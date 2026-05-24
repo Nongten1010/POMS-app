@@ -1,5 +1,6 @@
 import { db } from '../../config/database';
 import { env } from '../../config/env';
+import { logger } from '../../config/logger';
 import { UnauthorizedError } from '../../shared/errors/AppError';
 import { signAccessToken, parseDurationToSeconds } from '../../shared/utils/jwt';
 import { verifyPassword, bufferToHashString } from '../../shared/utils/password';
@@ -58,15 +59,8 @@ export const authService = {
     profile: Awaited<ReturnType<ReturnType<typeof getIdentityProvider>['authenticateOfficer']>>,
   ): Promise<LoginResponse> {
     if (!profile) throw new UnauthorizedError('Invalid credentials');
-    const user = await authRepository.findUserByProviderAndExternalId(
-      'mock',
-      profile.external_id,
-    );
-    if (!user) {
-      throw new UnauthorizedError(
-        `Officer ${profile.external_id} not provisioned in POMS — run seed first`,
-      );
-    }
+    const user = await authRepository.findUserByProviderAndExternalId('mock', profile.external_id);
+    ensureLoginUserAvailable(user, 'officer', profile.external_id);
     await authRepository.updateLastLogin(user.id);
 
     const officerProfile = await authRepository.getOfficerProfile(user.id);
@@ -84,25 +78,15 @@ export const authService = {
     profile: Awaited<ReturnType<ReturnType<typeof getIdentityProvider>['authenticateOperator']>>,
   ): Promise<LoginResponse> {
     if (!profile) throw new UnauthorizedError('Invalid credentials');
-    const user = await authRepository.findUserByProviderAndExternalId(
-      'mock',
-      profile.citizen_id,
-    );
-    if (!user) {
-      throw new UnauthorizedError(
-        `Operator ${profile.citizen_id} not provisioned in POMS — run seed first`,
-      );
-    }
+    const user = await authRepository.findUserByProviderAndExternalId('mock', profile.citizen_id);
+    ensureLoginUserAvailable(user, 'operator', profile.citizen_id);
     await authRepository.updateLastLogin(user.id);
 
     const opProfile = await authRepository.getOperatorProfile(user.id);
     const factories = await authRepository.getOperatorFactories(user.id);
     const { roles, scopes } = await authRepository.getRolesAndPermissions(user.id);
 
-    const juristicsMap = new Map<
-      string,
-      OperatorProfileDTO['juristics'][number]
-    >();
+    const juristicsMap = new Map<string, OperatorProfileDTO['juristics'][number]>();
     for (const f of factories) {
       const existing = juristicsMap.get(f.juristic_id);
       if (existing) {
@@ -155,13 +139,8 @@ export const authService = {
     profile: Awaited<ReturnType<ReturnType<typeof getIdentityProvider>['authenticateCitizen']>>,
   ): Promise<LoginResponse> {
     if (!profile) throw new UnauthorizedError('Invalid credentials');
-    const user = await authRepository.findUserByProviderAndExternalId(
-      'mock',
-      profile.external_id,
-    );
-    if (!user) {
-      throw new UnauthorizedError(`Citizen ${profile.external_id} not provisioned in POMS`);
-    }
+    const user = await authRepository.findUserByProviderAndExternalId('mock', profile.external_id);
+    ensureLoginUserAvailable(user, 'citizen', profile.external_id);
     await authRepository.updateLastLogin(user.id);
     const { roles, scopes } = await authRepository.getRolesAndPermissions(user.id);
     return buildLoginResponse({
@@ -172,6 +151,33 @@ export const authService = {
     });
   },
 };
+
+function ensureLoginUserAvailable(
+  user:
+    | {
+        id: number;
+        is_active: boolean;
+      }
+    | undefined,
+  userType: LoginRequest['userType'],
+  externalId: string,
+): asserts user is { id: number; is_active: boolean } {
+  if (!user) {
+    logger.warn(`[auth] ${userType} login rejected: external identity is not provisioned`, {
+      userType,
+      externalId,
+    });
+    throw new UnauthorizedError('Invalid credentials');
+  }
+
+  if (!Boolean(user.is_active)) {
+    logger.warn(`[auth] ${userType} login rejected: inactive account`, {
+      userType,
+      userId: user.id,
+    });
+    throw new UnauthorizedError('Invalid credentials');
+  }
+}
 
 function toUserSummary(row: {
   id: number | string;
@@ -202,7 +208,9 @@ function toUserSummary(row: {
   };
 }
 
-function toOfficerDTO(row: NonNullable<Awaited<ReturnType<typeof authRepository.getOfficerProfile>>>): OfficerProfileDTO {
+function toOfficerDTO(
+  row: NonNullable<Awaited<ReturnType<typeof authRepository.getOfficerProfile>>>,
+): OfficerProfileDTO {
   return {
     posNo: row.pos_no,
     pertype: row.pertype,

@@ -3,17 +3,15 @@ import { z } from 'zod';
 export const loginSchema = z
   .object({
     userType: z.enum(['officer', 'operator', 'citizen']),
-    username: z.string().min(1).optional(),
-    departmentID: z.string().min(1).optional(),
-    password: z.string().min(1),
+    username: z.string().trim().min(1).max(64).optional(),
+    departmentID: z.string().trim().min(1).max(32).optional(),
+    password: z.string().min(1).max(128),
   })
-  .refine(
-    (data) => !!data.username,
-    {
-      message: 'username is required',
-      path: ['username'],
-    },
-  )
+  .strict()
+  .refine((data) => !!data.username, {
+    message: 'username is required',
+    path: ['username'],
+  })
   .refine(
     (data) => {
       if (data.userType !== 'officer') return true;

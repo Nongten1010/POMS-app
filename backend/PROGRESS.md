@@ -5,6 +5,63 @@
 
 ---
 
+## 2026-05-24 — Login hardening (session #7)
+
+### What was done
+
+**1. Hardened `POST /api/v1/auth/login`** ✅
+- เพิ่ม rate limit เฉพาะ login: 10 attempts / 15 นาที
+- เมื่อเกิน limit ตอบ `429 RATE_LIMITED`
+- Validation เข้มขึ้นด้วย Zod:
+  - trim `username` และ `departmentID`
+  - จำกัดความยาว `username`, `departmentID`, `password`
+  - reject unknown request fields ด้วย `.strict()`
+
+**2. Security/error handling** ✅
+- ถ้า identity provider auth ผ่าน แต่ user ยังไม่ถูก provision ใน POMS → client เห็น generic `401 UNAUTHORIZED`
+- ถ้า user ถูกระงับ (`is_active=false`) → client เห็น generic `401 UNAUTHORIZED`
+- รายละเอียด provision/inactive ถูก log ฝั่ง server แทน ไม่ส่ง external id หรือ internal setup detail กลับ frontend
+- ไม่ออก JWT และไม่ update `last_login_at` ให้ inactive account
+
+**3. Tests** ✅
+- เพิ่ม validator tests สำหรับ trim, missing officer `departmentID`, oversized payload, unknown fields
+- เพิ่ม auth service tests สำหรับ:
+  - provision missing ต้องเป็น generic unauthorized
+  - inactive user ต้องถูก reject ก่อนออก token/update last login
+
+### Frontend contract notes
+
+Frontend ควร handle login errors ด้วย `error.code`:
+
+| HTTP | `error.code` | Frontend action |
+| --- | --- | --- |
+| 400 | `VALIDATION_ERROR` | แสดง field validation |
+| 401 | `UNAUTHORIZED` | แจ้ง login ไม่สำเร็จแบบกลาง ๆ |
+| 429 | `RATE_LIMITED` | แจ้งให้รอแล้วลองใหม่ภายหลัง |
+| 500 | `INTERNAL_ERROR` | แสดงข้อความระบบขัดข้อง |
+
+อย่า hardcode จาก `error.message`; ใช้ `error.code` เป็นหลัก
+
+### Files changed
+
+- `src/modules/auth/auth.routes.ts`
+- `src/modules/auth/auth.service.ts`
+- `src/modules/auth/auth.validator.ts`
+- `tests/unit/auth.validator.test.ts`
+- `tests/unit/auth.service.test.ts`
+- `docs/FRONTEND_HANDOFF.md`
+
+### Verification
+
+```bash
+npm run typecheck
+npm test -- --runInBand
+```
+
+Result: 3 test suites passed, 14 tests passed
+
+---
+
 ## 2026-05-24 — Live MSSQL setup + end-to-end smoke test (session #5)
 
 ### What was done

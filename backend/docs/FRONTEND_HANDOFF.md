@@ -181,22 +181,51 @@ Expected:
 
 ## 6. Error cases ที่ frontend ควรรองรับ
 
-Wrong password:
+Frontend ควรดู `error.code` เป็นหลัก ไม่ควร hardcode จาก `error.message`
+
+Wrong password / account not provisioned / inactive account:
 
 ```http
 POST /api/v1/auth/login
 ```
 
-Expected status:
+Expected status/body:
 
-```text
-401
+```json
+{
+  "success": false,
+  "error": {
+    "code": "UNAUTHORIZED",
+    "message": "Invalid credentials"
+  }
+}
 ```
 
 Missing required fields:
 
-```text
-400
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Request validation failed",
+    "details": {
+      "password": ["Invalid input: expected string, received undefined"]
+    }
+  }
+}
+```
+
+Too many login attempts:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "RATE_LIMITED",
+    "message": "Too many login attempts. Please try again later."
+  }
+}
 ```
 
 No token / invalid token:
@@ -222,6 +251,19 @@ curl -X POST http://localhost:3000/api/v1/auth/login \
   -H 'Content-Type: application/json' \
   -d '{"userType":"officer","username":"weekit","departmentID":"2","password":"demo1234"}'
 ```
+
+ทดสอบ rate limit เฉพาะ login:
+
+```bash
+for i in {1..11}; do
+  curl -s -o /dev/null -w "%{http_code}\n" \
+    -X POST http://localhost:3000/api/v1/auth/login \
+    -H 'Content-Type: application/json' \
+    -d '{"userType":"officer","username":"weekit","departmentID":"2","password":"wrong"}'
+done
+```
+
+หลังยิงถี่เกิน limit ควรได้ `429`
 
 ## 8. Backend smoke test
 
