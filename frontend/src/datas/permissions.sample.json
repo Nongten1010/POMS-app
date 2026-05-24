@@ -1,0 +1,517 @@
+{
+  "metadata": {
+    "description": "ตัวอย่างข้อมูลสิทธิ์การใช้งานสำหรับ D-POMS ใช้ทดสอบ UI permission matrix และหน้าจัดการสิทธิ์",
+    "comment": "JSON มาตรฐานไม่รองรับ comment จึงเก็บคำอธิบายและ values ที่ใช้ได้ทั้งหมดไว้ใน metadata",
+    "valueDefinitions": {
+      "permissionValue": {
+        "allowedValues": ["allow", "deny"],
+        "allow": "มีสิทธิ์ใช้งาน",
+        "deny": "ไม่มีสิทธิ์ใช้งาน"
+      },
+      "scope": {
+        "allowedValues": [
+          "all",
+          "own_factory",
+          "province",
+          "region",
+          "inspection_list",
+          "none"
+        ],
+        "all": "ทั้งหมด",
+        "own_factory": "โรงงานตัวเอง",
+        "province": "ในจังหวัด",
+        "region": "ในการนิคม",
+        "inspection_list": "รายการชุดตรวจ",
+        "none": "ไม่มีขอบเขตสิทธิ์"
+      },
+      "action": {
+        "allowedValues": [
+          "view",
+          "view_current_data",
+          "view_daily_alert",
+          "search",
+          "advanced_search",
+          "export",
+          "edit",
+          "approve",
+          "view_alert_status",
+          "question",
+          "answer",
+          "manage"
+        ],
+        "view": "ดูข้อมูล",
+        "view_current_data": "ดูหน้าหลักข้อมูลปัจจุบัน",
+        "view_daily_alert": "ดูติดตามแจ้งเตือน",
+        "search": "ค้นหา",
+        "advanced_search": "ค้นหาขั้นสูง",
+        "export": "สำเนาข้อมูล / ส่งออกข้อมูล",
+        "edit": "แก้ไข",
+        "approve": "อนุมัติ",
+        "view_alert_status": "ดูสถานะการแจ้งเตือน",
+        "question": "ถามคำถาม",
+        "answer": "ตอบคำถาม",
+        "manage": "จัดการ"
+      }
+    }
+  },
+  "roles": [
+    {
+      "id": "public",
+      "label": "ประชาชนทั่วไป",
+      "group": "external"
+    },
+    {
+      "id": "entrepreneur",
+      "label": "ผู้ประกอบการ",
+      "group": "external"
+    },
+    {
+      "id": "factory",
+      "label": "โรงงาน",
+      "group": "external"
+    },
+    {
+      "id": "industry_province",
+      "label": "อุตสาหกรรมจังหวัด",
+      "group": "officer"
+    },
+    {
+      "id": "ministry_officer",
+      "label": "สำนักงานปลัดกระทรวงอุตสาหกรรม",
+      "group": "officer"
+    },
+    {
+      "id": "ieat_officer",
+      "label": "การนิคมแห่งประเทศไทย",
+      "group": "officer"
+    },
+    {
+      "id": "diw_officer",
+      "label": "กรมโรงงานอุตสาหกรรม",
+      "group": "officer"
+    },
+    {
+      "id": "system_admin",
+      "label": "ผู้ดูแลระบบ",
+      "group": "admin"
+    }
+  ],
+  "permissionGroups": [
+    {
+      "id": "home",
+      "label": "หน้าหลัก",
+      "permissions": [
+        {
+          "action": "view",
+          "label": "View",
+          "grants": {
+            "public": { "value": "allow", "scope": "all" },
+            "entrepreneur": { "value": "allow", "scope": "all" },
+            "factory": { "value": "allow", "scope": "own_factory" },
+            "industry_province": { "value": "allow", "scope": "province" },
+            "ministry_officer": { "value": "allow", "scope": "all" },
+            "ieat_officer": { "value": "allow", "scope": "region" },
+            "diw_officer": { "value": "allow", "scope": "all" },
+            "system_admin": { "value": "allow", "scope": "all" }
+          }
+        },
+        {
+          "action": "view_current_data",
+          "label": "หน้าหลักข้อมูลปัจจุบัน",
+          "grants": {
+            "public": { "value": "allow", "scope": "all" },
+            "entrepreneur": { "value": "allow", "scope": "all" },
+            "factory": { "value": "allow", "scope": "own_factory" },
+            "industry_province": { "value": "allow", "scope": "province" },
+            "ministry_officer": { "value": "allow", "scope": "all" },
+            "ieat_officer": { "value": "allow", "scope": "region" },
+            "diw_officer": { "value": "allow", "scope": "all" },
+            "system_admin": { "value": "allow", "scope": "all" }
+          }
+        },
+        {
+          "action": "view_daily_alert",
+          "label": "ติดตามแจ้งเตือน",
+          "grants": {
+            "public": { "value": "deny", "scope": "none" },
+            "entrepreneur": { "value": "allow", "scope": "all" },
+            "factory": { "value": "allow", "scope": "own_factory" },
+            "industry_province": { "value": "allow", "scope": "province" },
+            "ministry_officer": { "value": "allow", "scope": "all" },
+            "ieat_officer": { "value": "allow", "scope": "region" },
+            "diw_officer": { "value": "allow", "scope": "all" },
+            "system_admin": { "value": "allow", "scope": "all" }
+          }
+        },
+        {
+          "action": "search",
+          "label": "หน้าค้นหา",
+          "grants": {
+            "public": { "value": "deny", "scope": "none" },
+            "entrepreneur": { "value": "deny", "scope": "none" },
+            "factory": { "value": "deny", "scope": "none" },
+            "industry_province": { "value": "allow", "scope": "province" },
+            "ministry_officer": { "value": "allow", "scope": "all" },
+            "ieat_officer": { "value": "allow", "scope": "region" },
+            "diw_officer": { "value": "allow", "scope": "all" },
+            "system_admin": { "value": "allow", "scope": "all" }
+          }
+        },
+        {
+          "action": "export",
+          "label": "สำเนาข้อมูล / ส่งออกข้อมูล",
+          "grants": {
+            "public": { "value": "deny", "scope": "none" },
+            "entrepreneur": { "value": "deny", "scope": "none" },
+            "factory": { "value": "allow", "scope": "own_factory" },
+            "industry_province": { "value": "allow", "scope": "province" },
+            "ministry_officer": { "value": "allow", "scope": "all" },
+            "ieat_officer": { "value": "allow", "scope": "region" },
+            "diw_officer": { "value": "allow", "scope": "all" },
+            "system_admin": { "value": "allow", "scope": "all" }
+          }
+        }
+      ]
+    },
+    {
+      "id": "master_data",
+      "label": "ข้อมูลพื้นฐาน",
+      "permissions": [
+        {
+          "action": "view",
+          "label": "View",
+          "grants": {
+            "factory": { "value": "allow", "scope": "own_factory" },
+            "industry_province": { "value": "allow", "scope": "province" },
+            "ministry_officer": { "value": "allow", "scope": "all" },
+            "ieat_officer": { "value": "allow", "scope": "region" },
+            "diw_officer": { "value": "allow", "scope": "all" },
+            "system_admin": { "value": "allow", "scope": "all" }
+          }
+        },
+        {
+          "action": "edit",
+          "label": "Edit",
+          "grants": {
+            "factory": { "value": "allow", "scope": "own_factory" },
+            "diw_officer": { "value": "allow", "scope": "all" },
+            "system_admin": { "value": "allow", "scope": "all" }
+          }
+        },
+        {
+          "action": "approve",
+          "label": "Approve",
+          "grants": {
+            "diw_officer": { "value": "allow", "scope": "all" },
+            "system_admin": { "value": "allow", "scope": "all" }
+          }
+        }
+      ]
+    },
+    {
+      "id": "connection_request",
+      "label": "ขอเชื่อมต่อระบบ CEMS / WPMS",
+      "permissions": [
+        {
+          "action": "view",
+          "label": "View",
+          "grants": {
+            "factory": { "value": "allow", "scope": "own_factory" },
+            "diw_officer": { "value": "allow", "scope": "inspection_list" },
+            "system_admin": { "value": "allow", "scope": "all" }
+          }
+        },
+        {
+          "action": "edit",
+          "label": "Edit",
+          "grants": {
+            "factory": { "value": "allow", "scope": "own_factory" },
+            "diw_officer": { "value": "allow", "scope": "all" },
+            "system_admin": { "value": "allow", "scope": "all" }
+          }
+        },
+        {
+          "action": "approve",
+          "label": "Approve",
+          "grants": {
+            "diw_officer": { "value": "allow", "scope": "all" },
+            "system_admin": { "value": "allow", "scope": "all" }
+          }
+        }
+      ]
+    },
+    {
+      "id": "form_gor_wor_por",
+      "label": "แจ้งแบบ กวภ. 01 - กวภ. 05",
+      "permissions": [
+        {
+          "action": "view",
+          "label": "View",
+          "grants": {
+            "factory": { "value": "allow", "scope": "own_factory" },
+            "industry_province": { "value": "allow", "scope": "province" },
+            "ministry_officer": { "value": "allow", "scope": "all" },
+            "ieat_officer": { "value": "allow", "scope": "region" },
+            "diw_officer": { "value": "allow", "scope": "all" },
+            "system_admin": { "value": "allow", "scope": "all" }
+          }
+        },
+        {
+          "action": "edit",
+          "label": "Edit",
+          "grants": {
+            "factory": { "value": "allow", "scope": "own_factory" },
+            "diw_officer": { "value": "allow", "scope": "all" },
+            "system_admin": { "value": "allow", "scope": "all" }
+          }
+        },
+        {
+          "action": "approve",
+          "label": "Approve",
+          "grants": {
+            "diw_officer": { "value": "allow", "scope": "all" },
+            "system_admin": { "value": "allow", "scope": "all" }
+          }
+        }
+      ]
+    },
+    {
+      "id": "bod_cod_deviation_report",
+      "label": "รายงานค่าความคลาดเคลื่อน BOD/COD Online",
+      "permissions": [
+        {
+          "action": "view",
+          "label": "View",
+          "grants": {
+            "factory": { "value": "allow", "scope": "own_factory" },
+            "industry_province": { "value": "allow", "scope": "province" },
+            "ministry_officer": { "value": "allow", "scope": "all" },
+            "ieat_officer": { "value": "allow", "scope": "region" },
+            "diw_officer": { "value": "allow", "scope": "all" },
+            "system_admin": { "value": "allow", "scope": "all" }
+          }
+        },
+        {
+          "action": "edit",
+          "label": "Edit",
+          "grants": {
+            "factory": { "value": "allow", "scope": "own_factory" },
+            "diw_officer": { "value": "allow", "scope": "all" },
+            "system_admin": { "value": "allow", "scope": "all" }
+          }
+        },
+        {
+          "action": "approve",
+          "label": "Approve",
+          "grants": {
+            "diw_officer": { "value": "allow", "scope": "all" },
+            "system_admin": { "value": "allow", "scope": "all" }
+          }
+        }
+      ]
+    },
+    {
+      "id": "notifications",
+      "label": "การแจ้งเตือน",
+      "permissions": [
+        {
+          "action": "view",
+          "label": "View",
+          "grants": {
+            "factory": { "value": "allow", "scope": "own_factory" },
+            "industry_province": { "value": "allow", "scope": "province" },
+            "ministry_officer": { "value": "allow", "scope": "all" },
+            "ieat_officer": { "value": "allow", "scope": "region" },
+            "diw_officer": { "value": "allow", "scope": "all" },
+            "system_admin": { "value": "allow", "scope": "all" }
+          }
+        },
+        {
+          "action": "view_alert_status",
+          "label": "View สถานะการแจ้งเตือน",
+          "grants": {
+            "system_admin": { "value": "allow", "scope": "all" }
+          }
+        },
+        {
+          "action": "edit",
+          "label": "Edit",
+          "grants": {
+            "system_admin": { "value": "allow", "scope": "all" }
+          }
+        },
+        {
+          "action": "approve",
+          "label": "Approve",
+          "grants": {
+            "system_admin": { "value": "allow", "scope": "all" }
+          }
+        }
+      ]
+    },
+    {
+      "id": "statistics",
+      "label": "สถิติข้อมูล",
+      "permissions": [
+        {
+          "action": "view",
+          "label": "View",
+          "grants": {
+            "factory": { "value": "allow", "scope": "own_factory" },
+            "industry_province": { "value": "allow", "scope": "province" },
+            "ministry_officer": { "value": "allow", "scope": "all" },
+            "ieat_officer": { "value": "allow", "scope": "region" },
+            "diw_officer": { "value": "allow", "scope": "all" },
+            "system_admin": { "value": "allow", "scope": "all" }
+          }
+        }
+      ]
+    },
+    {
+      "id": "conditional_search",
+      "label": "การสืบค้นข้อมูลแบบมีเงื่อนไข",
+      "permissions": [
+        {
+          "action": "advanced_search",
+          "label": "Search",
+          "grants": {
+            "industry_province": { "value": "allow", "scope": "province" },
+            "ministry_officer": { "value": "allow", "scope": "all" },
+            "ieat_officer": { "value": "allow", "scope": "region" },
+            "diw_officer": { "value": "allow", "scope": "all" },
+            "system_admin": { "value": "allow", "scope": "all" }
+          }
+        }
+      ]
+    },
+    {
+      "id": "help_request",
+      "label": "แจ้งขอความช่วยเหลือ",
+      "permissions": [
+        {
+          "action": "view",
+          "label": "View",
+          "grants": {
+            "factory": { "value": "allow", "scope": "own_factory" },
+            "industry_province": { "value": "allow", "scope": "province" },
+            "ministry_officer": { "value": "allow", "scope": "all" },
+            "ieat_officer": { "value": "allow", "scope": "region" },
+            "diw_officer": { "value": "allow", "scope": "all" },
+            "system_admin": { "value": "allow", "scope": "all" }
+          }
+        }
+      ]
+    },
+    {
+      "id": "feedback",
+      "label": "ข้อเสนอแนะ",
+      "permissions": [
+        {
+          "action": "view",
+          "label": "View",
+          "grants": {
+            "public": { "value": "allow", "scope": "all" },
+            "entrepreneur": { "value": "allow", "scope": "all" },
+            "factory": { "value": "allow", "scope": "own_factory" },
+            "industry_province": { "value": "allow", "scope": "province" },
+            "ministry_officer": { "value": "allow", "scope": "all" },
+            "ieat_officer": { "value": "allow", "scope": "region" },
+            "diw_officer": { "value": "allow", "scope": "all" },
+            "system_admin": { "value": "allow", "scope": "all" }
+          }
+        }
+      ]
+    },
+    {
+      "id": "related_laws",
+      "label": "กฎหมายที่เกี่ยวข้อง",
+      "permissions": [
+        {
+          "action": "view",
+          "label": "View",
+          "grants": {
+            "public": { "value": "allow", "scope": "all" },
+            "entrepreneur": { "value": "allow", "scope": "all" },
+            "factory": { "value": "allow", "scope": "own_factory" },
+            "industry_province": { "value": "allow", "scope": "province" },
+            "ministry_officer": { "value": "allow", "scope": "all" },
+            "ieat_officer": { "value": "allow", "scope": "region" },
+            "diw_officer": { "value": "allow", "scope": "all" },
+            "system_admin": { "value": "allow", "scope": "all" }
+          }
+        },
+        {
+          "action": "edit",
+          "label": "Edit",
+          "grants": {
+            "system_admin": { "value": "allow", "scope": "all" }
+          }
+        }
+      ]
+    },
+    {
+      "id": "faq",
+      "label": "คำถามที่พบบ่อย",
+      "permissions": [
+        {
+          "action": "view",
+          "label": "View",
+          "grants": {
+            "public": { "value": "allow", "scope": "all" },
+            "entrepreneur": { "value": "allow", "scope": "all" },
+            "factory": { "value": "allow", "scope": "own_factory" },
+            "industry_province": { "value": "allow", "scope": "province" },
+            "ministry_officer": { "value": "allow", "scope": "all" },
+            "ieat_officer": { "value": "allow", "scope": "region" },
+            "diw_officer": { "value": "allow", "scope": "all" },
+            "system_admin": { "value": "allow", "scope": "all" }
+          }
+        },
+        {
+          "action": "edit",
+          "label": "Edit",
+          "grants": {
+            "system_admin": { "value": "allow", "scope": "all" }
+          }
+        }
+      ]
+    },
+    {
+      "id": "chat",
+      "label": "Chat",
+      "permissions": [
+        {
+          "action": "question",
+          "label": "Question",
+          "grants": {
+            "entrepreneur": { "value": "allow", "scope": "all" },
+            "factory": { "value": "allow", "scope": "own_factory" },
+            "industry_province": { "value": "allow", "scope": "province" },
+            "ministry_officer": { "value": "allow", "scope": "all" }
+          }
+        },
+        {
+          "action": "answer",
+          "label": "Answer",
+          "grants": {
+            "diw_officer": { "value": "allow", "scope": "all" },
+            "system_admin": { "value": "allow", "scope": "all" }
+          }
+        }
+      ]
+    },
+    {
+      "id": "permissions",
+      "label": "จัดการสิทธิ์การใช้งาน",
+      "permissions": [
+        {
+          "action": "manage",
+          "label": "Manage",
+          "grants": {
+            "system_admin": { "value": "allow", "scope": "all" }
+          }
+        }
+      ]
+    }
+  ]
+}

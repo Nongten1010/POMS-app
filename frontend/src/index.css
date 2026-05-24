@@ -1,0 +1,14 @@
+@import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;600&display=swap');
+
+html {
+  min-height: 100%;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+}
