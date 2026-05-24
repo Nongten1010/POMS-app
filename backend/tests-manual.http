@@ -165,3 +165,58 @@ Content-Type: application/json
   "username": "unknown_operator",
   "password": "demo1234"
 }
+
+###############################################################################
+# 6. User permission management (ต้อง login admin ข้อ 2.1 ก่อน)
+###############################################################################
+
+### 6.1 ตารางรายชื่อเจ้าหน้าที่
+GET {{host}}{{apiPrefix}}/users?page=1&perPage=25&search=officer&status=all
+Authorization: Bearer {{loginAdmin.response.body.data.accessToken}}
+
+### 6.2 ข้อมูลรายคนสำหรับหน้าแก้ไขสิทธิ์
+GET {{host}}{{apiPrefix}}/users/1
+Authorization: Bearer {{loginAdmin.response.body.data.accessToken}}
+
+### 6.3 เพิ่มผู้ใช้งานเจ้าหน้าที่
+# @name createManagedUser
+POST {{host}}{{apiPrefix}}/users
+Authorization: Bearer {{loginAdmin.response.body.data.accessToken}}
+Content-Type: application/json
+
+{
+  "username": "officer_api_demo",
+  "externalId": "officer_api_demo",
+  "userType": "officer",
+  "prenameTh": "นาย",
+  "firstName": "ทดสอบ",
+  "lastName": "สิทธิ์ระบบ",
+  "email": "officer_api_demo@example.local",
+  "phone": "0800000000",
+  "isActive": true,
+  "roleCodes": ["diw_central"],
+  "profile": {
+    "departmentId": "3010000",
+    "lineNameTh": "นักวิชาการสิ่งแวดล้อม",
+    "levelNameTh": "ปฏิบัติการ"
+  }
+}
+
+### 6.4 แก้ไขสิทธิ์/สถานะรายคน
+PATCH {{host}}{{apiPrefix}}/users/{{createManagedUser.response.body.data.id}}
+Authorization: Bearer {{loginAdmin.response.body.data.accessToken}}
+Content-Type: application/json
+
+{
+  "isActive": false,
+  "roleCodes": ["provincial_office"],
+  "profile": {
+    "departmentId": "4019000",
+    "lineNameTh": "เจ้าหน้าที่ตรวจสอบ",
+    "levelNameTh": "ชำนาญการ"
+  }
+}
+
+### 6.5 ลบรายคน (soft delete)
+DELETE {{host}}{{apiPrefix}}/users/{{createManagedUser.response.body.data.id}}
+Authorization: Bearer {{loginAdmin.response.body.data.accessToken}}
