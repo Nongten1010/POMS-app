@@ -203,6 +203,8 @@ const factories = await factoriesRepo.list({
 | `faq`                | view, edit                 | `faq:view`, `faq:edit`                                |
 | `chat`               | ask, answer                | `chat:ask`, `chat:answer`                             |
 | `permissions`        | manage                     | `permissions:manage`                                  |
+| `eligible_factories` | manage                     | `eligible_factories:manage`                           |
+| `api_documentation`  | view                       | `api_documentation:view`                              |
 
 **DB schema** (preview สำหรับเฟสถัดไป):
 ```sql

@@ -51,6 +51,8 @@ export const PERMISSIONS: Array<{ code: string; resource: string; action: string
 
   // Admin
   { code: 'permissions:manage', resource: 'permissions', action: 'manage', description: 'จัดการสิทธิ์การใช้งาน' },
+  { code: 'eligible_factories:manage', resource: 'eligible_factories', action: 'manage', description: 'จัดการโรงงานที่เข้าข่าย' },
+  { code: 'api_documentation:view', resource: 'api_documentation', action: 'view', description: 'ดู API Documentation' },
   { code: 'users:view', resource: 'users', action: 'view', description: 'ดูข้อมูล user' },
   { code: 'users:edit', resource: 'users', action: 'edit', description: 'แก้ไข user' },
   { code: 'roles:view', resource: 'roles', action: 'view', description: 'ดู role' },

@@ -22,6 +22,8 @@ export interface UserSummary {
   lastName: string;
   email: string | null;
   phone: string | null;
+  isActive: boolean;
+  statusLabel: 'ใช้งาน' | 'ระงับใช้งาน';
 }
 
 export interface OfficerProfileDTO {

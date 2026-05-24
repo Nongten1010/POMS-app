@@ -183,7 +183,10 @@ function toUserSummary(row: {
   last_name: string;
   email: string | null;
   phone: string | null;
+  is_active: boolean;
 }): UserSummary {
+  const isActive = Boolean(row.is_active);
+
   return {
     id: Number(row.id), // BIGINT จาก MSSQL driver มาเป็น string — cast เป็น number (precision-safe จนถึง 2^53)
     userType: row.user_type,
@@ -194,6 +197,8 @@ function toUserSummary(row: {
     lastName: row.last_name,
     email: row.email,
     phone: row.phone,
+    isActive,
+    statusLabel: isActive ? 'ใช้งาน' : 'ระงับใช้งาน',
   };
 }
 
