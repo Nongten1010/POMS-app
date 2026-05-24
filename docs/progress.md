@@ -8,3 +8,4 @@
 - Left `frontend/` empty for the frontend teammate to add their work.
 - Excluded generated/runtime files from Git: `.env`, `node_modules`, `dist`, `coverage`, and `logs`.
 - Added `AGENTS.md` to define backend/frontend boundaries for AI assistants and contributors.
+- Added Windows service config for the real backend: `backend/deploy/windows/poms-app-backend.winsw.xml`.

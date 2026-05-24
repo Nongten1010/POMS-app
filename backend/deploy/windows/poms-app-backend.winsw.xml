@@ -1,0 +1,17 @@
+<service>
+  <id>poms-app-backend</id>
+  <name>POMS App Backend</name>
+  <description>POMS backend service running from C:\apps\POMS-app\backend</description>
+  <executable>C:\Program Files\nodejs\node.exe</executable>
+  <arguments>dist\server.js</arguments>
+  <workingdirectory>C:\apps\POMS-app\backend</workingdirectory>
+  <logpath>C:\apps\POMS-app\backend\logs</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>10485760</sizeThreshold>
+    <keepFiles>8</keepFiles>
+  </log>
+  <onfailure action="restart" delay="10 sec" />
+  <onfailure action="restart" delay="30 sec" />
+  <onfailure action="none" />
+</service>
+

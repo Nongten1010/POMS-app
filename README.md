@@ -29,6 +29,20 @@ npm run typecheck
 npm test
 ```
 
+## Windows Service
+
+The backend service config is stored at:
+
+```text
+backend/deploy/windows/poms-app-backend.winsw.xml
+```
+
+The service id is:
+
+```text
+poms-app-backend
+```
+
 ## Frontend
 
 The frontend folder is intentionally empty for now. Add the frontend project under:
