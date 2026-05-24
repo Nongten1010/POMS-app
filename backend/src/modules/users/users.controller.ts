@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
 import {
+  createLocalAccountSchema,
   createManagedUserSchema,
   listManagedUsersQuerySchema,
   updateManagedUserSchema,
@@ -36,6 +37,21 @@ export const usersController = {
       if (!actorUserId) throw new Error('Authenticated user missing from request');
       const payload = createManagedUserSchema.parse(req.body);
       const data = await usersService.create(payload, actorUserId);
+      res.status(StatusCodes.CREATED).location(`${req.baseUrl}/${data.id}`).json({
+        success: true,
+        data,
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async createLocalAccount(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const actorUserId = req.user?.id;
+      if (!actorUserId) throw new Error('Authenticated user missing from request');
+      const payload = createLocalAccountSchema.parse(req.body);
+      const data = await usersService.createLocalAccount(payload, actorUserId);
       res.status(StatusCodes.CREATED).location(`${req.baseUrl}/${data.id}`).json({
         success: true,
         data,

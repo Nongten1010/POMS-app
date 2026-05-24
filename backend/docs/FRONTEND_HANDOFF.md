@@ -217,6 +217,43 @@ Backend ตรวจ permission ซ้ำเสมอ:
 | `GET /users/:id/permissions` | `permissions:manage` |
 | `PUT /users/:id/permissions` | `permissions:manage` |
 
+### Role catalog สำหรับ frontend
+
+ใช้ list นี้ทำ dropdown / filter / badge label ของ `roleCodes` ได้เลย ค่า `code` คือค่าที่ส่งให้ API:
+
+| code | nameTh | nameEn | ใช้กับ UI |
+| --- | --- | --- | --- |
+| `public_anonymous` | ประชาชน ไม่ login | Public Anonymous | public/no auth เท่านั้น ปกติไม่ต้องใช้ในฟอร์มเจ้าหน้าที่ |
+| `public_user` | ประชาชน login | Public Logged-in | citizen login |
+| `factory_operator` | โรงงาน (ผู้ประกอบการ) | Factory Operator | ผู้ประกอบการ/โรงงาน |
+| `diw_central` | กรอ. | DIW Central | เจ้าหน้าที่ กรอ. ส่วนกลาง |
+| `provincial_office` | สอจ. | Provincial Industrial Office | สำนักงานอุตสาหกรรมจังหวัด |
+| `industrial_estate` | กนอ. | Industrial Estate Authority | การนิคมฯ |
+| `monitoring_kpm` | เจ้าหน้าที่ศูนย์เฝ้า (กฝม.) | Pollution Monitoring (KPM) | เจ้าหน้าที่ กฝม. |
+| `monitoring_5_centers` | เจ้าหน้าที่ศูนย์เฝ้า (5 ศูนย์) | Regional Centers (5) | เจ้าหน้าที่ 5 ศูนย์ภูมิภาค |
+| `center_director` | ผอ.ศูนย์ | Center Director | ผู้อำนวยการศูนย์ |
+| `kpm_director` | ผอ.กฝม. | KPM Director | ผู้อำนวยการ กฝม. |
+| `kwp_director` | ผอ.กวภ. | KWP Director | ผู้อำนวยการ กวภ. |
+| `admin` | Admin | Administrator | ผู้ดูแลระบบ |
+
+ตัวอย่าง object สำหรับ frontend:
+
+```js
+export const ROLE_OPTIONS = [
+  { code: 'diw_central', nameTh: 'กรอ.', nameEn: 'DIW Central' },
+  { code: 'provincial_office', nameTh: 'สอจ.', nameEn: 'Provincial Industrial Office' },
+  { code: 'industrial_estate', nameTh: 'กนอ.', nameEn: 'Industrial Estate Authority' },
+  { code: 'monitoring_kpm', nameTh: 'เจ้าหน้าที่ศูนย์เฝ้า (กฝม.)', nameEn: 'Pollution Monitoring (KPM)' },
+  { code: 'monitoring_5_centers', nameTh: 'เจ้าหน้าที่ศูนย์เฝ้า (5 ศูนย์)', nameEn: 'Regional Centers (5)' },
+  { code: 'center_director', nameTh: 'ผอ.ศูนย์', nameEn: 'Center Director' },
+  { code: 'kpm_director', nameTh: 'ผอ.กฝม.', nameEn: 'KPM Director' },
+  { code: 'kwp_director', nameTh: 'ผอ.กวภ.', nameEn: 'KWP Director' },
+  { code: 'admin', nameTh: 'Admin', nameEn: 'Administrator' },
+];
+```
+
+สำหรับหน้าสร้างเจ้าหน้าที่ใน POMS แนะนำให้ใช้เฉพาะ role เจ้าหน้าที่ใน `ROLE_OPTIONS` ตัวอย่างด้านบน ไม่ต้องโชว์ `public_*` และ `factory_operator` เว้นแต่จะทำฟอร์มจัดการ citizen/operator แยกต่างหาก
+
 ### 6.1 List users table
 
 ใช้กับหน้าตารางรายชื่อเจ้าหน้าที่
@@ -337,7 +374,85 @@ Expected response:
 }
 ```
 
-### 6.3 Create user
+### 6.3 Create user with local username/password
+
+ใช้ endpoint นี้สำหรับ requirement ปัจจุบัน: ชื่อ-สกุลรวมช่องเดียว, ไม่มี email, ไม่มีเบอร์โทร, มี username/password และเลือก `roleCodes`
+
+```http
+POST http://localhost:3000/api/v1/users/local-accounts
+Authorization: Bearer <accessToken>
+Content-Type: application/json
+```
+
+Request body:
+
+```json
+{
+  "fullName": "สมชาย ทดสอบ",
+  "username": "local_officer",
+  "password": "StrongerPass123",
+  "roleCodes": ["diw_central"],
+  "permissionOverrides": [
+    {
+      "code": "chat:ask",
+      "effect": "allow"
+    }
+  ]
+}
+```
+
+Expected status: `201 Created`
+
+Expected response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 25,
+    "username": "local_officer",
+    "fullName": "สมชาย ทดสอบ",
+    "userType": "officer",
+    "email": null,
+    "phone": null,
+    "roles": [
+      {
+        "code": "diw_central",
+        "nameTh": "กรอ.",
+        "nameEn": "DIW Central"
+      }
+    ],
+    "status": "active",
+    "statusLabel": "ใช้งาน"
+  }
+}
+```
+
+Rules:
+
+- `fullName` คือชื่อ-สกุลรวมกันในช่องเดียว
+- ห้ามส่ง `email` หรือ `phone`; backend ใช้ schema strict และจะตอบ `400 VALIDATION_ERROR`
+- `password` ต้องยาวอย่างน้อย 8 ตัวอักษร สูงสุด 128 ตัวอักษร
+- `roleCodes` ต้องตรงกับ role catalog ด้านบน และต้องมีอย่างน้อย 1 role
+- `permissionOverrides` ไม่จำเป็น ถ้า role มีสิทธิ์พอแล้วไม่ต้องส่ง
+
+Login ด้วย user ที่สร้างจาก endpoint นี้:
+
+```http
+POST http://localhost:3000/api/v1/auth/login
+Content-Type: application/json
+```
+
+```json
+{
+  "userType": "officer",
+  "provider": "local",
+  "username": "local_officer",
+  "password": "StrongerPass123"
+}
+```
+
+### 6.4 Create provisioned/mock-style user
 
 ```http
 POST http://localhost:3000/api/v1/users
@@ -369,9 +484,9 @@ Request body:
 
 Expected status: `201 Created`
 
-หมายเหตุ: API นี้เพิ่มข้อมูล user/role สำหรับจัดการสิทธิ์ใน POMS แต่ยังไม่ได้สร้าง password flow สำหรับ local login ถ้า user ใหม่นี้ต้อง login ได้เอง ต้องมี identity provider หรือ password setup flow เพิ่ม
+หมายเหตุ: API นี้ยังเหมาะกับ user ที่ผูก identity provider/mock profile และมี first/last name แยกช่อง ถ้าต้องสร้าง user ที่ login ด้วย username/password ใน POMS ให้ใช้ `POST /users/local-accounts`
 
-### 6.4 Update user
+### 6.5 Update user
 
 ใช้แก้ข้อมูล สิทธิ์ และสถานะรายคน
 
@@ -418,7 +533,7 @@ Expected response:
 
 หลัง update สำเร็จ frontend ควร refetch `GET /users` เพื่อ refresh ตาราง
 
-### 6.5 Delete user
+### 6.6 Delete user
 
 ```http
 DELETE http://localhost:3000/api/v1/users/25
@@ -429,7 +544,7 @@ Expected status: `204 No Content`
 
 เป็น soft delete ฝั่ง backend
 
-### 6.6 Get per-user permission overrides
+### 6.7 Get per-user permission overrides
 
 ใช้ตอนเปิดหน้าจัดสิทธิ์รายตัว เพื่อดูสิทธิ์จาก role, override ราย user, และ effective permissions หลังรวมแล้ว
 
@@ -485,7 +600,7 @@ Expected response:
 | `effectiveScopes` | permission สุดท้ายหลังรวม role + override |
 | `permissions` | object สำหรับ frontend ใช้เช็คเปิด/ปิด UI เหมือน login response |
 
-### 6.7 Replace per-user permission overrides
+### 6.8 Replace per-user permission overrides
 
 ใช้บันทึกสิทธิ์ราย user ทั้งชุด โดยเป็น replace ทั้งหมดของ override รายคนนั้น
 
@@ -529,7 +644,7 @@ Rules:
 
 Expected response เป็น shape เดียวกับ `GET /users/:id/permissions`
 
-### 6.8 Validation/error cases for user management
+### 6.9 Validation/error cases for user management
 
 | Case | Status | `error.code` |
 | --- | --- | --- |
@@ -539,6 +654,7 @@ Expected response เป็น shape เดียวกับ `GET /users/:id/pe
 | username หรือ externalId ซ้ำ | 409 | `CONFLICT` |
 | user id ไม่มีอยู่ | 404 | `NOT_FOUND` |
 | permission code ไม่มีอยู่ | 400 | `BAD_REQUEST` |
+| roleCode ไม่มีอยู่ | 400 | `BAD_REQUEST` |
 
 ## 7. Error cases ที่ frontend ควรรองรับ
 

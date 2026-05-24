@@ -19,6 +19,11 @@ usersRoutes.put(
   usersController.replacePermissions,
 );
 usersRoutes.get('/:id', authorize('users:view', 'permissions:manage'), usersController.getById);
+usersRoutes.post(
+  '/local-accounts',
+  authorize('users:edit', 'permissions:manage'),
+  usersController.createLocalAccount,
+);
 usersRoutes.post('/', authorize('users:edit', 'permissions:manage'), usersController.create);
 usersRoutes.patch('/:id', authorize('users:edit', 'permissions:manage'), usersController.update);
 usersRoutes.delete('/:id', authorize('users:edit', 'permissions:manage'), usersController.remove);

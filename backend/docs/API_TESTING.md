@@ -147,6 +147,54 @@ curl http://localhost:3000/api/v1/auth/me -H "Authorization: Bearer fake.token.h
 curl http://localhost:3000/api/v1/does-not-exist
 ```
 
+### 5.6 Create local user account
+
+สร้าง user ใหม่โดยใช้ชื่อ-สกุลรวมช่องเดียว ไม่ส่ง email/phone และให้ระบบเก็บ password hash:
+
+```bash
+TOKEN=$(curl -s -X POST http://localhost:3000/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"userType":"officer","username":"weekit","departmentID":"2","password":"demo1234"}' \
+  | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['accessToken'])")
+
+curl -X POST http://localhost:3000/api/v1/users/local-accounts \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "fullName":"สมชาย ทดสอบ",
+    "username":"local_officer",
+    "password":"StrongerPass123",
+    "roleCodes":["diw_central"],
+    "permissionOverrides":[
+      {"code":"chat:ask","effect":"allow"}
+    ]
+  }'
+```
+
+Response:
+```json
+{
+  "success": true,
+  "data": {
+    "id": 6,
+    "username": "local_officer",
+    "fullName": "สมชาย ทดสอบ",
+    "email": null,
+    "phone": null,
+    "roles": [{ "code": "diw_central", "nameTh": "กรอ.", "nameEn": "DIW Central" }],
+    "status": "active"
+  }
+}
+```
+
+Login ด้วยบัญชี local:
+
+```bash
+curl -X POST http://localhost:3000/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"userType":"officer","provider":"local","username":"local_officer","password":"StrongerPass123"}'
+```
+
 ---
 
 ## 6. ดูข้อมูลใน DB ตรง ๆ

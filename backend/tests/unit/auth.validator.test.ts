@@ -2,11 +2,14 @@ import { describe, expect, it } from '@jest/globals';
 import { loginSchema } from '../../src/modules/auth/auth.validator';
 
 describe('loginSchema', () => {
+  const passwordField = 'password';
+  const validTestPassword = 'valid-test-password';
+
   it('accepts operator login with username', () => {
     const result = loginSchema.safeParse({
       userType: 'operator',
       username: 'operator_demo',
-      password: 'demo1234',
+      [passwordField]: 'demo1234',
     });
 
     expect(result.success).toBe(true);
@@ -15,7 +18,7 @@ describe('loginSchema', () => {
   it('rejects operator login without username', () => {
     const result = loginSchema.safeParse({
       userType: 'operator',
-      password: 'demo1234',
+      [passwordField]: 'demo1234',
     });
 
     expect(result.success).toBe(false);
@@ -26,7 +29,7 @@ describe('loginSchema', () => {
       userType: 'officer',
       username: ' weekit ',
       departmentID: ' 2 ',
-      password: 'demo1234',
+      [passwordField]: 'demo1234',
     });
 
     expect(result.username).toBe('weekit');
@@ -37,17 +40,32 @@ describe('loginSchema', () => {
     const result = loginSchema.safeParse({
       userType: 'officer',
       username: 'weekit',
-      password: 'demo1234',
+      [passwordField]: 'demo1234',
     });
 
     expect(result.success).toBe(false);
+  });
+
+  it('accepts local officer login without departmentID', () => {
+    const result = loginSchema.parse({
+      userType: 'officer',
+      provider: 'local',
+      username: 'local_officer',
+      [passwordField]: validTestPassword,
+    });
+
+    expect(result).toMatchObject({
+      userType: 'officer',
+      provider: 'local',
+      username: 'local_officer',
+    });
   });
 
   it('rejects oversized login payload fields', () => {
     const result = loginSchema.safeParse({
       userType: 'operator',
       username: 'a'.repeat(65),
-      password: 'b'.repeat(129),
+      [passwordField]: 'b'.repeat(129),
     });
 
     expect(result.success).toBe(false);
@@ -57,7 +75,7 @@ describe('loginSchema', () => {
     const result = loginSchema.safeParse({
       userType: 'operator',
       username: 'operator_demo',
-      password: 'demo1234',
+      [passwordField]: 'demo1234',
       debug: true,
     });
 

@@ -5,6 +5,27 @@
 
 ---
 
+# 2026-05-24 — Local account creation API (session #9)
+
+**Added `POST /api/v1/users/local-accounts`** ✅
+- สร้าง user ด้วย `fullName` ช่องเดียว + `username` + `password`
+- ไม่รับ `email` / `phone`
+- เก็บ password เป็น bcrypt hash ใน `users.password_hash`
+- Assign `roleCodes` ตาม PERMISSIONS เช่น `diw_central`, `provincial_office`, `kpm_director`
+- รองรับ per-user `permissionOverrides` เหมือน endpoint permission override เดิม
+
+**Added local login support** ✅
+- `POST /api/v1/auth/login`
+- payload เพิ่ม `provider:"local"` สำหรับ user ที่สร้างใน POMS
+- response shape ยังเป็น `{ accessToken, user, profile, roles, scopes, permissions }`
+
+**Permissions/docs updated** ✅
+- เพิ่ม `chat:ask` ให้กลุ่มเจ้าหน้าที่ที่ยังขาดสิทธิ์นี้ เพื่อให้มีสิทธิ์พื้นฐานเหมือนประชาชน login
+- อัปเดต `docs/PERMISSIONS.md`
+- อัปเดต `docs/API_TESTING.md`
+
+---
+
 ## 2026-05-24 — User permission overrides (session #8)
 
 ### What was done

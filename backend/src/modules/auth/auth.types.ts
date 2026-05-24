@@ -4,6 +4,8 @@ export type UserType = 'citizen' | 'operator' | 'officer' | 'admin';
 
 export interface LoginRequest {
   userType: 'officer' | 'operator' | 'citizen';
+  /** local = username/password in POMS DB, omitted = external/mock IdP flow */
+  provider?: 'local';
   /** ทุก user type ใช้ username */
   username?: string;
   /** officer: department selector from DIW login flow */

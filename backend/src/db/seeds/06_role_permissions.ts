@@ -123,6 +123,7 @@ const GRANTS: Grant[] = [
   { role: 'monitoring_kpm', permission: 'feedback:submit', scope: null },
   { role: 'monitoring_kpm', permission: 'laws:view', scope: null },
   { role: 'monitoring_kpm', permission: 'faq:view', scope: null },
+  { role: 'monitoring_kpm', permission: 'chat:ask', scope: null },
   { role: 'monitoring_kpm', permission: 'chat:answer', scope: null },
 
   // === monitoring_5_centers ===
@@ -145,6 +146,7 @@ const GRANTS: Grant[] = [
   { role: 'monitoring_5_centers', permission: 'feedback:submit', scope: null },
   { role: 'monitoring_5_centers', permission: 'laws:view', scope: null },
   { role: 'monitoring_5_centers', permission: 'faq:view', scope: null },
+  { role: 'monitoring_5_centers', permission: 'chat:ask', scope: null },
   { role: 'monitoring_5_centers', permission: 'chat:answer', scope: null },
 
   // === center_director / kpm_director / kwp_director — view-only at ALL scope ===
@@ -162,6 +164,7 @@ const GRANTS: Grant[] = [
     { role, permission: 'feedback:submit', scope: null },
     { role, permission: 'laws:view', scope: null },
     { role, permission: 'faq:view', scope: null },
+    { role, permission: 'chat:ask', scope: null },
   ]),
 
   // === admin — ทุกสิทธิ์ + scope = ALL ===

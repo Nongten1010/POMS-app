@@ -5,10 +5,12 @@ import {
   ForbiddenError,
   NotFoundError,
 } from '../../shared/errors/AppError';
+import { hashPassword } from '../../shared/utils/password';
 import { usersRepository } from './users.repository';
 import { groupPermissions } from '../auth/permissions';
 import type {
   CreateManagedUserInput,
+  CreateLocalAccountInput,
   ListManagedUsersQuery,
   ManagedUserDetailDTO,
   PaginatedManagedUsersDTO,
@@ -45,6 +47,26 @@ export const usersService = {
     await ensureUniqueIdentity(input.username, input.externalId ?? input.username);
     await ensureRolesExist(input.roleCodes);
     return usersRepository.create(input, actorUserId);
+  },
+
+  async createLocalAccount(
+    input: CreateLocalAccountInput,
+    actorUserId: number,
+  ): Promise<ManagedUserDetailDTO> {
+    await ensureUniqueIdentity(input.username, input.username);
+    await ensureRolesExist(input.roleCodes);
+    if (input.permissionOverrides) {
+      await ensurePermissionsExist(input.permissionOverrides.map((permission) => permission.code));
+    }
+
+    const passwordHash = await hashPassword(input.password);
+    return usersRepository.createLocalAccount(
+      {
+        ...input,
+        passwordHash,
+      },
+      actorUserId,
+    );
   },
 
   async update(

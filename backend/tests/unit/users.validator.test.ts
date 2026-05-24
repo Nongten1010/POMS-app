@@ -1,5 +1,6 @@
 import { describe, expect, it } from '@jest/globals';
 import {
+  createLocalAccountSchema,
   createManagedUserSchema,
   listManagedUsersQuerySchema,
   updateManagedUserSchema,
@@ -8,6 +9,9 @@ import {
 } from '../../src/modules/users/users.validator';
 
 describe('managed users validators', () => {
+  const passwordField = 'password';
+  const validTestPassword = 'valid-test-password';
+
   it('defaults list queries to fetch all users', () => {
     const result = listManagedUsersQuerySchema.parse({});
 
@@ -39,6 +43,47 @@ describe('managed users validators', () => {
     });
 
     expect(result.success).toBe(true);
+  });
+
+  it('accepts a local account payload with combined fullName and no email or phone', () => {
+    const result = createLocalAccountSchema.parse({
+      fullName: 'สมชาย ทดสอบ',
+      username: 'local_officer',
+      [passwordField]: validTestPassword,
+      roleCodes: ['diw_central'],
+      permissionOverrides: [{ code: 'chat:ask', effect: 'allow' }],
+    });
+
+    expect(result).toMatchObject({
+      fullName: 'สมชาย ทดสอบ',
+      username: 'local_officer',
+      userType: 'officer',
+      isActive: true,
+      roleCodes: ['diw_central'],
+    });
+  });
+
+  it('rejects local account payloads with email or phone fields', () => {
+    const result = createLocalAccountSchema.safeParse({
+      fullName: 'สมชาย ทดสอบ',
+      username: 'local_officer',
+      [passwordField]: validTestPassword,
+      roleCodes: ['diw_central'],
+      email: 'nope@example.com',
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects weak local account passwords', () => {
+    const result = createLocalAccountSchema.safeParse({
+      fullName: 'สมชาย ทดสอบ',
+      username: 'local_officer',
+      [passwordField]: 'short',
+      roleCodes: ['diw_central'],
+    });
+
+    expect(result.success).toBe(false);
   });
 
   it('requires at least one role when creating a user', () => {

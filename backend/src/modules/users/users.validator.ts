@@ -66,6 +66,39 @@ const managedUserPayloadShape = {
   profile: officerProfileSchema.optional(),
 };
 
+export const createLocalAccountSchema = z
+  .object({
+    fullName: z.string().trim().min(1).max(255),
+    username: z.string().trim().min(3).max(64),
+    password: z.string().min(8).max(128),
+    userType: z.enum(['officer', 'admin']).default('officer'),
+    isActive: z.boolean().default(true),
+    roleCodes: z.array(z.string().trim().min(1).max(32)).min(1).max(20),
+    permissionOverrides: z
+      .array(
+        z
+          .object({
+            code: z.string().trim().min(1).max(64),
+            effect: z.enum(['allow', 'deny']),
+            scope: permissionScopeSchema.optional(),
+          })
+          .strict(),
+      )
+      .max(200)
+      .optional(),
+  })
+  .strict()
+  .refine(
+    (value) => {
+      const codes = value.permissionOverrides?.map((permission) => permission.code) ?? [];
+      return new Set(codes).size === codes.length;
+    },
+    {
+      message: 'permissionOverrides must not contain duplicate codes',
+      path: ['permissionOverrides'],
+    },
+  );
+
 export const createManagedUserSchema = z
   .object({
     ...managedUserPayloadShape,
@@ -112,6 +145,7 @@ export const replaceUserPermissionsSchema = z
   );
 
 export type ListManagedUsersQueryInput = z.infer<typeof listManagedUsersQuerySchema>;
+export type CreateLocalAccountSchemaInput = z.infer<typeof createLocalAccountSchema>;
 export type CreateManagedUserSchemaInput = z.infer<typeof createManagedUserSchema>;
 export type UpdateManagedUserSchemaInput = z.infer<typeof updateManagedUserSchema>;
 export type ReplaceUserPermissionsSchemaInput = z.infer<typeof replaceUserPermissionsSchema>;

@@ -174,7 +174,7 @@ const factories = await factoriesRepo.list({
 | กฎหมายที่เกี่ยวข้อง (Edit)             | —               | —            | —      | —    | —    | —    | —    | —      | —        | —       | —       | ✅     |
 | คำถามที่พบบ่อย (View)                  | ✅               | ✅            | ✅      | ✅    | ✅    | ✅    | ✅    | ✅      | ✅        | ✅       | ✅       | ✅     |
 | คำถามที่พบบ่อย (Edit)                  | —               | —            | —      | —    | —    | —    | —    | —      | —        | —       | —       | ✅     |
-| Chat — Question                      | —               | ✅            | ✅      | ✅    | ✅    | ✅    | ✅    | —      | —        | —       | —       | —     |
+| Chat — Question                      | —               | ✅            | ✅      | ✅    | ✅    | ✅    | ✅    | ✅      | ✅        | ✅       | ✅       | —     |
 | Chat — Answer                        | —               | —            | —      | —    | —    | —    | ✅    | ✅      | —        | —       | —       | ✅     |
 | จัดการสิทธิ์การใช้งาน                  | —               | —            | —      | —    | —    | —    | —    | —      | —        | —       | —       | ✅     |
 
@@ -260,6 +260,49 @@ DRAFT ──submit──> SUBMITTED ──review──┬──approve──> AP
 - [ ] Middleware: `authorize(permissionCode)` + `applyScope(repo, permissionCode)`
 - [ ] Approvals module (shared) — state machine + audit trail
 - [ ] แต่ละ feature module ใช้ middleware + scope helper
+
+---
+
+## 9. Local account creation API
+
+สำหรับ admin/เจ้าหน้าที่ที่มี `users:edit` หรือ `permissions:manage` ใช้สร้าง user แบบเก็บรหัสผ่านใน POMS เอง:
+
+```http
+POST /api/v1/users/local-accounts
+Authorization: Bearer <admin-token>
+Content-Type: application/json
+```
+
+Request:
+```json
+{
+  "fullName": "สมชาย ทดสอบ",
+  "username": "local_officer",
+  "password": "StrongerPass123",
+  "roleCodes": ["diw_central"],
+  "permissionOverrides": [
+    { "code": "chat:ask", "effect": "allow" }
+  ]
+}
+```
+
+Rules:
+- ชื่อและสกุลรวมใน `fullName` ช่องเดียว
+- ไม่รับ `email` และ `phone`
+- `password` ถูก hash ด้วย bcrypt แล้วเก็บใน `users.password_hash`
+- `roleCodes` ใช้ role catalog เดิม เช่น `diw_central`, `provincial_office`, `kpm_director`
+- `permissionOverrides` ใช้เพิ่ม/ตัดสิทธิ์ราย user เมื่อ role ยังไม่พอ
+- user ที่สร้างด้วย endpoint นี้ login ด้วย `POST /api/v1/auth/login` โดยส่ง `provider: "local"`
+
+Local login:
+```json
+{
+  "userType": "officer",
+  "provider": "local",
+  "username": "local_officer",
+  "password": "StrongerPass123"
+}
+```
 
 ---
 

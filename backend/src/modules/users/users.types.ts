@@ -107,6 +107,16 @@ export interface CreateManagedUserInput {
   profile?: OfficerProfileInput;
 }
 
+export interface CreateLocalAccountInput {
+  fullName: string;
+  username: string;
+  password: string;
+  userType: ManagedUserType;
+  isActive: boolean;
+  roleCodes: string[];
+  permissionOverrides?: PermissionOverrideInput[];
+}
+
 export interface UpdateManagedUserInput {
   username?: string;
   externalId?: string;

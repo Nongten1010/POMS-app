@@ -17,6 +17,10 @@ import type {
 
 export const authService = {
   async login(payload: LoginRequest): Promise<LoginResponse> {
+    if (payload.provider === 'local') {
+      return this.loginLocal(payload);
+    }
+
     const provider = getIdentityProvider();
 
     // 1. Authenticate กับ identity provider (mock หรือ external)
@@ -53,6 +57,34 @@ export const authService = {
     const hashString = bufferToHashString(user.password_hash);
     if (!hashString) return false;
     return verifyPassword(plaintext, hashString);
+  },
+
+  async loginLocal(payload: LoginRequest): Promise<LoginResponse> {
+    const user = await authRepository.findUserByUsername(payload.username!);
+    if (!user || user.identity_provider !== 'local') {
+      throw new UnauthorizedError('Invalid credentials');
+    }
+    const hashString = bufferToHashString(user.password_hash);
+    if (!hashString) throw new UnauthorizedError('Invalid credentials');
+
+    const matches = await verifyPassword(payload.password, hashString);
+    if (!matches) throw new UnauthorizedError('Invalid credentials');
+    ensureLocalLoginTypeAllowed(user.user_type, payload.userType);
+    ensureLoginUserAvailable(user, payload.userType, user.external_id);
+    await authRepository.updateLastLogin(user.id);
+
+    const officerProfile =
+      user.user_type === 'officer' || user.user_type === 'admin'
+        ? await authRepository.getOfficerProfile(user.id)
+        : undefined;
+    const { roles, scopes } = await authRepository.getRolesAndPermissions(user.id);
+
+    return buildLoginResponse({
+      user: toUserSummary(user),
+      profile: officerProfile ? toOfficerDTO(officerProfile) : null,
+      roles,
+      scopes,
+    });
   },
 
   async completeLoginAsOfficer(
@@ -151,6 +183,16 @@ export const authService = {
     });
   },
 };
+
+function ensureLocalLoginTypeAllowed(
+  storedUserType: 'citizen' | 'operator' | 'officer' | 'admin',
+  requestedUserType: LoginRequest['userType'],
+): void {
+  const allowed =
+    storedUserType === requestedUserType ||
+    (requestedUserType === 'officer' && storedUserType === 'admin');
+  if (!allowed) throw new UnauthorizedError('Invalid credentials');
+}
 
 function ensureLoginUserAvailable(
   user:

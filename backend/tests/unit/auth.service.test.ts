@@ -37,6 +37,7 @@ jest.mock('../../src/modules/auth/identity-provider', () => ({
 jest.mock('../../src/modules/auth/auth.repository', () => ({
   authRepository: {
     findUserByProviderAndExternalId: jest.fn(),
+    findUserByUsername: jest.fn(),
     updateLastLogin: jest.fn(),
     getOfficerProfile: jest.fn(),
     getOperatorProfile: jest.fn(),
@@ -135,5 +136,34 @@ describe('authService login completion', () => {
       message: 'Invalid credentials',
     });
     expect(mockedAuthRepository.updateLastLogin).not.toHaveBeenCalled();
+  });
+
+  it('rejects local login when the username is not a local identity', async () => {
+    mockedAuthRepository.findUserByUsername.mockResolvedValue({
+      id: 12,
+      external_id: 'officer001',
+      identity_provider: 'mock',
+      user_type: 'officer',
+      username: 'officer001',
+      email: null,
+      phone: null,
+      prename_th: 'นาย',
+      first_name: 'ทดสอบ',
+      last_name: 'ระบบ',
+      is_active: true,
+      password_hash: null,
+    });
+
+    await expect(
+      authService.loginLocal({
+        userType: 'officer',
+        provider: 'local',
+        username: 'officer001',
+        password: 'demo1234',
+      }),
+    ).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+      message: 'Invalid credentials',
+    });
   });
 });

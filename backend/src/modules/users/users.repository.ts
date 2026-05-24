@@ -1,6 +1,7 @@
 import type { Knex } from 'knex';
 import { db } from '../../config/database';
 import type {
+  CreateLocalAccountInput,
   CreateManagedUserInput,
   ListManagedUsersQuery,
   ManagedUserDetailDTO,
@@ -12,6 +13,10 @@ import type {
   UpdateManagedUserInput,
   UserPermissionOverrideDTO,
 } from './users.types';
+
+interface CreateLocalAccountRepositoryInput extends CreateLocalAccountInput {
+  passwordHash: string;
+}
 
 interface ManagedUserJoinedRow {
   id: number | string;
@@ -231,6 +236,49 @@ export const usersRepository = {
     });
   },
 
+  async createLocalAccount(
+    input: CreateLocalAccountRepositoryInput,
+    actorUserId: number,
+  ): Promise<ManagedUserDetailDTO> {
+    return db.transaction(async (trx) => {
+      const roleRows = await this.findRolesByCodes(input.roleCodes, trx);
+      const [{ id }] = await trx('users')
+        .insert({
+          external_id: input.username,
+          identity_provider: 'local',
+          user_type: input.userType,
+          username: input.username,
+          email: null,
+          phone: null,
+          prename_th: null,
+          first_name: input.fullName,
+          last_name: '',
+          password_hash: Buffer.from(input.passwordHash, 'utf8'),
+          is_active: input.isActive,
+          created_by: actorUserId,
+          updated_by: actorUserId,
+        })
+        .returning('id');
+      const userId = Number(id);
+
+      await upsertOfficerProfile(trx, userId, {});
+      await replaceUserRoles(trx, userId, roleRows, actorUserId);
+
+      if (input.permissionOverrides && input.permissionOverrides.length > 0) {
+        await replaceUserPermissionOverridesInTransaction(
+          trx,
+          userId,
+          input.permissionOverrides,
+          actorUserId,
+        );
+      }
+
+      const created = await this.findById(userId, trx);
+      if (!created) throw new Error('Created local account could not be loaded');
+      return created;
+    });
+  },
+
   async update(
     userId: number,
     input: UpdateManagedUserInput,
@@ -287,31 +335,7 @@ export const usersRepository = {
     actorUserId: number,
   ): Promise<void> {
     await db.transaction(async (trx) => {
-      const permissionRows = await this.findPermissionsByCodes(
-        permissions.map((permission) => permission.code),
-        trx,
-      );
-      const permissionByCode = new Map(
-        permissionRows.map((permission) => [permission.code, permission]),
-      );
-
-      await trx('user_permissions').where({ user_id: userId }).del();
-
-      if (permissions.length === 0) return;
-
-      await trx('user_permissions').insert(
-        permissions.map((permission) => {
-          const permissionRow = permissionByCode.get(permission.code);
-          if (!permissionRow) throw new Error(`Permission not loaded: ${permission.code}`);
-          return {
-            user_id: userId,
-            permission_id: permissionRow.id,
-            effect: permission.effect,
-            scope: permission.effect === 'allow' ? (permission.scope ?? null) : null,
-            granted_by: actorUserId,
-          };
-        }),
-      );
+      await replaceUserPermissionOverridesInTransaction(trx, userId, permissions, actorUserId);
     });
   },
 };
@@ -536,6 +560,39 @@ async function replaceUserRoles(
       role_id: role.id,
       assigned_by: actorUserId,
     })),
+  );
+}
+
+async function replaceUserPermissionOverridesInTransaction(
+  trx: Knex.Transaction,
+  userId: number,
+  permissions: PermissionOverrideInput[],
+  actorUserId: number,
+): Promise<void> {
+  const permissionRows = await usersRepository.findPermissionsByCodes(
+    permissions.map((permission) => permission.code),
+    trx,
+  );
+  const permissionByCode = new Map(
+    permissionRows.map((permission) => [permission.code, permission]),
+  );
+
+  await trx('user_permissions').where({ user_id: userId }).del();
+
+  if (permissions.length === 0) return;
+
+  await trx('user_permissions').insert(
+    permissions.map((permission) => {
+      const permissionRow = permissionByCode.get(permission.code);
+      if (!permissionRow) throw new Error(`Permission not loaded: ${permission.code}`);
+      return {
+        user_id: userId,
+        permission_id: permissionRow.id,
+        effect: permission.effect,
+        scope: permission.effect === 'allow' ? (permission.scope ?? null) : null,
+        granted_by: actorUserId,
+      };
+    }),
   );
 }
 
