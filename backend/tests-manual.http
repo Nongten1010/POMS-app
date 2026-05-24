@@ -1,0 +1,160 @@
+### POMS Backend — Manual API tests
+### VS Code: ติดตั้ง extension `humao.rest-client` แล้วกด "Send Request" เหนือแต่ละ block
+### IntelliJ/WebStorm: รองรับ native (HTTP Client)
+
+@host = http://localhost:3000
+@apiPrefix = /api/v1
+
+###############################################################################
+# 1. Health check
+###############################################################################
+
+### Health
+GET {{host}}/health
+
+###############################################################################
+# 2. Login flows (3 user types)
+###############################################################################
+
+### 2.1 Login — Admin officer (วีกิจ ชมญาติ)
+# @name loginAdmin
+POST {{host}}{{apiPrefix}}/auth/login
+Content-Type: application/json
+
+{
+  "userType": "officer",
+  "username": "weekit",
+  "password": "demo1234"
+}
+
+### 2.2 Login — KPM officer (เจ้าหน้าที่ กฝม.)
+# @name loginKpm
+POST {{host}}{{apiPrefix}}/auth/login
+Content-Type: application/json
+
+{
+  "userType": "officer",
+  "username": "officer_kpm",
+  "password": "demo1234"
+}
+
+### 2.3 Login — Provincial officer (สอจ. สระบุรี)
+# @name loginProvincial
+POST {{host}}{{apiPrefix}}/auth/login
+Content-Type: application/json
+
+{
+  "userType": "officer",
+  "username": "officer_sng",
+  "password": "demo1234"
+}
+
+### 2.4 Login — Operator (ธนาภรณ์ — 2 บริษัท + 7 โรงงาน)
+# @name loginOperator
+POST {{host}}{{apiPrefix}}/auth/login
+Content-Type: application/json
+
+{
+  "userType": "operator",
+  "citizenId": "3191000135709",
+  "password": "demo1234"
+}
+
+### 2.5 Login — Citizen
+# @name loginCitizen
+POST {{host}}{{apiPrefix}}/auth/login
+Content-Type: application/json
+
+{
+  "userType": "citizen",
+  "username": "citizen_demo",
+  "password": "demo1234"
+}
+
+###############################################################################
+# 3. /me — ดู profile ของตัวเอง (ต้อง login ข้อ 2.1 ก่อน)
+###############################################################################
+
+### 3.1 /me ด้วย admin token
+GET {{host}}{{apiPrefix}}/auth/me
+Authorization: Bearer {{loginAdmin.response.body.data.accessToken}}
+
+### 3.2 /me ด้วย operator token
+GET {{host}}{{apiPrefix}}/auth/me
+Authorization: Bearer {{loginOperator.response.body.data.accessToken}}
+
+###############################################################################
+# 4. Error cases (ทดสอบ error handling)
+###############################################################################
+
+### 4.1 Wrong password → 401 UNAUTHORIZED
+POST {{host}}{{apiPrefix}}/auth/login
+Content-Type: application/json
+
+{
+  "userType": "officer",
+  "username": "weekit",
+  "password": "WRONG"
+}
+
+### 4.2 Missing password → 400 VALIDATION_ERROR
+POST {{host}}{{apiPrefix}}/auth/login
+Content-Type: application/json
+
+{
+  "userType": "officer",
+  "username": "weekit"
+}
+
+### 4.3 Operator without citizenId → 400 VALIDATION_ERROR
+POST {{host}}{{apiPrefix}}/auth/login
+Content-Type: application/json
+
+{
+  "userType": "operator",
+  "password": "demo1234"
+}
+
+### 4.4 Invalid userType → 400 VALIDATION_ERROR
+POST {{host}}{{apiPrefix}}/auth/login
+Content-Type: application/json
+
+{
+  "userType": "robot",
+  "username": "hack",
+  "password": "demo1234"
+}
+
+### 4.5 No Authorization header → 401
+GET {{host}}{{apiPrefix}}/auth/me
+
+### 4.6 Invalid Bearer token → 401
+GET {{host}}{{apiPrefix}}/auth/me
+Authorization: Bearer fake.token.value
+
+### 4.7 Unknown route → 404
+GET {{host}}{{apiPrefix}}/does-not-exist
+
+###############################################################################
+# 5. Non-existent user
+###############################################################################
+
+### 5.1 Officer ที่ไม่มีใน fixtures → 401
+POST {{host}}{{apiPrefix}}/auth/login
+Content-Type: application/json
+
+{
+  "userType": "officer",
+  "username": "ghost_user",
+  "password": "demo1234"
+}
+
+### 5.2 citizenId รูปแบบผิด → 400 VALIDATION_ERROR
+POST {{host}}{{apiPrefix}}/auth/login
+Content-Type: application/json
+
+{
+  "userType": "operator",
+  "citizenId": "abc",
+  "password": "demo1234"
+}

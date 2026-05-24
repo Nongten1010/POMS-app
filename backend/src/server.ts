@@ -1,0 +1,43 @@
+import { createApp } from './app';
+import { env } from './config/env';
+import { logger } from './config/logger';
+import { pingDatabase, closeDatabase } from './config/database';
+
+async function bootstrap(): Promise<void> {
+  try {
+    await pingDatabase();
+  } catch {
+    logger.warn('[boot] Continuing without DB connection (dev only). Fix DB and restart.');
+  }
+
+  const app = createApp();
+  const server = app.listen(env.PORT, () => {
+    logger.info(`[boot] POMS backend listening on http://localhost:${env.PORT}${env.API_PREFIX}`);
+    logger.info(`[boot] Environment: ${env.NODE_ENV}`);
+  });
+
+  const shutdown = async (signal: string): Promise<void> => {
+    logger.info(`[boot] ${signal} received — shutting down gracefully`);
+    server.close(async () => {
+      await closeDatabase();
+      process.exit(0);
+    });
+    setTimeout(() => {
+      logger.error('[boot] Forced shutdown after timeout');
+      process.exit(1);
+    }, 10_000).unref();
+  };
+
+  process.on('SIGINT', () => void shutdown('SIGINT'));
+  process.on('SIGTERM', () => void shutdown('SIGTERM'));
+
+  process.on('unhandledRejection', (reason) => {
+    logger.error('[boot] Unhandled rejection', reason as Error);
+  });
+  process.on('uncaughtException', (err) => {
+    logger.error('[boot] Uncaught exception', err);
+    process.exit(1);
+  });
+}
+
+void bootstrap();

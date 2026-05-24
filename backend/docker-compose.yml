@@ -1,0 +1,16 @@
+services:
+  poms-mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: poms-mssql
+    platform: linux/amd64
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD:?Set MSSQL_SA_PASSWORD before starting MSSQL}"
+    ports:
+      - "1433:1433"
+    volumes:
+      - poms_mssql_data:/var/opt/mssql
+    restart: unless-stopped
+
+volumes:
+  poms_mssql_data:

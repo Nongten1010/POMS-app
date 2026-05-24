@@ -1,0 +1,4 @@
+{
+    "status": "true",
+    "msg": "[{\"per_cardno\":\"1102001567054\",\"prename_th\":\"นาย\",\"per_name\":\"วีกิจ\",\"per_surname\":\"ชมญาติ\",\"pos_no\":\"539\",\"pertype_id\":\"5\",\"pertype\":\"ข้าราชการพลเรือนสามัญ\",\"positiontype_id\":\"2\",\"positiontype_th\":\"วิชาการ\",\"line_id\":\"20\",\"linename_th\":\"นักวิชาการคอมพิวเตอร์\",\"level_id\":\"17\",\"levelname_th\":\"ชำนาญการ\",\"mposition_id\":\"\",\"mposition\":\"\",\"organize_id\":\"3010073\",\"organize_th\":\"กลุ่มบริการระบบสารสนเทศ 3\",\"division_id\":\"3010071\",\"division\":\"ศูนย์เทคโนโลยีสารสนเทศและการสื่อสาร\",\"department_id\":\"3010000\",\"department\":\"กรมโรงงานอุตสาหกรรม\",\"ministry_id\":\"22\",\"ministry\":\"กระทรวงอุตสาหกรรม\",\"province_id\":\"1000\",\"province_th\":\"กรุงเทพมหานคร\",\"per_status\":\"1\",\"per_status_name\":\"ปกติ\",\"relocation_type\":\"0\",\"relocation_name\":\"ปฏิบัติหน้าที่ตามสังกัดเดิม\"}]"
+}
