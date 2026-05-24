@@ -15,7 +15,7 @@ export const eligibleFactoriesService = {
     query: ListEligibleFactoryCandidatesQuery,
   ): Promise<EligibleFactoryCandidatesDTO> {
     const normalizedSearch = query.search?.toLocaleLowerCase('th-TH');
-    const data = MOCK_ELIGIBLE_FACTORY_CANDIDATES.filter((factory) => {
+    const filtered = MOCK_ELIGIBLE_FACTORY_CANDIDATES.filter((factory) => {
       if (query.provinceName && factory.provinceName !== query.provinceName) return false;
       if (query.operationStatus && factory.operationStatus !== query.operationStatus) return false;
       if (query.hasEia !== undefined && factory.hasEia !== query.hasEia) return false;
@@ -30,11 +30,18 @@ export const eligibleFactoriesService = {
         factory.businessActivity,
       ].some((value) => value?.toLocaleLowerCase('th-TH').includes(normalizedSearch));
     });
+    const page = query.page ?? 1;
+    const perPage = query.perPage ?? 25;
+    const offset = (page - 1) * perPage;
+    const data = filtered.slice(offset, offset + perPage);
 
     return {
       data,
       meta: {
-        total: data.length,
+        total: filtered.length,
+        page,
+        perPage,
+        totalPages: Math.ceil(filtered.length / perPage),
         source: 'mock',
       },
     };

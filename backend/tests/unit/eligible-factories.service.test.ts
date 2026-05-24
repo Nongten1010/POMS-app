@@ -70,21 +70,57 @@ describe('eligibleFactoriesService', () => {
   it('returns mock candidates from the external factory source', async () => {
     const result = await eligibleFactoriesService.listCandidates({});
 
-    expect(result.meta).toEqual({ total: 6, source: 'mock' });
-    expect(result.data).toHaveLength(6);
+    expect(result.meta).toEqual({
+      total: 60000,
+      page: 1,
+      perPage: 25,
+      totalPages: 2400,
+      source: 'mock',
+    });
+    expect(result.data).toHaveLength(25);
   });
 
   it('filters mock candidates by province and EIA flag', async () => {
     const result = await eligibleFactoriesService.listCandidates({
       provinceName: 'ระยอง',
       hasEia: true,
+      perPage: 100,
     });
 
-    expect(result.data).toHaveLength(1);
+    expect(result.meta.total).toBeGreaterThan(0);
+    expect(result.data.length).toBeGreaterThan(0);
+    expect(result.data.every((factory) => factory.provinceName === 'ระยอง')).toBe(true);
+    expect(result.data.every((factory) => factory.hasEia === true)).toBe(true);
+  });
+
+  it('paginates mock candidates', async () => {
+    const result = await eligibleFactoriesService.listCandidates({
+      page: 2,
+      perPage: 10,
+    });
+
+    expect(result.meta).toMatchObject({
+      total: 60000,
+      page: 2,
+      perPage: 10,
+      totalPages: 6000,
+    });
+    expect(result.data).toHaveLength(10);
     expect(result.data[0]).toMatchObject({
-      factoryRegistrationNoNew: '3-106-33/50รย',
+      sourceFactoryId: 'mock-factory-000011',
+    });
+  });
+
+  it('searches mock candidates across factory fields', async () => {
+    const result = await eligibleFactoriesService.listCandidates({
+      search: 'ระยองพาวเวอร์บอยเลอร์',
+      perPage: 5,
+    });
+
+    expect(result.meta.total).toBeGreaterThan(0);
+    expect(result.data[0]).toMatchObject({
+      factoryName: expect.stringContaining('ระยองพาวเวอร์บอยเลอร์'),
       provinceName: 'ระยอง',
-      hasEia: true,
     });
   });
 

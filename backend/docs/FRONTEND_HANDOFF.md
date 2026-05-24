@@ -674,7 +674,7 @@ eligible_factories:manage
 
 ### 7.1 Candidate factories จาก DB ภายนอกแบบ mock
 
-ตอนนี้ DB ภายนอก 6 หมื่นโรงงานยังไม่ได้เชื่อมจริง backend จึงมี mock source 6 โรงงานให้ frontend ใช้ทำ UI/flow ก่อน
+ตอนนี้ DB ภายนอก 6 หมื่นโรงงานยังไม่ได้เชื่อมจริง backend จึงมี mock source 60,000 โรงงานให้ frontend ใช้ทำ UI/flow ก่อน
 
 ```http
 GET http://localhost:3000/api/v1/eligible-factories/candidates
@@ -684,6 +684,8 @@ Query filter:
 
 | query | type | example |
 | --- | --- | --- |
+| `page` | number | `1`, default `1` |
+| `perPage` | number | `25`, default `25`, max `100` |
 | `search` | string | `เคมี` |
 | `provinceName` | string | `ระยอง` |
 | `operationStatus` | string | `แจ้งประกอบแล้ว` |
@@ -692,7 +694,7 @@ Query filter:
 Example:
 
 ```bash
-curl "http://localhost:3000/api/v1/eligible-factories/candidates?provinceName=ระยอง&hasEia=true" \
+curl "http://localhost:3000/api/v1/eligible-factories/candidates?page=1&perPage=25&provinceName=ระยอง&hasEia=true" \
   -H "Authorization: Bearer <accessToken>"
 ```
 
@@ -713,7 +715,10 @@ Response:
     }
   ],
   "meta": {
-    "total": 1,
+    "total": 2400,
+    "page": 1,
+    "perPage": 25,
+    "totalPages": 96,
     "source": "mock"
   }
 }

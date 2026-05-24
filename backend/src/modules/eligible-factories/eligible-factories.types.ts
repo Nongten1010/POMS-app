@@ -37,6 +37,8 @@ export interface ListEligibleFactoriesQuery {
 }
 
 export interface ListEligibleFactoryCandidatesQuery {
+  page?: number;
+  perPage?: number;
   search?: string;
   provinceName?: string;
   operationStatus?: string;
@@ -91,6 +93,9 @@ export interface EligibleFactoryCandidatesDTO {
   data: EligibleFactoryCandidateDTO[];
   meta: {
     total: number;
+    page: number;
+    perPage: number;
+    totalPages: number;
     source: 'mock';
   };
 }
