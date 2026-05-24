@@ -43,6 +43,12 @@ The service id is:
 poms-app-backend
 ```
 
+Deployment notes, including the Windows `npm ci`/locked `bcrypt.node` issue, are in:
+
+```text
+backend/docs/WINDOWS_DEPLOYMENT.md
+```
+
 ## Frontend
 
 The frontend folder is intentionally empty for now. Add the frontend project under:

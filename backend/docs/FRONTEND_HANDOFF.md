@@ -656,7 +656,154 @@ Expected response เป็น shape เดียวกับ `GET /users/:id/pe
 | permission code ไม่มีอยู่ | 400 | `BAD_REQUEST` |
 | roleCode ไม่มีอยู่ | 400 | `BAD_REQUEST` |
 
-## 7. Error cases ที่ frontend ควรรองรับ
+## 7. Eligible factories
+
+API ชุดนี้ใช้กับฟังก์ชัน “เลือกโรงงานที่เข้าข่าย”
+
+ทุก endpoint ต้องส่ง token:
+
+```http
+Authorization: Bearer <accessToken>
+```
+
+ผู้ใช้ต้องมี permission:
+
+```text
+eligible_factories:manage
+```
+
+### 7.1 Candidate factories จาก DB ภายนอกแบบ mock
+
+ตอนนี้ DB ภายนอก 6 หมื่นโรงงานยังไม่ได้เชื่อมจริง backend จึงมี mock source 6 โรงงานให้ frontend ใช้ทำ UI/flow ก่อน
+
+```http
+GET http://localhost:3000/api/v1/eligible-factories/candidates
+```
+
+Query filter:
+
+| query | type | example |
+| --- | --- | --- |
+| `search` | string | `เคมี` |
+| `provinceName` | string | `ระยอง` |
+| `operationStatus` | string | `แจ้งประกอบแล้ว` |
+| `hasEia` | boolean string | `true` หรือ `false` |
+
+Example:
+
+```bash
+curl "http://localhost:3000/api/v1/eligible-factories/candidates?provinceName=ระยอง&hasEia=true" \
+  -H "Authorization: Bearer <accessToken>"
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "sourceSystem": "mock_external_factory_db",
+      "sourceFactoryId": "mock-factory-0005",
+      "factoryName": "บริษัท ระยองพาวเวอร์บอยเลอร์ จำกัด",
+      "factoryRegistrationNoNew": "3-106-33/50รย",
+      "provinceName": "ระยอง",
+      "operationStatus": "แจ้งประกอบแล้ว",
+      "hasEia": true
+    }
+  ],
+  "meta": {
+    "total": 1,
+    "source": "mock"
+  }
+}
+```
+
+### 7.2 Save selected eligible factory
+
+เมื่อผู้ใช้เลือก candidate แล้ว ให้ส่งข้อมูลโรงงานนั้นเข้า endpoint นี้ เพื่อบันทึก snapshot ลง DB เรา
+
+```http
+POST http://localhost:3000/api/v1/eligible-factories
+Content-Type: application/json
+Authorization: Bearer <accessToken>
+```
+
+Payload example:
+
+```json
+{
+  "sourceSystem": "mock_external_factory_db",
+  "sourceFactoryId": "mock-factory-0005",
+  "factoryName": "บริษัท ระยองพาวเวอร์บอยเลอร์ จำกัด",
+  "factoryRegistrationNoNew": "3-106-33/50รย",
+  "factoryRegistrationNoOld": "รง.4-10005",
+  "factoryTypeSequence": "หลัก",
+  "address": "7 ถนนไอ-หนึ่ง",
+  "provinceName": "ระยอง",
+  "industrialEstateName": "นิคมอุตสาหกรรมมาบตาพุด",
+  "coordinates": {
+    "latitude": 12.6819444,
+    "longitude": 101.1538888
+  },
+  "businessActivity": "ผลิตไอน้ำและพลังงานความร้อน",
+  "operationStatus": "แจ้งประกอบแล้ว",
+  "capitalAmount": 50000000,
+  "machineryHorsepower": 1500,
+  "productionCapacity": "250 ตันไอน้ำ/วัน",
+  "wastewaterDischargeInfo": "มีการระบายน้ำหล่อเย็นและน้ำทิ้ง",
+  "boilerCount": 4,
+  "boilerSizeEach": "25 ตัน/ชั่วโมง",
+  "fuelUsed": "ก๊าซธรรมชาติ",
+  "hasEia": true,
+  "selectedReason": "เลือกจากรายการโรงงานเข้าข่าย"
+}
+```
+
+Created response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "sourceSystem": "mock_external_factory_db",
+    "sourceFactoryId": "mock-factory-0005",
+    "factoryRegistrationNoNew": "3-106-33/50รย",
+    "factoryName": "บริษัท ระยองพาวเวอร์บอยเลอร์ จำกัด",
+    "provinceName": "ระยอง",
+    "selectedBy": 1,
+    "selectedAt": "2026-05-24T15:00:00.000Z"
+  }
+}
+```
+
+ถ้าเลือกเลขทะเบียนโรงงานใหม่ซ้ำ จะได้:
+
+```text
+409 CONFLICT
+```
+
+### 7.3 List selected eligible factories
+
+ใช้แสดงรายการที่เลือกเข้าข่ายแล้วจาก DB ของ POMS
+
+```http
+GET http://localhost:3000/api/v1/eligible-factories?page=1&perPage=25
+```
+
+Query filter:
+
+| query | type | example |
+| --- | --- | --- |
+| `page` | number | `1` |
+| `perPage` | number | `25`, max `100` |
+| `search` | string | ชื่อโรงงานหรือเลขทะเบียน |
+| `provinceName` | string | `ระยอง` |
+| `operationStatus` | string | `แจ้งประกอบแล้ว` |
+| `hasEia` | boolean string | `true` หรือ `false` |
+
+## 8. Error cases ที่ frontend ควรรองรับ
 
 Frontend ควรดู `error.code` เป็นหลัก ไม่ควร hardcode จาก `error.message`
 
@@ -717,7 +864,7 @@ Unknown route:
 404
 ```
 
-## 8. Quick manual test
+## 9. Quick manual test
 
 ```bash
 curl http://localhost:3000/health
@@ -742,7 +889,7 @@ done
 
 หลังยิงถี่เกิน limit ควรได้ `429`
 
-## 9. Backend smoke test
+## 10. Backend smoke test
 
 ถ้า frontend บอกว่าเรียก backend ไม่ได้ ให้เช็คฝั่ง backend ด้วย:
 
