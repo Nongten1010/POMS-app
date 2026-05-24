@@ -165,6 +165,76 @@ If yes, reduce the scope or rewrite smaller.
 - Do not overwrite, revert, or remove user changes unless explicitly asked.
 - If unrelated changes are present, leave them intact and work around them when possible.
 
+## GitHub Push Workflow
+
+Only run this workflow when the user explicitly asks to push, publish, deploy to GitHub, or gives a direct GitHub push instruction. Do not commit, push, create branches, open pull requests, or change remote state during normal implementation work.
+
+Current target used for this project:
+
+- Repository: `git@github.com:Nongten1010/POMS-app.git`
+- Branch: `main`
+- Destination folder in the repository: `frontend`
+
+Required information before pushing:
+
+- Repository URL
+- Target branch
+- Destination folder or path inside the repository
+- Whether to push directly or open a pull request
+- Commit message, or a concise message inferred from the requested work when the user does not provide one
+
+Recommended push steps:
+
+1. Confirm the local project is ready.
+   - Run relevant validation first, usually `npm run lint` and `npm run build`.
+   - Do not include `node_modules`, `dist`, `.DS_Store`, local env files, or generated build artifacts.
+
+2. Check remote access.
+   - Use `git ls-remote --heads <repo-url> <branch>` to confirm SSH access and that the branch exists.
+   - If access fails, stop and report the blocker.
+
+3. Clone the target repository into a temporary directory.
+   - Example: `git clone --branch main git@github.com:Nongten1010/POMS-app.git /tmp/poms-app-push.<suffix>`
+   - Do not initialize this standalone frontend folder as a separate git repository when the target repository already exists.
+
+4. Inspect the target repository before syncing.
+   - Run `git status -sb`.
+   - Inspect the destination folder, for example `frontend`.
+   - If the destination folder contains existing files beyond placeholders, check the diff carefully before overwriting anything.
+
+5. Sync the frontend project into the destination folder.
+   - Use a scoped sync that excludes local-only and generated files.
+   - Example:
+
+```bash
+rsync -a --delete \
+  --exclude '.git/' \
+  --exclude 'node_modules/' \
+  --exclude 'dist/' \
+  --exclude '.DS_Store' \
+  /path/to/local/frontend/ \
+  /tmp/poms-app-push.<suffix>/frontend/
+```
+
+6. Validate inside the cloned repository destination.
+   - Run `npm ci` in `frontend` when dependencies are not installed.
+   - Run `npm run lint`.
+   - Run `npm run build`.
+   - Report warnings such as Vite bundle-size warnings, but they do not block push unless they indicate a real failure.
+
+7. Stage only the intended destination folder.
+   - Prefer `git add frontend`.
+   - Check `git status -sb` and `git diff --cached --stat` before committing.
+   - Do not stage unrelated backend, docs, root, or user changes.
+
+8. Commit and push.
+   - Commit with a concise message, for example `Update frontend app`.
+   - Push to the requested branch: `git push origin main`.
+   - If branch protection, authentication, or remote rejection blocks the push, stop and report the exact blocker.
+
+9. Report the result.
+   - Include repository, branch, destination folder, commit hash, validation results, and any warnings.
+
 ## Change Scope Rules
 
 Touch only what is necessary for the request.

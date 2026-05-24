@@ -28,9 +28,12 @@ const officerTypes = [
   'การนิคมแห่งประเทศไทย',
 ]
 
+const publicUserTypes = ['ประชาชนทั่วไป', 'เจ้าหน้าที่']
+
 function DpomsLoginDialog({ open, onClose, onLoginSuccess }) {
   const [activeTab, setActiveTab] = useState(0)
   const [officerType, setOfficerType] = useState(officerTypes[0])
+  const [publicUserType, setPublicUserType] = useState(publicUserTypes[0])
 
   const isOfficer = activeTab === 1
 
@@ -39,6 +42,7 @@ function DpomsLoginDialog({ open, onClose, onLoginSuccess }) {
     onLoginSuccess?.({
       userType: isOfficer ? 'officer' : 'public',
       officerType: isOfficer ? officerType : null,
+      publicUserType: isOfficer ? null : publicUserType,
     })
   }
 
@@ -134,7 +138,23 @@ function DpomsLoginDialog({ open, onClose, onLoginSuccess }) {
                 ))}
               </Select>
             </FormControl>
-          ) : null}
+          ) : (
+            <FormControl fullWidth required>
+              <InputLabel id="public-user-type-label">ประเภทผู้ใช้งาน</InputLabel>
+              <Select
+                labelId="public-user-type-label"
+                value={publicUserType}
+                label="ประเภทผู้ใช้งาน"
+                onChange={(event) => setPublicUserType(event.target.value)}
+              >
+                {publicUserTypes.map((type) => (
+                  <MenuItem key={type} value={type}>
+                    {type}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
 
           <Box
             sx={{

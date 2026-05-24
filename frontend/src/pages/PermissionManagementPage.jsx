@@ -381,7 +381,7 @@ function UserPermissionDialog({ mode, open, user, onClose, onSave }) {
               {title}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              {isAddMode ? 'กรอกข้อมูลผู้ใช้งานและกำหนดสิทธิ์เริ่มต้น' : user?.username}
+              {isAddMode ? 'กรอกข้อมูลผู้ใช้งาน' : user?.username}
             </Typography>
           </Box>
           <IconButton aria-label="ปิด" onClick={onClose}>
@@ -438,9 +438,11 @@ function UserPermissionDialog({ mode, open, user, onClose, onSave }) {
             </Stack>
           </Paper>
 
-          {permissionSections.map((section) => (
-            <PermissionSection key={section.title} section={section} />
-          ))}
+          {isAddMode
+            ? null
+            : permissionSections.map((section) => (
+                <PermissionSection key={section.title} section={section} />
+              ))}
         </Stack>
       </DialogContent>
 

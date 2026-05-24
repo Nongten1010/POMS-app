@@ -21,6 +21,7 @@ import WarningIcon from '@mui/icons-material/Warning'
 import DpomsAppBar from './components/DpomsAppBar'
 import DpomsLoginDialog from './components/DpomsLoginDialog'
 import DpomsSidebar from './components/DpomsSidebar'
+import ApiDocumentationPage from './pages/ApiDocumentationPage'
 import PermissionManagementPage from './pages/PermissionManagementPage'
 
 function App() {
@@ -28,6 +29,7 @@ function App() {
   const [isLoginOpen, setIsLoginOpen] = useState(false)
   const [currentUser, setCurrentUser] = useState(null)
   const [selectedMenu, setSelectedMenu] = useState('home')
+  const isWorkspacePage = selectedMenu === 'permissions' || selectedMenu === 'api-documentation'
 
   const primaryColors = [
     ['50', '#eef6ff'],
@@ -210,7 +212,7 @@ function App() {
         maxWidth={false}
         sx={{
           width: '100%',
-          ...(selectedMenu === 'permissions'
+          ...(isWorkspacePage
             ? {
                 height: { xs: 'calc(100dvh - 64px)', md: 'calc(100dvh - 72px)' },
                 overflow: 'hidden',
@@ -223,6 +225,8 @@ function App() {
       >
         {selectedMenu === 'permissions' ? (
           <PermissionManagementPage />
+        ) : selectedMenu === 'api-documentation' ? (
+          <ApiDocumentationPage />
         ) : (
         <Stack spacing={4}>
           <Paper
