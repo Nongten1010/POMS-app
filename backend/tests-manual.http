@@ -24,6 +24,7 @@ Content-Type: application/json
 {
   "userType": "officer",
   "username": "weekit",
+  "departmentID": "2",
   "password": "demo1234"
 }
 
@@ -35,6 +36,7 @@ Content-Type: application/json
 {
   "userType": "officer",
   "username": "officer_kpm",
+  "departmentID": "2",
   "password": "demo1234"
 }
 
@@ -46,6 +48,7 @@ Content-Type: application/json
 {
   "userType": "officer",
   "username": "officer_sng",
+  "departmentID": "2",
   "password": "demo1234"
 }
 
@@ -94,6 +97,7 @@ Content-Type: application/json
 {
   "userType": "officer",
   "username": "weekit",
+  "departmentID": "2",
   "password": "WRONG"
 }
 
@@ -103,7 +107,8 @@ Content-Type: application/json
 
 {
   "userType": "officer",
-  "username": "weekit"
+  "username": "weekit",
+  "departmentID": "2"
 }
 
 ### 4.3 Operator without citizenId → 400 VALIDATION_ERROR
@@ -122,6 +127,7 @@ Content-Type: application/json
 {
   "userType": "robot",
   "username": "hack",
+  "departmentID": "2",
   "password": "demo1234"
 }
 
@@ -146,6 +152,7 @@ Content-Type: application/json
 {
   "userType": "officer",
   "username": "ghost_user",
+  "departmentID": "2",
   "password": "demo1234"
 }
 

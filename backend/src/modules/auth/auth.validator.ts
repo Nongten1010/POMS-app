@@ -4,6 +4,7 @@ export const loginSchema = z
   .object({
     userType: z.enum(['officer', 'operator', 'citizen']),
     username: z.string().min(1).optional(),
+    departmentID: z.string().min(1).optional(),
     citizenId: z
       .string()
       .regex(/^\d{13}$/, 'citizenId must be 13 digits')
@@ -18,6 +19,16 @@ export const loginSchema = z
     {
       message: 'operator requires citizenId; officer/citizen requires username',
       path: ['username'],
+    },
+  )
+  .refine(
+    (data) => {
+      if (data.userType !== 'officer') return true;
+      return !!data.departmentID;
+    },
+    {
+      message: 'officer requires departmentID',
+      path: ['departmentID'],
     },
   );
 

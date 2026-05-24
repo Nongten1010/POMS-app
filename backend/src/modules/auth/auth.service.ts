@@ -19,7 +19,11 @@ export const authService = {
 
     // 1. Authenticate กับ identity provider (mock หรือ external)
     if (payload.userType === 'officer') {
-      const profile = await provider.authenticateOfficer(payload.username!, payload.password);
+      const profile = await provider.authenticateOfficer(
+        payload.username!,
+        payload.password,
+        payload.departmentID!,
+      );
       if (!profile) throw new UnauthorizedError('Invalid credentials');
       return await this.completeLoginAsOfficer(profile);
     }

@@ -506,7 +506,7 @@ CREATE INDEX ix_audit_action  ON audit_logs(action, created_at DESC);
 ```ts
 // src/modules/auth/identity-provider/identity-provider.interface.ts
 export interface IdentityProvider {
-  authenticateOfficer(username: string, password: string): Promise<OfficerProfile | null>;
+  authenticateOfficer(username: string, password: string, departmentID: string): Promise<OfficerProfile | null>;
   authenticateOperator(citizenId: string, password: string): Promise<OperatorProfile | null>;
   authenticateCitizen(username: string, password: string): Promise<CitizenProfile | null>;
   fetchJuristicsByCitizenId(citizenId: string): Promise<JuristicWithFactories[]>;
@@ -589,7 +589,7 @@ EXTERNAL_IDP_OPERATOR_URL=https://opr.diw.go.th/api/auth
 ### 9.5 Login flow (mock vs external)
 
 ```
-[Frontend] POST /api/v1/auth/login { userType, username/citizen_id, password }
+[Frontend] POST /api/v1/auth/login { userType, username/citizen_id, password, departmentID? }
    ↓
 [auth.controller] → authService.login(payload)
    ↓

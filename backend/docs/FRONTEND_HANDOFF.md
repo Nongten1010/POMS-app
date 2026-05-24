@@ -74,6 +74,7 @@ Content-Type: application/json
 {
   "userType": "officer",
   "username": "weekit",
+  "departmentID": "2",
   "password": "demo1234"
 }
 ```
@@ -84,6 +85,7 @@ Content-Type: application/json
 {
   "userType": "officer",
   "username": "officer_kpm",
+  "departmentID": "2",
   "password": "demo1234"
 }
 ```
@@ -94,6 +96,7 @@ Content-Type: application/json
 {
   "userType": "officer",
   "username": "officer_sng",
+  "departmentID": "2",
   "password": "demo1234"
 }
 ```
@@ -210,7 +213,7 @@ curl http://localhost:3000/health
 ```bash
 curl -X POST http://localhost:3000/api/v1/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"userType":"officer","username":"weekit","password":"demo1234"}'
+  -d '{"userType":"officer","username":"weekit","departmentID":"2","password":"demo1234"}'
 ```
 
 ## 8. Backend smoke test

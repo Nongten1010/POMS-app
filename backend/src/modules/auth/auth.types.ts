@@ -4,6 +4,8 @@ export interface LoginRequest {
   userType: 'officer' | 'operator' | 'citizen';
   /** officer/citizen: ใช้ username; operator: ใช้ citizenId */
   username?: string;
+  /** officer: department selector from DIW login flow */
+  departmentID?: string;
   citizenId?: string;
   password: string;
 }

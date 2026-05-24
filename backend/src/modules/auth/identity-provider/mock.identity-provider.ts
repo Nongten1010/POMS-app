@@ -14,6 +14,7 @@ export class MockIdentityProvider implements IdentityProvider {
   async authenticateOfficer(
     username: string,
     password: string,
+    _departmentID: string,
   ): Promise<ExternalOfficerProfile | null> {
     const officer = MOCK_OFFICERS.find((o) => o.username === username);
     if (!officer || officer.password !== password) return null;

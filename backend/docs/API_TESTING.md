@@ -80,7 +80,7 @@ Response: `{"success":true,"status":"ok",...}`
 ```bash
 curl -X POST http://localhost:3000/api/v1/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"userType":"officer","username":"weekit","password":"demo1234"}'
+  -d '{"userType":"officer","username":"weekit","departmentID":"2","password":"demo1234"}'
 ```
 
 Response (สำคัญที่ frontend ใช้):
@@ -115,7 +115,7 @@ curl -X POST http://localhost:3000/api/v1/auth/login \
 # ดึง token จาก login ก่อน
 TOKEN=$(curl -s -X POST http://localhost:3000/api/v1/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"userType":"officer","username":"weekit","password":"demo1234"}' \
+  -d '{"userType":"officer","username":"weekit","departmentID":"2","password":"demo1234"}' \
   | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['accessToken'])")
 
 curl http://localhost:3000/api/v1/auth/me -H "Authorization: Bearer $TOKEN"
@@ -127,7 +127,7 @@ curl http://localhost:3000/api/v1/auth/me -H "Authorization: Bearer $TOKEN"
 # 5.5.1 Wrong password → 401
 curl -X POST http://localhost:3000/api/v1/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"userType":"officer","username":"weekit","password":"WRONG"}'
+  -d '{"userType":"officer","username":"weekit","departmentID":"2","password":"WRONG"}'
 
 # 5.5.2 Validation error → 400
 curl -X POST http://localhost:3000/api/v1/auth/login \
