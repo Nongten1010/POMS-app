@@ -22,6 +22,7 @@ import DpomsAppBar from './components/DpomsAppBar'
 import DpomsLoginDialog from './components/DpomsLoginDialog'
 import DpomsSidebar from './components/DpomsSidebar'
 import ApiDocumentationPage from './pages/ApiDocumentationPage'
+import EligibleFactoriesPage from './pages/EligibleFactoriesPage'
 import PermissionManagementPage from './pages/PermissionManagementPage'
 
 function App() {
@@ -29,7 +30,10 @@ function App() {
   const [isLoginOpen, setIsLoginOpen] = useState(false)
   const [currentUser, setCurrentUser] = useState(null)
   const [selectedMenu, setSelectedMenu] = useState('home')
-  const isWorkspacePage = selectedMenu === 'permissions' || selectedMenu === 'api-documentation'
+  const isWorkspacePage =
+    selectedMenu === 'permissions' ||
+    selectedMenu === 'eligible-factories' ||
+    selectedMenu === 'api-documentation'
 
   const primaryColors = [
     ['50', '#eef6ff'],
@@ -225,6 +229,8 @@ function App() {
       >
         {selectedMenu === 'permissions' ? (
           <PermissionManagementPage />
+        ) : selectedMenu === 'eligible-factories' ? (
+          <EligibleFactoriesPage />
         ) : selectedMenu === 'api-documentation' ? (
           <ApiDocumentationPage />
         ) : (
