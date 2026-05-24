@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { StatusCodes } from 'http-status-codes';
 import { loginSchema } from './auth.validator';
 import { authService } from './auth.service';
+import { groupPermissions } from './permissions';
 
 export const authController = {
   async login(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -23,7 +24,7 @@ export const authController = {
         userType: req.user?.userType,
         roles: req.user?.roles,
         scopes: req.user?.scopes,
-        permissions: Object.keys(req.user?.scopes ?? {}),
+        permissions: groupPermissions(req.user?.scopes ?? {}),
       },
     });
   },

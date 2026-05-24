@@ -94,7 +94,10 @@ Response (สำคัญที่ frontend ใช้):
     "profile": { "lineNameTh": "นักวิชาการคอมพิวเตอร์", ... },
     "roles": ["admin"],
     "scopes": { "factories:view": "ALL", ... },
-    "permissions": ["dashboard:view", "factories:view", ...]
+    "permissions": {
+      "dashboard": { "view": true },
+      "factories": { "view": true, "edit": true, "approve": true }
+    }
   }
 }
 ```

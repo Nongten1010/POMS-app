@@ -1,3 +1,5 @@
+import type { PermissionGroups } from './permissions';
+
 export type UserType = 'citizen' | 'operator' | 'officer' | 'admin';
 
 export interface LoginRequest {
@@ -63,5 +65,5 @@ export interface LoginResponse {
   profile: OfficerProfileDTO | OperatorProfileDTO | null;
   roles: string[];
   scopes: Record<string, string | null>;
-  permissions: string[];
+  permissions: PermissionGroups;
 }

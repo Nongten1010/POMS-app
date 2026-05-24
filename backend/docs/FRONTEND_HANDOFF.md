@@ -143,7 +143,14 @@ Frontend ใช้ `data.accessToken` สำหรับเรียก endpoint
     "scopes": {
       "factories:view": "ALL"
     },
-    "permissions": ["dashboard:view", "factories:view"]
+    "permissions": {
+      "dashboard": {
+        "view": true
+      },
+      "factories": {
+        "view": true
+      }
+    }
   }
 }
 ```
@@ -167,7 +174,7 @@ Expected:
     "userType": "admin",
     "roles": ["admin"],
     "scopes": {},
-    "permissions": []
+    "permissions": {}
   }
 }
 ```

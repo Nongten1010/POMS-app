@@ -5,6 +5,7 @@ import { signAccessToken, parseDurationToSeconds } from '../../shared/utils/jwt'
 import { verifyPassword, bufferToHashString } from '../../shared/utils/password';
 import { getIdentityProvider } from './identity-provider';
 import { authRepository } from './auth.repository';
+import { groupPermissions } from './permissions';
 import type {
   LoginRequest,
   LoginResponse,
@@ -232,6 +233,6 @@ function buildLoginResponse(args: {
     profile: args.profile,
     roles: args.roles,
     scopes: args.scopes,
-    permissions: Object.keys(args.scopes),
+    permissions: groupPermissions(args.scopes),
   };
 }

@@ -625,12 +625,12 @@ interface LoginResponse {
   profile: OperatorProfile | OfficerProfile | null;  // discriminated by userType
   scopes: Record<string, 'ALL'|'IN_PROVINCE'|'IN_ESTATE'|'OWN_FACTORY'|null>;
   // e.g. { 'factories:view': 'IN_PROVINCE', 'factories:edit': null }
-  permissions: string[];                      // flat list ของ permission codes
-  // e.g. ['dashboard:view', 'factories:view', 'factories:edit']
+  permissions: Record<string, Record<string, true>>;
+  // e.g. { dashboard: { view: true }, factories: { view: true, edit: true } }
 }
 ```
 
-> Frontend check `permissions.includes('factories:edit')` ก่อนแสดงปุ่ม; backend re-check ที่ middleware เสมอ (defense in depth)
+> Frontend check `permissions.factories?.edit === true` ก่อนแสดงปุ่ม; backend re-check ที่ middleware เสมอ (defense in depth)
 
 ---
 
