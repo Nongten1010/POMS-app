@@ -8,6 +8,10 @@ frontend/  Frontend workspace, currently empty until the frontend work is added
 docs/      Project notes
 ```
 
+## Work Boundaries
+
+Read `AGENTS.md` before using AI tools or starting changes. Backend work stays in `backend/`; frontend work stays in `frontend/`. Do not edit both sides in one change unless the task explicitly requires it.
+
 ## Backend
 
 ```bash
@@ -34,4 +38,3 @@ frontend/
 ```
 
 Do not commit `.env`, `node_modules`, `dist`, `coverage`, or runtime logs.
-
