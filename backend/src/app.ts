@@ -8,6 +8,7 @@ import { env } from './config/env';
 import { errorHandler, notFoundHandler } from './shared/middlewares/errorHandler';
 import { authRoutes } from './modules/auth/auth.routes';
 import { usersRoutes } from './modules/users/users.routes';
+import { eligibleFactoriesRoutes } from './modules/eligible-factories/eligible-factories.routes';
 
 export function createApp(): Application {
   const app = express();
@@ -46,6 +47,7 @@ export function createApp(): Application {
 
   app.use(`${env.API_PREFIX}/auth`, authRoutes);
   app.use(`${env.API_PREFIX}/users`, usersRoutes);
+  app.use(`${env.API_PREFIX}/eligible-factories`, eligibleFactoriesRoutes);
   // TODO: mount more feature routes when ready
   // app.use(`${env.API_PREFIX}/factories`, factoriesRoutes);
 
