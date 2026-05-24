@@ -72,12 +72,9 @@ describe('eligibleFactoriesService', () => {
 
     expect(result.meta).toEqual({
       total: 60000,
-      page: 1,
-      perPage: 25,
-      totalPages: 2400,
       source: 'mock',
     });
-    expect(result.data).toHaveLength(25);
+    expect(result.data).toHaveLength(60000);
   });
 
   it('filters mock candidates by province and EIA flag', async () => {

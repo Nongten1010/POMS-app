@@ -72,8 +72,6 @@ describe('eligible factories validators', () => {
     });
 
     expect(result).toEqual({
-      page: 1,
-      perPage: 25,
       search: 'เคมี',
       provinceName: 'พระนครศรีอยุธยา',
       hasEia: true,

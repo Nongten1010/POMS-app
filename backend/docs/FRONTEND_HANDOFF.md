@@ -684,8 +684,8 @@ Query filter:
 
 | query | type | example |
 | --- | --- | --- |
-| `page` | number | `1`, default `1` |
-| `perPage` | number | `25`, default `25`, max `100` |
+| `page` | number | optional; ถ้าไม่ส่ง `page/perPage` จะดึงทั้งหมด |
+| `perPage` | number | optional; ถ้าส่ง max `100` |
 | `search` | string | `เคมี` |
 | `provinceName` | string | `ระยอง` |
 | `operationStatus` | string | `แจ้งประกอบแล้ว` |
@@ -694,7 +694,7 @@ Query filter:
 Example:
 
 ```bash
-curl "http://localhost:3000/api/v1/eligible-factories/candidates?page=1&perPage=25&provinceName=ระยอง&hasEia=true" \
+curl "http://localhost:3000/api/v1/eligible-factories/candidates?provinceName=ระยอง&hasEia=true" \
   -H "Authorization: Bearer <accessToken>"
 ```
 
@@ -716,12 +716,16 @@ Response:
   ],
   "meta": {
     "total": 2400,
-    "page": 1,
-    "perPage": 25,
-    "totalPages": 96,
     "source": "mock"
   }
 }
+```
+
+ถ้าต้องการ paginate ค่อยส่ง `page/perPage`:
+
+```bash
+curl "http://localhost:3000/api/v1/eligible-factories/candidates?page=1&perPage=25" \
+  -H "Authorization: Bearer <accessToken>"
 ```
 
 ### 7.2 Save selected eligible factory

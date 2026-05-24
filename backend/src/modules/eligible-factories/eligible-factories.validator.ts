@@ -61,8 +61,8 @@ export const listEligibleFactoriesQuerySchema = z
 
 export const listEligibleFactoryCandidatesQuerySchema = z
   .object({
-    page: z.coerce.number().int().min(1).default(1),
-    perPage: z.coerce.number().int().min(1).max(100).default(25),
+    page: z.coerce.number().int().min(1).optional(),
+    perPage: z.coerce.number().int().min(1).max(100).optional(),
     search: z.string().trim().min(1).max(128).optional(),
     provinceName: z.string().trim().min(1).max(128).optional(),
     operationStatus: z.string().trim().min(1).max(64).optional(),
@@ -71,7 +71,16 @@ export const listEligibleFactoryCandidatesQuerySchema = z
       .transform((value) => value === 'true')
       .optional(),
   })
-  .strict();
+  .strict()
+  .transform((query) => {
+    const shouldPaginate = query.page !== undefined || query.perPage !== undefined;
+    if (!shouldPaginate) return query;
+    return {
+      ...query,
+      page: query.page ?? 1,
+      perPage: query.perPage ?? 25,
+    };
+  });
 
 export type CreateEligibleFactorySchemaInput = z.infer<typeof createEligibleFactorySchema>;
 export type ListEligibleFactoriesQuerySchemaInput = z.infer<

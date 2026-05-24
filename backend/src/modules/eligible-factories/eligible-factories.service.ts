@@ -30,18 +30,26 @@ export const eligibleFactoriesService = {
         factory.businessActivity,
       ].some((value) => value?.toLocaleLowerCase('th-TH').includes(normalizedSearch));
     });
-    const page = query.page ?? 1;
-    const perPage = query.perPage ?? 25;
-    const offset = (page - 1) * perPage;
-    const data = filtered.slice(offset, offset + perPage);
+    if (query.page === undefined || query.perPage === undefined) {
+      return {
+        data: filtered,
+        meta: {
+          total: filtered.length,
+          source: 'mock',
+        },
+      };
+    }
+
+    const offset = (query.page - 1) * query.perPage;
+    const data = filtered.slice(offset, offset + query.perPage);
 
     return {
       data,
       meta: {
         total: filtered.length,
-        page,
-        perPage,
-        totalPages: Math.ceil(filtered.length / perPage),
+        page: query.page,
+        perPage: query.perPage,
+        totalPages: Math.ceil(filtered.length / query.perPage),
         source: 'mock',
       },
     };

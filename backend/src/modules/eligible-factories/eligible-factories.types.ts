@@ -93,9 +93,9 @@ export interface EligibleFactoryCandidatesDTO {
   data: EligibleFactoryCandidateDTO[];
   meta: {
     total: number;
-    page: number;
-    perPage: number;
-    totalPages: number;
+    page?: number;
+    perPage?: number;
+    totalPages?: number;
     source: 'mock';
   };
 }
