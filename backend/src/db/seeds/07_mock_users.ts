@@ -100,7 +100,7 @@ export async function seed(knex: Knex): Promise<void> {
     const userId = await upsertUser(knex, {
       external_id: operator.citizen_id,
       user_type: 'operator',
-      username: null,
+      username: operator.username,
       email: operator.email,
       phone: operator.phone,
       prename_th: null,

@@ -38,6 +38,7 @@ export interface MockOfficer {
 }
 
 export interface MockOperator {
+  username: string;
   citizen_id: string;
   password: string;
   email: string | null;
@@ -158,6 +159,7 @@ export const MOCK_OFFICERS: MockOfficer[] = [
 
 export const MOCK_OPERATORS: MockOperator[] = [
   {
+    username: 'operator_demo',
     citizen_id: '3191000135709',
     password: 'demo1234',
     email: 'tanaporn.sriaub@siamcitycement.com',

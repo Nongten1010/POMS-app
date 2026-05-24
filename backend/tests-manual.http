@@ -59,7 +59,7 @@ Content-Type: application/json
 
 {
   "userType": "operator",
-  "citizenId": "3191000135709",
+  "username": "operator_demo",
   "password": "demo1234"
 }
 
@@ -111,7 +111,7 @@ Content-Type: application/json
   "departmentID": "2"
 }
 
-### 4.3 Operator without citizenId → 400 VALIDATION_ERROR
+### 4.3 Operator without username → 400 VALIDATION_ERROR
 POST {{host}}{{apiPrefix}}/auth/login
 Content-Type: application/json
 
@@ -156,12 +156,12 @@ Content-Type: application/json
   "password": "demo1234"
 }
 
-### 5.2 citizenId รูปแบบผิด → 400 VALIDATION_ERROR
+### 5.2 Operator unknown username → 401 UNAUTHORIZED
 POST {{host}}{{apiPrefix}}/auth/login
 Content-Type: application/json
 
 {
   "userType": "operator",
-  "citizenId": "abc",
+  "username": "unknown_operator",
   "password": "demo1234"
 }

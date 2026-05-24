@@ -30,7 +30,7 @@ export const authService = {
     }
 
     if (payload.userType === 'operator') {
-      const profile = await provider.authenticateOperator(payload.citizenId!, payload.password);
+      const profile = await provider.authenticateOperator(payload.username!, payload.password);
       if (!profile) throw new UnauthorizedError('Invalid credentials');
       return await this.completeLoginAsOperator(profile);
     }

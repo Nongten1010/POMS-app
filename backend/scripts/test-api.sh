@@ -87,7 +87,7 @@ expect_status "POST /auth/login (provincial officer)"        200 -X POST "$HOST$
 
 expect_status "POST /auth/login (operator 'ธนาภรณ์')"        200 -X POST "$HOST$PREFIX/auth/login" \
   -H 'Content-Type: application/json' \
-  -d '{"userType":"operator","citizenId":"3191000135709","password":"demo1234"}'
+  -d '{"userType":"operator","username":"operator_demo","password":"demo1234"}'
 
 expect_status "POST /auth/login (citizen)"                   200 -X POST "$HOST$PREFIX/auth/login" \
   -H 'Content-Type: application/json' \
@@ -118,7 +118,7 @@ expect_status "Missing password → 400"          400 -X POST "$HOST$PREFIX/auth
   -H 'Content-Type: application/json' \
   -d '{"userType":"officer","username":"weekit"}'
 
-expect_status "Operator without citizenId → 400" 400 -X POST "$HOST$PREFIX/auth/login" \
+expect_status "Operator without username → 400" 400 -X POST "$HOST$PREFIX/auth/login" \
   -H 'Content-Type: application/json' \
   -d '{"userType":"operator","password":"demo1234"}'
 
@@ -157,7 +157,7 @@ fi
 print_section "6. Operator login — ดูจำนวน factories"
 OP_RESP=$(curl -s -X POST "$HOST$PREFIX/auth/login" \
   -H 'Content-Type: application/json' \
-  -d '{"userType":"operator","citizenId":"3191000135709","password":"demo1234"}')
+  -d '{"userType":"operator","username":"operator_demo","password":"demo1234"}')
 NUM_J=$(get_json "$OP_RESP" "print(len(d['data']['profile']['juristics']))")
 NUM_F=$(get_json "$OP_RESP" "print(sum(len(j['factories']) for j in d['data']['profile']['juristics']))")
 OP_SCOPE=$(get_json "$OP_RESP" "print(d['data']['scopes'].get('factories:view','-'))")

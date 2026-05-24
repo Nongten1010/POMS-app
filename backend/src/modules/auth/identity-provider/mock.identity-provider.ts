@@ -30,10 +30,10 @@ export class MockIdentityProvider implements IdentityProvider {
   }
 
   async authenticateOperator(
-    citizenId: string,
+    username: string,
     password: string,
   ): Promise<ExternalOperatorProfile | null> {
-    const op = MOCK_OPERATORS.find((o) => o.citizen_id === citizenId);
+    const op = MOCK_OPERATORS.find((o) => o.username === username);
     if (!op || op.password !== password) return null;
     return {
       citizen_id: op.citizen_id,

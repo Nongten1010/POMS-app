@@ -106,7 +106,7 @@ Content-Type: application/json
 ```json
 {
   "userType": "operator",
-  "citizenId": "3191000135709",
+  "username": "operator_demo",
   "password": "demo1234"
 }
 ```

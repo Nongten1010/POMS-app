@@ -76,9 +76,9 @@ export interface IdentityProvider {
     departmentID: string,
   ): Promise<ExternalOfficerProfile | null>;
 
-  /** Authenticate ผู้ประกอบการ (ใช้ citizen_id + password) */
+  /** Authenticate ผู้ประกอบการ (ใช้ username + password) */
   authenticateOperator(
-    citizenId: string,
+    username: string,
     password: string,
   ): Promise<ExternalOperatorProfile | null>;
 
