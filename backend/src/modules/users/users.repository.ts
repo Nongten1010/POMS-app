@@ -6,8 +6,11 @@ import type {
   ManagedUserDetailDTO,
   ManagedUserTableDTO,
   OfficerProfileInput,
+  PermissionGrantDTO,
+  PermissionOverrideInput,
   RoleSummaryDTO,
   UpdateManagedUserInput,
+  UserPermissionOverrideDTO,
 } from './users.types';
 
 interface ManagedUserJoinedRow {
@@ -55,6 +58,26 @@ interface RoleRow {
   code: string;
   name_th: string;
   name_en: string;
+}
+
+interface PermissionRow {
+  id: number;
+  code: string;
+  resource: string;
+  action: string;
+  description: string | null;
+}
+
+interface PermissionGrantRow {
+  code: string;
+  resource: string;
+  action: string;
+  description: string | null;
+  scope: 'ALL' | 'IN_PROVINCE' | 'IN_ESTATE' | 'OWN_FACTORY' | null;
+}
+
+interface UserPermissionOverrideRow extends PermissionGrantRow {
+  effect: 'allow' | 'deny';
 }
 
 export const usersRepository = {
@@ -130,6 +153,51 @@ export const usersRepository = {
       .whereIn('code', roleCodes)
       .whereNull('deleted_at')
       .select('id', 'code', 'name_th', 'name_en');
+  },
+
+  async findPermissionsByCodes(
+    permissionCodes: string[],
+    trx?: Knex.Transaction,
+  ): Promise<PermissionRow[]> {
+    if (permissionCodes.length === 0) return [];
+    return (trx ?? db)<PermissionRow>('permissions')
+      .whereIn('code', permissionCodes)
+      .select('id', 'code', 'resource', 'action', 'description');
+  },
+
+  async getRolePermissions(userId: number): Promise<PermissionGrantDTO[]> {
+    const rows: PermissionGrantRow[] = await db('user_roles')
+      .join('role_permissions', 'user_roles.role_id', 'role_permissions.role_id')
+      .join('permissions', 'role_permissions.permission_id', 'permissions.id')
+      .where('user_roles.user_id', userId)
+      .select(
+        'permissions.code as code',
+        'permissions.resource as resource',
+        'permissions.action as action',
+        'permissions.description as description',
+        'role_permissions.scope as scope',
+      );
+
+    return rows.map(toPermissionGrantDTO);
+  },
+
+  async getUserPermissionOverrides(userId: number): Promise<UserPermissionOverrideDTO[]> {
+    const rows: UserPermissionOverrideRow[] = await db('user_permissions')
+      .join('permissions', 'user_permissions.permission_id', 'permissions.id')
+      .where('user_permissions.user_id', userId)
+      .select(
+        'permissions.code as code',
+        'permissions.resource as resource',
+        'permissions.action as action',
+        'permissions.description as description',
+        'user_permissions.scope as scope',
+        'user_permissions.effect as effect',
+      );
+
+    return rows.map((row) => ({
+      ...toPermissionGrantDTO(row),
+      effect: row.effect,
+    }));
   },
 
   async create(input: CreateManagedUserInput, actorUserId: number): Promise<ManagedUserDetailDTO> {
@@ -211,6 +279,40 @@ export const usersRepository = {
         updated_at: db.raw('SYSDATETIME()'),
         updated_by: actorUserId,
       });
+  },
+
+  async replaceUserPermissionOverrides(
+    userId: number,
+    permissions: PermissionOverrideInput[],
+    actorUserId: number,
+  ): Promise<void> {
+    await db.transaction(async (trx) => {
+      const permissionRows = await this.findPermissionsByCodes(
+        permissions.map((permission) => permission.code),
+        trx,
+      );
+      const permissionByCode = new Map(
+        permissionRows.map((permission) => [permission.code, permission]),
+      );
+
+      await trx('user_permissions').where({ user_id: userId }).del();
+
+      if (permissions.length === 0) return;
+
+      await trx('user_permissions').insert(
+        permissions.map((permission) => {
+          const permissionRow = permissionByCode.get(permission.code);
+          if (!permissionRow) throw new Error(`Permission not loaded: ${permission.code}`);
+          return {
+            user_id: userId,
+            permission_id: permissionRow.id,
+            effect: permission.effect,
+            scope: permission.effect === 'allow' ? (permission.scope ?? null) : null,
+            granted_by: actorUserId,
+          };
+        }),
+      );
+    });
   },
 };
 
@@ -384,6 +486,16 @@ function collectRoles(rows: ManagedUserJoinedRow[]): RoleSummaryDTO[] {
     });
   }
   return Array.from(roles.values());
+}
+
+function toPermissionGrantDTO(row: PermissionGrantRow): PermissionGrantDTO {
+  return {
+    code: row.code,
+    resource: row.resource,
+    action: row.action,
+    description: row.description,
+    scope: row.scope,
+  };
 }
 
 async function upsertOfficerProfile(

@@ -4,6 +4,7 @@ import {
   createManagedUserSchema,
   listManagedUsersQuerySchema,
   updateManagedUserSchema,
+  replaceUserPermissionsSchema,
   userIdParamSchema,
 } from './users.validator';
 import { usersService } from './users.service';
@@ -64,6 +65,29 @@ export const usersController = {
       const { id } = userIdParamSchema.parse(req.params);
       await usersService.delete(id, actorUserId);
       res.status(StatusCodes.NO_CONTENT).send();
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async getPermissions(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = userIdParamSchema.parse(req.params);
+      const data = await usersService.getPermissions(id);
+      res.status(StatusCodes.OK).json({ success: true, data });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async replacePermissions(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const actorUserId = req.user?.id;
+      if (!actorUserId) throw new Error('Authenticated user missing from request');
+      const { id } = userIdParamSchema.parse(req.params);
+      const payload = replaceUserPermissionsSchema.parse(req.body);
+      const data = await usersService.replacePermissions(id, payload, actorUserId);
+      res.status(StatusCodes.OK).json({ success: true, data });
     } catch (err) {
       next(err);
     }

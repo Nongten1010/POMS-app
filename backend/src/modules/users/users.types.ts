@@ -7,6 +7,35 @@ export interface RoleSummaryDTO {
   nameEn: string;
 }
 
+export type PermissionScope = 'ALL' | 'IN_PROVINCE' | 'IN_ESTATE' | 'OWN_FACTORY' | null;
+export type UserPermissionEffect = 'allow' | 'deny';
+
+export interface PermissionOverrideInput {
+  code: string;
+  effect: UserPermissionEffect;
+  scope?: PermissionScope;
+}
+
+export interface PermissionGrantDTO {
+  code: string;
+  resource: string;
+  action: string;
+  description: string | null;
+  scope: PermissionScope;
+}
+
+export interface UserPermissionOverrideDTO extends PermissionGrantDTO {
+  effect: UserPermissionEffect;
+}
+
+export interface UserPermissionsDTO {
+  userId: number;
+  rolePermissions: PermissionGrantDTO[];
+  overrides: UserPermissionOverrideDTO[];
+  effectiveScopes: Record<string, PermissionScope>;
+  permissions: Record<string, Record<string, true>>;
+}
+
 export interface OfficerProfileInput {
   posNo?: string | null;
   pertypeId?: string | null;
@@ -90,6 +119,10 @@ export interface UpdateManagedUserInput {
   isActive?: boolean;
   roleCodes?: string[];
   profile?: OfficerProfileInput;
+}
+
+export interface ReplaceUserPermissionsInput {
+  permissions: PermissionOverrideInput[];
 }
 
 export interface PaginatedManagedUsersDTO {

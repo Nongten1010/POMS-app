@@ -6,12 +6,17 @@ import {
   NotFoundError,
 } from '../../shared/errors/AppError';
 import { usersRepository } from './users.repository';
+import { groupPermissions } from '../auth/permissions';
 import type {
   CreateManagedUserInput,
   ListManagedUsersQuery,
   ManagedUserDetailDTO,
   PaginatedManagedUsersDTO,
+  PermissionGrantDTO,
+  PermissionScope,
+  ReplaceUserPermissionsInput,
   UpdateManagedUserInput,
+  UserPermissionsDTO,
 } from './users.types';
 
 export const usersService = {
@@ -71,7 +76,68 @@ export const usersService = {
     if (!existing) throw new NotFoundError('User not found');
     await usersRepository.softDelete(userId, actorUserId);
   },
+
+  async getPermissions(userId: number): Promise<UserPermissionsDTO> {
+    const existing = await usersRepository.findById(userId);
+    if (!existing) throw new NotFoundError('User not found');
+
+    const [rolePermissions, overrides] = await Promise.all([
+      usersRepository.getRolePermissions(userId),
+      usersRepository.getUserPermissionOverrides(userId),
+    ]);
+    const effectiveScopes = buildEffectiveScopes(rolePermissions, overrides);
+
+    return {
+      userId,
+      rolePermissions,
+      overrides,
+      effectiveScopes,
+      permissions: groupPermissions(effectiveScopes),
+    };
+  },
+
+  async replacePermissions(
+    userId: number,
+    input: ReplaceUserPermissionsInput,
+    actorUserId: number,
+  ): Promise<UserPermissionsDTO> {
+    const existing = await usersRepository.findById(userId);
+    if (!existing) throw new NotFoundError('User not found');
+    await ensurePermissionsExist(input.permissions.map((permission) => permission.code));
+    await usersRepository.replaceUserPermissionOverrides(userId, input.permissions, actorUserId);
+    return this.getPermissions(userId);
+  },
 };
+
+function buildEffectiveScopes(
+  rolePermissions: PermissionGrantDTO[],
+  overrides: Awaited<ReturnType<typeof usersRepository.getUserPermissionOverrides>>,
+): Record<string, PermissionScope> {
+  const priority: Record<string, number> = {
+    ALL: 4,
+    IN_PROVINCE: 3,
+    IN_ESTATE: 2,
+    OWN_FACTORY: 1,
+  };
+  const scopes: Record<string, PermissionScope> = {};
+
+  for (const permission of rolePermissions) {
+    const current = scopes[permission.code];
+    const currentRank = current === undefined ? -1 : (priority[current ?? 'NULL'] ?? 0);
+    const newRank = priority[permission.scope ?? 'NULL'] ?? 0;
+    if (newRank >= currentRank) scopes[permission.code] = permission.scope;
+  }
+
+  for (const override of overrides) {
+    if (override.effect === 'deny') {
+      delete scopes[override.code];
+      continue;
+    }
+    scopes[override.code] = override.scope;
+  }
+
+  return scopes;
+}
 
 async function ensureUniqueIdentity(
   username: string,
@@ -99,6 +165,19 @@ async function ensureRolesExist(roleCodes: string[]): Promise<void> {
   if (missing.length > 0) {
     throw new BadRequestError('Unknown roleCodes', {
       roleCodes: missing,
+      status: StatusCodes.BAD_REQUEST,
+    });
+  }
+}
+
+async function ensurePermissionsExist(permissionCodes: string[]): Promise<void> {
+  const uniquePermissionCodes = Array.from(new Set(permissionCodes));
+  const permissions = await usersRepository.findPermissionsByCodes(uniquePermissionCodes);
+  const foundCodes = new Set(permissions.map((permission) => permission.code));
+  const missing = uniquePermissionCodes.filter((code) => !foundCodes.has(code));
+  if (missing.length > 0) {
+    throw new BadRequestError('Unknown permission codes', {
+      permissionCodes: missing,
       status: StatusCodes.BAD_REQUEST,
     });
   }

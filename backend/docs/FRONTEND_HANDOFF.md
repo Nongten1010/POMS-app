@@ -214,6 +214,8 @@ Backend ตรวจ permission ซ้ำเสมอ:
 | `POST /users` | `users:edit` หรือ `permissions:manage` |
 | `PATCH /users/:id` | `users:edit` หรือ `permissions:manage` |
 | `DELETE /users/:id` | `users:edit` หรือ `permissions:manage` |
+| `GET /users/:id/permissions` | `permissions:manage` |
+| `PUT /users/:id/permissions` | `permissions:manage` |
 
 ### 6.1 List users table
 
@@ -427,7 +429,107 @@ Expected status: `204 No Content`
 
 เป็น soft delete ฝั่ง backend
 
-### 6.6 Validation/error cases for user management
+### 6.6 Get per-user permission overrides
+
+ใช้ตอนเปิดหน้าจัดสิทธิ์รายตัว เพื่อดูสิทธิ์จาก role, override ราย user, และ effective permissions หลังรวมแล้ว
+
+```http
+GET http://localhost:3000/api/v1/users/25/permissions
+Authorization: Bearer <accessToken>
+```
+
+Expected response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "userId": 25,
+    "rolePermissions": [
+      {
+        "code": "dashboard:view",
+        "resource": "dashboard",
+        "action": "view",
+        "description": "ดู dashboard หน้าหลัก",
+        "scope": "ALL"
+      }
+    ],
+    "overrides": [
+      {
+        "code": "factories:edit",
+        "resource": "factories",
+        "action": "edit",
+        "description": "แก้ไขข้อมูลพื้นฐานโรงงาน",
+        "scope": null,
+        "effect": "deny"
+      }
+    ],
+    "effectiveScopes": {
+      "dashboard:view": "ALL"
+    },
+    "permissions": {
+      "dashboard": {
+        "view": true
+      }
+    }
+  }
+}
+```
+
+ความหมาย:
+
+| Field | Description |
+| --- | --- |
+| `rolePermissions` | สิทธิ์ที่ได้จาก role ปัจจุบันของ user |
+| `overrides` | สิทธิ์ราย user ที่ตั้งเพิ่ม/ตัดทับ role |
+| `effectiveScopes` | permission สุดท้ายหลังรวม role + override |
+| `permissions` | object สำหรับ frontend ใช้เช็คเปิด/ปิด UI เหมือน login response |
+
+### 6.7 Replace per-user permission overrides
+
+ใช้บันทึกสิทธิ์ราย user ทั้งชุด โดยเป็น replace ทั้งหมดของ override รายคนนั้น
+
+```http
+PUT http://localhost:3000/api/v1/users/25/permissions
+Authorization: Bearer <accessToken>
+Content-Type: application/json
+```
+
+Request body:
+
+```json
+{
+  "permissions": [
+    {
+      "code": "dashboard:view",
+      "effect": "allow",
+      "scope": "ALL"
+    },
+    {
+      "code": "factories:edit",
+      "effect": "deny"
+    }
+  ]
+}
+```
+
+Allowed values:
+
+| Field | Values |
+| --- | --- |
+| `effect` | `allow`, `deny` |
+| `scope` | `ALL`, `IN_PROVINCE`, `IN_ESTATE`, `OWN_FACTORY`, `null` |
+
+Rules:
+
+- `deny` จะตัด permission นั้นออกจาก effective permissions แม้ role จะมีสิทธิ์
+- `allow` จะเพิ่ม/override permission นั้นให้ user โดยตรง
+- payload นี้เป็น replace ทั้งชุด ถ้าส่ง `permissions: []` คือ clear override ราย user ทั้งหมด
+- หลังบันทึกสำเร็จ ถ้าแก้สิทธิ์ของ user ที่กำลัง login อยู่ ควรให้ user login ใหม่ หรือ refresh session เพราะ JWT เดิมยังถือ permissions เก่า
+
+Expected response เป็น shape เดียวกับ `GET /users/:id/permissions`
+
+### 6.8 Validation/error cases for user management
 
 | Case | Status | `error.code` |
 | --- | --- | --- |
@@ -436,6 +538,7 @@ Expected status: `204 No Content`
 | payload ไม่ถูกต้อง | 400 | `VALIDATION_ERROR` |
 | username หรือ externalId ซ้ำ | 409 | `CONFLICT` |
 | user id ไม่มีอยู่ | 404 | `NOT_FOUND` |
+| permission code ไม่มีอยู่ | 400 | `BAD_REQUEST` |
 
 ## 7. Error cases ที่ frontend ควรรองรับ
 

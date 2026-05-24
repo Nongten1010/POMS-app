@@ -3,6 +3,7 @@ import { z } from 'zod';
 const idParam = z.coerce.number().int().positive();
 const nullableTrimmedString = z.string().trim().min(1).max(255).nullable();
 const optionalNullableTrimmedString = nullableTrimmedString.optional();
+const permissionScopeSchema = z.enum(['ALL', 'IN_PROVINCE', 'IN_ESTATE', 'OWN_FACTORY']).nullable();
 
 export const userIdParamSchema = z.object({
   id: idParam,
@@ -84,6 +85,33 @@ export const updateManagedUserSchema = z
     message: 'At least one field is required',
   });
 
+export const replaceUserPermissionsSchema = z
+  .object({
+    permissions: z
+      .array(
+        z
+          .object({
+            code: z.string().trim().min(1).max(64),
+            effect: z.enum(['allow', 'deny']),
+            scope: permissionScopeSchema.optional(),
+          })
+          .strict(),
+      )
+      .max(200),
+  })
+  .strict()
+  .refine(
+    (value) => {
+      const codes = value.permissions.map((permission) => permission.code);
+      return new Set(codes).size === codes.length;
+    },
+    {
+      message: 'permissions must not contain duplicate codes',
+      path: ['permissions'],
+    },
+  );
+
 export type ListManagedUsersQueryInput = z.infer<typeof listManagedUsersQuerySchema>;
 export type CreateManagedUserSchemaInput = z.infer<typeof createManagedUserSchema>;
 export type UpdateManagedUserSchemaInput = z.infer<typeof updateManagedUserSchema>;
+export type ReplaceUserPermissionsSchemaInput = z.infer<typeof replaceUserPermissionsSchema>;

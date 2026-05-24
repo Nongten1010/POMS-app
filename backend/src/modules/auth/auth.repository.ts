@@ -54,10 +54,7 @@ export const authRepository = {
   },
 
   findUserByUsername(username: string): Promise<UserRow | undefined> {
-    return db<UserRow>('users')
-      .where({ username })
-      .whereNull('deleted_at')
-      .first();
+    return db<UserRow>('users').where({ username }).whereNull('deleted_at').first();
   },
 
   getOfficerProfile(userId: number): Promise<OfficerProfileRow | undefined> {
@@ -68,9 +65,7 @@ export const authRepository = {
     return db<OperatorProfileRow>('operator_profiles').where({ user_id: userId }).first();
   },
 
-  async getRolesAndPermissions(
-    userId: number,
-  ): Promise<{
+  async getRolesAndPermissions(userId: number): Promise<{
     roles: string[];
     scopes: Record<string, string | null>;
   }> {
@@ -85,6 +80,16 @@ export const authRepository = {
       .join('permissions', 'role_permissions.permission_id', 'permissions.id')
       .where('user_roles.user_id', userId)
       .select('permissions.code as code', 'role_permissions.scope as scope');
+
+    const userPerms: Array<{ code: string; scope: string | null; effect: 'allow' | 'deny' }> =
+      await db('user_permissions')
+        .join('permissions', 'user_permissions.permission_id', 'permissions.id')
+        .where('user_permissions.user_id', userId)
+        .select(
+          'permissions.code as code',
+          'user_permissions.scope as scope',
+          'user_permissions.effect as effect',
+        );
 
     // ถ้า user มี permission เดียวกันแต่หลาย scope จาก หลาย role → เอา scope กว้างที่สุด
     // priority: ALL > IN_PROVINCE > IN_ESTATE > OWN_FACTORY > null
@@ -102,15 +107,24 @@ export const authRepository = {
       if (newRank >= currentRank) scopes[p.code] = p.scope;
     }
 
+    // user_permissions เป็น per-user override:
+    // deny = ตัดสิทธิ์นี้ออกจาก effective permissions
+    // allow = set scope ตาม override โดยตรง แม้ role จะมี scope อื่นอยู่
+    for (const p of userPerms) {
+      if (p.effect === 'deny') {
+        delete scopes[p.code];
+        continue;
+      }
+      scopes[p.code] = p.scope;
+    }
+
     return {
       roles: roles.map((r) => r.code),
       scopes,
     };
   },
 
-  async getOperatorFactories(
-    userId: number,
-  ): Promise<
+  async getOperatorFactories(userId: number): Promise<
     Array<{
       juristic_id: string;
       juristic_name_th: string;

@@ -217,6 +217,38 @@ Content-Type: application/json
   }
 }
 
-### 6.5 ลบรายคน (soft delete)
+### 6.5 ดูสิทธิ์ราย user หลังรวม role + override
+GET {{host}}{{apiPrefix}}/users/{{createManagedUser.response.body.data.id}}/permissions
+Authorization: Bearer {{loginAdmin.response.body.data.accessToken}}
+
+### 6.6 แก้สิทธิ์ราย user แบบ override
+PUT {{host}}{{apiPrefix}}/users/{{createManagedUser.response.body.data.id}}/permissions
+Authorization: Bearer {{loginAdmin.response.body.data.accessToken}}
+Content-Type: application/json
+
+{
+  "permissions": [
+    {
+      "code": "dashboard:view",
+      "effect": "allow",
+      "scope": "ALL"
+    },
+    {
+      "code": "factories:edit",
+      "effect": "deny"
+    }
+  ]
+}
+
+### 6.7 ล้าง override สิทธิ์ราย user
+PUT {{host}}{{apiPrefix}}/users/{{createManagedUser.response.body.data.id}}/permissions
+Authorization: Bearer {{loginAdmin.response.body.data.accessToken}}
+Content-Type: application/json
+
+{
+  "permissions": []
+}
+
+### 6.8 ลบรายคน (soft delete)
 DELETE {{host}}{{apiPrefix}}/users/{{createManagedUser.response.body.data.id}}
 Authorization: Bearer {{loginAdmin.response.body.data.accessToken}}

@@ -5,6 +5,44 @@
 
 ---
 
+## 2026-05-24 — User permission overrides (session #8)
+
+### What was done
+
+**1. Added `user_permissions` table** ✅
+- Migration `0016_create_user_permissions.ts`
+- Per-user permission override with:
+  - `effect`: `allow` หรือ `deny`
+  - `scope`: `ALL`, `IN_PROVINCE`, `IN_ESTATE`, `OWN_FACTORY`, หรือ `null`
+  - `granted_by`, `granted_at`
+
+**2. Added user permission APIs** ✅
+- `GET /api/v1/users/:id/permissions`
+- `PUT /api/v1/users/:id/permissions`
+- Both require `permissions:manage`
+
+**3. Login effective permissions now include overrides** ✅
+- Role permissions are still the base
+- `user_permissions.effect = deny` removes that permission from effective scopes
+- `user_permissions.effect = allow` sets the user-specific scope directly
+- User must login again / refresh token to receive updated JWT permissions
+
+**4. Tests + handoff docs** ✅
+- Added validator coverage for allow/deny overrides, duplicate permission codes, invalid scopes
+- Updated `docs/FRONTEND_HANDOFF.md`
+- Updated `tests-manual.http`
+
+### Verification
+
+```bash
+npm run typecheck
+npm test -- --runInBand
+```
+
+Result: 3 test suites passed, 18 tests passed
+
+---
+
 ## 2026-05-24 — Login hardening (session #7)
 
 ### What was done

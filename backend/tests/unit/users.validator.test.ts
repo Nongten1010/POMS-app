@@ -4,6 +4,7 @@ import {
   listManagedUsersQuerySchema,
   updateManagedUserSchema,
   userIdParamSchema,
+  replaceUserPermissionsSchema,
 } from '../../src/modules/users/users.validator';
 
 describe('managed users validators', () => {
@@ -61,5 +62,35 @@ describe('managed users validators', () => {
     const result = userIdParamSchema.parse({ id: '42' });
 
     expect(result.id).toBe(42);
+  });
+
+  it('accepts user permission allow and deny overrides', () => {
+    const result = replaceUserPermissionsSchema.safeParse({
+      permissions: [
+        { code: 'dashboard:view', effect: 'allow', scope: 'ALL' },
+        { code: 'factories:edit', effect: 'deny' },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects duplicate user permission override codes', () => {
+    const result = replaceUserPermissionsSchema.safeParse({
+      permissions: [
+        { code: 'dashboard:view', effect: 'allow', scope: 'ALL' },
+        { code: 'dashboard:view', effect: 'deny' },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects invalid user permission scopes', () => {
+    const result = replaceUserPermissionsSchema.safeParse({
+      permissions: [{ code: 'dashboard:view', effect: 'allow', scope: 'EVERYWHERE' }],
+    });
+
+    expect(result.success).toBe(false);
   });
 });
