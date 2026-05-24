@@ -171,7 +171,7 @@ Content-Type: application/json
 ###############################################################################
 
 ### 6.1 ตารางรายชื่อเจ้าหน้าที่
-GET {{host}}{{apiPrefix}}/users?page=1&perPage=25&search=officer&status=all
+GET {{host}}{{apiPrefix}}/users?search=officer&status=all
 Authorization: Bearer {{loginAdmin.response.body.data.accessToken}}
 
 ### 6.2 ข้อมูลรายคนสำหรับหน้าแก้ไขสิทธิ์

@@ -17,14 +17,16 @@ import type {
 export const usersService = {
   async list(query: ListManagedUsersQuery): Promise<PaginatedManagedUsersDTO> {
     const { rows, total } = await usersRepository.list(query);
+    const meta: PaginatedManagedUsersDTO['meta'] = { total };
+    if (query.page !== undefined && query.perPage !== undefined) {
+      meta.page = query.page;
+      meta.perPage = query.perPage;
+      meta.totalPages = Math.ceil(total / query.perPage);
+    }
+
     return {
       data: rows,
-      meta: {
-        total,
-        page: query.page,
-        perPage: query.perPage,
-        totalPages: Math.ceil(total / query.perPage),
-      },
+      meta,
     };
   },
 

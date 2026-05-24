@@ -8,13 +8,23 @@ export const userIdParamSchema = z.object({
   id: idParam,
 });
 
-export const listManagedUsersQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  perPage: z.coerce.number().int().min(1).max(100).default(25),
-  search: z.string().trim().min(1).max(128).optional(),
-  roleCode: z.string().trim().min(1).max(32).optional(),
-  status: z.enum(['active', 'suspended', 'all']).default('all'),
-});
+export const listManagedUsersQuerySchema = z
+  .object({
+    page: z.coerce.number().int().min(1).optional(),
+    perPage: z.coerce.number().int().min(1).max(100).optional(),
+    search: z.string().trim().min(1).max(128).optional(),
+    roleCode: z.string().trim().min(1).max(32).optional(),
+    status: z.enum(['active', 'suspended', 'all']).default('all'),
+  })
+  .transform((query) => {
+    const shouldPaginate = query.page !== undefined || query.perPage !== undefined;
+    if (!shouldPaginate) return query;
+    return {
+      ...query,
+      page: query.page ?? 1,
+      perPage: query.perPage ?? 25,
+    };
+  });
 
 export const officerProfileSchema = z
   .object({

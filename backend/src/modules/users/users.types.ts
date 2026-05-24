@@ -57,8 +57,8 @@ export interface ManagedUserDetailDTO extends ManagedUserTableDTO {
 }
 
 export interface ListManagedUsersQuery {
-  page: number;
-  perPage: number;
+  page?: number;
+  perPage?: number;
   search?: string;
   roleCode?: string;
   status?: 'active' | 'suspended' | 'all';
@@ -96,8 +96,8 @@ export interface PaginatedManagedUsersDTO {
   data: ManagedUserTableDTO[];
   meta: {
     total: number;
-    page: number;
-    perPage: number;
-    totalPages: number;
+    page?: number;
+    perPage?: number;
+    totalPages?: number;
   };
 }

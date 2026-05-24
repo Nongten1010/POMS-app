@@ -7,10 +7,16 @@ import {
 } from '../../src/modules/users/users.validator';
 
 describe('managed users validators', () => {
-  it('normalizes list pagination defaults', () => {
+  it('defaults list queries to fetch all users', () => {
     const result = listManagedUsersQuerySchema.parse({});
 
-    expect(result).toEqual({ page: 1, perPage: 25, status: 'all' });
+    expect(result).toEqual({ status: 'all' });
+  });
+
+  it('normalizes pagination when page or perPage is provided', () => {
+    const result = listManagedUsersQuerySchema.parse({ page: '2' });
+
+    expect(result).toEqual({ page: 2, perPage: 25, status: 'all' });
   });
 
   it('rejects oversized page size', () => {

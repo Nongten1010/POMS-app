@@ -70,13 +70,17 @@ export const usersRepository = {
       .first();
     const total = Number(totalRow?.total ?? 0);
 
-    const ids = await baseQuery
+    const idsQuery = baseQuery
       .clone()
       .clearSelect()
       .distinct('users.id')
-      .orderBy('users.id', 'asc')
-      .limit(query.perPage)
-      .offset((query.page - 1) * query.perPage);
+      .orderBy('users.id', 'asc');
+
+    if (query.page !== undefined && query.perPage !== undefined) {
+      idsQuery.limit(query.perPage).offset((query.page - 1) * query.perPage);
+    }
+
+    const ids = await idsQuery;
     const userIds = ids.map((row: { id: number | string }) => Number(row.id));
     if (userIds.length === 0) return { rows: [], total };
 

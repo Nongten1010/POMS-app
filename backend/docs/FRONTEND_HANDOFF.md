@@ -220,7 +220,7 @@ Backend ตรวจ permission ซ้ำเสมอ:
 ใช้กับหน้าตารางรายชื่อเจ้าหน้าที่
 
 ```http
-GET http://localhost:3000/api/v1/users?page=1&perPage=25&search=officer&status=all
+GET http://localhost:3000/api/v1/users?search=officer&status=all
 Authorization: Bearer <accessToken>
 ```
 
@@ -228,8 +228,8 @@ Query params:
 
 | Param | Type | Required | Description |
 | --- | --- | --- | --- |
-| `page` | number | no | หน้า เริ่มที่ `1`, default `1` |
-| `perPage` | number | no | จำนวนต่อหน้า, default `25`, max `100` |
+| `page` | number | no | ถ้าไม่ส่ง `page/perPage` จะดึงทั้งหมด; ถ้าส่งจะ paginate หน้าเริ่มที่ `1` |
+| `perPage` | number | no | ถ้าไม่ส่ง `page/perPage` จะดึงทั้งหมด; ถ้าส่ง max `100` |
 | `search` | string | no | ค้นจาก username / ชื่อ / นามสกุล |
 | `roleCode` | string | no | filter role เช่น `admin`, `diw_central`, `provincial_office` |
 | `status` | string | no | `active`, `suspended`, `all`; default `all` |
@@ -264,13 +264,19 @@ Expected response:
     }
   ],
   "meta": {
-    "total": 1,
-    "page": 1,
-    "perPage": 25,
-    "totalPages": 1
+    "total": 1
   }
 }
 ```
+
+ถ้าต้องการใช้ pagination แบบเดิม ยังเรียกได้:
+
+```http
+GET http://localhost:3000/api/v1/users?page=1&perPage=25&status=all
+Authorization: Bearer <accessToken>
+```
+
+response จะมี `meta.page`, `meta.perPage`, `meta.totalPages` เพิ่มเข้ามา
 
 ตาราง frontend map field แบบนี้:
 
