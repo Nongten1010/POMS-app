@@ -87,12 +87,8 @@ export interface ManagedUserDetailDTO extends ManagedUserTableDTO {
   profile: Required<OfficerProfileInput>;
 }
 
-export interface ManagedUserEditUserDTO extends AuthUserDTO {
-  password: null;
-}
-
 export interface ManagedUserAuthDetailDTO {
-  user: ManagedUserEditUserDTO;
+  user: AuthUserDTO;
   permissions: PermissionGroups;
 }
 

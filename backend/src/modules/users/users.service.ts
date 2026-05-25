@@ -65,7 +65,6 @@ export const usersService = {
         levelNameTh: user.levelNameTh,
         roles: user.roles,
         isActive: user.isActive,
-        password: null,
       },
       permissions: groupPermissions(effectiveScopes),
     };
