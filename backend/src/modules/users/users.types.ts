@@ -68,8 +68,7 @@ export interface ManagedUserTableDTO {
   department: string | null;
   lineNameTh: string | null;
   levelNameTh: string | null;
-  roles: RoleSummaryDTO[];
-  primaryRole: RoleSummaryDTO | null;
+  roles: string;
   isActive: boolean;
 }
 

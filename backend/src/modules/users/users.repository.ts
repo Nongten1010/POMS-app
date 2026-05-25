@@ -454,8 +454,7 @@ function toTableDTO(rows: ManagedUserJoinedRow[]): ManagedUserTableDTO {
       first.department_name_th ?? first.division_name_th ?? first.organize_name_th ?? null,
     lineNameTh: first.line_name_th ?? first.position_type_th ?? first.mposition ?? null,
     levelNameTh: first.level_name_th,
-    roles,
-    primaryRole: roles[0] ?? null,
+    roles: roles[0]?.code ?? first.user_type,
     isActive,
   };
 }
