@@ -8,7 +8,8 @@ const optionalNullableTrimmedString = nullableTrimmedString.optional();
 const permissionScopeSchema = z.enum(['ALL', 'IN_PROVINCE', 'IN_ESTATE', 'OWN_FACTORY']).nullable();
 const optionalTrimmedNonEmptyString = (max: number) =>
   z.preprocess(
-    (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    (value) =>
+      value === null || (typeof value === 'string' && value.trim() === '') ? undefined : value,
     z.string().trim().min(1).max(max).optional(),
   );
 const optionalPasswordString = z.preprocess(
@@ -163,6 +164,7 @@ const editResponseUpdateSchema = z
         levelNameTh: optionalTrimmedNonEmptyString(64),
         roles: z.string().trim().min(1).max(32),
         isActive: z.boolean(),
+        source: z.enum(['api', 'created']).optional(),
       })
       .strict(),
     permissions: z.record(z.string(), permissionGroupSchema).optional(),

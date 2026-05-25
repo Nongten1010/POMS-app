@@ -202,8 +202,10 @@ describe('managed users validators', () => {
         fullName: 'สมชาย ทดสอบ',
         username: 'local_officer',
         password: '',
+        department: null,
         roles: 'diw_central',
         isActive: true,
+        source: 'created',
       },
     });
 
