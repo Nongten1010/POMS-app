@@ -78,6 +78,33 @@ export function groupPermissions(scopes: Record<string, string | null>): Permiss
   return groups;
 }
 
+export function permissionGroupsToScopes(groups: PermissionGroups): Record<string, PermissionDataScope> {
+  const scopes: Record<string, PermissionDataScope> = {};
+
+  for (const [module, group] of Object.entries(groups)) {
+    for (const [action, enabled] of Object.entries(group)) {
+      if (action === 'data' || enabled !== true) continue;
+      for (const code of permissionCodesFromAlias(module, action)) {
+        scopes[code] = group.data;
+      }
+    }
+  }
+
+  return scopes;
+}
+
+function permissionCodesFromAlias(module: string, action: string): string[] {
+  const matchedCodes = Object.entries(permissionAliases)
+    .filter(([, aliases]) =>
+      (Array.isArray(aliases) ? aliases : [aliases]).some(
+        (alias) => alias.module === module && alias.action === action,
+      ),
+    )
+    .map(([code]) => code);
+  if (matchedCodes.length > 0) return matchedCodes;
+  return [`${module}:${action}`];
+}
+
 function toPermissionAliases(code: string): Array<{ module: string; action: string }> {
   const alias = permissionAliases[code];
   if (alias) return Array.isArray(alias) ? alias : [alias];

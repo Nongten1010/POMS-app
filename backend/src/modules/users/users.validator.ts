@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { permissionGroupsToScopes } from '../auth/permissions';
+import type { PermissionGroups } from '../auth/permissions';
 
 const idParam = z.coerce.number().int().positive();
 const nullableTrimmedString = z.string().trim().min(1).max(255).nullable();
@@ -9,6 +11,10 @@ const optionalTrimmedNonEmptyString = (max: number) =>
     (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
     z.string().trim().min(1).max(max).optional(),
   );
+const optionalPasswordString = z.preprocess(
+  (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+  z.string().min(8).max(128).optional(),
+);
 
 export const userIdParamSchema = z.object({
   id: idParam,
@@ -127,16 +133,72 @@ export const createManagedUserSchema = z
   })
   .strict();
 
-export const updateManagedUserSchema = z
+const legacyUpdateManagedUserSchema = z
   .object({
     ...managedUserPayloadShape,
     roleCodes: z.array(z.string().trim().min(1).max(32)).min(1).max(20).optional(),
+    password: optionalPasswordString,
   })
   .partial()
   .strict()
   .refine((value) => Object.keys(value).length > 0, {
     message: 'At least one field is required',
   });
+
+const permissionGroupSchema = z
+  .object({
+    data: permissionScopeSchema.optional(),
+  })
+  .catchall(z.union([z.literal(true), z.boolean(), permissionScopeSchema]));
+
+const editResponseUpdateSchema = z
+  .object({
+    user: z
+      .object({
+        fullName: z.string().trim().min(1).max(255),
+        username: z.string().trim().min(3).max(64),
+        password: optionalPasswordString,
+        department: optionalTrimmedNonEmptyString(255),
+        lineNameTh: optionalTrimmedNonEmptyString(128),
+        levelNameTh: optionalTrimmedNonEmptyString(64),
+        roles: z.string().trim().min(1).max(32),
+        isActive: z.boolean(),
+      })
+      .strict(),
+    permissions: z.record(z.string(), permissionGroupSchema).optional(),
+  })
+  .strict()
+  .transform(({ user, permissions }) => {
+    const permissionScopes = permissions
+      ? permissionGroupsToScopes(permissions as PermissionGroups)
+      : undefined;
+    return {
+      username: user.username,
+      externalId: user.username,
+      firstName: user.fullName,
+      lastName: '',
+      password: user.password,
+      isActive: user.isActive,
+      roleCodes: [user.roles],
+      profile: {
+        departmentNameTh: user.department,
+        lineNameTh: user.lineNameTh,
+        levelNameTh: user.levelNameTh,
+      },
+      permissionOverrides: permissionScopes
+        ? Object.entries(permissionScopes).map(([code, scope]) => ({
+            code,
+            effect: 'allow' as const,
+            scope,
+          }))
+        : undefined,
+    };
+  });
+
+export const updateManagedUserSchema = z.union([
+  editResponseUpdateSchema,
+  legacyUpdateManagedUserSchema,
+]);
 
 export const replaceUserPermissionsSchema = z
   .object({

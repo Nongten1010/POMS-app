@@ -114,8 +114,19 @@ export const usersService = {
       );
     }
     if (input.roleCodes !== undefined) await ensureRolesExist(input.roleCodes);
+    if (input.permissionOverrides !== undefined) {
+      await ensurePermissionsExist(input.permissionOverrides.map((permission) => permission.code));
+    }
 
-    return usersRepository.update(userId, input, actorUserId);
+    const { password, ...repositoryInput } = input;
+    return usersRepository.update(
+      userId,
+      {
+        ...repositoryInput,
+        ...(password ? { passwordHash: await hashPassword(password) } : {}),
+      },
+      actorUserId,
+    );
   },
 
   async delete(userId: number, actorUserId: number): Promise<void> {

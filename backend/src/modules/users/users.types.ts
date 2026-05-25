@@ -140,9 +140,12 @@ export interface UpdateManagedUserInput {
   lastName?: string;
   email?: string | null;
   phone?: string | null;
+  password?: string;
+  passwordHash?: string;
   isActive?: boolean;
   roleCodes?: string[];
   profile?: OfficerProfileInput;
+  permissionOverrides?: PermissionOverrideInput[];
 }
 
 export interface ReplaceUserPermissionsInput {

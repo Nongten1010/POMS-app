@@ -128,6 +128,54 @@ describe('managed users validators', () => {
     expect(result.success).toBe(false);
   });
 
+  it('accepts edit response-shaped update payloads', () => {
+    const result = updateManagedUserSchema.parse({
+      user: {
+        fullName: 'สมชาย ทดสอบ',
+        username: 'local_officer',
+        password: '',
+        department: 'กรมโรงงานอุตสาหกรรม',
+        lineNameTh: 'นักวิทยาศาสตร์',
+        levelNameTh: 'ชำนาญการ',
+        roles: 'diw_central',
+        isActive: true,
+      },
+      permissions: {
+        dashboard: {
+          data: 'ALL',
+          view: true,
+          favorite: true,
+          search: true,
+          advanced_search: true,
+          statistics: true,
+        },
+        conditional_search: {
+          data: null,
+          view: true,
+        },
+      },
+    });
+
+    expect(result).toMatchObject({
+      username: 'local_officer',
+      externalId: 'local_officer',
+      firstName: 'สมชาย ทดสอบ',
+      lastName: '',
+      password: undefined,
+      isActive: true,
+      roleCodes: ['diw_central'],
+      profile: {
+        departmentNameTh: 'กรมโรงงานอุตสาหกรรม',
+        lineNameTh: 'นักวิทยาศาสตร์',
+        levelNameTh: 'ชำนาญการ',
+      },
+      permissionOverrides: expect.arrayContaining([
+        { code: 'dashboard:view', effect: 'allow', scope: 'ALL' },
+        { code: 'dashboard.search:advanced', effect: 'allow', scope: null },
+      ]),
+    });
+  });
+
   it('coerces route id params to positive integers', () => {
     const result = userIdParamSchema.parse({ id: '42' });
 

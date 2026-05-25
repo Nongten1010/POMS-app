@@ -510,19 +510,52 @@ Authorization: Bearer <accessToken>
 Content-Type: application/json
 ```
 
-Request body ส่งเฉพาะ field ที่ต้องแก้ได้:
+Request body ใช้ shape เดียวกับ `GET /users/:id` ได้ โดยส่ง `user` และ `permissions` กลับมา:
 
 ```json
 {
-  "isActive": false,
-  "roleCodes": ["provincial_office"],
-  "profile": {
-    "departmentId": "4019000",
-    "lineNameTh": "เจ้าหน้าที่ตรวจสอบ",
-    "levelNameTh": "ชำนาญการ"
+  "user": {
+    "fullName": "สมชาย ทดสอบ",
+    "username": "local_officer",
+    "password": "StrongerPass123",
+    "department": "กรมโรงงานอุตสาหกรรม",
+    "lineNameTh": "นักวิทยาศาสตร์",
+    "levelNameTh": "ชำนาญการ",
+    "roles": "diw_central",
+    "isActive": true
+  },
+  "permissions": {
+    "dashboard": {
+      "data": "ALL",
+      "view": true,
+      "favorite": true,
+      "search": true,
+      "advanced_search": true,
+      "statistics": true
+    },
+    "conditional_search": {
+      "data": null,
+      "view": true
+    },
+    "statistics": {
+      "data": "ALL",
+      "view": true
+    },
+    "factories": {
+      "data": "ALL",
+      "view": true,
+      "edit": true,
+      "approve": true
+    }
   }
 }
 ```
+
+หมายเหตุ:
+
+- `user.password` ไม่บังคับ; ถ้าไม่ส่งหรือส่งค่าว่าง backend จะไม่เปลี่ยนรหัสผ่านเดิม
+- `permissions` ไม่บังคับ; ถ้าส่งมา backend จะแปลง object นี้เป็น per-user permission overrides
+- payload flat แบบเก่า (`isActive`, `roleCodes`, `profile`) ยังใช้ได้อยู่
 
 Expected response:
 

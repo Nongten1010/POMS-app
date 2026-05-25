@@ -18,6 +18,10 @@ interface CreateLocalAccountRepositoryInput extends CreateLocalAccountInput {
   passwordHash: string;
 }
 
+interface UpdateManagedUserRepositoryInput extends Omit<UpdateManagedUserInput, 'password'> {
+  passwordHash?: string;
+}
+
 interface ManagedUserJoinedRow {
   id: number | string;
   external_id: string;
@@ -281,7 +285,7 @@ export const usersRepository = {
 
   async update(
     userId: number,
-    input: UpdateManagedUserInput,
+    input: UpdateManagedUserRepositoryInput,
     actorUserId: number,
   ): Promise<ManagedUserDetailDTO> {
     return db.transaction(async (trx) => {
@@ -295,6 +299,9 @@ export const usersRepository = {
       if (input.username !== undefined) userPatch.username = input.username;
       if (input.email !== undefined) userPatch.email = input.email;
       if (input.phone !== undefined) userPatch.phone = input.phone;
+      if (input.passwordHash !== undefined) {
+        userPatch.password_hash = Buffer.from(input.passwordHash, 'utf8');
+      }
       if (input.prenameTh !== undefined) userPatch.prename_th = input.prenameTh;
       if (input.firstName !== undefined) userPatch.first_name = input.firstName;
       if (input.lastName !== undefined) userPatch.last_name = input.lastName;
@@ -309,6 +316,15 @@ export const usersRepository = {
       if (input.roleCodes !== undefined) {
         const roleRows = await this.findRolesByCodes(input.roleCodes, trx);
         await replaceUserRoles(trx, userId, roleRows, actorUserId);
+      }
+
+      if (input.permissionOverrides !== undefined) {
+        await replaceUserPermissionOverridesInTransaction(
+          trx,
+          userId,
+          input.permissionOverrides,
+          actorUserId,
+        );
       }
 
       const updated = await this.findById(userId, trx);
