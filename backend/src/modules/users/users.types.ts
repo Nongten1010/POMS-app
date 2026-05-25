@@ -1,3 +1,5 @@
+import type { PermissionGroups } from '../auth/permissions';
+
 export type ManagedUserType = 'officer' | 'admin';
 export type ManagedUserStatus = 'active' | 'suspended';
 
@@ -33,7 +35,7 @@ export interface UserPermissionsDTO {
   rolePermissions: PermissionGrantDTO[];
   overrides: UserPermissionOverrideDTO[];
   effectiveScopes: Record<string, PermissionScope>;
-  permissions: Record<string, Record<string, true>>;
+  permissions: PermissionGroups;
 }
 
 export interface OfficerProfileInput {

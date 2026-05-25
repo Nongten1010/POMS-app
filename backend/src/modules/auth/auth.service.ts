@@ -1,15 +1,16 @@
 import { db } from '../../config/database';
-import { env } from '../../config/env';
 import { logger } from '../../config/logger';
 import { UnauthorizedError } from '../../shared/errors/AppError';
-import { signAccessToken, parseDurationToSeconds } from '../../shared/utils/jwt';
+import { signAccessToken } from '../../shared/utils/jwt';
 import { verifyPassword, bufferToHashString } from '../../shared/utils/password';
 import { getIdentityProvider } from './identity-provider';
 import { authRepository } from './auth.repository';
 import { groupPermissions } from './permissions';
 import type {
+  AuthUserDTO,
   LoginRequest,
   LoginResponse,
+  MeResponse,
   OfficerProfileDTO,
   OperatorProfileDTO,
   UserSummary,
@@ -182,6 +183,24 @@ export const authService = {
       scopes,
     });
   },
+
+  async me(userId: number): Promise<MeResponse> {
+    const user = await authRepository.findUserById(userId);
+    ensureLoginUserAvailable(user, 'citizen', String(userId));
+
+    const officerProfile =
+      user.user_type === 'officer' || user.user_type === 'admin'
+        ? await authRepository.getOfficerProfile(user.id)
+        : undefined;
+    const { roles, scopes } = await authRepository.getRolesAndPermissions(user.id);
+
+    return buildMeResponse({
+      user: toUserSummary(user),
+      profile: officerProfile ? toOfficerDTO(officerProfile) : null,
+      roles,
+      scopes,
+    });
+  },
 };
 
 function ensureLocalLoginTypeAllowed(
@@ -274,7 +293,6 @@ function buildLoginResponse(args: {
   roles: string[];
   scopes: Record<string, string | null>;
 }): LoginResponse {
-  const expiresIn = parseDurationToSeconds(env.JWT_EXPIRES_IN);
   const accessToken = signAccessToken({
     sub: String(args.user.id),
     userType: args.user.userType,
@@ -283,11 +301,50 @@ function buildLoginResponse(args: {
   });
   return {
     accessToken,
-    expiresIn,
-    user: args.user,
-    profile: args.profile,
-    roles: args.roles,
-    scopes: args.scopes,
+    user: toAuthUserDTO(args.user, args.profile, args.roles),
     permissions: groupPermissions(args.scopes),
   };
+}
+
+function buildMeResponse(args: {
+  user: UserSummary;
+  profile: OfficerProfileDTO | OperatorProfileDTO | null;
+  roles: string[];
+  scopes: Record<string, string | null>;
+}): MeResponse {
+  return {
+    user: toAuthUserDTO(args.user, args.profile, args.roles),
+    permissions: groupPermissions(args.scopes),
+  };
+}
+
+function toAuthUserDTO(
+  user: UserSummary,
+  profile: OfficerProfileDTO | OperatorProfileDTO | null,
+  roles: string[],
+): AuthUserDTO {
+  const officerProfile = isOfficerProfile(profile) ? profile : null;
+  const fullName = [joinNamePrefix(user.prenameTh, user.firstName), user.lastName]
+    .filter(Boolean)
+    .join(' ');
+
+  return {
+    username: user.username ?? user.externalId,
+    fullName,
+    department: officerProfile?.departmentId ?? null,
+    lineNameTh: officerProfile?.lineNameTh ?? null,
+    levelNameTh: officerProfile?.levelNameTh ?? null,
+    roles: roles[0] ?? user.userType,
+    isActive: user.isActive,
+  };
+}
+
+function joinNamePrefix(prenameTh: string | null, firstName: string): string {
+  return `${prenameTh ?? ''}${firstName}`;
+}
+
+function isOfficerProfile(
+  profile: OfficerProfileDTO | OperatorProfileDTO | null,
+): profile is OfficerProfileDTO {
+  return profile !== null && 'departmentId' in profile;
 }

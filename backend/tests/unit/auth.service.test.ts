@@ -166,4 +166,99 @@ describe('authService login completion', () => {
       message: 'Invalid credentials',
     });
   });
+
+  it('returns the documented login contract for an officer', async () => {
+    mockedAuthRepository.findUserByProviderAndExternalId.mockResolvedValue({
+      id: 12,
+      external_id: 'officer001',
+      identity_provider: 'mock',
+      user_type: 'officer',
+      username: 'officer001',
+      email: null,
+      phone: null,
+      prename_th: 'นาย',
+      first_name: 'ทดสอบ',
+      last_name: 'ระบบ',
+      is_active: true,
+      password_hash: null,
+    });
+    mockedAuthRepository.getOfficerProfile.mockResolvedValue({
+      user_id: 12,
+      pos_no: '1',
+      pertype_id: '1',
+      pertype: 'ข้าราชการ',
+      position_type_id: '1',
+      position_type_th: 'ทั่วไป',
+      line_id: '1',
+      line_name_th: 'เจ้าหน้าที่',
+      level_id: '1',
+      level_name_th: 'ปฏิบัติการ',
+      organize_id: '1',
+      division_id: '1',
+      department_id: '2',
+      ministry_id: '1',
+      province_id: '1',
+      per_status: '1',
+      per_status_name: 'ปกติ',
+    });
+    mockedAuthRepository.getRolesAndPermissions.mockResolvedValue({
+      roles: ['diw_central'],
+      scopes: {
+        'dashboard:view': 'ALL',
+        'dashboard.alerts:view': 'ALL',
+        'dashboard.search:advanced': 'ALL',
+        'permissions:manage': 'ALL',
+      },
+    });
+
+    const result = await authService.completeLoginAsOfficer({
+      external_id: 'officer001',
+      prename_th: 'นาย',
+      first_name: 'ทดสอบ',
+      last_name: 'ระบบ',
+      email: null,
+      phone: null,
+      pos_no: '1',
+      pertype_id: '1',
+      pertype: 'ข้าราชการ',
+      position_type_id: '1',
+      position_type_th: 'ทั่วไป',
+      line_id: '1',
+      line_name_th: 'เจ้าหน้าที่',
+      level_id: '1',
+      level_name_th: 'ปฏิบัติการ',
+      organize_id: '1',
+      division_id: '1',
+      department_id: '2',
+      ministry_id: '1',
+      province_id: '1',
+      per_status: '1',
+      per_status_name: 'ปกติ',
+    });
+
+    expect(result).toEqual({
+      accessToken: 'signed-access-token',
+      user: {
+        username: 'officer001',
+        fullName: 'นายทดสอบ ระบบ',
+        department: '2',
+        lineNameTh: 'เจ้าหน้าที่',
+        levelNameTh: 'ปฏิบัติการ',
+        roles: 'diw_central',
+        isActive: true,
+      },
+      permissions: {
+        dashboard: {
+          data: 'ALL',
+          view: true,
+          favorite: true,
+          advanced_search: true,
+        },
+        permissions: {
+          data: 'ALL',
+          view: true,
+        },
+      },
+    });
+  });
 });

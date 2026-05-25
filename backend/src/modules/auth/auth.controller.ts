@@ -2,30 +2,25 @@ import { Request, Response, NextFunction } from 'express';
 import { StatusCodes } from 'http-status-codes';
 import { loginSchema } from './auth.validator';
 import { authService } from './auth.service';
-import { groupPermissions } from './permissions';
 
 export const authController = {
   async login(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const payload = loginSchema.parse(req.body);
       const result = await authService.login(payload);
-      res.status(StatusCodes.OK).json({ success: true, data: result });
+      res.status(StatusCodes.OK).json(result);
     } catch (err) {
       next(err);
     }
   },
 
   /** ดู profile + scopes ของตัวเอง */
-  me(req: Request, res: Response): void {
-    res.json({
-      success: true,
-      data: {
-        id: req.user?.id,
-        userType: req.user?.userType,
-        roles: req.user?.roles,
-        scopes: req.user?.scopes,
-        permissions: groupPermissions(req.user?.scopes ?? {}),
-      },
-    });
+  async me(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const result = await authService.me(req.user!.id);
+      res.status(StatusCodes.OK).json(result);
+    } catch (err) {
+      next(err);
+    }
   },
 };

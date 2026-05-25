@@ -57,6 +57,10 @@ export const authRepository = {
     return db<UserRow>('users').where({ username }).whereNull('deleted_at').first();
   },
 
+  findUserById(userId: number): Promise<UserRow | undefined> {
+    return db<UserRow>('users').where({ id: userId }).whereNull('deleted_at').first();
+  },
+
   getOfficerProfile(userId: number): Promise<OfficerProfileRow | undefined> {
     return db<OfficerProfileRow>('officer_profiles').where({ user_id: userId }).first();
   },

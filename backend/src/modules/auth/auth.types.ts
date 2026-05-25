@@ -27,6 +27,16 @@ export interface UserSummary {
   statusLabel: 'ใช้งาน' | 'ระงับใช้งาน';
 }
 
+export interface AuthUserDTO {
+  username: string;
+  fullName: string;
+  department: string | null;
+  lineNameTh: string | null;
+  levelNameTh: string | null;
+  roles: string;
+  isActive: boolean;
+}
+
 export interface OfficerProfileDTO {
   posNo: string | null;
   pertype: string | null;
@@ -63,10 +73,11 @@ export interface OperatorProfileDTO {
 
 export interface LoginResponse {
   accessToken: string;
-  expiresIn: number;
-  user: UserSummary;
-  profile: OfficerProfileDTO | OperatorProfileDTO | null;
-  roles: string[];
-  scopes: Record<string, string | null>;
+  user: AuthUserDTO;
+  permissions: PermissionGroups;
+}
+
+export interface MeResponse {
+  user: AuthUserDTO;
   permissions: PermissionGroups;
 }
