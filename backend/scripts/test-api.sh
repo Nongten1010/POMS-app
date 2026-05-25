@@ -75,15 +75,15 @@ expect_status "GET /health"  200  "$HOST/health"
 print_section "2. Login — 5 user types"
 expect_status "POST /auth/login (admin officer 'weekit')"     200 -X POST "$HOST$PREFIX/auth/login" \
   -H 'Content-Type: application/json' \
-  -d '{"userType":"officer","username":"weekit","password":"demo1234"}'
+  -d '{"userType":"officer","username":"weekit","departmentID":"2","password":"demo1234"}'
 
 expect_status "POST /auth/login (kpm officer)"               200 -X POST "$HOST$PREFIX/auth/login" \
   -H 'Content-Type: application/json' \
-  -d '{"userType":"officer","username":"officer_kpm","password":"demo1234"}'
+  -d '{"userType":"officer","username":"officer_kpm","departmentID":"2","password":"demo1234"}'
 
 expect_status "POST /auth/login (provincial officer)"        200 -X POST "$HOST$PREFIX/auth/login" \
   -H 'Content-Type: application/json' \
-  -d '{"userType":"officer","username":"officer_sng","password":"demo1234"}'
+  -d '{"userType":"officer","username":"officer_sng","departmentID":"2","password":"demo1234"}'
 
 expect_status "POST /auth/login (operator 'ธนาภรณ์')"        200 -X POST "$HOST$PREFIX/auth/login" \
   -H 'Content-Type: application/json' \
@@ -97,8 +97,8 @@ expect_status "POST /auth/login (citizen)"                   200 -X POST "$HOST$
 print_section "3. /me with valid token"
 LOGIN_RESP=$(curl -s -X POST "$HOST$PREFIX/auth/login" \
   -H 'Content-Type: application/json' \
-  -d '{"userType":"officer","username":"weekit","password":"demo1234"}')
-TOKEN=$(get_json "$LOGIN_RESP" "print(d['data']['accessToken'])")
+  -d '{"userType":"officer","username":"weekit","departmentID":"2","password":"demo1234"}')
+TOKEN=$(get_json "$LOGIN_RESP" "print(d['accessToken'])")
 
 if [[ -n "$TOKEN" ]]; then
   expect_status "GET /auth/me (with admin token)" 200 "$HOST$PREFIX/auth/me" \
@@ -112,11 +112,11 @@ fi
 print_section "4. Error cases"
 expect_status "Wrong password → 401"            401 -X POST "$HOST$PREFIX/auth/login" \
   -H 'Content-Type: application/json' \
-  -d '{"userType":"officer","username":"weekit","password":"WRONG"}'
+  -d '{"userType":"officer","username":"weekit","departmentID":"2","password":"WRONG"}'
 
 expect_status "Missing password → 400"          400 -X POST "$HOST$PREFIX/auth/login" \
   -H 'Content-Type: application/json' \
-  -d '{"userType":"officer","username":"weekit"}'
+  -d '{"userType":"officer","username":"weekit","departmentID":"2"}'
 
 expect_status "Operator without username → 400" 400 -X POST "$HOST$PREFIX/auth/login" \
   -H 'Content-Type: application/json' \
@@ -133,37 +133,37 @@ expect_status "Invalid Bearer token → 401"       401 "$HOST$PREFIX/auth/me" \
 expect_status "Unknown route → 404"              404 "$HOST$PREFIX/does-not-exist"
 expect_status "Ghost user → 401"                 401 -X POST "$HOST$PREFIX/auth/login" \
   -H 'Content-Type: application/json' \
-  -d '{"userType":"officer","username":"ghost_user","password":"demo1234"}'
+  -H 'X-Forwarded-For: 127.0.0.2' \
+  -d '{"userType":"officer","username":"ghost_user","departmentID":"2","password":"demo1234"}'
 
 # 5. Inspection — แสดงข้อมูลที่สำคัญจาก login response
 print_section "5. Verify response shape (admin login)"
 if [[ -n "$TOKEN" ]]; then
-  USER_ID=$(get_json "$LOGIN_RESP" "print(d['data']['user']['id'])")
-  USER_TYPE_VAL=$(get_json "$LOGIN_RESP" "print(d['data']['user']['userType'])")
-  FIRST_NAME=$(get_json "$LOGIN_RESP" "print(d['data']['user']['firstName'])")
-  LAST_NAME=$(get_json "$LOGIN_RESP" "print(d['data']['user']['lastName'])")
-  PERM_COUNT=$(get_json "$LOGIN_RESP" "print(len(d['data']['permissions']))")
-  FACTORIES_SCOPE=$(get_json "$LOGIN_RESP" "print(d['data']['scopes'].get('factories:view','-'))")
+  USERNAME=$(get_json "$LOGIN_RESP" "print(d['user']['username'])")
+  FULL_NAME=$(get_json "$LOGIN_RESP" "print(d['user']['fullName'])")
+  ROLE_CODE=$(get_json "$LOGIN_RESP" "print(d['user']['roles'])")
+  DASHBOARD_DATA=$(get_json "$LOGIN_RESP" "print(d['permissions']['dashboard']['data'])")
+  DASHBOARD_SEARCH=$(get_json "$LOGIN_RESP" "print(d['permissions']['dashboard']['search:advanced'])")
+  PERM_COUNT=$(get_json "$LOGIN_RESP" "print(len(d['permissions']))")
 
-  echo "  user.id         = $USER_ID (type: $(get_json "$LOGIN_RESP" "print(type(d['data']['user']['id']).__name__)"))"
-  echo "  user.userType   = $USER_TYPE_VAL"
-  echo "  user.firstName  = $FIRST_NAME"
-  echo "  user.lastName   = $LAST_NAME"
+  echo "  user.username   = $USERNAME"
+  echo "  user.fullName   = $FULL_NAME"
+  echo "  user.roles      = $ROLE_CODE"
   echo "  permissions     = $PERM_COUNT รายการ"
-  echo "  scopes['factories:view'] = $FACTORIES_SCOPE"
+  echo "  dashboard.data  = $DASHBOARD_DATA"
+  echo "  dashboard['search:advanced'] = $DASHBOARD_SEARCH"
 fi
 
-# 6. Operator factories check
-print_section "6. Operator login — ดูจำนวน factories"
+# 6. Operator permission scope check
+print_section "6. Operator login — ดู permission data scope"
 OP_RESP=$(curl -s -X POST "$HOST$PREFIX/auth/login" \
   -H 'Content-Type: application/json' \
+  -H 'X-Forwarded-For: 127.0.0.3' \
   -d '{"userType":"operator","username":"operator_demo","password":"demo1234"}')
-NUM_J=$(get_json "$OP_RESP" "print(len(d['data']['profile']['juristics']))")
-NUM_F=$(get_json "$OP_RESP" "print(sum(len(j['factories']) for j in d['data']['profile']['juristics']))")
-OP_SCOPE=$(get_json "$OP_RESP" "print(d['data']['scopes'].get('factories:view','-'))")
-echo "  juristics count = $NUM_J (expect 2)"
-echo "  factories total = $NUM_F (expect 7)"
-echo "  scopes['factories:view'] = $OP_SCOPE (expect OWN_FACTORY)"
+OP_USERNAME=$(get_json "$OP_RESP" "print(d['user']['username'])")
+OP_SCOPE=$(get_json "$OP_RESP" "print(d['permissions']['factories']['data'])")
+echo "  user.username = $OP_USERNAME"
+echo "  permissions.factories.data = $OP_SCOPE (expect OWN_FACTORY)"
 
 # Summary
 echo ""
