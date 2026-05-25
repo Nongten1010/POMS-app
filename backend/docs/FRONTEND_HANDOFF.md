@@ -354,31 +354,36 @@ Expected response:
 
 ```json
 {
-  "success": true,
-  "data": {
-    "id": 1,
-    "username": "weekit",
-    "userType": "admin",
-    "externalId": "1102001567054",
-    "identityProvider": "mock",
-    "prenameTh": "นาย",
-    "firstName": "วีกิจ",
-    "lastName": "ชมญาติ",
-    "email": "weekit@example.local",
-    "phone": null,
+  "user": {
+    "username": "1102001567054",
+    "fullName": "นายวีกิจ ชมญาติ",
     "department": "กรมโรงงานอุตสาหกรรม",
     "lineNameTh": "นักวิชาการสิ่งแวดล้อม",
     "levelNameTh": "ปฏิบัติการ",
-    "isActive": true,
     "roles": "admin",
-    "profile": {
-      "departmentId": "3010000",
-      "lineNameTh": "นักวิชาการสิ่งแวดล้อม",
-      "levelNameTh": "ปฏิบัติการ"
+    "isActive": true
+  },
+  "permissions": {
+    "dashboard": {
+      "data": "ALL",
+      "view": true,
+      "favorite": true,
+      "search": true,
+      "advanced_search": true,
+      "statistics": true,
+      "export": true
+    },
+    "factories": {
+      "data": "ALL",
+      "view": true,
+      "edit": true,
+      "approve": true
     }
   }
 }
 ```
+
+หมายเหตุ: response นี้เป็น shape เดียวกับ `auth/login` แต่ไม่มี `accessToken` และไม่ห่อด้วย `{ success, data }`
 
 ### 6.3 Create user with local username/password
 

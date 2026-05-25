@@ -1,4 +1,5 @@
 import type { PermissionGroups } from '../auth/permissions';
+import type { AuthUserDTO } from '../auth/auth.types';
 
 export type ManagedUserType = 'officer' | 'admin';
 export type ManagedUserStatus = 'active' | 'suspended';
@@ -83,6 +84,11 @@ export interface ManagedUserDetailDTO extends ManagedUserTableDTO {
   phone: string | null;
   isActive: boolean;
   profile: Required<OfficerProfileInput>;
+}
+
+export interface ManagedUserAuthDetailDTO {
+  user: AuthUserDTO;
+  permissions: PermissionGroups;
 }
 
 export interface ListManagedUsersQuery {

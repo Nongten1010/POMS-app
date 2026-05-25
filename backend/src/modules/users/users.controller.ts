@@ -24,8 +24,8 @@ export const usersController = {
   async getById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { id } = userIdParamSchema.parse(req.params);
-      const data = await usersService.getById(id);
-      res.status(StatusCodes.OK).json({ success: true, data });
+      const result = await usersService.getAuthDetailById(id);
+      res.status(StatusCodes.OK).json(result);
     } catch (err) {
       next(err);
     }

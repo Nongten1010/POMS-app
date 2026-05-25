@@ -12,6 +12,7 @@ import type {
   CreateManagedUserInput,
   CreateLocalAccountInput,
   ListManagedUsersQuery,
+  ManagedUserAuthDetailDTO,
   ManagedUserDetailDTO,
   PaginatedManagedUsersDTO,
   PermissionGrantDTO,
@@ -41,6 +42,32 @@ export const usersService = {
     const user = await usersRepository.findById(userId);
     if (!user) throw new NotFoundError('User not found');
     return user;
+  },
+
+  async getAuthDetailById(userId: number): Promise<ManagedUserAuthDetailDTO> {
+    const user = await usersRepository.findById(userId);
+    if (!user) throw new NotFoundError('User not found');
+
+    const [rolePermissions, overrides] = await Promise.all([
+      usersRepository.getRolePermissions(userId),
+      usersRepository.getUserPermissionOverrides(userId),
+    ]);
+    const effectiveScopes = buildEffectiveScopes(rolePermissions, overrides);
+
+    return {
+      user: {
+        username: user.externalId,
+        fullName: [joinNamePrefix(user.prenameTh, user.firstName), user.lastName]
+          .filter(Boolean)
+          .join(' '),
+        department: user.department,
+        lineNameTh: user.lineNameTh,
+        levelNameTh: user.levelNameTh,
+        roles: user.roles,
+        isActive: user.isActive,
+      },
+      permissions: groupPermissions(effectiveScopes),
+    };
   },
 
   async create(input: CreateManagedUserInput, actorUserId: number): Promise<ManagedUserDetailDTO> {
@@ -159,6 +186,10 @@ function buildEffectiveScopes(
   }
 
   return scopes;
+}
+
+function joinNamePrefix(prenameTh: string | null, firstName: string): string {
+  return `${prenameTh ?? ''}${firstName}`;
 }
 
 async function ensureUniqueIdentity(
