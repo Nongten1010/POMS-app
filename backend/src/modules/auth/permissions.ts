@@ -6,21 +6,9 @@ export type PermissionGroup = { data: PermissionDataScope } & Record<
 export type PermissionGroups = Record<string, PermissionGroup>;
 
 const permissionAliases: Record<string, { module: string; action: string }> = {
-  'dashboard:view': { module: 'dashboard', action: 'view' },
-  'dashboard.alerts:view': { module: 'dashboard', action: 'favorite' },
-  'dashboard.search:basic': { module: 'dashboard', action: 'search' },
-  'dashboard.search:advanced': { module: 'dashboard', action: 'advanced_search' },
-  'dashboard.stats:view': { module: 'dashboard', action: 'statistics' },
-  'dashboard.stats:export': { module: 'dashboard', action: 'export' },
   'cems_wpms_requests:view': { module: 'connection', action: 'view' },
   'cems_wpms_requests:edit': { module: 'connection', action: 'edit' },
   'cems_wpms_requests:approve': { module: 'connection', action: 'approve' },
-  'helpdesk:submit': { module: 'helpdesk', action: 'view' },
-  'feedback:submit': { module: 'feedback', action: 'view' },
-  'chat:ask': { module: 'chat', action: 'view' },
-  'chat:answer': { module: 'chat', action: 'edit' },
-  'permissions:manage': { module: 'permissions', action: 'view' },
-  'eligible_factories:manage': { module: 'eligible_factories', action: 'view' },
 };
 
 const scopePriority: Record<string, number> = {
@@ -56,9 +44,11 @@ function toPermissionAlias(code: string): { module: string; action: string } | n
   const separatorIndex = code.indexOf(':');
   if (separatorIndex < 1) return null;
 
-  const module = code.slice(0, separatorIndex);
+  const resourcePath = code.slice(0, separatorIndex);
   const action = code.slice(separatorIndex + 1);
-  return { module, action };
+  const [module, ...children] = resourcePath.split('.');
+  const permissionAction = children.length > 0 ? `${children.join('.')}:${action}` : action;
+  return { module: module!, action: permissionAction };
 }
 
 function widestScope(

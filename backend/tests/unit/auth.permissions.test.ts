@@ -2,7 +2,7 @@ import { describe, expect, it } from '@jest/globals';
 import { groupPermissions } from '../../src/modules/auth/permissions';
 
 describe('groupPermissions', () => {
-  it('maps existing permission codes to the documented API keys with data scopes', () => {
+  it('keeps existing permission action keys and adds module data scopes', () => {
     expect(
       groupPermissions({
         'dashboard:view': 'ALL',
@@ -20,11 +20,11 @@ describe('groupPermissions', () => {
       dashboard: {
         data: 'ALL',
         view: true,
-        favorite: true,
-        search: true,
-        advanced_search: true,
-        statistics: true,
-        export: true,
+        'alerts:view': true,
+        'search:basic': true,
+        'search:advanced': true,
+        'stats:view': true,
+        'stats:export': true,
       },
       connection: {
         data: 'IN_PROVINCE',
@@ -32,12 +32,12 @@ describe('groupPermissions', () => {
       },
       helpdesk: {
         data: null,
-        view: true,
+        submit: true,
       },
       chat: {
         data: null,
-        view: true,
-        edit: true,
+        ask: true,
+        answer: true,
       },
     });
   });

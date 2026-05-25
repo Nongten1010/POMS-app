@@ -65,11 +65,11 @@
     "dashboard": {
       "data": "ALL",
       "view": true,
-      "favorite": true,
-      "search": true,
-      "advanced_search": true,
-      "statistics": true,
-      "export": true
+      "alerts:view": true,
+      "search:basic": true,
+      "search:advanced": true,
+      "stats:view": true,
+      "stats:export": true
     },
     "factories": {
       "data": "ALL",
@@ -104,11 +104,11 @@
     },
     "helpdesk": {
       "data": "ALL",
-      "view": true
+      "submit": true
     },
     "feedback": {
       "data": "ALL",
-      "view": true
+      "submit": true
     },
     "laws": {
       "data": "ALL",
@@ -122,16 +122,16 @@
     },
     "chat": {
       "data": "ALL",
-      "view": true,
-      "edit": true
+      "ask": true,
+      "answer": true
     },
     "permissions": {
       "data": "ALL",
-      "view": true
+      "manage": true
     },
     "eligible_factories": {
       "data": "ALL",
-      "view": true
+      "manage": true
     },
     "api_documentation": {
       "data": "ALL",
@@ -208,11 +208,11 @@
     "dashboard": {
       "data": "ALL",
       "view": true,
-      "favorite": true,
-      "search": true,
-      "advanced_search": true,
-      "statistics": true,
-      "export": true
+      "alerts:view": true,
+      "search:basic": true,
+      "search:advanced": true,
+      "stats:view": true,
+      "stats:export": true
     },
     "factories": {
       "data": "ALL",
@@ -247,11 +247,11 @@
     },
     "helpdesk": {
       "data": "ALL",
-      "view": true
+      "submit": true
     },
     "feedback": {
       "data": "ALL",
-      "view": true
+      "submit": true
     },
     "laws": {
       "data": "ALL",
@@ -265,16 +265,16 @@
     },
     "chat": {
       "data": "ALL",
-      "view": true,
-      "edit": true
+      "ask": true,
+      "answer": true
     },
     "permissions": {
       "data": "ALL",
-      "view": true
+      "manage": true
     },
     "eligible_factories": {
       "data": "ALL",
-      "view": true
+      "manage": true
     },
     "api_documentation": {
       "data": "ALL",
@@ -288,19 +288,19 @@
 
 | Module | Actions |
 | --- | --- |
-| `dashboard` | `data`, `view`, `favorite`, `search`, `advanced_search`, `statistics`, `export` |
+| `dashboard` | `data`, `view`, `alerts:view`, `search:basic`, `search:advanced`, `stats:view`, `stats:export` |
 | `factories` | `data`, `view`, `edit`, `approve` |
 | `connection` | `data`, `view`, `edit`, `approve` |
 | `kwp_forms` | `data`, `view`, `edit`, `approve` |
 | `bod_cod_errors` | `data`, `view`, `edit`, `approve` |
 | `notifications` | `data`, `view`, `view_status`, `edit`, `approve` |
-| `helpdesk` | `data`, `view` |
-| `feedback` | `data`, `view` |
+| `helpdesk` | `data`, `submit` |
+| `feedback` | `data`, `submit` |
 | `laws` | `data`, `view`, `edit` |
 | `faq` | `data`, `view`, `edit` |
-| `chat` | `data`, `view`, `edit` |
-| `permissions` | `data`, `view` |
-| `eligible_factories` | `data`, `view` |
+| `chat` | `data`, `ask`, `answer` |
+| `permissions` | `data`, `manage` |
+| `eligible_factories` | `data`, `manage` |
 | `api_documentation` | `data`, `view` |
 
 ### Permission Data Scope
