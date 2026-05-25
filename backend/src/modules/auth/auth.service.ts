@@ -329,7 +329,7 @@ function toAuthUserDTO(
     .join(' ');
 
   return {
-    username: user.username ?? user.externalId,
+    username: user.externalId,
     fullName,
     department: officerProfile?.departmentId ?? null,
     lineNameTh: officerProfile?.lineNameTh ?? null,

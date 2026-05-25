@@ -93,10 +93,10 @@ describe('authService login completion', () => {
   it('rejects inactive users before issuing a token', async () => {
     mockedAuthRepository.findUserByProviderAndExternalId.mockResolvedValue({
       id: 12,
-      external_id: 'officer001',
+      external_id: '1102001567054',
       identity_provider: 'mock',
       user_type: 'officer',
-      username: 'officer001',
+      username: 'weekit',
       email: null,
       phone: null,
       prename_th: 'นาย',
@@ -141,7 +141,7 @@ describe('authService login completion', () => {
   it('rejects local login when the username is not a local identity', async () => {
     mockedAuthRepository.findUserByUsername.mockResolvedValue({
       id: 12,
-      external_id: 'officer001',
+      external_id: '1102001567054',
       identity_provider: 'mock',
       user_type: 'officer',
       username: 'officer001',
@@ -170,10 +170,10 @@ describe('authService login completion', () => {
   it('returns the documented login contract for an officer', async () => {
     mockedAuthRepository.findUserByProviderAndExternalId.mockResolvedValue({
       id: 12,
-      external_id: 'officer001',
+      external_id: '1102001567054',
       identity_provider: 'mock',
       user_type: 'officer',
-      username: 'officer001',
+      username: 'weekit',
       email: null,
       phone: null,
       prename_th: 'นาย',
@@ -212,7 +212,7 @@ describe('authService login completion', () => {
     });
 
     const result = await authService.completeLoginAsOfficer({
-      external_id: 'officer001',
+      external_id: '1102001567054',
       prename_th: 'นาย',
       first_name: 'ทดสอบ',
       last_name: 'ระบบ',
@@ -239,7 +239,7 @@ describe('authService login completion', () => {
     expect(result).toEqual({
       accessToken: 'signed-access-token',
       user: {
-        username: 'officer001',
+        username: '1102001567054',
         fullName: 'นายทดสอบ ระบบ',
         department: '2',
         lineNameTh: 'เจ้าหน้าที่',

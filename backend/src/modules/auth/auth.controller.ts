@@ -14,7 +14,7 @@ export const authController = {
     }
   },
 
-  /** ดู profile + scopes ของตัวเอง */
+  /** ดู profile + permissions ของตัวเอง */
   async me(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const result = await authService.me(req.user!.id);

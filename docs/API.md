@@ -153,7 +153,7 @@
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `username` | string | ชื่อผู้ใช้งาน |
+| `username` | string | เลขประจำตัวผู้ใช้งานจากระบบต้นทาง เช่น `per_cardno` สำหรับเจ้าหน้าที่ |
 | `fullName` | string | ชื่อ-นามสกุล |
 | `department` | string | หน่วยงาน |
 | `lineNameTh` | string | สายงานภาษาไทย |
