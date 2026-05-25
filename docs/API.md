@@ -102,6 +102,14 @@
       "edit": true,
       "approve": true
     },
+    "statistics": {
+      "data": "ALL",
+      "view": true
+    },
+    "conditional_search": {
+      "data": "ALL",
+      "view": true
+    },
     "helpdesk": {
       "data": "ALL",
       "view": true
@@ -245,6 +253,14 @@
       "edit": true,
       "approve": true
     },
+    "statistics": {
+      "data": "ALL",
+      "view": true
+    },
+    "conditional_search": {
+      "data": "ALL",
+      "view": true
+    },
     "helpdesk": {
       "data": "ALL",
       "view": true
@@ -294,6 +310,8 @@
 | `kwp_forms` | `data`, `view`, `edit`, `approve` |
 | `bod_cod_errors` | `data`, `view`, `edit`, `approve` |
 | `notifications` | `data`, `view`, `view_status`, `edit`, `approve` |
+| `statistics` | `data`, `view` |
+| `conditional_search` | `data`, `view` |
 | `helpdesk` | `data`, `view` |
 | `feedback` | `data`, `view` |
 | `laws` | `data`, `view`, `edit` |

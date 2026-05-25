@@ -30,6 +30,14 @@ describe('groupPermissions', () => {
         data: 'IN_PROVINCE',
         approve: true,
       },
+      statistics: {
+        data: 'ALL',
+        view: true,
+      },
+      conditional_search: {
+        data: 'ALL',
+        view: true,
+      },
       helpdesk: {
         data: null,
         view: true,

@@ -5,12 +5,20 @@ export type PermissionGroup = { data: PermissionDataScope } & Record<
 >;
 export type PermissionGroups = Record<string, PermissionGroup>;
 
-const permissionAliases: Record<string, { module: string; action: string }> = {
+type PermissionAlias = { module: string; action: string };
+
+const permissionAliases: Record<string, PermissionAlias | PermissionAlias[]> = {
   'dashboard:view': { module: 'dashboard', action: 'view' },
   'dashboard.alerts:view': { module: 'dashboard', action: 'favorite' },
   'dashboard.search:basic': { module: 'dashboard', action: 'search' },
-  'dashboard.search:advanced': { module: 'dashboard', action: 'advanced_search' },
-  'dashboard.stats:view': { module: 'dashboard', action: 'statistics' },
+  'dashboard.search:advanced': [
+    { module: 'dashboard', action: 'advanced_search' },
+    { module: 'conditional_search', action: 'view' },
+  ],
+  'dashboard.stats:view': [
+    { module: 'dashboard', action: 'statistics' },
+    { module: 'statistics', action: 'view' },
+  ],
   'dashboard.stats:export': { module: 'dashboard', action: 'export' },
   'cems_wpms_requests:view': { module: 'connection', action: 'view' },
   'cems_wpms_requests:edit': { module: 'connection', action: 'edit' },
@@ -30,6 +38,8 @@ const responseModules = new Set([
   'kwp_forms',
   'bod_cod_errors',
   'notifications',
+  'statistics',
+  'conditional_search',
   'helpdesk',
   'feedback',
   'laws',
@@ -51,34 +61,35 @@ export function groupPermissions(scopes: Record<string, string | null>): Permiss
   const groups: PermissionGroups = {};
 
   for (const [code, scope] of Object.entries(scopes)) {
-    const permission = toPermissionAlias(code);
-    if (!permission) continue;
-    if (!responseModules.has(permission.module)) continue;
+    const permissions = toPermissionAliases(code);
+    for (const permission of permissions) {
+      if (!responseModules.has(permission.module)) continue;
 
-    const current = groups[permission.module];
-    const currentData = current?.data;
-    groups[permission.module] = {
-      ...(current ?? { data: scope as PermissionDataScope }),
-      data: widestScope(currentData, scope as PermissionDataScope),
-      [permission.action]: true,
-    };
+      const current = groups[permission.module];
+      const currentData = current?.data;
+      groups[permission.module] = {
+        ...(current ?? { data: scope as PermissionDataScope }),
+        data: widestScope(currentData, scope as PermissionDataScope),
+        [permission.action]: true,
+      };
+    }
   }
 
   return groups;
 }
 
-function toPermissionAlias(code: string): { module: string; action: string } | null {
+function toPermissionAliases(code: string): Array<{ module: string; action: string }> {
   const alias = permissionAliases[code];
-  if (alias) return alias;
+  if (alias) return Array.isArray(alias) ? alias : [alias];
 
   const separatorIndex = code.indexOf(':');
-  if (separatorIndex < 1) return null;
+  if (separatorIndex < 1) return [];
 
   const resourcePath = code.slice(0, separatorIndex);
   const action = code.slice(separatorIndex + 1);
   const [module, ...children] = resourcePath.split('.');
   const permissionAction = children.length > 0 ? `${children.join('.')}:${action}` : action;
-  return { module: module!, action: permissionAction };
+  return [{ module: module!, action: permissionAction }];
 }
 
 function widestScope(

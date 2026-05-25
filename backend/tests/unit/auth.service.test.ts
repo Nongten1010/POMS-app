@@ -208,6 +208,7 @@ describe('authService login completion', () => {
         'dashboard:view': 'ALL',
         'dashboard.alerts:view': 'ALL',
         'dashboard.search:advanced': 'ALL',
+        'dashboard.stats:view': 'ALL',
         'permissions:manage': 'ALL',
       },
     });
@@ -254,8 +255,17 @@ describe('authService login completion', () => {
           view: true,
           favorite: true,
           advanced_search: true,
+          statistics: true,
         },
         permissions: {
+          data: 'ALL',
+          view: true,
+        },
+        statistics: {
+          data: 'ALL',
+          view: true,
+        },
+        conditional_search: {
           data: 'ALL',
           view: true,
         },
