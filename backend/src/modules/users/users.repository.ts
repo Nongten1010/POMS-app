@@ -450,14 +450,13 @@ function toTableDTO(rows: ManagedUserJoinedRow[]): ManagedUserTableDTO {
     id: Number(first.id),
     username: first.username ?? '',
     fullName: `${first.first_name} ${first.last_name}`.trim(),
-    affiliation:
+    department:
       first.department_name_th ?? first.division_name_th ?? first.organize_name_th ?? null,
-    position: first.line_name_th ?? first.position_type_th ?? first.mposition ?? null,
-    level: first.level_name_th,
+    lineNameTh: first.line_name_th ?? first.position_type_th ?? first.mposition ?? null,
+    levelNameTh: first.level_name_th,
     roles,
     primaryRole: roles[0] ?? null,
-    status: isActive ? 'active' : 'suspended',
-    statusLabel: isActive ? 'ใช้งาน' : 'ระงับใช้งาน',
+    isActive,
   };
 }
 
@@ -473,7 +472,6 @@ function toDetailDTO(rows: ManagedUserJoinedRow[]): ManagedUserDetailDTO {
     lastName: first.last_name,
     email: first.email,
     phone: first.phone,
-    isActive: Boolean(first.is_active),
     profile: {
       posNo: first.pos_no,
       pertypeId: first.pertype_id,

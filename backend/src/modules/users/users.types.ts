@@ -65,13 +65,12 @@ export interface ManagedUserTableDTO {
   id: number;
   username: string;
   fullName: string;
-  affiliation: string | null;
-  position: string | null;
-  level: string | null;
+  department: string | null;
+  lineNameTh: string | null;
+  levelNameTh: string | null;
   roles: RoleSummaryDTO[];
   primaryRole: RoleSummaryDTO | null;
-  status: ManagedUserStatus;
-  statusLabel: 'ใช้งาน' | 'ระงับใช้งาน';
+  isActive: boolean;
 }
 
 export interface ManagedUserDetailDTO extends ManagedUserTableDTO {
