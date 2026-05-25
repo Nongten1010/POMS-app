@@ -459,11 +459,12 @@ Content-Type: application/json
 ```json
 {
   "userType": "officer",
-  "provider": "local",
   "username": "local_officer",
   "password": "StrongerPass123"
 }
 ```
+
+หมายเหตุ: backend จะเช็กบัญชี local จาก `username/password` ก่อน ถ้าไม่เจอจึง fallback ไป API/mock เดิม ดังนั้น frontend ไม่ต้องส่ง `provider: "local"` แล้ว
 
 ### 6.4 Create provisioned/mock-style user
 

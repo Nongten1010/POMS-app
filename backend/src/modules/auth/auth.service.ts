@@ -6,6 +6,7 @@ import { verifyPassword, bufferToHashString } from '../../shared/utils/password'
 import { getIdentityProvider } from './identity-provider';
 import { authRepository } from './auth.repository';
 import { groupPermissions } from './permissions';
+import type { UserRow } from './auth.repository';
 import type {
   AuthUserDTO,
   LoginRequest,
@@ -22,10 +23,14 @@ export const authService = {
       return this.loginLocal(payload);
     }
 
+    const localResponse = await this.tryLoginLocalFirst(payload);
+    if (localResponse) return localResponse;
+
     const provider = getIdentityProvider();
 
     // 1. Authenticate กับ identity provider (mock หรือ external)
     if (payload.userType === 'officer') {
+      if (!payload.departmentID) throw new UnauthorizedError('Invalid credentials');
       const profile = await provider.authenticateOfficer(
         payload.username!,
         payload.password,
@@ -60,32 +65,18 @@ export const authService = {
     return verifyPassword(plaintext, hashString);
   },
 
+  async tryLoginLocalFirst(payload: LoginRequest): Promise<LoginResponse | null> {
+    const user = await authRepository.findUserByUsername(payload.username!);
+    if (!user || user.identity_provider !== 'local') return null;
+    return completeLocalLogin(payload, user);
+  },
+
   async loginLocal(payload: LoginRequest): Promise<LoginResponse> {
     const user = await authRepository.findUserByUsername(payload.username!);
     if (!user || user.identity_provider !== 'local') {
       throw new UnauthorizedError('Invalid credentials');
     }
-    const hashString = bufferToHashString(user.password_hash);
-    if (!hashString) throw new UnauthorizedError('Invalid credentials');
-
-    const matches = await verifyPassword(payload.password, hashString);
-    if (!matches) throw new UnauthorizedError('Invalid credentials');
-    ensureLocalLoginTypeAllowed(user.user_type, payload.userType);
-    ensureLoginUserAvailable(user, payload.userType, user.external_id);
-    await authRepository.updateLastLogin(user.id);
-
-    const officerProfile =
-      user.user_type === 'officer' || user.user_type === 'admin'
-        ? await authRepository.getOfficerProfile(user.id)
-        : undefined;
-    const { roles, scopes } = await authRepository.getRolesAndPermissions(user.id);
-
-    return buildLoginResponse({
-      user: toUserSummary(user),
-      profile: officerProfile ? toOfficerDTO(officerProfile) : null,
-      roles,
-      scopes,
-    });
+    return completeLocalLogin(payload, user);
   },
 
   async completeLoginAsOfficer(
@@ -238,6 +229,30 @@ function ensureLoginUserAvailable(
     });
     throw new UnauthorizedError('Invalid credentials');
   }
+}
+
+async function completeLocalLogin(payload: LoginRequest, user: UserRow): Promise<LoginResponse> {
+  const hashString = bufferToHashString(user.password_hash);
+  if (!hashString) throw new UnauthorizedError('Invalid credentials');
+
+  const matches = await verifyPassword(payload.password, hashString);
+  if (!matches) throw new UnauthorizedError('Invalid credentials');
+  ensureLocalLoginTypeAllowed(user.user_type, payload.userType);
+  ensureLoginUserAvailable(user, payload.userType, user.external_id);
+  await authRepository.updateLastLogin(user.id);
+
+  const officerProfile =
+    user.user_type === 'officer' || user.user_type === 'admin'
+      ? await authRepository.getOfficerProfile(user.id)
+      : undefined;
+  const { roles, scopes } = await authRepository.getRolesAndPermissions(user.id);
+
+  return buildLoginResponse({
+    user: toUserSummary(user),
+    profile: officerProfile ? toOfficerDTO(officerProfile) : null,
+    roles,
+    scopes,
+  });
 }
 
 function toUserSummary(row: {

@@ -26,7 +26,7 @@
 | `userType` | string | Yes | ประเภทผู้ใช้งาน: `officer`, `operator`, `citizen` |
 | `username` | string | Yes | เลขบัตรประชาชน หรือ UID |
 | `password` | string | Yes | รหัสผ่าน |
-| `departmentID` | string | Required when `userType = officer` | รหัสหน่วยงานสำหรับเจ้าหน้าที่ |
+| `departmentID` | string | No | รหัสหน่วยงานสำหรับเจ้าหน้าที่ API/mock; ถ้าเป็นบัญชีที่สร้างใน POMS backend จะเช็ก local ก่อนและไม่ต้องส่ง |
 
 #### User Types
 

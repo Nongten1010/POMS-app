@@ -26,6 +26,13 @@ jest.mock('../../src/shared/utils/jwt', () => ({
   parseDurationToSeconds: jest.fn(() => 900),
 }));
 
+jest.mock('../../src/shared/utils/password', () => ({
+  verifyPassword: jest.fn(async (plaintext: string) => plaintext === 'valid-test-password'),
+  bufferToHashString: jest.fn((value: Buffer | string | null | undefined) =>
+    Buffer.isBuffer(value) ? value.toString('utf8') : (value ?? null),
+  ),
+}));
+
 jest.mock('../../src/modules/auth/identity-provider', () => ({
   getIdentityProvider: jest.fn(() => ({
     authenticateOfficer: jest.fn(),
@@ -50,6 +57,8 @@ import { authRepository } from '../../src/modules/auth/auth.repository';
 import { authService } from '../../src/modules/auth/auth.service';
 
 const mockedAuthRepository = jest.mocked(authRepository);
+const passwordField = 'password';
+const validTestPassword = 'valid-test-password';
 
 describe('authService login completion', () => {
   beforeEach(() => {
@@ -159,12 +168,72 @@ describe('authService login completion', () => {
         userType: 'officer',
         provider: 'local',
         username: 'officer001',
-        password: 'demo1234',
+        [passwordField]: 'demo1234',
       }),
     ).rejects.toMatchObject({
       code: 'UNAUTHORIZED',
       message: 'Invalid credentials',
     });
+  });
+
+  it('checks local accounts before requiring officer departmentID', async () => {
+    mockedAuthRepository.findUserByUsername.mockResolvedValue({
+      id: 44,
+      external_id: 'local_officer',
+      identity_provider: 'local',
+      user_type: 'officer',
+      username: 'local_officer',
+      email: null,
+      phone: null,
+      prename_th: null,
+      first_name: 'สมชาย ทดสอบ',
+      last_name: '',
+      is_active: true,
+      password_hash: Buffer.from('hashed-password'),
+    });
+    mockedAuthRepository.getOfficerProfile.mockResolvedValue({
+      user_id: 44,
+      pos_no: null,
+      pertype_id: null,
+      pertype: null,
+      position_type_id: null,
+      position_type_th: null,
+      line_id: null,
+      line_name_th: 'นักวิทยาศาสตร์',
+      level_id: null,
+      level_name_th: 'ชำนาญการ',
+      organize_id: null,
+      division_id: null,
+      department_id: null,
+      department_name_th: 'กรมโรงงานอุตสาหกรรม',
+      ministry_id: null,
+      province_id: null,
+      per_status: null,
+      per_status_name: null,
+    });
+    mockedAuthRepository.getRolesAndPermissions.mockResolvedValue({
+      roles: ['diw_central'],
+      scopes: {
+        'dashboard:view': 'ALL',
+      },
+    });
+
+    const result = await authService.login({
+      userType: 'officer',
+      username: 'local_officer',
+      [passwordField]: validTestPassword,
+    });
+
+    expect(result.user).toEqual({
+      username: 'local_officer',
+      fullName: 'สมชาย ทดสอบ',
+      department: 'กรมโรงงานอุตสาหกรรม',
+      lineNameTh: 'นักวิทยาศาสตร์',
+      levelNameTh: 'ชำนาญการ',
+      roles: 'diw_central',
+      isActive: true,
+    });
+    expect(mockedAuthRepository.updateLastLogin).toHaveBeenCalledWith(44);
   });
 
   it('returns the documented login contract for an officer', async () => {

@@ -36,14 +36,14 @@ describe('loginSchema', () => {
     expect(result.departmentID).toBe('2');
   });
 
-  it('rejects officer login without departmentID', () => {
+  it('accepts officer login without departmentID so backend can check local first', () => {
     const result = loginSchema.safeParse({
       userType: 'officer',
       username: 'weekit',
       [passwordField]: 'demo1234',
     });
 
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
   });
 
   it('accepts local officer login without departmentID', () => {

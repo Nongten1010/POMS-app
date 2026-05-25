@@ -12,17 +12,6 @@ export const loginSchema = z
   .refine((data) => !!data.username, {
     message: 'username is required',
     path: ['username'],
-  })
-  .refine(
-    (data) => {
-      if (data.userType !== 'officer') return true;
-      if (data.provider === 'local') return true;
-      return !!data.departmentID;
-    },
-    {
-      message: 'officer requires departmentID',
-      path: ['departmentID'],
-    },
-  );
+  });
 
 export type LoginInput = z.infer<typeof loginSchema>;

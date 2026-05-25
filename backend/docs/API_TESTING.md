@@ -192,7 +192,7 @@ Login ด้วยบัญชี local:
 ```bash
 curl -X POST http://localhost:3000/api/v1/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"userType":"officer","provider":"local","username":"local_officer","password":"StrongerPass123"}'
+  -d '{"userType":"officer","username":"local_officer","password":"StrongerPass123"}'
 ```
 
 ---
