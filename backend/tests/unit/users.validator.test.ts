@@ -176,6 +176,24 @@ describe('managed users validators', () => {
     });
   });
 
+  it('does not update optional edit profile fields when omitted or blank', () => {
+    const result = updateManagedUserSchema.parse({
+      user: {
+        fullName: 'สมชาย ทดสอบ',
+        username: 'local_officer',
+        password: '',
+        roles: 'diw_central',
+        isActive: true,
+      },
+    });
+
+    expect(result).toMatchObject({
+      username: 'local_officer',
+      password: undefined,
+      profile: undefined,
+    });
+  });
+
   it('coerces route id params to positive integers', () => {
     const result = userIdParamSchema.parse({ id: '42' });
 

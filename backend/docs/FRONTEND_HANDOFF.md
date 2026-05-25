@@ -554,6 +554,7 @@ Request body ใช้ shape เดียวกับ `GET /users/:id` ได้
 หมายเหตุ:
 
 - `user.password` ไม่บังคับ; ถ้าไม่ส่งหรือส่งค่าว่าง backend จะไม่เปลี่ยนรหัสผ่านเดิม
+- `user.department`, `user.lineNameTh`, `user.levelNameTh` ไม่บังคับ; ถ้าไม่ส่งหรือส่งค่าว่าง backend จะไม่เปลี่ยนค่าเดิม
 - `permissions` ไม่บังคับ; ถ้าส่งมา backend จะแปลง object นี้เป็น per-user permission overrides
 - payload flat แบบเก่า (`isActive`, `roleCodes`, `profile`) ยังใช้ได้อยู่
 

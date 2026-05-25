@@ -620,27 +620,33 @@ async function replaceUserPermissionOverridesInTransaction(
 }
 
 function toOfficerProfileRow(profile: OfficerProfileInput): Record<string, string | null> {
-  return {
-    pos_no: profile.posNo ?? null,
-    pertype_id: profile.pertypeId ?? null,
-    pertype: profile.pertype ?? null,
-    position_type_id: profile.positionTypeId ?? null,
-    position_type_th: profile.positionTypeTh ?? null,
-    line_id: profile.lineId ?? null,
-    line_name_th: profile.lineNameTh ?? null,
-    level_id: profile.levelId ?? null,
-    level_name_th: profile.levelNameTh ?? null,
-    mposition_id: profile.mpositionId ?? null,
-    mposition: profile.mposition ?? null,
-    organize_id: profile.organizeId ?? null,
-    division_id: profile.divisionId ?? null,
-    department_id: profile.departmentId ?? null,
-    department_name_th: profile.departmentNameTh ?? null,
-    ministry_id: profile.ministryId ?? null,
-    province_id: profile.provinceId ?? null,
-    per_status: profile.perStatus ?? null,
-    per_status_name: profile.perStatusName ?? null,
-    relocation_type: profile.relocationType ?? null,
-    relocation_name: profile.relocationName ?? null,
-  };
+  const mappings: Array<[keyof OfficerProfileInput, string]> = [
+    ['posNo', 'pos_no'],
+    ['pertypeId', 'pertype_id'],
+    ['pertype', 'pertype'],
+    ['positionTypeId', 'position_type_id'],
+    ['positionTypeTh', 'position_type_th'],
+    ['lineId', 'line_id'],
+    ['lineNameTh', 'line_name_th'],
+    ['levelId', 'level_id'],
+    ['levelNameTh', 'level_name_th'],
+    ['mpositionId', 'mposition_id'],
+    ['mposition', 'mposition'],
+    ['organizeId', 'organize_id'],
+    ['divisionId', 'division_id'],
+    ['departmentId', 'department_id'],
+    ['departmentNameTh', 'department_name_th'],
+    ['ministryId', 'ministry_id'],
+    ['provinceId', 'province_id'],
+    ['perStatus', 'per_status'],
+    ['perStatusName', 'per_status_name'],
+    ['relocationType', 'relocation_type'],
+    ['relocationName', 'relocation_name'],
+  ];
+
+  return Object.fromEntries(
+    mappings
+      .filter(([property]) => profile[property] !== undefined)
+      .map(([property, column]) => [column, profile[property] ?? null]),
+  );
 }

@@ -172,6 +172,16 @@ const editResponseUpdateSchema = z
     const permissionScopes = permissions
       ? permissionGroupsToScopes(permissions as PermissionGroups)
       : undefined;
+    const profile =
+      user.department !== undefined ||
+      user.lineNameTh !== undefined ||
+      user.levelNameTh !== undefined
+        ? {
+            departmentNameTh: user.department,
+            lineNameTh: user.lineNameTh,
+            levelNameTh: user.levelNameTh,
+          }
+        : undefined;
     return {
       username: user.username,
       externalId: user.username,
@@ -180,11 +190,7 @@ const editResponseUpdateSchema = z
       password: user.password,
       isActive: user.isActive,
       roleCodes: [user.roles],
-      profile: {
-        departmentNameTh: user.department,
-        lineNameTh: user.lineNameTh,
-        levelNameTh: user.levelNameTh,
-      },
+      profile,
       permissionOverrides: permissionScopes
         ? Object.entries(permissionScopes).map(([code, scope]) => ({
             code,
