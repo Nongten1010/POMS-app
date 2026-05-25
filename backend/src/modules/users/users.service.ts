@@ -65,6 +65,7 @@ export const usersService = {
         levelNameTh: user.levelNameTh,
         roles: user.roles,
         isActive: user.isActive,
+        source: toManagedUserSource(user.identityProvider),
       },
       permissions: groupPermissions(effectiveScopes),
     };
@@ -190,6 +191,10 @@ function buildEffectiveScopes(
 
 function joinNamePrefix(prenameTh: string | null, firstName: string): string {
   return `${prenameTh ?? ''}${firstName}`;
+}
+
+function toManagedUserSource(identityProvider: string): 'api' | 'created' {
+  return identityProvider === 'local' ? 'created' : 'api';
 }
 
 async function ensureUniqueIdentity(

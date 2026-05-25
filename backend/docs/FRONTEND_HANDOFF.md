@@ -361,7 +361,8 @@ Expected response:
     "lineNameTh": "นักวิชาการสิ่งแวดล้อม",
     "levelNameTh": "ปฏิบัติการ",
     "roles": "admin",
-    "isActive": true
+    "isActive": true,
+    "source": "api"
   },
   "permissions": {
     "dashboard": {
@@ -384,6 +385,13 @@ Expected response:
 ```
 
 หมายเหตุ: response นี้เป็น shape เดียวกับ `auth/login` แต่ไม่มี `accessToken` และไม่ห่อด้วย `{ success, data }`
+
+`user.source` ใช้บอกที่มาของ user:
+
+| value | ความหมาย |
+| --- | --- |
+| `api` | user มาจาก API/identity provider ภายนอก |
+| `created` | user ถูกสร้างขึ้นใน POMS |
 
 ### 6.3 Create user with local username/password
 

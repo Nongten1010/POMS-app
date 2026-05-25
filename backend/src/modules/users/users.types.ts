@@ -87,8 +87,14 @@ export interface ManagedUserDetailDTO extends ManagedUserTableDTO {
   profile: Required<OfficerProfileInput>;
 }
 
+export type ManagedUserSource = 'api' | 'created';
+
+export interface ManagedUserEditUserDTO extends AuthUserDTO {
+  source: ManagedUserSource;
+}
+
 export interface ManagedUserAuthDetailDTO {
-  user: AuthUserDTO;
+  user: ManagedUserEditUserDTO;
   permissions: PermissionGroups;
 }
 
