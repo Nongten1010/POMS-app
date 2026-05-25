@@ -361,7 +361,8 @@ Expected response:
     "lineNameTh": "นักวิชาการสิ่งแวดล้อม",
     "levelNameTh": "ปฏิบัติการ",
     "roles": "admin",
-    "isActive": true
+    "isActive": true,
+    "password": null
   },
   "permissions": {
     "dashboard": {
@@ -383,7 +384,7 @@ Expected response:
 }
 ```
 
-หมายเหตุ: response นี้เป็น shape เดียวกับ `auth/login` แต่ไม่มี `accessToken` และไม่ห่อด้วย `{ success, data }`
+หมายเหตุ: response นี้เป็น shape เดียวกับ `auth/login` แต่ไม่มี `accessToken` และไม่ห่อด้วย `{ success, data }`; `password` ส่งเป็น `null` สำหรับหน้า edit เท่านั้น backend ไม่ส่งรหัสผ่านจริงกลับออก API
 
 ### 6.3 Create user with local username/password
 
