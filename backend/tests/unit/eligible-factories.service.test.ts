@@ -8,12 +8,20 @@ jest.mock('../../src/modules/eligible-factories/eligible-factories.repository', 
   },
 }));
 
+jest.mock('../../src/modules/eligible-factories/eligible-factory-candidates.repository', () => ({
+  eligibleFactoryCandidatesRepository: {
+    list: jest.fn(),
+  },
+}));
+
 import { ConflictError } from '../../src/shared/errors/AppError';
+import { eligibleFactoryCandidatesRepository } from '../../src/modules/eligible-factories/eligible-factory-candidates.repository';
 import { eligibleFactoriesRepository } from '../../src/modules/eligible-factories/eligible-factories.repository';
 import { eligibleFactoriesService } from '../../src/modules/eligible-factories/eligible-factories.service';
 import type { CreateEligibleFactoryInput } from '../../src/modules/eligible-factories/eligible-factories.types';
 
 const mockedRepository = jest.mocked(eligibleFactoriesRepository);
+const mockedCandidatesRepository = jest.mocked(eligibleFactoryCandidatesRepository);
 
 describe('eligibleFactoriesService', () => {
   const payload: CreateEligibleFactoryInput = {
@@ -68,8 +76,24 @@ describe('eligibleFactoriesService', () => {
   });
 
   it('returns mock candidates from the external factory source', async () => {
+    mockedCandidatesRepository.list.mockResolvedValue({
+      data: new Array(60000).fill(null).map((_, index) => ({
+        sourceSystem: 'mock_external_factory_db',
+        sourceFactoryId: `mock-factory-${String(index + 1).padStart(6, '0')}`,
+        factoryName: `โรงงาน mock ${index + 1}`,
+        factoryRegistrationNoNew: `mock-${index + 1}`,
+        provinceName: 'ระยอง',
+        operationStatus: 'แจ้งประกอบแล้ว',
+      })),
+      meta: {
+        total: 60000,
+        source: 'mock',
+      },
+    });
+
     const result = await eligibleFactoriesService.listCandidates({});
 
+    expect(mockedCandidatesRepository.list).toHaveBeenCalledWith({});
     expect(result.meta).toEqual({
       total: 60000,
       source: 'mock',
@@ -78,6 +102,27 @@ describe('eligibleFactoriesService', () => {
   });
 
   it('filters mock candidates by province and EIA flag', async () => {
+    mockedCandidatesRepository.list.mockResolvedValue({
+      data: [
+        {
+          sourceSystem: 'mock_external_factory_db',
+          sourceFactoryId: 'mock-factory-000005',
+          factoryName: 'บริษัท ระยองพาวเวอร์บอยเลอร์ จำกัด',
+          factoryRegistrationNoNew: '3-106-33/50รย',
+          provinceName: 'ระยอง',
+          operationStatus: 'แจ้งประกอบแล้ว',
+          hasEia: true,
+        },
+      ],
+      meta: {
+        total: 1,
+        page: 1,
+        perPage: 100,
+        totalPages: 1,
+        source: 'mock',
+      },
+    });
+
     const result = await eligibleFactoriesService.listCandidates({
       provinceName: 'ระยอง',
       hasEia: true,
@@ -91,6 +136,26 @@ describe('eligibleFactoriesService', () => {
   });
 
   it('paginates mock candidates', async () => {
+    mockedCandidatesRepository.list.mockResolvedValue({
+      data: [
+        {
+          sourceSystem: 'mock_external_factory_db',
+          sourceFactoryId: 'mock-factory-000011',
+          factoryName: 'โรงงาน mock 11',
+          factoryRegistrationNoNew: 'mock-11',
+          provinceName: 'ระยอง',
+          operationStatus: 'แจ้งประกอบแล้ว',
+        },
+      ],
+      meta: {
+        total: 60000,
+        page: 2,
+        perPage: 10,
+        totalPages: 6000,
+        source: 'mock',
+      },
+    });
+
     const result = await eligibleFactoriesService.listCandidates({
       page: 2,
       perPage: 10,
@@ -102,13 +167,33 @@ describe('eligibleFactoriesService', () => {
       perPage: 10,
       totalPages: 6000,
     });
-    expect(result.data).toHaveLength(10);
+    expect(result.data).toHaveLength(1);
     expect(result.data[0]).toMatchObject({
       sourceFactoryId: 'mock-factory-000011',
     });
   });
 
   it('searches mock candidates across factory fields', async () => {
+    mockedCandidatesRepository.list.mockResolvedValue({
+      data: [
+        {
+          sourceSystem: 'mock_external_factory_db',
+          sourceFactoryId: 'mock-factory-000005',
+          factoryName: 'บริษัท ระยองพาวเวอร์บอยเลอร์ จำกัด',
+          factoryRegistrationNoNew: '3-106-33/50รย',
+          provinceName: 'ระยอง',
+          operationStatus: 'แจ้งประกอบแล้ว',
+        },
+      ],
+      meta: {
+        total: 1,
+        page: 1,
+        perPage: 5,
+        totalPages: 1,
+        source: 'mock',
+      },
+    });
+
     const result = await eligibleFactoriesService.listCandidates({
       search: 'ระยองพาวเวอร์บอยเลอร์',
       perPage: 5,

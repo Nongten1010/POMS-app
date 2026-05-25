@@ -672,9 +672,16 @@ Authorization: Bearer <accessToken>
 eligible_factories:manage
 ```
 
-### 7.1 Candidate factories จาก DB ภายนอกแบบ mock
+### 7.1 Candidate factories จากฐานข้อมูล DIW
 
-ตอนนี้ DB ภายนอก 6 หมื่นโรงงานยังไม่ได้เชื่อมจริง backend จึงมี mock source 60,000 โรงงานให้ frontend ใช้ทำ UI/flow ก่อน
+backend รองรับ 2 mode:
+
+```text
+FACTORY_SOURCE_MODE=mock      # ใช้ mock 60,000 records
+FACTORY_SOURCE_MODE=external  # อ่านจาก diw.dbo.fac_import
+```
+
+บน server จริงให้ใช้ `external` เพื่อดึงข้อมูลจาก DB `diw` ตาราง `fac_import`
 
 ```http
 GET http://localhost:3000/api/v1/eligible-factories/candidates
@@ -689,7 +696,7 @@ Query filter:
 | `search` | string | `เคมี` |
 | `provinceName` | string | `ระยอง` |
 | `operationStatus` | string | `แจ้งประกอบแล้ว` |
-| `hasEia` | boolean string | `true` หรือ `false` |
+| `hasEia` | boolean string | ใช้กับ mock ได้; `fac_import` ยังไม่มี column EIA ที่ map ได้ชัดเจน |
 
 Example:
 
@@ -705,18 +712,18 @@ Response:
   "success": true,
   "data": [
     {
-      "sourceSystem": "mock_external_factory_db",
-      "sourceFactoryId": "mock-factory-0005",
-      "factoryName": "บริษัท ระยองพาวเวอร์บอยเลอร์ จำกัด",
-      "factoryRegistrationNoNew": "3-106-33/50รย",
-      "provinceName": "ระยอง",
+      "sourceSystem": "diw.fac_import",
+      "sourceFactoryId": "10100302325234",
+      "factoryName": "ห้างหุ้นส่วนจำกัด โรงกลึงก๊กกวง",
+      "factoryRegistrationNoNew": "3-64(6)-45/17",
+      "provinceName": "กรุงเทพมหานคร",
       "operationStatus": "แจ้งประกอบแล้ว",
-      "hasEia": true
+      "hasEia": null
     }
   ],
   "meta": {
     "total": 2400,
-    "source": "mock"
+    "source": "external"
   }
 }
 ```
@@ -742,29 +749,26 @@ Payload example:
 
 ```json
 {
-  "sourceSystem": "mock_external_factory_db",
-  "sourceFactoryId": "mock-factory-0005",
-  "factoryName": "บริษัท ระยองพาวเวอร์บอยเลอร์ จำกัด",
-  "factoryRegistrationNoNew": "3-106-33/50รย",
-  "factoryRegistrationNoOld": "รง.4-10005",
-  "factoryTypeSequence": "หลัก",
-  "address": "7 ถนนไอ-หนึ่ง",
-  "provinceName": "ระยอง",
-  "industrialEstateName": "นิคมอุตสาหกรรมมาบตาพุด",
-  "coordinates": {
-    "latitude": 12.6819444,
-    "longitude": 101.1538888
-  },
-  "businessActivity": "ผลิตไอน้ำและพลังงานความร้อน",
+  "sourceSystem": "diw.fac_import",
+  "sourceFactoryId": "10100302325234",
+  "factoryName": "ห้างหุ้นส่วนจำกัด โรงกลึงก๊กกวง",
+  "factoryRegistrationNoNew": "3-64(6)-45/17",
+  "factoryRegistrationNoOld": "08",
+  "factoryTypeSequence": "31/12/2547",
+  "address": "50/10-11-12 ซอยบรมบรรพต ถนนบริพัตร",
+  "provinceName": "กรุงเทพมหานคร",
+  "industrialEstateName": null,
+  "coordinates": null,
+  "businessActivity": "ทำผลิตภัณฑ์โลหะต่าง ๆ",
   "operationStatus": "แจ้งประกอบแล้ว",
-  "capitalAmount": 50000000,
-  "machineryHorsepower": 1500,
-  "productionCapacity": "250 ตันไอน้ำ/วัน",
-  "wastewaterDischargeInfo": "มีการระบายน้ำหล่อเย็นและน้ำทิ้ง",
-  "boilerCount": 4,
-  "boilerSizeEach": "25 ตัน/ชั่วโมง",
-  "fuelUsed": "ก๊าซธรรมชาติ",
-  "hasEia": true,
+  "capitalAmount": 1825000,
+  "machineryHorsepower": 75,
+  "productionCapacity": null,
+  "wastewaterDischargeInfo": null,
+  "boilerCount": null,
+  "boilerSizeEach": null,
+  "fuelUsed": null,
+  "hasEia": null,
   "selectedReason": "เลือกจากรายการโรงงานเข้าข่าย"
 }
 ```

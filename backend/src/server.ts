@@ -2,6 +2,7 @@ import { createApp } from './app';
 import { env } from './config/env';
 import { logger } from './config/logger';
 import { pingDatabase, closeDatabase } from './config/database';
+import { closeFactorySourceDatabase } from './config/factory-source-database';
 
 async function bootstrap(): Promise<void> {
   try {
@@ -20,6 +21,7 @@ async function bootstrap(): Promise<void> {
     logger.info(`[boot] ${signal} received — shutting down gracefully`);
     server.close(async () => {
       await closeDatabase();
+      await closeFactorySourceDatabase();
       process.exit(0);
     });
     setTimeout(() => {

@@ -31,6 +31,29 @@ const envSchema = z.object({
 
   IDENTITY_PROVIDER: z.enum(['mock', 'external']).default('mock'),
 
+  FACTORY_SOURCE_MODE: z.enum(['mock', 'external']).default('mock'),
+  FACTORY_DB_HOST: z.string().min(1).optional(),
+  FACTORY_DB_PORT: z.coerce.number().int().positive().optional(),
+  FACTORY_DB_NAME: z.string().min(1).default('diw'),
+  FACTORY_DB_USER: z.string().min(1).optional(),
+  FACTORY_DB_PASSWORD: z.string().optional(),
+  FACTORY_DB_ENCRYPT: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v === 'true')),
+  FACTORY_DB_TRUST_SERVER_CERTIFICATE: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v !== 'false')),
+  FACTORY_DB_SCHEMA: z
+    .string()
+    .regex(/^[A-Za-z_][A-Za-z0-9_]*$/)
+    .default('dbo'),
+  FACTORY_DB_TABLE: z
+    .string()
+    .regex(/^[A-Za-z_][A-Za-z0-9_]*$/)
+    .default('fac_import'),
+
   CORS_ORIGIN: z.string().default('*'),
 
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'http', 'debug']).default('info'),

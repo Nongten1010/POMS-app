@@ -74,3 +74,24 @@ The eligible factory feature requires migration:
 ```
 
 This creates the `eligible_factories` table used to store factories selected as eligible.
+
+## External DIW factory source
+
+For real candidate factory data, configure the server `.env` with:
+
+```env
+FACTORY_SOURCE_MODE=external
+FACTORY_DB_HOST=<sql-server-host-or-ip>
+FACTORY_DB_PORT=1433
+FACTORY_DB_NAME=diw
+FACTORY_DB_USER=<username>
+FACTORY_DB_PASSWORD=<password>
+FACTORY_DB_ENCRYPT=false
+FACTORY_DB_TRUST_SERVER_CERTIFICATE=true
+FACTORY_DB_SCHEMA=dbo
+FACTORY_DB_TABLE=fac_import
+```
+
+If `diw` is on the same SQL Server and uses the same credentials as POMS, these can match the main `DB_*` values except `FACTORY_DB_NAME=diw`.
+
+Do not commit the server `.env`.

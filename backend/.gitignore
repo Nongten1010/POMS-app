@@ -32,3 +32,6 @@ coverage/
 # Temp
 *.tmp
 tmp/
+
+# Local database inspection exports
+db/*.csv
