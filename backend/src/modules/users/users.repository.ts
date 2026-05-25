@@ -342,9 +342,6 @@ export const usersRepository = {
 
 function buildManagedUsersBaseQuery(query: ListManagedUsersQuery): Knex.QueryBuilder {
   const builder = db('users')
-    .leftJoin('officer_profiles', 'officer_profiles.user_id', 'users.id')
-    .leftJoin('user_roles', 'user_roles.user_id', 'users.id')
-    .leftJoin('roles', 'roles.id', 'user_roles.role_id')
     .whereIn('users.user_type', ['officer', 'admin'])
     .whereNull('users.deleted_at');
 
@@ -352,13 +349,23 @@ function buildManagedUsersBaseQuery(query: ListManagedUsersQuery): Knex.QueryBui
     const term = `%${query.search}%`;
     builder.andWhere((qb) => {
       qb.where('users.username', 'like', term)
+        .orWhere('users.external_id', 'like', term)
         .orWhere('users.first_name', 'like', term)
         .orWhere('users.last_name', 'like', term)
         .orWhereRaw("CONCAT(users.first_name, ' ', users.last_name) LIKE ?", [term]);
     });
   }
 
-  if (query.roleCode) builder.andWhere('roles.code', query.roleCode);
+  if (query.roleCode) {
+    builder.whereExists(function roleFilter() {
+      this.select(db.raw('1'))
+        .from('user_roles')
+        .join('roles', 'roles.id', 'user_roles.role_id')
+        .whereRaw('user_roles.user_id = users.id')
+        .where('roles.code', query.roleCode!)
+        .whereNull('roles.deleted_at');
+    });
+  }
   if (query.status === 'active') builder.andWhere('users.is_active', true);
   if (query.status === 'suspended') builder.andWhere('users.is_active', false);
 
