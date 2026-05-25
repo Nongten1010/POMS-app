@@ -71,9 +71,12 @@ export const createLocalAccountSchema = z
     fullName: z.string().trim().min(1).max(255),
     username: z.string().trim().min(3).max(64),
     password: z.string().min(8).max(128),
+    department: z.string().trim().min(1).max(255).optional(),
+    lineNameTh: z.string().trim().min(1).max(128).optional(),
+    levelNameTh: z.string().trim().min(1).max(64).optional(),
+    roles: z.string().trim().min(1).max(32),
     userType: z.enum(['officer', 'admin']).default('officer'),
     isActive: z.boolean().default(true),
-    roleCodes: z.array(z.string().trim().min(1).max(32)).min(1).max(20),
     permissionOverrides: z
       .array(
         z
@@ -97,7 +100,19 @@ export const createLocalAccountSchema = z
       message: 'permissionOverrides must not contain duplicate codes',
       path: ['permissionOverrides'],
     },
-  );
+  )
+  .transform(({ department, lineNameTh, levelNameTh, roles, ...value }) => ({
+    ...value,
+    roleCodes: [roles],
+    profile:
+      department !== undefined || lineNameTh !== undefined || levelNameTh !== undefined
+        ? {
+            departmentNameTh: department,
+            lineNameTh,
+            levelNameTh,
+          }
+        : undefined,
+  }));
 
 export const createManagedUserSchema = z
   .object({

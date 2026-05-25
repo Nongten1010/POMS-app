@@ -387,7 +387,7 @@ Expected response:
 
 ### 6.3 Create user with local username/password
 
-ใช้ endpoint นี้สำหรับ requirement ปัจจุบัน: ชื่อ-สกุลรวมช่องเดียว, ไม่มี email, ไม่มีเบอร์โทร, มี username/password และเลือก `roleCodes`
+ใช้ endpoint นี้สำหรับ requirement ปัจจุบัน: ชื่อ-สกุลรวมช่องเดียว, ไม่มี email, ไม่มีเบอร์โทร, มี username/password และเลือก `roles`
 
 ```http
 POST http://localhost:3000/api/v1/users/local-accounts
@@ -402,13 +402,11 @@ Request body:
   "fullName": "สมชาย ทดสอบ",
   "username": "local_officer",
   "password": "StrongerPass123",
-  "roleCodes": ["diw_central"],
-  "permissionOverrides": [
-    {
-      "code": "chat:ask",
-      "effect": "allow"
-    }
-  ]
+  "department": "กรมโรงงานอุตสาหกรรม",
+  "lineNameTh": "นักวิทยาศาสตร์",
+  "levelNameTh": "ชำนาญการ",
+  "roles": "diw_central",
+  "isActive": true
 }
 ```
 
@@ -426,9 +424,9 @@ Expected response:
     "userType": "officer",
     "email": null,
     "phone": null,
-    "department": null,
-    "lineNameTh": null,
-    "levelNameTh": null,
+    "department": "กรมโรงงานอุตสาหกรรม",
+    "lineNameTh": "นักวิทยาศาสตร์",
+    "levelNameTh": "ชำนาญการ",
     "roles": "diw_central",
     "isActive": true
   }
@@ -440,8 +438,8 @@ Rules:
 - `fullName` คือชื่อ-สกุลรวมกันในช่องเดียว
 - ห้ามส่ง `email` หรือ `phone`; backend ใช้ schema strict และจะตอบ `400 VALIDATION_ERROR`
 - `password` ต้องยาวอย่างน้อย 8 ตัวอักษร สูงสุด 128 ตัวอักษร
-- `roleCodes` ต้องตรงกับ role catalog ด้านบน และต้องมีอย่างน้อย 1 role
-- `permissionOverrides` ไม่จำเป็น ถ้า role มีสิทธิ์พอแล้วไม่ต้องส่ง
+- `department`, `lineNameTh`, `levelNameTh` ใส่หรือไม่ใส่ก็ได้
+- `roles` ต้องตรงกับ role catalog ด้านบน เช่น `diw_central`
 
 Login ด้วย user ที่สร้างจาก endpoint นี้:
 

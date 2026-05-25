@@ -72,7 +72,12 @@ export const authRepository = {
         );
       })
       .where({ user_id: userId })
-      .first('officer_profiles.*', 'department_org.name_th as department_name_th');
+      .first(
+        'officer_profiles.*',
+        db.raw(
+          'COALESCE(officer_profiles.department_name_th, department_org.name_th) as department_name_th',
+        ),
+      );
   },
 
   getOperatorProfile(userId: number): Promise<OperatorProfileRow | undefined> {

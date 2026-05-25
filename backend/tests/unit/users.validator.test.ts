@@ -50,7 +50,10 @@ describe('managed users validators', () => {
       fullName: 'สมชาย ทดสอบ',
       username: 'local_officer',
       [passwordField]: validTestPassword,
-      roleCodes: ['diw_central'],
+      department: 'กรมโรงงานอุตสาหกรรม',
+      lineNameTh: 'นักวิทยาศาสตร์',
+      levelNameTh: 'ชำนาญการ',
+      roles: 'diw_central',
       permissionOverrides: [{ code: 'chat:ask', effect: 'allow' }],
     });
 
@@ -60,6 +63,11 @@ describe('managed users validators', () => {
       userType: 'officer',
       isActive: true,
       roleCodes: ['diw_central'],
+      profile: {
+        departmentNameTh: 'กรมโรงงานอุตสาหกรรม',
+        lineNameTh: 'นักวิทยาศาสตร์',
+        levelNameTh: 'ชำนาญการ',
+      },
     });
   });
 
@@ -68,7 +76,7 @@ describe('managed users validators', () => {
       fullName: 'สมชาย ทดสอบ',
       username: 'local_officer',
       [passwordField]: validTestPassword,
-      roleCodes: ['diw_central'],
+      roles: 'diw_central',
       email: 'nope@example.com',
     });
 
@@ -80,7 +88,7 @@ describe('managed users validators', () => {
       fullName: 'สมชาย ทดสอบ',
       username: 'local_officer',
       [passwordField]: 'short',
-      roleCodes: ['diw_central'],
+      roles: 'diw_central',
     });
 
     expect(result.success).toBe(false);

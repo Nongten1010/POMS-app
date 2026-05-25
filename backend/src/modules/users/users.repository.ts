@@ -261,7 +261,7 @@ export const usersRepository = {
         .returning('id');
       const userId = Number(id);
 
-      await upsertOfficerProfile(trx, userId, {});
+      await upsertOfficerProfile(trx, userId, input.profile ?? {});
       await replaceUserRoles(trx, userId, roleRows, actorUserId);
 
       if (input.permissionOverrides && input.permissionOverrides.length > 0) {
@@ -427,7 +427,9 @@ function managedUsersWithJoins(trx?: Knex.Transaction): Knex.QueryBuilder<Manage
       'roles.code as role_code',
       'roles.name_th as role_name_th',
       'roles.name_en as role_name_en',
-      'department_org.name_th as department_name_th',
+      db.raw(
+        'COALESCE(officer_profiles.department_name_th, department_org.name_th) as department_name_th',
+      ),
       'division_org.name_th as division_name_th',
       'organize_org.name_th as organize_name_th',
     );
@@ -486,6 +488,7 @@ function toDetailDTO(rows: ManagedUserJoinedRow[]): ManagedUserDetailDTO {
       organizeId: first.organize_id,
       divisionId: first.division_id,
       departmentId: first.department_id,
+      departmentNameTh: first.department_name_th,
       ministryId: first.ministry_id,
       provinceId: first.province_id,
       perStatus: first.per_status,
@@ -609,6 +612,7 @@ function toOfficerProfileRow(profile: OfficerProfileInput): Record<string, strin
     organize_id: profile.organizeId ?? null,
     division_id: profile.divisionId ?? null,
     department_id: profile.departmentId ?? null,
+    department_name_th: profile.departmentNameTh ?? null,
     ministry_id: profile.ministryId ?? null,
     province_id: profile.provinceId ?? null,
     per_status: profile.perStatus ?? null,

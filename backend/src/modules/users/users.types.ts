@@ -54,6 +54,7 @@ export interface OfficerProfileInput {
   organizeId?: string | null;
   divisionId?: string | null;
   departmentId?: string | null;
+  departmentNameTh?: string | null;
   ministryId?: string | null;
   provinceId?: string | null;
   perStatus?: string | null;
@@ -120,6 +121,7 @@ export interface CreateLocalAccountInput {
   userType: ManagedUserType;
   isActive: boolean;
   roleCodes: string[];
+  profile?: OfficerProfileInput;
   permissionOverrides?: PermissionOverrideInput[];
 }
 
