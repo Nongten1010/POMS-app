@@ -4,6 +4,11 @@ const idParam = z.coerce.number().int().positive();
 const nullableTrimmedString = z.string().trim().min(1).max(255).nullable();
 const optionalNullableTrimmedString = nullableTrimmedString.optional();
 const permissionScopeSchema = z.enum(['ALL', 'IN_PROVINCE', 'IN_ESTATE', 'OWN_FACTORY']).nullable();
+const optionalTrimmedNonEmptyString = (max: number) =>
+  z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    z.string().trim().min(1).max(max).optional(),
+  );
 
 export const userIdParamSchema = z.object({
   id: idParam,
@@ -71,9 +76,9 @@ export const createLocalAccountSchema = z
     fullName: z.string().trim().min(1).max(255),
     username: z.string().trim().min(3).max(64),
     password: z.string().min(8).max(128),
-    department: z.string().trim().min(1).max(255).optional(),
-    lineNameTh: z.string().trim().min(1).max(128).optional(),
-    levelNameTh: z.string().trim().min(1).max(64).optional(),
+    department: optionalTrimmedNonEmptyString(255),
+    lineNameTh: optionalTrimmedNonEmptyString(128),
+    levelNameTh: optionalTrimmedNonEmptyString(64),
     roles: z.string().trim().min(1).max(32),
     userType: z.enum(['officer', 'admin']).default('officer'),
     isActive: z.boolean().default(true),

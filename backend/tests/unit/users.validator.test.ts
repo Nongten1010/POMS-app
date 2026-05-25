@@ -71,6 +71,23 @@ describe('managed users validators', () => {
     });
   });
 
+  it('treats empty optional local account profile fields as omitted', () => {
+    const result = createLocalAccountSchema.parse({
+      fullName: 'สมชาย ทดสอบ',
+      username: 'local_officer',
+      [passwordField]: validTestPassword,
+      department: '',
+      lineNameTh: ' ',
+      levelNameTh: '',
+      roles: 'diw_central',
+    });
+
+    expect(result).toMatchObject({
+      roleCodes: ['diw_central'],
+      profile: undefined,
+    });
+  });
+
   it('rejects local account payloads with email or phone fields', () => {
     const result = createLocalAccountSchema.safeParse({
       fullName: 'สมชาย ทดสอบ',
