@@ -143,7 +143,7 @@ if [[ -n "$TOKEN" ]]; then
   FULL_NAME=$(get_json "$LOGIN_RESP" "print(d['user']['fullName'])")
   ROLE_CODE=$(get_json "$LOGIN_RESP" "print(d['user']['roles'])")
   DASHBOARD_DATA=$(get_json "$LOGIN_RESP" "print(d['permissions']['dashboard']['data'])")
-  DASHBOARD_SEARCH=$(get_json "$LOGIN_RESP" "print(d['permissions']['dashboard']['search:advanced'])")
+  DASHBOARD_SEARCH=$(get_json "$LOGIN_RESP" "print(d['permissions']['dashboard']['advanced_search'])")
   PERM_COUNT=$(get_json "$LOGIN_RESP" "print(len(d['permissions']))")
 
   echo "  user.username   = $USERNAME"
@@ -151,7 +151,7 @@ if [[ -n "$TOKEN" ]]; then
   echo "  user.roles      = $ROLE_CODE"
   echo "  permissions     = $PERM_COUNT รายการ"
   echo "  dashboard.data  = $DASHBOARD_DATA"
-  echo "  dashboard['search:advanced'] = $DASHBOARD_SEARCH"
+  echo "  dashboard.advanced_search = $DASHBOARD_SEARCH"
 fi
 
 # 6. Operator permission scope check

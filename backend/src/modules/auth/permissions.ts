@@ -6,10 +6,39 @@ export type PermissionGroup = { data: PermissionDataScope } & Record<
 export type PermissionGroups = Record<string, PermissionGroup>;
 
 const permissionAliases: Record<string, { module: string; action: string }> = {
+  'dashboard:view': { module: 'dashboard', action: 'view' },
+  'dashboard.alerts:view': { module: 'dashboard', action: 'favorite' },
+  'dashboard.search:basic': { module: 'dashboard', action: 'search' },
+  'dashboard.search:advanced': { module: 'dashboard', action: 'advanced_search' },
+  'dashboard.stats:view': { module: 'dashboard', action: 'statistics' },
+  'dashboard.stats:export': { module: 'dashboard', action: 'export' },
   'cems_wpms_requests:view': { module: 'connection', action: 'view' },
   'cems_wpms_requests:edit': { module: 'connection', action: 'edit' },
   'cems_wpms_requests:approve': { module: 'connection', action: 'approve' },
+  'helpdesk:submit': { module: 'helpdesk', action: 'view' },
+  'feedback:submit': { module: 'feedback', action: 'view' },
+  'chat:ask': { module: 'chat', action: 'view' },
+  'chat:answer': { module: 'chat', action: 'edit' },
+  'permissions:manage': { module: 'permissions', action: 'view' },
+  'eligible_factories:manage': { module: 'eligible_factories', action: 'view' },
 };
+
+const responseModules = new Set([
+  'dashboard',
+  'factories',
+  'connection',
+  'kwp_forms',
+  'bod_cod_errors',
+  'notifications',
+  'helpdesk',
+  'feedback',
+  'laws',
+  'faq',
+  'chat',
+  'permissions',
+  'eligible_factories',
+  'api_documentation',
+]);
 
 const scopePriority: Record<string, number> = {
   ALL: 4,
@@ -24,6 +53,7 @@ export function groupPermissions(scopes: Record<string, string | null>): Permiss
   for (const [code, scope] of Object.entries(scopes)) {
     const permission = toPermissionAlias(code);
     if (!permission) continue;
+    if (!responseModules.has(permission.module)) continue;
 
     const current = groups[permission.module];
     const currentData = current?.data;

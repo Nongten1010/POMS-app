@@ -251,12 +251,12 @@ describe('authService login completion', () => {
         dashboard: {
           data: 'ALL',
           view: true,
-          'alerts:view': true,
-          'search:advanced': true,
+          favorite: true,
+          advanced_search: true,
         },
         permissions: {
           data: 'ALL',
-          manage: true,
+          view: true,
         },
       },
     });
