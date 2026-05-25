@@ -176,6 +176,26 @@ describe('managed users validators', () => {
     });
   });
 
+  it('accepts disabled permission actions in edit response-shaped update payloads', () => {
+    const result = updateManagedUserSchema.safeParse({
+      user: {
+        fullName: 'สมชาย ทดสอบ',
+        username: 'local_officer',
+        roles: 'diw_central',
+        isActive: true,
+      },
+      permissions: {
+        dashboard: {
+          data: 'ALL',
+          view: true,
+          export: false,
+        },
+      },
+    });
+
+    expect(result.success).toBe(true);
+  });
+
   it('does not update optional edit profile fields when omitted or blank', () => {
     const result = updateManagedUserSchema.parse({
       user: {

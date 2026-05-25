@@ -149,7 +149,7 @@ const permissionGroupSchema = z
   .object({
     data: permissionScopeSchema.optional(),
   })
-  .catchall(z.union([z.literal(true), z.boolean(), permissionScopeSchema]));
+  .catchall(z.union([z.boolean(), permissionScopeSchema]));
 
 const editResponseUpdateSchema = z
   .object({
@@ -201,10 +201,18 @@ const editResponseUpdateSchema = z
     };
   });
 
-export const updateManagedUserSchema = z.union([
-  editResponseUpdateSchema,
-  legacyUpdateManagedUserSchema,
-]);
+export const updateManagedUserSchema = z.any().transform((value, ctx) => {
+  const result =
+    value && typeof value === 'object' && 'user' in value
+      ? editResponseUpdateSchema.safeParse(value)
+      : legacyUpdateManagedUserSchema.safeParse(value);
+  if (result.success) return result.data;
+
+  for (const issue of result.error.issues) {
+    ctx.addIssue(issue as never);
+  }
+  return z.NEVER;
+});
 
 export const replaceUserPermissionsSchema = z
   .object({
