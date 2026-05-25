@@ -196,6 +196,7 @@ describe('authService login completion', () => {
       organize_id: '1',
       division_id: '1',
       department_id: '2',
+      department_name_th: 'กรมโรงงานอุตสาหกรรม',
       ministry_id: '1',
       province_id: '1',
       per_status: '1',
@@ -241,7 +242,7 @@ describe('authService login completion', () => {
       user: {
         username: '1102001567054',
         fullName: 'นายทดสอบ ระบบ',
-        department: '2',
+        department: 'กรมโรงงานอุตสาหกรรม',
         lineNameTh: 'เจ้าหน้าที่',
         levelNameTh: 'ปฏิบัติการ',
         roles: 'diw_central',

@@ -281,6 +281,7 @@ function toOfficerDTO(
     organizeId: row.organize_id,
     divisionId: row.division_id,
     departmentId: row.department_id,
+    departmentNameTh: row.department_name_th,
     ministryId: row.ministry_id,
     provinceId: row.province_id,
     perStatusName: row.per_status_name,
@@ -331,7 +332,7 @@ function toAuthUserDTO(
   return {
     username: user.externalId,
     fullName,
-    department: officerProfile?.departmentId ?? null,
+    department: officerProfile?.departmentNameTh ?? officerProfile?.departmentId ?? null,
     lineNameTh: officerProfile?.lineNameTh ?? null,
     levelNameTh: officerProfile?.levelNameTh ?? null,
     roles: roles[0] ?? user.userType,

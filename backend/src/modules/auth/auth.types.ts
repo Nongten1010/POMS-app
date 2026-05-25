@@ -46,6 +46,7 @@ export interface OfficerProfileDTO {
   organizeId: string | null;
   divisionId: string | null;
   departmentId: string | null;
+  departmentNameTh: string | null;
   ministryId: string | null;
   provinceId: string | null;
   perStatusName: string | null;

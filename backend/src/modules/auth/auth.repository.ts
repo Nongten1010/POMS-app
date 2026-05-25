@@ -30,6 +30,7 @@ export interface OfficerProfileRow {
   organize_id: string | null;
   division_id: string | null;
   department_id: string | null;
+  department_name_th: string | null;
   ministry_id: string | null;
   province_id: string | null;
   per_status: string | null;
@@ -62,7 +63,16 @@ export const authRepository = {
   },
 
   getOfficerProfile(userId: number): Promise<OfficerProfileRow | undefined> {
-    return db<OfficerProfileRow>('officer_profiles').where({ user_id: userId }).first();
+    return db<OfficerProfileRow>('officer_profiles')
+      .leftJoin('organizations as department_org', function joinDepartmentOrg() {
+        this.on('department_org.external_id', '=', 'officer_profiles.department_id').andOnVal(
+          'department_org.level',
+          '=',
+          'department',
+        );
+      })
+      .where({ user_id: userId })
+      .first('officer_profiles.*', 'department_org.name_th as department_name_th');
   },
 
   getOperatorProfile(userId: number): Promise<OperatorProfileRow | undefined> {
