@@ -102,7 +102,7 @@ export const usersRepository = {
       .clone()
       .clearSelect()
       .distinct('users.id')
-      .orderBy('users.id', 'asc');
+      .orderBy('users.id', 'desc');
 
     if (query.page !== undefined && query.perPage !== undefined) {
       idsQuery.limit(query.perPage).offset((query.page - 1) * query.perPage);
@@ -114,7 +114,7 @@ export const usersRepository = {
 
     const rows = await managedUsersWithJoins()
       .whereIn('users.id', userIds)
-      .orderBy('users.id', 'asc')
+      .orderBy('users.id', 'desc')
       .orderBy('roles.code', 'asc');
 
     return { rows: toTableDTOs(rows), total };
