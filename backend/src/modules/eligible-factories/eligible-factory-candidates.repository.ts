@@ -14,7 +14,12 @@ import type {
 export const eligibleFactoryCandidatesRepository = {
   async list(_query: ListEligibleFactoryCandidatesQuery): Promise<EligibleFactoryCandidatesDTO> {
     if (env.FACTORY_SOURCE_MODE === 'external') {
-      return listExternalCandidates();
+      try {
+        return await listExternalCandidates();
+      } catch (error) {
+        logger.error('[eligible-factories] Failed to load Fac60k external candidates', { error });
+        return listMockCandidates();
+      }
     }
 
     return listMockCandidates();
