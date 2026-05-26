@@ -33,14 +33,14 @@ describe('eligibleFactoryCandidatesRepository', () => {
       FID: 'real-1',
       DISPFACREG: 'real-reg-1',
       PROV: 10,
-      FFLAG: 2,
+      FFLAG: 1,
     },
     {
       FNAME: 'โรงงานจริง 2',
       FID: 'real-2',
       DISPFACREG: 'real-reg-2',
       PROV: 21,
-      FFLAG: 2,
+      FFLAG: 3,
     },
   ];
 
@@ -60,6 +60,7 @@ describe('eligibleFactoryCandidatesRepository', () => {
     };
     const facImportQuery = {
       clone: jest.fn().mockReturnThis(),
+      whereIn: jest.fn().mockReturnThis(),
       select: jest.fn().mockReturnThis(),
       orderBy: jest.fn<() => Promise<typeof externalRows>>().mockResolvedValue(externalRows),
     };
@@ -67,10 +68,11 @@ describe('eligibleFactoryCandidatesRepository', () => {
       if (tableName === 'INFORMATION_SCHEMA.COLUMNS') return informationSchemaQuery as never;
       return facImportQuery as never;
     }) as never);
+    return { facImportQuery };
   }
 
   it('excludes factories that are already selected as eligible', async () => {
-    mockExternalCandidates();
+    const { facImportQuery } = mockExternalCandidates();
     mockedEligibleFactoriesRepository.listActiveRegistrationNumbers.mockResolvedValue([
       'real-reg-1',
     ]);
@@ -80,6 +82,7 @@ describe('eligibleFactoryCandidatesRepository', () => {
     expect(result.meta).toEqual({ total: 1, source: 'external' });
     expect(result.data).toHaveLength(1);
     expect(result.data[0]?.factoryRegistrationNo).toBe('real-reg-2');
+    expect(facImportQuery.whereIn).toHaveBeenCalledWith('FFLAG', ['1', '3']);
   });
 
   it('returns candidates when selected factory exclusion cannot be loaded', async () => {

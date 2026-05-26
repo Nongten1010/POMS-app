@@ -10,7 +10,7 @@ describe('fac_import mapper', () => {
   const row: FacImportRow = {
     FACREG: ' 06406304517',
     FACREQ: '31/12/2547',
-    FFLAG: 2,
+    FFLAG: 1,
     EXPSEQ: null,
     FNAME: 'ห้างหุ้นส่วนจำกัด โรงกลึงก๊กกวง',
     FADDR: '50/10-11-12',
@@ -107,7 +107,17 @@ describe('fac_import mapper', () => {
 
   it('maps supported province and operation status filters back to DIW codes', () => {
     expect(diwProvinceCodeFromName('ระยอง')).toBe('21');
-    expect(diwFactoryFlagFromOperationStatus('แจ้งประกอบแล้ว')).toBe('2');
+    expect(diwFactoryFlagFromOperationStatus('แจ้งประกอบแล้ว')).toBe('1');
+    expect(diwFactoryFlagFromOperationStatus('หยุดชั่วคราว')).toBe('3');
     expect(diwFactoryFlagFromOperationStatus('ยกเลิก')).toBeNull();
+  });
+
+  it('maps temporary stopped Fac60k status from FFLAG 3', () => {
+    const result = toEligibleFactoryCandidate({
+      ...row,
+      FFLAG: 3,
+    });
+
+    expect(result.operationStatus).toBe('หยุดชั่วคราว');
   });
 });

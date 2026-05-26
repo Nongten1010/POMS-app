@@ -115,7 +115,8 @@ const PROVINCE_BY_DIW_CODE: Record<string, string> = {
   '96': 'นราธิวาส',
 };
 
-const ACTIVE_FACTORY_FLAG = '2';
+const ACTIVE_FACTORY_FLAG = '1';
+const TEMPORARY_STOPPED_FACTORY_FLAG = '3';
 
 export function toEligibleFactoryCandidate(row: FacImportRow): EligibleFactoryCandidateDTO {
   const sourceFactoryId = firstText(row.FID, row.FACREG, row.DISPFACREG) ?? '';
@@ -163,12 +164,14 @@ export function diwProvinceCodeFromName(provinceName: string): string | null {
 
 export function diwFactoryFlagFromOperationStatus(operationStatus: string): string | null {
   if (operationStatus === 'แจ้งประกอบแล้ว') return ACTIVE_FACTORY_FLAG;
+  if (operationStatus === 'หยุดชั่วคราว') return TEMPORARY_STOPPED_FACTORY_FLAG;
   return null;
 }
 
 function operationStatusFromFlag(value: string | number | null): string {
   const flag = normalizeNumberCode(value);
   if (flag === ACTIVE_FACTORY_FLAG) return 'แจ้งประกอบแล้ว';
+  if (flag === TEMPORARY_STOPPED_FACTORY_FLAG) return 'หยุดชั่วคราว';
   if (!flag) return 'ไม่ระบุสถานะ';
   return `สถานะ ${flag}`;
 }

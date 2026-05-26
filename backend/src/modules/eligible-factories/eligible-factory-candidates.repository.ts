@@ -25,7 +25,11 @@ async function listExternalCandidates(): Promise<EligibleFactoryCandidatesDTO> {
   const selectedRegistrationNumbers = await selectedFactoryRegistrationNumbers();
   const columns = await availableFacImportColumns();
   const baseQuery = buildFacImportBaseQuery();
-  const rowsQuery = baseQuery.clone().select(columns);
+  const rowsQuery = baseQuery.clone();
+  if (columns.includes('FFLAG')) {
+    rowsQuery.whereIn('FFLAG', ['1', '3']);
+  }
+  rowsQuery.select(columns);
   const orderByColumn = firstAvailableColumn(columns, ['FACREG', 'FID', 'DISPFACREG']);
 
   const rows = await (orderByColumn ? rowsQuery.orderBy(orderByColumn, 'asc') : rowsQuery);
