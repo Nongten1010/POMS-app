@@ -869,17 +869,10 @@ Success response:
 ใช้แสดงรายการที่เลือกเข้าข่ายแล้วจาก DB ของ POMS
 
 ```http
-GET http://localhost:3000/api/v1/eligible-factories?page=1&perPage=25
+GET http://localhost:3000/api/v1/eligible-factories
 ```
 
-Query:
-
-| query | type | example |
-| --- | --- | --- |
-| `page` | number | `1` |
-| `perPage` | number | `25`, max `100` |
-
-Endpoint นี้ไม่รับ filter อื่น และจะ list รายการที่ยังไม่ถูกลบทั้งหมดตาม pagination
+Endpoint นี้ไม่รับ query params และจะ list รายการที่ยังไม่ถูกลบทั้งหมด
 
 ## 8. Error cases ที่ frontend ควรรองรับ
 

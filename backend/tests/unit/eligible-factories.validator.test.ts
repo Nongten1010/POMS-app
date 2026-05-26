@@ -73,16 +73,16 @@ describe('eligible factories validators', () => {
     expect(result.success).toBe(false);
   });
 
-  it('normalizes list pagination defaults when requested', () => {
-    const result = listEligibleFactoriesQuerySchema.parse({ page: '2' });
+  it('accepts an empty selected eligible factories list query', () => {
+    const result = listEligibleFactoriesQuerySchema.parse({});
 
-    expect(result).toEqual({ page: 2, perPage: 25 });
+    expect(result).toEqual({});
   });
 
-  it('rejects list filters because selected eligible factories only support listing all records', () => {
+  it('rejects list query params because selected eligible factories only support listing all records', () => {
     const result = listEligibleFactoriesQuerySchema.safeParse({
       page: '1',
-      search: 'เคมี',
+      perPage: '25',
     });
 
     expect(result.success).toBe(false);

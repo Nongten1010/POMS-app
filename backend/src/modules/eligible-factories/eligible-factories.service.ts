@@ -16,13 +16,7 @@ export const eligibleFactoriesService = {
 
   async list(query: ListEligibleFactoriesQuery): Promise<PaginatedEligibleFactoriesDTO> {
     const { rows, total } = await eligibleFactoriesRepository.list(query);
-    const meta: PaginatedEligibleFactoriesDTO['meta'] = { total };
-    if (query.page !== undefined && query.perPage !== undefined) {
-      meta.page = query.page;
-      meta.perPage = query.perPage;
-      meta.totalPages = Math.ceil(total / query.perPage);
-    }
-    return { data: rows, meta };
+    return { data: rows, meta: { total } };
   },
 
   async create(

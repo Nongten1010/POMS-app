@@ -70,21 +70,7 @@ export const createEligibleFactorySchema = z
     selectedReason: null,
   }));
 
-export const listEligibleFactoriesQuerySchema = z
-  .object({
-    page: z.coerce.number().int().min(1).optional(),
-    perPage: z.coerce.number().int().min(1).max(100).optional(),
-  })
-  .strict()
-  .transform((query) => {
-    const shouldPaginate = query.page !== undefined || query.perPage !== undefined;
-    if (!shouldPaginate) return query;
-    return {
-      ...query,
-      page: query.page ?? 1,
-      perPage: query.perPage ?? 25,
-    };
-  });
+export const listEligibleFactoriesQuerySchema = z.object({}).strict();
 
 export const listEligibleFactoryCandidatesQuerySchema = z.object({}).strict();
 

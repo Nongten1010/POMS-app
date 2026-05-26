@@ -38,7 +38,7 @@ interface EligibleFactoryRow {
 
 export const eligibleFactoriesRepository = {
   async list(
-    query: ListEligibleFactoriesQuery,
+    _query: ListEligibleFactoriesQuery,
   ): Promise<{ rows: EligibleFactoryDTO[]; total: number }> {
     const baseQuery = buildEligibleFactoriesBaseQuery();
     const totalRow = await baseQuery
@@ -50,9 +50,6 @@ export const eligibleFactoriesRepository = {
     const total = Number(totalRow?.total ?? 0);
 
     const rowsQuery = baseQuery.clone().orderBy('selected_at', 'desc').orderBy('id', 'desc');
-    if (query.page !== undefined && query.perPage !== undefined) {
-      rowsQuery.limit(query.perPage).offset((query.page - 1) * query.perPage);
-    }
 
     const rows = await rowsQuery;
     return { rows: rows.map(toDTO), total };

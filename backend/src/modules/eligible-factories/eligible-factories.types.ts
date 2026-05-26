@@ -27,10 +27,7 @@ export interface CreateEligibleFactoryInput {
   selectedReason?: string | null;
 }
 
-export interface ListEligibleFactoriesQuery {
-  page?: number;
-  perPage?: number;
-}
+export type ListEligibleFactoriesQuery = Record<string, never>;
 
 export type ListEligibleFactoryCandidatesQuery = Record<string, never>;
 
@@ -90,9 +87,6 @@ export interface PaginatedEligibleFactoriesDTO {
   data: EligibleFactoryDTO[];
   meta: {
     total: number;
-    page?: number;
-    perPage?: number;
-    totalPages?: number;
   };
 }
 
