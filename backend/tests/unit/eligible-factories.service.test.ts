@@ -84,6 +84,77 @@ describe('eligibleFactoriesService', () => {
     expect(mockedRepository.softDelete).toHaveBeenCalledWith(12, 42);
   });
 
+  it('lists selected eligible factories with the same fields as candidate rows plus id', async () => {
+    mockedRepository.list.mockResolvedValue({
+      rows: [
+        {
+          id: 1,
+          sourceSystem: 'diw.fac_import',
+          sourceFactoryId: '10550000125197',
+          factoryRegistrationNoNew: '3-1-1/19นน',
+          factoryRegistrationNoOld: null,
+          factoryName: 'ห้างหุ้นส่วนสามัญ สถานีบ่มใบยาสบหนอง',
+          factoryTypeSequence: null,
+          address: '189 หมู่ 10 ถนนวรนคร',
+          provinceName: 'น่าน',
+          industrialEstateName: null,
+          coordinates: {
+            latitude: 0,
+            longitude: 0,
+          },
+          businessActivity: 'บ่มใบยาสูบ',
+          operationStatus: 'แจ้งประกอบแล้ว',
+          capitalAmount: null,
+          machineryHorsepower: null,
+          productionCapacity: '0',
+          wastewaterDischargeInfo: null,
+          boilerCount: null,
+          boilerSizeEach: null,
+          fuelUsed: null,
+          hasEia: null,
+          selectedReason: null,
+          selectedBy: 7,
+          selectedAt: '2026-05-26T20:18:00.143Z',
+          createdAt: '2026-05-26T20:18:00.143Z',
+          updatedAt: '2026-05-26T20:18:00.143Z',
+        },
+      ],
+      total: 1,
+    });
+
+    const result = await eligibleFactoriesService.list({});
+
+    expect(result).toEqual({
+      data: [
+        {
+          id: 1,
+          factoryName: 'ห้างหุ้นส่วนสามัญ สถานีบ่มใบยาสบหนอง',
+          factoryId: '10550000125197',
+          factoryRegistrationNo: '3-1-1/19นน',
+          factoryClass: null,
+          factorySubclass: null,
+          address: '189 หมู่ 10 ถนนวรนคร',
+          provinceName: 'น่าน',
+          industrialEstateName: null,
+          longitude: 0,
+          latitude: 0,
+          businessActivity: 'บ่มใบยาสูบ',
+          operationStatus: 'แจ้งประกอบแล้ว',
+          capitalAmount: null,
+          machineryHorsepower: null,
+          productionCapacity: '0',
+          wastewaterDischargeInfo: null,
+          boilerCount: null,
+          boilerSizeEach: null,
+          fuelUsed: null,
+          hasEia: null,
+        },
+      ],
+      meta: { total: 1 },
+    });
+    expect(Object.keys(result.data[0] ?? {})).toHaveLength(21);
+  });
+
   it('throws not found when removing an unknown eligible factory selection', async () => {
     mockedRepository.softDelete.mockResolvedValue(false);
 

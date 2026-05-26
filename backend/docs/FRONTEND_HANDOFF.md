@@ -873,6 +873,7 @@ GET http://localhost:3000/api/v1/eligible-factories
 ```
 
 Endpoint นี้ไม่รับ query params และจะ list รายการที่ยังไม่ถูกลบทั้งหมด
+item ใน `data` ใช้ field เหมือน candidate response และเพิ่ม `id` สำหรับใช้ลบรายการออกจาก list
 
 ## 8. Error cases ที่ frontend ควรรองรับ
 

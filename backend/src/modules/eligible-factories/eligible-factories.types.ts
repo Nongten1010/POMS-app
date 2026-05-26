@@ -54,6 +54,10 @@ export interface EligibleFactoryCandidateDTO {
   hasEia: boolean | null;
 }
 
+export interface SelectedEligibleFactoryDTO extends EligibleFactoryCandidateDTO {
+  id: number;
+}
+
 export interface EligibleFactoryDTO {
   id: number;
   sourceSystem: string;
@@ -84,7 +88,7 @@ export interface EligibleFactoryDTO {
 }
 
 export interface PaginatedEligibleFactoriesDTO {
-  data: EligibleFactoryDTO[];
+  data: SelectedEligibleFactoryDTO[];
   meta: {
     total: number;
   };
