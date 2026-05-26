@@ -32,6 +32,7 @@ Primary UI surfaces include:
 - Use `Paper` for framed content sections.
 - Use `Grid` for responsive groups.
 - Use `Stack` for vertical or horizontal spacing.
+- For pages with submenus, place the page title on the left side of the header and the submenu control on the right side. On narrow screens, the submenu may wrap below the title.
 - Keep card radius at the theme default: `8px`.
 - Use `border: 1` and `borderColor: 'divider'` for quiet surfaces.
 - Avoid decorative gradients, large rounded cards, and marketing-style hero layouts.
@@ -302,6 +303,8 @@ Recommended full-height pattern:
 - Use `whiteSpace: 'nowrap'` only for stable IDs or compact action columns.
 - Give long Thai text columns reasonable `minWidth` values instead of squeezing text until unreadable.
 - Use icon buttons with tooltips for compact row actions such as edit and delete.
+- For MUI `DataGrid`, use `showCellVerticalBorder` and `showColumnVerticalBorder` for vertical grid lines instead of custom `borderRight` rules in `sx`.
+- When a `DataGrid` sits inside a framed `Paper` or `Box`, set the grid `border: 0` and keep header typography/borders in `sx` only where the product layout requires it.
 
 Recommended pattern:
 

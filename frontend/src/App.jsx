@@ -22,6 +22,7 @@ import DpomsAppBar from './components/DpomsAppBar'
 import DpomsLoginDialog from './components/DpomsLoginDialog'
 import DpomsSidebar from './components/DpomsSidebar'
 import ApiDocumentationPage from './pages/ApiDocumentationPage'
+import ConnectionRequestPage from './pages/ConnectionRequestPage'
 import EligibleFactoriesPage from './pages/EligibleFactoriesPage'
 import PermissionManagementPage from './pages/PermissionManagementPage'
 
@@ -113,6 +114,10 @@ function getAccessTokenFromAuth(auth) {
   return response?.accessToken ?? response?.data?.accessToken ?? ''
 }
 
+function getUserTypeFromAuth(auth) {
+  return auth?.userType ?? getAuthResponsePayload(auth)?.userType ?? ''
+}
+
 function canViewMenu(menuValue, permissions) {
   const permissionKey = menuPermissionMap[menuValue]
   return permissions?.[permissionKey]?.view === true
@@ -150,6 +155,7 @@ function App() {
   const [authResponse, setAuthResponse] = useState(() => loadStoredAuth())
   const currentUser = getUserFromAuth(authResponse)
   const accessToken = getAccessTokenFromAuth(authResponse)
+  const userType = getUserTypeFromAuth(authResponse)
   const activePermissions = useMemo(() => getPermissionsFromAuth(authResponse), [authResponse])
   const [selectedMenu, setSelectedMenu] = useState('home')
   const visibleSelectedMenu = canViewMenu(selectedMenu, activePermissions)
@@ -157,6 +163,7 @@ function App() {
     : getFirstViewableMenu(activePermissions)
   const isWorkspacePage =
     visibleSelectedMenu === 'permissions' ||
+    visibleSelectedMenu === 'connection-request' ||
     visibleSelectedMenu === 'eligible-factories' ||
     visibleSelectedMenu === 'api-documentation'
 
@@ -357,6 +364,8 @@ function App() {
       >
         {visibleSelectedMenu === 'permissions' ? (
           <PermissionManagementPage accessToken={accessToken} />
+        ) : visibleSelectedMenu === 'connection-request' ? (
+          <ConnectionRequestPage userType={userType} />
         ) : visibleSelectedMenu === 'eligible-factories' ? (
           <EligibleFactoriesPage accessToken={accessToken} />
         ) : visibleSelectedMenu === 'api-documentation' ? (

@@ -645,6 +645,8 @@ function PermissionManagementPage({ accessToken = '' }) {
               loading={isTableLoading}
               disableRowSelectionOnClick
               showToolbar
+              showCellVerticalBorder
+              showColumnVerticalBorder
               label="รายชื่อเจ้าหน้าที่ในระบบ"
               pageSizeOptions={[25, 50, 100]}
               initialState={{
@@ -671,11 +673,11 @@ function PermissionManagementPage({ accessToken = '' }) {
               sx={{
                 border: 0,
                 '& .MuiDataGrid-columnHeaders': {
+                  borderTop: 1,
                   borderBottom: 1,
                   borderColor: 'divider',
                 },
                 '& .MuiDataGrid-columnHeader': {
-                  borderRight: 1,
                   borderColor: 'divider',
                 },
                 '& .MuiDataGrid-columnHeaderTitle': {
@@ -683,10 +685,9 @@ function PermissionManagementPage({ accessToken = '' }) {
                 },
                 '& .MuiDataGrid-cell': {
                   alignItems: 'center',
-                  borderRight: 1,
                   borderColor: 'divider',
                 },
-                '& .MuiDataGrid-row': {
+                '& .MuiDataGrid-row--lastVisible .MuiDataGrid-cell': {
                   borderBottom: 1,
                   borderColor: 'divider',
                 },
