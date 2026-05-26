@@ -2,6 +2,7 @@ import { NextFunction, Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
 import {
   createEligibleFactorySchema,
+  eligibleFactoryIdParamsSchema,
   listEligibleFactoryCandidatesQuerySchema,
   listEligibleFactoriesQuerySchema,
 } from './eligible-factories.validator';
@@ -38,6 +39,18 @@ export const eligibleFactoriesController = {
         success: true,
         data,
       });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async remove(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const actorUserId = req.user?.id;
+      if (!actorUserId) throw new Error('Authenticated user missing from request');
+      const { id } = eligibleFactoryIdParamsSchema.parse(req.params);
+      await eligibleFactoriesService.remove(id, actorUserId);
+      res.status(StatusCodes.NO_CONTENT).send();
     } catch (err) {
       next(err);
     }

@@ -17,6 +17,7 @@ export interface FacImportRow {
   HP: string | number | null;
   HP2: string | number | null;
   OLDREG: string | null;
+  SUBCLASS?: string | null;
   CAPLAND: string | number | null;
   CAPBUILD: string | number | null;
   CAPMACH: string | number | null;
@@ -118,28 +119,30 @@ const ACTIVE_FACTORY_FLAG = '2';
 
 export function toEligibleFactoryCandidate(row: FacImportRow): EligibleFactoryCandidateDTO {
   const sourceFactoryId = firstText(row.FID, row.FACREG, row.DISPFACREG) ?? '';
-  const registrationNoNew = firstText(row.DISPFACREG, row.FACREG, sourceFactoryId) ?? sourceFactoryId;
+  const registrationNoNew =
+    firstText(row.DISPFACREG, row.FACREG, sourceFactoryId) ?? sourceFactoryId;
   const factoryName = firstText(row.FNAME) ?? 'ไม่ระบุชื่อโรงงาน';
   const provinceCode = normalizeNumberCode(row.PROV);
   const provinceName = provinceCode
     ? (PROVINCE_BY_DIW_CODE[provinceCode] ?? `รหัสจังหวัด ${provinceCode}`)
     : 'ไม่ระบุจังหวัด';
   const horsepower = firstNumber(row.HP2, row.HP);
-  const capitalAmount = firstNumber(row.CAPREGIS) ?? sumNumbers(row.CAPLAND, row.CAPBUILD, row.CAPMACH, row.CAPWORK);
+  const capitalAmount =
+    firstNumber(row.CAPREGIS) ?? sumNumbers(row.CAPLAND, row.CAPBUILD, row.CAPMACH, row.CAPWORK);
   const productionCapacity = firstNumber(row.CAPPROD, row.TOTAL_CAP);
-  const coordinates = toLatLongCoordinates(row.LATITUDE_Y, row.LONGITUDE_X);
+  const coordinates = toFactoryCoordinates(row);
 
   return {
-    sourceSystem: 'diw.fac_import',
-    sourceFactoryId,
     factoryName,
-    factoryRegistrationNoNew: registrationNoNew,
-    factoryRegistrationNoOld: firstText(row.OLDREG),
-    factoryTypeSequence: firstText(row.FACREQ, row.EXPSEQ, row.FACTYPE, row.CLASS),
+    factoryId: sourceFactoryId,
+    factoryRegistrationNo: registrationNoNew,
+    factoryClass: firstText(row.CLASS),
+    factorySubclass: firstText(row.SUBCLASS, row.FACTYPE, row.FACREQ, row.EXPSEQ),
     address: joinAddress(row),
     provinceName,
     industrialEstateName: firstText(row.COLONY_INDUST_CODE),
-    coordinates,
+    longitude: coordinates?.longitude ?? null,
+    latitude: coordinates?.latitude ?? null,
     businessActivity: firstText(row.OBJECT),
     operationStatus: operationStatusFromFlag(row.FFLAG),
     capitalAmount,
@@ -185,12 +188,16 @@ function wastewaterDischargeInfo(row: FacImportRow): string | null {
   const canal = firstText(row.CANAL);
   const river = firstText(row.RIVER);
   if (!canal && !river) return null;
-  return [
-    canal ? `คลอง: ${canal}` : null,
-    river ? `แม่น้ำ: ${river}` : null,
-  ]
+  return [canal ? `คลอง: ${canal}` : null, river ? `แม่น้ำ: ${river}` : null]
     .filter((part): part is string => part !== null)
     .join(', ');
+}
+
+function toFactoryCoordinates(row: FacImportRow): { latitude: number; longitude: number } | null {
+  return (
+    toLatLongCoordinates(row.LATITUDE_Y, row.LONGITUDE_X) ??
+    toLatLongCoordinates(row.LONGITUDE_X, row.LATITUDE_Y)
+  );
 }
 
 function toLatLongCoordinates(

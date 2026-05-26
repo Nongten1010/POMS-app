@@ -40,7 +40,7 @@ export const eligibleFactoriesRepository = {
   async list(
     query: ListEligibleFactoriesQuery,
   ): Promise<{ rows: EligibleFactoryDTO[]; total: number }> {
-    const baseQuery = buildEligibleFactoriesBaseQuery(query);
+    const baseQuery = buildEligibleFactoriesBaseQuery();
     const totalRow = await baseQuery
       .clone()
       .clearSelect()
@@ -74,7 +74,13 @@ export const eligibleFactoriesRepository = {
     };
   },
 
-  async create(input: CreateEligibleFactoryInput, actorUserId: number): Promise<EligibleFactoryDTO> {
+  async create(
+    input: CreateEligibleFactoryInput,
+    actorUserId: number,
+  ): Promise<EligibleFactoryDTO> {
+    const restored = await restoreDeletedFactory(input, actorUserId);
+    if (restored) return restored;
+
     const [{ id }] = await db('eligible_factories')
       .insert(toInsertRow(input, actorUserId))
       .returning('id');
@@ -90,23 +96,31 @@ export const eligibleFactoriesRepository = {
       .first();
     return row ? toDTO(row) : null;
   },
+
+  async listActiveRegistrationNumbers(): Promise<string[]> {
+    const rows = await db('eligible_factories')
+      .whereNull('deleted_at')
+      .select<{ factory_registration_no_new: string }[]>('factory_registration_no_new');
+
+    return rows.map((row) => row.factory_registration_no_new);
+  },
+
+  async softDelete(id: number, actorUserId: number): Promise<boolean> {
+    const affected = await db('eligible_factories').where('id', id).whereNull('deleted_at').update({
+      deleted_at: db.fn.now(),
+      updated_at: db.fn.now(),
+      updated_by: actorUserId,
+    });
+
+    return affected > 0;
+  },
 };
 
-function buildEligibleFactoriesBaseQuery(
-  query: ListEligibleFactoriesQuery,
-): Knex.QueryBuilder<EligibleFactoryRow, EligibleFactoryRow[]> {
+function buildEligibleFactoriesBaseQuery(): Knex.QueryBuilder<
+  EligibleFactoryRow,
+  EligibleFactoryRow[]
+> {
   const builder = db<EligibleFactoryRow>('eligible_factories').whereNull('deleted_at');
-
-  if (query.search) {
-    builder.andWhere((qb) => {
-      qb.where('factory_name', 'like', `%${query.search}%`)
-        .orWhere('factory_registration_no_new', 'like', `%${query.search}%`)
-        .orWhere('factory_registration_no_old', 'like', `%${query.search}%`);
-    });
-  }
-  if (query.provinceName) builder.where('province_name', query.provinceName);
-  if (query.operationStatus) builder.where('operation_status', query.operationStatus);
-  if (query.hasEia !== undefined) builder.where('has_eia', query.hasEia);
 
   return builder.select(
     'id',
@@ -137,6 +151,30 @@ function buildEligibleFactoriesBaseQuery(
     'created_at',
     'updated_at',
   );
+}
+
+async function restoreDeletedFactory(
+  input: CreateEligibleFactoryInput,
+  actorUserId: number,
+): Promise<EligibleFactoryDTO | null> {
+  const existingDeleted = await db('eligible_factories')
+    .where('factory_registration_no_new', input.factoryRegistrationNoNew)
+    .whereNotNull('deleted_at')
+    .select<{ id: number | string }[]>('id')
+    .first();
+
+  if (!existingDeleted) return null;
+
+  await db('eligible_factories')
+    .where('id', existingDeleted.id)
+    .update({
+      ...toInsertRow(input, actorUserId),
+      deleted_at: null,
+      selected_at: db.fn.now(),
+      updated_at: db.fn.now(),
+    });
+
+  return eligibleFactoriesRepository.findById(Number(existingDeleted.id));
 }
 
 function toInsertRow(

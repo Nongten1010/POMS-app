@@ -30,24 +30,31 @@ export interface CreateEligibleFactoryInput {
 export interface ListEligibleFactoriesQuery {
   page?: number;
   perPage?: number;
-  search?: string;
-  provinceName?: string;
-  operationStatus?: string;
-  hasEia?: boolean;
 }
 
-export interface ListEligibleFactoryCandidatesQuery {
-  page?: number;
-  perPage?: number;
-  search?: string;
-  provinceName?: string;
-  operationStatus?: string;
-  hasEia?: boolean;
-}
+export type ListEligibleFactoryCandidatesQuery = Record<string, never>;
 
-export interface EligibleFactoryCandidateDTO extends CreateEligibleFactoryInput {
-  sourceSystem: string;
-  sourceFactoryId: string;
+export interface EligibleFactoryCandidateDTO {
+  factoryName: string;
+  factoryId: string;
+  factoryRegistrationNo: string;
+  factoryClass: string | null;
+  factorySubclass: string | null;
+  address: string | null;
+  provinceName: string;
+  industrialEstateName: string | null;
+  longitude: number | null;
+  latitude: number | null;
+  businessActivity: string | null;
+  operationStatus: string;
+  capitalAmount: number | null;
+  machineryHorsepower: number | null;
+  productionCapacity: string | null;
+  wastewaterDischargeInfo: string | null;
+  boilerCount: number | null;
+  boilerSizeEach: string | null;
+  fuelUsed: string | null;
+  hasEia: boolean | null;
 }
 
 export interface EligibleFactoryDTO {

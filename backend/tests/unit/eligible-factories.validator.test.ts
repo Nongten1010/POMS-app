@@ -8,13 +8,15 @@ import {
 describe('eligible factories validators', () => {
   const validPayload = {
     factoryName: 'บริษัท ทดสอบ จำกัด',
-    factoryRegistrationNoNew: '3-106-33/50สบ',
-    factoryRegistrationNoOld: 'รง.4-12345',
-    factoryTypeSequence: 'ลำดับหลัก',
+    factoryId: '10100302325234',
+    factoryRegistrationNo: '3-106-33/50สบ',
+    factoryClass: 'ลำดับหลัก',
+    factorySubclass: 'ลำดับรอง',
     address: '99 หมู่ 1',
     provinceName: 'สมุทรปราการ',
     industrialEstateName: 'นิคมอุตสาหกรรมบางปู',
-    coordinates: { latitude: 13.5123456, longitude: 100.6123456 },
+    longitude: 100.6123456,
+    latitude: 13.5123456,
     businessActivity: 'ผลิตชิ้นส่วนโลหะ',
     operationStatus: 'แจ้งประกอบแล้ว',
     capitalAmount: 1000000,
@@ -25,7 +27,6 @@ describe('eligible factories validators', () => {
     boilerSizeEach: '10 ตัน/ชั่วโมง',
     fuelUsed: 'ก๊าซธรรมชาติ',
     hasEia: true,
-    selectedReason: 'มีหม้อน้ำและระบายน้ำทิ้ง',
   };
 
   it('accepts the required Excel-derived factory fields', () => {
@@ -34,7 +35,13 @@ describe('eligible factories validators', () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data).toMatchObject({
-        factoryRegistrationNoNew: validPayload.factoryRegistrationNoNew,
+        sourceFactoryId: validPayload.factoryId,
+        factoryRegistrationNoNew: validPayload.factoryRegistrationNo,
+        factoryTypeSequence: 'ลำดับหลัก / ลำดับรอง',
+        coordinates: {
+          latitude: validPayload.latitude,
+          longitude: validPayload.longitude,
+        },
         hasEia: true,
       });
     }
@@ -49,10 +56,18 @@ describe('eligible factories validators', () => {
     expect(result.success).toBe(false);
   });
 
+  it('rejects missing candidate fields even when their values may be null', () => {
+    const { boilerCount: _boilerCount, ...missingBoilerCount } = validPayload;
+
+    const result = createEligibleFactorySchema.safeParse(missingBoilerCount);
+
+    expect(result.success).toBe(false);
+  });
+
   it('rejects invalid coordinates', () => {
     const result = createEligibleFactorySchema.safeParse({
       ...validPayload,
-      coordinates: { latitude: 99, longitude: 100.6123456 },
+      latitude: 99,
     });
 
     expect(result.success).toBe(false);
@@ -64,26 +79,37 @@ describe('eligible factories validators', () => {
     expect(result).toEqual({ page: 2, perPage: 25 });
   });
 
-  it('accepts candidate filters', () => {
-    const result = listEligibleFactoryCandidatesQuerySchema.parse({
+  it('rejects list filters because selected eligible factories only support listing all records', () => {
+    const result = listEligibleFactoriesQuerySchema.safeParse({
+      page: '1',
+      search: 'เคมี',
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts an empty candidate query for the full Fac60k export', () => {
+    const result = listEligibleFactoryCandidatesQuerySchema.parse({});
+
+    expect(result).toEqual({});
+  });
+
+  it('rejects candidate filters because Fac60k candidates are exported without conditions', () => {
+    const result = listEligibleFactoryCandidatesQuerySchema.safeParse({
       search: 'เคมี',
       provinceName: 'พระนครศรีอยุธยา',
       hasEia: 'true',
     });
 
-    expect(result).toEqual({
-      search: 'เคมี',
-      provinceName: 'พระนครศรีอยุธยา',
-      hasEia: true,
-    });
+    expect(result.success).toBe(false);
   });
 
-  it('accepts candidate pagination', () => {
-    const result = listEligibleFactoryCandidatesQuerySchema.parse({
+  it('rejects candidate pagination because candidates must return all 60,000 factories', () => {
+    const result = listEligibleFactoryCandidatesQuerySchema.safeParse({
       page: '3',
       perPage: '50',
     });
 
-    expect(result).toEqual({ page: 3, perPage: 50 });
+    expect(result.success).toBe(false);
   });
 });

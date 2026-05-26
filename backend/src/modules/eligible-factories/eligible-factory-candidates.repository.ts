@@ -2,120 +2,76 @@ import type { Knex } from 'knex';
 import { env } from '../../config/env';
 import { factorySourceDb, factorySourceTableName } from '../../config/factory-source-database';
 import { MOCK_ELIGIBLE_FACTORY_CANDIDATES } from './eligible-factories.mock-source';
-import {
-  diwFactoryFlagFromOperationStatus,
-  diwProvinceCodeFromName,
-  type FacImportRow,
-  toEligibleFactoryCandidate,
-} from './fac-import.mapper';
+import { type FacImportRow, toEligibleFactoryCandidate } from './fac-import.mapper';
+import { eligibleFactoriesRepository } from './eligible-factories.repository';
 import type {
+  EligibleFactoryCandidateDTO,
   EligibleFactoryCandidatesDTO,
   ListEligibleFactoryCandidatesQuery,
 } from './eligible-factories.types';
 
 export const eligibleFactoryCandidatesRepository = {
-  async list(query: ListEligibleFactoryCandidatesQuery): Promise<EligibleFactoryCandidatesDTO> {
+  async list(_query: ListEligibleFactoryCandidatesQuery): Promise<EligibleFactoryCandidatesDTO> {
     if (env.FACTORY_SOURCE_MODE === 'external') {
-      return listExternalCandidates(query);
+      return listExternalCandidates();
     }
 
-    return listMockCandidates(query);
+    return listMockCandidates();
   },
 };
 
-async function listExternalCandidates(
-  query: ListEligibleFactoryCandidatesQuery,
-): Promise<EligibleFactoryCandidatesDTO> {
-  const baseQuery = buildFacImportBaseQuery(query);
-  const totalRow = await baseQuery
-    .clone()
-    .clearSelect()
-    .clearOrder()
-    .count<{ total: number | string }>({ total: '*' })
-    .first();
-  const total = Number(totalRow?.total ?? 0);
-
+async function listExternalCandidates(): Promise<EligibleFactoryCandidatesDTO> {
+  const selectedRegistrationNumbers = await selectedFactoryRegistrationNumbers();
+  const baseQuery = buildFacImportBaseQuery();
   const rowsQuery = baseQuery.clone().select(facImportColumns()).orderBy('FACREG', 'asc');
-  if (query.page !== undefined && query.perPage !== undefined) {
-    rowsQuery.limit(query.perPage).offset((query.page - 1) * query.perPage);
-  }
 
   const rows = await rowsQuery;
-  const data = rows.map(toEligibleFactoryCandidate);
+  const data = excludeSelectedCandidates(
+    rows.map(toEligibleFactoryCandidate),
+    selectedRegistrationNumbers,
+  );
   return {
     data,
-    meta: paginationMeta(total, query, 'external'),
+    meta: {
+      total: data.length,
+      source: 'external',
+    },
   };
 }
 
-function listMockCandidates(query: ListEligibleFactoryCandidatesQuery): EligibleFactoryCandidatesDTO {
-  const normalizedSearch = query.search?.toLocaleLowerCase('th-TH');
-  const filtered = MOCK_ELIGIBLE_FACTORY_CANDIDATES.filter((factory) => {
-    if (query.provinceName && factory.provinceName !== query.provinceName) return false;
-    if (query.operationStatus && factory.operationStatus !== query.operationStatus) return false;
-    if (query.hasEia !== undefined && factory.hasEia !== query.hasEia) return false;
-    if (!normalizedSearch) return true;
+async function listMockCandidates(): Promise<EligibleFactoryCandidatesDTO> {
+  const selectedRegistrationNumbers = await selectedFactoryRegistrationNumbers();
+  const data = excludeSelectedCandidates(
+    MOCK_ELIGIBLE_FACTORY_CANDIDATES,
+    selectedRegistrationNumbers,
+  );
 
-    return [
-      factory.factoryName,
-      factory.factoryRegistrationNoNew,
-      factory.factoryRegistrationNoOld,
-      factory.provinceName,
-      factory.industrialEstateName,
-      factory.businessActivity,
-    ].some((value) => value?.toLocaleLowerCase('th-TH').includes(normalizedSearch));
-  });
-
-  if (query.page === undefined || query.perPage === undefined) {
-    return {
-      data: filtered,
-      meta: {
-        total: filtered.length,
-        source: 'mock',
-      },
-    };
-  }
-
-  const offset = (query.page - 1) * query.perPage;
   return {
-    data: filtered.slice(offset, offset + query.perPage),
-    meta: paginationMeta(filtered.length, query, 'mock'),
+    data,
+    meta: {
+      total: data.length,
+      source: 'mock',
+    },
   };
 }
 
-function buildFacImportBaseQuery(
-  query: ListEligibleFactoryCandidatesQuery,
-): Knex.QueryBuilder<FacImportRow, FacImportRow[]> {
-  const builder = factorySourceDb<FacImportRow>(factorySourceTableName());
+async function selectedFactoryRegistrationNumbers(): Promise<Set<string>> {
+  return new Set(await eligibleFactoriesRepository.listActiveRegistrationNumbers());
+}
 
-  if (query.search) {
-    builder.andWhere((qb) => {
-      qb.where('FNAME', 'like', `%${query.search}%`)
-        .orWhere('DISPFACREG', 'like', `%${query.search}%`)
-        .orWhere('OLDREG', 'like', `%${query.search}%`)
-        .orWhere('FACREG', 'like', `%${query.search}%`)
-        .orWhere('FID', 'like', `%${query.search}%`)
-        .orWhere('OBJECT', 'like', `%${query.search}%`);
-    });
-  }
+function excludeSelectedCandidates(
+  candidates: EligibleFactoryCandidateDTO[],
+  selectedRegistrationNumbers: Set<string>,
+): EligibleFactoryCandidateDTO[] {
+  if (selectedRegistrationNumbers.size === 0) return candidates;
 
-  if (query.provinceName) {
-    const provinceCode = diwProvinceCodeFromName(query.provinceName);
-    if (provinceCode) builder.where('PROV', Number(provinceCode));
-    else builder.whereRaw('1 = 0');
-  }
+  return candidates.filter(
+    (candidate) => !selectedRegistrationNumbers.has(candidate.factoryRegistrationNo),
+  );
+}
 
-  if (query.operationStatus) {
-    const flag = diwFactoryFlagFromOperationStatus(query.operationStatus);
-    if (flag) builder.where('FFLAG', flag);
-    else builder.whereRaw('1 = 0');
-  }
-
-  if (query.hasEia !== undefined) {
-    builder.whereRaw('1 = 0');
-  }
-
-  return builder;
+function buildFacImportBaseQuery(): Knex.QueryBuilder<FacImportRow, FacImportRow[]> {
+  return factorySourceDb<FacImportRow>(factorySourceTableName());
 }
 
 function facImportColumns(): Array<keyof FacImportRow> {
@@ -152,22 +108,4 @@ function facImportColumns(): Array<keyof FacImportRow> {
     'FACTYPE',
     'CLASS',
   ];
-}
-
-function paginationMeta(
-  total: number,
-  query: ListEligibleFactoryCandidatesQuery,
-  source: 'mock' | 'external',
-): EligibleFactoryCandidatesDTO['meta'] {
-  if (query.page === undefined || query.perPage === undefined) {
-    return { total, source };
-  }
-
-  return {
-    total,
-    page: query.page,
-    perPage: query.perPage,
-    totalPages: Math.ceil(total / query.perPage),
-    source,
-  };
 }

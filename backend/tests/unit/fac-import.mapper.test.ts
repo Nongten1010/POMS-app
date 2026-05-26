@@ -45,11 +45,11 @@ describe('fac_import mapper', () => {
     const result = toEligibleFactoryCandidate(row);
 
     expect(result).toMatchObject({
-      sourceSystem: 'diw.fac_import',
-      sourceFactoryId: '10100302325234',
       factoryName: 'ห้างหุ้นส่วนจำกัด โรงกลึงก๊กกวง',
-      factoryRegistrationNoNew: '3-64(6)-45/17',
-      factoryRegistrationNoOld: '08',
+      factoryId: '10100302325234',
+      factoryRegistrationNo: '3-64(6)-45/17',
+      factoryClass: '1',
+      factorySubclass: '3',
       provinceName: 'กรุงเทพมหานคร',
       businessActivity: 'ทำผลิตภัณฑ์โลหะต่าง ๆ',
       operationStatus: 'แจ้งประกอบแล้ว',
@@ -61,7 +61,48 @@ describe('fac_import mapper', () => {
   it('does not expose projected coordinate values as latitude/longitude', () => {
     const result = toEligibleFactoryCandidate(row);
 
-    expect(result.coordinates).toBeNull();
+    expect(result.latitude).toBeNull();
+    expect(result.longitude).toBeNull();
+  });
+
+  it('maps WGS84 coordinates even when the source column values are swapped', () => {
+    const result = toEligibleFactoryCandidate({
+      ...row,
+      LONGITUDE_X: 13.544012,
+      LATITUDE_Y: 100.65241,
+    });
+
+    expect(result.latitude).toBe(13.544012);
+    expect(result.longitude).toBe(100.65241);
+  });
+
+  it('returns exactly the 20 DataDict_Fac60k candidate fields', () => {
+    const result = toEligibleFactoryCandidate(row);
+
+    expect(Object.keys(result).sort()).toEqual(
+      [
+        'address',
+        'boilerCount',
+        'boilerSizeEach',
+        'businessActivity',
+        'capitalAmount',
+        'factoryClass',
+        'factoryId',
+        'factoryName',
+        'factoryRegistrationNo',
+        'factorySubclass',
+        'fuelUsed',
+        'hasEia',
+        'industrialEstateName',
+        'latitude',
+        'longitude',
+        'machineryHorsepower',
+        'operationStatus',
+        'productionCapacity',
+        'provinceName',
+        'wastewaterDischargeInfo',
+      ].sort(),
+    );
   });
 
   it('maps supported province and operation status filters back to DIW codes', () => {

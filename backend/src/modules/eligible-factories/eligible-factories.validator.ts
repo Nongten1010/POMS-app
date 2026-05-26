@@ -1,52 +1,79 @@
 import { z } from 'zod';
 
 const trimmedString = (max: number) => z.string().trim().min(1).max(max);
-const nullableTrimmedString = (max: number) => trimmedString(max).nullable().optional();
+const requiredNullableTrimmedString = (max: number) => trimmedString(max).nullable();
+const nullableNumber = z.number().nullable();
+const nullableBoolean = z.boolean().nullable();
+
+function joinFactoryTypeSequence(factoryClass?: string | null, factorySubclass?: string | null) {
+  return (
+    [factoryClass, factorySubclass]
+      .filter((value): value is string => Boolean(value))
+      .join(' / ') || null
+  );
+}
 
 export const createEligibleFactorySchema = z
   .object({
-    sourceSystem: trimmedString(64).default('external_factory_db'),
-    sourceFactoryId: nullableTrimmedString(64),
     factoryName: trimmedString(500),
-    factoryRegistrationNoNew: trimmedString(64),
-    factoryRegistrationNoOld: nullableTrimmedString(64),
-    factoryTypeSequence: nullableTrimmedString(128),
-    address: nullableTrimmedString(1000),
+    factoryId: trimmedString(64),
+    factoryRegistrationNo: trimmedString(64),
+    factoryClass: requiredNullableTrimmedString(64),
+    factorySubclass: requiredNullableTrimmedString(64),
+    address: requiredNullableTrimmedString(1000),
     provinceName: trimmedString(128),
-    industrialEstateName: nullableTrimmedString(255),
-    coordinates: z
-      .object({
-        latitude: z.number().min(-90).max(90),
-        longitude: z.number().min(-180).max(180),
-      })
-      .strict()
-      .nullable()
-      .optional(),
-    businessActivity: nullableTrimmedString(4000),
+    industrialEstateName: requiredNullableTrimmedString(255),
+    longitude: z.number().min(-180).max(180).nullable(),
+    latitude: z.number().min(-90).max(90).nullable(),
+    businessActivity: requiredNullableTrimmedString(4000),
     operationStatus: trimmedString(64),
-    capitalAmount: z.number().nonnegative().nullable().optional(),
-    machineryHorsepower: z.number().nonnegative().nullable().optional(),
-    productionCapacity: nullableTrimmedString(500),
-    wastewaterDischargeInfo: nullableTrimmedString(4000),
-    boilerCount: z.number().int().min(0).max(10000).nullable().optional(),
-    boilerSizeEach: nullableTrimmedString(500),
-    fuelUsed: nullableTrimmedString(500),
-    hasEia: z.boolean().nullable().optional(),
-    selectedReason: nullableTrimmedString(1000),
+    capitalAmount: nullableNumber,
+    machineryHorsepower: nullableNumber,
+    productionCapacity: requiredNullableTrimmedString(500),
+    wastewaterDischargeInfo: requiredNullableTrimmedString(4000),
+    boilerCount: z.number().int().min(0).max(10000).nullable(),
+    boilerSizeEach: requiredNullableTrimmedString(500),
+    fuelUsed: requiredNullableTrimmedString(500),
+    hasEia: nullableBoolean,
   })
-  .strict();
+  .strict()
+  .transform((candidate) => ({
+    sourceSystem: 'diw.fac_import',
+    sourceFactoryId: candidate.factoryId,
+    factoryName: candidate.factoryName,
+    factoryRegistrationNoNew: candidate.factoryRegistrationNo,
+    factoryRegistrationNoOld: null,
+    factoryTypeSequence: joinFactoryTypeSequence(candidate.factoryClass, candidate.factorySubclass),
+    address: candidate.address ?? null,
+    provinceName: candidate.provinceName,
+    industrialEstateName: candidate.industrialEstateName ?? null,
+    coordinates:
+      candidate.latitude === null ||
+      candidate.latitude === undefined ||
+      candidate.longitude === null ||
+      candidate.longitude === undefined
+        ? null
+        : {
+            latitude: candidate.latitude,
+            longitude: candidate.longitude,
+          },
+    businessActivity: candidate.businessActivity ?? null,
+    operationStatus: candidate.operationStatus,
+    capitalAmount: candidate.capitalAmount ?? null,
+    machineryHorsepower: candidate.machineryHorsepower ?? null,
+    productionCapacity: candidate.productionCapacity ?? null,
+    wastewaterDischargeInfo: candidate.wastewaterDischargeInfo ?? null,
+    boilerCount: candidate.boilerCount ?? null,
+    boilerSizeEach: candidate.boilerSizeEach ?? null,
+    fuelUsed: candidate.fuelUsed ?? null,
+    hasEia: candidate.hasEia ?? null,
+    selectedReason: null,
+  }));
 
 export const listEligibleFactoriesQuerySchema = z
   .object({
     page: z.coerce.number().int().min(1).optional(),
     perPage: z.coerce.number().int().min(1).max(100).optional(),
-    search: z.string().trim().min(1).max(128).optional(),
-    provinceName: z.string().trim().min(1).max(128).optional(),
-    operationStatus: z.string().trim().min(1).max(64).optional(),
-    hasEia: z
-      .enum(['true', 'false'])
-      .transform((value) => value === 'true')
-      .optional(),
   })
   .strict()
   .transform((query) => {
@@ -59,28 +86,13 @@ export const listEligibleFactoriesQuerySchema = z
     };
   });
 
-export const listEligibleFactoryCandidatesQuerySchema = z
+export const listEligibleFactoryCandidatesQuerySchema = z.object({}).strict();
+
+export const eligibleFactoryIdParamsSchema = z
   .object({
-    page: z.coerce.number().int().min(1).optional(),
-    perPage: z.coerce.number().int().min(1).max(100).optional(),
-    search: z.string().trim().min(1).max(128).optional(),
-    provinceName: z.string().trim().min(1).max(128).optional(),
-    operationStatus: z.string().trim().min(1).max(64).optional(),
-    hasEia: z
-      .enum(['true', 'false'])
-      .transform((value) => value === 'true')
-      .optional(),
+    id: z.coerce.number().int().min(1),
   })
-  .strict()
-  .transform((query) => {
-    const shouldPaginate = query.page !== undefined || query.perPage !== undefined;
-    if (!shouldPaginate) return query;
-    return {
-      ...query,
-      page: query.page ?? 1,
-      perPage: query.perPage ?? 25,
-    };
-  });
+  .strict();
 
 export type CreateEligibleFactorySchemaInput = z.infer<typeof createEligibleFactorySchema>;
 export type ListEligibleFactoriesQuerySchemaInput = z.infer<
@@ -89,3 +101,4 @@ export type ListEligibleFactoriesQuerySchemaInput = z.infer<
 export type ListEligibleFactoryCandidatesQuerySchemaInput = z.infer<
   typeof listEligibleFactoryCandidatesQuerySchema
 >;
+export type EligibleFactoryIdParamsSchemaInput = z.infer<typeof eligibleFactoryIdParamsSchema>;

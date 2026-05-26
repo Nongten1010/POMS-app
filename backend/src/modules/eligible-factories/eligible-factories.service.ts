@@ -1,4 +1,4 @@
-import { ConflictError } from '../../shared/errors/AppError';
+import { ConflictError, NotFoundError } from '../../shared/errors/AppError';
 import { eligibleFactoriesRepository } from './eligible-factories.repository';
 import type {
   CreateEligibleFactoryInput,
@@ -25,7 +25,10 @@ export const eligibleFactoriesService = {
     return { data: rows, meta };
   },
 
-  async create(input: CreateEligibleFactoryInput, actorUserId: number): Promise<EligibleFactoryDTO> {
+  async create(
+    input: CreateEligibleFactoryInput,
+    actorUserId: number,
+  ): Promise<EligibleFactoryDTO> {
     const existing = await eligibleFactoriesRepository.findByRegistrationNoNew(
       input.factoryRegistrationNoNew,
     );
@@ -36,5 +39,12 @@ export const eligibleFactoriesService = {
     }
 
     return eligibleFactoriesRepository.create(input, actorUserId);
+  },
+
+  async remove(id: number, actorUserId: number): Promise<void> {
+    const removed = await eligibleFactoriesRepository.softDelete(id, actorUserId);
+    if (!removed) {
+      throw new NotFoundError('Eligible factory selection not found');
+    }
   },
 };

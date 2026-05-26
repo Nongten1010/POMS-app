@@ -731,52 +731,53 @@ FACTORY_SOURCE_MODE=external  # อ่านจาก diw.dbo.fac_import
 GET http://localhost:3000/api/v1/eligible-factories/candidates
 ```
 
-Query filter:
+Endpoint นี้ไม่รับ query filter/pagination และจะคืนรายการโรงงานจาก Fac60k source
+โดยตัดโรงงานที่ถูกเลือกเป็น eligible แล้วออกจากผลลัพธ์
 
-| query | type | example |
-| --- | --- | --- |
-| `page` | number | optional; ถ้าไม่ส่ง `page/perPage` จะดึงทั้งหมด |
-| `perPage` | number | optional; ถ้าส่ง max `100` |
-| `search` | string | `เคมี` |
-| `provinceName` | string | `ระยอง` |
-| `operationStatus` | string | `แจ้งประกอบแล้ว` |
-| `hasEia` | boolean string | ใช้กับ mock ได้; `fac_import` ยังไม่มี column EIA ที่ map ได้ชัดเจน |
+ตัวอย่าง: ถ้า source มี 60,000 โรงงาน และเลือกเข้าข่ายแล้ว 1,000 โรงงาน
+endpoint นี้จะคืน 59,000 โรงงาน
 
 Example:
 
 ```bash
-curl "http://localhost:3000/api/v1/eligible-factories/candidates?provinceName=ระยอง&hasEia=true" \
+curl "http://localhost:3000/api/v1/eligible-factories/candidates" \
   -H "Authorization: Bearer <accessToken>"
 ```
 
-Response:
+Candidate response มี 20 fields ตาม `backend/docs/DataDict_Fac60k.xlsx`:
 
 ```json
 {
   "success": true,
   "data": [
     {
-      "sourceSystem": "diw.fac_import",
-      "sourceFactoryId": "10100302325234",
       "factoryName": "ห้างหุ้นส่วนจำกัด โรงกลึงก๊กกวง",
-      "factoryRegistrationNoNew": "3-64(6)-45/17",
+      "factoryId": "10100302325234",
+      "factoryRegistrationNo": "3-64(6)-45/17",
+      "factoryClass": "1",
+      "factorySubclass": "3",
+      "address": "50/10-11-12 ซอยบรมบรรพต ถนนบริพัตร",
       "provinceName": "กรุงเทพมหานคร",
+      "industrialEstateName": null,
+      "longitude": null,
+      "latitude": null,
+      "businessActivity": "ทำผลิตภัณฑ์โลหะต่าง ๆ",
       "operationStatus": "แจ้งประกอบแล้ว",
+      "capitalAmount": 1825000,
+      "machineryHorsepower": 75,
+      "productionCapacity": null,
+      "wastewaterDischargeInfo": null,
+      "boilerCount": null,
+      "boilerSizeEach": null,
+      "fuelUsed": null,
       "hasEia": null
     }
   ],
   "meta": {
-    "total": 2400,
+    "total": 59000,
     "source": "external"
   }
 }
-```
-
-ถ้าต้องการ paginate ค่อยส่ง `page/perPage`:
-
-```bash
-curl "http://localhost:3000/api/v1/eligible-factories/candidates?page=1&perPage=25" \
-  -H "Authorization: Bearer <accessToken>"
 ```
 
 ### 7.2 Save selected eligible factory
@@ -789,20 +790,21 @@ Content-Type: application/json
 Authorization: Bearer <accessToken>
 ```
 
-Payload example:
+Payload ที่ frontend ส่งให้ใช้ shape เดียวกับ candidate response และต้องส่ง key ให้ครบ 20 fields
+field ที่ยังไม่รู้ค่าให้ส่ง `null`
 
 ```json
 {
-  "sourceSystem": "diw.fac_import",
-  "sourceFactoryId": "10100302325234",
   "factoryName": "ห้างหุ้นส่วนจำกัด โรงกลึงก๊กกวง",
-  "factoryRegistrationNoNew": "3-64(6)-45/17",
-  "factoryRegistrationNoOld": "08",
-  "factoryTypeSequence": "31/12/2547",
+  "factoryId": "10100302325234",
+  "factoryRegistrationNo": "3-64(6)-45/17",
+  "factoryClass": "1",
+  "factorySubclass": "3",
   "address": "50/10-11-12 ซอยบรมบรรพต ถนนบริพัตร",
   "provinceName": "กรุงเทพมหานคร",
   "industrialEstateName": null,
-  "coordinates": null,
+  "longitude": null,
+  "latitude": null,
   "businessActivity": "ทำผลิตภัณฑ์โลหะต่าง ๆ",
   "operationStatus": "แจ้งประกอบแล้ว",
   "capitalAmount": 1825000,
@@ -812,8 +814,7 @@ Payload example:
   "boilerCount": null,
   "boilerSizeEach": null,
   "fuelUsed": null,
-  "hasEia": null,
-  "selectedReason": "เลือกจากรายการโรงงานเข้าข่าย"
+  "hasEia": null
 }
 ```
 
@@ -841,7 +842,29 @@ Created response:
 409 CONFLICT
 ```
 
-### 7.3 List selected eligible factories
+### 7.3 Remove selected eligible factory
+
+ใช้เอาโรงงานออกจากรายการที่เลือกเข้าข่ายแล้ว เป็น soft delete และโรงงานนั้นจะกลับไปอยู่ใน
+`GET /eligible-factories/candidates`
+
+```http
+DELETE http://localhost:3000/api/v1/eligible-factories/:id
+Authorization: Bearer <accessToken>
+```
+
+Success response:
+
+```text
+204 No Content
+```
+
+ถ้าไม่พบรายการหรือถูกลบไปแล้ว จะได้:
+
+```text
+404 NOT_FOUND
+```
+
+### 7.4 List selected eligible factories
 
 ใช้แสดงรายการที่เลือกเข้าข่ายแล้วจาก DB ของ POMS
 
@@ -849,16 +872,14 @@ Created response:
 GET http://localhost:3000/api/v1/eligible-factories?page=1&perPage=25
 ```
 
-Query filter:
+Query:
 
 | query | type | example |
 | --- | --- | --- |
 | `page` | number | `1` |
 | `perPage` | number | `25`, max `100` |
-| `search` | string | ชื่อโรงงานหรือเลขทะเบียน |
-| `provinceName` | string | `ระยอง` |
-| `operationStatus` | string | `แจ้งประกอบแล้ว` |
-| `hasEia` | boolean string | `true` หรือ `false` |
+
+Endpoint นี้ไม่รับ filter อื่น และจะ list รายการที่ยังไม่ถูกลบทั้งหมดตาม pagination
 
 ## 8. Error cases ที่ frontend ควรรองรับ
 

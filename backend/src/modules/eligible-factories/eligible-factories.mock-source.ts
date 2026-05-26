@@ -55,11 +55,7 @@ const COMPANY_NAMES = [
   'ยูไนเต็ดเท็กซ์ไทล์',
 ];
 
-const OPERATION_STATUSES = [
-  'แจ้งประกอบแล้ว',
-  'หยุดประกอบกิจการชั่วคราว',
-  'เลิกประกอบกิจการ',
-];
+const OPERATION_STATUSES = ['แจ้งประกอบแล้ว', 'หยุดประกอบกิจการชั่วคราว', 'เลิกประกอบกิจการ'];
 
 const FUELS = ['ก๊าซธรรมชาติ', 'น้ำมันเตา', 'ชีวมวล', 'ไฟฟ้า', 'ถ่านหิน'];
 
@@ -86,19 +82,16 @@ function buildMockFactory(sequence: number): EligibleFactoryCandidateDTO {
   const running = String(sequence).padStart(5, '0');
 
   return {
-    sourceSystem: 'mock_external_factory_db',
-    sourceFactoryId: `mock-factory-${String(sequence).padStart(6, '0')}`,
     factoryName: `${companyPrefix} ${companyName} ${running} จำกัด`,
-    factoryRegistrationNoNew: `3-${category}-${group}/${year}${province.abbr}`,
-    factoryRegistrationNoOld: `รง.4-${running}`,
-    factoryTypeSequence: sequence % 3 === 0 ? 'รอง' : 'หลัก',
+    factoryId: `mock-factory-${String(sequence).padStart(6, '0')}`,
+    factoryRegistrationNo: `3-${category}-${group}/${year}${province.abbr}`,
+    factoryClass: 'หลัก',
+    factorySubclass: sequence % 3 === 0 ? 'รอง' : null,
     address: `${(sequence % 299) + 1}/${sequence % 30} หมู่ ${(sequence % 12) + 1}`,
     provinceName: province.name,
     industrialEstateName: INDUSTRIAL_ESTATES[(sequence - 1) % INDUSTRIAL_ESTATES.length],
-    coordinates: {
-      latitude: roundCoordinate(province.lat + ((sequence % 100) - 50) / 10_000),
-      longitude: roundCoordinate(province.lon + ((sequence % 100) - 50) / 10_000),
-    },
+    longitude: roundCoordinate(province.lon + ((sequence % 100) - 50) / 10_000),
+    latitude: roundCoordinate(province.lat + ((sequence % 100) - 50) / 10_000),
     businessActivity,
     operationStatus,
     capitalAmount: 1_000_000 + sequence * 1_250,

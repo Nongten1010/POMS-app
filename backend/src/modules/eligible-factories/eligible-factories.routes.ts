@@ -22,3 +22,8 @@ eligibleFactoriesRoutes.post(
   authorize('eligible_factories:manage'),
   eligibleFactoriesController.create,
 );
+eligibleFactoriesRoutes.delete(
+  '/:id',
+  authorize('eligible_factories:manage'),
+  eligibleFactoriesController.remove,
+);
