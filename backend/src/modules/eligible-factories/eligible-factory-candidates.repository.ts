@@ -14,12 +14,7 @@ import type {
 export const eligibleFactoryCandidatesRepository = {
   async list(_query: ListEligibleFactoryCandidatesQuery): Promise<EligibleFactoryCandidatesDTO> {
     if (env.FACTORY_SOURCE_MODE === 'external') {
-      try {
-        return await listExternalCandidates();
-      } catch (error) {
-        logger.error('[eligible-factories] Failed to load Fac60k external candidates', { error });
-        return listMockCandidates();
-      }
+      return listExternalCandidates();
     }
 
     return listMockCandidates();
@@ -28,10 +23,12 @@ export const eligibleFactoryCandidatesRepository = {
 
 async function listExternalCandidates(): Promise<EligibleFactoryCandidatesDTO> {
   const selectedRegistrationNumbers = await selectedFactoryRegistrationNumbers();
+  const columns = await availableFacImportColumns();
   const baseQuery = buildFacImportBaseQuery();
-  const rowsQuery = baseQuery.clone().select(facImportColumns()).orderBy('FACREG', 'asc');
+  const rowsQuery = baseQuery.clone().select(columns);
+  const orderByColumn = firstAvailableColumn(columns, ['FACREG', 'FID', 'DISPFACREG']);
 
-  const rows = await rowsQuery;
+  const rows = await (orderByColumn ? rowsQuery.orderBy(orderByColumn, 'asc') : rowsQuery);
   const data = excludeSelectedCandidates(
     rows.map(toEligibleFactoryCandidate),
     selectedRegistrationNumbers,
@@ -87,8 +84,28 @@ function buildFacImportBaseQuery(): Knex.QueryBuilder<FacImportRow, FacImportRow
   return factorySourceDb<FacImportRow>(factorySourceTableName());
 }
 
+async function availableFacImportColumns(): Promise<Array<keyof FacImportRow>> {
+  const requestedColumns = facImportColumns();
+  const rows = await factorySourceDb<{ COLUMN_NAME: string }>('INFORMATION_SCHEMA.COLUMNS')
+    .where('TABLE_SCHEMA', env.FACTORY_DB_SCHEMA)
+    .where('TABLE_NAME', env.FACTORY_DB_TABLE)
+    .whereIn('COLUMN_NAME', requestedColumns)
+    .select('COLUMN_NAME');
+
+  const availableColumns = new Set(rows.map((row) => row.COLUMN_NAME));
+  return requestedColumns.filter((column) => availableColumns.has(column));
+}
+
+function firstAvailableColumn(
+  columns: Array<keyof FacImportRow>,
+  candidates: Array<keyof FacImportRow>,
+): keyof FacImportRow | null {
+  return candidates.find((candidate) => columns.includes(candidate)) ?? null;
+}
+
 function facImportColumns(): Array<keyof FacImportRow> {
   return [
+    'FACREG',
     'FNAME',
     'FID',
     'DISPFACREG',

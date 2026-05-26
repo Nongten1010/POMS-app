@@ -21,61 +21,92 @@ jest.mock('../../src/modules/eligible-factories/eligible-factories.repository', 
 
 import { eligibleFactoriesRepository } from '../../src/modules/eligible-factories/eligible-factories.repository';
 import { factorySourceDb } from '../../src/config/factory-source-database';
-import { MOCK_ELIGIBLE_FACTORY_CANDIDATES } from '../../src/modules/eligible-factories/eligible-factories.mock-source';
 import { eligibleFactoryCandidatesRepository } from '../../src/modules/eligible-factories/eligible-factory-candidates.repository';
 
 const mockedEligibleFactoriesRepository = jest.mocked(eligibleFactoriesRepository);
 const mockedFactorySourceDb = jest.mocked(factorySourceDb);
 
 describe('eligibleFactoryCandidatesRepository', () => {
-  function mockExternalCandidateFailure() {
-    const failingQuery = {
+  const externalRows = [
+    {
+      FNAME: 'โรงงานจริง 1',
+      FID: 'real-1',
+      DISPFACREG: 'real-reg-1',
+      PROV: 10,
+      FFLAG: 2,
+    },
+    {
+      FNAME: 'โรงงานจริง 2',
+      FID: 'real-2',
+      DISPFACREG: 'real-reg-2',
+      PROV: 21,
+      FFLAG: 2,
+    },
+  ];
+
+  function mockExternalCandidates() {
+    const informationSchemaQuery = {
+      where: jest.fn().mockReturnThis(),
+      whereIn: jest.fn().mockReturnThis(),
+      select: jest
+        .fn<() => Promise<Array<{ COLUMN_NAME: string }>>>()
+        .mockResolvedValue([
+          { COLUMN_NAME: 'FNAME' },
+          { COLUMN_NAME: 'FID' },
+          { COLUMN_NAME: 'DISPFACREG' },
+          { COLUMN_NAME: 'PROV' },
+          { COLUMN_NAME: 'FFLAG' },
+        ]),
+    };
+    const facImportQuery = {
       clone: jest.fn().mockReturnThis(),
       select: jest.fn().mockReturnThis(),
-      orderBy: jest
-        .fn<() => Promise<never>>()
-        .mockRejectedValue(new Error('invalid fac_import column')),
+      orderBy: jest.fn<() => Promise<typeof externalRows>>().mockResolvedValue(externalRows),
     };
-    mockedFactorySourceDb.mockReturnValue(failingQuery as never);
+    mockedFactorySourceDb.mockImplementation(((tableName: unknown) => {
+      if (tableName === 'INFORMATION_SCHEMA.COLUMNS') return informationSchemaQuery as never;
+      return facImportQuery as never;
+    }) as never);
   }
 
   it('excludes factories that are already selected as eligible', async () => {
-    mockExternalCandidateFailure();
+    mockExternalCandidates();
     mockedEligibleFactoriesRepository.listActiveRegistrationNumbers.mockResolvedValue([
-      MOCK_ELIGIBLE_FACTORY_CANDIDATES[0]!.factoryRegistrationNo,
+      'real-reg-1',
     ]);
 
     const result = await eligibleFactoryCandidatesRepository.list({});
 
-    expect(result.meta.total).toBe(59999);
-    expect(result.data).toHaveLength(59999);
-    expect(result.data[0]?.factoryRegistrationNo).not.toBe(
-      MOCK_ELIGIBLE_FACTORY_CANDIDATES[0]!.factoryRegistrationNo,
-    );
+    expect(result.meta).toEqual({ total: 1, source: 'external' });
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0]?.factoryRegistrationNo).toBe('real-reg-2');
   });
 
   it('returns candidates when selected factory exclusion cannot be loaded', async () => {
-    mockExternalCandidateFailure();
+    mockExternalCandidates();
     mockedEligibleFactoriesRepository.listActiveRegistrationNumbers.mockRejectedValue(
       new Error('selected table is unavailable'),
     );
 
     const result = await eligibleFactoryCandidatesRepository.list({});
 
-    expect(result.meta.total).toBe(60000);
-    expect(result.data).toHaveLength(60000);
+    expect(result.meta).toEqual({ total: 2, source: 'external' });
+    expect(result.data).toHaveLength(2);
   });
 
-  it('falls back to mock candidates when the external Fac60k source fails', async () => {
-    mockExternalCandidateFailure();
+  it('surfaces external Fac60k source failures instead of returning mock data', async () => {
+    const failingInformationSchemaQuery = {
+      where: jest.fn().mockReturnThis(),
+      whereIn: jest.fn().mockReturnThis(),
+      select: jest
+        .fn<() => Promise<never>>()
+        .mockRejectedValue(new Error('fac_import unavailable')),
+    };
+    mockedFactorySourceDb.mockReturnValue(failingInformationSchemaQuery as never);
     mockedEligibleFactoriesRepository.listActiveRegistrationNumbers.mockResolvedValue([]);
 
-    const result = await eligibleFactoryCandidatesRepository.list({});
-
-    expect(result.meta).toEqual({
-      total: 60000,
-      source: 'mock',
-    });
-    expect(result.data).toHaveLength(60000);
+    await expect(eligibleFactoryCandidatesRepository.list({})).rejects.toThrow(
+      'fac_import unavailable',
+    );
   });
 });
