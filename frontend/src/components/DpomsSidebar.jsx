@@ -32,86 +32,104 @@ const menuItems = [
   {
     label: 'หน้าหลัก',
     value: 'home',
+    permissionKey: 'dashboard',
     icon: <HomeIcon />,
   },
   {
     label: 'ข้อมูลพื้นฐาน',
     value: 'master-data',
+    permissionKey: 'factories',
     icon: <DatasetIcon />,
   },
   {
     label: 'ขอเชื่อมต่อ',
     value: 'connection-request',
+    permissionKey: 'connection',
     icon: <LinkIcon />,
   },
   {
     label: 'แจ้งแบบ กวภ. 01 - กวภ. 05',
     value: 'forms',
+    permissionKey: 'kwp_forms',
     icon: <ArticleIcon />,
   },
   {
     label: 'รายงานค่าความคลาดเคลื่อน BOD/COD Online',
     value: 'bod-cod-report',
+    permissionKey: 'bod_cod_errors',
     icon: <AssessmentIcon />,
   },
   {
     label: 'การแจ้งเตือน',
     value: 'notifications',
+    permissionKey: 'notifications',
     icon: <NotificationsIcon />,
   },
   {
     label: 'สถิติข้อมูล',
     value: 'statistics',
+    permissionKey: 'statistics',
     icon: <QueryStatsIcon />,
   },
   {
     label: 'การสืบค้นข้อมูลแบบมีเงื่อนไข',
     value: 'conditional-search',
+    permissionKey: 'conditional_search',
     icon: <SearchIcon />,
   },
   {
     label: 'แจ้งขอความช่วยเหลือ',
     value: 'support-request',
+    permissionKey: 'helpdesk',
     icon: <SupportAgentIcon />,
   },
   {
     label: 'ข้อเสนอแนะ',
     value: 'feedback',
+    permissionKey: 'feedback',
     icon: <FeedbackIcon />,
   },
   {
     label: 'กฎหมายที่เกี่ยวข้อง',
     value: 'laws',
+    permissionKey: 'laws',
     icon: <GavelIcon />,
   },
   {
     label: 'คำถามที่พบบ่อย',
     value: 'faq',
+    permissionKey: 'faq',
     icon: <HelpIcon />,
   },
   {
     label: 'Chat',
     value: 'chat',
+    permissionKey: 'chat',
     icon: <ChatIcon />,
   },
   {
     label: 'สิทธิ์การใช้งาน',
     value: 'permissions',
+    permissionKey: 'permissions',
     icon: <AdminPanelSettingsIcon />,
   },
   {
     label: 'โรงงานที่เข้าข่าย',
     value: 'eligible-factories',
+    permissionKey: 'eligible_factories',
     icon: <FactoryIcon />,
   },
   {
     label: 'API Documentation',
     value: 'api-documentation',
+    permissionKey: 'api_documentation',
     icon: <ApiIcon />,
   },
 ]
 
-function DpomsSidebar({ open, selectedValue = 'home', onClose, onSelect }) {
+function DpomsSidebar({ open, selectedValue = 'home', onClose, onSelect, permissions }) {
+  const visibleMenuItems = menuItems.filter((item) => permissions?.[item.permissionKey]?.view === true)
+
   return (
     <Drawer
       anchor="left"
@@ -143,7 +161,7 @@ function DpomsSidebar({ open, selectedValue = 'home', onClose, onSelect }) {
     >
       <Box sx={{ height: '100%', overflow: 'auto', bgcolor: 'background.paper' }}>
         <List sx={{ px: 1, py: 1 }}>
-          {menuItems.map((item) => {
+          {visibleMenuItems.map((item) => {
             const isSelected = item.value === selectedValue
 
             return (

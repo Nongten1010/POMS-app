@@ -3,6 +3,7 @@ import {
   Alert,
   Box,
   Button,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -23,27 +24,84 @@ import PersonIcon from '@mui/icons-material/Person'
 import PersonAddIcon from '@mui/icons-material/PersonAdd'
 
 const officerTypes = [
-  'สำนักงานปลัดกระทรวงอุตสาหกรรม',
-  'กรมโรงงานอุตสาหกรรม',
-  'การนิคมแห่งประเทศไทย',
+  { label: 'สำนักงานปลัดกระทรวงอุตสาหกรรม', value: '1' },
+  { label: 'กรมโรงงานอุตสาหกรรม', value: '2' },
+  { label: 'การนิคมแห่งประเทศไทย', value: '8' },
+  { label: 'หน่วยงานอื่นๆ', value: '0' },
 ]
 
-const publicUserTypes = ['ประชาชนทั่วไป', 'เจ้าหน้าที่']
+const publicUserTypes = [
+  { label: 'ประชาชนทั่วไป', value: 'citizen' },
+  { label: 'ผู้ประกอบการ', value: 'operator' },
+]
+
+const loginUrl = import.meta.env.DEV
+  ? '/api-proxy/v1/auth/login'
+  : 'http://d-poms.diw.go.th/api/v1/auth/login'
 
 function DpomsLoginDialog({ open, onClose, onLoginSuccess }) {
   const [activeTab, setActiveTab] = useState(0)
-  const [officerType, setOfficerType] = useState(officerTypes[0])
-  const [publicUserType, setPublicUserType] = useState(publicUserTypes[0])
+  const [departmentID, setDepartmentID] = useState(officerTypes[0].value)
+  const [publicUserType, setPublicUserType] = useState(publicUserTypes[0].value)
+  const [error, setError] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const isOfficer = activeTab === 1
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault()
-    onLoginSuccess?.({
-      userType: isOfficer ? 'officer' : 'public',
-      officerType: isOfficer ? officerType : null,
-      publicUserType: isOfficer ? null : publicUserType,
-    })
+    const formData = new FormData(event.currentTarget)
+    const username = String(formData.get('username') ?? '').trim()
+    const password = String(formData.get('password') ?? '')
+    const userType = isOfficer ? 'officer' : publicUserType
+    const requestBody = {
+      userType,
+      username,
+      password,
+      ...(isOfficer ? { departmentID } : {}),
+    }
+
+    setError('')
+    setIsSubmitting(true)
+
+    try {
+      const result = await fetch(loginUrl, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      })
+      const rawText = await result.text()
+      let response = rawText
+
+      try {
+        response = rawText ? JSON.parse(rawText) : null
+      } catch {
+        response = rawText
+      }
+
+      if (!result.ok) {
+        const message =
+          response?.message ??
+          response?.error ??
+          `เข้าสู่ระบบไม่สำเร็จ (${result.status} ${result.statusText})`
+        throw new Error(message)
+      }
+
+      onLoginSuccess?.({
+        userType,
+        departmentID: isOfficer ? departmentID : null,
+        publicUserType: isOfficer ? null : publicUserType,
+        username,
+        response,
+      })
+    } catch (requestError) {
+      setError(requestError.message)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -122,18 +180,24 @@ function DpomsLoginDialog({ open, onClose, onLoginSuccess }) {
               : 'เข้าสู่ระบบด้วยรหัส i-Industry'}
           </Alert>
 
+          {error ? (
+            <Alert severity="error" variant="outlined">
+              {error}
+            </Alert>
+          ) : null}
+
           {isOfficer ? (
             <FormControl fullWidth required>
               <InputLabel id="officer-type-label">ประเภทหน่วยงาน</InputLabel>
               <Select
                 labelId="officer-type-label"
-                value={officerType}
+                value={departmentID}
                 label="ประเภทหน่วยงาน"
-                onChange={(event) => setOfficerType(event.target.value)}
+                onChange={(event) => setDepartmentID(event.target.value)}
               >
                 {officerTypes.map((type) => (
-                  <MenuItem key={type} value={type}>
-                    {type}
+                  <MenuItem key={type.value} value={type.value}>
+                    {type.label}
                   </MenuItem>
                 ))}
               </Select>
@@ -148,8 +212,8 @@ function DpomsLoginDialog({ open, onClose, onLoginSuccess }) {
                 onChange={(event) => setPublicUserType(event.target.value)}
               >
                 {publicUserTypes.map((type) => (
-                  <MenuItem key={type} value={type}>
-                    {type}
+                  <MenuItem key={type.value} value={type.value}>
+                    {type.label}
                   </MenuItem>
                 ))}
               </Select>
@@ -199,8 +263,13 @@ function DpomsLoginDialog({ open, onClose, onLoginSuccess }) {
         <Button onClick={onClose} color="inherit">
           ยกเลิก
         </Button>
-        <Button type="submit" variant="contained" startIcon={<LoginIcon />}>
-          เข้าสู่ระบบ
+        <Button
+          type="submit"
+          variant="contained"
+          startIcon={isSubmitting ? <CircularProgress size={18} color="inherit" /> : <LoginIcon />}
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? 'กำลังเข้าสู่ระบบ' : 'เข้าสู่ระบบ'}
         </Button>
       </DialogActions>
     </Dialog>

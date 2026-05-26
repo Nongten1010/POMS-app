@@ -10,6 +10,7 @@ import {
   Typography,
 } from '@mui/material'
 import LoginIcon from '@mui/icons-material/Login'
+import LogoutIcon from '@mui/icons-material/Logout'
 import MenuIcon from '@mui/icons-material/Menu'
 import logo from '../assets/logo.png'
 
@@ -21,6 +22,7 @@ function DpomsAppBar({
   },
   onMenuToggle,
   onLogin,
+  onLogout,
   onProfileClick,
 }) {
   const initials = user.name
@@ -96,43 +98,55 @@ function DpomsAppBar({
           </Box>
 
           {isAuthenticated ? (
-            <Button
-              color="inherit"
-              onClick={onProfileClick}
-              sx={{
-                minWidth: 0,
-                px: { xs: 0.75, sm: 1.5 },
-                flex: '0 0 auto',
-              }}
-            >
-              <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 0 }}>
-                <Avatar
-                  sx={{
-                    width: 34,
-                    height: 34,
-                    bgcolor: 'primary.main',
-                    fontSize: 13,
-                    fontWeight: 300,
-                  }}
+            <>
+              <Button
+                color="inherit"
+                onClick={onProfileClick}
+                sx={{
+                  minWidth: 0,
+                  px: { xs: 0.75, sm: 1.5 },
+                  flex: '0 0 auto',
+                }}
+              >
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 0 }}>
+                  <Avatar
+                    sx={{
+                      width: 34,
+                      height: 34,
+                      bgcolor: 'primary.main',
+                      fontSize: 13,
+                      fontWeight: 300,
+                    }}
+                  >
+                    {initials}
+                  </Avatar>
+                  <Box
+                    sx={{
+                      display: { xs: 'none', md: 'block' },
+                      minWidth: 0,
+                      textAlign: 'left',
+                    }}
+                  >
+                    <Typography variant="body2" sx={{ fontWeight: 300, lineHeight: 1.2 }}>
+                      {user.name}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.2 }}>
+                      {user.role}
+                    </Typography>
+                  </Box>
+                </Stack>
+              </Button>
+              <Tooltip title="ออกจากระบบ">
+                <IconButton
+                  color="inherit"
+                  aria-label="ออกจากระบบ"
+                  onClick={onLogout}
+                  sx={{ flex: '0 0 auto' }}
                 >
-                  {initials}
-                </Avatar>
-                <Box
-                  sx={{
-                    display: { xs: 'none', md: 'block' },
-                    minWidth: 0,
-                    textAlign: 'left',
-                  }}
-                >
-                  <Typography variant="body2" sx={{ fontWeight: 300, lineHeight: 1.2 }}>
-                    {user.name}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.2 }}>
-                    {user.role}
-                  </Typography>
-                </Box>
-              </Stack>
-            </Button>
+                  <LogoutIcon />
+                </IconButton>
+              </Tooltip>
+            </>
           ) : (
             <Button
               variant="contained"

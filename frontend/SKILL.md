@@ -122,6 +122,16 @@ When adding new UI, follow these rules:
 - Use action type colors only for buttons or controls that trigger a workflow action.
 - Keep all new screens consistent with `DESIGN.md` unless the product requirements say otherwise.
 
+## API Reference Workflow
+
+When a request involves APIs, authentication, request bodies, response bodies, headers, permissions, roles, access tokens, or the API Documentation page:
+
+- Read `API.md` before making changes.
+- Treat `API.md` as the source of truth for endpoint URLs, request/response shapes, field names, data dictionaries, role codes, permission keys, and permission data scopes.
+- Keep UI examples, mock request bodies, API test payloads, and documentation tables consistent with `API.md`.
+- If the user provides new API details, update `API.md` first or in the same change as the related UI/code update.
+- Do not infer API fields from memory when `API.md` can answer the question.
+
 ## UI Quality Rules
 
 - Use clear labels for forms, buttons, filters, tabs, table actions, and workflow actions.

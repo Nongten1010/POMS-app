@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   Box,
   Button,
@@ -25,15 +25,140 @@ import ApiDocumentationPage from './pages/ApiDocumentationPage'
 import EligibleFactoriesPage from './pages/EligibleFactoriesPage'
 import PermissionManagementPage from './pages/PermissionManagementPage'
 
+const authStorageKey = 'dpoms.authResponse'
+
+const defaultPermissions = {
+  dashboard: {
+    data: 'ALL',
+    view: true,
+  },
+  feedback: {
+    data: 'ALL',
+    view: true,
+  },
+  laws: {
+    data: 'ALL',
+    view: true,
+  },
+  faq: {
+    data: 'ALL',
+    view: true,
+  },
+}
+
+const menuPermissionMap = {
+  home: 'dashboard',
+  'master-data': 'factories',
+  'connection-request': 'connection',
+  forms: 'kwp_forms',
+  'bod-cod-report': 'bod_cod_errors',
+  notifications: 'notifications',
+  statistics: 'statistics',
+  'conditional-search': 'conditional_search',
+  'support-request': 'helpdesk',
+  feedback: 'feedback',
+  laws: 'laws',
+  faq: 'faq',
+  chat: 'chat',
+  permissions: 'permissions',
+  'eligible-factories': 'eligible_factories',
+  'api-documentation': 'api_documentation',
+}
+
+function loadStoredAuth() {
+  try {
+    const storedAuth = localStorage.getItem(authStorageKey)
+    return storedAuth ? JSON.parse(storedAuth) : null
+  } catch {
+    localStorage.removeItem(authStorageKey)
+    return null
+  }
+}
+
+function getResponseValue(response, keys) {
+  if (!response || typeof response !== 'object') {
+    return ''
+  }
+
+  for (const key of keys) {
+    if (response[key]) {
+      return response[key]
+    }
+  }
+
+  return getResponseValue(response.data, keys) || getResponseValue(response.user, keys)
+}
+
+function getAuthResponsePayload(auth) {
+  if (!auth || typeof auth !== 'object') {
+    return null
+  }
+
+  return auth.response ?? auth
+}
+
+function getPermissionsFromAuth(auth) {
+  const response = getAuthResponsePayload(auth)
+  const permissions = response?.permissions ?? response?.data?.permissions
+
+  if (!permissions || typeof permissions !== 'object') {
+    return defaultPermissions
+  }
+
+  return permissions
+}
+
+function getAccessTokenFromAuth(auth) {
+  const response = getAuthResponsePayload(auth)
+  return response?.accessToken ?? response?.data?.accessToken ?? ''
+}
+
+function canViewMenu(menuValue, permissions) {
+  const permissionKey = menuPermissionMap[menuValue]
+  return permissions?.[permissionKey]?.view === true
+}
+
+function getFirstViewableMenu(permissions) {
+  return Object.keys(menuPermissionMap).find((menuValue) => canViewMenu(menuValue, permissions)) ?? 'home'
+}
+
+function getUserFromAuth(auth) {
+  if (!auth) {
+    return null
+  }
+
+  const response = getAuthResponsePayload(auth)
+  const responseUser = response?.user ?? response?.data?.user
+  const name =
+    getResponseValue(responseUser, ['name', 'fullName', 'displayName', 'username']) ||
+    getResponseValue(response, ['name', 'fullName', 'displayName', 'username']) ||
+    auth.username ||
+    (auth.userType === 'officer' ? 'เจ้าหน้าที่ D-POMS' : 'ผู้ใช้งาน i-Industry')
+  const role =
+    auth.userType === 'officer'
+      ? 'เจ้าหน้าที่'
+      : auth.userType === 'operator'
+        ? 'ผู้ประกอบการ'
+        : 'ประชาชนทั่วไป'
+
+  return { name, role }
+}
+
 function App() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isLoginOpen, setIsLoginOpen] = useState(false)
-  const [currentUser, setCurrentUser] = useState(null)
+  const [authResponse, setAuthResponse] = useState(() => loadStoredAuth())
+  const currentUser = getUserFromAuth(authResponse)
+  const accessToken = getAccessTokenFromAuth(authResponse)
+  const activePermissions = useMemo(() => getPermissionsFromAuth(authResponse), [authResponse])
   const [selectedMenu, setSelectedMenu] = useState('home')
+  const visibleSelectedMenu = canViewMenu(selectedMenu, activePermissions)
+    ? selectedMenu
+    : getFirstViewableMenu(activePermissions)
   const isWorkspacePage =
-    selectedMenu === 'permissions' ||
-    selectedMenu === 'eligible-factories' ||
-    selectedMenu === 'api-documentation'
+    visibleSelectedMenu === 'permissions' ||
+    visibleSelectedMenu === 'eligible-factories' ||
+    visibleSelectedMenu === 'api-documentation'
 
   const primaryColors = [
     ['50', '#eef6ff'],
@@ -193,21 +318,24 @@ function App() {
         user={currentUser ?? undefined}
         onMenuToggle={() => setIsMenuOpen((current) => !current)}
         onLogin={() => setIsLoginOpen(true)}
+        onLogout={() => {
+          localStorage.removeItem(authStorageKey)
+          setAuthResponse(null)
+        }}
       />
       <DpomsSidebar
         open={isMenuOpen}
-        selectedValue={selectedMenu}
+        selectedValue={visibleSelectedMenu}
+        permissions={activePermissions}
         onSelect={setSelectedMenu}
         onClose={() => setIsMenuOpen(false)}
       />
       <DpomsLoginDialog
         open={isLoginOpen}
         onClose={() => setIsLoginOpen(false)}
-        onLoginSuccess={({ userType, officerType }) => {
-          setCurrentUser({
-            name: userType === 'officer' ? 'เจ้าหน้าที่ D-POMS' : 'ผู้ใช้งาน i-Industry',
-            role: userType === 'officer' ? officerType : 'ประชาชนทั่วไป / ผู้ประกอบการ',
-          })
+        onLoginSuccess={(auth) => {
+          localStorage.setItem(authStorageKey, JSON.stringify(auth))
+          setAuthResponse(auth)
           setIsLoginOpen(false)
         }}
       />
@@ -227,11 +355,11 @@ function App() {
               }),
         }}
       >
-        {selectedMenu === 'permissions' ? (
-          <PermissionManagementPage />
-        ) : selectedMenu === 'eligible-factories' ? (
-          <EligibleFactoriesPage />
-        ) : selectedMenu === 'api-documentation' ? (
+        {visibleSelectedMenu === 'permissions' ? (
+          <PermissionManagementPage accessToken={accessToken} />
+        ) : visibleSelectedMenu === 'eligible-factories' ? (
+          <EligibleFactoriesPage accessToken={accessToken} />
+        ) : visibleSelectedMenu === 'api-documentation' ? (
           <ApiDocumentationPage />
         ) : (
         <Stack spacing={4}>

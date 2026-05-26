@@ -1,117 +1,21 @@
-import { useMemo, useState } from 'react'
-import { Box, Button, Chip, Paper, Stack, Tab, Tabs, Typography } from '@mui/material'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Alert, Box, Button, Chip, Fade, Paper, Snackbar, Stack, Tab, Tabs, Typography } from '@mui/material'
 import AddTaskIcon from '@mui/icons-material/AddTask'
+import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import HighlightOffIcon from '@mui/icons-material/HighlightOff'
 import LinkIcon from '@mui/icons-material/Link'
+import RefreshIcon from '@mui/icons-material/Refresh'
 import { DataGrid } from '@mui/x-data-grid'
 
-const factoryRows = [
-  {
-    id: 1,
-    factoryName: 'บริษัท เอเชีย ไบโอเคมีคอล จำกัด',
-    newRegistrationNo: '3-101-45/67สป',
-    oldRegistrationNo: 'จ3-45(1)-12/2548',
-    factoryTypeOrder: '101 / 45',
-    location: '99 หมู่ 4 ตำบลบางปูใหม่ อำเภอเมืองสมุทรปราการ',
-    province: 'สมุทรปราการ',
-    industrialEstate: 'นิคมอุตสาหกรรมบางปู',
-    coordinates: '13.544012, 100.652410',
-    operation: 'ผลิตสารเคมีและวัตถุดิบชีวภาพ',
-    operationStatus: 'แจ้งประกอบแล้ว',
-    capital: '120,000,000 บาท',
-    machineHorsepower: '4,850 แรงม้า',
-    productionCapacity: '18,000 ตัน/ปี',
-    wastewaterDischarge: 'ระบายออกนอกโรงงานผ่านระบบบำบัดกลาง',
-    boilerCount: 2,
-    boilerSize: '8 ตัน/ชม., 6 ตัน/ชม.',
-    fuel: 'ก๊าซธรรมชาติ',
-    eia: 'มี',
-  },
-  {
-    id: 2,
-    factoryName: 'บริษัท ไทยฟู้ดส์ โปรเซสซิ่ง จำกัด',
-    newRegistrationNo: '3-009-18/66นฐ',
-    oldRegistrationNo: 'จ3-9(2)-88/2552',
-    factoryTypeOrder: '9 / 18',
-    location: '145 หมู่ 8 ตำบลกระทุ่มล้ม อำเภอสามพราน',
-    province: 'นครปฐม',
-    industrialEstate: '-',
-    coordinates: '13.724391, 100.300415',
-    operation: 'แปรรูปอาหารและผลิตภัณฑ์จากพืช',
-    operationStatus: 'แจ้งประกอบแล้ว',
-    capital: '85,000,000 บาท',
-    machineHorsepower: '2,120 แรงม้า',
-    productionCapacity: '9,500 ตัน/ปี',
-    wastewaterDischarge: 'บำบัดภายในและระบายตามใบอนุญาต',
-    boilerCount: 1,
-    boilerSize: '5 ตัน/ชม.',
-    fuel: 'ชีวมวล',
-    eia: 'ไม่มี',
-  },
-  {
-    id: 3,
-    factoryName: 'บริษัท อีสเทิร์น เมทัล เวิร์คส์ จำกัด',
-    newRegistrationNo: '3-064-22/65ชบ',
-    oldRegistrationNo: 'จ3-64(1)-31/2546',
-    factoryTypeOrder: '64 / 22',
-    location: '700/88 หมู่ 1 ตำบลบ้านเก่า อำเภอพานทอง',
-    province: 'ชลบุรี',
-    industrialEstate: 'นิคมอุตสาหกรรมอมตะซิตี้ ชลบุรี',
-    coordinates: '13.438762, 101.051155',
-    operation: 'ผลิตชิ้นส่วนโลหะและเคลือบผิวโลหะ',
-    operationStatus: 'ยังไม่แจ้ง',
-    capital: '210,000,000 บาท',
-    machineHorsepower: '7,300 แรงม้า',
-    productionCapacity: '24,000 ตัน/ปี',
-    wastewaterDischarge: 'มีจุดระบายน้ำทิ้งออกนอกโรงงาน',
-    boilerCount: 3,
-    boilerSize: '10 ตัน/ชม. จำนวน 2 ลูก, 4 ตัน/ชม.',
-    fuel: 'ก๊าซธรรมชาติและน้ำมันเตา',
-    eia: 'มี',
-  },
-  {
-    id: 4,
-    factoryName: 'บริษัท กรีนรับเบอร์ อินดัสทรี จำกัด',
-    newRegistrationNo: '3-052-11/64รย',
-    oldRegistrationNo: 'จ3-52(3)-09/2551',
-    factoryTypeOrder: '52 / 11',
-    location: '55 หมู่ 6 ตำบลมาบข่า อำเภอนิคมพัฒนา',
-    province: 'ระยอง',
-    industrialEstate: '-',
-    coordinates: '12.793421, 101.156880',
-    operation: 'ผลิตยางแผ่นและผลิตภัณฑ์ยาง',
-    operationStatus: 'ยกเลิก',
-    capital: '64,000,000 บาท',
-    machineHorsepower: '1,780 แรงม้า',
-    productionCapacity: '7,800 ตัน/ปี',
-    wastewaterDischarge: 'ไม่มีการระบายออกนอกโรงงาน',
-    boilerCount: 1,
-    boilerSize: '3 ตัน/ชม.',
-    fuel: 'ชีวมวล',
-    eia: 'ไม่มี',
-  },
-  {
-    id: 5,
-    factoryName: 'บริษัท นอร์ทเทิร์น เพเปอร์ มิลล์ จำกัด',
-    newRegistrationNo: '3-038-07/66ลป',
-    oldRegistrationNo: 'จ3-38(1)-44/2549',
-    factoryTypeOrder: '38 / 7',
-    location: '222 หมู่ 3 ตำบลบ้านเสด็จ อำเภอเมืองลำปาง',
-    province: 'ลำปาง',
-    industrialEstate: '-',
-    coordinates: '18.358105, 99.581670',
-    operation: 'ผลิตเยื่อกระดาษและกระดาษอุตสาหกรรม',
-    operationStatus: 'แจ้งประกอบแล้ว',
-    capital: '155,000,000 บาท',
-    machineHorsepower: '5,640 แรงม้า',
-    productionCapacity: '32,000 ตัน/ปี',
-    wastewaterDischarge: 'ระบายออกนอกโรงงานหลังบำบัด',
-    boilerCount: 2,
-    boilerSize: '12 ตัน/ชม., 8 ตัน/ชม.',
-    fuel: 'ถ่านหินและชีวมวล',
-    eia: 'มี',
-  },
-]
+const eligibleFactoryCandidatesApiUrl = import.meta.env.DEV
+  ? '/api-proxy/v1/eligible-factories/candidates'
+  : 'http://d-poms.diw.go.th/api/v1/eligible-factories/candidates'
+
+const eligibleFactoriesApiUrl = import.meta.env.DEV
+  ? '/api-proxy/v1/eligible-factories'
+  : 'http://d-poms.diw.go.th/api/v1/eligible-factories'
+
+const emptyValue = '-'
 
 const subMenus = [
   { value: 'all', label: 'โรงงานทั้งหมด' },
@@ -154,13 +58,371 @@ const baseColumns = [
   },
 ]
 
-function EligibleFactoriesPage() {
-  const [activeTab, setActiveTab] = useState('all')
-  const [eligibleFactoryIds, setEligibleFactoryIds] = useState([1, 3])
+function formatNumber(value) {
+  return typeof value === 'number' ? value.toLocaleString('th-TH') : emptyValue
+}
 
-  const eligibleRows = useMemo(
-    () => factoryRows.filter((row) => eligibleFactoryIds.includes(row.id)),
-    [eligibleFactoryIds],
+function formatWithUnit(value, unit) {
+  return typeof value === 'number' ? `${formatNumber(value)} ${unit}` : emptyValue
+}
+
+function formatCoordinates(latitude, longitude) {
+  if (typeof latitude !== 'number' || typeof longitude !== 'number') {
+    return emptyValue
+  }
+
+  return `${latitude}, ${longitude}`
+}
+
+function formatFactoryTypeOrder(factoryClass, factorySubclass) {
+  return [factoryClass, factorySubclass].filter(Boolean).join(' / ') || emptyValue
+}
+
+function getFactoryKey(row) {
+  return row.factoryId || row.factoryRegistrationNo || row.id
+}
+
+function mapFactoryRow(row, index, idPrefix = 'factory') {
+  const factoryKey = getFactoryKey(row) || `${idPrefix}-${index}`
+
+  return {
+    id: idPrefix === 'eligible' ? `eligible-${row.id ?? factoryKey}` : factoryKey,
+    factoryKey,
+    eligibleFactoryId: row.id ?? null,
+    candidatePayload: row,
+    factoryName: row.factoryName ?? emptyValue,
+    newRegistrationNo: row.factoryId ?? emptyValue,
+    oldRegistrationNo: row.factoryRegistrationNo ?? emptyValue,
+    factoryTypeOrder: formatFactoryTypeOrder(row.factoryClass, row.factorySubclass),
+    location: row.address ?? emptyValue,
+    province: row.provinceName ?? emptyValue,
+    industrialEstate: row.industrialEstateName ?? emptyValue,
+    coordinates: formatCoordinates(row.latitude, row.longitude),
+    operation: row.businessActivity ?? emptyValue,
+    operationStatus: row.operationStatus ?? emptyValue,
+    capital: formatWithUnit(row.capitalAmount, 'บาท'),
+    machineHorsepower: formatWithUnit(row.machineryHorsepower, 'แรงม้า'),
+    productionCapacity: row.productionCapacity ?? emptyValue,
+    wastewaterDischarge: row.wastewaterDischargeInfo ?? emptyValue,
+    boilerCount: typeof row.boilerCount === 'number' ? row.boilerCount : null,
+    boilerSize: row.boilerSizeEach ?? emptyValue,
+    fuel: row.fuelUsed ?? emptyValue,
+    eia: row.hasEia === true ? 'มี' : row.hasEia === false ? 'ไม่มี' : emptyValue,
+  }
+}
+
+function mapCandidateFactory(row, index) {
+  return mapFactoryRow(row, index, 'candidate')
+}
+
+function mapEligibleFactory(row, index) {
+  return mapFactoryRow(row, index, 'eligible')
+}
+
+function createEligibleFactoryPayload(row) {
+  const candidate = row.candidatePayload ?? {}
+
+  return {
+    factoryName: candidate.factoryName ?? null,
+    factoryId: candidate.factoryId ?? null,
+    factoryRegistrationNo: candidate.factoryRegistrationNo ?? null,
+    factoryClass: candidate.factoryClass ?? null,
+    factorySubclass: candidate.factorySubclass ?? null,
+    address: candidate.address ?? null,
+    provinceName: candidate.provinceName ?? null,
+    industrialEstateName: candidate.industrialEstateName ?? null,
+    longitude: candidate.longitude ?? null,
+    latitude: candidate.latitude ?? null,
+    businessActivity: candidate.businessActivity ?? null,
+    operationStatus: candidate.operationStatus ?? null,
+    capitalAmount: candidate.capitalAmount ?? null,
+    machineryHorsepower: candidate.machineryHorsepower ?? null,
+    productionCapacity: candidate.productionCapacity ?? null,
+    wastewaterDischargeInfo: candidate.wastewaterDischargeInfo ?? null,
+    boilerCount: candidate.boilerCount ?? null,
+    boilerSizeEach: candidate.boilerSizeEach ?? null,
+    fuelUsed: candidate.fuelUsed ?? null,
+    hasEia: candidate.hasEia ?? null,
+  }
+}
+
+function EligibleFactoriesPage({ accessToken = '' }) {
+  const [activeTab, setActiveTab] = useState('all')
+  const [factoryRows, setFactoryRows] = useState([])
+  const [eligibleFactoryRows, setEligibleFactoryRows] = useState([])
+  const [isLoadingFactories, setIsLoadingFactories] = useState(false)
+  const [isLoadingEligibleFactories, setIsLoadingEligibleFactories] = useState(false)
+  const [factoriesError, setFactoriesError] = useState('')
+  const [eligibleFactoriesError, setEligibleFactoriesError] = useState('')
+  const [eligibleActionError, setEligibleActionError] = useState('')
+  const [savingEligibleFactoryIds, setSavingEligibleFactoryIds] = useState([])
+  const [deletingEligibleFactoryIds, setDeletingEligibleFactoryIds] = useState([])
+  const [snackbarOpen, setSnackbarOpen] = useState(false)
+  const [snackbarMessage, setSnackbarMessage] = useState('นำเข้าโรงงานเข้าข่ายสำเร็จ')
+  const eligibleFactoryKeySet = useMemo(
+    () => new Set(eligibleFactoryRows.map((row) => row.factoryKey)),
+    [eligibleFactoryRows],
+  )
+  const savingEligibleFactoryIdSet = useMemo(
+    () => new Set(savingEligibleFactoryIds),
+    [savingEligibleFactoryIds],
+  )
+  const deletingEligibleFactoryIdSet = useMemo(
+    () => new Set(deletingEligibleFactoryIds),
+    [deletingEligibleFactoryIds],
+  )
+
+  const loadFactoryCandidates = useCallback(
+    async (signal) => {
+      if (!accessToken) {
+        return
+      }
+
+      setIsLoadingFactories(true)
+      setFactoriesError('')
+
+      try {
+        const result = await fetch(eligibleFactoryCandidatesApiUrl, {
+          headers: {
+            Accept: 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+          },
+          signal,
+        })
+        const rawText = await result.text()
+        let response = rawText
+
+        try {
+          response = rawText ? JSON.parse(rawText) : null
+        } catch {
+          response = rawText
+        }
+
+        if (!result.ok || response?.success === false) {
+          const message =
+            response?.error?.message ??
+            response?.message ??
+            `โหลดข้อมูลโรงงานจาก กรอ. ไม่สำเร็จ (${result.status} ${result.statusText})`
+          throw new Error(message)
+        }
+
+        const nextRows = Array.isArray(response?.data) ? response.data.map(mapCandidateFactory) : []
+        setFactoryRows(nextRows)
+      } catch (requestError) {
+        if (requestError.name !== 'AbortError') {
+          setFactoryRows([])
+          setFactoriesError(requestError.message)
+        }
+      } finally {
+        if (!signal?.aborted) {
+          setIsLoadingFactories(false)
+        }
+      }
+    },
+    [accessToken],
+  )
+
+  const loadEligibleFactories = useCallback(
+    async (signal) => {
+      if (!accessToken) {
+        return
+      }
+
+      setIsLoadingEligibleFactories(true)
+      setEligibleFactoriesError('')
+
+      try {
+        const result = await fetch(eligibleFactoriesApiUrl, {
+          headers: {
+            Accept: 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+          },
+          signal,
+        })
+        const rawText = await result.text()
+        let response = rawText
+
+        try {
+          response = rawText ? JSON.parse(rawText) : null
+        } catch {
+          response = rawText
+        }
+
+        if (!result.ok || response?.success === false) {
+          const message =
+            response?.error?.message ??
+            response?.message ??
+            `โหลดข้อมูลโรงงานที่เข้าข่ายไม่สำเร็จ (${result.status} ${result.statusText})`
+          throw new Error(message)
+        }
+
+        const nextRows = Array.isArray(response?.data) ? response.data.map(mapEligibleFactory) : []
+        setEligibleFactoryRows(nextRows)
+      } catch (requestError) {
+        if (requestError.name !== 'AbortError') {
+          setEligibleFactoryRows([])
+          setEligibleFactoriesError(requestError.message)
+        }
+      } finally {
+        if (!signal?.aborted) {
+          setIsLoadingEligibleFactories(false)
+        }
+      }
+    },
+    [accessToken],
+  )
+
+  useEffect(() => {
+    if (!accessToken) {
+      return
+    }
+
+    const controller = new AbortController()
+
+    async function loadRows() {
+      await loadFactoryCandidates(controller.signal)
+    }
+
+    loadRows()
+
+    return () => {
+      controller.abort()
+    }
+  }, [accessToken, loadFactoryCandidates])
+
+  useEffect(() => {
+    if (!accessToken) {
+      return
+    }
+
+    const controller = new AbortController()
+
+    async function loadRows() {
+      await loadEligibleFactories(controller.signal)
+    }
+
+    loadRows()
+
+    return () => {
+      controller.abort()
+    }
+  }, [accessToken, loadEligibleFactories])
+
+  const effectiveFactoryRows = useMemo(() => (accessToken ? factoryRows : []), [accessToken, factoryRows])
+  const effectiveEligibleFactoryRows = useMemo(
+    () => (accessToken ? eligibleFactoryRows : []),
+    [accessToken, eligibleFactoryRows],
+  )
+  const effectiveFactoriesError = accessToken
+    ? factoriesError
+    : 'กรุณาเข้าสู่ระบบเพื่อดูข้อมูลโรงงานจาก กรอ.'
+  const effectiveEligibleFactoriesError = accessToken
+    ? eligibleFactoriesError
+    : 'กรุณาเข้าสู่ระบบเพื่อดูข้อมูลโรงงานที่เข้าข่าย'
+
+  const handleMarkEligible = useCallback(
+    async (row) => {
+      if (!accessToken) {
+        setEligibleActionError('กรุณาเข้าสู่ระบบก่อนเพิ่มโรงงานเข้าข่าย')
+        return
+      }
+
+      setEligibleActionError('')
+      setSavingEligibleFactoryIds((current) =>
+        current.includes(row.id) ? current : [...current, row.id],
+      )
+
+      try {
+        const result = await fetch(eligibleFactoriesApiUrl, {
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(createEligibleFactoryPayload(row)),
+        })
+        const rawText = await result.text()
+        let response = rawText
+
+        try {
+          response = rawText ? JSON.parse(rawText) : null
+        } catch {
+          response = rawText
+        }
+
+        if (!result.ok || response?.success === false) {
+          const message =
+            response?.error?.message ??
+            response?.message ??
+            `เพิ่มโรงงานเข้าข่ายไม่สำเร็จ (${result.status} ${result.statusText})`
+          throw new Error(message)
+        }
+
+        await loadEligibleFactories()
+        setSnackbarMessage('นำเข้าโรงงานเข้าข่ายสำเร็จ')
+        setSnackbarOpen(true)
+      } catch (requestError) {
+        setEligibleActionError(requestError.message)
+      } finally {
+        setSavingEligibleFactoryIds((current) => current.filter((id) => id !== row.id))
+      }
+    },
+    [accessToken, loadEligibleFactories],
+  )
+
+  const handleRemoveEligible = useCallback(
+    async (row) => {
+      if (!accessToken) {
+        setEligibleActionError('กรุณาเข้าสู่ระบบก่อนนำโรงงานออกจากรายการเข้าข่าย')
+        return
+      }
+
+      if (!row.eligibleFactoryId) {
+        setEligibleActionError('ไม่พบรหัสรายการโรงงานที่เข้าข่ายสำหรับนำออก')
+        return
+      }
+
+      setEligibleActionError('')
+      setDeletingEligibleFactoryIds((current) =>
+        current.includes(row.id) ? current : [...current, row.id],
+      )
+
+      try {
+        const result = await fetch(`${eligibleFactoriesApiUrl}/${row.eligibleFactoryId}`, {
+          method: 'DELETE',
+          headers: {
+            Accept: 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+          },
+        })
+        const rawText = await result.text()
+        let response = rawText
+
+        try {
+          response = rawText ? JSON.parse(rawText) : null
+        } catch {
+          response = rawText
+        }
+
+        if (!result.ok || response?.success === false) {
+          const message =
+            response?.error?.message ??
+            response?.message ??
+            `นำโรงงานออกจากรายการเข้าข่ายไม่สำเร็จ (${result.status} ${result.statusText})`
+          throw new Error(message)
+        }
+
+        await loadEligibleFactories()
+        setSnackbarMessage('นำโรงงานออกจากรายการเข้าข่ายสำเร็จ')
+        setSnackbarOpen(true)
+      } catch (requestError) {
+        setEligibleActionError(requestError.message)
+      } finally {
+        setDeletingEligibleFactoryIds((current) => current.filter((id) => id !== row.id))
+      }
+    },
+    [accessToken, loadEligibleFactories],
   )
 
   const allFactoryColumns = useMemo(
@@ -173,7 +435,8 @@ function EligibleFactoriesPage() {
         sortable: false,
         filterable: false,
         renderCell: (params) => {
-          const isEligible = eligibleFactoryIds.includes(params.row.id)
+          const isEligible = eligibleFactoryKeySet.has(params.row.factoryKey)
+          const isSaving = savingEligibleFactoryIdSet.has(params.row.id)
 
           return (
             <Button
@@ -181,20 +444,16 @@ function EligibleFactoriesPage() {
               variant={isEligible ? 'outlined' : 'contained'}
               color="secondary"
               startIcon={<AddTaskIcon />}
-              disabled={isEligible}
-              onClick={() => {
-                setEligibleFactoryIds((current) =>
-                  current.includes(params.row.id) ? current : [...current, params.row.id],
-                )
-              }}
+              disabled={isEligible || isSaving}
+              onClick={() => handleMarkEligible(params.row)}
             >
-              เข้าข่าย
+              {isSaving ? 'กำลังบันทึก' : 'เข้าข่าย'}
             </Button>
           )
         },
       },
     ],
-    [eligibleFactoryIds],
+    [eligibleFactoryKeySet, handleMarkEligible, savingEligibleFactoryIdSet],
   )
 
   const eligibleFactoryColumns = useMemo(
@@ -206,22 +465,25 @@ function EligibleFactoriesPage() {
         width: 130,
         sortable: false,
         filterable: false,
-        renderCell: (params) => (
-          <Button
-            size="small"
-            variant="outlined"
-            color="error"
-            startIcon={<HighlightOffIcon />}
-            onClick={() => {
-              setEligibleFactoryIds((current) => current.filter((id) => id !== params.row.id))
-            }}
-          >
-            นำออก
-          </Button>
-        ),
+        renderCell: (params) => {
+          const isDeleting = deletingEligibleFactoryIdSet.has(params.row.id)
+
+          return (
+            <Button
+              size="small"
+              variant="outlined"
+              color="error"
+              startIcon={<HighlightOffIcon />}
+              disabled={isDeleting}
+              onClick={() => handleRemoveEligible(params.row)}
+            >
+              {isDeleting ? 'กำลังนำออก' : 'นำออก'}
+            </Button>
+          )
+        },
       },
     ],
-    [],
+    [deletingEligibleFactoryIdSet, handleRemoveEligible],
   )
 
   return (
@@ -249,6 +511,18 @@ function EligibleFactoriesPage() {
             </Typography>
           </Box>
 
+          {activeTab === 'all' ? (
+            <Button
+              variant="outlined"
+              startIcon={<RefreshIcon />}
+              disabled={!accessToken || isLoadingFactories}
+              onClick={() => loadFactoryCandidates()}
+              sx={{ flex: '0 0 auto' }}
+            >
+              {isLoadingFactories ? 'กำลังโหลด' : 'โหลดข้อมูลใหม่'}
+            </Button>
+          ) : null}
+
           <Tabs
             value={activeTab}
             onChange={(_, value) => setActiveTab(value)}
@@ -272,13 +546,47 @@ function EligibleFactoriesPage() {
         </Stack>
       </Paper>
 
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={3000}
+        onClose={() => setSnackbarOpen(false)}
+        TransitionComponent={Fade}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+        message={
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+            <CheckCircleIcon fontSize="small" />
+            <Typography component="span" variant="body2">
+              {snackbarMessage}
+            </Typography>
+          </Stack>
+        }
+        sx={{
+          '& .MuiSnackbarContent-root': {
+            minWidth: 0,
+            bgcolor: '#166534',
+            color: '#ffffff',
+            boxShadow: '0 12px 32px rgba(15, 23, 42, 0.16)',
+          },
+        }}
+      />
+
+      {eligibleActionError ? <Alert severity="error">{eligibleActionError}</Alert> : null}
+
       {activeTab === 'all' ? (
-        <FactoryDataGrid title="โรงงานทั้งหมด (กรอ.)" rows={factoryRows} columns={allFactoryColumns} />
+        <FactoryDataGrid
+          title="โรงงานทั้งหมด (กรอ.)"
+          rows={effectiveFactoryRows}
+          columns={allFactoryColumns}
+          loading={isLoadingFactories}
+          error={effectiveFactoriesError}
+        />
       ) : activeTab === 'eligible' ? (
         <FactoryDataGrid
           title="โรงงานที่เข้าข่าย"
-          rows={eligibleRows}
+          rows={effectiveEligibleFactoryRows}
           columns={eligibleFactoryColumns}
+          loading={isLoadingEligibleFactories}
+          error={effectiveEligibleFactoriesError}
         />
       ) : (
         <ConnectionRequestsPanel />
@@ -287,7 +595,7 @@ function EligibleFactoriesPage() {
   )
 }
 
-function FactoryDataGrid({ title, rows, columns }) {
+function FactoryDataGrid({ title, rows, columns, loading = false, error = '' }) {
   return (
     <Paper
       elevation={0}
@@ -299,10 +607,16 @@ function FactoryDataGrid({ title, rows, columns }) {
         overflow: 'hidden',
       }}
     >
+      {error ? (
+        <Alert severity="warning" sx={{ borderRadius: 0 }}>
+          {error}
+        </Alert>
+      ) : null}
       <Box sx={{ height: '100%', minHeight: 420 }}>
         <DataGrid
           rows={rows}
           columns={columns}
+          loading={loading}
           disableRowSelectionOnClick
           showToolbar
           label={title}

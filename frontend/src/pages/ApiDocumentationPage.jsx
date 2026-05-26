@@ -16,6 +16,430 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 
 const accessTokenExample = 'Bearer <accessToken>'
 
+const userResponseExample = {
+  username: 'string',
+  fullName: 'string',
+  department: 'string',
+  lineNameTh: 'string',
+  levelNameTh: 'string',
+  roles: 'diw_central',
+  isActive: true,
+}
+
+const permissionsResponseExample = {
+  dashboard: {
+    data: 'ALL',
+    view: true,
+    favorite: true,
+    search: true,
+    advanced_search: true,
+    statistics: true,
+    export: true,
+  },
+  conditional_search: {
+    data: null,
+    view: true,
+  },
+  statistics: {
+    data: 'ALL',
+    view: true,
+  },
+  factories: {
+    data: 'ALL',
+    view: true,
+    edit: true,
+    approve: true,
+  },
+  connection: {
+    data: 'ALL',
+    view: true,
+    edit: true,
+    approve: true,
+  },
+  kwp_forms: {
+    data: 'ALL',
+    view: true,
+    edit: true,
+    approve: true,
+  },
+  bod_cod_errors: {
+    data: 'ALL',
+    view: true,
+    edit: true,
+    approve: true,
+  },
+  notifications: {
+    data: 'ALL',
+    view: true,
+    view_status: true,
+    edit: true,
+    approve: true,
+  },
+  helpdesk: {
+    data: 'ALL',
+    view: true,
+  },
+  feedback: {
+    data: 'ALL',
+    view: true,
+  },
+  laws: {
+    data: 'ALL',
+    view: true,
+    edit: true,
+  },
+  faq: {
+    data: 'ALL',
+    view: true,
+    edit: true,
+  },
+  chat: {
+    data: 'ALL',
+    view: true,
+    edit: true,
+  },
+  permissions: {
+    data: 'ALL',
+    view: true,
+  },
+  eligible_factories: {
+    data: 'ALL',
+    view: true,
+  },
+  api_documentation: {
+    data: 'ALL',
+    view: true,
+  },
+}
+
+const loginResponseExample = {
+  accessToken: 'string',
+  user: userResponseExample,
+  permissions: permissionsResponseExample,
+}
+
+const meResponseExample = {
+  user: userResponseExample,
+  permissions: permissionsResponseExample,
+}
+
+const usersListResponseExample = {
+  success: true,
+  data: [
+    {
+      id: 2,
+      username: 'officer_kpm',
+      fullName: 'สมหญิง รักษ์สิ่งแวดล้อม',
+      department: 'กรมโรงงานอุตสาหกรรม',
+      lineNameTh: 'นักวิทยาศาสตร์',
+      levelNameTh: 'ชำนาญการ',
+      roles: 'monitoring_kpm',
+      isActive: true,
+    },
+    {
+      id: 3,
+      username: 'officer_sng',
+      fullName: 'ธีระ จังหวัดงาน',
+      department: 'สำนักงานอุตสาหกรรมจังหวัดสระบุรี',
+      lineNameTh: 'นักวิชาการอุตสาหกรรม',
+      levelNameTh: 'ชำนาญการ',
+      roles: 'provincial_office',
+      isActive: true,
+    },
+  ],
+  meta: {
+    total: 2,
+  },
+}
+
+const createUserRequestExample = {
+  fullName: 'ชื่อ-นามสกุล',
+  username: 'Username',
+  password: 'Password',
+  department: 'สังกัด',
+  lineNameTh: 'ตำแหน่ง',
+  levelNameTh: 'ระดับ',
+  roles: 'monitoring_kpm',
+  isActive: true,
+}
+
+const createUserResponseExample = {
+  success: true,
+}
+
+const userDetailResponseExample = {
+  user: {
+    username: '1100000000001',
+    fullName: 'นางสมหญิง รักษ์สิ่งแวดล้อม',
+    department: 'กรมโรงงานอุตสาหกรรม',
+    lineNameTh: 'นักวิทยาศาสตร์',
+    levelNameTh: 'ชำนาญการ',
+    roles: 'monitoring_kpm',
+    isActive: true,
+    source: 'api',
+  },
+  permissions: {
+    dashboard: {
+      data: 'ALL',
+      view: true,
+      favorite: true,
+      search: true,
+      advanced_search: true,
+      statistics: true,
+    },
+    conditional_search: {
+      data: null,
+      view: true,
+    },
+    statistics: {
+      data: 'ALL',
+      view: true,
+    },
+    factories: {
+      data: 'ALL',
+      view: true,
+      edit: true,
+      approve: true,
+    },
+    connection: {
+      data: 'ALL',
+      view: true,
+      edit: true,
+      approve: true,
+    },
+    kwp_forms: {
+      data: 'ALL',
+      view: true,
+      edit: true,
+      approve: true,
+    },
+    bod_cod_errors: {
+      data: 'ALL',
+      view: true,
+      edit: true,
+      approve: true,
+    },
+    notifications: {
+      data: 'ALL',
+      view: true,
+    },
+    helpdesk: {
+      data: null,
+      view: true,
+    },
+    feedback: {
+      data: null,
+      view: true,
+    },
+    laws: {
+      data: null,
+      view: true,
+    },
+    faq: {
+      data: null,
+      view: true,
+    },
+    chat: {
+      data: null,
+      view: true,
+      edit: true,
+    },
+  },
+}
+
+const updateUserRequestExample = {
+  user: {
+    username: 'frontend',
+    fullName: 'ภาณุ เล้าสุวรรณ',
+    department: null,
+    lineNameTh: 'Develop',
+    levelNameTh: 'Frontend',
+    roles: 'admin',
+    isActive: true,
+    password: 'Password',
+    source: 'created',
+  },
+  permissions: {
+    dashboard: {
+      data: 'ALL',
+      view: true,
+      favorite: true,
+      search: true,
+      advanced_search: true,
+      statistics: true,
+      export: true,
+    },
+    conditional_search: {
+      data: 'ALL',
+      view: true,
+    },
+    statistics: {
+      data: 'ALL',
+      view: true,
+    },
+    factories: {
+      data: 'ALL',
+      view: true,
+      edit: true,
+      approve: true,
+    },
+    connection: {
+      data: 'ALL',
+      view: true,
+      edit: true,
+      approve: true,
+    },
+    kwp_forms: {
+      data: 'ALL',
+      view: true,
+      edit: true,
+      approve: true,
+    },
+    bod_cod_errors: {
+      data: 'ALL',
+      view: true,
+      edit: true,
+      approve: true,
+    },
+    notifications: {
+      data: 'ALL',
+      view: true,
+      view_status: true,
+      edit: true,
+      approve: true,
+    },
+    helpdesk: {
+      data: 'ALL',
+      view: true,
+    },
+    feedback: {
+      data: 'ALL',
+      view: true,
+    },
+    laws: {
+      data: 'ALL',
+      view: true,
+      edit: true,
+    },
+    faq: {
+      data: 'ALL',
+      view: true,
+      edit: true,
+    },
+    chat: {
+      data: 'ALL',
+      view: true,
+      edit: true,
+    },
+    permissions: {
+      data: 'ALL',
+      view: true,
+    },
+    eligible_factories: {
+      data: 'ALL',
+      view: true,
+    },
+    api_documentation: {
+      data: 'ALL',
+      view: true,
+    },
+  },
+}
+
+const updateUserResponseExample = {
+  success: true,
+}
+
+const deleteUserResponseExample = {
+  success: true,
+}
+
+const authDictionarySections = [
+  {
+    title: 'User Types',
+    columns: ['Label', 'Value'],
+    rows: [
+      ['เจ้าหน้าที่', 'officer'],
+      ['ผู้ประกอบการ', 'operator'],
+      ['ประชาชนทั่วไป', 'citizen'],
+    ],
+  },
+  {
+    title: 'Department IDs',
+    columns: ['Label', 'Value'],
+    rows: [
+      ['สำนักงานปลัดกระทรวงอุตสาหกรรม', '1'],
+      ['กรมโรงงานอุตสาหกรรม', '2'],
+      ['การนิคมแห่งประเทศไทย', '8'],
+      ['หน่วยงานอื่นๆ', '0'],
+    ],
+  },
+  {
+    title: 'User Response Fields',
+    columns: ['Field', 'Type', 'Description'],
+    rows: [
+      ['user.username', 'string', 'ชื่อผู้ใช้งาน'],
+      ['user.fullName', 'string', 'ชื่อ-นามสกุล'],
+      ['user.department', 'string', 'หน่วยงาน'],
+      ['user.lineNameTh', 'string', 'สายงานภาษาไทย'],
+      ['user.levelNameTh', 'string', 'ระดับภาษาไทย'],
+      ['user.roles', 'string', 'บทบาทผู้ใช้งานตาม Role Codes'],
+      ['user.isActive', 'boolean', 'สถานะการใช้งาน'],
+    ],
+  },
+  {
+    title: 'Role Codes',
+    columns: ['Code', 'nameTh', 'nameEn', 'ใช้กับ UI'],
+    rows: [
+      ['public_anonymous', 'ประชาชน ไม่ login', 'Public Anonymous', 'public/no auth เท่านั้น'],
+      ['public_user', 'ประชาชน login', 'Public Logged-in', 'citizen login'],
+      ['factory_operator', 'โรงงาน (ผู้ประกอบการ)', 'Factory Operator', 'ผู้ประกอบการ/โรงงาน'],
+      ['diw_central', 'กรอ.', 'DIW Central', 'เจ้าหน้าที่ กรอ. ส่วนกลาง'],
+      ['provincial_office', 'สอจ.', 'Provincial Industrial Office', 'สำนักงานอุตสาหกรรมจังหวัด'],
+      ['industrial_estate', 'กนอ.', 'Industrial Estate Authority', 'การนิคมฯ'],
+      ['monitoring_kpm', 'เจ้าหน้าที่ศูนย์เฝ้า (กฝม.)', 'Pollution Monitoring (KPM)', 'เจ้าหน้าที่ กฝม.'],
+      ['monitoring_5_centers', 'เจ้าหน้าที่ศูนย์เฝ้า (5 ศูนย์)', 'Regional Centers (5)', 'เจ้าหน้าที่ 5 ศูนย์ภูมิภาค'],
+      ['center_director', 'ผอ.ศูนย์', 'Center Director', 'ผู้อำนวยการศูนย์'],
+      ['kpm_director', 'ผอ.กฝม.', 'KPM Director', 'ผู้อำนวยการ กฝม.'],
+      ['kwp_director', 'ผอ.กวภ.', 'KWP Director', 'ผู้อำนวยการ กวภ.'],
+      ['admin', 'Admin', 'Administrator', 'ผู้ดูแลระบบ'],
+    ],
+  },
+  {
+    title: 'Permission Data Scope',
+    columns: ['Value', 'Description'],
+    rows: [
+      ['ALL', 'เห็นข้อมูลทั้งหมด'],
+      ['IN_PROVINCE', 'เห็นข้อมูลในจังหวัดที่เกี่ยวข้อง'],
+      ['IN_ESTATE', 'เห็นข้อมูลในนิคมอุตสาหกรรมที่เกี่ยวข้อง'],
+      ['OWN_FACTORY', 'เห็นเฉพาะข้อมูลโรงงานของตนเอง'],
+      ['null', 'ไม่อนุญาต'],
+    ],
+  },
+  {
+    title: 'Permission Keys',
+    columns: ['Module', 'Actions'],
+    rows: [
+      ['dashboard', 'data, view, favorite, search, advanced_search, statistics, export'],
+      ['conditional_search', 'data, view'],
+      ['statistics', 'data, view'],
+      ['factories', 'data, view, edit, approve'],
+      ['connection', 'data, view, edit, approve'],
+      ['kwp_forms', 'data, view, edit, approve'],
+      ['bod_cod_errors', 'data, view, edit, approve'],
+      ['notifications', 'data, view, view_status, edit, approve'],
+      ['helpdesk', 'data, view'],
+      ['feedback', 'data, view'],
+      ['laws', 'data, view, edit'],
+      ['faq', 'data, view, edit'],
+      ['chat', 'data, view, edit'],
+      ['permissions', 'data, view'],
+      ['eligible_factories', 'data, view'],
+      ['api_documentation', 'data, view'],
+    ],
+  },
+]
+
 const apiCategories = [
   {
     name: 'Authentication',
@@ -30,15 +454,38 @@ const apiCategories = [
         defaultHeaders: {},
         defaultBody: {
           userType: 'officer',
-          username: 'weekit',
-          password: 'demo1234',
-          departmentID: '1',
+          username: 'citizenID-or-UID',
+          password: 'password',
+          departmentID: '2',
         },
         bodyFields: [
           { name: 'userType', type: 'string', required: true, example: 'officer, operator, citizen' },
           { name: 'username', type: 'string', required: true, example: '1234567890123, U1234' },
           { name: 'password', type: 'string', required: true, example: 'demo1234' },
           { name: 'departmentID', type: 'string', required: 'เฉพาะเจ้าหน้าที่', example: '1, 2, 8, 0' },
+        ],
+        responseExample: loginResponseExample,
+        dataDictionaries: [
+          {
+            title: 'Request Body',
+            columns: ['Field', 'Type', 'Required', 'Description'],
+            rows: [
+              ['userType', 'string', 'Yes', 'ประเภทผู้ใช้งาน: officer, operator, citizen'],
+              ['username', 'string', 'Yes', 'เลขบัตรประชาชน หรือ UID'],
+              ['password', 'string', 'Yes', 'รหัสผ่าน'],
+              ['departmentID', 'string', 'Required when userType = officer', 'รหัสหน่วยงานสำหรับเจ้าหน้าที่'],
+            ],
+          },
+          {
+            title: 'Login Response Fields',
+            columns: ['Field', 'Type', 'Description'],
+            rows: [
+              ['accessToken', 'string', 'Token สำหรับส่งใน Authorization header ของ API ที่ต้อง login'],
+              ['user', 'object', 'ข้อมูลผู้ใช้งาน'],
+              ['permissions', 'object', 'สิทธิ์การใช้งานตาม module/action'],
+            ],
+          },
+          ...authDictionarySections,
         ],
       },
       {
@@ -57,6 +504,287 @@ const apiCategories = [
             type: 'string',
             required: true,
             example: accessTokenExample,
+          },
+        ],
+        responseExample: meResponseExample,
+        dataDictionaries: [
+          {
+            title: 'Headers Request',
+            columns: ['Header', 'Type', 'Required', 'Description'],
+            rows: [['Authorization', 'string', 'Yes', 'Bearer <accessToken>']],
+          },
+          {
+            title: 'Response Fields',
+            columns: ['Field', 'Type', 'Description'],
+            rows: [
+              ['user', 'object', 'ข้อมูลผู้ใช้งาน'],
+              ['permissions', 'object', 'สิทธิ์การใช้งานตาม module/action'],
+            ],
+          },
+          ...authDictionarySections.slice(2),
+        ],
+      },
+    ],
+  },
+  {
+    name: 'Users',
+    endpoints: [
+      {
+        id: 'users-create',
+        method: 'POST',
+        path: '/users/local-accounts',
+        url: 'http://d-poms.diw.go.th/api/v1/users/local-accounts',
+        testUrl: '/api-proxy/v1/users/local-accounts',
+        description: 'เพิ่มผู้ใช้งานจาก dialog เพิ่มผู้ใช้งาน',
+        defaultHeaders: {
+          Authorization: accessTokenExample,
+        },
+        defaultBody: createUserRequestExample,
+        headerFields: [
+          {
+            name: 'Authorization',
+            type: 'string',
+            required: true,
+            example: accessTokenExample,
+          },
+        ],
+        bodyFields: [
+          { name: 'fullName', type: 'string', required: true, example: 'ชื่อ-นามสกุล' },
+          { name: 'username', type: 'string', required: true, example: 'Username' },
+          { name: 'password', type: 'string', required: true, example: 'Password อย่างน้อย 8 ตัวอักษร' },
+          { name: 'department', type: 'string', required: false, example: 'สังกัด' },
+          { name: 'lineNameTh', type: 'string', required: false, example: 'ตำแหน่ง' },
+          { name: 'levelNameTh', type: 'string', required: false, example: 'ระดับ' },
+          { name: 'roles', type: 'string', required: true, example: 'monitoring_kpm' },
+          { name: 'isActive', type: 'boolean', required: true, example: 'true, false' },
+        ],
+        responseExample: createUserResponseExample,
+        dataDictionaries: [
+          {
+            title: 'Headers Request',
+            columns: ['Header', 'Type', 'Required', 'Description'],
+            rows: [['Authorization', 'string', 'Yes', 'Bearer <accessToken>']],
+          },
+          {
+            title: 'Request Body',
+            columns: ['Field', 'Type', 'Required', 'Description'],
+            rows: [
+              ['fullName', 'string', 'Yes', 'ชื่อ-นามสกุล'],
+              ['username', 'string', 'Yes', 'Username'],
+              ['password', 'string', 'Yes', 'Password อย่างน้อย 8 ตัวอักษร'],
+              ['department', 'string', 'No', 'สังกัด'],
+              ['lineNameTh', 'string', 'No', 'ตำแหน่ง'],
+              ['levelNameTh', 'string', 'No', 'ระดับ'],
+              ['roles', 'string', 'Yes', 'สิทธิ์ในระบบ ใช้ role code จาก Role Codes'],
+              ['isActive', 'boolean', 'Yes', 'true = ใช้งาน, false = ระงับใช้งาน'],
+            ],
+          },
+          authDictionarySections[3],
+        ],
+      },
+      {
+        id: 'users-list-officers',
+        method: 'GET',
+        path: '/users?status=all',
+        url: 'http://d-poms.diw.go.th/api/v1/users?status=all',
+        testUrl: '/api-proxy/v1/users?status=all',
+        description: 'ดึงรายชื่อเจ้าหน้าที่ในระบบสำหรับหน้าสิทธิ์การใช้งาน',
+        defaultHeaders: {
+          Authorization: accessTokenExample,
+        },
+        headerFields: [
+          {
+            name: 'Authorization',
+            type: 'string',
+            required: true,
+            example: accessTokenExample,
+          },
+        ],
+        responseExample: usersListResponseExample,
+        dataDictionaries: [
+          {
+            title: 'Headers Request',
+            columns: ['Header', 'Type', 'Required', 'Description'],
+            rows: [['Authorization', 'string', 'Yes', 'Bearer <accessToken>']],
+          },
+          {
+            title: 'Query Parameters',
+            columns: ['Field', 'Type', 'Required', 'Description'],
+            rows: [
+              ['status', 'string', 'No', 'สถานะผู้ใช้งาน ในหน้านี้ใช้ all'],
+            ],
+          },
+          {
+            title: 'User List Fields',
+            columns: ['Field', 'Type', 'Description'],
+            rows: [
+              ['id', 'number', 'รหัสผู้ใช้งาน'],
+              ['username', 'string', 'ชื่อผู้ใช้งาน'],
+              ['fullName', 'string', 'ชื่อ-นามสกุล'],
+              ['department', 'string', 'หน่วยงาน'],
+              ['lineNameTh', 'string', 'ตำแหน่ง/สายงานภาษาไทย'],
+              ['levelNameTh', 'string', 'ระดับภาษาไทย'],
+              ['roles', 'string', 'role code ของผู้ใช้งาน ใช้เทียบ nameTh จาก Role Codes'],
+              ['isActive', 'boolean', 'สถานะการใช้งาน'],
+              ['meta.total', 'number', 'จำนวนข้อมูลทั้งหมด'],
+            ],
+          },
+          authDictionarySections[3],
+        ],
+      },
+      {
+        id: 'users-detail',
+        method: 'GET',
+        path: '/users/<id>',
+        url: 'http://d-poms.diw.go.th/api/v1/users/<id>',
+        testUrl: '/api-proxy/v1/users/2',
+        description: 'ดึงข้อมูลผู้ใช้งานและ permissions สำหรับ dialog แก้ไขสิทธิ์การใช้งาน',
+        defaultHeaders: {
+          Authorization: accessTokenExample,
+        },
+        headerFields: [
+          {
+            name: 'Authorization',
+            type: 'string',
+            required: true,
+            example: accessTokenExample,
+          },
+        ],
+        responseExample: userDetailResponseExample,
+        dataDictionaries: [
+          {
+            title: 'Headers Request',
+            columns: ['Header', 'Type', 'Required', 'Description'],
+            rows: [['Authorization', 'string', 'Yes', 'Bearer <accessToken>']],
+          },
+          {
+            title: 'Path Parameters',
+            columns: ['Field', 'Type', 'Required', 'Description'],
+            rows: [['id', 'number|string', 'Yes', 'รหัสผู้ใช้งาน']],
+          },
+          {
+            title: 'User Detail Fields',
+            columns: ['Field', 'Type', 'Description'],
+            rows: [
+              ['user.username', 'string', 'ชื่อผู้ใช้งาน'],
+              ['user.fullName', 'string', 'ชื่อ-นามสกุล'],
+              ['user.department', 'string', 'หน่วยงาน'],
+              ['user.lineNameTh', 'string', 'ตำแหน่ง/สายงานภาษาไทย'],
+              ['user.levelNameTh', 'string', 'ระดับภาษาไทย'],
+              ['user.roles', 'string', 'role code ของผู้ใช้งาน ใช้เทียบ nameTh จาก Role Codes'],
+              ['user.isActive', 'boolean', 'สถานะการใช้งาน'],
+              ['user.source', 'string', 'แหล่งที่มา: api, created'],
+              ['permissions', 'object', 'สิทธิ์การใช้งานตาม module/action สำหรับ map ลงฟอร์ม'],
+            ],
+          },
+          {
+            title: 'User Source Values',
+            columns: ['Value', 'Description'],
+            rows: [
+              ['api', 'ข้อมูลมาจาก API'],
+              ['created', 'ข้อมูลถูกสร้างในระบบ'],
+            ],
+          },
+          authDictionarySections[3],
+          authDictionarySections[4],
+          authDictionarySections[5],
+        ],
+      },
+      {
+        id: 'users-update',
+        method: 'PATCH',
+        path: '/users/:id',
+        url: 'http://d-poms.diw.go.th/api/v1/users/:id',
+        testUrl: '/api-proxy/v1/users/2',
+        description: 'บันทึกข้อมูลจาก dialog แก้ไขสิทธิ์การใช้งาน',
+        defaultHeaders: {
+          Authorization: accessTokenExample,
+        },
+        defaultBody: updateUserRequestExample,
+        headerFields: [
+          {
+            name: 'Authorization',
+            type: 'string',
+            required: true,
+            example: accessTokenExample,
+          },
+        ],
+        bodyFields: [
+          { name: 'user', type: 'object', required: true, example: 'ข้อมูลผู้ใช้งาน' },
+          { name: 'user.username', type: 'string', required: true, example: 'frontend' },
+          { name: 'user.fullName', type: 'string', required: true, example: 'ภาณุ เล้าสุวรรณ' },
+          { name: 'user.department', type: 'string|null', required: false, example: 'null, กรมโรงงานอุตสาหกรรม' },
+          { name: 'user.lineNameTh', type: 'string|null', required: false, example: 'Develop' },
+          { name: 'user.levelNameTh', type: 'string|null', required: false, example: 'Frontend' },
+          { name: 'user.roles', type: 'string', required: true, example: 'admin' },
+          { name: 'user.isActive', type: 'boolean', required: true, example: 'true, false' },
+          { name: 'user.password', type: 'string', required: true, example: 'Password' },
+          { name: 'user.source', type: 'string', required: true, example: 'api, created' },
+          { name: 'permissions', type: 'object', required: true, example: 'สิทธิ์การใช้งานตาม module/action' },
+        ],
+        responseExample: updateUserResponseExample,
+        dataDictionaries: [
+          {
+            title: 'Headers Request',
+            columns: ['Header', 'Type', 'Required', 'Description'],
+            rows: [['Authorization', 'string', 'Yes', 'Bearer <accessToken>']],
+          },
+          {
+            title: 'Path Parameters',
+            columns: ['Field', 'Type', 'Required', 'Description'],
+            rows: [['id', 'number|string', 'Yes', 'รหัสผู้ใช้งาน']],
+          },
+          {
+            title: 'Request Body',
+            columns: ['Field', 'Type', 'Required', 'Description'],
+            rows: [
+              ['user', 'object', 'Yes', 'ข้อมูลผู้ใช้งาน'],
+              ['user.username', 'string', 'Yes', 'Username'],
+              ['user.fullName', 'string', 'Yes', 'ชื่อ-นามสกุล'],
+              ['user.department', 'string|null', 'No', 'สังกัด'],
+              ['user.lineNameTh', 'string|null', 'No', 'ตำแหน่ง'],
+              ['user.levelNameTh', 'string|null', 'No', 'ระดับ'],
+              ['user.roles', 'string', 'Yes', 'สิทธิ์ในระบบ ใช้ role code จาก Role Codes'],
+              ['user.isActive', 'boolean', 'Yes', 'true = ใช้งาน, false = ระงับใช้งาน'],
+              ['user.password', 'string', 'Yes', 'Password'],
+              ['user.source', 'string', 'Yes', 'แหล่งที่มา: api, created'],
+              ['permissions', 'object', 'Yes', 'สิทธิ์การใช้งานตาม module/action'],
+            ],
+          },
+          authDictionarySections[3],
+          authDictionarySections[4],
+          authDictionarySections[5],
+        ],
+      },
+      {
+        id: 'users-delete',
+        method: 'DELETE',
+        path: '/users/:id',
+        url: 'http://d-poms.diw.go.th/api/v1/users/:id',
+        testUrl: '/api-proxy/v1/users/2',
+        description: 'ลบผู้ใช้งานจากหน้าสิทธิ์การใช้งาน',
+        defaultHeaders: {
+          Authorization: accessTokenExample,
+        },
+        headerFields: [
+          {
+            name: 'Authorization',
+            type: 'string',
+            required: true,
+            example: accessTokenExample,
+          },
+        ],
+        responseExample: deleteUserResponseExample,
+        dataDictionaries: [
+          {
+            title: 'Headers Request',
+            columns: ['Header', 'Type', 'Required', 'Description'],
+            rows: [['Authorization', 'string', 'Yes', 'Bearer <accessToken>']],
+          },
+          {
+            title: 'Path Parameters',
+            columns: ['Field', 'Type', 'Required', 'Description'],
+            rows: [['id', 'number|string', 'Yes', 'รหัสผู้ใช้งาน']],
           },
         ],
       },
@@ -353,10 +1081,23 @@ function ApiDocumentationPage() {
                 }}
               >
                 <SectionTitle title="Response" />
+                {selectedEndpoint.responseExample ? (
+                  <CodeBlock
+                    title="Expected Response Body"
+                    value={formatJson(selectedEndpoint.responseExample)}
+                  />
+                ) : null}
                 {error ? <Alert severity="error">{error}</Alert> : null}
                 {response ? <ResponseViewer response={response} /> : <EmptyResponse />}
               </Stack>
             </Box>
+
+            {selectedEndpoint.dataDictionaries?.length ? (
+              <>
+                <Divider />
+                <DataDictionary sections={selectedEndpoint.dataDictionaries} />
+              </>
+            ) : null}
           </Stack>
         </Paper>
       </Box>
@@ -472,6 +1213,95 @@ function RequestEditor({ title, fields, label, value, onChange, error, helperTex
         }}
       />
     </Stack>
+  )
+}
+
+function DataDictionary({ sections }) {
+  return (
+    <Stack spacing={2.5} sx={{ p: { xs: 2, md: 3 }, minWidth: 0 }}>
+      <Box>
+        <Typography variant="h6" component="h2" sx={{ fontWeight: 600 }}>
+          Data Dictionary
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          รายละเอียด field, code, และ permission ที่เกี่ยวข้องกับ API นี้
+        </Typography>
+      </Box>
+
+      {sections.map((section) => (
+        <DictionaryTable key={section.title} section={section} />
+      ))}
+    </Stack>
+  )
+}
+
+function DictionaryTable({ section }) {
+  return (
+    <Box sx={{ minWidth: 0 }}>
+      <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 600 }}>
+        {section.title}
+      </Typography>
+      <Box sx={{ overflow: 'auto', border: 1, borderColor: 'divider', borderRadius: 1 }}>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: `repeat(${section.columns.length}, minmax(160px, 1fr))`,
+            minWidth: Math.max(640, section.columns.length * 180),
+            bgcolor: 'neutral.50',
+            borderBottom: 1,
+            borderColor: 'divider',
+          }}
+        >
+          {section.columns.map((column) => (
+            <Typography
+              key={column}
+              variant="caption"
+              sx={{
+                px: 1.5,
+                py: 1,
+                fontWeight: 600,
+                borderRight: 1,
+                borderColor: 'divider',
+                '&:last-child': { borderRight: 0 },
+              }}
+            >
+              {column}
+            </Typography>
+          ))}
+        </Box>
+
+        {section.rows.map((row, rowIndex) => (
+          <Box
+            key={`${section.title}-${rowIndex}`}
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: `repeat(${section.columns.length}, minmax(160px, 1fr))`,
+              minWidth: Math.max(640, section.columns.length * 180),
+              borderBottom: 1,
+              borderColor: 'divider',
+              '&:last-child': { borderBottom: 0 },
+            }}
+          >
+            {row.map((cell, cellIndex) => (
+              <Typography
+                key={`${section.title}-${rowIndex}-${cellIndex}`}
+                variant="body2"
+                sx={{
+                  px: 1.5,
+                  py: 1,
+                  overflowWrap: 'anywhere',
+                  borderRight: 1,
+                  borderColor: 'divider',
+                  '&:last-child': { borderRight: 0 },
+                }}
+              >
+                {cell}
+              </Typography>
+            ))}
+          </Box>
+        ))}
+      </Box>
+    </Box>
   )
 }
 
