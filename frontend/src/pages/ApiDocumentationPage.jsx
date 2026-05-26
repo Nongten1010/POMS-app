@@ -354,6 +354,125 @@ const deleteUserResponseExample = {
   success: true,
 }
 
+const eligibleFactoryExample = {
+  id: 1,
+  factoryName: 'ห้างหุ้นส่วนสามัญ สถานีบ่มใบยาสบหนอง',
+  factoryId: '10550000125197',
+  factoryRegistrationNo: '3-1-1/19นน',
+  factoryClass: null,
+  factorySubclass: null,
+  address: '189 หมู่ 10 ถนนวรนคร',
+  provinceName: 'น่าน',
+  industrialEstateName: null,
+  longitude: 0,
+  latitude: 0,
+  businessActivity: 'บ่มใบยาสูบ',
+  operationStatus: 'แจ้งประกอบแล้ว',
+  capitalAmount: null,
+  machineryHorsepower: null,
+  productionCapacity: '0',
+  wastewaterDischargeInfo: null,
+  boilerCount: null,
+  boilerSizeEach: null,
+  fuelUsed: null,
+  hasEia: null,
+}
+
+const eligibleFactoryCandidateExample = {
+  factoryName: 'ห้างหุ้นส่วนจำกัด สมุทรรีไซเคิล 00001 จำกัด',
+  factoryId: 'mock-factory-000001',
+  factoryRegistrationNo: '3-002-02/51สป',
+  factoryClass: 'หลัก',
+  factorySubclass: null,
+  address: '2/1 หมู่ 2',
+  provinceName: 'สมุทรปราการ',
+  industrialEstateName: 'นิคมอุตสาหกรรมบางปู',
+  longitude: 100.6280124,
+  latitude: 13.5383181,
+  businessActivity: 'หลอมและรีไซเคิลโลหะ',
+  operationStatus: 'หยุดประกอบกิจการชั่วคราว',
+  capitalAmount: 1001250,
+  machineryHorsepower: 51,
+  productionCapacity: '11 ตัน/วัน',
+  wastewaterDischargeInfo: 'มีการระบายน้ำทิ้งออกนอกโรงงาน',
+  boilerCount: 2,
+  boilerSizeEach: '6 ตัน/ชั่วโมง',
+  fuelUsed: 'น้ำมันเตา',
+  hasEia: false,
+}
+
+const eligibleFactoryCandidatesResponseExample = {
+  success: true,
+  data: [eligibleFactoryCandidateExample],
+  meta: {
+    total: 60000,
+    source: 'mock',
+  },
+}
+
+const eligibleFactoriesListResponseExample = {
+  success: true,
+  data: [eligibleFactoryExample],
+  meta: {
+    total: 1,
+  },
+}
+
+const createEligibleFactoryRequestExample = {
+  factoryName: 'ห้างหุ้นส่วนจำกัด โรงกลึงก๊กกวง',
+  factoryId: '10100302325234',
+  factoryRegistrationNo: '3-64(6)-45/17',
+  factoryClass: '1',
+  factorySubclass: '3',
+  address: '50/10-11-12 ซอยบรมบรรพต ถนนบริพัตร',
+  provinceName: 'กรุงเทพมหานคร',
+  industrialEstateName: null,
+  longitude: null,
+  latitude: null,
+  businessActivity: 'ทำผลิตภัณฑ์โลหะต่าง ๆ',
+  operationStatus: 'แจ้งประกอบแล้ว',
+  capitalAmount: 1825000,
+  machineryHorsepower: 75,
+  productionCapacity: null,
+  wastewaterDischargeInfo: null,
+  boilerCount: null,
+  boilerSizeEach: null,
+  fuelUsed: null,
+  hasEia: null,
+}
+
+const createEligibleFactoryResponseExample = {
+  success: true,
+}
+
+const deleteEligibleFactoryResponseExample = {
+  success: true,
+}
+
+const eligibleFactoryFieldRows = [
+  ['id', 'number', 'รหัสรายการโรงงานที่เข้าข่าย ใช้กับ DELETE /eligible-factories/:id'],
+  ['factoryName', 'string', 'ชื่อโรงงาน'],
+  ['factoryId', 'string', 'เลขทะเบียนโรงงานแบบใหม่'],
+  ['factoryRegistrationNo', 'string', 'เลขทะเบียนโรงงานแบบเดิม'],
+  ['factoryClass', 'string|null', 'ลำดับประเภทโรงงานหลัก'],
+  ['factorySubclass', 'string|null', 'ลำดับประเภทโรงงานรอง'],
+  ['address', 'string|null', 'สถานที่ตั้ง'],
+  ['provinceName', 'string|null', 'จังหวัด'],
+  ['industrialEstateName', 'string|null', 'นิคมอุตสาหกรรม'],
+  ['longitude', 'number|null', 'ลองจิจูด'],
+  ['latitude', 'number|null', 'ละติจูด'],
+  ['businessActivity', 'string|null', 'การประกอบกิจการ'],
+  ['operationStatus', 'string|null', 'สถานะการประกอบกิจการ'],
+  ['capitalAmount', 'number|null', 'เงินทุน'],
+  ['machineryHorsepower', 'number|null', 'แรงม้าเครื่องจักร'],
+  ['productionCapacity', 'string|null', 'กำลังการผลิต'],
+  ['wastewaterDischargeInfo', 'string|null', 'ข้อมูลการระบายน้ำทิ้งออกนอกโรงงาน'],
+  ['boilerCount', 'number|null', 'จำนวนหม้อน้ำ'],
+  ['boilerSizeEach', 'string|null', 'ขนาดของหม้อน้ำแต่ละลูก'],
+  ['fuelUsed', 'string|null', 'เชื้อเพลิงที่ใช้'],
+  ['hasEia', 'boolean|null', 'ข้อมูล EIA'],
+]
+
 const authDictionarySections = [
   {
     title: 'User Types',
@@ -785,6 +904,161 @@ const apiCategories = [
             title: 'Path Parameters',
             columns: ['Field', 'Type', 'Required', 'Description'],
             rows: [['id', 'number|string', 'Yes', 'รหัสผู้ใช้งาน']],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    name: 'Eligible Factories',
+    endpoints: [
+      {
+        id: 'eligible-factory-candidates',
+        method: 'GET',
+        path: '/eligible-factories/candidates',
+        url: 'http://d-poms.diw.go.th/api/v1/eligible-factories/candidates',
+        testUrl: '/api-proxy/v1/eligible-factories/candidates',
+        description: 'ดึงรายการโรงงานทั้งหมดจาก กรอ. สำหรับตารางโรงงานทั้งหมด',
+        defaultHeaders: {
+          Authorization: accessTokenExample,
+        },
+        headerFields: [
+          {
+            name: 'Authorization',
+            type: 'string',
+            required: true,
+            example: accessTokenExample,
+          },
+        ],
+        responseExample: eligibleFactoryCandidatesResponseExample,
+        dataDictionaries: [
+          {
+            title: 'Headers Request',
+            columns: ['Header', 'Type', 'Required', 'Description'],
+            rows: [['Authorization', 'string', 'Yes', 'Bearer <accessToken>']],
+          },
+          {
+            title: 'Candidate Factory Fields',
+            columns: ['Field', 'Type', 'Description'],
+            rows: eligibleFactoryFieldRows.filter(([field]) => field !== 'id'),
+          },
+          {
+            title: 'Response Meta Fields',
+            columns: ['Field', 'Type', 'Description'],
+            rows: [
+              ['meta.total', 'number', 'จำนวนข้อมูลทั้งหมด'],
+              ['meta.source', 'string', 'แหล่งข้อมูล เช่น mock'],
+            ],
+          },
+        ],
+      },
+      {
+        id: 'eligible-factories-list',
+        method: 'GET',
+        path: '/eligible-factories',
+        url: 'http://d-poms.diw.go.th/api/v1/eligible-factories',
+        testUrl: '/api-proxy/v1/eligible-factories',
+        description: 'ดึงรายการโรงงานที่ถูกนำเข้าเป็นโรงงานที่เข้าข่ายแล้ว',
+        defaultHeaders: {
+          Authorization: accessTokenExample,
+        },
+        headerFields: [
+          {
+            name: 'Authorization',
+            type: 'string',
+            required: true,
+            example: accessTokenExample,
+          },
+        ],
+        responseExample: eligibleFactoriesListResponseExample,
+        dataDictionaries: [
+          {
+            title: 'Headers Request',
+            columns: ['Header', 'Type', 'Required', 'Description'],
+            rows: [['Authorization', 'string', 'Yes', 'Bearer <accessToken>']],
+          },
+          {
+            title: 'Eligible Factory Fields',
+            columns: ['Field', 'Type', 'Description'],
+            rows: eligibleFactoryFieldRows,
+          },
+          {
+            title: 'Response Meta Fields',
+            columns: ['Field', 'Type', 'Description'],
+            rows: [['meta.total', 'number', 'จำนวนข้อมูลทั้งหมด']],
+          },
+        ],
+      },
+      {
+        id: 'eligible-factories-create',
+        method: 'POST',
+        path: '/eligible-factories',
+        url: 'http://d-poms.diw.go.th/api/v1/eligible-factories',
+        testUrl: '/api-proxy/v1/eligible-factories',
+        description: 'นำเข้าโรงงานจากตารางโรงงานทั้งหมดเป็นโรงงานที่เข้าข่าย',
+        defaultHeaders: {
+          Authorization: accessTokenExample,
+        },
+        defaultBody: createEligibleFactoryRequestExample,
+        headerFields: [
+          {
+            name: 'Authorization',
+            type: 'string',
+            required: true,
+            example: accessTokenExample,
+          },
+        ],
+        bodyFields: eligibleFactoryFieldRows
+          .filter(([field]) => field !== 'id')
+          .map(([name, type, example]) => ({
+            name,
+            type,
+            required: false,
+            example,
+          })),
+        responseExample: createEligibleFactoryResponseExample,
+        dataDictionaries: [
+          {
+            title: 'Headers Request',
+            columns: ['Header', 'Type', 'Required', 'Description'],
+            rows: [['Authorization', 'string', 'Yes', 'Bearer <accessToken>']],
+          },
+          {
+            title: 'Request Body Fields',
+            columns: ['Field', 'Type', 'Description'],
+            rows: eligibleFactoryFieldRows.filter(([field]) => field !== 'id'),
+          },
+        ],
+      },
+      {
+        id: 'eligible-factories-delete',
+        method: 'DELETE',
+        path: '/eligible-factories/:id',
+        url: 'http://d-poms.diw.go.th/api/v1/eligible-factories/:id',
+        testUrl: '/api-proxy/v1/eligible-factories/1',
+        description: 'นำโรงงานออกจากรายการโรงงานที่เข้าข่าย',
+        defaultHeaders: {
+          Authorization: accessTokenExample,
+        },
+        headerFields: [
+          {
+            name: 'Authorization',
+            type: 'string',
+            required: true,
+            example: accessTokenExample,
+          },
+        ],
+        responseExample: deleteEligibleFactoryResponseExample,
+        dataDictionaries: [
+          {
+            title: 'Headers Request',
+            columns: ['Header', 'Type', 'Required', 'Description'],
+            rows: [['Authorization', 'string', 'Yes', 'Bearer <accessToken>']],
+          },
+          {
+            title: 'Path Parameters',
+            columns: ['Field', 'Type', 'Required', 'Description'],
+            rows: [['id', 'number|string', 'Yes', 'รหัสรายการโรงงานที่เข้าข่ายจาก GET /eligible-factories']],
           },
         ],
       },

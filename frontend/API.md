@@ -300,6 +300,199 @@
 }
 ```
 
+## Eligible Factories
+
+API กลุ่มนี้ใช้ในเมนู `โรงงานที่เข้าข่าย`
+
+### List Candidate Factories
+
+- Method: `GET`
+- URL: `http://d-poms.diw.go.th/api/v1/eligible-factories/candidates`
+
+#### Headers Request
+
+| Header | Type | Required | Description |
+| --- | --- | --- | --- |
+| `Authorization` | string | Yes | `Bearer <accessToken>` |
+
+#### Response Body
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "factoryName": "ห้างหุ้นส่วนจำกัด สมุทรรีไซเคิล 00001 จำกัด",
+      "factoryId": "mock-factory-000001",
+      "factoryRegistrationNo": "3-002-02/51สป",
+      "factoryClass": "หลัก",
+      "factorySubclass": null,
+      "address": "2/1 หมู่ 2",
+      "provinceName": "สมุทรปราการ",
+      "industrialEstateName": "นิคมอุตสาหกรรมบางปู",
+      "longitude": 100.6280124,
+      "latitude": 13.5383181,
+      "businessActivity": "หลอมและรีไซเคิลโลหะ",
+      "operationStatus": "หยุดประกอบกิจการชั่วคราว",
+      "capitalAmount": 1001250,
+      "machineryHorsepower": 51,
+      "productionCapacity": "11 ตัน/วัน",
+      "wastewaterDischargeInfo": "มีการระบายน้ำทิ้งออกนอกโรงงาน",
+      "boilerCount": 2,
+      "boilerSizeEach": "6 ตัน/ชั่วโมง",
+      "fuelUsed": "น้ำมันเตา",
+      "hasEia": false
+    }
+  ],
+  "meta": {
+    "total": 60000,
+    "source": "mock"
+  }
+}
+```
+
+### List Eligible Factories
+
+- Method: `GET`
+- URL: `http://d-poms.diw.go.th/api/v1/eligible-factories`
+
+#### Headers Request
+
+| Header | Type | Required | Description |
+| --- | --- | --- | --- |
+| `Authorization` | string | Yes | `Bearer <accessToken>` |
+
+#### Response Body
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "factoryName": "ห้างหุ้นส่วนสามัญ สถานีบ่มใบยาสบหนอง",
+      "factoryId": "10550000125197",
+      "factoryRegistrationNo": "3-1-1/19นน",
+      "factoryClass": null,
+      "factorySubclass": null,
+      "address": "189 หมู่ 10 ถนนวรนคร",
+      "provinceName": "น่าน",
+      "industrialEstateName": null,
+      "longitude": 0,
+      "latitude": 0,
+      "businessActivity": "บ่มใบยาสูบ",
+      "operationStatus": "แจ้งประกอบแล้ว",
+      "capitalAmount": null,
+      "machineryHorsepower": null,
+      "productionCapacity": "0",
+      "wastewaterDischargeInfo": null,
+      "boilerCount": null,
+      "boilerSizeEach": null,
+      "fuelUsed": null,
+      "hasEia": null
+    }
+  ],
+  "meta": {
+    "total": 1
+  }
+}
+```
+
+### Create Eligible Factory
+
+- Method: `POST`
+- URL: `http://d-poms.diw.go.th/api/v1/eligible-factories`
+- Content-Type: `application/json`
+
+#### Headers Request
+
+| Header | Type | Required | Description |
+| --- | --- | --- | --- |
+| `Authorization` | string | Yes | `Bearer <accessToken>` |
+
+#### Request Body
+
+```json
+{
+  "factoryName": "ห้างหุ้นส่วนจำกัด โรงกลึงก๊กกวง",
+  "factoryId": "10100302325234",
+  "factoryRegistrationNo": "3-64(6)-45/17",
+  "factoryClass": "1",
+  "factorySubclass": "3",
+  "address": "50/10-11-12 ซอยบรมบรรพต ถนนบริพัตร",
+  "provinceName": "กรุงเทพมหานคร",
+  "industrialEstateName": null,
+  "longitude": null,
+  "latitude": null,
+  "businessActivity": "ทำผลิตภัณฑ์โลหะต่าง ๆ",
+  "operationStatus": "แจ้งประกอบแล้ว",
+  "capitalAmount": 1825000,
+  "machineryHorsepower": 75,
+  "productionCapacity": null,
+  "wastewaterDischargeInfo": null,
+  "boilerCount": null,
+  "boilerSizeEach": null,
+  "fuelUsed": null,
+  "hasEia": null
+}
+```
+
+#### Response Body
+
+```json
+{
+  "success": true
+}
+```
+
+### Delete Eligible Factory
+
+- Method: `DELETE`
+- URL: `http://d-poms.diw.go.th/api/v1/eligible-factories/:id`
+
+#### Headers Request
+
+| Header | Type | Required | Description |
+| --- | --- | --- | --- |
+| `Authorization` | string | Yes | `Bearer <accessToken>` |
+
+#### Path Parameters
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | number/string | Yes | รหัสรายการโรงงานที่เข้าข่ายจาก `GET /eligible-factories` |
+
+#### Response Body
+
+```json
+{
+  "success": true
+}
+```
+
+### Eligible Factory Fields
+
+| UI Column | API Field | Type | Description |
+| --- | --- | --- | --- |
+| ชื่อโรงงาน | `factoryName` | string | ชื่อโรงงาน |
+| เลขทะเบียนโรงงานแบบใหม่ | `factoryId` | string | เลขทะเบียนโรงงานแบบใหม่ |
+| เลขทะเบียนโรงงานแบบเดิม | `factoryRegistrationNo` | string | เลขทะเบียนโรงงานแบบเดิม |
+| ลำดับประเภทโรงงาน (หลัก/รอง) | `factoryClass` / `factorySubclass` | string/null | ประเภทโรงงานหลักและรอง |
+| สถานที่ตั้ง | `address` | string/null | ที่อยู่โรงงาน |
+| จังหวัด | `provinceName` | string/null | จังหวัด |
+| นิคมอุตสาหกรรม | `industrialEstateName` | string/null | นิคมอุตสาหกรรม |
+| พิกัดโรงงาน | `latitude`, `longitude` | number/null | ละติจูดและลองจิจูด |
+| การประกอบกิจการ | `businessActivity` | string/null | รายละเอียดกิจกรรมประกอบกิจการ |
+| สถานะการประกอบกิจการ | `operationStatus` | string/null | สถานะการประกอบกิจการ |
+| เงินทุน | `capitalAmount` | number/null | เงินทุน |
+| แรงม้าเครื่องจักร | `machineryHorsepower` | number/null | แรงม้าเครื่องจักร |
+| กำลังการผลิต | `productionCapacity` | string/null | กำลังการผลิต |
+| ข้อมูลการระบายน้ำทิ้งออกนอกโรงงาน | `wastewaterDischargeInfo` | string/null | ข้อมูลน้ำทิ้ง |
+| จำนวนหม้อน้ำ | `boilerCount` | number/null | จำนวนหม้อน้ำ |
+| ขนาดของหม้อน้ำแต่ละลูก | `boilerSizeEach` | string/null | ขนาดหม้อน้ำแต่ละลูก |
+| เชื้อเพลิงที่ใช้ | `fuelUsed` | string/null | เชื้อเพลิงที่ใช้ |
+| ข้อมูล EIA | `hasEia` | boolean/null | ข้อมูล EIA |
+
 ### Permission Keys
 
 | Module | Actions |
