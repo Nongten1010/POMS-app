@@ -1,4 +1,5 @@
 import type { Knex } from 'knex';
+import { logger } from '../../config/logger';
 import { env } from '../../config/env';
 import { factorySourceDb, factorySourceTableName } from '../../config/factory-source-database';
 import { MOCK_ELIGIBLE_FACTORY_CANDIDATES } from './eligible-factories.mock-source';
@@ -56,7 +57,14 @@ async function listMockCandidates(): Promise<EligibleFactoryCandidatesDTO> {
 }
 
 async function selectedFactoryRegistrationNumbers(): Promise<Set<string>> {
-  return new Set(await eligibleFactoriesRepository.listActiveRegistrationNumbers());
+  try {
+    return new Set(await eligibleFactoriesRepository.listActiveRegistrationNumbers());
+  } catch (error) {
+    logger.warn('[eligible-factories] Failed to load selected factories for candidate exclusion', {
+      error,
+    });
+    return new Set();
+  }
 }
 
 function excludeSelectedCandidates(

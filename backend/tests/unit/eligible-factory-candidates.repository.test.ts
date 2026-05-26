@@ -26,4 +26,15 @@ describe('eligibleFactoryCandidatesRepository', () => {
       MOCK_ELIGIBLE_FACTORY_CANDIDATES[0]!.factoryRegistrationNo,
     );
   });
+
+  it('returns candidates when selected factory exclusion cannot be loaded', async () => {
+    mockedEligibleFactoriesRepository.listActiveRegistrationNumbers.mockRejectedValue(
+      new Error('selected table is unavailable'),
+    );
+
+    const result = await eligibleFactoryCandidatesRepository.list({});
+
+    expect(result.meta.total).toBe(60000);
+    expect(result.data).toHaveLength(60000);
+  });
 });
