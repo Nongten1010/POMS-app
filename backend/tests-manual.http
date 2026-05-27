@@ -419,8 +419,6 @@ Content-Type: application/json
 
 ### 7.6 List configs by station
 GET {{host}}{{apiPrefix}}/device-connections?stationId=STATION_001
-Authorization: Bearer {{loginOperator.response.body.data.accessToken}}
 
 ### 7.7 Get config by id
 GET {{host}}{{apiPrefix}}/device-connections/{{createDeviceConnection.response.body.data.id}}
-Authorization: Bearer {{loginOperator.response.body.data.accessToken}}

@@ -5,18 +5,11 @@ import { deviceConnectionsController } from './device-connections.controller';
 
 export const deviceConnectionsRoutes = Router();
 
+deviceConnectionsRoutes.get('/', deviceConnectionsController.list);
+deviceConnectionsRoutes.get('/:id', deviceConnectionsController.getById);
+
 deviceConnectionsRoutes.use(authenticate);
 
-deviceConnectionsRoutes.get(
-  '/',
-  authorize('cems_wpms_requests:view'),
-  deviceConnectionsController.list,
-);
-deviceConnectionsRoutes.get(
-  '/:id',
-  authorize('cems_wpms_requests:view'),
-  deviceConnectionsController.getById,
-);
 deviceConnectionsRoutes.post(
   '/',
   authorize('cems_wpms_requests:edit'),

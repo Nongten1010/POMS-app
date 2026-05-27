@@ -159,8 +159,9 @@ Security behavior:
 - `cems_wpms_requests:edit` ใช้สำหรับผู้ประกอบการสร้าง/แก้ไข/ยืนยัน request ของตัวเอง
 - `cems_wpms_requests:edit` ใช้สำหรับสร้าง config และ mock test connection อุปกรณ์ตรวจวัด
 - `cems_wpms_requests:approve` ใช้สำหรับเจ้าหน้าที่พิจารณาแบบและ verify การเชื่อมต่อ
-- list/detail ใช้ scope จาก `cems_wpms_requests:view`; scope `ALL` เห็นทั้งหมด, scope อื่นเห็นเฉพาะรายการที่ตัวเองสร้าง
-- `/device-connections` ใช้ permission ชุดเดียวกันกับ request workflow: `view` สำหรับ list/detail และ `edit` สำหรับ create/test
+- request workflow list/detail ใช้ scope จาก `cems_wpms_requests:view`; scope `ALL` เห็นทั้งหมด, scope อื่นเห็นเฉพาะรายการที่ตัวเองสร้าง
+- `/device-connections` GET ไม่ต้องใช้ token เพราะอุปกรณ์ client login ไม่ได้; `GET /device-connections` ต้องส่ง `stationId`
+- `/device-connections` POST ยังใช้ `cems_wpms_requests:edit` สำหรับ create/test
 
 ### 5.4 แจ้งแบบ กวภ. 01 - กวภ. 05
 
@@ -219,7 +220,7 @@ Security behavior:
 | `dashboard.stats`    | view, export               | `dashboard.stats:view`, `dashboard.stats:export`      |
 | `factories`          | view, edit, approve        | `factories:view`, `factories:edit`, `factories:approve` |
 | `cems_wpms_requests` | view, edit, approve        | `cems_wpms_requests:view`, ...                        |
-| `device_connections` | view, edit                 | ใช้ `cems_wpms_requests:view`, `cems_wpms_requests:edit` ชั่วคราว |
+| `device_connections` | public read, edit          | GET ไม่ใช้ token, POST ใช้ `cems_wpms_requests:edit` ชั่วคราว     |
 | `kwp_forms`          | view, edit, approve        | `kwp_forms:view`, ...                                 |
 | `bod_cod_errors`     | view, edit, approve        | `bod_cod_errors:view`, ...                            |
 | `notifications`      | view, view_status, edit, approve | `notifications:view`, `notifications:view_status`, ... |

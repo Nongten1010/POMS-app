@@ -30,7 +30,8 @@
   - `device_measurement_channels`
 
 **Security and validation** ✅
-- Uses existing permissions `cems_wpms_requests:view|edit`
+- Public GET for device clients that cannot login; list requires `stationId`
+- Uses existing permission `cems_wpms_requests:edit` for create/test
 - Zod schemas reject unknown fields
 - Validates IPv4, positive ports, positive COM/slave/quantity, `addressId >= 40001`
 - Validates range objects with `min <= max`

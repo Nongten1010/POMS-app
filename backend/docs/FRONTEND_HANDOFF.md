@@ -1098,8 +1098,9 @@ http://localhost:3000/api/v1/device-connections
 Permission ที่ใช้:
 
 ```text
-cems_wpms_requests:view
-cems_wpms_requests:edit
+GET /device-connections       ไม่ต้องส่ง Authorization
+POST /device-connections      cems_wpms_requests:edit
+POST /test-connection         cems_wpms_requests:edit
 ```
 
 ### 9.1 Data model สำหรับ UI
@@ -1290,12 +1291,10 @@ Response:
 
 ```http
 GET http://localhost:3000/api/v1/device-connections?stationId=STATION_001
-Authorization: Bearer <accessToken>
 ```
 
 ```http
 GET http://localhost:3000/api/v1/device-connections/:id
-Authorization: Bearer <accessToken>
 ```
 
 Response list:

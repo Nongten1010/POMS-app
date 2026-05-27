@@ -162,7 +162,7 @@ export const testDeviceConnectionSchema = createDeviceConnectionConfigSchema;
 
 export const listDeviceConnectionConfigsQuerySchema = z
   .object({
-    stationId: z.string().trim().min(1).max(64).optional(),
+    stationId: z.string().trim().min(1).max(64),
     protocol: z.nativeEnum(DEVICE_CONNECTION_PROTOCOL).optional(),
   })
   .strict();
