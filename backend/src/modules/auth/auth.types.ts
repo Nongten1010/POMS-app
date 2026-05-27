@@ -28,6 +28,7 @@ export interface UserSummary {
 }
 
 export interface AuthUserDTO {
+  userType: UserType;
   username: string;
   fullName: string;
   department: string | null;
@@ -35,6 +36,7 @@ export interface AuthUserDTO {
   levelNameTh: string | null;
   roles: string;
   isActive: boolean;
+  ownedFactoryIds?: string[];
 }
 
 export interface OfficerProfileDTO {

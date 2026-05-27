@@ -56,6 +56,7 @@ export const usersService = {
 
     return {
       user: {
+        userType: user.userType,
         username: user.externalId,
         fullName: [joinNamePrefix(user.prenameTh, user.firstName), user.lastName]
           .filter(Boolean)

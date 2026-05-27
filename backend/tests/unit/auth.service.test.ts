@@ -45,6 +45,7 @@ jest.mock('../../src/modules/auth/auth.repository', () => ({
   authRepository: {
     findUserByProviderAndExternalId: jest.fn(),
     findUserByUsername: jest.fn(),
+    findUserById: jest.fn(),
     updateLastLogin: jest.fn(),
     getOfficerProfile: jest.fn(),
     getOperatorProfile: jest.fn(),
@@ -225,6 +226,7 @@ describe('authService login completion', () => {
     });
 
     expect(result.user).toEqual({
+      userType: 'officer',
       username: 'local_officer',
       fullName: 'สมชาย ทดสอบ',
       department: 'กรมโรงงานอุตสาหกรรม',
@@ -310,6 +312,7 @@ describe('authService login completion', () => {
     expect(result).toEqual({
       accessToken: 'signed-access-token',
       user: {
+        userType: 'officer',
         username: '1102001567054',
         fullName: 'นายทดสอบ ระบบ',
         department: 'กรมโรงงานอุตสาหกรรม',
@@ -341,4 +344,123 @@ describe('authService login completion', () => {
       },
     });
   });
+
+  it('returns owned factory ids for an operator login', async () => {
+    mockedAuthRepository.findUserByProviderAndExternalId.mockResolvedValue({
+      id: 77,
+      external_id: '3191000135709',
+      identity_provider: 'mock',
+      user_type: 'operator',
+      username: 'operator_demo',
+      email: 'operator@example.com',
+      phone: '0999454594',
+      prename_th: null,
+      first_name: 'ธนาภรณ์',
+      last_name: 'ศรีอวบ',
+      is_active: true,
+      password_hash: null,
+    });
+    mockedAuthRepository.getOperatorProfile.mockResolvedValue({
+      user_id: 77,
+      user_code: '53495',
+      regis_date: '2023-06-09 12:01:53',
+    });
+    mockedAuthRepository.getOperatorFactories.mockResolvedValue([
+      operatorFactoryRow('0105556125804', '10190003325500'),
+      operatorFactoryRow('0105556125804', '72080000125562'),
+      operatorFactoryRow('0105556125804', '10900179425649'),
+      operatorFactoryRow('0105556125804', '10900061425657'),
+      operatorFactoryRow('0107536001346', '10190000125572'),
+      operatorFactoryRow('0107536001346', '10190000225448'),
+      operatorFactoryRow('0107536001346', '10190000325446'),
+    ]);
+    mockedAuthRepository.getRolesAndPermissions.mockResolvedValue({
+      roles: ['factory_operator'],
+      scopes: {
+        'factories:view': 'OWN_FACTORY',
+      },
+    });
+
+    const result = await authService.completeLoginAsOperator({
+      citizen_id: '3191000135709',
+      user_code: '53495',
+      first_name: 'ธนาภรณ์',
+      last_name: 'ศรีอวบ',
+      email: 'operator@example.com',
+      phone: '0999454594',
+      regis_date: '2023-06-09 12:01:53',
+      juristics: [],
+    });
+
+    expect(result.user).toMatchObject({
+      userType: 'operator',
+      username: '3191000135709',
+      fullName: 'ธนาภรณ์ ศรีอวบ',
+      roles: 'factory_operator',
+      ownedFactoryIds: [
+        '10190003325500',
+        '72080000125562',
+        '10900179425649',
+        '10900061425657',
+        '10190000125572',
+        '10190000225448',
+        '10190000325446',
+      ],
+    });
+  });
+
+  it('returns owned factory ids from /me for an operator', async () => {
+    mockedAuthRepository.findUserById.mockResolvedValue({
+      id: 77,
+      external_id: '3191000135709',
+      identity_provider: 'mock',
+      user_type: 'operator',
+      username: 'operator_demo',
+      email: 'operator@example.com',
+      phone: '0999454594',
+      prename_th: null,
+      first_name: 'ธนาภรณ์',
+      last_name: 'ศรีอวบ',
+      is_active: true,
+      password_hash: null,
+    });
+    mockedAuthRepository.getOperatorProfile.mockResolvedValue({
+      user_id: 77,
+      user_code: '53495',
+      regis_date: '2023-06-09 12:01:53',
+    });
+    mockedAuthRepository.getOperatorFactories.mockResolvedValue([
+      operatorFactoryRow('0105556125804', '10190003325500'),
+      operatorFactoryRow('0107536001346', '10190000125572'),
+    ]);
+    mockedAuthRepository.getRolesAndPermissions.mockResolvedValue({
+      roles: ['factory_operator'],
+      scopes: {
+        'factories:view': 'OWN_FACTORY',
+      },
+    });
+
+    const result = await authService.me(77);
+
+    expect(result.user).toMatchObject({
+      userType: 'operator',
+      ownedFactoryIds: ['10190003325500', '10190000125572'],
+    });
+  });
 });
+
+function operatorFactoryRow(juristicId: string, fid: string) {
+  return {
+    juristic_id: juristicId,
+    juristic_name_th: `บริษัท ${juristicId}`,
+    juristic_name_en: null,
+    fid,
+    code: `code-${fid}`,
+    name: `โรงงาน ${fid}`,
+    province_id: '1019',
+    system_id: 12,
+    verify_status: 1,
+    authorize_start: '2024-09-02',
+    authorize_end: '2024-09-30',
+  };
+}

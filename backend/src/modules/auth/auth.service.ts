@@ -106,50 +106,8 @@ export const authService = {
     ensureLoginUserAvailable(user, 'operator', profile.citizen_id);
     await authRepository.updateLastLogin(user.id);
 
-    const opProfile = await authRepository.getOperatorProfile(user.id);
-    const factories = await authRepository.getOperatorFactories(user.id);
+    const operatorProfile = await buildOperatorProfile(user.id);
     const { roles, scopes } = await authRepository.getRolesAndPermissions(user.id);
-
-    const juristicsMap = new Map<string, OperatorProfileDTO['juristics'][number]>();
-    for (const f of factories) {
-      const existing = juristicsMap.get(f.juristic_id);
-      if (existing) {
-        existing.factories.push({
-          fid: f.fid,
-          code: f.code,
-          name: f.name,
-          provinceId: f.province_id,
-          systemId: f.system_id,
-          verifyStatus: f.verify_status,
-          authorizeStart: f.authorize_start,
-          authorizeEnd: f.authorize_end,
-        });
-      } else {
-        juristicsMap.set(f.juristic_id, {
-          juristicId: f.juristic_id,
-          nameTh: f.juristic_name_th,
-          nameEn: f.juristic_name_en,
-          factories: [
-            {
-              fid: f.fid,
-              code: f.code,
-              name: f.name,
-              provinceId: f.province_id,
-              systemId: f.system_id,
-              verifyStatus: f.verify_status,
-              authorizeStart: f.authorize_start,
-              authorizeEnd: f.authorize_end,
-            },
-          ],
-        });
-      }
-    }
-
-    const operatorProfile: OperatorProfileDTO = {
-      userCode: opProfile?.user_code ?? null,
-      regisDate: opProfile?.regis_date ?? null,
-      juristics: Array.from(juristicsMap.values()),
-    };
 
     return buildLoginResponse({
       user: toUserSummary(user),
@@ -179,15 +137,12 @@ export const authService = {
     const user = await authRepository.findUserById(userId);
     ensureLoginUserAvailable(user, 'citizen', String(userId));
 
-    const officerProfile =
-      user.user_type === 'officer' || user.user_type === 'admin'
-        ? await authRepository.getOfficerProfile(user.id)
-        : undefined;
+    const profile = await buildProfileForUser(user);
     const { roles, scopes } = await authRepository.getRolesAndPermissions(user.id);
 
     return buildMeResponse({
       user: toUserSummary(user),
-      profile: officerProfile ? toOfficerDTO(officerProfile) : null,
+      profile,
       roles,
       scopes,
     });
@@ -241,15 +196,12 @@ async function completeLocalLogin(payload: LoginRequest, user: UserRow): Promise
   ensureLoginUserAvailable(user, payload.userType, user.external_id);
   await authRepository.updateLastLogin(user.id);
 
-  const officerProfile =
-    user.user_type === 'officer' || user.user_type === 'admin'
-      ? await authRepository.getOfficerProfile(user.id)
-      : undefined;
+  const profile = await buildProfileForUser(user);
   const { roles, scopes } = await authRepository.getRolesAndPermissions(user.id);
 
   return buildLoginResponse({
     user: toUserSummary(user),
-    profile: officerProfile ? toOfficerDTO(officerProfile) : null,
+    profile,
     roles,
     scopes,
   });
@@ -303,6 +255,62 @@ function toOfficerDTO(
   };
 }
 
+async function buildProfileForUser(
+  user: Pick<UserRow, 'id' | 'user_type'>,
+): Promise<OfficerProfileDTO | OperatorProfileDTO | null> {
+  if (user.user_type === 'officer' || user.user_type === 'admin') {
+    const officerProfile = await authRepository.getOfficerProfile(user.id);
+    return officerProfile ? toOfficerDTO(officerProfile) : null;
+  }
+
+  if (user.user_type === 'operator') {
+    return buildOperatorProfile(user.id);
+  }
+
+  return null;
+}
+
+async function buildOperatorProfile(userId: number): Promise<OperatorProfileDTO> {
+  const opProfile = await authRepository.getOperatorProfile(userId);
+  const factories = await authRepository.getOperatorFactories(userId);
+  const juristicsMap = new Map<string, OperatorProfileDTO['juristics'][number]>();
+
+  for (const factory of factories) {
+    const factoryDTO = {
+      fid: factory.fid,
+      code: factory.code,
+      name: factory.name,
+      provinceId: factory.province_id,
+      systemId: factory.system_id,
+      verifyStatus: factory.verify_status,
+      authorizeStart: factory.authorize_start,
+      authorizeEnd: factory.authorize_end,
+    };
+    const existing = juristicsMap.get(factory.juristic_id);
+
+    if (existing) {
+      juristicsMap.set(factory.juristic_id, {
+        ...existing,
+        factories: [...existing.factories, factoryDTO],
+      });
+      continue;
+    }
+
+    juristicsMap.set(factory.juristic_id, {
+      juristicId: factory.juristic_id,
+      nameTh: factory.juristic_name_th,
+      nameEn: factory.juristic_name_en,
+      factories: [factoryDTO],
+    });
+  }
+
+  return {
+    userCode: opProfile?.user_code ?? null,
+    regisDate: opProfile?.regis_date ?? null,
+    juristics: Array.from(juristicsMap.values()),
+  };
+}
+
 function buildLoginResponse(args: {
   user: UserSummary;
   profile: OfficerProfileDTO | OperatorProfileDTO | null;
@@ -340,11 +348,20 @@ function toAuthUserDTO(
   roles: string[],
 ): AuthUserDTO {
   const officerProfile = isOfficerProfile(profile) ? profile : null;
+  const operatorProfile = isOperatorProfile(profile) ? profile : null;
   const fullName = [joinNamePrefix(user.prenameTh, user.firstName), user.lastName]
     .filter(Boolean)
     .join(' ');
+  const operatorFields = operatorProfile
+    ? {
+        ownedFactoryIds: operatorProfile.juristics.flatMap((juristic) =>
+          juristic.factories.map((factory) => factory.fid),
+        ),
+      }
+    : {};
 
   return {
+    userType: user.userType,
     username: user.externalId,
     fullName,
     department: officerProfile?.departmentNameTh ?? officerProfile?.departmentId ?? null,
@@ -352,6 +369,7 @@ function toAuthUserDTO(
     levelNameTh: officerProfile?.levelNameTh ?? null,
     roles: roles[0] ?? user.userType,
     isActive: user.isActive,
+    ...operatorFields,
   };
 }
 
@@ -363,4 +381,10 @@ function isOfficerProfile(
   profile: OfficerProfileDTO | OperatorProfileDTO | null,
 ): profile is OfficerProfileDTO {
   return profile !== null && 'departmentId' in profile;
+}
+
+function isOperatorProfile(
+  profile: OfficerProfileDTO | OperatorProfileDTO | null,
+): profile is OperatorProfileDTO {
+  return profile !== null && 'juristics' in profile;
 }
