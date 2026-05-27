@@ -170,6 +170,51 @@ describe('deviceConnectionsService', () => {
     },
   );
 
+  it('returns fallback mock configs for STATION_001 when no DB configs exist', async () => {
+    mockedRepository.list.mockResolvedValue([]);
+
+    const result = await deviceConnectionsService.list({ stationId: 'STATION_001' });
+
+    expect(result).toHaveLength(4);
+    expect(result.map((config) => config.protocol)).toEqual([
+      DEVICE_CONNECTION_PROTOCOL.MODBUS_RTU,
+      DEVICE_CONNECTION_PROTOCOL.MODBUS_TCP,
+      DEVICE_CONNECTION_PROTOCOL.MSSQL,
+      DEVICE_CONNECTION_PROTOCOL.MYSQL,
+    ]);
+  });
+
+  it('does not return fallback mock configs for other station ids', async () => {
+    mockedRepository.list.mockResolvedValue([]);
+
+    const result = await deviceConnectionsService.list({ stationId: 'UNKNOWN_STATION' });
+
+    expect(result).toEqual([]);
+  });
+
+  it('returns fallback mock config detail by mock id', async () => {
+    mockedRepository.findById.mockResolvedValue(null);
+
+    const result = await deviceConnectionsService.getById(900003);
+
+    expect(result).toMatchObject({
+      id: 900003,
+      stationId: 'STATION_001',
+      protocol: DEVICE_CONNECTION_PROTOCOL.MSSQL,
+      settings: {
+        dbPass: '********',
+      },
+      channels: expect.arrayContaining([
+        expect.objectContaining({
+          addressId: 40001,
+          dataType: 'COD',
+          unit: 'mg/L',
+          offset: -0.5,
+        }),
+      ]),
+    });
+  });
+
   it('rejects duplicate channel addresses', async () => {
     await expect(
       deviceConnectionsService.testConnection({

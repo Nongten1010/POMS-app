@@ -22,6 +22,7 @@
   - `channels` = many measurement devices/channels under that connection point
 - Mock behavior is selected by endpoint: `POST /device-connections/test-connection`
 - Real config payload does not include a mock flag; `POST /device-connections` stores the real-ready config shape
+- `GET /device-connections?stationId=STATION_001` returns fallback mock configs when DB has no real configs yet
 
 **Database migration added** ✅
 - `0020_create_device_connection_configs.ts`

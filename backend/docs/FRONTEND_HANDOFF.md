@@ -1122,6 +1122,7 @@ type DeviceConnectionPayload = {
 | --- | --- |
 | `settings` | connection point 1 ชุด เช่น COM/Slave หรือ Host/DB |
 | `channels` | อุปกรณ์/ค่าตรวจวัดหลายรายการภายใต้ connection point เดียวกัน |
+| `GET /device-connections?stationId=STATION_001` | ถ้า DB ยังไม่มีข้อมูลจริง backend จะคืน fallback mock configs ให้ทันที |
 | `POST /device-connections/test-connection` | backend จำลองการเชื่อมต่อสำเร็จ ใช้ระหว่างรอ API/driver จริง |
 | `POST /device-connections` | บันทึก config ตาม payload จริง ไม่ต้องส่ง field สำหรับ mock |
 

@@ -1,4 +1,8 @@
 import { BadRequestError, NotFoundError } from '../../shared/errors/AppError';
+import {
+  findMockDeviceConnectionConfig,
+  getMockDeviceConnectionConfigs,
+} from './device-connections.mock-source';
 import { deviceConnectionsRepository } from './device-connections.repository';
 import {
   DEVICE_CONNECTION_PROTOCOL,
@@ -16,14 +20,24 @@ export const deviceConnectionsService = {
     nowProvider = provider;
   },
 
-  list(query: ListDeviceConnectionConfigsQuery): Promise<DeviceConnectionConfigDTO[]> {
-    return deviceConnectionsRepository.list(query);
+  async list(query: ListDeviceConnectionConfigsQuery): Promise<DeviceConnectionConfigDTO[]> {
+    const configs = await deviceConnectionsRepository.list(query);
+    if (configs.length > 0) return configs;
+
+    const mockConfigs = getMockDeviceConnectionConfigs(query.stationId ?? '');
+    return query.protocol
+      ? mockConfigs.filter((config) => config.protocol === query.protocol)
+      : mockConfigs;
   },
 
   async getById(id: number): Promise<DeviceConnectionConfigDTO> {
     const config = await deviceConnectionsRepository.findById(id);
-    if (!config) throw new NotFoundError('Device connection config not found');
-    return config;
+    if (config) return config;
+
+    const mockConfig = findMockDeviceConnectionConfig(id);
+    if (mockConfig) return mockConfig;
+
+    throw new NotFoundError('Device connection config not found');
   },
 
   async create(
