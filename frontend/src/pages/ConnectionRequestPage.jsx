@@ -130,6 +130,57 @@ const tableActionStackSx = {
   },
 }
 
+const connectionTypeOptions = ['Modbus RTU', 'Modbus TCP', 'Microsoft SQL', 'MySQL']
+
+const baudRateOptions = ['2400', '4800', '9600', '14400', '19200', '38400']
+const parityOptions = ['Even', 'Odd', 'None']
+const stopBitsOptions = ['1', '2']
+const dataBitsOptions = ['7', '8']
+const dataValueFormatOptions = ['ค่าข้อมูลตรวจวัด', 'ค่ากระแสไฟฟ้า', 'ค่าแรงดันไฟฟ้า']
+const encodingDataOptions = [
+  'Signed16 - Big Endian',
+  'Signed16 - Little Endian',
+  'Unsigned16 - Big Endian',
+  'Unsigned16 - Little Endian',
+  'Signed32 - Big Endian',
+  'Signed32 - Little Endian',
+  'Unsigned32 - Big Endian',
+  'Unsigned32 - Little Endian',
+  'Float32 - Big Endian',
+  'Float32 - Little Endian',
+  'Float64 - Big Endian',
+  'Float64 - Little Endian',
+]
+
+const mockNewRequestParameters = ['SO2 (ppm)', 'NOx (ppm)', 'Flow (m³/hr)', 'BOD (mg/l)', 'Loading (mg/hr)']
+
+const parameterUnitMap = {
+  'CO2 (%)': '%',
+  'CO2 (ppm)': 'ppm',
+  'CO (ppm)': 'ppm',
+  'Flow (m³/hr)': 'm³/hr',
+  'H2S (ppm)': 'ppm',
+  'HCl (mg/m³)': 'mg/m³',
+  'Hg (mg/m³)': 'mg/m³',
+  'Moisture in Stack (%)': '%',
+  'NOx (ppm)': 'ppm',
+  'O2 (%)': '%',
+  'Opacity (%)': '%',
+  'Opacity (mg/m³)': 'mg/m³',
+  'Particulate (mg/m³)': 'mg/m³',
+  'Pressure in Stack (mmHg)': 'mmHg',
+  'SO2 (ppm)': 'ppm',
+  'SOx (ppm)': 'ppm',
+  'Temp. (°C)': '°C',
+  'TRS (ppm)': 'ppm',
+  'TSP (mg/m³)': 'mg/m³',
+  'HCL (ppm)': 'ppm',
+  'Loading (mg/hr)': 'mg/hr',
+  'BOD (mg/l)': 'mg/l',
+  'COD (mg/l)': 'mg/l',
+  'Watt (kW)': 'kW',
+}
+
 const documentImageItems = [
   {
     title: 'ข้อมูลรายละเอียดการรายงานค่าที่สภาวะมาตรฐาน',
@@ -300,7 +351,7 @@ const requestRows = [
     factoryName: 'บริษัท เอเชีย เคมีคอล จำกัด',
     industryType: 'ผลิตเคมีภัณฑ์',
     province: 'ระยอง',
-    type: 'เชื่อมต่อใหม่',
+    type: 'CEMS',
     requestNo: 'CR-2567-0001',
     submittedDate: '12/03/2567',
     monitoringPointCode: '-',
@@ -313,7 +364,7 @@ const requestRows = [
     factoryName: 'บริษัท กรีน วอเตอร์ จำกัด',
     industryType: 'บำบัดน้ำเสีย',
     province: 'ชลบุรี',
-    type: 'เพิ่มจุดตรวจวัด',
+    type: 'WPMS',
     requestNo: 'CR-2567-0002',
     submittedDate: '15/03/2567',
     monitoringPointCode: 'POMS-RYG-0007',
@@ -326,7 +377,7 @@ const requestRows = [
     factoryName: 'บริษัท ไทยฟู้ด โปรเซสซิ่ง จำกัด',
     industryType: 'แปรรูปอาหาร',
     province: 'สมุทรปราการ',
-    type: 'เพิ่มพารามิเตอร์',
+    type: 'CEMS',
     requestNo: 'CR-2567-0003',
     submittedDate: '20/03/2567',
     monitoringPointCode: 'POMS-SPK-0012',
@@ -339,7 +390,7 @@ const requestRows = [
     factoryName: 'บริษัท อีสเทิร์น เพาเวอร์ จำกัด',
     industryType: 'ผลิตพลังงาน',
     province: 'ฉะเชิงเทรา',
-    type: 'เชื่อมต่อใหม่',
+    type: 'CEMS',
     requestNo: 'CR-2567-0004',
     submittedDate: '25/03/2567',
     monitoringPointCode: 'POMS-CCO-0021',
@@ -352,7 +403,7 @@ const requestRows = [
     factoryName: 'บริษัท เมทัล เวิร์คส์ จำกัด',
     industryType: 'ผลิตโลหะ',
     province: 'ปราจีนบุรี',
-    type: 'เพิ่มจุดตรวจวัด',
+    type: 'Mobile',
     requestNo: 'CR-2567-0005',
     submittedDate: '02/04/2567',
     monitoringPointCode: 'POMS-PCB-0016',
@@ -427,6 +478,11 @@ const monitoringPointRows = [
     status: 'เชื่อมต่อแล้ว',
   },
 ]
+
+function getConnectionParameterOptions(context) {
+  const existingParameters = context?.parameters ?? []
+  return [...new Set([...existingParameters, ...mockNewRequestParameters])]
+}
 
 function StatusChip({ value }) {
   if (value === 'รอเชื่อมต่อ') {
@@ -512,9 +568,6 @@ function OfficerFactoryActions({ row, onOpenMonitoringPoints }) {
       <Button size="small" variant="outlined" onClick={() => onOpenMonitoringPoints?.(row)}>
         ดูข้อมูล
       </Button>
-      <Button size="small" variant="outlined">
-        ดูคำขอ
-      </Button>
       <Button size="small" color="error" variant="outlined">
         ลบ
       </Button>
@@ -531,9 +584,6 @@ function OperatorFactoryActions({ row, onOpenRequestForm, onOpenMonitoringPoints
     <Stack direction="row" spacing={1} sx={tableActionStackSx}>
       <Button size="small" variant="outlined" onClick={() => onOpenMonitoringPoints?.(row)}>
         ดูข้อมูล
-      </Button>
-      <Button size="small" variant="outlined">
-        ดูคำขอ
       </Button>
       <FactoryFormMenu
         disabled={!canSubmitRequestForm}
@@ -553,7 +603,33 @@ function OfficerRequestActions() {
   )
 }
 
-function OperatorRequestActions({ status }) {
+function ConnectionSettingsButton({ disabled, onClick }) {
+  return (
+    <Button
+      size="small"
+      variant="outlined"
+      disabled={disabled}
+      onClick={onClick}
+      sx={{
+        ...waitingConnectionSx,
+        '&:hover': {
+          bgcolor: '#4c1d95',
+          borderColor: '#4c1d95',
+        },
+        '&.Mui-disabled': {
+          bgcolor: 'action.disabledBackground',
+          borderColor: 'divider',
+          color: 'text.disabled',
+        },
+      }}
+    >
+      ตั้งค่า
+    </Button>
+  )
+}
+
+function OperatorRequestActions({ row, onOpenConnectionSettings }) {
+  const { status } = row
   const canModifyRequest = status === 'รอโรงงานแก้ไข'
   const canConfigureConnection = status === 'รอเชื่อมต่อ'
 
@@ -568,30 +644,16 @@ function OperatorRequestActions({ status }) {
       <Button size="small" color="error" variant="outlined" disabled={!canModifyRequest}>
         ยกเลิกคำขอ
       </Button>
-      <Button
-        size="small"
-        variant="outlined"
+      <ConnectionSettingsButton
         disabled={!canConfigureConnection}
-        sx={{
-          ...waitingConnectionSx,
-          '&:hover': {
-            bgcolor: '#4c1d95',
-            borderColor: '#4c1d95',
-          },
-          '&.Mui-disabled': {
-            bgcolor: 'action.disabledBackground',
-            borderColor: 'divider',
-            color: 'text.disabled',
-          },
-        }}
-      >
-        ตั้งค่า
-      </Button>
+        onClick={() => onOpenConnectionSettings?.(row)}
+      />
     </Stack>
   )
 }
 
-function MonitoringPointActions({ status, isOperator }) {
+function MonitoringPointActions({ point, isOperator, onOpenConnectionSettings }) {
+  const { status } = point
   const canConsider = ['รอพิจารณาแบบ', 'ยืนยันการเชื่อมต่อ', 'แก้ไขแล้ว/รอพิจารณาแบบ'].includes(status)
   const canModifyRequest = status === 'รอโรงงานแก้ไข'
   const canConfigureConnection = status === 'รอเชื่อมต่อ'
@@ -617,30 +679,15 @@ function MonitoringPointActions({ status, isOperator }) {
       <Button size="small" variant="outlined" disabled={!canModifyRequest}>
         แก้ไข
       </Button>
-      <Button
-        size="small"
-        variant="outlined"
+      <ConnectionSettingsButton
         disabled={!canConfigureConnection}
-        sx={{
-          ...waitingConnectionSx,
-          '&:hover': {
-            bgcolor: '#4c1d95',
-            borderColor: '#4c1d95',
-          },
-          '&.Mui-disabled': {
-            bgcolor: 'action.disabledBackground',
-            borderColor: 'divider',
-            color: 'text.disabled',
-          },
-        }}
-      >
-        ตั้งค่า
-      </Button>
+        onClick={() => onOpenConnectionSettings?.(point)}
+      />
     </Stack>
   )
 }
 
-function MonitoringPointListDialog({ open, factory, isOperator, onClose }) {
+function MonitoringPointListDialog({ open, factory, isOperator, onOpenConnectionSettings, onClose }) {
   const rows = monitoringPointRows.filter((row) => row.factoryId === factory?.id)
 
   return (
@@ -677,7 +724,11 @@ function MonitoringPointListDialog({ open, factory, isOperator, onClose }) {
                       <StatusChip value={row.status} />
                     </TableCell>
                     <TableCell>
-                      <MonitoringPointActions status={row.status} isOperator={isOperator} />
+                      <MonitoringPointActions
+                        point={row}
+                        isOperator={isOperator}
+                        onOpenConnectionSettings={onOpenConnectionSettings}
+                      />
                     </TableCell>
                   </TableRow>
                 ))
@@ -703,6 +754,384 @@ function MonitoringPointListDialog({ open, factory, isOperator, onClose }) {
   )
 }
 
+function PositiveNumberField({ label, value, onChange, min = 1, placeholder }) {
+  return (
+    <TextField
+      label={label}
+      type="number"
+      size="small"
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      placeholder={placeholder}
+      fullWidth
+      slotProps={{ htmlInput: { min, step: 1 } }}
+    />
+  )
+}
+
+function OptionSelectField({ label, value, options, onChange, defaultOption }) {
+  return (
+    <TextField select label={label} size="small" value={value} onChange={(event) => onChange(event.target.value)} fullWidth>
+      {options.map((option) => (
+        <MenuItem key={option} value={option}>
+          {option}{option === defaultOption ? ' (default)' : ''}
+        </MenuItem>
+      ))}
+    </TextField>
+  )
+}
+
+function ConnectionFormFields({ connectionType, value, onChange }) {
+  const updateField = (field, nextValue) => onChange({ ...value, [field]: nextValue })
+
+  if (connectionType === 'Modbus RTU') {
+    return (
+      <Grid container spacing={2}>
+        <Grid size={{ xs: 12, md: 3 }}>
+          <PositiveNumberField label="COMPORT" value={value.comport} onChange={(nextValue) => updateField('comport', nextValue)} />
+        </Grid>
+        <Grid size={{ xs: 12, md: 3 }}>
+          <PositiveNumberField label="Slave ID" value={value.slaveId} onChange={(nextValue) => updateField('slaveId', nextValue)} />
+        </Grid>
+        <Grid size={{ xs: 12, md: 3 }}>
+          <OptionSelectField label="Baud Rate" value={value.baudRate} options={baudRateOptions} defaultOption="9600" onChange={(nextValue) => updateField('baudRate', nextValue)} />
+        </Grid>
+        <Grid size={{ xs: 12, md: 3 }}>
+          <OptionSelectField label="Parity" value={value.parity} options={parityOptions} defaultOption="None" onChange={(nextValue) => updateField('parity', nextValue)} />
+        </Grid>
+        <Grid size={{ xs: 12, md: 3 }}>
+          <OptionSelectField label="Stop bits" value={value.stopBits} options={stopBitsOptions} defaultOption="1" onChange={(nextValue) => updateField('stopBits', nextValue)} />
+        </Grid>
+        <Grid size={{ xs: 12, md: 3 }}>
+          <OptionSelectField label="Data bits" value={value.dataBits} options={dataBitsOptions} defaultOption="8" onChange={(nextValue) => updateField('dataBits', nextValue)} />
+        </Grid>
+        <Grid size={{ xs: 12, md: 3 }}>
+          <TextField label="ช่วงข้อมูลตรวจวัด Min" size="small" value={value.measureMin} onChange={(event) => updateField('measureMin', event.target.value)} placeholder="เช่น 0" fullWidth />
+        </Grid>
+        <Grid size={{ xs: 12, md: 3 }}>
+          <TextField label="ช่วงข้อมูลตรวจวัด Max" size="small" value={value.measureMax} onChange={(event) => updateField('measureMax', event.target.value)} placeholder="เช่น 200" fullWidth />
+        </Grid>
+        <Grid size={{ xs: 12, md: 3 }}>
+          <PositiveNumberField label="Quantity" value={value.quantity} onChange={(nextValue) => updateField('quantity', nextValue)} />
+        </Grid>
+      </Grid>
+    )
+  }
+
+  if (connectionType === 'Modbus TCP') {
+    return (
+      <Grid container spacing={2}>
+        <Grid size={{ xs: 12, md: 3 }}>
+          <PositiveNumberField label="Slave ID" value={value.slaveId} onChange={(nextValue) => updateField('slaveId', nextValue)} />
+        </Grid>
+        <Grid size={{ xs: 12, md: 3 }}>
+          <TextField label="Host IP" size="small" value={value.hostIp} onChange={(event) => updateField('hostIp', event.target.value)} placeholder="เช่น 192.168.1.10" fullWidth />
+        </Grid>
+        <Grid size={{ xs: 12, md: 3 }}>
+          <PositiveNumberField label="Port" value={value.port} onChange={(nextValue) => updateField('port', nextValue)} />
+        </Grid>
+      </Grid>
+    )
+  }
+
+  return (
+    <Grid container spacing={2}>
+      <Grid size={{ xs: 12, md: 3 }}>
+        <TextField label="Host IP" size="small" value={value.hostIp} onChange={(event) => updateField('hostIp', event.target.value)} placeholder="เช่น 192.168.1.254" fullWidth />
+      </Grid>
+      <Grid size={{ xs: 12, md: 3 }}>
+        <PositiveNumberField label="Port" value={value.port} onChange={(nextValue) => updateField('port', nextValue)} />
+      </Grid>
+      <Grid size={{ xs: 12, md: 3 }}>
+        <TextField label="dbUser" size="small" value={value.dbUser} onChange={(event) => updateField('dbUser', event.target.value)} fullWidth />
+      </Grid>
+      <Grid size={{ xs: 12, md: 3 }}>
+        <TextField label="dbPass" type="password" size="small" value={value.dbPass} onChange={(event) => updateField('dbPass', event.target.value)} fullWidth />
+      </Grid>
+      <Grid size={{ xs: 12, md: 3 }}>
+        <TextField label="dbName" size="small" value={value.dbName} onChange={(event) => updateField('dbName', event.target.value)} fullWidth />
+      </Grid>
+    </Grid>
+  )
+}
+
+function ConnectionParameterTable({ connectionType, parameterOptions }) {
+  const isDatabaseConnection = ['Microsoft SQL', 'MySQL'].includes(connectionType)
+  const [rows, setRows] = useState(() =>
+    parameterOptions.map((parameter, index) => ({
+      addressId: String(40001 + index),
+      parameter,
+      unit: parameterUnitMap[parameter] ?? '',
+      min: '',
+      max: '',
+      valueFormat: 'ค่าข้อมูลตรวจวัด',
+      offset: '0',
+      encodingData: 'Unsigned16 - Big Endian',
+    })),
+  )
+  const updateRow = (index, field, nextValue) => {
+    setRows((current) =>
+      current.map((row, rowIndex) => {
+        if (rowIndex !== index) {
+          return row
+        }
+        if (field === 'parameter') {
+          return { ...row, parameter: nextValue, unit: parameterUnitMap[nextValue] ?? row.unit }
+        }
+        return { ...row, [field]: nextValue }
+      }),
+    )
+  }
+  const columns = isDatabaseConnection
+    ? ['Address ID', 'พารามิเตอร์', 'หน่วย', 'ค่า Offset']
+    : [
+        'Address ID',
+        'พารามิเตอร์',
+        'หน่วย',
+        'Min',
+        'Max',
+        'รูปแบบค่าข้อมูลตรวจวัด',
+        'ค่า Offset',
+        'Encoding data',
+      ]
+
+  return (
+    <Stack spacing={2}>
+      <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+        การเชื่อมต่อพารามิเตอร์
+      </Typography>
+      <TableContainer sx={{ border: 1, borderColor: 'divider', overflowX: 'auto' }}>
+        <Table size="small" sx={{ minWidth: isDatabaseConnection ? 760 : 1280, ...borderedTableSx }}>
+          <TableHead>
+            <TableRow>
+              {columns.map((column) => (
+                <TableCell key={column} sx={{ fontWeight: 700, bgcolor: 'neutral.50' }}>
+                  {column}
+                </TableCell>
+              ))}
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {rows.length > 0 ? (
+              rows.map((row, index) => (
+                <TableRow key={`${row.addressId}-${row.parameter}-${index}`}>
+                  <TableCell>
+                    <PositiveNumberField
+                      label=""
+                      min={40001}
+                      value={row.addressId}
+                      onChange={(nextValue) => updateRow(index, 'addressId', nextValue)}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <TextField
+                      size="small"
+                      value={row.parameter}
+                      fullWidth
+                      slotProps={{ input: { readOnly: true } }}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <TextField
+                      size="small"
+                      value={row.unit}
+                      fullWidth
+                      slotProps={{ input: { readOnly: true } }}
+                    />
+                  </TableCell>
+                  {!isDatabaseConnection ? (
+                    <>
+                      <TableCell>
+                        <TextField
+                          size="small"
+                          value={row.min}
+                          onChange={(event) => updateRow(index, 'min', event.target.value)}
+                          fullWidth
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <TextField
+                          size="small"
+                          value={row.max}
+                          onChange={(event) => updateRow(index, 'max', event.target.value)}
+                          fullWidth
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <TextField
+                          select
+                          size="small"
+                          value={row.valueFormat}
+                          onChange={(event) => updateRow(index, 'valueFormat', event.target.value)}
+                          fullWidth
+                        >
+                          {dataValueFormatOptions.map((option) => (
+                            <MenuItem key={option} value={option}>
+                              {option}{option === 'ค่าข้อมูลตรวจวัด' ? ' (default)' : ''}
+                            </MenuItem>
+                          ))}
+                        </TextField>
+                      </TableCell>
+                    </>
+                  ) : null}
+                  <TableCell>
+                    <TextField
+                      type="number"
+                      size="small"
+                      value={row.offset}
+                      onChange={(event) => updateRow(index, 'offset', event.target.value)}
+                      fullWidth
+                    />
+                  </TableCell>
+                  {!isDatabaseConnection ? (
+                    <TableCell>
+                      <TextField
+                        select
+                        size="small"
+                        value={row.encodingData}
+                        onChange={(event) => updateRow(index, 'encodingData', event.target.value)}
+                        fullWidth
+                      >
+                        {encodingDataOptions.map((option) => (
+                          <MenuItem key={option} value={option}>
+                            {option}{option === 'Unsigned16 - Big Endian' ? ' (default)' : ''}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                    </TableCell>
+                  ) : null}
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={columns.length} align="center">
+                  <Typography variant="body2" color="text.secondary">
+                    ยังไม่มีข้อมูลการเชื่อมต่อพารามิเตอร์
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </Stack>
+  )
+}
+
+function ConnectionSettingsDialog({ open, context, onClose }) {
+  const [connectionType, setConnectionType] = useState('Modbus RTU')
+  const [testResult, setTestResult] = useState('')
+  const [forms, setForms] = useState({
+    'Modbus RTU': {
+      comport: '1',
+      slaveId: '1',
+      baudRate: '9600',
+      parity: 'None',
+      stopBits: '1',
+      dataBits: '8',
+      measureMin: '',
+      measureMax: '',
+      quantity: '1',
+    },
+    'Modbus TCP': {
+      slaveId: '1',
+      hostIp: '',
+      port: '502',
+    },
+    'Microsoft SQL': {
+      hostIp: '',
+      port: '1433',
+      dbUser: '',
+      dbPass: '',
+      dbName: '',
+    },
+    MySQL: {
+      hostIp: '',
+      port: '3306',
+      dbUser: '',
+      dbPass: '',
+      dbName: '',
+    },
+  })
+  const parameterOptions = getConnectionParameterOptions(context)
+
+  return (
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg">
+      <DialogTitle>ตั้งค่าอุปกรณ์</DialogTitle>
+      <DialogContent dividers>
+        <Stack spacing={2.5}>
+          <Grid container spacing={2}>
+            <Grid size={{ xs: 12, md: 4 }}>
+              <OptionSelectField label="อุปกรณ์ (Connection)" value={connectionType} options={connectionTypeOptions} onChange={setConnectionType} />
+            </Grid>
+          </Grid>
+          <ConnectionFormFields
+            connectionType={connectionType}
+            value={forms[connectionType]}
+            onChange={(nextValue) => setForms((current) => ({ ...current, [connectionType]: nextValue }))}
+          />
+          <Divider />
+          <ConnectionParameterTable
+            key={connectionType}
+            connectionType={connectionType}
+            parameterOptions={parameterOptions}
+          />
+          <Divider />
+          <Stack spacing={1.5}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+              ทดสอบการเชื่อมต่อ
+            </Typography>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', sm: 'flex-start' } }}>
+              <Button
+                variant="contained"
+                onClick={() =>
+                  setTestResult(
+                    JSON.stringify(
+                      {
+                        connection: connectionType,
+                        status: 'success',
+                        testedAt: new Date().toISOString(),
+                        sample: parameterOptions.slice(0, 3).map((parameter, index) => ({
+                          parameter,
+                          value: Number((25 + index * 7.5).toFixed(2)),
+                          unit: parameterUnitMap[parameter] ?? '',
+                        })),
+                      },
+                      null,
+                      2,
+                    )
+                  )
+                }
+              >
+                ทดสอบ
+              </Button>
+              <TextField
+                label="ผลการทดสอบ"
+                value={testResult}
+                multiline
+                minRows={6}
+                fullWidth
+                slotProps={{ input: { readOnly: true } }}
+              />
+            </Stack>
+          </Stack>
+        </Stack>
+      </DialogContent>
+      <DialogActions sx={{ justifyContent: 'center' }}>
+        <Button color="inherit" onClick={onClose}>
+          ปิด
+        </Button>
+        <Button variant="contained" onClick={onClose}>
+          บันทึก
+        </Button>
+        <Button color="secondary" variant="contained" onClick={onClose}>
+          ยืนยันการเชื่อมต่อ
+        </Button>
+      </DialogActions>
+    </Dialog>
+  )
+}
+
 function getFactoryColumns(isOperator, onOpenRequestForm, onOpenMonitoringPoints) {
   return [
     { field: 'factoryName', headerName: 'ชื่อโรงงาน/บริษัท', width: 240 },
@@ -721,7 +1150,7 @@ function getFactoryColumns(isOperator, onOpenRequestForm, onOpenMonitoringPoints
     {
       field: 'actions',
       headerName: 'จัดการ',
-      width: isOperator ? 330 : 360,
+      width: isOperator ? 240 : 290,
       sortable: false,
       filterable: false,
       renderCell: (params) =>
@@ -1970,12 +2399,12 @@ function RequestFormBottomSheet({ open, formType, factory, onClose }) {
   )
 }
 
-function getRequestColumns(isOperator) {
+function getRequestColumns(isOperator, onOpenConnectionSettings) {
   return [
     { field: 'factoryName', headerName: 'ชื่อโรงงาน/บริษัท', width: 240 },
     { field: 'industryType', headerName: 'ประเภทอุตสาหกรรม', width: 170 },
     { field: 'province', headerName: 'จังหวัด', width: 130 },
-    { field: 'type', headerName: 'ประเภท', width: 150 },
+    { field: 'type', headerName: 'ประเภทจุดตรวจวัด', width: 150 },
     { field: 'requestNo', headerName: 'เลขที่คำขอ', width: 150 },
     { field: 'submittedDate', headerName: 'วันที่ยื่นคำขอ', width: 150 },
     { field: 'monitoringPointCode', headerName: 'รหัสจุดตรวจวัด', width: 170 },
@@ -1990,11 +2419,15 @@ function getRequestColumns(isOperator) {
     {
       field: 'actions',
       headerName: 'จัดการ',
-      width: isOperator ? 350 : 130,
+      width: isOperator ? 350 : 120,
       sortable: false,
       filterable: false,
       renderCell: (params) =>
-        isOperator ? <OperatorRequestActions status={params.row.status} /> : <OfficerRequestActions />,
+        isOperator ? (
+          <OperatorRequestActions row={params.row} onOpenConnectionSettings={onOpenConnectionSettings} />
+        ) : (
+          <OfficerRequestActions />
+        ),
     },
   ]
 }
@@ -2003,6 +2436,7 @@ function ConnectionRequestPage({ userType = '' }) {
   const [selectedSubMenu, setSelectedSubMenu] = useState('factories')
   const [requestForm, setRequestForm] = useState(null)
   const [monitoringPointFactory, setMonitoringPointFactory] = useState(null)
+  const [connectionSettingsContext, setConnectionSettingsContext] = useState(null)
   const isOperator = userType === 'operator'
   const factoryColumns = useMemo(
     () =>
@@ -2013,7 +2447,7 @@ function ConnectionRequestPage({ userType = '' }) {
       ),
     [isOperator],
   )
-  const requestColumns = useMemo(() => getRequestColumns(isOperator), [isOperator])
+  const requestColumns = useMemo(() => getRequestColumns(isOperator, setConnectionSettingsContext), [isOperator])
   const table = useMemo(
     () =>
       selectedSubMenu === 'factories'
@@ -2145,7 +2579,13 @@ function ConnectionRequestPage({ userType = '' }) {
         open={Boolean(monitoringPointFactory)}
         factory={monitoringPointFactory}
         isOperator={isOperator}
+        onOpenConnectionSettings={setConnectionSettingsContext}
         onClose={() => setMonitoringPointFactory(null)}
+      />
+      <ConnectionSettingsDialog
+        open={Boolean(connectionSettingsContext)}
+        context={connectionSettingsContext}
+        onClose={() => setConnectionSettingsContext(null)}
       />
     </Stack>
   )
