@@ -137,6 +137,28 @@ const factories = await factoriesRepo.list({
 | Edit         | ✅      | —    | —    | —    | ✅    | —      | —        | —       | —       | ✅     |
 | Approve      | —      | —    | —    | —    | ✅    | —      | —        | —       | —       | ✅     |
 
+Implemented endpoint group:
+
+```text
+/api/v1/cems-wpms-requests
+```
+
+Workflow status:
+
+| Status | Thai label | Owner action |
+| --- | --- | --- |
+| `PENDING_DESIGN_REVIEW` | รอพิจารณาแบบ | ผู้ประกอบการส่งฟอร์ม |
+| `WAITING_FACTORY_REVISION` | รอโรงงานแก้ไข | เจ้าหน้าที่ขอให้แก้ไข |
+| `REVISED_PENDING_DESIGN_REVIEW` | แก้ไขแล้ว/รอพิจารณาแบบ | ผู้ประกอบการส่งแบบที่แก้ไขแล้ว |
+| `WAITING_CONNECTION` | รอเชื่อมต่อ | เจ้าหน้าที่อนุมัติแบบ และเริ่มนับ 30 วัน |
+| `CONNECTION_CONFIRMED` | ยืนยันการเชื่อมต่อ | ผู้ประกอบการยืนยันว่าส่งค่าเข้าระบบได้แล้ว |
+| `CONNECTED` | เชื่อมต่อแล้ว | เจ้าหน้าที่ตรวจค่าในระบบแล้ว |
+
+Security behavior:
+- `cems_wpms_requests:edit` ใช้สำหรับผู้ประกอบการสร้าง/แก้ไข/ยืนยัน request ของตัวเอง
+- `cems_wpms_requests:approve` ใช้สำหรับเจ้าหน้าที่พิจารณาแบบและ verify การเชื่อมต่อ
+- list/detail ใช้ scope จาก `cems_wpms_requests:view`; scope `ALL` เห็นทั้งหมด, scope อื่นเห็นเฉพาะรายการที่ตัวเองสร้าง
+
 ### 5.4 แจ้งแบบ กวภ. 01 - กวภ. 05
 
 | Action       | โรงงาน | กรอ. | สอจ. | กนอ. | กฝม. | 5 ศูนย์ | ผอ.ศูนย์ | ผอ.กฝม. | ผอ.กวภ. | Admin |

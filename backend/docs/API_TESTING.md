@@ -195,6 +195,94 @@ curl -X POST http://localhost:3000/api/v1/auth/login \
   -d '{"userType":"officer","username":"local_officer","password":"StrongerPass123"}'
 ```
 
+### 5.7 CEMS/WPMS connection request workflow
+
+Login เป็น operator เพื่อสร้างคำขอ:
+
+```bash
+OPERATOR_TOKEN=$(curl -s -X POST http://localhost:3000/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"userType":"operator","username":"operator_demo","password":"demo1234"}' \
+  | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['accessToken'])")
+```
+
+สร้างแบบฟอร์มคำขอเพิ่มจุดตรวจวัด:
+
+```bash
+REQUEST_ID=$(curl -s -X POST http://localhost:3000/api/v1/cems-wpms-requests \
+  -H "Authorization: Bearer $OPERATOR_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "factoryId":"factory-001",
+    "factoryName":"บริษัท ทดสอบ จำกัด",
+    "factoryRegistrationNo":"3-106-33/50สบ",
+    "systemType":"CEMS",
+    "contactName":"สมชาย ใจดี",
+    "contactPhone":"0812345678",
+    "contactEmail":"ops@example.com",
+    "measurementPoints":[{
+      "pointName":"ปล่องระบาย A",
+      "pointCode":"STACK-A",
+      "pointType":"STACK",
+      "latitude":13.7563,
+      "longitude":100.5018,
+      "parameters":["NOx","SO2","PM"],
+      "description":"จุดตรวจวัดหลัก"
+    }],
+    "remarks":"ขอเชื่อมต่อระบบใหม่"
+  }' | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['id'])")
+```
+
+Login เป็นเจ้าหน้าที่ กฝม. แล้วอนุมัติแบบ:
+
+```bash
+OFFICER_TOKEN=$(curl -s -X POST http://localhost:3000/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"userType":"officer","username":"officer_kpm","departmentID":"2","password":"demo1234"}' \
+  | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['accessToken'])")
+
+curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/review" \
+  -H "Authorization: Bearer $OFFICER_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"decision":"APPROVE_DESIGN","officerNote":"แบบถูกต้อง"}'
+```
+
+ผู้ประกอบการยืนยันว่า config และส่งค่าเข้าระบบได้แล้วภายใน 30 วัน:
+
+```bash
+curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/confirm-connection" \
+  -H "Authorization: Bearer $OPERATOR_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"note":"ส่งค่าเข้าระบบได้แล้ว"}'
+```
+
+เจ้าหน้าที่ตรวจค่าในระบบแล้วปิดงาน:
+
+```bash
+curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/verify-connection" \
+  -H "Authorization: Bearer $OFFICER_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"note":"ตรวจสอบค่าในระบบแล้ว"}'
+```
+
+ถ้าต้องการทดสอบ case แก้ไขแบบ ให้เปลี่ยน review step เป็น:
+
+```bash
+curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/review" \
+  -H "Authorization: Bearer $OFFICER_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"decision":"REQUEST_REVISION","revisionReason":"เพิ่มรายละเอียดจุดตรวจวัด"}'
+```
+
+แล้วส่งแบบเดิมอีกครั้งด้วย:
+
+```bash
+curl -X PUT "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/form" \
+  -H "Authorization: Bearer $OPERATOR_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{...body shape เดียวกับตอน POST...}'
+```
+
 ---
 
 ## 6. ดูข้อมูลใน DB ตรง ๆ

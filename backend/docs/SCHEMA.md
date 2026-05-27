@@ -1,9 +1,9 @@
 # POMS — Database Schema Design
 
-> Status: **APPROVED for Phase 1** (auth + users + roles + organizations + juristics + factories)
+> Status: **APPROVED for Phase 1** (auth + users + roles + organizations + juristics + factories + selected eligible factories + CEMS/WPMS connection requests)
 > DB: Microsoft SQL Server | Charset: NVARCHAR (Thai support) | Time: DATETIME2 (Asia/Bangkok)
 >
-> **Phase 1 scope:** identity + RBAC + org hierarchy + juristic/factory CRUD + audit
+> **Phase 1 scope:** identity + RBAC + org hierarchy + juristic/factory CRUD + selected eligible factories + CEMS/WPMS connection request workflow + audit
 > **Phase 2 (deferred):** parameters, sensors, measurements, measurements_hourly
 > **Phase 3 (deferred):** approvals, approval_events, notifications (email transport)
 
@@ -43,6 +43,9 @@ erDiagram
 
     juristics ||--o{ factories : owns
     juristics ||--o{ user_juristics : controlled_by
+    users ||--o{ cems_wpms_connection_requests : creates
+    cems_wpms_connection_requests ||--o{ cems_wpms_measurement_points : requests
+    cems_wpms_connection_requests ||--o{ cems_wpms_request_status_history : tracks
     factories ||--o{ sensors : has
     sensors ||--o{ measurements : produces
     parameters ||--o{ measurements : measured_as
@@ -314,6 +317,82 @@ CREATE TABLE user_juristics (
 ```
 
 > **Note:** user → factories ผ่าน `user_juristics` → `juristics.id = factories.juristic_id`. Helper view `v_user_factories` จะ provide flatten lookup ตอน query
+
+### 5.4 `cems_wpms_connection_requests` — คำขอเชื่อมต่อ / เพิ่มจุดตรวจวัด
+
+```sql
+CREATE TABLE cems_wpms_connection_requests (
+  id                      BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+  request_no              VARCHAR(32)          NOT NULL UNIQUE,
+  factory_id              VARCHAR(64)          NOT NULL,
+  factory_name            NVARCHAR(500)        NOT NULL,
+  factory_registration_no NVARCHAR(64)         NOT NULL,
+  system_type             VARCHAR(8)           NOT NULL, -- 'CEMS' | 'WPMS'
+  status                  VARCHAR(64)          NOT NULL,
+  contact_name            NVARCHAR(255)        NOT NULL,
+  contact_phone           VARCHAR(64)          NOT NULL,
+  contact_email           VARCHAR(255)         NULL,
+  remarks                 NVARCHAR(1000)       NULL,
+  revision_reason         NVARCHAR(1000)       NULL,
+  officer_note            NVARCHAR(1000)       NULL,
+  connection_due_at       DATETIME2            NULL,
+  confirmed_at            DATETIME2            NULL,
+  verified_at             DATETIME2            NULL,
+  created_at              DATETIME2            NOT NULL DEFAULT SYSDATETIME(),
+  updated_at              DATETIME2            NOT NULL DEFAULT SYSDATETIME(),
+  created_by              BIGINT               NULL,
+  updated_by              BIGINT               NULL,
+  deleted_at              DATETIME2            NULL
+);
+```
+
+Status values:
+- `PENDING_DESIGN_REVIEW` — รอพิจารณาแบบ
+- `WAITING_FACTORY_REVISION` — รอโรงงานแก้ไข
+- `REVISED_PENDING_DESIGN_REVIEW` — แก้ไขแล้ว/รอพิจารณาแบบ
+- `WAITING_CONNECTION` — รอเชื่อมต่อ
+- `CONNECTION_CONFIRMED` — ยืนยันการเชื่อมต่อ
+- `CONNECTED` — เชื่อมต่อแล้ว
+
+### 5.5 `cems_wpms_measurement_points` — จุดตรวจวัดในคำขอ
+
+```sql
+CREATE TABLE cems_wpms_measurement_points (
+  id              BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+  request_id      BIGINT               NOT NULL,
+  point_name      NVARCHAR(255)        NOT NULL,
+  point_code      VARCHAR(64)          NULL,
+  point_type      VARCHAR(32)          NOT NULL, -- 'STACK' | 'WASTEWATER' | 'OTHER'
+  latitude        DECIMAL(10,7)        NULL,
+  longitude       DECIMAL(10,7)        NULL,
+  parameters_json NVARCHAR(MAX)        NOT NULL,
+  description     NVARCHAR(1000)       NULL,
+  created_at      DATETIME2            NOT NULL DEFAULT SYSDATETIME(),
+  updated_at      DATETIME2            NOT NULL DEFAULT SYSDATETIME(),
+  created_by      BIGINT               NULL,
+  updated_by      BIGINT               NULL,
+  deleted_at      DATETIME2            NULL,
+  CONSTRAINT fk_cems_wpms_measurement_point_request FOREIGN KEY (request_id)
+    REFERENCES cems_wpms_connection_requests(id)
+);
+```
+
+### 5.6 `cems_wpms_request_status_history` — audit trail ของสถานะคำขอ
+
+```sql
+CREATE TABLE cems_wpms_request_status_history (
+  id          BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+  request_id  BIGINT               NOT NULL,
+  status      VARCHAR(64)          NOT NULL,
+  note        NVARCHAR(1000)       NULL,
+  changed_by  BIGINT               NOT NULL,
+  changed_at  DATETIME2            NOT NULL DEFAULT SYSDATETIME(),
+  CONSTRAINT fk_cems_wpms_status_history_request FOREIGN KEY (request_id)
+    REFERENCES cems_wpms_connection_requests(id),
+  CONSTRAINT fk_cems_wpms_status_history_user FOREIGN KEY (changed_by)
+    REFERENCES users(id)
+);
+```
 
 ---
 
@@ -654,6 +733,10 @@ interface LoginResponse {
 13_create_factories.ts
 14_create_user_juristics.ts
 15_create_audit_logs.ts
+16_create_user_permissions.ts
+17_create_eligible_factories.ts
+18_add_department_name_to_officer_profiles.ts
+19_create_cems_wpms_connection_requests.ts
 ```
 
 ### Phase 2 (deferred — sensor data)

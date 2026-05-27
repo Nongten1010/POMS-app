@@ -67,13 +67,18 @@ Only stop processes you know belong to this backend service.
 
 Run migrations against the server's real `.env` and database. Do not copy local `.env` to the server.
 
-The eligible factory feature requires migration:
+The eligible factory and CEMS/WPMS connection request features require migrations:
 
 ```text
 0017_create_eligible_factories.ts
+0019_create_cems_wpms_connection_requests.ts
 ```
 
-This creates the `eligible_factories` table used to store factories selected as eligible.
+These create:
+- `eligible_factories` for factories selected as eligible
+- `cems_wpms_connection_requests` for request form state
+- `cems_wpms_measurement_points` for requested monitoring points
+- `cems_wpms_request_status_history` for status audit trail
 
 ## External DIW factory source
 

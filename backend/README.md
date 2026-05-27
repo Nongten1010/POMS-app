@@ -31,6 +31,8 @@ backend/
 │   │   └── types/           # shared TS types
 │   ├── modules/             # feature modules
 │   │   ├── auth/            # login, logout, refresh token
+│   │   ├── connection-requests/ # CEMS/WPMS connection request workflow
+│   │   ├── eligible-factories/  # selected eligible factory management
 │   │   ├── users/           # user CRUD
 │   │   └── roles/           # role + permission (RBAC)
 │   ├── db/
@@ -127,9 +129,11 @@ npm start             # run compiled server
 ## Roadmap
 
 - [x] Project skeleton + tooling
-- [ ] Auth module (login, JWT, refresh token)
-- [ ] User management (CRUD)
-- [ ] Role + permission (RBAC)
+- [x] Auth module (login, JWT, refresh token)
+- [x] User management (CRUD)
+- [x] Role + permission (RBAC)
+- [x] Eligible factory selection API
+- [x] CEMS/WPMS connection request API (เพิ่มจุดตรวจวัด + status workflow)
 - [ ] Sensor data ingestion API (HTTP POST from gateway)
 - [ ] Real-time dashboard channel (Socket.IO) — _future_
 - [ ] Alerts / threshold rules — _future_

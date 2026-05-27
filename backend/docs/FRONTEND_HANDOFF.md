@@ -875,7 +875,217 @@ GET http://localhost:3000/api/v1/eligible-factories
 Endpoint นี้ไม่รับ query params และจะ list รายการที่ยังไม่ถูกลบทั้งหมด
 item ใน `data` ใช้ field เหมือน candidate response และเพิ่ม `id` สำหรับใช้ลบรายการออกจาก list
 
-## 8. Error cases ที่ frontend ควรรองรับ
+## 8. CEMS/WPMS connection request API
+
+API ชุดนี้ใช้กับเมนู “ขอเชื่อมต่อ” ส่วน “แบบฟอร์มคำขอ เพิ่มจุดตรวจวัด”
+
+Base URL:
+
+```text
+http://localhost:3000/api/v1/cems-wpms-requests
+```
+
+Permission ที่ใช้:
+
+```text
+cems_wpms_requests:view
+cems_wpms_requests:edit
+cems_wpms_requests:approve
+```
+
+### 8.1 Status flow
+
+Case 1:
+
+| Step | Actor | Endpoint | Status |
+| --- | --- | --- | --- |
+| 1 | ผู้ประกอบการ | `POST /cems-wpms-requests` | `PENDING_DESIGN_REVIEW` / รอพิจารณาแบบ |
+| 2 | เจ้าหน้าที่ | `POST /cems-wpms-requests/:id/review` decision=`APPROVE_DESIGN` | `WAITING_CONNECTION` / รอเชื่อมต่อ |
+| 3 | ผู้ประกอบการ | `POST /cems-wpms-requests/:id/confirm-connection` ภายใน 30 วัน | `CONNECTION_CONFIRMED` / ยืนยันการเชื่อมต่อ |
+| 4 | เจ้าหน้าที่ | `POST /cems-wpms-requests/:id/verify-connection` | `CONNECTED` / เชื่อมต่อแล้ว |
+
+Case 2:
+
+| Step | Actor | Endpoint | Status |
+| --- | --- | --- | --- |
+| 1 | ผู้ประกอบการ | `POST /cems-wpms-requests` | `PENDING_DESIGN_REVIEW` / รอพิจารณาแบบ |
+| 2 | เจ้าหน้าที่ | `POST /cems-wpms-requests/:id/review` decision=`REQUEST_REVISION` | `WAITING_FACTORY_REVISION` / รอโรงงานแก้ไข |
+| 3 | ผู้ประกอบการ | `PUT /cems-wpms-requests/:id/form` | `REVISED_PENDING_DESIGN_REVIEW` / แก้ไขแล้ว/รอพิจารณาแบบ |
+| 4 | เจ้าหน้าที่ | `POST /cems-wpms-requests/:id/review` decision=`APPROVE_DESIGN` | `WAITING_CONNECTION` / รอเชื่อมต่อ |
+| 5 | ผู้ประกอบการ | `POST /cems-wpms-requests/:id/confirm-connection` ภายใน 30 วัน | `CONNECTION_CONFIRMED` / ยืนยันการเชื่อมต่อ |
+| 6 | เจ้าหน้าที่ | `POST /cems-wpms-requests/:id/verify-connection` | `CONNECTED` / เชื่อมต่อแล้ว |
+
+### 8.2 Create request form
+
+```http
+POST http://localhost:3000/api/v1/cems-wpms-requests
+Authorization: Bearer <operatorAccessToken>
+Content-Type: application/json
+```
+
+Request body:
+
+```json
+{
+  "factoryId": "factory-001",
+  "factoryName": "บริษัท ทดสอบ จำกัด",
+  "factoryRegistrationNo": "3-106-33/50สบ",
+  "systemType": "CEMS",
+  "contactName": "สมชาย ใจดี",
+  "contactPhone": "0812345678",
+  "contactEmail": "ops@example.com",
+  "measurementPoints": [
+    {
+      "pointName": "ปล่องระบาย A",
+      "pointCode": "STACK-A",
+      "pointType": "STACK",
+      "latitude": 13.7563,
+      "longitude": 100.5018,
+      "parameters": ["NOx", "SO2", "PM"],
+      "description": "จุดตรวจวัดหลัก"
+    }
+  ],
+  "remarks": "ขอเชื่อมต่อระบบใหม่"
+}
+```
+
+Allowed values:
+
+| Field | Values |
+| --- | --- |
+| `systemType` | `CEMS`, `WPMS` |
+| `pointType` | `STACK`, `WASTEWATER`, `OTHER` |
+
+Success response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "requestNo": "CR-20260527-0001",
+    "status": "PENDING_DESIGN_REVIEW",
+    "statusLabel": "รอพิจารณาแบบ",
+    "connectionDueAt": null,
+    "measurementPoints": [
+      {
+        "id": 1,
+        "pointName": "ปล่องระบาย A",
+        "pointCode": "STACK-A",
+        "pointType": "STACK",
+        "latitude": 13.7563,
+        "longitude": 100.5018,
+        "parameters": ["NOx", "SO2", "PM"],
+        "description": "จุดตรวจวัดหลัก"
+      }
+    ],
+    "statusHistory": [
+      {
+        "status": "PENDING_DESIGN_REVIEW",
+        "statusLabel": "รอพิจารณาแบบ"
+      }
+    ]
+  }
+}
+```
+
+### 8.3 List and detail
+
+```http
+GET http://localhost:3000/api/v1/cems-wpms-requests
+Authorization: Bearer <accessToken>
+```
+
+Optional filter:
+
+```http
+GET http://localhost:3000/api/v1/cems-wpms-requests?status=WAITING_CONNECTION
+```
+
+```http
+GET http://localhost:3000/api/v1/cems-wpms-requests/:id
+Authorization: Bearer <accessToken>
+```
+
+Operator เห็นเฉพาะรายการที่ตัวเองสร้าง ส่วนเจ้าหน้าที่ที่มี scope `ALL` เห็นทั้งหมด
+
+### 8.4 Officer review
+
+Approve design:
+
+```http
+POST http://localhost:3000/api/v1/cems-wpms-requests/:id/review
+Authorization: Bearer <officerAccessToken>
+Content-Type: application/json
+```
+
+```json
+{
+  "decision": "APPROVE_DESIGN",
+  "officerNote": "แบบถูกต้อง"
+}
+```
+
+ผลลัพธ์จะเป็น `WAITING_CONNECTION` และ backend จะตั้ง `connectionDueAt` เป็น 30 วันนับจากเวลาพิจารณา
+
+Request revision:
+
+```json
+{
+  "decision": "REQUEST_REVISION",
+  "revisionReason": "เพิ่มรายละเอียดจุดตรวจวัด",
+  "officerNote": "ตรวจแล้วต้องแก้ไข"
+}
+```
+
+ผลลัพธ์จะเป็น `WAITING_FACTORY_REVISION`
+
+### 8.5 Resubmit revised form
+
+```http
+PUT http://localhost:3000/api/v1/cems-wpms-requests/:id/form
+Authorization: Bearer <operatorAccessToken>
+Content-Type: application/json
+```
+
+ใช้ body shape เดียวกับ `POST /cems-wpms-requests` หลังส่งสำเร็จ status จะเป็น
+`REVISED_PENDING_DESIGN_REVIEW` / แก้ไขแล้ว/รอพิจารณาแบบ
+
+### 8.6 Confirm and verify connection
+
+Operator confirm ภายใน 30 วัน:
+
+```http
+POST http://localhost:3000/api/v1/cems-wpms-requests/:id/confirm-connection
+Authorization: Bearer <operatorAccessToken>
+Content-Type: application/json
+```
+
+```json
+{
+  "note": "ส่งค่าเข้าระบบได้แล้ว"
+}
+```
+
+ถ้าเลย `connectionDueAt` จะได้ `400 BAD_REQUEST`
+
+Officer verify:
+
+```http
+POST http://localhost:3000/api/v1/cems-wpms-requests/:id/verify-connection
+Authorization: Bearer <officerAccessToken>
+Content-Type: application/json
+```
+
+```json
+{
+  "note": "ตรวจสอบค่าในระบบแล้ว"
+}
+```
+
+ผลลัพธ์จะเป็น `CONNECTED` / เชื่อมต่อแล้ว
+
+## 9. Error cases ที่ frontend ควรรองรับ
 
 Frontend ควรดู `error.code` เป็นหลัก ไม่ควร hardcode จาก `error.message`
 
@@ -936,7 +1146,7 @@ Unknown route:
 404
 ```
 
-## 9. Quick manual test
+## 10. Quick manual test
 
 ```bash
 curl http://localhost:3000/health
@@ -961,7 +1171,7 @@ done
 
 หลังยิงถี่เกิน limit ควรได้ `429`
 
-## 10. Backend smoke test
+## 11. Backend smoke test
 
 ถ้า frontend บอกว่าเรียก backend ไม่ได้ ให้เช็คฝั่ง backend ด้วย:
 

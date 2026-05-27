@@ -5,6 +5,56 @@
 
 ---
 
+# 2026-05-27 — CEMS/WPMS connection request API
+
+**Added request form workflow for “ขอเชื่อมต่อ / เพิ่มจุดตรวจวัด”** ✅
+- Added route group `POST|GET /api/v1/cems-wpms-requests`
+- Added form resubmission endpoint `PUT /api/v1/cems-wpms-requests/:id/form`
+- Added officer review endpoint `POST /api/v1/cems-wpms-requests/:id/review`
+- Added operator confirmation endpoint `POST /api/v1/cems-wpms-requests/:id/confirm-connection`
+- Added officer verification endpoint `POST /api/v1/cems-wpms-requests/:id/verify-connection`
+
+**Status workflow implemented** ✅
+- Case 1: `PENDING_DESIGN_REVIEW` → `WAITING_CONNECTION` → `CONNECTION_CONFIRMED` → `CONNECTED`
+- Case 2: `PENDING_DESIGN_REVIEW` → `WAITING_FACTORY_REVISION` → `REVISED_PENDING_DESIGN_REVIEW` → `WAITING_CONNECTION` → `CONNECTION_CONFIRMED` → `CONNECTED`
+- Backend enforces 30-day confirmation window after officer approves the design
+
+**Database migration added** ✅
+- `0019_create_cems_wpms_connection_requests.ts`
+- Tables:
+  - `cems_wpms_connection_requests`
+  - `cems_wpms_measurement_points`
+  - `cems_wpms_request_status_history`
+
+**Security and validation** ✅
+- Uses existing permissions `cems_wpms_requests:view|edit|approve`
+- Zod schemas reject unknown fields and invalid coordinates
+- Operator-only owner checks for resubmit/confirm
+- Officer-only approve/verify checks via permission middleware
+
+**Docs/tests updated** ✅
+- Updated `docs/FRONTEND_HANDOFF.md`
+- Updated `docs/API_TESTING.md`
+- Updated `docs/PERMISSIONS.md`
+- Updated `docs/SCHEMA.md`
+- Updated `docs/WINDOWS_DEPLOYMENT.md`
+- Added unit tests for validator and service state transitions
+
+**Verification**
+
+```bash
+npm test -- --runInBand
+npm run typecheck
+npm run build
+npx prettier --check docs/FRONTEND_HANDOFF.md docs/API_TESTING.md docs/PERMISSIONS.md docs/SCHEMA.md docs/WINDOWS_DEPLOYMENT.md README.md PROGRESS.md
+```
+
+Notes:
+- `npm run lint` still fails because the repo has ESLint v10 but no `eslint.config.*`; this is pre-existing project config work.
+- Full `npm run format:check` still reports unrelated pre-existing formatting issues in older backend files.
+
+---
+
 # 2026-05-24 — Local account creation API (session #9)
 
 **Added `POST /api/v1/users/local-accounts`** ✅
