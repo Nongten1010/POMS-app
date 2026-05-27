@@ -2,7 +2,12 @@ import { useMemo, useState } from 'react'
 import {
   Box,
   Button,
+  Checkbox,
   Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Divider,
   Drawer,
   FormControl,
@@ -19,6 +24,12 @@ import {
   Select,
   Stack,
   Tab,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   Tabs,
   TextField,
   Typography,
@@ -59,6 +70,65 @@ const cemsParameterOptions = [
 ]
 
 const monitoringPointTypeOptions = ['CEMS', 'WPMS', 'Mobile', 'Station']
+
+const wpmsInstrumentParameters = [
+  'BOD (mg/l)',
+  'COD (mg/l)',
+  'Flow (m³/hr)',
+  'Watt (kW)',
+  'Loading (mg/hr)',
+]
+
+const measurementInstrumentColumns = [
+  'พารามิเตอร์ที่ขอเชื่อมต่อ',
+  'เทคนิคการตรวจวัด',
+  'ช่วงการตรวจวัด',
+  'ยี่ห้อเครื่องมือ',
+  'ผู้จำหน่ายเครื่องมือ',
+  'มาตรฐาน EIA',
+  'สภาวะมาตรฐาน',
+  'การรายงานค่า (Dry basis)',
+  'O₂ @ 7% or Excess Air 50%',
+  'จัดการ',
+]
+
+const specialCriteriaRows = [
+  { key: 'normal', label: 'ปกติ', color: 'success' },
+  { key: 'warning', label: 'เฝ้าระวัง', color: 'warning' },
+  { key: 'critical', label: 'แจ้งเตือน', color: 'error' },
+]
+
+const waitingConnectionSx = {
+  bgcolor: '#5b21b6',
+  borderColor: '#5b21b6',
+  color: '#ffffff',
+}
+
+const borderedTableSx = {
+  '& th, & td': {
+    borderRight: 1,
+    borderBottom: 1,
+    borderColor: 'divider',
+  },
+  '& th:last-of-type, & td:last-of-type': {
+    borderRight: 0,
+  },
+  '& tbody tr:last-of-type td': {
+    borderBottom: 0,
+  },
+}
+
+const tableActionStackSx = {
+  alignItems: 'center',
+  flexWrap: 'nowrap',
+  height: 'auto',
+  '& .MuiButton-root': {
+    alignSelf: 'center',
+    minHeight: 30,
+    height: 30,
+    whiteSpace: 'nowrap',
+  },
+}
 
 const documentImageItems = [
   {
@@ -292,7 +362,77 @@ const requestRows = [
   },
 ]
 
+const monitoringPointRows = [
+  {
+    id: 1,
+    factoryId: 1,
+    code: 'POMS-RYG-0001',
+    name: 'ปล่องหม้อไอน้ำ 1',
+    type: 'CEMS',
+    parameters: ['SO2 (ppm)', 'NOx (ppm)', 'O2 (%)'],
+    status: 'รอพิจารณาแบบ',
+  },
+  {
+    id: 2,
+    factoryId: 1,
+    code: 'POMS-RYG-0002',
+    name: 'ปล่องเตาเผา 1',
+    type: 'CEMS',
+    parameters: ['Particulate (mg/m³)', 'CO (ppm)'],
+    status: 'เชื่อมต่อแล้ว',
+  },
+  {
+    id: 3,
+    factoryId: 2,
+    code: 'POMS-RYG-0007',
+    name: 'จุดระบายน้ำทิ้งหลัก',
+    type: 'WPMS',
+    parameters: ['BOD (mg/l)', 'COD (mg/l)', 'Flow (m³/hr)'],
+    status: 'รอเชื่อมต่อ',
+  },
+  {
+    id: 4,
+    factoryId: 2,
+    code: 'POMS-RYG-0008',
+    name: 'จุดระบายน้ำทิ้งสำรอง',
+    type: 'WPMS',
+    parameters: ['Flow (m³/hr)', 'Watt (kW)'],
+    status: 'ยืนยันการเชื่อมต่อ',
+  },
+  {
+    id: 5,
+    factoryId: 3,
+    code: 'POMS-SPK-0012',
+    name: 'ปล่องไลน์ผลิต A',
+    type: 'CEMS',
+    parameters: ['Opacity (%)', 'Temp. (°C)'],
+    status: 'รอโรงงานแก้ไข',
+  },
+  {
+    id: 6,
+    factoryId: 4,
+    code: 'POMS-CCO-0021',
+    name: 'ปล่องโรงไฟฟ้า',
+    type: 'CEMS',
+    parameters: ['SO2 (ppm)', 'NOx (ppm)', 'CO2 (%)'],
+    status: 'แก้ไขแล้ว/รอพิจารณาแบบ',
+  },
+  {
+    id: 7,
+    factoryId: 5,
+    code: 'POMS-PCB-0016',
+    name: 'จุดตรวจวัด Mobile',
+    type: 'Mobile',
+    parameters: ['CO (ppm)', 'NOx (ppm)'],
+    status: 'เชื่อมต่อแล้ว',
+  },
+]
+
 function StatusChip({ value }) {
+  if (value === 'รอเชื่อมต่อ') {
+    return <Chip label={value} size="small" variant="outlined" sx={{ ...waitingConnectionSx, fontWeight: 300 }} />
+  }
+
   const color =
     value === 'เชื่อมต่อแล้ว'
       ? 'success'
@@ -366,10 +506,10 @@ function FactoryFormMenu({ disabled = false, requestStatus, monitoringPointCount
   )
 }
 
-function OfficerFactoryActions({ status }) {
+function OfficerFactoryActions({ row, onOpenMonitoringPoints }) {
   return (
-    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', height: '100%' }}>
-      <Button size="small" variant="outlined">
+    <Stack direction="row" spacing={1} sx={tableActionStackSx}>
+      <Button size="small" variant="outlined" onClick={() => onOpenMonitoringPoints?.(row)}>
         ดูข้อมูล
       </Button>
       <Button size="small" variant="outlined">
@@ -378,18 +518,18 @@ function OfficerFactoryActions({ status }) {
       <Button size="small" color="error" variant="outlined">
         ลบ
       </Button>
-      <FactoryStatusMenu status={status} />
+      <FactoryStatusMenu status={row.status} />
     </Stack>
   )
 }
 
-function OperatorFactoryActions({ row, onOpenRequestForm }) {
+function OperatorFactoryActions({ row, onOpenRequestForm, onOpenMonitoringPoints }) {
   const { requestStatus, monitoringPointCount } = row
   const canSubmitRequestForm = ['เชื่อมต่อแล้ว', 'ยังไม่มีจุดตรวจวัด'].includes(requestStatus)
 
   return (
-    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', height: '100%' }}>
-      <Button size="small" variant="outlined">
+    <Stack direction="row" spacing={1} sx={tableActionStackSx}>
+      <Button size="small" variant="outlined" onClick={() => onOpenMonitoringPoints?.(row)}>
         ดูข้อมูล
       </Button>
       <Button size="small" variant="outlined">
@@ -415,9 +555,10 @@ function OfficerRequestActions() {
 
 function OperatorRequestActions({ status }) {
   const canModifyRequest = status === 'รอโรงงานแก้ไข'
+  const canConfigureConnection = status === 'รอเชื่อมต่อ'
 
   return (
-    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', height: '100%' }}>
+    <Stack direction="row" spacing={1} sx={tableActionStackSx}>
       <Button size="small" variant="outlined">
         เปิดดู
       </Button>
@@ -427,11 +568,142 @@ function OperatorRequestActions({ status }) {
       <Button size="small" color="error" variant="outlined" disabled={!canModifyRequest}>
         ยกเลิกคำขอ
       </Button>
+      <Button
+        size="small"
+        variant="outlined"
+        disabled={!canConfigureConnection}
+        sx={{
+          ...waitingConnectionSx,
+          '&:hover': {
+            bgcolor: '#4c1d95',
+            borderColor: '#4c1d95',
+          },
+          '&.Mui-disabled': {
+            bgcolor: 'action.disabledBackground',
+            borderColor: 'divider',
+            color: 'text.disabled',
+          },
+        }}
+      >
+        ตั้งค่า
+      </Button>
     </Stack>
   )
 }
 
-function getFactoryColumns(isOperator, onOpenRequestForm) {
+function MonitoringPointActions({ status, isOperator }) {
+  const canConsider = ['รอพิจารณาแบบ', 'ยืนยันการเชื่อมต่อ', 'แก้ไขแล้ว/รอพิจารณาแบบ'].includes(status)
+  const canModifyRequest = status === 'รอโรงงานแก้ไข'
+  const canConfigureConnection = status === 'รอเชื่อมต่อ'
+
+  if (!isOperator) {
+    return (
+      <Stack direction="row" spacing={1} sx={tableActionStackSx}>
+        <Button size="small" variant="outlined">
+          เปิดดู
+        </Button>
+        <Button size="small" variant="contained" disabled={!canConsider}>
+          พิจารณา
+        </Button>
+      </Stack>
+    )
+  }
+
+  return (
+    <Stack direction="row" spacing={1} sx={tableActionStackSx}>
+      <Button size="small" variant="outlined">
+        เปิดดู
+      </Button>
+      <Button size="small" variant="outlined" disabled={!canModifyRequest}>
+        แก้ไข
+      </Button>
+      <Button
+        size="small"
+        variant="outlined"
+        disabled={!canConfigureConnection}
+        sx={{
+          ...waitingConnectionSx,
+          '&:hover': {
+            bgcolor: '#4c1d95',
+            borderColor: '#4c1d95',
+          },
+          '&.Mui-disabled': {
+            bgcolor: 'action.disabledBackground',
+            borderColor: 'divider',
+            color: 'text.disabled',
+          },
+        }}
+      >
+        ตั้งค่า
+      </Button>
+    </Stack>
+  )
+}
+
+function MonitoringPointListDialog({ open, factory, isOperator, onClose }) {
+  const rows = monitoringPointRows.filter((row) => row.factoryId === factory?.id)
+
+  return (
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg">
+      <DialogTitle>รายการจุดตรวจวัด{factory?.factoryName ? ` - ${factory.factoryName}` : ''}</DialogTitle>
+      <DialogContent dividers>
+        <TableContainer sx={{ border: 1, borderColor: 'divider', overflowX: 'auto' }}>
+          <Table size="small" sx={{ minWidth: 1120, ...borderedTableSx }}>
+            <TableHead>
+              <TableRow>
+                {[
+                  'รหัสจุดตรวจวัด',
+                  'ชื่อจุดตรวจวัด',
+                  'ประเภทจุดตรวจวัด',
+                  'รายละเอียดพารามิเตอร์',
+                  'สถานะ',
+                  'จัดการ',
+                ].map((column) => (
+                  <TableCell key={column} sx={{ fontWeight: 700, bgcolor: 'neutral.50' }}>
+                    {column}
+                  </TableCell>
+                ))}
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {rows.length > 0 ? (
+                rows.map((row) => (
+                  <TableRow key={row.id}>
+                    <TableCell>{row.code}</TableCell>
+                    <TableCell>{row.name}</TableCell>
+                    <TableCell>{row.type}</TableCell>
+                    <TableCell>{row.parameters.join(', ')}</TableCell>
+                    <TableCell>
+                      <StatusChip value={row.status} />
+                    </TableCell>
+                    <TableCell>
+                      <MonitoringPointActions status={row.status} isOperator={isOperator} />
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={6} align="center">
+                    <Typography variant="body2" color="text.secondary">
+                      ไม่มีข้อมูลจุดตรวจวัด
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </DialogContent>
+      <DialogActions>
+        <Button color="inherit" onClick={onClose}>
+          ปิด
+        </Button>
+      </DialogActions>
+    </Dialog>
+  )
+}
+
+function getFactoryColumns(isOperator, onOpenRequestForm, onOpenMonitoringPoints) {
   return [
     { field: 'factoryName', headerName: 'ชื่อโรงงาน/บริษัท', width: 240 },
     { field: 'newRegistrationNo', headerName: 'เลขทะเบียนโรงงาน (ใหม่)', width: 190 },
@@ -457,9 +729,10 @@ function getFactoryColumns(isOperator, onOpenRequestForm) {
           <OperatorFactoryActions
             row={params.row}
             onOpenRequestForm={onOpenRequestForm}
+            onOpenMonitoringPoints={onOpenMonitoringPoints}
           />
         ) : (
-          <OfficerFactoryActions status={params.row.status} />
+          <OfficerFactoryActions row={params.row} onOpenMonitoringPoints={onOpenMonitoringPoints} />
         ),
     },
   ]
@@ -521,8 +794,9 @@ function UploadFileField({ label, accept }) {
   )
 }
 
-function ParameterMultiSelect({ label }) {
-  const [value, setValue] = useState([])
+function ParameterMultiSelect({ label, value: controlledValue, onChange }) {
+  const [internalValue, setInternalValue] = useState([])
+  const value = controlledValue ?? internalValue
 
   return (
     <FormControl size="small" fullWidth>
@@ -534,7 +808,12 @@ function ParameterMultiSelect({ label }) {
         input={<OutlinedInput label={label} />}
         onChange={(event) => {
           const selectedValue = event.target.value
-          setValue(typeof selectedValue === 'string' ? selectedValue.split(',') : selectedValue)
+          const nextValue = typeof selectedValue === 'string' ? selectedValue.split(',') : selectedValue
+          if (onChange) {
+            onChange(nextValue)
+          } else {
+            setInternalValue(nextValue)
+          }
         }}
         renderValue={(selected) => (
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
@@ -845,6 +1124,345 @@ function DocumentsAndImagesSection() {
   )
 }
 
+function SpecialCriteriaTable() {
+  return (
+    <TableContainer sx={{ border: 1, borderColor: 'divider' }}>
+      <Table size="small" sx={borderedTableSx}>
+        <TableHead>
+          <TableRow>
+            {['MIN', 'เกณฑ์มลพิษ', 'MAX'].map((header) => (
+              <TableCell
+                key={header}
+                align="center"
+                sx={{ bgcolor: 'primary.600', color: 'primary.contrastText', fontWeight: 700 }}
+              >
+                {header}
+              </TableCell>
+            ))}
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {specialCriteriaRows.map((row) => (
+            <TableRow key={row.key}>
+              <TableCell>
+                <TextField size="small" fullWidth />
+              </TableCell>
+              <TableCell align="center">
+                <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', justifyContent: 'center' }}>
+                  <Typography variant="body2">{row.key === 'critical' ? '<' : '≤'}</Typography>
+                  <Chip label={row.label} color={row.color} size="small" sx={{ fontWeight: 700 }} />
+                  <Typography variant="body2">{row.key === 'critical' ? '<' : '≤'}</Typography>
+                </Stack>
+              </TableCell>
+              <TableCell>
+                <TextField size="small" fullWidth />
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </TableContainer>
+  )
+}
+
+function StandardCriteriaSection({ label }) {
+  return (
+    <Stack spacing={1.5}>
+      <FormControlLabel control={<Checkbox size="small" />} label={label} />
+      <SpecialCriteriaTable />
+      <Grid container spacing={2}>
+        <Grid size={{ xs: 12, md: 6 }}>
+          <TextField label="ค่ามาตรฐาน" size="small" fullWidth />
+        </Grid>
+      </Grid>
+    </Stack>
+  )
+}
+
+function InstrumentDataDialog({ open, parameterOptions, value, onClose, onSave }) {
+  const [form, setForm] = useState({
+    parameter: value?.parameter ?? '',
+    technique: value?.technique ?? '',
+    range: value?.range ?? '',
+    brand: value?.brand ?? '',
+    supplier: value?.supplier ?? '',
+    eiaStandard: value?.eiaStandard ?? '',
+    standardCondition: value?.standardCondition ?? false,
+    dryBasis: value?.dryBasis ?? false,
+    oxygenOrExcessAir: value?.oxygenOrExcessAir ?? false,
+  })
+
+  const updateForm = (field, nextValue) => setForm((current) => ({ ...current, [field]: nextValue }))
+
+  return (
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
+      <DialogTitle>จัดการข้อมูลเครื่องมือตรวจวัด</DialogTitle>
+      <DialogContent dividers>
+        <Stack spacing={2}>
+          <Grid container spacing={2}>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <TextField
+                select
+                label="พารามิเตอร์ที่ขอเชื่อมต่อ"
+                size="small"
+                value={form.parameter}
+                onChange={(event) => updateForm('parameter', event.target.value)}
+                fullWidth
+              >
+                {parameterOptions.map((parameter) => (
+                  <MenuItem key={parameter} value={parameter}>
+                    {parameter}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <TextField
+                label="เทคนิคตรวจวัด"
+                size="small"
+                value={form.technique}
+                onChange={(event) => updateForm('technique', event.target.value)}
+                placeholder="เช่น NDIR"
+                fullWidth
+              />
+            </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <TextField
+                label="ช่วงการวัด"
+                size="small"
+                value={form.range}
+                onChange={(event) => updateForm('range', event.target.value)}
+                placeholder="เช่น 0-200"
+                fullWidth
+              />
+            </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <TextField
+                label="ยี่ห้อเครื่องมือ"
+                size="small"
+                value={form.brand}
+                onChange={(event) => updateForm('brand', event.target.value)}
+                placeholder="เช่น Siemens"
+                fullWidth
+              />
+            </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <TextField
+                label="ผู้จำหน่ายเครื่องมือ"
+                size="small"
+                value={form.supplier}
+                onChange={(event) => updateForm('supplier', event.target.value)}
+                placeholder="เช่น ABC Tech"
+                fullWidth
+              />
+            </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <TextField
+                label="มาตรฐาน EIA"
+                size="small"
+                value={form.eiaStandard}
+                onChange={(event) => updateForm('eiaStandard', event.target.value)}
+                placeholder="เช่น 12000"
+                fullWidth
+              />
+            </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <FormControl sx={{ p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1, width: '100%' }}>
+                <Typography variant="body2" sx={{ mb: 0.75, fontWeight: 700 }}>
+                  การรายงานค่า
+                </Typography>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      size="small"
+                      checked={form.standardCondition}
+                      onChange={(event) => updateForm('standardCondition', event.target.checked)}
+                    />
+                  }
+                  label="สภาวะมาตรฐาน"
+                />
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      size="small"
+                      checked={form.dryBasis}
+                      onChange={(event) => updateForm('dryBasis', event.target.checked)}
+                    />
+                  }
+                  label="การรายงานค่า (Dry basis)"
+                />
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      size="small"
+                      checked={form.oxygenOrExcessAir}
+                      onChange={(event) => updateForm('oxygenOrExcessAir', event.target.checked)}
+                    />
+                  }
+                  label="O₂ @ 7% or Excess Air 50%"
+                />
+              </FormControl>
+            </Grid>
+          </Grid>
+          <Divider />
+          <Grid container spacing={2}>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <StandardCriteriaSection label="พารามิเตอร์ไม่มีค่ามาตรฐาน ตามประกาศ อก." />
+            </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <StandardCriteriaSection label="พารามิเตอร์ไม่มีค่ามาตรฐาน ตาม EIA" />
+            </Grid>
+          </Grid>
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button color="inherit" onClick={onClose}>
+          ปิด
+        </Button>
+        <Button variant="contained" disabled={!form.parameter} onClick={() => onSave(form)}>
+          บันทึก
+        </Button>
+      </DialogActions>
+    </Dialog>
+  )
+}
+
+function MeasurementInstrumentSection({ parameterOptions }) {
+  const [instrumentRows, setInstrumentRows] = useState([])
+  const [editingRowIndex, setEditingRowIndex] = useState(null)
+  const [instrumentDialogOpen, setInstrumentDialogOpen] = useState(false)
+  const editingValue = editingRowIndex === null ? null : instrumentRows[editingRowIndex]
+
+  return (
+    <Paper elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider' }}>
+      <Stack spacing={2}>
+        <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+          รายละเอียดเครื่องมือตรวจวัด
+        </Typography>
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ justifyContent: 'space-between' }}>
+          <Grid container spacing={2} sx={{ flex: 1 }}>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <TextField label="อุปกรณ์แปลงสัญญาณ (Converter) ยี่ห้อ" size="small" fullWidth />
+            </Grid>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <TextField label="อุปกรณ์แปลงสัญญาณ (Converter) รุ่น" size="small" fullWidth />
+            </Grid>
+          </Grid>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            disabled={parameterOptions.length === 0}
+            onClick={() => {
+              setEditingRowIndex(null)
+              setInstrumentDialogOpen(true)
+            }}
+            sx={{ alignSelf: { xs: 'stretch', md: 'flex-start' } }}
+          >
+            เพิ่มพารามิเตอร์
+          </Button>
+        </Stack>
+        <TableContainer sx={{ border: 1, borderColor: 'divider', overflowX: 'auto' }}>
+          <Table size="small" sx={{ minWidth: 1280, ...borderedTableSx }}>
+            <TableHead>
+              <TableRow>
+                {measurementInstrumentColumns.map((column) => (
+                  <TableCell key={column} sx={{ fontWeight: 700, bgcolor: 'neutral.50' }}>
+                    {column}
+                  </TableCell>
+                ))}
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {instrumentRows.length > 0 ? (
+                instrumentRows.map((data, index) => {
+                  return (
+                    <TableRow key={`${data.parameter}-${index}`}>
+                      <TableCell>{data.parameter}</TableCell>
+                      <TableCell>{data?.technique ?? ''}</TableCell>
+                      <TableCell>{data?.range ?? ''}</TableCell>
+                      <TableCell>{data?.brand ?? ''}</TableCell>
+                      <TableCell>{data?.supplier ?? ''}</TableCell>
+                      <TableCell>{data?.eiaStandard ?? ''}</TableCell>
+                      <TableCell>{data?.standardCondition ? '✓' : ''}</TableCell>
+                      <TableCell>{data?.dryBasis ? '✓' : ''}</TableCell>
+                      <TableCell>{data?.oxygenOrExcessAir ? '✓' : ''}</TableCell>
+                      <TableCell>
+                        <Stack direction="row" spacing={1} sx={tableActionStackSx}>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={() => {
+                              setEditingRowIndex(index)
+                              setInstrumentDialogOpen(true)
+                            }}
+                          >
+                            จัดการข้อมูล
+                          </Button>
+                          <Button
+                            size="small"
+                            color="warning"
+                            variant="outlined"
+                            onClick={() =>
+                              setInstrumentRows((current) =>
+                                current.map((row, rowIndex) =>
+                                  rowIndex === index
+                                    ? {
+                                        parameter: row.parameter,
+                                        technique: '',
+                                        range: '',
+                                        brand: '',
+                                        supplier: '',
+                                        eiaStandard: '',
+                                        standardCondition: false,
+                                        dryBasis: false,
+                                        oxygenOrExcessAir: false,
+                                      }
+                                    : row,
+                                ),
+                              )
+                            }
+                          >
+                            ล้าง
+                          </Button>
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={measurementInstrumentColumns.length} align="center">
+                    <Typography variant="body2" color="text.secondary">
+                      ยังไม่มีข้อมูลเครื่องมือตรวจวัด
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Stack>
+      {instrumentDialogOpen ? (
+        <InstrumentDataDialog
+          key={editingRowIndex === null ? 'new' : `edit-${editingRowIndex}`}
+          open
+          parameterOptions={parameterOptions}
+          value={editingValue}
+          onClose={() => setInstrumentDialogOpen(false)}
+          onSave={(nextValue) => {
+            setInstrumentRows((current) =>
+              editingRowIndex === null
+                ? [...current, nextValue]
+                : current.map((row, index) => (index === editingRowIndex ? nextValue : row)),
+            )
+            setInstrumentDialogOpen(false)
+          }}
+        />
+      ) : null}
+    </Paper>
+  )
+}
+
 function WpmsMonitoringPointDetails() {
   const [hasTreatmentSystem, setHasTreatmentSystem] = useState('')
   const [connectionDevice, setConnectionDevice] = useState('')
@@ -1018,6 +1636,7 @@ function RequestFormBottomSheet({ open, formType, factory, onClose }) {
   const [factoryEmails, setFactoryEmails] = useState([{ id: 1, value: 'factory@company.com' }])
   const [monitoringPoints, setMonitoringPoints] = useState([])
   const [selectedMonitoringPointId, setSelectedMonitoringPointId] = useState(null)
+  const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false)
   const officerEmails = ['officer@poms.go.th']
   const showMonitoringPointSection = ['เชื่อมต่อใหม่', 'เพิ่มจุดตรวจวัด'].includes(formType)
   const isSingleMonitoringPointForm = formType === 'เพิ่มจุดตรวจวัด'
@@ -1287,16 +1906,66 @@ function RequestFormBottomSheet({ open, formType, factory, onClose }) {
 
             {showMonitoringPointSection && monitoringPoints.length > 0
               ? monitoringPoints.map((point) =>
-                  point.type === 'CEMS' ? (
+                  point.type === 'CEMS' || point.type === 'WPMS' ? (
                     <Box key={point.id} sx={{ display: point.id === selectedMonitoringPoint?.id ? 'block' : 'none' }}>
-                    <DocumentsAndImagesSection />
-                  </Box>
+                      <Stack spacing={2}>
+                        {point.type === 'CEMS' ? <DocumentsAndImagesSection /> : null}
+                        <MeasurementInstrumentSection
+                          parameterOptions={
+                            point.type === 'CEMS' ? cemsParameterOptions : wpmsInstrumentParameters
+                          }
+                        />
+                      </Stack>
+                    </Box>
                   ) : null,
                 )
               : null}
           </Stack>
         </Box>
+        <Divider />
+        <Stack
+          direction="row"
+          spacing={1.5}
+          sx={{
+            px: { xs: 2, md: 3 },
+            py: 1.5,
+            justifyContent: 'center',
+            bgcolor: 'background.paper',
+          }}
+        >
+          <Button variant="outlined" color="inherit" onClick={onClose}>
+            ยกเลิก
+          </Button>
+          <Button variant="contained" onClick={() => setSubmitConfirmOpen(true)}>
+            ส่งแบบฟอร์มคำขอ
+          </Button>
+        </Stack>
       </Stack>
+      <Dialog open={submitConfirmOpen} onClose={() => setSubmitConfirmOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>ยืนยันการส่งแบบฟอร์มคำขอ</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={1}>
+            <Typography>กรุณาตรวจสอบความถูกต้องของข้อมูลในแบบฟอร์ม</Typography>
+            <Typography color="text.secondary">
+              เมื่อส่งแบบฟอร์มคำขอแล้วจะไม่สามารถแก้ไขได้ จนกว่าจะผ่านการพิจารณาจากเจ้าหน้าที่
+            </Typography>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button color="inherit" onClick={() => setSubmitConfirmOpen(false)}>
+            ยกเลิก
+          </Button>
+          <Button
+            variant="contained"
+            onClick={() => {
+              setSubmitConfirmOpen(false)
+              onClose()
+            }}
+          >
+            ยืนยันส่งแบบฟอร์ม
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Drawer>
   )
 }
@@ -1321,7 +1990,7 @@ function getRequestColumns(isOperator) {
     {
       field: 'actions',
       headerName: 'จัดการ',
-      width: isOperator ? 270 : 130,
+      width: isOperator ? 350 : 130,
       sortable: false,
       filterable: false,
       renderCell: (params) =>
@@ -1333,9 +2002,15 @@ function getRequestColumns(isOperator) {
 function ConnectionRequestPage({ userType = '' }) {
   const [selectedSubMenu, setSelectedSubMenu] = useState('factories')
   const [requestForm, setRequestForm] = useState(null)
+  const [monitoringPointFactory, setMonitoringPointFactory] = useState(null)
   const isOperator = userType === 'operator'
   const factoryColumns = useMemo(
-    () => getFactoryColumns(isOperator, (factory, formType) => setRequestForm({ factory, formType })),
+    () =>
+      getFactoryColumns(
+        isOperator,
+        (factory, formType) => setRequestForm({ factory, formType }),
+        setMonitoringPointFactory,
+      ),
     [isOperator],
   )
   const requestColumns = useMemo(() => getRequestColumns(isOperator), [isOperator])
@@ -1465,6 +2140,12 @@ function ConnectionRequestPage({ userType = '' }) {
         formType={requestForm?.formType ?? ''}
         factory={requestForm?.factory}
         onClose={() => setRequestForm(null)}
+      />
+      <MonitoringPointListDialog
+        open={Boolean(monitoringPointFactory)}
+        factory={monitoringPointFactory}
+        isOperator={isOperator}
+        onClose={() => setMonitoringPointFactory(null)}
       />
     </Stack>
   )
