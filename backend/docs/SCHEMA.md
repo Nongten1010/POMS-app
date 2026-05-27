@@ -1,9 +1,9 @@
 # POMS — Database Schema Design
 
-> Status: **APPROVED for Phase 1** (auth + users + roles + organizations + juristics + factories + selected eligible factories + CEMS/WPMS connection requests)
+> Status: **APPROVED for Phase 1** (auth + users + roles + organizations + juristics + factories + selected eligible factories + CEMS/WPMS connection requests + device connection configs)
 > DB: Microsoft SQL Server | Charset: NVARCHAR (Thai support) | Time: DATETIME2 (Asia/Bangkok)
 >
-> **Phase 1 scope:** identity + RBAC + org hierarchy + juristic/factory CRUD + selected eligible factories + CEMS/WPMS connection request workflow + audit
+> **Phase 1 scope:** identity + RBAC + org hierarchy + juristic/factory CRUD + selected eligible factories + CEMS/WPMS connection request workflow + device connection configs + audit
 > **Phase 2 (deferred):** parameters, sensors, measurements, measurements_hourly
 > **Phase 3 (deferred):** approvals, approval_events, notifications (email transport)
 
@@ -46,6 +46,8 @@ erDiagram
     users ||--o{ cems_wpms_connection_requests : creates
     cems_wpms_connection_requests ||--o{ cems_wpms_measurement_points : requests
     cems_wpms_connection_requests ||--o{ cems_wpms_request_status_history : tracks
+    users ||--o{ device_connection_configs : creates
+    device_connection_configs ||--o{ device_measurement_channels : maps
     factories ||--o{ sensors : has
     sensors ||--o{ measurements : produces
     parameters ||--o{ measurements : measured_as
@@ -394,6 +396,69 @@ CREATE TABLE cems_wpms_request_status_history (
 );
 ```
 
+### 5.7 `device_connection_configs` — ตั้งค่า connection อุปกรณ์ตรวจวัด
+
+ใช้เก็บ connection point 1 ชุดต่อ config เช่น Modbus RTU COM/Slave, Modbus TCP Host/Slave/Port, หรือ DB Host/User/Name
+
+```sql
+CREATE TABLE device_connection_configs (
+  id              BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+  station_id      VARCHAR(64)          NOT NULL,
+  protocol        VARCHAR(32)          NOT NULL, -- 'MODBUS_RTU' | 'MODBUS_TCP' | 'MSSQL' | 'MYSQL'
+  settings_json   NVARCHAR(MAX)        NOT NULL,
+  created_at      DATETIME2            NOT NULL DEFAULT SYSDATETIME(),
+  updated_at      DATETIME2            NOT NULL DEFAULT SYSDATETIME(),
+  created_by      BIGINT               NULL,
+  updated_by      BIGINT               NULL,
+  deleted_at      DATETIME2            NULL
+);
+```
+
+`settings_json` แยกตาม `protocol`:
+
+| Protocol | Required settings |
+| --- | --- |
+| `MODBUS_RTU` | `comPort`, `slaveId`, `baudRate`, `parity`, `stopBits`, `dataBits`, `quantity`, optional `valueRange` |
+| `MODBUS_TCP` | `hostIp`, `slaveId`, `port` |
+| `MSSQL` | `hostIp`, `port`, `dbUser`, `dbPass`, `dbName` |
+| `MYSQL` | `hostIp`, `port`, `dbUser`, `dbPass`, `dbName` |
+
+Security note: API response masks `settings.dbPass` as `********`.
+
+### 5.8 `device_measurement_channels` — รายการอุปกรณ์/ค่าตรวจวัดใน connection
+
+แต่ละ `device_connection_configs` มีได้หลาย channel. ทุก protocol ใช้ pattern เดียวกัน: 1 connection point + หลายอุปกรณ์ตรวจวัด
+
+```sql
+CREATE TABLE device_measurement_channels (
+  id               BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+  config_id        BIGINT               NOT NULL,
+  address_id       BIGINT               NOT NULL,
+  data_type        NVARCHAR(128)        NOT NULL,
+  unit             NVARCHAR(64)         NOT NULL,
+  value_range_json NVARCHAR(MAX)        NULL,
+  value_format     VARCHAR(32)          NULL, -- 'MEASUREMENT_VALUE' | 'CURRENT' | 'VOLTAGE'
+  offset_value     DECIMAL(18,6)        NOT NULL DEFAULT 0,
+  encoding         VARCHAR(64)          NULL,
+  created_at       DATETIME2            NOT NULL DEFAULT SYSDATETIME(),
+  updated_at       DATETIME2            NOT NULL DEFAULT SYSDATETIME(),
+  created_by       BIGINT               NULL,
+  updated_by       BIGINT               NULL,
+  deleted_at       DATETIME2            NULL,
+  CONSTRAINT fk_device_measurement_channel_config FOREIGN KEY (config_id)
+    REFERENCES device_connection_configs(id),
+  CONSTRAINT uq_device_measurement_channels_config_address UNIQUE (config_id, address_id)
+);
+```
+
+Validation:
+
+- `address_id >= 40001`
+- `offset_value` รับได้ทั้งบวกและลบ
+- `value_range_json` เก็บ `{ "min": number, "max": number }`
+- `value_format` คือรูปแบบค่าข้อมูลตรวจวัด: `MEASUREMENT_VALUE` = ค่าตรวจวัดปกติ, `CURRENT` = ค่ากระแสไฟฟ้า, `VOLTAGE` = ค่าแรงดันไฟฟ้า
+- Modbus channel ต้องมี `value_range_json` และ `encoding`
+
 ---
 
 ## 6. Sensors & Measurements
@@ -737,16 +802,17 @@ interface LoginResponse {
 17_create_eligible_factories.ts
 18_add_department_name_to_officer_profiles.ts
 19_create_cems_wpms_connection_requests.ts
+20_create_device_connection_configs.ts
 ```
 
 ### Phase 2 (deferred — sensor data)
 
 ```
-20_create_parameters.ts
-21_create_sensors.ts
-22_create_partition_function_measurements.ts   ← MSSQL-specific (sliding window)
-23_create_measurements.ts
-24_create_measurements_hourly.ts
+21_create_parameters.ts
+22_create_sensors.ts
+23_create_partition_function_measurements.ts   ← MSSQL-specific (sliding window)
+24_create_measurements.ts
+25_create_measurements_hourly.ts
 ```
 
 ### Phase 3 (deferred — workflow + email notifications)

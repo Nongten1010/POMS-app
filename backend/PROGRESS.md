@@ -5,6 +5,62 @@
 
 ---
 
+# 2026-05-27 — Device connection config API
+
+**Added API for “ตั้งค่า connection อุปกรณ์ตรวจวัด”** ✅
+- Added route group `POST|GET /api/v1/device-connections`
+- Added mock connection test endpoint `POST /api/v1/device-connections/test-connection`
+- Supported protocols:
+  - `MODBUS_RTU`
+  - `MODBUS_TCP`
+  - `MSSQL`
+  - `MYSQL`
+
+**Contract decision** ✅
+- All 4 protocols use the same shape:
+  - `settings` = 1 connection point
+  - `channels` = many measurement devices/channels under that connection point
+- Mock behavior is selected by endpoint: `POST /device-connections/test-connection`
+- Real config payload does not include a mock flag; `POST /device-connections` stores the real-ready config shape
+
+**Database migration added** ✅
+- `0020_create_device_connection_configs.ts`
+- Tables:
+  - `device_connection_configs`
+  - `device_measurement_channels`
+
+**Security and validation** ✅
+- Uses existing permissions `cems_wpms_requests:view|edit`
+- Zod schemas reject unknown fields
+- Validates IPv4, positive ports, positive COM/slave/quantity, `addressId >= 40001`
+- Validates range objects with `min <= max`
+- Prevents duplicate `addressId` inside one config
+- Masks `settings.dbPass` as `********` in API responses
+
+**Docs/tests updated** ✅
+- Updated `README.md`
+- Updated `docs/FRONTEND_HANDOFF.md`
+- Updated `docs/API_TESTING.md`
+- Updated `docs/PERMISSIONS.md`
+- Updated `docs/SCHEMA.md`
+- Updated `docs/WINDOWS_DEPLOYMENT.md`
+- Updated `tests-manual.http`
+- Added unit tests for validator and service mock connection behavior
+
+**Verification**
+
+```bash
+npm test -- --runTestsByPath tests/unit/device-connections.service.test.ts tests/unit/device-connections.validator.test.ts
+npm run typecheck
+npm test
+npm run build
+```
+
+Notes:
+- `npm run lint` still fails because the repo has ESLint v10 but no `eslint.config.*`; this is pre-existing project config work.
+
+---
+
 # 2026-05-27 — CEMS/WPMS connection request API
 
 **Added request form workflow for “ขอเชื่อมต่อ / เพิ่มจุดตรวจวัด”** ✅

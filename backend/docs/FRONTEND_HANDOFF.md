@@ -1085,7 +1085,230 @@ Content-Type: application/json
 
 ผลลัพธ์จะเป็น `CONNECTED` / เชื่อมต่อแล้ว
 
-## 9. Error cases ที่ frontend ควรรองรับ
+## 9. Device connection config API
+
+API ชุดนี้ใช้กับหน้าตั้งค่า connection อุปกรณ์ตรวจวัดตาม `stationId`
+
+Base URL:
+
+```text
+http://localhost:3000/api/v1/device-connections
+```
+
+Permission ที่ใช้:
+
+```text
+cems_wpms_requests:view
+cems_wpms_requests:edit
+```
+
+### 9.1 Data model สำหรับ UI
+
+ทั้ง 4 protocol ใช้โครงเดียวกัน:
+
+```ts
+type DeviceConnectionPayload = {
+  stationId: string
+  protocol: 'MODBUS_RTU' | 'MODBUS_TCP' | 'MSSQL' | 'MYSQL'
+  settings: object
+  channels: DeviceMeasurementChannel[]
+}
+```
+
+แนวคิดสำคัญ:
+
+| Field | Meaning |
+| --- | --- |
+| `settings` | connection point 1 ชุด เช่น COM/Slave หรือ Host/DB |
+| `channels` | อุปกรณ์/ค่าตรวจวัดหลายรายการภายใต้ connection point เดียวกัน |
+| `POST /device-connections/test-connection` | backend จำลองการเชื่อมต่อสำเร็จ ใช้ระหว่างรอ API/driver จริง |
+| `POST /device-connections` | บันทึก config ตาม payload จริง ไม่ต้องส่ง field สำหรับ mock |
+
+Channel shape:
+
+```json
+{
+  "addressId": 40001,
+  "dataType": "CO2",
+  "unit": "ppm",
+  "valueRange": { "min": 0, "max": 200 },
+  "valueFormat": "MEASUREMENT_VALUE",
+  "offset": 0,
+  "encoding": "UNSIGNED16_BIG_ENDIAN"
+}
+```
+
+Validation สำคัญ:
+
+| Field | Rule |
+| --- | --- |
+| `addressId` | integer ตั้งแต่ `40001` |
+| `offset` | number ได้ทั้งบวกและลบ |
+| `valueRange.min/max` | `min <= max` |
+| `valueFormat` | รูปแบบค่าข้อมูลตรวจวัด: `MEASUREMENT_VALUE` = ค่าตรวจวัดปกติ, `CURRENT` = ค่ากระแสไฟฟ้า, `VOLTAGE` = ค่าแรงดันไฟฟ้า |
+| Modbus channel | ต้องมี `valueRange` และ `encoding` |
+| DB channel | ใช้เฉพาะ `addressId`, `dataType`, `unit`, `offset` ตามไฟล์ client |
+| `dbPass` | ส่งตอน create/test ได้ แต่ response จะ mask เป็น `********` |
+
+### 9.2 Mock test connection
+
+```http
+POST http://localhost:3000/api/v1/device-connections/test-connection
+Authorization: Bearer <operatorAccessToken>
+Content-Type: application/json
+```
+
+ตัวอย่าง Modbus RTU: 1 connection point + 2 อุปกรณ์ตรวจวัด
+
+```json
+{
+  "stationId": "STATION_001",
+  "protocol": "MODBUS_RTU",
+  "settings": {
+    "comPort": 1,
+    "slaveId": 1,
+    "baudRate": 9600,
+    "parity": "NONE",
+    "stopBits": 1,
+    "dataBits": 8,
+    "valueRange": { "min": 0, "max": 200 },
+    "quantity": 2
+  },
+  "channels": [
+    {
+      "addressId": 40001,
+      "dataType": "CO2",
+      "unit": "ppm",
+      "valueRange": { "min": 0, "max": 200 },
+      "valueFormat": "MEASUREMENT_VALUE",
+      "offset": 0,
+      "encoding": "UNSIGNED"
+    },
+    {
+      "addressId": 40002,
+      "dataType": "O2",
+      "unit": "%",
+      "valueRange": { "min": 0, "max": 25 },
+      "valueFormat": "MEASUREMENT_VALUE",
+      "offset": -0.1,
+      "encoding": "SIGNED"
+    }
+  ]
+}
+```
+
+Expected:
+
+```json
+{
+  "success": true,
+  "data": {
+    "success": true,
+    "mode": "MOCK",
+    "protocol": "MODBUS_RTU",
+    "stationId": "STATION_001",
+    "message": "Mock connection succeeded",
+    "checkedAt": "2026-05-27T13:21:00.000Z",
+    "details": {
+      "endpoint": "COM1:slave-1",
+      "channelCount": 2
+    }
+  }
+}
+```
+
+### 9.3 Create config
+
+```http
+POST http://localhost:3000/api/v1/device-connections
+Authorization: Bearer <operatorAccessToken>
+Content-Type: application/json
+```
+
+ตัวอย่าง MSSQL: 1 connection point + 2 อุปกรณ์ตรวจวัด
+
+```json
+{
+  "stationId": "STATION_001",
+  "protocol": "MSSQL",
+  "settings": {
+    "hostIp": "192.168.1.254",
+    "port": 1433,
+    "dbUser": "sensor_user",
+    "dbPass": "secret-pass",
+    "dbName": "sensor_db"
+  },
+  "channels": [
+    {
+      "addressId": 40001,
+      "dataType": "COD",
+      "unit": "mg/L",
+      "offset": -0.5
+    },
+    {
+      "addressId": 40002,
+      "dataType": "BOD",
+      "unit": "mg/L",
+      "offset": 0
+    }
+  ]
+}
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "stationId": "STATION_001",
+    "protocol": "MSSQL",
+    "settings": {
+      "hostIp": "192.168.1.254",
+      "port": 1433,
+      "dbUser": "sensor_user",
+      "dbPass": "********",
+      "dbName": "sensor_db"
+    },
+    "channels": [
+      {
+        "addressId": 40001,
+        "dataType": "COD",
+        "unit": "mg/L",
+        "offset": -0.5
+      }
+    ],
+    "createdBy": 42,
+    "createdAt": "2026-05-27T13:21:00.000Z",
+    "updatedAt": "2026-05-27T13:21:00.000Z"
+  }
+}
+```
+
+### 9.4 List and detail
+
+```http
+GET http://localhost:3000/api/v1/device-connections?stationId=STATION_001
+Authorization: Bearer <accessToken>
+```
+
+```http
+GET http://localhost:3000/api/v1/device-connections/:id
+Authorization: Bearer <accessToken>
+```
+
+Response list:
+
+```json
+{
+  "success": true,
+  "data": [],
+  "meta": { "total": 0 }
+}
+```
+
+## 10. Error cases ที่ frontend ควรรองรับ
 
 Frontend ควรดู `error.code` เป็นหลัก ไม่ควร hardcode จาก `error.message`
 

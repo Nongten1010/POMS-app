@@ -283,6 +283,159 @@ curl -X PUT "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/form" \
   -d '{...body shape เดียวกับตอน POST...}'
 ```
 
+### 5.8 Device connection config mock API
+
+API ชุดนี้ใช้ตั้งค่า connection อุปกรณ์ตรวจวัดหลังแบบเชื่อมต่อพร้อมใช้งาน โดยทั้ง 4 protocol ใช้ concept เดียวกัน:
+
+- `settings` = connection point 1 ชุด เช่น COM/Slave หรือ Host/DB
+- `channels` = รายการอุปกรณ์/ค่าตรวจวัดหลายตัวใน connection point นั้น
+- `POST /device-connections/test-connection` = backend จำลองการเชื่อมต่อสำเร็จ เพื่อให้ frontend พัฒนาได้ก่อน external API/driver จริงพร้อม
+- `POST /device-connections` = บันทึก config ตาม payload จริง ไม่ต้องส่ง field สำหรับ mock
+- `valueFormat` = รูปแบบค่าข้อมูลตรวจวัด (`MEASUREMENT_VALUE` ค่าปกติ, `CURRENT` ค่ากระแสไฟฟ้า, `VOLTAGE` ค่าแรงดันไฟฟ้า)
+
+Permission ที่ใช้:
+
+```text
+cems_wpms_requests:view
+cems_wpms_requests:edit
+```
+
+Mock test Modbus RTU หนึ่ง connection point + หลายอุปกรณ์ตรวจวัด:
+
+```bash
+curl -X POST http://localhost:3000/api/v1/device-connections/test-connection \
+  -H "Authorization: Bearer $OPERATOR_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "stationId":"STATION_001",
+    "protocol":"MODBUS_RTU",
+    "settings":{
+      "comPort":1,
+      "slaveId":1,
+      "baudRate":9600,
+      "parity":"NONE",
+      "stopBits":1,
+      "dataBits":8,
+      "valueRange":{"min":0,"max":200},
+      "quantity":2
+    },
+    "channels":[
+      {
+        "addressId":40001,
+        "dataType":"CO2",
+        "unit":"ppm",
+        "valueRange":{"min":0,"max":200},
+        "valueFormat":"MEASUREMENT_VALUE",
+        "offset":0,
+        "encoding":"UNSIGNED"
+      },
+      {
+        "addressId":40002,
+        "dataType":"O2",
+        "unit":"%",
+        "valueRange":{"min":0,"max":25},
+        "valueFormat":"MEASUREMENT_VALUE",
+        "offset":-0.1,
+        "encoding":"SIGNED"
+      }
+    ]
+  }'
+```
+
+Mock response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "success": true,
+    "mode": "MOCK",
+    "protocol": "MODBUS_RTU",
+    "stationId": "STATION_001",
+    "message": "Mock connection succeeded",
+    "checkedAt": "2026-05-27T13:21:00.000Z",
+    "details": {
+      "endpoint": "COM1:slave-1",
+      "channelCount": 2
+    }
+  }
+}
+```
+
+Create MSSQL config แบบ mock:
+
+```bash
+CONFIG_ID=$(curl -s -X POST http://localhost:3000/api/v1/device-connections \
+  -H "Authorization: Bearer $OPERATOR_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "stationId":"STATION_001",
+    "protocol":"MSSQL",
+    "settings":{
+      "hostIp":"192.168.1.254",
+      "port":1433,
+      "dbUser":"sensor_user",
+      "dbPass":"secret-pass",
+      "dbName":"sensor_db"
+    },
+    "channels":[
+      {
+        "addressId":40001,
+        "dataType":"COD",
+        "unit":"mg/L",
+        "offset":-0.5
+      },
+      {
+        "addressId":40002,
+        "dataType":"BOD",
+        "unit":"mg/L",
+        "offset":0
+      }
+    ]
+  }' | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['id'])")
+```
+
+Response จะ mask `settings.dbPass` เป็น `********` เสมอ:
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "stationId": "STATION_001",
+    "protocol": "MSSQL",
+    "settings": {
+      "hostIp": "192.168.1.254",
+      "port": 1433,
+      "dbUser": "sensor_user",
+      "dbPass": "********",
+      "dbName": "sensor_db"
+    },
+    "channels": [
+      {
+        "addressId": 40001,
+        "dataType": "COD",
+        "unit": "mg/L",
+        "offset": -0.5
+      }
+    ],
+    "createdBy": 42,
+    "createdAt": "2026-05-27T13:21:00.000Z",
+    "updatedAt": "2026-05-27T13:21:00.000Z"
+  }
+}
+```
+
+List/detail:
+
+```bash
+curl "http://localhost:3000/api/v1/device-connections?stationId=STATION_001" \
+  -H "Authorization: Bearer $OPERATOR_TOKEN"
+
+curl "http://localhost:3000/api/v1/device-connections/$CONFIG_ID" \
+  -H "Authorization: Bearer $OPERATOR_TOKEN"
+```
+
 ---
 
 ## 6. ดูข้อมูลใน DB ตรง ๆ

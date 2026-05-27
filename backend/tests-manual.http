@@ -252,3 +252,175 @@ Content-Type: application/json
 ### 6.8 ลบรายคน (soft delete)
 DELETE {{host}}{{apiPrefix}}/users/{{createManagedUser.response.body.data.id}}
 Authorization: Bearer {{loginAdmin.response.body.data.accessToken}}
+
+###############################################################################
+# 7. Device connection config (ต้อง login operator ข้อ 2.4 หรือ admin ข้อ 2.1 ก่อน)
+###############################################################################
+
+### 7.1 Mock test — Modbus TCP
+POST {{host}}{{apiPrefix}}/device-connections/test-connection
+Authorization: Bearer {{loginOperator.response.body.data.accessToken}}
+Content-Type: application/json
+
+{
+  "stationId": "STATION_001",
+  "protocol": "MODBUS_TCP",
+  "settings": {
+    "hostIp": "192.168.1.10",
+    "slaveId": 1,
+    "port": 502
+  },
+  "channels": [
+    {
+      "addressId": 40001,
+      "dataType": "CO2",
+      "unit": "ppm",
+      "valueRange": { "min": 0, "max": 200 },
+      "valueFormat": "MEASUREMENT_VALUE",
+      "offset": 0,
+      "encoding": "UNSIGNED16_BIG_ENDIAN"
+    }
+  ]
+}
+
+### 7.2 Mock test — Modbus RTU หนึ่ง connection point + หลายอุปกรณ์ตรวจวัด
+POST {{host}}{{apiPrefix}}/device-connections/test-connection
+Authorization: Bearer {{loginOperator.response.body.data.accessToken}}
+Content-Type: application/json
+
+{
+  "stationId": "STATION_001",
+  "protocol": "MODBUS_RTU",
+  "settings": {
+    "comPort": 1,
+    "slaveId": 1,
+    "baudRate": 9600,
+    "parity": "NONE",
+    "stopBits": 1,
+    "dataBits": 8,
+    "valueRange": { "min": 0, "max": 200 },
+    "quantity": 2
+  },
+  "channels": [
+    {
+      "addressId": 40001,
+      "dataType": "CO2",
+      "unit": "ppm",
+      "valueRange": { "min": 0, "max": 200 },
+      "valueFormat": "MEASUREMENT_VALUE",
+      "offset": 0,
+      "encoding": "UNSIGNED"
+    },
+    {
+      "addressId": 40002,
+      "dataType": "O2",
+      "unit": "%",
+      "valueRange": { "min": 0, "max": 25 },
+      "valueFormat": "MEASUREMENT_VALUE",
+      "offset": -0.1,
+      "encoding": "SIGNED"
+    }
+  ]
+}
+
+### 7.3 Mock test — MSSQL หนึ่ง connection point + หลายอุปกรณ์ตรวจวัด
+POST {{host}}{{apiPrefix}}/device-connections/test-connection
+Authorization: Bearer {{loginOperator.response.body.data.accessToken}}
+Content-Type: application/json
+
+{
+  "stationId": "STATION_001",
+  "protocol": "MSSQL",
+  "settings": {
+    "hostIp": "192.168.1.254",
+    "port": 1433,
+    "dbUser": "sensor_user",
+    "dbPass": "secret-pass",
+    "dbName": "sensor_db"
+  },
+  "channels": [
+    {
+      "addressId": 40001,
+      "dataType": "COD",
+      "unit": "mg/L",
+      "offset": -0.5
+    },
+    {
+      "addressId": 40002,
+      "dataType": "BOD",
+      "unit": "mg/L",
+      "offset": 0
+    }
+  ]
+}
+
+### 7.4 Mock test — MySQL หนึ่ง connection point + หลายอุปกรณ์ตรวจวัด
+POST {{host}}{{apiPrefix}}/device-connections/test-connection
+Authorization: Bearer {{loginOperator.response.body.data.accessToken}}
+Content-Type: application/json
+
+{
+  "stationId": "STATION_001",
+  "protocol": "MYSQL",
+  "settings": {
+    "hostIp": "192.168.1.254",
+    "port": 3306,
+    "dbUser": "sensor_user",
+    "dbPass": "secret-pass",
+    "dbName": "sensor_db"
+  },
+  "channels": [
+    {
+      "addressId": 40001,
+      "dataType": "COD",
+      "unit": "mg/L",
+      "offset": -0.5
+    },
+    {
+      "addressId": 40002,
+      "dataType": "BOD",
+      "unit": "mg/L",
+      "offset": 0
+    }
+  ]
+}
+
+### 7.5 Create config — MSSQL mock
+# @name createDeviceConnection
+POST {{host}}{{apiPrefix}}/device-connections
+Authorization: Bearer {{loginOperator.response.body.data.accessToken}}
+Content-Type: application/json
+
+{
+  "stationId": "STATION_001",
+  "protocol": "MSSQL",
+  "settings": {
+    "hostIp": "192.168.1.254",
+    "port": 1433,
+    "dbUser": "sensor_user",
+    "dbPass": "secret-pass",
+    "dbName": "sensor_db"
+  },
+  "channels": [
+    {
+      "addressId": 40001,
+      "dataType": "COD",
+      "unit": "mg/L",
+      "offset": -0.5
+    },
+    {
+      "addressId": 40002,
+      "dataType": "BOD",
+      "unit": "mg/L",
+      "offset": 0
+    }
+  ]
+}
+
+### 7.6 List configs by station
+GET {{host}}{{apiPrefix}}/device-connections?stationId=STATION_001
+Authorization: Bearer {{loginOperator.response.body.data.accessToken}}
+
+### 7.7 Get config by id
+GET {{host}}{{apiPrefix}}/device-connections/{{createDeviceConnection.response.body.data.id}}
+Authorization: Bearer {{loginOperator.response.body.data.accessToken}}

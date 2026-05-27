@@ -1,0 +1,84 @@
+import { BadRequestError, NotFoundError } from '../../shared/errors/AppError';
+import { deviceConnectionsRepository } from './device-connections.repository';
+import {
+  DEVICE_CONNECTION_PROTOCOL,
+  type CreateDeviceConnectionConfigInput,
+  type DeviceConnectionConfigDTO,
+  type DeviceConnectionTestResultDTO,
+  type ListDeviceConnectionConfigsQuery,
+  type TestDeviceConnectionInput,
+} from './device-connections.types';
+
+let nowProvider = () => new Date();
+
+export const deviceConnectionsService = {
+  setClockForTests(provider: () => Date): void {
+    nowProvider = provider;
+  },
+
+  list(query: ListDeviceConnectionConfigsQuery): Promise<DeviceConnectionConfigDTO[]> {
+    return deviceConnectionsRepository.list(query);
+  },
+
+  async getById(id: number): Promise<DeviceConnectionConfigDTO> {
+    const config = await deviceConnectionsRepository.findById(id);
+    if (!config) throw new NotFoundError('Device connection config not found');
+    return config;
+  },
+
+  async create(
+    input: CreateDeviceConnectionConfigInput,
+    actorUserId: number,
+  ): Promise<DeviceConnectionConfigDTO> {
+    ensureChannelAddressesAreUnique(input);
+    return deviceConnectionsRepository.create(input, actorUserId);
+  },
+
+  async testConnection(input: TestDeviceConnectionInput): Promise<DeviceConnectionTestResultDTO> {
+    ensureChannelAddressesAreUnique(input);
+    return {
+      success: true,
+      mode: 'MOCK',
+      protocol: input.protocol,
+      stationId: input.stationId,
+      message: 'Mock connection succeeded',
+      checkedAt: nowProvider().toISOString(),
+      details: {
+        endpoint: describeEndpoint(input),
+        channelCount: input.channels.length,
+      },
+    };
+  },
+};
+
+function ensureChannelAddressesAreUnique(input: TestDeviceConnectionInput): void {
+  const seen = new Set<number>();
+  const duplicates = input.channels
+    .map((channel) => channel.addressId)
+    .filter((addressId) => {
+      if (seen.has(addressId)) return true;
+      seen.add(addressId);
+      return false;
+    });
+
+  if (duplicates.length > 0) {
+    throw new BadRequestError('Channel addressId must be unique per connection config', {
+      addressIds: Array.from(new Set(duplicates)),
+    });
+  }
+}
+
+function describeEndpoint(input: TestDeviceConnectionInput): string {
+  if (input.protocol === DEVICE_CONNECTION_PROTOCOL.MODBUS_RTU) {
+    const settings = input.settings;
+    return `COM${settings.comPort}:slave-${settings.slaveId}`;
+  }
+
+  if (input.protocol === DEVICE_CONNECTION_PROTOCOL.MODBUS_TCP) {
+    const settings = input.settings;
+    return `${settings.hostIp}:${settings.port}:slave-${settings.slaveId}`;
+  }
+
+  const settings = input.settings;
+  return `${settings.hostIp}:${settings.port}/${settings.dbName}`;
+}

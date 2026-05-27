@@ -10,6 +10,7 @@ import { authRoutes } from './modules/auth/auth.routes';
 import { usersRoutes } from './modules/users/users.routes';
 import { eligibleFactoriesRoutes } from './modules/eligible-factories/eligible-factories.routes';
 import { connectionRequestsRoutes } from './modules/connection-requests/connection-requests.routes';
+import { deviceConnectionsRoutes } from './modules/device-connections/device-connections.routes';
 
 export function createApp(): Application {
   const app = express();
@@ -50,6 +51,7 @@ export function createApp(): Application {
   app.use(`${env.API_PREFIX}/users`, usersRoutes);
   app.use(`${env.API_PREFIX}/eligible-factories`, eligibleFactoriesRoutes);
   app.use(`${env.API_PREFIX}/cems-wpms-requests`, connectionRequestsRoutes);
+  app.use(`${env.API_PREFIX}/device-connections`, deviceConnectionsRoutes);
   // TODO: mount more feature routes when ready
   // app.use(`${env.API_PREFIX}/factories`, factoriesRoutes);
 

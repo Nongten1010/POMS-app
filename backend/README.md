@@ -32,6 +32,7 @@ backend/
 │   ├── modules/             # feature modules
 │   │   ├── auth/            # login, logout, refresh token
 │   │   ├── connection-requests/ # CEMS/WPMS connection request workflow
+│   │   ├── device-connections/  # device connection settings + mock connection test
 │   │   ├── eligible-factories/  # selected eligible factory management
 │   │   ├── users/           # user CRUD
 │   │   └── roles/           # role + permission (RBAC)
@@ -134,6 +135,7 @@ npm start             # run compiled server
 - [x] Role + permission (RBAC)
 - [x] Eligible factory selection API
 - [x] CEMS/WPMS connection request API (เพิ่มจุดตรวจวัด + status workflow)
+- [x] Device connection config API (Modbus RTU/TCP, MSSQL, MySQL + mock test)
 - [ ] Sensor data ingestion API (HTTP POST from gateway)
 - [ ] Real-time dashboard channel (Socket.IO) — _future_
 - [ ] Alerts / threshold rules — _future_

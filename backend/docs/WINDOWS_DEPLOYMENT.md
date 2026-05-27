@@ -67,11 +67,12 @@ Only stop processes you know belong to this backend service.
 
 Run migrations against the server's real `.env` and database. Do not copy local `.env` to the server.
 
-The eligible factory and CEMS/WPMS connection request features require migrations:
+The eligible factory, CEMS/WPMS connection request, and device connection config features require migrations:
 
 ```text
 0017_create_eligible_factories.ts
 0019_create_cems_wpms_connection_requests.ts
+0020_create_device_connection_configs.ts
 ```
 
 These create:
@@ -79,6 +80,8 @@ These create:
 - `cems_wpms_connection_requests` for request form state
 - `cems_wpms_measurement_points` for requested monitoring points
 - `cems_wpms_request_status_history` for status audit trail
+- `device_connection_configs` for Modbus RTU/TCP, MSSQL, and MySQL connection settings
+- `device_measurement_channels` for multiple measurement devices under one connection point
 
 ## External DIW factory source
 
