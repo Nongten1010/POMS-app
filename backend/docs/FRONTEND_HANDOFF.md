@@ -1105,7 +1105,7 @@ POST /test-connection         cems_wpms_requests:edit
 
 ### 9.1 Data model สำหรับ UI
 
-ทั้ง 4 protocol ใช้โครงเดียวกัน:
+1 `stationId` คือ 1 จุดตรวจวัด และมีได้ 1 config / 1 protocol เท่านั้น:
 
 ```ts
 type DeviceConnectionPayload = {
@@ -1122,7 +1122,7 @@ type DeviceConnectionPayload = {
 | --- | --- |
 | `settings` | connection point 1 ชุด เช่น COM/Slave หรือ Host/DB |
 | `channels` | อุปกรณ์/ค่าตรวจวัดหลายรายการภายใต้ connection point เดียวกัน |
-| `GET /device-connections?stationId=STATION_001` | ถ้า DB ยังไม่มีข้อมูลจริง backend จะคืน fallback mock configs ให้ทันที |
+| `GET /device-connections?stationId=STATION_001` | ถ้า DB ยังไม่มีข้อมูลจริง backend จะคืน fallback mock config 1 รายการ |
 | `POST /device-connections/test-connection` | backend จำลองการเชื่อมต่อสำเร็จ ใช้ระหว่างรอ API/driver จริง |
 | `POST /device-connections` | บันทึก config ตาม payload จริง ไม่ต้องส่ง field สำหรับ mock |
 

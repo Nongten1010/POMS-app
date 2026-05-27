@@ -36,6 +36,11 @@ export async function up(knex: Knex): Promise<void> {
     WHERE deleted_at IS NULL;
   `);
   await knex.schema.raw(`
+    CREATE UNIQUE INDEX uq_device_connection_configs_station
+    ON device_connection_configs(station_id)
+    WHERE deleted_at IS NULL;
+  `);
+  await knex.schema.raw(`
     CREATE INDEX ix_device_measurement_channels_config
     ON device_measurement_channels(config_id)
     WHERE deleted_at IS NULL;

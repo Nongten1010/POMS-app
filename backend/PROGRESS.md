@@ -20,9 +20,10 @@
 - All 4 protocols use the same shape:
   - `settings` = 1 connection point
   - `channels` = many measurement devices/channels under that connection point
+- One `stationId` is one monitoring point and can have only one config/protocol
 - Mock behavior is selected by endpoint: `POST /device-connections/test-connection`
 - Real config payload does not include a mock flag; `POST /device-connections` stores the real-ready config shape
-- `GET /device-connections?stationId=STATION_001` returns fallback mock configs when DB has no real configs yet
+- `GET /device-connections?stationId=STATION_001` returns one fallback mock config when DB has no real config yet
 
 **Database migration added** ✅
 - `0020_create_device_connection_configs.ts`

@@ -170,18 +170,28 @@ describe('deviceConnectionsService', () => {
     },
   );
 
-  it('returns fallback mock configs for STATION_001 when no DB configs exist', async () => {
+  it('returns one fallback mock config for STATION_001 when no DB config exists', async () => {
     mockedRepository.list.mockResolvedValue([]);
 
     const result = await deviceConnectionsService.list({ stationId: 'STATION_001' });
 
-    expect(result).toHaveLength(4);
-    expect(result.map((config) => config.protocol)).toEqual([
-      DEVICE_CONNECTION_PROTOCOL.MODBUS_RTU,
-      DEVICE_CONNECTION_PROTOCOL.MODBUS_TCP,
-      DEVICE_CONNECTION_PROTOCOL.MSSQL,
-      DEVICE_CONNECTION_PROTOCOL.MYSQL,
-    ]);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      id: 900001,
+      stationId: 'STATION_001',
+      protocol: DEVICE_CONNECTION_PROTOCOL.MODBUS_RTU,
+    });
+  });
+
+  it('does not return fallback mock config when protocol filter does not match station protocol', async () => {
+    mockedRepository.list.mockResolvedValue([]);
+
+    const result = await deviceConnectionsService.list({
+      stationId: 'STATION_001',
+      protocol: DEVICE_CONNECTION_PROTOCOL.MSSQL,
+    });
+
+    expect(result).toEqual([]);
   });
 
   it('does not return fallback mock configs for other station ids', async () => {
@@ -195,21 +205,22 @@ describe('deviceConnectionsService', () => {
   it('returns fallback mock config detail by mock id', async () => {
     mockedRepository.findById.mockResolvedValue(null);
 
-    const result = await deviceConnectionsService.getById(900003);
+    const result = await deviceConnectionsService.getById(900001);
 
     expect(result).toMatchObject({
-      id: 900003,
+      id: 900001,
       stationId: 'STATION_001',
-      protocol: DEVICE_CONNECTION_PROTOCOL.MSSQL,
+      protocol: DEVICE_CONNECTION_PROTOCOL.MODBUS_RTU,
       settings: {
-        dbPass: '********',
+        comPort: 1,
+        slaveId: 1,
       },
       channels: expect.arrayContaining([
         expect.objectContaining({
           addressId: 40001,
-          dataType: 'COD',
-          unit: 'mg/L',
-          offset: -0.5,
+          dataType: 'CO2',
+          unit: 'ppm',
+          encoding: 'UNSIGNED',
         }),
       ]),
     });

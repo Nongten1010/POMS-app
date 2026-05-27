@@ -285,11 +285,11 @@ curl -X PUT "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/form" \
 
 ### 5.8 Device connection config mock API
 
-API ชุดนี้ใช้ตั้งค่า connection อุปกรณ์ตรวจวัดหลังแบบเชื่อมต่อพร้อมใช้งาน โดยทั้ง 4 protocol ใช้ concept เดียวกัน:
+API ชุดนี้ใช้ตั้งค่า connection อุปกรณ์ตรวจวัดหลังแบบเชื่อมต่อพร้อมใช้งาน โดย 1 `stationId` คือ 1 จุดตรวจวัด และมีได้ 1 config / 1 protocol เท่านั้น:
 
 - `settings` = connection point 1 ชุด เช่น COM/Slave หรือ Host/DB
 - `channels` = รายการอุปกรณ์/ค่าตรวจวัดหลายตัวใน connection point นั้น
-- `GET /device-connections?stationId=STATION_001` จะคืน fallback mock configs ถ้า DB ยังไม่มีข้อมูลจริง
+- `GET /device-connections?stationId=STATION_001` จะคืน fallback mock config 1 รายการ ถ้า DB ยังไม่มีข้อมูลจริง
 - `POST /device-connections/test-connection` = backend จำลองการเชื่อมต่อสำเร็จ เพื่อให้ frontend พัฒนาได้ก่อน external API/driver จริงพร้อม
 - `POST /device-connections` = บันทึก config ตาม payload จริง ไม่ต้องส่ง field สำหรับ mock
 - `valueFormat` = รูปแบบค่าข้อมูลตรวจวัด (`MEASUREMENT_VALUE` ค่าปกติ, `CURRENT` ค่ากระแสไฟฟ้า, `VOLTAGE` ค่าแรงดันไฟฟ้า)
