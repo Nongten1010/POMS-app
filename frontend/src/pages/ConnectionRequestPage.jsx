@@ -137,6 +137,16 @@ const parityOptions = ['Even', 'Odd', 'None']
 const stopBitsOptions = ['1', '2']
 const dataBitsOptions = ['7', '8']
 const dataValueFormatOptions = ['ค่าข้อมูลตรวจวัด', 'ค่ากระแสไฟฟ้า', 'ค่าแรงดันไฟฟ้า']
+const connectionParameterStatusOptions = [
+  'Normal',
+  'Calibration',
+  'Defective',
+  'Maintenance',
+  'Start up',
+  'Shut Down',
+  'Turnaround',
+  'Etc.',
+]
 const encodingDataOptions = [
   'Signed16 - Big Endian',
   'Signed16 - Little Endian',
@@ -152,7 +162,7 @@ const encodingDataOptions = [
   'Float64 - Little Endian',
 ]
 
-const mockNewRequestParameters = ['SO2 (ppm)', 'NOx (ppm)', 'Flow (m³/hr)', 'BOD (mg/l)', 'Loading (mg/hr)']
+const mockConnectionParameterOptions = ['SO2 (ppm)', 'NOx (ppm)', 'Flow (m³/hr)', 'BOD (mg/l)', 'Loading (mg/hr)']
 
 const parameterUnitMap = {
   'CO2 (%)': '%',
@@ -179,6 +189,45 @@ const parameterUnitMap = {
   'BOD (mg/l)': 'mg/l',
   'COD (mg/l)': 'mg/l',
   'Watt (kW)': 'kW',
+}
+
+function getDefaultConnectionForm(type) {
+  if (type === 'Modbus RTU') {
+    return {
+      comport: '1',
+      slaveId: '1',
+      baudRate: '9600',
+      parity: 'None',
+      stopBits: '1',
+      dataBits: '8',
+      measureMin: '',
+      measureMax: '',
+      quantity: '1',
+    }
+  }
+  if (type === 'Modbus TCP') {
+    return {
+      slaveId: '1',
+      hostIp: '',
+      port: '502',
+    }
+  }
+  if (type === 'Microsoft SQL') {
+    return {
+      hostIp: '',
+      port: '1433',
+      dbUser: '',
+      dbPass: '',
+      dbName: '',
+    }
+  }
+  return {
+    hostIp: '',
+    port: '3306',
+    dbUser: '',
+    dbPass: '',
+    dbName: '',
+  }
 }
 
 const documentImageItems = [
@@ -250,6 +299,7 @@ const factoryRows = [
   },
   {
     id: 2,
+    factoryId: 2,
     factoryName: 'บริษัท กรีน วอเตอร์ จำกัด',
     newRegistrationNo: '3-088-12/65',
     oldRegistrationNo: 'รง.4-088-1212',
@@ -269,6 +319,7 @@ const factoryRows = [
   },
   {
     id: 3,
+    factoryId: 3,
     factoryName: 'บริษัท ไทยฟู้ด โปรเซสซิ่ง จำกัด',
     newRegistrationNo: '3-064-89/64',
     oldRegistrationNo: 'รง.4-064-4589',
@@ -307,6 +358,7 @@ const factoryRows = [
   },
   {
     id: 5,
+    factoryId: 5,
     factoryName: 'บริษัท เมทัล เวิร์คส์ จำกัด',
     newRegistrationNo: '3-105-21/63',
     oldRegistrationNo: 'รง.4-105-2121',
@@ -347,19 +399,6 @@ const factoryRows = [
 
 const requestRows = [
   {
-    id: 1,
-    factoryName: 'บริษัท เอเชีย เคมีคอล จำกัด',
-    industryType: 'ผลิตเคมีภัณฑ์',
-    province: 'ระยอง',
-    type: 'CEMS',
-    requestNo: 'CR-2567-0001',
-    submittedDate: '12/03/2567',
-    monitoringPointCode: '-',
-    codeIssuedDate: '-',
-    form: 'เชื่อมต่อใหม่',
-    status: 'รอพิจารณาแบบ',
-  },
-  {
     id: 2,
     factoryName: 'บริษัท กรีน วอเตอร์ จำกัด',
     industryType: 'บำบัดน้ำเสีย',
@@ -367,7 +406,7 @@ const requestRows = [
     type: 'WPMS',
     requestNo: 'CR-2567-0002',
     submittedDate: '15/03/2567',
-    monitoringPointCode: 'POMS-RYG-0007',
+    monitoringPointCode: 'P0001',
     codeIssuedDate: '18/03/2567',
     form: 'เพิ่มจุดตรวจวัด',
     status: 'รอเชื่อมต่อ',
@@ -380,23 +419,10 @@ const requestRows = [
     type: 'CEMS',
     requestNo: 'CR-2567-0003',
     submittedDate: '20/03/2567',
-    monitoringPointCode: 'POMS-SPK-0012',
+    monitoringPointCode: 'S0012',
     codeIssuedDate: '22/03/2567',
     form: 'เพิ่มพารามิเตอร์',
     status: 'รอโรงงานแก้ไข',
-  },
-  {
-    id: 4,
-    factoryName: 'บริษัท อีสเทิร์น เพาเวอร์ จำกัด',
-    industryType: 'ผลิตพลังงาน',
-    province: 'ฉะเชิงเทรา',
-    type: 'CEMS',
-    requestNo: 'CR-2567-0004',
-    submittedDate: '25/03/2567',
-    monitoringPointCode: 'POMS-CCO-0021',
-    codeIssuedDate: '29/03/2567',
-    form: 'เชื่อมต่อใหม่',
-    status: 'ยืนยันการเชื่อมต่อ',
   },
   {
     id: 5,
@@ -417,7 +443,7 @@ const monitoringPointRows = [
   {
     id: 1,
     factoryId: 1,
-    code: 'POMS-RYG-0001',
+    code: 'S0001',
     name: 'ปล่องหม้อไอน้ำ 1',
     type: 'CEMS',
     parameters: ['SO2 (ppm)', 'NOx (ppm)', 'O2 (%)'],
@@ -426,7 +452,7 @@ const monitoringPointRows = [
   {
     id: 2,
     factoryId: 1,
-    code: 'POMS-RYG-0002',
+    code: 'S0002',
     name: 'ปล่องเตาเผา 1',
     type: 'CEMS',
     parameters: ['Particulate (mg/m³)', 'CO (ppm)'],
@@ -435,7 +461,7 @@ const monitoringPointRows = [
   {
     id: 3,
     factoryId: 2,
-    code: 'POMS-RYG-0007',
+    code: 'P0001',
     name: 'จุดระบายน้ำทิ้งหลัก',
     type: 'WPMS',
     parameters: ['BOD (mg/l)', 'COD (mg/l)', 'Flow (m³/hr)'],
@@ -444,7 +470,7 @@ const monitoringPointRows = [
   {
     id: 4,
     factoryId: 2,
-    code: 'POMS-RYG-0008',
+    code: 'P0002',
     name: 'จุดระบายน้ำทิ้งสำรอง',
     type: 'WPMS',
     parameters: ['Flow (m³/hr)', 'Watt (kW)'],
@@ -453,7 +479,7 @@ const monitoringPointRows = [
   {
     id: 5,
     factoryId: 3,
-    code: 'POMS-SPK-0012',
+    code: 'S0012',
     name: 'ปล่องไลน์ผลิต A',
     type: 'CEMS',
     parameters: ['Opacity (%)', 'Temp. (°C)'],
@@ -462,7 +488,7 @@ const monitoringPointRows = [
   {
     id: 6,
     factoryId: 4,
-    code: 'POMS-CCO-0021',
+    code: 'S0021',
     name: 'ปล่องโรงไฟฟ้า',
     type: 'CEMS',
     parameters: ['SO2 (ppm)', 'NOx (ppm)', 'CO2 (%)'],
@@ -481,7 +507,21 @@ const monitoringPointRows = [
 
 function getConnectionParameterOptions(context) {
   const existingParameters = context?.parameters ?? []
-  return [...new Set([...existingParameters, ...mockNewRequestParameters])]
+  return [...new Set([...existingParameters, ...mockConnectionParameterOptions])]
+}
+
+function getMonitoringPointCode(context) {
+  return context?.code || context?.monitoringPointCode || 'S0001'
+}
+
+function getConnectionDeviceCode(context, index) {
+  return `${getMonitoringPointCode(context)}/${String(index + 1).padStart(2, '0')}`
+}
+
+function getFactoryFromRequest(request) {
+  return factoryRows.find((factory) => factory.id === request.factoryId)
+    ?? factoryRows.find((factory) => factory.factoryName === request.factoryName)
+    ?? request
 }
 
 function StatusChip({ value }) {
@@ -546,22 +586,6 @@ function FactoryStatusMenu({ status }) {
   )
 }
 
-function FactoryFormMenu({ disabled = false, requestStatus, monitoringPointCount = 0, onSelect }) {
-  const hasNoMonitoringPoint = requestStatus === 'ยังไม่มีจุดตรวจวัด'
-
-  return (
-    <MenuButton
-      label="แบบฟอร์มคำขอ"
-      options={[
-        { label: 'เชื่อมต่อใหม่', disabled: monitoringPointCount > 0 },
-        { label: 'เพิ่มจุดตรวจวัด', disabled: hasNoMonitoringPoint },
-      ]}
-      disabled={disabled}
-      onSelect={onSelect}
-    />
-  )
-}
-
 function OfficerFactoryActions({ row, onOpenMonitoringPoints }) {
   return (
     <Stack direction="row" spacing={1} sx={tableActionStackSx}>
@@ -577,20 +601,22 @@ function OfficerFactoryActions({ row, onOpenMonitoringPoints }) {
 }
 
 function OperatorFactoryActions({ row, onOpenRequestForm, onOpenMonitoringPoints }) {
-  const { requestStatus, monitoringPointCount } = row
-  const canSubmitRequestForm = ['เชื่อมต่อแล้ว', 'ยังไม่มีจุดตรวจวัด'].includes(requestStatus)
+  const { requestStatus } = row
+  const canAddMonitoringPoint = requestStatus === 'เชื่อมต่อแล้ว'
 
   return (
     <Stack direction="row" spacing={1} sx={tableActionStackSx}>
       <Button size="small" variant="outlined" onClick={() => onOpenMonitoringPoints?.(row)}>
         ดูข้อมูล
       </Button>
-      <FactoryFormMenu
-        disabled={!canSubmitRequestForm}
-        requestStatus={requestStatus}
-        monitoringPointCount={monitoringPointCount}
-        onSelect={(formType) => onOpenRequestForm?.(row, formType)}
-      />
+      <Button
+        size="small"
+        variant="outlined"
+        disabled={!canAddMonitoringPoint}
+        onClick={() => onOpenRequestForm?.(row, 'เพิ่มจุดตรวจวัด')}
+      >
+        เพิ่มจุดตรวจวัด
+      </Button>
     </Stack>
   )
 }
@@ -628,14 +654,14 @@ function ConnectionSettingsButton({ disabled, onClick }) {
   )
 }
 
-function OperatorRequestActions({ row, onOpenConnectionSettings }) {
+function OperatorRequestActions({ row, onOpenConnectionSettings, onOpenMonitoringPoints }) {
   const { status } = row
   const canModifyRequest = status === 'รอโรงงานแก้ไข'
   const canConfigureConnection = status === 'รอเชื่อมต่อ'
 
   return (
     <Stack direction="row" spacing={1} sx={tableActionStackSx}>
-      <Button size="small" variant="outlined">
+      <Button size="small" variant="outlined" onClick={() => onOpenMonitoringPoints?.(row)}>
         เปิดดู
       </Button>
       <Button size="small" variant="outlined" disabled={!canModifyRequest}>
@@ -656,7 +682,8 @@ function MonitoringPointActions({ point, isOperator, onOpenConnectionSettings })
   const { status } = point
   const canConsider = ['รอพิจารณาแบบ', 'ยืนยันการเชื่อมต่อ', 'แก้ไขแล้ว/รอพิจารณาแบบ'].includes(status)
   const canModifyRequest = status === 'รอโรงงานแก้ไข'
-  const canConfigureConnection = status === 'รอเชื่อมต่อ'
+  const canConfigureConnection = ['รอเชื่อมต่อ', 'ยืนยันการเชื่อมต่อ'].includes(status)
+  const canAddParameter = status === 'เชื่อมต่อแล้ว'
 
   if (!isOperator) {
     return (
@@ -678,6 +705,9 @@ function MonitoringPointActions({ point, isOperator, onOpenConnectionSettings })
       </Button>
       <Button size="small" variant="outlined" disabled={!canModifyRequest}>
         แก้ไข
+      </Button>
+      <Button size="small" variant="outlined" disabled={!canAddParameter}>
+        เพิ่มพารามิเตอร์
       </Button>
       <ConnectionSettingsButton
         disabled={!canConfigureConnection}
@@ -855,10 +885,10 @@ function ConnectionFormFields({ connectionType, value, onChange }) {
   )
 }
 
-function ConnectionParameterTable({ connectionType, parameterOptions }) {
-  const isDatabaseConnection = ['Microsoft SQL', 'MySQL'].includes(connectionType)
+function ConnectionParameterTable({ parameterOptions, deviceCodeOptions }) {
   const [rows, setRows] = useState(() =>
     parameterOptions.map((parameter, index) => ({
+      deviceCode: deviceCodeOptions[0] ?? '',
       addressId: String(40001 + index),
       parameter,
       unit: parameterUnitMap[parameter] ?? '',
@@ -867,6 +897,7 @@ function ConnectionParameterTable({ connectionType, parameterOptions }) {
       valueFormat: 'ค่าข้อมูลตรวจวัด',
       offset: '0',
       encodingData: 'Unsigned16 - Big Endian',
+      status: 'Normal',
     })),
   )
   const updateRow = (index, field, nextValue) => {
@@ -882,18 +913,17 @@ function ConnectionParameterTable({ connectionType, parameterOptions }) {
       }),
     )
   }
-  const columns = isDatabaseConnection
-    ? ['Address ID', 'พารามิเตอร์', 'หน่วย', 'ค่า Offset']
-    : [
-        'Address ID',
-        'พารามิเตอร์',
-        'หน่วย',
-        'Min',
-        'Max',
-        'รูปแบบค่าข้อมูลตรวจวัด',
-        'ค่า Offset',
-        'Encoding data',
-      ]
+  const columns = [
+    { label: 'รหัสอุปกรณ์', width: 170 },
+    { label: 'Address ID', width: 124 },
+    { label: 'พารามิเตอร์', width: 144 },
+    { label: 'Min', width: 108 },
+    { label: 'Max', width: 108 },
+    { label: 'รูปแบบค่าข้อมูลตรวจวัด', width: 220 },
+    { label: 'ค่า Offset', width: 108 },
+    { label: 'Encoding data', width: 230 },
+    { label: 'สถานะ', width: 170 },
+  ]
 
   return (
     <Stack spacing={2}>
@@ -901,12 +931,12 @@ function ConnectionParameterTable({ connectionType, parameterOptions }) {
         การเชื่อมต่อพารามิเตอร์
       </Typography>
       <TableContainer sx={{ border: 1, borderColor: 'divider', overflowX: 'auto' }}>
-        <Table size="small" sx={{ minWidth: isDatabaseConnection ? 760 : 1280, ...borderedTableSx }}>
+        <Table size="small" sx={{ minWidth: 1302, ...borderedTableSx }}>
           <TableHead>
             <TableRow>
               {columns.map((column) => (
-                <TableCell key={column} sx={{ fontWeight: 700, bgcolor: 'neutral.50' }}>
-                  {column}
+                <TableCell key={column.label} sx={{ width: column.width, minWidth: column.width, fontWeight: 700, bgcolor: 'neutral.50' }}>
+                  {column.label}
                 </TableCell>
               ))}
             </TableRow>
@@ -915,7 +945,22 @@ function ConnectionParameterTable({ connectionType, parameterOptions }) {
             {rows.length > 0 ? (
               rows.map((row, index) => (
                 <TableRow key={`${row.addressId}-${row.parameter}-${index}`}>
-                  <TableCell>
+                  <TableCell sx={{ minWidth: 170 }}>
+                    <TextField
+                      select
+                      size="small"
+                      value={deviceCodeOptions.includes(row.deviceCode) ? row.deviceCode : (deviceCodeOptions[0] ?? '')}
+                      onChange={(event) => updateRow(index, 'deviceCode', event.target.value)}
+                      fullWidth
+                    >
+                      {deviceCodeOptions.map((option) => (
+                        <MenuItem key={option} value={option}>
+                          {option}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  </TableCell>
+                  <TableCell sx={{ minWidth: 124 }}>
                     <PositiveNumberField
                       label=""
                       min={40001}
@@ -923,7 +968,7 @@ function ConnectionParameterTable({ connectionType, parameterOptions }) {
                       onChange={(nextValue) => updateRow(index, 'addressId', nextValue)}
                     />
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={{ minWidth: 144 }}>
                     <TextField
                       size="small"
                       value={row.parameter}
@@ -931,50 +976,38 @@ function ConnectionParameterTable({ connectionType, parameterOptions }) {
                       slotProps={{ input: { readOnly: true } }}
                     />
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={{ minWidth: 108 }}>
                     <TextField
                       size="small"
-                      value={row.unit}
+                      value={row.min}
+                      onChange={(event) => updateRow(index, 'min', event.target.value)}
                       fullWidth
-                      slotProps={{ input: { readOnly: true } }}
                     />
                   </TableCell>
-                  {!isDatabaseConnection ? (
-                    <>
-                      <TableCell>
-                        <TextField
-                          size="small"
-                          value={row.min}
-                          onChange={(event) => updateRow(index, 'min', event.target.value)}
-                          fullWidth
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <TextField
-                          size="small"
-                          value={row.max}
-                          onChange={(event) => updateRow(index, 'max', event.target.value)}
-                          fullWidth
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <TextField
-                          select
-                          size="small"
-                          value={row.valueFormat}
-                          onChange={(event) => updateRow(index, 'valueFormat', event.target.value)}
-                          fullWidth
-                        >
-                          {dataValueFormatOptions.map((option) => (
-                            <MenuItem key={option} value={option}>
-                              {option}{option === 'ค่าข้อมูลตรวจวัด' ? ' (default)' : ''}
-                            </MenuItem>
-                          ))}
-                        </TextField>
-                      </TableCell>
-                    </>
-                  ) : null}
-                  <TableCell>
+                  <TableCell sx={{ minWidth: 108 }}>
+                    <TextField
+                      size="small"
+                      value={row.max}
+                      onChange={(event) => updateRow(index, 'max', event.target.value)}
+                      fullWidth
+                    />
+                  </TableCell>
+                  <TableCell sx={{ minWidth: 220 }}>
+                    <TextField
+                      select
+                      size="small"
+                      value={row.valueFormat}
+                      onChange={(event) => updateRow(index, 'valueFormat', event.target.value)}
+                      fullWidth
+                    >
+                      {dataValueFormatOptions.map((option) => (
+                        <MenuItem key={option} value={option}>
+                          {option}{option === 'ค่าข้อมูลตรวจวัด' ? ' (default)' : ''}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  </TableCell>
+                  <TableCell sx={{ minWidth: 108 }}>
                     <TextField
                       type="number"
                       size="small"
@@ -983,23 +1016,36 @@ function ConnectionParameterTable({ connectionType, parameterOptions }) {
                       fullWidth
                     />
                   </TableCell>
-                  {!isDatabaseConnection ? (
-                    <TableCell>
-                      <TextField
-                        select
-                        size="small"
-                        value={row.encodingData}
-                        onChange={(event) => updateRow(index, 'encodingData', event.target.value)}
-                        fullWidth
-                      >
-                        {encodingDataOptions.map((option) => (
-                          <MenuItem key={option} value={option}>
-                            {option}{option === 'Unsigned16 - Big Endian' ? ' (default)' : ''}
-                          </MenuItem>
-                        ))}
-                      </TextField>
-                    </TableCell>
-                  ) : null}
+                  <TableCell sx={{ minWidth: 230 }}>
+                    <TextField
+                      select
+                      size="small"
+                      value={row.encodingData}
+                      onChange={(event) => updateRow(index, 'encodingData', event.target.value)}
+                      fullWidth
+                    >
+                      {encodingDataOptions.map((option) => (
+                        <MenuItem key={option} value={option}>
+                          {option}{option === 'Unsigned16 - Big Endian' ? ' (default)' : ''}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  </TableCell>
+                  <TableCell sx={{ minWidth: 170 }}>
+                    <TextField
+                      select
+                      size="small"
+                      value={row.status}
+                      onChange={(event) => updateRow(index, 'status', event.target.value)}
+                      fullWidth
+                    >
+                      {connectionParameterStatusOptions.map((option) => (
+                        <MenuItem key={option} value={option}>
+                          {option}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  </TableCell>
                 </TableRow>
               ))
             ) : (
@@ -1018,108 +1064,235 @@ function ConnectionParameterTable({ connectionType, parameterOptions }) {
   )
 }
 
+function StatusManagementSection({ parameterOptions }) {
+  const allOption = 'ทั้งหมด'
+  const [selectedParameters, setSelectedParameters] = useState([allOption])
+  const [status, setStatus] = useState('Normal')
+
+  return (
+    <Stack spacing={2}>
+      <Stack spacing={0.5}>
+        <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+          จัดการสถานะ
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          ตั้งเวลาสำหรับเปลี่ยนสถานะชั่วคราว รายพารามิเตอร์ โดยสามารถเลือกทั้งหมดได้
+        </Typography>
+      </Stack>
+      <Grid container spacing={2}>
+        <Grid size={{ xs: 12, md: 6 }}>
+          <FormControl size="small" fullWidth>
+            <InputLabel>เลือกพารามิเตอร์</InputLabel>
+            <Select
+              multiple
+              value={selectedParameters}
+              label="เลือกพารามิเตอร์"
+              input={<OutlinedInput label="เลือกพารามิเตอร์" />}
+              onChange={(event) => {
+                const selectedValue = event.target.value
+                const nextValue = typeof selectedValue === 'string' ? selectedValue.split(',') : selectedValue
+                setSelectedParameters(nextValue.includes(allOption) ? [allOption] : nextValue)
+              }}
+              renderValue={(selected) => (
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                  {selected.map((item) => (
+                    <Chip key={item} label={item} size="small" />
+                  ))}
+                </Box>
+              )}
+            >
+              {[allOption, ...parameterOptions].map((option) => (
+                <MenuItem key={option} value={option}>
+                  <Checkbox checked={selectedParameters.includes(option)} />
+                  {option}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Grid>
+        <Grid size={{ xs: 12, md: 2 }}>
+          <TextField
+            label="วันเวลาเริ่มต้น"
+            type="datetime-local"
+            size="small"
+            fullWidth
+            slotProps={{ inputLabel: { shrink: true } }}
+          />
+        </Grid>
+        <Grid size={{ xs: 12, md: 2 }}>
+          <TextField
+            label="วันเวลาสิ้นสุด"
+            type="datetime-local"
+            size="small"
+            fullWidth
+            slotProps={{ inputLabel: { shrink: true } }}
+          />
+        </Grid>
+        <Grid size={{ xs: 12, md: 2 }}>
+          <TextField
+            select
+            label="สถานะ"
+            size="small"
+            value={status}
+            onChange={(event) => setStatus(event.target.value)}
+            fullWidth
+          >
+            {connectionParameterStatusOptions.map((option) => (
+              <MenuItem key={option} value={option}>
+                {option}
+              </MenuItem>
+            ))}
+          </TextField>
+        </Grid>
+      </Grid>
+    </Stack>
+  )
+}
+
 function ConnectionSettingsDialog({ open, context, onClose }) {
-  const [connectionType, setConnectionType] = useState('Modbus RTU')
-  const [testResult, setTestResult] = useState('')
-  const [forms, setForms] = useState({
-    'Modbus RTU': {
-      comport: '1',
-      slaveId: '1',
-      baudRate: '9600',
-      parity: 'None',
-      stopBits: '1',
-      dataBits: '8',
-      measureMin: '',
-      measureMax: '',
-      quantity: '1',
-    },
-    'Modbus TCP': {
-      slaveId: '1',
-      hostIp: '',
-      port: '502',
-    },
-    'Microsoft SQL': {
-      hostIp: '',
-      port: '1433',
-      dbUser: '',
-      dbPass: '',
-      dbName: '',
-    },
-    MySQL: {
-      hostIp: '',
-      port: '3306',
-      dbUser: '',
-      dbPass: '',
-      dbName: '',
-    },
-  })
+  const [testResultRows, setTestResultRows] = useState([])
+  const [connectionForms, setConnectionForms] = useState([
+    { id: 1, type: 'Modbus RTU', values: getDefaultConnectionForm('Modbus RTU') },
+  ])
   const parameterOptions = getConnectionParameterOptions(context)
+  const deviceCodeOptions = connectionForms.map((_, index) => getConnectionDeviceCode(context, index))
+  const updateConnectionForm = (id, nextValue) => {
+    setConnectionForms((current) => current.map((form) => (form.id === id ? nextValue : form)))
+  }
+  const handleTestConnection = () => {
+    setTestResultRows([
+      {
+        id: Date.now(),
+        values: Object.fromEntries(
+          parameterOptions.map((parameter, index) => [parameter, Number((25 + index * 7.5).toFixed(2))]),
+        ),
+        timestamp: new Date().toLocaleString('th-TH'),
+      },
+    ])
+  }
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg">
       <DialogTitle>ตั้งค่าอุปกรณ์</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2.5}>
-          <Grid container spacing={2}>
-            <Grid size={{ xs: 12, md: 4 }}>
-              <OptionSelectField label="อุปกรณ์ (Connection)" value={connectionType} options={connectionTypeOptions} onChange={setConnectionType} />
-            </Grid>
-          </Grid>
-          <ConnectionFormFields
-            connectionType={connectionType}
-            value={forms[connectionType]}
-            onChange={(nextValue) => setForms((current) => ({ ...current, [connectionType]: nextValue }))}
-          />
+          <Stack spacing={2}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'space-between' }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                อุปกรณ์ (Connection)
+              </Typography>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() =>
+                  setConnectionForms((current) => [
+                    ...current,
+                    {
+                      id: Date.now(),
+                      type: 'Modbus RTU',
+                      values: getDefaultConnectionForm('Modbus RTU'),
+                    },
+                  ])
+                }
+              >
+                เพิ่มอุปกรณ์
+              </Button>
+            </Stack>
+            {connectionForms.map((form, index) => (
+              <Paper key={form.id} elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider' }}>
+                <Stack spacing={2}>
+                  <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
+                    <Button
+                      color="error"
+                      variant="outlined"
+                      disabled={connectionForms.length === 1}
+                      onClick={() => setConnectionForms((current) => current.filter((item) => item.id !== form.id))}
+                    >
+                      ลบอุปกรณ์
+                    </Button>
+                  </Stack>
+                  <Grid container spacing={2}>
+                    <Grid size={{ xs: 12, md: 3 }}>
+                      <OptionSelectField
+                        label={`อุปกรณ์ (Connection) ${index + 1}`}
+                        value={form.type}
+                        options={connectionTypeOptions}
+                        onChange={(nextType) =>
+                          updateConnectionForm(form.id, {
+                            id: form.id,
+                            type: nextType,
+                            values: getDefaultConnectionForm(nextType),
+                          })
+                        }
+                      />
+                    </Grid>
+                    <Grid size={{ xs: 12, md: 3 }}>
+                      <ReadOnlyField label="รหัสอุปกรณ์" value={getConnectionDeviceCode(context, index)} />
+                    </Grid>
+                  </Grid>
+                  <ConnectionFormFields
+                    connectionType={form.type}
+                    value={form.values}
+                    onChange={(nextValue) => updateConnectionForm(form.id, { ...form, values: nextValue })}
+                  />
+                </Stack>
+              </Paper>
+            ))}
+          </Stack>
+          <Divider />
+          <StatusManagementSection parameterOptions={parameterOptions} />
           <Divider />
           <ConnectionParameterTable
-            key={connectionType}
-            connectionType={connectionType}
             parameterOptions={parameterOptions}
+            deviceCodeOptions={deviceCodeOptions}
           />
           <Divider />
           <Stack spacing={1.5}>
             <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
               ทดสอบการเชื่อมต่อ
             </Typography>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', sm: 'flex-start' } }}>
-              <Button
-                variant="contained"
-                onClick={() =>
-                  setTestResult(
-                    JSON.stringify(
-                      {
-                        connection: connectionType,
-                        status: 'success',
-                        testedAt: new Date().toISOString(),
-                        sample: parameterOptions.slice(0, 3).map((parameter, index) => ({
-                          parameter,
-                          value: Number((25 + index * 7.5).toFixed(2)),
-                          unit: parameterUnitMap[parameter] ?? '',
-                        })),
-                      },
-                      null,
-                      2,
-                    )
-                  )
-                }
-              >
-                ทดสอบ
-              </Button>
-              <TextField
-                label="ผลการทดสอบ"
-                value={testResult}
-                multiline
-                minRows={6}
-                fullWidth
-                slotProps={{ input: { readOnly: true } }}
-              />
-            </Stack>
+            <TableContainer sx={{ border: 1, borderColor: 'divider', overflowX: 'auto' }}>
+              <Table size="small" sx={{ minWidth: Math.max(720, parameterOptions.length * 160), ...borderedTableSx }}>
+                <TableHead>
+                  <TableRow>
+                    {[...parameterOptions, 'Timestamp'].map((column) => (
+                      <TableCell key={column} sx={{ fontWeight: 700, bgcolor: 'neutral.50' }}>
+                        {column}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {testResultRows.length > 0 ? (
+                    testResultRows.map((row) => (
+                      <TableRow key={row.id}>
+                        {parameterOptions.map((parameter) => (
+                          <TableCell key={parameter}>{row.values[parameter]}</TableCell>
+                        ))}
+                        <TableCell>{row.timestamp}</TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={parameterOptions.length + 1} align="center">
+                        <Typography variant="body2" color="text.secondary">
+                          ยังไม่มีผลการทดสอบ
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
           </Stack>
         </Stack>
       </DialogContent>
       <DialogActions sx={{ justifyContent: 'center' }}>
         <Button color="inherit" onClick={onClose}>
           ปิด
+        </Button>
+        <Button variant="contained" onClick={handleTestConnection}>
+          ทดสอบ
         </Button>
         <Button variant="contained" onClick={onClose}>
           บันทึก
@@ -1133,7 +1306,7 @@ function ConnectionSettingsDialog({ open, context, onClose }) {
 }
 
 function getFactoryColumns(isOperator, onOpenRequestForm, onOpenMonitoringPoints) {
-  return [
+  const columns = [
     { field: 'factoryName', headerName: 'ชื่อโรงงาน/บริษัท', width: 240 },
     { field: 'newRegistrationNo', headerName: 'เลขทะเบียนโรงงาน (ใหม่)', width: 190 },
     { field: 'oldRegistrationNo', headerName: 'เลขทะเบียนโรงงาน (เก่า)', width: 190 },
@@ -1162,9 +1335,11 @@ function getFactoryColumns(isOperator, onOpenRequestForm, onOpenMonitoringPoints
           />
         ) : (
           <OfficerFactoryActions row={params.row} onOpenMonitoringPoints={onOpenMonitoringPoints} />
-        ),
+      ),
     },
   ]
+
+  return isOperator ? columns.filter((column) => column.field !== 'requestStatus') : columns
 }
 
 function ReadOnlyField({ label, value, sx }) {
@@ -2067,8 +2242,7 @@ function RequestFormBottomSheet({ open, formType, factory, onClose }) {
   const [selectedMonitoringPointId, setSelectedMonitoringPointId] = useState(null)
   const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false)
   const officerEmails = ['officer@poms.go.th']
-  const showMonitoringPointSection = ['เชื่อมต่อใหม่', 'เพิ่มจุดตรวจวัด'].includes(formType)
-  const isSingleMonitoringPointForm = formType === 'เพิ่มจุดตรวจวัด'
+  const showMonitoringPointSection = formType === 'เพิ่มจุดตรวจวัด'
   const selectedMonitoringPoint = monitoringPoints.find((point) => point.id === selectedMonitoringPointId)
     ?? monitoringPoints[0]
 
@@ -2265,55 +2439,27 @@ function RequestFormBottomSheet({ open, formType, factory, onClose }) {
                   <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
                     จุดตรวจวัด
                   </Typography>
-                  {isSingleMonitoringPointForm ? (
-                    <RadioGroup
-                      row
-                      value={selectedMonitoringPoint?.type ?? ''}
-                      onChange={(event) => {
-                        const nextPoint = {
-                          id: selectedMonitoringPoint?.id ?? Date.now(),
-                          type: event.target.value,
-                        }
-                        setMonitoringPoints([nextPoint])
-                        setSelectedMonitoringPointId(nextPoint.id)
-                      }}
-                    >
-                      {monitoringPointTypeOptions.map((type) => (
-                        <FormControlLabel
-                          key={type}
-                          value={type}
-                          control={<Radio size="small" />}
-                          label={type}
-                        />
-                      ))}
-                    </RadioGroup>
-                  ) : (
-                    <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
-                      {monitoringPoints.map((point, index) => (
-                        <Chip
-                          key={point.id}
-                          label={`${point.type} จุดที่ ${index + 1}`}
-                          color={point.id === selectedMonitoringPoint?.id ? 'primary' : 'default'}
-                          variant={point.id === selectedMonitoringPoint?.id ? 'filled' : 'outlined'}
-                          clickable
-                          onClick={() => setSelectedMonitoringPointId(point.id)}
-                          onDelete={() => {
-                            setMonitoringPoints((current) => current.filter((item) => item.id !== point.id))
-                            setSelectedMonitoringPointId((current) => (current === point.id ? null : current))
-                          }}
-                        />
-                      ))}
-                      <MenuButton
-                        label="+ เพิ่มจุดตรวจวัด"
-                        options={monitoringPointTypeOptions}
-                        onSelect={(type) => {
-                          const nextPoint = { id: Date.now(), type }
-                          setMonitoringPoints((current) => [...current, nextPoint])
-                          setSelectedMonitoringPointId(nextPoint.id)
-                        }}
+                  <RadioGroup
+                    row
+                    value={selectedMonitoringPoint?.type ?? ''}
+                    onChange={(event) => {
+                      const nextPoint = {
+                        id: selectedMonitoringPoint?.id ?? Date.now(),
+                        type: event.target.value,
+                      }
+                      setMonitoringPoints([nextPoint])
+                      setSelectedMonitoringPointId(nextPoint.id)
+                    }}
+                  >
+                    {monitoringPointTypeOptions.map((type) => (
+                      <FormControlLabel
+                        key={type}
+                        value={type}
+                        control={<Radio size="small" />}
+                        label={type}
                       />
-                    </Stack>
-                  )}
+                    ))}
+                  </RadioGroup>
                 </Stack>
               </Paper>
             ) : null}
@@ -2399,7 +2545,7 @@ function RequestFormBottomSheet({ open, formType, factory, onClose }) {
   )
 }
 
-function getRequestColumns(isOperator, onOpenConnectionSettings) {
+function getRequestColumns(isOperator, onOpenConnectionSettings, onOpenMonitoringPoints) {
   return [
     { field: 'factoryName', headerName: 'ชื่อโรงงาน/บริษัท', width: 240 },
     { field: 'industryType', headerName: 'ประเภทอุตสาหกรรม', width: 170 },
@@ -2424,7 +2570,11 @@ function getRequestColumns(isOperator, onOpenConnectionSettings) {
       filterable: false,
       renderCell: (params) =>
         isOperator ? (
-          <OperatorRequestActions row={params.row} onOpenConnectionSettings={onOpenConnectionSettings} />
+          <OperatorRequestActions
+            row={params.row}
+            onOpenConnectionSettings={onOpenConnectionSettings}
+            onOpenMonitoringPoints={onOpenMonitoringPoints}
+          />
         ) : (
           <OfficerRequestActions />
         ),
@@ -2433,11 +2583,18 @@ function getRequestColumns(isOperator, onOpenConnectionSettings) {
 }
 
 function ConnectionRequestPage({ userType = '' }) {
-  const [selectedSubMenu, setSelectedSubMenu] = useState('factories')
   const [requestForm, setRequestForm] = useState(null)
   const [monitoringPointFactory, setMonitoringPointFactory] = useState(null)
   const [connectionSettingsContext, setConnectionSettingsContext] = useState(null)
   const isOperator = userType === 'operator'
+  const availableSubMenus = useMemo(
+    () => (isOperator ? subMenus : subMenus.filter((menu) => menu.value !== 'factories')),
+    [isOperator],
+  )
+  const [selectedSubMenu, setSelectedSubMenu] = useState(() => (userType === 'operator' ? 'factories' : 'requests'))
+  const effectiveSubMenu = availableSubMenus.some((menu) => menu.value === selectedSubMenu)
+    ? selectedSubMenu
+    : availableSubMenus[0]?.value
   const factoryColumns = useMemo(
     () =>
       getFactoryColumns(
@@ -2447,10 +2604,18 @@ function ConnectionRequestPage({ userType = '' }) {
       ),
     [isOperator],
   )
-  const requestColumns = useMemo(() => getRequestColumns(isOperator, setConnectionSettingsContext), [isOperator])
+  const requestColumns = useMemo(
+    () =>
+      getRequestColumns(
+        isOperator,
+        setConnectionSettingsContext,
+        (request) => setMonitoringPointFactory(getFactoryFromRequest(request)),
+      ),
+    [isOperator],
+  )
   const table = useMemo(
     () =>
-      selectedSubMenu === 'factories'
+      effectiveSubMenu === 'factories'
         ? {
             title: 'รายชื่อโรงงาน',
             rows: factoryRows,
@@ -2461,7 +2626,7 @@ function ConnectionRequestPage({ userType = '' }) {
             rows: requestRows,
             columns: requestColumns,
           },
-    [factoryColumns, requestColumns, selectedSubMenu],
+    [effectiveSubMenu, factoryColumns, requestColumns],
   )
 
   return (
@@ -2487,7 +2652,7 @@ function ConnectionRequestPage({ userType = '' }) {
             ขอเชื่อมต่อ
           </Typography>
           <Tabs
-            value={selectedSubMenu}
+            value={effectiveSubMenu}
             onChange={(_, value) => setSelectedSubMenu(value)}
             variant="scrollable"
             scrollButtons="auto"
@@ -2498,7 +2663,7 @@ function ConnectionRequestPage({ userType = '' }) {
               },
             }}
           >
-            {subMenus.map((menu) => (
+            {availableSubMenus.map((menu) => (
               <Tab key={menu.value} value={menu.value} label={menu.label} />
             ))}
           </Tabs>
