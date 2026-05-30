@@ -109,7 +109,6 @@ export const connectionRequestsService = {
         return {
           ...factory,
           monitoringPointCount: connectedPointCountByFactory.get(factory.factoryId) ?? 0,
-          requestStatus: latestRequest?.statusLabel ?? 'ยังไม่มีจุดตรวจวัด',
           requestStatusCode: latestRequest?.status ?? null,
           status: 'แสดง',
         };

@@ -1430,7 +1430,6 @@ Response:
       "industryType": "ผลิตเคมีภัณฑ์",
       "province": "สระบุรี",
       "monitoringPointCount": 1,
-      "requestStatus": "เชื่อมต่อแล้ว",
       "requestStatusCode": "CONNECTED",
       "status": "แสดง"
     }
@@ -2266,7 +2265,6 @@ Data dictionary response row:
 | `industryType` | string|null | ประเภทอุตสาหกรรม |
 | `province` | string|null | จังหวัด |
 | `monitoringPointCount` | number | จำนวนจุดตรวจวัด |
-| `requestStatus` | string|null | สถานะคำขอล่าสุดแบบ label |
 | `requestStatusCode` | string|null | สถานะคำขอล่าสุดแบบ code |
 | `status` | string | สถานะการแสดงผลในตาราง |
 

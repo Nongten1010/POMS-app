@@ -143,7 +143,7 @@ describe('connectionRequestsService', () => {
     });
   });
 
-  it('returns operator factories with latest request status and connected point count', async () => {
+  it('returns operator factories with latest request status code and connected point count', async () => {
     mockedRepository.listFactoriesForAccess.mockResolvedValue([factorySummary()]);
     mockedRepository.listRequestsForFactories.mockResolvedValue([
       requestDto({
@@ -176,8 +176,9 @@ describe('connectionRequestsService', () => {
     expect(result.data[0]).toMatchObject({
       factoryName: 'บริษัท ทดสอบ จำกัด',
       monitoringPointCount: 1,
-      requestStatus: 'เชื่อมต่อแล้ว',
+      requestStatusCode: CONNECTION_REQUEST_STATUS.CONNECTED,
     });
+    expect(result.data[0]).not.toHaveProperty('requestStatus');
   });
 
   it('returns factory general data for add measurement point form prefill', async () => {

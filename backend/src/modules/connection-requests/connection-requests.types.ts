@@ -278,7 +278,6 @@ export interface ConnectionRequestTableRowDTO {
 
 export interface OperatorFactoryTableRowDTO extends FactorySummaryDTO {
   monitoringPointCount: number;
-  requestStatus: string;
   requestStatusCode: ConnectionRequestStatus | null;
   status: 'แสดง' | 'ซ่อน';
 }
