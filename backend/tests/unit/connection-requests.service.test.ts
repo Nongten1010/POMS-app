@@ -475,7 +475,7 @@ describe('connectionRequestsService', () => {
       { actorUserId, scope: 'ALL' },
     );
     expect(result.data[0]).toMatchObject({
-      requestNo: 'CR-20260527-0001',
+      requestNo: 'CEMS-69-00001',
       connectedAt: '2026-05-29T10:00:00.000Z',
       point: { pointCode: 'STACK-A' },
     });
@@ -823,7 +823,7 @@ describe('connectionRequestsService', () => {
 function requestDto(overrides: Partial<ConnectionRequestDTO> = {}): ConnectionRequestDTO {
   return {
     id: 1,
-    requestNo: 'CR-20260527-0001',
+    requestNo: 'CEMS-69-00001',
     requestType: CONNECTION_REQUEST_TYPE.NEW_CONNECTION,
     requestTypeLabel: 'ขอเชื่อมต่อใหม่',
     factoryId: 'factory-001',

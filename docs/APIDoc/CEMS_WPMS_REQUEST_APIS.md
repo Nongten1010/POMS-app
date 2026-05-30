@@ -24,6 +24,13 @@ Content-Type: application/json
 - CEMS ใช้ prefix `S` เช่น `S0001`, `S0002`
 - WPMS ใช้ prefix `P` เช่น `P0001`, `P0002`
 
+## Request No Auto Running
+
+เลขคำขอรันแยกตามระบบและปี พ.ศ. 2 หลัก ใช้รูปแบบ `<SYSTEM>-<YY>-<RUNNING_5_DIGITS>`
+
+- CEMS ปี 2569: `CEMS-69-00001`, `CEMS-69-00002`
+- WPMS ปี 2569: `WPMS-69-00001`, `WPMS-69-00002`
+
 ## Contact And Notification Emails
 
 รองรับผู้ติดต่อและอีเมลแจ้งเตือนได้หลายรายการ:
@@ -344,7 +351,7 @@ Response:
   "success": true,
   "data": {
     "id": 1,
-    "requestNo": "CR-20260530-0001",
+    "requestNo": "CEMS-69-00001",
     "requestType": "ADD_MEASUREMENT_POINT",
     "requestTypeLabel": "เพิ่มจุดตรวจวัด",
     "factoryId": "factory-001",
@@ -1165,7 +1172,7 @@ Response:
   "success": true,
   "data": {
     "id": 2,
-    "requestNo": "CR-20260530-0002",
+    "requestNo": "CEMS-69-00002",
     "requestType": "ADD_PARAMETER",
     "requestTypeLabel": "เพิ่มพารามิเตอร์",
     "status": "REVISED_PENDING_DESIGN_REVIEW",
@@ -1268,7 +1275,7 @@ Response สำหรับ prefill dialog:
   "success": true,
   "data": {
     "requestId": 1,
-    "requestNo": "CR-20260530-0001",
+    "requestNo": "CEMS-69-00001",
     "stationId": "S0001",
     "monitoringPoint": {
       "id": 1,
@@ -1366,7 +1373,7 @@ Response:
   "success": true,
   "data": {
     "id": 1,
-    "requestNo": "CR-20260530-0001",
+    "requestNo": "CEMS-69-00001",
     "status": "WAITING_CONNECTION",
     "statusLabel": "รอเชื่อมต่อ",
     "officerNote": "แบบถูกต้อง",
@@ -1418,7 +1425,7 @@ Response:
       "industryType": "ผลิตเคมีภัณฑ์",
       "province": "สระบุรี",
       "type": "CEMS",
-      "requestNo": "CR-20260530-0001",
+      "requestNo": "CEMS-69-00001",
       "submittedAt": "2026-05-30T10:00:00.000Z",
       "submittedDate": "30/05/2569",
       "monitoringPointCode": "S0001",
@@ -1505,7 +1512,7 @@ Response:
   "success": true,
   "data": {
     "id": 1,
-    "requestNo": "CR-20260530-0001",
+    "requestNo": "CEMS-69-00001",
     "requestType": "ADD_MEASUREMENT_POINT",
     "requestTypeLabel": "เพิ่มจุดตรวจวัด",
     "factoryId": "factory-001",
@@ -1598,7 +1605,7 @@ Response:
     {
       "id": 1,
       "requestId": 1,
-      "requestNo": "CR-20260530-0001",
+      "requestNo": "CEMS-69-00001",
       "factory": {
         "id": 1,
         "factoryId": "factory-001",

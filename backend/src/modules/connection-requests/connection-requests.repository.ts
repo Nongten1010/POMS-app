@@ -357,7 +357,7 @@ export const connectionRequestsRepository = {
     initialStatus: ConnectionRequestStatus,
   ): Promise<ConnectionRequestDTO> {
     return db.transaction(async (trx) => {
-      const requestNo = await nextRequestNo(trx);
+      const requestNo = await nextRequestNo(trx, input.systemType);
       const [{ id }] = await trx('cems_wpms_connection_requests')
         .insert({
           request_no: requestNo,
@@ -833,17 +833,28 @@ async function insertHistory(
   });
 }
 
-async function nextRequestNo(trx: Knex.Transaction): Promise<string> {
-  const now = new Date();
-  const prefix = `CR-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(
-    now.getDate(),
-  ).padStart(2, '0')}`;
+async function nextRequestNo(
+  trx: Knex.Transaction,
+  systemType: 'CEMS' | 'WPMS',
+): Promise<string> {
+  const prefix = buildRequestNoPrefix(systemType);
   const totalRow = await trx('cems_wpms_connection_requests')
     .where('request_no', 'like', `${prefix}-%`)
     .count<{ total: number | string }>('id as total')
     .first();
   const sequence = Number(totalRow?.total ?? 0) + 1;
-  return `${prefix}-${String(sequence).padStart(4, '0')}`;
+  return `${prefix}-${String(sequence).padStart(5, '0')}`;
+}
+
+export function buildRequestNoPrefix(systemType: 'CEMS' | 'WPMS', date = new Date()): string {
+  const gregorianYear = Number(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Bangkok',
+      year: 'numeric',
+    }).format(date),
+  );
+  const buddhistYear = String((gregorianYear + 543) % 100).padStart(2, '0');
+  return `${systemType}-${buddhistYear}`;
 }
 
 function toMeasurementPointDTO(row: MeasurementPointRow): MeasurementPointDTO {
