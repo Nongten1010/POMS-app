@@ -52,6 +52,21 @@ describe('connection request validators', () => {
     contactName: 'สมชาย ใจดี',
     contactPhone: '0812345678',
     contactEmail: 'ops@example.com',
+    contactPersons: [
+      {
+        name: 'สมชาย ใจดี',
+        phone: '0812345678',
+        email: 'ops@example.com',
+        position: 'ผู้จัดการสิ่งแวดล้อม',
+      },
+      {
+        name: 'สมหญิง ใจดี',
+        phone: '0899999999',
+        email: 'ops2@example.com',
+        position: 'วิศวกร',
+      },
+    ],
+    notificationEmails: ['ops@example.com', 'ops2@example.com'],
     measurementPoints: [
       {
         pointName: 'ปล่องระบาย A',
@@ -75,6 +90,26 @@ describe('connection request validators', () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.requestType).toBe('NEW_CONNECTION');
+      expect(result.data.contactPersons).toHaveLength(2);
+      expect(result.data.notificationEmails).toEqual(['ops@example.com', 'ops2@example.com']);
+    }
+  });
+
+  it('maps legacy single contact fields to contact arrays', () => {
+    const { contactPersons, notificationEmails, ...legacyPayload } = validPayload;
+    const result = createConnectionRequestSchema.safeParse(legacyPayload);
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.contactPersons).toEqual([
+        {
+          name: 'สมชาย ใจดี',
+          phone: '0812345678',
+          email: 'ops@example.com',
+          position: null,
+        },
+      ]);
+      expect(result.data.notificationEmails).toEqual(['ops@example.com']);
     }
   });
 

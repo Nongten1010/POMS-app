@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { CONNECTION_REQUEST_STATUS, CONNECTION_REQUEST_TYPE } from './connection-requests.types';
 
 const trimmedString = (max: number) => z.string().trim().min(1).max(max);
+const optionalTrimmedString = (max: number) => z.string().trim().min(1).max(max).optional();
 const optionalNullableTrimmedString = (max: number) =>
   z
     .string()
@@ -23,6 +24,20 @@ const jsonValueSchema: z.ZodType<unknown> = z.lazy(() =>
 );
 
 const measurementPointDetailsSchema = z.record(z.string().min(1).max(128), jsonValueSchema);
+
+const contactPersonSchema = z
+  .object({
+    name: trimmedString(255),
+    phone: trimmedString(64),
+    email: z.string().trim().email().max(255).nullable().optional(),
+    position: optionalNullableTrimmedString(255),
+  })
+  .strict()
+  .transform((contact) => ({
+    ...contact,
+    email: contact.email ?? null,
+    position: contact.position ?? null,
+  }));
 
 const requestDocumentImageSchema = z
   .object({
@@ -118,33 +133,100 @@ const measurementPointSchema = z
     measurementInstruments: point.measurementInstruments ?? null,
   }));
 
-const connectionRequestFormSchema = z
+const connectionRequestFormObjectSchema = z
   .object({
     requestType: z.nativeEnum(CONNECTION_REQUEST_TYPE).optional(),
     factoryId: trimmedString(64),
     factoryName: trimmedString(500),
     factoryRegistrationNo: trimmedString(64),
     systemType: z.enum(['CEMS', 'WPMS']),
-    contactName: trimmedString(255),
-    contactPhone: trimmedString(64),
+    contactName: optionalTrimmedString(255),
+    contactPhone: optionalTrimmedString(64),
     contactEmail: z.string().trim().email().max(255).nullable().optional(),
+    contactPersons: z.array(contactPersonSchema).min(1).max(20).optional(),
+    notificationEmails: z.array(z.string().trim().email().max(255)).max(20).optional(),
     measurementPoints: z.array(measurementPointSchema).min(1).max(100),
     remarks: optionalNullableTrimmedString(1000),
   })
   .strict();
 
+const connectionRequestFormBaseSchema =
+  connectionRequestFormObjectSchema.superRefine(validateContactSection);
+
+const connectionRequestFormSchema = connectionRequestFormBaseSchema.transform(normalizeContacts);
+
+type ContactFormPayload = z.infer<typeof connectionRequestFormBaseSchema>;
+type ContactFormPayloadWithoutRequestType = Omit<ContactFormPayload, 'requestType'>;
+
+function validateContactSection(
+  payload: ContactFormPayload | ContactFormPayloadWithoutRequestType,
+  ctx: z.RefinementCtx,
+): void {
+  if (!payload.contactPersons?.length && (!payload.contactName || !payload.contactPhone)) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['contactPersons'],
+      message: 'At least one contact person or contactName/contactPhone is required',
+    });
+  }
+}
+
+function normalizeContacts<T extends ContactFormPayload | ContactFormPayloadWithoutRequestType>(
+  payload: T,
+): T & {
+  contactName: string;
+  contactPhone: string;
+  contactEmail: string | null;
+  contactPersons: NonNullable<ContactFormPayload['contactPersons']>;
+  notificationEmails: string[];
+} {
+  const primaryContact = payload.contactPersons?.[0] ?? {
+    name: payload.contactName ?? '',
+    phone: payload.contactPhone ?? '',
+    email: payload.contactEmail ?? null,
+    position: null,
+  };
+  const contactEmail = payload.contactEmail ?? primaryContact.email ?? null;
+  const contactPersons =
+    payload.contactPersons && payload.contactPersons.length > 0
+      ? payload.contactPersons
+      : [
+          {
+            name: primaryContact.name,
+            phone: primaryContact.phone,
+            email: contactEmail,
+            position: null,
+          },
+        ];
+  const notificationEmails =
+    payload.notificationEmails && payload.notificationEmails.length > 0
+      ? [...new Set(payload.notificationEmails)]
+      : contactEmail
+        ? [contactEmail]
+        : [];
+
+  return {
+    ...payload,
+    contactName: payload.contactName ?? primaryContact.name,
+    contactPhone: payload.contactPhone ?? primaryContact.phone,
+    contactEmail,
+    contactPersons,
+    notificationEmails,
+  };
+}
+
 export const createConnectionRequestSchema = connectionRequestFormSchema.transform((payload) => ({
   ...payload,
   requestType: payload.requestType ?? CONNECTION_REQUEST_TYPE.NEW_CONNECTION,
-  contactEmail: payload.contactEmail ?? null,
   remarks: payload.remarks ?? null,
 }));
 
 export const resubmitConnectionRequestSchema = createConnectionRequestSchema;
 
-export const addMeasurementPointRequestSchema = connectionRequestFormSchema
+export const addMeasurementPointRequestSchema = connectionRequestFormObjectSchema
   .omit({ requestType: true })
   .superRefine((payload, ctx) => {
+    validateContactSection(payload, ctx);
     payload.measurementPoints.forEach((point, index) => {
       if (!point.details || Object.keys(point.details).length === 0) {
         ctx.addIssue({
@@ -170,13 +252,14 @@ export const addMeasurementPointRequestSchema = connectionRequestFormSchema
     });
   })
   .transform((payload) => ({
-    ...payload,
+    ...normalizeContacts(payload),
     requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT,
   }));
 
-export const addParameterRequestSchema = connectionRequestFormSchema
+export const addParameterRequestSchema = connectionRequestFormObjectSchema
   .omit({ requestType: true })
   .superRefine((payload, ctx) => {
+    validateContactSection(payload, ctx);
     if (payload.measurementPoints.length !== 1) {
       ctx.addIssue({
         code: 'custom',
@@ -202,7 +285,7 @@ export const addParameterRequestSchema = connectionRequestFormSchema
     });
   })
   .transform((payload) => ({
-    ...payload,
+    ...normalizeContacts(payload),
     requestType: CONNECTION_REQUEST_TYPE.ADD_PARAMETER,
   }));
 

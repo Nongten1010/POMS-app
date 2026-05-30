@@ -4,6 +4,7 @@ import {
   CONNECTION_REQUEST_TYPE,
   CONNECTION_REQUEST_TYPE_LABELS,
   CONNECTION_REQUEST_STATUS_LABELS,
+  type ContactPersonInput,
   type ConnectionRequestDTO,
   type ConnectionRequestStatus,
   type ConnectionRequestType,
@@ -30,6 +31,8 @@ interface ConnectionRequestRow {
   contact_name: string;
   contact_phone: string;
   contact_email: string | null;
+  contact_persons_json: string | null;
+  notification_emails_json: string | null;
   remarks: string | null;
   revision_reason: string | null;
   officer_note: string | null;
@@ -197,6 +200,8 @@ export const connectionRequestsRepository = {
         'contact_name',
         'contact_phone',
         'contact_email',
+        'contact_persons_json',
+        'notification_emails_json',
         'remarks',
         'revision_reason',
         'officer_note',
@@ -350,6 +355,8 @@ function buildBaseQuery(
     'contact_name',
     'contact_phone',
     'contact_email',
+    'contact_persons_json',
+    'notification_emails_json',
     'remarks',
     'revision_reason',
     'officer_note',
@@ -425,6 +432,8 @@ async function hydrate(
     contactName: row.contact_name,
     contactPhone: row.contact_phone,
     contactEmail: row.contact_email,
+    contactPersons: toContactPersons(row),
+    notificationEmails: toNotificationEmails(row),
     remarks: row.remarks,
     revisionReason: row.revision_reason,
     officerNote: row.officer_note,
@@ -448,6 +457,14 @@ function toRequestRow(input: CreateConnectionRequestInput): Record<string, unkno
     contact_name: input.contactName,
     contact_phone: input.contactPhone,
     contact_email: input.contactEmail ?? null,
+    contact_persons_json:
+      input.contactPersons && input.contactPersons.length > 0
+        ? JSON.stringify(input.contactPersons)
+        : null,
+    notification_emails_json:
+      input.notificationEmails && input.notificationEmails.length > 0
+        ? JSON.stringify(input.notificationEmails)
+        : null,
     remarks: input.remarks ?? null,
   };
 }
@@ -622,6 +639,29 @@ function toStatusHistoryDTO(row: StatusHistoryRow): StatusHistoryDTO {
     changedBy: Number(row.changed_by),
     changedAt: toIsoString(row.changed_at),
   };
+}
+
+function toContactPersons(row: ConnectionRequestRow): ContactPersonInput[] {
+  const contacts = parseJsonArray<ContactPersonInput>(row.contact_persons_json).filter(
+    (contact) => contact.name && contact.phone,
+  );
+  if (contacts.length > 0) return contacts;
+  return [
+    {
+      name: row.contact_name,
+      phone: row.contact_phone,
+      email: row.contact_email,
+      position: null,
+    },
+  ];
+}
+
+function toNotificationEmails(row: ConnectionRequestRow): string[] {
+  const emails = parseJsonArray<string>(row.notification_emails_json).filter(
+    (email) => typeof email === 'string' && email.length > 0,
+  );
+  if (emails.length > 0) return emails;
+  return row.contact_email ? [row.contact_email] : [];
 }
 
 function parseParameters(value: string): string[] {

@@ -71,6 +71,13 @@ export interface MeasurementInstrumentsInput {
   parameters: MeasurementInstrumentParameterInput[];
 }
 
+export interface ContactPersonInput {
+  name: string;
+  phone: string;
+  email?: string | null;
+  position?: string | null;
+}
+
 export interface MeasurementPointInput {
   pointName: string;
   pointCode?: string | null;
@@ -93,6 +100,8 @@ export interface CreateConnectionRequestInput {
   contactName: string;
   contactPhone: string;
   contactEmail?: string | null;
+  contactPersons?: ContactPersonInput[];
+  notificationEmails?: string[];
   measurementPoints: MeasurementPointInput[];
   remarks?: string | null;
 }
@@ -162,6 +171,8 @@ export interface ConnectionRequestDTO {
   contactName: string;
   contactPhone: string;
   contactEmail: string | null;
+  contactPersons: ContactPersonInput[];
+  notificationEmails: string[];
   remarks: string | null;
   revisionReason: string | null;
   officerNote: string | null;

@@ -46,6 +46,21 @@ describe('connectionRequestsService', () => {
     contactName: 'สมชาย ใจดี',
     contactPhone: '0812345678',
     contactEmail: 'ops@example.com',
+    contactPersons: [
+      {
+        name: 'สมชาย ใจดี',
+        phone: '0812345678',
+        email: 'ops@example.com',
+        position: 'ผู้จัดการสิ่งแวดล้อม',
+      },
+      {
+        name: 'สมหญิง ใจดี',
+        phone: '0899999999',
+        email: 'ops2@example.com',
+        position: 'วิศวกร',
+      },
+    ],
+    notificationEmails: ['ops@example.com', 'ops2@example.com'],
     measurementPoints: [
       {
         pointName: 'ปล่องระบาย A',
@@ -778,6 +793,15 @@ function requestDto(overrides: Partial<ConnectionRequestDTO> = {}): ConnectionRe
     contactName: 'สมชาย ใจดี',
     contactPhone: '0812345678',
     contactEmail: 'ops@example.com',
+    contactPersons: [
+      {
+        name: 'สมชาย ใจดี',
+        phone: '0812345678',
+        email: 'ops@example.com',
+        position: 'ผู้จัดการสิ่งแวดล้อม',
+      },
+    ],
+    notificationEmails: ['ops@example.com'],
     remarks: null,
     revisionReason: null,
     officerNote: null,

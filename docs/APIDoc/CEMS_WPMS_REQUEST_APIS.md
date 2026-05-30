@@ -24,6 +24,29 @@ Content-Type: application/json
 - CEMS ใช้ prefix `S` เช่น `S0001`, `S0002`
 - WPMS ใช้ prefix `P` เช่น `P0001`, `P0002`
 
+## Contact And Notification Emails
+
+รองรับผู้ติดต่อและอีเมลแจ้งเตือนได้หลายรายการ โดยยังรองรับ field เดิมเพื่อไม่ให้ API เก่าพัง:
+
+| UI | Field | Type | Required |
+| --- | --- | --- | --- |
+| ผู้ติดต่อประสานงาน | `contactPersons` | `array` | Yes ถ้าไม่ส่ง `contactName/contactPhone` |
+| ชื่อผู้ติดต่อ | `contactPersons[].name` | `string` | Yes |
+| เบอร์โทรผู้ติดต่อ | `contactPersons[].phone` | `string` | Yes |
+| อีเมลผู้ติดต่อ | `contactPersons[].email` | `string|null` | No |
+| ตำแหน่ง/หน้าที่ | `contactPersons[].position` | `string|null` | No |
+| อีเมลสำหรับแจ้งเตือนโรงงาน | `notificationEmails` | `string[]` | No |
+| ชื่อผู้ติดต่อแบบเดิม | `contactName` | `string` | Yes ถ้าไม่ส่ง `contactPersons` |
+| เบอร์โทรแบบเดิม | `contactPhone` | `string` | Yes ถ้าไม่ส่ง `contactPersons` |
+| อีเมลแบบเดิม | `contactEmail` | `string|null` | No |
+
+Mapping:
+
+- ถ้าส่ง `contactPersons` backend จะใช้รายการแรกเป็น `contactName/contactPhone/contactEmail` หลักใน response เดิม
+- ถ้าไม่ส่ง `contactPersons` backend จะสร้าง `contactPersons[0]` จาก `contactName/contactPhone/contactEmail`
+- ถ้าส่ง `notificationEmails` backend จะเก็บอีเมลแจ้งเตือนทั้งหมด
+- ถ้าไม่ส่ง `notificationEmails` แต่มี `contactEmail` backend จะใช้ `[contactEmail]` เป็นค่า default
+
 ## Endpoint Summary
 
 | ข้อ | รายการ                                                       | Method | Path                                                       | Permission                   |
@@ -54,6 +77,21 @@ curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/measurement-points
     "contactName": "สมชาย ใจดี",
     "contactPhone": "0812345678",
     "contactEmail": "ops@example.com",
+    "contactPersons": [
+      {
+        "name": "สมชาย ใจดี",
+        "phone": "0812345678",
+        "email": "ops@example.com",
+        "position": "ผู้จัดการสิ่งแวดล้อม"
+      },
+      {
+        "name": "สมหญิง ใจดี",
+        "phone": "0899999999",
+        "email": "ops2@example.com",
+        "position": "วิศวกร"
+      }
+    ],
+    "notificationEmails": ["ops@example.com", "ops2@example.com"],
     "measurementPoints": [
       {
         "pointName": "ปล่องระบาย A",
@@ -144,6 +182,21 @@ Response:
     "systemType": "CEMS",
     "status": "PENDING_DESIGN_REVIEW",
     "statusLabel": "รอพิจารณาแบบ",
+    "contactPersons": [
+      {
+        "name": "สมชาย ใจดี",
+        "phone": "0812345678",
+        "email": "ops@example.com",
+        "position": "ผู้จัดการสิ่งแวดล้อม"
+      },
+      {
+        "name": "สมหญิง ใจดี",
+        "phone": "0899999999",
+        "email": "ops2@example.com",
+        "position": "วิศวกร"
+      }
+    ],
+    "notificationEmails": ["ops@example.com", "ops2@example.com"],
     "measurementPoints": [
       {
         "id": 1,
@@ -234,6 +287,21 @@ curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/parameters" \
     "contactName": "สมชาย ใจดี",
     "contactPhone": "0812345678",
     "contactEmail": "ops@example.com",
+    "contactPersons": [
+      {
+        "name": "สมชาย ใจดี",
+        "phone": "0812345678",
+        "email": "ops@example.com",
+        "position": "ผู้จัดการสิ่งแวดล้อม"
+      },
+      {
+        "name": "สมหญิง ใจดี",
+        "phone": "0899999999",
+        "email": "ops2@example.com",
+        "position": "วิศวกร"
+      }
+    ],
+    "notificationEmails": ["ops@example.com", "ops2@example.com"],
     "measurementPoints": [
       {
         "pointName": "ปล่องระบาย A",
@@ -681,6 +749,21 @@ curl -X PUT "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/form" \
     "contactName": "สมชาย ใจดี",
     "contactPhone": "0812345678",
     "contactEmail": "ops@example.com",
+    "contactPersons": [
+      {
+        "name": "สมชาย ใจดี",
+        "phone": "0812345678",
+        "email": "ops@example.com",
+        "position": "ผู้จัดการสิ่งแวดล้อม"
+      },
+      {
+        "name": "สมหญิง ใจดี",
+        "phone": "0899999999",
+        "email": "ops2@example.com",
+        "position": "วิศวกร"
+      }
+    ],
+    "notificationEmails": ["ops@example.com", "ops2@example.com"],
     "measurementPoints": [
       {
         "pointName": "ปล่องระบาย A",
