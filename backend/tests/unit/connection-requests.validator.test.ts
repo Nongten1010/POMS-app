@@ -273,6 +273,40 @@ describe('connection request validators', () => {
     expect(result.success).toBe(true);
   });
 
+  it('accepts WPMS add measurement point without documents and images', () => {
+    const result = addMeasurementPointRequestSchema.safeParse({
+      ...validPayload,
+      systemType: 'WPMS',
+      measurementPoints: [
+        {
+          ...validPayload.measurementPoints[0],
+          pointType: 'WASTEWATER',
+          documentsAndImages: undefined,
+          details: {
+            monitoringPointKind: 'WPMS',
+            averageWastewaterDischarge: 500,
+            minWastewaterDischarge: 300,
+            maxWastewaterDischarge: 800,
+            hasTreatmentSystem: 'มี',
+            treatmentSystem: 'ระบบบำบัดชีวภาพ',
+            maxTreatmentCapacity: 1000,
+            instrumentLatitude: 13.7563,
+            instrumentLongitude: 100.5018,
+            wastewaterSource: 'กระบวนการผลิต',
+            dischargeReceivingSource: 'คลองสาธารณะ',
+            connectionDevice: 'อื่นๆ',
+            connectionDeviceOther: 'Gateway เดิมของโรงงาน',
+          },
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.measurementPoints[0].documentsAndImages).toEqual([]);
+    }
+  });
+
   it('rejects missing conditional detail fields and wrong parameter group type', () => {
     const result = addMeasurementPointRequestSchema.safeParse({
       ...validPayload,

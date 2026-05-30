@@ -722,8 +722,11 @@ function ensureRequestFormSections(
           path: `measurementPoints.${index}.details`,
         });
       }
-      if (!point.documentsAndImages || point.documentsAndImages.length === 0) {
-        throw new BadRequestError('Documents and images section is required', {
+      if (
+        input.systemType === 'CEMS' &&
+        (!point.documentsAndImages || point.documentsAndImages.length === 0)
+      ) {
+        throw new BadRequestError('Documents and images section is required for CEMS', {
           path: `measurementPoints.${index}.documentsAndImages`,
         });
       }

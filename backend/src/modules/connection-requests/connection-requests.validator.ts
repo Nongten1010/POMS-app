@@ -549,11 +549,11 @@ export const addMeasurementPointRequestSchema = connectionRequestFormObjectSchem
           message: 'Measurement point detail section is required',
         });
       }
-      if (point.documentsAndImages.length === 0) {
+      if (payload.systemType === 'CEMS' && point.documentsAndImages.length === 0) {
         ctx.addIssue({
           code: 'custom',
           path: ['measurementPoints', index, 'documentsAndImages'],
-          message: 'Documents and images section is required',
+          message: 'Documents and images section is required for CEMS',
         });
       }
       if (!point.measurementInstruments) {

@@ -66,7 +66,7 @@ Mapping:
 
 1. Frontend เปิดฟอร์ม "เพิ่มจุดตรวจวัด"
 2. เรียก `GET /cems-wpms-requests/factories/:factoryId/general` เพื่อดึงข้อมูลทั่วไปของโรงงานลงฟอร์ม
-3. ผู้ใช้กรอก `measurementPoints[].details`, `measurementPoints[].documentsAndImages`, `measurementPoints[].measurementInstruments`
+3. ผู้ใช้กรอก `measurementPoints[].details`, `measurementPoints[].measurementInstruments` และส่ง `measurementPoints[].documentsAndImages` เฉพาะ CEMS
 4. เรียก `POST /cems-wpms-requests/measurement-points` เพื่อบันทึกทั้งฟอร์ม
 5. คำขอถูกสร้างเป็น `ADD_MEASUREMENT_POINT` และสถานะเริ่มต้น `PENDING_DESIGN_REVIEW`
 
@@ -866,6 +866,8 @@ Mapping ประเภทที่ frontend เลือก:
 
 ### Documents And Images
 
+ใช้สำหรับ CEMS เท่านั้น; WPMS ไม่ต้องส่ง section `documentsAndImages`
+
 ใช้ field เดียวกันทุกหัวข้อ:
 
 | Label             | Field                                                  |
@@ -1114,7 +1116,7 @@ curl -X PUT "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/form" \
 หมายเหตุ:
 
 - ถ้าไม่ส่ง `requestType` backend จะใช้ประเภทคำขอเดิม เช่น `ADD_PARAMETER`
-- ถ้าแก้ไขฟอร์มเพิ่มจุดตรวจวัด ต้องส่ง `details`, `documentsAndImages`, `measurementInstruments`
+- ถ้าแก้ไขฟอร์มเพิ่มจุดตรวจวัด ต้องส่ง `details`, `measurementInstruments` และส่ง `documentsAndImages` เฉพาะ CEMS
 - ถ้าแก้ไขฟอร์มเพิ่มพารามิเตอร์ ต้องส่ง `measurementPoints` 1 รายการ และ `measurementInstruments`
 
 Response:
@@ -1798,17 +1800,6 @@ Data dictionary ของ response ที่ใช้ prefill:
         "connectionDevice": "อื่นๆ",
         "connectionDeviceOther": "Gateway เดิมของโรงงาน"
       },
-      "documentsAndImages": [
-        {
-          "title": "ภาพถ่ายจุดระบายน้ำทิ้ง",
-          "description": "ภาพถ่ายตำแหน่งติดตั้งเครื่องมือตรวจวัด",
-          "link": "https://example.com/documents/wpms-reference.pdf",
-          "fileName": "wpms-point.png",
-          "fileUrl": "https://example.com/files/wpms-point.png",
-          "fileType": "image/png",
-          "fileSize": 1024
-        }
-      ],
       "measurementInstruments": {
         "converterBrand": "Converter Brand",
         "converterModel": "CV-100",
@@ -2012,7 +2003,7 @@ Data dictionary:
 | --- | --- | --- | --- |
 | `requestType` | string | No | ถ้าไม่ส่ง backend ใช้ประเภทคำขอเดิม |
 | `measurementPoints[].details` | object | Conditional | ต้องมีเมื่อแก้คำขอเพิ่มจุดตรวจวัด |
-| `measurementPoints[].documentsAndImages` | array | Conditional | ต้องมีเมื่อแก้คำขอเพิ่มจุดตรวจวัด |
+| `measurementPoints[].documentsAndImages` | array | Conditional | ต้องมีเมื่อแก้คำขอเพิ่มจุดตรวจวัดแบบ CEMS; WPMS ไม่ต้องส่ง |
 | `measurementPoints[].measurementInstruments` | object | Yes | ต้องมีทั้งแก้เพิ่มจุดและแก้เพิ่มพารามิเตอร์ |
 
 ### API 3: POST บันทึกฟอร์ม ตั้งค่าอุปกรณ์ config
@@ -2348,7 +2339,7 @@ Data dictionary response row:
 | `pointCode` | string|null | Conditional | เพิ่มจุดใหม่ไม่ต้องส่ง; เพิ่มพารามิเตอร์ต้องส่งเลขเดิม |
 | `pointType` | string | Yes | `STACK`, `WASTEWATER`, `OTHER` |
 | `details` | object | Conditional | รายละเอียดจุดตรวจวัด ใช้ในฟอร์มเพิ่มจุดตรวจวัด |
-| `documentsAndImages` | array | Conditional | เอกสารและรูปภาพ ใช้ในฟอร์มเพิ่มจุดตรวจวัด |
+| `documentsAndImages` | array | Conditional | เอกสารและรูปภาพ ใช้เฉพาะ CEMS; WPMS ไม่ต้องส่ง |
 | `measurementInstruments` | object | Yes | รายละเอียดเครื่องมือตรวจวัด |
 
 #### `measurementPoints[].details`
