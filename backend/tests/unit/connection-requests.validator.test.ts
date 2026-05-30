@@ -54,10 +54,9 @@ describe('connection request validators', () => {
     eia: 'มี',
     projectName: 'โครงการทดสอบ CEMS',
     address: '99 หมู่ 1 ตำบลทดสอบ อำเภอเมือง จังหวัดสระบุรี',
+    latitude: 13.7563,
+    longitude: 100.5018,
     systemType: 'CEMS',
-    contactName: 'สมชาย ใจดี',
-    contactPhone: '0812345678',
-    contactEmail: 'ops@example.com',
     contactPersons: [
       {
         name: 'สมชาย ใจดี',
@@ -79,10 +78,6 @@ describe('connection request validators', () => {
         pointName: 'ปล่องระบาย A',
         pointCode: 'S0001',
         pointType: 'STACK',
-        latitude: 13.7563,
-        longitude: 100.5018,
-        parameters: ['NOx', 'SO2', 'PM'],
-        description: 'จุดตรวจวัดหลัก',
         details: pointDetails,
         documentsAndImages,
         measurementInstruments,
@@ -99,9 +94,11 @@ describe('connection request validators', () => {
       expect(result.data.requestType).toBe('NEW_CONNECTION');
       expect(result.data.industryMainOrder).toBe('106');
       expect(result.data.eia).toBe('มี');
+      expect(result.data.latitude).toBe(13.7563);
       expect(result.data.contactPersons).toHaveLength(2);
       expect(result.data.notificationEmails).toEqual(['ops@example.com', 'ops2@example.com']);
       expect(result.data.officerNotificationEmails).toEqual(['officer@example.com']);
+      expect(result.data.measurementPoints[0].parameters).toEqual(['NOx']);
     }
   });
 
@@ -188,7 +185,12 @@ describe('connection request validators', () => {
 
   it('maps legacy single contact fields to contact arrays', () => {
     const { contactPersons, notificationEmails, ...legacyPayload } = validPayload;
-    const result = createConnectionRequestSchema.safeParse(legacyPayload);
+    const result = createConnectionRequestSchema.safeParse({
+      ...legacyPayload,
+      contactName: 'สมชาย ใจดี',
+      contactPhone: '0812345678',
+      contactEmail: 'ops@example.com',
+    });
 
     expect(result.success).toBe(true);
     if (result.success) {

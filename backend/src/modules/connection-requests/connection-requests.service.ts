@@ -652,6 +652,9 @@ function findFactorySummary(
       eia: summary.eia ?? request.eia,
       projectName: summary.projectName ?? request.projectName,
       address: summary.address ?? request.address,
+      latitude: summary.latitude ?? (request.latitude === null ? null : String(request.latitude)),
+      longitude:
+        summary.longitude ?? (request.longitude === null ? null : String(request.longitude)),
     };
   }
 
@@ -668,8 +671,8 @@ function findFactorySummary(
     eia: request.eia,
     projectName: request.projectName,
     address: request.address,
-    latitude: null,
-    longitude: null,
+    latitude: request.latitude === null ? null : String(request.latitude),
+    longitude: request.longitude === null ? null : String(request.longitude),
     province: null,
   };
 }

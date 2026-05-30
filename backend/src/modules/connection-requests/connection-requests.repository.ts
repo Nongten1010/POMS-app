@@ -33,6 +33,8 @@ interface ConnectionRequestRow {
   has_eia: boolean | number | null;
   project_name: string | null;
   address: string | null;
+  latitude: number | string | null;
+  longitude: number | string | null;
   system_type: 'CEMS' | 'WPMS';
   status: ConnectionRequestStatus;
   contact_name: string;
@@ -303,6 +305,8 @@ export const connectionRequestsRepository = {
         'has_eia',
         'project_name',
         'address',
+        'latitude',
+        'longitude',
         'system_type',
         'status',
         'contact_name',
@@ -465,6 +469,8 @@ function buildBaseQuery(
     'has_eia',
     'project_name',
     'address',
+    'latitude',
+    'longitude',
     'system_type',
     'status',
     'contact_name',
@@ -609,6 +615,8 @@ async function hydrate(
     hasEia: toNullableBoolean(row.has_eia),
     projectName: row.project_name,
     address: row.address,
+    latitude: toNullableNumber(row.latitude),
+    longitude: toNullableNumber(row.longitude),
     systemType: row.system_type,
     status: row.status,
     statusLabel: CONNECTION_REQUEST_STATUS_LABELS[row.status],
@@ -644,6 +652,8 @@ function toRequestRow(input: CreateConnectionRequestInput): Record<string, unkno
     has_eia: hasEia,
     project_name: input.projectName ?? null,
     address: input.address ?? null,
+    latitude: input.latitude ?? null,
+    longitude: input.longitude ?? null,
     system_type: input.systemType,
     contact_name: input.contactName,
     contact_phone: input.contactPhone,
@@ -678,7 +688,7 @@ async function insertMeasurementPoints(
       point_type: point.pointType,
       latitude: point.latitude ?? null,
       longitude: point.longitude ?? null,
-      parameters_json: JSON.stringify(point.parameters),
+      parameters_json: JSON.stringify(point.parameters ?? []),
       description: point.description ?? null,
       details_json: point.details ? JSON.stringify(point.details) : null,
       documents_json:

@@ -241,7 +241,7 @@ const measurementPointSchema = z
     pointType: z.enum(['STACK', 'WASTEWATER', 'OTHER']),
     latitude: z.number().min(-90).max(90).nullable().optional(),
     longitude: z.number().min(-180).max(180).nullable().optional(),
-    parameters: z.array(trimmedString(64)).min(1).max(50),
+    parameters: z.array(trimmedString(64)).min(1).max(50).optional(),
     description: optionalNullableTrimmedString(1000),
     details: measurementPointDetailsSchema.nullable().optional(),
     documentsAndImages: z.array(requestDocumentImageSchema).max(50).optional(),
@@ -253,6 +253,7 @@ const measurementPointSchema = z
     latitude: point.latitude ?? null,
     longitude: point.longitude ?? null,
     pointCode: point.pointCode ?? null,
+    parameters: point.parameters ?? deriveMeasurementPointParameters(point.measurementInstruments),
     description: point.description ?? null,
     details: point.details ?? null,
     documentsAndImages: point.documentsAndImages ?? [],
@@ -272,6 +273,8 @@ const connectionRequestFormObjectSchema = z
     hasEia: z.boolean().nullable().optional(),
     projectName: optionalNullableTrimmedString(500),
     address: optionalNullableTrimmedString(1000),
+    latitude: z.number().min(-90).max(90).nullable().optional(),
+    longitude: z.number().min(-180).max(180).nullable().optional(),
     systemType: z.enum(['CEMS', 'WPMS']),
     contactName: optionalTrimmedString(255),
     contactPhone: optionalTrimmedString(64),
@@ -291,6 +294,13 @@ const connectionRequestFormSchema = connectionRequestFormBaseSchema.transform(no
 
 type ContactFormPayload = z.infer<typeof connectionRequestFormBaseSchema>;
 type ContactFormPayloadWithoutRequestType = Omit<ContactFormPayload, 'requestType'>;
+
+function deriveMeasurementPointParameters(
+  instruments: z.infer<typeof measurementInstrumentsSchema> | null | undefined,
+): string[] {
+  if (!instruments) return [];
+  return [...new Set(instruments.parameters.map((item) => item.parameter))];
+}
 
 function validateContactSection(
   payload: ContactFormPayload | ContactFormPayloadWithoutRequestType,

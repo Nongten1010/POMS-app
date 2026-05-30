@@ -84,7 +84,7 @@ export interface MeasurementPointInput {
   pointType: MeasurementPointType;
   latitude?: number | null;
   longitude?: number | null;
-  parameters: string[];
+  parameters?: string[];
   description?: string | null;
   details?: MeasurementPointDetailsInput | null;
   documentsAndImages?: RequestDocumentImageInput[];
@@ -103,6 +103,8 @@ export interface CreateConnectionRequestInput {
   hasEia?: boolean | null;
   projectName?: string | null;
   address?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   systemType: ConnectionSystemType;
   contactName: string;
   contactPhone: string;
@@ -152,8 +154,9 @@ export interface VerifyConnectionInput {
   note?: string | null;
 }
 
-export interface MeasurementPointDTO extends MeasurementPointInput {
+export interface MeasurementPointDTO extends Omit<MeasurementPointInput, 'parameters'> {
   id: number;
+  parameters: string[];
 }
 
 export interface StatusHistoryDTO {
@@ -180,6 +183,8 @@ export interface ConnectionRequestDTO {
   hasEia: boolean | null;
   projectName: string | null;
   address: string | null;
+  latitude: number | null;
+  longitude: number | null;
   systemType: ConnectionSystemType;
   status: ConnectionRequestStatus;
   statusLabel: string;
