@@ -232,6 +232,8 @@ curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/measurement-points
         "documentsAndImages": [
           {
             "title": "ภาพถ่ายปล่อง",
+            "description": "ภาพถ่ายตำแหน่งปล่องและเครื่องมือตรวจวัด",
+            "link": "https://example.com/documents/stack-reference.pdf",
             "fileName": "stack.png",
             "fileUrl": "https://example.com/files/stack.png",
             "fileType": "image/png",
@@ -269,6 +271,23 @@ curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/measurement-points
                   { "level": "warning", "min": 70, "max": 90 },
                   { "level": "critical", "min": 90, "max": null }
                 ]
+              }
+            },
+            {
+              "parameter": "SO2",
+              "technique": "UV Fluorescence",
+              "range": "0-500",
+              "brand": "Thermo",
+              "supplier": "XYZ Instrument",
+              "eiaStandard": null,
+              "standardCondition": false,
+              "dryBasis": false,
+              "oxygenOrExcessAir": false,
+              "standardCriteria": {
+                "enabled": false
+              },
+              "eiaCriteria": {
+                "enabled": false
               }
             }
           ]
@@ -413,6 +432,15 @@ curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/parameters" \
     "factoryId": "factory-001",
     "factoryName": "บริษัท ทดสอบ จำกัด",
     "factoryRegistrationNo": "3-106-33/50สบ",
+    "industryMainOrder": "106",
+    "industrySubOrder": "33",
+    "businessActivity": "ผลิตเคมีภัณฑ์",
+    "eia": "มี",
+    "hasEia": true,
+    "projectName": "โครงการทดสอบ CEMS",
+    "address": "99 หมู่ 1 ตำบลทดสอบ อำเภอเมือง จังหวัดสระบุรี",
+    "latitude": 13.7563,
+    "longitude": 100.5018,
     "systemType": "CEMS",
     "contactPersons": [
       {
@@ -429,6 +457,7 @@ curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/parameters" \
       }
     ],
     "notificationEmails": ["ops@example.com", "ops2@example.com"],
+    "officerNotificationEmails": ["officer@example.com"],
     "measurementPoints": [
       {
         "pointName": "ปล่องระบาย A",
@@ -458,7 +487,13 @@ curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/parameters" \
                 ]
               },
               "eiaCriteria": {
-                "enabled": false
+                "enabled": true,
+                "standardValue": "45",
+                "rows": [
+                  { "level": "normal", "min": 0, "max": 25 },
+                  { "level": "warning", "min": 25, "max": 35 },
+                  { "level": "critical", "min": 35, "max": null }
+                ]
               }
             }
           ]
@@ -1004,6 +1039,15 @@ curl -X PUT "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/form" \
     "factoryId": "factory-001",
     "factoryName": "บริษัท ทดสอบ จำกัด",
     "factoryRegistrationNo": "3-106-33/50สบ",
+    "industryMainOrder": "106",
+    "industrySubOrder": "33",
+    "businessActivity": "ผลิตเคมีภัณฑ์",
+    "eia": "มี",
+    "hasEia": true,
+    "projectName": "โครงการทดสอบ CEMS",
+    "address": "99 หมู่ 1 ตำบลทดสอบ อำเภอเมือง จังหวัดสระบุรี",
+    "latitude": 13.7563,
+    "longitude": 100.5018,
     "systemType": "CEMS",
     "contactPersons": [
       {
@@ -1020,6 +1064,7 @@ curl -X PUT "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/form" \
       }
     ],
     "notificationEmails": ["ops@example.com", "ops2@example.com"],
+    "officerNotificationEmails": ["officer@example.com"],
     "measurementPoints": [
       {
         "pointName": "ปล่องระบาย A",
@@ -1049,7 +1094,13 @@ curl -X PUT "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/form" \
                 ]
               },
               "eiaCriteria": {
-                "enabled": false
+                "enabled": true,
+                "standardValue": "45",
+                "rows": [
+                  { "level": "normal", "min": 0, "max": 25 },
+                  { "level": "warning", "min": 25, "max": 35 },
+                  { "level": "critical", "min": 35, "max": null }
+                ]
               }
             }
           ]
@@ -1547,6 +1598,734 @@ Response:
   }
 }
 ```
+
+## Request Contract And Data Dictionary ทุก API
+
+ส่วนนี้เป็นสรุปสำหรับ frontend/Postman โดยตรง: ทุก API มี URL, headers, request body/query/path, ตัวอย่าง JSON ที่ต้องส่ง และ data dictionary ของฟิลด์ request
+
+### Headers ทุก API
+
+| Header | Required | Value |
+| --- | --- | --- |
+| `Authorization` | Yes | `Bearer <accessToken>` |
+| `Content-Type` | เฉพาะ API ที่มี body | `application/json` |
+
+### API 0: GET ข้อมูลทั่วไปของโรงงาน
+
+| Item | Value |
+| --- | --- |
+| URL | `GET /api/v1/cems-wpms-requests/factories/:factoryId/general` |
+| Header | `Authorization: Bearer <operatorAccessToken>` |
+| Body | ไม่มี |
+
+Path params:
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `factoryId` | string | Yes | รหัสโรงงาน หรือเลขทะเบียนโรงงาน ใช้ดึงข้อมูลทั่วไปมาลงฟอร์ม |
+
+ตัวอย่าง request:
+
+```bash
+curl "http://localhost:3000/api/v1/cems-wpms-requests/factories/factory-001/general" \
+  -H "Authorization: Bearer $OPERATOR_TOKEN"
+```
+
+Data dictionary ของ response ที่ใช้ prefill:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `data.factoryId` | string | รหัสโรงงาน |
+| `data.factoryName` | string | ชื่อโรงงาน |
+| `data.newRegistrationNo` | string|null | เลขทะเบียนโรงงาน |
+| `data.industryMainOrder` | string|null | ลำดับประเภทโรงงานหลัก |
+| `data.industrySubOrder` | string|null | ลำดับประเภทโรงงานรอง |
+| `data.businessActivity` | string|null | การประกอบกิจการ |
+| `data.eia` | string|null | มี/ไม่มี EIA |
+| `data.hasEia` | boolean|null | สถานะ EIA แบบ boolean |
+| `data.projectName` | string|null | ชื่อโครงการ |
+| `data.address` | string|null | สถานที่ตั้งโรงงาน |
+| `data.latitude` | string|number|null | ละติจูดโรงงาน |
+| `data.longitude` | string|number|null | ลองจิจูดโรงงาน |
+| `data.formDefaults` | object | ค่าเริ่มต้นที่ส่งต่อใน POST form ได้ |
+
+### API 1: POST บันทึกฟอร์ม เพิ่มจุดตรวจวัด
+
+| Item | Value |
+| --- | --- |
+| URL | `POST /api/v1/cems-wpms-requests/measurement-points` |
+| Header | `Authorization: Bearer <operatorAccessToken>`, `Content-Type: application/json` |
+| Body | `ConnectionRequestFormBody` |
+
+ตัวอย่าง JSON ที่ต้องส่ง:
+
+```json
+{
+  "factoryId": "factory-001",
+  "factoryName": "บริษัท ทดสอบ จำกัด",
+  "factoryRegistrationNo": "3-106-33/50สบ",
+  "industryMainOrder": "106",
+  "industrySubOrder": "33",
+  "businessActivity": "ผลิตเคมีภัณฑ์",
+  "eia": "มี",
+  "hasEia": true,
+  "projectName": "โครงการทดสอบ CEMS",
+  "address": "99 หมู่ 1 ตำบลทดสอบ อำเภอเมือง จังหวัดสระบุรี",
+  "latitude": 13.7563,
+  "longitude": 100.5018,
+  "systemType": "CEMS",
+  "contactPersons": [
+    {
+      "name": "สมชาย ใจดี",
+      "position": "ผู้จัดการสิ่งแวดล้อม",
+      "phone": "0812345678",
+      "email": "ops@example.com"
+    }
+  ],
+  "notificationEmails": ["ops@example.com"],
+  "officerNotificationEmails": ["officer@example.com"],
+  "measurementPoints": [
+    {
+      "pointName": "ปล่องระบาย A",
+      "pointType": "STACK",
+      "details": {
+        "monitoringPointKind": "CEMS",
+        "productionUnitType": "หม้อไอน้ำ",
+        "productionCapacity": "10 ตันไอน้ำ/ชั่วโมง",
+        "cemsInstallationRequiredBy": "ประกาศ อก.",
+        "eligibleParameters": ["NOx", "SO2"],
+        "exemptedParameters": [],
+        "connectedParameters": [],
+        "pendingParameters": ["NOx", "SO2"],
+        "stackShape": "สี่เหลี่ยม",
+        "stackWidth": 1.5,
+        "stackLength": 2,
+        "hasTreatmentSystem": "มี",
+        "treatmentSystem": "สครับเบอร์",
+        "connectionDevice": "POMS Box (กรอ.)"
+      },
+      "documentsAndImages": [
+        {
+          "title": "ภาพถ่ายปล่อง",
+          "description": "ภาพถ่ายตำแหน่งปล่อง",
+          "link": "https://example.com/documents/stack-reference.pdf",
+          "fileName": "stack.png",
+          "fileUrl": "https://example.com/files/stack.png",
+          "fileType": "image/png",
+          "fileSize": 1024
+        }
+      ],
+      "measurementInstruments": {
+        "converterBrand": "Converter Brand",
+        "converterModel": "CV-100",
+        "parameters": [
+          {
+            "parameter": "NOx",
+            "technique": "NDIR",
+            "range": "0-200 ppm",
+            "brand": "Siemens",
+            "supplier": "ABC Tech",
+            "eiaStandard": "120 ppm",
+            "standardCondition": true,
+            "dryBasis": true,
+            "oxygenOrExcessAir": true,
+            "standardCriteria": {
+              "enabled": true,
+              "standardValue": "120 ppm",
+              "rows": [
+                { "level": "normal", "min": 0, "max": 80 },
+                { "level": "warning", "min": 80, "max": 100 },
+                { "level": "critical", "min": 100, "max": null }
+              ]
+            },
+            "eiaCriteria": {
+              "enabled": false
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "remarks": "ขอเพิ่มจุดตรวจวัด"
+}
+```
+
+Data dictionary:
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `factoryId` | string | Yes | รหัสโรงงาน |
+| `factoryName` | string | Yes | ชื่อโรงงาน |
+| `factoryRegistrationNo` | string | Yes | เลขทะเบียนโรงงาน |
+| `industryMainOrder` | string|null | No | ลำดับประเภทโรงงานหลัก |
+| `industrySubOrder` | string|null | No | ลำดับประเภทโรงงานรอง |
+| `businessActivity` | string|null | No | การประกอบกิจการ |
+| `eia` | string|null | No | ค่าแสดงผล EIA เช่น `มี`, `ไม่มี` |
+| `hasEia` | boolean|null | No | ค่า EIA แบบ boolean |
+| `projectName` | string|null | No | ชื่อโครงการ |
+| `address` | string|null | No | สถานที่ตั้งโรงงาน |
+| `latitude` | number|string|null | No | ละติจูดของโรงงาน |
+| `longitude` | number|string|null | No | ลองจิจูดของโรงงาน |
+| `systemType` | string | Yes | `CEMS` หรือ `WPMS` |
+| `contactPersons` | array | Yes | รายชื่อผู้ติดต่อประสานงาน เพิ่มได้หลายคน |
+| `notificationEmails` | string[] | No | อีเมลแจ้งเตือนโรงงาน เพิ่มได้หลายอัน |
+| `officerNotificationEmails` | string[] | No | อีเมลแจ้งเตือนเจ้าหน้าที่ เพิ่มได้หลายอัน |
+| `measurementPoints` | array | Yes | จุดตรวจวัด อย่างน้อย 1 จุด |
+| `remarks` | string|null | No | หมายเหตุคำขอ |
+
+### API 2: POST บันทึกฟอร์ม เพิ่มพารามิเตอร์
+
+| Item | Value |
+| --- | --- |
+| URL | `POST /api/v1/cems-wpms-requests/parameters` |
+| Header | `Authorization: Bearer <operatorAccessToken>`, `Content-Type: application/json` |
+| Body | `ConnectionRequestFormBody` แต่ `measurementPoints` ต้องมี 1 จุด และต้องมี `pointCode` |
+
+ตัวอย่าง JSON ที่ต้องส่ง:
+
+```json
+{
+  "factoryId": "factory-001",
+  "factoryName": "บริษัท ทดสอบ จำกัด",
+  "factoryRegistrationNo": "3-106-33/50สบ",
+  "systemType": "CEMS",
+  "contactPersons": [
+    {
+      "name": "สมชาย ใจดี",
+      "position": "ผู้จัดการสิ่งแวดล้อม",
+      "phone": "0812345678",
+      "email": "ops@example.com"
+    }
+  ],
+  "notificationEmails": ["ops@example.com"],
+  "measurementPoints": [
+    {
+      "pointName": "ปล่องระบาย A",
+      "pointCode": "S0001",
+      "pointType": "STACK",
+      "measurementInstruments": {
+        "converterBrand": "Converter Brand",
+        "converterModel": "CV-100",
+        "parameters": [
+          {
+            "parameter": "CO",
+            "technique": "NDIR",
+            "range": "0-100 ppm",
+            "brand": "Siemens",
+            "supplier": "ABC Tech",
+            "eiaStandard": "50 ppm",
+            "standardCondition": true,
+            "dryBasis": true,
+            "oxygenOrExcessAir": true,
+            "standardCriteria": {
+              "enabled": true,
+              "standardValue": "50 ppm",
+              "rows": [
+                { "level": "normal", "min": 0, "max": 30 },
+                { "level": "warning", "min": 30, "max": 40 },
+                { "level": "critical", "min": 40, "max": null }
+              ]
+            },
+            "eiaCriteria": {
+              "enabled": false
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "remarks": "ขอเพิ่มพารามิเตอร์"
+}
+```
+
+Data dictionary เพิ่มเติมจาก API 1:
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `measurementPoints` | array | Yes | ต้องส่ง 1 จุดต่อ 1 คำขอเพิ่มพารามิเตอร์ |
+| `measurementPoints[].pointCode` | string | Yes | เลขจุดตรวจวัดเดิมที่ backend ออกแล้ว เช่น `S0001`, `P0001` |
+| `measurementPoints[].measurementInstruments` | object | Yes | รายละเอียดเครื่องมือตรวจวัดและพารามิเตอร์ใหม่ |
+| `measurementPoints[].details` | object | No | ไม่จำเป็นสำหรับเพิ่มพารามิเตอร์ ถ้าไม่ได้แก้รายละเอียดจุด |
+| `measurementPoints[].documentsAndImages` | array | No | ไม่จำเป็นสำหรับเพิ่มพารามิเตอร์ |
+
+### API 2.1: PUT แก้ไขฟอร์ม เพิ่มจุดตรวจวัด / เพิ่มพารามิเตอร์
+
+| Item | Value |
+| --- | --- |
+| URL | `PUT /api/v1/cems-wpms-requests/:id/form` |
+| Header | `Authorization: Bearer <operatorAccessToken>`, `Content-Type: application/json` |
+| Body | ใช้ shape เดียวกับ API 1 หรือ API 2 ตามประเภทคำขอเดิม |
+
+Path params:
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | number | Yes | ID คำขอที่อยู่สถานะ `WAITING_FACTORY_REVISION` |
+
+ตัวอย่าง JSON ที่ต้องส่ง:
+
+```json
+{
+  "factoryId": "factory-001",
+  "factoryName": "บริษัท ทดสอบ จำกัด",
+  "factoryRegistrationNo": "3-106-33/50สบ",
+  "systemType": "CEMS",
+  "contactPersons": [
+    {
+      "name": "สมชาย ใจดี",
+      "position": "ผู้จัดการสิ่งแวดล้อม",
+      "phone": "0812345678",
+      "email": "ops@example.com"
+    }
+  ],
+  "measurementPoints": [
+    {
+      "pointName": "ปล่องระบาย A",
+      "pointCode": "S0001",
+      "pointType": "STACK",
+      "measurementInstruments": {
+        "parameters": [
+          {
+            "parameter": "CO",
+            "technique": "NDIR",
+            "range": "0-100 ppm",
+            "brand": "Siemens",
+            "supplier": "ABC Tech",
+            "standardCriteria": {
+              "enabled": true,
+              "standardValue": "50 ppm",
+              "rows": [
+                { "level": "normal", "min": 0, "max": 30 },
+                { "level": "warning", "min": 30, "max": 40 },
+                { "level": "critical", "min": 40, "max": null }
+              ]
+            },
+            "eiaCriteria": {
+              "enabled": false
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "remarks": "แก้ไขตามเจ้าหน้าที่แจ้ง"
+}
+```
+
+Data dictionary:
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `requestType` | string | No | ถ้าไม่ส่ง backend ใช้ประเภทคำขอเดิม |
+| `measurementPoints[].details` | object | Conditional | ต้องมีเมื่อแก้คำขอเพิ่มจุดตรวจวัด |
+| `measurementPoints[].documentsAndImages` | array | Conditional | ต้องมีเมื่อแก้คำขอเพิ่มจุดตรวจวัด |
+| `measurementPoints[].measurementInstruments` | object | Yes | ต้องมีทั้งแก้เพิ่มจุดและแก้เพิ่มพารามิเตอร์ |
+
+### API 3: POST บันทึกฟอร์ม ตั้งค่าอุปกรณ์ config
+
+| Item | Value |
+| --- | --- |
+| URL | `POST /api/v1/cems-wpms-requests/:id/device-configs` |
+| Header | `Authorization: Bearer <operatorAccessToken>`, `Content-Type: application/json` |
+| Body | `DeviceConfigBody` |
+
+Path params:
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | number | Yes | ID คำขอที่อยู่สถานะ `WAITING_CONNECTION` |
+
+ตัวอย่าง JSON ที่ต้องส่ง:
+
+```json
+{
+  "stationId": "S0001",
+  "protocol": "MODBUS_TCP",
+  "settings": {
+    "hostIp": "192.168.1.10",
+    "slaveId": 1,
+    "port": 502
+  },
+  "channels": [
+    {
+      "addressId": 40001,
+      "dataType": "NOx",
+      "unit": "ppm",
+      "valueRange": { "min": 0, "max": 200 },
+      "valueFormat": "MEASUREMENT_VALUE",
+      "offset": 0,
+      "encoding": "UNSIGNED16_BIG_ENDIAN"
+    }
+  ],
+  "statusManagement": {
+    "selectedParameters": ["ทั้งหมด"],
+    "startAt": null,
+    "endAt": null,
+    "status": "Normal",
+    "schedules": []
+  }
+}
+```
+
+Data dictionary:
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `stationId` | string | Yes | ต้องตรงกับ `pointCode` หรือ `pointName` ของจุดตรวจวัดในคำขอ |
+| `protocol` | string | Yes | `MODBUS_RTU`, `MODBUS_TCP`, `MSSQL`, `MYSQL` |
+| `settings` | object | Yes | ข้อมูล connection ตาม protocol |
+| `settings.hostIp` | string | Conditional | IP/host สำหรับ `MODBUS_TCP`, `MSSQL`, `MYSQL` |
+| `settings.port` | number | Conditional | port สำหรับ TCP/database |
+| `settings.comport` | string|number | Conditional | COM port สำหรับ `MODBUS_RTU` |
+| `settings.slaveId` | number|string | No | Slave ID |
+| `settings.baudRate` | number|string | No | Baud rate สำหรับ RTU |
+| `settings.parity` | string | No | Parity สำหรับ RTU |
+| `settings.stopBits` | number|string | No | Stop bits |
+| `settings.dataBits` | number|string | No | Data bits |
+| `channels` | array | Yes | รายการ mapping ค่าพารามิเตอร์ |
+| `channels[].addressId` | number|string | Yes | register/address/field id |
+| `channels[].dataType` | string | Yes | ชื่อพารามิเตอร์ เช่น `NOx` |
+| `channels[].unit` | string|null | No | หน่วย |
+| `channels[].valueRange.min` | number|null | No | ค่าต่ำสุดของช่วงข้อมูล |
+| `channels[].valueRange.max` | number|null | No | ค่าสูงสุดของช่วงข้อมูล |
+| `channels[].valueFormat` | string|null | No | รูปแบบค่า เช่น `MEASUREMENT_VALUE` |
+| `channels[].offset` | number|null | No | offset |
+| `channels[].encoding` | string|null | No | รูปแบบ encoding |
+| `statusManagement` | object|null | No | ข้อมูลจัดการสถานะชั่วคราว |
+
+### API 4: GET รายละเอียดฟอร์ม ตั้งค่าอุปกรณ์ config สำหรับ prefill
+
+| Item | Value |
+| --- | --- |
+| URL | `GET /api/v1/cems-wpms-requests/:id/device-configs?stationId=S0001` |
+| Header | `Authorization: Bearer <accessToken>` |
+| Body | ไม่มี |
+
+Path/query params:
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | number | Yes | ID คำขอ |
+| `stationId` | string | No | pointCode/pointName ที่ต้องการ prefill ถ้าไม่ส่งจะดึง config ทั้งหมดในคำขอ |
+
+ตัวอย่าง request:
+
+```bash
+curl "http://localhost:3000/api/v1/cems-wpms-requests/1/device-configs?stationId=S0001" \
+  -H "Authorization: Bearer $OPERATOR_TOKEN"
+```
+
+Data dictionary response ที่ frontend ใช้:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `data.monitoringPoint` | object|null | จุดตรวจวัดที่กำลังตั้งค่า |
+| `data.parameterOptions` | string[] | ตัวเลือกพารามิเตอร์ |
+| `data.deviceCodeOptions` | string[] | ตัวเลือกรหัสอุปกรณ์ เช่น `S0001/01` |
+| `data.connectionForms` | array | ค่า prefill ส่วนอุปกรณ์ connection |
+| `data.statusManagement` | object | ค่า prefill ส่วนจัดการสถานะ |
+| `data.parameterMappings` | array | ค่า prefill ตาราง mapping พารามิเตอร์ |
+| `data.testResults` | array | ผลทดสอบ connection |
+| `data.rawConfigs` | array | config ต้นฉบับจาก DB |
+
+### API 4.1: GET รายละเอียดฟอร์ม ตั้งค่าอุปกรณ์ config ราย config
+
+| Item | Value |
+| --- | --- |
+| URL | `GET /api/v1/cems-wpms-requests/:id/device-configs/:configId` |
+| Header | `Authorization: Bearer <accessToken>` |
+| Body | ไม่มี |
+
+Path params:
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | number | Yes | ID คำขอ |
+| `configId` | number | Yes | ID config ที่ต้องการเปิดแก้ไข |
+
+ตัวอย่าง request:
+
+```bash
+curl "http://localhost:3000/api/v1/cems-wpms-requests/1/device-configs/10" \
+  -H "Authorization: Bearer $OPERATOR_TOKEN"
+```
+
+Data dictionary response ใช้เหมือน API 4 แต่คืนเฉพาะ config ที่ระบุ
+
+### API 5: POST ตรวจฟอร์ม เปลี่ยนสถานะ
+
+| Item | Value |
+| --- | --- |
+| URL | `POST /api/v1/cems-wpms-requests/:id/status` |
+| Header | `Authorization: Bearer <officerAccessToken>`, `Content-Type: application/json` |
+| Body | `ChangeStatusBody` |
+
+ตัวอย่าง JSON อนุมัติ:
+
+```json
+{
+  "action": "APPROVE_FORM",
+  "officerNote": "แบบถูกต้อง"
+}
+```
+
+ตัวอย่าง JSON ขอแก้ไข:
+
+```json
+{
+  "action": "REQUEST_REVISION",
+  "revisionReason": "เพิ่มรายละเอียดพารามิเตอร์",
+  "officerNote": "ข้อมูลยังไม่ครบ"
+}
+```
+
+Data dictionary:
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `action` | string | Yes | `APPROVE_FORM` หรือ `REQUEST_REVISION` |
+| `officerNote` | string|null | No | หมายเหตุเจ้าหน้าที่ |
+| `revisionReason` | string | Conditional | ต้องส่งเมื่อ `action = REQUEST_REVISION` |
+
+### API 6: GET รายการคำขอทั้งหมด สำหรับตารางเจ้าหน้าที่
+
+| Item | Value |
+| --- | --- |
+| URL | `GET /api/v1/cems-wpms-requests/table-rows` |
+| Header | `Authorization: Bearer <officerAccessToken>` |
+| Body | ไม่มี |
+
+Query params:
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `status` | string | No | filter status เช่น `WAITING_CONNECTION` |
+| `requestType` | string | No | filter ประเภทคำขอ เช่น `ADD_MEASUREMENT_POINT` |
+| `factoryId` | string | No | filter โรงงาน |
+
+ตัวอย่าง request:
+
+```bash
+curl "http://localhost:3000/api/v1/cems-wpms-requests/table-rows?status=WAITING_CONNECTION&requestType=ADD_MEASUREMENT_POINT" \
+  -H "Authorization: Bearer $OFFICER_TOKEN"
+```
+
+Data dictionary response row:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `id` | number | ID คำขอ |
+| `factoryId` | string | รหัสโรงงาน |
+| `factoryName` | string | ชื่อโรงงาน |
+| `type` | string | `CEMS` หรือ `WPMS` |
+| `requestNo` | string | เลขคำขอ |
+| `monitoringPointCode` | string|null | pointCode หลังอนุมัติ |
+| `form` | string | ชื่อฟอร์ม |
+| `status` | string | label สถานะ |
+| `statusCode` | string | code สถานะ |
+| `requestType` | string | ประเภทคำขอ |
+
+### API 7: GET รายการคำขอเฉพาะโรงงานตัวเอง สำหรับตารางผู้ประกอบการ
+
+| Item | Value |
+| --- | --- |
+| URL | `GET /api/v1/cems-wpms-requests/table-rows` |
+| Header | `Authorization: Bearer <operatorAccessToken>` |
+| Body | ไม่มี |
+
+Query params ใช้เหมือน API 6 แต่ backend จะจำกัดข้อมูลตามโรงงานของ operator จาก token
+
+ตัวอย่าง request:
+
+```bash
+curl "http://localhost:3000/api/v1/cems-wpms-requests/table-rows" \
+  -H "Authorization: Bearer $OPERATOR_TOKEN"
+```
+
+Data dictionary response row ใช้เหมือน API 6
+
+### API 8: GET รายชื่อโรงงาน สำหรับตารางผู้ประกอบการ
+
+| Item | Value |
+| --- | --- |
+| URL | `GET /api/v1/cems-wpms-requests/operator-factories` |
+| Header | `Authorization: Bearer <operatorAccessToken>` |
+| Body | ไม่มี |
+
+ตัวอย่าง request:
+
+```bash
+curl "http://localhost:3000/api/v1/cems-wpms-requests/operator-factories" \
+  -H "Authorization: Bearer $OPERATOR_TOKEN"
+```
+
+Data dictionary response row:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `id` | number | ID โรงงานใน DB |
+| `factoryId` | string | รหัสโรงงาน |
+| `factoryName` | string | ชื่อโรงงาน |
+| `newRegistrationNo` | string|null | เลขทะเบียนใหม่ |
+| `oldRegistrationNo` | string|null | เลขทะเบียนเดิม |
+| `industryType` | string|null | ประเภทอุตสาหกรรม |
+| `province` | string|null | จังหวัด |
+| `monitoringPointCount` | number | จำนวนจุดตรวจวัด |
+| `requestStatus` | string|null | สถานะคำขอล่าสุดแบบ label |
+| `requestStatusCode` | string|null | สถานะคำขอล่าสุดแบบ code |
+| `status` | string | สถานะการแสดงผลในตาราง |
+
+### API 9: GET รายละเอียดคำขอรายคำขอ
+
+| Item | Value |
+| --- | --- |
+| URL | `GET /api/v1/cems-wpms-requests/:id/detail` |
+| Header | `Authorization: Bearer <accessToken>` |
+| Body | ไม่มี |
+
+Path params:
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | number | Yes | ID คำขอ |
+
+ตัวอย่าง request:
+
+```bash
+curl "http://localhost:3000/api/v1/cems-wpms-requests/1/detail" \
+  -H "Authorization: Bearer $OPERATOR_TOKEN"
+```
+
+Data dictionary response:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `data.id` | number | ID คำขอ |
+| `data.requestNo` | string | เลขคำขอ |
+| `data.requestType` | string | ประเภทคำขอ |
+| `data.factory` | object | ข้อมูลโรงงาน snapshot/detail |
+| `data.measurementPoints` | array | รายจุดตรวจวัด ใช้ทำ PDF และเติมฟอร์มเพิ่มพารามิเตอร์ |
+| `data.statusHistory` | array | ประวัติสถานะ |
+| `data.deviceConfigs` | array | config อุปกรณ์ของคำขอ |
+
+### API 10: GET รายละเอียดคำขอ รายจุดตรวจวัดทุกคำขอ เฉพาะเชื่อมต่อแล้ว
+
+| Item | Value |
+| --- | --- |
+| URL | `GET /api/v1/cems-wpms-requests/connected-measurement-points` |
+| Header | `Authorization: Bearer <accessToken>` |
+| Body | ไม่มี |
+
+Query params:
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `factoryId` | string | No | filter เฉพาะโรงงาน |
+
+ตัวอย่าง request:
+
+```bash
+curl "http://localhost:3000/api/v1/cems-wpms-requests/connected-measurement-points?factoryId=factory-001" \
+  -H "Authorization: Bearer $OFFICER_TOKEN"
+```
+
+Data dictionary response row:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `id` | number | ID จุดตรวจวัด |
+| `requestId` | number | ID คำขอ |
+| `requestNo` | string | เลขคำขอ |
+| `factory` | object | ข้อมูลโรงงาน |
+| `type` | string | `CEMS` หรือ `WPMS` |
+| `status` | string | label สถานะ |
+| `statusCode` | string | ต้องเป็น `CONNECTED` |
+| `connectedAt` | string|null | วันเวลาที่เชื่อมต่อแล้ว |
+| `point` | object | ข้อมูลจุดตรวจวัด |
+| `deviceConfigs` | array | config อุปกรณ์ที่ผูกกับจุด |
+
+### Common JSON Data Dictionary
+
+#### `measurementPoints[]`
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `pointName` | string | Yes | ชื่อจุดตรวจวัด |
+| `pointCode` | string|null | Conditional | เพิ่มจุดใหม่ไม่ต้องส่ง; เพิ่มพารามิเตอร์ต้องส่งเลขเดิม |
+| `pointType` | string | Yes | `STACK`, `WASTEWATER`, `OTHER` |
+| `details` | object | Conditional | รายละเอียดจุดตรวจวัด ใช้ในฟอร์มเพิ่มจุดตรวจวัด |
+| `documentsAndImages` | array | Conditional | เอกสารและรูปภาพ ใช้ในฟอร์มเพิ่มจุดตรวจวัด |
+| `measurementInstruments` | object | Yes | รายละเอียดเครื่องมือตรวจวัด |
+
+#### `measurementPoints[].details`
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `monitoringPointKind` | string|null | No | `CEMS`, `WPMS`, `Mobile`, `Station` |
+| `productionUnitType` | string|null | No | ประเภทหน่วยการผลิต |
+| `productionCapacity` | string|null | No | กำลังการผลิต |
+| `cemsInstallationRequiredBy` | string|null | No | เข้าข่ายต้องติดตั้ง CEMS ตามกฎหมาย |
+| `eligibleParameters` | string[] | No | พารามิเตอร์ที่เข้าข่าย เพิ่มได้หลายตัว |
+| `exemptedParameters` | string[] | No | พารามิเตอร์ที่ยกเว้น เพิ่มได้หลายตัว |
+| `connectedParameters` | string[] | No | พารามิเตอร์ที่เชื่อมต่อแล้ว เพิ่มได้หลายตัว |
+| `pendingParameters` | string[] | No | พารามิเตอร์ที่ยังไม่เชื่อมต่อ เพิ่มได้หลายตัว |
+| `stackShape` | string|null | Conditional | ลักษณะปล่อง เช่น `วงกลม`, `สี่เหลี่ยม`, `อื่นๆ` |
+| `stackDiameter` | number|null | Conditional | ต้องส่งเมื่อ `stackShape = วงกลม` |
+| `stackWidth` | number|null | Conditional | ต้องส่งเมื่อ `stackShape = สี่เหลี่ยม` |
+| `stackLength` | number|null | Conditional | ต้องส่งเมื่อ `stackShape = สี่เหลี่ยม` |
+| `stackShapeOther` | string|null | Conditional | ต้องส่งเมื่อ `stackShape = อื่นๆ` |
+| `hasTreatmentSystem` | string|null | No | มี/ไม่มี ระบบบำบัด |
+| `treatmentSystem` | string|null | Conditional | ระบบบำบัด |
+| `treatmentSystemOther` | string|null | Conditional | โปรดระบุระบบบำบัดอื่นๆ |
+| `connectionDevice` | string|null | No | อุปกรณ์/โปรแกรมที่ใช้เชื่อมต่อ |
+| `connectionDeviceOther` | string|null | Conditional | โปรดระบุอุปกรณ์/โปรแกรมอื่นๆ |
+
+#### `documentsAndImages[]`
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `title` | string | Yes | ชื่อเอกสาร/รูปภาพ |
+| `description` | string|null | No | รายละเอียดเพิ่มเติม |
+| `link` | string|null | No | URL เอกสารอ้างอิง |
+| `fileName` | string|null | No | ชื่อไฟล์ |
+| `fileUrl` | string|null | No | URL ไฟล์ |
+| `fileType` | string|null | No | MIME type |
+| `fileSize` | number|null | No | ขนาดไฟล์ byte |
+
+#### `measurementInstruments`
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `converterBrand` | string|null | No | ยี่ห้อ converter |
+| `converterModel` | string|null | No | รุ่น converter |
+| `parameters` | array | Yes | รายการพารามิเตอร์ที่ขอเชื่อมต่อ/เพิ่ม |
+
+#### `measurementInstruments.parameters[]`
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `parameter` | string | Yes | พารามิเตอร์ที่ขอเชื่อมต่อ เช่น `NOx` |
+| `technique` | string|null | No | เทคนิคการตรวจวัด |
+| `range` | string|null | No | ช่วงการตรวจวัด |
+| `brand` | string|null | No | ยี่ห้อเครื่องมือ |
+| `supplier` | string|null | No | ผู้จำหน่ายเครื่องมือ |
+| `eiaStandard` | string|null | No | มาตรฐาน EIA |
+| `standardCondition` | boolean|null | No | สภาวะมาตรฐาน |
+| `dryBasis` | boolean|null | No | การรายงานค่า Dry basis |
+| `oxygenOrExcessAir` | boolean|null | No | O2 @ 7% หรือ Excess Air 50% |
+| `standardCriteria` | object|null | No | ตาราง MIN/MAX ตามประกาศ อก. |
+| `eiaCriteria` | object|null | No | ตาราง MIN/MAX ตาม EIA |
+
+#### `standardCriteria` / `eiaCriteria`
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `enabled` | boolean | Yes | `true` ถ้ามีการกรอกตาราง MIN/MAX |
+| `standardValue` | string|null | No | ค่ามาตรฐาน |
+| `rows` | array | Conditional | ต้องส่งเมื่อ `enabled = true` |
+| `rows[].level` | string | Yes | `normal`, `warning`, `critical` |
+| `rows[].min` | number|null | No | ค่า MIN |
+| `rows[].max` | number|null | No | ค่า MAX |
 
 ## Value Reference
 

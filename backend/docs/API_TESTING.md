@@ -197,6 +197,8 @@ curl -X POST http://localhost:3000/api/v1/auth/login \
 
 ### 5.7 CEMS/WPMS connection request workflow
 
+เอกสารหลักของ API ชุดนี้อยู่ที่ `../../docs/APIDoc/CEMS_WPMS_REQUEST_APIS.md` และเป็นแหล่งอ้างอิงเดียวสำหรับ payload เต็ม, field mapping ทุกช่อง, validation และตัวอย่าง response.
+
 Login เป็น operator เพื่อสร้างคำขอ:
 
 ```bash
@@ -206,7 +208,32 @@ OPERATOR_TOKEN=$(curl -s -X POST http://localhost:3000/api/v1/auth/login \
   | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['accessToken'])")
 ```
 
-สร้างแบบฟอร์มคำขอเพิ่มจุดตรวจวัด:
+Login เป็นเจ้าหน้าที่ กฝม. สำหรับตรวจแบบ/ดูรายการทั้งหมด:
+
+```bash
+OFFICER_TOKEN=$(curl -s -X POST http://localhost:3000/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"userType":"officer","username":"officer_kpm","departmentID":"2","password":"demo1234"}' \
+  | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['accessToken'])")
+```
+
+ลำดับ endpoint ที่ต้องทดสอบ:
+
+| Step | Purpose | Method | Path |
+| --- | --- | --- | --- |
+| 0 | ดึงข้อมูลทั่วไปของโรงงานลงฟอร์มเพิ่มจุดตรวจวัด | GET | `/api/v1/cems-wpms-requests/factories/:factoryId/general` |
+| 1 | บันทึกฟอร์มเพิ่มจุดตรวจวัด | POST | `/api/v1/cems-wpms-requests/measurement-points` |
+| 2 | บันทึกฟอร์มเพิ่มพารามิเตอร์ | POST | `/api/v1/cems-wpms-requests/parameters` |
+| 3 | แก้ไข/ส่งฟอร์มกลับหลังเจ้าหน้าที่ขอแก้ไข | PUT | `/api/v1/cems-wpms-requests/:id/form` |
+| 4 | ตรวจฟอร์ม/เปลี่ยนสถานะ | POST | `/api/v1/cems-wpms-requests/:id/status` |
+| 5 | บันทึกตั้งค่าอุปกรณ์ config | POST | `/api/v1/cems-wpms-requests/:id/device-configs` |
+| 6 | ดึง config กลับไป prefill ฟอร์ม | GET | `/api/v1/cems-wpms-requests/:id/device-configs?stationId=S0001` |
+| 7 | รายการคำขอสำหรับตาราง | GET | `/api/v1/cems-wpms-requests/table-rows` |
+| 8 | รายชื่อโรงงานของผู้ประกอบการ | GET | `/api/v1/cems-wpms-requests/operator-factories` |
+| 9 | รายละเอียดคำขอรายคำขอ | GET | `/api/v1/cems-wpms-requests/:id/detail` |
+| 10 | รายจุดตรวจวัดทุกคำขอ เฉพาะเชื่อมต่อแล้ว | GET | `/api/v1/cems-wpms-requests/connected-measurement-points` |
+
+ตัวอย่าง minimal สำหรับสร้างคำขอเพิ่มจุดตรวจวัด:
 
 ```bash
 REQUEST_ID=$(curl -s -X POST http://localhost:3000/api/v1/cems-wpms-requests/measurement-points \
@@ -216,73 +243,49 @@ REQUEST_ID=$(curl -s -X POST http://localhost:3000/api/v1/cems-wpms-requests/mea
     "factoryId":"factory-001",
     "factoryName":"บริษัท ทดสอบ จำกัด",
     "factoryRegistrationNo":"3-106-33/50สบ",
+    "industryMainOrder":"106",
+    "industrySubOrder":"33",
+    "businessActivity":"ผลิตไอน้ำ",
+    "hasEia":true,
+    "projectName":"โครงการทดสอบ CEMS",
+    "address":"99 หมู่ 1 ต.ทดสอบ อ.เมือง จ.ระยอง",
+    "latitude":13.7563,
+    "longitude":100.5018,
     "systemType":"CEMS",
-    "contactName":"สมชาย ใจดี",
-    "contactPhone":"0812345678",
-    "contactEmail":"ops@example.com",
+    "contactPersons":[{"name":"สมชาย ใจดี","position":"วิศวกรสิ่งแวดล้อม","phone":"0812345678","email":"ops@example.com"}],
+    "notificationEmails":["plant-alert@example.com"],
+    "officerNotificationEmails":["officer-alert@example.com"],
     "measurementPoints":[{
       "pointName":"ปล่องระบาย A",
-      "pointCode":"STACK-A",
       "pointType":"STACK",
-      "latitude":13.7563,
-      "longitude":100.5018,
-      "parameters":["NOx","SO2","PM"],
-      "description":"จุดตรวจวัดหลัก",
       "details":{
+        "monitoringPointKind":"CEMS",
         "productionUnitType":"หม้อไอน้ำ",
         "productionCapacity":"10 ตันไอน้ำ/ชั่วโมง",
         "cemsInstallationRequiredBy":"ประกาศ อก.",
-        "cemsInstallationRequiredOther":null,
-        "legalAnnexNo":"เฉพาะประกาศปี 65",
-        "eligibleParameters":["NOx","SO2","PM"],
-        "exemptedParameters":[],
-        "connectedParameters":[],
-        "pendingParameters":["NOx","SO2","PM"],
-        "stackShape":"วงกลม",
-        "stackDiameter":1.2,
-        "stackWidth":null,
-        "stackLength":null,
-        "stackShapeOther":null,
-        "stackHeight":30,
-        "monitoringHeight":20,
-        "averageFlowRate":1200,
-        "minFlowRate":1000,
-        "maxFlowRate":1500,
-        "primaryFuel":"ก๊าซธรรมชาติ",
-        "primaryFuelOther":null,
-        "primaryFuelPercent":80,
-        "secondaryFuel":"ไม่มี",
-        "secondaryFuelOther":null,
-        "secondaryFuelPercent":null,
-        "combustionControlSystem":"ควบคุมอัตโนมัติ",
-        "hasTreatmentSystem":"มี",
-        "treatmentSystem":"สครับเบอร์",
-        "treatmentSystemOther":null,
-        "stackLatitude":13.7563,
-        "stackLongitude":100.5018,
-        "connectionDevice":"POMS Box (กรอ.)",
-        "connectionDeviceOther":null
+        "eligibleParameters":["NOx","SO2"],
+        "pendingParameters":["NOx","SO2"],
+        "stackShape":"สี่เหลี่ยม",
+        "stackWidth":1.5,
+        "stackLength":2,
+        "connectionDevice":"POMS Box (กรอ.)"
       },
-      "documentsAndImages":[{
-        "title":"ภาพถ่ายปล่อง",
-        "fileName":"stack.png",
-        "fileUrl":"https://example.com/files/stack.png",
-        "fileType":"image/png",
-        "fileSize":1024
-      }],
+      "documentsAndImages":[{"title":"ภาพถ่ายปล่อง","fileName":"stack.png","fileUrl":"https://example.com/files/stack.png","fileType":"image/png","fileSize":1024}],
       "measurementInstruments":{
         "converterBrand":"Converter Brand",
         "converterModel":"CV-100",
         "parameters":[{
           "parameter":"NOx",
           "technique":"NDIR",
-          "range":"0-200",
+          "range":"0-200 ppm",
           "brand":"Siemens",
           "supplier":"ABC Tech",
-          "eiaStandard":"120",
+          "eiaStandard":"120 ppm",
           "standardCondition":true,
           "dryBasis":true,
-          "oxygenOrExcessAir":true
+          "oxygenOrExcessAir":true,
+          "standardCriteria":{"enabled":true,"standardValue":"120","rows":[{"level":"normal","min":0,"max":80},{"level":"warning","min":80,"max":100},{"level":"critical","min":100,"max":null}]},
+          "eiaCriteria":{"enabled":false}
         }]
       }
     }],
@@ -290,7 +293,7 @@ REQUEST_ID=$(curl -s -X POST http://localhost:3000/api/v1/cems-wpms-requests/mea
   }' | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['id'])")
 ```
 
-สร้างแบบฟอร์มคำขอเพิ่มพารามิเตอร์ให้จุดตรวจวัดเดิม:
+ตัวอย่าง minimal สำหรับเพิ่มพารามิเตอร์ให้จุดตรวจวัดเดิม:
 
 ```bash
 PARAMETER_REQUEST_ID=$(curl -s -X POST http://localhost:3000/api/v1/cems-wpms-requests/parameters \
@@ -301,28 +304,27 @@ PARAMETER_REQUEST_ID=$(curl -s -X POST http://localhost:3000/api/v1/cems-wpms-re
     "factoryName":"บริษัท ทดสอบ จำกัด",
     "factoryRegistrationNo":"3-106-33/50สบ",
     "systemType":"CEMS",
-    "contactName":"สมชาย ใจดี",
-    "contactPhone":"0812345678",
-    "contactEmail":"ops@example.com",
+    "contactPersons":[{"name":"สมชาย ใจดี","position":"วิศวกรสิ่งแวดล้อม","phone":"0812345678","email":"ops@example.com"}],
+    "notificationEmails":["plant-alert@example.com"],
     "measurementPoints":[{
       "pointName":"ปล่องระบาย A",
-      "pointCode":"STACK-A",
+      "pointCode":"S0001",
       "pointType":"STACK",
-      "parameters":["CO"],
-      "description":"เพิ่มพารามิเตอร์ CO ให้จุดตรวจวัดเดิม",
       "measurementInstruments":{
         "converterBrand":"Converter Brand",
         "converterModel":"CV-100",
         "parameters":[{
           "parameter":"CO",
           "technique":"NDIR",
-          "range":"0-100",
+          "range":"0-100 ppm",
           "brand":"Siemens",
           "supplier":"ABC Tech",
-          "eiaStandard":"50",
+          "eiaStandard":"50 ppm",
           "standardCondition":true,
           "dryBasis":true,
-          "oxygenOrExcessAir":true
+          "oxygenOrExcessAir":true,
+          "standardCriteria":{"enabled":true,"standardValue":"50","rows":[{"level":"normal","min":0,"max":30},{"level":"warning","min":30,"max":40},{"level":"critical","min":40,"max":null}]},
+          "eiaCriteria":{"enabled":false}
         }]
       }
     }],
@@ -330,56 +332,7 @@ PARAMETER_REQUEST_ID=$(curl -s -X POST http://localhost:3000/api/v1/cems-wpms-re
   }' | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['id'])")
 ```
 
-Login เป็นเจ้าหน้าที่ กฝม. แล้วอนุมัติแบบ:
-
-```bash
-OFFICER_TOKEN=$(curl -s -X POST http://localhost:3000/api/v1/auth/login \
-  -H 'Content-Type: application/json' \
-  -d '{"userType":"officer","username":"officer_kpm","departmentID":"2","password":"demo1234"}' \
-  | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['accessToken'])")
-
-curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/review" \
-  -H "Authorization: Bearer $OFFICER_TOKEN" \
-  -H 'Content-Type: application/json' \
-  -d '{"decision":"APPROVE_DESIGN","officerNote":"แบบถูกต้อง"}'
-```
-
-ดึงรายการคำขอทั้งหมดสำหรับตารางเจ้าหน้าที่:
-
-```bash
-curl "http://localhost:3000/api/v1/cems-wpms-requests/table-rows" \
-  -H "Authorization: Bearer $OFFICER_TOKEN"
-```
-
-ดึงรายการคำขอเฉพาะผู้ประกอบการ/โรงงานของตัวเองสำหรับตารางผู้ประกอบการ:
-
-```bash
-curl "http://localhost:3000/api/v1/cems-wpms-requests/table-rows" \
-  -H "Authorization: Bearer $OPERATOR_TOKEN"
-```
-
-ดึงรายชื่อโรงงานสำหรับตารางรายชื่อโรงงานของผู้ประกอบการ:
-
-```bash
-curl "http://localhost:3000/api/v1/cems-wpms-requests/operator-factories" \
-  -H "Authorization: Bearer $OPERATOR_TOKEN"
-```
-
-ดึงรายละเอียดคำขอรายคำขอสำหรับทำ PDF หรือเติมข้อมูลเดิมลงฟอร์มเพิ่มพารามิเตอร์:
-
-```bash
-curl "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/detail" \
-  -H "Authorization: Bearer $OPERATOR_TOKEN"
-```
-
-ดึงรายละเอียดรายจุดตรวจวัดจากทุกคำขอที่สถานะ `CONNECTED` สำหรับทำ PDF:
-
-```bash
-curl "http://localhost:3000/api/v1/cems-wpms-requests/connected-measurement-points" \
-  -H "Authorization: Bearer $OFFICER_TOKEN"
-```
-
-หรือใช้ endpoint ตรวจฟอร์ม/เปลี่ยนสถานะแบบใหม่:
+ตัวอย่างตรวจฟอร์ม/เปลี่ยนสถานะ:
 
 ```bash
 curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/status" \
@@ -388,121 +341,7 @@ curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/status
   -d '{"action":"APPROVE_FORM","officerNote":"แบบถูกต้อง"}'
 ```
 
-บันทึกฟอร์มตั้งค่าอุปกรณ์ที่ผูกกับคำขอ หลังคำขออยู่สถานะ `WAITING_CONNECTION`:
-
-```bash
-curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/device-configs" \
-  -H "Authorization: Bearer $OPERATOR_TOKEN" \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "stationId":"STACK-A",
-    "protocol":"MODBUS_TCP",
-    "settings":{"hostIp":"192.168.1.10","slaveId":1,"port":502},
-    "channels":[{
-      "addressId":40001,
-      "dataType":"NOx",
-      "unit":"ppm",
-      "valueRange":{"min":0,"max":200},
-      "valueFormat":"MEASUREMENT_VALUE",
-      "offset":0,
-      "encoding":"UNSIGNED16_BIG_ENDIAN"
-    }],
-    "statusManagement":{
-      "selectedParameters":["ทั้งหมด"],
-      "startAt":null,
-      "endAt":null,
-      "status":"Normal",
-      "schedules":[]
-    }
-  }'
-```
-
-ดึงรายละเอียดฟอร์มตั้งค่าอุปกรณ์กลับไป prefill dialog:
-
-```bash
-curl "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/device-configs?stationId=STACK-A" \
-  -H "Authorization: Bearer $OPERATOR_TOKEN"
-```
-
-Response จะมี shape สำหรับฟอร์มโดยตรง เช่น `connectionForms`, `deviceCodeOptions`,
-`statusManagement`, `parameterMappings`, `testResults` และ `rawConfigs`.
-
-ดึงรายละเอียดฟอร์มตั้งค่าอุปกรณ์ราย config:
-
-```bash
-curl "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/device-configs/$CONFIG_ID" \
-  -H "Authorization: Bearer $OPERATOR_TOKEN"
-```
-
-ผู้ประกอบการยืนยันว่า config และส่งค่าเข้าระบบได้แล้วภายใน 30 วัน:
-
-```bash
-curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/confirm-connection" \
-  -H "Authorization: Bearer $OPERATOR_TOKEN" \
-  -H 'Content-Type: application/json' \
-  -d '{"note":"ส่งค่าเข้าระบบได้แล้ว"}'
-```
-
-เจ้าหน้าที่ตรวจค่าในระบบแล้วปิดงาน:
-
-```bash
-curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/verify-connection" \
-  -H "Authorization: Bearer $OFFICER_TOKEN" \
-  -H 'Content-Type: application/json' \
-  -d '{"note":"ตรวจสอบค่าในระบบแล้ว"}'
-```
-
-ถ้าต้องการทดสอบ case แก้ไขแบบ ให้เปลี่ยน review step เป็น:
-
-```bash
-curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/review" \
-  -H "Authorization: Bearer $OFFICER_TOKEN" \
-  -H 'Content-Type: application/json' \
-  -d '{"decision":"REQUEST_REVISION","revisionReason":"เพิ่มรายละเอียดจุดตรวจวัด"}'
-```
-
-แล้วส่งแบบเดิมอีกครั้งด้วย:
-
-```bash
-curl -X PUT "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/form" \
-  -H "Authorization: Bearer $OPERATOR_TOKEN" \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "factoryId":"factory-001",
-    "factoryName":"บริษัท ทดสอบ จำกัด",
-    "factoryRegistrationNo":"3-106-33/50สบ",
-    "systemType":"CEMS",
-    "contactName":"สมชาย ใจดี",
-    "contactPhone":"0812345678",
-    "contactEmail":"ops@example.com",
-    "measurementPoints":[{
-      "pointName":"ปล่องระบาย A",
-      "pointCode":"STACK-A",
-      "pointType":"STACK",
-      "parameters":["CO"],
-      "description":"แก้ไขข้อมูลพารามิเตอร์ CO",
-      "measurementInstruments":{
-        "converterBrand":"Converter Brand",
-        "converterModel":"CV-100",
-        "parameters":[{
-          "parameter":"CO",
-          "technique":"NDIR",
-          "range":"0-100",
-          "brand":"Siemens",
-          "supplier":"ABC Tech",
-          "eiaStandard":"50",
-          "standardCondition":true,
-          "dryBasis":true,
-          "oxygenOrExcessAir":true
-        }]
-      }
-    }],
-    "remarks":"แก้ไขตามเจ้าหน้าที่แจ้ง"
-  }'
-```
-
-`PUT /cems-wpms-requests/:id/form` ใช้ได้เฉพาะคำขอสถานะ `WAITING_FACTORY_REVISION`
-และถ้าไม่ส่ง `requestType` backend จะใช้ประเภทคำขอเดิมของรายการนั้น.
+หลังเจ้าหน้าที่อนุมัติ ฟอร์มจะเข้าสถานะ `WAITING_CONNECTION` และ backend จะออก `pointCode` ให้อัตโนมัติ โดย CEMS เริ่ม `S0001` และ WPMS เริ่ม `P0001`. Frontend ไม่ต้องส่ง `pointCode` ตอนเพิ่มจุดตรวจวัดใหม่.
 
 ### 5.8 Device connection config mock API
 

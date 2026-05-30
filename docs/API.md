@@ -2,6 +2,13 @@
 
 เอกสารนี้ใช้เป็นข้อมูลอ้างอิงสำหรับ agent ที่ทำงานกับ D-POMS frontend
 
+## API Document Index
+
+| Area | Document |
+| --- | --- |
+| Authentication | เอกสารนี้ |
+| CEMS/WPMS request workflow | [APIDoc/CEMS_WPMS_REQUEST_APIS.md](./APIDoc/CEMS_WPMS_REQUEST_APIS.md) |
+
 ## Authentication
 
 ### Login

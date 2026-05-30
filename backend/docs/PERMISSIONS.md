@@ -141,17 +141,24 @@ Implemented endpoint group:
 
 ```text
 /api/v1/cems-wpms-requests
+/api/v1/cems-wpms-requests/measurement-points
+/api/v1/cems-wpms-requests/parameters
+/api/v1/cems-wpms-requests/:id/form
+/api/v1/cems-wpms-requests/:id/status
+/api/v1/cems-wpms-requests/:id/device-configs
 /api/v1/device-connections
 ```
+
+Payload เต็มและ field mapping ของ CEMS/WPMS อยู่ที่ `../../docs/APIDoc/CEMS_WPMS_REQUEST_APIS.md`.
 
 Workflow status:
 
 | Status | Thai label | Owner action |
 | --- | --- | --- |
-| `PENDING_DESIGN_REVIEW` | รอพิจารณาแบบ | ผู้ประกอบการส่งฟอร์ม |
+| `PENDING_DESIGN_REVIEW` | รอพิจารณา | ผู้ประกอบการส่งฟอร์ม |
 | `WAITING_FACTORY_REVISION` | รอโรงงานแก้ไข | เจ้าหน้าที่ขอให้แก้ไข |
-| `REVISED_PENDING_DESIGN_REVIEW` | แก้ไขแล้ว/รอพิจารณาแบบ | ผู้ประกอบการส่งแบบที่แก้ไขแล้ว |
-| `WAITING_CONNECTION` | รอเชื่อมต่อ | เจ้าหน้าที่อนุมัติแบบ และเริ่มนับ 30 วัน |
+| `REVISED_PENDING_DESIGN_REVIEW` | แก้ไขแล้ว/รอพิจารณา | ผู้ประกอบการส่งแบบที่แก้ไขแล้ว |
+| `WAITING_CONNECTION` | รอเชื่อมต่อ | เจ้าหน้าที่อนุมัติแบบ และระบบออกเลข `pointCode` |
 | `CONNECTION_CONFIRMED` | ยืนยันการเชื่อมต่อ | ผู้ประกอบการยืนยันว่าส่งค่าเข้าระบบได้แล้ว |
 | `CONNECTED` | เชื่อมต่อแล้ว | เจ้าหน้าที่ตรวจค่าในระบบแล้ว |
 
