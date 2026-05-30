@@ -12,6 +12,38 @@ import {
 } from '../../src/modules/connection-requests/connection-requests.validator';
 
 describe('connection request validators', () => {
+  const pointDetails = {
+    stackShape: 'วงกลม',
+    stackDiameter: 1.2,
+    stackHeight: 30,
+    connectionDevice: 'POMS Box (กรอ.)',
+  };
+  const documentsAndImages = [
+    {
+      title: 'ภาพถ่ายปล่อง',
+      fileName: 'stack.png',
+      fileUrl: 'https://example.com/files/stack.png',
+      fileType: 'image/png',
+      fileSize: 1024,
+    },
+  ];
+  const measurementInstruments = {
+    converterBrand: 'Converter Brand',
+    converterModel: 'CV-100',
+    parameters: [
+      {
+        parameter: 'NOx',
+        technique: 'NDIR',
+        range: '0-200',
+        brand: 'Siemens',
+        supplier: 'ABC Tech',
+        eiaStandard: '120',
+        standardCondition: true,
+        dryBasis: true,
+        oxygenOrExcessAir: true,
+      },
+    ],
+  };
   const validPayload = {
     factoryId: 'factory-001',
     factoryName: 'บริษัท ทดสอบ จำกัด',
@@ -29,6 +61,9 @@ describe('connection request validators', () => {
         longitude: 100.5018,
         parameters: ['NOx', 'SO2', 'PM'],
         description: 'จุดตรวจวัดหลัก',
+        details: pointDetails,
+        documentsAndImages,
+        measurementInstruments,
       },
     ],
     remarks: 'ขอเชื่อมต่อระบบใหม่',
@@ -52,6 +87,22 @@ describe('connection request validators', () => {
     }
   });
 
+  it('rejects add measurement point request without the three required form sections', () => {
+    const result = addMeasurementPointRequestSchema.safeParse({
+      ...validPayload,
+      measurementPoints: [
+        {
+          pointName: 'ปล่องระบาย A',
+          pointCode: 'STACK-A',
+          pointType: 'STACK',
+          parameters: ['NOx'],
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+  });
+
   it('accepts add parameter request for exactly one measurement point', () => {
     const result = addParameterRequestSchema.safeParse({
       ...validPayload,
@@ -59,6 +110,12 @@ describe('connection request validators', () => {
         {
           ...validPayload.measurementPoints[0],
           parameters: ['CO'],
+          details: undefined,
+          documentsAndImages: undefined,
+          measurementInstruments: {
+            ...measurementInstruments,
+            parameters: [{ ...measurementInstruments.parameters[0], parameter: 'CO' }],
+          },
         },
       ],
     });
@@ -67,6 +124,22 @@ describe('connection request validators', () => {
     if (result.success) {
       expect(result.data.requestType).toBe('ADD_PARAMETER');
     }
+  });
+
+  it('rejects add parameter request without measurement instruments', () => {
+    const result = addParameterRequestSchema.safeParse({
+      ...validPayload,
+      measurementPoints: [
+        {
+          pointName: 'ปล่องระบาย A',
+          pointCode: 'STACK-A',
+          pointType: 'STACK',
+          parameters: ['CO'],
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
   });
 
   it('rejects add parameter request with multiple measurement points', () => {

@@ -11,6 +11,87 @@ const optionalNullableTrimmedString = (max: number) =>
     .nullable()
     .optional()
     .transform((value) => value ?? null);
+const jsonValueSchema: z.ZodType<unknown> = z.lazy(() =>
+  z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.null(),
+    z.array(jsonValueSchema).max(100),
+    z.record(z.string().min(1).max(128), jsonValueSchema),
+  ]),
+);
+
+const measurementPointDetailsSchema = z.record(z.string().min(1).max(128), jsonValueSchema);
+
+const requestDocumentImageSchema = z
+  .object({
+    title: trimmedString(255),
+    description: optionalNullableTrimmedString(1000),
+    link: z.string().trim().url().max(2048).nullable().optional(),
+    fileName: optionalNullableTrimmedString(255),
+    fileUrl: z.string().trim().url().max(2048).nullable().optional(),
+    fileType: optionalNullableTrimmedString(128),
+    fileSize: z
+      .number()
+      .int()
+      .min(0)
+      .max(20 * 1024 * 1024)
+      .nullable()
+      .optional(),
+  })
+  .strict()
+  .transform((document) => ({
+    ...document,
+    description: document.description ?? null,
+    link: document.link ?? null,
+    fileName: document.fileName ?? null,
+    fileUrl: document.fileUrl ?? null,
+    fileType: document.fileType ?? null,
+    fileSize: document.fileSize ?? null,
+  }));
+
+const measurementInstrumentParameterSchema = z
+  .object({
+    parameter: trimmedString(128),
+    technique: optionalNullableTrimmedString(255),
+    range: optionalNullableTrimmedString(255),
+    brand: optionalNullableTrimmedString(255),
+    supplier: optionalNullableTrimmedString(255),
+    eiaStandard: optionalNullableTrimmedString(255),
+    standardCondition: z.boolean().nullable().optional(),
+    dryBasis: z.boolean().nullable().optional(),
+    oxygenOrExcessAir: z.boolean().nullable().optional(),
+    standardCriteria: jsonValueSchema.nullable().optional(),
+    eiaCriteria: jsonValueSchema.nullable().optional(),
+  })
+  .strict()
+  .transform((instrument) => ({
+    ...instrument,
+    technique: instrument.technique ?? null,
+    range: instrument.range ?? null,
+    brand: instrument.brand ?? null,
+    supplier: instrument.supplier ?? null,
+    eiaStandard: instrument.eiaStandard ?? null,
+    standardCondition: instrument.standardCondition ?? null,
+    dryBasis: instrument.dryBasis ?? null,
+    oxygenOrExcessAir: instrument.oxygenOrExcessAir ?? null,
+    standardCriteria: instrument.standardCriteria ?? null,
+    eiaCriteria: instrument.eiaCriteria ?? null,
+  }));
+
+const measurementInstrumentsSchema = z
+  .object({
+    converterBrand: optionalNullableTrimmedString(255),
+    converterModel: optionalNullableTrimmedString(255),
+    parameters: z.array(measurementInstrumentParameterSchema).min(1).max(100),
+  })
+  .strict()
+  .transform((instruments) => ({
+    ...instruments,
+    converterBrand: instruments.converterBrand ?? null,
+    converterModel: instruments.converterModel ?? null,
+  }));
 
 const measurementPointSchema = z
   .object({
@@ -21,6 +102,9 @@ const measurementPointSchema = z
     longitude: z.number().min(-180).max(180).nullable().optional(),
     parameters: z.array(trimmedString(64)).min(1).max(50),
     description: optionalNullableTrimmedString(1000),
+    details: measurementPointDetailsSchema.nullable().optional(),
+    documentsAndImages: z.array(requestDocumentImageSchema).max(50).optional(),
+    measurementInstruments: measurementInstrumentsSchema.nullable().optional(),
   })
   .strict()
   .transform((point) => ({
@@ -29,6 +113,9 @@ const measurementPointSchema = z
     longitude: point.longitude ?? null,
     pointCode: point.pointCode ?? null,
     description: point.description ?? null,
+    details: point.details ?? null,
+    documentsAndImages: point.documentsAndImages ?? [],
+    measurementInstruments: point.measurementInstruments ?? null,
   }));
 
 const connectionRequestFormSchema = z
@@ -57,6 +144,31 @@ export const resubmitConnectionRequestSchema = createConnectionRequestSchema;
 
 export const addMeasurementPointRequestSchema = connectionRequestFormSchema
   .omit({ requestType: true })
+  .superRefine((payload, ctx) => {
+    payload.measurementPoints.forEach((point, index) => {
+      if (!point.details || Object.keys(point.details).length === 0) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['measurementPoints', index, 'details'],
+          message: 'Measurement point detail section is required',
+        });
+      }
+      if (point.documentsAndImages.length === 0) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['measurementPoints', index, 'documentsAndImages'],
+          message: 'Documents and images section is required',
+        });
+      }
+      if (!point.measurementInstruments) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['measurementPoints', index, 'measurementInstruments'],
+          message: 'Measurement instruments section is required',
+        });
+      }
+    });
+  })
   .transform((payload) => ({
     ...payload,
     requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT,
@@ -72,6 +184,15 @@ export const addParameterRequestSchema = connectionRequestFormSchema
         message: 'Add parameter request must reference exactly one measurement point',
       });
     }
+    payload.measurementPoints.forEach((point, index) => {
+      if (!point.measurementInstruments) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['measurementPoints', index, 'measurementInstruments'],
+          message: 'Measurement instruments section is required',
+        });
+      }
+    });
   })
   .transform((payload) => ({
     ...payload,

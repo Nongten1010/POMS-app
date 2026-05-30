@@ -17,19 +17,19 @@ Content-Type: application/json
 
 ## Endpoint Summary
 
-| ข้อ | รายการ | Method | Path | Permission |
-|---|---|---|---|---|
-| 1 | บันทึกฟอร์ม เพิ่มจุดตรวจวัด | POST | `/cems-wpms-requests/measurement-points` | `cems_wpms_requests:edit` |
-| 2 | บันทึกฟอร์ม เพิ่มพารามิเตอร์ | POST | `/cems-wpms-requests/parameters` | `cems_wpms_requests:edit` |
-| 3 | บันทึกฟอร์ม ตั้งค่าอุปกรณ์ config | POST | `/cems-wpms-requests/:id/device-configs` | `cems_wpms_requests:edit` |
-| 4 | รายละเอียดฟอร์ม ตั้งค่าอุปกรณ์ config สำหรับดึงข้อมูลลงฟอร์ม | GET | `/cems-wpms-requests/:id/device-configs?stationId=STACK-A` | `cems_wpms_requests:view` |
-| 4.1 | รายละเอียดฟอร์ม ตั้งค่าอุปกรณ์ config ราย config | GET | `/cems-wpms-requests/:id/device-configs/:configId` | `cems_wpms_requests:view` |
-| 5 | ตรวจฟอร์ม เปลี่ยนสถานะ | POST | `/cems-wpms-requests/:id/status` | `cems_wpms_requests:approve` |
-| 6 | รายการคำขอทั้งหมด สำหรับตารางเจ้าหน้าที่ | GET | `/cems-wpms-requests/table-rows` | `cems_wpms_requests:view` |
-| 7 | รายการคำขอเฉพาะโรงงานตัวเอง สำหรับตารางผู้ประกอบการ | GET | `/cems-wpms-requests/table-rows` | `cems_wpms_requests:view` |
-| 8 | รายชื่อโรงงาน สำหรับตารางผู้ประกอบการ | GET | `/cems-wpms-requests/operator-factories` | `factories:view` |
-| 9 | รายละเอียดคำขอรายคำขอ สำหรับ PDF/เติมฟอร์มเพิ่มพารามิเตอร์ | GET | `/cems-wpms-requests/:id/detail` | `cems_wpms_requests:view` |
-| 10 | รายละเอียดรายจุดตรวจวัดทุกคำขอ เฉพาะ status เชื่อมต่อแล้ว | GET | `/cems-wpms-requests/connected-measurement-points` | `cems_wpms_requests:view` |
+| ข้อ | รายการ                                                       | Method | Path                                                       | Permission                   |
+| --- | ------------------------------------------------------------ | ------ | ---------------------------------------------------------- | ---------------------------- |
+| 1   | บันทึกฟอร์ม เพิ่มจุดตรวจวัด                                  | POST   | `/cems-wpms-requests/measurement-points`                   | `cems_wpms_requests:edit`    |
+| 2   | บันทึกฟอร์ม เพิ่มพารามิเตอร์                                 | POST   | `/cems-wpms-requests/parameters`                           | `cems_wpms_requests:edit`    |
+| 3   | บันทึกฟอร์ม ตั้งค่าอุปกรณ์ config                            | POST   | `/cems-wpms-requests/:id/device-configs`                   | `cems_wpms_requests:edit`    |
+| 4   | รายละเอียดฟอร์ม ตั้งค่าอุปกรณ์ config สำหรับดึงข้อมูลลงฟอร์ม | GET    | `/cems-wpms-requests/:id/device-configs?stationId=STACK-A` | `cems_wpms_requests:view`    |
+| 4.1 | รายละเอียดฟอร์ม ตั้งค่าอุปกรณ์ config ราย config             | GET    | `/cems-wpms-requests/:id/device-configs/:configId`         | `cems_wpms_requests:view`    |
+| 5   | ตรวจฟอร์ม เปลี่ยนสถานะ                                       | POST   | `/cems-wpms-requests/:id/status`                           | `cems_wpms_requests:approve` |
+| 6   | รายการคำขอทั้งหมด สำหรับตารางเจ้าหน้าที่                     | GET    | `/cems-wpms-requests/table-rows`                           | `cems_wpms_requests:view`    |
+| 7   | รายการคำขอเฉพาะโรงงานตัวเอง สำหรับตารางผู้ประกอบการ          | GET    | `/cems-wpms-requests/table-rows`                           | `cems_wpms_requests:view`    |
+| 8   | รายชื่อโรงงาน สำหรับตารางผู้ประกอบการ                        | GET    | `/cems-wpms-requests/operator-factories`                   | `factories:view`             |
+| 9   | รายละเอียดคำขอรายคำขอ สำหรับ PDF/เติมฟอร์มเพิ่มพารามิเตอร์   | GET    | `/cems-wpms-requests/:id/detail`                           | `cems_wpms_requests:view`    |
+| 10  | รายละเอียดรายจุดตรวจวัดทุกคำขอ เฉพาะ status เชื่อมต่อแล้ว    | GET    | `/cems-wpms-requests/connected-measurement-points`         | `cems_wpms_requests:view`    |
 
 ## 1. บันทึกฟอร์ม เพิ่มจุดตรวจวัด
 
@@ -53,7 +53,42 @@ curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/measurement-points
         "latitude": 13.7563,
         "longitude": 100.5018,
         "parameters": ["NOx", "SO2", "O2"],
-        "description": "จุดตรวจวัดหลัก"
+        "description": "จุดตรวจวัดหลัก",
+        "details": {
+          "stackShape": "วงกลม",
+          "stackDiameter": 1.2,
+          "stackHeight": 30,
+          "monitoringHeight": 20,
+          "averageFlowRate": 1200,
+          "primaryFuel": "ก๊าซธรรมชาติ",
+          "connectionDevice": "POMS Box (กรอ.)"
+        },
+        "documentsAndImages": [
+          {
+            "title": "ภาพถ่ายปล่อง",
+            "fileName": "stack.png",
+            "fileUrl": "https://example.com/files/stack.png",
+            "fileType": "image/png",
+            "fileSize": 1024
+          }
+        ],
+        "measurementInstruments": {
+          "converterBrand": "Converter Brand",
+          "converterModel": "CV-100",
+          "parameters": [
+            {
+              "parameter": "NOx",
+              "technique": "NDIR",
+              "range": "0-200",
+              "brand": "Siemens",
+              "supplier": "ABC Tech",
+              "eiaStandard": "120",
+              "standardCondition": true,
+              "dryBasis": true,
+              "oxygenOrExcessAir": true
+            }
+          ]
+        }
       }
     ],
     "remarks": "ขอเพิ่มจุดตรวจวัด"
@@ -81,7 +116,42 @@ Response:
         "pointName": "ปล่องระบาย A",
         "pointCode": "STACK-A",
         "pointType": "STACK",
-        "parameters": ["NOx", "SO2", "O2"]
+        "parameters": ["NOx", "SO2", "O2"],
+        "details": {
+          "stackShape": "วงกลม",
+          "stackDiameter": 1.2,
+          "stackHeight": 30,
+          "monitoringHeight": 20,
+          "averageFlowRate": 1200,
+          "primaryFuel": "ก๊าซธรรมชาติ",
+          "connectionDevice": "POMS Box (กรอ.)"
+        },
+        "documentsAndImages": [
+          {
+            "title": "ภาพถ่ายปล่อง",
+            "fileName": "stack.png",
+            "fileUrl": "https://example.com/files/stack.png",
+            "fileType": "image/png",
+            "fileSize": 1024
+          }
+        ],
+        "measurementInstruments": {
+          "converterBrand": "Converter Brand",
+          "converterModel": "CV-100",
+          "parameters": [
+            {
+              "parameter": "NOx",
+              "technique": "NDIR",
+              "range": "0-200",
+              "brand": "Siemens",
+              "supplier": "ABC Tech",
+              "eiaStandard": "120",
+              "standardCondition": true,
+              "dryBasis": true,
+              "oxygenOrExcessAir": true
+            }
+          ]
+        }
       }
     ]
   }
@@ -90,7 +160,7 @@ Response:
 
 ## 2. บันทึกฟอร์ม เพิ่มพารามิเตอร์
 
-ต้องส่ง `measurementPoints` แค่ 1 จุดตรวจวัดต่อคำขอ
+ต้องส่ง `measurementPoints` แค่ 1 จุดตรวจวัดต่อคำขอ และต้องส่งส่วน `measurementInstruments`
 
 ```bash
 curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/parameters" \
@@ -109,7 +179,24 @@ curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/parameters" \
         "pointName": "ปล่องระบาย A",
         "pointCode": "STACK-A",
         "pointType": "STACK",
-        "parameters": ["CO", "CO2"]
+        "parameters": ["CO", "CO2"],
+        "measurementInstruments": {
+          "converterBrand": "Converter Brand",
+          "converterModel": "CV-100",
+          "parameters": [
+            {
+              "parameter": "CO",
+              "technique": "NDIR",
+              "range": "0-100",
+              "brand": "Siemens",
+              "supplier": "ABC Tech",
+              "eiaStandard": "50",
+              "standardCondition": true,
+              "dryBasis": true,
+              "oxygenOrExcessAir": true
+            }
+          ]
+        }
       }
     ],
     "remarks": "ขอเพิ่มพารามิเตอร์"
@@ -626,4 +713,3 @@ WAITING_CONNECTION
 CONNECTION_CONFIRMED
 CONNECTED
 ```
-

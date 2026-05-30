@@ -369,6 +369,9 @@ CREATE TABLE cems_wpms_measurement_points (
   longitude       DECIMAL(10,7)        NULL,
   parameters_json NVARCHAR(MAX)        NOT NULL,
   description     NVARCHAR(1000)       NULL,
+  details_json     NVARCHAR(MAX)        NULL,
+  documents_json   NVARCHAR(MAX)        NULL,
+  instruments_json NVARCHAR(MAX)        NULL,
   created_at      DATETIME2            NOT NULL DEFAULT SYSDATETIME(),
   updated_at      DATETIME2            NOT NULL DEFAULT SYSDATETIME(),
   created_by      BIGINT               NULL,
@@ -378,6 +381,10 @@ CREATE TABLE cems_wpms_measurement_points (
     REFERENCES cems_wpms_connection_requests(id)
 );
 ```
+
+`details_json`, `documents_json`, `instruments_json` ใช้รองรับฟอร์มใหม่:
+- ฟอร์มเพิ่มจุดตรวจวัด: บันทึก 3 ส่วนคือ รายละเอียดจุดตรวจวัด, เอกสารและรูปภาพ, รายละเอียดเครื่องมือตรวจวัด
+- ฟอร์มเพิ่มพารามิเตอร์: บันทึก/แก้ไขเฉพาะ `instruments_json`
 
 ### 5.6 `cems_wpms_request_status_history` — audit trail ของสถานะคำขอ
 
@@ -803,16 +810,18 @@ interface LoginResponse {
 18_add_department_name_to_officer_profiles.ts
 19_create_cems_wpms_connection_requests.ts
 20_create_device_connection_configs.ts
+21_extend_connection_request_forms.ts
+22_add_connection_request_form_sections.ts
 ```
 
 ### Phase 2 (deferred — sensor data)
 
 ```
-21_create_parameters.ts
-22_create_sensors.ts
-23_create_partition_function_measurements.ts   ← MSSQL-specific (sliding window)
-24_create_measurements.ts
-25_create_measurements_hourly.ts
+23_create_parameters.ts
+24_create_sensors.ts
+25_create_partition_function_measurements.ts   ← MSSQL-specific (sliding window)
+26_create_measurements.ts
+27_create_measurements_hourly.ts
 ```
 
 ### Phase 3 (deferred — workflow + email notifications)

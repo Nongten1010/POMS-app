@@ -498,6 +498,41 @@ const connectionRequestFormExample = {
       longitude: 100.5018,
       parameters: ["NOx", "SO2", "PM"],
       description: "จุดตรวจวัดหลัก",
+      details: {
+        stackShape: "วงกลม",
+        stackDiameter: 1.2,
+        stackHeight: 30,
+        monitoringHeight: 20,
+        averageFlowRate: 1200,
+        primaryFuel: "ก๊าซธรรมชาติ",
+        connectionDevice: "POMS Box (กรอ.)",
+      },
+      documentsAndImages: [
+        {
+          title: "ภาพถ่ายปล่อง",
+          fileName: "stack.png",
+          fileUrl: "https://example.com/files/stack.png",
+          fileType: "image/png",
+          fileSize: 1024,
+        },
+      ],
+      measurementInstruments: {
+        converterBrand: "Converter Brand",
+        converterModel: "CV-100",
+        parameters: [
+          {
+            parameter: "NOx",
+            technique: "NDIR",
+            range: "0-200",
+            brand: "Siemens",
+            supplier: "ABC Tech",
+            eiaStandard: "120",
+            standardCondition: true,
+            dryBasis: true,
+            oxygenOrExcessAir: true,
+          },
+        ],
+      },
     },
   ],
   remarks: "ขอเพิ่มจุดตรวจวัด",
@@ -512,6 +547,23 @@ const addParameterRequestExample = {
       pointType: "STACK",
       parameters: ["CO"],
       description: "เพิ่มพารามิเตอร์ CO ให้จุดตรวจวัดเดิม",
+      measurementInstruments: {
+        converterBrand: "Converter Brand",
+        converterModel: "CV-100",
+        parameters: [
+          {
+            parameter: "CO",
+            technique: "NDIR",
+            range: "0-100",
+            brand: "Siemens",
+            supplier: "ABC Tech",
+            eiaStandard: "50",
+            standardCondition: true,
+            dryBasis: true,
+            oxygenOrExcessAir: true,
+          },
+        ],
+      },
     },
   ],
   remarks: "ขอเพิ่มพารามิเตอร์",
@@ -744,6 +796,21 @@ const connectionRequestFieldRows = [
     "ประเภทจุดตรวจวัด",
   ],
   ["measurementPoints[].parameters", "string[]", "รายการพารามิเตอร์"],
+  [
+    "measurementPoints[].details",
+    "object|null",
+    "รายละเอียดจุดตรวจวัด: required สำหรับฟอร์มเพิ่มจุดตรวจวัด",
+  ],
+  [
+    "measurementPoints[].documentsAndImages",
+    "array",
+    "เอกสารและรูปภาพ: required สำหรับฟอร์มเพิ่มจุดตรวจวัด",
+  ],
+  [
+    "measurementPoints[].measurementInstruments",
+    "object|null",
+    "รายละเอียดเครื่องมือตรวจวัด: required สำหรับฟอร์มเพิ่มจุดตรวจวัดและเพิ่มพารามิเตอร์",
+  ],
 ];
 
 const connectionRequestTableFieldRows = [

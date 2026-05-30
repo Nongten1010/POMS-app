@@ -9,9 +9,12 @@ import {
   type ConnectionRequestType,
   type CreateConnectionRequestInput,
   type FactorySummaryDTO,
+  type MeasurementInstrumentsInput,
+  type MeasurementPointDetailsInput,
   type ListConnectionRequestsQuery,
   type MeasurementPointDTO,
   type MeasurementPointInput,
+  type RequestDocumentImageInput,
   type StatusHistoryDTO,
 } from './connection-requests.types';
 
@@ -47,6 +50,9 @@ interface MeasurementPointRow {
   longitude: number | string | null;
   parameters_json: string;
   description: string | null;
+  details_json: string | null;
+  documents_json: string | null;
+  instruments_json: string | null;
 }
 
 interface StatusHistoryRow {
@@ -452,6 +458,14 @@ async function insertMeasurementPoints(
       longitude: point.longitude ?? null,
       parameters_json: JSON.stringify(point.parameters),
       description: point.description ?? null,
+      details_json: point.details ? JSON.stringify(point.details) : null,
+      documents_json:
+        point.documentsAndImages && point.documentsAndImages.length > 0
+          ? JSON.stringify(point.documentsAndImages)
+          : null,
+      instruments_json: point.measurementInstruments
+        ? JSON.stringify(point.measurementInstruments)
+        : null,
       created_by: actorUserId,
       updated_by: actorUserId,
     })),
@@ -496,6 +510,9 @@ function toMeasurementPointDTO(row: MeasurementPointRow): MeasurementPointDTO {
     longitude: toNullableNumber(row.longitude),
     parameters: parseParameters(row.parameters_json),
     description: row.description,
+    details: parseJsonObject(row.details_json),
+    documentsAndImages: parseJsonArray<RequestDocumentImageInput>(row.documents_json),
+    measurementInstruments: parseJsonObject<MeasurementInstrumentsInput>(row.instruments_json),
   };
 }
 
@@ -516,6 +533,31 @@ function parseParameters(value: string): string[] {
     return Array.isArray(parsed)
       ? parsed.filter((item): item is string => typeof item === 'string')
       : [];
+  } catch {
+    return [];
+  }
+}
+
+function parseJsonObject<T extends object = MeasurementPointDetailsInput>(
+  value: string | null,
+): T | null {
+  if (!value) return null;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as T;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function parseJsonArray<T>(value: string | null): T[] {
+  if (!value) return [];
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed) ? (parsed as T[]) : [];
   } catch {
     return [];
   }

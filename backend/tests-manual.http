@@ -286,7 +286,42 @@ Content-Type: application/json
       "latitude": 13.7563,
       "longitude": 100.5018,
       "parameters": ["NOx", "SO2", "PM"],
-      "description": "จุดตรวจวัดหลัก"
+      "description": "จุดตรวจวัดหลัก",
+      "details": {
+        "stackShape": "วงกลม",
+        "stackDiameter": 1.2,
+        "stackHeight": 30,
+        "monitoringHeight": 20,
+        "averageFlowRate": 1200,
+        "primaryFuel": "ก๊าซธรรมชาติ",
+        "connectionDevice": "POMS Box (กรอ.)"
+      },
+      "documentsAndImages": [
+        {
+          "title": "ภาพถ่ายปล่อง",
+          "fileName": "stack.png",
+          "fileUrl": "https://example.com/files/stack.png",
+          "fileType": "image/png",
+          "fileSize": 1024
+        }
+      ],
+      "measurementInstruments": {
+        "converterBrand": "Converter Brand",
+        "converterModel": "CV-100",
+        "parameters": [
+          {
+            "parameter": "NOx",
+            "technique": "NDIR",
+            "range": "0-200",
+            "brand": "Siemens",
+            "supplier": "ABC Tech",
+            "eiaStandard": "120",
+            "standardCondition": true,
+            "dryBasis": true,
+            "oxygenOrExcessAir": true
+          }
+        ]
+      }
     }
   ],
   "remarks": "ขอเพิ่มจุดตรวจวัด"
@@ -312,7 +347,24 @@ Content-Type: application/json
       "pointCode": "STACK-A",
       "pointType": "STACK",
       "parameters": ["CO"],
-      "description": "เพิ่มพารามิเตอร์ CO"
+      "description": "เพิ่มพารามิเตอร์ CO",
+      "measurementInstruments": {
+        "converterBrand": "Converter Brand",
+        "converterModel": "CV-100",
+        "parameters": [
+          {
+            "parameter": "CO",
+            "technique": "NDIR",
+            "range": "0-100",
+            "brand": "Siemens",
+            "supplier": "ABC Tech",
+            "eiaStandard": "50",
+            "standardCondition": true,
+            "dryBasis": true,
+            "oxygenOrExcessAir": true
+          }
+        ]
+      }
     }
   ],
   "remarks": "ขอเพิ่มพารามิเตอร์"

@@ -39,6 +39,38 @@ export const CONNECTION_REQUEST_STATUS_LABELS: Record<ConnectionRequestStatus, s
 export type ConnectionSystemType = 'CEMS' | 'WPMS';
 export type MeasurementPointType = 'STACK' | 'WASTEWATER' | 'OTHER';
 
+export type MeasurementPointDetailsInput = Record<string, unknown>;
+
+export interface RequestDocumentImageInput {
+  title: string;
+  description?: string | null;
+  link?: string | null;
+  fileName?: string | null;
+  fileUrl?: string | null;
+  fileType?: string | null;
+  fileSize?: number | null;
+}
+
+export interface MeasurementInstrumentParameterInput {
+  parameter: string;
+  technique?: string | null;
+  range?: string | null;
+  brand?: string | null;
+  supplier?: string | null;
+  eiaStandard?: string | null;
+  standardCondition?: boolean | null;
+  dryBasis?: boolean | null;
+  oxygenOrExcessAir?: boolean | null;
+  standardCriteria?: unknown;
+  eiaCriteria?: unknown;
+}
+
+export interface MeasurementInstrumentsInput {
+  converterBrand?: string | null;
+  converterModel?: string | null;
+  parameters: MeasurementInstrumentParameterInput[];
+}
+
 export interface MeasurementPointInput {
   pointName: string;
   pointCode?: string | null;
@@ -47,6 +79,9 @@ export interface MeasurementPointInput {
   longitude?: number | null;
   parameters: string[];
   description?: string | null;
+  details?: MeasurementPointDetailsInput | null;
+  documentsAndImages?: RequestDocumentImageInput[];
+  measurementInstruments?: MeasurementInstrumentsInput | null;
 }
 
 export interface CreateConnectionRequestInput {

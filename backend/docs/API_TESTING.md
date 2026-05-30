@@ -227,7 +227,38 @@ REQUEST_ID=$(curl -s -X POST http://localhost:3000/api/v1/cems-wpms-requests/mea
       "latitude":13.7563,
       "longitude":100.5018,
       "parameters":["NOx","SO2","PM"],
-      "description":"จุดตรวจวัดหลัก"
+      "description":"จุดตรวจวัดหลัก",
+      "details":{
+        "stackShape":"วงกลม",
+        "stackDiameter":1.2,
+        "stackHeight":30,
+        "monitoringHeight":20,
+        "averageFlowRate":1200,
+        "primaryFuel":"ก๊าซธรรมชาติ",
+        "connectionDevice":"POMS Box (กรอ.)"
+      },
+      "documentsAndImages":[{
+        "title":"ภาพถ่ายปล่อง",
+        "fileName":"stack.png",
+        "fileUrl":"https://example.com/files/stack.png",
+        "fileType":"image/png",
+        "fileSize":1024
+      }],
+      "measurementInstruments":{
+        "converterBrand":"Converter Brand",
+        "converterModel":"CV-100",
+        "parameters":[{
+          "parameter":"NOx",
+          "technique":"NDIR",
+          "range":"0-200",
+          "brand":"Siemens",
+          "supplier":"ABC Tech",
+          "eiaStandard":"120",
+          "standardCondition":true,
+          "dryBasis":true,
+          "oxygenOrExcessAir":true
+        }]
+      }
     }],
     "remarks":"ขอเชื่อมต่อระบบใหม่"
   }' | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['id'])")
@@ -252,7 +283,22 @@ PARAMETER_REQUEST_ID=$(curl -s -X POST http://localhost:3000/api/v1/cems-wpms-re
       "pointCode":"STACK-A",
       "pointType":"STACK",
       "parameters":["CO"],
-      "description":"เพิ่มพารามิเตอร์ CO ให้จุดตรวจวัดเดิม"
+      "description":"เพิ่มพารามิเตอร์ CO ให้จุดตรวจวัดเดิม",
+      "measurementInstruments":{
+        "converterBrand":"Converter Brand",
+        "converterModel":"CV-100",
+        "parameters":[{
+          "parameter":"CO",
+          "technique":"NDIR",
+          "range":"0-100",
+          "brand":"Siemens",
+          "supplier":"ABC Tech",
+          "eiaStandard":"50",
+          "standardCondition":true,
+          "dryBasis":true,
+          "oxygenOrExcessAir":true
+        }]
+      }
     }],
     "remarks":"ขอเพิ่มพารามิเตอร์"
   }' | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['id'])")
