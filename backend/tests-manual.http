@@ -290,6 +290,9 @@ Content-Type: application/json
       "details": {
         "stackShape": "วงกลม",
         "stackDiameter": 1.2,
+        "stackWidth": null,
+        "stackLength": null,
+        "stackShapeOther": null,
         "stackHeight": 30,
         "monitoringHeight": 20,
         "averageFlowRate": 1200,

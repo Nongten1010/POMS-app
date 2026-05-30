@@ -231,6 +231,9 @@ REQUEST_ID=$(curl -s -X POST http://localhost:3000/api/v1/cems-wpms-requests/mea
       "details":{
         "stackShape":"วงกลม",
         "stackDiameter":1.2,
+        "stackWidth":null,
+        "stackLength":null,
+        "stackShapeOther":null,
         "stackHeight":30,
         "monitoringHeight":20,
         "averageFlowRate":1200,

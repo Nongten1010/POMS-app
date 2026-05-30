@@ -57,6 +57,9 @@ curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/measurement-points
         "details": {
           "stackShape": "วงกลม",
           "stackDiameter": 1.2,
+          "stackWidth": null,
+          "stackLength": null,
+          "stackShapeOther": null,
           "stackHeight": 30,
           "monitoringHeight": 20,
           "averageFlowRate": 1200,
@@ -120,6 +123,9 @@ Response:
         "details": {
           "stackShape": "วงกลม",
           "stackDiameter": 1.2,
+          "stackWidth": null,
+          "stackLength": null,
+          "stackShapeOther": null,
           "stackHeight": 30,
           "monitoringHeight": 20,
           "averageFlowRate": 1200,
@@ -204,6 +210,42 @@ curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/parameters" \
 ```
 
 Response จะเป็น shape เดียวกับข้อ 1 แต่ `requestType` เป็น `ADD_PARAMETER`
+
+ตัวอย่าง field สำหรับ `details.stackShape`:
+
+```json
+{
+  "details": {
+    "stackShape": "สี่เหลี่ยม",
+    "stackDiameter": null,
+    "stackWidth": 1.5,
+    "stackLength": 2,
+    "stackShapeOther": null
+  }
+}
+```
+
+```json
+{
+  "details": {
+    "stackShape": "อื่นๆ",
+    "stackDiameter": null,
+    "stackWidth": null,
+    "stackLength": null,
+    "stackShapeOther": "ปล่องทรงรี"
+  }
+}
+```
+
+Mapping:
+
+| Label                                    | Field                                         |
+| ---------------------------------------- | --------------------------------------------- |
+| ลักษณะปล่อง                              | `measurementPoints[].details.stackShape`      |
+| เส้นผ่านศูนย์กลาง (เมตร) เมื่อเลือกวงกลม | `measurementPoints[].details.stackDiameter`   |
+| กว้าง (เมตร) เมื่อเลือกสี่เหลี่ยม        | `measurementPoints[].details.stackWidth`      |
+| ยาว (เมตร) เมื่อเลือกสี่เหลี่ยม          | `measurementPoints[].details.stackLength`     |
+| โปรดระบุ เมื่อเลือกอื่นๆ                 | `measurementPoints[].details.stackShapeOther` |
 
 ## 2.1 แก้ไขฟอร์ม เพิ่มจุดตรวจวัด / เพิ่มพารามิเตอร์
 
