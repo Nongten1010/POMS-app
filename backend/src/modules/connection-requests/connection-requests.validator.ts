@@ -311,6 +311,12 @@ export const connectionRequestIdParamsSchema = z
   })
   .strict();
 
+export const factoryGeneralParamsSchema = z
+  .object({
+    factoryId: z.string().trim().min(1).max(64),
+  })
+  .strict();
+
 export const connectionRequestDeviceConfigParamsSchema = z
   .object({
     id: z.coerce.number().int().min(1),

@@ -22,6 +22,7 @@ import {
   type DeviceConfigFormConnectionDTO,
   type DeviceConfigFormDetailDTO,
   type DeviceConfigFormParameterMappingDTO,
+  type FactoryGeneralDTO,
   type FactorySummaryDTO,
   type ListConnectionRequestsQuery,
   type MeasurementPointDTO,
@@ -115,6 +116,19 @@ export const connectionRequestsService = {
       }),
       meta: { total: factories.length },
     };
+  },
+
+  async getFactoryGeneral(
+    factoryId: string,
+    actorUserId: number,
+    factoryViewScope: string | null | undefined,
+  ): Promise<FactoryGeneralDTO> {
+    const factory = await connectionRequestsRepository.findFactoryGeneral(factoryId, {
+      actorUserId,
+      scope: factoryViewScope,
+    });
+    if (!factory) throw new NotFoundError('Factory general information not found');
+    return factory;
   },
 
   async getById(

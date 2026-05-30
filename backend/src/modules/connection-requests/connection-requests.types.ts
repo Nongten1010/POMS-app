@@ -211,6 +211,31 @@ export interface FactorySummaryDTO {
   province: string | null;
 }
 
+export interface FactoryGeneralDTO extends FactorySummaryDTO {
+  juristicId: string | null;
+  juristicName: string | null;
+  industrialEstateName: string | null;
+  systemId: number | null;
+  systemDetail: string | null;
+  verifyStatus: number | null;
+  authorizeStart: string | null;
+  authorizeEnd: string | null;
+  operationStatus: string | null;
+  capitalAmount: number | null;
+  machineryHorsepower: number | null;
+  productionCapacity: string | null;
+  wastewaterDischargeInfo: string | null;
+  boilerCount: number | null;
+  boilerSizeEach: string | null;
+  fuelUsed: string | null;
+  hasEia: boolean | null;
+  formDefaults: {
+    factoryId: string;
+    factoryName: string;
+    factoryRegistrationNo: string;
+  };
+}
+
 export interface ConnectionRequestTableRowDTO {
   id: number;
   factoryId: string;

@@ -51,6 +51,7 @@ Mapping:
 
 | ข้อ | รายการ                                                       | Method | Path                                                       | Permission                   |
 | --- | ------------------------------------------------------------ | ------ | ---------------------------------------------------------- | ---------------------------- |
+| 0   | ดึงข้อมูลทั่วไปของโรงงานสำหรับลงฟอร์มเพิ่มจุดตรวจวัด         | GET    | `/cems-wpms-requests/factories/:factoryId/general`         | `factories:view`             |
 | 1   | บันทึกฟอร์ม เพิ่มจุดตรวจวัด                                  | POST   | `/cems-wpms-requests/measurement-points`                   | `cems_wpms_requests:edit`    |
 | 2   | บันทึกฟอร์ม เพิ่มพารามิเตอร์                                 | POST   | `/cems-wpms-requests/parameters`                           | `cems_wpms_requests:edit`    |
 | 3   | บันทึกฟอร์ม ตั้งค่าอุปกรณ์ config                            | POST   | `/cems-wpms-requests/:id/device-configs`                   | `cems_wpms_requests:edit`    |
@@ -62,6 +63,80 @@ Mapping:
 | 8   | รายชื่อโรงงาน สำหรับตารางผู้ประกอบการ                        | GET    | `/cems-wpms-requests/operator-factories`                   | `factories:view`             |
 | 9   | รายละเอียดคำขอรายคำขอ สำหรับ PDF/เติมฟอร์มเพิ่มพารามิเตอร์   | GET    | `/cems-wpms-requests/:id/detail`                           | `cems_wpms_requests:view`    |
 | 10  | รายละเอียดรายจุดตรวจวัดทุกคำขอ เฉพาะ status เชื่อมต่อแล้ว    | GET    | `/cems-wpms-requests/connected-measurement-points`         | `cems_wpms_requests:view`    |
+
+## Flow เพิ่มจุดตรวจวัด จบ 1 คำขอ
+
+1. Frontend เปิดฟอร์ม "เพิ่มจุดตรวจวัด"
+2. เรียก `GET /cems-wpms-requests/factories/:factoryId/general` เพื่อดึงข้อมูลทั่วไปของโรงงานลงฟอร์ม
+3. ผู้ใช้กรอก `measurementPoints[].details`, `measurementPoints[].documentsAndImages`, `measurementPoints[].measurementInstruments`
+4. เรียก `POST /cems-wpms-requests/measurement-points` เพื่อบันทึกทั้งฟอร์ม
+5. คำขอถูกสร้างเป็น `ADD_MEASUREMENT_POINT` และสถานะเริ่มต้น `PENDING_DESIGN_REVIEW`
+
+## 0. ดึงข้อมูลทั่วไปของโรงงาน สำหรับลงฟอร์ม เพิ่มจุดตรวจวัด
+
+ค้นหาได้ด้วย `factoryId`/`fid` หรือเลขทะเบียนโรงงาน (`factoryRegistrationNo`) และผู้ประกอบการจะเห็นเฉพาะโรงงานตัวเองตาม token
+
+```bash
+curl "http://localhost:3000/api/v1/cems-wpms-requests/factories/factory-001/general" \
+  -H "Authorization: Bearer $OPERATOR_TOKEN"
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "factoryId": "factory-001",
+    "factoryName": "บริษัท ทดสอบ จำกัด",
+    "newRegistrationNo": "3-106-33/50สบ",
+    "oldRegistrationNo": null,
+    "juristicId": "0105556125804",
+    "juristicName": "บริษัท ทดสอบ จำกัด",
+    "industryType": "ผลิตเคมีภัณฑ์",
+    "industryMainOrder": "106",
+    "industrySubOrder": "33",
+    "businessActivity": "ผลิตเคมีภัณฑ์",
+    "eia": "มี",
+    "projectName": null,
+    "address": "99 หมู่ 1",
+    "province": "สระบุรี",
+    "industrialEstateName": null,
+    "latitude": "13.7563",
+    "longitude": "100.5018",
+    "systemId": 12,
+    "systemDetail": "ผลิตเคมีภัณฑ์",
+    "verifyStatus": 1,
+    "authorizeStart": "2026-01-01",
+    "authorizeEnd": "2026-12-31",
+    "operationStatus": "ประกอบกิจการ",
+    "capitalAmount": 1000000,
+    "machineryHorsepower": 250,
+    "productionCapacity": "10 ตัน/วัน",
+    "wastewaterDischargeInfo": "ระบายน้ำทิ้งหลังบำบัด",
+    "boilerCount": 1,
+    "boilerSizeEach": "10 ตันไอน้ำ/ชั่วโมง",
+    "fuelUsed": "ก๊าซธรรมชาติ",
+    "hasEia": true,
+    "formDefaults": {
+      "factoryId": "factory-001",
+      "factoryName": "บริษัท ทดสอบ จำกัด",
+      "factoryRegistrationNo": "3-106-33/50สบ"
+    }
+  }
+}
+```
+
+Frontend ใช้ `data.formDefaults` เติมค่าหลักใน `POST /measurement-points` ได้ทันที:
+
+```json
+{
+  "factoryId": "factory-001",
+  "factoryName": "บริษัท ทดสอบ จำกัด",
+  "factoryRegistrationNo": "3-106-33/50สบ"
+}
+```
 
 ## 1. บันทึกฟอร์ม เพิ่มจุดตรวจวัด
 

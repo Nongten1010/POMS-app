@@ -23,6 +23,11 @@ connectionRequestsRoutes.get(
   connectionRequestsController.listOperatorFactories,
 );
 connectionRequestsRoutes.get(
+  '/factories/:factoryId/general',
+  authorize('factories:view'),
+  connectionRequestsController.getFactoryGeneral,
+);
+connectionRequestsRoutes.get(
   '/connected-measurement-points',
   authorize('cems_wpms_requests:view'),
   connectionRequestsController.listConnectedMeasurementPoints,

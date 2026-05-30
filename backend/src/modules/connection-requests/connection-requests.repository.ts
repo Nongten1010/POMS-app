@@ -9,6 +9,7 @@ import {
   type ConnectionRequestStatus,
   type ConnectionRequestType,
   type CreateConnectionRequestInput,
+  type FactoryGeneralDTO,
   type FactorySummaryDTO,
   type MeasurementInstrumentsInput,
   type MeasurementPointDetailsInput,
@@ -81,6 +82,38 @@ interface FactoryRow {
   is_active: boolean | number;
 }
 
+interface FactoryGeneralRow {
+  id: number | string;
+  fid: string;
+  code: string;
+  name: string;
+  system_id: number | string | null;
+  system_detail: string | null;
+  verify_status: number | string | null;
+  authorize_start: Date | string | null;
+  authorize_end: Date | string | null;
+  province_name: string | null;
+  industrial_estate_name: string | null;
+  juristic_id: string | null;
+  juristic_name: string | null;
+  source_factory_id: string | null;
+  factory_registration_no_old: string | null;
+  factory_type_sequence: string | null;
+  address: string | null;
+  latitude: number | string | null;
+  longitude: number | string | null;
+  business_activity: string | null;
+  operation_status: string | null;
+  capital_amount: number | string | null;
+  machinery_horsepower: number | string | null;
+  production_capacity: string | null;
+  wastewater_discharge_info: string | null;
+  boiler_count: number | string | null;
+  boiler_size_each: string | null;
+  fuel_used: string | null;
+  has_eia: boolean | number | null;
+}
+
 interface FactoryAccess {
   actorUserId: number;
   scope: string | null | undefined;
@@ -144,6 +177,68 @@ export const connectionRequestsRepository = {
 
     const rows = await builder;
     return rows.map(toFactorySummaryDTO);
+  },
+
+  async findFactoryGeneral(
+    factoryId: string,
+    access: FactoryAccess,
+  ): Promise<FactoryGeneralDTO | null> {
+    const builder = db<FactoryGeneralRow>('factories as f')
+      .leftJoin('provinces as p', 'p.id', 'f.province_id')
+      .leftJoin('industrial_estates as ie', 'ie.id', 'f.industrial_estate_id')
+      .leftJoin('juristics as j', 'j.id', 'f.juristic_id')
+      .leftJoin('eligible_factories as ef', function joinEligibleFactory() {
+        this.on('ef.factory_registration_no_new', '=', 'f.code').andOnNull('ef.deleted_at');
+      })
+      .whereNull('f.deleted_at')
+      .where((whereBuilder) => {
+        whereBuilder
+          .where('f.fid', factoryId)
+          .orWhere('f.code', factoryId)
+          .orWhere('ef.source_factory_id', factoryId)
+          .orWhere('ef.factory_registration_no_new', factoryId);
+      })
+      .select(
+        'f.id',
+        'f.fid',
+        'f.code',
+        'f.name',
+        'f.system_id',
+        'f.system_detail',
+        'f.verify_status',
+        'f.authorize_start',
+        'f.authorize_end',
+        'p.name_th as province_name',
+        'ie.name_th as industrial_estate_name',
+        'j.juristic_id as juristic_id',
+        'j.name_th as juristic_name',
+        'ef.source_factory_id',
+        'ef.factory_registration_no_old',
+        'ef.factory_type_sequence',
+        'ef.address',
+        'ef.latitude',
+        'ef.longitude',
+        'ef.business_activity',
+        'ef.operation_status',
+        'ef.capital_amount',
+        'ef.machinery_horsepower',
+        'ef.production_capacity',
+        'ef.wastewater_discharge_info',
+        'ef.boiler_count',
+        'ef.boiler_size_each',
+        'ef.fuel_used',
+        'ef.has_eia',
+      );
+
+    if (access.scope !== 'ALL') {
+      builder
+        .join('user_juristics as uj', 'uj.juristic_id', 'f.juristic_id')
+        .where('uj.user_id', access.actorUserId)
+        .whereNull('uj.revoked_at');
+    }
+
+    const row = await builder.first();
+    return row ? toFactoryGeneralDTO(row) : null;
   },
 
   async findFactorySummariesForRequests(
@@ -386,6 +481,66 @@ function toFactorySummaryDTO(row: FactoryRow): FactorySummaryDTO {
     latitude: null,
     longitude: null,
     province: row.province_name,
+  };
+}
+
+function toFactoryGeneralDTO(row: FactoryGeneralRow): FactoryGeneralDTO {
+  const { factoryClass, factorySubclass } = splitFactoryTypeSequence(row.factory_type_sequence);
+  return {
+    id: Number(row.id),
+    factoryId: row.fid,
+    factoryName: row.name,
+    newRegistrationNo: row.code,
+    oldRegistrationNo: row.factory_registration_no_old,
+    industryType: row.system_detail,
+    industryMainOrder: factoryClass,
+    industrySubOrder: factorySubclass,
+    businessActivity: row.business_activity,
+    eia:
+      toNullableBoolean(row.has_eia) === null
+        ? null
+        : toNullableBoolean(row.has_eia)
+          ? 'มี'
+          : 'ไม่มี',
+    projectName: null,
+    address: row.address,
+    latitude: nullableValueToString(row.latitude),
+    longitude: nullableValueToString(row.longitude),
+    province: row.province_name,
+    juristicId: row.juristic_id,
+    juristicName: row.juristic_name,
+    industrialEstateName: row.industrial_estate_name,
+    systemId: toNullableNumber(row.system_id),
+    systemDetail: row.system_detail,
+    verifyStatus: toNullableNumber(row.verify_status),
+    authorizeStart: toNullableDateString(row.authorize_start),
+    authorizeEnd: toNullableDateString(row.authorize_end),
+    operationStatus: row.operation_status,
+    capitalAmount: toNullableNumber(row.capital_amount),
+    machineryHorsepower: toNullableNumber(row.machinery_horsepower),
+    productionCapacity: row.production_capacity,
+    wastewaterDischargeInfo: row.wastewater_discharge_info,
+    boilerCount: toNullableNumber(row.boiler_count),
+    boilerSizeEach: row.boiler_size_each,
+    fuelUsed: row.fuel_used,
+    hasEia: toNullableBoolean(row.has_eia),
+    formDefaults: {
+      factoryId: row.fid,
+      factoryName: row.name,
+      factoryRegistrationNo: row.code,
+    },
+  };
+}
+
+function splitFactoryTypeSequence(value: string | null): {
+  factoryClass: string | null;
+  factorySubclass: string | null;
+} {
+  if (!value) return { factoryClass: null, factorySubclass: null };
+  const [factoryClass, factorySubclass] = value.split(' / ', 2);
+  return {
+    factoryClass: factoryClass || null,
+    factorySubclass: factorySubclass || null,
   };
 }
 
@@ -703,6 +858,21 @@ function parseJsonArray<T>(value: string | null): T[] {
 function toNullableNumber(value: number | string | null): number | null {
   if (value === null) return null;
   return Number(value);
+}
+
+function toNullableBoolean(value: boolean | number | null): boolean | null {
+  if (value === null) return null;
+  return Boolean(value);
+}
+
+function nullableValueToString(value: number | string | null): string | null {
+  if (value === null) return null;
+  return String(value);
+}
+
+function toNullableDateString(value: Date | string | null): string | null {
+  if (value === null) return null;
+  return value instanceof Date ? value.toISOString().slice(0, 10) : value.slice(0, 10);
 }
 
 function toNullableIsoString(value: Date | string | null): string | null {

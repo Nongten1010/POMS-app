@@ -9,6 +9,7 @@ jest.mock('../../src/modules/connection-requests/connection-requests.repository'
     updateStatus: jest.fn(),
     list: jest.fn(),
     listFactoriesForAccess: jest.fn(),
+    findFactoryGeneral: jest.fn(),
     listRequestsForFactories: jest.fn(),
   },
 }));
@@ -28,6 +29,7 @@ import {
   CONNECTION_REQUEST_TYPE,
   type ConnectionRequestDTO,
   type CreateConnectionRequestInput,
+  type FactoryGeneralDTO,
   type FactorySummaryDTO,
 } from '../../src/modules/connection-requests/connection-requests.types';
 
@@ -169,6 +171,27 @@ describe('connectionRequestsService', () => {
       factoryName: 'บริษัท ทดสอบ จำกัด',
       monitoringPointCount: 1,
       requestStatus: 'เชื่อมต่อแล้ว',
+    });
+  });
+
+  it('returns factory general data for add measurement point form prefill', async () => {
+    const factory = factoryGeneral();
+    mockedRepository.findFactoryGeneral.mockResolvedValue(factory);
+
+    const result = await connectionRequestsService.getFactoryGeneral(
+      'factory-001',
+      actorUserId,
+      'OWN_FACTORY',
+    );
+
+    expect(mockedRepository.findFactoryGeneral).toHaveBeenCalledWith('factory-001', {
+      actorUserId,
+      scope: 'OWN_FACTORY',
+    });
+    expect(result.formDefaults).toEqual({
+      factoryId: 'factory-001',
+      factoryName: 'บริษัท ทดสอบ จำกัด',
+      factoryRegistrationNo: '3-106-33/50สบ',
     });
   });
 
@@ -834,6 +857,35 @@ function factorySummary(overrides: Partial<FactorySummaryDTO> = {}): FactorySumm
     latitude: null,
     longitude: null,
     province: 'สระบุรี',
+    ...overrides,
+  };
+}
+
+function factoryGeneral(overrides: Partial<FactoryGeneralDTO> = {}): FactoryGeneralDTO {
+  return {
+    ...factorySummary(),
+    juristicId: '0105556125804',
+    juristicName: 'บริษัท ทดสอบ จำกัด',
+    industrialEstateName: null,
+    systemId: 12,
+    systemDetail: 'ผลิตเคมีภัณฑ์',
+    verifyStatus: 1,
+    authorizeStart: '2026-01-01',
+    authorizeEnd: '2026-12-31',
+    operationStatus: 'ประกอบกิจการ',
+    capitalAmount: 1000000,
+    machineryHorsepower: 250,
+    productionCapacity: '10 ตัน/วัน',
+    wastewaterDischargeInfo: 'ระบายน้ำทิ้งหลังบำบัด',
+    boilerCount: 1,
+    boilerSizeEach: '10 ตันไอน้ำ/ชั่วโมง',
+    fuelUsed: 'ก๊าซธรรมชาติ',
+    hasEia: true,
+    formDefaults: {
+      factoryId: 'factory-001',
+      factoryName: 'บริษัท ทดสอบ จำกัด',
+      factoryRegistrationNo: '3-106-33/50สบ',
+    },
     ...overrides,
   };
 }

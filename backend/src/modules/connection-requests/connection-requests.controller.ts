@@ -12,6 +12,7 @@ import {
   connectionRequestIdParamsSchema,
   createConnectionRequestSchema,
   deviceConfigFormQuerySchema,
+  factoryGeneralParamsSchema,
   listConnectedMeasurementPointsQuerySchema,
   listConnectionRequestTableRowsQuerySchema,
   listConnectionRequestsQuerySchema,
@@ -59,6 +60,21 @@ export const connectionRequestsController = {
         getScope(req, 'factories:view'),
       );
       res.status(StatusCodes.OK).json({ success: true, ...result });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async getFactoryGeneral(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const actorUserId = requireActorUserId(req);
+      const { factoryId } = factoryGeneralParamsSchema.parse(req.params);
+      const data = await connectionRequestsService.getFactoryGeneral(
+        factoryId,
+        actorUserId,
+        getScope(req, 'factories:view'),
+      );
+      res.status(StatusCodes.OK).json({ success: true, data });
     } catch (err) {
       next(err);
     }
