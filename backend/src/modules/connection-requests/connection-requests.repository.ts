@@ -150,6 +150,9 @@ interface PointCodeSequenceRow {
   last_sequence: number | string;
 }
 
+const TEMPORARY_FACTORY_TEXT = 'ไม่ระบุ';
+const TEMPORARY_EIA_LABEL: 'ไม่มี' = 'ไม่มี';
+
 export const connectionRequestsRepository = {
   async list(
     query: ListConnectionRequestsQuery,
@@ -521,11 +524,11 @@ function toFactorySummaryDTO(row: FactoryRow): FactorySummaryDTO {
     newRegistrationNo: row.code,
     oldRegistrationNo: row.factory_registration_no_old,
     industryType: row.system_detail,
-    industryMainOrder: factoryClass,
-    industrySubOrder: factorySubclass,
+    industryMainOrder: factoryClass ?? TEMPORARY_FACTORY_TEXT,
+    industrySubOrder: factorySubclass ?? TEMPORARY_FACTORY_TEXT,
     businessActivity: row.business_activity,
-    eia: hasEia === null ? null : hasEia ? 'มี' : 'ไม่มี',
-    projectName: null,
+    eia: hasEia === null ? TEMPORARY_EIA_LABEL : hasEia ? 'มี' : 'ไม่มี',
+    projectName: TEMPORARY_FACTORY_TEXT,
     address: row.address,
     latitude: nullableValueToString(row.latitude),
     longitude: nullableValueToString(row.longitude),
@@ -544,16 +547,16 @@ function toFactoryGeneralDTO(row: FactoryGeneralRow): FactoryGeneralDTO {
     newRegistrationNo: row.code,
     oldRegistrationNo: row.factory_registration_no_old,
     industryType: row.system_detail,
-    industryMainOrder: factoryClass,
-    industrySubOrder: factorySubclass,
+    industryMainOrder: factoryClass ?? TEMPORARY_FACTORY_TEXT,
+    industrySubOrder: factorySubclass ?? TEMPORARY_FACTORY_TEXT,
     businessActivity: row.business_activity,
     eia:
       toNullableBoolean(row.has_eia) === null
-        ? null
+        ? TEMPORARY_EIA_LABEL
         : toNullableBoolean(row.has_eia)
           ? 'มี'
           : 'ไม่มี',
-    projectName: null,
+    projectName: TEMPORARY_FACTORY_TEXT,
     address: row.address,
     latitude: nullableValueToString(row.latitude),
     longitude: nullableValueToString(row.longitude),
