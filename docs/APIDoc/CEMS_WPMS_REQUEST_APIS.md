@@ -1659,6 +1659,8 @@ Data dictionary ของ response ที่ใช้ prefill:
 
 ตัวอย่าง JSON ที่ต้องส่ง:
 
+ตัวอย่าง CEMS:
+
 ```json
 {
   "factoryId": "factory-001",
@@ -1747,6 +1749,98 @@ Data dictionary ของ response ที่ใช้ prefill:
     }
   ],
   "remarks": "ขอเพิ่มจุดตรวจวัด"
+}
+```
+
+ตัวอย่าง WPMS ตามฟอร์มจุดระบายน้ำทิ้ง:
+
+```json
+{
+  "factoryId": "factory-001",
+  "factoryName": "บริษัท ทดสอบ จำกัด",
+  "factoryRegistrationNo": "3-106-33/50สบ",
+  "industryMainOrder": "106",
+  "industrySubOrder": "33",
+  "businessActivity": "ผลิตเคมีภัณฑ์",
+  "eia": "มี",
+  "hasEia": true,
+  "projectName": "โครงการทดสอบ WPMS",
+  "address": "99 หมู่ 1 ตำบลทดสอบ อำเภอเมือง จังหวัดสระบุรี",
+  "latitude": 13.7563,
+  "longitude": 100.5018,
+  "systemType": "WPMS",
+  "contactPersons": [
+    {
+      "name": "สมชาย ใจดี",
+      "position": "ผู้จัดการสิ่งแวดล้อม",
+      "phone": "0812345678",
+      "email": "ops@example.com"
+    }
+  ],
+  "notificationEmails": ["ops@example.com"],
+  "officerNotificationEmails": ["officer@example.com"],
+  "measurementPoints": [
+    {
+      "pointName": "จุดระบายน้ำทิ้ง A",
+      "pointType": "WASTEWATER",
+      "details": {
+        "monitoringPointKind": "WPMS",
+        "averageWastewaterDischarge": 500,
+        "minWastewaterDischarge": 300,
+        "maxWastewaterDischarge": 800,
+        "hasTreatmentSystem": "มี",
+        "treatmentSystem": "ระบบบำบัดชีวภาพ",
+        "maxTreatmentCapacity": 1000,
+        "instrumentLatitude": 13.7563,
+        "instrumentLongitude": 100.5018,
+        "wastewaterSource": "กระบวนการผลิต",
+        "dischargeReceivingSource": "คลองสาธารณะ",
+        "connectionDevice": "อื่นๆ",
+        "connectionDeviceOther": "Gateway เดิมของโรงงาน"
+      },
+      "documentsAndImages": [
+        {
+          "title": "ภาพถ่ายจุดระบายน้ำทิ้ง",
+          "description": "ภาพถ่ายตำแหน่งติดตั้งเครื่องมือตรวจวัด",
+          "link": "https://example.com/documents/wpms-reference.pdf",
+          "fileName": "wpms-point.png",
+          "fileUrl": "https://example.com/files/wpms-point.png",
+          "fileType": "image/png",
+          "fileSize": 1024
+        }
+      ],
+      "measurementInstruments": {
+        "converterBrand": "Converter Brand",
+        "converterModel": "CV-100",
+        "parameters": [
+          {
+            "parameter": "CO2 (%)",
+            "technique": "NDIR",
+            "range": "0-200",
+            "brand": "Siemens",
+            "supplier": "ABC Tech",
+            "eiaStandard": "120",
+            "standardCondition": true,
+            "dryBasis": true,
+            "oxygenOrExcessAir": false,
+            "standardCriteria": {
+              "enabled": true,
+              "standardValue": "120",
+              "rows": [
+                { "level": "normal", "min": 0, "max": 80 },
+                { "level": "warning", "min": 80, "max": 100 },
+                { "level": "critical", "min": 100, "max": null }
+              ]
+            },
+            "eiaCriteria": {
+              "enabled": false
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "remarks": "ขอเพิ่มจุดตรวจวัด WPMS"
 }
 ```
 
@@ -2262,6 +2356,14 @@ Data dictionary response row:
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
 | `monitoringPointKind` | string|null | No | `CEMS`, `WPMS`, `Mobile`, `Station` |
+| `averageWastewaterDischarge` | number|null | WPMS | อัตราการระบายน้ำทิ้งเฉลี่ย (m3/d) |
+| `minWastewaterDischarge` | number|null | WPMS | อัตราการระบายน้ำทิ้งต่ำสุด (m3/d) |
+| `maxWastewaterDischarge` | number|null | WPMS | อัตราการระบายน้ำทิ้งสูงสุด (m3/d) |
+| `instrumentLatitude` | number|string|null | WPMS | พิกัดจุดติดตั้งเครื่องมือตรวจวัด ละติจูด |
+| `instrumentLongitude` | number|string|null | WPMS | พิกัดจุดติดตั้งเครื่องมือตรวจวัด ลองจิจูด |
+| `wastewaterSource` | string|null | WPMS | แหล่งกำเนิดน้ำเสีย |
+| `dischargeReceivingSource` | string|null | WPMS | แหล่งรองรับน้ำทิ้ง |
+| `maxTreatmentCapacity` | number|null | Conditional | ปริมาณรองรับน้ำเสียสูงสุดของระบบบำบัด ต้องส่งเมื่อ WPMS และ `hasTreatmentSystem = มี` |
 | `productionUnitType` | string|null | No | ประเภทหน่วยการผลิต |
 | `productionCapacity` | string|null | No | กำลังการผลิต |
 | `cemsInstallationRequiredBy` | string|null | No | เข้าข่ายต้องติดตั้ง CEMS ตามกฎหมาย |
