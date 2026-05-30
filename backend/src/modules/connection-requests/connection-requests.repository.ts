@@ -27,6 +27,12 @@ interface ConnectionRequestRow {
   factory_id: string;
   factory_name: string;
   factory_registration_no: string;
+  industry_main_order: string | null;
+  industry_sub_order: string | null;
+  business_activity: string | null;
+  has_eia: boolean | number | null;
+  project_name: string | null;
+  address: string | null;
   system_type: 'CEMS' | 'WPMS';
   status: ConnectionRequestStatus;
   contact_name: string;
@@ -34,6 +40,7 @@ interface ConnectionRequestRow {
   contact_email: string | null;
   contact_persons_json: string | null;
   notification_emails_json: string | null;
+  officer_notification_emails_json: string | null;
   remarks: string | null;
   revision_reason: string | null;
   officer_note: string | null;
@@ -290,6 +297,12 @@ export const connectionRequestsRepository = {
         'factory_id',
         'factory_name',
         'factory_registration_no',
+        'industry_main_order',
+        'industry_sub_order',
+        'business_activity',
+        'has_eia',
+        'project_name',
+        'address',
         'system_type',
         'status',
         'contact_name',
@@ -297,6 +310,7 @@ export const connectionRequestsRepository = {
         'contact_email',
         'contact_persons_json',
         'notification_emails_json',
+        'officer_notification_emails_json',
         'remarks',
         'revision_reason',
         'officer_note',
@@ -445,6 +459,12 @@ function buildBaseQuery(
     'factory_id',
     'factory_name',
     'factory_registration_no',
+    'industry_main_order',
+    'industry_sub_order',
+    'business_activity',
+    'has_eia',
+    'project_name',
+    'address',
     'system_type',
     'status',
     'contact_name',
@@ -452,6 +472,7 @@ function buildBaseQuery(
     'contact_email',
     'contact_persons_json',
     'notification_emails_json',
+    'officer_notification_emails_json',
     'remarks',
     'revision_reason',
     'officer_note',
@@ -581,6 +602,13 @@ async function hydrate(
     factoryId: row.factory_id,
     factoryName: row.factory_name,
     factoryRegistrationNo: row.factory_registration_no,
+    industryMainOrder: row.industry_main_order,
+    industrySubOrder: row.industry_sub_order,
+    businessActivity: row.business_activity,
+    eia: toEiaLabel(row.has_eia),
+    hasEia: toNullableBoolean(row.has_eia),
+    projectName: row.project_name,
+    address: row.address,
     systemType: row.system_type,
     status: row.status,
     statusLabel: CONNECTION_REQUEST_STATUS_LABELS[row.status],
@@ -589,6 +617,7 @@ async function hydrate(
     contactEmail: row.contact_email,
     contactPersons: toContactPersons(row),
     notificationEmails: toNotificationEmails(row),
+    officerNotificationEmails: toOfficerNotificationEmails(row),
     remarks: row.remarks,
     revisionReason: row.revision_reason,
     officerNote: row.officer_note,
@@ -604,10 +633,17 @@ async function hydrate(
 }
 
 function toRequestRow(input: CreateConnectionRequestInput): Record<string, unknown> {
+  const hasEia = input.hasEia ?? toBooleanFromEiaLabel(input.eia ?? null);
   return {
     factory_id: input.factoryId,
     factory_name: input.factoryName,
     factory_registration_no: input.factoryRegistrationNo,
+    industry_main_order: input.industryMainOrder ?? null,
+    industry_sub_order: input.industrySubOrder ?? null,
+    business_activity: input.businessActivity ?? null,
+    has_eia: hasEia,
+    project_name: input.projectName ?? null,
+    address: input.address ?? null,
     system_type: input.systemType,
     contact_name: input.contactName,
     contact_phone: input.contactPhone,
@@ -619,6 +655,10 @@ function toRequestRow(input: CreateConnectionRequestInput): Record<string, unkno
     notification_emails_json:
       input.notificationEmails && input.notificationEmails.length > 0
         ? JSON.stringify(input.notificationEmails)
+        : null,
+    officer_notification_emails_json:
+      input.officerNotificationEmails && input.officerNotificationEmails.length > 0
+        ? JSON.stringify(input.officerNotificationEmails)
         : null,
     remarks: input.remarks ?? null,
   };
@@ -817,6 +857,24 @@ function toNotificationEmails(row: ConnectionRequestRow): string[] {
   );
   if (emails.length > 0) return emails;
   return row.contact_email ? [row.contact_email] : [];
+}
+
+function toOfficerNotificationEmails(row: ConnectionRequestRow): string[] {
+  return parseJsonArray<string>(row.officer_notification_emails_json).filter(
+    (email) => typeof email === 'string' && email.length > 0,
+  );
+}
+
+function toEiaLabel(value: boolean | number | null): 'มี' | 'ไม่มี' | null {
+  const hasEia = toNullableBoolean(value);
+  if (hasEia === null) return null;
+  return hasEia ? 'มี' : 'ไม่มี';
+}
+
+function toBooleanFromEiaLabel(value: 'มี' | 'ไม่มี' | null): boolean | null {
+  if (value === 'มี') return true;
+  if (value === 'ไม่มี') return false;
+  return null;
 }
 
 function parseParameters(value: string): string[] {

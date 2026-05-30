@@ -48,6 +48,12 @@ describe('connection request validators', () => {
     factoryId: 'factory-001',
     factoryName: 'บริษัท ทดสอบ จำกัด',
     factoryRegistrationNo: '3-106-33/50สบ',
+    industryMainOrder: '106',
+    industrySubOrder: '33',
+    businessActivity: 'ผลิตเคมีภัณฑ์',
+    eia: 'มี',
+    projectName: 'โครงการทดสอบ CEMS',
+    address: '99 หมู่ 1 ตำบลทดสอบ อำเภอเมือง จังหวัดสระบุรี',
     systemType: 'CEMS',
     contactName: 'สมชาย ใจดี',
     contactPhone: '0812345678',
@@ -67,6 +73,7 @@ describe('connection request validators', () => {
       },
     ],
     notificationEmails: ['ops@example.com', 'ops2@example.com'],
+    officerNotificationEmails: ['officer@example.com'],
     measurementPoints: [
       {
         pointName: 'ปล่องระบาย A',
@@ -90,8 +97,11 @@ describe('connection request validators', () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.requestType).toBe('NEW_CONNECTION');
+      expect(result.data.industryMainOrder).toBe('106');
+      expect(result.data.eia).toBe('มี');
       expect(result.data.contactPersons).toHaveLength(2);
       expect(result.data.notificationEmails).toEqual(['ops@example.com', 'ops2@example.com']);
+      expect(result.data.officerNotificationEmails).toEqual(['officer@example.com']);
     }
   });
 
@@ -129,8 +139,7 @@ describe('connection request validators', () => {
 
     expect(result.success).toBe(true);
     if (result.success) {
-      const parameter =
-        result.data.measurementPoints[0].measurementInstruments?.parameters[0];
+      const parameter = result.data.measurementPoints[0].measurementInstruments?.parameters[0];
       expect(parameter?.standardCriteria).toEqual({
         enabled: true,
         standardValue: '120',

@@ -36,6 +36,7 @@ Content-Type: application/json
 | อีเมลผู้ติดต่อ | `contactPersons[].email` | `string|null` | No |
 | ตำแหน่ง/หน้าที่ | `contactPersons[].position` | `string|null` | No |
 | อีเมลสำหรับแจ้งเตือนโรงงาน | `notificationEmails` | `string[]` | No |
+| อีเมลสำหรับแจ้งเตือนเจ้าหน้าที่ | `officerNotificationEmails` | `string[]` | No |
 | ชื่อผู้ติดต่อแบบเดิม | `contactName` | `string` | Yes ถ้าไม่ส่ง `contactPersons` |
 | เบอร์โทรแบบเดิม | `contactPhone` | `string` | Yes ถ้าไม่ส่ง `contactPersons` |
 | อีเมลแบบเดิม | `contactEmail` | `string|null` | No |
@@ -46,6 +47,7 @@ Mapping:
 - ถ้าไม่ส่ง `contactPersons` backend จะสร้าง `contactPersons[0]` จาก `contactName/contactPhone/contactEmail`
 - ถ้าส่ง `notificationEmails` backend จะเก็บอีเมลแจ้งเตือนทั้งหมด
 - ถ้าไม่ส่ง `notificationEmails` แต่มี `contactEmail` backend จะใช้ `[contactEmail]` เป็นค่า default
+- ถ้าส่ง `officerNotificationEmails` backend จะเก็บอีเมลแจ้งเตือนเจ้าหน้าที่แยกจากอีเมลโรงงาน
 
 ## Endpoint Summary
 
@@ -138,6 +140,17 @@ Frontend ใช้ `data.formDefaults` เติมค่าหลักใน `
 }
 ```
 
+Field ข้อมูลทั่วไปของโรงงานที่ส่งบันทึกเป็น snapshot ในคำขอได้:
+
+| UI | Field | Type |
+| --- | --- | --- |
+| ลำดับประเภทโรงงาน (หลัก) | `industryMainOrder` | `string|null` |
+| ลำดับประเภทโรงงาน (รอง) | `industrySubOrder` | `string|null` |
+| การประกอบกิจการ | `businessActivity` | `string|null` |
+| มีการประเมินผลกระทบสิ่งแวดล้อม (EIA) / ไม่มี | `eia` หรือ `hasEia` | `"มี"|"ไม่มี"|null` หรือ `boolean|null` |
+| ชื่อโครงการ | `projectName` | `string|null` |
+| สถานที่ตั้งโรงงาน | `address` | `string|null` |
+
 ## 1. บันทึกฟอร์ม เพิ่มจุดตรวจวัด
 
 ```bash
@@ -148,6 +161,13 @@ curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/measurement-points
     "factoryId": "factory-001",
     "factoryName": "บริษัท ทดสอบ จำกัด",
     "factoryRegistrationNo": "3-106-33/50สบ",
+    "industryMainOrder": "106",
+    "industrySubOrder": "33",
+    "businessActivity": "ผลิตเคมีภัณฑ์",
+    "eia": "มี",
+    "hasEia": true,
+    "projectName": "โครงการทดสอบ CEMS",
+    "address": "99 หมู่ 1 ตำบลทดสอบ อำเภอเมือง จังหวัดสระบุรี",
     "systemType": "CEMS",
     "contactName": "สมชาย ใจดี",
     "contactPhone": "0812345678",
@@ -167,6 +187,7 @@ curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/measurement-points
       }
     ],
     "notificationEmails": ["ops@example.com", "ops2@example.com"],
+    "officerNotificationEmails": ["officer@example.com"],
     "measurementPoints": [
       {
         "pointName": "ปล่องระบาย A",
@@ -869,6 +890,27 @@ Mapping ประเภทที่ frontend เลือก:
 - ถ้าเลือก checkbox ต้องส่ง `enabled: true`, `standardValue`, และ `rows` ให้ครบ 3 แถว
 - `rows[].level` ต้องมีครบ `normal`, `warning`, `critical` ห้ามซ้ำ
 - `rows[].min` และ `rows[].max` เป็น number หรือ `null` กรณีช่องว่าง/ไม่จำกัด
+
+Mapping ช่อง MIN/MAX ในตารางเกณฑ์:
+
+| UI | Field |
+| --- | --- |
+| พารามิเตอร์ไม่มีค่ามาตรฐาน ตามประกาศ อก. | `standardCriteria.enabled` |
+| ตามประกาศ อก. ค่ามาตรฐาน | `standardCriteria.standardValue` |
+| ตามประกาศ อก. ปกติ MIN | `standardCriteria.rows[{ "level": "normal" }].min` |
+| ตามประกาศ อก. ปกติ MAX | `standardCriteria.rows[{ "level": "normal" }].max` |
+| ตามประกาศ อก. เฝ้าระวัง MIN | `standardCriteria.rows[{ "level": "warning" }].min` |
+| ตามประกาศ อก. เฝ้าระวัง MAX | `standardCriteria.rows[{ "level": "warning" }].max` |
+| ตามประกาศ อก. แจ้งเตือน MIN | `standardCriteria.rows[{ "level": "critical" }].min` |
+| ตามประกาศ อก. แจ้งเตือน MAX | `standardCriteria.rows[{ "level": "critical" }].max` |
+| พารามิเตอร์ไม่มีค่ามาตรฐาน ตาม EIA | `eiaCriteria.enabled` |
+| ตาม EIA ค่ามาตรฐาน | `eiaCriteria.standardValue` |
+| ตาม EIA ปกติ MIN | `eiaCriteria.rows[{ "level": "normal" }].min` |
+| ตาม EIA ปกติ MAX | `eiaCriteria.rows[{ "level": "normal" }].max` |
+| ตาม EIA เฝ้าระวัง MIN | `eiaCriteria.rows[{ "level": "warning" }].min` |
+| ตาม EIA เฝ้าระวัง MAX | `eiaCriteria.rows[{ "level": "warning" }].max` |
+| ตาม EIA แจ้งเตือน MIN | `eiaCriteria.rows[{ "level": "critical" }].min` |
+| ตาม EIA แจ้งเตือน MAX | `eiaCriteria.rows[{ "level": "critical" }].max` |
 
 ตัวอย่างเครื่องมือตรวจวัดพร้อมเกณฑ์:
 

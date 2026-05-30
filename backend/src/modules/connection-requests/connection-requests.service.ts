@@ -641,26 +641,37 @@ function findFactorySummary(
   request: ConnectionRequestDTO,
   factoryMap: Map<string, FactorySummaryDTO>,
 ): FactorySummaryDTO | null {
-  return (
-    factoryMap.get(request.factoryId) ??
-    factoryMap.get(request.factoryRegistrationNo) ?? {
-      id: null,
-      factoryId: request.factoryId,
-      factoryName: request.factoryName,
-      newRegistrationNo: request.factoryRegistrationNo,
-      oldRegistrationNo: null,
-      industryType: null,
-      industryMainOrder: null,
-      industrySubOrder: null,
-      businessActivity: null,
-      eia: null,
-      projectName: null,
-      address: null,
-      latitude: null,
-      longitude: null,
-      province: null,
-    }
-  );
+  const summary =
+    factoryMap.get(request.factoryId) ?? factoryMap.get(request.factoryRegistrationNo);
+  if (summary) {
+    return {
+      ...summary,
+      industryMainOrder: summary.industryMainOrder ?? request.industryMainOrder,
+      industrySubOrder: summary.industrySubOrder ?? request.industrySubOrder,
+      businessActivity: summary.businessActivity ?? request.businessActivity,
+      eia: summary.eia ?? request.eia,
+      projectName: summary.projectName ?? request.projectName,
+      address: summary.address ?? request.address,
+    };
+  }
+
+  return {
+    id: null,
+    factoryId: request.factoryId,
+    factoryName: request.factoryName,
+    newRegistrationNo: request.factoryRegistrationNo,
+    oldRegistrationNo: null,
+    industryType: null,
+    industryMainOrder: request.industryMainOrder,
+    industrySubOrder: request.industrySubOrder,
+    businessActivity: request.businessActivity,
+    eia: request.eia,
+    projectName: request.projectName,
+    address: request.address,
+    latitude: null,
+    longitude: null,
+    province: null,
+  };
 }
 
 function findCodeIssuedAt(request: ConnectionRequestDTO): string | null {

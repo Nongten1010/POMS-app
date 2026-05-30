@@ -44,6 +44,13 @@ describe('connectionRequestsService', () => {
     factoryId: 'factory-001',
     factoryName: 'บริษัท ทดสอบ จำกัด',
     factoryRegistrationNo: '3-106-33/50สบ',
+    industryMainOrder: '106',
+    industrySubOrder: '33',
+    businessActivity: 'ผลิตเคมีภัณฑ์',
+    eia: 'มี',
+    hasEia: true,
+    projectName: 'โครงการทดสอบ CEMS',
+    address: '99 หมู่ 1 ตำบลทดสอบ อำเภอเมือง จังหวัดสระบุรี',
     systemType: 'CEMS',
     contactName: 'สมชาย ใจดี',
     contactPhone: '0812345678',
@@ -63,6 +70,7 @@ describe('connectionRequestsService', () => {
       },
     ],
     notificationEmails: ['ops@example.com', 'ops2@example.com'],
+    officerNotificationEmails: ['officer@example.com'],
     measurementPoints: [
       {
         pointName: 'ปล่องระบาย A',
@@ -199,7 +207,7 @@ describe('connectionRequestsService', () => {
     const request = requestDto({ createdBy: actorUserId });
     mockedRepository.findById.mockResolvedValue(request);
     mockedRepository.findFactorySummariesForRequests.mockResolvedValue(
-      new Map([[request.factoryId, factorySummary()]]),
+      new Map([[request.factoryId, factorySummary({ businessActivity: null })]]),
     );
     mockedDeviceConnectionsService.listByRequestId.mockResolvedValue([
       {
@@ -219,6 +227,7 @@ describe('connectionRequestsService', () => {
     const result = await connectionRequestsService.getDetail(1, actorUserId, 'OWN_FACTORY');
 
     expect(result.factory?.province).toBe('สระบุรี');
+    expect(result.factory?.businessActivity).toBe('ผลิตเคมีภัณฑ์');
     expect(result.deviceConfigs).toHaveLength(1);
   });
 
@@ -810,6 +819,13 @@ function requestDto(overrides: Partial<ConnectionRequestDTO> = {}): ConnectionRe
     factoryId: 'factory-001',
     factoryName: 'บริษัท ทดสอบ จำกัด',
     factoryRegistrationNo: '3-106-33/50สบ',
+    industryMainOrder: '106',
+    industrySubOrder: '33',
+    businessActivity: 'ผลิตเคมีภัณฑ์',
+    eia: 'มี',
+    hasEia: true,
+    projectName: 'โครงการทดสอบ CEMS',
+    address: '99 หมู่ 1 ตำบลทดสอบ อำเภอเมือง จังหวัดสระบุรี',
     systemType: 'CEMS',
     status: CONNECTION_REQUEST_STATUS.PENDING_DESIGN_REVIEW,
     statusLabel: 'รอพิจารณาแบบ',
@@ -825,6 +841,7 @@ function requestDto(overrides: Partial<ConnectionRequestDTO> = {}): ConnectionRe
       },
     ],
     notificationEmails: ['ops@example.com'],
+    officerNotificationEmails: ['officer@example.com'],
     remarks: null,
     revisionReason: null,
     officerNote: null,

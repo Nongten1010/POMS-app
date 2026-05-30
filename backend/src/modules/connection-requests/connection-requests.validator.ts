@@ -117,7 +117,10 @@ const criteriaStandardValueSchema = z.preprocess(
     const trimmedValue = value.trim();
     return trimmedValue.length > 0 ? trimmedValue : null;
   },
-  z.union([z.string().min(1).max(255), z.number().finite()]).nullable().optional(),
+  z
+    .union([z.string().min(1).max(255), z.number().finite()])
+    .nullable()
+    .optional(),
 );
 const criteriaRangeRowSchema = z
   .object({
@@ -262,12 +265,20 @@ const connectionRequestFormObjectSchema = z
     factoryId: trimmedString(64),
     factoryName: trimmedString(500),
     factoryRegistrationNo: trimmedString(64),
+    industryMainOrder: optionalNullableTrimmedString(128),
+    industrySubOrder: optionalNullableTrimmedString(128),
+    businessActivity: optionalNullableTrimmedString(4000),
+    eia: z.enum(['มี', 'ไม่มี']).nullable().optional(),
+    hasEia: z.boolean().nullable().optional(),
+    projectName: optionalNullableTrimmedString(500),
+    address: optionalNullableTrimmedString(1000),
     systemType: z.enum(['CEMS', 'WPMS']),
     contactName: optionalTrimmedString(255),
     contactPhone: optionalTrimmedString(64),
     contactEmail: z.string().trim().email().max(255).nullable().optional(),
     contactPersons: z.array(contactPersonSchema).min(1).max(20).optional(),
     notificationEmails: z.array(z.string().trim().email().max(255)).max(20).optional(),
+    officerNotificationEmails: z.array(z.string().trim().email().max(255)).max(20).optional(),
     measurementPoints: z.array(measurementPointSchema).min(1).max(100),
     remarks: optionalNullableTrimmedString(1000),
   })
@@ -302,6 +313,7 @@ function normalizeContacts<T extends ContactFormPayload | ContactFormPayloadWith
   contactEmail: string | null;
   contactPersons: NonNullable<ContactFormPayload['contactPersons']>;
   notificationEmails: string[];
+  officerNotificationEmails: string[];
 } {
   const primaryContact = payload.contactPersons?.[0] ?? {
     name: payload.contactName ?? '',
@@ -327,6 +339,10 @@ function normalizeContacts<T extends ContactFormPayload | ContactFormPayloadWith
       : contactEmail
         ? [contactEmail]
         : [];
+  const officerNotificationEmails =
+    payload.officerNotificationEmails && payload.officerNotificationEmails.length > 0
+      ? [...new Set(payload.officerNotificationEmails)]
+      : [];
 
   return {
     ...payload,
@@ -335,6 +351,7 @@ function normalizeContacts<T extends ContactFormPayload | ContactFormPayloadWith
     contactEmail,
     contactPersons,
     notificationEmails,
+    officerNotificationEmails,
   };
 }
 

@@ -96,12 +96,20 @@ export interface CreateConnectionRequestInput {
   factoryId: string;
   factoryName: string;
   factoryRegistrationNo: string;
+  industryMainOrder?: string | null;
+  industrySubOrder?: string | null;
+  businessActivity?: string | null;
+  eia?: 'มี' | 'ไม่มี' | null;
+  hasEia?: boolean | null;
+  projectName?: string | null;
+  address?: string | null;
   systemType: ConnectionSystemType;
   contactName: string;
   contactPhone: string;
   contactEmail?: string | null;
   contactPersons?: ContactPersonInput[];
   notificationEmails?: string[];
+  officerNotificationEmails?: string[];
   measurementPoints: MeasurementPointInput[];
   remarks?: string | null;
 }
@@ -165,6 +173,13 @@ export interface ConnectionRequestDTO {
   factoryId: string;
   factoryName: string;
   factoryRegistrationNo: string;
+  industryMainOrder: string | null;
+  industrySubOrder: string | null;
+  businessActivity: string | null;
+  eia: 'มี' | 'ไม่มี' | null;
+  hasEia: boolean | null;
+  projectName: string | null;
+  address: string | null;
   systemType: ConnectionSystemType;
   status: ConnectionRequestStatus;
   statusLabel: string;
@@ -173,6 +188,7 @@ export interface ConnectionRequestDTO {
   contactEmail: string | null;
   contactPersons: ContactPersonInput[];
   notificationEmails: string[];
+  officerNotificationEmails: string[];
   remarks: string | null;
   revisionReason: string | null;
   officerNote: string | null;
