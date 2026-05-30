@@ -434,6 +434,103 @@ Response จะเป็น shape เดียวกับข้อ 1 แต่ 
 }
 ```
 
+### Validation รายละเอียดจุดตรวจวัด CEMS/WPMS
+
+Backend เก็บ `measurementPoints[].details` เป็น JSON เหมือนเดิม แต่ตรวจโครงสร้างแยกตาม `systemType` เพื่อไม่ให้ CEMS/WPMS ปน field กัน
+
+| Rule | CEMS | WPMS |
+| --- | --- | --- |
+| `pointType` | ต้องใช้ `STACK` | ต้องใช้ `WASTEWATER` |
+| `details.monitoringPointKind` | ถ้าส่งต้องเป็น `CEMS` | ถ้าส่งต้องเป็น `WPMS` |
+| รายละเอียดหลัก | ใช้ field กลุ่มปล่อง/เชื้อเพลิง/อากาศเสีย | ใช้ field กลุ่มน้ำทิ้ง/จุดติดตั้งเครื่องมือ |
+| field ฝั่งตรงข้าม | ไม่รับ WPMS-only field | ไม่รับ CEMS-only field |
+
+กลุ่มพารามิเตอร์ของ CEMS บันทึกได้มากกว่า 1 ค่า และต้องส่งเป็น `string[]`:
+
+```json
+{
+  "details": {
+    "eligibleParameters": ["NOx", "SO2", "PM"],
+    "exemptedParameters": ["Hg"],
+    "connectedParameters": ["O2", "Flow"],
+    "pendingParameters": ["CO", "CO2"]
+  }
+}
+```
+
+Conditional fields ที่ backend ตรวจ:
+
+| ตัวเลือกในฟอร์ม | เงื่อนไข | Field ที่ต้องส่งเพิ่ม |
+| --- | --- | --- |
+| ลักษณะปล่อง | `stackShape = "วงกลม"` | `details.stackDiameter` เป็น number |
+| ลักษณะปล่อง | `stackShape = "สี่เหลี่ยม"` | `details.stackWidth`, `details.stackLength` เป็น number |
+| ลักษณะปล่อง | `stackShape = "อื่นๆ"` | `details.stackShapeOther` |
+| ระบบบำบัด | `hasTreatmentSystem = "มี"` | `details.treatmentSystem` |
+| ระบบบำบัด | `hasTreatmentSystem = "มี"` และ `treatmentSystem = "อื่นๆ"` | `details.treatmentSystemOther` |
+| อุปกรณ์/โปรแกรมที่ใช้เชื่อมต่อ | `connectionDevice = "อื่นๆ"` | `details.connectionDeviceOther` |
+| เชื้อเพลิงหลัก | `primaryFuel = "อื่นๆ"` | `details.primaryFuelOther` |
+| เชื้อเพลิงรอง | `secondaryFuel = "อื่นๆ"` | `details.secondaryFuelOther` |
+| ระบบบำบัด WPMS | `systemType = "WPMS"` และ `hasTreatmentSystem = "มี"` | `details.maxTreatmentCapacity` เป็น number |
+
+ตัวอย่าง CEMS แบบสี่เหลี่ยม + ช่องงอก:
+
+```json
+{
+  "systemType": "CEMS",
+  "measurementPoints": [
+    {
+      "pointName": "ปล่องระบาย A",
+      "pointType": "STACK",
+      "parameters": ["NOx", "SO2"],
+      "details": {
+        "monitoringPointKind": "CEMS",
+        "eligibleParameters": ["NOx", "SO2"],
+        "exemptedParameters": ["PM"],
+        "connectedParameters": ["O2", "Flow"],
+        "pendingParameters": ["CO", "CO2"],
+        "stackShape": "สี่เหลี่ยม",
+        "stackWidth": 1.5,
+        "stackLength": 2,
+        "hasTreatmentSystem": "มี",
+        "treatmentSystem": "อื่นๆ",
+        "treatmentSystemOther": "ระบบเฉพาะโรงงาน",
+        "connectionDevice": "อื่นๆ",
+        "connectionDeviceOther": "Gateway เดิม"
+      }
+    }
+  ]
+}
+```
+
+ตัวอย่าง WPMS:
+
+```json
+{
+  "systemType": "WPMS",
+  "measurementPoints": [
+    {
+      "pointName": "จุดระบายน้ำทิ้ง A",
+      "pointType": "WASTEWATER",
+      "parameters": ["BOD (mg/l)", "COD (mg/l)"],
+      "details": {
+        "monitoringPointKind": "WPMS",
+        "averageWastewaterDischarge": 500,
+        "minWastewaterDischarge": 300,
+        "maxWastewaterDischarge": 800,
+        "hasTreatmentSystem": "มี",
+        "treatmentSystem": "ระบบบำบัดชีวภาพ",
+        "maxTreatmentCapacity": 1000,
+        "instrumentLatitude": 13.7563,
+        "instrumentLongitude": 100.5018,
+        "wastewaterSource": "กระบวนการผลิต",
+        "dischargeReceivingSource": "คลองสาธารณะ",
+        "connectionDevice": "POMS Box (กรอ.)"
+      }
+    }
+  ]
+}
+```
+
 Mapping:
 
 | Label                                      | Field                                                       |

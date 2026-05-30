@@ -122,6 +122,107 @@ describe('connection request validators', () => {
     }
   });
 
+  it('accepts CEMS conditional detail fields and multi-value parameter groups', () => {
+    const result = addMeasurementPointRequestSchema.safeParse({
+      ...validPayload,
+      measurementPoints: [
+        {
+          ...validPayload.measurementPoints[0],
+          details: {
+            monitoringPointKind: 'CEMS',
+            eligibleParameters: ['NOx', 'SO2'],
+            exemptedParameters: ['PM'],
+            connectedParameters: ['O2', 'Flow'],
+            pendingParameters: ['CO', 'CO2'],
+            stackShape: 'สี่เหลี่ยม',
+            stackWidth: 1.5,
+            stackLength: 2,
+            hasTreatmentSystem: 'มี',
+            treatmentSystem: 'อื่นๆ',
+            treatmentSystemOther: 'ระบบเฉพาะโรงงาน',
+            connectionDevice: 'อื่นๆ',
+            connectionDeviceOther: 'Gateway เดิม',
+          },
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts WPMS detail fields separately from CEMS fields', () => {
+    const result = addMeasurementPointRequestSchema.safeParse({
+      ...validPayload,
+      systemType: 'WPMS',
+      measurementPoints: [
+        {
+          ...validPayload.measurementPoints[0],
+          pointType: 'WASTEWATER',
+          parameters: ['BOD (mg/l)', 'COD (mg/l)'],
+          details: {
+            monitoringPointKind: 'WPMS',
+            averageWastewaterDischarge: 500,
+            minWastewaterDischarge: 300,
+            maxWastewaterDischarge: 800,
+            hasTreatmentSystem: 'มี',
+            treatmentSystem: 'ระบบบำบัดชีวภาพ',
+            maxTreatmentCapacity: 1000,
+            instrumentLatitude: 13.7563,
+            instrumentLongitude: 100.5018,
+            wastewaterSource: 'กระบวนการผลิต',
+            dischargeReceivingSource: 'คลองสาธารณะ',
+            connectionDevice: 'POMS Box (กรอ.)',
+          },
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects missing conditional detail fields and wrong parameter group type', () => {
+    const result = addMeasurementPointRequestSchema.safeParse({
+      ...validPayload,
+      measurementPoints: [
+        {
+          ...validPayload.measurementPoints[0],
+          details: {
+            stackShape: 'สี่เหลี่ยม',
+            stackWidth: 1.5,
+            eligibleParameters: 'NOx',
+            hasTreatmentSystem: 'มี',
+            treatmentSystem: 'อื่นๆ',
+            connectionDevice: 'อื่นๆ',
+          },
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects CEMS-only detail fields in WPMS requests', () => {
+    const result = addMeasurementPointRequestSchema.safeParse({
+      ...validPayload,
+      systemType: 'WPMS',
+      measurementPoints: [
+        {
+          ...validPayload.measurementPoints[0],
+          pointType: 'WASTEWATER',
+          details: {
+            monitoringPointKind: 'WPMS',
+            stackShape: 'วงกลม',
+            stackDiameter: 1.2,
+            hasTreatmentSystem: 'ไม่มี',
+            connectionDevice: 'POMS Box (กรอ.)',
+          },
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+  });
+
   it('rejects add measurement point request without the three required form sections', () => {
     const result = addMeasurementPointRequestSchema.safeParse({
       ...validPayload,

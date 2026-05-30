@@ -25,6 +25,50 @@ const jsonValueSchema: z.ZodType<unknown> = z.lazy(() =>
 
 const measurementPointDetailsSchema = z.record(z.string().min(1).max(128), jsonValueSchema);
 
+const parameterGroupFields = [
+  'eligibleParameters',
+  'exemptedParameters',
+  'connectedParameters',
+  'pendingParameters',
+] as const;
+const cemsOnlyDetailFields = new Set([
+  ...parameterGroupFields,
+  'productionUnitType',
+  'productionCapacity',
+  'cemsInstallationRequiredBy',
+  'cemsInstallationRequiredOther',
+  'legalAnnexNo',
+  'stackShape',
+  'stackDiameter',
+  'stackWidth',
+  'stackLength',
+  'stackShapeOther',
+  'stackHeight',
+  'monitoringHeight',
+  'averageFlowRate',
+  'minFlowRate',
+  'maxFlowRate',
+  'primaryFuel',
+  'primaryFuelOther',
+  'primaryFuelPercent',
+  'secondaryFuel',
+  'secondaryFuelOther',
+  'secondaryFuelPercent',
+  'combustionControlSystem',
+  'stackLatitude',
+  'stackLongitude',
+]);
+const wpmsOnlyDetailFields = new Set([
+  'averageWastewaterDischarge',
+  'minWastewaterDischarge',
+  'maxWastewaterDischarge',
+  'maxTreatmentCapacity',
+  'instrumentLatitude',
+  'instrumentLongitude',
+  'wastewaterSource',
+  'dischargeReceivingSource',
+]);
+
 const contactPersonSchema = z
   .object({
     name: trimmedString(255),
@@ -215,6 +259,170 @@ function normalizeContacts<T extends ContactFormPayload | ContactFormPayloadWith
   };
 }
 
+function validateMeasurementPointDetailsBySystem(
+  systemType: 'CEMS' | 'WPMS',
+  point: z.infer<typeof measurementPointSchema>,
+  index: number,
+  ctx: z.RefinementCtx,
+): void {
+  if (!point.details) return;
+
+  if (systemType === 'CEMS') {
+    validateCemsDetails(point, index, ctx);
+    return;
+  }
+
+  validateWpmsDetails(point, index, ctx);
+}
+
+function validateCemsDetails(
+  point: z.infer<typeof measurementPointSchema>,
+  index: number,
+  ctx: z.RefinementCtx,
+): void {
+  const details = point.details;
+  if (!details) return;
+
+  if (point.pointType !== 'STACK') {
+    addDetailIssue(ctx, index, 'pointType', 'CEMS measurement point must use pointType STACK');
+  }
+
+  validateMonitoringPointKind(details, index, ctx, 'CEMS');
+  validateExcludedFields(details, wpmsOnlyDetailFields, index, ctx, 'WPMS-only detail field');
+  validateParameterGroups(details, index, ctx);
+
+  const stackShape = details.stackShape;
+  if (stackShape === 'วงกลม') {
+    requireNumberDetail(details, index, ctx, 'stackDiameter');
+  } else if (stackShape === 'สี่เหลี่ยม') {
+    requireNumberDetail(details, index, ctx, 'stackWidth');
+    requireNumberDetail(details, index, ctx, 'stackLength');
+  } else if (stackShape === 'อื่นๆ') {
+    requireStringDetail(details, index, ctx, 'stackShapeOther');
+  } else {
+    addDetailIssue(ctx, index, 'stackShape', 'CEMS stackShape is required');
+  }
+
+  if (details.primaryFuel === 'อื่นๆ') {
+    requireStringDetail(details, index, ctx, 'primaryFuelOther');
+  }
+  if (details.secondaryFuel === 'อื่นๆ') {
+    requireStringDetail(details, index, ctx, 'secondaryFuelOther');
+  }
+
+  validateTreatmentSystem(details, index, ctx);
+  validateConnectionDevice(details, index, ctx);
+}
+
+function validateWpmsDetails(
+  point: z.infer<typeof measurementPointSchema>,
+  index: number,
+  ctx: z.RefinementCtx,
+): void {
+  const details = point.details;
+  if (!details) return;
+
+  if (point.pointType !== 'WASTEWATER') {
+    addDetailIssue(ctx, index, 'pointType', 'WPMS measurement point must use pointType WASTEWATER');
+  }
+
+  validateMonitoringPointKind(details, index, ctx, 'WPMS');
+  validateExcludedFields(details, cemsOnlyDetailFields, index, ctx, 'CEMS-only detail field');
+  validateTreatmentSystem(details, index, ctx);
+  validateConnectionDevice(details, index, ctx);
+
+  if (details.hasTreatmentSystem === 'มี') {
+    requireNumberDetail(details, index, ctx, 'maxTreatmentCapacity');
+  }
+}
+
+function validateMonitoringPointKind(
+  details: Record<string, unknown>,
+  index: number,
+  ctx: z.RefinementCtx,
+  expected: 'CEMS' | 'WPMS',
+): void {
+  if (details.monitoringPointKind === undefined || details.monitoringPointKind === expected) return;
+  addDetailIssue(ctx, index, 'monitoringPointKind', `monitoringPointKind must be ${expected}`);
+}
+
+function validateExcludedFields(
+  details: Record<string, unknown>,
+  fields: Set<string>,
+  index: number,
+  ctx: z.RefinementCtx,
+  messagePrefix: string,
+): void {
+  Object.keys(details).forEach((field) => {
+    if (!fields.has(field)) return;
+    addDetailIssue(ctx, index, field, `${messagePrefix} is not allowed here`);
+  });
+}
+
+function validateParameterGroups(
+  details: Record<string, unknown>,
+  index: number,
+  ctx: z.RefinementCtx,
+): void {
+  parameterGroupFields.forEach((field) => {
+    const value = details[field];
+    if (value === undefined || value === null) return;
+    if (Array.isArray(value) && value.every((item) => typeof item === 'string')) return;
+    addDetailIssue(ctx, index, field, `${field} must be string[]`);
+  });
+}
+
+function validateTreatmentSystem(
+  details: Record<string, unknown>,
+  index: number,
+  ctx: z.RefinementCtx,
+): void {
+  if (details.hasTreatmentSystem !== 'มี') return;
+  requireStringDetail(details, index, ctx, 'treatmentSystem');
+  if (details.treatmentSystem === 'อื่นๆ') {
+    requireStringDetail(details, index, ctx, 'treatmentSystemOther');
+  }
+}
+
+function validateConnectionDevice(
+  details: Record<string, unknown>,
+  index: number,
+  ctx: z.RefinementCtx,
+): void {
+  if (details.connectionDevice !== 'อื่นๆ') return;
+  requireStringDetail(details, index, ctx, 'connectionDeviceOther');
+}
+
+function requireStringDetail(
+  details: Record<string, unknown>,
+  index: number,
+  ctx: z.RefinementCtx,
+  field: string,
+): void {
+  const value = details[field];
+  if (typeof value === 'string' && value.trim().length > 0) return;
+  addDetailIssue(ctx, index, field, `${field} is required`);
+}
+
+function requireNumberDetail(
+  details: Record<string, unknown>,
+  index: number,
+  ctx: z.RefinementCtx,
+  field: string,
+): void {
+  const value = details[field];
+  if (typeof value === 'number' && Number.isFinite(value)) return;
+  addDetailIssue(ctx, index, field, `${field} must be a number`);
+}
+
+function addDetailIssue(ctx: z.RefinementCtx, index: number, field: string, message: string): void {
+  ctx.addIssue({
+    code: 'custom',
+    path: ['measurementPoints', index, 'details', field],
+    message,
+  });
+}
+
 export const createConnectionRequestSchema = connectionRequestFormSchema.transform((payload) => ({
   ...payload,
   requestType: payload.requestType ?? CONNECTION_REQUEST_TYPE.NEW_CONNECTION,
@@ -249,6 +457,7 @@ export const addMeasurementPointRequestSchema = connectionRequestFormObjectSchem
           message: 'Measurement instruments section is required',
         });
       }
+      validateMeasurementPointDetailsBySystem(payload.systemType, point, index, ctx);
     });
   })
   .transform((payload) => ({
