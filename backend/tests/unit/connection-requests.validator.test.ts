@@ -1,7 +1,12 @@
 import { describe, expect, it } from '@jest/globals';
 import {
+  addMeasurementPointRequestSchema,
+  addParameterRequestSchema,
+  changeConnectionRequestStatusSchema,
   confirmConnectionSchema,
+  connectionRequestDeviceConfigParamsSchema,
   createConnectionRequestSchema,
+  deviceConfigFormQuerySchema,
   reviewConnectionRequestSchema,
   verifyConnectionSchema,
 } from '../../src/modules/connection-requests/connection-requests.validator';
@@ -33,6 +38,47 @@ describe('connection request validators', () => {
     const result = createConnectionRequestSchema.safeParse(validPayload);
 
     expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.requestType).toBe('NEW_CONNECTION');
+    }
+  });
+
+  it('accepts add measurement point request and stamps the request type', () => {
+    const result = addMeasurementPointRequestSchema.safeParse(validPayload);
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.requestType).toBe('ADD_MEASUREMENT_POINT');
+    }
+  });
+
+  it('accepts add parameter request for exactly one measurement point', () => {
+    const result = addParameterRequestSchema.safeParse({
+      ...validPayload,
+      measurementPoints: [
+        {
+          ...validPayload.measurementPoints[0],
+          parameters: ['CO'],
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.requestType).toBe('ADD_PARAMETER');
+    }
+  });
+
+  it('rejects add parameter request with multiple measurement points', () => {
+    const result = addParameterRequestSchema.safeParse({
+      ...validPayload,
+      measurementPoints: [
+        validPayload.measurementPoints[0],
+        { ...validPayload.measurementPoints[0], pointCode: 'STACK-B' },
+      ],
+    });
+
+    expect(result.success).toBe(false);
   });
 
   it('rejects unknown fields', () => {
@@ -70,6 +116,21 @@ describe('connection request validators', () => {
     expect(result.success).toBe(false);
   });
 
+  it('accepts status changes for approval and revision actions', () => {
+    expect(
+      changeConnectionRequestStatusSchema.safeParse({
+        action: 'APPROVE_FORM',
+        officerNote: 'แบบถูกต้อง',
+      }).success,
+    ).toBe(true);
+    expect(
+      changeConnectionRequestStatusSchema.safeParse({
+        action: 'REQUEST_REVISION',
+        revisionReason: 'เพิ่มเอกสาร config',
+      }).success,
+    ).toBe(true);
+  });
+
   it('accepts connection confirmation and final verification payloads', () => {
     expect(
       confirmConnectionSchema.safeParse({
@@ -83,5 +144,12 @@ describe('connection request validators', () => {
         note: 'ตรวจสอบค่าในระบบแล้ว',
       }).success,
     ).toBe(true);
+  });
+
+  it('accepts device config form detail params and station query', () => {
+    expect(
+      connectionRequestDeviceConfigParamsSchema.safeParse({ id: '1', configId: '10' }).success,
+    ).toBe(true);
+    expect(deviceConfigFormQuerySchema.safeParse({ stationId: 'STACK-A' }).success).toBe(true);
   });
 });

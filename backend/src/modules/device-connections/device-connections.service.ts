@@ -1,4 +1,4 @@
-import { BadRequestError, NotFoundError } from '../../shared/errors/AppError';
+import { BadRequestError, ConflictError, NotFoundError } from '../../shared/errors/AppError';
 import {
   findMockDeviceConnectionConfig,
   getMockDeviceConnectionConfigs,
@@ -40,12 +40,27 @@ export const deviceConnectionsService = {
     throw new NotFoundError('Device connection config not found');
   },
 
+  listByRequestId(requestId: number): Promise<DeviceConnectionConfigDTO[]> {
+    return deviceConnectionsRepository.listByRequestId(requestId);
+  },
+
   async create(
     input: CreateDeviceConnectionConfigInput,
     actorUserId: number,
   ): Promise<DeviceConnectionConfigDTO> {
     ensureChannelAddressesAreUnique(input);
+    await ensureStationHasNoActiveConfig(input.stationId);
     return deviceConnectionsRepository.create(input, actorUserId);
+  },
+
+  async createForRequest(
+    input: CreateDeviceConnectionConfigInput,
+    actorUserId: number,
+    requestId: number,
+  ): Promise<DeviceConnectionConfigDTO> {
+    ensureChannelAddressesAreUnique(input);
+    await ensureStationHasNoActiveConfig(input.stationId);
+    return deviceConnectionsRepository.create(input, actorUserId, requestId);
   },
 
   async testConnection(input: TestDeviceConnectionInput): Promise<DeviceConnectionTestResultDTO> {
@@ -78,6 +93,15 @@ function ensureChannelAddressesAreUnique(input: TestDeviceConnectionInput): void
   if (duplicates.length > 0) {
     throw new BadRequestError('Channel addressId must be unique per connection config', {
       addressIds: Array.from(new Set(duplicates)),
+    });
+  }
+}
+
+async function ensureStationHasNoActiveConfig(stationId: string): Promise<void> {
+  const exists = await deviceConnectionsRepository.existsByStationId(stationId);
+  if (exists) {
+    throw new ConflictError('Device connection config already exists for stationId', {
+      stationId,
     });
   }
 }

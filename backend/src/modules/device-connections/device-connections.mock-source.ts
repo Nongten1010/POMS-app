@@ -8,6 +8,7 @@ const mockStationId = 'STATION_001';
 
 const station001MockConfig: DeviceConnectionConfigDTO = {
   id: 900001,
+  requestId: null,
   stationId: mockStationId,
   protocol: DEVICE_CONNECTION_PROTOCOL.MODBUS_RTU,
   settings: {
@@ -40,6 +41,7 @@ const station001MockConfig: DeviceConnectionConfigDTO = {
       encoding: 'SIGNED',
     },
   ],
+  statusManagement: null,
   createdBy: 0,
   createdAt: mockTimestamp,
   updatedAt: mockTimestamp,

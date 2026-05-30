@@ -1,10 +1,14 @@
 import type { Knex } from 'knex';
 import { db } from '../../config/database';
 import {
+  CONNECTION_REQUEST_TYPE,
+  CONNECTION_REQUEST_TYPE_LABELS,
   CONNECTION_REQUEST_STATUS_LABELS,
   type ConnectionRequestDTO,
   type ConnectionRequestStatus,
+  type ConnectionRequestType,
   type CreateConnectionRequestInput,
+  type FactorySummaryDTO,
   type ListConnectionRequestsQuery,
   type MeasurementPointDTO,
   type MeasurementPointInput,
@@ -14,6 +18,7 @@ import {
 interface ConnectionRequestRow {
   id: number | string;
   request_no: string;
+  request_type: ConnectionRequestType;
   factory_id: string;
   factory_name: string;
   factory_registration_no: string;
@@ -57,6 +62,21 @@ interface ListAccess {
   scope: string | null | undefined;
 }
 
+interface FactoryRow {
+  id: number | string;
+  fid: string;
+  code: string;
+  name: string;
+  system_detail: string | null;
+  province_name: string | null;
+  is_active: boolean | number;
+}
+
+interface FactoryAccess {
+  actorUserId: number;
+  scope: string | null | undefined;
+}
+
 interface StatusUpdate {
   revisionReason?: string | null;
   officerNote?: string | null;
@@ -84,6 +104,101 @@ export const connectionRequestsRepository = {
     return { rows: data, total };
   },
 
+  async listFactoriesForAccess(access: FactoryAccess): Promise<FactorySummaryDTO[]> {
+    const builder = db<FactoryRow>('factories as f')
+      .leftJoin('provinces as p', 'p.id', 'f.province_id')
+      .whereNull('f.deleted_at')
+      .select(
+        'f.id',
+        'f.fid',
+        'f.code',
+        'f.name',
+        'f.system_detail',
+        'f.is_active',
+        'p.name_th as province_name',
+      )
+      .orderBy('f.name', 'asc')
+      .orderBy('f.id', 'asc');
+
+    if (access.scope !== 'ALL') {
+      builder
+        .join('user_juristics as uj', 'uj.juristic_id', 'f.juristic_id')
+        .where('uj.user_id', access.actorUserId)
+        .whereNull('uj.revoked_at');
+    }
+
+    const rows = await builder;
+    return rows.map(toFactorySummaryDTO);
+  },
+
+  async findFactorySummariesForRequests(
+    requests: ConnectionRequestDTO[],
+  ): Promise<Map<string, FactorySummaryDTO>> {
+    const factoryIds = [...new Set(requests.map((request) => request.factoryId))];
+    const registrationNos = [...new Set(requests.map((request) => request.factoryRegistrationNo))];
+
+    if (factoryIds.length === 0 && registrationNos.length === 0) return new Map();
+
+    const rows = await db<FactoryRow>('factories as f')
+      .leftJoin('provinces as p', 'p.id', 'f.province_id')
+      .whereNull('f.deleted_at')
+      .where((builder) => {
+        if (factoryIds.length > 0) builder.whereIn('f.fid', factoryIds);
+        if (registrationNos.length > 0) builder.orWhereIn('f.code', registrationNos);
+      })
+      .select(
+        'f.id',
+        'f.fid',
+        'f.code',
+        'f.name',
+        'f.system_detail',
+        'f.is_active',
+        'p.name_th as province_name',
+      );
+
+    const map = new Map<string, FactorySummaryDTO>();
+    rows.forEach((row) => {
+      const dto = toFactorySummaryDTO(row);
+      map.set(row.fid, dto);
+      map.set(row.code, dto);
+    });
+    return map;
+  },
+
+  async listRequestsForFactories(factoryIds: string[]): Promise<ConnectionRequestDTO[]> {
+    if (factoryIds.length === 0) return [];
+
+    const rows = await db<ConnectionRequestRow>('cems_wpms_connection_requests')
+      .whereNull('deleted_at')
+      .whereIn('factory_id', factoryIds)
+      .orderBy('updated_at', 'desc')
+      .orderBy('id', 'desc')
+      .select(
+        'id',
+        'request_no',
+        'request_type',
+        'factory_id',
+        'factory_name',
+        'factory_registration_no',
+        'system_type',
+        'status',
+        'contact_name',
+        'contact_phone',
+        'contact_email',
+        'remarks',
+        'revision_reason',
+        'officer_note',
+        'connection_due_at',
+        'confirmed_at',
+        'verified_at',
+        'created_by',
+        'created_at',
+        'updated_at',
+      );
+
+    return Promise.all(rows.map((row) => hydrate(row)));
+  },
+
   async create(
     input: CreateConnectionRequestInput,
     actorUserId: number,
@@ -94,6 +209,7 @@ export const connectionRequestsRepository = {
       const [{ id }] = await trx('cems_wpms_connection_requests')
         .insert({
           request_no: requestNo,
+          request_type: input.requestType ?? CONNECTION_REQUEST_TYPE.NEW_CONNECTION,
           ...toRequestRow(input),
           status: initialStatus,
           created_by: actorUserId,
@@ -130,6 +246,7 @@ export const connectionRequestsRepository = {
         .where('id', id)
         .whereNull('deleted_at')
         .update({
+          request_type: input.requestType ?? CONNECTION_REQUEST_TYPE.NEW_CONNECTION,
           ...toRequestRow(input),
           status: nextStatus,
           revision_reason: null,
@@ -201,11 +318,14 @@ function buildBaseQuery(
   const builder = db<ConnectionRequestRow>('cems_wpms_connection_requests').whereNull('deleted_at');
 
   if (query.status) builder.where('status', query.status);
+  if (query.requestType) builder.where('request_type', query.requestType);
+  if (query.factoryId) builder.where('factory_id', query.factoryId);
   if (access.scope !== 'ALL') builder.where('created_by', access.actorUserId);
 
   return builder.select(
     'id',
     'request_no',
+    'request_type',
     'factory_id',
     'factory_name',
     'factory_registration_no',
@@ -224,6 +344,26 @@ function buildBaseQuery(
     'created_at',
     'updated_at',
   );
+}
+
+function toFactorySummaryDTO(row: FactoryRow): FactorySummaryDTO {
+  return {
+    id: Number(row.id),
+    factoryId: row.fid,
+    factoryName: row.name,
+    newRegistrationNo: row.code,
+    oldRegistrationNo: null,
+    industryType: row.system_detail,
+    industryMainOrder: null,
+    industrySubOrder: null,
+    businessActivity: null,
+    eia: null,
+    projectName: null,
+    address: null,
+    latitude: null,
+    longitude: null,
+    province: row.province_name,
+  };
 }
 
 async function findByIdInTransaction(
@@ -257,6 +397,9 @@ async function hydrate(
   return {
     id: requestId,
     requestNo: row.request_no,
+    requestType: row.request_type ?? CONNECTION_REQUEST_TYPE.NEW_CONNECTION,
+    requestTypeLabel:
+      CONNECTION_REQUEST_TYPE_LABELS[row.request_type ?? CONNECTION_REQUEST_TYPE.NEW_CONNECTION],
     factoryId: row.factory_id,
     factoryName: row.factory_name,
     factoryRegistrationNo: row.factory_registration_no,

@@ -76,6 +76,18 @@ export type DeviceConnectionSettingsInput =
 export interface BaseDeviceConnectionConfigInput {
   stationId: string;
   channels: DeviceMeasurementChannelInput[];
+  statusManagement?: DeviceConnectionStatusManagementInput | null;
+}
+
+export interface DeviceConnectionStatusScheduleInput {
+  selectedParameters: string[];
+  startAt: string | null;
+  endAt: string | null;
+  status: string;
+}
+
+export interface DeviceConnectionStatusManagementInput extends DeviceConnectionStatusScheduleInput {
+  schedules: DeviceConnectionStatusScheduleInput[];
 }
 
 export interface CreateModbusRtuConnectionConfigInput extends BaseDeviceConnectionConfigInput {
@@ -113,10 +125,12 @@ export interface ListDeviceConnectionConfigsQuery {
 
 export interface DeviceConnectionConfigDTO {
   id: number;
+  requestId: number | null;
   stationId: string;
   protocol: DeviceConnectionProtocol;
   settings: Record<string, unknown>;
   channels: DeviceMeasurementChannelInput[];
+  statusManagement: DeviceConnectionStatusManagementInput | null;
   createdBy: number;
   createdAt: string;
   updatedAt: string;

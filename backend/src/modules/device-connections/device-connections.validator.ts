@@ -125,6 +125,41 @@ const mysqlSettingsSchema = z
 
 const baseDeviceConnectionSchema = z.object({
   stationId: trimmedString(64),
+  statusManagement: z
+    .object({
+      selectedParameters: z.array(trimmedString(128)).min(1).max(50),
+      startAt: z.string().trim().min(1).max(64).nullable().optional(),
+      endAt: z.string().trim().min(1).max(64).nullable().optional(),
+      status: trimmedString(64),
+      schedules: z
+        .array(
+          z
+            .object({
+              selectedParameters: z.array(trimmedString(128)).min(1).max(50),
+              startAt: z.string().trim().min(1).max(64).nullable().optional(),
+              endAt: z.string().trim().min(1).max(64).nullable().optional(),
+              status: trimmedString(64),
+            })
+            .strict()
+            .transform((schedule) => ({
+              ...schedule,
+              startAt: schedule.startAt ?? null,
+              endAt: schedule.endAt ?? null,
+            })),
+        )
+        .max(50)
+        .optional()
+        .default([]),
+    })
+    .strict()
+    .transform((statusManagement) => ({
+      ...statusManagement,
+      startAt: statusManagement.startAt ?? null,
+      endAt: statusManagement.endAt ?? null,
+    }))
+    .nullable()
+    .optional()
+    .default(null),
 });
 
 export const createDeviceConnectionConfigSchema = z.discriminatedUnion('protocol', [

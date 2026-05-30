@@ -1,0 +1,629 @@
+# CEMS/WPMS Request APIs
+
+เอกสารชุด API สำหรับฟอร์มคำขอเพิ่มจุดตรวจวัด, เพิ่มพารามิเตอร์, ตั้งค่าอุปกรณ์ และหน้าตาราง/PDF ที่เกี่ยวข้อง
+
+## Base URL
+
+```text
+http://localhost:3000/api/v1
+```
+
+ทุก endpoint ต้องส่ง token:
+
+```http
+Authorization: Bearer <accessToken>
+Content-Type: application/json
+```
+
+## Endpoint Summary
+
+| ข้อ | รายการ | Method | Path | Permission |
+|---|---|---|---|---|
+| 1 | บันทึกฟอร์ม เพิ่มจุดตรวจวัด | POST | `/cems-wpms-requests/measurement-points` | `cems_wpms_requests:edit` |
+| 2 | บันทึกฟอร์ม เพิ่มพารามิเตอร์ | POST | `/cems-wpms-requests/parameters` | `cems_wpms_requests:edit` |
+| 3 | บันทึกฟอร์ม ตั้งค่าอุปกรณ์ config | POST | `/cems-wpms-requests/:id/device-configs` | `cems_wpms_requests:edit` |
+| 4 | รายละเอียดฟอร์ม ตั้งค่าอุปกรณ์ config สำหรับดึงข้อมูลลงฟอร์ม | GET | `/cems-wpms-requests/:id/device-configs?stationId=STACK-A` | `cems_wpms_requests:view` |
+| 4.1 | รายละเอียดฟอร์ม ตั้งค่าอุปกรณ์ config ราย config | GET | `/cems-wpms-requests/:id/device-configs/:configId` | `cems_wpms_requests:view` |
+| 5 | ตรวจฟอร์ม เปลี่ยนสถานะ | POST | `/cems-wpms-requests/:id/status` | `cems_wpms_requests:approve` |
+| 6 | รายการคำขอทั้งหมด สำหรับตารางเจ้าหน้าที่ | GET | `/cems-wpms-requests/table-rows` | `cems_wpms_requests:view` |
+| 7 | รายการคำขอเฉพาะโรงงานตัวเอง สำหรับตารางผู้ประกอบการ | GET | `/cems-wpms-requests/table-rows` | `cems_wpms_requests:view` |
+| 8 | รายชื่อโรงงาน สำหรับตารางผู้ประกอบการ | GET | `/cems-wpms-requests/operator-factories` | `factories:view` |
+| 9 | รายละเอียดคำขอรายคำขอ สำหรับ PDF/เติมฟอร์มเพิ่มพารามิเตอร์ | GET | `/cems-wpms-requests/:id/detail` | `cems_wpms_requests:view` |
+| 10 | รายละเอียดรายจุดตรวจวัดทุกคำขอ เฉพาะ status เชื่อมต่อแล้ว | GET | `/cems-wpms-requests/connected-measurement-points` | `cems_wpms_requests:view` |
+
+## 1. บันทึกฟอร์ม เพิ่มจุดตรวจวัด
+
+```bash
+curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/measurement-points" \
+  -H "Authorization: Bearer $OPERATOR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "factoryId": "factory-001",
+    "factoryName": "บริษัท ทดสอบ จำกัด",
+    "factoryRegistrationNo": "3-106-33/50สบ",
+    "systemType": "CEMS",
+    "contactName": "สมชาย ใจดี",
+    "contactPhone": "0812345678",
+    "contactEmail": "ops@example.com",
+    "measurementPoints": [
+      {
+        "pointName": "ปล่องระบาย A",
+        "pointCode": "STACK-A",
+        "pointType": "STACK",
+        "latitude": 13.7563,
+        "longitude": 100.5018,
+        "parameters": ["NOx", "SO2", "O2"],
+        "description": "จุดตรวจวัดหลัก"
+      }
+    ],
+    "remarks": "ขอเพิ่มจุดตรวจวัด"
+  }'
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "requestNo": "CR-20260530-0001",
+    "requestType": "ADD_MEASUREMENT_POINT",
+    "requestTypeLabel": "เพิ่มจุดตรวจวัด",
+    "factoryId": "factory-001",
+    "factoryName": "บริษัท ทดสอบ จำกัด",
+    "systemType": "CEMS",
+    "status": "PENDING_DESIGN_REVIEW",
+    "statusLabel": "รอพิจารณาแบบ",
+    "measurementPoints": [
+      {
+        "id": 1,
+        "pointName": "ปล่องระบาย A",
+        "pointCode": "STACK-A",
+        "pointType": "STACK",
+        "parameters": ["NOx", "SO2", "O2"]
+      }
+    ]
+  }
+}
+```
+
+## 2. บันทึกฟอร์ม เพิ่มพารามิเตอร์
+
+ต้องส่ง `measurementPoints` แค่ 1 จุดตรวจวัดต่อคำขอ
+
+```bash
+curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/parameters" \
+  -H "Authorization: Bearer $OPERATOR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "factoryId": "factory-001",
+    "factoryName": "บริษัท ทดสอบ จำกัด",
+    "factoryRegistrationNo": "3-106-33/50สบ",
+    "systemType": "CEMS",
+    "contactName": "สมชาย ใจดี",
+    "contactPhone": "0812345678",
+    "contactEmail": "ops@example.com",
+    "measurementPoints": [
+      {
+        "pointName": "ปล่องระบาย A",
+        "pointCode": "STACK-A",
+        "pointType": "STACK",
+        "parameters": ["CO", "CO2"]
+      }
+    ],
+    "remarks": "ขอเพิ่มพารามิเตอร์"
+  }'
+```
+
+Response จะเป็น shape เดียวกับข้อ 1 แต่ `requestType` เป็น `ADD_PARAMETER`
+
+## 3. บันทึกฟอร์ม ตั้งค่าอุปกรณ์ config
+
+ใช้หลังคำขออยู่สถานะ `WAITING_CONNECTION` และ `stationId` ต้องตรงกับ `pointCode` หรือ `pointName` ในคำขอนั้น
+
+```bash
+curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/device-configs" \
+  -H "Authorization: Bearer $OPERATOR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "stationId": "STACK-A",
+    "protocol": "MODBUS_TCP",
+    "settings": {
+      "hostIp": "192.168.1.10",
+      "slaveId": 1,
+      "port": 502
+    },
+    "channels": [
+      {
+        "addressId": 40001,
+        "dataType": "NOx",
+        "unit": "ppm",
+        "valueRange": { "min": 0, "max": 200 },
+        "valueFormat": "MEASUREMENT_VALUE",
+        "offset": 0,
+        "encoding": "UNSIGNED16_BIG_ENDIAN"
+      }
+    ],
+    "statusManagement": {
+      "selectedParameters": ["ทั้งหมด"],
+      "startAt": null,
+      "endAt": null,
+      "status": "Normal",
+      "schedules": []
+    }
+  }'
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 10,
+    "requestId": 1,
+    "stationId": "STACK-A",
+    "protocol": "MODBUS_TCP",
+    "settings": {
+      "hostIp": "192.168.1.10",
+      "slaveId": 1,
+      "port": 502
+    },
+    "channels": [
+      {
+        "addressId": 40001,
+        "dataType": "NOx",
+        "unit": "ppm",
+        "valueRange": { "min": 0, "max": 200 },
+        "valueFormat": "MEASUREMENT_VALUE",
+        "offset": 0,
+        "encoding": "UNSIGNED16_BIG_ENDIAN"
+      }
+    ],
+    "statusManagement": {
+      "selectedParameters": ["ทั้งหมด"],
+      "startAt": null,
+      "endAt": null,
+      "status": "Normal",
+      "schedules": []
+    }
+  }
+}
+```
+
+## 4. รายละเอียดฟอร์ม ตั้งค่าอุปกรณ์ config สำหรับดึงข้อมูลลงฟอร์ม
+
+```bash
+curl "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/device-configs?stationId=STACK-A" \
+  -H "Authorization: Bearer $OPERATOR_TOKEN"
+```
+
+Response สำหรับ prefill dialog:
+
+```json
+{
+  "success": true,
+  "data": {
+    "requestId": 1,
+    "requestNo": "CR-20260530-0001",
+    "stationId": "STACK-A",
+    "monitoringPoint": {
+      "id": 1,
+      "pointName": "ปล่องระบาย A",
+      "pointCode": "STACK-A",
+      "pointType": "STACK",
+      "parameters": ["NOx", "SO2", "O2"]
+    },
+    "parameterOptions": ["NOx", "SO2", "O2"],
+    "deviceCodeOptions": ["STACK-A/01"],
+    "connectionForms": [
+      {
+        "id": 10,
+        "configId": 10,
+        "type": "Modbus TCP",
+        "protocol": "MODBUS_TCP",
+        "deviceCode": "STACK-A/01",
+        "values": {
+          "slaveId": "1",
+          "hostIp": "192.168.1.10",
+          "port": "502"
+        }
+      }
+    ],
+    "statusManagement": {
+      "selectedParameters": ["ทั้งหมด"],
+      "startAt": null,
+      "endAt": null,
+      "status": "Normal",
+      "schedules": []
+    },
+    "parameterMappings": [
+      {
+        "configId": 10,
+        "deviceCode": "STACK-A/01",
+        "addressId": "40001",
+        "parameter": "NOx",
+        "unit": "ppm",
+        "min": "0",
+        "max": "200",
+        "valueFormat": "ค่าข้อมูลตรวจวัด",
+        "offset": "0",
+        "encodingData": "Unsigned16 - Big Endian",
+        "status": "Normal"
+      }
+    ],
+    "testResults": [],
+    "rawConfigs": []
+  }
+}
+```
+
+## 4.1 รายละเอียดฟอร์ม ตั้งค่าอุปกรณ์ config ราย config
+
+ใช้ตอนเปิดแก้ไขอุปกรณ์เดียว
+
+```bash
+curl "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/device-configs/$CONFIG_ID" \
+  -H "Authorization: Bearer $OPERATOR_TOKEN"
+```
+
+Response เป็น shape เดียวกับข้อ 4 แต่ `connectionForms`, `parameterMappings`, `rawConfigs` จะเหลือเฉพาะ config ที่ระบุ
+
+## 5. ตรวจฟอร์ม เปลี่ยนสถานะ
+
+อนุมัติแบบ:
+
+```bash
+curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/status" \
+  -H "Authorization: Bearer $OFFICER_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "action": "APPROVE_FORM",
+    "officerNote": "แบบถูกต้อง"
+  }'
+```
+
+ขอแก้ไข:
+
+```bash
+curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/status" \
+  -H "Authorization: Bearer $OFFICER_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "action": "REQUEST_REVISION",
+    "revisionReason": "เพิ่มรายละเอียดพารามิเตอร์",
+    "officerNote": "ข้อมูลยังไม่ครบ"
+  }'
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "requestNo": "CR-20260530-0001",
+    "status": "WAITING_CONNECTION",
+    "statusLabel": "รอเชื่อมต่อ",
+    "officerNote": "แบบถูกต้อง"
+  }
+}
+```
+
+## 6. รายการคำขอทั้งหมด สำหรับลงตาราง รายการคำขอ เจ้าหน้าที่
+
+```bash
+curl "http://localhost:3000/api/v1/cems-wpms-requests/table-rows" \
+  -H "Authorization: Bearer $OFFICER_TOKEN"
+```
+
+Query ที่ใช้ filter ได้:
+
+```text
+status=WAITING_CONNECTION
+requestType=ADD_MEASUREMENT_POINT
+factoryId=factory-001
+```
+
+ตัวอย่าง:
+
+```bash
+curl "http://localhost:3000/api/v1/cems-wpms-requests/table-rows?status=WAITING_CONNECTION&requestType=ADD_MEASUREMENT_POINT" \
+  -H "Authorization: Bearer $OFFICER_TOKEN"
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "factoryId": "factory-001",
+      "factoryName": "บริษัท ทดสอบ จำกัด",
+      "industryType": "ผลิตเคมีภัณฑ์",
+      "province": "สระบุรี",
+      "type": "CEMS",
+      "requestNo": "CR-20260530-0001",
+      "submittedAt": "2026-05-30T10:00:00.000Z",
+      "submittedDate": "30/05/2569",
+      "monitoringPointCode": "STACK-A",
+      "codeIssuedAt": "2026-05-30T10:05:00.000Z",
+      "codeIssuedDate": "30/05/2569",
+      "form": "เพิ่มจุดตรวจวัด",
+      "status": "รอเชื่อมต่อ",
+      "statusCode": "WAITING_CONNECTION",
+      "requestType": "ADD_MEASUREMENT_POINT"
+    }
+  ],
+  "meta": {
+    "total": 1
+  }
+}
+```
+
+## 7. รายการคำขอเฉพาะโรงงานตัวเอง สำหรับลงตาราง รายการคำขอ ผู้ประกอบการ
+
+ใช้ endpoint เดียวกับข้อ 6 แต่ส่ง token ผู้ประกอบการ ระบบจะจำกัด scope เป็นโรงงานของตัวเอง
+
+```bash
+curl "http://localhost:3000/api/v1/cems-wpms-requests/table-rows" \
+  -H "Authorization: Bearer $OPERATOR_TOKEN"
+```
+
+Response เป็น shape เดียวกับข้อ 6
+
+## 8. รายชื่อโรงงาน สำหรับลงตาราง รายชื่อโรงงาน ผู้ประกอบการ
+
+```bash
+curl "http://localhost:3000/api/v1/cems-wpms-requests/operator-factories" \
+  -H "Authorization: Bearer $OPERATOR_TOKEN"
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "factoryId": "factory-001",
+      "factoryName": "บริษัท ทดสอบ จำกัด",
+      "newRegistrationNo": "3-106-33/50สบ",
+      "oldRegistrationNo": null,
+      "industryType": "ผลิตเคมีภัณฑ์",
+      "province": "สระบุรี",
+      "monitoringPointCount": 1,
+      "requestStatus": "เชื่อมต่อแล้ว",
+      "requestStatusCode": "CONNECTED",
+      "status": "แสดง"
+    }
+  ],
+  "meta": {
+    "total": 1
+  }
+}
+```
+
+## 9. รายละเอียดคำขอรายคำขอ สำหรับทำ PDF และเรียกข้อมูลเดิมลงฟอร์มเพิ่มพารามิเตอร์
+
+```bash
+curl "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/detail" \
+  -H "Authorization: Bearer $OPERATOR_TOKEN"
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "requestNo": "CR-20260530-0001",
+    "requestType": "ADD_MEASUREMENT_POINT",
+    "requestTypeLabel": "เพิ่มจุดตรวจวัด",
+    "factoryId": "factory-001",
+    "factoryName": "บริษัท ทดสอบ จำกัด",
+    "systemType": "CEMS",
+    "status": "WAITING_CONNECTION",
+    "statusLabel": "รอเชื่อมต่อ",
+    "factory": {
+      "id": 1,
+      "factoryId": "factory-001",
+      "factoryName": "บริษัท ทดสอบ จำกัด",
+      "newRegistrationNo": "3-106-33/50สบ",
+      "industryType": "ผลิตเคมีภัณฑ์",
+      "province": "สระบุรี"
+    },
+    "measurementPoints": [
+      {
+        "id": 1,
+        "pointName": "ปล่องระบาย A",
+        "pointCode": "STACK-A",
+        "pointType": "STACK",
+        "parameters": ["NOx", "SO2", "O2"]
+      }
+    ],
+    "statusHistory": [
+      {
+        "id": 1,
+        "status": "PENDING_DESIGN_REVIEW",
+        "statusLabel": "รอพิจารณาแบบ",
+        "note": "ผู้ประกอบการส่งฟอร์ม",
+        "changedBy": 42,
+        "changedAt": "2026-05-30T10:00:00.000Z"
+      }
+    ],
+    "deviceConfigs": [
+      {
+        "id": 10,
+        "requestId": 1,
+        "stationId": "STACK-A",
+        "protocol": "MODBUS_TCP",
+        "settings": {
+          "hostIp": "192.168.1.10",
+          "slaveId": 1,
+          "port": 502
+        },
+        "channels": [
+          {
+            "addressId": 40001,
+            "dataType": "NOx",
+            "unit": "ppm",
+            "valueRange": { "min": 0, "max": 200 },
+            "valueFormat": "MEASUREMENT_VALUE",
+            "offset": 0,
+            "encoding": "UNSIGNED16_BIG_ENDIAN"
+          }
+        ],
+        "statusManagement": {
+          "selectedParameters": ["ทั้งหมด"],
+          "startAt": null,
+          "endAt": null,
+          "status": "Normal",
+          "schedules": []
+        }
+      }
+    ]
+  }
+}
+```
+
+## 10. รายละเอียดคำขอ รายจุดตรวจวัด ทุกคำขอ เฉพาะ status เชื่อมต่อแล้ว สำหรับทำ PDF
+
+```bash
+curl "http://localhost:3000/api/v1/cems-wpms-requests/connected-measurement-points" \
+  -H "Authorization: Bearer $OFFICER_TOKEN"
+```
+
+Filter โรงงานเดียว:
+
+```bash
+curl "http://localhost:3000/api/v1/cems-wpms-requests/connected-measurement-points?factoryId=factory-001" \
+  -H "Authorization: Bearer $OFFICER_TOKEN"
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "requestId": 1,
+      "requestNo": "CR-20260530-0001",
+      "factory": {
+        "id": 1,
+        "factoryId": "factory-001",
+        "factoryName": "บริษัท ทดสอบ จำกัด",
+        "newRegistrationNo": "3-106-33/50สบ",
+        "industryType": "ผลิตเคมีภัณฑ์",
+        "province": "สระบุรี"
+      },
+      "type": "CEMS",
+      "status": "เชื่อมต่อแล้ว",
+      "statusCode": "CONNECTED",
+      "connectedAt": "2026-05-30T10:30:00.000Z",
+      "point": {
+        "id": 1,
+        "pointName": "ปล่องระบาย A",
+        "pointCode": "STACK-A",
+        "pointType": "STACK",
+        "parameters": ["NOx", "SO2", "O2"]
+      },
+      "deviceConfigs": [
+        {
+          "id": 10,
+          "requestId": 1,
+          "stationId": "STACK-A",
+          "protocol": "MODBUS_TCP",
+          "settings": {
+            "hostIp": "192.168.1.10",
+            "slaveId": 1,
+            "port": 502
+          },
+          "channels": [
+            {
+              "addressId": 40001,
+              "dataType": "NOx",
+              "unit": "ppm",
+              "valueRange": { "min": 0, "max": 200 },
+              "valueFormat": "MEASUREMENT_VALUE",
+              "offset": 0,
+              "encoding": "UNSIGNED16_BIG_ENDIAN"
+            }
+          ],
+          "statusManagement": {
+            "selectedParameters": ["ทั้งหมด"],
+            "startAt": null,
+            "endAt": null,
+            "status": "Normal",
+            "schedules": []
+          }
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "total": 1
+  }
+}
+```
+
+## Value Reference
+
+### requestType
+
+```text
+NEW_CONNECTION
+ADD_MEASUREMENT_POINT
+ADD_PARAMETER
+```
+
+### systemType
+
+```text
+CEMS
+WPMS
+```
+
+### pointType
+
+```text
+STACK
+WASTEWATER
+OTHER
+```
+
+### protocol
+
+```text
+MODBUS_RTU
+MODBUS_TCP
+MSSQL
+MYSQL
+```
+
+### status/action สำหรับตรวจฟอร์ม
+
+```text
+APPROVE_FORM
+REQUEST_REVISION
+```
+
+### statusCode ที่พบบ่อย
+
+```text
+PENDING_DESIGN_REVIEW
+WAITING_FACTORY_REVISION
+REVISED_PENDING_DESIGN_REVIEW
+WAITING_CONNECTION
+CONNECTION_CONFIRMED
+CONNECTED
+```
+

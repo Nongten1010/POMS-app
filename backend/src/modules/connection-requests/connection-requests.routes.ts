@@ -13,9 +13,49 @@ connectionRequestsRoutes.get(
   connectionRequestsController.list,
 );
 connectionRequestsRoutes.get(
+  '/table-rows',
+  authorize('cems_wpms_requests:view'),
+  connectionRequestsController.listTableRows,
+);
+connectionRequestsRoutes.get(
+  '/operator-factories',
+  authorize('factories:view'),
+  connectionRequestsController.listOperatorFactories,
+);
+connectionRequestsRoutes.get(
+  '/connected-measurement-points',
+  authorize('cems_wpms_requests:view'),
+  connectionRequestsController.listConnectedMeasurementPoints,
+);
+connectionRequestsRoutes.post(
+  '/measurement-points',
+  authorize('cems_wpms_requests:edit'),
+  connectionRequestsController.createMeasurementPointRequest,
+);
+connectionRequestsRoutes.post(
+  '/parameters',
+  authorize('cems_wpms_requests:edit'),
+  connectionRequestsController.createParameterRequest,
+);
+connectionRequestsRoutes.get(
   '/:id',
   authorize('cems_wpms_requests:view'),
   connectionRequestsController.getById,
+);
+connectionRequestsRoutes.get(
+  '/:id/detail',
+  authorize('cems_wpms_requests:view'),
+  connectionRequestsController.getDetail,
+);
+connectionRequestsRoutes.get(
+  '/:id/device-configs',
+  authorize('cems_wpms_requests:view'),
+  connectionRequestsController.getDeviceConfigFormDetail,
+);
+connectionRequestsRoutes.get(
+  '/:id/device-configs/:configId',
+  authorize('cems_wpms_requests:view'),
+  connectionRequestsController.getSingleDeviceConfigFormDetail,
 );
 connectionRequestsRoutes.post(
   '/',
@@ -31,6 +71,16 @@ connectionRequestsRoutes.post(
   '/:id/review',
   authorize('cems_wpms_requests:approve'),
   connectionRequestsController.review,
+);
+connectionRequestsRoutes.post(
+  '/:id/status',
+  authorize('cems_wpms_requests:approve'),
+  connectionRequestsController.changeStatus,
+);
+connectionRequestsRoutes.post(
+  '/:id/device-configs',
+  authorize('cems_wpms_requests:edit'),
+  connectionRequestsController.createDeviceConfig,
 );
 connectionRequestsRoutes.post(
   '/:id/confirm-connection',

@@ -32,6 +32,41 @@ describe('device connection validators', () => {
     expect(result.success).toBe(true);
   });
 
+  it('accepts optional status management for config form prefill', () => {
+    const result = createDeviceConnectionConfigSchema.safeParse({
+      stationId: 'STATION_001',
+      protocol: 'MODBUS_TCP',
+      settings: {
+        hostIp: '192.168.1.10',
+        slaveId: 1,
+        port: 502,
+      },
+      channels: [
+        {
+          addressId: 40001,
+          dataType: 'CO2',
+          unit: 'ppm',
+          valueRange: { min: 0, max: 200 },
+          valueFormat: 'MEASUREMENT_VALUE',
+          offset: 0,
+          encoding: 'UNSIGNED16_BIG_ENDIAN',
+        },
+      ],
+      statusManagement: {
+        selectedParameters: ['ทั้งหมด'],
+        startAt: null,
+        endAt: null,
+        status: 'Normal',
+        schedules: [],
+      },
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.statusManagement?.status).toBe('Normal');
+    }
+  });
+
   it('rejects Modbus channels without address ranges and encoding', () => {
     const result = createDeviceConnectionConfigSchema.safeParse({
       stationId: 'STATION_001',

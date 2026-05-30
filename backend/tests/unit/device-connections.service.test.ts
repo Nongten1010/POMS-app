@@ -3,8 +3,10 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 jest.mock('../../src/modules/device-connections/device-connections.repository', () => ({
   deviceConnectionsRepository: {
     create: jest.fn(),
+    existsByStationId: jest.fn(),
     findById: jest.fn(),
     list: jest.fn(),
+    listByRequestId: jest.fn(),
   },
 }));
 
@@ -44,6 +46,7 @@ describe('deviceConnectionsService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockedRepository.existsByStationId.mockResolvedValue(false);
     deviceConnectionsService.setClockForTests(() => now);
   });
 
@@ -246,11 +249,45 @@ describe('deviceConnectionsService', () => {
     expect(mockedRepository.create).toHaveBeenCalledWith(modbusTcpPayload, actorUserId);
     expect(result.settings).toMatchObject({ hostIp: '192.168.1.10', port: 502 });
   });
+
+  it('rejects duplicate active station config before hitting database constraints', async () => {
+    mockedRepository.existsByStationId.mockResolvedValue(true);
+
+    await expect(
+      deviceConnectionsService.create(modbusTcpPayload, actorUserId),
+    ).rejects.toMatchObject({
+      code: 'CONFLICT',
+    });
+    expect(mockedRepository.create).not.toHaveBeenCalled();
+  });
+
+  it('stores a config linked to a connection request', async () => {
+    mockedRepository.create.mockResolvedValue(configDto({ requestId: 99 }));
+
+    const result = await deviceConnectionsService.createForRequest(
+      modbusTcpPayload,
+      actorUserId,
+      99,
+    );
+
+    expect(mockedRepository.create).toHaveBeenCalledWith(modbusTcpPayload, actorUserId, 99);
+    expect(result.requestId).toBe(99);
+  });
+
+  it('lists configs linked to a connection request', async () => {
+    mockedRepository.listByRequestId.mockResolvedValue([configDto({ requestId: 99 })]);
+
+    const result = await deviceConnectionsService.listByRequestId(99);
+
+    expect(mockedRepository.listByRequestId).toHaveBeenCalledWith(99);
+    expect(result[0].requestId).toBe(99);
+  });
 });
 
 function configDto(overrides: Partial<DeviceConnectionConfigDTO> = {}): DeviceConnectionConfigDTO {
   return {
     id: 1,
+    requestId: null,
     stationId: 'STATION_001',
     protocol: DEVICE_CONNECTION_PROTOCOL.MODBUS_TCP,
     settings: { hostIp: '192.168.1.10', slaveId: 1, port: 502 },
@@ -265,6 +302,7 @@ function configDto(overrides: Partial<DeviceConnectionConfigDTO> = {}): DeviceCo
         encoding: 'UNSIGNED16_BIG_ENDIAN',
       },
     ],
+    statusManagement: null,
     createdBy: 42,
     createdAt: '2026-05-27T10:00:00.000Z',
     updatedAt: '2026-05-27T10:00:00.000Z',

@@ -11,9 +11,11 @@ import {
 
 interface DeviceConnectionConfigRow {
   id: number | string;
+  request_id: number | string | null;
   station_id: string;
   protocol: DeviceConnectionProtocol;
   settings_json: string;
+  status_management_json: string | null;
   created_by: number | string;
   created_at: Date | string;
   updated_at: Date | string;
@@ -51,16 +53,38 @@ export const deviceConnectionsRepository = {
     return row ? hydrate(row) : null;
   },
 
+  async listByRequestId(requestId: number): Promise<DeviceConnectionConfigDTO[]> {
+    const rows = await db<DeviceConnectionConfigRow>('device_connection_configs')
+      .where('request_id', requestId)
+      .whereNull('deleted_at')
+      .orderBy('id', 'asc');
+    return Promise.all(rows.map((row) => hydrate(row)));
+  },
+
+  async existsByStationId(stationId: string): Promise<boolean> {
+    const row = await db('device_connection_configs')
+      .where('station_id', stationId)
+      .whereNull('deleted_at')
+      .select('id')
+      .first();
+    return Boolean(row);
+  },
+
   async create(
     input: CreateDeviceConnectionConfigInput,
     actorUserId: number,
+    requestId: number | null = null,
   ): Promise<DeviceConnectionConfigDTO> {
     return db.transaction(async (trx) => {
       const [{ id }] = await trx('device_connection_configs')
         .insert({
+          request_id: requestId,
           station_id: input.stationId,
           protocol: input.protocol,
           settings_json: JSON.stringify(input.settings),
+          status_management_json: input.statusManagement
+            ? JSON.stringify(input.statusManagement)
+            : null,
           created_by: actorUserId,
           updated_by: actorUserId,
         })
@@ -100,10 +124,12 @@ async function hydrate(
 
   return {
     id: configId,
+    requestId: row.request_id === null ? null : Number(row.request_id),
     stationId: row.station_id,
     protocol: row.protocol,
     settings: maskSensitiveSettings(parseJsonObject(row.settings_json)),
     channels: channels.map(toChannelDTO),
+    statusManagement: parseStatusManagement(row.status_management_json),
     createdBy: Number(row.created_by),
     createdAt: toIsoString(row.created_at),
     updatedAt: toIsoString(row.updated_at),
@@ -162,6 +188,40 @@ function parseMeasurementRange(value: string): MeasurementRangeInput | null {
   const max = parsed.max;
   if (typeof min !== 'number' || typeof max !== 'number') return null;
   return { min, max };
+}
+
+function parseStatusManagement(
+  value: string | null,
+): DeviceConnectionConfigDTO['statusManagement'] {
+  if (!value) return null;
+  const parsed = parseJsonObject(value);
+  if (!Array.isArray(parsed.selectedParameters) || typeof parsed.status !== 'string') {
+    return null;
+  }
+  return {
+    selectedParameters: parsed.selectedParameters.filter((item): item is string => {
+      return typeof item === 'string';
+    }),
+    startAt: typeof parsed.startAt === 'string' ? parsed.startAt : null,
+    endAt: typeof parsed.endAt === 'string' ? parsed.endAt : null,
+    status: parsed.status,
+    schedules: Array.isArray(parsed.schedules)
+      ? parsed.schedules
+          .filter((item): item is Record<string, unknown> => {
+            return item !== null && typeof item === 'object' && !Array.isArray(item);
+          })
+          .map((schedule) => ({
+            selectedParameters: Array.isArray(schedule.selectedParameters)
+              ? schedule.selectedParameters.filter(
+                  (item): item is string => typeof item === 'string',
+                )
+              : [],
+            startAt: typeof schedule.startAt === 'string' ? schedule.startAt : null,
+            endAt: typeof schedule.endAt === 'string' ? schedule.endAt : null,
+            status: typeof schedule.status === 'string' ? schedule.status : 'Normal',
+          }))
+      : [],
+  };
 }
 
 function maskSensitiveSettings(settings: Record<string, unknown>): Record<string, unknown> {

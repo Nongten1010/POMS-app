@@ -237,7 +237,14 @@ Content-Type: application/json
       "code": "factories:edit",
       "effect": "deny"
     }
-  ]
+  ],
+  "statusManagement": {
+    "selectedParameters": ["ทั้งหมด"],
+    "startAt": null,
+    "endAt": null,
+    "status": "Normal",
+    "schedules": []
+  }
 }
 
 ### 6.7 ล้าง override สิทธิ์ราย user
@@ -254,10 +261,145 @@ DELETE {{host}}{{apiPrefix}}/users/{{createManagedUser.response.body.data.id}}
 Authorization: Bearer {{loginAdmin.response.body.data.accessToken}}
 
 ###############################################################################
-# 7. Device connection config (ต้อง login operator ข้อ 2.4 หรือ admin ข้อ 2.1 ก่อน)
+# 7. CEMS/WPMS request forms (ต้อง login operator/เจ้าหน้าที่ก่อน)
 ###############################################################################
 
-### 7.1 Mock test — Modbus TCP
+### 7.1 บันทึกฟอร์มคำขอ เพิ่มจุดตรวจวัด
+# @name createMeasurementPointRequest
+POST {{host}}{{apiPrefix}}/cems-wpms-requests/measurement-points
+Authorization: Bearer {{loginOperator.response.body.data.accessToken}}
+Content-Type: application/json
+
+{
+  "factoryId": "factory-001",
+  "factoryName": "บริษัท ทดสอบ จำกัด",
+  "factoryRegistrationNo": "3-106-33/50สบ",
+  "systemType": "CEMS",
+  "contactName": "สมชาย ใจดี",
+  "contactPhone": "0812345678",
+  "contactEmail": "ops@example.com",
+  "measurementPoints": [
+    {
+      "pointName": "ปล่องระบาย A",
+      "pointCode": "STACK-A",
+      "pointType": "STACK",
+      "latitude": 13.7563,
+      "longitude": 100.5018,
+      "parameters": ["NOx", "SO2", "PM"],
+      "description": "จุดตรวจวัดหลัก"
+    }
+  ],
+  "remarks": "ขอเพิ่มจุดตรวจวัด"
+}
+
+### 7.2 บันทึกฟอร์มคำขอ เพิ่มพารามิเตอร์
+# @name createParameterRequest
+POST {{host}}{{apiPrefix}}/cems-wpms-requests/parameters
+Authorization: Bearer {{loginOperator.response.body.data.accessToken}}
+Content-Type: application/json
+
+{
+  "factoryId": "factory-001",
+  "factoryName": "บริษัท ทดสอบ จำกัด",
+  "factoryRegistrationNo": "3-106-33/50สบ",
+  "systemType": "CEMS",
+  "contactName": "สมชาย ใจดี",
+  "contactPhone": "0812345678",
+  "contactEmail": "ops@example.com",
+  "measurementPoints": [
+    {
+      "pointName": "ปล่องระบาย A",
+      "pointCode": "STACK-A",
+      "pointType": "STACK",
+      "parameters": ["CO"],
+      "description": "เพิ่มพารามิเตอร์ CO"
+    }
+  ],
+  "remarks": "ขอเพิ่มพารามิเตอร์"
+}
+
+### 7.3 ตรวจฟอร์มและเปลี่ยนสถานะเป็นรอเชื่อมต่อ
+POST {{host}}{{apiPrefix}}/cems-wpms-requests/{{createMeasurementPointRequest.response.body.data.id}}/status
+Authorization: Bearer {{loginKpm.response.body.data.accessToken}}
+Content-Type: application/json
+
+{
+  "action": "APPROVE_FORM",
+  "officerNote": "แบบถูกต้อง"
+}
+
+### 7.4 ตรวจฟอร์มและขอให้แก้ไข
+POST {{host}}{{apiPrefix}}/cems-wpms-requests/{{createParameterRequest.response.body.data.id}}/status
+Authorization: Bearer {{loginKpm.response.body.data.accessToken}}
+Content-Type: application/json
+
+{
+  "action": "REQUEST_REVISION",
+  "revisionReason": "เพิ่มรายละเอียดพารามิเตอร์",
+  "officerNote": "ข้อมูลยังไม่ครบ"
+}
+
+### 7.5 บันทึกฟอร์ม ตั้งค่าอุปกรณ์ (config) แบบผูกกับคำขอ
+# ต้องยิง 7.3 ให้ request เป็น WAITING_CONNECTION ก่อน
+# @name createRequestDeviceConfig
+POST {{host}}{{apiPrefix}}/cems-wpms-requests/{{createMeasurementPointRequest.response.body.data.id}}/device-configs
+Authorization: Bearer {{loginOperator.response.body.data.accessToken}}
+Content-Type: application/json
+
+{
+  "stationId": "STACK-A",
+  "protocol": "MODBUS_TCP",
+  "settings": {
+    "hostIp": "192.168.1.10",
+    "slaveId": 1,
+    "port": 502
+  },
+  "channels": [
+    {
+      "addressId": 40001,
+      "dataType": "NOx",
+      "unit": "ppm",
+      "valueRange": { "min": 0, "max": 200 },
+      "valueFormat": "MEASUREMENT_VALUE",
+      "offset": 0,
+      "encoding": "UNSIGNED16_BIG_ENDIAN"
+    }
+  ]
+}
+
+### 7.6 รายละเอียดฟอร์ม ตั้งค่าอุปกรณ์ (config) สำหรับดึงข้อมูลลงฟอร์มตามจุดตรวจวัด
+GET {{host}}{{apiPrefix}}/cems-wpms-requests/{{createMeasurementPointRequest.response.body.data.id}}/device-configs?stationId=STACK-A
+Authorization: Bearer {{loginOperator.response.body.data.accessToken}}
+
+### 7.7 รายละเอียดฟอร์ม ตั้งค่าอุปกรณ์ (config) ราย config
+GET {{host}}{{apiPrefix}}/cems-wpms-requests/{{createMeasurementPointRequest.response.body.data.id}}/device-configs/{{createRequestDeviceConfig.response.body.data.id}}
+Authorization: Bearer {{loginOperator.response.body.data.accessToken}}
+
+### 7.8 รายการคำขอทั้งหมด สำหรับตารางเจ้าหน้าที่
+GET {{host}}{{apiPrefix}}/cems-wpms-requests/table-rows
+Authorization: Bearer {{loginKpm.response.body.data.accessToken}}
+
+### 7.9 รายการคำขอเฉพาะผู้ประกอบการ/โรงงานตัวเอง สำหรับตารางผู้ประกอบการ
+GET {{host}}{{apiPrefix}}/cems-wpms-requests/table-rows
+Authorization: Bearer {{loginOperator.response.body.data.accessToken}}
+
+### 7.10 รายชื่อโรงงาน สำหรับตารางรายชื่อโรงงานผู้ประกอบการ
+GET {{host}}{{apiPrefix}}/cems-wpms-requests/operator-factories
+Authorization: Bearer {{loginOperator.response.body.data.accessToken}}
+
+### 7.11 รายละเอียดคำขอรายคำขอ สำหรับ PDF / เติมข้อมูลเดิมลงฟอร์มเพิ่มพารามิเตอร์
+GET {{host}}{{apiPrefix}}/cems-wpms-requests/{{createMeasurementPointRequest.response.body.data.id}}/detail
+Authorization: Bearer {{loginOperator.response.body.data.accessToken}}
+
+### 7.12 รายละเอียดรายจุดตรวจวัดจากทุกคำขอที่เชื่อมต่อแล้ว สำหรับ PDF
+GET {{host}}{{apiPrefix}}/cems-wpms-requests/connected-measurement-points
+Authorization: Bearer {{loginKpm.response.body.data.accessToken}}
+
+###############################################################################
+# 8. Device connection config (ต้อง login operator ข้อ 2.4 หรือ admin ข้อ 2.1 ก่อน)
+###############################################################################
+
+### 8.1 Mock test — Modbus TCP
 POST {{host}}{{apiPrefix}}/device-connections/test-connection
 Authorization: Bearer {{loginOperator.response.body.data.accessToken}}
 Content-Type: application/json
@@ -283,7 +425,7 @@ Content-Type: application/json
   ]
 }
 
-### 7.2 Mock test — Modbus RTU หนึ่ง connection point + หลายอุปกรณ์ตรวจวัด
+### 8.2 Mock test — Modbus RTU หนึ่ง connection point + หลายอุปกรณ์ตรวจวัด
 POST {{host}}{{apiPrefix}}/device-connections/test-connection
 Authorization: Bearer {{loginOperator.response.body.data.accessToken}}
 Content-Type: application/json
@@ -323,7 +465,7 @@ Content-Type: application/json
   ]
 }
 
-### 7.3 Mock test — MSSQL หนึ่ง connection point + หลายอุปกรณ์ตรวจวัด
+### 8.3 Mock test — MSSQL หนึ่ง connection point + หลายอุปกรณ์ตรวจวัด
 POST {{host}}{{apiPrefix}}/device-connections/test-connection
 Authorization: Bearer {{loginOperator.response.body.data.accessToken}}
 Content-Type: application/json
@@ -354,7 +496,7 @@ Content-Type: application/json
   ]
 }
 
-### 7.4 Mock test — MySQL หนึ่ง connection point + หลายอุปกรณ์ตรวจวัด
+### 8.4 Mock test — MySQL หนึ่ง connection point + หลายอุปกรณ์ตรวจวัด
 POST {{host}}{{apiPrefix}}/device-connections/test-connection
 Authorization: Bearer {{loginOperator.response.body.data.accessToken}}
 Content-Type: application/json
@@ -385,7 +527,7 @@ Content-Type: application/json
   ]
 }
 
-### 7.5 Create config — MSSQL mock
+### 8.5 Create config — MSSQL mock
 # @name createDeviceConnection
 POST {{host}}{{apiPrefix}}/device-connections
 Authorization: Bearer {{loginOperator.response.body.data.accessToken}}
@@ -417,8 +559,8 @@ Content-Type: application/json
   ]
 }
 
-### 7.6 List configs by station
+### 8.6 List configs by station
 GET {{host}}{{apiPrefix}}/device-connections?stationId=STATION_001
 
-### 7.7 Get config by id
+### 8.7 Get config by id
 GET {{host}}{{apiPrefix}}/device-connections/{{createDeviceConnection.response.body.data.id}}
