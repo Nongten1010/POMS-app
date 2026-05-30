@@ -111,6 +111,8 @@ export const connectionRequestsService = {
           monitoringPointCount: connectedPointCountByFactory.get(factory.factoryId) ?? 0,
           requestStatusCode: latestRequest?.status ?? null,
           status: 'แสดง',
+          isEligible: factory.isEligible ?? false,
+          eligibilityStatus: factory.isEligible ? 'เข้าข่าย' : 'ไม่เข้าข่าย',
         };
       }),
       meta: { total: factories.length },

@@ -163,12 +163,12 @@ describe('eligibleFactoriesService', () => {
     });
   });
 
-  it('returns mock candidates from the external factory source', async () => {
+  it('returns candidates from the external factory source', async () => {
     mockedCandidatesRepository.list.mockResolvedValue({
       data: new Array(60000).fill(null).map((_, index) => ({
-        factoryName: `โรงงาน mock ${index + 1}`,
-        factoryId: `mock-factory-${String(index + 1).padStart(6, '0')}`,
-        factoryRegistrationNo: `mock-${index + 1}`,
+        factoryName: `โรงงานจริง ${index + 1}`,
+        factoryId: `real-factory-${String(index + 1).padStart(6, '0')}`,
+        factoryRegistrationNo: `real-${index + 1}`,
         factoryClass: 'หลัก',
         factorySubclass: 'รอง',
         address: null,
@@ -189,7 +189,7 @@ describe('eligibleFactoriesService', () => {
       })),
       meta: {
         total: 60000,
-        source: 'mock',
+        source: 'external',
       },
     });
 
@@ -198,7 +198,7 @@ describe('eligibleFactoriesService', () => {
     expect(mockedCandidatesRepository.list).toHaveBeenCalledWith({});
     expect(result.meta).toEqual({
       total: 60000,
-      source: 'mock',
+      source: 'external',
     });
     expect(result.data).toHaveLength(60000);
     expect(Object.keys(result.data[0] ?? {})).toHaveLength(20);

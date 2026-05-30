@@ -2,7 +2,6 @@ import { describe, expect, it, jest } from '@jest/globals';
 
 jest.mock('../../src/config/env', () => ({
   env: {
-    FACTORY_SOURCE_MODE: 'external',
     FACTORY_DB_SCHEMA: 'dbo',
     FACTORY_DB_TABLE: 'fac_import',
   },

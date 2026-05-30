@@ -10,7 +10,10 @@ export interface FacImportRow {
   FMOO: string | null;
   SOI: string | null;
   ROAD: string | null;
+  TUMBOL?: string | null;
+  AMP?: string | null;
   PROV: string | number | null;
+  ZIPCODE?: string | number | null;
   CANAL: string | null;
   RIVER: string | null;
   OBJECT: string | null;
@@ -129,8 +132,9 @@ export function toEligibleFactoryCandidate(row: FacImportRow): EligibleFactoryCa
     : 'ไม่ระบุจังหวัด';
   const horsepower = firstNumber(row.HP2, row.HP);
   const capitalAmount =
-    firstNumber(row.CAPREGIS) ?? sumNumbers(row.CAPLAND, row.CAPBUILD, row.CAPMACH, row.CAPWORK);
-  const productionCapacity = firstNumber(row.CAPPROD, row.TOTAL_CAP);
+    firstNumber(row.TOTAL_CAP, row.CAPREGIS) ??
+    sumNumbers(row.CAPLAND, row.CAPBUILD, row.CAPMACH, row.CAPWORK);
+  const productionCapacity = firstNumber(row.CAPPROD);
   const coordinates = toFactoryCoordinates(row);
 
   return {
@@ -182,6 +186,9 @@ function joinAddress(row: FacImportRow): string | null {
     firstText(row.FMOO) ? `หมู่ ${firstText(row.FMOO)}` : null,
     firstText(row.SOI) ? `ซอย${firstText(row.SOI)}` : null,
     firstText(row.ROAD) ? `ถนน${firstText(row.ROAD)}` : null,
+    firstText(row.TUMBOL) ? `ตำบล${firstText(row.TUMBOL)}` : null,
+    firstText(row.AMP) ? `อำเภอ${firstText(row.AMP)}` : null,
+    firstText(row.ZIPCODE),
   ].filter((part): part is string => part !== null);
 
   return parts.length > 0 ? parts.join(' ') : null;

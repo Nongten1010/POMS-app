@@ -101,6 +101,6 @@ export interface EligibleFactoryCandidatesDTO {
     page?: number;
     perPage?: number;
     totalPages?: number;
-    source: 'mock' | 'external';
+    source: 'external';
   };
 }

@@ -31,7 +31,6 @@ const envSchema = z.object({
 
   IDENTITY_PROVIDER: z.enum(['mock', 'external']).default('mock'),
 
-  FACTORY_SOURCE_MODE: z.enum(['mock', 'external']).default('mock'),
   FACTORY_DB_HOST: z.string().min(1).optional(),
   FACTORY_DB_PORT: z.coerce.number().int().positive().optional(),
   FACTORY_DB_NAME: z.string().min(1).default('diw'),

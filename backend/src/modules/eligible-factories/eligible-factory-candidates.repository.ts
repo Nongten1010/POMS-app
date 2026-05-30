@@ -2,7 +2,6 @@ import type { Knex } from 'knex';
 import { logger } from '../../config/logger';
 import { env } from '../../config/env';
 import { factorySourceDb, factorySourceTableName } from '../../config/factory-source-database';
-import { MOCK_ELIGIBLE_FACTORY_CANDIDATES } from './eligible-factories.mock-source';
 import { type FacImportRow, toEligibleFactoryCandidate } from './fac-import.mapper';
 import { eligibleFactoriesRepository } from './eligible-factories.repository';
 import type {
@@ -13,11 +12,7 @@ import type {
 
 export const eligibleFactoryCandidatesRepository = {
   async list(_query: ListEligibleFactoryCandidatesQuery): Promise<EligibleFactoryCandidatesDTO> {
-    if (env.FACTORY_SOURCE_MODE === 'external') {
-      return listExternalCandidates();
-    }
-
-    return listMockCandidates();
+    return listExternalCandidates();
   },
 };
 
@@ -42,22 +37,6 @@ async function listExternalCandidates(): Promise<EligibleFactoryCandidatesDTO> {
     meta: {
       total: data.length,
       source: 'external',
-    },
-  };
-}
-
-async function listMockCandidates(): Promise<EligibleFactoryCandidatesDTO> {
-  const selectedRegistrationNumbers = await selectedFactoryRegistrationNumbers();
-  const data = excludeSelectedCandidates(
-    MOCK_ELIGIBLE_FACTORY_CANDIDATES,
-    selectedRegistrationNumbers,
-  );
-
-  return {
-    data,
-    meta: {
-      total: data.length,
-      source: 'mock',
     },
   };
 }
@@ -110,6 +89,7 @@ function firstAvailableColumn(
 function facImportColumns(): Array<keyof FacImportRow> {
   return [
     'FACREG',
+    'FACREQ',
     'FNAME',
     'FID',
     'DISPFACREG',
@@ -117,13 +97,31 @@ function facImportColumns(): Array<keyof FacImportRow> {
     'FMOO',
     'SOI',
     'ROAD',
+    'TUMBOL',
+    'AMP',
     'PROV',
+    'ZIPCODE',
     'COLONY_INDUST_CODE',
     'LONGITUDE_X',
     'LATITUDE_Y',
     'OBJECT',
     'FFLAG',
+    'CANAL',
+    'RIVER',
+    'HP',
+    'HP2',
+    'OLDREG',
+    'SUBCLASS',
+    'CAPLAND',
+    'CAPBUILD',
+    'CAPMACH',
+    'CAPWORK',
+    'STARTDATE',
+    'CAPREGIS',
     'TOTAL_CAP',
     'CAPPROD',
+    'FACTYPE',
+    'CLASS',
+    'EXPSEQ',
   ];
 }

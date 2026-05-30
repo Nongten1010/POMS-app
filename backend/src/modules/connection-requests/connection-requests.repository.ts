@@ -89,6 +89,14 @@ interface FactoryRow {
   system_detail: string | null;
   province_name: string | null;
   is_active: boolean | number;
+  factory_registration_no_old: string | null;
+  factory_type_sequence: string | null;
+  address: string | null;
+  latitude: number | string | null;
+  longitude: number | string | null;
+  business_activity: string | null;
+  has_eia: boolean | number | null;
+  eligible_factory_id: number | string | null;
 }
 
 interface FactoryGeneralRow {
@@ -164,6 +172,9 @@ export const connectionRequestsRepository = {
   async listFactoriesForAccess(access: FactoryAccess): Promise<FactorySummaryDTO[]> {
     const builder = db<FactoryRow>('factories as f')
       .leftJoin('provinces as p', 'p.id', 'f.province_id')
+      .leftJoin('eligible_factories as ef', function joinEligibleFactory() {
+        this.on('ef.factory_registration_no_new', '=', 'f.code').andOnNull('ef.deleted_at');
+      })
       .whereNull('f.deleted_at')
       .select(
         'f.id',
@@ -173,6 +184,14 @@ export const connectionRequestsRepository = {
         'f.system_detail',
         'f.is_active',
         'p.name_th as province_name',
+        'ef.factory_registration_no_old',
+        'ef.factory_type_sequence',
+        'ef.address',
+        'ef.latitude',
+        'ef.longitude',
+        'ef.business_activity',
+        'ef.has_eia',
+        'ef.id as eligible_factory_id',
       )
       .orderBy('f.name', 'asc')
       .orderBy('f.id', 'asc');
@@ -492,22 +511,27 @@ function buildBaseQuery(
 }
 
 function toFactorySummaryDTO(row: FactoryRow): FactorySummaryDTO {
+  const { factoryClass, factorySubclass } = splitFactoryTypeSequence(row.factory_type_sequence);
+  const hasEia = toNullableBoolean(row.has_eia);
+  const isEligible = row.eligible_factory_id !== null && row.eligible_factory_id !== undefined;
   return {
     id: Number(row.id),
     factoryId: row.fid,
     factoryName: row.name,
     newRegistrationNo: row.code,
-    oldRegistrationNo: null,
+    oldRegistrationNo: row.factory_registration_no_old,
     industryType: row.system_detail,
-    industryMainOrder: null,
-    industrySubOrder: null,
-    businessActivity: null,
-    eia: null,
+    industryMainOrder: factoryClass,
+    industrySubOrder: factorySubclass,
+    businessActivity: row.business_activity,
+    eia: hasEia === null ? null : hasEia ? 'มี' : 'ไม่มี',
     projectName: null,
-    address: null,
-    latitude: null,
-    longitude: null,
+    address: row.address,
+    latitude: nullableValueToString(row.latitude),
+    longitude: nullableValueToString(row.longitude),
     province: row.province_name,
+    isEligible,
+    eligibilityStatus: isEligible ? 'เข้าข่าย' : 'ไม่เข้าข่าย',
   };
 }
 

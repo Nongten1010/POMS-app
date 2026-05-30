@@ -230,6 +230,8 @@ export interface FactorySummaryDTO {
   latitude: string | null;
   longitude: string | null;
   province: string | null;
+  isEligible?: boolean;
+  eligibilityStatus?: 'เข้าข่าย' | 'ไม่เข้าข่าย';
 }
 
 export interface FactoryGeneralDTO extends FactorySummaryDTO {
@@ -280,6 +282,8 @@ export interface OperatorFactoryTableRowDTO extends FactorySummaryDTO {
   monitoringPointCount: number;
   requestStatusCode: ConnectionRequestStatus | null;
   status: 'แสดง' | 'ซ่อน';
+  isEligible: boolean;
+  eligibilityStatus: 'เข้าข่าย' | 'ไม่เข้าข่าย';
 }
 
 export interface ConnectionRequestDetailDTO extends ConnectionRequestDTO {
