@@ -368,6 +368,17 @@ export const connectionRequestsService = {
     ensureOwner(request, actorUserId);
     ensureStatus(request, [CONNECTION_REQUEST_STATUS.WAITING_CONNECTION]);
 
+    if ((input.action ?? 'CONFIRM') === 'SAVE') {
+      return connectionRequestsRepository.updateStatus(
+        id,
+        CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+        actorUserId,
+        {
+          officerNote: input.note ?? null,
+        },
+      );
+    }
+
     if (!request.connectionDueAt) {
       throw new BadRequestError('Connection due date is not set');
     }

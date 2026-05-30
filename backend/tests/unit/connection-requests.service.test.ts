@@ -788,6 +788,69 @@ describe('connectionRequestsService', () => {
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
   });
 
+  it('saves connection confirmation progress without changing to confirmed status', async () => {
+    mockedRepository.findById.mockResolvedValue(
+      requestDto({
+        status: CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+        connectionDueAt: '2026-06-30T00:00:00.000Z',
+        createdBy: actorUserId,
+      }),
+    );
+    mockedRepository.updateStatus.mockResolvedValue(
+      requestDto({
+        status: CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+        createdBy: actorUserId,
+      }),
+    );
+
+    await connectionRequestsService.confirmConnection(
+      1,
+      { action: 'SAVE', note: 'บันทึก config ชั่วคราว' },
+      actorUserId,
+    );
+
+    expect(mockedRepository.updateStatus).toHaveBeenCalledWith(
+      1,
+      CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+      actorUserId,
+      {
+        officerNote: 'บันทึก config ชั่วคราว',
+      },
+    );
+  });
+
+  it('confirms connection when operator submits confirm action', async () => {
+    mockedRepository.findById.mockResolvedValue(
+      requestDto({
+        status: CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+        connectionDueAt: '2026-06-30T00:00:00.000Z',
+        createdBy: actorUserId,
+      }),
+    );
+    mockedRepository.updateStatus.mockResolvedValue(
+      requestDto({
+        status: CONNECTION_REQUEST_STATUS.CONNECTION_CONFIRMED,
+        createdBy: actorUserId,
+      }),
+    );
+
+    await connectionRequestsService.confirmConnection(
+      1,
+      { action: 'CONFIRM', confirmedAt: now.toISOString(), note: 'ยืนยันแล้ว' },
+      actorUserId,
+    );
+
+    expect(mockedRepository.updateStatus).toHaveBeenCalledWith(
+      1,
+      CONNECTION_REQUEST_STATUS.CONNECTION_CONFIRMED,
+      actorUserId,
+      {
+        confirmedAt: now.toISOString(),
+        officerNote: 'ยืนยันแล้ว',
+      },
+    );
+  });
+
   it('moves confirmed requests to connected after officer verification', async () => {
     mockedRepository.findById.mockResolvedValue(
       requestDto({

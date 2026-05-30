@@ -1341,6 +1341,43 @@ Response เป็น shape เดียวกับข้อ 4 แต่ `conne
 
 ## 5. ตรวจฟอร์ม เปลี่ยนสถานะ
 
+### สรุป Flow สถานะแบบฟอร์ม
+
+| ขั้นตอน | ผู้ดำเนินการ | API | Action/Body | Status ใหม่ | Label |
+| --- | --- | --- | --- | --- | --- |
+| เพิ่มแบบฟอร์ม เพิ่มจุดตรวจวัด | ผู้ประกอบการ | `POST /api/v1/cems-wpms-requests/measurement-points` | ไม่มี action | `PENDING_DESIGN_REVIEW` | รอพิจารณาแบบ |
+| เพิ่มแบบฟอร์ม เพิ่มพารามิเตอร์ | ผู้ประกอบการ | `POST /api/v1/cems-wpms-requests/parameters` | ไม่มี action | `PENDING_DESIGN_REVIEW` | รอพิจารณาแบบ |
+| อนุมัติแบบ | เจ้าหน้าที่ | `POST /api/v1/cems-wpms-requests/:id/status` | `{ "action": "APPROVE_FORM" }` | `WAITING_CONNECTION` | รอเชื่อมต่อ |
+| ส่งกลับแก้ไข | เจ้าหน้าที่ | `POST /api/v1/cems-wpms-requests/:id/status` | `{ "action": "REQUEST_REVISION", "revisionReason": "..." }` | `WAITING_FACTORY_REVISION` | รอโรงงานแก้ไข |
+| แก้ไขแล้วส่งใหม่ | ผู้ประกอบการ | `PUT /api/v1/cems-wpms-requests/:id/form` | ไม่มี action | `REVISED_PENDING_DESIGN_REVIEW` | แก้ไขแล้ว/รอพิจารณาแบบ |
+| บันทึกข้อมูลการเชื่อมต่อ | ผู้ประกอบการ | `POST /api/v1/cems-wpms-requests/:id/confirm-connection` | `{ "action": "SAVE", "note": "บันทึก config ชั่วคราว" }` | `WAITING_CONNECTION` | รอเชื่อมต่อ |
+| ยืนยันการเชื่อมต่อ | ผู้ประกอบการ | `POST /api/v1/cems-wpms-requests/:id/confirm-connection` | `{ "action": "CONFIRM", "note": "ตั้งค่าอุปกรณ์และทดสอบแล้ว" }` | `CONNECTION_CONFIRMED` | ยืนยันการเชื่อมต่อ |
+| ตรวจสอบแล้วกดยืนยัน | เจ้าหน้าที่ | `POST /api/v1/cems-wpms-requests/:id/verify-connection` | `{ "note": "ตรวจสอบแล้ว" }` | `CONNECTED` | เชื่อมต่อแล้ว |
+
+บันทึกข้อมูลการเชื่อมต่อ:
+
+```bash
+curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/confirm-connection" \
+  -H "Authorization: Bearer $OPERATOR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "action": "SAVE",
+    "note": "บันทึก config ชั่วคราว"
+  }'
+```
+
+ยืนยันการเชื่อมต่อ:
+
+```bash
+curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/confirm-connection" \
+  -H "Authorization: Bearer $OPERATOR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "action": "CONFIRM",
+    "note": "ตั้งค่าอุปกรณ์และทดสอบแล้ว"
+  }'
+```
+
 อนุมัติแบบ:
 
 ```bash

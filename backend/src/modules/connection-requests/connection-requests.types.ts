@@ -145,6 +145,7 @@ export interface ChangeConnectionRequestStatusInput {
 }
 
 export interface ConfirmConnectionInput {
+  action?: 'SAVE' | 'CONFIRM';
   confirmedAt?: string;
   note?: string | null;
 }

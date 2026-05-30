@@ -716,6 +716,7 @@ export const changeConnectionRequestStatusSchema = z
 
 export const confirmConnectionSchema = z
   .object({
+    action: z.enum(['SAVE', 'CONFIRM']).default('CONFIRM'),
     confirmedAt: z.string().datetime().optional(),
     note: optionalNullableTrimmedString(1000),
   })
