@@ -59,6 +59,13 @@ describe('connectionRequestsService', () => {
     ],
     remarks: null,
   };
+  const payloadWithoutPointCodes: CreateConnectionRequestInput = {
+    ...payload,
+    measurementPoints: payload.measurementPoints.map((point) => ({
+      ...point,
+      pointCode: null,
+    })),
+  };
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -429,7 +436,7 @@ describe('connectionRequestsService', () => {
     const result = await connectionRequestsService.create(payload, actorUserId);
 
     expect(mockedRepository.create).toHaveBeenCalledWith(
-      payload,
+      payloadWithoutPointCodes,
       actorUserId,
       CONNECTION_REQUEST_STATUS.PENDING_DESIGN_REVIEW,
     );
@@ -452,7 +459,10 @@ describe('connectionRequestsService', () => {
     );
 
     expect(mockedRepository.create).toHaveBeenCalledWith(
-      { ...payload, requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT },
+      {
+        ...payloadWithoutPointCodes,
+        requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT,
+      },
       actorUserId,
       CONNECTION_REQUEST_STATUS.PENDING_DESIGN_REVIEW,
     );
@@ -641,7 +651,7 @@ describe('connectionRequestsService', () => {
 
     expect(mockedRepository.replaceForm).toHaveBeenCalledWith(
       1,
-      { ...payload, requestType: CONNECTION_REQUEST_TYPE.NEW_CONNECTION },
+      { ...payloadWithoutPointCodes, requestType: CONNECTION_REQUEST_TYPE.NEW_CONNECTION },
       actorUserId,
       CONNECTION_REQUEST_STATUS.REVISED_PENDING_DESIGN_REVIEW,
     );

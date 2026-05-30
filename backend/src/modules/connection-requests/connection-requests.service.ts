@@ -214,7 +214,7 @@ export const connectionRequestsService = {
 
   create(input: CreateConnectionRequestInput, actorUserId: number): Promise<ConnectionRequestDTO> {
     return connectionRequestsRepository.create(
-      input,
+      clearPendingPointCodes(input),
       actorUserId,
       CONNECTION_REQUEST_STATUS.PENDING_DESIGN_REVIEW,
     );
@@ -225,7 +225,10 @@ export const connectionRequestsService = {
     actorUserId: number,
   ): Promise<ConnectionRequestDTO> {
     return connectionRequestsRepository.create(
-      { ...input, requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT },
+      clearPendingPointCodes({
+        ...input,
+        requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT,
+      }),
       actorUserId,
       CONNECTION_REQUEST_STATUS.PENDING_DESIGN_REVIEW,
     );
@@ -256,10 +259,14 @@ export const connectionRequestsService = {
       requestType: input.requestType ?? request.requestType,
     };
     ensureRequestFormSections(effectiveInput, effectiveInput.requestType);
+    const formInput =
+      effectiveInput.requestType === CONNECTION_REQUEST_TYPE.ADD_PARAMETER
+        ? effectiveInput
+        : clearPendingPointCodes(effectiveInput);
 
     return connectionRequestsRepository.replaceForm(
       id,
-      effectiveInput,
+      formInput,
       actorUserId,
       CONNECTION_REQUEST_STATUS.REVISED_PENDING_DESIGN_REVIEW,
     );
@@ -672,6 +679,15 @@ function ensureRequestFormSections(
   }
 
   input.measurementPoints.forEach((point, index) => {
+    if (requestType === CONNECTION_REQUEST_TYPE.ADD_PARAMETER && !point.pointCode) {
+      throw new BadRequestError(
+        'Existing measurement point code is required for add parameter request',
+        {
+          path: `measurementPoints.${index}.pointCode`,
+        },
+      );
+    }
+
     if (requestType === CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT) {
       if (!point.details || Object.keys(point.details).length === 0) {
         throw new BadRequestError('Measurement point detail section is required', {
@@ -696,6 +712,16 @@ function ensureRequestFormSections(
       }
     }
   });
+}
+
+function clearPendingPointCodes(input: CreateConnectionRequestInput): CreateConnectionRequestInput {
+  return {
+    ...input,
+    measurementPoints: input.measurementPoints.map((point) => ({
+      ...point,
+      pointCode: null,
+    })),
+  };
 }
 
 async function loadRequest(id: number): Promise<ConnectionRequestDTO> {

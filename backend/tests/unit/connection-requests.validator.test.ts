@@ -55,7 +55,7 @@ describe('connection request validators', () => {
     measurementPoints: [
       {
         pointName: 'ปล่องระบาย A',
-        pointCode: 'STACK-A',
+        pointCode: 'S0001',
         pointType: 'STACK',
         latitude: 13.7563,
         longitude: 100.5018,
@@ -93,7 +93,6 @@ describe('connection request validators', () => {
       measurementPoints: [
         {
           pointName: 'ปล่องระบาย A',
-          pointCode: 'STACK-A',
           pointType: 'STACK',
           parameters: ['NOx'],
         },
@@ -132,8 +131,23 @@ describe('connection request validators', () => {
       measurementPoints: [
         {
           pointName: 'ปล่องระบาย A',
-          pointCode: 'STACK-A',
+          pointCode: 'S0001',
           pointType: 'STACK',
+          parameters: ['CO'],
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects add parameter request without an existing point code', () => {
+    const result = addParameterRequestSchema.safeParse({
+      ...validPayload,
+      measurementPoints: [
+        {
+          ...validPayload.measurementPoints[0],
+          pointCode: null,
           parameters: ['CO'],
         },
       ],
@@ -147,7 +161,7 @@ describe('connection request validators', () => {
       ...validPayload,
       measurementPoints: [
         validPayload.measurementPoints[0],
-        { ...validPayload.measurementPoints[0], pointCode: 'STACK-B' },
+        { ...validPayload.measurementPoints[0], pointCode: 'S0002' },
       ],
     });
 

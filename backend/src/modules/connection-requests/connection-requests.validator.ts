@@ -185,6 +185,13 @@ export const addParameterRequestSchema = connectionRequestFormSchema
       });
     }
     payload.measurementPoints.forEach((point, index) => {
+      if (!point.pointCode) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['measurementPoints', index, 'pointCode'],
+          message: 'Existing measurement point code is required for add parameter request',
+        });
+      }
       if (!point.measurementInstruments) {
         ctx.addIssue({
           code: 'custom',

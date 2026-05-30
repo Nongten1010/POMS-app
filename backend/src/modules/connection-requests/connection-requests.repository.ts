@@ -91,6 +91,12 @@ interface StatusUpdate {
   verifiedAt?: string | null;
 }
 
+interface PointCodeSequenceRow {
+  system_type: 'CEMS' | 'WPMS';
+  prefix: 'S' | 'P';
+  last_sequence: number | string;
+}
+
 export const connectionRequestsRepository = {
   async list(
     query: ListConnectionRequestsQuery,
@@ -286,6 +292,10 @@ export const connectionRequestsRepository = {
     update: StatusUpdate,
   ): Promise<ConnectionRequestDTO> {
     return db.transaction(async (trx) => {
+      if (status === 'WAITING_CONNECTION') {
+        await issuePointCodesForRequest(trx, id, actorUserId);
+      }
+
       await trx('cems_wpms_connection_requests')
         .where('id', id)
         .whereNull('deleted_at')
@@ -470,6 +480,93 @@ async function insertMeasurementPoints(
       updated_by: actorUserId,
     })),
   );
+}
+
+async function issuePointCodesForRequest(
+  trx: Knex.Transaction,
+  requestId: number,
+  actorUserId: number,
+): Promise<void> {
+  const request = await trx<ConnectionRequestRow>('cems_wpms_connection_requests')
+    .where('id', requestId)
+    .whereNull('deleted_at')
+    .first('system_type', 'request_type');
+  if (!request) return;
+  if (request.request_type === CONNECTION_REQUEST_TYPE.ADD_PARAMETER) return;
+
+  const points = await trx<MeasurementPointRow>('cems_wpms_measurement_points')
+    .where('request_id', requestId)
+    .whereNull('deleted_at')
+    .where((builder) => builder.whereNull('point_code').orWhere('point_code', ''))
+    .orderBy('id', 'asc')
+    .select('id');
+  if (points.length === 0) return;
+
+  const pointCodes = await reservePointCodes(trx, request.system_type, points.length);
+  await Promise.all(
+    points.map((point, index) =>
+      trx('cems_wpms_measurement_points').where('id', point.id).whereNull('deleted_at').update({
+        point_code: pointCodes[index],
+        updated_by: actorUserId,
+        updated_at: trx.fn.now(),
+      }),
+    ),
+  );
+}
+
+async function reservePointCodes(
+  trx: Knex.Transaction,
+  systemType: 'CEMS' | 'WPMS',
+  quantity: number,
+): Promise<string[]> {
+  const prefix = systemType === 'CEMS' ? 'S' : 'P';
+  let sequence = await trx<PointCodeSequenceRow>('cems_wpms_point_code_sequences')
+    .where('system_type', systemType)
+    .forUpdate()
+    .first();
+
+  if (!sequence) {
+    await trx('cems_wpms_point_code_sequences').insert({
+      system_type: systemType,
+      prefix,
+      last_sequence: 0,
+    });
+    sequence = await trx<PointCodeSequenceRow>('cems_wpms_point_code_sequences')
+      .where('system_type', systemType)
+      .forUpdate()
+      .first();
+  }
+
+  const currentSequence = Number(sequence?.last_sequence ?? 0);
+  const existingMaxSequence = await findMaxExistingPointCodeSequence(trx, prefix);
+  const firstSequence = Math.max(currentSequence, existingMaxSequence) + 1;
+  const lastSequence = firstSequence + quantity - 1;
+
+  await trx('cems_wpms_point_code_sequences').where('system_type', systemType).update({
+    last_sequence: lastSequence,
+    updated_at: trx.fn.now(),
+  });
+
+  return Array.from(
+    { length: quantity },
+    (_, index) => `${prefix}${String(firstSequence + index).padStart(4, '0')}`,
+  );
+}
+
+async function findMaxExistingPointCodeSequence(
+  trx: Knex.Transaction,
+  prefix: 'S' | 'P',
+): Promise<number> {
+  const rows = await trx<MeasurementPointRow>('cems_wpms_measurement_points')
+    .whereNull('deleted_at')
+    .where('point_code', 'like', `${prefix}%`)
+    .select('point_code');
+
+  return rows.reduce((maxSequence, row) => {
+    const match = row.point_code?.match(new RegExp(`^${prefix}(\\d+)$`));
+    if (!match) return maxSequence;
+    return Math.max(maxSequence, Number(match[1]));
+  }, 0);
 }
 
 async function insertHistory(
