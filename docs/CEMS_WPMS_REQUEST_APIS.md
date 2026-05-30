@@ -205,6 +205,74 @@ curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/parameters" \
 
 Response จะเป็น shape เดียวกับข้อ 1 แต่ `requestType` เป็น `ADD_PARAMETER`
 
+## 2.1 แก้ไขฟอร์ม เพิ่มจุดตรวจวัด / เพิ่มพารามิเตอร์
+
+ใช้เมื่อเจ้าหน้าที่เปลี่ยนสถานะเป็น `WAITING_FACTORY_REVISION` แล้วผู้ประกอบการต้องแก้ไขและส่งกลับอีกครั้ง
+
+```bash
+curl -X PUT "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/form" \
+  -H "Authorization: Bearer $OPERATOR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "factoryId": "factory-001",
+    "factoryName": "บริษัท ทดสอบ จำกัด",
+    "factoryRegistrationNo": "3-106-33/50สบ",
+    "systemType": "CEMS",
+    "contactName": "สมชาย ใจดี",
+    "contactPhone": "0812345678",
+    "contactEmail": "ops@example.com",
+    "measurementPoints": [
+      {
+        "pointName": "ปล่องระบาย A",
+        "pointCode": "STACK-A",
+        "pointType": "STACK",
+        "parameters": ["CO"],
+        "description": "แก้ไขข้อมูลพารามิเตอร์ CO",
+        "measurementInstruments": {
+          "converterBrand": "Converter Brand",
+          "converterModel": "CV-100",
+          "parameters": [
+            {
+              "parameter": "CO",
+              "technique": "NDIR",
+              "range": "0-100",
+              "brand": "Siemens",
+              "supplier": "ABC Tech",
+              "eiaStandard": "50",
+              "standardCondition": true,
+              "dryBasis": true,
+              "oxygenOrExcessAir": true
+            }
+          ]
+        }
+      }
+    ],
+    "remarks": "แก้ไขตามเจ้าหน้าที่แจ้ง"
+  }'
+```
+
+หมายเหตุ:
+
+- ถ้าไม่ส่ง `requestType` backend จะใช้ประเภทคำขอเดิม เช่น `ADD_PARAMETER`
+- ถ้าแก้ไขฟอร์มเพิ่มจุดตรวจวัด ต้องส่ง `details`, `documentsAndImages`, `measurementInstruments`
+- ถ้าแก้ไขฟอร์มเพิ่มพารามิเตอร์ ต้องส่ง `measurementPoints` 1 รายการ และ `measurementInstruments`
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 2,
+    "requestNo": "CR-20260530-0002",
+    "requestType": "ADD_PARAMETER",
+    "requestTypeLabel": "เพิ่มพารามิเตอร์",
+    "status": "REVISED_PENDING_DESIGN_REVIEW",
+    "statusLabel": "แก้ไขแล้ว/รอพิจารณาแบบ"
+  }
+}
+```
+
 ## 3. บันทึกฟอร์ม ตั้งค่าอุปกรณ์ config
 
 ใช้หลังคำขออยู่สถานะ `WAITING_CONNECTION` และ `stationId` ต้องตรงกับ `pointCode` หรือ `pointName` ในคำขอนั้น

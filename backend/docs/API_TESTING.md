@@ -441,8 +441,42 @@ curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/review
 curl -X PUT "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/form" \
   -H "Authorization: Bearer $OPERATOR_TOKEN" \
   -H 'Content-Type: application/json' \
-  -d '{...body shape เดียวกับตอน POST...}'
+  -d '{
+    "factoryId":"factory-001",
+    "factoryName":"บริษัท ทดสอบ จำกัด",
+    "factoryRegistrationNo":"3-106-33/50สบ",
+    "systemType":"CEMS",
+    "contactName":"สมชาย ใจดี",
+    "contactPhone":"0812345678",
+    "contactEmail":"ops@example.com",
+    "measurementPoints":[{
+      "pointName":"ปล่องระบาย A",
+      "pointCode":"STACK-A",
+      "pointType":"STACK",
+      "parameters":["CO"],
+      "description":"แก้ไขข้อมูลพารามิเตอร์ CO",
+      "measurementInstruments":{
+        "converterBrand":"Converter Brand",
+        "converterModel":"CV-100",
+        "parameters":[{
+          "parameter":"CO",
+          "technique":"NDIR",
+          "range":"0-100",
+          "brand":"Siemens",
+          "supplier":"ABC Tech",
+          "eiaStandard":"50",
+          "standardCondition":true,
+          "dryBasis":true,
+          "oxygenOrExcessAir":true
+        }]
+      }
+    }],
+    "remarks":"แก้ไขตามเจ้าหน้าที่แจ้ง"
+  }'
 ```
+
+`PUT /cems-wpms-requests/:id/form` ใช้ได้เฉพาะคำขอสถานะ `WAITING_FACTORY_REVISION`
+และถ้าไม่ส่ง `requestType` backend จะใช้ประเภทคำขอเดิมของรายการนั้น.
 
 ### 5.8 Device connection config mock API
 

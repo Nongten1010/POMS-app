@@ -641,9 +641,65 @@ describe('connectionRequestsService', () => {
 
     expect(mockedRepository.replaceForm).toHaveBeenCalledWith(
       1,
-      payload,
+      { ...payload, requestType: CONNECTION_REQUEST_TYPE.NEW_CONNECTION },
       actorUserId,
       CONNECTION_REQUEST_STATUS.REVISED_PENDING_DESIGN_REVIEW,
+    );
+  });
+
+  it('preserves the original request type when resubmitting an add parameter form', async () => {
+    const revisedPayload = {
+      ...payload,
+      measurementPoints: [
+        {
+          ...payload.measurementPoints[0],
+          parameters: ['CO'],
+          measurementInstruments: {
+            converterBrand: 'Converter Brand',
+            converterModel: 'CV-100',
+            parameters: [{ parameter: 'CO', technique: 'NDIR' }],
+          },
+        },
+      ],
+    };
+    mockedRepository.findById.mockResolvedValue(
+      requestDto({
+        requestType: CONNECTION_REQUEST_TYPE.ADD_PARAMETER,
+        status: CONNECTION_REQUEST_STATUS.WAITING_FACTORY_REVISION,
+        createdBy: actorUserId,
+      }),
+    );
+    mockedRepository.replaceForm.mockResolvedValue(
+      requestDto({
+        requestType: CONNECTION_REQUEST_TYPE.ADD_PARAMETER,
+        status: CONNECTION_REQUEST_STATUS.REVISED_PENDING_DESIGN_REVIEW,
+        createdBy: actorUserId,
+      }),
+    );
+
+    await connectionRequestsService.resubmit(1, revisedPayload, actorUserId);
+
+    expect(mockedRepository.replaceForm).toHaveBeenCalledWith(
+      1,
+      { ...revisedPayload, requestType: CONNECTION_REQUEST_TYPE.ADD_PARAMETER },
+      actorUserId,
+      CONNECTION_REQUEST_STATUS.REVISED_PENDING_DESIGN_REVIEW,
+    );
+  });
+
+  it('rejects resubmitting an add parameter form without measurement instruments', async () => {
+    mockedRepository.findById.mockResolvedValue(
+      requestDto({
+        requestType: CONNECTION_REQUEST_TYPE.ADD_PARAMETER,
+        status: CONNECTION_REQUEST_STATUS.WAITING_FACTORY_REVISION,
+        createdBy: actorUserId,
+      }),
+    );
+
+    await expect(connectionRequestsService.resubmit(1, payload, actorUserId)).rejects.toMatchObject(
+      {
+        code: 'BAD_REQUEST',
+      },
     );
   });
 

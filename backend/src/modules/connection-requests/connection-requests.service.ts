@@ -17,6 +17,7 @@ import {
   type ConnectionRequestDetailDTO,
   type ConnectionRequestStatus,
   type ConnectionRequestTableRowDTO,
+  type ConnectionRequestType,
   type CreateConnectionRequestInput,
   type DeviceConfigFormConnectionDTO,
   type DeviceConfigFormDetailDTO,
@@ -250,10 +251,15 @@ export const connectionRequestsService = {
     const request = await loadRequest(id);
     ensureOwner(request, actorUserId);
     ensureStatus(request, [CONNECTION_REQUEST_STATUS.WAITING_FACTORY_REVISION]);
+    const effectiveInput = {
+      ...input,
+      requestType: input.requestType ?? request.requestType,
+    };
+    ensureRequestFormSections(effectiveInput, effectiveInput.requestType);
 
     return connectionRequestsRepository.replaceForm(
       id,
-      input,
+      effectiveInput,
       actorUserId,
       CONNECTION_REQUEST_STATUS.REVISED_PENDING_DESIGN_REVIEW,
     );
@@ -655,6 +661,41 @@ function ensureSingleMeasurementPoint(input: CreateConnectionRequestInput): void
   if (input.measurementPoints.length !== 1) {
     throw new BadRequestError('Add parameter request must reference exactly one measurement point');
   }
+}
+
+function ensureRequestFormSections(
+  input: CreateConnectionRequestInput,
+  requestType: ConnectionRequestType,
+): void {
+  if (requestType === CONNECTION_REQUEST_TYPE.ADD_PARAMETER) {
+    ensureSingleMeasurementPoint(input);
+  }
+
+  input.measurementPoints.forEach((point, index) => {
+    if (requestType === CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT) {
+      if (!point.details || Object.keys(point.details).length === 0) {
+        throw new BadRequestError('Measurement point detail section is required', {
+          path: `measurementPoints.${index}.details`,
+        });
+      }
+      if (!point.documentsAndImages || point.documentsAndImages.length === 0) {
+        throw new BadRequestError('Documents and images section is required', {
+          path: `measurementPoints.${index}.documentsAndImages`,
+        });
+      }
+    }
+
+    if (
+      requestType === CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT ||
+      requestType === CONNECTION_REQUEST_TYPE.ADD_PARAMETER
+    ) {
+      if (!point.measurementInstruments) {
+        throw new BadRequestError('Measurement instruments section is required', {
+          path: `measurementPoints.${index}.measurementInstruments`,
+        });
+      }
+    }
+  });
 }
 
 async function loadRequest(id: number): Promise<ConnectionRequestDTO> {

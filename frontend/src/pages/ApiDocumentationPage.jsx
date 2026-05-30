@@ -1713,6 +1713,58 @@ const apiCategories = [
         ],
       },
       {
+        id: "cems-wpms-resubmit-form",
+        method: "PUT",
+        path: "/cems-wpms-requests/:id/form",
+        url: "http://d-poms.diw.go.th/api/v1/cems-wpms-requests/:id/form",
+        testUrl: "/api-proxy/v1/cems-wpms-requests/1/form",
+        description:
+          "ผู้ประกอบการแก้ไขและส่งแบบฟอร์มอีกครั้ง หลังเจ้าหน้าที่ขอแก้ไข",
+        defaultHeaders: { Authorization: accessTokenExample },
+        defaultBody: addParameterRequestExample,
+        responseExample: {
+          success: true,
+          data: {
+            ...connectionRequestExample,
+            requestType: "ADD_PARAMETER",
+            requestTypeLabel: "เพิ่มพารามิเตอร์",
+            status: "REVISED_PENDING_DESIGN_REVIEW",
+            statusLabel: "แก้ไขแล้ว/รอพิจารณาแบบ",
+          },
+        },
+        dataDictionaries: [
+          {
+            title: "Headers Request",
+            columns: ["Header", "Type", "Required", "Description"],
+            rows: [["Authorization", "string", "Yes", "Bearer <accessToken>"]],
+          },
+          {
+            title: "Path Parameters",
+            columns: ["Field", "Type", "Required", "Description"],
+            rows: [
+              [
+                "id",
+                "number",
+                "Yes",
+                "รหัสคำขอที่สถานะ WAITING_FACTORY_REVISION",
+              ],
+            ],
+          },
+          {
+            title: "Request Body Fields",
+            columns: ["Field", "Type", "Description"],
+            rows: [
+              ...connectionRequestFieldRows,
+              [
+                "requestType",
+                "ADD_MEASUREMENT_POINT|ADD_PARAMETER",
+                "Optional: ถ้าไม่ส่ง backend จะใช้ประเภทคำขอเดิม",
+              ],
+            ],
+          },
+        ],
+      },
+      {
         id: "cems-wpms-create-device-config",
         method: "POST",
         path: "/cems-wpms-requests/:id/device-configs",
