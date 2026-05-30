@@ -4,14 +4,23 @@ import { CONNECTION_REQUEST_STATUS, CONNECTION_REQUEST_TYPE } from './connection
 const trimmedString = (max: number) => z.string().trim().min(1).max(max);
 const optionalTrimmedString = (max: number) => z.string().trim().min(1).max(max).optional();
 const optionalNullableTrimmedString = (max: number) =>
-  z
-    .string()
-    .trim()
-    .min(1)
-    .max(max)
-    .nullable()
-    .optional()
-    .transform((value) => value ?? null);
+  z.preprocess(
+    (value) => {
+      if (typeof value !== 'string') return value;
+      const trimmed = value.trim();
+      return trimmed.length > 0 ? trimmed : null;
+    },
+    z.string().trim().min(1).max(max).nullable().optional(),
+  ).transform((value) => value ?? null);
+const requiredStringWithFallback = (max: number) =>
+  z.preprocess(
+    (value) => {
+      if (typeof value !== 'string') return value;
+      const trimmed = value.trim();
+      return trimmed.length > 0 ? trimmed : null;
+    },
+    z.string().trim().min(1).max(max).nullable().optional(),
+  );
 const jsonValueSchema: z.ZodType<unknown> = z.lazy(() =>
   z.union([
     z.string(),
@@ -265,11 +274,14 @@ const connectionRequestFormObjectSchema = z
     requestType: z.nativeEnum(CONNECTION_REQUEST_TYPE).optional(),
     factoryId: trimmedString(64),
     factoryName: trimmedString(500),
-    factoryRegistrationNo: trimmedString(64),
+    factoryRegistrationNo: requiredStringWithFallback(64),
     industryMainOrder: optionalNullableTrimmedString(128),
     industrySubOrder: optionalNullableTrimmedString(128),
     businessActivity: optionalNullableTrimmedString(4000),
-    eia: z.enum(['มี', 'ไม่มี']).nullable().optional(),
+    eia: z.preprocess(
+      (value) => (typeof value === 'string' && value.trim() === '' ? null : value),
+      z.enum(['มี', 'ไม่มี']).nullable().optional(),
+    ),
     hasEia: z.boolean().nullable().optional(),
     projectName: optionalNullableTrimmedString(500),
     address: optionalNullableTrimmedString(1000),
@@ -290,7 +302,9 @@ const connectionRequestFormObjectSchema = z
 const connectionRequestFormBaseSchema =
   connectionRequestFormObjectSchema.superRefine(validateContactSection);
 
-const connectionRequestFormSchema = connectionRequestFormBaseSchema.transform(normalizeContacts);
+const connectionRequestFormSchema = connectionRequestFormBaseSchema.transform((payload) =>
+  normalizeContacts(normalizeFactorySnapshot(payload)),
+);
 
 type ContactFormPayload = z.infer<typeof connectionRequestFormBaseSchema>;
 type ContactFormPayloadWithoutRequestType = Omit<ContactFormPayload, 'requestType'>;
@@ -313,6 +327,19 @@ function validateContactSection(
       message: 'At least one contact person or contactName/contactPhone is required',
     });
   }
+}
+
+function normalizeFactorySnapshot<T extends ContactFormPayload | ContactFormPayloadWithoutRequestType>(
+  payload: T,
+): T & {
+  factoryRegistrationNo: string;
+  eia: 'มี' | 'ไม่มี' | null;
+} {
+  return {
+    ...payload,
+    factoryRegistrationNo: payload.factoryRegistrationNo ?? payload.factoryId,
+    eia: payload.eia ?? null,
+  };
 }
 
 function normalizeContacts<T extends ContactFormPayload | ContactFormPayloadWithoutRequestType>(
@@ -567,7 +594,7 @@ export const addMeasurementPointRequestSchema = connectionRequestFormObjectSchem
     });
   })
   .transform((payload) => ({
-    ...normalizeContacts(payload),
+    ...normalizeContacts(normalizeFactorySnapshot(payload)),
     requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT,
   }));
 
@@ -600,7 +627,7 @@ export const addParameterRequestSchema = connectionRequestFormObjectSchema
     });
   })
   .transform((payload) => ({
-    ...normalizeContacts(payload),
+    ...normalizeContacts(normalizeFactorySnapshot(payload)),
     requestType: CONNECTION_REQUEST_TYPE.ADD_PARAMETER,
   }));
 

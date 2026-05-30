@@ -102,6 +102,30 @@ describe('connection request validators', () => {
     }
   });
 
+  it('normalizes empty optional factory snapshot fields from frontend forms', () => {
+    const result = addMeasurementPointRequestSchema.safeParse({
+      ...validPayload,
+      factoryRegistrationNo: '',
+      industryMainOrder: '',
+      industrySubOrder: '',
+      businessActivity: '',
+      eia: '',
+      projectName: '',
+      address: '',
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.factoryRegistrationNo).toBe(validPayload.factoryId);
+      expect(result.data.industryMainOrder).toBeNull();
+      expect(result.data.industrySubOrder).toBeNull();
+      expect(result.data.businessActivity).toBeNull();
+      expect(result.data.eia).toBeNull();
+      expect(result.data.projectName).toBeNull();
+      expect(result.data.address).toBeNull();
+    }
+  });
+
   it('accepts measurement instrument criteria thresholds', () => {
     const result = createConnectionRequestSchema.safeParse({
       ...validPayload,
