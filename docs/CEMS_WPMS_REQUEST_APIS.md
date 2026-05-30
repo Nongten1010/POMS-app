@@ -863,6 +863,13 @@ Mapping ประเภทที่ frontend เลือก:
 | พารามิเตอร์ไม่มีค่ามาตรฐาน ตามประกาศ อก. | `measurementPoints[].measurementInstruments.parameters[].standardCriteria`  |
 | พารามิเตอร์ไม่มีค่ามาตรฐาน ตาม EIA       | `measurementPoints[].measurementInstruments.parameters[].eiaCriteria`       |
 
+รูปแบบ `standardCriteria` และ `eiaCriteria`:
+
+- ถ้าไม่ได้เลือก checkbox ให้ไม่ส่ง field นี้, ส่ง `null`, หรือส่ง `{ "enabled": false }`
+- ถ้าเลือก checkbox ต้องส่ง `enabled: true`, `standardValue`, และ `rows` ให้ครบ 3 แถว
+- `rows[].level` ต้องมีครบ `normal`, `warning`, `critical` ห้ามซ้ำ
+- `rows[].min` และ `rows[].max` เป็น number หรือ `null` กรณีช่องว่าง/ไม่จำกัด
+
 ตัวอย่างเครื่องมือตรวจวัดพร้อมเกณฑ์:
 
 ```json

@@ -110,6 +110,85 @@ const requestDocumentImageSchema = z
     fileSize: document.fileSize ?? null,
   }));
 
+const criteriaLevelSchema = z.enum(['normal', 'warning', 'critical']);
+const criteriaStandardValueSchema = z.preprocess(
+  (value) => {
+    if (typeof value !== 'string') return value;
+    const trimmedValue = value.trim();
+    return trimmedValue.length > 0 ? trimmedValue : null;
+  },
+  z.union([z.string().min(1).max(255), z.number().finite()]).nullable().optional(),
+);
+const criteriaRangeRowSchema = z
+  .object({
+    level: criteriaLevelSchema,
+    min: z.number().finite().nullable(),
+    max: z.number().finite().nullable(),
+  })
+  .strict();
+const measurementCriteriaSchema = z
+  .object({
+    enabled: z.boolean(),
+    standardValue: criteriaStandardValueSchema,
+    rows: z.array(criteriaRangeRowSchema).max(3).optional(),
+  })
+  .strict()
+  .superRefine((criteria, ctx) => {
+    if (!criteria.enabled) return;
+
+    if (criteria.standardValue === undefined || criteria.standardValue === null) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['standardValue'],
+        message: 'standardValue is required when criteria is enabled',
+      });
+    }
+
+    if (!criteria.rows || criteria.rows.length !== 3) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['rows'],
+        message: 'criteria rows must include normal, warning, and critical',
+      });
+      return;
+    }
+
+    const levels = criteria.rows.map((row) => row.level);
+    const uniqueLevels = new Set(levels);
+    if (uniqueLevels.size !== levels.length) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['rows'],
+        message: 'criteria rows must not duplicate levels',
+      });
+      return;
+    }
+
+    criteriaLevelSchema.options.forEach((level) => {
+      if (uniqueLevels.has(level)) return;
+      ctx.addIssue({
+        code: 'custom',
+        path: ['rows'],
+        message: `criteria rows must include ${level}`,
+      });
+    });
+  })
+  .transform((criteria) => {
+    if (!criteria.enabled) {
+      return {
+        enabled: false,
+        standardValue: null,
+        rows: [],
+      };
+    }
+
+    return {
+      enabled: true,
+      standardValue: criteria.standardValue,
+      rows: criteria.rows ?? [],
+    };
+  });
+
 const measurementInstrumentParameterSchema = z
   .object({
     parameter: trimmedString(128),
@@ -121,8 +200,8 @@ const measurementInstrumentParameterSchema = z
     standardCondition: z.boolean().nullable().optional(),
     dryBasis: z.boolean().nullable().optional(),
     oxygenOrExcessAir: z.boolean().nullable().optional(),
-    standardCriteria: jsonValueSchema.nullable().optional(),
-    eiaCriteria: jsonValueSchema.nullable().optional(),
+    standardCriteria: measurementCriteriaSchema.nullable().optional(),
+    eiaCriteria: measurementCriteriaSchema.nullable().optional(),
   })
   .strict()
   .transform((instrument) => ({
