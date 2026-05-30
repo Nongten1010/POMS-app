@@ -70,19 +70,28 @@ function DpomsAppBar({
           />
 
           <Box sx={{ minWidth: 0, flex: 1 }}>
-            <Typography
-              variant="h6"
-              component="div"
-              sx={{
-                fontWeight: 600,
-                lineHeight: 1.15,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              D-POMS
-            </Typography>
+            <Stack direction="row" spacing={0.75} sx={{ alignItems: 'baseline', minWidth: 0 }}>
+              <Typography
+                variant="h6"
+                component="div"
+                sx={{
+                  fontWeight: 600,
+                  lineHeight: 1.15,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                D-POMS
+              </Typography>
+              <Typography
+                component="span"
+                color="text.secondary"
+                sx={{ flex: '0 0 auto', fontSize: 11, lineHeight: 1 }}
+              >
+                v1.1
+              </Typography>
+            </Stack>
             <Typography
               variant="body2"
               color="text.secondary"
