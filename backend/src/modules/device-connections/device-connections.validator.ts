@@ -27,6 +27,10 @@ const measurementRangeSchema = z
   });
 
 const dataValueFormatSchema = z.enum(['MEASUREMENT_VALUE', 'CURRENT', 'VOLTAGE']);
+const parameterStatusSchema = trimmedString(64)
+  .nullable()
+  .optional()
+  .transform((status) => status ?? 'Normal');
 const modbusEncodingSchema = z.enum([
   'SIGNED',
   'UNSIGNED',
@@ -55,6 +59,7 @@ const modbusChannelSchema = z
     valueFormat: dataValueFormatSchema.nullable().optional().default('MEASUREMENT_VALUE'),
     offset: z.number(),
     encoding: modbusEncodingSchema,
+    status: parameterStatusSchema,
   })
   .strict()
   .transform((channel) => ({
@@ -68,6 +73,7 @@ const databaseChannelSchema = z
     dataType: trimmedString(128),
     unit: trimmedString(64),
     offset: z.number(),
+    status: parameterStatusSchema,
   })
   .strict();
 
@@ -125,6 +131,7 @@ const mysqlSettingsSchema = z
 
 const baseDeviceConnectionSchema = z.object({
   stationId: trimmedString(64),
+  deviceCode: trimmedString(64).nullable().optional().default(null),
   statusManagement: z
     .object({
       selectedParameters: z.array(trimmedString(128)).min(1).max(50),

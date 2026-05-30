@@ -251,6 +251,7 @@ describe('connectionRequestsService', () => {
         id: 10,
         requestId: 1,
         stationId: 'STACK-A',
+        deviceCode: 'STACK-A/RTU-01',
         protocol: 'MODBUS_RTU',
         settings: {
           comPort: 1,
@@ -271,6 +272,7 @@ describe('connectionRequestsService', () => {
             valueFormat: 'MEASUREMENT_VALUE',
             offset: 0,
             encoding: 'UNSIGNED16_BIG_ENDIAN',
+            status: 'Maintenance',
           },
         ],
         statusManagement: {
@@ -297,12 +299,12 @@ describe('connectionRequestsService', () => {
       requestId: 1,
       stationId: 'STACK-A',
       parameterOptions: ['NOx'],
-      deviceCodeOptions: ['STACK-A/01'],
+      deviceCodeOptions: ['STACK-A/RTU-01'],
       connectionForms: [
         {
           configId: 10,
           type: 'Modbus RTU',
-          deviceCode: 'STACK-A/01',
+          deviceCode: 'STACK-A/RTU-01',
           values: {
             comport: '1',
             slaveId: '1',
@@ -315,12 +317,12 @@ describe('connectionRequestsService', () => {
       ],
       parameterMappings: [
         {
-          deviceCode: 'STACK-A/01',
+          deviceCode: 'STACK-A/RTU-01',
           addressId: '40001',
           parameter: 'NOx',
           valueFormat: 'ค่าข้อมูลตรวจวัด',
           encodingData: 'Unsigned16 - Big Endian',
-          status: 'Normal',
+          status: 'Maintenance',
         },
       ],
       statusManagement: {

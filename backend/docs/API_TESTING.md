@@ -345,10 +345,12 @@ curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/status
 
 ### 5.8 Device connection config mock API
 
-API ชุดนี้ใช้ตั้งค่า connection อุปกรณ์ตรวจวัดหลังแบบเชื่อมต่อพร้อมใช้งาน โดย 1 `stationId` คือ 1 จุดตรวจวัด และมีได้ 1 config / 1 protocol เท่านั้น:
+API ชุดนี้ใช้ตั้งค่า connection อุปกรณ์ตรวจวัดหลังแบบเชื่อมต่อพร้อมใช้งาน โดย 1 `stationId` คือ 1 จุดตรวจวัด และมีได้หลาย protocol แต่ห้ามซ้ำ `stationId + protocol`:
 
 - `settings` = connection point 1 ชุด เช่น COM/Slave หรือ Host/DB
 - `channels` = รายการอุปกรณ์/ค่าตรวจวัดหลายตัวใน connection point นั้น
+- `deviceCode` = รหัสอุปกรณ์ของ config เช่น `S0001/01`
+- `channels[].status` = สถานะพารามิเตอร์ เช่น `Normal`, `Maintenance`, `Inactive`
 - `statusManagement` = optional สำหรับ prefill ส่วนจัดการสถานะใน dialog ตั้งค่าอุปกรณ์
 - `GET /device-connections?stationId=STATION_001` จะคืน fallback mock config 1 รายการ ถ้า DB ยังไม่มีข้อมูลจริง
 - `POST /device-connections/test-connection` = backend จำลองการเชื่อมต่อสำเร็จ เพื่อให้ frontend พัฒนาได้ก่อน external API/driver จริงพร้อม

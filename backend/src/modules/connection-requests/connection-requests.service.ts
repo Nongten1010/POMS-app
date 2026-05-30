@@ -484,7 +484,11 @@ function toDeviceConfigFormDetail(
     },
     parameterMappings: stationConfigs.flatMap((config, configIndex) =>
       config.channels.map((channel) =>
-        toDeviceConfigParameterMapping(config.id, toDeviceCode(stationId, configIndex), channel),
+        toDeviceConfigParameterMapping(
+          config.id,
+          getDeviceCode(config, stationId, configIndex),
+          channel,
+        ),
       ),
     ),
     testResults: [],
@@ -514,7 +518,7 @@ function toDeviceConfigFormConnection(
     configId: config.id,
     type: protocolToConnectionType(config.protocol),
     protocol: config.protocol,
-    deviceCode: toDeviceCode(stationId, index),
+    deviceCode: getDeviceCode(config, stationId, index),
     values: settingsToFormValues(config.protocol, config.settings),
   };
 }
@@ -535,8 +539,16 @@ function toDeviceConfigParameterMapping(
     valueFormat: valueFormatToThai(channel.valueFormat ?? 'MEASUREMENT_VALUE'),
     offset: String(channel.offset),
     encodingData: encodingToFormLabel(channel.encoding ?? null),
-    status: 'Normal',
+    status: channel.status ?? 'Normal',
   };
+}
+
+function getDeviceCode(
+  config: Pick<ConnectionRequestDetailDTO['deviceConfigs'][number], 'deviceCode'>,
+  stationId: string,
+  index: number,
+): string {
+  return config.deviceCode || toDeviceCode(stationId, index);
 }
 
 function protocolToConnectionType(protocol: string): DeviceConfigFormConnectionDTO['type'] {

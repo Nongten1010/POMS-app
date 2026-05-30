@@ -955,11 +955,12 @@ POST /test-connection         cems_wpms_requests:edit
 
 ### 9.1 Data model สำหรับ UI
 
-1 `stationId` คือ 1 จุดตรวจวัด และมีได้ 1 config / 1 protocol เท่านั้น:
+1 `stationId` คือ 1 จุดตรวจวัด และมีได้หลาย protocol แต่ห้ามซ้ำ `stationId + protocol`:
 
 ```ts
 type DeviceConnectionPayload = {
   stationId: string
+  deviceCode?: string | null
   protocol: 'MODBUS_RTU' | 'MODBUS_TCP' | 'MSSQL' | 'MYSQL'
   settings: object
   channels: DeviceMeasurementChannel[]
@@ -970,6 +971,7 @@ type DeviceConnectionPayload = {
 
 | Field | Meaning |
 | --- | --- |
+| `deviceCode` | รหัสอุปกรณ์ของ config เช่น `S0001/01` |
 | `settings` | connection point 1 ชุด เช่น COM/Slave หรือ Host/DB |
 | `channels` | อุปกรณ์/ค่าตรวจวัดหลายรายการภายใต้ connection point เดียวกัน |
 | `GET /device-connections?stationId=STATION_001` | ถ้า DB ยังไม่มีข้อมูลจริง backend จะคืน fallback mock config 1 รายการ |
@@ -986,7 +988,8 @@ Channel shape:
   "valueRange": { "min": 0, "max": 200 },
   "valueFormat": "MEASUREMENT_VALUE",
   "offset": 0,
-  "encoding": "UNSIGNED16_BIG_ENDIAN"
+  "encoding": "UNSIGNED16_BIG_ENDIAN",
+  "status": "Normal"
 }
 ```
 
@@ -998,6 +1001,7 @@ Validation สำคัญ:
 | `offset` | number ได้ทั้งบวกและลบ |
 | `valueRange.min/max` | `min <= max` |
 | `valueFormat` | รูปแบบค่าข้อมูลตรวจวัด: `MEASUREMENT_VALUE` = ค่าตรวจวัดปกติ, `CURRENT` = ค่ากระแสไฟฟ้า, `VOLTAGE` = ค่าแรงดันไฟฟ้า |
+| `status` | สถานะพารามิเตอร์ เช่น `Normal`, `Maintenance`, `Inactive` |
 | Modbus channel | ต้องมี `valueRange` และ `encoding` |
 | DB channel | ใช้เฉพาะ `addressId`, `dataType`, `unit`, `offset` ตามไฟล์ client |
 | `dbPass` | ส่งตอน create/test ได้ แต่ response จะ mask เป็น `********` |

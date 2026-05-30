@@ -41,6 +41,7 @@ export interface DeviceMeasurementChannelInput {
   valueFormat?: DataValueFormat | null;
   offset: number;
   encoding?: ModbusEncoding | null;
+  status?: string | null;
 }
 
 export interface ModbusRtuConnectionSettingsInput {
@@ -75,6 +76,7 @@ export type DeviceConnectionSettingsInput =
 
 export interface BaseDeviceConnectionConfigInput {
   stationId: string;
+  deviceCode?: string | null;
   channels: DeviceMeasurementChannelInput[];
   statusManagement?: DeviceConnectionStatusManagementInput | null;
 }
@@ -127,6 +129,7 @@ export interface DeviceConnectionConfigDTO {
   id: number;
   requestId: number | null;
   stationId: string;
+  deviceCode?: string | null;
   protocol: DeviceConnectionProtocol;
   settings: Record<string, unknown>;
   channels: DeviceMeasurementChannelInput[];

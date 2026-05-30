@@ -35,6 +35,7 @@ describe('device connection validators', () => {
   it('accepts optional status management for config form prefill', () => {
     const result = createDeviceConnectionConfigSchema.safeParse({
       stationId: 'STATION_001',
+      deviceCode: 'STATION_001/01',
       protocol: 'MODBUS_TCP',
       settings: {
         hostIp: '192.168.1.10',
@@ -50,6 +51,7 @@ describe('device connection validators', () => {
           valueFormat: 'MEASUREMENT_VALUE',
           offset: 0,
           encoding: 'UNSIGNED16_BIG_ENDIAN',
+          status: 'Maintenance',
         },
       ],
       statusManagement: {
@@ -63,6 +65,8 @@ describe('device connection validators', () => {
 
     expect(result.success).toBe(true);
     if (result.success) {
+      expect(result.data.deviceCode).toBe('STATION_001/01');
+      expect(result.data.channels[0].status).toBe('Maintenance');
       expect(result.data.statusManagement?.status).toBe('Normal');
     }
   });

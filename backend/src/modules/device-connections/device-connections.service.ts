@@ -8,6 +8,7 @@ import {
   DEVICE_CONNECTION_PROTOCOL,
   type CreateDeviceConnectionConfigInput,
   type DeviceConnectionConfigDTO,
+  type DeviceConnectionProtocol,
   type DeviceConnectionTestResultDTO,
   type ListDeviceConnectionConfigsQuery,
   type TestDeviceConnectionInput,
@@ -49,7 +50,7 @@ export const deviceConnectionsService = {
     actorUserId: number,
   ): Promise<DeviceConnectionConfigDTO> {
     ensureChannelAddressesAreUnique(input);
-    await ensureStationHasNoActiveConfig(input.stationId);
+    await ensureStationProtocolHasNoActiveConfig(input.stationId, input.protocol);
     return deviceConnectionsRepository.create(input, actorUserId);
   },
 
@@ -59,7 +60,7 @@ export const deviceConnectionsService = {
     requestId: number,
   ): Promise<DeviceConnectionConfigDTO> {
     ensureChannelAddressesAreUnique(input);
-    await ensureStationHasNoActiveConfig(input.stationId);
+    await ensureStationProtocolHasNoActiveConfig(input.stationId, input.protocol);
     return deviceConnectionsRepository.create(input, actorUserId, requestId);
   },
 
@@ -97,11 +98,18 @@ function ensureChannelAddressesAreUnique(input: TestDeviceConnectionInput): void
   }
 }
 
-async function ensureStationHasNoActiveConfig(stationId: string): Promise<void> {
-  const exists = await deviceConnectionsRepository.existsByStationId(stationId);
+async function ensureStationProtocolHasNoActiveConfig(
+  stationId: string,
+  protocol: DeviceConnectionProtocol,
+): Promise<void> {
+  const exists = await deviceConnectionsRepository.existsByStationIdAndProtocol(
+    stationId,
+    protocol,
+  );
   if (exists) {
-    throw new ConflictError('Device connection config already exists for stationId', {
+    throw new ConflictError('Device connection config already exists for stationId and protocol', {
       stationId,
+      protocol,
     });
   }
 }

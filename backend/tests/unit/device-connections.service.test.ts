@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 jest.mock('../../src/modules/device-connections/device-connections.repository', () => ({
   deviceConnectionsRepository: {
     create: jest.fn(),
-    existsByStationId: jest.fn(),
+    existsByStationIdAndProtocol: jest.fn(),
     findById: jest.fn(),
     list: jest.fn(),
     listByRequestId: jest.fn(),
@@ -46,7 +46,7 @@ describe('deviceConnectionsService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockedRepository.existsByStationId.mockResolvedValue(false);
+    mockedRepository.existsByStationIdAndProtocol.mockResolvedValue(false);
     deviceConnectionsService.setClockForTests(() => now);
   });
 
@@ -250,8 +250,8 @@ describe('deviceConnectionsService', () => {
     expect(result.settings).toMatchObject({ hostIp: '192.168.1.10', port: 502 });
   });
 
-  it('rejects duplicate active station config before hitting database constraints', async () => {
-    mockedRepository.existsByStationId.mockResolvedValue(true);
+  it('rejects duplicate active station and protocol config before hitting database constraints', async () => {
+    mockedRepository.existsByStationIdAndProtocol.mockResolvedValue(true);
 
     await expect(
       deviceConnectionsService.create(modbusTcpPayload, actorUserId),
@@ -259,6 +259,46 @@ describe('deviceConnectionsService', () => {
       code: 'CONFLICT',
     });
     expect(mockedRepository.create).not.toHaveBeenCalled();
+  });
+
+  it('allows the same station to store different protocols', async () => {
+    mockedRepository.create.mockResolvedValue(
+      configDto({ protocol: DEVICE_CONNECTION_PROTOCOL.MODBUS_RTU }),
+    );
+
+    const input: CreateDeviceConnectionConfigInput = {
+      stationId: 'STATION_001',
+      protocol: DEVICE_CONNECTION_PROTOCOL.MODBUS_RTU,
+      settings: {
+        comPort: 1,
+        slaveId: 1,
+        baudRate: 9600,
+        parity: 'NONE',
+        stopBits: 1,
+        dataBits: 8,
+        quantity: 1,
+        valueRange: null,
+      },
+      channels: [
+        {
+          addressId: 40001,
+          dataType: 'CO2',
+          unit: 'ppm',
+          valueRange: { min: 0, max: 200 },
+          valueFormat: 'MEASUREMENT_VALUE',
+          offset: 0,
+          encoding: 'UNSIGNED16_BIG_ENDIAN',
+        },
+      ],
+    };
+
+    await deviceConnectionsService.create(input, actorUserId);
+
+    expect(mockedRepository.existsByStationIdAndProtocol).toHaveBeenCalledWith(
+      'STATION_001',
+      DEVICE_CONNECTION_PROTOCOL.MODBUS_RTU,
+    );
+    expect(mockedRepository.create).toHaveBeenCalledWith(input, actorUserId);
   });
 
   it('stores a config linked to a connection request', async () => {

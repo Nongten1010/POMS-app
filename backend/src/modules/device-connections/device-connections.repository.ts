@@ -13,6 +13,7 @@ interface DeviceConnectionConfigRow {
   id: number | string;
   request_id: number | string | null;
   station_id: string;
+  device_code: string | null;
   protocol: DeviceConnectionProtocol;
   settings_json: string;
   status_management_json: string | null;
@@ -29,6 +30,7 @@ interface DeviceMeasurementChannelRow {
   value_format: 'MEASUREMENT_VALUE' | 'CURRENT' | 'VOLTAGE' | null;
   offset_value: number | string;
   encoding: DeviceMeasurementChannelInput['encoding'];
+  parameter_status: string | null;
 }
 
 export const deviceConnectionsRepository = {
@@ -61,9 +63,13 @@ export const deviceConnectionsRepository = {
     return Promise.all(rows.map((row) => hydrate(row)));
   },
 
-  async existsByStationId(stationId: string): Promise<boolean> {
+  async existsByStationIdAndProtocol(
+    stationId: string,
+    protocol: DeviceConnectionProtocol,
+  ): Promise<boolean> {
     const row = await db('device_connection_configs')
       .where('station_id', stationId)
+      .where('protocol', protocol)
       .whereNull('deleted_at')
       .select('id')
       .first();
@@ -80,6 +86,7 @@ export const deviceConnectionsRepository = {
         .insert({
           request_id: requestId,
           station_id: input.stationId,
+          device_code: input.deviceCode ?? null,
           protocol: input.protocol,
           settings_json: JSON.stringify(input.settings),
           status_management_json: input.statusManagement
@@ -126,6 +133,7 @@ async function hydrate(
     id: configId,
     requestId: row.request_id === null ? null : Number(row.request_id),
     stationId: row.station_id,
+    deviceCode: row.device_code ?? null,
     protocol: row.protocol,
     settings: maskSensitiveSettings(parseJsonObject(row.settings_json)),
     channels: channels.map(toChannelDTO),
@@ -152,6 +160,7 @@ async function insertChannels(
       value_format: channel.valueFormat ?? null,
       offset_value: channel.offset,
       encoding: channel.encoding ?? null,
+      parameter_status: channel.status ?? 'Normal',
       created_by: actorUserId,
       updated_by: actorUserId,
     })),
@@ -167,6 +176,7 @@ function toChannelDTO(row: DeviceMeasurementChannelRow): DeviceMeasurementChanne
     ...(row.value_range_json ? { valueRange: parseMeasurementRange(row.value_range_json) } : {}),
     ...(row.value_format ? { valueFormat: row.value_format } : {}),
     ...(row.encoding ? { encoding: row.encoding } : {}),
+    status: row.parameter_status ?? 'Normal',
   };
 }
 

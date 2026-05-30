@@ -1139,12 +1139,15 @@ Response:
 
 ใช้หลังคำขออยู่สถานะ `WAITING_CONNECTION` และ `stationId` ต้องตรงกับ `pointCode` หรือ `pointName` ในคำขอนั้น
 
+หมายเหตุ: 1 `stationId` มีได้หลาย protocol เช่น `MODBUS_RTU`, `MODBUS_TCP`, `MSSQL`, `MYSQL` แต่ห้ามมี config ซ้ำ protocol เดิมใน station เดียวกัน
+
 ```bash
 curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/device-configs" \
   -H "Authorization: Bearer $OPERATOR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "stationId": "S0001",
+    "deviceCode": "S0001/01",
     "protocol": "MODBUS_TCP",
     "settings": {
       "hostIp": "192.168.1.10",
@@ -1159,7 +1162,8 @@ curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/device
         "valueRange": { "min": 0, "max": 200 },
         "valueFormat": "MEASUREMENT_VALUE",
         "offset": 0,
-        "encoding": "UNSIGNED16_BIG_ENDIAN"
+        "encoding": "UNSIGNED16_BIG_ENDIAN",
+        "status": "Normal"
       }
     ],
     "statusManagement": {
@@ -1181,6 +1185,7 @@ Response:
     "id": 10,
     "requestId": 1,
     "stationId": "S0001",
+    "deviceCode": "S0001/01",
     "protocol": "MODBUS_TCP",
     "settings": {
       "hostIp": "192.168.1.10",
@@ -1195,7 +1200,8 @@ Response:
         "valueRange": { "min": 0, "max": 200 },
         "valueFormat": "MEASUREMENT_VALUE",
         "offset": 0,
-        "encoding": "UNSIGNED16_BIG_ENDIAN"
+        "encoding": "UNSIGNED16_BIG_ENDIAN",
+        "status": "Normal"
       }
     ],
     "statusManagement": {
@@ -2025,6 +2031,7 @@ Path params:
 ```json
 {
   "stationId": "S0001",
+  "deviceCode": "S0001/01",
   "protocol": "MODBUS_TCP",
   "settings": {
     "hostIp": "192.168.1.10",
@@ -2039,7 +2046,8 @@ Path params:
       "valueRange": { "min": 0, "max": 200 },
       "valueFormat": "MEASUREMENT_VALUE",
       "offset": 0,
-      "encoding": "UNSIGNED16_BIG_ENDIAN"
+      "encoding": "UNSIGNED16_BIG_ENDIAN",
+      "status": "Normal"
     }
   ],
   "statusManagement": {
@@ -2057,6 +2065,7 @@ Data dictionary:
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
 | `stationId` | string | Yes | ต้องตรงกับ `pointCode` หรือ `pointName` ของจุดตรวจวัดในคำขอ |
+| `deviceCode` | string|null | No | รหัสอุปกรณ์ในฟอร์ม เช่น `S0001/01`; ถ้าไม่ส่ง response prefill จะ generate จาก `stationId` ตามลำดับ |
 | `protocol` | string | Yes | `MODBUS_RTU`, `MODBUS_TCP`, `MSSQL`, `MYSQL` |
 | `settings` | object | Yes | ข้อมูล connection ตาม protocol |
 | `settings.hostIp` | string | Conditional | IP/host สำหรับ `MODBUS_TCP`, `MSSQL`, `MYSQL` |
@@ -2076,6 +2085,7 @@ Data dictionary:
 | `channels[].valueFormat` | string|null | No | รูปแบบค่า เช่น `MEASUREMENT_VALUE` |
 | `channels[].offset` | number|null | No | offset |
 | `channels[].encoding` | string|null | No | รูปแบบ encoding |
+| `channels[].status` | string|null | No | สถานะพารามิเตอร์ เช่น `Normal`, `Maintenance`, `Inactive`; ถ้าไม่ส่ง backend ใช้ `Normal` |
 | `statusManagement` | object|null | No | ข้อมูลจัดการสถานะชั่วคราว |
 
 ### API 4: GET รายละเอียดฟอร์ม ตั้งค่าอุปกรณ์ config สำหรับ prefill
