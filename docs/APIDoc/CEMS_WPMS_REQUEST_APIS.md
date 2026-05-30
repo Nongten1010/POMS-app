@@ -251,7 +251,25 @@ curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/measurement-points
               "eiaStandard": "120",
               "standardCondition": true,
               "dryBasis": true,
-              "oxygenOrExcessAir": true
+              "oxygenOrExcessAir": true,
+              "standardCriteria": {
+                "enabled": true,
+                "standardValue": "120",
+                "rows": [
+                  { "level": "normal", "min": 0, "max": 80 },
+                  { "level": "warning", "min": 80, "max": 100 },
+                  { "level": "critical", "min": 100, "max": null }
+                ]
+              },
+              "eiaCriteria": {
+                "enabled": true,
+                "standardValue": "100",
+                "rows": [
+                  { "level": "normal", "min": 0, "max": 70 },
+                  { "level": "warning", "min": 70, "max": 90 },
+                  { "level": "critical", "min": 90, "max": null }
+                ]
+              }
             }
           ]
         }
@@ -355,7 +373,25 @@ Response:
               "eiaStandard": "120",
               "standardCondition": true,
               "dryBasis": true,
-              "oxygenOrExcessAir": true
+              "oxygenOrExcessAir": true,
+              "standardCriteria": {
+                "enabled": true,
+                "standardValue": "120",
+                "rows": [
+                  { "level": "normal", "min": 0, "max": 80 },
+                  { "level": "warning", "min": 80, "max": 100 },
+                  { "level": "critical", "min": 100, "max": null }
+                ]
+              },
+              "eiaCriteria": {
+                "enabled": true,
+                "standardValue": "100",
+                "rows": [
+                  { "level": "normal", "min": 0, "max": 70 },
+                  { "level": "warning", "min": 70, "max": 90 },
+                  { "level": "critical", "min": 90, "max": null }
+                ]
+              }
             }
           ]
         }
@@ -411,7 +447,19 @@ curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/parameters" \
               "eiaStandard": "50",
               "standardCondition": true,
               "dryBasis": true,
-              "oxygenOrExcessAir": true
+              "oxygenOrExcessAir": true,
+              "standardCriteria": {
+                "enabled": true,
+                "standardValue": "50",
+                "rows": [
+                  { "level": "normal", "min": 0, "max": 30 },
+                  { "level": "warning", "min": 30, "max": 40 },
+                  { "level": "critical", "min": 40, "max": null }
+                ]
+              },
+              "eiaCriteria": {
+                "enabled": false
+              }
             }
           ]
         }
@@ -990,7 +1038,19 @@ curl -X PUT "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/form" \
               "eiaStandard": "50",
               "standardCondition": true,
               "dryBasis": true,
-              "oxygenOrExcessAir": true
+              "oxygenOrExcessAir": true,
+              "standardCriteria": {
+                "enabled": true,
+                "standardValue": "50",
+                "rows": [
+                  { "level": "normal", "min": 0, "max": 30 },
+                  { "level": "warning", "min": 30, "max": 40 },
+                  { "level": "critical", "min": 40, "max": null }
+                ]
+              },
+              "eiaCriteria": {
+                "enabled": false
+              }
             }
           ]
         }
