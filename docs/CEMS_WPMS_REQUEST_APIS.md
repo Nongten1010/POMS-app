@@ -55,6 +55,15 @@ curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/measurement-points
         "parameters": ["NOx", "SO2", "O2"],
         "description": "จุดตรวจวัดหลัก",
         "details": {
+          "productionUnitType": "หม้อไอน้ำ",
+          "productionCapacity": "10 ตันไอน้ำ/ชั่วโมง",
+          "cemsInstallationRequiredBy": "ประกาศ อก.",
+          "cemsInstallationRequiredOther": null,
+          "legalAnnexNo": "เฉพาะประกาศปี 65",
+          "eligibleParameters": ["NOx", "SO2", "PM"],
+          "exemptedParameters": [],
+          "connectedParameters": [],
+          "pendingParameters": ["NOx", "SO2", "PM"],
           "stackShape": "วงกลม",
           "stackDiameter": 1.2,
           "stackWidth": null,
@@ -63,8 +72,22 @@ curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/measurement-points
           "stackHeight": 30,
           "monitoringHeight": 20,
           "averageFlowRate": 1200,
+          "minFlowRate": 1000,
+          "maxFlowRate": 1500,
           "primaryFuel": "ก๊าซธรรมชาติ",
-          "connectionDevice": "POMS Box (กรอ.)"
+          "primaryFuelOther": null,
+          "primaryFuelPercent": 80,
+          "secondaryFuel": "ไม่มี",
+          "secondaryFuelOther": null,
+          "secondaryFuelPercent": null,
+          "combustionControlSystem": "ควบคุมอัตโนมัติ",
+          "hasTreatmentSystem": "มี",
+          "treatmentSystem": "สครับเบอร์",
+          "treatmentSystemOther": null,
+          "stackLatitude": 13.7563,
+          "stackLongitude": 100.5018,
+          "connectionDevice": "POMS Box (กรอ.)",
+          "connectionDeviceOther": null
         },
         "documentsAndImages": [
           {
@@ -121,6 +144,15 @@ Response:
         "pointType": "STACK",
         "parameters": ["NOx", "SO2", "O2"],
         "details": {
+          "productionUnitType": "หม้อไอน้ำ",
+          "productionCapacity": "10 ตันไอน้ำ/ชั่วโมง",
+          "cemsInstallationRequiredBy": "ประกาศ อก.",
+          "cemsInstallationRequiredOther": null,
+          "legalAnnexNo": "เฉพาะประกาศปี 65",
+          "eligibleParameters": ["NOx", "SO2", "PM"],
+          "exemptedParameters": [],
+          "connectedParameters": [],
+          "pendingParameters": ["NOx", "SO2", "PM"],
           "stackShape": "วงกลม",
           "stackDiameter": 1.2,
           "stackWidth": null,
@@ -129,8 +161,22 @@ Response:
           "stackHeight": 30,
           "monitoringHeight": 20,
           "averageFlowRate": 1200,
+          "minFlowRate": 1000,
+          "maxFlowRate": 1500,
           "primaryFuel": "ก๊าซธรรมชาติ",
-          "connectionDevice": "POMS Box (กรอ.)"
+          "primaryFuelOther": null,
+          "primaryFuelPercent": 80,
+          "secondaryFuel": "ไม่มี",
+          "secondaryFuelOther": null,
+          "secondaryFuelPercent": null,
+          "combustionControlSystem": "ควบคุมอัตโนมัติ",
+          "hasTreatmentSystem": "มี",
+          "treatmentSystem": "สครับเบอร์",
+          "treatmentSystemOther": null,
+          "stackLatitude": 13.7563,
+          "stackLongitude": 100.5018,
+          "connectionDevice": "POMS Box (กรอ.)",
+          "connectionDeviceOther": null
         },
         "documentsAndImages": [
           {
@@ -239,13 +285,41 @@ Response จะเป็น shape เดียวกับข้อ 1 แต่ 
 
 Mapping:
 
-| Label                                    | Field                                         |
-| ---------------------------------------- | --------------------------------------------- |
-| ลักษณะปล่อง                              | `measurementPoints[].details.stackShape`      |
-| เส้นผ่านศูนย์กลาง (เมตร) เมื่อเลือกวงกลม | `measurementPoints[].details.stackDiameter`   |
-| กว้าง (เมตร) เมื่อเลือกสี่เหลี่ยม        | `measurementPoints[].details.stackWidth`      |
-| ยาว (เมตร) เมื่อเลือกสี่เหลี่ยม          | `measurementPoints[].details.stackLength`     |
-| โปรดระบุ เมื่อเลือกอื่นๆ                 | `measurementPoints[].details.stackShapeOther` |
+| Label                                      | Field                                                       |
+| ------------------------------------------ | ----------------------------------------------------------- |
+| ประเภทของหน่วยการผลิต                      | `measurementPoints[].details.productionUnitType`            |
+| กำลังการผลิตต่อหน่วย                       | `measurementPoints[].details.productionCapacity`            |
+| เข้าข่ายต้องติดตั้ง CEMS ตามกฎหมาย         | `measurementPoints[].details.cemsInstallationRequiredBy`    |
+| อื่นๆ โปรดระบุของเข้าข่ายต้องติดตั้ง       | `measurementPoints[].details.cemsInstallationRequiredOther` |
+| เข้าข่ายตามบัญชีแนบท้ายลำดับที่            | `measurementPoints[].details.legalAnnexNo`                  |
+| พารามิเตอร์ที่เข้าข่าย                     | `measurementPoints[].details.eligibleParameters`            |
+| พารามิเตอร์ที่ได้รับการยกเว้น              | `measurementPoints[].details.exemptedParameters`            |
+| พารามิเตอร์ที่เชื่อมต่อแล้ว                | `measurementPoints[].details.connectedParameters`           |
+| พารามิเตอร์ที่ยังไม่เชื่อมต่อ              | `measurementPoints[].details.pendingParameters`             |
+| ลักษณะปล่อง                                | `measurementPoints[].details.stackShape`                    |
+| เส้นผ่านศูนย์กลาง (เมตร) เมื่อเลือกวงกลม   | `measurementPoints[].details.stackDiameter`                 |
+| กว้าง (เมตร) เมื่อเลือกสี่เหลี่ยม          | `measurementPoints[].details.stackWidth`                    |
+| ยาว (เมตร) เมื่อเลือกสี่เหลี่ยม            | `measurementPoints[].details.stackLength`                   |
+| โปรดระบุ เมื่อเลือกอื่นๆ                   | `measurementPoints[].details.stackShapeOther`               |
+| ความสูงปล่อง (เมตร)                        | `measurementPoints[].details.stackHeight`                   |
+| ความสูงของจุดตรวจวัด (เมตร)                | `measurementPoints[].details.monitoringHeight`              |
+| อัตราการระบายอากาศเฉลี่ย (m3/hr)           | `measurementPoints[].details.averageFlowRate`               |
+| อัตราการระบายอากาศต่ำสุด (m3/hr)           | `measurementPoints[].details.minFlowRate`                   |
+| อัตราการระบายอากาศสูงสุด (m3/hr)           | `measurementPoints[].details.maxFlowRate`                   |
+| เชื้อเพลิงหลักที่ใช้                       | `measurementPoints[].details.primaryFuel`                   |
+| โปรดระบุของเชื้อเพลิงหลักอื่นๆ             | `measurementPoints[].details.primaryFuelOther`              |
+| ร้อยละโดยประมาณของเชื้อเพลิงหลัก           | `measurementPoints[].details.primaryFuelPercent`            |
+| เชื้อเพลิงรอง (ถ้ามี)                      | `measurementPoints[].details.secondaryFuel`                 |
+| โปรดระบุของเชื้อเพลิงรองอื่นๆ              | `measurementPoints[].details.secondaryFuelOther`            |
+| ร้อยละโดยประมาณของเชื้อเพลิงรอง            | `measurementPoints[].details.secondaryFuelPercent`          |
+| ระบบการควบคุมปริมาณอากาศและสภาวะการเผาไหม้ | `measurementPoints[].details.combustionControlSystem`       |
+| ระบบบำบัด                                  | `measurementPoints[].details.hasTreatmentSystem`            |
+| ระบุระบบบำบัด                              | `measurementPoints[].details.treatmentSystem`               |
+| ระบุรายละเอียดของระบบบำบัดอื่นๆ            | `measurementPoints[].details.treatmentSystemOther`          |
+| พิกัดปล่องที่ติดตั้ง CEMS (ละติจูด)        | `measurementPoints[].details.stackLatitude`                 |
+| พิกัดปล่องที่ติดตั้ง CEMS (ลองจิจูด)       | `measurementPoints[].details.stackLongitude`                |
+| อุปกรณ์/โปรแกรมที่ใช้เชื่อมต่อ             | `measurementPoints[].details.connectionDevice`              |
+| โปรดระบุของอุปกรณ์/โปรแกรมอื่นๆ            | `measurementPoints[].details.connectionDeviceOther`         |
 
 ## 2.1 แก้ไขฟอร์ม เพิ่มจุดตรวจวัด / เพิ่มพารามิเตอร์
 
