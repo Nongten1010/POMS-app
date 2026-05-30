@@ -365,7 +365,7 @@ function App() {
         {visibleSelectedMenu === 'permissions' ? (
           <PermissionManagementPage accessToken={accessToken} />
         ) : visibleSelectedMenu === 'connection-request' ? (
-          <ConnectionRequestPage userType={userType} />
+          <ConnectionRequestPage userType={userType} accessToken={accessToken} />
         ) : visibleSelectedMenu === 'eligible-factories' ? (
           <EligibleFactoriesPage accessToken={accessToken} />
         ) : visibleSelectedMenu === 'api-documentation' ? (

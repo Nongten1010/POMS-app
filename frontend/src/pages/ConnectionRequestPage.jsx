@@ -98,6 +98,18 @@ const specialCriteriaRows = [
   { key: 'critical', label: 'แจ้งเตือน', color: 'error' },
 ]
 
+const mockInstrumentParameter = {
+  parameter: 'NOx (ppm)',
+  technique: 'NDIR',
+  range: '0-200',
+  brand: 'Siemens',
+  supplier: 'ABC Tech',
+  eiaStandard: '120',
+  standardCondition: true,
+  dryBasis: true,
+  oxygenOrExcessAir: true,
+}
+
 const waitingConnectionSx = {
   bgcolor: '#5b21b6',
   borderColor: '#5b21b6',
@@ -275,6 +287,23 @@ const groupedDocumentImageTitles = [
 const appBarHeight = {
   xs: 64,
   md: 72,
+}
+
+const measurementPointsRequestApiUrl =
+  import.meta.env.DEV
+    ? '/api-proxy/v1/cems-wpms-requests/measurement-points'
+    : 'http://d-poms.diw.go.th/api/v1/cems-wpms-requests/measurement-points'
+
+function getMeasurementPointsRequestApiUrl() {
+  if (typeof window === 'undefined') {
+    return measurementPointsRequestApiUrl
+  }
+
+  if (window.location.hostname === 'd-poms.diw.go.th') {
+    return '/api/v1/cems-wpms-requests/measurement-points'
+  }
+
+  return measurementPointsRequestApiUrl
 }
 
 const factoryRows = [
@@ -522,6 +551,165 @@ function getFactoryFromRequest(request) {
   return factoryRows.find((factory) => factory.id === request.factoryId)
     ?? factoryRows.find((factory) => factory.factoryName === request.factoryName)
     ?? request
+}
+
+function buildMeasurementPointRequestBody(factory = {}, monitoringPointType = 'CEMS') {
+  const isWpms = monitoringPointType === 'WPMS'
+  const systemType = isWpms ? 'WPMS' : 'CEMS'
+
+  return {
+    factoryId: factory.newRegistrationNo ?? '3-106-33/50สบ',
+    factoryName: factory.factoryName ?? 'บริษัท ทดสอบ จำกัด',
+    factoryRegistrationNo: factory.oldRegistrationNo ?? 'รง.4-106-0033',
+    industryMainOrder: factory.industryMainOrder ?? '106',
+    industrySubOrder: factory.industrySubOrder ?? '33',
+    businessActivity: factory.businessActivity ?? 'ผลิตเคมีภัณฑ์',
+    eia: factory.eia ?? 'มี',
+    hasEia: (factory.eia ?? 'มี') === 'มี',
+    projectName: factory.projectName ?? 'โครงการทดสอบ CEMS',
+    address: factory.address ?? '99 หมู่ 1 ตำบลทดสอบ อำเภอเมือง จังหวัดสระบุรี',
+    latitude: Number(factory.latitude ?? 13.7563),
+    longitude: Number(factory.longitude ?? 100.5018),
+    systemType,
+    contactPersons: [
+      {
+        name: 'สมชาย ใจดี',
+        phone: '0812345678',
+        email: 'ops@example.com',
+        position: 'ผู้จัดการสิ่งแวดล้อม',
+      },
+    ],
+    notificationEmails: ['factory@company.com'],
+    officerNotificationEmails: ['officer@poms.go.th'],
+    measurementPoints: [
+      isWpms
+        ? {
+            pointName: 'จุดระบายน้ำทิ้ง A',
+            pointType: 'WASTEWATER',
+            details: {
+              monitoringPointKind: 'WPMS',
+              averageWastewaterDischarge: 500,
+              minWastewaterDischarge: 300,
+              maxWastewaterDischarge: 800,
+              hasTreatmentSystem: 'มี',
+              treatmentSystem: 'ระบบบำบัดชีวภาพ',
+              maxTreatmentCapacity: 1000,
+              instrumentLatitude: 13.7563,
+              instrumentLongitude: 100.5018,
+              wastewaterSource: 'กระบวนการผลิต',
+              dischargeReceivingSource: 'คลองสาธารณะ',
+              connectionDevice: 'อื่นๆ',
+              connectionDeviceOther: 'Gateway เดิมของโรงงาน',
+            },
+            measurementInstruments: {
+              converterBrand: 'Converter Brand',
+              converterModel: 'CV-100',
+              parameters: [
+                {
+                  parameter: 'BOD (mg/l)',
+                  technique: 'UV-Vis',
+                  range: '0-200',
+                  brand: 'Hach',
+                  supplier: 'ABC Tech',
+                  eiaStandard: '30',
+                  standardCondition: true,
+                  dryBasis: false,
+                  oxygenOrExcessAir: false,
+                  standardCriteria: { enabled: false },
+                  eiaCriteria: null,
+                },
+              ],
+            },
+          }
+        : {
+            pointName: 'ปล่องระบาย A',
+            pointType: 'STACK',
+            details: {
+              monitoringPointKind: 'CEMS',
+              productionUnitType: 'หม้อไอน้ำ',
+              productionCapacity: '10 ตันไอน้ำ/ชั่วโมง',
+              cemsInstallationRequiredBy: 'อื่นๆ',
+              cemsInstallationRequiredOther: 'เงื่อนไขเฉพาะโครงการ',
+              legalAnnexNo: 'เฉพาะประกาศปี 65',
+              eligibleParameters: ['CO2 (%)', 'CO2 (ppm)'],
+              exemptedParameters: ['CO2 (%)', 'CO2 (ppm)'],
+              connectedParameters: ['CO2 (%)', 'CO2 (ppm)'],
+              pendingParameters: ['CO2 (%)', 'CO2 (ppm)'],
+              stackShape: 'วงกลม',
+              stackDiameter: 1.2,
+              stackWidth: null,
+              stackLength: null,
+              stackShapeOther: null,
+              stackHeight: 30,
+              monitoringHeight: 20,
+              averageFlowRate: 1200,
+              minFlowRate: 1000,
+              maxFlowRate: 1500,
+              primaryFuel: 'อื่นๆ',
+              primaryFuelOther: 'เชื้อเพลิงผสม',
+              primaryFuelPercent: 80,
+              secondaryFuel: 'อื่นๆ',
+              secondaryFuelOther: 'น้ำมันดีเซล',
+              secondaryFuelPercent: 20,
+              combustionControlSystem: 'ควบคุมอัตโนมัติ',
+              hasTreatmentSystem: 'มี',
+              treatmentSystem: 'อื่นๆ',
+              treatmentSystemOther: 'ระบบบำบัดเฉพาะโรงงาน',
+              stackLatitude: 13.7563,
+              stackLongitude: 100.5018,
+              connectionDevice: 'อื่นๆ',
+              connectionDeviceOther: 'Gateway เดิมของโรงงาน',
+            },
+            documentsAndImages: [
+              {
+                title: 'ภาพถ่ายปล่อง',
+                description: null,
+                link: null,
+                fileName: 'stack.png',
+                fileUrl: 'https://example.com/files/stack.png',
+                fileType: 'image/png',
+                fileSize: 1024,
+              },
+            ],
+            measurementInstruments: {
+              converterBrand: 'Converter Brand',
+              converterModel: 'CV-100',
+              parameters: [
+                {
+                  parameter: 'NOx (ppm)',
+                  technique: 'NDIR',
+                  range: '0-200',
+                  brand: 'Siemens',
+                  supplier: 'ABC Tech',
+                  eiaStandard: '120',
+                  standardCondition: true,
+                  dryBasis: true,
+                  oxygenOrExcessAir: true,
+                  standardCriteria: {
+                    enabled: true,
+                    standardValue: '100',
+                    rows: [
+                      { level: 'normal', min: 0, max: 70 },
+                      { level: 'warning', min: 70, max: 90 },
+                      { level: 'critical', min: 90, max: null },
+                    ],
+                  },
+                  eiaCriteria: {
+                    enabled: true,
+                    standardValue: '100',
+                    rows: [
+                      { level: 'normal', min: 0, max: 70 },
+                      { level: 'warning', min: 70, max: 90 },
+                      { level: 'critical', min: 90, max: null },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+    ],
+    remarks: 'ขอเพิ่มจุดตรวจวัด',
+  }
 }
 
 function StatusChip({ value }) {
@@ -1360,7 +1548,7 @@ function ReadOnlyField({ label, value, sx }) {
 }
 
 function UploadFileField({ label, accept }) {
-  const [fileName, setFileName] = useState('')
+  const [fileName, setFileName] = useState(label.includes('JPG') ? 'mock-image.png' : 'mock-document.pdf')
 
   return (
     <Stack spacing={0.75}>
@@ -1399,7 +1587,7 @@ function UploadFileField({ label, accept }) {
 }
 
 function ParameterMultiSelect({ label, value: controlledValue, onChange }) {
-  const [internalValue, setInternalValue] = useState([])
+  const [internalValue, setInternalValue] = useState(() => cemsParameterOptions.slice(0, 2))
   const value = controlledValue ?? internalValue
 
   return (
@@ -1438,30 +1626,30 @@ function ParameterMultiSelect({ label, value: controlledValue, onChange }) {
 }
 
 function CemsMonitoringPointDetails() {
-  const [stackShape, setStackShape] = useState('')
-  const [primaryFuel, setPrimaryFuel] = useState('')
-  const [secondaryFuel, setSecondaryFuel] = useState('')
-  const [hasTreatmentSystem, setHasTreatmentSystem] = useState('')
-  const [treatmentSystem, setTreatmentSystem] = useState('')
-  const [connectionDevice, setConnectionDevice] = useState('')
+  const [stackShape, setStackShape] = useState('วงกลม')
+  const [primaryFuel, setPrimaryFuel] = useState('อื่นๆ')
+  const [secondaryFuel, setSecondaryFuel] = useState('อื่นๆ')
+  const [hasTreatmentSystem, setHasTreatmentSystem] = useState('มี')
+  const [treatmentSystem, setTreatmentSystem] = useState('อื่นๆ')
+  const [connectionDevice, setConnectionDevice] = useState('อื่นๆ')
 
   return (
     <Stack spacing={2}>
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField label="รหัสจุดตรวจวัด" size="small" fullWidth />
+          <TextField label="รหัสจุดตรวจวัด" size="small" defaultValue="S0001" fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField label="ชื่อจุดตรวจวัด" size="small" fullWidth />
+          <TextField label="ชื่อจุดตรวจวัด" size="small" defaultValue="ปล่องระบาย A" fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField label="ประเภทของหน่วยการผลิต" size="small" fullWidth />
+          <TextField label="ประเภทของหน่วยการผลิต" size="small" defaultValue="หม้อไอน้ำ" fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField label="กำลังการผลิตต่อหน่วย" size="small" fullWidth />
+          <TextField label="กำลังการผลิตต่อหน่วย" size="small" defaultValue="10 ตันไอน้ำ/ชั่วโมง" fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField select label="เข้าข่ายต้องติดตั้ง CEMS ตามกฎหมาย" size="small" fullWidth defaultValue="">
+          <TextField select label="เข้าข่ายต้องติดตั้ง CEMS ตามกฎหมาย" size="small" fullWidth defaultValue="อื่นๆ">
             <MenuItem value="">-</MenuItem>
             <MenuItem value="ประกาศ อก.">ประกาศ อก.</MenuItem>
             <MenuItem value="กกพ.">กกพ.</MenuItem>
@@ -1470,10 +1658,10 @@ function CemsMonitoringPointDetails() {
           </TextField>
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField label="อื่นๆ โปรดระบุ" size="small" fullWidth />
+          <TextField label="อื่นๆ โปรดระบุ" size="small" defaultValue="เงื่อนไขเฉพาะโครงการ" fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField select label="เข้าข่ายตามบัญชีแนบท้ายลำดับที่" size="small" fullWidth defaultValue="">
+          <TextField select label="เข้าข่ายตามบัญชีแนบท้ายลำดับที่" size="small" fullWidth defaultValue="เฉพาะประกาศปี 65">
             <MenuItem value="">-</MenuItem>
             <MenuItem value="เฉพาะประกาศปี 65">เฉพาะประกาศปี 65</MenuItem>
             <MenuItem value="กทม.">กทม.</MenuItem>
@@ -1512,42 +1700,42 @@ function CemsMonitoringPointDetails() {
         </Grid>
         {stackShape === 'วงกลม' ? (
           <Grid size={{ xs: 12, md: 3 }}>
-            <TextField label="เส้นผ่านศูนย์กลาง (เมตร)" size="small" fullWidth />
+            <TextField label="เส้นผ่านศูนย์กลาง (เมตร)" size="small" defaultValue="1.2" fullWidth />
           </Grid>
         ) : null}
         {stackShape === 'สี่เหลี่ยม' ? (
           <>
             <Grid size={{ xs: 12, md: 3 }}>
-              <TextField label="กว้าง (เมตร)" size="small" fullWidth />
+              <TextField label="กว้าง (เมตร)" size="small" defaultValue="1.5" fullWidth />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <TextField label="ยาว (เมตร)" size="small" fullWidth />
+              <TextField label="ยาว (เมตร)" size="small" defaultValue="2" fullWidth />
             </Grid>
           </>
         ) : null}
         {stackShape === 'อื่นๆ' ? (
           <Grid size={{ xs: 12, md: 3 }}>
-            <TextField label="โปรดระบุ" size="small" fullWidth />
+            <TextField label="โปรดระบุ" size="small" defaultValue="ปล่องทรงรี" fullWidth />
           </Grid>
         ) : null}
       </Grid>
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField label="ความสูงปล่อง (เมตร)" size="small" fullWidth />
+          <TextField label="ความสูงปล่อง (เมตร)" size="small" defaultValue="30" fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField label="ความสูงของจุดตรวจวัด (เมตร)" size="small" fullWidth />
+          <TextField label="ความสูงของจุดตรวจวัด (เมตร)" size="small" defaultValue="20" fullWidth />
         </Grid>
       </Grid>
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField label="อัตราการระบายอากาศเฉลี่ย (m³/hr)" size="small" fullWidth />
+          <TextField label="อัตราการระบายอากาศเฉลี่ย (m³/hr)" size="small" defaultValue="1200" fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField label="อัตราการระบายอากาศต่ำสุด (m³/hr)" size="small" fullWidth />
+          <TextField label="อัตราการระบายอากาศต่ำสุด (m³/hr)" size="small" defaultValue="1000" fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField label="อัตราการระบายอากาศสูงสุด (m³/hr)" size="small" fullWidth />
+          <TextField label="อัตราการระบายอากาศสูงสุด (m³/hr)" size="small" defaultValue="1500" fullWidth />
         </Grid>
       </Grid>
       <Grid container spacing={2}>
@@ -1569,10 +1757,10 @@ function CemsMonitoringPointDetails() {
           </TextField>
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField label="โปรดระบุ" size="small" fullWidth disabled={primaryFuel !== 'อื่นๆ'} />
+          <TextField label="โปรดระบุ" size="small" defaultValue="เชื้อเพลิงผสม" fullWidth disabled={primaryFuel !== 'อื่นๆ'} />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField label="ร้อยละโดยประมาณ" size="small" fullWidth />
+          <TextField label="ร้อยละโดยประมาณ" size="small" defaultValue="80" fullWidth />
         </Grid>
       </Grid>
       <Grid container spacing={2}>
@@ -1595,15 +1783,15 @@ function CemsMonitoringPointDetails() {
           </TextField>
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField label="โปรดระบุ" size="small" fullWidth disabled={secondaryFuel !== 'อื่นๆ'} />
+          <TextField label="โปรดระบุ" size="small" defaultValue="น้ำมันดีเซล" fullWidth disabled={secondaryFuel !== 'อื่นๆ'} />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField label="ร้อยละโดยประมาณ" size="small" fullWidth />
+          <TextField label="ร้อยละโดยประมาณ" size="small" defaultValue="20" fullWidth />
         </Grid>
       </Grid>
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField label="ระบบการควบคุมปริมาณอากาศและสภาวะการเผาไหม้" size="small" fullWidth />
+          <TextField label="ระบบการควบคุมปริมาณอากาศและสภาวะการเผาไหม้" size="small" defaultValue="ควบคุมอัตโนมัติ" fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
           <TextField
@@ -1639,16 +1827,16 @@ function CemsMonitoringPointDetails() {
         ) : null}
         {hasTreatmentSystem === 'มี' && treatmentSystem === 'อื่นๆ' ? (
           <Grid size={{ xs: 12, md: 3 }}>
-            <TextField label="ระบุรายละเอียดของระบบบำบัด" size="small" fullWidth />
+            <TextField label="ระบุรายละเอียดของระบบบำบัด" size="small" defaultValue="ระบบบำบัดเฉพาะโรงงาน" fullWidth />
           </Grid>
         ) : null}
       </Grid>
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField label="พิกัดปล่องที่ติดตั้ง CEMS (ละติจูด)" size="small" fullWidth />
+          <TextField label="พิกัดปล่องที่ติดตั้ง CEMS (ละติจูด)" size="small" defaultValue="13.7563" fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField label="พิกัดปล่องที่ติดตั้ง CEMS (ลองติจูด)" size="small" fullWidth />
+          <TextField label="พิกัดปล่องที่ติดตั้ง CEMS (ลองติจูด)" size="small" defaultValue="100.5018" fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
           <TextField
@@ -1669,7 +1857,7 @@ function CemsMonitoringPointDetails() {
         </Grid>
         {connectionDevice === 'อื่นๆ' ? (
           <Grid size={{ xs: 12, md: 3 }}>
-            <TextField label="โปรดระบุ" size="small" fullWidth />
+            <TextField label="โปรดระบุ" size="small" defaultValue="Gateway เดิมของโรงงาน" fullWidth />
           </Grid>
         ) : null}
       </Grid>
@@ -1699,12 +1887,12 @@ function DocumentsAndImagesSection() {
                 </Typography>
               ) : null}
             </Box>
-            <Grid container spacing={2}>
-              {item.hasLink ? (
-                <Grid size={{ xs: 12, md: 3 }}>
-                  <TextField label="Link" size="small" fullWidth />
-                </Grid>
-              ) : null}
+                <Grid container spacing={2}>
+                  {item.hasLink ? (
+                    <Grid size={{ xs: 12, md: 3 }}>
+                  <TextField label="Link" size="small" defaultValue="https://example.com/files/mock-document.pdf" fullWidth />
+                    </Grid>
+                  ) : null}
               <Grid size={{ xs: 12, md: 3 }}>
                 <UploadFileField label={item.uploadLabel} accept={item.accept} />
               </Grid>
@@ -1729,6 +1917,12 @@ function DocumentsAndImagesSection() {
 }
 
 function SpecialCriteriaTable() {
+  const mockCriteriaValues = {
+    normal: { min: '0', max: '70' },
+    warning: { min: '70', max: '90' },
+    critical: { min: '90', max: '' },
+  }
+
   return (
     <TableContainer sx={{ border: 1, borderColor: 'divider' }}>
       <Table size="small" sx={borderedTableSx}>
@@ -1749,7 +1943,7 @@ function SpecialCriteriaTable() {
           {specialCriteriaRows.map((row) => (
             <TableRow key={row.key}>
               <TableCell>
-                <TextField size="small" fullWidth />
+                <TextField size="small" defaultValue={mockCriteriaValues[row.key].min} fullWidth />
               </TableCell>
               <TableCell align="center">
                 <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', justifyContent: 'center' }}>
@@ -1759,7 +1953,7 @@ function SpecialCriteriaTable() {
                 </Stack>
               </TableCell>
               <TableCell>
-                <TextField size="small" fullWidth />
+                <TextField size="small" defaultValue={mockCriteriaValues[row.key].max} fullWidth />
               </TableCell>
             </TableRow>
           ))}
@@ -1772,11 +1966,11 @@ function SpecialCriteriaTable() {
 function StandardCriteriaSection({ label }) {
   return (
     <Stack spacing={1.5}>
-      <FormControlLabel control={<Checkbox size="small" />} label={label} />
+      <FormControlLabel control={<Checkbox size="small" defaultChecked />} label={label} />
       <SpecialCriteriaTable />
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 6 }}>
-          <TextField label="ค่ามาตรฐาน" size="small" fullWidth />
+          <TextField label="ค่ามาตรฐาน" size="small" defaultValue="100" fullWidth />
         </Grid>
       </Grid>
     </Stack>
@@ -1785,15 +1979,15 @@ function StandardCriteriaSection({ label }) {
 
 function InstrumentDataDialog({ open, parameterOptions, value, onClose, onSave }) {
   const [form, setForm] = useState({
-    parameter: value?.parameter ?? '',
-    technique: value?.technique ?? '',
-    range: value?.range ?? '',
-    brand: value?.brand ?? '',
-    supplier: value?.supplier ?? '',
-    eiaStandard: value?.eiaStandard ?? '',
-    standardCondition: value?.standardCondition ?? false,
-    dryBasis: value?.dryBasis ?? false,
-    oxygenOrExcessAir: value?.oxygenOrExcessAir ?? false,
+    parameter: value?.parameter ?? parameterOptions[0] ?? '',
+    technique: value?.technique ?? mockInstrumentParameter.technique,
+    range: value?.range ?? mockInstrumentParameter.range,
+    brand: value?.brand ?? mockInstrumentParameter.brand,
+    supplier: value?.supplier ?? mockInstrumentParameter.supplier,
+    eiaStandard: value?.eiaStandard ?? mockInstrumentParameter.eiaStandard,
+    standardCondition: value?.standardCondition ?? true,
+    dryBasis: value?.dryBasis ?? true,
+    oxygenOrExcessAir: value?.oxygenOrExcessAir ?? true,
   })
 
   const updateForm = (field, nextValue) => setForm((current) => ({ ...current, [field]: nextValue }))
@@ -1932,7 +2126,12 @@ function InstrumentDataDialog({ open, parameterOptions, value, onClose, onSave }
 }
 
 function MeasurementInstrumentSection({ parameterOptions }) {
-  const [instrumentRows, setInstrumentRows] = useState([])
+  const [instrumentRows, setInstrumentRows] = useState(() => [
+    {
+      ...mockInstrumentParameter,
+      parameter: parameterOptions[0] ?? mockInstrumentParameter.parameter,
+    },
+  ])
   const [editingRowIndex, setEditingRowIndex] = useState(null)
   const [instrumentDialogOpen, setInstrumentDialogOpen] = useState(false)
   const editingValue = editingRowIndex === null ? null : instrumentRows[editingRowIndex]
@@ -1946,10 +2145,10 @@ function MeasurementInstrumentSection({ parameterOptions }) {
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ justifyContent: 'space-between' }}>
           <Grid container spacing={2} sx={{ flex: 1 }}>
             <Grid size={{ xs: 12, md: 3 }}>
-              <TextField label="อุปกรณ์แปลงสัญญาณ (Converter) ยี่ห้อ" size="small" fullWidth />
+              <TextField label="อุปกรณ์แปลงสัญญาณ (Converter) ยี่ห้อ" size="small" defaultValue="Converter Brand" fullWidth />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <TextField label="อุปกรณ์แปลงสัญญาณ (Converter) รุ่น" size="small" fullWidth />
+              <TextField label="อุปกรณ์แปลงสัญญาณ (Converter) รุ่น" size="small" defaultValue="CV-100" fullWidth />
             </Grid>
           </Grid>
           <Button
@@ -2068,28 +2267,28 @@ function MeasurementInstrumentSection({ parameterOptions }) {
 }
 
 function WpmsMonitoringPointDetails() {
-  const [hasTreatmentSystem, setHasTreatmentSystem] = useState('')
-  const [connectionDevice, setConnectionDevice] = useState('')
+  const [hasTreatmentSystem, setHasTreatmentSystem] = useState('มี')
+  const [connectionDevice, setConnectionDevice] = useState('อื่นๆ')
 
   return (
     <Stack spacing={2}>
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField label="รหัสจุดตรวจวัด" size="small" fullWidth />
+          <TextField label="รหัสจุดตรวจวัด" size="small" defaultValue="P0001" fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField label="ชื่อจุดตรวจวัด" size="small" fullWidth />
+          <TextField label="ชื่อจุดตรวจวัด" size="small" defaultValue="จุดระบายน้ำทิ้ง A" fullWidth />
         </Grid>
       </Grid>
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField label="อัตราการระบายน้ำทิ้งเฉลี่ย (m³/d)" size="small" fullWidth />
+          <TextField label="อัตราการระบายน้ำทิ้งเฉลี่ย (m³/d)" size="small" defaultValue="500" fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField label="อัตราการระบายน้ำทิ้งต่ำสุด (m³/d)" size="small" fullWidth />
+          <TextField label="อัตราการระบายน้ำทิ้งต่ำสุด (m³/d)" size="small" defaultValue="300" fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField label="อัตราการระบายน้ำทิ้งสูงสุด (m³/d)" size="small" fullWidth />
+          <TextField label="อัตราการระบายน้ำทิ้งสูงสุด (m³/d)" size="small" defaultValue="800" fullWidth />
         </Grid>
       </Grid>
       <Grid container spacing={2}>
@@ -2108,28 +2307,28 @@ function WpmsMonitoringPointDetails() {
           </TextField>
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField label="ระบุ" size="small" fullWidth />
+          <TextField label="ระบุ" size="small" defaultValue="ระบบบำบัดชีวภาพ" fullWidth />
         </Grid>
         {hasTreatmentSystem === 'มี' ? (
           <Grid size={{ xs: 12, md: 3 }}>
-            <TextField label="ปริมาณรองรับน้ำเสียสูงสุดของระบบบำบัด" size="small" fullWidth />
+            <TextField label="ปริมาณรองรับน้ำเสียสูงสุดของระบบบำบัด" size="small" defaultValue="1000" fullWidth />
           </Grid>
         ) : null}
       </Grid>
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField label="พิกัดจุดติดตั้งเครื่องมือตรวจวัด (ละติจูด)" size="small" fullWidth />
+          <TextField label="พิกัดจุดติดตั้งเครื่องมือตรวจวัด (ละติจูด)" size="small" defaultValue="13.7563" fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField label="พิกัดจุดติดตั้งเครื่องมือตรวจวัด (ลองติจูด)" size="small" fullWidth />
+          <TextField label="พิกัดจุดติดตั้งเครื่องมือตรวจวัด (ลองติจูด)" size="small" defaultValue="100.5018" fullWidth />
         </Grid>
       </Grid>
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField label="แหล่งกำเนิดน้ำเสีย" size="small" fullWidth />
+          <TextField label="แหล่งกำเนิดน้ำเสีย" size="small" defaultValue="กระบวนการผลิต" fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField label="แหล่งรองรับน้ำทิ้ง" size="small" fullWidth />
+          <TextField label="แหล่งรองรับน้ำทิ้ง" size="small" defaultValue="คลองสาธารณะ" fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
           <TextField
@@ -2150,7 +2349,7 @@ function WpmsMonitoringPointDetails() {
         </Grid>
         {connectionDevice === 'อื่นๆ' ? (
           <Grid size={{ xs: 12, md: 3 }}>
-            <TextField label="โปรดระบุ" size="small" fullWidth />
+            <TextField label="โปรดระบุ" size="small" defaultValue="Gateway เดิมของโรงงาน" fullWidth />
           </Grid>
         ) : null}
       </Grid>
@@ -2163,16 +2362,16 @@ function MobileMonitoringPointDetails() {
     <Stack spacing={2}>
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField label="รหัสหน่วยตรวจวัด" size="small" fullWidth />
+          <TextField label="รหัสหน่วยตรวจวัด" size="small" defaultValue="M0001" fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField label="ชื่อหน่วยตรวจวัด" size="small" fullWidth />
+          <TextField label="ชื่อหน่วยตรวจวัด" size="small" defaultValue="หน่วยตรวจวัดเคลื่อนที่ 1" fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField label="หมายเลขเครื่องมือ/อุปกรณ์" size="small" fullWidth />
+          <TextField label="หมายเลขเครื่องมือ/อุปกรณ์" size="small" defaultValue="MB-2026-001" fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField label="ผู้รับผิดชอบหน่วยตรวจวัด" size="small" fullWidth />
+          <TextField label="ผู้รับผิดชอบหน่วยตรวจวัด" size="small" defaultValue="สมชาย ใจดี" fullWidth />
         </Grid>
       </Grid>
       <Grid container spacing={2}>
@@ -2180,7 +2379,7 @@ function MobileMonitoringPointDetails() {
           <ParameterMultiSelect label="พารามิเตอร์ที่ตรวจวัด" />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField label="อุปกรณ์/โปรแกรมที่ใช้เชื่อมต่อ" size="small" fullWidth />
+          <TextField label="อุปกรณ์/โปรแกรมที่ใช้เชื่อมต่อ" size="small" defaultValue="POMS Client (ใหม่)" fullWidth />
         </Grid>
       </Grid>
     </Stack>
@@ -2192,30 +2391,30 @@ function StationMonitoringPointDetails() {
     <Stack spacing={2}>
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField label="รหัสสถานีตรวจวัด" size="small" fullWidth />
+          <TextField label="รหัสสถานีตรวจวัด" size="small" defaultValue="ST0001" fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField label="ชื่อสถานีตรวจวัด" size="small" fullWidth />
+          <TextField label="ชื่อสถานีตรวจวัด" size="small" defaultValue="สถานีตรวจวัด A" fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField label="ประเภทสถานี" size="small" fullWidth />
+          <TextField label="ประเภทสถานี" size="small" defaultValue="สถานีถาวร" fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField label="พื้นที่ติดตั้งสถานี" size="small" fullWidth />
+          <TextField label="พื้นที่ติดตั้งสถานี" size="small" defaultValue="หน้าโรงงาน" fullWidth />
         </Grid>
       </Grid>
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField label="พิกัดสถานี (ละติจูด)" size="small" fullWidth />
+          <TextField label="พิกัดสถานี (ละติจูด)" size="small" defaultValue="13.7563" fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField label="พิกัดสถานี (ลองติจูด)" size="small" fullWidth />
+          <TextField label="พิกัดสถานี (ลองติจูด)" size="small" defaultValue="100.5018" fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
           <ParameterMultiSelect label="พารามิเตอร์ที่ตรวจวัด" />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField label="อุปกรณ์/โปรแกรมที่ใช้เชื่อมต่อ" size="small" fullWidth />
+          <TextField label="อุปกรณ์/โปรแกรมที่ใช้เชื่อมต่อ" size="small" defaultValue="POMS Client (ใหม่)" fullWidth />
         </Grid>
       </Grid>
     </Stack>
@@ -2235,16 +2434,49 @@ function MonitoringPointDetails({ point }) {
   return <StationMonitoringPointDetails />
 }
 
-function RequestFormBottomSheet({ open, formType, factory, onClose }) {
+function RequestFormBottomSheet({ open, formType, factory, accessToken, onClose }) {
   const [contacts, setContacts] = useState([{ id: 1 }])
   const [factoryEmails, setFactoryEmails] = useState([{ id: 1, value: 'factory@company.com' }])
-  const [monitoringPoints, setMonitoringPoints] = useState([])
-  const [selectedMonitoringPointId, setSelectedMonitoringPointId] = useState(null)
+  const [monitoringPoints, setMonitoringPoints] = useState([{ id: 1, type: 'CEMS' }])
+  const [selectedMonitoringPointId, setSelectedMonitoringPointId] = useState(1)
   const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
   const officerEmails = ['officer@poms.go.th']
   const showMonitoringPointSection = formType === 'เพิ่มจุดตรวจวัด'
   const selectedMonitoringPoint = monitoringPoints.find((point) => point.id === selectedMonitoringPointId)
     ?? monitoringPoints[0]
+  const submitRequest = async () => {
+    setIsSubmitting(true)
+    setSubmitError('')
+
+    try {
+      const result = await fetch(getMeasurementPointsRequestApiUrl(), {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken || '$OPERATOR_TOKEN'}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(buildMeasurementPointRequestBody(factory, selectedMonitoringPoint?.type)),
+      })
+
+      if (!result.ok) {
+        throw new Error(`ส่งแบบฟอร์มไม่สำเร็จ (${result.status} ${result.statusText})`)
+      }
+
+      setSubmitConfirmOpen(false)
+      onClose()
+    } catch (error) {
+      const message = error instanceof TypeError
+        ? 'ส่งแบบฟอร์มไม่สำเร็จ: browser ไม่สามารถเชื่อมต่อ API ได้ กรุณาเปิดผ่าน Vite dev server หรือ domain d-poms.diw.go.th และตรวจ CORS/HTTPS ของ API'
+        : error instanceof Error
+          ? error.message
+          : 'ส่งแบบฟอร์มไม่สำเร็จ'
+      setSubmitError(message)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
 
   return (
     <Drawer
@@ -2371,16 +2603,16 @@ function RequestFormBottomSheet({ open, formType, factory, onClose }) {
                     key={contact.id}
                   >
                     <Grid size={{ xs: 12, md: 3 }}>
-                      <TextField label="ชื่อ-นามสกุล" size="small" fullWidth />
+                      <TextField label="ชื่อ-นามสกุล" size="small" defaultValue="สมชาย ใจดี" fullWidth />
                     </Grid>
                     <Grid size={{ xs: 12, md: 3 }}>
-                      <TextField label="ตำแหน่ง" size="small" fullWidth />
+                      <TextField label="ตำแหน่ง" size="small" defaultValue="ผู้จัดการสิ่งแวดล้อม" fullWidth />
                     </Grid>
                     <Grid size={{ xs: 12, md: 3 }}>
-                      <TextField label="เบอร์โทร" size="small" fullWidth />
+                      <TextField label="เบอร์โทร" size="small" defaultValue="0812345678" fullWidth />
                     </Grid>
                     <Grid size={{ xs: 12, md: 3 }}>
-                      <TextField label="อีเมล" size="small" fullWidth />
+                      <TextField label="อีเมล" size="small" defaultValue="ops@example.com" fullWidth />
                     </Grid>
                   </Grid>
                 ))}
@@ -2524,20 +2756,23 @@ function RequestFormBottomSheet({ open, formType, factory, onClose }) {
             <Typography color="text.secondary">
               เมื่อส่งแบบฟอร์มคำขอแล้วจะไม่สามารถแก้ไขได้ จนกว่าจะผ่านการพิจารณาจากเจ้าหน้าที่
             </Typography>
+            {submitError ? (
+              <Typography color="error" variant="body2">
+                {submitError}
+              </Typography>
+            ) : null}
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button color="inherit" onClick={() => setSubmitConfirmOpen(false)}>
+          <Button color="inherit" disabled={isSubmitting} onClick={() => setSubmitConfirmOpen(false)}>
             ยกเลิก
           </Button>
           <Button
             variant="contained"
-            onClick={() => {
-              setSubmitConfirmOpen(false)
-              onClose()
-            }}
+            disabled={isSubmitting}
+            onClick={submitRequest}
           >
-            ยืนยันส่งแบบฟอร์ม
+            {isSubmitting ? 'กำลังส่ง' : 'ยืนยันส่งแบบฟอร์ม'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -2582,7 +2817,7 @@ function getRequestColumns(isOperator, onOpenConnectionSettings, onOpenMonitorin
   ]
 }
 
-function ConnectionRequestPage({ userType = '' }) {
+function ConnectionRequestPage({ userType = '', accessToken = '' }) {
   const [requestForm, setRequestForm] = useState(null)
   const [monitoringPointFactory, setMonitoringPointFactory] = useState(null)
   const [connectionSettingsContext, setConnectionSettingsContext] = useState(null)
@@ -2738,6 +2973,7 @@ function ConnectionRequestPage({ userType = '' }) {
         open={Boolean(requestForm)}
         formType={requestForm?.formType ?? ''}
         factory={requestForm?.factory}
+        accessToken={accessToken}
         onClose={() => setRequestForm(null)}
       />
       <MonitoringPointListDialog
