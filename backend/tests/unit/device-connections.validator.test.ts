@@ -32,6 +32,75 @@ describe('device connection validators', () => {
     expect(result.success).toBe(true);
   });
 
+  it('accepts the legacy Modbus RTU device setup form payload', () => {
+    const result = createDeviceConnectionConfigSchema.safeParse({
+      stationId: 'SO001',
+      connection: 'Modbus RTU',
+      deviceCode: 'SO001/01',
+      COMPORT: '1',
+      slaveID: '1',
+      baudRate: '9600 (default)',
+      parity: 'None (default)',
+      stopBits: '1 (default)',
+      dataBits: '8 (default)',
+      measurementMin: '0',
+      measurementMax: '200',
+      quantity: '1',
+      selectedParameters: 'ทั้งหมด',
+      startAt: null,
+      endAt: null,
+      status: 'Normal',
+      channels: [
+        {
+          addressID: '40001',
+          parameter: 'NOx (ppm)',
+          min: '0',
+          max: '200',
+          format: 'ค่าข้อมูลตรวจวัด',
+          offset: '0',
+          encodingData: 'Signed16 - Big Endian',
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toMatchObject({
+        stationId: 'SO001',
+        deviceCode: 'SO001/01',
+        protocol: 'MODBUS_RTU',
+        settings: {
+          comPort: 1,
+          slaveId: 1,
+          baudRate: 9600,
+          parity: 'NONE',
+          stopBits: 1,
+          dataBits: 8,
+          quantity: 1,
+          valueRange: { min: 0, max: 200 },
+        },
+        channels: [
+          {
+            addressId: 40001,
+            dataType: 'NOx',
+            unit: 'ppm',
+            valueRange: { min: 0, max: 200 },
+            valueFormat: 'MEASUREMENT_VALUE',
+            offset: 0,
+            encoding: 'SIGNED16_BIG_ENDIAN',
+          },
+        ],
+        statusManagement: {
+          selectedParameters: ['ทั้งหมด'],
+          startAt: null,
+          endAt: null,
+          status: 'Normal',
+          schedules: [],
+        },
+      });
+    }
+  });
+
   it('accepts optional status management for config form prefill', () => {
     const result = createDeviceConnectionConfigSchema.safeParse({
       stationId: 'STATION_001',

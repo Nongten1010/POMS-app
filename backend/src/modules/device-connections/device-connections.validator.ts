@@ -50,6 +50,21 @@ const modbusEncodingSchema = z.enum([
   'FLOAT64_LITTLE_ENDIAN',
 ]);
 
+const modbusEncodingAliases = {
+  SIGNED16_BIG_ENDIAN: 'SIGNED16_BIG_ENDIAN',
+  SIGNED16_LITTLE_ENDIAN: 'SIGNED16_LITTLE_ENDIAN',
+  UNSIGNED16_BIG_ENDIAN: 'UNSIGNED16_BIG_ENDIAN',
+  UNSIGNED16_LITTLE_ENDIAN: 'UNSIGNED16_LITTLE_ENDIAN',
+  SIGNED32_BIG_ENDIAN: 'SIGNED32_BIG_ENDIAN',
+  SIGNED32_LITTLE_ENDIAN: 'SIGNED32_LITTLE_ENDIAN',
+  UNSIGNED32_BIG_ENDIAN: 'UNSIGNED32_BIG_ENDIAN',
+  UNSIGNED32_LITTLE_ENDIAN: 'UNSIGNED32_LITTLE_ENDIAN',
+  FLOAT32_BIG_ENDIAN: 'FLOAT32_BIG_ENDIAN',
+  FLOAT32_LITTLE_ENDIAN: 'FLOAT32_LITTLE_ENDIAN',
+  FLOAT64_BIG_ENDIAN: 'FLOAT64_BIG_ENDIAN',
+  FLOAT64_LITTLE_ENDIAN: 'FLOAT64_LITTLE_ENDIAN',
+} as const;
+
 const modbusChannelSchema = z
   .object({
     addressId,
@@ -169,7 +184,7 @@ const baseDeviceConnectionSchema = z.object({
     .default(null),
 });
 
-export const createDeviceConnectionConfigSchema = z.discriminatedUnion('protocol', [
+const deviceConnectionConfigSchema = z.discriminatedUnion('protocol', [
   baseDeviceConnectionSchema
     .extend({
       protocol: z.literal(DEVICE_CONNECTION_PROTOCOL.MODBUS_RTU),
@@ -200,6 +215,11 @@ export const createDeviceConnectionConfigSchema = z.discriminatedUnion('protocol
     .strict(),
 ]);
 
+export const createDeviceConnectionConfigSchema = z.preprocess(
+  normalizeLegacyModbusRtuFormPayload,
+  deviceConnectionConfigSchema,
+);
+
 export const testDeviceConnectionSchema = createDeviceConnectionConfigSchema;
 
 export const listDeviceConnectionConfigsQuerySchema = z
@@ -218,3 +238,184 @@ export const deviceConnectionConfigIdParamsSchema = z
 export type CreateDeviceConnectionConfigSchemaInput = z.infer<
   typeof createDeviceConnectionConfigSchema
 >;
+
+function normalizeLegacyModbusRtuFormPayload(value: unknown): unknown {
+  if (!isRecord(value) || !isLegacyModbusRtuPayload(value)) return value;
+
+  const normalized: Record<string, unknown> = {
+    stationId: value.stationId,
+    deviceCode: value.deviceCode,
+    protocol: DEVICE_CONNECTION_PROTOCOL.MODBUS_RTU,
+    settings: {
+      comPort: parseLeadingNumber(value.COMPORT),
+      slaveId: parseLeadingNumber(value.slaveID),
+      baudRate: parseLeadingNumber(value.baudRate),
+      parity: normalizeParity(value.parity),
+      stopBits: parseLeadingNumber(value.stopBits),
+      dataBits: parseLeadingNumber(value.dataBits),
+      quantity: parseLeadingNumber(value.quantity),
+      valueRange: {
+        min: parseLeadingNumber(value.measurementMin),
+        max: parseLeadingNumber(value.measurementMax),
+      },
+    },
+    channels: normalizeLegacyModbusChannels(value.channels),
+    statusManagement: normalizeLegacyStatusManagement(value),
+  };
+
+  copyUnknownFields(value, normalized, legacyModbusTopLevelKeys);
+  return removeUndefinedProperties(normalized);
+}
+
+function isLegacyModbusRtuPayload(value: Record<string, unknown>): boolean {
+  if (typeof value.protocol === 'string') return false;
+  return typeof value.connection === 'string' && normalizeToken(value.connection) === 'MODBUS_RTU';
+}
+
+function normalizeLegacyModbusChannels(value: unknown): unknown {
+  if (!Array.isArray(value)) return value;
+  return value.map((channel) => {
+    if (!isRecord(channel)) return channel;
+    const parameter = parseParameterWithUnit(channel.parameter);
+    const normalized: Record<string, unknown> = {
+      addressId: parseLeadingNumber(channel.addressID),
+      dataType: parameter.dataType,
+      unit: parameter.unit,
+      valueRange: {
+        min: parseLeadingNumber(channel.min),
+        max: parseLeadingNumber(channel.max),
+      },
+      valueFormat: normalizeValueFormat(channel.format),
+      offset: parseLeadingNumber(channel.offset),
+      encoding: normalizeEncoding(channel.encodingData),
+      status: channel.status,
+    };
+    copyUnknownFields(channel, normalized, legacyModbusChannelKeys);
+    return removeUndefinedProperties(normalized);
+  });
+}
+
+function normalizeLegacyStatusManagement(value: Record<string, unknown>): unknown {
+  if (
+    value.selectedParameters === undefined &&
+    value.status === undefined &&
+    value.startAt === undefined &&
+    value.endAt === undefined
+  ) {
+    return undefined;
+  }
+
+  return {
+    selectedParameters:
+      typeof value.selectedParameters === 'string'
+        ? [value.selectedParameters.trim()]
+        : value.selectedParameters,
+    startAt: value.startAt ?? null,
+    endAt: value.endAt ?? null,
+    status: value.status,
+    schedules: Array.isArray(value.schedules) ? value.schedules : [],
+  };
+}
+
+function normalizeParity(value: unknown): unknown {
+  if (typeof value !== 'string') return value;
+  const token = normalizeToken(value);
+  if (token.startsWith('NONE')) return 'NONE';
+  if (token.startsWith('EVEN')) return 'EVEN';
+  if (token.startsWith('ODD')) return 'ODD';
+  return value;
+}
+
+function normalizeValueFormat(value: unknown): unknown {
+  if (typeof value !== 'string') return value;
+  if (value.includes('ตรวจวัด')) return 'MEASUREMENT_VALUE';
+  const token = normalizeToken(value);
+  if (token.includes('MEASUREMENT')) return 'MEASUREMENT_VALUE';
+  if (token.includes('CURRENT')) return 'CURRENT';
+  if (token.includes('VOLTAGE')) return 'VOLTAGE';
+  return value;
+}
+
+function normalizeEncoding(value: unknown): unknown {
+  if (typeof value !== 'string') return value;
+  const token = normalizeToken(value);
+  return modbusEncodingAliases[token as keyof typeof modbusEncodingAliases] ?? value;
+}
+
+function normalizeToken(value: string): string {
+  return value
+    .trim()
+    .toUpperCase()
+    .replace(/\([^)]*\)/g, '')
+    .replace(/[^A-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+function parseLeadingNumber(value: unknown): unknown {
+  if (typeof value === 'number') return value;
+  if (typeof value !== 'string') return value;
+  const match = value.trim().match(/^-?\d+(?:\.\d+)?/);
+  if (!match) return value;
+  const parsed = Number(match[0]);
+  return Number.isFinite(parsed) ? parsed : value;
+}
+
+function parseParameterWithUnit(value: unknown): { dataType?: string; unit?: string } {
+  if (typeof value !== 'string') return {};
+  const match = value.trim().match(/^(.+?)\s*\(([^)]+)\)$/);
+  if (!match) return { dataType: value.trim() };
+  return {
+    dataType: match[1]?.trim(),
+    unit: match[2]?.trim(),
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function copyUnknownFields(
+  source: Record<string, unknown>,
+  target: Record<string, unknown>,
+  knownKeys: Set<string>,
+): void {
+  for (const [key, sourceValue] of Object.entries(source)) {
+    if (!knownKeys.has(key)) target[key] = sourceValue;
+  }
+}
+
+function removeUndefinedProperties(value: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined));
+}
+
+const legacyModbusTopLevelKeys = new Set([
+  'stationId',
+  'connection',
+  'deviceCode',
+  'COMPORT',
+  'slaveID',
+  'baudRate',
+  'parity',
+  'stopBits',
+  'dataBits',
+  'measurementMin',
+  'measurementMax',
+  'quantity',
+  'selectedParameters',
+  'startAt',
+  'endAt',
+  'status',
+  'schedules',
+  'channels',
+]);
+
+const legacyModbusChannelKeys = new Set([
+  'addressID',
+  'parameter',
+  'min',
+  'max',
+  'format',
+  'offset',
+  'encodingData',
+  'status',
+]);
