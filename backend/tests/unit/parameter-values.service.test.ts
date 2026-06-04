@@ -5,6 +5,7 @@ jest.mock('../../src/modules/parameter-values/parameter-values.repository', () =
     canAccessStation: jest.fn(),
     latestRow: jest.fn(),
     listAccessibleStationIds: jest.fn(),
+    listRegisteredParameters: jest.fn(),
     listRows: jest.fn(),
     listTables: jest.fn(),
     tableExists: jest.fn(),
@@ -24,18 +25,23 @@ describe('parameterValuesService', () => {
     jest.clearAllMocks();
     mockedRepository.canAccessStation.mockResolvedValue(true);
     mockedRepository.listAccessibleStationIds.mockResolvedValue(['S0001']);
+    mockedRepository.listRegisteredParameters.mockResolvedValue(['CO2']);
   });
 
-  it('lists values from the interval table with source metadata', async () => {
+  it('lists only registered parameter columns from the interval table with source metadata', async () => {
+    mockedRepository.listRegisteredParameters.mockResolvedValue(['NOx', 'O2']);
     mockedRepository.tableExists.mockResolvedValue(true);
     mockedRepository.listRows.mockResolvedValue({
       tableName: 'S0001_data_real',
       rows: [
         {
           station_id: 'S0001',
-          co2_value: '12.3',
-          co2_units: 'ppm',
-          co2_status: 'Normal',
+          nox_value: '12.3',
+          nox_units: 'ppm',
+          nox_status: 'Normal',
+          o2_value: '7.1',
+          o2_units: '%',
+          co2_value: '400',
           cdate: '2026-06-04',
           ctime: '10:00:00',
         },
@@ -58,7 +64,13 @@ describe('parameterValuesService', () => {
       data: [
         {
           station_id: 'S0001',
-          co2_value: '12.3',
+          nox_value: '12.3',
+          nox_units: 'ppm',
+          nox_status: 'Normal',
+          o2_value: '7.1',
+          o2_units: '%',
+          cdate: '2026-06-04',
+          ctime: '10:00:00',
         },
       ],
       meta: {
@@ -69,8 +81,20 @@ describe('parameterValuesService', () => {
         startDate: '2026-06-04',
         endDate: '2026-06-04',
         count: 1,
+        registeredParameters: ['NOx', 'O2'],
+        returnedColumns: [
+          'station_id',
+          'nox_value',
+          'nox_units',
+          'nox_status',
+          'o2_value',
+          'o2_units',
+          'cdate',
+          'ctime',
+        ],
       },
     });
+    expect(result.data[0]).not.toHaveProperty('co2_value');
   });
 
   it('throws not found when the station interval table does not exist', async () => {
@@ -145,8 +169,51 @@ describe('parameterValuesService', () => {
         schemaName: 'ingest',
         tableName: 'S0001_data_real',
         count: 1,
+        registeredParameters: ['CO2'],
+        returnedColumns: ['station_id', 'co2_value', 'cdate', 'ctime'],
       },
     });
+  });
+
+  it('returns only base columns when the station has no registered parameters', async () => {
+    mockedRepository.listRegisteredParameters.mockResolvedValue([]);
+    mockedRepository.tableExists.mockResolvedValue(true);
+    mockedRepository.listRows.mockResolvedValue({
+      tableName: 'S0001_data_real',
+      rows: [
+        {
+          station_id: 'S0001',
+          co2_value: '12.3',
+          cdate: '2026-06-04',
+          ctime: '10:00:00',
+        },
+      ],
+    });
+
+    const result = await parameterValuesService.list(
+      {
+        stationId: 'S0001',
+        interval: 'real',
+        startDate: '2026-06-04',
+        endDate: '2026-06-04',
+      },
+      operatorAccess,
+    );
+
+    expect(result).toMatchObject({
+      data: [
+        {
+          station_id: 'S0001',
+          cdate: '2026-06-04',
+          ctime: '10:00:00',
+        },
+      ],
+      meta: {
+        registeredParameters: [],
+        returnedColumns: ['station_id', 'cdate', 'ctime'],
+      },
+    });
+    expect(result.data[0]).not.toHaveProperty('co2_value');
   });
 
   it('lists available parameter tables', async () => {

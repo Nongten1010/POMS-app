@@ -20,6 +20,10 @@ interface StationAccessRow {
   station_id: string | null;
 }
 
+interface RegisteredParameterRow {
+  parameters_json: string | null;
+}
+
 export const parameterValuesRepository = {
   tableName(stationId: string, interval: ParameterValueInterval): string {
     return `${stationId}_data_${interval}`;
@@ -94,6 +98,19 @@ export const parameterValuesRepository = {
     return Boolean(row);
   },
 
+  async listRegisteredParameters(
+    stationId: string,
+    access: ParameterValueAccessContext,
+  ): Promise<string[]> {
+    const rows = await buildStationAccessQuery(access)
+      .where((builder) => {
+        builder.where('p.point_code', stationId).orWhere('p.point_name', stationId);
+      })
+      .select<RegisteredParameterRow[]>('p.parameters_json');
+
+    return uniqueRegisteredParameters(rows.flatMap((row) => parseRegisteredParameters(row)));
+  },
+
   async listRows(
     query: ListParameterValuesQuery,
   ): Promise<{ rows: Record<string, unknown>[]; tableName: string }> {
@@ -131,6 +148,42 @@ export const parameterValuesRepository = {
     };
   },
 };
+
+function parseRegisteredParameters(row: RegisteredParameterRow): string[] {
+  if (!row.parameters_json) return [];
+
+  try {
+    const parsed: unknown = JSON.parse(row.parameters_json);
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed.flatMap((item) => {
+      if (typeof item === 'string') return [item];
+      if (!item || typeof item !== 'object') return [];
+
+      const parameter = item as Record<string, unknown>;
+      return [parameter.parameter, parameter.code, parameter.name].filter(
+        (value): value is string => typeof value === 'string',
+      );
+    });
+  } catch {
+    return [];
+  }
+}
+
+function uniqueRegisteredParameters(parameters: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const parameter of parameters) {
+    const value = parameter.trim();
+    const key = value.toLowerCase();
+    if (!value || seen.has(key)) continue;
+    seen.add(key);
+    result.push(value);
+  }
+
+  return result;
+}
 
 function buildStationAccessQuery(access: ParameterValueAccessContext) {
   const query = db('cems_wpms_measurement_points as p')

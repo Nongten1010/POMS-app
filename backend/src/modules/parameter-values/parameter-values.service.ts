@@ -40,9 +40,14 @@ export const parameterValuesService = {
     }
 
     const result = await parameterValuesRepository.listRows(query);
+    const registeredParameters = await parameterValuesRepository.listRegisteredParameters(
+      query.stationId,
+      access,
+    );
+    const filtered = filterRowsByRegisteredParameters(result.rows, registeredParameters);
 
     return {
-      data: result.rows,
+      data: filtered.rows,
       meta: {
         stationId: query.stationId,
         interval: query.interval,
@@ -50,7 +55,9 @@ export const parameterValuesService = {
         tableName: result.tableName,
         startDate: query.startDate,
         endDate: query.endDate,
-        count: result.rows.length,
+        count: filtered.rows.length,
+        registeredParameters,
+        returnedColumns: filtered.returnedColumns,
       },
     };
   },
@@ -70,19 +77,112 @@ export const parameterValuesService = {
     }
 
     const result = await parameterValuesRepository.latestRow(query);
+    const registeredParameters = await parameterValuesRepository.listRegisteredParameters(
+      query.stationId,
+      access,
+    );
+    const filtered = filterRowsByRegisteredParameters(
+      result.row ? [result.row] : [],
+      registeredParameters,
+    );
 
     return {
-      data: result.row,
+      data: filtered.rows[0] ?? null,
       meta: {
         stationId: query.stationId,
         interval: query.interval,
         schemaName: env.PARAMETER_DB_SCHEMA,
         tableName: result.tableName,
-        count: result.row ? 1 : 0,
+        count: filtered.rows.length,
+        registeredParameters,
+        returnedColumns: filtered.returnedColumns,
       },
     };
   },
 };
+
+const BASE_PARAMETER_VALUE_COLUMNS = new Set(['station_id', 'cdate', 'ctime', 'udate', 'utime']);
+const IGNORED_PARAMETER_TOKENS = new Set([
+  'mg',
+  'mgl',
+  'mgm3',
+  'mgm',
+  'ppm',
+  'ppb',
+  'percent',
+  'pct',
+  'unit',
+  'units',
+]);
+
+function filterRowsByRegisteredParameters(
+  rows: Record<string, unknown>[],
+  registeredParameters: string[],
+): { rows: Record<string, unknown>[]; returnedColumns: string[] } {
+  const allowedColumns = getAllowedColumns(rows, registeredParameters);
+
+  return {
+    rows: rows.map((row) =>
+      Object.fromEntries(Object.entries(row).filter(([key]) => allowedColumns.has(key))),
+    ),
+    returnedColumns: [...allowedColumns],
+  };
+}
+
+function getAllowedColumns(
+  rows: Record<string, unknown>[],
+  registeredParameters: string[],
+): Set<string> {
+  const prefixes = new Set(registeredParameters.flatMap(toParameterColumnPrefixes));
+  const allowedColumns = new Set<string>();
+
+  for (const row of rows) {
+    for (const key of Object.keys(row)) {
+      const lowerKey = key.toLowerCase();
+      if (BASE_PARAMETER_VALUE_COLUMNS.has(lowerKey) || hasRegisteredPrefix(lowerKey, prefixes)) {
+        allowedColumns.add(key);
+      }
+    }
+  }
+
+  return allowedColumns;
+}
+
+function hasRegisteredPrefix(key: string, prefixes: Set<string>): boolean {
+  for (const prefix of prefixes) {
+    if (key.startsWith(`${prefix}_`)) return true;
+  }
+
+  return false;
+}
+
+function toParameterColumnPrefixes(parameter: string): string[] {
+  const candidates = new Set<string>();
+  const trimmed = parameter.trim();
+  const beforeParenthesis = trimmed.split('(')[0] ?? trimmed;
+  const beforeAtSign = beforeParenthesis.split('@')[0] ?? beforeParenthesis;
+
+  addParameterCandidate(candidates, beforeAtSign);
+
+  for (const match of trimmed.matchAll(/\(([^)]+)\)/g)) {
+    addParameterCandidate(candidates, match[1]);
+  }
+
+  if (!trimmed.includes('(')) {
+    addParameterCandidate(candidates, trimmed);
+  }
+
+  return [...candidates].filter((candidate) => !IGNORED_PARAMETER_TOKENS.has(candidate));
+}
+
+function addParameterCandidate(candidates: Set<string>, value: string | undefined): void {
+  const candidate = normalizeParameterName(value ?? '');
+  if (candidate) candidates.add(candidate);
+}
+
+function normalizeParameterName(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
 
 async function ensureStationAccess(
   stationId: string,

@@ -527,6 +527,7 @@ GET /parameter-values/latest?stationId=S0001&interval=real
 - scope `ALL` เห็น station ที่มีใน `cems_wpms_measurement_points`
 - scope `OWN_FACTORY` เห็นเฉพาะ station ของโรงงาน/นิติบุคคลตัวเอง
 - demo seed ผูก `operator_demo` กับ `S0001` ผ่าน request `CEMS-DEMO-S0001`
+- response ของ `latest` และ list rows จะคืนเฉพาะ base columns (`station_id`, `cdate`, `ctime`, `udate`, `utime`) และกลุ่มคอลัมน์ของ parameter ที่ลงทะเบียนไว้ใน `cems_wpms_measurement_points.parameters_json` เช่น `NOx` จะคืน `nox_value`, `nox_units`, `nox_status`
 
 Interval ที่รองรับ:
 
@@ -567,7 +568,22 @@ Expected response metadata:
     "tableName": "S0001_data_real",
     "startDate": "2026-06-04",
     "endDate": "2026-06-04",
-    "count": 1
+    "count": 1,
+    "registeredParameters": ["NOx", "SO2", "O2"],
+    "returnedColumns": [
+      "station_id",
+      "nox_value",
+      "nox_units",
+      "nox_status",
+      "so2_value",
+      "so2_units",
+      "so2_status",
+      "o2_value",
+      "o2_units",
+      "o2_status",
+      "cdate",
+      "ctime"
+    ]
   }
 }
 ```

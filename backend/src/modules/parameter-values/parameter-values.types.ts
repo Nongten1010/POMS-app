@@ -36,6 +36,8 @@ export interface ParameterValuesResultDTO {
     startDate: string;
     endDate: string;
     count: number;
+    registeredParameters: string[];
+    returnedColumns: string[];
   };
 }
 
@@ -47,5 +49,7 @@ export interface LatestParameterValueResultDTO {
     schemaName: string;
     tableName: string;
     count: number;
+    registeredParameters: string[];
+    returnedColumns: string[];
   };
 }
