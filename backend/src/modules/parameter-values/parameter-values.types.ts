@@ -14,6 +14,11 @@ export interface LatestParameterValueQuery {
   interval: ParameterValueInterval;
 }
 
+export interface ParameterValueAccessContext {
+  actorUserId: number;
+  scope: string | null | undefined;
+}
+
 export interface ParameterValuesTableDTO {
   schemaName: string;
   tableName: string;

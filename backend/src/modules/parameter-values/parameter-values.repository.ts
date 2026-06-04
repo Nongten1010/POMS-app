@@ -1,8 +1,10 @@
 import { env } from '../../config/env';
+import { db } from '../../config/database';
 import { parameterSourceDb } from '../../config/parameter-source-database';
 import {
   type LatestParameterValueQuery,
   type ListParameterValuesQuery,
+  type ParameterValueAccessContext,
   type ParameterValueInterval,
   type ParameterValuesTableDTO,
 } from './parameter-values.types';
@@ -12,6 +14,10 @@ interface TableSummaryRow {
   table_name: string;
   column_count: number | string;
   row_count: number | string;
+}
+
+interface StationAccessRow {
+  station_id: string | null;
 }
 
 export const parameterValuesRepository = {
@@ -66,6 +72,28 @@ export const parameterValuesRepository = {
     }));
   },
 
+  async listAccessibleStationIds(access: ParameterValueAccessContext): Promise<string[]> {
+    const rows = await buildStationAccessQuery(access)
+      .whereNotNull('p.point_code')
+      .distinct<StationAccessRow[]>({ station_id: 'p.point_code' })
+      .orderBy('p.point_code', 'asc');
+
+    return rows
+      .map((row) => row.station_id)
+      .filter((stationId): stationId is string => Boolean(stationId));
+  },
+
+  async canAccessStation(stationId: string, access: ParameterValueAccessContext): Promise<boolean> {
+    const row = await buildStationAccessQuery(access)
+      .where((builder) => {
+        builder.where('p.point_code', stationId).orWhere('p.point_name', stationId);
+      })
+      .select('p.id')
+      .first();
+
+    return Boolean(row);
+  },
+
   async listRows(
     query: ListParameterValuesQuery,
   ): Promise<{ rows: Record<string, unknown>[]; tableName: string }> {
@@ -103,6 +131,28 @@ export const parameterValuesRepository = {
     };
   },
 };
+
+function buildStationAccessQuery(access: ParameterValueAccessContext) {
+  const query = db('cems_wpms_measurement_points as p')
+    .join('cems_wpms_connection_requests as r', 'r.id', 'p.request_id')
+    .whereNull('p.deleted_at')
+    .whereNull('r.deleted_at');
+
+  if (access.scope === 'ALL') return query;
+
+  return query
+    .leftJoin('factories as f', function joinFactory() {
+      this.on('f.fid', '=', 'r.factory_id').andOnNull('f.deleted_at');
+    })
+    .leftJoin('user_juristics as uj', function joinUserJuristic() {
+      this.on('uj.juristic_id', '=', 'f.juristic_id')
+        .andOnVal('uj.user_id', access.actorUserId)
+        .andOnNull('uj.revoked_at');
+    })
+    .where((builder) => {
+      builder.where('r.created_by', access.actorUserId).orWhereNotNull('uj.user_id');
+    });
+}
 
 function serializeRow(row: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(

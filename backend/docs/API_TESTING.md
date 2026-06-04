@@ -513,13 +513,20 @@ PARAMETER_DB_NAME=parameter_ingest
 PARAMETER_DB_SCHEMA=ingest
 ```
 
-GET endpoints ยังไม่ต้องส่ง Authorization ตาม route ปัจจุบัน:
+GET endpoints ต้องส่ง `Authorization: Bearer <accessToken>` และต้องมี permission
+`cems_wpms_requests:view`:
 
 ```text
 GET /parameter-values/tables
 GET /parameter-values?stationId=S0001&interval=real&startDate=2026-06-04&endDate=2026-06-04
 GET /parameter-values/latest?stationId=S0001&interval=real
 ```
+
+การมองเห็น station อิงจากฐาน POMS หลัก:
+
+- scope `ALL` เห็น station ที่มีใน `cems_wpms_measurement_points`
+- scope `OWN_FACTORY` เห็นเฉพาะ station ของโรงงาน/นิติบุคคลตัวเอง
+- demo seed ผูก `operator_demo` กับ `S0001` ผ่าน request `CEMS-DEMO-S0001`
 
 Interval ที่รองรับ:
 
@@ -530,19 +537,22 @@ real, 1m, 5m, 60m, 1day, test
 List tables:
 
 ```bash
-curl "http://localhost:3000/api/v1/parameter-values/tables"
+curl "http://localhost:3000/api/v1/parameter-values/tables" \
+  -H "Authorization: Bearer $ACCESS_TOKEN"
 ```
 
 Latest row:
 
 ```bash
-curl "http://localhost:3000/api/v1/parameter-values/latest?stationId=S0001&interval=real"
+curl "http://localhost:3000/api/v1/parameter-values/latest?stationId=S0001&interval=real" \
+  -H "Authorization: Bearer $ACCESS_TOKEN"
 ```
 
 Rows by date range:
 
 ```bash
-curl "http://localhost:3000/api/v1/parameter-values?stationId=S0001&interval=real&startDate=2026-06-04&endDate=2026-06-04"
+curl "http://localhost:3000/api/v1/parameter-values?stationId=S0001&interval=real&startDate=2026-06-04&endDate=2026-06-04" \
+  -H "Authorization: Bearer $ACCESS_TOKEN"
 ```
 
 Expected response metadata:
@@ -557,10 +567,20 @@ Expected response metadata:
     "tableName": "S0001_data_real",
     "startDate": "2026-06-04",
     "endDate": "2026-06-04",
-    "count": 1,
+    "count": 1
   }
 }
 ```
+
+Seed สำหรับผูก station demo:
+
+```bash
+cd backend
+npm run db:seed
+```
+
+หรือถ้าต้องยิงผ่าน SSMS ให้รัน `backend/db/seed_operator_demo_s0001_station_access.sql`
+ในฐาน POMS หลัก แล้วค่อยรัน seed ข้อมูล mock parameter ในฐาน `parameter_ingest`.
 
 ---
 

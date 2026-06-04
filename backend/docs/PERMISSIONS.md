@@ -170,7 +170,7 @@ Security behavior:
 - request workflow list/detail ใช้ scope จาก `cems_wpms_requests:view`; scope `ALL` เห็นทั้งหมด, scope อื่นเห็นเฉพาะรายการที่ตัวเองสร้าง
 - `/device-connections` GET ไม่ต้องใช้ token เพราะอุปกรณ์ client login ไม่ได้; `GET /device-connections` ต้องส่ง `stationId`
 - `/device-connections` POST ยังใช้ `cems_wpms_requests:edit` สำหรับ create/test
-- `/parameter-values` GET ไม่ต้องใช้ token ตาม route ปัจจุบัน และอ่านจาก `PARAMETER_DB_SCHEMA` เช่น `ingest.S0001_data_real`; ควรมี network/access control เพิ่มก่อนเปิด production
+- `/parameter-values` GET ใช้ token และ permission `cems_wpms_requests:view`; scope `ALL` เห็น station ที่มีใน `cems_wpms_measurement_points`, scope อื่นเห็นเฉพาะ station ของโรงงาน/นิติบุคคลตัวเองก่อนอ่านจาก `PARAMETER_DB_SCHEMA` เช่น `ingest.S0001_data_real`
 
 ### 5.4 แจ้งแบบ กวภ. 01 - กวภ. 05
 
