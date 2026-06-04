@@ -1,6 +1,7 @@
 import { env } from '../../config/env';
 import { parameterSourceDb } from '../../config/parameter-source-database';
 import {
+  type LatestParameterValueQuery,
   type ListParameterValuesQuery,
   type ParameterValueInterval,
   type ParameterValuesTableDTO,
@@ -67,21 +68,38 @@ export const parameterValuesRepository = {
 
   async listRows(
     query: ListParameterValuesQuery,
-  ): Promise<{ rows: Record<string, unknown>[]; tableName: string; hasMore: boolean }> {
+  ): Promise<{ rows: Record<string, unknown>[]; tableName: string }> {
     const tableName = this.tableName(query.stationId, query.interval);
     const rows = await parameterSourceDb
       .withSchema(env.PARAMETER_DB_SCHEMA)
       .from<Record<string, unknown>>(tableName)
       .select('*')
+      .where('cdate', '>=', query.startDate)
+      .where('cdate', '<=', query.endDate)
       .orderBy('cdate', 'desc')
-      .orderBy('ctime', 'desc')
-      .limit(query.limit + 1)
-      .offset(query.offset);
+      .orderBy('ctime', 'desc');
 
     return {
       tableName,
-      rows: rows.slice(0, query.limit).map(serializeRow),
-      hasMore: rows.length > query.limit,
+      rows: rows.map(serializeRow),
+    };
+  },
+
+  async latestRow(
+    query: LatestParameterValueQuery,
+  ): Promise<{ row: Record<string, unknown> | null; tableName: string }> {
+    const tableName = this.tableName(query.stationId, query.interval);
+    const row = await parameterSourceDb
+      .withSchema(env.PARAMETER_DB_SCHEMA)
+      .from<Record<string, unknown>>(tableName)
+      .select('*')
+      .orderBy('cdate', 'desc')
+      .orderBy('ctime', 'desc')
+      .first();
+
+    return {
+      tableName,
+      row: row ? serializeRow(row) : null,
     };
   },
 };

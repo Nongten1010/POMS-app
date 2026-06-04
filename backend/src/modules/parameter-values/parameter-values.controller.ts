@@ -29,10 +29,8 @@ export const parameterValuesController = {
   async latest(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const query = latestParameterValueQuerySchema.parse(req.query);
-      const result = await parameterValuesService.list(query);
-      res
-        .status(StatusCodes.OK)
-        .json({ success: true, data: result.data[0] ?? null, meta: result.meta });
+      const result = await parameterValuesService.latest(query);
+      res.status(StatusCodes.OK).json({ success: true, ...result });
     } catch (err) {
       next(err);
     }

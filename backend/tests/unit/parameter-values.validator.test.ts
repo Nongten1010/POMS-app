@@ -5,38 +5,52 @@ import {
 } from '../../src/modules/parameter-values/parameter-values.validator';
 
 describe('parameter value validators', () => {
-  it('accepts a station and interval query with pagination defaults', () => {
+  it('accepts a station and interval query with a date range', () => {
     const result = listParameterValuesQuerySchema.parse({
       stationId: 'S0001',
       interval: 'real',
+      startDate: '2026-06-04',
+      endDate: '2026-06-04',
     });
 
     expect(result).toEqual({
       stationId: 'S0001',
       interval: 'real',
-      limit: 100,
-      offset: 0,
+      startDate: '2026-06-04',
+      endDate: '2026-06-04',
     });
   });
 
-  it('coerces bounded pagination values', () => {
-    const result = listParameterValuesQuerySchema.parse({
+  it('rejects pagination values because list reads use date ranges', () => {
+    const result = listParameterValuesQuerySchema.safeParse({
       stationId: 'S0001',
       interval: '1m',
       limit: '25',
       offset: '50',
+      startDate: '2026-06-04',
+      endDate: '2026-06-04',
     });
 
-    expect(result).toMatchObject({
-      limit: 25,
-      offset: 50,
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects invalid date ranges', () => {
+    const result = listParameterValuesQuerySchema.safeParse({
+      stationId: 'S0001',
+      interval: '1m',
+      startDate: '2026-06-05',
+      endDate: '2026-06-04',
     });
+
+    expect(result.success).toBe(false);
   });
 
   it('rejects unsafe station fragments before table name construction', () => {
     const result = listParameterValuesQuerySchema.safeParse({
       stationId: 'S0001];DROP TABLE users;--',
       interval: 'real',
+      startDate: '2026-06-04',
+      endDate: '2026-06-04',
     });
 
     expect(result.success).toBe(false);
@@ -46,12 +60,14 @@ describe('parameter value validators', () => {
     const result = listParameterValuesQuerySchema.safeParse({
       stationId: 'S0001',
       interval: '15m',
+      startDate: '2026-06-04',
+      endDate: '2026-06-04',
     });
 
     expect(result.success).toBe(false);
   });
 
-  it('builds the latest query as a one-row read', () => {
+  it('builds the latest query without date range or pagination', () => {
     const result = latestParameterValueQuerySchema.parse({
       stationId: 'S0001',
       interval: '5m',
@@ -60,8 +76,6 @@ describe('parameter value validators', () => {
     expect(result).toEqual({
       stationId: 'S0001',
       interval: '5m',
-      limit: 1,
-      offset: 0,
     });
   });
 });

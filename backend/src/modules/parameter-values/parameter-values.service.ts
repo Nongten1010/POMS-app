@@ -2,6 +2,8 @@ import { env } from '../../config/env';
 import { NotFoundError } from '../../shared/errors/AppError';
 import { parameterValuesRepository } from './parameter-values.repository';
 import {
+  type LatestParameterValueQuery,
+  type LatestParameterValueResultDTO,
   type ListParameterValuesQuery,
   type ParameterValuesResultDTO,
   type ParameterValuesTableDTO,
@@ -30,10 +32,32 @@ export const parameterValuesService = {
         interval: query.interval,
         schemaName: env.PARAMETER_DB_SCHEMA,
         tableName: result.tableName,
-        limit: query.limit,
-        offset: query.offset,
+        startDate: query.startDate,
+        endDate: query.endDate,
         count: result.rows.length,
-        hasMore: result.hasMore,
+      },
+    };
+  },
+
+  async latest(query: LatestParameterValueQuery): Promise<LatestParameterValueResultDTO> {
+    const tableName = parameterValuesRepository.tableName(query.stationId, query.interval);
+    const exists = await parameterValuesRepository.tableExists(tableName);
+    if (!exists) {
+      throw new NotFoundError(
+        `Parameter value table ${env.PARAMETER_DB_SCHEMA}.${tableName} not found`,
+      );
+    }
+
+    const result = await parameterValuesRepository.latestRow(query);
+
+    return {
+      data: result.row,
+      meta: {
+        stationId: query.stationId,
+        interval: query.interval,
+        schemaName: env.PARAMETER_DB_SCHEMA,
+        tableName: result.tableName,
+        count: result.row ? 1 : 0,
       },
     };
   },

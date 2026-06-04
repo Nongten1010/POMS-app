@@ -15,7 +15,7 @@ PARAMETER_DB_TABLE=parameter_values
 | Method | Path | Auth | Permission | Description |
 | --- | --- | --- | --- | --- |
 | `GET` | `/api/v1/parameter-values/tables` | No | - | รายการตารางใน schema `PARAMETER_DB_SCHEMA` |
-| `GET` | `/api/v1/parameter-values` | No | - | ดึงข้อมูลจากตารางของ station/interval พร้อม pagination |
+| `GET` | `/api/v1/parameter-values` | No | - | ดึงข้อมูลจากตารางของ station/interval ตามช่วงวันที่ |
 | `GET` | `/api/v1/parameter-values/latest` | No | - | ดึง row ล่าสุดของ station/interval |
 
 หมายเหตุ: endpoints ชุดนี้ยังเปิด public ตาม route ปัจจุบัน เพื่อให้อุปกรณ์/client ที่ไม่มี token ดึงข้อมูลได้ ระวังอย่า expose production โดยไม่มี network/access control เพิ่มเติม
@@ -79,7 +79,7 @@ curl "http://localhost:3000/api/v1/parameter-values/tables"
 
 ## `GET /api/v1/parameter-values`
 
-ดึงข้อมูลจากตารางของ `stationId` และ `interval` พร้อม pagination
+ดึงข้อมูลจากตารางของ `stationId` และ `interval` ตามช่วงวันที่
 
 ### Query
 
@@ -87,13 +87,13 @@ curl "http://localhost:3000/api/v1/parameter-values/tables"
 | --- | --- | --- | --- | --- | --- |
 | `stationId` | string | Yes | - | 1-64 chars, pattern `^[A-Za-z][A-Za-z0-9_]*$` | station id เช่น `S0001` |
 | `interval` | string | No | `real` | interval values | รอบข้อมูลที่ต้องการ |
-| `limit` | number | No | `100` | 1-1000 | จำนวน row ที่ต้องการ |
-| `offset` | number | No | `0` | >= 0 | offset สำหรับ pagination |
+| `startDate` | string | Yes | - | `YYYY-MM-DD` | วันที่เริ่มต้น |
+| `endDate` | string | Yes | - | `YYYY-MM-DD`, ต้องมากกว่าหรือเท่ากับ `startDate` | วันที่สิ้นสุด |
 
 ### Example
 
 ```bash
-curl "http://localhost:3000/api/v1/parameter-values?stationId=S0001&interval=real&limit=100&offset=0"
+curl "http://localhost:3000/api/v1/parameter-values?stationId=S0001&interval=real&startDate=2026-06-04&endDate=2026-06-04"
 ```
 
 ### Success Response
@@ -118,10 +118,9 @@ curl "http://localhost:3000/api/v1/parameter-values?stationId=S0001&interval=rea
     "interval": "real",
     "schemaName": "ingest",
     "tableName": "S0001_data_real",
-    "limit": 100,
-    "offset": 0,
+    "startDate": "2026-06-04",
+    "endDate": "2026-06-04",
     "count": 1,
-    "hasMore": false
   }
 }
 ```
@@ -165,10 +164,7 @@ curl "http://localhost:3000/api/v1/parameter-values/latest?stationId=S0001&inter
     "interval": "real",
     "schemaName": "ingest",
     "tableName": "S0001_data_real",
-    "limit": 1,
-    "offset": 0,
     "count": 1,
-    "hasMore": false
   }
 }
 ```
@@ -179,7 +175,7 @@ curl "http://localhost:3000/api/v1/parameter-values/latest?stationId=S0001&inter
 
 ### Validation error
 
-เกิดเมื่อ query ผิด เช่น `interval=15m`, `limit` เกิน 1000, หรือ `stationId` มีอักขระไม่ปลอดภัย
+เกิดเมื่อ query ผิด เช่น `interval=15m`, วันที่ผิดรูปแบบ, `startDate > endDate`, หรือ `stationId` มีอักขระไม่ปลอดภัย
 
 ```json
 {

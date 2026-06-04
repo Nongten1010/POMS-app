@@ -517,7 +517,7 @@ GET endpoints ยังไม่ต้องส่ง Authorization ตาม ro
 
 ```text
 GET /parameter-values/tables
-GET /parameter-values?stationId=S0001&interval=real&limit=100&offset=0
+GET /parameter-values?stationId=S0001&interval=real&startDate=2026-06-04&endDate=2026-06-04
 GET /parameter-values/latest?stationId=S0001&interval=real
 ```
 
@@ -539,10 +539,10 @@ Latest row:
 curl "http://localhost:3000/api/v1/parameter-values/latest?stationId=S0001&interval=real"
 ```
 
-Paged rows:
+Rows by date range:
 
 ```bash
-curl "http://localhost:3000/api/v1/parameter-values?stationId=S0001&interval=real&limit=100&offset=0"
+curl "http://localhost:3000/api/v1/parameter-values?stationId=S0001&interval=real&startDate=2026-06-04&endDate=2026-06-04"
 ```
 
 Expected response metadata:
@@ -555,10 +555,9 @@ Expected response metadata:
     "interval": "real",
     "schemaName": "ingest",
     "tableName": "S0001_data_real",
-    "limit": 100,
-    "offset": 0,
+    "startDate": "2026-06-04",
+    "endDate": "2026-06-04",
     "count": 1,
-    "hasMore": false
   }
 }
 ```

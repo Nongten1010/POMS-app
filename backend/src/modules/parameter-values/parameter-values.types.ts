@@ -5,8 +5,13 @@ export type ParameterValueInterval = (typeof PARAMETER_VALUE_INTERVALS)[number];
 export interface ListParameterValuesQuery {
   stationId: string;
   interval: ParameterValueInterval;
-  limit: number;
-  offset: number;
+  startDate: string;
+  endDate: string;
+}
+
+export interface LatestParameterValueQuery {
+  stationId: string;
+  interval: ParameterValueInterval;
 }
 
 export interface ParameterValuesTableDTO {
@@ -23,9 +28,19 @@ export interface ParameterValuesResultDTO {
     interval: ParameterValueInterval;
     schemaName: string;
     tableName: string;
-    limit: number;
-    offset: number;
+    startDate: string;
+    endDate: string;
     count: number;
-    hasMore: boolean;
+  };
+}
+
+export interface LatestParameterValueResultDTO {
+  data: Record<string, unknown> | null;
+  meta: {
+    stationId: string;
+    interval: ParameterValueInterval;
+    schemaName: string;
+    tableName: string;
+    count: number;
   };
 }
