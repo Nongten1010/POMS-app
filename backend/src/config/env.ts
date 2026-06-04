@@ -53,6 +53,28 @@ const envSchema = z.object({
     .regex(/^[A-Za-z_][A-Za-z0-9_]*$/)
     .default('fac_import'),
 
+  PARAMETER_DB_HOST: z.string().min(1).optional(),
+  PARAMETER_DB_PORT: z.coerce.number().int().positive().optional(),
+  PARAMETER_DB_NAME: z.string().min(1).optional(),
+  PARAMETER_DB_USER: z.string().min(1).optional(),
+  PARAMETER_DB_PASSWORD: z.string().optional(),
+  PARAMETER_DB_ENCRYPT: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v === 'true')),
+  PARAMETER_DB_TRUST_SERVER_CERTIFICATE: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v !== 'false')),
+  PARAMETER_DB_SCHEMA: z
+    .string()
+    .regex(/^[A-Za-z_][A-Za-z0-9_]*$/)
+    .default('dbo'),
+  PARAMETER_DB_TABLE: z
+    .string()
+    .regex(/^[A-Za-z_][A-Za-z0-9_]*$/)
+    .default('parameter_values'),
+
   CORS_ORIGIN: z.string().default('*'),
 
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'http', 'debug']).default('info'),

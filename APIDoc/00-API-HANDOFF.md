@@ -1,6 +1,6 @@
 # D-POMS API Handoff
 
-อัปเดตล่าสุด: 2026-05-30
+อัปเดตล่าสุด: 2026-06-04
 
 เอกสารนี้เป็นไฟล์รวม API ทั้งหมดของ backend สำหรับส่งต่อให้ frontend, tester, หรือ agent ตัวถัดไปใช้งานได้ทันที โดยรายละเอียดเชิงลึกแยกอยู่ในไฟล์ย่อยในโฟลเดอร์ `APIDoc/`
 
@@ -126,6 +126,9 @@ Error response มาตรฐาน:
 | Device Connections | `GET` | `/api/v1/device-connections/:id` | No | - | รายละเอียด config การเชื่อมต่อ device |
 | Device Connections | `POST` | `/api/v1/device-connections` | Yes | `cems_wpms_requests:edit` | บันทึก config การเชื่อมต่อ device |
 | Device Connections | `POST` | `/api/v1/device-connections/test-connection` | Yes | `cems_wpms_requests:edit` | ทดสอบ config การเชื่อมต่อแบบ mock |
+| Parameter Values | `GET` | `/api/v1/parameter-values/tables` | No | - | รายการตารางรับค่าพารามิเตอร์ใน schema ที่ตั้งค่าไว้ |
+| Parameter Values | `GET` | `/api/v1/parameter-values` | No | - | ดึงข้อมูลค่าพารามิเตอร์จากตารางของ station/interval |
+| Parameter Values | `GET` | `/api/v1/parameter-values/latest` | No | - | ดึงข้อมูลค่าพารามิเตอร์ล่าสุดของ station/interval |
 
 ## ไฟล์รายละเอียด
 
@@ -136,6 +139,7 @@ Error response มาตรฐาน:
 | `03-eligible-factories.md` | Candidate factory และ eligible factory list |
 | `04-cems-wpms-requests.md` | Workflow คำขอเชื่อมต่อ CEMS/WPMS |
 | `05-device-connections.md` | Device connection config, protocol, channel mapping |
+| `06-parameter-values.md` | Query ค่าพารามิเตอร์จากฐาน `PARAMETER_DB_*` |
 
 ## Permission Scope
 

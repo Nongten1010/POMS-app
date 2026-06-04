@@ -3,6 +3,7 @@ import { env } from './config/env';
 import { logger } from './config/logger';
 import { pingDatabase, closeDatabase } from './config/database';
 import { closeFactorySourceDatabase } from './config/factory-source-database';
+import { closeParameterSourceDatabase } from './config/parameter-source-database';
 
 async function bootstrap(): Promise<void> {
   try {
@@ -22,6 +23,7 @@ async function bootstrap(): Promise<void> {
     server.close(async () => {
       await closeDatabase();
       await closeFactorySourceDatabase();
+      await closeParameterSourceDatabase();
       process.exit(0);
     });
     setTimeout(() => {

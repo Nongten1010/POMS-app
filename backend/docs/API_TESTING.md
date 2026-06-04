@@ -504,6 +504,65 @@ curl "http://localhost:3000/api/v1/device-connections?stationId=STATION_001"
 curl "http://localhost:3000/api/v1/device-connections/$CONFIG_ID"
 ```
 
+### 5.9 Parameter values API
+
+API ชุดนี้ดึงค่าพารามิเตอร์จากฐาน external parameter ingestion ตาม env `PARAMETER_DB_*`:
+
+```text
+PARAMETER_DB_NAME=parameter_ingest
+PARAMETER_DB_SCHEMA=ingest
+```
+
+GET endpoints ยังไม่ต้องส่ง Authorization ตาม route ปัจจุบัน:
+
+```text
+GET /parameter-values/tables
+GET /parameter-values?stationId=S0001&interval=real&limit=100&offset=0
+GET /parameter-values/latest?stationId=S0001&interval=real
+```
+
+Interval ที่รองรับ:
+
+```text
+real, 1m, 5m, 60m, 1day, test
+```
+
+List tables:
+
+```bash
+curl "http://localhost:3000/api/v1/parameter-values/tables"
+```
+
+Latest row:
+
+```bash
+curl "http://localhost:3000/api/v1/parameter-values/latest?stationId=S0001&interval=real"
+```
+
+Paged rows:
+
+```bash
+curl "http://localhost:3000/api/v1/parameter-values?stationId=S0001&interval=real&limit=100&offset=0"
+```
+
+Expected response metadata:
+
+```json
+{
+  "success": true,
+  "meta": {
+    "stationId": "S0001",
+    "interval": "real",
+    "schemaName": "ingest",
+    "tableName": "S0001_data_real",
+    "limit": 100,
+    "offset": 0,
+    "count": 1,
+    "hasMore": false
+  }
+}
+```
+
 ---
 
 ## 6. ดูข้อมูลใน DB ตรง ๆ

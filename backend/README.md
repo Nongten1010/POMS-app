@@ -136,6 +136,7 @@ npm start             # run compiled server
 - [x] Eligible factory selection API
 - [x] CEMS/WPMS connection request API (เพิ่มจุดตรวจวัด + status workflow)
 - [x] Device connection config API (Modbus RTU/TCP, MSSQL, MySQL + mock test)
+- [x] Parameter values query API (อ่านจาก `PARAMETER_DB_*` / `ingest.S0001_data_*`)
 - [ ] Sensor data ingestion API (HTTP POST from gateway)
 - [ ] Real-time dashboard channel (Socket.IO) — _future_
 - [ ] Alerts / threshold rules — _future_

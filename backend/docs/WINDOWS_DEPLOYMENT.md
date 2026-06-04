@@ -102,4 +102,30 @@ FACTORY_DB_TABLE=fac_import
 
 If `diw` is on the same SQL Server and uses the same credentials as POMS, these can match the main `DB_*` values except `FACTORY_DB_NAME=diw`.
 
+## External parameter ingestion source
+
+For the SQL Server account/table used to receive parameter values, configure a separate user, password, and table name in `.env`:
+
+```env
+PARAMETER_DB_HOST=localhost
+PARAMETER_DB_PORT=1433
+PARAMETER_DB_NAME=parameter_ingest
+PARAMETER_DB_USER=parameter_ingest_user
+PARAMETER_DB_PASSWORD=<parameter-ingest-password>
+PARAMETER_DB_ENCRYPT=false
+PARAMETER_DB_TRUST_SERVER_CERTIFICATE=true
+PARAMETER_DB_SCHEMA=ingest
+PARAMETER_DB_TABLE=parameter_values
+```
+
+If the parameter table is on another SQL Server/database, override the connection target:
+
+```env
+PARAMETER_DB_HOST=<sql-server-host-or-ip>
+PARAMETER_DB_PORT=1433
+PARAMETER_DB_NAME=<database-name>
+```
+
+This only configures the connection details. It does not create the database or parameter table.
+
 Do not commit the server `.env`.
