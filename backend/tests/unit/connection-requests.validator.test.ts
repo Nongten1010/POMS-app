@@ -138,7 +138,7 @@ describe('connection request validators', () => {
               {
                 ...measurementInstruments.parameters[0],
                 standardCriteria: {
-                  enabled: true,
+                  enabled: false,
                   standardValue: '120',
                   rows: [
                     { level: 'normal', min: 0, max: 80 },
@@ -147,9 +147,53 @@ describe('connection request validators', () => {
                   ],
                 },
                 eiaCriteria: {
-                  enabled: false,
+                  enabled: true,
+                },
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const parameter = result.data.measurementPoints[0].measurementInstruments?.parameters[0];
+      expect(parameter?.standardCriteria).toEqual({
+        enabled: false,
+        standardValue: '120',
+        rows: [
+          { level: 'normal', min: 0, max: 80 },
+          { level: 'warning', min: 80, max: 100 },
+          { level: 'critical', min: 100, max: null },
+        ],
+      });
+      expect(parameter?.eiaCriteria).toEqual({
+        enabled: true,
+        standardValue: null,
+        rows: [],
+      });
+    }
+  });
+
+  it('does not require criteria thresholds when criteria is enabled', () => {
+    const result = createConnectionRequestSchema.safeParse({
+      ...validPayload,
+      measurementPoints: [
+        {
+          ...validPayload.measurementPoints[0],
+          measurementInstruments: {
+            ...measurementInstruments,
+            parameters: [
+              {
+                ...measurementInstruments.parameters[0],
+                standardCriteria: {
+                  enabled: true,
+                },
+                eiaCriteria: {
+                  enabled: 'true',
                   standardValue: '',
-                  rows: [],
+                  rows: [{ level: 'normal', min: null, max: null }],
                 },
               },
             ],
@@ -163,22 +207,18 @@ describe('connection request validators', () => {
       const parameter = result.data.measurementPoints[0].measurementInstruments?.parameters[0];
       expect(parameter?.standardCriteria).toEqual({
         enabled: true,
-        standardValue: '120',
-        rows: [
-          { level: 'normal', min: 0, max: 80 },
-          { level: 'warning', min: 80, max: 100 },
-          { level: 'critical', min: 100, max: null },
-        ],
+        standardValue: null,
+        rows: [],
       });
       expect(parameter?.eiaCriteria).toEqual({
-        enabled: false,
+        enabled: true,
         standardValue: null,
         rows: [],
       });
     }
   });
 
-  it('rejects enabled measurement criteria without all threshold levels', () => {
+  it('rejects disabled measurement criteria without all threshold levels', () => {
     const result = createConnectionRequestSchema.safeParse({
       ...validPayload,
       measurementPoints: [
@@ -190,11 +230,40 @@ describe('connection request validators', () => {
               {
                 ...measurementInstruments.parameters[0],
                 standardCriteria: {
-                  enabled: true,
+                  enabled: false,
                   standardValue: '120',
                   rows: [
                     { level: 'normal', min: 0, max: 80 },
                     { level: 'warning', min: 80, max: 100 },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects disabled measurement criteria without a standard value', () => {
+    const result = createConnectionRequestSchema.safeParse({
+      ...validPayload,
+      measurementPoints: [
+        {
+          ...validPayload.measurementPoints[0],
+          measurementInstruments: {
+            ...measurementInstruments,
+            parameters: [
+              {
+                ...measurementInstruments.parameters[0],
+                standardCriteria: {
+                  enabled: false,
+                  rows: [
+                    { level: 'normal', min: 0, max: 80 },
+                    { level: 'warning', min: 80, max: 100 },
+                    { level: 'critical', min: 100, max: null },
                   ],
                 },
               },

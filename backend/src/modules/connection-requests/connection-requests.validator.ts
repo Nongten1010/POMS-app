@@ -139,21 +139,37 @@ const criteriaRangeRowSchema = z
     max: z.number().finite().nullable(),
   })
   .strict();
+
+function normalizeMeasurementCriteriaInput(value: unknown): unknown {
+  if (!isRecord(value)) return value;
+
+  const rawEnabled = value.enabled;
+  const enabled =
+    typeof rawEnabled === 'string' ? rawEnabled.trim().toLowerCase() === 'true' : rawEnabled === true;
+
+  return {
+    ...value,
+    enabled,
+  };
+}
+
 const measurementCriteriaSchema = z
-  .object({
-    enabled: z.boolean(),
-    standardValue: criteriaStandardValueSchema,
-    rows: z.array(criteriaRangeRowSchema).max(3).optional(),
-  })
-  .strict()
+  .preprocess(
+    normalizeMeasurementCriteriaInput,
+    z.object({
+      enabled: z.boolean(),
+      standardValue: criteriaStandardValueSchema,
+      rows: z.array(criteriaRangeRowSchema).max(3).optional(),
+    }).strict(),
+  )
   .superRefine((criteria, ctx) => {
-    if (!criteria.enabled) return;
+    if (criteria.enabled) return;
 
     if (criteria.standardValue === undefined || criteria.standardValue === null) {
       ctx.addIssue({
         code: 'custom',
         path: ['standardValue'],
-        message: 'standardValue is required when criteria is enabled',
+        message: 'standardValue is required when criteria is disabled',
       });
     }
 
@@ -187,16 +203,16 @@ const measurementCriteriaSchema = z
     });
   })
   .transform((criteria) => {
-    if (!criteria.enabled) {
+    if (criteria.enabled) {
       return {
-        enabled: false,
+        enabled: true,
         standardValue: null,
         rows: [],
       };
     }
 
     return {
-      enabled: true,
+      enabled: false,
       standardValue: criteria.standardValue,
       rows: criteria.rows ?? [],
     };
