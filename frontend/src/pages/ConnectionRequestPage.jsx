@@ -624,10 +624,9 @@ function mapRequestDetailRow(detail = {}, row = {}) {
   }
 }
 
-function buildMeasurementPointRequestBody(factory = {}, monitoringPointType = 'CEMS', options = {}) {
+function buildMeasurementPointRequestBody(factory = {}, monitoringPointType = 'CEMS') {
   const isWpms = monitoringPointType === 'WPMS'
   const systemType = isWpms ? 'WPMS' : 'CEMS'
-  const documentsAndImages = Array.isArray(options.documentsAndImages) ? options.documentsAndImages : []
 
   return {
     factoryId: factory.newRegistrationNo ?? '3-106-33/50สบ',
@@ -732,7 +731,17 @@ function buildMeasurementPointRequestBody(factory = {}, monitoringPointType = 'C
               connectionDevice: 'อื่นๆ',
               connectionDeviceOther: 'Gateway เดิมของโรงงาน',
             },
-            documentsAndImages,
+            documentsAndImages: [
+              {
+                title: 'ภาพถ่ายปล่อง',
+                description: null,
+                link: null,
+                fileName: 'stack.png',
+                fileUrl: 'https://example.com/files/stack.png',
+                fileType: 'image/png',
+                fileSize: 1024,
+              },
+            ],
             measurementInstruments: {
               converterBrand: 'Converter Brand',
               converterModel: 'CV-100',
@@ -2522,7 +2531,9 @@ function ReadOnlyField({ label, value, sx }) {
   )
 }
 
-function UploadFileField({ label, accept, fileName = '', onFileChange }) {
+function UploadFileField({ label, accept }) {
+  const [fileName, setFileName] = useState(label.includes('JPG') ? 'mock-image.png' : 'mock-document.pdf')
+
   return (
     <Stack spacing={0.75}>
       <Button
@@ -2549,7 +2560,7 @@ function UploadFileField({ label, accept, fileName = '', onFileChange }) {
           type="file"
           accept={accept}
           hidden
-          onChange={(event) => onFileChange?.(event.target.files?.[0] ?? null)}
+          onChange={(event) => setFileName(event.target.files?.[0]?.name ?? '')}
         />
       </Button>
       <Typography variant="caption" color="text.secondary">
@@ -2838,53 +2849,9 @@ function CemsMonitoringPointDetails() {
   )
 }
 
-function hasDocumentImageMetadata(documentImage) {
-  return Boolean(
-    documentImage?.link ||
-      documentImage?.fileName ||
-      documentImage?.fileUrl ||
-      documentImage?.fileType ||
-      documentImage?.fileSize,
-  )
-}
-
-function buildDocumentImageMetadata(item, existingDocument = {}, patch = {}) {
-  return {
-    title: item.title,
-    description: item.description ?? null,
-    link: null,
-    fileName: null,
-    fileUrl: null,
-    fileType: null,
-    fileSize: null,
-    ...existingDocument,
-    ...patch,
-  }
-}
-
-function DocumentsAndImagesSection({ value = [], onChange }) {
+function DocumentsAndImagesSection() {
   const groupedItems = documentImageItems.filter((item) => groupedDocumentImageTitles.includes(item.title))
   const standaloneItems = documentImageItems.filter((item) => !groupedDocumentImageTitles.includes(item.title))
-  const documentsByTitle = new Map(value.map((documentImage) => [documentImage.title, documentImage]))
-  const updateDocumentImage = (item, patch) => {
-    const existingDocument = documentsByTitle.get(item.title)
-    const nextDocument = buildDocumentImageMetadata(item, existingDocument, patch)
-    const nextValue = value.filter((documentImage) => documentImage.title !== item.title)
-
-    if (hasDocumentImageMetadata(nextDocument)) {
-      nextValue.push(nextDocument)
-    }
-
-    onChange?.(nextValue)
-  }
-  const updateDocumentImageFile = (item, file) => {
-    updateDocumentImage(item, {
-      fileName: file?.name ?? null,
-      fileUrl: null,
-      fileType: file?.type || null,
-      fileSize: file?.size ?? null,
-    })
-  }
 
   return (
     <Paper elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider' }}>
@@ -2904,25 +2871,14 @@ function DocumentsAndImagesSection({ value = [], onChange }) {
                 </Typography>
               ) : null}
             </Box>
-            <Grid container spacing={2}>
-              {item.hasLink ? (
-                <Grid size={{ xs: 12, md: 3 }}>
-                  <TextField
-                    label="Link"
-                    size="small"
-                    value={documentsByTitle.get(item.title)?.link ?? ''}
-                    onChange={(event) => updateDocumentImage(item, { link: event.target.value.trim() || null })}
-                    fullWidth
-                  />
-                </Grid>
-              ) : null}
+                <Grid container spacing={2}>
+                  {item.hasLink ? (
+                    <Grid size={{ xs: 12, md: 3 }}>
+                  <TextField label="Link" size="small" defaultValue="https://example.com/files/mock-document.pdf" fullWidth />
+                    </Grid>
+                  ) : null}
               <Grid size={{ xs: 12, md: 3 }}>
-                <UploadFileField
-                  label={item.uploadLabel}
-                  accept={item.accept}
-                  fileName={documentsByTitle.get(item.title)?.fileName ?? ''}
-                  onFileChange={(file) => updateDocumentImageFile(item, file)}
-                />
+                <UploadFileField label={item.uploadLabel} accept={item.accept} />
               </Grid>
             </Grid>
           </Stack>
@@ -2934,12 +2890,7 @@ function DocumentsAndImagesSection({ value = [], onChange }) {
                 <Typography variant="body2" sx={{ fontWeight: 700 }}>
                   {item.title}
                 </Typography>
-                <UploadFileField
-                  label={item.uploadLabel}
-                  accept={item.accept}
-                  fileName={documentsByTitle.get(item.title)?.fileName ?? ''}
-                  onFileChange={(file) => updateDocumentImageFile(item, file)}
-                />
+                <UploadFileField label={item.uploadLabel} accept={item.accept} />
               </Stack>
             </Grid>
           ))}
@@ -3471,7 +3422,6 @@ function RequestFormBottomSheet({ open, formType, factory, accessToken, onClose 
   const [contacts, setContacts] = useState([{ id: 1 }])
   const [factoryEmails, setFactoryEmails] = useState([{ id: 1, value: 'factory@company.com' }])
   const [monitoringPoints, setMonitoringPoints] = useState([{ id: 1, type: 'CEMS' }])
-  const [documentImagesByPointId, setDocumentImagesByPointId] = useState({})
   const [selectedMonitoringPointId, setSelectedMonitoringPointId] = useState(1)
   const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -3480,9 +3430,6 @@ function RequestFormBottomSheet({ open, formType, factory, accessToken, onClose 
   const showMonitoringPointSection = formType === 'เพิ่มจุดตรวจวัด'
   const selectedMonitoringPoint = monitoringPoints.find((point) => point.id === selectedMonitoringPointId)
     ?? monitoringPoints[0]
-  const selectedDocumentImages = selectedMonitoringPoint
-    ? (documentImagesByPointId[selectedMonitoringPoint.id] ?? [])
-    : []
   const submitRequest = async () => {
     setIsSubmitting(true)
     setSubmitError('')
@@ -3494,11 +3441,7 @@ function RequestFormBottomSheet({ open, formType, factory, accessToken, onClose 
           Authorization: `Bearer ${accessToken || '$OPERATOR_TOKEN'}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(
-          buildMeasurementPointRequestBody(factory, selectedMonitoringPoint?.type, {
-            documentsAndImages: selectedDocumentImages,
-          }),
-        ),
+        body: JSON.stringify(buildMeasurementPointRequestBody(factory, selectedMonitoringPoint?.type)),
       })
 
       if (!result.ok) {
@@ -3757,17 +3700,7 @@ function RequestFormBottomSheet({ open, formType, factory, accessToken, onClose 
                   point.type === 'CEMS' || point.type === 'WPMS' ? (
                     <Box key={point.id} sx={{ display: point.id === selectedMonitoringPoint?.id ? 'block' : 'none' }}>
                       <Stack spacing={2}>
-                        {point.type === 'CEMS' ? (
-                          <DocumentsAndImagesSection
-                            value={documentImagesByPointId[point.id] ?? []}
-                            onChange={(documentsAndImages) => {
-                              setDocumentImagesByPointId((current) => ({
-                                ...current,
-                                [point.id]: documentsAndImages,
-                              }))
-                            }}
-                          />
-                        ) : null}
+                        {point.type === 'CEMS' ? <DocumentsAndImagesSection /> : null}
                         <MeasurementInstrumentSection
                           parameterOptions={
                             point.type === 'CEMS' ? cemsParameterOptions : wpmsInstrumentParameters

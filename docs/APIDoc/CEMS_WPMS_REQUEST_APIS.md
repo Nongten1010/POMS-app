@@ -917,15 +917,6 @@ Backend ยังรับ alias `type: "CEMS" | "WPMS"` และ infer `pointT
 
 ใช้สำหรับ CEMS เท่านั้น; WPMS ไม่ต้องส่ง section `documentsAndImages`
 
-Endpoint ฟอร์มนี้รับ `Content-Type: application/json` ดังนั้น `documentsAndImages` เป็น metadata ของเอกสาร/รูปภาพเท่านั้น ไม่ได้แนบ binary file จริงไปพร้อม request นี้
-
-ถ้า frontend ใช้ `<input type="file">` ให้ส่ง metadata จากไฟล์ที่เลือก เช่น `fileName`, `fileType`, `fileSize` และตั้ง `fileUrl: null` ได้จนกว่าจะมีระบบอัปโหลดไฟล์จริง
-
-ถ้าต้องเก็บไฟล์จริง ให้ใช้หนึ่งในแนวทางนี้:
-
-- อัปโหลดไฟล์ไป storage/API อื่นก่อน แล้วนำ URL ที่ได้มาใส่ `documentsAndImages[].fileUrl`
-- เพิ่ม/เปลี่ยน endpoint ให้รับ `multipart/form-data` เพื่อส่ง JSON พร้อม binary file
-
 ใช้ field เดียวกันทุกหัวข้อ:
 
 | Label             | Field                                                  |
@@ -2496,7 +2487,7 @@ Data dictionary response row:
 | `description` | string|null | No | รายละเอียดเพิ่มเติม |
 | `link` | string|null | No | URL เอกสารอ้างอิง |
 | `fileName` | string|null | No | ชื่อไฟล์ |
-| `fileUrl` | string|null | No | URL ไฟล์; ส่ง `null` ได้ถ้ายังไม่มีระบบอัปโหลดไฟล์จริง |
+| `fileUrl` | string|null | No | URL ไฟล์ |
 | `fileType` | string|null | No | MIME type |
 | `fileSize` | number|null | No | ขนาดไฟล์ byte |
 
