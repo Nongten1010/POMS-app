@@ -1,6 +1,7 @@
 import { ErrorRequestHandler, NextFunction, Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
 import { ZodError } from 'zod';
+import multer from 'multer';
 import { AppError } from '../errors/AppError';
 import { logger } from '../../config/logger';
 
@@ -22,6 +23,21 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
         code: 'VALIDATION_ERROR',
         message: 'Request validation failed',
         details: err.flatten().fieldErrors,
+      },
+    });
+    return;
+  }
+
+  if (err instanceof multer.MulterError) {
+    res.status(StatusCodes.BAD_REQUEST).json({
+      success: false,
+      error: {
+        code: 'UPLOAD_ERROR',
+        message: err.message,
+        details: {
+          field: err.field ?? null,
+          reason: err.code,
+        },
       },
     });
     return;

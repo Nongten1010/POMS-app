@@ -6,5 +6,6 @@ node_modules/
 dist/
 coverage/
 logs/
+uploads/
+backend/uploads/
 npm-debug.log*
-

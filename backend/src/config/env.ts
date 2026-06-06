@@ -76,6 +76,12 @@ const envSchema = z.object({
     .default('parameter_values'),
 
   CORS_ORIGIN: z.string().default('*'),
+  PUBLIC_BASE_URL: z.string().url().optional(),
+  UPLOAD_DIR: z.string().min(1).default('uploads'),
+  UPLOAD_PUBLIC_PATH: z
+    .string()
+    .regex(/^\/[A-Za-z0-9/_-]*$/)
+    .default('/uploads'),
 
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'http', 'debug']).default('info'),
 });

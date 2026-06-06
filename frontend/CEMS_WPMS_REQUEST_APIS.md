@@ -58,6 +58,7 @@ Mapping:
 | --- | ------------------------------------------------------------ | ------ | ---------------------------------------------------------- | ---------------------------- |
 | 0   | ดึงข้อมูลทั่วไปของโรงงานสำหรับลงฟอร์มเพิ่มจุดตรวจวัด         | GET    | `/cems-wpms-requests/factories/:factoryId/general`         | `factories:view`             |
 | 1   | บันทึกฟอร์ม เพิ่มจุดตรวจวัด                                  | POST   | `/cems-wpms-requests/measurement-points`                   | `cems_wpms_requests:edit`    |
+| 1.1 | อัปโหลด/บันทึกลิงก์เอกสารและรูปภาพของฟอร์ม CEMS             | POST   | `/cems-wpms-requests/document-images`                      | `cems_wpms_requests:edit`    |
 | 2   | บันทึกฟอร์ม เพิ่มพารามิเตอร์                                 | POST   | `/cems-wpms-requests/parameters`                           | `cems_wpms_requests:edit`    |
 | 3   | บันทึกฟอร์ม ตั้งค่าอุปกรณ์ config                            | POST   | `/cems-wpms-requests/:id/device-configs`                   | `cems_wpms_requests:edit`    |
 | 4   | รายละเอียดฟอร์ม ตั้งค่าอุปกรณ์ config สำหรับดึงข้อมูลลงฟอร์ม | GET    | `/cems-wpms-requests/:id/device-configs?stationId=S0001`   | `cems_wpms_requests:view`    |
@@ -73,9 +74,10 @@ Mapping:
 
 1. Frontend เปิดฟอร์ม "เพิ่มจุดตรวจวัด"
 2. เรียก `GET /cems-wpms-requests/factories/:factoryId/general` เพื่อดึงข้อมูลทั่วไปของโรงงานลงฟอร์ม
-3. ผู้ใช้กรอก `measurementPoints[].details`, `measurementPoints[].measurementInstruments` และส่ง `measurementPoints[].documentsAndImages` เฉพาะ CEMS
-4. เรียก `POST /cems-wpms-requests/measurement-points` เพื่อบันทึกทั้งฟอร์ม
-5. คำขอถูกสร้างเป็น `ADD_MEASUREMENT_POINT` และสถานะเริ่มต้น `PENDING_DESIGN_REVIEW`
+3. ผู้ใช้กรอก `measurementPoints[].details`, `measurementPoints[].measurementInstruments` และแนบเอกสาร/รูปภาพเฉพาะ CEMS
+4. ถ้ามีไฟล์จริงหรืออยากบันทึกลิงก์ก่อน ให้เรียก `POST /cems-wpms-requests/document-images` แล้วนำ response ไปใส่ `measurementPoints[].documentsAndImages[]`
+5. เรียก `POST /cems-wpms-requests/measurement-points` เพื่อบันทึกทั้งฟอร์ม
+6. คำขอถูกสร้างเป็น `ADD_MEASUREMENT_POINT` และสถานะเริ่มต้น `PENDING_DESIGN_REVIEW`
 
 ## 0. ดึงข้อมูลทั่วไปของโรงงาน สำหรับลงฟอร์ม เพิ่มจุดตรวจวัด
 
@@ -917,6 +919,10 @@ Backend ยังรับ alias `type: "CEMS" | "WPMS"` และ infer `pointT
 
 ใช้สำหรับ CEMS เท่านั้น; WPMS ไม่ต้องส่ง section `documentsAndImages`
 
+ไฟล์จริงให้อัปโหลดผ่าน `POST /api/v1/cems-wpms-requests/document-images` ก่อน แล้วนำ `data` ที่ได้ไปใส่ใน `measurementPoints[].documentsAndImages[]` ตอน submit form หลัก
+
+Backend เริ่มด้วย local disk storage (`UPLOAD_DIR`, `UPLOAD_PUBLIC_PATH`, `PUBLIC_BASE_URL`) แต่ response contract ตั้งใจให้ย้ายไป object storage ภายหลังได้โดยไม่ต้องเปลี่ยน payload ของ form หลัก
+
 ใช้ field เดียวกันทุกหัวข้อ:
 
 | Label             | Field                                                  |
@@ -1753,6 +1759,58 @@ Data dictionary ของ response ที่ใช้ prefill:
 | `data.latitude` | string|number|null | ละติจูดโรงงาน |
 | `data.longitude` | string|number|null | ลองจิจูดโรงงาน |
 | `data.formDefaults` | object | ค่าเริ่มต้นที่ส่งต่อใน POST form ได้ |
+
+### API 1.1: POST อัปโหลด/บันทึกลิงก์เอกสารและรูปภาพ
+
+ใช้ก่อน submit ฟอร์มหลักเมื่อ CEMS มีไฟล์จริง หรือมีลิงก์เอกสารที่ต้องการแปลงเป็น `documentsAndImages[]` metadata
+
+| Item | Value |
+| --- | --- |
+| URL | `POST /api/v1/cems-wpms-requests/document-images` |
+| Header | `Authorization: Bearer <operatorAccessToken>` |
+| Content-Type | `multipart/form-data` |
+| Permission | `cems_wpms_requests:edit` |
+
+Form fields:
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `file` | file | Conditional | ไฟล์เอกสาร/รูปภาพจริง; รองรับ `image/jpeg`, `image/png`, `application/pdf`, ขนาดไม่เกิน 20 MB |
+| `title` | string | No | ชื่อหัวข้อเอกสาร/รูปภาพ; ถ้าไม่ส่ง backend ใช้ค่า default |
+| `description` | string | No | รายละเอียดเพิ่มเติม |
+| `link` | URL string | Conditional | URL เอกสารอ้างอิง; ใช้เดี่ยวๆ ได้แม้ไม่มีไฟล์ |
+
+ต้องส่งอย่างน้อย `file` หรือ `link` อย่างใดอย่างหนึ่ง
+
+ตัวอย่าง upload ไฟล์:
+
+```bash
+curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/document-images" \
+  -H "Authorization: Bearer $OPERATOR_TOKEN" \
+  -F "title=ภาพถ่ายปล่อง" \
+  -F "description=ภาพประกอบตำแหน่งติดตั้ง CEMS" \
+  -F "link=https://example.com/documents/stack-reference.pdf" \
+  -F "file=@./stack.png;type=image/png"
+```
+
+ตัวอย่าง response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "title": "ภาพถ่ายปล่อง",
+    "description": "ภาพประกอบตำแหน่งติดตั้ง CEMS",
+    "link": "https://example.com/documents/stack-reference.pdf",
+    "fileName": "stack.png",
+    "fileUrl": "http://localhost:3000/uploads/cems-wpms/document-images/2026/06/4b775e0f-0f62-4f68-83e0-3352f32f21bb.png",
+    "fileType": "image/png",
+    "fileSize": 1024
+  }
+}
+```
+
+นำ `data` object ไปใส่ใน `measurementPoints[].documentsAndImages[]` ของ `POST /measurement-points`
 
 ### API 1: POST บันทึกฟอร์ม เพิ่มจุดตรวจวัด
 

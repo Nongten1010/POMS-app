@@ -1,7 +1,9 @@
 import { NextFunction, Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
+import { env } from '../../config/env';
 import { getScope } from '../../shared/middlewares/authorize';
 import { createDeviceConnectionConfigSchema } from '../device-connections/device-connections.validator';
+import { createConnectionRequestDocumentImageService } from './connection-request-document-image.service';
 import { connectionRequestsService } from './connection-requests.service';
 import {
   addMeasurementPointRequestSchema,
@@ -94,6 +96,35 @@ export const connectionRequestsController = {
         getScope(req, 'cems_wpms_requests:view'),
       );
       res.status(StatusCodes.OK).json({ success: true, ...result });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async uploadDocumentImage(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      requireActorUserId(req);
+      const service = createConnectionRequestDocumentImageService({
+        uploadDir: env.UPLOAD_DIR,
+        publicPath: env.UPLOAD_PUBLIC_PATH,
+        publicBaseUrl: getPublicBaseUrl(req),
+      });
+      const documentImage = await service.createDocumentImage({
+        title: getSingleBodyValue(req.body.title),
+        description: getSingleBodyValue(req.body.description),
+        link: getSingleBodyValue(req.body.link),
+        file: req.file
+          ? {
+              buffer: req.file.buffer,
+              originalName: req.file.originalname,
+              mimeType: req.file.mimetype,
+              size: req.file.size,
+            }
+          : null,
+      });
+      const { storageKey: _storageKey, ...data } = documentImage;
+
+      res.status(StatusCodes.CREATED).json({ success: true, data });
     } catch (err) {
       next(err);
     }
@@ -295,4 +326,14 @@ function requireActorUserId(req: Request): number {
   const actorUserId = req.user?.id;
   if (!actorUserId) throw new Error('Authenticated user missing from request');
   return actorUserId;
+}
+
+function getSingleBodyValue(value: unknown): string | null {
+  if (Array.isArray(value)) return getSingleBodyValue(value[0]);
+  return typeof value === 'string' ? value : null;
+}
+
+function getPublicBaseUrl(req: Request): string {
+  if (env.PUBLIC_BASE_URL) return env.PUBLIC_BASE_URL;
+  return `${req.protocol}://${req.get('host')}`;
 }

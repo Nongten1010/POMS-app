@@ -1,4 +1,5 @@
 import express, { Application, Request, Response } from 'express';
+import path from 'node:path';
 import helmet from 'helmet';
 import cors from 'cors';
 import compression from 'compression';
@@ -30,6 +31,15 @@ export function createApp(): Application {
   app.use(cookieParser());
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: true }));
+  app.use(
+    env.UPLOAD_PUBLIC_PATH,
+    express.static(path.resolve(env.UPLOAD_DIR), {
+      dotfiles: 'deny',
+      fallthrough: false,
+      index: false,
+      maxAge: '1d',
+    }),
+  );
 
   app.use(
     rateLimit({

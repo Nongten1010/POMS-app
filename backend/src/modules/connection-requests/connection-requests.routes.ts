@@ -1,9 +1,30 @@
 import { Router } from 'express';
+import multer from 'multer';
+import { BadRequestError } from '../../shared/errors/AppError';
 import { authenticate } from '../../shared/middlewares/authenticate';
 import { authorize } from '../../shared/middlewares/authorize';
+import {
+  allowedDocumentFileTypes,
+  MAX_DOCUMENT_FILE_SIZE_BYTES,
+} from './connection-request-document-image.service';
 import { connectionRequestsController } from './connection-requests.controller';
 
 export const connectionRequestsRoutes = Router();
+const documentImageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: MAX_DOCUMENT_FILE_SIZE_BYTES,
+    files: 1,
+  },
+  fileFilter: (_req, file, callback) => {
+    if (allowedDocumentFileTypes.has(file.mimetype)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new BadRequestError('Unsupported file type'));
+  },
+});
 
 connectionRequestsRoutes.use(authenticate);
 
@@ -36,6 +57,12 @@ connectionRequestsRoutes.post(
   '/measurement-points',
   authorize('cems_wpms_requests:edit'),
   connectionRequestsController.createMeasurementPointRequest,
+);
+connectionRequestsRoutes.post(
+  '/document-images',
+  authorize('cems_wpms_requests:edit'),
+  documentImageUpload.single('file'),
+  connectionRequestsController.uploadDocumentImage,
 );
 connectionRequestsRoutes.post(
   '/parameters',
