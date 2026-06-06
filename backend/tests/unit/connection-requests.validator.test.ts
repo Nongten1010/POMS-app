@@ -267,6 +267,55 @@ describe('connection request validators', () => {
     expect(result.success).toBe(true);
   });
 
+  it('normalizes frontend CEMS aliases with blank point type and empty instrument parameters', () => {
+    const result = addMeasurementPointRequestSchema.safeParse({
+      ...validPayload,
+      type: 'CEMS',
+      measurementPoints: [
+        {
+          ...validPayload.measurementPoints[0],
+          pointType: '',
+          type: 'CEMS',
+          details: {
+            monitoringPointKind: 'CEMS',
+            eligibleParameters: ['CO2 (%),CO2 (ppm),CO (ppm),Flow (m³/hr),H2S (ppm)'],
+            pendingParameters: ['CO2 (%),CO2 (ppm),CO (ppm),Flow (m³/hr),H2S (ppm)'],
+            stackShape: 'วงกลม',
+            stackDiameter: 20,
+            stackHeight: 200,
+            hasTreatmentSystem: 'มี',
+            treatmentSystem: 'ระบบดักจับฝุ่น',
+            connectionDevice: 'POMS Client (ใหม่)',
+          },
+          measurementInstruments: {
+            converterBrand: 'ABCTech',
+            converterModel: '100',
+            parameters: [],
+          },
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.measurementPoints[0].pointType).toBe('STACK');
+      expect(result.data.measurementPoints[0].measurementInstruments?.parameters).toEqual([
+        expect.objectContaining({ parameter: 'CO2 (%)' }),
+        expect.objectContaining({ parameter: 'CO2 (ppm)' }),
+        expect.objectContaining({ parameter: 'CO (ppm)' }),
+        expect.objectContaining({ parameter: 'Flow (m³/hr)' }),
+        expect.objectContaining({ parameter: 'H2S (ppm)' }),
+      ]);
+      expect(result.data.measurementPoints[0].parameters).toEqual([
+        'CO2 (%)',
+        'CO2 (ppm)',
+        'CO (ppm)',
+        'Flow (m³/hr)',
+        'H2S (ppm)',
+      ]);
+    }
+  });
+
   it('accepts WPMS detail fields separately from CEMS fields', () => {
     const result = addMeasurementPointRequestSchema.safeParse({
       ...validPayload,

@@ -4,23 +4,19 @@ import { CONNECTION_REQUEST_STATUS, CONNECTION_REQUEST_TYPE } from './connection
 const trimmedString = (max: number) => z.string().trim().min(1).max(max);
 const optionalTrimmedString = (max: number) => z.string().trim().min(1).max(max).optional();
 const optionalNullableTrimmedString = (max: number) =>
-  z.preprocess(
-    (value) => {
+  z
+    .preprocess((value) => {
       if (typeof value !== 'string') return value;
       const trimmed = value.trim();
       return trimmed.length > 0 ? trimmed : null;
-    },
-    z.string().trim().min(1).max(max).nullable().optional(),
-  ).transform((value) => value ?? null);
+    }, z.string().trim().min(1).max(max).nullable().optional())
+    .transform((value) => value ?? null);
 const requiredStringWithFallback = (max: number) =>
-  z.preprocess(
-    (value) => {
-      if (typeof value !== 'string') return value;
-      const trimmed = value.trim();
-      return trimmed.length > 0 ? trimmed : null;
-    },
-    z.string().trim().min(1).max(max).nullable().optional(),
-  );
+  z.preprocess((value) => {
+    if (typeof value !== 'string') return value;
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }, z.string().trim().min(1).max(max).nullable().optional());
 const jsonValueSchema: z.ZodType<unknown> = z.lazy(() =>
   z.union([
     z.string(),
@@ -39,6 +35,11 @@ const parameterGroupFields = [
   'exemptedParameters',
   'connectedParameters',
   'pendingParameters',
+] as const;
+const measurementPointParameterFallbackFields = [
+  'pendingParameters',
+  'eligibleParameters',
+  'connectedParameters',
 ] as const;
 const cemsOnlyDetailFields = new Set([
   ...parameterGroupFields,
@@ -234,29 +235,142 @@ const measurementInstrumentsSchema = z
   .object({
     converterBrand: optionalNullableTrimmedString(255),
     converterModel: optionalNullableTrimmedString(255),
-    parameters: z.array(measurementInstrumentParameterSchema).min(1).max(100),
+    parameters: z.array(measurementInstrumentParameterSchema).max(100).optional(),
   })
   .strict()
   .transform((instruments) => ({
     ...instruments,
     converterBrand: instruments.converterBrand ?? null,
     converterModel: instruments.converterModel ?? null,
+    parameters: instruments.parameters ?? [],
   }));
 
+function normalizeMeasurementPointInput(value: unknown): unknown {
+  if (!isRecord(value)) return value;
+
+  const { type: frontendType, ...point } = value;
+  const inferredPointType = inferMeasurementPointType(point.pointType, point.details, frontendType);
+  const measurementInstruments = normalizeMeasurementInstrumentsInput(
+    point.measurementInstruments,
+    point,
+  );
+  const parameters = normalizeMeasurementPointParameterNames(point);
+
+  return {
+    ...point,
+    ...(inferredPointType ? { pointType: inferredPointType } : {}),
+    ...(parameters.length > 0 ? { parameters } : {}),
+    ...(measurementInstruments ? { measurementInstruments } : {}),
+  };
+}
+
+function normalizeMeasurementInstrumentsInput(
+  value: unknown,
+  point: Record<string, unknown>,
+): unknown {
+  if (!isRecord(value)) return value;
+
+  if (Array.isArray(value.parameters) && value.parameters.length > 0) return value;
+
+  const parameterNames = normalizeMeasurementPointParameterNames(point);
+  if (parameterNames.length === 0) return value;
+
+  return {
+    ...value,
+    parameters: parameterNames.map((parameter) => ({ parameter })),
+  };
+}
+
+function normalizeMeasurementPointParameterNames(point: Record<string, unknown>): string[] {
+  const directParameters = normalizeParameterNameList(point.parameters);
+  if (directParameters.length > 0) return directParameters;
+
+  if (!isRecord(point.details)) return [];
+
+  for (const field of measurementPointParameterFallbackFields) {
+    const detailParameters = normalizeParameterNameList(point.details[field]);
+    if (detailParameters.length > 0) return detailParameters;
+  }
+
+  return [];
+}
+
+function normalizeParameterNameList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+
+  const parameterNames = value.flatMap((item) => {
+    if (typeof item !== 'string') return [];
+    return item
+      .split(',')
+      .map((parameter) => parameter.trim())
+      .filter((parameter) => parameter.length > 0);
+  });
+
+  return [...new Set(parameterNames)];
+}
+
+function inferMeasurementPointType(
+  pointType: unknown,
+  details: unknown,
+  frontendType: unknown,
+): 'STACK' | 'WASTEWATER' | 'OTHER' | null {
+  const candidates = [
+    pointType,
+    isRecord(details) ? details.monitoringPointKind : undefined,
+    frontendType,
+  ];
+
+  for (const candidate of candidates) {
+    const inferred = inferMeasurementPointTypeFromValue(candidate);
+    if (inferred) return inferred;
+  }
+
+  return null;
+}
+
+function inferMeasurementPointTypeFromValue(
+  value: unknown,
+): 'STACK' | 'WASTEWATER' | 'OTHER' | null {
+  if (typeof value !== 'string') return null;
+
+  const normalizedValue = value.trim().toUpperCase();
+  if (!normalizedValue) return null;
+
+  if (
+    normalizedValue === 'STACK' ||
+    normalizedValue === 'WASTEWATER' ||
+    normalizedValue === 'OTHER'
+  ) {
+    return normalizedValue;
+  }
+  if (normalizedValue === 'CEMS') return 'STACK';
+  if (normalizedValue === 'WPMS') return 'WASTEWATER';
+
+  return null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 const measurementPointSchema = z
-  .object({
-    pointName: trimmedString(255),
-    pointCode: optionalNullableTrimmedString(64),
-    pointType: z.enum(['STACK', 'WASTEWATER', 'OTHER']),
-    latitude: z.number().min(-90).max(90).nullable().optional(),
-    longitude: z.number().min(-180).max(180).nullable().optional(),
-    parameters: z.array(trimmedString(64)).min(1).max(50).optional(),
-    description: optionalNullableTrimmedString(1000),
-    details: measurementPointDetailsSchema.nullable().optional(),
-    documentsAndImages: z.array(requestDocumentImageSchema).max(50).optional(),
-    measurementInstruments: measurementInstrumentsSchema.nullable().optional(),
-  })
-  .strict()
+  .preprocess(
+    normalizeMeasurementPointInput,
+    z
+      .object({
+        pointName: trimmedString(255),
+        pointCode: optionalNullableTrimmedString(64),
+        pointType: z.enum(['STACK', 'WASTEWATER', 'OTHER']),
+        latitude: z.number().min(-90).max(90).nullable().optional(),
+        longitude: z.number().min(-180).max(180).nullable().optional(),
+        parameters: z.array(trimmedString(64)).min(1).max(50).optional(),
+        description: optionalNullableTrimmedString(1000),
+        details: measurementPointDetailsSchema.nullable().optional(),
+        documentsAndImages: z.array(requestDocumentImageSchema).max(50).optional(),
+        measurementInstruments: measurementInstrumentsSchema.nullable().optional(),
+      })
+      .strict(),
+  )
   .transform((point) => ({
     ...point,
     latitude: point.latitude ?? null,
@@ -288,6 +402,7 @@ const connectionRequestFormObjectSchema = z
     latitude: z.number().min(-90).max(90).nullable().optional(),
     longitude: z.number().min(-180).max(180).nullable().optional(),
     systemType: z.enum(['CEMS', 'WPMS']),
+    type: z.enum(['CEMS', 'WPMS']).optional(),
     contactName: optionalTrimmedString(255),
     contactPhone: optionalTrimmedString(64),
     contactEmail: z.string().trim().email().max(255).nullable().optional(),
@@ -303,7 +418,7 @@ const connectionRequestFormBaseSchema =
   connectionRequestFormObjectSchema.superRefine(validateContactSection);
 
 const connectionRequestFormSchema = connectionRequestFormBaseSchema.transform((payload) =>
-  normalizeContacts(normalizeFactorySnapshot(payload)),
+  normalizeContacts(normalizeFactorySnapshot(stripFrontendSystemTypeAlias(payload))),
 );
 
 type ContactFormPayload = z.infer<typeof connectionRequestFormBaseSchema>;
@@ -329,7 +444,14 @@ function validateContactSection(
   }
 }
 
-function normalizeFactorySnapshot<T extends ContactFormPayload | ContactFormPayloadWithoutRequestType>(
+function stripFrontendSystemTypeAlias<T extends { type?: unknown }>(payload: T): Omit<T, 'type'> {
+  const { type: _type, ...formPayload } = payload;
+  return formPayload;
+}
+
+function normalizeFactorySnapshot<
+  T extends ContactFormPayload | ContactFormPayloadWithoutRequestType,
+>(
   payload: T,
 ): T & {
   factoryRegistrationNo: string;
@@ -594,7 +716,7 @@ export const addMeasurementPointRequestSchema = connectionRequestFormObjectSchem
     });
   })
   .transform((payload) => ({
-    ...normalizeContacts(normalizeFactorySnapshot(payload)),
+    ...normalizeContacts(normalizeFactorySnapshot(stripFrontendSystemTypeAlias(payload))),
     requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT,
   }));
 
@@ -627,7 +749,7 @@ export const addParameterRequestSchema = connectionRequestFormObjectSchema
     });
   })
   .transform((payload) => ({
-    ...normalizeContacts(normalizeFactorySnapshot(payload)),
+    ...normalizeContacts(normalizeFactorySnapshot(stripFrontendSystemTypeAlias(payload))),
     requestType: CONNECTION_REQUEST_TYPE.ADD_PARAMETER,
   }));
 
