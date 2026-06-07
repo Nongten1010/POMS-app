@@ -2000,6 +2000,7 @@ function buildConnectionSettings(form) {
 
   if (type === 'Modbus RTU') {
     return compactObject({
+      comPort: toNumberOrNull(values.comport),
       slaveId: toNumberOrNull(values.slaveId),
       baudRate: toNumberOrNull(values.baudRate),
       parity: parityCodeMap[values.parity] ?? values.parity,
