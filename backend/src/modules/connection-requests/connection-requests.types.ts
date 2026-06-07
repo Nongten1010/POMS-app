@@ -1,5 +1,3 @@
-import type { DeviceConnectionConfigDTO } from '../device-connections/device-connections.types';
-
 export const CONNECTION_REQUEST_STATUS = {
   PENDING_DESIGN_REVIEW: 'PENDING_DESIGN_REVIEW',
   WAITING_CONNECTION: 'WAITING_CONNECTION',
@@ -287,9 +285,44 @@ export interface OperatorFactoryTableRowDTO extends FactorySummaryDTO {
   eligibilityStatus: 'เข้าข่าย' | 'ไม่เข้าข่าย';
 }
 
+export interface DeviceConfigFormStatusManagementDTO {
+  selectedParameters: string[];
+  startAt: string | null;
+  endAt: string | null;
+  status: string;
+  schedules: Array<{
+    selectedParameters: string[];
+    startAt: string | null;
+    endAt: string | null;
+    status: string;
+  }>;
+}
+
+export interface DeviceConfigPayloadDTO {
+  stationId: string;
+  device: Array<{
+    deviceCode: string;
+    protocol: string;
+    settings: Record<string, unknown>;
+  }>;
+  channels: Array<{
+    deviceCode: string;
+    addressId: number;
+    dataType: string;
+    valueRange?: { min: number; max: number } | null;
+    valueFormat?: string | null;
+    offset: number;
+    encoding?: string | null;
+    status?: string | null;
+  }>;
+  statusManagement: DeviceConfigFormStatusManagementDTO;
+}
+
+export type DeviceConfigPayloadResponseDTO = DeviceConfigPayloadDTO | DeviceConfigPayloadDTO[];
+
 export interface ConnectionRequestDetailDTO extends ConnectionRequestDTO {
   factory: FactorySummaryDTO | null;
-  deviceConfigs: DeviceConnectionConfigDTO[];
+  deviceConfigs: DeviceConfigPayloadDTO[];
 }
 
 export interface ConnectedMeasurementPointDetailDTO {
@@ -302,7 +335,7 @@ export interface ConnectedMeasurementPointDetailDTO {
   statusCode: ConnectionRequestStatus;
   connectedAt: string | null;
   point: MeasurementPointDTO;
-  deviceConfigs: ConnectionRequestDetailDTO['deviceConfigs'];
+  deviceConfigs: DeviceConfigPayloadDTO[];
 }
 
 export interface DeviceConfigFormConnectionDTO {
@@ -327,19 +360,6 @@ export interface DeviceConfigFormParameterMappingDTO {
   status: string;
 }
 
-export interface DeviceConfigFormStatusManagementDTO {
-  selectedParameters: string[];
-  startAt: string | null;
-  endAt: string | null;
-  status: string;
-  schedules: Array<{
-    selectedParameters: string[];
-    startAt: string | null;
-    endAt: string | null;
-    status: string;
-  }>;
-}
-
 export interface DeviceConfigFormDetailDTO {
   requestId: number;
   requestNo: string;
@@ -351,7 +371,7 @@ export interface DeviceConfigFormDetailDTO {
   statusManagement: DeviceConfigFormStatusManagementDTO;
   parameterMappings: DeviceConfigFormParameterMappingDTO[];
   testResults: unknown[];
-  rawConfigs: ConnectionRequestDetailDTO['deviceConfigs'];
+  rawConfigs: DeviceConfigPayloadDTO;
 }
 
 export interface PaginatedTableRowsDTO<T> {

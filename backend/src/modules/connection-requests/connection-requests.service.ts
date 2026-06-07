@@ -23,6 +23,7 @@ import {
   type DeviceConfigFormConnectionDTO,
   type DeviceConfigFormDetailDTO,
   type DeviceConfigFormParameterMappingDTO,
+  type DeviceConfigPayloadResponseDTO,
   type FactoryGeneralDTO,
   type FactorySummaryDTO,
   type ListConnectionRequestsQuery,
@@ -157,7 +158,7 @@ export const connectionRequestsService = {
     return {
       ...request,
       factory: findFactorySummary(request, factoryMap),
-      deviceConfigs,
+      deviceConfigs: toDeviceConfigPayloadGroups(deviceConfigs),
     };
   },
 
@@ -219,7 +220,7 @@ export const connectionRequestsService = {
             statusCode: request.status,
             connectedAt: request.verifiedAt,
             point,
-            deviceConfigs: pointDeviceConfigs,
+            deviceConfigs: toDeviceConfigPayloadGroups(pointDeviceConfigs),
           };
         }),
       ),
@@ -351,20 +352,21 @@ export const connectionRequestsService = {
     id: number,
     input: CreateDeviceConnectionConfigInput,
     actorUserId: number,
-  ): Promise<DeviceConnectionConfigDTO> {
+  ): Promise<DeviceConfigPayloadResponseDTO> {
     const request = await loadRequest(id);
     ensureOwner(request, actorUserId);
     ensureStatus(request, [CONNECTION_REQUEST_STATUS.WAITING_CONNECTION]);
     ensureStationBelongsToRequest(request, input.stationId);
 
-    return deviceConnectionsService.createForRequest(input, actorUserId, id);
+    const created = await deviceConnectionsService.createForRequest(input, actorUserId, id);
+    return toDeviceConfigPayloadResponse([created]);
   },
 
   async createDeviceConfigs(
     id: number,
     input: CreateDeviceConnectionConfigsInput,
     actorUserId: number,
-  ): Promise<DeviceConnectionConfigDTO[]> {
+  ): Promise<DeviceConfigPayloadResponseDTO> {
     const request = await loadRequest(id);
     ensureOwner(request, actorUserId);
     ensureStatus(request, [CONNECTION_REQUEST_STATUS.WAITING_CONNECTION]);
@@ -372,7 +374,12 @@ export const connectionRequestsService = {
       ensureStationBelongsToRequest(request, config.stationId);
     }
 
-    return deviceConnectionsService.createManyForRequest(input.configs, actorUserId, id);
+    const created = await deviceConnectionsService.createManyForRequest(
+      input.configs,
+      actorUserId,
+      id,
+    );
+    return toDeviceConfigPayloadResponse(created);
   },
 
   async confirmConnection(
@@ -463,7 +470,7 @@ function toRequestTableRow(
 
 function toDeviceConfigFormDetail(
   request: ConnectionRequestDTO,
-  configs: ConnectionRequestDetailDTO['deviceConfigs'],
+  configs: DeviceConnectionConfigDTO[],
   requestedStationId?: string,
 ): DeviceConfigFormDetailDTO {
   const monitoringPoint = findMonitoringPoint(request, requestedStationId);
@@ -494,6 +501,13 @@ function toDeviceConfigFormDetail(
   const savedStatusManagement = stationConfigs.find(
     (config) => config.statusManagement,
   )?.statusManagement;
+  const statusManagement = savedStatusManagement ?? {
+    selectedParameters: ['ทั้งหมด'],
+    startAt: null,
+    endAt: null,
+    status: 'Normal',
+    schedules: [],
+  };
 
   return {
     requestId: request.id,
@@ -503,13 +517,7 @@ function toDeviceConfigFormDetail(
     parameterOptions,
     deviceCodeOptions,
     connectionForms,
-    statusManagement: savedStatusManagement ?? {
-      selectedParameters: ['ทั้งหมด'],
-      startAt: null,
-      endAt: null,
-      status: 'Normal',
-      schedules: [],
-    },
+    statusManagement,
     parameterMappings: stationConfigs.flatMap((config, configIndex) =>
       config.channels.map((channel) =>
         toDeviceConfigParameterMapping(
@@ -520,7 +528,7 @@ function toDeviceConfigFormDetail(
       ),
     ),
     testResults: [],
-    rawConfigs: stationConfigs,
+    rawConfigs: toDeviceConfigRawConfig(stationId, stationConfigs, statusManagement),
   };
 }
 
@@ -537,7 +545,7 @@ function findMonitoringPoint(
 }
 
 function toDeviceConfigFormConnection(
-  config: ConnectionRequestDetailDTO['deviceConfigs'][number],
+  config: DeviceConnectionConfigDTO,
   stationId: string,
   index: number,
 ): DeviceConfigFormConnectionDTO {
@@ -554,7 +562,7 @@ function toDeviceConfigFormConnection(
 function toDeviceConfigParameterMapping(
   configId: number,
   deviceCode: string,
-  channel: ConnectionRequestDetailDTO['deviceConfigs'][number]['channels'][number],
+  channel: DeviceConnectionConfigDTO['channels'][number],
 ): DeviceConfigFormParameterMappingDTO {
   return {
     configId,
@@ -570,8 +578,70 @@ function toDeviceConfigParameterMapping(
   };
 }
 
+function toDeviceConfigRawConfig(
+  stationId: string,
+  configs: DeviceConnectionConfigDTO[],
+  statusManagement: DeviceConfigFormDetailDTO['statusManagement'],
+): DeviceConfigFormDetailDTO['rawConfigs'] {
+  return {
+    stationId,
+    device: configs.map((config, index) => ({
+      deviceCode: getDeviceCode(config, stationId, index),
+      protocol: config.protocol,
+      settings: config.settings,
+    })),
+    channels: configs.flatMap((config, configIndex) =>
+      config.channels.map((channel) => ({
+        deviceCode: getDeviceCode(config, stationId, configIndex),
+        addressId: channel.addressId,
+        dataType: channel.dataType,
+        valueRange: channel.valueRange ?? null,
+        valueFormat: channel.valueFormat ?? null,
+        offset: channel.offset,
+        encoding: channel.encoding ?? null,
+        status: channel.status ?? 'Normal',
+      })),
+    ),
+    statusManagement,
+  };
+}
+
+function toDeviceConfigPayloadGroups(
+  configs: DeviceConnectionConfigDTO[],
+): DeviceConfigFormDetailDTO['rawConfigs'][] {
+  const groups = new Map<string, DeviceConnectionConfigDTO[]>();
+  for (const config of configs) {
+    const group = groups.get(config.stationId) ?? [];
+    group.push(config);
+    groups.set(config.stationId, group);
+  }
+
+  return Array.from(groups.entries()).map(([stationId, stationConfigs]) =>
+    toDeviceConfigRawConfig(stationId, stationConfigs, toStatusManagement(stationConfigs)),
+  );
+}
+
+function toDeviceConfigPayloadResponse(
+  configs: DeviceConnectionConfigDTO[],
+): DeviceConfigPayloadResponseDTO {
+  const groups = toDeviceConfigPayloadGroups(configs);
+  return groups.length === 1 ? groups[0] : groups;
+}
+
+function toStatusManagement(
+  configs: DeviceConnectionConfigDTO[],
+): DeviceConfigFormDetailDTO['statusManagement'] {
+  return configs.find((config) => config.statusManagement)?.statusManagement ?? {
+    selectedParameters: ['ทั้งหมด'],
+    startAt: null,
+    endAt: null,
+    status: 'Normal',
+    schedules: [],
+  };
+}
+
 function getDeviceCode(
-  config: Pick<ConnectionRequestDetailDTO['deviceConfigs'][number], 'deviceCode'>,
+  config: Pick<DeviceConnectionConfigDTO, 'deviceCode'>,
   stationId: string,
   index: number,
 ): string {

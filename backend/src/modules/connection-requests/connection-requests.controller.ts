@@ -297,7 +297,7 @@ export const connectionRequestsController = {
       }
 
       const data = await connectionRequestsService.createDeviceConfig(id, payload, actorUserId);
-      res.status(StatusCodes.CREATED).location(`/api/v1/device-connections/${data.id}`).json({
+      res.status(StatusCodes.CREATED).json({
         success: true,
         data,
       });

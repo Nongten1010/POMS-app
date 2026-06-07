@@ -238,6 +238,16 @@ describe('connectionRequestsService', () => {
     expect(result.factory?.province).toBe('สระบุรี');
     expect(result.factory?.businessActivity).toBe('ผลิตเคมีภัณฑ์');
     expect(result.deviceConfigs).toHaveLength(1);
+    expect(result.deviceConfigs[0]).toMatchObject({
+      stationId: 'STACK-A',
+      device: [
+        {
+          protocol: 'MODBUS_TCP',
+          settings: { hostIp: '192.168.1.10', slaveId: 1, port: 502 },
+        },
+      ],
+      channels: [],
+    });
   });
 
   it('returns device config form detail mapped to frontend field names', async () => {
@@ -342,11 +352,26 @@ describe('connectionRequestsService', () => {
         status: 'Maintenance',
       },
     });
-    expect(result.rawConfigs[0]?.channels[0]).toMatchObject({
+    expect(Object.keys(result.rawConfigs)).toEqual([
+      'stationId',
+      'device',
+      'channels',
+      'statusManagement',
+    ]);
+    expect(result.rawConfigs.device[0]).toMatchObject({
+      deviceCode: 'STACK-A/RTU-01',
+      protocol: 'MODBUS_RTU',
+      settings: {
+        comPort: 1,
+        slaveId: 1,
+      },
+    });
+    expect(result.rawConfigs.channels[0]).toMatchObject({
+      deviceCode: 'STACK-A/RTU-01',
       addressId: 40001,
       dataType: 'NOx (ppm)',
     });
-    expect(result.rawConfigs[0]?.channels[0]).not.toHaveProperty('unit');
+    expect(result.rawConfigs.channels[0]).not.toHaveProperty('unit');
   });
 
   it('matches device config form detail by monitoring point code or name aliases', async () => {
@@ -686,13 +711,33 @@ describe('connectionRequestsService', () => {
       updatedAt: now.toISOString(),
     });
 
-    await connectionRequestsService.createDeviceConfig(1, deviceConfig, actorUserId);
+    const result = await connectionRequestsService.createDeviceConfig(
+      1,
+      deviceConfig,
+      actorUserId,
+    );
 
     expect(mockedDeviceConnectionsService.createForRequest).toHaveBeenCalledWith(
       deviceConfig,
       actorUserId,
       1,
     );
+    expect(result).toMatchObject({
+      stationId: 'STACK-A',
+      device: [
+        {
+          protocol: 'MODBUS_TCP',
+          settings: { hostIp: '192.168.1.10', slaveId: 1, port: 502 },
+        },
+      ],
+      channels: [
+        {
+          deviceCode: 'STACK-A/01',
+          addressId: 40001,
+          dataType: 'NOx',
+        },
+      ],
+    });
   });
 
   it('stores multiple device configs in one request when every station belongs to the owner request', async () => {
@@ -759,7 +804,7 @@ describe('connectionRequestsService', () => {
       },
     ]);
 
-    await connectionRequestsService.createDeviceConfigs(
+    const result = await connectionRequestsService.createDeviceConfigs(
       1,
       { configs: [firstConfig, secondConfig] },
       actorUserId,
@@ -770,6 +815,17 @@ describe('connectionRequestsService', () => {
       actorUserId,
       1,
     );
+    expect(result).toMatchObject({
+      stationId: 'STACK-A',
+      device: [
+        { deviceCode: 'STACK-A/01', protocol: 'MODBUS_TCP' },
+        { deviceCode: 'STACK-A/02', protocol: 'MODBUS_TCP' },
+      ],
+      channels: [
+        { deviceCode: 'STACK-A/01', addressId: 40001, dataType: 'NOx' },
+        { deviceCode: 'STACK-A/02', addressId: 40002, dataType: 'NOx' },
+      ],
+    });
   });
 
   it('allows the owner to resubmit a revised form', async () => {

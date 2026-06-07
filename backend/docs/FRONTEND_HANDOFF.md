@@ -985,6 +985,7 @@ Frontend save rule:
 - ช่อง `ช่วงข้อมูลตรวจวัด Min/Max` บนการ์ด Connection ให้ส่งใน `settings.valueRange.min/max` ของอุปกรณ์นั้น
 - backend จะตอบ `409 CONFLICT` เฉพาะเมื่อ active config ซ้ำชุด `stationId + protocol + deviceCode`
 - หลังบันทึกสำเร็จให้เรียก `GET /cems-wpms-requests/:id/device-configs?stationId=...` เพื่อ refresh ค่า `connectionForms`, `deviceCodeOptions`, `parameterMappings`, และ `rawConfigs`
+- device-config response จะจัด shape เหมือน payload: `{ stationId, device, channels, statusManagement }`; ฟิลด์ plural เช่น `deviceConfigs` จะเป็น array ของ shape นี้
 
 Channel shape:
 

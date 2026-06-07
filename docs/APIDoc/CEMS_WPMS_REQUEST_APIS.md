@@ -1339,7 +1339,39 @@ Response สำหรับ prefill dialog:
       }
     ],
     "testResults": [],
-    "rawConfigs": []
+    "rawConfigs": {
+      "stationId": "S0001",
+      "device": [
+        {
+          "deviceCode": "S0001/01",
+          "protocol": "MODBUS_TCP",
+          "settings": {
+            "slaveId": 1,
+            "hostIp": "192.168.1.10",
+            "port": 502
+          }
+        }
+      ],
+      "channels": [
+        {
+          "deviceCode": "S0001/01",
+          "addressId": 40001,
+          "dataType": "NOx (ppm)",
+          "valueRange": { "min": 0, "max": 200 },
+          "valueFormat": "MEASUREMENT_VALUE",
+          "offset": 0,
+          "encoding": "UNSIGNED16_BIG_ENDIAN",
+          "status": "Normal"
+        }
+      ],
+      "statusManagement": {
+        "selectedParameters": ["ทั้งหมด"],
+        "startAt": null,
+        "endAt": null,
+        "status": "Normal",
+        "schedules": []
+      }
+    }
   }
 }
 ```
@@ -1602,23 +1634,28 @@ Response:
     ],
     "deviceConfigs": [
       {
-        "id": 10,
-        "requestId": 1,
         "stationId": "S0001",
-        "protocol": "MODBUS_TCP",
-        "settings": {
-          "hostIp": "192.168.1.10",
-          "slaveId": 1,
-          "port": 502
-        },
+        "device": [
+          {
+            "deviceCode": "S0001/01",
+            "protocol": "MODBUS_TCP",
+            "settings": {
+              "hostIp": "192.168.1.10",
+              "slaveId": 1,
+              "port": 502
+            }
+          }
+        ],
         "channels": [
           {
+            "deviceCode": "S0001/01",
             "addressId": 40001,
             "dataType": "NOx (ppm)",
             "valueRange": { "min": 0, "max": 200 },
             "valueFormat": "MEASUREMENT_VALUE",
             "offset": 0,
-            "encoding": "UNSIGNED16_BIG_ENDIAN"
+            "encoding": "UNSIGNED16_BIG_ENDIAN",
+            "status": "Normal"
           }
         ],
         "statusManagement": {
@@ -1679,23 +1716,28 @@ Response:
       },
       "deviceConfigs": [
         {
-          "id": 10,
-          "requestId": 1,
           "stationId": "S0001",
-          "protocol": "MODBUS_TCP",
-          "settings": {
-            "hostIp": "192.168.1.10",
-            "slaveId": 1,
-            "port": 502
-          },
+          "device": [
+            {
+              "deviceCode": "S0001/01",
+              "protocol": "MODBUS_TCP",
+              "settings": {
+                "hostIp": "192.168.1.10",
+                "slaveId": 1,
+                "port": 502
+              }
+            }
+          ],
           "channels": [
             {
+              "deviceCode": "S0001/01",
               "addressId": 40001,
               "dataType": "NOx (ppm)",
               "valueRange": { "min": 0, "max": 200 },
               "valueFormat": "MEASUREMENT_VALUE",
               "offset": 0,
-              "encoding": "UNSIGNED16_BIG_ENDIAN"
+              "encoding": "UNSIGNED16_BIG_ENDIAN",
+              "status": "Normal"
             }
           ],
           "statusManagement": {
@@ -2375,7 +2417,7 @@ Data dictionary response ที่ frontend ใช้:
 | `data.statusManagement` | object | ค่า prefill ส่วนจัดการสถานะ |
 | `data.parameterMappings` | array | ค่า prefill ตาราง mapping พารามิเตอร์ |
 | `data.testResults` | array | ผลทดสอบ connection |
-| `data.rawConfigs` | array | config ต้นฉบับจาก DB |
+| `data.rawConfigs` | object | config ต้นฉบับที่จัด shape เหมือน payload: `{ stationId, device, channels, statusManagement }` |
 
 ### API 4.1: GET รายละเอียดฟอร์ม ตั้งค่าอุปกรณ์ config ราย config
 
@@ -2554,7 +2596,7 @@ Data dictionary response:
 | `data.factory` | object | ข้อมูลโรงงาน snapshot/detail |
 | `data.measurementPoints` | array | รายจุดตรวจวัด ใช้ทำ PDF และเติมฟอร์มเพิ่มพารามิเตอร์ |
 | `data.statusHistory` | array | ประวัติสถานะ |
-| `data.deviceConfigs` | array | config อุปกรณ์ของคำขอ |
+| `data.deviceConfigs` | array | config อุปกรณ์ของคำขอ โดยแต่ละ item จัด shape เหมือน payload: `{ stationId, device, channels, statusManagement }` |
 
 ### API 10: GET รายละเอียดคำขอ รายจุดตรวจวัดทุกคำขอ เฉพาะเชื่อมต่อแล้ว
 
@@ -2590,7 +2632,7 @@ Data dictionary response row:
 | `statusCode` | string | ต้องเป็น `CONNECTED` |
 | `connectedAt` | string|null | วันเวลาที่เชื่อมต่อแล้ว |
 | `point` | object | ข้อมูลจุดตรวจวัด |
-| `deviceConfigs` | array | config อุปกรณ์ที่ผูกกับจุด |
+| `deviceConfigs` | array | config อุปกรณ์ที่ผูกกับจุด โดยแต่ละ item จัด shape เหมือน payload: `{ stationId, device, channels, statusManagement }` |
 
 ### Common JSON Data Dictionary
 
