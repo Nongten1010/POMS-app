@@ -174,33 +174,6 @@ const encodingDataOptions = [
   'Float64 - Little Endian',
 ]
 
-const parameterUnitMap = {
-  'CO2 (%)': '%',
-  'CO2 (ppm)': 'ppm',
-  'CO (ppm)': 'ppm',
-  'Flow (m³/hr)': 'm³/hr',
-  'H2S (ppm)': 'ppm',
-  'HCl (mg/m³)': 'mg/m³',
-  'Hg (mg/m³)': 'mg/m³',
-  'Moisture in Stack (%)': '%',
-  'NOx (ppm)': 'ppm',
-  'O2 (%)': '%',
-  'Opacity (%)': '%',
-  'Opacity (mg/m³)': 'mg/m³',
-  'Particulate (mg/m³)': 'mg/m³',
-  'Pressure in Stack (mmHg)': 'mmHg',
-  'SO2 (ppm)': 'ppm',
-  'SOx (ppm)': 'ppm',
-  'Temp. (°C)': '°C',
-  'TRS (ppm)': 'ppm',
-  'TSP (mg/m³)': 'mg/m³',
-  'HCL (ppm)': 'ppm',
-  'Loading (mg/hr)': 'mg/hr',
-  'BOD (mg/l)': 'mg/l',
-  'COD (mg/l)': 'mg/l',
-  'Watt (kW)': 'kW',
-}
-
 function getDefaultConnectionForm(type) {
   if (type === 'Modbus RTU') {
     return {
@@ -1593,7 +1566,7 @@ function createEmptyParameterMappingRow(parameter, index) {
     deviceCode: '',
     addressId: '',
     parameter,
-    unit: parameterUnitMap[parameter] ?? '',
+    unit: '',
     min: '',
     max: '',
     valueFormat: '',
@@ -1617,15 +1590,14 @@ function mapParameterMappingRows(parameterMappings = [], parameterOptions = []) 
 
   return parameterMappings.map((mapping, index) => {
     const parameter = mapping.parameter ?? mapping.parameterName ?? ''
-    const unit = mapping.unit ?? parameterUnitMap[parameter] ?? ''
-    const displayParameter = getParameterDisplayName(parameter, unit)
+    const displayParameter = getParameterDisplayName(parameter, mapping.unit ?? '')
 
     return {
       id: mapping.id ?? `${displayParameter}-${index}`,
       deviceCode: mapping.deviceCode ?? mapping.device_code ?? '',
       addressId: mapping.addressId ?? mapping.address_id ?? mapping.address ?? '',
       parameter: displayParameter,
-      unit,
+      unit: '',
       min: mapping.min ?? mapping.measureMin ?? '',
       max: mapping.max ?? mapping.measureMax ?? '',
       valueFormat: mapping.valueFormat ?? mapping.dataValueFormat ?? '',
@@ -1644,7 +1616,7 @@ function ConnectionParameterTable({ deviceCodeOptions, rows, setRows }) {
           return row
         }
         if (field === 'parameter') {
-          return { ...row, parameter: nextValue, unit: parameterUnitMap[nextValue] ?? row.unit }
+          return { ...row, parameter: nextValue, unit: '' }
         }
         return { ...row, [field]: nextValue }
       }),
@@ -2015,6 +1987,17 @@ function compactObject(value) {
   )
 }
 
+function buildOptionalValueRange(minValue, maxValue) {
+  const min = toNumberOrNull(minValue)
+  const max = toNumberOrNull(maxValue)
+
+  if (min === null || max === null) {
+    return null
+  }
+
+  return { min, max }
+}
+
 function buildConnectionSettings(form) {
   const values = form?.values ?? {}
   const type = normalizeConnectionType(form?.type)
@@ -2028,6 +2011,7 @@ function buildConnectionSettings(form) {
       stopBits: toNumberOrNull(values.stopBits),
       dataBits: toNumberOrNull(values.dataBits),
       quantity: toNumberOrNull(values.quantity),
+      valueRange: buildOptionalValueRange(values.measureMin, values.measureMax),
     })
   }
 
@@ -2051,10 +2035,9 @@ function buildConnectionSettings(form) {
 function buildDeviceConfigChannels(rows) {
   return rows
     .filter((row) => row.parameter)
-    .map((row) => ({
+    .map((row) => compactObject({
       addressId: toNumberOrNull(row.addressId),
       dataType: row.parameter,
-      unit: row.unit || parameterUnitMap[row.parameter] || '',
       valueRange: {
         min: toNumberOrNull(row.min),
         max: toNumberOrNull(row.max),

@@ -30,6 +30,47 @@ describe('device connection validators', () => {
     });
 
     expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.channels[0]).toMatchObject({
+        dataType: 'CO2',
+        unit: 'ppm',
+      });
+    }
+  });
+
+  it('preserves the full parameter name when the unit is already in dataType', () => {
+    const result = createDeviceConnectionConfigSchema.safeParse({
+      stationId: 'STATION_001',
+      protocol: 'MODBUS_RTU',
+      settings: {
+        comPort: 1,
+        slaveId: 1,
+        baudRate: 9600,
+        parity: 'NONE',
+        stopBits: 1,
+        dataBits: 8,
+        quantity: 1,
+      },
+      channels: [
+        {
+          addressId: 40001,
+          dataType: 'CO2 (%)',
+          valueRange: { min: 0, max: 200 },
+          valueFormat: 'MEASUREMENT_VALUE',
+          offset: 0,
+          encoding: 'SIGNED16_BIG_ENDIAN',
+          status: 'Start up',
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.channels[0]).toMatchObject({
+        dataType: 'CO2 (%)',
+        unit: '',
+      });
+    }
   });
 
   it('accepts the legacy Modbus RTU device setup form payload', () => {
@@ -71,9 +112,9 @@ describe('device connection validators', () => {
         protocol: 'MODBUS_RTU',
         settings: {
           comPort: 1,
-	          slaveId: 1,
-	          baudRate: 9600,
-	          parity: 'NONE',
+          slaveId: 1,
+          baudRate: 9600,
+          parity: 'NONE',
           stopBits: 1,
           dataBits: 8,
           quantity: 1,
@@ -83,7 +124,7 @@ describe('device connection validators', () => {
           {
             addressId: 40001,
             dataType: 'NOx (ppm)',
-            unit: 'ppm',
+            unit: '',
             valueRange: { min: 0, max: 200 },
             valueFormat: 'MEASUREMENT_VALUE',
             offset: 0,

@@ -69,7 +69,7 @@ const modbusChannelSchema = z
   .object({
     addressId,
     dataType: trimmedString(128),
-    unit: trimmedString(64),
+    unit: z.string().trim().max(64).optional().default(''),
     valueRange: measurementRangeSchema,
     valueFormat: dataValueFormatSchema.nullable().optional().default('MEASUREMENT_VALUE'),
     offset: z.number(),
@@ -86,7 +86,7 @@ const databaseChannelSchema = z
   .object({
     addressId,
     dataType: trimmedString(128),
-    unit: trimmedString(64),
+    unit: z.string().trim().max(64).optional().default(''),
     offset: z.number(),
     status: parameterStatusSchema,
   })
@@ -291,11 +291,10 @@ function normalizeLegacyModbusChannels(value: unknown): unknown {
   if (!Array.isArray(value)) return value;
   return value.map((channel) => {
     if (!isRecord(channel)) return channel;
-    const parameter = parseParameterWithUnit(channel.parameter);
     const normalized: Record<string, unknown> = {
       addressId: parseLeadingNumber(channel.addressID),
-      dataType: parameter.dataType,
-      unit: parameter.unit,
+      dataType: typeof channel.parameter === 'string' ? channel.parameter.trim() : channel.parameter,
+      unit: channel.unit,
       valueRange: {
         min: parseLeadingNumber(channel.min),
         max: parseLeadingNumber(channel.max),
@@ -373,16 +372,6 @@ function parseLeadingNumber(value: unknown): unknown {
   if (!match) return value;
   const parsed = Number(match[0]);
   return Number.isFinite(parsed) ? parsed : value;
-}
-
-function parseParameterWithUnit(value: unknown): { dataType?: string; unit?: string } {
-  if (typeof value !== 'string') return {};
-  const match = value.trim().match(/^(.+?)\s*\(([^)]+)\)$/);
-  if (!match) return { dataType: value.trim() };
-  return {
-    dataType: value.trim(),
-    unit: match[2]?.trim(),
-  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

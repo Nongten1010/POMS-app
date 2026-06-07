@@ -1222,8 +1222,7 @@ curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/device
     "channels": [
       {
         "addressId": 40001,
-	      "dataType": "NOx (ppm)",
-        "unit": "ppm",
+        "dataType": "NOx (ppm)",
         "valueRange": { "min": 0, "max": 200 },
         "valueFormat": "MEASUREMENT_VALUE",
         "offset": 0,
@@ -1260,8 +1259,7 @@ Response:
     "channels": [
       {
         "addressId": 40001,
-        "dataType": "NOx",
-        "unit": "ppm",
+        "dataType": "NOx (ppm)",
         "valueRange": { "min": 0, "max": 200 },
         "valueFormat": "MEASUREMENT_VALUE",
         "offset": 0,
@@ -1617,8 +1615,7 @@ Response:
         "channels": [
           {
             "addressId": 40001,
-            "dataType": "NOx",
-            "unit": "ppm",
+            "dataType": "NOx (ppm)",
             "valueRange": { "min": 0, "max": 200 },
             "valueFormat": "MEASUREMENT_VALUE",
             "offset": 0,
@@ -1695,8 +1692,7 @@ Response:
           "channels": [
             {
               "addressId": 40001,
-              "dataType": "NOx",
-              "unit": "ppm",
+              "dataType": "NOx (ppm)",
               "valueRange": { "min": 0, "max": 200 },
               "valueFormat": "MEASUREMENT_VALUE",
               "offset": 0,
@@ -2214,8 +2210,7 @@ Path params:
   "channels": [
     {
       "addressId": 40001,
-      "dataType": "NOx",
-      "unit": "ppm",
+      "dataType": "NOx (ppm)",
       "valueRange": { "min": 0, "max": 200 },
       "valueFormat": "MEASUREMENT_VALUE",
       "offset": 0,
@@ -2249,13 +2244,13 @@ Path params:
         "parity": "NONE",
         "stopBits": 1,
         "dataBits": 8,
-        "quantity": 1
+        "quantity": 1,
+        "valueRange": { "min": 20, "max": 200 }
       },
       "channels": [
         {
           "addressId": 40001,
-	          "dataType": "CO2 (%)",
-          "unit": "%",
+          "dataType": "CO2 (%)",
           "valueRange": { "min": 20, "max": 200 },
           "valueFormat": "MEASUREMENT_VALUE",
           "offset": 1,
@@ -2287,8 +2282,7 @@ Path params:
       "channels": [
         {
           "addressId": 40002,
-	          "dataType": "CO2 (ppm)",
-          "unit": "ppm",
+          "dataType": "CO2 (ppm)",
           "valueRange": { "min": 0, "max": 180 },
           "valueFormat": "MEASUREMENT_VALUE",
           "offset": 1,
@@ -2338,10 +2332,12 @@ Data dictionary:
 | `settings.parity` | string | No | Parity สำหรับ RTU |
 | `settings.stopBits` | number|string | No | Stop bits |
 | `settings.dataBits` | number|string | No | Data bits |
+| `settings.valueRange.min` | number|null | No | ช่วงข้อมูลตรวจวัด Min จากการ์ด Connection |
+| `settings.valueRange.max` | number|null | No | ช่วงข้อมูลตรวจวัด Max จากการ์ด Connection |
 | `channels` | array | Yes | รายการ mapping ค่าพารามิเตอร์ |
 | `channels[].addressId` | number|string | Yes | register/address/field id |
-| `channels[].dataType` | string | Yes | ชื่อพารามิเตอร์ตามที่แสดงในฟอร์ม เช่น `CO2 (%)`, `CO2 (ppm)`, `NOx (ppm)`; backend เก็บตามค่าที่ส่ง ไม่ตัดหน่วยออกจากชื่อ |
-| `channels[].unit` | string|null | No | หน่วย |
+| `channels[].dataType` | string | Yes | ชื่อพารามิเตอร์เต็มตามที่แสดงในฟอร์ม เช่น `CO2 (%)`, `CO2 (ppm)`, `NOx (ppm)`; backend เก็บตามค่าที่ส่งมา ไม่ตัดหรือประกอบหน่วยเอง |
+| `channels[].unit` | string|null | No | optional สำหรับ client เก่าที่มีหน่วยแยกอยู่แล้ว; frontend ใหม่ไม่ต้องส่ง field นี้ |
 | `channels[].valueRange.min` | number|null | No | ค่าต่ำสุดของช่วงข้อมูล |
 | `channels[].valueRange.max` | number|null | No | ค่าสูงสุดของช่วงข้อมูล |
 | `channels[].valueFormat` | string|null | No | รูปแบบค่า: `MEASUREMENT_VALUE`, `CURRENT`, `VOLTAGE` |

@@ -560,7 +560,7 @@ function toDeviceConfigParameterMapping(
     configId,
     deviceCode,
     addressId: String(channel.addressId),
-    parameter: toParameterDisplayName(channel.dataType, channel.unit),
+    parameter: channel.dataType,
     unit: channel.unit,
     min: channel.valueRange ? String(channel.valueRange.min) : '',
     max: channel.valueRange ? String(channel.valueRange.max) : '',
@@ -569,11 +569,6 @@ function toDeviceConfigParameterMapping(
     encodingData: encodingToFormLabel(channel.encoding ?? null),
     status: channel.status ?? 'Normal',
   };
-}
-
-function toParameterDisplayName(dataType: string, unit: string): string {
-  if (!unit || dataType.includes('(')) return dataType;
-  return `${dataType} (${unit})`;
 }
 
 function getDeviceCode(

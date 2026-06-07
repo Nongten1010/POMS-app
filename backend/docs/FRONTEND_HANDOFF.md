@@ -982,6 +982,7 @@ Frontend save rule:
 
 - endpoint `POST /cems-wpms-requests/:id/device-configs` รับได้ทั้ง payload เดี่ยวแบบเดิมและ batch `{ configs: DeviceConnectionPayload[] }`
 - ถ้าหน้าจอมีหลาย `connectionForms` ให้ส่ง `POST` ครั้งเดียวด้วย `configs` และส่ง `channels` เฉพาะ row ที่เลือก `deviceCode` นั้นในแต่ละ config
+- ช่อง `ช่วงข้อมูลตรวจวัด Min/Max` บนการ์ด Connection ให้ส่งใน `settings.valueRange.min/max` ของอุปกรณ์นั้น
 - backend จะตอบ `409 CONFLICT` เฉพาะเมื่อ active config ซ้ำชุด `stationId + protocol + deviceCode`
 - หลังบันทึกสำเร็จให้เรียก `GET /cems-wpms-requests/:id/device-configs?stationId=...` เพื่อ refresh ค่า `connectionForms`, `deviceCodeOptions`, `parameterMappings`, และ `rawConfigs`
 
@@ -991,7 +992,6 @@ Channel shape:
 {
   "addressId": 40001,
   "dataType": "CO2 (ppm)",
-  "unit": "ppm",
   "valueRange": { "min": 0, "max": 200 },
   "valueFormat": "MEASUREMENT_VALUE",
   "offset": 0,
@@ -1013,7 +1013,7 @@ Validation สำคัญ:
 | DB channel | ใช้เฉพาะ `addressId`, `dataType`, `unit`, `offset` ตามไฟล์ client |
 | `dbPass` | ส่งตอน create/test ได้ แต่ response จะ mask เป็น `********` |
 
-ส่ง `channels[].dataType` เป็นชื่อพารามิเตอร์เต็มตามที่แสดงในฟอร์ม เช่น `CO2 (%)` หรือ `CO2 (ppm)`; backend เก็บตามค่าที่ส่ง ไม่ตัดหน่วยออกจากชื่อพารามิเตอร์
+ส่ง `channels[].dataType` เป็นชื่อพารามิเตอร์เต็มตามที่แสดงในฟอร์ม เช่น `CO2 (%)` หรือ `CO2 (ppm)`; frontend ไม่ต้องแยกหน่วยออกมา และไม่ต้องส่ง field `channels[].unit` ส่วน backend จะเก็บ `dataType` ตามค่าที่ส่งมาโดยไม่ตัดหรือประกอบหน่วยเอง
 
 ### 9.2 Mock test connection
 
@@ -1042,8 +1042,7 @@ Content-Type: application/json
   "channels": [
     {
       "addressId": 40001,
-	      "dataType": "CO2 (ppm)",
-      "unit": "ppm",
+      "dataType": "CO2 (ppm)",
       "valueRange": { "min": 0, "max": 200 },
       "valueFormat": "MEASUREMENT_VALUE",
       "offset": 0,
@@ -1051,8 +1050,7 @@ Content-Type: application/json
     },
     {
       "addressId": 40002,
-	      "dataType": "O2 (%)",
-      "unit": "%",
+      "dataType": "O2 (%)",
       "valueRange": { "min": 0, "max": 25 },
       "valueFormat": "MEASUREMENT_VALUE",
       "offset": -0.1,
