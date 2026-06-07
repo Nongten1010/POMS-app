@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Box,
   Button,
@@ -38,6 +38,7 @@ import AddIcon from '@mui/icons-material/Add'
 import CloseIcon from '@mui/icons-material/Close'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import UploadFileIcon from '@mui/icons-material/UploadFile'
+import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import { DataGrid } from '@mui/x-data-grid'
 
 const subMenus = [
@@ -110,6 +111,66 @@ const emptyInstrumentParameter = {
   oxygenOrExcessAir: false,
 }
 
+const emptyCriteria = {
+  enabled: false,
+  standardValue: '',
+  rows: specialCriteriaRows.map((row) => ({
+    level: row.key,
+    min: '',
+    max: '',
+  })),
+}
+
+const mockCemsMonitoringPointDetails = {
+  pointCode: 'CEMS-STACK-001',
+  pointName: 'ปล่องระบาย A',
+  productionUnitType: 'หม้อไอน้ำ',
+  productionCapacity: '10 ตันไอน้ำ/ชั่วโมง',
+  cemsInstallationRequiredBy: 'ประกาศ อก.',
+  legalAnnexNo: 'เฉพาะประกาศปี 65',
+  eligibleParameters: ['NOx (ppm)', 'SO2 (ppm)', 'O2 (%)'],
+  exemptedParameters: [],
+  connectedParameters: [],
+  pendingParameters: ['NOx (ppm)', 'SO2 (ppm)', 'O2 (%)'],
+  stackShape: 'วงกลม',
+  stackDiameter: '1.2',
+  stackHeight: '30',
+  monitoringHeight: '20',
+  averageFlowRate: '1200',
+  minFlowRate: '1000',
+  maxFlowRate: '1500',
+  primaryFuel: 'ก๊าซธรรมชาติ',
+  primaryFuelPercent: '80',
+  secondaryFuel: 'ไม่มี',
+  combustionControlSystem: 'ควบคุมอัตโนมัติ',
+  hasTreatmentSystem: 'มี',
+  treatmentSystem: 'สครับเบอร์',
+  stackLatitude: '13.7563',
+  stackLongitude: '100.5018',
+  connectionDevice: 'POMS Box (กรอ.)',
+}
+
+const mockWpmsMonitoringPointDetails = {
+  pointCode: 'WPMS-WW-001',
+  pointName: 'จุดระบายน้ำทิ้ง A',
+  averageWastewaterDischarge: '500',
+  minWastewaterDischarge: '300',
+  maxWastewaterDischarge: '800',
+  hasTreatmentSystem: 'มี',
+  treatmentSystem: 'ระบบบำบัดชีวภาพ',
+  maxTreatmentCapacity: '1000',
+  instrumentLatitude: '13.7563',
+  instrumentLongitude: '100.5018',
+  wastewaterSource: 'กระบวนการผลิต',
+  dischargeReceivingSource: 'คลองสาธารณะ',
+  connectionDevice: 'POMS Box (กรอ.)',
+}
+
+const mockMeasurementInstrumentDetails = {
+  converterBrand: 'Converter Brand',
+  converterModel: 'CV-100',
+}
+
 const waitingConnectionSx = {
   bgcolor: '#5b21b6',
   borderColor: '#5b21b6',
@@ -174,10 +235,37 @@ const encodingDataOptions = [
   'Float64 - Little Endian',
 ]
 
+const parameterUnitMap = {
+  'CO2 (%)': '%',
+  'CO2 (ppm)': 'ppm',
+  'CO (ppm)': 'ppm',
+  'Flow (m³/hr)': 'm³/hr',
+  'H2S (ppm)': 'ppm',
+  'HCl (mg/m³)': 'mg/m³',
+  'Hg (mg/m³)': 'mg/m³',
+  'Moisture in Stack (%)': '%',
+  'NOx (ppm)': 'ppm',
+  'O2 (%)': '%',
+  'Opacity (%)': '%',
+  'Opacity (mg/m³)': 'mg/m³',
+  'Particulate (mg/m³)': 'mg/m³',
+  'Pressure in Stack (mmHg)': 'mmHg',
+  'SO2 (ppm)': 'ppm',
+  'SOx (ppm)': 'ppm',
+  'Temp. (°C)': '°C',
+  'TRS (ppm)': 'ppm',
+  'TSP (mg/m³)': 'mg/m³',
+  'HCL (ppm)': 'ppm',
+  'Loading (mg/hr)': 'mg/hr',
+  'BOD (mg/l)': 'mg/l',
+  'COD (mg/l)': 'mg/l',
+  'Watt (kW)': 'kW',
+}
+
 function getDefaultConnectionForm(type) {
   if (type === 'Modbus RTU') {
     return {
-      comport: '',
+      comPort: '',
       slaveId: '',
       baudRate: '',
       parity: '',
@@ -264,6 +352,10 @@ const measurementPointsRequestApiUrl =
   import.meta.env.DEV
     ? '/api-proxy/v1/cems-wpms-requests/measurement-points'
     : 'http://d-poms.diw.go.th/api/v1/cems-wpms-requests/measurement-points'
+const documentImagesApiUrl =
+  import.meta.env.DEV
+    ? '/api-proxy/v1/cems-wpms-requests/document-images'
+    : 'http://d-poms.diw.go.th/api/v1/cems-wpms-requests/document-images'
 const operatorFactoriesApiUrl = import.meta.env.DEV
   ? '/api-proxy/v1/cems-wpms-requests/operator-factories'
   : 'http://d-poms.diw.go.th/api/v1/cems-wpms-requests/operator-factories'
@@ -289,6 +381,18 @@ function getMeasurementPointsRequestApiUrl() {
   return measurementPointsRequestApiUrl
 }
 
+function getDocumentImagesApiUrl() {
+  if (typeof window === 'undefined') {
+    return documentImagesApiUrl
+  }
+
+  if (window.location.hostname === 'd-poms.diw.go.th') {
+    return '/api/v1/cems-wpms-requests/document-images'
+  }
+
+  return documentImagesApiUrl
+}
+
 function getRequestDetailApiUrl(id) {
   if (typeof window !== 'undefined' && window.location.hostname === 'd-poms.diw.go.th') {
     return `/api/v1/cems-wpms-requests/${id}/detail`
@@ -305,6 +409,24 @@ function getRequestStatusApiUrl(id) {
   return `${requestDetailApiBaseUrl}/${id}/status`
 }
 
+function getRequestFormApiUrl(id) {
+  if (typeof window !== 'undefined' && window.location.hostname === 'd-poms.diw.go.th') {
+    return `/api/v1/cems-wpms-requests/${id}/form`
+  }
+
+  return `${requestDetailApiBaseUrl}/${id}/form`
+}
+
+function getConnectedMeasurementPointsApiUrl(factoryId) {
+  const query = factoryId ? `?factoryId=${encodeURIComponent(factoryId)}` : ''
+
+  if (typeof window !== 'undefined' && window.location.hostname === 'd-poms.diw.go.th') {
+    return `/api/v1/cems-wpms-requests/connected-measurement-points${query}`
+  }
+
+  return `${requestDetailApiBaseUrl}/connected-measurement-points${query}`
+}
+
 function getDeviceConfigsApiUrl(id, stationId) {
   const query = stationId ? `?stationId=${encodeURIComponent(stationId)}` : ''
 
@@ -313,6 +435,22 @@ function getDeviceConfigsApiUrl(id, stationId) {
   }
 
   return `${requestDetailApiBaseUrl}/${id}/device-configs${query}`
+}
+
+function getConfirmConnectionApiUrl(id) {
+  if (typeof window !== 'undefined' && window.location.hostname === 'd-poms.diw.go.th') {
+    return `/api/v1/cems-wpms-requests/${id}/confirm-connection`
+  }
+
+  return `${requestDetailApiBaseUrl}/${id}/confirm-connection`
+}
+
+function getVerifyConnectionApiUrl(id) {
+  if (typeof window !== 'undefined' && window.location.hostname === 'd-poms.diw.go.th') {
+    return `/api/v1/cems-wpms-requests/${id}/verify-connection`
+  }
+
+  return `${requestDetailApiBaseUrl}/${id}/verify-connection`
 }
 
 function getConnectionTestApiUrl(stationId) {
@@ -326,7 +464,6 @@ function getConnectionTestApiUrl(stationId) {
 }
 
 const factoryRows = []
-const monitoringPointRows = []
 
 function getConnectionParameterOptions(context) {
   const existingParameters = context?.parameters ?? []
@@ -342,17 +479,13 @@ function getConnectionDeviceCode(context, index) {
   return monitoringPointCode ? `${monitoringPointCode}/${String(index + 1).padStart(2, '0')}` : ''
 }
 
-function getConnectionFormDeviceCode(context, form, index, existingOptions = []) {
-  return form?.deviceCode || existingOptions[index] || getConnectionDeviceCode(context, index)
-}
-
-function buildDeviceCodeOptions(context, forms = [], existingOptions = []) {
-  return [
-    ...new Set([
-      ...existingOptions,
-      ...forms.map((form, index) => getConnectionFormDeviceCode(context, form, index, existingOptions)),
-    ]),
-  ].filter(Boolean)
+function createDefaultConnectionItem(context, index = 0) {
+  return {
+    id: Date.now() + index,
+    deviceCode: getConnectionDeviceCode(context, index),
+    type: '',
+    values: {},
+  }
 }
 
 function getDeviceConfigRequestId(context) {
@@ -400,6 +533,8 @@ function mapRequestTableRow(row) {
     id: row.id,
     factoryId: row.factoryId ?? '',
     factoryName: row.factoryName ?? '',
+    newRegistrationNo: row.newRegistrationNo ?? row.factoryId ?? '',
+    oldRegistrationNo: row.oldRegistrationNo ?? row.factoryRegistrationNo ?? '',
     industryType: row.industryType ?? '',
     province: row.province ?? '',
     type: row.type ?? '',
@@ -416,6 +551,35 @@ function mapRequestTableRow(row) {
   }
 }
 
+function mapConnectedMeasurementPointRow(row) {
+  const point = row.point ?? {}
+
+  return {
+    id: row.id ?? point.id ?? row.requestId,
+    requestId: row.requestId ?? row.id ?? '',
+    requestNo: row.requestNo ?? '',
+    factoryId: row.factory?.factoryId ?? row.factoryId ?? '',
+    factory: row.factory ?? {},
+    type: row.type ?? row.systemType ?? '',
+    code: point.pointCode ?? point.code ?? row.pointCode ?? '',
+    pointCode: point.pointCode ?? point.code ?? row.pointCode ?? '',
+    name: point.pointName ?? point.name ?? row.pointName ?? '',
+    pointName: point.pointName ?? point.name ?? row.pointName ?? '',
+    pointType: point.pointType ?? row.pointType ?? '',
+    typeLabel: point.pointType ?? row.pointType ?? '',
+    parameters: Array.isArray(point.parameters) ? point.parameters : [],
+    status: row.status ?? 'เชื่อมต่อแล้ว',
+    statusCode: row.statusCode ?? 'CONNECTED',
+    connectedAt: row.connectedAt ?? null,
+    deviceConfigs: Array.isArray(row.deviceConfigs) ? row.deviceConfigs : [],
+    request: {
+      id: row.requestId ?? row.id ?? '',
+      requestId: row.requestId ?? row.id ?? '',
+      requestNo: row.requestNo ?? '',
+    },
+  }
+}
+
 function mapRequestDetailRow(detail = {}, row = {}) {
   const factory = detail.factory ?? {}
   const firstPoint = Array.isArray(detail.measurementPoints) ? detail.measurementPoints[0] : null
@@ -426,6 +590,8 @@ function mapRequestDetailRow(detail = {}, row = {}) {
     id: detail.id ?? row.id,
     factoryId: detail.factoryId ?? factory.factoryId ?? row.factoryId ?? '',
     factoryName: detail.factoryName ?? factory.factoryName ?? row.factoryName ?? '',
+    newRegistrationNo: detail.newRegistrationNo ?? factory.newRegistrationNo ?? row.newRegistrationNo ?? detail.factoryId ?? factory.factoryId ?? row.factoryId ?? '',
+    oldRegistrationNo: detail.oldRegistrationNo ?? detail.factoryRegistrationNo ?? factory.oldRegistrationNo ?? row.oldRegistrationNo ?? row.factoryRegistrationNo ?? '',
     industryType: detail.industryType ?? factory.industryType ?? row.industryType ?? '',
     province: detail.province ?? factory.province ?? row.province ?? '',
     type: detail.type ?? detail.systemType ?? firstPoint?.details?.monitoringPointKind ?? row.type ?? '',
@@ -438,6 +604,85 @@ function mapRequestDetailRow(detail = {}, row = {}) {
     statusCode: detail.statusCode ?? row.statusCode ?? '',
     requestType: detail.requestType ?? row.requestType ?? '',
   }
+}
+
+function getInitialRequestPoint(request = {}) {
+  const safeRequest = request ?? {}
+
+  return Array.isArray(safeRequest.measurementPoints) ? safeRequest.measurementPoints[0] ?? {} : {}
+}
+
+function getInitialRequestFactory(request = {}, fallbackFactory = {}) {
+  const safeRequest = request ?? {}
+  const factory = safeRequest.factory ?? {}
+
+  return {
+    ...fallbackFactory,
+    ...factory,
+    factoryId: safeRequest.factoryId ?? factory.factoryId ?? fallbackFactory.factoryId ?? '',
+    factoryName: safeRequest.factoryName ?? factory.factoryName ?? fallbackFactory.factoryName ?? '',
+    newRegistrationNo: safeRequest.newRegistrationNo ?? factory.newRegistrationNo ?? fallbackFactory.newRegistrationNo ?? safeRequest.factoryId ?? '',
+    oldRegistrationNo: safeRequest.factoryRegistrationNo ?? safeRequest.oldRegistrationNo ?? factory.oldRegistrationNo ?? fallbackFactory.oldRegistrationNo ?? '',
+    factoryRegistrationNo: safeRequest.factoryRegistrationNo ?? factory.factoryRegistrationNo ?? fallbackFactory.factoryRegistrationNo ?? '',
+    industryMainOrder: safeRequest.industryMainOrder ?? factory.industryMainOrder ?? fallbackFactory.industryMainOrder ?? '',
+    industrySubOrder: safeRequest.industrySubOrder ?? factory.industrySubOrder ?? fallbackFactory.industrySubOrder ?? '',
+    businessActivity: safeRequest.businessActivity ?? factory.businessActivity ?? fallbackFactory.businessActivity ?? '',
+    eia: safeRequest.eia ?? factory.eia ?? fallbackFactory.eia ?? '',
+    hasEia: safeRequest.hasEia ?? factory.hasEia ?? fallbackFactory.hasEia,
+    projectName: safeRequest.projectName ?? factory.projectName ?? fallbackFactory.projectName ?? '',
+    address: safeRequest.address ?? factory.address ?? fallbackFactory.address ?? '',
+    latitude: safeRequest.latitude ?? factory.latitude ?? fallbackFactory.latitude ?? '',
+    longitude: safeRequest.longitude ?? factory.longitude ?? fallbackFactory.longitude ?? '',
+  }
+}
+
+function getRequestSystemType(request = {}, fallback = 'CEMS') {
+  const safeRequest = request ?? {}
+  const point = getInitialRequestPoint(safeRequest)
+  const details = point.details ?? {}
+  const pointType = point.pointType
+  const systemType = safeRequest.systemType ?? safeRequest.type ?? details.monitoringPointKind
+
+  if (systemType === 'WPMS' || pointType === 'WASTEWATER') {
+    return 'WPMS'
+  }
+
+  return fallback || 'CEMS'
+}
+
+function getLatestRevisionMessage(request = {}) {
+  const safeRequest = request ?? {}
+  const directMessage = safeRequest.revisionReason ?? safeRequest.officerNote ?? safeRequest.revisionNote
+
+  if (directMessage) {
+    return directMessage
+  }
+
+  const history = Array.isArray(safeRequest.statusHistory) ? safeRequest.statusHistory : []
+  const revisionHistory = history
+    .filter((item) =>
+      [item.status, item.statusLabel, item.statusCode].includes('WAITING_FACTORY_REVISION')
+        || [item.status, item.statusLabel, item.statusCode].includes('รอโรงงานแก้ไข'),
+    )
+    .sort((a, b) => {
+      const dateA = a.changedAt ? new Date(a.changedAt).getTime() : 0
+      const dateB = b.changedAt ? new Date(b.changedAt).getTime() : 0
+
+      if (dateA !== dateB) {
+        return dateB - dateA
+      }
+
+      return Number(b.id ?? 0) - Number(a.id ?? 0)
+    })
+
+  return revisionHistory[0]?.revisionReason
+    ?? revisionHistory[0]?.officerNote
+    ?? revisionHistory[0]?.note
+    ?? ''
+}
+
+function withFormIds(items = []) {
+  return items.length ? items.map((item, index) => ({ ...item, id: item.id ?? index + 1 })) : [{ id: 1 }]
 }
 
 function getFormValue(formData, key, fallback = '') {
@@ -454,7 +699,11 @@ function getFormValues(formData, key) {
     return []
   }
 
-  return formData.getAll(key).map((value) => String(value)).filter(Boolean)
+  return formData
+    .getAll(key)
+    .flatMap((value) => String(value).split(','))
+    .map((value) => value.trim())
+    .filter(Boolean)
 }
 
 function getOptionalFormValue(formData, key) {
@@ -468,7 +717,7 @@ function getFactoryNumber(value) {
   }
 
   const numericValue = Number(value)
-  return Number.isNaN(numericValue) ? value : numericValue
+  return Number.isNaN(numericValue) ? null : numericValue
 }
 
 function getEiaValue(factory = {}) {
@@ -495,17 +744,33 @@ function getHasEiaValue(factory = {}) {
   return null
 }
 
-function buildMeasurementInstrumentParameters(formData) {
-  const rawParameters = getFormValues(formData, 'measurementInstrumentParameters')
+function toPayloadNumberOrNull(value) {
+  if (value === '' || value === null || value === undefined) {
+    return null
+  }
 
-  return rawParameters
-    .map((rawParameter) => {
-      try {
-        return JSON.parse(rawParameter)
-      } catch {
-        return null
-      }
-    })
+  const numericValue = Number(value)
+  return Number.isNaN(numericValue) ? null : numericValue
+}
+
+function normalizeCriteriaPayload(criteria) {
+  if (!criteria) {
+    return { enabled: false }
+  }
+
+  return {
+    enabled: Boolean(criteria.enabled),
+    standardValue: criteria.standardValue ?? '',
+    rows: (criteria.rows ?? []).map((row) => ({
+      level: row.level,
+      min: toPayloadNumberOrNull(row.min),
+      max: toPayloadNumberOrNull(row.max),
+    })),
+  }
+}
+
+function buildMeasurementInstrumentParameters(instrumentRows = []) {
+  return instrumentRows
     .filter((parameter) => parameter?.parameter)
     .map((parameter) => ({
       parameter: parameter.parameter,
@@ -517,31 +782,107 @@ function buildMeasurementInstrumentParameters(formData) {
       standardCondition: Boolean(parameter.standardCondition),
       dryBasis: Boolean(parameter.dryBasis),
       oxygenOrExcessAir: Boolean(parameter.oxygenOrExcessAir),
-      standardCriteria: parameter.standardCriteria ?? { enabled: false },
-      eiaCriteria: parameter.eiaCriteria ?? { enabled: false },
+      standardCriteria: normalizeCriteriaPayload(parameter.standardCriteria),
+      eiaCriteria: normalizeCriteriaPayload(parameter.eiaCriteria),
     }))
 }
 
-function buildDocumentsAndImages(formData) {
-  return documentImageItems.map((item, index) => {
-    const file = formData?.get(`documentImageFile-${index}`)
-    const fileName = file instanceof File && file.name ? file.name : null
-    const fileType = file instanceof File && file.type ? file.type : null
-    const fileSize = file instanceof File && typeof file.size === 'number' && file.size > 0 ? file.size : null
+function getDocumentImageFile(formData, index) {
+  const file = formData?.get(`documentImageFile-${index}`)
+  return file instanceof File && file.name ? file : null
+}
 
-    return {
-      title: item.title,
-      description: item.description ?? null,
-      link: getOptionalFormValue(formData, `documentImageLink-${index}`),
-      fileName,
-      fileUrl: null,
-      fileType,
-      fileSize,
+function buildDocumentsAndImages(formData, uploadedDocuments = [], { includePreviewUrls = false, existingDocuments = [] } = {}) {
+  return documentImageItems.map((item, index) => {
+    const uploadedDocument = uploadedDocuments[index]
+    const existingDocument = existingDocuments[index] ?? {}
+    const file = getDocumentImageFile(formData, index)
+    const fileName = file ? file.name : null
+    const fileType = file?.type || null
+    const fileSize = file && typeof file.size === 'number' && file.size > 0 ? file.size : null
+    const documentPayload = {
+      title: uploadedDocument?.title ?? item.title,
+      description: uploadedDocument?.description ?? item.description ?? null,
+      link: uploadedDocument?.link ?? getOptionalFormValue(formData, `documentImageLink-${index}`) ?? existingDocument.link ?? null,
+      fileName: uploadedDocument?.fileName ?? fileName ?? existingDocument.fileName ?? null,
+      fileUrl: uploadedDocument?.fileUrl ?? existingDocument.fileUrl ?? null,
+      fileType: uploadedDocument?.fileType ?? fileType ?? existingDocument.fileType ?? null,
+      fileSize: uploadedDocument?.fileSize ?? fileSize ?? existingDocument.fileSize ?? null,
     }
+
+    if (includePreviewUrls && file) {
+      documentPayload.filePreviewUrl = URL.createObjectURL(file)
+    }
+
+    return documentPayload
   })
 }
 
-function buildMeasurementPointRequestBody(factory = {}, monitoringPointType = 'CEMS', formData = null) {
+async function uploadDocumentImages(formData, accessToken) {
+  const uploadedDocuments = []
+
+  for (const [index, item] of documentImageItems.entries()) {
+    const file = getDocumentImageFile(formData, index)
+    const link = getOptionalFormValue(formData, `documentImageLink-${index}`)
+
+    if (!file && !link) {
+      uploadedDocuments[index] = null
+      continue
+    }
+
+    const uploadFormData = new FormData()
+    uploadFormData.append('title', item.title)
+
+    if (item.description) {
+      uploadFormData.append('description', item.description)
+    }
+
+    if (link) {
+      uploadFormData.append('link', link)
+    }
+
+    if (file) {
+      uploadFormData.append('file', file)
+    }
+
+    const result = await fetch(getDocumentImagesApiUrl(), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: uploadFormData,
+    })
+    const rawText = await result.text()
+    const response = (() => {
+      try {
+        return rawText ? JSON.parse(rawText) : null
+      } catch {
+        return rawText
+      }
+    })()
+
+    if (!result.ok || response?.success === false) {
+      const message =
+        response?.error?.message ??
+        response?.message ??
+        `อัปโหลดเอกสารและรูปภาพไม่สำเร็จ (${result.status} ${result.statusText})`
+      throw new Error(message)
+    }
+
+    uploadedDocuments[index] = response?.data ?? null
+  }
+
+  return uploadedDocuments
+}
+
+function buildMeasurementPointRequestBody(
+  factory = {},
+  monitoringPointType = 'CEMS',
+  formData = null,
+  uploadedDocuments = [],
+  instrumentRows = [],
+  options = {},
+) {
   const isWpms = monitoringPointType === 'WPMS'
   const systemType = isWpms ? 'WPMS' : 'CEMS'
   const contactPersons = getFormValues(formData, 'contactName').map((name, index) => ({
@@ -556,8 +897,8 @@ function buildMeasurementPointRequestBody(factory = {}, monitoringPointType = 'C
   const pointName = getFormValue(formData, 'pointName')
   const converterBrand = getFormValue(formData, 'converterBrand')
   const converterModel = getFormValue(formData, 'converterModel')
-  const instrumentParameters = buildMeasurementInstrumentParameters(formData)
-  const documentsAndImages = buildDocumentsAndImages(formData)
+  const instrumentParameters = buildMeasurementInstrumentParameters(instrumentRows)
+  const documentsAndImages = buildDocumentsAndImages(formData, uploadedDocuments, options)
 
   return {
     factoryId: factory.factoryId ?? factory.newRegistrationNo ?? '',
@@ -749,12 +1090,24 @@ function OperatorFactoryActions({ row, onOpenRequestForm, onOpenMonitoringPoints
 }
 
 function OfficerRequestActions({ row, onOpenRequestDocument, onOpenRequestProcess }) {
+  const isProcessDisabled = [row?.status, row?.statusLabel, row?.statusCode].includes('รอโรงงานแก้ไข')
+    || [row?.status, row?.statusLabel, row?.statusCode].includes('WAITING_FACTORY_REVISION')
+    || [row?.status, row?.statusLabel, row?.statusCode].includes('รอเชื่อมต่อ')
+    || [row?.status, row?.statusLabel, row?.statusCode].includes('WAITING_CONNECTION')
+    || [row?.status, row?.statusLabel, row?.statusCode].includes('เชื่อมต่อแล้ว')
+    || [row?.status, row?.statusLabel, row?.statusCode].includes('CONNECTED')
+
   return (
     <Stack direction="row" spacing={1} sx={tableActionStackSx}>
       <Button size="small" variant="outlined" onClick={() => onOpenRequestDocument?.(row)}>
         เปิดดู
       </Button>
-      <Button size="small" variant="contained" onClick={() => onOpenRequestProcess?.(row)}>
+      <Button
+        size="small"
+        variant="contained"
+        disabled={isProcessDisabled}
+        onClick={() => onOpenRequestProcess?.(row)}
+      >
         ดำเนินการ
       </Button>
     </Stack>
@@ -786,9 +1139,10 @@ function ConnectionSettingsButton({ disabled, onClick }) {
   )
 }
 
-function OperatorRequestActions({ row, onOpenConnectionSettings, onOpenRequestDocument }) {
-  const { status } = row
-  const canModifyRequest = status === 'รอโรงงานแก้ไข'
+function OperatorRequestActions({ row, onOpenConnectionSettings, onOpenRequestDocument, onOpenRequestEdit }) {
+  const { status, statusCode } = row
+  const canModifyRequest = [status, statusCode].includes('รอโรงงานแก้ไข')
+    || [status, statusCode].includes('WAITING_FACTORY_REVISION')
   const canConfigureConnection = status === 'รอเชื่อมต่อ'
 
   return (
@@ -796,7 +1150,12 @@ function OperatorRequestActions({ row, onOpenConnectionSettings, onOpenRequestDo
       <Button size="small" variant="outlined" onClick={() => onOpenRequestDocument?.(row)}>
         เปิดดู
       </Button>
-      <Button size="small" variant="outlined" disabled={!canModifyRequest}>
+      <Button
+        size="small"
+        variant="outlined"
+        disabled={!canModifyRequest}
+        onClick={() => onOpenRequestEdit?.(row)}
+      >
         แก้ไข
       </Button>
       <Button size="small" color="error" variant="outlined" disabled={!canModifyRequest}>
@@ -810,12 +1169,13 @@ function OperatorRequestActions({ row, onOpenConnectionSettings, onOpenRequestDo
   )
 }
 
-function MonitoringPointActions({ point, isOperator, canAddParameterForFactory, onOpenConnectionSettings }) {
-  const { status } = point
+function MonitoringPointActions({ point, isOperator, onOpenConnectionSettings }) {
+  const { status, statusCode } = point
   const canConsider = ['รอพิจารณาแบบ', 'ยืนยันการเชื่อมต่อ', 'แก้ไขแล้ว/รอพิจารณาแบบ'].includes(status)
-  const canModifyRequest = status === 'รอโรงงานแก้ไข'
-  const canConfigureConnection = ['รอเชื่อมต่อ', 'ยืนยันการเชื่อมต่อ'].includes(status)
-  const canAddParameter = canAddParameterForFactory && status === 'เชื่อมต่อแล้ว'
+  const isConnected = [status, statusCode].includes('เชื่อมต่อแล้ว')
+    || [status, statusCode].includes('CONNECTED')
+  const canConfigureConnection = isConnected
+  const canAddParameter = isConnected
 
   if (!isOperator) {
     return (
@@ -835,9 +1195,6 @@ function MonitoringPointActions({ point, isOperator, canAddParameterForFactory, 
       <Button size="small" variant="outlined">
         เปิดดู
       </Button>
-      <Button size="small" variant="outlined" disabled={!canModifyRequest}>
-        แก้ไข
-      </Button>
       <Button size="small" variant="outlined" disabled={!canAddParameter}>
         เพิ่มพารามิเตอร์
       </Button>
@@ -849,14 +1206,100 @@ function MonitoringPointActions({ point, isOperator, canAddParameterForFactory, 
   )
 }
 
-function MonitoringPointListDialog({ open, factory, isOperator, onOpenConnectionSettings, onClose }) {
-  const rows = monitoringPointRows.filter((row) => row.factoryId === factory?.id)
-  const canAddParameterForFactory = factory?.eligibilityStatus === 'เข้าข่าย'
+function MonitoringPointListDialog({ open, factory, isOperator, accessToken, onOpenConnectionSettings, onClose }) {
+  const [rows, setRows] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+
+    let isActive = true
+    const factoryId = factory?.factoryId ?? factory?.id ?? ''
+
+    queueMicrotask(() => {
+      if (!isActive) {
+        return
+      }
+
+      setRows([])
+      setError('')
+      setLoading(false)
+    })
+
+    if (!factoryId) {
+      queueMicrotask(() => {
+        if (isActive) {
+          setError('ไม่พบรหัสโรงงานสำหรับโหลดจุดตรวจวัด')
+        }
+      })
+      return
+    }
+
+    if (!accessToken) {
+      queueMicrotask(() => {
+        if (isActive) {
+          setError('กรุณาเข้าสู่ระบบเพื่อดูข้อมูลจุดตรวจวัด')
+        }
+      })
+      return
+    }
+
+    queueMicrotask(() => {
+      if (isActive) {
+        setLoading(true)
+      }
+    })
+
+    fetch(getConnectedMeasurementPointsApiUrl(factoryId), {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
+      .then(async (result) => {
+        const payload = await result.json().catch(() => null)
+
+        if (!result.ok) {
+          throw new Error(payload?.error?.message || payload?.message || `โหลดข้อมูลจุดตรวจวัดไม่สำเร็จ (${result.status} ${result.statusText})`)
+        }
+
+        if (isActive) {
+          const nextRows = Array.isArray(payload?.data) ? payload.data.map(mapConnectedMeasurementPointRow) : []
+          setRows(nextRows)
+        }
+      })
+      .catch((fetchError) => {
+        if (isActive) {
+          setError(fetchError instanceof Error ? fetchError.message : 'โหลดข้อมูลจุดตรวจวัดไม่สำเร็จ')
+        }
+      })
+      .finally(() => {
+        if (isActive) {
+          setLoading(false)
+        }
+      })
+
+    return () => {
+      isActive = false
+    }
+  }, [accessToken, factory, open])
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg">
       <DialogTitle>รายการจุดตรวจวัด{factory?.factoryName ? ` - ${factory.factoryName}` : ''}</DialogTitle>
       <DialogContent dividers>
+        {loading ? (
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            กำลังโหลดข้อมูลจุดตรวจวัด...
+          </Typography>
+        ) : null}
+        {error ? (
+          <Typography color="error" variant="body2" sx={{ mb: 2 }}>
+            {error}
+          </Typography>
+        ) : null}
         <TableContainer sx={{ border: 1, borderColor: 'divider', overflowX: 'auto' }}>
           <Table size="small" sx={{ minWidth: 1120, ...borderedTableSx }}>
             <TableHead>
@@ -881,7 +1324,7 @@ function MonitoringPointListDialog({ open, factory, isOperator, onOpenConnection
                   <TableRow key={row.id}>
                     <TableCell>{row.code}</TableCell>
                     <TableCell>{row.name}</TableCell>
-                    <TableCell>{row.type}</TableCell>
+                    <TableCell>{row.typeLabel}</TableCell>
                     <TableCell>{row.parameters.join(', ')}</TableCell>
                     <TableCell>
                       <StatusChip value={row.status} />
@@ -890,7 +1333,6 @@ function MonitoringPointListDialog({ open, factory, isOperator, onOpenConnection
                       <MonitoringPointActions
                         point={row}
                         isOperator={isOperator}
-                        canAddParameterForFactory={canAddParameterForFactory}
                         onOpenConnectionSettings={onOpenConnectionSettings}
                       />
                     </TableCell>
@@ -941,7 +1383,7 @@ function DocumentLine({ label, value = '', width = '100%' }) {
   )
 }
 
-function DocumentPage({ children, pageNo, totalPages = 5, revisionText = 'แก้ไข : 14 พฤศจิกายน 2567' }) {
+function DocumentPage({ children, revisionText = 'แก้ไข : 14 พฤศจิกายน 2567' }) {
   return (
     <Paper
       elevation={0}
@@ -956,15 +1398,17 @@ function DocumentPage({ children, pageNo, totalPages = 5, revisionText = 'แก
         fontSize: 16,
         lineHeight: 1.9,
         position: 'relative',
+        overflow: 'visible',
+        breakAfter: 'page',
+        pageBreakAfter: 'always',
+        breakInside: 'auto',
+        pageBreakInside: 'auto',
       }}
     >
       <Typography variant="body2" sx={{ position: 'absolute', top: 18, right: 72, fontWeight: 400 }}>
         {revisionText}
       </Typography>
       {children}
-      <Typography sx={{ position: 'absolute', bottom: 28, left: 0, right: 0, textAlign: 'center', fontWeight: 700 }}>
-        {pageNo}/{totalPages}
-      </Typography>
     </Paper>
   )
 }
@@ -987,9 +1431,386 @@ function formatFuel(name, other, percent) {
   return fuelName ? `${fuelName}${fuelPercent}` : ''
 }
 
+function formatFactoryRegistration(request, factory = {}) {
+  const candidates = [
+    request?.factoryId,
+    factory.factoryId,
+    factory.newRegistrationNo,
+    request?.newRegistrationNo,
+    request?.factoryRegistrationNo,
+    factory.oldRegistrationNo,
+  ].filter(Boolean)
+
+  return candidates[0] || ''
+}
+
+function DocumentImagePreview({ document }) {
+  const linkIsImage = document?.link && /\.(png|jpe?g|gif|webp)(\?.*)?$/i.test(document.link)
+  const imageUrl = document?.filePreviewUrl ?? document?.fileUrl ?? (linkIsImage ? document.link : null)
+  const isImage =
+    Boolean(imageUrl) &&
+    (document?.fileType?.startsWith('image/') || /\.(png|jpe?g|gif|webp)(\?.*)?$/i.test(imageUrl) || linkIsImage)
+
+  return (
+    <Stack spacing={0.75} sx={{ pl: 3, mt: 0.75, breakInside: 'avoid' }}>
+      {isImage ? (
+        <Stack spacing={0.75}>
+          <Box
+            component="img"
+            src={imageUrl}
+            alt={document.title}
+            sx={{
+              width: '100%',
+              maxWidth: 520,
+              maxHeight: 360,
+              objectFit: 'contain',
+              border: '1px solid #999',
+              bgcolor: '#fff',
+            }}
+          />
+          {document?.link && !linkIsImage ? (
+            <Typography
+              component="a"
+              href={document.link}
+              target="_blank"
+              rel="noreferrer"
+              sx={{ color: '#0b57d0', wordBreak: 'break-all' }}
+            >
+              {document.link}
+            </Typography>
+          ) : null}
+        </Stack>
+      ) : document?.fileName ? (
+        <Stack spacing={0.5}>
+          <Typography>{document.fileName}</Typography>
+          {document?.link ? (
+            <Typography component="a" href={document.link} target="_blank" rel="noreferrer" sx={{ color: '#0b57d0', wordBreak: 'break-all' }}>
+              {document.link}
+            </Typography>
+          ) : null}
+        </Stack>
+      ) : document?.link ? (
+        <Typography component="a" href={document.link} target="_blank" rel="noreferrer" sx={{ color: '#0b57d0', wordBreak: 'break-all' }}>
+          {document.link}
+        </Typography>
+      ) : (
+        <Typography color="text.secondary">-</Typography>
+      )}
+    </Stack>
+  )
+}
+
+function DocumentImageLine({ label, document }) {
+  return (
+    <Box sx={{ breakInside: 'avoid' }}>
+      <Typography sx={{ fontWeight: 700 }}>{label}</Typography>
+      <DocumentImagePreview document={document} />
+    </Box>
+  )
+}
+
+function chunkArray(items, size) {
+  const chunks = []
+
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size))
+  }
+
+  return chunks
+}
+
+function DocumentImagePages({ items }) {
+  return chunkArray(items, 2).map((chunk, pageIndex) => (
+    <DocumentPage key={`document-images-${pageIndex}`}>
+      <Stack spacing={3}>
+        {chunk.map((item) => (
+          <DocumentImageLine key={item.label} label={item.label} document={item.document} />
+        ))}
+      </Stack>
+    </DocumentPage>
+  ))
+}
+
+function getSpecialCriteriaLabel(level) {
+  return specialCriteriaRows.find((row) => row.key === level)?.label ?? displayValue(level)
+}
+
+function getCriteriaRow(criteria, level) {
+  return criteria?.rows?.find((row) => row.level === level) ?? {}
+}
+
+function StandardCriteriaAttachmentTable({ parameters }) {
+  const displayParameters = parameters.length ? parameters : [{ parameter: '' }]
+
+  return (
+    <TableContainer sx={{ overflow: 'visible' }}>
+      <Table
+        size="small"
+        sx={{
+          tableLayout: 'fixed',
+          border: '1px solid #111',
+          '& th, & td': {
+            border: '1px solid #111',
+            p: 0.65,
+            fontSize: 12,
+            lineHeight: 1.45,
+            verticalAlign: 'middle',
+            wordBreak: 'break-word',
+          },
+          '& th': {
+            fontWeight: 700,
+          },
+        }}
+      >
+        <TableHead>
+          <TableRow>
+            <TableCell align="center" rowSpan={2} sx={{ width: 92 }}>พารามิเตอร์</TableCell>
+            <TableCell align="center" rowSpan={2} sx={{ width: 120 }}>เกณฑ์มลพิษ</TableCell>
+            <TableCell align="center" colSpan={3}>ตามประกาศ อก.</TableCell>
+            <TableCell align="center" colSpan={3}>ตาม EIA</TableCell>
+          </TableRow>
+          <TableRow>
+            {['MIN', 'MAX', 'ค่ามาตรฐาน', 'MIN', 'MAX', 'ค่ามาตรฐาน'].map((header) => (
+              <TableCell key={header} align="center" sx={{ width: 80 }}>{header}</TableCell>
+            ))}
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {displayParameters.flatMap((parameter) => specialCriteriaRows.map((criteriaLevel, criteriaIndex) => {
+            const standardRow = getCriteriaRow(parameter.standardCriteria, criteriaLevel.key)
+            const eiaRow = getCriteriaRow(parameter.eiaCriteria, criteriaLevel.key)
+            const rowKey = `${parameter.parameter || 'parameter'}-${criteriaLevel.key}`
+
+            return (
+              <TableRow key={rowKey}>
+                {criteriaIndex === 0 ? (
+                  <TableCell rowSpan={specialCriteriaRows.length}>{displayValue(parameter.parameter)}</TableCell>
+                ) : null}
+                <TableCell align="center">{getSpecialCriteriaLabel(criteriaLevel.key)}</TableCell>
+                <TableCell align="center">{displayValue(standardRow.min)}</TableCell>
+                <TableCell align="center">{displayValue(standardRow.max)}</TableCell>
+                {criteriaIndex === 0 ? (
+                  <TableCell align="center" rowSpan={specialCriteriaRows.length}>
+                    {displayValue(parameter.standardCriteria?.standardValue)}
+                  </TableCell>
+                ) : null}
+                <TableCell align="center">{displayValue(eiaRow.min)}</TableCell>
+                <TableCell align="center">{displayValue(eiaRow.max)}</TableCell>
+                {criteriaIndex === 0 ? (
+                  <TableCell align="center" rowSpan={specialCriteriaRows.length}>
+                    {displayValue(parameter.eiaCriteria?.standardValue)}
+                  </TableCell>
+                ) : null}
+              </TableRow>
+            )
+          }))}
+        </TableBody>
+      </Table>
+    </TableContainer>
+  )
+}
+
+function getRequestDeviceConfigs(request) {
+  return Array.isArray(request?.deviceConfigs) ? request.deviceConfigs.filter(Boolean) : []
+}
+
+function formatDeviceSettingValue(label, value) {
+  if (value === null || value === undefined || value === '') {
+    return ''
+  }
+
+  return `${label}: ${value}`
+}
+
+function formatDeviceSettings(settings = {}) {
+  const valueRange = settings.valueRange ?? {}
+  const values = [
+    formatDeviceSettingValue('COMPORT', settings.comPort ?? settings.comport),
+    formatDeviceSettingValue('Slave ID', settings.slaveId),
+    formatDeviceSettingValue('Baud Rate', settings.baudRate),
+    formatDeviceSettingValue('Parity', settings.parity),
+    formatDeviceSettingValue('Stop bits', settings.stopBits),
+    formatDeviceSettingValue('Data bits', settings.dataBits),
+    formatDeviceSettingValue('Quantity', settings.quantity),
+    formatDeviceSettingValue('Host IP', settings.hostIp),
+    formatDeviceSettingValue('Port', settings.port),
+    formatDeviceSettingValue('dbUser', settings.dbUser),
+    formatDeviceSettingValue('dbName', settings.dbName),
+    valueRange.min !== undefined || valueRange.max !== undefined
+      ? `ช่วงข้อมูลตรวจวัด: ${displayValue(valueRange.min, '-')} - ${displayValue(valueRange.max, '-')}`
+      : '',
+  ].filter(Boolean)
+
+  return values.join(', ')
+}
+
+function getDeviceConfigDevices(deviceConfigs) {
+  return deviceConfigs.flatMap((config) =>
+    Array.isArray(config?.device)
+      ? config.device.map((device) => ({ ...device, stationId: config.stationId }))
+      : [],
+  )
+}
+
+function getDeviceConfigChannels(deviceConfigs) {
+  return deviceConfigs.flatMap((config) =>
+    Array.isArray(config?.channels)
+      ? config.channels.map((channel) => ({ ...channel, stationId: config.stationId }))
+      : [],
+  )
+}
+
+function DeviceConfigDeviceTable({ devices }) {
+  return (
+    <TableContainer sx={{ overflow: 'visible' }}>
+      <Table
+        size="small"
+        sx={{
+          tableLayout: 'fixed',
+          border: '1px solid #111',
+          '& th, & td': {
+            border: '1px solid #111',
+            p: 0.65,
+            fontSize: 11,
+            lineHeight: 1.45,
+            verticalAlign: 'top',
+            wordBreak: 'break-word',
+          },
+          '& th': { fontWeight: 700 },
+        }}
+      >
+        <TableHead>
+          <TableRow>
+            <TableCell align="center" sx={{ width: 92 }}>รหัสจุดตรวจวัด</TableCell>
+            <TableCell align="center" sx={{ width: 110 }}>รหัสอุปกรณ์</TableCell>
+            <TableCell align="center" sx={{ width: 102 }}>Protocol</TableCell>
+            <TableCell align="center">รายละเอียดการเชื่อมต่อ</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {devices.map((device, index) => (
+            <TableRow key={`${device.stationId}-${device.deviceCode}-${index}`}>
+              <TableCell>{displayValue(device.stationId)}</TableCell>
+              <TableCell>{displayValue(device.deviceCode)}</TableCell>
+              <TableCell>{displayValue(device.protocol)}</TableCell>
+              <TableCell>{formatDeviceSettings(device.settings)}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </TableContainer>
+  )
+}
+
+function DeviceConfigChannelTable({ channels }) {
+  return (
+    <TableContainer sx={{ overflow: 'visible' }}>
+      <Table
+        size="small"
+        sx={{
+          tableLayout: 'fixed',
+          border: '1px solid #111',
+          '& th, & td': {
+            border: '1px solid #111',
+            p: 0.5,
+            fontSize: 10,
+            lineHeight: 1.3,
+            verticalAlign: 'top',
+            wordBreak: 'break-word',
+          },
+          '& th': { fontWeight: 700 },
+        }}
+      >
+        <TableHead>
+          <TableRow>
+            {[
+              ['รหัสอุปกรณ์', 86],
+              ['Address ID', 68],
+              ['พารามิเตอร์', 92],
+              ['Min', 46],
+              ['Max', 46],
+              ['รูปแบบค่า', 100],
+              ['Offset', 48],
+              ['Encoding', 108],
+            ].map(([label, width]) => (
+              <TableCell key={label} align="center" sx={{ width }}>{label}</TableCell>
+            ))}
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {channels.map((channel, index) => {
+            const valueRange = channel.valueRange ?? {}
+
+            return (
+              <TableRow key={`${channel.deviceCode}-${channel.addressId}-${channel.dataType}-${index}`}>
+                <TableCell>{displayValue(channel.deviceCode)}</TableCell>
+                <TableCell>{displayValue(channel.addressId)}</TableCell>
+                <TableCell>{displayValue(channel.dataType)}</TableCell>
+                <TableCell>{displayValue(valueRange.min)}</TableCell>
+                <TableCell>{displayValue(valueRange.max)}</TableCell>
+                <TableCell>{displayValue(channel.valueFormat)}</TableCell>
+                <TableCell>{displayValue(channel.offset)}</TableCell>
+                <TableCell>{displayValue(channel.encoding)}</TableCell>
+              </TableRow>
+            )
+          })}
+        </TableBody>
+      </Table>
+    </TableContainer>
+  )
+}
+
+function DeviceConfigDocumentPages({ request }) {
+  const deviceConfigs = getRequestDeviceConfigs(request)
+
+  if (!deviceConfigs.length) {
+    return null
+  }
+
+  const devices = getDeviceConfigDevices(deviceConfigs)
+  const channels = getDeviceConfigChannels(deviceConfigs)
+  const channelChunks = chunkArray(channels, 12)
+
+  return (
+    <>
+      <DocumentPage>
+        <Stack spacing={2.2}>
+          <Typography sx={{ fontWeight: 700 }}>การตั้งค่าอุปกรณ์</Typography>
+          <Box>
+            <Typography sx={{ fontWeight: 700, mb: 1 }}>ข้อมูลอุปกรณ์</Typography>
+            <DeviceConfigDeviceTable devices={devices} />
+          </Box>
+          <Box>
+            <Typography sx={{ fontWeight: 700, mb: 1 }}>การเชื่อมต่อพารามิเตอร์</Typography>
+            <DeviceConfigChannelTable channels={channelChunks[0] ?? []} />
+          </Box>
+        </Stack>
+      </DocumentPage>
+      {channelChunks.slice(1).map((chunk, index) => (
+        <DocumentPage key={`device-config-channels-${index}`}>
+          <Stack spacing={2.2}>
+            <Typography sx={{ fontWeight: 700 }}>การตั้งค่าอุปกรณ์</Typography>
+            <Box>
+              <Typography sx={{ fontWeight: 700, mb: 1 }}>การเชื่อมต่อพารามิเตอร์</Typography>
+              <DeviceConfigChannelTable channels={chunk} />
+            </Box>
+          </Stack>
+        </DocumentPage>
+      ))}
+    </>
+  )
+}
+
 function isPendingDesignReview(request) {
   return [request?.status, request?.statusLabel, request?.statusCode].includes('รอพิจารณาแบบ')
     || [request?.status, request?.statusLabel, request?.statusCode].includes('PENDING_DESIGN_REVIEW')
+    || [request?.status, request?.statusLabel, request?.statusCode].includes('แก้ไขแล้ว/รอพิจารณาแบบ')
+    || [request?.status, request?.statusLabel, request?.statusCode].includes('REVISED_PENDING_DESIGN_REVIEW')
+}
+
+function isConnectionConfirmed(request) {
+  return [request?.status, request?.statusLabel, request?.statusCode].includes('ยืนยันการเชื่อมต่อ')
+    || [request?.status, request?.statusLabel, request?.statusCode].includes('CONNECTION_CONFIRMED')
 }
 
 function RequestDocumentDialog({
@@ -1001,27 +1822,46 @@ function RequestDocumentDialog({
   error,
   approving,
   onApprove,
+  onVerifyConnection,
+  onRequestRevision,
   onClose,
   footerContent,
   footerActions,
 }) {
-  const isWpms = request?.type === 'WPMS'
+  const isWpms = request?.type === 'WPMS' || request?.systemType === 'WPMS'
   const factory = request?.factory ?? {}
   const points = Array.isArray(request?.measurementPoints) ? request.measurementPoints : []
   const point = points[0] ?? {}
   const details = point.details ?? {}
   const instruments = point.measurementInstruments ?? {}
   const instrumentParameters = Array.isArray(instruments.parameters) ? instruments.parameters : []
+  const documentsAndImages = Array.isArray(point.documentsAndImages) ? point.documentsAndImages : []
   const contactPersons = Array.isArray(request?.contactPersons) ? request.contactPersons : []
   const notificationEmails = Array.isArray(request?.notificationEmails) ? request.notificationEmails : []
   const officerNotificationEmails = Array.isArray(request?.officerNotificationEmails) ? request.officerNotificationEmails : []
-  const firstCriteriaParameter = instrumentParameters.find((parameter) => parameter.standardCriteria || parameter.eiaCriteria)
   const documentParameters = instrumentParameters
   const systemName = isWpms
     ? 'ระบบตรวจวัดคุณภาพน้ำทิ้งอัตโนมัติอย่างต่อเนื่อง'
     : 'ระบบตรวจวัดคุณภาพอากาศจากปล่องแบบอัตโนมัติอย่างต่อเนื่อง'
   const systemCode = isWpms ? 'Water Pollution Monitoring System : WPMS' : 'Continuous Emission Monitoring Systems : CEMS'
+  const cemsDocumentImageItems = [
+    {
+      label: '4.6 รายงานผลการทำ RATA หรือ อื่นๆ ที่เทียบเท่า ของระบบ CEMS ครั้งล่าสุด',
+      document: documentsAndImages[1],
+    },
+    { label: '4.7 ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน', document: documentsAndImages[2] },
+    { label: '4.8 สัญลักษณ์ของโรงงานหรือโลโก้บริษัท', document: documentsAndImages[3] },
+    { label: '4.9 ภาพถ่ายปล่อง', document: documentsAndImages[4] },
+    { label: '4.10 ภาพถ่ายเครื่องมือตรวจวัดที่ติดตั้ง (CEMS)', document: documentsAndImages[5] },
+  ]
   const canReview = mode === 'process' && isPendingDesignReview(request)
+  const canVerifyConnection = mode === 'process' && isConnectionConfirmed(request)
+  const isRevisedPendingReview = mode === 'process'
+    && (
+      [request?.status, request?.statusLabel, request?.statusCode].includes('แก้ไขแล้ว/รอพิจารณาแบบ')
+      || [request?.status, request?.statusLabel, request?.statusCode].includes('REVISED_PENDING_DESIGN_REVIEW')
+    )
+  const latestRevisionMessage = isRevisedPendingReview ? getLatestRevisionMessage(request) : ''
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg">
@@ -1037,7 +1877,30 @@ function RequestDocumentDialog({
             {error}
           </Typography>
         ) : null}
-        <Stack spacing={2}>
+        {latestRevisionMessage ? (
+          <Paper
+            elevation={0}
+            sx={{
+              p: 2,
+              mb: 2,
+              border: 1,
+              borderColor: 'warning.main',
+              bgcolor: 'warning.50',
+              color: 'text.primary',
+            }}
+          >
+            <Stack direction="row" spacing={1.5} sx={{ alignItems: 'flex-start' }}>
+              <WarningAmberIcon color="warning" fontSize="small" sx={{ mt: 0.25 }} />
+              <Stack spacing={0.75}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                  รายละเอียดการแก้ไข
+                </Typography>
+                <Typography variant="body2">{latestRevisionMessage}</Typography>
+              </Stack>
+            </Stack>
+          </Paper>
+        ) : null}
+        <Stack spacing={2} sx={{ alignItems: 'center' }}>
           {isWpms ? (
             <>
               <DocumentPage pageNo={1} totalPages={3} revisionText="แก้ไข : 14-11-67">
@@ -1056,7 +1919,7 @@ function RequestDocumentDialog({
                     <Stack spacing={1.1} sx={{ pl: 3, mt: 1 }}>
                       <Box sx={{ display: 'flex', gap: 2 }}>
                         <DocumentLine label="ชื่อโรงงาน" value={request?.factoryName ?? factory.factoryName} />
-                        <DocumentLine label="เลขทะเบียน" value={request?.factoryRegistrationNo ?? factory.newRegistrationNo ?? request?.factoryId} />
+                        <DocumentLine label="เลขทะเบียน" value={formatFactoryRegistration(request, factory)} />
                       </Box>
                       <DocumentLine label="ประกอบกิจการ" value={request?.businessActivity ?? factory.businessActivity} />
                       <DocumentLine label="เขตประกอบการ/นิคมอุตสาหกรรม (ถ้ามี)" value="" />
@@ -1163,35 +2026,11 @@ function RequestDocumentDialog({
 
               <DocumentPage pageNo={3} totalPages={3} revisionText="แก้ไข : 14-11-67">
                 <Stack spacing={3}>
-                  {[
-                    ['ตามประกาศ อก.', firstCriteriaParameter?.standardCriteria],
-                    ['ตาม EIA', firstCriteriaParameter?.eiaCriteria],
-                  ].map(([title, criteria]) => (
-                    <Box key={title} sx={{ width: 520 }}>
-                      <Typography sx={{ color: 'red', fontWeight: 700 }}>{title}</Typography>
-                      <Table size="small" sx={{ border: '1px solid #555', '& th, & td': { border: '1px solid #555', p: 0.8 } }}>
-                        <TableHead>
-                          <TableRow>
-                            <TableCell align="center" sx={{ bgcolor: '#00677a', color: '#fff', fontWeight: 700 }}>MIN</TableCell>
-                            <TableCell align="center" sx={{ bgcolor: '#00677a', color: '#fff', fontWeight: 700 }}>เกณฑ์มลพิษ</TableCell>
-                            <TableCell align="center" sx={{ bgcolor: '#00677a', color: '#fff', fontWeight: 700 }}>MAX</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {(criteria?.rows ?? []).map((row) => (
-                            <TableRow key={row.level}>
-                              <TableCell align="center">{displayValue(row.min)}</TableCell>
-                              <TableCell align="center">{row.level}</TableCell>
-                              <TableCell align="center">{displayValue(row.max)}</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                      <DocumentLine label="ค่ามาตรฐาน" value={criteria?.standardValue} width="60%" />
-                    </Box>
-                  ))}
+                  <Typography sx={{ fontWeight: 700 }}>แนบรายละเอียดเกณฑ์มาตรฐาน</Typography>
+                  <StandardCriteriaAttachmentTable parameters={documentParameters} />
                 </Stack>
               </DocumentPage>
+              <DeviceConfigDocumentPages request={request} />
             </>
           ) : (
             <>
@@ -1210,7 +2049,7 @@ function RequestDocumentDialog({
                 <Stack spacing={1.1} sx={{ pl: 3, mt: 1 }}>
                   <Box sx={{ display: 'flex', gap: 2 }}>
                     <DocumentLine label="ชื่อโรงงาน" value={request?.factoryName ?? factory.factoryName} />
-                    <DocumentLine label="เลขทะเบียน" value={request?.factoryRegistrationNo ?? factory.newRegistrationNo ?? request?.factoryId} />
+                    <DocumentLine label="เลขทะเบียน" value={formatFactoryRegistration(request, factory)} />
                   </Box>
                   <DocumentLine label="ลำดับประเภทโรงงาน" value={request?.industryMainOrder ?? factory.industryMainOrder} width="58%" />
                   <DocumentLine label="ประกอบกิจการ" value={request?.businessActivity ?? factory.businessActivity} width="58%" />
@@ -1349,12 +2188,10 @@ function RequestDocumentDialog({
                     <Typography sx={{ textIndent: 48, mt: 1 }}>
                       ให้แสดงรายละเอียดหรือแนบเอกสารหรือรูปภาพหน้าโปรแกรมของเครื่องมือที่แสดงให้เห็นถึงการคำนวณและการรายงานค่าของมลพิษในอากาศเสียที่สภาวะมาตรฐาน ความดัน 1 บรรยากาศ หรือ 760 มิลลิเมตรปรอท อุณหภูมิ 25 องศาเซลเซียสที่สภาวะแห้ง (Dry basis)
                     </Typography>
+                    <Box sx={{ mt: 2 }}>
+                      <DocumentImagePreview document={documentsAndImages[0]} />
+                    </Box>
                   </Box>
-                  <Typography sx={{ fontWeight: 700 }}>4.6 รายงานผลการทำ RATA หรือ อื่นๆ ที่เทียบเท่า ของระบบ CEMS ครั้งล่าสุด</Typography>
-                  <Typography sx={{ fontWeight: 700 }}>4.7 ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน</Typography>
-                  <Typography sx={{ fontWeight: 700 }}>4.8 สัญลักษณ์ของโรงงานหรือโลโก้บริษัท</Typography>
-                  <Typography sx={{ fontWeight: 700 }}>4.9 ภาพถ่ายปล่อง</Typography>
-                  <Typography sx={{ fontWeight: 700 }}>4.10 ภาพถ่ายเครื่องมือตรวจวัดที่ติดตั้ง (CEMS)</Typography>
                 </>
               ) : (
                 <>
@@ -1364,6 +2201,8 @@ function RequestDocumentDialog({
               )}
             </Stack>
           </DocumentPage>
+
+          {!isWpms ? <DocumentImagePages items={cemsDocumentImageItems} /> : null}
 
           <DocumentPage pageNo={4}>
             <Stack spacing={2}>
@@ -1410,35 +2249,10 @@ function RequestDocumentDialog({
           <DocumentPage pageNo={5}>
             <Stack spacing={3}>
               <Typography sx={{ fontWeight: 700 }}>แนบรายละเอียดเกณฑ์มาตรฐาน</Typography>
-              {[
-                ['ตามประกาศ อก.', firstCriteriaParameter?.standardCriteria],
-                ['ตาม EIA', firstCriteriaParameter?.eiaCriteria],
-              ].map(([title, criteria]) => (
-                <Box key={title} sx={{ width: 520 }}>
-                  <Typography sx={{ color: 'red', fontWeight: 700 }}>{title}</Typography>
-                  <Table size="small" sx={{ border: '1px solid #555', '& th, & td': { border: '1px solid #555', p: 0.8 } }}>
-                    <TableHead>
-                      <TableRow>
-                        <TableCell align="center" sx={{ bgcolor: '#00677a', color: '#fff', fontWeight: 700 }}>MIN</TableCell>
-                        <TableCell align="center" sx={{ bgcolor: '#00677a', color: '#fff', fontWeight: 700 }}>เกณฑ์มลพิษ</TableCell>
-                        <TableCell align="center" sx={{ bgcolor: '#00677a', color: '#fff', fontWeight: 700 }}>MAX</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {(criteria?.rows ?? []).map((row) => (
-                        <TableRow key={row.level}>
-                          <TableCell align="center">{displayValue(row.min)}</TableCell>
-                          <TableCell align="center">{row.level}</TableCell>
-                          <TableCell align="center">{displayValue(row.max)}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                  <DocumentLine label="ค่ามาตรฐาน" value={criteria?.standardValue} width="60%" />
-                </Box>
-              ))}
+              <StandardCriteriaAttachmentTable parameters={documentParameters} />
             </Stack>
           </DocumentPage>
+          <DeviceConfigDocumentPages request={request} />
             </>
           )}
         </Stack>
@@ -1453,11 +2267,18 @@ function RequestDocumentDialog({
           <Button color="inherit" disabled={approving} onClick={onClose}>ปิด</Button>
           {canReview ? (
             <>
-              <Button variant="outlined" disabled={approving}>แจ้งแก้ไข</Button>
+              <Button variant="outlined" disabled={approving || loading} onClick={onRequestRevision}>
+                แจ้งแก้ไข
+              </Button>
               <Button variant="contained" disabled={approving || loading} onClick={onApprove}>
                 {approving ? 'กำลังอนุมัติ' : 'อนุมัติ'}
               </Button>
             </>
+          ) : null}
+          {canVerifyConnection ? (
+            <Button variant="contained" disabled={approving || loading} onClick={onVerifyConnection}>
+              {approving ? 'กำลังยืนยัน' : 'ยืนยันการเชื่อมต่อ'}
+            </Button>
           ) : null}
         </DialogActions>
       )}
@@ -1476,6 +2297,19 @@ function PositiveNumberField({ label, value, onChange, min = 1, placeholder }) {
       placeholder={placeholder}
       fullWidth
       slotProps={{ htmlInput: { min, step: 1 } }}
+    />
+  )
+}
+
+function TextInputField({ label, value, onChange, placeholder }) {
+  return (
+    <TextField
+      label={label}
+      size="small"
+      value={value ?? ''}
+      onChange={(event) => onChange(event.target.value)}
+      placeholder={placeholder}
+      fullWidth
     />
   )
 }
@@ -1506,7 +2340,7 @@ function ConnectionFormFields({ connectionType, value, onChange }) {
     return (
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 3 }}>
-          <PositiveNumberField label="COMPORT" value={value.comport} onChange={(nextValue) => updateField('comport', nextValue)} />
+          <TextInputField label="COMPORT" value={value.comPort ?? value.comport ?? ''} onChange={(nextValue) => updateField('comPort', nextValue)} />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
           <PositiveNumberField label="Slave ID" value={value.slaveId} onChange={(nextValue) => updateField('slaveId', nextValue)} />
@@ -1579,7 +2413,7 @@ function createEmptyParameterMappingRow(parameter, index) {
     deviceCode: '',
     addressId: '',
     parameter,
-    unit: '',
+    unit: parameterUnitMap[parameter] ?? '',
     min: '',
     max: '',
     valueFormat: '',
@@ -1589,33 +2423,29 @@ function createEmptyParameterMappingRow(parameter, index) {
   }
 }
 
-function getParameterDisplayName(parameter, unit) {
-  if (!unit || parameter.includes('(')) {
-    return parameter
-  }
-  return `${parameter} (${unit})`
-}
-
 function mapParameterMappingRows(parameterMappings = [], parameterOptions = []) {
   if (!parameterMappings.length) {
     return parameterOptions.map(createEmptyParameterMappingRow)
   }
 
   return parameterMappings.map((mapping, index) => {
-    const parameter = mapping.parameter ?? mapping.parameterName ?? ''
-    const displayParameter = getParameterDisplayName(parameter, mapping.unit ?? '')
+    const parameter = mapping.parameter ?? mapping.parameterName ?? mapping.dataType ?? ''
+    const valueRange = mapping.valueRange ?? {}
+    const valueFormat = mapping.valueFormat ?? mapping.dataValueFormat ?? ''
+    const encodingData = mapping.encodingData ?? mapping.encoding ?? ''
 
     return {
-      id: mapping.id ?? `${displayParameter}-${index}`,
+      id: mapping.id ?? `${parameter}-${index}`,
+      configId: mapping.configId ?? mapping.config_id ?? '',
       deviceCode: mapping.deviceCode ?? mapping.device_code ?? '',
       addressId: mapping.addressId ?? mapping.address_id ?? mapping.address ?? '',
-      parameter: displayParameter,
-      unit: '',
-      min: mapping.min ?? mapping.measureMin ?? '',
-      max: mapping.max ?? mapping.measureMax ?? '',
-      valueFormat: mapping.valueFormat ?? mapping.dataValueFormat ?? '',
+      parameter,
+      unit: mapping.unit ?? parameterUnitMap[parameter] ?? '',
+      min: mapping.min ?? mapping.measureMin ?? valueRange.min ?? '',
+      max: mapping.max ?? mapping.measureMax ?? valueRange.max ?? '',
+      valueFormat: valueFormatLabelMap[valueFormat] ?? valueFormat,
       offset: mapping.offset ?? '',
-      encodingData: mapping.encodingData ?? mapping.encoding ?? '',
+      encodingData: encodingLabelMap[encodingData] ?? encodingData,
       status: mapping.status ?? '',
     }
   })
@@ -1629,7 +2459,7 @@ function ConnectionParameterTable({ deviceCodeOptions, rows, setRows }) {
           return row
         }
         if (field === 'parameter') {
-          return { ...row, parameter: nextValue, unit: '' }
+          return { ...row, parameter: nextValue, unit: parameterUnitMap[nextValue] ?? row.unit }
         }
         return { ...row, [field]: nextValue }
       }),
@@ -1928,23 +2758,39 @@ const protocolLabelMap = {
   MYSQL: 'MySQL',
 }
 
+const allowedProtocolCodes = new Set(['MODBUS_RTU', 'MODBUS_TCP', 'MSSQL', 'MYSQL'])
+
 function normalizeConnectionType(type) {
   return protocolLabelMap[type] ?? type ?? ''
+}
+
+function getConnectionProtocolCode(type) {
+  const normalizedType = normalizeConnectionType(type)
+
+  if (allowedProtocolCodes.has(normalizedType)) {
+    return normalizedType
+  }
+
+  return protocolCodeMap[normalizedType] ?? ''
 }
 
 function mapConnectionForms(forms = []) {
   return forms.map((form, index) => {
     const type = normalizeConnectionType(form.type ?? form.connectionType ?? form.protocol)
     const values = form.values ?? form.settings ?? form.config ?? form.connectionConfig ?? form
+    const valueRange = values.valueRange ?? {}
 
     return {
       id: form.id ?? Date.now() + index,
-      configId: form.configId ?? form.config_id ?? null,
+      configId: form.configId ?? form.config_id ?? form.id ?? '',
       deviceCode: form.deviceCode ?? form.device_code ?? '',
       type,
       values: {
         ...getDefaultConnectionForm(type),
         ...values,
+        comPort: getComPortValue(values),
+        measureMin: values.measureMin ?? valueRange.min ?? '',
+        measureMax: values.measureMax ?? valueRange.max ?? '',
       },
     }
   })
@@ -1954,46 +2800,54 @@ function mapTestResultRows(testResults = []) {
   return testResults.map((result, index) => ({
     id: result.id ?? index,
     values: result.values ?? result.data ?? result.parameters ?? {},
-    statuses: result.statuses ?? {},
+    status: result.status ?? result.statusLabel ?? result.connectionStatus ?? '',
+    statuses: result.statuses ?? result.parameterStatuses ?? result.statusByParameter ?? {},
     timestamp: result.timestamp ?? result.createdAt ?? result.testedAt ?? '',
   }))
 }
 
-function mapConnectionTestResultRows(connectionTestData) {
-  const rows = Array.isArray(connectionTestData)
-    ? connectionTestData
-    : connectionTestData
-      ? [connectionTestData]
-      : []
+function getRawDeviceConfig(data) {
+  const rawConfigs = data?.rawConfigs?.config ?? data?.rawConfigs ?? data?.config
 
-  if (rows.length === 0) {
-    return []
+  if (!rawConfigs || Array.isArray(rawConfigs) || typeof rawConfigs !== 'object') {
+    return {}
   }
 
-  return rows.map((row, index) => ({
-    id: `${row.timestamp ?? 'latest'}-${index}`,
-    values: Object.fromEntries(
-      Object.entries(row.values ?? {}).map(([parameter, value]) => [
-        parameter,
-        formatConnectionTestValue(value),
-      ]),
-    ),
-    statuses: Object.fromEntries(
-      Object.entries(row.statuses ?? {}).map(([parameter, status]) => [
-        parameter,
-        formatConnectionTestValue(status),
-      ]),
-    ),
-    timestamp: row.timestamp ?? '',
-  }))
+  return rawConfigs
 }
 
-function formatConnectionTestValue(value) {
-  if (value === null || value === undefined || value === '') {
-    return '-'
+function getDeviceConfigConnectionForms(data) {
+  if (data?.connectionForms?.length) {
+    return data.connectionForms
   }
 
-  return String(value)
+  const rawConfig = getRawDeviceConfig(data)
+  return Array.isArray(rawConfig.device) ? rawConfig.device : []
+}
+
+function getDeviceConfigParameterMappings(data) {
+  if (data?.parameterMappings?.length) {
+    return data.parameterMappings
+  }
+
+  const rawConfig = getRawDeviceConfig(data)
+  return Array.isArray(rawConfig.channels) ? rawConfig.channels : []
+}
+
+function getDeviceConfigStatusManagement(data) {
+  return data?.statusManagement ?? getRawDeviceConfig(data).statusManagement ?? null
+}
+
+function getTestResultParameterStatus(row, parameter) {
+  if (row.statuses && typeof row.statuses === 'object') {
+    return row.statuses[parameter] ?? ''
+  }
+
+  return row.status ?? ''
+}
+
+function getTestResultColumnCount(parameterOptions) {
+  return (parameterOptions.length * 2) + 1
 }
 
 const parityCodeMap = {
@@ -2006,6 +2860,14 @@ const valueFormatCodeMap = {
   ค่าข้อมูลตรวจวัด: 'MEASUREMENT_VALUE',
   ค่ากระแสไฟฟ้า: 'CURRENT',
   ค่าแรงดันไฟฟ้า: 'VOLTAGE',
+}
+
+const valueFormatLabelMap = {
+  MEASUREMENT_VALUE: 'ค่าข้อมูลตรวจวัด',
+  CURRENT: 'ค่ากระแสไฟฟ้า',
+  CURRENT_VALUE: 'ค่ากระแสไฟฟ้า',
+  VOLTAGE: 'ค่าแรงดันไฟฟ้า',
+  VOLTAGE_VALUE: 'ค่าแรงดันไฟฟ้า',
 }
 
 const encodingCodeMap = {
@@ -2023,6 +2885,8 @@ const encodingCodeMap = {
   'Float64 - Little Endian': 'FLOAT64_LITTLE_ENDIAN',
 }
 
+const encodingLabelMap = Object.fromEntries(Object.entries(encodingCodeMap).map(([label, code]) => [code, label]))
+
 function toNumberOrNull(value) {
   if (value === '' || value === null || value === undefined) {
     return null
@@ -2032,21 +2896,43 @@ function toNumberOrNull(value) {
   return Number.isNaN(numericValue) ? null : numericValue
 }
 
+function toNumberOrStringOrNull(value) {
+  if (value === '' || value === null || value === undefined) {
+    return null
+  }
+
+  const numericValue = Number(value)
+  return Number.isNaN(numericValue) ? value : numericValue
+}
+
+function getComPortValue(values) {
+  return values.comPort
+    ?? values.comport
+    ?? values.COMPORT
+    ?? values.com_port
+    ?? values.com
+    ?? values.serialPort
+    ?? values.serial_port
+    ?? ''
+}
+
 function compactObject(value) {
   return Object.fromEntries(
     Object.entries(value).filter(([, item]) => item !== '' && item !== null && item !== undefined),
   )
 }
 
-function buildOptionalValueRange(minValue, maxValue) {
-  const min = toNumberOrNull(minValue)
-  const max = toNumberOrNull(maxValue)
-
-  if (min === null || max === null) {
-    return null
+function buildValueRange(min, max) {
+  const valueRange = {
+    min: toNumberOrNull(min),
+    max: toNumberOrNull(max),
   }
 
-  return { min, max }
+  if (valueRange.min === null && valueRange.max === null) {
+    return undefined
+  }
+
+  return valueRange
 }
 
 function buildConnectionSettings(form) {
@@ -2055,14 +2941,14 @@ function buildConnectionSettings(form) {
 
   if (type === 'Modbus RTU') {
     return compactObject({
-      comPort: toNumberOrNull(values.comport),
+      comPort: toNumberOrStringOrNull(getComPortValue(values)),
       slaveId: toNumberOrNull(values.slaveId),
       baudRate: toNumberOrNull(values.baudRate),
       parity: parityCodeMap[values.parity] ?? values.parity,
       stopBits: toNumberOrNull(values.stopBits),
       dataBits: toNumberOrNull(values.dataBits),
       quantity: toNumberOrNull(values.quantity),
-      valueRange: buildOptionalValueRange(values.measureMin, values.measureMax),
+      valueRange: buildValueRange(values.measureMin, values.measureMax),
     })
   }
 
@@ -2071,6 +2957,7 @@ function buildConnectionSettings(form) {
       hostIp: values.hostIp,
       slaveId: toNumberOrNull(values.slaveId),
       port: toNumberOrNull(values.port),
+      valueRange: buildValueRange(values.measureMin, values.measureMax),
     })
   }
 
@@ -2080,7 +2967,44 @@ function buildConnectionSettings(form) {
     dbUser: values.dbUser,
     dbPass: values.dbPass,
     dbName: values.dbName,
+    valueRange: buildValueRange(values.measureMin, values.measureMax),
   })
+}
+
+function validateDeviceConfigForm(form) {
+  const values = form?.values ?? {}
+  const type = normalizeConnectionType(form?.type)
+  const protocol = getConnectionProtocolCode(form?.type)
+
+  if (!type) {
+    return 'กรุณาเลือกอุปกรณ์ (Connection)'
+  }
+
+  if (!protocol) {
+    return 'กรุณาเลือกอุปกรณ์ (Connection) ให้ถูกต้อง'
+  }
+
+  if (type === 'Modbus RTU' && !getComPortValue(values)) {
+    return 'กรุณากรอก COMPORT'
+  }
+
+  if (type === 'Modbus TCP' && !values.hostIp) {
+    return 'กรุณากรอก Host IP'
+  }
+
+  if (type === 'Modbus TCP' && !values.port) {
+    return 'กรุณากรอก Port'
+  }
+
+  if (['Microsoft SQL', 'MySQL'].includes(type) && !values.hostIp) {
+    return 'กรุณากรอก Host IP'
+  }
+
+  if (['Microsoft SQL', 'MySQL'].includes(type) && !values.port) {
+    return 'กรุณากรอก Port'
+  }
+
+  return ''
 }
 
 function buildDeviceConfigChannels(rows, deviceCode) {
@@ -2090,10 +3014,7 @@ function buildDeviceConfigChannels(rows, deviceCode) {
       deviceCode,
       addressId: toNumberOrNull(row.addressId),
       dataType: row.parameter,
-      valueRange: {
-        min: toNumberOrNull(row.min),
-        max: toNumberOrNull(row.max),
-      },
+      valueRange: buildValueRange(row.min, row.max),
       valueFormat: (valueFormatCodeMap[row.valueFormat] ?? row.valueFormat) || 'MEASUREMENT_VALUE',
       offset: toNumberOrNull(row.offset),
       encoding: (encodingCodeMap[row.encodingData] ?? row.encodingData) || 'UNSIGNED16_BIG_ENDIAN',
@@ -2101,56 +3022,33 @@ function buildDeviceConfigChannels(rows, deviceCode) {
     }))
 }
 
-function buildDeviceConfigPayload({
-  stationId,
-  context,
-  connectionForms,
-  parameterMappingRows,
-  statusManagement,
-  deviceCodeOptions,
-}) {
-  const statusManagementPayload = {
+function buildDeviceConfigStatusManagement(statusManagement) {
+  return {
     selectedParameters: statusManagement?.selectedParameters?.length ? statusManagement.selectedParameters : ['ทั้งหมด'],
     startAt: statusManagement?.startAt || null,
     endAt: statusManagement?.endAt || null,
     status: statusManagement?.status || 'Normal',
     schedules: statusManagement?.schedules ?? [],
   }
+}
 
-  const items = connectionForms
-    .map((form, index) => {
-      const deviceCode = getConnectionFormDeviceCode(context, form, index, deviceCodeOptions)
-      const rowsForDevice = parameterMappingRows.filter((row) => {
-        if (row.deviceCode) {
-          return row.deviceCode === deviceCode
-        }
-        return connectionForms.length === 1
-      })
-
-      return {
-        configId: form.configId,
-        device: {
-          deviceCode,
-          protocol: protocolCodeMap[normalizeConnectionType(form.type)] ?? form.type,
-          settings: buildConnectionSettings(form),
-        },
-        channels: buildDeviceConfigChannels(rowsForDevice, deviceCode),
-      }
-    })
-    .filter((item) => !item.configId)
-
+function buildDeviceConfigPayloadItem({ form, stationId, deviceCode, channels, statusManagement }) {
   return {
-    config: {
-      stationId,
-      device: items.map((item) => item.device),
-      channels: items.flatMap((item) => item.channels),
-      statusManagement: statusManagementPayload,
-    },
+    stationId,
+    deviceCode,
+    protocol: getConnectionProtocolCode(form.type),
+    settings: buildConnectionSettings(form),
+    channels,
+    statusManagement: buildDeviceConfigStatusManagement(statusManagement),
   }
 }
 
-function getPayloadErrorMessage(payload, fallback) {
-  return payload?.error?.message || payload?.message || fallback
+function buildDeviceConfigDeviceItem(form, deviceCode) {
+  return {
+    deviceCode,
+    protocol: getConnectionProtocolCode(form.type),
+    settings: buildConnectionSettings(form),
+  }
 }
 
 function ConnectionSettingsDialog({ open, context, accessToken, onClose }) {
@@ -2161,10 +3059,21 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose }) {
   const [connectionForms, setConnectionForms] = useState([])
   const [parameterMappingRows, setParameterMappingRows] = useState([])
   const [statusManagementValue, setStatusManagementValue] = useState(null)
+  const [deviceConfigTesting, setDeviceConfigTesting] = useState(false)
   const [deviceConfigSaving, setDeviceConfigSaving] = useState(false)
-  const [connectionTestLoading, setConnectionTestLoading] = useState(false)
+  const [deviceConfigConfirming, setDeviceConfigConfirming] = useState(false)
   const parameterOptions = deviceConfig?.parameterOptions ?? getConnectionParameterOptions(context)
-  const deviceCodeOptions = buildDeviceCodeOptions(context, connectionForms, deviceConfig?.deviceCodeOptions ?? [])
+  const generatedDeviceCodeOptions = connectionForms
+    .map((form, index) => form.deviceCode ?? getConnectionDeviceCode(context, index))
+    .filter(Boolean)
+  const mappedDeviceCodeOptions = parameterMappingRows.map((row) => row.deviceCode).filter(Boolean)
+  const deviceCodeOptions = [
+    ...new Set([
+      ...(deviceConfig?.deviceCodeOptions ?? []),
+      ...generatedDeviceCodeOptions,
+      ...mappedDeviceCodeOptions,
+    ]),
+  ]
   const statusManagement = statusManagementValue ?? deviceConfig?.statusManagement ?? null
 
   useEffect(() => {
@@ -2182,11 +3091,12 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose }) {
       }
 
       setDeviceConfig(null)
-      setConnectionForms([])
+      setConnectionForms([createDefaultConnectionItem(context)])
       setParameterMappingRows([])
       setStatusManagementValue(null)
       setTestResultRows([])
-      setConnectionTestLoading(false)
+      setDeviceConfigTesting(false)
+      setDeviceConfigConfirming(false)
       setDeviceConfigError('')
     })
 
@@ -2228,10 +3138,11 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose }) {
 
         if (isActive) {
           const data = payload?.data ?? {}
+          const nextConnectionForms = mapConnectionForms(getDeviceConfigConnectionForms(data))
           setDeviceConfig(data)
-          setConnectionForms(mapConnectionForms(data.connectionForms ?? []))
-          setParameterMappingRows(mapParameterMappingRows(data.parameterMappings ?? [], data.parameterOptions ?? []))
-          setStatusManagementValue(data.statusManagement ?? null)
+          setConnectionForms(nextConnectionForms.length ? nextConnectionForms : [createDefaultConnectionItem(context)])
+          setParameterMappingRows(mapParameterMappingRows(getDeviceConfigParameterMappings(data), data.parameterOptions ?? []))
+          setStatusManagementValue(getDeviceConfigStatusManagement(data))
           setTestResultRows(mapTestResultRows(data.testResults ?? []))
         }
       })
@@ -2254,7 +3165,7 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose }) {
   const updateConnectionForm = (id, nextValue) => {
     setConnectionForms((current) => current.map((form) => (form.id === id ? nextValue : form)))
   }
-  const handleTestConnection = async () => {
+  const handleTestConnection = () => {
     const stationId = getMonitoringPointCode(context)
 
     if (!stationId) {
@@ -2267,119 +3178,187 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose }) {
       return
     }
 
-    setConnectionTestLoading(true)
+    setDeviceConfigTesting(true)
     setDeviceConfigError('')
 
-    try {
-      const result = await fetch(getConnectionTestApiUrl(stationId), {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
+    fetch(getConnectionTestApiUrl(stationId), {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
+      .then(async (result) => {
+        const payload = await result.json().catch(() => null)
+
+        if (!result.ok) {
+          throw new Error(payload?.error?.message || payload?.message || `ทดสอบการเชื่อมต่อไม่สำเร็จ (${result.status} ${result.statusText})`)
+        }
+
+        const rows = Array.isArray(payload?.data) ? payload.data : []
+        const registeredParameters = Array.isArray(payload?.meta?.registeredParameters)
+          ? payload.meta.registeredParameters
+          : []
+
+        setTestResultRows(mapTestResultRows(rows))
+
+        if (registeredParameters.length) {
+          setDeviceConfig((current) => ({
+            ...(current ?? {}),
+            parameterOptions: registeredParameters,
+          }))
+        }
       })
-      const payload = await result.json().catch(() => null)
-
-      if (!result.ok) {
-        throw new Error(
-          getPayloadErrorMessage(
-            payload,
-            `ทดสอบการเชื่อมต่อไม่สำเร็จ (${result.status} ${result.statusText})`,
-          ),
-        )
-      }
-
-      setTestResultRows(mapConnectionTestResultRows(payload?.data ?? null))
-    } catch (error) {
-      setDeviceConfigError(error instanceof Error ? error.message : 'ทดสอบการเชื่อมต่อไม่สำเร็จ')
-    } finally {
-      setConnectionTestLoading(false)
-    }
+      .catch((error) => {
+        setDeviceConfigError(error instanceof Error ? error.message : 'ทดสอบการเชื่อมต่อไม่สำเร็จ')
+      })
+      .finally(() => {
+        setDeviceConfigTesting(false)
+      })
   }
-  const handleSaveDeviceConfig = async () => {
+  const buildCurrentDeviceConfigRequest = () => {
     const requestId = getDeviceConfigRequestId(context)
     const stationId = getMonitoringPointCode(context)
+    const forms = connectionForms.length ? connectionForms : [{ type: '', values: {} }]
+    const validationMessage = forms.map(validateDeviceConfigForm).find(Boolean)
 
     if (!requestId || !stationId) {
-      setDeviceConfigError('ไม่พบรหัสคำขอหรือรหัสจุดตรวจวัดสำหรับบันทึกการตั้งค่าอุปกรณ์')
-      return
+      throw new Error('ไม่พบรหัสคำขอหรือรหัสจุดตรวจวัดสำหรับบันทึกการตั้งค่าอุปกรณ์')
     }
 
     if (!accessToken) {
-      setDeviceConfigError('กรุณาเข้าสู่ระบบเพื่อบันทึกการตั้งค่าอุปกรณ์')
-      return
+      throw new Error('กรุณาเข้าสู่ระบบเพื่อบันทึกการตั้งค่าอุปกรณ์')
     }
 
+    if (validationMessage) {
+      throw new Error(validationMessage)
+    }
+
+    if (forms.length > 1 && parameterMappingRows.some((row) => !row.deviceCode)) {
+      throw new Error('กรุณาเลือกรหัสอุปกรณ์ในตารางการเชื่อมต่อพารามิเตอร์ให้ครบ')
+    }
+
+    const deviceItems = forms.map((form, index) => {
+      const deviceCode = form.deviceCode || deviceCodeOptions[index] || getConnectionDeviceCode(context, index)
+
+      return buildDeviceConfigDeviceItem(form, deviceCode)
+    })
+
+    const channelGroups = forms.map((form, index) => {
+      const deviceCode = deviceItems[index]?.deviceCode || form.deviceCode || deviceCodeOptions[index] || getConnectionDeviceCode(context, index)
+      const configRows = forms.length > 1
+        ? parameterMappingRows.filter((row) => row.deviceCode === deviceCode)
+        : parameterMappingRows
+
+      return buildDeviceConfigChannels(configRows, forms.length > 1 ? deviceCode : undefined)
+    })
+
+    if (channelGroups.some((channels) => channels.length === 0)) {
+      throw new Error('กรุณาเพิ่ม mapping ค่าพารามิเตอร์อย่างน้อย 1 รายการ')
+    }
+
+    const requestBody = forms.length > 1
+      ? {
+          config: {
+            stationId,
+            device: deviceItems,
+            channels: channelGroups.flat(),
+            statusManagement: buildDeviceConfigStatusManagement(statusManagement),
+          },
+        }
+      : buildDeviceConfigPayloadItem({
+          form: forms[0],
+          stationId,
+          deviceCode: deviceItems[0]?.deviceCode,
+          channels: channelGroups[0],
+          statusManagement,
+        })
+
+    return { requestId, stationId, requestBody }
+  }
+
+  const applyDeviceConfigResponse = (data) => {
+    const nextConnectionForms = mapConnectionForms(getDeviceConfigConnectionForms(data).length ? getDeviceConfigConnectionForms(data) : connectionForms)
+    setDeviceConfig(data)
+    setConnectionForms(nextConnectionForms.length ? nextConnectionForms : [createDefaultConnectionItem(context)])
+    setParameterMappingRows(mapParameterMappingRows(getDeviceConfigParameterMappings(data).length ? getDeviceConfigParameterMappings(data) : parameterMappingRows, data?.parameterOptions ?? parameterOptions))
+    setStatusManagementValue(getDeviceConfigStatusManagement(data) ?? statusManagement)
+    setTestResultRows(mapTestResultRows(data?.testResults ?? testResultRows))
+  }
+
+  const saveDeviceConfig = async () => {
+    const { requestId, stationId, requestBody } = buildCurrentDeviceConfigRequest()
+    const saveResult = await fetch(getDeviceConfigsApiUrl(requestId), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+    })
+
+    const savePayload = await saveResult.json().catch(() => null)
+
+    if (!saveResult.ok) {
+      throw new Error(savePayload?.error?.message || savePayload?.message || `บันทึกการตั้งค่าอุปกรณ์ไม่สำเร็จ (${saveResult.status} ${saveResult.statusText})`)
+    }
+
+    const refreshResult = await fetch(getDeviceConfigsApiUrl(requestId, stationId), {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
+    const refreshPayload = await refreshResult.json().catch(() => null)
+
+    if (!refreshResult.ok) {
+      throw new Error(refreshPayload?.error?.message || refreshPayload?.message || `โหลดการตั้งค่าอุปกรณ์ล่าสุดไม่สำเร็จ (${refreshResult.status} ${refreshResult.statusText})`)
+    }
+
+    const data = refreshPayload?.data ?? deviceConfig
+    applyDeviceConfigResponse(data)
+    return { requestId, stationId, data }
+  }
+
+  const handleSaveDeviceConfig = () => {
     setDeviceConfigSaving(true)
     setDeviceConfigError('')
-
-    try {
-      const savePayloadBody = buildDeviceConfigPayload({
-        stationId,
-        context,
-        connectionForms,
-        parameterMappingRows,
-        statusManagement,
-        deviceCodeOptions,
+    saveDeviceConfig()
+      .catch((error) => {
+        setDeviceConfigError(error instanceof Error ? error.message : 'บันทึกการตั้งค่าอุปกรณ์ไม่สำเร็จ')
       })
-      const saveDevices = savePayloadBody.config.device
-      const saveChannels = savePayloadBody.config.channels
-
-      if (saveDevices.length === 0) {
-        throw new Error('ไม่มีอุปกรณ์ใหม่สำหรับบันทึก หากต้องการแก้ไขอุปกรณ์เดิมต้องใช้ endpoint สำหรับแก้ไข config')
-      }
-
-      const invalidDevice = saveDevices.find(
-        (device) => !saveChannels.some((channel) => channel.deviceCode === device.deviceCode),
-      )
-      if (invalidDevice) {
-        throw new Error(`กรุณากำหนดพารามิเตอร์อย่างน้อย 1 รายการให้ ${invalidDevice.deviceCode}`)
-      }
-
-      const saveResult = await fetch(getDeviceConfigsApiUrl(requestId), {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(savePayloadBody),
+      .finally(() => {
+        setDeviceConfigSaving(false)
       })
-      const savePayload = await saveResult.json().catch(() => null)
+  }
 
-      if (!saveResult.ok) {
-        throw new Error(
-          getPayloadErrorMessage(
-            savePayload,
-            `บันทึกการตั้งค่าอุปกรณ์ไม่สำเร็จ (${saveResult.status} ${saveResult.statusText})`,
-          ),
-        )
-      }
+  const handleConfirmConnection = () => {
+    setDeviceConfigConfirming(true)
+    setDeviceConfigError('')
+    saveDeviceConfig()
+      .then(async ({ requestId }) => {
+        const result = await fetch(getConfirmConnectionApiUrl(requestId), {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            action: 'CONFIRM',
+            note: 'ตั้งค่าอุปกรณ์และทดสอบแล้ว',
+          }),
+        })
+        const payload = await result.json().catch(() => null)
 
-      const detailResult = await fetch(getDeviceConfigsApiUrl(requestId, stationId), {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
+        if (!result.ok) {
+          throw new Error(payload?.error?.message || payload?.message || `ยืนยันการเชื่อมต่อไม่สำเร็จ (${result.status} ${result.statusText})`)
+        }
+
+        onClose()
       })
-      const detailPayload = await detailResult.json().catch(() => null)
-
-      if (!detailResult.ok) {
-        throw new Error(
-          getPayloadErrorMessage(
-            detailPayload,
-            `โหลดการตั้งค่าอุปกรณ์หลังบันทึกไม่สำเร็จ (${detailResult.status} ${detailResult.statusText})`,
-          ),
-        )
-      }
-
-      const data = detailPayload?.data ?? {}
-      setDeviceConfig(data)
-      setConnectionForms(mapConnectionForms(data.connectionForms ?? []))
-      setParameterMappingRows(mapParameterMappingRows(data.parameterMappings ?? [], data.parameterOptions ?? []))
-      setStatusManagementValue(data.statusManagement ?? null)
-      setTestResultRows(mapTestResultRows(data.testResults ?? []))
-    } catch (error) {
-      setDeviceConfigError(error instanceof Error ? error.message : 'บันทึกการตั้งค่าอุปกรณ์ไม่สำเร็จ')
-    } finally {
-      setDeviceConfigSaving(false)
-    }
+      .catch((error) => {
+        setDeviceConfigError(error instanceof Error ? error.message : 'ยืนยันการเชื่อมต่อไม่สำเร็จ')
+      })
+      .finally(() => {
+        setDeviceConfigConfirming(false)
+      })
   }
 
   return (
@@ -2406,13 +3385,7 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose }) {
                 onClick={() =>
                   setConnectionForms((current) => [
                     ...current,
-                    {
-                      id: Date.now(),
-                      configId: null,
-                      deviceCode: getConnectionDeviceCode(context, current.length),
-                      type: '',
-                      values: {},
-                    },
+                    createDefaultConnectionItem(context, current.length),
                   ])
                 }
               >
@@ -2442,14 +3415,15 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose }) {
                       onChange={(nextType) =>
                         updateConnectionForm(form.id, {
                           id: form.id,
-                            type: nextType,
-                            values: getDefaultConnectionForm(nextType),
-                          })
+                          deviceCode: form.deviceCode,
+                          type: nextType,
+                          values: getDefaultConnectionForm(nextType),
+                        })
                         }
                       />
                     </Grid>
                     <Grid size={{ xs: 12, md: 3 }}>
-                      <ReadOnlyField label="รหัสอุปกรณ์" value={getConnectionFormDeviceCode(context, form, index, deviceCodeOptions)} />
+                      <ReadOnlyField label="รหัสอุปกรณ์" value={deviceCodeOptions[index] ?? getConnectionDeviceCode(context, index)} />
                     </Grid>
                   </Grid>
                   <ConnectionFormFields
@@ -2480,34 +3454,40 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose }) {
               ทดสอบการเชื่อมต่อ
             </Typography>
             <TableContainer sx={{ border: 1, borderColor: 'divider', overflowX: 'auto' }}>
-              <Table size="small" sx={{ minWidth: Math.max(720, parameterOptions.length * 220), ...borderedTableSx }}>
+              <Table size="small" sx={{ minWidth: Math.max(720, getTestResultColumnCount(parameterOptions) * 120), ...borderedTableSx }}>
                 <TableHead>
                   <TableRow>
-                    {parameterOptions.flatMap((parameter) => [
-                      <TableCell key={`${parameter}-value`} sx={{ fontWeight: 700, bgcolor: 'neutral.50' }}>
-                        {parameter}
-                      </TableCell>,
-                      <TableCell key={`${parameter}-status`} sx={{ fontWeight: 700, bgcolor: 'neutral.50' }}>
-                        Status
-                      </TableCell>,
-                    ])}
-                    <TableCell sx={{ fontWeight: 700, bgcolor: 'neutral.50' }}>Timestamp</TableCell>
+                    {parameterOptions.map((column) => (
+                      <Fragment key={column}>
+                        <TableCell sx={{ fontWeight: 700, bgcolor: 'neutral.50' }}>
+                          {column}
+                        </TableCell>
+                        <TableCell sx={{ fontWeight: 700, bgcolor: 'neutral.50' }}>
+                          Status
+                        </TableCell>
+                      </Fragment>
+                    ))}
+                    <TableCell sx={{ fontWeight: 700, bgcolor: 'neutral.50' }}>
+                      Timestamp
+                    </TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {testResultRows.length > 0 ? (
                     testResultRows.map((row) => (
                       <TableRow key={row.id}>
-                        {parameterOptions.flatMap((parameter) => [
-                          <TableCell key={`${parameter}-value`}>{row.values[parameter] ?? '-'}</TableCell>,
-                          <TableCell key={`${parameter}-status`}>{row.statuses?.[parameter] ?? '-'}</TableCell>,
-                        ])}
+                        {parameterOptions.map((parameter) => (
+                          <Fragment key={parameter}>
+                            <TableCell>{row.values[parameter]}</TableCell>
+                            <TableCell>{getTestResultParameterStatus(row, parameter)}</TableCell>
+                          </Fragment>
+                        ))}
                         <TableCell>{row.timestamp}</TableCell>
                       </TableRow>
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={parameterOptions.length * 2 + 1} align="center">
+                      <TableCell colSpan={getTestResultColumnCount(parameterOptions)} align="center">
                         <Typography variant="body2" color="text.secondary">
                           ยังไม่มีผลการทดสอบ
                         </Typography>
@@ -2524,14 +3504,14 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose }) {
         <Button color="inherit" onClick={onClose}>
           ปิด
         </Button>
-        <Button variant="contained" disabled={connectionTestLoading} onClick={handleTestConnection}>
-          {connectionTestLoading ? 'กำลังทดสอบ' : 'ทดสอบ'}
+        <Button variant="contained" disabled={deviceConfigTesting || deviceConfigSaving || deviceConfigConfirming} onClick={handleTestConnection}>
+          {deviceConfigTesting ? 'กำลังทดสอบ' : 'ทดสอบ'}
         </Button>
-        <Button variant="contained" disabled={deviceConfigSaving} onClick={handleSaveDeviceConfig}>
+        <Button variant="contained" disabled={deviceConfigSaving || deviceConfigConfirming} onClick={handleSaveDeviceConfig}>
           {deviceConfigSaving ? 'กำลังบันทึก' : 'บันทึก'}
         </Button>
-        <Button color="secondary" variant="contained" onClick={onClose}>
-          ยืนยันการเชื่อมต่อ
+        <Button color="secondary" variant="contained" disabled={deviceConfigSaving || deviceConfigConfirming} onClick={handleConfirmConnection}>
+          {deviceConfigConfirming ? 'กำลังยืนยัน' : 'ยืนยันการเชื่อมต่อ'}
         </Button>
       </DialogActions>
     </Dialog>
@@ -2592,7 +3572,7 @@ function ReadOnlyField({ label, value, sx }) {
   )
 }
 
-function UploadFileField({ label, accept, name }) {
+function UploadFileField({ label, accept, name, currentFileName = '' }) {
   const [fileName, setFileName] = useState('')
 
   return (
@@ -2607,7 +3587,7 @@ function UploadFileField({ label, accept, name }) {
           minHeight: 40,
           justifyContent: 'flex-start',
           borderStyle: 'dashed',
-          color: fileName ? 'text.primary' : 'text.secondary',
+          color: fileName || currentFileName ? 'text.primary' : 'text.secondary',
           bgcolor: 'background.paper',
           '&:hover': {
             borderStyle: 'dashed',
@@ -2615,7 +3595,7 @@ function UploadFileField({ label, accept, name }) {
           },
         }}
       >
-        {fileName || label}
+        {fileName || currentFileName || label}
         <Box
           component="input"
           type="file"
@@ -2626,14 +3606,14 @@ function UploadFileField({ label, accept, name }) {
         />
       </Button>
       <Typography variant="caption" color="text.secondary">
-        {label}
+        {currentFileName && !fileName ? `ไฟล์เดิม: ${currentFileName}` : label}
       </Typography>
     </Stack>
   )
 }
 
-function ParameterMultiSelect({ label, name, value: controlledValue, onChange }) {
-  const [internalValue, setInternalValue] = useState([])
+function ParameterMultiSelect({ label, name, value: controlledValue, defaultValue = [], onChange }) {
+  const [internalValue, setInternalValue] = useState(defaultValue)
   const value = controlledValue ?? internalValue
 
   return (
@@ -2672,31 +3652,32 @@ function ParameterMultiSelect({ label, name, value: controlledValue, onChange })
   )
 }
 
-function CemsMonitoringPointDetails() {
-  const [stackShape, setStackShape] = useState('')
-  const [primaryFuel, setPrimaryFuel] = useState('')
-  const [secondaryFuel, setSecondaryFuel] = useState('')
-  const [hasTreatmentSystem, setHasTreatmentSystem] = useState('')
-  const [treatmentSystem, setTreatmentSystem] = useState('')
-  const [connectionDevice, setConnectionDevice] = useState('')
+function CemsMonitoringPointDetails({ initialPoint = {} }) {
+  const initialDetails = { ...mockCemsMonitoringPointDetails, ...(initialPoint.details ?? {}) }
+  const [stackShape, setStackShape] = useState(initialDetails.stackShape)
+  const [primaryFuel, setPrimaryFuel] = useState(initialDetails.primaryFuel)
+  const [secondaryFuel, setSecondaryFuel] = useState(initialDetails.secondaryFuel)
+  const [hasTreatmentSystem, setHasTreatmentSystem] = useState(initialDetails.hasTreatmentSystem)
+  const [treatmentSystem, setTreatmentSystem] = useState(initialDetails.treatmentSystem)
+  const [connectionDevice, setConnectionDevice] = useState(initialDetails.connectionDevice)
 
   return (
     <Stack spacing={2}>
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField name="pointCode" label="รหัสจุดตรวจวัด" size="small" fullWidth />
+          <TextField name="pointCode" label="รหัสจุดตรวจวัด" size="small" defaultValue={initialPoint.pointCode ?? initialPoint.code ?? initialDetails.pointCode} fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField name="pointName" label="ชื่อจุดตรวจวัด" size="small" fullWidth />
+          <TextField name="pointName" label="ชื่อจุดตรวจวัด" size="small" defaultValue={initialPoint.pointName ?? initialDetails.pointName} fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField name="productionUnitType" label="ประเภทของหน่วยการผลิต" size="small" fullWidth />
+          <TextField name="productionUnitType" label="ประเภทของหน่วยการผลิต" size="small" defaultValue={initialDetails.productionUnitType} fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField name="productionCapacity" label="กำลังการผลิตต่อหน่วย" size="small" fullWidth />
+          <TextField name="productionCapacity" label="กำลังการผลิตต่อหน่วย" size="small" defaultValue={initialDetails.productionCapacity} fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField name="cemsInstallationRequiredBy" select label="เข้าข่ายต้องติดตั้ง CEMS ตามกฎหมาย" size="small" fullWidth defaultValue="">
+          <TextField name="cemsInstallationRequiredBy" select label="เข้าข่ายต้องติดตั้ง CEMS ตามกฎหมาย" size="small" fullWidth defaultValue={initialDetails.cemsInstallationRequiredBy}>
             <MenuItem value="">-</MenuItem>
             <MenuItem value="ประกาศ อก.">ประกาศ อก.</MenuItem>
             <MenuItem value="กกพ.">กกพ.</MenuItem>
@@ -2705,10 +3686,10 @@ function CemsMonitoringPointDetails() {
           </TextField>
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField name="cemsInstallationRequiredOther" label="อื่นๆ โปรดระบุ" size="small" fullWidth />
+          <TextField name="cemsInstallationRequiredOther" label="อื่นๆ โปรดระบุ" size="small" defaultValue={initialDetails.cemsInstallationRequiredOther} fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField name="legalAnnexNo" select label="เข้าข่ายตามบัญชีแนบท้ายลำดับที่" size="small" fullWidth defaultValue="">
+          <TextField name="legalAnnexNo" select label="เข้าข่ายตามบัญชีแนบท้ายลำดับที่" size="small" fullWidth defaultValue={initialDetails.legalAnnexNo}>
             <MenuItem value="">-</MenuItem>
             <MenuItem value="เฉพาะประกาศปี 65">เฉพาะประกาศปี 65</MenuItem>
             <MenuItem value="กทม.">กทม.</MenuItem>
@@ -2717,16 +3698,16 @@ function CemsMonitoringPointDetails() {
       </Grid>
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 3 }}>
-          <ParameterMultiSelect name="eligibleParameters" label="พารามิเตอร์ที่เข้าข่าย" />
+          <ParameterMultiSelect name="eligibleParameters" label="พารามิเตอร์ที่เข้าข่าย" defaultValue={initialDetails.eligibleParameters ?? []} />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <ParameterMultiSelect name="exemptedParameters" label="พารามิเตอร์ที่ได้รับการยกเว้น" />
+          <ParameterMultiSelect name="exemptedParameters" label="พารามิเตอร์ที่ได้รับการยกเว้น" defaultValue={initialDetails.exemptedParameters ?? []} />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <ParameterMultiSelect name="connectedParameters" label="พารามิเตอร์ที่เชื่อมต่อแล้ว" />
+          <ParameterMultiSelect name="connectedParameters" label="พารามิเตอร์ที่เชื่อมต่อแล้ว" defaultValue={initialDetails.connectedParameters ?? []} />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <ParameterMultiSelect name="pendingParameters" label="พารามิเตอร์ที่ยังไม่เชื่อมต่อ" />
+          <ParameterMultiSelect name="pendingParameters" label="พารามิเตอร์ที่ยังไม่เชื่อมต่อ" defaultValue={initialDetails.pendingParameters ?? []} />
         </Grid>
       </Grid>
       <Grid container spacing={2}>
@@ -2748,42 +3729,42 @@ function CemsMonitoringPointDetails() {
         </Grid>
         {stackShape === 'วงกลม' ? (
           <Grid size={{ xs: 12, md: 3 }}>
-            <TextField name="stackDiameter" label="เส้นผ่านศูนย์กลาง (เมตร)" size="small" fullWidth />
+            <TextField name="stackDiameter" label="เส้นผ่านศูนย์กลาง (เมตร)" size="small" defaultValue={initialDetails.stackDiameter} fullWidth />
           </Grid>
         ) : null}
         {stackShape === 'สี่เหลี่ยม' ? (
           <>
             <Grid size={{ xs: 12, md: 3 }}>
-              <TextField name="stackWidth" label="กว้าง (เมตร)" size="small" fullWidth />
+              <TextField name="stackWidth" label="กว้าง (เมตร)" size="small" defaultValue={initialDetails.stackWidth} fullWidth />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <TextField name="stackLength" label="ยาว (เมตร)" size="small" fullWidth />
+              <TextField name="stackLength" label="ยาว (เมตร)" size="small" defaultValue={initialDetails.stackLength} fullWidth />
             </Grid>
           </>
         ) : null}
         {stackShape === 'อื่นๆ' ? (
           <Grid size={{ xs: 12, md: 3 }}>
-            <TextField name="stackShapeOther" label="โปรดระบุ" size="small" fullWidth />
+            <TextField name="stackShapeOther" label="โปรดระบุ" size="small" defaultValue={initialDetails.stackShapeOther} fullWidth />
           </Grid>
         ) : null}
       </Grid>
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField name="stackHeight" label="ความสูงปล่อง (เมตร)" size="small" fullWidth />
+          <TextField name="stackHeight" label="ความสูงปล่อง (เมตร)" size="small" defaultValue={initialDetails.stackHeight} fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField name="monitoringHeight" label="ความสูงของจุดตรวจวัด (เมตร)" size="small" fullWidth />
+          <TextField name="monitoringHeight" label="ความสูงของจุดตรวจวัด (เมตร)" size="small" defaultValue={initialDetails.monitoringHeight} fullWidth />
         </Grid>
       </Grid>
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField name="averageFlowRate" label="อัตราการระบายอากาศเฉลี่ย (m³/hr)" size="small" fullWidth />
+          <TextField name="averageFlowRate" label="อัตราการระบายอากาศเฉลี่ย (m³/hr)" size="small" defaultValue={initialDetails.averageFlowRate} fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField name="minFlowRate" label="อัตราการระบายอากาศต่ำสุด (m³/hr)" size="small" fullWidth />
+          <TextField name="minFlowRate" label="อัตราการระบายอากาศต่ำสุด (m³/hr)" size="small" defaultValue={initialDetails.minFlowRate} fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField name="maxFlowRate" label="อัตราการระบายอากาศสูงสุด (m³/hr)" size="small" fullWidth />
+          <TextField name="maxFlowRate" label="อัตราการระบายอากาศสูงสุด (m³/hr)" size="small" defaultValue={initialDetails.maxFlowRate} fullWidth />
         </Grid>
       </Grid>
       <Grid container spacing={2}>
@@ -2806,10 +3787,10 @@ function CemsMonitoringPointDetails() {
           </TextField>
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField name="primaryFuelOther" label="โปรดระบุ" size="small" fullWidth disabled={primaryFuel !== 'อื่นๆ'} />
+          <TextField name="primaryFuelOther" label="โปรดระบุ" size="small" defaultValue={initialDetails.primaryFuelOther} fullWidth disabled={primaryFuel !== 'อื่นๆ'} />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField name="primaryFuelPercent" label="ร้อยละโดยประมาณ" size="small" fullWidth />
+          <TextField name="primaryFuelPercent" label="ร้อยละโดยประมาณ" size="small" defaultValue={initialDetails.primaryFuelPercent} fullWidth />
         </Grid>
       </Grid>
       <Grid container spacing={2}>
@@ -2833,15 +3814,15 @@ function CemsMonitoringPointDetails() {
           </TextField>
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField name="secondaryFuelOther" label="โปรดระบุ" size="small" fullWidth disabled={secondaryFuel !== 'อื่นๆ'} />
+          <TextField name="secondaryFuelOther" label="โปรดระบุ" size="small" defaultValue={initialDetails.secondaryFuelOther} fullWidth disabled={secondaryFuel !== 'อื่นๆ'} />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField name="secondaryFuelPercent" label="ร้อยละโดยประมาณ" size="small" fullWidth />
+          <TextField name="secondaryFuelPercent" label="ร้อยละโดยประมาณ" size="small" defaultValue={initialDetails.secondaryFuelPercent} fullWidth />
         </Grid>
       </Grid>
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField name="combustionControlSystem" label="ระบบการควบคุมปริมาณอากาศและสภาวะการเผาไหม้" size="small" fullWidth />
+          <TextField name="combustionControlSystem" label="ระบบการควบคุมปริมาณอากาศและสภาวะการเผาไหม้" size="small" defaultValue={initialDetails.combustionControlSystem} fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
           <TextField
@@ -2879,16 +3860,16 @@ function CemsMonitoringPointDetails() {
         ) : null}
         {hasTreatmentSystem === 'มี' && treatmentSystem === 'อื่นๆ' ? (
           <Grid size={{ xs: 12, md: 3 }}>
-            <TextField name="treatmentSystemOther" label="ระบุรายละเอียดของระบบบำบัด" size="small" fullWidth />
+            <TextField name="treatmentSystemOther" label="ระบุรายละเอียดของระบบบำบัด" size="small" defaultValue={initialDetails.treatmentSystemOther} fullWidth />
           </Grid>
         ) : null}
       </Grid>
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField name="stackLatitude" label="พิกัดปล่องที่ติดตั้ง CEMS (ละติจูด)" size="small" fullWidth />
+          <TextField name="stackLatitude" label="พิกัดปล่องที่ติดตั้ง CEMS (ละติจูด)" size="small" defaultValue={initialDetails.stackLatitude} fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField name="stackLongitude" label="พิกัดปล่องที่ติดตั้ง CEMS (ลองติจูด)" size="small" fullWidth />
+          <TextField name="stackLongitude" label="พิกัดปล่องที่ติดตั้ง CEMS (ลองติจูด)" size="small" defaultValue={initialDetails.stackLongitude} fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
           <TextField
@@ -2910,7 +3891,7 @@ function CemsMonitoringPointDetails() {
         </Grid>
         {connectionDevice === 'อื่นๆ' ? (
           <Grid size={{ xs: 12, md: 3 }}>
-            <TextField name="connectionDeviceOther" label="โปรดระบุ" size="small" fullWidth />
+            <TextField name="connectionDeviceOther" label="โปรดระบุ" size="small" defaultValue={initialDetails.connectionDeviceOther} fullWidth />
           </Grid>
         ) : null}
       </Grid>
@@ -2918,7 +3899,7 @@ function CemsMonitoringPointDetails() {
   )
 }
 
-function DocumentsAndImagesSection() {
+function DocumentsAndImagesSection({ initialDocuments = [] }) {
   const itemsWithIndex = documentImageItems.map((item, index) => ({ ...item, index }))
   const groupedItems = itemsWithIndex.filter((item) => groupedDocumentImageTitles.includes(item.title))
   const standaloneItems = itemsWithIndex.filter((item) => !groupedDocumentImageTitles.includes(item.title))
@@ -2944,7 +3925,13 @@ function DocumentsAndImagesSection() {
             <Grid container spacing={2}>
               {item.hasLink ? (
                 <Grid size={{ xs: 12, md: 3 }}>
-                  <TextField name={`documentImageLink-${item.index}`} label="Link" size="small" fullWidth />
+                  <TextField
+                    name={`documentImageLink-${item.index}`}
+                    label="Link"
+                    size="small"
+                    defaultValue={initialDocuments[item.index]?.link ?? ''}
+                    fullWidth
+                  />
                 </Grid>
               ) : null}
               <Grid size={{ xs: 12, md: 3 }}>
@@ -2952,6 +3939,7 @@ function DocumentsAndImagesSection() {
                   name={`documentImageFile-${item.index}`}
                   label={item.uploadLabel}
                   accept={item.accept}
+                  currentFileName={initialDocuments[item.index]?.fileName ?? ''}
                 />
               </Grid>
             </Grid>
@@ -2968,6 +3956,7 @@ function DocumentsAndImagesSection() {
                   name={`documentImageFile-${item.index}`}
                   label={item.uploadLabel}
                   accept={item.accept}
+                  currentFileName={initialDocuments[item.index]?.fileName ?? ''}
                 />
               </Stack>
             </Grid>
@@ -2978,7 +3967,14 @@ function DocumentsAndImagesSection() {
   )
 }
 
-function SpecialCriteriaTable() {
+function SpecialCriteriaTable({ value, onChange }) {
+  const updateRow = (level, field, nextValue) => {
+    onChange({
+      ...value,
+      rows: value.rows.map((row) => (row.level === level ? { ...row, [field]: nextValue } : row)),
+    })
+  }
+
   return (
     <TableContainer sx={{ border: 1, borderColor: 'divider' }}>
       <Table size="small" sx={borderedTableSx}>
@@ -2999,7 +3995,12 @@ function SpecialCriteriaTable() {
           {specialCriteriaRows.map((row) => (
             <TableRow key={row.key}>
               <TableCell>
-                <TextField size="small" fullWidth />
+                <TextField
+                  size="small"
+                  value={value.rows.find((criteriaRow) => criteriaRow.level === row.key)?.min ?? ''}
+                  onChange={(event) => updateRow(row.key, 'min', event.target.value)}
+                  fullWidth
+                />
               </TableCell>
               <TableCell align="center">
                 <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', justifyContent: 'center' }}>
@@ -3009,7 +4010,12 @@ function SpecialCriteriaTable() {
                 </Stack>
               </TableCell>
               <TableCell>
-                <TextField size="small" fullWidth />
+                <TextField
+                  size="small"
+                  value={value.rows.find((criteriaRow) => criteriaRow.level === row.key)?.max ?? ''}
+                  onChange={(event) => updateRow(row.key, 'max', event.target.value)}
+                  fullWidth
+                />
               </TableCell>
             </TableRow>
           ))}
@@ -3019,14 +4025,29 @@ function SpecialCriteriaTable() {
   )
 }
 
-function StandardCriteriaSection({ label }) {
+function StandardCriteriaSection({ label, value, onChange }) {
   return (
     <Stack spacing={1.5}>
-      <FormControlLabel control={<Checkbox size="small" />} label={label} />
-      <SpecialCriteriaTable />
+      <FormControlLabel
+        control={
+          <Checkbox
+            size="small"
+            checked={value.enabled}
+            onChange={(event) => onChange({ ...value, enabled: event.target.checked })}
+          />
+        }
+        label={label}
+      />
+      <SpecialCriteriaTable value={value} onChange={onChange} />
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 6 }}>
-          <TextField label="ค่ามาตรฐาน" size="small" fullWidth />
+          <TextField
+            label="ค่ามาตรฐาน"
+            size="small"
+            value={value.standardValue}
+            onChange={(event) => onChange({ ...value, standardValue: event.target.value })}
+            fullWidth
+          />
         </Grid>
       </Grid>
     </Stack>
@@ -3044,6 +4065,8 @@ function InstrumentDataDialog({ open, parameterOptions, value, onClose, onSave }
     standardCondition: value?.standardCondition ?? emptyInstrumentParameter.standardCondition,
     dryBasis: value?.dryBasis ?? emptyInstrumentParameter.dryBasis,
     oxygenOrExcessAir: value?.oxygenOrExcessAir ?? emptyInstrumentParameter.oxygenOrExcessAir,
+    standardCriteria: value?.standardCriteria ?? emptyCriteria,
+    eiaCriteria: value?.eiaCriteria ?? emptyCriteria,
   })
 
   const updateForm = (field, nextValue) => setForm((current) => ({ ...current, [field]: nextValue }))
@@ -3164,10 +4187,18 @@ function InstrumentDataDialog({ open, parameterOptions, value, onClose, onSave }
           <Divider />
           <Grid container spacing={2}>
             <Grid size={{ xs: 12, md: 6 }}>
-              <StandardCriteriaSection label="พารามิเตอร์ไม่มีค่ามาตรฐาน ตามประกาศ อก." />
+              <StandardCriteriaSection
+                label="พารามิเตอร์ไม่มีค่ามาตรฐาน ตามประกาศ อก."
+                value={form.standardCriteria}
+                onChange={(nextValue) => updateForm('standardCriteria', nextValue)}
+              />
             </Grid>
             <Grid size={{ xs: 12, md: 6 }}>
-              <StandardCriteriaSection label="พารามิเตอร์ไม่มีค่ามาตรฐาน ตาม EIA" />
+              <StandardCriteriaSection
+                label="พารามิเตอร์ไม่มีค่ามาตรฐาน ตาม EIA"
+                value={form.eiaCriteria}
+                onChange={(nextValue) => updateForm('eiaCriteria', nextValue)}
+              />
             </Grid>
           </Grid>
         </Stack>
@@ -3184,8 +4215,8 @@ function InstrumentDataDialog({ open, parameterOptions, value, onClose, onSave }
   )
 }
 
-function MeasurementInstrumentSection({ parameterOptions }) {
-  const [instrumentRows, setInstrumentRows] = useState([])
+function MeasurementInstrumentSection({ parameterOptions, rows, setRows, initialInstruments = {} }) {
+  const instrumentRows = rows
   const [editingRowIndex, setEditingRowIndex] = useState(null)
   const [instrumentDialogOpen, setInstrumentDialogOpen] = useState(false)
   const editingValue = editingRowIndex === null ? null : instrumentRows[editingRowIndex]
@@ -3199,10 +4230,22 @@ function MeasurementInstrumentSection({ parameterOptions }) {
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ justifyContent: 'space-between' }}>
           <Grid container spacing={2} sx={{ flex: 1 }}>
             <Grid size={{ xs: 12, md: 3 }}>
-              <TextField name="converterBrand" label="อุปกรณ์แปลงสัญญาณ (Converter) ยี่ห้อ" size="small" fullWidth />
+              <TextField
+                name="converterBrand"
+                label="อุปกรณ์แปลงสัญญาณ (Converter) ยี่ห้อ"
+                size="small"
+                defaultValue={initialInstruments.converterBrand ?? mockMeasurementInstrumentDetails.converterBrand}
+                fullWidth
+              />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <TextField name="converterModel" label="อุปกรณ์แปลงสัญญาณ (Converter) รุ่น" size="small" fullWidth />
+              <TextField
+                name="converterModel"
+                label="อุปกรณ์แปลงสัญญาณ (Converter) รุ่น"
+                size="small"
+                defaultValue={initialInstruments.converterModel ?? mockMeasurementInstrumentDetails.converterModel}
+                fullWidth
+              />
             </Grid>
           </Grid>
           <Button
@@ -3234,10 +4277,7 @@ function MeasurementInstrumentSection({ parameterOptions }) {
                 instrumentRows.map((data, index) => {
                   return (
                     <TableRow key={`${data.parameter}-${index}`}>
-                      <TableCell>
-                        <input type="hidden" name="measurementInstrumentParameters" value={JSON.stringify(data)} />
-                        {data.parameter}
-                      </TableCell>
+                      <TableCell>{data.parameter}</TableCell>
                       <TableCell>{data?.technique ?? ''}</TableCell>
                       <TableCell>{data?.range ?? ''}</TableCell>
                       <TableCell>{data?.brand ?? ''}</TableCell>
@@ -3260,29 +4300,11 @@ function MeasurementInstrumentSection({ parameterOptions }) {
                           </Button>
                           <Button
                             size="small"
-                            color="warning"
+                            color="error"
                             variant="outlined"
-                            onClick={() =>
-                              setInstrumentRows((current) =>
-                                current.map((row, rowIndex) =>
-                                  rowIndex === index
-                                    ? {
-                                        parameter: row.parameter,
-                                        technique: '',
-                                        range: '',
-                                        brand: '',
-                                        supplier: '',
-                                        eiaStandard: '',
-                                        standardCondition: false,
-                                        dryBasis: false,
-                                        oxygenOrExcessAir: false,
-                                      }
-                                    : row,
-                                ),
-                              )
-                            }
+                            onClick={() => setRows((current) => current.filter((_, rowIndex) => rowIndex !== index))}
                           >
-                            ล้าง
+                            ลบ
                           </Button>
                         </Stack>
                       </TableCell>
@@ -3310,7 +4332,7 @@ function MeasurementInstrumentSection({ parameterOptions }) {
           value={editingValue}
           onClose={() => setInstrumentDialogOpen(false)}
           onSave={(nextValue) => {
-            setInstrumentRows((current) =>
+            setRows((current) =>
               editingRowIndex === null
                 ? [...current, nextValue]
                 : current.map((row, index) => (index === editingRowIndex ? nextValue : row)),
@@ -3323,29 +4345,30 @@ function MeasurementInstrumentSection({ parameterOptions }) {
   )
 }
 
-function WpmsMonitoringPointDetails() {
-  const [hasTreatmentSystem, setHasTreatmentSystem] = useState('')
-  const [connectionDevice, setConnectionDevice] = useState('')
+function WpmsMonitoringPointDetails({ initialPoint = {} }) {
+  const initialDetails = { ...mockWpmsMonitoringPointDetails, ...(initialPoint.details ?? {}) }
+  const [hasTreatmentSystem, setHasTreatmentSystem] = useState(initialDetails.hasTreatmentSystem)
+  const [connectionDevice, setConnectionDevice] = useState(initialDetails.connectionDevice)
 
   return (
     <Stack spacing={2}>
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField name="pointCode" label="รหัสจุดตรวจวัด" size="small" fullWidth />
+          <TextField name="pointCode" label="รหัสจุดตรวจวัด" size="small" defaultValue={initialPoint.pointCode ?? initialPoint.code ?? initialDetails.pointCode} fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField name="pointName" label="ชื่อจุดตรวจวัด" size="small" fullWidth />
+          <TextField name="pointName" label="ชื่อจุดตรวจวัด" size="small" defaultValue={initialPoint.pointName ?? initialDetails.pointName} fullWidth />
         </Grid>
       </Grid>
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField name="averageWastewaterDischarge" label="อัตราการระบายน้ำทิ้งเฉลี่ย (m³/d)" size="small" fullWidth />
+          <TextField name="averageWastewaterDischarge" label="อัตราการระบายน้ำทิ้งเฉลี่ย (m³/d)" size="small" defaultValue={initialDetails.averageWastewaterDischarge} fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField name="minWastewaterDischarge" label="อัตราการระบายน้ำทิ้งต่ำสุด (m³/d)" size="small" fullWidth />
+          <TextField name="minWastewaterDischarge" label="อัตราการระบายน้ำทิ้งต่ำสุด (m³/d)" size="small" defaultValue={initialDetails.minWastewaterDischarge} fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField name="maxWastewaterDischarge" label="อัตราการระบายน้ำทิ้งสูงสุด (m³/d)" size="small" fullWidth />
+          <TextField name="maxWastewaterDischarge" label="อัตราการระบายน้ำทิ้งสูงสุด (m³/d)" size="small" defaultValue={initialDetails.maxWastewaterDischarge} fullWidth />
         </Grid>
       </Grid>
       <Grid container spacing={2}>
@@ -3365,28 +4388,28 @@ function WpmsMonitoringPointDetails() {
           </TextField>
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField name="treatmentSystem" label="ระบุ" size="small" fullWidth />
+          <TextField name="treatmentSystem" label="ระบุ" size="small" defaultValue={initialDetails.treatmentSystem} fullWidth />
         </Grid>
         {hasTreatmentSystem === 'มี' ? (
           <Grid size={{ xs: 12, md: 3 }}>
-            <TextField name="maxTreatmentCapacity" label="ปริมาณรองรับน้ำเสียสูงสุดของระบบบำบัด" size="small" fullWidth />
+            <TextField name="maxTreatmentCapacity" label="ปริมาณรองรับน้ำเสียสูงสุดของระบบบำบัด" size="small" defaultValue={initialDetails.maxTreatmentCapacity} fullWidth />
           </Grid>
         ) : null}
       </Grid>
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField name="instrumentLatitude" label="พิกัดจุดติดตั้งเครื่องมือตรวจวัด (ละติจูด)" size="small" fullWidth />
+          <TextField name="instrumentLatitude" label="พิกัดจุดติดตั้งเครื่องมือตรวจวัด (ละติจูด)" size="small" defaultValue={initialDetails.instrumentLatitude} fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField name="instrumentLongitude" label="พิกัดจุดติดตั้งเครื่องมือตรวจวัด (ลองติจูด)" size="small" fullWidth />
+          <TextField name="instrumentLongitude" label="พิกัดจุดติดตั้งเครื่องมือตรวจวัด (ลองติจูด)" size="small" defaultValue={initialDetails.instrumentLongitude} fullWidth />
         </Grid>
       </Grid>
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField name="wastewaterSource" label="แหล่งกำเนิดน้ำเสีย" size="small" fullWidth />
+          <TextField name="wastewaterSource" label="แหล่งกำเนิดน้ำเสีย" size="small" defaultValue={initialDetails.wastewaterSource} fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField name="dischargeReceivingSource" label="แหล่งรองรับน้ำทิ้ง" size="small" fullWidth />
+          <TextField name="dischargeReceivingSource" label="แหล่งรองรับน้ำทิ้ง" size="small" defaultValue={initialDetails.dischargeReceivingSource} fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
           <TextField
@@ -3408,7 +4431,7 @@ function WpmsMonitoringPointDetails() {
         </Grid>
         {connectionDevice === 'อื่นๆ' ? (
           <Grid size={{ xs: 12, md: 3 }}>
-            <TextField name="connectionDeviceOther" label="โปรดระบุ" size="small" fullWidth />
+            <TextField name="connectionDeviceOther" label="โปรดระบุ" size="small" defaultValue={initialDetails.connectionDeviceOther} fullWidth />
           </Grid>
         ) : null}
       </Grid>
@@ -3480,12 +4503,12 @@ function StationMonitoringPointDetails() {
   )
 }
 
-function MonitoringPointDetails({ point }) {
+function MonitoringPointDetails({ point, initialPoint = {} }) {
   if (point.type === 'CEMS') {
-    return <CemsMonitoringPointDetails />
+    return <CemsMonitoringPointDetails initialPoint={initialPoint} />
   }
   if (point.type === 'WPMS') {
-    return <WpmsMonitoringPointDetails />
+    return <WpmsMonitoringPointDetails initialPoint={initialPoint} />
   }
   if (point.type === 'Mobile') {
     return <MobileMonitoringPointDetails />
@@ -3496,11 +4519,40 @@ function MonitoringPointDetails({ point }) {
   return null
 }
 
-function RequestFormBottomSheet({ open, formType, factory, accessToken, onClose, onSubmitted }) {
+function RequestFormBottomSheet({
+  open,
+  formType,
+  factory,
+  accessToken,
+  mode = 'create',
+  requestId,
+  initialRequest,
+  loading = false,
+  loadError = '',
+  onClose,
+  onSubmitted,
+}) {
   const formRef = useRef(null)
-  const [contacts, setContacts] = useState([{ id: 1 }])
-  const [factoryEmails, setFactoryEmails] = useState([{ id: 1, value: '' }])
-  const [monitoringPoints, setMonitoringPoints] = useState([{ id: 1, type: '' }])
+  const isEditMode = mode === 'edit'
+  const initialPoint = getInitialRequestPoint(initialRequest)
+  const initialInstruments = initialPoint.measurementInstruments ?? {}
+  const initialDocuments = Array.isArray(initialPoint.documentsAndImages) ? initialPoint.documentsAndImages : []
+  const formFactory = isEditMode ? getInitialRequestFactory(initialRequest, factory) : factory
+  const latestRevisionMessage = isEditMode ? getLatestRevisionMessage(initialRequest) : ''
+  const initialContactPersons = isEditMode && Array.isArray(initialRequest?.contactPersons)
+    ? withFormIds(initialRequest.contactPersons)
+    : [{ id: 1 }]
+  const initialNotificationEmails = isEditMode && Array.isArray(initialRequest?.notificationEmails) && initialRequest.notificationEmails.length
+    ? initialRequest.notificationEmails.map((email, index) => ({ id: index + 1, value: email }))
+    : [{ id: 1, value: '' }]
+  const initialMonitoringPointType = isEditMode && initialRequest ? getRequestSystemType(initialRequest) : ''
+  const initialMonitoringPoints = [{ id: 1, type: initialMonitoringPointType }]
+  const [contacts, setContacts] = useState(initialContactPersons)
+  const [factoryEmails, setFactoryEmails] = useState(initialNotificationEmails)
+  const [monitoringPoints, setMonitoringPoints] = useState(initialMonitoringPoints)
+  const [measurementInstrumentRows, setMeasurementInstrumentRows] = useState(
+    Array.isArray(initialInstruments.parameters) ? initialInstruments.parameters : [],
+  )
   const [selectedMonitoringPointId, setSelectedMonitoringPointId] = useState(1)
   const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false)
   const [submitPreviewRequest, setSubmitPreviewRequest] = useState(null)
@@ -3512,7 +4564,14 @@ function RequestFormBottomSheet({ open, formType, factory, accessToken, onClose,
     ?? monitoringPoints[0]
   const buildCurrentRequestBody = () => {
     const formData = formRef.current ? new FormData(formRef.current) : null
-    return buildMeasurementPointRequestBody(factory, selectedMonitoringPoint?.type, formData)
+    return buildMeasurementPointRequestBody(
+      formFactory,
+      selectedMonitoringPoint?.type,
+      formData,
+      [],
+      measurementInstrumentRows,
+      { includePreviewUrls: true, existingDocuments: initialDocuments },
+    )
   }
   const openSubmitConfirm = () => {
     setSubmitError('')
@@ -3525,13 +4584,32 @@ function RequestFormBottomSheet({ open, formType, factory, accessToken, onClose,
       return
     }
 
+    if (isEditMode && !requestId) {
+      setSubmitError('ไม่พบรหัสคำขอสำหรับแก้ไขแบบฟอร์ม')
+      return
+    }
+
     setIsSubmitting(true)
     setSubmitError('')
-    const requestBody = submitPreviewRequest ?? buildCurrentRequestBody()
 
     try {
-      const result = await fetch(getMeasurementPointsRequestApiUrl(), {
-        method: 'POST',
+      const formData = formRef.current ? new FormData(formRef.current) : null
+      const monitoringPointType = selectedMonitoringPoint?.type
+      const uploadedDocuments = monitoringPointType === 'CEMS' ? await uploadDocumentImages(formData, accessToken) : []
+      const requestBody = buildMeasurementPointRequestBody(
+        formFactory,
+        monitoringPointType,
+        formData,
+        uploadedDocuments,
+        measurementInstrumentRows,
+        { existingDocuments: initialDocuments },
+      )
+      if (isEditMode) {
+        requestBody.remarks = 'แก้ไขตามเจ้าหน้าที่แจ้ง'
+      }
+
+      const result = await fetch(isEditMode ? getRequestFormApiUrl(requestId) : getMeasurementPointsRequestApiUrl(), {
+        method: isEditMode ? 'PUT' : 'POST',
         headers: {
           Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
@@ -3614,9 +4692,42 @@ function RequestFormBottomSheet({ open, formType, factory, accessToken, onClose,
         <Box
           component="form"
           ref={formRef}
+          key={`${mode}-${requestId ?? 'new'}-${initialRequest?.id ?? 'draft'}`}
           sx={{ flex: 1, minHeight: 0, overflow: 'auto', p: { xs: 2, md: 3 }, bgcolor: 'background.default' }}
         >
           <Stack spacing={2}>
+            {loading ? (
+              <Typography variant="body2" color="text.secondary">
+                กำลังโหลดข้อมูลคำขอเดิม...
+              </Typography>
+            ) : null}
+            {loadError ? (
+              <Typography variant="body2" color="error">
+                {loadError}
+              </Typography>
+            ) : null}
+            {isEditMode && latestRevisionMessage ? (
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 2,
+                  border: 1,
+                  borderColor: 'warning.main',
+                  bgcolor: 'warning.50',
+                  color: 'text.primary',
+                }}
+              >
+                <Stack direction="row" spacing={1.5} sx={{ alignItems: 'flex-start' }}>
+                  <WarningAmberIcon color="warning" fontSize="small" sx={{ mt: 0.25 }} />
+                  <Stack spacing={0.75}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                      รายละเอียดการแก้ไข
+                    </Typography>
+                    <Typography variant="body2">{latestRevisionMessage}</Typography>
+                  </Stack>
+                </Stack>
+              </Paper>
+            ) : null}
             <Paper elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider' }}>
               <Stack spacing={2}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
@@ -3624,22 +4735,22 @@ function RequestFormBottomSheet({ open, formType, factory, accessToken, onClose,
                 </Typography>
                 <Grid container spacing={2}>
                   <Grid size={{ xs: 12, md: 6 }}>
-                    <ReadOnlyField label="ชื่อโรงงาน" value={factory?.factoryName ?? ''} />
+                    <ReadOnlyField label="ชื่อโรงงาน" value={formFactory?.factoryName ?? ''} />
                   </Grid>
                   <Grid size={{ xs: 12, md: 3 }}>
-                    <ReadOnlyField label="เลขทะเบียนโรงงาน (เดิม)" value={factory?.oldRegistrationNo ?? ''} />
+                    <ReadOnlyField label="เลขทะเบียนโรงงาน (เดิม)" value={formFactory?.oldRegistrationNo ?? formFactory?.factoryRegistrationNo ?? ''} />
                   </Grid>
                   <Grid size={{ xs: 12, md: 3 }}>
-                    <ReadOnlyField label="เลขทะเบียนโรงงาน (ใหม่)" value={factory?.newRegistrationNo ?? ''} />
+                    <ReadOnlyField label="เลขทะเบียนโรงงาน (ใหม่)" value={formFactory?.newRegistrationNo ?? formFactory?.factoryId ?? ''} />
                   </Grid>
                   <Grid size={{ xs: 12, md: 6 }}>
-                    <ReadOnlyField label="ลำดับประเภทโรงงาน (หลัก)" value={factory?.industryMainOrder ?? ''} />
+                    <ReadOnlyField label="ลำดับประเภทโรงงาน (หลัก)" value={formFactory?.industryMainOrder ?? ''} />
                   </Grid>
                   <Grid size={{ xs: 12, md: 6 }}>
-                    <ReadOnlyField label="ลำดับประเภทโรงงาน (รอง)" value={factory?.industrySubOrder ?? ''} />
+                    <ReadOnlyField label="ลำดับประเภทโรงงาน (รอง)" value={formFactory?.industrySubOrder ?? ''} />
                   </Grid>
                   <Grid size={{ xs: 12, md: 6 }}>
-                    <ReadOnlyField label="การประกอบกิจการ" value={factory?.businessActivity ?? ''} />
+                    <ReadOnlyField label="การประกอบกิจการ" value={formFactory?.businessActivity ?? ''} />
                   </Grid>
                   <Grid size={{ xs: 12, md: 3 }}>
                     <Box
@@ -3652,7 +4763,7 @@ function RequestFormBottomSheet({ open, formType, factory, accessToken, onClose,
                         minHeight: 40,
                       }}
                     >
-                      <RadioGroup row value={factory?.eia ?? 'ไม่มี'}>
+                      <RadioGroup row value={formFactory?.eia ?? 'ไม่มี'}>
                         <FormControlLabel
                           value="มี"
                           control={<Radio size="small" />}
@@ -3664,16 +4775,16 @@ function RequestFormBottomSheet({ open, formType, factory, accessToken, onClose,
                     </Box>
                   </Grid>
                   <Grid size={{ xs: 12, md: 3 }}>
-                    <ReadOnlyField label="ชื่อโครงการ" value={factory?.projectName ?? ''} />
+                    <ReadOnlyField label="ชื่อโครงการ" value={formFactory?.projectName ?? ''} />
                   </Grid>
                   <Grid size={{ xs: 12, md: 6 }}>
-                    <ReadOnlyField label="สถานที่ตั้งโรงงาน" value={factory?.address ?? ''} />
+                    <ReadOnlyField label="สถานที่ตั้งโรงงาน" value={formFactory?.address ?? ''} />
                   </Grid>
                   <Grid size={{ xs: 12, md: 3 }}>
-                    <ReadOnlyField label="ละติจูด" value={factory?.latitude ?? ''} />
+                    <ReadOnlyField label="ละติจูด" value={formFactory?.latitude ?? ''} />
                   </Grid>
                   <Grid size={{ xs: 12, md: 3 }}>
-                    <ReadOnlyField label="ลองติจูด" value={factory?.longitude ?? ''} />
+                    <ReadOnlyField label="ลองติจูด" value={formFactory?.longitude ?? ''} />
                   </Grid>
                 </Grid>
               </Stack>
@@ -3700,16 +4811,16 @@ function RequestFormBottomSheet({ open, formType, factory, accessToken, onClose,
                     key={contact.id}
                   >
                     <Grid size={{ xs: 12, md: 3 }}>
-                      <TextField name="contactName" label="ชื่อ-นามสกุล" size="small" fullWidth />
+                      <TextField name="contactName" label="ชื่อ-นามสกุล" size="small" defaultValue={contact.name ?? ''} fullWidth />
                     </Grid>
                     <Grid size={{ xs: 12, md: 3 }}>
-                      <TextField name="contactPosition" label="ตำแหน่ง" size="small" fullWidth />
+                      <TextField name="contactPosition" label="ตำแหน่ง" size="small" defaultValue={contact.position ?? ''} fullWidth />
                     </Grid>
                     <Grid size={{ xs: 12, md: 3 }}>
-                      <TextField name="contactPhone" label="เบอร์โทร" size="small" fullWidth />
+                      <TextField name="contactPhone" label="เบอร์โทร" size="small" defaultValue={contact.phone ?? ''} fullWidth />
                     </Grid>
                     <Grid size={{ xs: 12, md: 3 }}>
-                      <TextField name="contactEmail" label="อีเมล" size="small" fullWidth />
+                      <TextField name="contactEmail" label="อีเมล" size="small" defaultValue={contact.email ?? ''} fullWidth />
                     </Grid>
                   </Grid>
                 ))}
@@ -3777,6 +4888,7 @@ function RequestFormBottomSheet({ open, formType, factory, accessToken, onClose,
                         id: selectedMonitoringPoint?.id ?? Date.now(),
                         type: event.target.value,
                       }
+                      setMeasurementInstrumentRows([])
                       setMonitoringPoints([nextPoint])
                       setSelectedMonitoringPointId(nextPoint.id)
                     }}
@@ -3802,7 +4914,10 @@ function RequestFormBottomSheet({ open, formType, factory, accessToken, onClose,
                   </Typography>
                   {monitoringPoints.map((point) => (
                     <Box key={point.id} sx={{ display: point.id === selectedMonitoringPoint?.id ? 'block' : 'none' }}>
-                      <MonitoringPointDetails point={point} />
+                      <MonitoringPointDetails
+                        point={point}
+                        initialPoint={point.type === initialMonitoringPointType ? initialPoint : {}}
+                      />
                     </Box>
                   ))}
                 </Stack>
@@ -3812,13 +4927,20 @@ function RequestFormBottomSheet({ open, formType, factory, accessToken, onClose,
             {showMonitoringPointSection && monitoringPoints.length > 0
               ? monitoringPoints.map((point) =>
                   point.type === 'CEMS' || point.type === 'WPMS' ? (
-                    <Box key={point.id} sx={{ display: point.id === selectedMonitoringPoint?.id ? 'block' : 'none' }}>
+                    <Box key={`${point.id}-${point.type}`} sx={{ display: point.id === selectedMonitoringPoint?.id ? 'block' : 'none' }}>
                       <Stack spacing={2}>
-                        {point.type === 'CEMS' ? <DocumentsAndImagesSection /> : null}
+                        {point.type === 'CEMS' ? (
+                          <DocumentsAndImagesSection
+                            initialDocuments={point.type === initialMonitoringPointType ? initialDocuments : []}
+                          />
+                        ) : null}
                         <MeasurementInstrumentSection
                           parameterOptions={
                             point.type === 'CEMS' ? cemsParameterOptions : wpmsInstrumentParameters
                           }
+                          rows={measurementInstrumentRows}
+                          setRows={setMeasurementInstrumentRows}
+                          initialInstruments={point.type === initialMonitoringPointType ? initialInstruments : {}}
                         />
                       </Stack>
                     </Box>
@@ -3841,7 +4963,7 @@ function RequestFormBottomSheet({ open, formType, factory, accessToken, onClose,
           <Button variant="outlined" color="inherit" onClick={onClose}>
             ยกเลิก
           </Button>
-          <Button variant="contained" onClick={openSubmitConfirm}>
+          <Button variant="contained" disabled={loading || Boolean(loadError)} onClick={openSubmitConfirm}>
             ส่งแบบฟอร์มคำขอ
           </Button>
         </Stack>
@@ -3889,10 +5011,26 @@ function RequestFormBottomSheet({ open, formType, factory, accessToken, onClose,
   )
 }
 
-function getRequestColumns(isOperator, onOpenConnectionSettings, onOpenRequestDocument, onOpenRequestProcess) {
+function getRequestColumns(
+  isOperator,
+  onOpenConnectionSettings,
+  onOpenRequestDocument,
+  onOpenRequestProcess,
+  onOpenRequestEdit,
+) {
   return [
     { field: 'factoryName', headerName: 'ชื่อโรงงาน/บริษัท', width: 240 },
-    { field: 'industryType', headerName: 'ประเภทอุตสาหกรรม', width: 170 },
+    {
+      field: 'factoryRegistration',
+      headerName: 'เลขทะเบียนโรงงาน',
+      width: 190,
+      sortable: false,
+      renderCell: (params) => (
+        <Stack sx={{ justifyContent: 'center', minHeight: '100%' }}>
+          <Typography variant="body2">{params.row.newRegistrationNo || '-'}</Typography>
+        </Stack>
+      ),
+    },
     { field: 'province', headerName: 'จังหวัด', width: 130 },
     { field: 'type', headerName: 'ประเภทจุดตรวจวัด', width: 150 },
     { field: 'requestNo', headerName: 'เลขที่คำขอ', width: 150 },
@@ -3918,6 +5056,7 @@ function getRequestColumns(isOperator, onOpenConnectionSettings, onOpenRequestDo
             row={params.row}
             onOpenConnectionSettings={onOpenConnectionSettings}
             onOpenRequestDocument={onOpenRequestDocument}
+            onOpenRequestEdit={onOpenRequestEdit}
           />
         ) : (
           <OfficerRequestActions
@@ -3932,11 +5071,16 @@ function getRequestColumns(isOperator, onOpenConnectionSettings, onOpenRequestDo
 
 function ConnectionRequestPage({ userType = '', accessToken = '' }) {
   const [requestForm, setRequestForm] = useState(null)
+  const [requestFormError, setRequestFormError] = useState('')
   const [requestDocument, setRequestDocument] = useState(null)
   const [requestDocumentMode, setRequestDocumentMode] = useState('view')
   const [requestDocumentLoading, setRequestDocumentLoading] = useState(false)
   const [requestDocumentApproving, setRequestDocumentApproving] = useState(false)
   const [requestDocumentError, setRequestDocumentError] = useState('')
+  const [approveConfirmOpen, setApproveConfirmOpen] = useState(false)
+  const [verifyConnectionConfirmOpen, setVerifyConnectionConfirmOpen] = useState(false)
+  const [revisionDialogOpen, setRevisionDialogOpen] = useState(false)
+  const [revisionOfficerNote, setRevisionOfficerNote] = useState('')
   const [monitoringPointFactory, setMonitoringPointFactory] = useState(null)
   const [connectionSettingsContext, setConnectionSettingsContext] = useState(null)
   const [operatorFactoryRows, setOperatorFactoryRows] = useState([])
@@ -4002,6 +5146,61 @@ function ConnectionRequestPage({ userType = '', accessToken = '' }) {
         setRequestDocumentLoading(false)
       })
   }, [accessToken])
+  const handleOpenEditRequestForm = useCallback((row) => {
+    setRequestFormError('')
+
+    if (!row?.id) {
+      setRequestFormError('ไม่พบรหัสคำขอสำหรับแก้ไขแบบฟอร์ม')
+      return
+    }
+
+    const editForm = {
+      mode: 'edit',
+      formType: 'เพิ่มจุดตรวจวัด',
+      factory: row,
+      requestId: row.id,
+      row,
+      loading: true,
+      initialRequest: null,
+    }
+
+    setRequestForm(editForm)
+
+    if (!accessToken) {
+      setRequestForm((current) => (current?.requestId === row.id ? { ...current, loading: false } : current))
+      setRequestFormError('กรุณาเข้าสู่ระบบเพื่อแก้ไขแบบฟอร์ม')
+      return
+    }
+
+    fetch(getRequestDetailApiUrl(row.id), {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
+      .then(async (result) => {
+        const payload = await result.json().catch(() => null)
+
+        if (!result.ok) {
+          throw new Error(payload?.message || `โหลดข้อมูลคำขอเดิมไม่สำเร็จ (${result.status} ${result.statusText})`)
+        }
+
+        const detailRequest = mapRequestDetailRow(payload?.data ?? {}, row)
+        setRequestForm((current) =>
+          current?.requestId === row.id
+            ? {
+                ...current,
+                factory: getInitialRequestFactory(detailRequest, row),
+                initialRequest: detailRequest,
+                loading: false,
+              }
+            : current,
+        )
+      })
+      .catch((error) => {
+        setRequestForm((current) => (current?.requestId === row.id ? { ...current, loading: false } : current))
+        setRequestFormError(error instanceof Error ? error.message : 'โหลดข้อมูลคำขอเดิมไม่สำเร็จ')
+      })
+  }, [accessToken])
   const approveRequestDocument = useCallback(() => {
     if (!requestDocument?.id) {
       setRequestDocumentError('ไม่พบรหัสคำขอสำหรับอนุมัติ')
@@ -4039,6 +5238,7 @@ function ConnectionRequestPage({ userType = '', accessToken = '' }) {
         setRequestTableRows((rows) =>
           rows.map((row) => (row.id === requestDocument.id ? { ...row, ...updatedRequest } : row)),
         )
+        setApproveConfirmOpen(false)
       })
       .catch((error) => {
         setRequestDocumentError(error instanceof Error ? error.message : 'อนุมัติคำขอไม่สำเร็จ')
@@ -4047,6 +5247,131 @@ function ConnectionRequestPage({ userType = '', accessToken = '' }) {
         setRequestDocumentApproving(false)
       })
   }, [accessToken, requestDocument])
+  const closeVerifyConnectionConfirmDialog = useCallback(() => {
+    if (requestDocumentApproving) {
+      return
+    }
+
+    setVerifyConnectionConfirmOpen(false)
+  }, [requestDocumentApproving])
+  const verifyConnectionDocument = useCallback(() => {
+    if (!requestDocument?.id) {
+      setRequestDocumentError('ไม่พบรหัสคำขอสำหรับยืนยันการเชื่อมต่อ')
+      return
+    }
+
+    if (!accessToken) {
+      setRequestDocumentError('กรุณาเข้าสู่ระบบเจ้าหน้าที่เพื่อยืนยันการเชื่อมต่อ')
+      return
+    }
+
+    setRequestDocumentApproving(true)
+    setRequestDocumentError('')
+
+    fetch(getVerifyConnectionApiUrl(requestDocument.id), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        note: 'ตรวจสอบแล้ว',
+      }),
+    })
+      .then(async (result) => {
+        const payload = await result.json().catch(() => null)
+
+        if (!result.ok) {
+          throw new Error(payload?.error?.message || payload?.message || `ยืนยันการเชื่อมต่อไม่สำเร็จ (${result.status} ${result.statusText})`)
+        }
+
+        const updatedRequest = payload?.data ? mapRequestDetailRow(payload.data, requestDocument) : {
+          ...requestDocument,
+          status: 'เชื่อมต่อแล้ว',
+          statusLabel: 'เชื่อมต่อแล้ว',
+          statusCode: 'CONNECTED',
+        }
+        setRequestDocument(updatedRequest)
+        setRequestTableRows((rows) =>
+          rows.map((row) => (row.id === requestDocument.id ? { ...row, ...updatedRequest } : row)),
+        )
+        setVerifyConnectionConfirmOpen(false)
+      })
+      .catch((error) => {
+        setRequestDocumentError(error instanceof Error ? error.message : 'ยืนยันการเชื่อมต่อไม่สำเร็จ')
+      })
+      .finally(() => {
+        setRequestDocumentApproving(false)
+      })
+  }, [accessToken, requestDocument])
+  const openRevisionDialog = useCallback(() => {
+    setRevisionOfficerNote('')
+    setRequestDocumentError('')
+    setRevisionDialogOpen(true)
+  }, [])
+  const closeRevisionDialog = useCallback(() => {
+    if (requestDocumentApproving) {
+      return
+    }
+
+    setRevisionDialogOpen(false)
+    setRevisionOfficerNote('')
+  }, [requestDocumentApproving])
+  const requestRevisionDocument = useCallback(() => {
+    const officerNote = revisionOfficerNote.trim()
+
+    if (!requestDocument?.id) {
+      setRequestDocumentError('ไม่พบรหัสคำขอสำหรับแจ้งแก้ไข')
+      return
+    }
+
+    if (!accessToken) {
+      setRequestDocumentError('กรุณาเข้าสู่ระบบเจ้าหน้าที่เพื่อแจ้งแก้ไขคำขอ')
+      return
+    }
+
+    if (!officerNote) {
+      setRequestDocumentError('กรุณากรอกหมายเหตุเจ้าหน้าที่')
+      return
+    }
+
+    setRequestDocumentApproving(true)
+    setRequestDocumentError('')
+
+    fetch(getRequestStatusApiUrl(requestDocument.id), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        action: 'REQUEST_REVISION',
+        revisionReason: officerNote,
+        officerNote,
+      }),
+    })
+      .then(async (result) => {
+        const payload = await result.json().catch(() => null)
+
+        if (!result.ok) {
+          throw new Error(payload?.message || `แจ้งแก้ไขคำขอไม่สำเร็จ (${result.status} ${result.statusText})`)
+        }
+
+        const updatedRequest = payload?.data ? mapRequestDetailRow(payload.data, requestDocument) : requestDocument
+        setRequestDocument(updatedRequest)
+        setRequestTableRows((rows) =>
+          rows.map((row) => (row.id === requestDocument.id ? { ...row, ...updatedRequest } : row)),
+        )
+        setRevisionDialogOpen(false)
+        setRevisionOfficerNote('')
+      })
+      .catch((error) => {
+        setRequestDocumentError(error instanceof Error ? error.message : 'แจ้งแก้ไขคำขอไม่สำเร็จ')
+      })
+      .finally(() => {
+        setRequestDocumentApproving(false)
+      })
+  }, [accessToken, requestDocument, revisionOfficerNote])
   const requestColumns = useMemo(
     () =>
       getRequestColumns(
@@ -4054,8 +5379,9 @@ function ConnectionRequestPage({ userType = '', accessToken = '' }) {
         setConnectionSettingsContext,
         (row) => handleOpenRequestDocument(row, 'view'),
         (row) => handleOpenRequestDocument(row, 'process'),
+        handleOpenEditRequestForm,
       ),
-    [handleOpenRequestDocument, isOperator],
+    [handleOpenEditRequestForm, handleOpenRequestDocument, isOperator],
   )
   useEffect(() => {
     if (!isOperator || effectiveSubMenu !== 'factories') {
@@ -4162,10 +5488,19 @@ function ConnectionRequestPage({ userType = '', accessToken = '' }) {
       : requestTableError
   const handleRequestSubmitted = useCallback((request) => {
     if (request) {
-      setRequestTableRows((rows) => [mapRequestTableRow(request), ...rows])
+      setRequestTableRows((rows) => {
+        const mappedRequest = mapRequestTableRow(request)
+        const editRequestId = requestForm?.mode === 'edit' ? requestForm.requestId : null
+
+        if (editRequestId) {
+          return rows.map((row) => (row.id === editRequestId ? { ...row, ...mappedRequest } : row))
+        }
+
+        return [mappedRequest, ...rows]
+      })
     }
     setSelectedSubMenu('requests')
-  }, [])
+  }, [requestForm])
 
   return (
     <Stack spacing={2} sx={{ height: '100%', minHeight: 0 }}>
@@ -4284,17 +5619,27 @@ function ConnectionRequestPage({ userType = '', accessToken = '' }) {
         />
       </Paper>
       <RequestFormBottomSheet
+        key={`${requestForm?.mode ?? 'create'}-${requestForm?.requestId ?? 'new'}-${requestForm?.initialRequest?.id ?? 'draft'}`}
         open={Boolean(requestForm)}
         formType={requestForm?.formType ?? ''}
         factory={requestForm?.factory}
         accessToken={accessToken}
+        mode={requestForm?.mode ?? 'create'}
+        requestId={requestForm?.requestId}
+        initialRequest={requestForm?.initialRequest}
+        loading={requestForm?.loading}
+        loadError={requestFormError}
         onSubmitted={handleRequestSubmitted}
-        onClose={() => setRequestForm(null)}
+        onClose={() => {
+          setRequestForm(null)
+          setRequestFormError('')
+        }}
       />
       <MonitoringPointListDialog
         open={Boolean(monitoringPointFactory)}
         factory={monitoringPointFactory}
         isOperator={isOperator}
+        accessToken={accessToken}
         onOpenConnectionSettings={setConnectionSettingsContext}
         onClose={() => setMonitoringPointFactory(null)}
       />
@@ -4310,10 +5655,97 @@ function ConnectionRequestPage({ userType = '', accessToken = '' }) {
           setRequestDocumentError('')
           setRequestDocumentLoading(false)
           setRequestDocumentApproving(false)
+          setApproveConfirmOpen(false)
+          setVerifyConnectionConfirmOpen(false)
+          setRevisionDialogOpen(false)
+          setRevisionOfficerNote('')
         }}
         approving={requestDocumentApproving}
-        onApprove={approveRequestDocument}
+        onApprove={() => setApproveConfirmOpen(true)}
+        onVerifyConnection={() => setVerifyConnectionConfirmOpen(true)}
+        onRequestRevision={openRevisionDialog}
       />
+      <Dialog
+        open={approveConfirmOpen}
+        onClose={() => {
+          if (!requestDocumentApproving) {
+            setApproveConfirmOpen(false)
+          }
+        }}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>ยืนยันการอนุมัติ</DialogTitle>
+        <DialogContent dividers>
+          <Typography>อนุมัติแบบฟอร์มนี้และออกรหัสจุดตรวจวัด</Typography>
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: 'center' }}>
+          <Button color="inherit" disabled={requestDocumentApproving} onClick={() => setApproveConfirmOpen(false)}>
+            ยกเลิก
+          </Button>
+          <Button
+            variant="contained"
+            disabled={requestDocumentApproving}
+            onClick={approveRequestDocument}
+          >
+            {requestDocumentApproving ? 'กำลังอนุมัติ' : 'ยืนยันอนุมัติ'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog open={verifyConnectionConfirmOpen} onClose={closeVerifyConnectionConfirmDialog} fullWidth maxWidth="sm">
+        <DialogTitle>ยืนยันการเชื่อมต่อ</DialogTitle>
+        <DialogContent dividers>
+          <Typography>เมื่อยืนยันการเชื่อมต่อ จุดตรวจวัดนี้จะแสดงผลในระบบ D-POMS</Typography>
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: 'center' }}>
+          <Button color="inherit" disabled={requestDocumentApproving} onClick={closeVerifyConnectionConfirmDialog}>
+            ยกเลิก
+          </Button>
+          <Button
+            variant="contained"
+            disabled={requestDocumentApproving}
+            onClick={verifyConnectionDocument}
+          >
+            {requestDocumentApproving ? 'กำลังยืนยัน' : 'ยืนยันการเชื่อมต่อ'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog open={revisionDialogOpen} onClose={closeRevisionDialog} fullWidth maxWidth="sm">
+        <DialogTitle>แจ้งแก้ไขแบบฟอร์ม</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2}>
+            <Typography variant="body2" color="text.secondary">
+              ระบุหมายเหตุเจ้าหน้าที่สำหรับแจ้งให้ผู้ประกอบการแก้ไขแบบฟอร์ม
+            </Typography>
+            <TextField
+              label="รายละเอียด"
+              value={revisionOfficerNote}
+              onChange={(event) => setRevisionOfficerNote(event.target.value)}
+              multiline
+              minRows={4}
+              fullWidth
+              autoFocus
+            />
+            {requestDocumentError ? (
+              <Typography color="error" variant="body2">
+                {requestDocumentError}
+              </Typography>
+            ) : null}
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: 'center' }}>
+          <Button color="inherit" disabled={requestDocumentApproving} onClick={closeRevisionDialog}>
+            ยกเลิก
+          </Button>
+          <Button
+            variant="contained"
+            disabled={requestDocumentApproving}
+            onClick={requestRevisionDocument}
+          >
+            {requestDocumentApproving ? 'กำลังแจ้งแก้ไข' : 'ยืนยันแจ้งแก้ไข'}
+          </Button>
+        </DialogActions>
+      </Dialog>
       <ConnectionSettingsDialog
         open={Boolean(connectionSettingsContext)}
         context={connectionSettingsContext}
