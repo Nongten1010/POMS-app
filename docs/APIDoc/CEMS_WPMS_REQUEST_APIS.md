@@ -1246,7 +1246,9 @@ Response:
 
 - 1 `stationId` มีได้หลาย protocol เช่น `MODBUS_RTU`, `MODBUS_TCP`, `MSSQL`, `MYSQL`
 - protocol เดียวกันเพิ่มได้หลายอุปกรณ์เมื่อ `deviceCode` ต่างกัน เช่น `S0001/01` และ `S0001/02` เป็น `MODBUS_RTU` ได้ทั้งคู่
-- ห้ามมี config ซ้ำชุด `stationId + protocol + deviceCode`
+- ห้ามมี config ซ้ำชุด `stationId + protocol + deviceCode` ภายใน payload เดียวกัน
+- การบันทึกผ่านคำขอจะเก็บ config เป็น snapshot ของคำขอนั้น (`request_id` ของคำขอ) และบันทึก/แทน active setting แยกอีกชุด (`request_id = null`) เพื่อให้ข้อมูลคำขอเดิมไม่เปลี่ยนตามการแก้ config ภายหลัง
+- เมื่อเจ้าหน้าที่ verify จนเป็น `CONNECTED` backend จะ sync ข้อมูลใช้งานจริงไปที่ `cems_wpms_connected_measurement_points` ซึ่งเก็บโรงงาน/ที่อยู่/พิกัด/จุดตรวจวัด/พารามิเตอร์ปัจจุบัน แยกจาก snapshot ในคำขอ
 - endpoint นี้รับได้ทั้ง payload เดี่ยวแบบเดิม และ payload หลายอุปกรณ์แบบ `{ "config": { "stationId": "...", "device": [...], "channels": [...], "statusManagement": {...} } }`
 
 ```bash
@@ -1322,6 +1324,8 @@ Response:
 ```
 
 ## 4. รายละเอียดฟอร์ม ตั้งค่าอุปกรณ์ config สำหรับดึงข้อมูลลงฟอร์ม
+
+Endpoint นี้อ่าน config snapshot ที่ผูกกับ `requestId` เดิม ใช้สำหรับเปิดดู/พิมพ์/แก้ข้อมูลในบริบทของคำขอ โดยไม่ดึง active setting ล่าสุดมาทับข้อมูลคำขอเดิม
 
 ```bash
 curl "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/device-configs?stationId=S0001" \
@@ -2275,9 +2279,9 @@ Path params:
 
 - `POST /device-configs` รองรับการส่งหลายอุปกรณ์ในครั้งเดียวด้วย `{ "config": { "stationId": "...", "device": [...], "channels": [...], "statusManagement": {...} } }`
 - `config.channels[].deviceCode` ใช้ผูก channel กลับไปหาอุปกรณ์ใน `config.device[]`
-- backend อนุญาต `stationId + protocol` ซ้ำได้เมื่อ `deviceCode` ต่างกัน แต่จะตอบ `409 CONFLICT` ถ้า `stationId + protocol + deviceCode` ซ้ำกับ active config เดิม
+- backend อนุญาต `stationId + protocol` ซ้ำได้เมื่อ `deviceCode` ต่างกัน และถ้า `stationId + protocol + deviceCode` เดิมมี active setting อยู่ backend จะ soft delete active setting เก่าแล้ว insert active setting ใหม่ แยกจาก snapshot ของคำขอ
 - payload เดี่ยว response `data` เป็น object; structured/batch payload response `data` เป็น array ตามลำดับ `config.device`
-- หลังบันทึกหลายอุปกรณ์สำเร็จ ให้เรียก `GET /device-configs?stationId=...` ซ้ำเพื่อ refresh `connectionForms`, `deviceCodeOptions`, `parameterMappings`, และ `rawConfigs`
+- หลังบันทึกหลายอุปกรณ์สำเร็จ ให้เรียก `GET /cems-wpms-requests/:id/device-configs?stationId=...` ซ้ำเพื่อ refresh snapshot ของคำขอ หรือเรียก `GET /device-connections?stationId=...` เมื่อต้องการดู active setting ล่าสุด
 - `protocol` สำหรับ Microsoft SQL ต้องส่ง `MSSQL`
 
 ตัวอย่าง JSON payload เดี่ยวแบบเดิม:
@@ -2428,6 +2432,8 @@ Data dictionary:
 | `config.statusManagement` | object|null | No | ข้อมูลจัดการสถานะชั่วคราวของชุด config |
 
 ### API 4: GET รายละเอียดฟอร์ม ตั้งค่าอุปกรณ์ config สำหรับ prefill
+
+API นี้คืน config snapshot ของคำขอเดิม ไม่ใช่ active setting ล่าสุดหลังเชื่อมต่อ
 
 | Item | Value |
 | --- | --- |
@@ -2702,7 +2708,7 @@ Data dictionary response:
 | `data.factory` | object | ข้อมูลโรงงาน snapshot/detail |
 | `data.measurementPoints` | array | รายจุดตรวจวัด ใช้ทำ PDF และเติมฟอร์มเพิ่มพารามิเตอร์ |
 | `data.statusHistory` | array | ประวัติสถานะ |
-| `data.deviceConfigs` | array | config อุปกรณ์ของคำขอ โดยแต่ละ item จัด shape เหมือน payload: `{ stationId, device, channels, statusManagement }` |
+| `data.deviceConfigs` | array | config snapshot ของคำขอ โดยแต่ละ item จัด shape เหมือน payload: `{ stationId, device, channels, statusManagement }` |
 
 ### API 10: GET รายละเอียดคำขอ รายจุดตรวจวัดทุกคำขอ เฉพาะเชื่อมต่อแล้ว
 
@@ -2738,7 +2744,7 @@ Data dictionary response row:
 | `statusCode` | string | ต้องเป็น `CONNECTED` |
 | `connectedAt` | string|null | วันเวลาที่เชื่อมต่อแล้ว |
 | `point` | object | ข้อมูลจุดตรวจวัด |
-| `deviceConfigs` | array | config อุปกรณ์ที่ผูกกับจุด โดยแต่ละ item จัด shape เหมือน payload: `{ stationId, device, channels, statusManagement }` |
+| `deviceConfigs` | array | active setting ล่าสุดของจุดตรวจวัด โดยแต่ละ item จัด shape เหมือน payload: `{ stationId, device, channels, statusManagement }`; ไม่ใช่ snapshot ของคำขอแรก |
 
 ### Common JSON Data Dictionary
 

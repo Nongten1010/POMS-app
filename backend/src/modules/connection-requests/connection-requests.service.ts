@@ -205,11 +205,7 @@ export const connectionRequestsService = {
     const details = await Promise.all(
       rows.flatMap((request) =>
         request.measurementPoints.map(async (point) => {
-          const requestDeviceConfigs = await deviceConnectionsService.listByRequestId(request.id);
-          const pointDeviceConfigs = requestDeviceConfigs.filter(
-            (config) =>
-              config.stationId === point.pointCode || config.stationId === point.pointName,
-          );
+          const pointDeviceConfigs = await listActiveDeviceConfigsForPoint(point);
           return {
             id: point.id,
             requestId: request.id,
@@ -430,7 +426,7 @@ export const connectionRequestsService = {
     const request = await loadRequest(id);
     ensureStatus(request, [CONNECTION_REQUEST_STATUS.CONNECTION_CONFIRMED]);
 
-    return connectionRequestsRepository.updateStatus(
+    const connected = await connectionRequestsRepository.updateStatus(
       id,
       CONNECTION_REQUEST_STATUS.CONNECTED,
       actorUserId,
@@ -439,6 +435,8 @@ export const connectionRequestsService = {
         officerNote: input.note ?? null,
       },
     );
+    await connectionRequestsRepository.syncConnectedMeasurementPoints(connected, actorUserId);
+    return connected;
   },
 };
 
@@ -466,6 +464,21 @@ function toRequestTableRow(
     statusCode: request.status,
     requestType: request.requestType,
   };
+}
+
+async function listActiveDeviceConfigsForPoint(
+  point: MeasurementPointDTO,
+): Promise<DeviceConnectionConfigDTO[]> {
+  const stationIds = [point.pointCode, point.pointName].filter((value): value is string =>
+    Boolean(value),
+  );
+
+  for (const stationId of stationIds) {
+    const configs = await deviceConnectionsService.listActiveSettings({ stationId });
+    if (configs.length > 0) return configs;
+  }
+
+  return [];
 }
 
 function toDeviceConfigFormDetail(
@@ -631,13 +644,15 @@ function toDeviceConfigPayloadResponse(
 function toStatusManagement(
   configs: DeviceConnectionConfigDTO[],
 ): DeviceConfigFormDetailDTO['statusManagement'] {
-  return configs.find((config) => config.statusManagement)?.statusManagement ?? {
-    selectedParameters: ['ทั้งหมด'],
-    startAt: null,
-    endAt: null,
-    status: 'Normal',
-    schedules: [],
-  };
+  return (
+    configs.find((config) => config.statusManagement)?.statusManagement ?? {
+      selectedParameters: ['ทั้งหมด'],
+      startAt: null,
+      endAt: null,
+      status: 'Normal',
+      schedules: [],
+    }
+  );
 }
 
 function getDeviceCode(

@@ -6,6 +6,7 @@ jest.mock('../../src/modules/connection-requests/connection-requests.repository'
     findById: jest.fn(),
     findFactorySummariesForRequests: jest.fn(),
     replaceForm: jest.fn(),
+    syncConnectedMeasurementPoints: jest.fn(),
     updateStatus: jest.fn(),
     list: jest.fn(),
     listFactoriesForAccess: jest.fn(),
@@ -18,6 +19,7 @@ jest.mock('../../src/modules/device-connections/device-connections.service', () 
   deviceConnectionsService: {
     createForRequest: jest.fn(),
     createManyForRequest: jest.fn(),
+    listActiveSettings: jest.fn(),
     listByRequestId: jest.fn(),
   },
 }));
@@ -93,6 +95,8 @@ describe('connectionRequestsService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockedDeviceConnectionsService.listActiveSettings.mockResolvedValue([]);
+    mockedDeviceConnectionsService.listByRequestId.mockResolvedValue([]);
     connectionRequestsService.setClockForTests(() => now);
   });
 
@@ -504,6 +508,9 @@ describe('connectionRequestsService', () => {
       { status: CONNECTION_REQUEST_STATUS.CONNECTED },
       { actorUserId, scope: 'ALL' },
     );
+    expect(mockedDeviceConnectionsService.listActiveSettings).toHaveBeenCalledWith({
+      stationId: 'STACK-A',
+    });
     expect(result.data[0]).toMatchObject({
       requestNo: 'CEMS-69-00001',
       connectedAt: '2026-05-29T10:00:00.000Z',
@@ -737,11 +744,7 @@ describe('connectionRequestsService', () => {
       updatedAt: now.toISOString(),
     });
 
-    const result = await connectionRequestsService.createDeviceConfig(
-      1,
-      deviceConfig,
-      actorUserId,
-    );
+    const result = await connectionRequestsService.createDeviceConfig(1, deviceConfig, actorUserId);
 
     expect(mockedDeviceConnectionsService.createForRequest).toHaveBeenCalledWith(
       deviceConfig,
@@ -1057,6 +1060,13 @@ describe('connectionRequestsService', () => {
         verifiedAt: '2026-05-27T11:00:00.000Z',
         officerNote: null,
       },
+    );
+    expect(mockedRepository.syncConnectedMeasurementPoints).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: CONNECTION_REQUEST_STATUS.CONNECTED,
+        address: '99 หมู่ 1 ตำบลทดสอบ อำเภอเมือง จังหวัดสระบุรี',
+      }),
+      7,
     );
   });
 });

@@ -68,6 +68,11 @@ interface MeasurementPointRow {
   instruments_json: string | null;
 }
 
+interface ConnectedMeasurementPointRow {
+  id: number | string;
+  parameters_json: string;
+}
+
 interface StatusHistoryRow {
   id: number | string;
   status: ConnectionRequestStatus;
@@ -465,6 +470,49 @@ export const connectionRequestsRepository = {
       return updated;
     });
   },
+
+  async syncConnectedMeasurementPoints(
+    request: ConnectionRequestDTO,
+    actorUserId: number,
+  ): Promise<void> {
+    await db.transaction(async (trx) => {
+      for (const point of request.measurementPoints) {
+        const existing = await findConnectedPointForMeasurementPoint(trx, point);
+        const parameters = uniqueParameters([
+          ...(existing ? parseParameters(existing.parameters_json) : []),
+          ...point.parameters,
+        ]);
+
+        await softDeleteConnectedPoint(trx, point, actorUserId);
+        await trx('cems_wpms_connected_measurement_points').insert({
+          source_request_id: request.id,
+          source_measurement_point_id: point.id,
+          factory_id: request.factoryId,
+          factory_name: request.factoryName,
+          factory_registration_no: request.factoryRegistrationNo,
+          factory_address: request.address,
+          factory_latitude: request.latitude,
+          factory_longitude: request.longitude,
+          system_type: request.systemType,
+          point_name: point.pointName,
+          point_code: point.pointCode,
+          point_type: point.pointType,
+          parameters_json: JSON.stringify(parameters),
+          details_json: point.details ? JSON.stringify(point.details) : null,
+          documents_json:
+            point.documentsAndImages && point.documentsAndImages.length > 0
+              ? JSON.stringify(point.documentsAndImages)
+              : null,
+          instruments_json: point.measurementInstruments
+            ? JSON.stringify(point.measurementInstruments)
+            : null,
+          connected_at: request.verifiedAt,
+          created_by: actorUserId,
+          updated_by: actorUserId,
+        });
+      }
+    });
+  },
 };
 
 function buildBaseQuery(
@@ -731,6 +779,58 @@ async function insertMeasurementPoints(
   );
 }
 
+async function findConnectedPointForMeasurementPoint(
+  trx: Knex.Transaction,
+  point: MeasurementPointDTO,
+): Promise<ConnectedMeasurementPointRow | null> {
+  const query = trx<ConnectedMeasurementPointRow>('cems_wpms_connected_measurement_points')
+    .whereNull('deleted_at')
+    .select('id', 'parameters_json');
+
+  if (point.pointCode) {
+    query.where('point_code', point.pointCode);
+  } else {
+    query.where('source_measurement_point_id', point.id);
+  }
+
+  return (await query.first()) ?? null;
+}
+
+async function softDeleteConnectedPoint(
+  trx: Knex.Transaction,
+  point: MeasurementPointDTO,
+  actorUserId: number,
+): Promise<void> {
+  const query = trx('cems_wpms_connected_measurement_points').whereNull('deleted_at');
+
+  if (point.pointCode) {
+    query.where('point_code', point.pointCode);
+  } else {
+    query.where('source_measurement_point_id', point.id);
+  }
+
+  await query.update({
+    deleted_at: trx.fn.now(),
+    updated_at: trx.fn.now(),
+    updated_by: actorUserId,
+  });
+}
+
+function uniqueParameters(values: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const value of values) {
+    const normalized = value.trim();
+    const key = normalized.toLowerCase();
+    if (!normalized || seen.has(key)) continue;
+    seen.add(key);
+    result.push(normalized);
+  }
+
+  return result;
+}
+
 async function issuePointCodesForRequest(
   trx: Knex.Transaction,
   requestId: number,
@@ -833,10 +933,7 @@ async function insertHistory(
   });
 }
 
-async function nextRequestNo(
-  trx: Knex.Transaction,
-  systemType: 'CEMS' | 'WPMS',
-): Promise<string> {
+async function nextRequestNo(trx: Knex.Transaction, systemType: 'CEMS' | 'WPMS'): Promise<string> {
   const prefix = buildRequestNoPrefix(systemType);
   const totalRow = await trx('cems_wpms_connection_requests')
     .where('request_no', 'like', `${prefix}-%`)

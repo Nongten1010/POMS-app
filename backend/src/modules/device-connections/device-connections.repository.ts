@@ -36,6 +36,7 @@ export const deviceConnectionsRepository = {
   async list(query: ListDeviceConnectionConfigsQuery): Promise<DeviceConnectionConfigDTO[]> {
     const rows = await db<DeviceConnectionConfigRow>('device_connection_configs')
       .whereNull('deleted_at')
+      .whereNull('request_id')
       .modify((builder) => {
         if (query.stationId) builder.where('station_id', query.stationId);
         if (query.protocol) builder.where('protocol', query.protocol);
@@ -79,7 +80,10 @@ export const deviceConnectionsRepository = {
     stationId: string,
     protocol: DeviceConnectionProtocol,
     deviceCode: string | null,
-  ): Promise<Pick<DeviceConnectionConfigDTO, 'id' | 'requestId' | 'stationId' | 'protocol' | 'deviceCode'> | null> {
+  ): Promise<Pick<
+    DeviceConnectionConfigDTO,
+    'id' | 'requestId' | 'stationId' | 'protocol' | 'deviceCode'
+  > | null> {
     const row = await db('device_connection_configs')
       .where('station_id', stationId)
       .where('protocol', protocol)
@@ -92,6 +96,7 @@ export const deviceConnectionsRepository = {
       })
       .whereNull('deleted_at')
       .select('id', 'request_id', 'station_id', 'protocol', 'device_code')
+      .whereNull('request_id')
       .first();
 
     return row
@@ -122,6 +127,26 @@ export const deviceConnectionsRepository = {
     return db.transaction((trx) => insertConfigs(trx, inputs, actorUserId, requestId));
   },
 
+  async replaceActive(
+    input: CreateDeviceConnectionConfigInput,
+    actorUserId: number,
+  ): Promise<DeviceConnectionConfigDTO> {
+    const [saved] = await this.replaceManyActive([input], actorUserId);
+    return saved;
+  },
+
+  async replaceManyActive(
+    inputs: CreateDeviceConnectionConfigInput[],
+    actorUserId: number,
+  ): Promise<DeviceConnectionConfigDTO[]> {
+    return db.transaction(async (trx) => {
+      for (const input of inputs) {
+        await softDeleteActiveConfigByDeviceKey(trx, input, actorUserId);
+      }
+      return insertConfigs(trx, inputs, actorUserId, null);
+    });
+  },
+
   async replaceManyForRequest(
     inputs: CreateDeviceConnectionConfigInput[],
     actorUserId: number,
@@ -132,6 +157,23 @@ export const deviceConnectionsRepository = {
         await softDeleteRequestConfigByDeviceKey(trx, input, actorUserId, requestId);
       }
       return insertConfigs(trx, inputs, actorUserId, requestId);
+    });
+  },
+
+  async replaceManyForRequestAndActiveSettings(
+    inputs: CreateDeviceConnectionConfigInput[],
+    actorUserId: number,
+    requestId: number,
+  ): Promise<DeviceConnectionConfigDTO[]> {
+    return db.transaction(async (trx) => {
+      for (const input of inputs) {
+        await softDeleteRequestConfigByDeviceKey(trx, input, actorUserId, requestId);
+        await softDeleteActiveConfigByDeviceKey(trx, input, actorUserId);
+      }
+
+      const requestSnapshots = await insertConfigs(trx, inputs, actorUserId, requestId);
+      await insertConfigs(trx, inputs, actorUserId, null);
+      return requestSnapshots;
     });
   },
 };
@@ -152,7 +194,9 @@ async function insertConfigs(
         device_code: input.deviceCode ?? null,
         protocol: input.protocol,
         settings_json: JSON.stringify(input.settings),
-        status_management_json: input.statusManagement ? JSON.stringify(input.statusManagement) : null,
+        status_management_json: input.statusManagement
+          ? JSON.stringify(input.statusManagement)
+          : null,
         created_by: actorUserId,
         updated_by: actorUserId,
       })
@@ -177,6 +221,44 @@ async function softDeleteRequestConfigByDeviceKey(
 ): Promise<void> {
   const rows = await trx<DeviceConnectionConfigRow>('device_connection_configs')
     .where('request_id', requestId)
+    .where('station_id', input.stationId)
+    .where('protocol', input.protocol)
+    .modify((builder) => {
+      if (input.deviceCode) {
+        builder.where('device_code', input.deviceCode);
+      } else {
+        builder.whereNull('device_code');
+      }
+    })
+    .whereNull('deleted_at')
+    .select('id');
+
+  const configIds = rows.map((row: Pick<DeviceConnectionConfigRow, 'id'>) => Number(row.id));
+  if (configIds.length === 0) return;
+
+  const auditUpdate = {
+    deleted_at: trx.fn.now(),
+    updated_at: trx.fn.now(),
+    updated_by: actorUserId,
+  };
+
+  await trx('device_measurement_channels')
+    .whereIn('config_id', configIds)
+    .whereNull('deleted_at')
+    .update(auditUpdate);
+  await trx('device_connection_configs')
+    .whereIn('id', configIds)
+    .whereNull('deleted_at')
+    .update(auditUpdate);
+}
+
+async function softDeleteActiveConfigByDeviceKey(
+  trx: Knex.Transaction,
+  input: CreateDeviceConnectionConfigInput,
+  actorUserId: number,
+): Promise<void> {
+  const rows = await trx<DeviceConnectionConfigRow>('device_connection_configs')
+    .whereNull('request_id')
     .where('station_id', input.stationId)
     .where('protocol', input.protocol)
     .modify((builder) => {

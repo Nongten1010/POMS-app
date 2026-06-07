@@ -1,4 +1,4 @@
-import { BadRequestError, ConflictError, NotFoundError } from '../../shared/errors/AppError';
+import { BadRequestError, NotFoundError } from '../../shared/errors/AppError';
 import {
   findMockDeviceConnectionConfig,
   getMockDeviceConnectionConfigs,
@@ -30,6 +30,12 @@ export const deviceConnectionsService = {
       : mockConfigs;
   },
 
+  listActiveSettings(
+    query: ListDeviceConnectionConfigsQuery,
+  ): Promise<DeviceConnectionConfigDTO[]> {
+    return deviceConnectionsRepository.list(query);
+  },
+
   async getById(id: number): Promise<DeviceConnectionConfigDTO> {
     const config = await deviceConnectionsRepository.findById(id);
     if (config) return config;
@@ -49,8 +55,7 @@ export const deviceConnectionsService = {
     actorUserId: number,
   ): Promise<DeviceConnectionConfigDTO> {
     ensureChannelAddressesAreUnique(input);
-    await ensureStationProtocolDeviceCodeHasNoActiveConfig(input);
-    return deviceConnectionsRepository.create(input, actorUserId);
+    return deviceConnectionsRepository.replaceActive(input, actorUserId);
   },
 
   async createForRequest(
@@ -59,8 +64,7 @@ export const deviceConnectionsService = {
     requestId: number,
   ): Promise<DeviceConnectionConfigDTO> {
     ensureChannelAddressesAreUnique(input);
-    await ensureRequestDeviceConfigCanBeSaved(input, requestId);
-    const [saved] = await deviceConnectionsRepository.replaceManyForRequest(
+    const [saved] = await deviceConnectionsRepository.replaceManyForRequestAndActiveSettings(
       [input],
       actorUserId,
       requestId,
@@ -76,9 +80,12 @@ export const deviceConnectionsService = {
     ensureBatchDeviceKeysAreUnique(inputs);
     for (const input of inputs) {
       ensureChannelAddressesAreUnique(input);
-      await ensureRequestDeviceConfigCanBeSaved(input, requestId);
     }
-    return deviceConnectionsRepository.replaceManyForRequest(inputs, actorUserId, requestId);
+    return deviceConnectionsRepository.replaceManyForRequestAndActiveSettings(
+      inputs,
+      actorUserId,
+      requestId,
+    );
   },
 
   async testConnection(input: TestDeviceConnectionInput): Promise<DeviceConnectionTestResultDTO> {
@@ -140,49 +147,6 @@ function ensureBatchDeviceKeysAreUnique(inputs: CreateDeviceConnectionConfigInpu
     throw new BadRequestError(
       'Device connection configs in the same request must have unique stationId, protocol, and deviceCode',
       { duplicates },
-    );
-  }
-}
-
-async function ensureStationProtocolDeviceCodeHasNoActiveConfig(
-  input: CreateDeviceConnectionConfigInput,
-): Promise<void> {
-  const deviceCode = input.deviceCode ?? null;
-  const exists = await deviceConnectionsRepository.existsByStationIdProtocolAndDeviceCode(
-    input.stationId,
-    input.protocol,
-    deviceCode,
-  );
-  if (exists) {
-    throw new ConflictError(
-      'Device connection config already exists for stationId, protocol, and deviceCode',
-      {
-        stationId: input.stationId,
-        protocol: input.protocol,
-        deviceCode,
-      },
-    );
-  }
-}
-
-async function ensureRequestDeviceConfigCanBeSaved(
-  input: CreateDeviceConnectionConfigInput,
-  requestId: number,
-): Promise<void> {
-  const deviceCode = input.deviceCode ?? null;
-  const existing = await deviceConnectionsRepository.findActiveByStationIdProtocolAndDeviceCode(
-    input.stationId,
-    input.protocol,
-    deviceCode,
-  );
-  if (existing && existing.requestId !== requestId) {
-    throw new ConflictError(
-      'Device connection config already exists for stationId, protocol, and deviceCode',
-      {
-        stationId: input.stationId,
-        protocol: input.protocol,
-        deviceCode,
-      },
     );
   }
 }
