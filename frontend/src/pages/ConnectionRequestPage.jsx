@@ -1603,6 +1603,13 @@ function createEmptyParameterMappingRow(parameter, index) {
   }
 }
 
+function getParameterDisplayName(parameter, unit) {
+  if (!unit || parameter.includes('(')) {
+    return parameter
+  }
+  return `${parameter} (${unit})`
+}
+
 function mapParameterMappingRows(parameterMappings = [], parameterOptions = []) {
   if (!parameterMappings.length) {
     return parameterOptions.map(createEmptyParameterMappingRow)
@@ -1610,13 +1617,15 @@ function mapParameterMappingRows(parameterMappings = [], parameterOptions = []) 
 
   return parameterMappings.map((mapping, index) => {
     const parameter = mapping.parameter ?? mapping.parameterName ?? ''
+    const unit = mapping.unit ?? parameterUnitMap[parameter] ?? ''
+    const displayParameter = getParameterDisplayName(parameter, unit)
 
     return {
-      id: mapping.id ?? `${parameter}-${index}`,
+      id: mapping.id ?? `${displayParameter}-${index}`,
       deviceCode: mapping.deviceCode ?? mapping.device_code ?? '',
       addressId: mapping.addressId ?? mapping.address_id ?? mapping.address ?? '',
-      parameter,
-      unit: mapping.unit ?? parameterUnitMap[parameter] ?? '',
+      parameter: displayParameter,
+      unit,
       min: mapping.min ?? mapping.measureMin ?? '',
       max: mapping.max ?? mapping.measureMax ?? '',
       valueFormat: mapping.valueFormat ?? mapping.dataValueFormat ?? '',

@@ -330,7 +330,8 @@ describe('connectionRequestsService', () => {
         {
           deviceCode: 'STACK-A/RTU-01',
           addressId: '40001',
-          parameter: 'NOx',
+          parameter: 'NOx (ppm)',
+          unit: 'ppm',
           valueFormat: 'ค่าข้อมูลตรวจวัด',
           encodingData: 'Unsigned16 - Big Endian',
           status: 'Maintenance',
