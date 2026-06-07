@@ -59,8 +59,13 @@ export const deviceConnectionsService = {
     requestId: number,
   ): Promise<DeviceConnectionConfigDTO> {
     ensureChannelAddressesAreUnique(input);
-    await ensureStationProtocolDeviceCodeHasNoActiveConfig(input);
-    return deviceConnectionsRepository.create(input, actorUserId, requestId);
+    await ensureRequestDeviceConfigCanBeSaved(input, requestId);
+    const [saved] = await deviceConnectionsRepository.replaceManyForRequest(
+      [input],
+      actorUserId,
+      requestId,
+    );
+    return saved;
   },
 
   async createManyForRequest(
@@ -71,9 +76,9 @@ export const deviceConnectionsService = {
     ensureBatchDeviceKeysAreUnique(inputs);
     for (const input of inputs) {
       ensureChannelAddressesAreUnique(input);
-      await ensureStationProtocolDeviceCodeHasNoActiveConfig(input);
+      await ensureRequestDeviceConfigCanBeSaved(input, requestId);
     }
-    return deviceConnectionsRepository.createMany(inputs, actorUserId, requestId);
+    return deviceConnectionsRepository.replaceManyForRequest(inputs, actorUserId, requestId);
   },
 
   async testConnection(input: TestDeviceConnectionInput): Promise<DeviceConnectionTestResultDTO> {
@@ -149,6 +154,28 @@ async function ensureStationProtocolDeviceCodeHasNoActiveConfig(
     deviceCode,
   );
   if (exists) {
+    throw new ConflictError(
+      'Device connection config already exists for stationId, protocol, and deviceCode',
+      {
+        stationId: input.stationId,
+        protocol: input.protocol,
+        deviceCode,
+      },
+    );
+  }
+}
+
+async function ensureRequestDeviceConfigCanBeSaved(
+  input: CreateDeviceConnectionConfigInput,
+  requestId: number,
+): Promise<void> {
+  const deviceCode = input.deviceCode ?? null;
+  const existing = await deviceConnectionsRepository.findActiveByStationIdProtocolAndDeviceCode(
+    input.stationId,
+    input.protocol,
+    deviceCode,
+  );
+  if (existing && existing.requestId !== requestId) {
     throw new ConflictError(
       'Device connection config already exists for stationId, protocol, and deviceCode',
       {

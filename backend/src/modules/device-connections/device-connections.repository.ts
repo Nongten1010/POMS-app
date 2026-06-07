@@ -67,6 +67,19 @@ export const deviceConnectionsRepository = {
     protocol: DeviceConnectionProtocol,
     deviceCode: string | null,
   ): Promise<boolean> {
+    const row = await this.findActiveByStationIdProtocolAndDeviceCode(
+      stationId,
+      protocol,
+      deviceCode,
+    );
+    return Boolean(row);
+  },
+
+  async findActiveByStationIdProtocolAndDeviceCode(
+    stationId: string,
+    protocol: DeviceConnectionProtocol,
+    deviceCode: string | null,
+  ): Promise<Pick<DeviceConnectionConfigDTO, 'id' | 'requestId' | 'stationId' | 'protocol' | 'deviceCode'> | null> {
     const row = await db('device_connection_configs')
       .where('station_id', stationId)
       .where('protocol', protocol)
@@ -78,9 +91,18 @@ export const deviceConnectionsRepository = {
         }
       })
       .whereNull('deleted_at')
-      .select('id')
+      .select('id', 'request_id', 'station_id', 'protocol', 'device_code')
       .first();
-    return Boolean(row);
+
+    return row
+      ? {
+          id: Number(row.id),
+          requestId: row.request_id === null ? null : Number(row.request_id),
+          stationId: row.station_id,
+          protocol: row.protocol,
+          deviceCode: row.device_code ?? null,
+        }
+      : null;
   },
 
   async create(
@@ -97,37 +119,94 @@ export const deviceConnectionsRepository = {
     actorUserId: number,
     requestId: number | null = null,
   ): Promise<DeviceConnectionConfigDTO[]> {
+    return db.transaction((trx) => insertConfigs(trx, inputs, actorUserId, requestId));
+  },
+
+  async replaceManyForRequest(
+    inputs: CreateDeviceConnectionConfigInput[],
+    actorUserId: number,
+    requestId: number,
+  ): Promise<DeviceConnectionConfigDTO[]> {
     return db.transaction(async (trx) => {
-      const createdConfigs: DeviceConnectionConfigDTO[] = [];
-
       for (const input of inputs) {
-        const [{ id }] = await trx('device_connection_configs')
-          .insert({
-            request_id: requestId,
-            station_id: input.stationId,
-            device_code: input.deviceCode ?? null,
-            protocol: input.protocol,
-            settings_json: JSON.stringify(input.settings),
-            status_management_json: input.statusManagement
-              ? JSON.stringify(input.statusManagement)
-              : null,
-            created_by: actorUserId,
-            updated_by: actorUserId,
-          })
-          .returning('id');
-
-        const configId = Number(id);
-        await insertChannels(trx, configId, input.channels, actorUserId);
-
-        const created = await findByIdInTransaction(trx, configId);
-        if (!created) throw new Error('Created device connection config could not be loaded');
-        createdConfigs.push(created);
+        await softDeleteRequestConfigByDeviceKey(trx, input, actorUserId, requestId);
       }
-
-      return createdConfigs;
+      return insertConfigs(trx, inputs, actorUserId, requestId);
     });
   },
 };
+
+async function insertConfigs(
+  trx: Knex.Transaction,
+  inputs: CreateDeviceConnectionConfigInput[],
+  actorUserId: number,
+  requestId: number | null,
+): Promise<DeviceConnectionConfigDTO[]> {
+  const createdConfigs: DeviceConnectionConfigDTO[] = [];
+
+  for (const input of inputs) {
+    const [{ id }] = await trx('device_connection_configs')
+      .insert({
+        request_id: requestId,
+        station_id: input.stationId,
+        device_code: input.deviceCode ?? null,
+        protocol: input.protocol,
+        settings_json: JSON.stringify(input.settings),
+        status_management_json: input.statusManagement ? JSON.stringify(input.statusManagement) : null,
+        created_by: actorUserId,
+        updated_by: actorUserId,
+      })
+      .returning('id');
+
+    const configId = Number(id);
+    await insertChannels(trx, configId, input.channels, actorUserId);
+
+    const created = await findByIdInTransaction(trx, configId);
+    if (!created) throw new Error('Created device connection config could not be loaded');
+    createdConfigs.push(created);
+  }
+
+  return createdConfigs;
+}
+
+async function softDeleteRequestConfigByDeviceKey(
+  trx: Knex.Transaction,
+  input: CreateDeviceConnectionConfigInput,
+  actorUserId: number,
+  requestId: number,
+): Promise<void> {
+  const rows = await trx<DeviceConnectionConfigRow>('device_connection_configs')
+    .where('request_id', requestId)
+    .where('station_id', input.stationId)
+    .where('protocol', input.protocol)
+    .modify((builder) => {
+      if (input.deviceCode) {
+        builder.where('device_code', input.deviceCode);
+      } else {
+        builder.whereNull('device_code');
+      }
+    })
+    .whereNull('deleted_at')
+    .select('id');
+
+  const configIds = rows.map((row: Pick<DeviceConnectionConfigRow, 'id'>) => Number(row.id));
+  if (configIds.length === 0) return;
+
+  const auditUpdate = {
+    deleted_at: trx.fn.now(),
+    updated_at: trx.fn.now(),
+    updated_by: actorUserId,
+  };
+
+  await trx('device_measurement_channels')
+    .whereIn('config_id', configIds)
+    .whereNull('deleted_at')
+    .update(auditUpdate);
+  await trx('device_connection_configs')
+    .whereIn('id', configIds)
+    .whereNull('deleted_at')
+    .update(auditUpdate);
+}
 
 async function findByIdInTransaction(
   trx: Knex.Transaction,

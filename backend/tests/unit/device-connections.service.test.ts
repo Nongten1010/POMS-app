@@ -5,9 +5,11 @@ jest.mock('../../src/modules/device-connections/device-connections.repository', 
     create: jest.fn(),
     createMany: jest.fn(),
     existsByStationIdProtocolAndDeviceCode: jest.fn(),
+    findActiveByStationIdProtocolAndDeviceCode: jest.fn(),
     findById: jest.fn(),
     list: jest.fn(),
     listByRequestId: jest.fn(),
+    replaceManyForRequest: jest.fn(),
   },
 }));
 
@@ -48,6 +50,7 @@ describe('deviceConnectionsService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedRepository.existsByStationIdProtocolAndDeviceCode.mockResolvedValue(false);
+    mockedRepository.findActiveByStationIdProtocolAndDeviceCode.mockResolvedValue(null);
     deviceConnectionsService.setClockForTests(() => now);
   });
 
@@ -324,7 +327,7 @@ describe('deviceConnectionsService', () => {
   });
 
   it('stores a config linked to a connection request', async () => {
-    mockedRepository.create.mockResolvedValue(configDto({ requestId: 99 }));
+    mockedRepository.replaceManyForRequest.mockResolvedValue([configDto({ requestId: 99 })]);
 
     const result = await deviceConnectionsService.createForRequest(
       modbusTcpPayload,
@@ -332,8 +335,57 @@ describe('deviceConnectionsService', () => {
       99,
     );
 
-    expect(mockedRepository.create).toHaveBeenCalledWith(modbusTcpPayload, actorUserId, 99);
+    expect(mockedRepository.replaceManyForRequest).toHaveBeenCalledWith(
+      [modbusTcpPayload],
+      actorUserId,
+      99,
+    );
     expect(result.requestId).toBe(99);
+  });
+
+  it('replaces an existing active config in the same request instead of returning conflict', async () => {
+    const input: CreateDeviceConnectionConfigInput = {
+      ...modbusTcpPayload,
+      deviceCode: 'STATION_001/01',
+    };
+    mockedRepository.findActiveByStationIdProtocolAndDeviceCode.mockResolvedValue({
+      id: 10,
+      requestId: 99,
+      stationId: 'STATION_001',
+      protocol: DEVICE_CONNECTION_PROTOCOL.MODBUS_TCP,
+      deviceCode: 'STATION_001/01',
+    });
+    mockedRepository.replaceManyForRequest.mockResolvedValue([
+      configDto({ requestId: 99, id: 11, deviceCode: 'STATION_001/01' }),
+    ]);
+
+    const result = await deviceConnectionsService.createForRequest(input, actorUserId, 99);
+
+    expect(mockedRepository.replaceManyForRequest).toHaveBeenCalledWith(
+      [input],
+      actorUserId,
+      99,
+    );
+    expect(result.id).toBe(11);
+  });
+
+  it('rejects replacing a config owned by another request', async () => {
+    const input: CreateDeviceConnectionConfigInput = {
+      ...modbusTcpPayload,
+      deviceCode: 'STATION_001/01',
+    };
+    mockedRepository.findActiveByStationIdProtocolAndDeviceCode.mockResolvedValue({
+      id: 10,
+      requestId: 98,
+      stationId: 'STATION_001',
+      protocol: DEVICE_CONNECTION_PROTOCOL.MODBUS_TCP,
+      deviceCode: 'STATION_001/01',
+    });
+
+    await expect(
+      deviceConnectionsService.createForRequest(input, actorUserId, 99),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(mockedRepository.replaceManyForRequest).not.toHaveBeenCalled();
   });
 
   it('stores multiple configs linked to a connection request in one repository call', async () => {
@@ -341,15 +393,15 @@ describe('deviceConnectionsService', () => {
       { ...modbusTcpPayload, deviceCode: 'STATION_001/01' },
       { ...modbusTcpPayload, deviceCode: 'STATION_001/02' },
     ];
-    mockedRepository.createMany.mockResolvedValue([
+    mockedRepository.replaceManyForRequest.mockResolvedValue([
       configDto({ requestId: 99, deviceCode: 'STATION_001/01' }),
       configDto({ requestId: 99, id: 2, deviceCode: 'STATION_001/02' }),
     ]);
 
     const result = await deviceConnectionsService.createManyForRequest(inputs, actorUserId, 99);
 
-    expect(mockedRepository.existsByStationIdProtocolAndDeviceCode).toHaveBeenCalledTimes(2);
-    expect(mockedRepository.createMany).toHaveBeenCalledWith(inputs, actorUserId, 99);
+    expect(mockedRepository.findActiveByStationIdProtocolAndDeviceCode).toHaveBeenCalledTimes(2);
+    expect(mockedRepository.replaceManyForRequest).toHaveBeenCalledWith(inputs, actorUserId, 99);
     expect(result).toHaveLength(2);
   });
 
@@ -362,7 +414,7 @@ describe('deviceConnectionsService', () => {
     await expect(
       deviceConnectionsService.createManyForRequest(inputs, actorUserId, 99),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
-    expect(mockedRepository.createMany).not.toHaveBeenCalled();
+    expect(mockedRepository.replaceManyForRequest).not.toHaveBeenCalled();
   });
 
   it('lists configs linked to a connection request', async () => {
