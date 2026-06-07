@@ -2220,6 +2220,20 @@ Path params:
 }
 ```
 
+ตัวอย่าง `settings` สำหรับ `MODBUS_RTU`:
+
+```json
+{
+  "comPort": 1,
+  "slaveId": 1,
+  "baudRate": 9600,
+  "parity": "NONE",
+  "stopBits": 1,
+  "dataBits": 8,
+  "quantity": 1
+}
+```
+
 Data dictionary:
 
 | Field | Type | Required | Description |
@@ -2230,7 +2244,7 @@ Data dictionary:
 | `settings` | object | Yes | ข้อมูล connection ตาม protocol |
 | `settings.hostIp` | string | Conditional | IP/host สำหรับ `MODBUS_TCP`, `MSSQL`, `MYSQL` |
 | `settings.port` | number | Conditional | port สำหรับ TCP/database |
-| `settings.comport` | string|number | Conditional | COM port สำหรับ `MODBUS_RTU` |
+| `settings.comPort` | number|string | Conditional | COM port สำหรับ `MODBUS_RTU` |
 | `settings.slaveId` | number|string | No | Slave ID |
 | `settings.baudRate` | number|string | No | Baud rate สำหรับ RTU |
 | `settings.parity` | string | No | Parity สำหรับ RTU |
