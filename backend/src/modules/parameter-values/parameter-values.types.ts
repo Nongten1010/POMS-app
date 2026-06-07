@@ -59,7 +59,6 @@ export interface LatestParameterValueResultDTO {
 }
 
 export interface ConnectionTestRowDTO {
-  stationId: string;
   timestamp: string | null;
   values: Record<string, unknown>;
   statuses: Record<string, unknown>;

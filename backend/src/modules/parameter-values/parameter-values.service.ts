@@ -131,9 +131,7 @@ export const parameterValuesService = {
     const filtered = filterRowsByRegisteredParameters(result.rows, registeredParameters);
 
     return {
-      data: filtered.rows.map((row) =>
-        buildConnectionTestData(query.stationId, row, registeredParameters),
-      ),
+      data: filtered.rows.map((row) => buildConnectionTestData(row, registeredParameters)),
       meta: {
         stationId: query.stationId,
         interval,
@@ -230,7 +228,6 @@ function normalizeParameterName(value: string): string {
 }
 
 function buildConnectionTestData(
-  stationId: string,
   row: Record<string, unknown>,
   registeredParameters: string[],
 ): ConnectionTestResultDTO['data'][number] {
@@ -240,7 +237,6 @@ function buildConnectionTestData(
   }));
 
   return {
-    stationId,
     timestamp: buildTimestamp(row),
     values: Object.fromEntries(
       entries.map(({ parameter, columns }) => [

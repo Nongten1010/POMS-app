@@ -598,7 +598,6 @@ Expected connection test response shape:
   "success": true,
   "data": [
     {
-      "stationId": "S0001",
       "timestamp": "2026-06-07 10:15:00",
       "values": {
         "CO2 (%)": "123.4",
@@ -610,7 +609,6 @@ Expected connection test response shape:
       }
     },
     {
-      "stationId": "S0001",
       "timestamp": "2026-06-07 10:14:00",
       "values": {
         "CO2 (%)": "122.4",

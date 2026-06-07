@@ -1971,7 +1971,7 @@ function mapConnectionTestResultRows(connectionTestData) {
   }
 
   return rows.map((row, index) => ({
-    id: `${row.stationId ?? 'station'}-${row.timestamp ?? 'latest'}-${index}`,
+    id: `${row.timestamp ?? 'latest'}-${index}`,
     values: Object.fromEntries(
       Object.entries(row.values ?? {}).map(([parameter, value]) => [
         parameter,

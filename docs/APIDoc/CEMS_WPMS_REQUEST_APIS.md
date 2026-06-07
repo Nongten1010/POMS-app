@@ -2473,7 +2473,6 @@ curl "http://localhost:3000/api/v1/parameter-values/connection-test?stationId=S0
   "success": true,
   "data": [
     {
-      "stationId": "S0001",
       "timestamp": "2026-06-07 10:15:00",
       "values": {
         "CO2 (%)": "123.4",
@@ -2485,7 +2484,6 @@ curl "http://localhost:3000/api/v1/parameter-values/connection-test?stationId=S0
       }
     },
     {
-      "stationId": "S0001",
       "timestamp": "2026-06-07 10:14:00",
       "values": {
         "CO2 (%)": "122.4",

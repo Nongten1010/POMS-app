@@ -229,7 +229,6 @@ describe('parameterValuesService', () => {
     expect(result).toMatchObject({
       data: [
         {
-          stationId: 'S0001',
           timestamp: '2026-06-07 10:15:00',
           values: {
             'CO2 (%)': '123.4',
@@ -243,7 +242,6 @@ describe('parameterValuesService', () => {
           },
         },
         {
-          stationId: 'S0001',
           timestamp: '2026-06-07 10:14:00',
           values: {
             'CO2 (%)': '122.4',
@@ -268,6 +266,7 @@ describe('parameterValuesService', () => {
     });
     expect(result.data[0]?.values).not.toHaveProperty('Flow');
     expect(result.data[0]).not.toHaveProperty('results');
+    expect(result.data[0]).not.toHaveProperty('stationId');
     expect(result.meta).not.toHaveProperty('returnedColumns');
   });
 
