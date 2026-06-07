@@ -63,6 +63,19 @@ export const deviceConnectionsService = {
     return deviceConnectionsRepository.create(input, actorUserId, requestId);
   },
 
+  async createManyForRequest(
+    inputs: CreateDeviceConnectionConfigInput[],
+    actorUserId: number,
+    requestId: number,
+  ): Promise<DeviceConnectionConfigDTO[]> {
+    ensureBatchDeviceKeysAreUnique(inputs);
+    for (const input of inputs) {
+      ensureChannelAddressesAreUnique(input);
+      await ensureStationProtocolDeviceCodeHasNoActiveConfig(input);
+    }
+    return deviceConnectionsRepository.createMany(inputs, actorUserId, requestId);
+  },
+
   async testConnection(input: TestDeviceConnectionInput): Promise<DeviceConnectionTestResultDTO> {
     ensureChannelAddressesAreUnique(input);
     return {
@@ -94,6 +107,35 @@ function ensureChannelAddressesAreUnique(input: TestDeviceConnectionInput): void
     throw new BadRequestError('Channel addressId must be unique per connection config', {
       addressIds: Array.from(new Set(duplicates)),
     });
+  }
+}
+
+function ensureBatchDeviceKeysAreUnique(inputs: CreateDeviceConnectionConfigInput[]): void {
+  const seen = new Set<string>();
+  const duplicates: Array<{
+    stationId: string;
+    protocol: string;
+    deviceCode: string | null;
+  }> = [];
+
+  for (const input of inputs) {
+    const deviceCode = input.deviceCode ?? null;
+    const key = `${input.stationId}\u0000${input.protocol}\u0000${deviceCode ?? ''}`;
+    if (seen.has(key)) {
+      duplicates.push({
+        stationId: input.stationId,
+        protocol: input.protocol,
+        deviceCode,
+      });
+    }
+    seen.add(key);
+  }
+
+  if (duplicates.length > 0) {
+    throw new BadRequestError(
+      'Device connection configs in the same request must have unique stationId, protocol, and deviceCode',
+      { duplicates },
+    );
   }
 }
 

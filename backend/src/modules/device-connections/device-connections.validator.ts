@@ -220,6 +220,17 @@ export const createDeviceConnectionConfigSchema = z.preprocess(
   deviceConnectionConfigSchema,
 );
 
+export const createDeviceConnectionConfigsSchema = z
+  .object({
+    configs: z.array(createDeviceConnectionConfigSchema).min(1).max(50),
+  })
+  .strict();
+
+export const createDeviceConnectionConfigRequestSchema = z.union([
+  createDeviceConnectionConfigsSchema,
+  createDeviceConnectionConfigSchema,
+]);
+
 export const testDeviceConnectionSchema = createDeviceConnectionConfigSchema;
 
 export const listDeviceConnectionConfigsQuerySchema = z
@@ -237,6 +248,10 @@ export const deviceConnectionConfigIdParamsSchema = z
 
 export type CreateDeviceConnectionConfigSchemaInput = z.infer<
   typeof createDeviceConnectionConfigSchema
+>;
+
+export type CreateDeviceConnectionConfigRequestSchemaInput = z.infer<
+  typeof createDeviceConnectionConfigRequestSchema
 >;
 
 function normalizeLegacyModbusRtuFormPayload(value: unknown): unknown {

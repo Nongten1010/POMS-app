@@ -2242,25 +2242,25 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose }) {
         throw new Error(`กรุณากำหนดพารามิเตอร์อย่างน้อย 1 รายการให้ ${invalidItem.payload.deviceCode}`)
       }
 
-      for (const item of saveItems) {
-        const result = await fetch(getDeviceConfigsApiUrl(requestId), {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(item.payload),
-        })
-        const payload = await result.json().catch(() => null)
+      const saveResult = await fetch(getDeviceConfigsApiUrl(requestId), {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          configs: saveItems.map((item) => item.payload),
+        }),
+      })
+      const savePayload = await saveResult.json().catch(() => null)
 
-        if (!result.ok) {
-          throw new Error(
-            getPayloadErrorMessage(
-              payload,
-              `บันทึกการตั้งค่าอุปกรณ์ ${item.payload.deviceCode} ไม่สำเร็จ (${result.status} ${result.statusText})`,
-            ),
-          )
-        }
+      if (!saveResult.ok) {
+        throw new Error(
+          getPayloadErrorMessage(
+            savePayload,
+            `บันทึกการตั้งค่าอุปกรณ์ไม่สำเร็จ (${saveResult.status} ${saveResult.statusText})`,
+          ),
+        )
       }
 
       const detailResult = await fetch(getDeviceConfigsApiUrl(requestId, stationId), {

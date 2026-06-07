@@ -89,28 +89,43 @@ export const deviceConnectionsRepository = {
     actorUserId: number,
     requestId: number | null = null,
   ): Promise<DeviceConnectionConfigDTO> {
+    const [created] = await this.createMany([input], actorUserId, requestId);
+    return created;
+  },
+
+  async createMany(
+    inputs: CreateDeviceConnectionConfigInput[],
+    actorUserId: number,
+    requestId: number | null = null,
+  ): Promise<DeviceConnectionConfigDTO[]> {
     return db.transaction(async (trx) => {
-      const [{ id }] = await trx('device_connection_configs')
-        .insert({
-          request_id: requestId,
-          station_id: input.stationId,
-          device_code: input.deviceCode ?? null,
-          protocol: input.protocol,
-          settings_json: JSON.stringify(input.settings),
-          status_management_json: input.statusManagement
-            ? JSON.stringify(input.statusManagement)
-            : null,
-          created_by: actorUserId,
-          updated_by: actorUserId,
-        })
-        .returning('id');
+      const createdConfigs: DeviceConnectionConfigDTO[] = [];
 
-      const configId = Number(id);
-      await insertChannels(trx, configId, input.channels, actorUserId);
+      for (const input of inputs) {
+        const [{ id }] = await trx('device_connection_configs')
+          .insert({
+            request_id: requestId,
+            station_id: input.stationId,
+            device_code: input.deviceCode ?? null,
+            protocol: input.protocol,
+            settings_json: JSON.stringify(input.settings),
+            status_management_json: input.statusManagement
+              ? JSON.stringify(input.statusManagement)
+              : null,
+            created_by: actorUserId,
+            updated_by: actorUserId,
+          })
+          .returning('id');
 
-      const created = await findByIdInTransaction(trx, configId);
-      if (!created) throw new Error('Created device connection config could not be loaded');
-      return created;
+        const configId = Number(id);
+        await insertChannels(trx, configId, input.channels, actorUserId);
+
+        const created = await findByIdInTransaction(trx, configId);
+        if (!created) throw new Error('Created device connection config could not be loaded');
+        createdConfigs.push(created);
+      }
+
+      return createdConfigs;
     });
   },
 };

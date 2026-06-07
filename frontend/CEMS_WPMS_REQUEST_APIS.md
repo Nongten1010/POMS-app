@@ -1199,7 +1199,7 @@ Response:
 - 1 `stationId` มีได้หลาย protocol เช่น `MODBUS_RTU`, `MODBUS_TCP`, `MSSQL`, `MYSQL`
 - protocol เดียวกันเพิ่มได้หลายอุปกรณ์เมื่อ `deviceCode` ต่างกัน เช่น `S0001/01` และ `S0001/02` เป็น `MODBUS_RTU` ได้ทั้งคู่
 - ห้ามมี config ซ้ำชุด `stationId + protocol + deviceCode`
-- endpoint นี้รับ 1 device config ต่อ 1 request; ถ้า frontend มีหลาย `connectionForms` ให้แยกยิง `POST` ตาม `deviceCode` และส่ง `channels` เฉพาะของอุปกรณ์นั้น
+- endpoint นี้รับได้ทั้ง payload เดี่ยวแบบเดิม และ payload หลายอุปกรณ์แบบ `{ "configs": [...] }`; ถ้า frontend มีหลาย `connectionForms` ให้ส่ง `POST` ครั้งเดียวด้วย `configs`
 
 ```bash
 curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/device-configs" \
@@ -2178,7 +2178,7 @@ Data dictionary:
 | --- | --- |
 | URL | `POST /api/v1/cems-wpms-requests/:id/device-configs` |
 | Header | `Authorization: Bearer <operatorAccessToken>`, `Content-Type: application/json` |
-| Body | `DeviceConfigBody` |
+| Body | `DeviceConfigBody` หรือ `{ "configs": DeviceConfigBody[] }` |
 
 Path params:
 
@@ -2188,12 +2188,13 @@ Path params:
 
 หมายเหตุสำหรับ frontend:
 
-- `POST /device-configs` บันทึก 1 config ต่อ 1 `deviceCode`; ถ้าผู้ใช้กดเพิ่มอุปกรณ์หลายตัว ให้ยิงหลายครั้งตามจำนวนอุปกรณ์ใหม่
+- `POST /device-configs` รองรับการส่งหลายอุปกรณ์ในครั้งเดียวด้วย `{ "configs": [...] }`; แต่ละ item คือ 1 config ต่อ 1 `deviceCode`
 - backend อนุญาต `stationId + protocol` ซ้ำได้เมื่อ `deviceCode` ต่างกัน แต่จะตอบ `409 CONFLICT` ถ้า `stationId + protocol + deviceCode` ซ้ำกับ active config เดิม
+- payload เดี่ยว response `data` เป็น object; batch payload response `data` เป็น array ตามลำดับ `configs`
 - หลังบันทึกหลายอุปกรณ์สำเร็จ ให้เรียก `GET /device-configs?stationId=...` ซ้ำเพื่อ refresh `connectionForms`, `deviceCodeOptions`, `parameterMappings`, และ `rawConfigs`
 - `protocol` สำหรับ Microsoft SQL ต้องส่ง `MSSQL`
 
-ตัวอย่าง JSON ที่ต้องส่ง:
+ตัวอย่าง JSON payload เดี่ยวแบบเดิม:
 
 ```json
 {
@@ -2224,6 +2225,81 @@ Path params:
     "status": "Normal",
     "schedules": []
   }
+}
+```
+
+ตัวอย่าง JSON ส่งหลายอุปกรณ์ในครั้งเดียว:
+
+```json
+{
+  "configs": [
+    {
+      "stationId": "S0001",
+      "deviceCode": "S0001/01",
+      "protocol": "MODBUS_RTU",
+      "settings": {
+        "comPort": 1,
+        "slaveId": 1,
+        "baudRate": 9600,
+        "parity": "NONE",
+        "stopBits": 1,
+        "dataBits": 8,
+        "quantity": 1
+      },
+      "channels": [
+        {
+          "addressId": 40001,
+          "dataType": "CO2",
+          "unit": "%",
+          "valueRange": { "min": 20, "max": 200 },
+          "valueFormat": "MEASUREMENT_VALUE",
+          "offset": 1,
+          "encoding": "SIGNED16_BIG_ENDIAN",
+          "status": "Start up"
+        }
+      ],
+      "statusManagement": {
+        "selectedParameters": ["ทั้งหมด"],
+        "startAt": null,
+        "endAt": null,
+        "status": "Normal",
+        "schedules": []
+      }
+    },
+    {
+      "stationId": "S0001",
+      "deviceCode": "S0001/02",
+      "protocol": "MODBUS_RTU",
+      "settings": {
+        "comPort": 1,
+        "slaveId": 1,
+        "baudRate": 9600,
+        "parity": "NONE",
+        "stopBits": 1,
+        "dataBits": 8,
+        "quantity": 1
+      },
+      "channels": [
+        {
+          "addressId": 40002,
+          "dataType": "CO2",
+          "unit": "ppm",
+          "valueRange": { "min": 0, "max": 180 },
+          "valueFormat": "MEASUREMENT_VALUE",
+          "offset": 1,
+          "encoding": "SIGNED16_BIG_ENDIAN",
+          "status": "Start up"
+        }
+      ],
+      "statusManagement": {
+        "selectedParameters": ["ทั้งหมด"],
+        "startAt": null,
+        "endAt": null,
+        "status": "Normal",
+        "schedules": []
+      }
+    }
+  ]
 }
 ```
 

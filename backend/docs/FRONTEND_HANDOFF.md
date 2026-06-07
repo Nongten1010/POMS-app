@@ -980,8 +980,8 @@ type DeviceConnectionPayload = {
 
 Frontend save rule:
 
-- endpoint `POST /cems-wpms-requests/:id/device-configs` รับ 1 config ต่อ 1 `deviceCode`
-- ถ้าหน้าจอมีหลาย `connectionForms` ให้แยกยิง `POST` ต่ออุปกรณ์ใหม่แต่ละตัว และส่ง `channels` เฉพาะ row ที่เลือก `deviceCode` นั้น
+- endpoint `POST /cems-wpms-requests/:id/device-configs` รับได้ทั้ง payload เดี่ยวแบบเดิมและ batch `{ configs: DeviceConnectionPayload[] }`
+- ถ้าหน้าจอมีหลาย `connectionForms` ให้ส่ง `POST` ครั้งเดียวด้วย `configs` และส่ง `channels` เฉพาะ row ที่เลือก `deviceCode` นั้นในแต่ละ config
 - backend จะตอบ `409 CONFLICT` เฉพาะเมื่อ active config ซ้ำชุด `stationId + protocol + deviceCode`
 - หลังบันทึกสำเร็จให้เรียก `GET /cems-wpms-requests/:id/device-configs?stationId=...` เพื่อ refresh ค่า `connectionForms`, `deviceCodeOptions`, `parameterMappings`, และ `rawConfigs`
 

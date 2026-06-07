@@ -2,6 +2,7 @@ import { BadRequestError, ForbiddenError, NotFoundError } from '../../shared/err
 import { deviceConnectionsService } from '../device-connections/device-connections.service';
 import type {
   CreateDeviceConnectionConfigInput,
+  CreateDeviceConnectionConfigsInput,
   DeviceConnectionConfigDTO,
 } from '../device-connections/device-connections.types';
 import { connectionRequestsRepository } from './connection-requests.repository';
@@ -357,6 +358,21 @@ export const connectionRequestsService = {
     ensureStationBelongsToRequest(request, input.stationId);
 
     return deviceConnectionsService.createForRequest(input, actorUserId, id);
+  },
+
+  async createDeviceConfigs(
+    id: number,
+    input: CreateDeviceConnectionConfigsInput,
+    actorUserId: number,
+  ): Promise<DeviceConnectionConfigDTO[]> {
+    const request = await loadRequest(id);
+    ensureOwner(request, actorUserId);
+    ensureStatus(request, [CONNECTION_REQUEST_STATUS.WAITING_CONNECTION]);
+    for (const config of input.configs) {
+      ensureStationBelongsToRequest(request, config.stationId);
+    }
+
+    return deviceConnectionsService.createManyForRequest(input.configs, actorUserId, id);
   },
 
   async confirmConnection(

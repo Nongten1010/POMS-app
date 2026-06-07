@@ -2,7 +2,7 @@ import { NextFunction, Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
 import { env } from '../../config/env';
 import { getScope } from '../../shared/middlewares/authorize';
-import { createDeviceConnectionConfigSchema } from '../device-connections/device-connections.validator';
+import { createDeviceConnectionConfigRequestSchema } from '../device-connections/device-connections.validator';
 import { createConnectionRequestDocumentImageService } from './connection-request-document-image.service';
 import { connectionRequestsService } from './connection-requests.service';
 import {
@@ -286,7 +286,16 @@ export const connectionRequestsController = {
     try {
       const actorUserId = requireActorUserId(req);
       const { id } = connectionRequestIdParamsSchema.parse(req.params);
-      const payload = createDeviceConnectionConfigSchema.parse(req.body);
+      const payload = createDeviceConnectionConfigRequestSchema.parse(req.body);
+      if ('configs' in payload) {
+        const data = await connectionRequestsService.createDeviceConfigs(id, payload, actorUserId);
+        res.status(StatusCodes.CREATED).json({
+          success: true,
+          data,
+        });
+        return;
+      }
+
       const data = await connectionRequestsService.createDeviceConfig(id, payload, actorUserId);
       res.status(StatusCodes.CREATED).location(`/api/v1/device-connections/${data.id}`).json({
         success: true,

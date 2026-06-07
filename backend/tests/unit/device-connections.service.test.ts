@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 jest.mock('../../src/modules/device-connections/device-connections.repository', () => ({
   deviceConnectionsRepository: {
     create: jest.fn(),
+    createMany: jest.fn(),
     existsByStationIdProtocolAndDeviceCode: jest.fn(),
     findById: jest.fn(),
     list: jest.fn(),
@@ -333,6 +334,35 @@ describe('deviceConnectionsService', () => {
 
     expect(mockedRepository.create).toHaveBeenCalledWith(modbusTcpPayload, actorUserId, 99);
     expect(result.requestId).toBe(99);
+  });
+
+  it('stores multiple configs linked to a connection request in one repository call', async () => {
+    const inputs: CreateDeviceConnectionConfigInput[] = [
+      { ...modbusTcpPayload, deviceCode: 'STATION_001/01' },
+      { ...modbusTcpPayload, deviceCode: 'STATION_001/02' },
+    ];
+    mockedRepository.createMany.mockResolvedValue([
+      configDto({ requestId: 99, deviceCode: 'STATION_001/01' }),
+      configDto({ requestId: 99, id: 2, deviceCode: 'STATION_001/02' }),
+    ]);
+
+    const result = await deviceConnectionsService.createManyForRequest(inputs, actorUserId, 99);
+
+    expect(mockedRepository.existsByStationIdProtocolAndDeviceCode).toHaveBeenCalledTimes(2);
+    expect(mockedRepository.createMany).toHaveBeenCalledWith(inputs, actorUserId, 99);
+    expect(result).toHaveLength(2);
+  });
+
+  it('rejects duplicate station, protocol, and deviceCode within a batch payload', async () => {
+    const inputs: CreateDeviceConnectionConfigInput[] = [
+      { ...modbusTcpPayload, deviceCode: 'STATION_001/01' },
+      { ...modbusTcpPayload, deviceCode: 'STATION_001/01' },
+    ];
+
+    await expect(
+      deviceConnectionsService.createManyForRequest(inputs, actorUserId, 99),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(mockedRepository.createMany).not.toHaveBeenCalled();
   });
 
   it('lists configs linked to a connection request', async () => {

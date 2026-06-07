@@ -17,6 +17,7 @@ jest.mock('../../src/modules/connection-requests/connection-requests.repository'
 jest.mock('../../src/modules/device-connections/device-connections.service', () => ({
   deviceConnectionsService: {
     createForRequest: jest.fn(),
+    createManyForRequest: jest.fn(),
     listByRequestId: jest.fn(),
   },
 }));
@@ -685,6 +686,83 @@ describe('connectionRequestsService', () => {
 
     expect(mockedDeviceConnectionsService.createForRequest).toHaveBeenCalledWith(
       deviceConfig,
+      actorUserId,
+      1,
+    );
+  });
+
+  it('stores multiple device configs in one request when every station belongs to the owner request', async () => {
+    const firstConfig = {
+      stationId: 'STACK-A',
+      deviceCode: 'STACK-A/01',
+      protocol: 'MODBUS_TCP' as const,
+      settings: { hostIp: '192.168.1.10', slaveId: 1, port: 502 },
+      channels: [
+        {
+          addressId: 40001,
+          dataType: 'NOx',
+          unit: 'ppm',
+          valueRange: { min: 0, max: 200 },
+          valueFormat: 'MEASUREMENT_VALUE' as const,
+          offset: 0,
+          encoding: 'UNSIGNED16_BIG_ENDIAN' as const,
+        },
+      ],
+    };
+    const secondConfig = {
+      ...firstConfig,
+      deviceCode: 'STACK-A/02',
+      channels: [{ ...firstConfig.channels[0], addressId: 40002 }],
+    };
+    mockedRepository.findById.mockResolvedValue(
+      requestDto({
+        status: CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+        createdBy: actorUserId,
+        measurementPoints: [
+          {
+            id: 1,
+            pointName: 'ปล่องระบาย A',
+            pointCode: 'STACK-A',
+            pointType: 'STACK',
+            latitude: 13.7563,
+            longitude: 100.5018,
+            parameters: ['NOx'],
+            description: null,
+          },
+        ],
+      }),
+    );
+    mockedDeviceConnectionsService.createManyForRequest.mockResolvedValue([
+      {
+        id: 10,
+        requestId: 1,
+        ...firstConfig,
+        settings: firstConfig.settings,
+        statusManagement: null,
+        createdBy: actorUserId,
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString(),
+      },
+      {
+        id: 11,
+        requestId: 1,
+        ...secondConfig,
+        settings: secondConfig.settings,
+        statusManagement: null,
+        createdBy: actorUserId,
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString(),
+      },
+    ]);
+
+    await connectionRequestsService.createDeviceConfigs(
+      1,
+      { configs: [firstConfig, secondConfig] },
+      actorUserId,
+    );
+
+    expect(mockedDeviceConnectionsService.createManyForRequest).toHaveBeenCalledWith(
+      [firstConfig, secondConfig],
       actorUserId,
       1,
     );

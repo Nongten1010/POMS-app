@@ -118,6 +118,10 @@ export type CreateDeviceConnectionConfigInput =
   | CreateMssqlConnectionConfigInput
   | CreateMysqlConnectionConfigInput;
 
+export interface CreateDeviceConnectionConfigsInput {
+  configs: CreateDeviceConnectionConfigInput[];
+}
+
 export type TestDeviceConnectionInput = CreateDeviceConnectionConfigInput;
 
 export interface ListDeviceConnectionConfigsQuery {
