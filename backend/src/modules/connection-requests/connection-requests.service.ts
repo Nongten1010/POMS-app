@@ -255,7 +255,7 @@ export const connectionRequestsService = {
     input: AddParameterRequestInput,
     actorUserId: number,
   ): Promise<ConnectionRequestDTO> {
-    ensureSingleMeasurementPoint(input);
+    ensureRequestFormSections(input, CONNECTION_REQUEST_TYPE.ADD_PARAMETER);
     return connectionRequestsRepository.create(
       { ...input, requestType: CONNECTION_REQUEST_TYPE.ADD_PARAMETER },
       actorUserId,
@@ -825,7 +825,10 @@ function ensureRequestFormSections(
       );
     }
 
-    if (requestType === CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT) {
+    if (
+      requestType === CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT ||
+      requestType === CONNECTION_REQUEST_TYPE.ADD_PARAMETER
+    ) {
       if (!point.details || Object.keys(point.details).length === 0) {
         throw new BadRequestError('Measurement point detail section is required', {
           path: `measurementPoints.${index}.details`,

@@ -694,6 +694,44 @@ function addDetailIssue(ctx: z.RefinementCtx, index: number, field: string, mess
   });
 }
 
+function validateMeasurementPointFormSections(
+  payload: ContactFormPayloadWithoutRequestType,
+  ctx: z.RefinementCtx,
+  options: { requireExistingPointCode?: boolean } = {},
+): void {
+  payload.measurementPoints.forEach((point, index) => {
+    if (options.requireExistingPointCode && !point.pointCode) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['measurementPoints', index, 'pointCode'],
+        message: 'Existing measurement point code is required for add parameter request',
+      });
+    }
+    if (!point.details || Object.keys(point.details).length === 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['measurementPoints', index, 'details'],
+        message: 'Measurement point detail section is required',
+      });
+    }
+    if (payload.systemType === 'CEMS' && point.documentsAndImages.length === 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['measurementPoints', index, 'documentsAndImages'],
+        message: 'Documents and images section is required for CEMS',
+      });
+    }
+    if (!point.measurementInstruments) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['measurementPoints', index, 'measurementInstruments'],
+        message: 'Measurement instruments section is required',
+      });
+    }
+    validateMeasurementPointDetailsBySystem(payload.systemType, point, index, ctx);
+  });
+}
+
 export const createConnectionRequestSchema = connectionRequestFormSchema.transform((payload) => ({
   ...payload,
   requestType: payload.requestType ?? CONNECTION_REQUEST_TYPE.NEW_CONNECTION,
@@ -706,30 +744,7 @@ export const addMeasurementPointRequestSchema = connectionRequestFormObjectSchem
   .omit({ requestType: true })
   .superRefine((payload, ctx) => {
     validateContactSection(payload, ctx);
-    payload.measurementPoints.forEach((point, index) => {
-      if (!point.details || Object.keys(point.details).length === 0) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['measurementPoints', index, 'details'],
-          message: 'Measurement point detail section is required',
-        });
-      }
-      if (payload.systemType === 'CEMS' && point.documentsAndImages.length === 0) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['measurementPoints', index, 'documentsAndImages'],
-          message: 'Documents and images section is required for CEMS',
-        });
-      }
-      if (!point.measurementInstruments) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['measurementPoints', index, 'measurementInstruments'],
-          message: 'Measurement instruments section is required',
-        });
-      }
-      validateMeasurementPointDetailsBySystem(payload.systemType, point, index, ctx);
-    });
+    validateMeasurementPointFormSections(payload, ctx);
   })
   .transform((payload) => ({
     ...normalizeContacts(normalizeFactorySnapshot(stripFrontendSystemTypeAlias(payload))),
@@ -747,22 +762,7 @@ export const addParameterRequestSchema = connectionRequestFormObjectSchema
         message: 'Add parameter request must reference exactly one measurement point',
       });
     }
-    payload.measurementPoints.forEach((point, index) => {
-      if (!point.pointCode) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['measurementPoints', index, 'pointCode'],
-          message: 'Existing measurement point code is required for add parameter request',
-        });
-      }
-      if (!point.measurementInstruments) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['measurementPoints', index, 'measurementInstruments'],
-          message: 'Measurement instruments section is required',
-        });
-      }
-    });
+    validateMeasurementPointFormSections(payload, ctx, { requireExistingPointCode: true });
   })
   .transform((payload) => ({
     ...normalizeContacts(normalizeFactorySnapshot(stripFrontendSystemTypeAlias(payload))),

@@ -556,6 +556,35 @@ describe('connectionRequestsService', () => {
   });
 
   it('creates an add parameter request for exactly one measurement point', async () => {
+    const addParameterPayload = {
+      ...payload,
+      requestType: CONNECTION_REQUEST_TYPE.ADD_PARAMETER,
+      measurementPoints: [
+        {
+          ...payload.measurementPoints[0],
+          parameters: ['CO'],
+          details: {
+            stackShape: 'วงกลม',
+            stackDiameter: 1.2,
+            connectionDevice: 'POMS Box (กรอ.)',
+          },
+          documentsAndImages: [
+            {
+              title: 'ภาพถ่ายปล่อง',
+              fileName: 'stack.png',
+              fileUrl: 'https://example.com/files/stack.png',
+              fileType: 'image/png',
+              fileSize: 1024,
+            },
+          ],
+          measurementInstruments: {
+            converterBrand: 'Converter Brand',
+            converterModel: 'CV-100',
+            parameters: [{ parameter: 'CO', technique: 'NDIR' }],
+          },
+        },
+      ],
+    };
     mockedRepository.create.mockResolvedValue(
       requestDto({
         requestType: CONNECTION_REQUEST_TYPE.ADD_PARAMETER,
@@ -564,13 +593,10 @@ describe('connectionRequestsService', () => {
       }),
     );
 
-    await connectionRequestsService.createParameterRequest(
-      { ...payload, requestType: CONNECTION_REQUEST_TYPE.ADD_PARAMETER },
-      actorUserId,
-    );
+    await connectionRequestsService.createParameterRequest(addParameterPayload, actorUserId);
 
     expect(mockedRepository.create).toHaveBeenCalledWith(
-      { ...payload, requestType: CONNECTION_REQUEST_TYPE.ADD_PARAMETER },
+      addParameterPayload,
       actorUserId,
       CONNECTION_REQUEST_STATUS.PENDING_DESIGN_REVIEW,
     );
@@ -859,6 +885,20 @@ describe('connectionRequestsService', () => {
         {
           ...payload.measurementPoints[0],
           parameters: ['CO'],
+          details: {
+            stackShape: 'วงกลม',
+            stackDiameter: 1.2,
+            connectionDevice: 'POMS Box (กรอ.)',
+          },
+          documentsAndImages: [
+            {
+              title: 'ภาพถ่ายปล่อง',
+              fileName: 'stack.png',
+              fileUrl: 'https://example.com/files/stack.png',
+              fileType: 'image/png',
+              fileSize: 1024,
+            },
+          ],
           measurementInstruments: {
             converterBrand: 'Converter Brand',
             converterModel: 'CV-100',

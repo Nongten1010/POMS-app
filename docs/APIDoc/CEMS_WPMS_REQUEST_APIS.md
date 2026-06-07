@@ -476,7 +476,9 @@ Response:
 
 ## 2. บันทึกฟอร์ม เพิ่มพารามิเตอร์
 
-ต้องส่ง `measurementPoints` แค่ 1 จุดตรวจวัดต่อคำขอ, ต้องส่ง `pointCode` ของจุดตรวจวัดเดิมที่ backend เคยออกเลขให้แล้ว และต้องส่งส่วน `measurementInstruments`
+Payload ใช้รูปแบบเดียวกับข้อ 1 เพิ่มจุดตรวจวัด: ส่งข้อมูลโรงงาน/ผู้ติดต่อ และ `measurementPoints[]` พร้อม `details`, `documentsAndImages` สำหรับ CEMS และ `measurementInstruments`
+
+เงื่อนไขเฉพาะของฟอร์มเพิ่มพารามิเตอร์คือ ต้องส่ง `measurementPoints` แค่ 1 จุดตรวจวัดต่อคำขอ และต้องส่ง `pointCode` ของจุดตรวจวัดเดิมที่ backend เคยออกเลขให้แล้ว
 
 ```bash
 curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/parameters" \
@@ -517,6 +519,47 @@ curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/parameters" \
         "pointName": "ปล่องระบาย A",
         "pointCode": "S0001",
         "pointType": "STACK",
+        "details": {
+          "productionUnitType": "หม้อไอน้ำ",
+          "productionCapacity": "10 ตันไอน้ำ/ชั่วโมง",
+          "cemsInstallationRequiredBy": "ประกาศ อก.",
+          "cemsInstallationRequiredOther": null,
+          "legalAnnexNo": "เฉพาะประกาศปี 65",
+          "eligibleParameters": ["NOx", "SO2", "PM", "CO"],
+          "exemptedParameters": [],
+          "connectedParameters": ["NOx", "SO2", "PM"],
+          "pendingParameters": ["CO"],
+          "stackShape": "วงกลม",
+          "stackDiameter": 1.2,
+          "stackWidth": null,
+          "stackLength": null,
+          "stackShapeOther": null,
+          "stackHeight": 30,
+          "monitoringHeight": 20,
+          "averageFlowRate": 1200,
+          "minFlowRate": 1000,
+          "maxFlowRate": 1500,
+          "primaryFuel": "ก๊าซธรรมชาติ",
+          "primaryFuelOther": null,
+          "secondaryFuel": "ไม่มี",
+          "secondaryFuelOther": null,
+          "hasTreatmentSystem": "มี",
+          "treatmentSystem": "สครับเบอร์",
+          "treatmentSystemOther": null,
+          "connectionDevice": "POMS Box (กรอ.)",
+          "connectionDeviceOther": null
+        },
+        "documentsAndImages": [
+          {
+            "title": "ภาพถ่ายปล่อง",
+            "description": "ภาพถ่ายตำแหน่งปล่องและเครื่องมือตรวจวัด",
+            "link": "https://example.com/documents/stack-reference.pdf",
+            "fileName": "stack.png",
+            "fileUrl": "https://example.com/files/stack.png",
+            "fileType": "image/png",
+            "fileSize": 1024
+          }
+        ],
         "measurementInstruments": {
           "converterBrand": "Converter Brand",
           "converterModel": "CV-100",

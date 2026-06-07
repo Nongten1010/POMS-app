@@ -514,8 +514,6 @@ describe('connection request validators', () => {
         {
           ...validPayload.measurementPoints[0],
           parameters: ['CO'],
-          details: undefined,
-          documentsAndImages: undefined,
           measurementInstruments: {
             ...measurementInstruments,
             parameters: [{ ...measurementInstruments.parameters[0], parameter: 'CO' }],
@@ -528,6 +526,26 @@ describe('connection request validators', () => {
     if (result.success) {
       expect(result.data.requestType).toBe('ADD_PARAMETER');
     }
+  });
+
+  it('rejects add parameter request without the measurement point form sections', () => {
+    const result = addParameterRequestSchema.safeParse({
+      ...validPayload,
+      measurementPoints: [
+        {
+          pointName: 'ปล่องระบาย A',
+          pointCode: 'S0001',
+          pointType: 'STACK',
+          parameters: ['CO'],
+          measurementInstruments: {
+            ...measurementInstruments,
+            parameters: [{ ...measurementInstruments.parameters[0], parameter: 'CO' }],
+          },
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
   });
 
   it('rejects add parameter request without measurement instruments', () => {
