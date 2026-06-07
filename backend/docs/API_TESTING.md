@@ -392,8 +392,7 @@ curl -X POST http://localhost:3000/api/v1/device-connections/test-connection \
     "channels":[
       {
         "addressId":40001,
-        "dataType":"CO2",
-        "unit":"ppm",
+        "dataType":"CO2 (ppm)",
         "valueRange":{"min":0,"max":200},
         "valueFormat":"MEASUREMENT_VALUE",
         "offset":0,
@@ -401,8 +400,7 @@ curl -X POST http://localhost:3000/api/v1/device-connections/test-connection \
       },
       {
         "addressId":40002,
-        "dataType":"O2",
-        "unit":"%",
+        "dataType":"O2 (%)",
         "valueRange":{"min":0,"max":25},
         "valueFormat":"MEASUREMENT_VALUE",
         "offset":-0.1,
@@ -451,14 +449,12 @@ CONFIG_ID=$(curl -s -X POST http://localhost:3000/api/v1/device-connections \
     "channels":[
       {
         "addressId":40001,
-        "dataType":"COD",
-        "unit":"mg/L",
+        "dataType":"COD (mg/L)",
         "offset":-0.5
       },
       {
         "addressId":40002,
-        "dataType":"BOD",
-        "unit":"mg/L",
+        "dataType":"BOD (mg/L)",
         "offset":0
       }
     ]
@@ -484,8 +480,7 @@ Response จะ mask `settings.dbPass` เป็น `********` เสมอ:
     "channels": [
       {
         "addressId": 40001,
-        "dataType": "COD",
-        "unit": "mg/L",
+        "dataType": "COD (mg/L)",
         "offset": -0.5
       }
     ],

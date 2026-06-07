@@ -561,7 +561,6 @@ function toDeviceConfigParameterMapping(
     deviceCode,
     addressId: String(channel.addressId),
     parameter: channel.dataType,
-    unit: channel.unit,
     min: channel.valueRange ? String(channel.valueRange.min) : '',
     max: channel.valueRange ? String(channel.valueRange.max) : '',
     valueFormat: valueFormatToThai(channel.valueFormat ?? 'MEASUREMENT_VALUE'),

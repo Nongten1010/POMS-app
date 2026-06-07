@@ -980,8 +980,8 @@ type DeviceConnectionPayload = {
 
 Frontend save rule:
 
-- endpoint `POST /cems-wpms-requests/:id/device-configs` รับได้ทั้ง payload เดี่ยวแบบเดิมและ batch `{ configs: DeviceConnectionPayload[] }`
-- ถ้าหน้าจอมีหลาย `connectionForms` ให้ส่ง `POST` ครั้งเดียวด้วย `configs` และส่ง `channels` เฉพาะ row ที่เลือก `deviceCode` นั้นในแต่ละ config
+- endpoint `POST /cems-wpms-requests/:id/device-configs` รับได้ทั้ง payload เดี่ยวแบบเดิมและ structured payload `{ config: { stationId, device, channels, statusManagement } }`
+- ถ้าหน้าจอมีหลาย `connectionForms` ให้ส่ง `POST` ครั้งเดียวด้วย `config.device[]` และส่ง `config.channels[]` เป็น flat list โดยใส่ `deviceCode` เพื่อผูก channel กับอุปกรณ์
 - ช่อง `ช่วงข้อมูลตรวจวัด Min/Max` บนการ์ด Connection ให้ส่งใน `settings.valueRange.min/max` ของอุปกรณ์นั้น
 - backend จะตอบ `409 CONFLICT` เฉพาะเมื่อ active config ซ้ำชุด `stationId + protocol + deviceCode`
 - หลังบันทึกสำเร็จให้เรียก `GET /cems-wpms-requests/:id/device-configs?stationId=...` เพื่อ refresh ค่า `connectionForms`, `deviceCodeOptions`, `parameterMappings`, และ `rawConfigs`
@@ -990,6 +990,7 @@ Channel shape:
 
 ```json
 {
+  "deviceCode": "S0001/01",
   "addressId": 40001,
   "dataType": "CO2 (ppm)",
   "valueRange": { "min": 0, "max": 200 },
@@ -1010,10 +1011,10 @@ Validation สำคัญ:
 | `valueFormat` | รูปแบบค่าข้อมูลตรวจวัด: `MEASUREMENT_VALUE` = ค่าตรวจวัดปกติ, `CURRENT` = ค่ากระแสไฟฟ้า, `VOLTAGE` = ค่าแรงดันไฟฟ้า |
 | `status` | สถานะพารามิเตอร์ เช่น `Normal`, `Maintenance`, `Inactive` |
 | Modbus channel | ต้องมี `valueRange` และ `encoding` |
-| DB channel | ใช้เฉพาะ `addressId`, `dataType`, `unit`, `offset` ตามไฟล์ client |
+| DB channel | ใช้เฉพาะ `addressId`, `dataType`, `offset` ตามไฟล์ client |
 | `dbPass` | ส่งตอน create/test ได้ แต่ response จะ mask เป็น `********` |
 
-ส่ง `channels[].dataType` เป็นชื่อพารามิเตอร์เต็มตามที่แสดงในฟอร์ม เช่น `CO2 (%)` หรือ `CO2 (ppm)`; frontend ไม่ต้องแยกหน่วยออกมา และไม่ต้องส่ง field `channels[].unit` ส่วน backend จะเก็บ `dataType` ตามค่าที่ส่งมาโดยไม่ตัดหรือประกอบหน่วยเอง
+ส่งเฉพาะ `channels[].dataType` เป็นชื่อพารามิเตอร์เต็มตามที่แสดงในฟอร์ม เช่น `CO2 (%)` หรือ `CO2 (ppm)`; frontend ไม่ต้องแยกหน่วยออกมา ส่วน backend จะเก็บ `dataType` ตามค่าที่ส่งมาโดยไม่ตัดหรือประกอบหน่วยเอง
 
 ### 9.2 Mock test connection
 
@@ -1104,14 +1105,12 @@ Content-Type: application/json
   "channels": [
     {
       "addressId": 40001,
-      "dataType": "COD",
-      "unit": "mg/L",
+      "dataType": "COD (mg/L)",
       "offset": -0.5
     },
     {
       "addressId": 40002,
-      "dataType": "BOD",
-      "unit": "mg/L",
+      "dataType": "BOD (mg/L)",
       "offset": 0
     }
   ]
@@ -1137,8 +1136,7 @@ Response:
     "channels": [
       {
         "addressId": 40001,
-        "dataType": "COD",
-        "unit": "mg/L",
+        "dataType": "COD (mg/L)",
         "offset": -0.5
       }
     ],

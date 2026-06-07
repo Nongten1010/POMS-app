@@ -1,5 +1,8 @@
 import { describe, expect, it } from '@jest/globals';
-import { createDeviceConnectionConfigSchema } from '../../src/modules/device-connections/device-connections.validator';
+import {
+  createDeviceConnectionConfigRequestSchema,
+  createDeviceConnectionConfigSchema,
+} from '../../src/modules/device-connections/device-connections.validator';
 
 describe('device connection validators', () => {
   it('accepts a valid Modbus RTU mock config', () => {
@@ -32,9 +35,9 @@ describe('device connection validators', () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.channels[0]).toMatchObject({
-        dataType: 'CO2',
-        unit: 'ppm',
+        dataType: 'CO2 (ppm)',
       });
+      expect(result.data.channels[0]).not.toHaveProperty('unit');
     }
   });
 
@@ -68,7 +71,108 @@ describe('device connection validators', () => {
     if (result.success) {
       expect(result.data.channels[0]).toMatchObject({
         dataType: 'CO2 (%)',
-        unit: '',
+      });
+      expect(result.data.channels[0]).not.toHaveProperty('unit');
+    }
+  });
+
+  it('accepts structured config payload with shared station and flat channels', () => {
+    const result = createDeviceConnectionConfigRequestSchema.safeParse({
+      config: {
+        stationId: 'S0001',
+        device: [
+          {
+            deviceCode: 'S0001/01',
+            protocol: 'MODBUS_RTU',
+            settings: {
+              comPort: 1,
+              slaveId: 1,
+              baudRate: 9600,
+              parity: 'NONE',
+              stopBits: 1,
+              dataBits: 8,
+              quantity: 1,
+              valueRange: { min: 20, max: 200 },
+            },
+          },
+          {
+            deviceCode: 'S0001/02',
+            protocol: 'MODBUS_RTU',
+            settings: {
+              comPort: 1,
+              slaveId: 1,
+              baudRate: 9600,
+              parity: 'NONE',
+              stopBits: 1,
+              dataBits: 8,
+              quantity: 1,
+              valueRange: { min: 0, max: 180 },
+            },
+          },
+        ],
+        channels: [
+          {
+            deviceCode: 'S0001/01',
+            addressId: 40001,
+            dataType: 'CO2 (%)',
+            valueRange: { min: 20, max: 200 },
+            valueFormat: 'MEASUREMENT_VALUE',
+            offset: 1,
+            encoding: 'SIGNED16_BIG_ENDIAN',
+            status: 'Start up',
+          },
+          {
+            deviceCode: 'S0001/02',
+            addressId: 40002,
+            dataType: 'CO2 (ppm)',
+            valueRange: { min: 0, max: 180 },
+            valueFormat: 'MEASUREMENT_VALUE',
+            offset: 1,
+            encoding: 'SIGNED16_BIG_ENDIAN',
+            status: 'Start up',
+          },
+        ],
+        statusManagement: {
+          selectedParameters: ['ทั้งหมด'],
+          startAt: null,
+          endAt: null,
+          status: 'Normal',
+          schedules: [],
+        },
+      },
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toMatchObject({
+        configs: [
+          {
+            stationId: 'S0001',
+            deviceCode: 'S0001/01',
+            protocol: 'MODBUS_RTU',
+            settings: { valueRange: { min: 20, max: 200 } },
+            channels: [
+              {
+                addressId: 40001,
+                dataType: 'CO2 (%)',
+              },
+            ],
+            statusManagement: { status: 'Normal' },
+          },
+          {
+            stationId: 'S0001',
+            deviceCode: 'S0001/02',
+            protocol: 'MODBUS_RTU',
+            settings: { valueRange: { min: 0, max: 180 } },
+            channels: [
+              {
+                addressId: 40002,
+                dataType: 'CO2 (ppm)',
+              },
+            ],
+            statusManagement: { status: 'Normal' },
+          },
+        ],
       });
     }
   });
@@ -124,7 +228,6 @@ describe('device connection validators', () => {
           {
             addressId: 40001,
             dataType: 'NOx (ppm)',
-            unit: '',
             valueRange: { min: 0, max: 200 },
             valueFormat: 'MEASUREMENT_VALUE',
             offset: 0,

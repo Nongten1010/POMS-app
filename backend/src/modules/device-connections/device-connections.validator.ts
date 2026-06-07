@@ -78,8 +78,13 @@ const modbusChannelSchema = z
   })
   .strict()
   .transform((channel) => ({
-    ...channel,
+    addressId: channel.addressId,
+    dataType: toChannelDataType(channel.dataType, channel.unit),
+    valueRange: channel.valueRange,
     valueFormat: channel.valueFormat ?? 'MEASUREMENT_VALUE',
+    offset: channel.offset,
+    encoding: channel.encoding,
+    status: channel.status,
   }));
 
 const databaseChannelSchema = z
@@ -90,7 +95,13 @@ const databaseChannelSchema = z
     offset: z.number(),
     status: parameterStatusSchema,
   })
-  .strict();
+  .strict()
+  .transform((channel) => ({
+    addressId: channel.addressId,
+    dataType: toChannelDataType(channel.dataType, channel.unit),
+    offset: channel.offset,
+    status: channel.status,
+  }));
 
 const modbusRtuSettingsSchema = z
   .object({
@@ -226,10 +237,13 @@ export const createDeviceConnectionConfigsSchema = z
   })
   .strict();
 
-export const createDeviceConnectionConfigRequestSchema = z.union([
-  createDeviceConnectionConfigsSchema,
-  createDeviceConnectionConfigSchema,
-]);
+export const createDeviceConnectionConfigRequestSchema = z.preprocess(
+  normalizeStructuredDeviceConfigPayload,
+  z.union([
+    createDeviceConnectionConfigsSchema,
+    createDeviceConnectionConfigSchema,
+  ]),
+);
 
 export const testDeviceConnectionSchema = createDeviceConnectionConfigSchema;
 
@@ -282,6 +296,58 @@ function normalizeLegacyModbusRtuFormPayload(value: unknown): unknown {
   return removeUndefinedProperties(normalized);
 }
 
+function normalizeStructuredDeviceConfigPayload(value: unknown): unknown {
+  if (!isRecord(value) || !isRecord(value.config)) return value;
+
+  const config = value.config;
+  const devices = config.device;
+  const channels = Array.isArray(config.channels) ? config.channels : [];
+  if (!Array.isArray(devices)) return value;
+
+  return {
+    configs: devices.map((device) => {
+      if (!isRecord(device)) return device;
+      const deviceCode = readDeviceCode(device.deviceCode);
+      const matchedChannels = channels
+        .filter((channel) => isChannelForDevice(channel, deviceCode, devices.length))
+        .map(removeChannelDeviceCode);
+
+      return removeUndefinedProperties({
+        stationId: config.stationId,
+        deviceCode: device.deviceCode,
+        protocol: device.protocol,
+        settings: device.settings,
+        channels: matchedChannels,
+        statusManagement: config.statusManagement,
+      });
+    }),
+  };
+}
+
+function readDeviceCode(value: unknown): string | null {
+  if (typeof value !== 'string') return value == null ? null : String(value);
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
+function isChannelForDevice(channel: unknown, deviceCode: string | null, deviceCount: number): boolean {
+  if (!isRecord(channel)) return false;
+  const channelDeviceCode = readDeviceCode(channel.deviceCode);
+  if (channelDeviceCode !== null) return channelDeviceCode === deviceCode;
+  return deviceCount === 1;
+}
+
+function removeChannelDeviceCode(channel: unknown): unknown {
+  if (!isRecord(channel)) return channel;
+  return Object.fromEntries(Object.entries(channel).filter(([key]) => key !== 'deviceCode'));
+}
+
+function toChannelDataType(dataType: string, unit?: string): string {
+  const trimmedUnit = unit?.trim() ?? '';
+  if (!trimmedUnit || /\([^)]*\)\s*$/.test(dataType)) return dataType;
+  return `${dataType} (${trimmedUnit})`;
+}
+
 function isLegacyModbusRtuPayload(value: Record<string, unknown>): boolean {
   if (typeof value.protocol === 'string') return false;
   return typeof value.connection === 'string' && normalizeToken(value.connection) === 'MODBUS_RTU';
@@ -294,7 +360,6 @@ function normalizeLegacyModbusChannels(value: unknown): unknown {
     const normalized: Record<string, unknown> = {
       addressId: parseLeadingNumber(channel.addressID),
       dataType: typeof channel.parameter === 'string' ? channel.parameter.trim() : channel.parameter,
-      unit: channel.unit,
       valueRange: {
         min: parseLeadingNumber(channel.min),
         max: parseLeadingNumber(channel.max),

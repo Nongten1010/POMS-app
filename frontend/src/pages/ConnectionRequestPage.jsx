@@ -2032,10 +2032,11 @@ function buildConnectionSettings(form) {
   })
 }
 
-function buildDeviceConfigChannels(rows) {
+function buildDeviceConfigChannels(rows, deviceCode) {
   return rows
     .filter((row) => row.parameter)
     .map((row) => compactObject({
+      deviceCode,
       addressId: toNumberOrNull(row.addressId),
       dataType: row.parameter,
       valueRange: {
@@ -2049,7 +2050,7 @@ function buildDeviceConfigChannels(rows) {
     }))
 }
 
-function buildDeviceConfigPayloads({
+function buildDeviceConfigPayload({
   stationId,
   context,
   connectionForms,
@@ -2057,7 +2058,15 @@ function buildDeviceConfigPayloads({
   statusManagement,
   deviceCodeOptions,
 }) {
-  return connectionForms
+  const statusManagementPayload = {
+    selectedParameters: statusManagement?.selectedParameters?.length ? statusManagement.selectedParameters : ['ทั้งหมด'],
+    startAt: statusManagement?.startAt || null,
+    endAt: statusManagement?.endAt || null,
+    status: statusManagement?.status || 'Normal',
+    schedules: statusManagement?.schedules ?? [],
+  }
+
+  const items = connectionForms
     .map((form, index) => {
       const deviceCode = getConnectionFormDeviceCode(context, form, index, deviceCodeOptions)
       const rowsForDevice = parameterMappingRows.filter((row) => {
@@ -2069,23 +2078,24 @@ function buildDeviceConfigPayloads({
 
       return {
         configId: form.configId,
-        payload: {
-          stationId,
+        device: {
           deviceCode,
           protocol: protocolCodeMap[normalizeConnectionType(form.type)] ?? form.type,
           settings: buildConnectionSettings(form),
-          channels: buildDeviceConfigChannels(rowsForDevice),
-          statusManagement: {
-            selectedParameters: statusManagement?.selectedParameters?.length ? statusManagement.selectedParameters : ['ทั้งหมด'],
-            startAt: statusManagement?.startAt || null,
-            endAt: statusManagement?.endAt || null,
-            status: statusManagement?.status || 'Normal',
-            schedules: statusManagement?.schedules ?? [],
-          },
         },
+        channels: buildDeviceConfigChannels(rowsForDevice, deviceCode),
       }
     })
     .filter((item) => !item.configId)
+
+  return {
+    config: {
+      stationId,
+      device: items.map((item) => item.device),
+      channels: items.flatMap((item) => item.channels),
+      statusManagement: statusManagementPayload,
+    },
+  }
 }
 
 function getPayloadErrorMessage(payload, fallback) {
@@ -2212,7 +2222,7 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose }) {
     setDeviceConfigError('')
 
     try {
-      const saveItems = buildDeviceConfigPayloads({
+      const savePayloadBody = buildDeviceConfigPayload({
         stationId,
         context,
         connectionForms,
@@ -2220,14 +2230,18 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose }) {
         statusManagement,
         deviceCodeOptions,
       })
+      const saveDevices = savePayloadBody.config.device
+      const saveChannels = savePayloadBody.config.channels
 
-      if (saveItems.length === 0) {
+      if (saveDevices.length === 0) {
         throw new Error('ไม่มีอุปกรณ์ใหม่สำหรับบันทึก หากต้องการแก้ไขอุปกรณ์เดิมต้องใช้ endpoint สำหรับแก้ไข config')
       }
 
-      const invalidItem = saveItems.find((item) => item.payload.channels.length === 0)
-      if (invalidItem) {
-        throw new Error(`กรุณากำหนดพารามิเตอร์อย่างน้อย 1 รายการให้ ${invalidItem.payload.deviceCode}`)
+      const invalidDevice = saveDevices.find(
+        (device) => !saveChannels.some((channel) => channel.deviceCode === device.deviceCode),
+      )
+      if (invalidDevice) {
+        throw new Error(`กรุณากำหนดพารามิเตอร์อย่างน้อย 1 รายการให้ ${invalidDevice.deviceCode}`)
       }
 
       const saveResult = await fetch(getDeviceConfigsApiUrl(requestId), {
@@ -2236,9 +2250,7 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose }) {
           Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          configs: saveItems.map((item) => item.payload),
-        }),
+        body: JSON.stringify(savePayloadBody),
       })
       const savePayload = await saveResult.json().catch(() => null)
 

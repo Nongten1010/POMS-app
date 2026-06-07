@@ -25,7 +25,6 @@ interface DeviceConnectionConfigRow {
 interface DeviceMeasurementChannelRow {
   address_id: number | string;
   data_type: string;
-  unit: string;
   value_range_json: string | null;
   value_format: 'MEASUREMENT_VALUE' | 'CURRENT' | 'VOLTAGE' | null;
   offset_value: number | string;
@@ -177,8 +176,7 @@ async function insertChannels(
     channels.map((channel) => ({
       config_id: configId,
       address_id: channel.addressId,
-      data_type: channel.dataType,
-      unit: channel.unit,
+      data_type: toStoredChannelDataType(channel),
       value_range_json: channel.valueRange ? JSON.stringify(channel.valueRange) : null,
       value_format: channel.valueFormat ?? null,
       offset_value: channel.offset,
@@ -194,13 +192,18 @@ function toChannelDTO(row: DeviceMeasurementChannelRow): DeviceMeasurementChanne
   return {
     addressId: Number(row.address_id),
     dataType: row.data_type,
-    unit: row.unit,
     offset: Number(row.offset_value),
     ...(row.value_range_json ? { valueRange: parseMeasurementRange(row.value_range_json) } : {}),
     ...(row.value_format ? { valueFormat: row.value_format } : {}),
     ...(row.encoding ? { encoding: row.encoding } : {}),
     status: row.parameter_status ?? 'Normal',
   };
+}
+
+function toStoredChannelDataType(channel: DeviceMeasurementChannelInput): string {
+  const unit = channel.unit?.trim() ?? '';
+  if (!unit || /\([^)]*\)\s*$/.test(channel.dataType)) return channel.dataType;
+  return `${channel.dataType} (${unit})`;
 }
 
 function parseJsonObject(value: string): Record<string, unknown> {

@@ -319,7 +319,6 @@ export interface DeviceConfigFormParameterMappingDTO {
   deviceCode: string;
   addressId: string;
   parameter: string;
-  unit: string;
   min: string;
   max: string;
   valueFormat: string;

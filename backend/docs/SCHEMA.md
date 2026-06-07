@@ -444,8 +444,7 @@ CREATE TABLE device_measurement_channels (
   id               BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
   config_id        BIGINT               NOT NULL,
   address_id       BIGINT               NOT NULL,
-  data_type        NVARCHAR(128)        NOT NULL,
-  unit             NVARCHAR(64)         NOT NULL,
+  data_type        NVARCHAR(128)        NOT NULL, -- ชื่อเต็ม เช่น "CO2 (%)", "CO2 (ppm)"
   value_range_json NVARCHAR(MAX)        NULL,
   value_format     VARCHAR(32)          NULL, -- 'MEASUREMENT_VALUE' | 'CURRENT' | 'VOLTAGE'
   offset_value     DECIMAL(18,6)        NOT NULL DEFAULT 0,

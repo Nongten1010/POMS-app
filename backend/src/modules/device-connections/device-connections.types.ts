@@ -36,7 +36,7 @@ export interface MeasurementRangeInput {
 export interface DeviceMeasurementChannelInput {
   addressId: number;
   dataType: string;
-  unit: string;
+  unit?: string;
   valueRange?: MeasurementRangeInput | null;
   valueFormat?: DataValueFormat | null;
   offset: number;

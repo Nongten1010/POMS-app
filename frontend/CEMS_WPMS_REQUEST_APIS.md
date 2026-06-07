@@ -1199,7 +1199,7 @@ Response:
 - 1 `stationId` มีได้หลาย protocol เช่น `MODBUS_RTU`, `MODBUS_TCP`, `MSSQL`, `MYSQL`
 - protocol เดียวกันเพิ่มได้หลายอุปกรณ์เมื่อ `deviceCode` ต่างกัน เช่น `S0001/01` และ `S0001/02` เป็น `MODBUS_RTU` ได้ทั้งคู่
 - ห้ามมี config ซ้ำชุด `stationId + protocol + deviceCode`
-- endpoint นี้รับได้ทั้ง payload เดี่ยวแบบเดิม และ payload หลายอุปกรณ์แบบ `{ "configs": [...] }`; ถ้า frontend มีหลาย `connectionForms` ให้ส่ง `POST` ครั้งเดียวด้วย `configs`
+- endpoint นี้รับได้ทั้ง payload เดี่ยวแบบเดิม และ payload หลายอุปกรณ์แบบ `{ "config": { "stationId": "...", "device": [...], "channels": [...], "statusManagement": {...} } }`
 
 ```bash
 curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/device-configs" \
@@ -1324,8 +1324,7 @@ Response สำหรับ prefill dialog:
         "configId": 10,
         "deviceCode": "S0001/01",
         "addressId": "40001",
-        "parameter": "NOx",
-        "unit": "ppm",
+        "parameter": "NOx (ppm)",
         "min": "0",
         "max": "200",
         "valueFormat": "ค่าข้อมูลตรวจวัด",
@@ -2174,7 +2173,7 @@ Data dictionary:
 | --- | --- |
 | URL | `POST /api/v1/cems-wpms-requests/:id/device-configs` |
 | Header | `Authorization: Bearer <operatorAccessToken>`, `Content-Type: application/json` |
-| Body | `DeviceConfigBody` หรือ `{ "configs": DeviceConfigBody[] }` |
+| Body | `DeviceConfigBody` หรือ `{ "config": { "stationId": string, "device": DeviceBody[], "channels": ChannelBody[], "statusManagement": object } }` |
 
 Path params:
 
@@ -2184,9 +2183,10 @@ Path params:
 
 หมายเหตุสำหรับ frontend:
 
-- `POST /device-configs` รองรับการส่งหลายอุปกรณ์ในครั้งเดียวด้วย `{ "configs": [...] }`; แต่ละ item คือ 1 config ต่อ 1 `deviceCode`
+- `POST /device-configs` รองรับการส่งหลายอุปกรณ์ในครั้งเดียวด้วย `{ "config": { "stationId": "...", "device": [...], "channels": [...], "statusManagement": {...} } }`
+- `config.channels[].deviceCode` ใช้ผูก channel กลับไปหาอุปกรณ์ใน `config.device[]`
 - backend อนุญาต `stationId + protocol` ซ้ำได้เมื่อ `deviceCode` ต่างกัน แต่จะตอบ `409 CONFLICT` ถ้า `stationId + protocol + deviceCode` ซ้ำกับ active config เดิม
-- payload เดี่ยว response `data` เป็น object; batch payload response `data` เป็น array ตามลำดับ `configs`
+- payload เดี่ยว response `data` เป็น object; structured/batch payload response `data` เป็น array ตามลำดับ `config.device`
 - หลังบันทึกหลายอุปกรณ์สำเร็จ ให้เรียก `GET /device-configs?stationId=...` ซ้ำเพื่อ refresh `connectionForms`, `deviceCodeOptions`, `parameterMappings`, และ `rawConfigs`
 - `protocol` สำหรับ Microsoft SQL ต้องส่ง `MSSQL`
 
@@ -2227,73 +2227,68 @@ Path params:
 
 ```json
 {
-  "configs": [
-    {
-      "stationId": "S0001",
-      "deviceCode": "S0001/01",
-      "protocol": "MODBUS_RTU",
-      "settings": {
-        "comPort": 1,
-        "slaveId": 1,
-        "baudRate": 9600,
-        "parity": "NONE",
-        "stopBits": 1,
-        "dataBits": 8,
-        "quantity": 1,
-        "valueRange": { "min": 20, "max": 200 }
-      },
-      "channels": [
-        {
-          "addressId": 40001,
-          "dataType": "CO2 (%)",
-          "valueRange": { "min": 20, "max": 200 },
-          "valueFormat": "MEASUREMENT_VALUE",
-          "offset": 1,
-          "encoding": "SIGNED16_BIG_ENDIAN",
-          "status": "Start up"
+  "config": {
+    "stationId": "S0001",
+    "device": [
+      {
+        "deviceCode": "S0001/01",
+        "protocol": "MODBUS_RTU",
+        "settings": {
+          "comPort": 1,
+          "slaveId": 1,
+          "baudRate": 9600,
+          "parity": "NONE",
+          "stopBits": 1,
+          "dataBits": 8,
+          "quantity": 1,
+          "valueRange": { "min": 20, "max": 200 }
         }
-      ],
-      "statusManagement": {
-        "selectedParameters": ["ทั้งหมด"],
-        "startAt": null,
-        "endAt": null,
-        "status": "Normal",
-        "schedules": []
-      }
-    },
-    {
-      "stationId": "S0001",
-      "deviceCode": "S0001/02",
-      "protocol": "MODBUS_RTU",
-      "settings": {
-        "comPort": 1,
-        "slaveId": 1,
-        "baudRate": 9600,
-        "parity": "NONE",
-        "stopBits": 1,
-        "dataBits": 8,
-        "quantity": 1
       },
-      "channels": [
-        {
-          "addressId": 40002,
-          "dataType": "CO2 (ppm)",
-          "valueRange": { "min": 0, "max": 180 },
-          "valueFormat": "MEASUREMENT_VALUE",
-          "offset": 1,
-          "encoding": "SIGNED16_BIG_ENDIAN",
-          "status": "Start up"
+      {
+        "deviceCode": "S0001/02",
+        "protocol": "MODBUS_RTU",
+        "settings": {
+          "comPort": 1,
+          "slaveId": 1,
+          "baudRate": 9600,
+          "parity": "NONE",
+          "stopBits": 1,
+          "dataBits": 8,
+          "quantity": 1,
+          "valueRange": { "min": 0, "max": 180 }
         }
-      ],
-      "statusManagement": {
-        "selectedParameters": ["ทั้งหมด"],
-        "startAt": null,
-        "endAt": null,
-        "status": "Normal",
-        "schedules": []
       }
+    ],
+    "channels": [
+      {
+        "deviceCode": "S0001/01",
+        "addressId": 40001,
+        "dataType": "CO2 (%)",
+        "valueRange": { "min": 20, "max": 200 },
+        "valueFormat": "MEASUREMENT_VALUE",
+        "offset": 1,
+        "encoding": "SIGNED16_BIG_ENDIAN",
+        "status": "Start up"
+      },
+      {
+        "deviceCode": "S0001/02",
+        "addressId": 40002,
+        "dataType": "CO2 (ppm)",
+        "valueRange": { "min": 0, "max": 180 },
+        "valueFormat": "MEASUREMENT_VALUE",
+        "offset": 1,
+        "encoding": "SIGNED16_BIG_ENDIAN",
+        "status": "Start up"
+      }
+    ],
+    "statusManagement": {
+      "selectedParameters": ["ทั้งหมด"],
+      "startAt": null,
+      "endAt": null,
+      "status": "Normal",
+      "schedules": []
     }
-  ]
+  }
 }
 ```
 
@@ -2301,31 +2296,32 @@ Data dictionary:
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
-| `stationId` | string | Yes | ต้องตรงกับ `pointCode` หรือ `pointName` ของจุดตรวจวัดในคำขอ |
-| `deviceCode` | string|null | No | รหัสอุปกรณ์ในฟอร์ม เช่น `S0001/01`; ใช้เป็นส่วนหนึ่งของ unique key ร่วมกับ `stationId + protocol`; ถ้าไม่ส่งจะถือเป็น config แบบไม่มีรหัสอุปกรณ์ |
-| `protocol` | string | Yes | `MODBUS_RTU`, `MODBUS_TCP`, `MSSQL`, `MYSQL` |
-| `settings` | object | Yes | ข้อมูล connection ตาม protocol |
-| `settings.hostIp` | string | Conditional | IP/host สำหรับ `MODBUS_TCP`, `MSSQL`, `MYSQL` |
-| `settings.port` | number | Conditional | port สำหรับ TCP/database |
-| `settings.comPort` | string|number | Conditional | COM port สำหรับ `MODBUS_RTU` |
-| `settings.slaveId` | number|string | No | Slave ID |
-| `settings.baudRate` | number|string | No | Baud rate สำหรับ RTU |
-| `settings.parity` | string | No | Parity สำหรับ RTU |
-| `settings.stopBits` | number|string | No | Stop bits |
-| `settings.dataBits` | number|string | No | Data bits |
-| `settings.valueRange.min` | number|null | No | ช่วงข้อมูลตรวจวัด Min จากการ์ด Connection |
-| `settings.valueRange.max` | number|null | No | ช่วงข้อมูลตรวจวัด Max จากการ์ด Connection |
-| `channels` | array | Yes | รายการ mapping ค่าพารามิเตอร์ |
-| `channels[].addressId` | number|string | Yes | register/address/field id |
-| `channels[].dataType` | string | Yes | ชื่อพารามิเตอร์เต็มตามที่แสดงในฟอร์ม เช่น `CO2 (%)`, `CO2 (ppm)`, `NOx (ppm)`; backend เก็บตามค่าที่ส่งมา ไม่ตัดหรือประกอบหน่วยเอง |
-| `channels[].unit` | string|null | No | optional สำหรับ client เก่าที่มีหน่วยแยกอยู่แล้ว; frontend ใหม่ไม่ต้องส่ง field นี้ |
-| `channels[].valueRange.min` | number|null | No | ค่าต่ำสุดของช่วงข้อมูล |
-| `channels[].valueRange.max` | number|null | No | ค่าสูงสุดของช่วงข้อมูล |
-| `channels[].valueFormat` | string|null | No | รูปแบบค่า: `MEASUREMENT_VALUE`, `CURRENT`, `VOLTAGE` |
-| `channels[].offset` | number|null | No | offset |
-| `channels[].encoding` | string|null | No | รูปแบบ encoding |
-| `channels[].status` | string|null | No | สถานะพารามิเตอร์ เช่น `Normal`, `Maintenance`, `Inactive`; ถ้าไม่ส่ง backend ใช้ `Normal` |
-| `statusManagement` | object|null | No | ข้อมูลจัดการสถานะชั่วคราว |
+| `config.stationId` | string | Yes | ต้องตรงกับ `pointCode` หรือ `pointName` ของจุดตรวจวัดในคำขอ |
+| `config.device` | array | Yes | รายการอุปกรณ์ที่ต้องสร้าง |
+| `config.device[].deviceCode` | string|null | No | รหัสอุปกรณ์ในฟอร์ม เช่น `S0001/01`; ใช้เป็นส่วนหนึ่งของ unique key ร่วมกับ `stationId + protocol` |
+| `config.device[].protocol` | string | Yes | `MODBUS_RTU`, `MODBUS_TCP`, `MSSQL`, `MYSQL` |
+| `config.device[].settings` | object | Yes | ข้อมูล connection ตาม protocol |
+| `config.device[].settings.hostIp` | string | Conditional | IP/host สำหรับ `MODBUS_TCP`, `MSSQL`, `MYSQL` |
+| `config.device[].settings.port` | number | Conditional | port สำหรับ TCP/database |
+| `config.device[].settings.comPort` | string|number | Conditional | COM port สำหรับ `MODBUS_RTU` |
+| `config.device[].settings.slaveId` | number|string | No | Slave ID |
+| `config.device[].settings.baudRate` | number|string | No | Baud rate สำหรับ RTU |
+| `config.device[].settings.parity` | string | No | Parity สำหรับ RTU |
+| `config.device[].settings.stopBits` | number|string | No | Stop bits |
+| `config.device[].settings.dataBits` | number|string | No | Data bits |
+| `config.device[].settings.valueRange.min` | number|null | No | ช่วงข้อมูลตรวจวัด Min จากการ์ด Connection |
+| `config.device[].settings.valueRange.max` | number|null | No | ช่วงข้อมูลตรวจวัด Max จากการ์ด Connection |
+| `config.channels` | array | Yes | รายการ mapping ค่าพารามิเตอร์แบบ flat list |
+| `config.channels[].deviceCode` | string|null | Yes | ใช้ผูก channel กลับไปหา `config.device[].deviceCode` |
+| `config.channels[].addressId` | number|string | Yes | register/address/field id |
+| `config.channels[].dataType` | string | Yes | ชื่อพารามิเตอร์เต็มตามที่แสดงในฟอร์ม เช่น `CO2 (%)`, `CO2 (ppm)`, `NOx (ppm)`; backend เก็บตามค่าที่ส่งมา ไม่ตัดหรือประกอบหน่วยเอง |
+| `config.channels[].valueRange.min` | number|null | No | ค่าต่ำสุดของช่วงข้อมูล |
+| `config.channels[].valueRange.max` | number|null | No | ค่าสูงสุดของช่วงข้อมูล |
+| `config.channels[].valueFormat` | string|null | No | รูปแบบค่า: `MEASUREMENT_VALUE`, `CURRENT`, `VOLTAGE` |
+| `config.channels[].offset` | number|null | No | offset |
+| `config.channels[].encoding` | string|null | No | รูปแบบ encoding |
+| `config.channels[].status` | string|null | No | สถานะพารามิเตอร์ เช่น `Normal`, `Maintenance`, `Inactive`; ถ้าไม่ส่ง backend ใช้ `Normal` |
+| `config.statusManagement` | object|null | No | ข้อมูลจัดการสถานะชั่วคราวของชุด config |
 
 ### API 4: GET รายละเอียดฟอร์ม ตั้งค่าอุปกรณ์ config สำหรับ prefill
 

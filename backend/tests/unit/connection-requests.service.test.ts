@@ -277,8 +277,7 @@ describe('connectionRequestsService', () => {
         channels: [
           {
             addressId: 40001,
-            dataType: 'NOx',
-            unit: 'ppm',
+            dataType: 'NOx (ppm)',
             valueRange: { min: 0, max: 200 },
             valueFormat: 'MEASUREMENT_VALUE',
             offset: 0,
@@ -309,7 +308,7 @@ describe('connectionRequestsService', () => {
     expect(result).toMatchObject({
       requestId: 1,
       stationId: 'STACK-A',
-      parameterOptions: ['NOx'],
+      parameterOptions: ['NOx', 'NOx (ppm)'],
       deviceCodeOptions: ['STACK-A/RTU-01'],
       connectionForms: [
         {
@@ -330,8 +329,7 @@ describe('connectionRequestsService', () => {
         {
           deviceCode: 'STACK-A/RTU-01',
           addressId: '40001',
-          parameter: 'NOx',
-          unit: 'ppm',
+          parameter: 'NOx (ppm)',
           valueFormat: 'ค่าข้อมูลตรวจวัด',
           encodingData: 'Unsigned16 - Big Endian',
           status: 'Maintenance',
@@ -344,6 +342,11 @@ describe('connectionRequestsService', () => {
         status: 'Maintenance',
       },
     });
+    expect(result.rawConfigs[0]?.channels[0]).toMatchObject({
+      addressId: 40001,
+      dataType: 'NOx (ppm)',
+    });
+    expect(result.rawConfigs[0]?.channels[0]).not.toHaveProperty('unit');
   });
 
   it('matches device config form detail by monitoring point code or name aliases', async () => {
