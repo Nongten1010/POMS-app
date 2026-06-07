@@ -14,6 +14,20 @@ export interface LatestParameterValueQuery {
   interval: ParameterValueInterval;
 }
 
+export interface ConnectionTestParameterValueDTO {
+  parameter: string;
+  value: unknown;
+  status: unknown;
+  unit: unknown;
+  valueColumn: string | null;
+  statusColumn: string | null;
+  unitColumn: string | null;
+}
+
+export interface ConnectionTestQuery {
+  stationId: string;
+}
+
 export interface ParameterValueAccessContext {
   actorUserId: number;
   scope: string | null | undefined;
@@ -46,6 +60,25 @@ export interface LatestParameterValueResultDTO {
   meta: {
     stationId: string;
     interval: ParameterValueInterval;
+    schemaName: string;
+    tableName: string;
+    count: number;
+    registeredParameters: string[];
+    returnedColumns: string[];
+  };
+}
+
+export interface ConnectionTestResultDTO {
+  data: {
+    stationId: string;
+    timestamp: string | null;
+    values: Record<string, unknown>;
+    statuses: Record<string, unknown>;
+    results: ConnectionTestParameterValueDTO[];
+  } | null;
+  meta: {
+    stationId: string;
+    interval: 'test';
     schemaName: string;
     tableName: string;
     count: number;

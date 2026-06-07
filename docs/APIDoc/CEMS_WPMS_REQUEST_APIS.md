@@ -2443,6 +2443,67 @@ curl "http://localhost:3000/api/v1/cems-wpms-requests/1/device-configs/10" \
 
 Data dictionary response ใช้เหมือน API 4 แต่คืนเฉพาะ config ที่ระบุ
 
+### API 4.2: GET ผลทดสอบการเชื่อมต่อจากตาราง test
+
+ใช้กับปุ่ม `ทดสอบ` ในหน้าตั้งค่าอุปกรณ์ โดย backend จะอ่านค่าล่าสุดจากตาราง external parameter ingestion รูปแบบ `<stationId>_data_test` เช่น `ingest.S0001_data_test` และคืนเฉพาะพารามิเตอร์ที่ผู้ใช้มีสิทธิ์เห็นจาก `cems_wpms_measurement_points.parameters_json`
+
+| Item | Value |
+| --- | --- |
+| URL | `GET /api/v1/parameter-values/connection-test?stationId=S0001` |
+| Header | `Authorization: Bearer <accessToken>` |
+| Body | ไม่มี |
+
+Query params:
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `stationId` | string | Yes | pointCode/pointName ของจุดตรวจวัด เช่น `S0001`; backend จะอ่านจากตาราง `S0001_data_test` |
+
+ตัวอย่าง request:
+
+```bash
+curl "http://localhost:3000/api/v1/parameter-values/connection-test?stationId=S0001" \
+  -H "Authorization: Bearer $ACCESS_TOKEN"
+```
+
+ตัวอย่าง response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "stationId": "S0001",
+    "timestamp": "2026-06-07 10:15:00",
+    "values": {
+      "CO2 (%)": "123.4"
+    },
+    "statuses": {
+      "CO2 (%)": "Normal"
+    },
+    "results": [
+      {
+        "parameter": "CO2 (%)",
+        "value": "123.4",
+        "status": "Normal",
+        "unit": "ppm",
+        "valueColumn": "co2_value",
+        "statusColumn": "co2_status",
+        "unitColumn": "co2_units"
+      }
+    ]
+  },
+  "meta": {
+    "stationId": "S0001",
+    "interval": "test",
+    "schemaName": "ingest",
+    "tableName": "S0001_data_test",
+    "count": 1,
+    "registeredParameters": ["CO2 (%)"],
+    "returnedColumns": ["station_id", "co2_value", "co2_units", "co2_status", "cdate", "ctime"]
+  }
+}
+```
+
 ### API 5: POST ตรวจฟอร์ม เปลี่ยนสถานะ
 
 | Item | Value |

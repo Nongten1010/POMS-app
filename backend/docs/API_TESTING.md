@@ -515,6 +515,7 @@ GET endpoints ต้องส่ง `Authorization: Bearer <accessToken>` แล
 GET /parameter-values/tables
 GET /parameter-values?stationId=S0001&interval=real&startDate=2026-06-04&endDate=2026-06-04
 GET /parameter-values/latest?stationId=S0001&interval=real
+GET /parameter-values/connection-test?stationId=S0001
 ```
 
 การมองเห็น station อิงจากฐาน POMS หลัก:
@@ -541,6 +542,13 @@ Latest row:
 
 ```bash
 curl "http://localhost:3000/api/v1/parameter-values/latest?stationId=S0001&interval=real" \
+  -H "Authorization: Bearer $ACCESS_TOKEN"
+```
+
+Connection test row จากตาราง `ingest.S0001_data_test`:
+
+```bash
+curl "http://localhost:3000/api/v1/parameter-values/connection-test?stationId=S0001" \
   -H "Authorization: Bearer $ACCESS_TOKEN"
 ```
 
@@ -579,6 +587,44 @@ Expected response metadata:
       "cdate",
       "ctime"
     ]
+  }
+}
+```
+
+Expected connection test response shape:
+
+```json
+{
+  "success": true,
+  "data": {
+    "stationId": "S0001",
+    "timestamp": "2026-06-07 10:15:00",
+    "values": {
+      "CO2 (%)": "123.4"
+    },
+    "statuses": {
+      "CO2 (%)": "Normal"
+    },
+    "results": [
+      {
+        "parameter": "CO2 (%)",
+        "value": "123.4",
+        "status": "Normal",
+        "unit": "ppm",
+        "valueColumn": "co2_value",
+        "statusColumn": "co2_status",
+        "unitColumn": "co2_units"
+      }
+    ]
+  },
+  "meta": {
+    "stationId": "S0001",
+    "interval": "test",
+    "schemaName": "ingest",
+    "tableName": "S0001_data_test",
+    "count": 1,
+    "registeredParameters": ["CO2 (%)"],
+    "returnedColumns": ["station_id", "co2_value", "co2_units", "co2_status", "cdate", "ctime"]
   }
 }
 ```

@@ -2,6 +2,8 @@ import { env } from '../../config/env';
 import { ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
 import { parameterValuesRepository } from './parameter-values.repository';
 import {
+  type ConnectionTestQuery,
+  type ConnectionTestResultDTO,
   type LatestParameterValueQuery,
   type LatestParameterValueResultDTO,
   type ListParameterValuesQuery,
@@ -99,6 +101,49 @@ export const parameterValuesService = {
       },
     };
   },
+
+  async connectionTest(
+    query: ConnectionTestQuery,
+    access: ParameterValueAccessContext,
+  ): Promise<ConnectionTestResultDTO> {
+    await ensureStationAccess(query.stationId, access);
+
+    const interval = 'test';
+    const tableName = parameterValuesRepository.tableName(query.stationId, interval);
+    const exists = await parameterValuesRepository.tableExists(tableName);
+    if (!exists) {
+      throw new NotFoundError(
+        `Parameter value table ${env.PARAMETER_DB_SCHEMA}.${tableName} not found`,
+      );
+    }
+
+    const result = await parameterValuesRepository.latestRow({
+      stationId: query.stationId,
+      interval,
+    });
+    const registeredParameters = await parameterValuesRepository.listRegisteredParameters(
+      query.stationId,
+      access,
+    );
+    const filtered = filterRowsByRegisteredParameters(
+      result.row ? [result.row] : [],
+      registeredParameters,
+    );
+    const row = filtered.rows[0] ?? null;
+
+    return {
+      data: row ? buildConnectionTestData(query.stationId, row, registeredParameters) : null,
+      meta: {
+        stationId: query.stationId,
+        interval,
+        schemaName: env.PARAMETER_DB_SCHEMA,
+        tableName: result.tableName,
+        count: row ? 1 : 0,
+        registeredParameters,
+        returnedColumns: filtered.returnedColumns,
+      },
+    };
+  },
 };
 
 const BASE_PARAMETER_VALUE_COLUMNS = new Set(['station_id', 'cdate', 'ctime', 'udate', 'utime']);
@@ -182,6 +227,73 @@ function addParameterCandidate(candidates: Set<string>, value: string | undefine
 
 function normalizeParameterName(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function buildConnectionTestData(
+  stationId: string,
+  row: Record<string, unknown>,
+  registeredParameters: string[],
+): NonNullable<ConnectionTestResultDTO['data']> {
+  const results = registeredParameters.map((parameter) => {
+    const columns = findParameterColumns(row, parameter);
+    return {
+      parameter,
+      value: columns.valueColumn ? row[columns.valueColumn] : null,
+      status: columns.statusColumn ? row[columns.statusColumn] : null,
+      unit: columns.unitColumn ? row[columns.unitColumn] : null,
+      ...columns,
+    };
+  });
+
+  return {
+    stationId,
+    timestamp: buildTimestamp(row),
+    values: Object.fromEntries(results.map((result) => [result.parameter, result.value])),
+    statuses: Object.fromEntries(results.map((result) => [result.parameter, result.status])),
+    results,
+  };
+}
+
+function findParameterColumns(
+  row: Record<string, unknown>,
+  parameter: string,
+): { valueColumn: string | null; statusColumn: string | null; unitColumn: string | null } {
+  const keysByLower = new Map(Object.keys(row).map((key) => [key.toLowerCase(), key]));
+  const prefixes = toParameterColumnPrefixes(parameter);
+
+  return {
+    valueColumn: findColumn(keysByLower, prefixes, 'value'),
+    statusColumn: findColumn(keysByLower, prefixes, 'status'),
+    unitColumn:
+      findColumn(keysByLower, prefixes, 'units') ?? findColumn(keysByLower, prefixes, 'unit'),
+  };
+}
+
+function findColumn(
+  keysByLower: Map<string, string>,
+  prefixes: string[],
+  suffix: string,
+): string | null {
+  for (const prefix of prefixes) {
+    const key = keysByLower.get(`${prefix}_${suffix}`);
+    if (key) return key;
+  }
+
+  return null;
+}
+
+function buildTimestamp(row: Record<string, unknown>): string | null {
+  const cdate = typeof row.cdate === 'string' ? row.cdate : null;
+  const ctime = typeof row.ctime === 'string' ? row.ctime : null;
+  if (cdate && ctime) return `${cdate} ${ctime}`;
+  if (cdate) return cdate;
+
+  const udate = typeof row.udate === 'string' ? row.udate : null;
+  const utime = typeof row.utime === 'string' ? row.utime : null;
+  if (udate && utime) return `${udate} ${utime}`;
+  if (udate) return udate;
+
+  return null;
 }
 
 async function ensureStationAccess(

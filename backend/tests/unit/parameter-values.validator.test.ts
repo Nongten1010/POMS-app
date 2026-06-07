@@ -1,5 +1,6 @@
 import { describe, expect, it } from '@jest/globals';
 import {
+  connectionTestQuerySchema,
   latestParameterValueQuerySchema,
   listParameterValuesQuerySchema,
 } from '../../src/modules/parameter-values/parameter-values.validator';
@@ -77,5 +78,23 @@ describe('parameter value validators', () => {
       stationId: 'S0001',
       interval: '5m',
     });
+  });
+
+  it('builds a connection test query with only the station id', () => {
+    const result = connectionTestQuerySchema.parse({
+      stationId: 'S0001',
+    });
+
+    expect(result).toEqual({
+      stationId: 'S0001',
+    });
+  });
+
+  it('rejects unsafe station ids for connection test table names', () => {
+    const result = connectionTestQuerySchema.safeParse({
+      stationId: 'S0001;DROP',
+    });
+
+    expect(result.success).toBe(false);
   });
 });

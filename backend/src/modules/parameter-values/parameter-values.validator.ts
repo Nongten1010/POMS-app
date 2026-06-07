@@ -36,5 +36,12 @@ export const latestParameterValueQuerySchema = z
   })
   .strict();
 
+export const connectionTestQuerySchema = z
+  .object({
+    stationId: stationIdSchema,
+  })
+  .strict();
+
 export type ListParameterValuesQuerySchemaInput = z.infer<typeof listParameterValuesQuerySchema>;
 export type LatestParameterValueQuerySchemaInput = z.infer<typeof latestParameterValueQuerySchema>;
+export type ConnectionTestQuerySchemaInput = z.infer<typeof connectionTestQuerySchema>;

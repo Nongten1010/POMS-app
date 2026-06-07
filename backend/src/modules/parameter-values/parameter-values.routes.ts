@@ -8,5 +8,6 @@ export const parameterValuesRoutes = Router();
 parameterValuesRoutes.use(authenticate, authorize('cems_wpms_requests:view'));
 
 parameterValuesRoutes.get('/tables', parameterValuesController.listTables);
+parameterValuesRoutes.get('/connection-test', parameterValuesController.connectionTest);
 parameterValuesRoutes.get('/latest', parameterValuesController.latest);
 parameterValuesRoutes.get('/', parameterValuesController.list);

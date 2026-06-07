@@ -175,6 +175,129 @@ describe('parameterValuesService', () => {
     });
   });
 
+  it('returns formatted connection test values from the station test table', async () => {
+    mockedRepository.listRegisteredParameters.mockResolvedValue([
+      'CO2 (%)',
+      'CO2 (ppm)',
+      'NOx (ppm)',
+    ]);
+    mockedRepository.tableExists.mockResolvedValue(true);
+    mockedRepository.latestRow.mockResolvedValue({
+      tableName: 'S0001_data_test',
+      row: {
+        station_id: 'S0001',
+        co2_value: '123.4',
+        co2_units: 'ppm',
+        co2_status: 'Normal',
+        nox_value: '8.5',
+        nox_units: 'ppm',
+        nox_status: 'Maintenance',
+        flow_value: '777',
+        cdate: '2026-06-07',
+        ctime: '10:15:00',
+      },
+    });
+
+    const result = await parameterValuesService.connectionTest(
+      { stationId: 'S0001' },
+      operatorAccess,
+    );
+
+    expect(mockedRepository.canAccessStation).toHaveBeenCalledWith('S0001', operatorAccess);
+    expect(mockedRepository.tableExists).toHaveBeenCalledWith('S0001_data_test');
+    expect(mockedRepository.latestRow).toHaveBeenCalledWith({
+      stationId: 'S0001',
+      interval: 'test',
+    });
+    expect(result).toMatchObject({
+      data: {
+        stationId: 'S0001',
+        timestamp: '2026-06-07 10:15:00',
+        values: {
+          'CO2 (%)': '123.4',
+          'CO2 (ppm)': '123.4',
+          'NOx (ppm)': '8.5',
+        },
+        statuses: {
+          'CO2 (%)': 'Normal',
+          'CO2 (ppm)': 'Normal',
+          'NOx (ppm)': 'Maintenance',
+        },
+        results: [
+          {
+            parameter: 'CO2 (%)',
+            value: '123.4',
+            status: 'Normal',
+            unit: 'ppm',
+            valueColumn: 'co2_value',
+            statusColumn: 'co2_status',
+            unitColumn: 'co2_units',
+          },
+          {
+            parameter: 'CO2 (ppm)',
+            value: '123.4',
+            status: 'Normal',
+            unit: 'ppm',
+            valueColumn: 'co2_value',
+            statusColumn: 'co2_status',
+            unitColumn: 'co2_units',
+          },
+          {
+            parameter: 'NOx (ppm)',
+            value: '8.5',
+            status: 'Maintenance',
+            unit: 'ppm',
+            valueColumn: 'nox_value',
+            statusColumn: 'nox_status',
+            unitColumn: 'nox_units',
+          },
+        ],
+      },
+      meta: {
+        stationId: 'S0001',
+        interval: 'test',
+        schemaName: 'ingest',
+        tableName: 'S0001_data_test',
+        count: 1,
+        registeredParameters: ['CO2 (%)', 'CO2 (ppm)', 'NOx (ppm)'],
+        returnedColumns: [
+          'station_id',
+          'co2_value',
+          'co2_units',
+          'co2_status',
+          'nox_value',
+          'nox_units',
+          'nox_status',
+          'cdate',
+          'ctime',
+        ],
+      },
+    });
+    expect(result.data?.values).not.toHaveProperty('Flow');
+  });
+
+  it('returns empty connection test data when no test row exists', async () => {
+    mockedRepository.tableExists.mockResolvedValue(true);
+    mockedRepository.latestRow.mockResolvedValue({
+      tableName: 'S0001_data_test',
+      row: null,
+    });
+
+    await expect(
+      parameterValuesService.connectionTest({ stationId: 'S0001' }, operatorAccess),
+    ).resolves.toMatchObject({
+      data: null,
+      meta: {
+        stationId: 'S0001',
+        interval: 'test',
+        tableName: 'S0001_data_test',
+        count: 0,
+        registeredParameters: ['CO2'],
+        returnedColumns: [],
+      },
+    });
+  });
+
   it('returns only base columns when the station has no registered parameters', async () => {
     mockedRepository.listRegisteredParameters.mockResolvedValue([]);
     mockedRepository.tableExists.mockResolvedValue(true);

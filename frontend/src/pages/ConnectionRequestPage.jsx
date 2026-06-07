@@ -273,6 +273,9 @@ const requestTableRowsApiUrl = import.meta.env.DEV
 const requestDetailApiBaseUrl = import.meta.env.DEV
   ? '/api-proxy/v1/cems-wpms-requests'
   : 'http://d-poms.diw.go.th/api/v1/cems-wpms-requests'
+const parameterValuesApiBaseUrl = import.meta.env.DEV
+  ? '/api-proxy/v1/parameter-values'
+  : 'http://d-poms.diw.go.th/api/v1/parameter-values'
 
 function getMeasurementPointsRequestApiUrl() {
   if (typeof window === 'undefined') {
@@ -310,6 +313,16 @@ function getDeviceConfigsApiUrl(id, stationId) {
   }
 
   return `${requestDetailApiBaseUrl}/${id}/device-configs${query}`
+}
+
+function getConnectionTestApiUrl(stationId) {
+  const query = `?stationId=${encodeURIComponent(stationId)}`
+
+  if (typeof window !== 'undefined' && window.location.hostname === 'd-poms.diw.go.th') {
+    return `/api/v1/parameter-values/connection-test${query}`
+  }
+
+  return `${parameterValuesApiBaseUrl}/connection-test${query}`
 }
 
 const factoryRows = []
@@ -1941,8 +1954,42 @@ function mapTestResultRows(testResults = []) {
   return testResults.map((result, index) => ({
     id: result.id ?? index,
     values: result.values ?? result.data ?? result.parameters ?? {},
+    statuses: result.statuses ?? {},
     timestamp: result.timestamp ?? result.createdAt ?? result.testedAt ?? '',
   }))
+}
+
+function mapConnectionTestResultRows(connectionTestData) {
+  if (!connectionTestData) {
+    return []
+  }
+
+  return [
+    {
+      id: `${connectionTestData.stationId ?? 'station'}-${connectionTestData.timestamp ?? 'latest'}`,
+      values: Object.fromEntries(
+        (connectionTestData.results ?? []).map((result) => [
+          result.parameter,
+          formatConnectionTestValue(result.value),
+        ]),
+      ),
+      statuses: Object.fromEntries(
+        (connectionTestData.results ?? []).map((result) => [
+          result.parameter,
+          formatConnectionTestValue(result.status),
+        ]),
+      ),
+      timestamp: connectionTestData.timestamp ?? '',
+    },
+  ]
+}
+
+function formatConnectionTestValue(value) {
+  if (value === null || value === undefined || value === '') {
+    return '-'
+  }
+
+  return String(value)
 }
 
 const parityCodeMap = {
@@ -2111,6 +2158,7 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose }) {
   const [parameterMappingRows, setParameterMappingRows] = useState([])
   const [statusManagementValue, setStatusManagementValue] = useState(null)
   const [deviceConfigSaving, setDeviceConfigSaving] = useState(false)
+  const [connectionTestLoading, setConnectionTestLoading] = useState(false)
   const parameterOptions = deviceConfig?.parameterOptions ?? getConnectionParameterOptions(context)
   const deviceCodeOptions = buildDeviceCodeOptions(context, connectionForms, deviceConfig?.deviceCodeOptions ?? [])
   const statusManagement = statusManagementValue ?? deviceConfig?.statusManagement ?? null
@@ -2134,6 +2182,7 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose }) {
       setParameterMappingRows([])
       setStatusManagementValue(null)
       setTestResultRows([])
+      setConnectionTestLoading(false)
       setDeviceConfigError('')
     })
 
@@ -2201,8 +2250,45 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose }) {
   const updateConnectionForm = (id, nextValue) => {
     setConnectionForms((current) => current.map((form) => (form.id === id ? nextValue : form)))
   }
-  const handleTestConnection = () => {
-    setTestResultRows([])
+  const handleTestConnection = async () => {
+    const stationId = getMonitoringPointCode(context)
+
+    if (!stationId) {
+      setDeviceConfigError('ไม่พบรหัสจุดตรวจวัดสำหรับทดสอบการเชื่อมต่อ')
+      return
+    }
+
+    if (!accessToken) {
+      setDeviceConfigError('กรุณาเข้าสู่ระบบเพื่อทดสอบการเชื่อมต่อ')
+      return
+    }
+
+    setConnectionTestLoading(true)
+    setDeviceConfigError('')
+
+    try {
+      const result = await fetch(getConnectionTestApiUrl(stationId), {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      })
+      const payload = await result.json().catch(() => null)
+
+      if (!result.ok) {
+        throw new Error(
+          getPayloadErrorMessage(
+            payload,
+            `ทดสอบการเชื่อมต่อไม่สำเร็จ (${result.status} ${result.statusText})`,
+          ),
+        )
+      }
+
+      setTestResultRows(mapConnectionTestResultRows(payload?.data ?? null))
+    } catch (error) {
+      setDeviceConfigError(error instanceof Error ? error.message : 'ทดสอบการเชื่อมต่อไม่สำเร็จ')
+    } finally {
+      setConnectionTestLoading(false)
+    }
   }
   const handleSaveDeviceConfig = async () => {
     const requestId = getDeviceConfigRequestId(context)
@@ -2390,29 +2476,34 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose }) {
               ทดสอบการเชื่อมต่อ
             </Typography>
             <TableContainer sx={{ border: 1, borderColor: 'divider', overflowX: 'auto' }}>
-              <Table size="small" sx={{ minWidth: Math.max(720, parameterOptions.length * 160), ...borderedTableSx }}>
+              <Table size="small" sx={{ minWidth: Math.max(720, parameterOptions.length * 220), ...borderedTableSx }}>
                 <TableHead>
                   <TableRow>
-                    {[...parameterOptions, 'Timestamp'].map((column) => (
-                      <TableCell key={column} sx={{ fontWeight: 700, bgcolor: 'neutral.50' }}>
-                        {column}
-                      </TableCell>
-                    ))}
+                    {parameterOptions.flatMap((parameter) => [
+                      <TableCell key={`${parameter}-value`} sx={{ fontWeight: 700, bgcolor: 'neutral.50' }}>
+                        {parameter}
+                      </TableCell>,
+                      <TableCell key={`${parameter}-status`} sx={{ fontWeight: 700, bgcolor: 'neutral.50' }}>
+                        Status
+                      </TableCell>,
+                    ])}
+                    <TableCell sx={{ fontWeight: 700, bgcolor: 'neutral.50' }}>Timestamp</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {testResultRows.length > 0 ? (
                     testResultRows.map((row) => (
                       <TableRow key={row.id}>
-                        {parameterOptions.map((parameter) => (
-                          <TableCell key={parameter}>{row.values[parameter]}</TableCell>
-                        ))}
+                        {parameterOptions.flatMap((parameter) => [
+                          <TableCell key={`${parameter}-value`}>{row.values[parameter] ?? '-'}</TableCell>,
+                          <TableCell key={`${parameter}-status`}>{row.statuses?.[parameter] ?? '-'}</TableCell>,
+                        ])}
                         <TableCell>{row.timestamp}</TableCell>
                       </TableRow>
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={parameterOptions.length + 1} align="center">
+                      <TableCell colSpan={parameterOptions.length * 2 + 1} align="center">
                         <Typography variant="body2" color="text.secondary">
                           ยังไม่มีผลการทดสอบ
                         </Typography>
@@ -2429,8 +2520,8 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose }) {
         <Button color="inherit" onClick={onClose}>
           ปิด
         </Button>
-        <Button variant="contained" onClick={handleTestConnection}>
-          ทดสอบ
+        <Button variant="contained" disabled={connectionTestLoading} onClick={handleTestConnection}>
+          {connectionTestLoading ? 'กำลังทดสอบ' : 'ทดสอบ'}
         </Button>
         <Button variant="contained" disabled={deviceConfigSaving} onClick={handleSaveDeviceConfig}>
           {deviceConfigSaving ? 'กำลังบันทึก' : 'บันทึก'}

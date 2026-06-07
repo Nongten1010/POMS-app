@@ -4,6 +4,7 @@ import { getScope } from '../../shared/middlewares/authorize';
 import { parameterValuesService } from './parameter-values.service';
 import { type ParameterValueAccessContext } from './parameter-values.types';
 import {
+  connectionTestQuerySchema,
   latestParameterValueQuerySchema,
   listParameterValuesQuerySchema,
 } from './parameter-values.validator';
@@ -32,6 +33,16 @@ export const parameterValuesController = {
     try {
       const query = latestParameterValueQuerySchema.parse(req.query);
       const result = await parameterValuesService.latest(query, requireAccess(req));
+      res.status(StatusCodes.OK).json({ success: true, ...result });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async connectionTest(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const query = connectionTestQuerySchema.parse(req.query);
+      const result = await parameterValuesService.connectionTest(query, requireAccess(req));
       res.status(StatusCodes.OK).json({ success: true, ...result });
     } catch (err) {
       next(err);
