@@ -380,7 +380,7 @@ function parseParameterWithUnit(value: unknown): { dataType?: string; unit?: str
   const match = value.trim().match(/^(.+?)\s*\(([^)]+)\)$/);
   if (!match) return { dataType: value.trim() };
   return {
-    dataType: match[1]?.trim(),
+    dataType: value.trim(),
     unit: match[2]?.trim(),
   };
 }

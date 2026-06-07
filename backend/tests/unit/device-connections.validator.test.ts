@@ -71,9 +71,9 @@ describe('device connection validators', () => {
         protocol: 'MODBUS_RTU',
         settings: {
           comPort: 1,
-          slaveId: 1,
-          baudRate: 9600,
-          parity: 'NONE',
+	          slaveId: 1,
+	          baudRate: 9600,
+	          parity: 'NONE',
           stopBits: 1,
           dataBits: 8,
           quantity: 1,
@@ -82,7 +82,7 @@ describe('device connection validators', () => {
         channels: [
           {
             addressId: 40001,
-            dataType: 'NOx',
+            dataType: 'NOx (ppm)',
             unit: 'ppm',
             valueRange: { min: 0, max: 200 },
             valueFormat: 'MEASUREMENT_VALUE',

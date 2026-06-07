@@ -1217,7 +1217,7 @@ curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/device
     "channels": [
       {
         "addressId": 40001,
-        "dataType": "NOx",
+	      "dataType": "NOx (ppm)",
         "unit": "ppm",
         "valueRange": { "min": 0, "max": 200 },
         "valueFormat": "MEASUREMENT_VALUE",
@@ -2249,7 +2249,7 @@ Path params:
       "channels": [
         {
           "addressId": 40001,
-          "dataType": "CO2",
+	          "dataType": "CO2 (%)",
           "unit": "%",
           "valueRange": { "min": 20, "max": 200 },
           "valueFormat": "MEASUREMENT_VALUE",
@@ -2282,7 +2282,7 @@ Path params:
       "channels": [
         {
           "addressId": 40002,
-          "dataType": "CO2",
+	          "dataType": "CO2 (ppm)",
           "unit": "ppm",
           "valueRange": { "min": 0, "max": 180 },
           "valueFormat": "MEASUREMENT_VALUE",
@@ -2321,7 +2321,7 @@ Data dictionary:
 | `settings.dataBits` | number|string | No | Data bits |
 | `channels` | array | Yes | รายการ mapping ค่าพารามิเตอร์ |
 | `channels[].addressId` | number|string | Yes | register/address/field id |
-| `channels[].dataType` | string | Yes | ชื่อพารามิเตอร์ เช่น `NOx` |
+| `channels[].dataType` | string | Yes | ชื่อพารามิเตอร์ตามที่แสดงในฟอร์ม เช่น `CO2 (%)`, `CO2 (ppm)`, `NOx (ppm)`; backend เก็บตามค่าที่ส่ง ไม่ตัดหน่วยออกจากชื่อ |
 | `channels[].unit` | string|null | No | หน่วย |
 | `channels[].valueRange.min` | number|null | No | ค่าต่ำสุดของช่วงข้อมูล |
 | `channels[].valueRange.max` | number|null | No | ค่าสูงสุดของช่วงข้อมูล |

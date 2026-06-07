@@ -990,7 +990,7 @@ Channel shape:
 ```json
 {
   "addressId": 40001,
-  "dataType": "CO2",
+  "dataType": "CO2 (ppm)",
   "unit": "ppm",
   "valueRange": { "min": 0, "max": 200 },
   "valueFormat": "MEASUREMENT_VALUE",
@@ -1012,6 +1012,8 @@ Validation สำคัญ:
 | Modbus channel | ต้องมี `valueRange` และ `encoding` |
 | DB channel | ใช้เฉพาะ `addressId`, `dataType`, `unit`, `offset` ตามไฟล์ client |
 | `dbPass` | ส่งตอน create/test ได้ แต่ response จะ mask เป็น `********` |
+
+ส่ง `channels[].dataType` เป็นชื่อพารามิเตอร์เต็มตามที่แสดงในฟอร์ม เช่น `CO2 (%)` หรือ `CO2 (ppm)`; backend เก็บตามค่าที่ส่ง ไม่ตัดหน่วยออกจากชื่อพารามิเตอร์
 
 ### 9.2 Mock test connection
 
@@ -1040,7 +1042,7 @@ Content-Type: application/json
   "channels": [
     {
       "addressId": 40001,
-      "dataType": "CO2",
+	      "dataType": "CO2 (ppm)",
       "unit": "ppm",
       "valueRange": { "min": 0, "max": 200 },
       "valueFormat": "MEASUREMENT_VALUE",
@@ -1049,7 +1051,7 @@ Content-Type: application/json
     },
     {
       "addressId": 40002,
-      "dataType": "O2",
+	      "dataType": "O2 (%)",
       "unit": "%",
       "valueRange": { "min": 0, "max": 25 },
       "valueFormat": "MEASUREMENT_VALUE",

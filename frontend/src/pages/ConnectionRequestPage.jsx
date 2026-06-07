@@ -2000,10 +2000,6 @@ function toNumberOrNull(value) {
   return Number.isNaN(numericValue) ? null : numericValue
 }
 
-function getParameterDataType(parameter) {
-  return parameter?.split(' ')?.[0] ?? ''
-}
-
 function compactObject(value) {
   return Object.fromEntries(
     Object.entries(value).filter(([, item]) => item !== '' && item !== null && item !== undefined),
@@ -2048,7 +2044,7 @@ function buildDeviceConfigChannels(rows) {
     .filter((row) => row.parameter)
     .map((row) => ({
       addressId: toNumberOrNull(row.addressId),
-      dataType: getParameterDataType(row.parameter),
+      dataType: row.parameter,
       unit: row.unit || parameterUnitMap[row.parameter] || '',
       valueRange: {
         min: toNumberOrNull(row.min),
