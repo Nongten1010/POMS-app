@@ -1199,7 +1199,12 @@ Response:
 
 ใช้หลังคำขออยู่สถานะ `WAITING_CONNECTION` และ `stationId` ต้องตรงกับ `pointCode` หรือ `pointName` ในคำขอนั้น
 
-หมายเหตุ: 1 `stationId` มีได้หลาย protocol เช่น `MODBUS_RTU`, `MODBUS_TCP`, `MSSQL`, `MYSQL` แต่ห้ามมี config ซ้ำ protocol เดิมใน station เดียวกัน
+หมายเหตุ:
+
+- 1 `stationId` มีได้หลาย protocol เช่น `MODBUS_RTU`, `MODBUS_TCP`, `MSSQL`, `MYSQL`
+- protocol เดียวกันเพิ่มได้หลายอุปกรณ์เมื่อ `deviceCode` ต่างกัน เช่น `S0001/01` และ `S0001/02` เป็น `MODBUS_RTU` ได้ทั้งคู่
+- ห้ามมี config ซ้ำชุด `stationId + protocol + deviceCode`
+- endpoint นี้รับ 1 device config ต่อ 1 request; ถ้า frontend มีหลาย `connectionForms` ให้แยกยิง `POST` ตาม `deviceCode` และส่ง `channels` เฉพาะของอุปกรณ์นั้น
 
 ```bash
 curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/device-configs" \
@@ -2186,6 +2191,13 @@ Path params:
 | --- | --- | --- | --- |
 | `id` | number | Yes | ID คำขอที่อยู่สถานะ `WAITING_CONNECTION` |
 
+หมายเหตุสำหรับ frontend:
+
+- `POST /device-configs` บันทึก 1 config ต่อ 1 `deviceCode`; ถ้าผู้ใช้กดเพิ่มอุปกรณ์หลายตัว ให้ยิงหลายครั้งตามจำนวนอุปกรณ์ใหม่
+- backend อนุญาต `stationId + protocol` ซ้ำได้เมื่อ `deviceCode` ต่างกัน แต่จะตอบ `409 CONFLICT` ถ้า `stationId + protocol + deviceCode` ซ้ำกับ active config เดิม
+- หลังบันทึกหลายอุปกรณ์สำเร็จ ให้เรียก `GET /device-configs?stationId=...` ซ้ำเพื่อ refresh `connectionForms`, `deviceCodeOptions`, `parameterMappings`, และ `rawConfigs`
+- `protocol` สำหรับ Microsoft SQL ต้องส่ง `MSSQL`
+
 ตัวอย่าง JSON ที่ต้องส่ง:
 
 ```json
@@ -2239,7 +2251,7 @@ Data dictionary:
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
 | `stationId` | string | Yes | ต้องตรงกับ `pointCode` หรือ `pointName` ของจุดตรวจวัดในคำขอ |
-| `deviceCode` | string|null | No | รหัสอุปกรณ์ในฟอร์ม เช่น `S0001/01`; ถ้าไม่ส่ง response prefill จะ generate จาก `stationId` ตามลำดับ |
+| `deviceCode` | string|null | No | รหัสอุปกรณ์ในฟอร์ม เช่น `S0001/01`; ใช้เป็นส่วนหนึ่งของ unique key ร่วมกับ `stationId + protocol`; ถ้าไม่ส่งจะถือเป็น config แบบไม่มีรหัสอุปกรณ์ |
 | `protocol` | string | Yes | `MODBUS_RTU`, `MODBUS_TCP`, `MSSQL`, `MYSQL` |
 | `settings` | object | Yes | ข้อมูล connection ตาม protocol |
 | `settings.hostIp` | string | Conditional | IP/host สำหรับ `MODBUS_TCP`, `MSSQL`, `MYSQL` |
@@ -2256,7 +2268,7 @@ Data dictionary:
 | `channels[].unit` | string|null | No | หน่วย |
 | `channels[].valueRange.min` | number|null | No | ค่าต่ำสุดของช่วงข้อมูล |
 | `channels[].valueRange.max` | number|null | No | ค่าสูงสุดของช่วงข้อมูล |
-| `channels[].valueFormat` | string|null | No | รูปแบบค่า เช่น `MEASUREMENT_VALUE` |
+| `channels[].valueFormat` | string|null | No | รูปแบบค่า: `MEASUREMENT_VALUE`, `CURRENT`, `VOLTAGE` |
 | `channels[].offset` | number|null | No | offset |
 | `channels[].encoding` | string|null | No | รูปแบบ encoding |
 | `channels[].status` | string|null | No | สถานะพารามิเตอร์ เช่น `Normal`, `Maintenance`, `Inactive`; ถ้าไม่ส่ง backend ใช้ `Normal` |
@@ -2291,7 +2303,7 @@ Data dictionary response ที่ frontend ใช้:
 | `data.monitoringPoint` | object|null | จุดตรวจวัดที่กำลังตั้งค่า |
 | `data.parameterOptions` | string[] | ตัวเลือกพารามิเตอร์ |
 | `data.deviceCodeOptions` | string[] | ตัวเลือกรหัสอุปกรณ์ เช่น `S0001/01` |
-| `data.connectionForms` | array | ค่า prefill ส่วนอุปกรณ์ connection |
+| `data.connectionForms` | array | ค่า prefill ส่วนอุปกรณ์ connection; แต่ละรายการมี `configId` และ `deviceCode` สำหรับแยกอุปกรณ์เดิมออกจากอุปกรณ์ใหม่ |
 | `data.statusManagement` | object | ค่า prefill ส่วนจัดการสถานะ |
 | `data.parameterMappings` | array | ค่า prefill ตาราง mapping พารามิเตอร์ |
 | `data.testResults` | array | ผลทดสอบ connection |

@@ -8,7 +8,6 @@ import {
   DEVICE_CONNECTION_PROTOCOL,
   type CreateDeviceConnectionConfigInput,
   type DeviceConnectionConfigDTO,
-  type DeviceConnectionProtocol,
   type DeviceConnectionTestResultDTO,
   type ListDeviceConnectionConfigsQuery,
   type TestDeviceConnectionInput,
@@ -50,7 +49,7 @@ export const deviceConnectionsService = {
     actorUserId: number,
   ): Promise<DeviceConnectionConfigDTO> {
     ensureChannelAddressesAreUnique(input);
-    await ensureStationProtocolHasNoActiveConfig(input.stationId, input.protocol);
+    await ensureStationProtocolDeviceCodeHasNoActiveConfig(input);
     return deviceConnectionsRepository.create(input, actorUserId);
   },
 
@@ -60,7 +59,7 @@ export const deviceConnectionsService = {
     requestId: number,
   ): Promise<DeviceConnectionConfigDTO> {
     ensureChannelAddressesAreUnique(input);
-    await ensureStationProtocolHasNoActiveConfig(input.stationId, input.protocol);
+    await ensureStationProtocolDeviceCodeHasNoActiveConfig(input);
     return deviceConnectionsRepository.create(input, actorUserId, requestId);
   },
 
@@ -98,19 +97,24 @@ function ensureChannelAddressesAreUnique(input: TestDeviceConnectionInput): void
   }
 }
 
-async function ensureStationProtocolHasNoActiveConfig(
-  stationId: string,
-  protocol: DeviceConnectionProtocol,
+async function ensureStationProtocolDeviceCodeHasNoActiveConfig(
+  input: CreateDeviceConnectionConfigInput,
 ): Promise<void> {
-  const exists = await deviceConnectionsRepository.existsByStationIdAndProtocol(
-    stationId,
-    protocol,
+  const deviceCode = input.deviceCode ?? null;
+  const exists = await deviceConnectionsRepository.existsByStationIdProtocolAndDeviceCode(
+    input.stationId,
+    input.protocol,
+    deviceCode,
   );
   if (exists) {
-    throw new ConflictError('Device connection config already exists for stationId and protocol', {
-      stationId,
-      protocol,
-    });
+    throw new ConflictError(
+      'Device connection config already exists for stationId, protocol, and deviceCode',
+      {
+        stationId: input.stationId,
+        protocol: input.protocol,
+        deviceCode,
+      },
+    );
   }
 }
 

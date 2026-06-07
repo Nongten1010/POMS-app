@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 jest.mock('../../src/modules/device-connections/device-connections.repository', () => ({
   deviceConnectionsRepository: {
     create: jest.fn(),
-    existsByStationIdAndProtocol: jest.fn(),
+    existsByStationIdProtocolAndDeviceCode: jest.fn(),
     findById: jest.fn(),
     list: jest.fn(),
     listByRequestId: jest.fn(),
@@ -46,7 +46,7 @@ describe('deviceConnectionsService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockedRepository.existsByStationIdAndProtocol.mockResolvedValue(false);
+    mockedRepository.existsByStationIdProtocolAndDeviceCode.mockResolvedValue(false);
     deviceConnectionsService.setClockForTests(() => now);
   });
 
@@ -250,15 +250,35 @@ describe('deviceConnectionsService', () => {
     expect(result.settings).toMatchObject({ hostIp: '192.168.1.10', port: 502 });
   });
 
-  it('rejects duplicate active station and protocol config before hitting database constraints', async () => {
-    mockedRepository.existsByStationIdAndProtocol.mockResolvedValue(true);
+  it('rejects duplicate active station, protocol, and deviceCode config before hitting database constraints', async () => {
+    mockedRepository.existsByStationIdProtocolAndDeviceCode.mockResolvedValue(true);
 
     await expect(
-      deviceConnectionsService.create(modbusTcpPayload, actorUserId),
+      deviceConnectionsService.create(
+        { ...modbusTcpPayload, deviceCode: 'STATION_001/01' },
+        actorUserId,
+      ),
     ).rejects.toMatchObject({
       code: 'CONFLICT',
     });
     expect(mockedRepository.create).not.toHaveBeenCalled();
+  });
+
+  it('allows the same station and protocol to store a different deviceCode', async () => {
+    const input: CreateDeviceConnectionConfigInput = {
+      ...modbusTcpPayload,
+      deviceCode: 'STATION_001/02',
+    };
+    mockedRepository.create.mockResolvedValue(configDto({ deviceCode: input.deviceCode }));
+
+    await deviceConnectionsService.create(input, actorUserId);
+
+    expect(mockedRepository.existsByStationIdProtocolAndDeviceCode).toHaveBeenCalledWith(
+      'STATION_001',
+      DEVICE_CONNECTION_PROTOCOL.MODBUS_TCP,
+      'STATION_001/02',
+    );
+    expect(mockedRepository.create).toHaveBeenCalledWith(input, actorUserId);
   });
 
   it('allows the same station to store different protocols', async () => {
@@ -294,9 +314,10 @@ describe('deviceConnectionsService', () => {
 
     await deviceConnectionsService.create(input, actorUserId);
 
-    expect(mockedRepository.existsByStationIdAndProtocol).toHaveBeenCalledWith(
+    expect(mockedRepository.existsByStationIdProtocolAndDeviceCode).toHaveBeenCalledWith(
       'STATION_001',
       DEVICE_CONNECTION_PROTOCOL.MODBUS_RTU,
+      null,
     );
     expect(mockedRepository.create).toHaveBeenCalledWith(input, actorUserId);
   });

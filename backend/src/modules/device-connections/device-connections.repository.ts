@@ -63,13 +63,21 @@ export const deviceConnectionsRepository = {
     return Promise.all(rows.map((row) => hydrate(row)));
   },
 
-  async existsByStationIdAndProtocol(
+  async existsByStationIdProtocolAndDeviceCode(
     stationId: string,
     protocol: DeviceConnectionProtocol,
+    deviceCode: string | null,
   ): Promise<boolean> {
     const row = await db('device_connection_configs')
       .where('station_id', stationId)
       .where('protocol', protocol)
+      .modify((builder) => {
+        if (deviceCode) {
+          builder.where('device_code', deviceCode);
+        } else {
+          builder.whereNull('device_code');
+        }
+      })
       .whereNull('deleted_at')
       .select('id')
       .first();

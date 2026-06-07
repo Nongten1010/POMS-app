@@ -356,6 +356,19 @@ function getConnectionDeviceCode(context, index) {
   return monitoringPointCode ? `${monitoringPointCode}/${String(index + 1).padStart(2, '0')}` : ''
 }
 
+function getConnectionFormDeviceCode(context, form, index, existingOptions = []) {
+  return form?.deviceCode || existingOptions[index] || getConnectionDeviceCode(context, index)
+}
+
+function buildDeviceCodeOptions(context, forms = [], existingOptions = []) {
+  return [
+    ...new Set([
+      ...existingOptions,
+      ...forms.map((form, index) => getConnectionFormDeviceCode(context, form, index, existingOptions)),
+    ]),
+  ].filter(Boolean)
+}
+
 function getDeviceConfigRequestId(context) {
   return context?.REQUEST_ID
     ?? context?.requestId
@@ -1909,13 +1922,14 @@ function StatusManagementSection({ parameterOptions, statusManagement, onChange 
 const protocolCodeMap = {
   'Modbus RTU': 'MODBUS_RTU',
   'Modbus TCP': 'MODBUS_TCP',
-  'Microsoft SQL': 'MICROSOFT_SQL',
+  'Microsoft SQL': 'MSSQL',
   MySQL: 'MYSQL',
 }
 
 const protocolLabelMap = {
   MODBUS_RTU: 'Modbus RTU',
   MODBUS_TCP: 'Modbus TCP',
+  MSSQL: 'Microsoft SQL',
   MICROSOFT_SQL: 'Microsoft SQL',
   MYSQL: 'MySQL',
 }
@@ -1931,6 +1945,8 @@ function mapConnectionForms(forms = []) {
 
     return {
       id: form.id ?? Date.now() + index,
+      configId: form.configId ?? form.config_id ?? null,
+      deviceCode: form.deviceCode ?? form.device_code ?? '',
       type,
       values: {
         ...getDefaultConnectionForm(type),
@@ -1956,8 +1972,8 @@ const parityCodeMap = {
 
 const valueFormatCodeMap = {
   ค่าข้อมูลตรวจวัด: 'MEASUREMENT_VALUE',
-  ค่ากระแสไฟฟ้า: 'CURRENT_VALUE',
-  ค่าแรงดันไฟฟ้า: 'VOLTAGE_VALUE',
+  ค่ากระแสไฟฟ้า: 'CURRENT',
+  ค่าแรงดันไฟฟ้า: 'VOLTAGE',
 }
 
 const encodingCodeMap = {
@@ -2045,6 +2061,49 @@ function buildDeviceConfigChannels(rows) {
     }))
 }
 
+function buildDeviceConfigPayloads({
+  stationId,
+  context,
+  connectionForms,
+  parameterMappingRows,
+  statusManagement,
+  deviceCodeOptions,
+}) {
+  return connectionForms
+    .map((form, index) => {
+      const deviceCode = getConnectionFormDeviceCode(context, form, index, deviceCodeOptions)
+      const rowsForDevice = parameterMappingRows.filter((row) => {
+        if (row.deviceCode) {
+          return row.deviceCode === deviceCode
+        }
+        return connectionForms.length === 1
+      })
+
+      return {
+        configId: form.configId,
+        payload: {
+          stationId,
+          deviceCode,
+          protocol: protocolCodeMap[normalizeConnectionType(form.type)] ?? form.type,
+          settings: buildConnectionSettings(form),
+          channels: buildDeviceConfigChannels(rowsForDevice),
+          statusManagement: {
+            selectedParameters: statusManagement?.selectedParameters?.length ? statusManagement.selectedParameters : ['ทั้งหมด'],
+            startAt: statusManagement?.startAt || null,
+            endAt: statusManagement?.endAt || null,
+            status: statusManagement?.status || 'Normal',
+            schedules: statusManagement?.schedules ?? [],
+          },
+        },
+      }
+    })
+    .filter((item) => !item.configId)
+}
+
+function getPayloadErrorMessage(payload, fallback) {
+  return payload?.error?.message || payload?.message || fallback
+}
+
 function ConnectionSettingsDialog({ open, context, accessToken, onClose }) {
   const [deviceConfig, setDeviceConfig] = useState(null)
   const [deviceConfigLoading, setDeviceConfigLoading] = useState(false)
@@ -2055,7 +2114,7 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose }) {
   const [statusManagementValue, setStatusManagementValue] = useState(null)
   const [deviceConfigSaving, setDeviceConfigSaving] = useState(false)
   const parameterOptions = deviceConfig?.parameterOptions ?? getConnectionParameterOptions(context)
-  const deviceCodeOptions = deviceConfig?.deviceCodeOptions ?? connectionForms.map((_, index) => getConnectionDeviceCode(context, index)).filter(Boolean)
+  const deviceCodeOptions = buildDeviceCodeOptions(context, connectionForms, deviceConfig?.deviceCodeOptions ?? [])
   const statusManagement = statusManagementValue ?? deviceConfig?.statusManagement ?? null
 
   useEffect(() => {
@@ -2147,12 +2206,9 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose }) {
   const handleTestConnection = () => {
     setTestResultRows([])
   }
-  const handleSaveDeviceConfig = () => {
+  const handleSaveDeviceConfig = async () => {
     const requestId = getDeviceConfigRequestId(context)
     const stationId = getMonitoringPointCode(context)
-    const firstForm = connectionForms[0] ?? { type: '', values: {} }
-    const settings = buildConnectionSettings(firstForm)
-    const channels = buildDeviceConfigChannels(parameterMappingRows)
 
     if (!requestId || !stationId) {
       setDeviceConfigError('ไม่พบรหัสคำขอหรือรหัสจุดตรวจวัดสำหรับบันทึกการตั้งค่าอุปกรณ์')
@@ -2167,47 +2223,73 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose }) {
     setDeviceConfigSaving(true)
     setDeviceConfigError('')
 
-    fetch(getDeviceConfigsApiUrl(requestId), {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
+    try {
+      const saveItems = buildDeviceConfigPayloads({
         stationId,
-        deviceCode: parameterMappingRows[0]?.deviceCode || deviceCodeOptions[0] || getConnectionDeviceCode(context, 0),
-        protocol: protocolCodeMap[normalizeConnectionType(firstForm.type)] ?? firstForm.type,
-        settings,
-        channels,
-        statusManagement: {
-          selectedParameters: statusManagement?.selectedParameters?.length ? statusManagement.selectedParameters : ['ทั้งหมด'],
-          startAt: statusManagement?.startAt || null,
-          endAt: statusManagement?.endAt || null,
-          status: statusManagement?.status || 'Normal',
-          schedules: statusManagement?.schedules ?? [],
-        },
-      }),
-    })
-      .then(async (result) => {
+        context,
+        connectionForms,
+        parameterMappingRows,
+        statusManagement,
+        deviceCodeOptions,
+      })
+
+      if (saveItems.length === 0) {
+        throw new Error('ไม่มีอุปกรณ์ใหม่สำหรับบันทึก หากต้องการแก้ไขอุปกรณ์เดิมต้องใช้ endpoint สำหรับแก้ไข config')
+      }
+
+      const invalidItem = saveItems.find((item) => item.payload.channels.length === 0)
+      if (invalidItem) {
+        throw new Error(`กรุณากำหนดพารามิเตอร์อย่างน้อย 1 รายการให้ ${invalidItem.payload.deviceCode}`)
+      }
+
+      for (const item of saveItems) {
+        const result = await fetch(getDeviceConfigsApiUrl(requestId), {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(item.payload),
+        })
         const payload = await result.json().catch(() => null)
 
         if (!result.ok) {
-          throw new Error(payload?.message || `บันทึกการตั้งค่าอุปกรณ์ไม่สำเร็จ (${result.status} ${result.statusText})`)
+          throw new Error(
+            getPayloadErrorMessage(
+              payload,
+              `บันทึกการตั้งค่าอุปกรณ์ ${item.payload.deviceCode} ไม่สำเร็จ (${result.status} ${result.statusText})`,
+            ),
+          )
         }
+      }
 
-        const data = payload?.data ?? deviceConfig
-        setDeviceConfig(data)
-        setConnectionForms(mapConnectionForms(data?.connectionForms ?? connectionForms))
-        setParameterMappingRows(mapParameterMappingRows(data?.parameterMappings ?? parameterMappingRows, data?.parameterOptions ?? parameterOptions))
-        setStatusManagementValue(data?.statusManagement ?? statusManagement)
-        setTestResultRows(mapTestResultRows(data?.testResults ?? testResultRows))
+      const detailResult = await fetch(getDeviceConfigsApiUrl(requestId, stationId), {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
       })
-      .catch((error) => {
-        setDeviceConfigError(error instanceof Error ? error.message : 'บันทึกการตั้งค่าอุปกรณ์ไม่สำเร็จ')
-      })
-      .finally(() => {
-        setDeviceConfigSaving(false)
-      })
+      const detailPayload = await detailResult.json().catch(() => null)
+
+      if (!detailResult.ok) {
+        throw new Error(
+          getPayloadErrorMessage(
+            detailPayload,
+            `โหลดการตั้งค่าอุปกรณ์หลังบันทึกไม่สำเร็จ (${detailResult.status} ${detailResult.statusText})`,
+          ),
+        )
+      }
+
+      const data = detailPayload?.data ?? {}
+      setDeviceConfig(data)
+      setConnectionForms(mapConnectionForms(data.connectionForms ?? []))
+      setParameterMappingRows(mapParameterMappingRows(data.parameterMappings ?? [], data.parameterOptions ?? []))
+      setStatusManagementValue(data.statusManagement ?? null)
+      setTestResultRows(mapTestResultRows(data.testResults ?? []))
+    } catch (error) {
+      setDeviceConfigError(error instanceof Error ? error.message : 'บันทึกการตั้งค่าอุปกรณ์ไม่สำเร็จ')
+    } finally {
+      setDeviceConfigSaving(false)
+    }
   }
 
   return (
@@ -2236,6 +2318,8 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose }) {
                     ...current,
                     {
                       id: Date.now(),
+                      configId: null,
+                      deviceCode: getConnectionDeviceCode(context, current.length),
                       type: '',
                       values: {},
                     },
@@ -2275,7 +2359,7 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose }) {
                       />
                     </Grid>
                     <Grid size={{ xs: 12, md: 3 }}>
-                      <ReadOnlyField label="รหัสอุปกรณ์" value={deviceCodeOptions[index] ?? getConnectionDeviceCode(context, index)} />
+                      <ReadOnlyField label="รหัสอุปกรณ์" value={getConnectionFormDeviceCode(context, form, index, deviceCodeOptions)} />
                     </Grid>
                   </Grid>
                   <ConnectionFormFields

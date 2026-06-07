@@ -411,6 +411,7 @@ CREATE TABLE cems_wpms_request_status_history (
 CREATE TABLE device_connection_configs (
   id              BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
   station_id      VARCHAR(64)          NOT NULL,
+  device_code     VARCHAR(64)          NULL,
   protocol        VARCHAR(32)          NOT NULL, -- 'MODBUS_RTU' | 'MODBUS_TCP' | 'MSSQL' | 'MYSQL'
   settings_json   NVARCHAR(MAX)        NOT NULL,
   created_at      DATETIME2            NOT NULL DEFAULT SYSDATETIME(),
@@ -431,6 +432,8 @@ CREATE TABLE device_connection_configs (
 | `MYSQL` | `hostIp`, `port`, `dbUser`, `dbPass`, `dbName` |
 
 Security note: API response masks `settings.dbPass` as `********`.
+
+Active configs are unique by `(station_id, protocol, device_code)`, so one station can have multiple devices using the same protocol when each device has a different `device_code`.
 
 ### 5.8 `device_measurement_channels` — รายการอุปกรณ์/ค่าตรวจวัดใน connection
 

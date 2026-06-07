@@ -345,7 +345,7 @@ curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/status
 
 ### 5.8 Device connection config mock API
 
-API ชุดนี้ใช้ตั้งค่า connection อุปกรณ์ตรวจวัดหลังแบบเชื่อมต่อพร้อมใช้งาน โดย 1 `stationId` คือ 1 จุดตรวจวัด และมีได้หลาย protocol แต่ห้ามซ้ำ `stationId + protocol`:
+API ชุดนี้ใช้ตั้งค่า connection อุปกรณ์ตรวจวัดหลังแบบเชื่อมต่อพร้อมใช้งาน โดย 1 `stationId` คือ 1 จุดตรวจวัด และมีได้หลาย protocol รวมถึงมีหลายอุปกรณ์ใน protocol เดียวกันได้เมื่อ `deviceCode` ต่างกัน แต่ห้ามซ้ำ `stationId + protocol + deviceCode`:
 
 - `settings` = connection point 1 ชุด เช่น COM/Slave หรือ Host/DB
 - `channels` = รายการอุปกรณ์/ค่าตรวจวัดหลายตัวใน connection point นั้น

@@ -955,7 +955,7 @@ POST /test-connection         cems_wpms_requests:edit
 
 ### 9.1 Data model สำหรับ UI
 
-1 `stationId` คือ 1 จุดตรวจวัด และมีได้หลาย protocol แต่ห้ามซ้ำ `stationId + protocol`:
+1 `stationId` คือ 1 จุดตรวจวัด และมีได้หลาย protocol รวมถึงมีหลายอุปกรณ์ใน protocol เดียวกันได้เมื่อ `deviceCode` ต่างกัน:
 
 ```ts
 type DeviceConnectionPayload = {
@@ -971,12 +971,19 @@ type DeviceConnectionPayload = {
 
 | Field | Meaning |
 | --- | --- |
-| `deviceCode` | รหัสอุปกรณ์ของ config เช่น `S0001/01` |
+| `deviceCode` | รหัสอุปกรณ์ของ config เช่น `S0001/01`; unique ร่วมกับ `stationId + protocol` |
 | `settings` | connection point 1 ชุด เช่น COM/Slave หรือ Host/DB |
 | `channels` | อุปกรณ์/ค่าตรวจวัดหลายรายการภายใต้ connection point เดียวกัน |
 | `GET /device-connections?stationId=STATION_001` | ถ้า DB ยังไม่มีข้อมูลจริง backend จะคืน fallback mock config 1 รายการ |
 | `POST /device-connections/test-connection` | backend จำลองการเชื่อมต่อสำเร็จ ใช้ระหว่างรอ API/driver จริง |
 | `POST /device-connections` | บันทึก config ตาม payload จริง ไม่ต้องส่ง field สำหรับ mock |
+
+Frontend save rule:
+
+- endpoint `POST /cems-wpms-requests/:id/device-configs` รับ 1 config ต่อ 1 `deviceCode`
+- ถ้าหน้าจอมีหลาย `connectionForms` ให้แยกยิง `POST` ต่ออุปกรณ์ใหม่แต่ละตัว และส่ง `channels` เฉพาะ row ที่เลือก `deviceCode` นั้น
+- backend จะตอบ `409 CONFLICT` เฉพาะเมื่อ active config ซ้ำชุด `stationId + protocol + deviceCode`
+- หลังบันทึกสำเร็จให้เรียก `GET /cems-wpms-requests/:id/device-configs?stationId=...` เพื่อ refresh ค่า `connectionForms`, `deviceCodeOptions`, `parameterMappings`, และ `rawConfigs`
 
 Channel shape:
 
