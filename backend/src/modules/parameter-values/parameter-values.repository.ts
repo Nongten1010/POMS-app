@@ -147,6 +147,25 @@ export const parameterValuesRepository = {
       row: row ? serializeRow(row) : null,
     };
   },
+
+  async latestRows(
+    query: LatestParameterValueQuery,
+    limit: number,
+  ): Promise<{ rows: Record<string, unknown>[]; tableName: string }> {
+    const tableName = this.tableName(query.stationId, query.interval);
+    const rows = await parameterSourceDb
+      .withSchema(env.PARAMETER_DB_SCHEMA)
+      .from<Record<string, unknown>>(tableName)
+      .select('*')
+      .orderBy('cdate', 'desc')
+      .orderBy('ctime', 'desc')
+      .limit(limit);
+
+    return {
+      tableName,
+      rows: rows.map(serializeRow),
+    };
+  },
 };
 
 function parseRegisteredParameters(row: RegisteredParameterRow): string[] {

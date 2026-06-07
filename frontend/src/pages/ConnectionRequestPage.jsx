@@ -1960,28 +1960,32 @@ function mapTestResultRows(testResults = []) {
 }
 
 function mapConnectionTestResultRows(connectionTestData) {
-  if (!connectionTestData) {
+  const rows = Array.isArray(connectionTestData)
+    ? connectionTestData
+    : connectionTestData
+      ? [connectionTestData]
+      : []
+
+  if (rows.length === 0) {
     return []
   }
 
-  return [
-    {
-      id: `${connectionTestData.stationId ?? 'station'}-${connectionTestData.timestamp ?? 'latest'}`,
-      values: Object.fromEntries(
-        (connectionTestData.results ?? []).map((result) => [
-          result.parameter,
-          formatConnectionTestValue(result.value),
-        ]),
-      ),
-      statuses: Object.fromEntries(
-        (connectionTestData.results ?? []).map((result) => [
-          result.parameter,
-          formatConnectionTestValue(result.status),
-        ]),
-      ),
-      timestamp: connectionTestData.timestamp ?? '',
-    },
-  ]
+  return rows.map((row, index) => ({
+    id: `${row.stationId ?? 'station'}-${row.timestamp ?? 'latest'}-${index}`,
+    values: Object.fromEntries(
+      Object.entries(row.values ?? {}).map(([parameter, value]) => [
+        parameter,
+        formatConnectionTestValue(value),
+      ]),
+    ),
+    statuses: Object.fromEntries(
+      Object.entries(row.statuses ?? {}).map(([parameter, status]) => [
+        parameter,
+        formatConnectionTestValue(status),
+      ]),
+    ),
+    timestamp: row.timestamp ?? '',
+  }))
 }
 
 function formatConnectionTestValue(value) {

@@ -117,30 +117,30 @@ export const parameterValuesService = {
       );
     }
 
-    const result = await parameterValuesRepository.latestRow({
-      stationId: query.stationId,
-      interval,
-    });
+    const result = await parameterValuesRepository.latestRows(
+      {
+        stationId: query.stationId,
+        interval,
+      },
+      5,
+    );
     const registeredParameters = await parameterValuesRepository.listRegisteredParameters(
       query.stationId,
       access,
     );
-    const filtered = filterRowsByRegisteredParameters(
-      result.row ? [result.row] : [],
-      registeredParameters,
-    );
-    const row = filtered.rows[0] ?? null;
+    const filtered = filterRowsByRegisteredParameters(result.rows, registeredParameters);
 
     return {
-      data: row ? buildConnectionTestData(query.stationId, row, registeredParameters) : null,
+      data: filtered.rows.map((row) =>
+        buildConnectionTestData(query.stationId, row, registeredParameters),
+      ),
       meta: {
         stationId: query.stationId,
         interval,
         schemaName: env.PARAMETER_DB_SCHEMA,
         tableName: result.tableName,
-        count: row ? 1 : 0,
+        count: filtered.rows.length,
         registeredParameters,
-        returnedColumns: filtered.returnedColumns,
       },
     };
   },
@@ -233,39 +233,40 @@ function buildConnectionTestData(
   stationId: string,
   row: Record<string, unknown>,
   registeredParameters: string[],
-): NonNullable<ConnectionTestResultDTO['data']> {
-  const results = registeredParameters.map((parameter) => {
-    const columns = findParameterColumns(row, parameter);
-    return {
-      parameter,
-      value: columns.valueColumn ? row[columns.valueColumn] : null,
-      status: columns.statusColumn ? row[columns.statusColumn] : null,
-      unit: columns.unitColumn ? row[columns.unitColumn] : null,
-      ...columns,
-    };
-  });
+): ConnectionTestResultDTO['data'][number] {
+  const entries = registeredParameters.map((parameter) => ({
+    parameter,
+    columns: findParameterColumns(row, parameter),
+  }));
 
   return {
     stationId,
     timestamp: buildTimestamp(row),
-    values: Object.fromEntries(results.map((result) => [result.parameter, result.value])),
-    statuses: Object.fromEntries(results.map((result) => [result.parameter, result.status])),
-    results,
+    values: Object.fromEntries(
+      entries.map(({ parameter, columns }) => [
+        parameter,
+        columns.valueColumn ? row[columns.valueColumn] : null,
+      ]),
+    ),
+    statuses: Object.fromEntries(
+      entries.map(({ parameter, columns }) => [
+        parameter,
+        columns.statusColumn ? row[columns.statusColumn] : null,
+      ]),
+    ),
   };
 }
 
 function findParameterColumns(
   row: Record<string, unknown>,
   parameter: string,
-): { valueColumn: string | null; statusColumn: string | null; unitColumn: string | null } {
+): { valueColumn: string | null; statusColumn: string | null } {
   const keysByLower = new Map(Object.keys(row).map((key) => [key.toLowerCase(), key]));
   const prefixes = toParameterColumnPrefixes(parameter);
 
   return {
     valueColumn: findColumn(keysByLower, prefixes, 'value'),
     statusColumn: findColumn(keysByLower, prefixes, 'status'),
-    unitColumn:
-      findColumn(keysByLower, prefixes, 'units') ?? findColumn(keysByLower, prefixes, 'unit'),
   };
 }
 

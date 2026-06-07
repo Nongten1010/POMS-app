@@ -2445,7 +2445,7 @@ Data dictionary response ใช้เหมือน API 4 แต่คืนเ
 
 ### API 4.2: GET ผลทดสอบการเชื่อมต่อจากตาราง test
 
-ใช้กับปุ่ม `ทดสอบ` ในหน้าตั้งค่าอุปกรณ์ โดย backend จะอ่านค่าล่าสุดจากตาราง external parameter ingestion รูปแบบ `<stationId>_data_test` เช่น `ingest.S0001_data_test` และคืนเฉพาะพารามิเตอร์ที่ผู้ใช้มีสิทธิ์เห็นจาก `cems_wpms_measurement_points.parameters_json`
+ใช้กับปุ่ม `ทดสอบ` ในหน้าตั้งค่าอุปกรณ์ โดย backend จะอ่านค่าล่าสุด 5 แถวจากตาราง external parameter ingestion รูปแบบ `<stationId>_data_test` เช่น `ingest.S0001_data_test` และคืนเฉพาะพารามิเตอร์ที่ผู้ใช้มีสิทธิ์เห็นจาก `cems_wpms_measurement_points.parameters_json`
 
 | Item | Value |
 | --- | --- |
@@ -2471,35 +2471,39 @@ curl "http://localhost:3000/api/v1/parameter-values/connection-test?stationId=S0
 ```json
 {
   "success": true,
-  "data": {
-    "stationId": "S0001",
-    "timestamp": "2026-06-07 10:15:00",
-    "values": {
-      "CO2 (%)": "123.4"
-    },
-    "statuses": {
-      "CO2 (%)": "Normal"
-    },
-    "results": [
-      {
-        "parameter": "CO2 (%)",
-        "value": "123.4",
-        "status": "Normal",
-        "unit": "ppm",
-        "valueColumn": "co2_value",
-        "statusColumn": "co2_status",
-        "unitColumn": "co2_units"
+  "data": [
+    {
+      "stationId": "S0001",
+      "timestamp": "2026-06-07 10:15:00",
+      "values": {
+        "CO2 (%)": "123.4",
+        "CO2 (ppm)": "123.4"
+      },
+      "statuses": {
+        "CO2 (%)": "Normal",
+        "CO2 (ppm)": "Normal"
       }
-    ]
-  },
+    },
+    {
+      "stationId": "S0001",
+      "timestamp": "2026-06-07 10:14:00",
+      "values": {
+        "CO2 (%)": "122.4",
+        "CO2 (ppm)": "122.4"
+      },
+      "statuses": {
+        "CO2 (%)": "Normal",
+        "CO2 (ppm)": "Normal"
+      }
+    }
+  ],
   "meta": {
     "stationId": "S0001",
     "interval": "test",
     "schemaName": "ingest",
     "tableName": "S0001_data_test",
-    "count": 1,
-    "registeredParameters": ["CO2 (%)"],
-    "returnedColumns": ["station_id", "co2_value", "co2_units", "co2_status", "cdate", "ctime"]
+    "count": 2,
+    "registeredParameters": ["CO2 (%)", "CO2 (ppm)"]
   }
 }
 ```

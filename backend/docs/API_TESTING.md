@@ -545,7 +545,7 @@ curl "http://localhost:3000/api/v1/parameter-values/latest?stationId=S0001&inter
   -H "Authorization: Bearer $ACCESS_TOKEN"
 ```
 
-Connection test row จากตาราง `ingest.S0001_data_test`:
+Connection test rows ล่าสุด 5 แถวจากตาราง `ingest.S0001_data_test`:
 
 ```bash
 curl "http://localhost:3000/api/v1/parameter-values/connection-test?stationId=S0001" \
@@ -596,35 +596,39 @@ Expected connection test response shape:
 ```json
 {
   "success": true,
-  "data": {
-    "stationId": "S0001",
-    "timestamp": "2026-06-07 10:15:00",
-    "values": {
-      "CO2 (%)": "123.4"
-    },
-    "statuses": {
-      "CO2 (%)": "Normal"
-    },
-    "results": [
-      {
-        "parameter": "CO2 (%)",
-        "value": "123.4",
-        "status": "Normal",
-        "unit": "ppm",
-        "valueColumn": "co2_value",
-        "statusColumn": "co2_status",
-        "unitColumn": "co2_units"
+  "data": [
+    {
+      "stationId": "S0001",
+      "timestamp": "2026-06-07 10:15:00",
+      "values": {
+        "CO2 (%)": "123.4",
+        "CO2 (ppm)": "123.4"
+      },
+      "statuses": {
+        "CO2 (%)": "Normal",
+        "CO2 (ppm)": "Normal"
       }
-    ]
-  },
+    },
+    {
+      "stationId": "S0001",
+      "timestamp": "2026-06-07 10:14:00",
+      "values": {
+        "CO2 (%)": "122.4",
+        "CO2 (ppm)": "122.4"
+      },
+      "statuses": {
+        "CO2 (%)": "Normal",
+        "CO2 (ppm)": "Normal"
+      }
+    }
+  ],
   "meta": {
     "stationId": "S0001",
     "interval": "test",
     "schemaName": "ingest",
     "tableName": "S0001_data_test",
-    "count": 1,
-    "registeredParameters": ["CO2 (%)"],
-    "returnedColumns": ["station_id", "co2_value", "co2_units", "co2_status", "cdate", "ctime"]
+    "count": 2,
+    "registeredParameters": ["CO2 (%)", "CO2 (ppm)"]
   }
 }
 ```
