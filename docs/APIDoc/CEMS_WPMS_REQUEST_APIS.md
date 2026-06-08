@@ -70,7 +70,7 @@ Mapping:
 | 7   | รายการคำขอเฉพาะโรงงานตัวเอง สำหรับตารางผู้ประกอบการ          | GET    | `/cems-wpms-requests/table-rows`                           | `cems_wpms_requests:view`    |
 | 8   | รายชื่อโรงงาน สำหรับตารางผู้ประกอบการ                        | GET    | `/cems-wpms-requests/operator-factories`                   | `factories:view`             |
 | 9   | รายละเอียดคำขอรายคำขอ สำหรับ PDF/เติมฟอร์มเพิ่มพารามิเตอร์   | GET    | `/cems-wpms-requests/:id/detail`                           | `cems_wpms_requests:view`    |
-| 10  | รายละเอียดรายจุดตรวจวัดทุกคำขอ เฉพาะ status เชื่อมต่อแล้ว    | GET    | `/cems-wpms-requests/connected-measurement-points`         | `cems_wpms_requests:view`    |
+| 10  | รายละเอียดจุดตรวจวัดที่เชื่อมต่อแล้วจากระบบ POMS ปัจจุบัน    | GET    | `/connected-measurement-points`                            | `cems_wpms_requests:view`    |
 
 ## Flow เพิ่มจุดตรวจวัด จบ 1 คำขอ
 
@@ -1718,24 +1718,28 @@ Response:
 }
 ```
 
-## 10. รายละเอียดคำขอ รายจุดตรวจวัด ทุกคำขอ เฉพาะ status เชื่อมต่อแล้ว สำหรับทำ PDF
+## 10. รายละเอียดจุดตรวจวัดที่เชื่อมต่อแล้วจากระบบ POMS ปัจจุบัน
+
+ใช้ endpoint นี้เมื่อต้องการข้อมูล current/live ของระบบ POMS หลังคำขอผ่านการเชื่อมต่อแล้ว ไม่ใช่ config snapshot ของคำขอแรก
+
+หมายเหตุ backward compatibility: `GET /api/v1/cems-wpms-requests/connected-measurement-points` ยังใช้ได้เป็น legacy alias แต่ frontend ใหม่ควรใช้ `/api/v1/connected-measurement-points`
 
 ```bash
-curl "http://localhost:3000/api/v1/cems-wpms-requests/connected-measurement-points" \
+curl "http://localhost:3000/api/v1/connected-measurement-points" \
   -H "Authorization: Bearer $OFFICER_TOKEN"
 ```
 
 Filter โรงงานเดียว:
 
 ```bash
-curl "http://localhost:3000/api/v1/cems-wpms-requests/connected-measurement-points?factoryId=factory-001" \
+curl "http://localhost:3000/api/v1/connected-measurement-points?factoryId=factory-001" \
   -H "Authorization: Bearer $OFFICER_TOKEN"
 ```
 
 Filter จุดตรวจวัดเดียวด้วย `stationId`:
 
 ```bash
-curl "http://localhost:3000/api/v1/cems-wpms-requests/connected-measurement-points?stationId=S0001" \
+curl "http://localhost:3000/api/v1/connected-measurement-points?stationId=S0001" \
   -H "Authorization: Bearer $OFFICER_TOKEN"
 ```
 
@@ -2717,13 +2721,16 @@ Data dictionary response:
 | `data.statusHistory` | array | ประวัติสถานะ |
 | `data.deviceConfigs` | array | config snapshot ของคำขอ โดยแต่ละ item จัด shape เหมือน payload: `{ stationId, device, channels, statusManagement }` |
 
-### API 10: GET รายละเอียดคำขอ รายจุดตรวจวัดทุกคำขอ เฉพาะเชื่อมต่อแล้ว
+### API 10: GET รายละเอียดจุดตรวจวัดที่เชื่อมต่อแล้วจากระบบ POMS ปัจจุบัน
 
 | Item | Value |
 | --- | --- |
-| URL | `GET /api/v1/cems-wpms-requests/connected-measurement-points` |
+| URL | `GET /api/v1/connected-measurement-points` |
+| Legacy alias | `GET /api/v1/cems-wpms-requests/connected-measurement-points` |
 | Header | `Authorization: Bearer <accessToken>` |
 | Body | ไม่มี |
+
+API นี้คืนค่า current/live ของระบบ POMS โดย `deviceConfigs` เป็น active setting ล่าสุด ไม่ใช่ config snapshot ของคำขอ ถ้าต้องการ snapshot ของคำขอให้ใช้ `GET /api/v1/cems-wpms-requests/:id/device-configs`
 
 Query params:
 
@@ -2735,14 +2742,14 @@ Query params:
 ตัวอย่าง request:
 
 ```bash
-curl "http://localhost:3000/api/v1/cems-wpms-requests/connected-measurement-points?factoryId=factory-001" \
+curl "http://localhost:3000/api/v1/connected-measurement-points?factoryId=factory-001" \
   -H "Authorization: Bearer $OFFICER_TOKEN"
 ```
 
 ตัวอย่าง request จุดเดียว:
 
 ```bash
-curl "http://localhost:3000/api/v1/cems-wpms-requests/connected-measurement-points?stationId=S0001" \
+curl "http://localhost:3000/api/v1/connected-measurement-points?stationId=S0001" \
   -H "Authorization: Bearer $OFFICER_TOKEN"
 ```
 

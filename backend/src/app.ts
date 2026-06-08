@@ -10,6 +10,7 @@ import { errorHandler, notFoundHandler } from './shared/middlewares/errorHandler
 import { authRoutes } from './modules/auth/auth.routes';
 import { usersRoutes } from './modules/users/users.routes';
 import { eligibleFactoriesRoutes } from './modules/eligible-factories/eligible-factories.routes';
+import { connectedMeasurementPointsRoutes } from './modules/connection-requests/connected-measurement-points.routes';
 import { connectionRequestsRoutes } from './modules/connection-requests/connection-requests.routes';
 import { deviceConnectionsRoutes } from './modules/device-connections/device-connections.routes';
 import { parameterValuesRoutes } from './modules/parameter-values/parameter-values.routes';
@@ -61,6 +62,7 @@ export function createApp(): Application {
   app.use(`${env.API_PREFIX}/auth`, authRoutes);
   app.use(`${env.API_PREFIX}/users`, usersRoutes);
   app.use(`${env.API_PREFIX}/eligible-factories`, eligibleFactoriesRoutes);
+  app.use(`${env.API_PREFIX}/connected-measurement-points`, connectedMeasurementPointsRoutes);
   app.use(`${env.API_PREFIX}/cems-wpms-requests`, connectionRequestsRoutes);
   app.use(`${env.API_PREFIX}/device-connections`, deviceConnectionsRoutes);
   app.use(`${env.API_PREFIX}/parameter-values`, parameterValuesRoutes);
