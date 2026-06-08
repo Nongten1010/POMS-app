@@ -440,7 +440,26 @@ describe('connectionRequestsService', () => {
       factorySummary({ factoryId: 'factory-visible', factoryName: 'โรงงานแสดง', isActive: true }),
       factorySummary({ factoryId: 'factory-hidden', factoryName: 'โรงงานซ่อน', isActive: false }),
     ]);
-    mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([]);
+    mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
+      {
+        factoryId: 'factory-visible',
+        stationId: 'S0001',
+        pointName: 'ปล่อง A',
+        pointCode: 'S0001',
+        systemType: 'CEMS',
+        parameters: ['NOx'],
+        data: [],
+      },
+      {
+        factoryId: 'factory-hidden',
+        stationId: 'S0002',
+        pointName: 'ปล่อง B',
+        pointCode: 'S0002',
+        systemType: 'CEMS',
+        parameters: ['NOx'],
+        data: [],
+      },
+    ]);
 
     const result = await connectionRequestsService.listOperatorFactories(
       actorUserId,
@@ -450,6 +469,72 @@ describe('connectionRequestsService', () => {
     expect(result.data).toHaveLength(1);
     expect(result.data[0]).toMatchObject({
       factoryId: 'factory-visible',
+      status: 'แสดง',
+    });
+  });
+
+  it('excludes factories without at least one connected measurement point', async () => {
+    mockedRepository.listFactoriesForAccess.mockResolvedValue([
+      factorySummary({ factoryId: 'factory-connected', factoryName: 'โรงงานมีจุดตรวจวัด' }),
+      factorySummary({ factoryId: 'factory-without-point', factoryName: 'โรงงานไม่มีจุดตรวจวัด' }),
+    ]);
+    mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
+      {
+        factoryId: 'factory-connected',
+        stationId: 'S0001',
+        pointName: 'ปล่อง A',
+        pointCode: 'S0001',
+        systemType: 'CEMS',
+        parameters: ['NOx'],
+        data: [],
+      },
+    ]);
+
+    const result = await connectionRequestsService.listOperatorFactories(
+      actorUserId,
+      'OWN_FACTORY',
+    );
+
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0]).toMatchObject({
+      factoryId: 'factory-connected',
+      measurementPoints: [{ stationId: 'S0001' }],
+    });
+  });
+
+  it('excludes factories that are not selected as eligible before displaying operator factories', async () => {
+    mockedRepository.listFactoriesForAccess.mockResolvedValue([
+      factorySummary({ factoryId: 'factory-eligible', factoryName: 'โรงงานเข้าข่าย' }),
+      factorySummary({
+        factoryId: 'factory-ineligible',
+        factoryName: 'โรงงานไม่เข้าข่าย',
+        isEligible: false,
+        eligibilityStatus: 'ไม่เข้าข่าย',
+      }),
+    ]);
+    mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
+      {
+        factoryId: 'factory-eligible',
+        stationId: 'S0001',
+        pointName: 'ปล่อง A',
+        pointCode: 'S0001',
+        systemType: 'CEMS',
+        parameters: ['NOx'],
+        data: [],
+      },
+    ]);
+
+    const result = await connectionRequestsService.listOperatorFactories(
+      actorUserId,
+      'OWN_FACTORY',
+    );
+
+    expect(mockedRepository.listConnectedMeasurementPointsForFactories).toHaveBeenCalledWith([
+      'factory-eligible',
+    ]);
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0]).toMatchObject({
+      factoryId: 'factory-eligible',
       status: 'แสดง',
     });
   });

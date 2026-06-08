@@ -194,38 +194,7 @@ export const connectionRequestsRepository = {
   },
 
   async listFactoriesForAccess(access: FactoryAccess): Promise<FactorySummaryDTO[]> {
-    const builder = db<FactoryRow>('factories as f')
-      .leftJoin('provinces as p', 'p.id', 'f.province_id')
-      .leftJoin('eligible_factories as ef', function joinEligibleFactory() {
-        this.on('ef.factory_registration_no_new', '=', 'f.code').andOnNull('ef.deleted_at');
-      })
-      .whereNull('f.deleted_at')
-      .select(
-        'f.id',
-        'f.fid',
-        'f.code',
-        'f.name',
-        'f.system_detail',
-        'f.is_active',
-        'p.name_th as province_name',
-        'ef.factory_registration_no_old',
-        'ef.factory_type_sequence',
-        'ef.address',
-        'ef.latitude',
-        'ef.longitude',
-        'ef.business_activity',
-        'ef.has_eia',
-        'ef.id as eligible_factory_id',
-      )
-      .orderBy('f.name', 'asc')
-      .orderBy('f.id', 'asc');
-
-    if (access.scope !== 'ALL') {
-      builder
-        .join('user_juristics as uj', 'uj.juristic_id', 'f.juristic_id')
-        .where('uj.user_id', access.actorUserId)
-        .whereNull('uj.revoked_at');
-    }
+    const builder = buildFactoriesForAccessQuery(access);
 
     const rows = await builder;
     return rows.map(toFactorySummaryDTO);
@@ -616,6 +585,51 @@ export function buildBaseQueryForTests(
   access: ListAccess,
 ): Knex.QueryBuilder<ConnectionRequestRow, ConnectionRequestRow[]> {
   return buildBaseQuery(query, access);
+}
+
+export function buildFactoriesForAccessQueryForTests(
+  access: FactoryAccess,
+): Knex.QueryBuilder<FactoryRow, FactoryRow[]> {
+  return buildFactoriesForAccessQuery(access);
+}
+
+function buildFactoriesForAccessQuery(
+  access: FactoryAccess,
+): Knex.QueryBuilder<FactoryRow, FactoryRow[]> {
+  const builder = db<FactoryRow>('factories as f')
+    .leftJoin('provinces as p', 'p.id', 'f.province_id')
+    .join('eligible_factories as ef', function joinEligibleFactory() {
+      this.on('ef.factory_registration_no_new', '=', 'f.code').andOnNull('ef.deleted_at');
+    })
+    .whereNull('f.deleted_at')
+    .select(
+      'f.id',
+      'f.fid',
+      'f.code',
+      'f.name',
+      'f.system_detail',
+      'f.is_active',
+      'p.name_th as province_name',
+      'ef.factory_registration_no_old',
+      'ef.factory_type_sequence',
+      'ef.address',
+      'ef.latitude',
+      'ef.longitude',
+      'ef.business_activity',
+      'ef.has_eia',
+      'ef.id as eligible_factory_id',
+    )
+    .orderBy('f.name', 'asc')
+    .orderBy('f.id', 'asc');
+
+  if (access.scope !== 'ALL') {
+    builder
+      .join('user_juristics as uj', 'uj.juristic_id', 'f.juristic_id')
+      .where('uj.user_id', access.actorUserId)
+      .whereNull('uj.revoked_at');
+  }
+
+  return builder as unknown as Knex.QueryBuilder<FactoryRow, FactoryRow[]>;
 }
 
 function buildBaseQuery(

@@ -120,7 +120,8 @@ export const connectionRequestsService = {
       actorUserId,
       scope: factoryViewScope,
     });
-    const factoryIds = factories.map((factory) => factory.factoryId);
+    const eligibleFactories = factories.filter((factory) => factory.isEligible !== false);
+    const factoryIds = eligibleFactories.map((factory) => factory.factoryId);
     const [connectedPoints, favoriteFactoryIds] = await Promise.all([
       connectionRequestsRepository.listConnectedMeasurementPointsForFactories(factoryIds),
       connectionRequestsRepository.listFavoriteFactoryIds(actorUserId),
@@ -136,7 +137,7 @@ export const connectionRequestsService = {
       ]);
     });
 
-    const data = factories
+    const data = eligibleFactories
       .map<OperatorFactoryTableRowDTO>((factory) => {
         const measurementPoints = measurementPointsByFactory.get(factory.factoryId) ?? [];
         const monitoringPointCountBySystem = countMeasurementPointsBySystem(measurementPoints);
@@ -1224,6 +1225,7 @@ function matchesOperatorFactoryQuery(
   query: ListOperatorFactoriesQuery,
 ): boolean {
   if (factory.status !== 'แสดง') return false;
+  if (factory.measurementPoints.length === 0) return false;
   if (
     query.systemType &&
     !factory.measurementPoints.some((point) => point.systemType === query.systemType)

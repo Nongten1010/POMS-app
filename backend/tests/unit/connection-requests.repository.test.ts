@@ -1,6 +1,7 @@
 import { describe, expect, it } from '@jest/globals';
 import {
   buildBaseQueryForTests,
+  buildFactoriesForAccessQueryForTests,
   buildRequestNoPrefix,
 } from '../../src/modules/connection-requests/connection-requests.repository';
 
@@ -24,5 +25,19 @@ describe('connectionRequestsRepository request numbers', () => {
     expect(sql).toContain('cmp.source_measurement_point_id');
     expect(sql).toContain('mp.point_code');
     expect(sql).toContain('mp.point_name');
+  });
+
+  it('requires operator dashboard factories to have an active eligible factory record', () => {
+    const sql = buildFactoriesForAccessQueryForTests({
+      actorUserId: 42,
+      scope: 'ALL',
+    })
+      .toSQL()
+      .sql.toLowerCase();
+
+    expect(sql).toContain('inner join [eligible_factories] as [ef]');
+    expect(sql).not.toContain('left join [eligible_factories] as [ef]');
+    expect(sql).toContain('[ef].[factory_registration_no_new] = [f].[code]');
+    expect(sql).toContain('[ef].[deleted_at] is null');
   });
 });

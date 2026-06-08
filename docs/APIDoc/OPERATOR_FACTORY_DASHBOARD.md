@@ -9,12 +9,12 @@
 | ส่วนข้อมูล | Source |
 | --- | --- |
 | โรงงานและสิทธิ์ผู้ใช้ | `factories` + `user_juristics` |
-| ข้อมูลเสริมโรงงาน เช่น ที่อยู่/พิกัด | `eligible_factories` join ด้วย `eligible_factories.factory_registration_no_new = factories.code` |
+| โรงงานที่เข้าข่ายและข้อมูลเสริม เช่น ที่อยู่/พิกัด | ต้องมี record ใน `eligible_factories` โดย join ด้วย `eligible_factories.factory_registration_no_new = factories.code` |
 | จุดตรวจวัดปัจจุบัน | `cems_wpms_connected_measurement_points` |
 | ค่าตรวจวัดล่าสุดรายชั่วโมง | Parameter DB ตาราง `{stationId}_data_60m` เช่น `S0001_data_60m` |
 | Favorite | `user_factory_favorites` |
 
-หมายเหตุ: endpoint นี้คืนเฉพาะโรงงานที่ `status = "แสดง"` เท่านั้น
+หมายเหตุ: endpoint นี้คืนเฉพาะโรงงานที่อยู่ใน `eligible_factories`, มี `status = "แสดง"`, และมีจุดตรวจวัดที่เชื่อมแล้วอย่างน้อย 1 จุดใน `cems_wpms_connected_measurement_points` เท่านั้น
 
 ## GET รายการโรงงานสำหรับหน้าแผนที่
 

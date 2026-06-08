@@ -1645,7 +1645,7 @@ Response:
 }
 ```
 
-Endpoint นี้ join `factories` กับ `eligible_factories` ด้วย `eligible_factories.factory_registration_no_new = factories.code` เพื่อเติมข้อมูลโรงงานที่คัดจาก DIW source ลงในตารางผู้ประกอบการ เช่น ประเภทโรงงานหลัก/รอง, การประกอบกิจการ, EIA, ที่อยู่ และพิกัดโรงงาน ถ้าโรงงานนั้นยังไม่มี record ใน `eligible_factories` field ที่ไม่มีข้อมูลจะใช้ค่าชั่วคราว (`industryMainOrder: "ไม่ระบุ"`, `industrySubOrder: "ไม่ระบุ"`, `eia: "ไม่มี"`, `projectName: "ไม่ระบุ"`) และจะคืน `isEligible: false`, `eligibilityStatus: "ไม่เข้าข่าย"`
+Endpoint นี้แสดงเฉพาะโรงงานที่เข้าข่ายและมีจุดตรวจวัดที่เชื่อมแล้วอย่างน้อย 1 จุดเท่านั้น โดย join `factories` กับ `eligible_factories` ด้วย `eligible_factories.factory_registration_no_new = factories.code` และต้องเป็น record ที่ยังไม่ถูกลบ (`eligible_factories.deleted_at IS NULL`) เพื่อเติมข้อมูลโรงงานที่คัดจาก DIW source ลงในตารางผู้ประกอบการ เช่น ประเภทโรงงานหลัก/รอง, การประกอบกิจการ, EIA, ที่อยู่ และพิกัดโรงงาน ถ้าโรงงานไม่มี record ใน `eligible_factories` หรือไม่มีจุดตรวจวัดใน `cems_wpms_connected_measurement_points` จะไม่ถูกคืนใน response ของ `operator-factories`
 
 ## 9. รายละเอียดคำขอรายคำขอ สำหรับทำ PDF และเรียกข้อมูลเดิมลงฟอร์มเพิ่มพารามิเตอร์
 
