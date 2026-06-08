@@ -73,6 +73,25 @@ export const connectionRequestsController = {
     }
   },
 
+  async listOperatorFactoryDashboard(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const actorUserId = requireActorUserId(req);
+      const query = listOperatorFactoriesQuerySchema.parse(req.query);
+      const result = await connectionRequestsService.listOperatorFactories(
+        actorUserId,
+        getScope(req, 'factories:view'),
+        { ...query, connectedOnly: true },
+      );
+      res.status(StatusCodes.OK).json({ success: true, ...result });
+    } catch (err) {
+      next(err);
+    }
+  },
+
   async setOperatorFactoryFavorite(
     req: Request,
     res: Response,

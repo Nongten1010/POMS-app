@@ -2687,16 +2687,22 @@ Query params:
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
-| `systemType` | `CEMS`\|`WPMS` | No | กรองโรงงานที่มีจุดตรวจวัดที่เชื่อมต่อแล้วตามระบบ สำหรับปุ่ม CEMS/WPMS |
+| `systemType` | `CEMS`\|`WPMS` | No | กรองโรงงานที่มีจุดตรวจวัดระบบนั้น ถ้ามีข้อมูลจุดเชื่อมแล้ว |
 | `favoriteOnly` | boolean | No | `true` เพื่อแสดงเฉพาะโรงงานที่ user ปัจจุบันติดดาว |
-| `connectedOnly` | boolean | No | `true` เพื่อคืนเฉพาะโรงงานที่มีจุดตรวจวัดที่เชื่อมแล้วอย่างน้อย 1 จุด; default `false` เพื่อให้หน้าขอเชื่อมต่อใช้รายชื่อโรงงานเข้าข่ายได้ |
 
-Endpoint นี้คืนเฉพาะโรงงานที่อยู่ใน `eligible_factories` และมี `status = "แสดง"` โดย response หลักไม่อ่านรายการคำขอจาก `cems_wpms_connection_requests`; ใช้ข้อมูลโรงงานจาก `factories`, จุดตรวจวัดปัจจุบันจาก `cems_wpms_connected_measurement_points`, และค่าตรวจวัดล่าสุดจากตาราง `{stationId}_data_60m` ถ้าต้องใช้เป็น dashboard เฉพาะโรงงานที่มีจุดเชื่อมแล้วให้ส่ง `connectedOnly=true`
+Endpoint นี้ใช้สำหรับหน้าขอเชื่อมต่อ/เพิ่มจุดตรวจวัด คืนเฉพาะโรงงานที่อยู่ใน `eligible_factories` และมี `status = "แสดง"` แต่ไม่บังคับว่าต้องมีจุดตรวจวัดที่เชื่อมแล้ว
 
 ตัวอย่าง request:
 
 ```bash
-curl "http://localhost:3000/api/v1/cems-wpms-requests/operator-factories?systemType=CEMS&connectedOnly=true" \
+curl "http://localhost:3000/api/v1/cems-wpms-requests/operator-factories" \
+  -H "Authorization: Bearer $OPERATOR_TOKEN"
+```
+
+สำหรับหน้า dashboard/แผนที่ที่ต้องแสดงเฉพาะโรงงานที่มีจุดตรวจวัดเชื่อมแล้ว ให้ใช้ endpoint แยก:
+
+```bash
+curl "http://localhost:3000/api/v1/cems-wpms-requests/operator-factory-dashboard?systemType=CEMS" \
   -H "Authorization: Bearer $OPERATOR_TOKEN"
 ```
 

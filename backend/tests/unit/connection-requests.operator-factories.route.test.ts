@@ -71,7 +71,7 @@ describe('operator factory dashboard routes', () => {
     expect(mockedConnectionRequestsService.listOperatorFactories).toHaveBeenCalledWith(
       42,
       'OWN_FACTORY',
-      { systemType: 'WPMS', favoriteOnly: false, connectedOnly: false },
+      { systemType: 'WPMS', favoriteOnly: false },
     );
     expect(response.body.data[0]).toMatchObject({
       factoryId: 'factory-001',
@@ -85,6 +85,21 @@ describe('operator factory dashboard routes', () => {
     expect(response.body.data[0]).not.toHaveProperty('requestStatusCode');
     expect(response.body.data[0]).not.toHaveProperty('systemTypes');
     expect(response.body.data[0].measurementPoints[0]).not.toHaveProperty('requestId');
+  });
+
+  it('uses a separate connected-only route for the operator dashboard', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .get('/api/v1/cems-wpms-requests/operator-factory-dashboard?systemType=WPMS')
+      .set('Authorization', `Bearer ${accessToken()}`);
+
+    expect(response.status).toBe(200);
+    expect(mockedConnectionRequestsService.listOperatorFactories).toHaveBeenCalledWith(
+      42,
+      'OWN_FACTORY',
+      { systemType: 'WPMS', favoriteOnly: false, connectedOnly: true },
+    );
   });
 
   it('updates the favorite flag for an accessible factory', async () => {

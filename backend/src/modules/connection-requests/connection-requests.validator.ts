@@ -805,7 +805,6 @@ export const listOperatorFactoriesQuerySchema = z
   .object({
     systemType: z.enum(['CEMS', 'WPMS']).optional(),
     favoriteOnly: booleanQuerySchema,
-    connectedOnly: booleanQuerySchema,
   })
   .strict();
 
