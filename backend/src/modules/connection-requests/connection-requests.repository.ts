@@ -394,11 +394,12 @@ export const connectionRequestsRepository = {
   async listConnectedMeasurementPointsForFactories(
     factoryIds: string[],
   ): Promise<CurrentFactoryMeasurementPointDTO[]> {
-    if (factoryIds.length === 0) return [];
+    const lookupKeys = [...new Set(factoryIds.filter((factoryId) => factoryId.trim().length > 0))];
+    if (lookupKeys.length === 0) return [];
 
     const rows = await db<CurrentFactoryMeasurementPointRow>('cems_wpms_connected_measurement_points')
       .whereNull('deleted_at')
-      .whereIn('factory_id', factoryIds)
+      .whereIn('factory_id', lookupKeys)
       .select(
         'factory_id',
         'point_name',
@@ -599,9 +600,13 @@ function buildFactoriesForAccessQuery(
   const builder = db<FactoryRow>('factories as f')
     .leftJoin('provinces as p', 'p.id', 'f.province_id')
     .join('eligible_factories as ef', function joinEligibleFactory() {
-      this.on('ef.factory_registration_no_new', '=', 'f.code').andOnNull('ef.deleted_at');
+      this.on('ef.factory_registration_no_new', '=', 'f.code')
+        .orOn('ef.factory_registration_no_new', '=', 'f.fid')
+        .orOn('ef.source_factory_id', '=', 'f.fid')
+        .orOn('ef.source_factory_id', '=', 'f.code');
     })
     .whereNull('f.deleted_at')
+    .whereNull('ef.deleted_at')
     .select(
       'f.id',
       'f.fid',

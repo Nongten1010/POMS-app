@@ -309,9 +309,9 @@ describe('connectionRequestsService', () => {
       actorUserId,
       scope: 'OWN_FACTORY',
     });
-    expect(mockedRepository.listConnectedMeasurementPointsForFactories).toHaveBeenCalledWith([
-      'factory-001',
-    ]);
+    expect(mockedRepository.listConnectedMeasurementPointsForFactories).toHaveBeenCalledWith(
+      expect.arrayContaining(['factory-001', '3-106-33/50สบ']),
+    );
     expect(mockedRepository.listRequestsForFactories).not.toHaveBeenCalled();
     expect(result.data[0]).toMatchObject({
       factoryId: 'factory-001',
@@ -397,6 +397,44 @@ describe('connectionRequestsService', () => {
       factoryId: 'factory-wpms',
       status: 'แสดง',
       measurementPoints: [{ stationId: 'P0001', systemType: 'WPMS' }],
+    });
+  });
+
+  it('matches connected measurement points by factory registration aliases', async () => {
+    mockedRepository.listFactoriesForAccess.mockResolvedValue([
+      factorySummary({
+        factoryId: 'factory-001',
+        newRegistrationNo: 'REG-001',
+        oldRegistrationNo: 'OLD-001',
+      }),
+    ]);
+    mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
+      {
+        factoryId: 'REG-001',
+        stationId: 'S0001',
+        pointName: 'ปล่อง A',
+        pointCode: 'S0001',
+        systemType: 'CEMS',
+        parameters: ['NOx'],
+        data: [],
+      },
+    ]);
+
+    const result = await connectionRequestsService.listOperatorFactories(
+      actorUserId,
+      'OWN_FACTORY',
+    );
+
+    expect(mockedRepository.listConnectedMeasurementPointsForFactories).toHaveBeenCalledWith([
+      'factory-001',
+      'REG-001',
+      'OLD-001',
+    ]);
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0]).toMatchObject({
+      factoryId: 'factory-001',
+      newRegistrationNo: 'REG-001',
+      measurementPoints: [{ stationId: 'S0001' }],
     });
   });
 
@@ -529,9 +567,9 @@ describe('connectionRequestsService', () => {
       'OWN_FACTORY',
     );
 
-    expect(mockedRepository.listConnectedMeasurementPointsForFactories).toHaveBeenCalledWith([
-      'factory-eligible',
-    ]);
+    expect(mockedRepository.listConnectedMeasurementPointsForFactories).toHaveBeenCalledWith(
+      expect.arrayContaining(['factory-eligible', '3-106-33/50สบ']),
+    );
     expect(result.data).toHaveLength(1);
     expect(result.data[0]).toMatchObject({
       factoryId: 'factory-eligible',

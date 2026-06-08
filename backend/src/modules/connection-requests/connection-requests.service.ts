@@ -121,19 +121,21 @@ export const connectionRequestsService = {
       scope: factoryViewScope,
     });
     const eligibleFactories = factories.filter((factory) => factory.isEligible !== false);
-    const factoryIds = eligibleFactories.map((factory) => factory.factoryId);
+    const factoryIdByLookupKey = buildFactoryLookupKeyMap(eligibleFactories);
+    const factoryLookupKeys = [...factoryIdByLookupKey.keys()];
     const [connectedPoints, favoriteFactoryIds] = await Promise.all([
-      connectionRequestsRepository.listConnectedMeasurementPointsForFactories(factoryIds),
+      connectionRequestsRepository.listConnectedMeasurementPointsForFactories(factoryLookupKeys),
       connectionRequestsRepository.listFavoriteFactoryIds(actorUserId),
     ]);
     const favoriteFactoryIdSet = new Set(favoriteFactoryIds);
     const measurementPointsByFactory = new Map<string, OperatorFactoryMeasurementPointDTO[]>();
 
     connectedPoints.forEach((point) => {
-      const currentPoints = measurementPointsByFactory.get(point.factoryId) ?? [];
-      measurementPointsByFactory.set(point.factoryId, [
+      const factoryId = factoryIdByLookupKey.get(point.factoryId) ?? point.factoryId;
+      const currentPoints = measurementPointsByFactory.get(factoryId) ?? [];
+      measurementPointsByFactory.set(factoryId, [
         ...currentPoints,
-        toOperatorFactoryMeasurementPoint(point),
+        toOperatorFactoryMeasurementPoint({ ...point, factoryId }),
       ]);
     });
 
@@ -1100,6 +1102,18 @@ function toOperatorFactoryMeasurementPoint(
     parameters: point.parameters.map(toParameterDisplayName),
     data: [],
   };
+}
+
+function buildFactoryLookupKeyMap(factories: FactorySummaryDTO[]): Map<string, string> {
+  const keys = new Map<string, string>();
+
+  factories.forEach((factory) => {
+    [factory.factoryId, factory.newRegistrationNo, factory.oldRegistrationNo].forEach((key) => {
+      if (key) keys.set(key, factory.factoryId);
+    });
+  });
+
+  return keys;
 }
 
 const parameterUnitLabels: Record<string, string> = {

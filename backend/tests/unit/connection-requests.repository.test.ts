@@ -38,6 +38,7 @@ describe('connectionRequestsRepository request numbers', () => {
     expect(sql).toContain('inner join [eligible_factories] as [ef]');
     expect(sql).not.toContain('left join [eligible_factories] as [ef]');
     expect(sql).toContain('[ef].[factory_registration_no_new] = [f].[code]');
+    expect(sql).toContain('[ef].[source_factory_id] = [f].[fid]');
     expect(sql).toContain('[ef].[deleted_at] is null');
   });
 });
