@@ -146,7 +146,7 @@ curl "http://localhost:3000/api/v1/operator-factory-dashboard?systemType=CEMS" \
 
 | Item | Value |
 | --- | --- |
-| URL | `PUT /api/v1/cems-wpms-requests/operator-factories/:factoryId/favorite` |
+| URL | `PUT /api/v1/operator-factories/:factoryId/favorite` |
 | Header | `Authorization: Bearer <accessToken>` |
 | Permission | `factories:view` + `dashboard.alerts:view` |
 
@@ -161,7 +161,7 @@ Request body:
 ตัวอย่าง:
 
 ```bash
-curl -X PUT "http://localhost:3000/api/v1/cems-wpms-requests/operator-factories/factory-001/favorite" \
+curl -X PUT "http://localhost:3000/api/v1/operator-factories/factory-001/favorite" \
   -H "Authorization: Bearer $ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{ "isFavorite": true }'

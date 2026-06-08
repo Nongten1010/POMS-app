@@ -158,7 +158,7 @@ describe('operator factory dashboard routes', () => {
     const app = createApp();
 
     const response = await request(app)
-      .put('/api/v1/cems-wpms-requests/operator-factories/factory-001/favorite')
+      .put('/api/v1/operator-factories/factory-001/favorite')
       .set('Authorization', `Bearer ${accessToken()}`)
       .send({ isFavorite: true });
 
@@ -173,6 +173,18 @@ describe('operator factory dashboard routes', () => {
       success: true,
       data: { factoryId: 'factory-001', isFavorite: true },
     });
+  });
+
+  it('does not expose favorite updates under cems-wpms requests', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .put('/api/v1/cems-wpms-requests/operator-factories/factory-001/favorite')
+      .set('Authorization', `Bearer ${accessToken()}`)
+      .send({ isFavorite: true });
+
+    expect(response.status).toBe(404);
+    expect(mockedConnectionRequestsService.setOperatorFactoryFavorite).not.toHaveBeenCalled();
   });
 });
 

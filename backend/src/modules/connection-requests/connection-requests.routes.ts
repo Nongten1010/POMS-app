@@ -11,6 +11,7 @@ import { connectionRequestsController } from './connection-requests.controller';
 
 export const connectionRequestsRoutes = Router();
 export const operatorFactoryDashboardRoutes = Router();
+export const operatorFactoryRoutes = Router();
 const documentImageUpload = multer({
   storage: multer.memoryStorage(),
   limits: {
@@ -29,11 +30,19 @@ const documentImageUpload = multer({
 
 connectionRequestsRoutes.use(authenticate);
 operatorFactoryDashboardRoutes.use(authenticate);
+operatorFactoryRoutes.use(authenticate);
 
 operatorFactoryDashboardRoutes.get(
   '/',
   authorize('factories:view'),
   connectionRequestsController.listOperatorFactoryDashboard,
+);
+
+operatorFactoryRoutes.put(
+  '/:factoryId/favorite',
+  authorize('factories:view'),
+  authorize('dashboard.alerts:view'),
+  connectionRequestsController.setOperatorFactoryFavorite,
 );
 
 connectionRequestsRoutes.get(
@@ -60,12 +69,6 @@ connectionRequestsRoutes.get('/operator-factory-dashboard', (_req, res) => {
     },
   });
 });
-connectionRequestsRoutes.put(
-  '/operator-factories/:factoryId/favorite',
-  authorize('factories:view'),
-  authorize('dashboard.alerts:view'),
-  connectionRequestsController.setOperatorFactoryFavorite,
-);
 connectionRequestsRoutes.get(
   '/factories/:factoryId/general',
   authorize('factories:view'),

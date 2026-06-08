@@ -69,7 +69,7 @@ Mapping:
 | 6   | รายการคำขอทั้งหมด สำหรับตารางเจ้าหน้าที่                     | GET    | `/cems-wpms-requests/table-rows`                           | `cems_wpms_requests:view`    |
 | 7   | รายการคำขอเฉพาะโรงงานตัวเอง สำหรับตารางผู้ประกอบการ          | GET    | `/cems-wpms-requests/table-rows`                           | `cems_wpms_requests:view`    |
 | 8   | รายชื่อโรงงาน สำหรับตารางผู้ประกอบการ                        | GET    | `/cems-wpms-requests/operator-factories`                   | `factories:view`             |
-| 8.1 | ติดดาว/ยกเลิกติดดาวโรงงาน                                   | PUT    | `/cems-wpms-requests/operator-factories/:factoryId/favorite` | `factories:view` + `dashboard.alerts:view` |
+| 8.1 | ติดดาว/ยกเลิกติดดาวโรงงาน                                   | PUT    | `/operator-factories/:factoryId/favorite` | `factories:view` + `dashboard.alerts:view` |
 | 9   | รายละเอียดคำขอรายคำขอ สำหรับ PDF/เติมฟอร์มเพิ่มพารามิเตอร์   | GET    | `/cems-wpms-requests/:id/detail`                           | `cems_wpms_requests:view`    |
 | 10  | รายละเอียดจุดตรวจวัดที่เชื่อมต่อแล้วจากระบบ POMS ปัจจุบัน    | GET    | `/connected-measurement-points`                            | `cems_wpms_requests:view`    |
 | 11  | รายการคำขอทุกคำขอของจุดตรวจวัดที่เลือก                      | GET    | `/connected-measurement-points/:stationId/requests`        | `cems_wpms_requests:view`    |
@@ -2770,7 +2770,7 @@ Data dictionary response row:
 
 | Item | Value |
 | --- | --- |
-| URL | `PUT /api/v1/cems-wpms-requests/operator-factories/:factoryId/favorite` |
+| URL | `PUT /api/v1/operator-factories/:factoryId/favorite` |
 | Header | `Authorization: Bearer <accessToken>` |
 | Body | `{ "isFavorite": true }` หรือ `{ "isFavorite": false }` |
 
@@ -2783,7 +2783,7 @@ Path params:
 ตัวอย่าง request:
 
 ```bash
-curl -X PUT "http://localhost:3000/api/v1/cems-wpms-requests/operator-factories/factory-001/favorite" \
+curl -X PUT "http://localhost:3000/api/v1/operator-factories/factory-001/favorite" \
   -H "Authorization: Bearer $OPERATOR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{ "isFavorite": true }'

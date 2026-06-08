@@ -14,6 +14,7 @@ import { connectedMeasurementPointsRoutes } from './modules/connection-requests/
 import {
   connectionRequestsRoutes,
   operatorFactoryDashboardRoutes,
+  operatorFactoryRoutes,
 } from './modules/connection-requests/connection-requests.routes';
 import { deviceConnectionsRoutes } from './modules/device-connections/device-connections.routes';
 import { parameterValuesRoutes } from './modules/parameter-values/parameter-values.routes';
@@ -67,6 +68,7 @@ export function createApp(): Application {
   app.use(`${env.API_PREFIX}/eligible-factories`, eligibleFactoriesRoutes);
   app.use(`${env.API_PREFIX}/connected-measurement-points`, connectedMeasurementPointsRoutes);
   app.use(`${env.API_PREFIX}/operator-factory-dashboard`, operatorFactoryDashboardRoutes);
+  app.use(`${env.API_PREFIX}/operator-factories`, operatorFactoryRoutes);
   app.use(`${env.API_PREFIX}/cems-wpms-requests`, connectionRequestsRoutes);
   app.use(`${env.API_PREFIX}/device-connections`, deviceConnectionsRoutes);
   app.use(`${env.API_PREFIX}/parameter-values`, parameterValuesRoutes);
