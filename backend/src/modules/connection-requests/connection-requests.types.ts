@@ -136,6 +136,11 @@ export interface ListConnectedMeasurementPointsQuery {
   stationId?: string;
 }
 
+export interface ListOperatorFactoriesQuery {
+  systemType?: ConnectionSystemType;
+  favoriteOnly?: boolean;
+}
+
 export interface ReviewConnectionRequestInput {
   decision: 'APPROVE_DESIGN' | 'REQUEST_REVISION';
   revisionReason?: string | null;
@@ -237,6 +242,7 @@ export interface FactorySummaryDTO {
   province: string | null;
   isEligible?: boolean;
   eligibilityStatus?: 'เข้าข่าย' | 'ไม่เข้าข่าย';
+  isActive?: boolean;
 }
 
 export interface FactoryGeneralDTO extends FactorySummaryDTO {
@@ -283,12 +289,41 @@ export interface ConnectionRequestTableRowDTO {
   requestType: ConnectionRequestType;
 }
 
-export interface OperatorFactoryTableRowDTO extends FactorySummaryDTO {
-  monitoringPointCount: number;
-  requestStatusCode: ConnectionRequestStatus | null;
+export interface OperatorFactoryTableRowDTO {
+  factoryId: string;
+  factoryName: string;
+  newRegistrationNo: string;
+  province: string | null;
+  address: string | null;
+  latitude: string | null;
+  longitude: string | null;
+  isFavorite: boolean;
+  monitoringPointCountBySystem: OperatorFactorySystemPointCountDTO[];
   status: 'แสดง' | 'ซ่อน';
-  isEligible: boolean;
-  eligibilityStatus: 'เข้าข่าย' | 'ไม่เข้าข่าย';
+  measurementPoints: OperatorFactoryMeasurementPointDTO[];
+}
+
+export interface OperatorFactorySystemPointCountDTO {
+  systemType: ConnectionSystemType;
+  count: number;
+}
+
+export interface OperatorFactoryMeasurementPointDTO {
+  stationId: string | null;
+  pointName: string;
+  pointCode: string | null;
+  systemType: ConnectionSystemType;
+  parameters: string[];
+  data: Record<string, unknown>[];
+}
+
+export interface CurrentFactoryMeasurementPointDTO extends OperatorFactoryMeasurementPointDTO {
+  factoryId: string;
+}
+
+export interface FactoryFavoriteDTO {
+  factoryId: string;
+  isFavorite: boolean;
 }
 
 export interface DeviceConfigFormStatusManagementDTO {

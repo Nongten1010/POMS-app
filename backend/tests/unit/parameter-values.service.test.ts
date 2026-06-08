@@ -4,6 +4,7 @@ jest.mock('../../src/modules/parameter-values/parameter-values.repository', () =
   parameterValuesRepository: {
     canAccessStation: jest.fn(),
     latestRow: jest.fn(),
+    latestRowsAtLatestTimestamp: jest.fn(),
     latestRows: jest.fn(),
     listAccessibleStationIds: jest.fn(),
     listRegisteredParameters: jest.fn(),
@@ -174,6 +175,88 @@ describe('parameterValuesService', () => {
         returnedColumns: ['station_id', 'co2_value', 'cdate', 'ctime'],
       },
     });
+  });
+
+  it('returns the latest hourly rows from the 60m table timestamp group', async () => {
+    mockedRepository.listRegisteredParameters.mockResolvedValue(['CO', 'NOx', 'Temp', 'O2', 'Flow']);
+    mockedRepository.tableExists.mockResolvedValue(true);
+    mockedRepository.latestRowsAtLatestTimestamp.mockResolvedValue({
+      tableName: 'S0001_data_60m',
+      rows: [
+        {
+          station_id: 'NB-C21',
+          co_value: 0.05,
+          nox_value: 10.54,
+          temp_value: 93.35,
+          o2_value: 12.58,
+          flow_value: 1981710,
+          bod_value: 5,
+          cdate: '2026-02-25',
+          ctime: '22.00-22.59 น.',
+        },
+        {
+          station_id: 'NB-C22',
+          co_value: 0,
+          nox_value: 12.37,
+          temp_value: 93.11,
+          o2_value: 12.52,
+          flow_value: 1906655.5,
+          cdate: '2026-02-25',
+          ctime: '22.00-22.59 น.',
+        },
+      ],
+    });
+
+    const result = await parameterValuesService.latestHourly('S0001', operatorAccess);
+
+    expect(mockedRepository.tableExists).toHaveBeenCalledWith('S0001_data_60m');
+    expect(mockedRepository.latestRowsAtLatestTimestamp).toHaveBeenCalledWith({
+      stationId: 'S0001',
+      interval: '60m',
+    });
+    expect(result).toMatchObject({
+      data: [
+        {
+          station_id: 'NB-C21',
+          co_value: 0.05,
+          nox_value: 10.54,
+          temp_value: 93.35,
+          o2_value: 12.58,
+          flow_value: 1981710,
+          cdate: '2026-02-25',
+          ctime: '22.00-22.59 น.',
+        },
+        {
+          station_id: 'NB-C22',
+          co_value: 0,
+          nox_value: 12.37,
+          temp_value: 93.11,
+          o2_value: 12.52,
+          flow_value: 1906655.5,
+          cdate: '2026-02-25',
+          ctime: '22.00-22.59 น.',
+        },
+      ],
+      meta: {
+        stationId: 'S0001',
+        interval: '60m',
+        schemaName: 'ingest',
+        tableName: 'S0001_data_60m',
+        count: 2,
+        registeredParameters: ['CO', 'NOx', 'Temp', 'O2', 'Flow'],
+      },
+    });
+    expect(result.meta.returnedColumns).toEqual([
+      'station_id',
+      'co_value',
+      'nox_value',
+      'temp_value',
+      'o2_value',
+      'flow_value',
+      'cdate',
+      'ctime',
+    ]);
+    expect(result.data[0]).not.toHaveProperty('bod_value');
   });
 
   it('returns formatted connection test values from the latest five station test rows', async () => {

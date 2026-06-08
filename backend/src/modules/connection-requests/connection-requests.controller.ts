@@ -19,6 +19,9 @@ import {
   listConnectedMeasurementPointsQuerySchema,
   listConnectionRequestTableRowsQuerySchema,
   listConnectionRequestsQuerySchema,
+  listOperatorFactoriesQuerySchema,
+  operatorFactoryFavoriteParamsSchema,
+  operatorFactoryFavoriteSchema,
   resubmitConnectionRequestSchema,
   reviewConnectionRequestSchema,
   verifyConnectionSchema,
@@ -58,11 +61,34 @@ export const connectionRequestsController = {
   async listOperatorFactories(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const actorUserId = requireActorUserId(req);
+      const query = listOperatorFactoriesQuerySchema.parse(req.query);
       const result = await connectionRequestsService.listOperatorFactories(
         actorUserId,
         getScope(req, 'factories:view'),
+        query,
       );
       res.status(StatusCodes.OK).json({ success: true, ...result });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async setOperatorFactoryFavorite(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const actorUserId = requireActorUserId(req);
+      const { factoryId } = operatorFactoryFavoriteParamsSchema.parse(req.params);
+      const { isFavorite } = operatorFactoryFavoriteSchema.parse(req.body);
+      const data = await connectionRequestsService.setOperatorFactoryFavorite(
+        factoryId,
+        isFavorite,
+        actorUserId,
+        getScope(req, 'factories:view'),
+      );
+      res.status(StatusCodes.OK).json({ success: true, data });
     } catch (err) {
       next(err);
     }

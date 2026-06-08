@@ -791,6 +791,23 @@ export const listConnectedMeasurementPointsQuerySchema = z
   })
   .strict();
 
+const booleanQuerySchema = z
+  .preprocess((value) => {
+    if (typeof value !== 'string') return value;
+    const normalized = value.trim().toLowerCase();
+    if (['true', '1', 'yes'].includes(normalized)) return true;
+    if (['false', '0', 'no'].includes(normalized)) return false;
+    return value;
+  }, z.boolean().optional())
+  .transform((value) => value ?? false);
+
+export const listOperatorFactoriesQuerySchema = z
+  .object({
+    systemType: z.enum(['CEMS', 'WPMS']).optional(),
+    favoriteOnly: booleanQuerySchema,
+  })
+  .strict();
+
 export const connectionRequestIdParamsSchema = z
   .object({
     id: z.coerce.number().int().min(1),
@@ -800,6 +817,14 @@ export const connectionRequestIdParamsSchema = z
 export const factoryGeneralParamsSchema = z
   .object({
     factoryId: z.string().trim().min(1).max(64),
+  })
+  .strict();
+
+export const operatorFactoryFavoriteParamsSchema = factoryGeneralParamsSchema;
+
+export const operatorFactoryFavoriteSchema = z
+  .object({
+    isFavorite: z.boolean(),
   })
   .strict();
 

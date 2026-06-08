@@ -4,6 +4,7 @@ import { parameterValuesRepository } from './parameter-values.repository';
 import {
   type ConnectionTestQuery,
   type ConnectionTestResultDTO,
+  type LatestHourlyParameterValuesResultDTO,
   type LatestParameterValueQuery,
   type LatestParameterValueResultDTO,
   type ListParameterValuesQuery,
@@ -93,6 +94,45 @@ export const parameterValuesService = {
       meta: {
         stationId: query.stationId,
         interval: query.interval,
+        schemaName: env.PARAMETER_DB_SCHEMA,
+        tableName: result.tableName,
+        count: filtered.rows.length,
+        registeredParameters,
+        returnedColumns: filtered.returnedColumns,
+      },
+    };
+  },
+
+  async latestHourly(
+    stationId: string,
+    access: ParameterValueAccessContext,
+  ): Promise<LatestHourlyParameterValuesResultDTO> {
+    await ensureStationAccess(stationId, access);
+
+    const interval = '60m';
+    const tableName = parameterValuesRepository.tableName(stationId, interval);
+    const exists = await parameterValuesRepository.tableExists(tableName);
+    if (!exists) {
+      throw new NotFoundError(
+        `Parameter value table ${env.PARAMETER_DB_SCHEMA}.${tableName} not found`,
+      );
+    }
+
+    const result = await parameterValuesRepository.latestRowsAtLatestTimestamp({
+      stationId,
+      interval,
+    });
+    const registeredParameters = await parameterValuesRepository.listRegisteredParameters(
+      stationId,
+      access,
+    );
+    const filtered = filterRowsByRegisteredParameters(result.rows, registeredParameters);
+
+    return {
+      data: filtered.rows,
+      meta: {
+        stationId,
+        interval,
         schemaName: env.PARAMETER_DB_SCHEMA,
         tableName: result.tableName,
         count: filtered.rows.length,

@@ -11,7 +11,10 @@ jest.mock('../../src/modules/connection-requests/connection-requests.repository'
     list: jest.fn(),
     listFactoriesForAccess: jest.fn(),
     findFactoryGeneral: jest.fn(),
+    listConnectedMeasurementPointsForFactories: jest.fn(),
+    listFavoriteFactoryIds: jest.fn(),
     listRequestsForFactories: jest.fn(),
+    setFactoryFavorite: jest.fn(),
   },
 }));
 
@@ -26,8 +29,15 @@ jest.mock('../../src/modules/device-connections/device-connections.service', () 
   },
 }));
 
+jest.mock('../../src/modules/parameter-values/parameter-values.service', () => ({
+  parameterValuesService: {
+    latestHourly: jest.fn(),
+  },
+}));
+
 import { deviceConnectionsService } from '../../src/modules/device-connections/device-connections.service';
 import type { DeviceConnectionConfigDTO } from '../../src/modules/device-connections/device-connections.types';
+import { parameterValuesService } from '../../src/modules/parameter-values/parameter-values.service';
 import { connectionRequestsRepository } from '../../src/modules/connection-requests/connection-requests.repository';
 import { connectionRequestsService } from '../../src/modules/connection-requests/connection-requests.service';
 import {
@@ -41,6 +51,7 @@ import {
 
 const mockedRepository = jest.mocked(connectionRequestsRepository);
 const mockedDeviceConnectionsService = jest.mocked(deviceConnectionsService);
+const mockedParameterValuesService = jest.mocked(parameterValuesService);
 
 describe('connectionRequestsService', () => {
   const actorUserId = 42;
@@ -98,10 +109,24 @@ describe('connectionRequestsService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockedRepository.listFavoriteFactoryIds.mockResolvedValue([]);
+    mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([]);
     mockedDeviceConnectionsService.listActiveSettings.mockResolvedValue([]);
     mockedDeviceConnectionsService.listByRequestId.mockResolvedValue([]);
     mockedDeviceConnectionsService.create.mockResolvedValue(deviceConnectionConfig());
     mockedDeviceConnectionsService.createMany.mockResolvedValue([deviceConnectionConfig()]);
+    mockedParameterValuesService.latestHourly.mockResolvedValue({
+      data: [],
+      meta: {
+        stationId: 'S0001',
+        interval: '60m',
+        schemaName: 'ingest',
+        tableName: 'S0001_data_60m',
+        count: 0,
+        registeredParameters: [],
+        returnedColumns: [],
+      },
+    });
     connectionRequestsService.setClockForTests(() => now);
   });
 
@@ -220,25 +245,51 @@ describe('connectionRequestsService', () => {
     expect(result.meta.total).toBe(1);
   });
 
-  it('returns operator factories with latest request status code and connected point count', async () => {
+  it('returns only visible operator factories in the dashboard response shape', async () => {
     mockedRepository.listFactoriesForAccess.mockResolvedValue([factorySummary()]);
-    mockedRepository.listRequestsForFactories.mockResolvedValue([
-      requestDto({
-        status: CONNECTION_REQUEST_STATUS.CONNECTED,
-        statusLabel: 'เชื่อมต่อแล้ว',
-        measurementPoints: [
-          {
-            id: 1,
-            pointName: 'ปล่องระบาย A',
-            pointCode: 'STACK-A',
-            pointType: 'STACK',
-            latitude: null,
-            longitude: null,
-            parameters: ['NOx'],
-            description: null,
-          },
+    mockedRepository.listFavoriteFactoryIds.mockResolvedValue(['factory-001']);
+    mockedParameterValuesService.latestHourly.mockResolvedValueOnce({
+      data: [
+        {
+          station_id: 'NB-C21',
+          cdate: '2026-02-25',
+          ctime: '22.00-22.59 น.',
+          co_value: 0.05,
+          nox_value: 10.54,
+          temp_value: 93.35,
+          o2_value: 12.58,
+          flow_value: 1981710,
+        },
+      ],
+      meta: {
+        stationId: 'S0001',
+        interval: '60m',
+        schemaName: 'ingest',
+        tableName: 'S0001_data_60m',
+        count: 1,
+        registeredParameters: ['CO', 'NOx', 'Temp', 'O2', 'Flow'],
+        returnedColumns: [
+          'station_id',
+          'cdate',
+          'ctime',
+          'co_value',
+          'nox_value',
+          'temp_value',
+          'o2_value',
+          'flow_value',
         ],
-      }),
+      },
+    });
+    mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
+      {
+        factoryId: 'factory-001',
+        stationId: 'S0001',
+        pointName: 'ปล่องระบาย A',
+        pointCode: 'S0001',
+        systemType: 'CEMS',
+        parameters: ['CO', 'NOx', 'Temp', 'O2', 'Flow'],
+        data: [],
+      },
     ]);
 
     const result = await connectionRequestsService.listOperatorFactories(
@@ -250,21 +301,140 @@ describe('connectionRequestsService', () => {
       actorUserId,
       scope: 'OWN_FACTORY',
     });
+    expect(mockedRepository.listConnectedMeasurementPointsForFactories).toHaveBeenCalledWith([
+      'factory-001',
+    ]);
+    expect(mockedRepository.listRequestsForFactories).not.toHaveBeenCalled();
     expect(result.data[0]).toMatchObject({
+      factoryId: 'factory-001',
       factoryName: 'บริษัท ทดสอบ จำกัด',
-      industryMainOrder: '106',
-      industrySubOrder: '33',
-      businessActivity: 'ผลิตเคมีภัณฑ์',
-      eia: 'มี',
+      newRegistrationNo: '3-106-33/50สบ',
+      province: 'สระบุรี',
       address: '99 หมู่ 1',
       latitude: '13.7563',
       longitude: '100.5018',
-      isEligible: true,
-      eligibilityStatus: 'เข้าข่าย',
-      monitoringPointCount: 1,
-      requestStatusCode: CONNECTION_REQUEST_STATUS.CONNECTED,
+      isFavorite: true,
+      monitoringPointCountBySystem: [
+        { systemType: 'CEMS', count: 1 },
+        { systemType: 'WPMS', count: 0 },
+      ],
+      status: 'แสดง',
+      measurementPoints: [
+        {
+          stationId: 'S0001',
+          pointName: 'ปล่องระบาย A',
+          pointCode: 'S0001',
+          systemType: 'CEMS',
+          parameters: ['CO (ppm)', 'NOx (ppm)', 'Temp. (°C)', 'O2 (%)', 'Flow (m3/hr)'],
+          data: [
+            {
+              station_id: 'NB-C21',
+              cdate: '2026-02-25',
+              ctime: '22.00-22.59 น.',
+              'CO (ppm)': 0.05,
+              'NOx (ppm)': 10.54,
+              'Temp. (°C)': 93.35,
+              'O2 (%)': 12.58,
+              'Flow (m3/hr)': 1981710,
+            },
+          ],
+        },
+      ],
+    });
+    expect(mockedParameterValuesService.latestHourly).toHaveBeenCalledWith('S0001', {
+      actorUserId,
+      scope: 'OWN_FACTORY',
     });
     expect(result.data[0]).not.toHaveProperty('requestStatus');
+    expect(result.data[0]).not.toHaveProperty('requestStatusCode');
+    expect(result.data[0]).not.toHaveProperty('systemTypes');
+    expect(result.data[0].measurementPoints[0]).not.toHaveProperty('requestId');
+    expect(result.data[0].measurementPoints[0]).not.toHaveProperty('latestHourlyMeasurement');
+  });
+
+  it('filters operator factories by requested CEMS or WPMS system type', async () => {
+    mockedRepository.listFactoriesForAccess.mockResolvedValue([
+      factorySummary({ factoryId: 'factory-cems', factoryName: 'โรงงาน CEMS' }),
+      factorySummary({ factoryId: 'factory-wpms', factoryName: 'โรงงาน WPMS' }),
+    ]);
+    mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
+      {
+        factoryId: 'factory-cems',
+        stationId: 'S0001',
+        pointName: 'ปล่อง A',
+        pointCode: 'S0001',
+        systemType: 'CEMS',
+        parameters: ['NOx'],
+        data: [],
+      },
+      {
+        factoryId: 'factory-wpms',
+        stationId: 'P0001',
+        pointName: 'น้ำทิ้ง A',
+        pointCode: 'P0001',
+        systemType: 'WPMS',
+        parameters: ['BOD'],
+        data: [],
+      },
+    ]);
+
+    const result = await connectionRequestsService.listOperatorFactories(
+      actorUserId,
+      'OWN_FACTORY',
+      { systemType: 'WPMS' },
+    );
+
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0]).toMatchObject({
+      factoryId: 'factory-wpms',
+      status: 'แสดง',
+      measurementPoints: [{ stationId: 'P0001', systemType: 'WPMS' }],
+    });
+  });
+
+  it('excludes factories whose display status is hidden', async () => {
+    mockedRepository.listFactoriesForAccess.mockResolvedValue([
+      factorySummary({ factoryId: 'factory-visible', factoryName: 'โรงงานแสดง', isActive: true }),
+      factorySummary({ factoryId: 'factory-hidden', factoryName: 'โรงงานซ่อน', isActive: false }),
+    ]);
+    mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([]);
+
+    const result = await connectionRequestsService.listOperatorFactories(
+      actorUserId,
+      'OWN_FACTORY',
+    );
+
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0]).toMatchObject({
+      factoryId: 'factory-visible',
+      status: 'แสดง',
+    });
+  });
+
+  it('toggles factory favorites only after resolving the factory through the actor access scope', async () => {
+    mockedRepository.findFactoryGeneral.mockResolvedValue(factoryGeneral());
+    mockedRepository.setFactoryFavorite.mockResolvedValue({
+      factoryId: 'factory-001',
+      isFavorite: true,
+    });
+
+    const result = await connectionRequestsService.setOperatorFactoryFavorite(
+      'factory-001',
+      true,
+      actorUserId,
+      'OWN_FACTORY',
+    );
+
+    expect(mockedRepository.findFactoryGeneral).toHaveBeenCalledWith('factory-001', {
+      actorUserId,
+      scope: 'OWN_FACTORY',
+    });
+    expect(mockedRepository.setFactoryFavorite).toHaveBeenCalledWith(
+      actorUserId,
+      'factory-001',
+      true,
+    );
+    expect(result).toEqual({ factoryId: 'factory-001', isFavorite: true });
   });
 
   it('returns factory general data for add measurement point form prefill', async () => {

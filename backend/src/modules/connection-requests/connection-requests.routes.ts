@@ -43,6 +43,12 @@ connectionRequestsRoutes.get(
   authorize('factories:view'),
   connectionRequestsController.listOperatorFactories,
 );
+connectionRequestsRoutes.put(
+  '/operator-factories/:factoryId/favorite',
+  authorize('factories:view'),
+  authorize('dashboard.alerts:view'),
+  connectionRequestsController.setOperatorFactoryFavorite,
+);
 connectionRequestsRoutes.get(
   '/factories/:factoryId/general',
   authorize('factories:view'),

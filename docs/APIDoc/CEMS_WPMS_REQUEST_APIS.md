@@ -69,6 +69,7 @@ Mapping:
 | 6   | รายการคำขอทั้งหมด สำหรับตารางเจ้าหน้าที่                     | GET    | `/cems-wpms-requests/table-rows`                           | `cems_wpms_requests:view`    |
 | 7   | รายการคำขอเฉพาะโรงงานตัวเอง สำหรับตารางผู้ประกอบการ          | GET    | `/cems-wpms-requests/table-rows`                           | `cems_wpms_requests:view`    |
 | 8   | รายชื่อโรงงาน สำหรับตารางผู้ประกอบการ                        | GET    | `/cems-wpms-requests/operator-factories`                   | `factories:view`             |
+| 8.1 | ติดดาว/ยกเลิกติดดาวโรงงาน                                   | PUT    | `/cems-wpms-requests/operator-factories/:factoryId/favorite` | `factories:view` + `dashboard.alerts:view` |
 | 9   | รายละเอียดคำขอรายคำขอ สำหรับ PDF/เติมฟอร์มเพิ่มพารามิเตอร์   | GET    | `/cems-wpms-requests/:id/detail`                           | `cems_wpms_requests:view`    |
 | 10  | รายละเอียดจุดตรวจวัดที่เชื่อมต่อแล้วจากระบบ POMS ปัจจุบัน    | GET    | `/connected-measurement-points`                            | `cems_wpms_requests:view`    |
 | 11  | รายการคำขอทุกคำขอของจุดตรวจวัดที่เลือก                      | GET    | `/connected-measurement-points/:stationId/requests`        | `cems_wpms_requests:view`    |
@@ -2682,27 +2683,138 @@ Data dictionary response row ใช้เหมือน API 6
 | Header | `Authorization: Bearer <operatorAccessToken>` |
 | Body | ไม่มี |
 
+Query params:
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `systemType` | `CEMS`\|`WPMS` | No | กรองโรงงานที่มีจุดตรวจวัดที่เชื่อมต่อแล้วตามระบบ สำหรับปุ่ม CEMS/WPMS |
+| `favoriteOnly` | boolean | No | `true` เพื่อแสดงเฉพาะโรงงานที่ user ปัจจุบันติดดาว |
+
+Endpoint นี้คืนเฉพาะโรงงานที่ `status = "แสดง"` และ response หลักไม่อ่านรายการคำขอจาก `cems_wpms_connection_requests`; ใช้ข้อมูลโรงงานจาก `factories`, จุดตรวจวัดปัจจุบันจาก `cems_wpms_connected_measurement_points`, และค่าตรวจวัดล่าสุดจากตาราง `{stationId}_data_60m`
+
 ตัวอย่าง request:
 
 ```bash
-curl "http://localhost:3000/api/v1/cems-wpms-requests/operator-factories" \
+curl "http://localhost:3000/api/v1/cems-wpms-requests/operator-factories?systemType=CEMS" \
   -H "Authorization: Bearer $OPERATOR_TOKEN"
+```
+
+ตัวอย่าง response:
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "factoryId": "factory-001",
+      "factoryName": "บริษัท ทดสอบ จำกัด",
+      "newRegistrationNo": "3-106-33/50สบ",
+      "province": "สระบุรี",
+      "address": "99 หมู่ 1",
+      "latitude": "13.7563",
+      "longitude": "100.5018",
+      "isFavorite": true,
+      "monitoringPointCountBySystem": [
+        {
+          "systemType": "CEMS",
+          "count": 1
+        },
+        {
+          "systemType": "WPMS",
+          "count": 0
+        }
+      ],
+      "status": "แสดง",
+      "measurementPoints": [
+        {
+          "stationId": "S0001",
+          "pointName": "ปล่อง A",
+          "pointCode": "S0001",
+          "systemType": "CEMS",
+          "parameters": ["CO (ppm)", "NOx (ppm)", "Temp. (°C)", "O2 (%)", "Flow (m3/hr)"],
+          "data": [
+            {
+              "station_id": "NB-C21",
+              "cdate": "2026-02-25",
+              "ctime": "22.00-22.59 น.",
+              "CO (ppm)": 0.05,
+              "NOx (ppm)": 10.54,
+              "Temp. (°C)": 93.35,
+              "O2 (%)": 12.58,
+              "Flow (m3/hr)": 1981710
+            },
+            {
+              "station_id": "NB-C22",
+              "cdate": "2026-02-25",
+              "ctime": "22.00-22.59 น.",
+              "CO (ppm)": 0,
+              "NOx (ppm)": 12.37,
+              "Temp. (°C)": 93.11,
+              "O2 (%)": 12.52,
+              "Flow (m3/hr)": 1906655.5
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "total": 1
+  }
+}
 ```
 
 Data dictionary response row:
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `id` | number | ID โรงงานใน DB |
 | `factoryId` | string | รหัสโรงงาน |
 | `factoryName` | string | ชื่อโรงงาน |
 | `newRegistrationNo` | string|null | เลขทะเบียนใหม่ |
-| `oldRegistrationNo` | string|null | เลขทะเบียนเดิม |
-| `industryType` | string|null | ประเภทอุตสาหกรรม |
 | `province` | string|null | จังหวัด |
-| `monitoringPointCount` | number | จำนวนจุดตรวจวัด |
-| `requestStatusCode` | string|null | สถานะคำขอล่าสุดแบบ code |
-| `status` | string | สถานะการแสดงผลในตาราง |
+| `address` | string|null | ที่อยู่โรงงาน |
+| `latitude` | string|null | พิกัด latitude |
+| `longitude` | string|null | พิกัด longitude |
+| `isFavorite` | boolean | โรงงานนี้ถูก user ปัจจุบันติดดาวหรือไม่ |
+| `monitoringPointCountBySystem` | array | จำนวนจุดตรวจวัดแยกตามระบบ เช่น `{ "systemType": "CEMS", "count": 1 }` |
+| `status` | string | คืนเฉพาะโรงงานที่เป็น `แสดง` เท่านั้น |
+| `measurementPoints` | array | จุดตรวจวัดที่เชื่อมต่อแล้ว ใช้สร้างตารางตามปุ่ม CEMS/WPMS |
+| `measurementPoints[].data` | array | ค่าตรวจวัดล่าสุดรายชั่วโมงจากตาราง `{stationId}_data_60m`; value fields ใช้ชื่อเดียวกับ `parameters` เช่น `NOx (ppm)` |
+
+### API 8.1: PUT ติดดาว/ยกเลิกติดดาวโรงงาน
+
+| Item | Value |
+| --- | --- |
+| URL | `PUT /api/v1/cems-wpms-requests/operator-factories/:factoryId/favorite` |
+| Header | `Authorization: Bearer <accessToken>` |
+| Body | `{ "isFavorite": true }` หรือ `{ "isFavorite": false }` |
+
+Path params:
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `factoryId` | string | Yes | ใช้ได้ทั้ง `factoryId`/`fid` หรือเลขทะเบียนที่ `GET /operator-factories` คืนมา แต่ backend จะ normalize เป็น `factoryId` จริงก่อนบันทึก |
+
+ตัวอย่าง request:
+
+```bash
+curl -X PUT "http://localhost:3000/api/v1/cems-wpms-requests/operator-factories/factory-001/favorite" \
+  -H "Authorization: Bearer $OPERATOR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "isFavorite": true }'
+```
+
+ตัวอย่าง response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "factoryId": "factory-001",
+    "isFavorite": true
+  }
+}
+```
 
 ### API 9: GET รายละเอียดคำขอรายคำขอ
 

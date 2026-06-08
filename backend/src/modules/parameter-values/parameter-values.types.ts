@@ -58,6 +58,19 @@ export interface LatestParameterValueResultDTO {
   };
 }
 
+export interface LatestHourlyParameterValuesResultDTO {
+  data: Record<string, unknown>[];
+  meta: {
+    stationId: string;
+    interval: '60m';
+    schemaName: string;
+    tableName: string;
+    count: number;
+    registeredParameters: string[];
+    returnedColumns: string[];
+  };
+}
+
 export interface ConnectionTestRowDTO {
   timestamp: string | null;
   values: Record<string, unknown>;

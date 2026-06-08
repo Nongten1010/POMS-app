@@ -9,6 +9,8 @@ import {
   type ConnectionRequestStatus,
   type ConnectionRequestType,
   type CreateConnectionRequestInput,
+  type CurrentFactoryMeasurementPointDTO,
+  type FactoryFavoriteDTO,
   type FactoryGeneralDTO,
   type FactorySummaryDTO,
   type MeasurementInstrumentsInput,
@@ -70,6 +72,14 @@ interface MeasurementPointRow {
 
 interface ConnectedMeasurementPointRow {
   id: number | string;
+  parameters_json: string;
+}
+
+interface CurrentFactoryMeasurementPointRow {
+  factory_id: string;
+  point_name: string;
+  point_code: string | null;
+  system_type: 'CEMS' | 'WPMS';
   parameters_json: string;
 }
 
@@ -153,6 +163,12 @@ interface PointCodeSequenceRow {
   system_type: 'CEMS' | 'WPMS';
   prefix: 'S' | 'P';
   last_sequence: number | string;
+}
+
+interface FactoryFavoriteRow {
+  id: number | string;
+  factory_id: string;
+  deleted_at: Date | string | null;
 }
 
 const TEMPORARY_FACTORY_TEXT = 'ไม่ระบุ';
@@ -277,6 +293,56 @@ export const connectionRequestsRepository = {
     return row ? toFactoryGeneralDTO(row) : null;
   },
 
+  async listFavoriteFactoryIds(actorUserId: number): Promise<string[]> {
+    const rows = await db<FactoryFavoriteRow>('user_factory_favorites')
+      .where('user_id', actorUserId)
+      .whereNull('deleted_at')
+      .select('factory_id')
+      .orderBy('factory_id', 'asc');
+
+    return rows.map((row) => row.factory_id);
+  },
+
+  async setFactoryFavorite(
+    actorUserId: number,
+    factoryId: string,
+    isFavorite: boolean,
+  ): Promise<FactoryFavoriteDTO> {
+    const existing = await db<FactoryFavoriteRow>('user_factory_favorites')
+      .where('user_id', actorUserId)
+      .where('factory_id', factoryId)
+      .first('id', 'factory_id', 'deleted_at');
+
+    if (isFavorite) {
+      if (existing) {
+        await db('user_factory_favorites')
+          .where('id', existing.id)
+          .update({
+            deleted_at: null,
+            updated_by: actorUserId,
+            updated_at: db.fn.now(),
+          });
+      } else {
+        await db('user_factory_favorites').insert({
+          user_id: actorUserId,
+          factory_id: factoryId,
+          created_by: actorUserId,
+          updated_by: actorUserId,
+        });
+      }
+    } else if (existing && existing.deleted_at === null) {
+      await db('user_factory_favorites')
+        .where('id', existing.id)
+        .update({
+          deleted_at: db.fn.now(),
+          updated_by: actorUserId,
+          updated_at: db.fn.now(),
+        });
+    }
+
+    return { factoryId, isFavorite };
+  },
+
   async findFactorySummariesForRequests(
     requests: ConnectionRequestDTO[],
   ): Promise<Map<string, FactorySummaryDTO>> {
@@ -354,6 +420,36 @@ export const connectionRequestsRepository = {
       );
 
     return Promise.all(rows.map((row) => hydrate(row)));
+  },
+
+  async listConnectedMeasurementPointsForFactories(
+    factoryIds: string[],
+  ): Promise<CurrentFactoryMeasurementPointDTO[]> {
+    if (factoryIds.length === 0) return [];
+
+    const rows = await db<CurrentFactoryMeasurementPointRow>('cems_wpms_connected_measurement_points')
+      .whereNull('deleted_at')
+      .whereIn('factory_id', factoryIds)
+      .select(
+        'factory_id',
+        'point_name',
+        'point_code',
+        'system_type',
+        'parameters_json',
+      )
+      .orderBy('factory_id', 'asc')
+      .orderBy('point_code', 'asc')
+      .orderBy('point_name', 'asc');
+
+    return rows.map((row) => ({
+      factoryId: row.factory_id,
+      stationId: row.point_code ?? row.point_name,
+      pointName: row.point_name,
+      pointCode: row.point_code,
+      systemType: row.system_type,
+      parameters: parseParameters(row.parameters_json),
+      data: [],
+    }));
   },
 
   async create(
@@ -621,6 +717,7 @@ function toFactorySummaryDTO(row: FactoryRow): FactorySummaryDTO {
     province: row.province_name,
     isEligible,
     eligibilityStatus: isEligible ? 'เข้าข่าย' : 'ไม่เข้าข่าย',
+    isActive: toNullableBoolean(row.is_active) ?? false,
   };
 }
 

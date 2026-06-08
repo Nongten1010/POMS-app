@@ -9,3 +9,4 @@
 | File | Description |
 | --- | --- |
 | [CEMS_WPMS_REQUEST_APIS.md](./CEMS_WPMS_REQUEST_APIS.md) | API คำขอ CEMS/WPMS ครบ 10 รายการ พร้อมตัวอย่าง request/response และ field mapping ทุกช่อง |
+| [OPERATOR_FACTORY_DASHBOARD.md](./OPERATOR_FACTORY_DASHBOARD.md) | API เฉพาะหน้าแผนที่/รายการโรงงาน CEMS/WPMS, favorite และตารางค่าตรวจวัดล่าสุด |

@@ -24,6 +24,11 @@ interface RegisteredParameterRow {
   parameters_json: string | null;
 }
 
+interface LatestTimestampRow {
+  cdate: unknown;
+  ctime: unknown;
+}
+
 export const parameterValuesRepository = {
   tableName(stationId: string, interval: ParameterValueInterval): string {
     return `${stationId}_data_${interval}`;
@@ -160,6 +165,34 @@ export const parameterValuesRepository = {
       .orderBy('cdate', 'desc')
       .orderBy('ctime', 'desc')
       .limit(limit);
+
+    return {
+      tableName,
+      rows: rows.map(serializeRow),
+    };
+  },
+
+  async latestRowsAtLatestTimestamp(
+    query: LatestParameterValueQuery,
+  ): Promise<{ rows: Record<string, unknown>[]; tableName: string }> {
+    const tableName = this.tableName(query.stationId, query.interval);
+    const latestTimestamp = await parameterSourceDb
+      .withSchema(env.PARAMETER_DB_SCHEMA)
+      .from<LatestTimestampRow>(tableName)
+      .select('cdate', 'ctime')
+      .orderBy('cdate', 'desc')
+      .orderBy('ctime', 'desc')
+      .first();
+
+    if (!latestTimestamp) return { tableName, rows: [] };
+
+    const rows = await parameterSourceDb
+      .withSchema(env.PARAMETER_DB_SCHEMA)
+      .from<Record<string, unknown>>(tableName)
+      .select('*')
+      .where('cdate', latestTimestamp.cdate)
+      .where('ctime', latestTimestamp.ctime)
+      .orderBy('station_id', 'asc');
 
     return {
       tableName,
