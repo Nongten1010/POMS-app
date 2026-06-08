@@ -1732,6 +1732,13 @@ curl "http://localhost:3000/api/v1/cems-wpms-requests/connected-measurement-poin
   -H "Authorization: Bearer $OFFICER_TOKEN"
 ```
 
+Filter จุดตรวจวัดเดียวด้วย `stationId`:
+
+```bash
+curl "http://localhost:3000/api/v1/cems-wpms-requests/connected-measurement-points?stationId=S0001" \
+  -H "Authorization: Bearer $OFFICER_TOKEN"
+```
+
 Response:
 
 ```json
@@ -2723,11 +2730,19 @@ Query params:
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
 | `factoryId` | string | No | filter เฉพาะโรงงาน |
+| `stationId` | string | No | filter รายจุดตรวจวัดเดียว ใช้ค่าเดียวกับ `point.pointCode` เช่น `S0001`; ไม่รับชื่อ query `pointCode` เพื่อให้ contract ใช้คำว่า `stationId` เหมือน endpoint อื่น |
 
 ตัวอย่าง request:
 
 ```bash
 curl "http://localhost:3000/api/v1/cems-wpms-requests/connected-measurement-points?factoryId=factory-001" \
+  -H "Authorization: Bearer $OFFICER_TOKEN"
+```
+
+ตัวอย่าง request จุดเดียว:
+
+```bash
+curl "http://localhost:3000/api/v1/cems-wpms-requests/connected-measurement-points?stationId=S0001" \
   -H "Authorization: Bearer $OFFICER_TOKEN"
 ```
 

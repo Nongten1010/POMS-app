@@ -518,6 +518,59 @@ describe('connectionRequestsService', () => {
     });
   });
 
+  it('filters connected measurement point details by stationId', async () => {
+    const request = requestDto({
+      status: CONNECTION_REQUEST_STATUS.CONNECTED,
+      statusLabel: 'เชื่อมต่อแล้ว',
+      verifiedAt: '2026-05-29T10:00:00.000Z',
+      measurementPoints: [
+        {
+          id: 1,
+          pointName: 'ปล่องระบาย A',
+          pointCode: 'STACK-A',
+          pointType: 'STACK',
+          latitude: null,
+          longitude: null,
+          parameters: ['NOx'],
+          description: null,
+        },
+        {
+          id: 2,
+          pointName: 'ปล่องระบาย B',
+          pointCode: 'STACK-B',
+          pointType: 'STACK',
+          latitude: null,
+          longitude: null,
+          parameters: ['SO2'],
+          description: null,
+        },
+      ],
+    });
+    mockedRepository.list.mockResolvedValue({ rows: [request], total: 1 });
+    mockedRepository.findFactorySummariesForRequests.mockResolvedValue(
+      new Map([[request.factoryId, factorySummary()]]),
+    );
+
+    const result = await connectionRequestsService.listConnectedMeasurementPoints(
+      { factoryId: 'factory-001', stationId: 'STACK-B' },
+      actorUserId,
+      'ALL',
+    );
+
+    expect(mockedRepository.list).toHaveBeenCalledWith(
+      { factoryId: 'factory-001', status: CONNECTION_REQUEST_STATUS.CONNECTED },
+      { actorUserId, scope: 'ALL' },
+    );
+    expect(mockedDeviceConnectionsService.listActiveSettings).toHaveBeenCalledTimes(1);
+    expect(mockedDeviceConnectionsService.listActiveSettings).toHaveBeenCalledWith({
+      stationId: 'STACK-B',
+    });
+    expect(result).toMatchObject({
+      data: [{ point: { pointCode: 'STACK-B' } }],
+      meta: { total: 1 },
+    });
+  });
+
   it('creates a request in pending design review status', async () => {
     mockedRepository.create.mockResolvedValue(
       requestDto({

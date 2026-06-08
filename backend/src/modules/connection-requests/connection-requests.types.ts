@@ -130,6 +130,11 @@ export interface ListConnectionRequestsQuery {
   factoryId?: string;
 }
 
+export interface ListConnectedMeasurementPointsQuery {
+  factoryId?: string;
+  stationId?: string;
+}
+
 export interface ReviewConnectionRequestInput {
   decision: 'APPROVE_DESIGN' | 'REQUEST_REVISION';
   revisionReason?: string | null;

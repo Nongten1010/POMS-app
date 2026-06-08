@@ -782,6 +782,7 @@ export const listConnectionRequestTableRowsQuerySchema = listConnectionRequestsQ
 export const listConnectedMeasurementPointsQuerySchema = z
   .object({
     factoryId: z.string().trim().min(1).max(64).optional(),
+    stationId: z.string().trim().min(1).max(64).optional(),
   })
   .strict();
 

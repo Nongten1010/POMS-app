@@ -26,6 +26,7 @@ import {
   type DeviceConfigPayloadResponseDTO,
   type FactoryGeneralDTO,
   type FactorySummaryDTO,
+  type ListConnectedMeasurementPointsQuery,
   type ListConnectionRequestsQuery,
   type MeasurementPointDTO,
   type OperatorFactoryTableRowDTO,
@@ -187,13 +188,13 @@ export const connectionRequestsService = {
   },
 
   async listConnectedMeasurementPoints(
-    query: Pick<ListConnectionRequestsQuery, 'factoryId'>,
+    query: ListConnectedMeasurementPointsQuery,
     actorUserId: number,
     viewScope: string | null | undefined,
   ): Promise<PaginatedTableRowsDTO<ConnectedMeasurementPointDetailDTO>> {
     const { rows } = await connectionRequestsRepository.list(
       {
-        ...query,
+        factoryId: query.factoryId,
         status: CONNECTION_REQUEST_STATUS.CONNECTED,
       },
       {
@@ -204,21 +205,23 @@ export const connectionRequestsService = {
     const factoryMap = await connectionRequestsRepository.findFactorySummariesForRequests(rows);
     const details = await Promise.all(
       rows.flatMap((request) =>
-        request.measurementPoints.map(async (point) => {
-          const pointDeviceConfigs = await listActiveDeviceConfigsForPoint(point);
-          return {
-            id: point.id,
-            requestId: request.id,
-            requestNo: request.requestNo,
-            factory: findFactorySummary(request, factoryMap),
-            type: request.systemType,
-            status: request.statusLabel,
-            statusCode: request.status,
-            connectedAt: request.verifiedAt,
-            point,
-            deviceConfigs: toDeviceConfigPayloadGroups(pointDeviceConfigs),
-          };
-        }),
+        request.measurementPoints
+          .filter((point) => stationMatchesMeasurementPoint(point, query.stationId))
+          .map(async (point) => {
+            const pointDeviceConfigs = await listActiveDeviceConfigsForPoint(point, query.stationId);
+            return {
+              id: point.id,
+              requestId: request.id,
+              requestNo: request.requestNo,
+              factory: findFactorySummary(request, factoryMap),
+              type: request.systemType,
+              status: request.statusLabel,
+              statusCode: request.status,
+              connectedAt: request.verifiedAt,
+              point,
+              deviceConfigs: toDeviceConfigPayloadGroups(pointDeviceConfigs),
+            };
+          }),
       ),
     );
 
@@ -440,6 +443,11 @@ export const connectionRequestsService = {
   },
 };
 
+function stationMatchesMeasurementPoint(point: MeasurementPointDTO, stationId?: string): boolean {
+  if (!stationId) return true;
+  return point.pointCode === stationId || point.pointName === stationId;
+}
+
 function toRequestTableRow(
   request: ConnectionRequestDTO,
   factory: FactorySummaryDTO | null,
@@ -468,10 +476,11 @@ function toRequestTableRow(
 
 async function listActiveDeviceConfigsForPoint(
   point: MeasurementPointDTO,
+  stationId?: string,
 ): Promise<DeviceConnectionConfigDTO[]> {
-  const stationIds = [point.pointCode, point.pointName].filter((value): value is string =>
-    Boolean(value),
-  );
+  const stationIds = stationId
+    ? [stationId]
+    : [point.pointCode, point.pointName].filter((value): value is string => Boolean(value));
 
   for (const stationId of stationIds) {
     const configs = await deviceConnectionsService.listActiveSettings({ stationId });
