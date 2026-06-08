@@ -70,7 +70,23 @@ Mapping:
 | 7   | รายการคำขอเฉพาะโรงงานตัวเอง สำหรับตารางผู้ประกอบการ          | GET    | `/cems-wpms-requests/table-rows`                           | `cems_wpms_requests:view`    |
 | 8   | รายชื่อโรงงาน สำหรับตารางผู้ประกอบการ                        | GET    | `/cems-wpms-requests/operator-factories`                   | `factories:view`             |
 | 9   | รายละเอียดคำขอรายคำขอ สำหรับ PDF/เติมฟอร์มเพิ่มพารามิเตอร์   | GET    | `/cems-wpms-requests/:id/detail`                           | `cems_wpms_requests:view`    |
-| 10  | รายละเอียดรายจุดตรวจวัดทุกคำขอ เฉพาะ status เชื่อมต่อแล้ว    | GET    | `/cems-wpms-requests/connected-measurement-points`         | `cems_wpms_requests:view`    |
+| 10  | รายละเอียดจุดตรวจวัดที่เชื่อมต่อแล้วจากระบบ POMS ปัจจุบัน    | GET    | `/connected-measurement-points`                            | `cems_wpms_requests:view`    |
+| 11  | รายการคำขอทุกคำขอของจุดตรวจวัดที่เลือก                      | GET    | `/connected-measurement-points/:stationId/requests`        | `cems_wpms_requests:view`    |
+| 12  | ดึงข้อมูลปัจจุบันลงฟอร์มเพิ่มพารามิเตอร์                     | GET    | `/connected-measurement-points/:stationId/parameter-form`  | `cems_wpms_requests:view`    |
+| 13  | ดึง config ปัจจุบันของจุดตรวจวัดที่เลือก                     | GET    | `/connected-measurement-points/:stationId/device-configs`  | `cems_wpms_requests:view`    |
+| 14  | บันทึก config ปัจจุบันของจุดตรวจวัดที่เลือก                  | POST   | `/connected-measurement-points/:stationId/device-configs`  | `cems_wpms_requests:edit`    |
+
+## API Mapping สำหรับปุ่มบนจุดตรวจวัด
+
+ใช้ `stationId` เป็นรหัสจุดตรวจวัด เช่น `S0001` หรือ `P0001`
+
+| ปุ่ม | ใช้ API | หมายเหตุ |
+| --- | --- | --- |
+| เปิดดู | `GET /api/v1/connected-measurement-points/:stationId/requests` | คืนรายการคำขอทุกคำขอของจุดตรวจวัดที่เลือก โดยจับทั้งรหัส/ชื่อจุดจาก current connected point และแต่ละรายการใช้ shape เดียวกับ `GET /api/v1/cems-wpms-requests/:id/detail` |
+| เพิ่มพารามิเตอร์ | `GET /api/v1/connected-measurement-points/:stationId/parameter-form` | คืน `formDefaults` เป็น payload shape เดียวกับ `POST /api/v1/cems-wpms-requests/parameters` |
+| เพิ่มพารามิเตอร์ | `POST /api/v1/cems-wpms-requests/parameters` | บันทึกคำขอเพิ่มพารามิเตอร์; ใช้ฟอร์ม shape เดียวกับเพิ่มจุดตรวจวัด แต่ต้องมี `measurementPoints[0].pointCode` |
+| ตั้งค่า | `GET /api/v1/connected-measurement-points/:stationId/device-configs` | คืน config ปัจจุบันจาก active settings ของจุดตรวจวัดที่เลือก |
+| ตั้งค่า | `POST /api/v1/connected-measurement-points/:stationId/device-configs` | บันทึก active settings ปัจจุบัน; payload ใช้รูปแบบเดียวกับ device config เดิม และ `stationId` ใน payload ต้องตรงกับ path |
 
 ## Flow เพิ่มจุดตรวจวัด จบ 1 คำขอ
 
@@ -476,7 +492,9 @@ Response:
 
 ## 2. บันทึกฟอร์ม เพิ่มพารามิเตอร์
 
-ต้องส่ง `measurementPoints` แค่ 1 จุดตรวจวัดต่อคำขอ, ต้องส่ง `pointCode` ของจุดตรวจวัดเดิมที่ backend เคยออกเลขให้แล้ว และต้องส่งส่วน `measurementInstruments`
+Payload ใช้รูปแบบเดียวกับข้อ 1 เพิ่มจุดตรวจวัด: ส่งข้อมูลโรงงาน/ผู้ติดต่อ และ `measurementPoints[]` พร้อม `details`, `documentsAndImages` สำหรับ CEMS และ `measurementInstruments`
+
+เงื่อนไขเฉพาะของฟอร์มเพิ่มพารามิเตอร์คือ ต้องส่ง `measurementPoints` แค่ 1 จุดตรวจวัดต่อคำขอ และต้องส่ง `pointCode` ของจุดตรวจวัดเดิมที่ backend เคยออกเลขให้แล้ว
 
 ```bash
 curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/parameters" \
@@ -517,6 +535,47 @@ curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/parameters" \
         "pointName": "ปล่องระบาย A",
         "pointCode": "S0001",
         "pointType": "STACK",
+        "details": {
+          "productionUnitType": "หม้อไอน้ำ",
+          "productionCapacity": "10 ตันไอน้ำ/ชั่วโมง",
+          "cemsInstallationRequiredBy": "ประกาศ อก.",
+          "cemsInstallationRequiredOther": null,
+          "legalAnnexNo": "เฉพาะประกาศปี 65",
+          "eligibleParameters": ["NOx", "SO2", "PM", "CO"],
+          "exemptedParameters": [],
+          "connectedParameters": ["NOx", "SO2", "PM"],
+          "pendingParameters": ["CO"],
+          "stackShape": "วงกลม",
+          "stackDiameter": 1.2,
+          "stackWidth": null,
+          "stackLength": null,
+          "stackShapeOther": null,
+          "stackHeight": 30,
+          "monitoringHeight": 20,
+          "averageFlowRate": 1200,
+          "minFlowRate": 1000,
+          "maxFlowRate": 1500,
+          "primaryFuel": "ก๊าซธรรมชาติ",
+          "primaryFuelOther": null,
+          "secondaryFuel": "ไม่มี",
+          "secondaryFuelOther": null,
+          "hasTreatmentSystem": "มี",
+          "treatmentSystem": "สครับเบอร์",
+          "treatmentSystemOther": null,
+          "connectionDevice": "POMS Box (กรอ.)",
+          "connectionDeviceOther": null
+        },
+        "documentsAndImages": [
+          {
+            "title": "ภาพถ่ายปล่อง",
+            "description": "ภาพถ่ายตำแหน่งปล่องและเครื่องมือตรวจวัด",
+            "link": "https://example.com/documents/stack-reference.pdf",
+            "fileName": "stack.png",
+            "fileUrl": "https://example.com/files/stack.png",
+            "fileType": "image/png",
+            "fileSize": 1024
+          }
+        ],
         "measurementInstruments": {
           "converterBrand": "Converter Brand",
           "converterModel": "CV-100",
@@ -1203,7 +1262,9 @@ Response:
 
 - 1 `stationId` มีได้หลาย protocol เช่น `MODBUS_RTU`, `MODBUS_TCP`, `MSSQL`, `MYSQL`
 - protocol เดียวกันเพิ่มได้หลายอุปกรณ์เมื่อ `deviceCode` ต่างกัน เช่น `S0001/01` และ `S0001/02` เป็น `MODBUS_RTU` ได้ทั้งคู่
-- ห้ามมี config ซ้ำชุด `stationId + protocol + deviceCode`
+- ห้ามมี config ซ้ำชุด `stationId + protocol + deviceCode` ภายใน payload เดียวกัน
+- การบันทึกผ่านคำขอจะเก็บ config เป็น snapshot ของคำขอนั้น (`request_id` ของคำขอ) และบันทึก/แทน active setting แยกอีกชุด (`request_id = null`) เพื่อให้ข้อมูลคำขอเดิมไม่เปลี่ยนตามการแก้ config ภายหลัง
+- เมื่อเจ้าหน้าที่ verify จนเป็น `CONNECTED` backend จะ sync ข้อมูลใช้งานจริงไปที่ `cems_wpms_connected_measurement_points` ซึ่งเก็บโรงงาน/ที่อยู่/พิกัด/จุดตรวจวัด/พารามิเตอร์ปัจจุบัน แยกจาก snapshot ในคำขอ
 - endpoint นี้รับได้ทั้ง payload เดี่ยวแบบเดิม และ payload หลายอุปกรณ์แบบ `{ "config": { "stationId": "...", "device": [...], "channels": [...], "statusManagement": {...} } }`
 
 ```bash
@@ -1279,6 +1340,8 @@ Response:
 ```
 
 ## 4. รายละเอียดฟอร์ม ตั้งค่าอุปกรณ์ config สำหรับดึงข้อมูลลงฟอร์ม
+
+Endpoint นี้อ่าน config snapshot ที่ผูกกับ `requestId` เดิม ใช้สำหรับเปิดดู/พิมพ์/แก้ข้อมูลในบริบทของคำขอ โดยไม่ดึง active setting ล่าสุดมาทับข้อมูลคำขอเดิม
 
 ```bash
 curl "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/device-configs?stationId=S0001" \
@@ -1671,17 +1734,28 @@ Response:
 }
 ```
 
-## 10. รายละเอียดคำขอ รายจุดตรวจวัด ทุกคำขอ เฉพาะ status เชื่อมต่อแล้ว สำหรับทำ PDF
+## 10. รายละเอียดจุดตรวจวัดที่เชื่อมต่อแล้วจากระบบ POMS ปัจจุบัน
+
+ใช้ endpoint นี้เมื่อต้องการข้อมูล current/live ของระบบ POMS หลังคำขอผ่านการเชื่อมต่อแล้ว ไม่ใช่ config snapshot ของคำขอแรก
+
+หมายเหตุ backward compatibility: `GET /api/v1/cems-wpms-requests/connected-measurement-points` ยังใช้ได้เป็น legacy alias แต่ frontend ใหม่ควรใช้ `/api/v1/connected-measurement-points`
 
 ```bash
-curl "http://localhost:3000/api/v1/cems-wpms-requests/connected-measurement-points" \
+curl "http://localhost:3000/api/v1/connected-measurement-points" \
   -H "Authorization: Bearer $OFFICER_TOKEN"
 ```
 
 Filter โรงงานเดียว:
 
 ```bash
-curl "http://localhost:3000/api/v1/cems-wpms-requests/connected-measurement-points?factoryId=factory-001" \
+curl "http://localhost:3000/api/v1/connected-measurement-points?factoryId=factory-001" \
+  -H "Authorization: Bearer $OFFICER_TOKEN"
+```
+
+Filter จุดตรวจวัดเดียวด้วย `stationId`:
+
+```bash
+curl "http://localhost:3000/api/v1/connected-measurement-points?stationId=S0001" \
   -H "Authorization: Bearer $OFFICER_TOKEN"
 ```
 
@@ -2232,9 +2306,9 @@ Path params:
 
 - `POST /device-configs` รองรับการส่งหลายอุปกรณ์ในครั้งเดียวด้วย `{ "config": { "stationId": "...", "device": [...], "channels": [...], "statusManagement": {...} } }`
 - `config.channels[].deviceCode` ใช้ผูก channel กลับไปหาอุปกรณ์ใน `config.device[]`
-- backend อนุญาต `stationId + protocol` ซ้ำได้เมื่อ `deviceCode` ต่างกัน แต่จะตอบ `409 CONFLICT` ถ้า `stationId + protocol + deviceCode` ซ้ำกับ active config เดิม
+- backend อนุญาต `stationId + protocol` ซ้ำได้เมื่อ `deviceCode` ต่างกัน และถ้า `stationId + protocol + deviceCode` เดิมมี active setting อยู่ backend จะ soft delete active setting เก่าแล้ว insert active setting ใหม่ แยกจาก snapshot ของคำขอ
 - payload เดี่ยว response `data` เป็น object; structured/batch payload response `data` เป็น array ตามลำดับ `config.device`
-- หลังบันทึกหลายอุปกรณ์สำเร็จ ให้เรียก `GET /device-configs?stationId=...` ซ้ำเพื่อ refresh `connectionForms`, `deviceCodeOptions`, `parameterMappings`, และ `rawConfigs`
+- หลังบันทึกหลายอุปกรณ์สำเร็จ ให้เรียก `GET /cems-wpms-requests/:id/device-configs?stationId=...` ซ้ำเพื่อ refresh snapshot ของคำขอ หรือเรียก `GET /device-connections?stationId=...` เมื่อต้องการดู active setting ล่าสุด
 - `protocol` สำหรับ Microsoft SQL ต้องส่ง `MSSQL`
 
 ตัวอย่าง JSON payload เดี่ยวแบบเดิม:
@@ -2386,6 +2460,8 @@ Data dictionary:
 
 ### API 4: GET รายละเอียดฟอร์ม ตั้งค่าอุปกรณ์ config สำหรับ prefill
 
+API นี้คืน config snapshot ของคำขอเดิม ไม่ใช่ active setting ล่าสุดหลังเชื่อมต่อ
+
 | Item | Value |
 | --- | --- |
 | URL | `GET /api/v1/cems-wpms-requests/:id/device-configs?stationId=S0001` |
@@ -2473,7 +2549,6 @@ curl "http://localhost:3000/api/v1/parameter-values/connection-test?stationId=S0
   "success": true,
   "data": [
     {
-      "stationId": "S0001",
       "timestamp": "2026-06-07 10:15:00",
       "values": {
         "CO2 (%)": "123.4",
@@ -2485,7 +2560,6 @@ curl "http://localhost:3000/api/v1/parameter-values/connection-test?stationId=S0
       }
     },
     {
-      "stationId": "S0001",
       "timestamp": "2026-06-07 10:14:00",
       "values": {
         "CO2 (%)": "122.4",
@@ -2661,26 +2735,37 @@ Data dictionary response:
 | `data.factory` | object | ข้อมูลโรงงาน snapshot/detail |
 | `data.measurementPoints` | array | รายจุดตรวจวัด ใช้ทำ PDF และเติมฟอร์มเพิ่มพารามิเตอร์ |
 | `data.statusHistory` | array | ประวัติสถานะ |
-| `data.deviceConfigs` | array | config อุปกรณ์ของคำขอ โดยแต่ละ item จัด shape เหมือน payload: `{ stationId, device, channels, statusManagement }` |
+| `data.deviceConfigs` | array | config snapshot ของคำขอ โดยแต่ละ item จัด shape เหมือน payload: `{ stationId, device, channels, statusManagement }` |
 
-### API 10: GET รายละเอียดคำขอ รายจุดตรวจวัดทุกคำขอ เฉพาะเชื่อมต่อแล้ว
+### API 10: GET รายละเอียดจุดตรวจวัดที่เชื่อมต่อแล้วจากระบบ POMS ปัจจุบัน
 
 | Item | Value |
 | --- | --- |
-| URL | `GET /api/v1/cems-wpms-requests/connected-measurement-points` |
+| URL | `GET /api/v1/connected-measurement-points` |
+| Legacy alias | `GET /api/v1/cems-wpms-requests/connected-measurement-points` |
 | Header | `Authorization: Bearer <accessToken>` |
 | Body | ไม่มี |
+
+API นี้คืนค่า current/live ของระบบ POMS โดย `deviceConfigs` เป็น active setting ล่าสุด ไม่ใช่ config snapshot ของคำขอ ถ้าต้องการ snapshot ของคำขอให้ใช้ `GET /api/v1/cems-wpms-requests/:id/device-configs`
 
 Query params:
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
 | `factoryId` | string | No | filter เฉพาะโรงงาน |
+| `stationId` | string | No | filter รายจุดตรวจวัดเดียว ใช้ค่าเดียวกับ `point.pointCode` เช่น `S0001`; ไม่รับชื่อ query `pointCode` เพื่อให้ contract ใช้คำว่า `stationId` เหมือน endpoint อื่น |
 
 ตัวอย่าง request:
 
 ```bash
-curl "http://localhost:3000/api/v1/cems-wpms-requests/connected-measurement-points?factoryId=factory-001" \
+curl "http://localhost:3000/api/v1/connected-measurement-points?factoryId=factory-001" \
+  -H "Authorization: Bearer $OFFICER_TOKEN"
+```
+
+ตัวอย่าง request จุดเดียว:
+
+```bash
+curl "http://localhost:3000/api/v1/connected-measurement-points?stationId=S0001" \
   -H "Authorization: Bearer $OFFICER_TOKEN"
 ```
 
@@ -2697,7 +2782,7 @@ Data dictionary response row:
 | `statusCode` | string | ต้องเป็น `CONNECTED` |
 | `connectedAt` | string|null | วันเวลาที่เชื่อมต่อแล้ว |
 | `point` | object | ข้อมูลจุดตรวจวัด |
-| `deviceConfigs` | array | config อุปกรณ์ที่ผูกกับจุด โดยแต่ละ item จัด shape เหมือน payload: `{ stationId, device, channels, statusManagement }` |
+| `deviceConfigs` | array | active setting ล่าสุดของจุดตรวจวัด โดยแต่ละ item จัด shape เหมือน payload: `{ stationId, device, channels, statusManagement }`; ไม่ใช่ snapshot ของคำขอแรก |
 
 ### Common JSON Data Dictionary
 

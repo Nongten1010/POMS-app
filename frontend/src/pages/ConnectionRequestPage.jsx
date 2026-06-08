@@ -352,6 +352,10 @@ const measurementPointsRequestApiUrl =
   import.meta.env.DEV
     ? '/api-proxy/v1/cems-wpms-requests/measurement-points'
     : 'http://d-poms.diw.go.th/api/v1/cems-wpms-requests/measurement-points'
+const parametersRequestApiUrl =
+  import.meta.env.DEV
+    ? '/api-proxy/v1/cems-wpms-requests/parameters'
+    : 'http://d-poms.diw.go.th/api/v1/cems-wpms-requests/parameters'
 const documentImagesApiUrl =
   import.meta.env.DEV
     ? '/api-proxy/v1/cems-wpms-requests/document-images'
@@ -368,6 +372,9 @@ const requestDetailApiBaseUrl = import.meta.env.DEV
 const parameterValuesApiBaseUrl = import.meta.env.DEV
   ? '/api-proxy/v1/parameter-values'
   : 'http://d-poms.diw.go.th/api/v1/parameter-values'
+const connectedMeasurementPointsApiBaseUrl = import.meta.env.DEV
+  ? '/api-proxy/v1/connected-measurement-points'
+  : 'http://d-poms.diw.go.th/api/v1/connected-measurement-points'
 
 function getMeasurementPointsRequestApiUrl() {
   if (typeof window === 'undefined') {
@@ -379,6 +386,18 @@ function getMeasurementPointsRequestApiUrl() {
   }
 
   return measurementPointsRequestApiUrl
+}
+
+function getParametersRequestApiUrl() {
+  if (typeof window === 'undefined') {
+    return parametersRequestApiUrl
+  }
+
+  if (window.location.hostname === 'd-poms.diw.go.th') {
+    return '/api/v1/cems-wpms-requests/parameters'
+  }
+
+  return parametersRequestApiUrl
 }
 
 function getDocumentImagesApiUrl() {
@@ -417,14 +436,55 @@ function getRequestFormApiUrl(id) {
   return `${requestDetailApiBaseUrl}/${id}/form`
 }
 
-function getConnectedMeasurementPointsApiUrl(factoryId) {
-  const query = factoryId ? `?factoryId=${encodeURIComponent(factoryId)}` : ''
+function getConnectedMeasurementPointsApiUrl(filters = {}) {
+  const normalizedFilters = typeof filters === 'string' ? { factoryId: filters } : filters
+  const searchParams = new URLSearchParams()
 
-  if (typeof window !== 'undefined' && window.location.hostname === 'd-poms.diw.go.th') {
-    return `/api/v1/cems-wpms-requests/connected-measurement-points${query}`
+  if (normalizedFilters.factoryId) {
+    searchParams.set('factoryId', normalizedFilters.factoryId)
   }
 
-  return `${requestDetailApiBaseUrl}/connected-measurement-points${query}`
+  if (normalizedFilters.stationId) {
+    searchParams.set('stationId', normalizedFilters.stationId)
+  }
+
+  const query = searchParams.toString() ? `?${searchParams.toString()}` : ''
+
+  if (typeof window !== 'undefined' && window.location.hostname === 'd-poms.diw.go.th') {
+    return `/api/v1/connected-measurement-points${query}`
+  }
+
+  return `${connectedMeasurementPointsApiBaseUrl}${query}`
+}
+
+function getConnectedMeasurementPointRequestsApiUrl(stationId) {
+  const encodedStationId = encodeURIComponent(stationId)
+
+  if (typeof window !== 'undefined' && window.location.hostname === 'd-poms.diw.go.th') {
+    return `/api/v1/connected-measurement-points/${encodedStationId}/requests`
+  }
+
+  return `${connectedMeasurementPointsApiBaseUrl}/${encodedStationId}/requests`
+}
+
+function getConnectedMeasurementPointParameterFormApiUrl(stationId) {
+  const encodedStationId = encodeURIComponent(stationId)
+
+  if (typeof window !== 'undefined' && window.location.hostname === 'd-poms.diw.go.th') {
+    return `/api/v1/connected-measurement-points/${encodedStationId}/parameter-form`
+  }
+
+  return `${connectedMeasurementPointsApiBaseUrl}/${encodedStationId}/parameter-form`
+}
+
+function getConnectedMeasurementPointDeviceConfigsApiUrl(stationId) {
+  const encodedStationId = encodeURIComponent(stationId)
+
+  if (typeof window !== 'undefined' && window.location.hostname === 'd-poms.diw.go.th') {
+    return `/api/v1/connected-measurement-points/${encodedStationId}/device-configs`
+  }
+
+  return `${connectedMeasurementPointsApiBaseUrl}/${encodedStationId}/device-configs`
 }
 
 function getDeviceConfigsApiUrl(id, stationId) {
@@ -497,6 +557,10 @@ function getDeviceConfigRequestId(context) {
     ?? context?.cemsWpmsRequestId
     ?? context?.id
     ?? ''
+}
+
+function isConnectedMeasurementPointDeviceConfigContext(context) {
+  return context?.deviceConfigSource === 'connected-measurement-point'
 }
 
 function mapOperatorFactoryRow(row) {
@@ -718,6 +782,16 @@ function getFactoryNumber(value) {
 
   const numericValue = Number(value)
   return Number.isNaN(numericValue) ? null : numericValue
+}
+
+function isBlankValue(value) {
+  return value === null || value === undefined || value === '' || value === 'undefined'
+}
+
+function compactDefinedObject(object = {}) {
+  return Object.fromEntries(
+    Object.entries(object).filter(([, value]) => !isBlankValue(value)),
+  )
 }
 
 function getEiaValue(factory = {}) {
@@ -1169,7 +1243,7 @@ function OperatorRequestActions({ row, onOpenConnectionSettings, onOpenRequestDo
   )
 }
 
-function MonitoringPointActions({ point, isOperator, onOpenConnectionSettings }) {
+function MonitoringPointActions({ point, isOperator, onOpenPointDetails, onOpenAddParameter, onOpenConnectionSettings }) {
   const { status, statusCode } = point
   const canConsider = ['รอพิจารณาแบบ', 'ยืนยันการเชื่อมต่อ', 'แก้ไขแล้ว/รอพิจารณาแบบ'].includes(status)
   const isConnected = [status, statusCode].includes('เชื่อมต่อแล้ว')
@@ -1180,7 +1254,7 @@ function MonitoringPointActions({ point, isOperator, onOpenConnectionSettings })
   if (!isOperator) {
     return (
       <Stack direction="row" spacing={1} sx={tableActionStackSx}>
-        <Button size="small" variant="outlined">
+        <Button size="small" variant="outlined" onClick={() => onOpenPointDetails?.(point)}>
           เปิดดู
         </Button>
         <Button size="small" variant="contained" disabled={!canConsider}>
@@ -1192,24 +1266,32 @@ function MonitoringPointActions({ point, isOperator, onOpenConnectionSettings })
 
   return (
     <Stack direction="row" spacing={1} sx={tableActionStackSx}>
-      <Button size="small" variant="outlined">
+      <Button size="small" variant="outlined" onClick={() => onOpenPointDetails?.(point)}>
         เปิดดู
       </Button>
-      <Button size="small" variant="outlined" disabled={!canAddParameter}>
+      <Button size="small" variant="outlined" disabled={!canAddParameter} onClick={() => onOpenAddParameter?.(point)}>
         เพิ่มพารามิเตอร์
       </Button>
       <ConnectionSettingsButton
         disabled={!canConfigureConnection}
-        onClick={() => onOpenConnectionSettings?.(point)}
+        onClick={() => onOpenConnectionSettings?.({
+          ...point,
+          deviceConfigSource: 'connected-measurement-point',
+        })}
       />
     </Stack>
   )
 }
 
-function MonitoringPointListDialog({ open, factory, isOperator, accessToken, onOpenConnectionSettings, onClose }) {
+function MonitoringPointListDialog({ open, factory, isOperator, accessToken, onOpenAddParameter, onOpenConnectionSettings, onClose }) {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [pointDetailRows, setPointDetailRows] = useState([])
+  const [pointDetailOpen, setPointDetailOpen] = useState(false)
+  const [pointDetailLoading, setPointDetailLoading] = useState(false)
+  const [pointDetailError, setPointDetailError] = useState('')
+  const [selectedPointDetailTab, setSelectedPointDetailTab] = useState(0)
 
   useEffect(() => {
     if (!open) {
@@ -1286,22 +1368,67 @@ function MonitoringPointListDialog({ open, factory, isOperator, accessToken, onO
     }
   }, [accessToken, factory, open])
 
+  const handleOpenPointDetails = (point) => {
+    const stationId = point?.pointCode ?? point?.code ?? ''
+
+    setPointDetailOpen(true)
+    setPointDetailRows([])
+    setSelectedPointDetailTab(0)
+    setPointDetailError('')
+
+    if (!stationId) {
+      setPointDetailError('ไม่พบรหัสจุดตรวจวัดสำหรับโหลดรายละเอียด')
+      return
+    }
+
+    if (!accessToken) {
+      setPointDetailError('กรุณาเข้าสู่ระบบเพื่อดูรายละเอียดจุดตรวจวัด')
+      return
+    }
+
+    setPointDetailLoading(true)
+
+    fetch(getConnectedMeasurementPointRequestsApiUrl(stationId), {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
+      .then(async (result) => {
+        const payload = await result.json().catch(() => null)
+
+        if (!result.ok) {
+          throw new Error(payload?.error?.message || payload?.message || `โหลดรายละเอียดจุดตรวจวัดไม่สำเร็จ (${result.status} ${result.statusText})`)
+        }
+
+        const nextRows = getConnectedPointRequestRowsFromPayload(payload)
+        setPointDetailRows(nextRows)
+        setSelectedPointDetailTab(0)
+      })
+      .catch((fetchError) => {
+        setPointDetailError(fetchError instanceof Error ? fetchError.message : 'โหลดรายละเอียดจุดตรวจวัดไม่สำเร็จ')
+      })
+      .finally(() => {
+        setPointDetailLoading(false)
+      })
+  }
+
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg">
-      <DialogTitle>รายการจุดตรวจวัด{factory?.factoryName ? ` - ${factory.factoryName}` : ''}</DialogTitle>
-      <DialogContent dividers>
-        {loading ? (
-          <Typography variant="body2" sx={{ mb: 2 }}>
-            กำลังโหลดข้อมูลจุดตรวจวัด...
-          </Typography>
-        ) : null}
-        {error ? (
-          <Typography color="error" variant="body2" sx={{ mb: 2 }}>
-            {error}
-          </Typography>
-        ) : null}
-        <TableContainer sx={{ border: 1, borderColor: 'divider', overflowX: 'auto' }}>
-          <Table size="small" sx={{ minWidth: 1120, ...borderedTableSx }}>
+    <>
+      <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg">
+        <DialogTitle>รายการจุดตรวจวัด{factory?.factoryName ? ` - ${factory.factoryName}` : ''}</DialogTitle>
+        <DialogContent dividers>
+          {loading ? (
+            <Typography variant="body2" sx={{ mb: 2 }}>
+              กำลังโหลดข้อมูลจุดตรวจวัด...
+            </Typography>
+          ) : null}
+          {error ? (
+            <Typography color="error" variant="body2" sx={{ mb: 2 }}>
+              {error}
+            </Typography>
+          ) : null}
+          <TableContainer sx={{ border: 1, borderColor: 'divider', overflowX: 'auto' }}>
+            <Table size="small" sx={{ minWidth: 1120, ...borderedTableSx }}>
             <TableHead>
               <TableRow>
                 {[
@@ -1333,6 +1460,11 @@ function MonitoringPointListDialog({ open, factory, isOperator, accessToken, onO
                       <MonitoringPointActions
                         point={row}
                         isOperator={isOperator}
+                        onOpenPointDetails={handleOpenPointDetails}
+                        onOpenAddParameter={(point) => {
+                          onOpenAddParameter?.(point)
+                          onClose?.()
+                        }}
                         onOpenConnectionSettings={onOpenConnectionSettings}
                       />
                     </TableCell>
@@ -1356,7 +1488,23 @@ function MonitoringPointListDialog({ open, factory, isOperator, accessToken, onO
           ปิด
         </Button>
       </DialogActions>
-    </Dialog>
+      </Dialog>
+      <ConnectedPointRequestsDialog
+        open={pointDetailOpen}
+        rows={pointDetailRows}
+        loading={pointDetailLoading}
+        error={pointDetailError}
+        selectedIndex={selectedPointDetailTab}
+        onSelectedIndexChange={setSelectedPointDetailTab}
+        onClose={() => {
+          setPointDetailOpen(false)
+          setPointDetailRows([])
+          setPointDetailError('')
+          setPointDetailLoading(false)
+          setSelectedPointDetailTab(0)
+        }}
+      />
+    </>
   )
 }
 
@@ -1414,7 +1562,7 @@ function DocumentPage({ children, revisionText = 'แก้ไข : 14 พฤศ
 }
 
 function displayValue(value, fallback = '') {
-  if (value === null || value === undefined || value === 'undefined') {
+  if (isBlankValue(value)) {
     return fallback
   }
 
@@ -1801,6 +1949,160 @@ function DeviceConfigDocumentPages({ request }) {
   )
 }
 
+function getConnectedPointTabLabel(row, index) {
+  return row?.requestNo
+    || row?.request?.requestNo
+    || row?.point?.pointName
+    || row?.measurementPoints?.[0]?.pointName
+    || row?.pointName
+    || `คำขอที่ ${index + 1}`
+}
+
+function mapConnectedPointRequestToDocumentRequest(row = {}) {
+  if (Array.isArray(row.measurementPoints)) {
+    const factory = row.factory ?? {}
+
+    return {
+      ...row,
+      id: row.id ?? row.requestId,
+      requestNo: row.requestNo ?? row.request?.requestNo ?? '',
+      type: row.type ?? row.systemType ?? row.measurementPoints?.[0]?.details?.monitoringPointKind ?? '',
+      systemType: row.systemType ?? row.type ?? row.measurementPoints?.[0]?.details?.monitoringPointKind ?? '',
+      status: row.status ?? row.statusLabel ?? '',
+      statusCode: row.statusCode ?? '',
+      factoryId: row.factoryId ?? factory.factoryId ?? '',
+      factoryName: row.factoryName ?? factory.factoryName ?? '',
+      newRegistrationNo: row.newRegistrationNo ?? factory.newRegistrationNo ?? row.factoryId ?? factory.factoryId ?? '',
+      oldRegistrationNo: row.oldRegistrationNo ?? factory.oldRegistrationNo ?? row.factoryRegistrationNo ?? '',
+      industryType: row.industryType ?? factory.industryType ?? '',
+      province: row.province ?? factory.province ?? '',
+      factory,
+      deviceConfigs: Array.isArray(row.deviceConfigs) ? row.deviceConfigs : [],
+    }
+  }
+
+  const point = row?.point ?? {}
+  const factory = row?.factory ?? {}
+
+  return {
+    ...row,
+    id: row.requestId ?? row.id,
+    requestNo: row.requestNo ?? '',
+    type: row.type ?? '',
+    systemType: row.type ?? row.systemType ?? '',
+    status: row.status ?? '',
+    statusCode: row.statusCode ?? '',
+    connectedAt: row.connectedAt ?? null,
+    factoryId: factory.factoryId ?? row.factoryId ?? '',
+    factoryName: factory.factoryName ?? row.factoryName ?? '',
+    newRegistrationNo: factory.newRegistrationNo ?? row.newRegistrationNo ?? '',
+    oldRegistrationNo: factory.oldRegistrationNo ?? row.oldRegistrationNo ?? '',
+    industryType: factory.industryType ?? row.industryType ?? '',
+    province: factory.province ?? row.province ?? '',
+    factory,
+    measurementPoints: [
+      {
+        ...point,
+        id: point.id ?? row.id,
+        pointCode: point.pointCode ?? row.pointCode ?? '',
+        pointName: point.pointName ?? row.pointName ?? '',
+        pointType: point.pointType ?? row.pointType ?? '',
+        parameters: Array.isArray(point.parameters) ? point.parameters : [],
+        details: point.details ?? {},
+        measurementInstruments: point.measurementInstruments ?? { parameters: [] },
+        documentsAndImages: Array.isArray(point.documentsAndImages) ? point.documentsAndImages : [],
+      },
+    ],
+    deviceConfigs: Array.isArray(row.deviceConfigs) ? row.deviceConfigs : [],
+  }
+}
+
+function getConnectedPointRequestRowsFromPayload(payload) {
+  const data = payload?.data
+
+  if (Array.isArray(data)) {
+    return data
+  }
+
+  if (Array.isArray(data?.rows)) {
+    return data.rows
+  }
+
+  if (Array.isArray(data?.requests)) {
+    return data.requests
+  }
+
+  if (data && typeof data === 'object') {
+    return [data]
+  }
+
+  return []
+}
+
+function getParameterFormDefaultsFromPayload(payload, point = {}) {
+  const data = payload?.data ?? {}
+  const formDefaults = data?.formDefaults ?? data?.defaults ?? {}
+  const mergedDefaults = {
+    ...compactDefinedObject(data),
+    ...compactDefinedObject(formDefaults),
+  }
+  const stationId = point?.pointCode ?? point?.code ?? point?.stationId ?? ''
+  const pointName = point?.pointName ?? point?.name ?? ''
+  const systemType = point?.type ?? mergedDefaults?.systemType ?? mergedDefaults?.type ?? ''
+  const measurementPoints = Array.isArray(mergedDefaults?.measurementPoints)
+    ? mergedDefaults.measurementPoints
+    : []
+  const firstPoint = measurementPoints[0] ?? {}
+  const nextPoint = {
+    ...firstPoint,
+    pointCode: firstPoint.pointCode ?? stationId,
+    pointName: firstPoint.pointName ?? pointName,
+    pointType: firstPoint.pointType ?? point?.pointType ?? (systemType === 'WPMS' ? 'WASTEWATER' : 'STACK'),
+    details: firstPoint.details ?? {},
+    documentsAndImages: Array.isArray(firstPoint.documentsAndImages) ? firstPoint.documentsAndImages : [],
+    measurementInstruments: firstPoint.measurementInstruments ?? { parameters: [] },
+  }
+
+  return {
+    ...mergedDefaults,
+    id: mergedDefaults.id ?? `add-parameter-${stationId || Date.now()}`,
+    systemType,
+    type: systemType,
+    measurementPoints: [nextPoint],
+  }
+}
+
+function ConnectedPointRequestsDialog({ open, rows, loading, error, selectedIndex, onSelectedIndexChange, onClose }) {
+  const selectedRow = rows[selectedIndex] ?? rows[0] ?? null
+  const selectedRequest = selectedRow ? mapConnectedPointRequestToDocumentRequest(selectedRow) : null
+  const tabsContent = rows.length > 1 ? (
+    <Paper elevation={0} sx={{ mb: 2, mx: 'auto', maxWidth: 794, border: 1, borderColor: 'divider' }}>
+      <Tabs
+        value={Math.min(selectedIndex, rows.length - 1)}
+        onChange={(_, value) => onSelectedIndexChange(value)}
+        variant="scrollable"
+        scrollButtons="auto"
+      >
+        {rows.map((row, index) => (
+          <Tab key={`${row.requestId}-${row.id}-${index}`} value={index} label={getConnectedPointTabLabel(row, index)} />
+        ))}
+      </Tabs>
+    </Paper>
+  ) : null
+
+  return (
+    <RequestDocumentDialog
+      open={open}
+      request={selectedRequest}
+      title="รายละเอียดจุดตรวจวัด"
+      loading={loading}
+      error={error}
+      onClose={onClose}
+      contentHeader={tabsContent}
+    />
+  )
+}
+
 function isPendingDesignReview(request) {
   return [request?.status, request?.statusLabel, request?.statusCode].includes('รอพิจารณาแบบ')
     || [request?.status, request?.statusLabel, request?.statusCode].includes('PENDING_DESIGN_REVIEW')
@@ -1825,6 +2127,7 @@ function RequestDocumentDialog({
   onVerifyConnection,
   onRequestRevision,
   onClose,
+  contentHeader,
   footerContent,
   footerActions,
 }) {
@@ -1900,6 +2203,7 @@ function RequestDocumentDialog({
             </Stack>
           </Paper>
         ) : null}
+        {contentHeader}
         <Stack spacing={2} sx={{ alignItems: 'center' }}>
           {isWpms ? (
             <>
@@ -2807,6 +3111,26 @@ function mapTestResultRows(testResults = []) {
 }
 
 function getRawDeviceConfig(data) {
+  if (Array.isArray(data)) {
+    return data.reduce((result, config) => ({
+      ...result,
+      stationId: result.stationId ?? config?.stationId,
+      device: [
+        ...(Array.isArray(result.device) ? result.device : []),
+        ...(Array.isArray(config?.device) ? config.device : []),
+      ],
+      channels: [
+        ...(Array.isArray(result.channels) ? result.channels : []),
+        ...(Array.isArray(config?.channels) ? config.channels : []),
+      ],
+      statusManagement: result.statusManagement ?? config?.statusManagement ?? null,
+    }), {})
+  }
+
+  if (Array.isArray(data?.device) || Array.isArray(data?.channels)) {
+    return data
+  }
+
   const rawConfigs = data?.rawConfigs?.config ?? data?.rawConfigs ?? data?.config
 
   if (!rawConfigs || Array.isArray(rawConfigs) || typeof rawConfigs !== 'object') {
@@ -2832,6 +3156,19 @@ function getDeviceConfigParameterMappings(data) {
 
   const rawConfig = getRawDeviceConfig(data)
   return Array.isArray(rawConfig.channels) ? rawConfig.channels : []
+}
+
+function getDeviceConfigParameterOptions(data, fallback = []) {
+  if (Array.isArray(data?.parameterOptions) && data.parameterOptions.length) {
+    return data.parameterOptions
+  }
+
+  const rawConfig = getRawDeviceConfig(data)
+  const channelParameters = Array.isArray(rawConfig.channels)
+    ? rawConfig.channels.map((channel) => channel.dataType ?? channel.parameter ?? channel.name).filter(Boolean)
+    : []
+
+  return channelParameters.length ? [...new Set(channelParameters)] : fallback
 }
 
 function getDeviceConfigStatusManagement(data) {
@@ -3062,7 +3399,8 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose }) {
   const [deviceConfigTesting, setDeviceConfigTesting] = useState(false)
   const [deviceConfigSaving, setDeviceConfigSaving] = useState(false)
   const [deviceConfigConfirming, setDeviceConfigConfirming] = useState(false)
-  const parameterOptions = deviceConfig?.parameterOptions ?? getConnectionParameterOptions(context)
+  const useConnectedPointDeviceConfigs = isConnectedMeasurementPointDeviceConfigContext(context)
+  const parameterOptions = getDeviceConfigParameterOptions(deviceConfig, getConnectionParameterOptions(context))
   const generatedDeviceCodeOptions = connectionForms
     .map((form, index) => form.deviceCode ?? getConnectionDeviceCode(context, index))
     .filter(Boolean)
@@ -3084,6 +3422,9 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose }) {
     let isActive = true
     const requestId = getDeviceConfigRequestId(context)
     const stationId = getMonitoringPointCode(context)
+    const loadApiUrl = useConnectedPointDeviceConfigs
+      ? (stationId ? getConnectedMeasurementPointDeviceConfigsApiUrl(stationId) : '')
+      : (requestId && stationId ? getDeviceConfigsApiUrl(requestId, stationId) : '')
 
     queueMicrotask(() => {
       if (!isActive) {
@@ -3100,10 +3441,12 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose }) {
       setDeviceConfigError('')
     })
 
-    if (!requestId || !stationId) {
+    if (!stationId || (!useConnectedPointDeviceConfigs && !requestId)) {
       queueMicrotask(() => {
         if (isActive) {
-          setDeviceConfigError('ไม่พบรหัสคำขอหรือรหัสจุดตรวจวัดสำหรับโหลดการตั้งค่าอุปกรณ์')
+          setDeviceConfigError(useConnectedPointDeviceConfigs
+            ? 'ไม่พบรหัสจุดตรวจวัดสำหรับโหลดการตั้งค่าอุปกรณ์'
+            : 'ไม่พบรหัสคำขอหรือรหัสจุดตรวจวัดสำหรับโหลดการตั้งค่าอุปกรณ์')
         }
       })
       return
@@ -3124,7 +3467,7 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose }) {
       }
     })
 
-    fetch(getDeviceConfigsApiUrl(requestId, stationId), {
+    fetch(loadApiUrl, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
       },
@@ -3138,10 +3481,11 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose }) {
 
         if (isActive) {
           const data = payload?.data ?? {}
+          const nextParameterOptions = getDeviceConfigParameterOptions(data, getConnectionParameterOptions(context))
           const nextConnectionForms = mapConnectionForms(getDeviceConfigConnectionForms(data))
           setDeviceConfig(data)
           setConnectionForms(nextConnectionForms.length ? nextConnectionForms : [createDefaultConnectionItem(context)])
-          setParameterMappingRows(mapParameterMappingRows(getDeviceConfigParameterMappings(data), data.parameterOptions ?? []))
+          setParameterMappingRows(mapParameterMappingRows(getDeviceConfigParameterMappings(data), nextParameterOptions))
           setStatusManagementValue(getDeviceConfigStatusManagement(data))
           setTestResultRows(mapTestResultRows(data.testResults ?? []))
         }
@@ -3160,7 +3504,7 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose }) {
     return () => {
       isActive = false
     }
-  }, [accessToken, context, open])
+  }, [accessToken, context, open, useConnectedPointDeviceConfigs])
 
   const updateConnectionForm = (id, nextValue) => {
     setConnectionForms((current) => current.map((form) => (form.id === id ? nextValue : form)))
@@ -3220,8 +3564,10 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose }) {
     const forms = connectionForms.length ? connectionForms : [{ type: '', values: {} }]
     const validationMessage = forms.map(validateDeviceConfigForm).find(Boolean)
 
-    if (!requestId || !stationId) {
-      throw new Error('ไม่พบรหัสคำขอหรือรหัสจุดตรวจวัดสำหรับบันทึกการตั้งค่าอุปกรณ์')
+    if (!stationId || (!useConnectedPointDeviceConfigs && !requestId)) {
+      throw new Error(useConnectedPointDeviceConfigs
+        ? 'ไม่พบรหัสจุดตรวจวัดสำหรับบันทึกการตั้งค่าอุปกรณ์'
+        : 'ไม่พบรหัสคำขอหรือรหัสจุดตรวจวัดสำหรับบันทึกการตั้งค่าอุปกรณ์')
     }
 
     if (!accessToken) {
@@ -3279,14 +3625,24 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose }) {
     const nextConnectionForms = mapConnectionForms(getDeviceConfigConnectionForms(data).length ? getDeviceConfigConnectionForms(data) : connectionForms)
     setDeviceConfig(data)
     setConnectionForms(nextConnectionForms.length ? nextConnectionForms : [createDefaultConnectionItem(context)])
-    setParameterMappingRows(mapParameterMappingRows(getDeviceConfigParameterMappings(data).length ? getDeviceConfigParameterMappings(data) : parameterMappingRows, data?.parameterOptions ?? parameterOptions))
+    setParameterMappingRows(mapParameterMappingRows(
+      getDeviceConfigParameterMappings(data).length ? getDeviceConfigParameterMappings(data) : parameterMappingRows,
+      getDeviceConfigParameterOptions(data, parameterOptions),
+    ))
     setStatusManagementValue(getDeviceConfigStatusManagement(data) ?? statusManagement)
     setTestResultRows(mapTestResultRows(data?.testResults ?? testResultRows))
   }
 
   const saveDeviceConfig = async () => {
     const { requestId, stationId, requestBody } = buildCurrentDeviceConfigRequest()
-    const saveResult = await fetch(getDeviceConfigsApiUrl(requestId), {
+    const saveApiUrl = useConnectedPointDeviceConfigs
+      ? getConnectedMeasurementPointDeviceConfigsApiUrl(stationId)
+      : getDeviceConfigsApiUrl(requestId)
+    const refreshApiUrl = useConnectedPointDeviceConfigs
+      ? getConnectedMeasurementPointDeviceConfigsApiUrl(stationId)
+      : getDeviceConfigsApiUrl(requestId, stationId)
+
+    const saveResult = await fetch(saveApiUrl, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -3301,7 +3657,7 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose }) {
       throw new Error(savePayload?.error?.message || savePayload?.message || `บันทึกการตั้งค่าอุปกรณ์ไม่สำเร็จ (${saveResult.status} ${saveResult.statusText})`)
     }
 
-    const refreshResult = await fetch(getDeviceConfigsApiUrl(requestId, stationId), {
+    const refreshResult = await fetch(refreshApiUrl, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
       },
@@ -3330,6 +3686,11 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose }) {
   }
 
   const handleConfirmConnection = () => {
+    if (useConnectedPointDeviceConfigs) {
+      setDeviceConfigError('การยืนยันการเชื่อมต่อใช้ได้เฉพาะคำขอที่รอยืนยันการเชื่อมต่อ')
+      return
+    }
+
     setDeviceConfigConfirming(true)
     setDeviceConfigError('')
     saveDeviceConfig()
@@ -3510,9 +3871,11 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose }) {
         <Button variant="contained" disabled={deviceConfigSaving || deviceConfigConfirming} onClick={handleSaveDeviceConfig}>
           {deviceConfigSaving ? 'กำลังบันทึก' : 'บันทึก'}
         </Button>
-        <Button color="secondary" variant="contained" disabled={deviceConfigSaving || deviceConfigConfirming} onClick={handleConfirmConnection}>
-          {deviceConfigConfirming ? 'กำลังยืนยัน' : 'ยืนยันการเชื่อมต่อ'}
-        </Button>
+        {!useConnectedPointDeviceConfigs ? (
+          <Button color="secondary" variant="contained" disabled={deviceConfigSaving || deviceConfigConfirming} onClick={handleConfirmConnection}>
+            {deviceConfigConfirming ? 'กำลังยืนยัน' : 'ยืนยันการเชื่อมต่อ'}
+          </Button>
+        ) : null}
       </DialogActions>
     </Dialog>
   )
@@ -3559,7 +3922,7 @@ function ReadOnlyField({ label, value, sx }) {
   return (
     <TextField
       label={label}
-      value={value}
+      value={displayValue(value)}
       size="small"
       fullWidth
       slotProps={{
@@ -4534,18 +4897,20 @@ function RequestFormBottomSheet({
 }) {
   const formRef = useRef(null)
   const isEditMode = mode === 'edit'
+  const isAddParameterMode = mode === 'add-parameter'
+  const useInitialRequestValues = isEditMode || isAddParameterMode
   const initialPoint = getInitialRequestPoint(initialRequest)
   const initialInstruments = initialPoint.measurementInstruments ?? {}
   const initialDocuments = Array.isArray(initialPoint.documentsAndImages) ? initialPoint.documentsAndImages : []
-  const formFactory = isEditMode ? getInitialRequestFactory(initialRequest, factory) : factory
+  const formFactory = useInitialRequestValues ? getInitialRequestFactory(initialRequest, factory) : factory
   const latestRevisionMessage = isEditMode ? getLatestRevisionMessage(initialRequest) : ''
-  const initialContactPersons = isEditMode && Array.isArray(initialRequest?.contactPersons)
+  const initialContactPersons = useInitialRequestValues && Array.isArray(initialRequest?.contactPersons)
     ? withFormIds(initialRequest.contactPersons)
     : [{ id: 1 }]
-  const initialNotificationEmails = isEditMode && Array.isArray(initialRequest?.notificationEmails) && initialRequest.notificationEmails.length
+  const initialNotificationEmails = useInitialRequestValues && Array.isArray(initialRequest?.notificationEmails) && initialRequest.notificationEmails.length
     ? initialRequest.notificationEmails.map((email, index) => ({ id: index + 1, value: email }))
     : [{ id: 1, value: '' }]
-  const initialMonitoringPointType = isEditMode && initialRequest ? getRequestSystemType(initialRequest) : ''
+  const initialMonitoringPointType = useInitialRequestValues && initialRequest ? getRequestSystemType(initialRequest) : ''
   const initialMonitoringPoints = [{ id: 1, type: initialMonitoringPointType }]
   const [contacts, setContacts] = useState(initialContactPersons)
   const [factoryEmails, setFactoryEmails] = useState(initialNotificationEmails)
@@ -4559,12 +4924,12 @@ function RequestFormBottomSheet({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const officerEmails = ['']
-  const showMonitoringPointSection = formType === 'เพิ่มจุดตรวจวัด'
+  const showMonitoringPointSection = formType === 'เพิ่มจุดตรวจวัด' || isAddParameterMode
   const selectedMonitoringPoint = monitoringPoints.find((point) => point.id === selectedMonitoringPointId)
     ?? monitoringPoints[0]
   const buildCurrentRequestBody = () => {
     const formData = formRef.current ? new FormData(formRef.current) : null
-    return buildMeasurementPointRequestBody(
+    const requestBody = buildMeasurementPointRequestBody(
       formFactory,
       selectedMonitoringPoint?.type,
       formData,
@@ -4572,6 +4937,14 @@ function RequestFormBottomSheet({
       measurementInstrumentRows,
       { includePreviewUrls: true, existingDocuments: initialDocuments },
     )
+
+    if (isEditMode) {
+      requestBody.remarks = 'แก้ไขตามเจ้าหน้าที่แจ้ง'
+    } else if (isAddParameterMode) {
+      requestBody.remarks = 'ขอเพิ่มพารามิเตอร์'
+    }
+
+    return requestBody
   }
   const openSubmitConfirm = () => {
     setSubmitError('')
@@ -4606,9 +4979,17 @@ function RequestFormBottomSheet({
       )
       if (isEditMode) {
         requestBody.remarks = 'แก้ไขตามเจ้าหน้าที่แจ้ง'
+      } else if (isAddParameterMode) {
+        requestBody.remarks = 'ขอเพิ่มพารามิเตอร์'
       }
 
-      const result = await fetch(isEditMode ? getRequestFormApiUrl(requestId) : getMeasurementPointsRequestApiUrl(), {
+      const submitApiUrl = isEditMode
+        ? getRequestFormApiUrl(requestId)
+        : isAddParameterMode
+          ? getParametersRequestApiUrl()
+          : getMeasurementPointsRequestApiUrl()
+
+      const result = await fetch(submitApiUrl, {
         method: isEditMode ? 'PUT' : 'POST',
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -5201,6 +5582,73 @@ function ConnectionRequestPage({ userType = '', accessToken = '' }) {
         setRequestFormError(error instanceof Error ? error.message : 'โหลดข้อมูลคำขอเดิมไม่สำเร็จ')
       })
   }, [accessToken])
+  const handleOpenAddParameterForm = useCallback((point) => {
+    setRequestFormError('')
+
+    const stationId = point?.pointCode ?? point?.code ?? point?.stationId ?? ''
+
+    if (!stationId) {
+      setRequestFormError('ไม่พบรหัสจุดตรวจวัดสำหรับเพิ่มพารามิเตอร์')
+      return
+    }
+
+    const formState = {
+      mode: 'add-parameter',
+      formType: 'เพิ่มพารามิเตอร์',
+      factory: {
+        ...(point?.factory ?? {}),
+        factoryId: point?.factoryId ?? point?.factory?.factoryId ?? '',
+      },
+      point,
+      loading: true,
+      initialRequest: null,
+    }
+
+    setRequestForm(formState)
+
+    if (!accessToken) {
+      setRequestForm((current) =>
+        current?.mode === 'add-parameter' && (current?.point?.pointCode ?? current?.point?.code) === stationId
+          ? { ...current, loading: false }
+          : current,
+      )
+      setRequestFormError('กรุณาเข้าสู่ระบบเพื่อเพิ่มพารามิเตอร์')
+      return
+    }
+
+    fetch(getConnectedMeasurementPointParameterFormApiUrl(stationId), {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
+      .then(async (result) => {
+        const payload = await result.json().catch(() => null)
+
+        if (!result.ok) {
+          throw new Error(payload?.error?.message || payload?.message || `โหลดข้อมูลสำหรับเพิ่มพารามิเตอร์ไม่สำเร็จ (${result.status} ${result.statusText})`)
+        }
+
+        const initialRequest = getParameterFormDefaultsFromPayload(payload, point)
+        setRequestForm((current) =>
+          current?.mode === 'add-parameter' && (current?.point?.pointCode ?? current?.point?.code) === stationId
+            ? {
+                ...current,
+                factory: getInitialRequestFactory(initialRequest, current.factory),
+                initialRequest,
+                loading: false,
+              }
+            : current,
+        )
+      })
+      .catch((error) => {
+        setRequestForm((current) =>
+          current?.mode === 'add-parameter' && (current?.point?.pointCode ?? current?.point?.code) === stationId
+            ? { ...current, loading: false }
+            : current,
+        )
+        setRequestFormError(error instanceof Error ? error.message : 'โหลดข้อมูลสำหรับเพิ่มพารามิเตอร์ไม่สำเร็จ')
+      })
+  }, [accessToken])
   const approveRequestDocument = useCallback(() => {
     if (!requestDocument?.id) {
       setRequestDocumentError('ไม่พบรหัสคำขอสำหรับอนุมัติ')
@@ -5619,7 +6067,7 @@ function ConnectionRequestPage({ userType = '', accessToken = '' }) {
         />
       </Paper>
       <RequestFormBottomSheet
-        key={`${requestForm?.mode ?? 'create'}-${requestForm?.requestId ?? 'new'}-${requestForm?.initialRequest?.id ?? 'draft'}`}
+        key={`${requestForm?.mode ?? 'create'}-${requestForm?.requestId ?? requestForm?.point?.pointCode ?? requestForm?.point?.code ?? 'new'}-${requestForm?.initialRequest?.id ?? 'draft'}`}
         open={Boolean(requestForm)}
         formType={requestForm?.formType ?? ''}
         factory={requestForm?.factory}
@@ -5640,6 +6088,7 @@ function ConnectionRequestPage({ userType = '', accessToken = '' }) {
         factory={monitoringPointFactory}
         isOperator={isOperator}
         accessToken={accessToken}
+        onOpenAddParameter={handleOpenAddParameterForm}
         onOpenConnectionSettings={setConnectionSettingsContext}
         onClose={() => setMonitoringPointFactory(null)}
       />
