@@ -1,5 +1,8 @@
 import { describe, expect, it } from '@jest/globals';
-import { buildRequestNoPrefix } from '../../src/modules/connection-requests/connection-requests.repository';
+import {
+  buildBaseQueryForTests,
+  buildRequestNoPrefix,
+} from '../../src/modules/connection-requests/connection-requests.repository';
 
 describe('connectionRequestsRepository request numbers', () => {
   it('builds request number prefixes from system type and Thai Buddhist year', () => {
@@ -7,5 +10,19 @@ describe('connectionRequestsRepository request numbers', () => {
 
     expect(buildRequestNoPrefix('CEMS', date)).toBe('CEMS-69');
     expect(buildRequestNoPrefix('WPMS', date)).toBe('WPMS-69');
+  });
+
+  it('filters request history by selected station aliases from connected measurement points', () => {
+    const sql = buildBaseQueryForTests(
+      { stationId: 'S0001' },
+      { actorUserId: 42, scope: 'ALL' },
+    ).toSQL().sql;
+
+    expect(sql).toContain('cems_wpms_connected_measurement_points');
+    expect(sql).toContain('cmp.point_code');
+    expect(sql).toContain('cmp.point_name');
+    expect(sql).toContain('cmp.source_measurement_point_id');
+    expect(sql).toContain('mp.point_code');
+    expect(sql).toContain('mp.point_name');
   });
 });

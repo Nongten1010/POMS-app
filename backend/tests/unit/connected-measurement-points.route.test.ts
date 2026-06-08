@@ -7,6 +7,7 @@ jest.mock('../../src/modules/connection-requests/connection-requests.service', (
     getAddParameterFormDetail: jest.fn(),
     getCurrentDeviceConfigFormDetail: jest.fn(),
     listConnectedMeasurementPoints: jest.fn(),
+    listDetails: jest.fn(),
     listTableRows: jest.fn(),
     saveCurrentDeviceConfig: jest.fn(),
     saveCurrentDeviceConfigs: jest.fn(),
@@ -68,6 +69,62 @@ describe('connected measurement points route', () => {
           status: 'เชื่อมต่อแล้ว',
           statusCode: 'CONNECTED',
           requestType: 'ADD_PARAMETER',
+        },
+      ],
+      meta: { total: 1 },
+    });
+    mockedConnectionRequestsService.listDetails.mockResolvedValue({
+      data: [
+        {
+          id: 10,
+          requestNo: 'CEMS6900001',
+          requestType: 'ADD_PARAMETER',
+          requestTypeLabel: 'เพิ่มพารามิเตอร์',
+          factoryId: 'factory-001',
+          factoryName: 'บริษัท ทดสอบ จำกัด',
+          factoryRegistrationNo: '3-106-33/50สบ',
+          industryMainOrder: null,
+          industrySubOrder: null,
+          businessActivity: null,
+          eia: null,
+          hasEia: null,
+          projectName: null,
+          address: null,
+          latitude: null,
+          longitude: null,
+          systemType: 'CEMS',
+          status: 'CONNECTED',
+          statusLabel: 'เชื่อมต่อแล้ว',
+          contactName: 'สมชาย ใจดี',
+          contactPhone: '0812345678',
+          contactEmail: null,
+          contactPersons: [],
+          notificationEmails: [],
+          officerNotificationEmails: [],
+          remarks: null,
+          revisionReason: null,
+          officerNote: null,
+          connectionDueAt: null,
+          confirmedAt: null,
+          verifiedAt: '2026-06-08T00:00:00.000Z',
+          measurementPoints: [
+            {
+              id: 1,
+              pointName: 'ปล่อง A',
+              pointCode: 'S0001',
+              pointType: 'STACK',
+              latitude: null,
+              longitude: null,
+              parameters: ['NOx'],
+              description: null,
+            },
+          ],
+          statusHistory: [],
+          createdBy: 42,
+          createdAt: '2026-06-08T00:00:00.000Z',
+          updatedAt: '2026-06-08T00:00:00.000Z',
+          factory: null,
+          deviceConfigs: [],
         },
       ],
       meta: { total: 1 },
@@ -167,7 +224,7 @@ describe('connected measurement points route', () => {
     });
   });
 
-  it('exposes request history rows for a selected connected measurement point', async () => {
+  it('exposes request details for a selected connected measurement point', async () => {
     const app = createApp();
 
     const response = await request(app)
@@ -175,13 +232,16 @@ describe('connected measurement points route', () => {
       .set('Authorization', `Bearer ${accessToken()}`);
 
     expect(response.status).toBe(200);
-    expect(mockedConnectionRequestsService.listTableRows).toHaveBeenCalledWith(
+    expect(mockedConnectionRequestsService.listDetails).toHaveBeenCalledWith(
       { stationId: 'S0001' },
       42,
       'ALL',
     );
     expect(response.body.data[0]).toMatchObject({
-      monitoringPointCode: 'S0001',
+      id: 10,
+      requestNo: 'CEMS6900001',
+      measurementPoints: [{ pointCode: 'S0001' }],
+      deviceConfigs: [],
     });
   });
 

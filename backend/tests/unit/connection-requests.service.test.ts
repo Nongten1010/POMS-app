@@ -165,6 +165,61 @@ describe('connectionRequestsService', () => {
     );
   });
 
+  it('returns request details for selected monitoring point history', async () => {
+    const request = requestDto({
+      createdBy: actorUserId,
+      measurementPoints: [
+        {
+          id: 1,
+          pointName: 'ปล่องระบาย A',
+          pointCode: 'STACK-A',
+          pointType: 'STACK',
+          latitude: null,
+          longitude: null,
+          parameters: ['NOx'],
+          description: null,
+        },
+      ],
+    });
+    mockedRepository.list.mockResolvedValue({ rows: [request], total: 1 });
+    mockedRepository.findFactorySummariesForRequests.mockResolvedValue(
+      new Map([[request.factoryId, factorySummary()]]),
+    );
+    mockedDeviceConnectionsService.listByRequestId.mockResolvedValue([
+      deviceConnectionConfig({
+        requestId: request.id,
+        stationId: 'STACK-A',
+        deviceCode: 'STACK-A/01',
+      }),
+    ]);
+
+    const result = await connectionRequestsService.listDetails(
+      { stationId: 'STACK-A' },
+      actorUserId,
+      'ALL',
+    );
+
+    expect(mockedRepository.list).toHaveBeenCalledWith(
+      { stationId: 'STACK-A' },
+      { actorUserId, scope: 'ALL' },
+    );
+    expect(result.data[0]).toMatchObject({
+      id: 1,
+      requestNo: 'CEMS-69-00001',
+      factory: {
+        factoryId: 'factory-001',
+      },
+      measurementPoints: [{ pointCode: 'STACK-A' }],
+      deviceConfigs: [
+        {
+          stationId: 'STACK-A',
+          device: [{ deviceCode: 'STACK-A/01' }],
+        },
+      ],
+    });
+    expect(result.meta.total).toBe(1);
+  });
+
   it('returns operator factories with latest request status code and connected point count', async () => {
     mockedRepository.listFactoriesForAccess.mockResolvedValue([factorySummary()]);
     mockedRepository.listRequestsForFactories.mockResolvedValue([

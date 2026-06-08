@@ -110,7 +110,7 @@ export const connectionRequestsController = {
     try {
       const actorUserId = requireActorUserId(req);
       const { stationId } = connectedMeasurementPointParamsSchema.parse(req.params);
-      const result = await connectionRequestsService.listTableRows(
+      const result = await connectionRequestsService.listDetails(
         { stationId },
         actorUserId,
         getScope(req, 'cems_wpms_requests:view'),

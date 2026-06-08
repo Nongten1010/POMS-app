@@ -515,6 +515,13 @@ export const connectionRequestsRepository = {
   },
 };
 
+export function buildBaseQueryForTests(
+  query: ListConnectionRequestsQuery,
+  access: ListAccess,
+): Knex.QueryBuilder<ConnectionRequestRow, ConnectionRequestRow[]> {
+  return buildBaseQuery(query, access);
+}
+
 function buildBaseQuery(
   query: ListConnectionRequestsQuery,
   access: ListAccess,
@@ -532,7 +539,26 @@ function buildBaseQuery(
         .whereRaw('mp.request_id = cems_wpms_connection_requests.id')
         .whereNull('mp.deleted_at')
         .where((pointBuilder) => {
-          pointBuilder.where('mp.point_code', stationId).orWhere('mp.point_name', stationId);
+          pointBuilder
+            .where('mp.point_code', stationId)
+            .orWhere('mp.point_name', stationId)
+            .orWhereExists(function connectedPointAliasFilter() {
+              this.select(db.raw('1'))
+                .from('cems_wpms_connected_measurement_points as cmp')
+                .whereNull('cmp.deleted_at')
+                .whereRaw('cmp.factory_id = cems_wpms_connection_requests.factory_id')
+                .where((connectedPointBuilder) => {
+                  connectedPointBuilder
+                    .where('cmp.point_code', stationId)
+                    .orWhere('cmp.point_name', stationId);
+                })
+                .where((aliasBuilder) => {
+                  aliasBuilder
+                    .whereRaw('mp.point_code = cmp.point_code')
+                    .orWhereRaw('mp.point_name = cmp.point_name')
+                    .orWhereRaw('mp.id = cmp.source_measurement_point_id');
+                });
+            });
         });
     });
   }

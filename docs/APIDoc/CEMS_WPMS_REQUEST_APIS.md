@@ -82,7 +82,7 @@ Mapping:
 
 | ปุ่ม | ใช้ API | หมายเหตุ |
 | --- | --- | --- |
-| เปิดดู | `GET /api/v1/connected-measurement-points/:stationId/requests` | คืนรายการคำขอทุกคำขอของจุดตรวจวัดที่เลือกในรูปแบบ table rows |
+| เปิดดู | `GET /api/v1/connected-measurement-points/:stationId/requests` | คืนรายการคำขอทุกคำขอของจุดตรวจวัดที่เลือก โดยจับทั้งรหัส/ชื่อจุดจาก current connected point และแต่ละรายการใช้ shape เดียวกับ `GET /api/v1/cems-wpms-requests/:id/detail` |
 | เพิ่มพารามิเตอร์ | `GET /api/v1/connected-measurement-points/:stationId/parameter-form` | คืน `formDefaults` เป็น payload shape เดียวกับ `POST /api/v1/cems-wpms-requests/parameters` |
 | เพิ่มพารามิเตอร์ | `POST /api/v1/cems-wpms-requests/parameters` | บันทึกคำขอเพิ่มพารามิเตอร์; ใช้ฟอร์ม shape เดียวกับเพิ่มจุดตรวจวัด แต่ต้องมี `measurementPoints[0].pointCode` |
 | ตั้งค่า | `GET /api/v1/connected-measurement-points/:stationId/device-configs` | คืน config ปัจจุบันจาก active settings ของจุดตรวจวัดที่เลือก |

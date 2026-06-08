@@ -81,6 +81,30 @@ export const connectionRequestsService = {
     };
   },
 
+  async listDetails(
+    query: ListConnectionRequestsQuery,
+    actorUserId: number,
+    viewScope: string | null | undefined,
+  ): Promise<PaginatedTableRowsDTO<ConnectionRequestDetailDTO>> {
+    const { rows, total } = await connectionRequestsRepository.list(query, {
+      actorUserId,
+      scope: viewScope,
+    });
+    const factoryMap = await connectionRequestsRepository.findFactorySummariesForRequests(rows);
+    const data = await Promise.all(
+      rows.map(async (request) => {
+        const deviceConfigs = await deviceConnectionsService.listByRequestId(request.id);
+        return {
+          ...request,
+          factory: findFactorySummary(request, factoryMap),
+          deviceConfigs: toDeviceConfigPayloadGroups(deviceConfigs),
+        };
+      }),
+    );
+
+    return { data, meta: { total } };
+  },
+
   async listOperatorFactories(
     actorUserId: number,
     factoryViewScope: string | null | undefined,
