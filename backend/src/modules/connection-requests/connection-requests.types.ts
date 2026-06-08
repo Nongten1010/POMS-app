@@ -297,7 +297,17 @@ export interface OperatorFactoryTableRowDTO {
   newRegistrationNo: string | null;
   oldRegistrationNo: string | null;
   industryType: string | null;
+  industryMainOrder: string | null;
+  industrySubOrder: string | null;
+  businessActivity: string | null;
+  eia: 'มี' | 'ไม่มี' | null;
+  projectName: string | null;
+  address: string | null;
+  latitude: string | null;
+  longitude: string | null;
   province: string | null;
+  isEligible: boolean;
+  eligibilityStatus: 'เข้าข่าย' | 'ไม่เข้าข่าย';
   monitoringPointCount: number;
   requestStatusCode: ConnectionRequestStatus | null;
   status: 'แสดง' | 'ซ่อน';

@@ -2719,7 +2719,17 @@ curl "http://localhost:3000/api/v1/cems-wpms-requests/operator-factory-dashboard
       "newRegistrationNo": "3-106-33/50สบ",
       "oldRegistrationNo": "3-106-33/50สบ",
       "industryType": "ผลิตเคมีภัณฑ์",
+      "industryMainOrder": "106",
+      "industrySubOrder": "33",
+      "businessActivity": "ผลิตเคมีภัณฑ์",
+      "eia": "มี",
+      "projectName": null,
+      "address": "99 หมู่ 1",
+      "latitude": "13.7563",
+      "longitude": "100.5018",
       "province": "สระบุรี",
+      "isEligible": true,
+      "eligibilityStatus": "เข้าข่าย",
       "monitoringPointCount": 1,
       "requestStatusCode": "CONNECTED",
       "status": "แสดง"
@@ -2741,7 +2751,17 @@ Data dictionary response row:
 | `newRegistrationNo` | string|null | เลขทะเบียนใหม่ |
 | `oldRegistrationNo` | string|null | เลขทะเบียนเก่า |
 | `industryType` | string|null | ประเภทอุตสาหกรรม |
+| `industryMainOrder` | string|null | ลำดับโรงงานหลัก |
+| `industrySubOrder` | string|null | ลำดับโรงงานรอง |
+| `businessActivity` | string|null | รายละเอียดการประกอบกิจการ |
+| `eia` | string|null | สถานะ EIA |
+| `projectName` | string|null | ชื่อโครงการ |
+| `address` | string|null | ที่อยู่โรงงาน |
+| `latitude` | string|null | พิกัด latitude |
+| `longitude` | string|null | พิกัด longitude |
 | `province` | string|null | จังหวัด |
+| `isEligible` | boolean | โรงงานอยู่ในรายการเข้าข่าย |
+| `eligibilityStatus` | string | `เข้าข่าย` |
 | `monitoringPointCount` | number | จำนวนจุดตรวจวัด |
 | `requestStatusCode` | string|null | สถานะคำขอล่าสุดแบบ code |
 | `status` | string | สถานะการแสดงผลในตาราง |
