@@ -1,4 +1,5 @@
 import { BadRequestError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
+import { logger } from '../../config/logger';
 import { deviceConnectionsService } from '../device-connections/device-connections.service';
 import type {
   CreateDeviceConnectionConfigInput,
@@ -1160,7 +1161,11 @@ async function loadLatestHourlyMeasurementData(
     return result.data.map((row) => toDashboardMeasurementRow(row, parameterDisplayNames));
   } catch (error) {
     if (error instanceof NotFoundError || error instanceof ForbiddenError) return [];
-    throw error;
+    logger.warn('[operator-factories] Failed to load latest hourly measurement values', {
+      stationId,
+      reason: error instanceof Error ? error.message : 'Unknown error',
+    });
+    return [];
   }
 }
 

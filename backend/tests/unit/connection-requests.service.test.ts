@@ -35,9 +35,16 @@ jest.mock('../../src/modules/parameter-values/parameter-values.service', () => (
   },
 }));
 
+jest.mock('../../src/config/logger', () => ({
+  logger: {
+    warn: jest.fn(),
+  },
+}));
+
 import { deviceConnectionsService } from '../../src/modules/device-connections/device-connections.service';
 import type { DeviceConnectionConfigDTO } from '../../src/modules/device-connections/device-connections.types';
 import { parameterValuesService } from '../../src/modules/parameter-values/parameter-values.service';
+import { logger } from '../../src/config/logger';
 import { connectionRequestsRepository } from '../../src/modules/connection-requests/connection-requests.repository';
 import { connectionRequestsService } from '../../src/modules/connection-requests/connection-requests.service';
 import {
@@ -52,6 +59,7 @@ import {
 const mockedRepository = jest.mocked(connectionRequestsRepository);
 const mockedDeviceConnectionsService = jest.mocked(deviceConnectionsService);
 const mockedParameterValuesService = jest.mocked(parameterValuesService);
+const mockedLogger = jest.mocked(logger);
 
 describe('connectionRequestsService', () => {
   const actorUserId = 42;
@@ -390,6 +398,41 @@ describe('connectionRequestsService', () => {
       status: 'แสดง',
       measurementPoints: [{ stationId: 'P0001', systemType: 'WPMS' }],
     });
+  });
+
+  it('keeps factory rows loadable when latest hourly parameter values fail', async () => {
+    mockedRepository.listFactoriesForAccess.mockResolvedValue([factorySummary()]);
+    mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
+      {
+        factoryId: 'factory-001',
+        stationId: 'S0001',
+        pointName: 'ปล่องระบาย A',
+        pointCode: 'S0001',
+        systemType: 'CEMS',
+        parameters: ['NOx'],
+        data: [],
+      },
+    ]);
+    mockedParameterValuesService.latestHourly.mockRejectedValueOnce(
+      new Error('parameter source database unavailable'),
+    );
+
+    const result = await connectionRequestsService.listOperatorFactories(
+      actorUserId,
+      'OWN_FACTORY',
+    );
+
+    expect(result.data[0]?.measurementPoints[0]).toMatchObject({
+      stationId: 'S0001',
+      data: [],
+    });
+    expect(mockedLogger.warn).toHaveBeenCalledWith(
+      '[operator-factories] Failed to load latest hourly measurement values',
+      expect.objectContaining({
+        stationId: 'S0001',
+        reason: 'parameter source database unavailable',
+      }),
+    );
   });
 
   it('excludes factories whose display status is hidden', async () => {
