@@ -29,6 +29,8 @@ interface LatestTimestampRow {
   ctime: unknown;
 }
 
+type TimestampPredicateValue = string | number | boolean | null;
+
 export const parameterValuesRepository = {
   tableName(stationId: string, interval: ParameterValueInterval): string {
     return `${stationId}_data_${interval}`;
@@ -186,12 +188,13 @@ export const parameterValuesRepository = {
 
     if (!latestTimestamp) return { tableName, rows: [] };
 
+    const timestampPredicate = serializeLatestTimestamp(latestTimestamp);
     const rows = await parameterSourceDb
       .withSchema(env.PARAMETER_DB_SCHEMA)
       .from<Record<string, unknown>>(tableName)
       .select('*')
-      .where('cdate', latestTimestamp.cdate)
-      .where('ctime', latestTimestamp.ctime)
+      .where('cdate', timestampPredicate.cdate)
+      .where('ctime', timestampPredicate.ctime)
       .orderBy('station_id', 'asc');
 
     return {
@@ -277,4 +280,31 @@ function serializeValue(key: string, value: unknown): unknown {
   }
 
   return value.toISOString();
+}
+
+function serializeLatestTimestamp(row: LatestTimestampRow): {
+  cdate: TimestampPredicateValue;
+  ctime: TimestampPredicateValue;
+} {
+  return {
+    cdate: serializeTimestampPredicateValue('cdate', row.cdate),
+    ctime: serializeTimestampPredicateValue('ctime', row.ctime),
+  };
+}
+
+function serializeTimestampPredicateValue(
+  key: 'cdate' | 'ctime',
+  value: unknown,
+): TimestampPredicateValue {
+  const serialized = serializeValue(key, value);
+  if (serialized === null || serialized === undefined) return null;
+  if (
+    typeof serialized === 'string' ||
+    typeof serialized === 'number' ||
+    typeof serialized === 'boolean'
+  ) {
+    return serialized;
+  }
+
+  return String(serialized);
 }
