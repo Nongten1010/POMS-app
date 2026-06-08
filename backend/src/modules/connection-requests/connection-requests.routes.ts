@@ -10,6 +10,7 @@ import {
 import { connectionRequestsController } from './connection-requests.controller';
 
 export const connectionRequestsRoutes = Router();
+export const operatorFactoryDashboardRoutes = Router();
 const documentImageUpload = multer({
   storage: multer.memoryStorage(),
   limits: {
@@ -27,6 +28,13 @@ const documentImageUpload = multer({
 });
 
 connectionRequestsRoutes.use(authenticate);
+operatorFactoryDashboardRoutes.use(authenticate);
+
+operatorFactoryDashboardRoutes.get(
+  '/',
+  authorize('factories:view'),
+  connectionRequestsController.listOperatorFactoryDashboard,
+);
 
 connectionRequestsRoutes.get(
   '/',
@@ -43,11 +51,15 @@ connectionRequestsRoutes.get(
   authorize('factories:view'),
   connectionRequestsController.listOperatorFactories,
 );
-connectionRequestsRoutes.get(
-  '/operator-factory-dashboard',
-  authorize('factories:view'),
-  connectionRequestsController.listOperatorFactoryDashboard,
-);
+connectionRequestsRoutes.get('/operator-factory-dashboard', (_req, res) => {
+  res.status(404).json({
+    success: false,
+    error: {
+      code: 'NOT_FOUND',
+      message: 'Use GET /api/v1/operator-factory-dashboard',
+    },
+  });
+});
 connectionRequestsRoutes.put(
   '/operator-factories/:factoryId/favorite',
   authorize('factories:view'),

@@ -2702,7 +2702,7 @@ curl "http://localhost:3000/api/v1/cems-wpms-requests/operator-factories" \
 สำหรับหน้า dashboard/แผนที่ที่ต้องแสดงเฉพาะโรงงานที่มีจุดตรวจวัดเชื่อมแล้ว ให้ใช้ endpoint แยก:
 
 ```bash
-curl "http://localhost:3000/api/v1/cems-wpms-requests/operator-factory-dashboard?systemType=CEMS" \
+curl "http://localhost:3000/api/v1/operator-factory-dashboard?systemType=CEMS" \
   -H "Authorization: Bearer $OPERATOR_TOKEN"
 ```
 

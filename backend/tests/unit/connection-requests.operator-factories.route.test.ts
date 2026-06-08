@@ -132,7 +132,7 @@ describe('operator factory dashboard routes', () => {
     const app = createApp();
 
     const response = await request(app)
-      .get('/api/v1/cems-wpms-requests/operator-factory-dashboard?systemType=WPMS')
+      .get('/api/v1/operator-factory-dashboard?systemType=WPMS')
       .set('Authorization', `Bearer ${accessToken()}`);
 
     expect(response.status).toBe(200);
@@ -141,6 +141,17 @@ describe('operator factory dashboard routes', () => {
       'OWN_FACTORY',
       { systemType: 'WPMS', favoriteOnly: false, connectedOnly: true },
     );
+  });
+
+  it('does not expose the operator dashboard under cems-wpms requests', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .get('/api/v1/cems-wpms-requests/operator-factory-dashboard?systemType=WPMS')
+      .set('Authorization', `Bearer ${accessToken()}`);
+
+    expect(response.status).toBe(404);
+    expect(mockedConnectionRequestsService.listOperatorFactoryDashboard).not.toHaveBeenCalled();
   });
 
   it('updates the favorite flag for an accessible factory', async () => {

@@ -20,7 +20,7 @@
 
 | Item | Value |
 | --- | --- |
-| URL | `GET /api/v1/cems-wpms-requests/operator-factory-dashboard` |
+| URL | `GET /api/v1/operator-factory-dashboard` |
 | Header | `Authorization: Bearer <accessToken>` |
 | Permission | `factories:view` |
 | Body | ไม่มี |
@@ -35,7 +35,7 @@ Query params:
 ตัวอย่าง:
 
 ```bash
-curl "http://localhost:3000/api/v1/cems-wpms-requests/operator-factory-dashboard?systemType=CEMS" \
+curl "http://localhost:3000/api/v1/operator-factory-dashboard?systemType=CEMS" \
   -H "Authorization: Bearer $ACCESS_TOKEN"
 ```
 
@@ -183,7 +183,7 @@ Response:
 
 - ไม่ต้องส่ง `requestId` จาก frontend
 - response หน้านี้ไม่ใช้ `cems_wpms_connection_requests` เป็นข้อมูลหลัก
-- ถ้ากดปุ่ม `CEMS` บน dashboard ให้เรียก `/operator-factory-dashboard?systemType=CEMS`
-- ถ้ากดปุ่ม `WPMS` บน dashboard ให้เรียก `/operator-factory-dashboard?systemType=WPMS`
+- ถ้ากดปุ่ม `CEMS` บน dashboard ให้เรียก `/api/v1/operator-factory-dashboard?systemType=CEMS`
+- ถ้ากดปุ่ม `WPMS` บน dashboard ให้เรียก `/api/v1/operator-factory-dashboard?systemType=WPMS`
 - ถ้าต้องแสดงเฉพาะ favorite ให้เรียก `?favoriteOnly=true`
 - ถ้าหน้าขอเชื่อมต่อต้องใช้รายชื่อโรงงานเข้าข่ายสำหรับเพิ่มจุดตรวจวัด ให้ใช้ `GET /api/v1/cems-wpms-requests/operator-factories`
