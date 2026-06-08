@@ -20,6 +20,7 @@ describe('operator factory dashboard routes', () => {
     mockedConnectionRequestsService.listOperatorFactories.mockResolvedValue({
       data: [
         {
+          id: 1,
           factoryId: 'factory-001',
           factoryName: 'บริษัท ทดสอบ จำกัด',
           newRegistrationNo: '3-106-33/50สบ',
@@ -74,6 +75,7 @@ describe('operator factory dashboard routes', () => {
       { systemType: 'WPMS', favoriteOnly: false },
     );
     expect(response.body.data[0]).toMatchObject({
+      id: 1,
       factoryId: 'factory-001',
       isFavorite: true,
       monitoringPointCountBySystem: expect.arrayContaining([{ systemType: 'WPMS', count: 1 }]),

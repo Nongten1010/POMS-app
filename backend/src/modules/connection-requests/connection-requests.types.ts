@@ -291,6 +291,7 @@ export interface ConnectionRequestTableRowDTO {
 }
 
 export interface OperatorFactoryTableRowDTO {
+  id: number | null;
   factoryId: string;
   factoryName: string;
   newRegistrationNo: string;

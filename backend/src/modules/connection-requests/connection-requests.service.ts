@@ -144,6 +144,7 @@ export const connectionRequestsService = {
         const measurementPoints = measurementPointsByFactory.get(factory.factoryId) ?? [];
         const monitoringPointCountBySystem = countMeasurementPointsBySystem(measurementPoints);
         return {
+          id: factory.id,
           factoryId: factory.factoryId,
           factoryName: factory.factoryName,
           newRegistrationNo: factory.newRegistrationNo,

@@ -46,6 +46,7 @@ curl "http://localhost:3000/api/v1/cems-wpms-requests/operator-factory-dashboard
   "success": true,
   "data": [
     {
+      "id": 1,
       "factoryId": "factory-001",
       "factoryName": "บริษัท ทดสอบ จำกัด",
       "newRegistrationNo": "3-106-33/50สบ",
@@ -108,6 +109,7 @@ curl "http://localhost:3000/api/v1/cems-wpms-requests/operator-factory-dashboard
 
 | Field | Type | Description |
 | --- | --- | --- |
+| `id` | number|null | primary key จาก `factories.id` สำหรับใช้เป็น row id ในตาราง |
 | `factoryId` | string | รหัสโรงงานจาก `factories.fid` |
 | `factoryName` | string | ชื่อโรงงาน |
 | `newRegistrationNo` | string|null | เลขทะเบียนโรงงานใหม่จาก `factories.code` |

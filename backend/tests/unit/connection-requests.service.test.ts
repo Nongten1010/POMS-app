@@ -314,6 +314,7 @@ describe('connectionRequestsService', () => {
     );
     expect(mockedRepository.listRequestsForFactories).not.toHaveBeenCalled();
     expect(result.data[0]).toMatchObject({
+      id: 1,
       factoryId: 'factory-001',
       factoryName: 'บริษัท ทดสอบ จำกัด',
       newRegistrationNo: '3-106-33/50สบ',
