@@ -1239,7 +1239,7 @@ function matchesOperatorFactoryQuery(
   query: ListOperatorFactoriesQuery,
 ): boolean {
   if (factory.status !== 'แสดง') return false;
-  if (factory.measurementPoints.length === 0) return false;
+  if (query.connectedOnly && factory.measurementPoints.length === 0) return false;
   if (
     query.systemType &&
     !factory.measurementPoints.some((point) => point.systemType === query.systemType)

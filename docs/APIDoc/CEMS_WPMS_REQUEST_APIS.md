@@ -2689,13 +2689,14 @@ Query params:
 | --- | --- | --- | --- |
 | `systemType` | `CEMS`\|`WPMS` | No | กรองโรงงานที่มีจุดตรวจวัดที่เชื่อมต่อแล้วตามระบบ สำหรับปุ่ม CEMS/WPMS |
 | `favoriteOnly` | boolean | No | `true` เพื่อแสดงเฉพาะโรงงานที่ user ปัจจุบันติดดาว |
+| `connectedOnly` | boolean | No | `true` เพื่อคืนเฉพาะโรงงานที่มีจุดตรวจวัดที่เชื่อมแล้วอย่างน้อย 1 จุด; default `false` เพื่อให้หน้าขอเชื่อมต่อใช้รายชื่อโรงงานเข้าข่ายได้ |
 
-Endpoint นี้คืนเฉพาะโรงงานที่ `status = "แสดง"` และ response หลักไม่อ่านรายการคำขอจาก `cems_wpms_connection_requests`; ใช้ข้อมูลโรงงานจาก `factories`, จุดตรวจวัดปัจจุบันจาก `cems_wpms_connected_measurement_points`, และค่าตรวจวัดล่าสุดจากตาราง `{stationId}_data_60m`
+Endpoint นี้คืนเฉพาะโรงงานที่อยู่ใน `eligible_factories` และมี `status = "แสดง"` โดย response หลักไม่อ่านรายการคำขอจาก `cems_wpms_connection_requests`; ใช้ข้อมูลโรงงานจาก `factories`, จุดตรวจวัดปัจจุบันจาก `cems_wpms_connected_measurement_points`, และค่าตรวจวัดล่าสุดจากตาราง `{stationId}_data_60m` ถ้าต้องใช้เป็น dashboard เฉพาะโรงงานที่มีจุดเชื่อมแล้วให้ส่ง `connectedOnly=true`
 
 ตัวอย่าง request:
 
 ```bash
-curl "http://localhost:3000/api/v1/cems-wpms-requests/operator-factories?systemType=CEMS" \
+curl "http://localhost:3000/api/v1/cems-wpms-requests/operator-factories?systemType=CEMS&connectedOnly=true" \
   -H "Authorization: Bearer $OPERATOR_TOKEN"
 ```
 

@@ -71,7 +71,7 @@ describe('operator factory dashboard routes', () => {
     expect(mockedConnectionRequestsService.listOperatorFactories).toHaveBeenCalledWith(
       42,
       'OWN_FACTORY',
-      { systemType: 'WPMS', favoriteOnly: false },
+      { systemType: 'WPMS', favoriteOnly: false, connectedOnly: false },
     );
     expect(response.body.data[0]).toMatchObject({
       factoryId: 'factory-001',

@@ -31,11 +31,12 @@ Query params:
 | --- | --- | --- | --- |
 | `systemType` | `CEMS`\|`WPMS` | No | ใช้ตอนกดปุ่ม CEMS หรือ WPMS เพื่อกรองโรงงานที่มีจุดตรวจวัดระบบนั้น |
 | `favoriteOnly` | boolean | No | `true` เพื่อดูเฉพาะโรงงานที่ user ปัจจุบันติดดาว |
+| `connectedOnly` | boolean | No | `true` เพื่อคืนเฉพาะโรงงานที่มีจุดตรวจวัดที่เชื่อมแล้วอย่างน้อย 1 จุด; default `false` เพื่อให้หน้าขอเชื่อมต่อยังใช้รายชื่อโรงงานเข้าข่ายได้ |
 
 ตัวอย่าง:
 
 ```bash
-curl "http://localhost:3000/api/v1/cems-wpms-requests/operator-factories?systemType=CEMS" \
+curl "http://localhost:3000/api/v1/cems-wpms-requests/operator-factories?systemType=CEMS&connectedOnly=true" \
   -H "Authorization: Bearer $ACCESS_TOKEN"
 ```
 
@@ -181,6 +182,7 @@ Response:
 
 - ไม่ต้องส่ง `requestId` จาก frontend
 - response หน้านี้ไม่ใช้ `cems_wpms_connection_requests` เป็นข้อมูลหลัก
-- ถ้ากดปุ่ม `CEMS` ให้เรียก `?systemType=CEMS`
-- ถ้ากดปุ่ม `WPMS` ให้เรียก `?systemType=WPMS`
+- ถ้ากดปุ่ม `CEMS` บน dashboard ให้เรียก `?systemType=CEMS&connectedOnly=true`
+- ถ้ากดปุ่ม `WPMS` บน dashboard ให้เรียก `?systemType=WPMS&connectedOnly=true`
 - ถ้าต้องแสดงเฉพาะ favorite ให้เรียก `?favoriteOnly=true`
+- ถ้าหน้าขอเชื่อมต่อต้องใช้รายชื่อโรงงานเข้าข่ายสำหรับเพิ่มจุดตรวจวัด ให้เรียก endpoint นี้โดยไม่ส่ง `connectedOnly`

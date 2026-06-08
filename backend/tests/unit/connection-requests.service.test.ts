@@ -511,7 +511,7 @@ describe('connectionRequestsService', () => {
     });
   });
 
-  it('excludes factories without at least one connected measurement point', async () => {
+  it('keeps eligible visible factories without connected measurement points by default', async () => {
     mockedRepository.listFactoriesForAccess.mockResolvedValue([
       factorySummary({ factoryId: 'factory-connected', factoryName: 'โรงงานมีจุดตรวจวัด' }),
       factorySummary({ factoryId: 'factory-without-point', factoryName: 'โรงงานไม่มีจุดตรวจวัด' }),
@@ -531,6 +531,40 @@ describe('connectionRequestsService', () => {
     const result = await connectionRequestsService.listOperatorFactories(
       actorUserId,
       'OWN_FACTORY',
+    );
+
+    expect(result.data).toHaveLength(2);
+    expect(result.data[0]).toMatchObject({
+      factoryId: 'factory-connected',
+      measurementPoints: [{ stationId: 'S0001' }],
+    });
+    expect(result.data[1]).toMatchObject({
+      factoryId: 'factory-without-point',
+      measurementPoints: [],
+    });
+  });
+
+  it('excludes factories without connected measurement points when connectedOnly is requested', async () => {
+    mockedRepository.listFactoriesForAccess.mockResolvedValue([
+      factorySummary({ factoryId: 'factory-connected', factoryName: 'โรงงานมีจุดตรวจวัด' }),
+      factorySummary({ factoryId: 'factory-without-point', factoryName: 'โรงงานไม่มีจุดตรวจวัด' }),
+    ]);
+    mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
+      {
+        factoryId: 'factory-connected',
+        stationId: 'S0001',
+        pointName: 'ปล่อง A',
+        pointCode: 'S0001',
+        systemType: 'CEMS',
+        parameters: ['NOx'],
+        data: [],
+      },
+    ]);
+
+    const result = await connectionRequestsService.listOperatorFactories(
+      actorUserId,
+      'OWN_FACTORY',
+      { connectedOnly: true },
     );
 
     expect(result.data).toHaveLength(1);

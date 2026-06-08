@@ -139,6 +139,7 @@ export interface ListConnectedMeasurementPointsQuery {
 export interface ListOperatorFactoriesQuery {
   systemType?: ConnectionSystemType;
   favoriteOnly?: boolean;
+  connectedOnly?: boolean;
 }
 
 export interface ReviewConnectionRequestInput {
