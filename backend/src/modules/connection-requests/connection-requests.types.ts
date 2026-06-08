@@ -128,6 +128,7 @@ export interface ListConnectionRequestsQuery {
   status?: ConnectionRequestStatus;
   requestType?: ConnectionRequestType;
   factoryId?: string;
+  stationId?: string;
 }
 
 export interface ListConnectedMeasurementPointsQuery {
@@ -377,6 +378,14 @@ export interface DeviceConfigFormDetailDTO {
   parameterMappings: DeviceConfigFormParameterMappingDTO[];
   testResults: unknown[];
   rawConfigs: DeviceConfigPayloadDTO;
+}
+
+export interface AddParameterFormDetailDTO {
+  requestType: typeof CONNECTION_REQUEST_TYPE.ADD_PARAMETER;
+  sourceRequestId: number;
+  sourceRequestNo: string;
+  stationId: string;
+  formDefaults: AddParameterRequestInput;
 }
 
 export interface PaginatedTableRowsDTO<T> {

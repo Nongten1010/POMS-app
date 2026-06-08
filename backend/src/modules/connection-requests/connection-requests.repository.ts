@@ -524,6 +524,18 @@ function buildBaseQuery(
   if (query.status) builder.where('status', query.status);
   if (query.requestType) builder.where('request_type', query.requestType);
   if (query.factoryId) builder.where('factory_id', query.factoryId);
+  if (query.stationId) {
+    const stationId = query.stationId;
+    builder.whereExists(function stationFilter() {
+      this.select(db.raw('1'))
+        .from('cems_wpms_measurement_points as mp')
+        .whereRaw('mp.request_id = cems_wpms_connection_requests.id')
+        .whereNull('mp.deleted_at')
+        .where((pointBuilder) => {
+          pointBuilder.where('mp.point_code', stationId).orWhere('mp.point_name', stationId);
+        });
+    });
+  }
   if (access.scope !== 'ALL') builder.where('created_by', access.actorUserId);
 
   return builder.select(

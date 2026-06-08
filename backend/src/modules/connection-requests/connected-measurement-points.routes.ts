@@ -12,3 +12,23 @@ connectedMeasurementPointsRoutes.get(
   authorize('cems_wpms_requests:view'),
   connectionRequestsController.listConnectedMeasurementPoints,
 );
+connectedMeasurementPointsRoutes.get(
+  '/:stationId/requests',
+  authorize('cems_wpms_requests:view'),
+  connectionRequestsController.listRequestsForConnectedMeasurementPoint,
+);
+connectedMeasurementPointsRoutes.get(
+  '/:stationId/parameter-form',
+  authorize('cems_wpms_requests:view'),
+  connectionRequestsController.getAddParameterFormDetail,
+);
+connectedMeasurementPointsRoutes.get(
+  '/:stationId/device-configs',
+  authorize('cems_wpms_requests:view'),
+  connectionRequestsController.getCurrentDeviceConfigFormDetail,
+);
+connectedMeasurementPointsRoutes.post(
+  '/:stationId/device-configs',
+  authorize('cems_wpms_requests:edit'),
+  connectionRequestsController.saveCurrentDeviceConfig,
+);

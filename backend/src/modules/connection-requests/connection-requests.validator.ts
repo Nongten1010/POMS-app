@@ -145,7 +145,9 @@ function normalizeMeasurementCriteriaInput(value: unknown): unknown {
 
   const rawEnabled = value.enabled;
   const enabled =
-    typeof rawEnabled === 'string' ? rawEnabled.trim().toLowerCase() === 'true' : rawEnabled === true;
+    typeof rawEnabled === 'string'
+      ? rawEnabled.trim().toLowerCase() === 'true'
+      : rawEnabled === true;
 
   return {
     ...value,
@@ -156,11 +158,13 @@ function normalizeMeasurementCriteriaInput(value: unknown): unknown {
 const measurementCriteriaSchema = z
   .preprocess(
     normalizeMeasurementCriteriaInput,
-    z.object({
-      enabled: z.boolean(),
-      standardValue: criteriaStandardValueSchema,
-      rows: z.array(criteriaRangeRowSchema).max(3).optional(),
-    }).strict(),
+    z
+      .object({
+        enabled: z.boolean(),
+        standardValue: criteriaStandardValueSchema,
+        rows: z.array(criteriaRangeRowSchema).max(3).optional(),
+      })
+      .strict(),
   )
   .superRefine((criteria, ctx) => {
     if (criteria.enabled) return;
@@ -774,6 +778,7 @@ export const listConnectionRequestsQuerySchema = z
     status: z.nativeEnum(CONNECTION_REQUEST_STATUS).optional(),
     requestType: z.nativeEnum(CONNECTION_REQUEST_TYPE).optional(),
     factoryId: z.string().trim().min(1).max(64).optional(),
+    stationId: z.string().trim().min(1).max(64).optional(),
   })
   .strict();
 
@@ -795,6 +800,12 @@ export const connectionRequestIdParamsSchema = z
 export const factoryGeneralParamsSchema = z
   .object({
     factoryId: z.string().trim().min(1).max(64),
+  })
+  .strict();
+
+export const connectedMeasurementPointParamsSchema = z
+  .object({
+    stationId: z.string().trim().min(1).max(64),
   })
   .strict();
 

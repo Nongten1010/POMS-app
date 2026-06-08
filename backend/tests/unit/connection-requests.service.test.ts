@@ -17,6 +17,8 @@ jest.mock('../../src/modules/connection-requests/connection-requests.repository'
 
 jest.mock('../../src/modules/device-connections/device-connections.service', () => ({
   deviceConnectionsService: {
+    create: jest.fn(),
+    createMany: jest.fn(),
     createForRequest: jest.fn(),
     createManyForRequest: jest.fn(),
     listActiveSettings: jest.fn(),
@@ -25,6 +27,7 @@ jest.mock('../../src/modules/device-connections/device-connections.service', () 
 }));
 
 import { deviceConnectionsService } from '../../src/modules/device-connections/device-connections.service';
+import type { DeviceConnectionConfigDTO } from '../../src/modules/device-connections/device-connections.types';
 import { connectionRequestsRepository } from '../../src/modules/connection-requests/connection-requests.repository';
 import { connectionRequestsService } from '../../src/modules/connection-requests/connection-requests.service';
 import {
@@ -97,6 +100,8 @@ describe('connectionRequestsService', () => {
     jest.clearAllMocks();
     mockedDeviceConnectionsService.listActiveSettings.mockResolvedValue([]);
     mockedDeviceConnectionsService.listByRequestId.mockResolvedValue([]);
+    mockedDeviceConnectionsService.create.mockResolvedValue(deviceConnectionConfig());
+    mockedDeviceConnectionsService.createMany.mockResolvedValue([deviceConnectionConfig()]);
     connectionRequestsService.setClockForTests(() => now);
   });
 
@@ -146,6 +151,18 @@ describe('connectionRequestsService', () => {
       form: 'เพิ่มจุดตรวจวัด',
       status: 'รอเชื่อมต่อ',
     });
+  });
+
+  it('passes stationId filters through request table rows for selected monitoring point history', async () => {
+    mockedRepository.list.mockResolvedValue({ rows: [], total: 0 });
+    mockedRepository.findFactorySummariesForRequests.mockResolvedValue(new Map());
+
+    await connectionRequestsService.listTableRows({ stationId: 'STACK-A' }, actorUserId, 'ALL');
+
+    expect(mockedRepository.list).toHaveBeenCalledWith(
+      { stationId: 'STACK-A' },
+      { actorUserId, scope: 'ALL' },
+    );
   });
 
   it('returns operator factories with latest request status code and connected point count', async () => {
@@ -422,6 +439,114 @@ describe('connectionRequestsService', () => {
       configId: 10,
       deviceCode: 'STACK-A/01',
       type: 'Modbus TCP',
+    });
+  });
+
+  it('returns add parameter form defaults from latest connected request for selected station', async () => {
+    const request = requestDto({
+      status: CONNECTION_REQUEST_STATUS.CONNECTED,
+      statusLabel: 'เชื่อมต่อแล้ว',
+      createdBy: actorUserId,
+      measurementPoints: [
+        {
+          id: 1,
+          pointName: 'ปล่องระบาย A',
+          pointCode: 'STACK-A',
+          pointType: 'STACK',
+          latitude: 13.7563,
+          longitude: 100.5018,
+          parameters: ['NOx', 'SO2'],
+          description: 'จุดเดิม',
+          details: { stackShape: 'วงกลม' },
+          documentsAndImages: [{ title: 'ภาพปล่อง' }],
+          measurementInstruments: {
+            converterBrand: 'ACME',
+            converterModel: 'CEMS-1',
+            parameters: [{ parameter: 'NOx' }],
+          },
+        },
+      ],
+    });
+    mockedRepository.list.mockResolvedValue({ rows: [request], total: 1 });
+
+    const result = await connectionRequestsService.getAddParameterFormDetail(
+      'STACK-A',
+      actorUserId,
+      'OWN_FACTORY',
+    );
+
+    expect(mockedRepository.list).toHaveBeenCalledWith(
+      { stationId: 'STACK-A', status: CONNECTION_REQUEST_STATUS.CONNECTED },
+      { actorUserId, scope: 'OWN_FACTORY' },
+    );
+    expect(result).toMatchObject({
+      requestType: CONNECTION_REQUEST_TYPE.ADD_PARAMETER,
+      sourceRequestId: 1,
+      sourceRequestNo: 'CEMS-69-00001',
+      stationId: 'STACK-A',
+      formDefaults: {
+        requestType: CONNECTION_REQUEST_TYPE.ADD_PARAMETER,
+        factoryId: 'factory-001',
+        systemType: 'CEMS',
+        measurementPoints: [
+          {
+            pointCode: 'STACK-A',
+            pointName: 'ปล่องระบาย A',
+            parameters: ['NOx', 'SO2'],
+            details: { stackShape: 'วงกลม' },
+            measurementInstruments: {
+              converterBrand: 'ACME',
+            },
+          },
+        ],
+      },
+    });
+  });
+
+  it('returns current device config form detail from active settings for selected station', async () => {
+    const request = requestDto({
+      createdBy: actorUserId,
+      status: CONNECTION_REQUEST_STATUS.CONNECTED,
+      measurementPoints: [
+        {
+          id: 1,
+          pointName: 'ปล่องระบาย A',
+          pointCode: 'STACK-A',
+          pointType: 'STACK',
+          latitude: null,
+          longitude: null,
+          parameters: ['NOx'],
+          description: null,
+        },
+      ],
+    });
+    mockedRepository.list.mockResolvedValue({ rows: [request], total: 1 });
+    mockedDeviceConnectionsService.listActiveSettings.mockResolvedValue([
+      deviceConnectionConfig({
+        id: 20,
+        stationId: 'STACK-A',
+        deviceCode: 'STACK-A/TCP-01',
+        channels: [{ addressId: 40001, dataType: 'NOx', offset: 0 }],
+      }),
+    ]);
+
+    const result = await connectionRequestsService.getCurrentDeviceConfigFormDetail(
+      'STACK-A',
+      actorUserId,
+      'ALL',
+    );
+
+    expect(mockedDeviceConnectionsService.listActiveSettings).toHaveBeenCalledWith({
+      stationId: 'STACK-A',
+    });
+    expect(result).toMatchObject({
+      requestId: 1,
+      stationId: 'STACK-A',
+      connectionForms: [{ configId: 20, deviceCode: 'STACK-A/TCP-01' }],
+      rawConfigs: {
+        stationId: 'STACK-A',
+        device: [{ deviceCode: 'STACK-A/TCP-01', protocol: 'MODBUS_TCP' }],
+      },
     });
   });
 
@@ -910,6 +1035,102 @@ describe('connectionRequestsService', () => {
     });
   });
 
+  it('saves current device configs for a selected connected monitoring point', async () => {
+    const config = {
+      stationId: 'STACK-A',
+      deviceCode: 'STACK-A/01',
+      protocol: 'MODBUS_TCP' as const,
+      settings: { hostIp: '192.168.1.10', slaveId: 1, port: 502 },
+      channels: [{ addressId: 40001, dataType: 'NOx', offset: 0 }],
+    };
+    mockedRepository.list.mockResolvedValue({
+      rows: [
+        requestDto({
+          status: CONNECTION_REQUEST_STATUS.CONNECTED,
+          createdBy: actorUserId,
+          measurementPoints: [
+            {
+              id: 1,
+              pointName: 'ปล่องระบาย A',
+              pointCode: 'STACK-A',
+              pointType: 'STACK',
+              latitude: null,
+              longitude: null,
+              parameters: ['NOx'],
+              description: null,
+            },
+          ],
+        }),
+      ],
+      total: 1,
+    });
+    mockedDeviceConnectionsService.createMany.mockResolvedValue([
+      deviceConnectionConfig({
+        ...config,
+        id: 20,
+        requestId: null,
+      }),
+    ]);
+
+    const result = await connectionRequestsService.saveCurrentDeviceConfigs(
+      'STACK-A',
+      { configs: [config] },
+      actorUserId,
+      'OWN_FACTORY',
+    );
+
+    expect(mockedRepository.list).toHaveBeenCalledWith(
+      { stationId: 'STACK-A', status: CONNECTION_REQUEST_STATUS.CONNECTED },
+      { actorUserId, scope: 'OWN_FACTORY' },
+    );
+    expect(mockedDeviceConnectionsService.createMany).toHaveBeenCalledWith([config], actorUserId);
+    expect(result).toMatchObject({
+      stationId: 'STACK-A',
+      device: [{ deviceCode: 'STACK-A/01', protocol: 'MODBUS_TCP' }],
+    });
+  });
+
+  it('rejects current device config saves when payload stationId does not match route stationId', async () => {
+    mockedRepository.list.mockResolvedValue({
+      rows: [
+        requestDto({
+          status: CONNECTION_REQUEST_STATUS.CONNECTED,
+          createdBy: actorUserId,
+          measurementPoints: [
+            {
+              id: 1,
+              pointName: 'ปล่องระบาย A',
+              pointCode: 'STACK-A',
+              pointType: 'STACK',
+              latitude: null,
+              longitude: null,
+              parameters: ['NOx'],
+              description: null,
+            },
+          ],
+        }),
+      ],
+      total: 1,
+    });
+
+    await expect(
+      connectionRequestsService.saveCurrentDeviceConfig(
+        'STACK-A',
+        {
+          stationId: 'STACK-B',
+          protocol: 'MODBUS_TCP',
+          settings: { hostIp: '192.168.1.10', slaveId: 1, port: 502 },
+          channels: [{ addressId: 40001, dataType: 'NOx', offset: 0 }],
+        },
+        actorUserId,
+        'OWN_FACTORY',
+      ),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+    expect(mockedDeviceConnectionsService.create).not.toHaveBeenCalled();
+  });
+
   it('allows the owner to resubmit a revised form', async () => {
     mockedRepository.findById.mockResolvedValue(
       requestDto({
@@ -1192,6 +1413,24 @@ function factorySummary(overrides: Partial<FactorySummaryDTO> = {}): FactorySumm
     province: 'สระบุรี',
     isEligible: true,
     eligibilityStatus: 'เข้าข่าย',
+    ...overrides,
+  };
+}
+
+function deviceConnectionConfig(
+  overrides: Partial<DeviceConnectionConfigDTO> = {},
+): DeviceConnectionConfigDTO {
+  return {
+    id: 10,
+    requestId: null,
+    stationId: 'STACK-A',
+    protocol: 'MODBUS_TCP',
+    settings: { hostIp: '192.168.1.10', slaveId: 1, port: 502 },
+    channels: [],
+    statusManagement: null,
+    createdBy: 42,
+    createdAt: '2026-05-27T10:00:00.000Z',
+    updatedAt: '2026-05-27T10:00:00.000Z',
     ...overrides,
   };
 }

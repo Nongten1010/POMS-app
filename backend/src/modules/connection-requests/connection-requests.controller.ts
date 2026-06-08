@@ -10,6 +10,7 @@ import {
   addParameterRequestSchema,
   changeConnectionRequestStatusSchema,
   confirmConnectionSchema,
+  connectedMeasurementPointParamsSchema,
   connectionRequestDeviceConfigParamsSchema,
   connectionRequestIdParamsSchema,
   createConnectionRequestSchema,
@@ -96,6 +97,84 @@ export const connectionRequestsController = {
         getScope(req, 'cems_wpms_requests:view'),
       );
       res.status(StatusCodes.OK).json({ success: true, ...result });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async listRequestsForConnectedMeasurementPoint(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const actorUserId = requireActorUserId(req);
+      const { stationId } = connectedMeasurementPointParamsSchema.parse(req.params);
+      const result = await connectionRequestsService.listTableRows(
+        { stationId },
+        actorUserId,
+        getScope(req, 'cems_wpms_requests:view'),
+      );
+      res.status(StatusCodes.OK).json({ success: true, ...result });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async getAddParameterFormDetail(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const actorUserId = requireActorUserId(req);
+      const { stationId } = connectedMeasurementPointParamsSchema.parse(req.params);
+      const data = await connectionRequestsService.getAddParameterFormDetail(
+        stationId,
+        actorUserId,
+        getScope(req, 'cems_wpms_requests:view'),
+      );
+      res.status(StatusCodes.OK).json({ success: true, data });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async getCurrentDeviceConfigFormDetail(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const actorUserId = requireActorUserId(req);
+      const { stationId } = connectedMeasurementPointParamsSchema.parse(req.params);
+      const data = await connectionRequestsService.getCurrentDeviceConfigFormDetail(
+        stationId,
+        actorUserId,
+        getScope(req, 'cems_wpms_requests:view'),
+      );
+      res.status(StatusCodes.OK).json({ success: true, data });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async saveCurrentDeviceConfig(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const actorUserId = requireActorUserId(req);
+      const { stationId } = connectedMeasurementPointParamsSchema.parse(req.params);
+      const payload = createDeviceConnectionConfigRequestSchema.parse(req.body);
+      const data =
+        'configs' in payload
+          ? await connectionRequestsService.saveCurrentDeviceConfigs(
+              stationId,
+              payload,
+              actorUserId,
+              getScope(req, 'cems_wpms_requests:edit'),
+            )
+          : await connectionRequestsService.saveCurrentDeviceConfig(
+              stationId,
+              payload,
+              actorUserId,
+              getScope(req, 'cems_wpms_requests:edit'),
+            );
+      res.status(StatusCodes.CREATED).json({ success: true, data });
     } catch (err) {
       next(err);
     }

@@ -9,6 +9,7 @@ import { connectionRequestsRepository } from './connection-requests.repository';
 import {
   CONNECTION_REQUEST_STATUS,
   CONNECTION_REQUEST_TYPE,
+  type AddParameterFormDetailDTO,
   type AddMeasurementPointRequestInput,
   type AddParameterRequestInput,
   type ChangeConnectionRequestStatusInput,
@@ -29,6 +30,7 @@ import {
   type ListConnectedMeasurementPointsQuery,
   type ListConnectionRequestsQuery,
   type MeasurementPointDTO,
+  type MeasurementPointInput,
   type OperatorFactoryTableRowDTO,
   type PaginatedConnectionRequestsDTO,
   type PaginatedTableRowsDTO,
@@ -187,6 +189,34 @@ export const connectionRequestsService = {
     return toDeviceConfigFormDetail(request, [config], config.stationId);
   },
 
+  async getAddParameterFormDetail(
+    stationId: string,
+    actorUserId: number,
+    viewScope: string | null | undefined,
+  ): Promise<AddParameterFormDetailDTO> {
+    const { request, point } = await loadLatestConnectedRequestForStation(
+      stationId,
+      actorUserId,
+      viewScope,
+    );
+
+    return toAddParameterFormDetail(request, point, stationId);
+  },
+
+  async getCurrentDeviceConfigFormDetail(
+    stationId: string,
+    actorUserId: number,
+    viewScope: string | null | undefined,
+  ): Promise<DeviceConfigFormDetailDTO> {
+    const { request } = await loadLatestConnectedRequestForStation(
+      stationId,
+      actorUserId,
+      viewScope,
+    );
+    const configs = await deviceConnectionsService.listActiveSettings({ stationId });
+    return toDeviceConfigFormDetail(request, configs, stationId);
+  },
+
   async listConnectedMeasurementPoints(
     query: ListConnectedMeasurementPointsQuery,
     actorUserId: number,
@@ -208,7 +238,10 @@ export const connectionRequestsService = {
         request.measurementPoints
           .filter((point) => stationMatchesMeasurementPoint(point, query.stationId))
           .map(async (point) => {
-            const pointDeviceConfigs = await listActiveDeviceConfigsForPoint(point, query.stationId);
+            const pointDeviceConfigs = await listActiveDeviceConfigsForPoint(
+              point,
+              query.stationId,
+            );
             return {
               id: point.id,
               requestId: request.id,
@@ -381,6 +414,34 @@ export const connectionRequestsService = {
     return toDeviceConfigPayloadResponse(created);
   },
 
+  async saveCurrentDeviceConfig(
+    stationId: string,
+    input: CreateDeviceConnectionConfigInput,
+    actorUserId: number,
+    editScope: string | null | undefined,
+  ): Promise<DeviceConfigPayloadResponseDTO> {
+    await loadLatestConnectedRequestForStation(stationId, actorUserId, editScope);
+    ensureConfigStationMatchesRoute(stationId, input.stationId);
+
+    const saved = await deviceConnectionsService.create(input, actorUserId);
+    return toDeviceConfigPayloadResponse([saved]);
+  },
+
+  async saveCurrentDeviceConfigs(
+    stationId: string,
+    input: CreateDeviceConnectionConfigsInput,
+    actorUserId: number,
+    editScope: string | null | undefined,
+  ): Promise<DeviceConfigPayloadResponseDTO> {
+    await loadLatestConnectedRequestForStation(stationId, actorUserId, editScope);
+    for (const config of input.configs) {
+      ensureConfigStationMatchesRoute(stationId, config.stationId);
+    }
+
+    const saved = await deviceConnectionsService.createMany(input.configs, actorUserId);
+    return toDeviceConfigPayloadResponse(saved);
+  },
+
   async confirmConnection(
     id: number,
     input: ConfirmConnectionInput,
@@ -446,6 +507,82 @@ export const connectionRequestsService = {
 function stationMatchesMeasurementPoint(point: MeasurementPointDTO, stationId?: string): boolean {
   if (!stationId) return true;
   return point.pointCode === stationId || point.pointName === stationId;
+}
+
+async function loadLatestConnectedRequestForStation(
+  stationId: string,
+  actorUserId: number,
+  scope: string | null | undefined,
+): Promise<{ request: ConnectionRequestDTO; point: MeasurementPointDTO }> {
+  const { rows } = await connectionRequestsRepository.list(
+    {
+      stationId,
+      status: CONNECTION_REQUEST_STATUS.CONNECTED,
+    },
+    {
+      actorUserId,
+      scope,
+    },
+  );
+
+  for (const request of rows) {
+    const point = findMonitoringPoint(request, stationId);
+    if (point) return { request, point };
+  }
+
+  throw new NotFoundError('Connected measurement point not found');
+}
+
+function toAddParameterFormDetail(
+  request: ConnectionRequestDTO,
+  point: MeasurementPointDTO,
+  stationId: string,
+): AddParameterFormDetailDTO {
+  return {
+    requestType: CONNECTION_REQUEST_TYPE.ADD_PARAMETER,
+    sourceRequestId: request.id,
+    sourceRequestNo: request.requestNo,
+    stationId,
+    formDefaults: {
+      requestType: CONNECTION_REQUEST_TYPE.ADD_PARAMETER,
+      factoryId: request.factoryId,
+      factoryName: request.factoryName,
+      factoryRegistrationNo: request.factoryRegistrationNo,
+      industryMainOrder: request.industryMainOrder,
+      industrySubOrder: request.industrySubOrder,
+      businessActivity: request.businessActivity,
+      eia: request.eia,
+      hasEia: request.hasEia,
+      projectName: request.projectName,
+      address: request.address,
+      latitude: request.latitude,
+      longitude: request.longitude,
+      systemType: request.systemType,
+      contactName: request.contactName,
+      contactPhone: request.contactPhone,
+      contactEmail: request.contactEmail,
+      contactPersons: request.contactPersons,
+      notificationEmails: request.notificationEmails,
+      officerNotificationEmails: request.officerNotificationEmails,
+      measurementPoints: [toMeasurementPointInput(point)],
+      remarks: null,
+    },
+  };
+}
+
+function toMeasurementPointInput(point: MeasurementPointDTO): MeasurementPointInput {
+  return {
+    pointName: point.pointName,
+    pointCode: point.pointCode,
+    pointType: point.pointType,
+    latitude: point.latitude,
+    longitude: point.longitude,
+    parameters: point.parameters,
+    description: point.description,
+    details: point.details,
+    documentsAndImages: point.documentsAndImages,
+    measurementInstruments: point.measurementInstruments,
+  };
 }
 
 function toRequestTableRow(
@@ -938,6 +1075,14 @@ function ensureStationBelongsToRequest(request: ConnectionRequestDTO, stationId:
       })),
     });
   }
+}
+
+function ensureConfigStationMatchesRoute(routeStationId: string, payloadStationId: string): void {
+  if (routeStationId === payloadStationId) return;
+  throw new BadRequestError('Device config stationId must match selected measurement point', {
+    stationId: payloadStationId,
+    selectedStationId: routeStationId,
+  });
 }
 
 function addDays(value: Date, days: number): Date {

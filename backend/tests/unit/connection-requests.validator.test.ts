@@ -4,10 +4,12 @@ import {
   addParameterRequestSchema,
   changeConnectionRequestStatusSchema,
   confirmConnectionSchema,
+  connectedMeasurementPointParamsSchema,
   connectionRequestDeviceConfigParamsSchema,
   createConnectionRequestSchema,
   deviceConfigFormQuerySchema,
   listConnectedMeasurementPointsQuerySchema,
+  listConnectionRequestsQuerySchema,
   reviewConnectionRequestSchema,
   verifyConnectionSchema,
 } from '../../src/modules/connection-requests/connection-requests.validator';
@@ -676,5 +678,17 @@ describe('connection request validators', () => {
         pointCode: 'STACK-A',
       }).success,
     ).toBe(false);
+  });
+
+  it('accepts stationId filters for request lists and connected point params', () => {
+    expect(
+      listConnectionRequestsQuerySchema.safeParse({
+        factoryId: 'factory-001',
+        stationId: 'STACK-A',
+      }).success,
+    ).toBe(true);
+    expect(connectedMeasurementPointParamsSchema.safeParse({ stationId: 'STACK-A' }).success).toBe(
+      true,
+    );
   });
 });
