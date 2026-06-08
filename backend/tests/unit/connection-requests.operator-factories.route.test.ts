@@ -5,6 +5,7 @@ import { signAccessToken } from '../../src/shared/utils/jwt';
 jest.mock('../../src/modules/connection-requests/connection-requests.service', () => ({
   connectionRequestsService: {
     listOperatorFactories: jest.fn(),
+    listOperatorFactoryDashboard: jest.fn(),
     setOperatorFactoryFavorite: jest.fn(),
   },
 }));
@@ -18,6 +19,23 @@ describe('operator factory dashboard routes', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedConnectionRequestsService.listOperatorFactories.mockResolvedValue({
+      data: [
+        {
+          id: 1,
+          factoryId: 'factory-001',
+          factoryName: 'บริษัท ทดสอบ จำกัด',
+          newRegistrationNo: '3-106-33/50สบ',
+          oldRegistrationNo: '3-106-33/50สบ',
+          industryType: 'ผลิตเคมีภัณฑ์',
+          province: 'สระบุรี',
+          monitoringPointCount: 1,
+          requestStatusCode: 'CONNECTED',
+          status: 'แสดง',
+        },
+      ],
+      meta: { total: 1 },
+    });
+    mockedConnectionRequestsService.listOperatorFactoryDashboard.mockResolvedValue({
       data: [
         {
           id: 1,
@@ -61,7 +79,7 @@ describe('operator factory dashboard routes', () => {
     });
   });
 
-  it('passes system type filters to the scoped operator factory list', async () => {
+  it('keeps the operator factory list response in the original table shape', async () => {
     const app = createApp();
 
     const response = await request(app)
@@ -74,19 +92,20 @@ describe('operator factory dashboard routes', () => {
       'OWN_FACTORY',
       { systemType: 'WPMS', favoriteOnly: false },
     );
-    expect(response.body.data[0]).toMatchObject({
+    expect(response.body.data[0]).toEqual({
       id: 1,
       factoryId: 'factory-001',
-      isFavorite: true,
-      monitoringPointCountBySystem: expect.arrayContaining([{ systemType: 'WPMS', count: 1 }]),
+      factoryName: 'บริษัท ทดสอบ จำกัด',
+      newRegistrationNo: '3-106-33/50สบ',
+      oldRegistrationNo: '3-106-33/50สบ',
+      industryType: 'ผลิตเคมีภัณฑ์',
+      province: 'สระบุรี',
+      monitoringPointCount: 1,
+      requestStatusCode: 'CONNECTED',
       status: 'แสดง',
-      measurementPoints: [
-        { stationId: 'P0001', systemType: 'WPMS', data: [{ 'BOD (mg/L)': 12.3 }] },
-      ],
     });
-    expect(response.body.data[0]).not.toHaveProperty('requestStatusCode');
-    expect(response.body.data[0]).not.toHaveProperty('systemTypes');
-    expect(response.body.data[0].measurementPoints[0]).not.toHaveProperty('requestId');
+    expect(response.body.data[0]).not.toHaveProperty('measurementPoints');
+    expect(response.body.data[0]).not.toHaveProperty('monitoringPointCountBySystem');
   });
 
   it('uses a separate connected-only route for the operator dashboard', async () => {
@@ -97,7 +116,7 @@ describe('operator factory dashboard routes', () => {
       .set('Authorization', `Bearer ${accessToken()}`);
 
     expect(response.status).toBe(200);
-    expect(mockedConnectionRequestsService.listOperatorFactories).toHaveBeenCalledWith(
+    expect(mockedConnectionRequestsService.listOperatorFactoryDashboard).toHaveBeenCalledWith(
       42,
       'OWN_FACTORY',
       { systemType: 'WPMS', favoriteOnly: false, connectedOnly: true },

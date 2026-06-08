@@ -294,6 +294,19 @@ export interface OperatorFactoryTableRowDTO {
   id: number | null;
   factoryId: string;
   factoryName: string;
+  newRegistrationNo: string | null;
+  oldRegistrationNo: string | null;
+  industryType: string | null;
+  province: string | null;
+  monitoringPointCount: number;
+  requestStatusCode: ConnectionRequestStatus | null;
+  status: 'แสดง' | 'ซ่อน';
+}
+
+export interface OperatorFactoryDashboardRowDTO {
+  id: number | null;
+  factoryId: string;
+  factoryName: string;
   newRegistrationNo: string;
   province: string | null;
   address: string | null;
@@ -301,7 +314,7 @@ export interface OperatorFactoryTableRowDTO {
   longitude: string | null;
   isFavorite: boolean;
   monitoringPointCountBySystem: OperatorFactorySystemPointCountDTO[];
-  status: 'แสดง' | 'ซ่อน';
+  status: 'แสดง';
   measurementPoints: OperatorFactoryMeasurementPointDTO[];
 }
 

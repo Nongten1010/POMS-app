@@ -81,7 +81,7 @@ export const connectionRequestsController = {
     try {
       const actorUserId = requireActorUserId(req);
       const query = listOperatorFactoriesQuerySchema.parse(req.query);
-      const result = await connectionRequestsService.listOperatorFactories(
+      const result = await connectionRequestsService.listOperatorFactoryDashboard(
         actorUserId,
         getScope(req, 'factories:view'),
         { ...query, connectedOnly: true },

@@ -253,6 +253,55 @@ describe('connectionRequestsService', () => {
     expect(result.meta.total).toBe(1);
   });
 
+  it('returns operator factories in the original table response shape', async () => {
+    mockedRepository.listFactoriesForAccess.mockResolvedValue([factorySummary()]);
+    mockedRepository.listRequestsForFactories.mockResolvedValue([
+      requestDto({
+        status: CONNECTION_REQUEST_STATUS.CONNECTED,
+        measurementPoints: [
+          {
+            id: 1,
+            pointName: 'ปล่องระบาย A',
+            pointCode: 'S0001',
+            pointType: 'STACK',
+            latitude: 13.7563,
+            longitude: 100.5018,
+            parameters: ['NOx'],
+            description: null,
+          },
+        ],
+      }),
+    ]);
+
+    const result = await connectionRequestsService.listOperatorFactories(
+      actorUserId,
+      'OWN_FACTORY',
+    );
+
+    expect(mockedRepository.listFactoriesForAccess).toHaveBeenCalledWith({
+      actorUserId,
+      scope: 'OWN_FACTORY',
+    });
+    expect(mockedRepository.listRequestsForFactories).toHaveBeenCalledWith(['factory-001']);
+    expect(mockedRepository.listFavoriteFactoryIds).not.toHaveBeenCalled();
+    expect(mockedRepository.listConnectedMeasurementPointsForFactories).not.toHaveBeenCalled();
+    expect(mockedParameterValuesService.latestHourly).not.toHaveBeenCalled();
+    expect(result.data[0]).toEqual({
+      id: 1,
+      factoryId: 'factory-001',
+      factoryName: 'บริษัท ทดสอบ จำกัด',
+      newRegistrationNo: '3-106-33/50สบ',
+      oldRegistrationNo: null,
+      industryType: 'ผลิตเคมีภัณฑ์',
+      province: 'สระบุรี',
+      monitoringPointCount: 1,
+      requestStatusCode: CONNECTION_REQUEST_STATUS.CONNECTED,
+      status: 'แสดง',
+    });
+    expect(result.data[0]).not.toHaveProperty('measurementPoints');
+    expect(result.data[0]).not.toHaveProperty('monitoringPointCountBySystem');
+  });
+
   it('returns only visible operator factories in the dashboard response shape', async () => {
     mockedRepository.listFactoriesForAccess.mockResolvedValue([factorySummary()]);
     mockedRepository.listFavoriteFactoryIds.mockResolvedValue(['factory-001']);
@@ -300,7 +349,7 @@ describe('connectionRequestsService', () => {
       },
     ]);
 
-    const result = await connectionRequestsService.listOperatorFactories(
+    const result = await connectionRequestsService.listOperatorFactoryDashboard(
       actorUserId,
       'OWN_FACTORY',
     );
@@ -387,7 +436,7 @@ describe('connectionRequestsService', () => {
       },
     ]);
 
-    const result = await connectionRequestsService.listOperatorFactories(
+    const result = await connectionRequestsService.listOperatorFactoryDashboard(
       actorUserId,
       'OWN_FACTORY',
       { systemType: 'WPMS' },
@@ -421,7 +470,7 @@ describe('connectionRequestsService', () => {
       },
     ]);
 
-    const result = await connectionRequestsService.listOperatorFactories(
+    const result = await connectionRequestsService.listOperatorFactoryDashboard(
       actorUserId,
       'OWN_FACTORY',
     );
@@ -456,7 +505,7 @@ describe('connectionRequestsService', () => {
       new Error('parameter source database unavailable'),
     );
 
-    const result = await connectionRequestsService.listOperatorFactories(
+    const result = await connectionRequestsService.listOperatorFactoryDashboard(
       actorUserId,
       'OWN_FACTORY',
     );
@@ -500,7 +549,7 @@ describe('connectionRequestsService', () => {
       },
     ]);
 
-    const result = await connectionRequestsService.listOperatorFactories(
+    const result = await connectionRequestsService.listOperatorFactoryDashboard(
       actorUserId,
       'OWN_FACTORY',
     );
@@ -529,7 +578,7 @@ describe('connectionRequestsService', () => {
       },
     ]);
 
-    const result = await connectionRequestsService.listOperatorFactories(
+    const result = await connectionRequestsService.listOperatorFactoryDashboard(
       actorUserId,
       'OWN_FACTORY',
     );
@@ -562,7 +611,7 @@ describe('connectionRequestsService', () => {
       },
     ]);
 
-    const result = await connectionRequestsService.listOperatorFactories(
+    const result = await connectionRequestsService.listOperatorFactoryDashboard(
       actorUserId,
       'OWN_FACTORY',
       { connectedOnly: true },
@@ -597,7 +646,7 @@ describe('connectionRequestsService', () => {
       },
     ]);
 
-    const result = await connectionRequestsService.listOperatorFactories(
+    const result = await connectionRequestsService.listOperatorFactoryDashboard(
       actorUserId,
       'OWN_FACTORY',
     );

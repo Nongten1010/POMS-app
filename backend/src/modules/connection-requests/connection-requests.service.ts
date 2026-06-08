@@ -36,6 +36,7 @@ import {
   type ListOperatorFactoriesQuery,
   type MeasurementPointDTO,
   type MeasurementPointInput,
+  type OperatorFactoryDashboardRowDTO,
   type OperatorFactoryMeasurementPointDTO,
   type OperatorFactoryTableRowDTO,
   type PaginatedConnectionRequestsDTO,
@@ -116,11 +117,66 @@ export const connectionRequestsService = {
     factoryViewScope: string | null | undefined,
     query: ListOperatorFactoriesQuery = {},
   ): Promise<PaginatedTableRowsDTO<OperatorFactoryTableRowDTO>> {
+    void query;
     const factories = await connectionRequestsRepository.listFactoriesForAccess({
       actorUserId,
       scope: factoryViewScope,
     });
-    const eligibleFactories = factories.filter((factory) => factory.isEligible !== false);
+    const eligibleFactories = factories.filter(
+      (factory) => factory.isEligible !== false && factory.isActive !== false,
+    );
+    const requests = await connectionRequestsRepository.listRequestsForFactories(
+      eligibleFactories.map((factory) => factory.factoryId),
+    );
+    const latestRequestByFactory = new Map<string, ConnectionRequestDTO>();
+    const connectedPointCountByFactory = new Map<string, number>();
+
+    requests.forEach((request) => {
+      if (!latestRequestByFactory.has(request.factoryId)) {
+        latestRequestByFactory.set(request.factoryId, request);
+      }
+      if (request.status === CONNECTION_REQUEST_STATUS.CONNECTED) {
+        connectedPointCountByFactory.set(
+          request.factoryId,
+          (connectedPointCountByFactory.get(request.factoryId) ?? 0) +
+            request.measurementPoints.length,
+        );
+      }
+    });
+
+    const data = eligibleFactories
+      .map<OperatorFactoryTableRowDTO>((factory) => {
+        const latestRequest = latestRequestByFactory.get(factory.factoryId);
+        return {
+          id: factory.id,
+          factoryId: factory.factoryId,
+          factoryName: factory.factoryName,
+          newRegistrationNo: factory.newRegistrationNo,
+          oldRegistrationNo: factory.oldRegistrationNo,
+          industryType: factory.industryType,
+          province: factory.province,
+          monitoringPointCount: connectedPointCountByFactory.get(factory.factoryId) ?? 0,
+          requestStatusCode: latestRequest?.status ?? null,
+          status: 'แสดง',
+        };
+      })
+      .filter((factory) => factory.status === 'แสดง');
+
+    return { data, meta: { total: data.length } };
+  },
+
+  async listOperatorFactoryDashboard(
+    actorUserId: number,
+    factoryViewScope: string | null | undefined,
+    query: ListOperatorFactoriesQuery = {},
+  ): Promise<PaginatedTableRowsDTO<OperatorFactoryDashboardRowDTO>> {
+    const factories = await connectionRequestsRepository.listFactoriesForAccess({
+      actorUserId,
+      scope: factoryViewScope,
+    });
+    const eligibleFactories = factories.filter(
+      (factory) => factory.isEligible !== false && factory.isActive !== false,
+    );
     const factoryIdByLookupKey = buildFactoryLookupKeyMap(eligibleFactories);
     const factoryLookupKeys = [...factoryIdByLookupKey.keys()];
     const [connectedPoints, favoriteFactoryIds] = await Promise.all([
@@ -140,7 +196,7 @@ export const connectionRequestsService = {
     });
 
     const data = eligibleFactories
-      .map<OperatorFactoryTableRowDTO>((factory) => {
+      .map<OperatorFactoryDashboardRowDTO>((factory) => {
         const measurementPoints = measurementPointsByFactory.get(factory.factoryId) ?? [];
         const monitoringPointCountBySystem = countMeasurementPointsBySystem(measurementPoints);
         return {
@@ -154,11 +210,11 @@ export const connectionRequestsService = {
           longitude: factory.longitude,
           isFavorite: favoriteFactoryIdSet.has(factory.factoryId),
           monitoringPointCountBySystem,
-          status: factory.isActive === false ? 'ซ่อน' : 'แสดง',
+          status: 'แสดง',
           measurementPoints,
         };
       })
-      .filter((factory) => matchesOperatorFactoryQuery(factory, query));
+      .filter((factory) => matchesOperatorFactoryDashboardQuery(factory, query));
 
     const dataWithLatestHourlyMeasurements = await populateLatestHourlyMeasurements(
       data,
@@ -1139,10 +1195,10 @@ function toParameterDisplayName(parameter: string): string {
 }
 
 async function populateLatestHourlyMeasurements(
-  factories: OperatorFactoryTableRowDTO[],
+  factories: OperatorFactoryDashboardRowDTO[],
   actorUserId: number,
   factoryViewScope: string | null | undefined,
-): Promise<OperatorFactoryTableRowDTO[]> {
+): Promise<OperatorFactoryDashboardRowDTO[]> {
   return Promise.all(
     factories.map(async (factory) => ({
       ...factory,
@@ -1228,18 +1284,17 @@ function isSafeStationId(stationId: string): boolean {
 
 function countMeasurementPointsBySystem(
   points: OperatorFactoryMeasurementPointDTO[],
-): OperatorFactoryTableRowDTO['monitoringPointCountBySystem'] {
+): OperatorFactoryDashboardRowDTO['monitoringPointCountBySystem'] {
   return [
     { systemType: 'CEMS', count: points.filter((point) => point.systemType === 'CEMS').length },
     { systemType: 'WPMS', count: points.filter((point) => point.systemType === 'WPMS').length },
   ];
 }
 
-function matchesOperatorFactoryQuery(
-  factory: OperatorFactoryTableRowDTO,
+function matchesOperatorFactoryDashboardQuery(
+  factory: OperatorFactoryDashboardRowDTO,
   query: ListOperatorFactoriesQuery,
 ): boolean {
-  if (factory.status !== 'แสดง') return false;
   if (query.connectedOnly && factory.measurementPoints.length === 0) return false;
   if (
     query.systemType &&

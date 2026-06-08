@@ -2717,53 +2717,12 @@ curl "http://localhost:3000/api/v1/cems-wpms-requests/operator-factory-dashboard
       "factoryId": "factory-001",
       "factoryName": "บริษัท ทดสอบ จำกัด",
       "newRegistrationNo": "3-106-33/50สบ",
+      "oldRegistrationNo": "3-106-33/50สบ",
+      "industryType": "ผลิตเคมีภัณฑ์",
       "province": "สระบุรี",
-      "address": "99 หมู่ 1",
-      "latitude": "13.7563",
-      "longitude": "100.5018",
-      "isFavorite": true,
-      "monitoringPointCountBySystem": [
-        {
-          "systemType": "CEMS",
-          "count": 1
-        },
-        {
-          "systemType": "WPMS",
-          "count": 0
-        }
-      ],
-      "status": "แสดง",
-      "measurementPoints": [
-        {
-          "stationId": "S0001",
-          "pointName": "ปล่อง A",
-          "pointCode": "S0001",
-          "systemType": "CEMS",
-          "parameters": ["CO (ppm)", "NOx (ppm)", "Temp. (°C)", "O2 (%)", "Flow (m3/hr)"],
-          "data": [
-            {
-              "station_id": "NB-C21",
-              "cdate": "2026-02-25",
-              "ctime": "22.00-22.59 น.",
-              "CO (ppm)": 0.05,
-              "NOx (ppm)": 10.54,
-              "Temp. (°C)": 93.35,
-              "O2 (%)": 12.58,
-              "Flow (m3/hr)": 1981710
-            },
-            {
-              "station_id": "NB-C22",
-              "cdate": "2026-02-25",
-              "ctime": "22.00-22.59 น.",
-              "CO (ppm)": 0,
-              "NOx (ppm)": 12.37,
-              "Temp. (°C)": 93.11,
-              "O2 (%)": 12.52,
-              "Flow (m3/hr)": 1906655.5
-            }
-          ]
-        }
-      ]
+      "monitoringPointCount": 1,
+      "requestStatusCode": "CONNECTED",
+      "status": "แสดง"
     }
   ],
   "meta": {
@@ -2780,15 +2739,12 @@ Data dictionary response row:
 | `factoryId` | string | รหัสโรงงาน |
 | `factoryName` | string | ชื่อโรงงาน |
 | `newRegistrationNo` | string|null | เลขทะเบียนใหม่ |
+| `oldRegistrationNo` | string|null | เลขทะเบียนเก่า |
+| `industryType` | string|null | ประเภทอุตสาหกรรม |
 | `province` | string|null | จังหวัด |
-| `address` | string|null | ที่อยู่โรงงาน |
-| `latitude` | string|null | พิกัด latitude |
-| `longitude` | string|null | พิกัด longitude |
-| `isFavorite` | boolean | โรงงานนี้ถูก user ปัจจุบันติดดาวหรือไม่ |
-| `monitoringPointCountBySystem` | array | จำนวนจุดตรวจวัดแยกตามระบบ เช่น `{ "systemType": "CEMS", "count": 1 }` |
-| `status` | string | คืนเฉพาะโรงงานที่เป็น `แสดง` เท่านั้น |
-| `measurementPoints` | array | จุดตรวจวัดที่เชื่อมต่อแล้ว ใช้สร้างตารางตามปุ่ม CEMS/WPMS |
-| `measurementPoints[].data` | array | ค่าตรวจวัดล่าสุดรายชั่วโมงจากตาราง `{stationId}_data_60m`; value fields ใช้ชื่อเดียวกับ `parameters` เช่น `NOx (ppm)` |
+| `monitoringPointCount` | number | จำนวนจุดตรวจวัด |
+| `requestStatusCode` | string|null | สถานะคำขอล่าสุดแบบ code |
+| `status` | string | สถานะการแสดงผลในตาราง |
 
 ### API 8.1: PUT ติดดาว/ยกเลิกติดดาวโรงงาน
 
