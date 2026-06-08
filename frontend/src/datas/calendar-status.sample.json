@@ -1,0 +1,171 @@
+{
+  "metadata": {
+    "description": "ตัวอย่างข้อมูลสำหรับ DateCalendar และตารางสรุปสถานะรายเดือนของโรงงาน",
+    "month": "2026-06",
+    "valueDefinitions": {
+      "dataCompletenessStatus": {
+        "lowData": "ส่งข้อมูลน้อยกว่า 80% ใช้พื้นหลังสีเทา",
+        "highData": "ส่งข้อมูลมากกว่าหรือเท่ากับ 80% ใช้พื้นหลังสีฟ้า"
+      },
+      "pollutionStatus": {
+        "normal": "ปกติทั้งวัน ใช้เส้นขอบสีเขียว",
+        "warning": "เฝ้าระวัง ใช้เส้นขอบสีส้ม",
+        "exceeded": "เกินมาตรฐาน ใช้เส้นขอบสีแดง",
+        "insufficient": "ข้อมูลไม่เพียงพอ หรือประเมินสถานะไม่ได้"
+      }
+    }
+  },
+  "factory": {
+    "factoryId": "NB-C21",
+    "factoryName": "บริษัท ตัวอย่างอุตสาหกรรม จำกัด",
+    "systemType": "CEMS"
+  },
+  "calendar": {
+    "year": 2026,
+    "month": 6,
+    "days": [
+      {
+        "date": "2026-06-02",
+        "dataCompletenessPercent": 72,
+        "dataCompletenessStatus": "lowData",
+        "pollutionStatus": "insufficient",
+        "display": {
+          "backgroundStatus": "lowData",
+          "borderStatus": "insufficient"
+        }
+      },
+      {
+        "date": "2026-06-03",
+        "dataCompletenessPercent": 86,
+        "dataCompletenessStatus": "highData",
+        "pollutionStatus": "normal",
+        "display": {
+          "backgroundStatus": "highData",
+          "borderStatus": "normal"
+        }
+      },
+      {
+        "date": "2026-06-05",
+        "dataCompletenessPercent": 95,
+        "dataCompletenessStatus": "highData",
+        "pollutionStatus": "normal",
+        "display": {
+          "backgroundStatus": "highData",
+          "borderStatus": "normal"
+        }
+      },
+      {
+        "date": "2026-06-08",
+        "dataCompletenessPercent": 92,
+        "dataCompletenessStatus": "highData",
+        "pollutionStatus": "warning",
+        "display": {
+          "backgroundStatus": "highData",
+          "borderStatus": "warning"
+        }
+      },
+      {
+        "date": "2026-06-11",
+        "dataCompletenessPercent": 90,
+        "dataCompletenessStatus": "highData",
+        "pollutionStatus": "exceeded",
+        "display": {
+          "backgroundStatus": "highData",
+          "borderStatus": "exceeded"
+        }
+      },
+      {
+        "date": "2026-06-14",
+        "dataCompletenessPercent": 78,
+        "dataCompletenessStatus": "lowData",
+        "pollutionStatus": "insufficient",
+        "display": {
+          "backgroundStatus": "lowData",
+          "borderStatus": "insufficient"
+        }
+      },
+      {
+        "date": "2026-06-17",
+        "dataCompletenessPercent": 98,
+        "dataCompletenessStatus": "highData",
+        "pollutionStatus": "normal",
+        "display": {
+          "backgroundStatus": "highData",
+          "borderStatus": "normal"
+        }
+      },
+      {
+        "date": "2026-06-19",
+        "dataCompletenessPercent": 69,
+        "dataCompletenessStatus": "lowData",
+        "pollutionStatus": "insufficient",
+        "display": {
+          "backgroundStatus": "lowData",
+          "borderStatus": "insufficient"
+        }
+      },
+      {
+        "date": "2026-06-23",
+        "dataCompletenessPercent": 91,
+        "dataCompletenessStatus": "highData",
+        "pollutionStatus": "warning",
+        "display": {
+          "backgroundStatus": "highData",
+          "borderStatus": "warning"
+        }
+      },
+      {
+        "date": "2026-06-26",
+        "dataCompletenessPercent": 95,
+        "dataCompletenessStatus": "highData",
+        "pollutionStatus": "exceeded",
+        "display": {
+          "backgroundStatus": "highData",
+          "borderStatus": "exceeded"
+        }
+      }
+    ]
+  },
+  "monthlySummary": [
+    {
+      "parameterCode": "CO",
+      "parameterName": "CO",
+      "unit": "ppm",
+      "exceededDays": 4,
+      "lowDataDays": 1,
+      "todayDataCompletenessPercent": 95
+    },
+    {
+      "parameterCode": "NOX",
+      "parameterName": "NOx",
+      "unit": "ppm",
+      "exceededDays": 2,
+      "lowDataDays": 2,
+      "todayDataCompletenessPercent": 92
+    },
+    {
+      "parameterCode": "TEMP",
+      "parameterName": "Temp.",
+      "unit": "°C",
+      "exceededDays": 1,
+      "lowDataDays": 0,
+      "todayDataCompletenessPercent": 98
+    },
+    {
+      "parameterCode": "O2",
+      "parameterName": "O2",
+      "unit": "%",
+      "exceededDays": 3,
+      "lowDataDays": 1,
+      "todayDataCompletenessPercent": 90
+    },
+    {
+      "parameterCode": "FLOW",
+      "parameterName": "Flow",
+      "unit": "m3/hr",
+      "exceededDays": 0,
+      "lowDataDays": 0,
+      "todayDataCompletenessPercent": 99
+    }
+  ]
+}

@@ -1,0 +1,207 @@
+{
+  "metadata": {
+    "description": "ตัวอย่างข้อมูลสถิติรายชั่วโมงสำหรับตารางสถิติข้อมูลและกราฟแนวโน้มสถานการณ์มลพิษ",
+    "date": "2026-06-26",
+    "valueDefinitions": {
+      "status": {
+        "normal": "สีเขียว ปกติ ค่ามลพิษ <= normalMax",
+        "warning": "สีส้ม เฝ้าระวัง ค่ามลพิษ <= warningMax",
+        "exceeded": "สีแดง เกินมาตรฐาน ค่ามลพิษ > warningMax",
+        "insufficient": "สีเทา ข้อมูลไม่เพียงพอ",
+        "noData": "สีเทา ไม่มีข้อมูล",
+        "invalid": "สีเทา ข้อมูลผิดรูปแบบหรือสถานะอื่นๆ"
+      },
+      "dataCompletenessPercent": "ร้อยละการส่งข้อมูลในช่วงเวลานั้น ถ้าน้อยกว่า 80 ให้แสดงสีเทาหรือ status insufficient"
+    }
+  },
+  "factory": {
+    "factoryId": "NB-C21",
+    "factoryName": "บริษัท ตัวอย่างอุตสาหกรรม จำกัด",
+    "systemType": "CEMS"
+  },
+  "thresholds": [
+    {
+      "parameterCode": "CO",
+      "parameterLabel": "CO (ppm)",
+      "unit": "ppm",
+      "normalMax": 180,
+      "warningMax": 190
+    },
+    {
+      "parameterCode": "NOX",
+      "parameterLabel": "NOx (ppm)",
+      "unit": "ppm",
+      "normalMax": 180,
+      "warningMax": 190
+    },
+    {
+      "parameterCode": "TEMP",
+      "parameterLabel": "Temp. (°C)",
+      "unit": "°C",
+      "normalMax": 180,
+      "warningMax": 190
+    },
+    {
+      "parameterCode": "O2",
+      "parameterLabel": "O2 (%)",
+      "unit": "%",
+      "normalMax": 180,
+      "warningMax": 190
+    },
+    {
+      "parameterCode": "FLOW",
+      "parameterLabel": "Flow (m3/hr)",
+      "unit": "m3/hr",
+      "normalMax": 180,
+      "warningMax": 190
+    }
+  ],
+  "measurementPoints": [
+    {
+      "pointCode": "WP-01",
+      "stationId": "WP-01",
+      "date": "2026-06-26",
+      "rows": [
+        {
+          "time": "00.00-00.59 น.",
+          "chartTime": "00:00",
+          "dataCompletenessPercent": 96,
+          "values": {
+            "CO": { "value": 120, "displayValue": "120.00", "status": "normal" },
+            "NOX": { "value": 132, "displayValue": "132.00", "status": "normal" },
+            "TEMP": { "value": 93.1, "displayValue": "93.10", "status": "normal" },
+            "O2": { "value": 12.2, "displayValue": "12.20", "status": "normal" },
+            "FLOW": { "value": 1800000, "displayValue": "1,800,000.00", "status": "normal" }
+          }
+        },
+        {
+          "time": "01.00-01.59 น.",
+          "chartTime": "01:00",
+          "dataCompletenessPercent": 94,
+          "values": {
+            "CO": { "value": 145, "displayValue": "145.00", "status": "normal" },
+            "NOX": { "value": 150, "displayValue": "150.00", "status": "normal" },
+            "TEMP": { "value": 93.3, "displayValue": "93.30", "status": "normal" },
+            "O2": { "value": 12.3, "displayValue": "12.30", "status": "normal" },
+            "FLOW": { "value": 1815000, "displayValue": "1,815,000.00", "status": "normal" }
+          }
+        },
+        {
+          "time": "02.00-02.59 น.",
+          "chartTime": "02:00",
+          "dataCompletenessPercent": 91,
+          "values": {
+            "CO": { "value": 184, "displayValue": "184.00", "status": "warning" },
+            "NOX": { "value": 176, "displayValue": "176.00", "status": "normal" },
+            "TEMP": { "value": 93.4, "displayValue": "93.40", "status": "normal" },
+            "O2": { "value": 12.4, "displayValue": "12.40", "status": "normal" },
+            "FLOW": { "value": 1822000, "displayValue": "1,822,000.00", "status": "normal" }
+          }
+        },
+        {
+          "time": "03.00-03.59 น.",
+          "chartTime": "03:00",
+          "dataCompletenessPercent": 88,
+          "values": {
+            "CO": { "value": 193, "displayValue": "193.00", "status": "exceeded" },
+            "NOX": { "value": 181, "displayValue": "181.00", "status": "warning" },
+            "TEMP": { "value": 93.6, "displayValue": "93.60", "status": "normal" },
+            "O2": { "value": 12.5, "displayValue": "12.50", "status": "normal" },
+            "FLOW": { "value": 1830000, "displayValue": "1,830,000.00", "status": "normal" }
+          }
+        },
+        {
+          "time": "04.00-04.59 น.",
+          "chartTime": "04:00",
+          "dataCompletenessPercent": 76,
+          "values": {
+            "CO": { "value": null, "displayValue": "-", "status": "insufficient" },
+            "NOX": { "value": null, "displayValue": "-", "status": "insufficient" },
+            "TEMP": { "value": null, "displayValue": "-", "status": "insufficient" },
+            "O2": { "value": null, "displayValue": "-", "status": "insufficient" },
+            "FLOW": { "value": null, "displayValue": "-", "status": "insufficient" }
+          }
+        },
+        {
+          "time": "05.00-05.59 น.",
+          "chartTime": "05:00",
+          "dataCompletenessPercent": 93,
+          "values": {
+            "CO": { "value": 160, "displayValue": "160.00", "status": "normal" },
+            "NOX": { "value": 196, "displayValue": "196.00", "status": "exceeded" },
+            "TEMP": { "value": 93.7, "displayValue": "93.70", "status": "normal" },
+            "O2": { "value": 12.6, "displayValue": "12.60", "status": "normal" },
+            "FLOW": { "value": 1835000, "displayValue": "1,835,000.00", "status": "normal" }
+          }
+        },
+        {
+          "time": "06.00-06.59 น.",
+          "chartTime": "06:00",
+          "dataCompletenessPercent": 95,
+          "values": {
+            "CO": { "value": 170, "displayValue": "170.00", "status": "normal" },
+            "NOX": { "value": 174, "displayValue": "174.00", "status": "normal" },
+            "TEMP": { "value": 181, "displayValue": "181.00", "status": "warning" },
+            "O2": { "value": 12.7, "displayValue": "12.70", "status": "normal" },
+            "FLOW": { "value": 1841000, "displayValue": "1,841,000.00", "status": "normal" }
+          }
+        },
+        {
+          "time": "07.00-07.59 น.",
+          "chartTime": "07:00",
+          "dataCompletenessPercent": 97,
+          "values": {
+            "CO": { "value": 179, "displayValue": "179.00", "status": "normal" },
+            "NOX": { "value": 188, "displayValue": "188.00", "status": "warning" },
+            "TEMP": { "value": 191, "displayValue": "191.00", "status": "exceeded" },
+            "O2": { "value": 12.8, "displayValue": "12.80", "status": "normal" },
+            "FLOW": { "value": 1850000, "displayValue": "1,850,000.00", "status": "normal" }
+          }
+        }
+      ]
+    },
+    {
+      "pointCode": "WP-02",
+      "stationId": "WP-02",
+      "date": "2026-06-26",
+      "rows": [
+        {
+          "time": "00.00-00.59 น.",
+          "chartTime": "00:00",
+          "dataCompletenessPercent": 90,
+          "values": {
+            "CO": { "value": 122, "displayValue": "122.00", "status": "normal" },
+            "NOX": { "value": 135, "displayValue": "135.00", "status": "normal" },
+            "TEMP": { "value": 93.2, "displayValue": "93.20", "status": "normal" },
+            "O2": { "value": 12.2, "displayValue": "12.20", "status": "normal" },
+            "FLOW": { "value": 1843000, "displayValue": "1,843,000.00", "status": "normal" }
+          }
+        },
+        {
+          "time": "01.00-01.59 น.",
+          "chartTime": "01:00",
+          "dataCompletenessPercent": 74,
+          "values": {
+            "CO": { "value": null, "displayValue": "-", "status": "insufficient" },
+            "NOX": { "value": null, "displayValue": "-", "status": "insufficient" },
+            "TEMP": { "value": null, "displayValue": "-", "status": "insufficient" },
+            "O2": { "value": null, "displayValue": "-", "status": "insufficient" },
+            "FLOW": { "value": null, "displayValue": "-", "status": "insufficient" }
+          }
+        },
+        {
+          "time": "02.00-02.59 น.",
+          "chartTime": "02:00",
+          "dataCompletenessPercent": 93,
+          "values": {
+            "CO": { "value": 186, "displayValue": "186.00", "status": "warning" },
+            "NOX": { "value": 192, "displayValue": "192.00", "status": "exceeded" },
+            "TEMP": { "value": 93.5, "displayValue": "93.50", "status": "normal" },
+            "O2": { "value": 12.4, "displayValue": "12.40", "status": "normal" },
+            "FLOW": { "value": 1865000, "displayValue": "1,865,000.00", "status": "normal" }
+          }
+        }
+      ]
+    }
+  ]
+}

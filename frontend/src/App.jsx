@@ -196,7 +196,7 @@ function App() {
         }}
       >
         {visibleSelectedMenu === 'home' ? (
-          <HomePage />
+          <HomePage accessToken={accessToken} />
         ) : visibleSelectedMenu === 'permissions' ? (
           <PermissionManagementPage accessToken={accessToken} />
         ) : visibleSelectedMenu === 'connection-request' ? (
@@ -206,7 +206,7 @@ function App() {
         ) : visibleSelectedMenu === 'api-documentation' ? (
           <ApiDocumentationPage />
         ) : (
-          <HomePage />
+          <HomePage accessToken={accessToken} />
         )}
       </Container>
     </Box>
