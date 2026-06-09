@@ -244,6 +244,8 @@ GET /api/v1/connected-measurement-points/S0001/measurement-statistics?date=2026-
 
 Response หลัก: `data.factory`, `data.thresholds[]`, `data.measurementPoints[].rows[]`, `meta.tableName`, `meta.registeredParameters`
 
+หมายเหตุ `data.thresholds[]`: ต้องคืนรายการตามพารามิเตอร์ที่ถูกตั้งค่าไว้สำหรับจุดตรวจวัดนั้น เช่น `CO (ppm)`, `NOx (ppm)`, `Temp. (°C)` แม้บางพารามิเตอร์ยังไม่มีค่าเกณฑ์มาตรฐานครบ ให้คงแถวนั้นไว้และส่ง `normalMax: null`, `warningMax: null` เพื่อให้ frontend สร้าง column ได้ครบ ไม่ drop พารามิเตอร์ออกจากหน้าจอ
+
 ตัวอย่าง response:
 
 ```json
@@ -262,6 +264,20 @@ Response หลัก: `data.factory`, `data.thresholds[]`, `data.measurementPoi
         "unit": "ppm",
         "normalMax": 180,
         "warningMax": 190
+      },
+      {
+        "parameterCode": "NOX",
+        "parameterLabel": "NOx (ppm)",
+        "unit": "ppm",
+        "normalMax": 180,
+        "warningMax": 190
+      },
+      {
+        "parameterCode": "TEMP",
+        "parameterLabel": "Temp. (°C)",
+        "unit": "°C",
+        "normalMax": null,
+        "warningMax": null
       }
     ],
     "measurementPoints": [
@@ -279,6 +295,16 @@ Response หลัก: `data.factory`, `data.thresholds[]`, `data.measurementPoi
                 "value": 0.05,
                 "displayValue": "0.05",
                 "status": "normal"
+              },
+              "NOx (ppm)": {
+                "value": null,
+                "displayValue": "-",
+                "status": "insufficient"
+              },
+              "Temp. (°C)": {
+                "value": null,
+                "displayValue": "-",
+                "status": "insufficient"
               }
             }
           }
