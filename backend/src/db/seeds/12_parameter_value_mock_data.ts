@@ -5,7 +5,6 @@ const FACTORY_FID = '10190003325500';
 const MOCK_DATES = ['2026-06-09'];
 const MOCK_INTERVALS = ['real', '1m', '5m', '60m', '1day', 'test'] as const;
 const MIN_MOCK_PARAMETER_COUNT = 100;
-const TEMPLATE_TABLE_INTERVAL = '60m';
 const SQL_SERVER_SAFE_INSERT_PARAMETER_LIMIT = 2000;
 const PASTED_PARAMETER_COLUMN_PREFIXES = [
   'co2',
@@ -187,13 +186,11 @@ export async function seed(knex: Knex): Promise<void> {
   const parameterDb = createParameterSourceKnex(knex);
 
   try {
-    const mockStations = await resolveMockStations(parameterDb);
-
     if (canSeedMainDb) {
-      await seedConnectedMeasurementPoints(knex, mockStations);
+      await seedConnectedMeasurementPoints(knex, PARAMETER_VALUE_MOCK_STATIONS);
     }
 
-    await seedParameterValueTables(parameterDb, mockStations);
+    await seedParameterValueTables(parameterDb, PARAMETER_VALUE_MOCK_STATIONS);
   } finally {
     await parameterDb.destroy();
   }
@@ -221,9 +218,16 @@ export function buildParameterValueMockRows(
       row[`${parameter.columnPrefix}_units`] = parameter.unit || null;
       row[`${parameter.columnPrefix}_status`] = buildMockStatus(hour, parameterIndex);
     });
+    copyLegacyCo2Columns(row);
 
     return row;
   });
+}
+
+function copyLegacyCo2Columns(row: Record<string, unknown>): void {
+  row.co2_value = row.co2_ppm_value;
+  row.co2_units = row.co2_ppm_units;
+  row.co2_status = row.co2_ppm_status;
 }
 
 async function hasRequiredMainTables(knex: Knex): Promise<boolean> {
@@ -446,86 +450,6 @@ async function seedParameterValueTables(
   }
 }
 
-async function resolveMockStations(parameterDb: Knex): Promise<ParameterValueMockStation[]> {
-  const schemaName = parameterSchemaName();
-
-  return Promise.all(
-    PARAMETER_VALUE_MOCK_STATIONS.map(async (station) => {
-      const discoveredParameters = await discoverExistingParameters(
-        parameterDb,
-        schemaName,
-        station,
-      );
-      if (discoveredParameters.length === 0) return station;
-
-      return {
-        ...station,
-        parameters: discoveredParameters,
-      };
-    }),
-  );
-}
-
-async function discoverExistingParameters(
-  parameterDb: Knex,
-  schemaName: string,
-  station: ParameterValueMockStation,
-): Promise<ParameterValueMockParameter[]> {
-  const templateTableNames = templateTableNamesForStation(station.stationId);
-
-  for (const tableName of templateTableNames) {
-    const exists = await parameterDb.schema.withSchema(schemaName).hasTable(tableName);
-    if (!exists) continue;
-
-    const rows = await parameterDb('sys.tables as t')
-      .join('sys.schemas as s', 't.schema_id', 's.schema_id')
-      .join('sys.columns as c', 't.object_id', 'c.object_id')
-      .where('s.name', schemaName)
-      .where('t.name', tableName)
-      .select<{ column_name: string }[]>({ column_name: 'c.name' })
-      .orderBy('c.column_id', 'asc');
-
-    const parameters = toParametersFromColumnNames(
-      station,
-      rows.map((row) => row.column_name),
-    );
-    if (parameters.length > 0) return parameters;
-  }
-
-  return [];
-}
-
-function templateTableNamesForStation(stationId: string): string[] {
-  const direct = `${stationId}_data_${TEMPLATE_TABLE_INTERVAL}`;
-  if (stationId === 'S00001') return [direct, `S0001_data_${TEMPLATE_TABLE_INTERVAL}`];
-  return [direct];
-}
-
-function toParametersFromColumnNames(
-  station: ParameterValueMockStation,
-  columnNames: string[],
-): ParameterValueMockParameter[] {
-  const knownParameters = new Map(
-    station.parameters.map((parameter) => [parameter.columnPrefix, parameter]),
-  );
-  const valuePrefixes = columnNames
-    .map((columnName) => columnName.toLowerCase().match(/^(.+)_value$/)?.[1])
-    .filter((prefix): prefix is string => Boolean(prefix));
-
-  return [...new Set(valuePrefixes)].map((columnPrefix, index) => {
-    const known = knownParameters.get(columnPrefix);
-    if (known) return known;
-
-    return {
-      label: toParameterLabel(columnPrefix),
-      columnPrefix,
-      unit: '',
-      baseValue: 20 + index,
-      step: 0.5 + (index % 5) * 0.1,
-    };
-  });
-}
-
 function buildPastedSchemaMockParameters(): ParameterValueMockParameter[] {
   return PASTED_PARAMETER_COLUMN_PREFIXES.flatMap((columnPrefix, index) => {
     if (columnPrefix === 'co2') {
@@ -688,6 +612,7 @@ async function ensureParameterTable(
         table.specificType(`${parameter.columnPrefix}_units`, 'NVARCHAR(32) NULL');
         table.specificType(`${parameter.columnPrefix}_status`, 'NVARCHAR(64) NULL');
       }
+      addLegacyCo2Columns(table);
     });
     return;
   }
@@ -737,6 +662,24 @@ async function ensureColumns(
       'NVARCHAR(64) NULL',
     );
   }
+
+  await ensureLegacyCo2Columns(parameterDb, schemaName, tableName);
+}
+
+function addLegacyCo2Columns(table: Knex.CreateTableBuilder): void {
+  table.decimal('co2_value', 18, 4).nullable();
+  table.specificType('co2_units', 'NVARCHAR(32) NULL');
+  table.specificType('co2_status', 'NVARCHAR(64) NULL');
+}
+
+async function ensureLegacyCo2Columns(
+  parameterDb: Knex,
+  schemaName: string,
+  tableName: string,
+): Promise<void> {
+  await addColumnIfMissing(parameterDb, schemaName, tableName, 'co2_value', 'DECIMAL(18, 4) NULL');
+  await addColumnIfMissing(parameterDb, schemaName, tableName, 'co2_units', 'NVARCHAR(32) NULL');
+  await addColumnIfMissing(parameterDb, schemaName, tableName, 'co2_status', 'NVARCHAR(64) NULL');
 }
 
 async function addColumnIfMissing(
@@ -767,7 +710,6 @@ async function replaceRows(
     .withSchema(schemaName)
     .from(tableName)
     .where('station_id', station.stationId)
-    .whereIn('cdate', MOCK_DATES)
     .del();
 
   for (const date of MOCK_DATES) {
