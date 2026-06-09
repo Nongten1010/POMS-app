@@ -546,9 +546,10 @@ export const connectionRequestsRepository = {
     await db.transaction(async (trx) => {
       for (const point of request.measurementPoints) {
         const existing = await findConnectedPointForMeasurementPoint(trx, point);
+        const pointParameters = getConnectedMeasurementPointParameters(point);
         const parameters = uniqueParameters([
-          ...(existing ? parseParameters(existing.parameters_json) : []),
-          ...point.parameters,
+          ...(pointParameters.length > 0 ? [] : existing ? parseParameters(existing.parameters_json) : []),
+          ...pointParameters,
         ]);
 
         await softDeleteConnectedPoint(trx, point, actorUserId);
@@ -983,6 +984,14 @@ async function insertMeasurementPoints(
       updated_by: actorUserId,
     })),
   );
+}
+
+function getConnectedMeasurementPointParameters(point: MeasurementPointDTO): string[] {
+  const instrumentParameters =
+    point.measurementInstruments?.parameters
+      ?.map((parameter) => parameter.parameter)
+      .filter((parameter): parameter is string => Boolean(parameter)) ?? [];
+  return instrumentParameters.length > 0 ? instrumentParameters : point.parameters;
 }
 
 async function findConnectedPointForMeasurementPoint(

@@ -827,10 +827,28 @@ function toDeviceConfigFormDetail(
   const stationAliases = new Set(
     [stationId, monitoringPoint?.pointCode, monitoringPoint?.pointName].filter(Boolean),
   );
-  const stationConfigs = configs.filter((config) => stationAliases.has(config.stationId));
+  const instrumentParameterOptions = getMeasurementInstrumentParameterOptions(monitoringPoint);
+  const monitoringPointParameterOptions = getDeviceConfigParameterOptions(monitoringPoint);
+  const allowedParameterOptions =
+    instrumentParameterOptions.length > 0 ? new Set(instrumentParameterOptions) : null;
+  const stationConfigs = configs
+    .filter((config) => stationAliases.has(config.stationId))
+    .map((config) =>
+      allowedParameterOptions
+        ? {
+            ...config,
+            channels: config.channels.filter((channel) =>
+              allowedParameterOptions.has(channel.dataType),
+            ),
+          }
+        : config,
+    );
+  const responseMonitoringPoint = monitoringPoint
+    ? { ...monitoringPoint, parameters: monitoringPointParameterOptions }
+    : null;
   const parameterOptions = [
     ...new Set([
-      ...(monitoringPoint?.parameters ?? []),
+      ...monitoringPointParameterOptions,
       ...stationConfigs.flatMap((config) => config.channels.map((channel) => channel.dataType)),
     ]),
   ];
@@ -856,7 +874,7 @@ function toDeviceConfigFormDetail(
     requestId: request.id,
     requestNo: request.requestNo,
     stationId,
-    monitoringPoint,
+    monitoringPoint: responseMonitoringPoint,
     parameterOptions,
     deviceCodeOptions,
     connectionForms,
@@ -873,6 +891,20 @@ function toDeviceConfigFormDetail(
     testResults: [],
     rawConfigs: toDeviceConfigRawConfig(stationId, stationConfigs, statusManagement),
   };
+}
+
+function getDeviceConfigParameterOptions(point: MeasurementPointDTO | null): string[] {
+  if (!point) return [];
+  const instrumentParameters = getMeasurementInstrumentParameterOptions(point);
+  return instrumentParameters.length > 0 ? instrumentParameters : point.parameters;
+}
+
+function getMeasurementInstrumentParameterOptions(point: MeasurementPointDTO | null): string[] {
+  return (
+    point?.measurementInstruments?.parameters
+      ?.map((parameter) => parameter.parameter)
+      .filter((parameter): parameter is string => Boolean(parameter)) ?? []
+  );
 }
 
 function findMonitoringPoint(

@@ -388,6 +388,37 @@ describe('connection request validators', () => {
     }
   });
 
+  it('prefers requested instrument parameters over all eligible point parameters', () => {
+    const result = addParameterRequestSchema.safeParse({
+      ...validPayload,
+      measurementPoints: [
+        {
+          ...validPayload.measurementPoints[0],
+          pointCode: 'S0001',
+          parameters: ['CO (ppm)', 'NOx (ppm)', 'Temp. (°C)', 'O2 (%)', 'Flow (m³/hr)'],
+          measurementInstruments: {
+            converterBrand: 'Converter Brand',
+            converterModel: 'CV-100',
+            parameters: [
+              { parameter: 'CO (ppm)' },
+              { parameter: 'NOx (ppm)' },
+              { parameter: 'Temp. (°C)' },
+            ],
+          },
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.measurementPoints[0].parameters).toEqual([
+        'CO (ppm)',
+        'NOx (ppm)',
+        'Temp. (°C)',
+      ]);
+    }
+  });
+
   it('accepts WPMS detail fields separately from CEMS fields', () => {
     const result = addMeasurementPointRequestSchema.safeParse({
       ...validPayload,

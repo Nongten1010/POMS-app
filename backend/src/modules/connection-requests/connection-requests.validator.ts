@@ -396,7 +396,7 @@ const measurementPointSchema = z
     latitude: point.latitude ?? null,
     longitude: point.longitude ?? null,
     pointCode: point.pointCode ?? null,
-    parameters: point.parameters ?? deriveMeasurementPointParameters(point.measurementInstruments),
+    parameters: selectMeasurementPointParameters(point),
     description: point.description ?? null,
     details: point.details ?? null,
     documentsAndImages: point.documentsAndImages ?? [],
@@ -449,6 +449,15 @@ function deriveMeasurementPointParameters(
 ): string[] {
   if (!instruments) return [];
   return [...new Set(instruments.parameters.map((item) => item.parameter))];
+}
+
+function selectMeasurementPointParameters(point: {
+  parameters?: string[];
+  measurementInstruments?: z.infer<typeof measurementInstrumentsSchema> | null;
+}): string[] {
+  const instrumentParameters = deriveMeasurementPointParameters(point.measurementInstruments);
+  if (instrumentParameters.length > 0) return instrumentParameters;
+  return point.parameters ?? [];
 }
 
 function validateContactSection(

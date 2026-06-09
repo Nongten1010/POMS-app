@@ -1182,6 +1182,70 @@ describe('connectionRequestsService', () => {
     });
   });
 
+  it('uses requested instrument parameters instead of all eligible point parameters for current device configs', async () => {
+    const request = requestDto({
+      createdBy: actorUserId,
+      status: CONNECTION_REQUEST_STATUS.CONNECTED,
+      requestType: CONNECTION_REQUEST_TYPE.ADD_PARAMETER,
+      requestTypeLabel: 'เพิ่มพารามิเตอร์',
+      measurementPoints: [
+        {
+          id: 1,
+          pointName: 'ปล่องระบาย A',
+          pointCode: 'STACK-A',
+          pointType: 'STACK',
+          latitude: null,
+          longitude: null,
+          parameters: ['CO (ppm)', 'NOx (ppm)', 'Temp. (°C)', 'O2 (%)', 'Flow (m3/hr)'],
+          description: null,
+          measurementInstruments: {
+            converterBrand: 'Converter Brand',
+            converterModel: 'CV-100',
+            parameters: [
+              { parameter: 'CO (ppm)' },
+              { parameter: 'NOx (ppm)' },
+              { parameter: 'Temp. (°C)' },
+            ],
+          },
+        },
+      ],
+    });
+    mockedRepository.list.mockResolvedValue({ rows: [request], total: 1 });
+    mockedDeviceConnectionsService.listActiveSettings.mockResolvedValue([
+      deviceConnectionConfig({
+        id: 20,
+        stationId: 'STACK-A',
+        deviceCode: 'STACK-A/TCP-01',
+        channels: [
+          { addressId: 40001, dataType: 'CO (ppm)', offset: 0 },
+          { addressId: 40002, dataType: 'NOx (ppm)', offset: 0 },
+          { addressId: 40003, dataType: 'Temp. (°C)', offset: 0 },
+          { addressId: 40004, dataType: 'O2 (%)', offset: 0 },
+          { addressId: 40005, dataType: 'Flow (m3/hr)', offset: 0 },
+        ],
+      }),
+    ]);
+
+    const result = await connectionRequestsService.getCurrentDeviceConfigFormDetail(
+      'STACK-A',
+      actorUserId,
+      'ALL',
+    );
+
+    expect(result.parameterOptions).toEqual(['CO (ppm)', 'NOx (ppm)', 'Temp. (°C)']);
+    expect(result.monitoringPoint?.parameters).toEqual(['CO (ppm)', 'NOx (ppm)', 'Temp. (°C)']);
+    expect(result.parameterMappings.map((mapping) => mapping.parameter)).toEqual([
+      'CO (ppm)',
+      'NOx (ppm)',
+      'Temp. (°C)',
+    ]);
+    expect(result.rawConfigs.channels.map((channel) => channel.dataType)).toEqual([
+      'CO (ppm)',
+      'NOx (ppm)',
+      'Temp. (°C)',
+    ]);
+  });
+
   it('returns one device config form detail by config id and rejects missing config', async () => {
     const request = requestDto({ createdBy: actorUserId });
     mockedRepository.findById.mockResolvedValue(request);
