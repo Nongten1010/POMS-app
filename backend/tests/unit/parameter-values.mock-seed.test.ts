@@ -121,4 +121,19 @@ describe('parameter value mock seed', () => {
     expect(Math.max(...noxValues)).toBeLessThanOrEqual(360);
     expect(Math.max(...noxValues) - Math.min(...noxValues)).toBeGreaterThan(160);
   });
+
+  it('caps CO and NOx on June 9 and June 10', () => {
+    const station = PARAMETER_VALUE_MOCK_STATIONS.find(
+      (mockStation) => mockStation.stationId === 'S0001',
+    );
+    expect(station).toBeDefined();
+
+    const june9Rows = buildParameterValueMockRows(station!, '2026-06-09');
+    const june10Rows = buildParameterValueMockRows(station!, '2026-06-10');
+
+    expect(Math.max(...june9Rows.map((row) => Number(row.co_value)))).toBeLessThanOrEqual(690);
+    expect(Math.max(...june9Rows.map((row) => Number(row.nox_value)))).toBeLessThanOrEqual(350);
+    expect(Math.max(...june10Rows.map((row) => Number(row.co_value)))).toBeLessThanOrEqual(552);
+    expect(Math.max(...june10Rows.map((row) => Number(row.nox_value)))).toBeLessThanOrEqual(280);
+  });
 });

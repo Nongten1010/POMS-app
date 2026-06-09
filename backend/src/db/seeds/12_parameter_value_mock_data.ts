@@ -849,7 +849,12 @@ function buildMockValue(
   dateOffset: number,
 ): number {
   if (parameter.valueRange) {
-    return buildRangedMockValue(parameter.valueRange, hour, parameterIndex, dateOffset);
+    const valueRange = valueRangeForMockDate(
+      parameter.columnPrefix,
+      parameter.valueRange,
+      dateOffset,
+    );
+    return buildRangedMockValue(valueRange, hour, parameterIndex, dateOffset);
   }
 
   const dailyDrift = dateOffset * (0.1 + (parameterIndex % 5) * 0.03);
@@ -864,6 +869,26 @@ function buildMockValue(
       dailyWave
     ).toFixed(2),
   );
+}
+
+function valueRangeForMockDate(
+  columnPrefix: string,
+  range: ParameterValueMockRange,
+  dateOffset: number,
+): ParameterValueMockRange {
+  const date = PARAMETER_VALUE_MOCK_DATES[dateOffset];
+  const maxOverrides = new Map<string, Record<string, number>>([
+    ['2026-06-09', { co: 690, nox: 350 }],
+    ['2026-06-10', { co: 552, nox: 280 }],
+  ]);
+  const maxOverride = maxOverrides.get(date)?.[columnPrefix];
+
+  if (maxOverride === undefined) return range;
+
+  return {
+    ...range,
+    max: Math.min(range.max, maxOverride),
+  };
 }
 
 function buildRangedMockValue(
