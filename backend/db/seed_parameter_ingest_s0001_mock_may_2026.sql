@@ -4,12 +4,38 @@
 USE [parameter_ingest];
 GO
 
+IF OBJECT_ID(N'ingest.P0001_data_real', N'U') IS NULL SELECT TOP 0 * INTO [ingest].[P0001_data_real] FROM [ingest].[S0001_data_real];
+IF OBJECT_ID(N'ingest.P0001_data_1m', N'U') IS NULL SELECT TOP 0 * INTO [ingest].[P0001_data_1m] FROM [ingest].[S0001_data_1m];
+IF OBJECT_ID(N'ingest.P0001_data_5m', N'U') IS NULL SELECT TOP 0 * INTO [ingest].[P0001_data_5m] FROM [ingest].[S0001_data_5m];
+IF OBJECT_ID(N'ingest.P0001_data_60m', N'U') IS NULL SELECT TOP 0 * INTO [ingest].[P0001_data_60m] FROM [ingest].[S0001_data_60m];
+IF OBJECT_ID(N'ingest.P0001_data_1day', N'U') IS NULL SELECT TOP 0 * INTO [ingest].[P0001_data_1day] FROM [ingest].[S0001_data_1day];
+IF OBJECT_ID(N'ingest.P0001_data_test', N'U') IS NULL SELECT TOP 0 * INTO [ingest].[P0001_data_test] FROM [ingest].[S0001_data_test];
+
+DELETE FROM [ingest].[S0001_data_real] WHERE [station_id] = N'S0001' AND [cdate] >= '2026-06-01' AND [cdate] <= '2026-06-10';
+DELETE FROM [ingest].[S0001_data_1m] WHERE [station_id] = N'S0001' AND [cdate] >= '2026-06-01' AND [cdate] <= '2026-06-10';
+DELETE FROM [ingest].[S0001_data_5m] WHERE [station_id] = N'S0001' AND [cdate] >= '2026-06-01' AND [cdate] <= '2026-06-10';
+DELETE FROM [ingest].[S0001_data_60m] WHERE [station_id] = N'S0001' AND [cdate] >= '2026-06-01' AND [cdate] <= '2026-06-10';
+DELETE FROM [ingest].[S0001_data_1day] WHERE [station_id] = N'S0001' AND [cdate] >= '2026-06-01' AND [cdate] <= '2026-06-10';
+DELETE FROM [ingest].[S0001_data_test] WHERE [station_id] = N'S0001' AND [cdate] >= '2026-06-01' AND [cdate] <= '2026-06-10';
+DELETE FROM [ingest].[P0001_data_real] WHERE [station_id] = N'P0001' AND [cdate] >= '2026-06-01' AND [cdate] <= '2026-06-10';
+DELETE FROM [ingest].[P0001_data_1m] WHERE [station_id] = N'P0001' AND [cdate] >= '2026-06-01' AND [cdate] <= '2026-06-10';
+DELETE FROM [ingest].[P0001_data_5m] WHERE [station_id] = N'P0001' AND [cdate] >= '2026-06-01' AND [cdate] <= '2026-06-10';
+DELETE FROM [ingest].[P0001_data_60m] WHERE [station_id] = N'P0001' AND [cdate] >= '2026-06-01' AND [cdate] <= '2026-06-10';
+DELETE FROM [ingest].[P0001_data_1day] WHERE [station_id] = N'P0001' AND [cdate] >= '2026-06-01' AND [cdate] <= '2026-06-10';
+DELETE FROM [ingest].[P0001_data_test] WHERE [station_id] = N'P0001' AND [cdate] >= '2026-06-01' AND [cdate] <= '2026-06-10';
+
 DELETE FROM [ingest].[S0001_data_real] WHERE [station_id] = N'S0001' AND [cdate] >= '2026-05-01' AND [cdate] <= '2026-05-10';
 DELETE FROM [ingest].[S0001_data_1m] WHERE [station_id] = N'S0001' AND [cdate] >= '2026-05-01' AND [cdate] <= '2026-05-10';
 DELETE FROM [ingest].[S0001_data_5m] WHERE [station_id] = N'S0001' AND [cdate] >= '2026-05-01' AND [cdate] <= '2026-05-10';
 DELETE FROM [ingest].[S0001_data_60m] WHERE [station_id] = N'S0001' AND [cdate] >= '2026-05-01' AND [cdate] <= '2026-05-10';
 DELETE FROM [ingest].[S0001_data_1day] WHERE [station_id] = N'S0001' AND [cdate] >= '2026-05-01' AND [cdate] <= '2026-05-10';
 DELETE FROM [ingest].[S0001_data_test] WHERE [station_id] = N'S0001' AND [cdate] >= '2026-05-01' AND [cdate] <= '2026-05-10';
+DELETE FROM [ingest].[P0001_data_real] WHERE [station_id] = N'P0001' AND [cdate] >= '2026-05-01' AND [cdate] <= '2026-05-10';
+DELETE FROM [ingest].[P0001_data_1m] WHERE [station_id] = N'P0001' AND [cdate] >= '2026-05-01' AND [cdate] <= '2026-05-10';
+DELETE FROM [ingest].[P0001_data_5m] WHERE [station_id] = N'P0001' AND [cdate] >= '2026-05-01' AND [cdate] <= '2026-05-10';
+DELETE FROM [ingest].[P0001_data_60m] WHERE [station_id] = N'P0001' AND [cdate] >= '2026-05-01' AND [cdate] <= '2026-05-10';
+DELETE FROM [ingest].[P0001_data_1day] WHERE [station_id] = N'P0001' AND [cdate] >= '2026-05-01' AND [cdate] <= '2026-05-10';
+DELETE FROM [ingest].[P0001_data_test] WHERE [station_id] = N'P0001' AND [cdate] >= '2026-05-01' AND [cdate] <= '2026-05-10';
 
 INSERT INTO [ingest].[S0001_data_real] ([station_id], [nox_value], [nox_units], [nox_status], [cdate], [ctime], [udate], [utime]) VALUES
 (N'S0001', N'52', N'ppm', N'Normal', '2026-05-01', '09:00:00', '2026-05-01', '09:00:00'),
@@ -83,10 +109,34 @@ INSERT INTO [ingest].[S0001_data_test] ([station_id], [nox_value], [nox_units], 
 (N'S0001', N'62', N'ppm', N'Normal', '2026-05-09', '10:00:00', '2026-05-09', '10:00:00'),
 (N'S0001', N'70', N'ppm', N'Test', '2026-05-10', '10:00:00', '2026-05-10', '10:00:00');
 
+INSERT INTO [ingest].[P0001_data_real] ([station_id], [nox_value], [nox_units], [nox_status], [cdate], [ctime], [udate], [utime])
+SELECT N'P0001', [nox_value], [nox_units], [nox_status], [cdate], [ctime], [udate], [utime] FROM [ingest].[S0001_data_real] WHERE [station_id] = N'S0001' AND [cdate] >= '2026-05-01' AND [cdate] <= '2026-05-10';
+
+INSERT INTO [ingest].[P0001_data_1m] ([station_id], [nox_value], [nox_units], [nox_status], [cdate], [ctime], [udate], [utime])
+SELECT N'P0001', [nox_value], [nox_units], [nox_status], [cdate], [ctime], [udate], [utime] FROM [ingest].[S0001_data_1m] WHERE [station_id] = N'S0001' AND [cdate] >= '2026-05-01' AND [cdate] <= '2026-05-10';
+
+INSERT INTO [ingest].[P0001_data_5m] ([station_id], [nox_value], [nox_units], [nox_status], [cdate], [ctime], [udate], [utime])
+SELECT N'P0001', [nox_value], [nox_units], [nox_status], [cdate], [ctime], [udate], [utime] FROM [ingest].[S0001_data_5m] WHERE [station_id] = N'S0001' AND [cdate] >= '2026-05-01' AND [cdate] <= '2026-05-10';
+
+INSERT INTO [ingest].[P0001_data_60m] ([station_id], [nox_value], [nox_units], [nox_status], [cdate], [ctime], [udate], [utime])
+SELECT N'P0001', [nox_value], [nox_units], [nox_status], [cdate], [ctime], [udate], [utime] FROM [ingest].[S0001_data_60m] WHERE [station_id] = N'S0001' AND [cdate] >= '2026-05-01' AND [cdate] <= '2026-05-10';
+
+INSERT INTO [ingest].[P0001_data_1day] ([station_id], [nox_value], [nox_units], [nox_status], [cdate], [ctime], [udate], [utime])
+SELECT N'P0001', [nox_value], [nox_units], [nox_status], [cdate], [ctime], [udate], [utime] FROM [ingest].[S0001_data_1day] WHERE [station_id] = N'S0001' AND [cdate] >= '2026-05-01' AND [cdate] <= '2026-05-10';
+
+INSERT INTO [ingest].[P0001_data_test] ([station_id], [nox_value], [nox_units], [nox_status], [cdate], [ctime], [udate], [utime])
+SELECT N'P0001', [nox_value], [nox_units], [nox_status], [cdate], [ctime], [udate], [utime] FROM [ingest].[S0001_data_test] WHERE [station_id] = N'S0001' AND [cdate] >= '2026-05-01' AND [cdate] <= '2026-05-10';
+
 SELECT 'S0001_data_real' AS table_name, COUNT(*) AS row_count FROM [ingest].[S0001_data_real] WHERE [station_id] = N'S0001' AND [cdate] >= '2026-05-01' AND [cdate] <= '2026-05-10'
 UNION ALL SELECT 'S0001_data_1m', COUNT(*) FROM [ingest].[S0001_data_1m] WHERE [station_id] = N'S0001' AND [cdate] >= '2026-05-01' AND [cdate] <= '2026-05-10'
 UNION ALL SELECT 'S0001_data_5m', COUNT(*) FROM [ingest].[S0001_data_5m] WHERE [station_id] = N'S0001' AND [cdate] >= '2026-05-01' AND [cdate] <= '2026-05-10'
 UNION ALL SELECT 'S0001_data_60m', COUNT(*) FROM [ingest].[S0001_data_60m] WHERE [station_id] = N'S0001' AND [cdate] >= '2026-05-01' AND [cdate] <= '2026-05-10'
 UNION ALL SELECT 'S0001_data_1day', COUNT(*) FROM [ingest].[S0001_data_1day] WHERE [station_id] = N'S0001' AND [cdate] >= '2026-05-01' AND [cdate] <= '2026-05-10'
-UNION ALL SELECT 'S0001_data_test', COUNT(*) FROM [ingest].[S0001_data_test] WHERE [station_id] = N'S0001' AND [cdate] >= '2026-05-01' AND [cdate] <= '2026-05-10';
+UNION ALL SELECT 'S0001_data_test', COUNT(*) FROM [ingest].[S0001_data_test] WHERE [station_id] = N'S0001' AND [cdate] >= '2026-05-01' AND [cdate] <= '2026-05-10'
+UNION ALL SELECT 'P0001_data_real', COUNT(*) FROM [ingest].[P0001_data_real] WHERE [station_id] = N'P0001' AND [cdate] >= '2026-05-01' AND [cdate] <= '2026-05-10'
+UNION ALL SELECT 'P0001_data_1m', COUNT(*) FROM [ingest].[P0001_data_1m] WHERE [station_id] = N'P0001' AND [cdate] >= '2026-05-01' AND [cdate] <= '2026-05-10'
+UNION ALL SELECT 'P0001_data_5m', COUNT(*) FROM [ingest].[P0001_data_5m] WHERE [station_id] = N'P0001' AND [cdate] >= '2026-05-01' AND [cdate] <= '2026-05-10'
+UNION ALL SELECT 'P0001_data_60m', COUNT(*) FROM [ingest].[P0001_data_60m] WHERE [station_id] = N'P0001' AND [cdate] >= '2026-05-01' AND [cdate] <= '2026-05-10'
+UNION ALL SELECT 'P0001_data_1day', COUNT(*) FROM [ingest].[P0001_data_1day] WHERE [station_id] = N'P0001' AND [cdate] >= '2026-05-01' AND [cdate] <= '2026-05-10'
+UNION ALL SELECT 'P0001_data_test', COUNT(*) FROM [ingest].[P0001_data_test] WHERE [station_id] = N'P0001' AND [cdate] >= '2026-05-01' AND [cdate] <= '2026-05-10';
 GO

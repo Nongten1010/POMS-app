@@ -241,16 +241,13 @@ function uniqueRegisteredParameters(parameters: string[]): string[] {
 }
 
 function buildStationAccessQuery(access: ParameterValueAccessContext) {
-  const query = db('cems_wpms_measurement_points as p')
-    .join('cems_wpms_connection_requests as r', 'r.id', 'p.request_id')
-    .whereNull('p.deleted_at')
-    .whereNull('r.deleted_at');
+  const query = db('cems_wpms_connected_measurement_points as p').whereNull('p.deleted_at');
 
   if (access.scope === 'ALL') return query;
 
   return query
     .leftJoin('factories as f', function joinFactory() {
-      this.on('f.fid', '=', 'r.factory_id').andOnNull('f.deleted_at');
+      this.on('f.fid', '=', 'p.factory_id').andOnNull('f.deleted_at');
     })
     .leftJoin('user_juristics as uj', function joinUserJuristic() {
       this.on('uj.juristic_id', '=', 'f.juristic_id')
@@ -258,8 +255,12 @@ function buildStationAccessQuery(access: ParameterValueAccessContext) {
         .andOnNull('uj.revoked_at');
     })
     .where((builder) => {
-      builder.where('r.created_by', access.actorUserId).orWhereNotNull('uj.user_id');
+      builder.where('p.created_by', access.actorUserId).orWhereNotNull('uj.user_id');
     });
+}
+
+export function buildStationAccessQueryForTests(access: ParameterValueAccessContext) {
+  return buildStationAccessQuery(access);
 }
 
 function serializeRow(row: Record<string, unknown>): Record<string, unknown> {

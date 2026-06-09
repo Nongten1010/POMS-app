@@ -40,7 +40,10 @@ jest.mock('../../src/config/parameter-source-database', () => ({
   parameterSourceDb: mockParameterSourceDb,
 }));
 
-import { parameterValuesRepository } from '../../src/modules/parameter-values/parameter-values.repository';
+import {
+  buildStationAccessQueryForTests,
+  parameterValuesRepository,
+} from '../../src/modules/parameter-values/parameter-values.repository';
 
 describe('parameterValuesRepository', () => {
   beforeEach(() => {
@@ -82,5 +85,17 @@ describe('parameterValuesRepository', () => {
         },
       ],
     });
+  });
+
+  it('uses current connected measurement points for station access and registered parameters', () => {
+    const sql = buildStationAccessQueryForTests({ actorUserId: 42, scope: 'OWN_FACTORY' })
+      .toSQL()
+      .sql.toLowerCase();
+
+    expect(sql).toContain('cems_wpms_connected_measurement_points');
+    expect(sql).not.toContain('cems_wpms_measurement_points');
+    expect(sql).not.toContain('cems_wpms_connection_requests');
+    expect(sql).toContain('[p].[factory_id]');
+    expect(sql).toContain('[p].[created_by]');
   });
 });
