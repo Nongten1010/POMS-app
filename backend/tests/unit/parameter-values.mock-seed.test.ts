@@ -100,4 +100,25 @@ describe('parameter value mock seed', () => {
     expect(firstDayRows[0].co2_percent_value).not.toBe(secondDayRows[0].co2_percent_value);
     expect(firstDayRows[18].co2_percent_status).not.toBe(secondDayRows[18].co2_percent_status);
   });
+
+  it('uses wider realistic ranges for key stack parameters', () => {
+    const station = PARAMETER_VALUE_MOCK_STATIONS.find(
+      (mockStation) => mockStation.stationId === 'S0001',
+    );
+    expect(station).toBeDefined();
+
+    const rows = PARAMETER_VALUE_MOCK_DATES.flatMap((date) =>
+      buildParameterValueMockRows(station!, date),
+    );
+    const coValues = rows.map((row) => Number(row.co_value));
+    const noxValues = rows.map((row) => Number(row.nox_value));
+
+    expect(Math.min(...coValues)).toBeGreaterThanOrEqual(300);
+    expect(Math.max(...coValues)).toBeLessThanOrEqual(700);
+    expect(Math.max(...coValues) - Math.min(...coValues)).toBeGreaterThan(250);
+
+    expect(Math.min(...noxValues)).toBeGreaterThanOrEqual(100);
+    expect(Math.max(...noxValues)).toBeLessThanOrEqual(360);
+    expect(Math.max(...noxValues) - Math.min(...noxValues)).toBeGreaterThan(160);
+  });
 });

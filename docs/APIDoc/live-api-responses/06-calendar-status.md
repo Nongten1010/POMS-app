@@ -98,10 +98,10 @@ Response sample:
           "date": "2026-06-01",
           "dataCompletenessPercent": 100,
           "dataCompletenessStatus": "highData",
-          "pollutionStatus": "insufficient",
+          "pollutionStatus": "normal",
           "display": {
             "backgroundStatus": "highData",
-            "borderStatus": "insufficient"
+            "borderStatus": "normal"
           }
         }
       ]
@@ -128,5 +128,4 @@ Response sample:
 }
 ```
 
-Status ที่พบในเดือนนี้: `insufficient` 10 วัน
-
+Status ที่พบในเดือนนี้: `normal` 10 วัน

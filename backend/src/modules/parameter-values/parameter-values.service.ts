@@ -756,8 +756,6 @@ function readParameterStatus(
   value: number,
 ): ParameterValueStatus {
   if (definition.useConfiguredEvaluation) {
-    if (!isNormalChannelStatus(definition.channelStatus)) return 'insufficient';
-
     const criteriaStatus = readCriteriaStatus(definition.criteriaRows, value);
     if (criteriaStatus) return criteriaStatus;
 
@@ -882,12 +880,6 @@ function readPreferredCriteriaRows(
   if (standardRows.length > 0) return standardRows;
 
   return readCriteriaRows(evaluation.eiaCriteria);
-}
-
-function isNormalChannelStatus(value: string | null): boolean {
-  if (value === null) return true;
-  if (!value.trim()) return true;
-  return normalizeSourceStatus(value) === 'normal';
 }
 
 function findParameterEvaluation(
@@ -1016,7 +1008,7 @@ function calendarStatusValueDefinitions(): Record<string, unknown> {
       normal: 'ปกติทั้งวัน ใช้เส้นขอบสีเขียว',
       warning: 'เฝ้าระวัง ใช้เส้นขอบสีส้ม',
       exceeded: 'เกินมาตรฐาน ใช้เส้นขอบสีแดง',
-      insufficient: 'ข้อมูลไม่เพียงพอ หรือประเมินสถานะไม่ได้',
+      insufficient: 'ข้อมูลไม่เพียงพอเมื่อ dataCompletenessStatus เป็น lowData',
     },
   };
 }

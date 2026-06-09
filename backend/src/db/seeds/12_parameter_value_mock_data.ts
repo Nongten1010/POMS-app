@@ -143,12 +143,18 @@ export const PARAMETER_VALUE_MOCK_STATUSES = ['Normal', 'Maintenance', 'Shut Dow
 
 type ParameterValueMockStatus = (typeof PARAMETER_VALUE_MOCK_STATUSES)[number];
 
+interface ParameterValueMockRange {
+  min: number;
+  max: number;
+}
+
 export interface ParameterValueMockParameter {
   label: string;
   columnPrefix: string;
   unit: string;
   baseValue: number;
   step: number;
+  valueRange?: ParameterValueMockRange;
 }
 
 export interface ParameterValueMockStation {
@@ -463,36 +469,43 @@ async function seedParameterValueTables(
 }
 
 function buildPastedSchemaMockParameters(): ParameterValueMockParameter[] {
-  return PASTED_PARAMETER_COLUMN_PREFIXES.flatMap((columnPrefix, index) => {
-    if (columnPrefix === 'co2') {
+  return PASTED_PARAMETER_COLUMN_PREFIXES.flatMap<ParameterValueMockParameter>(
+    (columnPrefix, index) => {
+      if (columnPrefix === 'co2') {
+        return [
+          {
+            label: 'CO2 (%)',
+            columnPrefix: 'co2_percent',
+            unit: '%',
+            baseValue: 10,
+            step: 0.08,
+            valueRange: { min: 8, max: 16 },
+          },
+          {
+            label: 'CO2 (ppm)',
+            columnPrefix: 'co2_ppm',
+            unit: 'ppm',
+            baseValue: 520,
+            step: 3,
+            valueRange: { min: 420, max: 950 },
+          },
+        ];
+      }
+
+      const valueRange = valueRangeForColumnPrefix(columnPrefix);
+
       return [
         {
-          label: 'CO2 (%)',
-          columnPrefix: 'co2_percent',
-          unit: '%',
-          baseValue: 10,
-          step: 0.08,
-        },
-        {
-          label: 'CO2 (ppm)',
-          columnPrefix: 'co2_ppm',
-          unit: 'ppm',
-          baseValue: 520,
-          step: 3,
+          label: toParameterLabel(columnPrefix),
+          columnPrefix,
+          unit: unitForColumnPrefix(columnPrefix),
+          baseValue: 20 + index,
+          step: 0.25 + (index % 7) * 0.05,
+          ...(valueRange ? { valueRange } : {}),
         },
       ];
-    }
-
-    return [
-      {
-        label: toParameterLabel(columnPrefix),
-        columnPrefix,
-        unit: unitForColumnPrefix(columnPrefix),
-        baseValue: 20 + index,
-        step: 0.25 + (index % 7) * 0.05,
-      },
-    ];
-  });
+    },
+  );
 }
 
 function ensureMinimumMockParameters(
@@ -588,6 +601,27 @@ function unitForColumnPrefix(columnPrefix: string): string {
   ]);
 
   return knownUnits.get(columnPrefix) ?? '';
+}
+
+function valueRangeForColumnPrefix(columnPrefix: string): ParameterValueMockRange | undefined {
+  const knownRanges = new Map<string, ParameterValueMockRange>([
+    ['co', { min: 300, max: 700 }],
+    ['nox', { min: 100, max: 360 }],
+    ['no', { min: 40, max: 180 }],
+    ['no2', { min: 20, max: 120 }],
+    ['so2', { min: 80, max: 420 }],
+    ['sox', { min: 80, max: 420 }],
+    ['o2', { min: 3, max: 18 }],
+    ['temp', { min: 95, max: 220 }],
+    ['flow', { min: 1200, max: 5200 }],
+    ['flow2', { min: 900, max: 4600 }],
+    ['particulate', { min: 20, max: 180 }],
+    ['dust', { min: 20, max: 180 }],
+    ['tsp', { min: 30, max: 220 }],
+    ['opacity', { min: 5, max: 65 }],
+  ]);
+
+  return knownRanges.get(columnPrefix);
 }
 
 async function ensureSchema(parameterDb: Knex, schemaName: string): Promise<void> {
@@ -814,6 +848,10 @@ function buildMockValue(
   parameterIndex: number,
   dateOffset: number,
 ): number {
+  if (parameter.valueRange) {
+    return buildRangedMockValue(parameter.valueRange, hour, parameterIndex, dateOffset);
+  }
+
   const dailyDrift = dateOffset * (0.1 + (parameterIndex % 5) * 0.03);
   const dailyWave = ((dateOffset + parameterIndex) % 3) * 0.07;
 
@@ -826,6 +864,18 @@ function buildMockValue(
       dailyWave
     ).toFixed(2),
   );
+}
+
+function buildRangedMockValue(
+  range: ParameterValueMockRange,
+  hour: number,
+  parameterIndex: number,
+  dateOffset: number,
+): number {
+  const phase = ((hour * 37 + dateOffset * 53 + parameterIndex * 17) % 1000) / 999;
+  const value = range.min + (range.max - range.min) * phase;
+
+  return Number(value.toFixed(2));
 }
 
 function buildMockStatus(

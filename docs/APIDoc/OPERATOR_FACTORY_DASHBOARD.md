@@ -182,6 +182,8 @@ GET /api/v1/connected-measurement-points/S0001/calendar-status?month=2026-06
 
 Response หลัก: `data.factory`, `data.calendar.days[]`, `data.monthlySummary[]`, `meta.tableName`, `meta.registeredParameters`
 
+กติกา `pollutionStatus` ของปฏิทิน: ใช้ลำดับ `normal < warning < exceeded < insufficient`; ค่า `normal`, `warning`, และ `exceeded` ตัดจากค่า `min` ของแถว `level: normal`, `level: warning`, และ `level: critical` ตามลำดับ โดย `level: critical` แสดงใน API เป็น `pollutionStatus: "exceeded"` และ `insufficient` ใช้เฉพาะวันที่ `dataCompletenessStatus` เป็น `lowData`
+
 ตัวอย่าง response:
 
 ```json

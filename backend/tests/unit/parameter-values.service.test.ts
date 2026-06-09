@@ -826,7 +826,7 @@ describe('parameterValuesService', () => {
     ]);
   });
 
-  it('can evaluate connected-point calendar status from per-parameter completeness, criteria, and channel health', async () => {
+  it('can evaluate connected-point calendar status from per-parameter completeness and criteria min thresholds', async () => {
     mockedRepository.listRegisteredParameters.mockResolvedValue(['CO (ppm)', 'NOx (ppm)']);
     mockedRepository.tableExists.mockResolvedValue(true);
     mockedRepository.listRows.mockResolvedValue({
@@ -834,16 +834,23 @@ describe('parameterValuesService', () => {
       rows: [
         ...Array.from({ length: 24 }, (_, hour) => ({
           station_id: 'S0001',
-          co_value: hour === 0 ? 110 : 60,
+          co_value: hour === 0 ? 690 : 60,
           nox_value: 40,
           cdate: '2026-06-09',
           ctime: `${String(hour).padStart(2, '0')}:00:00`,
         })),
         ...Array.from({ length: 24 }, (_, hour) => ({
           station_id: 'S0001',
+          co_value: hour === 0 ? 552 : 60,
+          nox_value: 40,
+          cdate: '2026-06-10',
+          ctime: `${String(hour).padStart(2, '0')}:00:00`,
+        })),
+        ...Array.from({ length: 24 }, (_, hour) => ({
+          station_id: 'S0001',
           co_value: 60,
           nox_value: hour < 18 ? 40 : null,
-          cdate: '2026-06-10',
+          cdate: '2026-06-11',
           ctime: `${String(hour).padStart(2, '0')}:00:00`,
         })),
       ],
@@ -862,8 +869,8 @@ describe('parameterValuesService', () => {
               standardValue: null,
               rows: [
                 { level: 'normal', min: 0, max: null },
-                { level: 'warning', min: 80, max: null },
-                { level: 'critical', min: 100, max: null },
+                { level: 'warning', min: 552, max: null },
+                { level: 'critical', min: 690, max: null },
               ],
             },
           },
@@ -897,6 +904,16 @@ describe('parameterValuesService', () => {
       },
       {
         date: '2026-06-10',
+        dataCompletenessPercent: 100,
+        dataCompletenessStatus: 'highData',
+        pollutionStatus: 'warning',
+        display: {
+          backgroundStatus: 'highData',
+          borderStatus: 'warning',
+        },
+      },
+      {
+        date: '2026-06-11',
         dataCompletenessPercent: 75,
         dataCompletenessStatus: 'lowData',
         pollutionStatus: 'insufficient',
@@ -955,7 +972,7 @@ describe('parameterValuesService', () => {
     });
   });
 
-  it('treats a non-normal device channel as insufficient even when values are otherwise normal', async () => {
+  it('keeps high-data calendar pollution based on criteria when a device channel is non-normal', async () => {
     mockedRepository.listRegisteredParameters.mockResolvedValue(['CO (ppm)', 'NOx (ppm)']);
     mockedRepository.tableExists.mockResolvedValue(true);
     mockedRepository.listRows.mockResolvedValue({
@@ -998,7 +1015,7 @@ describe('parameterValuesService', () => {
 
     expect(result.data.calendar.days[0]).toMatchObject({
       dataCompletenessStatus: 'highData',
-      pollutionStatus: 'insufficient',
+      pollutionStatus: 'normal',
     });
   });
 });
