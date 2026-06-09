@@ -61,4 +61,23 @@ describe('parameter value mock seed', () => {
       }
     }
   });
+
+  it('fills value, unit, and status for every mock parameter on every row', () => {
+    for (const station of PARAMETER_VALUE_MOCK_STATIONS) {
+      const rows = buildParameterValueMockRows(station, '2026-06-09');
+
+      for (const row of rows) {
+        for (const parameter of station.parameters) {
+          expect(row[`${parameter.columnPrefix}_value`]).not.toBeNull();
+          expect(row[`${parameter.columnPrefix}_units`]).not.toBeNull();
+          expect(row[`${parameter.columnPrefix}_units`]).not.toBe('');
+          expect(row[`${parameter.columnPrefix}_status`]).not.toBeNull();
+        }
+
+        expect(row.co2_value).not.toBeNull();
+        expect(row.co2_units).not.toBeNull();
+        expect(row.co2_status).not.toBeNull();
+      }
+    }
+  });
 });

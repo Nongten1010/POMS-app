@@ -216,7 +216,7 @@ export function buildParameterValueMockRows(
 
     station.parameters.forEach((parameter, parameterIndex) => {
       row[`${parameter.columnPrefix}_value`] = buildMockValue(parameter, hour, parameterIndex);
-      row[`${parameter.columnPrefix}_units`] = parameter.unit || null;
+      row[`${parameter.columnPrefix}_units`] = mockUnit(parameter.unit);
       row[`${parameter.columnPrefix}_status`] = buildMockStatus(hour, parameterIndex);
     });
     copyLegacyCo2Columns(row);
@@ -229,6 +229,10 @@ function copyLegacyCo2Columns(row: Record<string, unknown>): void {
   row.co2_value = row.co2_ppm_value;
   row.co2_units = row.co2_ppm_units;
   row.co2_status = row.co2_ppm_status;
+}
+
+function mockUnit(unit: string): string {
+  return unit.trim() || 'unitless';
 }
 
 async function hasRequiredMainTables(knex: Knex): Promise<boolean> {
