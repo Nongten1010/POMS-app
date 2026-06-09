@@ -1,6 +1,7 @@
 -- Run this in the main POMS database, not in parameter_ingest.
--- It links operator_demo to station S0001 through a CONNECTED CEMS request
--- and measurement point, so /parameter-values can authorize the station.
+-- It links operator_demo to station S0001 through a CONNECTED CEMS request,
+-- source measurement point, and current connected point, so /parameter-values
+-- can authorize the station.
 
 SET NOCOUNT ON;
 
@@ -16,6 +17,7 @@ DECLARE @contactName NVARCHAR(255);
 DECLARE @contactPhone VARCHAR(64);
 DECLARE @contactEmail VARCHAR(255);
 DECLARE @requestId BIGINT;
+DECLARE @measurementPointId BIGINT;
 
 SELECT TOP 1
   @userId = id,
@@ -149,6 +151,74 @@ BEGIN
   );
 END;
 
+SELECT TOP 1 @measurementPointId = id
+FROM cems_wpms_measurement_points
+WHERE request_id = @requestId
+  AND point_code = @stationId
+  AND deleted_at IS NULL;
+
+IF @measurementPointId IS NULL
+  THROW 51002, 'S0001 source measurement point was not found after upsert.', 1;
+
+IF EXISTS (
+  SELECT 1
+  FROM cems_wpms_connected_measurement_points
+  WHERE point_code = @stationId
+    AND deleted_at IS NULL
+)
+BEGIN
+  UPDATE cems_wpms_connected_measurement_points
+  SET
+    source_request_id = @requestId,
+    source_measurement_point_id = @measurementPointId,
+    factory_id = @factoryFid,
+    factory_name = @factoryName,
+    factory_registration_no = @factoryRegistrationNo,
+    system_type = 'CEMS',
+    point_name = @stationId,
+    point_code = @stationId,
+    point_type = 'STACK',
+    parameters_json = '["co2","co","nox","o2","so2","temp"]',
+    connected_at = COALESCE(connected_at, SYSDATETIME()),
+    updated_by = @userId,
+    updated_at = SYSDATETIME()
+  WHERE point_code = @stationId
+    AND deleted_at IS NULL;
+END
+ELSE
+BEGIN
+  INSERT INTO cems_wpms_connected_measurement_points (
+    source_request_id,
+    source_measurement_point_id,
+    factory_id,
+    factory_name,
+    factory_registration_no,
+    system_type,
+    point_name,
+    point_code,
+    point_type,
+    parameters_json,
+    connected_at,
+    created_by,
+    updated_by
+  )
+  VALUES (
+    @requestId,
+    @measurementPointId,
+    @factoryFid,
+    @factoryName,
+    @factoryRegistrationNo,
+    'CEMS',
+    @stationId,
+    @stationId,
+    'STACK',
+    '["co2","co","nox","o2","so2","temp"]',
+    SYSDATETIME(),
+    @userId,
+    @userId
+  );
+END;
+
 IF NOT EXISTS (
   SELECT 1
   FROM cems_wpms_request_status_history
@@ -174,4 +244,5 @@ SELECT
   @requestNo AS request_no,
   @factoryFid AS factory_id,
   @stationId AS station_id,
+  @measurementPointId AS measurement_point_id,
   @userId AS operator_user_id;
