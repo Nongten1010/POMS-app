@@ -204,6 +204,8 @@ export function buildParameterValueMockRows(
   station: ParameterValueMockStation,
   date: string,
 ): Record<string, unknown>[] {
+  const dateOffset = buildDateOffset(date);
+
   return Array.from({ length: 24 }, (_, hour) => {
     const row: Record<string, unknown> = {
       station_id: station.stationId,
@@ -215,9 +217,14 @@ export function buildParameterValueMockRows(
     };
 
     station.parameters.forEach((parameter, parameterIndex) => {
-      row[`${parameter.columnPrefix}_value`] = buildMockValue(parameter, hour, parameterIndex);
+      row[`${parameter.columnPrefix}_value`] = buildMockValue(
+        parameter,
+        hour,
+        parameterIndex,
+        dateOffset,
+      );
       row[`${parameter.columnPrefix}_units`] = mockUnit(parameter.unit);
-      row[`${parameter.columnPrefix}_status`] = buildMockStatus(hour, parameterIndex);
+      row[`${parameter.columnPrefix}_status`] = buildMockStatus(hour, parameterIndex, dateOffset);
     });
     copyLegacyCo2Columns(row);
 
@@ -784,6 +791,14 @@ function buildDateRange(startDate: string, endDate: string): string[] {
   return dates;
 }
 
+function buildDateOffset(date: string): number {
+  const start = new Date(`${PARAMETER_VALUE_MOCK_DATES[0]}T00:00:00.000Z`);
+  const current = new Date(`${date}T00:00:00.000Z`);
+  const millisecondsPerDay = 24 * 60 * 60 * 1000;
+
+  return Math.max(0, Math.floor((current.getTime() - start.getTime()) / millisecondsPerDay));
+}
+
 function parameterSchemaName(): string {
   const schemaName = process.env.PARAMETER_DB_SCHEMA ?? 'dbo';
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(schemaName)) {
@@ -797,12 +812,28 @@ function buildMockValue(
   parameter: ParameterValueMockParameter,
   hour: number,
   parameterIndex: number,
+  dateOffset: number,
 ): number {
-  return Number((parameter.baseValue + hour * parameter.step + parameterIndex * 0.25).toFixed(2));
+  const dailyDrift = dateOffset * (0.1 + (parameterIndex % 5) * 0.03);
+  const dailyWave = ((dateOffset + parameterIndex) % 3) * 0.07;
+
+  return Number(
+    (
+      parameter.baseValue +
+      hour * parameter.step +
+      parameterIndex * 0.25 +
+      dailyDrift +
+      dailyWave
+    ).toFixed(2),
+  );
 }
 
-function buildMockStatus(hour: number, parameterIndex: number): ParameterValueMockStatus {
-  const slot = (hour + parameterIndex) % 24;
+function buildMockStatus(
+  hour: number,
+  parameterIndex: number,
+  dateOffset: number,
+): ParameterValueMockStatus {
+  const slot = (hour + parameterIndex + dateOffset) % 24;
   if (slot < 19) return 'Normal';
   if (slot < 22) return 'Maintenance';
   return 'Shut Down';

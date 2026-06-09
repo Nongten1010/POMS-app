@@ -87,4 +87,17 @@ describe('parameter value mock seed', () => {
       }
     }
   });
+
+  it('varies mock values and statuses across dates', () => {
+    const station = PARAMETER_VALUE_MOCK_STATIONS.find(
+      (mockStation) => mockStation.stationId === 'S0001',
+    );
+    expect(station).toBeDefined();
+
+    const firstDayRows = buildParameterValueMockRows(station!, '2026-06-01');
+    const secondDayRows = buildParameterValueMockRows(station!, '2026-06-02');
+
+    expect(firstDayRows[0].co2_percent_value).not.toBe(secondDayRows[0].co2_percent_value);
+    expect(firstDayRows[18].co2_percent_status).not.toBe(secondDayRows[18].co2_percent_status);
+  });
 });
