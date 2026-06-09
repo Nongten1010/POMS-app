@@ -6,6 +6,7 @@ const MOCK_DATES = ['2026-06-09'];
 const MOCK_INTERVALS = ['real', '1m', '5m', '60m', '1day', 'test'] as const;
 const MIN_MOCK_PARAMETER_COUNT = 100;
 const TEMPLATE_TABLE_INTERVAL = '60m';
+const SQL_SERVER_SAFE_INSERT_PARAMETER_LIMIT = 2000;
 const PASTED_PARAMETER_COLUMN_PREFIXES = [
   'co2',
   'co',
@@ -770,11 +771,29 @@ async function replaceRows(
     .del();
 
   for (const date of MOCK_DATES) {
-    await parameterDb
-      .withSchema(schemaName)
-      .from(tableName)
-      .insert(buildParameterValueMockRows(station, date));
+    const rows = buildParameterValueMockRows(station, date);
+    for (const chunk of chunkRowsForSqlServer(rows)) {
+      await parameterDb.withSchema(schemaName).from(tableName).insert(chunk);
+    }
   }
+}
+
+function chunkRowsForSqlServer(rows: Record<string, unknown>[]): Record<string, unknown>[][] {
+  const firstRow = rows[0];
+  if (!firstRow) return [];
+
+  const columnCount = Object.keys(firstRow).length;
+  const rowsPerChunk = Math.max(
+    1,
+    Math.floor(SQL_SERVER_SAFE_INSERT_PARAMETER_LIMIT / columnCount),
+  );
+
+  const chunks: Record<string, unknown>[][] = [];
+  for (let index = 0; index < rows.length; index += rowsPerChunk) {
+    chunks.push(rows.slice(index, index + rowsPerChunk));
+  }
+
+  return chunks;
 }
 
 function createParameterSourceKnex(primaryKnex: Knex): Knex {
