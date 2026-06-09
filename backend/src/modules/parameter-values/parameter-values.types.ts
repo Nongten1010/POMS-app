@@ -126,8 +126,8 @@ export interface MeasurementParameterThresholdDTO {
   parameterCode: string;
   parameterLabel: string;
   unit: string;
-  normalMax: number;
-  warningMax: number;
+  normalMax: number | null;
+  warningMax: number | null;
 }
 
 export interface MeasurementStatisticValueDTO {

@@ -449,7 +449,15 @@ function toThreshold(definition: ParameterDefinition): MeasurementParameterThres
     };
   }
 
-  if (definition.useConfiguredEvaluation) return null;
+  if (definition.useConfiguredEvaluation) {
+    return {
+      parameterCode: definition.code,
+      parameterLabel: definition.label,
+      unit: definition.unit,
+      normalMax: null,
+      warningMax: null,
+    };
+  }
 
   return {
     parameterCode: definition.code,

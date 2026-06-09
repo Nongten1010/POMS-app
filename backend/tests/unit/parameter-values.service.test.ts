@@ -695,6 +695,13 @@ describe('parameterValuesService', () => {
         warningMax: 190,
       },
       {
+        parameterCode: 'CO2',
+        parameterLabel: 'CO2 (ppm)',
+        unit: 'ppm',
+        normalMax: null,
+        warningMax: null,
+      },
+      {
         parameterCode: 'SO2',
         parameterLabel: 'SO2 (ppm)',
         unit: 'ppm',
