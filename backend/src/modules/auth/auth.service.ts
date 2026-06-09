@@ -105,6 +105,7 @@ export const authService = {
     const user = await authRepository.findUserByProviderAndExternalId('mock', profile.citizen_id);
     ensureLoginUserAvailable(user, 'operator', profile.citizen_id);
     await authRepository.updateLastLogin(user.id);
+    await authRepository.syncExternalOperatorProfile(user.id, profile);
 
     const operatorProfile = await buildOperatorProfile(user.id);
     const { roles, scopes } = await authRepository.getRolesAndPermissions(user.id);

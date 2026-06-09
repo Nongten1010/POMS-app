@@ -337,6 +337,72 @@ describe('connectionRequestsService', () => {
     expect(result.data[0]).not.toHaveProperty('monitoringPointCountBySystem');
   });
 
+  it('keeps all accessible operator factories even when they are inactive or not eligible', async () => {
+    mockedRepository.listFactoriesForAccess.mockResolvedValue([
+      factorySummary({
+        factoryId: 'factory-eligible',
+        factoryName: 'โรงงานเข้าข่าย',
+      }),
+      factorySummary({
+        factoryId: 'factory-inactive',
+        factoryName: 'โรงงานปิดใช้งาน',
+        isActive: false,
+      }),
+      factorySummary({
+        factoryId: 'factory-ineligible',
+        factoryName: 'โรงงานไม่เข้าข่าย',
+        isEligible: false,
+        eligibilityStatus: 'ไม่เข้าข่าย',
+      }),
+    ]);
+    mockedRepository.listRequestsForFactories.mockResolvedValue([
+      requestDto({
+        factoryId: 'factory-eligible',
+        status: CONNECTION_REQUEST_STATUS.CONNECTED,
+        measurementPoints: [
+          {
+            id: 1,
+            pointName: 'ปล่องระบาย A',
+            pointCode: 'S0001',
+            pointType: 'STACK',
+            latitude: null,
+            longitude: null,
+            parameters: ['NOx'],
+            description: null,
+          },
+        ],
+      }),
+    ]);
+
+    const result = await connectionRequestsService.listOperatorFactories(
+      actorUserId,
+      'OWN_FACTORY',
+    );
+
+    expect(mockedRepository.listRequestsForFactories).toHaveBeenCalledWith([
+      'factory-eligible',
+      'factory-inactive',
+      'factory-ineligible',
+    ]);
+    expect(result.data.map((factory) => factory.factoryId)).toEqual([
+      'factory-eligible',
+      'factory-inactive',
+      'factory-ineligible',
+    ]);
+    expect(result.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          factoryId: 'factory-ineligible',
+          isEligible: false,
+          eligibilityStatus: 'ไม่เข้าข่าย',
+          monitoringPointCount: 0,
+          requestStatusCode: null,
+        }),
+      ]),
+    );
+    expect(result.meta.total).toBe(3);
+  });
+
   it('returns only visible operator factories in the dashboard response shape', async () => {
     mockedRepository.listFactoriesForAccess.mockResolvedValue([factorySummary()]);
     mockedRepository.listFavoriteFactoryIds.mockResolvedValue(['factory-001']);

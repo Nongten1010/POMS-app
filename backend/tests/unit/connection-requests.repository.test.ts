@@ -27,7 +27,7 @@ describe('connectionRequestsRepository request numbers', () => {
     expect(sql).toContain('mp.point_name');
   });
 
-  it('requires operator dashboard factories to have an active eligible factory record', () => {
+  it('keeps operator factory access even when no eligible factory record exists', () => {
     const sql = buildFactoriesForAccessQueryForTests({
       actorUserId: 42,
       scope: 'ALL',
@@ -35,8 +35,8 @@ describe('connectionRequestsRepository request numbers', () => {
       .toSQL()
       .sql.toLowerCase();
 
-    expect(sql).toContain('inner join [eligible_factories] as [ef]');
-    expect(sql).not.toContain('left join [eligible_factories] as [ef]');
+    expect(sql).toContain('left join [eligible_factories] as [ef]');
+    expect(sql).not.toContain('inner join [eligible_factories] as [ef]');
     expect(sql).toContain('[ef].[factory_registration_no_new] = [f].[code]');
     expect(sql).toContain('[ef].[source_factory_id] = [f].[fid]');
     expect(sql).toContain('[ef].[deleted_at] is null');

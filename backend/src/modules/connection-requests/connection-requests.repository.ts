@@ -601,14 +601,15 @@ function buildFactoriesForAccessQuery(
 ): Knex.QueryBuilder<FactoryRow, FactoryRow[]> {
   const builder = db<FactoryRow>('factories as f')
     .leftJoin('provinces as p', 'p.id', 'f.province_id')
-    .join('eligible_factories as ef', function joinEligibleFactory() {
-      this.on('ef.factory_registration_no_new', '=', 'f.code')
-        .orOn('ef.factory_registration_no_new', '=', 'f.fid')
-        .orOn('ef.source_factory_id', '=', 'f.fid')
-        .orOn('ef.source_factory_id', '=', 'f.code');
+    .leftJoin('eligible_factories as ef', function joinEligibleFactory() {
+      this.on(function joinFactoryKeys() {
+        this.on('ef.factory_registration_no_new', '=', 'f.code')
+          .orOn('ef.factory_registration_no_new', '=', 'f.fid')
+          .orOn('ef.source_factory_id', '=', 'f.fid')
+          .orOn('ef.source_factory_id', '=', 'f.code');
+      }).andOnNull('ef.deleted_at');
     })
     .whereNull('f.deleted_at')
-    .whereNull('ef.deleted_at')
     .select(
       'f.id',
       'f.fid',

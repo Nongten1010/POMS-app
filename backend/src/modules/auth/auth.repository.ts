@@ -1,5 +1,6 @@
 import { db } from '../../config/database';
 import type { Knex } from 'knex';
+import type { ExternalOperatorProfile } from './identity-provider/identity-provider.interface';
 
 export interface UserRow {
   id: number;
@@ -82,6 +83,38 @@ export const authRepository = {
 
   getOperatorProfile(userId: number): Promise<OperatorProfileRow | undefined> {
     return db<OperatorProfileRow>('operator_profiles').where({ user_id: userId }).first();
+  },
+
+  async syncExternalOperatorProfile(
+    userId: number,
+    profile: ExternalOperatorProfile,
+  ): Promise<void> {
+    await db.transaction(async (trx) => {
+      const existingProfile = await trx('operator_profiles').where({ user_id: userId }).first();
+      const operatorProfilePayload = {
+        user_code: profile.user_code,
+        regis_date: profile.regis_date,
+        synced_at: trx.raw('SYSDATETIME()'),
+      };
+
+      if (existingProfile) {
+        await trx('operator_profiles').where({ user_id: userId }).update(operatorProfilePayload);
+      } else {
+        await trx('operator_profiles').insert({
+          user_id: userId,
+          ...operatorProfilePayload,
+        });
+      }
+
+      for (const juristic of profile.juristics) {
+        const juristicId = await upsertExternalJuristic(trx, juristic);
+        await upsertUserJuristicAccess(trx, userId, juristicId);
+
+        for (const factory of juristic.factories) {
+          await upsertExternalFactory(trx, juristicId, factory);
+        }
+      }
+    });
   },
 
   async getRolesAndPermissions(userId: number): Promise<{
@@ -187,3 +220,89 @@ export const authRepository = {
     return q;
   },
 };
+
+type ExternalOperatorJuristic = ExternalOperatorProfile['juristics'][number];
+type ExternalOperatorFactory = ExternalOperatorJuristic['factories'][number];
+
+async function upsertExternalJuristic(
+  trx: Knex.Transaction,
+  juristic: ExternalOperatorJuristic,
+): Promise<number> {
+  const existing = await trx('juristics')
+    .where({ juristic_id: juristic.juristic_id })
+    .first('id');
+  const payload = {
+    name_th: juristic.name_th,
+    name_en: juristic.name_en,
+    deleted_at: null,
+    updated_at: trx.raw('SYSDATETIME()'),
+  };
+
+  if (existing) {
+    await trx('juristics').where({ id: existing.id }).update(payload);
+    return Number(existing.id);
+  }
+
+  await trx('juristics').insert({
+    juristic_id: juristic.juristic_id,
+    ...payload,
+  });
+  const inserted = await trx('juristics')
+    .where({ juristic_id: juristic.juristic_id })
+    .first('id');
+  if (!inserted) throw new Error('Synced juristic could not be loaded');
+
+  return Number(inserted.id);
+}
+
+async function upsertUserJuristicAccess(
+  trx: Knex.Transaction,
+  userId: number,
+  juristicId: number,
+): Promise<void> {
+  const existing = await trx('user_juristics')
+    .where({ user_id: userId, juristic_id: juristicId })
+    .first('user_id');
+
+  if (existing) {
+    await trx('user_juristics')
+      .where({ user_id: userId, juristic_id: juristicId })
+      .update({ revoked_at: null });
+    return;
+  }
+
+  await trx('user_juristics').insert({ user_id: userId, juristic_id: juristicId });
+}
+
+async function upsertExternalFactory(
+  trx: Knex.Transaction,
+  juristicId: number,
+  factory: ExternalOperatorFactory,
+): Promise<void> {
+  const existing = await trx('factories').where({ fid: factory.fid }).first('id');
+  const payload = {
+    code: factory.code,
+    name: factory.name,
+    juristic_id: juristicId,
+    province_id: factory.province_id,
+    system_id: factory.system_id,
+    verify_status: factory.verify_status,
+    authorize_start: factory.authorize_start,
+    authorize_end: factory.authorize_end,
+    juristic_start: factory.juristic_start,
+    verify_date: factory.verify_date,
+    is_active: true,
+    deleted_at: null,
+    updated_at: trx.raw('SYSDATETIME()'),
+  };
+
+  if (existing) {
+    await trx('factories').where({ id: existing.id }).update(payload);
+    return;
+  }
+
+  await trx('factories').insert({
+    fid: factory.fid,
+    ...payload,
+  });
+}

@@ -127,11 +127,8 @@ export const connectionRequestsService = {
       actorUserId,
       scope: factoryViewScope,
     });
-    const eligibleFactories = factories.filter(
-      (factory) => factory.isEligible !== false && factory.isActive !== false,
-    );
     const requests = await connectionRequestsRepository.listRequestsForFactories(
-      eligibleFactories.map((factory) => factory.factoryId),
+      factories.map((factory) => factory.factoryId),
     );
     const latestRequestByFactory = new Map<string, ConnectionRequestDTO>();
     const connectedPointCountByFactory = new Map<string, number>();
@@ -149,7 +146,7 @@ export const connectionRequestsService = {
       }
     });
 
-    const data = eligibleFactories
+    const data = factories
       .map<OperatorFactoryTableRowDTO>((factory) => {
         const latestRequest = latestRequestByFactory.get(factory.factoryId);
         return {
@@ -168,8 +165,8 @@ export const connectionRequestsService = {
           latitude: factory.latitude,
           longitude: factory.longitude,
           province: factory.province,
-          isEligible: true,
-          eligibilityStatus: 'เข้าข่าย',
+          isEligible: factory.isEligible ?? false,
+          eligibilityStatus: factory.eligibilityStatus ?? 'ไม่เข้าข่าย',
           monitoringPointCount: connectedPointCountByFactory.get(factory.factoryId) ?? 0,
           requestStatusCode: latestRequest?.status ?? null,
           status: 'แสดง',

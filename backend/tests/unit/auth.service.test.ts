@@ -51,6 +51,7 @@ jest.mock('../../src/modules/auth/auth.repository', () => ({
     getOperatorProfile: jest.fn(),
     getOperatorFactories: jest.fn(),
     getRolesAndPermissions: jest.fn(),
+    syncExternalOperatorProfile: jest.fn(),
   },
 }));
 
@@ -381,7 +382,7 @@ describe('authService login completion', () => {
       },
     });
 
-    const result = await authService.completeLoginAsOperator({
+    const operatorProfile = {
       citizen_id: '3191000135709',
       user_code: '53495',
       first_name: 'ธนาภรณ์',
@@ -389,9 +390,35 @@ describe('authService login completion', () => {
       email: 'operator@example.com',
       phone: '0999454594',
       regis_date: '2023-06-09 12:01:53',
-      juristics: [],
-    });
+      juristics: [
+        {
+          juristic_id: '0105556125804',
+          name_th: 'บริษัท อินทรี อีโคไซเคิล จำกัด',
+          name_en: 'INSEE ECOCYCLE COMPANY LIMITED',
+          factories: [
+            {
+              fid: '10190003325500',
+              code: '3-106-33/50สบ',
+              name: 'บริษัท อินทรี อีโคไซเคิล จำกัด',
+              province_id: '1019',
+              system_id: 12,
+              verify_status: 1,
+              authorize_start: '2024-09-02',
+              authorize_end: '2024-09-30',
+              juristic_start: '2024-08-05',
+              verify_date: '2024-09-13',
+            },
+          ],
+        },
+      ],
+    };
 
+    const result = await authService.completeLoginAsOperator(operatorProfile);
+
+    expect(mockedAuthRepository.syncExternalOperatorProfile).toHaveBeenCalledWith(
+      77,
+      operatorProfile,
+    );
     expect(result.user).toMatchObject({
       userType: 'operator',
       username: '3191000135709',
