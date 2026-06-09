@@ -6,6 +6,7 @@ const MOCK_DATES = ['2026-06-09'];
 const MOCK_INTERVALS = ['real', '1m', '5m', '60m', '1day', 'test'] as const;
 const MIN_MOCK_PARAMETER_COUNT = 100;
 const SQL_SERVER_SAFE_INSERT_PARAMETER_LIMIT = 2000;
+const SKIP_ACCESS_SEED = process.env.PARAMETER_VALUE_MOCK_SKIP_ACCESS === '1';
 const PASTED_PARAMETER_COLUMN_PREFIXES = [
   'co2',
   'co',
@@ -182,7 +183,7 @@ const BASE_PARAMETER_VALUE_MOCK_STATIONS: ParameterValueMockStation[] = [
 ];
 
 export async function seed(knex: Knex): Promise<void> {
-  const canSeedMainDb = await hasRequiredMainTables(knex);
+  const canSeedMainDb = !SKIP_ACCESS_SEED && (await hasRequiredMainTables(knex));
   const parameterDb = createParameterSourceKnex(knex);
 
   try {
