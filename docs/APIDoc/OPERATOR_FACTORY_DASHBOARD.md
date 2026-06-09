@@ -142,6 +142,185 @@ curl "http://localhost:3000/api/v1/operator-factory-dashboard?systemType=CEMS" \
 | วันที่ | `measurementPoints[].data[].cdate` |
 | เวลา | `measurementPoints[].data[].ctime` |
 
+## Detail Page APIs
+
+API สำหรับหน้ารายละเอียดหลังเลือกจุดตรวจวัด/โรงงานจากหน้าแผนที่หรือรายการโรงงาน
+
+Base URL:
+
+```text
+/api/v1/connected-measurement-points/:stationId
+```
+
+Header:
+
+```http
+Authorization: Bearer <accessToken>
+```
+
+Permission: `cems_wpms_requests:view`
+
+Data source:
+
+| ส่วนข้อมูล | Source |
+| --- | --- |
+| โรงงาน/จุดตรวจวัด | current connected measurement point |
+| ข้อมูลรายชั่วโมง | Parameter DB ตาราง `{stationId}_data_60m` เช่น `S0001_data_60m` |
+| พารามิเตอร์ที่แสดง | registered parameters ของจุดตรวจวัดนั้น |
+
+`stationId` ต้องเป็น safe SQL identifier เพราะ backend ใช้ประกอบชื่อตาราง parameter ingestion เช่น `S0001`, `P0001`
+
+### GET Calendar Status
+
+```http
+GET /api/v1/connected-measurement-points/S0001/calendar-status?month=2026-06
+```
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `month` | query string | Yes | เดือนรูปแบบ `YYYY-MM` |
+
+Response หลัก: `data.factory`, `data.calendar.days[]`, `data.monthlySummary[]`, `meta.tableName`, `meta.registeredParameters`
+
+ตัวอย่าง response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "factory": {
+      "factoryId": "factory-001",
+      "factoryName": "บริษัท ทดสอบ จำกัด",
+      "systemType": "CEMS"
+    },
+    "calendar": {
+      "year": 2026,
+      "month": 6,
+      "days": [
+        {
+          "date": "2026-06-09",
+          "dataCompletenessPercent": 83,
+          "dataCompletenessStatus": "highData",
+          "pollutionStatus": "exceeded",
+          "display": {
+            "backgroundStatus": "highData",
+            "borderStatus": "exceeded"
+          }
+        }
+      ]
+    },
+    "monthlySummary": [
+      {
+        "parameterCode": "CO",
+        "parameterName": "CO",
+        "unit": "ppm",
+        "exceededDays": 1,
+        "lowDataDays": 0,
+        "todayDataCompletenessPercent": 83
+      }
+    ]
+  },
+  "meta": {
+    "stationId": "S0001",
+    "interval": "60m",
+    "schemaName": "ingest",
+    "tableName": "S0001_data_60m",
+    "month": "2026-06",
+    "count": 20,
+    "registeredParameters": ["CO (ppm)"]
+  }
+}
+```
+
+### GET Measurement Statistics
+
+```http
+GET /api/v1/connected-measurement-points/S0001/measurement-statistics?date=2026-06-09
+```
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `date` | query string | Yes | วันที่รูปแบบ `YYYY-MM-DD` |
+
+Response หลัก: `data.factory`, `data.thresholds[]`, `data.measurementPoints[].rows[]`, `meta.tableName`, `meta.registeredParameters`
+
+ตัวอย่าง response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "factory": {
+      "factoryId": "factory-001",
+      "factoryName": "บริษัท ทดสอบ จำกัด",
+      "systemType": "CEMS"
+    },
+    "thresholds": [
+      {
+        "parameterCode": "CO",
+        "parameterLabel": "CO (ppm)",
+        "unit": "ppm",
+        "normalMax": 180,
+        "warningMax": 190
+      }
+    ],
+    "measurementPoints": [
+      {
+        "pointCode": "S0001",
+        "stationId": "S0001",
+        "date": "2026-06-09",
+        "rows": [
+          {
+            "time": "00.00-00.59 น.",
+            "chartTime": "00:00",
+            "dataCompletenessPercent": 100,
+            "values": {
+              "CO": {
+                "value": 0.05,
+                "displayValue": "0.05",
+                "status": "normal"
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "meta": {
+    "stationId": "S0001",
+    "interval": "60m",
+    "schemaName": "ingest",
+    "tableName": "S0001_data_60m",
+    "date": "2026-06-09",
+    "count": 1,
+    "registeredParameters": ["CO (ppm)"]
+  }
+}
+```
+
+หมายเหตุ: `measurement-statistics` สร้าง `rows` ครบ 24 ชั่วโมงเสมอ ถ้าชั่วโมงไหนไม่มีข้อมูลจะได้ `displayValue = "-"` และ status เป็น `noData` หรือ `insufficient`
+
+Status values:
+
+| Status | ใช้เมื่อ |
+| --- | --- |
+| `normal` | ค่าปกติ |
+| `warning` | ค่าอยู่ช่วงเฝ้าระวัง |
+| `exceeded` | ค่าเกินมาตรฐาน |
+| `insufficient` | ข้อมูลไม่พอ หรือ completeness ต่ำกว่า 80% |
+| `noData` | ไม่มี row ของชั่วโมงนั้น |
+| `invalid` | source status ไม่รู้จักหรือข้อมูลผิดรูปแบบ |
+
+Column mapping:
+
+| Registered parameter | Columns |
+| --- | --- |
+| `CO (ppm)` | `co_value`, `co_units`, `co_status` |
+| `NOx (ppm)` | `nox_value`, `nox_units`, `nox_status` |
+| `Temp. (°C)` | `temp_value`, `temp_units`, `temp_status` |
+| `O2 (%)` | `o2_value`, `o2_units`, `o2_status` |
+| `Flow (m3/hr)` | `flow_value`, `flow_units`, `flow_status` |
+
 ## PUT Favorite
 
 | Item | Value |

@@ -93,6 +93,8 @@ Mapping:
 | ดูรายละเอียด | `GET /api/v1/connected-measurement-points/:stationId/calendar-status?month=2026-06` | คืนข้อมูลทำ DateCalendar รายเดือนจากตาราง `{stationId}_data_60m` |
 | ดูรายละเอียด | `GET /api/v1/connected-measurement-points/:stationId/measurement-statistics?date=2026-06-09` | คืนข้อมูลกราฟและตารางรายชั่วโมงจากตาราง `{stationId}_data_60m` |
 
+รายละเอียด API ของหน้าดูรายละเอียดอยู่ใน [`OPERATOR_FACTORY_DASHBOARD.md`](./OPERATOR_FACTORY_DASHBOARD.md#detail-page-apis)
+
 ## Flow เพิ่มจุดตรวจวัด จบ 1 คำขอ
 
 1. Frontend เปิดฟอร์ม "เพิ่มจุดตรวจวัด"
@@ -2884,34 +2886,6 @@ Data dictionary response row:
 | `connectedAt` | string|null | วันเวลาที่เชื่อมต่อแล้ว |
 | `point` | object | ข้อมูลจุดตรวจวัด |
 | `deviceConfigs` | array | active setting ล่าสุดของจุดตรวจวัด โดยแต่ละ item จัด shape เหมือน payload: `{ stationId, device, channels, statusManagement }`; ไม่ใช่ snapshot ของคำขอแรก |
-
-### API 15: GET ปฏิทินสถานะรายเดือนของจุดตรวจวัดที่เลือก
-
-`GET /api/v1/connected-measurement-points/:stationId/calendar-status?month=2026-06`
-
-คืนข้อมูลทำ DateCalendar รายเดือนจากตาราง `{stationId}_data_60m`
-
-| Field | Type | Required | Description |
-| --- | --- | --- | --- |
-| `stationId` | path string | Yes | รหัสจุดตรวจวัด ต้องใช้เป็น safe SQL identifier |
-| `month` | query string | Yes | `YYYY-MM` |
-
-Response หลัก: `data.factory`, `data.calendar.days[]`, `data.monthlySummary[]`, `meta.stationId`, `meta.tableName`, `meta.registeredParameters`
-
-### API 16: GET สถิติรายชั่วโมง/กราฟแนวโน้มของจุดตรวจวัดที่เลือก
-
-`GET /api/v1/connected-measurement-points/:stationId/measurement-statistics?date=2026-06-09`
-
-คืนข้อมูลกราฟและตารางรายชั่วโมงจากตาราง `{stationId}_data_60m`; สร้าง `rows` 24 ชั่วโมงเสมอ
-
-| Field | Type | Required | Description |
-| --- | --- | --- | --- |
-| `stationId` | path string | Yes | รหัสจุดตรวจวัด ต้องใช้เป็น safe SQL identifier |
-| `date` | query string | Yes | `YYYY-MM-DD` |
-
-Response หลัก: `data.factory`, `data.thresholds[]`, `data.measurementPoints[].rows[]`, `meta.stationId`, `meta.tableName`, `meta.registeredParameters`
-
-หมายเหตุ: response ใช้ registered parameters เพื่อเลือก column เช่น `CO (ppm)` map กับ `co_value`, `co_units`, `co_status`
 
 ### Common JSON Data Dictionary
 
