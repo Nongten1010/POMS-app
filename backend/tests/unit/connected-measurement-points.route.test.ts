@@ -5,7 +5,9 @@ import { signAccessToken } from '../../src/shared/utils/jwt';
 jest.mock('../../src/modules/connection-requests/connection-requests.service', () => ({
   connectionRequestsService: {
     getAddParameterFormDetail: jest.fn(),
+    getCalendarStatus: jest.fn(),
     getCurrentDeviceConfigFormDetail: jest.fn(),
+    getMeasurementStatistics: jest.fn(),
     listConnectedMeasurementPoints: jest.fn(),
     listDetails: jest.fn(),
     listTableRows: jest.fn(),
@@ -193,6 +195,60 @@ describe('connected measurement points route', () => {
         schedules: [],
       },
     });
+    mockedConnectionRequestsService.getMeasurementStatistics.mockResolvedValue({
+      data: {
+        metadata: {
+          description: 'สถิติรายชั่วโมงสำหรับตารางสถิติข้อมูลและกราฟแนวโน้มสถานการณ์มลพิษ',
+          date: '2026-06-09',
+          valueDefinitions: {},
+        },
+        factory: {
+          factoryId: 'factory-001',
+          factoryName: 'บริษัท ทดสอบ จำกัด',
+          systemType: 'CEMS',
+        },
+        thresholds: [],
+        measurementPoints: [],
+      },
+      meta: {
+        stationId: 'S0001',
+        interval: '60m',
+        schemaName: 'ingest',
+        tableName: 'S0001_data_60m',
+        date: '2026-06-09',
+        count: 0,
+        registeredParameters: [],
+      },
+    });
+    mockedConnectionRequestsService.getCalendarStatus.mockResolvedValue({
+      data: {
+        metadata: {
+          description: 'DateCalendar และตารางสรุปสถานะรายเดือนของโรงงาน',
+          month: '2026-06',
+          valueDefinitions: {},
+        },
+        factory: {
+          factoryId: 'factory-001',
+          factoryName: 'บริษัท ทดสอบ จำกัด',
+          systemType: 'CEMS',
+        },
+        calendar: {
+          year: 2026,
+          month: 6,
+          days: [],
+        },
+        monthlySummary: [],
+      },
+      meta: {
+        stationId: 'S0001',
+        interval: '60m',
+        schemaName: 'ingest',
+        tableName: 'S0001_data_60m',
+        month: '2026-06',
+        count: 0,
+        registeredParameters: [],
+      },
+    });
   });
 
   it('exposes current connected measurement points outside the request route namespace', async () => {
@@ -309,6 +365,76 @@ describe('connected measurement points route', () => {
       42,
       'ALL',
     );
+  });
+
+  it('exposes measurement statistics for the selected connected measurement point', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .get('/api/v1/connected-measurement-points/S0001/measurement-statistics?date=2026-06-09')
+      .set('Authorization', `Bearer ${accessToken()}`);
+
+    expect(response.status).toBe(200);
+    expect(mockedConnectionRequestsService.getMeasurementStatistics).toHaveBeenCalledWith(
+      'S0001',
+      { date: '2026-06-09' },
+      42,
+      'ALL',
+    );
+    expect(response.body).toMatchObject({
+      success: true,
+      data: {
+        factory: {
+          factoryId: 'factory-001',
+        },
+      },
+      meta: {
+        stationId: 'S0001',
+        date: '2026-06-09',
+      },
+    });
+  });
+
+  it('exposes monthly calendar status for the selected connected measurement point', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .get('/api/v1/connected-measurement-points/S0001/calendar-status?month=2026-06')
+      .set('Authorization', `Bearer ${accessToken()}`);
+
+    expect(response.status).toBe(200);
+    expect(mockedConnectionRequestsService.getCalendarStatus).toHaveBeenCalledWith(
+      'S0001',
+      { month: '2026-06' },
+      42,
+      'ALL',
+    );
+    expect(response.body).toMatchObject({
+      success: true,
+      data: {
+        calendar: {
+          year: 2026,
+          month: 6,
+        },
+      },
+      meta: {
+        stationId: 'S0001',
+        month: '2026-06',
+      },
+    });
+  });
+
+  it('rejects unsafe station ids before querying measurement statistics tables', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .get(
+        '/api/v1/connected-measurement-points/S0001%3Bdrop/measurement-statistics?date=2026-06-09',
+      )
+      .set('Authorization', `Bearer ${accessToken()}`);
+
+    expect(response.status).toBe(400);
+    expect(mockedConnectionRequestsService.getMeasurementStatistics).not.toHaveBeenCalled();
   });
 });
 

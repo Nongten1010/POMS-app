@@ -6,6 +6,11 @@ import { createDeviceConnectionConfigRequestSchema } from '../device-connections
 import { createConnectionRequestDocumentImageService } from './connection-request-document-image.service';
 import { connectionRequestsService } from './connection-requests.service';
 import {
+  calendarStatusQuerySchema,
+  connectedMeasurementPointDetailParamsSchema,
+  measurementStatisticsQuerySchema,
+} from '../parameter-values/parameter-values.validator';
+import {
   addMeasurementPointRequestSchema,
   addParameterRequestSchema,
   changeConnectionRequestStatusSchema,
@@ -92,11 +97,7 @@ export const connectionRequestsController = {
     }
   },
 
-  async setOperatorFactoryFavorite(
-    req: Request,
-    res: Response,
-    next: NextFunction,
-  ): Promise<void> {
+  async setOperatorFactoryFavorite(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const actorUserId = requireActorUserId(req);
       const { factoryId } = operatorFactoryFavoriteParamsSchema.parse(req.params);
@@ -220,6 +221,40 @@ export const connectionRequestsController = {
               getScope(req, 'cems_wpms_requests:edit'),
             );
       res.status(StatusCodes.CREATED).json({ success: true, data });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async getMeasurementStatistics(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const actorUserId = requireActorUserId(req);
+      const { stationId } = connectedMeasurementPointDetailParamsSchema.parse(req.params);
+      const query = measurementStatisticsQuerySchema.parse(req.query);
+      const result = await connectionRequestsService.getMeasurementStatistics(
+        stationId,
+        query,
+        actorUserId,
+        getScope(req, 'cems_wpms_requests:view'),
+      );
+      res.status(StatusCodes.OK).json({ success: true, ...result });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async getCalendarStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const actorUserId = requireActorUserId(req);
+      const { stationId } = connectedMeasurementPointDetailParamsSchema.parse(req.params);
+      const query = calendarStatusQuerySchema.parse(req.query);
+      const result = await connectionRequestsService.getCalendarStatus(
+        stationId,
+        query,
+        actorUserId,
+        getScope(req, 'cems_wpms_requests:view'),
+      );
+      res.status(StatusCodes.OK).json({ success: true, ...result });
     } catch (err) {
       next(err);
     }

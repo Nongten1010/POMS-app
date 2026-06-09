@@ -27,6 +27,16 @@ connectedMeasurementPointsRoutes.get(
   authorize('cems_wpms_requests:view'),
   connectionRequestsController.getCurrentDeviceConfigFormDetail,
 );
+connectedMeasurementPointsRoutes.get(
+  '/:stationId/measurement-statistics',
+  authorize('cems_wpms_requests:view'),
+  connectionRequestsController.getMeasurementStatistics,
+);
+connectedMeasurementPointsRoutes.get(
+  '/:stationId/calendar-status',
+  authorize('cems_wpms_requests:view'),
+  connectionRequestsController.getCalendarStatus,
+);
 connectedMeasurementPointsRoutes.post(
   '/:stationId/device-configs',
   authorize('cems_wpms_requests:edit'),

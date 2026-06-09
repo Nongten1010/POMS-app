@@ -7,6 +7,10 @@ import type {
   DeviceConnectionConfigDTO,
 } from '../device-connections/device-connections.types';
 import { parameterValuesService } from '../parameter-values/parameter-values.service';
+import type {
+  CalendarStatusQuerySchemaInput,
+  MeasurementStatisticsQuerySchemaInput,
+} from '../parameter-values/parameter-values.validator';
 import { connectionRequestsRepository } from './connection-requests.repository';
 import {
   CONNECTION_REQUEST_STATUS,
@@ -389,6 +393,48 @@ export const connectionRequestsService = {
     );
 
     return { data: details, meta: { total: details.length } };
+  },
+
+  async getMeasurementStatistics(
+    stationId: string,
+    query: MeasurementStatisticsQuerySchemaInput,
+    actorUserId: number,
+    viewScope: string | null | undefined,
+  ) {
+    const point = await loadConnectedMeasurementPointDetail(stationId, actorUserId, viewScope);
+    const result = await parameterValuesService.measurementStatistics(
+      { stationId, ...query },
+      { actorUserId, scope: viewScope },
+    );
+
+    return {
+      ...result,
+      data: {
+        ...result.data,
+        factory: toMeasurementDetailFactory(point),
+      },
+    };
+  },
+
+  async getCalendarStatus(
+    stationId: string,
+    query: CalendarStatusQuerySchemaInput,
+    actorUserId: number,
+    viewScope: string | null | undefined,
+  ) {
+    const point = await loadConnectedMeasurementPointDetail(stationId, actorUserId, viewScope);
+    const result = await parameterValuesService.calendarStatus(
+      { stationId, ...query },
+      { actorUserId, scope: viewScope },
+    );
+
+    return {
+      ...result,
+      data: {
+        ...result.data,
+        factory: toMeasurementDetailFactory(point),
+      },
+    };
   },
 
   create(input: CreateConnectionRequestInput, actorUserId: number): Promise<ConnectionRequestDTO> {
@@ -1314,6 +1360,33 @@ function matchesOperatorFactoryDashboardQuery(
   }
   if (query.favoriteOnly && !factory.isFavorite) return false;
   return true;
+}
+
+async function loadConnectedMeasurementPointDetail(
+  stationId: string,
+  actorUserId: number,
+  viewScope: string | null | undefined,
+): Promise<ConnectedMeasurementPointDetailDTO> {
+  const result = await connectionRequestsService.listConnectedMeasurementPoints(
+    { stationId },
+    actorUserId,
+    viewScope,
+  );
+  const point = result.data[0];
+  if (!point) throw new NotFoundError(`Connected measurement point ${stationId} not found`);
+  return point;
+}
+
+function toMeasurementDetailFactory(point: ConnectedMeasurementPointDetailDTO): {
+  factoryId: string;
+  factoryName: string;
+  systemType: string;
+} {
+  return {
+    factoryId: point.factory?.factoryId ?? '',
+    factoryName: point.factory?.factoryName ?? '',
+    systemType: point.type,
+  };
 }
 
 async function loadRequest(id: number): Promise<ConnectionRequestDTO> {

@@ -2,12 +2,18 @@ import { env } from '../../config/env';
 import { ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
 import { parameterValuesRepository } from './parameter-values.repository';
 import {
+  type CalendarStatusQuery,
+  type CalendarStatusResultDTO,
   type ConnectionTestQuery,
   type ConnectionTestResultDTO,
   type LatestHourlyParameterValuesResultDTO,
   type LatestParameterValueQuery,
   type LatestParameterValueResultDTO,
   type ListParameterValuesQuery,
+  type MeasurementParameterThresholdDTO,
+  type MeasurementStatisticsQuery,
+  type MeasurementStatisticsResultDTO,
+  type ParameterValueStatus,
   PARAMETER_VALUE_INTERVALS,
   type ParameterValueAccessContext,
   type ParameterValuesResultDTO,
@@ -182,7 +188,149 @@ export const parameterValuesService = {
       },
     };
   },
+
+  async measurementStatistics(
+    query: MeasurementStatisticsQuery,
+    access: ParameterValueAccessContext,
+  ): Promise<MeasurementStatisticsResultDTO> {
+    await ensureStationAccess(query.stationId, access);
+
+    const interval = '60m';
+    const tableName = parameterValuesRepository.tableName(query.stationId, interval);
+    const exists = await parameterValuesRepository.tableExists(tableName);
+    if (!exists) {
+      throw new NotFoundError(
+        `Parameter value table ${env.PARAMETER_DB_SCHEMA}.${tableName} not found`,
+      );
+    }
+
+    const [result, registeredParameters] = await Promise.all([
+      parameterValuesRepository.listRows({
+        stationId: query.stationId,
+        interval,
+        startDate: query.date,
+        endDate: query.date,
+      }),
+      parameterValuesRepository.listRegisteredParameters(query.stationId, access),
+    ]);
+    const definitions = buildParameterDefinitions(registeredParameters, result.rows);
+
+    return {
+      data: {
+        metadata: {
+          description: 'สถิติรายชั่วโมงสำหรับตารางสถิติข้อมูลและกราฟแนวโน้มสถานการณ์มลพิษ',
+          date: query.date,
+          valueDefinitions: measurementStatisticsValueDefinitions(),
+        },
+        thresholds: definitions.map(toThreshold),
+        measurementPoints: [
+          {
+            pointCode: query.stationId,
+            stationId: query.stationId,
+            date: query.date,
+            rows: buildHourlyStatisticRows(query.date, result.rows, definitions),
+          },
+        ],
+      },
+      meta: {
+        stationId: query.stationId,
+        interval,
+        schemaName: env.PARAMETER_DB_SCHEMA,
+        tableName: result.tableName,
+        date: query.date,
+        count: result.rows.length,
+        registeredParameters,
+      },
+    };
+  },
+
+  async calendarStatus(
+    query: CalendarStatusQuery,
+    access: ParameterValueAccessContext,
+  ): Promise<CalendarStatusResultDTO> {
+    await ensureStationAccess(query.stationId, access);
+
+    const interval = '60m';
+    const tableName = parameterValuesRepository.tableName(query.stationId, interval);
+    const exists = await parameterValuesRepository.tableExists(tableName);
+    if (!exists) {
+      throw new NotFoundError(
+        `Parameter value table ${env.PARAMETER_DB_SCHEMA}.${tableName} not found`,
+      );
+    }
+
+    const { year, month, startDate, endDate } = monthRange(query.month);
+    const [result, registeredParameters] = await Promise.all([
+      parameterValuesRepository.listRows({
+        stationId: query.stationId,
+        interval,
+        startDate,
+        endDate,
+      }),
+      parameterValuesRepository.listRegisteredParameters(query.stationId, access),
+    ]);
+    const definitions = buildParameterDefinitions(registeredParameters, result.rows);
+    const dailySummaries = buildDailySummaries(result.rows, definitions);
+
+    return {
+      data: {
+        metadata: {
+          description: 'DateCalendar และตารางสรุปสถานะรายเดือนของโรงงาน',
+          month: query.month,
+          valueDefinitions: calendarStatusValueDefinitions(),
+        },
+        calendar: {
+          year,
+          month,
+          days: dailySummaries.map((summary) => ({
+            date: summary.date,
+            dataCompletenessPercent: summary.dataCompletenessPercent,
+            dataCompletenessStatus: summary.dataCompletenessStatus,
+            pollutionStatus: summary.pollutionStatus,
+            display: {
+              backgroundStatus: summary.dataCompletenessStatus,
+              borderStatus: summary.pollutionStatus,
+            },
+          })),
+        },
+        monthlySummary: definitions.map((definition) =>
+          buildMonthlyParameterSummary(definition, dailySummaries),
+        ),
+      },
+      meta: {
+        stationId: query.stationId,
+        interval,
+        schemaName: env.PARAMETER_DB_SCHEMA,
+        tableName: result.tableName,
+        month: query.month,
+        count: result.rows.length,
+        registeredParameters,
+      },
+    };
+  },
 };
+
+const DEFAULT_NORMAL_MAX = 180;
+const DEFAULT_WARNING_MAX = 190;
+const HOURS_PER_DAY = 24;
+
+interface ParameterDefinition {
+  code: string;
+  label: string;
+  name: string;
+  unit: string;
+  prefixes: string[];
+  normalMax: number;
+  warningMax: number;
+}
+
+interface DailySummary {
+  date: string;
+  dataCompletenessPercent: number;
+  dataCompletenessStatus: 'lowData' | 'highData';
+  pollutionStatus: 'normal' | 'warning' | 'exceeded' | 'insufficient';
+  parameterStatuses: Map<string, ParameterValueStatus[]>;
+}
 
 const BASE_PARAMETER_VALUE_COLUMNS = new Set(['station_id', 'cdate', 'ctime', 'udate', 'utime']);
 const IGNORED_PARAMETER_TOKENS = new Set([
@@ -197,6 +345,396 @@ const IGNORED_PARAMETER_TOKENS = new Set([
   'unit',
   'units',
 ]);
+
+function buildParameterDefinitions(
+  registeredParameters: string[],
+  rows: Record<string, unknown>[],
+): ParameterDefinition[] {
+  return registeredParameters.map((parameter) => {
+    const prefixes = toParameterColumnPrefixes(parameter);
+    const code = (prefixes[0] ?? normalizeParameterName(parameter)).toUpperCase();
+    const parsed = parseParameterLabel(parameter);
+
+    return {
+      code,
+      label: parsed.label,
+      name: parsed.name,
+      unit: parsed.unit || findUnitForPrefixes(rows, prefixes),
+      prefixes,
+      normalMax: DEFAULT_NORMAL_MAX,
+      warningMax: DEFAULT_WARNING_MAX,
+    };
+  });
+}
+
+function parseParameterLabel(parameter: string): { label: string; name: string; unit: string } {
+  const label = parameter.trim();
+  const match = label.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
+  if (!match) {
+    return {
+      label,
+      name: label,
+      unit: '',
+    };
+  }
+
+  return {
+    label,
+    name: match[1].trim(),
+    unit: match[2].trim(),
+  };
+}
+
+function findUnitForPrefixes(rows: Record<string, unknown>[], prefixes: string[]): string {
+  for (const row of rows) {
+    for (const prefix of prefixes) {
+      const value = row[`${prefix}_units`];
+      if (typeof value === 'string' && value.trim()) return value.trim();
+    }
+  }
+
+  return '';
+}
+
+function toThreshold(definition: ParameterDefinition): MeasurementParameterThresholdDTO {
+  return {
+    parameterCode: definition.code,
+    parameterLabel: definition.label,
+    unit: definition.unit,
+    normalMax: definition.normalMax,
+    warningMax: definition.warningMax,
+  };
+}
+
+function buildHourlyStatisticRows(
+  date: string,
+  rows: Record<string, unknown>[],
+  definitions: ParameterDefinition[],
+) {
+  const rowsByHour = new Map<number, Record<string, unknown>>();
+  for (const row of rows) {
+    const rowDate = stringValue(row.cdate);
+    const hour = parseHour(row.ctime);
+    if (rowDate === date && hour !== null && !rowsByHour.has(hour)) {
+      rowsByHour.set(hour, row);
+    }
+  }
+
+  return Array.from({ length: HOURS_PER_DAY }, (_, hour) => {
+    const row = rowsByHour.get(hour);
+    const dataCompletenessPercent = row
+      ? (readCompletenessPercent(row) ?? (hasAnyParameterValue(row, definitions) ? 100 : 0))
+      : 0;
+
+    return {
+      time: hourLabel(hour),
+      chartTime: chartHour(hour),
+      dataCompletenessPercent,
+      values: Object.fromEntries(
+        definitions.map((definition) => [
+          definition.code,
+          buildStatisticValue(row, definition, dataCompletenessPercent),
+        ]),
+      ),
+    };
+  });
+}
+
+function buildStatisticValue(
+  row: Record<string, unknown> | undefined,
+  definition: ParameterDefinition,
+  dataCompletenessPercent: number,
+) {
+  if (!row) {
+    return {
+      value: null,
+      displayValue: '-',
+      status: 'noData' as const,
+    };
+  }
+
+  const value = readParameterNumber(row, definition);
+  if (value === null || dataCompletenessPercent < 80) {
+    return {
+      value: null,
+      displayValue: '-',
+      status: 'insufficient' as const,
+    };
+  }
+
+  return {
+    value,
+    displayValue: formatMeasurementValue(value),
+    status: readParameterStatus(row, definition, value),
+  };
+}
+
+function buildDailySummaries(
+  rows: Record<string, unknown>[],
+  definitions: ParameterDefinition[],
+): DailySummary[] {
+  const rowsByDate = new Map<string, Record<string, unknown>[]>();
+  for (const row of rows) {
+    const date = stringValue(row.cdate);
+    if (!date) continue;
+    rowsByDate.set(date, [...(rowsByDate.get(date) ?? []), row]);
+  }
+
+  return [...rowsByDate.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, dayRows]) => buildDailySummary(date, dayRows, definitions));
+}
+
+function buildDailySummary(
+  date: string,
+  rows: Record<string, unknown>[],
+  definitions: ParameterDefinition[],
+): DailySummary {
+  const dataCompletenessPercent = calculateDailyCompleteness(rows, definitions);
+  const dataCompletenessStatus = dataCompletenessPercent < 80 ? 'lowData' : 'highData';
+  const parameterStatuses = new Map<string, ParameterValueStatus[]>(
+    definitions.map((definition) => [definition.code, []]),
+  );
+
+  for (const row of rows) {
+    const completeness = readCompletenessPercent(row) ?? 100;
+    for (const definition of definitions) {
+      const value = readParameterNumber(row, definition);
+      if (value === null) continue;
+      const statuses = parameterStatuses.get(definition.code) ?? [];
+      statuses.push(
+        completeness < 80 ? 'insufficient' : readParameterStatus(row, definition, value),
+      );
+      parameterStatuses.set(definition.code, statuses);
+    }
+  }
+
+  const pollutionStatus =
+    dataCompletenessPercent < 80
+      ? 'insufficient'
+      : worstPollutionStatus([...parameterStatuses.values()].flat());
+
+  return {
+    date,
+    dataCompletenessPercent,
+    dataCompletenessStatus,
+    pollutionStatus,
+    parameterStatuses,
+  };
+}
+
+function buildMonthlyParameterSummary(
+  definition: ParameterDefinition,
+  dailySummaries: DailySummary[],
+) {
+  const latestSummary = dailySummaries.at(-1);
+
+  return {
+    parameterCode: definition.code,
+    parameterName: definition.name,
+    unit: definition.unit,
+    exceededDays: dailySummaries.filter((summary) =>
+      (summary.parameterStatuses.get(definition.code) ?? []).includes('exceeded'),
+    ).length,
+    lowDataDays: dailySummaries.filter((summary) => summary.dataCompletenessStatus === 'lowData')
+      .length,
+    todayDataCompletenessPercent: latestSummary?.dataCompletenessPercent ?? null,
+  };
+}
+
+function calculateDailyCompleteness(
+  rows: Record<string, unknown>[],
+  definitions: ParameterDefinition[],
+): number {
+  const explicitCompleteness = rows
+    .map(readCompletenessPercent)
+    .filter((value): value is number => value !== null);
+
+  if (explicitCompleteness.length > 0) {
+    return Math.round(
+      explicitCompleteness.reduce((sum, value) => sum + value, 0) / explicitCompleteness.length,
+    );
+  }
+
+  const completeHours = new Set<number>();
+  for (const row of rows) {
+    const hour = parseHour(row.ctime);
+    if (hour !== null && hasAnyParameterValue(row, definitions)) completeHours.add(hour);
+  }
+
+  return Math.round((completeHours.size / HOURS_PER_DAY) * 100);
+}
+
+function hasAnyParameterValue(
+  row: Record<string, unknown>,
+  definitions: ParameterDefinition[],
+): boolean {
+  return definitions.some((definition) => readParameterNumber(row, definition) !== null);
+}
+
+function readCompletenessPercent(row: Record<string, unknown>): number | null {
+  for (const key of [
+    'data_completeness_percent',
+    'dataCompletenessPercent',
+    'completeness_percent',
+    'availability_percent',
+  ]) {
+    const value = toNumber(row[key]);
+    if (value !== null) return clampPercent(Math.round(value));
+  }
+
+  return null;
+}
+
+function readParameterNumber(
+  row: Record<string, unknown>,
+  definition: ParameterDefinition,
+): number | null {
+  for (const prefix of definition.prefixes) {
+    const value = toNumber(row[`${prefix}_value`]);
+    if (value !== null) return value;
+  }
+
+  return null;
+}
+
+function readParameterStatus(
+  row: Record<string, unknown>,
+  definition: ParameterDefinition,
+  value: number,
+): ParameterValueStatus {
+  for (const prefix of definition.prefixes) {
+    const sourceStatus = normalizeSourceStatus(row[`${prefix}_status`]);
+    if (sourceStatus) return sourceStatus;
+  }
+
+  if (value <= definition.normalMax) return 'normal';
+  if (value <= definition.warningMax) return 'warning';
+  return 'exceeded';
+}
+
+function normalizeSourceStatus(value: unknown): ParameterValueStatus | null {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return null;
+  if (['normal', 'ok', 'pass', 'ปกติ'].some((token) => normalized.includes(token))) {
+    return 'normal';
+  }
+  if (['warning', 'warn', 'alert', 'เฝ้าระวัง'].some((token) => normalized.includes(token))) {
+    return 'warning';
+  }
+  if (['exceed', 'over', 'fail', 'เกิน'].some((token) => normalized.includes(token))) {
+    return 'exceeded';
+  }
+  if (['insufficient', 'missing', 'ไม่เพียงพอ'].some((token) => normalized.includes(token))) {
+    return 'insufficient';
+  }
+  if (['nodata', 'no data', 'ไม่มีข้อมูล'].some((token) => normalized.includes(token))) {
+    return 'noData';
+  }
+
+  return 'invalid';
+}
+
+function worstPollutionStatus(
+  statuses: ParameterValueStatus[],
+): 'normal' | 'warning' | 'exceeded' | 'insufficient' {
+  if (statuses.includes('exceeded')) return 'exceeded';
+  if (statuses.includes('warning')) return 'warning';
+  if (statuses.includes('normal')) return 'normal';
+  return 'insufficient';
+}
+
+function toNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value !== 'string') return null;
+  const cleaned = value.replace(/,/g, '').trim();
+  if (!cleaned || cleaned === '-') return null;
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function stringValue(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function parseHour(value: unknown): number | null {
+  if (typeof value !== 'string') return null;
+  const match = value.trim().match(/^(\d{1,2})(?::|\.)/);
+  if (!match) return null;
+  const hour = Number(match[1]);
+  return Number.isInteger(hour) && hour >= 0 && hour <= 23 ? hour : null;
+}
+
+function hourLabel(hour: number): string {
+  const value = String(hour).padStart(2, '0');
+  return `${value}.00-${value}.59 น.`;
+}
+
+function chartHour(hour: number): string {
+  return `${String(hour).padStart(2, '0')}:00`;
+}
+
+function formatMeasurementValue(value: number): string {
+  return new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function clampPercent(value: number): number {
+  if (value < 0) return 0;
+  if (value > 100) return 100;
+  return value;
+}
+
+function monthRange(monthValue: string): {
+  year: number;
+  month: number;
+  startDate: string;
+  endDate: string;
+} {
+  const year = Number(monthValue.slice(0, 4));
+  const month = Number(monthValue.slice(5, 7));
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+
+  return {
+    year,
+    month,
+    startDate: `${monthValue}-01`,
+    endDate: `${monthValue}-${String(lastDay).padStart(2, '0')}`,
+  };
+}
+
+function measurementStatisticsValueDefinitions(): Record<string, unknown> {
+  return {
+    status: {
+      normal: 'สีเขียว ปกติ ค่ามลพิษ <= normalMax',
+      warning: 'สีส้ม เฝ้าระวัง ค่ามลพิษ <= warningMax',
+      exceeded: 'สีแดง เกินมาตรฐาน ค่ามลพิษ > warningMax',
+      insufficient: 'สีเทา ข้อมูลไม่เพียงพอ',
+      noData: 'สีเทา ไม่มีข้อมูล',
+      invalid: 'สีเทา ข้อมูลผิดรูปแบบหรือสถานะอื่นๆ',
+    },
+    dataCompletenessPercent:
+      'ร้อยละการส่งข้อมูลในช่วงเวลานั้น ถ้าน้อยกว่า 80 ให้แสดงสีเทาหรือ status insufficient',
+  };
+}
+
+function calendarStatusValueDefinitions(): Record<string, unknown> {
+  return {
+    dataCompletenessStatus: {
+      lowData: 'ส่งข้อมูลน้อยกว่า 80% ใช้พื้นหลังสีเทา',
+      highData: 'ส่งข้อมูลมากกว่าหรือเท่ากับ 80% ใช้พื้นหลังสีฟ้า',
+    },
+    pollutionStatus: {
+      normal: 'ปกติทั้งวัน ใช้เส้นขอบสีเขียว',
+      warning: 'เฝ้าระวัง ใช้เส้นขอบสีส้ม',
+      exceeded: 'เกินมาตรฐาน ใช้เส้นขอบสีแดง',
+      insufficient: 'ข้อมูลไม่เพียงพอ หรือประเมินสถานะไม่ได้',
+    },
+  };
+}
 
 function filterRowsByRegisteredParameters(
   rows: Record<string, unknown>[],

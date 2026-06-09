@@ -76,6 +76,8 @@ Mapping:
 | 12  | ดึงข้อมูลปัจจุบันลงฟอร์มเพิ่มพารามิเตอร์                     | GET    | `/connected-measurement-points/:stationId/parameter-form`  | `cems_wpms_requests:view`    |
 | 13  | ดึง config ปัจจุบันของจุดตรวจวัดที่เลือก                     | GET    | `/connected-measurement-points/:stationId/device-configs`  | `cems_wpms_requests:view`    |
 | 14  | บันทึก config ปัจจุบันของจุดตรวจวัดที่เลือก                  | POST   | `/connected-measurement-points/:stationId/device-configs`  | `cems_wpms_requests:edit`    |
+| 15  | ปฏิทินสถานะรายเดือนของจุดตรวจวัดที่เลือก                     | GET    | `/connected-measurement-points/:stationId/calendar-status` | `cems_wpms_requests:view`    |
+| 16  | สถิติรายชั่วโมง/กราฟแนวโน้มของจุดตรวจวัดที่เลือก             | GET    | `/connected-measurement-points/:stationId/measurement-statistics` | `cems_wpms_requests:view` |
 
 ## API Mapping สำหรับปุ่มบนจุดตรวจวัด
 
@@ -88,6 +90,8 @@ Mapping:
 | เพิ่มพารามิเตอร์ | `POST /api/v1/cems-wpms-requests/parameters` | บันทึกคำขอเพิ่มพารามิเตอร์; ใช้ฟอร์ม shape เดียวกับเพิ่มจุดตรวจวัด แต่ต้องมี `measurementPoints[0].pointCode` |
 | ตั้งค่า | `GET /api/v1/connected-measurement-points/:stationId/device-configs` | คืน config ปัจจุบันจาก active settings ของจุดตรวจวัดที่เลือก |
 | ตั้งค่า | `POST /api/v1/connected-measurement-points/:stationId/device-configs` | บันทึก active settings ปัจจุบัน; payload ใช้รูปแบบเดียวกับ device config เดิม และ `stationId` ใน payload ต้องตรงกับ path |
+| ดูรายละเอียด | `GET /api/v1/connected-measurement-points/:stationId/calendar-status?month=2026-06` | คืนข้อมูลทำ DateCalendar รายเดือนจากตาราง `{stationId}_data_60m` |
+| ดูรายละเอียด | `GET /api/v1/connected-measurement-points/:stationId/measurement-statistics?date=2026-06-09` | คืนข้อมูลกราฟและตารางรายชั่วโมงจากตาราง `{stationId}_data_60m` |
 
 ## Flow เพิ่มจุดตรวจวัด จบ 1 คำขอ
 
@@ -2880,6 +2884,34 @@ Data dictionary response row:
 | `connectedAt` | string|null | วันเวลาที่เชื่อมต่อแล้ว |
 | `point` | object | ข้อมูลจุดตรวจวัด |
 | `deviceConfigs` | array | active setting ล่าสุดของจุดตรวจวัด โดยแต่ละ item จัด shape เหมือน payload: `{ stationId, device, channels, statusManagement }`; ไม่ใช่ snapshot ของคำขอแรก |
+
+### API 15: GET ปฏิทินสถานะรายเดือนของจุดตรวจวัดที่เลือก
+
+`GET /api/v1/connected-measurement-points/:stationId/calendar-status?month=2026-06`
+
+คืนข้อมูลทำ DateCalendar รายเดือนจากตาราง `{stationId}_data_60m`
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `stationId` | path string | Yes | รหัสจุดตรวจวัด ต้องใช้เป็น safe SQL identifier |
+| `month` | query string | Yes | `YYYY-MM` |
+
+Response หลัก: `data.factory`, `data.calendar.days[]`, `data.monthlySummary[]`, `meta.stationId`, `meta.tableName`, `meta.registeredParameters`
+
+### API 16: GET สถิติรายชั่วโมง/กราฟแนวโน้มของจุดตรวจวัดที่เลือก
+
+`GET /api/v1/connected-measurement-points/:stationId/measurement-statistics?date=2026-06-09`
+
+คืนข้อมูลกราฟและตารางรายชั่วโมงจากตาราง `{stationId}_data_60m`; สร้าง `rows` 24 ชั่วโมงเสมอ
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `stationId` | path string | Yes | รหัสจุดตรวจวัด ต้องใช้เป็น safe SQL identifier |
+| `date` | query string | Yes | `YYYY-MM-DD` |
+
+Response หลัก: `data.factory`, `data.thresholds[]`, `data.measurementPoints[].rows[]`, `meta.stationId`, `meta.tableName`, `meta.registeredParameters`
+
+หมายเหตุ: response ใช้ registered parameters เพื่อเลือก column เช่น `CO (ppm)` map กับ `co_value`, `co_units`, `co_status`
 
 ### Common JSON Data Dictionary
 

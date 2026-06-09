@@ -178,7 +178,13 @@ describe('parameterValuesService', () => {
   });
 
   it('returns the latest hourly rows from the 60m table timestamp group', async () => {
-    mockedRepository.listRegisteredParameters.mockResolvedValue(['CO', 'NOx', 'Temp', 'O2', 'Flow']);
+    mockedRepository.listRegisteredParameters.mockResolvedValue([
+      'CO',
+      'NOx',
+      'Temp',
+      'O2',
+      'Flow',
+    ]);
     mockedRepository.tableExists.mockResolvedValue(true);
     mockedRepository.latestRowsAtLatestTimestamp.mockResolvedValue({
       tableName: 'S0001_data_60m',
@@ -458,6 +464,190 @@ describe('parameterValuesService', () => {
         tableName: 'S0001_data_real',
         columnCount: 392,
         rowCount: 1,
+      },
+    ]);
+  });
+
+  it('builds daily measurement statistics for chart and table display', async () => {
+    mockedRepository.listRegisteredParameters.mockResolvedValue(['CO (ppm)', 'NOx (ppm)']);
+    mockedRepository.tableExists.mockResolvedValue(true);
+    mockedRepository.listRows.mockResolvedValue({
+      tableName: 'S0001_data_60m',
+      rows: [
+        {
+          station_id: 'S0001',
+          co_value: 0.08,
+          co_units: 'ppm',
+          co_status: 'Normal',
+          nox_value: 192,
+          nox_units: 'ppm',
+          cdate: '2026-06-09',
+          ctime: '01:00:00',
+        },
+        {
+          station_id: 'S0001',
+          co_value: null,
+          nox_value: null,
+          cdate: '2026-06-09',
+          ctime: '02:00:00',
+        },
+        {
+          station_id: 'S0001',
+          co_value: 191,
+          co_units: 'ppm',
+          nox_value: 150,
+          nox_units: 'ppm',
+          cdate: '2026-06-09',
+          ctime: '00:00:00',
+        },
+      ],
+    });
+
+    const result = await parameterValuesService.measurementStatistics(
+      { stationId: 'S0001', date: '2026-06-09' },
+      operatorAccess,
+    );
+
+    expect(mockedRepository.tableExists).toHaveBeenCalledWith('S0001_data_60m');
+    expect(mockedRepository.listRows).toHaveBeenCalledWith({
+      stationId: 'S0001',
+      interval: '60m',
+      startDate: '2026-06-09',
+      endDate: '2026-06-09',
+    });
+    expect(result.data).toMatchObject({
+      metadata: {
+        date: '2026-06-09',
+      },
+      thresholds: [
+        {
+          parameterCode: 'CO',
+          parameterLabel: 'CO (ppm)',
+          unit: 'ppm',
+          normalMax: 180,
+          warningMax: 190,
+        },
+        {
+          parameterCode: 'NOX',
+          parameterLabel: 'NOx (ppm)',
+          unit: 'ppm',
+          normalMax: 180,
+          warningMax: 190,
+        },
+      ],
+      measurementPoints: [
+        {
+          pointCode: 'S0001',
+          stationId: 'S0001',
+          date: '2026-06-09',
+          rows: expect.arrayContaining([
+            expect.objectContaining({
+              time: '00.00-00.59 น.',
+              chartTime: '00:00',
+              values: {
+                CO: { value: 191, displayValue: '191.00', status: 'exceeded' },
+                NOX: { value: 150, displayValue: '150.00', status: 'normal' },
+              },
+            }),
+            expect.objectContaining({
+              time: '02.00-02.59 น.',
+              chartTime: '02:00',
+              dataCompletenessPercent: 0,
+              values: {
+                CO: { value: null, displayValue: '-', status: 'insufficient' },
+                NOX: { value: null, displayValue: '-', status: 'insufficient' },
+              },
+            }),
+          ]),
+        },
+      ],
+    });
+    expect(result.data.measurementPoints[0]?.rows).toHaveLength(24);
+    expect(result.meta).toMatchObject({
+      stationId: 'S0001',
+      interval: '60m',
+      tableName: 'S0001_data_60m',
+      count: 3,
+      registeredParameters: ['CO (ppm)', 'NOx (ppm)'],
+    });
+  });
+
+  it('builds monthly calendar status from hourly rows', async () => {
+    mockedRepository.listRegisteredParameters.mockResolvedValue(['CO (ppm)', 'NOx (ppm)']);
+    mockedRepository.tableExists.mockResolvedValue(true);
+    mockedRepository.listRows.mockResolvedValue({
+      tableName: 'S0001_data_60m',
+      rows: [
+        ...Array.from({ length: 20 }, (_, hour) => ({
+          station_id: 'S0001',
+          co_value: hour === 0 ? 191 : 100,
+          nox_value: 100,
+          cdate: '2026-06-09',
+          ctime: `${String(hour).padStart(2, '0')}:00:00`,
+        })),
+        ...Array.from({ length: 10 }, (_, hour) => ({
+          station_id: 'S0001',
+          co_value: 100,
+          nox_value: 100,
+          cdate: '2026-06-10',
+          ctime: `${String(hour).padStart(2, '0')}:00:00`,
+        })),
+      ],
+    });
+
+    const result = await parameterValuesService.calendarStatus(
+      { stationId: 'S0001', month: '2026-06' },
+      operatorAccess,
+    );
+
+    expect(mockedRepository.listRows).toHaveBeenCalledWith({
+      stationId: 'S0001',
+      interval: '60m',
+      startDate: '2026-06-01',
+      endDate: '2026-06-30',
+    });
+    expect(result.data.calendar).toMatchObject({
+      year: 2026,
+      month: 6,
+      days: [
+        {
+          date: '2026-06-09',
+          dataCompletenessPercent: 83,
+          dataCompletenessStatus: 'highData',
+          pollutionStatus: 'exceeded',
+          display: {
+            backgroundStatus: 'highData',
+            borderStatus: 'exceeded',
+          },
+        },
+        {
+          date: '2026-06-10',
+          dataCompletenessPercent: 42,
+          dataCompletenessStatus: 'lowData',
+          pollutionStatus: 'insufficient',
+          display: {
+            backgroundStatus: 'lowData',
+            borderStatus: 'insufficient',
+          },
+        },
+      ],
+    });
+    expect(result.data.monthlySummary).toEqual([
+      {
+        parameterCode: 'CO',
+        parameterName: 'CO',
+        unit: 'ppm',
+        exceededDays: 1,
+        lowDataDays: 1,
+        todayDataCompletenessPercent: 42,
+      },
+      {
+        parameterCode: 'NOX',
+        parameterName: 'NOx',
+        unit: 'ppm',
+        exceededDays: 0,
+        lowDataDays: 1,
+        todayDataCompletenessPercent: 42,
       },
     ]);
   });
