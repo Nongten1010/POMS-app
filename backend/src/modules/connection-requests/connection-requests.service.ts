@@ -11,6 +11,7 @@ import type {
   CalendarStatusQuerySchemaInput,
   MeasurementStatisticsQuerySchemaInput,
 } from '../parameter-values/parameter-values.validator';
+import type { CalendarStatusEvaluationOptions } from '../parameter-values/parameter-values.types';
 import { connectionRequestsRepository } from './connection-requests.repository';
 import {
   CONNECTION_REQUEST_STATUS,
@@ -426,6 +427,7 @@ export const connectionRequestsService = {
     const result = await parameterValuesService.calendarStatus(
       { stationId, ...query },
       { actorUserId, scope: viewScope },
+      toCalendarStatusEvaluationOptions(point),
     );
 
     return {
@@ -1387,6 +1389,68 @@ function toMeasurementDetailFactory(point: ConnectedMeasurementPointDetailDTO): 
     factoryName: point.factory?.factoryName ?? '',
     systemType: point.type,
   };
+}
+
+function toCalendarStatusEvaluationOptions(
+  point: ConnectedMeasurementPointDetailDTO,
+): CalendarStatusEvaluationOptions {
+  const instrumentParameters = point.point.measurementInstruments?.parameters ?? [];
+  const instrumentsByParameter = new Map(
+    instrumentParameters.map((parameter) => [
+      toParameterColumnPrefix(parameter.parameter),
+      parameter,
+    ]),
+  );
+  const channelStatusesByParameter = buildChannelStatusesByParameter(point);
+  const parameterNamesByKey = new Map<string, string>();
+
+  for (const parameter of point.point.parameters) {
+    parameterNamesByKey.set(toParameterColumnPrefix(parameter), parameter);
+  }
+  for (const parameter of instrumentParameters) {
+    parameterNamesByKey.set(toParameterColumnPrefix(parameter.parameter), parameter.parameter);
+  }
+  for (const [key, channel] of channelStatusesByParameter) {
+    parameterNamesByKey.set(key, channel.parameter);
+  }
+
+  return {
+    parameterEvaluations: [...parameterNamesByKey.entries()].map(([key, parameter]) => ({
+      parameter,
+      standardCriteria: instrumentsByParameter.get(key)?.standardCriteria ?? null,
+      channelStatus: channelStatusesByParameter.get(key)?.status ?? null,
+    })),
+  };
+}
+
+function buildChannelStatusesByParameter(
+  point: ConnectedMeasurementPointDetailDTO,
+): Map<string, { parameter: string; status: string | null }> {
+  const statuses = new Map<string, { parameter: string; status: string | null }>();
+
+  for (const config of point.deviceConfigs) {
+    for (const channel of config.channels) {
+      const key = toParameterColumnPrefix(channel.dataType);
+      const current = statuses.get(key);
+      const nextStatus = channel.status ?? null;
+      statuses.set(key, {
+        parameter: current?.parameter ?? channel.dataType,
+        status: mergeChannelStatus(current?.status ?? null, nextStatus),
+      });
+    }
+  }
+
+  return statuses;
+}
+
+function mergeChannelStatus(current: string | null, next: string | null): string | null {
+  if (current && !isNormalDeviceChannelStatus(current)) return current;
+  if (next && !isNormalDeviceChannelStatus(next)) return next;
+  return current ?? next;
+}
+
+function isNormalDeviceChannelStatus(value: string): boolean {
+  return value.trim().toLowerCase() === 'normal';
 }
 
 async function loadRequest(id: number): Promise<ConnectionRequestDTO> {

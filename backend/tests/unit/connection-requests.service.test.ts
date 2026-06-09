@@ -31,6 +31,7 @@ jest.mock('../../src/modules/device-connections/device-connections.service', () 
 
 jest.mock('../../src/modules/parameter-values/parameter-values.service', () => ({
   parameterValuesService: {
+    calendarStatus: jest.fn(),
     latestHourly: jest.fn(),
   },
 }));
@@ -133,6 +134,30 @@ describe('connectionRequestsService', () => {
         count: 0,
         registeredParameters: [],
         returnedColumns: [],
+      },
+    });
+    mockedParameterValuesService.calendarStatus.mockResolvedValue({
+      data: {
+        metadata: {
+          description: 'DateCalendar และตารางสรุปสถานะรายเดือนของโรงงาน',
+          month: '2026-06',
+          valueDefinitions: {},
+        },
+        calendar: {
+          year: 2026,
+          month: 6,
+          days: [],
+        },
+        monthlySummary: [],
+      },
+      meta: {
+        stationId: 'S0001',
+        interval: '60m',
+        schemaName: 'ingest',
+        tableName: 'S0001_data_60m',
+        month: '2026-06',
+        count: 0,
+        registeredParameters: [],
       },
     });
     connectionRequestsService.setClockForTests(() => now);
@@ -1178,6 +1203,127 @@ describe('connectionRequestsService', () => {
     expect(result).toMatchObject({
       data: [{ point: { pointCode: 'STACK-B' } }],
       meta: { total: 1 },
+    });
+  });
+
+  it('passes measurement criteria and device channel health to connected calendar status', async () => {
+    const standardCriteria = {
+      enabled: false,
+      standardValue: null,
+      rows: [
+        { level: 'normal', min: 0, max: null },
+        { level: 'warning', min: 80, max: null },
+        { level: 'critical', min: 100, max: null },
+      ],
+    };
+    const request = requestDto({
+      status: CONNECTION_REQUEST_STATUS.CONNECTED,
+      statusLabel: 'เชื่อมต่อแล้ว',
+      verifiedAt: '2026-05-29T10:00:00.000Z',
+      measurementPoints: [
+        {
+          id: 1,
+          pointName: 'ปล่องระบาย A',
+          pointCode: 'STACK-A',
+          pointType: 'STACK',
+          latitude: null,
+          longitude: null,
+          parameters: ['CO (ppm)', 'NOx (ppm)'],
+          description: null,
+          measurementInstruments: {
+            converterBrand: null,
+            converterModel: null,
+            parameters: [
+              {
+                parameter: 'CO (ppm)',
+                technique: null,
+                range: null,
+                brand: null,
+                supplier: null,
+                eiaStandard: null,
+                standardCondition: null,
+                dryBasis: null,
+                oxygenOrExcessAir: null,
+                standardCriteria,
+                eiaCriteria: null,
+              },
+              {
+                parameter: 'NOx (ppm)',
+                technique: null,
+                range: null,
+                brand: null,
+                supplier: null,
+                eiaStandard: null,
+                standardCondition: null,
+                dryBasis: null,
+                oxygenOrExcessAir: null,
+                standardCriteria: null,
+                eiaCriteria: null,
+              },
+            ],
+          },
+        },
+      ],
+    });
+    mockedRepository.list.mockResolvedValue({ rows: [request], total: 1 });
+    mockedRepository.findFactorySummariesForRequests.mockResolvedValue(
+      new Map([[request.factoryId, factorySummary()]]),
+    );
+    mockedDeviceConnectionsService.listActiveSettings.mockResolvedValue([
+      deviceConnectionConfig({
+        stationId: 'STACK-A',
+        channels: [
+          {
+            addressId: 40001,
+            dataType: 'CO (ppm)',
+            valueRange: { min: 0, max: 200 },
+            valueFormat: 'MEASUREMENT_VALUE',
+            offset: 0,
+            encoding: 'UNSIGNED16_BIG_ENDIAN',
+            status: 'Normal',
+          },
+          {
+            addressId: 40002,
+            dataType: 'NOx (ppm)',
+            valueRange: { min: 0, max: 200 },
+            valueFormat: 'MEASUREMENT_VALUE',
+            offset: 0,
+            encoding: 'UNSIGNED16_BIG_ENDIAN',
+            status: 'Maintenance',
+          },
+        ],
+      }),
+    ]);
+
+    const result = await connectionRequestsService.getCalendarStatus(
+      'STACK-A',
+      { month: '2026-06' },
+      actorUserId,
+      'ALL',
+    );
+
+    expect(mockedParameterValuesService.calendarStatus).toHaveBeenCalledWith(
+      { stationId: 'STACK-A', month: '2026-06' },
+      { actorUserId, scope: 'ALL' },
+      {
+        parameterEvaluations: [
+          {
+            parameter: 'CO (ppm)',
+            standardCriteria,
+            channelStatus: 'Normal',
+          },
+          {
+            parameter: 'NOx (ppm)',
+            standardCriteria: null,
+            channelStatus: 'Maintenance',
+          },
+        ],
+      },
+    );
+    expect(result.data.factory).toEqual({
+      factoryId: 'factory-001',
+      factoryName: 'บริษัท ทดสอบ จำกัด',
+      systemType: 'CEMS',
     });
   });
 

@@ -651,4 +651,133 @@ describe('parameterValuesService', () => {
       },
     ]);
   });
+
+  it('can evaluate connected-point calendar status from per-parameter completeness, criteria, and channel health', async () => {
+    mockedRepository.listRegisteredParameters.mockResolvedValue(['CO (ppm)', 'NOx (ppm)']);
+    mockedRepository.tableExists.mockResolvedValue(true);
+    mockedRepository.listRows.mockResolvedValue({
+      tableName: 'S0001_data_60m',
+      rows: [
+        ...Array.from({ length: 24 }, (_, hour) => ({
+          station_id: 'S0001',
+          co_value: hour === 0 ? 110 : 60,
+          nox_value: 40,
+          cdate: '2026-06-09',
+          ctime: `${String(hour).padStart(2, '0')}:00:00`,
+        })),
+        ...Array.from({ length: 24 }, (_, hour) => ({
+          station_id: 'S0001',
+          co_value: 60,
+          nox_value: hour < 18 ? 40 : null,
+          cdate: '2026-06-10',
+          ctime: `${String(hour).padStart(2, '0')}:00:00`,
+        })),
+      ],
+    });
+
+    const result = await parameterValuesService.calendarStatus(
+      { stationId: 'S0001', month: '2026-06' },
+      operatorAccess,
+      {
+        parameterEvaluations: [
+          {
+            parameter: 'CO (ppm)',
+            channelStatus: 'Normal',
+            standardCriteria: {
+              enabled: false,
+              standardValue: null,
+              rows: [
+                { level: 'normal', min: 0, max: null },
+                { level: 'warning', min: 80, max: null },
+                { level: 'critical', min: 100, max: null },
+              ],
+            },
+          },
+          {
+            parameter: 'NOx (ppm)',
+            channelStatus: 'Normal',
+            standardCriteria: {
+              enabled: false,
+              standardValue: null,
+              rows: [
+                { level: 'normal', min: 0, max: null },
+                { level: 'warning', min: 100, max: null },
+                { level: 'critical', min: 200, max: null },
+              ],
+            },
+          },
+        ],
+      },
+    );
+
+    expect(result.data.calendar.days).toMatchObject([
+      {
+        date: '2026-06-09',
+        dataCompletenessPercent: 100,
+        dataCompletenessStatus: 'highData',
+        pollutionStatus: 'exceeded',
+        display: {
+          backgroundStatus: 'highData',
+          borderStatus: 'exceeded',
+        },
+      },
+      {
+        date: '2026-06-10',
+        dataCompletenessPercent: 75,
+        dataCompletenessStatus: 'lowData',
+        pollutionStatus: 'insufficient',
+        display: {
+          backgroundStatus: 'lowData',
+          borderStatus: 'insufficient',
+        },
+      },
+    ]);
+  });
+
+  it('treats a non-normal device channel as insufficient even when values are otherwise normal', async () => {
+    mockedRepository.listRegisteredParameters.mockResolvedValue(['CO (ppm)', 'NOx (ppm)']);
+    mockedRepository.tableExists.mockResolvedValue(true);
+    mockedRepository.listRows.mockResolvedValue({
+      tableName: 'S0001_data_60m',
+      rows: Array.from({ length: 24 }, (_, hour) => ({
+        station_id: 'S0001',
+        co_value: 50,
+        nox_value: 40,
+        cdate: '2026-06-09',
+        ctime: `${String(hour).padStart(2, '0')}:00:00`,
+      })),
+    });
+
+    const result = await parameterValuesService.calendarStatus(
+      { stationId: 'S0001', month: '2026-06' },
+      operatorAccess,
+      {
+        parameterEvaluations: [
+          {
+            parameter: 'CO (ppm)',
+            channelStatus: 'Maintenance',
+            standardCriteria: {
+              enabled: false,
+              standardValue: null,
+              rows: [
+                { level: 'normal', min: 0, max: null },
+                { level: 'warning', min: 80, max: null },
+                { level: 'critical', min: 100, max: null },
+              ],
+            },
+          },
+          {
+            parameter: 'NOx (ppm)',
+            channelStatus: 'Normal',
+            standardCriteria: null,
+          },
+        ],
+      },
+    );
+
+    expect(result.data.calendar.days[0]).toMatchObject({
+      dataCompletenessStatus: 'highData',
+      pollutionStatus: 'insufficient',
+    });
+  });
 });

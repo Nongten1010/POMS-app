@@ -28,6 +28,16 @@ export interface CalendarStatusQuery {
   month: string;
 }
 
+export interface CalendarStatusParameterEvaluation {
+  parameter: string;
+  standardCriteria?: unknown;
+  channelStatus?: string | null;
+}
+
+export interface CalendarStatusEvaluationOptions {
+  parameterEvaluations?: CalendarStatusParameterEvaluation[];
+}
+
 export interface ParameterValueAccessContext {
   actorUserId: number;
   scope: string | null | undefined;

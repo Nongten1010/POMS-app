@@ -2,6 +2,7 @@ import { env } from '../../config/env';
 import { ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
 import { parameterValuesRepository } from './parameter-values.repository';
 import {
+  type CalendarStatusEvaluationOptions,
   type CalendarStatusQuery,
   type CalendarStatusResultDTO,
   type ConnectionTestQuery,
@@ -247,6 +248,7 @@ export const parameterValuesService = {
   async calendarStatus(
     query: CalendarStatusQuery,
     access: ParameterValueAccessContext,
+    options?: CalendarStatusEvaluationOptions,
   ): Promise<CalendarStatusResultDTO> {
     await ensureStationAccess(query.stationId, access);
 
@@ -269,8 +271,13 @@ export const parameterValuesService = {
       }),
       parameterValuesRepository.listRegisteredParameters(query.stationId, access),
     ]);
-    const definitions = buildParameterDefinitions(registeredParameters, result.rows);
-    const dailySummaries = buildDailySummaries(result.rows, definitions);
+    const definitions = buildParameterDefinitions(
+      registeredParameters,
+      result.rows,
+      options?.parameterEvaluations,
+    );
+    const useConfiguredEvaluation = Boolean(options?.parameterEvaluations);
+    const dailySummaries = buildDailySummaries(result.rows, definitions, useConfiguredEvaluation);
 
     return {
       data: {
@@ -322,6 +329,9 @@ interface ParameterDefinition {
   prefixes: string[];
   normalMax: number;
   warningMax: number;
+  criteriaRows: CriteriaRangeRow[];
+  channelStatus: string | null;
+  useConfiguredEvaluation: boolean;
 }
 
 interface DailySummary {
@@ -330,6 +340,18 @@ interface DailySummary {
   dataCompletenessStatus: 'lowData' | 'highData';
   pollutionStatus: 'normal' | 'warning' | 'exceeded' | 'insufficient';
   parameterStatuses: Map<string, ParameterValueStatus[]>;
+}
+
+interface CriteriaRangeRow {
+  level: 'normal' | 'warning' | 'critical';
+  min: number | null;
+  max: number | null;
+}
+
+interface ParameterEvaluationInput {
+  parameter: string;
+  standardCriteria?: unknown;
+  channelStatus?: string | null;
 }
 
 const BASE_PARAMETER_VALUE_COLUMNS = new Set(['station_id', 'cdate', 'ctime', 'udate', 'utime']);
@@ -349,11 +371,13 @@ const IGNORED_PARAMETER_TOKENS = new Set([
 function buildParameterDefinitions(
   registeredParameters: string[],
   rows: Record<string, unknown>[],
+  evaluations: ParameterEvaluationInput[] | undefined = undefined,
 ): ParameterDefinition[] {
   return registeredParameters.map((parameter) => {
     const prefixes = toParameterColumnPrefixes(parameter);
     const code = (prefixes[0] ?? normalizeParameterName(parameter)).toUpperCase();
     const parsed = parseParameterLabel(parameter);
+    const evaluation = findParameterEvaluation(parameter, prefixes, evaluations);
 
     return {
       code,
@@ -363,6 +387,9 @@ function buildParameterDefinitions(
       prefixes,
       normalMax: DEFAULT_NORMAL_MAX,
       warningMax: DEFAULT_WARNING_MAX,
+      criteriaRows: readCriteriaRows(evaluation?.standardCriteria),
+      channelStatus: evaluation?.channelStatus ?? null,
+      useConfiguredEvaluation: Boolean(evaluations),
     };
   });
 }
@@ -472,6 +499,7 @@ function buildStatisticValue(
 function buildDailySummaries(
   rows: Record<string, unknown>[],
   definitions: ParameterDefinition[],
+  useParameterCompleteness = false,
 ): DailySummary[] {
   const rowsByDate = new Map<string, Record<string, unknown>[]>();
   for (const row of rows) {
@@ -482,25 +510,40 @@ function buildDailySummaries(
 
   return [...rowsByDate.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, dayRows]) => buildDailySummary(date, dayRows, definitions));
+    .map(([date, dayRows]) =>
+      buildDailySummary(date, dayRows, definitions, useParameterCompleteness),
+    );
 }
 
 function buildDailySummary(
   date: string,
   rows: Record<string, unknown>[],
   definitions: ParameterDefinition[],
+  useParameterCompleteness = false,
 ): DailySummary {
-  const dataCompletenessPercent = calculateDailyCompleteness(rows, definitions);
+  const dataCompletenessPercent = useParameterCompleteness
+    ? calculateLowestDailyParameterCompleteness(rows, definitions)
+    : calculateDailyCompleteness(rows, definitions);
   const dataCompletenessStatus = dataCompletenessPercent < 80 ? 'lowData' : 'highData';
   const parameterStatuses = new Map<string, ParameterValueStatus[]>(
     definitions.map((definition) => [definition.code, []]),
   );
+  const parameterCompletenessByCode = useParameterCompleteness
+    ? new Map(
+        definitions.map((definition) => [
+          definition.code,
+          calculateDailyParameterCompleteness(rows, definition),
+        ]),
+      )
+    : new Map<string, number>();
 
   for (const row of rows) {
-    const completeness = readCompletenessPercent(row) ?? 100;
     for (const definition of definitions) {
       const value = readParameterNumber(row, definition);
       if (value === null) continue;
+      const completeness = useParameterCompleteness
+        ? (parameterCompletenessByCode.get(definition.code) ?? 0)
+        : (readCompletenessPercent(row) ?? 100);
       const statuses = parameterStatuses.get(definition.code) ?? [];
       statuses.push(
         completeness < 80 ? 'insufficient' : readParameterStatus(row, definition, value),
@@ -512,7 +555,10 @@ function buildDailySummary(
   const pollutionStatus =
     dataCompletenessPercent < 80
       ? 'insufficient'
-      : worstPollutionStatus([...parameterStatuses.values()].flat());
+      : worstPollutionStatus(
+          [...parameterStatuses.values()].flat(),
+          definitions.some((definition) => definition.useConfiguredEvaluation),
+        );
 
   return {
     date,
@@ -521,6 +567,40 @@ function buildDailySummary(
     pollutionStatus,
     parameterStatuses,
   };
+}
+
+function calculateLowestDailyParameterCompleteness(
+  rows: Record<string, unknown>[],
+  definitions: ParameterDefinition[],
+): number {
+  if (definitions.length === 0) return calculateDailyCompleteness(rows, definitions);
+
+  return Math.min(
+    ...definitions.map((definition) => calculateDailyParameterCompleteness(rows, definition)),
+  );
+}
+
+function calculateDailyParameterCompleteness(
+  rows: Record<string, unknown>[],
+  definition: ParameterDefinition,
+): number {
+  const explicitCompleteness = rows
+    .map((row) => readParameterCompletenessPercent(row, definition))
+    .filter((value): value is number => value !== null);
+
+  if (explicitCompleteness.length > 0) {
+    return Math.round(
+      explicitCompleteness.reduce((sum, value) => sum + value, 0) / explicitCompleteness.length,
+    );
+  }
+
+  const completeHours = new Set<number>();
+  for (const row of rows) {
+    const hour = parseHour(row.ctime);
+    if (hour !== null && readParameterNumber(row, definition) !== null) completeHours.add(hour);
+  }
+
+  return Math.round((completeHours.size / HOURS_PER_DAY) * 100);
 }
 
 function buildMonthlyParameterSummary(
@@ -586,6 +666,25 @@ function readCompletenessPercent(row: Record<string, unknown>): number | null {
   return null;
 }
 
+function readParameterCompletenessPercent(
+  row: Record<string, unknown>,
+  definition: ParameterDefinition,
+): number | null {
+  for (const prefix of definition.prefixes) {
+    for (const suffix of [
+      'data_completeness_percent',
+      'dataCompletenessPercent',
+      'completeness_percent',
+      'availability_percent',
+    ]) {
+      const value = toNumber(row[`${prefix}_${suffix}`]);
+      if (value !== null) return clampPercent(Math.round(value));
+    }
+  }
+
+  return readCompletenessPercent(row);
+}
+
 function readParameterNumber(
   row: Record<string, unknown>,
   definition: ParameterDefinition,
@@ -603,6 +702,17 @@ function readParameterStatus(
   definition: ParameterDefinition,
   value: number,
 ): ParameterValueStatus {
+  if (definition.useConfiguredEvaluation) {
+    if (!isNormalChannelStatus(definition.channelStatus)) return 'insufficient';
+
+    const criteriaStatus = readCriteriaStatus(definition.criteriaRows, value);
+    if (criteriaStatus) return criteriaStatus;
+
+    if (value <= definition.normalMax) return 'normal';
+    if (value <= definition.warningMax) return 'warning';
+    return 'exceeded';
+  }
+
   for (const prefix of definition.prefixes) {
     const sourceStatus = normalizeSourceStatus(row[`${prefix}_status`]);
     if (sourceStatus) return sourceStatus;
@@ -638,11 +748,77 @@ function normalizeSourceStatus(value: unknown): ParameterValueStatus | null {
 
 function worstPollutionStatus(
   statuses: ParameterValueStatus[],
+  insufficientIsHighest = false,
 ): 'normal' | 'warning' | 'exceeded' | 'insufficient' {
+  if (insufficientIsHighest && statuses.includes('insufficient')) return 'insufficient';
   if (statuses.includes('exceeded')) return 'exceeded';
   if (statuses.includes('warning')) return 'warning';
   if (statuses.includes('normal')) return 'normal';
   return 'insufficient';
+}
+
+function readCriteriaStatus(
+  rows: CriteriaRangeRow[],
+  value: number,
+): 'normal' | 'warning' | 'exceeded' | null {
+  const criticalMin = findCriteriaMin(rows, 'critical');
+  if (criticalMin !== null && value >= criticalMin) return 'exceeded';
+
+  const warningMin = findCriteriaMin(rows, 'warning');
+  if (warningMin !== null && value >= warningMin) return 'warning';
+
+  const normalMin = findCriteriaMin(rows, 'normal');
+  if (normalMin === null || value >= normalMin) return 'normal';
+
+  return 'normal';
+}
+
+function findCriteriaMin(
+  rows: CriteriaRangeRow[],
+  level: CriteriaRangeRow['level'],
+): number | null {
+  const row = rows.find((item) => item.level === level);
+  return row?.min ?? null;
+}
+
+function readCriteriaRows(value: unknown): CriteriaRangeRow[] {
+  if (!isRecord(value) || !Array.isArray(value.rows)) return [];
+
+  return value.rows
+    .map((row): CriteriaRangeRow | null => {
+      if (!isRecord(row)) return null;
+      if (row.level !== 'normal' && row.level !== 'warning' && row.level !== 'critical') {
+        return null;
+      }
+
+      return {
+        level: row.level,
+        min: toNumber(row.min),
+        max: toNumber(row.max),
+      };
+    })
+    .filter((row): row is CriteriaRangeRow => row !== null);
+}
+
+function isNormalChannelStatus(value: string | null): boolean {
+  if (value === null) return true;
+  const normalized = value.trim().toLowerCase();
+  return normalized === '' || normalized === 'normal';
+}
+
+function findParameterEvaluation(
+  parameter: string,
+  prefixes: string[],
+  evaluations: ParameterEvaluationInput[] | undefined,
+): ParameterEvaluationInput | null {
+  if (!evaluations) return null;
+
+  const parameterKeys = new Set([normalizeParameterName(parameter), ...prefixes]);
+  return (
+    evaluations.find((evaluation) =>
+      toParameterColumnPrefixes(evaluation.parameter).some((prefix) => parameterKeys.has(prefix)),
+    ) ?? null
+  );
 }
 
 function toNumber(value: unknown): number | null {
@@ -686,6 +862,10 @@ function clampPercent(value: number): number {
   if (value < 0) return 0;
   if (value > 100) return 100;
   return value;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function monthRange(monthValue: string): {
