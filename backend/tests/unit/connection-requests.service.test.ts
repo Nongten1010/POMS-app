@@ -445,6 +445,58 @@ describe('connectionRequestsService', () => {
     expect(result.data[0].measurementPoints[0]).not.toHaveProperty('latestHourlyMeasurement');
   });
 
+  it('keeps dashboard measurement values for registered parameters that share a base code', async () => {
+    mockedRepository.listFactoriesForAccess.mockResolvedValue([
+      factorySummary({ factoryId: 'factory-001', factoryName: 'บริษัท ทดสอบ จำกัด' }),
+    ]);
+    mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
+      {
+        factoryId: 'factory-001',
+        stationId: 'S0001',
+        pointName: 'ปล่องระบาย A',
+        pointCode: 'S0001',
+        systemType: 'CEMS',
+        parameters: ['CO2 (%)', 'CO2 (ppm)'],
+        data: [],
+      },
+    ]);
+    mockedParameterValuesService.latestHourly.mockResolvedValueOnce({
+      data: [
+        {
+          station_id: 'S0001',
+          co2_value: '563',
+          co2_units: 'ppm',
+          cdate: '2026-06-10',
+          ctime: '23:00:00',
+        },
+      ],
+      meta: {
+        stationId: 'S0001',
+        interval: '60m',
+        schemaName: 'ingest',
+        tableName: 'S0001_data_60m',
+        count: 1,
+        registeredParameters: ['CO2 (%)', 'CO2 (ppm)'],
+        returnedColumns: ['station_id', 'co2_value', 'co2_units', 'cdate', 'ctime'],
+      },
+    });
+
+    const result = await connectionRequestsService.listOperatorFactoryDashboard(
+      actorUserId,
+      'OWN_FACTORY',
+    );
+
+    expect(result.data[0]?.measurementPoints[0]?.data).toEqual([
+      {
+        station_id: 'S0001',
+        'CO2 (%)': null,
+        'CO2 (ppm)': '563',
+        cdate: '2026-06-10',
+        ctime: '23:00:00',
+      },
+    ]);
+  });
+
   it('filters operator factories by requested CEMS or WPMS system type', async () => {
     mockedRepository.listFactoriesForAccess.mockResolvedValue([
       factorySummary({ factoryId: 'factory-cems', factoryName: 'โรงงาน CEMS' }),

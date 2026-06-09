@@ -1306,10 +1306,10 @@ function toDashboardMeasurementRow(
   row: Record<string, unknown>,
   parameterDisplayNames: string[],
 ): Record<string, unknown> {
-  const parameterNamesByColumnPrefix = new Map(
-    parameterDisplayNames.map((parameter) => [toParameterColumnPrefix(parameter), parameter]),
+  const parametersByColumnPrefix = groupParametersByColumnPrefix(parameterDisplayNames);
+  const result: Record<string, unknown> = Object.fromEntries(
+    parameterDisplayNames.map((parameter) => [parameter, null]),
   );
-  const result: Record<string, unknown> = {};
 
   Object.entries(row).forEach(([key, value]) => {
     if (dashboardBaseMeasurementColumns.has(key)) {
@@ -1320,13 +1320,53 @@ function toDashboardMeasurementRow(
     const valueColumnMatch = key.match(/^(.+)_value$/i);
     if (!valueColumnMatch) return;
 
-    const displayName =
-      parameterNamesByColumnPrefix.get(valueColumnMatch[1].toLowerCase()) ??
-      parameterUnitLabels[valueColumnMatch[1].toLowerCase()];
+    const columnPrefix = valueColumnMatch[1].toLowerCase();
+    const displayName = findDashboardParameterDisplayName(
+      parametersByColumnPrefix.get(columnPrefix) ?? [],
+      row[`${columnPrefix}_units`],
+      columnPrefix,
+    );
     if (displayName) result[displayName] = value;
   });
 
   return result;
+}
+
+function groupParametersByColumnPrefix(parameters: string[]): Map<string, string[]> {
+  const grouped = new Map<string, string[]>();
+  for (const parameter of parameters) {
+    const prefix = toParameterColumnPrefix(parameter);
+    grouped.set(prefix, [...(grouped.get(prefix) ?? []), parameter]);
+  }
+  return grouped;
+}
+
+function findDashboardParameterDisplayName(
+  candidates: string[],
+  sourceUnit: unknown,
+  columnPrefix: string,
+): string | null {
+  if (candidates.length === 1) return candidates[0];
+
+  const unit = typeof sourceUnit === 'string' ? normalizeParameterUnit(sourceUnit) : '';
+  if (unit) {
+    const unitMatch = candidates.find(
+      (candidate) => normalizeParameterUnit(extractParameterUnit(candidate)) === unit,
+    );
+    if (unitMatch) return unitMatch;
+  }
+
+  if (candidates.length > 1) return null;
+  return parameterUnitLabels[columnPrefix] ?? null;
+}
+
+function extractParameterUnit(parameter: string): string {
+  const match = parameter.match(/\(([^)]+)\)/);
+  return match?.[1] ?? '';
+}
+
+function normalizeParameterUnit(unit: string): string {
+  return unit.trim().toLowerCase().replace(/[^a-z0-9%]+/g, '');
 }
 
 function toParameterColumnPrefix(parameter: string): string {
