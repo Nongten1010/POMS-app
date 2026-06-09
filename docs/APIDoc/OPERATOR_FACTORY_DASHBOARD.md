@@ -275,7 +275,7 @@ Response หลัก: `data.factory`, `data.thresholds[]`, `data.measurementPoi
             "chartTime": "00:00",
             "dataCompletenessPercent": 100,
             "values": {
-              "CO": {
+              "CO (ppm)": {
                 "value": 0.05,
                 "displayValue": "0.05",
                 "status": "normal"
@@ -299,6 +299,7 @@ Response หลัก: `data.factory`, `data.thresholds[]`, `data.measurementPoi
 ```
 
 หมายเหตุ: `measurement-statistics` สร้าง `rows` ครบ 24 ชั่วโมงเสมอ ถ้าชั่วโมงไหนไม่มีข้อมูลจะได้ `displayValue = "-"` และ status เป็น `noData` หรือ `insufficient`
+และ key ใน `values` ใช้ชื่อพารามิเตอร์พร้อมหน่วย เช่น `CO2 (%)`, `CO2 (ppm)`, `BOD (mg/L)` เพื่อไม่ให้พารามิเตอร์ base เดียวกันทับกันเอง
 
 Status values:
 

@@ -16,6 +16,18 @@ When the user asks for backend work:
 
 - Inspect and modify only `backend/` unless documentation updates are needed.
 - Do not edit `frontend/`.
+- For any parameter/value response contract, include the unit together with the
+  parameter display name whenever the API returns human-readable parameter
+  labels or parameter-keyed maps. Prefer labels such as `BOD (mg/l)`,
+  `COD (mg/l)`, `CO2 (ppm)`, or `CO (%)` instead of bare names like `BOD`,
+  `COD`, `CO2`, or `CO`, so clients can distinguish parameters that share a
+  similar name but use different units.
+- If a response must keep machine-stable parameter codes for compatibility,
+  also return a human-readable label/display name that includes the unit.
+- Parameter status fields for each measured value, such as `co2_status`,
+  `co_status`, `bod_status`, or `cod_status`, must use one of these statuses:
+  `Normal`, `Calibration`, `Defective`, `Maintenance`, `Start up`,
+  `Shut Down`, `Turnaround`, or `Etc.`.
 - Prefer these checks before finishing when relevant:
 
 ```bash
@@ -61,4 +73,3 @@ backend/feature-name
 frontend/feature-name
 docs/topic-name
 ```
-

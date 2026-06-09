@@ -381,16 +381,17 @@ function buildParameterDefinitions(
   evaluations: ParameterEvaluationInput[] | undefined = undefined,
 ): ParameterDefinition[] {
   return registeredParameters.map((parameter) => {
-    const prefixes = toParameterColumnPrefixes(parameter);
-    const code = (prefixes[0] ?? normalizeParameterName(parameter)).toUpperCase();
     const parsed = parseParameterLabel(parameter);
+    const prefixes = toParameterColumnPrefixes(parameter);
+    const code = normalizeParameterName(parsed.name || parameter).toUpperCase();
+    const unit = parsed.unit || findUnitForPrefixes(rows, prefixes);
     const evaluation = findParameterEvaluation(parameter, prefixes, evaluations);
 
     return {
       code,
-      label: parsed.label,
+      label: toParameterLabel(parsed.name, unit),
       name: parsed.name,
-      unit: parsed.unit || findUnitForPrefixes(rows, prefixes),
+      unit,
       prefixes,
       normalMax: DEFAULT_NORMAL_MAX,
       warningMax: DEFAULT_WARNING_MAX,
@@ -417,6 +418,12 @@ function parseParameterLabel(parameter: string): { label: string; name: string; 
     name: match[1].trim(),
     unit: match[2].trim(),
   };
+}
+
+function toParameterLabel(name: string, unit: string): string {
+  const trimmedName = name.trim();
+  const trimmedUnit = unit.trim();
+  return trimmedUnit ? `${trimmedName} (${trimmedUnit})` : trimmedName;
 }
 
 function findUnitForPrefixes(rows: Record<string, unknown>[], prefixes: string[]): string {
@@ -495,7 +502,7 @@ function buildHourlyStatisticRows(
       dataCompletenessPercent,
       values: Object.fromEntries(
         definitions.map((definition) => [
-          definition.code,
+          definition.label,
           buildStatisticValue(row, definition, dataCompletenessPercent),
         ]),
       ),
@@ -726,6 +733,8 @@ function readParameterNumber(
   definition: ParameterDefinition,
 ): number | null {
   for (const prefix of definition.prefixes) {
+    if (!sourceUnitMatchesDefinition(row, prefix, definition)) continue;
+
     const value = toNumber(row[`${prefix}_value`]);
     if (value !== null) return value;
   }
@@ -750,6 +759,8 @@ function readParameterStatus(
   }
 
   for (const prefix of definition.prefixes) {
+    if (!sourceUnitMatchesDefinition(row, prefix, definition)) continue;
+
     const sourceStatus = normalizeSourceStatus(row[`${prefix}_status`]);
     if (sourceStatus) return sourceStatus;
   }
@@ -757,6 +768,16 @@ function readParameterStatus(
   if (value <= definition.normalMax) return 'normal';
   if (value <= definition.warningMax) return 'warning';
   return 'exceeded';
+}
+
+function sourceUnitMatchesDefinition(
+  row: Record<string, unknown>,
+  prefix: string,
+  definition: ParameterDefinition,
+): boolean {
+  const sourceUnit = row[`${prefix}_units`];
+  if (typeof sourceUnit !== 'string' || !sourceUnit.trim() || !definition.unit) return true;
+  return normalizeUnit(sourceUnit) === normalizeUnit(definition.unit);
 }
 
 function normalizeSourceStatus(value: unknown): ParameterValueStatus | null {
@@ -844,7 +865,9 @@ function readCriteriaRows(value: unknown): CriteriaRangeRow[] {
     .filter((row): row is CriteriaRangeRow => row !== null);
 }
 
-function readPreferredCriteriaRows(evaluation: ParameterEvaluationInput | null): CriteriaRangeRow[] {
+function readPreferredCriteriaRows(
+  evaluation: ParameterEvaluationInput | null,
+): CriteriaRangeRow[] {
   if (!evaluation) return [];
 
   const standardRows = readCriteriaRows(evaluation.standardCriteria);
@@ -855,8 +878,8 @@ function readPreferredCriteriaRows(evaluation: ParameterEvaluationInput | null):
 
 function isNormalChannelStatus(value: string | null): boolean {
   if (value === null) return true;
-  const normalized = value.trim().toLowerCase();
-  return normalized === '' || normalized === 'normal';
+  if (!value.trim()) return true;
+  return normalizeSourceStatus(value) === 'normal';
 }
 
 function findParameterEvaluation(
@@ -875,9 +898,10 @@ function findParameterEvaluation(
   const parameterUnit = normalizeUnit(parseParameterLabel(parameter).unit);
   const parameterKeys = new Set([normalizeParameterName(parameter), ...prefixes]);
   return (
-    evaluations.find((evaluation) =>
-      canMatchParameterEvaluationByPrefix(parameterUnit, evaluation) &&
-      toParameterColumnPrefixes(evaluation.parameter).some((prefix) => parameterKeys.has(prefix)),
+    evaluations.find(
+      (evaluation) =>
+        canMatchParameterEvaluationByPrefix(parameterUnit, evaluation) &&
+        toParameterColumnPrefixes(evaluation.parameter).some((prefix) => parameterKeys.has(prefix)),
     ) ?? null
   );
 }
@@ -1035,18 +1059,30 @@ function toParameterColumnPrefixes(parameter: string): string[] {
   const trimmed = parameter.trim();
   const beforeParenthesis = trimmed.split('(')[0] ?? trimmed;
   const beforeAtSign = beforeParenthesis.split('@')[0] ?? beforeParenthesis;
-
-  addParameterCandidate(candidates, beforeAtSign);
+  const baseCandidate = normalizeParameterName(beforeAtSign);
 
   for (const match of trimmed.matchAll(/\(([^)]+)\)/g)) {
-    addParameterCandidate(candidates, match[1]);
+    const unitCandidate = normalizeUnitColumnToken(match[1]);
+    if (baseCandidate && unitCandidate) {
+      addParameterCandidate(candidates, `${baseCandidate}_${unitCandidate}`);
+    }
+    addParameterCandidate(candidates, unitCandidate);
   }
+
+  addParameterCandidate(candidates, baseCandidate);
 
   if (!trimmed.includes('(')) {
     addParameterCandidate(candidates, trimmed);
   }
 
   return [...candidates].filter((candidate) => !IGNORED_PARAMETER_TOKENS.has(candidate));
+}
+
+function normalizeUnitColumnToken(value: string | undefined): string {
+  const normalized = normalizeParameterName(value ?? '');
+  if (normalized === 'pct' || normalized === 'percent') return 'percent';
+  if (!normalized && value?.includes('%')) return 'percent';
+  return normalized;
 }
 
 function addParameterCandidate(candidates: Set<string>, value: string | undefined): void {

@@ -545,8 +545,8 @@ describe('parameterValuesService', () => {
               time: '00.00-00.59 น.',
               chartTime: '00:00',
               values: {
-                CO: { value: 191, displayValue: '191.00', status: 'exceeded' },
-                NOX: { value: 150, displayValue: '150.00', status: 'normal' },
+                'CO (ppm)': { value: 191, displayValue: '191.00', status: 'exceeded' },
+                'NOx (ppm)': { value: 150, displayValue: '150.00', status: 'normal' },
               },
             }),
             expect.objectContaining({
@@ -554,8 +554,8 @@ describe('parameterValuesService', () => {
               chartTime: '02:00',
               dataCompletenessPercent: 0,
               values: {
-                CO: { value: null, displayValue: '-', status: 'insufficient' },
-                NOX: { value: null, displayValue: '-', status: 'insufficient' },
+                'CO (ppm)': { value: null, displayValue: '-', status: 'insufficient' },
+                'NOx (ppm)': { value: null, displayValue: '-', status: 'insufficient' },
               },
             }),
           ]),
@@ -660,6 +660,41 @@ describe('parameterValuesService', () => {
         warningMax: 60,
       },
     ]);
+  });
+
+  it('keys measurement statistic values by parameter label with units', async () => {
+    mockedRepository.listRegisteredParameters.mockResolvedValue(['CO2 (%)', 'CO2 (ppm)']);
+    mockedRepository.tableExists.mockResolvedValue(true);
+    mockedRepository.listRows.mockResolvedValue({
+      tableName: 'S0001_data_60m',
+      rows: [
+        {
+          station_id: 'S0001',
+          co2_value: 12.5,
+          co2_units: '%',
+          cdate: '2026-06-09',
+          ctime: '00:00:00',
+        },
+      ],
+    });
+
+    const result = await parameterValuesService.measurementStatistics(
+      { stationId: 'S0001', date: '2026-06-09' },
+      operatorAccess,
+      {
+        parameterEvaluations: [
+          { parameter: 'CO2 (%)', channelStatus: 'ปกติ', standardCriteria: null },
+          { parameter: 'CO2 (ppm)', channelStatus: 'ปกติ', standardCriteria: null },
+        ],
+      },
+    );
+
+    const values = result.data.measurementPoints[0]?.rows[0]?.values;
+    expect(values).toEqual({
+      'CO2 (%)': { value: 12.5, displayValue: '12.50', status: 'normal' },
+      'CO2 (ppm)': { value: null, displayValue: '-', status: 'insufficient' },
+    });
+    expect(values).not.toHaveProperty('CO2');
   });
 
   it('builds monthly calendar status from hourly rows', async () => {
@@ -822,6 +857,53 @@ describe('parameterValuesService', () => {
         },
       },
     ]);
+  });
+
+  it('does not mark calendar pollution status insufficient for localized normal channel statuses', async () => {
+    mockedRepository.listRegisteredParameters.mockResolvedValue(['CO (ppm)']);
+    mockedRepository.tableExists.mockResolvedValue(true);
+    mockedRepository.listRows.mockResolvedValue({
+      tableName: 'S0001_data_60m',
+      rows: Array.from({ length: 24 }, (_, hour) => ({
+        station_id: 'S0001',
+        co_value: hour === 0 ? 110 : 60,
+        co_units: 'ppm',
+        cdate: '2026-06-09',
+        ctime: `${String(hour).padStart(2, '0')}:00:00`,
+      })),
+    });
+
+    const result = await parameterValuesService.calendarStatus(
+      { stationId: 'S0001', month: '2026-06' },
+      operatorAccess,
+      {
+        parameterEvaluations: [
+          {
+            parameter: 'CO (ppm)',
+            channelStatus: 'ปกติ',
+            standardCriteria: {
+              enabled: false,
+              standardValue: null,
+              rows: [
+                { level: 'normal', min: 0, max: null },
+                { level: 'warning', min: 80, max: null },
+                { level: 'critical', min: 100, max: null },
+              ],
+            },
+          },
+        ],
+      },
+    );
+
+    expect(result.data.calendar.days[0]).toMatchObject({
+      dataCompletenessPercent: 100,
+      dataCompletenessStatus: 'highData',
+      pollutionStatus: 'exceeded',
+      display: {
+        backgroundStatus: 'highData',
+        borderStatus: 'exceeded',
+      },
+    });
   });
 
   it('treats a non-normal device channel as insufficient even when values are otherwise normal', async () => {
