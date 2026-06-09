@@ -2,7 +2,7 @@ import createKnex, { type Knex } from 'knex';
 
 const OPERATOR_EXTERNAL_ID = '3191000135709';
 const FACTORY_FID = '10190003325500';
-const MOCK_DATES = ['2026-06-09'];
+export const PARAMETER_VALUE_MOCK_DATES = buildDateRange('2026-06-01', '2026-06-10');
 const MOCK_INTERVALS = ['real', '1m', '5m', '60m', '1day', 'test'] as const;
 const MIN_MOCK_PARAMETER_COUNT = 100;
 const SQL_SERVER_SAFE_INSERT_PARAMETER_LIMIT = 2000;
@@ -717,7 +717,7 @@ async function replaceRows(
     .where('station_id', station.stationId)
     .del();
 
-  for (const date of MOCK_DATES) {
+  for (const date of PARAMETER_VALUE_MOCK_DATES) {
     const rows = buildParameterValueMockRows(station, date);
     for (const chunk of chunkRowsForSqlServer(rows)) {
       await parameterDb.withSchema(schemaName).from(tableName).insert(chunk);
@@ -769,6 +769,19 @@ function createParameterSourceKnex(primaryKnex: Knex): Knex {
       max: 2,
     },
   });
+}
+
+function buildDateRange(startDate: string, endDate: string): string[] {
+  const dates: string[] = [];
+  const current = new Date(`${startDate}T00:00:00.000Z`);
+  const end = new Date(`${endDate}T00:00:00.000Z`);
+
+  while (current <= end) {
+    dates.push(current.toISOString().slice(0, 10));
+    current.setUTCDate(current.getUTCDate() + 1);
+  }
+
+  return dates;
 }
 
 function parameterSchemaName(): string {

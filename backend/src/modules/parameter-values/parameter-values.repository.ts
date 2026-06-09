@@ -22,6 +22,7 @@ interface StationAccessRow {
 
 interface RegisteredParameterRow {
   parameters_json: string | null;
+  instruments_json?: string | null;
 }
 
 interface LatestTimestampRow {
@@ -130,9 +131,9 @@ export const parameterValuesRepository = {
       .where((builder) => {
         builder.where('p.point_code', stationId).orWhere('p.point_name', stationId);
       })
-      .select<RegisteredParameterRow[]>('p.parameters_json');
+      .select<RegisteredParameterRow[]>('p.parameters_json', 'p.instruments_json');
 
-    return uniqueRegisteredParameters(rows.flatMap((row) => parseRegisteredParameters(row)));
+    return uniqueRegisteredParameters(rows.flatMap((row) => parseRegisteredParametersFromRow(row)));
   },
 
   async listRegisteredParametersForConnectionTest(
@@ -143,16 +144,16 @@ export const parameterValuesRepository = {
       .where((builder) => {
         builder.where('p.point_code', stationId).orWhere('p.point_name', stationId);
       })
-      .select<RegisteredParameterRow[]>('p.parameters_json');
+      .select<RegisteredParameterRow[]>('p.parameters_json', 'p.instruments_json');
 
     const waitingRows = await buildWaitingConnectionStationAccessQuery(access)
       .where((builder) => {
         builder.where('p.point_code', stationId).orWhere('p.point_name', stationId);
       })
-      .select<RegisteredParameterRow[]>('p.parameters_json');
+      .select<RegisteredParameterRow[]>('p.parameters_json', 'p.instruments_json');
 
     return uniqueRegisteredParameters(
-      [...connectedRows, ...waitingRows].flatMap((row) => parseRegisteredParameters(row)),
+      [...connectedRows, ...waitingRows].flatMap((row) => parseRegisteredParametersFromRow(row)),
     );
   },
 
@@ -242,25 +243,49 @@ export const parameterValuesRepository = {
   },
 };
 
-function parseRegisteredParameters(row: RegisteredParameterRow): string[] {
-  if (!row.parameters_json) return [];
+function parseRegisteredParametersFromRow(row: RegisteredParameterRow): string[] {
+  const instrumentParameters = parseInstrumentParameters(row.instruments_json);
+  if (instrumentParameters.length > 0) return instrumentParameters;
+  return parseRegisteredParameters(row.parameters_json);
+}
+
+function parseInstrumentParameters(value: string | null | undefined): string[] {
+  if (!value) return [];
 
   try {
-    const parsed: unknown = JSON.parse(row.parameters_json);
-    if (!Array.isArray(parsed)) return [];
+    const parsed: unknown = JSON.parse(value);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return [];
+    const parameters = (parsed as Record<string, unknown>).parameters;
+    if (!Array.isArray(parameters)) return [];
 
-    return parsed.flatMap((item) => {
-      if (typeof item === 'string') return [item];
-      if (!item || typeof item !== 'object') return [];
-
-      const parameter = item as Record<string, unknown>;
-      return [parameter.parameter, parameter.code, parameter.name].filter(
-        (value): value is string => typeof value === 'string',
-      );
-    });
+    return parseParameterList(parameters);
   } catch {
     return [];
   }
+}
+
+function parseRegisteredParameters(value: string | null): string[] {
+  if (!value) return [];
+
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+    return parseParameterList(parsed);
+  } catch {
+    return [];
+  }
+}
+
+function parseParameterList(parameters: unknown[]): string[] {
+  return parameters.flatMap((item) => {
+    if (typeof item === 'string') return [item];
+    if (!item || typeof item !== 'object') return [];
+
+    const parameter = item as Record<string, unknown>;
+    return [parameter.parameter, parameter.code, parameter.name].filter(
+      (value): value is string => typeof value === 'string',
+    );
+  });
 }
 
 function uniqueRegisteredParameters(parameters: string[]): string[] {
@@ -328,6 +353,10 @@ export function buildWaitingConnectionStationAccessQueryForTests(
   access: ParameterValueAccessContext,
 ) {
   return buildWaitingConnectionStationAccessQuery(access);
+}
+
+export function parseRegisteredParametersFromRowForTests(row: RegisteredParameterRow): string[] {
+  return uniqueRegisteredParameters(parseRegisteredParametersFromRow(row));
 }
 
 function serializeRow(row: Record<string, unknown>): Record<string, unknown> {

@@ -43,6 +43,7 @@ jest.mock('../../src/config/parameter-source-database', () => ({
 import {
   buildStationAccessQueryForTests,
   buildWaitingConnectionStationAccessQueryForTests,
+  parseRegisteredParametersFromRowForTests,
   parameterValuesRepository,
 } from '../../src/modules/parameter-values/parameter-values.repository';
 
@@ -113,5 +114,22 @@ describe('parameterValuesRepository', () => {
     expect(compiled.bindings).toContain('WAITING_CONNECTION');
     expect(sql).toContain('[r].[factory_id]');
     expect(sql).toContain('[r].[created_by]');
+  });
+
+  it('prefers instrument parameters over all eligible registered parameters', () => {
+    const result = parseRegisteredParametersFromRowForTests({
+      parameters_json: JSON.stringify(['CO (ppm)', 'NOx (ppm)', 'Temp. (°C)', 'O2 (%)', 'Flow (m³/hr)']),
+      instruments_json: JSON.stringify({
+        converterBrand: 'Converter Brand',
+        converterModel: 'CV-100',
+        parameters: [
+          { parameter: 'CO (ppm)' },
+          { parameter: 'NOx (ppm)' },
+          { parameter: 'Temp. (°C)' },
+        ],
+      }),
+    });
+
+    expect(result).toEqual(['CO (ppm)', 'NOx (ppm)', 'Temp. (°C)']);
   });
 });

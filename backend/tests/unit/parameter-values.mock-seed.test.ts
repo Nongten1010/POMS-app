@@ -1,11 +1,18 @@
 import { describe, expect, it } from '@jest/globals';
 import {
   buildParameterValueMockRows,
+  PARAMETER_VALUE_MOCK_DATES,
   PARAMETER_VALUE_MOCK_STATIONS,
   PARAMETER_VALUE_MOCK_STATUSES,
 } from '../../src/db/seeds/12_parameter_value_mock_data';
 
 describe('parameter value mock seed', () => {
+  it('defines a June 1-10, 2026 mock date range', () => {
+    expect(PARAMETER_VALUE_MOCK_DATES).toHaveLength(10);
+    expect(PARAMETER_VALUE_MOCK_DATES[0]).toBe('2026-06-01');
+    expect(PARAMETER_VALUE_MOCK_DATES[PARAMETER_VALUE_MOCK_DATES.length - 1]).toBe('2026-06-10');
+  });
+
   it('defines demo stations for S0001 and P0001 with pasted columns plus separate CO2 units', () => {
     expect(PARAMETER_VALUE_MOCK_STATIONS.map((station) => station.stationId).sort()).toEqual([
       'P0001',
