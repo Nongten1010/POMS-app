@@ -58,6 +58,9 @@ const referencePoint = { lon: 100.574, lat: 13.91 }
 const operatorFactoriesApiUrl = import.meta.env.DEV
   ? '/api-proxy/v1/operator-factory-dashboard'
   : 'http://d-poms.diw.go.th/api/v1/operator-factory-dashboard'
+const connectedMeasurementPointsApiBaseUrl = import.meta.env.DEV
+  ? '/api-proxy/v1/connected-measurement-points'
+  : 'http://d-poms.diw.go.th/api/v1/connected-measurement-points'
 const logoBackgrounds = ['#dbeafe', '#fef3c7', '#fee2e2', '#dcfce7', '#e0f2fe', '#ffedd5', '#ecfdf3']
 const calendarStatusStyles = {
   lowData: { backgroundColor: '#e5e7eb', borderColor: 'transparent' },
@@ -65,6 +68,9 @@ const calendarStatusStyles = {
   normal: { backgroundColor: 'transparent', borderColor: '#22c55e' },
   warning: { backgroundColor: 'transparent', borderColor: '#f59e0b' },
   exceeded: { backgroundColor: 'transparent', borderColor: '#ef4444' },
+  insufficient: { backgroundColor: 'transparent', borderColor: 'transparent' },
+  noData: { backgroundColor: 'transparent', borderColor: 'transparent' },
+  invalid: { backgroundColor: 'transparent', borderColor: 'transparent' },
 }
 const calendarLegendItems = [
   { label: 'ส่งข้อมูลน้อยกว่า 80%', ...calendarStatusStyles.lowData },
@@ -73,31 +79,15 @@ const calendarLegendItems = [
   { label: 'เฝ้าระวัง', ...calendarStatusStyles.warning },
   { label: 'เกินมาตรฐาน', ...calendarStatusStyles.exceeded },
 ]
-const calendarSummaryRows = [
-  { parameter: 'CO (ppm)', exceededDays: '4 วัน', lowDataDays: '1 วัน', todayPercent: '95%' },
-  { parameter: 'NOx (ppm)', exceededDays: '2 วัน', lowDataDays: '2 วัน', todayPercent: '92%' },
-  { parameter: 'Temp. (°C)', exceededDays: '1 วัน', lowDataDays: '0 วัน', todayPercent: '98%' },
-  { parameter: 'O2 (%)', exceededDays: '3 วัน', lowDataDays: '1 วัน', todayPercent: '90%' },
-  { parameter: 'Flow (m3/hr)', exceededDays: '0 วัน', lowDataDays: '0 วัน', todayPercent: '99%' },
-]
-const mockCalendarStatusByDay = {
-  '2026-06-02': 'lowData',
-  '2026-06-03': 'highData',
-  '2026-06-05': 'normal',
-  '2026-06-08': 'warning',
-  '2026-06-11': 'exceeded',
-  '2026-06-14': 'highData',
-  '2026-06-17': 'normal',
-  '2026-06-19': 'lowData',
-  '2026-06-23': 'warning',
-  '2026-06-26': 'exceeded',
-}
 const statisticParameters = ['CO (ppm)', 'NOx (ppm)', 'Temp. (°C)', 'O2 (%)', 'Flow (m3/hr)']
 const statisticStatusColors = {
   normal: '#46b529',
   warning: '#f59e0b',
   exceeded: '#ef4444',
   unavailable: '#9ca3af',
+  insufficient: '#9ca3af',
+  noData: '#9ca3af',
+  invalid: '#9ca3af',
 }
 const pollutionTrendLegendItems = [
   { label: 'ปกติ ค่ามลพิษ ≤ 180', color: statisticStatusColors.normal },
@@ -134,9 +124,155 @@ function getOperatorFactoriesApiUrl(systemType) {
   return params.toString() ? `${baseUrl}?${params.toString()}` : baseUrl
 }
 
+function getConnectedMeasurementPointApiUrl(stationId, resource, params = {}) {
+  const baseUrl =
+    typeof window !== 'undefined' && window.location.hostname === 'd-poms.diw.go.th'
+      ? '/api/v1/connected-measurement-points'
+      : connectedMeasurementPointsApiBaseUrl
+  const searchParams = new URLSearchParams()
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== null && value !== undefined && value !== '') {
+      searchParams.set(key, value)
+    }
+  })
+
+  const path = `${baseUrl}/${encodeURIComponent(stationId)}/${resource}`
+  return searchParams.toString() ? `${path}?${searchParams.toString()}` : path
+}
+
 function toFiniteNumber(value) {
+  if (value === null || value === undefined || value === '') {
+    return null
+  }
+
   const nextValue = Number(value)
   return Number.isFinite(nextValue) ? nextValue : null
+}
+
+function normalizeStatus(status) {
+  return ['normal', 'warning', 'exceeded'].includes(status) ? status : 'unavailable'
+}
+
+function getParameterLabelFromThreshold(threshold) {
+  if (threshold?.parameterLabel) {
+    return threshold.parameterLabel
+  }
+
+  if (threshold?.parameterName && threshold?.unit) {
+    return `${threshold.parameterName} (${threshold.unit})`
+  }
+
+  return threshold?.parameterCode ?? ''
+}
+
+function getParameterLabelFromSummary(row) {
+  if (row?.parameterLabel) {
+    return row.parameterLabel
+  }
+
+  if (row?.parameterName && row?.unit) {
+    return `${row.parameterName} (${row.unit})`
+  }
+
+  return row?.parameterCode ?? ''
+}
+
+function getMeasurementParameterValue(values, parameter) {
+  if (!values || !parameter) {
+    return null
+  }
+
+  return values[parameter.label] ?? values[parameter.code] ?? null
+}
+
+function mapCalendarStatusByDay(days) {
+  if (!Array.isArray(days)) {
+    return {}
+  }
+
+  return days.reduce((result, day) => {
+    if (!day?.date) {
+      return result
+    }
+
+    result[day.date] = {
+      backgroundStatus: day.display?.backgroundStatus ?? day.dataCompletenessStatus ?? null,
+      borderStatus: day.display?.borderStatus ?? day.pollutionStatus ?? null,
+    }
+    return result
+  }, {})
+}
+
+function mapCalendarSummaryRows(rows) {
+  if (!Array.isArray(rows)) {
+    return []
+  }
+
+  return rows.map((row) => ({
+    parameter: getParameterLabelFromSummary(row),
+    exceededDays: `${Number(row.exceededDays ?? 0).toLocaleString('th-TH')} วัน`,
+    lowDataDays: `${Number(row.lowDataDays ?? 0).toLocaleString('th-TH')} วัน`,
+    todayPercent:
+      row.todayDataCompletenessPercent === null || row.todayDataCompletenessPercent === undefined
+        ? '-'
+        : `${Number(row.todayDataCompletenessPercent).toLocaleString('th-TH')}%`,
+  }))
+}
+
+function mapMeasurementStatistics(payload, selectedPoint) {
+  const data = payload?.data ?? {}
+  const thresholds = Array.isArray(data.thresholds) ? data.thresholds : []
+  const parameterMap = thresholds
+    .map((threshold) => ({
+      code: threshold?.parameterCode,
+      label: getParameterLabelFromThreshold(threshold),
+    }))
+    .filter((parameter) => parameter.code && parameter.label)
+  const fallbackParameters = Array.isArray(payload?.meta?.registeredParameters) ? payload.meta.registeredParameters : []
+  const parameters = parameterMap.length > 0 ? parameterMap.map((parameter) => parameter.label) : fallbackParameters
+  const pointRows = Array.isArray(data.measurementPoints) ? data.measurementPoints : []
+  const selectedRows =
+    pointRows.find((point) => [point?.stationId, point?.pointCode].includes(selectedPoint)) ?? pointRows[0] ?? {}
+  const rows = Array.isArray(selectedRows.rows) ? selectedRows.rows : []
+
+  return {
+    parameters: parameters.length > 0 ? parameters : statisticParameters,
+    rows: rows.map((row) => {
+      const values = {}
+      const chartValues = {}
+      const statuses = {}
+
+      if (parameterMap.length > 0) {
+        parameterMap.forEach((parameter) => {
+          const value = getMeasurementParameterValue(row.values, parameter)
+          values[parameter.label] = value?.displayValue ?? value?.value ?? ''
+          chartValues[parameter.label] = toFiniteNumber(value?.value)
+          statuses[parameter.label] = normalizeStatus(value?.status)
+        })
+      } else {
+        parameters.forEach((parameter) => {
+          const value = row.values?.[parameter]
+          values[parameter] = value?.displayValue ?? value?.value ?? ''
+          chartValues[parameter] = toFiniteNumber(value?.value)
+          statuses[parameter] = normalizeStatus(value?.status)
+        })
+      }
+
+      return {
+        date: selectedRows.date ?? payload?.meta?.date ?? '',
+        time: row.time ?? '',
+        chartTime: row.chartTime ?? String(row.time ?? '').slice(0, 5).replace('.', ':'),
+        values,
+        chartValues,
+        statuses,
+      }
+    }),
+  }
+}
+
+function getApiErrorMessage(payload, fallback) {
+  return payload?.message || payload?.error || fallback
 }
 
 function hasFactoryCoordinate(factory) {
@@ -366,6 +502,7 @@ function HomePage({ accessToken = '' }) {
       />
       <FactoryBottomSheet
         factory={selectedFactory}
+        accessToken={accessToken}
         open={Boolean(selectedFactory)}
         onClose={() => setSelectedFactory(null)}
       />
@@ -633,7 +770,7 @@ function FactoryCard({ factory, onSelect }) {
             color="text.secondary"
             sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
           >
-            {[factory.newRegistrationNo, factory.oldRegistrationNo ? `(${factory.oldRegistrationNo})` : ''].filter(Boolean).join(' ')}
+            {[factory.factoryId, factory.newRegistrationNo ? `(${factory.newRegistrationNo})` : ''].filter(Boolean).join(' ')}
           </Typography>
           <Typography
             variant="body2"
@@ -931,18 +1068,109 @@ function FactoryMap({ factories }) {
   )
 }
 
-function FactoryBottomSheet({ factory, open, onClose }) {
+function FactoryBottomSheet({ factory, accessToken = '', open, onClose }) {
   const [selectedDate, setSelectedDate] = useState(() => dayjs())
+  const [selectedCalendarMonth, setSelectedCalendarMonth] = useState(() => dayjs())
   const [selectedStatisticPoint, setSelectedStatisticPoint] = useState('')
   const [selectedTrendParameter, setSelectedTrendParameter] = useState(statisticParameters[0])
+  const [calendarStatusByDay, setCalendarStatusByDay] = useState({})
+  const [calendarSummary, setCalendarSummary] = useState([])
+  const [calendarError, setCalendarError] = useState('')
+  const [measurementStatisticParameters, setMeasurementStatisticParameters] = useState(statisticParameters)
+  const [measurementStatisticRows, setMeasurementStatisticRows] = useState([])
+  const [measurementStatisticError, setMeasurementStatisticError] = useState('')
   const statisticPoints = useMemo(() => getStatisticPoints(factory), [factory])
   const activeStatisticPoint = statisticPoints.some((point) => point.value === selectedStatisticPoint)
     ? selectedStatisticPoint
     : statisticPoints[0]?.value
-  const statisticRows = useMemo(
-    () => getStatisticRows(selectedDate, activeStatisticPoint),
-    [activeStatisticPoint, selectedDate],
-  )
+  const activeStatisticPointLabel =
+    statisticPoints.find((point) => point.value === activeStatisticPoint)?.label ?? activeStatisticPoint ?? '-'
+  const statisticRows = measurementStatisticRows
+  const activeCalendarSummaryRows = calendarSummary.length > 0 ? calendarSummary : []
+  const activeStatisticParameters =
+    measurementStatisticParameters.length > 0 ? measurementStatisticParameters : statisticParameters
+  const activeTrendParameter = activeStatisticParameters.includes(selectedTrendParameter)
+    ? selectedTrendParameter
+    : activeStatisticParameters[0] ?? statisticParameters[0]
+
+  useEffect(() => {
+    if (!open || !accessToken || !activeStatisticPoint) {
+      return
+    }
+
+    let isActive = true
+    const month = selectedCalendarMonth.format('YYYY-MM')
+
+    fetch(getConnectedMeasurementPointApiUrl(activeStatisticPoint, 'calendar-status', { month }), {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
+      .then(async (result) => {
+        const payload = await result.json().catch(() => null)
+
+        if (!result.ok) {
+          throw new Error(getApiErrorMessage(payload, `โหลดข้อมูล calendar ไม่สำเร็จ (${result.status} ${result.statusText})`))
+        }
+
+        if (isActive) {
+          setCalendarStatusByDay(mapCalendarStatusByDay(payload?.data?.calendar?.days))
+          setCalendarSummary(mapCalendarSummaryRows(payload?.data?.monthlySummary))
+          setCalendarError('')
+        }
+      })
+      .catch((error) => {
+        if (isActive) {
+          setCalendarStatusByDay({})
+          setCalendarSummary([])
+          setCalendarError(error instanceof Error ? error.message : 'โหลดข้อมูล calendar ไม่สำเร็จ')
+        }
+      })
+
+    return () => {
+      isActive = false
+    }
+  }, [accessToken, activeStatisticPoint, open, selectedCalendarMonth])
+
+  useEffect(() => {
+    if (!open || !accessToken || !activeStatisticPoint) {
+      return
+    }
+
+    let isActive = true
+    const date = selectedDate.format('YYYY-MM-DD')
+
+    fetch(getConnectedMeasurementPointApiUrl(activeStatisticPoint, 'measurement-statistics', { date }), {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
+      .then(async (result) => {
+        const payload = await result.json().catch(() => null)
+
+        if (!result.ok) {
+          throw new Error(getApiErrorMessage(payload, `โหลดสถิติข้อมูลไม่สำเร็จ (${result.status} ${result.statusText})`))
+        }
+
+        if (isActive) {
+          const mapped = mapMeasurementStatistics(payload, activeStatisticPoint)
+          setMeasurementStatisticParameters(mapped.parameters)
+          setMeasurementStatisticRows(mapped.rows)
+          setMeasurementStatisticError('')
+        }
+      })
+      .catch((error) => {
+        if (isActive) {
+          setMeasurementStatisticParameters(statisticParameters)
+          setMeasurementStatisticRows([])
+          setMeasurementStatisticError(error instanceof Error ? error.message : 'โหลดสถิติข้อมูลไม่สำเร็จ')
+        }
+      })
+
+    return () => {
+      isActive = false
+    }
+  }, [accessToken, activeStatisticPoint, open, selectedDate])
 
   return (
     <Drawer
@@ -1069,6 +1297,21 @@ function FactoryBottomSheet({ factory, open, onClose }) {
                     p: 1.5,
                   }}
                 >
+                  <Typography
+                    variant="subtitle1"
+                    sx={{
+                      gridColumn: '1 / -1',
+                      color: 'text.primary',
+                      fontWeight: 700,
+                      lineHeight: 1.35,
+                    }}
+                  >
+                    ข้อมูล{' '}
+                    <Box component="span" sx={{ color: 'primary.main' }}>
+                      {activeStatisticPointLabel}
+                    </Box>
+                  </Typography>
+
                   <Stack spacing={1.25} sx={{ width: { xs: '100%', sm: 320 }, alignItems: 'flex-start' }}>
                     <LocalizationProvider dateAdapter={AdapterDayjsBuddhist} adapterLocale="th">
                       <DateCalendar
@@ -1078,13 +1321,14 @@ function FactoryBottomSheet({ factory, open, onClose }) {
                             setSelectedDate(nextDate)
                           }
                         }}
+                        onMonthChange={(nextMonth) => setSelectedCalendarMonth(nextMonth)}
                         sx={{
                           width: { xs: '100%', sm: 320 },
                           bgcolor: 'background.paper',
                           m: 0,
                         }}
                         slots={{ day: CalendarStatusDay }}
-                        slotProps={{ day: { statusByDay: mockCalendarStatusByDay } }}
+                        slotProps={{ day: { statusByDay: calendarStatusByDay } }}
                       />
                     </LocalizationProvider>
 
@@ -1174,7 +1418,7 @@ function FactoryBottomSheet({ factory, open, onClose }) {
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {calendarSummaryRows.map((row) => (
+                        {activeCalendarSummaryRows.map((row) => (
                           <TableRow key={row.parameter}>
                             <TableCell sx={{ fontWeight: 700 }}>{row.parameter}</TableCell>
                             <TableCell align="center" sx={{ fontWeight: 400 }}>
@@ -1188,6 +1432,13 @@ function FactoryBottomSheet({ factory, open, onClose }) {
                             </TableCell>
                           </TableRow>
                         ))}
+                        {activeCalendarSummaryRows.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={4} align="center" sx={{ fontWeight: 400, color: 'text.secondary' }}>
+                              {calendarError || 'ไม่มีข้อมูลสรุปรายเดือน'}
+                            </TableCell>
+                          </TableRow>
+                        ) : null}
                       </TableBody>
                     </Table>
                   </TableContainer>
@@ -1195,8 +1446,10 @@ function FactoryBottomSheet({ factory, open, onClose }) {
 
                 <PollutionTrendPanel
                   rows={statisticRows}
+                  parameters={activeStatisticParameters}
                   selectedDate={selectedDate}
-                  selectedParameter={selectedTrendParameter}
+                  selectedPointLabel={activeStatisticPointLabel}
+                  selectedParameter={activeTrendParameter}
                   onParameterChange={setSelectedTrendParameter}
                 />
               </Stack>
@@ -1207,6 +1460,8 @@ function FactoryBottomSheet({ factory, open, onClose }) {
               selectedPoint={activeStatisticPoint}
               onPointChange={setSelectedStatisticPoint}
               rows={statisticRows}
+              parameters={activeStatisticParameters}
+              error={measurementStatisticError}
             />
           </Box>
         </Box>
@@ -1233,54 +1488,13 @@ function getStatisticPoints(factory) {
       ]
 }
 
-function getStatisticRows(selectedDate, selectedPoint) {
-  const date = selectedDate?.format?.('YYYY-MM-DD') ?? dayjs().format('YYYY-MM-DD')
-  const pointOffset = selectedPoint === 'WP-02' ? 0.02 : 0
-
-  return Array.from({ length: 24 }, (_, hour) => {
-    const status =
-      hour === 2 || hour === 13
-        ? 'warning'
-        : hour === 8 || hour === 17
-          ? 'exceeded'
-          : hour === 5 || hour === 21
-            ? 'unavailable'
-            : 'normal'
-    const time = `${String(hour).padStart(2, '0')}.00-${String(hour).padStart(2, '0')}.59 น.`
-    const co = 0.04 + ((hour + 1) % 5) * 0.01 + pointOffset
-    const nox = 9.2 + (hour % 8) * 0.18 + pointOffset * 10
-    const temp = 93.1 + (hour % 7) * 0.1
-    const oxygen = 12.2 + (hour % 6) * 0.1
-    const flow = 1800000 + hour * 5200 + (selectedPoint === 'WP-02' ? 43000 : 0)
-
-    return {
-      date,
-      time,
-      values: {
-        'CO (ppm)': co,
-        'NOx (ppm)': nox,
-        'Temp. (°C)': temp,
-        'O2 (%)': oxygen,
-        'Flow (m3/hr)': flow,
-      },
-      statuses: {
-        'CO (ppm)': status,
-        'NOx (ppm)': hour === 4 || hour === 18 ? 'warning' : status,
-        'Temp. (°C)': hour === 8 ? 'exceeded' : status,
-        'O2 (%)': hour === 5 || hour === 21 ? 'unavailable' : 'normal',
-        'Flow (m3/hr)': hour === 17 ? 'exceeded' : status,
-      },
-    }
-  })
-}
-
-function PollutionTrendPanel({ rows, selectedDate, selectedParameter, onParameterChange }) {
+function PollutionTrendPanel({ rows, parameters, selectedDate, selectedPointLabel, selectedParameter, onParameterChange }) {
   const selectedDateLabel = selectedDate?.format?.('D MMMM BBBB') ?? ''
   const chartData = useMemo(
     () =>
       rows.map((row) => ({
-        time: row.time.slice(0, 5).replace('.', ':'),
-        value: Number(row.values[selectedParameter] ?? 0),
+        time: row.chartTime || row.time.slice(0, 5).replace('.', ':'),
+        value: row.chartValues?.[selectedParameter] ?? toFiniteNumber(row.values[selectedParameter]),
       })),
     [rows, selectedParameter],
   )
@@ -1297,9 +1511,9 @@ function PollutionTrendPanel({ rows, selectedDate, selectedParameter, onParamete
       }}
     >
       <Typography variant="subtitle1" sx={{ px: 1.25, py: 0.75, fontWeight: 700 }}>
-        ค่าแนวโน้มสถานการณ์มลพิษ :{' '}
+        ค่าแนวโน้มสถานการณ์มลพิษ{' '}
         <Box component="span" sx={{ color: 'primary.main' }}>
-          {selectedParameter} {selectedDateLabel}
+          {selectedParameter} {selectedDateLabel} ({selectedPointLabel})
         </Box>
       </Typography>
 
@@ -1319,7 +1533,7 @@ function PollutionTrendPanel({ rows, selectedDate, selectedParameter, onParamete
 	          },
 	        }}
       >
-        {statisticParameters.map((parameter) => (
+        {parameters.map((parameter) => (
           <Tab key={parameter} value={parameter} label={parameter} />
         ))}
       </Tabs>
@@ -1390,7 +1604,7 @@ function PollutionTrendPanel({ rows, selectedDate, selectedParameter, onParamete
   )
 }
 
-function FactoryStatisticPanel({ selectedDate, points, selectedPoint, onPointChange, rows }) {
+function FactoryStatisticPanel({ selectedDate, points, selectedPoint, onPointChange, rows, parameters, error }) {
   const selectedDateLabel = selectedDate?.format?.('D MMMM BBBB') ?? ''
 
   return (
@@ -1448,7 +1662,7 @@ function FactoryStatisticPanel({ selectedDate, points, selectedPoint, onPointCha
               >
                 เวลา
               </TableCell>
-              {statisticParameters.map((parameter) => (
+              {parameters.map((parameter) => (
                 <TableCell key={parameter} sx={{ minWidth: 104, fontWeight: 700, bgcolor: 'neutral.50' }}>
                   {parameter}
                 </TableCell>
@@ -1456,7 +1670,7 @@ function FactoryStatisticPanel({ selectedDate, points, selectedPoint, onPointCha
             </TableRow>
           </TableHead>
           <TableBody>
-            {rows.map((row) => (
+            {rows.length > 0 ? rows.map((row) => (
               <TableRow key={`${row.date}-${row.time}`}>
                 <TableCell
                   sx={{
@@ -1471,7 +1685,7 @@ function FactoryStatisticPanel({ selectedDate, points, selectedPoint, onPointCha
                 >
                   {row.time}
                 </TableCell>
-                {statisticParameters.map((parameter) => (
+                {parameters.map((parameter) => (
                   <TableCell
                     key={parameter}
                     sx={{
@@ -1484,7 +1698,15 @@ function FactoryStatisticPanel({ selectedDate, points, selectedPoint, onPointCha
                   </TableCell>
                 ))}
               </TableRow>
-            ))}
+            )) : (
+              <TableRow>
+                <TableCell colSpan={parameters.length + 1} align="center" sx={{ fontWeight: 400 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    {error || 'ไม่มีข้อมูลสถิติ'}
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       </TableContainer>
@@ -1514,7 +1736,17 @@ function CalendarStatusDay({
   ...other
 }) {
   const status = outsideCurrentMonth ? null : statusByDay[day.format('YYYY-MM-DD')]
-  const statusStyle = status ? calendarStatusStyles[status] : null
+  const backgroundStatus = typeof status === 'string' ? status : status?.backgroundStatus
+  const borderStatus = typeof status === 'string' ? status : status?.borderStatus
+  const backgroundStyle = backgroundStatus ? calendarStatusStyles[backgroundStatus] : null
+  const borderStyle = borderStatus ? calendarStatusStyles[borderStatus] : null
+  const statusStyle =
+    backgroundStyle || borderStyle
+      ? {
+          backgroundColor: backgroundStyle?.backgroundColor ?? 'transparent',
+          borderColor: borderStyle?.borderColor ?? 'transparent',
+        }
+      : null
   const isSelected = selected || isVisuallySelected
 
   void disableHighlightToday
