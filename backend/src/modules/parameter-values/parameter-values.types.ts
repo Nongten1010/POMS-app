@@ -28,15 +28,20 @@ export interface CalendarStatusQuery {
   month: string;
 }
 
-export interface CalendarStatusParameterEvaluation {
+export interface ParameterEvaluation {
   parameter: string;
   standardCriteria?: unknown;
+  eiaCriteria?: unknown;
   channelStatus?: string | null;
 }
 
-export interface CalendarStatusEvaluationOptions {
-  parameterEvaluations?: CalendarStatusParameterEvaluation[];
+export interface ParameterEvaluationOptions {
+  parameterEvaluations?: ParameterEvaluation[];
 }
+
+export type CalendarStatusParameterEvaluation = ParameterEvaluation;
+export type CalendarStatusEvaluationOptions = ParameterEvaluationOptions;
+export type MeasurementStatisticsEvaluationOptions = ParameterEvaluationOptions;
 
 export interface ParameterValueAccessContext {
   actorUserId: number;

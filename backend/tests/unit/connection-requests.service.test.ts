@@ -1310,11 +1310,13 @@ describe('connectionRequestsService', () => {
           {
             parameter: 'CO (ppm)',
             standardCriteria,
+            eiaCriteria: null,
             channelStatus: 'Normal',
           },
           {
             parameter: 'NOx (ppm)',
             standardCriteria: null,
+            eiaCriteria: null,
             channelStatus: 'Maintenance',
           },
         ],

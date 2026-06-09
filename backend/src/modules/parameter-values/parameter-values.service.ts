@@ -12,6 +12,7 @@ import {
   type LatestParameterValueResultDTO,
   type ListParameterValuesQuery,
   type MeasurementParameterThresholdDTO,
+  type MeasurementStatisticsEvaluationOptions,
   type MeasurementStatisticsQuery,
   type MeasurementStatisticsResultDTO,
   type ParameterValueStatus,
@@ -193,6 +194,7 @@ export const parameterValuesService = {
   async measurementStatistics(
     query: MeasurementStatisticsQuery,
     access: ParameterValueAccessContext,
+    options?: MeasurementStatisticsEvaluationOptions,
   ): Promise<MeasurementStatisticsResultDTO> {
     await ensureStationAccess(query.stationId, access);
 
@@ -214,7 +216,11 @@ export const parameterValuesService = {
       }),
       parameterValuesRepository.listRegisteredParameters(query.stationId, access),
     ]);
-    const definitions = buildParameterDefinitions(registeredParameters, result.rows);
+    const definitions = buildParameterDefinitions(
+      registeredParameters,
+      result.rows,
+      options?.parameterEvaluations,
+    );
 
     return {
       data: {
@@ -223,7 +229,7 @@ export const parameterValuesService = {
           date: query.date,
           valueDefinitions: measurementStatisticsValueDefinitions(),
         },
-        thresholds: definitions.map(toThreshold),
+        thresholds: definitions.map(toThreshold).filter(isMeasurementParameterThreshold),
         measurementPoints: [
           {
             pointCode: query.stationId,
@@ -351,6 +357,7 @@ interface CriteriaRangeRow {
 interface ParameterEvaluationInput {
   parameter: string;
   standardCriteria?: unknown;
+  eiaCriteria?: unknown;
   channelStatus?: string | null;
 }
 
@@ -387,7 +394,7 @@ function buildParameterDefinitions(
       prefixes,
       normalMax: DEFAULT_NORMAL_MAX,
       warningMax: DEFAULT_WARNING_MAX,
-      criteriaRows: readCriteriaRows(evaluation?.standardCriteria),
+      criteriaRows: readPreferredCriteriaRows(evaluation),
       channelStatus: evaluation?.channelStatus ?? null,
       useConfiguredEvaluation: Boolean(evaluations),
     };
@@ -423,7 +430,20 @@ function findUnitForPrefixes(rows: Record<string, unknown>[], prefixes: string[]
   return '';
 }
 
-function toThreshold(definition: ParameterDefinition): MeasurementParameterThresholdDTO {
+function toThreshold(definition: ParameterDefinition): MeasurementParameterThresholdDTO | null {
+  const criteriaThreshold = toCriteriaThreshold(definition.criteriaRows);
+  if (criteriaThreshold) {
+    return {
+      parameterCode: definition.code,
+      parameterLabel: definition.label,
+      unit: definition.unit,
+      normalMax: criteriaThreshold.normalMax,
+      warningMax: criteriaThreshold.warningMax,
+    };
+  }
+
+  if (definition.useConfiguredEvaluation) return null;
+
   return {
     parameterCode: definition.code,
     parameterLabel: definition.label,
@@ -431,6 +451,22 @@ function toThreshold(definition: ParameterDefinition): MeasurementParameterThres
     normalMax: definition.normalMax,
     warningMax: definition.warningMax,
   };
+}
+
+function isMeasurementParameterThreshold(
+  threshold: MeasurementParameterThresholdDTO | null,
+): threshold is MeasurementParameterThresholdDTO {
+  return threshold !== null;
+}
+
+function toCriteriaThreshold(
+  rows: CriteriaRangeRow[],
+): Pick<MeasurementParameterThresholdDTO, 'normalMax' | 'warningMax'> | null {
+  const normalMax = findCriteriaMax(rows, 'normal');
+  const warningMax = findCriteriaMax(rows, 'warning');
+  if (normalMax === null || warningMax === null) return null;
+
+  return { normalMax, warningMax };
 }
 
 function buildHourlyStatisticRows(
@@ -781,6 +817,14 @@ function findCriteriaMin(
   return row?.min ?? null;
 }
 
+function findCriteriaMax(
+  rows: CriteriaRangeRow[],
+  level: CriteriaRangeRow['level'],
+): number | null {
+  const row = rows.find((item) => item.level === level);
+  return row?.max ?? null;
+}
+
 function readCriteriaRows(value: unknown): CriteriaRangeRow[] {
   if (!isRecord(value) || !Array.isArray(value.rows)) return [];
 
@@ -800,6 +844,15 @@ function readCriteriaRows(value: unknown): CriteriaRangeRow[] {
     .filter((row): row is CriteriaRangeRow => row !== null);
 }
 
+function readPreferredCriteriaRows(evaluation: ParameterEvaluationInput | null): CriteriaRangeRow[] {
+  if (!evaluation) return [];
+
+  const standardRows = readCriteriaRows(evaluation.standardCriteria);
+  if (standardRows.length > 0) return standardRows;
+
+  return readCriteriaRows(evaluation.eiaCriteria);
+}
+
 function isNormalChannelStatus(value: string | null): boolean {
   if (value === null) return true;
   const normalized = value.trim().toLowerCase();
@@ -813,12 +866,32 @@ function findParameterEvaluation(
 ): ParameterEvaluationInput | null {
   if (!evaluations) return null;
 
+  const parameterLabelKey = normalizeParameterName(parameter);
+  const exactMatch = evaluations.find(
+    (evaluation) => normalizeParameterName(evaluation.parameter) === parameterLabelKey,
+  );
+  if (exactMatch) return exactMatch;
+
+  const parameterUnit = normalizeUnit(parseParameterLabel(parameter).unit);
   const parameterKeys = new Set([normalizeParameterName(parameter), ...prefixes]);
   return (
     evaluations.find((evaluation) =>
+      canMatchParameterEvaluationByPrefix(parameterUnit, evaluation) &&
       toParameterColumnPrefixes(evaluation.parameter).some((prefix) => parameterKeys.has(prefix)),
     ) ?? null
   );
+}
+
+function canMatchParameterEvaluationByPrefix(
+  parameterUnit: string,
+  evaluation: ParameterEvaluationInput,
+): boolean {
+  const evaluationUnit = normalizeUnit(parseParameterLabel(evaluation.parameter).unit);
+  return !parameterUnit || !evaluationUnit || parameterUnit === evaluationUnit;
+}
+
+function normalizeUnit(unit: string): string {
+  return normalizeParameterName(unit);
 }
 
 function toNumber(value: unknown): number | null {

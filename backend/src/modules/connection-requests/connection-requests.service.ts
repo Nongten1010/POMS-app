@@ -11,7 +11,7 @@ import type {
   CalendarStatusQuerySchemaInput,
   MeasurementStatisticsQuerySchemaInput,
 } from '../parameter-values/parameter-values.validator';
-import type { CalendarStatusEvaluationOptions } from '../parameter-values/parameter-values.types';
+import type { ParameterEvaluationOptions } from '../parameter-values/parameter-values.types';
 import { connectionRequestsRepository } from './connection-requests.repository';
 import {
   CONNECTION_REQUEST_STATUS,
@@ -406,6 +406,7 @@ export const connectionRequestsService = {
     const result = await parameterValuesService.measurementStatistics(
       { stationId, ...query },
       { actorUserId, scope: viewScope },
+      toParameterEvaluationOptions(point),
     );
 
     return {
@@ -427,7 +428,7 @@ export const connectionRequestsService = {
     const result = await parameterValuesService.calendarStatus(
       { stationId, ...query },
       { actorUserId, scope: viewScope },
-      toCalendarStatusEvaluationOptions(point),
+      toParameterEvaluationOptions(point),
     );
 
     return {
@@ -1391,9 +1392,9 @@ function toMeasurementDetailFactory(point: ConnectedMeasurementPointDetailDTO): 
   };
 }
 
-function toCalendarStatusEvaluationOptions(
+function toParameterEvaluationOptions(
   point: ConnectedMeasurementPointDetailDTO,
-): CalendarStatusEvaluationOptions {
+): ParameterEvaluationOptions {
   const instrumentParameters = point.point.measurementInstruments?.parameters ?? [];
   const instrumentsByParameter = new Map(
     instrumentParameters.map((parameter) => [
@@ -1418,6 +1419,7 @@ function toCalendarStatusEvaluationOptions(
     parameterEvaluations: [...parameterNamesByKey.entries()].map(([key, parameter]) => ({
       parameter,
       standardCriteria: instrumentsByParameter.get(key)?.standardCriteria ?? null,
+      eiaCriteria: instrumentsByParameter.get(key)?.eiaCriteria ?? null,
       channelStatus: channelStatusesByParameter.get(key)?.status ?? null,
     })),
   };

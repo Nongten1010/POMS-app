@@ -572,6 +572,96 @@ describe('parameterValuesService', () => {
     });
   });
 
+  it('uses form criteria for measurement thresholds without copying them across units', async () => {
+    mockedRepository.listRegisteredParameters.mockResolvedValue(['CO2 (%)', 'CO2 (ppm)', 'SO2 (ppm)']);
+    mockedRepository.tableExists.mockResolvedValue(true);
+    mockedRepository.listRows.mockResolvedValue({
+      tableName: 'S0001_data_60m',
+      rows: [
+        {
+          station_id: 'S0001',
+          co2_value: 185,
+          co2_units: 'ppm',
+          so2_value: 55,
+          so2_units: 'ppm',
+          cdate: '2026-06-09',
+          ctime: '00:00:00',
+        },
+      ],
+    });
+
+    const result = await parameterValuesService.measurementStatistics(
+      { stationId: 'S0001', date: '2026-06-09' },
+      operatorAccess,
+      {
+        parameterEvaluations: [
+          {
+            parameter: 'CO2 (%)',
+            channelStatus: 'Normal',
+            standardCriteria: {
+              enabled: false,
+              standardValue: '120',
+              rows: [
+                { level: 'normal', min: 0, max: 180 },
+                { level: 'warning', min: 181, max: 190 },
+                { level: 'critical', min: 191, max: null },
+              ],
+            },
+          },
+          {
+            parameter: 'CO2 (ppm)',
+            channelStatus: 'Normal',
+            standardCriteria: {
+              enabled: true,
+              standardValue: null,
+              rows: [],
+            },
+            eiaCriteria: {
+              enabled: true,
+              standardValue: null,
+              rows: [],
+            },
+          },
+          {
+            parameter: 'SO2 (ppm)',
+            channelStatus: 'Normal',
+            standardCriteria: {
+              enabled: true,
+              standardValue: null,
+              rows: [],
+            },
+            eiaCriteria: {
+              enabled: false,
+              standardValue: '50',
+              rows: [
+                { level: 'normal', min: 0, max: 50 },
+                { level: 'warning', min: 51, max: 60 },
+                { level: 'critical', min: 61, max: null },
+              ],
+            },
+          },
+        ],
+      },
+    );
+
+    expect(result.data.thresholds).toEqual([
+      {
+        parameterCode: 'CO2',
+        parameterLabel: 'CO2 (%)',
+        unit: '%',
+        normalMax: 180,
+        warningMax: 190,
+      },
+      {
+        parameterCode: 'SO2',
+        parameterLabel: 'SO2 (ppm)',
+        unit: 'ppm',
+        normalMax: 50,
+        warningMax: 60,
+      },
+    ]);
+  });
+
   it('builds monthly calendar status from hourly rows', async () => {
     mockedRepository.listRegisteredParameters.mockResolvedValue(['CO (ppm)', 'NOx (ppm)']);
     mockedRepository.tableExists.mockResolvedValue(true);
