@@ -27,10 +27,10 @@ describe('parameterValuesService CO2 unit-specific columns', () => {
   it('returns CO2 percent and CO2 ppm mock columns as separate parameters', async () => {
     mockedRepository.listRegisteredParameters.mockResolvedValue(['CO2 (%)', 'CO2 (ppm)']);
     mockedRepository.listRows.mockResolvedValue({
-      tableName: 'S00001_data_60m',
+      tableName: 'S0001_data_60m',
       rows: [
         {
-          station_id: 'S00001',
+          station_id: 'S0001',
           co2_percent_value: '10.4',
           co2_percent_units: '%',
           co2_percent_status: 'Normal',
@@ -45,7 +45,7 @@ describe('parameterValuesService CO2 unit-specific columns', () => {
 
     const result = await parameterValuesService.list(
       {
-        stationId: 'S00001',
+        stationId: 'S0001',
         interval: '60m',
         startDate: '2026-06-09',
         endDate: '2026-06-09',

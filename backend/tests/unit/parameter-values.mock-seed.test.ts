@@ -6,10 +6,10 @@ import {
 } from '../../src/db/seeds/12_parameter_value_mock_data';
 
 describe('parameter value mock seed', () => {
-  it('defines demo stations for S00001 and P0001 with pasted columns plus separate CO2 units', () => {
+  it('defines demo stations for S0001 and P0001 with pasted columns plus separate CO2 units', () => {
     expect(PARAMETER_VALUE_MOCK_STATIONS.map((station) => station.stationId).sort()).toEqual([
       'P0001',
-      'S00001',
+      'S0001',
     ]);
 
     for (const station of PARAMETER_VALUE_MOCK_STATIONS) {
@@ -21,7 +21,7 @@ describe('parameter value mock seed', () => {
 
   it('keeps CO2 percent and CO2 ppm as separate mock columns', () => {
     const stackStation = PARAMETER_VALUE_MOCK_STATIONS.find(
-      (station) => station.stationId === 'S00001',
+      (station) => station.stationId === 'S0001',
     );
 
     expect(stackStation?.parameters).toEqual(

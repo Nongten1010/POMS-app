@@ -163,11 +163,11 @@ export interface ParameterValueMockStation {
 
 const BASE_PARAMETER_VALUE_MOCK_STATIONS: ParameterValueMockStation[] = [
   {
-    stationId: 'S00001',
-    requestNo: 'CEMS-DEMO-S00001',
+    stationId: 'S0001',
+    requestNo: 'CEMS-DEMO-S0001',
     systemType: 'CEMS',
     pointType: 'STACK',
-    pointName: 'S00001',
+    pointName: 'S0001',
     description: 'Demo CEMS station with all common stack parameters',
     parameters: buildPastedSchemaMockParameters(),
   },
