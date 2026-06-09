@@ -599,7 +599,11 @@ export const connectionRequestsService = {
     await loadLatestConnectedRequestForStation(stationId, actorUserId, editScope);
     ensureConfigStationMatchesRoute(stationId, input.stationId);
 
-    const saved = await deviceConnectionsService.create(input, actorUserId);
+    const [saved] = await deviceConnectionsService.replaceCurrentStation(
+      stationId,
+      [input],
+      actorUserId,
+    );
     return toDeviceConfigPayloadResponse([saved]);
   },
 
@@ -614,7 +618,11 @@ export const connectionRequestsService = {
       ensureConfigStationMatchesRoute(stationId, config.stationId);
     }
 
-    const saved = await deviceConnectionsService.createMany(input.configs, actorUserId);
+    const saved = await deviceConnectionsService.replaceCurrentStation(
+      stationId,
+      input.configs,
+      actorUserId,
+    );
     return toDeviceConfigPayloadResponse(saved);
   },
 

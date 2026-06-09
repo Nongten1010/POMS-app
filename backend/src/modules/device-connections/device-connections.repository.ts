@@ -147,6 +147,17 @@ export const deviceConnectionsRepository = {
     });
   },
 
+  async replaceManyActiveForStation(
+    stationId: string,
+    inputs: CreateDeviceConnectionConfigInput[],
+    actorUserId: number,
+  ): Promise<DeviceConnectionConfigDTO[]> {
+    return db.transaction(async (trx) => {
+      await softDeleteActiveConfigsByStation(trx, stationId, actorUserId);
+      return insertConfigs(trx, inputs, actorUserId, null);
+    });
+  },
+
   async replaceManyForRequest(
     inputs: CreateDeviceConnectionConfigInput[],
     actorUserId: number,
@@ -268,6 +279,36 @@ async function softDeleteActiveConfigByDeviceKey(
         builder.whereNull('device_code');
       }
     })
+    .whereNull('deleted_at')
+    .select('id');
+
+  const configIds = rows.map((row: Pick<DeviceConnectionConfigRow, 'id'>) => Number(row.id));
+  if (configIds.length === 0) return;
+
+  const auditUpdate = {
+    deleted_at: trx.fn.now(),
+    updated_at: trx.fn.now(),
+    updated_by: actorUserId,
+  };
+
+  await trx('device_measurement_channels')
+    .whereIn('config_id', configIds)
+    .whereNull('deleted_at')
+    .update(auditUpdate);
+  await trx('device_connection_configs')
+    .whereIn('id', configIds)
+    .whereNull('deleted_at')
+    .update(auditUpdate);
+}
+
+async function softDeleteActiveConfigsByStation(
+  trx: Knex.Transaction,
+  stationId: string,
+  actorUserId: number,
+): Promise<void> {
+  const rows = await trx<DeviceConnectionConfigRow>('device_connection_configs')
+    .whereNull('request_id')
+    .where('station_id', stationId)
     .whereNull('deleted_at')
     .select('id');
 

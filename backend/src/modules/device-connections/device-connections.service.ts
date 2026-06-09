@@ -69,6 +69,18 @@ export const deviceConnectionsService = {
     return deviceConnectionsRepository.replaceManyActive(inputs, actorUserId);
   },
 
+  async replaceCurrentStation(
+    stationId: string,
+    inputs: CreateDeviceConnectionConfigInput[],
+    actorUserId: number,
+  ): Promise<DeviceConnectionConfigDTO[]> {
+    ensureBatchDeviceKeysAreUnique(inputs);
+    for (const input of inputs) {
+      ensureChannelAddressesAreUnique(input);
+    }
+    return deviceConnectionsRepository.replaceManyActiveForStation(stationId, inputs, actorUserId);
+  },
+
   async createForRequest(
     input: CreateDeviceConnectionConfigInput,
     actorUserId: number,

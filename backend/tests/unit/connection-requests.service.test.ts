@@ -24,6 +24,7 @@ jest.mock('../../src/modules/device-connections/device-connections.service', () 
     createMany: jest.fn(),
     createForRequest: jest.fn(),
     createManyForRequest: jest.fn(),
+    replaceCurrentStation: jest.fn(),
     listActiveSettings: jest.fn(),
     listByRequestId: jest.fn(),
   },
@@ -124,6 +125,9 @@ describe('connectionRequestsService', () => {
     mockedDeviceConnectionsService.listByRequestId.mockResolvedValue([]);
     mockedDeviceConnectionsService.create.mockResolvedValue(deviceConnectionConfig());
     mockedDeviceConnectionsService.createMany.mockResolvedValue([deviceConnectionConfig()]);
+    mockedDeviceConnectionsService.replaceCurrentStation.mockResolvedValue([
+      deviceConnectionConfig(),
+    ]);
     mockedParameterValuesService.latestHourly.mockResolvedValue({
       data: [],
       meta: {
@@ -1815,7 +1819,7 @@ describe('connectionRequestsService', () => {
       ],
       total: 1,
     });
-    mockedDeviceConnectionsService.createMany.mockResolvedValue([
+    mockedDeviceConnectionsService.replaceCurrentStation.mockResolvedValue([
       deviceConnectionConfig({
         ...config,
         id: 20,
@@ -1834,7 +1838,12 @@ describe('connectionRequestsService', () => {
       { stationId: 'STACK-A', status: CONNECTION_REQUEST_STATUS.CONNECTED },
       { actorUserId, scope: 'OWN_FACTORY' },
     );
-    expect(mockedDeviceConnectionsService.createMany).toHaveBeenCalledWith([config], actorUserId);
+    expect(mockedDeviceConnectionsService.replaceCurrentStation).toHaveBeenCalledWith(
+      'STACK-A',
+      [config],
+      actorUserId,
+    );
+    expect(mockedDeviceConnectionsService.createMany).not.toHaveBeenCalled();
     expect(result).toMatchObject({
       stationId: 'STACK-A',
       device: [{ deviceCode: 'STACK-A/01', protocol: 'MODBUS_TCP' }],
@@ -1880,6 +1889,7 @@ describe('connectionRequestsService', () => {
       code: 'BAD_REQUEST',
     });
     expect(mockedDeviceConnectionsService.create).not.toHaveBeenCalled();
+    expect(mockedDeviceConnectionsService.replaceCurrentStation).not.toHaveBeenCalled();
   });
 
   it('allows the owner to resubmit a revised form', async () => {

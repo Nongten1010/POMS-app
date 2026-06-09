@@ -11,6 +11,7 @@ jest.mock('../../src/modules/device-connections/device-connections.repository', 
     listByRequestId: jest.fn(),
     replaceActive: jest.fn(),
     replaceManyActive: jest.fn(),
+    replaceManyActiveForStation: jest.fn(),
     replaceManyForRequest: jest.fn(),
     replaceManyForRequestAndActiveSettings: jest.fn(),
   },
@@ -288,6 +289,29 @@ describe('deviceConnectionsService', () => {
     expect(mockedRepository.replaceManyActive).toHaveBeenCalledWith(inputs, actorUserId);
     expect(result).toHaveLength(2);
     expect(mockedRepository.replaceManyForRequestAndActiveSettings).not.toHaveBeenCalled();
+  });
+
+  it('replaces all current active settings for a station in one repository call', async () => {
+    const inputs: CreateDeviceConnectionConfigInput[] = [
+      { ...modbusTcpPayload, deviceCode: 'STATION_001/02' },
+    ];
+    mockedRepository.replaceManyActiveForStation.mockResolvedValue([
+      configDto({ requestId: null, deviceCode: 'STATION_001/02' }),
+    ]);
+
+    const result = await deviceConnectionsService.replaceCurrentStation(
+      'STATION_001',
+      inputs,
+      actorUserId,
+    );
+
+    expect(mockedRepository.replaceManyActiveForStation).toHaveBeenCalledWith(
+      'STATION_001',
+      inputs,
+      actorUserId,
+    );
+    expect(result).toHaveLength(1);
+    expect(mockedRepository.replaceManyActive).not.toHaveBeenCalled();
   });
 
   it('allows the same station and protocol to store a different deviceCode', async () => {
