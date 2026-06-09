@@ -42,6 +42,7 @@ jest.mock('../../src/config/parameter-source-database', () => ({
 
 import {
   buildStationAccessQueryForTests,
+  buildWaitingConnectionStationAccessQueryForTests,
   parameterValuesRepository,
 } from '../../src/modules/parameter-values/parameter-values.repository';
 
@@ -97,5 +98,20 @@ describe('parameterValuesRepository', () => {
     expect(sql).not.toContain('cems_wpms_connection_requests');
     expect(sql).toContain('[p].[factory_id]');
     expect(sql).toContain('[p].[created_by]');
+  });
+
+  it('uses waiting connection requests for connection-test station access', () => {
+    const compiled = buildWaitingConnectionStationAccessQueryForTests({
+      actorUserId: 42,
+      scope: 'OWN_FACTORY',
+    }).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('cems_wpms_measurement_points');
+    expect(sql).toContain('cems_wpms_connection_requests');
+    expect(sql).toContain('[r].[status] = ?');
+    expect(compiled.bindings).toContain('WAITING_CONNECTION');
+    expect(sql).toContain('[r].[factory_id]');
+    expect(sql).toContain('[r].[created_by]');
   });
 });

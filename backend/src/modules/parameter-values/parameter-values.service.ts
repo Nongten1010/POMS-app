@@ -154,7 +154,7 @@ export const parameterValuesService = {
     query: ConnectionTestQuery,
     access: ParameterValueAccessContext,
   ): Promise<ConnectionTestResultDTO> {
-    await ensureStationAccess(query.stationId, access);
+    await ensureConnectionTestStationAccess(query.stationId, access);
 
     const interval = 'test';
     const tableName = parameterValuesRepository.tableName(query.stationId, interval);
@@ -172,7 +172,7 @@ export const parameterValuesService = {
       },
       5,
     );
-    const registeredParameters = await parameterValuesRepository.listRegisteredParameters(
+    const registeredParameters = await parameterValuesRepository.listRegisteredParametersForConnectionTest(
       query.stationId,
       access,
     );
@@ -1165,6 +1165,19 @@ async function ensureStationAccess(
   access: ParameterValueAccessContext,
 ): Promise<void> {
   const hasAccess = await parameterValuesRepository.canAccessStation(stationId, access);
+  if (!hasAccess) {
+    throw new ForbiddenError(`Station ${stationId} is not available for this user`);
+  }
+}
+
+async function ensureConnectionTestStationAccess(
+  stationId: string,
+  access: ParameterValueAccessContext,
+): Promise<void> {
+  const hasAccess = await parameterValuesRepository.canAccessStationForConnectionTest(
+    stationId,
+    access,
+  );
   if (!hasAccess) {
     throw new ForbiddenError(`Station ${stationId} is not available for this user`);
   }

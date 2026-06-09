@@ -105,6 +105,23 @@ export const parameterValuesRepository = {
     return Boolean(row);
   },
 
+  async canAccessStationForConnectionTest(
+    stationId: string,
+    access: ParameterValueAccessContext,
+  ): Promise<boolean> {
+    const connected = await this.canAccessStation(stationId, access);
+    if (connected) return true;
+
+    const row = await buildWaitingConnectionStationAccessQuery(access)
+      .where((builder) => {
+        builder.where('p.point_code', stationId).orWhere('p.point_name', stationId);
+      })
+      .select('p.id')
+      .first();
+
+    return Boolean(row);
+  },
+
   async listRegisteredParameters(
     stationId: string,
     access: ParameterValueAccessContext,
@@ -116,6 +133,27 @@ export const parameterValuesRepository = {
       .select<RegisteredParameterRow[]>('p.parameters_json');
 
     return uniqueRegisteredParameters(rows.flatMap((row) => parseRegisteredParameters(row)));
+  },
+
+  async listRegisteredParametersForConnectionTest(
+    stationId: string,
+    access: ParameterValueAccessContext,
+  ): Promise<string[]> {
+    const connectedRows = await buildStationAccessQuery(access)
+      .where((builder) => {
+        builder.where('p.point_code', stationId).orWhere('p.point_name', stationId);
+      })
+      .select<RegisteredParameterRow[]>('p.parameters_json');
+
+    const waitingRows = await buildWaitingConnectionStationAccessQuery(access)
+      .where((builder) => {
+        builder.where('p.point_code', stationId).orWhere('p.point_name', stationId);
+      })
+      .select<RegisteredParameterRow[]>('p.parameters_json');
+
+    return uniqueRegisteredParameters(
+      [...connectedRows, ...waitingRows].flatMap((row) => parseRegisteredParameters(row)),
+    );
   },
 
   async listRows(
@@ -259,8 +297,37 @@ function buildStationAccessQuery(access: ParameterValueAccessContext) {
     });
 }
 
+function buildWaitingConnectionStationAccessQuery(access: ParameterValueAccessContext) {
+  const query = db('cems_wpms_measurement_points as p')
+    .join('cems_wpms_connection_requests as r', 'r.id', 'p.request_id')
+    .whereNull('p.deleted_at')
+    .whereNull('r.deleted_at')
+    .where('r.status', 'WAITING_CONNECTION');
+
+  if (access.scope === 'ALL') return query;
+
+  return query
+    .leftJoin('factories as f', function joinFactory() {
+      this.on('f.fid', '=', 'r.factory_id').andOnNull('f.deleted_at');
+    })
+    .leftJoin('user_juristics as uj', function joinUserJuristic() {
+      this.on('uj.juristic_id', '=', 'f.juristic_id')
+        .andOnVal('uj.user_id', access.actorUserId)
+        .andOnNull('uj.revoked_at');
+    })
+    .where((builder) => {
+      builder.where('r.created_by', access.actorUserId).orWhereNotNull('uj.user_id');
+    });
+}
+
 export function buildStationAccessQueryForTests(access: ParameterValueAccessContext) {
   return buildStationAccessQuery(access);
+}
+
+export function buildWaitingConnectionStationAccessQueryForTests(
+  access: ParameterValueAccessContext,
+) {
+  return buildWaitingConnectionStationAccessQuery(access);
 }
 
 function serializeRow(row: Record<string, unknown>): Record<string, unknown> {

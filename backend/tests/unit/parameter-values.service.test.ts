@@ -3,11 +3,13 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 jest.mock('../../src/modules/parameter-values/parameter-values.repository', () => ({
   parameterValuesRepository: {
     canAccessStation: jest.fn(),
+    canAccessStationForConnectionTest: jest.fn(),
     latestRow: jest.fn(),
     latestRowsAtLatestTimestamp: jest.fn(),
     latestRows: jest.fn(),
     listAccessibleStationIds: jest.fn(),
     listRegisteredParameters: jest.fn(),
+    listRegisteredParametersForConnectionTest: jest.fn(),
     listRows: jest.fn(),
     listTables: jest.fn(),
     tableExists: jest.fn(),
@@ -26,8 +28,10 @@ describe('parameterValuesService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedRepository.canAccessStation.mockResolvedValue(true);
+    mockedRepository.canAccessStationForConnectionTest.mockResolvedValue(true);
     mockedRepository.listAccessibleStationIds.mockResolvedValue(['S0001']);
     mockedRepository.listRegisteredParameters.mockResolvedValue(['CO2']);
+    mockedRepository.listRegisteredParametersForConnectionTest.mockResolvedValue(['CO2']);
   });
 
   it('lists only registered parameter columns from the interval table with source metadata', async () => {
@@ -266,7 +270,7 @@ describe('parameterValuesService', () => {
   });
 
   it('returns formatted connection test values from the latest five station test rows', async () => {
-    mockedRepository.listRegisteredParameters.mockResolvedValue([
+    mockedRepository.listRegisteredParametersForConnectionTest.mockResolvedValue([
       'CO2 (%)',
       'CO2 (ppm)',
       'NOx (ppm)',
@@ -306,7 +310,10 @@ describe('parameterValuesService', () => {
       operatorAccess,
     );
 
-    expect(mockedRepository.canAccessStation).toHaveBeenCalledWith('S0001', operatorAccess);
+    expect(mockedRepository.canAccessStationForConnectionTest).toHaveBeenCalledWith(
+      'S0001',
+      operatorAccess,
+    );
     expect(mockedRepository.tableExists).toHaveBeenCalledWith('S0001_data_test');
     expect(mockedRepository.latestRows).toHaveBeenCalledWith(
       {
@@ -357,6 +364,41 @@ describe('parameterValuesService', () => {
     expect(result.data[0]).not.toHaveProperty('results');
     expect(result.data[0]).not.toHaveProperty('stationId');
     expect(result.meta).not.toHaveProperty('returnedColumns');
+  });
+
+  it('allows connection test when the station is accessible through a waiting connection request', async () => {
+    mockedRepository.canAccessStationForConnectionTest.mockResolvedValue(true);
+    mockedRepository.listRegisteredParametersForConnectionTest.mockResolvedValue(['NOx (ppm)']);
+    mockedRepository.tableExists.mockResolvedValue(true);
+    mockedRepository.latestRows.mockResolvedValue({
+      tableName: 'S0001_data_test',
+      rows: [
+        {
+          station_id: 'S0001',
+          nox_value: '8.5',
+          nox_units: 'ppm',
+          nox_status: 'Normal',
+          cdate: '2026-06-07',
+          ctime: '10:15:00',
+        },
+      ],
+    });
+
+    const result = await parameterValuesService.connectionTest(
+      { stationId: 'S0001' },
+      operatorAccess,
+    );
+
+    expect(mockedRepository.canAccessStation).not.toHaveBeenCalled();
+    expect(mockedRepository.canAccessStationForConnectionTest).toHaveBeenCalledWith(
+      'S0001',
+      operatorAccess,
+    );
+    expect(mockedRepository.listRegisteredParametersForConnectionTest).toHaveBeenCalledWith(
+      'S0001',
+      operatorAccess,
+    );
+    expect(result.data[0]?.values).toEqual({ 'NOx (ppm)': '8.5' });
   });
 
   it('returns empty connection test data when no test row exists', async () => {
