@@ -58,6 +58,7 @@ interface ConnectionRequestRow {
 
 interface MeasurementPointRow {
   id: number | string;
+  request_id: number | string;
   point_name: string;
   point_code: string | null;
   point_type: 'STACK' | 'WASTEWATER' | 'OTHER';
@@ -85,6 +86,7 @@ interface CurrentFactoryMeasurementPointRow {
 
 interface StatusHistoryRow {
   id: number | string;
+  request_id: number | string;
   status: ConnectionRequestStatus;
   note: string | null;
   changed_by: number | string;
@@ -189,7 +191,7 @@ export const connectionRequestsRepository = {
     const total = Number(totalRow?.total ?? 0);
 
     const rows = await baseQuery.clone().orderBy('created_at', 'desc').orderBy('id', 'desc');
-    const data = await Promise.all(rows.map((row) => hydrate(row)));
+    const data = await hydrateMany(rows);
     return { rows: data, total };
   },
 
@@ -388,7 +390,7 @@ export const connectionRequestsRepository = {
         'updated_at',
       );
 
-    return Promise.all(rows.map((row) => hydrate(row)));
+    return hydrateMany(rows);
   },
 
   async listConnectedMeasurementPointsForFactories(
@@ -828,8 +830,57 @@ async function hydrate(
       .orderBy('id', 'asc'),
   ]);
 
+  return toConnectionRequestDTO(row, pointRows, historyRows);
+}
+
+async function hydrateMany(rows: ConnectionRequestRow[]): Promise<ConnectionRequestDTO[]> {
+  if (rows.length === 0) return [];
+
+  const requestIds = rows.map((row) => Number(row.id));
+  const [pointRows, historyRows] = await Promise.all([
+    db<MeasurementPointRow>('cems_wpms_measurement_points')
+      .whereIn('request_id', requestIds)
+      .whereNull('deleted_at')
+      .orderBy('request_id', 'asc')
+      .orderBy('id', 'asc'),
+    db<StatusHistoryRow>('cems_wpms_request_status_history')
+      .whereIn('request_id', requestIds)
+      .orderBy('request_id', 'asc')
+      .orderBy('changed_at', 'asc')
+      .orderBy('id', 'asc'),
+  ]);
+
+  const pointsByRequestId = groupRowsByRequestId(pointRows);
+  const historyByRequestId = groupRowsByRequestId(historyRows);
+
+  return rows.map((row) => {
+    const requestId = Number(row.id);
+    return toConnectionRequestDTO(
+      row,
+      pointsByRequestId.get(requestId) ?? [],
+      historyByRequestId.get(requestId) ?? [],
+    );
+  });
+}
+
+function groupRowsByRequestId<T extends { request_id: number | string }>(
+  rows: T[],
+): Map<number, T[]> {
+  const grouped = new Map<number, T[]>();
+  rows.forEach((row) => {
+    const requestId = Number(row.request_id);
+    grouped.set(requestId, [...(grouped.get(requestId) ?? []), row]);
+  });
+  return grouped;
+}
+
+function toConnectionRequestDTO(
+  row: ConnectionRequestRow,
+  pointRows: MeasurementPointRow[],
+  historyRows: StatusHistoryRow[],
+): ConnectionRequestDTO {
   return {
-    id: requestId,
+    id: Number(row.id),
     requestNo: row.request_no,
     requestType: row.request_type ?? CONNECTION_REQUEST_TYPE.NEW_CONNECTION,
     requestTypeLabel:
