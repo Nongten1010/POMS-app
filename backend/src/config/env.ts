@@ -75,6 +75,8 @@ const envSchema = z.object({
     .regex(/^[A-Za-z_][A-Za-z0-9_]*$/)
     .default('parameter_values'),
 
+  INTEGRATION_API_KEYS: z.string().optional(),
+
   CORS_ORIGIN: z.string().default('*'),
   PUBLIC_BASE_URL: z.string().url().optional(),
   UPLOAD_DIR: z.string().min(1).default('uploads'),

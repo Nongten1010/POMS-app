@@ -78,6 +78,9 @@ Mapping:
 | 14  | บันทึก config ปัจจุบันของจุดตรวจวัดที่เลือก                  | POST   | `/connected-measurement-points/:stationId/device-configs`  | `cems_wpms_requests:edit`    |
 | 15  | ปฏิทินสถานะรายเดือนของจุดตรวจวัดที่เลือก                     | GET    | `/connected-measurement-points/:stationId/calendar-status` | `cems_wpms_requests:view`    |
 | 16  | สถิติรายชั่วโมง/กราฟแนวโน้มของจุดตรวจวัดที่เลือก             | GET    | `/connected-measurement-points/:stationId/measurement-statistics` | `cems_wpms_requests:view` |
+| 17  | Integration ดึง active device/parameter/status config         | GET    | `/integrations/device-configs/:stationId`                  | `X-API-Key`                  |
+
+รายละเอียด API integration สำหรับระบบภายนอกอยู่ใน [`INTEGRATION_DEVICE_CONFIGS.md`](./INTEGRATION_DEVICE_CONFIGS.md)
 
 ## API Mapping สำหรับปุ่มบนจุดตรวจวัด
 

@@ -18,6 +18,7 @@ import {
 } from './modules/connection-requests/connection-requests.routes';
 import { deviceConnectionsRoutes } from './modules/device-connections/device-connections.routes';
 import { parameterValuesRoutes } from './modules/parameter-values/parameter-values.routes';
+import { integrationsRoutes } from './modules/integrations/integrations.routes';
 
 export function createApp(): Application {
   const app = express();
@@ -72,6 +73,7 @@ export function createApp(): Application {
   app.use(`${env.API_PREFIX}/cems-wpms-requests`, connectionRequestsRoutes);
   app.use(`${env.API_PREFIX}/device-connections`, deviceConnectionsRoutes);
   app.use(`${env.API_PREFIX}/parameter-values`, parameterValuesRoutes);
+  app.use(`${env.API_PREFIX}/integrations`, integrationsRoutes);
   // TODO: mount more feature routes when ready
   // app.use(`${env.API_PREFIX}/factories`, factoriesRoutes);
 
