@@ -38,6 +38,7 @@ describe('email test route', () => {
         to: 'yuth.s@ku.th',
         subject: 'POMS test mail',
         text: expect.stringContaining('Testing SMTP from POMS.'),
+        html: expect.stringContaining('<meta charset="utf-8">'),
       }),
     );
     expect(response.body).toMatchObject({

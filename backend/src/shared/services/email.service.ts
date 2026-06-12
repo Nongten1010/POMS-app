@@ -42,6 +42,8 @@ class EmailService {
       subject: input.subject,
       text: input.text,
       html: input.html,
+      encoding: 'utf-8',
+      textEncoding: 'base64',
     });
   }
 

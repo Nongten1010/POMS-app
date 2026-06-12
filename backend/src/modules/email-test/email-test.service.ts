@@ -28,6 +28,7 @@ export const emailTestService = {
       to: EMAIL_TEST_RECIPIENT,
       subject,
       text: [message, '', `Sent at: ${sentAt}`, `Triggered by user ID: ${actorUserId}`].join('\n'),
+      html: renderEmailTestHtml(message, sentAt, actorUserId),
     });
 
     return {
@@ -37,3 +38,29 @@ export const emailTestService = {
     };
   },
 };
+
+export function renderEmailTestHtml(message: string, sentAt: string, actorUserId: number): string {
+  return [
+    '<!doctype html>',
+    '<html lang="th">',
+    '<head>',
+    '<meta charset="utf-8">',
+    '<meta name="viewport" content="width=device-width, initial-scale=1">',
+    '<title>POMS SMTP Test</title>',
+    '</head>',
+    '<body>',
+    `<p>${escapeHtml(message).replace(/\n/g, '<br>')}</p>`,
+    `<p>Sent at: ${escapeHtml(sentAt)}<br>Triggered by user ID: ${actorUserId}</p>`,
+    '</body>',
+    '</html>',
+  ].join('');
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
