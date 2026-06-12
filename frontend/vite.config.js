@@ -12,6 +12,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api-proxy/, '/api'),
       },
+      '/api-local': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api-local/, '/api'),
+      },
     },
   },
   preview: {
@@ -21,6 +26,11 @@ export default defineConfig({
         target: 'http://d-poms.diw.go.th',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api-proxy/, '/api'),
+      },
+      '/api-local': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api-local/, '/api'),
       },
     },
   },

@@ -18,6 +18,7 @@ import GavelIcon from '@mui/icons-material/Gavel'
 import HelpIcon from '@mui/icons-material/Help'
 import HomeIcon from '@mui/icons-material/Home'
 import LinkIcon from '@mui/icons-material/Link'
+import MarkEmailReadIcon from '@mui/icons-material/MarkEmailRead'
 import NotificationsIcon from '@mui/icons-material/Notifications'
 import QueryStatsIcon from '@mui/icons-material/QueryStats'
 import SearchIcon from '@mui/icons-material/Search'
@@ -124,6 +125,12 @@ const menuItems = [
     value: 'api-documentation',
     permissionKey: 'api_documentation',
     icon: <ApiIcon />,
+  },
+  {
+    label: 'ทดสอบส่งอีเมล',
+    value: 'email-test',
+    permissionKey: 'email_test',
+    icon: <MarkEmailReadIcon />,
   },
 ]
 

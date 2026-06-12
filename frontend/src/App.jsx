@@ -6,6 +6,7 @@ import DpomsSidebar from './components/DpomsSidebar'
 import ApiDocumentationPage from './pages/ApiDocumentationPage'
 import ConnectionRequestPage from './pages/ConnectionRequestPage'
 import EligibleFactoriesPage from './pages/EligibleFactoriesPage'
+import EmailTestPage from './pages/EmailTestPage'
 import HomePage from './pages/HomePage'
 import PermissionManagementPage from './pages/PermissionManagementPage'
 
@@ -28,6 +29,10 @@ const defaultPermissions = {
     data: 'ALL',
     view: true,
   },
+  email_test: {
+    data: 'ALL',
+    view: true,
+  },
 }
 
 const menuPermissionMap = {
@@ -47,6 +52,7 @@ const menuPermissionMap = {
   permissions: 'permissions',
   'eligible-factories': 'eligible_factories',
   'api-documentation': 'api_documentation',
+  'email-test': 'email_test',
 }
 
 function loadStoredAuth() {
@@ -149,7 +155,8 @@ function App() {
     visibleSelectedMenu === 'permissions' ||
     visibleSelectedMenu === 'connection-request' ||
     visibleSelectedMenu === 'eligible-factories' ||
-    visibleSelectedMenu === 'api-documentation'
+    visibleSelectedMenu === 'api-documentation' ||
+    visibleSelectedMenu === 'email-test'
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
@@ -205,6 +212,8 @@ function App() {
           <EligibleFactoriesPage accessToken={accessToken} />
         ) : visibleSelectedMenu === 'api-documentation' ? (
           <ApiDocumentationPage />
+        ) : visibleSelectedMenu === 'email-test' ? (
+          <EmailTestPage accessToken={accessToken} />
         ) : (
           <HomePage accessToken={accessToken} />
         )}
