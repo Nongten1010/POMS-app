@@ -19,6 +19,7 @@ import {
 import { deviceConnectionsRoutes } from './modules/device-connections/device-connections.routes';
 import { parameterValuesRoutes } from './modules/parameter-values/parameter-values.routes';
 import { integrationsRoutes } from './modules/integrations/integrations.routes';
+import { alertEventsRoutes } from './modules/alert-events/alert-events.routes';
 import { emailTestRoutes } from './modules/email-test/email-test.routes';
 
 export function createApp(): Application {
@@ -75,6 +76,7 @@ export function createApp(): Application {
   app.use(`${env.API_PREFIX}/device-connections`, deviceConnectionsRoutes);
   app.use(`${env.API_PREFIX}/parameter-values`, parameterValuesRoutes);
   app.use(`${env.API_PREFIX}/integrations`, integrationsRoutes);
+  app.use(`${env.API_PREFIX}/alert-events`, alertEventsRoutes);
   app.use(`${env.API_PREFIX}/email-test`, emailTestRoutes);
   // TODO: mount more feature routes when ready
   // app.use(`${env.API_PREFIX}/factories`, factoriesRoutes);

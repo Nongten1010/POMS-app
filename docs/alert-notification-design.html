@@ -1,0 +1,1769 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>POMS Alert Notification Design</title>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --surface: #ffffff;
+      --surface-soft: #eef4ff;
+      --ink: #172033;
+      --muted: #5d6b82;
+      --line: #d8e0ec;
+      --blue: #2364d2;
+      --green: #16835f;
+      --red: #c73737;
+      --amber: #a96f00;
+      --code: #101828;
+      --radius: 8px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Tahoma, sans-serif;
+      line-height: 1.65;
+    }
+
+    main {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 32px 20px 56px;
+    }
+
+    h1,
+    h2,
+    h3 {
+      line-height: 1.25;
+      margin: 0;
+    }
+
+    h1 {
+      font-size: 32px;
+      color: #10213d;
+    }
+
+    h2 {
+      margin-top: 34px;
+      padding-top: 24px;
+      border-top: 1px solid var(--line);
+      font-size: 24px;
+    }
+
+    h3 {
+      margin-top: 22px;
+      font-size: 18px;
+    }
+
+    p {
+      margin: 10px 0;
+    }
+
+    ul,
+    ol {
+      margin: 10px 0 0;
+      padding-left: 24px;
+    }
+
+    li {
+      margin: 5px 0;
+    }
+
+    code {
+      border-radius: 5px;
+      background: #eef1f6;
+      padding: 1px 6px;
+      color: #0f2748;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.93em;
+    }
+
+    pre {
+      overflow-x: auto;
+      margin: 12px 0 0;
+      border-radius: var(--radius);
+      background: var(--code);
+      color: #e8eef9;
+      padding: 16px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    table {
+      width: 100%;
+      margin-top: 12px;
+      border-collapse: collapse;
+      background: var(--surface);
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #e9eff8;
+      color: #12233b;
+      font-weight: 700;
+    }
+
+    .hero {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      padding: 24px;
+    }
+
+    .subtitle {
+      max-width: 900px;
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 17px;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 18px;
+    }
+
+    .pill {
+      border-radius: 999px;
+      background: #e8f0ff;
+      color: #173c7a;
+      padding: 5px 11px;
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .section {
+      margin-top: 20px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      padding: 20px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 14px;
+    }
+
+    .box {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fbfcff;
+      padding: 14px;
+    }
+
+    .box strong {
+      display: block;
+      margin-bottom: 6px;
+      color: #12233b;
+    }
+
+    .note {
+      border-left: 4px solid var(--blue);
+      background: var(--surface-soft);
+      padding: 12px 14px;
+      margin-top: 14px;
+    }
+
+    .warning {
+      border-left-color: var(--amber);
+      background: #fff7e6;
+    }
+
+    .danger {
+      border-left-color: var(--red);
+      background: #fff0f0;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(130px, 1fr));
+      gap: 10px;
+      align-items: stretch;
+      margin-top: 16px;
+    }
+
+    .flow-step {
+      position: relative;
+      border: 1px solid #bfd0ea;
+      border-radius: var(--radius);
+      background: #f8fbff;
+      padding: 14px;
+      min-height: 116px;
+    }
+
+    .flow-step::after {
+      content: ">";
+      position: absolute;
+      top: 50%;
+      right: -10px;
+      transform: translateY(-50%);
+      color: var(--blue);
+      font-weight: 800;
+    }
+
+    .flow-step:last-child::after {
+      content: "";
+    }
+
+    .flow-step strong {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--blue);
+    }
+
+    .diagram-wrap {
+      margin-top: 16px;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #f9fbff;
+      padding: 14px;
+    }
+
+    .workflow-diagram {
+      display: block;
+      min-width: 1060px;
+      width: 100%;
+      height: auto;
+    }
+
+    .diagram-title {
+      fill: #10213d;
+      font-size: 22px;
+      font-weight: 800;
+    }
+
+    .diagram-subtitle {
+      fill: #5d6b82;
+      font-size: 14px;
+    }
+
+    .diagram-box {
+      fill: #ffffff;
+      stroke: #b9c7dc;
+      stroke-width: 1.5;
+      rx: 8;
+    }
+
+    .diagram-box-blue {
+      fill: #eaf2ff;
+      stroke: #7aa4ee;
+    }
+
+    .diagram-box-green {
+      fill: #e9f8f1;
+      stroke: #71c69d;
+    }
+
+    .diagram-box-amber {
+      fill: #fff5df;
+      stroke: #e4b45d;
+    }
+
+    .diagram-box-red {
+      fill: #fff0f0;
+      stroke: #df8787;
+    }
+
+    .diagram-text {
+      fill: #172033;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .diagram-small {
+      fill: #5d6b82;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .diagram-arrow {
+      stroke: #2364d2;
+      stroke-width: 2;
+      fill: none;
+      marker-end: url(#arrowhead);
+    }
+
+    .diagram-dashed {
+      stroke-dasharray: 6 5;
+    }
+
+    .diagram-lane {
+      fill: #f1f5fb;
+      stroke: #d8e0ec;
+      stroke-width: 1;
+      rx: 8;
+    }
+
+    .tag {
+      display: inline-block;
+      border-radius: 5px;
+      padding: 2px 7px;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .tag.green {
+      background: var(--green);
+    }
+
+    .tag.red {
+      background: var(--red);
+    }
+
+    .tag.blue {
+      background: var(--blue);
+    }
+
+    .tag.amber {
+      background: var(--amber);
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 16px;
+      margin-top: 14px;
+    }
+
+    .small {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 900px) {
+      .grid,
+      .two-col,
+      .flow {
+        grid-template-columns: 1fr;
+      }
+
+      .flow-step::after {
+        content: "v";
+        top: auto;
+        right: 50%;
+        bottom: -18px;
+        transform: translateX(50%);
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="hero">
+      <h1>ออกแบบระบบข้อมูลการแจ้งเตือน CEMS และ BOD/COD Online</h1>
+      <p class="subtitle">
+        เอกสารนี้สรุปแนวทางเก็บข้อมูล, flow งาน, schema, API สำหรับทีมภายนอก POST ค่าเข้ามา,
+        และแนวทางรองรับข้อมูลขนาดใหญ่ระดับหลายหมื่นโรงงานต่อวัน
+      </p>
+      <div class="meta">
+        <span class="pill">Source หลัก: 60m raw data</span>
+        <span class="pill">ผลลัพธ์กลาง: alert_events</span>
+        <span class="pill">กันซ้ำ: idempotency_key</span>
+        <span class="pill">Scale: batch + summary</span>
+      </div>
+    </section>
+
+    <h2>1. ข้อสรุปการออกแบบ</h2>
+    <section class="section">
+      <p>
+        แนะนำให้ใช้ <strong>ตารางกลางตารางเดียวสำหรับเหตุการณ์แจ้งเตือน</strong> คือ
+        <code>alert_events</code> แล้วแยกหน้าจอด้วย <code>alert_type</code>,
+        <code>system_type</code>, view หรือ API filter แทนการสร้างตารางแยกตาม alert ทุกประเภท
+      </p>
+      <div class="note">
+        ไม่ควรให้หน้าเว็บหรือ API รายงานไป scan ตาราง <code>{stationId}_data_60m</code> สด ๆ ทุกครั้ง
+        เพราะข้อมูลจะใหญ่ตามจำนวนโรงงาน จุดตรวจ และพารามิเตอร์ ควรให้ background job คำนวณไว้ล่วงหน้า
+        แล้วหน้าเว็บอ่านจาก <code>alert_events</code>
+      </div>
+      <div class="grid">
+        <div class="box">
+          <strong>Raw data</strong>
+          เก็บค่าตรวจวัดจำนวนมากใน Parameter DB เช่น <code>ingest.S0001_data_60m</code>
+        </div>
+        <div class="box">
+          <strong>Daily summary</strong>
+          สรุป completeness, no report, abnormal ต่อวัน เพื่อให้ job อ่านเร็ว
+        </div>
+        <div class="box">
+          <strong>Alert event</strong>
+          เก็บเฉพาะเหตุการณ์ที่เข้าเงื่อนไขแจ้งเตือน พร้อม snapshot สำหรับเปิดย้อนหลัง
+        </div>
+      </div>
+    </section>
+
+    <h2>2. ประเภทการแจ้งเตือน</h2>
+    <section class="section">
+      <table>
+        <thead>
+          <tr>
+            <th>กลุ่ม</th>
+            <th>รายการแจ้งเตือน</th>
+            <th>alert_type</th>
+            <th>แหล่งข้อมูลที่แนะนำ</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>CEMS</td>
+            <td>ผลการตรวจวัด CEMS เกินมาตรฐาน</td>
+            <td><code>STANDARD_EXCEEDED</code></td>
+            <td>รับ POST จาก API ภายนอกเท่านั้น</td>
+          </tr>
+          <tr>
+            <td>CEMS</td>
+            <td>ผลการตรวจวัด CEMS เกินค่า EIA กำหนด</td>
+            <td><code>EIA_EXCEEDED</code></td>
+            <td>รับ POST จาก API ภายนอกเท่านั้น</td>
+          </tr>
+          <tr>
+            <td>CEMS</td>
+            <td>รายงานผล CEMS ไม่ถึงร้อยละ 80 ต่อวัน</td>
+            <td><code>DAILY_COMPLETENESS_LOW</code></td>
+            <td>job 08:30 คำนวณจากข้อมูลวันก่อนหน้า ด้วยสูตร <code>Normal / (24 - Shut Down)</code></td>
+          </tr>
+          <tr>
+            <td>CEMS</td>
+            <td>ไม่รายงานผล CEMS ติดต่อกันเกิน 14 วัน</td>
+            <td><code>CONSECUTIVE_NO_REPORT</code></td>
+            <td>เริ่มแจ้งวันที่ 15 และแจ้งทุกวันจนกว่าจะมีค่ากลับเข้ามา</td>
+          </tr>
+          <tr>
+            <td>CEMS</td>
+            <td>รายงานผลตรวจวัด CEMS มีค่าผิดปกติ</td>
+            <td><code>ABNORMAL_VALUE</code></td>
+            <td>rolling window จาก 60m: ค่านิ่ง 5 ครั้งติดกัน, ค่า 0 5 ครั้งติดกัน, ค่าติดลบ 5 ครั้งติดกัน</td>
+          </tr>
+          <tr>
+            <td>BOD/COD Online</td>
+            <td>ผลการตรวจวัด BOD/COD Online เกินมาตรฐาน</td>
+            <td><code>STANDARD_EXCEEDED</code></td>
+            <td>รับ POST จาก API ภายนอกเท่านั้น</td>
+          </tr>
+          <tr>
+            <td>BOD/COD Online</td>
+            <td>ผลการตรวจวัด BOD/COD Online เกินค่า EIA กำหนด</td>
+            <td><code>EIA_EXCEEDED</code></td>
+            <td>รับ POST จาก API ภายนอกเท่านั้น</td>
+          </tr>
+          <tr>
+            <td>BOD/COD Online</td>
+            <td>รายงานผล BOD/COD Online ไม่ถึงร้อยละ 80 ต่อวัน</td>
+            <td><code>DAILY_COMPLETENESS_LOW</code></td>
+            <td>job 08:30 คำนวณจากข้อมูลวันก่อนหน้า ด้วยสูตร <code>Normal / (24 - Shut Down)</code></td>
+          </tr>
+          <tr>
+            <td>BOD/COD Online</td>
+            <td>ไม่รายงานผล BOD/COD Online ติดต่อกันเกิน 7 วัน</td>
+            <td><code>CONSECUTIVE_NO_REPORT</code></td>
+            <td>เริ่มแจ้งวันที่ 8 และแจ้งทุกวันจนกว่าจะมีค่ากลับเข้ามา</td>
+          </tr>
+          <tr>
+            <td>BOD/COD Online</td>
+            <td>รายงานผลตรวจวัด BOD/COD Online มีค่าผิดปกติ</td>
+            <td><code>ABNORMAL_VALUE</code></td>
+            <td>rolling window จาก 60m: ค่านิ่ง 5 ครั้งติดกัน, ค่า 0 5 ครั้งติดกัน, ค่าติดลบ 5 ครั้งติดกัน</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="note">
+        กติกา no report: ถ้า CEMS ไม่มีค่ารายงานติดต่อกันเกิน 14 วัน ให้เริ่มสร้าง alert ในวันที่ 15
+        และสร้างต่อทุกวันจนกว่าจะมีค่ากลับเข้ามา ถ้า BOD/COD Online ไม่มีค่ารายงานติดต่อกันเกิน 7 วัน
+        ให้เริ่มสร้าง alert ในวันที่ 8 และสร้างต่อทุกวันจนกว่าจะมีค่ากลับเข้ามา
+        เมื่อมีค่ากลับเข้ามาอย่างน้อย 1 ค่า ให้ reset การนับ no report ใหม่ ถ้าหลังจากนั้นค่าหายไปอีก
+        หรือค่าที่เข้ามากลายเป็นค่านิ่ง/ค่า 0/ค่าติดลบ ให้เริ่มนับ sequence ใหม่จากหลังจุด reset นั้น
+      </div>
+
+      <div class="note">
+        กติกา 80%: คำนวณจากจำนวนค่า status <code>Normal</code> เทียบกับจำนวนชั่วโมงที่ควรมีข้อมูล
+        หลังหักช่วง <code>Shut Down</code> ออก สูตรคือ
+        <code>normalStatusCount / (24 - shutDownStatusCount) * 100</code>
+        ถ้าผลลัพธ์ต่ำกว่า 80% ให้สร้าง <code>DAILY_COMPLETENESS_LOW</code>
+        ถ้าต้นทางส่ง status เป็น <code>SHUTDOWN</code>, <code>Shutdown</code>, หรือ <code>Shut Down</code>
+        ให้ normalize เป็น <code>Shut Down</code> ก่อนคำนวณ
+        ถ้า <code>24 - shutDownStatusCount = 0</code> ให้ถือว่าวันนั้นไม่มีชั่วโมงที่ต้องรายงาน และไม่สร้าง alert 80%
+      </div>
+
+      <div class="note">
+        กติกาค่าผิดปกติ: ค่านิ่ง, ค่า 0, และค่าติดลบ ต้องเกิด <strong>5 ครั้งติดกัน</strong>
+        จึงสร้าง alert ถ้ามีค่าปกติกลับมา 1 ค่า ให้ reset sequence แล้วเริ่มนับใหม่
+        ในแต่ละวันให้เก็บช่วงแรกที่พบครบ 5 ครั้งติดกันไว้ใน <code>alert_events</code>
+        โดย <code>startedAt</code> คือเวลาของค่าครั้งที่ 1 และ <code>endedAt</code>
+        คือเวลาของค่าครั้งที่ 5 ที่ยืนยันว่าเข้าเงื่อนไขแล้ว
+      </div>
+    </section>
+
+    <h2>3. Flow งานที่แนะนำ</h2>
+    <section class="section">
+      <h3>รูป Flow งานภาพรวม</h3>
+      <div class="diagram-wrap" aria-label="รูป flow งานระบบแจ้งเตือน">
+        <svg class="workflow-diagram" viewBox="0 0 1120 700" role="img">
+          <defs>
+            <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+              <path d="M0,0 L0,6 L8,3 z" fill="#2364d2"></path>
+            </marker>
+          </defs>
+
+          <text x="24" y="36" class="diagram-title">Flow งานระบบแจ้งเตือน CEMS / BOD-COD Online</text>
+          <text x="24" y="60" class="diagram-subtitle">หน้าเว็บอ่านจาก alert_events ที่คำนวณไว้แล้ว ไม่ scan raw 60m ตอนเปิดรายงาน</text>
+
+          <rect x="24" y="90" width="1072" height="140" class="diagram-lane"></rect>
+          <text x="44" y="118" class="diagram-text">Input / Raw Data</text>
+
+          <rect x="54" y="145" width="180" height="58" class="diagram-box diagram-box-blue"></rect>
+          <text x="84" y="170" class="diagram-text">60m raw data</text>
+          <text x="76" y="190" class="diagram-small">ingest.{stationId}_data_60m</text>
+
+          <rect x="300" y="145" width="190" height="58" class="diagram-box diagram-box-blue"></rect>
+          <text x="329" y="170" class="diagram-text">External POST API</text>
+          <text x="323" y="190" class="diagram-small">standard / EIA exceeded</text>
+
+          <rect x="24" y="260" width="1072" height="170" class="diagram-lane"></rect>
+          <text x="44" y="288" class="diagram-text">Detection / Processing</text>
+
+          <rect x="54" y="325" width="190" height="70" class="diagram-box diagram-box-green"></rect>
+          <text x="78" y="350" class="diagram-text">Hourly 60m Detector</text>
+          <text x="68" y="372" class="diagram-small">ค่านิ่ง/0/ติดลบ 5 ครั้งติดกัน</text>
+
+          <rect x="290" y="325" width="190" height="70" class="diagram-box diagram-box-green"></rect>
+          <text x="321" y="350" class="diagram-text">Daily Summary Job</text>
+          <text x="313" y="372" class="diagram-small">สรุปข้อมูลวันก่อนหน้า</text>
+
+          <rect x="526" y="325" width="200" height="70" class="diagram-box diagram-box-green"></rect>
+          <text x="557" y="350" class="diagram-text">08:30 Alert Job</text>
+          <text x="545" y="372" class="diagram-small">80% / ไม่รายงาน / ผิดปกติ</text>
+
+          <rect x="772" y="325" width="190" height="70" class="diagram-box diagram-box-amber"></rect>
+          <text x="804" y="350" class="diagram-text">Build Unique Key</text>
+          <text x="807" y="372" class="diagram-small">idempotency_key</text>
+
+          <rect x="24" y="460" width="1072" height="190" class="diagram-lane"></rect>
+          <text x="44" y="488" class="diagram-text">Storage / Notification / Read</text>
+
+          <rect x="54" y="530" width="190" height="72" class="diagram-box diagram-box-amber"></rect>
+          <text x="91" y="555" class="diagram-text">alert_events</text>
+          <text x="73" y="577" class="diagram-small">เก็บเฉพาะ event ที่เข้าเงื่อนไข</text>
+
+          <rect x="300" y="530" width="210" height="72" class="diagram-box diagram-box-amber"></rect>
+          <text x="337" y="555" class="diagram-text">alert_notifications</text>
+          <text x="327" y="577" class="diagram-small">log การส่ง แจ้งแล้ว/ยังไม่ส่ง</text>
+
+          <rect x="572" y="530" width="210" height="72" class="diagram-box diagram-box-red"></rect>
+          <text x="606" y="555" class="diagram-text">Send Notification</text>
+          <text x="621" y="577" class="diagram-small">auto / officer / retry</text>
+
+          <rect x="846" y="530" width="190" height="72" class="diagram-box diagram-box-blue"></rect>
+          <text x="881" y="555" class="diagram-text">Frontend Report</text>
+          <text x="872" y="577" class="diagram-small">filter จาก alert_events</text>
+
+          <path d="M144 203 V325" class="diagram-arrow"></path>
+          <path d="M234 174 C270 174, 385 250, 385 325" class="diagram-arrow"></path>
+          <path d="M395 203 C395 250, 867 250, 867 325" class="diagram-arrow"></path>
+          <path d="M244 360 C390 430, 720 430, 817 395" class="diagram-arrow"></path>
+          <path d="M480 360 H526" class="diagram-arrow"></path>
+          <path d="M726 360 H772" class="diagram-arrow"></path>
+          <path d="M867 395 C867 455, 149 455, 149 530" class="diagram-arrow"></path>
+          <path d="M244 566 H300" class="diagram-arrow"></path>
+          <path d="M510 566 H572" class="diagram-arrow"></path>
+          <path d="M782 566 H846" class="diagram-arrow"></path>
+
+          <path d="M676 530 C676 490, 149 490, 149 530" class="diagram-arrow diagram-dashed"></path>
+          <text x="430" y="485" class="diagram-small">ถ้าเคยส่งแล้ว ไม่ส่งซ้ำ</text>
+
+          <text x="72" y="636" class="diagram-small">หลักคิด: raw data มีปริมาณมาก จึงคำนวณล่วงหน้าเป็น event/summary แล้วให้หน้าจออ่านข้อมูลที่ index ไว้</text>
+        </svg>
+      </div>
+
+      <div class="flow">
+        <div class="flow-step">
+          <strong>1. รับข้อมูล</strong>
+          60m raw data หรือ POST จากทีมภายนอก
+        </div>
+        <div class="flow-step">
+          <strong>2. Detect</strong>
+          job ตรวจเฉพาะช่วงใหม่ ไม่ scan ทั้งระบบ
+        </div>
+        <div class="flow-step">
+          <strong>3. Upsert</strong>
+          สร้าง <code>idempotency_key</code> แล้วบันทึก <code>alert_events</code>
+        </div>
+        <div class="flow-step">
+          <strong>4. Notify</strong>
+          worker ตรวจว่ายังไม่เคยส่ง แล้วส่งแจ้งเตือน
+        </div>
+        <div class="flow-step">
+          <strong>5. Read</strong>
+          หน้าเว็บอ่านจาก <code>alert_events</code> เท่านั้น
+        </div>
+      </div>
+
+      <h3>Flow แบบข้อความ</h3>
+      <pre>External POST API (standard / EIA exceeded)
+  -> Build idempotency_key
+  -> Upsert alert_events
+
+60m raw tables
+  -> Hourly 60m Detector (ค่านิ่ง/ค่า 0/ค่าติดลบ 5 ครั้งติดกัน)
+  -> Daily Summary Job
+  -> 08:30 Alert Job (80% / ไม่รายงานต่อเนื่อง / ค่าผิดปกติ)
+  -> Build idempotency_key
+  -> Upsert alert_events
+
+alert_events
+  -> Notification Worker
+  -> Insert alert_notifications
+  -> Frontend reads alert_events with filters</pre>
+    </section>
+
+    <h2>4. Schema หลัก</h2>
+    <section class="section">
+      <h3>4.1 alert_events</h3>
+      <p>
+        ตารางนี้เก็บเฉพาะรายการที่เข้าเงื่อนไขแจ้งเตือนแล้ว ไม่เก็บ raw 60m ทั้งหมดซ้ำ
+      </p>
+      <pre>CREATE TABLE alert_events (
+  id BIGINT IDENTITY(1,1) PRIMARY KEY,
+
+  alert_type VARCHAR(64) NOT NULL,
+  system_type VARCHAR(16) NOT NULL,
+  display_system_type VARCHAR(32) NOT NULL,
+
+  factory_id VARCHAR(64) NULL,
+  factory_name NVARCHAR(500) NOT NULL,
+  factory_registration_no NVARCHAR(64) NULL,
+
+  connected_measurement_point_id BIGINT NULL,
+  station_id VARCHAR(64) NOT NULL,
+  point_name NVARCHAR(255) NOT NULL,
+  point_code VARCHAR(64) NULL,
+  point_type VARCHAR(32) NULL,
+
+  parameter_code VARCHAR(64) NOT NULL,
+  parameter_name NVARCHAR(255) NOT NULL,
+  parameter_label NVARCHAR(255) NOT NULL,
+  unit NVARCHAR(64) NULL,
+
+  event_date DATE NOT NULL,
+  started_at DATETIME2 NULL,
+  ended_at DATETIME2 NULL,
+
+  measured_value DECIMAL(18,6) NULL,
+  threshold_value DECIMAL(18,6) NULL,
+  threshold_type VARCHAR(32) NULL,
+
+  completeness_percent DECIMAL(5,2) NULL,
+  consecutive_days INT NULL,
+  abnormal_type VARCHAR(32) NULL,
+
+  source_table VARCHAR(128) NULL,
+  source_interval VARCHAR(16) NOT NULL DEFAULT '60m',
+  source_payload_json NVARCHAR(MAX) NULL,
+  evidence_json NVARCHAR(MAX) NULL,
+
+  notification_status VARCHAR(32) NOT NULL DEFAULT 'AUTO',
+
+  idempotency_key VARCHAR(220) NOT NULL,
+  detected_at DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
+  created_at DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
+  updated_at DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
+  deleted_at DATETIME2 NULL
+);</pre>
+
+      <h3>4.2 measurement_daily_summaries</h3>
+      <p>
+        ตารางสรุปรายวันช่วยให้เงื่อนไข 80%, ไม่รายงานต่อเนื่อง, ค่านิ่ง/0/ติดลบ อ่านเร็วขึ้นมาก
+      </p>
+      <pre>CREATE TABLE measurement_daily_summaries (
+  id BIGINT IDENTITY(1,1) PRIMARY KEY,
+
+  system_type VARCHAR(16) NOT NULL,
+  factory_id VARCHAR(64) NULL,
+  station_id VARCHAR(64) NOT NULL,
+  parameter_code VARCHAR(64) NOT NULL,
+  parameter_label NVARCHAR(255) NOT NULL,
+  unit NVARCHAR(64) NULL,
+
+  summary_date DATE NOT NULL,
+  expected_count INT NOT NULL,
+  received_count INT NOT NULL,
+  normal_status_count INT NOT NULL DEFAULT 0,
+  shutdown_status_count INT NOT NULL DEFAULT 0,
+  completeness_percent DECIMAL(5,2) NOT NULL,
+
+  null_count INT NOT NULL DEFAULT 0,
+  zero_count INT NOT NULL DEFAULT 0,
+  negative_count INT NOT NULL DEFAULT 0,
+  same_value_max_streak INT NOT NULL DEFAULT 0,
+
+  first_received_at DATETIME2 NULL,
+  last_received_at DATETIME2 NULL,
+  source_table VARCHAR(128) NULL,
+
+  created_at DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
+  updated_at DATETIME2 NOT NULL DEFAULT SYSDATETIME()
+);</pre>
+
+      <h3>4.3 alert_notifications</h3>
+      <pre>CREATE TABLE alert_notifications (
+  id BIGINT IDENTITY(1,1) PRIMARY KEY,
+  alert_event_id BIGINT NOT NULL,
+  channel VARCHAR(32) NOT NULL,
+  recipient NVARCHAR(255) NULL,
+  send_status VARCHAR(32) NOT NULL,
+  error_message NVARCHAR(1000) NULL,
+  sent_at DATETIME2 NULL,
+  created_at DATETIME2 NOT NULL DEFAULT SYSDATETIME()
+);</pre>
+    </section>
+
+    <h2>5. Index และ Partition สำหรับข้อมูลใหญ่</h2>
+    <section class="section">
+      <div class="warning note">
+        กรณีมี 10,000 โรงงานต่อวัน และ 1 โรงงานมีหลายจุดตรวจ/หลายพารามิเตอร์
+        ต้องออกแบบให้ query ส่วนใหญ่ใช้ index ตามวันที่และประเภทแจ้งเตือน หลีกเลี่ยงการค้นแบบ full scan
+      </div>
+      <pre>CREATE UNIQUE INDEX uq_alert_events_idempotency
+ON alert_events(idempotency_key)
+WHERE deleted_at IS NULL;
+
+CREATE INDEX ix_alert_events_date_type
+ON alert_events(event_date DESC, alert_type, system_type)
+WHERE deleted_at IS NULL;
+
+CREATE INDEX ix_alert_events_factory_date
+ON alert_events(factory_id, event_date DESC)
+WHERE deleted_at IS NULL;
+
+CREATE INDEX ix_alert_events_station_param_date
+ON alert_events(station_id, parameter_code, event_date DESC)
+WHERE deleted_at IS NULL;
+
+CREATE UNIQUE INDEX uq_daily_summary_station_param_date
+ON measurement_daily_summaries(station_id, parameter_code, summary_date);</pre>
+      <p>
+        ถ้าปริมาณข้อมูลโตมาก ให้พิจารณา partition <code>alert_events</code> ตาม <code>event_date</code>
+        รายเดือนหรือรายไตรมาส เพื่อให้ query รายเดือนและการ purge ข้อมูลเก่าทำได้เร็ว
+      </p>
+    </section>
+
+    <h2>6. API สำหรับทีมภายนอก POST ค่าแจ้งเตือน</h2>
+    <section class="section">
+      <p>
+        API นี้ใช้รับเฉพาะเหตุการณ์ที่อีกทีมประเมินแล้วว่าเกินมาตรฐานหรือเกินค่า EIA เท่านั้น
+        ฝั่ง POMS ไม่ต้องคำนวณซ้ำว่าเกินหรือไม่ แต่ต้อง upsert ด้วย <code>idempotencyKey</code>
+        แล้วตรวจว่า event นี้เคยส่งแจ้งเตือนไปแล้วหรือยัง
+      </p>
+
+      <h3>Endpoint</h3>
+      <pre>POST /api/v1/integrations/alert-events</pre>
+
+      <div class="note">
+        ขอบเขตของ API นี้: ระบบภายนอกต้อง POST มาเฉพาะรายการที่ยืนยันแล้วว่า
+        <strong>เกินมาตรฐาน</strong> หรือ <strong>เกินค่า EIA</strong> เท่านั้น
+        ฝั่ง POMS ทำหน้าที่ตรวจ <code>idempotencyKey</code>, บันทึก/อัปเดต <code>alert_events</code>,
+        และเช็ค <code>alert_notifications</code> ว่าเคยส่งแจ้งเตือน event นี้แล้วหรือยัง
+      </div>
+
+      <h3>ตัวอย่าง API แบบเต็ม</h3>
+      <p>
+        API ชุดนี้ควรใช้ integration key เหมือน API ภายนอกชุดอื่นของระบบ โดยส่งผ่าน header
+        <code>X-API-Key</code> และ backend อ่าน key จาก environment variable <code>INTEGRATION_API_KEYS</code>
+      </p>
+
+      <h3>Request: CEMS เกินมาตรฐาน</h3>
+      <pre>curl -X POST "http://localhost:3000/api/v1/integrations/alert-events" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $INTEGRATION_API_KEY" \
+  -d '{
+    "idempotencyKey": "CEMS:S0001:SO2:STANDARD_EXCEEDED:2026-03-02:20",
+    "systemType": "CEMS",
+    "displaySystemType": "CEMS",
+    "alertType": "STANDARD_EXCEEDED",
+
+    "factoryId": "factory-001",
+    "factoryName": "บริษัท 2584 จำกัด",
+    "factoryRegistrationNo": "3-xx-xx",
+
+    "stationId": "S0001",
+    "pointCode": "S0001",
+    "pointName": "Stack 1",
+    "pointType": "STACK",
+
+    "parameterCode": "so2",
+    "parameterName": "SO2",
+    "parameterLabel": "SO2 (ppm)",
+    "unit": "ppm",
+
+    "eventDate": "2026-03-02",
+    "startedAt": "2026-03-02T20:00:00+07:00",
+    "endedAt": "2026-03-02T20:59:59+07:00",
+
+    "measuredValue": 150,
+    "thresholdValue": 60,
+    "thresholdType": "STANDARD",
+    "notificationStatus": "AUTO",
+
+    "sourcePayload": {
+      "externalSystem": "EIA-CEMS",
+      "externalReferenceId": "external-123",
+      "sourceTable": "S0001_data_60m",
+      "sourceDate": "2026-03-02",
+      "sourceTime": "20:00:00"
+    }
+  }'</pre>
+
+      <h3>Response: สร้าง event ใหม่</h3>
+      <pre>HTTP/1.1 201 Created
+Content-Type: application/json
+
+{
+  "success": true,
+  "data": {
+    "id": 1001,
+    "created": true,
+    "duplicate": false,
+    "idempotencyKey": "CEMS:S0001:SO2:STANDARD_EXCEEDED:2026-03-02:20",
+    "alertType": "STANDARD_EXCEEDED",
+    "systemType": "CEMS",
+    "displaySystemType": "CEMS",
+    "factoryId": "factory-001",
+    "factoryName": "บริษัท 2584 จำกัด",
+    "factoryRegistrationNo": "3-xx-xx",
+    "stationId": "S0001",
+    "pointCode": "S0001",
+    "pointName": "Stack 1",
+    "pointType": "STACK",
+    "parameterCode": "so2",
+    "parameterName": "SO2",
+    "parameterLabel": "SO2 (ppm)",
+    "unit": "ppm",
+    "eventDate": "2026-03-02",
+    "startedAt": "2026-03-02T20:00:00+07:00",
+    "endedAt": "2026-03-02T20:59:59+07:00",
+    "measuredValue": 150,
+    "thresholdValue": 60,
+    "thresholdType": "STANDARD",
+    "notificationStatus": "AUTO",
+    "detectedAt": "2026-03-03T08:30:05+07:00"
+  }
+}</pre>
+
+      <h3>Response: ยิงซ้ำด้วย idempotencyKey เดิม</h3>
+      <pre>HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "success": true,
+  "data": {
+    "id": 1001,
+    "created": false,
+    "duplicate": true,
+    "idempotencyKey": "CEMS:S0001:SO2:STANDARD_EXCEEDED:2026-03-02:20",
+    "message": "Alert event already exists"
+  }
+}</pre>
+
+      <h3>Request: BOD/COD Online เกินค่า EIA</h3>
+      <pre>curl -X POST "http://localhost:3000/api/v1/integrations/alert-events" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $INTEGRATION_API_KEY" \
+  -d '{
+    "idempotencyKey": "WPMS:P0001:COD:EIA_EXCEEDED:2026-03-02:20",
+    "systemType": "WPMS",
+    "displaySystemType": "BOD_COD_ONLINE",
+    "alertType": "EIA_EXCEEDED",
+
+    "factoryId": "factory-002",
+    "factoryName": "บริษัท สวัสดี จำกัด",
+    "factoryRegistrationNo": "3-yy-yy",
+
+    "stationId": "P0001",
+    "pointCode": "P0001",
+    "pointName": "จุดที่ 1",
+    "pointType": "WASTEWATER",
+
+    "parameterCode": "cod",
+    "parameterName": "COD",
+    "parameterLabel": "COD (mg/l)",
+    "unit": "mg/l",
+
+    "eventDate": "2026-03-02",
+    "startedAt": "2026-03-02T20:00:00+07:00",
+    "endedAt": "2026-03-02T20:59:59+07:00",
+
+    "measuredValue": 150,
+    "thresholdValue": 100,
+    "thresholdType": "EIA",
+    "notificationStatus": "AUTO",
+
+    "sourcePayload": {
+      "externalSystem": "EIA-WPMS",
+      "externalReferenceId": "external-456",
+      "sourceTable": "P0001_data_60m",
+      "sourceDate": "2026-03-02",
+      "sourceTime": "20:00:00"
+    }
+  }'</pre>
+
+      <h3>Response: validation error</h3>
+      <pre>HTTP/1.1 400 Bad Request
+Content-Type: application/json
+
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Invalid alert event payload",
+    "details": [
+      {
+        "field": "thresholdType",
+        "message": "thresholdType must be EIA when alertType is EIA_EXCEEDED"
+      },
+      {
+        "field": "measuredValue",
+        "message": "measuredValue must be a number"
+      }
+    ]
+  }
+}</pre>
+
+      <h3>Response: API key ไม่ถูกต้อง</h3>
+      <pre>HTTP/1.1 401 Unauthorized
+Content-Type: application/json
+
+{
+  "success": false,
+  "error": {
+    "code": "UNAUTHORIZED",
+    "message": "Invalid integration API key"
+  }
+}</pre>
+
+      <h3>ข้อมูลที่ External API ต้องส่ง</h3>
+      <p>
+        ถ้าอีกทีมส่ง alert event มาให้ POMS โดยตรง ให้ส่งข้อมูลให้ครบพอสำหรับ 3 งาน:
+        กันข้อมูลซ้ำ, แสดงผลในตาราง, และตรวจสอบย้อนหลังว่า event นี้อ้างอิงค่าจากไหน
+      </p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>กลุ่มข้อมูล</th>
+            <th>Field</th>
+            <th>Required</th>
+            <th>ตัวอย่าง</th>
+            <th>หมายเหตุ</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>กันข้อมูลซ้ำ</td>
+            <td><code>idempotencyKey</code></td>
+            <td>Yes</td>
+            <td><code>CEMS:S0001:SO2:STANDARD_EXCEEDED:2026-03-02:20</code></td>
+            <td>ใช้ upsert กันยิงซ้ำหรือ job rerun แล้วเกิด event ซ้ำ</td>
+          </tr>
+          <tr>
+            <td>ประเภทระบบ</td>
+            <td><code>systemType</code></td>
+            <td>Yes</td>
+            <td><code>CEMS</code>, <code>WPMS</code></td>
+            <td>ในระบบเดิม BOD/COD Online ควร map เป็น <code>WPMS</code></td>
+          </tr>
+          <tr>
+            <td>ชื่อแสดงผล</td>
+            <td><code>displaySystemType</code></td>
+            <td>Yes</td>
+            <td><code>CEMS</code>, <code>BOD_COD_ONLINE</code></td>
+            <td>ใช้ให้ frontend แสดงชื่อเมนู/รายงานชัดเจน</td>
+          </tr>
+          <tr>
+            <td>ประเภท alert</td>
+            <td><code>alertType</code></td>
+            <td>Yes</td>
+            <td><code>STANDARD_EXCEEDED</code>, <code>EIA_EXCEEDED</code></td>
+            <td>External API ส่งมาเฉพาะ alert ที่เกินมาตรฐาน/EIA แล้ว ส่วน 80%, no report, abnormal ให้ POMS คำนวณจาก 60m</td>
+          </tr>
+          <tr>
+            <td>โรงงาน</td>
+            <td><code>factoryId</code></td>
+            <td>Recommended</td>
+            <td><code>factory-001</code></td>
+            <td>ถ้าไม่ส่ง POMS ต้อง lookup จาก <code>stationId</code>; ส่งมาจะช่วยลด ambiguity</td>
+          </tr>
+          <tr>
+            <td>โรงงาน</td>
+            <td><code>factoryName</code></td>
+            <td>Recommended</td>
+            <td><code>บริษัท 2584 จำกัด</code></td>
+            <td>ใช้เป็น snapshot แสดงผลย้อนหลัง แม้ชื่อใน master เปลี่ยนภายหลัง</td>
+          </tr>
+          <tr>
+            <td>โรงงาน</td>
+            <td><code>factoryRegistrationNo</code></td>
+            <td>Recommended</td>
+            <td><code>3-xx-xx</code></td>
+            <td>ใช้แสดงคอลัมน์เลขทะเบียนโรงงานตามรูปตัวอย่าง</td>
+          </tr>
+          <tr>
+            <td>จุดตรวจวัด</td>
+            <td><code>stationId</code></td>
+            <td>Yes</td>
+            <td><code>S0001</code>, <code>P0001</code></td>
+            <td>รหัสหลักสำหรับจับกับตาราง <code>{stationId}_data_60m</code> และจุดตรวจวัดใน POMS</td>
+          </tr>
+          <tr>
+            <td>จุดตรวจวัด</td>
+            <td><code>pointCode</code></td>
+            <td>Recommended</td>
+            <td><code>S0001</code></td>
+            <td>ถ้า pointCode กับ stationId คือค่าเดียวกัน ส่งซ้ำได้เพื่อความชัดเจน</td>
+          </tr>
+          <tr>
+            <td>จุดตรวจวัด</td>
+            <td><code>pointName</code></td>
+            <td>Yes</td>
+            <td><code>Stack 1</code>, <code>จุดที่ 1</code></td>
+            <td>ใช้แสดงคอลัมน์จุดตรวจวัด</td>
+          </tr>
+          <tr>
+            <td>จุดตรวจวัด</td>
+            <td><code>pointType</code></td>
+            <td>Optional</td>
+            <td><code>STACK</code>, <code>WASTEWATER</code></td>
+            <td>ใช้กรอง/จัดกลุ่มเพิ่มเติม</td>
+          </tr>
+          <tr>
+            <td>พารามิเตอร์</td>
+            <td><code>parameterCode</code></td>
+            <td>Yes</td>
+            <td><code>so2</code>, <code>nox</code>, <code>bod</code>, <code>cod</code></td>
+            <td>ควรตรงกับ prefix ใน 60m เช่น <code>so2_value</code>, <code>cod_value</code></td>
+          </tr>
+          <tr>
+            <td>พารามิเตอร์</td>
+            <td><code>parameterName</code></td>
+            <td>Yes</td>
+            <td><code>SO2</code>, <code>NOx</code>, <code>BOD</code>, <code>COD</code></td>
+            <td>ชื่อสั้นของพารามิเตอร์</td>
+          </tr>
+          <tr>
+            <td>พารามิเตอร์</td>
+            <td><code>parameterLabel</code></td>
+            <td>Yes</td>
+            <td><code>SO2 (ppm)</code>, <code>COD (mg/l)</code></td>
+            <td>ต้องมีหน่วยใน label เพื่อแสดงผลไม่กำกวม</td>
+          </tr>
+          <tr>
+            <td>พารามิเตอร์</td>
+            <td><code>unit</code></td>
+            <td>Yes</td>
+            <td><code>ppm</code>, <code>mg/l</code></td>
+            <td>ใช้แสดงคอลัมน์หน่วยและตรวจย้อนหลัง</td>
+          </tr>
+          <tr>
+            <td>เวลาเกิดเหตุ</td>
+            <td><code>eventDate</code></td>
+            <td>Yes</td>
+            <td><code>2026-03-02</code></td>
+            <td>วันที่ของข้อมูลตรวจวัด ไม่ใช่วันที่ส่ง API</td>
+          </tr>
+          <tr>
+            <td>เวลาเกิดเหตุ</td>
+            <td><code>startedAt</code></td>
+            <td>Yes</td>
+            <td><code>2026-03-02T20:00:00+07:00</code></td>
+            <td>เวลาเริ่มช่วงตรวจวัด เช่น 20.00</td>
+          </tr>
+          <tr>
+            <td>เวลาเกิดเหตุ</td>
+            <td><code>endedAt</code></td>
+            <td>Yes</td>
+            <td><code>2026-03-02T20:59:59+07:00</code></td>
+            <td>เวลาสิ้นสุดช่วงตรวจวัด เช่น 20.59</td>
+          </tr>
+          <tr>
+            <td>ค่าและเกณฑ์</td>
+            <td><code>measuredValue</code></td>
+            <td>Yes</td>
+            <td><code>150</code></td>
+            <td>ค่าผลตรวจวัดที่เกิน ต้องเป็นตัวเลข</td>
+          </tr>
+          <tr>
+            <td>ค่าและเกณฑ์</td>
+            <td><code>thresholdValue</code></td>
+            <td>Yes</td>
+            <td><code>60</code>, <code>100</code></td>
+            <td>ค่าเกณฑ์ที่ใช้ตัดสินว่าเกิน</td>
+          </tr>
+          <tr>
+            <td>ค่าและเกณฑ์</td>
+            <td><code>thresholdType</code></td>
+            <td>Yes</td>
+            <td><code>STANDARD</code>, <code>EIA</code></td>
+            <td>ต้องสัมพันธ์กับ <code>alertType</code></td>
+          </tr>
+          <tr>
+            <td>สถานะแจ้งเตือน</td>
+            <td><code>notificationStatus</code></td>
+            <td>Optional</td>
+            <td><code>AUTO</code>, <code>OFFICER</code></td>
+            <td>ถ้าไม่ส่ง ให้ default เป็น <code>AUTO</code></td>
+          </tr>
+          <tr>
+            <td>อ้างอิงต้นทาง</td>
+            <td><code>sourcePayload</code></td>
+            <td>Recommended</td>
+            <td><code>{ "externalReferenceId": "external-123" }</code></td>
+            <td>เก็บ payload หรือ reference จากระบบภายนอกสำหรับตรวจสอบย้อนหลัง</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Validation หลักที่ POMS ควรตรวจ</h3>
+      <ul>
+        <li><code>alertType</code> ที่รับจาก external API ควรจำกัดที่ <code>STANDARD_EXCEEDED</code> และ <code>EIA_EXCEEDED</code></li>
+        <li><code>systemType</code> ต้องเป็น <code>CEMS</code> หรือ <code>WPMS</code></li>
+        <li><code>thresholdType</code> ต้องสัมพันธ์กับ <code>alertType</code>: <code>STANDARD_EXCEEDED</code> ใช้ <code>STANDARD</code>, <code>EIA_EXCEEDED</code> ใช้ <code>EIA</code></li>
+        <li><code>measuredValue</code> และ <code>thresholdValue</code> ต้องเป็นตัวเลข; ฝั่ง external เป็นผู้ยืนยันว่า event นี้เกินมาตรฐาน/EIA แล้ว</li>
+        <li><code>eventDate</code>, <code>startedAt</code>, <code>endedAt</code> ต้องเป็นช่วงเวลาของข้อมูลตรวจวัด และ <code>startedAt</code> ต้องไม่มากกว่า <code>endedAt</code></li>
+        <li><code>stationId</code> และ <code>parameterCode</code> ควรตรวจว่ามีอยู่ในจุดตรวจวัดที่เชื่อมต่อแล้ว หรืออย่างน้อยบันทึกเป็น pending/error ถ้าไม่พบ master</li>
+      </ul>
+
+      <h3>Minimal Payload ที่รับได้</h3>
+      <pre>{
+  "idempotencyKey": "CEMS:S0001:SO2:STANDARD_EXCEEDED:2026-03-02:20",
+  "systemType": "CEMS",
+  "displaySystemType": "CEMS",
+  "alertType": "STANDARD_EXCEEDED",
+  "stationId": "S0001",
+  "pointName": "Stack 1",
+  "parameterCode": "so2",
+  "parameterName": "SO2",
+  "parameterLabel": "SO2 (ppm)",
+  "unit": "ppm",
+  "eventDate": "2026-03-02",
+  "startedAt": "2026-03-02T20:00:00+07:00",
+  "endedAt": "2026-03-02T20:59:59+07:00",
+  "measuredValue": 150,
+  "thresholdValue": 60,
+  "thresholdType": "STANDARD"
+}</pre>
+
+      <h3>Payload ตัวอย่าง: CEMS เกินมาตรฐาน</h3>
+      <pre>{
+  "idempotencyKey": "CEMS:S0001:SO2:STANDARD_EXCEEDED:2026-03-02:20",
+  "systemType": "CEMS",
+  "displaySystemType": "CEMS",
+  "alertType": "STANDARD_EXCEEDED",
+  "stationId": "S0001",
+  "pointName": "Stack 1",
+  "parameterCode": "so2",
+  "parameterName": "SO2",
+  "parameterLabel": "SO2 (ppm)",
+  "unit": "ppm",
+  "eventDate": "2026-03-02",
+  "startedAt": "2026-03-02T20:00:00+07:00",
+  "endedAt": "2026-03-02T20:59:59+07:00",
+  "measuredValue": 150,
+  "thresholdValue": 60,
+  "thresholdType": "STANDARD",
+  "notificationStatus": "AUTO",
+  "sourcePayload": {
+    "externalReferenceId": "external-123"
+  }
+}</pre>
+
+      <h3>Payload ตัวอย่าง: BOD/COD Online เกินค่า EIA</h3>
+      <pre>{
+  "idempotencyKey": "WPMS:P0001:COD:EIA_EXCEEDED:2026-03-02:20",
+  "systemType": "WPMS",
+  "displaySystemType": "BOD_COD_ONLINE",
+  "alertType": "EIA_EXCEEDED",
+  "stationId": "P0001",
+  "pointName": "จุดที่ 1",
+  "parameterCode": "cod",
+  "parameterName": "COD",
+  "parameterLabel": "COD (mg/l)",
+  "unit": "mg/l",
+  "eventDate": "2026-03-02",
+  "startedAt": "2026-03-02T20:00:00+07:00",
+  "endedAt": "2026-03-02T20:59:59+07:00",
+  "measuredValue": 150,
+  "thresholdValue": 100,
+  "thresholdType": "EIA",
+  "notificationStatus": "AUTO"
+}</pre>
+    </section>
+
+    <h2>7. API สำหรับหน้าบ้าน</h2>
+    <section class="section">
+      <p>
+        หน้าบ้านใช้ <code>GET /api/v1/alert-events</code> ตัวเดียว แล้วแยกตารางด้วย query
+        <code>systemType</code>, <code>displaySystemType</code>, <code>alertType</code> และ
+        <code>thresholdType</code> แทนการทำหลาย endpoint
+      </p>
+
+      <h3>Query กลางที่ทุกตารางใช้ร่วมกัน</h3>
+      <pre>GET /api/v1/alert-events?systemType=CEMS&amp;alertType=STANDARD_EXCEEDED&amp;thresholdType=STANDARD&amp;dateFrom=2026-03-01&amp;dateTo=2026-03-31&amp;page=1&amp;pageSize=20</pre>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Query</th>
+            <th>Required</th>
+            <th>ตัวอย่าง</th>
+            <th>หมายเหตุ</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>systemType</code></td>
+            <td>Yes</td>
+            <td><code>CEMS</code>, <code>WPMS</code></td>
+            <td>BOD/COD Online ใช้ <code>systemType=WPMS</code></td>
+          </tr>
+          <tr>
+            <td><code>displaySystemType</code></td>
+            <td>Optional</td>
+            <td><code>BOD_COD_ONLINE</code></td>
+            <td>ใช้ช่วยให้ query ฝั่ง BOD/COD ชัดเจนขึ้น</td>
+          </tr>
+          <tr>
+            <td><code>alertType</code></td>
+            <td>Yes</td>
+            <td><code>STANDARD_EXCEEDED</code></td>
+            <td>ประเภทการแจ้งเตือน</td>
+          </tr>
+          <tr>
+            <td><code>thresholdType</code></td>
+            <td>เฉพาะ exceeded</td>
+            <td><code>STANDARD</code>, <code>EIA</code></td>
+            <td>ใช้แยกเกินมาตรฐานกับเกินค่า EIA</td>
+          </tr>
+          <tr>
+            <td><code>dateFrom</code>, <code>dateTo</code></td>
+            <td>Recommended</td>
+            <td><code>2026-03-01</code> ถึง <code>2026-03-31</code></td>
+            <td>ควรบังคับหรือ default เป็นช่วงสั้นเพื่อ performance</td>
+          </tr>
+          <tr>
+            <td><code>factoryId</code>, <code>stationId</code>, <code>parameterCode</code></td>
+            <td>Optional</td>
+            <td><code>S0001</code>, <code>so2</code></td>
+            <td>ใช้ filter เฉพาะโรงงาน/จุด/พารามิเตอร์</td>
+          </tr>
+          <tr>
+            <td><code>page</code>, <code>pageSize</code></td>
+            <td>Yes</td>
+            <td><code>page=1&amp;pageSize=20</code></td>
+            <td>ทุกตารางต้อง paginate</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>ตัวอย่าง API + ตารางแต่ละเมนู</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>เมนู/ตาราง</th>
+            <th>GET API</th>
+            <th>คอลัมน์ที่แสดง</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>CEMS เกินมาตรฐาน</td>
+            <td><code>/api/v1/alert-events?systemType=CEMS&amp;alertType=STANDARD_EXCEEDED&amp;thresholdType=STANDARD</code></td>
+            <td>ชื่อโรงงาน, เลขทะเบียนโรงงาน, วันที่, เวลา, จุดตรวจวัด, พารามิเตอร์, ค่ามาตรฐาน, ผลตรวจวัด, หน่วย, สถานะการแจ้งเตือน</td>
+          </tr>
+          <tr>
+            <td>CEMS เกินค่า EIA</td>
+            <td><code>/api/v1/alert-events?systemType=CEMS&amp;alertType=EIA_EXCEEDED&amp;thresholdType=EIA</code></td>
+            <td>ชื่อโรงงาน, เลขทะเบียนโรงงาน, วันที่, เวลา, จุดตรวจวัด, พารามิเตอร์, ค่า EIA, ผลตรวจวัด, หน่วย, สถานะการแจ้งเตือน</td>
+          </tr>
+          <tr>
+            <td>CEMS รายงานไม่ถึง 80% ต่อวัน</td>
+            <td><code>/api/v1/alert-events?systemType=CEMS&amp;alertType=DAILY_COMPLETENESS_LOW</code></td>
+            <td>ชื่อโรงงาน, เลขทะเบียนโรงงาน, จุดตรวจวัด, พารามิเตอร์, วันที่, ส่งร้อยละ, สถานะการแจ้งเตือน</td>
+          </tr>
+          <tr>
+            <td>CEMS ไม่รายงานติดต่อกันเกิน 14 วัน</td>
+            <td><code>/api/v1/alert-events?systemType=CEMS&amp;alertType=CONSECUTIVE_NO_REPORT</code></td>
+            <td>ชื่อโรงงาน, เลขทะเบียนโรงงาน, จุดตรวจวัด, พารามิเตอร์, ตั้งแต่วันที่, ถึงวันที่, รวม (วัน), สถานะการแจ้งเตือน</td>
+          </tr>
+          <tr>
+            <td>CEMS ค่าผิดปกติ</td>
+            <td><code>/api/v1/alert-events?systemType=CEMS&amp;alertType=ABNORMAL_VALUE</code></td>
+            <td>ชื่อโรงงาน, เลขทะเบียนโรงงาน, จุดตรวจวัด, พารามิเตอร์, วันที่, เวลา, ความผิดปกติ, สถานะการแจ้งเตือน</td>
+          </tr>
+          <tr>
+            <td>BOD/COD Online เกินมาตรฐาน</td>
+            <td><code>/api/v1/alert-events?systemType=WPMS&amp;displaySystemType=BOD_COD_ONLINE&amp;alertType=STANDARD_EXCEEDED&amp;thresholdType=STANDARD</code></td>
+            <td>ชื่อโรงงาน, เลขทะเบียนโรงงาน, วันที่, เวลา, จุดตรวจวัด, พารามิเตอร์, ค่ามาตรฐาน, ผลตรวจวัด, หน่วย, สถานะการแจ้งเตือน</td>
+          </tr>
+          <tr>
+            <td>BOD/COD Online เกินค่า EIA</td>
+            <td><code>/api/v1/alert-events?systemType=WPMS&amp;displaySystemType=BOD_COD_ONLINE&amp;alertType=EIA_EXCEEDED&amp;thresholdType=EIA</code></td>
+            <td>ชื่อโรงงาน, เลขทะเบียนโรงงาน, วันที่, เวลา, จุดตรวจวัด, พารามิเตอร์, ค่า EIA, ผลตรวจวัด, หน่วย, สถานะการแจ้งเตือน</td>
+          </tr>
+          <tr>
+            <td>BOD/COD Online รายงานไม่ถึง 80% ต่อวัน</td>
+            <td><code>/api/v1/alert-events?systemType=WPMS&amp;displaySystemType=BOD_COD_ONLINE&amp;alertType=DAILY_COMPLETENESS_LOW</code></td>
+            <td>ชื่อโรงงาน, เลขทะเบียนโรงงาน, จุดตรวจวัด, พารามิเตอร์, วันที่, ส่งร้อยละ, สถานะการแจ้งเตือน</td>
+          </tr>
+          <tr>
+            <td>BOD/COD Online ไม่รายงานติดต่อกันเกิน 7 วัน</td>
+            <td><code>/api/v1/alert-events?systemType=WPMS&amp;displaySystemType=BOD_COD_ONLINE&amp;alertType=CONSECUTIVE_NO_REPORT</code></td>
+            <td>ชื่อโรงงาน, เลขทะเบียนโรงงาน, จุดตรวจวัด, พารามิเตอร์, ตั้งแต่วันที่, ถึงวันที่, รวม (วัน), สถานะการแจ้งเตือน</td>
+          </tr>
+          <tr>
+            <td>BOD/COD Online ค่าผิดปกติ</td>
+            <td><code>/api/v1/alert-events?systemType=WPMS&amp;displaySystemType=BOD_COD_ONLINE&amp;alertType=ABNORMAL_VALUE</code></td>
+            <td>ชื่อโรงงาน, เลขทะเบียนโรงงาน, จุดตรวจวัด, พารามิเตอร์, วันที่, เวลา, ความผิดปกติ, สถานะการแจ้งเตือน</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="note">
+        จากรูปตารางตัวอย่าง ข้อมูล response ต้องมี field สำหรับแสดงผลครบทุกคอลัมน์ ได้แก่
+        ชื่อโรงงาน, เลขทะเบียนโรงงาน, วันที่/ช่วงวันที่, เวลา/ช่วงเวลา, จุดตรวจวัด, พารามิเตอร์,
+        ค่าเกณฑ์หรือร้อยละหรือจำนวนวัน, ผลตรวจวัดเมื่อมี, หน่วยเมื่อมี, และสถานะการแจ้งเตือน
+        โดยควรส่งทั้ง code และ label เช่น <code>notificationStatus</code> กับ
+        <code>notificationStatusLabel</code> เพื่อให้ frontend แสดงภาษาไทยได้ตรงกัน
+      </div>
+
+      <h3>ตัวอย่าง Response: ตารางเกินมาตรฐาน / เกิน EIA</h3>
+      <pre>{
+  "success": true,
+  "data": [
+    {
+      "id": 1001,
+      "alertType": "STANDARD_EXCEEDED",
+      "systemType": "CEMS",
+      "displaySystemType": "CEMS",
+      "factoryId": "factory-001",
+      "factoryName": "บริษัท 2584 จำกัด",
+      "factoryRegistrationNo": "3-xx-xx",
+      "eventDate": "2026-03-02",
+      "eventDateText": "2-Mar-69",
+      "timeRange": "20.00 - 20.59",
+      "startedAt": "2026-03-02T20:00:00+07:00",
+      "endedAt": "2026-03-02T20:59:59+07:00",
+      "stationId": "S0001",
+      "pointCode": "S0001",
+      "pointName": "Stack 1",
+      "parameterCode": "so2",
+      "parameterName": "SO2",
+      "parameterLabel": "SO2 (ppm)",
+      "thresholdType": "STANDARD",
+      "thresholdLabel": "ค่ามาตรฐาน",
+      "thresholdValue": 60,
+      "measuredValue": 150,
+      "unit": "ppm",
+      "notificationStatus": "AUTO",
+      "notificationStatusLabel": "อัตโนมัติ"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "pageSize": 20,
+    "total": 1
+  }
+}</pre>
+
+      <h3>ตัวอย่าง Response: ตารางรายงานไม่ถึง 80% ต่อวัน</h3>
+      <pre>{
+  "success": true,
+  "data": [
+    {
+      "id": 2001,
+      "alertType": "DAILY_COMPLETENESS_LOW",
+      "systemType": "CEMS",
+      "factoryId": "factory-001",
+      "factoryName": "บริษัท 2584 จำกัด",
+      "factoryRegistrationNo": "3-xx-xx",
+      "stationId": "S0001",
+      "pointCode": "S0001",
+      "pointName": "จุดที่ 1",
+      "parameterCode": "nox",
+      "parameterName": "NOx",
+      "parameterLabel": "NOx (ppm)",
+      "eventDate": "2026-03-02",
+      "eventDateText": "2-Mar-69",
+      "normalStatusCount": 16,
+      "shutDownStatusCount": 1,
+      "expectedStatusCount": 23,
+      "completenessPercent": 69.5,
+      "completenessFormula": "16 / (24 - 1) * 100",
+      "completenessPercentText": "69.50",
+      "notificationStatus": "AUTO",
+      "notificationStatusLabel": "อัตโนมัติ"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "pageSize": 20,
+    "total": 1
+  }
+}</pre>
+
+      <h3>ตัวอย่าง Response: ตารางไม่รายงานติดต่อกัน</h3>
+      <pre>{
+  "success": true,
+  "data": [
+    {
+      "id": 3001,
+      "alertType": "CONSECUTIVE_NO_REPORT",
+      "systemType": "WPMS",
+      "displaySystemType": "BOD_COD_ONLINE",
+      "factoryId": "factory-002",
+      "factoryName": "บริษัท สวัสดี จำกัด",
+      "factoryRegistrationNo": "3-yy-yy",
+      "stationId": "P0001",
+      "pointCode": "P0001",
+      "pointName": "จุดที่ 1",
+      "parameterCode": "cod",
+      "parameterName": "COD",
+      "parameterLabel": "COD (mg/l)",
+      "startedAt": "2026-03-02T00:00:00+07:00",
+      "endedAt": "2026-03-09T23:59:59+07:00",
+      "dateFrom": "2026-03-02",
+      "dateTo": "2026-03-09",
+      "dateFromText": "2-Mar-69",
+      "dateToText": "9-Mar-69",
+      "consecutiveDays": 8,
+      "alertDate": "2026-03-10",
+      "alertDateText": "10-Mar-69",
+      "willAlertAgainUntilValueReturns": true,
+      "notificationStatus": "AUTO",
+      "notificationStatusLabel": "อัตโนมัติ"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "pageSize": 20,
+    "total": 1
+  }
+}</pre>
+
+      <h3>ตัวอย่าง Response: ตารางค่าผิดปกติ</h3>
+      <pre>{
+  "success": true,
+  "data": [
+    {
+      "id": 4001,
+      "alertType": "ABNORMAL_VALUE",
+      "systemType": "CEMS",
+      "factoryId": "factory-001",
+      "factoryName": "บริษัท 2584 จำกัด",
+      "factoryRegistrationNo": "3-xx-xx",
+      "stationId": "S0001",
+      "pointCode": "S0001",
+      "pointName": "จุดที่ 1",
+      "parameterCode": "nox",
+      "parameterName": "NOx",
+      "parameterLabel": "NOx (ppm)",
+      "eventDate": "2026-03-02",
+      "eventDateText": "2-Mar-69",
+      "timeRange": "10.00 - 14.00",
+      "startedAt": "2026-03-02T10:00:00+07:00",
+      "endedAt": "2026-03-02T14:59:59+07:00",
+      "firstAbnormalAt": "2026-03-02T10:00:00+07:00",
+      "confirmedAbnormalAt": "2026-03-02T14:00:00+07:00",
+      "abnormalType": "CONSTANT",
+      "abnormalLabel": "ค่านิ่ง",
+      "abnormalStreakCount": 5,
+      "sameValueStreak": 5,
+      "measuredValue": 5,
+      "unit": "ppm",
+      "notificationStatus": "AUTO",
+      "notificationStatusLabel": "อัตโนมัติ"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "pageSize": 20,
+    "total": 1
+  }
+}</pre>
+
+      <h3>API รายละเอียดและปรับสถานะ</h3>
+      <pre>GET /api/v1/alert-events/:id
+PATCH /api/v1/alert-events/:id/status</pre>
+
+      <h3>ตัวอย่าง PATCH สถานะ</h3>
+      <pre>curl -X PATCH "http://localhost:3000/api/v1/alert-events/1001/status" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "notificationStatus": "OFFICER",
+    "note": "เจ้าหน้าที่รับทราบและดำเนินการแล้ว"
+  }'</pre>
+    </section>
+
+    <h2>8. กติกา idempotency_key</h2>
+    <section class="section">
+      <p>
+        <code>idempotency_key</code> คือ key กันบันทึกซ้ำ เมื่อ job รันซ้ำหรือทีมภายนอก POST ซ้ำ
+        ระบบต้องได้ event เดิม ไม่สร้างแถวใหม่
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>กรณี</th>
+            <th>ตัวอย่าง key</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>เกินมาตรฐานรายชั่วโมง</td>
+            <td><code>CEMS:S0001:SO2:STANDARD_EXCEEDED:2026-03-02:20</code></td>
+          </tr>
+          <tr>
+            <td>เกิน EIA รายชั่วโมง</td>
+            <td><code>WPMS:P0001:COD:EIA_EXCEEDED:2026-03-02:20</code></td>
+          </tr>
+          <tr>
+            <td>รายงานไม่ถึง 80% ต่อวัน</td>
+            <td><code>CEMS:S0001:NOX:DAILY_COMPLETENESS_LOW:2026-03-02</code></td>
+          </tr>
+          <tr>
+            <td>ไม่รายงานต่อเนื่อง</td>
+            <td><code>WPMS:P0001:COD:CONSECUTIVE_NO_REPORT:2026-03-02:2026-03-09:ALERT_2026-03-10</code></td>
+          </tr>
+          <tr>
+            <td>ค่านิ่ง/0/ติดลบ</td>
+            <td><code>CEMS:S0001:NOX:ABNORMAL_VALUE:CONSTANT:2026-03-02:FIRST</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <h2>9. Job Strategy</h2>
+    <section class="section">
+      <table>
+        <thead>
+          <tr>
+            <th>Job</th>
+            <th>รอบเวลา</th>
+            <th>อ่านจาก</th>
+            <th>เขียนไป</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>External exceeded event receiver</td>
+            <td>เมื่อระบบภายนอก POST เข้ามา</td>
+            <td>External API payload เฉพาะเกินมาตรฐาน/EIA</td>
+            <td><code>alert_events</code> และตรวจ <code>alert_notifications</code> ว่าเคยส่งแล้วหรือยัง</td>
+          </tr>
+          <tr>
+            <td>Hourly abnormal detector</td>
+            <td>ทุกชั่วโมง หรือหลัง raw data เข้า</td>
+            <td>60m rolling window: ค่านิ่ง 5 ครั้งติดกัน, ค่า 0 5 ครั้งติดกัน, ค่าติดลบ 5 ครั้งติดกัน</td>
+            <td><code>alert_events</code></td>
+          </tr>
+          <tr>
+            <td>Daily summary builder</td>
+            <td>หลังจบวัน หรือ 08:00</td>
+            <td>60m ของวันก่อนหน้า</td>
+            <td><code>measurement_daily_summaries</code></td>
+          </tr>
+          <tr>
+            <td>Daily completeness detector</td>
+            <td>08:30</td>
+            <td><code>measurement_daily_summaries</code></td>
+            <td><code>alert_events</code></td>
+          </tr>
+          <tr>
+            <td>No report detector</td>
+            <td>08:30</td>
+            <td><code>measurement_daily_summaries</code> หรือ last seen</td>
+            <td><code>alert_events</code></td>
+          </tr>
+          <tr>
+            <td>Abnormal value detector</td>
+            <td>ทุกชั่วโมง หรือ 08:30</td>
+            <td>60m rolling window / daily summary โดยใช้ threshold 5 ครั้งติดกัน</td>
+            <td><code>alert_events</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <h2>10. ขั้นตอนบน Windows Server</h2>
+    <section class="section">
+      <p>
+        สำหรับ Windows Server ไม่ต้องใช้ Linux cron ให้ใช้ <strong>Windows Task Scheduler</strong>
+        เรียก job script ตามเวลาที่กำหนด และให้ job ทุกตัวออกแบบเป็น idempotent คือรันซ้ำได้โดยไม่สร้างข้อมูลซ้ำ
+      </p>
+
+      <h3>10.1 งานฝั่ง Code ที่ต้องเตรียม</h3>
+      <ol>
+        <li>เพิ่ม module <code>alert-events</code> สำหรับ repository/service/controller/validator</li>
+        <li>เพิ่ม integration route <code>POST /api/v1/integrations/alert-events</code> รับเฉพาะ event เกินมาตรฐาน/EIA จากระบบภายนอก</li>
+        <li>เพิ่ม frontend API route <code>GET /api/v1/alert-events</code>, <code>GET /api/v1/alert-events/:id</code>, <code>PATCH /api/v1/alert-events/:id/status</code></li>
+        <li>เพิ่ม job function กลาง เช่น <code>runDailyAlertDetection(targetDate)</code> และ <code>runHourlyAbnormalDetection(targetDateTime)</code></li>
+        <li>เพิ่ม CLI script ให้ Windows Task Scheduler เรียกได้ เช่น <code>npm run job:alerts:daily</code> และ <code>npm run job:alerts:hourly</code></li>
+        <li>เพิ่ม notification worker/checker ให้เช็ค <code>alert_notifications</code> ก่อนส่ง เพื่อไม่ส่งซ้ำ</li>
+      </ol>
+
+      <h3>10.2 งานฝั่ง Database ที่ต้องเตรียม</h3>
+      <ol>
+        <li>สร้าง migration สำหรับ <code>alert_events</code></li>
+        <li>สร้าง migration สำหรับ <code>alert_notifications</code></li>
+        <li>สร้าง migration สำหรับ <code>measurement_daily_summaries</code></li>
+        <li>เพิ่ม unique index ที่ <code>alert_events.idempotency_key</code></li>
+        <li>เพิ่ม index ตาม <code>event_date</code>, <code>alert_type</code>, <code>system_type</code>, <code>factory_id</code>, <code>station_id</code>, <code>parameter_code</code></li>
+        <li>เตรียม retention/partition strategy ถ้าข้อมูล alert โตมากใน production</li>
+      </ol>
+
+      <h3>10.3 Environment บน Windows Server</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>ค่า</th>
+            <th>ใช้ทำอะไร</th>
+            <th>ตัวอย่าง</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>INTEGRATION_API_KEYS</code></td>
+            <td>key สำหรับ external API</td>
+            <td><code>key-1,key-2</code></td>
+          </tr>
+          <tr>
+            <td><code>TZ</code> หรือ config timezone</td>
+            <td>ให้ job คิดวันที่ตาม Asia/Bangkok</td>
+            <td><code>Asia/Bangkok</code></td>
+          </tr>
+          <tr>
+            <td><code>PARAMETER_DB_*</code></td>
+            <td>เชื่อม Parameter DB ที่มีตาราง 60m</td>
+            <td><code>PARAMETER_DB_NAME=parameter_ingest</code></td>
+          </tr>
+          <tr>
+            <td><code>DB_*</code></td>
+            <td>เชื่อม POMS main DB ที่เก็บ alert tables</td>
+            <td><code>DB_NAME=poms</code></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>10.4 ตั้ง Windows Task Scheduler</h3>
+      <p>แนะนำให้สร้าง task แยกตามหน้าที่ เพื่อ debug ง่ายและรันซ้ำเฉพาะ job ได้</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Task</th>
+            <th>Trigger</th>
+            <th>Action</th>
+            <th>หมายเหตุ</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Alert Daily Summary</td>
+            <td>ทุกวัน 08:00</td>
+            <td><code>npm run job:alerts:summary</code></td>
+            <td>สรุปข้อมูล 60m ของวันก่อนหน้า</td>
+          </tr>
+          <tr>
+            <td>Alert Daily Detection</td>
+            <td>ทุกวัน 08:30</td>
+            <td><code>npm run job:alerts:daily</code></td>
+            <td>ตรวจ 80%, ไม่รายงาน 7/14 วัน, และ event รายวันที่ต้องสร้าง</td>
+          </tr>
+          <tr>
+            <td>Alert Hourly Abnormal</td>
+            <td>ทุกชั่วโมง</td>
+            <td><code>npm run job:alerts:hourly</code></td>
+            <td>ตรวจค่านิ่ง/ค่า 0/ค่าติดลบ 5 ครั้งติดกันจาก 60m</td>
+          </tr>
+          <tr>
+            <td>Alert Notification Worker</td>
+            <td>ทุก 5 นาที หรือหลัง daily job</td>
+            <td><code>npm run job:alerts:notify</code></td>
+            <td>ส่งเฉพาะ event ที่ยังไม่มี log ส่งสำเร็จใน <code>alert_notifications</code></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>10.5 ตัวอย่างคำสั่ง Task Scheduler</h3>
+      <p>ตัวอย่างนี้เป็นแนวทาง ต้องปรับ path ให้ตรงกับเครื่อง production จริง</p>
+      <pre>Program/script:
+C:\Program Files\nodejs\npm.cmd
+
+Arguments:
+run job:alerts:daily
+
+Start in:
+C:\inetpub\wwwroot\POMS-app\backend</pre>
+
+      <h3>10.6 Logging ที่ควรมี</h3>
+      <ul>
+        <li>log เริ่ม/จบ job พร้อมวันที่ที่ประมวลผล</li>
+        <li>จำนวน row ที่อ่านจาก 60m</li>
+        <li>จำนวน alert ที่สร้างใหม่</li>
+        <li>จำนวน alert ที่เจอซ้ำจาก <code>idempotency_key</code></li>
+        <li>จำนวน notification ที่ส่งสำเร็จ/ล้มเหลว</li>
+        <li>error stack ของ job แต่ต้องไม่ log secret/API key</li>
+      </ul>
+
+      <h3>10.7 ขั้นตอนทดสอบก่อนขึ้น Production</h3>
+      <ol>
+        <li>รัน migration บน staging DB</li>
+        <li>ยิง <code>POST /api/v1/integrations/alert-events</code> 1 รายการ แล้วเช็คว่าเกิด <code>alert_events</code></li>
+        <li>ยิง POST ซ้ำด้วย <code>idempotencyKey</code> เดิม แล้วเช็คว่าไม่เกิด row ซ้ำ</li>
+        <li>รัน <code>npm run job:alerts:summary</code> กับวันที่ทดสอบ</li>
+        <li>รัน <code>npm run job:alerts:daily</code> แล้วเช็ค 80% และ no report</li>
+        <li>seed 60m ให้มีค่านิ่ง/0/ติดลบ 5 ครั้งติดกัน แล้วรัน <code>npm run job:alerts:hourly</code></li>
+        <li>รัน notification worker แล้วเช็คว่า event เดิมไม่ส่งซ้ำ</li>
+        <li>ทดสอบ <code>GET /api/v1/alert-events</code> พร้อม query ของทั้ง 10 ตาราง</li>
+        <li>เปิด Task Scheduler history/log เพื่อยืนยันว่า task รันตามเวลา 08:00, 08:30 และรายชั่วโมง</li>
+      </ol>
+
+      <div class="note">
+        จุดสำคัญบน Windows Server คืออย่าผูก job กับการเปิดหน้าเว็บ ให้ Task Scheduler เป็นตัวปลุกงาน
+        และให้ทุก job ใช้ <code>idempotency_key</code> เพื่อให้รันซ้ำได้ปลอดภัยเมื่อ server retry หรือผู้ดูแลกด rerun เอง
+      </div>
+    </section>
+
+    <h2>11. ข้อแนะนำสุดท้าย</h2>
+    <section class="section">
+      <ol>
+        <li>อย่าแยก 10 ตารางตาม alert type เพราะ query, index, API, และ notification logic จะซ้ำกันมาก</li>
+        <li>ใช้ <code>alert_events</code> เป็นตารางกลาง แล้วแยกเมนูด้วย filter หรือ view</li>
+        <li>เก็บ raw 60m ไว้ที่เดิม ไม่ copy ทั้งหมดเข้าระบบแจ้งเตือน</li>
+        <li>เพิ่ม <code>measurement_daily_summaries</code> เพื่อรองรับข้อมูลขนาดใหญ่และลดการ scan raw data</li>
+        <li>ใช้ <code>alert_notifications</code> แยกจาก <code>alert_events</code> เพื่อรู้ว่าส่งแจ้งเตือนแล้วหรือยัง</li>
+        <li>ทุก event ต้องมี <code>idempotency_key</code> เพื่อกัน job rerun หรือ external POST ซ้ำ</li>
+      </ol>
+    </section>
+  </main>
+</body>
+</html>
