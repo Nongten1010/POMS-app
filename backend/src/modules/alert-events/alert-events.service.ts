@@ -1,4 +1,4 @@
-import { NotFoundError } from '../../shared/errors/AppError';
+import { BadRequestError, NotFoundError } from '../../shared/errors/AppError';
 import { alertEventsRepository } from './alert-events.repository';
 import type {
   AlertEventDTO,
@@ -27,18 +27,27 @@ export const alertEventsService = {
       stationId: input.stationId,
       pointCode: input.pointCode ?? null,
     });
-    const enrichedInput = connectedPoint
-      ? {
-          ...input,
-          connectedMeasurementPointId: connectedPoint.id,
-          factoryId: connectedPoint.factoryId,
-          factoryName: connectedPoint.factoryName,
-          factoryRegistrationNo: connectedPoint.factoryRegistrationNo,
-          pointCode: connectedPoint.pointCode ?? input.pointCode ?? input.stationId,
-          pointName: connectedPoint.pointName,
-          pointType: connectedPoint.pointType,
-        }
-      : input;
+    if (!connectedPoint) {
+      throw new BadRequestError(
+        'Alert event stationId must match a connected measurement point',
+        {
+          systemType: input.systemType,
+          stationId: input.stationId,
+          pointCode: input.pointCode ?? null,
+        },
+      );
+    }
+
+    const enrichedInput = {
+      ...input,
+      connectedMeasurementPointId: connectedPoint.id,
+      factoryId: connectedPoint.factoryId,
+      factoryName: connectedPoint.factoryName,
+      factoryRegistrationNo: connectedPoint.factoryRegistrationNo,
+      pointCode: connectedPoint.pointCode ?? input.pointCode ?? input.stationId,
+      pointName: connectedPoint.pointName,
+      pointType: connectedPoint.pointType,
+    };
 
     const event = await alertEventsRepository.createFromIntegration(enrichedInput);
     return {

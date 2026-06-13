@@ -83,6 +83,18 @@ describe('alertEventsService', () => {
     expect(mockedRepository.findConnectedMeasurementPointByStation).not.toHaveBeenCalled();
     expect(mockedRepository.createFromIntegration).not.toHaveBeenCalled();
   });
+
+  it('rejects new external events when station cannot be matched to a connected point', async () => {
+    mockedRepository.findByIdempotencyKey.mockResolvedValue(null);
+    mockedRepository.findConnectedMeasurementPointByStation.mockResolvedValue(null);
+
+    await expect(alertEventsService.createFromIntegration(integrationPayload())).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: 'Alert event stationId must match a connected measurement point',
+    });
+
+    expect(mockedRepository.createFromIntegration).not.toHaveBeenCalled();
+  });
 });
 
 function integrationPayload(): CreateIntegrationAlertEventInput {

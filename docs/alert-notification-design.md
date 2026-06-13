@@ -315,7 +315,7 @@ curl -X POST "http://localhost:3000/api/v1/integrations/alert-events" \
 | Field | Required | ตัวอย่าง | หมายเหตุ |
 | --- | --- | --- | --- |
 | `systemType` | Yes | `CEMS`, `WPMS` | BOD/COD Online ใช้ `WPMS` |
-| `stationId` | Yes | `S0001` | รหัสจุดตรวจวัดที่ใช้ lookup โรงงาน/ชื่อจุดใน POMS |
+| `stationId` | Yes | `S0001` | รหัสจุดตรวจวัดที่ต้อง match กับ connected measurement point ใน POMS |
 | `pointCode` | Optional | `S0001` | ส่งมาได้ ถ้ามี; backend จะใช้ร่วมกับ `stationId` ตอน lookup |
 | `parameterCode` | Yes | `so2`, `cod` | backend แปลงเป็น lower-case |
 | `unit` | Yes | `ppm`, `mg/l` | backend สร้าง `parameterLabel` เป็น `PARAMETER (unit)` |
@@ -329,13 +329,15 @@ curl -X POST "http://localhost:3000/api/v1/integrations/alert-events" \
 
 | Field | เจ้าของข้อมูล |
 | --- | --- |
-| `idempotencyKey` | backend generate จาก `systemType`, `stationId`, `parameterCode`, `thresholdType`, `eventDate`, `startTime` |
+| `idempotencyKey` | backend generate จาก `systemType`, `stationId`, `parameterCode`, `alertType` ที่ derive แล้ว และ `startedAt` ที่สร้างจาก `eventDate/startTime` |
 | `alertType` | backend derive จาก `thresholdType`: `STANDARD` -> `STANDARD_EXCEEDED`, `EIA` -> `EIA_EXCEEDED` |
 | `displaySystemType` | backend derive จาก `systemType` |
 | `factoryId`, `factoryName`, `factoryRegistrationNo` | backend lookup จาก `cems_wpms_connected_measurement_points` |
 | `pointName`, `pointType` | backend lookup จาก `cems_wpms_connected_measurement_points` |
 | `parameterName`, `parameterLabel` | backend derive จาก `parameterCode` และ `unit` |
 | `notificationStatus` | backend ตั้งเป็น `AUTO`; ภายนอกส่งมาไม่ได้ |
+
+ถ้า `stationId`/`pointCode` ไม่พบใน `cems_wpms_connected_measurement_points` backend จะ reject ด้วย `400 BAD_REQUEST` เพื่อไม่ให้เกิด alert ที่ข้อมูลโรงงานว่างหรือไม่ตรง
 
 ### Response: Created
 
@@ -563,7 +565,7 @@ Query กลาง:
 
 | กรณี | ตัวอย่าง key |
 | --- | --- |
-| เกินมาตรฐานรายชั่วโมง | `CEMS:S0001:SO2:STANDARD_EXCEEDED:2026-03-02:20` |
+| เกินมาตรฐานรายชั่วโมง | `CEMS:S0001:so2:STANDARD_EXCEEDED:2026-03-02T20:00:00+07:00` |
 | เกิน EIA รายชั่วโมง | `WPMS:P0001:COD:EIA_EXCEEDED:2026-03-02:20` |
 | รายงานไม่ถึง 80% ต่อวัน | `CEMS:S0001:NOX:DAILY_COMPLETENESS_LOW:2026-03-02` |
 | ไม่รายงานต่อเนื่อง | `WPMS:P0001:COD:CONSECUTIVE_NO_REPORT:2026-03-02:2026-03-09:ALERT_2026-03-10` |

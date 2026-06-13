@@ -823,7 +823,7 @@ ON measurement_daily_summaries(station_id, parameter_code, summary_date);</pre>
         </thead>
         <tbody>
           <tr><td><code>systemType</code></td><td><code>CEMS</code>, <code>WPMS</code></td><td>BOD/COD Online ใช้ <code>WPMS</code></td></tr>
-          <tr><td><code>stationId</code></td><td><code>S0001</code></td><td>รหัสจุดตรวจวัด ใช้ lookup โรงงาน/ชื่อจุดใน POMS</td></tr>
+          <tr><td><code>stationId</code></td><td><code>S0001</code></td><td>รหัสจุดตรวจวัดที่ต้อง match กับ connected measurement point ใน POMS</td></tr>
           <tr><td><code>pointCode</code></td><td><code>S0001</code></td><td>optional ถ้ามีให้ส่งมา</td></tr>
           <tr><td><code>parameterCode</code></td><td><code>so2</code>, <code>cod</code></td><td>backend แปลงเป็น lower-case</td></tr>
           <tr><td><code>unit</code></td><td><code>ppm</code>, <code>mg/l</code></td><td>ใช้สร้าง parameter label</td></tr>
@@ -841,6 +841,11 @@ ON measurement_daily_summaries(station_id, parameter_code, summary_date);</pre>
         <code>factoryRegistrationNo</code>, <code>pointName</code>, <code>pointType</code>,
         <code>parameterName</code>, <code>parameterLabel</code> หรือ <code>notificationStatus</code>
         เพราะ backend เป็นเจ้าของข้อมูลกลุ่มนี้
+      </div>
+      <div class="note">
+        ถ้า <code>stationId</code>/<code>pointCode</code> ไม่พบใน
+        <code>cems_wpms_connected_measurement_points</code> backend จะ reject ด้วย
+        <code>400 BAD_REQUEST</code> เพื่อไม่ให้เกิด alert ที่ข้อมูลโรงงานว่างหรือไม่ตรง
       </div>
 
       <h3>Response: สร้าง event ใหม่</h3>
@@ -949,7 +954,7 @@ Content-Type: application/json
       <h3>สรุป Contract ใหม่</h3>
       <ul>
         <li>External API ส่งเฉพาะ <code>systemType</code>, <code>stationId</code>, <code>pointCode</code>, <code>parameterCode</code>, <code>unit</code>, วันเวลา, ค่าที่วัดได้, ค่าเกณฑ์ และ <code>thresholdType</code></li>
-        <li>Backend สร้าง <code>idempotencyKey</code> จาก <code>systemType</code>, <code>stationId</code>, <code>parameterCode</code>, <code>thresholdType</code>, <code>eventDate</code> และ <code>startTime</code></li>
+        <li>Backend สร้าง <code>idempotencyKey</code> จาก <code>systemType</code>, <code>stationId</code>, <code>parameterCode</code>, <code>alertType</code> ที่ derive แล้ว และ <code>startedAt</code> ที่สร้างจาก <code>eventDate/startTime</code></li>
         <li>Backend derive <code>alertType</code> จาก <code>thresholdType</code>: <code>STANDARD</code> เป็น <code>STANDARD_EXCEEDED</code>, <code>EIA</code> เป็น <code>EIA_EXCEEDED</code></li>
         <li>Backend lookup ข้อมูลโรงงาน/ชื่อจุดจาก <code>cems_wpms_connected_measurement_points</code></li>
         <li>Backend ตั้ง <code>notificationStatus</code> เป็น <code>AUTO</code> เอง และ reject ถ้า external ส่ง field นี้มา</li>
@@ -1278,7 +1283,7 @@ PATCH /api/v1/alert-events/:id/status</pre>
         <tbody>
           <tr>
             <td>เกินมาตรฐานรายชั่วโมง</td>
-            <td><code>CEMS:S0001:SO2:STANDARD_EXCEEDED:2026-03-02:20</code></td>
+            <td><code>CEMS:S0001:so2:STANDARD_EXCEEDED:2026-03-02T20:00:00+07:00</code></td>
           </tr>
           <tr>
             <td>เกิน EIA รายชั่วโมง</td>

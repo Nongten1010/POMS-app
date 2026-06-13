@@ -59,7 +59,8 @@ describe('alert events routes', () => {
       data: {
         created: true,
         duplicate: false,
-        idempotencyKey: 'CEMS:S0001:SO2:STANDARD_EXCEEDED:2026-03-02:20',
+        idempotencyKey:
+          'CEMS:S0001:so2:STANDARD_EXCEEDED:2026-03-02T20:00:00+07:00',
       },
     });
   });
@@ -83,7 +84,8 @@ describe('alert events routes', () => {
       data: {
         created: false,
         duplicate: true,
-        idempotencyKey: 'CEMS:S0001:SO2:STANDARD_EXCEEDED:2026-03-02:20',
+        idempotencyKey:
+          'CEMS:S0001:so2:STANDARD_EXCEEDED:2026-03-02T20:00:00+07:00',
       },
     });
   });
@@ -227,7 +229,7 @@ function integrationPayload() {
 function alertEventFixture(): AlertEventDTO {
   return {
     id: 1001,
-    idempotencyKey: 'CEMS:S0001:SO2:STANDARD_EXCEEDED:2026-03-02:20',
+    idempotencyKey: 'CEMS:S0001:so2:STANDARD_EXCEEDED:2026-03-02T20:00:00+07:00',
     alertType: 'STANDARD_EXCEEDED',
     systemType: 'CEMS',
     displaySystemType: 'CEMS',
