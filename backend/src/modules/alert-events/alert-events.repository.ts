@@ -2,10 +2,21 @@ import { db } from '../../config/database';
 import type {
   AlertEventDTO,
   AlertEventRow,
+  ConnectedAlertMeasurementPointSnapshot,
   CreateIntegrationAlertEventInput,
   ListAlertEventsQuery,
   UpdateAlertEventStatusInput,
 } from './alert-events.types';
+
+interface ConnectedMeasurementPointRow {
+  id: number | string;
+  factory_id: string;
+  factory_name: string;
+  factory_registration_no: string;
+  point_code: string | null;
+  point_name: string;
+  point_type: string;
+}
 
 export const alertEventsRepository = {
   async findByIdempotencyKey(idempotencyKey: string): Promise<AlertEventDTO | null> {
@@ -24,6 +35,41 @@ export const alertEventsRepository = {
       .first();
 
     return row ? toAlertEventDTO(row) : null;
+  },
+
+  async findConnectedMeasurementPointByStation(input: {
+    systemType: string;
+    stationId: string;
+    pointCode?: string | null;
+  }): Promise<ConnectedAlertMeasurementPointSnapshot | null> {
+    const lookupCodes = [...new Set([input.pointCode, input.stationId].filter(Boolean))] as string[];
+    if (lookupCodes.length === 0) return null;
+
+    const row = await db<ConnectedMeasurementPointRow>('cems_wpms_connected_measurement_points')
+      .whereNull('deleted_at')
+      .where('system_type', input.systemType)
+      .whereIn('point_code', lookupCodes)
+      .first(
+        'id',
+        'factory_id',
+        'factory_name',
+        'factory_registration_no',
+        'point_code',
+        'point_name',
+        'point_type',
+      );
+
+    return row
+      ? {
+          id: Number(row.id),
+          factoryId: row.factory_id,
+          factoryName: row.factory_name,
+          factoryRegistrationNo: row.factory_registration_no,
+          pointCode: row.point_code,
+          pointName: row.point_name,
+          pointType: toAlertPointType(row.point_type),
+        }
+      : null;
   },
 
   async createFromIntegration(input: CreateIntegrationAlertEventInput): Promise<AlertEventDTO> {
@@ -102,6 +148,7 @@ function toInsertPayload(input: CreateIntegrationAlertEventInput) {
     factory_id: input.factoryId ?? null,
     factory_name: input.factoryName ?? '',
     factory_registration_no: input.factoryRegistrationNo ?? null,
+    connected_measurement_point_id: input.connectedMeasurementPointId ?? null,
     station_id: input.stationId,
     point_code: input.pointCode ?? null,
     point_name: input.pointName,
@@ -119,6 +166,11 @@ function toInsertPayload(input: CreateIntegrationAlertEventInput) {
     notification_status: input.notificationStatus ?? 'AUTO',
     source_payload_json: input.sourcePayload ? JSON.stringify(input.sourcePayload) : null,
   };
+}
+
+function toAlertPointType(value: string) {
+  if (value === 'STACK' || value === 'WASTEWATER' || value === 'OTHER') return value;
+  return 'OTHER';
 }
 
 function toAlertEventDTO(row: AlertEventRow): AlertEventDTO {

@@ -41,9 +41,17 @@ describe('alert events routes', () => {
     expect(response.status).toBe(201);
     expect(mockedAlertEventsService.createFromIntegration).toHaveBeenCalledWith(
       expect.objectContaining({
-        idempotencyKey: 'CEMS:S0001:SO2:STANDARD_EXCEEDED:2026-03-02:20',
+        idempotencyKey:
+          'CEMS:S0001:so2:STANDARD_EXCEEDED:2026-03-02T20:00:00+07:00',
         alertType: 'STANDARD_EXCEEDED',
+        displaySystemType: 'CEMS',
         thresholdType: 'STANDARD',
+        notificationStatus: 'AUTO',
+        pointName: 'S0001',
+        parameterName: 'SO2',
+        parameterLabel: 'SO2 (ppm)',
+        startedAt: '2026-03-02T20:00:00+07:00',
+        endedAt: '2026-03-02T20:59:59+07:00',
       }),
     );
     expect(response.body).toMatchObject({
@@ -80,14 +88,45 @@ describe('alert events routes', () => {
     });
   });
 
-  it('rejects unsupported external alert types', async () => {
+  it('rejects externally managed alert statuses', async () => {
     const app = createApp();
     const response = await request(app)
       .post('/api/v1/integrations/alert-events')
       .set('X-API-Key', 'test-integration-key')
       .send({
         ...integrationPayload(),
-        alertType: 'DAILY_COMPLETENESS_LOW',
+        notificationStatus: 'DISMISSED',
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    expect(mockedAlertEventsService.createFromIntegration).not.toHaveBeenCalled();
+  });
+
+  it('rejects externally supplied alert types because backend derives them from threshold type', async () => {
+    const app = createApp();
+    const response = await request(app)
+      .post('/api/v1/integrations/alert-events')
+      .set('X-API-Key', 'test-integration-key')
+      .send({
+        ...integrationPayload(),
+        alertType: 'STANDARD_EXCEEDED',
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    expect(mockedAlertEventsService.createFromIntegration).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid event time ranges', async () => {
+    const app = createApp();
+    const response = await request(app)
+      .post('/api/v1/integrations/alert-events')
+      .set('X-API-Key', 'test-integration-key')
+      .send({
+        ...integrationPayload(),
+        startTime: '21:00',
+        endTime: '20:59',
       });
 
     expect(response.status).toBe(400);
@@ -171,32 +210,17 @@ describe('alert events routes', () => {
 
 function integrationPayload() {
   return {
-    idempotencyKey: 'CEMS:S0001:SO2:STANDARD_EXCEEDED:2026-03-02:20',
     systemType: 'CEMS',
-    displaySystemType: 'CEMS',
-    alertType: 'STANDARD_EXCEEDED',
-    factoryId: 'factory-001',
-    factoryName: 'บริษัท 2584 จำกัด',
-    factoryRegistrationNo: '3-xx-xx',
     stationId: 'S0001',
     pointCode: 'S0001',
-    pointName: 'Stack 1',
-    pointType: 'STACK',
     parameterCode: 'so2',
-    parameterName: 'SO2',
-    parameterLabel: 'SO2 (ppm)',
     unit: 'ppm',
     eventDate: '2026-03-02',
-    startedAt: '2026-03-02T20:00:00+07:00',
-    endedAt: '2026-03-02T20:59:59+07:00',
+    startTime: '20:00',
+    endTime: '20:59',
     measuredValue: 150,
     thresholdValue: 60,
     thresholdType: 'STANDARD',
-    notificationStatus: 'AUTO',
-    sourcePayload: {
-      externalSystem: 'EIA-CEMS',
-      externalReferenceId: 'external-123',
-    },
   };
 }
 

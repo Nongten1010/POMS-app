@@ -83,10 +83,13 @@ function toParameterConfig(
   channel: DeviceConnectionConfigDTO['channels'][number],
   standard: StandardValues | null,
 ): IntegrationParameterConfigDTO {
+  const parameterParts = splitParameterAndUnit(channel.dataType);
   return {
     deviceCode,
     addressId: channel.addressId,
     parameter: channel.dataType,
+    parameterName: parameterParts.name,
+    parameterUnit: parameterParts.unit,
     valueRange: channel.valueRange ?? null,
     valueFormat: channel.valueFormat ?? null,
     offset: channel.offset,
@@ -221,4 +224,16 @@ function normalizeParameterKey(value: string): string {
 
 function stripTrailingUnit(value: string): string {
   return value.replace(/\s*\([^)]*\)\s*$/, '');
+}
+
+function splitParameterAndUnit(parameter: string): { name: string; unit: string | null } {
+  const match = parameter.trim().match(/^(.*?)\s*\(([^()]*)\)\s*$/);
+  if (!match) return { name: parameter.trim(), unit: null };
+
+  const name = match[1].trim();
+  const unit = match[2].trim();
+  return {
+    name,
+    unit: unit || null,
+  };
 }

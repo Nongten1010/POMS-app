@@ -32,6 +32,8 @@ export interface IntegrationParameterConfigDTO {
   deviceCode: string;
   addressId: number;
   parameter: string;
+  parameterName: string | null;
+  parameterUnit: string | null;
   valueRange: { min: number; max: number } | null;
   valueFormat: string | null;
   offset: number;

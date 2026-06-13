@@ -103,6 +103,8 @@ Response แยกเป็น 3 ชุด:
         "deviceCode": "S0002/01",
         "addressId": 40001,
         "parameter": "NOx (ppm)",
+        "parameterName": "NOx",
+        "parameterUnit": "ppm",
         "valueRange": { "min": 0, "max": 200 },
         "valueFormat": "MEASUREMENT_VALUE",
         "offset": 0,
@@ -115,6 +117,8 @@ Response แยกเป็น 3 ชุด:
         "deviceCode": "S0002/01",
         "addressId": 40002,
         "parameter": "SO2 (ppm)",
+        "parameterName": "SO2",
+        "parameterUnit": "ppm",
         "valueRange": { "min": 0, "max": 500 },
         "valueFormat": "MEASUREMENT_VALUE",
         "offset": 0,
@@ -172,6 +176,8 @@ Response แยกเป็น 3 ชุด:
 | `deviceCode` | string | รหัสอุปกรณ์ที่ channel นี้ผูกอยู่ |
 | `addressId` | number | register/address/field id |
 | `parameter` | string | ชื่อพารามิเตอร์พร้อมหน่วย เช่น `NOx (ppm)` |
+| `parameterName` | string|null | ชื่อพารามิเตอร์ไม่รวมหน่วย เช่น `NOx` |
+| `parameterUnit` | string|null | หน่วยพารามิเตอร์ เช่น `ppm`; ถ้าไม่มีหน่วยส่ง `null` |
 | `valueRange` | object|null | ช่วงข้อมูลของ channel เช่น `{ "min": 0, "max": 200 }` |
 | `valueFormat` | string|null | `MEASUREMENT_VALUE`, `CURRENT`, `VOLTAGE` หรือ `null` |
 | `offset` | number | offset |

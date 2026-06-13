@@ -45,6 +45,8 @@ describe('integration device configs route', () => {
           deviceCode: 'S0002/01',
           addressId: 40001,
           parameter: 'NOx (ppm)',
+          parameterName: 'NOx',
+          parameterUnit: 'ppm',
           valueRange: { min: 0, max: 200 },
           valueFormat: 'MEASUREMENT_VALUE',
           offset: 0,
@@ -79,7 +81,14 @@ describe('integration device configs route', () => {
       data: {
         stationId: 'S0002',
         deviceConfigs: [{ deviceCode: 'S0002/01', protocol: 'MODBUS_TCP' }],
-        parameterConfigs: [{ parameter: 'NOx (ppm)', standardCriteria: 120 }],
+        parameterConfigs: [
+          {
+            parameter: 'NOx (ppm)',
+            parameterName: 'NOx',
+            parameterUnit: 'ppm',
+            standardCriteria: 120,
+          },
+        ],
         statusSchedules: [{ parameter: 'NOx (ppm)', status: 'Calibration' }],
       },
     });

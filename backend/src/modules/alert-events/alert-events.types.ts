@@ -34,6 +34,7 @@ export interface CreateIntegrationAlertEventInput {
   systemType: AlertEventSystemType;
   displaySystemType: AlertEventDisplaySystemType;
   alertType: IntegrationAlertEventAlertType;
+  connectedMeasurementPointId?: number | null;
   factoryId?: string | null;
   factoryName?: string | null;
   factoryRegistrationNo?: string | null;
@@ -53,6 +54,16 @@ export interface CreateIntegrationAlertEventInput {
   thresholdType: AlertEventThresholdType;
   notificationStatus?: AlertEventNotificationStatus;
   sourcePayload?: Record<string, unknown>;
+}
+
+export interface ConnectedAlertMeasurementPointSnapshot {
+  id: number;
+  factoryId: string;
+  factoryName: string;
+  factoryRegistrationNo: string;
+  pointCode: string | null;
+  pointName: string;
+  pointType: AlertEventPointType;
 }
 
 export interface ListAlertEventsQuery {

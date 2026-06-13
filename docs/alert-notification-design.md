@@ -272,38 +272,20 @@ ALERT_EVENT_API_KEYS=alert-event-key-1,alert-event-key-2
 
 ```bash
 curl -X POST "http://localhost:3000/api/v1/integrations/alert-events" \
-  -H "Content-Type: application/json" \
+  -H "Content-Type: application/json; charset=utf-8" \
   -H "X-API-Key: $ALERT_EVENT_API_KEY" \
   -d '{
-    "idempotencyKey": "CEMS:S0001:SO2:STANDARD_EXCEEDED:2026-03-02:20",
     "systemType": "CEMS",
-    "displaySystemType": "CEMS",
-    "alertType": "STANDARD_EXCEEDED",
-    "factoryId": "factory-001",
-    "factoryName": "บริษัท 2584 จำกัด",
-    "factoryRegistrationNo": "3-xx-xx",
     "stationId": "S0001",
     "pointCode": "S0001",
-    "pointName": "Stack 1",
-    "pointType": "STACK",
     "parameterCode": "so2",
-    "parameterName": "SO2",
-    "parameterLabel": "SO2 (ppm)",
     "unit": "ppm",
     "eventDate": "2026-03-02",
-    "startedAt": "2026-03-02T20:00:00+07:00",
-    "endedAt": "2026-03-02T20:59:59+07:00",
+    "startTime": "20:00",
+    "endTime": "20:59",
     "measuredValue": 150,
     "thresholdValue": 60,
-    "thresholdType": "STANDARD",
-    "notificationStatus": "AUTO",
-    "sourcePayload": {
-      "externalSystem": "EIA-CEMS",
-      "externalReferenceId": "external-123",
-      "sourceTable": "S0001_data_60m",
-      "sourceDate": "2026-03-02",
-      "sourceTime": "20:00:00"
-    }
+    "thresholdType": "STANDARD"
   }'
 ```
 
@@ -311,33 +293,49 @@ curl -X POST "http://localhost:3000/api/v1/integrations/alert-events" \
 
 ```bash
 curl -X POST "http://localhost:3000/api/v1/integrations/alert-events" \
-  -H "Content-Type: application/json" \
+  -H "Content-Type: application/json; charset=utf-8" \
   -H "X-API-Key: $ALERT_EVENT_API_KEY" \
   -d '{
-    "idempotencyKey": "WPMS:P0001:COD:EIA_EXCEEDED:2026-03-02:20",
     "systemType": "WPMS",
-    "displaySystemType": "BOD_COD_ONLINE",
-    "alertType": "EIA_EXCEEDED",
-    "factoryId": "factory-002",
-    "factoryName": "บริษัท สวัสดี จำกัด",
-    "factoryRegistrationNo": "3-yy-yy",
     "stationId": "P0001",
     "pointCode": "P0001",
-    "pointName": "จุดที่ 1",
-    "pointType": "WASTEWATER",
     "parameterCode": "cod",
-    "parameterName": "COD",
-    "parameterLabel": "COD (mg/l)",
     "unit": "mg/l",
     "eventDate": "2026-03-02",
-    "startedAt": "2026-03-02T20:00:00+07:00",
-    "endedAt": "2026-03-02T20:59:59+07:00",
+    "startTime": "20:00",
+    "endTime": "20:59",
     "measuredValue": 150,
     "thresholdValue": 100,
-    "thresholdType": "EIA",
-    "notificationStatus": "AUTO"
+    "thresholdType": "EIA"
   }'
 ```
+
+### Field ที่ external API ต้องส่ง
+
+| Field | Required | ตัวอย่าง | หมายเหตุ |
+| --- | --- | --- | --- |
+| `systemType` | Yes | `CEMS`, `WPMS` | BOD/COD Online ใช้ `WPMS` |
+| `stationId` | Yes | `S0001` | รหัสจุดตรวจวัดที่ใช้ lookup โรงงาน/ชื่อจุดใน POMS |
+| `pointCode` | Optional | `S0001` | ส่งมาได้ ถ้ามี; backend จะใช้ร่วมกับ `stationId` ตอน lookup |
+| `parameterCode` | Yes | `so2`, `cod` | backend แปลงเป็น lower-case |
+| `unit` | Yes | `ppm`, `mg/l` | backend สร้าง `parameterLabel` เป็น `PARAMETER (unit)` |
+| `eventDate` | Yes | `2026-03-02` | วันที่ของเหตุการณ์ |
+| `startTime`, `endTime` | Yes | `20:00`, `20:59` | เวลาแบบ `HH:mm`; backend สร้าง `startedAt/endedAt` เป็นเวลาไทย `+07:00` เอง |
+| `measuredValue` | Yes | `150` | ค่าที่ตรวจวัดได้ |
+| `thresholdValue` | Yes | `60` | ค่ามาตรฐาน/ค่า EIA ที่ถูกใช้เทียบ |
+| `thresholdType` | Yes | `STANDARD`, `EIA` | backend ใช้สร้าง `alertType` เอง |
+
+### Field ที่ external API ไม่ต้องส่ง
+
+| Field | เจ้าของข้อมูล |
+| --- | --- |
+| `idempotencyKey` | backend generate จาก `systemType`, `stationId`, `parameterCode`, `thresholdType`, `eventDate`, `startTime` |
+| `alertType` | backend derive จาก `thresholdType`: `STANDARD` -> `STANDARD_EXCEEDED`, `EIA` -> `EIA_EXCEEDED` |
+| `displaySystemType` | backend derive จาก `systemType` |
+| `factoryId`, `factoryName`, `factoryRegistrationNo` | backend lookup จาก `cems_wpms_connected_measurement_points` |
+| `pointName`, `pointType` | backend lookup จาก `cems_wpms_connected_measurement_points` |
+| `parameterName`, `parameterLabel` | backend derive จาก `parameterCode` และ `unit` |
+| `notificationStatus` | backend ตั้งเป็น `AUTO`; ภายนอกส่งมาไม่ได้ |
 
 ### Response: Created
 
@@ -348,7 +346,7 @@ curl -X POST "http://localhost:3000/api/v1/integrations/alert-events" \
     "id": 1001,
     "created": true,
     "duplicate": false,
-    "idempotencyKey": "CEMS:S0001:SO2:STANDARD_EXCEEDED:2026-03-02:20",
+    "idempotencyKey": "CEMS:S0001:so2:STANDARD_EXCEEDED:2026-03-02T20:00:00+07:00",
     "alertType": "STANDARD_EXCEEDED",
     "systemType": "CEMS",
     "notificationStatus": "AUTO",
@@ -366,7 +364,7 @@ curl -X POST "http://localhost:3000/api/v1/integrations/alert-events" \
     "id": 1001,
     "created": false,
     "duplicate": true,
-    "idempotencyKey": "CEMS:S0001:SO2:STANDARD_EXCEEDED:2026-03-02:20",
+    "idempotencyKey": "CEMS:S0001:so2:STANDARD_EXCEEDED:2026-03-02T20:00:00+07:00",
     "message": "Alert event already exists"
   }
 }
@@ -625,7 +623,7 @@ C:\inetpub\wwwroot\POMS-app\backend
 
 1. รัน migration บน staging DB
 2. ยิง external POST 1 รายการ แล้วเช็ค `alert_events`
-3. ยิง POST ซ้ำด้วย `idempotencyKey` เดิม แล้วเช็คว่าไม่เกิด row ซ้ำ
+3. ยิง POST payload เดิมซ้ำ แล้วเช็คว่า backend generate `idempotencyKey` เดิมและไม่เกิด row ซ้ำ
 4. รัน `npm run job:alerts:summary`
 5. รัน `npm run job:alerts:daily`
 6. seed 60m ให้มีค่านิ่ง/0/ติดลบ 5 ครั้งติดกัน แล้วรัน `npm run job:alerts:hourly`

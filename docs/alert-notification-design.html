@@ -772,8 +772,9 @@ ON measurement_daily_summaries(station_id, parameter_code, summary_date);</pre>
     <section class="section">
       <p>
         API นี้ใช้รับเฉพาะเหตุการณ์ที่อีกทีมประเมินแล้วว่าเกินมาตรฐานหรือเกินค่า EIA เท่านั้น
-        ฝั่ง POMS ไม่ต้องคำนวณซ้ำว่าเกินหรือไม่ แต่ต้อง upsert ด้วย <code>idempotencyKey</code>
-        แล้วตรวจว่า event นี้เคยส่งแจ้งเตือนไปแล้วหรือยัง
+        ฝั่ง POMS ไม่ต้องคำนวณซ้ำว่าเกินหรือไม่ โดย external ส่งเฉพาะข้อมูลเหตุการณ์ขั้นต่ำ
+        แล้ว backend จะสร้าง <code>idempotencyKey</code>, <code>alertType</code>,
+        <code>displaySystemType</code> และ <code>notificationStatus</code> เอง
       </p>
 
       <h3>Endpoint</h3>
@@ -782,8 +783,8 @@ ON measurement_daily_summaries(station_id, parameter_code, summary_date);</pre>
       <div class="note">
         ขอบเขตของ API นี้: ระบบภายนอกต้อง POST มาเฉพาะรายการที่ยืนยันแล้วว่า
         <strong>เกินมาตรฐาน</strong> หรือ <strong>เกินค่า EIA</strong> เท่านั้น
-        ฝั่ง POMS ทำหน้าที่ตรวจ <code>idempotencyKey</code>, บันทึก/อัปเดต <code>alert_events</code>,
-        และเช็ค <code>alert_notifications</code> ว่าเคยส่งแจ้งเตือน event นี้แล้วหรือยัง
+        ฝั่ง POMS ทำหน้าที่ lookup ข้อมูลโรงงาน/จุดตรวจจาก <code>stationId</code>/<code>pointCode</code>,
+        สร้าง event key กันซ้ำ, บันทึก <code>alert_events</code>, และตั้งสถานะเป็น <code>AUTO</code>
       </div>
 
       <h3>ตัวอย่าง API แบบเต็ม</h3>
@@ -795,45 +796,52 @@ ON measurement_daily_summaries(station_id, parameter_code, summary_date);</pre>
 
       <h3>Request: CEMS เกินมาตรฐาน</h3>
       <pre>curl -X POST "http://localhost:3000/api/v1/integrations/alert-events" \
-  -H "Content-Type: application/json" \
+  -H "Content-Type: application/json; charset=utf-8" \
   -H "X-API-Key: $ALERT_EVENT_API_KEY" \
   -d '{
-    "idempotencyKey": "CEMS:S0001:SO2:STANDARD_EXCEEDED:2026-03-02:20",
     "systemType": "CEMS",
-    "displaySystemType": "CEMS",
-    "alertType": "STANDARD_EXCEEDED",
-
-    "factoryId": "factory-001",
-    "factoryName": "บริษัท 2584 จำกัด",
-    "factoryRegistrationNo": "3-xx-xx",
-
     "stationId": "S0001",
     "pointCode": "S0001",
-    "pointName": "Stack 1",
-    "pointType": "STACK",
-
     "parameterCode": "so2",
-    "parameterName": "SO2",
-    "parameterLabel": "SO2 (ppm)",
     "unit": "ppm",
-
     "eventDate": "2026-03-02",
-    "startedAt": "2026-03-02T20:00:00+07:00",
-    "endedAt": "2026-03-02T20:59:59+07:00",
-
+    "startTime": "20:00",
+    "endTime": "20:59",
     "measuredValue": 150,
     "thresholdValue": 60,
-    "thresholdType": "STANDARD",
-    "notificationStatus": "AUTO",
-
-    "sourcePayload": {
-      "externalSystem": "EIA-CEMS",
-      "externalReferenceId": "external-123",
-      "sourceTable": "S0001_data_60m",
-      "sourceDate": "2026-03-02",
-      "sourceTime": "20:00:00"
-    }
+    "thresholdType": "STANDARD"
   }'</pre>
+
+      <h3>Field ที่ external API ต้องส่ง</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Field</th>
+            <th>ตัวอย่าง</th>
+            <th>หมายเหตุ</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><code>systemType</code></td><td><code>CEMS</code>, <code>WPMS</code></td><td>BOD/COD Online ใช้ <code>WPMS</code></td></tr>
+          <tr><td><code>stationId</code></td><td><code>S0001</code></td><td>รหัสจุดตรวจวัด ใช้ lookup โรงงาน/ชื่อจุดใน POMS</td></tr>
+          <tr><td><code>pointCode</code></td><td><code>S0001</code></td><td>optional ถ้ามีให้ส่งมา</td></tr>
+          <tr><td><code>parameterCode</code></td><td><code>so2</code>, <code>cod</code></td><td>backend แปลงเป็น lower-case</td></tr>
+          <tr><td><code>unit</code></td><td><code>ppm</code>, <code>mg/l</code></td><td>ใช้สร้าง parameter label</td></tr>
+          <tr><td><code>eventDate</code></td><td><code>2026-03-02</code></td><td>วันที่ของเหตุการณ์</td></tr>
+          <tr><td><code>startTime</code>, <code>endTime</code></td><td><code>20:00</code>, <code>20:59</code></td><td>เวลาแบบ HH:mm; backend สร้าง startedAt/endedAt เป็นเวลาไทย +07:00 เอง</td></tr>
+          <tr><td><code>measuredValue</code></td><td><code>150</code></td><td>ค่าที่ตรวจวัดได้</td></tr>
+          <tr><td><code>thresholdValue</code></td><td><code>60</code></td><td>ค่ามาตรฐาน/ค่า EIA ที่ใช้เทียบ</td></tr>
+          <tr><td><code>thresholdType</code></td><td><code>STANDARD</code>, <code>EIA</code></td><td>backend ใช้สร้าง alertType เอง</td></tr>
+        </tbody>
+      </table>
+
+      <div class="note">
+        External API ไม่ต้องส่ง <code>idempotencyKey</code>, <code>alertType</code>,
+        <code>displaySystemType</code>, <code>factoryId</code>, <code>factoryName</code>,
+        <code>factoryRegistrationNo</code>, <code>pointName</code>, <code>pointType</code>,
+        <code>parameterName</code>, <code>parameterLabel</code> หรือ <code>notificationStatus</code>
+        เพราะ backend เป็นเจ้าของข้อมูลกลุ่มนี้
+      </div>
 
       <h3>Response: สร้าง event ใหม่</h3>
       <pre>HTTP/1.1 201 Created
@@ -845,7 +853,7 @@ Content-Type: application/json
     "id": 1001,
     "created": true,
     "duplicate": false,
-    "idempotencyKey": "CEMS:S0001:SO2:STANDARD_EXCEEDED:2026-03-02:20",
+    "idempotencyKey": "CEMS:S0001:so2:STANDARD_EXCEEDED:2026-03-02T20:00:00+07:00",
     "alertType": "STANDARD_EXCEEDED",
     "systemType": "CEMS",
     "displaySystemType": "CEMS",
@@ -871,7 +879,7 @@ Content-Type: application/json
   }
 }</pre>
 
-      <h3>Response: ยิงซ้ำด้วย idempotencyKey เดิม</h3>
+      <h3>Response: ยิง payload เดิมซ้ำ</h3>
       <pre>HTTP/1.1 200 OK
 Content-Type: application/json
 
@@ -881,51 +889,27 @@ Content-Type: application/json
     "id": 1001,
     "created": false,
     "duplicate": true,
-    "idempotencyKey": "CEMS:S0001:SO2:STANDARD_EXCEEDED:2026-03-02:20",
+    "idempotencyKey": "CEMS:S0001:so2:STANDARD_EXCEEDED:2026-03-02T20:00:00+07:00",
     "message": "Alert event already exists"
   }
 }</pre>
 
       <h3>Request: BOD/COD Online เกินค่า EIA</h3>
       <pre>curl -X POST "http://localhost:3000/api/v1/integrations/alert-events" \
-  -H "Content-Type: application/json" \
+  -H "Content-Type: application/json; charset=utf-8" \
   -H "X-API-Key: $ALERT_EVENT_API_KEY" \
   -d '{
-    "idempotencyKey": "WPMS:P0001:COD:EIA_EXCEEDED:2026-03-02:20",
     "systemType": "WPMS",
-    "displaySystemType": "BOD_COD_ONLINE",
-    "alertType": "EIA_EXCEEDED",
-
-    "factoryId": "factory-002",
-    "factoryName": "บริษัท สวัสดี จำกัด",
-    "factoryRegistrationNo": "3-yy-yy",
-
     "stationId": "P0001",
     "pointCode": "P0001",
-    "pointName": "จุดที่ 1",
-    "pointType": "WASTEWATER",
-
     "parameterCode": "cod",
-    "parameterName": "COD",
-    "parameterLabel": "COD (mg/l)",
     "unit": "mg/l",
-
     "eventDate": "2026-03-02",
-    "startedAt": "2026-03-02T20:00:00+07:00",
-    "endedAt": "2026-03-02T20:59:59+07:00",
-
+    "startTime": "20:00",
+    "endTime": "20:59",
     "measuredValue": 150,
     "thresholdValue": 100,
-    "thresholdType": "EIA",
-    "notificationStatus": "AUTO",
-
-    "sourcePayload": {
-      "externalSystem": "EIA-WPMS",
-      "externalReferenceId": "external-456",
-      "sourceTable": "P0001_data_60m",
-      "sourceDate": "2026-03-02",
-      "sourceTime": "20:00:00"
-    }
+    "thresholdType": "EIA"
   }'</pre>
 
       <h3>Response: validation error</h3>
@@ -939,8 +923,8 @@ Content-Type: application/json
     "message": "Invalid alert event payload",
     "details": [
       {
-        "field": "thresholdType",
-        "message": "thresholdType must be EIA when alertType is EIA_EXCEEDED"
+        "field": "notificationStatus",
+        "message": "Unrecognized key: notificationStatus"
       },
       {
         "field": "measuredValue",
@@ -962,261 +946,14 @@ Content-Type: application/json
   }
 }</pre>
 
-      <h3>ข้อมูลที่ External API ต้องส่ง</h3>
-      <p>
-        ถ้าอีกทีมส่ง alert event มาให้ POMS โดยตรง ให้ส่งข้อมูลให้ครบพอสำหรับ 3 งาน:
-        กันข้อมูลซ้ำ, แสดงผลในตาราง, และตรวจสอบย้อนหลังว่า event นี้อ้างอิงค่าจากไหน
-      </p>
-
-      <table>
-        <thead>
-          <tr>
-            <th>กลุ่มข้อมูล</th>
-            <th>Field</th>
-            <th>Required</th>
-            <th>ตัวอย่าง</th>
-            <th>หมายเหตุ</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>กันข้อมูลซ้ำ</td>
-            <td><code>idempotencyKey</code></td>
-            <td>Yes</td>
-            <td><code>CEMS:S0001:SO2:STANDARD_EXCEEDED:2026-03-02:20</code></td>
-            <td>ใช้ upsert กันยิงซ้ำหรือ job rerun แล้วเกิด event ซ้ำ</td>
-          </tr>
-          <tr>
-            <td>ประเภทระบบ</td>
-            <td><code>systemType</code></td>
-            <td>Yes</td>
-            <td><code>CEMS</code>, <code>WPMS</code></td>
-            <td>ในระบบเดิม BOD/COD Online ควร map เป็น <code>WPMS</code></td>
-          </tr>
-          <tr>
-            <td>ชื่อแสดงผล</td>
-            <td><code>displaySystemType</code></td>
-            <td>Yes</td>
-            <td><code>CEMS</code>, <code>BOD_COD_ONLINE</code></td>
-            <td>ใช้ให้ frontend แสดงชื่อเมนู/รายงานชัดเจน</td>
-          </tr>
-          <tr>
-            <td>ประเภท alert</td>
-            <td><code>alertType</code></td>
-            <td>Yes</td>
-            <td><code>STANDARD_EXCEEDED</code>, <code>EIA_EXCEEDED</code></td>
-            <td>External API ส่งมาเฉพาะ alert ที่เกินมาตรฐาน/EIA แล้ว ส่วน 80%, no report, abnormal ให้ POMS คำนวณจาก 60m</td>
-          </tr>
-          <tr>
-            <td>โรงงาน</td>
-            <td><code>factoryId</code></td>
-            <td>Recommended</td>
-            <td><code>factory-001</code></td>
-            <td>ถ้าไม่ส่ง POMS ต้อง lookup จาก <code>stationId</code>; ส่งมาจะช่วยลด ambiguity</td>
-          </tr>
-          <tr>
-            <td>โรงงาน</td>
-            <td><code>factoryName</code></td>
-            <td>Recommended</td>
-            <td><code>บริษัท 2584 จำกัด</code></td>
-            <td>ใช้เป็น snapshot แสดงผลย้อนหลัง แม้ชื่อใน master เปลี่ยนภายหลัง</td>
-          </tr>
-          <tr>
-            <td>โรงงาน</td>
-            <td><code>factoryRegistrationNo</code></td>
-            <td>Recommended</td>
-            <td><code>3-xx-xx</code></td>
-            <td>ใช้แสดงคอลัมน์เลขทะเบียนโรงงานตามรูปตัวอย่าง</td>
-          </tr>
-          <tr>
-            <td>จุดตรวจวัด</td>
-            <td><code>stationId</code></td>
-            <td>Yes</td>
-            <td><code>S0001</code>, <code>P0001</code></td>
-            <td>รหัสหลักสำหรับจับกับตาราง <code>{stationId}_data_60m</code> และจุดตรวจวัดใน POMS</td>
-          </tr>
-          <tr>
-            <td>จุดตรวจวัด</td>
-            <td><code>pointCode</code></td>
-            <td>Recommended</td>
-            <td><code>S0001</code></td>
-            <td>ถ้า pointCode กับ stationId คือค่าเดียวกัน ส่งซ้ำได้เพื่อความชัดเจน</td>
-          </tr>
-          <tr>
-            <td>จุดตรวจวัด</td>
-            <td><code>pointName</code></td>
-            <td>Yes</td>
-            <td><code>Stack 1</code>, <code>จุดที่ 1</code></td>
-            <td>ใช้แสดงคอลัมน์จุดตรวจวัด</td>
-          </tr>
-          <tr>
-            <td>จุดตรวจวัด</td>
-            <td><code>pointType</code></td>
-            <td>Optional</td>
-            <td><code>STACK</code>, <code>WASTEWATER</code></td>
-            <td>ใช้กรอง/จัดกลุ่มเพิ่มเติม</td>
-          </tr>
-          <tr>
-            <td>พารามิเตอร์</td>
-            <td><code>parameterCode</code></td>
-            <td>Yes</td>
-            <td><code>so2</code>, <code>nox</code>, <code>bod</code>, <code>cod</code></td>
-            <td>ควรตรงกับ prefix ใน 60m เช่น <code>so2_value</code>, <code>cod_value</code></td>
-          </tr>
-          <tr>
-            <td>พารามิเตอร์</td>
-            <td><code>parameterName</code></td>
-            <td>Yes</td>
-            <td><code>SO2</code>, <code>NOx</code>, <code>BOD</code>, <code>COD</code></td>
-            <td>ชื่อสั้นของพารามิเตอร์</td>
-          </tr>
-          <tr>
-            <td>พารามิเตอร์</td>
-            <td><code>parameterLabel</code></td>
-            <td>Yes</td>
-            <td><code>SO2 (ppm)</code>, <code>COD (mg/l)</code></td>
-            <td>ต้องมีหน่วยใน label เพื่อแสดงผลไม่กำกวม</td>
-          </tr>
-          <tr>
-            <td>พารามิเตอร์</td>
-            <td><code>unit</code></td>
-            <td>Yes</td>
-            <td><code>ppm</code>, <code>mg/l</code></td>
-            <td>ใช้แสดงคอลัมน์หน่วยและตรวจย้อนหลัง</td>
-          </tr>
-          <tr>
-            <td>เวลาเกิดเหตุ</td>
-            <td><code>eventDate</code></td>
-            <td>Yes</td>
-            <td><code>2026-03-02</code></td>
-            <td>วันที่ของข้อมูลตรวจวัด ไม่ใช่วันที่ส่ง API</td>
-          </tr>
-          <tr>
-            <td>เวลาเกิดเหตุ</td>
-            <td><code>startedAt</code></td>
-            <td>Yes</td>
-            <td><code>2026-03-02T20:00:00+07:00</code></td>
-            <td>เวลาเริ่มช่วงตรวจวัด เช่น 20.00</td>
-          </tr>
-          <tr>
-            <td>เวลาเกิดเหตุ</td>
-            <td><code>endedAt</code></td>
-            <td>Yes</td>
-            <td><code>2026-03-02T20:59:59+07:00</code></td>
-            <td>เวลาสิ้นสุดช่วงตรวจวัด เช่น 20.59</td>
-          </tr>
-          <tr>
-            <td>ค่าและเกณฑ์</td>
-            <td><code>measuredValue</code></td>
-            <td>Yes</td>
-            <td><code>150</code></td>
-            <td>ค่าผลตรวจวัดที่เกิน ต้องเป็นตัวเลข</td>
-          </tr>
-          <tr>
-            <td>ค่าและเกณฑ์</td>
-            <td><code>thresholdValue</code></td>
-            <td>Yes</td>
-            <td><code>60</code>, <code>100</code></td>
-            <td>ค่าเกณฑ์ที่ใช้ตัดสินว่าเกิน</td>
-          </tr>
-          <tr>
-            <td>ค่าและเกณฑ์</td>
-            <td><code>thresholdType</code></td>
-            <td>Yes</td>
-            <td><code>STANDARD</code>, <code>EIA</code></td>
-            <td>ต้องสัมพันธ์กับ <code>alertType</code></td>
-          </tr>
-          <tr>
-            <td>สถานะแจ้งเตือน</td>
-            <td><code>notificationStatus</code></td>
-            <td>Optional</td>
-            <td><code>AUTO</code>, <code>OFFICER</code></td>
-            <td>ถ้าไม่ส่ง ให้ default เป็น <code>AUTO</code></td>
-          </tr>
-          <tr>
-            <td>อ้างอิงต้นทาง</td>
-            <td><code>sourcePayload</code></td>
-            <td>Recommended</td>
-            <td><code>{ "externalReferenceId": "external-123" }</code></td>
-            <td>เก็บ payload หรือ reference จากระบบภายนอกสำหรับตรวจสอบย้อนหลัง</td>
-          </tr>
-        </tbody>
-      </table>
-
-      <h3>Validation หลักที่ POMS ควรตรวจ</h3>
+      <h3>สรุป Contract ใหม่</h3>
       <ul>
-        <li><code>alertType</code> ที่รับจาก external API ควรจำกัดที่ <code>STANDARD_EXCEEDED</code> และ <code>EIA_EXCEEDED</code></li>
-        <li><code>systemType</code> ต้องเป็น <code>CEMS</code> หรือ <code>WPMS</code></li>
-        <li><code>thresholdType</code> ต้องสัมพันธ์กับ <code>alertType</code>: <code>STANDARD_EXCEEDED</code> ใช้ <code>STANDARD</code>, <code>EIA_EXCEEDED</code> ใช้ <code>EIA</code></li>
-        <li><code>measuredValue</code> และ <code>thresholdValue</code> ต้องเป็นตัวเลข; ฝั่ง external เป็นผู้ยืนยันว่า event นี้เกินมาตรฐาน/EIA แล้ว</li>
-        <li><code>eventDate</code>, <code>startedAt</code>, <code>endedAt</code> ต้องเป็นช่วงเวลาของข้อมูลตรวจวัด และ <code>startedAt</code> ต้องไม่มากกว่า <code>endedAt</code></li>
-        <li><code>stationId</code> และ <code>parameterCode</code> ควรตรวจว่ามีอยู่ในจุดตรวจวัดที่เชื่อมต่อแล้ว หรืออย่างน้อยบันทึกเป็น pending/error ถ้าไม่พบ master</li>
+        <li>External API ส่งเฉพาะ <code>systemType</code>, <code>stationId</code>, <code>pointCode</code>, <code>parameterCode</code>, <code>unit</code>, วันเวลา, ค่าที่วัดได้, ค่าเกณฑ์ และ <code>thresholdType</code></li>
+        <li>Backend สร้าง <code>idempotencyKey</code> จาก <code>systemType</code>, <code>stationId</code>, <code>parameterCode</code>, <code>thresholdType</code>, <code>eventDate</code> และ <code>startTime</code></li>
+        <li>Backend derive <code>alertType</code> จาก <code>thresholdType</code>: <code>STANDARD</code> เป็น <code>STANDARD_EXCEEDED</code>, <code>EIA</code> เป็น <code>EIA_EXCEEDED</code></li>
+        <li>Backend lookup ข้อมูลโรงงาน/ชื่อจุดจาก <code>cems_wpms_connected_measurement_points</code></li>
+        <li>Backend ตั้ง <code>notificationStatus</code> เป็น <code>AUTO</code> เอง และ reject ถ้า external ส่ง field นี้มา</li>
       </ul>
-
-      <h3>Minimal Payload ที่รับได้</h3>
-      <pre>{
-  "idempotencyKey": "CEMS:S0001:SO2:STANDARD_EXCEEDED:2026-03-02:20",
-  "systemType": "CEMS",
-  "displaySystemType": "CEMS",
-  "alertType": "STANDARD_EXCEEDED",
-  "stationId": "S0001",
-  "pointName": "Stack 1",
-  "parameterCode": "so2",
-  "parameterName": "SO2",
-  "parameterLabel": "SO2 (ppm)",
-  "unit": "ppm",
-  "eventDate": "2026-03-02",
-  "startedAt": "2026-03-02T20:00:00+07:00",
-  "endedAt": "2026-03-02T20:59:59+07:00",
-  "measuredValue": 150,
-  "thresholdValue": 60,
-  "thresholdType": "STANDARD"
-}</pre>
-
-      <h3>Payload ตัวอย่าง: CEMS เกินมาตรฐาน</h3>
-      <pre>{
-  "idempotencyKey": "CEMS:S0001:SO2:STANDARD_EXCEEDED:2026-03-02:20",
-  "systemType": "CEMS",
-  "displaySystemType": "CEMS",
-  "alertType": "STANDARD_EXCEEDED",
-  "stationId": "S0001",
-  "pointName": "Stack 1",
-  "parameterCode": "so2",
-  "parameterName": "SO2",
-  "parameterLabel": "SO2 (ppm)",
-  "unit": "ppm",
-  "eventDate": "2026-03-02",
-  "startedAt": "2026-03-02T20:00:00+07:00",
-  "endedAt": "2026-03-02T20:59:59+07:00",
-  "measuredValue": 150,
-  "thresholdValue": 60,
-  "thresholdType": "STANDARD",
-  "notificationStatus": "AUTO",
-  "sourcePayload": {
-    "externalReferenceId": "external-123"
-  }
-}</pre>
-
-      <h3>Payload ตัวอย่าง: BOD/COD Online เกินค่า EIA</h3>
-      <pre>{
-  "idempotencyKey": "WPMS:P0001:COD:EIA_EXCEEDED:2026-03-02:20",
-  "systemType": "WPMS",
-  "displaySystemType": "BOD_COD_ONLINE",
-  "alertType": "EIA_EXCEEDED",
-  "stationId": "P0001",
-  "pointName": "จุดที่ 1",
-  "parameterCode": "cod",
-  "parameterName": "COD",
-  "parameterLabel": "COD (mg/l)",
-  "unit": "mg/l",
-  "eventDate": "2026-03-02",
-  "startedAt": "2026-03-02T20:00:00+07:00",
-  "endedAt": "2026-03-02T20:59:59+07:00",
-  "measuredValue": 150,
-  "thresholdValue": 100,
-  "thresholdType": "EIA",
-  "notificationStatus": "AUTO"
-}</pre>
     </section>
 
     <h2>7. API สำหรับหน้าบ้าน</h2>
@@ -1749,7 +1486,7 @@ C:\inetpub\wwwroot\POMS-app\backend</pre>
       <ol>
         <li>รัน migration บน staging DB</li>
         <li>ยิง <code>POST /api/v1/integrations/alert-events</code> 1 รายการ แล้วเช็คว่าเกิด <code>alert_events</code></li>
-        <li>ยิง POST ซ้ำด้วย <code>idempotencyKey</code> เดิม แล้วเช็คว่าไม่เกิด row ซ้ำ</li>
+        <li>ยิง POST payload เดิมซ้ำ แล้วเช็คว่า backend generate <code>idempotencyKey</code> เดิมและไม่เกิด row ซ้ำ</li>
         <li>รัน <code>npm run job:alerts:summary</code> กับวันที่ทดสอบ</li>
         <li>รัน <code>npm run job:alerts:daily</code> แล้วเช็ค 80% และ no report</li>
         <li>seed 60m ให้มีค่านิ่ง/0/ติดลบ 5 ครั้งติดกัน แล้วรัน <code>npm run job:alerts:hourly</code></li>

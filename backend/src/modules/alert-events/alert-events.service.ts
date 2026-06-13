@@ -22,7 +22,25 @@ export const alertEventsService = {
       };
     }
 
-    const event = await alertEventsRepository.createFromIntegration(input);
+    const connectedPoint = await alertEventsRepository.findConnectedMeasurementPointByStation({
+      systemType: input.systemType,
+      stationId: input.stationId,
+      pointCode: input.pointCode ?? null,
+    });
+    const enrichedInput = connectedPoint
+      ? {
+          ...input,
+          connectedMeasurementPointId: connectedPoint.id,
+          factoryId: connectedPoint.factoryId,
+          factoryName: connectedPoint.factoryName,
+          factoryRegistrationNo: connectedPoint.factoryRegistrationNo,
+          pointCode: connectedPoint.pointCode ?? input.pointCode ?? input.stationId,
+          pointName: connectedPoint.pointName,
+          pointType: connectedPoint.pointType,
+        }
+      : input;
+
+    const event = await alertEventsRepository.createFromIntegration(enrichedInput);
     return {
       created: true,
       duplicate: false,
