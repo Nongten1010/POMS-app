@@ -788,14 +788,15 @@ ON measurement_daily_summaries(station_id, parameter_code, summary_date);</pre>
 
       <h3>ตัวอย่าง API แบบเต็ม</h3>
       <p>
-        API ชุดนี้ควรใช้ integration key เหมือน API ภายนอกชุดอื่นของระบบ โดยส่งผ่าน header
-        <code>X-API-Key</code> และ backend อ่าน key จาก environment variable <code>INTEGRATION_API_KEYS</code>
+        API ชุดนี้ใช้ alert-event integration key โดยส่งผ่าน header <code>X-API-Key</code>
+        และ backend อ่าน key จาก environment variable <code>ALERT_EVENT_API_KEYS</code>
+        ถ้ายังไม่ได้ตั้งค่าใหม่ ระบบ fallback ไปอ่าน <code>INTEGRATION_API_KEYS</code> ชั่วคราวเพื่อ backward compatibility
       </p>
 
       <h3>Request: CEMS เกินมาตรฐาน</h3>
       <pre>curl -X POST "http://localhost:3000/api/v1/integrations/alert-events" \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: $INTEGRATION_API_KEY" \
+  -H "X-API-Key: $ALERT_EVENT_API_KEY" \
   -d '{
     "idempotencyKey": "CEMS:S0001:SO2:STANDARD_EXCEEDED:2026-03-02:20",
     "systemType": "CEMS",
@@ -888,7 +889,7 @@ Content-Type: application/json
       <h3>Request: BOD/COD Online เกินค่า EIA</h3>
       <pre>curl -X POST "http://localhost:3000/api/v1/integrations/alert-events" \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: $INTEGRATION_API_KEY" \
+  -H "X-API-Key: $ALERT_EVENT_API_KEY" \
   -d '{
     "idempotencyKey": "WPMS:P0001:COD:EIA_EXCEEDED:2026-03-02:20",
     "systemType": "WPMS",
@@ -1652,9 +1653,19 @@ PATCH /api/v1/alert-events/:id/status</pre>
         </thead>
         <tbody>
           <tr>
+            <td><code>DEVICE_CONFIG_API_KEYS</code></td>
+            <td>key สำหรับดึง device config เท่านั้น</td>
+            <td><code>device-config-key-1,device-config-key-2</code></td>
+          </tr>
+          <tr>
+            <td><code>ALERT_EVENT_API_KEYS</code></td>
+            <td>key สำหรับ POST alert event เท่านั้น</td>
+            <td><code>alert-event-key-1,alert-event-key-2</code></td>
+          </tr>
+          <tr>
             <td><code>INTEGRATION_API_KEYS</code></td>
-            <td>key สำหรับ external API</td>
-            <td><code>key-1,key-2</code></td>
+            <td>fallback ชั่วคราวสำหรับ deployment เดิม</td>
+            <td><code>legacy-key</code></td>
           </tr>
           <tr>
             <td><code>TZ</code> หรือ config timezone</td>

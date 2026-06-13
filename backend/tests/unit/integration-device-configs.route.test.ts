@@ -16,6 +16,8 @@ describe('integration device configs route', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     process.env.INTEGRATION_API_KEYS = 'test-integration-key';
+    process.env.DEVICE_CONFIG_API_KEYS = '';
+    process.env.ALERT_EVENT_API_KEYS = '';
     mockedIntegrationDeviceConfigsService.getByStationId.mockResolvedValue({
       stationId: 'S0002',
       deviceConfigs: [
@@ -99,6 +101,34 @@ describe('integration device configs route', () => {
     const response = await request(app)
       .get('/api/v1/integrations/device-configs/S0002')
       .set('X-API-Key', 'wrong-key');
+
+    expect(response.status).toBe(401);
+    expect(mockedIntegrationDeviceConfigsService.getByStationId).not.toHaveBeenCalled();
+  });
+
+  it('accepts device config scoped API keys', async () => {
+    process.env.INTEGRATION_API_KEYS = '';
+    process.env.DEVICE_CONFIG_API_KEYS = 'device-config-key';
+    process.env.ALERT_EVENT_API_KEYS = 'alert-event-key';
+    const app = createApp();
+
+    const response = await request(app)
+      .get('/api/v1/integrations/device-configs/S0002')
+      .set('X-API-Key', 'device-config-key');
+
+    expect(response.status).toBe(200);
+    expect(mockedIntegrationDeviceConfigsService.getByStationId).toHaveBeenCalledWith('S0002');
+  });
+
+  it('rejects alert event scoped API keys for device config endpoints', async () => {
+    process.env.INTEGRATION_API_KEYS = '';
+    process.env.DEVICE_CONFIG_API_KEYS = 'device-config-key';
+    process.env.ALERT_EVENT_API_KEYS = 'alert-event-key';
+    const app = createApp();
+
+    const response = await request(app)
+      .get('/api/v1/integrations/device-configs/S0002')
+      .set('X-API-Key', 'alert-event-key');
 
     expect(response.status).toBe(401);
     expect(mockedIntegrationDeviceConfigsService.getByStationId).not.toHaveBeenCalled();

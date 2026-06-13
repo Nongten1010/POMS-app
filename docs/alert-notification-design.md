@@ -263,15 +263,17 @@ X-API-Key: <integration-key>
 Backend อ่าน key จาก:
 
 ```bash
-INTEGRATION_API_KEYS=key-1,key-2
+ALERT_EVENT_API_KEYS=alert-event-key-1,alert-event-key-2
 ```
+
+หมายเหตุ backward compatibility: ถ้ายังไม่ได้ตั้ง `ALERT_EVENT_API_KEYS` ระบบจะ fallback ไปอ่าน `INTEGRATION_API_KEYS` ชั่วคราวเพื่อไม่ให้ deployment เดิมพังทันที แต่ production ใหม่ควรแยก key ตาม endpoint
 
 ### Request: CEMS เกินมาตรฐาน
 
 ```bash
 curl -X POST "http://localhost:3000/api/v1/integrations/alert-events" \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: $INTEGRATION_API_KEY" \
+  -H "X-API-Key: $ALERT_EVENT_API_KEY" \
   -d '{
     "idempotencyKey": "CEMS:S0001:SO2:STANDARD_EXCEEDED:2026-03-02:20",
     "systemType": "CEMS",
@@ -310,7 +312,7 @@ curl -X POST "http://localhost:3000/api/v1/integrations/alert-events" \
 ```bash
 curl -X POST "http://localhost:3000/api/v1/integrations/alert-events" \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: $INTEGRATION_API_KEY" \
+  -H "X-API-Key: $ALERT_EVENT_API_KEY" \
   -d '{
     "idempotencyKey": "WPMS:P0001:COD:EIA_EXCEEDED:2026-03-02:20",
     "systemType": "WPMS",

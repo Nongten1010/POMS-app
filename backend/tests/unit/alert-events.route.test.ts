@@ -21,6 +21,8 @@ describe('alert events routes', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     process.env.INTEGRATION_API_KEYS = 'test-integration-key';
+    process.env.DEVICE_CONFIG_API_KEYS = '';
+    process.env.ALERT_EVENT_API_KEYS = '';
   });
 
   it('creates an external exceeded alert event with an integration API key', async () => {
@@ -90,6 +92,41 @@ describe('alert events routes', () => {
 
     expect(response.status).toBe(400);
     expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    expect(mockedAlertEventsService.createFromIntegration).not.toHaveBeenCalled();
+  });
+
+  it('accepts alert event scoped API keys', async () => {
+    process.env.INTEGRATION_API_KEYS = '';
+    process.env.DEVICE_CONFIG_API_KEYS = 'device-config-key';
+    process.env.ALERT_EVENT_API_KEYS = 'alert-event-key';
+    mockedAlertEventsService.createFromIntegration.mockResolvedValue({
+      created: true,
+      duplicate: false,
+      event: alertEventFixture(),
+    });
+    const app = createApp();
+
+    const response = await request(app)
+      .post('/api/v1/integrations/alert-events')
+      .set('X-API-Key', 'alert-event-key')
+      .send(integrationPayload());
+
+    expect(response.status).toBe(201);
+    expect(mockedAlertEventsService.createFromIntegration).toHaveBeenCalled();
+  });
+
+  it('rejects device config scoped API keys for alert event endpoints', async () => {
+    process.env.INTEGRATION_API_KEYS = '';
+    process.env.DEVICE_CONFIG_API_KEYS = 'device-config-key';
+    process.env.ALERT_EVENT_API_KEYS = 'alert-event-key';
+    const app = createApp();
+
+    const response = await request(app)
+      .post('/api/v1/integrations/alert-events')
+      .set('X-API-Key', 'device-config-key')
+      .send(integrationPayload());
+
+    expect(response.status).toBe(401);
     expect(mockedAlertEventsService.createFromIntegration).not.toHaveBeenCalled();
   });
 

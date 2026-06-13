@@ -4,30 +4,60 @@ import { UnauthorizedError } from '../../shared/errors/AppError';
 
 const API_KEY_HEADER = 'x-api-key';
 
-export function authenticateIntegrationApiKey(
-  req: Request,
-  _res: Response,
-  next: NextFunction,
-): void {
-  const apiKey = req.get(API_KEY_HEADER)?.trim();
-  if (!apiKey) {
-    return next(new UnauthorizedError('Missing X-API-Key header'));
-  }
+type IntegrationApiKeyEnvName =
+  | 'INTEGRATION_API_KEYS'
+  | 'DEVICE_CONFIG_API_KEYS'
+  | 'ALERT_EVENT_API_KEYS';
 
-  if (!isAllowedApiKey(apiKey)) {
-    return next(new UnauthorizedError('Invalid integration API key'));
-  }
+export const authenticateIntegrationApiKey = authenticateIntegrationApiKeyFor(
+  'INTEGRATION_API_KEYS',
+);
+export const authenticateDeviceConfigApiKey = authenticateIntegrationApiKeyFor(
+  'DEVICE_CONFIG_API_KEYS',
+  'INTEGRATION_API_KEYS',
+);
+export const authenticateAlertEventApiKey = authenticateIntegrationApiKeyFor(
+  'ALERT_EVENT_API_KEYS',
+  'INTEGRATION_API_KEYS',
+);
 
-  return next();
+function authenticateIntegrationApiKeyFor(
+  primaryEnvName: IntegrationApiKeyEnvName,
+  fallbackEnvName?: IntegrationApiKeyEnvName,
+) {
+  return (req: Request, _res: Response, next: NextFunction): void => {
+    const apiKey = req.get(API_KEY_HEADER)?.trim();
+    if (!apiKey) {
+      return next(new UnauthorizedError('Missing X-API-Key header'));
+    }
+
+    if (!isAllowedApiKey(apiKey, primaryEnvName, fallbackEnvName)) {
+      return next(new UnauthorizedError('Invalid integration API key'));
+    }
+
+    return next();
+  };
 }
 
-function isAllowedApiKey(apiKey: string): boolean {
-  const allowedKeys = (process.env.INTEGRATION_API_KEYS ?? '')
+function isAllowedApiKey(
+  apiKey: string,
+  primaryEnvName: IntegrationApiKeyEnvName,
+  fallbackEnvName?: IntegrationApiKeyEnvName,
+): boolean {
+  const primaryKeys = parseApiKeys(process.env[primaryEnvName]);
+  const allowedKeys =
+    primaryKeys.length > 0 || !fallbackEnvName
+      ? primaryKeys
+      : parseApiKeys(process.env[fallbackEnvName]);
+
+  return allowedKeys.some((allowedKey) => safeEquals(apiKey, allowedKey));
+}
+
+function parseApiKeys(value: string | undefined): string[] {
+  return (value ?? '')
     .split(',')
     .map((key) => key.trim())
     .filter(Boolean);
-
-  return allowedKeys.some((allowedKey) => safeEquals(apiKey, allowedKey));
 }
 
 function safeEquals(candidate: string, expected: string): boolean {

@@ -16,11 +16,13 @@ API ชุดนี้ไม่ใช้ user token (`Authorization: Bearer ...`
 X-API-Key: <integration-key>
 ```
 
-Backend อ่าน key จาก environment variable:
+Backend อ่าน key จาก environment variable เฉพาะ endpoint นี้:
 
 ```bash
-INTEGRATION_API_KEYS=key-1,key-2
+DEVICE_CONFIG_API_KEYS=device-config-key-1,device-config-key-2
 ```
+
+หมายเหตุ backward compatibility: ถ้ายังไม่ได้ตั้ง `DEVICE_CONFIG_API_KEYS` ระบบจะ fallback ไปอ่าน `INTEGRATION_API_KEYS` ชั่วคราวเพื่อไม่ให้ deployment เดิมพังทันที แต่ production ใหม่ควรแยก key ตาม endpoint
 
 หมายเหตุ:
 
