@@ -8,6 +8,7 @@ import ConnectionRequestPage from './pages/ConnectionRequestPage'
 import EligibleFactoriesPage from './pages/EligibleFactoriesPage'
 import EmailTestPage from './pages/EmailTestPage'
 import HomePage from './pages/HomePage'
+import NotificationPage from './pages/NotificationPage'
 import PermissionManagementPage from './pages/PermissionManagementPage'
 
 const authStorageKey = 'dpoms.authResponse'
@@ -154,6 +155,7 @@ function App() {
     visibleSelectedMenu === 'home' ||
     visibleSelectedMenu === 'permissions' ||
     visibleSelectedMenu === 'connection-request' ||
+    visibleSelectedMenu === 'notifications' ||
     visibleSelectedMenu === 'eligible-factories' ||
     visibleSelectedMenu === 'api-documentation' ||
     visibleSelectedMenu === 'email-test'
@@ -208,6 +210,8 @@ function App() {
           <PermissionManagementPage accessToken={accessToken} />
         ) : visibleSelectedMenu === 'connection-request' ? (
           <ConnectionRequestPage userType={userType} accessToken={accessToken} />
+        ) : visibleSelectedMenu === 'notifications' ? (
+          <NotificationPage accessToken={accessToken} />
         ) : visibleSelectedMenu === 'eligible-factories' ? (
           <EligibleFactoriesPage accessToken={accessToken} />
         ) : visibleSelectedMenu === 'api-documentation' ? (
