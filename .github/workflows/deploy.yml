@@ -1,0 +1,137 @@
+name: Deploy POMS
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: poms-prod-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy changed app parts
+    runs-on: [self-hosted, poms, windows, prod]
+
+    defaults:
+      run:
+        shell: pwsh
+
+    env:
+      FRONTEND_TARGET: C:\sites\poms
+      BACKEND_TARGET: C:\apps\POMS-app\backend
+      BACKEND_SERVICE: poms-app-backend
+      BACKEND_HEALTH_URL: http://127.0.0.1:3000/health
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect changed paths
+        id: changes
+        run: |
+          $before = "${{ github.event.before }}"
+          $after = "${{ github.sha }}"
+
+          if ([string]::IsNullOrWhiteSpace($before) -or $before -match '^0+$') {
+            $files = git ls-tree -r --name-only $after
+          } else {
+            $files = git diff --name-only $before $after
+          }
+
+          $files | ForEach-Object { "Changed: $_" }
+
+          $frontendChanged = $files | Where-Object { $_ -like 'frontend/*' }
+          $backendChanged = $files | Where-Object { $_ -like 'backend/*' }
+
+          $frontend = if ($frontendChanged) { 'true' } else { 'false' }
+          $backend = if ($backendChanged) { 'true' } else { 'false' }
+
+          "frontend_changed=$frontend" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "backend_changed=$backend" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Build frontend
+        if: steps.changes.outputs.frontend_changed == 'true'
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Deploy frontend to IIS site root
+        if: steps.changes.outputs.frontend_changed == 'true'
+        run: |
+          New-Item -ItemType Directory -Force -Path $env:FRONTEND_TARGET | Out-Null
+
+          robocopy ".\frontend\dist" $env:FRONTEND_TARGET /MIR /R:3 /W:5 /NFL /NDL /NP
+          $robocopyExit = $LASTEXITCODE
+
+          if ($robocopyExit -gt 7) {
+            throw "robocopy failed with exit code $robocopyExit"
+          }
+
+          $global:LASTEXITCODE = 0
+
+      - name: Build and test backend
+        if: steps.changes.outputs.backend_changed == 'true'
+        working-directory: backend
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+          npm run build
+
+      - name: Deploy backend service files
+        if: steps.changes.outputs.backend_changed == 'true'
+        run: |
+          New-Item -ItemType Directory -Force -Path $env:BACKEND_TARGET | Out-Null
+          New-Item -ItemType Directory -Force -Path (Join-Path $env:BACKEND_TARGET 'dist') | Out-Null
+
+          Copy-Item ".\backend\package.json" $env:BACKEND_TARGET -Force
+          Copy-Item ".\backend\package-lock.json" $env:BACKEND_TARGET -Force
+
+          Push-Location $env:BACKEND_TARGET
+          try {
+            npm ci --omit=dev
+          } finally {
+            Pop-Location
+          }
+
+          robocopy ".\backend\dist" (Join-Path $env:BACKEND_TARGET 'dist') /MIR /R:3 /W:5 /NFL /NDL /NP
+          $robocopyExit = $LASTEXITCODE
+
+          if ($robocopyExit -gt 7) {
+            throw "robocopy failed with exit code $robocopyExit"
+          }
+
+          $global:LASTEXITCODE = 0
+
+      - name: Restart backend and verify health
+        if: steps.changes.outputs.backend_changed == 'true'
+        run: |
+          Restart-Service -Name $env:BACKEND_SERVICE -Force
+
+          $deadline = (Get-Date).AddSeconds(60)
+          do {
+            try {
+              $response = Invoke-WebRequest $env:BACKEND_HEALTH_URL -UseBasicParsing -TimeoutSec 5
+              if ($response.StatusCode -eq 200) {
+                Write-Host "Backend health check passed: $($response.Content)"
+                exit 0
+              }
+            } catch {
+              Write-Host "Waiting for backend health check: $($_.Exception.Message)"
+            }
+
+            Start-Sleep -Seconds 2
+          } while ((Get-Date) -lt $deadline)
+
+          throw "Backend health check did not pass within 60 seconds."
+
+      - name: Report skipped deploy
+        if: steps.changes.outputs.frontend_changed != 'true' && steps.changes.outputs.backend_changed != 'true'
+        run: |
+          Write-Host "No frontend/ or backend/ changes detected. Nothing to deploy."
