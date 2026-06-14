@@ -27,6 +27,8 @@ then updates `C:\apps\POMS-app\backend`, restarts `poms-app-backend`, and checks
 The production Windows service name is `poms-app-backend`.
 Backend verification reuses the production `.env` on the server without storing
 secrets in Git.
+The workflow falls back to the previous local commit when a rerun cannot access
+the original push range.
 
 ## Project Structure
 

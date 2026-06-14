@@ -41,8 +41,14 @@ jobs:
 
           if ([string]::IsNullOrWhiteSpace($before) -or $before -match '^0+$') {
             $files = git ls-tree -r --name-only $after
-          } else {
+          } elseif (git cat-file -e "$before^{commit}" 2>$null) {
             $files = git diff --name-only $before $after
+          } elseif (git rev-parse --verify HEAD~1 2>$null) {
+            Write-Host "Before commit $before is unavailable; falling back to HEAD~1..HEAD."
+            $files = git diff --name-only HEAD~1 HEAD
+          } else {
+            Write-Host "No previous commit is available; treating the current tree as changed."
+            $files = git ls-tree -r --name-only $after
           }
 
           $files | ForEach-Object { "Changed: $_" }
