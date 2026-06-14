@@ -33,6 +33,10 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Trust runner workspace
+        run: |
+          git config --global --add safe.directory "$env:GITHUB_WORKSPACE"
+
       - name: Detect changed paths
         id: changes
         run: |

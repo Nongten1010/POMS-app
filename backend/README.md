@@ -29,6 +29,8 @@ Backend verification reuses the production `.env` on the server without storing
 secrets in Git.
 The workflow falls back to the previous local commit when a rerun cannot access
 the original push range.
+The runner marks the checked-out workspace as a trusted Git directory before
+detecting changed paths.
 
 ## Project Structure
 
