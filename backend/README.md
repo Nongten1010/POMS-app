@@ -31,6 +31,8 @@ The workflow falls back to the previous local commit when a rerun cannot access
 the original push range.
 The runner marks the checked-out workspace as a trusted Git directory before
 detecting changed paths.
+Production dependencies are prepared in `C:\apps\POMS-app\backend-release`
+before the running backend service is stopped and updated.
 
 ## Project Structure
 
