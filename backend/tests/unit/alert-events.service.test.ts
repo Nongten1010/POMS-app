@@ -95,6 +95,60 @@ describe('alertEventsService', () => {
 
     expect(mockedRepository.createFromIntegration).not.toHaveBeenCalled();
   });
+
+  it('creates a batch and reports created, duplicate, and failed rows separately', async () => {
+    mockedRepository.findByIdempotencyKey
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(alertEventFixture({ id: 1002, stationId: 'S0002' }))
+      .mockResolvedValueOnce(null);
+    mockedRepository.findConnectedMeasurementPointByStation
+      .mockResolvedValueOnce({
+        id: 55,
+        factoryId: 'real-factory-001',
+        factoryName: 'บริษัท จริง จำกัด',
+        factoryRegistrationNo: '3-106-33/50สบ',
+        pointCode: 'S0001',
+        pointName: 'Stack จริง',
+        pointType: 'STACK',
+      })
+      .mockResolvedValueOnce(null);
+    mockedRepository.createFromIntegration.mockResolvedValueOnce(alertEventFixture({ id: 1001 }));
+
+    const result = await alertEventsService.createBatchFromIntegration([
+      integrationPayload(),
+      {
+        ...integrationPayload(),
+        idempotencyKey: 'CEMS:S0002:SO2:STANDARD_EXCEEDED:2026-03-02:20',
+        stationId: 'S0002',
+        pointCode: 'S0002',
+      },
+      {
+        ...integrationPayload(),
+        idempotencyKey: 'CEMS:S9999:SO2:STANDARD_EXCEEDED:2026-03-02:20',
+        stationId: 'S9999',
+        pointCode: 'S9999',
+      },
+    ]);
+
+    expect(result).toMatchObject({
+      total: 3,
+      created: 1,
+      duplicate: 1,
+      failed: 1,
+      results: [
+        { index: 0, success: true, created: true, duplicate: false },
+        { index: 1, success: true, created: false, duplicate: true },
+        {
+          index: 2,
+          success: false,
+          error: {
+            code: 'BAD_REQUEST',
+            message: 'Alert event stationId must match a connected measurement point',
+          },
+        },
+      ],
+    });
+  });
 });
 
 function integrationPayload(): CreateIntegrationAlertEventInput {

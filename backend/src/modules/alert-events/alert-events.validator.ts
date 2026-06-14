@@ -68,6 +68,12 @@ export const createIntegrationAlertEventSchema = z
     };
   });
 
+export const createIntegrationAlertEventBatchSchema = z
+  .object({
+    events: z.array(createIntegrationAlertEventSchema).min(1).max(500),
+  })
+  .strict();
+
 function timeToMinutes(value: string): number {
   const [hour, minute] = value.split(':').map(Number);
   return hour * 60 + minute;

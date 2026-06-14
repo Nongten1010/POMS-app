@@ -5,6 +5,7 @@ import { signAccessToken } from '../../src/shared/utils/jwt';
 jest.mock('../../src/modules/alert-events/alert-events.service', () => ({
   alertEventsService: {
     createFromIntegration: jest.fn(),
+    createBatchFromIntegration: jest.fn(),
     list: jest.fn(),
     getById: jest.fn(),
     updateStatus: jest.fn(),
@@ -25,21 +26,29 @@ describe('alert events routes', () => {
     process.env.ALERT_EVENT_API_KEYS = '';
   });
 
-  it('creates an external exceeded alert event with an integration API key', async () => {
-    mockedAlertEventsService.createFromIntegration.mockResolvedValue({
-      created: true,
-      duplicate: false,
-      event: alertEventFixture(),
+  it('creates a single external exceeded alert event through the unified events array', async () => {
+    mockedAlertEventsService.createBatchFromIntegration.mockResolvedValue({
+      total: 1,
+      created: 1,
+      duplicate: 0,
+      failed: 0,
+      results: [{
+        index: 0,
+        success: true,
+        created: true,
+        duplicate: false,
+        event: alertEventFixture(),
+      }],
     });
 
     const app = createApp();
     const response = await request(app)
       .post('/api/v1/integrations/alert-events')
       .set('X-API-Key', 'test-integration-key')
-      .send(integrationPayload());
+      .send(integrationBatchPayload());
 
-    expect(response.status).toBe(201);
-    expect(mockedAlertEventsService.createFromIntegration).toHaveBeenCalledWith(
+    expect(response.status).toBe(200);
+    expect(mockedAlertEventsService.createBatchFromIntegration).toHaveBeenCalledWith([
       expect.objectContaining({
         idempotencyKey:
           'CEMS:S0001:so2:STANDARD_EXCEEDED:2026-03-02T20:00:00+07:00',
@@ -53,39 +62,63 @@ describe('alert events routes', () => {
         startedAt: '2026-03-02T20:00:00+07:00',
         endedAt: '2026-03-02T20:59:59+07:00',
       }),
-    );
+    ]);
     expect(response.body).toMatchObject({
       success: true,
       data: {
-        created: true,
-        duplicate: false,
-        idempotencyKey:
-          'CEMS:S0001:so2:STANDARD_EXCEEDED:2026-03-02T20:00:00+07:00',
+        total: 1,
+        created: 1,
+        duplicate: 0,
+        failed: 0,
+        results: [
+          {
+            index: 0,
+            success: true,
+            created: true,
+            duplicate: false,
+          },
+        ],
       },
     });
   });
 
-  it('returns duplicate metadata when the same idempotency key already exists', async () => {
-    mockedAlertEventsService.createFromIntegration.mockResolvedValue({
-      created: false,
-      duplicate: true,
-      event: alertEventFixture(),
+  it('returns duplicate metadata in the unified events array response', async () => {
+    mockedAlertEventsService.createBatchFromIntegration.mockResolvedValue({
+      total: 1,
+      created: 0,
+      duplicate: 1,
+      failed: 0,
+      results: [{
+        index: 0,
+        success: true,
+        created: false,
+        duplicate: true,
+        event: alertEventFixture(),
+      }],
     });
 
     const app = createApp();
     const response = await request(app)
       .post('/api/v1/integrations/alert-events')
       .set('X-API-Key', 'test-integration-key')
-      .send(integrationPayload());
+      .send(integrationBatchPayload());
 
     expect(response.status).toBe(200);
     expect(response.body).toMatchObject({
       success: true,
       data: {
-        created: false,
-        duplicate: true,
-        idempotencyKey:
-          'CEMS:S0001:so2:STANDARD_EXCEEDED:2026-03-02T20:00:00+07:00',
+        total: 1,
+        created: 0,
+        duplicate: 1,
+        failed: 0,
+        results: [
+          {
+            index: 0,
+            success: true,
+            created: false,
+            duplicate: true,
+          },
+        ],
       },
     });
   });
@@ -96,13 +129,15 @@ describe('alert events routes', () => {
       .post('/api/v1/integrations/alert-events')
       .set('X-API-Key', 'test-integration-key')
       .send({
-        ...integrationPayload(),
-        notificationStatus: 'DISMISSED',
+        events: [{
+          ...integrationPayload(),
+          notificationStatus: 'DISMISSED',
+        }],
       });
 
     expect(response.status).toBe(400);
     expect(response.body.error.code).toBe('VALIDATION_ERROR');
-    expect(mockedAlertEventsService.createFromIntegration).not.toHaveBeenCalled();
+    expect(mockedAlertEventsService.createBatchFromIntegration).not.toHaveBeenCalled();
   });
 
   it('rejects externally supplied alert types because backend derives them from threshold type', async () => {
@@ -111,13 +146,15 @@ describe('alert events routes', () => {
       .post('/api/v1/integrations/alert-events')
       .set('X-API-Key', 'test-integration-key')
       .send({
-        ...integrationPayload(),
-        alertType: 'STANDARD_EXCEEDED',
+        events: [{
+          ...integrationPayload(),
+          alertType: 'STANDARD_EXCEEDED',
+        }],
       });
 
     expect(response.status).toBe(400);
     expect(response.body.error.code).toBe('VALIDATION_ERROR');
-    expect(mockedAlertEventsService.createFromIntegration).not.toHaveBeenCalled();
+    expect(mockedAlertEventsService.createBatchFromIntegration).not.toHaveBeenCalled();
   });
 
   it('rejects invalid event time ranges', async () => {
@@ -126,34 +163,56 @@ describe('alert events routes', () => {
       .post('/api/v1/integrations/alert-events')
       .set('X-API-Key', 'test-integration-key')
       .send({
-        ...integrationPayload(),
-        startTime: '21:00',
-        endTime: '20:59',
+        events: [{
+          ...integrationPayload(),
+          startTime: '21:00',
+          endTime: '20:59',
+        }],
       });
 
     expect(response.status).toBe(400);
     expect(response.body.error.code).toBe('VALIDATION_ERROR');
-    expect(mockedAlertEventsService.createFromIntegration).not.toHaveBeenCalled();
+    expect(mockedAlertEventsService.createBatchFromIntegration).not.toHaveBeenCalled();
+  });
+
+  it('rejects a bare single alert event object to keep the integration contract unambiguous', async () => {
+    const app = createApp();
+    const response = await request(app)
+      .post('/api/v1/integrations/alert-events')
+      .set('X-API-Key', 'test-integration-key')
+      .send(integrationPayload());
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    expect(mockedAlertEventsService.createBatchFromIntegration).not.toHaveBeenCalled();
   });
 
   it('accepts alert event scoped API keys', async () => {
     process.env.INTEGRATION_API_KEYS = '';
     process.env.DEVICE_CONFIG_API_KEYS = 'device-config-key';
     process.env.ALERT_EVENT_API_KEYS = 'alert-event-key';
-    mockedAlertEventsService.createFromIntegration.mockResolvedValue({
-      created: true,
-      duplicate: false,
-      event: alertEventFixture(),
+    mockedAlertEventsService.createBatchFromIntegration.mockResolvedValue({
+      total: 1,
+      created: 1,
+      duplicate: 0,
+      failed: 0,
+      results: [{
+        index: 0,
+        success: true,
+        created: true,
+        duplicate: false,
+        event: alertEventFixture(),
+      }],
     });
     const app = createApp();
 
     const response = await request(app)
       .post('/api/v1/integrations/alert-events')
       .set('X-API-Key', 'alert-event-key')
-      .send(integrationPayload());
+      .send(integrationBatchPayload());
 
-    expect(response.status).toBe(201);
-    expect(mockedAlertEventsService.createFromIntegration).toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(mockedAlertEventsService.createBatchFromIntegration).toHaveBeenCalled();
   });
 
   it('rejects device config scoped API keys for alert event endpoints', async () => {
@@ -165,10 +224,121 @@ describe('alert events routes', () => {
     const response = await request(app)
       .post('/api/v1/integrations/alert-events')
       .set('X-API-Key', 'device-config-key')
-      .send(integrationPayload());
+      .send(integrationBatchPayload());
 
     expect(response.status).toBe(401);
-    expect(mockedAlertEventsService.createFromIntegration).not.toHaveBeenCalled();
+    expect(mockedAlertEventsService.createBatchFromIntegration).not.toHaveBeenCalled();
+  });
+
+  it('creates multiple external alert events through the unified endpoint', async () => {
+    mockedAlertEventsService.createBatchFromIntegration.mockResolvedValue({
+      total: 2,
+      created: 1,
+      duplicate: 1,
+      failed: 0,
+      results: [
+        {
+          index: 0,
+          success: true,
+          created: true,
+          duplicate: false,
+          event: alertEventFixture(),
+        },
+        {
+          index: 1,
+          success: true,
+          created: false,
+          duplicate: true,
+          event: alertEventFixture({
+            id: 1002,
+            stationId: 'S0002',
+            pointCode: 'S0002',
+            parameterCode: 'nox',
+            parameterName: 'NOX',
+            parameterLabel: 'NOX (ppm)',
+          }),
+        },
+      ],
+    });
+
+    const app = createApp();
+    const response = await request(app)
+      .post('/api/v1/integrations/alert-events')
+      .set('X-API-Key', 'test-integration-key')
+      .send({
+        events: [
+          integrationPayload(),
+          {
+            ...integrationPayload(),
+            stationId: 'S0002',
+            pointCode: 'S0002',
+            parameterCode: 'nox',
+            measuredValue: 5000,
+            thresholdValue: 200,
+          },
+        ],
+      });
+
+    expect(response.status).toBe(200);
+    expect(mockedAlertEventsService.createBatchFromIntegration).toHaveBeenCalledWith([
+      expect.objectContaining({
+        stationId: 'S0001',
+        parameterCode: 'so2',
+        alertType: 'STANDARD_EXCEEDED',
+      }),
+      expect.objectContaining({
+        stationId: 'S0002',
+        parameterCode: 'nox',
+        alertType: 'STANDARD_EXCEEDED',
+      }),
+    ]);
+    expect(response.body).toMatchObject({
+      success: true,
+      data: {
+        total: 2,
+        created: 1,
+        duplicate: 1,
+        failed: 0,
+        results: [
+          { index: 0, success: true, created: true, duplicate: false },
+          { index: 1, success: true, created: false, duplicate: true },
+        ],
+      },
+    });
+  });
+
+  it('rejects oversized alert event batch requests before processing', async () => {
+    const app = createApp();
+    const response = await request(app)
+      .post('/api/v1/integrations/alert-events')
+      .set('X-API-Key', 'test-integration-key')
+      .send({ events: Array.from({ length: 501 }, () => integrationPayload()) });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    expect(mockedAlertEventsService.createBatchFromIntegration).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid items in alert event batch requests before processing', async () => {
+    const app = createApp();
+    const response = await request(app)
+      .post('/api/v1/integrations/alert-events')
+      .set('X-API-Key', 'test-integration-key')
+      .send({
+        events: [
+          integrationPayload(),
+          {
+            ...integrationPayload(),
+            stationId: 'S0002',
+            startTime: '21:00',
+            endTime: '20:59',
+          },
+        ],
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    expect(mockedAlertEventsService.createBatchFromIntegration).not.toHaveBeenCalled();
   });
 
   it('lists alert events for authenticated officers', async () => {
@@ -226,7 +396,13 @@ function integrationPayload() {
   };
 }
 
-function alertEventFixture(): AlertEventDTO {
+function integrationBatchPayload() {
+  return {
+    events: [integrationPayload()],
+  };
+}
+
+function alertEventFixture(overrides: Partial<AlertEventDTO> = {}): AlertEventDTO {
   return {
     id: 1001,
     idempotencyKey: 'CEMS:S0001:so2:STANDARD_EXCEEDED:2026-03-02T20:00:00+07:00',
@@ -265,6 +441,7 @@ function alertEventFixture(): AlertEventDTO {
     notificationStatusLabel: 'อัตโนมัติ',
     sourcePayload: null,
     detectedAt: '2026-03-03T08:30:05.000Z',
+    ...overrides,
   };
 }
 

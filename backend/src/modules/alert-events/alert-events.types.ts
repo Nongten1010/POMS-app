@@ -131,6 +131,32 @@ export interface CreateAlertEventResult {
   event: AlertEventDTO;
 }
 
+export type CreateAlertEventBatchItemResult =
+  | {
+      index: number;
+      success: true;
+      created: boolean;
+      duplicate: boolean;
+      event: AlertEventDTO;
+    }
+  | {
+      index: number;
+      success: false;
+      error: {
+        code: string;
+        message: string;
+        details?: unknown;
+      };
+    };
+
+export interface CreateAlertEventBatchResult {
+  total: number;
+  created: number;
+  duplicate: number;
+  failed: number;
+  results: CreateAlertEventBatchItemResult[];
+}
+
 export interface ListAlertEventsResult {
   data: AlertEventDTO[];
   pagination: {

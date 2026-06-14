@@ -3,7 +3,7 @@ import { StatusCodes } from 'http-status-codes';
 import { alertEventsService } from './alert-events.service';
 import {
   alertEventIdParamsSchema,
-  createIntegrationAlertEventSchema,
+  createIntegrationAlertEventBatchSchema,
   listAlertEventsQuerySchema,
   updateAlertEventStatusSchema,
 } from './alert-events.validator';
@@ -11,16 +11,11 @@ import {
 export const alertEventsController = {
   async createFromIntegration(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const input = createIntegrationAlertEventSchema.parse(req.body);
-      const result = await alertEventsService.createFromIntegration(input);
-      res.status(result.created ? StatusCodes.CREATED : StatusCodes.OK).json({
+      const { events } = createIntegrationAlertEventBatchSchema.parse(req.body);
+      const data = await alertEventsService.createBatchFromIntegration(events);
+      res.status(StatusCodes.OK).json({
         success: true,
-        data: {
-          created: result.created,
-          duplicate: result.duplicate,
-          ...result.event,
-          ...(result.duplicate ? { message: 'Alert event already exists' } : {}),
-        },
+        data,
       });
     } catch (err) {
       next(err);

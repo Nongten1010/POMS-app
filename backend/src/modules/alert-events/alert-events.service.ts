@@ -1,7 +1,9 @@
-import { BadRequestError, NotFoundError } from '../../shared/errors/AppError';
+import { AppError, BadRequestError, NotFoundError } from '../../shared/errors/AppError';
 import { alertEventsRepository } from './alert-events.repository';
 import type {
   AlertEventDTO,
+  CreateAlertEventBatchItemResult,
+  CreateAlertEventBatchResult,
   CreateAlertEventResult,
   CreateIntegrationAlertEventInput,
   ListAlertEventsQuery,
@@ -57,6 +59,39 @@ export const alertEventsService = {
     };
   },
 
+  async createBatchFromIntegration(
+    inputs: CreateIntegrationAlertEventInput[],
+  ): Promise<CreateAlertEventBatchResult> {
+    const results: CreateAlertEventBatchItemResult[] = [];
+
+    for (const [index, input] of inputs.entries()) {
+      try {
+        const result = await this.createFromIntegration(input);
+        results.push({
+          index,
+          success: true,
+          created: result.created,
+          duplicate: result.duplicate,
+          event: result.event,
+        });
+      } catch (error) {
+        results.push({
+          index,
+          success: false,
+          error: toBatchError(error),
+        });
+      }
+    }
+
+    return {
+      total: results.length,
+      created: results.filter((result) => result.success && result.created).length,
+      duplicate: results.filter((result) => result.success && result.duplicate).length,
+      failed: results.filter((result) => !result.success).length,
+      results,
+    };
+  },
+
   async list(query: ListAlertEventsQuery): Promise<ListAlertEventsResult> {
     const result = await alertEventsRepository.list(query);
     return {
@@ -85,3 +120,18 @@ export const alertEventsService = {
     return event;
   },
 };
+
+function toBatchError(error: unknown): { code: string; message: string; details?: unknown } {
+  if (error instanceof AppError) {
+    return {
+      code: error.code,
+      message: error.message,
+      ...(error.details === undefined ? {} : { details: error.details }),
+    };
+  }
+
+  return {
+    code: 'INTERNAL_ERROR',
+    message: 'Failed to create alert event',
+  };
+}
