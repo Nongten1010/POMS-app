@@ -25,6 +25,8 @@ The deploy workflow runs `npm run typecheck`, `npm test`, and `npm run build`,
 then updates `C:\apps\POMS-app\backend`, restarts `poms-app-backend`, and checks
 `http://127.0.0.1:3000/health`.
 The production Windows service name is `poms-app-backend`.
+Backend verification reuses the production `.env` on the server without storing
+secrets in Git.
 
 ## Project Structure
 

@@ -80,6 +80,18 @@ jobs:
 
           $global:LASTEXITCODE = 0
 
+      - name: Prepare backend environment
+        if: steps.changes.outputs.backend_changed == 'true'
+        run: |
+          $sourceEnv = Join-Path $env:BACKEND_TARGET '.env'
+          $workspaceEnv = '.\backend\.env'
+
+          if (!(Test-Path $sourceEnv)) {
+            throw "Backend .env was not found at $sourceEnv"
+          }
+
+          Copy-Item $sourceEnv $workspaceEnv -Force
+
       - name: Build and test backend
         if: steps.changes.outputs.backend_changed == 'true'
         working-directory: backend
@@ -143,6 +155,11 @@ jobs:
           } while ((Get-Date) -lt $deadline)
 
           throw "Backend health check did not pass within 60 seconds."
+
+      - name: Remove backend environment copy
+        if: always() && steps.changes.outputs.backend_changed == 'true'
+        run: |
+          Remove-Item ".\backend\.env" -Force -ErrorAction SilentlyContinue
 
       - name: Report skipped deploy
         if: steps.changes.outputs.frontend_changed != 'true' && steps.changes.outputs.backend_changed != 'true'
