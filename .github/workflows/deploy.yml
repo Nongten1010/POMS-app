@@ -61,7 +61,10 @@ jobs:
         working-directory: frontend
         run: |
           npm ci
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
           npm run build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Deploy frontend to IIS site root
         if: steps.changes.outputs.frontend_changed == 'true'
@@ -82,9 +85,16 @@ jobs:
         working-directory: backend
         run: |
           npm ci
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
           npm run typecheck
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
           npm test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
           npm run build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Deploy backend service files
         if: steps.changes.outputs.backend_changed == 'true'
@@ -98,6 +108,7 @@ jobs:
           Push-Location $env:BACKEND_TARGET
           try {
             npm ci --omit=dev
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           } finally {
             Pop-Location
           }
