@@ -18,6 +18,13 @@ Backend API สำหรับ **POMS (Plant Operations Monitoring System)** —
 | Tests        | Jest + Supertest                          |
 | Deployment   | Windows Server                            |
 
+## Production deploy
+
+Production backend deploys are handled by GitHub Actions on pushes to `main`.
+The deploy workflow runs `npm run typecheck`, `npm test`, and `npm run build`,
+then updates `C:\apps\POMS-app\backend`, restarts `poms-app-backend`, and checks
+`http://127.0.0.1:3000/health`.
+
 ## Project Structure
 
 ```
