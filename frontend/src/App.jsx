@@ -4,6 +4,7 @@ import DpomsAppBar from './components/DpomsAppBar'
 import DpomsLoginDialog from './components/DpomsLoginDialog'
 import DpomsSidebar from './components/DpomsSidebar'
 import ApiDocumentationPage from './pages/ApiDocumentationPage'
+import BodCodReportPage from './pages/BodCodReportPage'
 import ConnectionRequestPage from './pages/ConnectionRequestPage'
 import EligibleFactoriesPage from './pages/EligibleFactoriesPage'
 import EmailTestPage from './pages/EmailTestPage'
@@ -157,6 +158,7 @@ function App() {
     visibleSelectedMenu === 'permissions' ||
     visibleSelectedMenu === 'connection-request' ||
     visibleSelectedMenu === 'forms' ||
+    visibleSelectedMenu === 'bod-cod-report' ||
     visibleSelectedMenu === 'notifications' ||
     visibleSelectedMenu === 'eligible-factories' ||
     visibleSelectedMenu === 'api-documentation' ||
@@ -214,6 +216,8 @@ function App() {
           <ConnectionRequestPage userType={userType} accessToken={accessToken} />
         ) : visibleSelectedMenu === 'forms' ? (
           <KwpFormsPage userType={userType} />
+        ) : visibleSelectedMenu === 'bod-cod-report' ? (
+          <BodCodReportPage userType={userType} />
         ) : visibleSelectedMenu === 'notifications' ? (
           <NotificationPage accessToken={accessToken} />
         ) : visibleSelectedMenu === 'eligible-factories' ? (
