@@ -8,6 +8,7 @@ import ConnectionRequestPage from './pages/ConnectionRequestPage'
 import EligibleFactoriesPage from './pages/EligibleFactoriesPage'
 import EmailTestPage from './pages/EmailTestPage'
 import HomePage from './pages/HomePage'
+import KwpFormsPage from './pages/KwpFormsPage'
 import NotificationPage from './pages/NotificationPage'
 import PermissionManagementPage from './pages/PermissionManagementPage'
 
@@ -155,6 +156,7 @@ function App() {
     visibleSelectedMenu === 'home' ||
     visibleSelectedMenu === 'permissions' ||
     visibleSelectedMenu === 'connection-request' ||
+    visibleSelectedMenu === 'forms' ||
     visibleSelectedMenu === 'notifications' ||
     visibleSelectedMenu === 'eligible-factories' ||
     visibleSelectedMenu === 'api-documentation' ||
@@ -210,6 +212,8 @@ function App() {
           <PermissionManagementPage accessToken={accessToken} />
         ) : visibleSelectedMenu === 'connection-request' ? (
           <ConnectionRequestPage userType={userType} accessToken={accessToken} />
+        ) : visibleSelectedMenu === 'forms' ? (
+          <KwpFormsPage userType={userType} />
         ) : visibleSelectedMenu === 'notifications' ? (
           <NotificationPage accessToken={accessToken} />
         ) : visibleSelectedMenu === 'eligible-factories' ? (
