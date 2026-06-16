@@ -12,6 +12,7 @@ import HomePage from './pages/HomePage'
 import KwpFormsPage from './pages/KwpFormsPage'
 import NotificationPage from './pages/NotificationPage'
 import PermissionManagementPage from './pages/PermissionManagementPage'
+import StatisticsPage from './pages/StatisticsPage'
 
 const authStorageKey = 'dpoms.authResponse'
 
@@ -160,6 +161,7 @@ function App() {
     visibleSelectedMenu === 'forms' ||
     visibleSelectedMenu === 'bod-cod-report' ||
     visibleSelectedMenu === 'notifications' ||
+    visibleSelectedMenu === 'statistics' ||
     visibleSelectedMenu === 'eligible-factories' ||
     visibleSelectedMenu === 'api-documentation' ||
     visibleSelectedMenu === 'email-test'
@@ -220,6 +222,8 @@ function App() {
           <BodCodReportPage userType={userType} />
         ) : visibleSelectedMenu === 'notifications' ? (
           <NotificationPage accessToken={accessToken} />
+        ) : visibleSelectedMenu === 'statistics' ? (
+          <StatisticsPage accessToken={accessToken} />
         ) : visibleSelectedMenu === 'eligible-factories' ? (
           <EligibleFactoriesPage accessToken={accessToken} />
         ) : visibleSelectedMenu === 'api-documentation' ? (
