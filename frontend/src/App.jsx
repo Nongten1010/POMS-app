@@ -5,14 +5,20 @@ import DpomsLoginDialog from './components/DpomsLoginDialog'
 import DpomsSidebar from './components/DpomsSidebar'
 import ApiDocumentationPage from './pages/ApiDocumentationPage'
 import BodCodReportPage from './pages/BodCodReportPage'
+import ChatPage from './pages/ChatPage'
+import ConditionalSearchPage from './pages/ConditionalSearchPage'
 import ConnectionRequestPage from './pages/ConnectionRequestPage'
 import EligibleFactoriesPage from './pages/EligibleFactoriesPage'
 import EmailTestPage from './pages/EmailTestPage'
+import FaqPage from './pages/FaqPage'
+import FeedbackPage from './pages/FeedbackPage'
 import HomePage from './pages/HomePage'
 import KwpFormsPage from './pages/KwpFormsPage'
+import LawsPage from './pages/LawsPage'
 import NotificationPage from './pages/NotificationPage'
 import PermissionManagementPage from './pages/PermissionManagementPage'
 import StatisticsPage from './pages/StatisticsPage'
+import SupportRequestPage from './pages/SupportRequestPage'
 
 const authStorageKey = 'dpoms.authResponse'
 
@@ -111,6 +117,18 @@ function getUserTypeFromAuth(auth) {
   return auth?.userType ?? getAuthResponsePayload(auth)?.userType ?? ''
 }
 
+function getRoleCodeFromAuth(auth) {
+  const response = getAuthResponsePayload(auth)
+  const responseUser = response?.user ?? response?.data?.user
+  const roles = responseUser?.roles ?? response?.roles ?? auth?.roles
+
+  if (typeof roles === 'string') {
+    return roles
+  }
+
+  return responseUser?.primaryRole?.code ?? roles?.[0]?.code ?? ''
+}
+
 function canViewMenu(menuValue, permissions) {
   const permissionKey = menuPermissionMap[menuValue]
   return permissions?.[permissionKey]?.view === true
@@ -149,6 +167,7 @@ function App() {
   const currentUser = getUserFromAuth(authResponse)
   const accessToken = getAccessTokenFromAuth(authResponse)
   const userType = getUserTypeFromAuth(authResponse)
+  const roleCode = getRoleCodeFromAuth(authResponse)
   const activePermissions = useMemo(() => getPermissionsFromAuth(authResponse), [authResponse])
   const [selectedMenu, setSelectedMenu] = useState('home')
   const visibleSelectedMenu = canViewMenu(selectedMenu, activePermissions)
@@ -162,6 +181,12 @@ function App() {
     visibleSelectedMenu === 'bod-cod-report' ||
     visibleSelectedMenu === 'notifications' ||
     visibleSelectedMenu === 'statistics' ||
+    visibleSelectedMenu === 'conditional-search' ||
+    visibleSelectedMenu === 'support-request' ||
+    visibleSelectedMenu === 'feedback' ||
+    visibleSelectedMenu === 'laws' ||
+    visibleSelectedMenu === 'faq' ||
+    visibleSelectedMenu === 'chat' ||
     visibleSelectedMenu === 'eligible-factories' ||
     visibleSelectedMenu === 'api-documentation' ||
     visibleSelectedMenu === 'email-test'
@@ -224,6 +249,18 @@ function App() {
           <NotificationPage accessToken={accessToken} />
         ) : visibleSelectedMenu === 'statistics' ? (
           <StatisticsPage accessToken={accessToken} />
+        ) : visibleSelectedMenu === 'conditional-search' ? (
+          <ConditionalSearchPage />
+        ) : visibleSelectedMenu === 'support-request' ? (
+          <SupportRequestPage />
+        ) : visibleSelectedMenu === 'feedback' ? (
+          <FeedbackPage />
+        ) : visibleSelectedMenu === 'laws' ? (
+          <LawsPage isAdmin={roleCode === 'admin' || activePermissions?.laws?.edit === true} />
+        ) : visibleSelectedMenu === 'faq' ? (
+          <FaqPage isAdmin={roleCode === 'admin' || activePermissions?.faq?.edit === true} />
+        ) : visibleSelectedMenu === 'chat' ? (
+          <ChatPage isStaff={userType === 'officer' || roleCode === 'admin' || activePermissions?.chat?.edit === true} />
         ) : visibleSelectedMenu === 'eligible-factories' ? (
           <EligibleFactoriesPage accessToken={accessToken} />
         ) : visibleSelectedMenu === 'api-documentation' ? (
