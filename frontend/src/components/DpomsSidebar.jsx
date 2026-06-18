@@ -7,7 +7,6 @@ import {
   ListItemText,
 } from '@mui/material'
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings'
-import ApiIcon from '@mui/icons-material/Api'
 import ArticleIcon from '@mui/icons-material/Article'
 import AssessmentIcon from '@mui/icons-material/Assessment'
 import ChatIcon from '@mui/icons-material/Chat'
@@ -119,12 +118,6 @@ const menuItems = [
     value: 'eligible-factories',
     permissionKey: 'eligible_factories',
     icon: <FactoryIcon />,
-  },
-  {
-    label: 'API Documentation',
-    value: 'api-documentation',
-    permissionKey: 'api_documentation',
-    icon: <ApiIcon />,
   },
   {
     label: 'ทดสอบส่งอีเมล',

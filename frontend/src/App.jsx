@@ -3,7 +3,6 @@ import { Box, Container } from '@mui/material'
 import DpomsAppBar from './components/DpomsAppBar'
 import DpomsLoginDialog from './components/DpomsLoginDialog'
 import DpomsSidebar from './components/DpomsSidebar'
-import ApiDocumentationPage from './pages/ApiDocumentationPage'
 import BodCodReportPage from './pages/BodCodReportPage'
 import ChatPage from './pages/ChatPage'
 import ConditionalSearchPage from './pages/ConditionalSearchPage'
@@ -12,9 +11,10 @@ import EligibleFactoriesPage from './pages/EligibleFactoriesPage'
 import EmailTestPage from './pages/EmailTestPage'
 import FaqPage from './pages/FaqPage'
 import FeedbackPage from './pages/FeedbackPage'
-import HomePage from './pages/HomePage'
+import HomePageMockup from './pages/HomePageMockup'
 import KwpFormsPage from './pages/KwpFormsPage'
 import LawsPage from './pages/LawsPage'
+import MasterDataPage from './pages/MasterDataPage'
 import NotificationPage from './pages/NotificationPage'
 import PermissionManagementPage from './pages/PermissionManagementPage'
 import StatisticsPage from './pages/StatisticsPage'
@@ -61,7 +61,6 @@ const menuPermissionMap = {
   chat: 'chat',
   permissions: 'permissions',
   'eligible-factories': 'eligible_factories',
-  'api-documentation': 'api_documentation',
   'email-test': 'email_test',
 }
 
@@ -175,6 +174,7 @@ function App() {
     : getFirstViewableMenu(activePermissions)
   const isWorkspacePage =
     visibleSelectedMenu === 'home' ||
+    visibleSelectedMenu === 'master-data' ||
     visibleSelectedMenu === 'permissions' ||
     visibleSelectedMenu === 'connection-request' ||
     visibleSelectedMenu === 'forms' ||
@@ -188,7 +188,6 @@ function App() {
     visibleSelectedMenu === 'faq' ||
     visibleSelectedMenu === 'chat' ||
     visibleSelectedMenu === 'eligible-factories' ||
-    visibleSelectedMenu === 'api-documentation' ||
     visibleSelectedMenu === 'email-test'
 
   return (
@@ -236,7 +235,9 @@ function App() {
         }}
       >
         {visibleSelectedMenu === 'home' ? (
-          <HomePage accessToken={accessToken} />
+          <HomePageMockup />
+        ) : visibleSelectedMenu === 'master-data' ? (
+          <MasterDataPage userType={userType} />
         ) : visibleSelectedMenu === 'permissions' ? (
           <PermissionManagementPage accessToken={accessToken} />
         ) : visibleSelectedMenu === 'connection-request' ? (
@@ -263,12 +264,10 @@ function App() {
           <ChatPage isStaff={userType === 'officer' || roleCode === 'admin' || activePermissions?.chat?.edit === true} />
         ) : visibleSelectedMenu === 'eligible-factories' ? (
           <EligibleFactoriesPage accessToken={accessToken} />
-        ) : visibleSelectedMenu === 'api-documentation' ? (
-          <ApiDocumentationPage />
         ) : visibleSelectedMenu === 'email-test' ? (
           <EmailTestPage accessToken={accessToken} />
         ) : (
-          <HomePage accessToken={accessToken} />
+          <HomePageMockup />
         )}
       </Container>
     </Box>

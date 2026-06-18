@@ -25,17 +25,7 @@
     "month": 6,
     "days": [
       {
-        "date": "2026-06-02",
-        "dataCompletenessPercent": 72,
-        "dataCompletenessStatus": "lowData",
-        "pollutionStatus": "insufficient",
-        "display": {
-          "backgroundStatus": "lowData",
-          "borderStatus": "insufficient"
-        }
-      },
-      {
-        "date": "2026-06-03",
+        "date": "2026-06-01",
         "dataCompletenessPercent": 86,
         "dataCompletenessStatus": "highData",
         "pollutionStatus": "normal",
@@ -45,13 +35,63 @@
         }
       },
       {
-        "date": "2026-06-05",
-        "dataCompletenessPercent": 95,
+        "date": "2026-06-02",
+        "dataCompletenessPercent": 72,
+        "dataCompletenessStatus": "lowData",
+        "pollutionStatus": "warning",
+        "display": {
+          "backgroundStatus": "lowData",
+          "borderStatus": "warning"
+        }
+      },
+      {
+        "date": "2026-06-03",
+        "dataCompletenessPercent": 86,
+        "dataCompletenessStatus": "highData",
+        "pollutionStatus": "exceeded",
+        "display": {
+          "backgroundStatus": "highData",
+          "borderStatus": "exceeded"
+        }
+      },
+      {
+        "date": "2026-06-04",
+        "dataCompletenessPercent": 91,
         "dataCompletenessStatus": "highData",
         "pollutionStatus": "normal",
         "display": {
           "backgroundStatus": "highData",
           "borderStatus": "normal"
+        }
+      },
+      {
+        "date": "2026-06-05",
+        "dataCompletenessPercent": 76,
+        "dataCompletenessStatus": "lowData",
+        "pollutionStatus": "warning",
+        "display": {
+          "backgroundStatus": "lowData",
+          "borderStatus": "warning"
+        }
+      },
+      {
+        "date": "2026-06-06",
+        "dataCompletenessPercent": 96,
+        "dataCompletenessStatus": "highData",
+        "pollutionStatus": "normal",
+        "display": {
+          "backgroundStatus": "highData",
+          "borderStatus": "normal"
+        }
+      },
+      {
+        "date": "2026-06-07",
+        "dataCompletenessPercent": 89,
+        "dataCompletenessStatus": "highData",
+        "pollutionStatus": "exceeded",
+        "display": {
+          "backgroundStatus": "highData",
+          "borderStatus": "exceeded"
         }
       },
       {
@@ -65,6 +105,26 @@
         }
       },
       {
+        "date": "2026-06-09",
+        "dataCompletenessPercent": 93,
+        "dataCompletenessStatus": "highData",
+        "pollutionStatus": "normal",
+        "display": {
+          "backgroundStatus": "highData",
+          "borderStatus": "normal"
+        }
+      },
+      {
+        "date": "2026-06-10",
+        "dataCompletenessPercent": 74,
+        "dataCompletenessStatus": "lowData",
+        "pollutionStatus": "normal",
+        "display": {
+          "backgroundStatus": "lowData",
+          "borderStatus": "normal"
+        }
+      },
+      {
         "date": "2026-06-11",
         "dataCompletenessPercent": 90,
         "dataCompletenessStatus": "highData",
@@ -75,38 +135,8 @@
         }
       },
       {
-        "date": "2026-06-14",
-        "dataCompletenessPercent": 78,
-        "dataCompletenessStatus": "lowData",
-        "pollutionStatus": "insufficient",
-        "display": {
-          "backgroundStatus": "lowData",
-          "borderStatus": "insufficient"
-        }
-      },
-      {
-        "date": "2026-06-17",
-        "dataCompletenessPercent": 98,
-        "dataCompletenessStatus": "highData",
-        "pollutionStatus": "normal",
-        "display": {
-          "backgroundStatus": "highData",
-          "borderStatus": "normal"
-        }
-      },
-      {
-        "date": "2026-06-19",
-        "dataCompletenessPercent": 69,
-        "dataCompletenessStatus": "lowData",
-        "pollutionStatus": "insufficient",
-        "display": {
-          "backgroundStatus": "lowData",
-          "borderStatus": "insufficient"
-        }
-      },
-      {
-        "date": "2026-06-23",
-        "dataCompletenessPercent": 91,
+        "date": "2026-06-12",
+        "dataCompletenessPercent": 87,
         "dataCompletenessStatus": "highData",
         "pollutionStatus": "warning",
         "display": {
@@ -115,8 +145,28 @@
         }
       },
       {
-        "date": "2026-06-26",
-        "dataCompletenessPercent": 95,
+        "date": "2026-06-13",
+        "dataCompletenessPercent": 94,
+        "dataCompletenessStatus": "highData",
+        "pollutionStatus": "normal",
+        "display": {
+          "backgroundStatus": "highData",
+          "borderStatus": "normal"
+        }
+      },
+      {
+        "date": "2026-06-14",
+        "dataCompletenessPercent": 78,
+        "dataCompletenessStatus": "lowData",
+        "pollutionStatus": "warning",
+        "display": {
+          "backgroundStatus": "lowData",
+          "borderStatus": "warning"
+        }
+      },
+      {
+        "date": "2026-06-15",
+        "dataCompletenessPercent": 97,
         "dataCompletenessStatus": "highData",
         "pollutionStatus": "exceeded",
         "display": {

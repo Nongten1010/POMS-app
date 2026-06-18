@@ -189,7 +189,6 @@ const permissionSections = [
     permissionKey: 'eligible_factories',
     permissions: [{ label: 'มีสิทธิ์ใช้งาน (Admin)', action: 'view' }],
   },
-  { title: 'API Documentation', permissionKey: 'api_documentation', permissions: [{ label: 'มีสิทธิ์ใช้งาน', action: 'view' }] },
 ]
 
 const defaultUser = {

@@ -1,7 +1,7 @@
 {
   "metadata": {
     "description": "ตัวอย่างข้อมูลสถิติรายชั่วโมงสำหรับตารางสถิติข้อมูลและกราฟแนวโน้มสถานการณ์มลพิษ",
-    "date": "2026-06-26",
+    "date": "2026-06-15",
     "valueDefinitions": {
       "status": {
         "normal": "สีเขียว ปกติ ค่ามลพิษ <= normalMax",
@@ -58,92 +58,232 @@
   ],
   "measurementPoints": [
     {
-      "pointCode": "WP-01",
-      "stationId": "WP-01",
-      "date": "2026-06-26",
+      "pointCode": "S0001",
+      "stationId": "S0001",
+      "date": "2026-06-15",
       "rows": [
         {
           "time": "00.00-00.59 น.",
           "chartTime": "00:00",
-          "dataCompletenessPercent": 96,
+          "dataCompletenessPercent": 90,
           "values": {
-            "CO": { "value": 120, "displayValue": "120.00", "status": "normal" },
-            "NOX": { "value": 132, "displayValue": "132.00", "status": "normal" },
-            "TEMP": { "value": 93.1, "displayValue": "93.10", "status": "normal" },
-            "O2": { "value": 12.2, "displayValue": "12.20", "status": "normal" },
-            "FLOW": { "value": 1800000, "displayValue": "1,800,000.00", "status": "normal" }
+            "CO": {
+              "value": 120,
+              "displayValue": "120.00",
+              "status": "normal"
+            },
+            "NOX": {
+              "value": 132,
+              "displayValue": "132.00",
+              "status": "normal"
+            },
+            "TEMP": {
+              "value": 93.1,
+              "displayValue": "93.10",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.2,
+              "displayValue": "12.20",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1800000,
+              "displayValue": "1,800,000.00",
+              "status": "normal"
+            }
           }
         },
         {
           "time": "01.00-01.59 น.",
           "chartTime": "01:00",
-          "dataCompletenessPercent": 94,
+          "dataCompletenessPercent": 91,
           "values": {
-            "CO": { "value": 145, "displayValue": "145.00", "status": "normal" },
-            "NOX": { "value": 150, "displayValue": "150.00", "status": "normal" },
-            "TEMP": { "value": 93.3, "displayValue": "93.30", "status": "normal" },
-            "O2": { "value": 12.3, "displayValue": "12.30", "status": "normal" },
-            "FLOW": { "value": 1815000, "displayValue": "1,815,000.00", "status": "normal" }
+            "CO": {
+              "value": 145,
+              "displayValue": "145.00",
+              "status": "normal"
+            },
+            "NOX": {
+              "value": 150,
+              "displayValue": "150.00",
+              "status": "normal"
+            },
+            "TEMP": {
+              "value": 93.3,
+              "displayValue": "93.30",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.299999999999999,
+              "displayValue": "12.30",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1808500,
+              "displayValue": "1,808,500.00",
+              "status": "normal"
+            }
           }
         },
         {
           "time": "02.00-02.59 น.",
           "chartTime": "02:00",
-          "dataCompletenessPercent": 91,
+          "dataCompletenessPercent": 92,
           "values": {
-            "CO": { "value": 184, "displayValue": "184.00", "status": "warning" },
-            "NOX": { "value": 176, "displayValue": "176.00", "status": "normal" },
-            "TEMP": { "value": 93.4, "displayValue": "93.40", "status": "normal" },
-            "O2": { "value": 12.4, "displayValue": "12.40", "status": "normal" },
-            "FLOW": { "value": 1822000, "displayValue": "1,822,000.00", "status": "normal" }
+            "CO": {
+              "value": 184,
+              "displayValue": "184.00",
+              "status": "warning"
+            },
+            "NOX": {
+              "value": 176,
+              "displayValue": "176.00",
+              "status": "normal"
+            },
+            "TEMP": {
+              "value": 93.4,
+              "displayValue": "93.40",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.399999999999999,
+              "displayValue": "12.40",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1817000,
+              "displayValue": "1,817,000.00",
+              "status": "normal"
+            }
           }
         },
         {
           "time": "03.00-03.59 น.",
           "chartTime": "03:00",
-          "dataCompletenessPercent": 88,
+          "dataCompletenessPercent": 93,
           "values": {
-            "CO": { "value": 193, "displayValue": "193.00", "status": "exceeded" },
-            "NOX": { "value": 181, "displayValue": "181.00", "status": "warning" },
-            "TEMP": { "value": 93.6, "displayValue": "93.60", "status": "normal" },
-            "O2": { "value": 12.5, "displayValue": "12.50", "status": "normal" },
-            "FLOW": { "value": 1830000, "displayValue": "1,830,000.00", "status": "normal" }
+            "CO": {
+              "value": 193,
+              "displayValue": "193.00",
+              "status": "exceeded"
+            },
+            "NOX": {
+              "value": 181,
+              "displayValue": "181.00",
+              "status": "warning"
+            },
+            "TEMP": {
+              "value": 93.6,
+              "displayValue": "93.60",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.5,
+              "displayValue": "12.50",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1825500,
+              "displayValue": "1,825,500.00",
+              "status": "normal"
+            }
           }
         },
         {
           "time": "04.00-04.59 น.",
           "chartTime": "04:00",
-          "dataCompletenessPercent": 76,
+          "dataCompletenessPercent": 94,
           "values": {
-            "CO": { "value": null, "displayValue": "-", "status": "insufficient" },
-            "NOX": { "value": null, "displayValue": "-", "status": "insufficient" },
-            "TEMP": { "value": null, "displayValue": "-", "status": "insufficient" },
-            "O2": { "value": null, "displayValue": "-", "status": "insufficient" },
-            "FLOW": { "value": null, "displayValue": "-", "status": "insufficient" }
+            "CO": {
+              "value": 170,
+              "displayValue": "170.00",
+              "status": "normal"
+            },
+            "NOX": {
+              "value": 169,
+              "displayValue": "169.00",
+              "status": "normal"
+            },
+            "TEMP": {
+              "value": 93.5,
+              "displayValue": "93.50",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.6,
+              "displayValue": "12.60",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1834000,
+              "displayValue": "1,834,000.00",
+              "status": "normal"
+            }
           }
         },
         {
           "time": "05.00-05.59 น.",
           "chartTime": "05:00",
-          "dataCompletenessPercent": 93,
+          "dataCompletenessPercent": 95,
           "values": {
-            "CO": { "value": 160, "displayValue": "160.00", "status": "normal" },
-            "NOX": { "value": 196, "displayValue": "196.00", "status": "exceeded" },
-            "TEMP": { "value": 93.7, "displayValue": "93.70", "status": "normal" },
-            "O2": { "value": 12.6, "displayValue": "12.60", "status": "normal" },
-            "FLOW": { "value": 1835000, "displayValue": "1,835,000.00", "status": "normal" }
+            "CO": {
+              "value": 160,
+              "displayValue": "160.00",
+              "status": "normal"
+            },
+            "NOX": {
+              "value": 196,
+              "displayValue": "196.00",
+              "status": "exceeded"
+            },
+            "TEMP": {
+              "value": 93.7,
+              "displayValue": "93.70",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.7,
+              "displayValue": "12.70",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1842500,
+              "displayValue": "1,842,500.00",
+              "status": "normal"
+            }
           }
         },
         {
           "time": "06.00-06.59 น.",
           "chartTime": "06:00",
-          "dataCompletenessPercent": 95,
+          "dataCompletenessPercent": 96,
           "values": {
-            "CO": { "value": 170, "displayValue": "170.00", "status": "normal" },
-            "NOX": { "value": 174, "displayValue": "174.00", "status": "normal" },
-            "TEMP": { "value": 181, "displayValue": "181.00", "status": "warning" },
-            "O2": { "value": 12.7, "displayValue": "12.70", "status": "normal" },
-            "FLOW": { "value": 1841000, "displayValue": "1,841,000.00", "status": "normal" }
+            "CO": {
+              "value": 170,
+              "displayValue": "170.00",
+              "status": "normal"
+            },
+            "NOX": {
+              "value": 174,
+              "displayValue": "174.00",
+              "status": "normal"
+            },
+            "TEMP": {
+              "value": 181,
+              "displayValue": "181.00",
+              "status": "warning"
+            },
+            "O2": {
+              "value": 12.799999999999999,
+              "displayValue": "12.80",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1851000,
+              "displayValue": "1,851,000.00",
+              "status": "normal"
+            }
           }
         },
         {
@@ -151,54 +291,1318 @@
           "chartTime": "07:00",
           "dataCompletenessPercent": 97,
           "values": {
-            "CO": { "value": 179, "displayValue": "179.00", "status": "normal" },
-            "NOX": { "value": 188, "displayValue": "188.00", "status": "warning" },
-            "TEMP": { "value": 191, "displayValue": "191.00", "status": "exceeded" },
-            "O2": { "value": 12.8, "displayValue": "12.80", "status": "normal" },
-            "FLOW": { "value": 1850000, "displayValue": "1,850,000.00", "status": "normal" }
+            "CO": {
+              "value": 179,
+              "displayValue": "179.00",
+              "status": "normal"
+            },
+            "NOX": {
+              "value": 188,
+              "displayValue": "188.00",
+              "status": "warning"
+            },
+            "TEMP": {
+              "value": 191,
+              "displayValue": "191.00",
+              "status": "exceeded"
+            },
+            "O2": {
+              "value": 12.899999999999999,
+              "displayValue": "12.90",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1859500,
+              "displayValue": "1,859,500.00",
+              "status": "normal"
+            }
+          }
+        },
+        {
+          "time": "08.00-08.59 น.",
+          "chartTime": "08:00",
+          "dataCompletenessPercent": 90,
+          "values": {
+            "CO": {
+              "value": 168,
+              "displayValue": "168.00",
+              "status": "normal"
+            },
+            "NOX": {
+              "value": 177,
+              "displayValue": "177.00",
+              "status": "normal"
+            },
+            "TEMP": {
+              "value": 93.8,
+              "displayValue": "93.80",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.2,
+              "displayValue": "12.20",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1868000,
+              "displayValue": "1,868,000.00",
+              "status": "normal"
+            }
+          }
+        },
+        {
+          "time": "09.00-09.59 น.",
+          "chartTime": "09:00",
+          "dataCompletenessPercent": 91,
+          "values": {
+            "CO": {
+              "value": 172,
+              "displayValue": "172.00",
+              "status": "normal"
+            },
+            "NOX": {
+              "value": 173,
+              "displayValue": "173.00",
+              "status": "normal"
+            },
+            "TEMP": {
+              "value": 94,
+              "displayValue": "94.00",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.299999999999999,
+              "displayValue": "12.30",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1876500,
+              "displayValue": "1,876,500.00",
+              "status": "normal"
+            }
+          }
+        },
+        {
+          "time": "10.00-10.59 น.",
+          "chartTime": "10:00",
+          "dataCompletenessPercent": 92,
+          "values": {
+            "CO": {
+              "value": 181,
+              "displayValue": "181.00",
+              "status": "warning"
+            },
+            "NOX": {
+              "value": 180,
+              "displayValue": "180.00",
+              "status": "normal"
+            },
+            "TEMP": {
+              "value": 94.1,
+              "displayValue": "94.10",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.399999999999999,
+              "displayValue": "12.40",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1885000,
+              "displayValue": "1,885,000.00",
+              "status": "normal"
+            }
+          }
+        },
+        {
+          "time": "11.00-11.59 น.",
+          "chartTime": "11:00",
+          "dataCompletenessPercent": 93,
+          "values": {
+            "CO": {
+              "value": 176,
+              "displayValue": "176.00",
+              "status": "normal"
+            },
+            "NOX": {
+              "value": 185,
+              "displayValue": "185.00",
+              "status": "warning"
+            },
+            "TEMP": {
+              "value": 94.2,
+              "displayValue": "94.20",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.5,
+              "displayValue": "12.50",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1893500,
+              "displayValue": "1,893,500.00",
+              "status": "normal"
+            }
+          }
+        },
+        {
+          "time": "12.00-12.59 น.",
+          "chartTime": "12:00",
+          "dataCompletenessPercent": 94,
+          "values": {
+            "CO": {
+              "value": 169,
+              "displayValue": "169.00",
+              "status": "normal"
+            },
+            "NOX": {
+              "value": 171,
+              "displayValue": "171.00",
+              "status": "normal"
+            },
+            "TEMP": {
+              "value": 94.1,
+              "displayValue": "94.10",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.6,
+              "displayValue": "12.60",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1902000,
+              "displayValue": "1,902,000.00",
+              "status": "normal"
+            }
+          }
+        },
+        {
+          "time": "13.00-13.59 น.",
+          "chartTime": "13:00",
+          "dataCompletenessPercent": 95,
+          "values": {
+            "CO": {
+              "value": 188,
+              "displayValue": "188.00",
+              "status": "warning"
+            },
+            "NOX": {
+              "value": 176,
+              "displayValue": "176.00",
+              "status": "normal"
+            },
+            "TEMP": {
+              "value": 94.3,
+              "displayValue": "94.30",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.7,
+              "displayValue": "12.70",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1910500,
+              "displayValue": "1,910,500.00",
+              "status": "normal"
+            }
+          }
+        },
+        {
+          "time": "14.00-14.59 น.",
+          "chartTime": "14:00",
+          "dataCompletenessPercent": 96,
+          "values": {
+            "CO": {
+              "value": 192,
+              "displayValue": "192.00",
+              "status": "exceeded"
+            },
+            "NOX": {
+              "value": 190,
+              "displayValue": "190.00",
+              "status": "warning"
+            },
+            "TEMP": {
+              "value": 94.5,
+              "displayValue": "94.50",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.799999999999999,
+              "displayValue": "12.80",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1919000,
+              "displayValue": "1,919,000.00",
+              "status": "normal"
+            }
+          }
+        },
+        {
+          "time": "15.00-15.59 น.",
+          "chartTime": "15:00",
+          "dataCompletenessPercent": 97,
+          "values": {
+            "CO": {
+              "value": 174,
+              "displayValue": "174.00",
+              "status": "normal"
+            },
+            "NOX": {
+              "value": 182,
+              "displayValue": "182.00",
+              "status": "warning"
+            },
+            "TEMP": {
+              "value": 94.2,
+              "displayValue": "94.20",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.899999999999999,
+              "displayValue": "12.90",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1927500,
+              "displayValue": "1,927,500.00",
+              "status": "normal"
+            }
+          }
+        },
+        {
+          "time": "16.00-16.59 น.",
+          "chartTime": "16:00",
+          "dataCompletenessPercent": 90,
+          "values": {
+            "CO": {
+              "value": 166,
+              "displayValue": "166.00",
+              "status": "normal"
+            },
+            "NOX": {
+              "value": 175,
+              "displayValue": "175.00",
+              "status": "normal"
+            },
+            "TEMP": {
+              "value": 94,
+              "displayValue": "94.00",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.2,
+              "displayValue": "12.20",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1936000,
+              "displayValue": "1,936,000.00",
+              "status": "normal"
+            }
+          }
+        },
+        {
+          "time": "17.00-17.59 น.",
+          "chartTime": "17:00",
+          "dataCompletenessPercent": 91,
+          "values": {
+            "CO": {
+              "value": 182,
+              "displayValue": "182.00",
+              "status": "warning"
+            },
+            "NOX": {
+              "value": 179,
+              "displayValue": "179.00",
+              "status": "normal"
+            },
+            "TEMP": {
+              "value": 93.9,
+              "displayValue": "93.90",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.299999999999999,
+              "displayValue": "12.30",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1944500,
+              "displayValue": "1,944,500.00",
+              "status": "normal"
+            }
+          }
+        },
+        {
+          "time": "18.00-18.59 น.",
+          "chartTime": "18:00",
+          "dataCompletenessPercent": 92,
+          "values": {
+            "CO": {
+              "value": 171,
+              "displayValue": "171.00",
+              "status": "normal"
+            },
+            "NOX": {
+              "value": 184,
+              "displayValue": "184.00",
+              "status": "warning"
+            },
+            "TEMP": {
+              "value": 93.7,
+              "displayValue": "93.70",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.399999999999999,
+              "displayValue": "12.40",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1953000,
+              "displayValue": "1,953,000.00",
+              "status": "normal"
+            }
+          }
+        },
+        {
+          "time": "19.00-19.59 น.",
+          "chartTime": "19:00",
+          "dataCompletenessPercent": 93,
+          "values": {
+            "CO": {
+              "value": 178,
+              "displayValue": "178.00",
+              "status": "normal"
+            },
+            "NOX": {
+              "value": 172,
+              "displayValue": "172.00",
+              "status": "normal"
+            },
+            "TEMP": {
+              "value": 93.8,
+              "displayValue": "93.80",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.5,
+              "displayValue": "12.50",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1961500,
+              "displayValue": "1,961,500.00",
+              "status": "normal"
+            }
+          }
+        },
+        {
+          "time": "20.00-20.59 น.",
+          "chartTime": "20:00",
+          "dataCompletenessPercent": 94,
+          "values": {
+            "CO": {
+              "value": 186,
+              "displayValue": "186.00",
+              "status": "warning"
+            },
+            "NOX": {
+              "value": 178,
+              "displayValue": "178.00",
+              "status": "normal"
+            },
+            "TEMP": {
+              "value": 94.1,
+              "displayValue": "94.10",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.6,
+              "displayValue": "12.60",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1970000,
+              "displayValue": "1,970,000.00",
+              "status": "normal"
+            }
+          }
+        },
+        {
+          "time": "21.00-21.59 น.",
+          "chartTime": "21:00",
+          "dataCompletenessPercent": 95,
+          "values": {
+            "CO": {
+              "value": 173,
+              "displayValue": "173.00",
+              "status": "normal"
+            },
+            "NOX": {
+              "value": 187,
+              "displayValue": "187.00",
+              "status": "warning"
+            },
+            "TEMP": {
+              "value": 94.4,
+              "displayValue": "94.40",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.7,
+              "displayValue": "12.70",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1978500,
+              "displayValue": "1,978,500.00",
+              "status": "normal"
+            }
+          }
+        },
+        {
+          "time": "22.00-22.59 น.",
+          "chartTime": "22:00",
+          "dataCompletenessPercent": 96,
+          "values": {
+            "CO": {
+              "value": 165,
+              "displayValue": "165.00",
+              "status": "normal"
+            },
+            "NOX": {
+              "value": 169,
+              "displayValue": "169.00",
+              "status": "normal"
+            },
+            "TEMP": {
+              "value": 94.2,
+              "displayValue": "94.20",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.799999999999999,
+              "displayValue": "12.80",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1987000,
+              "displayValue": "1,987,000.00",
+              "status": "normal"
+            }
+          }
+        },
+        {
+          "time": "23.00-23.59 น.",
+          "chartTime": "23:00",
+          "dataCompletenessPercent": 97,
+          "values": {
+            "CO": {
+              "value": 180,
+              "displayValue": "180.00",
+              "status": "normal"
+            },
+            "NOX": {
+              "value": 181,
+              "displayValue": "181.00",
+              "status": "warning"
+            },
+            "TEMP": {
+              "value": 94,
+              "displayValue": "94.00",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.899999999999999,
+              "displayValue": "12.90",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1995500,
+              "displayValue": "1,995,500.00",
+              "status": "normal"
+            }
           }
         }
       ]
     },
     {
-      "pointCode": "WP-02",
-      "stationId": "WP-02",
-      "date": "2026-06-26",
+      "pointCode": "S0002",
+      "stationId": "S0002",
+      "date": "2026-06-15",
       "rows": [
         {
           "time": "00.00-00.59 น.",
           "chartTime": "00:00",
           "dataCompletenessPercent": 90,
           "values": {
-            "CO": { "value": 122, "displayValue": "122.00", "status": "normal" },
-            "NOX": { "value": 135, "displayValue": "135.00", "status": "normal" },
-            "TEMP": { "value": 93.2, "displayValue": "93.20", "status": "normal" },
-            "O2": { "value": 12.2, "displayValue": "12.20", "status": "normal" },
-            "FLOW": { "value": 1843000, "displayValue": "1,843,000.00", "status": "normal" }
+            "CO": {
+              "value": 122,
+              "displayValue": "122.00",
+              "status": "normal"
+            },
+            "NOX": {
+              "value": 134,
+              "displayValue": "134.00",
+              "status": "normal"
+            },
+            "TEMP": {
+              "value": 93.1,
+              "displayValue": "93.10",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.2,
+              "displayValue": "12.20",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1802000,
+              "displayValue": "1,802,000.00",
+              "status": "normal"
+            }
           }
         },
         {
           "time": "01.00-01.59 น.",
           "chartTime": "01:00",
-          "dataCompletenessPercent": 74,
+          "dataCompletenessPercent": 91,
           "values": {
-            "CO": { "value": null, "displayValue": "-", "status": "insufficient" },
-            "NOX": { "value": null, "displayValue": "-", "status": "insufficient" },
-            "TEMP": { "value": null, "displayValue": "-", "status": "insufficient" },
-            "O2": { "value": null, "displayValue": "-", "status": "insufficient" },
-            "FLOW": { "value": null, "displayValue": "-", "status": "insufficient" }
+            "CO": {
+              "value": 147,
+              "displayValue": "147.00",
+              "status": "normal"
+            },
+            "NOX": {
+              "value": 152,
+              "displayValue": "152.00",
+              "status": "normal"
+            },
+            "TEMP": {
+              "value": 93.3,
+              "displayValue": "93.30",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.299999999999999,
+              "displayValue": "12.30",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1810500,
+              "displayValue": "1,810,500.00",
+              "status": "normal"
+            }
           }
         },
         {
           "time": "02.00-02.59 น.",
           "chartTime": "02:00",
+          "dataCompletenessPercent": 92,
+          "values": {
+            "CO": {
+              "value": 186,
+              "displayValue": "186.00",
+              "status": "warning"
+            },
+            "NOX": {
+              "value": 178,
+              "displayValue": "178.00",
+              "status": "normal"
+            },
+            "TEMP": {
+              "value": 93.4,
+              "displayValue": "93.40",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.399999999999999,
+              "displayValue": "12.40",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1819000,
+              "displayValue": "1,819,000.00",
+              "status": "normal"
+            }
+          }
+        },
+        {
+          "time": "03.00-03.59 น.",
+          "chartTime": "03:00",
           "dataCompletenessPercent": 93,
           "values": {
-            "CO": { "value": 186, "displayValue": "186.00", "status": "warning" },
-            "NOX": { "value": 192, "displayValue": "192.00", "status": "exceeded" },
-            "TEMP": { "value": 93.5, "displayValue": "93.50", "status": "normal" },
-            "O2": { "value": 12.4, "displayValue": "12.40", "status": "normal" },
-            "FLOW": { "value": 1865000, "displayValue": "1,865,000.00", "status": "normal" }
+            "CO": {
+              "value": 195,
+              "displayValue": "195.00",
+              "status": "exceeded"
+            },
+            "NOX": {
+              "value": 183,
+              "displayValue": "183.00",
+              "status": "warning"
+            },
+            "TEMP": {
+              "value": 93.6,
+              "displayValue": "93.60",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.5,
+              "displayValue": "12.50",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1827500,
+              "displayValue": "1,827,500.00",
+              "status": "normal"
+            }
+          }
+        },
+        {
+          "time": "04.00-04.59 น.",
+          "chartTime": "04:00",
+          "dataCompletenessPercent": 94,
+          "values": {
+            "CO": {
+              "value": 172,
+              "displayValue": "172.00",
+              "status": "normal"
+            },
+            "NOX": {
+              "value": 171,
+              "displayValue": "171.00",
+              "status": "normal"
+            },
+            "TEMP": {
+              "value": 93.5,
+              "displayValue": "93.50",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.6,
+              "displayValue": "12.60",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1836000,
+              "displayValue": "1,836,000.00",
+              "status": "normal"
+            }
+          }
+        },
+        {
+          "time": "05.00-05.59 น.",
+          "chartTime": "05:00",
+          "dataCompletenessPercent": 95,
+          "values": {
+            "CO": {
+              "value": 162,
+              "displayValue": "162.00",
+              "status": "normal"
+            },
+            "NOX": {
+              "value": 198,
+              "displayValue": "198.00",
+              "status": "exceeded"
+            },
+            "TEMP": {
+              "value": 93.7,
+              "displayValue": "93.70",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.7,
+              "displayValue": "12.70",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1844500,
+              "displayValue": "1,844,500.00",
+              "status": "normal"
+            }
+          }
+        },
+        {
+          "time": "06.00-06.59 น.",
+          "chartTime": "06:00",
+          "dataCompletenessPercent": 96,
+          "values": {
+            "CO": {
+              "value": 172,
+              "displayValue": "172.00",
+              "status": "normal"
+            },
+            "NOX": {
+              "value": 176,
+              "displayValue": "176.00",
+              "status": "normal"
+            },
+            "TEMP": {
+              "value": 181,
+              "displayValue": "181.00",
+              "status": "warning"
+            },
+            "O2": {
+              "value": 12.799999999999999,
+              "displayValue": "12.80",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1853000,
+              "displayValue": "1,853,000.00",
+              "status": "normal"
+            }
+          }
+        },
+        {
+          "time": "07.00-07.59 น.",
+          "chartTime": "07:00",
+          "dataCompletenessPercent": 97,
+          "values": {
+            "CO": {
+              "value": 181,
+              "displayValue": "181.00",
+              "status": "warning"
+            },
+            "NOX": {
+              "value": 190,
+              "displayValue": "190.00",
+              "status": "warning"
+            },
+            "TEMP": {
+              "value": 191,
+              "displayValue": "191.00",
+              "status": "exceeded"
+            },
+            "O2": {
+              "value": 12.899999999999999,
+              "displayValue": "12.90",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1861500,
+              "displayValue": "1,861,500.00",
+              "status": "normal"
+            }
+          }
+        },
+        {
+          "time": "08.00-08.59 น.",
+          "chartTime": "08:00",
+          "dataCompletenessPercent": 90,
+          "values": {
+            "CO": {
+              "value": 170,
+              "displayValue": "170.00",
+              "status": "normal"
+            },
+            "NOX": {
+              "value": 179,
+              "displayValue": "179.00",
+              "status": "normal"
+            },
+            "TEMP": {
+              "value": 93.8,
+              "displayValue": "93.80",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.2,
+              "displayValue": "12.20",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1870000,
+              "displayValue": "1,870,000.00",
+              "status": "normal"
+            }
+          }
+        },
+        {
+          "time": "09.00-09.59 น.",
+          "chartTime": "09:00",
+          "dataCompletenessPercent": 91,
+          "values": {
+            "CO": {
+              "value": 174,
+              "displayValue": "174.00",
+              "status": "normal"
+            },
+            "NOX": {
+              "value": 175,
+              "displayValue": "175.00",
+              "status": "normal"
+            },
+            "TEMP": {
+              "value": 94,
+              "displayValue": "94.00",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.299999999999999,
+              "displayValue": "12.30",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1878500,
+              "displayValue": "1,878,500.00",
+              "status": "normal"
+            }
+          }
+        },
+        {
+          "time": "10.00-10.59 น.",
+          "chartTime": "10:00",
+          "dataCompletenessPercent": 92,
+          "values": {
+            "CO": {
+              "value": 183,
+              "displayValue": "183.00",
+              "status": "warning"
+            },
+            "NOX": {
+              "value": 182,
+              "displayValue": "182.00",
+              "status": "warning"
+            },
+            "TEMP": {
+              "value": 94.1,
+              "displayValue": "94.10",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.399999999999999,
+              "displayValue": "12.40",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1887000,
+              "displayValue": "1,887,000.00",
+              "status": "normal"
+            }
+          }
+        },
+        {
+          "time": "11.00-11.59 น.",
+          "chartTime": "11:00",
+          "dataCompletenessPercent": 93,
+          "values": {
+            "CO": {
+              "value": 178,
+              "displayValue": "178.00",
+              "status": "normal"
+            },
+            "NOX": {
+              "value": 187,
+              "displayValue": "187.00",
+              "status": "warning"
+            },
+            "TEMP": {
+              "value": 94.2,
+              "displayValue": "94.20",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.5,
+              "displayValue": "12.50",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1895500,
+              "displayValue": "1,895,500.00",
+              "status": "normal"
+            }
+          }
+        },
+        {
+          "time": "12.00-12.59 น.",
+          "chartTime": "12:00",
+          "dataCompletenessPercent": 94,
+          "values": {
+            "CO": {
+              "value": 171,
+              "displayValue": "171.00",
+              "status": "normal"
+            },
+            "NOX": {
+              "value": 173,
+              "displayValue": "173.00",
+              "status": "normal"
+            },
+            "TEMP": {
+              "value": 94.1,
+              "displayValue": "94.10",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.6,
+              "displayValue": "12.60",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1904000,
+              "displayValue": "1,904,000.00",
+              "status": "normal"
+            }
+          }
+        },
+        {
+          "time": "13.00-13.59 น.",
+          "chartTime": "13:00",
+          "dataCompletenessPercent": 95,
+          "values": {
+            "CO": {
+              "value": 190,
+              "displayValue": "190.00",
+              "status": "warning"
+            },
+            "NOX": {
+              "value": 178,
+              "displayValue": "178.00",
+              "status": "normal"
+            },
+            "TEMP": {
+              "value": 94.3,
+              "displayValue": "94.30",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.7,
+              "displayValue": "12.70",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1912500,
+              "displayValue": "1,912,500.00",
+              "status": "normal"
+            }
+          }
+        },
+        {
+          "time": "14.00-14.59 น.",
+          "chartTime": "14:00",
+          "dataCompletenessPercent": 96,
+          "values": {
+            "CO": {
+              "value": 194,
+              "displayValue": "194.00",
+              "status": "exceeded"
+            },
+            "NOX": {
+              "value": 192,
+              "displayValue": "192.00",
+              "status": "exceeded"
+            },
+            "TEMP": {
+              "value": 94.5,
+              "displayValue": "94.50",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.799999999999999,
+              "displayValue": "12.80",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1921000,
+              "displayValue": "1,921,000.00",
+              "status": "normal"
+            }
+          }
+        },
+        {
+          "time": "15.00-15.59 น.",
+          "chartTime": "15:00",
+          "dataCompletenessPercent": 97,
+          "values": {
+            "CO": {
+              "value": 176,
+              "displayValue": "176.00",
+              "status": "normal"
+            },
+            "NOX": {
+              "value": 184,
+              "displayValue": "184.00",
+              "status": "warning"
+            },
+            "TEMP": {
+              "value": 94.2,
+              "displayValue": "94.20",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.899999999999999,
+              "displayValue": "12.90",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1929500,
+              "displayValue": "1,929,500.00",
+              "status": "normal"
+            }
+          }
+        },
+        {
+          "time": "16.00-16.59 น.",
+          "chartTime": "16:00",
+          "dataCompletenessPercent": 90,
+          "values": {
+            "CO": {
+              "value": 168,
+              "displayValue": "168.00",
+              "status": "normal"
+            },
+            "NOX": {
+              "value": 177,
+              "displayValue": "177.00",
+              "status": "normal"
+            },
+            "TEMP": {
+              "value": 94,
+              "displayValue": "94.00",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.2,
+              "displayValue": "12.20",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1938000,
+              "displayValue": "1,938,000.00",
+              "status": "normal"
+            }
+          }
+        },
+        {
+          "time": "17.00-17.59 น.",
+          "chartTime": "17:00",
+          "dataCompletenessPercent": 91,
+          "values": {
+            "CO": {
+              "value": 184,
+              "displayValue": "184.00",
+              "status": "warning"
+            },
+            "NOX": {
+              "value": 181,
+              "displayValue": "181.00",
+              "status": "warning"
+            },
+            "TEMP": {
+              "value": 93.9,
+              "displayValue": "93.90",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.299999999999999,
+              "displayValue": "12.30",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1946500,
+              "displayValue": "1,946,500.00",
+              "status": "normal"
+            }
+          }
+        },
+        {
+          "time": "18.00-18.59 น.",
+          "chartTime": "18:00",
+          "dataCompletenessPercent": 92,
+          "values": {
+            "CO": {
+              "value": 173,
+              "displayValue": "173.00",
+              "status": "normal"
+            },
+            "NOX": {
+              "value": 186,
+              "displayValue": "186.00",
+              "status": "warning"
+            },
+            "TEMP": {
+              "value": 93.7,
+              "displayValue": "93.70",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.399999999999999,
+              "displayValue": "12.40",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1955000,
+              "displayValue": "1,955,000.00",
+              "status": "normal"
+            }
+          }
+        },
+        {
+          "time": "19.00-19.59 น.",
+          "chartTime": "19:00",
+          "dataCompletenessPercent": 93,
+          "values": {
+            "CO": {
+              "value": 180,
+              "displayValue": "180.00",
+              "status": "normal"
+            },
+            "NOX": {
+              "value": 174,
+              "displayValue": "174.00",
+              "status": "normal"
+            },
+            "TEMP": {
+              "value": 93.8,
+              "displayValue": "93.80",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.5,
+              "displayValue": "12.50",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1963500,
+              "displayValue": "1,963,500.00",
+              "status": "normal"
+            }
+          }
+        },
+        {
+          "time": "20.00-20.59 น.",
+          "chartTime": "20:00",
+          "dataCompletenessPercent": 94,
+          "values": {
+            "CO": {
+              "value": 188,
+              "displayValue": "188.00",
+              "status": "warning"
+            },
+            "NOX": {
+              "value": 180,
+              "displayValue": "180.00",
+              "status": "normal"
+            },
+            "TEMP": {
+              "value": 94.1,
+              "displayValue": "94.10",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.6,
+              "displayValue": "12.60",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1972000,
+              "displayValue": "1,972,000.00",
+              "status": "normal"
+            }
+          }
+        },
+        {
+          "time": "21.00-21.59 น.",
+          "chartTime": "21:00",
+          "dataCompletenessPercent": 95,
+          "values": {
+            "CO": {
+              "value": 175,
+              "displayValue": "175.00",
+              "status": "normal"
+            },
+            "NOX": {
+              "value": 189,
+              "displayValue": "189.00",
+              "status": "warning"
+            },
+            "TEMP": {
+              "value": 94.4,
+              "displayValue": "94.40",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.7,
+              "displayValue": "12.70",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1980500,
+              "displayValue": "1,980,500.00",
+              "status": "normal"
+            }
+          }
+        },
+        {
+          "time": "22.00-22.59 น.",
+          "chartTime": "22:00",
+          "dataCompletenessPercent": 96,
+          "values": {
+            "CO": {
+              "value": 167,
+              "displayValue": "167.00",
+              "status": "normal"
+            },
+            "NOX": {
+              "value": 171,
+              "displayValue": "171.00",
+              "status": "normal"
+            },
+            "TEMP": {
+              "value": 94.2,
+              "displayValue": "94.20",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.799999999999999,
+              "displayValue": "12.80",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1989000,
+              "displayValue": "1,989,000.00",
+              "status": "normal"
+            }
+          }
+        },
+        {
+          "time": "23.00-23.59 น.",
+          "chartTime": "23:00",
+          "dataCompletenessPercent": 97,
+          "values": {
+            "CO": {
+              "value": 182,
+              "displayValue": "182.00",
+              "status": "warning"
+            },
+            "NOX": {
+              "value": 183,
+              "displayValue": "183.00",
+              "status": "warning"
+            },
+            "TEMP": {
+              "value": 94,
+              "displayValue": "94.00",
+              "status": "normal"
+            },
+            "O2": {
+              "value": 12.899999999999999,
+              "displayValue": "12.90",
+              "status": "normal"
+            },
+            "FLOW": {
+              "value": 1997500,
+              "displayValue": "1,997,500.00",
+              "status": "normal"
+            }
           }
         }
       ]
