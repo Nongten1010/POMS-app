@@ -104,6 +104,16 @@ function getMonitoringPointCode(point, index) {
   return `${prefix}${String(index + 1).padStart(4, '0')}`
 }
 
+function getRequestNo(point, index) {
+  const prefix = point?.systemType || 'CEMS'
+  return `${prefix}-69-${String(index + 2).padStart(5, '0')}`
+}
+
+function getLatestUpdatedAt(point) {
+  const latestRow = Array.isArray(point?.data) ? point.data.at(-1) : null
+  return latestRow?.cdate || '-'
+}
+
 function mapFactoryRows(rows) {
   return rows.map((row, index) => ({
     id: row.factoryId || `factory-${index}`,
@@ -131,7 +141,7 @@ function makeRequestRows(factory) {
   const points = Array.isArray(factory.measurementPoints) ? factory.measurementPoints : []
   const rows = points.map((point, index) => ({
     id: `${factory.id}-request-${index + 1}`,
-    requestNo: `REQ-2569-${String(index + 1).padStart(4, '0')}`,
+    requestNo: getRequestNo(point, index),
     requestType: index === 0 ? 'เพิ่มจุดตรวจวัด' : 'เพิ่มพารามิเตอร์',
     systemType: point.systemType ?? '-',
     pointCode: getMonitoringPointCode(point, index),
@@ -146,7 +156,7 @@ function makeRequestRows(factory) {
     : [
         {
           id: `${factory.id}-request-empty`,
-          requestNo: 'REQ-2569-0001',
+          requestNo: 'CEMS-69-00002',
           requestType: 'เพิ่มจุดตรวจวัด',
           systemType: '-',
           pointCode: '-',
@@ -271,7 +281,7 @@ function getMonitoringPointColumns(userType) {
     { field: 'pointName', headerName: 'ชื่อจุดตรวจวัด', minWidth: 220, flex: 1 },
     { field: 'systemType', headerName: 'ประเภทจุดตรวจวัด', width: 160 },
     { field: 'parameters', headerName: 'พารามิเตอร์', minWidth: 260, flex: 1 },
-    { field: 'status', headerName: 'สถานะ', width: 160, renderCell: (params) => <StatusChip value={params.value} /> },
+    { field: 'latestUpdatedAt', headerName: 'อัพเดตล่าสุด', width: 180 },
     {
       field: 'actions',
       headerName: 'จัดการ',
@@ -292,6 +302,18 @@ const requestColumns = [
   { field: 'submittedDate', headerName: 'วันที่ยื่นคำขอ', width: 150 },
   { field: 'reviewedDate', headerName: 'วันที่พิจารณา', width: 150 },
   { field: 'status', headerName: 'สถานะ', width: 170, renderCell: (params) => <StatusChip value={params.value} /> },
+  {
+    field: 'actions',
+    headerName: 'จัดการ',
+    width: 130,
+    sortable: false,
+    filterable: false,
+    renderCell: () => (
+      <Button size="small" variant="outlined" startIcon={<VisibilityIcon />} sx={{ minWidth: 92 }}>
+        เปิดดู
+      </Button>
+    ),
+  },
 ]
 
 function mapMonitoringPointRows(factory) {
@@ -303,7 +325,7 @@ function mapMonitoringPointRows(factory) {
     parameters: Array.isArray(point.parameters)
       ? point.parameters.join(', ')
       : point.parameters ?? point.parameterText ?? 'CO (ppm), NOx (ppm), Temp. (°C), O2 (%), Flow (m3/hr)',
-    status: point.status ?? 'เชื่อมต่อแล้ว',
+    latestUpdatedAt: getLatestUpdatedAt(point),
   }))
 }
 

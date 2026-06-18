@@ -36,6 +36,7 @@ import {
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import CloseIcon from '@mui/icons-material/Close'
+import FileDownloadIcon from '@mui/icons-material/FileDownload'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import UploadFileIcon from '@mui/icons-material/UploadFile'
 import WarningAmberIcon from '@mui/icons-material/WarningAmber'
@@ -2175,6 +2176,17 @@ function RequestDocumentDialog({
       || [request?.status, request?.statusLabel, request?.statusCode].includes('REVISED_PENDING_DESIGN_REVIEW')
     )
   const latestRevisionMessage = isRevisedPendingReview ? getLatestRevisionMessage(request) : ''
+  const handleDownload = useCallback(() => {
+    if (!request) return
+
+    const blob = new Blob([JSON.stringify(request, null, 2)], { type: 'application/json;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${request.requestNo || 'connection-request'}.json`
+    link.click()
+    URL.revokeObjectURL(url)
+  }, [request])
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg">
@@ -2577,8 +2589,13 @@ function RequestDocumentDialog({
           {footerActions}
         </DialogActions>
       ) : (
-        <DialogActions sx={{ justifyContent: 'center' }}>
-          <Button color="inherit" disabled={approving} onClick={onClose}>ปิด</Button>
+        <DialogActions sx={{ justifyContent: 'center', gap: 1 }}>
+          <Button variant="outlined" color="inherit" disabled={approving} onClick={onClose}>
+            ปิด
+          </Button>
+          <Button variant="contained" startIcon={<FileDownloadIcon />} disabled={loading || !request} onClick={handleDownload}>
+            ดาวน์โหลด
+          </Button>
           {canReview ? (
             <>
               <Button variant="outlined" disabled={approving || loading} onClick={onRequestRevision}>

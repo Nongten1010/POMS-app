@@ -1229,34 +1229,33 @@ function escapeHtml(value) {
   })
 }
 
-function getFactoryMapMarkerHtml(factory) {
+function encodeSvgDataUrl(svg) {
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`
+}
+
+function getFactoryMapMarkerIcon(factory) {
   const label = escapeHtml(factory.logoText || getFactoryLogoText(factory.name, factory.factoryId))
+  const fill = escapeHtml(factory.logoBg || '#dbeafe')
   const image = factory.logoUrl
-    ? `<img src="${escapeHtml(factory.logoUrl)}" alt="" onerror="this.remove()" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:999px;" />`
+    ? `
+      <clipPath id="marker-clip">
+        <circle cx="24" cy="24" r="21" />
+      </clipPath>
+      <image href="${escapeHtml(factory.logoUrl)}" x="3" y="3" width="42" height="42" clip-path="url(#marker-clip)" preserveAspectRatio="xMidYMid slice" />
+    `
     : ''
 
-  return `
-    <div style="
-      position:relative;
-      width:48px;
-      height:48px;
-      border:3px solid #ffffff;
-      border-radius:999px;
-      background:${factory.logoBg || '#dbeafe'};
-      color:#0f172a;
-      display:grid;
-      place-items:center;
-      font-family:'Noto Sans Thai', Arial, sans-serif;
-      font-size:14px;
-      font-weight:800;
-      line-height:1;
-      box-shadow:0 8px 18px rgba(15, 23, 42, 0.22);
-      overflow:hidden;
-    ">
-      <span style="position:relative;z-index:0;">${label}</span>
+  return encodeSvgDataUrl(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+      <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+        <feDropShadow dx="0" dy="5" stdDeviation="4" flood-color="#0f172a" flood-opacity="0.25" />
+      </filter>
+      <circle cx="24" cy="24" r="22" fill="#ffffff" filter="url(#shadow)" />
+      <circle cx="24" cy="24" r="19" fill="${fill}" />
+      <text x="24" y="28" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="800" fill="#0f172a">${label}</text>
       ${image}
-    </div>
-  `
+    </svg>
+  `)
 }
 
 function FactoryMap({ factories }) {
@@ -1311,7 +1310,7 @@ function FactoryMap({ factories }) {
             title: factory.name,
             detail: `${factory.newRegistrationNo} (${factory.oldRegistrationNo})<br>${factory.address}`,
             icon: {
-              html: getFactoryMapMarkerHtml(factory),
+              url: getFactoryMapMarkerIcon(factory),
               offset: { x: 24, y: 24 },
               size: { width: 48, height: 48 },
             },
@@ -1324,7 +1323,7 @@ function FactoryMap({ factories }) {
     if (factoriesWithCoordinates.length > 0) {
       const center = getMapCenter(factoriesWithCoordinates)
       map.location(center, true)
-      map.zoom(factoriesWithCoordinates.length === 1 ? 13 : 10, true)
+      map.zoom(factoriesWithCoordinates.length === 1 ? 15 : 14, true)
     }
   }, [factories])
 
