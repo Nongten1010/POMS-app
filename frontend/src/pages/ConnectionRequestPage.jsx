@@ -1146,7 +1146,17 @@ function OfficerFactoryActions({ row, onOpenMonitoringPoints }) {
   )
 }
 
-function OperatorFactoryActions({ row, onOpenRequestForm, onOpenMonitoringPoints }) {
+function OperatorFactoryActions({ row, onOpenRequestForm, onOpenMonitoringPoints, onOpenIntentDialog }) {
+  if (!row.isEligible) {
+    return (
+      <Stack direction="row" spacing={1} sx={tableActionStackSx}>
+        <Button size="small" variant="outlined" onClick={() => onOpenIntentDialog?.(row)}>
+          แจ้งความประสงค์
+        </Button>
+      </Stack>
+    )
+  }
+
   return (
     <Stack direction="row" spacing={1} sx={tableActionStackSx}>
       <Button size="small" variant="outlined" onClick={() => onOpenMonitoringPoints?.(row)}>
@@ -3881,7 +3891,7 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose }) {
   )
 }
 
-function getFactoryColumns(isOperator, onOpenRequestForm, onOpenMonitoringPoints) {
+function getFactoryColumns(isOperator, onOpenRequestForm, onOpenMonitoringPoints, onOpenIntentDialog) {
   const columns = [
     { field: 'factoryName', headerName: 'ชื่อโรงงาน/บริษัท', width: 240 },
     { field: 'newRegistrationNo', headerName: 'เลขทะเบียนโรงงาน (ใหม่)', width: 190 },
@@ -3899,7 +3909,7 @@ function getFactoryColumns(isOperator, onOpenRequestForm, onOpenMonitoringPoints
     {
       field: 'actions',
       headerName: 'จัดการ',
-      width: isOperator ? 240 : 290,
+      width: isOperator ? 260 : 290,
       sortable: false,
       filterable: false,
       renderCell: (params) =>
@@ -3908,6 +3918,7 @@ function getFactoryColumns(isOperator, onOpenRequestForm, onOpenMonitoringPoints
             row={params.row}
             onOpenRequestForm={onOpenRequestForm}
             onOpenMonitoringPoints={onOpenMonitoringPoints}
+            onOpenIntentDialog={onOpenIntentDialog}
           />
         ) : (
           <OfficerFactoryActions row={params.row} onOpenMonitoringPoints={onOpenMonitoringPoints} />
@@ -5464,6 +5475,8 @@ function ConnectionRequestPage({ userType = '', accessToken = '' }) {
   const [revisionOfficerNote, setRevisionOfficerNote] = useState('')
   const [monitoringPointFactory, setMonitoringPointFactory] = useState(null)
   const [connectionSettingsContext, setConnectionSettingsContext] = useState(null)
+  const [intentRequestFactory, setIntentRequestFactory] = useState(null)
+  const [intentReason, setIntentReason] = useState('')
   const [operatorFactoryRows, setOperatorFactoryRows] = useState([])
   const [operatorFactoriesError, setOperatorFactoriesError] = useState('')
   const [requestTableRows, setRequestTableRows] = useState([])
@@ -5477,14 +5490,26 @@ function ConnectionRequestPage({ userType = '', accessToken = '' }) {
   const effectiveSubMenu = availableSubMenus.some((menu) => menu.value === selectedSubMenu)
     ? selectedSubMenu
     : availableSubMenus[0]?.value
+  const openIntentDialog = useCallback((factory) => {
+    setIntentRequestFactory(factory)
+    setIntentReason('')
+  }, [])
+  const closeIntentDialog = useCallback(() => {
+    setIntentRequestFactory(null)
+    setIntentReason('')
+  }, [])
+  const submitIntentRequest = useCallback(() => {
+    closeIntentDialog()
+  }, [closeIntentDialog])
   const factoryColumns = useMemo(
     () =>
       getFactoryColumns(
         isOperator,
         (factory, formType) => setRequestForm({ factory, formType }),
         setMonitoringPointFactory,
+        openIntentDialog,
       ),
-    [isOperator],
+    [isOperator, openIntentDialog],
   )
   const handleOpenRequestDocument = useCallback((row, mode = 'view') => {
     setRequestDocument(row)
@@ -6066,6 +6091,39 @@ function ConnectionRequestPage({ userType = '', accessToken = '' }) {
           }}
         />
       </Paper>
+      <Dialog open={Boolean(intentRequestFactory)} onClose={closeIntentDialog} fullWidth maxWidth="sm">
+        <DialogTitle>แจ้งความประสงค์</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2}>
+            <Box>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                {intentRequestFactory?.factoryName ?? '-'}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {intentRequestFactory?.newRegistrationNo ?? intentRequestFactory?.factoryId ?? '-'}
+              </Typography>
+            </Box>
+            <TextField
+              label="เหตุผล"
+              value={intentReason}
+              onChange={(event) => setIntentReason(event.target.value)}
+              multiline
+              minRows={3}
+              fullWidth
+              autoFocus
+              placeholder="ระบุเหตุผลที่ต้องการแจ้งความประสงค์"
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: 'flex-end', px: 3, py: 2 }}>
+          <Button color="inherit" onClick={closeIntentDialog}>
+            ยกเลิก
+          </Button>
+          <Button variant="contained" onClick={submitIntentRequest}>
+            ส่งข้อความ
+          </Button>
+        </DialogActions>
+      </Dialog>
       <RequestFormBottomSheet
         key={`${requestForm?.mode ?? 'create'}-${requestForm?.requestId ?? requestForm?.point?.pointCode ?? requestForm?.point?.code ?? 'new'}-${requestForm?.initialRequest?.id ?? 'draft'}`}
         open={Boolean(requestForm)}

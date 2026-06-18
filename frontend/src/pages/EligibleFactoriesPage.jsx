@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Alert, Box, Button, Chip, Fade, Paper, Snackbar, Stack, Tab, Tabs, Typography } from '@mui/material'
+import { Alert, Badge, Box, Button, Chip, Fade, Paper, Snackbar, Stack, Tab, Tabs, Typography } from '@mui/material'
 import AddTaskIcon from '@mui/icons-material/AddTask'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import HighlightOffIcon from '@mui/icons-material/HighlightOff'
-import LinkIcon from '@mui/icons-material/Link'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import { DataGrid } from '@mui/x-data-grid'
 
@@ -55,6 +54,67 @@ const baseColumns = [
     headerName: 'ข้อมูล EIA',
     width: 130,
     renderCell: (params) => <EiaChip value={params.value} />,
+  },
+]
+
+const connectionRequestRows = [
+  {
+    id: 'connection-request-1',
+    factoryName: 'บริษัท พรีเมี่ยม อิควิปเม้นท์ แอนด์ เอ็นจิเนียริ่ง จำกัด',
+    factoryRegistrationNo: '82010400125514',
+    province: 'กรุงเทพมหานคร',
+    reason: 'มีคำขอเชื่อมต่อระบบ CEMS และมีจุดตรวจวัดที่อยู่ในเกณฑ์พิจารณา',
+  },
+  {
+    id: 'connection-request-2',
+    factoryName: 'บริษัท เอสแอล โฮมโพรดักส์ จำกัด',
+    factoryRegistrationNo: '82010000125609',
+    province: 'กรุงเทพมหานคร',
+    reason: 'มีคำขอเชื่อมต่อระบบ WPMS และมีการส่งข้อมูลตรวจวัดต่อเนื่อง',
+  },
+]
+
+function getSubMenuLabel(menu) {
+  if (menu.value !== 'requests') {
+    return menu.label
+  }
+
+  return (
+    <Badge
+      badgeContent={connectionRequestRows.length}
+      color="error"
+      sx={{
+        pr: 1.75,
+        '& .MuiBadge-badge': {
+          minWidth: 18,
+          height: 18,
+          px: 0.6,
+          fontSize: 10,
+          fontWeight: 700,
+        },
+      }}
+    >
+      <Box component="span">{menu.label}</Box>
+    </Badge>
+  )
+}
+
+const connectionRequestColumns = [
+  { field: 'factoryName', headerName: 'ชื่อโรงงาน/บริษัท', minWidth: 260, flex: 1 },
+  { field: 'factoryRegistrationNo', headerName: 'เลขทะเบียนโรงงาน', width: 190 },
+  { field: 'province', headerName: 'จังหวัด', width: 150 },
+  { field: 'reason', headerName: 'เหตุผล', minWidth: 320, flex: 1 },
+  {
+    field: 'actions',
+    headerName: 'จัดการ',
+    width: 160,
+    sortable: false,
+    filterable: false,
+    renderCell: () => (
+      <Button size="small" variant="contained" color="secondary" startIcon={<AddTaskIcon />}>
+        เลือกเข้าข่าย
+      </Button>
+    ),
   },
 ]
 
@@ -540,7 +600,7 @@ function EligibleFactoriesPage({ accessToken = '' }) {
             }}
           >
             {subMenus.map((menu) => (
-              <Tab key={menu.value} value={menu.value} label={menu.label} />
+              <Tab key={menu.value} value={menu.value} label={getSubMenuLabel(menu)} />
             ))}
           </Tabs>
         </Stack>
@@ -727,40 +787,11 @@ function EiaChip({ value }) {
 
 function ConnectionRequestsPanel() {
   return (
-    <Paper
-      elevation={0}
-      sx={{
-        flex: 1,
-        minHeight: 420,
-        p: 3,
-        border: 1,
-        borderColor: 'divider',
-      }}
-    >
-      <Stack spacing={1.5} sx={{ alignItems: 'flex-start' }}>
-        <Box
-          sx={{
-            width: 44,
-            height: 44,
-            display: 'grid',
-            placeItems: 'center',
-            borderRadius: 1,
-            color: 'primary.dark',
-            bgcolor: 'primary.50',
-          }}
-        >
-          <LinkIcon />
-        </Box>
-        <Box>
-          <Typography variant="h6" component="h2">
-            คำขอเชื่อมต่อ
-          </Typography>
-          <Typography color="text.secondary">
-            ส่วนนี้พร้อมสำหรับเชื่อมต่อข้อมูลคำขอในขั้นถัดไป
-          </Typography>
-        </Box>
-      </Stack>
-    </Paper>
+    <FactoryDataGrid
+      title="คำขอเชื่อมต่อ"
+      rows={connectionRequestRows}
+      columns={connectionRequestColumns}
+    />
   )
 }
 

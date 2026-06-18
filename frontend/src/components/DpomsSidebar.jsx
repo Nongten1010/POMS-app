@@ -1,4 +1,5 @@
 import {
+  Badge,
   Box,
   Drawer,
   List,
@@ -46,24 +47,28 @@ const menuItems = [
     value: 'connection-request',
     permissionKey: 'connection',
     icon: <LinkIcon />,
+    notificationCount: 2,
   },
   {
     label: 'แจ้งแบบ กวภ. 01 - กวภ. 05',
     value: 'forms',
     permissionKey: 'kwp_forms',
     icon: <ArticleIcon />,
+    notificationCount: 1,
   },
   {
     label: 'รายงานค่าความคลาดเคลื่อน BOD/COD Online',
     value: 'bod-cod-report',
     permissionKey: 'bod_cod_errors',
     icon: <AssessmentIcon />,
+    notificationCount: 2,
   },
   {
     label: 'การแจ้งเตือน',
     value: 'notifications',
     permissionKey: 'notifications',
     icon: <NotificationsIcon />,
+    notificationCount: 1,
   },
   {
     label: 'สถิติข้อมูล',
@@ -118,6 +123,7 @@ const menuItems = [
     value: 'eligible-factories',
     permissionKey: 'eligible_factories',
     icon: <FactoryIcon />,
+    notificationCount: 2,
   },
   {
     label: 'ทดสอบส่งอีเมล',
@@ -195,13 +201,31 @@ function DpomsSidebar({ open, selectedValue = 'home', onClose, onSelect, permiss
               </ListItemIcon>
               <ListItemText
                 primary={item.label}
+                sx={{ minWidth: 0, mr: item.notificationCount ? 1 : 0 }}
                 slotProps={{
                   primary: {
                     variant: 'body2',
                     fontWeight: 300,
+                    noWrap: true,
                   },
                 }}
               />
+              {item.notificationCount ? (
+                <Badge
+                  badgeContent={item.notificationCount}
+                  color="error"
+                  sx={{
+                    flex: '0 0 auto',
+                    '& .MuiBadge-badge': {
+                      minWidth: 20,
+                      height: 20,
+                      px: 0.75,
+                      fontSize: 11,
+                      fontWeight: 700,
+                    },
+                  }}
+                />
+              ) : null}
             </ListItemButton>
             )
           })}
