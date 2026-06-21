@@ -59,12 +59,30 @@ describe('eligibleFactoryCandidatesRepository', () => {
         ]),
     };
     const facImportQuery = {
-      clone: jest.fn().mockReturnThis(),
       whereIn: jest.fn().mockReturnThis(),
+      whereNotIn: jest.fn().mockReturnThis(),
       select: jest.fn().mockReturnThis(),
-      orderBy: jest.fn<() => Promise<typeof externalRows>>().mockResolvedValue(externalRows),
+      orderBy: jest.fn().mockReturnThis(),
+      timeout: jest.fn().mockReturnThis(),
+      offset: jest.fn().mockReturnThis(),
+      limit: jest
+        .fn<(...args: unknown[]) => Promise<typeof externalRows>>()
+        .mockResolvedValue(externalRows),
+    };
+    const countQuery = {
+      whereIn: jest.fn().mockReturnThis(),
+      whereNotIn: jest.fn().mockReturnThis(),
+      timeout: jest.fn().mockReturnThis(),
+      count: jest
+        .fn<(...args: unknown[]) => Promise<Array<{ total: string | number | null }>>>()
+        .mockResolvedValue([{ total: externalRows.length }]),
+    };
+    const baseQuery = {
+      clone: jest.fn().mockReturnValueOnce(countQuery).mockReturnValueOnce(facImportQuery),
     };
     const checkEiaQuery = {
+      whereIn: jest.fn().mockReturnThis(),
+      timeout: jest.fn().mockReturnThis(),
       select: jest
         .fn<
           (...columns: string[]) => Promise<Array<{ FACREG: string | null; FID: string | null }>>
@@ -73,6 +91,7 @@ describe('eligibleFactoryCandidatesRepository', () => {
     };
     const industrialEstateQuery = {
       whereIn: jest.fn().mockReturnThis(),
+      timeout: jest.fn().mockReturnThis(),
       select: jest
         .fn<
           (
@@ -86,6 +105,7 @@ describe('eligibleFactoryCandidatesRepository', () => {
     const facProdQuery = {
       leftJoin: jest.fn().mockReturnThis(),
       whereIn: jest.fn().mockReturnThis(),
+      timeout: jest.fn().mockReturnThis(),
       select: jest
         .fn<
           () => Promise<
@@ -114,6 +134,7 @@ describe('eligibleFactoryCandidatesRepository', () => {
     };
     const boilerListQuery = {
       whereIn: jest.fn().mockReturnThis(),
+      timeout: jest.fn().mockReturnThis(),
       select: jest.fn<() => Promise<Array<Record<string, unknown>>>>().mockResolvedValue([
         { FID: 'real-2', BOILER_SIZE: '10 ตัน/ชั่วโมง' },
         { FID: 'real-2', BOILER_SIZE: '12 ตัน/ชั่วโมง' },
@@ -125,33 +146,55 @@ describe('eligibleFactoryCandidatesRepository', () => {
       if (tableName === 'dbo.FAC_COLONY_INDUST') return industrialEstateQuery as never;
       if (tableName === 'dbo.FAC_PROD as fp') return facProdQuery as never;
       if (tableName === 'dbo.boiler_list') return boilerListQuery as never;
-      return facImportQuery as never;
+      return baseQuery as never;
     }) as never);
-    return { facImportQuery, checkEiaQuery, facProdQuery, boilerListQuery, industrialEstateQuery };
+    return {
+      baseQuery,
+      countQuery,
+      facImportQuery,
+      checkEiaQuery,
+      facProdQuery,
+      boilerListQuery,
+      industrialEstateQuery,
+    };
   }
 
-  it('excludes factories that are already selected as eligible', async () => {
-    const { facImportQuery, checkEiaQuery, facProdQuery, boilerListQuery, industrialEstateQuery } =
-      mockExternalCandidates();
-    mockedEligibleFactoriesRepository.listActiveRegistrationNumbers.mockResolvedValue([
-      'real-reg-1',
-    ]);
+  it('paginates candidates before loading related lookup data', async () => {
+    const {
+      countQuery,
+      facImportQuery,
+      checkEiaQuery,
+      facProdQuery,
+      boilerListQuery,
+      industrialEstateQuery,
+    } = mockExternalCandidates();
+    mockedEligibleFactoriesRepository.listActiveRegistrationNumbers.mockResolvedValue([]);
 
-    const result = await eligibleFactoryCandidatesRepository.list({});
+    const result = await eligibleFactoryCandidatesRepository.list({ page: 2, perPage: 50 });
 
-    expect(result.meta).toEqual({ total: 1, source: 'external' });
-    expect(result.data).toHaveLength(1);
-    expect(result.data[0]?.factoryRegistrationNo).toBe('real-reg-2');
-    expect(result.data[0]?.industrialEstateName).toBe('แหลมฉบัง');
-    expect(result.data[0]?.eia).toBe('มี');
-    expect(result.data[0]?.hasEia).toBe(true);
-    expect(result.data[0]?.productionCapacity).toBe('น้ำตาลทราย 1200 ตัน/ปี, กากน้ำตาล 300 ตัน/ปี');
-    expect(result.data[0]?.boilerSizeEach).toBe('10 ตัน/ชั่วโมง, 12 ตัน/ชั่วโมง');
+    expect(result.meta).toEqual({
+      total: 2,
+      page: 2,
+      perPage: 50,
+      totalPages: 1,
+      source: 'external',
+    });
+    expect(result.data).toHaveLength(2);
+    expect(result.data[1]?.factoryRegistrationNo).toBe('real-reg-2');
+    expect(result.data[1]?.industrialEstateName).toBe('แหลมฉบัง');
+    expect(result.data[1]?.eia).toBe('มี');
+    expect(result.data[1]?.hasEia).toBe(true);
+    expect(result.data[1]?.productionCapacity).toBe('น้ำตาลทราย 1200 ตัน/ปี, กากน้ำตาล 300 ตัน/ปี');
+    expect(result.data[1]?.boilerSizeEach).toBe('10 ตัน/ชั่วโมง, 12 ตัน/ชั่วโมง');
+    expect(countQuery.count).toHaveBeenCalledWith({ total: '*' });
+    expect(facImportQuery.offset).toHaveBeenCalledWith(50);
+    expect(facImportQuery.limit).toHaveBeenCalledWith(50);
     expect(facImportQuery.whereIn).toHaveBeenCalledWith('FFLAG', ['1', '3']);
     expect(industrialEstateQuery.select).toHaveBeenCalledWith(
       'COLONY_INDUST_CODE',
       'COLONY_INDUST_DESC',
     );
+    expect(checkEiaQuery.whereIn).toHaveBeenCalledWith('FID', ['real-1', 'real-2']);
     expect(checkEiaQuery.select).toHaveBeenCalledWith('FACREG', 'FID');
     expect(facProdQuery.leftJoin).toHaveBeenCalledWith('dbo.UNIT as u', 'fp.UNIT', 'u.UNIT');
     expect(facProdQuery.whereIn).toHaveBeenCalledWith('fp.FID', ['real-1', 'real-2']);
@@ -166,7 +209,13 @@ describe('eligibleFactoryCandidatesRepository', () => {
 
     const result = await eligibleFactoryCandidatesRepository.list({});
 
-    expect(result.meta).toEqual({ total: 2, source: 'external' });
+    expect(result.meta).toEqual({
+      total: 2,
+      page: 1,
+      perPage: 100,
+      totalPages: 1,
+      source: 'external',
+    });
     expect(result.data).toHaveLength(2);
   });
 

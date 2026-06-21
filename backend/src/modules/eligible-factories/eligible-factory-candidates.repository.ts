@@ -10,28 +10,41 @@ import type {
   ListEligibleFactoryCandidatesQuery,
 } from './eligible-factories.types';
 
+const EXTERNAL_QUERY_TIMEOUT_MS = 15000;
+
 export const eligibleFactoryCandidatesRepository = {
-  async list(_query: ListEligibleFactoryCandidatesQuery): Promise<EligibleFactoryCandidatesDTO> {
-    return listExternalCandidates();
+  async list(query: ListEligibleFactoryCandidatesQuery): Promise<EligibleFactoryCandidatesDTO> {
+    return listExternalCandidates(query);
   },
 };
 
-async function listExternalCandidates(): Promise<EligibleFactoryCandidatesDTO> {
+async function listExternalCandidates(
+  query: ListEligibleFactoryCandidatesQuery,
+): Promise<EligibleFactoryCandidatesDTO> {
   const selectedRegistrationNumbers = await selectedFactoryRegistrationNumbers();
   const columns = await availableFacImportColumns();
   const baseQuery = buildFacImportBaseQuery();
+  const page = query.page ?? 1;
+  const perPage = query.perPage ?? 100;
+  const offset = (page - 1) * perPage;
+
+  const countQuery = baseQuery.clone();
+  applyCandidateFilters(countQuery, columns, selectedRegistrationNumbers);
+  const total = await countCandidates(countQuery);
+
   const rowsQuery = baseQuery.clone();
-  if (columns.includes('FFLAG')) {
-    rowsQuery.whereIn('FFLAG', ['1', '3']);
-  }
+  applyCandidateFilters(rowsQuery, columns, selectedRegistrationNumbers);
   rowsQuery.select(columns);
   const orderByColumn = firstAvailableColumn(columns, ['FACREG', 'FID', 'DISPFACREG']);
+  if (orderByColumn) {
+    rowsQuery.orderBy(orderByColumn, 'asc');
+  }
 
-  const rows = await (orderByColumn ? rowsQuery.orderBy(orderByColumn, 'asc') : rowsQuery);
+  const rows = await rowsQuery.timeout(EXTERNAL_QUERY_TIMEOUT_MS).offset(offset).limit(perPage);
   const [industrialEstateNamesByCode, eiaFactoryKeys, productionCapacitiesByFid, boilerSizesByFid] =
     await Promise.all([
       loadIndustrialEstateNamesByCode(rows),
-      loadEiaFactoryKeys(),
+      loadEiaFactoryKeys(rows),
       loadProductionCapacitiesByFid(rows),
       loadBoilerSizesByFid(rows),
     ]);
@@ -49,10 +62,35 @@ async function listExternalCandidates(): Promise<EligibleFactoryCandidatesDTO> {
   return {
     data,
     meta: {
-      total: data.length,
+      total,
+      page,
+      perPage,
+      totalPages: Math.ceil(total / perPage),
       source: 'external',
     },
   };
+}
+
+function applyCandidateFilters(
+  query: Knex.QueryBuilder<FacImportRow, unknown>,
+  columns: Array<keyof FacImportRow>,
+  selectedRegistrationNumbers: Set<string>,
+): void {
+  if (columns.includes('FFLAG')) {
+    query.whereIn('FFLAG', ['1', '3']);
+  }
+  if (columns.includes('DISPFACREG') && selectedRegistrationNumbers.size > 0) {
+    query.whereNotIn('DISPFACREG', [...selectedRegistrationNumbers]);
+  }
+}
+
+async function countCandidates(query: Knex.QueryBuilder<FacImportRow, unknown>): Promise<number> {
+  const rows = await query
+    .timeout(EXTERNAL_QUERY_TIMEOUT_MS)
+    .count<{ total: string | number | null }[]>({ total: '*' });
+  const rawTotal = rows[0]?.total;
+  const total = Number(rawTotal ?? 0);
+  return Number.isFinite(total) ? total : 0;
 }
 
 async function loadIndustrialEstateNamesByCode(rows: FacImportRow[]): Promise<Map<string, string>> {
@@ -71,6 +109,7 @@ async function loadIndustrialEstateNamesByCode(rows: FacImportRow[]): Promise<Ma
       COLONY_INDUST_DESC: string | null;
     }>(`${env.FACTORY_DB_SCHEMA}.FAC_COLONY_INDUST`)
       .whereIn('COLONY_INDUST_CODE', codes)
+      .timeout(EXTERNAL_QUERY_TIMEOUT_MS)
       .select('COLONY_INDUST_CODE', 'COLONY_INDUST_DESC');
 
     return new Map(
@@ -95,6 +134,7 @@ async function loadBoilerSizesByFid(rows: FacImportRow[]): Promise<Map<string, s
         `${env.FACTORY_DB_SCHEMA}.boiler_list`,
       )
         .whereIn('FID', fidChunk)
+        .timeout(EXTERNAL_QUERY_TIMEOUT_MS)
         .select('*');
       boilerRows.push(...chunkRows);
     }
@@ -138,6 +178,7 @@ async function loadProductionCapacitiesByFid(rows: FacImportRow[]): Promise<Map<
       )
         .leftJoin(`${env.FACTORY_DB_SCHEMA}.UNIT as u`, 'fp.UNIT', 'u.UNIT')
         .whereIn('fp.FID', fidChunk)
+        .timeout(EXTERNAL_QUERY_TIMEOUT_MS)
         .select('fp.FID', 'fp.PRODNAME', 'fp.PRODQUAN', 'u.UNT_ENAME');
       productionRows.push(...chunkRows);
     }
@@ -159,11 +200,17 @@ async function loadProductionCapacitiesByFid(rows: FacImportRow[]): Promise<Map<
   );
 }
 
-async function loadEiaFactoryKeys(): Promise<Set<string>> {
+async function loadEiaFactoryKeys(rows: FacImportRow[]): Promise<Set<string>> {
+  const fids = uniqueFids(rows);
+  if (fids.length === 0) return new Set();
+
   try {
     const rows = await factorySourceDb<{ FACREG: string | null; FID: string | null }>(
       `${env.FACTORY_DB_SCHEMA}.check_eia`,
-    ).select('FACREG', 'FID');
+    )
+      .whereIn('FID', fids)
+      .timeout(EXTERNAL_QUERY_TIMEOUT_MS)
+      .select('FACREG', 'FID');
 
     return new Set(
       rows.flatMap((row) => [row.FACREG?.trim(), row.FID?.trim()]).filter(isNonEmptyString),

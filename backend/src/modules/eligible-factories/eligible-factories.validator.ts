@@ -72,7 +72,12 @@ export const createEligibleFactorySchema = z
 
 export const listEligibleFactoriesQuerySchema = z.object({}).strict();
 
-export const listEligibleFactoryCandidatesQuerySchema = z.object({}).strict();
+export const listEligibleFactoryCandidatesQuerySchema = z
+  .object({
+    page: z.coerce.number().int().min(1).default(1),
+    perPage: z.coerce.number().int().min(1).max(200).default(100),
+  })
+  .strict();
 
 export const eligibleFactoryIdParamsSchema = z
   .object({

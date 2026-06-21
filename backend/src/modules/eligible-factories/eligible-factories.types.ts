@@ -29,7 +29,10 @@ export interface CreateEligibleFactoryInput {
 
 export type ListEligibleFactoriesQuery = Record<string, never>;
 
-export type ListEligibleFactoryCandidatesQuery = Record<string, never>;
+export interface ListEligibleFactoryCandidatesQuery {
+  page?: number;
+  perPage?: number;
+}
 
 export interface EligibleFactoryCandidateDTO {
   factoryName: string;

@@ -88,13 +88,13 @@ describe('eligible factories validators', () => {
     expect(result.success).toBe(false);
   });
 
-  it('accepts an empty candidate query for the full Fac60k export', () => {
+  it('accepts an empty candidate query with default pagination', () => {
     const result = listEligibleFactoryCandidatesQuerySchema.parse({});
 
-    expect(result).toEqual({});
+    expect(result).toEqual({ page: 1, perPage: 100 });
   });
 
-  it('rejects candidate filters because Fac60k candidates are exported without conditions', () => {
+  it('rejects unsupported candidate filters', () => {
     const result = listEligibleFactoryCandidatesQuerySchema.safeParse({
       search: 'เคมี',
       provinceName: 'พระนครศรีอยุธยา',
@@ -104,10 +104,19 @@ describe('eligible factories validators', () => {
     expect(result.success).toBe(false);
   });
 
-  it('rejects candidate pagination because candidates must return all 60,000 factories', () => {
-    const result = listEligibleFactoryCandidatesQuerySchema.safeParse({
+  it('accepts candidate pagination', () => {
+    const result = listEligibleFactoryCandidatesQuerySchema.parse({
       page: '3',
       perPage: '50',
+    });
+
+    expect(result).toEqual({ page: 3, perPage: 50 });
+  });
+
+  it('rejects candidate pagination outside supported bounds', () => {
+    const result = listEligibleFactoryCandidatesQuerySchema.safeParse({
+      page: '0',
+      perPage: '1000',
     });
 
     expect(result.success).toBe(false);
