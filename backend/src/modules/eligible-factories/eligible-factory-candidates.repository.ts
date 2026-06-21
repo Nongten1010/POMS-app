@@ -2,6 +2,7 @@ import type { Knex } from 'knex';
 import { logger } from '../../config/logger';
 import { env } from '../../config/env';
 import { factorySourceDb, factorySourceTableName } from '../../config/factory-source-database';
+import { boilerSourceDb, boilerSourceTableName } from '../../config/boiler-source-database';
 import { type FacImportRow, toEligibleFactoryCandidate } from './fac-import.mapper';
 import { eligibleFactoriesRepository } from './eligible-factories.repository';
 import type {
@@ -24,9 +25,9 @@ async function listExternalCandidates(
   const selectedRegistrationNumbers = await selectedFactoryRegistrationNumbers();
   const columns = await availableFacImportColumns();
   const baseQuery = buildFacImportBaseQuery();
-  const page = query.page ?? 1;
-  const perPage = query.perPage ?? 100;
-  const offset = (page - 1) * perPage;
+  const page = query.page;
+  const perPage = query.perPage;
+  const isPaginated = page !== undefined && perPage !== undefined;
 
   const countQuery = baseQuery.clone();
   applyCandidateFilters(countQuery, columns, selectedRegistrationNumbers);
@@ -40,7 +41,10 @@ async function listExternalCandidates(
     rowsQuery.orderBy(orderByColumn, 'asc');
   }
 
-  const rows = await rowsQuery.timeout(EXTERNAL_QUERY_TIMEOUT_MS).offset(offset).limit(perPage);
+  const executableRowsQuery = rowsQuery.timeout(EXTERNAL_QUERY_TIMEOUT_MS);
+  const rows = isPaginated
+    ? await executableRowsQuery.offset((page - 1) * perPage).limit(perPage)
+    : await executableRowsQuery;
   const [industrialEstateNamesByCode, productionCapacitiesByFid, boilerSizesByFid] =
     await Promise.all([
       loadIndustrialEstateNamesByCode(rows),
@@ -62,10 +66,14 @@ async function listExternalCandidates(
     data,
     meta: {
       total,
-      page,
-      perPage,
-      totalPages: Math.ceil(total / perPage),
       source: 'external',
+      ...(isPaginated
+        ? {
+            page,
+            perPage,
+            totalPages: Math.ceil(total / perPage),
+          }
+        : {}),
     },
   };
 }
@@ -129,9 +137,7 @@ async function loadBoilerSizesByFid(rows: FacImportRow[]): Promise<Map<string, s
   const boilerRows: Array<Record<string, unknown>> = [];
   try {
     for (const fidChunk of chunks(fids, 1000)) {
-      const chunkRows = await factorySourceDb<Record<string, unknown>>(
-        `${env.FACTORY_DB_SCHEMA}.boiler_list`,
-      )
+      const chunkRows = await boilerSourceDb<Record<string, unknown>>(boilerSourceTableName())
         .whereIn('FID', fidChunk)
         .timeout(EXTERNAL_QUERY_TIMEOUT_MS)
         .select('*');

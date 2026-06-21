@@ -88,10 +88,10 @@ describe('eligible factories validators', () => {
     expect(result.success).toBe(false);
   });
 
-  it('accepts an empty candidate query with default pagination', () => {
+  it('accepts an empty candidate query as an all-record request', () => {
     const result = listEligibleFactoryCandidatesQuerySchema.parse({});
 
-    expect(result).toEqual({ page: 1, perPage: 100 });
+    expect(result).toEqual({});
   });
 
   it('rejects unsupported candidate filters', () => {
@@ -111,6 +111,14 @@ describe('eligible factories validators', () => {
     });
 
     expect(result).toEqual({ page: 3, perPage: 50 });
+  });
+
+  it('rejects partial candidate pagination', () => {
+    const result = listEligibleFactoryCandidatesQuerySchema.safeParse({
+      page: '3',
+    });
+
+    expect(result.success).toBe(false);
   });
 
   it('rejects candidate pagination outside supported bounds', () => {

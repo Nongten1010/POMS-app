@@ -54,6 +54,28 @@ const envSchema = z
       .regex(/^[A-Za-z_][A-Za-z0-9_]*$/)
       .default('fac_import'),
 
+    BOILER_DB_HOST: z.string().min(1).default('sqldiw.diw.go.th'),
+    BOILER_DB_PORT: z.coerce.number().int().positive().optional(),
+    BOILER_DB_NAME: z.string().min(1).default('diw'),
+    BOILER_DB_USER: z.string().min(1).optional(),
+    BOILER_DB_PASSWORD: z.string().optional(),
+    BOILER_DB_ENCRYPT: z
+      .string()
+      .optional()
+      .transform((v) => (v === undefined ? undefined : v === 'true')),
+    BOILER_DB_TRUST_SERVER_CERTIFICATE: z
+      .string()
+      .optional()
+      .transform((v) => (v === undefined ? undefined : v !== 'false')),
+    BOILER_DB_SCHEMA: z
+      .string()
+      .regex(/^[A-Za-z_][A-Za-z0-9_]*$/)
+      .default('dbo'),
+    BOILER_DB_TABLE: z
+      .string()
+      .regex(/^[A-Za-z_][A-Za-z0-9_]*$/)
+      .default('boiler_list'),
+
     PARAMETER_DB_HOST: z.string().min(1).optional(),
     PARAMETER_DB_PORT: z.coerce.number().int().positive().optional(),
     PARAMETER_DB_NAME: z.string().min(1).optional(),

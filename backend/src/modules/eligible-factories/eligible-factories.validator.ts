@@ -74,10 +74,18 @@ export const listEligibleFactoriesQuerySchema = z.object({}).strict();
 
 export const listEligibleFactoryCandidatesQuerySchema = z
   .object({
-    page: z.coerce.number().int().min(1).default(1),
-    perPage: z.coerce.number().int().min(1).max(200).default(100),
+    page: z.coerce.number().int().min(1).optional(),
+    perPage: z.coerce.number().int().min(1).max(200).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((query, ctx) => {
+    if ((query.page === undefined) !== (query.perPage === undefined)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'page and perPage must be provided together',
+      });
+    }
+  });
 
 export const eligibleFactoryIdParamsSchema = z
   .object({

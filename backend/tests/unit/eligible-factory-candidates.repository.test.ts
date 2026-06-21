@@ -4,12 +4,19 @@ jest.mock('../../src/config/env', () => ({
   env: {
     FACTORY_DB_SCHEMA: 'dbo',
     FACTORY_DB_TABLE: 'fac_import',
+    BOILER_DB_SCHEMA: 'dbo',
+    BOILER_DB_TABLE: 'boiler_list',
   },
 }));
 
 jest.mock('../../src/config/factory-source-database', () => ({
   factorySourceDb: jest.fn(),
   factorySourceTableName: jest.fn(() => 'dbo.fac_import'),
+}));
+
+jest.mock('../../src/config/boiler-source-database', () => ({
+  boilerSourceDb: jest.fn(),
+  boilerSourceTableName: jest.fn(() => 'dbo.boiler_list'),
 }));
 
 jest.mock('../../src/modules/eligible-factories/eligible-factories.repository', () => ({
@@ -20,10 +27,12 @@ jest.mock('../../src/modules/eligible-factories/eligible-factories.repository', 
 
 import { eligibleFactoriesRepository } from '../../src/modules/eligible-factories/eligible-factories.repository';
 import { factorySourceDb } from '../../src/config/factory-source-database';
+import { boilerSourceDb } from '../../src/config/boiler-source-database';
 import { eligibleFactoryCandidatesRepository } from '../../src/modules/eligible-factories/eligible-factory-candidates.repository';
 
 const mockedEligibleFactoriesRepository = jest.mocked(eligibleFactoriesRepository);
 const mockedFactorySourceDb = jest.mocked(factorySourceDb);
+const mockedBoilerSourceDb = jest.mocked(boilerSourceDb);
 
 describe('eligibleFactoryCandidatesRepository', () => {
   const externalRows = [
@@ -68,6 +77,9 @@ describe('eligibleFactoryCandidatesRepository', () => {
       limit: jest
         .fn<(...args: unknown[]) => Promise<typeof externalRows>>()
         .mockResolvedValue(externalRows),
+      then: jest.fn((resolve: (rows: typeof externalRows) => unknown) =>
+        Promise.resolve(resolve(externalRows)),
+      ),
     };
     const countQuery = {
       whereIn: jest.fn().mockReturnThis(),
@@ -140,12 +152,12 @@ describe('eligibleFactoryCandidatesRepository', () => {
         { FID: 'real-2', BOILER_SIZE: '12 ตัน/ชั่วโมง' },
       ]),
     };
+    mockedBoilerSourceDb.mockReturnValue(boilerListQuery as never);
     mockedFactorySourceDb.mockImplementation(((tableName: unknown) => {
       if (tableName === 'INFORMATION_SCHEMA.COLUMNS') return informationSchemaQuery as never;
       if (tableName === 'dbo.check_eia') return checkEiaQuery as never;
       if (tableName === 'dbo.FAC_COLONY_INDUST') return industrialEstateQuery as never;
       if (tableName === 'dbo.FAC_PROD as fp') return facProdQuery as never;
-      if (tableName === 'dbo.boiler_list') return boilerListQuery as never;
       return baseQuery as never;
     }) as never);
     return {
@@ -191,7 +203,23 @@ describe('eligibleFactoryCandidatesRepository', () => {
     expect(mockedFactorySourceDb).not.toHaveBeenCalledWith('dbo.check_eia');
     expect(facProdQuery.leftJoin).toHaveBeenCalledWith('dbo.UNIT as u', 'fp.UNIT', 'u.UNIT');
     expect(facProdQuery.whereIn).toHaveBeenCalledWith('fp.FID', ['real-1', 'real-2']);
+    expect(mockedBoilerSourceDb).toHaveBeenCalledWith('dbo.boiler_list');
     expect(boilerListQuery.whereIn).toHaveBeenCalledWith('FID', ['real-1', 'real-2']);
+  });
+
+  it('returns all candidates when pagination is not requested', async () => {
+    const { facImportQuery } = mockExternalCandidates();
+    mockedEligibleFactoriesRepository.listActiveRegistrationNumbers.mockResolvedValue([]);
+
+    const result = await eligibleFactoryCandidatesRepository.list({});
+
+    expect(result.meta).toEqual({
+      total: 2,
+      source: 'external',
+    });
+    expect(result.data).toHaveLength(2);
+    expect(facImportQuery.offset).not.toHaveBeenCalled();
+    expect(facImportQuery.limit).not.toHaveBeenCalled();
   });
 
   it('returns candidates when selected factory exclusion cannot be loaded', async () => {
@@ -204,9 +232,6 @@ describe('eligibleFactoryCandidatesRepository', () => {
 
     expect(result.meta).toEqual({
       total: 2,
-      page: 1,
-      perPage: 100,
-      totalPages: 1,
       source: 'external',
     });
     expect(result.data).toHaveLength(2);
