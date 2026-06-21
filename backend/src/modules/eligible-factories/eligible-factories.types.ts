@@ -58,6 +58,11 @@ export interface EligibleFactoryCandidateDTO {
   hasEia: boolean | null;
 }
 
+export interface BoilerLookupValue {
+  boilerSizeEach: string | null;
+  fuelUsed: string | null;
+}
+
 export interface SelectedEligibleFactoryDTO extends EligibleFactoryCandidateDTO {
   id: number;
 }

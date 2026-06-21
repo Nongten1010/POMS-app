@@ -1,4 +1,4 @@
-import type { EligibleFactoryCandidateDTO } from './eligible-factories.types';
+import type { BoilerLookupValue, EligibleFactoryCandidateDTO } from './eligible-factories.types';
 
 export interface FacImportRow {
   FACREG: string | null;
@@ -129,7 +129,7 @@ interface FacImportMapperOptions {
   eiaFactoryKeys?: Set<string>;
   eiaLookupSkipped?: boolean;
   productionCapacitiesByFid?: Map<string, string>;
-  boilerSizesByFid?: Map<string, string>;
+  boilerValuesByFid?: Map<string, BoilerLookupValue>;
 }
 
 export function toEligibleFactoryCandidate(
@@ -153,6 +153,7 @@ export function toEligibleFactoryCandidate(
     row.EXPSEQ,
   ]);
   const hasEia = options.eiaLookupSkipped ? null : hasFactoryEia(row, options);
+  const boilerValue = options.boilerValuesByFid?.get(sourceFactoryId);
 
   return {
     factoryName,
@@ -171,9 +172,9 @@ export function toEligibleFactoryCandidate(
     productionCapacity:
       options.productionCapacitiesByFid?.get(sourceFactoryId) ?? fallbackProductionCapacity(row),
     boilerSizeEach:
-      options.boilerSizesByFid?.get(sourceFactoryId) ??
+      boilerValue?.boilerSizeEach ??
       commaSeparatedValues(row.BOILER_SIZE_EACH, row.BOILER_SIZE, row.BOILER_SIZES),
-    fuelUsed: null,
+    fuelUsed: boilerValue?.fuelUsed ?? null,
     eia: hasEia === null ? null : hasEia ? 'มี' : 'ไม่มี',
     hasEia,
   };

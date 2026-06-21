@@ -56,7 +56,7 @@ const envSchema = z
 
     BOILER_DB_HOST: z.string().min(1).default('sqldiw.diw.go.th'),
     BOILER_DB_PORT: z.coerce.number().int().positive().optional(),
-    BOILER_DB_NAME: z.string().min(1).default('diw'),
+    BOILER_DB_NAME: z.string().min(1).default('control'),
     BOILER_DB_USER: z.string().min(1).optional(),
     BOILER_DB_PASSWORD: z.string().optional(),
     BOILER_DB_ENCRYPT: z

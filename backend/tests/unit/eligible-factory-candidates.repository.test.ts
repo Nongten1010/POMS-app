@@ -147,9 +147,17 @@ describe('eligibleFactoryCandidatesRepository', () => {
     const boilerListQuery = {
       whereIn: jest.fn().mockReturnThis(),
       timeout: jest.fn().mockReturnThis(),
-      select: jest.fn<() => Promise<Array<Record<string, unknown>>>>().mockResolvedValue([
-        { FID: 'real-2', BOILER_SIZE: '10 ตัน/ชั่วโมง' },
-        { FID: 'real-2', BOILER_SIZE: '12 ตัน/ชั่วโมง' },
+      select: jest.fn<(...columns: string[]) => Promise<Array<Record<string, unknown>>>>().mockResolvedValue([
+        {
+          fac_id_reg: 'real-2',
+          mac_max_stream_prod: '10 ตัน/ชั่วโมง',
+          fuel_name: 'ก๊าซธรรมชาติ',
+        },
+        {
+          fac_id_reg: 'real-2',
+          mac_max_stream_prod: '12 ตัน/ชั่วโมง',
+          fuel_name: 'น้ำมันเตา',
+        },
       ]),
     };
     mockedBoilerSourceDb.mockReturnValue(boilerListQuery as never);
@@ -192,6 +200,7 @@ describe('eligibleFactoryCandidatesRepository', () => {
     expect(result.data[1]?.hasEia).toBeNull();
     expect(result.data[1]?.productionCapacity).toBe('น้ำตาลทราย 1200 ตัน/ปี, กากน้ำตาล 300 ตัน/ปี');
     expect(result.data[1]?.boilerSizeEach).toBe('10 ตัน/ชั่วโมง, 12 ตัน/ชั่วโมง');
+    expect(result.data[1]?.fuelUsed).toBe('ก๊าซธรรมชาติ, น้ำมันเตา');
     expect(countQuery.count).toHaveBeenCalledWith({ total: '*' });
     expect(facImportQuery.offset).toHaveBeenCalledWith(50);
     expect(facImportQuery.limit).toHaveBeenCalledWith(50);
@@ -204,7 +213,12 @@ describe('eligibleFactoryCandidatesRepository', () => {
     expect(facProdQuery.leftJoin).toHaveBeenCalledWith('dbo.UNIT as u', 'fp.UNIT', 'u.UNIT');
     expect(facProdQuery.whereIn).toHaveBeenCalledWith('fp.FID', ['real-1', 'real-2']);
     expect(mockedBoilerSourceDb).toHaveBeenCalledWith('dbo.boiler_list');
-    expect(boilerListQuery.whereIn).toHaveBeenCalledWith('FID', ['real-1', 'real-2']);
+    expect(boilerListQuery.whereIn).toHaveBeenCalledWith('fac_id_reg', ['real-1', 'real-2']);
+    expect(boilerListQuery.select).toHaveBeenCalledWith(
+      'fac_id_reg',
+      'mac_max_stream_prod',
+      'fuel_name',
+    );
   });
 
   it('returns all candidates when pagination is not requested', async () => {

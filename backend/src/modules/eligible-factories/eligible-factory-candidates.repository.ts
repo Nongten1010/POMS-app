@@ -8,6 +8,7 @@ import { eligibleFactoriesRepository } from './eligible-factories.repository';
 import type {
   EligibleFactoryCandidateDTO,
   EligibleFactoryCandidatesDTO,
+  BoilerLookupValue,
   ListEligibleFactoryCandidatesQuery,
 } from './eligible-factories.types';
 
@@ -45,11 +46,11 @@ async function listExternalCandidates(
   const rows = isPaginated
     ? await executableRowsQuery.offset((page - 1) * perPage).limit(perPage)
     : await executableRowsQuery;
-  const [industrialEstateNamesByCode, productionCapacitiesByFid, boilerSizesByFid] =
+  const [industrialEstateNamesByCode, productionCapacitiesByFid, boilerValuesByFid] =
     await Promise.all([
       loadIndustrialEstateNamesByCode(rows),
       loadProductionCapacitiesByFid(rows),
-      loadBoilerSizesByFid(rows),
+      loadBoilerValuesByFid(rows),
     ]);
   const data = excludeSelectedCandidates(
     rows.map((row) =>
@@ -57,7 +58,7 @@ async function listExternalCandidates(
         industrialEstateNamesByCode,
         eiaLookupSkipped: true,
         productionCapacitiesByFid,
-        boilerSizesByFid,
+        boilerValuesByFid,
       }),
     ),
     selectedRegistrationNumbers,
@@ -130,7 +131,7 @@ async function loadIndustrialEstateNamesByCode(rows: FacImportRow[]): Promise<Ma
   }
 }
 
-async function loadBoilerSizesByFid(rows: FacImportRow[]): Promise<Map<string, string>> {
+async function loadBoilerValuesByFid(rows: FacImportRow[]): Promise<Map<string, BoilerLookupValue>> {
   const fids = uniqueFids(rows);
   if (fids.length === 0) return new Map();
 
@@ -138,9 +139,9 @@ async function loadBoilerSizesByFid(rows: FacImportRow[]): Promise<Map<string, s
   try {
     for (const fidChunk of chunks(fids, 1000)) {
       const chunkRows = await boilerSourceDb<Record<string, unknown>>(boilerSourceTableName())
-        .whereIn('FID', fidChunk)
+        .whereIn('fac_id_reg', fidChunk)
         .timeout(EXTERNAL_QUERY_TIMEOUT_MS)
-        .select('*');
+        .select('fac_id_reg', 'mac_max_stream_prod', 'fuel_name');
       boilerRows.push(...chunkRows);
     }
   } catch (error) {
@@ -148,26 +149,31 @@ async function loadBoilerSizesByFid(rows: FacImportRow[]): Promise<Map<string, s
     return new Map();
   }
 
-  const valuesByFid = new Map<string, string[]>();
+  const boilerSizesByFid = new Map<string, string[]>();
+  const fuelNamesByFid = new Map<string, string[]>();
   for (const row of boilerRows) {
-    const fid = firstRowText(row, ['FID', 'fid']);
-    const value = firstRowText(row, [
-      'BOILER_SIZE_EACH',
-      'BOILER_SIZE',
-      'BOILER_SIZES',
-      'BOILER_CAPACITY',
-      'BOILER_CAP',
-      'BOILER_TON',
-      'STEAM_CAPACITY',
-      'CAPACITY',
-      'SIZE',
-    ]);
-    if (!fid || !value) continue;
-    valuesByFid.set(fid, [...(valuesByFid.get(fid) ?? []), value]);
+    const fid = firstRowText(row, ['fac_id_reg', 'FAC_ID_REG']);
+    if (!fid) continue;
+
+    const boilerSize = firstRowText(row, ['mac_max_stream_prod', 'MAC_MAX_STREAM_PROD']);
+    if (boilerSize) {
+      boilerSizesByFid.set(fid, [...(boilerSizesByFid.get(fid) ?? []), boilerSize]);
+    }
+
+    const fuelName = firstRowText(row, ['fuel_name', 'FUEL_NAME']);
+    if (fuelName) {
+      fuelNamesByFid.set(fid, [...(fuelNamesByFid.get(fid) ?? []), fuelName]);
+    }
   }
 
   return new Map(
-    [...valuesByFid.entries()].map(([fid, values]) => [fid, [...new Set(values)].join(', ')]),
+    [...new Set([...boilerSizesByFid.keys(), ...fuelNamesByFid.keys()])].map((fid) => [
+      fid,
+      {
+        boilerSizeEach: joinUnique(boilerSizesByFid.get(fid)),
+        fuelUsed: joinUnique(fuelNamesByFid.get(fid)),
+      },
+    ]),
   );
 }
 
@@ -234,6 +240,12 @@ function formatProductionCapacity(row: ProductionCapacityRow): string | null {
     .map((value) => (value === null || value === undefined ? null : String(value).trim()))
     .filter((value): value is string => Boolean(value));
   return parts.length > 0 ? parts.join(' ') : null;
+}
+
+function joinUnique(values: string[] | undefined): string | null {
+  if (!values || values.length === 0) return null;
+  const uniqueValues = [...new Set(values)];
+  return uniqueValues.length > 0 ? uniqueValues.join(', ') : null;
 }
 
 function firstRowText(row: Record<string, unknown>, keys: string[]): string | null {
