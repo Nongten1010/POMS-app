@@ -40,6 +40,7 @@ describe('eligibleFactoryCandidatesRepository', () => {
       DISPFACREG: 'real-reg-2',
       PROV: 21,
       FFLAG: 3,
+      COLONY_INDUST_CODE: '000022',
     },
   ];
 
@@ -69,6 +70,18 @@ describe('eligibleFactoryCandidatesRepository', () => {
           (...columns: string[]) => Promise<Array<{ FACREG: string | null; FID: string | null }>>
         >()
         .mockResolvedValue([{ FACREG: 'real-reg-2', FID: null }]),
+    };
+    const industrialEstateQuery = {
+      whereIn: jest.fn().mockReturnThis(),
+      select: jest
+        .fn<
+          (
+            ...columns: string[]
+          ) => Promise<
+            Array<{ COLONY_INDUST_CODE: string | null; COLONY_INDUST_DESC: string | null }>
+          >
+        >()
+        .mockResolvedValue([{ COLONY_INDUST_CODE: '000022', COLONY_INDUST_DESC: 'แหลมฉบัง' }]),
     };
     const facProdQuery = {
       leftJoin: jest.fn().mockReturnThis(),
@@ -109,15 +122,16 @@ describe('eligibleFactoryCandidatesRepository', () => {
     mockedFactorySourceDb.mockImplementation(((tableName: unknown) => {
       if (tableName === 'INFORMATION_SCHEMA.COLUMNS') return informationSchemaQuery as never;
       if (tableName === 'dbo.check_eia') return checkEiaQuery as never;
+      if (tableName === 'dbo.FAC_COLONY_INDUST') return industrialEstateQuery as never;
       if (tableName === 'dbo.FAC_PROD as fp') return facProdQuery as never;
       if (tableName === 'dbo.boiler_list') return boilerListQuery as never;
       return facImportQuery as never;
     }) as never);
-    return { facImportQuery, checkEiaQuery, facProdQuery, boilerListQuery };
+    return { facImportQuery, checkEiaQuery, facProdQuery, boilerListQuery, industrialEstateQuery };
   }
 
   it('excludes factories that are already selected as eligible', async () => {
-    const { facImportQuery, checkEiaQuery, facProdQuery, boilerListQuery } =
+    const { facImportQuery, checkEiaQuery, facProdQuery, boilerListQuery, industrialEstateQuery } =
       mockExternalCandidates();
     mockedEligibleFactoriesRepository.listActiveRegistrationNumbers.mockResolvedValue([
       'real-reg-1',
@@ -128,11 +142,16 @@ describe('eligibleFactoryCandidatesRepository', () => {
     expect(result.meta).toEqual({ total: 1, source: 'external' });
     expect(result.data).toHaveLength(1);
     expect(result.data[0]?.factoryRegistrationNo).toBe('real-reg-2');
+    expect(result.data[0]?.industrialEstateName).toBe('แหลมฉบัง');
     expect(result.data[0]?.eia).toBe('มี');
     expect(result.data[0]?.hasEia).toBe(true);
     expect(result.data[0]?.productionCapacity).toBe('น้ำตาลทราย 1200 ตัน/ปี, กากน้ำตาล 300 ตัน/ปี');
     expect(result.data[0]?.boilerSizeEach).toBe('10 ตัน/ชั่วโมง, 12 ตัน/ชั่วโมง');
     expect(facImportQuery.whereIn).toHaveBeenCalledWith('FFLAG', ['1', '3']);
+    expect(industrialEstateQuery.select).toHaveBeenCalledWith(
+      'COLONY_INDUST_CODE',
+      'COLONY_INDUST_DESC',
+    );
     expect(checkEiaQuery.select).toHaveBeenCalledWith('FACREG', 'FID');
     expect(facProdQuery.leftJoin).toHaveBeenCalledWith('dbo.UNIT as u', 'fp.UNIT', 'u.UNIT');
     expect(facProdQuery.whereIn).toHaveBeenCalledWith('fp.FID', ['real-1', 'real-2']);

@@ -68,15 +68,15 @@ async function loadIndustrialEstateNamesByCode(rows: FacImportRow[]): Promise<Ma
   try {
     const lookupRows = await factorySourceDb<{
       COLONY_INDUST_CODE: string | null;
-      FAC_COLONY_INDUST_DESC: string | null;
+      COLONY_INDUST_DESC: string | null;
     }>(`${env.FACTORY_DB_SCHEMA}.FAC_COLONY_INDUST`)
       .whereIn('COLONY_INDUST_CODE', codes)
-      .select('COLONY_INDUST_CODE', 'FAC_COLONY_INDUST_DESC');
+      .select('COLONY_INDUST_CODE', 'COLONY_INDUST_DESC');
 
     return new Map(
       lookupRows
-        .filter((row) => row.COLONY_INDUST_CODE && row.FAC_COLONY_INDUST_DESC)
-        .map((row) => [row.COLONY_INDUST_CODE as string, row.FAC_COLONY_INDUST_DESC as string]),
+        .filter((row) => row.COLONY_INDUST_CODE && row.COLONY_INDUST_DESC)
+        .map((row) => [row.COLONY_INDUST_CODE as string, row.COLONY_INDUST_DESC as string]),
     );
   } catch (error) {
     logger.warn('[eligible-factories] Failed to load industrial estate names', { error });
