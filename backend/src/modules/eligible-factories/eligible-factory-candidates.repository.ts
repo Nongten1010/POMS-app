@@ -41,10 +41,9 @@ async function listExternalCandidates(
   }
 
   const rows = await rowsQuery.timeout(EXTERNAL_QUERY_TIMEOUT_MS).offset(offset).limit(perPage);
-  const [industrialEstateNamesByCode, eiaFactoryKeys, productionCapacitiesByFid, boilerSizesByFid] =
+  const [industrialEstateNamesByCode, productionCapacitiesByFid, boilerSizesByFid] =
     await Promise.all([
       loadIndustrialEstateNamesByCode(rows),
-      loadEiaFactoryKeys(rows),
       loadProductionCapacitiesByFid(rows),
       loadBoilerSizesByFid(rows),
     ]);
@@ -52,7 +51,7 @@ async function listExternalCandidates(
     rows.map((row) =>
       toEligibleFactoryCandidate(row, {
         industrialEstateNamesByCode,
-        eiaFactoryKeys,
+        eiaLookupSkipped: true,
         productionCapacitiesByFid,
         boilerSizesByFid,
       }),
@@ -200,27 +199,6 @@ async function loadProductionCapacitiesByFid(rows: FacImportRow[]): Promise<Map<
   );
 }
 
-async function loadEiaFactoryKeys(rows: FacImportRow[]): Promise<Set<string>> {
-  const fids = uniqueFids(rows);
-  if (fids.length === 0) return new Set();
-
-  try {
-    const rows = await factorySourceDb<{ FACREG: string | null; FID: string | null }>(
-      `${env.FACTORY_DB_SCHEMA}.check_eia`,
-    )
-      .whereIn('FID', fids)
-      .timeout(EXTERNAL_QUERY_TIMEOUT_MS)
-      .select('FACREG', 'FID');
-
-    return new Set(
-      rows.flatMap((row) => [row.FACREG?.trim(), row.FID?.trim()]).filter(isNonEmptyString),
-    );
-  } catch (error) {
-    logger.warn('[eligible-factories] Failed to load EIA factory keys', { error });
-    return new Set();
-  }
-}
-
 async function selectedFactoryRegistrationNumbers(): Promise<Set<string>> {
   try {
     return new Set(await eligibleFactoriesRepository.listActiveRegistrationNumbers());
@@ -230,10 +208,6 @@ async function selectedFactoryRegistrationNumbers(): Promise<Set<string>> {
     });
     return new Set();
   }
-}
-
-function isNonEmptyString(value: string | null | undefined): value is string {
-  return Boolean(value);
 }
 
 function uniqueFids(rows: FacImportRow[]): string[] {

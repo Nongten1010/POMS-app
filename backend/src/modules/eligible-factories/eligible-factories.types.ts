@@ -54,7 +54,7 @@ export interface EligibleFactoryCandidateDTO {
   boilerCount?: number | null;
   boilerSizeEach: string | null;
   fuelUsed: string | null;
-  eia?: 'มี' | 'ไม่มี';
+  eia?: 'มี' | 'ไม่มี' | null;
   hasEia: boolean | null;
 }
 

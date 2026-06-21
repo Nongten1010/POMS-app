@@ -127,6 +127,7 @@ const TEMPORARY_STOPPED_FACTORY_FLAG = '3';
 interface FacImportMapperOptions {
   industrialEstateNamesByCode?: Map<string, string>;
   eiaFactoryKeys?: Set<string>;
+  eiaLookupSkipped?: boolean;
   productionCapacitiesByFid?: Map<string, string>;
   boilerSizesByFid?: Map<string, string>;
 }
@@ -151,7 +152,7 @@ export function toEligibleFactoryCandidate(
     row.FACTYPE,
     row.EXPSEQ,
   ]);
-  const hasEia = hasFactoryEia(row, options);
+  const hasEia = options.eiaLookupSkipped ? null : hasFactoryEia(row, options);
 
   return {
     factoryName,
@@ -173,7 +174,7 @@ export function toEligibleFactoryCandidate(
       options.boilerSizesByFid?.get(sourceFactoryId) ??
       commaSeparatedValues(row.BOILER_SIZE_EACH, row.BOILER_SIZE, row.BOILER_SIZES),
     fuelUsed: null,
-    eia: hasEia ? 'มี' : 'ไม่มี',
+    eia: hasEia === null ? null : hasEia ? 'มี' : 'ไม่มี',
     hasEia,
   };
 }

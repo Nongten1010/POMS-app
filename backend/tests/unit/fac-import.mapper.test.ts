@@ -68,6 +68,15 @@ describe('fac_import mapper', () => {
     expect(result.hasEia).toBe(true);
   });
 
+  it('returns null EIA fields when the EIA lookup is intentionally skipped', () => {
+    const result = toEligibleFactoryCandidate(row, {
+      eiaLookupSkipped: true,
+    });
+
+    expect(result.eia).toBeNull();
+    expect(result.hasEia).toBeNull();
+  });
+
   it('splits multiple subclass codes and removes the duplicated main code', () => {
     const result = toEligibleFactoryCandidate({
       ...row,

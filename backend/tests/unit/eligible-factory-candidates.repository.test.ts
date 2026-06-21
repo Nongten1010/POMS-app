@@ -160,14 +160,8 @@ describe('eligibleFactoryCandidatesRepository', () => {
   }
 
   it('paginates candidates before loading related lookup data', async () => {
-    const {
-      countQuery,
-      facImportQuery,
-      checkEiaQuery,
-      facProdQuery,
-      boilerListQuery,
-      industrialEstateQuery,
-    } = mockExternalCandidates();
+    const { countQuery, facImportQuery, facProdQuery, boilerListQuery, industrialEstateQuery } =
+      mockExternalCandidates();
     mockedEligibleFactoriesRepository.listActiveRegistrationNumbers.mockResolvedValue([]);
 
     const result = await eligibleFactoryCandidatesRepository.list({ page: 2, perPage: 50 });
@@ -182,8 +176,8 @@ describe('eligibleFactoryCandidatesRepository', () => {
     expect(result.data).toHaveLength(2);
     expect(result.data[1]?.factoryRegistrationNo).toBe('real-reg-2');
     expect(result.data[1]?.industrialEstateName).toBe('แหลมฉบัง');
-    expect(result.data[1]?.eia).toBe('มี');
-    expect(result.data[1]?.hasEia).toBe(true);
+    expect(result.data[1]?.eia).toBeNull();
+    expect(result.data[1]?.hasEia).toBeNull();
     expect(result.data[1]?.productionCapacity).toBe('น้ำตาลทราย 1200 ตัน/ปี, กากน้ำตาล 300 ตัน/ปี');
     expect(result.data[1]?.boilerSizeEach).toBe('10 ตัน/ชั่วโมง, 12 ตัน/ชั่วโมง');
     expect(countQuery.count).toHaveBeenCalledWith({ total: '*' });
@@ -194,8 +188,7 @@ describe('eligibleFactoryCandidatesRepository', () => {
       'COLONY_INDUST_CODE',
       'COLONY_INDUST_DESC',
     );
-    expect(checkEiaQuery.whereIn).toHaveBeenCalledWith('FID', ['real-1', 'real-2']);
-    expect(checkEiaQuery.select).toHaveBeenCalledWith('FACREG', 'FID');
+    expect(mockedFactorySourceDb).not.toHaveBeenCalledWith('dbo.check_eia');
     expect(facProdQuery.leftJoin).toHaveBeenCalledWith('dbo.UNIT as u', 'fp.UNIT', 'u.UNIT');
     expect(facProdQuery.whereIn).toHaveBeenCalledWith('fp.FID', ['real-1', 'real-2']);
     expect(boilerListQuery.whereIn).toHaveBeenCalledWith('FID', ['real-1', 'real-2']);
