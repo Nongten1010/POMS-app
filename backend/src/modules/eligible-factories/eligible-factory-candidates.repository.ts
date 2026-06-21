@@ -141,7 +141,7 @@ async function loadBoilerValuesByFid(rows: FacImportRow[]): Promise<Map<string, 
       const chunkRows = await boilerSourceDb<Record<string, unknown>>(boilerSourceTableName())
         .whereIn('fac_id_reg', fidChunk)
         .timeout(EXTERNAL_QUERY_TIMEOUT_MS)
-        .select('fac_id_reg', 'mac_max_stream_prod', 'fuel_name');
+        .select('fac_id_reg', 'mac_max_stream_prod', 'fuel_name', 'fuel_volume');
       boilerRows.push(...chunkRows);
     }
   } catch (error) {
@@ -160,9 +160,9 @@ async function loadBoilerValuesByFid(rows: FacImportRow[]): Promise<Map<string, 
       boilerSizesByFid.set(fid, [...(boilerSizesByFid.get(fid) ?? []), boilerSize]);
     }
 
-    const fuelName = firstRowText(row, ['fuel_name', 'FUEL_NAME']);
-    if (fuelName) {
-      fuelNamesByFid.set(fid, [...(fuelNamesByFid.get(fid) ?? []), fuelName]);
+    const fuel = formatFuelUsed(row);
+    if (fuel) {
+      fuelNamesByFid.set(fid, [...(fuelNamesByFid.get(fid) ?? []), fuel]);
     }
   }
 
@@ -170,7 +170,7 @@ async function loadBoilerValuesByFid(rows: FacImportRow[]): Promise<Map<string, 
     [...new Set([...boilerSizesByFid.keys(), ...fuelNamesByFid.keys()])].map((fid) => [
       fid,
       {
-        boilerSizeEach: joinUnique(boilerSizesByFid.get(fid)),
+        boilerSizeEach: joinUnique(boilerSizesByFid.get(fid), ','),
         fuelUsed: joinUnique(fuelNamesByFid.get(fid)),
       },
     ]),
@@ -242,10 +242,18 @@ function formatProductionCapacity(row: ProductionCapacityRow): string | null {
   return parts.length > 0 ? parts.join(' ') : null;
 }
 
-function joinUnique(values: string[] | undefined): string | null {
+function joinUnique(values: string[] | undefined, separator = ', '): string | null {
   if (!values || values.length === 0) return null;
   const uniqueValues = [...new Set(values)];
-  return uniqueValues.length > 0 ? uniqueValues.join(', ') : null;
+  return uniqueValues.length > 0 ? uniqueValues.join(separator) : null;
+}
+
+function formatFuelUsed(row: Record<string, unknown>): string | null {
+  const fuelName = firstRowText(row, ['fuel_name', 'FUEL_NAME']);
+  const fuelVolume = firstRowText(row, ['fuel_volume', 'FUEL_VOLUME']);
+  if (!fuelName) return fuelVolume;
+  if (!fuelVolume) return fuelName;
+  return `${fuelName} ${fuelVolume}`;
 }
 
 function firstRowText(row: Record<string, unknown>, keys: string[]): string | null {
