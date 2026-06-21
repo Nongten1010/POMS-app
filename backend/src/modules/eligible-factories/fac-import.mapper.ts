@@ -128,6 +128,7 @@ interface FacImportMapperOptions {
   industrialEstateNamesByCode?: Map<string, string>;
   eiaFactoryKeys?: Set<string>;
   productionCapacitiesByFid?: Map<string, string>;
+  boilerSizesByFid?: Map<string, string>;
 }
 
 export function toEligibleFactoryCandidate(
@@ -168,7 +169,9 @@ export function toEligibleFactoryCandidate(
     machineryHorsepower: horsepower,
     productionCapacity:
       options.productionCapacitiesByFid?.get(sourceFactoryId) ?? fallbackProductionCapacity(row),
-    boilerSizeEach: commaSeparatedValues(row.BOILER_SIZE_EACH, row.BOILER_SIZE, row.BOILER_SIZES),
+    boilerSizeEach:
+      options.boilerSizesByFid?.get(sourceFactoryId) ??
+      commaSeparatedValues(row.BOILER_SIZE_EACH, row.BOILER_SIZE, row.BOILER_SIZES),
     fuelUsed: null,
     eia: hasEia ? 'มี' : 'ไม่มี',
     hasEia,

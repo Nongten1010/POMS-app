@@ -99,17 +99,26 @@ describe('eligibleFactoryCandidatesRepository', () => {
           },
         ]),
     };
+    const boilerListQuery = {
+      whereIn: jest.fn().mockReturnThis(),
+      select: jest.fn<() => Promise<Array<Record<string, unknown>>>>().mockResolvedValue([
+        { FID: 'real-2', BOILER_SIZE: '10 ตัน/ชั่วโมง' },
+        { FID: 'real-2', BOILER_SIZE: '12 ตัน/ชั่วโมง' },
+      ]),
+    };
     mockedFactorySourceDb.mockImplementation(((tableName: unknown) => {
       if (tableName === 'INFORMATION_SCHEMA.COLUMNS') return informationSchemaQuery as never;
       if (tableName === 'dbo.check_eia') return checkEiaQuery as never;
       if (tableName === 'dbo.FAC_PROD as fp') return facProdQuery as never;
+      if (tableName === 'dbo.boiler_list') return boilerListQuery as never;
       return facImportQuery as never;
     }) as never);
-    return { facImportQuery, checkEiaQuery, facProdQuery };
+    return { facImportQuery, checkEiaQuery, facProdQuery, boilerListQuery };
   }
 
   it('excludes factories that are already selected as eligible', async () => {
-    const { facImportQuery, checkEiaQuery, facProdQuery } = mockExternalCandidates();
+    const { facImportQuery, checkEiaQuery, facProdQuery, boilerListQuery } =
+      mockExternalCandidates();
     mockedEligibleFactoriesRepository.listActiveRegistrationNumbers.mockResolvedValue([
       'real-reg-1',
     ]);
@@ -122,10 +131,12 @@ describe('eligibleFactoryCandidatesRepository', () => {
     expect(result.data[0]?.eia).toBe('มี');
     expect(result.data[0]?.hasEia).toBe(true);
     expect(result.data[0]?.productionCapacity).toBe('น้ำตาลทราย 1200 ตัน/ปี, กากน้ำตาล 300 ตัน/ปี');
+    expect(result.data[0]?.boilerSizeEach).toBe('10 ตัน/ชั่วโมง, 12 ตัน/ชั่วโมง');
     expect(facImportQuery.whereIn).toHaveBeenCalledWith('FFLAG', ['1', '3']);
     expect(checkEiaQuery.select).toHaveBeenCalledWith('FACREG', 'FID');
     expect(facProdQuery.leftJoin).toHaveBeenCalledWith('dbo.UNIT as u', 'fp.UNIT', 'u.UNIT');
     expect(facProdQuery.whereIn).toHaveBeenCalledWith('fp.FID', ['real-1', 'real-2']);
+    expect(boilerListQuery.whereIn).toHaveBeenCalledWith('FID', ['real-1', 'real-2']);
   });
 
   it('returns candidates when selected factory exclusion cannot be loaded', async () => {

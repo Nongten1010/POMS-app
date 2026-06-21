@@ -28,11 +28,12 @@ async function listExternalCandidates(): Promise<EligibleFactoryCandidatesDTO> {
   const orderByColumn = firstAvailableColumn(columns, ['FACREG', 'FID', 'DISPFACREG']);
 
   const rows = await (orderByColumn ? rowsQuery.orderBy(orderByColumn, 'asc') : rowsQuery);
-  const [industrialEstateNamesByCode, eiaFactoryKeys, productionCapacitiesByFid] =
+  const [industrialEstateNamesByCode, eiaFactoryKeys, productionCapacitiesByFid, boilerSizesByFid] =
     await Promise.all([
       loadIndustrialEstateNamesByCode(rows),
       loadEiaFactoryKeys(),
       loadProductionCapacitiesByFid(rows),
+      loadBoilerSizesByFid(rows),
     ]);
   const data = excludeSelectedCandidates(
     rows.map((row) =>
@@ -40,6 +41,7 @@ async function listExternalCandidates(): Promise<EligibleFactoryCandidatesDTO> {
         industrialEstateNamesByCode,
         eiaFactoryKeys,
         productionCapacitiesByFid,
+        boilerSizesByFid,
       }),
     ),
     selectedRegistrationNumbers,
@@ -82,10 +84,50 @@ async function loadIndustrialEstateNamesByCode(rows: FacImportRow[]): Promise<Ma
   }
 }
 
+async function loadBoilerSizesByFid(rows: FacImportRow[]): Promise<Map<string, string>> {
+  const fids = uniqueFids(rows);
+  if (fids.length === 0) return new Map();
+
+  const boilerRows: Array<Record<string, unknown>> = [];
+  try {
+    for (const fidChunk of chunks(fids, 1000)) {
+      const chunkRows = await factorySourceDb<Record<string, unknown>>(
+        `${env.FACTORY_DB_SCHEMA}.boiler_list`,
+      )
+        .whereIn('FID', fidChunk)
+        .select('*');
+      boilerRows.push(...chunkRows);
+    }
+  } catch (error) {
+    logger.warn('[eligible-factories] Failed to load boiler sizes', { error });
+    return new Map();
+  }
+
+  const valuesByFid = new Map<string, string[]>();
+  for (const row of boilerRows) {
+    const fid = firstRowText(row, ['FID', 'fid']);
+    const value = firstRowText(row, [
+      'BOILER_SIZE_EACH',
+      'BOILER_SIZE',
+      'BOILER_SIZES',
+      'BOILER_CAPACITY',
+      'BOILER_CAP',
+      'BOILER_TON',
+      'STEAM_CAPACITY',
+      'CAPACITY',
+      'SIZE',
+    ]);
+    if (!fid || !value) continue;
+    valuesByFid.set(fid, [...(valuesByFid.get(fid) ?? []), value]);
+  }
+
+  return new Map(
+    [...valuesByFid.entries()].map(([fid, values]) => [fid, [...new Set(values)].join(', ')]),
+  );
+}
+
 async function loadProductionCapacitiesByFid(rows: FacImportRow[]): Promise<Map<string, string>> {
-  const fids = [
-    ...new Set(rows.map((row) => row.FID?.trim()).filter((fid): fid is string => Boolean(fid))),
-  ];
+  const fids = uniqueFids(rows);
   if (fids.length === 0) return new Map();
 
   const productionRows: ProductionCapacityRow[] = [];
@@ -147,6 +189,12 @@ function isNonEmptyString(value: string | null | undefined): value is string {
   return Boolean(value);
 }
 
+function uniqueFids(rows: FacImportRow[]): string[] {
+  return [
+    ...new Set(rows.map((row) => row.FID?.trim()).filter((fid): fid is string => Boolean(fid))),
+  ];
+}
+
 interface ProductionCapacityRow {
   FID: string | null;
   PRODNAME: string | null;
@@ -159,6 +207,16 @@ function formatProductionCapacity(row: ProductionCapacityRow): string | null {
     .map((value) => (value === null || value === undefined ? null : String(value).trim()))
     .filter((value): value is string => Boolean(value));
   return parts.length > 0 ? parts.join(' ') : null;
+}
+
+function firstRowText(row: Record<string, unknown>, keys: string[]): string | null {
+  for (const key of keys) {
+    const value = row[key];
+    if (value === null || value === undefined) continue;
+    const text = String(value).trim();
+    if (text) return text;
+  }
+  return null;
 }
 
 function chunks<T>(values: T[], size: number): T[][] {
