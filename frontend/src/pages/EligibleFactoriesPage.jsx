@@ -24,8 +24,16 @@ const subMenus = [
 
 const baseColumns = [
   { field: 'factoryName', headerName: 'ชื่อโรงงาน', width: 240 },
-  { field: 'newRegistrationNo', headerName: 'เลขทะเบียนโรงงานแบบใหม่', width: 180 },
-  { field: 'oldRegistrationNo', headerName: 'เลขทะเบียนโรงงานแบบเดิม', width: 190 },
+  {
+    field: 'newRegistrationNo',
+    headerName: 'เลขทะเบียนโรงงานแบบใหม่',
+    width: 180,
+  },
+  {
+    field: 'oldRegistrationNo',
+    headerName: 'เลขทะเบียนโรงงานแบบเดิม',
+    width: 190,
+  },
   { field: 'factoryClass', headerName: 'ลำดับประเภทโรงงานหลัก', width: 190 },
   { field: 'factorySubclass', headerName: 'ลำดับประเภทโรงงานรอง', width: 190 },
   { field: 'location', headerName: 'สถานที่ตั้ง', width: 320 },
@@ -88,8 +96,17 @@ function getSubMenuLabel(menu) {
 }
 
 const connectionRequestColumns = [
-  { field: 'factoryName', headerName: 'ชื่อโรงงาน/บริษัท', minWidth: 260, flex: 1 },
-  { field: 'factoryRegistrationNo', headerName: 'เลขทะเบียนโรงงาน', width: 190 },
+  {
+    field: 'factoryName',
+    headerName: 'ชื่อโรงงาน/บริษัท',
+    minWidth: 260,
+    flex: 1,
+  },
+  {
+    field: 'factoryRegistrationNo',
+    headerName: 'เลขทะเบียนโรงงาน',
+    width: 190,
+  },
   { field: 'province', headerName: 'จังหวัด', width: 150 },
   { field: 'reason', headerName: 'เหตุผล', minWidth: 320, flex: 1 },
   {
@@ -190,6 +207,11 @@ function createEligibleFactoryPayload(row) {
 function EligibleFactoriesPage({ accessToken = '' }) {
   const [activeTab, setActiveTab] = useState('all')
   const [factoryRows, setFactoryRows] = useState([])
+  const [factoryTotal, setFactoryTotal] = useState(0)
+  const [factoryPaginationModel, setFactoryPaginationModel] = useState({
+    page: 0,
+    pageSize: 25,
+  })
   const [eligibleFactoryRows, setEligibleFactoryRows] = useState([])
   const [isLoadingFactories, setIsLoadingFactories] = useState(false)
   const [isLoadingEligibleFactories, setIsLoadingEligibleFactories] = useState(false)
@@ -204,17 +226,11 @@ function EligibleFactoriesPage({ accessToken = '' }) {
     () => new Set(eligibleFactoryRows.map((row) => row.factoryKey)),
     [eligibleFactoryRows],
   )
-  const savingEligibleFactoryIdSet = useMemo(
-    () => new Set(savingEligibleFactoryIds),
-    [savingEligibleFactoryIds],
-  )
-  const deletingEligibleFactoryIdSet = useMemo(
-    () => new Set(deletingEligibleFactoryIds),
-    [deletingEligibleFactoryIds],
-  )
+  const savingEligibleFactoryIdSet = useMemo(() => new Set(savingEligibleFactoryIds), [savingEligibleFactoryIds])
+  const deletingEligibleFactoryIdSet = useMemo(() => new Set(deletingEligibleFactoryIds), [deletingEligibleFactoryIds])
 
   const loadFactoryCandidates = useCallback(
-    async (signal) => {
+    async (signal, paginationModel = factoryPaginationModel) => {
       if (!accessToken) {
         return
       }
@@ -223,7 +239,11 @@ function EligibleFactoriesPage({ accessToken = '' }) {
       setFactoriesError('')
 
       try {
-        const result = await fetch(eligibleFactoryCandidatesApiUrl, {
+        const params = new URLSearchParams({
+          page: String(paginationModel.page + 1),
+          perPage: String(paginationModel.pageSize),
+        })
+        const result = await fetch(`${eligibleFactoryCandidatesApiUrl}?${params.toString()}`, {
           headers: {
             Accept: 'application/json',
             Authorization: `Bearer ${accessToken}`,
@@ -249,9 +269,11 @@ function EligibleFactoriesPage({ accessToken = '' }) {
 
         const nextRows = Array.isArray(response?.data) ? response.data.map(mapCandidateFactory) : []
         setFactoryRows(nextRows)
+        setFactoryTotal(Number(response?.meta?.total ?? nextRows.length))
       } catch (requestError) {
         if (requestError.name !== 'AbortError') {
           setFactoryRows([])
+          setFactoryTotal(0)
           setFactoriesError(requestError.message)
         }
       } finally {
@@ -260,7 +282,7 @@ function EligibleFactoriesPage({ accessToken = '' }) {
         }
       }
     },
-    [accessToken],
+    [accessToken, factoryPaginationModel],
   )
 
   const loadEligibleFactories = useCallback(
@@ -321,7 +343,7 @@ function EligibleFactoriesPage({ accessToken = '' }) {
     const controller = new AbortController()
 
     async function loadRows() {
-      await loadFactoryCandidates(controller.signal)
+      await loadFactoryCandidates(controller.signal, factoryPaginationModel)
     }
 
     loadRows()
@@ -329,7 +351,7 @@ function EligibleFactoriesPage({ accessToken = '' }) {
     return () => {
       controller.abort()
     }
-  }, [accessToken, loadFactoryCandidates])
+  }, [accessToken, factoryPaginationModel, loadFactoryCandidates])
 
   useEffect(() => {
     if (!accessToken) {
@@ -354,9 +376,7 @@ function EligibleFactoriesPage({ accessToken = '' }) {
     () => (accessToken ? eligibleFactoryRows : []),
     [accessToken, eligibleFactoryRows],
   )
-  const effectiveFactoriesError = accessToken
-    ? factoriesError
-    : 'กรุณาเข้าสู่ระบบเพื่อดูข้อมูลโรงงานจาก กรอ.'
+  const effectiveFactoriesError = accessToken ? factoriesError : 'กรุณาเข้าสู่ระบบเพื่อดูข้อมูลโรงงานจาก กรอ.'
   const effectiveEligibleFactoriesError = accessToken
     ? eligibleFactoriesError
     : 'กรุณาเข้าสู่ระบบเพื่อดูข้อมูลโรงงานที่เข้าข่าย'
@@ -369,9 +389,7 @@ function EligibleFactoriesPage({ accessToken = '' }) {
       }
 
       setEligibleActionError('')
-      setSavingEligibleFactoryIds((current) =>
-        current.includes(row.id) ? current : [...current, row.id],
-      )
+      setSavingEligibleFactoryIds((current) => (current.includes(row.id) ? current : [...current, row.id]))
 
       try {
         const result = await fetch(eligibleFactoriesApiUrl, {
@@ -425,9 +443,7 @@ function EligibleFactoriesPage({ accessToken = '' }) {
       }
 
       setEligibleActionError('')
-      setDeletingEligibleFactoryIds((current) =>
-        current.includes(row.id) ? current : [...current, row.id],
-      )
+      setDeletingEligibleFactoryIds((current) => (current.includes(row.id) ? current : [...current, row.id]))
 
       try {
         const result = await fetch(`${eligibleFactoriesApiUrl}/${row.eligibleFactoryId}`, {
@@ -557,7 +573,7 @@ function EligibleFactoriesPage({ accessToken = '' }) {
               variant="outlined"
               startIcon={<RefreshIcon />}
               disabled={!accessToken || isLoadingFactories}
-              onClick={() => loadFactoryCandidates()}
+              onClick={() => loadFactoryCandidates(undefined, factoryPaginationModel)}
               sx={{ flex: '0 0 auto' }}
             >
               {isLoadingFactories ? 'กำลังโหลด' : 'โหลดข้อมูลใหม่'}
@@ -620,6 +636,10 @@ function EligibleFactoriesPage({ accessToken = '' }) {
           columns={allFactoryColumns}
           loading={isLoadingFactories}
           error={effectiveFactoriesError}
+          paginationMode="server"
+          rowCount={accessToken ? factoryTotal : 0}
+          paginationModel={factoryPaginationModel}
+          onPaginationModelChange={setFactoryPaginationModel}
         />
       ) : activeTab === 'eligible' ? (
         <FactoryDataGrid
@@ -636,7 +656,27 @@ function EligibleFactoriesPage({ accessToken = '' }) {
   )
 }
 
-function FactoryDataGrid({ title, rows, columns, loading = false, error = '' }) {
+function FactoryDataGrid({
+  title,
+  rows,
+  columns,
+  loading = false,
+  error = '',
+  paginationMode,
+  rowCount,
+  paginationModel,
+  onPaginationModelChange,
+}) {
+  const paginationProps =
+    paginationModel && onPaginationModelChange
+      ? {
+          paginationMode,
+          rowCount,
+          paginationModel,
+          onPaginationModelChange,
+        }
+      : {}
+
   return (
     <Paper
       elevation={0}
@@ -663,7 +703,8 @@ function FactoryDataGrid({ title, rows, columns, loading = false, error = '' }) 
           showCellVerticalBorder
           showColumnVerticalBorder
           label={title}
-          pageSizeOptions={[25, 50, 100]}
+          pageSizeOptions={[25, 50, 100, 200]}
+          {...paginationProps}
           initialState={{
             pagination: {
               paginationModel: { page: 0, pageSize: 25 },
@@ -749,13 +790,7 @@ function StatusChip({ value }) {
 }
 
 function ConnectionRequestsPanel() {
-  return (
-    <FactoryDataGrid
-      title="คำขอเชื่อมต่อ"
-      rows={connectionRequestRows}
-      columns={connectionRequestColumns}
-    />
-  )
+  return <FactoryDataGrid title="คำขอเชื่อมต่อ" rows={connectionRequestRows} columns={connectionRequestColumns} />
 }
 
 export default EligibleFactoriesPage
