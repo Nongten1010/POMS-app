@@ -36,9 +36,6 @@ export interface FacImportRow {
   FID: string | null;
   FACTYPE: string | null;
   CLASS: string | null;
-  HAS_EIA?: string | number | boolean | null;
-  EIA?: string | number | boolean | null;
-  EIA_STATUS?: string | number | boolean | null;
   BOILER_SIZE_EACH?: string | number | null;
   BOILER_SIZE?: string | number | null;
   BOILER_SIZES?: string | number | null;
@@ -129,6 +126,7 @@ const TEMPORARY_STOPPED_FACTORY_FLAG = '3';
 
 interface FacImportMapperOptions {
   industrialEstateNamesByCode?: Map<string, string>;
+  eiaFactoryKeys?: Set<string>;
 }
 
 export function toEligibleFactoryCandidate(
@@ -152,7 +150,7 @@ export function toEligibleFactoryCandidate(
     row.FACTYPE,
     row.EXPSEQ,
   ]);
-  const hasEia = toEiaBoolean(row.HAS_EIA, row.EIA, row.EIA_STATUS);
+  const hasEia = hasFactoryEia(row, options);
 
   return {
     factoryName,
@@ -289,18 +287,12 @@ function commaSeparatedValues(...values: Array<string | number | null | undefine
   return items.length > 0 ? [...new Set(items)].join(',') : null;
 }
 
-function toEiaBoolean(...values: Array<string | number | boolean | null | undefined>): boolean {
-  for (const value of values) {
-    if (value === true) return true;
-    if (value === false) return false;
-    const text = firstText(value);
-    if (!text) continue;
-    const normalized = text.toLowerCase();
-    if (['1', 'true', 'yes', 'y', 'มี'].includes(normalized)) return true;
-    if (['0', 'false', 'no', 'n', 'ไม่มี'].includes(normalized)) return false;
-  }
+function hasFactoryEia(row: FacImportRow, options: FacImportMapperOptions): boolean {
+  const keys = [row.FACREG, row.FID, row.DISPFACREG]
+    .map((value) => firstText(value))
+    .filter((value): value is string => Boolean(value));
 
-  return false;
+  return keys.some((key) => options.eiaFactoryKeys?.has(key));
 }
 
 function firstText(...values: Array<string | number | null | undefined>): string | null {

@@ -63,15 +63,23 @@ describe('eligibleFactoryCandidatesRepository', () => {
       select: jest.fn().mockReturnThis(),
       orderBy: jest.fn<() => Promise<typeof externalRows>>().mockResolvedValue(externalRows),
     };
+    const checkEiaQuery = {
+      select: jest
+        .fn<
+          (...columns: string[]) => Promise<Array<{ FACREG: string | null; FID: string | null }>>
+        >()
+        .mockResolvedValue([{ FACREG: 'real-reg-2', FID: null }]),
+    };
     mockedFactorySourceDb.mockImplementation(((tableName: unknown) => {
       if (tableName === 'INFORMATION_SCHEMA.COLUMNS') return informationSchemaQuery as never;
+      if (tableName === 'dbo.check_eia') return checkEiaQuery as never;
       return facImportQuery as never;
     }) as never);
-    return { facImportQuery };
+    return { facImportQuery, checkEiaQuery };
   }
 
   it('excludes factories that are already selected as eligible', async () => {
-    const { facImportQuery } = mockExternalCandidates();
+    const { facImportQuery, checkEiaQuery } = mockExternalCandidates();
     mockedEligibleFactoriesRepository.listActiveRegistrationNumbers.mockResolvedValue([
       'real-reg-1',
     ]);
@@ -81,7 +89,10 @@ describe('eligibleFactoryCandidatesRepository', () => {
     expect(result.meta).toEqual({ total: 1, source: 'external' });
     expect(result.data).toHaveLength(1);
     expect(result.data[0]?.factoryRegistrationNo).toBe('real-reg-2');
+    expect(result.data[0]?.eia).toBe('มี');
+    expect(result.data[0]?.hasEia).toBe(true);
     expect(facImportQuery.whereIn).toHaveBeenCalledWith('FFLAG', ['1', '3']);
+    expect(checkEiaQuery.select).toHaveBeenCalledWith('FACREG', 'FID');
   });
 
   it('returns candidates when selected factory exclusion cannot be loaded', async () => {

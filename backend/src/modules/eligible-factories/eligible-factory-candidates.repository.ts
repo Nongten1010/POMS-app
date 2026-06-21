@@ -28,9 +28,14 @@ async function listExternalCandidates(): Promise<EligibleFactoryCandidatesDTO> {
   const orderByColumn = firstAvailableColumn(columns, ['FACREG', 'FID', 'DISPFACREG']);
 
   const rows = await (orderByColumn ? rowsQuery.orderBy(orderByColumn, 'asc') : rowsQuery);
-  const industrialEstateNamesByCode = await loadIndustrialEstateNamesByCode(rows);
+  const [industrialEstateNamesByCode, eiaFactoryKeys] = await Promise.all([
+    loadIndustrialEstateNamesByCode(rows),
+    loadEiaFactoryKeys(),
+  ]);
   const data = excludeSelectedCandidates(
-    rows.map((row) => toEligibleFactoryCandidate(row, { industrialEstateNamesByCode })),
+    rows.map((row) =>
+      toEligibleFactoryCandidate(row, { industrialEstateNamesByCode, eiaFactoryKeys }),
+    ),
     selectedRegistrationNumbers,
   );
   return {
@@ -71,6 +76,21 @@ async function loadIndustrialEstateNamesByCode(rows: FacImportRow[]): Promise<Ma
   }
 }
 
+async function loadEiaFactoryKeys(): Promise<Set<string>> {
+  try {
+    const rows = await factorySourceDb<{ FACREG: string | null; FID: string | null }>(
+      `${env.FACTORY_DB_SCHEMA}.check_eia`,
+    ).select('FACREG', 'FID');
+
+    return new Set(
+      rows.flatMap((row) => [row.FACREG?.trim(), row.FID?.trim()]).filter(isNonEmptyString),
+    );
+  } catch (error) {
+    logger.warn('[eligible-factories] Failed to load EIA factory keys', { error });
+    return new Set();
+  }
+}
+
 async function selectedFactoryRegistrationNumbers(): Promise<Set<string>> {
   try {
     return new Set(await eligibleFactoriesRepository.listActiveRegistrationNumbers());
@@ -80,6 +100,10 @@ async function selectedFactoryRegistrationNumbers(): Promise<Set<string>> {
     });
     return new Set();
   }
+}
+
+function isNonEmptyString(value: string | null | undefined): value is string {
+  return Boolean(value);
 }
 
 function excludeSelectedCandidates(
@@ -153,9 +177,6 @@ function facImportColumns(): Array<keyof FacImportRow> {
     'FACTYPE',
     'CLASS',
     'EXPSEQ',
-    'HAS_EIA',
-    'EIA',
-    'EIA_STATUS',
     'BOILER_SIZE_EACH',
     'BOILER_SIZE',
     'BOILER_SIZES',

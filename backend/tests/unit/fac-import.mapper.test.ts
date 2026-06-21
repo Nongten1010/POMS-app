@@ -59,6 +59,15 @@ describe('fac_import mapper', () => {
     });
   });
 
+  it('marks EIA when the factory registration or FID exists in check_eia', () => {
+    const result = toEligibleFactoryCandidate(row, {
+      eiaFactoryKeys: new Set(['10100302325234']),
+    });
+
+    expect(result.eia).toBe('มี');
+    expect(result.hasEia).toBe(true);
+  });
+
   it('splits multiple subclass codes and removes the duplicated main code', () => {
     const result = toEligibleFactoryCandidate({
       ...row,
