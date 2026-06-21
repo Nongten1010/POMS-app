@@ -155,7 +155,9 @@ async function loadBoilerValuesByFid(rows: FacImportRow[]): Promise<Map<string, 
     const fid = firstRowText(row, ['fac_id_reg', 'FAC_ID_REG']);
     if (!fid) continue;
 
-    const boilerSize = firstRowText(row, ['mac_max_stream_prod', 'MAC_MAX_STREAM_PROD']);
+    const boilerSize = formatDecimalText(
+      firstRowText(row, ['mac_max_stream_prod', 'MAC_MAX_STREAM_PROD']),
+    );
     if (boilerSize) {
       boilerSizesByFid.set(fid, [...(boilerSizesByFid.get(fid) ?? []), boilerSize]);
     }
@@ -254,6 +256,13 @@ function formatFuelUsed(row: Record<string, unknown>): string | null {
   if (!fuelName) return fuelVolume;
   if (!fuelVolume) return fuelName;
   return `${fuelName} ${fuelVolume}`;
+}
+
+function formatDecimalText(value: string | null): string | null {
+  if (!value) return null;
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return value;
+  return Number(numeric.toFixed(2)).toString();
 }
 
 function firstRowText(row: Record<string, unknown>, keys: string[]): string | null {
