@@ -28,8 +28,9 @@ async function listExternalCandidates(): Promise<EligibleFactoryCandidatesDTO> {
   const orderByColumn = firstAvailableColumn(columns, ['FACREG', 'FID', 'DISPFACREG']);
 
   const rows = await (orderByColumn ? rowsQuery.orderBy(orderByColumn, 'asc') : rowsQuery);
+  const industrialEstateNamesByCode = await loadIndustrialEstateNamesByCode(rows);
   const data = excludeSelectedCandidates(
-    rows.map(toEligibleFactoryCandidate),
+    rows.map((row) => toEligibleFactoryCandidate(row, { industrialEstateNamesByCode })),
     selectedRegistrationNumbers,
   );
   return {
@@ -39,6 +40,35 @@ async function listExternalCandidates(): Promise<EligibleFactoryCandidatesDTO> {
       source: 'external',
     },
   };
+}
+
+async function loadIndustrialEstateNamesByCode(rows: FacImportRow[]): Promise<Map<string, string>> {
+  const codes = [
+    ...new Set(
+      rows
+        .map((row) => row.COLONY_INDUST_CODE?.trim())
+        .filter((code): code is string => Boolean(code)),
+    ),
+  ];
+  if (codes.length === 0) return new Map();
+
+  try {
+    const lookupRows = await factorySourceDb<{
+      COLONY_INDUST_CODE: string | null;
+      FAC_COLONY_INDUST_DESC: string | null;
+    }>(`${env.FACTORY_DB_SCHEMA}.FAC_COLONY_INDUST`)
+      .whereIn('COLONY_INDUST_CODE', codes)
+      .select('COLONY_INDUST_CODE', 'FAC_COLONY_INDUST_DESC');
+
+    return new Map(
+      lookupRows
+        .filter((row) => row.COLONY_INDUST_CODE && row.FAC_COLONY_INDUST_DESC)
+        .map((row) => [row.COLONY_INDUST_CODE as string, row.FAC_COLONY_INDUST_DESC as string]),
+    );
+  } catch (error) {
+    logger.warn('[eligible-factories] Failed to load industrial estate names', { error });
+    return new Map();
+  }
 }
 
 async function selectedFactoryRegistrationNumbers(): Promise<Set<string>> {
@@ -123,5 +153,11 @@ function facImportColumns(): Array<keyof FacImportRow> {
     'FACTYPE',
     'CLASS',
     'EXPSEQ',
+    'HAS_EIA',
+    'EIA',
+    'EIA_STATUS',
+    'BOILER_SIZE_EACH',
+    'BOILER_SIZE',
+    'BOILER_SIZES',
   ];
 }

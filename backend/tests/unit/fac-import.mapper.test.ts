@@ -37,8 +37,8 @@ describe('fac_import mapper', () => {
     TOTAL_CAP: null,
     CAPREGIS: null,
     FID: '10100302325234',
-    FACTYPE: '3',
-    CLASS: '1',
+    FACTYPE: '064065',
+    CLASS: '000064',
   };
 
   it('maps fac_import columns to eligible factory candidate fields', () => {
@@ -48,14 +48,39 @@ describe('fac_import mapper', () => {
       factoryName: 'ห้างหุ้นส่วนจำกัด โรงกลึงก๊กกวง',
       factoryId: '10100302325234',
       factoryRegistrationNo: '3-64(6)-45/17',
-      factoryClass: '1',
-      factorySubclass: '3',
+      factoryClass: '064',
+      factorySubclass: '065',
       provinceName: 'กรุงเทพมหานคร',
       businessActivity: 'ทำผลิตภัณฑ์โลหะต่าง ๆ',
       operationStatus: 'แจ้งประกอบแล้ว',
-      capitalAmount: 1825000,
       machineryHorsepower: 75,
+      eia: 'ไม่มี',
+      hasEia: false,
     });
+  });
+
+  it('splits multiple subclass codes and removes the duplicated main code', () => {
+    const result = toEligibleFactoryCandidate({
+      ...row,
+      CLASS: '101',
+      SUBCLASS: '101102103',
+      FACTYPE: null,
+    });
+
+    expect(result.factoryClass).toBe('101');
+    expect(result.factorySubclass).toBe('102,103');
+  });
+
+  it('uses industrial estate display names when the source code has a lookup match', () => {
+    const result = toEligibleFactoryCandidate(
+      {
+        ...row,
+        COLONY_INDUST_CODE: 'BP',
+      },
+      { industrialEstateNamesByCode: new Map([['BP', 'นิคมอุตสาหกรรมบางปู']]) },
+    );
+
+    expect(result.industrialEstateName).toBe('นิคมอุตสาหกรรมบางปู');
   });
 
   it('does not expose projected coordinate values as latitude/longitude', () => {
@@ -76,16 +101,26 @@ describe('fac_import mapper', () => {
     expect(result.longitude).toBe(100.65241);
   });
 
+  it('does not expose zero coordinates as latitude/longitude', () => {
+    const result = toEligibleFactoryCandidate({
+      ...row,
+      LONGITUDE_X: 0,
+      LATITUDE_Y: 0,
+    });
+
+    expect(result.latitude).toBeNull();
+    expect(result.longitude).toBeNull();
+  });
+
   it('returns exactly the 20 DataDict_Fac60k candidate fields', () => {
     const result = toEligibleFactoryCandidate(row);
 
     expect(Object.keys(result).sort()).toEqual(
       [
         'address',
-        'boilerCount',
         'boilerSizeEach',
         'businessActivity',
-        'capitalAmount',
+        'eia',
         'factoryClass',
         'factoryId',
         'factoryName',
@@ -100,7 +135,6 @@ describe('fac_import mapper', () => {
         'operationStatus',
         'productionCapacity',
         'provinceName',
-        'wastewaterDischargeInfo',
       ].sort(),
     );
   });

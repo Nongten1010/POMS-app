@@ -44,13 +44,14 @@ export interface EligibleFactoryCandidateDTO {
   latitude: number | null;
   businessActivity: string | null;
   operationStatus: string;
-  capitalAmount: number | null;
+  capitalAmount?: number | null;
   machineryHorsepower: number | null;
   productionCapacity: string | null;
-  wastewaterDischargeInfo: string | null;
-  boilerCount: number | null;
+  wastewaterDischargeInfo?: string | null;
+  boilerCount?: number | null;
   boilerSizeEach: string | null;
   fuelUsed: string | null;
+  eia?: 'มี' | 'ไม่มี';
   hasEia: boolean | null;
 }
 

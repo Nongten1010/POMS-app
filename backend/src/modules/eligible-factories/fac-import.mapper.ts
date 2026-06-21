@@ -36,6 +36,12 @@ export interface FacImportRow {
   FID: string | null;
   FACTYPE: string | null;
   CLASS: string | null;
+  HAS_EIA?: string | number | boolean | null;
+  EIA?: string | number | boolean | null;
+  EIA_STATUS?: string | number | boolean | null;
+  BOILER_SIZE_EACH?: string | number | null;
+  BOILER_SIZE?: string | number | null;
+  BOILER_SIZES?: string | number | null;
 }
 
 const PROVINCE_BY_DIW_CODE: Record<string, string> = {
@@ -121,7 +127,14 @@ const PROVINCE_BY_DIW_CODE: Record<string, string> = {
 const ACTIVE_FACTORY_FLAG = '1';
 const TEMPORARY_STOPPED_FACTORY_FLAG = '3';
 
-export function toEligibleFactoryCandidate(row: FacImportRow): EligibleFactoryCandidateDTO {
+interface FacImportMapperOptions {
+  industrialEstateNamesByCode?: Map<string, string>;
+}
+
+export function toEligibleFactoryCandidate(
+  row: FacImportRow,
+  options: FacImportMapperOptions = {},
+): EligibleFactoryCandidateDTO {
   const sourceFactoryId = firstText(row.FID, row.FACREG, row.DISPFACREG) ?? '';
   const registrationNoNew =
     firstText(row.DISPFACREG, row.FACREG, sourceFactoryId) ?? sourceFactoryId;
@@ -131,33 +144,35 @@ export function toEligibleFactoryCandidate(row: FacImportRow): EligibleFactoryCa
     ? (PROVINCE_BY_DIW_CODE[provinceCode] ?? `รหัสจังหวัด ${provinceCode}`)
     : 'ไม่ระบุจังหวัด';
   const horsepower = firstNumber(row.HP2, row.HP);
-  const capitalAmount =
-    firstNumber(row.TOTAL_CAP, row.CAPREGIS) ??
-    sumNumbers(row.CAPLAND, row.CAPBUILD, row.CAPMACH, row.CAPWORK);
   const productionCapacity = firstNumber(row.CAPPROD);
   const coordinates = toFactoryCoordinates(row);
+  const factoryClass = factoryMainClass(row.CLASS);
+  const factorySubclass = factorySubclassCodes(factoryClass, [
+    row.SUBCLASS,
+    row.FACTYPE,
+    row.EXPSEQ,
+  ]);
+  const hasEia = toEiaBoolean(row.HAS_EIA, row.EIA, row.EIA_STATUS);
 
   return {
     factoryName,
     factoryId: sourceFactoryId,
     factoryRegistrationNo: registrationNoNew,
-    factoryClass: firstText(row.CLASS),
-    factorySubclass: firstText(row.SUBCLASS, row.FACTYPE, row.FACREQ, row.EXPSEQ),
+    factoryClass,
+    factorySubclass,
     address: joinAddress(row),
     provinceName,
-    industrialEstateName: firstText(row.COLONY_INDUST_CODE),
+    industrialEstateName: industrialEstateName(row.COLONY_INDUST_CODE, options),
     longitude: coordinates?.longitude ?? null,
     latitude: coordinates?.latitude ?? null,
     businessActivity: firstText(row.OBJECT),
     operationStatus: operationStatusFromFlag(row.FFLAG),
-    capitalAmount,
     machineryHorsepower: horsepower,
     productionCapacity: productionCapacity === null ? null : `${productionCapacity}`,
-    wastewaterDischargeInfo: wastewaterDischargeInfo(row),
-    boilerCount: null,
-    boilerSizeEach: null,
+    boilerSizeEach: commaSeparatedValues(row.BOILER_SIZE_EACH, row.BOILER_SIZE, row.BOILER_SIZES),
     fuelUsed: null,
-    hasEia: null,
+    eia: hasEia ? 'มี' : 'ไม่มี',
+    hasEia,
   };
 }
 
@@ -194,15 +209,6 @@ function joinAddress(row: FacImportRow): string | null {
   return parts.length > 0 ? parts.join(' ') : null;
 }
 
-function wastewaterDischargeInfo(row: FacImportRow): string | null {
-  const canal = firstText(row.CANAL);
-  const river = firstText(row.RIVER);
-  if (!canal && !river) return null;
-  return [canal ? `คลอง: ${canal}` : null, river ? `แม่น้ำ: ${river}` : null]
-    .filter((part): part is string => part !== null)
-    .join(', ');
-}
-
 function toFactoryCoordinates(row: FacImportRow): { latitude: number; longitude: number } | null {
   return (
     toLatLongCoordinates(row.LATITUDE_Y, row.LONGITUDE_X) ??
@@ -217,8 +223,84 @@ function toLatLongCoordinates(
   const latitude = firstNumber(latitudeValue);
   const longitude = firstNumber(longitudeValue);
   if (latitude === null || longitude === null) return null;
+  if (latitude === 0 && longitude === 0) return null;
   if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return null;
   return { latitude, longitude };
+}
+
+function industrialEstateName(
+  colonyIndustrialEstateCode: string | null,
+  options: FacImportMapperOptions,
+): string | null {
+  const code = firstText(colonyIndustrialEstateCode);
+  if (!code) return null;
+  return options.industrialEstateNamesByCode?.get(code) ?? code;
+}
+
+function factoryMainClass(value: string | number | null | undefined): string | null {
+  const text = firstText(value);
+  if (!text) return null;
+  const digits = text.replace(/\D/g, '');
+  if (!digits) return text.length > 3 ? text.slice(-3) : text.padStart(3, '0');
+  return digits.slice(-3).padStart(3, '0');
+}
+
+function factorySubclassCodes(
+  factoryClass: string | null,
+  values: Array<string | number | null | undefined>,
+): string | null {
+  const codes = new Set<string>();
+
+  for (const value of values) {
+    const text = firstText(value);
+    if (!text) continue;
+    for (const token of text.split(/[,\s/|;]+/)) {
+      for (const code of factoryCodeChunks(token, factoryClass)) {
+        if (code !== factoryClass) codes.add(code);
+      }
+    }
+  }
+
+  return codes.size > 0 ? [...codes].join(',') : null;
+}
+
+function factoryCodeChunks(value: string, factoryClass: string | null): string[] {
+  const digits = value.replace(/\D/g, '');
+  if (!digits) return [];
+  const normalized = factoryClass && digits.startsWith(factoryClass) ? digits.slice(3) : digits;
+  if (!normalized) return [];
+  if (normalized.length <= 3) return [normalized.padStart(3, '0')];
+
+  const chunks: string[] = [];
+  for (let index = 0; index < normalized.length; index += 3) {
+    const chunk = normalized.slice(index, index + 3);
+    if (chunk.length === 3) chunks.push(chunk);
+  }
+
+  return chunks.length > 0 ? chunks : [normalized.slice(-3).padStart(3, '0')];
+}
+
+function commaSeparatedValues(...values: Array<string | number | null | undefined>): string | null {
+  const items = values
+    .flatMap((value) => firstText(value)?.split(/[,\s/|;]+/) ?? [])
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+
+  return items.length > 0 ? [...new Set(items)].join(',') : null;
+}
+
+function toEiaBoolean(...values: Array<string | number | boolean | null | undefined>): boolean {
+  for (const value of values) {
+    if (value === true) return true;
+    if (value === false) return false;
+    const text = firstText(value);
+    if (!text) continue;
+    const normalized = text.toLowerCase();
+    if (['1', 'true', 'yes', 'y', 'มี'].includes(normalized)) return true;
+    if (['0', 'false', 'no', 'n', 'ไม่มี'].includes(normalized)) return false;
+  }
+
+  return false;
 }
 
 function firstText(...values: Array<string | number | null | undefined>): string | null {
@@ -237,14 +319,6 @@ function firstNumber(...values: Array<string | number | null | undefined>): numb
     if (Number.isFinite(numeric)) return numeric;
   }
   return null;
-}
-
-function sumNumbers(...values: Array<string | number | null | undefined>): number | null {
-  const total = values.reduce<number>((sum, value) => {
-    const numeric = firstNumber(value);
-    return numeric === null ? sum : sum + numeric;
-  }, 0);
-  return total > 0 ? total : null;
 }
 
 function normalizeNumberCode(value: string | number | null): string | null {
