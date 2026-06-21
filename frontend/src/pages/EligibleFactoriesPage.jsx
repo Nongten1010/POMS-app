@@ -26,7 +26,8 @@ const baseColumns = [
   { field: 'factoryName', headerName: 'ชื่อโรงงาน', width: 240 },
   { field: 'newRegistrationNo', headerName: 'เลขทะเบียนโรงงานแบบใหม่', width: 180 },
   { field: 'oldRegistrationNo', headerName: 'เลขทะเบียนโรงงานแบบเดิม', width: 190 },
-  { field: 'factoryTypeOrder', headerName: 'ลำดับประเภทโรงงาน (หลัก /รอง)', width: 220 },
+  { field: 'factoryClass', headerName: 'ลำดับประเภทโรงงานหลัก', width: 190 },
+  { field: 'factorySubclass', headerName: 'ลำดับประเภทโรงงานรอง', width: 190 },
   { field: 'location', headerName: 'สถานที่ตั้ง', width: 320 },
   { field: 'province', headerName: 'จังหวัด', width: 130 },
   { field: 'industrialEstate', headerName: 'นิคมอุตสาหกรรม', width: 210 },
@@ -38,23 +39,10 @@ const baseColumns = [
     width: 190,
     renderCell: (params) => <StatusChip value={params.value} />,
   },
-  { field: 'capital', headerName: 'เงินทุน', width: 160 },
   { field: 'machineHorsepower', headerName: 'แรงม้าเครื่องจักร', width: 160 },
   { field: 'productionCapacity', headerName: 'กำลังการผลิต', width: 170 },
-  {
-    field: 'wastewaterDischarge',
-    headerName: 'ข้อมูลการระบายน้ำทิ้งออกนอกโรงงาน',
-    width: 290,
-  },
-  { field: 'boilerCount', headerName: 'จำนวนหม้อน้ำ', width: 130, type: 'number' },
   { field: 'boilerSize', headerName: 'ขนาดของหม้อน้ำแต่ละลูก', width: 220 },
   { field: 'fuel', headerName: 'เชื้อเพลิงที่ใช้', width: 190 },
-  {
-    field: 'eia',
-    headerName: 'ข้อมูล EIA',
-    width: 130,
-    renderCell: (params) => <EiaChip value={params.value} />,
-  },
 ]
 
 const connectionRequestRows = [
@@ -134,10 +122,6 @@ function formatCoordinates(latitude, longitude) {
   return `${latitude}, ${longitude}`
 }
 
-function formatFactoryTypeOrder(factoryClass, factorySubclass) {
-  return [factoryClass, factorySubclass].filter(Boolean).join(' / ') || emptyValue
-}
-
 function getFactoryKey(row) {
   return row.factoryId || row.factoryRegistrationNo || row.id
 }
@@ -153,21 +137,18 @@ function mapFactoryRow(row, index, idPrefix = 'factory') {
     factoryName: row.factoryName ?? emptyValue,
     newRegistrationNo: row.factoryId ?? emptyValue,
     oldRegistrationNo: row.factoryRegistrationNo ?? emptyValue,
-    factoryTypeOrder: formatFactoryTypeOrder(row.factoryClass, row.factorySubclass),
+    factoryClass: row.factoryClass ?? emptyValue,
+    factorySubclass: row.factorySubclass ?? emptyValue,
     location: row.address ?? emptyValue,
     province: row.provinceName ?? emptyValue,
     industrialEstate: row.industrialEstateName ?? emptyValue,
     coordinates: formatCoordinates(row.latitude, row.longitude),
     operation: row.businessActivity ?? emptyValue,
     operationStatus: row.operationStatus ?? emptyValue,
-    capital: formatWithUnit(row.capitalAmount, 'บาท'),
     machineHorsepower: formatWithUnit(row.machineryHorsepower, 'แรงม้า'),
     productionCapacity: row.productionCapacity ?? emptyValue,
-    wastewaterDischarge: row.wastewaterDischargeInfo ?? emptyValue,
-    boilerCount: typeof row.boilerCount === 'number' ? row.boilerCount : null,
     boilerSize: row.boilerSizeEach ?? emptyValue,
     fuel: row.fuelUsed ?? emptyValue,
-    eia: row.hasEia === true ? 'มี' : row.hasEia === false ? 'ไม่มี' : emptyValue,
   }
 }
 
@@ -762,24 +743,6 @@ function StatusChip({ value }) {
       sx={{
         fontWeight: 300,
         ...(colorByStatus[value] ?? {}),
-      }}
-    />
-  )
-}
-
-function EiaChip({ value }) {
-  const hasEia = value === 'มี'
-
-  return (
-    <Chip
-      label={value}
-      size="small"
-      variant="outlined"
-      sx={{
-        fontWeight: 300,
-        borderColor: hasEia ? '#86efac' : '#cbd5e1',
-        color: hasEia ? '#166534' : 'text.secondary',
-        bgcolor: hasEia ? '#dcfce7' : 'background.paper',
       }}
     />
   )
