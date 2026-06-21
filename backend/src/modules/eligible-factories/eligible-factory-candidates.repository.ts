@@ -28,13 +28,19 @@ async function listExternalCandidates(): Promise<EligibleFactoryCandidatesDTO> {
   const orderByColumn = firstAvailableColumn(columns, ['FACREG', 'FID', 'DISPFACREG']);
 
   const rows = await (orderByColumn ? rowsQuery.orderBy(orderByColumn, 'asc') : rowsQuery);
-  const [industrialEstateNamesByCode, eiaFactoryKeys] = await Promise.all([
-    loadIndustrialEstateNamesByCode(rows),
-    loadEiaFactoryKeys(),
-  ]);
+  const [industrialEstateNamesByCode, eiaFactoryKeys, productionCapacitiesByFid] =
+    await Promise.all([
+      loadIndustrialEstateNamesByCode(rows),
+      loadEiaFactoryKeys(),
+      loadProductionCapacitiesByFid(rows),
+    ]);
   const data = excludeSelectedCandidates(
     rows.map((row) =>
-      toEligibleFactoryCandidate(row, { industrialEstateNamesByCode, eiaFactoryKeys }),
+      toEligibleFactoryCandidate(row, {
+        industrialEstateNamesByCode,
+        eiaFactoryKeys,
+        productionCapacitiesByFid,
+      }),
     ),
     selectedRegistrationNumbers,
   );
@@ -76,6 +82,41 @@ async function loadIndustrialEstateNamesByCode(rows: FacImportRow[]): Promise<Ma
   }
 }
 
+async function loadProductionCapacitiesByFid(rows: FacImportRow[]): Promise<Map<string, string>> {
+  const fids = [
+    ...new Set(rows.map((row) => row.FID?.trim()).filter((fid): fid is string => Boolean(fid))),
+  ];
+  if (fids.length === 0) return new Map();
+
+  const productionRows: ProductionCapacityRow[] = [];
+  try {
+    for (const fidChunk of chunks(fids, 1000)) {
+      const chunkRows = await factorySourceDb<ProductionCapacityRow>(
+        `${env.FACTORY_DB_SCHEMA}.FAC_PROD as fp`,
+      )
+        .leftJoin(`${env.FACTORY_DB_SCHEMA}.UNIT as u`, 'fp.UNIT', 'u.UNIT')
+        .whereIn('fp.FID', fidChunk)
+        .select('fp.FID', 'fp.PRODNAME', 'fp.PRODQUAN', 'u.UNT_ENAME');
+      productionRows.push(...chunkRows);
+    }
+  } catch (error) {
+    logger.warn('[eligible-factories] Failed to load production capacities', { error });
+    return new Map();
+  }
+
+  const valuesByFid = new Map<string, string[]>();
+  for (const row of productionRows) {
+    const fid = row.FID?.trim();
+    const value = formatProductionCapacity(row);
+    if (!fid || !value) continue;
+    valuesByFid.set(fid, [...(valuesByFid.get(fid) ?? []), value]);
+  }
+
+  return new Map(
+    [...valuesByFid.entries()].map(([fid, values]) => [fid, [...new Set(values)].join(', ')]),
+  );
+}
+
 async function loadEiaFactoryKeys(): Promise<Set<string>> {
   try {
     const rows = await factorySourceDb<{ FACREG: string | null; FID: string | null }>(
@@ -104,6 +145,28 @@ async function selectedFactoryRegistrationNumbers(): Promise<Set<string>> {
 
 function isNonEmptyString(value: string | null | undefined): value is string {
   return Boolean(value);
+}
+
+interface ProductionCapacityRow {
+  FID: string | null;
+  PRODNAME: string | null;
+  PRODQUAN: string | number | null;
+  UNT_ENAME: string | null;
+}
+
+function formatProductionCapacity(row: ProductionCapacityRow): string | null {
+  const parts = [row.PRODNAME, row.PRODQUAN, row.UNT_ENAME]
+    .map((value) => (value === null || value === undefined ? null : String(value).trim()))
+    .filter((value): value is string => Boolean(value));
+  return parts.length > 0 ? parts.join(' ') : null;
+}
+
+function chunks<T>(values: T[], size: number): T[][] {
+  const result: T[][] = [];
+  for (let index = 0; index < values.length; index += size) {
+    result.push(values.slice(index, index + size));
+  }
+  return result;
 }
 
 function excludeSelectedCandidates(

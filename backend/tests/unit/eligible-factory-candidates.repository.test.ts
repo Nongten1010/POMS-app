@@ -70,16 +70,46 @@ describe('eligibleFactoryCandidatesRepository', () => {
         >()
         .mockResolvedValue([{ FACREG: 'real-reg-2', FID: null }]),
     };
+    const facProdQuery = {
+      leftJoin: jest.fn().mockReturnThis(),
+      whereIn: jest.fn().mockReturnThis(),
+      select: jest
+        .fn<
+          () => Promise<
+            Array<{
+              FID: string | null;
+              PRODNAME: string | null;
+              PRODQUAN: string | number | null;
+              UNT_ENAME: string | null;
+            }>
+          >
+        >()
+        .mockResolvedValue([
+          {
+            FID: 'real-2',
+            PRODNAME: 'น้ำตาลทราย',
+            PRODQUAN: 1200,
+            UNT_ENAME: 'ตัน/ปี',
+          },
+          {
+            FID: 'real-2',
+            PRODNAME: 'กากน้ำตาล',
+            PRODQUAN: 300,
+            UNT_ENAME: 'ตัน/ปี',
+          },
+        ]),
+    };
     mockedFactorySourceDb.mockImplementation(((tableName: unknown) => {
       if (tableName === 'INFORMATION_SCHEMA.COLUMNS') return informationSchemaQuery as never;
       if (tableName === 'dbo.check_eia') return checkEiaQuery as never;
+      if (tableName === 'dbo.FAC_PROD as fp') return facProdQuery as never;
       return facImportQuery as never;
     }) as never);
-    return { facImportQuery, checkEiaQuery };
+    return { facImportQuery, checkEiaQuery, facProdQuery };
   }
 
   it('excludes factories that are already selected as eligible', async () => {
-    const { facImportQuery, checkEiaQuery } = mockExternalCandidates();
+    const { facImportQuery, checkEiaQuery, facProdQuery } = mockExternalCandidates();
     mockedEligibleFactoriesRepository.listActiveRegistrationNumbers.mockResolvedValue([
       'real-reg-1',
     ]);
@@ -91,8 +121,11 @@ describe('eligibleFactoryCandidatesRepository', () => {
     expect(result.data[0]?.factoryRegistrationNo).toBe('real-reg-2');
     expect(result.data[0]?.eia).toBe('มี');
     expect(result.data[0]?.hasEia).toBe(true);
+    expect(result.data[0]?.productionCapacity).toBe('น้ำตาลทราย 1200 ตัน/ปี, กากน้ำตาล 300 ตัน/ปี');
     expect(facImportQuery.whereIn).toHaveBeenCalledWith('FFLAG', ['1', '3']);
     expect(checkEiaQuery.select).toHaveBeenCalledWith('FACREG', 'FID');
+    expect(facProdQuery.leftJoin).toHaveBeenCalledWith('dbo.UNIT as u', 'fp.UNIT', 'u.UNIT');
+    expect(facProdQuery.whereIn).toHaveBeenCalledWith('fp.FID', ['real-1', 'real-2']);
   });
 
   it('returns candidates when selected factory exclusion cannot be loaded', async () => {

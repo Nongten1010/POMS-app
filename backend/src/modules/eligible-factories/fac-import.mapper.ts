@@ -127,6 +127,7 @@ const TEMPORARY_STOPPED_FACTORY_FLAG = '3';
 interface FacImportMapperOptions {
   industrialEstateNamesByCode?: Map<string, string>;
   eiaFactoryKeys?: Set<string>;
+  productionCapacitiesByFid?: Map<string, string>;
 }
 
 export function toEligibleFactoryCandidate(
@@ -142,7 +143,6 @@ export function toEligibleFactoryCandidate(
     ? (PROVINCE_BY_DIW_CODE[provinceCode] ?? `รหัสจังหวัด ${provinceCode}`)
     : 'ไม่ระบุจังหวัด';
   const horsepower = firstNumber(row.HP2, row.HP);
-  const productionCapacity = firstNumber(row.CAPPROD);
   const coordinates = toFactoryCoordinates(row);
   const factoryClass = factoryMainClass(row.CLASS);
   const factorySubclass = factorySubclassCodes(factoryClass, [
@@ -166,7 +166,8 @@ export function toEligibleFactoryCandidate(
     businessActivity: firstText(row.OBJECT),
     operationStatus: operationStatusFromFlag(row.FFLAG),
     machineryHorsepower: horsepower,
-    productionCapacity: productionCapacity === null ? null : `${productionCapacity}`,
+    productionCapacity:
+      options.productionCapacitiesByFid?.get(sourceFactoryId) ?? fallbackProductionCapacity(row),
     boilerSizeEach: commaSeparatedValues(row.BOILER_SIZE_EACH, row.BOILER_SIZE, row.BOILER_SIZES),
     fuelUsed: null,
     eia: hasEia ? 'มี' : 'ไม่มี',
@@ -285,6 +286,11 @@ function commaSeparatedValues(...values: Array<string | number | null | undefine
     .filter((value) => value.length > 0);
 
   return items.length > 0 ? [...new Set(items)].join(',') : null;
+}
+
+function fallbackProductionCapacity(row: FacImportRow): string | null {
+  const productionCapacity = firstNumber(row.CAPPROD);
+  return productionCapacity === null ? null : `${productionCapacity}`;
 }
 
 function hasFactoryEia(row: FacImportRow, options: FacImportMapperOptions): boolean {
