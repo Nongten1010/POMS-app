@@ -10,20 +10,24 @@ const optionalText = (max: number) =>
     .optional()
     .nullable()
     .transform((value) => (value ? value : null));
-const parameterListSchema = z.array(requiredText(255)).max(100).default([]);
-const legalAnnexListSchema = z
-  .preprocess((value) => {
-    if (value === undefined || value === null || value === '') return [];
-    if (Array.isArray(value)) return value;
-    if (typeof value === 'string') {
-      return value
-        .split(',')
-        .map((item) => item.trim())
-        .filter(Boolean);
-    }
-    return value;
-  }, z.array(requiredText(32)).max(12))
-  .default([]);
+const optionalStringList = (maxItemLength: number, maxItems: number) =>
+  z
+    .preprocess((value) => {
+      if (value === undefined || value === null || value === '') return [];
+      if (Array.isArray(value)) {
+        return value.map((item) => (typeof item === 'string' ? item.trim() : item)).filter(Boolean);
+      }
+      if (typeof value === 'string') {
+        return value
+          .split(',')
+          .map((item) => item.trim())
+          .filter(Boolean);
+      }
+      return value;
+    }, z.array(requiredText(maxItemLength)).max(maxItems))
+    .default([]);
+const parameterListSchema = optionalStringList(255, 100);
+const legalAnnexListSchema = optionalStringList(32, 12);
 
 export const saveMonitoringPointFormSchema = z
   .object({

@@ -58,6 +58,32 @@ describe('monitoring point form validator', () => {
     expect(result.success).toBe(false);
   });
 
+  it('ignores blank values in multiselect arrays', () => {
+    const result = saveMonitoringPointFormSchema.parse({
+      factory: {
+        factoryName: 'สถานีบ่มใบยาสบหนอง',
+        factoryRegistrationNoNew: '10520000225172',
+      },
+      points: [
+        {
+          systemType: 'CEMS',
+          pointName: 'ปล่องหลัก',
+          legalAnnexNo: ['', '1', '  ', '3'],
+          eligibleParameters: ['', 'NOx (ppm)', '  '],
+          exemptedParameters: [''],
+          connectedParameters: ['O2 (%)', ''],
+          pendingParameters: ['', 'SO2 (ppm)'],
+        },
+      ],
+    });
+
+    expect(result.points[0]?.legalAnnexNo).toEqual(['1', '3']);
+    expect(result.points[0]?.eligibleParameters).toEqual(['NOx (ppm)']);
+    expect(result.points[0]?.exemptedParameters).toEqual([]);
+    expect(result.points[0]?.connectedParameters).toEqual(['O2 (%)']);
+    expect(result.points[0]?.pendingParameters).toEqual(['SO2 (ppm)']);
+  });
+
   it('rejects unknown system types', () => {
     const result = saveMonitoringPointFormSchema.safeParse({
       factory: {
