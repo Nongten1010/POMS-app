@@ -16,6 +16,10 @@ describe('monitoring point form validator', () => {
           pointCode: 'S0001',
           pointName: 'ปล่องหลัก',
           eligibleParameters: ['NOx (ppm)', 'SO2 (ppm)'],
+          primaryFuel: 'ก๊าซธรรมชาติ',
+          primaryFuelOther: 'ชีวมวล',
+          secondaryFuel: 'น้ำมันเตา',
+          secondaryFuelOther: 'ก๊าซชีวภาพ',
         },
         {
           systemType: 'WPMS',
@@ -29,6 +33,8 @@ describe('monitoring point form validator', () => {
     expect(result.points).toHaveLength(2);
     expect(result.points[0]).toMatchObject({
       systemType: 'CEMS',
+      primaryFuelOther: 'ชีวมวล',
+      secondaryFuelOther: 'ก๊าซชีวภาพ',
       exemptedParameters: [],
       connectedParameters: [],
       pendingParameters: [],

@@ -31,7 +31,9 @@ export interface MonitoringPointInput {
   connectedParameters?: string[];
   pendingParameters?: string[];
   primaryFuel?: string | null;
+  primaryFuelOther?: string | null;
   secondaryFuel?: string | null;
+  secondaryFuelOther?: string | null;
   details?: Record<string, unknown> | null;
 }
 

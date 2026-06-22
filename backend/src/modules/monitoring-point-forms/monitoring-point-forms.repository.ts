@@ -43,7 +43,9 @@ interface MonitoringPointRow {
   connected_parameters_json: string;
   pending_parameters_json: string;
   primary_fuel: string | null;
+  primary_fuel_other: string | null;
   secondary_fuel: string | null;
+  secondary_fuel_other: string | null;
   details_json: string | null;
   created_at: Date | string;
   updated_at: Date | string;
@@ -233,7 +235,9 @@ function toPointInsertRow(
     connected_parameters_json: JSON.stringify(point.connectedParameters ?? []),
     pending_parameters_json: JSON.stringify(point.pendingParameters ?? []),
     primary_fuel: point.primaryFuel ?? null,
+    primary_fuel_other: point.primaryFuelOther ?? null,
     secondary_fuel: point.secondaryFuel ?? null,
+    secondary_fuel_other: point.secondaryFuelOther ?? null,
     details_json: point.details ? JSON.stringify(point.details) : null,
     created_by: actorUserId,
     updated_by: actorUserId,
@@ -291,7 +295,9 @@ function toPointDTO(row: MonitoringPointRow): MonitoringPointDTO {
     connectedParameters: parseStringList(row.connected_parameters_json),
     pendingParameters: parseStringList(row.pending_parameters_json),
     primaryFuel: row.primary_fuel,
+    primaryFuelOther: row.primary_fuel_other,
     secondaryFuel: row.secondary_fuel,
+    secondaryFuelOther: row.secondary_fuel_other,
     details: parseObject(row.details_json),
     createdAt: toIsoString(row.created_at),
     updatedAt: toIsoString(row.updated_at),

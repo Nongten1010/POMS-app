@@ -47,7 +47,9 @@ export const saveMonitoringPointFormSchema = z
             connectedParameters: parameterListSchema,
             pendingParameters: parameterListSchema,
             primaryFuel: optionalText(255),
+            primaryFuelOther: optionalText(255),
             secondaryFuel: optionalText(255),
+            secondaryFuelOther: optionalText(255),
             details: z.record(z.string(), z.unknown()).optional().nullable().default(null),
           })
           .strict(),
