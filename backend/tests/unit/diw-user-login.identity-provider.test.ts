@@ -19,7 +19,7 @@ describe('parseDiwOfficerLoginResponse', () => {
         {
           organize_id: '3010089',
           organize_th: 'ฝ่ายบริหารทั่วไป',
-          per_cardno: '1234567890123',
+          percardno: '1234567890123',
           prename_th: 'นางสาว',
           per_name: 'สมหญิง',
           per_surname: 'ทดสอบ',
@@ -162,8 +162,8 @@ describe('DiwUserLoginIdentityProvider', () => {
     })) as unknown as typeof fetch;
 
     const provider = new DiwUserLoginIdentityProvider({
-      operatorUrl: 'https://diw-center.diw.go.th/uloginuat/v1/UserLogin',
-      officerUrl: 'https://diw-center.diw.go.th/idiwdpisloginuat/v1/UserLogin',
+      operatorUrl: 'https://diwws.diw.go.th/ulogin/v1/UserLogin',
+      officerUrl: 'https://diwws.diw.go.th/idiwdpislogin/v1/UserLogin',
       clientId: 'test-client-id',
       timeoutMs: 1000,
       defaultProvinceId: '1000',
@@ -173,7 +173,7 @@ describe('DiwUserLoginIdentityProvider', () => {
     const result = await provider.authenticateOperator('operator_user', 'secret-password');
 
     expect(fetchImpl).toHaveBeenCalledWith(
-      'https://diw-center.diw.go.th/uloginuat/v1/UserLogin',
+      'https://diwws.diw.go.th/ulogin/v1/UserLogin',
       expect.objectContaining({
         method: 'POST',
         headers: {
@@ -210,8 +210,8 @@ describe('DiwUserLoginIdentityProvider', () => {
     })) as unknown as typeof fetch;
 
     const provider = new DiwUserLoginIdentityProvider({
-      operatorUrl: 'https://diw-center.diw.go.th/uloginuat/v1/UserLogin',
-      officerUrl: 'https://diw-center.diw.go.th/idiwdpisloginuat/v1/UserLogin',
+      operatorUrl: 'https://diwws.diw.go.th/ulogin/v1/UserLogin',
+      officerUrl: 'https://diwws.diw.go.th/idiwdpislogin/v1/UserLogin',
       clientId: 'test-client-id',
       timeoutMs: 1000,
       defaultProvinceId: '1000',
@@ -221,7 +221,7 @@ describe('DiwUserLoginIdentityProvider', () => {
     const result = await provider.authenticateOfficer('officer_user', 'secret-password', '2');
 
     expect(fetchImpl).toHaveBeenCalledWith(
-      'https://diw-center.diw.go.th/idiwdpisloginuat/v1/UserLogin',
+      'https://diwws.diw.go.th/idiwdpislogin/v1/UserLogin',
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({

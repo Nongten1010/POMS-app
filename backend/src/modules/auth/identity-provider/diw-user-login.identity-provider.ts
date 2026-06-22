@@ -37,6 +37,7 @@ interface DiwOfficerLoginResponse {
 interface DiwOfficer {
   organize_id?: unknown;
   organize_th?: unknown;
+  percardno?: unknown;
   per_cardno?: unknown;
   prename_th?: unknown;
   per_name?: unknown;
@@ -174,7 +175,7 @@ export function parseDiwOfficerLoginResponse(data: unknown): ExternalOfficerProf
   if (!isRecord(first)) return null;
 
   const officer = first as DiwOfficer;
-  const externalId = toStringValue(officer.per_cardno);
+  const externalId = toStringValue(officer.per_cardno) ?? toStringValue(officer.percardno);
   if (!externalId) return null;
 
   return {

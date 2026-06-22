@@ -42,11 +42,11 @@ const envSchema = z
     DIW_USER_LOGIN_URL: z
       .string()
       .url()
-      .default('https://diw-center.diw.go.th/uloginuat/v1/UserLogin'),
+      .default('https://diwws.diw.go.th/ulogin/v1/UserLogin'),
     DIW_OFFICER_LOGIN_URL: z
       .string()
       .url()
-      .default('https://diw-center.diw.go.th/idiwdpisloginuat/v1/UserLogin'),
+      .default('https://diwws.diw.go.th/idiwdpislogin/v1/UserLogin'),
     DIW_USER_LOGIN_CLIENT_ID: z.string().min(1).optional(),
     DIW_USER_LOGIN_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
     DIW_USER_LOGIN_DEFAULT_PROVINCE_ID: z.string().min(1).max(8).default('1000'),

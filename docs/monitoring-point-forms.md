@@ -30,6 +30,7 @@
 | `eia_info` | NVARCHAR(255) | No | ข้อมูล EIA |
 | `address` | NVARCHAR(1000) | No | สถานที่ตั้ง |
 | `business_activity` | NVARCHAR(4000) | No | การประกอบกิจการ |
+| `machinery_horsepower` | DECIMAL(18,2) | No | แรงม้าเครื่องจักรของโรงงาน ใช้แสดงในหน้าโรงงานที่เข้าข่าย |
 | `created_at`, `updated_at`, `created_by`, `updated_by`, `deleted_at` | audit fields | Mixed | ข้อมูล audit |
 
 Index:
@@ -76,10 +77,19 @@ Constraints:
 | Column | Type | Required | Description |
 | --- | --- | --- | --- |
 | `monitoring_point_form_id` | BIGINT | No | FK ไปยัง `factory_monitoring_point_forms.id` เมื่อเลือกฟอร์มนี้เข้าโรงงานที่เข้าข่าย |
+| `machinery_horsepower` | DECIMAL(18,2) | No | แรงม้าเครื่องจักรที่ sync จากฟอร์ม หรือ fallback จากฐานโรงงาน กรอ. เมื่อค่าในตารางเป็น `NULL` |
 
 Index:
 
 - `uq_eligible_factories_monitoring_point_form` unique เฉพาะรายการที่ `deleted_at IS NULL` และ `monitoring_point_form_id IS NOT NULL`
+
+หมายเหตุสำหรับหน้า "โรงงานที่เข้าข่าย":
+
+- ตารางหน้า frontend เรียก `GET /api/v1/eligible-factories`
+- คอลัมน์แรงม้าอ่านจาก `machineryHorsepower`
+- คอลัมน์ `CEMS` และ `WPMS` ไม่ได้เก็บเป็นตัวเลขแยกใน `eligible_factories` แต่ frontend นับจาก `measurementPoints[].systemType`
+- `measurementPoints` มาจากตาราง `factory_monitoring_points` โดย join ผ่าน `eligible_factories.monitoring_point_form_id = factory_monitoring_points.form_id`
+- ถ้า `eligible_factories.machinery_horsepower` เป็น `NULL` backend จะ lookup จากฐานโรงงาน กรอ. ด้วย `source_factory_id/FID` หรือเลขทะเบียนโรงงานแบบใหม่ แล้วใช้ค่า `HP2` fallback `HP`
 
 ## API
 
@@ -106,6 +116,7 @@ http://d-poms.diw.go.th/api/v1/monitoring-point-forms
 - `GET /api/v1/monitoring-point-forms` แบบไม่มี token ได้ `401 UNAUTHORIZED` แปลว่า route พร้อมใช้งาน
 - `POST /api/v1/monitoring-point-forms` พร้อม token สำเร็จ ได้ `success: true`
 - `GET /api/v1/monitoring-point-forms/1` พร้อม token อ่านข้อมูลที่บันทึกกลับมาได้
+- หลัง deploy commit `e890a51` ตรวจ `GET /api/v1/eligible-factories` แล้ว API คืน `measurementPoints` สำหรับนับ `CEMS/WPMS` และคืน `machineryHorsepower` แล้ว
 
 Response จากการยิง `POST` production:
 
@@ -214,6 +225,76 @@ Payload นี้ถูกบันทึกลงตาราง:
 
 - เรียกดู: `cems_wpms_requests:view`
 - บันทึก/แก้ไข: `cems_wpms_requests:edit`
+
+### Production Test: หน้าโรงงานที่เข้าข่าย
+
+วันที่ทดสอบ: `2026-06-23`
+
+Endpoint ที่ frontend ใช้แสดงตาราง:
+
+```text
+GET http://d-poms.diw.go.th/api/v1/eligible-factories
+```
+
+Response สำคัญหลัง deploy:
+
+```json
+{
+  "success": true,
+  "meta": {
+    "total": 3
+  },
+  "data": [
+    {
+      "id": 21,
+      "factoryName": "ห้างหุ้นส่วนสามัญ สถานีบ่มใบยาสบหนอง",
+      "factoryId": "10550000125197",
+      "factoryRegistrationNo": "3-1-1/19นน",
+      "machineryHorsepower": 149.76,
+      "measurementPoints": [
+        {
+          "systemType": "CEMS",
+          "pointCode": "CEMS-UI-001"
+        },
+        {
+          "systemType": "WPMS",
+          "pointCode": "WPMS-UI-001"
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "factoryName": "สถานีบ่มใบยาสบหนอง",
+      "factoryId": "10520000225172",
+      "factoryRegistrationNo": "3-1-2/17ลป",
+      "machineryHorsepower": 121.8,
+      "measurementPoints": [
+        {
+          "systemType": "CEMS",
+          "pointCode": "CEMS-REAL-001"
+        },
+        {
+          "systemType": "WPMS",
+          "pointCode": "WPMS-REAL-001"
+        }
+      ]
+    }
+  ]
+}
+```
+
+ตัวนับบนหน้า frontend:
+
+```js
+const cemsPointCount = measurementPoints.filter((point) => point.systemType === 'CEMS').length;
+const wpmsPointCount = measurementPoints.filter((point) => point.systemType === 'WPMS').length;
+```
+
+ตารางที่เกี่ยวข้อง:
+
+- `eligible_factories`: แถวโรงงานที่เข้าข่าย, เลขทะเบียน, แรงม้า, และ `monitoring_point_form_id`
+- `factory_monitoring_point_forms`: ข้อมูลโรงงานของฟอร์มเพิ่ม/แก้ไขข้อมูลจุดตรวจวัด
+- `factory_monitoring_points`: จุดตรวจวัดหลายจุด ใช้นับ `CEMS` และ `WPMS`
 
 ### GET `/api/v1/monitoring-point-forms`
 
