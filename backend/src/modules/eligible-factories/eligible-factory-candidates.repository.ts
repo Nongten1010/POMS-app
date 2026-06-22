@@ -13,6 +13,7 @@ import type {
 } from './eligible-factories.types';
 
 const EXTERNAL_QUERY_TIMEOUT_MS = 300000;
+const BULK_LOOKUP_THRESHOLD = 5000;
 
 export const eligibleFactoryCandidatesRepository = {
   async list(query: ListEligibleFactoryCandidatesQuery): Promise<EligibleFactoryCandidatesDTO> {
@@ -137,23 +138,33 @@ async function loadBoilerValuesByFid(rows: FacImportRow[]): Promise<Map<string, 
 
   const boilerRows: Array<Record<string, unknown>> = [];
   try {
-    for (const fidChunk of chunks(fids, 1000)) {
-      const chunkRows = await boilerSourceDb<Record<string, unknown>>(boilerSourceTableName())
-        .whereIn('fac_id_reg', fidChunk)
-        .timeout(EXTERNAL_QUERY_TIMEOUT_MS)
-        .select('fac_id_reg', 'mac_max_stream_prod', 'fuel_name', 'fuel_volume');
-      boilerRows.push(...chunkRows);
+    if (fids.length > BULK_LOOKUP_THRESHOLD) {
+      boilerRows.push(
+        ...(await boilerSourceDb<Record<string, unknown>>(boilerSourceTableName())
+          .whereNotNull('fac_id_reg')
+          .timeout(EXTERNAL_QUERY_TIMEOUT_MS)
+          .select('fac_id_reg', 'mac_max_stream_prod', 'fuel_name', 'fuel_volume')),
+      );
+    } else {
+      for (const fidChunk of chunks(fids, 1000)) {
+        const chunkRows = await boilerSourceDb<Record<string, unknown>>(boilerSourceTableName())
+          .whereIn('fac_id_reg', fidChunk)
+          .timeout(EXTERNAL_QUERY_TIMEOUT_MS)
+          .select('fac_id_reg', 'mac_max_stream_prod', 'fuel_name', 'fuel_volume');
+        boilerRows.push(...chunkRows);
+      }
     }
   } catch (error) {
     logger.warn('[eligible-factories] Failed to load boiler sizes', { error });
     return new Map();
   }
 
+  const requestedFids = new Set(fids);
   const boilerSizesByFid = new Map<string, string[]>();
   const fuelNamesByFid = new Map<string, string[]>();
   for (const row of boilerRows) {
     const fid = firstRowText(row, ['fac_id_reg', 'FAC_ID_REG']);
-    if (!fid) continue;
+    if (!fid || !requestedFids.has(fid)) continue;
 
     const boilerSize = formatDecimalText(
       firstRowText(row, ['mac_max_stream_prod', 'MAC_MAX_STREAM_PROD']),
@@ -185,32 +196,46 @@ async function loadProductionCapacitiesByFid(rows: FacImportRow[]): Promise<Map<
 
   const productionRows: ProductionCapacityRow[] = [];
   try {
-    for (const fidChunk of chunks(fids, 1000)) {
-      const chunkRows = await factorySourceDb<ProductionCapacityRow>(
-        `${env.FACTORY_DB_SCHEMA}.FAC_PROD as fp`,
-      )
-        .leftJoin(`${env.FACTORY_DB_SCHEMA}.UNIT as u`, 'fp.UNIT', 'u.UNIT')
-        .whereIn('fp.FID', fidChunk)
-        .timeout(EXTERNAL_QUERY_TIMEOUT_MS)
-        .select('fp.FID', 'fp.PRODNAME', 'fp.PRODQUAN', 'u.UNT_ENAME');
-      productionRows.push(...chunkRows);
+    if (fids.length > BULK_LOOKUP_THRESHOLD) {
+      productionRows.push(...(await loadActiveFactoryProductionCapacities()));
+    } else {
+      for (const fidChunk of chunks(fids, 1000)) {
+        const chunkRows = await factorySourceDb<ProductionCapacityRow>(
+          `${env.FACTORY_DB_SCHEMA}.FAC_PROD as fp`,
+        )
+          .leftJoin(`${env.FACTORY_DB_SCHEMA}.UNIT as u`, 'fp.UNIT', 'u.UNIT')
+          .whereIn('fp.FID', fidChunk)
+          .timeout(EXTERNAL_QUERY_TIMEOUT_MS)
+          .select('fp.FID', 'fp.PRODNAME', 'fp.PRODQUAN', 'u.UNT_ENAME');
+        productionRows.push(...chunkRows);
+      }
     }
   } catch (error) {
     logger.warn('[eligible-factories] Failed to load production capacities', { error });
     return new Map();
   }
 
+  const requestedFids = new Set(fids);
   const valuesByFid = new Map<string, string[]>();
   for (const row of productionRows) {
     const fid = row.FID?.trim();
     const value = formatProductionCapacity(row);
-    if (!fid || !value) continue;
+    if (!fid || !requestedFids.has(fid) || !value) continue;
     valuesByFid.set(fid, [...(valuesByFid.get(fid) ?? []), value]);
   }
 
   return new Map(
     [...valuesByFid.entries()].map(([fid, values]) => [fid, [...new Set(values)].join(', ')]),
   );
+}
+
+async function loadActiveFactoryProductionCapacities(): Promise<ProductionCapacityRow[]> {
+  return factorySourceDb<ProductionCapacityRow>(`${env.FACTORY_DB_SCHEMA}.FAC_PROD as fp`)
+    .join(`${factorySourceTableName()} as fi`, 'fp.FID', 'fi.FID')
+    .leftJoin(`${env.FACTORY_DB_SCHEMA}.UNIT as u`, 'fp.UNIT', 'u.UNIT')
+    .whereIn('fi.FFLAG', ['1', '3'])
+    .timeout(EXTERNAL_QUERY_TIMEOUT_MS)
+    .select('fp.FID', 'fp.PRODNAME', 'fp.PRODQUAN', 'u.UNT_ENAME');
 }
 
 async function selectedFactoryRegistrationNumbers(): Promise<Set<string>> {

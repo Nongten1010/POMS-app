@@ -2,6 +2,8 @@ import knex, { Knex } from 'knex';
 import { env } from './env';
 import { logger } from './logger';
 
+const REQUEST_TIMEOUT_MS = 300000;
+
 const config: Knex.Config = {
   client: 'mssql',
   connection: {
@@ -10,6 +12,7 @@ const config: Knex.Config = {
     user: env.FACTORY_DB_USER ?? env.DB_USER,
     password: env.FACTORY_DB_PASSWORD ?? env.DB_PASSWORD,
     database: env.FACTORY_DB_NAME,
+    requestTimeout: REQUEST_TIMEOUT_MS,
     options: {
       encrypt: env.FACTORY_DB_ENCRYPT ?? env.DB_ENCRYPT,
       trustServerCertificate:
