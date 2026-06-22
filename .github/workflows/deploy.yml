@@ -10,12 +10,13 @@ permissions:
 
 concurrency:
   group: poms-prod-deploy
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   deploy:
     name: Deploy changed app parts
     runs-on: [self-hosted, poms, windows, prod]
+    timeout-minutes: 45
 
     defaults:
       run:
@@ -70,6 +71,7 @@ jobs:
       - name: Build frontend
         if: steps.changes.outputs.frontend_changed == 'true'
         working-directory: frontend
+        timeout-minutes: 15
         run: |
           npm ci
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -106,6 +108,7 @@ jobs:
       - name: Build and test backend
         if: steps.changes.outputs.backend_changed == 'true'
         working-directory: backend
+        timeout-minutes: 20
         run: |
           npm ci
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -122,12 +125,14 @@ jobs:
       - name: Run backend database migrations
         if: steps.changes.outputs.backend_changed == 'true'
         working-directory: backend
+        timeout-minutes: 5
         run: |
           npm run db:migrate
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Deploy backend service files
         if: steps.changes.outputs.backend_changed == 'true'
+        timeout-minutes: 15
         run: |
           if (Test-Path $env:BACKEND_RELEASE) {
             Remove-Item $env:BACKEND_RELEASE -Recurse -Force

@@ -1,5 +1,7 @@
 import type { Knex } from 'knex';
 import { db } from '../../config/database';
+import { factorySourceDb, factorySourceTableName } from '../../config/factory-source-database';
+import { logger } from '../../config/logger';
 import type {
   CreateEligibleFactoryInput,
   EligibleFactoryDTO,
@@ -60,6 +62,16 @@ interface EligibleFactoryMonitoringPointRow {
   details_json: string | null;
 }
 
+interface FactoryHorsepowerRow {
+  FID?: string | null;
+  FACREG?: string | null;
+  DISPFACREG?: string | null;
+  HP?: number | string | null;
+  HP2?: number | string | null;
+}
+
+const EXTERNAL_LOOKUP_TIMEOUT_MS = 300000;
+
 export const eligibleFactoriesRepository = {
   async list(
     _query: ListEligibleFactoriesQuery,
@@ -76,7 +88,8 @@ export const eligibleFactoriesRepository = {
     const rowsQuery = baseQuery.clone().orderBy('selected_at', 'desc').orderBy('id', 'desc');
 
     const rows = await rowsQuery;
-    return { rows: await hydrateMeasurementPoints(rows.map(toDTO)), total };
+    const factories = await hydrateMissingMachineryHorsepower(rows.map(toDTO));
+    return { rows: await hydrateMeasurementPoints(factories), total };
   },
 
   async findByRegistrationNoNew(
@@ -377,6 +390,66 @@ async function hydrateMeasurementPoints(rows: EligibleFactoryDTO[]): Promise<Eli
   }));
 }
 
+async function hydrateMissingMachineryHorsepower(
+  rows: EligibleFactoryDTO[],
+): Promise<EligibleFactoryDTO[]> {
+  const missingRows = rows.filter((row) => row.machineryHorsepower === null);
+  if (missingRows.length === 0) return rows;
+
+  const sourceFactoryIds = uniqueNonEmpty(missingRows.map((row) => row.sourceFactoryId));
+  const registrationNumbers = uniqueNonEmpty(
+    missingRows.map((row) => row.factoryRegistrationNoNew),
+  );
+  if (sourceFactoryIds.length === 0 && registrationNumbers.length === 0) return rows;
+
+  try {
+    const sourceRows = await factorySourceDb<FactoryHorsepowerRow>(factorySourceTableName())
+      .where((builder) => {
+        if (sourceFactoryIds.length > 0) {
+          builder.whereIn('FID', sourceFactoryIds);
+        }
+        if (registrationNumbers.length > 0) {
+          builder
+            .orWhereIn('DISPFACREG', registrationNumbers)
+            .orWhereIn('FACREG', registrationNumbers);
+        }
+      })
+      .timeout(EXTERNAL_LOOKUP_TIMEOUT_MS)
+      .select('FID', 'FACREG', 'DISPFACREG', 'HP', 'HP2');
+
+    const horsepowerByFactoryKey = new Map<string, number>();
+    for (const sourceRow of sourceRows) {
+      const horsepower = firstNullableNumber(sourceRow.HP2, sourceRow.HP);
+      if (horsepower === null) continue;
+
+      for (const key of [sourceRow.FID, sourceRow.DISPFACREG, sourceRow.FACREG]) {
+        const normalizedKey = normalizeText(key);
+        if (normalizedKey) horsepowerByFactoryKey.set(normalizedKey, horsepower);
+      }
+    }
+
+    if (horsepowerByFactoryKey.size === 0) return rows;
+
+    return rows.map((row) => {
+      if (row.machineryHorsepower !== null) return row;
+
+      const sourceKey = normalizeText(row.sourceFactoryId);
+      const registrationKey = normalizeText(row.factoryRegistrationNoNew);
+      const machineryHorsepower =
+        (sourceKey ? horsepowerByFactoryKey.get(sourceKey) : undefined) ??
+        (registrationKey ? horsepowerByFactoryKey.get(registrationKey) : undefined) ??
+        null;
+
+      return machineryHorsepower === null ? row : { ...row, machineryHorsepower };
+    });
+  } catch (error) {
+    logger.warn('[eligible-factories] Failed to hydrate machinery horsepower from source DB', {
+      error,
+    });
+    return rows;
+  }
+}
+
 function toMeasurementPointDTO(
   row: EligibleFactoryMonitoringPointRow,
 ): EligibleFactoryMeasurementPointDTO {
@@ -436,6 +509,26 @@ function parseObject(value: string | null): Record<string, unknown> | null {
   } catch {
     return null;
   }
+}
+
+function uniqueNonEmpty(values: Array<string | null>): string[] {
+  return [
+    ...new Set(values.map(normalizeText).filter((value): value is string => Boolean(value))),
+  ];
+}
+
+function normalizeText(value: string | null | undefined): string | null {
+  const text = value?.trim();
+  return text ? text : null;
+}
+
+function firstNullableNumber(...values: Array<number | string | null | undefined>): number | null {
+  for (const value of values) {
+    const numberValue = toNullableNumber(value ?? null);
+    if (numberValue !== null && Number.isFinite(numberValue)) return numberValue;
+  }
+
+  return null;
 }
 
 function toNullableNumber(value: number | string | null): number | null {
