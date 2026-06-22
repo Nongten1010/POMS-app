@@ -2,13 +2,11 @@ import type { Knex } from 'knex';
 import { logger } from '../../config/logger';
 import { env } from '../../config/env';
 import { factorySourceDb, factorySourceTableName } from '../../config/factory-source-database';
-import { boilerSourceDb, boilerSourceTableName } from '../../config/boiler-source-database';
 import { type FacImportRow, toEligibleFactoryCandidate } from './fac-import.mapper';
 import { eligibleFactoriesRepository } from './eligible-factories.repository';
 import type {
   EligibleFactoryCandidateDTO,
   EligibleFactoryCandidatesDTO,
-  BoilerLookupValue,
   ListEligibleFactoryCandidatesQuery,
 } from './eligible-factories.types';
 
@@ -47,19 +45,16 @@ async function listExternalCandidates(
   const rows = isPaginated
     ? await executableRowsQuery.offset((page - 1) * perPage).limit(perPage)
     : await executableRowsQuery;
-  const [industrialEstateNamesByCode, productionCapacitiesByFid, boilerValuesByFid] =
-    await Promise.all([
-      loadIndustrialEstateNamesByCode(rows),
-      loadProductionCapacitiesByFid(rows),
-      loadBoilerValuesByFid(rows),
-    ]);
+  const [industrialEstateNamesByCode, productionCapacitiesByFid] = await Promise.all([
+    loadIndustrialEstateNamesByCode(rows),
+    loadProductionCapacitiesByFid(rows),
+  ]);
   const data = excludeSelectedCandidates(
     rows.map((row) =>
       toEligibleFactoryCandidate(row, {
         industrialEstateNamesByCode,
         eiaLookupSkipped: true,
         productionCapacitiesByFid,
-        boilerValuesByFid,
       }),
     ),
     selectedRegistrationNumbers,
@@ -130,64 +125,6 @@ async function loadIndustrialEstateNamesByCode(rows: FacImportRow[]): Promise<Ma
     logger.warn('[eligible-factories] Failed to load industrial estate names', { error });
     return new Map();
   }
-}
-
-async function loadBoilerValuesByFid(rows: FacImportRow[]): Promise<Map<string, BoilerLookupValue>> {
-  const fids = uniqueFids(rows);
-  if (fids.length === 0) return new Map();
-
-  const boilerRows: Array<Record<string, unknown>> = [];
-  try {
-    if (fids.length > BULK_LOOKUP_THRESHOLD) {
-      boilerRows.push(
-        ...(await boilerSourceDb<Record<string, unknown>>(boilerSourceTableName())
-          .whereNotNull('fac_id_reg')
-          .timeout(EXTERNAL_QUERY_TIMEOUT_MS)
-          .select('fac_id_reg', 'mac_max_stream_prod', 'fuel_name', 'fuel_volume')),
-      );
-    } else {
-      for (const fidChunk of chunks(fids, 1000)) {
-        const chunkRows = await boilerSourceDb<Record<string, unknown>>(boilerSourceTableName())
-          .whereIn('fac_id_reg', fidChunk)
-          .timeout(EXTERNAL_QUERY_TIMEOUT_MS)
-          .select('fac_id_reg', 'mac_max_stream_prod', 'fuel_name', 'fuel_volume');
-        boilerRows.push(...chunkRows);
-      }
-    }
-  } catch (error) {
-    logger.warn('[eligible-factories] Failed to load boiler sizes', { error });
-    return new Map();
-  }
-
-  const requestedFids = new Set(fids);
-  const boilerSizesByFid = new Map<string, string[]>();
-  const fuelNamesByFid = new Map<string, string[]>();
-  for (const row of boilerRows) {
-    const fid = firstRowText(row, ['fac_id_reg', 'FAC_ID_REG']);
-    if (!fid || !requestedFids.has(fid)) continue;
-
-    const boilerSize = formatDecimalText(
-      firstRowText(row, ['mac_max_stream_prod', 'MAC_MAX_STREAM_PROD']),
-    );
-    if (boilerSize) {
-      boilerSizesByFid.set(fid, [...(boilerSizesByFid.get(fid) ?? []), boilerSize]);
-    }
-
-    const fuel = formatFuelUsed(row);
-    if (fuel) {
-      fuelNamesByFid.set(fid, [...(fuelNamesByFid.get(fid) ?? []), fuel]);
-    }
-  }
-
-  return new Map(
-    [...new Set([...boilerSizesByFid.keys(), ...fuelNamesByFid.keys()])].map((fid) => [
-      fid,
-      {
-        boilerSizeEach: joinUnique(boilerSizesByFid.get(fid), ','),
-        fuelUsed: joinUnique(fuelNamesByFid.get(fid)),
-      },
-    ]),
-  );
 }
 
 async function loadProductionCapacitiesByFid(rows: FacImportRow[]): Promise<Map<string, string>> {
@@ -267,37 +204,6 @@ function formatProductionCapacity(row: ProductionCapacityRow): string | null {
     .map((value) => (value === null || value === undefined ? null : String(value).trim()))
     .filter((value): value is string => Boolean(value));
   return parts.length > 0 ? parts.join(' ') : null;
-}
-
-function joinUnique(values: string[] | undefined, separator = ', '): string | null {
-  if (!values || values.length === 0) return null;
-  const uniqueValues = [...new Set(values)];
-  return uniqueValues.length > 0 ? uniqueValues.join(separator) : null;
-}
-
-function formatFuelUsed(row: Record<string, unknown>): string | null {
-  const fuelName = firstRowText(row, ['fuel_name', 'FUEL_NAME']);
-  const fuelVolume = firstRowText(row, ['fuel_volume', 'FUEL_VOLUME']);
-  if (!fuelName) return fuelVolume;
-  if (!fuelVolume) return fuelName;
-  return `${fuelName} ${fuelVolume}`;
-}
-
-function formatDecimalText(value: string | null): string | null {
-  if (!value) return null;
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return value;
-  return Number(numeric.toFixed(2)).toString();
-}
-
-function firstRowText(row: Record<string, unknown>, keys: string[]): string | null {
-  for (const key of keys) {
-    const value = row[key];
-    if (value === null || value === undefined) continue;
-    const text = String(value).trim();
-    if (text) return text;
-  }
-  return null;
 }
 
 function chunks<T>(values: T[], size: number): T[][] {

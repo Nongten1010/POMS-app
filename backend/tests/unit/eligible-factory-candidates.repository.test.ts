@@ -144,25 +144,6 @@ describe('eligibleFactoryCandidatesRepository', () => {
           },
         ]),
     };
-    const boilerListQuery = {
-      whereIn: jest.fn().mockReturnThis(),
-      timeout: jest.fn().mockReturnThis(),
-      select: jest.fn<(...columns: string[]) => Promise<Array<Record<string, unknown>>>>().mockResolvedValue([
-        {
-          fac_id_reg: 'real-2',
-          mac_max_stream_prod: '10 ตัน/ชั่วโมง',
-          fuel_name: 'ก๊าซธรรมชาติ',
-          fuel_volume: '100',
-        },
-        {
-          fac_id_reg: 'real-2',
-          mac_max_stream_prod: '5.51999999999999957',
-          fuel_name: 'น้ำมันเตา',
-          fuel_volume: '200',
-        },
-      ]),
-    };
-    mockedBoilerSourceDb.mockReturnValue(boilerListQuery as never);
     mockedFactorySourceDb.mockImplementation(((tableName: unknown) => {
       if (tableName === 'INFORMATION_SCHEMA.COLUMNS') return informationSchemaQuery as never;
       if (tableName === 'dbo.check_eia') return checkEiaQuery as never;
@@ -176,13 +157,12 @@ describe('eligibleFactoryCandidatesRepository', () => {
       facImportQuery,
       checkEiaQuery,
       facProdQuery,
-      boilerListQuery,
       industrialEstateQuery,
     };
   }
 
   it('paginates candidates before loading related lookup data', async () => {
-    const { countQuery, facImportQuery, facProdQuery, boilerListQuery, industrialEstateQuery } =
+    const { countQuery, facImportQuery, facProdQuery, industrialEstateQuery } =
       mockExternalCandidates();
     mockedEligibleFactoriesRepository.listActiveRegistrationNumbers.mockResolvedValue([]);
 
@@ -201,8 +181,8 @@ describe('eligibleFactoryCandidatesRepository', () => {
     expect(result.data[1]?.eia).toBeNull();
     expect(result.data[1]?.hasEia).toBeNull();
     expect(result.data[1]?.productionCapacity).toBe('น้ำตาลทราย 1200 ตัน/ปี, กากน้ำตาล 300 ตัน/ปี');
-    expect(result.data[1]?.boilerSizeEach).toBe('10 ตัน/ชั่วโมง,5.52');
-    expect(result.data[1]?.fuelUsed).toBe('ก๊าซธรรมชาติ 100, น้ำมันเตา 200');
+    expect(result.data[1]?.boilerSizeEach).toBeNull();
+    expect(result.data[1]?.fuelUsed).toBeNull();
     expect(countQuery.count).toHaveBeenCalledWith({ total: '*' });
     expect(facImportQuery.offset).toHaveBeenCalledWith(50);
     expect(facImportQuery.limit).toHaveBeenCalledWith(50);
@@ -214,14 +194,7 @@ describe('eligibleFactoryCandidatesRepository', () => {
     expect(mockedFactorySourceDb).not.toHaveBeenCalledWith('dbo.check_eia');
     expect(facProdQuery.leftJoin).toHaveBeenCalledWith('dbo.UNIT as u', 'fp.UNIT', 'u.UNIT');
     expect(facProdQuery.whereIn).toHaveBeenCalledWith('fp.FID', ['real-1', 'real-2']);
-    expect(mockedBoilerSourceDb).toHaveBeenCalledWith('dbo.boiler_list');
-    expect(boilerListQuery.whereIn).toHaveBeenCalledWith('fac_id_reg', ['real-1', 'real-2']);
-    expect(boilerListQuery.select).toHaveBeenCalledWith(
-      'fac_id_reg',
-      'mac_max_stream_prod',
-      'fuel_name',
-      'fuel_volume',
-    );
+    expect(mockedBoilerSourceDb).not.toHaveBeenCalled();
   });
 
   it('returns all candidates when pagination is not requested', async () => {
