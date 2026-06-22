@@ -15,6 +15,7 @@ import HomePageMockup from './pages/HomePageMockup'
 import KwpFormsPage from './pages/KwpFormsPage'
 import LawsPage from './pages/LawsPage'
 import MasterDataPage from './pages/MasterDataPage'
+import MonitoringPointFormsPage from './pages/MonitoringPointFormsPage'
 import NotificationPage from './pages/NotificationPage'
 import PermissionManagementPage from './pages/PermissionManagementPage'
 import StatisticsPage from './pages/StatisticsPage'
@@ -49,6 +50,7 @@ const menuPermissionMap = {
   home: 'dashboard',
   'master-data': 'factories',
   'connection-request': 'connection',
+  'monitoring-points': 'connection',
   forms: 'kwp_forms',
   'bod-cod-report': 'bod_cod_errors',
   notifications: 'notifications',
@@ -177,6 +179,7 @@ function App() {
     visibleSelectedMenu === 'master-data' ||
     visibleSelectedMenu === 'permissions' ||
     visibleSelectedMenu === 'connection-request' ||
+    visibleSelectedMenu === 'monitoring-points' ||
     visibleSelectedMenu === 'forms' ||
     visibleSelectedMenu === 'bod-cod-report' ||
     visibleSelectedMenu === 'notifications' ||
@@ -242,6 +245,8 @@ function App() {
           <PermissionManagementPage accessToken={accessToken} />
         ) : visibleSelectedMenu === 'connection-request' ? (
           <ConnectionRequestPage userType={userType} accessToken={accessToken} />
+        ) : visibleSelectedMenu === 'monitoring-points' ? (
+          <MonitoringPointFormsPage accessToken={accessToken} />
         ) : visibleSelectedMenu === 'forms' ? (
           <KwpFormsPage userType={userType} />
         ) : visibleSelectedMenu === 'bod-cod-report' ? (

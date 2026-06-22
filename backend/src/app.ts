@@ -21,6 +21,7 @@ import { parameterValuesRoutes } from './modules/parameter-values/parameter-valu
 import { integrationsRoutes } from './modules/integrations/integrations.routes';
 import { alertEventsRoutes } from './modules/alert-events/alert-events.routes';
 import { emailTestRoutes } from './modules/email-test/email-test.routes';
+import { monitoringPointFormsRoutes } from './modules/monitoring-point-forms/monitoring-point-forms.routes';
 
 export function createApp(): Application {
   const app = express();
@@ -75,6 +76,7 @@ export function createApp(): Application {
   app.use(`${env.API_PREFIX}/cems-wpms-requests`, connectionRequestsRoutes);
   app.use(`${env.API_PREFIX}/device-connections`, deviceConnectionsRoutes);
   app.use(`${env.API_PREFIX}/parameter-values`, parameterValuesRoutes);
+  app.use(`${env.API_PREFIX}/monitoring-point-forms`, monitoringPointFormsRoutes);
   app.use(`${env.API_PREFIX}/integrations`, integrationsRoutes);
   app.use(`${env.API_PREFIX}/alert-events`, alertEventsRoutes);
   app.use(`${env.API_PREFIX}/email-test`, emailTestRoutes);
