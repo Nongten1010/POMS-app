@@ -36,7 +36,9 @@ import HighlightOffIcon from '@mui/icons-material/HighlightOff'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import { DataGrid } from '@mui/x-data-grid'
 import cemsInstallationRequiredOptions from '../option/cemsInstallationRequiredOptions.json'
+import cemsParameterOptionItems from '../option/cemsParameterOptions.json'
 import fuelOptions from '../option/fuelOptions.json'
+import wpmsParameterOptionItems from '../option/wpmsParameterOptions.json'
 
 const eligibleFactoryCandidatesApiUrl = import.meta.env.DEV
   ? '/api-proxy/v1/eligible-factories/candidates'
@@ -58,8 +60,8 @@ const subMenus = [
   { value: 'requests', label: 'คำขอเชื่อมต่อ' },
 ]
 
-const cemsParameterOptions = ['NOx (ppm)', 'SO2 (ppm)', 'O2 (%)']
-const wpmsParameterOptions = ['BOD (mg/l)', 'COD (mg/l)', 'Flow (m³/hr)']
+const cemsParameterOptions = cemsParameterOptionItems.map((option) => option.label)
+const wpmsParameterOptions = wpmsParameterOptionItems.map((option) => option.label)
 const legalAnnexOptions = Array.from({ length: 12 }, (_, index) => String(index + 1))
 const fuelOtherTriggerValues = ['เชื้อเพลิงชีวมวล (Biomass)', 'เชื้อเพลิงอื่นๆ']
 
@@ -189,6 +191,10 @@ function normalizeDisplayValue(value) {
   return value === emptyValue || value === undefined || value === null ? '' : value
 }
 
+function normalizeFactoryId(value) {
+  return String(normalizeDisplayValue(value)).trim()
+}
+
 function normalizeArrayValue(value) {
   if (Array.isArray(value)) {
     return value.map((item) => String(item).trim()).filter(Boolean)
@@ -232,6 +238,7 @@ function mapFactoryRow(row, index, idPrefix = 'factory') {
   return {
     id: idPrefix === 'eligible' ? `eligible-${row.id ?? factoryKey}` : factoryKey,
     factoryKey,
+    factoryId: row.factoryId ?? emptyValue,
     eligibleFactoryId: row.id ?? null,
     candidatePayload: row,
     factoryName: row.factoryName ?? emptyValue,
@@ -335,7 +342,7 @@ function mapMonitoringPointForEligibleState(point) {
           productionCapacity: point.productionCapacity || null,
           cemsInstallationRequiredBy: point.cemsInstallationRequiredBy || null,
           cemsInstallationRequiredOther: point.cemsInstallationRequiredOther || null,
-          legalAnnexNo: normalizeArrayValue(point.legalAnnexNo).join(',') || null,
+          legalAnnexNo: normalizeArrayValue(point.legalAnnexNo),
           primaryFuel: point.primaryFuel || null,
           primaryFuelOther: point.primaryFuelOther || null,
           secondaryFuel: point.secondaryFuel || null,
@@ -357,7 +364,7 @@ function mapMonitoringPointFormPayload(point) {
     productionCapacity: normalizeDisplayValue(point.productionCapacity) || null,
     cemsInstallationRequiredBy: point.type === 'CEMS' ? normalizeDisplayValue(point.cemsInstallationRequiredBy) || null : null,
     cemsInstallationRequiredOther: point.type === 'CEMS' ? normalizeDisplayValue(point.cemsInstallationRequiredOther) || null : null,
-    legalAnnexNo: normalizeArrayValue(point.legalAnnexNo).join(',') || null,
+    legalAnnexNo: normalizeArrayValue(point.legalAnnexNo),
     accountingConnectionStatus: normalizeDisplayValue(point.accountingConnectionStatus) || null,
     eligibleParameters: point.eligibleParameters ?? [],
     exemptedParameters: point.type === 'CEMS' ? point.exemptedParameters ?? [] : [],
@@ -384,7 +391,6 @@ function createMonitoringPointFormPayload(row, monitoringPoints = []) {
       eiaInfo: normalizeDisplayValue(row.eia) || null,
       address: normalizeDisplayValue(row.location) || null,
       businessActivity: normalizeDisplayValue(row.operation) || null,
-      machineryHorsepower: typeof row.machineryHorsepower === 'number' ? row.machineryHorsepower : null,
     },
     points: monitoringPoints.map(mapMonitoringPointFormPayload),
   }
@@ -402,12 +408,16 @@ function EligibleFactoriesPage({ accessToken = '' }) {
   const [savingEligibleFactoryIds, setSavingEligibleFactoryIds] = useState([])
   const [deletingEligibleFactoryIds, setDeletingEligibleFactoryIds] = useState([])
   const [selectedFactoryForSheet, setSelectedFactoryForSheet] = useState(null)
-  const [monitoringPoints, setMonitoringPoints] = useState(() => [createDefaultMonitoringPoint('CEMS', 1)])
+  const [monitoringPoints, setMonitoringPoints] = useState([])
   const [activeMonitoringPointId, setActiveMonitoringPointId] = useState('')
   const [snackbarOpen, setSnackbarOpen] = useState(false)
   const [snackbarMessage, setSnackbarMessage] = useState('นำเข้าโรงงานเข้าข่ายสำเร็จ')
   const eligibleFactoryKeySet = useMemo(
     () => new Set(eligibleFactoryRows.map((row) => row.factoryKey)),
+    [eligibleFactoryRows],
+  )
+  const eligibleFactoryIdSet = useMemo(
+    () => new Set(eligibleFactoryRows.map((row) => normalizeFactoryId(row.factoryId)).filter(Boolean)),
     [eligibleFactoryRows],
   )
   const savingEligibleFactoryIdSet = useMemo(
@@ -555,7 +565,13 @@ function EligibleFactoriesPage({ accessToken = '' }) {
     }
   }, [accessToken, loadEligibleFactories])
 
-  const effectiveFactoryRows = useMemo(() => (accessToken ? factoryRows : []), [accessToken, factoryRows])
+  const effectiveFactoryRows = useMemo(
+    () =>
+      accessToken
+        ? factoryRows.filter((row) => !eligibleFactoryIdSet.has(normalizeFactoryId(row.factoryId)))
+        : [],
+    [accessToken, eligibleFactoryIdSet, factoryRows],
+  )
   const effectiveEligibleFactoryRows = useMemo(
     () => (accessToken ? eligibleFactoryRows : []),
     [accessToken, eligibleFactoryRows],
@@ -567,17 +583,18 @@ function EligibleFactoriesPage({ accessToken = '' }) {
     ? eligibleFactoriesError
     : 'กรุณาเข้าสู่ระบบเพื่อดูข้อมูลโรงงานที่เข้าข่าย'
 
-  const handleOpenEligibleSheet = useCallback(async (row) => {
-    const existingPoints = Array.isArray(row.measurementPoints)
+  const handleOpenEligibleSheet = useCallback(async (row, options = {}) => {
+    const shouldStartEmpty = options.startEmpty === true
+    const existingPoints = !shouldStartEmpty && Array.isArray(row.measurementPoints)
       ? row.measurementPoints.map(mapMonitoringPointToForm)
       : []
-    const firstPoint = existingPoints[0] ?? createDefaultMonitoringPoint('CEMS', 1)
+    const firstPoint = existingPoints[0] ?? null
     setSelectedFactoryForSheet(row)
-    setMonitoringPoints(existingPoints.length ? existingPoints : [firstPoint])
-    setActiveMonitoringPointId(firstPoint.id)
+    setMonitoringPoints(existingPoints)
+    setActiveMonitoringPointId(firstPoint?.id ?? '')
     setEligibleActionError('')
 
-    if (!accessToken || !normalizeDisplayValue(row.newRegistrationNo)) {
+    if (shouldStartEmpty || !accessToken || !normalizeDisplayValue(row.newRegistrationNo)) {
       return
     }
 
@@ -607,7 +624,7 @@ function EligibleFactoriesPage({ accessToken = '' }) {
       const detailResponse = await readJsonResponse(detailResult, 'โหลดรายละเอียดฟอร์มจุดตรวจวัดไม่สำเร็จ')
       const detail = detailResponse?.data ?? existingForm
       const nextPoints = Array.isArray(detail.points) ? detail.points.map(mapMonitoringPointToForm) : []
-      const nextFirstPoint = nextPoints[0] ?? firstPoint
+      const nextFirstPoint = nextPoints[0] ?? null
 
       setSelectedFactoryForSheet((current) =>
         current?.id === row.id
@@ -620,7 +637,7 @@ function EligibleFactoriesPage({ accessToken = '' }) {
       )
       if (nextPoints.length) {
         setMonitoringPoints(nextPoints)
-        setActiveMonitoringPointId(nextFirstPoint.id)
+        setActiveMonitoringPointId(nextFirstPoint?.id ?? '')
       }
     } catch (requestError) {
       setEligibleActionError(requestError.message)
@@ -629,14 +646,14 @@ function EligibleFactoriesPage({ accessToken = '' }) {
 
   const handleCloseEligibleSheet = useCallback(() => {
     setSelectedFactoryForSheet(null)
-    setMonitoringPoints([createDefaultMonitoringPoint('CEMS', 1)])
+    setMonitoringPoints([])
     setActiveMonitoringPointId('')
   }, [])
 
   const handleMonitoringPointsChange = useCallback((updater) => {
     setMonitoringPoints((current) => {
       const next = typeof updater === 'function' ? updater(current) : updater
-      return next.length ? next : [createDefaultMonitoringPoint('CEMS', 1)]
+      return next
     })
   }, [])
 
@@ -770,7 +787,7 @@ function EligibleFactoriesPage({ accessToken = '' }) {
               color="secondary"
               startIcon={<AddIcon />}
               disabled={isEligible || isSaving}
-              onClick={() => handleOpenEligibleSheet(params.row)}
+              onClick={() => handleOpenEligibleSheet(params.row, { startEmpty: true })}
             >
               {isSaving ? 'กำลังบันทึก' : 'เลือกเข้าข่าย'}
             </Button>
@@ -1001,7 +1018,7 @@ function EligibleFactoryBottomSheet({
   }, [monitoringPoints.length, onActiveMonitoringPointChange, onMonitoringPointsChange])
 
   const handleRemovePoint = useCallback(() => {
-    if (!activePoint || monitoringPoints.length <= 1) {
+    if (!activePoint) {
       return
     }
 
@@ -1087,7 +1104,7 @@ function EligibleFactoryBottomSheet({
               variant="outlined"
               color="error"
               startIcon={<DeleteOutlineIcon />}
-              disabled={monitoringPoints.length <= 1}
+              disabled={!activePoint}
               onClick={handleRemovePoint}
             >
               ลบจุดนี้
@@ -1106,11 +1123,29 @@ function EligibleFactoryBottomSheet({
             ))}
           </Stack>
 
-          <Divider sx={{ mb: 2 }} />
+          {monitoringPoints.length ? (
+            <Divider sx={{ mb: 2 }} />
+          ) : null}
 
           {activePoint ? (
             <MonitoringPointForm point={activePoint} onChange={updateActivePoint} onTypeChange={handleTypeChange} />
-          ) : null}
+          ) : (
+            <Paper
+              elevation={0}
+              sx={{
+                p: 3,
+                border: 1,
+                borderStyle: 'dashed',
+                borderColor: 'divider',
+                bgcolor: 'background.default',
+                textAlign: 'center',
+              }}
+            >
+              <Typography color="text.secondary">
+                ยังไม่มีข้อมูลจุดตรวจวัด
+              </Typography>
+            </Paper>
+          )}
         </Paper>
 
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'center' }}>

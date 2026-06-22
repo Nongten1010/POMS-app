@@ -1,0 +1,10 @@
+[
+  { "name": "BOD", "unit": "mg/l", "label": "BOD (mg/l)" },
+  { "name": "COD", "unit": "mg/l", "label": "COD (mg/l)" },
+  { "name": "Flow rate", "unit": "m3/hr", "label": "Flow rate (m3/hr)" },
+  { "name": "pH", "unit": "-", "label": "pH (-)" },
+  { "name": "SS", "unit": "mg/l", "label": "SS (mg/l)" },
+  { "name": "TDS", "unit": "mg/l", "label": "TDS (mg/l)" },
+  { "name": "Temp.", "unit": "C°", "label": "Temp. (C°)" },
+  { "name": "Watt", "unit": "kW/hr", "label": "Watt (kW/hr)" }
+]

@@ -7,6 +7,7 @@
 - ใช้สำหรับบันทึกข้อมูลจุดตรวจวัดของโรงงานหนึ่งแห่งได้มากกว่า 1 จุด
 - รองรับจุดตรวจวัดชนิด `CEMS` และ `WPMS`
 - ฟอร์มนี้ยังไม่เชื่อมกับตารางคำขอเชื่อมต่อหรือข้อมูล current/live เดิม
+- เมื่อบันทึกฟอร์มที่มี `factory.factoryRegistrationNoNew` ระบบจะสร้างหรืออัพเดทแถวใน `eligible_factories` ให้อัตโนมัติ เพื่อให้แสดงในหน้าโรงงานที่เข้าข่าย
 - มี API สำหรับบันทึก, แก้ไข, เรียกดูรายการ, และเรียกดูรายละเอียด
 - หน้า frontend เพิ่มเมนู `ข้อมูลจุดตรวจวัด`
 
@@ -19,8 +20,8 @@
 | Column | Type | Required | Description |
 | --- | --- | --- | --- |
 | `id` | BIGINT IDENTITY | Yes | Primary key |
-| `factory_name` | NVARCHAR(500) | Yes | ชื่อโรงงาน |
-| `factory_registration_no_new` | NVARCHAR(64) | Yes | เลขทะเบียนโรงงานแบบใหม่ |
+| `factory_name` | NVARCHAR(500) | No | ชื่อโรงงาน |
+| `factory_registration_no_new` | NVARCHAR(64) | No | เลขทะเบียนโรงงานแบบใหม่ |
 | `factory_registration_no_old` | NVARCHAR(64) | No | เลขทะเบียนโรงงานแบบเดิม |
 | `province_name` | NVARCHAR(128) | No | จังหวัด |
 | `factory_type_main` | NVARCHAR(128) | No | ลำดับประเภทโรงงานหลัก |
@@ -29,11 +30,12 @@
 | `eia_info` | NVARCHAR(255) | No | ข้อมูล EIA |
 | `address` | NVARCHAR(1000) | No | สถานที่ตั้ง |
 | `business_activity` | NVARCHAR(4000) | No | การประกอบกิจการ |
+| `machinery_horsepower` | DECIMAL(18,2) | No | แรงม้าเครื่องจักรของโรงงาน ใช้แสดงในหน้าโรงงานที่เข้าข่าย |
 | `created_at`, `updated_at`, `created_by`, `updated_by`, `deleted_at` | audit fields | Mixed | ข้อมูล audit |
 
 Index:
 
-- `uq_factory_monitoring_forms_registration` unique เฉพาะรายการที่ `deleted_at IS NULL`
+- `uq_factory_monitoring_forms_registration` unique เฉพาะรายการที่ `deleted_at IS NULL` และ `factory_registration_no_new IS NOT NULL`
 
 ### `factory_monitoring_points`
 
@@ -45,19 +47,21 @@ Index:
 | `form_id` | BIGINT | Yes | FK ไปยัง `factory_monitoring_point_forms.id` |
 | `system_type` | VARCHAR(8) | Yes | `CEMS` หรือ `WPMS` |
 | `point_code` | VARCHAR(64) | No | รหัสจุดตรวจวัด |
-| `point_name` | NVARCHAR(255) | Yes | ชื่อจุดตรวจวัด |
+| `point_name` | NVARCHAR(255) | No | ชื่อจุดตรวจวัด |
 | `production_unit_type` | NVARCHAR(255) | No | ประเภทของหน่วยการผลิต |
 | `production_capacity` | NVARCHAR(255) | No | กำลังการผลิตต่อหน่วย |
 | `cems_installation_required_by` | NVARCHAR(255) | No | สถานะการเข้าข่ายติดตั้ง CEMS |
 | `cems_installation_required_other` | NVARCHAR(255) | No | รายละเอียดอื่นๆ |
-| `legal_annex_no` | NVARCHAR(255) | No | ลำดับบัญชีหรือหมายเหตุ |
+| `legal_annex_no` | NVARCHAR(255) | No | ลำดับบัญชีแนบท้ายที่เข้าข่าย เก็บหลายค่าแบบ comma-separated เช่น `1,3,5` |
 | `accounting_connection_status` | NVARCHAR(255) | No | สถานะการเข้าข่ายตามบัญชีแนบท้าย |
 | `eligible_parameters_json` | NVARCHAR(MAX) | Yes | พารามิเตอร์ที่เข้าข่าย |
 | `exempted_parameters_json` | NVARCHAR(MAX) | Yes | พารามิเตอร์ที่ได้รับการยกเว้น |
 | `connected_parameters_json` | NVARCHAR(MAX) | Yes | พารามิเตอร์ที่เชื่อมต่อแล้ว |
 | `pending_parameters_json` | NVARCHAR(MAX) | Yes | พารามิเตอร์ที่ยังไม่เชื่อมต่อ |
 | `primary_fuel` | NVARCHAR(255) | No | เชื้อเพลิงหลัก |
+| `primary_fuel_other` | NVARCHAR(255) | No | เชื้อเพลิงหลักอื่นๆ |
 | `secondary_fuel` | NVARCHAR(255) | No | เชื้อเพลิงรอง |
+| `secondary_fuel_other` | NVARCHAR(255) | No | เชื้อเพลิงรองอื่นๆ |
 | `details_json` | NVARCHAR(MAX) | No | รายละเอียดเสริมสำหรับอนาคต |
 | `created_at`, `updated_at`, `created_by`, `updated_by`, `deleted_at` | audit fields | Mixed | ข้อมูล audit |
 
@@ -65,6 +69,27 @@ Constraints:
 
 - `ck_factory_monitoring_points_system_type` จำกัดค่าเป็น `CEMS`, `WPMS`
 - `ix_factory_monitoring_points_form` สำหรับเรียก child points ตาม form
+
+### `eligible_factories`
+
+ตารางนี้ยังเป็น canonical table สำหรับรายการโรงงานที่ถูกเลือกเป็น "โรงงานที่เข้าข่าย" เหมือนเดิม ฟอร์มจุดตรวจวัดไม่ย้ายข้อมูลจุดตรวจวัดไปไว้ในตารางนี้ แต่เพิ่ม FK เพื่อระบุว่าแถวนี้ถูกเลือกมาจากฟอร์มใด
+
+| Column | Type | Required | Description |
+| --- | --- | --- | --- |
+| `monitoring_point_form_id` | BIGINT | No | FK ไปยัง `factory_monitoring_point_forms.id` เมื่อเลือกฟอร์มนี้เข้าโรงงานที่เข้าข่าย |
+| `machinery_horsepower` | DECIMAL(18,2) | No | แรงม้าเครื่องจักรที่ sync จากฟอร์ม หรือ fallback จากฐานโรงงาน กรอ. เมื่อค่าในตารางเป็น `NULL` |
+
+Index:
+
+- `uq_eligible_factories_monitoring_point_form` unique เฉพาะรายการที่ `deleted_at IS NULL` และ `monitoring_point_form_id IS NOT NULL`
+
+หมายเหตุสำหรับหน้า "โรงงานที่เข้าข่าย":
+
+- ตารางหน้า frontend เรียก `GET /api/v1/eligible-factories`
+- คอลัมน์แรงม้าอ่านจาก `machineryHorsepower`
+- คอลัมน์ `CEMS` และ `WPMS` ไม่ได้เก็บเป็นตัวเลขแยกใน `eligible_factories` แต่ frontend นับจาก `measurementPoints[].systemType`
+- `measurementPoints` มาจากตาราง `factory_monitoring_points` โดย join ผ่าน `eligible_factories.monitoring_point_form_id = factory_monitoring_points.form_id`
+- ถ้า `eligible_factories.machinery_horsepower` เป็น `NULL` backend จะ lookup จากฐานโรงงาน กรอ. ด้วย `source_factory_id/FID` หรือเลขทะเบียนโรงงานแบบใหม่ แล้วใช้ค่า `HP2` fallback `HP`
 
 ## API
 
@@ -91,6 +116,7 @@ http://d-poms.diw.go.th/api/v1/monitoring-point-forms
 - `GET /api/v1/monitoring-point-forms` แบบไม่มี token ได้ `401 UNAUTHORIZED` แปลว่า route พร้อมใช้งาน
 - `POST /api/v1/monitoring-point-forms` พร้อม token สำเร็จ ได้ `success: true`
 - `GET /api/v1/monitoring-point-forms/1` พร้อม token อ่านข้อมูลที่บันทึกกลับมาได้
+- หลัง deploy commit `e890a51` ตรวจ `GET /api/v1/eligible-factories` แล้ว API คืน `measurementPoints` สำหรับนับ `CEMS/WPMS` และคืน `machineryHorsepower` แล้ว
 
 Response จากการยิง `POST` production:
 
@@ -148,14 +174,16 @@ Payload ที่ใช้ทดสอบยิง production โดยมี `C
       "productionCapacity": "10 ตันไอน้ำ/ชั่วโมง",
       "cemsInstallationRequiredBy": "เข้าข่ายต้องติดตั้ง CEMS ตามกฎหมาย",
       "cemsInstallationRequiredOther": null,
-      "legalAnnexNo": "บัญชีแนบท้ายลำดับที่ 1",
+      "legalAnnexNo": ["1"],
       "accountingConnectionStatus": "เข้าข่ายตามบัญชีแนบท้ายลำดับที่",
       "eligibleParameters": ["NOx (ppm)", "SO2 (ppm)", "O2 (%)"],
       "exemptedParameters": [],
       "connectedParameters": [],
       "pendingParameters": ["NOx (ppm)", "SO2 (ppm)", "O2 (%)"],
       "primaryFuel": "ก๊าซธรรมชาติ",
+      "primaryFuelOther": "ชีวมวล",
       "secondaryFuel": "น้ำมันเตา",
+      "secondaryFuelOther": "ก๊าซชีวภาพ",
       "details": null
     },
     {
@@ -166,14 +194,16 @@ Payload ที่ใช้ทดสอบยิง production โดยมี `C
       "productionCapacity": "500 ลบ.ม./วัน",
       "cemsInstallationRequiredBy": null,
       "cemsInstallationRequiredOther": null,
-      "legalAnnexNo": "บัญชีแนบท้ายลำดับที่ 2",
+      "legalAnnexNo": ["2"],
       "accountingConnectionStatus": "เข้าข่ายตามบัญชีแนบท้ายลำดับที่",
       "eligibleParameters": ["BOD (mg/l)", "COD (mg/l)", "Flow (m³/hr)"],
       "exemptedParameters": [],
       "connectedParameters": [],
       "pendingParameters": ["BOD (mg/l)", "COD (mg/l)", "Flow (m³/hr)"],
       "primaryFuel": null,
+      "primaryFuelOther": null,
       "secondaryFuel": null,
+      "secondaryFuelOther": null,
       "details": null
     }
   ]
@@ -195,6 +225,76 @@ Payload นี้ถูกบันทึกลงตาราง:
 
 - เรียกดู: `cems_wpms_requests:view`
 - บันทึก/แก้ไข: `cems_wpms_requests:edit`
+
+### Production Test: หน้าโรงงานที่เข้าข่าย
+
+วันที่ทดสอบ: `2026-06-23`
+
+Endpoint ที่ frontend ใช้แสดงตาราง:
+
+```text
+GET http://d-poms.diw.go.th/api/v1/eligible-factories
+```
+
+Response สำคัญหลัง deploy:
+
+```json
+{
+  "success": true,
+  "meta": {
+    "total": 3
+  },
+  "data": [
+    {
+      "id": 21,
+      "factoryName": "ห้างหุ้นส่วนสามัญ สถานีบ่มใบยาสบหนอง",
+      "factoryId": "10550000125197",
+      "factoryRegistrationNo": "3-1-1/19นน",
+      "machineryHorsepower": 149.76,
+      "measurementPoints": [
+        {
+          "systemType": "CEMS",
+          "pointCode": "CEMS-UI-001"
+        },
+        {
+          "systemType": "WPMS",
+          "pointCode": "WPMS-UI-001"
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "factoryName": "สถานีบ่มใบยาสบหนอง",
+      "factoryId": "10520000225172",
+      "factoryRegistrationNo": "3-1-2/17ลป",
+      "machineryHorsepower": 121.8,
+      "measurementPoints": [
+        {
+          "systemType": "CEMS",
+          "pointCode": "CEMS-REAL-001"
+        },
+        {
+          "systemType": "WPMS",
+          "pointCode": "WPMS-REAL-001"
+        }
+      ]
+    }
+  ]
+}
+```
+
+ตัวนับบนหน้า frontend:
+
+```js
+const cemsPointCount = measurementPoints.filter((point) => point.systemType === 'CEMS').length;
+const wpmsPointCount = measurementPoints.filter((point) => point.systemType === 'WPMS').length;
+```
+
+ตารางที่เกี่ยวข้อง:
+
+- `eligible_factories`: แถวโรงงานที่เข้าข่าย, เลขทะเบียน, แรงม้า, และ `monitoring_point_form_id`
+- `factory_monitoring_point_forms`: ข้อมูลโรงงานของฟอร์มเพิ่ม/แก้ไขข้อมูลจุดตรวจวัด
+- `factory_monitoring_points`: จุดตรวจวัดหลายจุด ใช้นับ `CEMS` และ `WPMS`
 
 ### GET `/api/v1/monitoring-point-forms`
 
@@ -246,7 +346,9 @@ Response:
 
 ### POST `/api/v1/monitoring-point-forms`
 
-สร้างฟอร์มใหม่และบันทึกจุดตรวจวัดหลายจุดในครั้งเดียว
+สร้างฟอร์มใหม่และบันทึกจุดตรวจวัดหลายจุดในครั้งเดียว โดยทุกช่องใน `factory` ว่างได้ และ `points` ว่างได้
+
+ถ้า payload มี `factory.factoryRegistrationNoNew` backend จะ sync ข้อมูลโรงงานเข้า `eligible_factories` อัตโนมัติ โดยผูกด้วย `eligible_factories.monitoring_point_form_id`
 
 Request:
 
@@ -278,7 +380,9 @@ Request:
       "connectedParameters": [],
       "pendingParameters": ["NOx (ppm)", "SO2 (ppm)"],
       "primaryFuel": "ก๊าซธรรมชาติ",
-      "secondaryFuel": ""
+      "primaryFuelOther": "ชีวมวล",
+      "secondaryFuel": "",
+      "secondaryFuelOther": ""
     },
     {
       "systemType": "WPMS",
@@ -292,7 +396,9 @@ Request:
       "connectedParameters": [],
       "pendingParameters": ["BOD (mg/l)", "COD (mg/l)"],
       "primaryFuel": "",
-      "secondaryFuel": ""
+      "primaryFuelOther": "",
+      "secondaryFuel": "",
+      "secondaryFuelOther": ""
     }
   ]
 }
@@ -300,7 +406,36 @@ Request:
 
 ### PUT `/api/v1/monitoring-point-forms/:id`
 
-แก้ไขฟอร์มเดิม โดย backend จะ update ข้อมูลโรงงานและแทนที่รายการจุดตรวจวัดด้วย `points` ชุดใหม่ใน payload
+แก้ไขฟอร์มเดิม โดย backend จะ update ข้อมูลโรงงานและแทนที่รายการจุดตรวจวัดด้วย `points` ชุดใหม่ใน payload พร้อม sync แถวที่เกี่ยวข้องใน `eligible_factories` ถ้าฟอร์มมีเลขทะเบียนโรงงาน
+
+### POST `/api/v1/monitoring-point-forms/:id/select-eligible`
+
+เลือกฟอร์มจุดตรวจวัดเข้าเป็นรายการโรงงานที่เข้าข่าย โดย backend จะสร้างหรือผูกแถวใน `eligible_factories` กับฟอร์มนี้ผ่าน `eligible_factories.monitoring_point_form_id`
+
+หมายเหตุ: endpoint นี้ยังคงไว้สำหรับการเรียกแยกโดยตรง แต่ flow ปุ่ม “เลือกเข้าข่าย” สามารถใช้ `POST /api/v1/monitoring-point-forms` หรือ `PUT /api/v1/monitoring-point-forms/:id` แล้วระบบจะเพิ่ม/อัพเดทโรงงานที่เข้าข่ายให้อัตโนมัติเมื่อมีเลขทะเบียนโรงงาน
+
+เงื่อนไข:
+
+- ต้องมีสิทธิ์ `eligible_factories:manage`
+- ฟอร์มต้องมี `factory.factoryRegistrationNoNew` เพื่อใช้ระบุตัวโรงงานและกันข้อมูลซ้ำ
+- ถ้า form นี้ถูกเลือกแล้ว API จะคืน eligible factory row เดิม
+- ถ้าเลขทะเบียนโรงงานนี้มีอยู่ใน `eligible_factories` แล้วแต่ยังไม่ผูก form ระบบจะผูก `monitoring_point_form_id` กับ row เดิม
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 12,
+    "sourceSystem": "monitoring_point_forms",
+    "sourceFactoryId": "10520000225172",
+    "monitoringPointFormId": 3,
+    "factoryRegistrationNoNew": "10520000225172",
+    "factoryName": "สถานีบ่มใบยาสบหนอง"
+  }
+}
+```
 
 ## Frontend
 
@@ -330,9 +465,8 @@ Request:
 
 ## Validation
 
-- ต้องมี `factory.factoryName`
-- ต้องมี `factory.factoryRegistrationNoNew`
-- ต้องมี `points` อย่างน้อย 1 จุด
-- แต่ละจุดต้องมี `systemType` เป็น `CEMS` หรือ `WPMS`
-- แต่ละจุดต้องมี `pointName`
+- ทุกช่องใน `factory` ว่างได้
+- `points` ว่างได้ ใช้กรณีบันทึกข้อมูลโรงงานไว้ก่อนโดยยังไม่ระบุจุดตรวจวัด
+- ถ้ามีรายการใน `points` แต่ละจุดต้องมี `systemType` เป็น `CEMS` หรือ `WPMS`
+- ช่องอื่นของจุดตรวจวัด เช่น `pointName`, `pointCode`, พารามิเตอร์, เชื้อเพลิง และบัญชีแนบท้าย ว่างได้
 - รายการพารามิเตอร์เก็บเป็น array และ backend แปลงเป็น JSON ในฐานข้อมูล

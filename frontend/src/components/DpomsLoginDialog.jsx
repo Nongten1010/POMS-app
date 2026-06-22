@@ -39,6 +39,17 @@ const loginUrl = import.meta.env.DEV
   ? '/api-proxy/v1/auth/login'
   : 'http://d-poms.diw.go.th/api/v1/auth/login'
 
+function formatLoginError(result, response) {
+  const statusLabel = [result.status, result.statusText].filter(Boolean).join(' ')
+  const message =
+    response?.error?.message ??
+    response?.message ??
+    response?.error ??
+    'เข้าสู่ระบบไม่สำเร็จ'
+
+  return statusLabel ? `${statusLabel} - ${message}` : message
+}
+
 function DpomsLoginDialog({ open, onClose, onLoginSuccess }) {
   const [activeTab, setActiveTab] = useState(0)
   const [departmentID, setDepartmentID] = useState(officerTypes[0].value)
@@ -83,11 +94,7 @@ function DpomsLoginDialog({ open, onClose, onLoginSuccess }) {
       }
 
       if (!result.ok) {
-        const message =
-          response?.message ??
-          response?.error ??
-          `เข้าสู่ระบบไม่สำเร็จ (${result.status} ${result.statusText})`
-        throw new Error(message)
+        throw new Error(formatLoginError(result, response))
       }
 
       onLoginSuccess?.({
