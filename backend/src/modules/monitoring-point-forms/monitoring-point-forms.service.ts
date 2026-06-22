@@ -1,6 +1,9 @@
 import { BadRequestError, ConflictError, NotFoundError } from '../../shared/errors/AppError';
 import { eligibleFactoriesRepository } from '../eligible-factories/eligible-factories.repository';
-import type { EligibleFactoryDTO } from '../eligible-factories/eligible-factories.types';
+import type {
+  CreateEligibleFactoryInput,
+  EligibleFactoryDTO,
+} from '../eligible-factories/eligible-factories.types';
 import { monitoringPointFormsRepository } from './monitoring-point-forms.repository';
 import type {
   ListMonitoringPointFormsQuery,
@@ -36,7 +39,9 @@ export const monitoringPointFormsService = {
       }
     }
 
-    return monitoringPointFormsRepository.create(input, actorUserId);
+    const created = await monitoringPointFormsRepository.create(input, actorUserId);
+    await syncEligibleFactoryFromForm(created, actorUserId, { requireRegistration: false });
+    return created;
   },
 
   async update(
@@ -46,6 +51,7 @@ export const monitoringPointFormsService = {
   ): Promise<MonitoringPointFormDTO> {
     const updated = await monitoringPointFormsRepository.update(id, input, actorUserId);
     if (!updated) throw new NotFoundError('Monitoring point form not found');
+    await syncEligibleFactoryFromForm(updated, actorUserId, { requireRegistration: false });
     return updated;
   },
 
@@ -53,63 +59,94 @@ export const monitoringPointFormsService = {
     const form = await monitoringPointFormsRepository.findById(id);
     if (!form) throw new NotFoundError('Monitoring point form not found');
 
-    const registrationNoNew = form.factory.factoryRegistrationNoNew?.trim();
-    if (!registrationNoNew) {
-      throw new BadRequestError('Factory registration number is required before selecting eligible factory', {
-        field: 'factory.factoryRegistrationNoNew',
-      });
-    }
-
-    const existingByForm = await eligibleFactoriesRepository.findByMonitoringPointFormId(id);
-    if (existingByForm) return existingByForm;
-
-    const existingByRegistration = await eligibleFactoriesRepository.findByRegistrationNoNew(
-      registrationNoNew,
-    );
-    if (existingByRegistration?.monitoringPointFormId) {
-      throw new ConflictError('Factory registration is already linked to another monitoring point form', {
-        factoryRegistrationNoNew: registrationNoNew,
-        monitoringPointFormId: existingByRegistration.monitoringPointFormId,
-      });
-    }
-
-    if (existingByRegistration) {
-      const linked = await eligibleFactoriesRepository.attachMonitoringPointForm(
-        existingByRegistration.id,
-        id,
-        actorUserId,
-      );
-      if (!linked) throw new NotFoundError('Eligible factory selection not found');
-      return linked;
-    }
-
-    return eligibleFactoriesRepository.create(
-      {
-        sourceSystem: 'monitoring_point_forms',
-        sourceFactoryId: String(form.id),
-        monitoringPointFormId: form.id,
-        factoryName: form.factory.factoryName?.trim() || registrationNoNew,
-        factoryRegistrationNoNew: registrationNoNew,
-        factoryRegistrationNoOld: form.factory.factoryRegistrationNoOld ?? null,
-        factoryTypeSequence: joinFactoryTypeSequence(
-          form.factory.factoryTypeMain,
-          form.factory.factoryTypeSub,
-        ),
-        address: form.factory.address ?? null,
-        provinceName: form.factory.provinceName?.trim() || '-',
-        industrialEstateName: null,
-        coordinates: null,
-        businessActivity: form.factory.businessActivity ?? null,
-        operationStatus: form.factory.operationStatus?.trim() || '-',
-        productionCapacity: buildProductionCapacitySummary(form),
-        fuelUsed: buildFuelSummary(form),
-        hasEia: parseEiaFlag(form.factory.eiaInfo),
-        selectedReason: 'selected_from_monitoring_point_form',
-      },
-      actorUserId,
-    );
+    const selected = await syncEligibleFactoryFromForm(form, actorUserId, {
+      requireRegistration: true,
+    });
+    if (!selected) throw new Error('Eligible factory selection could not be synchronized');
+    return selected;
   },
 };
+
+async function syncEligibleFactoryFromForm(
+  form: MonitoringPointFormDTO,
+  actorUserId: number,
+  options: { requireRegistration: boolean },
+): Promise<EligibleFactoryDTO | null> {
+  const input = buildEligibleFactoryInput(form, options);
+  if (!input) return null;
+
+  const existingByForm = await eligibleFactoriesRepository.findByMonitoringPointFormId(form.id);
+  if (existingByForm) {
+    const updated = await eligibleFactoriesRepository.updateFromMonitoringPointForm(
+      existingByForm.id,
+      input,
+      actorUserId,
+    );
+    if (!updated) throw new NotFoundError('Eligible factory selection not found');
+    return updated;
+  }
+
+  const existingByRegistration = await eligibleFactoriesRepository.findByRegistrationNoNew(
+    input.factoryRegistrationNoNew,
+  );
+  if (
+    existingByRegistration?.monitoringPointFormId &&
+    existingByRegistration.monitoringPointFormId !== form.id
+  ) {
+    throw new ConflictError('Factory registration is already linked to another monitoring point form', {
+      factoryRegistrationNoNew: input.factoryRegistrationNoNew,
+      monitoringPointFormId: existingByRegistration.monitoringPointFormId,
+    });
+  }
+
+  if (existingByRegistration) {
+    const updated = await eligibleFactoriesRepository.updateFromMonitoringPointForm(
+      existingByRegistration.id,
+      input,
+      actorUserId,
+    );
+    if (!updated) throw new NotFoundError('Eligible factory selection not found');
+    return updated;
+  }
+
+  return eligibleFactoriesRepository.create(input, actorUserId);
+}
+
+function buildEligibleFactoryInput(
+  form: MonitoringPointFormDTO,
+  options: { requireRegistration: boolean },
+): CreateEligibleFactoryInput | null {
+  const registrationNoNew = form.factory.factoryRegistrationNoNew?.trim();
+  if (!registrationNoNew) {
+    if (!options.requireRegistration) return null;
+    throw new BadRequestError('Factory registration number is required before selecting eligible factory', {
+      field: 'factory.factoryRegistrationNoNew',
+    });
+  }
+
+  return {
+    sourceSystem: 'monitoring_point_forms',
+    sourceFactoryId: registrationNoNew,
+    monitoringPointFormId: form.id,
+    factoryName: form.factory.factoryName?.trim() || registrationNoNew,
+    factoryRegistrationNoNew: registrationNoNew,
+    factoryRegistrationNoOld: form.factory.factoryRegistrationNoOld ?? null,
+    factoryTypeSequence: joinFactoryTypeSequence(
+      form.factory.factoryTypeMain,
+      form.factory.factoryTypeSub,
+    ),
+    address: form.factory.address ?? null,
+    provinceName: form.factory.provinceName?.trim() || '-',
+    industrialEstateName: null,
+    coordinates: null,
+    businessActivity: form.factory.businessActivity ?? null,
+    operationStatus: form.factory.operationStatus?.trim() || '-',
+    productionCapacity: buildProductionCapacitySummary(form),
+    fuelUsed: buildFuelSummary(form),
+    hasEia: parseEiaFlag(form.factory.eiaInfo),
+    selectedReason: 'selected_from_monitoring_point_form',
+  };
+}
 
 function joinFactoryTypeSequence(main?: string | null, sub?: string | null): string | null {
   return [main, sub]

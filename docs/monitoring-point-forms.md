@@ -7,6 +7,7 @@
 - ใช้สำหรับบันทึกข้อมูลจุดตรวจวัดของโรงงานหนึ่งแห่งได้มากกว่า 1 จุด
 - รองรับจุดตรวจวัดชนิด `CEMS` และ `WPMS`
 - ฟอร์มนี้ยังไม่เชื่อมกับตารางคำขอเชื่อมต่อหรือข้อมูล current/live เดิม
+- เมื่อบันทึกฟอร์มที่มี `factory.factoryRegistrationNoNew` ระบบจะสร้างหรืออัพเดทแถวใน `eligible_factories` ให้อัตโนมัติ เพื่อให้แสดงในหน้าโรงงานที่เข้าข่าย
 - มี API สำหรับบันทึก, แก้ไข, เรียกดูรายการ, และเรียกดูรายละเอียด
 - หน้า frontend เพิ่มเมนู `ข้อมูลจุดตรวจวัด`
 
@@ -266,6 +267,8 @@ Response:
 
 สร้างฟอร์มใหม่และบันทึกจุดตรวจวัดหลายจุดในครั้งเดียว โดยทุกช่องใน `factory` ว่างได้ และ `points` ว่างได้
 
+ถ้า payload มี `factory.factoryRegistrationNoNew` backend จะ sync ข้อมูลโรงงานเข้า `eligible_factories` อัตโนมัติ โดยผูกด้วย `eligible_factories.monitoring_point_form_id`
+
 Request:
 
 ```json
@@ -322,11 +325,13 @@ Request:
 
 ### PUT `/api/v1/monitoring-point-forms/:id`
 
-แก้ไขฟอร์มเดิม โดย backend จะ update ข้อมูลโรงงานและแทนที่รายการจุดตรวจวัดด้วย `points` ชุดใหม่ใน payload
+แก้ไขฟอร์มเดิม โดย backend จะ update ข้อมูลโรงงานและแทนที่รายการจุดตรวจวัดด้วย `points` ชุดใหม่ใน payload พร้อม sync แถวที่เกี่ยวข้องใน `eligible_factories` ถ้าฟอร์มมีเลขทะเบียนโรงงาน
 
 ### POST `/api/v1/monitoring-point-forms/:id/select-eligible`
 
 เลือกฟอร์มจุดตรวจวัดเข้าเป็นรายการโรงงานที่เข้าข่าย โดย backend จะสร้างหรือผูกแถวใน `eligible_factories` กับฟอร์มนี้ผ่าน `eligible_factories.monitoring_point_form_id`
+
+หมายเหตุ: endpoint นี้ยังคงไว้สำหรับการเรียกแยกโดยตรง แต่ flow ปุ่ม “เลือกเข้าข่าย” สามารถใช้ `POST /api/v1/monitoring-point-forms` หรือ `PUT /api/v1/monitoring-point-forms/:id` แล้วระบบจะเพิ่ม/อัพเดทโรงงานที่เข้าข่ายให้อัตโนมัติเมื่อมีเลขทะเบียนโรงงาน
 
 เงื่อนไข:
 
@@ -343,7 +348,7 @@ Response:
   "data": {
     "id": 12,
     "sourceSystem": "monitoring_point_forms",
-    "sourceFactoryId": "3",
+    "sourceFactoryId": "10520000225172",
     "monitoringPointFormId": 3,
     "factoryRegistrationNoNew": "10520000225172",
     "factoryName": "สถานีบ่มใบยาสบหนอง"

@@ -14,6 +14,7 @@ jest.mock('../../src/modules/eligible-factories/eligible-factories.repository', 
     create: jest.fn(),
     findByMonitoringPointFormId: jest.fn(),
     findByRegistrationNoNew: jest.fn(),
+    updateFromMonitoringPointForm: jest.fn(),
   },
 }));
 
@@ -113,6 +114,9 @@ describe('monitoringPointFormsService', () => {
       createdAt: '2026-06-22T00:00:00.000Z',
       updatedAt: '2026-06-22T00:00:00.000Z',
     });
+    mockedEligibleRepository.findByMonitoringPointFormId.mockResolvedValue(null);
+    mockedEligibleRepository.findByRegistrationNoNew.mockResolvedValue(null);
+    mockedEligibleRepository.create.mockResolvedValue(createEligibleFactoryDTO());
 
     const result = await monitoringPointFormsService.create(input, 42);
 
@@ -120,6 +124,15 @@ describe('monitoringPointFormsService', () => {
       factoryRegistrationNoNew: '10520000225172',
     });
     expect(mockedRepository.create).toHaveBeenCalledWith(input, 42);
+    expect(mockedEligibleRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceSystem: 'monitoring_point_forms',
+        sourceFactoryId: '10520000225172',
+        monitoringPointFormId: 1,
+        factoryRegistrationNoNew: '10520000225172',
+      }),
+      42,
+    );
     expect(result.id).toBe(1);
   });
 
@@ -162,7 +175,38 @@ describe('monitoringPointFormsService', () => {
 
     expect(mockedRepository.list).not.toHaveBeenCalled();
     expect(mockedRepository.create).toHaveBeenCalledWith(blankInput, 42);
+    expect(mockedEligibleRepository.create).not.toHaveBeenCalled();
+    expect(mockedEligibleRepository.findByRegistrationNoNew).not.toHaveBeenCalled();
     expect(result.id).toBe(8);
+  });
+
+  it('updates the linked eligible factory when editing a monitoring point form', async () => {
+    mockedRepository.update.mockResolvedValue({
+      id: 1,
+      factory: toFactoryDTO({ ...input.factory, provinceName: 'เชียงใหม่' }),
+      points: [],
+      createdAt: '2026-06-22T00:00:00.000Z',
+      updatedAt: '2026-06-23T00:00:00.000Z',
+    });
+    mockedEligibleRepository.findByMonitoringPointFormId.mockResolvedValue(
+      createEligibleFactoryDTO({ id: 88, provinceName: 'ลำปาง' }),
+    );
+    mockedEligibleRepository.updateFromMonitoringPointForm.mockResolvedValue(
+      createEligibleFactoryDTO({ id: 88, provinceName: 'เชียงใหม่' }),
+    );
+
+    const result = await monitoringPointFormsService.update(1, input, 42);
+
+    expect(mockedEligibleRepository.updateFromMonitoringPointForm).toHaveBeenCalledWith(
+      88,
+      expect.objectContaining({
+        sourceFactoryId: '10520000225172',
+        monitoringPointFormId: 1,
+        provinceName: 'เชียงใหม่',
+      }),
+      42,
+    );
+    expect(result.id).toBe(1);
   });
 
   it('throws not found when updating an unknown form', async () => {
@@ -215,7 +259,7 @@ describe('monitoringPointFormsService', () => {
     expect(mockedEligibleRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
         sourceSystem: 'monitoring_point_forms',
-        sourceFactoryId: '1',
+        sourceFactoryId: '10520000225172',
         monitoringPointFormId: 1,
         factoryRegistrationNoNew: '10520000225172',
         factoryName: 'สถานีบ่มใบยาสบหนอง',
@@ -254,10 +298,16 @@ describe('monitoringPointFormsService', () => {
       updatedAt: '2026-06-22T00:00:00.000Z',
     });
     mockedEligibleRepository.findByMonitoringPointFormId.mockResolvedValue(existing);
+    mockedEligibleRepository.updateFromMonitoringPointForm.mockResolvedValue(existing);
 
     const result = await monitoringPointFormsService.selectEligible(1, 42);
 
     expect(result.id).toBe(99);
+    expect(mockedEligibleRepository.updateFromMonitoringPointForm).toHaveBeenCalledWith(
+      99,
+      expect.objectContaining({ monitoringPointFormId: 1 }),
+      42,
+    );
     expect(mockedEligibleRepository.create).not.toHaveBeenCalled();
   });
 });

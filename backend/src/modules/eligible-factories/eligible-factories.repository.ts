@@ -146,6 +146,23 @@ export const eligibleFactoriesRepository = {
 
     return this.findById(eligibleFactoryId);
   },
+
+  async updateFromMonitoringPointForm(
+    eligibleFactoryId: number,
+    input: CreateEligibleFactoryInput,
+    actorUserId: number,
+  ): Promise<EligibleFactoryDTO | null> {
+    await db('eligible_factories')
+      .where('id', eligibleFactoryId)
+      .whereNull('deleted_at')
+      .update({
+        ...toMonitoringPointFormUpdateRow(input),
+        updated_at: db.fn.now(),
+        updated_by: actorUserId,
+      });
+
+    return this.findById(eligibleFactoryId);
+  },
 };
 
 function buildEligibleFactoriesBaseQuery(): Knex.QueryBuilder<
@@ -241,6 +258,29 @@ function toInsertRow(
     selected_by: actorUserId,
     created_by: actorUserId,
     updated_by: actorUserId,
+  };
+}
+
+function toMonitoringPointFormUpdateRow(input: CreateEligibleFactoryInput): Record<string, unknown> {
+  return {
+    source_system: input.sourceSystem ?? 'monitoring_point_forms',
+    source_factory_id: input.sourceFactoryId ?? null,
+    monitoring_point_form_id: input.monitoringPointFormId ?? null,
+    factory_registration_no_new: input.factoryRegistrationNoNew,
+    factory_registration_no_old: input.factoryRegistrationNoOld ?? null,
+    factory_name: input.factoryName,
+    factory_type_sequence: input.factoryTypeSequence ?? null,
+    address: input.address ?? null,
+    province_name: input.provinceName,
+    industrial_estate_name: input.industrialEstateName ?? null,
+    latitude: input.coordinates?.latitude ?? null,
+    longitude: input.coordinates?.longitude ?? null,
+    business_activity: input.businessActivity ?? null,
+    operation_status: input.operationStatus,
+    production_capacity: input.productionCapacity ?? null,
+    fuel_used: input.fuelUsed ?? null,
+    has_eia: input.hasEia ?? null,
+    selected_reason: input.selectedReason ?? null,
   };
 }
 
