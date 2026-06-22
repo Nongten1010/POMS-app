@@ -12,7 +12,7 @@ import type {
   ListEligibleFactoryCandidatesQuery,
 } from './eligible-factories.types';
 
-const EXTERNAL_QUERY_TIMEOUT_MS = 15000;
+const EXTERNAL_QUERY_TIMEOUT_MS = 300000;
 
 export const eligibleFactoryCandidatesRepository = {
   async list(query: ListEligibleFactoryCandidatesQuery): Promise<EligibleFactoryCandidatesDTO> {

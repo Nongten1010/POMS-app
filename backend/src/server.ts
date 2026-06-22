@@ -6,6 +6,8 @@ import { closeFactorySourceDatabase } from './config/factory-source-database';
 import { closeParameterSourceDatabase } from './config/parameter-source-database';
 import { closeBoilerSourceDatabase } from './config/boiler-source-database';
 
+const REQUEST_TIMEOUT_MS = 300000;
+
 async function bootstrap(): Promise<void> {
   try {
     await pingDatabase();
@@ -18,6 +20,9 @@ async function bootstrap(): Promise<void> {
     logger.info(`[boot] POMS backend listening on http://localhost:${env.PORT}${env.API_PREFIX}`);
     logger.info(`[boot] Environment: ${env.NODE_ENV}`);
   });
+  server.requestTimeout = REQUEST_TIMEOUT_MS;
+  server.headersTimeout = REQUEST_TIMEOUT_MS + 60000;
+  server.setTimeout(REQUEST_TIMEOUT_MS);
 
   const shutdown = async (signal: string): Promise<void> => {
     logger.info(`[boot] ${signal} received — shutting down gracefully`);
