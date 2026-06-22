@@ -43,6 +43,7 @@ describe('parseDiwOfficerLoginResponse', () => {
     });
 
     expect(result).toEqual({
+      identity_provider: 'officer_dpis',
       external_id: '1234567890123',
       prename_th: 'นางสาว',
       first_name: 'สมหญิง',
@@ -63,6 +64,7 @@ describe('parseDiwOfficerLoginResponse', () => {
       organize_id: '3010089',
       division_id: '3010088',
       department_id: '3010000',
+      department_name_th: '',
       ministry_id: '22',
       province_id: '1000',
       per_status: '1',

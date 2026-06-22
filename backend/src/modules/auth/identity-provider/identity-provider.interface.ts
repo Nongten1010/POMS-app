@@ -9,6 +9,7 @@
  */
 
 export interface ExternalOfficerProfile {
+  identity_provider?: 'mock' | 'officer_dpis';
   external_id: string; // per_cardno
   prename_th: string;
   first_name: string;
@@ -29,6 +30,7 @@ export interface ExternalOfficerProfile {
   organize_id: string;
   division_id: string;
   department_id: string;
+  department_name_th?: string;
   ministry_id: string;
   province_id: string;
   per_status: string;

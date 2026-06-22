@@ -51,6 +51,7 @@ jest.mock('../../src/modules/auth/auth.repository', () => ({
     getOperatorProfile: jest.fn(),
     getOperatorFactories: jest.fn(),
     getRolesAndPermissions: jest.fn(),
+    upsertExternalOfficerUser: jest.fn(),
     syncExternalOfficerProfile: jest.fn(),
     syncExternalOperatorProfile: jest.fn(),
   },
@@ -344,6 +345,91 @@ describe('authService login completion', () => {
           view: true,
         },
       },
+    });
+  });
+
+  it('provisions a DIW DPIS industrial-estate officer before issuing a token', async () => {
+    const officerProfile = {
+      identity_provider: 'officer_dpis' as const,
+      external_id: '1102002574259',
+      prename_th: 'นาย',
+      first_name: 'คณาพัฒน์',
+      last_name: 'ปลั่งศรีสกุล',
+      email: null,
+      phone: null,
+      pos_no: '2071',
+      pertype_id: '99',
+      pertype: 'พนักงานจ้างเหมาบริการ',
+      position_type_id: '12',
+      position_type_th: 'งานสนับสนุน',
+      line_id: '',
+      line_name_th: 'พนักงานจ้างเหมาบริการ',
+      level_id: '',
+      level_name_th: 'ลูกจ้างเหมา',
+      organize_id: '401',
+      division_id: '40101',
+      department_id: '100',
+      department_name_th: 'การนิคมอุตสาหกรรมแห่งประเทศไทย (กนอ.)',
+      ministry_id: '',
+      province_id: '',
+      per_status: '1',
+      per_status_name: 'ทำงาน',
+    };
+    mockedAuthRepository.upsertExternalOfficerUser.mockResolvedValue({
+      id: 88,
+      external_id: officerProfile.external_id,
+      identity_provider: 'officer_dpis',
+      user_type: 'officer',
+      username: officerProfile.external_id,
+      email: null,
+      phone: null,
+      prename_th: 'นาย',
+      first_name: 'คณาพัฒน์',
+      last_name: 'ปลั่งศรีสกุล',
+      is_active: true,
+      password_hash: null,
+    });
+    mockedAuthRepository.getOfficerProfile.mockResolvedValue({
+      user_id: 88,
+      pos_no: '2071',
+      pertype_id: '99',
+      pertype: 'พนักงานจ้างเหมาบริการ',
+      position_type_id: '12',
+      position_type_th: 'งานสนับสนุน',
+      line_id: '',
+      line_name_th: 'พนักงานจ้างเหมาบริการ',
+      level_id: '',
+      level_name_th: 'ลูกจ้างเหมา',
+      organize_id: '401',
+      division_id: '40101',
+      department_id: '100',
+      department_name_th: 'การนิคมอุตสาหกรรมแห่งประเทศไทย (กนอ.)',
+      ministry_id: '',
+      province_id: '',
+      per_status: '1',
+      per_status_name: 'ทำงาน',
+    });
+    mockedAuthRepository.getRolesAndPermissions.mockResolvedValue({
+      roles: ['industrial_estate'],
+      scopes: {
+        'dashboard:view': 'IN_ESTATE',
+      },
+    });
+
+    const result = await authService.completeLoginAsOfficer(officerProfile);
+
+    expect(mockedAuthRepository.upsertExternalOfficerUser).toHaveBeenCalledWith(
+      officerProfile,
+      'industrial_estate',
+    );
+    expect(mockedAuthRepository.syncExternalOfficerProfile).not.toHaveBeenCalled();
+    expect(result.user).toMatchObject({
+      userType: 'officer',
+      username: '1102002574259',
+      fullName: 'นายคณาพัฒน์ ปลั่งศรีสกุล',
+      department: 'การนิคมอุตสาหกรรมแห่งประเทศไทย (กนอ.)',
+      roles: 'industrial_estate',
+      isActive: true,
     });
   });
 

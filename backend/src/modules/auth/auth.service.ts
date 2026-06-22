@@ -83,10 +83,15 @@ export const authService = {
     profile: Awaited<ReturnType<ReturnType<typeof getIdentityProvider>['authenticateOfficer']>>,
   ): Promise<LoginResponse> {
     if (!profile) throw new UnauthorizedError('Invalid credentials');
-    const user = await authRepository.findUserByProviderAndExternalId('mock', profile.external_id);
+    const user =
+      profile.identity_provider === 'officer_dpis'
+        ? await authRepository.upsertExternalOfficerUser(profile, getOfficerRoleCode(profile))
+        : await authRepository.findUserByProviderAndExternalId('mock', profile.external_id);
     ensureLoginUserAvailable(user, 'officer', profile.external_id);
     await authRepository.updateLastLogin(user.id);
-    await authRepository.syncExternalOfficerProfile(user.id, profile);
+    if (profile.identity_provider !== 'officer_dpis') {
+      await authRepository.syncExternalOfficerProfile(user.id, profile);
+    }
 
     const officerProfile = await authRepository.getOfficerProfile(user.id);
     const { roles, scopes } = await authRepository.getRolesAndPermissions(user.id);
@@ -150,6 +155,16 @@ export const authService = {
     });
   },
 };
+
+function getOfficerRoleCode(profile: NonNullable<Awaited<ReturnType<ReturnType<typeof getIdentityProvider>['authenticateOfficer']>>>): string {
+  if (profile.department_id === '100' || profile.department_id === '4019000') {
+    return 'industrial_estate';
+  }
+  if (profile.department_id === '3010000' || profile.department_id === '2') {
+    return 'diw_central';
+  }
+  return 'provincial_office';
+}
 
 function ensureLocalLoginTypeAllowed(
   storedUserType: 'citizen' | 'operator' | 'officer' | 'admin',

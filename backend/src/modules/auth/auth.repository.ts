@@ -88,44 +88,61 @@ export const authRepository = {
     return db<OperatorProfileRow>('operator_profiles').where({ user_id: userId }).first();
   },
 
+  async upsertExternalOfficerUser(
+    profile: ExternalOfficerProfile,
+    roleCode: string,
+  ): Promise<UserRow> {
+    return db.transaction(async (trx) => {
+      const provider = profile.identity_provider ?? 'officer_dpis';
+      const existingUser = await trx<UserRow>('users')
+        .where({ identity_provider: provider, external_id: profile.external_id })
+        .whereNull('deleted_at')
+        .first();
+      const userPayload = {
+        user_type: 'officer',
+        username: profile.external_id,
+        email: profile.email,
+        phone: profile.phone,
+        prename_th: profile.prename_th,
+        first_name: profile.first_name,
+        last_name: profile.last_name,
+        is_active: true,
+        last_synced_at: trx.raw('SYSDATETIME()'),
+        updated_at: trx.raw('SYSDATETIME()'),
+      };
+
+      let userId: number;
+      if (existingUser) {
+        await trx('users').where({ id: existingUser.id }).update(userPayload);
+        userId = Number(existingUser.id);
+      } else {
+        await trx('users').insert({
+          external_id: profile.external_id,
+          identity_provider: provider,
+          ...userPayload,
+        });
+        const insertedUser = await trx<UserRow>('users')
+          .where({ identity_provider: provider, external_id: profile.external_id })
+          .whereNull('deleted_at')
+          .first();
+        if (!insertedUser) throw new Error('Synced officer user could not be loaded');
+        userId = Number(insertedUser.id);
+      }
+
+      await syncExternalOfficerProfileWithTrx(trx, userId, profile);
+      await assignUserRole(trx, userId, roleCode);
+
+      const user = await trx<UserRow>('users').where({ id: userId }).whereNull('deleted_at').first();
+      if (!user) throw new Error('Synced officer user could not be loaded');
+      return user;
+    });
+  },
+
   async syncExternalOfficerProfile(
     userId: number,
     profile: ExternalOfficerProfile,
   ): Promise<void> {
-    const existingProfile = await db('officer_profiles').where({ user_id: userId }).first();
-    const officerProfilePayload = {
-      pos_no: profile.pos_no,
-      pertype_id: profile.pertype_id,
-      pertype: profile.pertype,
-      position_type_id: profile.position_type_id,
-      position_type_th: profile.position_type_th,
-      line_id: profile.line_id,
-      line_name_th: profile.line_name_th,
-      level_id: profile.level_id,
-      level_name_th: profile.level_name_th,
-      mposition_id: profile.mposition_id ?? null,
-      mposition: profile.mposition ?? null,
-      organize_id: profile.organize_id,
-      division_id: profile.division_id,
-      department_id: profile.department_id,
-      ministry_id: profile.ministry_id,
-      province_id: profile.province_id,
-      per_status: profile.per_status,
-      per_status_name: profile.per_status_name,
-      relocation_type: profile.relocation_type ?? null,
-      relocation_name: profile.relocation_name ?? null,
-      synced_at: db.raw('SYSDATETIME()'),
-    };
-
-    if (existingProfile) {
-      await db('officer_profiles').where({ user_id: userId }).update(officerProfilePayload);
-      return;
-    }
-
-    await db('officer_profiles').insert({
-      user_id: userId,
-      ...officerProfilePayload,
-    });
+    await syncExternalOfficerProfileWithTrx(db, userId, profile);
   },
 
   async syncExternalOperatorProfile(
@@ -266,6 +283,64 @@ export const authRepository = {
 
 type ExternalOperatorJuristic = ExternalOperatorProfile['juristics'][number];
 type ExternalOperatorFactory = ExternalOperatorJuristic['factories'][number];
+
+async function syncExternalOfficerProfileWithTrx(
+  trx: Knex.Transaction | typeof db,
+  userId: number,
+  profile: ExternalOfficerProfile,
+): Promise<void> {
+  const existingProfile = await trx('officer_profiles').where({ user_id: userId }).first();
+  const officerProfilePayload = {
+    pos_no: profile.pos_no,
+    pertype_id: profile.pertype_id,
+    pertype: profile.pertype,
+    position_type_id: profile.position_type_id,
+    position_type_th: profile.position_type_th,
+    line_id: profile.line_id,
+    line_name_th: profile.line_name_th,
+    level_id: profile.level_id,
+    level_name_th: profile.level_name_th,
+    mposition_id: profile.mposition_id ?? null,
+    mposition: profile.mposition ?? null,
+    organize_id: profile.organize_id,
+    division_id: profile.division_id,
+    department_id: profile.department_id,
+    department_name_th: profile.department_name_th ?? null,
+    ministry_id: profile.ministry_id,
+    province_id: profile.province_id,
+    per_status: profile.per_status,
+    per_status_name: profile.per_status_name,
+    relocation_type: profile.relocation_type ?? null,
+    relocation_name: profile.relocation_name ?? null,
+    synced_at: trx.raw('SYSDATETIME()'),
+  };
+
+  if (existingProfile) {
+    await trx('officer_profiles').where({ user_id: userId }).update(officerProfilePayload);
+    return;
+  }
+
+  await trx('officer_profiles').insert({
+    user_id: userId,
+    ...officerProfilePayload,
+  });
+}
+
+async function assignUserRole(
+  trx: Knex.Transaction,
+  userId: number,
+  roleCode: string,
+): Promise<void> {
+  const role = await trx('roles').where({ code: roleCode }).whereNull('deleted_at').first('id');
+  if (!role) throw new Error(`Role ${roleCode} is not provisioned`);
+
+  const existing = await trx('user_roles')
+    .where({ user_id: userId, role_id: role.id })
+    .first('user_id');
+  if (!existing) {
+    await trx('user_roles').insert({ user_id: userId, role_id: role.id });
+  }
+}
 
 async function upsertExternalJuristic(
   trx: Knex.Transaction,

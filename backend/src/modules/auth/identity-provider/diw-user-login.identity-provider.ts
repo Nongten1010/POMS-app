@@ -179,6 +179,7 @@ export function parseDiwOfficerLoginResponse(data: unknown): ExternalOfficerProf
   if (!externalId) return null;
 
   return {
+    identity_provider: 'officer_dpis',
     external_id: externalId,
     prename_th: toStringValue(officer.prename_th) ?? '',
     first_name: toStringValue(officer.per_name) ?? '',
@@ -199,6 +200,7 @@ export function parseDiwOfficerLoginResponse(data: unknown): ExternalOfficerProf
     organize_id: toStringValue(officer.organize_id) ?? '',
     division_id: toStringValue(officer.division_id) ?? '',
     department_id: toStringValue(officer.department_id) ?? '',
+    department_name_th: toStringValue(officer.department) ?? '',
     ministry_id: toStringValue(officer.ministry_id) ?? '',
     province_id: toStringValue(officer.province_id) ?? '',
     per_status: toStringValue(officer.per_status) ?? '',
