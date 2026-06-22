@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 jest.mock('../../src/modules/eligible-factories/eligible-factories.repository', () => ({
   eligibleFactoriesRepository: {
     findByRegistrationNoNew: jest.fn(),
+    findByMonitoringPointFormId: jest.fn(),
+    attachMonitoringPointForm: jest.fn(),
     create: jest.fn(),
     list: jest.fn(),
     softDelete: jest.fn(),
@@ -45,6 +47,7 @@ describe('eligibleFactoriesService', () => {
       id: 1,
       sourceSystem: 'external_factory_db',
       sourceFactoryId: null,
+      monitoringPointFormId: null,
       factoryRegistrationNoNew: payload.factoryRegistrationNoNew,
       factoryRegistrationNoOld: null,
       factoryName: payload.factoryName,
@@ -91,6 +94,7 @@ describe('eligibleFactoriesService', () => {
           id: 1,
           sourceSystem: 'diw.fac_import',
           sourceFactoryId: '10550000125197',
+          monitoringPointFormId: null,
           factoryRegistrationNoNew: '3-1-1/19นน',
           factoryRegistrationNoOld: null,
           factoryName: 'ห้างหุ้นส่วนสามัญ สถานีบ่มใบยาสบหนอง',
@@ -148,11 +152,12 @@ describe('eligibleFactoriesService', () => {
           boilerSizeEach: null,
           fuelUsed: null,
           hasEia: null,
+          monitoringPointFormId: null,
         },
       ],
       meta: { total: 1 },
     });
-    expect(Object.keys(result.data[0] ?? {})).toHaveLength(21);
+    expect(Object.keys(result.data[0] ?? {})).toHaveLength(22);
   });
 
   it('throws not found when removing an unknown eligible factory selection', async () => {
@@ -208,6 +213,7 @@ describe('eligibleFactoriesService', () => {
     mockedRepository.findByRegistrationNoNew.mockResolvedValue({
       id: 99,
       factoryRegistrationNoNew: payload.factoryRegistrationNoNew,
+      monitoringPointFormId: null,
     });
 
     await expect(eligibleFactoriesService.create(payload, 42)).rejects.toBeInstanceOf(
