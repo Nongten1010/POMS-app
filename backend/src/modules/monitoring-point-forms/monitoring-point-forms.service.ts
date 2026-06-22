@@ -1,4 +1,6 @@
-import { ConflictError, NotFoundError } from '../../shared/errors/AppError';
+import { BadRequestError, ConflictError, NotFoundError } from '../../shared/errors/AppError';
+import { eligibleFactoriesRepository } from '../eligible-factories/eligible-factories.repository';
+import type { EligibleFactoryDTO } from '../eligible-factories/eligible-factories.types';
 import { monitoringPointFormsRepository } from './monitoring-point-forms.repository';
 import type {
   ListMonitoringPointFormsQuery,
@@ -46,4 +48,99 @@ export const monitoringPointFormsService = {
     if (!updated) throw new NotFoundError('Monitoring point form not found');
     return updated;
   },
+
+  async selectEligible(id: number, actorUserId: number): Promise<EligibleFactoryDTO> {
+    const form = await monitoringPointFormsRepository.findById(id);
+    if (!form) throw new NotFoundError('Monitoring point form not found');
+
+    const registrationNoNew = form.factory.factoryRegistrationNoNew?.trim();
+    if (!registrationNoNew) {
+      throw new BadRequestError('Factory registration number is required before selecting eligible factory', {
+        field: 'factory.factoryRegistrationNoNew',
+      });
+    }
+
+    const existingByForm = await eligibleFactoriesRepository.findByMonitoringPointFormId(id);
+    if (existingByForm) return existingByForm;
+
+    const existingByRegistration = await eligibleFactoriesRepository.findByRegistrationNoNew(
+      registrationNoNew,
+    );
+    if (existingByRegistration?.monitoringPointFormId) {
+      throw new ConflictError('Factory registration is already linked to another monitoring point form', {
+        factoryRegistrationNoNew: registrationNoNew,
+        monitoringPointFormId: existingByRegistration.monitoringPointFormId,
+      });
+    }
+
+    if (existingByRegistration) {
+      const linked = await eligibleFactoriesRepository.attachMonitoringPointForm(
+        existingByRegistration.id,
+        id,
+        actorUserId,
+      );
+      if (!linked) throw new NotFoundError('Eligible factory selection not found');
+      return linked;
+    }
+
+    return eligibleFactoriesRepository.create(
+      {
+        sourceSystem: 'monitoring_point_forms',
+        sourceFactoryId: String(form.id),
+        monitoringPointFormId: form.id,
+        factoryName: form.factory.factoryName?.trim() || registrationNoNew,
+        factoryRegistrationNoNew: registrationNoNew,
+        factoryRegistrationNoOld: form.factory.factoryRegistrationNoOld ?? null,
+        factoryTypeSequence: joinFactoryTypeSequence(
+          form.factory.factoryTypeMain,
+          form.factory.factoryTypeSub,
+        ),
+        address: form.factory.address ?? null,
+        provinceName: form.factory.provinceName?.trim() || '-',
+        industrialEstateName: null,
+        coordinates: null,
+        businessActivity: form.factory.businessActivity ?? null,
+        operationStatus: form.factory.operationStatus?.trim() || '-',
+        productionCapacity: buildProductionCapacitySummary(form),
+        fuelUsed: buildFuelSummary(form),
+        hasEia: parseEiaFlag(form.factory.eiaInfo),
+        selectedReason: 'selected_from_monitoring_point_form',
+      },
+      actorUserId,
+    );
+  },
 };
+
+function joinFactoryTypeSequence(main?: string | null, sub?: string | null): string | null {
+  return [main, sub]
+    .map((value) => value?.trim())
+    .filter((value): value is string => Boolean(value))
+    .join(' / ') || null;
+}
+
+function buildProductionCapacitySummary(form: MonitoringPointFormDTO): string | null {
+  const values = form.points
+    .map((point) => point.productionCapacity?.trim())
+    .filter((value): value is string => Boolean(value));
+
+  return values.length ? Array.from(new Set(values)).join(', ') : null;
+}
+
+function buildFuelSummary(form: MonitoringPointFormDTO): string | null {
+  const values = form.points.flatMap((point) => [
+    point.primaryFuel?.trim(),
+    point.primaryFuelOther?.trim(),
+    point.secondaryFuel?.trim(),
+    point.secondaryFuelOther?.trim(),
+  ]).filter((value): value is string => Boolean(value));
+
+  return values.length ? Array.from(new Set(values)).join(', ') : null;
+}
+
+function parseEiaFlag(value?: string | null): boolean | null {
+  const normalized = value?.trim().toLowerCase();
+  if (!normalized || normalized === '-') return null;
+  if (normalized.includes('ไม่มี')) return false;
+  if (normalized.includes('มี') || normalized === 'yes' || normalized === 'true') return true;
+  return null;
+}

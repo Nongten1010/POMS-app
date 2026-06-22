@@ -22,6 +22,11 @@ monitoringPointFormsRoutes.post(
   authorize('cems_wpms_requests:edit'),
   monitoringPointFormsController.create,
 );
+monitoringPointFormsRoutes.post(
+  '/:id/select-eligible',
+  authorize('eligible_factories:manage'),
+  monitoringPointFormsController.selectEligible,
+);
 monitoringPointFormsRoutes.put(
   '/:id',
   authorize('cems_wpms_requests:edit'),

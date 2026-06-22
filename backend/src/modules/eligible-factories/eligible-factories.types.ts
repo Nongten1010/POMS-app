@@ -6,6 +6,7 @@ export interface CoordinatesInput {
 export interface CreateEligibleFactoryInput {
   sourceSystem?: string;
   sourceFactoryId?: string | null;
+  monitoringPointFormId?: number | null;
   factoryName: string;
   factoryRegistrationNoNew: string;
   factoryRegistrationNoOld?: string | null;
@@ -65,12 +66,14 @@ export interface BoilerLookupValue {
 
 export interface SelectedEligibleFactoryDTO extends EligibleFactoryCandidateDTO {
   id: number;
+  monitoringPointFormId?: number | null;
 }
 
 export interface EligibleFactoryDTO {
   id: number;
   sourceSystem: string;
   sourceFactoryId: string | null;
+  monitoringPointFormId: number | null;
   factoryRegistrationNoNew: string;
   factoryRegistrationNoOld: string | null;
   factoryName: string;

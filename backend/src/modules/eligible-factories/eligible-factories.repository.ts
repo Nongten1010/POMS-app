@@ -10,6 +10,7 @@ interface EligibleFactoryRow {
   id: number | string;
   source_system: string;
   source_factory_id: string | null;
+  monitoring_point_form_id: number | string | null;
   factory_registration_no_new: string;
   factory_registration_no_old: string | null;
   factory_name: string;
@@ -57,18 +58,35 @@ export const eligibleFactoriesRepository = {
 
   async findByRegistrationNoNew(
     registrationNoNew: string,
-  ): Promise<{ id: number; factoryRegistrationNoNew: string } | null> {
+  ): Promise<{
+    id: number;
+    factoryRegistrationNoNew: string;
+    monitoringPointFormId: number | null;
+  } | null> {
     const row = await db('eligible_factories')
       .where('factory_registration_no_new', registrationNoNew)
       .whereNull('deleted_at')
-      .select('id', 'factory_registration_no_new')
+      .select('id', 'factory_registration_no_new', 'monitoring_point_form_id')
       .first();
 
     if (!row) return null;
     return {
       id: Number(row.id),
       factoryRegistrationNoNew: row.factory_registration_no_new,
+      monitoringPointFormId:
+        row.monitoring_point_form_id === null || row.monitoring_point_form_id === undefined
+          ? null
+          : Number(row.monitoring_point_form_id),
     };
+  },
+
+  async findByMonitoringPointFormId(formId: number): Promise<EligibleFactoryDTO | null> {
+    const row = await db<EligibleFactoryRow>('eligible_factories')
+      .where('monitoring_point_form_id', formId)
+      .whereNull('deleted_at')
+      .first();
+
+    return row ? toDTO(row) : null;
   },
 
   async create(
@@ -111,6 +129,23 @@ export const eligibleFactoriesRepository = {
 
     return affected > 0;
   },
+
+  async attachMonitoringPointForm(
+    eligibleFactoryId: number,
+    formId: number,
+    actorUserId: number,
+  ): Promise<EligibleFactoryDTO | null> {
+    await db('eligible_factories')
+      .where('id', eligibleFactoryId)
+      .whereNull('deleted_at')
+      .update({
+        monitoring_point_form_id: formId,
+        updated_at: db.fn.now(),
+        updated_by: actorUserId,
+      });
+
+    return this.findById(eligibleFactoryId);
+  },
 };
 
 function buildEligibleFactoriesBaseQuery(): Knex.QueryBuilder<
@@ -123,6 +158,7 @@ function buildEligibleFactoriesBaseQuery(): Knex.QueryBuilder<
     'id',
     'source_system',
     'source_factory_id',
+    'monitoring_point_form_id',
     'factory_registration_no_new',
     'factory_registration_no_old',
     'factory_name',
@@ -181,6 +217,7 @@ function toInsertRow(
   return {
     source_system: input.sourceSystem ?? 'external_factory_db',
     source_factory_id: input.sourceFactoryId ?? null,
+    monitoring_point_form_id: input.monitoringPointFormId ?? null,
     factory_registration_no_new: input.factoryRegistrationNoNew,
     factory_registration_no_old: input.factoryRegistrationNoOld ?? null,
     factory_name: input.factoryName,
@@ -215,6 +252,7 @@ function toDTO(row: EligibleFactoryRow): EligibleFactoryDTO {
     id: Number(row.id),
     sourceSystem: row.source_system,
     sourceFactoryId: row.source_factory_id,
+    monitoringPointFormId: toNullableNumber(row.monitoring_point_form_id),
     factoryRegistrationNoNew: row.factory_registration_no_new,
     factoryRegistrationNoOld: row.factory_registration_no_old,
     factoryName: row.factory_name,

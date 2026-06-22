@@ -55,4 +55,19 @@ export const monitoringPointFormsController = {
       next(err);
     }
   },
+
+  async selectEligible(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const actorUserId = req.user?.id;
+      if (!actorUserId) throw new Error('Authenticated user missing from request');
+      const { id } = monitoringPointFormIdParamsSchema.parse(req.params);
+      const data = await monitoringPointFormsService.selectEligible(id, actorUserId);
+      res.status(StatusCodes.CREATED).location(`/api/v1/eligible-factories/${data.id}`).json({
+        success: true,
+        data,
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
 };

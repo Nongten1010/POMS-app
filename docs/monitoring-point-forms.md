@@ -68,6 +68,18 @@ Constraints:
 - `ck_factory_monitoring_points_system_type` จำกัดค่าเป็น `CEMS`, `WPMS`
 - `ix_factory_monitoring_points_form` สำหรับเรียก child points ตาม form
 
+### `eligible_factories`
+
+ตารางนี้ยังเป็น canonical table สำหรับรายการโรงงานที่ถูกเลือกเป็น "โรงงานที่เข้าข่าย" เหมือนเดิม ฟอร์มจุดตรวจวัดไม่ย้ายข้อมูลจุดตรวจวัดไปไว้ในตารางนี้ แต่เพิ่ม FK เพื่อระบุว่าแถวนี้ถูกเลือกมาจากฟอร์มใด
+
+| Column | Type | Required | Description |
+| --- | --- | --- | --- |
+| `monitoring_point_form_id` | BIGINT | No | FK ไปยัง `factory_monitoring_point_forms.id` เมื่อเลือกฟอร์มนี้เข้าโรงงานที่เข้าข่าย |
+
+Index:
+
+- `uq_eligible_factories_monitoring_point_form` unique เฉพาะรายการที่ `deleted_at IS NULL` และ `monitoring_point_form_id IS NOT NULL`
+
 ## API
 
 Base path:
@@ -311,6 +323,33 @@ Request:
 ### PUT `/api/v1/monitoring-point-forms/:id`
 
 แก้ไขฟอร์มเดิม โดย backend จะ update ข้อมูลโรงงานและแทนที่รายการจุดตรวจวัดด้วย `points` ชุดใหม่ใน payload
+
+### POST `/api/v1/monitoring-point-forms/:id/select-eligible`
+
+เลือกฟอร์มจุดตรวจวัดเข้าเป็นรายการโรงงานที่เข้าข่าย โดย backend จะสร้างหรือผูกแถวใน `eligible_factories` กับฟอร์มนี้ผ่าน `eligible_factories.monitoring_point_form_id`
+
+เงื่อนไข:
+
+- ต้องมีสิทธิ์ `eligible_factories:manage`
+- ฟอร์มต้องมี `factory.factoryRegistrationNoNew` เพื่อใช้ระบุตัวโรงงานและกันข้อมูลซ้ำ
+- ถ้า form นี้ถูกเลือกแล้ว API จะคืน eligible factory row เดิม
+- ถ้าเลขทะเบียนโรงงานนี้มีอยู่ใน `eligible_factories` แล้วแต่ยังไม่ผูก form ระบบจะผูก `monitoring_point_form_id` กับ row เดิม
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 12,
+    "sourceSystem": "monitoring_point_forms",
+    "sourceFactoryId": "3",
+    "monitoringPointFormId": 3,
+    "factoryRegistrationNoNew": "10520000225172",
+    "factoryName": "สถานีบ่มใบยาสบหนอง"
+  }
+}
+```
 
 ## Frontend
 

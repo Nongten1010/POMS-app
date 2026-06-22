@@ -50,6 +50,7 @@ function toSelectedEligibleFactory(factory: EligibleFactoryDTO): SelectedEligibl
 
   return {
     id: factory.id,
+    monitoringPointFormId: factory.monitoringPointFormId,
     factoryName: factory.factoryName,
     factoryId: factory.sourceFactoryId ?? factory.factoryRegistrationNoNew,
     factoryRegistrationNo: factory.factoryRegistrationNoNew,
