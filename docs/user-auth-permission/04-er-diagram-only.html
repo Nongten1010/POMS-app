@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ER Diagram - User Auth Permission</title>
+  <style>
+    :root {
+      --ink: #111827;
+      --muted: #4b5563;
+      --line: #d7dde6;
+      --blue: #1d4ed8;
+      --green: #047857;
+      --amber: #b45309;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #fff;
+      font-family: Arial, "Noto Sans Thai", Tahoma, sans-serif;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    main {
+      width: min(1240px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 30px 0 56px;
+    }
+    h1, h2, p { margin: 0; }
+    h1 { font-size: 28px; line-height: 1.25; }
+    h2 {
+      margin-top: 30px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--line);
+      font-size: 21px;
+    }
+    .subtitle { margin-top: 8px; color: var(--muted); font-size: 15px; }
+    .header {
+      padding: 24px 26px;
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, #f8fbff 0%, #fff 100%);
+    }
+    .erd-wrap {
+      margin-top: 14px;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      background: #fff;
+      padding: 0;
+    }
+    .erd { display: block; width: 100%; height: auto; }
+    .entity { fill: #fff; stroke: #94a3b8; stroke-width: 1.2; }
+    .entity.main { fill: #f8fbff; stroke: var(--blue); stroke-width: 1.8; }
+    .entity.lookup { fill: #ecfdf5; stroke: var(--green); stroke-width: 1.4; }
+    .entity-token { fill: #fff7ed; stroke: var(--amber); stroke-width: 1.4; }
+    .entity-title {
+      fill: #0f172a;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .field {
+      fill: #334155;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 12px;
+    }
+    .rel { stroke: #334155; stroke-width: 1.6; fill: none; marker-end: url(#arrow); }
+    @page { size: A4 landscape; margin: 10mm; }
+    @media print {
+      main { width: 100%; padding: 0; }
+      .header { display: none; }
+      h2 { display: none; }
+      .erd-wrap { overflow: visible; }
+      .erd { width: 100%; max-height: 176mm; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <section class="header">
+    <h1>ER Diagram - User Auth Permission</h1>
+    <p class="subtitle">เฉพาะ ER Diagram ของฐานข้อมูลผู้ใช้งาน การยืนยันตัวตน role permission และสิทธิ์เฉพาะรายบุคคลของระบบ POMS</p>
+  </section>
+
+  <section id="er-diagram">
+    <h2>1. ER Diagram</h2>
+    <div class="erd-wrap">
+      <svg class="erd" viewBox="0 0 1100 640" role="img" aria-label="ER Diagram User Auth Permission" xmlns="http://www.w3.org/2000/svg">
+        <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#64748b"/></marker></defs>
+        <rect class="entity main" x="420" y="58" width="260" height="150"/><text class="entity-title" x="442" y="92">users</text><text class="field" x="442" y="120">PK id, provider + external_id</text><text class="field" x="442" y="144">user_type, username, email</text><text class="field" x="442" y="168">password_hash, active, audit</text>
+        <rect class="entity lookup" x="80" y="282" width="240" height="112"/><text class="entity-title" x="102" y="316">roles</text><text class="field" x="102" y="344">PK id, code, names</text>
+        <rect class="entity lookup" x="780" y="282" width="240" height="112"/><text class="entity-title" x="802" y="316">permissions</text><text class="field" x="802" y="344">PK id, code</text><text class="field" x="802" y="368">resource, action</text>
+        <rect class="entity" x="410" y="282" width="280" height="112"/><text class="entity-title" x="432" y="316">user_roles</text><text class="field" x="432" y="344">PK user_id + role_id</text><text class="field" x="432" y="368">assigned_at, assigned_by</text>
+        <rect class="entity" x="430" y="472" width="280" height="112"/><text class="entity-title" x="452" y="506">role_permissions</text><text class="field" x="452" y="534">PK role_id + permission_id</text><text class="field" x="452" y="558">scope, granted_at</text>
+        <rect class="entity" x="760" y="472" width="280" height="112"/><text class="entity-title" x="782" y="506">user_permissions</text><text class="field" x="782" y="534">PK user_id + permission_id</text><text class="field" x="782" y="558">effect allow/deny, scope</text>
+        <rect class="entity-token" x="80" y="70" width="260" height="112"/><text class="entity-title" x="102" y="104">refresh_tokens</text><text class="field" x="102" y="132">FK user_id, token_hash</text><text class="field" x="102" y="156">family_id, expires/revoked</text>
+        <path class="rel" d="M420 126 H340"/><path class="rel" d="M550 208 V282"/><path class="rel" d="M410 338 H320"/><path class="rel" d="M690 338 H780"/><path class="rel" d="M200 394 V448 H570 V472"/><path class="rel" d="M710 528 H760"/><path class="rel" d="M680 126 H1070 V528 H1040"/><path class="rel" d="M900 394 V472"/>
+      </svg>
+    </div>
+  </section>
+</main>
+</body>
+</html>

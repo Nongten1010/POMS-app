@@ -31,6 +31,25 @@ const envSchema = z
     BCRYPT_SALT_ROUNDS: z.coerce.number().int().min(4).max(15).default(12),
 
     IDENTITY_PROVIDER: z.enum(['mock', 'external']).default('mock'),
+    DIW_USER_LOGIN_ENABLED: z
+      .string()
+      .default('false')
+      .transform((v) => v === 'true'),
+    DIW_OFFICER_LOGIN_ENABLED: z
+      .string()
+      .default('false')
+      .transform((v) => v === 'true'),
+    DIW_USER_LOGIN_URL: z
+      .string()
+      .url()
+      .default('https://diw-center.diw.go.th/uloginuat/v1/UserLogin'),
+    DIW_OFFICER_LOGIN_URL: z
+      .string()
+      .url()
+      .default('https://diw-center.diw.go.th/idiwdpisloginuat/v1/UserLogin'),
+    DIW_USER_LOGIN_CLIENT_ID: z.string().min(1).optional(),
+    DIW_USER_LOGIN_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
+    DIW_USER_LOGIN_DEFAULT_PROVINCE_ID: z.string().min(1).max(8).default('1000'),
 
     FACTORY_DB_HOST: z.string().min(1).optional(),
     FACTORY_DB_PORT: z.coerce.number().int().positive().optional(),
@@ -138,25 +157,35 @@ const envSchema = z
     ];
     const hasSmtpConfig = smtpFields.some((field) => field !== undefined && field !== '');
 
-    if (!hasSmtpConfig) {
-      return;
+    if (hasSmtpConfig) {
+      const requiredFields: Array<[string, string | undefined]> = [
+        ['SMTP_HOST', value.SMTP_HOST],
+        ['SMTP_USERNAME', value.SMTP_USERNAME],
+        ['SMTP_PASSWORD', value.SMTP_PASSWORD],
+        ['SMTP_FROM', value.SMTP_FROM],
+      ];
+
+      for (const [fieldName, fieldValue] of requiredFields) {
+        if (!fieldValue) {
+          ctx.addIssue({
+            code: 'custom',
+            path: [fieldName],
+            message: `${fieldName} is required when SMTP is configured`,
+          });
+        }
+      }
     }
 
-    const requiredFields: Array<[string, string | undefined]> = [
-      ['SMTP_HOST', value.SMTP_HOST],
-      ['SMTP_USERNAME', value.SMTP_USERNAME],
-      ['SMTP_PASSWORD', value.SMTP_PASSWORD],
-      ['SMTP_FROM', value.SMTP_FROM],
-    ];
-
-    for (const [fieldName, fieldValue] of requiredFields) {
-      if (!fieldValue) {
-        ctx.addIssue({
-          code: 'custom',
-          path: [fieldName],
-          message: `${fieldName} is required when SMTP is configured`,
-        });
-      }
+    if (
+      (value.DIW_USER_LOGIN_ENABLED || value.DIW_OFFICER_LOGIN_ENABLED) &&
+      !value.DIW_USER_LOGIN_CLIENT_ID
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['DIW_USER_LOGIN_CLIENT_ID'],
+        message:
+          'DIW_USER_LOGIN_CLIENT_ID is required when DIW UserLogin integration is enabled',
+      });
     }
   });
 

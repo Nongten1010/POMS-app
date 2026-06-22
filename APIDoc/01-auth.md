@@ -13,6 +13,8 @@
 
 ใช้ login ได้ 3 ประเภทผู้ใช้: เจ้าหน้าที่, ผู้ประกอบการ, ประชาชนทั่วไป
 
+หมายเหตุฝั่ง backend: login เดิมยังทำงานเหมือนเดิม โดยระบบจะตรวจ local POMS account ก่อน จากนั้นใช้ identity provider หลัก (`IDENTITY_PROVIDER=mock` ใน demo). ถ้าเปิด `DIW_USER_LOGIN_ENABLED=true` ผู้ประกอบการ (`userType: "operator"`) จะมี fallback เพิ่มไปยัง DIW `UserLogin` API ด้วย `clientId + username + password`; ถ้าเปิด `DIW_OFFICER_LOGIN_ENABLED=true` เจ้าหน้าที่ (`userType: "officer"`) จะมี fallback เพิ่มไปยัง DIW DPIS `UserLogin` API ด้วย `clientId + username + password + departmentID`. `ClientID` ต้องเก็บใน env `DIW_USER_LOGIN_CLIENT_ID` เท่านั้น ห้าม hardcode ลง source code.
+
 ### Request Body
 
 ```json

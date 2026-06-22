@@ -141,6 +141,7 @@ function buildEligibleFactoryInput(
     coordinates: null,
     businessActivity: form.factory.businessActivity ?? null,
     operationStatus: form.factory.operationStatus?.trim() || '-',
+    machineryHorsepower: form.factory.machineryHorsepower ?? null,
     productionCapacity: buildProductionCapacitySummary(form),
     fuelUsed: buildFuelSummary(form),
     hasEia: parseEiaFlag(form.factory.eiaInfo),

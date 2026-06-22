@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ER Diagram Options - BOD/COD Deviation Report</title>
+  <style>
+    :root {
+      --ink: #111827;
+      --muted: #4b5563;
+      --line: #d7dde6;
+      --soft: #f8fbff;
+      --blue: #2563eb;
+      --green: #047857;
+      --orange: #b45309;
+      --violet: #7c3aed;
+      --red: #b91c1c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #f3f6fb;
+      font-family: Arial, "Noto Sans Thai", Tahoma, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    main {
+      width: min(1400px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 26px 0 56px;
+    }
+    h1, h2, p { margin: 0; }
+    h1 { font-size: 28px; line-height: 1.25; }
+    h2 { font-size: 20px; }
+    a { color: var(--blue); }
+    .cover {
+      padding: 22px 24px;
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, #fff 0%, #f8fbff 100%);
+    }
+    .subtitle { margin-top: 8px; color: var(--muted); font-size: 15px; }
+    .links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 14px;
+    }
+    .link-button {
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 6px 12px;
+      border: 1px solid #bfd0ea;
+      border-radius: 6px;
+      background: #fff;
+      text-decoration: none;
+      font-weight: 700;
+    }
+    .note {
+      margin-top: 14px;
+      padding: 12px 14px;
+      border-left: 4px solid var(--blue);
+      background: #eef5ff;
+    }
+    .option {
+      margin-top: 22px;
+      border: 1px solid var(--line);
+      background: #fff;
+    }
+    .option-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      background: #fbfcff;
+    }
+    .option-head p { color: var(--muted); margin-top: 4px; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      height: 28px;
+      padding: 0 10px;
+      border-radius: 999px;
+      background: #eef5ff;
+      color: #1d4ed8;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .erd-wrap {
+      overflow-x: auto;
+      padding: 14px;
+      background: #fff;
+    }
+    svg {
+      display: block;
+      min-width: 1180px;
+      width: 100%;
+      height: auto;
+      border: 1px solid #e2e8f0;
+      background: #fff;
+    }
+    .entity { fill: #fff; stroke: #94a3b8; stroke-width: 1.4; }
+    .main { fill: #f8fbff; stroke: var(--blue); stroke-width: 2; }
+    .review { fill: #f6f0ff; stroke: var(--violet); stroke-width: 1.6; }
+    .audit { fill: #fff7ed; stroke: var(--orange); stroke-width: 1.6; }
+    .file { fill: #ecfdf5; stroke: var(--green); stroke-width: 1.6; }
+    .title { fill: #0f172a; font-family: "SFMono-Regular", Consolas, monospace; font-size: 14px; font-weight: 800; }
+    .field { fill: #334155; font-family: "SFMono-Regular", Consolas, monospace; font-size: 12px; }
+    .rel { fill: none; stroke: #334155; stroke-width: 1.7; marker-end: url(#arrow); }
+    .rel-blue { stroke: var(--blue); }
+    .rel-green { stroke: var(--green); }
+    .rel-violet { stroke: var(--violet); }
+    .rel-orange { stroke: var(--orange); }
+    .rel-label { fill: #334155; font-size: 12px; font-weight: 800; paint-order: stroke; stroke: #fff; stroke-width: 4px; stroke-linejoin: round; }
+    .group { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1.2; stroke-dasharray: 7 5; }
+    .group-label { fill: #475569; font-size: 13px; font-weight: 800; }
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 0 16px 14px;
+      color: var(--muted);
+    }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      padding: 3px 8px;
+      border: 1px solid #bfd0ea;
+      border-radius: 999px;
+      background: #f8fbff;
+      font-weight: 700;
+      font-size: 12px;
+    }
+    @media (max-width: 900px) {
+      .option-head { display: block; }
+      .badge { margin-top: 8px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="cover">
+      <h1>ตัวเลือก ER Diagram 6 แบบ</h1>
+      <p class="subtitle">เลือก layout ที่อ่านง่ายก่อนนำไปแทน ER ในหน้า Data Dictionary จริง ทุกแบบตั้งใจให้เส้นไม่ลากทับกล่องตาราง</p>
+      <div class="links">
+        <a class="link-button" href="04-data-dictionary-er.html">กลับ Data Dictionary</a>
+        <a class="link-button" href="00-db-workflow.html">DB และ Workflow</a>
+        <a class="link-button" href="05-user-flow.html">User Flow Diagram</a>
+      </div>
+    </section>
+
+    <section class="note">
+      <strong>ตารางที่ใช้ในทุกแบบ</strong>
+      <p><code>bod_cod_deviation_reports</code> เป็นตารางหลัก และเชื่อมกับ <code>measurements</code>, <code>reviews</code>, <code>attachments</code>, <code>approval_steps</code>, <code>approval_events</code> โดย <code>approval_events</code> เชื่อมกับ <code>approval_steps</code> เพิ่มอีกเส้นหนึ่ง</p>
+    </section>
+
+    <section class="option">
+      <div class="option-head">
+        <div>
+          <h2>แบบที่ 1: Hub and Spoke</h2>
+          <p>วาง reports เป็นศูนย์กลาง เส้นสั้นและวิ่งออกขอบแต่ละด้าน อ่านความเป็นตารางหลักได้เร็ว</p>
+        </div>
+        <span class="badge">แนะนำสำหรับเอกสารสรุป</span>
+      </div>
+      <div class="erd-wrap">
+        <svg viewBox="0 0 1180 720" role="img" aria-label="ER option 1 hub and spoke">
+          <defs><marker id="arrow" markerWidth="11" markerHeight="11" refX="10" refY="5.5" orient="auto"><path d="M1,1 L10,5.5 L1,10 Z" fill="#334155"></path></marker></defs>
+          <rect class="main" x="410" y="240" width="360" height="180" rx="6"></rect>
+          <text class="title" x="435" y="270">bod_cod_deviation_reports</text>
+          <text class="field" x="435" y="300">PK id</text><text class="field" x="435" y="322">report_no, selected_parameter_code</text><text class="field" x="435" y="344">factory snapshot, approval_track</text><text class="field" x="435" y="366">status, submitted_at</text>
+
+          <rect class="entity" x="40" y="70" width="330" height="132" rx="6"></rect>
+          <text class="title" x="62" y="100">bod_cod_deviation_measurements</text>
+          <text class="field" x="62" y="128">PK id, FK report_id</text><text class="field" x="62" y="150">parameter_code, sample_date/time</text><text class="field" x="62" y="172">M, T, E, standard_deviation</text>
+
+          <rect class="review" x="810" y="70" width="330" height="132" rx="6"></rect>
+          <text class="title" x="832" y="100">bod_cod_deviation_reviews</text>
+          <text class="field" x="832" y="128">PK/FK report_id</text><text class="field" x="832" y="150">form_check_result</text><text class="field" x="832" y="172">deviation_check_result</text>
+
+          <rect class="file" x="40" y="500" width="330" height="132" rx="6"></rect>
+          <text class="title" x="62" y="530">bod_cod_deviation_attachments</text>
+          <text class="field" x="62" y="558">PK id, FK report_id</text><text class="field" x="62" y="580">attachment_type, file_name</text><text class="field" x="62" y="602">mime_type, file_size, path</text>
+
+          <rect class="audit" x="810" y="500" width="330" height="132" rx="6"></rect>
+          <text class="title" x="832" y="530">bod_cod_approval_events</text>
+          <text class="field" x="832" y="558">PK id, FK report_id</text><text class="field" x="832" y="580">FK step_id nullable</text><text class="field" x="832" y="602">event_type, actor_user_id</text>
+
+          <rect class="entity" x="425" y="548" width="330" height="118" rx="6"></rect>
+          <text class="title" x="447" y="578">bod_cod_approval_steps</text>
+          <text class="field" x="447" y="606">PK id, FK report_id</text><text class="field" x="447" y="628">track, step_no, role_code, status</text>
+
+          <path class="rel rel-blue" d="M410 276 H370"></path><text class="rel-label" x="380" y="264">1:N</text>
+          <path class="rel rel-violet" d="M770 276 H810"></path><text class="rel-label" x="778" y="264">1:1</text>
+          <path class="rel rel-green" d="M410 384 H370"></path><text class="rel-label" x="380" y="408">1:N</text>
+          <path class="rel" d="M590 420 V548"></path><text class="rel-label" x="604" y="488">1:N</text>
+          <path class="rel rel-orange" d="M770 384 H810"></path><text class="rel-label" x="778" y="408">1:N</text>
+          <path class="rel rel-orange" d="M755 608 H810"></path><text class="rel-label" x="766" y="596">1:N</text>
+        </svg>
+      </div>
+      <div class="legend"><span class="tag">จุดเด่น: เส้นไม่ผ่านกลางตาราง</span><span class="tag">เหมาะกับรายงานผู้บริหาร</span></div>
+    </section>
+
+    <section class="option">
+      <div class="option-head">
+        <div>
+          <h2>แบบที่ 2: Left to Right Pipeline</h2>
+          <p>อ่านจากซ้ายไปขวา: รายงาน → ข้อมูลประกอบ → การอนุมัติ/ประวัติ เหมาะกับการอธิบายลำดับข้อมูล</p>
+        </div>
+        <span class="badge">แนะนำสำหรับ flow เชิงระบบ</span>
+      </div>
+      <div class="erd-wrap">
+        <svg viewBox="0 0 1180 620" role="img" aria-label="ER option 2 left to right">
+          <defs><marker id="arrow" markerWidth="11" markerHeight="11" refX="10" refY="5.5" orient="auto"><path d="M1,1 L10,5.5 L1,10 Z" fill="#334155"></path></marker></defs>
+          <rect class="main" x="40" y="220" width="310" height="168" rx="6"></rect>
+          <text class="title" x="62" y="250">bod_cod_deviation_reports</text>
+          <text class="field" x="62" y="278">PK id</text><text class="field" x="62" y="300">factory snapshot</text><text class="field" x="62" y="322">selected_parameter_code</text><text class="field" x="62" y="344">approval_track, status</text>
+
+          <rect class="entity" x="430" y="52" width="310" height="116" rx="6"></rect>
+          <text class="title" x="452" y="82">measurements</text><text class="field" x="452" y="110">FK report_id, M, T, E</text><text class="field" x="452" y="132">sample_date, sample_time</text>
+          <rect class="review" x="430" y="196" width="310" height="116" rx="6"></rect>
+          <text class="title" x="452" y="226">reviews</text><text class="field" x="452" y="254">form/deviation check result</text><text class="field" x="452" y="276">reason, notice flag</text>
+          <rect class="file" x="430" y="340" width="310" height="116" rx="6"></rect>
+          <text class="title" x="452" y="370">attachments</text><text class="field" x="452" y="398">sample/device/lab report files</text><text class="field" x="452" y="420">mime_type, file_size, path</text>
+
+          <rect class="entity" x="830" y="156" width="310" height="116" rx="6"></rect>
+          <text class="title" x="852" y="186">approval_steps</text><text class="field" x="852" y="214">track, step_no, role_code</text><text class="field" x="852" y="236">status, decision, revision_no</text>
+          <rect class="audit" x="830" y="352" width="310" height="116" rx="6"></rect>
+          <text class="title" x="852" y="382">approval_events</text><text class="field" x="852" y="410">event_type, actor_user_id</text><text class="field" x="852" y="432">from_status, to_status</text>
+
+          <path class="rel rel-blue" d="M350 260 H430"></path><text class="rel-label" x="374" y="248">1:N</text>
+          <path class="rel rel-violet" d="M350 304 H430"></path><text class="rel-label" x="374" y="292">1:1</text>
+          <path class="rel rel-green" d="M350 348 H430"></path><text class="rel-label" x="374" y="374">1:N</text>
+          <path class="rel" d="M740 254 H786 V214 H830"></path><text class="rel-label" x="768" y="202">1:N</text>
+          <path class="rel rel-orange" d="M740 410 H830"></path><text class="rel-label" x="772" y="398">1:N</text>
+          <path class="rel rel-orange" d="M985 272 V352"></path><text class="rel-label" x="998" y="318">1:N</text>
+        </svg>
+      </div>
+      <div class="legend"><span class="tag">จุดเด่น: เส้นเป็นแนวนอน/ฉาก</span><span class="tag">อ่านง่ายบนจอกว้าง</span></div>
+    </section>
+
+    <section class="option">
+      <div class="option-head">
+        <div>
+          <h2>แบบที่ 3: Top Down Bus</h2>
+          <p>ใช้เส้น bus กลางจาก reports ลงมาแตกแขนง ทำให้ไม่มีเส้นเฉียงตัดกล่อง</p>
+        </div>
+        <span class="badge">แนะนำถ้าต้องการความเป็นระเบียบ</span>
+      </div>
+      <div class="erd-wrap">
+        <svg viewBox="0 0 1180 700" role="img" aria-label="ER option 3 top down bus">
+          <defs><marker id="arrow" markerWidth="11" markerHeight="11" refX="10" refY="5.5" orient="auto"><path d="M1,1 L10,5.5 L1,10 Z" fill="#334155"></path></marker></defs>
+          <rect class="main" x="390" y="36" width="400" height="142" rx="6"></rect>
+          <text class="title" x="416" y="68">bod_cod_deviation_reports</text><text class="field" x="416" y="96">PK id, report_no, selected_parameter_code</text><text class="field" x="416" y="118">factory snapshot, approval_track, status</text>
+          <path class="rel" d="M590 178 V238"></path>
+          <line x1="190" y1="238" x2="990" y2="238" stroke="#334155" stroke-width="1.7"></line>
+
+          <rect class="entity" x="40" y="290" width="292" height="118" rx="6"></rect>
+          <text class="title" x="62" y="320">measurements</text><text class="field" x="62" y="348">FK report_id, parameter_code</text><text class="field" x="62" y="370">M, T, E, standard</text>
+          <rect class="review" x="368" y="290" width="292" height="118" rx="6"></rect>
+          <text class="title" x="390" y="320">reviews</text><text class="field" x="390" y="348">PK/FK report_id</text><text class="field" x="390" y="370">check results, reasons</text>
+          <rect class="file" x="696" y="290" width="292" height="118" rx="6"></rect>
+          <text class="title" x="718" y="320">attachments</text><text class="field" x="718" y="348">FK report_id, file metadata</text><text class="field" x="718" y="370">type, path, size</text>
+          <rect class="entity" x="238" y="510" width="292" height="118" rx="6"></rect>
+          <text class="title" x="260" y="540">approval_steps</text><text class="field" x="260" y="568">FK report_id, role, status</text><text class="field" x="260" y="590">decision, revision_no</text>
+          <rect class="audit" x="650" y="510" width="292" height="118" rx="6"></rect>
+          <text class="title" x="672" y="540">approval_events</text><text class="field" x="672" y="568">FK report_id, FK step_id</text><text class="field" x="672" y="590">event_type, actor</text>
+
+          <path class="rel rel-blue" d="M190 238 V290"></path><text class="rel-label" x="204" y="268">1:N</text>
+          <path class="rel rel-violet" d="M514 238 V290"></path><text class="rel-label" x="528" y="268">1:1</text>
+          <path class="rel rel-green" d="M842 238 V290"></path><text class="rel-label" x="856" y="268">1:N</text>
+          <path class="rel" d="M384 238 V510"></path><text class="rel-label" x="398" y="458">1:N</text>
+          <path class="rel rel-orange" d="M796 238 V510"></path><text class="rel-label" x="810" y="458">1:N</text>
+          <path class="rel rel-orange" d="M530 570 H650"></path><text class="rel-label" x="576" y="558">1:N</text>
+        </svg>
+      </div>
+      <div class="legend"><span class="tag">จุดเด่น: ไม่มีเส้นเฉียง</span><span class="tag">เหมาะกับการพิมพ์ A4 แนวนอน</span></div>
+    </section>
+
+    <section class="option">
+      <div class="option-head">
+        <div>
+          <h2>แบบที่ 4: Grouped by Responsibility</h2>
+          <p>แบ่งกลุ่มข้อมูลรายงาน, เอกสาร, และ approval/audit ชัดเจน เหมาะกับคุยกับทีม backend</p>
+        </div>
+        <span class="badge">แนะนำสำหรับออกแบบ DB จริง</span>
+      </div>
+      <div class="erd-wrap">
+        <svg viewBox="0 0 1180 720" role="img" aria-label="ER option 4 grouped">
+          <defs><marker id="arrow" markerWidth="11" markerHeight="11" refX="10" refY="5.5" orient="auto"><path d="M1,1 L10,5.5 L1,10 Z" fill="#334155"></path></marker></defs>
+          <rect class="group" x="30" y="34" width="525" height="600" rx="8"></rect><text class="group-label" x="52" y="62">Report Data</text>
+          <rect class="group" x="610" y="34" width="525" height="600" rx="8"></rect><text class="group-label" x="632" y="62">Approval and Audit</text>
+
+          <rect class="main" x="108" y="92" width="370" height="146" rx="6"></rect>
+          <text class="title" x="132" y="122">bod_cod_deviation_reports</text><text class="field" x="132" y="150">PK id, report_no</text><text class="field" x="132" y="172">factory snapshot, parameter</text><text class="field" x="132" y="194">approval_track, status</text>
+          <rect class="entity" x="70" y="332" width="220" height="118" rx="6"></rect>
+          <text class="title" x="92" y="362">measurements</text><text class="field" x="92" y="390">FK report_id</text><text class="field" x="92" y="412">M, T, E</text>
+          <rect class="file" x="318" y="332" width="220" height="118" rx="6"></rect>
+          <text class="title" x="340" y="362">attachments</text><text class="field" x="340" y="390">FK report_id</text><text class="field" x="340" y="412">file metadata</text>
+          <rect class="review" x="686" y="92" width="370" height="126" rx="6"></rect>
+          <text class="title" x="710" y="122">bod_cod_deviation_reviews</text><text class="field" x="710" y="150">PK/FK report_id</text><text class="field" x="710" y="172">check results, reasons</text>
+          <rect class="entity" x="668" y="332" width="252" height="118" rx="6"></rect>
+          <text class="title" x="690" y="362">approval_steps</text><text class="field" x="690" y="390">FK report_id</text><text class="field" x="690" y="412">role, status, revision</text>
+          <rect class="audit" x="942" y="332" width="252" height="118" rx="6"></rect>
+          <text class="title" x="964" y="362">approval_events</text><text class="field" x="964" y="390">FK report_id, step_id</text><text class="field" x="964" y="412">event_type, actor</text>
+
+          <path class="rel rel-blue" d="M180 238 V332"></path><text class="rel-label" x="194" y="292">1:N</text>
+          <path class="rel rel-green" d="M428 238 V332"></path><text class="rel-label" x="442" y="292">1:N</text>
+          <path class="rel rel-violet" d="M478 150 H686"></path><text class="rel-label" x="570" y="138">1:1</text>
+          <path class="rel" d="M478 202 H624 V392 H668"></path><text class="rel-label" x="590" y="380">1:N</text>
+          <path class="rel rel-orange" d="M478 218 H606 V392 H942"></path><text class="rel-label" x="600" y="430">1:N</text>
+          <path class="rel rel-orange" d="M920 392 H942"></path><text class="rel-label" x="922" y="380">1:N</text>
+        </svg>
+      </div>
+      <div class="legend"><span class="tag">จุดเด่น: แยก responsibility ชัด</span><span class="tag">เหมาะกับอธิบาย module</span></div>
+    </section>
+
+    <section class="option">
+      <div class="option-head">
+        <div>
+          <h2>แบบที่ 5: Compact Table Cards</h2>
+          <p>ลด field ในกล่องให้สั้น ใช้ relationship summary ด้านล่างช่วย รายงานจะไม่แน่นและเส้นไม่ชนข้อความ</p>
+        </div>
+        <span class="badge">แนะนำถ้าหน้ารายงานต้องไม่รก</span>
+      </div>
+      <div class="erd-wrap">
+        <svg viewBox="0 0 1180 560" role="img" aria-label="ER option 5 compact">
+          <defs><marker id="arrow" markerWidth="11" markerHeight="11" refX="10" refY="5.5" orient="auto"><path d="M1,1 L10,5.5 L1,10 Z" fill="#334155"></path></marker></defs>
+          <rect class="main" x="438" y="40" width="304" height="96" rx="6"></rect><text class="title" x="462" y="74">reports</text><text class="field" x="462" y="102">PK id, report_no, status</text>
+          <rect class="entity" x="48" y="230" width="250" height="86" rx="6"></rect><text class="title" x="70" y="264">measurements</text><text class="field" x="70" y="292">FK report_id, values</text>
+          <rect class="review" x="354" y="230" width="250" height="86" rx="6"></rect><text class="title" x="376" y="264">reviews</text><text class="field" x="376" y="292">PK/FK report_id, results</text>
+          <rect class="file" x="660" y="230" width="250" height="86" rx="6"></rect><text class="title" x="682" y="264">attachments</text><text class="field" x="682" y="292">FK report_id, files</text>
+          <rect class="entity" x="256" y="410" width="250" height="86" rx="6"></rect><text class="title" x="278" y="444">approval_steps</text><text class="field" x="278" y="472">FK report_id, role/status</text>
+          <rect class="audit" x="674" y="410" width="250" height="86" rx="6"></rect><text class="title" x="696" y="444">approval_events</text><text class="field" x="696" y="472">FK report_id, step_id</text>
+          <line x1="590" y1="136" x2="590" y2="186" stroke="#334155" stroke-width="1.7"></line>
+          <line x1="173" y1="186" x2="785" y2="186" stroke="#334155" stroke-width="1.7"></line>
+          <path class="rel rel-blue" d="M173 186 V230"></path><text class="rel-label" x="186" y="216">1:N</text>
+          <path class="rel rel-violet" d="M479 186 V230"></path><text class="rel-label" x="492" y="216">1:1</text>
+          <path class="rel rel-green" d="M785 186 V230"></path><text class="rel-label" x="798" y="216">1:N</text>
+          <path class="rel" d="M381 186 V410"></path><text class="rel-label" x="394" y="384">1:N</text>
+          <path class="rel rel-orange" d="M799 186 V410"></path><text class="rel-label" x="812" y="384">1:N</text>
+          <path class="rel rel-orange" d="M506 453 H674"></path><text class="rel-label" x="576" y="440">1:N</text>
+        </svg>
+      </div>
+      <div class="legend"><span class="tag">จุดเด่น: โล่งที่สุด</span><span class="tag">เหมาะกับ slide/เอกสารประกอบ</span></div>
+    </section>
+
+    <section class="option">
+      <div class="option-head">
+        <div>
+          <h2>แบบที่ 6: Report-Centric Ring</h2>
+          <p>วาง child รอบ reports แบบสมดุล ใช้เส้นฉากออกจากขอบ ไม่ตัดกลางกล่อง</p>
+        </div>
+        <span class="badge">แนะนำถ้าต้องการภาพสวย</span>
+      </div>
+      <div class="erd-wrap">
+        <svg viewBox="0 0 1180 700" role="img" aria-label="ER option 6 report centric ring">
+          <defs><marker id="arrow" markerWidth="11" markerHeight="11" refX="10" refY="5.5" orient="auto"><path d="M1,1 L10,5.5 L1,10 Z" fill="#334155"></path></marker></defs>
+          <rect class="main" x="420" y="262" width="340" height="136" rx="8"></rect><text class="title" x="446" y="294">bod_cod_deviation_reports</text><text class="field" x="446" y="322">PK id, report_no</text><text class="field" x="446" y="344">selected_parameter_code</text><text class="field" x="446" y="366">approval_track, status</text>
+          <rect class="entity" x="70" y="80" width="300" height="108" rx="6"></rect><text class="title" x="92" y="112">measurements</text><text class="field" x="92" y="140">FK report_id, values</text>
+          <rect class="review" x="810" y="80" width="300" height="108" rx="6"></rect><text class="title" x="832" y="112">reviews</text><text class="field" x="832" y="140">PK/FK report_id, results</text>
+          <rect class="file" x="70" y="520" width="300" height="108" rx="6"></rect><text class="title" x="92" y="552">attachments</text><text class="field" x="92" y="580">FK report_id, file metadata</text>
+          <rect class="entity" x="810" y="520" width="300" height="108" rx="6"></rect><text class="title" x="832" y="552">approval_steps</text><text class="field" x="832" y="580">FK report_id, role/status</text>
+          <rect class="audit" x="440" y="540" width="300" height="108" rx="6"></rect><text class="title" x="462" y="572">approval_events</text><text class="field" x="462" y="600">FK report_id, FK step_id</text>
+          <path class="rel rel-blue" d="M420 286 H300 V188"></path><text class="rel-label" x="306" y="240">1:N</text>
+          <path class="rel rel-violet" d="M760 286 H960 V188"></path><text class="rel-label" x="930" y="240">1:1</text>
+          <path class="rel rel-green" d="M420 374 H220 V520"></path><text class="rel-label" x="230" y="462">1:N</text>
+          <path class="rel" d="M760 374 H960 V520"></path><text class="rel-label" x="970" y="462">1:N</text>
+          <path class="rel rel-orange" d="M590 398 V540"></path><text class="rel-label" x="604" y="476">1:N</text>
+          <path class="rel rel-orange" d="M810 584 H740"></path><text class="rel-label" x="756" y="572">1:N</text>
+        </svg>
+      </div>
+      <div class="legend"><span class="tag">จุดเด่น: สมดุลและดูเป็นภาพรวม</span><span class="tag">เส้นไม่ทับกล่อง</span></div>
+    </section>
+  </main>
+</body>
+</html>

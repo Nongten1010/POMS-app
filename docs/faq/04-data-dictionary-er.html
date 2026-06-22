@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Data Dictionary และ ER Diagram - คำถามที่พบบ่อย</title>
+  <style>
+    :root {
+      --ink: #111827;
+      --muted: #4b5563;
+      --line: #d7dde6;
+      --head: #e9eef6;
+      --blue: #1d4ed8;
+      --green: #047857;
+      --amber: #b45309;
+      --red: #b91c1c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #fff;
+      font-family: Arial, "Noto Sans Thai", Tahoma, sans-serif;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    main {
+      width: min(1240px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 30px 0 56px;
+    }
+    section {
+      margin: 0;
+      padding: 0;
+      border: 0;
+      background: transparent;
+    }
+    section:first-child {
+      padding: 24px 26px;
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, #f8fbff 0%, #fff 100%);
+    }
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: 28px; line-height: 1.25; }
+    h2 {
+      margin-top: 30px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--line);
+      font-size: 21px;
+    }
+    h3 { margin-top: 18px; font-size: 17px; }
+    p { margin-top: 8px; }
+    ul { margin: 10px 0 0 22px; padding: 0; }
+    li { margin: 5px 0; }
+    .subtitle { color: var(--muted); font-size: 15px; }
+    .links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+    .link-button {
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 6px 12px;
+      border: 1px solid #bfd0ea;
+      border-radius: 6px;
+      background: #f2f6ff;
+      color: var(--blue);
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 14px;
+    }
+    .table-wrap {
+      margin-top: 12px;
+      overflow-x: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      background: #fff;
+    }
+    th, td {
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      vertical-align: top;
+      word-break: break-word;
+    }
+    th { background: var(--head); text-align: left; font-weight: 700; }
+    tbody tr:nth-child(even) td { background: #fbfcfe; }
+    code {
+      padding: 1px 5px;
+      border: 1px solid #dbe3ef;
+      border-radius: 4px;
+      background: #f8fafc;
+      color: #0f172a;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 12px;
+    }
+    .tag {
+      display: inline-block;
+      padding: 2px 7px;
+      border: 1px solid #bfd0ea;
+      border-radius: 999px;
+      background: #f2f6ff;
+      color: #1e3a8a;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .tag.pk { border-color: #86efac; background: #ecfdf5; color: var(--green); }
+    .tag.fk { border-color: #fed7aa; background: #fff7ed; color: var(--amber); }
+    .tag.req { border-color: #fecaca; background: #fff1f2; color: var(--red); }
+    .erd-wrap {
+      margin-top: 14px;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      background: #fff;
+    }
+    .erd { display: block; min-width: 820px; width: 100%; height: auto; }
+    .entity { fill: #fff; stroke: #94a3b8; stroke-width: 1.2; }
+    .entity.main { fill: #f8fbff; stroke: var(--blue); stroke-width: 1.8; }
+    .entity.lookup { fill: #ecfdf5; stroke: var(--green); stroke-width: 1.4; }
+    .entity.map { fill: #fff7ed; stroke: var(--amber); stroke-width: 1.4; }
+    .entity.log { fill: #fff1f2; stroke: var(--red); stroke-width: 1.4; }
+    .entity-title {
+      fill: #0f172a;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .field {
+      fill: #334155;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 12px;
+    }
+    .rel { stroke: #334155; stroke-width: 1.6; fill: none; marker-end: url(#arrow); }
+    .note-box {
+      margin-top: 12px;
+      padding: 12px 14px;
+      border: 1px solid #bfd0ea;
+      background: #f8fbff;
+    }
+    @media print {
+      main { width: 100%; padding: 0; }
+      section { break-inside: avoid; }
+      .link-button { display: none; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <section>
+    <h1>Data Dictionary และ ER Diagram</h1>
+    <p class="subtitle">ระบบคำถามที่พบบ่อย ออกแบบจากข้อมูลที่หน้า <code>frontend/src/pages/FaqPage.jsx</code> ใช้จริง: คำถาม หมวดหมู่ วันที่อัปเดต และคำตอบ</p>
+    <div class="links">
+      <a class="link-button" href="#er-diagram">ER Diagram</a>
+      <a class="link-button" href="#faqs">faqs</a>
+    </div>
+  </section>
+
+  <section>
+    <h2>รายการตารางสรุป</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 28%">Table</th>
+            <th>หน้าที่</th>
+            <th style="width: 18%">Cardinality</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><code>faqs</code></td><td>ข้อมูลคำถามที่พบบ่อย ใช้แสดง accordion ค้นหาจากคำถาม/คำตอบ และกรองด้วยหมวดหมู่</td><td>Single table</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="er-diagram">
+    <h2>1. ER Diagram</h2>
+    <div class="erd-wrap">
+      <svg class="erd" viewBox="0 0 820 300" role="img" aria-label="ER Diagram FAQ" xmlns="http://www.w3.org/2000/svg">
+        <rect class="entity main" x="220" y="48" width="380" height="204"/>
+        <text class="entity-title" x="248" y="84">faqs</text>
+        <text class="field" x="248" y="116">PK id</text>
+        <text class="field" x="248" y="144">question</text>
+        <text class="field" x="248" y="172">category</text>
+        <text class="field" x="248" y="200">updated_date</text>
+        <text class="field" x="248" y="228">answer</text>
+      </svg>
+    </div>
+  </section>
+
+  <section id="faqs">
+    <h2>2. Data Dictionary: faqs</h2>
+    <p>ตารางเดียวพอสำหรับหน้าจอปัจจุบัน เพราะ frontend เก็บหมวดหมู่เป็นข้อความ และค้นหาจาก <code>question</code> กับ <code>answer</code></p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 22%">Column</th>
+            <th style="width: 16%">Type</th>
+            <th style="width: 12%">Key</th>
+            <th style="width: 14%">Required</th>
+            <th>คำอธิบาย</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><code>id</code></td><td><code>varchar(50)</code></td><td><span class="tag pk">PK</span></td><td><span class="tag req">Yes</span></td><td>รหัส FAQ เช่น <code>faq-001</code> หรือ <code>faq-1750000000000</code></td></tr>
+          <tr><td><code>question</code></td><td><code>nvarchar(500)</code></td><td></td><td><span class="tag req">Yes</span></td><td>คำถามที่แสดงในหัว accordion</td></tr>
+          <tr><td><code>category</code></td><td><code>nvarchar(150)</code></td><td></td><td><span class="tag req">Yes</span></td><td>ชื่อหมวดหมู่ที่แสดงเป็น chip และใช้ filter dropdown</td></tr>
+          <tr><td><code>updated_date</code></td><td><code>date</code></td><td></td><td><span class="tag req">Yes</span></td><td>วันที่แสดงเป็นข้อความ <code>อัปเดต YYYY-MM-DD</code></td></tr>
+          <tr><td><code>answer</code></td><td><code>nvarchar(max)</code></td><td></td><td><span class="tag req">Yes</span></td><td>คำตอบ รองรับข้อความหลายบรรทัด</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+</body>
+</html>

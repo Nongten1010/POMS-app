@@ -28,6 +28,13 @@ const optionalStringList = (maxItemLength: number, maxItems: number) =>
     .default([]);
 const parameterListSchema = optionalStringList(255, 100);
 const legalAnnexListSchema = optionalStringList(32, 12);
+const optionalNumber = z
+  .preprocess((value) => {
+    if (value === undefined || value === null || value === '') return null;
+    return value;
+  }, z.coerce.number().finite().nonnegative().nullable())
+  .optional()
+  .default(null);
 
 export const saveMonitoringPointFormSchema = z
   .object({
@@ -43,6 +50,7 @@ export const saveMonitoringPointFormSchema = z
         eiaInfo: optionalText(255),
         address: optionalText(1000),
         businessActivity: optionalText(4000),
+        machineryHorsepower: optionalNumber,
       })
       .strict(),
     points: z

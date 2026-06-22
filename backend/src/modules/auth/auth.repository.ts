@@ -1,6 +1,9 @@
 import { db } from '../../config/database';
 import type { Knex } from 'knex';
-import type { ExternalOperatorProfile } from './identity-provider/identity-provider.interface';
+import type {
+  ExternalOfficerProfile,
+  ExternalOperatorProfile,
+} from './identity-provider/identity-provider.interface';
 
 export interface UserRow {
   id: number;
@@ -83,6 +86,46 @@ export const authRepository = {
 
   getOperatorProfile(userId: number): Promise<OperatorProfileRow | undefined> {
     return db<OperatorProfileRow>('operator_profiles').where({ user_id: userId }).first();
+  },
+
+  async syncExternalOfficerProfile(
+    userId: number,
+    profile: ExternalOfficerProfile,
+  ): Promise<void> {
+    const existingProfile = await db('officer_profiles').where({ user_id: userId }).first();
+    const officerProfilePayload = {
+      pos_no: profile.pos_no,
+      pertype_id: profile.pertype_id,
+      pertype: profile.pertype,
+      position_type_id: profile.position_type_id,
+      position_type_th: profile.position_type_th,
+      line_id: profile.line_id,
+      line_name_th: profile.line_name_th,
+      level_id: profile.level_id,
+      level_name_th: profile.level_name_th,
+      mposition_id: profile.mposition_id ?? null,
+      mposition: profile.mposition ?? null,
+      organize_id: profile.organize_id,
+      division_id: profile.division_id,
+      department_id: profile.department_id,
+      ministry_id: profile.ministry_id,
+      province_id: profile.province_id,
+      per_status: profile.per_status,
+      per_status_name: profile.per_status_name,
+      relocation_type: profile.relocation_type ?? null,
+      relocation_name: profile.relocation_name ?? null,
+      synced_at: db.raw('SYSDATETIME()'),
+    };
+
+    if (existingProfile) {
+      await db('officer_profiles').where({ user_id: userId }).update(officerProfilePayload);
+      return;
+    }
+
+    await db('officer_profiles').insert({
+      user_id: userId,
+      ...officerProfilePayload,
+    });
   },
 
   async syncExternalOperatorProfile(

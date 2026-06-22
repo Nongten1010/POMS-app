@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Data Dictionary และ ER Diagram - Audit Log</title>
+  <style>
+    :root { --ink:#172033; --muted:#526173; --line:#dbe3ef; --head:#eef4fb; --blue:#e8f1ff; --orange:#fff3e1; --red:#ffecec; }
+    * { box-sizing:border-box; } body { margin:0; font-family:"TH Sarabun New", Tahoma, Arial, sans-serif; color:var(--ink); background:#f6f8fb; line-height:1.55; }
+    main { width:min(1180px, calc(100% - 32px)); margin:32px auto; } section { background:#fff; border:1px solid var(--line); border-radius:8px; padding:24px; margin:0 0 18px; }
+    h1 { margin:0 0 8px; font-size:34px; } h2 { margin:0 0 14px; font-size:26px; } p { margin:0 0 12px; } code { font-family:Consolas,"Courier New",monospace; background:#f2f5f9; padding:1px 5px; border-radius:4px; }
+    .subtitle { color:var(--muted); font-size:20px; } .links { display:flex; flex-wrap:wrap; gap:8px; margin-top:16px; } .link-button,.tag { display:inline-flex; border:1px solid var(--line); border-radius:999px; padding:4px 10px; color:#26435f; background:#f9fbfe; text-decoration:none; font-size:16px; }
+    .tag.pk { background:var(--orange); } .tag.fk { background:var(--blue); } .tag.req { background:var(--red); }
+    .table-wrap { overflow:auto; border:1px solid var(--line); border-radius:8px; } table { width:100%; border-collapse:collapse; table-layout:fixed; background:#fff; } th,td { border-bottom:1px solid var(--line); border-right:1px solid var(--line); padding:8px 10px; vertical-align:top; word-break:break-word; } th:last-child,td:last-child { border-right:0; } tr:last-child td { border-bottom:0; } th { background:var(--head); text-align:left; }
+    .erd-wrap { overflow:auto; border:1px solid var(--line); border-radius:8px; background:#fbfdff; padding:16px; } .erd { min-width:760px; width:100%; height:auto; } .entity { fill:#fff; stroke:#8ea7c2; stroke-width:1.5; rx:8; } .entity.main { fill:#f8fbff; stroke:#1d4ed8; stroke-width:1.8; } .entity-title { font-size:18px; font-weight:700; fill:#172033; } .field { font-size:14px; fill:#465569; } .rel { stroke:#64748b; stroke-width:2; fill:none; marker-end:url(#arrow); }
+    @media print { body { background:#fff; } main { width:100%; margin:0; } section { break-inside:avoid; } }
+  
+
+    /* Match docs/kwp-forms/04-data-dictionary-er.html visual style */
+    :root {
+      --ink: #111827;
+      --muted: #4b5563;
+      --line: #d7dde6;
+      --soft: #f6f8fb;
+      --head: #e9eef6;
+      --blue: #1d4ed8;
+      --green: #047857;
+      --amber: #b45309;
+      --red: #b91c1c;
+    }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #fff;
+      font-family: Arial, "Noto Sans Thai", Tahoma, sans-serif;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    main {
+      width: min(1240px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 30px 0 56px;
+    }
+    section {
+      margin: 0;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+    }
+    section:first-child {
+      padding: 24px 26px;
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, #f8fbff 0%, #fff 100%);
+    }
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: 28px; line-height: 1.25; }
+    h2 {
+      margin-top: 30px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--line);
+      font-size: 21px;
+    }
+    p { margin-top: 8px; }
+    .subtitle { color: var(--muted); font-size: 15px; }
+    .links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+    .link-button {
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 6px 12px;
+      border: 1px solid #bfd0ea;
+      border-radius: 6px;
+      background: #f2f6ff;
+      color: var(--blue);
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 14px;
+    }
+    .table-wrap {
+      margin-top: 12px;
+      overflow-x: auto;
+      border: 0;
+      border-radius: 0;
+    }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; background: #fff; }
+    th, td {
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      vertical-align: top;
+      word-break: break-word;
+    }
+    th { background: var(--head); text-align: left; font-weight: 700; }
+    tbody tr:nth-child(even) td { background: #fbfcfe; }
+    code {
+      padding: 1px 5px;
+      border: 1px solid #dbe3ef;
+      border-radius: 4px;
+      background: #f8fafc;
+      color: #0f172a;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 12px;
+    }
+    .tag {
+      display: inline-block;
+      padding: 2px 7px;
+      border: 1px solid #bfd0ea;
+      border-radius: 999px;
+      background: #f2f6ff;
+      color: #1e3a8a;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .tag.pk { border-color: #86efac; background: #ecfdf5; color: #047857; }
+    .tag.fk { border-color: #fed7aa; background: #fff7ed; color: #b45309; }
+    .tag.req { border-color: #fecaca; background: #fff1f2; color: #b91c1c; }
+    .erd-wrap {
+      margin-top: 14px;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 0;
+      background: #fff;
+      padding: 0;
+    }
+    .erd { display: block; width: 100%; height: auto; }
+    .entity { fill: #fff; stroke: #94a3b8; stroke-width: 1.2; }
+    .entity.main { fill: #f8fbff; stroke: var(--blue); stroke-width: 1.8; }
+    .entity.derived, .entity.live, .entity.lookup { fill: #ecfdf5; stroke: #047857; stroke-width: 1.4; }
+    .entity.seq, .entity.special, .entity-token { fill: #fff7ed; stroke: #b45309; stroke-width: 1.4; }
+    .entity-title { fill: #0f172a; font-family: "SFMono-Regular", Consolas, monospace; font-size: 14px; font-weight: 700; }
+    .field { fill: #334155; font-family: "SFMono-Regular", Consolas, monospace; font-size: 12px; }
+    .rel { stroke: #334155; stroke-width: 1.6; fill: none; }
+  </style>
+
+</head>
+<body><main>
+  <section>
+    <h1>Data Dictionary และ ER Diagram</h1>
+    <p class="subtitle">ฐานข้อมูล audit log สำหรับบันทึกการกระทำของผู้ใช้และระบบต่อ object เป้าหมาย</p>
+    <div class="links"><a class="link-button" href="#er-diagram">ER Diagram</a><a class="link-button" href="#relationship-summary">Relationship Summary</a><a class="link-button" href="#audit_logs">audit_logs</a><a class="link-button" href="#constraints">Constraints</a></div>
+  </section>
+  <section><h2>รายการตารางสรุป</h2><div class="table-wrap"><table><thead><tr><th style="width:28%">Table</th><th>หน้าที่</th><th style="width:16%">Cardinality</th></tr></thead><tbody><tr><td><code>audit_logs</code></td><td>บันทึก action, actor, target, metadata, IP และ user agent</td><td>Append-only log</td></tr></tbody></table></div></section>
+  <section id="er-diagram"><h2>1. ER Diagram</h2><div class="erd-wrap"><svg class="erd" viewBox="0 0 760 330" role="img" aria-label="ER Diagram Audit Log" xmlns="http://www.w3.org/2000/svg"><defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#64748b"/></marker></defs><rect class="entity" x="60" y="98" width="230" height="112"/><text class="entity-title" x="82" y="132">users</text><text class="field" x="82" y="160">PK id</text><text class="field" x="82" y="184">actor user</text><rect class="entity main" x="420" y="70" width="280" height="170"/><text class="entity-title" x="442" y="104">audit_logs</text><text class="field" x="442" y="132">PK id, FK actor_user_id</text><text class="field" x="442" y="156">action, target_type, target_id</text><text class="field" x="442" y="180">metadata, ip_address</text><text class="field" x="442" y="204">user_agent, created_at</text><path class="rel" d="M290 154 H420"/></svg></div></section>
+  <section id="relationship-summary"><h2>2. Relationship Summary</h2><div class="table-wrap"><table><thead><tr><th>Parent</th><th>Child</th><th>ความสัมพันธ์</th><th>คำอธิบาย</th></tr></thead><tbody><tr><td><code>users.id</code></td><td><code>audit_logs.actor_user_id</code></td><td>1:N optional</td><td>log อาจมี actor เป็นผู้ใช้ หรือ NULL สำหรับ system action/unknown actor</td></tr><tr><td><code>target_type</code> + <code>target_id</code></td><td>หลายตาราง</td><td>Polymorphic reference</td><td>ชี้ object เป้าหมายด้วยชนิดและ id โดยไม่มี FK ตรง เพื่อรองรับหลาย domain</td></tr></tbody></table></div></section>
+  <section id="audit_logs"><h2>3. Table: audit_logs</h2><p><span class="tag">Append-only Table</span> บันทึกเหตุการณ์สำคัญในระบบ</p><div class="table-wrap"><table><thead><tr><th style="width: 24%">Column</th><th style="width: 18%">Type</th><th style="width: 14%">Key/Null</th><th>คำอธิบาย</th></tr></thead><tbody><tr><td><code>id</code></td><td>BIGINT IDENTITY</td><td><span class="tag pk">PK</span></td><td>รหัส audit log</td></tr><tr><td><code>actor_user_id</code></td><td>BIGINT</td><td><span class="tag fk">FK NULL</span></td><td>ผู้กระทำ ถ้ามี</td></tr><tr><td><code>action</code></td><td>VARCHAR(64)</td><td><span class="tag req">NOT NULL</span></td><td>ชื่อ action เช่น create, update, approve, login</td></tr><tr><td><code>target_type</code></td><td>VARCHAR(32)</td><td>NULL</td><td>ชนิด object เป้าหมาย</td></tr><tr><td><code>target_id</code></td><td>BIGINT</td><td>NULL</td><td>รหัส object เป้าหมาย</td></tr><tr><td><code>metadata</code></td><td>NVARCHAR(MAX)</td><td>NULL</td><td>JSON หรือรายละเอียดประกอบ action</td></tr><tr><td><code>ip_address</code></td><td>VARCHAR(45)</td><td>NULL</td><td>IPv4/IPv6 ของผู้ใช้งาน</td></tr><tr><td><code>user_agent</code></td><td>VARCHAR(500)</td><td>NULL</td><td>browser/client user agent</td></tr><tr><td><code>created_at</code></td><td>DATETIME2</td><td><span class="tag req">NOT NULL</span></td><td>เวลาที่เกิด log</td></tr></tbody></table></div></section>
+  <section id="constraints"><h2>4. Constraints และ Index ที่แนะนำ/มีใน migration</h2><div class="table-wrap"><table><thead><tr><th>Name</th><th>Table</th><th>Purpose</th></tr></thead><tbody><tr><td><code>fk_audit_actor</code></td><td><code>audit_logs</code></td><td>ผูก actor_user_id กับ users.id</td></tr><tr><td><code>ix_audit_actor</code></td><td><code>audit_logs</code></td><td>ค้นหา log ตาม actor และเวลา</td></tr><tr><td><code>ix_audit_target</code></td><td><code>audit_logs</code></td><td>ค้นหา timeline ของ object เป้าหมาย</td></tr><tr><td><code>ix_audit_action</code></td><td><code>audit_logs</code></td><td>ค้นหาตาม action และเวลา</td></tr></tbody></table></div></section>
+</main></body></html>

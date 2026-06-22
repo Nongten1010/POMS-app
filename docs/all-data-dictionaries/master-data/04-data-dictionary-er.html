@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Data Dictionary และ ER Diagram - Master Data</title>
+  <style>
+    :root { --ink:#172033; --muted:#526173; --line:#dbe3ef; --head:#eef4fb; --blue:#e8f1ff; --green:#e9f8ef; --orange:#fff3e1; --red:#ffecec; }
+    * { box-sizing:border-box; } body { margin:0; font-family:"TH Sarabun New", Tahoma, Arial, sans-serif; color:var(--ink); background:#f6f8fb; line-height:1.55; }
+    main { width:min(1180px, calc(100% - 32px)); margin:32px auto; } section { background:#fff; border:1px solid var(--line); border-radius:8px; padding:24px; margin:0 0 18px; }
+    h1 { margin:0 0 8px; font-size:34px; } h2 { margin:0 0 14px; font-size:26px; } p { margin:0 0 12px; } code { font-family:Consolas,"Courier New",monospace; background:#f2f5f9; padding:1px 5px; border-radius:4px; }
+    .subtitle { color:var(--muted); font-size:20px; } .links { display:flex; flex-wrap:wrap; gap:8px; margin-top:16px; } .link-button,.tag { display:inline-flex; border:1px solid var(--line); border-radius:999px; padding:4px 10px; color:#26435f; background:#f9fbfe; text-decoration:none; font-size:16px; }
+    .tag.pk { background:var(--orange); } .tag.fk { background:var(--blue); } .tag.req { background:var(--red); }
+    .table-wrap { overflow:auto; border:1px solid var(--line); border-radius:8px; } table { width:100%; border-collapse:collapse; table-layout:fixed; background:#fff; } th,td { border-bottom:1px solid var(--line); border-right:1px solid var(--line); padding:8px 10px; vertical-align:top; word-break:break-word; } th:last-child,td:last-child { border-right:0; } tr:last-child td { border-bottom:0; } th { background:var(--head); text-align:left; }
+    .erd-wrap { overflow:auto; border:1px solid var(--line); border-radius:8px; background:#fbfdff; padding:16px; } .erd { min-width:1120px; width:100%; height:auto; } .entity { fill:#fff; stroke:#8ea7c2; stroke-width:1.5; rx:8; } .entity.main { fill:#f8fbff; stroke:#1d4ed8; stroke-width:1.8; } .entity.lookup { fill:#ecfdf5; stroke:#047857; stroke-width:1.4; } .entity.special { fill:#fff7ed; stroke:#b45309; stroke-width:1.4; } .entity-title { font-size:16px; font-weight:700; fill:#172033; } .field { font-size:13px; fill:#465569; } .rel { stroke:#64748b; stroke-width:2; fill:none; marker-end:url(#arrow); }
+    @media print { body { background:#fff; } main { width:100%; margin:0; } section { break-inside:avoid; } }
+  
+
+    /* Match docs/kwp-forms/04-data-dictionary-er.html visual style */
+    :root {
+      --ink: #111827;
+      --muted: #4b5563;
+      --line: #d7dde6;
+      --soft: #f6f8fb;
+      --head: #e9eef6;
+      --blue: #1d4ed8;
+      --green: #047857;
+      --amber: #b45309;
+      --red: #b91c1c;
+    }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #fff;
+      font-family: Arial, "Noto Sans Thai", Tahoma, sans-serif;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    main {
+      width: min(1240px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 30px 0 56px;
+    }
+    section {
+      margin: 0;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+    }
+    section:first-child {
+      padding: 24px 26px;
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, #f8fbff 0%, #fff 100%);
+    }
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: 28px; line-height: 1.25; }
+    h2 {
+      margin-top: 30px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--line);
+      font-size: 21px;
+    }
+    p { margin-top: 8px; }
+    .subtitle { color: var(--muted); font-size: 15px; }
+    .links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+    .link-button {
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 6px 12px;
+      border: 1px solid #bfd0ea;
+      border-radius: 6px;
+      background: #f2f6ff;
+      color: var(--blue);
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 14px;
+    }
+    .table-wrap {
+      margin-top: 12px;
+      overflow-x: auto;
+      border: 0;
+      border-radius: 0;
+    }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; background: #fff; }
+    th, td {
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      vertical-align: top;
+      word-break: break-word;
+    }
+    th { background: var(--head); text-align: left; font-weight: 700; }
+    tbody tr:nth-child(even) td { background: #fbfcfe; }
+    code {
+      padding: 1px 5px;
+      border: 1px solid #dbe3ef;
+      border-radius: 4px;
+      background: #f8fafc;
+      color: #0f172a;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 12px;
+    }
+    .tag {
+      display: inline-block;
+      padding: 2px 7px;
+      border: 1px solid #bfd0ea;
+      border-radius: 999px;
+      background: #f2f6ff;
+      color: #1e3a8a;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .tag.pk { border-color: #86efac; background: #ecfdf5; color: #047857; }
+    .tag.fk { border-color: #fed7aa; background: #fff7ed; color: #b45309; }
+    .tag.req { border-color: #fecaca; background: #fff1f2; color: #b91c1c; }
+    .erd-wrap {
+      margin-top: 14px;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 0;
+      background: #fff;
+      padding: 0;
+    }
+    .erd { display: block; width: 100%; height: auto; }
+    .entity { fill: #fff; stroke: #94a3b8; stroke-width: 1.2; }
+    .entity.main { fill: #f8fbff; stroke: var(--blue); stroke-width: 1.8; }
+    .entity.derived, .entity.live, .entity.lookup { fill: #ecfdf5; stroke: #047857; stroke-width: 1.4; }
+    .entity.seq, .entity.special, .entity-token { fill: #fff7ed; stroke: #b45309; stroke-width: 1.4; }
+    .entity-title { fill: #0f172a; font-family: "SFMono-Regular", Consolas, monospace; font-size: 14px; font-weight: 700; }
+    .field { fill: #334155; font-family: "SFMono-Regular", Consolas, monospace; font-size: 12px; }
+    .rel { stroke: #334155; stroke-width: 1.6; fill: none; }
+    .rel.semantic { stroke-dasharray: 6 5; opacity: .75; }
+  </style>
+
+</head>
+<body><main>
+  <section>
+    <h1>Data Dictionary และ ER Diagram</h1>
+    <p class="subtitle">ฐานข้อมูล master data โรงงาน นิติบุคคล จังหวัด นิคมอุตสาหกรรม องค์กร โปรไฟล์ผู้ใช้ และโรงงานที่เข้าข่าย</p>
+    <div class="links"><a class="link-button" href="#er-diagram">ER Diagram</a><a class="link-button" href="#relationship-summary">Relationship Summary</a><a class="link-button" href="#factories">factories</a><a class="link-button" href="#constraints">Constraints</a></div>
+  </section>
+
+  <section><h2>รายการตารางสรุป</h2><div class="table-wrap"><table><thead><tr><th style="width:26%">Table</th><th>หน้าที่</th><th style="width:16%">Cardinality</th></tr></thead><tbody>
+    <tr><td><code>provinces</code></td><td>จังหวัดและภูมิภาค</td><td>Lookup</td></tr>
+    <tr><td><code>industrial_estates</code></td><td>นิคมอุตสาหกรรม/เขตประกอบการตามจังหวัด</td><td>Lookup</td></tr>
+    <tr><td><code>organizations</code></td><td>โครงสร้างหน่วยงานแบบ parent-child</td><td>Tree</td></tr>
+    <tr><td><code>officer_profiles</code></td><td>profile เจ้าหน้าที่จากระบบบุคลากร</td><td>1:1 users</td></tr>
+    <tr><td><code>operator_profiles</code></td><td>profile ผู้ประกอบการ</td><td>1:1 users</td></tr>
+    <tr><td><code>juristics</code></td><td>นิติบุคคล</td><td>Parent</td></tr>
+    <tr><td><code>factories</code></td><td>ทะเบียนโรงงานหลักในระบบ</td><td>Parent</td></tr>
+    <tr><td><code>user_juristics</code></td><td>mapping user กับนิติบุคคล</td><td>M:N</td></tr>
+    <tr><td><code>eligible_factories</code></td><td>โรงงานที่ถูกคัดเลือก/เข้าข่ายจาก source ภายนอก</td><td>Selection</td></tr>
+    <tr><td><code>user_factory_favorites</code></td><td>โรงงานที่ผู้ใช้ติดดาวใน dashboard</td><td>1:N</td></tr>
+  </tbody></table></div></section>
+
+  <section id="er-diagram"><h2>1. ER Diagram</h2><div class="erd-wrap">
+    <svg class="erd" viewBox="0 0 1160 720" role="img" aria-label="ER Diagram Master Data" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#64748b"/></marker></defs>
+      <rect class="entity lookup" x="70" y="70" width="240" height="100"/><text class="entity-title" x="92" y="104">provinces</text><text class="field" x="92" y="132">PK id, names, region</text>
+      <rect class="entity lookup" x="70" y="245" width="260" height="116"/><text class="entity-title" x="92" y="279">industrial_estates</text><text class="field" x="92" y="307">FK province_id</text><text class="field" x="92" y="331">code, names, active</text>
+      <rect class="entity main" x="450" y="72" width="290" height="140"/><text class="entity-title" x="472" y="106">factories</text><text class="field" x="472" y="134">PK id, fid, code, name</text><text class="field" x="472" y="158">FK juristic/province/estate</text><text class="field" x="472" y="182">system, verify, active</text>
+      <rect class="entity" x="820" y="84" width="250" height="116"/><text class="entity-title" x="842" y="118">juristics</text><text class="field" x="842" y="146">PK id, juristic_id</text><text class="field" x="842" y="170">name_th/name_en</text>
+      <rect class="entity" x="820" y="270" width="250" height="100"/><text class="entity-title" x="842" y="304">user_juristics</text><text class="field" x="842" y="332">PK user_id + juristic_id</text>
+      <rect class="entity special" x="450" y="300" width="300" height="132"/><text class="entity-title" x="472" y="334">eligible_factories</text><text class="field" x="472" y="362">source factory snapshot</text><text class="field" x="472" y="386">registration, province, boiler, EIA</text><text class="field" x="472" y="410">selected_by user</text>
+      <rect class="entity" x="450" y="452" width="260" height="54"/><text class="entity-title" x="472" y="480">users</text><text class="field" x="542" y="480">reference from auth</text>
+      <rect class="entity" x="80" y="505" width="260" height="116"/><text class="entity-title" x="102" y="539">organizations</text><text class="field" x="102" y="567">self FK parent_id</text><text class="field" x="102" y="591">external_id + level</text>
+      <rect class="entity" x="450" y="520" width="260" height="100"/><text class="entity-title" x="472" y="554">officer_profiles</text><text class="field" x="472" y="582">PK/FK user_id, division/province</text>
+      <rect class="entity" x="790" y="520" width="260" height="100"/><text class="entity-title" x="812" y="554">operator_profiles</text><text class="field" x="812" y="582">PK/FK user_id, user_code</text>
+      <rect class="entity" x="790" y="415" width="270" height="82"/><text class="entity-title" x="812" y="449">user_factory_favorites</text><text class="field" x="812" y="473">FK user_id, factory_id external</text>
+      <path class="rel" d="M310 124 H450"/><path class="rel" d="M190 170 V245"/><path class="rel" d="M330 303 H390 V178 H450"/><path class="rel" d="M820 140 H740"/><path class="rel" d="M945 200 V270"/>
+      <path class="rel" d="M580 452 V432"/>
+      <path class="rel" d="M540 506 V520"/>
+      <path class="rel" d="M710 488 H760 V570 H790"/>
+      <path class="rel" d="M710 470 H790"/>
+      <path class="rel" d="M710 458 H780 V320 H820"/>
+      <path class="rel semantic" d="M340 570 H450"/>
+      <path class="rel semantic" d="M1060 456 H1094 V48 H595 V72"/>
+    </svg>
+  </div></section>
+
+  <section id="relationship-summary"><h2>2. Relationship Summary</h2><div class="table-wrap"><table><thead><tr><th>Parent</th><th>Child</th><th>ความสัมพันธ์</th><th>คำอธิบาย</th></tr></thead><tbody>
+    <tr><td><code>provinces.id</code></td><td><code>industrial_estates.province_id</code></td><td>1:N</td><td>จังหวัดหนึ่งมีหลายนิคม</td></tr>
+    <tr><td><code>provinces.id</code></td><td><code>factories.province_id</code></td><td>1:N</td><td>โรงงานผูกจังหวัด</td></tr>
+    <tr><td><code>industrial_estates.id</code></td><td><code>factories.industrial_estate_id</code></td><td>1:N optional</td><td>โรงงานอาจอยู่ในนิคม</td></tr>
+    <tr><td><code>juristics.id</code></td><td><code>factories.juristic_id</code></td><td>1:N</td><td>นิติบุคคลหนึ่งมีหลายโรงงาน</td></tr>
+    <tr><td><code>users.id</code></td><td><code>officer_profiles.user_id</code> / <code>operator_profiles.user_id</code></td><td>1:0..1</td><td>profile เฉพาะประเภทผู้ใช้</td></tr>
+    <tr><td><code>users.id</code></td><td><code>user_juristics.user_id</code></td><td>1:N</td><td>ผู้ใช้ผูกนิติบุคคลที่ดูแล</td></tr>
+    <tr><td><code>juristics.id</code></td><td><code>user_juristics.juristic_id</code></td><td>1:N</td><td>นิติบุคคลผูกผู้ใช้ได้หลายคน</td></tr>
+    <tr><td><code>users.id</code></td><td><code>eligible_factories.selected_by</code></td><td>1:N</td><td>ผู้ใช้ที่เลือกโรงงานเข้าข่าย</td></tr>
+    <tr><td><code>users.id</code></td><td><code>user_factory_favorites.user_id</code></td><td>1:N</td><td>ผู้ใช้ติดดาวโรงงานได้หลายรายการ</td></tr>
+    <tr><td><code>organizations.external_id</code></td><td><code>officer_profiles.department_id</code></td><td>semantic</td><td>ใช้ join เพื่อแสดงชื่อหน่วยงานใน profile เจ้าหน้าที่ ไม่ได้ประกาศ FK ใน migration</td></tr>
+    <tr><td><code>factories.fid/code</code></td><td><code>user_factory_favorites.factory_id</code></td><td>semantic</td><td>factory_id เป็นรหัสภายนอก ไม่ได้ประกาศ FK ใน migration</td></tr>
+  </tbody></table></div></section>
+
+  <section><h2>3. Table: provinces</h2><div class="table-wrap"><table><thead><tr><th style="width: 24%">Column</th><th style="width: 18%">Type</th><th style="width: 14%">Key/Null</th><th>คำอธิบาย</th></tr></thead><tbody><tr><td><code>id</code></td><td>VARCHAR(8)</td><td><span class="tag pk">PK</span></td><td>รหัสจังหวัด</td></tr><tr><td><code>name_th</code>, <code>name_en</code></td><td>VARCHAR(64)</td><td><span class="tag req">NOT NULL</span></td><td>ชื่อจังหวัดไทย/อังกฤษ</td></tr><tr><td><code>region</code></td><td>VARCHAR(32)</td><td>NULL</td><td>ภูมิภาค</td></tr></tbody></table></div></section>
+  <section><h2>4. Table: industrial_estates</h2><div class="table-wrap"><table><thead><tr><th style="width: 24%">Column</th><th style="width: 18%">Type</th><th style="width: 14%">Key/Null</th><th>คำอธิบาย</th></tr></thead><tbody><tr><td><code>id</code></td><td>BIGINT IDENTITY</td><td><span class="tag pk">PK</span></td><td>รหัสนิคม</td></tr><tr><td><code>code</code></td><td>VARCHAR(16)</td><td><span class="tag req">NOT NULL/UQ</span></td><td>รหัสนิคม</td></tr><tr><td><code>name_th</code>, <code>name_en</code></td><td>VARCHAR(255)</td><td>mixed</td><td>ชื่อนิคม</td></tr><tr><td><code>province_id</code></td><td>VARCHAR(8)</td><td><span class="tag fk">FK/NOT NULL</span></td><td>จังหวัด</td></tr><tr><td><code>is_active</code>, <code>created_at</code>, <code>updated_at</code>, <code>deleted_at</code></td><td>BIT / DATETIME2</td><td>mixed</td><td>สถานะและ audit</td></tr></tbody></table></div></section>
+  <section><h2>5. Table: organizations</h2><div class="table-wrap"><table><thead><tr><th style="width: 24%">Column</th><th style="width: 18%">Type</th><th style="width: 14%">Key/Null</th><th>คำอธิบาย</th></tr></thead><tbody><tr><td><code>id</code></td><td>BIGINT IDENTITY</td><td><span class="tag pk">PK</span></td><td>รหัสหน่วยงาน</td></tr><tr><td><code>external_id</code>, <code>level</code></td><td>VARCHAR</td><td><span class="tag req">NOT NULL/UQ</span></td><td>รหัสหน่วยงานภายนอกและระดับ</td></tr><tr><td><code>parent_id</code></td><td>BIGINT</td><td><span class="tag fk">FK NULL</span></td><td>หน่วยงานแม่</td></tr><tr><td><code>name_th</code>, <code>name_en</code>, <code>is_active</code></td><td>VARCHAR / BIT</td><td>mixed</td><td>ชื่อและสถานะ</td></tr><tr><td><code>created_at</code>, <code>updated_at</code>, <code>deleted_at</code></td><td>DATETIME2</td><td>mixed</td><td>timestamps และ soft delete</td></tr></tbody></table></div></section>
+  <section><h2>6. Table: officer_profiles</h2><div class="table-wrap"><table><thead><tr><th style="width: 24%">Column</th><th style="width: 18%">Type</th><th style="width: 14%">Key/Null</th><th>คำอธิบาย</th></tr></thead><tbody><tr><td><code>user_id</code></td><td>BIGINT</td><td><span class="tag pk">PK/FK</span></td><td>อ้างอิง users</td></tr><tr><td><code>pos_no</code>, <code>pertype_id</code>, <code>pertype</code>, <code>position_type_id</code>, <code>position_type_th</code></td><td>VARCHAR</td><td>NULL</td><td>ข้อมูลตำแหน่ง/ประเภทบุคลากร</td></tr><tr><td><code>line_id</code>, <code>line_name_th</code>, <code>level_id</code>, <code>level_name_th</code>, <code>mposition_id</code>, <code>mposition</code></td><td>VARCHAR</td><td>NULL</td><td>สายงาน ระดับ และตำแหน่งบริหาร</td></tr><tr><td><code>organize_id</code>, <code>division_id</code>, <code>department_id</code>, <code>ministry_id</code>, <code>province_id</code></td><td>VARCHAR</td><td>NULL</td><td>รหัสหน่วยงานและจังหวัด</td></tr><tr><td><code>per_status</code>, <code>per_status_name</code>, <code>relocation_type</code>, <code>relocation_name</code>, <code>synced_at</code></td><td>VARCHAR / DATETIME2</td><td>NULL</td><td>สถานะบุคลากรและเวลาซิงก์</td></tr></tbody></table></div></section>
+  <section><h2>7. Table: operator_profiles</h2><div class="table-wrap"><table><thead><tr><th style="width: 24%">Column</th><th style="width: 18%">Type</th><th style="width: 14%">Key/Null</th><th>คำอธิบาย</th></tr></thead><tbody><tr><td><code>user_id</code></td><td>BIGINT</td><td><span class="tag pk">PK/FK</span></td><td>อ้างอิง users</td></tr><tr><td><code>user_code</code></td><td>VARCHAR(16)</td><td>NULL</td><td>รหัสผู้ประกอบการ</td></tr><tr><td><code>regis_date</code>, <code>synced_at</code></td><td>DATETIME2</td><td>NULL</td><td>วันลงทะเบียนและวันซิงก์</td></tr></tbody></table></div></section>
+  <section><h2>8. Table: juristics</h2><div class="table-wrap"><table><thead><tr><th style="width: 24%">Column</th><th style="width: 18%">Type</th><th style="width: 14%">Key/Null</th><th>คำอธิบาย</th></tr></thead><tbody><tr><td><code>id</code></td><td>BIGINT IDENTITY</td><td><span class="tag pk">PK</span></td><td>รหัสนิติบุคคล</td></tr><tr><td><code>juristic_id</code></td><td>VARCHAR(13)</td><td><span class="tag req">NOT NULL/UQ</span></td><td>เลขนิติบุคคล</td></tr><tr><td><code>name_th</code>, <code>name_en</code></td><td>VARCHAR(500)</td><td>mixed</td><td>ชื่อนิติบุคคล</td></tr><tr><td><code>created_at</code>, <code>updated_at</code>, <code>created_by</code>, <code>updated_by</code>, <code>deleted_at</code></td><td>DATETIME2 / BIGINT</td><td>mixed</td><td>audit fields</td></tr></tbody></table></div></section>
+  <section id="factories"><h2>9. Table: factories</h2><p><span class="tag">Main Table</span> ทะเบียนโรงงานหลัก</p><div class="table-wrap"><table><thead><tr><th style="width: 24%">Column</th><th style="width: 18%">Type</th><th style="width: 14%">Key/Null</th><th>คำอธิบาย</th></tr></thead><tbody><tr><td><code>id</code></td><td>BIGINT IDENTITY</td><td><span class="tag pk">PK</span></td><td>รหัสโรงงานภายใน</td></tr><tr><td><code>fid</code>, <code>code</code>, <code>name</code></td><td>VARCHAR/NVARCHAR</td><td><span class="tag req">NOT NULL</span></td><td>รหัสและชื่อโรงงาน</td></tr><tr><td><code>juristic_id</code>, <code>province_id</code>, <code>industrial_estate_id</code></td><td>BIGINT/VARCHAR</td><td>mixed FK</td><td>นิติบุคคล จังหวัด และนิคม</td></tr><tr><td><code>system_id</code>, <code>system_detail</code>, <code>verify_status</code></td><td>INT/VARCHAR/TINYINT</td><td>mixed</td><td>ระบบ/รายละเอียดและสถานะตรวจสอบ</td></tr><tr><td><code>authorize_start</code>, <code>authorize_end</code>, <code>juristic_start</code>, <code>verify_date</code></td><td>DATE</td><td>NULL</td><td>วันที่สำคัญจากทะเบียนโรงงาน</td></tr><tr><td><code>is_active</code></td><td>BIT</td><td><span class="tag req">NOT NULL</span></td><td>สถานะใช้งาน</td></tr><tr><td><code>created_at</code>, <code>updated_at</code>, <code>created_by</code>, <code>updated_by</code>, <code>deleted_at</code></td><td>DATETIME2 / BIGINT</td><td>mixed</td><td>audit fields</td></tr></tbody></table></div></section>
+  <section><h2>10. Table: user_juristics</h2><div class="table-wrap"><table><thead><tr><th style="width: 24%">Column</th><th style="width: 18%">Type</th><th style="width: 14%">Key/Null</th><th>คำอธิบาย</th></tr></thead><tbody><tr><td><code>user_id</code></td><td>BIGINT</td><td><span class="tag pk">PK/FK</span></td><td>ผู้ใช้</td></tr><tr><td><code>juristic_id</code></td><td>BIGINT</td><td><span class="tag pk">PK/FK</span></td><td>นิติบุคคล</td></tr><tr><td><code>granted_at</code>, <code>revoked_at</code></td><td>DATETIME2</td><td>mixed</td><td>ช่วงเวลาสิทธิ์</td></tr></tbody></table></div></section>
+  <section><h2>11. Table: eligible_factories</h2><div class="table-wrap"><table><thead><tr><th style="width: 24%">Column</th><th style="width: 18%">Type</th><th style="width: 14%">Key/Null</th><th>คำอธิบาย</th></tr></thead><tbody><tr><td><code>id</code></td><td>BIGINT IDENTITY</td><td><span class="tag pk">PK</span></td><td>รหัสโรงงานเข้าข่าย</td></tr><tr><td><code>source_system</code>, <code>source_factory_id</code></td><td>VARCHAR</td><td>mixed</td><td>แหล่งข้อมูลต้นทาง</td></tr><tr><td><code>factory_registration_no_new</code>, <code>factory_registration_no_old</code>, <code>factory_name</code></td><td>NVARCHAR/VARCHAR</td><td>mixed</td><td>เลขทะเบียนและชื่อโรงงาน</td></tr><tr><td><code>factory_type_sequence</code>, <code>address</code>, <code>province_name</code>, <code>industrial_estate_name</code></td><td>NVARCHAR</td><td>mixed</td><td>ประเภท ที่อยู่ จังหวัด และนิคมจาก source</td></tr><tr><td><code>latitude</code>, <code>longitude</code>, <code>capital_amount</code>, <code>machinery_horsepower</code></td><td>DECIMAL</td><td>NULL</td><td>พิกัดและข้อมูลประกอบ</td></tr><tr><td><code>business_activity</code>, <code>operation_status</code>, <code>production_capacity</code>, <code>wastewater_discharge_info</code></td><td>NVARCHAR</td><td>mixed</td><td>กิจการ สถานะ และข้อมูลการผลิต/น้ำเสีย</td></tr><tr><td><code>boiler_count</code>, <code>boiler_size_each</code>, <code>fuel_used</code>, <code>has_eia</code></td><td>INT/NVARCHAR/BIT</td><td>NULL</td><td>ข้อมูลหม้อไอน้ำ เชื้อเพลิง และ EIA</td></tr><tr><td><code>selected_reason</code>, <code>selected_by</code>, <code>selected_at</code></td><td>NVARCHAR/BIGINT/DATETIME2</td><td>mixed</td><td>เหตุผล ผู้เลือก และเวลาเลือก</td></tr><tr><td><code>created_at</code>, <code>updated_at</code>, <code>created_by</code>, <code>updated_by</code>, <code>deleted_at</code></td><td>DATETIME2 / BIGINT</td><td>mixed</td><td>audit fields</td></tr></tbody></table></div></section>
+  <section><h2>12. Table: user_factory_favorites</h2><div class="table-wrap"><table><thead><tr><th style="width: 24%">Column</th><th style="width: 18%">Type</th><th style="width: 14%">Key/Null</th><th>คำอธิบาย</th></tr></thead><tbody><tr><td><code>id</code></td><td>BIGINT IDENTITY</td><td><span class="tag pk">PK</span></td><td>รหัสรายการติดดาว</td></tr><tr><td><code>user_id</code></td><td>BIGINT</td><td><span class="tag fk">FK/NOT NULL</span></td><td>ผู้ใช้</td></tr><tr><td><code>factory_id</code></td><td>VARCHAR(64)</td><td><span class="tag req">NOT NULL</span></td><td>รหัสโรงงานที่ติดดาว</td></tr><tr><td><code>created_at</code>, <code>updated_at</code>, <code>created_by</code>, <code>updated_by</code>, <code>deleted_at</code></td><td>DATETIME2 / BIGINT</td><td>mixed</td><td>audit fields</td></tr></tbody></table></div></section>
+
+  <section id="constraints"><h2>13. Constraints และ Index ที่แนะนำ/มีใน migration</h2><div class="table-wrap"><table><thead><tr><th>Name</th><th>Table</th><th>Purpose</th></tr></thead><tbody>
+    <tr><td><code>uq_estate_code</code>, <code>uq_org_external</code>, <code>uq_juristic_id</code>, <code>uq_factory_fid</code></td><td>master tables</td><td>กันรหัสหลักซ้ำ</td></tr><tr><td><code>ix_factory_province</code>, <code>ix_factory_estate</code>, <code>ix_factory_juristic</code></td><td><code>factories</code></td><td>ค้นหาโรงงานตามจังหวัด นิคม และนิติบุคคล</td></tr><tr><td><code>uq_eligible_factory_registration_new</code></td><td><code>eligible_factories</code></td><td>กันเลขทะเบียนโรงงานเข้าข่ายซ้ำ</td></tr><tr><td><code>ck_eligible_factories_latitude/longitude/boiler_count</code></td><td><code>eligible_factories</code></td><td>ตรวจช่วงพิกัดและจำนวนหม้อไอน้ำ</td></tr><tr><td><code>uq_user_factory_favorites_active</code></td><td><code>user_factory_favorites</code></td><td>ผู้ใช้ติดดาวโรงงานเดียวกันซ้ำไม่ได้เมื่อยัง active</td></tr>
+  </tbody></table></div></section>
+</main></body></html>

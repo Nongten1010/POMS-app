@@ -24,6 +24,8 @@ export interface ExternalOfficerProfile {
   line_name_th: string;
   level_id: string;
   level_name_th: string;
+  mposition_id?: string;
+  mposition?: string;
   organize_id: string;
   division_id: string;
   department_id: string;
@@ -31,6 +33,8 @@ export interface ExternalOfficerProfile {
   province_id: string;
   per_status: string;
   per_status_name: string;
+  relocation_type?: string;
+  relocation_name?: string;
 }
 
 export interface ExternalOperatorProfile {
@@ -50,7 +54,7 @@ export interface ExternalOperatorProfile {
       code: string;
       name: string;
       province_id: string;
-      system_id: number;
+      system_id: number | null;
       verify_status: number;
       authorize_start: string | null;
       authorize_end: string | null;

@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>แบบรายงานผลการตรวจสอบความคลาดเคลื่อน</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #eef2f7;
+      color: #111;
+      font-family: Arial, "Noto Sans Thai", Tahoma, sans-serif;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    .toolbar {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 18px 20px 0;
+    }
+    .toolbar a { color: #1d4ed8; font-weight: 700; }
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(320px, 460px) minmax(794px, 1fr);
+      gap: 18px;
+      max-width: 1420px;
+      margin: 0 auto;
+      padding: 18px 20px 50px;
+      align-items: start;
+    }
+    .panel {
+      border: 1px solid #d7dde6;
+      background: #fff;
+      padding: 16px;
+    }
+    h1, h2, p { margin: 0; }
+    h1 { font-size: 22px; line-height: 1.3; }
+    h2 { margin-top: 18px; font-size: 16px; }
+    .hint { margin-top: 6px; color: #4b5563; }
+    label { display: block; margin-top: 10px; font-weight: 700; }
+    input, select, textarea {
+      width: 100%;
+      margin-top: 4px;
+      padding: 8px 9px;
+      border: 1px solid #cfd7e3;
+      border-radius: 4px;
+      font: inherit;
+      background: #fff;
+    }
+    textarea { min-height: 72px; resize: vertical; }
+    .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .check-row { display: flex; gap: 12px; margin-top: 8px; }
+    .check-row label { display: inline-flex; align-items: center; gap: 6px; margin: 0; }
+    .check-row input { width: auto; margin: 0; }
+    .sample-table {
+      width: 100%;
+      margin-top: 10px;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .sample-table th, .sample-table td {
+      border: 1px solid #d7dde6;
+      padding: 6px;
+      vertical-align: top;
+    }
+    .file-row {
+      display: grid;
+      grid-template-columns: 28px 1fr;
+      gap: 8px;
+      margin-top: 8px;
+      align-items: center;
+      color: #374151;
+    }
+    .file-icon {
+      display: inline-grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      border: 1px solid #9ca3af;
+      background: #f9fafb;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .paper {
+      width: 794px;
+      min-height: 1123px;
+      margin: 0 auto;
+      padding: 46px 58px;
+      background: #fff;
+      box-shadow: 0 10px 28px rgba(15, 23, 42, .12);
+      font-size: 16px;
+      line-height: 1.72;
+    }
+    .center { text-align: center; }
+    .title { font-size: 18px; font-weight: 700; line-height: 1.45; }
+    .line {
+      display: inline-block;
+      min-width: 120px;
+      border-bottom: 1px dotted #111;
+      line-height: 1.15;
+      padding: 0 6px;
+    }
+    .line.long { min-width: 430px; }
+    .line.mid { min-width: 230px; }
+    .box {
+      display: inline-grid;
+      place-items: center;
+      width: 18px;
+      height: 18px;
+      margin: 0 5px 0 12px;
+      border: 2px solid #111;
+      vertical-align: middle;
+      font-size: 13px;
+      line-height: 1;
+    }
+    .report-table {
+      width: 100%;
+      margin-top: 26px;
+      border-collapse: collapse;
+      table-layout: fixed;
+      font-size: 15px;
+      line-height: 1.45;
+    }
+    .report-table th, .report-table td {
+      border: 1px solid #222;
+      padding: 8px 6px;
+      text-align: center;
+      vertical-align: middle;
+    }
+    .report-table th { background: #c9c9c9; font-weight: 400; }
+    .report-table td { height: 72px; }
+    .notes { margin-top: 22px; font-size: 15px; line-height: 1.72; }
+    .signature {
+      width: 360px;
+      margin: 34px 0 0 auto;
+      font-size: 15px;
+      line-height: 1.8;
+    }
+    .attachments {
+      margin-top: 18px;
+      font-size: 15px;
+      line-height: 1.75;
+    }
+    .attachments b { text-decoration: underline; }
+    .red { color: #d00; }
+    @media (max-width: 1180px) {
+      .layout { grid-template-columns: 1fr; }
+      .paper-wrap { overflow-x: auto; }
+    }
+    @media print {
+      body { background: #fff; }
+      .toolbar, .panel { display: none; }
+      .layout { display: block; padding: 0; }
+      .paper { box-shadow: none; margin: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar"><a href="00-db-workflow.html">กลับไปหน้า DB และ Workflow</a></div>
+  <main class="layout">
+    <section class="panel">
+      <h1>หน้ากรอกข้อมูลรายงาน</h1>
+      <p class="hint">ตัวอย่างนี้จำลองข้อมูลที่กรอกแล้ว และแสดงกลับลงฟอร์ม PDF ด้านขวา</p>
+
+      <h2>ข้อมูลโรงงาน</h2>
+      <div class="two">
+        <label>ครั้งที่ <input value="1"></label>
+        <label>ปี <input value="2569"></label>
+      </div>
+      <label>ชื่อบริษัท <input value="บริษัท ตัวอย่างอุตสาหกรรม จำกัด"></label>
+      <div class="two">
+        <label>เลขทะเบียนโรงงาน <input value="3-101-55/69กท"></label>
+        <label>ประกอบกิจการ <input value="ผลิตอาหารแปรรูป"></label>
+      </div>
+      <label>สถานที่ตั้ง <textarea>123 ถนนพระรามที่ 6 แขวงพญาไท เขตพญาไท กรุงเทพมหานคร 10400</textarea></label>
+      <label>ปริมาณการระบายน้ำทิ้งขณะเก็บตัวอย่าง <input value="24.50"></label>
+
+      <h2>ห้องปฏิบัติการและเครื่องมือ</h2>
+      <div class="two">
+        <label>ผู้เก็บตัวอย่าง <input value="นายสมชาย ตรวจน้ำ"></label>
+        <label>ทะเบียนเจ้าหน้าที่ <input value="LAB-1256"></label>
+      </div>
+      <label>หน่วยงาน/ชื่อห้องปฏิบัติการ <input value="บริษัท แล็บทดสอบมาตรฐาน จำกัด"></label>
+      <div class="two">
+        <label>ทะเบียนห้องปฏิบัติการ <input value="ว-1234"></label>
+        <label>เลขที่ใบรายงานผลวิเคราะห์ <input value="LAB-REP-2569-001"></label>
+      </div>
+      <label>วิธีวิเคราะห์ทดสอบ <input value="Standard Methods 5210 B / 5220 D"></label>
+      <div class="two">
+        <label>ยี่ห้อ <input value="AquaSense"></label>
+        <label>รุ่น <input value="BC-900"></label>
+      </div>
+      <label>หมายเลขเครื่อง <input value="SN-BC900-0008"></label>
+      <div class="check-row">
+        <label><input type="radio" name="parameter" checked> BOD</label>
+        <label><input type="radio" name="parameter"> COD</label>
+      </div>
+
+      <h2>ผลตรวจ</h2>
+      <table class="sample-table">
+        <thead>
+          <tr><th>วันที่</th><th>เวลา</th><th>M</th><th>T</th><th>E</th><th>ตามประกาศฯ</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>16/06/2569</td><td>10.30</td><td>32.40</td><td>30.10</td><td>2.30</td><td>±10.00</td></tr>
+        </tbody>
+      </table>
+
+      <h2>ไฟล์แนบ</h2>
+      <div class="file-row"><span class="file-icon">JPG</span><span>sample-photo-20260616.jpg</span></div>
+      <div class="file-row"><span class="file-icon">PNG</span><span>device-display-1030.png</span></div>
+      <div class="file-row"><span class="file-icon">PDF</span><span>lab-report-2569-001.pdf</span></div>
+    </section>
+
+    <section class="paper-wrap">
+      <article class="paper">
+        <div class="center">
+          <div class="title">แบบรายงานผลการตรวจสอบความคลาดเคลื่อนของเครื่องมือหรือเครื่องอุปกรณ์พิเศษ</div>
+          <div class="title">และเครื่องมือหรือเครื่องอุปกรณ์เพิ่มเติม</div>
+          <div class="title">ครั้งที่<span class="line">1</span>/ปี<span class="line">2569</span></div>
+        </div>
+
+        <div>ชื่อบริษัท : <span class="line long">บริษัท ตัวอย่างอุตสาหกรรม จำกัด</span></div>
+        <div>เลขทะเบียนโรงงาน : <span class="line mid">3-101-55/69กท</span> ประกอบกิจการ : <span class="line mid">ผลิตอาหารแปรรูป</span></div>
+        <div>สถานที่ตั้ง : <span class="line long">123 ถนนพระรามที่ 6 แขวงพญาไท เขตพญาไท กรุงเทพมหานคร 10400</span></div>
+        <div>ปริมาณการระบายน้ำทิ้งขณะเก็บตัวอย่าง : <span class="line mid">24.50</span> ลบ.ม./ชั่วโมง</div>
+        <div>ผู้เก็บตัวอย่าง : <span class="line mid">นายสมชาย ตรวจน้ำ</span> ทะเบียนเจ้าหน้าที่ : <span class="line">LAB-1256</span></div>
+        <div>หน่วยงาน/ชื่อห้องปฏิบัติการ : <span class="line long">บริษัท แล็บทดสอบมาตรฐาน จำกัด</span></div>
+        <div>ทะเบียนห้องปฏิบัติการ : <span class="line">ว-1234</span> เลขที่ใบรายงานผลวิเคราะห์ : <span class="line">LAB-REP-2569-001</span></div>
+        <div>วิธีวิเคราะห์ทดสอบในห้องปฏิบัติการ : <span class="line long">Standard Methods 5210 B / 5220 D</span></div>
+        <div>รายละเอียดของเครื่องมือหรือเครื่องอุปกรณ์พิเศษฯ : ยี่ห้อ (Brand) : <span class="line mid">AquaSense</span></div>
+        <div>รุ่น (Model) : <span class="line mid">BC-900</span> หมายเลขเครื่อง (Serial No.) : <span class="line mid">SN-BC900-0008</span></div>
+        <div>รายการที่ตรวจสอบค่าความคลาดเคลื่อน : <span class="box">/</span> บีโอดี <span class="box"></span> ซีโอดี</div>
+
+        <table class="report-table">
+          <thead>
+            <tr>
+              <th>วันที่<br>เก็บตัวอย่าง</th>
+              <th>เวลา<br>ที่เก็บตัวอย่าง</th>
+              <th>ค่าที่<br>เครื่องมือ<br>ตรวจวัดได้<br>(มก./ลิตร)<br>(M)</th>
+              <th>ค่าที่<br>ห้องปฏิบัติการ<br>วิเคราะห์ได้<br>(มก./ลิตร)<br>(T)</th>
+              <th>ค่าความ<br>คลาดเคลื่อน<br>(มก./ลิตร)<br>(E)</th>
+              <th>ค่าความ<br>คลาดเคลื่อน<br>ตามประกาศฯ<br>(มก./ลิตร)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>16/06/2569</td><td>10.30</td><td>32.40</td><td>30.10</td><td>2.30</td><td>±10.00</td></tr>
+          </tbody>
+        </table>
+
+        <div class="notes">
+          <b>หมายเหตุ</b> 1. คำนวณค่าความคลาดเคลื่อน โดยใช้สูตร&nbsp;&nbsp; E = M - T<br>
+          โดย E = ค่าความคลาดเคลื่อนของเครื่องตรวจวัดค่าบีโอดีหรือเครื่องตรวจวัดค่าซีโอดี (มิลลิกรัมต่อลิตร)<br>
+          M = ผลการตรวจวัดค่าบีโอดีหรือซีโอดีที่ได้จากเครื่องมือหรือเครื่องอุปกรณ์พิเศษขณะเก็บตัวอย่างน้ำ (มิลลิกรัมต่อลิตร)<br>
+          T = ผลการตรวจวัดค่าบีโอดีหรือซีโอดีที่ได้จากห้องปฏิบัติการ (มิลลิกรัมต่อลิตร)<br>
+          2. ในกรณีที่ผลตรวจวัดค่าบีโอดีหรือซีโอดีน้อยกว่าขีดจำกัดในการวิเคราะห์ของห้องปฏิบัติการ ให้ใช้ค่าจริงที่วิเคราะห์ได้ในการคำนวณ<br>
+          3. การปัดเศษ ให้เป็นไปตาม มอก.929-2533
+        </div>
+
+        <div class="signature">
+          <div>ผู้รายงานผลการทดสอบ <span class="line">นายสมชาย ตรวจน้ำ</span></div>
+          <div class="center">(<span class="line mid">นายสมชาย ตรวจน้ำ</span>)</div>
+          <div>ตำแหน่ง <span class="line mid">นักวิทยาศาสตร์</span></div>
+          <div>ลงวันที่ <span class="line mid">16/06/2569</span></div>
+        </div>
+
+        <div class="attachments">
+          <b>แนบไฟล์ (JPG / PNG /PDF)</b>
+          <ol>
+            <li>ภาพถ่ายขณะเก็บตัวอย่าง <span class="red">(ขนาดไม่เกิน 2 Mb)*</span></li>
+            <li>ภาพหน้าเครื่องมือตรวจวัดที่แสดง ณ เวลาที่เก็บตัวอย่าง <span class="red">(ขนาดไม่เกิน 2 Mb)*</span></li>
+            <li>รายงานผลจากห้องปฏิบัติการ <span class="red">(ขนาดไม่เกิน 2 Mb)*</span></li>
+          </ol>
+        </div>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

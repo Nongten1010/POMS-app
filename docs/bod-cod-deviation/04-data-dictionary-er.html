@@ -1,0 +1,508 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Data Dictionary และ ER Diagram - BOD/COD Deviation Report</title>
+  <style>
+    :root {
+      --ink: #111827;
+      --muted: #4b5563;
+      --line: #d7dde6;
+      --soft: #f6f8fb;
+      --head: #e9eef6;
+      --blue: #1d4ed8;
+      --green: #047857;
+      --amber: #b45309;
+      --red: #b91c1c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #fff;
+      font-family: Arial, "Noto Sans Thai", Tahoma, sans-serif;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    main {
+      width: min(1240px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 30px 0 56px;
+    }
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: 28px; line-height: 1.25; }
+    h2 {
+      margin-top: 30px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--line);
+      font-size: 21px;
+    }
+    h3 { margin-top: 20px; font-size: 17px; }
+    p { margin-top: 8px; }
+    a { color: var(--blue); }
+    code {
+      padding: 1px 5px;
+      border: 1px solid #dbe3ef;
+      border-radius: 4px;
+      background: #f8fafc;
+      color: #0f172a;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 12px;
+    }
+    .cover {
+      padding: 24px 26px;
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, #f8fbff 0%, #fff 100%);
+    }
+    .subtitle { color: var(--muted); font-size: 15px; }
+    .links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+    }
+    .link-button {
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 6px 12px;
+      border: 1px solid #bfd0ea;
+      border-radius: 6px;
+      background: #f2f6ff;
+      text-decoration: none;
+      font-weight: 700;
+    }
+    .note {
+      margin-top: 14px;
+      padding: 12px 14px;
+      border-left: 4px solid var(--blue);
+      background: #eef5ff;
+    }
+    .warning {
+      border-left-color: var(--amber);
+      background: #fff7ed;
+    }
+    .table-wrap {
+      margin-top: 12px;
+      overflow-x: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+    th, td {
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      vertical-align: top;
+      word-break: break-word;
+    }
+    th {
+      background: var(--head);
+      text-align: left;
+      font-weight: 700;
+    }
+    tbody tr:nth-child(even) td { background: #fbfcfe; }
+    .tag {
+      display: inline-block;
+      padding: 2px 7px;
+      border: 1px solid #bfd0ea;
+      border-radius: 999px;
+      background: #f2f6ff;
+      color: #1e3a8a;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .tag.pk { border-color: #86efac; background: #ecfdf5; color: #047857; }
+    .tag.fk { border-color: #fed7aa; background: #fff7ed; color: #b45309; }
+    .tag.req { border-color: #fecaca; background: #fff1f2; color: #b91c1c; }
+    .erd-wrap {
+      margin-top: 14px;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      background: #fff;
+    }
+    .erd {
+      display: block;
+      min-width: 1180px;
+      width: 100%;
+      height: auto;
+    }
+    .entity { fill: #fff; stroke: #94a3b8; stroke-width: 1.2; }
+    .entity-main { fill: #f8fbff; stroke: var(--blue); stroke-width: 1.8; }
+    .erd-review { fill: #f6f0ff; stroke: #7c3aed; stroke-width: 1.4; }
+    .erd-audit { fill: #fff7ed; stroke: #b45309; stroke-width: 1.4; }
+    .erd-file { fill: #ecfdf5; stroke: #047857; stroke-width: 1.4; }
+    .entity-title { fill: #0f172a; font-family: "SFMono-Regular", Consolas, monospace; font-size: 14px; font-weight: 700; }
+    .entity-field { fill: #334155; font-family: "SFMono-Regular", Consolas, monospace; font-size: 12px; }
+    .rel { stroke: #334155; stroke-width: 1.6; fill: none; marker-end: url(#arrow); }
+    .rel-blue, .rel-green, .rel-violet, .rel-orange { stroke: #334155; }
+    .rel-label {
+      fill: #475569;
+      font-size: 12px;
+      font-weight: 700;
+      paint-order: stroke;
+      stroke: #ffffff;
+      stroke-width: 4px;
+      stroke-linejoin: round;
+    }
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+      color: var(--muted);
+    }
+    pre {
+      margin: 12px 0 0;
+      padding: 14px;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      background: #0f172a;
+      color: #e5e7eb;
+      font-size: 12px;
+      line-height: 1.55;
+    }
+    @media print {
+      main { width: 100%; padding: 0; }
+      .links { display: none; }
+      .cover, .note, table, .erd-wrap { break-inside: avoid; }
+    }
+  </style>
+
+</head>
+<body>
+  <main>
+    <section class="cover">
+      <h1>Data Dictionary และ ER Diagram</h1>
+      <p class="subtitle">ฐานข้อมูลสำหรับรายงานค่าความคลาดเคลื่อน BOD/COD Online และแบบแจ้งผลการตรวจสอบ ส่วนกลาง/ส่วนภูมิภาค</p>
+      <div class="links">
+        <a class="link-button" href="00-db-workflow.html">DB และ Workflow</a>
+        <a class="link-button" href="01-report-form.html">แบบรายงานผล</a>
+        <a class="link-button" href="02-central-approval.html">แบบแจ้งผลส่วนกลาง</a>
+        <a class="link-button" href="03-regional-approval.html">แบบแจ้งผลส่วนภูมิภาค</a>
+        <a class="link-button" href="06-er-diagram-options.html">ER Diagram 6 แบบ</a>
+      </div>
+    </section>
+
+    <section class="note">
+      <strong>ขอบเขตการออกแบบ</strong>
+      <p>รายงาน 1 ฉบับเลือกพารามิเตอร์ได้เพียง 1 รายการ คือ <code>BOD</code> หรือ <code>COD</code> เท่านั้น ข้อมูลโรงงานถูก snapshot ลงรายงานตอนส่ง เพื่อให้การออกเอกสารย้อนหลังไม่เปลี่ยนตาม master data ที่อาจแก้ภายหลัง</p>
+    </section>
+
+    <h2>1. ER Diagram</h2>
+    <div class="erd-wrap">
+      <svg class="erd" viewBox="0 0 1180 700" role="img" aria-label="ER diagram for BOD COD deviation report database">
+        <defs>
+          <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L9,3 z" fill="#64748b"></path>
+          </marker>
+        </defs>
+
+        <rect class="entity-main" x="420" y="262" width="340" height="136" rx="8"></rect>
+        <text class="entity-title" x="446" y="294">bod_cod_deviation_reports</text>
+        <text class="entity-field" x="446" y="322">PK id, report_no</text>
+        <text class="entity-field" x="446" y="344">selected_parameter_code</text>
+        <text class="entity-field" x="446" y="366">approval_track, status</text>
+
+        <rect class="entity" x="70" y="80" width="300" height="108" rx="6"></rect>
+        <text class="entity-title" x="92" y="112">bod_cod_deviation_measurements</text>
+        <text class="entity-field" x="92" y="140">FK report_id, parameter_code</text>
+        <text class="entity-field" x="92" y="162">sample_date/time, M, T, E</text>
+
+        <rect class="erd-review" x="810" y="80" width="300" height="108" rx="6"></rect>
+        <text class="entity-title" x="832" y="112">bod_cod_deviation_reviews</text>
+        <text class="entity-field" x="832" y="140">PK/FK report_id</text>
+        <text class="entity-field" x="832" y="162">check results, reasons</text>
+
+        <rect class="erd-file" x="70" y="520" width="300" height="108" rx="6"></rect>
+        <text class="entity-title" x="92" y="552">bod_cod_deviation_attachments</text>
+        <text class="entity-field" x="92" y="580">FK report_id</text>
+        <text class="entity-field" x="92" y="602">attachment_type, file metadata</text>
+
+        <rect class="entity" x="810" y="520" width="300" height="108" rx="6"></rect>
+        <text class="entity-title" x="832" y="552">bod_cod_approval_steps</text>
+        <text class="entity-field" x="832" y="580">FK report_id, role/status</text>
+        <text class="entity-field" x="832" y="602">decision, revision_no</text>
+
+        <rect class="erd-audit" x="440" y="540" width="300" height="108" rx="6"></rect>
+        <text class="entity-title" x="462" y="572">bod_cod_approval_events</text>
+        <text class="entity-field" x="462" y="600">FK report_id, FK step_id</text>
+        <text class="entity-field" x="462" y="622">event_type, actor_user_id</text>
+
+        <path class="rel rel-blue" d="M420 286 H300 V188"></path>
+        <text class="rel-label" x="306" y="240">1:N</text>
+        <path class="rel rel-violet" d="M760 286 H960 V188"></path>
+        <text class="rel-label" x="930" y="240">1:1</text>
+        <path class="rel rel-green" d="M420 374 H220 V520"></path>
+        <text class="rel-label" x="230" y="462">1:N</text>
+        <path class="rel" d="M760 374 H960 V520"></path>
+        <text class="rel-label" x="970" y="462">1:N</text>
+        <path class="rel rel-orange" d="M590 398 V540"></path>
+        <text class="rel-label" x="604" y="476">1:N</text>
+        <path class="rel rel-orange" d="M810 584 H740"></path>
+        <text class="rel-label" x="756" y="572">1:N</text>
+      </svg>
+    </div>
+    <div class="legend">
+      <span class="tag pk">PK = Primary Key</span>
+      <span class="tag fk">FK = Foreign Key</span>
+      <span class="tag">1:N = รายงานหนึ่งฉบับมีได้หลายรายการ</span>
+      <span class="tag">1:1 = รายงานหนึ่งฉบับมีผลตรวจแจ้งผลหนึ่งชุด</span>
+    </div>
+
+    <h2>2. Relationship Summary</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 28%;">Parent</th>
+            <th style="width: 28%;">Child</th>
+            <th style="width: 16%;">Cardinality</th>
+            <th>คำอธิบาย</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>bod_cod_deviation_reports.id</code></td>
+            <td><code>bod_cod_deviation_measurements.report_id</code></td>
+            <td>1:N</td>
+            <td>หนึ่งรายงานมีแถวผลตรวจได้หลายแถว แต่ทุกแถวต้องเป็น parameter เดียวกับที่เลือกในรายงาน</td>
+          </tr>
+          <tr>
+            <td><code>bod_cod_deviation_reports.id</code></td>
+            <td><code>bod_cod_deviation_reviews.report_id</code></td>
+            <td>1:1</td>
+            <td>หนึ่งรายงานมีผลตรวจเพื่อออกแบบแจ้งผลหนึ่งชุด</td>
+          </tr>
+          <tr>
+            <td><code>bod_cod_deviation_reports.id</code></td>
+            <td><code>bod_cod_deviation_attachments.report_id</code></td>
+            <td>1:N</td>
+            <td>หนึ่งรายงานต้องมีไฟล์แนบตามประเภทที่กำหนด</td>
+          </tr>
+          <tr>
+            <td><code>bod_cod_deviation_reports.id</code></td>
+            <td><code>bod_cod_approval_steps.report_id</code></td>
+            <td>1:N</td>
+            <td>สร้าง step ตามพื้นที่: CENTRAL = 3 step, REGIONAL = 2 step</td>
+          </tr>
+          <tr>
+            <td><code>bod_cod_deviation_reports.id</code></td>
+            <td><code>bod_cod_approval_events.report_id</code></td>
+            <td>1:N</td>
+            <td>เก็บประวัติ action ทุกครั้งของรายงาน</td>
+          </tr>
+          <tr>
+            <td><code>bod_cod_approval_steps.id</code></td>
+            <td><code>bod_cod_approval_events.step_id</code></td>
+            <td>1:N</td>
+            <td>event บางรายการผูกกับ step เฉพาะ เช่น approve หรือ edit_after_approval</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>3. Table: bod_cod_deviation_reports</h2>
+    <p>หัวรายงานและข้อมูล snapshot สำหรับพิมพ์แบบรายงานผลการตรวจสอบความคลาดเคลื่อน</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 22%;">Column</th>
+            <th style="width: 16%;">Type</th>
+            <th style="width: 12%;">Key/Null</th>
+            <th>คำอธิบาย</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><code>id</code></td><td>BIGINT IDENTITY</td><td><span class="tag pk">PK</span></td><td>รหัสรายงานภายในระบบ</td></tr>
+          <tr><td><code>report_no</code></td><td>VARCHAR(40)</td><td><span class="tag req">NOT NULL</span></td><td>เลขที่รายงาน เช่น BODCOD-2569-0001</td></tr>
+          <tr><td><code>report_round</code></td><td>INT</td><td><span class="tag req">NOT NULL</span></td><td>ครั้งที่รายงาน</td></tr>
+          <tr><td><code>report_year</code></td><td>INT</td><td><span class="tag req">NOT NULL</span></td><td>ปี พ.ศ. ของรายงาน</td></tr>
+          <tr><td><code>factory_id</code></td><td>BIGINT</td><td>NULL</td><td>อ้างอิงโรงงานใน master data ถ้ามี</td></tr>
+          <tr><td><code>factory_name</code></td><td>NVARCHAR(255)</td><td><span class="tag req">NOT NULL</span></td><td>ชื่อบริษัท/โรงงานที่แสดงในเอกสาร</td></tr>
+          <tr><td><code>factory_registration_no</code></td><td>NVARCHAR(80)</td><td><span class="tag req">NOT NULL</span></td><td>เลขทะเบียนโรงงาน</td></tr>
+          <tr><td><code>business_activity</code></td><td>NVARCHAR(255)</td><td>NULL</td><td>ประกอบกิจการ</td></tr>
+          <tr><td><code>address</code></td><td>NVARCHAR(1000)</td><td>NULL</td><td>สถานที่ตั้งโรงงานแบบ snapshot</td></tr>
+          <tr><td><code>province_name</code></td><td>NVARCHAR(120)</td><td><span class="tag req">NOT NULL</span></td><td>จังหวัด ใช้ตัดสิน workflow กรุงเทพฯ/ภูมิภาค</td></tr>
+          <tr><td><code>approval_track</code></td><td>VARCHAR(16)</td><td><span class="tag req">NOT NULL</span></td><td><code>CENTRAL</code> หรือ <code>REGIONAL</code></td></tr>
+          <tr><td><code>selected_parameter_code</code></td><td>VARCHAR(8)</td><td><span class="tag req">NOT NULL</span></td><td>เลือกได้อันเดียว: <code>BOD</code> หรือ <code>COD</code></td></tr>
+          <tr><td><code>wastewater_flow_m3_per_hour</code></td><td>DECIMAL(12,2)</td><td>NULL</td><td>ปริมาณการระบายน้ำทิ้งขณะเก็บตัวอย่าง หน่วย ลบ.ม./ชั่วโมง</td></tr>
+          <tr><td><code>sampler_name</code></td><td>NVARCHAR(255)</td><td>NULL</td><td>ผู้เก็บตัวอย่าง</td></tr>
+          <tr><td><code>officer_registration_no</code></td><td>NVARCHAR(80)</td><td>NULL</td><td>ทะเบียนเจ้าหน้าที่</td></tr>
+          <tr><td><code>laboratory_name</code></td><td>NVARCHAR(255)</td><td>NULL</td><td>หน่วยงาน/ชื่อห้องปฏิบัติการ</td></tr>
+          <tr><td><code>laboratory_registration_no</code></td><td>NVARCHAR(80)</td><td>NULL</td><td>ทะเบียนห้องปฏิบัติการ</td></tr>
+          <tr><td><code>lab_report_no</code></td><td>NVARCHAR(120)</td><td>NULL</td><td>เลขที่ใบรายงานผลวิเคราะห์</td></tr>
+          <tr><td><code>analysis_method</code></td><td>NVARCHAR(255)</td><td>NULL</td><td>วิธีวิเคราะห์ทดสอบในห้องปฏิบัติการ</td></tr>
+          <tr><td><code>device_brand</code></td><td>NVARCHAR(120)</td><td>NULL</td><td>ยี่ห้อเครื่องมือ</td></tr>
+          <tr><td><code>device_model</code></td><td>NVARCHAR(120)</td><td>NULL</td><td>รุ่นเครื่องมือ</td></tr>
+          <tr><td><code>device_serial_no</code></td><td>NVARCHAR(120)</td><td>NULL</td><td>หมายเลขเครื่อง</td></tr>
+          <tr><td><code>reporter_name</code></td><td>NVARCHAR(255)</td><td>NULL</td><td>ผู้รายงานผลการทดสอบ</td></tr>
+          <tr><td><code>reporter_position</code></td><td>NVARCHAR(255)</td><td>NULL</td><td>ตำแหน่งผู้รายงานผลการทดสอบ</td></tr>
+          <tr><td><code>status</code></td><td>VARCHAR(32)</td><td><span class="tag req">NOT NULL</span></td><td><code>DRAFT</code>, <code>SUBMITTED</code>, <code>UNDER_REVIEW</code>, <code>WAITING_APPROVAL</code>, <code>APPROVED</code>, <code>REVISION_REQUESTED</code>, <code>CANCELLED</code></td></tr>
+          <tr><td><code>submitted_at</code></td><td>DATETIME2</td><td>NULL</td><td>วันเวลาที่โรงงานส่งรายงาน</td></tr>
+          <tr><td><code>created_by</code></td><td>BIGINT</td><td><span class="tag req">NOT NULL</span></td><td>ผู้สร้างรายงาน</td></tr>
+          <tr><td><code>updated_by</code></td><td>BIGINT</td><td>NULL</td><td>ผู้แก้ไขล่าสุด</td></tr>
+          <tr><td><code>created_at</code></td><td>DATETIME2</td><td><span class="tag req">NOT NULL</span></td><td>วันเวลาสร้างข้อมูล</td></tr>
+          <tr><td><code>updated_at</code></td><td>DATETIME2</td><td><span class="tag req">NOT NULL</span></td><td>วันเวลาแก้ไขล่าสุด</td></tr>
+          <tr><td><code>deleted_at</code></td><td>DATETIME2</td><td>NULL</td><td>soft delete</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>4. Table: bod_cod_deviation_measurements</h2>
+    <p>แถวผลตรวจวัดตามตารางในแบบรายงาน PDF</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th style="width: 22%;">Column</th><th style="width: 16%;">Type</th><th style="width: 12%;">Key/Null</th><th>คำอธิบาย</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>id</code></td><td>BIGINT IDENTITY</td><td><span class="tag pk">PK</span></td><td>รหัสแถวผลตรวจ</td></tr>
+          <tr><td><code>report_id</code></td><td>BIGINT</td><td><span class="tag fk">FK</span></td><td>อ้างอิง <code>bod_cod_deviation_reports.id</code></td></tr>
+          <tr><td><code>parameter_code</code></td><td>VARCHAR(8)</td><td><span class="tag req">NOT NULL</span></td><td><code>BOD</code> หรือ <code>COD</code> ต้องตรงกับ <code>reports.selected_parameter_code</code></td></tr>
+          <tr><td><code>sample_date</code></td><td>DATE</td><td><span class="tag req">NOT NULL</span></td><td>วันที่เก็บตัวอย่าง</td></tr>
+          <tr><td><code>sample_time</code></td><td>TIME(0)</td><td><span class="tag req">NOT NULL</span></td><td>เวลาที่เก็บตัวอย่าง</td></tr>
+          <tr><td><code>device_value_mg_l</code></td><td>DECIMAL(12,3)</td><td><span class="tag req">NOT NULL</span></td><td>ค่าที่เครื่องมือตรวจวัดได้ (M) หน่วย mg/l</td></tr>
+          <tr><td><code>lab_value_mg_l</code></td><td>DECIMAL(12,3)</td><td><span class="tag req">NOT NULL</span></td><td>ค่าที่ห้องปฏิบัติการวิเคราะห์ได้ (T) หน่วย mg/l</td></tr>
+          <tr><td><code>deviation_value_mg_l</code></td><td>DECIMAL(12,3)</td><td>Generated</td><td>ค่าความคลาดเคลื่อน (E) = M - T</td></tr>
+          <tr><td><code>standard_deviation_mg_l</code></td><td>DECIMAL(12,3)</td><td>NULL</td><td>ค่าความคลาดเคลื่อนตามประกาศฯ</td></tr>
+          <tr><td><code>is_within_standard</code></td><td>BIT</td><td>NULL</td><td>ผลเทียบเกณฑ์: 1 = เป็นไปตามประกาศ, 0 = ไม่เป็นไปตามประกาศ</td></tr>
+          <tr><td><code>sort_order</code></td><td>INT</td><td><span class="tag req">NOT NULL</span></td><td>ลำดับแสดงผลในตาราง</td></tr>
+          <tr><td><code>created_at</code></td><td>DATETIME2</td><td><span class="tag req">NOT NULL</span></td><td>วันเวลาสร้างข้อมูล</td></tr>
+          <tr><td><code>updated_at</code></td><td>DATETIME2</td><td><span class="tag req">NOT NULL</span></td><td>วันเวลาแก้ไขล่าสุด</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>5. Table: bod_cod_deviation_attachments</h2>
+    <p>ไฟล์แนบตามฟอร์ม: ภาพเก็บตัวอย่าง, ภาพหน้าเครื่องมือ, รายงานผลจากห้องปฏิบัติการ</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th style="width: 22%;">Column</th><th style="width: 16%;">Type</th><th style="width: 12%;">Key/Null</th><th>คำอธิบาย</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>id</code></td><td>BIGINT IDENTITY</td><td><span class="tag pk">PK</span></td><td>รหัสไฟล์แนบ</td></tr>
+          <tr><td><code>report_id</code></td><td>BIGINT</td><td><span class="tag fk">FK</span></td><td>อ้างอิง <code>bod_cod_deviation_reports.id</code></td></tr>
+          <tr><td><code>attachment_type</code></td><td>VARCHAR(40)</td><td><span class="tag req">NOT NULL</span></td><td><code>SAMPLE_PHOTO</code>, <code>DEVICE_PHOTO</code>, <code>LAB_REPORT</code></td></tr>
+          <tr><td><code>original_file_name</code></td><td>NVARCHAR(255)</td><td><span class="tag req">NOT NULL</span></td><td>ชื่อไฟล์ที่ผู้ใช้ upload</td></tr>
+          <tr><td><code>stored_file_name</code></td><td>NVARCHAR(255)</td><td><span class="tag req">NOT NULL</span></td><td>ชื่อไฟล์ที่ระบบเก็บจริง</td></tr>
+          <tr><td><code>mime_type</code></td><td>VARCHAR(120)</td><td><span class="tag req">NOT NULL</span></td><td><code>image/jpeg</code>, <code>image/png</code>, <code>application/pdf</code></td></tr>
+          <tr><td><code>file_size_bytes</code></td><td>INT</td><td><span class="tag req">NOT NULL</span></td><td>ขนาดไฟล์ ต้องไม่เกิน 2 MB</td></tr>
+          <tr><td><code>storage_path</code></td><td>NVARCHAR(1000)</td><td><span class="tag req">NOT NULL</span></td><td>path หรือ object key สำหรับอ่านไฟล์</td></tr>
+          <tr><td><code>checksum_sha256</code></td><td>CHAR(64)</td><td>NULL</td><td>hash สำหรับตรวจความซ้ำ/ความถูกต้องของไฟล์</td></tr>
+          <tr><td><code>uploaded_by</code></td><td>BIGINT</td><td><span class="tag req">NOT NULL</span></td><td>ผู้ upload ไฟล์</td></tr>
+          <tr><td><code>uploaded_at</code></td><td>DATETIME2</td><td><span class="tag req">NOT NULL</span></td><td>วันเวลา upload</td></tr>
+          <tr><td><code>deleted_at</code></td><td>DATETIME2</td><td>NULL</td><td>soft delete กรณีเปลี่ยนไฟล์แนบ</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>6. Table: bod_cod_deviation_reviews</h2>
+    <p>ผลตรวจเพื่อสร้างแบบแจ้งผลการตรวจสอบ ทั้งส่วนกลางและส่วนภูมิภาค</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th style="width: 22%;">Column</th><th style="width: 16%;">Type</th><th style="width: 12%;">Key/Null</th><th>คำอธิบาย</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>report_id</code></td><td>BIGINT</td><td><span class="tag pk">PK/FK</span></td><td>อ้างอิง <code>bod_cod_deviation_reports.id</code></td></tr>
+          <tr><td><code>selected_parameter_code</code></td><td>VARCHAR(8)</td><td><span class="tag req">NOT NULL</span></td><td>parameter ที่ใช้ในแบบแจ้งผล ต้องเป็น <code>BOD</code> หรือ <code>COD</code></td></tr>
+          <tr><td><code>form_check_result</code></td><td>VARCHAR(16)</td><td>NULL</td><td><code>CORRECT</code> หรือ <code>INCORRECT</code></td></tr>
+          <tr><td><code>form_check_reason</code></td><td>NVARCHAR(MAX)</td><td>NULL</td><td>เหตุผลกรณีแบบรายงานไม่ถูกต้องครบถ้วน</td></tr>
+          <tr><td><code>deviation_check_result</code></td><td>VARCHAR(20)</td><td>NULL</td><td><code>COMPLIANT</code> หรือ <code>NON_COMPLIANT</code></td></tr>
+          <tr><td><code>deviation_check_reason</code></td><td>NVARCHAR(MAX)</td><td>NULL</td><td>เหตุผลประกอบผลค่าความคลาดเคลื่อน</td></tr>
+          <tr><td><code>regulator_notice_required</code></td><td>BIT</td><td><span class="tag req">NOT NULL</span></td><td>ต้องแจ้งหน่วยงานกำกับหรือไม่</td></tr>
+          <tr><td><code>updated_by</code></td><td>BIGINT</td><td>NULL</td><td>ผู้แก้ไขผลตรวจล่าสุด</td></tr>
+          <tr><td><code>updated_at</code></td><td>DATETIME2</td><td><span class="tag req">NOT NULL</span></td><td>วันเวลาแก้ไขล่าสุด</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>7. Table: bod_cod_approval_steps</h2>
+    <p>สถานะอนุมัติรายคน สำหรับรองรับส่วนกลาง 3 คน และส่วนภูมิภาค 2 คน</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th style="width: 22%;">Column</th><th style="width: 16%;">Type</th><th style="width: 12%;">Key/Null</th><th>คำอธิบาย</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>id</code></td><td>BIGINT IDENTITY</td><td><span class="tag pk">PK</span></td><td>รหัส step อนุมัติ</td></tr>
+          <tr><td><code>report_id</code></td><td>BIGINT</td><td><span class="tag fk">FK</span></td><td>อ้างอิง <code>bod_cod_deviation_reports.id</code></td></tr>
+          <tr><td><code>track</code></td><td>VARCHAR(16)</td><td><span class="tag req">NOT NULL</span></td><td><code>CENTRAL</code> หรือ <code>REGIONAL</code></td></tr>
+          <tr><td><code>step_no</code></td><td>INT</td><td><span class="tag req">NOT NULL</span></td><td>ลำดับอนุมัติ</td></tr>
+          <tr><td><code>role_code</code></td><td>VARCHAR(32)</td><td><span class="tag req">NOT NULL</span></td><td><code>INSPECTOR</code>, <code>REVIEWER</code>, <code>APPROVER</code></td></tr>
+          <tr><td><code>role_label</code></td><td>NVARCHAR(80)</td><td><span class="tag req">NOT NULL</span></td><td>ข้อความบนเอกสาร เช่น ผู้ตรวจสอบ, ผู้ทบทวน, ผู้อนุมัติ</td></tr>
+          <tr><td><code>status</code></td><td>VARCHAR(24)</td><td><span class="tag req">NOT NULL</span></td><td><code>PENDING</code>, <code>APPROVED</code>, <code>REVISION_REQUESTED</code>, <code>EDITED_AFTER_APPROVAL</code></td></tr>
+          <tr><td><code>actor_user_id</code></td><td>BIGINT</td><td>NULL</td><td>ผู้ดำเนินการ step นี้</td></tr>
+          <tr><td><code>actor_name</code></td><td>NVARCHAR(255)</td><td>NULL</td><td>ชื่อที่แสดงในช่องลายเซ็น</td></tr>
+          <tr><td><code>actor_position</code></td><td>NVARCHAR(255)</td><td>NULL</td><td>ตำแหน่งที่แสดงในช่องลายเซ็น</td></tr>
+          <tr><td><code>decision</code></td><td>VARCHAR(24)</td><td>NULL</td><td><code>APPROVED</code> หรือ <code>REVISION_REQUESTED</code></td></tr>
+          <tr><td><code>comment</code></td><td>NVARCHAR(MAX)</td><td>NULL</td><td>หมายเหตุหรือเหตุผลการขอแก้ไข</td></tr>
+          <tr><td><code>decided_at</code></td><td>DATETIME2</td><td>NULL</td><td>วันเวลาตัดสินใจ</td></tr>
+          <tr><td><code>revision_no</code></td><td>INT</td><td><span class="tag req">NOT NULL</span></td><td>เลข revision ของ step เพื่อรองรับการแก้ไขย้อนหลัง</td></tr>
+          <tr><td><code>is_current</code></td><td>BIT</td><td><span class="tag req">NOT NULL</span></td><td>1 = record ปัจจุบัน, 0 = revision เก่า</td></tr>
+          <tr><td><code>created_at</code></td><td>DATETIME2</td><td><span class="tag req">NOT NULL</span></td><td>วันเวลาสร้าง step</td></tr>
+          <tr><td><code>updated_at</code></td><td>DATETIME2</td><td><span class="tag req">NOT NULL</span></td><td>วันเวลาแก้ไขล่าสุด</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>8. Table: bod_cod_approval_events</h2>
+    <p>audit trail สำหรับ submit, approve, request revision, resubmit และแก้ไขหลังอนุมัติ</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th style="width: 22%;">Column</th><th style="width: 16%;">Type</th><th style="width: 12%;">Key/Null</th><th>คำอธิบาย</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>id</code></td><td>BIGINT IDENTITY</td><td><span class="tag pk">PK</span></td><td>รหัส event</td></tr>
+          <tr><td><code>report_id</code></td><td>BIGINT</td><td><span class="tag fk">FK</span></td><td>อ้างอิง <code>bod_cod_deviation_reports.id</code></td></tr>
+          <tr><td><code>step_id</code></td><td>BIGINT</td><td><span class="tag fk">FK NULL</span></td><td>อ้างอิง step กรณี event เกี่ยวกับคนอนุมัติ</td></tr>
+          <tr><td><code>event_type</code></td><td>VARCHAR(32)</td><td><span class="tag req">NOT NULL</span></td><td><code>submit</code>, <code>approve</code>, <code>request_revision</code>, <code>resubmit</code>, <code>edit_after_approval</code>, <code>comment</code></td></tr>
+          <tr><td><code>actor_user_id</code></td><td>BIGINT</td><td><span class="tag req">NOT NULL</span></td><td>ผู้กระทำ event</td></tr>
+          <tr><td><code>from_status</code></td><td>VARCHAR(32)</td><td>NULL</td><td>สถานะก่อน action</td></tr>
+          <tr><td><code>to_status</code></td><td>VARCHAR(32)</td><td>NULL</td><td>สถานะหลัง action</td></tr>
+          <tr><td><code>comment</code></td><td>NVARCHAR(MAX)</td><td>NULL</td><td>ข้อความประกอบ action</td></tr>
+          <tr><td><code>metadata_json</code></td><td>NVARCHAR(MAX)</td><td>NULL</td><td>JSON เก็บ diff, revision, snapshot หรือข้อมูลประกอบอื่น</td></tr>
+          <tr><td><code>created_at</code></td><td>DATETIME2</td><td><span class="tag req">NOT NULL</span></td><td>วันเวลาที่เกิด event</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>9. Constraints และ Index ที่แนะนำ</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 30%;">Name</th>
+            <th style="width: 22%;">Table</th>
+            <th>รายละเอียด</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><code>ck_bodcod_report_track</code></td><td><code>reports</code></td><td><code>approval_track IN ('CENTRAL','REGIONAL')</code></td></tr>
+          <tr><td><code>ck_bodcod_report_parameter</code></td><td><code>reports</code></td><td><code>selected_parameter_code IN ('BOD','COD')</code></td></tr>
+          <tr><td><code>ck_bodcod_report_status</code></td><td><code>reports</code></td><td>จำกัดสถานะรายงานตาม workflow ที่กำหนด</td></tr>
+          <tr><td><code>ck_bodcod_attachment_type</code></td><td><code>attachments</code></td><td><code>attachment_type IN ('SAMPLE_PHOTO','DEVICE_PHOTO','LAB_REPORT')</code></td></tr>
+          <tr><td><code>ck_bodcod_attachment_size</code></td><td><code>attachments</code></td><td><code>file_size_bytes &lt;= 2097152</code></td></tr>
+          <tr><td><code>ux_bodcod_report_no</code></td><td><code>reports</code></td><td>unique เฉพาะ <code>report_no</code> ที่ยังไม่ถูก soft delete</td></tr>
+          <tr><td><code>ux_bodcod_step_current</code></td><td><code>approval_steps</code></td><td>unique <code>(report_id, step_no)</code> เฉพาะ <code>is_current = 1</code></td></tr>
+          <tr><td><code>ix_bodcod_reports_status</code></td><td><code>reports</code></td><td>ค้นหารายงานตามสถานะและวันที่ส่ง</td></tr>
+          <tr><td><code>ix_bodcod_reports_factory</code></td><td><code>reports</code></td><td>ค้นหาประวัติรายงานตามโรงงาน</td></tr>
+          <tr><td><code>ix_bodcod_events_report</code></td><td><code>approval_events</code></td><td>ดึง timeline ของรายงานตาม <code>report_id, created_at</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <section class="note warning">
+      <strong>หมายเหตุสำหรับ implement จริง</strong>
+      <p>ถ้าต้องการ enforce ว่า <code>measurements.parameter_code</code> ตรงกับ <code>reports.selected_parameter_code</code> ทุกครั้ง อาจทำใน service layer หรือใช้ trigger/check logic เพิ่ม เพราะ SQL Server check constraint ไม่สามารถอ้าง column ข้ามตารางได้โดยตรง</p>
+    </section>
+  </main>
+</body>
+</html>

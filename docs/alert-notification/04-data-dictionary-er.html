@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Data Dictionary และ ER Diagram - Alert Notification</title>
+  <style>
+    :root { color-scheme: light; --ink:#172033; --muted:#526173; --line:#dbe3ef; --head:#eef4fb; --blue:#e8f1ff; --green:#e9f8ef; --orange:#fff3e1; --red:#ffecec; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: "TH Sarabun New", Tahoma, Arial, sans-serif; color:var(--ink); background:#f6f8fb; line-height:1.55; }
+    main { width:min(1180px, calc(100% - 32px)); margin:32px auto; }
+    section { background:#fff; border:1px solid var(--line); border-radius:8px; padding:24px; margin:0 0 18px; }
+    h1 { margin:0 0 8px; font-size:34px; }
+    h2 { margin:0 0 14px; font-size:26px; }
+    h3 { margin:18px 0 8px; font-size:22px; }
+    p { margin:0 0 12px; }
+    code { font-family: Consolas, "Courier New", monospace; background:#f2f5f9; padding:1px 5px; border-radius:4px; }
+    .subtitle { color:var(--muted); font-size:20px; }
+    .links { display:flex; flex-wrap:wrap; gap:8px; margin-top:16px; }
+    .link-button, .tag { display:inline-flex; align-items:center; border:1px solid var(--line); border-radius:999px; padding:4px 10px; color:#26435f; background:#f9fbfe; text-decoration:none; font-size:16px; }
+    .tag.pk { background:var(--orange); }
+    .tag.fk { background:var(--blue); }
+    .tag.req { background:var(--red); }
+    .table-wrap { overflow:auto; border:1px solid var(--line); border-radius:8px; }
+    table { width:100%; border-collapse:collapse; table-layout:fixed; background:#fff; }
+    th, td { border-bottom:1px solid var(--line); border-right:1px solid var(--line); padding:8px 10px; vertical-align:top; word-break:break-word; }
+    th:last-child, td:last-child { border-right:0; }
+    tr:last-child td { border-bottom:0; }
+    th { background:var(--head); text-align:left; }
+    .erd-wrap { overflow:auto; border:1px solid var(--line); border-radius:8px; background:#fbfdff; padding:16px; }
+    .erd { min-width:980px; width:100%; height:auto; }
+    .entity { fill:#fff; stroke:#8ea7c2; stroke-width:1.5; rx:8; }
+    .entity.main { fill:#f8fbff; stroke:#1d4ed8; stroke-width:1.8; }
+    .entity.derived { fill:#ecfdf5; stroke:#047857; stroke-width:1.4; }
+    .entity-title { font-size:18px; font-weight:700; fill:#172033; }
+    .field { font-size:14px; fill:#465569; }
+    .rel { stroke:#64748b; stroke-width:2; fill:none; marker-end:url(#arrow); }
+    @media print { body { background:#fff; } main { width:100%; margin:0; } section { break-inside:avoid; border-color:#cfd8e3; } }
+  
+
+    /* Match docs/kwp-forms/04-data-dictionary-er.html visual style */
+    :root {
+      --ink: #111827;
+      --muted: #4b5563;
+      --line: #d7dde6;
+      --soft: #f6f8fb;
+      --head: #e9eef6;
+      --blue: #1d4ed8;
+      --green: #047857;
+      --amber: #b45309;
+      --red: #b91c1c;
+    }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #fff;
+      font-family: Arial, "Noto Sans Thai", Tahoma, sans-serif;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    main {
+      width: min(1240px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 30px 0 56px;
+    }
+    section {
+      margin: 0;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+    }
+    section:first-child {
+      padding: 24px 26px;
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, #f8fbff 0%, #fff 100%);
+    }
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: 28px; line-height: 1.25; }
+    h2 {
+      margin-top: 30px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--line);
+      font-size: 21px;
+    }
+    p { margin-top: 8px; }
+    .subtitle { color: var(--muted); font-size: 15px; }
+    .links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+    .link-button {
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 6px 12px;
+      border: 1px solid #bfd0ea;
+      border-radius: 6px;
+      background: #f2f6ff;
+      color: var(--blue);
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 14px;
+    }
+    .table-wrap {
+      margin-top: 12px;
+      overflow-x: auto;
+      border: 0;
+      border-radius: 0;
+    }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; background: #fff; }
+    th, td {
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      vertical-align: top;
+      word-break: break-word;
+    }
+    th { background: var(--head); text-align: left; font-weight: 700; }
+    tbody tr:nth-child(even) td { background: #fbfcfe; }
+    code {
+      padding: 1px 5px;
+      border: 1px solid #dbe3ef;
+      border-radius: 4px;
+      background: #f8fafc;
+      color: #0f172a;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 12px;
+    }
+    .tag {
+      display: inline-block;
+      padding: 2px 7px;
+      border: 1px solid #bfd0ea;
+      border-radius: 999px;
+      background: #f2f6ff;
+      color: #1e3a8a;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .tag.pk { border-color: #86efac; background: #ecfdf5; color: #047857; }
+    .tag.fk { border-color: #fed7aa; background: #fff7ed; color: #b45309; }
+    .tag.req { border-color: #fecaca; background: #fff1f2; color: #b91c1c; }
+    .erd-wrap {
+      margin-top: 14px;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 0;
+      background: #fff;
+      padding: 0;
+    }
+    .erd { display: block; width: 100%; height: auto; }
+    .entity { fill: #fff; stroke: #94a3b8; stroke-width: 1.2; }
+    .entity.main { fill: #f8fbff; stroke: var(--blue); stroke-width: 1.8; }
+    .entity.derived, .entity.live, .entity.lookup { fill: #ecfdf5; stroke: #047857; stroke-width: 1.4; }
+    .entity.seq, .entity.special, .entity-token { fill: #fff7ed; stroke: #b45309; stroke-width: 1.4; }
+    .entity-title { fill: #0f172a; font-family: "SFMono-Regular", Consolas, monospace; font-size: 14px; font-weight: 700; }
+    .field { fill: #334155; font-family: "SFMono-Regular", Consolas, monospace; font-size: 12px; }
+    .rel { stroke: #334155; stroke-width: 1.6; fill: none; }
+  </style>
+
+</head>
+<body>
+  <main>
+    <section>
+      <h1>Data Dictionary และ ER Diagram</h1>
+      <p class="subtitle">เอกสารออกแบบฐานข้อมูลสำหรับระบบแจ้งเตือน POMS: เหตุการณ์แจ้งเตือน ประวัติการส่งแจ้งเตือน และ summary รายวันจากข้อมูล 60m</p>
+      <div class="links">
+        <a class="link-button" href="#er-diagram">ER Diagram</a>
+        <a class="link-button" href="#relationship-summary">Relationship Summary</a>
+        <a class="link-button" href="#alert_events">alert_events</a>
+        <a class="link-button" href="#constraints">Constraints</a>
+      </div>
+    </section>
+
+    <section>
+      <h2>รายการตารางสรุป</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="width:28%">Table</th><th>หน้าที่</th><th style="width:18%">Cardinality</th></tr></thead>
+          <tbody>
+            <tr><td><code>alert_events</code></td><td>ตารางกลางเก็บเหตุการณ์แจ้งเตือนทุกประเภท ทั้ง CEMS และ BOD/COD Online</td><td>Parent</td></tr>
+            <tr><td><code>alert_notifications</code></td><td>ประวัติการส่งแจ้งเตือนของแต่ละ event แยกตาม channel/recipient</td><td>1:N</td></tr>
+            <tr><td><code>measurement_daily_summaries</code></td><td>ข้อมูลสรุปรายวันต่อจุดตรวจวัดและพารามิเตอร์ เพื่อคำนวณ 80%, no report และค่าผิดปกติ</td><td>Independent summary</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="er-diagram">
+      <h2>1. ER Diagram</h2>
+      <div class="erd-wrap">
+        <svg class="erd" viewBox="0 0 980 420" role="img" aria-label="ER Diagram Alert Notification" xmlns="http://www.w3.org/2000/svg">
+          <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#64748b"/></marker></defs>
+          <rect class="entity main" x="360" y="74" width="280" height="170"/>
+          <text class="entity-title" x="382" y="108">alert_events</text>
+          <text class="field" x="382" y="136">PK id, idempotency_key</text>
+          <text class="field" x="382" y="160">alert_type, system_type</text>
+          <text class="field" x="382" y="184">factory/station/parameter snapshot</text>
+          <text class="field" x="382" y="208">event_date, measured/threshold</text>
+          <rect class="entity" x="60" y="104" width="250" height="128"/>
+          <text class="entity-title" x="82" y="138">alert_notifications</text>
+          <text class="field" x="82" y="166">PK id, FK alert_event_id</text>
+          <text class="field" x="82" y="190">channel, recipient, send_status</text>
+          <rect class="entity derived" x="660" y="104" width="280" height="128"/>
+          <text class="entity-title" x="682" y="138">measurement_daily_summaries</text>
+          <text class="field" x="682" y="166">station_id + parameter_code</text>
+          <text class="field" x="682" y="190">summary_date, completeness</text>
+          <text class="field" x="682" y="214">abnormal counters</text>
+          <path class="rel" d="M360 160 H310"/>
+          <path class="rel" d="M660 170 H640"/>
+        </svg>
+      </div>
+    </section>
+
+    <section id="relationship-summary">
+      <h2>2. Relationship Summary</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Parent</th><th>Child</th><th>ความสัมพันธ์</th><th>คำอธิบาย</th></tr></thead>
+        <tbody>
+          <tr><td><code>alert_events.id</code></td><td><code>alert_notifications.alert_event_id</code></td><td>1:N</td><td>หนึ่งเหตุการณ์แจ้งเตือนส่ง notification ได้หลายครั้งหรือหลายช่องทาง</td></tr>
+          <tr><td><code>measurement_daily_summaries</code></td><td><code>alert_events</code></td><td>Derived</td><td>Daily detector ใช้ summary เพื่อสร้าง event ประเภท 80%, no report และ abnormal value</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="alert_events">
+      <h2>3. Table: alert_events</h2>
+      <p><span class="tag">Parent Table</span> ตารางกลางสำหรับเหตุการณ์แจ้งเตือนทุกประเภท</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th style="width: 24%">Column</th><th style="width: 18%">Type</th><th style="width: 14%">Key/Null</th><th>คำอธิบาย</th></tr></thead>
+        <tbody>
+          <tr><td><code>id</code></td><td>BIGINT IDENTITY</td><td><span class="tag pk">PK</span></td><td>รหัสเหตุการณ์</td></tr>
+          <tr><td><code>alert_type</code></td><td>VARCHAR(64)</td><td><span class="tag req">NOT NULL</span></td><td>ประเภท alert เช่น STANDARD_EXCEEDED, EIA_EXCEEDED, DAILY_COMPLETENESS_LOW</td></tr>
+          <tr><td><code>system_type</code></td><td>VARCHAR(16)</td><td><span class="tag req">NOT NULL</span></td><td>CEMS หรือ WPMS</td></tr>
+          <tr><td><code>display_system_type</code></td><td>VARCHAR(32)</td><td><span class="tag req">NOT NULL</span></td><td>ประเภทที่แสดงบนหน้าจอ เช่น CEMS หรือ BOD_COD_ONLINE</td></tr>
+          <tr><td><code>factory_id</code>, <code>factory_name</code>, <code>factory_registration_no</code></td><td>VARCHAR/NVARCHAR</td><td>mixed</td><td>snapshot ข้อมูลโรงงาน ณ เวลาสร้าง alert</td></tr>
+          <tr><td><code>connected_measurement_point_id</code></td><td>BIGINT</td><td>NULL</td><td>อ้างอิงจุดตรวจวัดที่เชื่อมต่อแล้วถ้ามี</td></tr>
+          <tr><td><code>station_id</code>, <code>point_code</code>, <code>point_name</code>, <code>point_type</code></td><td>VARCHAR/NVARCHAR</td><td>mixed</td><td>snapshot จุดตรวจวัด</td></tr>
+          <tr><td><code>parameter_code</code>, <code>parameter_name</code>, <code>parameter_label</code>, <code>unit</code></td><td>VARCHAR/NVARCHAR</td><td>mixed</td><td>ข้อมูลพารามิเตอร์ โดย label ควรรวมหน่วย เช่น SO2 (ppm)</td></tr>
+          <tr><td><code>event_date</code>, <code>started_at</code>, <code>ended_at</code></td><td>DATE / DATETIME2</td><td>mixed</td><td>วันที่และช่วงเวลาของเหตุการณ์</td></tr>
+          <tr><td><code>measured_value</code>, <code>threshold_value</code>, <code>threshold_type</code></td><td>DECIMAL / VARCHAR</td><td>NULL</td><td>ค่าที่วัดได้และเกณฑ์มาตรฐาน/EIA</td></tr>
+          <tr><td><code>completeness_percent</code>, <code>consecutive_days</code></td><td>DECIMAL / INT</td><td>NULL</td><td>ข้อมูลสำหรับ alert ความครบถ้วนและไม่รายงานต่อเนื่อง</td></tr>
+          <tr><td><code>abnormal_type</code>, <code>abnormal_streak_count</code>, <code>first_abnormal_at</code>, <code>confirmed_abnormal_at</code></td><td>VARCHAR / INT / DATETIME2</td><td>NULL</td><td>ข้อมูลประกอบ alert ค่าผิดปกติ</td></tr>
+          <tr><td><code>source_table</code>, <code>source_interval</code>, <code>source_payload_json</code>, <code>evidence_json</code></td><td>VARCHAR / NVARCHAR(MAX)</td><td>mixed</td><td>หลักฐานและข้อมูลต้นทางที่ใช้สร้าง alert</td></tr>
+          <tr><td><code>notification_status</code></td><td>VARCHAR(32)</td><td><span class="tag req">NOT NULL</span></td><td>สถานะแจ้งเตือน เช่น AUTO, ACKNOWLEDGED, DISMISSED</td></tr>
+          <tr><td><code>idempotency_key</code></td><td>VARCHAR(220)</td><td><span class="tag req">NOT NULL</span></td><td>key กันสร้าง alert ซ้ำ</td></tr>
+          <tr><td><code>detected_at</code>, <code>created_at</code>, <code>updated_at</code>, <code>created_by</code>, <code>updated_by</code>, <code>deleted_at</code></td><td>DATETIME2 / BIGINT</td><td>mixed</td><td>audit fields และ soft delete</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="alert_notifications">
+      <h2>4. Table: alert_notifications</h2>
+      <p><span class="tag">Child Table</span> ประวัติการส่งแจ้งเตือน</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th style="width: 24%">Column</th><th style="width: 18%">Type</th><th style="width: 14%">Key/Null</th><th>คำอธิบาย</th></tr></thead>
+        <tbody>
+          <tr><td><code>id</code></td><td>BIGINT IDENTITY</td><td><span class="tag pk">PK</span></td><td>รหัส notification log</td></tr>
+          <tr><td><code>alert_event_id</code></td><td>BIGINT</td><td><span class="tag fk">FK/NOT NULL</span></td><td>อ้างอิง <code>alert_events.id</code></td></tr>
+          <tr><td><code>channel</code></td><td>VARCHAR(32)</td><td><span class="tag req">NOT NULL</span></td><td>ช่องทางส่ง เช่น email หรือ line</td></tr>
+          <tr><td><code>recipient</code></td><td>NVARCHAR(255)</td><td>NULL</td><td>ผู้รับแจ้งเตือน</td></tr>
+          <tr><td><code>send_status</code></td><td>VARCHAR(32)</td><td><span class="tag req">NOT NULL</span></td><td>สถานะการส่ง</td></tr>
+          <tr><td><code>error_message</code></td><td>NVARCHAR(1000)</td><td>NULL</td><td>ข้อความ error กรณีส่งไม่สำเร็จ</td></tr>
+          <tr><td><code>sent_at</code>, <code>created_at</code></td><td>DATETIME2</td><td>mixed</td><td>วันเวลาส่งสำเร็จและวันเวลาสร้างข้อมูล</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="measurement_daily_summaries">
+      <h2>5. Table: measurement_daily_summaries</h2>
+      <p><span class="tag">Summary Table</span> สรุปรายวันจากข้อมูล 60m</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th style="width: 24%">Column</th><th style="width: 18%">Type</th><th style="width: 14%">Key/Null</th><th>คำอธิบาย</th></tr></thead>
+        <tbody>
+          <tr><td><code>id</code></td><td>BIGINT IDENTITY</td><td><span class="tag pk">PK</span></td><td>รหัส summary</td></tr>
+          <tr><td><code>system_type</code>, <code>factory_id</code>, <code>station_id</code></td><td>VARCHAR</td><td>mixed</td><td>ระบบ โรงงาน และสถานีที่สรุปข้อมูล</td></tr>
+          <tr><td><code>parameter_code</code>, <code>parameter_label</code>, <code>unit</code></td><td>VARCHAR/NVARCHAR</td><td>mixed</td><td>พารามิเตอร์ที่สรุป</td></tr>
+          <tr><td><code>summary_date</code></td><td>DATE</td><td><span class="tag req">NOT NULL</span></td><td>วันที่ของข้อมูลสรุป</td></tr>
+          <tr><td><code>expected_count</code>, <code>received_count</code>, <code>normal_status_count</code>, <code>shutdown_status_count</code></td><td>INT</td><td><span class="tag req">NOT NULL</span></td><td>จำนวนข้อมูลที่คาดหวัง ได้รับ และแยกสถานะ</td></tr>
+          <tr><td><code>completeness_percent</code></td><td>DECIMAL(5,2)</td><td><span class="tag req">NOT NULL</span></td><td>เปอร์เซ็นต์ความครบถ้วน</td></tr>
+          <tr><td><code>null_count</code>, <code>zero_count</code>, <code>negative_count</code>, <code>same_value_max_streak</code></td><td>INT</td><td><span class="tag req">NOT NULL</span></td><td>ตัวนับสำหรับตรวจค่าผิดปกติ</td></tr>
+          <tr><td><code>first_received_at</code>, <code>last_received_at</code>, <code>source_table</code></td><td>DATETIME2 / VARCHAR</td><td>NULL</td><td>ช่วงข้อมูลที่ได้รับและตารางต้นทาง</td></tr>
+          <tr><td><code>created_at</code>, <code>updated_at</code></td><td>DATETIME2</td><td><span class="tag req">NOT NULL</span></td><td>วันเวลาสร้างและแก้ไขข้อมูล</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="constraints">
+      <h2>6. Constraints และ Index ที่แนะนำ/มีใน migration</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Name</th><th>Table</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td><code>uq_alert_events_idempotency</code></td><td><code>alert_events</code></td><td>กัน alert ซ้ำเมื่อยังไม่ถูก soft delete</td></tr>
+          <tr><td><code>ix_alert_events_date_type</code></td><td><code>alert_events</code></td><td>ค้นหาตามวันที่ ประเภท alert และระบบ</td></tr>
+          <tr><td><code>ix_alert_events_factory_date</code></td><td><code>alert_events</code></td><td>ค้นหาประวัติ alert รายโรงงาน</td></tr>
+          <tr><td><code>ix_alert_events_station_param_date</code></td><td><code>alert_events</code></td><td>ค้นหาตาม station/parameter/date</td></tr>
+          <tr><td><code>ix_alert_notifications_event</code></td><td><code>alert_notifications</code></td><td>ดึงประวัติ notification ของ event ตามเวลาล่าสุด</td></tr>
+          <tr><td><code>uq_daily_summary_station_param_date</code></td><td><code>measurement_daily_summaries</code></td><td>หนึ่ง summary ต่อ station + parameter + date</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+  </main>
+</body>
+</html>

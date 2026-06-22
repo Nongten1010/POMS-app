@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Data Dictionary และ ER Diagram - User Auth Permission</title>
+  <style>
+    :root { --ink:#172033; --muted:#526173; --line:#dbe3ef; --head:#eef4fb; --blue:#e8f1ff; --green:#e9f8ef; --orange:#fff3e1; --red:#ffecec; }
+    * { box-sizing:border-box; } body { margin:0; font-family:"TH Sarabun New", Tahoma, Arial, sans-serif; color:var(--ink); background:#f6f8fb; line-height:1.55; }
+    main { width:min(1180px, calc(100% - 32px)); margin:32px auto; } section { background:#fff; border:1px solid var(--line); border-radius:8px; padding:24px; margin:0 0 18px; }
+    h1 { margin:0 0 8px; font-size:34px; } h2 { margin:0 0 14px; font-size:26px; } p { margin:0 0 12px; } code { font-family:Consolas,"Courier New",monospace; background:#f2f5f9; padding:1px 5px; border-radius:4px; }
+    .subtitle { color:var(--muted); font-size:20px; } .links { display:flex; flex-wrap:wrap; gap:8px; margin-top:16px; } .link-button,.tag { display:inline-flex; border:1px solid var(--line); border-radius:999px; padding:4px 10px; color:#26435f; background:#f9fbfe; text-decoration:none; font-size:16px; }
+    .tag.pk { background:var(--orange); } .tag.fk { background:var(--blue); } .tag.req { background:var(--red); }
+    .table-wrap { overflow:auto; border:1px solid var(--line); border-radius:8px; } table { width:100%; border-collapse:collapse; table-layout:fixed; background:#fff; } th,td { border-bottom:1px solid var(--line); border-right:1px solid var(--line); padding:8px 10px; vertical-align:top; word-break:break-word; } th:last-child,td:last-child { border-right:0; } tr:last-child td { border-bottom:0; } th { background:var(--head); text-align:left; }
+    .erd-wrap { overflow:auto; border:1px solid var(--line); border-radius:8px; background:#fbfdff; padding:16px; } .erd { min-width:1080px; width:100%; height:auto; } .entity { fill:#fff; stroke:#8ea7c2; stroke-width:1.5; rx:8; } .entity.main { fill:#f8fbff; stroke:#1d4ed8; stroke-width:1.8; } .entity.lookup { fill:#ecfdf5; stroke:#047857; stroke-width:1.4; } .entity-token { fill:#fff7ed; stroke:#b45309; stroke-width:1.4; stroke:#8ea7c2; stroke-width:1.5; rx:8; } .entity-title { font-size:17px; font-weight:700; fill:#172033; } .field { font-size:13px; fill:#465569; } .rel { stroke:#64748b; stroke-width:2; fill:none; marker-end:url(#arrow); }
+    @media print { body { background:#fff; } main { width:100%; margin:0; } section { break-inside:avoid; } }
+  
+
+    /* Match docs/kwp-forms/04-data-dictionary-er.html visual style */
+    :root {
+      --ink: #111827;
+      --muted: #4b5563;
+      --line: #d7dde6;
+      --soft: #f6f8fb;
+      --head: #e9eef6;
+      --blue: #1d4ed8;
+      --green: #047857;
+      --amber: #b45309;
+      --red: #b91c1c;
+    }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #fff;
+      font-family: Arial, "Noto Sans Thai", Tahoma, sans-serif;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    main {
+      width: min(1240px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 30px 0 56px;
+    }
+    section {
+      margin: 0;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+    }
+    section:first-child {
+      padding: 24px 26px;
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, #f8fbff 0%, #fff 100%);
+    }
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: 28px; line-height: 1.25; }
+    h2 {
+      margin-top: 30px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--line);
+      font-size: 21px;
+    }
+    p { margin-top: 8px; }
+    .subtitle { color: var(--muted); font-size: 15px; }
+    .links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+    .link-button {
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 6px 12px;
+      border: 1px solid #bfd0ea;
+      border-radius: 6px;
+      background: #f2f6ff;
+      color: var(--blue);
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 14px;
+    }
+    .table-wrap {
+      margin-top: 12px;
+      overflow-x: auto;
+      border: 0;
+      border-radius: 0;
+    }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; background: #fff; }
+    th, td {
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      vertical-align: top;
+      word-break: break-word;
+    }
+    th { background: var(--head); text-align: left; font-weight: 700; }
+    tbody tr:nth-child(even) td { background: #fbfcfe; }
+    code {
+      padding: 1px 5px;
+      border: 1px solid #dbe3ef;
+      border-radius: 4px;
+      background: #f8fafc;
+      color: #0f172a;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 12px;
+    }
+    .tag {
+      display: inline-block;
+      padding: 2px 7px;
+      border: 1px solid #bfd0ea;
+      border-radius: 999px;
+      background: #f2f6ff;
+      color: #1e3a8a;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .tag.pk { border-color: #86efac; background: #ecfdf5; color: #047857; }
+    .tag.fk { border-color: #fed7aa; background: #fff7ed; color: #b45309; }
+    .tag.req { border-color: #fecaca; background: #fff1f2; color: #b91c1c; }
+    .erd-wrap {
+      margin-top: 14px;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 0;
+      background: #fff;
+      padding: 0;
+    }
+    .erd { display: block; width: 100%; height: auto; }
+    .entity { fill: #fff; stroke: #94a3b8; stroke-width: 1.2; }
+    .entity.main { fill: #f8fbff; stroke: var(--blue); stroke-width: 1.8; }
+    .entity.derived, .entity.live, .entity.lookup { fill: #ecfdf5; stroke: #047857; stroke-width: 1.4; }
+    .entity.seq, .entity.special, .entity-token { fill: #fff7ed; stroke: #b45309; stroke-width: 1.4; }
+    .entity-title { fill: #0f172a; font-family: "SFMono-Regular", Consolas, monospace; font-size: 14px; font-weight: 700; }
+    .field { fill: #334155; font-family: "SFMono-Regular", Consolas, monospace; font-size: 12px; }
+    .rel { stroke: #334155; stroke-width: 1.6; fill: none; }
+  </style>
+
+</head>
+<body><main>
+  <section>
+    <h1>Data Dictionary และ ER Diagram</h1>
+    <p class="subtitle">ฐานข้อมูลผู้ใช้งาน การยืนยันตัวตน role permission และสิทธิ์เฉพาะรายบุคคลของระบบ POMS</p>
+    <div class="links"><a class="link-button" href="#er-diagram">ER Diagram</a><a class="link-button" href="#relationship-summary">Relationship Summary</a><a class="link-button" href="#users">users</a><a class="link-button" href="#constraints">Constraints</a></div>
+  </section>
+
+  <section><h2>รายการตารางสรุป</h2><div class="table-wrap"><table><thead><tr><th style="width:24%">Table</th><th>หน้าที่</th><th style="width:16%">Cardinality</th></tr></thead><tbody>
+    <tr><td><code>users</code></td><td>บัญชีผู้ใช้กลาง รองรับ external identity provider และ password hash</td><td>Parent</td></tr>
+    <tr><td><code>roles</code></td><td>ชุดบทบาทของผู้ใช้</td><td>Lookup</td></tr>
+    <tr><td><code>permissions</code></td><td>สิทธิ์ย่อยตาม resource/action</td><td>Lookup</td></tr>
+    <tr><td><code>role_permissions</code></td><td>mapping role กับ permission</td><td>M:N</td></tr>
+    <tr><td><code>user_roles</code></td><td>mapping user กับ role</td><td>M:N</td></tr>
+    <tr><td><code>user_permissions</code></td><td>allow/deny permission เฉพาะรายผู้ใช้</td><td>M:N override</td></tr>
+    <tr><td><code>refresh_tokens</code></td><td>refresh token family สำหรับ session rotation/revoke</td><td>1:N</td></tr>
+  </tbody></table></div></section>
+
+  <section id="er-diagram"><h2>1. ER Diagram</h2><div class="erd-wrap">
+    <svg class="erd" viewBox="0 0 1100 640" role="img" aria-label="ER Diagram User Auth Permission" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#64748b"/></marker></defs>
+      <rect class="entity main" x="420" y="58" width="260" height="150"/><text class="entity-title" x="442" y="92">users</text><text class="field" x="442" y="120">PK id, provider + external_id</text><text class="field" x="442" y="144">user_type, username, email</text><text class="field" x="442" y="168">password_hash, active, audit</text>
+      <rect class="entity lookup" x="80" y="282" width="240" height="112"/><text class="entity-title" x="102" y="316">roles</text><text class="field" x="102" y="344">PK id, code, names</text>
+      <rect class="entity lookup" x="780" y="282" width="240" height="112"/><text class="entity-title" x="802" y="316">permissions</text><text class="field" x="802" y="344">PK id, code</text><text class="field" x="802" y="368">resource, action</text>
+      <rect class="entity" x="410" y="282" width="280" height="112"/><text class="entity-title" x="432" y="316">user_roles</text><text class="field" x="432" y="344">PK user_id + role_id</text><text class="field" x="432" y="368">assigned_at, assigned_by</text>
+      <rect class="entity" x="430" y="472" width="280" height="112"/><text class="entity-title" x="452" y="506">role_permissions</text><text class="field" x="452" y="534">PK role_id + permission_id</text><text class="field" x="452" y="558">scope, granted_at</text>
+      <rect class="entity" x="760" y="472" width="280" height="112"/><text class="entity-title" x="782" y="506">user_permissions</text><text class="field" x="782" y="534">PK user_id + permission_id</text><text class="field" x="782" y="558">effect allow/deny, scope</text>
+      <rect class="entity-token" x="80" y="70" width="260" height="112"/><text class="entity-title" x="102" y="104">refresh_tokens</text><text class="field" x="102" y="132">FK user_id, token_hash</text><text class="field" x="102" y="156">family_id, expires/revoked</text>
+      <path class="rel" d="M420 126 H340"/><path class="rel" d="M550 208 V282"/><path class="rel" d="M410 338 H320"/><path class="rel" d="M690 338 H780"/><path class="rel" d="M200 394 V448 H570 V472"/><path class="rel" d="M710 528 H760"/><path class="rel" d="M680 126 H1070 V528 H1040"/><path class="rel" d="M900 394 V472"/>
+    </svg>
+  </div></section>
+
+  <section id="relationship-summary"><h2>2. Relationship Summary</h2><div class="table-wrap"><table><thead><tr><th>Parent</th><th>Child</th><th>ความสัมพันธ์</th><th>คำอธิบาย</th></tr></thead><tbody>
+    <tr><td><code>users.id</code></td><td><code>refresh_tokens.user_id</code></td><td>1:N</td><td>หนึ่งผู้ใช้มี refresh token หลายรายการตาม session/family</td></tr>
+    <tr><td><code>users.id</code></td><td><code>user_roles.user_id</code></td><td>1:N</td><td>ผู้ใช้รับได้หลาย role</td></tr>
+    <tr><td><code>roles.id</code></td><td><code>user_roles.role_id</code></td><td>1:N</td><td>role ถูก assign ให้ผู้ใช้หลายคน</td></tr>
+    <tr><td><code>roles.id</code></td><td><code>role_permissions.role_id</code></td><td>1:N</td><td>role รวม permission หลายรายการ</td></tr>
+    <tr><td><code>permissions.id</code></td><td><code>role_permissions.permission_id</code></td><td>1:N</td><td>permission ถูกใช้ในหลาย role</td></tr>
+    <tr><td><code>users.id</code></td><td><code>user_permissions.user_id</code></td><td>1:N</td><td>ใช้ override สิทธิ์เฉพาะ user แบบ allow/deny</td></tr>
+  </tbody></table></div></section>
+
+  <section id="users"><h2>3. Table: users</h2><p><span class="tag">Parent Table</span> บัญชีผู้ใช้กลาง</p><div class="table-wrap"><table><thead><tr><th style="width: 24%">Column</th><th style="width: 18%">Type</th><th style="width: 14%">Key/Null</th><th>คำอธิบาย</th></tr></thead><tbody>
+    <tr><td><code>id</code></td><td>BIGINT IDENTITY</td><td><span class="tag pk">PK</span></td><td>รหัสผู้ใช้</td></tr><tr><td><code>external_id</code>, <code>identity_provider</code></td><td>VARCHAR</td><td><span class="tag req">NOT NULL/UQ</span></td><td>รหัสจากระบบ login ภายนอกและ provider</td></tr><tr><td><code>user_type</code></td><td>VARCHAR(16)</td><td><span class="tag req">NOT NULL</span></td><td>ประเภทผู้ใช้ เช่น officer/operator</td></tr><tr><td><code>username</code>, <code>email</code>, <code>phone</code></td><td>VARCHAR</td><td>NULL</td><td>ข้อมูลติดต่อ/login</td></tr><tr><td><code>prename_th</code>, <code>first_name</code>, <code>last_name</code></td><td>VARCHAR</td><td>mixed</td><td>ชื่อผู้ใช้</td></tr><tr><td><code>is_active</code></td><td>BIT</td><td><span class="tag req">NOT NULL</span></td><td>สถานะใช้งาน</td></tr><tr><td><code>password_hash</code></td><td>VARBINARY(256)</td><td>NULL</td><td>hash รหัสผ่าน กรณีใช้ local password</td></tr><tr><td><code>last_login_at</code>, <code>last_synced_at</code></td><td>DATETIME2</td><td>NULL</td><td>เวลาล่าสุดที่ login/sync</td></tr><tr><td><code>created_at</code>, <code>updated_at</code>, <code>created_by</code>, <code>updated_by</code>, <code>deleted_at</code></td><td>DATETIME2 / BIGINT</td><td>mixed</td><td>audit fields</td></tr>
+  </tbody></table></div></section>
+
+  <section><h2>4. Table: roles</h2><div class="table-wrap"><table><thead><tr><th style="width: 24%">Column</th><th style="width: 18%">Type</th><th style="width: 14%">Key/Null</th><th>คำอธิบาย</th></tr></thead><tbody>
+    <tr><td><code>id</code></td><td>BIGINT IDENTITY</td><td><span class="tag pk">PK</span></td><td>รหัส role</td></tr><tr><td><code>code</code></td><td>VARCHAR(32)</td><td><span class="tag req">NOT NULL/UQ</span></td><td>รหัส role ที่ใช้ในระบบ</td></tr><tr><td><code>name_th</code>, <code>name_en</code>, <code>description</code></td><td>VARCHAR</td><td>mixed</td><td>ชื่อและคำอธิบาย role</td></tr><tr><td><code>is_system</code></td><td>BIT</td><td><span class="tag req">NOT NULL</span></td><td>role ระบบหรือกำหนดเอง</td></tr><tr><td><code>created_at</code>, <code>updated_at</code>, <code>deleted_at</code></td><td>DATETIME2</td><td>mixed</td><td>timestamps และ soft delete</td></tr>
+  </tbody></table></div></section>
+
+  <section><h2>5. Table: permissions</h2><div class="table-wrap"><table><thead><tr><th style="width: 24%">Column</th><th style="width: 18%">Type</th><th style="width: 14%">Key/Null</th><th>คำอธิบาย</th></tr></thead><tbody>
+    <tr><td><code>id</code></td><td>BIGINT IDENTITY</td><td><span class="tag pk">PK</span></td><td>รหัส permission</td></tr><tr><td><code>code</code></td><td>VARCHAR(64)</td><td><span class="tag req">NOT NULL/UQ</span></td><td>permission key เช่น factories:view</td></tr><tr><td><code>resource</code></td><td>VARCHAR(32)</td><td><span class="tag req">NOT NULL</span></td><td>resource ที่ควบคุม</td></tr><tr><td><code>action</code></td><td>VARCHAR(16)</td><td><span class="tag req">NOT NULL</span></td><td>action เช่น view/create/update/delete</td></tr><tr><td><code>description</code></td><td>VARCHAR(255)</td><td>NULL</td><td>คำอธิบายสิทธิ์</td></tr>
+  </tbody></table></div></section>
+
+  <section><h2>6. Table: role_permissions</h2><div class="table-wrap"><table><thead><tr><th style="width: 24%">Column</th><th style="width: 18%">Type</th><th style="width: 14%">Key/Null</th><th>คำอธิบาย</th></tr></thead><tbody>
+    <tr><td><code>role_id</code></td><td>BIGINT</td><td><span class="tag pk">PK/FK</span></td><td>role</td></tr><tr><td><code>permission_id</code></td><td>BIGINT</td><td><span class="tag pk">PK/FK</span></td><td>permission</td></tr><tr><td><code>scope</code></td><td>VARCHAR(16)</td><td>NULL</td><td>scope เพิ่มเติม</td></tr><tr><td><code>granted_at</code></td><td>DATETIME2</td><td><span class="tag req">NOT NULL</span></td><td>เวลาที่ผูกสิทธิ์</td></tr>
+  </tbody></table></div></section>
+
+  <section><h2>7. Table: user_roles</h2><div class="table-wrap"><table><thead><tr><th style="width: 24%">Column</th><th style="width: 18%">Type</th><th style="width: 14%">Key/Null</th><th>คำอธิบาย</th></tr></thead><tbody>
+    <tr><td><code>user_id</code></td><td>BIGINT</td><td><span class="tag pk">PK/FK</span></td><td>ผู้ใช้</td></tr><tr><td><code>role_id</code></td><td>BIGINT</td><td><span class="tag pk">PK/FK</span></td><td>role</td></tr><tr><td><code>assigned_at</code></td><td>DATETIME2</td><td><span class="tag req">NOT NULL</span></td><td>เวลา assign</td></tr><tr><td><code>assigned_by</code></td><td>BIGINT</td><td>NULL</td><td>ผู้ assign</td></tr>
+  </tbody></table></div></section>
+
+  <section><h2>8. Table: user_permissions</h2><div class="table-wrap"><table><thead><tr><th style="width: 24%">Column</th><th style="width: 18%">Type</th><th style="width: 14%">Key/Null</th><th>คำอธิบาย</th></tr></thead><tbody>
+    <tr><td><code>user_id</code></td><td>BIGINT</td><td><span class="tag pk">PK/FK</span></td><td>ผู้ใช้</td></tr><tr><td><code>permission_id</code></td><td>BIGINT</td><td><span class="tag pk">PK/FK</span></td><td>permission</td></tr><tr><td><code>effect</code></td><td>VARCHAR(8)</td><td><span class="tag req">NOT NULL</span></td><td>allow หรือ deny</td></tr><tr><td><code>scope</code></td><td>VARCHAR(16)</td><td>NULL</td><td>scope เพิ่มเติม</td></tr><tr><td><code>granted_at</code>, <code>granted_by</code></td><td>DATETIME2 / BIGINT</td><td>mixed</td><td>เวลาและผู้ให้สิทธิ์</td></tr>
+  </tbody></table></div></section>
+
+  <section><h2>9. Table: refresh_tokens</h2><div class="table-wrap"><table><thead><tr><th style="width: 24%">Column</th><th style="width: 18%">Type</th><th style="width: 14%">Key/Null</th><th>คำอธิบาย</th></tr></thead><tbody>
+    <tr><td><code>id</code></td><td>BIGINT IDENTITY</td><td><span class="tag pk">PK</span></td><td>รหัส token</td></tr><tr><td><code>user_id</code></td><td>BIGINT</td><td><span class="tag fk">FK/NOT NULL</span></td><td>เจ้าของ token</td></tr><tr><td><code>token_hash</code></td><td>VARBINARY(32)</td><td><span class="tag req">NOT NULL/UQ</span></td><td>hash ของ refresh token</td></tr><tr><td><code>family_id</code></td><td>UNIQUEIDENTIFIER</td><td><span class="tag req">NOT NULL</span></td><td>กลุ่ม token rotation</td></tr><tr><td><code>expires_at</code>, <code>revoked_at</code>, <code>rotated_from_id</code></td><td>DATETIME2 / BIGINT</td><td>mixed</td><td>วันหมดอายุ การ revoke และ token ก่อนหน้า</td></tr><tr><td><code>user_agent</code>, <code>ip_address</code>, <code>created_at</code></td><td>VARCHAR / DATETIME2</td><td>mixed</td><td>ข้อมูล session และเวลาสร้าง</td></tr>
+  </tbody></table></div></section>
+
+  <section id="constraints"><h2>10. Constraints และ Index ที่แนะนำ/มีใน migration</h2><div class="table-wrap"><table><thead><tr><th>Name</th><th>Table</th><th>Purpose</th></tr></thead><tbody>
+    <tr><td><code>uq_users_provider</code></td><td><code>users</code></td><td>กัน external user ซ้ำต่อ provider</td></tr><tr><td><code>ix_users_username</code>, <code>ix_users_user_type</code></td><td><code>users</code></td><td>ค้นหาผู้ใช้ตาม username/type</td></tr><tr><td><code>uq_roles_code</code></td><td><code>roles</code></td><td>role code ไม่ซ้ำ</td></tr><tr><td><code>uq_permissions_code</code></td><td><code>permissions</code></td><td>permission code ไม่ซ้ำ</td></tr><tr><td><code>pk_role_permissions</code>, <code>pk_user_roles</code>, <code>pk_user_permissions</code></td><td>mapping tables</td><td>กัน mapping ซ้ำด้วย composite key</td></tr><tr><td><code>ck_user_permissions_effect</code></td><td><code>user_permissions</code></td><td>จำกัด effect เป็น allow/deny</td></tr><tr><td><code>ix_rt_hash</code>, <code>ix_rt_user_active</code></td><td><code>refresh_tokens</code></td><td>ค้นหา token และ session active</td></tr>
+  </tbody></table></div></section>
+</main></body></html>

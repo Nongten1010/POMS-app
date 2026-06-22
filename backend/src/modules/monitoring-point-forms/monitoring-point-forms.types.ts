@@ -13,6 +13,7 @@ export interface MonitoringPointFormFactoryInput {
   eiaInfo?: string | null;
   address?: string | null;
   businessActivity?: string | null;
+  machineryHorsepower?: number | null;
 }
 
 export interface MonitoringPointInput {

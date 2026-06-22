@@ -51,6 +51,7 @@ jest.mock('../../src/modules/auth/auth.repository', () => ({
     getOperatorProfile: jest.fn(),
     getOperatorFactories: jest.fn(),
     getRolesAndPermissions: jest.fn(),
+    syncExternalOfficerProfile: jest.fn(),
     syncExternalOperatorProfile: jest.fn(),
   },
 }));

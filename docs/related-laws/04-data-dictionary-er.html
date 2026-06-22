@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Data Dictionary และ ER Diagram - กฎหมายที่เกี่ยวข้อง</title>
+  <style>
+    :root {
+      --ink: #111827;
+      --muted: #4b5563;
+      --line: #d7dde6;
+      --head: #e9eef6;
+      --blue: #1d4ed8;
+      --green: #047857;
+      --amber: #b45309;
+      --red: #b91c1c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #fff;
+      font-family: Arial, "Noto Sans Thai", Tahoma, sans-serif;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    main {
+      width: min(1240px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 30px 0 56px;
+    }
+    section {
+      margin: 0;
+      padding: 0;
+      border: 0;
+      background: transparent;
+    }
+    section:first-child {
+      padding: 24px 26px;
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, #f8fbff 0%, #fff 100%);
+    }
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: 28px; line-height: 1.25; }
+    h2 {
+      margin-top: 30px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--line);
+      font-size: 21px;
+    }
+    h3 { margin-top: 18px; font-size: 17px; }
+    p { margin-top: 8px; }
+    .subtitle { color: var(--muted); font-size: 15px; }
+    .links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+    .link-button {
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 6px 12px;
+      border: 1px solid #bfd0ea;
+      border-radius: 6px;
+      background: #f2f6ff;
+      color: var(--blue);
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 14px;
+    }
+    .table-wrap {
+      margin-top: 12px;
+      overflow-x: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      background: #fff;
+    }
+    th, td {
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      vertical-align: top;
+      word-break: break-word;
+    }
+    th { background: var(--head); text-align: left; font-weight: 700; }
+    tbody tr:nth-child(even) td { background: #fbfcfe; }
+    code {
+      padding: 1px 5px;
+      border: 1px solid #dbe3ef;
+      border-radius: 4px;
+      background: #f8fafc;
+      color: #0f172a;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 12px;
+    }
+    .tag {
+      display: inline-block;
+      padding: 2px 7px;
+      border: 1px solid #bfd0ea;
+      border-radius: 999px;
+      background: #f2f6ff;
+      color: #1e3a8a;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .tag.pk { border-color: #86efac; background: #ecfdf5; color: var(--green); }
+    .tag.fk { border-color: #fed7aa; background: #fff7ed; color: var(--amber); }
+    .tag.req { border-color: #fecaca; background: #fff1f2; color: var(--red); }
+    .erd-wrap {
+      margin-top: 14px;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      background: #fff;
+    }
+    .erd { display: block; min-width: 1120px; width: 100%; height: auto; }
+    .entity { fill: #fff; stroke: #94a3b8; stroke-width: 1.2; }
+    .entity.main { fill: #f8fbff; stroke: var(--blue); stroke-width: 1.8; }
+    .entity.lookup { fill: #ecfdf5; stroke: var(--green); stroke-width: 1.4; }
+    .entity.file { fill: #fff7ed; stroke: var(--amber); stroke-width: 1.4; }
+    .entity.log { fill: #fff1f2; stroke: var(--red); stroke-width: 1.4; }
+    .entity-title {
+      fill: #0f172a;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .field {
+      fill: #334155;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 12px;
+    }
+    .rel { stroke: #334155; stroke-width: 1.6; fill: none; marker-end: url(#arrow); }
+    .note-box {
+      margin-top: 12px;
+      padding: 12px 14px;
+      border: 1px solid #bfd0ea;
+      background: #f8fbff;
+    }
+    ul { margin: 10px 0 0 22px; padding: 0; }
+    li { margin: 5px 0; }
+    @media print {
+      main { width: 100%; padding: 0; }
+      section { break-inside: avoid; }
+      .link-button { display: none; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <section>
+    <h1>Data Dictionary และ ER Diagram</h1>
+    <p class="subtitle">ระบบจัดการกฎหมายที่เกี่ยวข้อง รองรับเจ้าหน้าที่อัปโหลด/แก้ไขไฟล์แบบมี version และให้ผู้ประกอบการหรือประชาชนดาวน์โหลดไฟล์ที่เผยแพร่ได้</p>
+    <div class="links">
+      <a class="link-button" href="#er-diagram">ER Diagram</a>
+      <a class="link-button" href="#relationship-summary">Relationship Summary</a>
+      <a class="link-button" href="#laws">laws</a>
+      <a class="link-button" href="#law-files">law_files</a>
+      <a class="link-button" href="#business-rules">Business Rules</a>
+      <a class="link-button" href="#api">API</a>
+    </div>
+  </section>
+
+  <section>
+    <h2>รายการตารางสรุป</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 28%">Table</th>
+            <th>หน้าที่</th>
+            <th style="width: 18%">Cardinality</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><code>law_categories</code></td><td>หมวดหมู่กฎหมาย เช่น ประกาศกระทรวง ประกาศกรม พระราชบัญญัติ กฎกระทรวง แนวปฏิบัติ</td><td>Lookup</td></tr>
+          <tr><td><code>laws</code></td><td>ข้อมูลหลักของกฎหมาย/เอกสารที่แสดงในหน้ารายการ</td><td>Parent</td></tr>
+          <tr><td><code>law_files</code></td><td>ไฟล์แนบของกฎหมายแบบ versioned file ห้าม overwrite ไฟล์เดิม</td><td>1:N</td></tr>
+          <tr><td><code>law_download_logs</code></td><td>บันทึกประวัติการดาวน์โหลดของ public/operator/officer</td><td>Append-only log</td></tr>
+          <tr><td><code>law_audit_logs</code></td><td>บันทึกประวัติการสร้าง แก้ไข เผยแพร่ ยกเลิก และเปลี่ยนไฟล์</td><td>Append-only log</td></tr>
+          <tr><td><code>users</code></td><td>ตารางผู้ใช้งานของระบบเดิม ใช้อ้างอิงเจ้าหน้าที่ผู้สร้าง/แก้ไข/อัปโหลด</td><td>Reference</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="er-diagram">
+    <h2>1. ER Diagram</h2>
+    <div class="erd-wrap">
+      <svg class="erd" viewBox="0 0 1120 680" role="img" aria-label="ER Diagram Related Laws" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L9,3 z" fill="#334155"/>
+          </marker>
+        </defs>
+
+        <rect class="entity lookup" x="60" y="70" width="250" height="120"/>
+        <text class="entity-title" x="82" y="104">law_categories</text>
+        <text class="field" x="82" y="132">PK id</text>
+        <text class="field" x="82" y="156">name, slug</text>
+        <text class="field" x="82" y="180">is_active</text>
+
+        <rect class="entity main" x="430" y="58" width="310" height="190"/>
+        <text class="entity-title" x="452" y="92">laws</text>
+        <text class="field" x="452" y="120">PK id</text>
+        <text class="field" x="452" y="144">FK category_id</text>
+        <text class="field" x="452" y="168">document_no, title</text>
+        <text class="field" x="452" y="192">announced/effective_date</text>
+        <text class="field" x="452" y="216">status, is_public</text>
+        <text class="field" x="452" y="240">FK created_by, updated_by</text>
+
+        <rect class="entity file" x="430" y="330" width="310" height="180"/>
+        <text class="entity-title" x="452" y="364">law_files</text>
+        <text class="field" x="452" y="392">PK id, FK law_id</text>
+        <text class="field" x="452" y="416">version_no, is_current</text>
+        <text class="field" x="452" y="440">original/stored_filename</text>
+        <text class="field" x="452" y="464">file_path, mime_type, size</text>
+        <text class="field" x="452" y="488">checksum, FK uploaded_by</text>
+
+        <rect class="entity log" x="800" y="310" width="270" height="170"/>
+        <text class="entity-title" x="822" y="344">law_download_logs</text>
+        <text class="field" x="822" y="372">PK id</text>
+        <text class="field" x="822" y="396">FK law_id, law_file_id</text>
+        <text class="field" x="822" y="420">downloader_type, user_id</text>
+        <text class="field" x="822" y="444">ip_address, user_agent</text>
+        <text class="field" x="822" y="468">downloaded_at</text>
+
+        <rect class="entity log" x="60" y="330" width="270" height="170"/>
+        <text class="entity-title" x="82" y="364">law_audit_logs</text>
+        <text class="field" x="82" y="392">PK id</text>
+        <text class="field" x="82" y="416">FK law_id</text>
+        <text class="field" x="82" y="440">FK actor_user_id</text>
+        <text class="field" x="82" y="464">action, old_value</text>
+        <text class="field" x="82" y="488">new_value, created_at</text>
+
+        <rect class="entity" x="430" y="570" width="310" height="70"/>
+        <text class="entity-title" x="452" y="604">users</text>
+        <text class="field" x="452" y="628">PK id, name, email, role</text>
+
+        <path class="rel" d="M310 130 H430"/>
+        <path class="rel" d="M585 248 V330"/>
+        <path class="rel" d="M740 420 H800"/>
+        <path class="rel" d="M740 150 H935 V310"/>
+        <path class="rel" d="M430 170 H365 V415 H330"/>
+        <path class="rel" d="M585 570 V510"/>
+        <path class="rel" d="M430 605 H195 V500"/>
+        <path class="rel" d="M740 605 H1095 V118 H740"/>
+      </svg>
+    </div>
+    <div class="note-box">
+      <strong>แนวคิดหลัก:</strong> การเปลี่ยนไฟล์ให้เพิ่มแถวใหม่ใน <code>law_files</code> พร้อม <code>version_no</code> ใหม่ และตั้งไฟล์ล่าสุดเป็น <code>is_current = true</code> เพื่อให้ตรวจสอบย้อนหลังได้
+    </div>
+  </section>
+
+  <section id="relationship-summary">
+    <h2>2. Relationship Summary</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Parent</th><th>Child</th><th>ความสัมพันธ์</th><th>คำอธิบาย</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>law_categories.id</code></td><td><code>laws.category_id</code></td><td>1:N</td><td>หมวดหมู่หนึ่งมีเอกสารกฎหมายได้หลายรายการ</td></tr>
+          <tr><td><code>laws.id</code></td><td><code>law_files.law_id</code></td><td>1:N</td><td>กฎหมายหนึ่งรายการมีไฟล์ได้หลาย version</td></tr>
+          <tr><td><code>laws.id</code></td><td><code>law_download_logs.law_id</code></td><td>1:N</td><td>เก็บทุกครั้งที่มีการดาวน์โหลด</td></tr>
+          <tr><td><code>law_files.id</code></td><td><code>law_download_logs.law_file_id</code></td><td>1:N</td><td>ระบุว่า download ไฟล์ version ใด</td></tr>
+          <tr><td><code>laws.id</code></td><td><code>law_audit_logs.law_id</code></td><td>1:N</td><td>เก็บประวัติการแก้ไขข้อมูลและสถานะ</td></tr>
+          <tr><td><code>users.id</code></td><td><code>laws.created_by</code>, <code>laws.updated_by</code></td><td>1:N optional</td><td>เจ้าหน้าที่ผู้สร้างและแก้ไขล่าสุด</td></tr>
+          <tr><td><code>users.id</code></td><td><code>law_files.uploaded_by</code></td><td>1:N</td><td>เจ้าหน้าที่ผู้อัปโหลดไฟล์</td></tr>
+          <tr><td><code>users.id</code></td><td><code>law_audit_logs.actor_user_id</code></td><td>1:N</td><td>ผู้กระทำ action ใน audit log</td></tr>
+          <tr><td><code>users.id</code></td><td><code>law_download_logs.user_id</code></td><td>1:N optional</td><td>ผู้ดาวน์โหลดที่ login แล้ว ถ้าเป็นประชาชนทั่วไปอาจเป็น NULL</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="law-categories">
+    <h2>3. Table: law_categories</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th style="width: 24%">Column</th><th style="width: 18%">Type</th><th style="width: 14%">Key/Null</th><th>คำอธิบาย</th></tr></thead>
+        <tbody>
+          <tr><td><code>id</code></td><td>BIGINT IDENTITY</td><td><span class="tag pk">PK</span></td><td>รหัสหมวดหมู่กฎหมาย</td></tr>
+          <tr><td><code>name</code></td><td>NVARCHAR(150)</td><td><span class="tag req">NOT NULL</span></td><td>ชื่อหมวดหมู่ เช่น ประกาศกระทรวง ประกาศกรม พระราชบัญญัติ กฎกระทรวง แนวปฏิบัติ</td></tr>
+          <tr><td><code>slug</code></td><td>VARCHAR(100)</td><td><span class="tag req">NOT NULL/UQ</span></td><td>key สำหรับอ้างอิงในระบบ เช่น <code>ministerial-announcement</code></td></tr>
+          <tr><td><code>description</code></td><td>NVARCHAR(500)</td><td>NULL</td><td>รายละเอียดเพิ่มเติมของหมวดหมู่</td></tr>
+          <tr><td><code>display_order</code></td><td>INT</td><td><span class="tag req">NOT NULL</span></td><td>ลำดับการแสดงผล</td></tr>
+          <tr><td><code>is_active</code></td><td>BIT</td><td><span class="tag req">NOT NULL</span></td><td>เปิด/ปิดหมวดหมู่</td></tr>
+          <tr><td><code>created_at</code>, <code>updated_at</code></td><td>DATETIME2</td><td><span class="tag req">NOT NULL</span></td><td>วันที่สร้างและวันที่แก้ไขล่าสุด</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="laws">
+    <h2>4. Table: laws</h2>
+    <p><span class="tag">Main Table</span> ข้อมูลหลักที่ใช้แสดงรายการกฎหมายที่เกี่ยวข้อง</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th style="width: 24%">Column</th><th style="width: 18%">Type</th><th style="width: 14%">Key/Null</th><th>คำอธิบาย</th></tr></thead>
+        <tbody>
+          <tr><td><code>id</code></td><td>BIGINT IDENTITY</td><td><span class="tag pk">PK</span></td><td>รหัสเอกสารกฎหมาย</td></tr>
+          <tr><td><code>category_id</code></td><td>BIGINT</td><td><span class="tag fk">FK/NOT NULL</span></td><td>อ้างอิง <code>law_categories.id</code></td></tr>
+          <tr><td><code>document_no</code></td><td>VARCHAR(50)</td><td><span class="tag req">NOT NULL/UQ</span></td><td>เลขเอกสาร เช่น <code>LAW-001</code></td></tr>
+          <tr><td><code>title</code></td><td>NVARCHAR(500)</td><td><span class="tag req">NOT NULL</span></td><td>ชื่อกฎหมาย/ประกาศที่แสดงในหน้ารายการ</td></tr>
+          <tr><td><code>description</code></td><td>NVARCHAR(MAX)</td><td>NULL</td><td>รายละเอียดเพิ่มเติมหรือคำอธิบายเอกสาร</td></tr>
+          <tr><td><code>announced_date</code></td><td>DATE</td><td><span class="tag req">NOT NULL</span></td><td>วันที่ประกาศ</td></tr>
+          <tr><td><code>effective_date</code></td><td>DATE</td><td>NULL</td><td>วันที่มีผลบังคับใช้ ถ้ามี</td></tr>
+          <tr><td><code>issuing_agency</code></td><td>NVARCHAR(255)</td><td>NULL</td><td>หน่วยงานผู้ออกเอกสาร เช่น กรมโรงงานอุตสาหกรรม</td></tr>
+          <tr><td><code>status</code></td><td>VARCHAR(30)</td><td><span class="tag req">NOT NULL</span></td><td>สถานะเอกสาร: <code>draft</code>, <code>published</code>, <code>archived</code></td></tr>
+          <tr><td><code>is_public</code></td><td>BIT</td><td><span class="tag req">NOT NULL</span></td><td>กำหนดว่าให้ประชาชน/ผู้ประกอบการเห็นและดาวน์โหลดได้หรือไม่</td></tr>
+          <tr><td><code>published_at</code></td><td>DATETIME2</td><td>NULL</td><td>วันที่เผยแพร่จริงในระบบ</td></tr>
+          <tr><td><code>created_by</code>, <code>updated_by</code></td><td>BIGINT</td><td><span class="tag fk">FK</span></td><td>เจ้าหน้าที่ผู้สร้างและแก้ไขล่าสุด</td></tr>
+          <tr><td><code>created_at</code>, <code>updated_at</code>, <code>deleted_at</code></td><td>DATETIME2</td><td>mixed</td><td>timestamps และ soft delete</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="law-files">
+    <h2>5. Table: law_files</h2>
+    <p><span class="tag">Versioned File</span> ไฟล์แนบของกฎหมาย เก็บหลาย version เพื่อรองรับการแก้ไขไฟล์</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th style="width: 24%">Column</th><th style="width: 18%">Type</th><th style="width: 14%">Key/Null</th><th>คำอธิบาย</th></tr></thead>
+        <tbody>
+          <tr><td><code>id</code></td><td>BIGINT IDENTITY</td><td><span class="tag pk">PK</span></td><td>รหัสไฟล์</td></tr>
+          <tr><td><code>law_id</code></td><td>BIGINT</td><td><span class="tag fk">FK/NOT NULL</span></td><td>อ้างอิง <code>laws.id</code></td></tr>
+          <tr><td><code>version_no</code></td><td>INT</td><td><span class="tag req">NOT NULL</span></td><td>ลำดับ version ของไฟล์ เช่น 1, 2, 3</td></tr>
+          <tr><td><code>original_filename</code></td><td>NVARCHAR(255)</td><td><span class="tag req">NOT NULL</span></td><td>ชื่อไฟล์ที่ผู้ใช้อัปโหลด</td></tr>
+          <tr><td><code>stored_filename</code></td><td>VARCHAR(255)</td><td><span class="tag req">NOT NULL</span></td><td>ชื่อไฟล์ที่ระบบเก็บจริง ควรเป็นชื่อที่กันชนกัน เช่น uuid</td></tr>
+          <tr><td><code>file_path</code></td><td>VARCHAR(500)</td><td><span class="tag req">NOT NULL</span></td><td>path หรือ object storage key สำหรับดึงไฟล์</td></tr>
+          <tr><td><code>mime_type</code></td><td>VARCHAR(100)</td><td><span class="tag req">NOT NULL</span></td><td>ชนิดไฟล์ เช่น <code>application/pdf</code></td></tr>
+          <tr><td><code>file_size_bytes</code></td><td>BIGINT</td><td><span class="tag req">NOT NULL</span></td><td>ขนาดไฟล์เป็น byte</td></tr>
+          <tr><td><code>checksum_sha256</code></td><td>CHAR(64)</td><td>NULL</td><td>ค่า hash สำหรับตรวจไฟล์ซ้ำหรือไฟล์เสีย</td></tr>
+          <tr><td><code>is_current</code></td><td>BIT</td><td><span class="tag req">NOT NULL</span></td><td>ระบุว่าเป็นไฟล์ version ล่าสุดที่ใช้ดาวน์โหลดหรือไม่</td></tr>
+          <tr><td><code>change_note</code></td><td>NVARCHAR(1000)</td><td>NULL</td><td>หมายเหตุการเปลี่ยนไฟล์ เช่น แก้ไขคำผิด เปลี่ยนฉบับประกาศ</td></tr>
+          <tr><td><code>uploaded_by</code></td><td>BIGINT</td><td><span class="tag fk">FK/NOT NULL</span></td><td>เจ้าหน้าที่ผู้อัปโหลด</td></tr>
+          <tr><td><code>uploaded_at</code></td><td>DATETIME2</td><td><span class="tag req">NOT NULL</span></td><td>วันที่อัปโหลด</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="law-download-logs">
+    <h2>6. Table: law_download_logs</h2>
+    <p><span class="tag">Append-only Table</span> เก็บประวัติการดาวน์โหลดเพื่อทำสถิติและตรวจสอบย้อนหลัง</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th style="width: 24%">Column</th><th style="width: 18%">Type</th><th style="width: 14%">Key/Null</th><th>คำอธิบาย</th></tr></thead>
+        <tbody>
+          <tr><td><code>id</code></td><td>BIGINT IDENTITY</td><td><span class="tag pk">PK</span></td><td>รหัส download log</td></tr>
+          <tr><td><code>law_id</code></td><td>BIGINT</td><td><span class="tag fk">FK/NOT NULL</span></td><td>กฎหมายที่ถูกดาวน์โหลด</td></tr>
+          <tr><td><code>law_file_id</code></td><td>BIGINT</td><td><span class="tag fk">FK/NOT NULL</span></td><td>ไฟล์ version ที่ถูกดาวน์โหลด</td></tr>
+          <tr><td><code>downloader_type</code></td><td>VARCHAR(30)</td><td><span class="tag req">NOT NULL</span></td><td>ประเภทผู้ดาวน์โหลด: <code>public</code>, <code>operator</code>, <code>officer</code></td></tr>
+          <tr><td><code>user_id</code></td><td>BIGINT</td><td>NULL</td><td>รหัสผู้ใช้ ถ้ามีการ login</td></tr>
+          <tr><td><code>ip_address</code></td><td>VARCHAR(45)</td><td>NULL</td><td>IPv4/IPv6 ของผู้ดาวน์โหลด</td></tr>
+          <tr><td><code>user_agent</code></td><td>NVARCHAR(500)</td><td>NULL</td><td>browser หรือ client ที่ใช้ดาวน์โหลด</td></tr>
+          <tr><td><code>downloaded_at</code></td><td>DATETIME2</td><td><span class="tag req">NOT NULL</span></td><td>วันที่ดาวน์โหลด</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="law-audit-logs">
+    <h2>7. Table: law_audit_logs</h2>
+    <p><span class="tag">Append-only Table</span> เก็บประวัติการกระทำของเจ้าหน้าที่ต่อข้อมูลกฎหมาย</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th style="width: 24%">Column</th><th style="width: 18%">Type</th><th style="width: 14%">Key/Null</th><th>คำอธิบาย</th></tr></thead>
+        <tbody>
+          <tr><td><code>id</code></td><td>BIGINT IDENTITY</td><td><span class="tag pk">PK</span></td><td>รหัส audit log</td></tr>
+          <tr><td><code>law_id</code></td><td>BIGINT</td><td><span class="tag fk">FK/NOT NULL</span></td><td>กฎหมายที่ถูกดำเนินการ</td></tr>
+          <tr><td><code>actor_user_id</code></td><td>BIGINT</td><td><span class="tag fk">FK/NOT NULL</span></td><td>เจ้าหน้าที่ผู้กระทำ</td></tr>
+          <tr><td><code>action</code></td><td>VARCHAR(50)</td><td><span class="tag req">NOT NULL</span></td><td>action เช่น <code>create</code>, <code>update</code>, <code>upload_file</code>, <code>publish</code>, <code>archive</code>, <code>delete</code></td></tr>
+          <tr><td><code>old_value</code></td><td>NVARCHAR(MAX)</td><td>NULL</td><td>JSON ค่าเดิมก่อนแก้ไข</td></tr>
+          <tr><td><code>new_value</code></td><td>NVARCHAR(MAX)</td><td>NULL</td><td>JSON ค่าใหม่หลังแก้ไข</td></tr>
+          <tr><td><code>created_at</code></td><td>DATETIME2</td><td><span class="tag req">NOT NULL</span></td><td>เวลาที่เกิด action</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="business-rules">
+    <h2>8. Business Rules</h2>
+    <ul>
+      <li>ประชาชนและผู้ประกอบการเห็นเฉพาะรายการที่ <code>laws.status = 'published'</code>, <code>laws.is_public = 1</code> และ <code>laws.deleted_at IS NULL</code></li>
+      <li>ปุ่มดาวน์โหลดต้องเลือกไฟล์จาก <code>law_files.is_current = 1</code> ของกฎหมายนั้น</li>
+      <li>เมื่อเจ้าหน้าที่แก้ไขไฟล์ ให้เพิ่มแถวใหม่ใน <code>law_files</code> และเพิ่ม <code>version_no</code> ห้าม overwrite ไฟล์เดิม</li>
+      <li>กฎหมายหนึ่งรายการควรมีไฟล์ current ได้ไม่เกิน 1 ไฟล์</li>
+      <li>อนุญาตชนิดไฟล์ตาม policy เช่น <code>pdf</code>, <code>doc</code>, <code>docx</code> และควรจำกัดขนาดไฟล์สูงสุด</li>
+      <li>ทุกการสร้าง แก้ไข เปลี่ยนไฟล์ เผยแพร่ ยกเลิกเผยแพร่ และลบ ต้องบันทึกใน <code>law_audit_logs</code></li>
+      <li>ทุกการดาวน์โหลดควรบันทึกใน <code>law_download_logs</code> เพื่อดูสถิติและตรวจสอบย้อนหลัง</li>
+      <li>การลบรายการกฎหมายควรใช้ soft delete ผ่าน <code>deleted_at</code> เพื่อรักษาประวัติไฟล์และ audit</li>
+    </ul>
+  </section>
+
+  <section id="constraints">
+    <h2>9. Constraints และ Index ที่แนะนำ</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Name</th><th>Table</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td><code>uq_law_categories_slug</code></td><td><code>law_categories</code></td><td>กัน slug หมวดหมู่ซ้ำ</td></tr>
+          <tr><td><code>uq_laws_document_no</code></td><td><code>laws</code></td><td>กันเลขเอกสารซ้ำ</td></tr>
+          <tr><td><code>ck_laws_status</code></td><td><code>laws</code></td><td>บังคับสถานะเป็น <code>draft</code>, <code>published</code>, <code>archived</code></td></tr>
+          <tr><td><code>uq_law_files_version</code></td><td><code>law_files</code></td><td>กัน <code>law_id</code> + <code>version_no</code> ซ้ำ</td></tr>
+          <tr><td><code>uq_law_files_current</code></td><td><code>law_files</code></td><td>แนะนำ filtered unique index ให้หนึ่งกฎหมายมี current file ได้หนึ่งรายการ</td></tr>
+          <tr><td><code>ix_laws_public_list</code></td><td><code>laws</code></td><td>เร่งการค้นหารายการ public ด้วย <code>status</code>, <code>is_public</code>, <code>announced_date</code></td></tr>
+          <tr><td><code>ix_law_download_logs_law_date</code></td><td><code>law_download_logs</code></td><td>ทำรายงานจำนวนดาวน์โหลดรายเอกสารตามช่วงเวลา</td></tr>
+          <tr><td><code>ix_law_audit_logs_law_date</code></td><td><code>law_audit_logs</code></td><td>ดู timeline การแก้ไขกฎหมายแต่ละรายการ</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="api">
+    <h2>10. API ที่ควรมี</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th style="width: 14%">Method</th><th style="width: 34%">Endpoint</th><th style="width: 16%">ใช้โดย</th><th>คำอธิบาย</th></tr></thead>
+        <tbody>
+          <tr><td><code>GET</code></td><td><code>/api/v1/laws</code></td><td>public</td><td>รายการกฎหมายที่เผยแพร่แล้ว</td></tr>
+          <tr><td><code>GET</code></td><td><code>/api/v1/laws/:id</code></td><td>public</td><td>รายละเอียดกฎหมาย</td></tr>
+          <tr><td><code>GET</code></td><td><code>/api/v1/laws/:id/download</code></td><td>public</td><td>ดาวน์โหลดไฟล์ current และบันทึก download log</td></tr>
+          <tr><td><code>GET</code></td><td><code>/api/v1/admin/laws</code></td><td>officer</td><td>รายการทั้งหมดสำหรับเจ้าหน้าที่ รวม draft/archived</td></tr>
+          <tr><td><code>POST</code></td><td><code>/api/v1/admin/laws</code></td><td>officer</td><td>เพิ่มข้อมูลกฎหมาย</td></tr>
+          <tr><td><code>PATCH</code></td><td><code>/api/v1/admin/laws/:id</code></td><td>officer</td><td>แก้ไข metadata เช่น ชื่อ เลขเอกสาร วันที่ประกาศ หมวดหมู่</td></tr>
+          <tr><td><code>POST</code></td><td><code>/api/v1/admin/laws/:id/files</code></td><td>officer</td><td>อัปโหลดไฟล์ version ใหม่</td></tr>
+          <tr><td><code>PATCH</code></td><td><code>/api/v1/admin/laws/:id/publish</code></td><td>officer</td><td>เผยแพร่เอกสารให้ public เห็น</td></tr>
+          <tr><td><code>PATCH</code></td><td><code>/api/v1/admin/laws/:id/archive</code></td><td>officer</td><td>เก็บถาวร/ยกเลิกการเผยแพร่</td></tr>
+          <tr><td><code>DELETE</code></td><td><code>/api/v1/admin/laws/:id</code></td><td>officer</td><td>soft delete รายการกฎหมาย</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+</body>
+</html>

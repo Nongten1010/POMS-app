@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>User Flow - รายงานค่าความคลาดเคลื่อน WPMS BOD/COD Online</title>
+  <style>
+    :root {
+      --ink: #111827;
+      --muted: #4b5563;
+      --line: #d7dde6;
+      --factory: #b7e35c;
+      --officer: #4f6df5;
+      --director: #b45be8;
+      --green: #16a34a;
+      --blue: #0ea5e9;
+      --pink: #ec4899;
+      --orange: #f97316;
+      --red: #dc2626;
+      --yellow: #facc15;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #f3f6fb;
+      font-family: Arial, "Noto Sans Thai", Tahoma, sans-serif;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+    main {
+      width: min(1420px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 24px 0 52px;
+    }
+    h1, h2, p { margin: 0; }
+    a { color: #1d4ed8; }
+    .cover {
+      padding: 20px 24px;
+      border: 1px solid var(--line);
+      background: linear-gradient(90deg, #fff 0%, #ffef5a 36%, #ffef5a 64%, #fff 100%);
+      text-align: center;
+    }
+    h1 {
+      font-size: 26px;
+      line-height: 1.25;
+    }
+    .subtitle {
+      margin-top: 8px;
+      color: #334155;
+      font-size: 15px;
+    }
+    .links {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 14px;
+    }
+    .link-button {
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 6px 12px;
+      border: 1px solid #bfd0ea;
+      border-radius: 6px;
+      background: #fff;
+      text-decoration: none;
+      font-weight: 700;
+    }
+    .diagram {
+      position: relative;
+      margin-top: 18px;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      background: #fff;
+    }
+    .canvas {
+      position: relative;
+      width: 1360px;
+      min-height: 780px;
+      padding: 22px 18px 28px;
+    }
+    .lane {
+      position: absolute;
+      top: 20px;
+      bottom: 20px;
+      border-right: 3px dotted #111;
+    }
+    .lane.first { left: 446px; }
+    .lane.second { left: 858px; }
+    .lane-title {
+      position: absolute;
+      top: 28px;
+      height: 54px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      border-radius: 0 28px 28px 0;
+      color: #111;
+      font-size: 18px;
+      font-weight: 800;
+      box-shadow: 0 5px 16px rgba(15, 23, 42, .12);
+    }
+    .lane-title.factory { left: 44px; width: 360px; background: var(--factory); }
+    .lane-title.officer { left: 480px; width: 360px; background: var(--officer); color: #fff; }
+    .lane-title.director { left: 900px; width: 370px; background: linear-gradient(90deg, #f97388 0%, var(--director) 100%); }
+    .avatar {
+      position: absolute;
+      top: 20px;
+      font-size: 36px;
+      line-height: 1;
+    }
+    .avatar.factory { left: 16px; }
+    .avatar.officer { left: 462px; }
+    .avatar.director { left: 880px; }
+    .node {
+      position: absolute;
+      width: 260px;
+      min-height: 46px;
+      padding: 9px 12px;
+      border: 2px solid #dbe3ef;
+      border-radius: 8px;
+      background: #fff;
+      text-align: center;
+      font-weight: 800;
+      box-shadow: 0 4px 12px rgba(15, 23, 42, .08);
+    }
+    .node.small { width: 210px; }
+    .node.wide { width: 310px; }
+    .node.note {
+      border-color: #fecaca;
+      background: #fff7f7;
+      color: #991b1b;
+      font-size: 12px;
+      font-weight: 700;
+      text-align: left;
+      line-height: 1.45;
+    }
+    .node.success { border-color: #86efac; background: #f0fdf4; }
+    .node.wait { border-color: #fde68a; background: #fffbeb; }
+    .node.pdf { border-color: #fecaca; background: #fff7f7; }
+    .node .sub {
+      display: block;
+      margin-top: 3px;
+      color: var(--red);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .bell {
+      display: inline-block;
+      margin-right: 4px;
+      color: var(--yellow);
+      text-shadow: 0 1px 0 #9a6b00;
+    }
+    .status-mark {
+      display: inline-grid;
+      place-items: center;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      color: #fff;
+      font-weight: 900;
+      font-size: 18px;
+      box-shadow: 0 2px 6px rgba(15, 23, 42, .18);
+    }
+    .status-mark.no { background: var(--red); }
+    .status-mark.yes { background: var(--green); }
+    .choice {
+      position: absolute;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      font-weight: 800;
+    }
+    .choice span { white-space: nowrap; }
+    .legend {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 16px;
+    }
+    .legend-item {
+      border: 1px solid var(--line);
+      background: #fff;
+      padding: 10px 12px;
+      min-height: 70px;
+    }
+    .legend-title {
+      font-weight: 800;
+      margin-bottom: 4px;
+    }
+    .legend small { color: var(--muted); }
+    svg.flow-lines {
+      position: absolute;
+      inset: 0;
+      width: 1360px;
+      height: 780px;
+      z-index: 1;
+      pointer-events: none;
+    }
+    .line-green { stroke: var(--green); }
+    .line-blue { stroke: var(--blue); }
+    .line-pink { stroke: var(--pink); }
+    .line-orange { stroke: var(--orange); }
+    .line-gray { stroke: #64748b; }
+    .dash { stroke-dasharray: 5 5; }
+    .flow-lines > path,
+    .flow-lines > polyline,
+    .flow-lines > line {
+      fill: none;
+      stroke-width: 3;
+    }
+    .flow-lines .line-green { marker-end: url(#arrow-green); }
+    .flow-lines .line-blue { marker-end: url(#arrow-blue); }
+    .flow-lines .line-pink { marker-end: url(#arrow-pink); }
+    .flow-lines .line-orange { marker-end: url(#arrow-orange); }
+    .flow-lines .line-gray { marker-end: url(#arrow-gray); }
+    .flow-label {
+      position: absolute;
+      z-index: 4;
+      padding: 2px 6px;
+      background: rgba(255, 255, 255, .92);
+      color: #111;
+      font-weight: 800;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    .summary {
+      margin-top: 18px;
+      padding: 14px 16px;
+      border-left: 4px solid #1d4ed8;
+      background: #eef5ff;
+    }
+    .lane,
+    .lane-title,
+    .avatar,
+    .node,
+    .choice {
+      z-index: 3;
+    }
+    .summary ul {
+      margin: 8px 0 0;
+      padding-left: 20px;
+    }
+    @media (max-width: 900px) {
+      .legend { grid-template-columns: 1fr; }
+      h1 { font-size: 22px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="cover">
+      <h1>แผนผังการใช้งานระบบ D-POMS รายงานค่าความคลาดเคลื่อน WPMS (BOD/COD Online)</h1>
+      <p class="subtitle">ภาพรวม flow ที่ผมเข้าใจจากแบบฟอร์ม: โรงงานส่งรายงาน → เจ้าหน้าที่ตรวจ/ทบทวน → ผู้อำนวยการอนุมัติ → โรงงานดาวน์โหลด PDF</p>
+      <div class="links">
+        <a class="link-button" href="00-db-workflow.html">DB และ Workflow</a>
+        <a class="link-button" href="01-report-form.html">แบบรายงานผล</a>
+        <a class="link-button" href="02-central-approval.html">แบบแจ้งผลส่วนกลาง</a>
+        <a class="link-button" href="03-regional-approval.html">แบบแจ้งผลส่วนภูมิภาค</a>
+        <a class="link-button" href="04-data-dictionary-er.html">Data Dictionary + ER</a>
+      </div>
+    </section>
+
+    <section class="diagram" aria-label="User flow diagram">
+      <div class="canvas">
+        <svg class="flow-lines" viewBox="0 0 1360 780" aria-hidden="true">
+          <defs>
+            <marker id="arrow-green" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+              <path d="M1,1 L11,6 L1,11 Z" fill="#16a34a"></path>
+            </marker>
+            <marker id="arrow-blue" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+              <path d="M1,1 L11,6 L1,11 Z" fill="#0ea5e9"></path>
+            </marker>
+            <marker id="arrow-pink" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+              <path d="M1,1 L11,6 L1,11 Z" fill="#ec4899"></path>
+            </marker>
+            <marker id="arrow-orange" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+              <path d="M1,1 L11,6 L1,11 Z" fill="#f97316"></path>
+            </marker>
+            <marker id="arrow-gray" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+              <path d="M1,1 L11,6 L1,11 Z" fill="#64748b"></path>
+            </marker>
+          </defs>
+
+          <line class="line-green" x1="150" y1="126" x2="258" y2="126"></line>
+          <line class="line-green" x1="260" y1="160" x2="260" y2="226"></line>
+          <line class="line-green" x1="260" y1="270" x2="260" y2="328"></line>
+          <line class="line-green" x1="260" y1="374" x2="260" y2="404"></line>
+          <path class="line-green dash" d="M334 588 H424 V630"></path>
+
+          <path class="line-pink" d="M138 588 H86 V430 H132"></path>
+          <path class="line-pink" d="M552 438 H488 V472 H402"></path>
+          <path class="line-blue" d="M552 610 H488 V586 H402"></path>
+          <path class="line-blue" d="M138 578 H38 V444 H132"></path>
+          <path class="line-orange" d="M18 728 V150 H82"></path>
+          <path class="line-green" d="M554 653 H488 V104 H505"></path>
+
+          <line class="line-green" x1="640" y1="128" x2="640" y2="204"></line>
+          <line class="line-green" x1="640" y1="252" x2="640" y2="328"></line>
+          <path class="line-green dash" d="M700 430 H760"></path>
+          <line class="line-green" x1="700" y1="462" x2="760" y2="462"></line>
+          <line class="line-green" x1="760" y1="462" x2="760" y2="508"></line>
+          <path class="line-green" d="M760 520 H888 V150 H1020"></path>
+
+          <path class="line-blue dash" d="M700 605 H760"></path>
+          <line class="line-blue" x1="760" y1="632" x2="760" y2="682"></line>
+          <path class="line-blue" d="M760 694 H900 V260 H1050"></path>
+          <path class="line-blue" d="M1050 306 H912 V566 H788"></path>
+
+          <line class="line-green" x1="1048" y1="150" x2="1112" y2="150"></line>
+          <line class="line-green" x1="1130" y1="220" x2="1130" y2="306"></line>
+          <path class="line-green dash" d="M1140 338 H1230"></path>
+          <line class="line-green" x1="1230" y1="338" x2="1230" y2="430"></line>
+          <line class="line-green" x1="1230" y1="486" x2="1230" y2="568"></line>
+          <path class="line-orange" d="M1190 370 H914 V728 H18"></path>
+        </svg>
+
+        <div class="lane first"></div>
+        <div class="lane second"></div>
+
+        <div class="avatar factory">👨‍💻</div>
+        <div class="lane-title factory">ผู้ประกอบการ (โรงงาน)</div>
+        <div class="avatar officer">👩‍💼</div>
+        <div class="lane-title officer">เจ้าหน้าที่ผู้ได้รับมอบหมาย</div>
+        <div class="avatar director">👨‍💼</div>
+        <div class="lane-title director">ผู้อำนวยการ (ผอ.กวภ./ผอ.ศวภ.)</div>
+
+        <div class="node small" style="left: 82px; top: 104px;">Login<br>iSingleForm</div>
+        <div class="node small" style="left: 268px; top: 102px;">Username<br>Password</div>
+        <div class="node" style="left: 132px; top: 218px;">เมนูหลัก<br><span class="sub">รายงานค่าความคลาดเคลื่อน ครั้งที่ 2/2569</span></div>
+        <div class="node small" style="left: 154px; top: 320px;">เลือกจุดตรวจวัด</div>
+        <div class="node" style="left: 132px; top: 404px;">กรอกแบบฟอร์ม / อัปโหลดเอกสาร<br><span class="sub">(Preview)</span></div>
+        <div class="node note" style="left: 52px; top: 480px; width: 350px;">เงื่อนไขตรวจเบื้องต้น<br>• ส่งรายงานภายในระยะเวลา 30 วันหลังได้รับมอบหมาย<br>• แนบเอกสารครบ 3 รายการ และไฟล์ไม่เกิน 2 MB</div>
+        <div class="choice" style="left: 138px; top: 572px;"><span>ไม่ถูกต้อง</span><span class="status-mark no">×</span><span class="status-mark yes">✓</span><span>ถูกต้อง</span></div>
+        <div class="node success" style="left: 294px; top: 630px;">ส่งรายงาน</div>
+        <div class="flow-label" style="left: 44px; top: 184px;">login</div>
+        <div class="flow-label" style="left: 96px; top: 548px;">แก้ไข</div>
+
+        <div class="node wait wide" style="left: 505px; top: 112px;"><span class="bell">🔔</span>ระบบมอบหมายงานอัตโนมัติ<br><span class="sub">(แยกภูมิภาคจากเลขทะเบียน/จังหวัด)</span></div>
+        <div class="node" style="left: 525px; top: 220px;">กดรับงานที่ได้รับมอบหมาย<br><span class="sub">(แจ้งเตือนมีแบบรายงานเข้า)</span></div>
+        <div class="node" style="left: 525px; top: 336px;">ตรวจสอบความถูกต้อง</div>
+        <div class="choice" style="left: 552px; top: 430px;"><span>ไม่ถูกต้อง</span><span class="status-mark no">×</span><span class="status-mark yes">✓</span><span>ถูกต้อง</span></div>
+        <div class="node success" style="left: 590px; top: 496px;">อนุมัติผลการพิจารณา</div>
+        <div class="node" style="left: 528px; top: 566px;">ทบทวนความถูกต้อง</div>
+        <div class="choice" style="left: 552px; top: 632px;"><span>ไม่ถูกต้อง</span><span class="status-mark no">×</span><span class="status-mark yes">✓</span><span>ถูกต้อง</span></div>
+        <div class="node success" style="left: 590px; top: 690px;">อนุมัติผลการพิจารณา</div>
+        <div class="flow-label" style="left: 492px; top: 400px; color: var(--pink);"><span class="bell">🔔</span>แจ้งเตือนแบบไม่ถูกต้อง</div>
+        <div class="flow-label" style="left: 492px; top: 576px; color: var(--blue);"><span class="bell">🔔</span>แจ้งเตือนแบบไม่ถูกต้อง</div>
+
+        <div class="node wait" style="left: 1020px; top: 128px;"><span class="bell">🔔</span>กดรับงานเพื่ออนุมัติ<br><span class="sub">(แจ้งเตือนมีแบบรายงานเข้า)</span></div>
+        <div class="node" style="left: 1050px; top: 248px;">พิจารณาอนุมัติ</div>
+        <div class="choice" style="left: 952px; top: 328px;"><span>ทบทวน</span><span>ไม่อนุมัติ</span><span class="status-mark no">×</span><span class="status-mark yes">✓</span><span>อนุมัติ</span></div>
+        <div class="node success wide" style="left: 1068px; top: 420px;">ส่งแบบแจ้งผลการพิจารณา<br>ผู้ประกอบการ</div>
+        <div class="node pdf" style="left: 1088px; top: 560px;">📄 ดูแบบฟอร์ม (PDF)<br>ดาวน์โหลด/พิมพ์</div>
+        <div class="flow-label" style="left: 958px; top: 392px; color: var(--orange);"><span class="bell">🔔</span>แจ้งเตือนพิจารณาสำเร็จ</div>
+        <div class="flow-label" style="left: 920px; top: 278px; color: var(--blue);"><span class="bell">🔔</span>แจ้งเตือนแบบไม่อนุมัติ</div>
+      </div>
+    </section>
+
+    <section class="legend" aria-label="Legend">
+      <div class="legend-item">
+        <div class="legend-title" style="color: var(--green);">เส้นสีเขียว</div>
+        <small>ขั้นตอนปกติเมื่อข้อมูลถูกต้องและอนุมัติผ่าน</small>
+      </div>
+      <div class="legend-item">
+        <div class="legend-title" style="color: var(--pink);">เส้นสีชมพู</div>
+        <small>ส่งกลับให้โรงงานแก้ไข เมื่อแบบฟอร์มหรือเอกสารไม่ถูกต้อง</small>
+      </div>
+      <div class="legend-item">
+        <div class="legend-title" style="color: var(--blue);">เส้นสีฟ้า</div>
+        <small>ส่งกลับทบทวน/ไม่อนุมัติจากขั้นเจ้าหน้าที่หรือผู้อำนวยการ</small>
+      </div>
+      <div class="legend-item">
+        <div class="legend-title" style="color: var(--orange);">เส้นสีส้ม</div>
+        <small>แจ้งผลสำเร็จกลับโรงงาน และเปิดให้ดู/ดาวน์โหลด PDF</small>
+      </div>
+    </section>
+
+    <section class="summary">
+      <h2>สรุป Flow ที่เข้าใจ</h2>
+      <ul>
+        <li>โรงงาน Login ผ่าน iSingleForm เลือกรายงานค่าความคลาดเคลื่อน เลือกจุดตรวจวัด กรอกแบบและแนบไฟล์</li>
+        <li>ระบบตรวจเบื้องต้น: ระยะเวลา 30 วัน, แนบไฟล์ครบ 3 รายการ, ขนาดไฟล์ไม่เกิน 2 MB ถ้าไม่ผ่านให้แก้ไขก่อนส่ง</li>
+        <li>หลังส่งรายงาน ระบบมอบหมายงานอัตโนมัติให้เจ้าหน้าที่ตามพื้นที่ ส่วนกลาง/ภูมิภาค</li>
+        <li>เจ้าหน้าที่ตรวจความถูกต้อง ถ้าไม่ถูกต้องส่งกลับโรงงานแก้ไข ถ้าถูกต้องอนุมัติผลและส่งต่อขั้นทบทวน/อนุมัติ</li>
+        <li>ผู้อำนวยการกดรับงาน พิจารณาอนุมัติ หากไม่อนุมัติส่งกลับทบทวน หากอนุมัติส่งแบบแจ้งผลให้โรงงาน</li>
+        <li>โรงงานเห็นแบบแจ้งผลเป็น PDF และสามารถดาวน์โหลด/พิมพ์ได้</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

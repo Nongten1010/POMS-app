@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>แบบแจ้งผลการตรวจสอบ ส่วนกลาง</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #eef2f7;
+      color: #111;
+      font-family: Arial, "Noto Sans Thai", Tahoma, sans-serif;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    .toolbar {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 18px 20px 0;
+    }
+    .toolbar a { color: #1d4ed8; font-weight: 700; }
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(320px, 430px) minmax(794px, 1fr);
+      gap: 18px;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 18px 20px 50px;
+      align-items: start;
+    }
+    .panel {
+      border: 1px solid #d7dde6;
+      background: #fff;
+      padding: 16px;
+    }
+    h1, h2, p { margin: 0; }
+    h1 { font-size: 22px; line-height: 1.3; }
+    h2 { margin-top: 18px; font-size: 16px; }
+    .hint { margin-top: 6px; color: #4b5563; }
+    .step {
+      display: grid;
+      grid-template-columns: 34px 1fr;
+      gap: 10px;
+      margin-top: 10px;
+      padding: 10px;
+      border: 1px solid #d7dde6;
+      background: #f9fafb;
+    }
+    .num {
+      display: grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: #1d4ed8;
+      color: #fff;
+      font-weight: 700;
+    }
+    .status {
+      display: inline-block;
+      margin-top: 6px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: #ecfdf5;
+      color: #047857;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .paper {
+      width: 794px;
+      min-height: 1123px;
+      margin: 0 auto;
+      padding: 34px 36px;
+      background: #fff;
+      box-shadow: 0 10px 28px rgba(15, 23, 42, .12);
+      font-size: 17px;
+      line-height: 1.55;
+    }
+    .border {
+      min-height: 1055px;
+      border: 1px solid #111;
+      padding: 28px 34px;
+    }
+    .center { text-align: center; }
+    .title { text-decoration: underline; font-weight: 700; line-height: 1.55; }
+    .line {
+      display: inline-block;
+      min-width: 180px;
+      border-bottom: 1px dotted #111;
+      line-height: 1.15;
+      padding: 0 6px;
+    }
+    .line.long { min-width: 330px; }
+    .box {
+      display: inline-grid;
+      place-items: center;
+      width: 19px;
+      height: 19px;
+      margin: 0 5px;
+      border: 2px solid #111;
+      vertical-align: middle;
+      font-size: 13px;
+      line-height: 1;
+    }
+    .choice {
+      display: grid;
+      grid-template-columns: 28px 1fr;
+      gap: 10px;
+      margin-top: 9px;
+      padding-left: 28px;
+    }
+    .section-title { margin-top: 18px; font-weight: 700; }
+    .reason-line {
+      display: block;
+      border-bottom: 1px dotted #111;
+      min-height: 24px;
+      margin-top: 4px;
+    }
+    .note { margin-top: 54px; }
+    .sign-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 70px;
+      margin: 64px 80px 0;
+    }
+    .sign-bottom {
+      width: 250px;
+      margin: 48px auto 0;
+    }
+    .signature {
+      text-align: center;
+      font-size: 16px;
+      line-height: 1.7;
+    }
+    .signature .dot { display: block; border-bottom: 1px dotted #111; height: 24px; }
+    .contact {
+      margin-top: 40px;
+      text-align: center;
+      font-size: 15px;
+      line-height: 1.65;
+    }
+    @media (max-width: 1180px) {
+      .layout { grid-template-columns: 1fr; }
+      .paper-wrap { overflow-x: auto; }
+    }
+    @media print {
+      body { background: #fff; }
+      .toolbar, .panel { display: none; }
+      .layout { display: block; padding: 0; }
+      .paper { box-shadow: none; margin: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar"><a href="00-db-workflow.html">กลับไปหน้า DB และ Workflow</a></div>
+  <main class="layout">
+    <section class="panel">
+      <h1>Workflow อนุมัติส่วนกลาง</h1>
+      <p class="hint">ใช้เมื่อโรงงานอยู่ในกรุงเทพมหานคร ระบบเลือก <code>approval_track = CENTRAL</code></p>
+      <h2>ลำดับการอนุมัติ</h2>
+      <div class="step"><div class="num">1</div><div><b>ผู้ตรวจสอบ</b><br>ตรวจความถูกต้องของแบบรายงานและค่าความคลาดเคลื่อน <span class="status">อนุมัติแล้ว</span></div></div>
+      <div class="step"><div class="num">2</div><div><b>ผู้ทบทวน</b><br>ทบทวนผลตรวจและเหตุผลประกอบ <span class="status">อนุมัติแล้ว</span></div></div>
+      <div class="step"><div class="num">3</div><div><b>ผู้อนุมัติ</b><br>อนุมัติออกแบบแจ้งผลส่วนกลาง <span class="status">รอดำเนินการ</span></div></div>
+      <h2>การแก้ไขย้อนหลัง</h2>
+      <p class="hint">แต่ละคนแก้ไขผลของ step ตนเองได้ ระบบเพิ่ม revision และบันทึก event ทุกครั้ง เช่น ผู้ทบทวนแก้ comment หลังอนุมัติแล้ว จะเก็บ revision 2 โดยไม่ลบ revision 1</p>
+    </section>
+
+    <section class="paper-wrap">
+      <article class="paper">
+        <div class="border">
+          <div class="center title">
+            <div>แบบแจ้งผลการตรวจสอบ (ส่วนกลาง)</div>
+            <div>การรายงานค่าความคลาดเคลื่อนของเครื่องมือหรือเครื่องอุปกรณ์พิเศษและเครื่องมือหรือเครื่องอุปกรณ์เพิ่มเติม</div>
+            <div>สำหรับตรวจวัด</div>
+          </div>
+
+          <div style="margin-top: 34px;">
+            สำหรับโรงงาน : <span class="line long">บริษัท ตัวอย่างอุตสาหกรรม จำกัด</span>
+            การรายงานครั้งที่ <span class="line">1</span>
+          </div>
+          <div>
+            ทะเบียนโรงงานเลขที่ : <span class="line long">3-101-55/69กท</span>
+            อ้างอิงรายงานวันที่ : <span class="line">16/06/2569</span>
+          </div>
+
+          <div class="section-title">1. ความถูกต้องของแบบรายงาน <span class="box">/</span> BOD <span class="box"></span> COD</div>
+          <div class="choice"><span class="box">/</span><div>แบบรายงาน<b>ถูกต้องครบถ้วน</b>ตามประกาศกรมโรงงานอุตสาหกรรม เรื่อง หลักเกณฑ์การให้ความเห็นชอบให้โรงงานที่ต้องมีระบบบำบัดน้ำเสียต้องติดตั้งเครื่องมือหรือเครื่องอุปกรณ์พิเศษและเครื่องมือหรือเครื่องอุปกรณ์เพิ่มเติม (ฉบับที่ 2) พ.ศ. 2565</div></div>
+          <div class="choice"><span class="box"></span><div>แบบรายงาน<b>ไม่ถูกต้องครบถ้วน</b>ตามประกาศกรมโรงงานอุตสาหกรรม เรื่อง หลักเกณฑ์การให้ความเห็นชอบให้โรงงานที่ต้องมีระบบบำบัดน้ำเสียต้องติดตั้งเครื่องมือหรือเครื่องอุปกรณ์พิเศษและเครื่องมือหรือเครื่องอุปกรณ์เพิ่มเติม (ฉบับที่ 2) พ.ศ. 2565 เนื่องจาก <span class="reason-line"></span><span class="reason-line"></span></div></div>
+
+          <div class="section-title">2.ค่าความคลาดเคลื่อน <span class="box">/</span> BOD <span class="box"></span> COD</div>
+          <div class="choice"><span class="box">/</span><div><b>เป็นไปตามประกาศ</b>กรมโรงงานอุตสาหกรรม เรื่อง หลักเกณฑ์การให้ความเห็นชอบให้โรงงานที่ต้องมีระบบบำบัดน้ำเสียต้องติดตั้งเครื่องมือหรือเครื่องอุปกรณ์พิเศษและเครื่องมือหรือเครื่องอุปกรณ์เพิ่มเติม พ.ศ. 2550</div></div>
+          <div class="choice"><span class="box"></span><div><b>ไม่เป็นตามประกาศ</b>กรมโรงงานอุตสาหกรรม เรื่อง หลักเกณฑ์การให้ความเห็นชอบให้โรงงานที่ต้องมีระบบบำบัดน้ำเสียต้องติดตั้งเครื่องมือหรือเครื่องอุปกรณ์พิเศษและเครื่องมือหรือเครื่องอุปกรณ์เพิ่มเติม พ.ศ. 2550</div></div>
+
+          <div class="note"><b>หมายเหตุ</b> : ในกรณีที่การบันทึกข้อมูลในแบบรายงานไม่ถูกต้องและหรือค่าความเคลื่อนไม่เป็นไปตามประกาศฯ<br>กรมโรงงานอุตสาหกรรมจะดำเนินการแจ้งผลการตรวจสอบไปยังหน่วยงานกำกับ</div>
+
+          <div class="sign-grid">
+            <div class="signature"><span class="dot"></span>(<span class="line">นางสาวตรวจสอบ กลาง</span>)<br>ตำแหน่ง <span class="line">นักวิชาการ</span><br>ผู้ตรวจสอบ<br>16/06/2569</div>
+            <div class="signature"><span class="dot"></span>(<span class="line">นายทบทวน กลาง</span>)<br>ตำแหน่ง <span class="line">นักวิชาการชำนาญการ</span><br>ผู้ทบทวน<br>16/06/2569</div>
+          </div>
+          <div class="sign-bottom signature"><span class="dot"></span>(<span class="line"></span>)<br>ตำแหน่ง <span class="line"></span><br>ผู้อนุมัติ<br>......./.........../.........</div>
+
+          <div class="contact">
+            <b>สอบถามข้อมูลเพิ่มเติมได้ที่</b> : ศูนย์เฝ้าระวังสิ่งแวดล้อมอุตสาหกรรม กลุ่มเฝ้าระวังและเตือนภัยมลพิษโรงงาน<br>
+            โทรศัพท์ : 02-4306312 ต่อ 2109&nbsp;&nbsp; Line : @iemcdiw<br>
+            ไปรษณีย์อิเล็กทรอนิกส์ : poms.support@diw.mail.go.th
+          </div>
+        </div>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

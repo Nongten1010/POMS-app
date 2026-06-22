@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Data Dictionary และ ER Diagram - Chat</title>
+  <style>
+    :root {
+      --ink: #111827;
+      --muted: #4b5563;
+      --line: #d7dde6;
+      --head: #e9eef6;
+      --blue: #1d4ed8;
+      --green: #047857;
+      --amber: #b45309;
+      --red: #b91c1c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #fff;
+      font-family: Arial, "Noto Sans Thai", Tahoma, sans-serif;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    main {
+      width: min(1240px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 30px 0 56px;
+    }
+    section {
+      margin: 0;
+      padding: 0;
+      border: 0;
+      background: transparent;
+    }
+    section:first-child {
+      padding: 24px 26px;
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, #f8fbff 0%, #fff 100%);
+    }
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: 28px; line-height: 1.25; }
+    h2 {
+      margin-top: 30px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--line);
+      font-size: 21px;
+    }
+    h3 { margin-top: 18px; font-size: 17px; }
+    p { margin-top: 8px; }
+    ul { margin: 10px 0 0 22px; padding: 0; }
+    li { margin: 5px 0; }
+    .subtitle { color: var(--muted); font-size: 15px; }
+    .links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+    .link-button {
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 6px 12px;
+      border: 1px solid #bfd0ea;
+      border-radius: 6px;
+      background: #f2f6ff;
+      color: var(--blue);
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 14px;
+    }
+    .table-wrap {
+      margin-top: 12px;
+      overflow-x: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      background: #fff;
+    }
+    th, td {
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      vertical-align: top;
+      word-break: break-word;
+    }
+    th { background: var(--head); text-align: left; font-weight: 700; }
+    tbody tr:nth-child(even) td { background: #fbfcfe; }
+    code {
+      padding: 1px 5px;
+      border: 1px solid #dbe3ef;
+      border-radius: 4px;
+      background: #f8fafc;
+      color: #0f172a;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 12px;
+    }
+    pre {
+      margin: 12px 0 0;
+      padding: 14px;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      background: #0f172a;
+      color: #e5e7eb;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+    .tag {
+      display: inline-block;
+      padding: 2px 7px;
+      border: 1px solid #bfd0ea;
+      border-radius: 999px;
+      background: #f2f6ff;
+      color: #1e3a8a;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .tag.pk { border-color: #86efac; background: #ecfdf5; color: var(--green); }
+    .tag.fk { border-color: #fed7aa; background: #fff7ed; color: var(--amber); }
+    .tag.req { border-color: #fecaca; background: #fff1f2; color: var(--red); }
+    .erd-wrap {
+      margin-top: 14px;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      background: #fff;
+    }
+    .erd { display: block; min-width: 980px; width: 100%; height: auto; }
+    .entity { fill: #fff; stroke: #94a3b8; stroke-width: 1.2; }
+    .entity.main { fill: #f8fbff; stroke: var(--blue); stroke-width: 1.8; }
+    .entity.child { fill: #ecfdf5; stroke: var(--green); stroke-width: 1.4; }
+    .entity.file { fill: #fff7ed; stroke: var(--amber); stroke-width: 1.4; }
+    .entity-title {
+      fill: #0f172a;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .field {
+      fill: #334155;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 12px;
+    }
+    .rel { stroke: #334155; stroke-width: 1.6; fill: none; marker-end: url(#arrow); }
+    .note-box {
+      margin-top: 12px;
+      padding: 12px 14px;
+      border: 1px solid #bfd0ea;
+      background: #f8fbff;
+    }
+    @media print {
+      main { width: 100%; padding: 0; }
+      section { break-inside: avoid; }
+      .link-button { display: none; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <section>
+    <h1>Data Dictionary และ ER Diagram</h1>
+    <p class="subtitle">ระบบ Chat ออกแบบจากข้อมูลที่หน้า <code>frontend/src/pages/ChatPage.jsx</code> ใช้จริง: หัวข้อสนทนา สถานะ หมวดหมู่ ผู้ประกอบการ ข้อความตอบกลับ และไฟล์แนบ</p>
+    <div class="links">
+      <a class="link-button" href="#er-diagram">ER Diagram</a>
+      <a class="link-button" href="#chat-threads">chat_threads</a>
+      <a class="link-button" href="#chat-messages">chat_messages</a>
+      <a class="link-button" href="#chat-attachments">chat_attachments</a>
+      <a class="link-button" href="#sql-ddl">SQL DDL</a>
+    </div>
+  </section>
+
+  <section>
+    <h2>รายการตารางสรุป</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 24%">Table</th>
+            <th>หน้าที่</th>
+            <th style="width: 18%">Cardinality</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><code>chat_threads</code></td><td>หัวข้อสนทนาหนึ่งเรื่อง ใช้แสดงรายการด้านซ้าย กรองสถานะ/หมวดหมู่ และแสดงหัวเรื่องด้านขวา</td><td>Parent</td></tr>
+          <tr><td><code>chat_messages</code></td><td>ข้อความในแต่ละหัวข้อ เก็บผู้ส่ง บทบาท เวลา และเนื้อหาที่แสดงเป็น bubble</td><td>1 thread : N messages</td></tr>
+          <tr><td><code>chat_attachments</code></td><td>ไฟล์แนบของข้อความ เก็บแยกเพื่อไม่ต้องฝังคำว่าไฟล์แนบไว้ในข้อความ</td><td>1 message : N files</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="er-diagram">
+    <h2>1. ER Diagram</h2>
+    <div class="erd-wrap">
+      <svg class="erd" viewBox="0 0 980 420" role="img" aria-label="ER Diagram Chat" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L9,3 z" fill="#334155"/>
+          </marker>
+        </defs>
+        <rect class="entity main" x="56" y="72" width="280" height="238"/>
+        <text class="entity-title" x="84" y="108">chat_threads</text>
+        <text class="field" x="84" y="140">PK id</text>
+        <text class="field" x="84" y="166">title</text>
+        <text class="field" x="84" y="192">status</text>
+        <text class="field" x="84" y="218">category</text>
+        <text class="field" x="84" y="244">operator_name</text>
+        <text class="field" x="84" y="270">created_by_user_id</text>
+        <text class="field" x="84" y="296">created_at, updated_at, closed_at</text>
+
+        <rect class="entity child" x="402" y="72" width="280" height="238"/>
+        <text class="entity-title" x="430" y="108">chat_messages</text>
+        <text class="field" x="430" y="140">PK id</text>
+        <text class="field" x="430" y="166">FK thread_id</text>
+        <text class="field" x="430" y="192">sender_role</text>
+        <text class="field" x="430" y="218">sender_name</text>
+        <text class="field" x="430" y="244">sender_user_id</text>
+        <text class="field" x="430" y="270">message_text</text>
+        <text class="field" x="430" y="296">created_at</text>
+
+        <rect class="entity file" x="748" y="112" width="180" height="158"/>
+        <text class="entity-title" x="772" y="148">chat_attachments</text>
+        <text class="field" x="772" y="180">PK id</text>
+        <text class="field" x="772" y="206">FK message_id</text>
+        <text class="field" x="772" y="232">file_name</text>
+        <text class="field" x="772" y="258">file_path</text>
+
+        <path class="rel" d="M336 190 H402"/>
+        <text class="field" x="352" y="178">1:N</text>
+        <path class="rel" d="M682 190 H748"/>
+        <text class="field" x="700" y="178">1:N</text>
+      </svg>
+    </div>
+  </section>
+
+  <section>
+    <h2>2. Relationship Summary</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 28%">Parent</th>
+            <th style="width: 28%">Child</th>
+            <th style="width: 14%">Relationship</th>
+            <th>คำอธิบาย</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><code>chat_threads.id</code></td><td><code>chat_messages.thread_id</code></td><td>1:N</td><td>หนึ่งหัวข้อมีข้อความหลายรายการ ใช้แสดง timeline ในหน้าสนทนา</td></tr>
+          <tr><td><code>chat_messages.id</code></td><td><code>chat_attachments.message_id</code></td><td>1:N</td><td>หนึ่งข้อความแนบไฟล์ได้มากกว่าหนึ่งไฟล์ แม้ UI ปัจจุบันเลือกครั้งละ 1 ไฟล์</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="chat-threads">
+    <h2>3. Data Dictionary: chat_threads</h2>
+    <p>เก็บข้อมูลระดับหัวข้อสนทนา ใช้กับรายการซ้ายของหน้า Chat และส่วนหัวรายละเอียดด้านขวา</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 22%">Column</th>
+            <th style="width: 16%">Type</th>
+            <th style="width: 12%">Key</th>
+            <th style="width: 14%">Required</th>
+            <th>คำอธิบาย</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><code>id</code></td><td><code>bigint identity</code></td><td><span class="tag pk">PK</span></td><td><span class="tag req">Yes</span></td><td>รหัสหัวข้อสนทนา</td></tr>
+          <tr><td><code>title</code></td><td><code>nvarchar(300)</code></td><td></td><td><span class="tag req">Yes</span></td><td>เรื่องที่ผู้ใช้กรอกใน dialog ตั้งคำถาม</td></tr>
+          <tr><td><code>status</code></td><td><code>varchar(20)</code></td><td></td><td><span class="tag req">Yes</span></td><td>สถานะตาม UI: <code>waiting</code>, <code>inProgress</code>, <code>closed</code></td></tr>
+          <tr><td><code>category</code></td><td><code>nvarchar(100)</code></td><td></td><td><span class="tag req">Yes</span></td><td>หมวดหมู่ เช่น การเชื่อมต่อข้อมูล, ข้อมูลโรงงาน, แบบ กวภ., รายงานและสถิติ, การเข้าใช้งานระบบ</td></tr>
+          <tr><td><code>operator_name</code></td><td><code>nvarchar(255)</code></td><td></td><td>No</td><td>ชื่อผู้ประกอบการที่แสดงในรายละเอียดหัวข้อ</td></tr>
+          <tr><td><code>operator_factory_id</code></td><td><code>bigint</code></td><td><span class="tag fk">FK</span></td><td>No</td><td>อ้างอิงโรงงาน/ผู้ประกอบการถ้าต้องผูกกับข้อมูลจริงของระบบ</td></tr>
+          <tr><td><code>created_by_user_id</code></td><td><code>bigint</code></td><td><span class="tag fk">FK</span></td><td>No</td><td>ผู้ใช้ที่เปิดหัวข้อ</td></tr>
+          <tr><td><code>assigned_to_user_id</code></td><td><code>bigint</code></td><td><span class="tag fk">FK</span></td><td>No</td><td>เจ้าหน้าที่ผู้รับผิดชอบ ถ้ายังไม่มอบหมายให้เป็น <code>NULL</code></td></tr>
+          <tr><td><code>created_at</code></td><td><code>datetime2</code></td><td></td><td><span class="tag req">Yes</span></td><td>เวลาสร้างหัวข้อ</td></tr>
+          <tr><td><code>updated_at</code></td><td><code>datetime2</code></td><td></td><td><span class="tag req">Yes</span></td><td>เวลาที่มีความเคลื่อนไหวล่าสุด ใช้เรียงรายการล่าสุดก่อน</td></tr>
+          <tr><td><code>closed_at</code></td><td><code>datetime2</code></td><td></td><td>No</td><td>เวลาปิดเรื่อง กรอกเมื่อ <code>status = closed</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="chat-messages">
+    <h2>4. Data Dictionary: chat_messages</h2>
+    <p>เก็บข้อความแต่ละ bubble ในห้องสนทนา โดยแยกบทบาทผู้ส่งเพื่อจัดตำแหน่งซ้าย/ขวาตามหน้า frontend</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 22%">Column</th>
+            <th style="width: 16%">Type</th>
+            <th style="width: 12%">Key</th>
+            <th style="width: 14%">Required</th>
+            <th>คำอธิบาย</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><code>id</code></td><td><code>bigint identity</code></td><td><span class="tag pk">PK</span></td><td><span class="tag req">Yes</span></td><td>รหัสข้อความ</td></tr>
+          <tr><td><code>thread_id</code></td><td><code>bigint</code></td><td><span class="tag fk">FK</span></td><td><span class="tag req">Yes</span></td><td>อ้างอิงหัวข้อสนทนา</td></tr>
+          <tr><td><code>sender_role</code></td><td><code>varchar(20)</code></td><td></td><td><span class="tag req">Yes</span></td><td>บทบาทผู้ส่งตาม UI: <code>operator</code> หรือ <code>officer</code></td></tr>
+          <tr><td><code>sender_name</code></td><td><code>nvarchar(150)</code></td><td></td><td><span class="tag req">Yes</span></td><td>ชื่อที่แสดงเหนือข้อความ เช่น ผู้ประกอบการ หรือ เจ้าหน้าที่ กวภ.</td></tr>
+          <tr><td><code>sender_user_id</code></td><td><code>bigint</code></td><td><span class="tag fk">FK</span></td><td>No</td><td>ผู้ใช้ที่ส่งข้อความ ถ้ามีระบบ login ผูกกับ users</td></tr>
+          <tr><td><code>message_text</code></td><td><code>nvarchar(max)</code></td><td></td><td><span class="tag req">Yes</span></td><td>เนื้อหาข้อความ รองรับหลายบรรทัดเหมือน <code>white-space: pre-line</code> ใน frontend</td></tr>
+          <tr><td><code>created_at</code></td><td><code>datetime2</code></td><td></td><td><span class="tag req">Yes</span></td><td>เวลาส่งข้อความ ใช้แทนข้อความ mock เช่น วันนี้ 10:24 หรือ ตอนนี้</td></tr>
+          <tr><td><code>is_internal_note</code></td><td><code>bit</code></td><td></td><td><span class="tag req">Yes</span></td><td>ค่าเริ่มต้น <code>0</code>; เผื่อใช้บันทึกหมายเหตุเจ้าหน้าที่ภายหลังโดยไม่แสดงให้ผู้ประกอบการ</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="chat-attachments">
+    <h2>5. Data Dictionary: chat_attachments</h2>
+    <p>หน้า Chat ปัจจุบันแสดงชื่อไฟล์แนบรวมในข้อความ แต่ฐานข้อมูลควรแยกไฟล์แนบเพื่อเก็บ path, ขนาดไฟล์ และชนิดไฟล์ได้ชัดเจน</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 22%">Column</th>
+            <th style="width: 16%">Type</th>
+            <th style="width: 12%">Key</th>
+            <th style="width: 14%">Required</th>
+            <th>คำอธิบาย</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><code>id</code></td><td><code>bigint identity</code></td><td><span class="tag pk">PK</span></td><td><span class="tag req">Yes</span></td><td>รหัสไฟล์แนบ</td></tr>
+          <tr><td><code>message_id</code></td><td><code>bigint</code></td><td><span class="tag fk">FK</span></td><td><span class="tag req">Yes</span></td><td>ข้อความที่แนบไฟล์นี้</td></tr>
+          <tr><td><code>file_name</code></td><td><code>nvarchar(255)</code></td><td></td><td><span class="tag req">Yes</span></td><td>ชื่อไฟล์ต้นฉบับที่แสดงบนหน้า Chat</td></tr>
+          <tr><td><code>file_path</code></td><td><code>nvarchar(500)</code></td><td></td><td><span class="tag req">Yes</span></td><td>ตำแหน่งไฟล์ใน storage หรือ path ที่ backend ใช้ดาวน์โหลด</td></tr>
+          <tr><td><code>mime_type</code></td><td><code>varchar(100)</code></td><td></td><td>No</td><td>ชนิดไฟล์ เช่น <code>application/pdf</code> หรือ <code>image/png</code></td></tr>
+          <tr><td><code>file_size_bytes</code></td><td><code>bigint</code></td><td></td><td>No</td><td>ขนาดไฟล์ ใช้ตรวจสอบข้อจำกัดการแนบไฟล์</td></tr>
+          <tr><td><code>uploaded_at</code></td><td><code>datetime2</code></td><td></td><td><span class="tag req">Yes</span></td><td>เวลาที่อัปโหลดไฟล์</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="sql-ddl">
+    <h2>6. SQL Server DDL แบบพอใช้</h2>
+    <p>ตัวอย่างนี้ตั้งใจให้เป็น schema เริ่มต้นสำหรับทำ backend ต่อ ยังไม่บังคับ FK ไปหา <code>users</code> หรือ <code>factories</code> เพราะหน้า Chat ปัจจุบันยังเป็น mock data ใน frontend</p>
+    <pre><code>CREATE TABLE chat_threads (
+  id BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+  title NVARCHAR(300) NOT NULL,
+  status VARCHAR(20) NOT NULL,
+  category NVARCHAR(100) NOT NULL,
+  operator_name NVARCHAR(255) NULL,
+  operator_factory_id BIGINT NULL,
+  created_by_user_id BIGINT NULL,
+  assigned_to_user_id BIGINT NULL,
+  created_at DATETIME2 NOT NULL CONSTRAINT df_chat_threads_created_at DEFAULT SYSUTCDATETIME(),
+  updated_at DATETIME2 NOT NULL CONSTRAINT df_chat_threads_updated_at DEFAULT SYSUTCDATETIME(),
+  closed_at DATETIME2 NULL,
+  CONSTRAINT ck_chat_threads_status CHECK (status IN ('waiting', 'inProgress', 'closed'))
+);
+
+CREATE TABLE chat_messages (
+  id BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+  thread_id BIGINT NOT NULL,
+  sender_role VARCHAR(20) NOT NULL,
+  sender_name NVARCHAR(150) NOT NULL,
+  sender_user_id BIGINT NULL,
+  message_text NVARCHAR(MAX) NOT NULL,
+  created_at DATETIME2 NOT NULL CONSTRAINT df_chat_messages_created_at DEFAULT SYSUTCDATETIME(),
+  is_internal_note BIT NOT NULL CONSTRAINT df_chat_messages_internal DEFAULT 0,
+  CONSTRAINT fk_chat_messages_thread FOREIGN KEY (thread_id) REFERENCES chat_threads(id),
+  CONSTRAINT ck_chat_messages_sender_role CHECK (sender_role IN ('operator', 'officer'))
+);
+
+CREATE TABLE chat_attachments (
+  id BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+  message_id BIGINT NOT NULL,
+  file_name NVARCHAR(255) NOT NULL,
+  file_path NVARCHAR(500) NOT NULL,
+  mime_type VARCHAR(100) NULL,
+  file_size_bytes BIGINT NULL,
+  uploaded_at DATETIME2 NOT NULL CONSTRAINT df_chat_attachments_uploaded_at DEFAULT SYSUTCDATETIME(),
+  CONSTRAINT fk_chat_attachments_message FOREIGN KEY (message_id) REFERENCES chat_messages(id)
+);
+
+CREATE INDEX ix_chat_threads_status_updated_at ON chat_threads(status, updated_at DESC);
+CREATE INDEX ix_chat_threads_category ON chat_threads(category);
+CREATE INDEX ix_chat_messages_thread_created_at ON chat_messages(thread_id, created_at);
+CREATE INDEX ix_chat_attachments_message_id ON chat_attachments(message_id);</code></pre>
+    <div class="note-box">
+      <strong>หมายเหตุ:</strong> ถ้าต้องทำ production จริง ควรเพิ่ม endpoint, validation, upload storage policy, permission <code>chat:ask</code>/<code>chat:answer</code> และ foreign key ไปยังตารางผู้ใช้/โรงงานตาม schema จริงของ backend
+    </div>
+  </section>
+</main>
+</body>
+</html>

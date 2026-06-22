@@ -1,0 +1,735 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Data Dictionary และ ER Diagram - ระบบแจ้งแบบ กวภ.01-กวภ.05</title>
+  <style>
+    :root {
+      --ink: #111827;
+      --muted: #4b5563;
+      --line: #d7dde6;
+      --soft: #f6f8fb;
+      --head: #e9eef6;
+      --blue: #1d4ed8;
+      --green: #047857;
+      --amber: #b45309;
+      --red: #b91c1c;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #fff;
+      font-family: Arial, "Noto Sans Thai", Tahoma, sans-serif;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    main {
+      width: min(1240px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 30px 0 56px;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: 28px; line-height: 1.25; }
+
+    h2 {
+      margin-top: 30px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--line);
+      font-size: 21px;
+    }
+
+    h3 { margin-top: 20px; font-size: 17px; }
+    p { margin-top: 8px; }
+    a { color: var(--blue); }
+
+    .cover {
+      padding: 24px 26px;
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, #f8fbff 0%, #fff 100%);
+    }
+
+    .subtitle { color: var(--muted); font-size: 15px; }
+
+    .links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .link-button {
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 6px 12px;
+      border: 1px solid #bfd0ea;
+      border-radius: 6px;
+      background: #f2f6ff;
+      text-decoration: none;
+      font-weight: 700;
+    }
+
+    .note {
+      margin-top: 14px;
+      padding: 12px 14px;
+      border-left: 4px solid var(--blue);
+      background: #eef5ff;
+    }
+
+    .warning {
+      border-left-color: var(--amber);
+      background: #fff7ed;
+    }
+
+    .success {
+      border-left-color: var(--green);
+      background: #ecfdf5;
+    }
+
+    .table-wrap {
+      margin-top: 12px;
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    th,
+    td {
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      vertical-align: top;
+      word-break: break-word;
+    }
+
+    th {
+      background: var(--head);
+      text-align: left;
+      font-weight: 700;
+    }
+
+    tbody tr:nth-child(even) td { background: #fbfcfe; }
+
+    code {
+      padding: 1px 5px;
+      border: 1px solid #dbe3ef;
+      border-radius: 4px;
+      background: #f8fafc;
+      color: #0f172a;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 12px;
+    }
+
+    .tag {
+      display: inline-block;
+      padding: 2px 7px;
+      border: 1px solid #bfd0ea;
+      border-radius: 999px;
+      background: #f2f6ff;
+      color: #1e3a8a;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .tag.pk { border-color: #86efac; background: #ecfdf5; color: #047857; }
+    .tag.fk { border-color: #fed7aa; background: #fff7ed; color: #b45309; }
+    .tag.req { border-color: #fecaca; background: #fff1f2; color: #b91c1c; }
+
+    .erd-wrap {
+      margin-top: 14px;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      background: #fff;
+    }
+
+    .erd {
+      display: block;
+      min-width: 1180px;
+      width: 100%;
+      height: auto;
+    }
+
+    .entity { fill: #fff; stroke: #94a3b8; stroke-width: 1.2; }
+    .entity-main { fill: #f8fbff; stroke: var(--blue); stroke-width: 1.8; }
+    .erd-kwp01 { fill: #fff7ed; stroke: #b45309; stroke-width: 1.4; }
+    .erd-kwp03 { fill: #f6f0ff; stroke: #7c3aed; stroke-width: 1.4; }
+    .erd-kwp05 { fill: #ecfdf5; stroke: #047857; stroke-width: 1.4; }
+    .erd-shared { fill: #f8fafc; stroke: #475569; stroke-width: 1.4; }
+    .entity-title { fill: #0f172a; font-family: "SFMono-Regular", Consolas, monospace; font-size: 14px; font-weight: 700; }
+    .entity-field { fill: #334155; font-family: "SFMono-Regular", Consolas, monospace; font-size: 12px; }
+    .rel { stroke: #334155; stroke-width: 1.6; fill: none; marker-end: url(#arrow); }
+    .rel-blue { stroke: var(--blue); }
+    .rel-green { stroke: #047857; }
+    .rel-violet { stroke: #7c3aed; }
+    .rel-orange { stroke: #b45309; }
+    .rel-label {
+      fill: #475569;
+      font-size: 12px;
+      font-weight: 700;
+      paint-order: stroke;
+      stroke: #ffffff;
+      stroke-width: 4px;
+      stroke-linejoin: round;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+      color: var(--muted);
+    }
+
+    @media print {
+      main { width: 100%; padding: 0; }
+      .links { display: none; }
+      .cover, .note, table, .erd-wrap { break-inside: avoid; }
+    }
+  </style>
+
+</head>
+<body>
+  <main>
+    <section class="cover">
+      <h1>Data Dictionary และ ER Diagram</h1>
+      <p class="subtitle">เอกสารออกแบบฐานข้อมูลสำหรับจัดเก็บแบบฟอร์ม กวภ.01, กวภ.02, กวภ.03, กวภ.04 และ กวภ.05 ของระบบ POMS</p>
+      <div class="links">
+        <a class="link-button" href="#er-diagram">ER Diagram</a>
+        <a class="link-button" href="#relationship-summary">Relationship Summary</a>
+        <a class="link-button" href="#kwp_form_submissions">Parent Table</a>
+        <a class="link-button" href="#constraints">Constraints</a>
+      </div>
+    </section>
+
+    <section>
+      <h2>รายการตารางสรุป</h2>
+      <div class="table-wrap">
+        <table>
+        <thead>
+          <tr>
+            <th style="width: 24%">Table</th>
+            <th style="width: 18%">ใช้กับแบบฟอร์ม</th>
+            <th>หน้าที่</th>
+            <th style="width: 16%">Cardinality</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>kwp_form_submissions</code></td>
+            <td>กวภ.01-05</td>
+            <td>หัวฟอร์มรวม ข้อมูล snapshot โรงงาน/จุดตรวจวัด ข้อมูลผู้ติดต่อ ผู้จัดทำรายงาน และสถานะล่าสุด</td>
+            <td>Parent</td>
+          </tr>
+          <tr>
+            <td><code>kwp01_issue_reports</code></td>
+            <td>กวภ.01</td>
+            <td>รายละเอียดเหตุขัดข้องของเครื่องมือหรืออุปกรณ์พิเศษ</td>
+            <td>1:1</td>
+          </tr>
+          <tr>
+            <td><code>kwp01_unreported_parameters</code></td>
+            <td>กวภ.01</td>
+            <td>รายการพารามิเตอร์ที่ไม่สามารถรายงานผลได้</td>
+            <td>1:N</td>
+          </tr>
+          <tr>
+            <td><code>kwp_emission_measurement_items</code></td>
+            <td>กวภ.02, กวภ.04</td>
+            <td>รายการตรวจวัดมลพิษอากาศจากปล่องระบาย</td>
+            <td>1:N</td>
+          </tr>
+          <tr>
+            <td><code>kwp03_wpms_issue_reports</code></td>
+            <td>กวภ.03</td>
+            <td>รายละเอียดเหตุขัดข้องหรือหยุดส่งข้อมูล WPMS</td>
+            <td>1:1</td>
+          </tr>
+          <tr>
+            <td><code>kwp03_selected_options</code></td>
+            <td>กวภ.03</td>
+            <td>ตัวเลือกแบบหลายค่า เช่น เครื่องมือ รอบเวลา เหตุขัดข้อง พารามิเตอร์ที่ขัดข้อง</td>
+            <td>1:N</td>
+          </tr>
+          <tr>
+            <td><code>kwp05_calibration_reports</code></td>
+            <td>กวภ.05</td>
+            <td>ข้อมูลหัวรายงานผลการสอบเทียบหรือทวนสอบ CEMS</td>
+            <td>1:1</td>
+          </tr>
+          <tr>
+            <td><code>kwp05_calibration_items</code></td>
+            <td>กวภ.05</td>
+            <td>รายการผลการสอบเทียบหรือทวนสอบ CEMS หลายแถว</td>
+            <td>1:N</td>
+          </tr>
+          <tr>
+            <td><code>kwp_form_attachments</code></td>
+            <td>กวภ.01-05</td>
+            <td>ไฟล์แนบกลาง ผูกได้ทั้งระดับฟอร์มและระดับรายการย่อย</td>
+            <td>1:N</td>
+          </tr>
+          <tr>
+            <td><code>kwp_form_status_history</code></td>
+            <td>กวภ.01-05</td>
+            <td>ประวัติการเปลี่ยนสถานะของแบบฟอร์ม</td>
+            <td>1:N</td>
+          </tr>
+        </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="er-diagram">
+      <h2>1. ER Diagram</h2>
+      <p>
+        แผนภาพความสัมพันธ์ของตารางสำหรับระบบแจ้งแบบ กวภ.01 - กวภ.05
+        โดยใช้ <code>kwp_form_submissions</code> เป็นตารางหัวฟอร์มกลาง และแยกตารางรายละเอียดตามประเภทแบบฟอร์ม
+      </p>
+      <div class="erd-wrap">
+        <svg class="erd" viewBox="0 0 1180 760" role="img" aria-label="ER Diagram: ระบบแจ้งแบบ กวภ.01 - กวภ.05" xmlns="http://www.w3.org/2000/svg">
+          <title>ER Diagram: ระบบแจ้งแบบ กวภ.01 - กวภ.05</title>
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+              <path d="M0,0 L0,6 L9,3 z" fill="#64748b"></path>
+            </marker>
+          </defs>
+
+          <rect class="entity-main" x="405" y="290" width="370" height="144" rx="8"></rect>
+          <text class="entity-title" x="432" y="322">kwp_form_submissions</text>
+          <text class="entity-field" x="432" y="350">PK id, submission_no</text>
+          <text class="entity-field" x="432" y="372">form_type: KWP01-KWP05</text>
+          <text class="entity-field" x="432" y="394">factory/point snapshot, status</text>
+
+          <rect class="erd-kwp01" x="60" y="70" width="330" height="112" rx="6"></rect>
+          <text class="entity-title" x="82" y="102">kwp01_issue_reports</text>
+          <text class="entity-field" x="82" y="130">PK id, FK/UQ submission_id</text>
+          <text class="entity-field" x="82" y="152">issue_reason, dates, action</text>
+
+          <rect class="erd-kwp01" x="60" y="250" width="330" height="112" rx="6"></rect>
+          <text class="entity-title" x="82" y="282">kwp01_unreported_parameters</text>
+          <text class="entity-field" x="82" y="310">PK id, FK submission_id</text>
+          <text class="entity-field" x="82" y="332">parameter_name, sort_order</text>
+
+          <rect class="entity" x="60" y="540" width="330" height="112" rx="6"></rect>
+          <text class="entity-title" x="82" y="572">kwp_emission_measurement_items</text>
+          <text class="entity-field" x="82" y="600">FK submission_id</text>
+          <text class="entity-field" x="82" y="622">pollutant, measured_value, method</text>
+
+          <rect class="erd-kwp03" x="790" y="70" width="330" height="112" rx="6"></rect>
+          <text class="entity-title" x="812" y="102">kwp03_wpms_issue_reports</text>
+          <text class="entity-field" x="812" y="130">PK id, FK/UQ submission_id</text>
+          <text class="entity-field" x="812" y="152">wastewater source, corrective action</text>
+
+          <rect class="erd-kwp03" x="790" y="250" width="330" height="112" rx="6"></rect>
+          <text class="entity-title" x="812" y="282">kwp03_selected_options</text>
+          <text class="entity-field" x="812" y="310">FK submission_id</text>
+          <text class="entity-field" x="812" y="332">option_group, option_value</text>
+
+          <rect class="erd-kwp05" x="790" y="540" width="330" height="112" rx="6"></rect>
+          <text class="entity-title" x="812" y="572">kwp05_calibration_reports</text>
+          <text class="entity-field" x="812" y="600">PK id, FK/UQ submission_id</text>
+          <text class="entity-field" x="812" y="622">laboratory, CEMS, report year</text>
+
+          <rect class="erd-kwp05" x="425" y="580" width="330" height="112" rx="6"></rect>
+          <text class="entity-title" x="447" y="612">kwp05_calibration_items</text>
+          <text class="entity-field" x="447" y="640">FK submission_id</text>
+          <text class="entity-field" x="447" y="662">parameter_name, date range, result</text>
+
+          <rect class="erd-shared" x="425" y="70" width="330" height="112" rx="6"></rect>
+          <text class="entity-title" x="447" y="102">kwp_form_attachments</text>
+          <text class="entity-field" x="447" y="130">FK submission_id</text>
+          <text class="entity-field" x="447" y="152">file metadata, optional related item</text>
+
+          <rect class="erd-shared" x="425" y="30" width="330" height="0" rx="6" opacity="0"></rect>
+          <rect class="erd-shared" x="425" y="470" width="330" height="88" rx="6"></rect>
+          <text class="entity-title" x="447" y="502">kwp_form_status_history</text>
+          <text class="entity-field" x="447" y="530">FK submission_id, status, changed_at</text>
+
+          <path class="rel rel-orange" d="M405 304 H398 V126 H390"></path>
+          <text class="rel-label" x="404" y="220">1:0..1</text>
+          <path class="rel rel-orange" d="M405 350 H390"></path>
+          <text class="rel-label" x="404" y="382">1:N</text>
+          <path class="rel rel-blue" d="M405 420 H398 V596 H390"></path>
+          <text class="rel-label" x="404" y="500">1:N</text>
+
+          <path class="rel rel-violet" d="M775 304 H782 V126 H790"></path>
+          <text class="rel-label" x="794" y="220">1:0..1</text>
+          <path class="rel rel-violet" d="M775 350 H790"></path>
+          <text class="rel-label" x="794" y="382">1:N</text>
+          <path class="rel rel-green" d="M775 420 H782 V596 H790"></path>
+          <text class="rel-label" x="794" y="500">1:0..1</text>
+
+          <path class="rel" d="M590 290 V182"></path>
+          <text class="rel-label" x="604" y="240">1:N</text>
+          <path class="rel" d="M540 434 V470"></path>
+          <text class="rel-label" x="554" y="458">1:N</text>
+          <path class="rel rel-green" d="M775 424 H770 V636 H755"></path>
+          <text class="rel-label" x="784" y="532">1:N</text>
+        </svg>
+      </div>
+      <div class="legend">
+        <span class="tag pk">PK = Primary Key</span>
+        <span class="tag fk">FK = Foreign Key</span>
+        <span class="tag req">NOT NULL = Required</span>
+        <span class="tag">สีส้ม = กวภ.01</span>
+        <span class="tag">สีม่วง = กวภ.03</span>
+        <span class="tag">สีเขียว = กวภ.05</span>
+      </div>
+      <div class="note">
+        เส้นทึบคือความสัมพันธ์ผ่าน <code>submission_id</code> ไปยัง <code>kwp_form_submissions.id</code> ส่วน <code>kwp_form_attachments</code> สามารถแนบไฟล์ระดับฟอร์มโดยตรง หรือชี้ไปยังรายการย่อยแบบ optional ผ่าน <code>related_table</code> และ <code>related_id</code>
+      </div>
+    </section>
+
+    <section id="relationship-summary">
+      <h2>2. Relationship Summary</h2>
+      <div class="table-wrap">
+        <table>
+        <thead>
+          <tr>
+            <th style="width: 28%">Parent</th>
+            <th style="width: 28%">Child</th>
+            <th style="width: 16%">Cardinality</th>
+            <th>คำอธิบาย</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><code>kwp_form_submissions.id</code></td><td><code>kwp01_issue_reports.submission_id</code></td><td>1:0..1</td><td>แบบ กวภ.01 หนึ่งรายการมีรายละเอียดเหตุขัดข้องได้หนึ่งชุด</td></tr>
+          <tr><td><code>kwp_form_submissions.id</code></td><td><code>kwp01_unreported_parameters.submission_id</code></td><td>1:N</td><td>แบบ กวภ.01 มีพารามิเตอร์ที่ไม่สามารถรายงานผลได้หลายรายการ</td></tr>
+          <tr><td><code>kwp_form_submissions.id</code></td><td><code>kwp_emission_measurement_items.submission_id</code></td><td>1:N</td><td>แบบ กวภ.02 และ กวภ.04 มีรายการตรวจวัดมลพิษอากาศหลายแถว</td></tr>
+          <tr><td><code>kwp_form_submissions.id</code></td><td><code>kwp03_wpms_issue_reports.submission_id</code></td><td>1:0..1</td><td>แบบ กวภ.03 หนึ่งรายการมีรายละเอียดเหตุขัดข้อง WPMS ได้หนึ่งชุด</td></tr>
+          <tr><td><code>kwp_form_submissions.id</code></td><td><code>kwp03_selected_options.submission_id</code></td><td>1:N</td><td>แบบ กวภ.03 เก็บตัวเลือกหลายค่าแยกตามกลุ่ม</td></tr>
+          <tr><td><code>kwp_form_submissions.id</code></td><td><code>kwp05_calibration_reports.submission_id</code></td><td>1:0..1</td><td>แบบ กวภ.05 หนึ่งรายการมีหัวรายงานสอบเทียบได้หนึ่งชุด</td></tr>
+          <tr><td><code>kwp_form_submissions.id</code></td><td><code>kwp05_calibration_items.submission_id</code></td><td>1:N</td><td>แบบ กวภ.05 มีรายการผลการสอบเทียบหรือทวนสอบหลายรายการ</td></tr>
+          <tr><td><code>kwp_form_submissions.id</code></td><td><code>kwp_form_attachments.submission_id</code></td><td>1:N</td><td>ทุกแบบฟอร์มแนบไฟล์ได้หลายไฟล์ และอาจชี้ไปยังรายการย่อยด้วย <code>related_table</code>/<code>related_id</code></td></tr>
+          <tr><td><code>kwp_form_submissions.id</code></td><td><code>kwp_form_status_history.submission_id</code></td><td>1:N</td><td>เก็บประวัติการเปลี่ยนสถานะของแบบฟอร์มตามเวลา</td></tr>
+        </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="kwp_form_submissions">
+      <h2>3. Table: kwp_form_submissions</h2>
+      <p><span class="tag">Parent Table</span> ตารางหัวฟอร์มกลางสำหรับทุกแบบ กวภ.01-05</p>
+      <div class="table-wrap">
+        <table>
+        <thead>
+          <tr>
+            <th style="width: 24%">Column</th>
+            <th style="width: 18%">Type</th>
+            <th style="width: 14%">Key/Null</th>
+            <th>คำอธิบาย</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><code>id</code></td><td>BIGINT IDENTITY</td><td><span class="tag pk">PK</span></td><td>รหัสรายการฟอร์ม</td></tr>
+          <tr><td><code>submission_no</code></td><td>VARCHAR(32)</td><td><span class="tag req">NOT NULL</span></td><td>เลขที่อ้างอิงการยื่นแบบ</td></tr>
+          <tr><td><code>form_type</code></td><td>VARCHAR(16)</td><td><span class="tag req">NOT NULL</span></td><td>ประเภทฟอร์ม: KWP01, KWP02, KWP03, KWP04, KWP05</td></tr>
+          <tr><td><code>status</code></td><td>VARCHAR(32)</td><td><span class="tag req">NOT NULL</span></td><td>สถานะล่าสุด: DRAFT, SUBMITTED, UNDER_REVIEW, APPROVED, REJECTED, CANCELLED</td></tr>
+          <tr><td><code>factory_id</code></td><td>VARCHAR(64)</td><td>NULL</td><td>รหัสโรงงานจากระบบต้นทาง</td></tr>
+          <tr><td><code>factory_name</code></td><td>NVARCHAR(500)</td><td><span class="tag req">NOT NULL</span></td><td>ชื่อโรงงาน ณ วันที่ยื่นแบบ</td></tr>
+          <tr><td><code>factory_registration_no</code></td><td>NVARCHAR(64)</td><td>NULL</td><td>ทะเบียนโรงงานเลขที่</td></tr>
+          <tr><td><code>factory_address</code></td><td>NVARCHAR(1000)</td><td>NULL</td><td>ที่ตั้งโรงงาน ณ วันที่ยื่นแบบ</td></tr>
+          <tr><td><code>industry_type</code></td><td>NVARCHAR(255)</td><td>NULL</td><td>ลำดับประเภทโรงงาน</td></tr>
+          <tr><td><code>connected_point_id</code></td><td>BIGINT</td><td><span class="tag fk">FK NULL</span></td><td>อ้างอิงจุดตรวจวัดที่เชื่อมต่อแล้ว หากมี</td></tr>
+          <tr><td><code>point_code</code></td><td>VARCHAR(64)</td><td>NULL</td><td>รหัสจุดตรวจวัด ณ วันที่ยื่นแบบ</td></tr>
+          <tr><td><code>point_name</code></td><td>NVARCHAR(255)</td><td>NULL</td><td>ชื่อจุดตรวจวัด ณ วันที่ยื่นแบบ</td></tr>
+          <tr><td><code>point_type</code></td><td>VARCHAR(32)</td><td>NULL</td><td>ประเภทจุดตรวจวัด เช่น STACK, WASTEWATER, OTHER</td></tr>
+          <tr><td><code>production_stack</code></td><td>NVARCHAR(255)</td><td>NULL</td><td>ปล่องจากกระบวนการผลิต</td></tr>
+          <tr><td><code>primary_fuel</code></td><td>NVARCHAR(255)</td><td>NULL</td><td>เชื้อเพลิงหลัก</td></tr>
+          <tr><td><code>secondary_fuel</code></td><td>NVARCHAR(255)</td><td>NULL</td><td>เชื้อเพลิงสำรอง</td></tr>
+          <tr><td><code>combustion_system</code></td><td>NVARCHAR(64)</td><td>NULL</td><td>ระบบการเผาไหม้เชื้อเพลิง เช่น ระบบปิด, ระบบเปิด</td></tr>
+          <tr><td><code>production_capacity</code></td><td>NVARCHAR(255)</td><td>NULL</td><td>กำลังการผลิตของหน่วยการผลิต</td></tr>
+          <tr><td><code>production_capacity_unit</code></td><td>NVARCHAR(64)</td><td>NULL</td><td>หน่วยของกำลังการผลิต</td></tr>
+          <tr><td><code>contact_name</code></td><td>NVARCHAR(255)</td><td>NULL</td><td>รายชื่อผู้ติดต่อ</td></tr>
+          <tr><td><code>contact_phone</code></td><td>VARCHAR(64)</td><td>NULL</td><td>เบอร์โทรศัพท์ผู้ติดต่อ</td></tr>
+          <tr><td><code>contact_email</code></td><td>VARCHAR(255)</td><td>NULL</td><td>อีเมลผู้ติดต่อ</td></tr>
+          <tr><td><code>reporter_name</code></td><td>NVARCHAR(255)</td><td>NULL</td><td>ชื่อ-นามสกุลผู้จัดทำรายงาน</td></tr>
+          <tr><td><code>reporter_position</code></td><td>NVARCHAR(255)</td><td>NULL</td><td>ตำแหน่งผู้จัดทำรายงาน</td></tr>
+          <tr><td><code>submitted_at</code></td><td>DATETIME2</td><td>NULL</td><td>วันเวลาที่ยื่นแบบ</td></tr>
+          <tr><td><code>reviewed_at</code></td><td>DATETIME2</td><td>NULL</td><td>วันเวลาที่เจ้าหน้าที่พิจารณา</td></tr>
+          <tr><td><code>reviewed_by</code></td><td>BIGINT</td><td>NULL</td><td>รหัสผู้พิจารณา</td></tr>
+          <tr><td><code>officer_note</code></td><td>NVARCHAR(1000)</td><td>NULL</td><td>หมายเหตุจากเจ้าหน้าที่</td></tr>
+          <tr><td><code>created_at</code></td><td>DATETIME2</td><td><span class="tag req">NOT NULL</span></td><td>วันเวลาสร้างข้อมูล</td></tr>
+          <tr><td><code>updated_at</code></td><td>DATETIME2</td><td><span class="tag req">NOT NULL</span></td><td>วันเวลาแก้ไขล่าสุด</td></tr>
+          <tr><td><code>created_by</code></td><td>BIGINT</td><td>NULL</td><td>ผู้สร้างข้อมูล</td></tr>
+          <tr><td><code>updated_by</code></td><td>BIGINT</td><td>NULL</td><td>ผู้แก้ไขล่าสุด</td></tr>
+          <tr><td><code>deleted_at</code></td><td>DATETIME2</td><td>NULL</td><td>วันเวลาลบแบบ soft delete</td></tr>
+        </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="kwp01_issue_reports">
+      <h2>4. Table: kwp01_issue_reports</h2>
+      <p><span class="tag">กวภ.01</span> รายละเอียดเหตุขัดข้องของเครื่องมือหรือเครื่องอุปกรณ์พิเศษ</p>
+      <div class="table-wrap">
+        <table>
+        <thead>
+          <tr><th>Column</th><th>Type</th><th>Key/Null</th><th>คำอธิบาย</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>id</code></td><td>BIGINT IDENTITY</td><td><span class="tag pk">PK</span></td><td>รหัสรายละเอียด กวภ.01</td></tr>
+          <tr><td><code>submission_id</code></td><td>BIGINT</td><td><span class="tag fk">FK/UQ</span></td><td>อ้างอิง <code>kwp_form_submissions.id</code></td></tr>
+          <tr><td><code>issue_reason</code></td><td>NVARCHAR(255)</td><td><span class="tag req">NOT NULL</span></td><td>สาเหตุหลัก เช่น เครื่องมือขัดข้อง หรือหยุดหน่วยการผลิต</td></tr>
+          <tr><td><code>reason_detail</code></td><td>NVARCHAR(2000)</td><td>NULL</td><td>รายละเอียดสาเหตุ</td></tr>
+          <tr><td><code>problem_date</code></td><td>DATE</td><td>NULL</td><td>วันที่พบปัญหาหรือหยุดหน่วยการผลิต</td></tr>
+          <tr><td><code>expected_done_date</code></td><td>DATE</td><td>NULL</td><td>วันที่คาดว่าจะดำเนินการแล้วเสร็จ</td></tr>
+          <tr><td><code>total_days</code></td><td>INT</td><td>NULL</td><td>รวมระยะเวลาปรับปรุงแก้ไขหรือหยุดหน่วยการผลิต</td></tr>
+          <tr><td><code>corrective_action</code></td><td>NVARCHAR(2000)</td><td>NULL</td><td>แนวทางการปรับปรุงแก้ไข</td></tr>
+        </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="kwp01_unreported_parameters">
+      <h2>5. Table: kwp01_unreported_parameters</h2>
+      <p><span class="tag">กวภ.01</span> รายการพารามิเตอร์ที่ไม่สามารถรายงานผลได้</p>
+      <div class="table-wrap">
+        <table>
+        <thead>
+          <tr><th>Column</th><th>Type</th><th>Key/Null</th><th>คำอธิบาย</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>id</code></td><td>BIGINT IDENTITY</td><td><span class="tag pk">PK</span></td><td>รหัสรายการพารามิเตอร์</td></tr>
+          <tr><td><code>submission_id</code></td><td>BIGINT</td><td><span class="tag fk">FK</span></td><td>อ้างอิง <code>kwp_form_submissions.id</code></td></tr>
+          <tr><td><code>parameter_name</code></td><td>NVARCHAR(255)</td><td><span class="tag req">NOT NULL</span></td><td>ชื่อพารามิเตอร์ที่ไม่สามารถรายงานผลได้</td></tr>
+          <tr><td><code>sort_order</code></td><td>INT</td><td><span class="tag req">NOT NULL</span></td><td>ลำดับการแสดงผล</td></tr>
+        </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="kwp_emission_measurement_items">
+      <h2>6. Table: kwp_emission_measurement_items</h2>
+      <p><span class="tag">กวภ.02 / กวภ.04</span> รายการตรวจวัดมลพิษอากาศจากปล่องระบาย</p>
+      <div class="note">
+        ตารางนี้ใช้ร่วมกันสำหรับ <code>KWP02</code> และ <code>KWP04</code>
+        โดยแยกประเภทจาก <code>kwp_form_submissions.form_type</code>
+      </div>
+      <div class="table-wrap">
+        <table>
+        <thead>
+          <tr><th>Column</th><th>Type</th><th>Key/Null</th><th>คำอธิบาย</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>id</code></td><td>BIGINT IDENTITY</td><td><span class="tag pk">PK</span></td><td>รหัสรายการตรวจวัด</td></tr>
+          <tr><td><code>submission_id</code></td><td>BIGINT</td><td><span class="tag fk">FK</span></td><td>อ้างอิง <code>kwp_form_submissions.id</code></td></tr>
+          <tr><td><code>pollutant</code></td><td>NVARCHAR(255)</td><td><span class="tag req">NOT NULL</span></td><td>รายการสารมลพิษ เช่น NOx, SO2, CO, Opacity</td></tr>
+          <tr><td><code>sample_date</code></td><td>DATE</td><td>NULL</td><td>วันที่เก็บตัวอย่าง</td></tr>
+          <tr><td><code>measured_value</code></td><td>DECIMAL(18,6)</td><td>NULL</td><td>ค่าที่ตรวจวัดได้ในรูปแบบตัวเลข</td></tr>
+          <tr><td><code>measured_value_text</code></td><td>NVARCHAR(100)</td><td>NULL</td><td>ค่าที่ตรวจวัดแบบข้อความ กรณีมีสัญลักษณ์หรือรูปแบบพิเศษ</td></tr>
+          <tr><td><code>unit</code></td><td>NVARCHAR(64)</td><td>NULL</td><td>หน่วยการตรวจวัด</td></tr>
+          <tr><td><code>laboratory_no</code></td><td>NVARCHAR(100)</td><td>NULL</td><td>เลขที่ห้องปฏิบัติการ</td></tr>
+          <tr><td><code>report_no</code></td><td>NVARCHAR(100)</td><td>NULL</td><td>เลขที่รายงาน</td></tr>
+          <tr><td><code>method</code></td><td>NVARCHAR(1000)</td><td>NULL</td><td>วิธีการตรวจวัดวิเคราะห์</td></tr>
+          <tr><td><code>sort_order</code></td><td>INT</td><td><span class="tag req">NOT NULL</span></td><td>ลำดับแถวในรายงาน</td></tr>
+        </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="kwp03_wpms_issue_reports">
+      <h2>7. Table: kwp03_wpms_issue_reports</h2>
+      <p><span class="tag">กวภ.03</span> รายละเอียดเหตุขัดข้องหรือหยุดส่งข้อมูล WPMS</p>
+      <div class="table-wrap">
+        <table>
+        <thead>
+          <tr><th>Column</th><th>Type</th><th>Key/Null</th><th>คำอธิบาย</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>id</code></td><td>BIGINT IDENTITY</td><td><span class="tag pk">PK</span></td><td>รหัสรายละเอียด กวภ.03</td></tr>
+          <tr><td><code>submission_id</code></td><td>BIGINT</td><td><span class="tag fk">FK/UQ</span></td><td>อ้างอิง <code>kwp_form_submissions.id</code></td></tr>
+          <tr><td><code>wastewater_source</code></td><td>NVARCHAR(500)</td><td>NULL</td><td>แหล่งกำเนิดน้ำเสีย</td></tr>
+          <tr><td><code>receiving_source</code></td><td>NVARCHAR(500)</td><td>NULL</td><td>แหล่งรองรับน้ำทิ้ง</td></tr>
+          <tr><td><code>treatment_system_type</code></td><td>NVARCHAR(500)</td><td>NULL</td><td>ประเภทระบบบำบัดน้ำเสีย</td></tr>
+          <tr><td><code>discharge_point</code></td><td>NVARCHAR(500)</td><td>NULL</td><td>จุดระบายน้ำทิ้ง</td></tr>
+          <tr><td><code>average_discharge</code></td><td>DECIMAL(18,6)</td><td>NULL</td><td>ปริมาณน้ำทิ้งเฉลี่ย</td></tr>
+          <tr><td><code>minimum_discharge</code></td><td>DECIMAL(18,6)</td><td>NULL</td><td>ปริมาณน้ำทิ้งต่ำสุด</td></tr>
+          <tr><td><code>maximum_discharge</code></td><td>DECIMAL(18,6)</td><td>NULL</td><td>ปริมาณน้ำทิ้งสูงสุด</td></tr>
+          <tr><td><code>reason_detail</code></td><td>NVARCHAR(2000)</td><td>NULL</td><td>รายละเอียดสาเหตุ</td></tr>
+          <tr><td><code>problem_date</code></td><td>DATE</td><td>NULL</td><td>วันที่พบปัญหาหรือหยุดส่งข้อมูล</td></tr>
+          <tr><td><code>expected_done_date</code></td><td>DATE</td><td>NULL</td><td>วันที่คาดว่าจะดำเนินการแล้วเสร็จ</td></tr>
+          <tr><td><code>total_days</code></td><td>INT</td><td>NULL</td><td>รวมระยะเวลาขัดข้อง</td></tr>
+          <tr><td><code>corrective_action</code></td><td>NVARCHAR(2000)</td><td>NULL</td><td>แนวทางการปรับปรุงแก้ไข</td></tr>
+        </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="kwp03_selected_options">
+      <h2>8. Table: kwp03_selected_options</h2>
+      <p><span class="tag">กวภ.03</span> ตารางเก็บตัวเลือกหลายค่า</p>
+      <div class="table-wrap">
+        <table>
+        <thead>
+          <tr><th>Column</th><th>Type</th><th>Key/Null</th><th>คำอธิบาย</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>id</code></td><td>BIGINT IDENTITY</td><td><span class="tag pk">PK</span></td><td>รหัสตัวเลือก</td></tr>
+          <tr><td><code>submission_id</code></td><td>BIGINT</td><td><span class="tag fk">FK</span></td><td>อ้างอิง <code>kwp_form_submissions.id</code></td></tr>
+          <tr><td><code>option_group</code></td><td>VARCHAR(32)</td><td><span class="tag req">NOT NULL</span></td><td>กลุ่มตัวเลือก: INSTRUMENT, MEASUREMENT_TIME, ISSUE_REASON, FAILED_PARAMETER</td></tr>
+          <tr><td><code>option_value</code></td><td>NVARCHAR(255)</td><td><span class="tag req">NOT NULL</span></td><td>ค่าตัวเลือกที่ผู้ใช้เลือก</td></tr>
+          <tr><td><code>sort_order</code></td><td>INT</td><td><span class="tag req">NOT NULL</span></td><td>ลำดับการแสดงผล</td></tr>
+        </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="kwp05_calibration_reports">
+      <h2>9. Table: kwp05_calibration_reports</h2>
+      <p><span class="tag">กวภ.05</span> ข้อมูลหัวรายงานผลการสอบเทียบหรือทวนสอบ CEMS</p>
+      <div class="table-wrap">
+        <table>
+        <thead>
+          <tr><th>Column</th><th>Type</th><th>Key/Null</th><th>คำอธิบาย</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>id</code></td><td>BIGINT IDENTITY</td><td><span class="tag pk">PK</span></td><td>รหัสรายละเอียด กวภ.05</td></tr>
+          <tr><td><code>submission_id</code></td><td>BIGINT</td><td><span class="tag fk">FK/UQ</span></td><td>อ้างอิง <code>kwp_form_submissions.id</code></td></tr>
+          <tr><td><code>business_activity</code></td><td>NVARCHAR(500)</td><td>NULL</td><td>ประกอบกิจการ</td></tr>
+          <tr><td><code>sampler_name</code></td><td>NVARCHAR(255)</td><td>NULL</td><td>ผู้เก็บตัวอย่าง</td></tr>
+          <tr><td><code>officer_registration</code></td><td>NVARCHAR(100)</td><td>NULL</td><td>ทะเบียนเจ้าหน้าที่</td></tr>
+          <tr><td><code>laboratory_name</code></td><td>NVARCHAR(500)</td><td>NULL</td><td>หน่วยงานหรือชื่อห้องปฏิบัติการ</td></tr>
+          <tr><td><code>laboratory_registration</code></td><td>NVARCHAR(100)</td><td>NULL</td><td>ทะเบียนห้องปฏิบัติการ</td></tr>
+          <tr><td><code>cems_brand</code></td><td>NVARCHAR(255)</td><td>NULL</td><td>ยี่ห้อ CEMS</td></tr>
+          <tr><td><code>cems_detail</code></td><td>NVARCHAR(1000)</td><td>NULL</td><td>รายละเอียด CEMS</td></tr>
+          <tr><td><code>report_round</code></td><td>NVARCHAR(100)</td><td>NULL</td><td>ครั้งที่รายงาน</td></tr>
+          <tr><td><code>report_year</code></td><td>VARCHAR(4)</td><td>NULL</td><td>ปีที่รายงาน</td></tr>
+        </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="kwp05_calibration_items">
+      <h2>10. Table: kwp05_calibration_items</h2>
+      <p><span class="tag">กวภ.05</span> รายการผลการสอบเทียบหรือทวนสอบ CEMS</p>
+      <div class="table-wrap">
+        <table>
+        <thead>
+          <tr><th>Column</th><th>Type</th><th>Key/Null</th><th>คำอธิบาย</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>id</code></td><td>BIGINT IDENTITY</td><td><span class="tag pk">PK</span></td><td>รหัสรายการสอบเทียบ</td></tr>
+          <tr><td><code>submission_id</code></td><td>BIGINT</td><td><span class="tag fk">FK</span></td><td>อ้างอิง <code>kwp_form_submissions.id</code></td></tr>
+          <tr><td><code>parameter_name</code></td><td>NVARCHAR(255)</td><td><span class="tag req">NOT NULL</span></td><td>รายการพารามิเตอร์</td></tr>
+          <tr><td><code>start_date</code></td><td>DATE</td><td>NULL</td><td>วันที่เริ่มสอบเทียบหรือทวนสอบ</td></tr>
+          <tr><td><code>end_date</code></td><td>DATE</td><td>NULL</td><td>วันที่สิ้นสุดสอบเทียบหรือทวนสอบ</td></tr>
+          <tr><td><code>result</code></td><td>VARCHAR(32)</td><td>NULL</td><td>ผลการสอบเทียบ: PASS, FAIL</td></tr>
+          <tr><td><code>verifier_company</code></td><td>NVARCHAR(500)</td><td>NULL</td><td>บริษัทหรือหน่วยงานผู้สอบเทียบ</td></tr>
+          <tr><td><code>cems_model</code></td><td>NVARCHAR(500)</td><td>NULL</td><td>ยี่ห้อ/รุ่นของ CEMS</td></tr>
+          <tr><td><code>link_qr1</code></td><td>NVARCHAR(1000)</td><td>NULL</td><td>ลิงก์หรือ QR Code เอกสารชุดที่ 1</td></tr>
+          <tr><td><code>link_qr2</code></td><td>NVARCHAR(1000)</td><td>NULL</td><td>ลิงก์หรือ QR Code เอกสารชุดที่ 2</td></tr>
+          <tr><td><code>sort_order</code></td><td>INT</td><td><span class="tag req">NOT NULL</span></td><td>ลำดับแถวในรายงาน</td></tr>
+        </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="kwp_form_attachments">
+      <h2>11. Table: kwp_form_attachments</h2>
+      <p><span class="tag">Shared</span> ตารางไฟล์แนบกลางสำหรับทุกฟอร์ม</p>
+      <div class="table-wrap">
+        <table>
+        <thead>
+          <tr><th>Column</th><th>Type</th><th>Key/Null</th><th>คำอธิบาย</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>id</code></td><td>BIGINT IDENTITY</td><td><span class="tag pk">PK</span></td><td>รหัสไฟล์แนบ</td></tr>
+          <tr><td><code>submission_id</code></td><td>BIGINT</td><td><span class="tag fk">FK</span></td><td>อ้างอิง <code>kwp_form_submissions.id</code></td></tr>
+          <tr><td><code>related_table</code></td><td>VARCHAR(64)</td><td>NULL</td><td>ชื่อตารางรายการย่อยที่ไฟล์นี้เกี่ยวข้อง เช่น kwp_emission_measurement_items</td></tr>
+          <tr><td><code>related_id</code></td><td>BIGINT</td><td>NULL</td><td>รหัสรายการย่อยที่ไฟล์นี้เกี่ยวข้อง</td></tr>
+          <tr><td><code>attachment_type</code></td><td>VARCHAR(64)</td><td><span class="tag req">NOT NULL</span></td><td>ประเภทไฟล์ เช่น SAMPLING_PHOTO, LAB_REPORT, SUPPORTING_DOCUMENT</td></tr>
+          <tr><td><code>original_file_name</code></td><td>NVARCHAR(500)</td><td><span class="tag req">NOT NULL</span></td><td>ชื่อไฟล์เดิมจากผู้ใช้งาน</td></tr>
+          <tr><td><code>stored_file_name</code></td><td>NVARCHAR(500)</td><td>NULL</td><td>ชื่อไฟล์ที่ระบบจัดเก็บ</td></tr>
+          <tr><td><code>mime_type</code></td><td>VARCHAR(128)</td><td>NULL</td><td>ชนิดไฟล์ MIME type</td></tr>
+          <tr><td><code>file_size</code></td><td>BIGINT</td><td>NULL</td><td>ขนาดไฟล์เป็น byte</td></tr>
+          <tr><td><code>storage_path</code></td><td>NVARCHAR(1000)</td><td>NULL</td><td>path หรือ object key สำหรับเรียกไฟล์</td></tr>
+          <tr><td><code>uploaded_at</code></td><td>DATETIME2</td><td><span class="tag req">NOT NULL</span></td><td>วันเวลาอัปโหลด</td></tr>
+          <tr><td><code>uploaded_by</code></td><td>BIGINT</td><td>NULL</td><td>ผู้ใช้งานที่อัปโหลดไฟล์</td></tr>
+          <tr><td><code>deleted_at</code></td><td>DATETIME2</td><td>NULL</td><td>วันเวลาลบไฟล์แบบ soft delete</td></tr>
+        </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="kwp_form_status_history">
+      <h2>12. Table: kwp_form_status_history</h2>
+      <p><span class="tag">Shared</span> ประวัติการเปลี่ยนสถานะของแบบฟอร์ม</p>
+      <div class="table-wrap">
+        <table>
+        <thead>
+          <tr><th>Column</th><th>Type</th><th>Key/Null</th><th>คำอธิบาย</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>id</code></td><td>BIGINT IDENTITY</td><td><span class="tag pk">PK</span></td><td>รหัสประวัติสถานะ</td></tr>
+          <tr><td><code>submission_id</code></td><td>BIGINT</td><td><span class="tag fk">FK</span></td><td>อ้างอิง <code>kwp_form_submissions.id</code></td></tr>
+          <tr><td><code>status</code></td><td>VARCHAR(32)</td><td><span class="tag req">NOT NULL</span></td><td>สถานะที่เปลี่ยนเป็น</td></tr>
+          <tr><td><code>note</code></td><td>NVARCHAR(1000)</td><td>NULL</td><td>หมายเหตุประกอบการเปลี่ยนสถานะ</td></tr>
+          <tr><td><code>changed_by</code></td><td>BIGINT</td><td>NULL</td><td>ผู้เปลี่ยนสถานะ</td></tr>
+          <tr><td><code>changed_at</code></td><td>DATETIME2</td><td><span class="tag req">NOT NULL</span></td><td>วันเวลาเปลี่ยนสถานะ</td></tr>
+        </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="constraints">
+      <h2>13. Constraints และ Index ที่แนะนำ</h2>
+      <div class="table-wrap">
+        <table>
+        <thead>
+          <tr>
+            <th style="width: 30%">Constraint / Index</th>
+            <th>คำอธิบาย</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>uq_kwp_submission_no</code></td>
+            <td>บังคับเลขที่ยื่นแบบไม่ซ้ำ</td>
+          </tr>
+          <tr>
+            <td><code>ck_kwp_form_type</code></td>
+            <td>จำกัด <code>form_type</code> เฉพาะ KWP01, KWP02, KWP03, KWP04, KWP05</td>
+          </tr>
+          <tr>
+            <td><code>ck_kwp_form_status</code></td>
+            <td>จำกัดสถานะเฉพาะ DRAFT, SUBMITTED, UNDER_REVIEW, APPROVED, REJECTED, CANCELLED</td>
+          </tr>
+          <tr>
+            <td><code>ix_kwp_forms_type_status_created</code></td>
+            <td>ค้นหารายการตามประเภทแบบฟอร์ม สถานะ และวันที่สร้าง</td>
+          </tr>
+          <tr>
+            <td><code>ix_kwp_forms_factory</code></td>
+            <td>ค้นหารายการตามโรงงาน</td>
+          </tr>
+          <tr>
+            <td><code>ix_kwp_forms_point_code</code></td>
+            <td>ค้นหารายการตามรหัสจุดตรวจวัด</td>
+          </tr>
+          <tr>
+            <td><code>ix_kwp_emission_items_submission</code></td>
+            <td>ดึงรายการตรวจวัดทั้งหมดของแบบ กวภ.02/04</td>
+          </tr>
+          <tr>
+            <td><code>ix_kwp_attachments_submission</code></td>
+            <td>ดึงไฟล์แนบทั้งหมดของฟอร์ม</td>
+          </tr>
+        </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+</body>
+</html>

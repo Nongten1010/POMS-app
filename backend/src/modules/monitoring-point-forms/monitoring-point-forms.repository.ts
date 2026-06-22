@@ -22,6 +22,7 @@ interface MonitoringPointFormRow {
   eia_info: string | null;
   address: string | null;
   business_activity: string | null;
+  machinery_horsepower: number | string | null;
   created_at: Date | string;
   updated_at: Date | string;
 }
@@ -75,6 +76,7 @@ export const monitoringPointFormsRepository = {
         'f.eia_info',
         'f.address',
         'f.business_activity',
+        'f.machinery_horsepower',
         'f.created_at',
         'f.updated_at',
       )
@@ -90,6 +92,7 @@ export const monitoringPointFormsRepository = {
         'f.eia_info',
         'f.address',
         'f.business_activity',
+        'f.machinery_horsepower',
         'f.created_at',
         'f.updated_at',
         db.raw('COUNT(p.id) as point_count'),
@@ -211,6 +214,7 @@ function toFormInsertRow(
     eia_info: factory.eiaInfo ?? null,
     address: factory.address ?? null,
     business_activity: factory.businessActivity ?? null,
+    machinery_horsepower: factory.machineryHorsepower ?? null,
     created_by: actorUserId,
     updated_by: actorUserId,
   };
@@ -276,6 +280,7 @@ function toFactoryDTO(row: MonitoringPointFormRow): Required<MonitoringPointForm
     eiaInfo: row.eia_info,
     address: row.address,
     businessActivity: row.business_activity,
+    machineryHorsepower: toNullableNumber(row.machinery_horsepower),
   };
 }
 
@@ -350,4 +355,9 @@ function parseObject(value: string | null): Record<string, unknown> | null {
 
 function toIsoString(value: Date | string): string {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+}
+
+function toNullableNumber(value: number | string | null): number | null {
+  if (value === null) return null;
+  return Number(value);
 }

@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Data Dictionary และ ER Diagram - CEMS/WPMS Requests</title>
+  <style>
+    :root { --ink:#172033; --muted:#526173; --line:#dbe3ef; --head:#eef4fb; --blue:#e8f1ff; --green:#e9f8ef; --orange:#fff3e1; --red:#ffecec; }
+    * { box-sizing:border-box; } body { margin:0; font-family:"TH Sarabun New", Tahoma, Arial, sans-serif; color:var(--ink); background:#f6f8fb; line-height:1.55; }
+    main { width:min(1180px, calc(100% - 32px)); margin:32px auto; } section { background:#fff; border:1px solid var(--line); border-radius:8px; padding:24px; margin:0 0 18px; }
+    h1 { margin:0 0 8px; font-size:34px; } h2 { margin:0 0 14px; font-size:26px; } p { margin:0 0 12px; } code { font-family:Consolas,"Courier New",monospace; background:#f2f5f9; padding:1px 5px; border-radius:4px; }
+    .subtitle { color:var(--muted); font-size:20px; } .links { display:flex; flex-wrap:wrap; gap:8px; margin-top:16px; } .link-button,.tag { display:inline-flex; border:1px solid var(--line); border-radius:999px; padding:4px 10px; color:#26435f; background:#f9fbfe; text-decoration:none; font-size:16px; }
+    .tag.pk { background:var(--orange); } .tag.fk { background:var(--blue); } .tag.req { background:var(--red); }
+    .table-wrap { overflow:auto; border:1px solid var(--line); border-radius:8px; } table { width:100%; border-collapse:collapse; table-layout:fixed; background:#fff; } th,td { border-bottom:1px solid var(--line); border-right:1px solid var(--line); padding:8px 10px; vertical-align:top; word-break:break-word; } th:last-child,td:last-child { border-right:0; } tr:last-child td { border-bottom:0; } th { background:var(--head); text-align:left; }
+    .erd-wrap { overflow:auto; border:1px solid var(--line); border-radius:8px; background:#fbfdff; padding:16px; } .erd { min-width:1100px; width:100%; height:auto; } .entity { fill:#fff; stroke:#8ea7c2; stroke-width:1.5; rx:8; } .entity.main { fill:#f8fbff; stroke:#1d4ed8; stroke-width:1.8; } .entity.live { fill:#ecfdf5; stroke:#047857; stroke-width:1.4; } .entity.seq { fill:#fff7ed; stroke:#b45309; stroke-width:1.4; } .entity-title { font-size:17px; font-weight:700; fill:#172033; } .field { font-size:13px; fill:#465569; } .rel { stroke:#64748b; stroke-width:2; fill:none; marker-end:url(#arrow); }
+    @media print { body { background:#fff; } main { width:100%; margin:0; } section { break-inside:avoid; } }
+  
+
+    /* Match docs/kwp-forms/04-data-dictionary-er.html visual style */
+    :root {
+      --ink: #111827;
+      --muted: #4b5563;
+      --line: #d7dde6;
+      --soft: #f6f8fb;
+      --head: #e9eef6;
+      --blue: #1d4ed8;
+      --green: #047857;
+      --amber: #b45309;
+      --red: #b91c1c;
+    }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #fff;
+      font-family: Arial, "Noto Sans Thai", Tahoma, sans-serif;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    main {
+      width: min(1240px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 30px 0 56px;
+    }
+    section {
+      margin: 0;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+    }
+    section:first-child {
+      padding: 24px 26px;
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, #f8fbff 0%, #fff 100%);
+    }
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: 28px; line-height: 1.25; }
+    h2 {
+      margin-top: 30px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--line);
+      font-size: 21px;
+    }
+    p { margin-top: 8px; }
+    .subtitle { color: var(--muted); font-size: 15px; }
+    .links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+    .link-button {
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 6px 12px;
+      border: 1px solid #bfd0ea;
+      border-radius: 6px;
+      background: #f2f6ff;
+      color: var(--blue);
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 14px;
+    }
+    .table-wrap {
+      margin-top: 12px;
+      overflow-x: auto;
+      border: 0;
+      border-radius: 0;
+    }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; background: #fff; }
+    th, td {
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      vertical-align: top;
+      word-break: break-word;
+    }
+    th { background: var(--head); text-align: left; font-weight: 700; }
+    tbody tr:nth-child(even) td { background: #fbfcfe; }
+    code {
+      padding: 1px 5px;
+      border: 1px solid #dbe3ef;
+      border-radius: 4px;
+      background: #f8fafc;
+      color: #0f172a;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 12px;
+    }
+    .tag {
+      display: inline-block;
+      padding: 2px 7px;
+      border: 1px solid #bfd0ea;
+      border-radius: 999px;
+      background: #f2f6ff;
+      color: #1e3a8a;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .tag.pk { border-color: #86efac; background: #ecfdf5; color: #047857; }
+    .tag.fk { border-color: #fed7aa; background: #fff7ed; color: #b45309; }
+    .tag.req { border-color: #fecaca; background: #fff1f2; color: #b91c1c; }
+    .erd-wrap {
+      margin-top: 14px;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 0;
+      background: #fff;
+      padding: 0;
+    }
+    .erd { display: block; width: 100%; height: auto; }
+    .entity { fill: #fff; stroke: #94a3b8; stroke-width: 1.2; }
+    .entity.main { fill: #f8fbff; stroke: var(--blue); stroke-width: 1.8; }
+    .entity.derived, .entity.live, .entity.lookup { fill: #ecfdf5; stroke: #047857; stroke-width: 1.4; }
+    .entity.seq, .entity.special, .entity-token { fill: #fff7ed; stroke: #b45309; stroke-width: 1.4; }
+    .entity-title { fill: #0f172a; font-family: "SFMono-Regular", Consolas, monospace; font-size: 14px; font-weight: 700; }
+    .field { fill: #334155; font-family: "SFMono-Regular", Consolas, monospace; font-size: 12px; }
+    .rel { stroke: #334155; stroke-width: 1.6; fill: none; }
+    .rel.no-arrow { marker-end: none; }
+  </style>
+
+</head>
+<body><main>
+  <section>
+    <h1>Data Dictionary และ ER Diagram</h1>
+    <p class="subtitle">เอกสารฐานข้อมูลสำหรับคำขอเชื่อมต่อ CEMS/WPMS, จุดตรวจวัด, device config และข้อมูล connected/current หลังอนุมัติ</p>
+    <div class="links"><a class="link-button" href="#er-diagram">ER Diagram</a><a class="link-button" href="#relationship-summary">Relationship Summary</a><a class="link-button" href="#cems_wpms_connection_requests">Parent Table</a><a class="link-button" href="#constraints">Constraints</a></div>
+  </section>
+
+  <section><h2>รายการตารางสรุป</h2><div class="table-wrap"><table>
+    <thead><tr><th style="width:30%">Table</th><th>หน้าที่</th><th style="width:16%">Cardinality</th></tr></thead>
+    <tbody>
+      <tr><td><code>cems_wpms_connection_requests</code></td><td>หัวคำขอเชื่อมต่อ/เพิ่มจุด/เพิ่มพารามิเตอร์ พร้อม snapshot โรงงานและผู้ติดต่อ</td><td>Parent</td></tr>
+      <tr><td><code>cems_wpms_measurement_points</code></td><td>จุดตรวจวัดที่ยื่นในคำขอ พร้อมรายละเอียด เอกสาร และเครื่องมือ</td><td>1:N</td></tr>
+      <tr><td><code>cems_wpms_request_status_history</code></td><td>ประวัติการเปลี่ยนสถานะคำขอ</td><td>1:N</td></tr>
+      <tr><td><code>device_connection_configs</code></td><td>config การเชื่อมต่ออุปกรณ์ ทั้ง snapshot ผูกคำขอและ active config หลังอนุมัติ</td><td>1:N / current</td></tr>
+      <tr><td><code>device_measurement_channels</code></td><td>channel/address ของค่าตรวจวัดภายใต้ config</td><td>1:N</td></tr>
+      <tr><td><code>cems_wpms_point_code_sequences</code></td><td>running sequence สำหรับออกรหัสจุด CEMS/WPMS</td><td>Lookup</td></tr>
+      <tr><td><code>cems_wpms_connected_measurement_points</code></td><td>จุดตรวจวัด current/live ที่แยกจาก snapshot คำขอ</td><td>Current</td></tr>
+    </tbody>
+  </table></div></section>
+
+  <section id="er-diagram"><h2>1. ER Diagram</h2><div class="erd-wrap">
+    <svg class="erd" viewBox="0 0 1160 740" role="img" aria-label="ER Diagram CEMS WPMS Requests" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#64748b"/></marker></defs>
+      <path class="rel" d="M440 216 V238 H220 V280"/>
+      <path class="rel" d="M580 216 V300"/>
+      <path class="rel" d="M420 136 H30 V610 H70"/>
+      <path class="rel" d="M740 136 H1145 V710 H600 V686"/>
+      <path class="rel" d="M700 216 V250 H1128 V500 H940 V560"/>
+      <path class="rel" d="M720 358 H790"/>
+      <path class="rel" d="M220 412 V482 H520 V560"/>
+      <rect class="entity main" x="420" y="56" width="320" height="160"/><text class="entity-title" x="442" y="90">cems_wpms_connection_requests</text><text class="field" x="442" y="118">PK id, request_no, request_type</text><text class="field" x="442" y="142">factory snapshot, system_type, status</text><text class="field" x="442" y="166">contact/person/email JSON</text>
+      <rect class="entity" x="70" y="280" width="300" height="132"/><text class="entity-title" x="92" y="314">cems_wpms_measurement_points</text><text class="field" x="92" y="342">FK request_id, point_code/type</text><text class="field" x="92" y="366">parameters/details/documents</text><text class="field" x="92" y="390">instruments JSON</text>
+      <rect class="entity" x="420" y="300" width="300" height="126"/><text class="entity-title" x="442" y="334">device_connection_configs</text><text class="field" x="442" y="362">station_id, protocol, device_code</text><text class="field" x="442" y="386">FK request_id nullable</text><text class="field" x="442" y="410">for active config</text>
+      <rect class="entity" x="790" y="300" width="300" height="116"/><text class="entity-title" x="812" y="334">device_measurement_channels</text><text class="field" x="812" y="362">FK config_id, address_id</text><text class="field" x="812" y="386">data_type, format, offset, status</text>
+      <rect class="entity" x="70" y="560" width="300" height="100"/><text class="entity-title" x="92" y="594">cems_wpms_request_status_history</text><text class="field" x="92" y="622">FK request_id, changed_by</text>
+      <rect class="entity live" x="420" y="560" width="360" height="126"/><text class="entity-title" x="442" y="594">cems_wpms_connected_measurement_points</text><text class="field" x="442" y="622">FK source_request_id</text><text class="field" x="442" y="646">FK source_measurement_point_id</text><text class="field" x="442" y="670">current/live point snapshot</text>
+      <rect class="entity seq" x="790" y="560" width="300" height="92"/><text class="entity-title" x="812" y="594">cems_wpms_point_code_sequences</text><text class="field" x="812" y="622">PK system_type, prefix, last_sequence</text>
+    </svg>
+  </div></section>
+
+  <section id="relationship-summary"><h2>2. Relationship Summary</h2><div class="table-wrap"><table>
+    <thead><tr><th>Parent</th><th>Child</th><th>ความสัมพันธ์</th><th>คำอธิบาย</th></tr></thead>
+    <tbody>
+      <tr><td><code>cems_wpms_connection_requests.id</code></td><td><code>cems_wpms_measurement_points.request_id</code></td><td>1:N</td><td>หนึ่งคำขอมีหลายจุดตรวจวัด</td></tr>
+      <tr><td><code>cems_wpms_connection_requests.id</code></td><td><code>cems_wpms_request_status_history.request_id</code></td><td>1:N</td><td>เก็บ timeline สถานะคำขอ</td></tr>
+      <tr><td><code>cems_wpms_connection_requests.id</code></td><td><code>device_connection_configs.request_id</code></td><td>1:N / optional</td><td>config ที่เป็น snapshot คำขอมี request_id; active config ใช้ request_id เป็น NULL</td></tr>
+      <tr><td><code>device_connection_configs.id</code></td><td><code>device_measurement_channels.config_id</code></td><td>1:N</td><td>หนึ่ง config มีหลาย measurement channel</td></tr>
+      <tr><td><code>cems_wpms_connection_requests.id</code></td><td><code>cems_wpms_connected_measurement_points.source_request_id</code></td><td>1:N</td><td>เมื่อ connected แล้วจะมี current point แยกจาก request snapshot</td></tr>
+      <tr><td><code>cems_wpms_measurement_points.id</code></td><td><code>cems_wpms_connected_measurement_points.source_measurement_point_id</code></td><td>1:0..1</td><td>ชี้กลับไปยังจุดในคำขอต้นทาง</td></tr>
+    </tbody>
+  </table></div></section>
+
+  <section id="cems_wpms_connection_requests"><h2>3. Table: cems_wpms_connection_requests</h2><p><span class="tag">Parent Table</span> หัวคำขอและ snapshot โรงงาน</p><div class="table-wrap"><table><thead><tr><th style="width: 24%">Column</th><th style="width: 18%">Type</th><th style="width: 14%">Key/Null</th><th>คำอธิบาย</th></tr></thead><tbody>
+    <tr><td><code>id</code></td><td>BIGINT IDENTITY</td><td><span class="tag pk">PK</span></td><td>รหัสคำขอ</td></tr>
+    <tr><td><code>request_no</code></td><td>VARCHAR(32)</td><td><span class="tag req">NOT NULL/UQ</span></td><td>เลขที่คำขอ</td></tr>
+    <tr><td><code>request_type</code></td><td>VARCHAR(32)</td><td><span class="tag req">NOT NULL</span></td><td>NEW_CONNECTION, ADD_MEASUREMENT_POINT, ADD_PARAMETER</td></tr>
+    <tr><td><code>factory_id</code>, <code>factory_name</code>, <code>factory_registration_no</code></td><td>VARCHAR/NVARCHAR</td><td><span class="tag req">NOT NULL</span></td><td>ข้อมูลโรงงานหลัก</td></tr>
+    <tr><td><code>system_type</code>, <code>status</code></td><td>VARCHAR</td><td><span class="tag req">NOT NULL</span></td><td>ระบบ CEMS/WPMS และสถานะ workflow</td></tr>
+    <tr><td><code>contact_name</code>, <code>contact_phone</code>, <code>contact_email</code></td><td>NVARCHAR/VARCHAR</td><td>mixed</td><td>ผู้ติดต่อหลัก</td></tr>
+    <tr><td><code>contact_persons_json</code>, <code>notification_emails_json</code>, <code>officer_notification_emails_json</code></td><td>NVARCHAR(MAX)</td><td>NULL</td><td>รายชื่อผู้ติดต่อและอีเมลแจ้งเตือนเพิ่มเติม</td></tr>
+    <tr><td><code>industry_main_order</code>, <code>industry_sub_order</code>, <code>business_activity</code>, <code>has_eia</code></td><td>NVARCHAR / BIT</td><td>NULL</td><td>snapshot รายละเอียดกิจการและ EIA</td></tr>
+    <tr><td><code>project_name</code>, <code>address</code>, <code>latitude</code>, <code>longitude</code></td><td>NVARCHAR / DECIMAL</td><td>NULL</td><td>ข้อมูลสถานที่/โครงการของโรงงาน</td></tr>
+    <tr><td><code>remarks</code>, <code>revision_reason</code>, <code>officer_note</code></td><td>NVARCHAR</td><td>NULL</td><td>หมายเหตุและเหตุผลแก้ไข</td></tr>
+    <tr><td><code>connection_due_at</code>, <code>confirmed_at</code>, <code>verified_at</code></td><td>DATETIME2</td><td>NULL</td><td>กำหนดเชื่อมต่อ ยืนยัน และตรวจสอบสำเร็จ</td></tr>
+    <tr><td><code>created_at</code>, <code>updated_at</code>, <code>created_by</code>, <code>updated_by</code>, <code>deleted_at</code></td><td>DATETIME2 / BIGINT</td><td>mixed</td><td>audit fields และ soft delete</td></tr>
+  </tbody></table></div></section>
+
+  <section><h2>4. Table: cems_wpms_measurement_points</h2><p><span class="tag">Child Table</span> จุดตรวจวัดในคำขอ</p><div class="table-wrap"><table><thead><tr><th style="width: 24%">Column</th><th style="width: 18%">Type</th><th style="width: 14%">Key/Null</th><th>คำอธิบาย</th></tr></thead><tbody>
+    <tr><td><code>id</code></td><td>BIGINT IDENTITY</td><td><span class="tag pk">PK</span></td><td>รหัสจุดตรวจวัด</td></tr>
+    <tr><td><code>request_id</code></td><td>BIGINT</td><td><span class="tag fk">FK/NOT NULL</span></td><td>อ้างอิงคำขอ</td></tr>
+    <tr><td><code>point_name</code>, <code>point_code</code>, <code>point_type</code></td><td>NVARCHAR/VARCHAR</td><td>mixed</td><td>ชื่อ รหัส และประเภทจุด STACK/WASTEWATER/OTHER</td></tr>
+    <tr><td><code>latitude</code>, <code>longitude</code></td><td>DECIMAL(10,7)</td><td>NULL</td><td>พิกัดจุดตรวจวัด</td></tr>
+    <tr><td><code>parameters_json</code>, <code>details_json</code>, <code>documents_json</code>, <code>instruments_json</code></td><td>NVARCHAR(MAX)</td><td>mixed</td><td>พารามิเตอร์ รายละเอียด เอกสาร และเครื่องมือของจุดตรวจวัด</td></tr>
+    <tr><td><code>description</code></td><td>NVARCHAR(1000)</td><td>NULL</td><td>คำอธิบายเพิ่มเติม</td></tr>
+    <tr><td><code>created_at</code>, <code>updated_at</code>, <code>created_by</code>, <code>updated_by</code>, <code>deleted_at</code></td><td>DATETIME2 / BIGINT</td><td>mixed</td><td>audit fields</td></tr>
+  </tbody></table></div></section>
+
+  <section><h2>5. Table: cems_wpms_request_status_history</h2><p><span class="tag">History Table</span> สถานะย้อนหลังของคำขอ</p><div class="table-wrap"><table><thead><tr><th style="width: 24%">Column</th><th style="width: 18%">Type</th><th style="width: 14%">Key/Null</th><th>คำอธิบาย</th></tr></thead><tbody>
+    <tr><td><code>id</code></td><td>BIGINT IDENTITY</td><td><span class="tag pk">PK</span></td><td>รหัสประวัติ</td></tr><tr><td><code>request_id</code></td><td>BIGINT</td><td><span class="tag fk">FK/NOT NULL</span></td><td>คำขอที่เปลี่ยนสถานะ</td></tr><tr><td><code>status</code></td><td>VARCHAR(64)</td><td><span class="tag req">NOT NULL</span></td><td>สถานะใหม่</td></tr><tr><td><code>note</code></td><td>NVARCHAR(1000)</td><td>NULL</td><td>หมายเหตุ</td></tr><tr><td><code>changed_by</code></td><td>BIGINT</td><td><span class="tag fk">FK/NOT NULL</span></td><td>ผู้เปลี่ยนสถานะ</td></tr><tr><td><code>created_at</code>, <code>updated_at</code>, <code>changed_at</code></td><td>DATETIME2</td><td><span class="tag req">NOT NULL</span></td><td>เวลาสร้าง/แก้ไข/เปลี่ยนสถานะ</td></tr>
+  </tbody></table></div></section>
+
+  <section><h2>6. Table: device_connection_configs</h2><p><span class="tag">Config Table</span> การเชื่อมต่ออุปกรณ์</p><div class="table-wrap"><table><thead><tr><th style="width: 24%">Column</th><th style="width: 18%">Type</th><th style="width: 14%">Key/Null</th><th>คำอธิบาย</th></tr></thead><tbody>
+    <tr><td><code>id</code></td><td>BIGINT IDENTITY</td><td><span class="tag pk">PK</span></td><td>รหัส config</td></tr><tr><td><code>request_id</code></td><td>BIGINT</td><td><span class="tag fk">FK NULL</span></td><td>ถ้ามีค่าเป็น config snapshot ของคำขอ; ถ้า NULL คือ active/current config</td></tr><tr><td><code>station_id</code></td><td>VARCHAR(64)</td><td><span class="tag req">NOT NULL</span></td><td>รหัสสถานีหรือ point code</td></tr><tr><td><code>device_code</code></td><td>VARCHAR(64)</td><td>NULL</td><td>รหัสอุปกรณ์ภายในสถานี</td></tr><tr><td><code>protocol</code></td><td>VARCHAR(32)</td><td><span class="tag req">NOT NULL</span></td><td>MODBUS_RTU, MODBUS_TCP, MSSQL, MYSQL</td></tr><tr><td><code>settings_json</code>, <code>status_management_json</code></td><td>NVARCHAR(MAX)</td><td>mixed</td><td>ค่า config การเชื่อมต่อและการจัดการสถานะ</td></tr><tr><td><code>created_at</code>, <code>updated_at</code>, <code>created_by</code>, <code>updated_by</code>, <code>deleted_at</code></td><td>DATETIME2 / BIGINT</td><td>mixed</td><td>audit fields</td></tr>
+  </tbody></table></div></section>
+
+  <section><h2>7. Table: device_measurement_channels</h2><p><span class="tag">Channel Table</span> mapping address เป็นค่าตรวจวัด</p><div class="table-wrap"><table><thead><tr><th style="width: 24%">Column</th><th style="width: 18%">Type</th><th style="width: 14%">Key/Null</th><th>คำอธิบาย</th></tr></thead><tbody>
+    <tr><td><code>id</code></td><td>BIGINT IDENTITY</td><td><span class="tag pk">PK</span></td><td>รหัส channel</td></tr><tr><td><code>config_id</code></td><td>BIGINT</td><td><span class="tag fk">FK/NOT NULL</span></td><td>อ้างอิง config</td></tr><tr><td><code>address_id</code></td><td>BIGINT</td><td><span class="tag req">NOT NULL</span></td><td>address เริ่มที่ 40001 สำหรับ Modbus</td></tr><tr><td><code>data_type</code></td><td>NVARCHAR(128)</td><td><span class="tag req">NOT NULL</span></td><td>ชนิดข้อมูล/ชื่อพารามิเตอร์ ปัจจุบันรวมหน่วยไว้ใน field นี้แล้ว</td></tr><tr><td><code>value_range_json</code>, <code>value_format</code>, <code>offset_value</code>, <code>encoding</code>, <code>parameter_status</code></td><td>NVARCHAR/VARCHAR/DECIMAL</td><td>mixed</td><td>รายละเอียดการอ่านและแปลงค่า</td></tr><tr><td><code>created_at</code>, <code>updated_at</code>, <code>created_by</code>, <code>updated_by</code>, <code>deleted_at</code></td><td>DATETIME2 / BIGINT</td><td>mixed</td><td>audit fields</td></tr>
+  </tbody></table></div></section>
+
+  <section><h2>8. Table: cems_wpms_point_code_sequences</h2><div class="table-wrap"><table><thead><tr><th style="width: 24%">Column</th><th style="width: 18%">Type</th><th style="width: 14%">Key/Null</th><th>คำอธิบาย</th></tr></thead><tbody>
+    <tr><td><code>system_type</code></td><td>VARCHAR(8)</td><td><span class="tag pk">PK</span></td><td>CEMS หรือ WPMS</td></tr><tr><td><code>prefix</code></td><td>VARCHAR(1)</td><td><span class="tag req">NOT NULL</span></td><td>S สำหรับ CEMS, P สำหรับ WPMS</td></tr><tr><td><code>last_sequence</code></td><td>INT</td><td><span class="tag req">NOT NULL</span></td><td>เลขลำดับล่าสุด</td></tr><tr><td><code>updated_at</code></td><td>DATETIME2</td><td><span class="tag req">NOT NULL</span></td><td>วันเวลา update sequence</td></tr>
+  </tbody></table></div></section>
+
+  <section><h2>9. Table: cems_wpms_connected_measurement_points</h2><p><span class="tag">Current Table</span> จุดตรวจวัดที่เชื่อมต่อแล้ว แยกจากข้อมูลคำขอเดิม</p><div class="table-wrap"><table><thead><tr><th style="width: 24%">Column</th><th style="width: 18%">Type</th><th style="width: 14%">Key/Null</th><th>คำอธิบาย</th></tr></thead><tbody>
+    <tr><td><code>id</code></td><td>BIGINT IDENTITY</td><td><span class="tag pk">PK</span></td><td>รหัส connected point</td></tr><tr><td><code>source_request_id</code>, <code>source_measurement_point_id</code></td><td>BIGINT</td><td><span class="tag fk">FK/NOT NULL</span></td><td>อ้างอิงคำขอและจุดตรวจวัดต้นทาง</td></tr><tr><td><code>factory_id</code>, <code>factory_name</code>, <code>factory_registration_no</code>, <code>factory_address</code></td><td>VARCHAR/NVARCHAR</td><td>mixed</td><td>snapshot โรงงานของ current point</td></tr><tr><td><code>factory_latitude</code>, <code>factory_longitude</code></td><td>DECIMAL(10,7)</td><td>NULL</td><td>พิกัดโรงงาน</td></tr><tr><td><code>system_type</code>, <code>point_name</code>, <code>point_code</code>, <code>point_type</code></td><td>VARCHAR/NVARCHAR</td><td>mixed</td><td>ข้อมูลจุดตรวจวัด current</td></tr><tr><td><code>parameters_json</code>, <code>details_json</code>, <code>documents_json</code>, <code>instruments_json</code></td><td>NVARCHAR(MAX)</td><td>mixed</td><td>รายละเอียดจุดตรวจวัดหลัง connected</td></tr><tr><td><code>connected_at</code></td><td>DATETIME2</td><td>NULL</td><td>วันที่เชื่อมต่อสำเร็จ</td></tr><tr><td><code>created_at</code>, <code>updated_at</code>, <code>created_by</code>, <code>updated_by</code>, <code>deleted_at</code></td><td>DATETIME2 / BIGINT</td><td>mixed</td><td>audit fields</td></tr>
+  </tbody></table></div></section>
+
+  <section id="constraints"><h2>10. Constraints และ Index ที่แนะนำ/มีใน migration</h2><div class="table-wrap"><table><thead><tr><th>Name</th><th>Table</th><th>Purpose</th></tr></thead><tbody>
+    <tr><td><code>uq_cems_wpms_connection_request_no</code></td><td><code>cems_wpms_connection_requests</code></td><td>เลขคำขอต้องไม่ซ้ำ</td></tr><tr><td><code>ck_cems_wpms_requests_system_type</code></td><td><code>cems_wpms_connection_requests</code></td><td>จำกัด CEMS/WPMS</td></tr><tr><td><code>ck_cems_wpms_requests_status</code></td><td><code>cems_wpms_connection_requests</code></td><td>จำกัดสถานะ workflow</td></tr><tr><td><code>ck_cems_wpms_points_type</code></td><td><code>cems_wpms_measurement_points</code></td><td>จำกัด STACK/WASTEWATER/OTHER</td></tr><tr><td><code>uq_device_measurement_channels_config_address</code></td><td><code>device_measurement_channels</code></td><td>หนึ่ง config ใช้ address เดียวซ้ำไม่ได้</td></tr><tr><td><code>uq_device_connection_configs_active_station_protocol_device</code></td><td><code>device_connection_configs</code></td><td>active config ต่อ station/protocol/device ต้องไม่ซ้ำ</td></tr><tr><td><code>uq_connected_points_point_code</code></td><td><code>cems_wpms_connected_measurement_points</code></td><td>point_code ของ current point ต้องไม่ซ้ำเมื่อยัง active</td></tr>
+  </tbody></table></div></section>
+</main></body></html>
