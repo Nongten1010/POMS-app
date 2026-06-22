@@ -74,6 +74,123 @@ Base path:
 /api/v1/monitoring-point-forms
 ```
 
+## Production Test Example
+
+วันที่ทดสอบ: `2026-06-22`
+
+Production base URL ที่ยิง:
+
+```text
+http://d-poms.diw.go.th/api/v1/monitoring-point-forms
+```
+
+ผลการทดสอบจริง:
+
+- deploy production แล้วที่ commit `6de7d6e`
+- รัน migration แล้ว: `Batch 21 run: 1 migrations`
+- `GET /api/v1/monitoring-point-forms` แบบไม่มี token ได้ `401 UNAUTHORIZED` แปลว่า route พร้อมใช้งาน
+- `POST /api/v1/monitoring-point-forms` พร้อม token สำเร็จ ได้ `success: true`
+- `GET /api/v1/monitoring-point-forms/1` พร้อม token อ่านข้อมูลที่บันทึกกลับมาได้
+
+Response จากการยิง `POST` production:
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "factory": {
+      "factoryName": "โรงงานทดสอบ Production CEMS WPMS",
+      "factoryRegistrationNoNew": "POMS-PROD-TEST-20260622-001"
+    },
+    "points": [
+      {
+        "id": 1,
+        "formId": 1,
+        "systemType": "CEMS",
+        "pointCode": "S-PROD-TEST-001",
+        "pointName": "ปล่องทดสอบ Production 1"
+      },
+      {
+        "id": 2,
+        "formId": 1,
+        "systemType": "WPMS",
+        "pointCode": "P-PROD-TEST-001",
+        "pointName": "จุดระบายน้ำทิ้งทดสอบ Production 1"
+      }
+    ]
+  }
+}
+```
+
+Payload ที่ใช้ทดสอบยิง production โดยมี `CEMS` และ `WPMS` ในครั้งเดียว:
+
+```json
+{
+  "factory": {
+    "factoryName": "โรงงานทดสอบ Production CEMS WPMS",
+    "factoryRegistrationNoNew": "POMS-PROD-TEST-20260622-001",
+    "factoryRegistrationNoOld": "TEST-OLD-001",
+    "provinceName": "ลำปาง",
+    "factoryTypeMain": "100",
+    "factoryTypeSub": "003,000",
+    "operationStatus": "แจ้งประกอบแล้ว",
+    "eiaInfo": "-",
+    "address": "1 หมู่ 9 ถนนบ้านช่องคอม ตำบลทดสอบ อำเภอทดสอบ 52240",
+    "businessActivity": "ทดสอบบันทึกข้อมูลจุดตรวจวัด"
+  },
+  "points": [
+    {
+      "systemType": "CEMS",
+      "pointCode": "S-PROD-TEST-001",
+      "pointName": "ปล่องทดสอบ Production 1",
+      "productionUnitType": "หม้อไอน้ำ",
+      "productionCapacity": "10 ตันไอน้ำ/ชั่วโมง",
+      "cemsInstallationRequiredBy": "เข้าข่ายต้องติดตั้ง CEMS ตามกฎหมาย",
+      "cemsInstallationRequiredOther": null,
+      "legalAnnexNo": "บัญชีแนบท้ายลำดับที่ 1",
+      "accountingConnectionStatus": "เข้าข่ายตามบัญชีแนบท้ายลำดับที่",
+      "eligibleParameters": ["NOx (ppm)", "SO2 (ppm)", "O2 (%)"],
+      "exemptedParameters": [],
+      "connectedParameters": [],
+      "pendingParameters": ["NOx (ppm)", "SO2 (ppm)", "O2 (%)"],
+      "primaryFuel": "ก๊าซธรรมชาติ",
+      "secondaryFuel": "น้ำมันเตา",
+      "details": null
+    },
+    {
+      "systemType": "WPMS",
+      "pointCode": "P-PROD-TEST-001",
+      "pointName": "จุดระบายน้ำทิ้งทดสอบ Production 1",
+      "productionUnitType": "ระบบบำบัดน้ำเสีย",
+      "productionCapacity": "500 ลบ.ม./วัน",
+      "cemsInstallationRequiredBy": null,
+      "cemsInstallationRequiredOther": null,
+      "legalAnnexNo": "บัญชีแนบท้ายลำดับที่ 2",
+      "accountingConnectionStatus": "เข้าข่ายตามบัญชีแนบท้ายลำดับที่",
+      "eligibleParameters": ["BOD (mg/l)", "COD (mg/l)", "Flow (m³/hr)"],
+      "exemptedParameters": [],
+      "connectedParameters": [],
+      "pendingParameters": ["BOD (mg/l)", "COD (mg/l)", "Flow (m³/hr)"],
+      "primaryFuel": null,
+      "secondaryFuel": null,
+      "details": null
+    }
+  ]
+}
+```
+
+Payload นี้ถูกบันทึกลงตาราง:
+
+- `factory_monitoring_point_forms` จำนวน 1 แถว สำหรับข้อมูลโรงงาน
+- `factory_monitoring_points` จำนวน 2 แถว สำหรับจุด `CEMS` 1 จุด และ `WPMS` 1 จุด
+
+ข้อมูลที่ได้จาก production:
+
+- `factory_monitoring_point_forms.id = 1`
+- `factory_monitoring_points.id = 1`, `system_type = CEMS`
+- `factory_monitoring_points.id = 2`, `system_type = WPMS`
+
 สิทธิ์ที่ใช้:
 
 - เรียกดู: `cems_wpms_requests:view`
