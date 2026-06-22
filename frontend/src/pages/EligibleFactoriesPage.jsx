@@ -31,9 +31,12 @@ import AddIcon from '@mui/icons-material/Add'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import CloseIcon from '@mui/icons-material/Close'
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlineOutlined'
+import EditIcon from '@mui/icons-material/Edit'
 import HighlightOffIcon from '@mui/icons-material/HighlightOff'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import { DataGrid } from '@mui/x-data-grid'
+import cemsInstallationRequiredOptions from '../option/cemsInstallationRequiredOptions.json'
+import fuelOptions from '../option/fuelOptions.json'
 
 const eligibleFactoryCandidatesApiUrl = import.meta.env.DEV
   ? '/api-proxy/v1/eligible-factories/candidates'
@@ -42,6 +45,10 @@ const eligibleFactoryCandidatesApiUrl = import.meta.env.DEV
 const eligibleFactoriesApiUrl = import.meta.env.DEV
   ? '/api-proxy/v1/eligible-factories'
   : 'http://d-poms.diw.go.th/api/v1/eligible-factories'
+
+const monitoringPointFormsApiUrl = import.meta.env.DEV
+  ? '/api-proxy/v1/monitoring-point-forms'
+  : 'http://d-poms.diw.go.th/api/v1/monitoring-point-forms'
 
 const emptyValue = '-'
 
@@ -53,6 +60,8 @@ const subMenus = [
 
 const cemsParameterOptions = ['NOx (ppm)', 'SO2 (ppm)', 'O2 (%)']
 const wpmsParameterOptions = ['BOD (mg/l)', 'COD (mg/l)', 'Flow (m³/hr)']
+const legalAnnexOptions = Array.from({ length: 12 }, (_, index) => String(index + 1))
+const fuelOtherTriggerValues = ['เชื้อเพลิงชีวมวล (Biomass)', 'เชื้อเพลิงอื่นๆ']
 
 const baseColumns = [
   { field: 'factoryName', headerName: 'ชื่อโรงงาน', width: 240 },
@@ -73,6 +82,25 @@ const baseColumns = [
   },
   { field: 'productionCapacity', headerName: 'กำลังการผลิต', width: 170 },
   { field: 'machineryHorsepower', headerName: 'แรงม้าเครื่องจักร', width: 160, type: 'number' },
+]
+
+const eligibleMonitoringColumns = [
+  {
+    field: 'cemsPointCount',
+    headerName: 'CEMS',
+    width: 110,
+    align: 'center',
+    headerAlign: 'center',
+    headerClassName: 'eligible-cems-header',
+  },
+  {
+    field: 'wpmsPointCount',
+    headerName: 'WPMS',
+    width: 110,
+    align: 'center',
+    headerAlign: 'center',
+    headerClassName: 'eligible-wpms-header',
+  },
 ]
 
 const connectionRequestRows = [
@@ -148,8 +176,58 @@ function getFactoryKey(row) {
   return row.factoryId || row.factoryRegistrationNo || row.id
 }
 
+function getMonitoringPointType(point = {}) {
+  return point.systemType ?? point.type ?? point.details?.monitoringPointKind ?? (point.pointType === 'WASTEWATER' ? 'WPMS' : point.pointType === 'STACK' ? 'CEMS' : '')
+}
+
+function countMonitoringPointsByType(points = [], type) {
+  const count = points.filter((point) => getMonitoringPointType(point) === type).length
+  return count || emptyValue
+}
+
+function normalizeDisplayValue(value) {
+  return value === emptyValue || value === undefined || value === null ? '' : value
+}
+
+function normalizeArrayValue(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean)
+  }
+
+  return normalizeDisplayValue(value)
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+function shouldShowFuelOther(value) {
+  return fuelOtherTriggerValues.includes(value)
+}
+
+async function readJsonResponse(result, fallbackMessage) {
+  const rawText = await result.text()
+  let response
+
+  try {
+    response = rawText ? JSON.parse(rawText) : null
+  } catch {
+    response = rawText
+  }
+
+  if (!result.ok || response?.success === false) {
+    const message =
+      response?.error?.message ??
+      response?.message ??
+      `${fallbackMessage} (${result.status} ${result.statusText})`
+    throw new Error(message)
+  }
+
+  return response
+}
+
 function mapFactoryRow(row, index, idPrefix = 'factory') {
   const factoryKey = getFactoryKey(row) || `${idPrefix}-${index}`
+  const measurementPoints = Array.isArray(row.measurementPoints) ? row.measurementPoints : []
 
   return {
     id: idPrefix === 'eligible' ? `eligible-${row.id ?? factoryKey}` : factoryKey,
@@ -172,6 +250,9 @@ function mapFactoryRow(row, index, idPrefix = 'factory') {
     boilerSizeEach: row.boilerSizeEach ?? emptyValue,
     fuel: row.fuelUsed ?? emptyValue,
     eia: row.eia ?? (row.hasEia === true ? 'มี' : row.hasEia === false ? 'ไม่มี' : emptyValue),
+    measurementPoints,
+    cemsPointCount: countMonitoringPointsByType(measurementPoints, 'CEMS'),
+    wpmsPointCount: countMonitoringPointsByType(measurementPoints, 'WPMS'),
   }
 }
 
@@ -193,9 +274,12 @@ function createDefaultMonitoringPoint(type = 'CEMS', order = 1) {
     productionCapacity: '',
     cemsInstallationRequiredBy: '',
     cemsInstallationRequiredOther: '',
-    legalAnnexNo: '',
+    legalAnnexNo: [],
+    accountingConnectionStatus: '',
     primaryFuel: '',
+    primaryFuelOther: '',
     secondaryFuel: '',
+    secondaryFuelOther: '',
     eligibleParameters: [],
     exemptedParameters: [],
     connectedParameters: [],
@@ -203,7 +287,34 @@ function createDefaultMonitoringPoint(type = 'CEMS', order = 1) {
   }
 }
 
-function mapMonitoringPointPayload(point) {
+function mapMonitoringPointToForm(point = {}, index = 0) {
+  const type = getMonitoringPointType(point) === 'WPMS' ? 'WPMS' : 'CEMS'
+  const details = point.details ?? {}
+
+  return {
+    ...createDefaultMonitoringPoint(type, index + 1),
+    id: point.id ?? `${type.toLowerCase()}-${Date.now()}-${index + 1}`,
+    type,
+    pointCode: point.pointCode ?? point.code ?? '',
+    pointName: point.pointName ?? point.name ?? '',
+    productionUnitType: point.productionUnitType ?? details.productionUnitType ?? '',
+    productionCapacity: point.productionCapacity ?? details.productionCapacity ?? '',
+    cemsInstallationRequiredBy: point.cemsInstallationRequiredBy ?? details.cemsInstallationRequiredBy ?? '',
+    cemsInstallationRequiredOther: point.cemsInstallationRequiredOther ?? details.cemsInstallationRequiredOther ?? '',
+    legalAnnexNo: normalizeArrayValue(point.legalAnnexNo ?? details.legalAnnexNo),
+    accountingConnectionStatus: point.accountingConnectionStatus ?? details.accountingConnectionStatus ?? '',
+    primaryFuel: point.primaryFuel ?? details.primaryFuel ?? '',
+    primaryFuelOther: point.primaryFuelOther ?? details.primaryFuelOther ?? '',
+    secondaryFuel: point.secondaryFuel ?? details.secondaryFuel ?? '',
+    secondaryFuelOther: point.secondaryFuelOther ?? details.secondaryFuelOther ?? '',
+    eligibleParameters: point.eligibleParameters ?? details.eligibleParameters ?? [],
+    exemptedParameters: point.exemptedParameters ?? details.exemptedParameters ?? [],
+    connectedParameters: point.connectedParameters ?? details.connectedParameters ?? [],
+    pendingParameters: point.pendingParameters ?? details.pendingParameters ?? [],
+  }
+}
+
+function mapMonitoringPointForEligibleState(point) {
   const isWpms = point.type === 'WPMS'
 
   return {
@@ -224,9 +335,11 @@ function mapMonitoringPointPayload(point) {
           productionCapacity: point.productionCapacity || null,
           cemsInstallationRequiredBy: point.cemsInstallationRequiredBy || null,
           cemsInstallationRequiredOther: point.cemsInstallationRequiredOther || null,
-          legalAnnexNo: point.legalAnnexNo || null,
+          legalAnnexNo: normalizeArrayValue(point.legalAnnexNo).join(',') || null,
           primaryFuel: point.primaryFuel || null,
+          primaryFuelOther: point.primaryFuelOther || null,
           secondaryFuel: point.secondaryFuel || null,
+          secondaryFuelOther: point.secondaryFuelOther || null,
           eligibleParameters: point.eligibleParameters ?? [],
           exemptedParameters: point.exemptedParameters ?? [],
           connectedParameters: point.connectedParameters ?? [],
@@ -235,31 +348,44 @@ function mapMonitoringPointPayload(point) {
   }
 }
 
-function createEligibleFactoryPayload(row, monitoringPoints = []) {
-  const candidate = row.candidatePayload ?? {}
-
+function mapMonitoringPointFormPayload(point) {
   return {
-    factoryName: candidate.factoryName ?? null,
-    factoryId: candidate.factoryId ?? null,
-    factoryRegistrationNo: candidate.factoryRegistrationNo ?? null,
-    factoryClass: candidate.factoryClass ?? null,
-    factorySubclass: candidate.factorySubclass ?? null,
-    address: candidate.address ?? null,
-    provinceName: candidate.provinceName ?? null,
-    industrialEstateName: candidate.industrialEstateName ?? null,
-    longitude: candidate.longitude ?? null,
-    latitude: candidate.latitude ?? null,
-    businessActivity: candidate.businessActivity ?? null,
-    operationStatus: candidate.operationStatus ?? null,
-    capitalAmount: candidate.capitalAmount ?? null,
-    machineryHorsepower: candidate.machineryHorsepower ?? null,
-    productionCapacity: candidate.productionCapacity ?? null,
-    wastewaterDischargeInfo: candidate.wastewaterDischargeInfo ?? null,
-    boilerCount: candidate.boilerCount ?? null,
-    boilerSizeEach: candidate.boilerSizeEach ?? null,
-    fuelUsed: candidate.fuelUsed ?? null,
-    hasEia: candidate.hasEia ?? null,
-    measurementPoints: monitoringPoints.map(mapMonitoringPointPayload),
+    systemType: point.type,
+    pointCode: normalizeDisplayValue(point.pointCode) || null,
+    pointName: normalizeDisplayValue(point.pointName),
+    productionUnitType: normalizeDisplayValue(point.productionUnitType) || (point.type === 'WPMS' ? 'ระบบบำบัดน้ำเสีย' : null),
+    productionCapacity: normalizeDisplayValue(point.productionCapacity) || null,
+    cemsInstallationRequiredBy: point.type === 'CEMS' ? normalizeDisplayValue(point.cemsInstallationRequiredBy) || null : null,
+    cemsInstallationRequiredOther: point.type === 'CEMS' ? normalizeDisplayValue(point.cemsInstallationRequiredOther) || null : null,
+    legalAnnexNo: normalizeArrayValue(point.legalAnnexNo).join(',') || null,
+    accountingConnectionStatus: normalizeDisplayValue(point.accountingConnectionStatus) || null,
+    eligibleParameters: point.eligibleParameters ?? [],
+    exemptedParameters: point.type === 'CEMS' ? point.exemptedParameters ?? [] : [],
+    connectedParameters: point.connectedParameters ?? [],
+    pendingParameters: point.pendingParameters ?? [],
+    primaryFuel: point.type === 'CEMS' ? normalizeDisplayValue(point.primaryFuel) || null : null,
+    primaryFuelOther: point.type === 'CEMS' ? normalizeDisplayValue(point.primaryFuelOther) || null : null,
+    secondaryFuel: point.type === 'CEMS' ? normalizeDisplayValue(point.secondaryFuel) || null : null,
+    secondaryFuelOther: point.type === 'CEMS' ? normalizeDisplayValue(point.secondaryFuelOther) || null : null,
+    details: null,
+  }
+}
+
+function createMonitoringPointFormPayload(row, monitoringPoints = []) {
+  return {
+    factory: {
+      factoryName: normalizeDisplayValue(row.factoryName),
+      factoryRegistrationNoNew: normalizeDisplayValue(row.newRegistrationNo),
+      factoryRegistrationNoOld: normalizeDisplayValue(row.oldRegistrationNo) || null,
+      provinceName: normalizeDisplayValue(row.province) || null,
+      factoryTypeMain: normalizeDisplayValue(row.factoryClass) || null,
+      factoryTypeSub: normalizeDisplayValue(row.factorySubclass) || null,
+      operationStatus: normalizeDisplayValue(row.operationStatus) || null,
+      eiaInfo: normalizeDisplayValue(row.eia) || null,
+      address: normalizeDisplayValue(row.location) || null,
+      businessActivity: normalizeDisplayValue(row.operation) || null,
+    },
+    points: monitoringPoints.map(mapMonitoringPointFormPayload),
   }
 }
 
@@ -440,13 +566,65 @@ function EligibleFactoriesPage({ accessToken = '' }) {
     ? eligibleFactoriesError
     : 'กรุณาเข้าสู่ระบบเพื่อดูข้อมูลโรงงานที่เข้าข่าย'
 
-  const handleOpenEligibleSheet = useCallback((row) => {
-    const firstPoint = createDefaultMonitoringPoint('CEMS', 1)
+  const handleOpenEligibleSheet = useCallback(async (row) => {
+    const existingPoints = Array.isArray(row.measurementPoints)
+      ? row.measurementPoints.map(mapMonitoringPointToForm)
+      : []
+    const firstPoint = existingPoints[0] ?? createDefaultMonitoringPoint('CEMS', 1)
     setSelectedFactoryForSheet(row)
-    setMonitoringPoints([firstPoint])
+    setMonitoringPoints(existingPoints.length ? existingPoints : [firstPoint])
     setActiveMonitoringPointId(firstPoint.id)
     setEligibleActionError('')
-  }, [])
+
+    if (!accessToken || !normalizeDisplayValue(row.newRegistrationNo)) {
+      return
+    }
+
+    try {
+      const query = new URLSearchParams({
+        factoryRegistrationNoNew: normalizeDisplayValue(row.newRegistrationNo),
+      })
+      const listResult = await fetch(`${monitoringPointFormsApiUrl}?${query.toString()}`, {
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+      })
+      const listResponse = await readJsonResponse(listResult, 'โหลดข้อมูลฟอร์มจุดตรวจวัดไม่สำเร็จ')
+      const existingForm = Array.isArray(listResponse?.data) ? listResponse.data[0] : null
+
+      if (!existingForm?.id) {
+        return
+      }
+
+      const detailResult = await fetch(`${monitoringPointFormsApiUrl}/${existingForm.id}`, {
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+      })
+      const detailResponse = await readJsonResponse(detailResult, 'โหลดรายละเอียดฟอร์มจุดตรวจวัดไม่สำเร็จ')
+      const detail = detailResponse?.data ?? existingForm
+      const nextPoints = Array.isArray(detail.points) ? detail.points.map(mapMonitoringPointToForm) : []
+      const nextFirstPoint = nextPoints[0] ?? firstPoint
+
+      setSelectedFactoryForSheet((current) =>
+        current?.id === row.id
+          ? {
+              ...current,
+              monitoringPointFormId: detail.id ?? existingForm.id,
+              measurementPoints: detail.points ?? current.measurementPoints,
+            }
+          : current,
+      )
+      if (nextPoints.length) {
+        setMonitoringPoints(nextPoints)
+        setActiveMonitoringPointId(nextFirstPoint.id)
+      }
+    } catch (requestError) {
+      setEligibleActionError(requestError.message)
+    }
+  }, [accessToken])
 
   const handleCloseEligibleSheet = useCallback(() => {
     setSelectedFactoryForSheet(null)
@@ -461,10 +639,10 @@ function EligibleFactoriesPage({ accessToken = '' }) {
     })
   }, [])
 
-  const handleMarkEligible = useCallback(
+  const handleSaveMonitoringPointForm = useCallback(
     async (row, nextMonitoringPoints = []) => {
       if (!accessToken) {
-        setEligibleActionError('กรุณาเข้าสู่ระบบก่อนเพิ่มโรงงานเข้าข่าย')
+        setEligibleActionError('กรุณาเข้าสู่ระบบก่อนบันทึกข้อมูลจุดตรวจวัด')
         return
       }
 
@@ -474,35 +652,40 @@ function EligibleFactoriesPage({ accessToken = '' }) {
       )
 
       try {
-        const result = await fetch(eligibleFactoriesApiUrl, {
-          method: 'POST',
-          headers: {
-            Accept: 'application/json',
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
+        const formId = row.monitoringPointFormId ?? row.formId ?? null
+        const result = await fetch(
+          formId ? `${monitoringPointFormsApiUrl}/${formId}` : monitoringPointFormsApiUrl,
+          {
+            method: formId ? 'PUT' : 'POST',
+            headers: {
+              Accept: 'application/json',
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(createMonitoringPointFormPayload(row, nextMonitoringPoints)),
           },
-          body: JSON.stringify(createEligibleFactoryPayload(row, nextMonitoringPoints)),
-        })
-        const rawText = await result.text()
-        let response = rawText
+        )
+        const response = await readJsonResponse(result, 'บันทึกข้อมูลจุดตรวจวัดไม่สำเร็จ')
+        const savedData = response?.data ?? {}
+        const savedFormId = savedData.id ?? formId
+        const savedPoints = nextMonitoringPoints.map(mapMonitoringPointForEligibleState)
+        const updateRows = (current) =>
+          current.map((factoryRow) =>
+            factoryRow.id === row.id || factoryRow.factoryKey === row.factoryKey
+              ? {
+                  ...factoryRow,
+                  monitoringPointFormId: savedFormId,
+                  measurementPoints: savedPoints,
+                  cemsPointCount: countMonitoringPointsByType(nextMonitoringPoints, 'CEMS'),
+                  wpmsPointCount: countMonitoringPointsByType(nextMonitoringPoints, 'WPMS'),
+                }
+              : factoryRow,
+          )
 
-        try {
-          response = rawText ? JSON.parse(rawText) : null
-        } catch {
-          response = rawText
-        }
-
-        if (!result.ok || response?.success === false) {
-          const message =
-            response?.error?.message ??
-            response?.message ??
-            `เพิ่มโรงงานเข้าข่ายไม่สำเร็จ (${result.status} ${result.statusText})`
-          throw new Error(message)
-        }
-
-        await loadEligibleFactories()
+        setFactoryRows(updateRows)
+        setEligibleFactoryRows(updateRows)
         handleCloseEligibleSheet()
-        setSnackbarMessage('นำเข้าโรงงานเข้าข่ายสำเร็จ')
+        setSnackbarMessage('บันทึกข้อมูลจุดตรวจวัดสำเร็จ')
         setSnackbarOpen(true)
       } catch (requestError) {
         setEligibleActionError(requestError.message)
@@ -510,7 +693,7 @@ function EligibleFactoriesPage({ accessToken = '' }) {
         setSavingEligibleFactoryIds((current) => current.filter((id) => id !== row.id))
       }
     },
-    [accessToken, handleCloseEligibleSheet, loadEligibleFactories],
+    [accessToken, handleCloseEligibleSheet],
   )
 
   const handleRemoveEligible = useCallback(
@@ -603,29 +786,45 @@ function EligibleFactoriesPage({ accessToken = '' }) {
       {
         field: 'option',
         headerName: 'Option',
-        width: 130,
+        width: 185,
         sortable: false,
         filterable: false,
         renderCell: (params) => {
           const isDeleting = deletingEligibleFactoryIdSet.has(params.row.id)
 
           return (
-            <Button
-              size="small"
-              variant="outlined"
-              color="error"
-              startIcon={<HighlightOffIcon />}
-              disabled={isDeleting}
-              onClick={() => handleRemoveEligible(params.row)}
+            <Stack
+              direction="row"
+              spacing={1}
+              sx={{ alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}
             >
-              {isDeleting ? 'กำลังนำออก' : 'นำออก'}
-            </Button>
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<EditIcon />}
+                onClick={() => handleOpenEligibleSheet(params.row)}
+              >
+                แก้ไข
+              </Button>
+              <Button
+                size="small"
+                variant="outlined"
+                color="error"
+                startIcon={<HighlightOffIcon />}
+                disabled={isDeleting}
+                onClick={() => handleRemoveEligible(params.row)}
+              >
+                {isDeleting ? 'กำลังนำออก' : 'นำออก'}
+              </Button>
+            </Stack>
           )
         },
       },
-      ...baseColumns,
+      ...baseColumns.slice(0, 3),
+      ...eligibleMonitoringColumns,
+      ...baseColumns.slice(3),
     ],
-    [deletingEligibleFactoryIdSet, handleRemoveEligible],
+    [deletingEligibleFactoryIdSet, handleOpenEligibleSheet, handleRemoveEligible],
   )
 
   return (
@@ -745,7 +944,7 @@ function EligibleFactoriesPage({ accessToken = '' }) {
         onMonitoringPointsChange={handleMonitoringPointsChange}
         onSubmit={() => {
           if (selectedFactoryForSheet) {
-            handleMarkEligible(selectedFactoryForSheet, monitoringPoints)
+            handleSaveMonitoringPointForm(selectedFactoryForSheet, monitoringPoints)
           }
         }}
       />
@@ -1010,10 +1209,11 @@ function MonitoringPointForm({ point, onChange, onTypeChange }) {
                 onChange={(event) => onChange({ cemsInstallationRequiredBy: event.target.value })}
               >
                 <MenuItem value="">-</MenuItem>
-                <MenuItem value="ประกาศ อก.">ประกาศ อก.</MenuItem>
-                <MenuItem value="กกพ.">กกพ.</MenuItem>
-                <MenuItem value="กทม.">กทม.</MenuItem>
-                <MenuItem value="อื่นๆ">อื่นๆ</MenuItem>
+                {cemsInstallationRequiredOptions.map((option) => (
+                  <MenuItem key={option.value} value={option.value}>
+                    {option.label}
+                  </MenuItem>
+                ))}
               </TextField>
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
@@ -1026,18 +1226,12 @@ function MonitoringPointForm({ point, onChange, onTypeChange }) {
               />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <TextField
-                select
+              <ParameterMultiSelect
                 label="เข้าข่ายตามบัญชีแนบท้ายลำดับที่"
-                size="small"
-                fullWidth
+                options={legalAnnexOptions}
                 value={point.legalAnnexNo}
-                onChange={(event) => onChange({ legalAnnexNo: event.target.value })}
-              >
-                <MenuItem value="">-</MenuItem>
-                <MenuItem value="เฉพาะประกาศปี 65">เฉพาะประกาศปี 65</MenuItem>
-                <MenuItem value="กทม.">กทม.</MenuItem>
-              </TextField>
+                onChange={(value) => onChange({ legalAnnexNo: value })}
+              />
             </Grid>
           </Grid>
         ) : null}
@@ -1082,22 +1276,72 @@ function MonitoringPointForm({ point, onChange, onTypeChange }) {
           <Grid container spacing={2}>
             <Grid size={{ xs: 12, md: 3 }}>
               <TextField
+                select
                 label="เชื้อเพลิง (หลัก)"
                 size="small"
                 fullWidth
                 value={point.primaryFuel}
-                onChange={(event) => onChange({ primaryFuel: event.target.value })}
-              />
+                onChange={(event) => {
+                  const nextValue = event.target.value
+                  onChange({
+                    primaryFuel: nextValue,
+                    primaryFuelOther: shouldShowFuelOther(nextValue) ? point.primaryFuelOther : '',
+                  })
+                }}
+              >
+                <MenuItem value="">-</MenuItem>
+                {fuelOptions.map((option) => (
+                  <MenuItem key={option.value} value={option.value}>
+                    {option.label}
+                  </MenuItem>
+                ))}
+              </TextField>
             </Grid>
+            {shouldShowFuelOther(point.primaryFuel) ? (
+              <Grid size={{ xs: 12, md: 3 }}>
+                <TextField
+                  label="ระบุ (เชื้อเพลิงหลัก)"
+                  size="small"
+                  fullWidth
+                  value={point.primaryFuelOther}
+                  onChange={(event) => onChange({ primaryFuelOther: event.target.value })}
+                />
+              </Grid>
+            ) : null}
             <Grid size={{ xs: 12, md: 3 }}>
               <TextField
+                select
                 label="เชื้อเพลิง (รอง)"
                 size="small"
                 fullWidth
                 value={point.secondaryFuel}
-                onChange={(event) => onChange({ secondaryFuel: event.target.value })}
-              />
+                onChange={(event) => {
+                  const nextValue = event.target.value
+                  onChange({
+                    secondaryFuel: nextValue,
+                    secondaryFuelOther: shouldShowFuelOther(nextValue) ? point.secondaryFuelOther : '',
+                  })
+                }}
+              >
+                <MenuItem value="">-</MenuItem>
+                {fuelOptions.map((option) => (
+                  <MenuItem key={option.value} value={option.value}>
+                    {option.label}
+                  </MenuItem>
+                ))}
+              </TextField>
             </Grid>
+            {shouldShowFuelOther(point.secondaryFuel) ? (
+              <Grid size={{ xs: 12, md: 3 }}>
+                <TextField
+                  label="ระบุ (เชื้อเพลิงรอง)"
+                  size="small"
+                  fullWidth
+                  value={point.secondaryFuelOther}
+                  onChange={(event) => onChange({ secondaryFuelOther: event.target.value })}
+                />
+              </Grid>
+            ) : null}
           </Grid>
         ) : null}
       </Stack>
@@ -1203,6 +1447,10 @@ function FactoryDataGrid({ title, rows, columns, loading = false, error = '' }) 
               alignItems: 'center',
               borderColor: 'divider',
             },
+            '& .MuiDataGrid-cell[data-field="option"]': {
+              display: 'flex',
+              alignItems: 'center',
+            },
             '& .MuiDataGrid-columnHeader[data-field="option"], & .MuiDataGrid-cell[data-field="option"]': {
               position: 'sticky',
               left: 0,
@@ -1213,6 +1461,14 @@ function FactoryDataGrid({ title, rows, columns, loading = false, error = '' }) 
             '& .MuiDataGrid-columnHeader[data-field="option"]': {
               zIndex: 8,
               bgcolor: '#eef2f6',
+            },
+            '& .MuiDataGrid-columnHeader.eligible-cems-header': {
+              bgcolor: '#ffedd5',
+              color: '#9a3412',
+            },
+            '& .MuiDataGrid-columnHeader.eligible-wpms-header': {
+              bgcolor: '#dbeafe',
+              color: '#1e40af',
             },
             '& .MuiDataGrid-row--lastVisible .MuiDataGrid-cell': {
               borderBottom: 1,
