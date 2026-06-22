@@ -33,7 +33,7 @@ The runner marks the checked-out workspace as a trusted Git directory before
 detecting changed paths.
 Production dependencies are prepared in `C:\apps\POMS-app\backend-release`
 before the running backend service is stopped and updated.
-Run `npm run db:migrate` after backend deploys that include new migration files.
+Backend deploys run `npm run db:migrate` automatically after build/test passes.
 
 ## Project Structure
 

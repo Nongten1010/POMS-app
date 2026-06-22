@@ -119,6 +119,13 @@ jobs:
           npm run build
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Run backend database migrations
+        if: steps.changes.outputs.backend_changed == 'true'
+        working-directory: backend
+        run: |
+          npm run db:migrate
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Deploy backend service files
         if: steps.changes.outputs.backend_changed == 'true'
         run: |
