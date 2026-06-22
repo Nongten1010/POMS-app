@@ -50,14 +50,16 @@ Index:
 | `production_capacity` | NVARCHAR(255) | No | กำลังการผลิตต่อหน่วย |
 | `cems_installation_required_by` | NVARCHAR(255) | No | สถานะการเข้าข่ายติดตั้ง CEMS |
 | `cems_installation_required_other` | NVARCHAR(255) | No | รายละเอียดอื่นๆ |
-| `legal_annex_no` | NVARCHAR(255) | No | ลำดับบัญชีหรือหมายเหตุ |
+| `legal_annex_no` | NVARCHAR(255) | No | ลำดับบัญชีแนบท้ายที่เข้าข่าย เก็บหลายค่าแบบ comma-separated เช่น `1,3,5` |
 | `accounting_connection_status` | NVARCHAR(255) | No | สถานะการเข้าข่ายตามบัญชีแนบท้าย |
 | `eligible_parameters_json` | NVARCHAR(MAX) | Yes | พารามิเตอร์ที่เข้าข่าย |
 | `exempted_parameters_json` | NVARCHAR(MAX) | Yes | พารามิเตอร์ที่ได้รับการยกเว้น |
 | `connected_parameters_json` | NVARCHAR(MAX) | Yes | พารามิเตอร์ที่เชื่อมต่อแล้ว |
 | `pending_parameters_json` | NVARCHAR(MAX) | Yes | พารามิเตอร์ที่ยังไม่เชื่อมต่อ |
 | `primary_fuel` | NVARCHAR(255) | No | เชื้อเพลิงหลัก |
+| `primary_fuel_other` | NVARCHAR(255) | No | เชื้อเพลิงหลักอื่นๆ |
 | `secondary_fuel` | NVARCHAR(255) | No | เชื้อเพลิงรอง |
+| `secondary_fuel_other` | NVARCHAR(255) | No | เชื้อเพลิงรองอื่นๆ |
 | `details_json` | NVARCHAR(MAX) | No | รายละเอียดเสริมสำหรับอนาคต |
 | `created_at`, `updated_at`, `created_by`, `updated_by`, `deleted_at` | audit fields | Mixed | ข้อมูล audit |
 
@@ -148,14 +150,16 @@ Payload ที่ใช้ทดสอบยิง production โดยมี `C
       "productionCapacity": "10 ตันไอน้ำ/ชั่วโมง",
       "cemsInstallationRequiredBy": "เข้าข่ายต้องติดตั้ง CEMS ตามกฎหมาย",
       "cemsInstallationRequiredOther": null,
-      "legalAnnexNo": "บัญชีแนบท้ายลำดับที่ 1",
+      "legalAnnexNo": ["1"],
       "accountingConnectionStatus": "เข้าข่ายตามบัญชีแนบท้ายลำดับที่",
       "eligibleParameters": ["NOx (ppm)", "SO2 (ppm)", "O2 (%)"],
       "exemptedParameters": [],
       "connectedParameters": [],
       "pendingParameters": ["NOx (ppm)", "SO2 (ppm)", "O2 (%)"],
       "primaryFuel": "ก๊าซธรรมชาติ",
+      "primaryFuelOther": "ชีวมวล",
       "secondaryFuel": "น้ำมันเตา",
+      "secondaryFuelOther": "ก๊าซชีวภาพ",
       "details": null
     },
     {
@@ -166,14 +170,16 @@ Payload ที่ใช้ทดสอบยิง production โดยมี `C
       "productionCapacity": "500 ลบ.ม./วัน",
       "cemsInstallationRequiredBy": null,
       "cemsInstallationRequiredOther": null,
-      "legalAnnexNo": "บัญชีแนบท้ายลำดับที่ 2",
+      "legalAnnexNo": ["2"],
       "accountingConnectionStatus": "เข้าข่ายตามบัญชีแนบท้ายลำดับที่",
       "eligibleParameters": ["BOD (mg/l)", "COD (mg/l)", "Flow (m³/hr)"],
       "exemptedParameters": [],
       "connectedParameters": [],
       "pendingParameters": ["BOD (mg/l)", "COD (mg/l)", "Flow (m³/hr)"],
       "primaryFuel": null,
+      "primaryFuelOther": null,
       "secondaryFuel": null,
+      "secondaryFuelOther": null,
       "details": null
     }
   ]
@@ -278,7 +284,9 @@ Request:
       "connectedParameters": [],
       "pendingParameters": ["NOx (ppm)", "SO2 (ppm)"],
       "primaryFuel": "ก๊าซธรรมชาติ",
-      "secondaryFuel": ""
+      "primaryFuelOther": "ชีวมวล",
+      "secondaryFuel": "",
+      "secondaryFuelOther": ""
     },
     {
       "systemType": "WPMS",
@@ -292,7 +300,9 @@ Request:
       "connectedParameters": [],
       "pendingParameters": ["BOD (mg/l)", "COD (mg/l)"],
       "primaryFuel": "",
-      "secondaryFuel": ""
+      "primaryFuelOther": "",
+      "secondaryFuel": "",
+      "secondaryFuelOther": ""
     }
   ]
 }

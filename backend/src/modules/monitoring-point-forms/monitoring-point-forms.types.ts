@@ -24,7 +24,7 @@ export interface MonitoringPointInput {
   productionCapacity?: string | null;
   cemsInstallationRequiredBy?: string | null;
   cemsInstallationRequiredOther?: string | null;
-  legalAnnexNo?: string | null;
+  legalAnnexNo?: string[];
   accountingConnectionStatus?: string | null;
   eligibleParameters?: string[];
   exemptedParameters?: string[];

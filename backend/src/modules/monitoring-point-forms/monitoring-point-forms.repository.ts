@@ -228,7 +228,7 @@ function toPointInsertRow(
     production_capacity: point.productionCapacity ?? null,
     cems_installation_required_by: point.cemsInstallationRequiredBy ?? null,
     cems_installation_required_other: point.cemsInstallationRequiredOther ?? null,
-    legal_annex_no: point.legalAnnexNo ?? null,
+    legal_annex_no: formatStringList(point.legalAnnexNo),
     accounting_connection_status: point.accountingConnectionStatus ?? null,
     eligible_parameters_json: JSON.stringify(point.eligibleParameters ?? []),
     exempted_parameters_json: JSON.stringify(point.exemptedParameters ?? []),
@@ -288,7 +288,7 @@ function toPointDTO(row: MonitoringPointRow): MonitoringPointDTO {
     productionCapacity: row.production_capacity,
     cemsInstallationRequiredBy: row.cems_installation_required_by,
     cemsInstallationRequiredOther: row.cems_installation_required_other,
-    legalAnnexNo: row.legal_annex_no,
+    legalAnnexNo: parseDelimitedStringList(row.legal_annex_no),
     accountingConnectionStatus: row.accounting_connection_status,
     eligibleParameters: parseStringList(row.eligible_parameters_json),
     exemptedParameters: parseStringList(row.exempted_parameters_json),
@@ -311,6 +311,29 @@ function parseStringList(value: string): string[] {
   } catch {
     return [];
   }
+}
+
+function parseDelimitedStringList(value: string | null): string[] {
+  if (!value) return [];
+
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) {
+      return parsed.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+    }
+  } catch {
+    // Fall back to the legacy comma-separated format below.
+  }
+
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function formatStringList(value: string[] | undefined): string | null {
+  if (!value?.length) return null;
+  return value.map((item) => item.trim()).filter(Boolean).join(',') || null;
 }
 
 function parseObject(value: string | null): Record<string, unknown> | null {

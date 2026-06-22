@@ -11,6 +11,19 @@ const optionalText = (max: number) =>
     .nullable()
     .transform((value) => (value ? value : null));
 const parameterListSchema = z.array(requiredText(255)).max(100).default([]);
+const legalAnnexListSchema = z
+  .preprocess((value) => {
+    if (value === undefined || value === null || value === '') return [];
+    if (Array.isArray(value)) return value;
+    if (typeof value === 'string') {
+      return value
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+    return value;
+  }, z.array(requiredText(32)).max(12))
+  .default([]);
 
 export const saveMonitoringPointFormSchema = z
   .object({
@@ -40,7 +53,7 @@ export const saveMonitoringPointFormSchema = z
             productionCapacity: optionalText(255),
             cemsInstallationRequiredBy: optionalText(255),
             cemsInstallationRequiredOther: optionalText(255),
-            legalAnnexNo: optionalText(255),
+            legalAnnexNo: legalAnnexListSchema,
             accountingConnectionStatus: optionalText(255),
             eligibleParameters: parameterListSchema,
             exemptedParameters: parameterListSchema,

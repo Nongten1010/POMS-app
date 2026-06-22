@@ -15,6 +15,7 @@ describe('monitoring point form validator', () => {
           systemType: 'CEMS',
           pointCode: 'S0001',
           pointName: 'ปล่องหลัก',
+          legalAnnexNo: ['1', '3'],
           eligibleParameters: ['NOx (ppm)', 'SO2 (ppm)'],
           primaryFuel: 'ก๊าซธรรมชาติ',
           primaryFuelOther: 'ชีวมวล',
@@ -25,6 +26,7 @@ describe('monitoring point form validator', () => {
           systemType: 'WPMS',
           pointCode: 'P0001',
           pointName: 'จุดระบายน้ำทิ้ง',
+          legalAnnexNo: '2,4',
           eligibleParameters: ['BOD (mg/l)', 'COD (mg/l)'],
         },
       ],
@@ -33,6 +35,7 @@ describe('monitoring point form validator', () => {
     expect(result.points).toHaveLength(2);
     expect(result.points[0]).toMatchObject({
       systemType: 'CEMS',
+      legalAnnexNo: ['1', '3'],
       primaryFuelOther: 'ชีวมวล',
       secondaryFuelOther: 'ก๊าซชีวภาพ',
       exemptedParameters: [],
@@ -40,6 +43,7 @@ describe('monitoring point form validator', () => {
       pendingParameters: [],
       details: null,
     });
+    expect(result.points[1]?.legalAnnexNo).toEqual(['2', '4']);
   });
 
   it('rejects forms without monitoring points', () => {

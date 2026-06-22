@@ -66,6 +66,8 @@ const accountingOptions = [
   'รอตรวจสอบข้อมูล',
 ]
 
+const legalAnnexOptions = Array.from({ length: 12 }, (_item, index) => String(index + 1))
+
 const emptyFactory = {
   factoryName: 'สถานีบ่มใบยาสบหนอง',
   factoryRegistrationNoNew: '10520000225172',
@@ -91,14 +93,16 @@ function createEmptyPoint(systemType = 'CEMS') {
     productionCapacity: '',
     cemsInstallationRequiredBy: systemType === 'CEMS' ? 'เข้าข่ายต้องติดตั้ง CEMS ตามกฎหมาย' : '',
     cemsInstallationRequiredOther: '',
-    legalAnnexNo: '',
+    legalAnnexNo: [],
     accountingConnectionStatus: 'เข้าข่ายตามบัญชีแนบท้ายลำดับที่',
     eligibleParameters: [],
     exemptedParameters: [],
     connectedParameters: [],
     pendingParameters: [],
     primaryFuel: '',
+    primaryFuelOther: '',
     secondaryFuel: '',
+    secondaryFuelOther: '',
   }
 }
 
@@ -116,6 +120,7 @@ function mapFormToState(form) {
     points: form.points.map((point) => ({
       ...createEmptyPoint(point.systemType),
       ...point,
+      legalAnnexNo: normalizeStringList(point.legalAnnexNo),
       clientId: `point-${point.id}`,
     })),
   }
@@ -137,8 +142,22 @@ function toPayloadPoint(point) {
 
   return {
     ...payloadPoint,
+    legalAnnexNo: normalizeStringList(payloadPoint.legalAnnexNo),
     details: null,
   }
+}
+
+function normalizeStringList(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean)
+  }
+  if (typeof value === 'string') {
+    return value
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean)
+  }
+  return []
 }
 
 function MonitoringPointFormsPage({ accessToken }) {
@@ -492,14 +511,16 @@ function MonitoringPointFormsPage({ accessToken }) {
                       <PointTextField label="อื่นๆ โปรดระบุ" value={selectedPoint.cemsInstallationRequiredOther} onChange={(value) => updatePoint('cemsInstallationRequiredOther', value)} />
                     </>
                   ) : null}
-                  <PointSelectField label="เข้าข่ายตามบัญชีแนบท้าย" value={selectedPoint.accountingConnectionStatus} options={accountingOptions} onChange={(value) => updatePoint('accountingConnectionStatus', value)} />
-                  <PointTextField label="ลำดับบัญชี/หมายเหตุ" value={selectedPoint.legalAnnexNo} onChange={(value) => updatePoint('legalAnnexNo', value)} />
+                  <PointSelectField label="สถานะบัญชีแนบท้าย" value={selectedPoint.accountingConnectionStatus} options={accountingOptions} onChange={(value) => updatePoint('accountingConnectionStatus', value)} />
+                  <PointMultiSelectField label="เข้าข่ายตามบัญชีแนบท้ายลำดับที่" value={selectedPoint.legalAnnexNo} options={legalAnnexOptions} onChange={(value) => updatePoint('legalAnnexNo', value)} />
                   <PointMultiSelectField label="พารามิเตอร์ที่เข้าข่าย" value={selectedPoint.eligibleParameters} options={parameterOptions} onChange={(value) => updatePoint('eligibleParameters', value)} />
                   <PointMultiSelectField label="พารามิเตอร์ที่ได้รับการยกเว้น" value={selectedPoint.exemptedParameters} options={parameterOptions} onChange={(value) => updatePoint('exemptedParameters', value)} />
                   <PointMultiSelectField label="พารามิเตอร์ที่เชื่อมต่อแล้ว" value={selectedPoint.connectedParameters} options={parameterOptions} onChange={(value) => updatePoint('connectedParameters', value)} />
                   <PointMultiSelectField label="พารามิเตอร์ที่ยังไม่เชื่อมต่อ" value={selectedPoint.pendingParameters} options={parameterOptions} onChange={(value) => updatePoint('pendingParameters', value)} />
                   <PointTextField label="เชื้อเพลิง (หลัก)" value={selectedPoint.primaryFuel} onChange={(value) => updatePoint('primaryFuel', value)} />
+                  <PointTextField label="เชื้อเพลิงหลักอื่นๆ" value={selectedPoint.primaryFuelOther} onChange={(value) => updatePoint('primaryFuelOther', value)} />
                   <PointTextField label="เชื้อเพลิง (รอง)" value={selectedPoint.secondaryFuel} onChange={(value) => updatePoint('secondaryFuel', value)} />
+                  <PointTextField label="เชื้อเพลิงรองอื่นๆ" value={selectedPoint.secondaryFuelOther} onChange={(value) => updatePoint('secondaryFuelOther', value)} />
                 </Grid>
               </Stack>
             ) : null}
