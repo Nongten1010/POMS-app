@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  Badge,
   Box,
   Button,
   Checkbox,
@@ -44,7 +45,7 @@ import { DataGrid } from '@mui/x-data-grid'
 
 const subMenus = [
   { value: 'factories', label: 'รายชื่อโรงงาน' },
-  { value: 'requests', label: 'รายการคำขอ' },
+  { value: 'requests', label: 'รายการคำขอ', badgeContent: 1 },
 ]
 
 const cemsParameterOptions = [
@@ -154,6 +155,9 @@ const mockCemsMonitoringPointDetails = {
 const mockWpmsMonitoringPointDetails = {
   pointCode: 'WPMS-WW-001',
   pointName: 'จุดระบายน้ำทิ้ง A',
+  eligibleParameters: ['BOD (mg/l)', 'COD (mg/l)', 'Flow (m³/hr)'],
+  connectedParameters: [],
+  pendingParameters: ['BOD (mg/l)', 'COD (mg/l)', 'Flow (m³/hr)'],
   averageWastewaterDischarge: '500',
   minWastewaterDischarge: '300',
   maxWastewaterDischarge: '800',
@@ -1003,6 +1007,9 @@ function buildMeasurementPointRequestBody(
               averageWastewaterDischarge: toNumberOrNull(getFormValue(formData, 'averageWastewaterDischarge')),
               minWastewaterDischarge: toNumberOrNull(getFormValue(formData, 'minWastewaterDischarge')),
               maxWastewaterDischarge: toNumberOrNull(getFormValue(formData, 'maxWastewaterDischarge')),
+              eligibleParameters: getFormValues(formData, 'eligibleParameters'),
+              connectedParameters: getFormValues(formData, 'connectedParameters'),
+              pendingParameters: getFormValues(formData, 'pendingParameters'),
               hasTreatmentSystem: getFormValue(formData, 'hasTreatmentSystem'),
               treatmentSystem: getFormValue(formData, 'treatmentSystem'),
               maxTreatmentCapacity: toNumberOrNull(getFormValue(formData, 'maxTreatmentCapacity')),
@@ -4003,7 +4010,14 @@ function UploadFileField({ label, accept, name, currentFileName = '' }) {
   )
 }
 
-function ParameterMultiSelect({ label, name, value: controlledValue, defaultValue = [], onChange }) {
+function ParameterMultiSelect({
+  label,
+  name,
+  options = cemsParameterOptions,
+  value: controlledValue,
+  defaultValue = [],
+  onChange,
+}) {
   const [internalValue, setInternalValue] = useState(defaultValue)
   const value = controlledValue ?? internalValue
 
@@ -4033,7 +4047,7 @@ function ParameterMultiSelect({ label, name, value: controlledValue, defaultValu
           </Box>
         )}
       >
-        {cemsParameterOptions.map((option) => (
+        {options.map((option) => (
           <MenuItem key={option} value={option}>
             {option}
           </MenuItem>
@@ -4749,6 +4763,32 @@ function WpmsMonitoringPointDetails({ initialPoint = {} }) {
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
           <TextField name="pointName" label="ชื่อจุดตรวจวัด" size="small" defaultValue={initialPoint.pointName ?? initialDetails.pointName} fullWidth />
+        </Grid>
+      </Grid>
+      <Grid container spacing={2}>
+        <Grid size={{ xs: 12, md: 3 }}>
+          <ParameterMultiSelect
+            name="eligibleParameters"
+            label="พารามิเตอร์ที่เข้าข่าย"
+            options={wpmsInstrumentParameters}
+            defaultValue={initialDetails.eligibleParameters ?? []}
+          />
+        </Grid>
+        <Grid size={{ xs: 12, md: 3 }}>
+          <ParameterMultiSelect
+            name="connectedParameters"
+            label="พารามิเตอร์ที่เชื่อมต่อแล้ว"
+            options={wpmsInstrumentParameters}
+            defaultValue={initialDetails.connectedParameters ?? []}
+          />
+        </Grid>
+        <Grid size={{ xs: 12, md: 3 }}>
+          <ParameterMultiSelect
+            name="pendingParameters"
+            label="พารามิเตอร์ที่ยังไม่เชื่อมต่อ"
+            options={wpmsInstrumentParameters}
+            defaultValue={initialDetails.pendingParameters ?? []}
+          />
         </Grid>
       </Grid>
       <Grid container spacing={2}>
@@ -6027,7 +6067,29 @@ function ConnectionRequestPage({ userType = '', accessToken = '' }) {
             }}
           >
             {availableSubMenus.map((menu) => (
-              <Tab key={menu.value} value={menu.value} label={menu.label} />
+              <Tab
+                key={menu.value}
+                value={menu.value}
+                label={
+                  menu.badgeContent ? (
+                    <Badge
+                      badgeContent={menu.badgeContent}
+                      color="error"
+                      sx={{
+                        pr: 2,
+                        '& .MuiBadge-badge': {
+                          right: 2,
+                          top: 2,
+                        },
+                      }}
+                    >
+                      <Box component="span">{menu.label}</Box>
+                    </Badge>
+                  ) : (
+                    menu.label
+                  )
+                }
+              />
             ))}
           </Tabs>
         </Stack>

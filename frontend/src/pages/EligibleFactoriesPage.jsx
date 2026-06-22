@@ -1,7 +1,36 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Alert, Badge, Box, Button, Chip, Fade, Paper, Snackbar, Stack, Tab, Tabs, Typography } from '@mui/material'
+import {
+  Alert,
+  Badge,
+  Box,
+  Button,
+  Chip,
+  Divider,
+  Drawer,
+  Fade,
+  FormControl,
+  FormControlLabel,
+  Grid,
+  IconButton,
+  InputLabel,
+  MenuItem,
+  OutlinedInput,
+  Paper,
+  Radio,
+  RadioGroup,
+  Select,
+  Snackbar,
+  Stack,
+  Tab,
+  Tabs,
+  TextField,
+  Typography,
+} from '@mui/material'
 import AddTaskIcon from '@mui/icons-material/AddTask'
+import AddIcon from '@mui/icons-material/Add'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
+import CloseIcon from '@mui/icons-material/Close'
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlineOutlined'
 import HighlightOffIcon from '@mui/icons-material/HighlightOff'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import { DataGrid } from '@mui/x-data-grid'
@@ -22,11 +51,15 @@ const subMenus = [
   { value: 'requests', label: 'คำขอเชื่อมต่อ' },
 ]
 
+const cemsParameterOptions = ['NOx (ppm)', 'SO2 (ppm)', 'O2 (%)']
+const wpmsParameterOptions = ['BOD (mg/l)', 'COD (mg/l)', 'Flow (m³/hr)']
+
 const baseColumns = [
   { field: 'factoryName', headerName: 'ชื่อโรงงาน', width: 240 },
   { field: 'newRegistrationNo', headerName: 'เลขทะเบียนโรงงานแบบใหม่', width: 180 },
   { field: 'oldRegistrationNo', headerName: 'เลขทะเบียนโรงงานแบบเดิม', width: 190 },
-  { field: 'factoryTypeOrder', headerName: 'ลำดับประเภทโรงงาน (หลัก /รอง)', width: 220 },
+  { field: 'factoryClass', headerName: 'ลำดับประเภทโรงงานหลัก', width: 190 },
+  { field: 'factorySubclass', headerName: 'ลำดับประเภทโรงงานรอง', width: 190 },
   { field: 'location', headerName: 'สถานที่ตั้ง', width: 320 },
   { field: 'province', headerName: 'จังหวัด', width: 130 },
   { field: 'industrialEstate', headerName: 'นิคมอุตสาหกรรม', width: 210 },
@@ -38,23 +71,8 @@ const baseColumns = [
     width: 190,
     renderCell: (params) => <StatusChip value={params.value} />,
   },
-  { field: 'capital', headerName: 'เงินทุน', width: 160 },
-  { field: 'machineHorsepower', headerName: 'แรงม้าเครื่องจักร', width: 160 },
   { field: 'productionCapacity', headerName: 'กำลังการผลิต', width: 170 },
-  {
-    field: 'wastewaterDischarge',
-    headerName: 'ข้อมูลการระบายน้ำทิ้งออกนอกโรงงาน',
-    width: 290,
-  },
-  { field: 'boilerCount', headerName: 'จำนวนหม้อน้ำ', width: 130, type: 'number' },
-  { field: 'boilerSize', headerName: 'ขนาดของหม้อน้ำแต่ละลูก', width: 220 },
-  { field: 'fuel', headerName: 'เชื้อเพลิงที่ใช้', width: 190 },
-  {
-    field: 'eia',
-    headerName: 'ข้อมูล EIA',
-    width: 130,
-    renderCell: (params) => <EiaChip value={params.value} />,
-  },
+  { field: 'machineryHorsepower', headerName: 'แรงม้าเครื่องจักร', width: 160, type: 'number' },
 ]
 
 const connectionRequestRows = [
@@ -118,24 +136,12 @@ const connectionRequestColumns = [
   },
 ]
 
-function formatNumber(value) {
-  return typeof value === 'number' ? value.toLocaleString('th-TH') : emptyValue
-}
-
-function formatWithUnit(value, unit) {
-  return typeof value === 'number' ? `${formatNumber(value)} ${unit}` : emptyValue
-}
-
 function formatCoordinates(latitude, longitude) {
   if (typeof latitude !== 'number' || typeof longitude !== 'number') {
     return emptyValue
   }
 
   return `${latitude}, ${longitude}`
-}
-
-function formatFactoryTypeOrder(factoryClass, factorySubclass) {
-  return [factoryClass, factorySubclass].filter(Boolean).join(' / ') || emptyValue
 }
 
 function getFactoryKey(row) {
@@ -153,21 +159,19 @@ function mapFactoryRow(row, index, idPrefix = 'factory') {
     factoryName: row.factoryName ?? emptyValue,
     newRegistrationNo: row.factoryId ?? emptyValue,
     oldRegistrationNo: row.factoryRegistrationNo ?? emptyValue,
-    factoryTypeOrder: formatFactoryTypeOrder(row.factoryClass, row.factorySubclass),
+    factoryClass: row.factoryClass ?? emptyValue,
+    factorySubclass: row.factorySubclass ?? emptyValue,
     location: row.address ?? emptyValue,
     province: row.provinceName ?? emptyValue,
     industrialEstate: row.industrialEstateName ?? emptyValue,
     coordinates: formatCoordinates(row.latitude, row.longitude),
     operation: row.businessActivity ?? emptyValue,
     operationStatus: row.operationStatus ?? emptyValue,
-    capital: formatWithUnit(row.capitalAmount, 'บาท'),
-    machineHorsepower: formatWithUnit(row.machineryHorsepower, 'แรงม้า'),
     productionCapacity: row.productionCapacity ?? emptyValue,
-    wastewaterDischarge: row.wastewaterDischargeInfo ?? emptyValue,
-    boilerCount: typeof row.boilerCount === 'number' ? row.boilerCount : null,
-    boilerSize: row.boilerSizeEach ?? emptyValue,
+    machineryHorsepower: typeof row.machineryHorsepower === 'number' ? row.machineryHorsepower : null,
+    boilerSizeEach: row.boilerSizeEach ?? emptyValue,
     fuel: row.fuelUsed ?? emptyValue,
-    eia: row.hasEia === true ? 'มี' : row.hasEia === false ? 'ไม่มี' : emptyValue,
+    eia: row.eia ?? (row.hasEia === true ? 'มี' : row.hasEia === false ? 'ไม่มี' : emptyValue),
   }
 }
 
@@ -179,7 +183,59 @@ function mapEligibleFactory(row, index) {
   return mapFactoryRow(row, index, 'eligible')
 }
 
-function createEligibleFactoryPayload(row) {
+function createDefaultMonitoringPoint(type = 'CEMS', order = 1) {
+  return {
+    id: `${type.toLowerCase()}-${Date.now()}-${order}`,
+    type,
+    pointCode: '',
+    pointName: '',
+    productionUnitType: '',
+    productionCapacity: '',
+    cemsInstallationRequiredBy: '',
+    cemsInstallationRequiredOther: '',
+    legalAnnexNo: '',
+    primaryFuel: '',
+    secondaryFuel: '',
+    eligibleParameters: [],
+    exemptedParameters: [],
+    connectedParameters: [],
+    pendingParameters: [],
+  }
+}
+
+function mapMonitoringPointPayload(point) {
+  const isWpms = point.type === 'WPMS'
+
+  return {
+    pointCode: point.pointCode || null,
+    pointName: point.pointName || null,
+    pointType: isWpms ? 'WASTEWATER' : 'STACK',
+    systemType: point.type,
+    details: isWpms
+      ? {
+          monitoringPointKind: 'WPMS',
+          eligibleParameters: point.eligibleParameters ?? [],
+          connectedParameters: point.connectedParameters ?? [],
+          pendingParameters: point.pendingParameters ?? [],
+        }
+      : {
+          monitoringPointKind: 'CEMS',
+          productionUnitType: point.productionUnitType || null,
+          productionCapacity: point.productionCapacity || null,
+          cemsInstallationRequiredBy: point.cemsInstallationRequiredBy || null,
+          cemsInstallationRequiredOther: point.cemsInstallationRequiredOther || null,
+          legalAnnexNo: point.legalAnnexNo || null,
+          primaryFuel: point.primaryFuel || null,
+          secondaryFuel: point.secondaryFuel || null,
+          eligibleParameters: point.eligibleParameters ?? [],
+          exemptedParameters: point.exemptedParameters ?? [],
+          connectedParameters: point.connectedParameters ?? [],
+          pendingParameters: point.pendingParameters ?? [],
+        },
+  }
+}
+
+function createEligibleFactoryPayload(row, monitoringPoints = []) {
   const candidate = row.candidatePayload ?? {}
 
   return {
@@ -203,6 +259,7 @@ function createEligibleFactoryPayload(row) {
     boilerSizeEach: candidate.boilerSizeEach ?? null,
     fuelUsed: candidate.fuelUsed ?? null,
     hasEia: candidate.hasEia ?? null,
+    measurementPoints: monitoringPoints.map(mapMonitoringPointPayload),
   }
 }
 
@@ -217,6 +274,9 @@ function EligibleFactoriesPage({ accessToken = '' }) {
   const [eligibleActionError, setEligibleActionError] = useState('')
   const [savingEligibleFactoryIds, setSavingEligibleFactoryIds] = useState([])
   const [deletingEligibleFactoryIds, setDeletingEligibleFactoryIds] = useState([])
+  const [selectedFactoryForSheet, setSelectedFactoryForSheet] = useState(null)
+  const [monitoringPoints, setMonitoringPoints] = useState(() => [createDefaultMonitoringPoint('CEMS', 1)])
+  const [activeMonitoringPointId, setActiveMonitoringPointId] = useState('')
   const [snackbarOpen, setSnackbarOpen] = useState(false)
   const [snackbarMessage, setSnackbarMessage] = useState('นำเข้าโรงงานเข้าข่ายสำเร็จ')
   const eligibleFactoryKeySet = useMemo(
@@ -380,8 +440,29 @@ function EligibleFactoriesPage({ accessToken = '' }) {
     ? eligibleFactoriesError
     : 'กรุณาเข้าสู่ระบบเพื่อดูข้อมูลโรงงานที่เข้าข่าย'
 
+  const handleOpenEligibleSheet = useCallback((row) => {
+    const firstPoint = createDefaultMonitoringPoint('CEMS', 1)
+    setSelectedFactoryForSheet(row)
+    setMonitoringPoints([firstPoint])
+    setActiveMonitoringPointId(firstPoint.id)
+    setEligibleActionError('')
+  }, [])
+
+  const handleCloseEligibleSheet = useCallback(() => {
+    setSelectedFactoryForSheet(null)
+    setMonitoringPoints([createDefaultMonitoringPoint('CEMS', 1)])
+    setActiveMonitoringPointId('')
+  }, [])
+
+  const handleMonitoringPointsChange = useCallback((updater) => {
+    setMonitoringPoints((current) => {
+      const next = typeof updater === 'function' ? updater(current) : updater
+      return next.length ? next : [createDefaultMonitoringPoint('CEMS', 1)]
+    })
+  }, [])
+
   const handleMarkEligible = useCallback(
-    async (row) => {
+    async (row, nextMonitoringPoints = []) => {
       if (!accessToken) {
         setEligibleActionError('กรุณาเข้าสู่ระบบก่อนเพิ่มโรงงานเข้าข่าย')
         return
@@ -400,7 +481,7 @@ function EligibleFactoriesPage({ accessToken = '' }) {
             Authorization: `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(createEligibleFactoryPayload(row)),
+          body: JSON.stringify(createEligibleFactoryPayload(row, nextMonitoringPoints)),
         })
         const rawText = await result.text()
         let response = rawText
@@ -420,6 +501,7 @@ function EligibleFactoriesPage({ accessToken = '' }) {
         }
 
         await loadEligibleFactories()
+        handleCloseEligibleSheet()
         setSnackbarMessage('นำเข้าโรงงานเข้าข่ายสำเร็จ')
         setSnackbarOpen(true)
       } catch (requestError) {
@@ -428,7 +510,7 @@ function EligibleFactoriesPage({ accessToken = '' }) {
         setSavingEligibleFactoryIds((current) => current.filter((id) => id !== row.id))
       }
     },
-    [accessToken, loadEligibleFactories],
+    [accessToken, handleCloseEligibleSheet, loadEligibleFactories],
   )
 
   const handleRemoveEligible = useCallback(
@@ -487,7 +569,6 @@ function EligibleFactoriesPage({ accessToken = '' }) {
 
   const allFactoryColumns = useMemo(
     () => [
-      ...baseColumns,
       {
         field: 'option',
         headerName: 'Option',
@@ -503,22 +584,22 @@ function EligibleFactoriesPage({ accessToken = '' }) {
               size="small"
               variant={isEligible ? 'outlined' : 'contained'}
               color="secondary"
-              startIcon={<AddTaskIcon />}
+              startIcon={<AddIcon />}
               disabled={isEligible || isSaving}
-              onClick={() => handleMarkEligible(params.row)}
+              onClick={() => handleOpenEligibleSheet(params.row)}
             >
-              {isSaving ? 'กำลังบันทึก' : 'เข้าข่าย'}
+              {isSaving ? 'กำลังบันทึก' : 'เลือกเข้าข่าย'}
             </Button>
           )
         },
       },
+      ...baseColumns,
     ],
-    [eligibleFactoryKeySet, handleMarkEligible, savingEligibleFactoryIdSet],
+    [eligibleFactoryKeySet, handleOpenEligibleSheet, savingEligibleFactoryIdSet],
   )
 
   const eligibleFactoryColumns = useMemo(
     () => [
-      ...baseColumns,
       {
         field: 'option',
         headerName: 'Option',
@@ -542,6 +623,7 @@ function EligibleFactoriesPage({ accessToken = '' }) {
           )
         },
       },
+      ...baseColumns,
     ],
     [deletingEligibleFactoryIdSet, handleRemoveEligible],
   )
@@ -651,7 +733,406 @@ function EligibleFactoriesPage({ accessToken = '' }) {
       ) : (
         <ConnectionRequestsPanel />
       )}
+
+      <EligibleFactoryBottomSheet
+        open={Boolean(selectedFactoryForSheet)}
+        factory={selectedFactoryForSheet}
+        monitoringPoints={monitoringPoints}
+        activeMonitoringPointId={activeMonitoringPointId}
+        saving={selectedFactoryForSheet ? savingEligibleFactoryIdSet.has(selectedFactoryForSheet.id) : false}
+        onClose={handleCloseEligibleSheet}
+        onActiveMonitoringPointChange={setActiveMonitoringPointId}
+        onMonitoringPointsChange={handleMonitoringPointsChange}
+        onSubmit={() => {
+          if (selectedFactoryForSheet) {
+            handleMarkEligible(selectedFactoryForSheet, monitoringPoints)
+          }
+        }}
+      />
     </Stack>
+  )
+}
+
+function EligibleFactoryBottomSheet({
+  open,
+  factory,
+  monitoringPoints,
+  activeMonitoringPointId,
+  saving,
+  onClose,
+  onActiveMonitoringPointChange,
+  onMonitoringPointsChange,
+  onSubmit,
+}) {
+  const activePoint = monitoringPoints.find((point) => point.id === activeMonitoringPointId) ?? monitoringPoints[0]
+  const activePointIndex = Math.max(0, monitoringPoints.findIndex((point) => point.id === activePoint?.id))
+
+  const updateActivePoint = useCallback(
+    (patch) => {
+      if (!activePoint) {
+        return
+      }
+
+      onMonitoringPointsChange((current) =>
+        current.map((point) => (point.id === activePoint.id ? { ...point, ...patch } : point)),
+      )
+    },
+    [activePoint, onMonitoringPointsChange],
+  )
+
+  const handleTypeChange = useCallback(
+    (nextType) => {
+      if (!activePoint) {
+        return
+      }
+
+      const nextPoint = createDefaultMonitoringPoint(nextType, activePointIndex + 1)
+      onMonitoringPointsChange((current) =>
+        current.map((point) => (point.id === activePoint.id ? { ...nextPoint, id: point.id } : point)),
+      )
+    },
+    [activePoint, activePointIndex, onMonitoringPointsChange],
+  )
+
+  const handleAddPoint = useCallback(() => {
+    const nextPoint = createDefaultMonitoringPoint('CEMS', monitoringPoints.length + 1)
+    onMonitoringPointsChange((current) => [...current, nextPoint])
+    onActiveMonitoringPointChange(nextPoint.id)
+  }, [monitoringPoints.length, onActiveMonitoringPointChange, onMonitoringPointsChange])
+
+  const handleRemovePoint = useCallback(() => {
+    if (!activePoint || monitoringPoints.length <= 1) {
+      return
+    }
+
+    const nextPoints = monitoringPoints.filter((point) => point.id !== activePoint.id)
+    onMonitoringPointsChange(nextPoints)
+    onActiveMonitoringPointChange(nextPoints[0]?.id ?? '')
+  }, [activePoint, monitoringPoints, onActiveMonitoringPointChange, onMonitoringPointsChange])
+
+  return (
+    <Drawer
+      anchor="bottom"
+      open={open}
+      onClose={onClose}
+      PaperProps={{
+        sx: {
+          maxHeight: '92vh',
+          borderTopLeftRadius: 8,
+          borderTopRightRadius: 8,
+        },
+      }}
+    >
+      <Stack spacing={2} sx={{ p: { xs: 2, md: 3 }, overflow: 'auto' }}>
+        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+          <Box sx={{ minWidth: 0, flex: 1 }}>
+            <Typography variant="h6">เพิ่ม/แก้ไข ข้อมูลจุดตรวจวัด</Typography>
+            <Typography variant="body2" color="text.secondary">
+              เลือกโรงงานเข้าข่ายและกำหนดข้อมูลจุดตรวจวัดได้หลายจุด
+            </Typography>
+          </Box>
+          <IconButton aria-label="ปิด" onClick={onClose}>
+            <CloseIcon />
+          </IconButton>
+        </Stack>
+
+        <Paper elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider' }}>
+          <Typography sx={{ mb: 1.5, fontWeight: 700 }}>ข้อมูลทั่วไปของโรงงาน</Typography>
+          <Grid container spacing={2}>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <ReadOnlyField label="ชื่อโรงงาน" value={factory?.factoryName} />
+            </Grid>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <ReadOnlyField label="เลขทะเบียนโรงงานแบบใหม่" value={factory?.newRegistrationNo} />
+            </Grid>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <ReadOnlyField label="เลขทะเบียนโรงงานแบบเดิม" value={factory?.oldRegistrationNo} />
+            </Grid>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <ReadOnlyField label="จังหวัด" value={factory?.province} />
+            </Grid>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <ReadOnlyField label="ลำดับประเภทโรงงานหลัก" value={factory?.factoryClass} />
+            </Grid>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <ReadOnlyField label="ลำดับประเภทโรงงานรอง" value={factory?.factorySubclass} />
+            </Grid>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <ReadOnlyField label="สถานะการประกอบกิจการ" value={factory?.operationStatus} />
+            </Grid>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <ReadOnlyField label="ข้อมูล EIA" value={factory?.eia} />
+            </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <ReadOnlyField label="สถานที่ตั้ง" value={factory?.location} />
+            </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <ReadOnlyField label="การประกอบกิจการ" value={factory?.operation} />
+            </Grid>
+          </Grid>
+        </Paper>
+
+        <Paper elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider' }}>
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', md: 'center' }, mb: 2 }}>
+            <Box sx={{ minWidth: 0, flex: 1 }}>
+              <Typography sx={{ fontWeight: 700 }}>ข้อมูลจุดตรวจวัด</Typography>
+              <Typography variant="body2" color="text.secondary">
+                เลือกจุดเพื่อแก้ไข หรือเพิ่มจุดตรวจวัดใหม่
+              </Typography>
+            </Box>
+            <Button variant="outlined" startIcon={<AddIcon />} onClick={handleAddPoint}>
+              เพิ่มจุดตรวจวัด
+            </Button>
+            <Button
+              variant="outlined"
+              color="error"
+              startIcon={<DeleteOutlineIcon />}
+              disabled={monitoringPoints.length <= 1}
+              onClick={handleRemovePoint}
+            >
+              ลบจุดนี้
+            </Button>
+          </Stack>
+
+          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1, mb: 2 }}>
+            {monitoringPoints.map((point, index) => (
+              <Chip
+                key={point.id}
+                label={`${point.type} จุดที่ ${index + 1}`}
+                color={point.id === activePoint?.id ? 'primary' : 'default'}
+                variant={point.id === activePoint?.id ? 'filled' : 'outlined'}
+                onClick={() => onActiveMonitoringPointChange(point.id)}
+              />
+            ))}
+          </Stack>
+
+          <Divider sx={{ mb: 2 }} />
+
+          {activePoint ? (
+            <MonitoringPointForm point={activePoint} onChange={updateActivePoint} onTypeChange={handleTypeChange} />
+          ) : null}
+        </Paper>
+
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'center' }}>
+          <Button variant="outlined" color="inherit" onClick={onClose}>
+            ยกเลิก
+          </Button>
+          <Button variant="contained" color="secondary" disabled={saving} startIcon={<AddTaskIcon />} onClick={onSubmit}>
+            {saving ? 'กำลังบันทึก' : 'บันทึก'}
+          </Button>
+        </Stack>
+      </Stack>
+    </Drawer>
+  )
+}
+
+function ReadOnlyField({ label, value }) {
+  return (
+    <TextField
+      label={label}
+      value={value ?? emptyValue}
+      size="small"
+      fullWidth
+      InputProps={{ readOnly: true }}
+    />
+  )
+}
+
+function MonitoringPointForm({ point, onChange, onTypeChange }) {
+  const isWpms = point.type === 'WPMS'
+  const parameterOptions = isWpms ? wpmsParameterOptions : cemsParameterOptions
+
+  return (
+    <Stack spacing={2}>
+      <Paper elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider', bgcolor: 'background.default' }}>
+        <Typography sx={{ mb: 1, fontWeight: 700 }}>จุดตรวจวัด</Typography>
+        <RadioGroup row value={point.type} onChange={(event) => onTypeChange(event.target.value)}>
+          <FormControlLabel value="CEMS" control={<Radio size="small" />} label="CEMS" />
+          <FormControlLabel value="WPMS" control={<Radio size="small" />} label="WPMS" />
+        </RadioGroup>
+      </Paper>
+
+      <Stack spacing={2}>
+        <Typography sx={{ mb: 1.5, fontWeight: 700 }}>รายละเอียดจุดตรวจวัด</Typography>
+        <Grid container spacing={2}>
+          <Grid size={{ xs: 12, md: 3 }}>
+            <TextField
+              label="รหัสจุดตรวจวัด"
+              size="small"
+              fullWidth
+              value={point.pointCode}
+              onChange={(event) => onChange({ pointCode: event.target.value })}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, md: 3 }}>
+            <TextField
+              label="ชื่อจุดตรวจวัด"
+              size="small"
+              fullWidth
+              value={point.pointName}
+              onChange={(event) => onChange({ pointName: event.target.value })}
+            />
+          </Grid>
+
+          {!isWpms ? (
+            <>
+              <Grid size={{ xs: 12, md: 3 }}>
+                <TextField
+                  label="ประเภทของหน่วยการผลิต"
+                  size="small"
+                  fullWidth
+                  value={point.productionUnitType}
+                  onChange={(event) => onChange({ productionUnitType: event.target.value })}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 3 }}>
+                <TextField
+                  label="กำลังการผลิตต่อหน่วย"
+                  size="small"
+                  fullWidth
+                  value={point.productionCapacity}
+                  onChange={(event) => onChange({ productionCapacity: event.target.value })}
+                />
+              </Grid>
+            </>
+          ) : null}
+        </Grid>
+
+        {!isWpms ? (
+          <Grid container spacing={2}>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <TextField
+                select
+                label="เข้าข่ายต้องติดตั้ง CEMS ตามกฎหมาย"
+                size="small"
+                fullWidth
+                value={point.cemsInstallationRequiredBy}
+                onChange={(event) => onChange({ cemsInstallationRequiredBy: event.target.value })}
+              >
+                <MenuItem value="">-</MenuItem>
+                <MenuItem value="ประกาศ อก.">ประกาศ อก.</MenuItem>
+                <MenuItem value="กกพ.">กกพ.</MenuItem>
+                <MenuItem value="กทม.">กทม.</MenuItem>
+                <MenuItem value="อื่นๆ">อื่นๆ</MenuItem>
+              </TextField>
+            </Grid>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <TextField
+                label="อื่นๆ โปรดระบุ"
+                size="small"
+                fullWidth
+                value={point.cemsInstallationRequiredOther}
+                onChange={(event) => onChange({ cemsInstallationRequiredOther: event.target.value })}
+              />
+            </Grid>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <TextField
+                select
+                label="เข้าข่ายตามบัญชีแนบท้ายลำดับที่"
+                size="small"
+                fullWidth
+                value={point.legalAnnexNo}
+                onChange={(event) => onChange({ legalAnnexNo: event.target.value })}
+              >
+                <MenuItem value="">-</MenuItem>
+                <MenuItem value="เฉพาะประกาศปี 65">เฉพาะประกาศปี 65</MenuItem>
+                <MenuItem value="กทม.">กทม.</MenuItem>
+              </TextField>
+            </Grid>
+          </Grid>
+        ) : null}
+
+        <Grid container spacing={2}>
+          <Grid size={{ xs: 12, md: 3 }}>
+            <ParameterMultiSelect
+              label="พารามิเตอร์ที่เข้าข่าย"
+              options={parameterOptions}
+              value={point.eligibleParameters}
+              onChange={(value) => onChange({ eligibleParameters: value })}
+            />
+          </Grid>
+          {!isWpms ? (
+            <Grid size={{ xs: 12, md: 3 }}>
+              <ParameterMultiSelect
+                label="พารามิเตอร์ที่ได้รับการยกเว้น"
+                options={parameterOptions}
+                value={point.exemptedParameters}
+                onChange={(value) => onChange({ exemptedParameters: value })}
+              />
+            </Grid>
+          ) : null}
+          <Grid size={{ xs: 12, md: 3 }}>
+            <ParameterMultiSelect
+              label="พารามิเตอร์ที่เชื่อมต่อแล้ว"
+              options={parameterOptions}
+              value={point.connectedParameters}
+              onChange={(value) => onChange({ connectedParameters: value })}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, md: 3 }}>
+            <ParameterMultiSelect
+              label="พารามิเตอร์ที่ยังไม่เชื่อมต่อ"
+              options={parameterOptions}
+              value={point.pendingParameters}
+              onChange={(value) => onChange({ pendingParameters: value })}
+            />
+          </Grid>
+        </Grid>
+        {!isWpms ? (
+          <Grid container spacing={2}>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <TextField
+                label="เชื้อเพลิง (หลัก)"
+                size="small"
+                fullWidth
+                value={point.primaryFuel}
+                onChange={(event) => onChange({ primaryFuel: event.target.value })}
+              />
+            </Grid>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <TextField
+                label="เชื้อเพลิง (รอง)"
+                size="small"
+                fullWidth
+                value={point.secondaryFuel}
+                onChange={(event) => onChange({ secondaryFuel: event.target.value })}
+              />
+            </Grid>
+          </Grid>
+        ) : null}
+      </Stack>
+    </Stack>
+  )
+}
+
+function ParameterMultiSelect({ label, options, value = [], onChange }) {
+  return (
+    <FormControl size="small" fullWidth>
+      <InputLabel>{label}</InputLabel>
+      <Select
+        multiple
+        value={value}
+        label={label}
+        input={<OutlinedInput label={label} />}
+        onChange={(event) => {
+          const nextValue = typeof event.target.value === 'string' ? event.target.value.split(',') : event.target.value
+          onChange(nextValue)
+        }}
+        renderValue={(selected) => (
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+            {selected.map((item) => (
+              <Chip key={item} label={item} size="small" />
+            ))}
+          </Box>
+        )}
+      >
+        {options.map((option) => (
+          <MenuItem key={option} value={option}>
+            {option}
+          </MenuItem>
+        ))}
+      </Select>
+    </FormControl>
   )
 }
 
@@ -678,6 +1159,7 @@ function FactoryDataGrid({ title, rows, columns, loading = false, error = '' }) 
           columns={columns}
           loading={loading}
           disableRowSelectionOnClick
+          disableVirtualization
           showToolbar
           showCellVerticalBorder
           showColumnVerticalBorder
@@ -721,6 +1203,17 @@ function FactoryDataGrid({ title, rows, columns, loading = false, error = '' }) 
               alignItems: 'center',
               borderColor: 'divider',
             },
+            '& .MuiDataGrid-columnHeader[data-field="option"], & .MuiDataGrid-cell[data-field="option"]': {
+              position: 'sticky',
+              left: 0,
+              zIndex: 5,
+              bgcolor: 'background.paper',
+              boxShadow: '4px 0 8px -8px rgba(15, 23, 42, 0.45)',
+            },
+            '& .MuiDataGrid-columnHeader[data-field="option"]': {
+              zIndex: 8,
+              bgcolor: '#eef2f6',
+            },
             '& .MuiDataGrid-row--lastVisible .MuiDataGrid-cell': {
               borderBottom: 1,
               borderColor: 'divider',
@@ -762,24 +1255,6 @@ function StatusChip({ value }) {
       sx={{
         fontWeight: 300,
         ...(colorByStatus[value] ?? {}),
-      }}
-    />
-  )
-}
-
-function EiaChip({ value }) {
-  const hasEia = value === 'มี'
-
-  return (
-    <Chip
-      label={value}
-      size="small"
-      variant="outlined"
-      sx={{
-        fontWeight: 300,
-        borderColor: hasEia ? '#86efac' : '#cbd5e1',
-        color: hasEia ? '#166534' : 'text.secondary',
-        bgcolor: hasEia ? '#dcfce7' : 'background.paper',
       }}
     />
   )
