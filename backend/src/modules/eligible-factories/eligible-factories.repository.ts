@@ -3,6 +3,7 @@ import { db } from '../../config/database';
 import type {
   CreateEligibleFactoryInput,
   EligibleFactoryDTO,
+  EligibleFactoryMeasurementPointDTO,
   ListEligibleFactoriesQuery,
 } from './eligible-factories.types';
 
@@ -37,6 +38,28 @@ interface EligibleFactoryRow {
   updated_at: Date | string;
 }
 
+interface EligibleFactoryMonitoringPointRow {
+  form_id: number | string;
+  system_type: 'CEMS' | 'WPMS';
+  point_code: string | null;
+  point_name: string | null;
+  production_unit_type: string | null;
+  production_capacity: string | null;
+  cems_installation_required_by: string | null;
+  cems_installation_required_other: string | null;
+  legal_annex_no: string | null;
+  accounting_connection_status: string | null;
+  eligible_parameters_json: string;
+  exempted_parameters_json: string;
+  connected_parameters_json: string;
+  pending_parameters_json: string;
+  primary_fuel: string | null;
+  primary_fuel_other: string | null;
+  secondary_fuel: string | null;
+  secondary_fuel_other: string | null;
+  details_json: string | null;
+}
+
 export const eligibleFactoriesRepository = {
   async list(
     _query: ListEligibleFactoriesQuery,
@@ -53,7 +76,7 @@ export const eligibleFactoriesRepository = {
     const rowsQuery = baseQuery.clone().orderBy('selected_at', 'desc').orderBy('id', 'desc');
 
     const rows = await rowsQuery;
-    return { rows: rows.map(toDTO), total };
+    return { rows: await hydrateMeasurementPoints(rows.map(toDTO)), total };
   },
 
   async findByRegistrationNoNew(
@@ -277,6 +300,7 @@ function toMonitoringPointFormUpdateRow(input: CreateEligibleFactoryInput): Reco
     longitude: input.coordinates?.longitude ?? null,
     business_activity: input.businessActivity ?? null,
     operation_status: input.operationStatus,
+    machinery_horsepower: input.machineryHorsepower ?? null,
     production_capacity: input.productionCapacity ?? null,
     fuel_used: input.fuelUsed ?? null,
     has_eia: input.hasEia ?? null,
@@ -323,6 +347,95 @@ function toDTO(row: EligibleFactoryRow): EligibleFactoryDTO {
     createdAt: toIsoString(row.created_at),
     updatedAt: toIsoString(row.updated_at),
   };
+}
+
+async function hydrateMeasurementPoints(rows: EligibleFactoryDTO[]): Promise<EligibleFactoryDTO[]> {
+  const formIds = rows
+    .map((row) => row.monitoringPointFormId)
+    .filter((value): value is number => value !== null && value !== undefined);
+  if (formIds.length === 0) return rows;
+
+  const pointRows = await db<EligibleFactoryMonitoringPointRow>('factory_monitoring_points')
+    .whereIn('form_id', Array.from(new Set(formIds)))
+    .whereNull('deleted_at')
+    .orderBy('form_id', 'asc')
+    .orderBy('id', 'asc');
+
+  const pointsByFormId = new Map<number, EligibleFactoryMeasurementPointDTO[]>();
+  for (const pointRow of pointRows) {
+    const formId = Number(pointRow.form_id);
+    const currentPoints = pointsByFormId.get(formId) ?? [];
+    pointsByFormId.set(formId, [...currentPoints, toMeasurementPointDTO(pointRow)]);
+  }
+
+  return rows.map((row) => ({
+    ...row,
+    measurementPoints:
+      row.monitoringPointFormId === null
+        ? []
+        : pointsByFormId.get(row.monitoringPointFormId) ?? [],
+  }));
+}
+
+function toMeasurementPointDTO(
+  row: EligibleFactoryMonitoringPointRow,
+): EligibleFactoryMeasurementPointDTO {
+  return {
+    systemType: row.system_type,
+    pointCode: row.point_code,
+    pointName: row.point_name,
+    productionUnitType: row.production_unit_type,
+    productionCapacity: row.production_capacity,
+    cemsInstallationRequiredBy: row.cems_installation_required_by,
+    cemsInstallationRequiredOther: row.cems_installation_required_other,
+    legalAnnexNo: parseDelimitedStringList(row.legal_annex_no),
+    accountingConnectionStatus: row.accounting_connection_status,
+    eligibleParameters: parseStringList(row.eligible_parameters_json),
+    exemptedParameters: parseStringList(row.exempted_parameters_json),
+    connectedParameters: parseStringList(row.connected_parameters_json),
+    pendingParameters: parseStringList(row.pending_parameters_json),
+    primaryFuel: row.primary_fuel,
+    primaryFuelOther: row.primary_fuel_other,
+    secondaryFuel: row.secondary_fuel,
+    secondaryFuelOther: row.secondary_fuel_other,
+    details: parseObject(row.details_json),
+  };
+}
+
+function parseStringList(value: string): string[] {
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function parseDelimitedStringList(value: string | null): string[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) {
+      return parsed.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+    }
+  } catch {
+    // Fall back to the comma-separated format below.
+  }
+
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function parseObject(value: string | null): Record<string, unknown> | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 function toNullableNumber(value: number | string | null): number | null {

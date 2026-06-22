@@ -384,6 +384,7 @@ function createMonitoringPointFormPayload(row, monitoringPoints = []) {
       eiaInfo: normalizeDisplayValue(row.eia) || null,
       address: normalizeDisplayValue(row.location) || null,
       businessActivity: normalizeDisplayValue(row.operation) || null,
+      machineryHorsepower: typeof row.machineryHorsepower === 'number' ? row.machineryHorsepower : null,
     },
     points: monitoringPoints.map(mapMonitoringPointFormPayload),
   }

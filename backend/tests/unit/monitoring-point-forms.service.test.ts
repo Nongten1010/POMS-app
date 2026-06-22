@@ -41,6 +41,7 @@ function toFactoryDTO(factory: MonitoringPointFormFactoryInput) {
     eiaInfo: factory.eiaInfo ?? null,
     address: factory.address ?? null,
     businessActivity: factory.businessActivity ?? null,
+    machineryHorsepower: factory.machineryHorsepower ?? null,
   };
 }
 
@@ -84,6 +85,7 @@ describe('monitoringPointFormsService', () => {
       factoryRegistrationNoNew: '10520000225172',
       factoryRegistrationNoOld: '3-1-2/17ลป',
       provinceName: 'ลำปาง',
+      machineryHorsepower: 121.8,
     },
     points: [
       {
@@ -130,6 +132,7 @@ describe('monitoringPointFormsService', () => {
         sourceFactoryId: '10520000225172',
         monitoringPointFormId: 1,
         factoryRegistrationNoNew: '10520000225172',
+        machineryHorsepower: 121.8,
       }),
       42,
     );
@@ -203,6 +206,7 @@ describe('monitoringPointFormsService', () => {
         sourceFactoryId: '10520000225172',
         monitoringPointFormId: 1,
         provinceName: 'เชียงใหม่',
+        machineryHorsepower: 121.8,
       }),
       42,
     );
@@ -265,6 +269,7 @@ describe('monitoringPointFormsService', () => {
         factoryName: 'สถานีบ่มใบยาสบหนอง',
         provinceName: 'ลำปาง',
         operationStatus: '-',
+        machineryHorsepower: 121.8,
         productionCapacity: '10 ตัน/ชั่วโมง',
         fuelUsed: 'ก๊าซธรรมชาติ',
       }),

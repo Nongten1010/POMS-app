@@ -67,6 +67,28 @@ export interface BoilerLookupValue {
 export interface SelectedEligibleFactoryDTO extends EligibleFactoryCandidateDTO {
   id: number;
   monitoringPointFormId?: number | null;
+  measurementPoints?: EligibleFactoryMeasurementPointDTO[];
+}
+
+export interface EligibleFactoryMeasurementPointDTO {
+  systemType: 'CEMS' | 'WPMS';
+  pointCode: string | null;
+  pointName: string | null;
+  productionUnitType: string | null;
+  productionCapacity: string | null;
+  cemsInstallationRequiredBy: string | null;
+  cemsInstallationRequiredOther: string | null;
+  legalAnnexNo: string[];
+  accountingConnectionStatus: string | null;
+  eligibleParameters: string[];
+  exemptedParameters: string[];
+  connectedParameters: string[];
+  pendingParameters: string[];
+  primaryFuel: string | null;
+  primaryFuelOther: string | null;
+  secondaryFuel: string | null;
+  secondaryFuelOther: string | null;
+  details: Record<string, unknown> | null;
 }
 
 export interface EligibleFactoryDTO {
@@ -97,6 +119,7 @@ export interface EligibleFactoryDTO {
   selectedAt: string;
   createdAt: string;
   updatedAt: string;
+  measurementPoints?: EligibleFactoryMeasurementPointDTO[];
 }
 
 export interface PaginatedEligibleFactoriesDTO {
