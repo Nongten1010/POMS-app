@@ -173,11 +173,7 @@ function MonitoringPointFormsPage({ accessToken }) {
   const selectedPoint = points[selectedPointIndex] ?? points[0]
   const canSave =
     Boolean(accessToken) &&
-    !isSaving &&
-    factory.factoryName.trim() &&
-    factory.factoryRegistrationNoNew.trim() &&
-    points.length > 0 &&
-    points.every((point) => point.pointName.trim())
+    !isSaving
 
   const summary = useMemo(
     () => ({
@@ -264,12 +260,12 @@ function MonitoringPointFormsPage({ accessToken }) {
   }
 
   function removeSelectedPoint() {
-    if (points.length <= 1) {
+    if (points.length === 0) {
       return
     }
 
     setPoints((current) => current.filter((_point, index) => index !== selectedPointIndex))
-    setSelectedPointIndex((current) => Math.max(0, current - 1))
+    setSelectedPointIndex((current) => Math.max(0, Math.min(current - 1, points.length - 2)))
   }
 
   async function loadFormDetail(id) {
@@ -449,27 +445,31 @@ function MonitoringPointFormsPage({ accessToken }) {
                 <Button variant="outlined" startIcon={<AddIcon />} onClick={addPoint}>
                   เพิ่มจุดตรวจวัด
                 </Button>
-                <Button variant="outlined" color="inherit" startIcon={<DeleteOutlineIcon />} onClick={removeSelectedPoint} disabled={points.length <= 1}>
+                <Button variant="outlined" color="inherit" startIcon={<DeleteOutlineIcon />} onClick={removeSelectedPoint} disabled={points.length === 0}>
                   ลบจุดนี้
                 </Button>
               </Stack>
             </Stack>
 
-            <Tabs
-              value={selectedPointIndex}
-              onChange={(_event, value) => setSelectedPointIndex(value)}
-              variant="scrollable"
-              scrollButtons="auto"
-            >
-              {points.map((point, index) => (
-                <Tab
-                  key={point.clientId}
-                  label={`${point.systemType} จุดที่ ${index + 1}`}
-                  sx={{ minHeight: 42, borderRadius: 8, mr: 1 }}
-                />
-              ))}
-            </Tabs>
-            <Divider />
+            {points.length > 0 ? (
+              <>
+                <Tabs
+                  value={selectedPointIndex}
+                  onChange={(_event, value) => setSelectedPointIndex(value)}
+                  variant="scrollable"
+                  scrollButtons="auto"
+                >
+                  {points.map((point, index) => (
+                    <Tab
+                      key={point.clientId}
+                      label={`${point.systemType} จุดที่ ${index + 1}`}
+                      sx={{ minHeight: 42, borderRadius: 8, mr: 1 }}
+                    />
+                  ))}
+                </Tabs>
+                <Divider />
+              </>
+            ) : null}
 
             {selectedPoint ? (
               <Stack spacing={2.5}>
@@ -523,7 +523,9 @@ function MonitoringPointFormsPage({ accessToken }) {
                   <PointTextField label="เชื้อเพลิงรองอื่นๆ" value={selectedPoint.secondaryFuelOther} onChange={(value) => updatePoint('secondaryFuelOther', value)} />
                 </Grid>
               </Stack>
-            ) : null}
+            ) : (
+              <Alert severity="info">ยังไม่มีจุดตรวจวัด สามารถบันทึกข้อมูลโรงงานไว้ก่อนได้</Alert>
+            )}
           </Stack>
         </Paper>
 

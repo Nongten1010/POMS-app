@@ -22,14 +22,16 @@ export const monitoringPointFormsService = {
     input: SaveMonitoringPointFormInput,
     actorUserId: number,
   ): Promise<MonitoringPointFormDTO> {
-    const existingForms = await monitoringPointFormsRepository.list({
-      factoryRegistrationNoNew: input.factory.factoryRegistrationNoNew,
-    });
-    if (existingForms.length > 0) {
-      throw new ConflictError('Monitoring point form already exists for this factory', {
-        id: existingForms[0]?.id,
+    if (input.factory.factoryRegistrationNoNew) {
+      const existingForms = await monitoringPointFormsRepository.list({
         factoryRegistrationNoNew: input.factory.factoryRegistrationNoNew,
       });
+      if (existingForms.length > 0) {
+        throw new ConflictError('Monitoring point form already exists for this factory', {
+          id: existingForms[0]?.id,
+          factoryRegistrationNoNew: input.factory.factoryRegistrationNoNew,
+        });
+      }
     }
 
     return monitoringPointFormsRepository.create(input, actorUserId);

@@ -11,9 +11,27 @@ jest.mock('../../src/modules/monitoring-point-forms/monitoring-point-forms.repos
 
 import { monitoringPointFormsRepository } from '../../src/modules/monitoring-point-forms/monitoring-point-forms.repository';
 import { monitoringPointFormsService } from '../../src/modules/monitoring-point-forms/monitoring-point-forms.service';
-import type { SaveMonitoringPointFormInput } from '../../src/modules/monitoring-point-forms/monitoring-point-forms.types';
+import type {
+  MonitoringPointFormFactoryInput,
+  SaveMonitoringPointFormInput,
+} from '../../src/modules/monitoring-point-forms/monitoring-point-forms.types';
 
 const mockedRepository = jest.mocked(monitoringPointFormsRepository);
+
+function toFactoryDTO(factory: MonitoringPointFormFactoryInput) {
+  return {
+    factoryName: factory.factoryName ?? null,
+    factoryRegistrationNoNew: factory.factoryRegistrationNoNew ?? null,
+    factoryRegistrationNoOld: factory.factoryRegistrationNoOld ?? null,
+    provinceName: factory.provinceName ?? null,
+    factoryTypeMain: factory.factoryTypeMain ?? null,
+    factoryTypeSub: factory.factoryTypeSub ?? null,
+    operationStatus: factory.operationStatus ?? null,
+    eiaInfo: factory.eiaInfo ?? null,
+    address: factory.address ?? null,
+    businessActivity: factory.businessActivity ?? null,
+  };
+}
 
 describe('monitoringPointFormsService', () => {
   const input: SaveMonitoringPointFormInput = {
@@ -47,17 +65,7 @@ describe('monitoringPointFormsService', () => {
     mockedRepository.list.mockResolvedValue([]);
     mockedRepository.create.mockResolvedValue({
       id: 1,
-      factory: {
-        ...input.factory,
-        factoryRegistrationNoOld: input.factory.factoryRegistrationNoOld ?? null,
-        provinceName: input.factory.provinceName ?? null,
-        factoryTypeMain: null,
-        factoryTypeSub: null,
-        operationStatus: null,
-        eiaInfo: null,
-        address: null,
-        businessActivity: null,
-      },
+      factory: toFactoryDTO(input.factory),
       points: [],
       createdAt: '2026-06-22T00:00:00.000Z',
       updatedAt: '2026-06-22T00:00:00.000Z',
@@ -76,17 +84,7 @@ describe('monitoringPointFormsService', () => {
     mockedRepository.list.mockResolvedValue([
       {
         id: 7,
-        factory: {
-          ...input.factory,
-          factoryRegistrationNoOld: input.factory.factoryRegistrationNoOld ?? null,
-          provinceName: input.factory.provinceName ?? null,
-          factoryTypeMain: null,
-          factoryTypeSub: null,
-          operationStatus: null,
-          eiaInfo: null,
-          address: null,
-          businessActivity: null,
-        },
+        factory: toFactoryDTO(input.factory),
         pointCount: 1,
         cemsPointCount: 1,
         wpmsPointCount: 0,
@@ -99,6 +97,29 @@ describe('monitoringPointFormsService', () => {
       code: 'CONFLICT',
     });
     expect(mockedRepository.create).not.toHaveBeenCalled();
+  });
+
+  it('creates a blank form without duplicate lookup when registration is blank', async () => {
+    const blankInput: SaveMonitoringPointFormInput = {
+      factory: {
+        factoryName: null,
+        factoryRegistrationNoNew: null,
+      },
+      points: [],
+    };
+    mockedRepository.create.mockResolvedValue({
+      id: 8,
+      factory: toFactoryDTO(blankInput.factory),
+      points: [],
+      createdAt: '2026-06-22T00:00:00.000Z',
+      updatedAt: '2026-06-22T00:00:00.000Z',
+    });
+
+    const result = await monitoringPointFormsService.create(blankInput, 42);
+
+    expect(mockedRepository.list).not.toHaveBeenCalled();
+    expect(mockedRepository.create).toHaveBeenCalledWith(blankInput, 42);
+    expect(result.id).toBe(8);
   });
 
   it('throws not found when updating an unknown form', async () => {

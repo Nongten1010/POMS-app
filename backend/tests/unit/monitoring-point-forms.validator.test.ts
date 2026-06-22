@@ -46,16 +46,40 @@ describe('monitoring point form validator', () => {
     expect(result.points[1]?.legalAnnexNo).toEqual(['2', '4']);
   });
 
-  it('rejects forms without monitoring points', () => {
-    const result = saveMonitoringPointFormSchema.safeParse({
+  it('accepts forms without monitoring points', () => {
+    const result = saveMonitoringPointFormSchema.parse({
       factory: {
-        factoryName: 'สถานีบ่มใบยาสบหนอง',
-        factoryRegistrationNoNew: '10520000225172',
+        factoryName: '',
+        factoryRegistrationNoNew: '',
       },
       points: [],
     });
 
-    expect(result.success).toBe(false);
+    expect(result.factory.factoryName).toBeNull();
+    expect(result.factory.factoryRegistrationNoNew).toBeNull();
+    expect(result.points).toEqual([]);
+  });
+
+  it('accepts blank monitoring point fields', () => {
+    const result = saveMonitoringPointFormSchema.parse({
+      factory: {},
+      points: [
+        {
+          systemType: 'CEMS',
+          pointCode: '',
+          pointName: '',
+          productionUnitType: '',
+          productionCapacity: '',
+        },
+      ],
+    });
+
+    expect(result.points[0]).toMatchObject({
+      pointCode: null,
+      pointName: null,
+      productionUnitType: null,
+      productionCapacity: null,
+    });
   });
 
   it('ignores blank values in multiselect arrays', () => {

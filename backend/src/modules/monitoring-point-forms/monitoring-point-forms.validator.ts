@@ -33,8 +33,8 @@ export const saveMonitoringPointFormSchema = z
   .object({
     factory: z
       .object({
-        factoryName: requiredText(500),
-        factoryRegistrationNoNew: requiredText(64),
+        factoryName: optionalText(500),
+        factoryRegistrationNoNew: optionalText(64),
         factoryRegistrationNoOld: optionalText(64),
         provinceName: optionalText(128),
         factoryTypeMain: optionalText(128),
@@ -52,7 +52,7 @@ export const saveMonitoringPointFormSchema = z
             id: z.coerce.number().int().positive().optional(),
             systemType: z.enum(MONITORING_POINT_SYSTEM_TYPES),
             pointCode: optionalText(64),
-            pointName: requiredText(255),
+            pointName: optionalText(255),
             productionUnitType: optionalText(255),
             productionCapacity: optionalText(255),
             cemsInstallationRequiredBy: optionalText(255),
@@ -71,8 +71,8 @@ export const saveMonitoringPointFormSchema = z
           })
           .strict(),
       )
-      .min(1)
-      .max(100),
+      .max(100)
+      .default([]),
   })
   .strict();
 

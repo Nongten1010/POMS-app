@@ -19,8 +19,8 @@
 | Column | Type | Required | Description |
 | --- | --- | --- | --- |
 | `id` | BIGINT IDENTITY | Yes | Primary key |
-| `factory_name` | NVARCHAR(500) | Yes | ชื่อโรงงาน |
-| `factory_registration_no_new` | NVARCHAR(64) | Yes | เลขทะเบียนโรงงานแบบใหม่ |
+| `factory_name` | NVARCHAR(500) | No | ชื่อโรงงาน |
+| `factory_registration_no_new` | NVARCHAR(64) | No | เลขทะเบียนโรงงานแบบใหม่ |
 | `factory_registration_no_old` | NVARCHAR(64) | No | เลขทะเบียนโรงงานแบบเดิม |
 | `province_name` | NVARCHAR(128) | No | จังหวัด |
 | `factory_type_main` | NVARCHAR(128) | No | ลำดับประเภทโรงงานหลัก |
@@ -33,7 +33,7 @@
 
 Index:
 
-- `uq_factory_monitoring_forms_registration` unique เฉพาะรายการที่ `deleted_at IS NULL`
+- `uq_factory_monitoring_forms_registration` unique เฉพาะรายการที่ `deleted_at IS NULL` และ `factory_registration_no_new IS NOT NULL`
 
 ### `factory_monitoring_points`
 
@@ -45,7 +45,7 @@ Index:
 | `form_id` | BIGINT | Yes | FK ไปยัง `factory_monitoring_point_forms.id` |
 | `system_type` | VARCHAR(8) | Yes | `CEMS` หรือ `WPMS` |
 | `point_code` | VARCHAR(64) | No | รหัสจุดตรวจวัด |
-| `point_name` | NVARCHAR(255) | Yes | ชื่อจุดตรวจวัด |
+| `point_name` | NVARCHAR(255) | No | ชื่อจุดตรวจวัด |
 | `production_unit_type` | NVARCHAR(255) | No | ประเภทของหน่วยการผลิต |
 | `production_capacity` | NVARCHAR(255) | No | กำลังการผลิตต่อหน่วย |
 | `cems_installation_required_by` | NVARCHAR(255) | No | สถานะการเข้าข่ายติดตั้ง CEMS |
@@ -252,7 +252,7 @@ Response:
 
 ### POST `/api/v1/monitoring-point-forms`
 
-สร้างฟอร์มใหม่และบันทึกจุดตรวจวัดหลายจุดในครั้งเดียว
+สร้างฟอร์มใหม่และบันทึกจุดตรวจวัดหลายจุดในครั้งเดียว โดยทุกช่องใน `factory` ว่างได้ และ `points` ว่างได้
 
 Request:
 
@@ -340,9 +340,8 @@ Request:
 
 ## Validation
 
-- ต้องมี `factory.factoryName`
-- ต้องมี `factory.factoryRegistrationNoNew`
-- ต้องมี `points` อย่างน้อย 1 จุด
-- แต่ละจุดต้องมี `systemType` เป็น `CEMS` หรือ `WPMS`
-- แต่ละจุดต้องมี `pointName`
+- ทุกช่องใน `factory` ว่างได้
+- `points` ว่างได้ ใช้กรณีบันทึกข้อมูลโรงงานไว้ก่อนโดยยังไม่ระบุจุดตรวจวัด
+- ถ้ามีรายการใน `points` แต่ละจุดต้องมี `systemType` เป็น `CEMS` หรือ `WPMS`
+- ช่องอื่นของจุดตรวจวัด เช่น `pointName`, `pointCode`, พารามิเตอร์, เชื้อเพลิง และบัญชีแนบท้าย ว่างได้
 - รายการพารามิเตอร์เก็บเป็น array และ backend แปลงเป็น JSON ในฐานข้อมูล

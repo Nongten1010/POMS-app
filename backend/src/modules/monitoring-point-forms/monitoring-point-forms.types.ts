@@ -3,8 +3,8 @@ export const MONITORING_POINT_SYSTEM_TYPES = ['CEMS', 'WPMS'] as const;
 export type MonitoringPointSystemType = (typeof MONITORING_POINT_SYSTEM_TYPES)[number];
 
 export interface MonitoringPointFormFactoryInput {
-  factoryName: string;
-  factoryRegistrationNoNew: string;
+  factoryName?: string | null;
+  factoryRegistrationNoNew?: string | null;
   factoryRegistrationNoOld?: string | null;
   provinceName?: string | null;
   factoryTypeMain?: string | null;
@@ -19,7 +19,7 @@ export interface MonitoringPointInput {
   id?: number;
   systemType: MonitoringPointSystemType;
   pointCode?: string | null;
-  pointName: string;
+  pointName?: string | null;
   productionUnitType?: string | null;
   productionCapacity?: string | null;
   cemsInstallationRequiredBy?: string | null;

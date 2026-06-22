@@ -12,8 +12,8 @@ import type {
 
 interface MonitoringPointFormRow {
   id: number | string;
-  factory_name: string;
-  factory_registration_no_new: string;
+  factory_name: string | null;
+  factory_registration_no_new: string | null;
   factory_registration_no_old: string | null;
   province_name: string | null;
   factory_type_main: string | null;
@@ -31,7 +31,7 @@ interface MonitoringPointRow {
   form_id: number | string;
   system_type: 'CEMS' | 'WPMS';
   point_code: string | null;
-  point_name: string;
+  point_name: string | null;
   production_unit_type: string | null;
   production_capacity: string | null;
   cems_installation_required_by: string | null;
@@ -189,6 +189,8 @@ async function insertPoints(
   points: MonitoringPointInput[],
   actorUserId: number,
 ) {
+  if (points.length === 0) return;
+
   await trx('factory_monitoring_points').insert(
     points.map((point) => toPointInsertRow(formId, point, actorUserId)),
   );
@@ -199,8 +201,8 @@ function toFormInsertRow(
   actorUserId: number,
 ): Record<string, unknown> {
   return {
-    factory_name: factory.factoryName,
-    factory_registration_no_new: factory.factoryRegistrationNoNew,
+    factory_name: factory.factoryName ?? null,
+    factory_registration_no_new: factory.factoryRegistrationNoNew ?? null,
     factory_registration_no_old: factory.factoryRegistrationNoOld ?? null,
     province_name: factory.provinceName ?? null,
     factory_type_main: factory.factoryTypeMain ?? null,
@@ -223,7 +225,7 @@ function toPointInsertRow(
     form_id: formId,
     system_type: point.systemType,
     point_code: point.pointCode ?? null,
-    point_name: point.pointName,
+    point_name: point.pointName ?? null,
     production_unit_type: point.productionUnitType ?? null,
     production_capacity: point.productionCapacity ?? null,
     cems_installation_required_by: point.cemsInstallationRequiredBy ?? null,
