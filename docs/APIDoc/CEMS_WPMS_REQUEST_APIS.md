@@ -279,7 +279,7 @@ curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/measurement-points
           "productionCapacity": "10 ตันไอน้ำ/ชั่วโมง",
           "cemsInstallationRequiredBy": "ประกาศ อก.",
           "cemsInstallationRequiredOther": null,
-          "legalAnnexNo": "เฉพาะประกาศปี 65",
+          "legalAnnexNo": ["1", "3"],
           "eligibleParameters": ["NOx", "SO2", "PM"],
           "exemptedParameters": [],
           "connectedParameters": [],
@@ -420,7 +420,7 @@ Response:
           "productionCapacity": "10 ตันไอน้ำ/ชั่วโมง",
           "cemsInstallationRequiredBy": "ประกาศ อก.",
           "cemsInstallationRequiredOther": null,
-          "legalAnnexNo": "เฉพาะประกาศปี 65",
+          "legalAnnexNo": ["1", "3"],
           "eligibleParameters": ["NOx", "SO2", "PM"],
           "exemptedParameters": [],
           "connectedParameters": [],
@@ -550,7 +550,7 @@ curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/parameters" \
           "productionCapacity": "10 ตันไอน้ำ/ชั่วโมง",
           "cemsInstallationRequiredBy": "ประกาศ อก.",
           "cemsInstallationRequiredOther": null,
-          "legalAnnexNo": "เฉพาะประกาศปี 65",
+          "legalAnnexNo": ["1", "3"],
           "eligibleParameters": ["NOx", "SO2", "PM", "CO"],
           "exemptedParameters": [],
           "connectedParameters": ["NOx", "SO2", "PM"],
@@ -763,6 +763,8 @@ Mapping:
 | พารามิเตอร์ที่ได้รับการยกเว้น              | `measurementPoints[].details.exemptedParameters`            |
 | พารามิเตอร์ที่เชื่อมต่อแล้ว                | `measurementPoints[].details.connectedParameters`           |
 | พารามิเตอร์ที่ยังไม่เชื่อมต่อ              | `measurementPoints[].details.pendingParameters`             |
+| พารามิเตอร์ที่ติดตั้งแบบ Time sharing      | `measurementPoints[].details.timeSharingParameters`         |
+| ร่วมกับปล่อง                               | `measurementPoints[].details.sharedStackCode`               |
 | ลักษณะปล่อง                                | `measurementPoints[].details.stackShape`                    |
 | เส้นผ่านศูนย์กลาง (เมตร) เมื่อเลือกวงกลม   | `measurementPoints[].details.stackDiameter`                 |
 | กว้าง (เมตร) เมื่อเลือกสี่เหลี่ยม          | `measurementPoints[].details.stackWidth`                    |
@@ -864,11 +866,13 @@ Backend ยังรับ alias `type: "CEMS" | "WPMS"` และ infer `pointT
     "productionCapacity": "10 ตันไอน้ำ/ชั่วโมง",
     "cemsInstallationRequiredBy": "ประกาศ อก.",
     "cemsInstallationRequiredOther": null,
-    "legalAnnexNo": "เฉพาะประกาศปี 65",
+    "legalAnnexNo": ["1", "3"],
     "eligibleParameters": ["NOx", "SO2", "PM"],
     "exemptedParameters": [],
     "connectedParameters": [],
     "pendingParameters": ["NOx", "SO2", "PM"],
+    "timeSharingParameters": ["NOx", "SO2"],
+    "sharedStackCode": "S0002",
     "stackShape": "สี่เหลี่ยม",
     "stackDiameter": null,
     "stackWidth": 1.5,
@@ -2919,10 +2923,13 @@ Data dictionary response row:
 | `productionUnitType` | string|null | No | ประเภทหน่วยการผลิต |
 | `productionCapacity` | string|null | No | กำลังการผลิต |
 | `cemsInstallationRequiredBy` | string|null | No | เข้าข่ายต้องติดตั้ง CEMS ตามกฎหมาย |
+| `legalAnnexNo` | string[] | CEMS | เข้าข่ายตามบัญชีแนบท้ายลำดับที่ เลือกได้หลายลำดับ |
 | `eligibleParameters` | string[] | No | พารามิเตอร์ที่เข้าข่าย เพิ่มได้หลายตัว |
 | `exemptedParameters` | string[] | No | พารามิเตอร์ที่ยกเว้น เพิ่มได้หลายตัว |
 | `connectedParameters` | string[] | No | พารามิเตอร์ที่เชื่อมต่อแล้ว เพิ่มได้หลายตัว |
 | `pendingParameters` | string[] | No | พารามิเตอร์ที่ยังไม่เชื่อมต่อ เพิ่มได้หลายตัว |
+| `timeSharingParameters` | string[] | CEMS | พารามิเตอร์ที่ติดตั้งแบบ Time sharing เลือกได้หลายตัว |
+| `sharedStackCode` | string|null | CEMS | รหัสจุดตรวจวัดของปล่องที่ใช้ร่วมกัน |
 | `stackShape` | string|null | Conditional | ลักษณะปล่อง เช่น `วงกลม`, `สี่เหลี่ยม`, `อื่นๆ` |
 | `stackDiameter` | number|null | Conditional | ต้องส่งเมื่อ `stackShape = วงกลม` |
 | `stackWidth` | number|null | Conditional | ต้องส่งเมื่อ `stackShape = สี่เหลี่ยม` |

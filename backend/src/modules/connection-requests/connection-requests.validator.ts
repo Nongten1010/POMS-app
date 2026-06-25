@@ -35,6 +35,7 @@ const parameterGroupFields = [
   'exemptedParameters',
   'connectedParameters',
   'pendingParameters',
+  'timeSharingParameters',
 ] as const;
 const measurementPointParameterFallbackFields = [
   'pendingParameters',
@@ -48,6 +49,7 @@ const cemsOnlyDetailFields = new Set([
   'cemsInstallationRequiredBy',
   'cemsInstallationRequiredOther',
   'legalAnnexNo',
+  'sharedStackCode',
   'stackShape',
   'stackDiameter',
   'stackWidth',

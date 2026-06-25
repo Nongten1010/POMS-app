@@ -319,10 +319,13 @@ describe('connection request validators', () => {
           ...validPayload.measurementPoints[0],
           details: {
             monitoringPointKind: 'CEMS',
+            legalAnnexNo: ['1', '3'],
             eligibleParameters: ['NOx', 'SO2'],
             exemptedParameters: ['PM'],
             connectedParameters: ['O2', 'Flow'],
             pendingParameters: ['CO', 'CO2'],
+            timeSharingParameters: ['NOx', 'SO2'],
+            sharedStackCode: 'S0002',
             stackShape: 'สี่เหลี่ยม',
             stackWidth: 1.5,
             stackLength: 2,
@@ -337,6 +340,74 @@ describe('connection request validators', () => {
     });
 
     expect(result.success).toBe(true);
+  });
+
+  it('rejects non-array CEMS time sharing parameters', () => {
+    const result = addMeasurementPointRequestSchema.safeParse({
+      ...validPayload,
+      measurementPoints: [
+        {
+          ...validPayload.measurementPoints[0],
+          details: {
+            ...pointDetails,
+            monitoringPointKind: 'CEMS',
+            timeSharingParameters: 'NOx',
+          },
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: ['measurementPoints', 0, 'details', 'timeSharingParameters'],
+          }),
+        ]),
+      );
+    }
+  });
+
+  it('rejects CEMS-only time sharing and shared stack fields on WPMS points', () => {
+    const result = addMeasurementPointRequestSchema.safeParse({
+      ...validPayload,
+      systemType: 'WPMS',
+      measurementPoints: [
+        {
+          pointName: 'จุดระบายน้ำทิ้ง A',
+          pointCode: 'P0001',
+          pointType: 'WASTEWATER',
+          details: {
+            monitoringPointKind: 'WPMS',
+            averageWastewaterDischarge: 500,
+            minWastewaterDischarge: 300,
+            maxWastewaterDischarge: 800,
+            hasTreatmentSystem: 'มี',
+            treatmentSystem: 'ระบบบำบัดชีวภาพ',
+            maxTreatmentCapacity: 1000,
+            connectionDevice: 'POMS Box (กรอ.)',
+            timeSharingParameters: ['BOD'],
+            sharedStackCode: 'S0001',
+          },
+          measurementInstruments,
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: ['measurementPoints', 0, 'details', 'timeSharingParameters'],
+          }),
+          expect.objectContaining({
+            path: ['measurementPoints', 0, 'details', 'sharedStackCode'],
+          }),
+        ]),
+      );
+    }
   });
 
   it('normalizes frontend CEMS aliases with blank point type and empty instrument parameters', () => {

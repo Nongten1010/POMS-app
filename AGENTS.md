@@ -9,6 +9,13 @@ Rules for AI assistants and contributors working in this repository.
 - Documentation-only work may edit `README.md`, `AGENTS.md`, or files under `docs/`.
 - Do not edit both `backend/` and `frontend/` in the same change unless the user explicitly asks for a cross-stack change.
 - Do not move, delete, rename, or replace files across `backend/` and `frontend/` without explicit confirmation.
+- Do not edit application code unless the user explicitly asks to modify code, implement, fix, update, or wire the UI/API/backend/frontend.
+- If the user asks to "ปรับ md", "ทำ md", "อัพใน md", "แก้เอกสาร", or only mentions Markdown/docs, edit only Markdown files under `docs/`, `README.md`, `AGENTS.md`, or explicitly named `.md` files.
+- Do not infer that a screenshot, UI description, or desired field list is permission to edit frontend code. Explain the needed code change first and wait for explicit approval before touching application code.
+- If a request could require both code and documentation, ask for confirmation before changing code.
+- When the user says "เล่าก่อน", "อธิบายก่อน", "ดูให้ก่อน", or "วางแผนก่อน", do not edit files until the user explicitly approves implementation.
+- For request-form field changes in this project, work in the backend contract/validation and Markdown documentation only. Do not edit `frontend/` in any case unless the user explicitly says the exact phrase "แก้ frontend ด้วย".
+- Mentions of "หน้าขอเชื่อมต่อ", screenshots, field labels, or missing inputs describe the desired backend/API contract unless the user explicitly says "แก้ frontend ด้วย".
 
 ## Backend Tasks
 
