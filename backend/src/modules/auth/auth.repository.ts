@@ -382,14 +382,15 @@ async function upsertUserJuristicAccess(
     .where({ user_id: userId, juristic_id: juristicId })
     .first('user_id');
 
-  if (existing) {
-    await trx('user_juristics')
-      .where({ user_id: userId, juristic_id: juristicId })
-      .update({ revoked_at: null });
+  if (!shouldInsertUserJuristicAccess(existing)) {
     return;
   }
 
   await trx('user_juristics').insert({ user_id: userId, juristic_id: juristicId });
+}
+
+export function shouldInsertUserJuristicAccess(existing: unknown): boolean {
+  return !existing;
 }
 
 async function upsertExternalFactory(
