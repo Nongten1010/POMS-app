@@ -146,12 +146,17 @@ export function toEligibleFactoryCandidate(
     : 'ไม่ระบุจังหวัด';
   const horsepower = firstNumber(row.HP2, row.HP);
   const coordinates = toFactoryCoordinates(row);
-  const factoryClass = factoryMainClass(row.CLASS);
-  const factorySubclass = factorySubclassCodes(factoryClass, [
-    row.SUBCLASS,
-    row.FACTYPE,
-    row.EXPSEQ,
-  ]);
+  const factoryClassFromSource = factoryMainClass(row.CLASS);
+  const factoryClass = factoryClassFromRegistration(row.DISPFACREG) ?? factoryClassFromSource;
+  const factorySubclass = factorySubclassCodes(
+    factoryClass,
+    [
+      row.SUBCLASS,
+      row.FACTYPE,
+      row.EXPSEQ,
+    ],
+    [factoryClassFromSource, ...factoryClassAliasesFromRegistration(row.DISPFACREG)],
+  );
   const hasEia = options.eiaLookupSkipped ? null : hasFactoryEia(row, options);
   const boilerValue = options.boilerValuesByFid?.get(sourceFactoryId);
 
@@ -249,18 +254,47 @@ function factoryMainClass(value: string | number | null | undefined): string | n
   return digits.slice(-3).padStart(3, '0');
 }
 
+function factoryClassFromRegistration(value: string | number | null | undefined): string | null {
+  const text = firstText(value);
+  if (!text) return null;
+  const match = matchFactoryClassRegistration(text);
+  if (!match) return null;
+
+  const classNo = match[1];
+  const parenthesizedNo = match[2];
+  if (!parenthesizedNo) return classNo.padStart(3, '0');
+  return `${classNo}${parenthesizedNo.padStart(2, '0')}`;
+}
+
+function factoryClassAliasesFromRegistration(value: string | number | null | undefined): string[] {
+  const text = firstText(value);
+  if (!text) return [];
+  const match = matchFactoryClassRegistration(text);
+  if (!match) return [];
+
+  return [match[1].padStart(3, '0')];
+}
+
+function matchFactoryClassRegistration(text: string): RegExpMatchArray | null {
+  return text.match(/^\s*\d+\s*-\s*(\d{1,3})(?:\s*\(\s*(\d{1,2})\s*\))?/);
+}
+
 function factorySubclassCodes(
   factoryClass: string | null,
   values: Array<string | number | null | undefined>,
+  duplicateFactoryClasses: Array<string | null> = [],
 ): string | null {
   const codes = new Set<string>();
+  const duplicateCodes = new Set(
+    [factoryClass, ...duplicateFactoryClasses].filter((code): code is string => Boolean(code)),
+  );
 
   for (const value of values) {
     const text = firstText(value);
     if (!text) continue;
     for (const token of text.split(/[,\s/|;]+/)) {
       for (const code of factoryCodeChunks(token, factoryClass)) {
-        if (code !== factoryClass) codes.add(code);
+        if (!duplicateCodes.has(code)) codes.add(code);
       }
     }
   }

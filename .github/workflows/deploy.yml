@@ -68,6 +68,37 @@ jobs:
           "frontend_changed=$frontend" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           "backend_changed=$backend" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
+      - name: Update server git checkout
+        if: steps.changes.outputs.frontend_changed == 'true' || steps.changes.outputs.backend_changed == 'true'
+        run: |
+          $repoRoot = Split-Path -Parent $env:BACKEND_TARGET
+          $gitDir = Join-Path $repoRoot '.git'
+
+          if (!(Test-Path $gitDir)) {
+            throw "Server repo checkout was not found at $repoRoot"
+          }
+
+          Push-Location $repoRoot
+          try {
+            git fetch origin main
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+            git checkout main
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+            git pull --ff-only origin main
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+            $current = git rev-parse HEAD
+            if ($current -ne "${{ github.sha }}") {
+              throw "Server checkout is at $current, expected ${{ github.sha }}"
+            }
+
+            Write-Host "Server git checkout updated to $current"
+          } finally {
+            Pop-Location
+          }
+
       - name: Build frontend
         if: steps.changes.outputs.frontend_changed == 'true'
         working-directory: frontend
@@ -92,6 +123,14 @@ jobs:
           }
 
           $global:LASTEXITCODE = 0
+
+          @(
+            "sha=${{ github.sha }}"
+            "ref=${{ github.ref_name }}"
+            "run_id=${{ github.run_id }}"
+            "run_number=${{ github.run_number }}"
+            "deployed_at=$((Get-Date).ToUniversalTime().ToString('o'))"
+          ) | Set-Content -Path (Join-Path $env:FRONTEND_TARGET 'DEPLOYED_SHA.txt') -Encoding utf8
 
       - name: Prepare backend environment
         if: steps.changes.outputs.backend_changed == 'true'
@@ -206,6 +245,17 @@ jobs:
           } while ((Get-Date) -lt $deadline)
 
           throw "Backend health check did not pass within 60 seconds."
+
+      - name: Write backend deploy marker
+        if: steps.changes.outputs.backend_changed == 'true'
+        run: |
+          @(
+            "sha=${{ github.sha }}"
+            "ref=${{ github.ref_name }}"
+            "run_id=${{ github.run_id }}"
+            "run_number=${{ github.run_number }}"
+            "deployed_at=$((Get-Date).ToUniversalTime().ToString('o'))"
+          ) | Set-Content -Path (Join-Path $env:BACKEND_TARGET 'DEPLOYED_SHA.txt') -Encoding utf8
 
       - name: Ensure backend service is running
         if: always() && steps.changes.outputs.backend_changed == 'true'
