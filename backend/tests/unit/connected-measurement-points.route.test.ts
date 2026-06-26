@@ -103,6 +103,8 @@ describe('connected measurement points route', () => {
           contactPersons: [],
           notificationEmails: [],
           officerNotificationEmails: [],
+          informationProviderName: null,
+          informationProviderPosition: null,
           remarks: null,
           revisionReason: null,
           officerNote: null,
