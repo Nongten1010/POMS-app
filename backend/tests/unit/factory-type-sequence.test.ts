@@ -4,6 +4,7 @@ import {
   normalizeFactoryTypeSequence,
   splitFactoryTypeSequence,
 } from '../../src/modules/eligible-factories/factory-type-sequence';
+import { normalizeStoredFactoryTypeSequence } from '../../src/db/migrations/0043_rehydrate_eligible_factory_subclasses_from_source';
 
 describe('factory type sequence normalization', () => {
   it.each([
@@ -37,5 +38,12 @@ describe('factory type sequence normalization', () => {
     expect(joinFactoryTypeSequence('0602', '200,602')).toBe('0602 / 0200');
     expect(joinFactoryTypeSequence('0902', '902')).toBe('0902');
     expect(joinFactoryTypeSequence('0902', '00902')).toBe('0902');
+  });
+
+  it('rehydrates stored subclasses from raw FACCLASS values instead of padded stored values', () => {
+    expect(normalizeStoredFactoryTypeSequence('5301 / 000,300,702', ['07000', '07300', '07702']))
+      .toBe('5301 / 7000,7300,7702');
+    expect(normalizeStoredFactoryTypeSequence('0403 / 000,003', ['00000', '00003']))
+      .toBe('0403 / 0000,0003');
   });
 });

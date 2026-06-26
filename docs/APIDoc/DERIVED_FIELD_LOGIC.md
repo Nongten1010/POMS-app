@@ -125,10 +125,18 @@ factorySubclass = 0201
 
 ```text
 fac_import.CLASS = 05301
-FACCLASS.CLASS = 00000, 00300, 00702, 07000
+FACCLASS.CLASS = 07000, 07300, 07702
 
 factoryClass = 5301
-factorySubclass = 0000,0300,0702,7000
+factorySubclass = 7000,7300,7702
+```
+
+```text
+fac_import.CLASS = 00403
+FACCLASS.CLASS = 00000, 00003, 00403
+
+factoryClass = 0403
+factorySubclass = 0000,0003
 ```
 
 Risk:
@@ -286,7 +294,8 @@ Logic:
 - API แยกค่าหน้า `/` เป็น `factoryClass`
 - API แยกค่าหลัง `/` เป็นรายการ `factorySubclass`
 - ก่อนส่งออกและก่อนบันทึกข้อมูลใหม่ ระบบตัดรหัสรองที่ซ้ำกับประเภทหลักออก โดยเทียบเลข 4 หลักท้ายของ `factoryClass` กับรหัสใน `factorySubclass`
-- ระบบแสดงรหัสรองเป็น 4 หลัก เช่น `000` -> `0000`, `300` -> `0300`, `702` -> `0702`, `07000` -> `7000`
+- สำหรับข้อมูลใหม่จากหน้า “โรงงานทั้งหมด (กรอ.)” ค่า `factorySubclass` มาจาก raw `FACCLASS.CLASS` แล้วใช้เลข 4 หลักท้าย เช่น `07000` -> `7000`, `07300` -> `7300`, `07702` -> `7702`
+- ค่า `0000` หรือ `0003` จะเกิดได้เฉพาะเมื่อ raw source เป็นค่าแบบ `00000` หรือ `00003` จริง ไม่ใช่การเดาจาก stored value ที่เหลือแค่ `000` หรือ `003`
 - ถ้าตัดแล้วไม่เหลือรหัสรอง จะส่ง `factorySubclass = null`
 
 Example:
@@ -312,9 +321,10 @@ Cleanup:
 - Rollback migration จะคืนค่าเดิมจาก backup table
 - Migration `0041_format_eligible_factory_subclasses_to_four_digits.ts` ปรับข้อมูลเก่าที่เหลือให้ `factorySubclass` เป็น 4 หลัก และสำรองค่าก่อนแก้ไว้ใน `eligible_factory_type_sequence_cleanup_0041`
 - Migration `0042_use_last_four_digits_for_factory_subclasses.ts` ปรับ rule เป็นการใช้เลข 4 หลักท้ายจริง และสำรองค่าก่อนแก้ไว้ใน `eligible_factory_type_sequence_cleanup_0042`
+- Migration `0043_rehydrate_eligible_factory_subclasses_from_source.ts` ปรับข้อมูลเก่าซ้ำอีกครั้งโดยใช้ `eligible_factories.source_factory_id` ไปดึง raw `FACCLASS.CLASS` จากฐาน กรอ. จริง แล้วสำรองค่าก่อนแก้ไว้ใน `eligible_factory_type_sequence_cleanup_0043`
 
 Risk:
 
 - Rule นี้ตัดเฉพาะรหัสรอง 4 หลักที่เท่ากับเลข 4 หลักท้ายของประเภทหลักหลัง pad เป็น 4 หลักเท่านั้น
 - เคสเช่น `0403 / 000,003,00403` จะกลายเป็น `0403 / 0000,0003`
-- ถ้าข้อมูลเก่าถูก normalize ผิดจนสูญเลขหลักหน้าไปแล้ว เช่น source เดิม `07000` ถูกเก็บเป็น `0000` จะต้องเติมจาก source เดิมอีกครั้ง เพราะค่า `7000` ไม่เหลืออยู่ใน stored value
+- ถ้าข้อมูลเก่าถูก normalize ผิดจนสูญเลขหลักหน้าไปแล้ว เช่น source เดิม `07000` ถูกเก็บเป็น `0000` จะต้องเติมจาก source เดิมอีกครั้ง เพราะค่า `7000` ไม่เหลืออยู่ใน stored value; migration `0043` ทำงานส่วนนี้เฉพาะแถวที่มี `source_factory_id`
