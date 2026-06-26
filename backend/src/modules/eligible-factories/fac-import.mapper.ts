@@ -146,8 +146,7 @@ export function toEligibleFactoryCandidate(
     : 'ไม่ระบุจังหวัด';
   const horsepower = firstNumber(row.HP2, row.HP);
   const coordinates = toFactoryCoordinates(row);
-  const factoryClassFromSource = factoryMainClass(row.CLASS);
-  const factoryClass = factoryClassFromRegistration(row.DISPFACREG) ?? factoryClassFromSource;
+  const factoryClass = factoryMainClass(row.CLASS);
   const factorySubclass = factorySubclassCodes(
     factoryClass,
     [
@@ -155,7 +154,7 @@ export function toEligibleFactoryCandidate(
       row.FACTYPE,
       row.EXPSEQ,
     ],
-    [factoryClassFromSource, ...factoryClassAliasesFromRegistration(row.DISPFACREG)],
+    factoryClassDuplicateCodes(row.CLASS),
   );
   const hasEia = options.eiaLookupSkipped ? null : hasFactoryEia(row, options);
   const boilerValue = options.boilerValuesByFid?.get(sourceFactoryId);
@@ -250,33 +249,16 @@ function factoryMainClass(value: string | number | null | undefined): string | n
   const text = firstText(value);
   if (!text) return null;
   const digits = text.replace(/\D/g, '');
-  if (!digits) return text.length > 3 ? text.slice(-3) : text.padStart(3, '0');
-  return digits.slice(-3).padStart(3, '0');
+  if (!digits) return text.length > 4 ? text.slice(-4) : text.padStart(4, '0');
+  return digits.slice(-4).padStart(4, '0');
 }
 
-function factoryClassFromRegistration(value: string | number | null | undefined): string | null {
-  const text = firstText(value);
-  if (!text) return null;
-  const match = matchFactoryClassRegistration(text);
-  if (!match) return null;
-
-  const classNo = match[1];
-  const parenthesizedNo = match[2];
-  if (!parenthesizedNo) return classNo.padStart(3, '0');
-  return `${classNo}${parenthesizedNo.padStart(2, '0')}`;
-}
-
-function factoryClassAliasesFromRegistration(value: string | number | null | undefined): string[] {
+function factoryClassDuplicateCodes(value: string | number | null | undefined): string[] {
   const text = firstText(value);
   if (!text) return [];
-  const match = matchFactoryClassRegistration(text);
-  if (!match) return [];
-
-  return [match[1].padStart(3, '0')];
-}
-
-function matchFactoryClassRegistration(text: string): RegExpMatchArray | null {
-  return text.match(/^\s*\d+\s*-\s*(\d{1,3})(?:\s*\(\s*(\d{1,2})\s*\))?/);
+  const digits = text.replace(/\D/g, '');
+  if (!digits) return [];
+  return [...new Set([digits.slice(-4).padStart(4, '0'), digits.slice(-3).padStart(3, '0')])];
 }
 
 function factorySubclassCodes(

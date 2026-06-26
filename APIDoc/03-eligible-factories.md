@@ -38,7 +38,7 @@ eligible_factories:manage
       "factoryName": "โรงงานตัวอย่าง",
       "factoryId": "FAC001",
       "factoryRegistrationNo": "3-100-1/60",
-      "factoryClass": "101",
+      "factoryClass": "0101",
       "factorySubclass": "01",
       "address": "99 หมู่ 1",
       "provinceName": "ระยอง",
@@ -77,7 +77,7 @@ eligible_factories:manage
       "factoryName": "โรงงานตัวอย่าง",
       "factoryId": "FAC001",
       "factoryRegistrationNo": "3-100-1/60",
-      "factoryClass": "101",
+      "factoryClass": "0101",
       "factorySubclass": "01",
       "address": "99 หมู่ 1",
       "provinceName": "ระยอง",
@@ -110,7 +110,7 @@ eligible_factories:manage
 | --- | --- |
 | `factoryId` | `sourceFactoryId` |
 | `factoryRegistrationNo` | `factoryRegistrationNoNew` |
-| `factoryClass` + `factorySubclass` | `factoryTypeSequence` |
+| `factoryClass` + `factorySubclass` | `factoryTypeSequence`; `factoryClass` มาจาก `fac_import.CLASS` 4 ตัวท้าย |
 | `latitude` + `longitude` | `coordinates` |
 | fixed | `sourceSystem = "diw.fac_import"` |
 
@@ -121,7 +121,7 @@ eligible_factories:manage
   "factoryName": "โรงงานตัวอย่าง",
   "factoryId": "FAC001",
   "factoryRegistrationNo": "3-100-1/60",
-  "factoryClass": "101",
+  "factoryClass": "0101",
   "factorySubclass": "01",
   "address": "99 หมู่ 1",
   "provinceName": "ระยอง",
@@ -175,7 +175,7 @@ eligible_factories:manage
     "factoryRegistrationNoNew": "3-100-1/60",
     "factoryRegistrationNoOld": null,
     "factoryName": "โรงงานตัวอย่าง",
-    "factoryTypeSequence": "101 / 01",
+    "factoryTypeSequence": "0101 / 01",
     "address": "99 หมู่ 1",
     "provinceName": "ระยอง",
     "industrialEstateName": "นิคมอุตสาหกรรมมาบตาพุด",

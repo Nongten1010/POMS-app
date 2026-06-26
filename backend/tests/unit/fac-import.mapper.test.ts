@@ -48,7 +48,7 @@ describe('fac_import mapper', () => {
       factoryName: 'ห้างหุ้นส่วนจำกัด โรงกลึงก๊กกวง',
       factoryId: '10100302325234',
       factoryRegistrationNo: '3-64(6)-45/17',
-      factoryClass: '6406',
+      factoryClass: '0064',
       factorySubclass: '065',
       provinceName: 'กรุงเทพมหานคร',
       businessActivity: 'ทำผลิตภัณฑ์โลหะต่าง ๆ',
@@ -86,21 +86,22 @@ describe('fac_import mapper', () => {
       FACTYPE: null,
     });
 
-    expect(result.factoryClass).toBe('101');
+    expect(result.factoryClass).toBe('0101');
     expect(result.factorySubclass).toBe('102,103');
   });
 
-  it('uses the parenthesized factory type from the displayed registration number', () => {
+  it('uses the last 4 digits from CLASS for the main factory type', () => {
     const result = toEligibleFactoryCandidate({
       ...row,
-      DISPFACREG: '3-88(2)-5/49อบ',
-      CLASS: '000802',
-      FACTYPE: '088003',
+      DISPFACREG: '3-1-1/19นน',
+      CLASS: '00100',
+      FACTYPE: '3',
       SUBCLASS: null,
+      EXPSEQ: '0',
     });
 
-    expect(result.factoryClass).toBe('8802');
-    expect(result.factorySubclass).toBe('003');
+    expect(result.factoryClass).toBe('0100');
+    expect(result.factorySubclass).toBe('003,000');
   });
 
   it('uses industrial estate display names when the source code has a lookup match', () => {
