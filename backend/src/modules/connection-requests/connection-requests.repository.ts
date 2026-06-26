@@ -45,6 +45,8 @@ interface ConnectionRequestRow {
   contact_persons_json: string | null;
   notification_emails_json: string | null;
   officer_notification_emails_json: string | null;
+  information_provider_name: string | null;
+  information_provider_position: string | null;
   remarks: string | null;
   revision_reason: string | null;
   officer_note: string | null;
@@ -379,6 +381,8 @@ export const connectionRequestsRepository = {
         'contact_persons_json',
         'notification_emails_json',
         'officer_notification_emails_json',
+        'information_provider_name',
+        'information_provider_position',
         'remarks',
         'revision_reason',
         'officer_note',
@@ -706,6 +710,8 @@ function buildBaseQuery(
     'contact_persons_json',
     'notification_emails_json',
     'officer_notification_emails_json',
+    'information_provider_name',
+    'information_provider_position',
     'remarks',
     'revision_reason',
     'officer_note',
@@ -908,6 +914,8 @@ function toConnectionRequestDTO(
     contactPersons: toContactPersons(row),
     notificationEmails: toNotificationEmails(row),
     officerNotificationEmails: toOfficerNotificationEmails(row),
+    informationProviderName: row.information_provider_name,
+    informationProviderPosition: row.information_provider_position,
     remarks: row.remarks,
     revisionReason: row.revision_reason,
     officerNote: row.officer_note,
@@ -952,6 +960,8 @@ function toRequestRow(input: CreateConnectionRequestInput): Record<string, unkno
       input.officerNotificationEmails && input.officerNotificationEmails.length > 0
         ? JSON.stringify(input.officerNotificationEmails)
         : null,
+    information_provider_name: input.informationProviderName ?? null,
+    information_provider_position: input.informationProviderPosition ?? null,
     remarks: input.remarks ?? null,
   };
 }

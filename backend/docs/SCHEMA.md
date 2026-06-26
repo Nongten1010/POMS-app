@@ -334,6 +334,8 @@ CREATE TABLE cems_wpms_connection_requests (
   contact_name            NVARCHAR(255)        NOT NULL,
   contact_phone           VARCHAR(64)          NOT NULL,
   contact_email           VARCHAR(255)         NULL,
+  information_provider_name NVARCHAR(255)       NULL,
+  information_provider_position NVARCHAR(255)   NULL,
   remarks                 NVARCHAR(1000)       NULL,
   revision_reason         NVARCHAR(1000)       NULL,
   officer_note            NVARCHAR(1000)       NULL,

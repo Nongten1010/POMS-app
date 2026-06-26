@@ -255,6 +255,8 @@ REQUEST_ID=$(curl -s -X POST http://localhost:3000/api/v1/cems-wpms-requests/mea
     "contactPersons":[{"name":"สมชาย ใจดี","position":"วิศวกรสิ่งแวดล้อม","phone":"0812345678","email":"ops@example.com"}],
     "notificationEmails":["plant-alert@example.com"],
     "officerNotificationEmails":["officer-alert@example.com"],
+    "informationProviderName":"ธนากรณ์ ศรีคอม",
+    "informationProviderPosition":"ผู้จัดการโรงงาน",
     "measurementPoints":[{
       "pointName":"ปล่องระบาย A",
       "pointType":"STACK",
@@ -306,6 +308,8 @@ PARAMETER_REQUEST_ID=$(curl -s -X POST http://localhost:3000/api/v1/cems-wpms-re
     "systemType":"CEMS",
     "contactPersons":[{"name":"สมชาย ใจดี","position":"วิศวกรสิ่งแวดล้อม","phone":"0812345678","email":"ops@example.com"}],
     "notificationEmails":["plant-alert@example.com"],
+    "informationProviderName":"ธนากรณ์ ศรีคอม",
+    "informationProviderPosition":"ผู้จัดการโรงงาน",
     "measurementPoints":[{
       "pointName":"ปล่องระบาย A",
       "pointCode":"S0001",

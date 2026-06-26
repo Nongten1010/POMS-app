@@ -76,6 +76,8 @@ describe('connection request validators', () => {
     ],
     notificationEmails: ['ops@example.com', 'ops2@example.com'],
     officerNotificationEmails: ['officer@example.com'],
+    informationProviderName: 'ธนากรณ์ ศรีคอม',
+    informationProviderPosition: 'ผู้จัดการโรงงาน',
     measurementPoints: [
       {
         pointName: 'ปล่องระบาย A',
@@ -101,6 +103,8 @@ describe('connection request validators', () => {
       expect(result.data.contactPersons).toHaveLength(2);
       expect(result.data.notificationEmails).toEqual(['ops@example.com', 'ops2@example.com']);
       expect(result.data.officerNotificationEmails).toEqual(['officer@example.com']);
+      expect(result.data.informationProviderName).toBe('ธนากรณ์ ศรีคอม');
+      expect(result.data.informationProviderPosition).toBe('ผู้จัดการโรงงาน');
       expect(result.data.measurementPoints[0].parameters).toEqual(['NOx']);
     }
   });

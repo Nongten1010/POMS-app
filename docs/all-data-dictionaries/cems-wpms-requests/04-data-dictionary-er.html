@@ -195,6 +195,7 @@
     <tr><td><code>system_type</code>, <code>status</code></td><td>VARCHAR</td><td><span class="tag req">NOT NULL</span></td><td>ระบบ CEMS/WPMS และสถานะ workflow</td></tr>
     <tr><td><code>contact_name</code>, <code>contact_phone</code>, <code>contact_email</code></td><td>NVARCHAR/VARCHAR</td><td>mixed</td><td>ผู้ติดต่อหลัก</td></tr>
     <tr><td><code>contact_persons_json</code>, <code>notification_emails_json</code>, <code>officer_notification_emails_json</code></td><td>NVARCHAR(MAX)</td><td>NULL</td><td>รายชื่อผู้ติดต่อและอีเมลแจ้งเตือนเพิ่มเติม</td></tr>
+    <tr><td><code>information_provider_name</code>, <code>information_provider_position</code></td><td>NVARCHAR(255)</td><td>NULL</td><td>ผู้ให้ข้อมูลหรือผู้รับมอบอำนาจที่ลงนามยื่นคำขอทั้งใบ</td></tr>
     <tr><td><code>industry_main_order</code>, <code>industry_sub_order</code>, <code>business_activity</code>, <code>has_eia</code></td><td>NVARCHAR / BIT</td><td>NULL</td><td>snapshot รายละเอียดกิจการและ EIA</td></tr>
     <tr><td><code>project_name</code>, <code>address</code>, <code>latitude</code>, <code>longitude</code></td><td>NVARCHAR / DECIMAL</td><td>NULL</td><td>ข้อมูลสถานที่/โครงการของโรงงาน</td></tr>
     <tr><td><code>remarks</code>, <code>revision_reason</code>, <code>officer_note</code></td><td>NVARCHAR</td><td>NULL</td><td>หมายเหตุและเหตุผลแก้ไข</td></tr>

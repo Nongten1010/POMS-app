@@ -46,12 +46,15 @@ Content-Type: application/json
 | ตำแหน่ง/หน้าที่ | `contactPersons[].position` | `string|null` | No |
 | อีเมลสำหรับแจ้งเตือนโรงงาน | `notificationEmails` | `string[]` | No |
 | อีเมลสำหรับแจ้งเตือนเจ้าหน้าที่ | `officerNotificationEmails` | `string[]` | No |
+| ชื่อผู้ให้ข้อมูล/ผู้รับมอบอำนาจที่ลงนาม | `informationProviderName` | `string|null` | No |
+| ตำแหน่งผู้ให้ข้อมูล/ผู้รับมอบอำนาจที่ลงนาม | `informationProviderPosition` | `string|null` | No |
 
 Mapping:
 
 - ถ้าส่ง `notificationEmails` backend จะเก็บอีเมลแจ้งเตือนทั้งหมด
 - ถ้าไม่ส่ง `notificationEmails` backend จะใช้ `contactPersons[].email` ที่มีค่าเป็น default
 - ถ้าส่ง `officerNotificationEmails` backend จะเก็บอีเมลแจ้งเตือนเจ้าหน้าที่แยกจากอีเมลโรงงาน
+- `informationProviderName` และ `informationProviderPosition` เป็นข้อมูลผู้ลงนามยื่นคำขอทั้งใบ จึงส่งที่ root payload และเก็บในตารางหัวคำขอ `cems_wpms_connection_requests`
 - `contactName`, `contactPhone`, `contactEmail` ยังรับแบบ legacy เพื่อไม่ให้ API เก่าพัง แต่ request ใหม่ไม่ต้องส่งแล้ว
 
 ## Endpoint Summary
@@ -270,6 +273,8 @@ curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/measurement-points
     ],
     "notificationEmails": ["ops@example.com", "ops2@example.com"],
     "officerNotificationEmails": ["officer@example.com"],
+    "informationProviderName": "ธนากรณ์ ศรีคอม",
+    "informationProviderPosition": "ผู้จัดการโรงงาน",
     "measurementPoints": [
       {
         "pointName": "ปล่องระบาย A",
@@ -540,6 +545,8 @@ curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/parameters" \
     ],
     "notificationEmails": ["ops@example.com", "ops2@example.com"],
     "officerNotificationEmails": ["officer@example.com"],
+    "informationProviderName": "ธนากรณ์ ศรีคอม",
+    "informationProviderPosition": "ผู้จัดการโรงงาน",
     "measurementPoints": [
       {
         "pointName": "ปล่องระบาย A",
@@ -2151,6 +2158,8 @@ Data dictionary:
 | `contactPersons` | array | Yes | รายชื่อผู้ติดต่อประสานงาน เพิ่มได้หลายคน |
 | `notificationEmails` | string[] | No | อีเมลแจ้งเตือนโรงงาน เพิ่มได้หลายอัน |
 | `officerNotificationEmails` | string[] | No | อีเมลแจ้งเตือนเจ้าหน้าที่ เพิ่มได้หลายอัน |
+| `informationProviderName` | string|null | No | ชื่อผู้ให้ข้อมูล/ผู้รับมอบอำนาจที่ลงนามยื่นคำขอ |
+| `informationProviderPosition` | string|null | No | ตำแหน่งผู้ให้ข้อมูล/ผู้รับมอบอำนาจที่ลงนามยื่นคำขอ |
 | `measurementPoints` | array | Yes | จุดตรวจวัด อย่างน้อย 1 จุด |
 | `remarks` | string|null | No | หมายเหตุคำขอ |
 

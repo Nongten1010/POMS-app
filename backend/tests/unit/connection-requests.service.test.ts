@@ -100,6 +100,8 @@ describe('connectionRequestsService', () => {
     ],
     notificationEmails: ['ops@example.com', 'ops2@example.com'],
     officerNotificationEmails: ['officer@example.com'],
+    informationProviderName: 'ธนากรณ์ ศรีคอม',
+    informationProviderPosition: 'ผู้จัดการโรงงาน',
     measurementPoints: [
       {
         pointName: 'ปล่องระบาย A',
@@ -2204,6 +2206,8 @@ function requestDto(overrides: Partial<ConnectionRequestDTO> = {}): ConnectionRe
     ],
     notificationEmails: ['ops@example.com'],
     officerNotificationEmails: ['officer@example.com'],
+    informationProviderName: 'ธนากรณ์ ศรีคอม',
+    informationProviderPosition: 'ผู้จัดการโรงงาน',
     remarks: null,
     revisionReason: null,
     officerNote: null,

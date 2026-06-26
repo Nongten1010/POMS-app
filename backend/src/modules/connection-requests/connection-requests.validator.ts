@@ -431,6 +431,8 @@ const connectionRequestFormObjectSchema = z
     contactPersons: z.array(contactPersonSchema).min(1).max(20).optional(),
     notificationEmails: z.array(z.string().trim().email().max(255)).max(20).optional(),
     officerNotificationEmails: z.array(z.string().trim().email().max(255)).max(20).optional(),
+    informationProviderName: optionalNullableTrimmedString(255),
+    informationProviderPosition: optionalNullableTrimmedString(255),
     measurementPoints: z.array(measurementPointSchema).min(1).max(100),
     remarks: optionalNullableTrimmedString(1000),
   })

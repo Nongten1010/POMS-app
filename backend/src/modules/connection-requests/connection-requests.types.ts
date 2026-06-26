@@ -110,6 +110,8 @@ export interface CreateConnectionRequestInput {
   contactPersons?: ContactPersonInput[];
   notificationEmails?: string[];
   officerNotificationEmails?: string[];
+  informationProviderName?: string | null;
+  informationProviderPosition?: string | null;
   measurementPoints: MeasurementPointInput[];
   remarks?: string | null;
 }
@@ -205,6 +207,8 @@ export interface ConnectionRequestDTO {
   contactPersons: ContactPersonInput[];
   notificationEmails: string[];
   officerNotificationEmails: string[];
+  informationProviderName: string | null;
+  informationProviderPosition: string | null;
   remarks: string | null;
   revisionReason: string | null;
   officerNote: string | null;
