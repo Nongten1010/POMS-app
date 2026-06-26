@@ -51,7 +51,7 @@ describe('fac_import mapper', () => {
       factoryId: '10100302325234',
       factoryRegistrationNo: '3-64(6)-45/17',
       factoryClass: '0064',
-      factorySubclass: '065',
+      factorySubclass: '045',
       provinceName: 'กรุงเทพมหานคร',
       businessActivity: 'ทำผลิตภัณฑ์โลหะต่าง ๆ',
       operationStatus: 'แจ้งประกอบแล้ว',
@@ -84,6 +84,7 @@ describe('fac_import mapper', () => {
       {
         ...row,
         DISPFACREG: null,
+        FACREG: null,
         CLASS: '101',
         SUBCLASS: '101102103',
         FACTYPE: null,
@@ -108,7 +109,7 @@ describe('fac_import mapper', () => {
     });
 
     expect(result.factoryClass).toBe('0100');
-    expect(result.factorySubclass).toBeNull();
+    expect(result.factorySubclass).toBe('001');
   });
 
   it('does not use FACTYPE or EXPSEQ as secondary factory type codes', () => {
@@ -117,6 +118,7 @@ describe('fac_import mapper', () => {
         ...row,
         FID: '10550000125197',
         DISPFACREG: '3-1-1/19นน',
+        FACREG: '00100300119นน',
         CLASS: '00100',
         FACTYPE: '3',
         SUBCLASS: null,
@@ -128,7 +130,49 @@ describe('fac_import mapper', () => {
     );
 
     expect(result.factoryClass).toBe('0100');
-    expect(result.factorySubclass).toBe('201');
+    expect(result.factorySubclass).toBe('001');
+  });
+
+  it('uses the registration sequence when FACCLASS only repeats the main class', () => {
+    const result = toEligibleFactoryCandidate(
+      {
+        ...row,
+        FID: '10560000125311',
+        DISPFACREG: '3-1-1/31พย',
+        FACREG: '00100300131พย',
+        CLASS: '00100',
+        SUBCLASS: null,
+        FACTYPE: '3',
+        EXPSEQ: '0',
+      },
+      {
+        factoryClassCodesByFid: new Map([['10560000125311', ['00100']]]),
+      },
+    );
+
+    expect(result.factoryClass).toBe('0100');
+    expect(result.factorySubclass).toBe('001');
+  });
+
+  it('uses the registration sequence for the secondary factory type order', () => {
+    const result = toEligibleFactoryCandidate(
+      {
+        ...row,
+        FID: '10520000225172',
+        DISPFACREG: '3-1-2/17ลป',
+        FACREG: '00100300217ลป',
+        CLASS: '00100',
+        SUBCLASS: null,
+        FACTYPE: '3',
+        EXPSEQ: '0',
+      },
+      {
+        factoryClassCodesByFid: new Map([['10520000225172', ['00100']]]),
+      },
+    );
+
+    expect(result.factoryClass).toBe('0100');
+    expect(result.factorySubclass).toBe('002');
   });
 
   it('uses industrial estate display names when the source code has a lookup match', () => {

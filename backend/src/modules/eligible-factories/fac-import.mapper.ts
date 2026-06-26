@@ -148,11 +148,14 @@ export function toEligibleFactoryCandidate(
   const horsepower = firstNumber(row.HP2, row.HP);
   const coordinates = toFactoryCoordinates(row);
   const factoryClass = factoryMainClass(row.CLASS);
-  const factorySubclass = factorySubclassCodes(
-    factoryClass,
-    options.factoryClassCodesByFid?.get(sourceFactoryId) ?? [],
-    factoryClassDuplicateCodes(row.CLASS),
-  );
+  const factorySubclass =
+    factorySubclassCodeFromRegistration(row.DISPFACREG, row.FACREG) ??
+    factorySubclassCodes(
+      factoryClass,
+      options.factoryClassCodesByFid?.get(sourceFactoryId) ?? [],
+      factoryClassDuplicateCodes(row.CLASS),
+    ) ??
+    factorySubclassCodeFromClassValue(row.CLASS);
   const hasEia = options.eiaLookupSkipped ? null : hasFactoryEia(row, options);
   const boilerValue = options.boilerValuesByFid?.get(sourceFactoryId);
 
@@ -284,6 +287,28 @@ function factorySubclassCodeFromClass(value: string): string | null {
   const digits = value.replace(/\D/g, '');
   if (!digits) return null;
   return digits.slice(-3).padStart(3, '0');
+}
+
+function factorySubclassCodeFromClassValue(value: string | number | null | undefined): string | null {
+  const text = firstText(value);
+  return text ? factorySubclassCodeFromClass(text) : null;
+}
+
+function factorySubclassCodeFromRegistration(
+  ...values: Array<string | number | null | undefined>
+): string | null {
+  for (const value of values) {
+    const text = firstText(value);
+    if (!text) continue;
+
+    const displayRegistrationMatch = text.match(/-(\d+)\//);
+    if (displayRegistrationMatch) return displayRegistrationMatch[1].padStart(3, '0');
+
+    const digits = text.replace(/\D/g, '');
+    if (digits.length >= 9) return digits.slice(6, 9).padStart(3, '0');
+  }
+
+  return null;
 }
 
 function commaSeparatedValues(...values: Array<string | number | null | undefined>): string | null {
