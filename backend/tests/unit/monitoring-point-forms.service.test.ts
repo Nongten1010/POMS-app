@@ -42,6 +42,8 @@ function toFactoryDTO(factory: MonitoringPointFormFactoryInput) {
     address: factory.address ?? null,
     businessActivity: factory.businessActivity ?? null,
     machineryHorsepower: factory.machineryHorsepower ?? null,
+    latitude: factory.latitude ?? null,
+    longitude: factory.longitude ?? null,
   };
 }
 
@@ -86,6 +88,8 @@ describe('monitoringPointFormsService', () => {
       factoryRegistrationNoOld: '3-1-2/17ลป',
       provinceName: 'ลำปาง',
       machineryHorsepower: 121.8,
+      latitude: 18.29512,
+      longitude: 99.50672,
     },
     points: [
       {
@@ -133,6 +137,10 @@ describe('monitoringPointFormsService', () => {
         monitoringPointFormId: 1,
         factoryRegistrationNoNew: '10520000225172',
         machineryHorsepower: 121.8,
+        coordinates: {
+          latitude: 18.29512,
+          longitude: 99.50672,
+        },
       }),
       42,
     );
@@ -207,6 +215,10 @@ describe('monitoringPointFormsService', () => {
         monitoringPointFormId: 1,
         provinceName: 'เชียงใหม่',
         machineryHorsepower: 121.8,
+        coordinates: {
+          latitude: 18.29512,
+          longitude: 99.50672,
+        },
       }),
       42,
     );

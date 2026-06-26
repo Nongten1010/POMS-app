@@ -12,19 +12,24 @@ const optionalText = (max: number) =>
     .transform((value) => (value ? value : null));
 const optionalStringList = (maxItemLength: number, maxItems: number) =>
   z
-    .preprocess((value) => {
-      if (value === undefined || value === null || value === '') return [];
-      if (Array.isArray(value)) {
-        return value.map((item) => (typeof item === 'string' ? item.trim() : item)).filter(Boolean);
-      }
-      if (typeof value === 'string') {
-        return value
-          .split(',')
-          .map((item) => item.trim())
-          .filter(Boolean);
-      }
-      return value;
-    }, z.array(requiredText(maxItemLength)).max(maxItems))
+    .preprocess(
+      (value) => {
+        if (value === undefined || value === null || value === '') return [];
+        if (Array.isArray(value)) {
+          return value
+            .map((item) => (typeof item === 'string' ? item.trim() : item))
+            .filter(Boolean);
+        }
+        if (typeof value === 'string') {
+          return value
+            .split(',')
+            .map((item) => item.trim())
+            .filter(Boolean);
+        }
+        return value;
+      },
+      z.array(requiredText(maxItemLength)).max(maxItems),
+    )
     .default([]);
 const parameterListSchema = optionalStringList(255, 100);
 const legalAnnexListSchema = optionalStringList(32, 12);
@@ -35,6 +40,14 @@ const optionalNumber = z
   }, z.coerce.number().finite().nonnegative().nullable())
   .optional()
   .default(null);
+const optionalCoordinate = (min: number, max: number) =>
+  z
+    .preprocess((value) => {
+      if (value === undefined || value === null || value === '') return null;
+      return value;
+    }, z.coerce.number().finite().min(min).max(max).nullable())
+    .optional()
+    .default(null);
 
 export const saveMonitoringPointFormSchema = z
   .object({
@@ -51,6 +64,8 @@ export const saveMonitoringPointFormSchema = z
         address: optionalText(1000),
         businessActivity: optionalText(4000),
         machineryHorsepower: optionalNumber,
+        latitude: optionalCoordinate(-90, 90),
+        longitude: optionalCoordinate(-180, 180),
       })
       .strict(),
     points: z

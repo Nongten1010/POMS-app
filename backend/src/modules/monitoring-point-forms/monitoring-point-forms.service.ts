@@ -145,7 +145,7 @@ function buildEligibleFactoryInput(
     address: form.factory.address ?? null,
     provinceName: form.factory.provinceName?.trim() || '-',
     industrialEstateName: null,
-    coordinates: null,
+    coordinates: buildCoordinates(form.factory.latitude, form.factory.longitude),
     businessActivity: form.factory.businessActivity ?? null,
     operationStatus: form.factory.operationStatus?.trim() || '-',
     machineryHorsepower: form.factory.machineryHorsepower ?? null,
@@ -154,6 +154,18 @@ function buildEligibleFactoryInput(
     hasEia: parseEiaFlag(form.factory.eiaInfo),
     selectedReason: 'selected_from_monitoring_point_form',
   };
+}
+
+function buildCoordinates(
+  latitude?: number | null,
+  longitude?: number | null,
+): { latitude: number; longitude: number } | null {
+  return latitude === null ||
+    latitude === undefined ||
+    longitude === null ||
+    longitude === undefined
+    ? null
+    : { latitude, longitude };
 }
 
 function buildProductionCapacitySummary(form: MonitoringPointFormDTO): string | null {

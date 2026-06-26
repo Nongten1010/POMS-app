@@ -14,6 +14,8 @@ export interface MonitoringPointFormFactoryInput {
   address?: string | null;
   businessActivity?: string | null;
   machineryHorsepower?: number | null;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export interface MonitoringPointInput {

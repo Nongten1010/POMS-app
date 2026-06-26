@@ -60,6 +60,35 @@ describe('monitoring point form validator', () => {
     expect(result.points).toEqual([]);
   });
 
+  it('accepts factory coordinates within valid latitude and longitude ranges', () => {
+    const result = saveMonitoringPointFormSchema.parse({
+      factory: {
+        factoryName: 'สถานีบ่มใบยาสบหนอง',
+        factoryRegistrationNoNew: '10520000225172',
+        latitude: '18.29512',
+        longitude: '99.50672',
+      },
+      points: [],
+    });
+
+    expect(result.factory.latitude).toBe(18.29512);
+    expect(result.factory.longitude).toBe(99.50672);
+  });
+
+  it('rejects factory coordinates outside valid latitude and longitude ranges', () => {
+    const result = saveMonitoringPointFormSchema.safeParse({
+      factory: {
+        factoryName: 'สถานีบ่มใบยาสบหนอง',
+        factoryRegistrationNoNew: '10520000225172',
+        latitude: 91,
+        longitude: 181,
+      },
+      points: [],
+    });
+
+    expect(result.success).toBe(false);
+  });
+
   it('accepts blank monitoring point fields', () => {
     const result = saveMonitoringPointFormSchema.parse({
       factory: {},

@@ -31,6 +31,7 @@
 | `address` | NVARCHAR(1000) | No | สถานที่ตั้ง |
 | `business_activity` | NVARCHAR(4000) | No | การประกอบกิจการ |
 | `machinery_horsepower` | DECIMAL(18,2) | No | แรงม้าเครื่องจักรของโรงงาน ใช้แสดงในหน้าโรงงานที่เข้าข่าย |
+| `latitude`, `longitude` | DECIMAL(10,7) | No | พิกัดโรงงาน ใช้ sync เข้า `eligible_factories` เมื่อมีค่าครบทั้งสองช่อง |
 | `created_at`, `updated_at`, `created_by`, `updated_by`, `deleted_at` | audit fields | Mixed | ข้อมูล audit |
 
 Index:
@@ -78,6 +79,7 @@ Constraints:
 | --- | --- | --- | --- |
 | `monitoring_point_form_id` | BIGINT | No | FK ไปยัง `factory_monitoring_point_forms.id` เมื่อเลือกฟอร์มนี้เข้าโรงงานที่เข้าข่าย |
 | `machinery_horsepower` | DECIMAL(18,2) | No | แรงม้าเครื่องจักรที่ sync จากฟอร์ม หรือ fallback จากฐานโรงงาน กรอ. เมื่อค่าในตารางเป็น `NULL` |
+| `latitude`, `longitude` | DECIMAL(10,7) | No | พิกัดโรงงานที่ sync จากฟอร์มจุดตรวจวัดเมื่อมีค่าครบทั้งสองช่อง |
 
 Index:
 
@@ -90,6 +92,7 @@ Index:
 - คอลัมน์ `CEMS` และ `WPMS` ไม่ได้เก็บเป็นตัวเลขแยกใน `eligible_factories` แต่ frontend นับจาก `measurementPoints[].systemType`
 - `measurementPoints` มาจากตาราง `factory_monitoring_points` โดย join ผ่าน `eligible_factories.monitoring_point_form_id = factory_monitoring_points.form_id`
 - ถ้า `eligible_factories.machinery_horsepower` เป็น `NULL` backend จะ lookup จากฐานโรงงาน กรอ. ด้วย `source_factory_id/FID` หรือเลขทะเบียนโรงงานแบบใหม่ แล้วใช้ค่า `HP2` fallback `HP`
+- ถ้าฟอร์มส่ง `factory.latitude` และ `factory.longitude` ครบทั้งคู่ backend จะบันทึกพิกัดไว้ใน `factory_monitoring_point_forms` และ sync เข้า `eligible_factories.latitude` / `eligible_factories.longitude`
 
 ## API
 
@@ -364,7 +367,9 @@ Request:
     "operationStatus": "แจ้งประกอบแล้ว",
     "eiaInfo": "-",
     "address": "1 หมู่ 9 ถนนบ้านช่องคอม ตำบล4 อำเภอ13 52240",
-    "businessActivity": "บ่มใบยาสูบ"
+    "businessActivity": "บ่มใบยาสูบ",
+    "latitude": 18.29512,
+    "longitude": 99.50672
   },
   "points": [
     {

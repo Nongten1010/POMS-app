@@ -23,6 +23,8 @@ interface MonitoringPointFormRow {
   address: string | null;
   business_activity: string | null;
   machinery_horsepower: number | string | null;
+  latitude: number | string | null;
+  longitude: number | string | null;
   created_at: Date | string;
   updated_at: Date | string;
 }
@@ -77,6 +79,8 @@ export const monitoringPointFormsRepository = {
         'f.address',
         'f.business_activity',
         'f.machinery_horsepower',
+        'f.latitude',
+        'f.longitude',
         'f.created_at',
         'f.updated_at',
       )
@@ -93,6 +97,8 @@ export const monitoringPointFormsRepository = {
         'f.address',
         'f.business_activity',
         'f.machinery_horsepower',
+        'f.latitude',
+        'f.longitude',
         'f.created_at',
         'f.updated_at',
         db.raw('COUNT(p.id) as point_count'),
@@ -215,6 +221,8 @@ function toFormInsertRow(
     address: factory.address ?? null,
     business_activity: factory.businessActivity ?? null,
     machinery_horsepower: factory.machineryHorsepower ?? null,
+    latitude: factory.latitude ?? null,
+    longitude: factory.longitude ?? null,
     created_by: actorUserId,
     updated_by: actorUserId,
   };
@@ -281,6 +289,8 @@ function toFactoryDTO(row: MonitoringPointFormRow): Required<MonitoringPointForm
     address: row.address,
     businessActivity: row.business_activity,
     machineryHorsepower: toNullableNumber(row.machinery_horsepower),
+    latitude: toNullableNumber(row.latitude),
+    longitude: toNullableNumber(row.longitude),
   };
 }
 
@@ -314,7 +324,9 @@ function toPointDTO(row: MonitoringPointRow): MonitoringPointDTO {
 function parseStringList(value: string): string[] {
   try {
     const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [];
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is string => typeof item === 'string')
+      : [];
   } catch {
     return [];
   }
@@ -326,7 +338,9 @@ function parseDelimitedStringList(value: string | null): string[] {
   try {
     const parsed = JSON.parse(value);
     if (Array.isArray(parsed)) {
-      return parsed.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+      return parsed.filter(
+        (item): item is string => typeof item === 'string' && item.trim().length > 0,
+      );
     }
   } catch {
     // Fall back to the legacy comma-separated format below.
@@ -340,7 +354,12 @@ function parseDelimitedStringList(value: string | null): string[] {
 
 function formatStringList(value: string[] | undefined): string | null {
   if (!value?.length) return null;
-  return value.map((item) => item.trim()).filter(Boolean).join(',') || null;
+  return (
+    value
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .join(',') || null
+  );
 }
 
 function parseObject(value: string | null): Record<string, unknown> | null {
