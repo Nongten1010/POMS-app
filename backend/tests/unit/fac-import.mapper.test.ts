@@ -51,7 +51,7 @@ describe('fac_import mapper', () => {
       factoryId: '10100302325234',
       factoryRegistrationNo: '3-64(6)-45/17',
       factoryClass: '0064',
-      factorySubclass: '045',
+      factorySubclass: '064,065',
       provinceName: 'กรุงเทพมหานคร',
       businessActivity: 'ทำผลิตภัณฑ์โลหะต่าง ๆ',
       operationStatus: 'แจ้งประกอบแล้ว',
@@ -79,12 +79,12 @@ describe('fac_import mapper', () => {
     expect(result.hasEia).toBeNull();
   });
 
-  it('uses FACCLASS CLASS values for subclass codes and removes the duplicated main code', () => {
+  it('uses FACCLASS CLASS values for subclass codes', () => {
     const result = toEligibleFactoryCandidate(
       {
         ...row,
-        DISPFACREG: null,
-        FACREG: null,
+        DISPFACREG: '3-101-1/19นน',
+        FACREG: '10100300119นน',
         CLASS: '101',
         SUBCLASS: '101102103',
         FACTYPE: null,
@@ -95,7 +95,7 @@ describe('fac_import mapper', () => {
     );
 
     expect(result.factoryClass).toBe('0101');
-    expect(result.factorySubclass).toBe('102,103');
+    expect(result.factorySubclass).toBe('101,102,103');
   });
 
   it('uses the last 4 digits from CLASS for the main factory type', () => {
@@ -109,7 +109,7 @@ describe('fac_import mapper', () => {
     });
 
     expect(result.factoryClass).toBe('0100');
-    expect(result.factorySubclass).toBe('001');
+    expect(result.factorySubclass).toBe('100');
   });
 
   it('does not use FACTYPE or EXPSEQ as secondary factory type codes', () => {
@@ -130,10 +130,10 @@ describe('fac_import mapper', () => {
     );
 
     expect(result.factoryClass).toBe('0100');
-    expect(result.factorySubclass).toBe('001');
+    expect(result.factorySubclass).toBe('100,201');
   });
 
-  it('uses the registration sequence when FACCLASS only repeats the main class', () => {
+  it('uses FACCLASS when it only repeats the main class', () => {
     const result = toEligibleFactoryCandidate(
       {
         ...row,
@@ -151,10 +151,10 @@ describe('fac_import mapper', () => {
     );
 
     expect(result.factoryClass).toBe('0100');
-    expect(result.factorySubclass).toBe('001');
+    expect(result.factorySubclass).toBe('100');
   });
 
-  it('uses the registration sequence for the secondary factory type order', () => {
+  it('uses FACCLASS for the secondary factory type code', () => {
     const result = toEligibleFactoryCandidate(
       {
         ...row,
@@ -172,7 +172,7 @@ describe('fac_import mapper', () => {
     );
 
     expect(result.factoryClass).toBe('0100');
-    expect(result.factorySubclass).toBe('002');
+    expect(result.factorySubclass).toBe('100');
   });
 
   it('uses industrial estate display names when the source code has a lookup match', () => {

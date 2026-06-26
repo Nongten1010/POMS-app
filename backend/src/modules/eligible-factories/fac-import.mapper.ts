@@ -149,12 +149,7 @@ export function toEligibleFactoryCandidate(
   const coordinates = toFactoryCoordinates(row);
   const factoryClass = factoryMainClass(row.CLASS);
   const factorySubclass =
-    factorySubclassCodeFromRegistration(row.DISPFACREG, row.FACREG) ??
-    factorySubclassCodes(
-      factoryClass,
-      options.factoryClassCodesByFid?.get(sourceFactoryId) ?? [],
-      factoryClassDuplicateCodes(row.CLASS),
-    ) ??
+    factorySubclassCodes(options.factoryClassCodesByFid?.get(sourceFactoryId) ?? []) ??
     factorySubclassCodeFromClassValue(row.CLASS);
   const hasEia = options.eiaLookupSkipped ? null : hasFactoryEia(row, options);
   const boilerValue = options.boilerValuesByFid?.get(sourceFactoryId);
@@ -253,30 +248,17 @@ function factoryMainClass(value: string | number | null | undefined): string | n
   return digits.slice(-4).padStart(4, '0');
 }
 
-function factoryClassDuplicateCodes(value: string | number | null | undefined): string[] {
-  const text = firstText(value);
-  if (!text) return [];
-  const digits = text.replace(/\D/g, '');
-  if (!digits) return [];
-  return [...new Set([digits.slice(-4).padStart(4, '0'), digits.slice(-3).padStart(3, '0')])];
-}
-
 function factorySubclassCodes(
-  factoryClass: string | null,
   values: Array<string | number | null | undefined>,
-  duplicateFactoryClasses: Array<string | null> = [],
 ): string | null {
   const codes = new Set<string>();
-  const duplicateCodes = new Set(
-    [factoryClass, ...duplicateFactoryClasses].filter((code): code is string => Boolean(code)),
-  );
 
   for (const value of values) {
     const text = firstText(value);
     if (!text) continue;
     for (const token of text.split(/[,\s/|;]+/)) {
       const code = factorySubclassCodeFromClass(token);
-      if (code && !duplicateCodes.has(code)) codes.add(code);
+      if (code) codes.add(code);
     }
   }
 
@@ -292,23 +274,6 @@ function factorySubclassCodeFromClass(value: string): string | null {
 function factorySubclassCodeFromClassValue(value: string | number | null | undefined): string | null {
   const text = firstText(value);
   return text ? factorySubclassCodeFromClass(text) : null;
-}
-
-function factorySubclassCodeFromRegistration(
-  ...values: Array<string | number | null | undefined>
-): string | null {
-  for (const value of values) {
-    const text = firstText(value);
-    if (!text) continue;
-
-    const displayRegistrationMatch = text.match(/-(\d+)\//);
-    if (displayRegistrationMatch) return displayRegistrationMatch[1].padStart(3, '0');
-
-    const digits = text.replace(/\D/g, '');
-    if (digits.length >= 9) return digits.slice(6, 9).padStart(3, '0');
-  }
-
-  return null;
 }
 
 function commaSeparatedValues(...values: Array<string | number | null | undefined>): string | null {

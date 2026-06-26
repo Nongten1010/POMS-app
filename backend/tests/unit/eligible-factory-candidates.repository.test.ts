@@ -212,7 +212,7 @@ describe('eligibleFactoryCandidatesRepository', () => {
     expect(result.data[1]?.eia).toBeNull();
     expect(result.data[1]?.hasEia).toBeNull();
     expect(result.data[1]?.productionCapacity).toBe('น้ำตาลทราย 1200 ตัน/ปี, กากน้ำตาล 300 ตัน/ปี');
-    expect(result.data[0]?.factorySubclass).toBe('201');
+    expect(result.data[0]?.factorySubclass).toBe('100,201');
     expect(result.data[1]?.boilerSizeEach).toBeNull();
     expect(result.data[1]?.fuelUsed).toBeNull();
     expect(countQuery.count).toHaveBeenCalledWith({ total: '*' });

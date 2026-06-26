@@ -90,46 +90,42 @@ Status:
 
 Source:
 
-- `dbo.fac_import.DISPFACREG`
-- fallback `dbo.fac_import.FACREG`
 - `dbo.FACCLASS.CLASS` join ด้วย `FID`
 - fallback `dbo.fac_import.CLASS`
 
 Logic:
 
-- ใช้เลขลำดับหลังประเภทโรงงานจาก `DISPFACREG` ก่อน เช่น `3-1-2/17ลป` -> `002`
-- ถ้า `DISPFACREG` ไม่มีรูปแบบที่อ่านได้ ให้ใช้ตำแหน่งที่ 7-9 จาก `FACREG` หลังตัดอักขระที่ไม่ใช่ตัวเลข เช่น `00100300217ลป` -> `002`
-- ถ้าทะเบียนอ่านไม่ได้ ให้ดึงรายการ `CLASS` ทั้งหมดของ `FID` จาก `dbo.FACCLASS`, เอาเลข 3 หลักท้ายของแต่ละ `CLASS`, ตัดค่าที่ซ้ำกับประเภทหลักออก, และ join ด้วย comma
-- ถ้ายังไม่มีค่า ให้ fallback เป็นเลข 3 หลักท้ายจาก `dbo.fac_import.CLASS`
+- ดึงรายการ `CLASS` ทั้งหมดของ `FID` จาก `dbo.FACCLASS`
+- เอาเลข 3 หลักท้ายของแต่ละ `CLASS`
+- ตัดค่าซ้ำ และถ้าเหลือหลายค่าให้ join ด้วย comma
+- ถ้า `FACCLASS` ไม่มีค่า ให้ fallback เป็นเลข 3 หลักท้ายจาก `dbo.fac_import.CLASS`
+- ไม่ใช้ `fac_import.DISPFACREG`
+- ไม่ใช้ `fac_import.FACREG`
 - ไม่ใช้ `fac_import.FACTYPE`
 - ไม่ใช้ `fac_import.EXPSEQ`
 
 Example:
 
 ```text
-DISPFACREG = 3-1-2/17ลป
-FACREG = 00100300217ลป
 fac_import.CLASS = 00100
 FACCLASS.CLASS = 00100
 
 factoryClass = 0100
-factorySubclass = 002
+factorySubclass = 100
 ```
 
 ```text
-DISPFACREG = 3-1-1/19นน
-FACREG = 00100300119นน
 fac_import.CLASS = 00100
 FACCLASS.CLASS = 00100, 00201
 
 factoryClass = 0100
-factorySubclass = 001
+factorySubclass = 100,201
 ```
 
 Risk:
 
-- ถ้า `DISPFACREG` และ `FACREG` ผิดรูปแบบ ระบบจะ fallback ไป `FACCLASS`/`fac_import.CLASS`
-- `EXPSEQ = 0` ใน `fac_import` ไม่ได้หมายความว่าประเภทรองคือ `000`
+- ถ้า `FACCLASS` ไม่มี row สำหรับ `FID` ระบบจะ fallback ไป `fac_import.CLASS`
+- `DISPFACREG`/`FACREG` เป็นเลขทะเบียน ไม่ใช่ source ของ `factorySubclass`
 
 ### `provinceName`
 
