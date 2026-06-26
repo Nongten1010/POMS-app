@@ -96,6 +96,7 @@ Logic:
 
 - ดึงรายการ `CLASS` ทั้งหมดของ `FID` จาก `dbo.FACCLASS`
 - เอาเลข 3 หลักท้ายของแต่ละ `CLASS`
+- ตัดรหัสที่ซ้ำกับประเภทหลักออก เช่น `factoryClass = 0100` และ `FACCLASS.CLASS = 00100` จะไม่คืน `100`
 - ตัดค่าซ้ำ และถ้าเหลือหลายค่าให้ join ด้วย comma
 - ถ้า `FACCLASS` ไม่มีค่า ให้คืน `null`
 - ไม่ใช้ `fac_import.DISPFACREG`
@@ -111,7 +112,7 @@ fac_import.CLASS = 00100
 FACCLASS.CLASS = 00100
 
 factoryClass = 0100
-factorySubclass = 100
+factorySubclass = null
 ```
 
 ```text
@@ -119,12 +120,13 @@ fac_import.CLASS = 00100
 FACCLASS.CLASS = 00100, 00201
 
 factoryClass = 0100
-factorySubclass = 100,201
+factorySubclass = 201
 ```
 
 Risk:
 
 - ถ้า `FACCLASS` ไม่มี row สำหรับ `FID` ระบบจะคืน `null` แม้ `fac_import.CLASS` มีค่า
+- ถ้า `FACCLASS` มีเฉพาะรหัสที่ซ้ำกับประเภทหลัก ระบบจะคืน `null`
 - `DISPFACREG`/`FACREG` เป็นเลขทะเบียน ไม่ใช่ source ของ `factorySubclass`
 
 ### `provinceName`

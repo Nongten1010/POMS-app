@@ -51,7 +51,7 @@ describe('fac_import mapper', () => {
       factoryId: '10100302325234',
       factoryRegistrationNo: '3-64(6)-45/17',
       factoryClass: '0064',
-      factorySubclass: '064,065',
+      factorySubclass: '065',
       provinceName: 'กรุงเทพมหานคร',
       businessActivity: 'ทำผลิตภัณฑ์โลหะต่าง ๆ',
       operationStatus: 'แจ้งประกอบแล้ว',
@@ -95,7 +95,7 @@ describe('fac_import mapper', () => {
     );
 
     expect(result.factoryClass).toBe('0101');
-    expect(result.factorySubclass).toBe('101,102,103');
+    expect(result.factorySubclass).toBe('102,103');
   });
 
   it('sorts FACCLASS subclass codes for stable display', () => {
@@ -110,7 +110,7 @@ describe('fac_import mapper', () => {
       },
     );
 
-    expect(result.factorySubclass).toBe('100,201');
+    expect(result.factorySubclass).toBe('201');
   });
 
   it('uses the last 4 digits from CLASS for the main factory type only', () => {
@@ -157,10 +157,10 @@ describe('fac_import mapper', () => {
     );
 
     expect(result.factoryClass).toBe('0100');
-    expect(result.factorySubclass).toBe('100,201');
+    expect(result.factorySubclass).toBe('201');
   });
 
-  it('uses FACCLASS when it only repeats the main class', () => {
+  it('omits FACCLASS subclass when it only repeats the main class', () => {
     const result = toEligibleFactoryCandidate(
       {
         ...row,
@@ -178,10 +178,10 @@ describe('fac_import mapper', () => {
     );
 
     expect(result.factoryClass).toBe('0100');
-    expect(result.factorySubclass).toBe('100');
+    expect(result.factorySubclass).toBeNull();
   });
 
-  it('uses FACCLASS for the secondary factory type code', () => {
+  it('returns null when the FACCLASS secondary factory type repeats the main class', () => {
     const result = toEligibleFactoryCandidate(
       {
         ...row,
@@ -199,7 +199,7 @@ describe('fac_import mapper', () => {
     );
 
     expect(result.factoryClass).toBe('0100');
-    expect(result.factorySubclass).toBe('100');
+    expect(result.factorySubclass).toBeNull();
   });
 
   it('uses industrial estate display names when the source code has a lookup match', () => {

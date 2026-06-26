@@ -150,6 +150,7 @@ export function toEligibleFactoryCandidate(
   const factoryClass = factoryMainClass(row.CLASS);
   const factorySubclass = factorySubclassCodes(
     options.factoryClassCodesByFid?.get(sourceFactoryId) ?? [],
+    factoryClass,
   );
   const hasEia = options.eiaLookupSkipped ? null : hasFactoryEia(row, options);
   const boilerValue = options.boilerValuesByFid?.get(sourceFactoryId);
@@ -250,14 +251,17 @@ function factoryMainClass(value: string | number | null | undefined): string | n
 
 function factorySubclassCodes(
   values: Array<string | number | null | undefined>,
+  factoryClass: string | null,
 ): string | null {
   const codes = new Set<string>();
+  const mainClassAsSubclass = factoryClass ? factorySubclassCodeFromClass(factoryClass) : null;
 
   for (const value of values) {
     const text = firstText(value);
     if (!text) continue;
     for (const token of text.split(/[,\s/|;]+/)) {
       const code = factorySubclassCodeFromClass(token);
+      if (code && code === mainClassAsSubclass) continue;
       if (code) codes.add(code);
     }
   }
