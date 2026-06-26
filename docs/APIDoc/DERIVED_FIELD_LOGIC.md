@@ -91,16 +91,16 @@ Status:
 Source:
 
 - `dbo.FACCLASS.CLASS` join ด้วย `FID`
-- fallback `dbo.fac_import.CLASS`
 
 Logic:
 
 - ดึงรายการ `CLASS` ทั้งหมดของ `FID` จาก `dbo.FACCLASS`
 - เอาเลข 3 หลักท้ายของแต่ละ `CLASS`
 - ตัดค่าซ้ำ และถ้าเหลือหลายค่าให้ join ด้วย comma
-- ถ้า `FACCLASS` ไม่มีค่า ให้ fallback เป็นเลข 3 หลักท้ายจาก `dbo.fac_import.CLASS`
+- ถ้า `FACCLASS` ไม่มีค่า ให้คืน `null`
 - ไม่ใช้ `fac_import.DISPFACREG`
 - ไม่ใช้ `fac_import.FACREG`
+- ไม่ใช้ `fac_import.CLASS`
 - ไม่ใช้ `fac_import.FACTYPE`
 - ไม่ใช้ `fac_import.EXPSEQ`
 
@@ -124,7 +124,7 @@ factorySubclass = 100,201
 
 Risk:
 
-- ถ้า `FACCLASS` ไม่มี row สำหรับ `FID` ระบบจะ fallback ไป `fac_import.CLASS`
+- ถ้า `FACCLASS` ไม่มี row สำหรับ `FID` ระบบจะคืน `null` แม้ `fac_import.CLASS` มีค่า
 - `DISPFACREG`/`FACREG` เป็นเลขทะเบียน ไม่ใช่ source ของ `factorySubclass`
 
 ### `provinceName`

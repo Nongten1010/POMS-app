@@ -148,9 +148,9 @@ export function toEligibleFactoryCandidate(
   const horsepower = firstNumber(row.HP2, row.HP);
   const coordinates = toFactoryCoordinates(row);
   const factoryClass = factoryMainClass(row.CLASS);
-  const factorySubclass =
-    factorySubclassCodes(options.factoryClassCodesByFid?.get(sourceFactoryId) ?? []) ??
-    factorySubclassCodeFromClassValue(row.CLASS);
+  const factorySubclass = factorySubclassCodes(
+    options.factoryClassCodesByFid?.get(sourceFactoryId) ?? [],
+  );
   const hasEia = options.eiaLookupSkipped ? null : hasFactoryEia(row, options);
   const boilerValue = options.boilerValuesByFid?.get(sourceFactoryId);
 
@@ -269,11 +269,6 @@ function factorySubclassCodeFromClass(value: string): string | null {
   const digits = value.replace(/\D/g, '');
   if (!digits) return null;
   return digits.slice(-3).padStart(3, '0');
-}
-
-function factorySubclassCodeFromClassValue(value: string | number | null | undefined): string | null {
-  const text = firstText(value);
-  return text ? factorySubclassCodeFromClass(text) : null;
 }
 
 function commaSeparatedValues(...values: Array<string | number | null | undefined>): string | null {

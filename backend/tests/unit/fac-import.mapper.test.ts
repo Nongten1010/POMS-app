@@ -113,7 +113,7 @@ describe('fac_import mapper', () => {
     expect(result.factorySubclass).toBe('100,201');
   });
 
-  it('uses the last 4 digits from CLASS for the main factory type', () => {
+  it('uses the last 4 digits from CLASS for the main factory type only', () => {
     const result = toEligibleFactoryCandidate({
       ...row,
       DISPFACREG: '3-1-1/19นน',
@@ -124,7 +124,19 @@ describe('fac_import mapper', () => {
     });
 
     expect(result.factoryClass).toBe('0100');
-    expect(result.factorySubclass).toBe('100');
+    expect(result.factorySubclass).toBeNull();
+  });
+
+  it('does not fallback subclass to fac_import CLASS when FACCLASS is missing', () => {
+    const result = toEligibleFactoryCandidate({
+      ...row,
+      FID: '10110300125163',
+      DISPFACREG: '3-30-1/16สป',
+      CLASS: '03000',
+    });
+
+    expect(result.factoryClass).toBe('3000');
+    expect(result.factorySubclass).toBeNull();
   });
 
   it('does not use FACTYPE or EXPSEQ as secondary factory type codes', () => {
