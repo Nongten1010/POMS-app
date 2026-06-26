@@ -262,7 +262,7 @@ function factorySubclassCodes(
     }
   }
 
-  return codes.size > 0 ? [...codes].join(',') : null;
+  return codes.size > 0 ? [...codes].sort().join(',') : null;
 }
 
 function factorySubclassCodeFromClass(value: string): string | null {
