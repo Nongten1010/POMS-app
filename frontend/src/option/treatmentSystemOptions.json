@@ -1,0 +1,19 @@
+[
+  { "label": "ไม่มี", "value": "ไม่มี" },
+  { "label": "ห้องตกอนุภาค (Settling Chamber)", "value": "ห้องตกอนุภาค (Settling Chamber)" },
+  { "label": "ไซโคลนแบบตัวเดียว (Single Cyclone)", "value": "ไซโคลนแบบตัวเดียว (Single Cyclone)" },
+  { "label": "ไซโคลนแบบหลายตัว (Multiple Cyclone)", "value": "ไซโคลนแบบหลายตัว (Multiple Cyclone)" },
+  { "label": "ถุงกรอง (Bag Filter)", "value": "ถุงกรอง (Bag Filter)" },
+  { "label": "สครับเบอร์แบบเปียก (ไม่มี media) (Wet Scrubber)", "value": "สครับเบอร์แบบเปียก (ไม่มี media) (Wet Scrubber)" },
+  { "label": "สครับเบอร์แบบหอบรรจุวัสดุ (Packed-Bed Scrubber)", "value": "สครับเบอร์แบบหอบรรจุวัสดุ (Packed-Bed Scrubber)" },
+  { "label": "สครับเบอร์แบบเวนจูรี (Venturi Scrubber)", "value": "สครับเบอร์แบบเวนจูรี (Venturi Scrubber)" },
+  { "label": "เครื่องดักจับอนุภาคด้วยไฟฟ้าสถิต (Electrostatic Precipitator)", "value": "เครื่องดักจับอนุภาคด้วยไฟฟ้าสถิต (Electrostatic Precipitator)" },
+  { "label": "หน่วยควบแน่น (Condensation Unit)", "value": "หน่วยควบแน่น (Condensation Unit)" },
+  { "label": "หน่วยดูดซับด้วยถ่านกัมมันต์ (Activated Carbon Adsorber)", "value": "หน่วยดูดซับด้วยถ่านกัมมันต์ (Activated Carbon Adsorber)" },
+  { "label": "หน่วยกําจัดซัลเฟอร์ไดออกไซด์ในก๊าซเสีย (Flue Gas Desulfurization)", "value": "หน่วยกําจัดซัลเฟอร์ไดออกไซด์ในก๊าซเสีย (Flue Gas Desulfurization)" },
+  { "label": "หน่วยกําจัดสารประกอบไนโตรเจน (Selective Catalytic Reduction)", "value": "หน่วยกําจัดสารประกอบไนโตรเจน (Selective Catalytic Reduction)" },
+  { "label": "เตาเผา (Incinerator)", "value": "เตาเผา (Incinerator)" },
+  { "label": "หน่วยสลายตัวด้วยความร้อน (Thermal Oxidizer)", "value": "หน่วยสลายตัวด้วยความร้อน (Thermal Oxidizer)" },
+  { "label": "หัวเผาออกไซด์ของไนโตรเจนต่ํา (Low NOx Burner)", "value": "หัวเผาออกไซด์ของไนโตรเจนต่ํา (Low NOx Burner)" },
+  { "label": "อื่นๆ", "value": "อื่นๆ" }
+]

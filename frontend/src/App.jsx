@@ -244,7 +244,7 @@ function App() {
         ) : visibleSelectedMenu === 'permissions' ? (
           <PermissionManagementPage accessToken={accessToken} />
         ) : visibleSelectedMenu === 'connection-request' ? (
-          <ConnectionRequestPage userType={userType} accessToken={accessToken} />
+          <ConnectionRequestPage userType={userType} accessToken={accessToken} currentUser={currentUser} />
         ) : visibleSelectedMenu === 'monitoring-points' ? (
           <MonitoringPointFormsPage accessToken={accessToken} />
         ) : visibleSelectedMenu === 'forms' ? (

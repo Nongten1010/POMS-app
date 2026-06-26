@@ -42,45 +42,39 @@ import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import UploadFileIcon from '@mui/icons-material/UploadFile'
 import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import { DataGrid } from '@mui/x-data-grid'
+import cemsInstallationRequiredOptionItems from '../option/cemsInstallationRequiredOptions.json'
+import cemsParameterOptionItems from '../option/cemsParameterOptions.json'
+import fuelOptionItems from '../option/fuelOptions.json'
+import treatmentSystemOptionItems from '../option/treatmentSystemOptions.json'
+import wpmsParameterOptionItems from '../option/wpmsParameterOptions.json'
 
 const subMenus = [
   { value: 'factories', label: 'รายชื่อโรงงาน' },
   { value: 'requests', label: 'รายการคำขอ', badgeContent: 1 },
 ]
 
-const cemsParameterOptions = [
-  'CO2 (%)',
-  'CO2 (ppm)',
-  'CO (ppm)',
-  'Flow (m³/hr)',
-  'H2S (ppm)',
-  'HCl (mg/m³)',
-  'Hg (mg/m³)',
-  'Moisture in Stack (%)',
-  'NOx (ppm)',
-  'O2 (%)',
-  'Opacity (%)',
-  'Opacity (mg/m³)',
-  'Particulate (mg/m³)',
-  'Pressure in Stack (mmHg)',
-  'SO2 (ppm)',
-  'SOx (ppm)',
-  'Temp. (°C)',
-  'TRS (ppm)',
-  'TSP (mg/m³)',
-  'HCL (ppm)',
-  'Loading (mg/hr)',
-]
+const getOptionValue = (option) => (typeof option === 'string' ? option : option.value ?? option.label)
+const getOptionLabel = (option) => (typeof option === 'string' ? option : option.label ?? option.value)
+
+const cemsParameterOptions = cemsParameterOptionItems.map((option) => option.label)
 
 const monitoringPointTypeOptions = ['CEMS', 'WPMS', 'Mobile', 'Station']
 
-const wpmsInstrumentParameters = [
-  'BOD (mg/l)',
-  'COD (mg/l)',
-  'Flow (m³/hr)',
-  'Watt (kW)',
-  'Loading (mg/hr)',
-]
+const wpmsInstrumentParameters = wpmsParameterOptionItems.map((option) => option.label)
+const cemsInstallationRequiredOptions = cemsInstallationRequiredOptionItems.map((option) => ({
+  label: getOptionLabel(option),
+  value: getOptionValue(option),
+}))
+const fuelOptions = fuelOptionItems.map((option) => ({
+  label: getOptionLabel(option),
+  value: getOptionValue(option),
+}))
+const treatmentSystemOptions = treatmentSystemOptionItems.map((option) => ({
+  label: getOptionLabel(option),
+  value: getOptionValue(option),
+}))
+const legalAnnexNoOptions = Array.from({ length: 12 }, (_, index) => String(index + 1))
+const isOtherOption = (value = '') => value === 'อื่นๆ' || value.includes('อื่นๆ')
 
 const measurementInstrumentColumns = [
   'พารามิเตอร์ที่ขอเชื่อมต่อ',
@@ -123,17 +117,138 @@ const emptyCriteria = {
   })),
 }
 
+function createCriteria(standardValue = '', rows = {}) {
+  return {
+    enabled: true,
+    standardValue,
+    rows: specialCriteriaRows.map((row) => ({
+      level: row.key,
+      min: rows[row.key]?.min ?? '',
+      max: rows[row.key]?.max ?? '',
+    })),
+  }
+}
+
+const mockCemsEligibleParameters = [
+  'NOx (ppm)',
+  'SO2 (ppm)',
+  'CO (ppm)',
+  'Temp. (C°)',
+  'O2 (%)',
+  'Opacity (%)',
+  'Flow Rate (m3/hr)',
+  'Particulate (mg/m3)',
+]
+
+const mockCemsExemptedParameters = [
+  'As (mg/m3)',
+  'Cl (mg/m3)',
+  'Cl (ppm)',
+  'CO2 (%)',
+  'Cresol (ppm)',
+  'Cu (mg/m3)',
+  'Dioxins/Furans (µg/m3)',
+  'H2S (ppm)',
+  'H2SO4 (ppm)',
+  'HCl (mg/m3)',
+  'HCl (ppm)',
+  'HF (ppm)',
+  'Hg (mg/m3)',
+  'Moisture (%)',
+  'Opacity (mg/m3)',
+  'Pb (mg/m3)',
+  'Pressure (mmHg)',
+  'Sb (mg/m3)',
+  'TRS (ppm)',
+  'Xylene (ppm)',
+]
+
+const mockCemsInstrumentParameters = [
+  {
+    ...emptyInstrumentParameter,
+    parameter: 'CO (ppm)',
+    standardCriteria: createCriteria('690', {
+      normal: { min: '0', max: '552' },
+      warning: { min: '552', max: '690' },
+      critical: { min: '690' },
+    }),
+    eiaCriteria: createCriteria('690', {
+      normal: { min: '0', max: '552' },
+      warning: { min: '552', max: '690' },
+      critical: { min: '690' },
+    }),
+  },
+  {
+    ...emptyInstrumentParameter,
+    parameter: 'NOx (ppm)',
+    standardCriteria: createCriteria('200', {
+      normal: { min: '0', max: '160' },
+      warning: { min: '160', max: '200' },
+      critical: { min: '200' },
+    }),
+    eiaCriteria: createCriteria('', {}),
+  },
+  {
+    ...emptyInstrumentParameter,
+    parameter: 'SO2 (ppm)',
+    standardCriteria: createCriteria('320', {
+      normal: { min: '0', max: '256' },
+      warning: { min: '256', max: '320' },
+      critical: { min: '320' },
+    }),
+    eiaCriteria: createCriteria('', {}),
+  },
+  {
+    ...emptyInstrumentParameter,
+    parameter: 'Temp. (C°)',
+    standardCriteria: createCriteria('', {}),
+    eiaCriteria: createCriteria('', {}),
+  },
+]
+
+function cloneInstrumentParameters(parameters = []) {
+  return parameters.map((parameter) => ({
+    ...parameter,
+    standardCriteria: parameter.standardCriteria
+      ? {
+          ...parameter.standardCriteria,
+          rows: parameter.standardCriteria.rows?.map((row) => ({ ...row })) ?? [],
+        }
+      : undefined,
+    eiaCriteria: parameter.eiaCriteria
+      ? {
+          ...parameter.eiaCriteria,
+          rows: parameter.eiaCriteria.rows?.map((row) => ({ ...row })) ?? [],
+        }
+      : undefined,
+  }))
+}
+
+function getInitialInstrumentRows(initialInstruments = {}, initialMonitoringPointType = '', useInitialRequestValues = false) {
+  if (Array.isArray(initialInstruments.parameters) && initialInstruments.parameters.length) {
+    return initialInstruments.parameters
+  }
+
+  if (!useInitialRequestValues && initialMonitoringPointType === 'CEMS') {
+    return cloneInstrumentParameters(mockCemsInstrumentParameters)
+  }
+
+  return []
+}
+
 const mockCemsMonitoringPointDetails = {
   pointCode: 'CEMS-STACK-001',
   pointName: 'ปล่องระบาย A',
   productionUnitType: 'หม้อไอน้ำ',
   productionCapacity: '10 ตันไอน้ำ/ชั่วโมง',
-  cemsInstallationRequiredBy: 'ประกาศ อก.',
-  legalAnnexNo: 'เฉพาะประกาศปี 65',
-  eligibleParameters: ['NOx (ppm)', 'SO2 (ppm)', 'O2 (%)'],
-  exemptedParameters: [],
+  cemsInstallationRequiredBy: cemsInstallationRequiredOptions[0]?.value ?? '',
+  legalAnnexNo: ['1'],
+  eligibleParameters: mockCemsEligibleParameters,
+  exemptedParameters: mockCemsExemptedParameters,
   connectedParameters: [],
-  pendingParameters: ['NOx (ppm)', 'SO2 (ppm)', 'O2 (%)'],
+  pendingParameters: mockCemsEligibleParameters,
+  timeSharingParameters: [],
+  sharedStack: '',
   stackShape: 'วงกลม',
   stackDiameter: '1.2',
   stackHeight: '30',
@@ -141,12 +256,12 @@ const mockCemsMonitoringPointDetails = {
   averageFlowRate: '1200',
   minFlowRate: '1000',
   maxFlowRate: '1500',
-  primaryFuel: 'ก๊าซธรรมชาติ',
+  primaryFuel: 'ก๊าซธรรมชาติ (NG)',
   primaryFuelPercent: '80',
   secondaryFuel: 'ไม่มี',
   combustionControlSystem: 'ควบคุมอัตโนมัติ',
   hasTreatmentSystem: 'มี',
-  treatmentSystem: 'สครับเบอร์',
+  treatmentSystem: 'สครับเบอร์แบบเปียก (ไม่มี media) (Wet Scrubber)',
   stackLatitude: '13.7563',
   stackLongitude: '100.5018',
   connectionDevice: 'POMS Box (กรอ.)',
@@ -155,14 +270,15 @@ const mockCemsMonitoringPointDetails = {
 const mockWpmsMonitoringPointDetails = {
   pointCode: 'WPMS-WW-001',
   pointName: 'จุดระบายน้ำทิ้ง A',
-  eligibleParameters: ['BOD (mg/l)', 'COD (mg/l)', 'Flow (m³/hr)'],
+  eligibleParameters: ['BOD (mg/l)', 'COD (mg/l)', 'Flow rate (m3/hr)'],
   connectedParameters: [],
-  pendingParameters: ['BOD (mg/l)', 'COD (mg/l)', 'Flow (m³/hr)'],
+  pendingParameters: ['BOD (mg/l)', 'COD (mg/l)', 'Flow rate (m3/hr)'],
   averageWastewaterDischarge: '500',
   minWastewaterDischarge: '300',
   maxWastewaterDischarge: '800',
   hasTreatmentSystem: 'มี',
-  treatmentSystem: 'ระบบบำบัดชีวภาพ',
+  treatmentSystem: 'อื่นๆ',
+  treatmentSystemOther: 'ระบบบำบัดชีวภาพ',
   maxTreatmentCapacity: '1000',
   instrumentLatitude: '13.7563',
   instrumentLongitude: '100.5018',
@@ -241,6 +357,10 @@ const encodingDataOptions = [
 ]
 
 const parameterUnitMap = {
+  ...[...cemsParameterOptionItems, ...wpmsParameterOptionItems].reduce((units, option) => {
+    units[option.label] = option.unit
+    return units
+  }, {}),
   'CO2 (%)': '%',
   'CO2 (ppm)': 'ppm',
   'CO (ppm)': 'ppm',
@@ -576,8 +696,8 @@ function mapOperatorFactoryRow(row) {
     factoryId: row.factoryId ?? '',
     factoryName: row.factoryName ?? '',
     newRegistrationNo: row.factoryId ?? '',
-    oldRegistrationNo: row.newRegistrationNo ?? '',
-    factoryRegistrationNo: row.oldRegistrationNo ?? '',
+    oldRegistrationNo: row.oldRegistrationNo ?? row.factoryRegistrationNo ?? '',
+    factoryRegistrationNo: row.oldRegistrationNo ?? row.factoryRegistrationNo ?? '',
     industryType: row.industryType ?? '',
     industryMainOrder: row.industryMainOrder ?? '',
     industrySubOrder: row.industrySubOrder ?? '',
@@ -1019,6 +1139,8 @@ function buildMeasurementPointRequestBody(
               dischargeReceivingSource: getFormValue(formData, 'dischargeReceivingSource'),
               connectionDevice: getFormValue(formData, 'connectionDevice'),
               connectionDeviceOther: getFormValue(formData, 'connectionDeviceOther'),
+              informationProviderName: getOptionalFormValue(formData, 'informationProviderName'),
+              informationProviderPosition: getOptionalFormValue(formData, 'informationProviderPosition'),
             },
             measurementInstruments: {
               converterBrand: converterBrand || null,
@@ -1036,11 +1158,13 @@ function buildMeasurementPointRequestBody(
               productionCapacity: getOptionalFormValue(formData, 'productionCapacity'),
               cemsInstallationRequiredBy: getOptionalFormValue(formData, 'cemsInstallationRequiredBy'),
               cemsInstallationRequiredOther: getOptionalFormValue(formData, 'cemsInstallationRequiredOther'),
-              legalAnnexNo: getOptionalFormValue(formData, 'legalAnnexNo'),
+              legalAnnexNo: getFormValues(formData, 'legalAnnexNo'),
               eligibleParameters: getFormValues(formData, 'eligibleParameters'),
               exemptedParameters: getFormValues(formData, 'exemptedParameters'),
               connectedParameters: getFormValues(formData, 'connectedParameters'),
               pendingParameters: getFormValues(formData, 'pendingParameters'),
+              timeSharingParameters: getFormValues(formData, 'timeSharingParameters'),
+              sharedStack: getOptionalFormValue(formData, 'sharedStack'),
               stackShape: getOptionalFormValue(formData, 'stackShape'),
               stackDiameter: toNumberOrNull(getFormValue(formData, 'stackDiameter')),
               stackWidth: toNumberOrNull(getFormValue(formData, 'stackWidth')),
@@ -1065,6 +1189,8 @@ function buildMeasurementPointRequestBody(
               stackLongitude: toNumberOrNull(getFormValue(formData, 'stackLongitude')),
               connectionDevice: getOptionalFormValue(formData, 'connectionDevice'),
               connectionDeviceOther: getOptionalFormValue(formData, 'connectionDeviceOther'),
+              informationProviderName: getOptionalFormValue(formData, 'informationProviderName'),
+              informationProviderPosition: getOptionalFormValue(formData, 'informationProviderPosition'),
             },
             documentsAndImages,
             measurementInstruments: {
@@ -1549,6 +1675,90 @@ function DocumentLine({ label, value = '', width = '100%' }) {
   )
 }
 
+function DocumentSignatureBlock({ name = '', position = '' }) {
+  const signatureName = displayValue(name, '........................................')
+
+  return (
+    <Stack spacing={0.25} sx={{ width: 250 }}>
+      <Box sx={{ display: 'flex', alignItems: 'baseline', width: '100%' }}>
+        <Box component="span" sx={{ flex: '0 0 auto' }}>
+          ลงชื่อ
+        </Box>
+        <Box
+          component="span"
+          sx={{
+            flex: 1,
+            minWidth: 72,
+            mx: 0.5,
+            borderBottom: '1px dotted #555',
+            lineHeight: 1.4,
+          }}
+        />
+        <Box component="span" sx={{ flex: '0 0 auto', fontWeight: 400 }}>
+          ผู้ให้ข้อมูล
+        </Box>
+      </Box>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', lineHeight: 1.4 }}>
+        <Box component="span">(</Box>
+        <Box component="span">{signatureName}</Box>
+        <Box component="span">)</Box>
+      </Box>
+      <DocumentLine label="ตำแหน่ง" value={position} />
+      <Box sx={{ display: 'flex', alignItems: 'baseline', width: '100%' }}>
+        <Box component="span" sx={{ flex: '0 0 auto' }}>
+          วันที่
+        </Box>
+        <Box
+          component="span"
+          sx={{
+            display: 'inline-block',
+            flex: '0 0 auto',
+            minWidth: 190,
+            mx: 0.5,
+            lineHeight: 1.4,
+            px: 0.5,
+          }}
+        >
+          ................/................/................
+        </Box>
+      </Box>
+    </Stack>
+  )
+}
+
+function DocumentWrappingLine({ label, value = '' }) {
+  const displayedValue = displayValue(value)
+
+  if (!displayedValue) {
+    return <DocumentLine label={label} value="" />
+  }
+
+  return (
+    <Box
+      sx={{
+        width: '100%',
+        lineHeight: 1.9,
+        overflowWrap: 'anywhere',
+      }}
+    >
+      <Box component="span" sx={{ pr: 0.5 }}>
+        {label}
+      </Box>
+      <Box
+        component="span"
+        sx={{
+          px: 0.5,
+          borderBottom: '1px dotted #555',
+          boxDecorationBreak: 'clone',
+          WebkitBoxDecorationBreak: 'clone',
+        }}
+      >
+        {displayedValue}
+      </Box>
+    </Box>
+  )
+}
+
 function DocumentPage({ children, revisionText = 'แก้ไข : 14 พฤศจิกายน 2567' }) {
   return (
     <Paper
@@ -1588,7 +1798,19 @@ function displayValue(value, fallback = '') {
 }
 
 function joinList(values, fallback = '') {
+  if (typeof values === 'string') {
+    return values || fallback
+  }
+
   return Array.isArray(values) && values.length > 0 ? values.join(', ') : fallback
+}
+
+function normalizeStringArray(value) {
+  if (Array.isArray(value)) {
+    return value
+  }
+
+  return value ? [value] : []
 }
 
 function formatFuel(name, other, percent) {
@@ -2347,12 +2569,10 @@ function RequestDocumentDialog({
                       <Typography variant="caption">หมายถึง ค่าที่ส่งต้องเป็นหน่วยเดียวกับหน่วยที่กำหนดในตาราง</Typography>
                       <Typography variant="caption" display="block">หมายถึง เลขช่องสัญญาณจากโปรแกรมส่งข้อมูล</Typography>
                     </Box>
-                    <Box sx={{ width: 260 }}>
-                      <DocumentLine label="ลงชื่อ" value="" />
-                      <Typography sx={{ textAlign: 'center' }}>(........................................)</Typography>
-                      <DocumentLine label="ตำแหน่ง" value="" />
-                      <DocumentLine label="วันที่" value="........./........./........." />
-                    </Box>
+                    <DocumentSignatureBlock
+                      name={details.informationProviderName}
+                      position={details.informationProviderPosition}
+                    />
                   </Box>
                 </Stack>
               </DocumentPage>
@@ -2444,12 +2664,18 @@ function RequestDocumentDialog({
               <Box>
                 <Typography sx={{ pl: 3, fontWeight: 700 }}>4.2 การติดตั้ง {isWpms ? 'WPMS' : 'CEMS'}</Typography>
                 <Stack spacing={1} sx={{ pl: 5, mt: 1 }}>
-                  <DocumentLine label={`4.2.1 เข้าข่ายต้องติดตั้ง ${isWpms ? 'WPMS' : 'CEMS'} ตามกฎหมาย :`} value={details.cemsInstallationRequiredOther ?? details.cemsInstallationRequiredBy} />
-                  <DocumentLine label="4.2.2 เข้าข่ายตามบัญชีแนบท้ายลำดับที่ :" value={details.legalAnnexNo} />
-                  <DocumentLine label="4.2.3 พารามิเตอร์ที่เข้าข่าย :" value={joinList(details.eligibleParameters ?? point.parameters)} />
-                  <DocumentLine label="4.2.4 พารามิเตอร์ที่ได้รับการยกเว้นตามประกาศฯ ข้อ :" value={joinList(details.exemptedParameters)} />
-                  <DocumentLine label="4.2.5 พารามิเตอร์ที่เชื่อมต่อแล้ว :" value={joinList(details.connectedParameters)} />
-                  <DocumentLine label="4.2.6 พารามิเตอร์ที่ยังไม่เชื่อมต่อ :" value={joinList(details.pendingParameters ?? point.parameters)} />
+                  <DocumentWrappingLine label={`4.2.1 เข้าข่ายต้องติดตั้ง ${isWpms ? 'WPMS' : 'CEMS'} ตามกฎหมาย :`} value={details.cemsInstallationRequiredOther ?? details.cemsInstallationRequiredBy} />
+                  <DocumentLine label="4.2.2 เข้าข่ายตามบัญชีแนบท้ายลำดับที่ :" value={joinList(details.legalAnnexNo)} />
+                  <DocumentWrappingLine label="4.2.3 พารามิเตอร์ที่เข้าข่าย :" value={joinList(details.eligibleParameters ?? point.parameters)} />
+                  <DocumentWrappingLine label="4.2.4 พารามิเตอร์ที่ได้รับการยกเว้นตามประกาศฯ ข้อ :" value={joinList(details.exemptedParameters)} />
+                  <DocumentWrappingLine label="4.2.5 พารามิเตอร์ที่เชื่อมต่อแล้ว :" value={joinList(details.connectedParameters)} />
+                  <DocumentWrappingLine label="4.2.6 พารามิเตอร์ที่ยังไม่เชื่อมต่อ :" value={joinList(details.pendingParameters ?? point.parameters)} />
+                  {!isWpms ? (
+                    <Box sx={{ display: 'flex', gap: 1.5 }}>
+                      <DocumentLine label="4.2.7 พารามิเตอร์ที่ติดตั้งแบบ Time sharing :" value={joinList(details.timeSharingParameters)} width="68%" />
+                      <DocumentLine label="ร่วมกับปล่อง :" value={details.sharedStack} width="32%" />
+                    </Box>
+                  ) : null}
                 </Stack>
               </Box>
               <Box>
@@ -2569,12 +2795,10 @@ function RequestDocumentDialog({
               </TableContainer>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', pt: 2 }}>
                 <Typography variant="caption">หมายเหตุ: ✓ ใช่, ✕ ไม่ใช่</Typography>
-                <Box sx={{ width: 260 }}>
-                  <DocumentLine label="ลงชื่อ" value="" />
-                  <Typography sx={{ textAlign: 'center' }}>(........................................)</Typography>
-                  <DocumentLine label="ตำแหน่ง" value="" />
-                  <DocumentLine label="วันที่" value="........./........./........." />
-                </Box>
+                <DocumentSignatureBlock
+                  name={details.informationProviderName}
+                  position={details.informationProviderPosition}
+                />
               </Box>
             </Stack>
           </DocumentPage>
@@ -3920,7 +4144,7 @@ function getFactoryColumns(isOperator, onOpenRequestForm, onOpenMonitoringPoints
     { field: 'factoryName', headerName: 'ชื่อโรงงาน/บริษัท', width: 240 },
     { field: 'newRegistrationNo', headerName: 'เลขทะเบียนโรงงาน (ใหม่)', width: 190 },
     { field: 'oldRegistrationNo', headerName: 'เลขทะเบียนโรงงาน (เก่า)', width: 190 },
-    { field: 'industryType', headerName: 'ประเภทอุตสาหกรรม', width: 170 },
+    { field: 'businessActivity', headerName: 'การประกอบกิจการ', width: 170 },
     { field: 'province', headerName: 'จังหวัด', width: 130 },
     { field: 'monitoringPointCount', headerName: 'จำนวนจุดตรวจวัด', width: 150, type: 'number' },
     {
@@ -4084,21 +4308,23 @@ function CemsMonitoringPointDetails({ initialPoint = {} }) {
         <Grid size={{ xs: 12, md: 3 }}>
           <TextField name="cemsInstallationRequiredBy" select label="เข้าข่ายต้องติดตั้ง CEMS ตามกฎหมาย" size="small" fullWidth defaultValue={initialDetails.cemsInstallationRequiredBy}>
             <MenuItem value="">-</MenuItem>
-            <MenuItem value="ประกาศ อก.">ประกาศ อก.</MenuItem>
-            <MenuItem value="กกพ.">กกพ.</MenuItem>
-            <MenuItem value="กทม.">กทม.</MenuItem>
-            <MenuItem value="อื่นๆ">อื่นๆ</MenuItem>
+            {cemsInstallationRequiredOptions.map((option) => (
+              <MenuItem key={option.value} value={option.value}>
+                {option.label}
+              </MenuItem>
+            ))}
           </TextField>
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
           <TextField name="cemsInstallationRequiredOther" label="อื่นๆ โปรดระบุ" size="small" defaultValue={initialDetails.cemsInstallationRequiredOther} fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField name="legalAnnexNo" select label="เข้าข่ายตามบัญชีแนบท้ายลำดับที่" size="small" fullWidth defaultValue={initialDetails.legalAnnexNo}>
-            <MenuItem value="">-</MenuItem>
-            <MenuItem value="เฉพาะประกาศปี 65">เฉพาะประกาศปี 65</MenuItem>
-            <MenuItem value="กทม.">กทม.</MenuItem>
-          </TextField>
+          <ParameterMultiSelect
+            name="legalAnnexNo"
+            label="เข้าข่ายตามบัญชีแนบท้ายลำดับที่"
+            options={legalAnnexNoOptions}
+            defaultValue={normalizeStringArray(initialDetails.legalAnnexNo)}
+          />
         </Grid>
       </Grid>
       <Grid container spacing={2}>
@@ -4113,6 +4339,24 @@ function CemsMonitoringPointDetails({ initialPoint = {} }) {
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
           <ParameterMultiSelect name="pendingParameters" label="พารามิเตอร์ที่ยังไม่เชื่อมต่อ" defaultValue={initialDetails.pendingParameters ?? []} />
+        </Grid>
+      </Grid>
+      <Grid container spacing={2}>
+        <Grid size={{ xs: 12, md: 3 }}>
+          <ParameterMultiSelect
+            name="timeSharingParameters"
+            label="พารามิเตอร์ที่ติดตั้งแบบ Time sharing"
+            defaultValue={initialDetails.timeSharingParameters ?? []}
+          />
+        </Grid>
+        <Grid size={{ xs: 12, md: 3 }}>
+          <TextField
+            name="sharedStack"
+            label="ร่วมกับปล่อง"
+            size="small"
+            defaultValue={initialDetails.sharedStack}
+            fullWidth
+          />
         </Grid>
       </Grid>
       <Grid container spacing={2}>
@@ -4184,15 +4428,15 @@ function CemsMonitoringPointDetails({ initialPoint = {} }) {
             onChange={(event) => setPrimaryFuel(event.target.value)}
           >
             <MenuItem value="">-</MenuItem>
-            <MenuItem value="ก๊าซธรรมชาติ">ก๊าซธรรมชาติ</MenuItem>
-            <MenuItem value="น้ำมันเตา">น้ำมันเตา</MenuItem>
-            <MenuItem value="ถ่านหิน">ถ่านหิน</MenuItem>
-            <MenuItem value="ชีวมวล">ชีวมวล</MenuItem>
-            <MenuItem value="อื่นๆ">อื่นๆ</MenuItem>
+            {fuelOptions.map((option) => (
+              <MenuItem key={option.value} value={option.value}>
+                {option.label}
+              </MenuItem>
+            ))}
           </TextField>
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField name="primaryFuelOther" label="โปรดระบุ" size="small" defaultValue={initialDetails.primaryFuelOther} fullWidth disabled={primaryFuel !== 'อื่นๆ'} />
+          <TextField name="primaryFuelOther" label="โปรดระบุ" size="small" defaultValue={initialDetails.primaryFuelOther} fullWidth disabled={!isOtherOption(primaryFuel)} />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
           <TextField name="primaryFuelPercent" label="ร้อยละโดยประมาณ" size="small" defaultValue={initialDetails.primaryFuelPercent} fullWidth />
@@ -4210,16 +4454,15 @@ function CemsMonitoringPointDetails({ initialPoint = {} }) {
             onChange={(event) => setSecondaryFuel(event.target.value)}
           >
             <MenuItem value="">-</MenuItem>
-            <MenuItem value="ไม่มี">ไม่มี</MenuItem>
-            <MenuItem value="ก๊าซธรรมชาติ">ก๊าซธรรมชาติ</MenuItem>
-            <MenuItem value="น้ำมันเตา">น้ำมันเตา</MenuItem>
-            <MenuItem value="ถ่านหิน">ถ่านหิน</MenuItem>
-            <MenuItem value="ชีวมวล">ชีวมวล</MenuItem>
-            <MenuItem value="อื่นๆ">อื่นๆ</MenuItem>
+            {fuelOptions.map((option) => (
+              <MenuItem key={option.value} value={option.value}>
+                {option.label}
+              </MenuItem>
+            ))}
           </TextField>
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField name="secondaryFuelOther" label="โปรดระบุ" size="small" defaultValue={initialDetails.secondaryFuelOther} fullWidth disabled={secondaryFuel !== 'อื่นๆ'} />
+          <TextField name="secondaryFuelOther" label="โปรดระบุ" size="small" defaultValue={initialDetails.secondaryFuelOther} fullWidth disabled={!isOtherOption(secondaryFuel)} />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
           <TextField name="secondaryFuelPercent" label="ร้อยละโดยประมาณ" size="small" defaultValue={initialDetails.secondaryFuelPercent} fullWidth />
@@ -4230,39 +4473,32 @@ function CemsMonitoringPointDetails({ initialPoint = {} }) {
           <TextField name="combustionControlSystem" label="ระบบการควบคุมปริมาณอากาศและสภาวะการเผาไหม้" size="small" defaultValue={initialDetails.combustionControlSystem} fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
+          <input
+            type="hidden"
+            name="hasTreatmentSystem"
+            value={treatmentSystem && treatmentSystem !== 'ไม่มี' ? 'มี' : 'ไม่มี'}
+          />
           <TextField
             select
-            name="hasTreatmentSystem"
+            name="treatmentSystem"
             label="ระบบบำบัด"
             size="small"
             fullWidth
-            value={hasTreatmentSystem}
-            onChange={(event) => setHasTreatmentSystem(event.target.value)}
+            value={treatmentSystem}
+            onChange={(event) => {
+              const nextValue = event.target.value
+              setTreatmentSystem(nextValue)
+              setHasTreatmentSystem(nextValue && nextValue !== 'ไม่มี' ? 'มี' : 'ไม่มี')
+            }}
           >
             <MenuItem value="">-</MenuItem>
-            <MenuItem value="ไม่มี">ไม่มี</MenuItem>
-            <MenuItem value="มี">มี</MenuItem>
+            {treatmentSystemOptions.map((option) => (
+              <MenuItem key={option.value} value={option.value}>
+                {option.label}
+              </MenuItem>
+            ))}
           </TextField>
         </Grid>
-        {hasTreatmentSystem === 'มี' ? (
-          <Grid size={{ xs: 12, md: 3 }}>
-            <TextField
-              select
-              name="treatmentSystem"
-              label="ระบุระบบบำบัด"
-              size="small"
-              fullWidth
-              value={treatmentSystem}
-              onChange={(event) => setTreatmentSystem(event.target.value)}
-            >
-              <MenuItem value="">-</MenuItem>
-              <MenuItem value="ระบบดักจับฝุ่น">ระบบดักจับฝุ่น</MenuItem>
-              <MenuItem value="สครับเบอร์">สครับเบอร์</MenuItem>
-              <MenuItem value="ถุงกรอง">ถุงกรอง</MenuItem>
-              <MenuItem value="อื่นๆ">อื่นๆ</MenuItem>
-            </TextField>
-          </Grid>
-        ) : null}
         {hasTreatmentSystem === 'มี' && treatmentSystem === 'อื่นๆ' ? (
           <Grid size={{ xs: 12, md: 3 }}>
             <TextField name="treatmentSystemOther" label="ระบุรายละเอียดของระบบบำบัด" size="small" defaultValue={initialDetails.treatmentSystemOther} fullWidth />
@@ -4443,7 +4679,6 @@ function StandardCriteriaSection({ label, value, onChange }) {
         }
         label={label}
       />
-      <SpecialCriteriaTable value={value} onChange={onChange} />
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 6 }}>
           <TextField
@@ -4455,6 +4690,7 @@ function StandardCriteriaSection({ label, value, onChange }) {
           />
         </Grid>
       </Grid>
+      <SpecialCriteriaTable value={value} onChange={onChange} />
     </Stack>
   )
 }
@@ -4750,9 +4986,41 @@ function MeasurementInstrumentSection({ parameterOptions, rows, setRows, initial
   )
 }
 
+function InformationProviderSection({ currentUser }) {
+  return (
+    <Paper elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider' }}>
+      <Stack spacing={2}>
+        <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+          ผู้ให้ข้อมูลหรือผู้รับมอบอำนาจ
+        </Typography>
+        <Grid container spacing={2}>
+          <Grid size={{ xs: 12, md: 3 }}>
+            <TextField
+              name="informationProviderName"
+              label="ชื่อ-นามสกุล"
+              size="small"
+              defaultValue={currentUser?.name ?? ''}
+              fullWidth
+            />
+          </Grid>
+          <Grid size={{ xs: 12, md: 3 }}>
+            <TextField
+              name="informationProviderPosition"
+              label="ตำแหน่ง"
+              size="small"
+              fullWidth
+            />
+          </Grid>
+        </Grid>
+      </Stack>
+    </Paper>
+  )
+}
+
 function WpmsMonitoringPointDetails({ initialPoint = {} }) {
   const initialDetails = { ...mockWpmsMonitoringPointDetails, ...(initialPoint.details ?? {}) }
   const [hasTreatmentSystem, setHasTreatmentSystem] = useState(initialDetails.hasTreatmentSystem)
+  const [treatmentSystem, setTreatmentSystem] = useState(initialDetails.treatmentSystem)
   const [connectionDevice, setConnectionDevice] = useState(initialDetails.connectionDevice)
 
   return (
@@ -4804,23 +5072,37 @@ function WpmsMonitoringPointDetails({ initialPoint = {} }) {
       </Grid>
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 3 }}>
+          <input
+            type="hidden"
+            name="hasTreatmentSystem"
+            value={treatmentSystem && treatmentSystem !== 'ไม่มี' ? 'มี' : 'ไม่มี'}
+          />
           <TextField
             select
-            name="hasTreatmentSystem"
+            name="treatmentSystem"
             label="ระบบบำบัด"
             size="small"
             fullWidth
-            value={hasTreatmentSystem}
-            onChange={(event) => setHasTreatmentSystem(event.target.value)}
+            value={treatmentSystem}
+            onChange={(event) => {
+              const nextValue = event.target.value
+              setTreatmentSystem(nextValue)
+              setHasTreatmentSystem(nextValue && nextValue !== 'ไม่มี' ? 'มี' : 'ไม่มี')
+            }}
           >
             <MenuItem value="">-</MenuItem>
-            <MenuItem value="ไม่มี">ไม่มี</MenuItem>
-            <MenuItem value="มี">มี</MenuItem>
+            {treatmentSystemOptions.map((option) => (
+              <MenuItem key={option.value} value={option.value}>
+                {option.label}
+              </MenuItem>
+            ))}
           </TextField>
         </Grid>
-        <Grid size={{ xs: 12, md: 3 }}>
-          <TextField name="treatmentSystem" label="ระบุ" size="small" defaultValue={initialDetails.treatmentSystem} fullWidth />
-        </Grid>
+        {hasTreatmentSystem === 'มี' && treatmentSystem === 'อื่นๆ' ? (
+          <Grid size={{ xs: 12, md: 3 }}>
+            <TextField name="treatmentSystemOther" label="ระบุรายละเอียดของระบบบำบัด" size="small" defaultValue={initialDetails.treatmentSystemOther} fullWidth />
+          </Grid>
+        ) : null}
         {hasTreatmentSystem === 'มี' ? (
           <Grid size={{ xs: 12, md: 3 }}>
             <TextField name="maxTreatmentCapacity" label="ปริมาณรองรับน้ำเสียสูงสุดของระบบบำบัด" size="small" defaultValue={initialDetails.maxTreatmentCapacity} fullWidth />
@@ -4955,6 +5237,7 @@ function RequestFormBottomSheet({
   formType,
   factory,
   accessToken,
+  currentUser,
   mode = 'create',
   requestId,
   initialRequest,
@@ -4984,7 +5267,7 @@ function RequestFormBottomSheet({
   const [factoryEmails, setFactoryEmails] = useState(initialNotificationEmails)
   const [monitoringPoints, setMonitoringPoints] = useState(initialMonitoringPoints)
   const [measurementInstrumentRows, setMeasurementInstrumentRows] = useState(
-    Array.isArray(initialInstruments.parameters) ? initialInstruments.parameters : [],
+    getInitialInstrumentRows(initialInstruments, initialMonitoringPointType, useInitialRequestValues),
   )
   const [selectedMonitoringPointId, setSelectedMonitoringPointId] = useState(1)
   const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false)
@@ -5333,11 +5616,12 @@ function RequestFormBottomSheet({
                     row
                     value={selectedMonitoringPoint?.type ?? ''}
                     onChange={(event) => {
+                      const nextType = event.target.value
                       const nextPoint = {
                         id: selectedMonitoringPoint?.id ?? Date.now(),
-                        type: event.target.value,
+                        type: nextType,
                       }
-                      setMeasurementInstrumentRows([])
+                      setMeasurementInstrumentRows(nextType === 'CEMS' ? cloneInstrumentParameters(mockCemsInstrumentParameters) : [])
                       setMonitoringPoints([nextPoint])
                       setSelectedMonitoringPointId(nextPoint.id)
                     }}
@@ -5391,6 +5675,7 @@ function RequestFormBottomSheet({
                           setRows={setMeasurementInstrumentRows}
                           initialInstruments={point.type === initialMonitoringPointType ? initialInstruments : {}}
                         />
+                        <InformationProviderSection currentUser={currentUser} />
                       </Stack>
                     </Box>
                   ) : null,
@@ -5518,7 +5803,7 @@ function getRequestColumns(
   ]
 }
 
-function ConnectionRequestPage({ userType = '', accessToken = '' }) {
+function ConnectionRequestPage({ userType = '', accessToken = '', currentUser = null }) {
   const [requestForm, setRequestForm] = useState(null)
   const [requestFormError, setRequestFormError] = useState('')
   const [requestDocument, setRequestDocument] = useState(null)
@@ -6209,6 +6494,7 @@ function ConnectionRequestPage({ userType = '', accessToken = '' }) {
         formType={requestForm?.formType ?? ''}
         factory={requestForm?.factory}
         accessToken={accessToken}
+        currentUser={currentUser}
         mode={requestForm?.mode ?? 'create'}
         requestId={requestForm?.requestId}
         initialRequest={requestForm?.initialRequest}
