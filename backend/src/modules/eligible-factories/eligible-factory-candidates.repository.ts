@@ -175,12 +175,18 @@ async function loadFactoryClassCodesByFid(rows: FacImportRow[]): Promise<Map<str
 
   const classRows: FactoryClassRow[] = [];
   try {
-    for (const fidChunk of chunks(fids, 1000)) {
-      const chunkRows = await factorySourceDb<FactoryClassRow>(`${env.FACTORY_DB_SCHEMA}.FACCLASS`)
-        .whereIn('FID', fidChunk)
-        .timeout(EXTERNAL_QUERY_TIMEOUT_MS)
-        .select('FID', 'CLASS');
-      classRows.push(...chunkRows);
+    if (fids.length > BULK_LOOKUP_THRESHOLD) {
+      classRows.push(...(await loadActiveFactoryClassCodes()));
+    } else {
+      for (const fidChunk of chunks(fids, 1000)) {
+        const chunkRows = await factorySourceDb<FactoryClassRow>(
+          `${env.FACTORY_DB_SCHEMA}.FACCLASS`,
+        )
+          .whereIn('FID', fidChunk)
+          .timeout(EXTERNAL_QUERY_TIMEOUT_MS)
+          .select('FID', 'CLASS');
+        classRows.push(...chunkRows);
+      }
     }
   } catch (error) {
     logger.warn('[eligible-factories] Failed to load FACCLASS factory classes', { error });
@@ -206,6 +212,14 @@ async function loadActiveFactoryProductionCapacities(): Promise<ProductionCapaci
     .whereIn('fi.FFLAG', ['1', '3'])
     .timeout(EXTERNAL_QUERY_TIMEOUT_MS)
     .select('fp.FID', 'fp.PRODNAME', 'fp.PRODQUAN', 'u.UNT_ENAME');
+}
+
+async function loadActiveFactoryClassCodes(): Promise<FactoryClassRow[]> {
+  return factorySourceDb<FactoryClassRow>(`${env.FACTORY_DB_SCHEMA}.FACCLASS as fc`)
+    .join(`${factorySourceTableName()} as fi`, 'fc.FID', 'fi.FID')
+    .whereIn('fi.FFLAG', ['1', '3'])
+    .timeout(EXTERNAL_QUERY_TIMEOUT_MS)
+    .select('fc.FID', 'fc.CLASS');
 }
 
 async function selectedFactoryRegistrationNumbers(): Promise<Set<string>> {

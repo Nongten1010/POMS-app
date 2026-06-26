@@ -40,6 +40,7 @@ describe('eligibleFactoryCandidatesRepository', () => {
       FNAME: 'โรงงานจริง 1',
       FID: 'real-1',
       DISPFACREG: 'real-reg-1',
+      CLASS: '00100',
       PROV: 10,
       FFLAG: 1,
     },
@@ -47,13 +48,14 @@ describe('eligibleFactoryCandidatesRepository', () => {
       FNAME: 'โรงงานจริง 2',
       FID: 'real-2',
       DISPFACREG: 'real-reg-2',
+      CLASS: '00100',
       PROV: 21,
       FFLAG: 3,
       COLONY_INDUST_CODE: '000022',
     },
   ];
 
-  function mockExternalCandidates() {
+  function mockExternalCandidates(candidateRows = externalRows) {
     const informationSchemaQuery = {
       where: jest.fn().mockReturnThis(),
       whereIn: jest.fn().mockReturnThis(),
@@ -63,6 +65,7 @@ describe('eligibleFactoryCandidatesRepository', () => {
           { COLUMN_NAME: 'FNAME' },
           { COLUMN_NAME: 'FID' },
           { COLUMN_NAME: 'DISPFACREG' },
+          { COLUMN_NAME: 'CLASS' },
           { COLUMN_NAME: 'PROV' },
           { COLUMN_NAME: 'FFLAG' },
         ]),
@@ -76,9 +79,9 @@ describe('eligibleFactoryCandidatesRepository', () => {
       offset: jest.fn().mockReturnThis(),
       limit: jest
         .fn<(...args: unknown[]) => Promise<typeof externalRows>>()
-        .mockResolvedValue(externalRows),
+        .mockResolvedValue(candidateRows),
       then: jest.fn((resolve: (rows: typeof externalRows) => unknown) =>
-        Promise.resolve(resolve(externalRows)),
+        Promise.resolve(resolve(candidateRows)),
       ),
     };
     const countQuery = {
@@ -87,7 +90,7 @@ describe('eligibleFactoryCandidatesRepository', () => {
       timeout: jest.fn().mockReturnThis(),
       count: jest
         .fn<(...args: unknown[]) => Promise<Array<{ total: string | number | null }>>>()
-        .mockResolvedValue([{ total: externalRows.length }]),
+        .mockResolvedValue([{ total: candidateRows.length }]),
     };
     const baseQuery = {
       clone: jest.fn().mockReturnValueOnce(countQuery).mockReturnValueOnce(facImportQuery),
@@ -115,6 +118,7 @@ describe('eligibleFactoryCandidatesRepository', () => {
         .mockResolvedValue([{ COLONY_INDUST_CODE: '000022', COLONY_INDUST_DESC: 'แหลมฉบัง' }]),
     };
     const facProdQuery = {
+      join: jest.fn().mockReturnThis(),
       leftJoin: jest.fn().mockReturnThis(),
       whereIn: jest.fn().mockReturnThis(),
       timeout: jest.fn().mockReturnThis(),
@@ -144,11 +148,36 @@ describe('eligibleFactoryCandidatesRepository', () => {
           },
         ]),
     };
+    const facClassQuery = {
+      whereIn: jest.fn().mockReturnThis(),
+      timeout: jest.fn().mockReturnThis(),
+      select: jest
+        .fn<(...columns: string[]) => Promise<Array<{ FID: string | null; CLASS: string | null }>>>()
+        .mockResolvedValue([
+          { FID: 'real-1', CLASS: '00100' },
+          { FID: 'real-1', CLASS: '00201' },
+          { FID: 'real-2', CLASS: '00100' },
+        ]),
+    };
+    const activeFacClassQuery = {
+      join: jest.fn().mockReturnThis(),
+      whereIn: jest.fn().mockReturnThis(),
+      timeout: jest.fn().mockReturnThis(),
+      select: jest
+        .fn<(...columns: string[]) => Promise<Array<{ FID: string | null; CLASS: string | null }>>>()
+        .mockResolvedValue([
+          { FID: 'real-1', CLASS: '00100' },
+          { FID: 'real-1', CLASS: '00201' },
+          { FID: 'real-2', CLASS: '00100' },
+        ]),
+    };
     mockedFactorySourceDb.mockImplementation(((tableName: unknown) => {
       if (tableName === 'INFORMATION_SCHEMA.COLUMNS') return informationSchemaQuery as never;
       if (tableName === 'dbo.check_eia') return checkEiaQuery as never;
       if (tableName === 'dbo.FAC_COLONY_INDUST') return industrialEstateQuery as never;
       if (tableName === 'dbo.FAC_PROD as fp') return facProdQuery as never;
+      if (tableName === 'dbo.FACCLASS') return facClassQuery as never;
+      if (tableName === 'dbo.FACCLASS as fc') return activeFacClassQuery as never;
       return baseQuery as never;
     }) as never);
     return {
@@ -157,12 +186,14 @@ describe('eligibleFactoryCandidatesRepository', () => {
       facImportQuery,
       checkEiaQuery,
       facProdQuery,
+      facClassQuery,
+      activeFacClassQuery,
       industrialEstateQuery,
     };
   }
 
   it('paginates candidates before loading related lookup data', async () => {
-    const { countQuery, facImportQuery, facProdQuery, industrialEstateQuery } =
+    const { countQuery, facImportQuery, facProdQuery, facClassQuery, industrialEstateQuery } =
       mockExternalCandidates();
     mockedEligibleFactoriesRepository.listActiveRegistrationNumbers.mockResolvedValue([]);
 
@@ -181,6 +212,7 @@ describe('eligibleFactoryCandidatesRepository', () => {
     expect(result.data[1]?.eia).toBeNull();
     expect(result.data[1]?.hasEia).toBeNull();
     expect(result.data[1]?.productionCapacity).toBe('น้ำตาลทราย 1200 ตัน/ปี, กากน้ำตาล 300 ตัน/ปี');
+    expect(result.data[0]?.factorySubclass).toBe('201');
     expect(result.data[1]?.boilerSizeEach).toBeNull();
     expect(result.data[1]?.fuelUsed).toBeNull();
     expect(countQuery.count).toHaveBeenCalledWith({ total: '*' });
@@ -194,7 +226,33 @@ describe('eligibleFactoryCandidatesRepository', () => {
     expect(mockedFactorySourceDb).not.toHaveBeenCalledWith('dbo.check_eia');
     expect(facProdQuery.leftJoin).toHaveBeenCalledWith('dbo.UNIT as u', 'fp.UNIT', 'u.UNIT');
     expect(facProdQuery.whereIn).toHaveBeenCalledWith('fp.FID', ['real-1', 'real-2']);
+    expect(facClassQuery.whereIn).toHaveBeenCalledWith('FID', ['real-1', 'real-2']);
     expect(mockedBoilerSourceDb).not.toHaveBeenCalled();
+  });
+
+  it('loads FACCLASS with a single bulk join when exporting all candidates', async () => {
+    const manyRows = Array.from({ length: 5001 }, (_, index) => ({
+      FNAME: `โรงงานจริง ${index + 1}`,
+      FID: `real-${index + 1}`,
+      DISPFACREG: `real-reg-${index + 1}`,
+      CLASS: '00100',
+      PROV: 10,
+      FFLAG: 1,
+    }));
+    const { facClassQuery, activeFacClassQuery } = mockExternalCandidates(manyRows);
+    mockedEligibleFactoriesRepository.listActiveRegistrationNumbers.mockResolvedValue([]);
+
+    const result = await eligibleFactoryCandidatesRepository.list({});
+
+    expect(result.meta).toEqual({
+      total: 5001,
+      source: 'external',
+    });
+    expect(result.data).toHaveLength(5001);
+    expect(activeFacClassQuery.join).toHaveBeenCalledWith('dbo.fac_import as fi', 'fc.FID', 'fi.FID');
+    expect(activeFacClassQuery.whereIn).toHaveBeenCalledWith('fi.FFLAG', ['1', '3']);
+    expect(activeFacClassQuery.select).toHaveBeenCalledWith('fc.FID', 'fc.CLASS');
+    expect(facClassQuery.whereIn).not.toHaveBeenCalled();
   });
 
   it('returns all candidates when pagination is not requested', async () => {

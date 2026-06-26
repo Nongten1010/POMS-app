@@ -65,6 +65,7 @@ source: external
 | Query | เวลาก่อนปรับโดยประมาณ |
 | --- | --- |
 | `FAC_PROD` แบบ `whereIn` chunk หลายรอบ | chunk ตัวอย่าง 1,000 FID ใช้ประมาณ 24s; ถ้าดึงทั้งหมดเสี่ยงเกิน 300s |
+| `FACCLASS` แบบ `whereIn` chunk หลายรอบ | เมื่อดึงทั้งหมดต้องยิงหลายสิบ query เพราะมี FID ประมาณ 68k รายการ |
 | `boiler_list` แบบ `whereIn` chunk หลายรอบ | ประมาณ 85s |
 
 แนวทางที่ปรับ:
@@ -80,8 +81,17 @@ left join dbo.UNIT as u on fp.UNIT = u.UNIT
 where fi.FFLAG in ('1', '3')
 ```
 
-3. ตัด `boiler_list` และ `check_eia` ออกจาก candidate lookup แล้ว เพราะ frontend ไม่ใช้แล้ว
-4. เพิ่ม MSSQL `requestTimeout = 300000` ใน connection ของ factory source และ boiler source เพื่อให้ timeout ระดับ driver สอดคล้องกับ endpoint timeout
+3. ถ้า request มีจำนวน FID มากกว่า `5,000` รายการ จะเปลี่ยน `FACCLASS` เป็น bulk join รอบเดียว:
+
+```sql
+select fc.FID, fc.CLASS
+from dbo.FACCLASS as fc
+join dbo.fac_import as fi on fc.FID = fi.FID
+where fi.FFLAG in ('1', '3')
+```
+
+4. ตัด `boiler_list` และ `check_eia` ออกจาก candidate lookup แล้ว เพราะ frontend ไม่ใช้แล้ว
+5. เพิ่ม MSSQL `requestTimeout = 300000` ใน connection ของ factory source และ boiler source เพื่อให้ timeout ระดับ driver สอดคล้องกับ endpoint timeout
 
 ## ตัวอย่าง response
 
