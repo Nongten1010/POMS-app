@@ -30,7 +30,7 @@ export function normalizeFactoryTypeSequence(
 ): Pick<EligibleFactoryCandidateDTO, 'factoryClass' | 'factorySubclass'> {
   const normalizedClass = normalizeText(factoryClass);
   const duplicateSubclassCode = normalizedClass
-    ? factorySubclassCodeFromClass(normalizedClass)
+    ? factorySubclassCodeFromMainClass(normalizedClass)
     : null;
   const subclassCodes = new Set<string>();
 
@@ -51,14 +51,20 @@ function normalizeText(value?: string | null): string | null {
   return text ? text : null;
 }
 
-function factorySubclassCodeFromClass(value: string): string | null {
+function factorySubclassCodeFromMainClass(value: string): string | null {
   const digits = value.replace(/\D/g, '');
   if (!digits) return null;
-  return digits.slice(-3).padStart(3, '0');
+  return digits.slice(-3).padStart(4, '0');
 }
 
 function normalizeSubclassToken(value: string): string | null {
   const text = value.trim();
   if (!text) return null;
-  return factorySubclassCodeFromClass(text) ?? text;
+  return factorySubclassCodeFromSource(text) ?? text;
+}
+
+function factorySubclassCodeFromSource(value: string): string | null {
+  const digits = value.replace(/\D/g, '');
+  if (!digits) return null;
+  return digits.slice(-3).padStart(4, '0');
 }

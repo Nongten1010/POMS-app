@@ -56,7 +56,7 @@ describe('eligible factories validators', () => {
 
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.factoryTypeSequence).toBe('9200 / 602,605');
+      expect(result.data.factoryTypeSequence).toBe('9200 / 0602,0605');
     }
   });
 

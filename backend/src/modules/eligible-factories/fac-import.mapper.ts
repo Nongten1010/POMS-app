@@ -254,13 +254,13 @@ function factorySubclassCodes(
   factoryClass: string | null,
 ): string | null {
   const codes = new Set<string>();
-  const mainClassAsSubclass = factoryClass ? factorySubclassCodeFromClass(factoryClass) : null;
+  const mainClassAsSubclass = factoryClass ? factorySubclassCodeFromMainClass(factoryClass) : null;
 
   for (const value of values) {
     const text = firstText(value);
     if (!text) continue;
     for (const token of text.split(/[,\s/|;]+/)) {
-      const code = factorySubclassCodeFromClass(token);
+      const code = factorySubclassCodeFromSource(token);
       if (code && code === mainClassAsSubclass) continue;
       if (code) codes.add(code);
     }
@@ -269,10 +269,16 @@ function factorySubclassCodes(
   return codes.size > 0 ? [...codes].sort().join(',') : null;
 }
 
-function factorySubclassCodeFromClass(value: string): string | null {
+function factorySubclassCodeFromMainClass(value: string): string | null {
   const digits = value.replace(/\D/g, '');
   if (!digits) return null;
-  return digits.slice(-3).padStart(3, '0');
+  return digits.slice(-3).padStart(4, '0');
+}
+
+function factorySubclassCodeFromSource(value: string): string | null {
+  const digits = value.replace(/\D/g, '');
+  if (!digits) return null;
+  return digits.slice(-3).padStart(4, '0');
 }
 
 function commaSeparatedValues(...values: Array<string | number | null | undefined>): string | null {

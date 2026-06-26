@@ -51,7 +51,7 @@ describe('fac_import mapper', () => {
       factoryId: '10100302325234',
       factoryRegistrationNo: '3-64(6)-45/17',
       factoryClass: '0064',
-      factorySubclass: '065',
+      factorySubclass: '0065',
       provinceName: 'กรุงเทพมหานคร',
       businessActivity: 'ทำผลิตภัณฑ์โลหะต่าง ๆ',
       operationStatus: 'แจ้งประกอบแล้ว',
@@ -95,7 +95,7 @@ describe('fac_import mapper', () => {
     );
 
     expect(result.factoryClass).toBe('0101');
-    expect(result.factorySubclass).toBe('102,103');
+    expect(result.factorySubclass).toBe('0102,0103');
   });
 
   it('sorts FACCLASS subclass codes for stable display', () => {
@@ -110,7 +110,7 @@ describe('fac_import mapper', () => {
       },
     );
 
-    expect(result.factorySubclass).toBe('201');
+    expect(result.factorySubclass).toBe('0201');
   });
 
   it('uses the last 4 digits from CLASS for the main factory type only', () => {
@@ -157,7 +157,7 @@ describe('fac_import mapper', () => {
     );
 
     expect(result.factoryClass).toBe('0100');
-    expect(result.factorySubclass).toBe('201');
+    expect(result.factorySubclass).toBe('0201');
   });
 
   it('omits FACCLASS subclass when it only repeats the main class', () => {

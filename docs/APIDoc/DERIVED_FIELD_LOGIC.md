@@ -95,8 +95,8 @@ Source:
 Logic:
 
 - ดึงรายการ `CLASS` ทั้งหมดของ `FID` จาก `dbo.FACCLASS`
-- เอาเลข 3 หลักท้ายของแต่ละ `CLASS`
-- ตัดรหัสที่ซ้ำกับประเภทหลักออก เช่น `factoryClass = 0100` และ `FACCLASS.CLASS = 00100` จะไม่คืน `100`
+- เอาเลข 3 หลักท้ายของแต่ละ `CLASS` แล้ว pad ซ้ายด้วย `0` ให้เป็น 4 หลัก
+- ตัดรหัสที่ซ้ำกับประเภทหลักออก เช่น `factoryClass = 0100` และ `FACCLASS.CLASS = 00100` จะไม่คืน `0100`
 - ตัดค่าซ้ำ และถ้าเหลือหลายค่าให้ join ด้วย comma
 - ถ้า `FACCLASS` ไม่มีค่า ให้คืน `null`
 - ไม่ใช้ `fac_import.DISPFACREG`
@@ -120,7 +120,15 @@ fac_import.CLASS = 00100
 FACCLASS.CLASS = 00100, 00201
 
 factoryClass = 0100
-factorySubclass = 201
+factorySubclass = 0201
+```
+
+```text
+fac_import.CLASS = 05301
+FACCLASS.CLASS = 00000, 00300, 00702
+
+factoryClass = 5301
+factorySubclass = 0000,0300,0702
 ```
 
 Risk:
@@ -274,19 +282,20 @@ Source:
 
 Logic:
 
-- DB เก็บประเภทโรงงานเป็นค่าเดียว เช่น `9200 / 200,602,605`
+- DB เก็บประเภทโรงงานเป็นค่าเดียว เช่น `9200 / 0200,0602,0605`
 - API แยกค่าหน้า `/` เป็น `factoryClass`
 - API แยกค่าหลัง `/` เป็นรายการ `factorySubclass`
 - ก่อนส่งออกและก่อนบันทึกข้อมูลใหม่ ระบบตัดรหัสรองที่ซ้ำกับประเภทหลักออก โดยเทียบเลข 3 หลักท้ายของ `factoryClass` กับรหัสใน `factorySubclass`
+- ระบบแสดงรหัสรองเป็น 4 หลัก เช่น `000` -> `0000`, `300` -> `0300`, `702` -> `0702`
 - ถ้าตัดแล้วไม่เหลือรหัสรอง จะส่ง `factorySubclass = null`
 
 Example:
 
 ```text
-factory_type_sequence = 9200 / 200,602,605
+factory_type_sequence = 9200 / 0200,0602,0605
 
 factoryClass = 9200
-factorySubclass = 602,605
+factorySubclass = 0602,0605
 ```
 
 ```text
@@ -301,8 +310,9 @@ Cleanup:
 - Migration `0040_normalize_eligible_factory_type_sequences.ts` ปรับข้อมูลเก่าใน `eligible_factories.factory_type_sequence` ให้ตรงกับ rule เดียวกัน
 - ก่อน update migration จะสำรองเฉพาะแถวที่ถูกแก้ไว้ใน `eligible_factory_type_sequence_cleanup_0040`
 - Rollback migration จะคืนค่าเดิมจาก backup table
+- Migration `0041_format_eligible_factory_subclasses_to_four_digits.ts` ปรับข้อมูลเก่าที่เหลือให้ `factorySubclass` เป็น 4 หลัก และสำรองค่าก่อนแก้ไว้ใน `eligible_factory_type_sequence_cleanup_0041`
 
 Risk:
 
-- Rule นี้ตัดเฉพาะรหัสรองที่เท่ากับเลข 3 หลักท้ายของประเภทหลักเท่านั้น
-- เคสเช่น `403 / 000,003` จะยังคง `000,003` เพราะ `000` และ `003` ไม่เท่ากับ `403`
+- Rule นี้ตัดเฉพาะรหัสรอง 4 หลักที่เท่ากับเลข 3 หลักท้ายของประเภทหลักหลัง pad เป็น 4 หลักเท่านั้น
+- เคสเช่น `0403 / 000,003` จะกลายเป็น `0403 / 0000,0003`
