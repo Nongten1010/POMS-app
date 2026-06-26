@@ -42,7 +42,9 @@ describe('fac_import mapper', () => {
   };
 
   it('maps fac_import columns to eligible factory candidate fields', () => {
-    const result = toEligibleFactoryCandidate(row);
+    const result = toEligibleFactoryCandidate(row, {
+      factoryClassCodesByFid: new Map([['10100302325234', ['000064', '000065']]]),
+    });
 
     expect(result).toMatchObject({
       factoryName: 'ห้างหุ้นส่วนจำกัด โรงกลึงก๊กกวง',
@@ -77,14 +79,19 @@ describe('fac_import mapper', () => {
     expect(result.hasEia).toBeNull();
   });
 
-  it('splits multiple subclass codes and removes the duplicated main code', () => {
-    const result = toEligibleFactoryCandidate({
-      ...row,
-      DISPFACREG: null,
-      CLASS: '101',
-      SUBCLASS: '101102103',
-      FACTYPE: null,
-    });
+  it('uses FACCLASS CLASS values for subclass codes and removes the duplicated main code', () => {
+    const result = toEligibleFactoryCandidate(
+      {
+        ...row,
+        DISPFACREG: null,
+        CLASS: '101',
+        SUBCLASS: '101102103',
+        FACTYPE: null,
+      },
+      {
+        factoryClassCodesByFid: new Map([['10100302325234', ['00101', '00102', '00103']]]),
+      },
+    );
 
     expect(result.factoryClass).toBe('0101');
     expect(result.factorySubclass).toBe('102,103');
@@ -101,7 +108,27 @@ describe('fac_import mapper', () => {
     });
 
     expect(result.factoryClass).toBe('0100');
-    expect(result.factorySubclass).toBe('003,000');
+    expect(result.factorySubclass).toBeNull();
+  });
+
+  it('does not use FACTYPE or EXPSEQ as secondary factory type codes', () => {
+    const result = toEligibleFactoryCandidate(
+      {
+        ...row,
+        FID: '10550000125197',
+        DISPFACREG: '3-1-1/19นน',
+        CLASS: '00100',
+        FACTYPE: '3',
+        SUBCLASS: null,
+        EXPSEQ: '0',
+      },
+      {
+        factoryClassCodesByFid: new Map([['10550000125197', ['00100', '00201']]]),
+      },
+    );
+
+    expect(result.factoryClass).toBe('0100');
+    expect(result.factorySubclass).toBe('201');
   });
 
   it('uses industrial estate display names when the source code has a lookup match', () => {

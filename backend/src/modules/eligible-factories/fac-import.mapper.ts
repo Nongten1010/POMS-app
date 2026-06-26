@@ -130,6 +130,7 @@ interface FacImportMapperOptions {
   eiaLookupSkipped?: boolean;
   productionCapacitiesByFid?: Map<string, string>;
   boilerValuesByFid?: Map<string, BoilerLookupValue>;
+  factoryClassCodesByFid?: Map<string, string[]>;
 }
 
 export function toEligibleFactoryCandidate(
@@ -149,11 +150,7 @@ export function toEligibleFactoryCandidate(
   const factoryClass = factoryMainClass(row.CLASS);
   const factorySubclass = factorySubclassCodes(
     factoryClass,
-    [
-      row.SUBCLASS,
-      row.FACTYPE,
-      row.EXPSEQ,
-    ],
+    options.factoryClassCodesByFid?.get(sourceFactoryId) ?? [],
     factoryClassDuplicateCodes(row.CLASS),
   );
   const hasEia = options.eiaLookupSkipped ? null : hasFactoryEia(row, options);
@@ -275,29 +272,18 @@ function factorySubclassCodes(
     const text = firstText(value);
     if (!text) continue;
     for (const token of text.split(/[,\s/|;]+/)) {
-      for (const code of factoryCodeChunks(token, factoryClass)) {
-        if (!duplicateCodes.has(code)) codes.add(code);
-      }
+      const code = factorySubclassCodeFromClass(token);
+      if (code && !duplicateCodes.has(code)) codes.add(code);
     }
   }
 
   return codes.size > 0 ? [...codes].join(',') : null;
 }
 
-function factoryCodeChunks(value: string, factoryClass: string | null): string[] {
+function factorySubclassCodeFromClass(value: string): string | null {
   const digits = value.replace(/\D/g, '');
-  if (!digits) return [];
-  const normalized = factoryClass && digits.startsWith(factoryClass) ? digits.slice(3) : digits;
-  if (!normalized) return [];
-  if (normalized.length <= 3) return [normalized.padStart(3, '0')];
-
-  const chunks: string[] = [];
-  for (let index = 0; index < normalized.length; index += 3) {
-    const chunk = normalized.slice(index, index + 3);
-    if (chunk.length === 3) chunks.push(chunk);
-  }
-
-  return chunks.length > 0 ? chunks : [normalized.slice(-3).padStart(3, '0')];
+  if (!digits) return null;
+  return digits.slice(-3).padStart(3, '0');
 }
 
 function commaSeparatedValues(...values: Array<string | number | null | undefined>): string | null {

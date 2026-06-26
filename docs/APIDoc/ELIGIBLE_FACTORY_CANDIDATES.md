@@ -37,7 +37,7 @@ source: external
 | `factoryId` | `sqlservice.diw.go.th` / `diw.dbo.fac_import.FID` | query หลัก |
 | `factoryRegistrationNo` | `sqlservice.diw.go.th` / `diw.dbo.fac_import.DISPFACREG`, fallback `FACREG` | query หลัก |
 | `factoryClass` | `sqlservice.diw.go.th` / `diw.dbo.fac_import.CLASS` | เอาเลข 4 ตัวท้าย เช่น `00100` -> `0100` |
-| `factorySubclass` | `sqlservice.diw.go.th` / `diw.dbo.fac_import.SUBCLASS`, `FACTYPE`, `EXPSEQ` | แปลงเป็นเลข 3 ตัว, ตัดเลขที่ซ้ำกับ `factoryClass`, มากกว่า 1 ค่า join ด้วย comma |
+| `factorySubclass` | `sqlservice.diw.go.th` / `diw.dbo.FACCLASS.CLASS` join ด้วย `FID` | ใช้เลข 3 ตัวท้ายจาก `CLASS`, ตัดเลขที่ซ้ำกับประเภทหลัก, มากกว่า 1 ค่า join ด้วย comma |
 | `address` | `sqlservice.diw.go.th` / `fac_import` address columns | query หลัก |
 | `provinceName` | `sqlservice.diw.go.th` / `fac_import.PROV` | map รหัสจังหวัด DIW เป็นชื่อจังหวัด |
 | `industrialEstateName` | `sqlservice.diw.go.th` / `diw.dbo.FAC_COLONY_INDUST` | join lookup จาก `fac_import.COLONY_INDUST_CODE` ไป `FAC_COLONY_INDUST.COLONY_INDUST_DESC` |
@@ -94,7 +94,7 @@ where fi.FFLAG in ('1', '3')
       "factoryId": "10520000225172",
       "factoryRegistrationNo": "3-1-2/17ลป",
       "factoryClass": "0100",
-      "factorySubclass": "003,000",
+      "factorySubclass": null,
       "address": "1 หมู่ 9 ถนนบ้านช่องกอม ตำบล4 อำเภอ13 52240",
       "provinceName": "ลำปาง",
       "industrialEstateName": null,

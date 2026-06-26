@@ -45,16 +45,19 @@ async function listExternalCandidates(
   const rows = isPaginated
     ? await executableRowsQuery.offset((page - 1) * perPage).limit(perPage)
     : await executableRowsQuery;
-  const [industrialEstateNamesByCode, productionCapacitiesByFid] = await Promise.all([
-    loadIndustrialEstateNamesByCode(rows),
-    loadProductionCapacitiesByFid(rows),
-  ]);
+  const [industrialEstateNamesByCode, productionCapacitiesByFid, factoryClassCodesByFid] =
+    await Promise.all([
+      loadIndustrialEstateNamesByCode(rows),
+      loadProductionCapacitiesByFid(rows),
+      loadFactoryClassCodesByFid(rows),
+    ]);
   const data = excludeSelectedCandidates(
     rows.map((row) =>
       toEligibleFactoryCandidate(row, {
         industrialEstateNamesByCode,
         eiaLookupSkipped: true,
         productionCapacitiesByFid,
+        factoryClassCodesByFid,
       }),
     ),
     selectedRegistrationNumbers,
@@ -166,6 +169,36 @@ async function loadProductionCapacitiesByFid(rows: FacImportRow[]): Promise<Map<
   );
 }
 
+async function loadFactoryClassCodesByFid(rows: FacImportRow[]): Promise<Map<string, string[]>> {
+  const fids = uniqueFids(rows);
+  if (fids.length === 0) return new Map();
+
+  const classRows: FactoryClassRow[] = [];
+  try {
+    for (const fidChunk of chunks(fids, 1000)) {
+      const chunkRows = await factorySourceDb<FactoryClassRow>(`${env.FACTORY_DB_SCHEMA}.FACCLASS`)
+        .whereIn('FID', fidChunk)
+        .timeout(EXTERNAL_QUERY_TIMEOUT_MS)
+        .select('FID', 'CLASS');
+      classRows.push(...chunkRows);
+    }
+  } catch (error) {
+    logger.warn('[eligible-factories] Failed to load FACCLASS factory classes', { error });
+    return new Map();
+  }
+
+  const requestedFids = new Set(fids);
+  const codesByFid = new Map<string, string[]>();
+  for (const row of classRows) {
+    const fid = row.FID?.trim();
+    const classCode = row.CLASS?.trim();
+    if (!fid || !requestedFids.has(fid) || !classCode) continue;
+    codesByFid.set(fid, [...(codesByFid.get(fid) ?? []), classCode]);
+  }
+
+  return new Map([...codesByFid.entries()].map(([fid, codes]) => [fid, [...new Set(codes)]]));
+}
+
 async function loadActiveFactoryProductionCapacities(): Promise<ProductionCapacityRow[]> {
   return factorySourceDb<ProductionCapacityRow>(`${env.FACTORY_DB_SCHEMA}.FAC_PROD as fp`)
     .join(`${factorySourceTableName()} as fi`, 'fp.FID', 'fi.FID')
@@ -197,6 +230,11 @@ interface ProductionCapacityRow {
   PRODNAME: string | null;
   PRODQUAN: string | number | null;
   UNT_ENAME: string | null;
+}
+
+interface FactoryClassRow {
+  FID: string | null;
+  CLASS: string | null;
 }
 
 function formatProductionCapacity(row: ProductionCapacityRow): string | null {
