@@ -94,6 +94,8 @@ describe('eligibleFactoryCandidatesRepository', () => {
     };
     const baseQuery = {
       clone: jest.fn().mockReturnValueOnce(countQuery).mockReturnValueOnce(facImportQuery),
+      whereIn: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
     };
     const checkEiaQuery = {
       whereIn: jest.fn().mockReturnThis(),
@@ -230,7 +232,7 @@ describe('eligibleFactoryCandidatesRepository', () => {
     expect(mockedBoilerSourceDb).not.toHaveBeenCalled();
   });
 
-  it('loads FACCLASS with a single bulk join when exporting all candidates', async () => {
+  it('loads FACCLASS without joining fac_import when exporting all candidates', async () => {
     const manyRows = Array.from({ length: 5001 }, (_, index) => ({
       FNAME: `โรงงานจริง ${index + 1}`,
       FID: `real-${index + 1}`,
@@ -249,10 +251,11 @@ describe('eligibleFactoryCandidatesRepository', () => {
       source: 'external',
     });
     expect(result.data).toHaveLength(5001);
-    expect(activeFacClassQuery.join).toHaveBeenCalledWith('dbo.fac_import as fi', 'fc.FID', 'fi.FID');
-    expect(activeFacClassQuery.whereIn).toHaveBeenCalledWith('fi.FFLAG', ['1', '3']);
-    expect(activeFacClassQuery.select).toHaveBeenCalledWith('fc.FID', 'fc.CLASS');
+    expect(result.data[0]?.factorySubclass).toBe('100,201');
+    expect(activeFacClassQuery.join).not.toHaveBeenCalled();
     expect(facClassQuery.whereIn).not.toHaveBeenCalled();
+    expect(activeFacClassQuery.whereIn).toHaveBeenCalled();
+    expect(activeFacClassQuery.select).toHaveBeenCalledWith('fc.FID', 'fc.CLASS');
   });
 
   it('returns all candidates when pagination is not requested', async () => {

@@ -45,12 +45,18 @@ async function listExternalCandidates(
   const rows = isPaginated
     ? await executableRowsQuery.offset((page - 1) * perPage).limit(perPage)
     : await executableRowsQuery;
-  const [industrialEstateNamesByCode, productionCapacitiesByFid, factoryClassCodesByFid] =
-    await Promise.all([
-      loadIndustrialEstateNamesByCode(rows),
-      loadProductionCapacitiesByFid(rows),
-      loadFactoryClassCodesByFid(rows),
-    ]);
+  const [industrialEstateNamesByCode, factoryClassCodesByFid, productionCapacitiesByFid] =
+    rows.length > BULK_LOOKUP_THRESHOLD
+      ? [
+          await loadIndustrialEstateNamesByCode(rows),
+          await loadFactoryClassCodesByFid(rows),
+          await loadProductionCapacitiesByFid(rows),
+        ]
+      : await Promise.all([
+          loadIndustrialEstateNamesByCode(rows),
+          loadFactoryClassCodesByFid(rows),
+          loadProductionCapacitiesByFid(rows),
+        ]);
   const data = excludeSelectedCandidates(
     rows.map((row) =>
       toEligibleFactoryCandidate(row, {
@@ -134,10 +140,10 @@ async function loadProductionCapacitiesByFid(rows: FacImportRow[]): Promise<Map<
   const fids = uniqueFids(rows);
   if (fids.length === 0) return new Map();
 
-  const productionRows: ProductionCapacityRow[] = [];
+  let productionRows: ProductionCapacityRow[] = [];
   try {
     if (fids.length > BULK_LOOKUP_THRESHOLD) {
-      productionRows.push(...(await loadActiveFactoryProductionCapacities()));
+      productionRows = await loadActiveFactoryProductionCapacities();
     } else {
       for (const fidChunk of chunks(fids, 1000)) {
         const chunkRows = await factorySourceDb<ProductionCapacityRow>(
@@ -173,15 +179,13 @@ async function loadFactoryClassCodesByFid(rows: FacImportRow[]): Promise<Map<str
   const fids = uniqueFids(rows);
   if (fids.length === 0) return new Map();
 
-  const classRows: FactoryClassRow[] = [];
+  let classRows: FactoryClassRow[] = [];
   try {
     if (fids.length > BULK_LOOKUP_THRESHOLD) {
-      classRows.push(...(await loadActiveFactoryClassCodes()));
+      classRows = await loadActiveFactoryClassCodes();
     } else {
       for (const fidChunk of chunks(fids, 1000)) {
-        const chunkRows = await factorySourceDb<FactoryClassRow>(
-          `${env.FACTORY_DB_SCHEMA}.FACCLASS`,
-        )
+        const chunkRows = await factorySourceDb<FactoryClassRow>(`${env.FACTORY_DB_SCHEMA}.FACCLASS`)
           .whereIn('FID', fidChunk)
           .timeout(EXTERNAL_QUERY_TIMEOUT_MS)
           .select('FID', 'CLASS');
@@ -205,21 +209,25 @@ async function loadFactoryClassCodesByFid(rows: FacImportRow[]): Promise<Map<str
   return new Map([...codesByFid.entries()].map(([fid, codes]) => [fid, [...new Set(codes)]]));
 }
 
-async function loadActiveFactoryProductionCapacities(): Promise<ProductionCapacityRow[]> {
-  return factorySourceDb<ProductionCapacityRow>(`${env.FACTORY_DB_SCHEMA}.FAC_PROD as fp`)
-    .join(`${factorySourceTableName()} as fi`, 'fp.FID', 'fi.FID')
-    .leftJoin(`${env.FACTORY_DB_SCHEMA}.UNIT as u`, 'fp.UNIT', 'u.UNIT')
-    .whereIn('fi.FFLAG', ['1', '3'])
-    .timeout(EXTERNAL_QUERY_TIMEOUT_MS)
-    .select('fp.FID', 'fp.PRODNAME', 'fp.PRODQUAN', 'u.UNT_ENAME');
-}
-
 async function loadActiveFactoryClassCodes(): Promise<FactoryClassRow[]> {
   return factorySourceDb<FactoryClassRow>(`${env.FACTORY_DB_SCHEMA}.FACCLASS as fc`)
-    .join(`${factorySourceTableName()} as fi`, 'fc.FID', 'fi.FID')
-    .whereIn('fi.FFLAG', ['1', '3'])
+    .whereIn(
+      'fc.FID',
+      factorySourceDb(factorySourceTableName()).whereIn('FFLAG', ['1', '3']).select('FID'),
+    )
     .timeout(EXTERNAL_QUERY_TIMEOUT_MS)
     .select('fc.FID', 'fc.CLASS');
+}
+
+async function loadActiveFactoryProductionCapacities(): Promise<ProductionCapacityRow[]> {
+  return factorySourceDb<ProductionCapacityRow>(`${env.FACTORY_DB_SCHEMA}.FAC_PROD as fp`)
+    .leftJoin(`${env.FACTORY_DB_SCHEMA}.UNIT as u`, 'fp.UNIT', 'u.UNIT')
+    .whereIn(
+      'fp.FID',
+      factorySourceDb(factorySourceTableName()).whereIn('FFLAG', ['1', '3']).select('FID'),
+    )
+    .timeout(EXTERNAL_QUERY_TIMEOUT_MS)
+    .select('fp.FID', 'fp.PRODNAME', 'fp.PRODQUAN', 'u.UNT_ENAME');
 }
 
 async function selectedFactoryRegistrationNumbers(): Promise<Set<string>> {
