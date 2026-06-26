@@ -255,3 +255,54 @@ Logic:
 Risk:
 
 - เป็น formatted address ของระบบ ไม่ใช่ raw DB field เดี่ยว
+
+## Selected Eligible Factories
+
+Endpoint: `GET /api/v1/eligible-factories`
+
+Code:
+
+- `backend/src/modules/eligible-factories/eligible-factories.repository.ts`
+- `backend/src/modules/eligible-factories/eligible-factories.service.ts`
+- `backend/src/modules/eligible-factories/factory-type-sequence.ts`
+
+### `factoryClass` / `factorySubclass`
+
+Source:
+
+- `eligible_factories.factory_type_sequence`
+
+Logic:
+
+- DB เก็บประเภทโรงงานเป็นค่าเดียว เช่น `9200 / 200,602,605`
+- API แยกค่าหน้า `/` เป็น `factoryClass`
+- API แยกค่าหลัง `/` เป็นรายการ `factorySubclass`
+- ก่อนส่งออกและก่อนบันทึกข้อมูลใหม่ ระบบตัดรหัสรองที่ซ้ำกับประเภทหลักออก โดยเทียบเลข 3 หลักท้ายของ `factoryClass` กับรหัสใน `factorySubclass`
+- ถ้าตัดแล้วไม่เหลือรหัสรอง จะส่ง `factorySubclass = null`
+
+Example:
+
+```text
+factory_type_sequence = 9200 / 200,602,605
+
+factoryClass = 9200
+factorySubclass = 602,605
+```
+
+```text
+factory_type_sequence = 0902 / 902
+
+factoryClass = 0902
+factorySubclass = null
+```
+
+Cleanup:
+
+- Migration `0040_normalize_eligible_factory_type_sequences.ts` ปรับข้อมูลเก่าใน `eligible_factories.factory_type_sequence` ให้ตรงกับ rule เดียวกัน
+- ก่อน update migration จะสำรองเฉพาะแถวที่ถูกแก้ไว้ใน `eligible_factory_type_sequence_cleanup_0040`
+- Rollback migration จะคืนค่าเดิมจาก backup table
+
+Risk:
+
+- Rule นี้ตัดเฉพาะรหัสรองที่เท่ากับเลข 3 หลักท้ายของประเภทหลักเท่านั้น
+- เคสเช่น `403 / 000,003` จะยังคง `000,003` เพราะ `000` และ `003` ไม่เท่ากับ `403`

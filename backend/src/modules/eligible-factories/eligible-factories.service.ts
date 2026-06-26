@@ -2,7 +2,6 @@ import { ConflictError, NotFoundError } from '../../shared/errors/AppError';
 import { eligibleFactoriesRepository } from './eligible-factories.repository';
 import type {
   CreateEligibleFactoryInput,
-  EligibleFactoryCandidateDTO,
   EligibleFactoryDTO,
   ListEligibleFactoryCandidatesQuery,
   ListEligibleFactoriesQuery,
@@ -10,6 +9,7 @@ import type {
   SelectedEligibleFactoryDTO,
 } from './eligible-factories.types';
 import { eligibleFactoryCandidatesRepository } from './eligible-factory-candidates.repository';
+import { splitFactoryTypeSequence } from './factory-type-sequence';
 
 export const eligibleFactoriesService = {
   listCandidates(query: ListEligibleFactoryCandidatesQuery) {
@@ -72,17 +72,5 @@ function toSelectedEligibleFactory(factory: EligibleFactoryDTO): SelectedEligibl
     fuelUsed: factory.fuelUsed,
     hasEia: factory.hasEia,
     measurementPoints: factory.measurementPoints ?? [],
-  };
-}
-
-function splitFactoryTypeSequence(
-  value: string | null,
-): Pick<EligibleFactoryCandidateDTO, 'factoryClass' | 'factorySubclass'> {
-  if (!value) return { factoryClass: null, factorySubclass: null };
-  const [factoryClass, factorySubclass] = value.split(' / ', 2);
-
-  return {
-    factoryClass: factoryClass || null,
-    factorySubclass: factorySubclass || null,
   };
 }

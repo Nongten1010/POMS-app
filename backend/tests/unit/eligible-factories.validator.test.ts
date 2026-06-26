@@ -47,6 +47,19 @@ describe('eligible factories validators', () => {
     }
   });
 
+  it('removes duplicated secondary factory type codes before storing selections', () => {
+    const result = createEligibleFactorySchema.safeParse({
+      ...validPayload,
+      factoryClass: '9200',
+      factorySubclass: '200,602,605',
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.factoryTypeSequence).toBe('9200 / 602,605');
+    }
+  });
+
   it('rejects unknown fields', () => {
     const result = createEligibleFactorySchema.safeParse({
       ...validPayload,

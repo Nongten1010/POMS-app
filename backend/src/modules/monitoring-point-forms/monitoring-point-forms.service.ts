@@ -1,5 +1,6 @@
 import { BadRequestError, ConflictError, NotFoundError } from '../../shared/errors/AppError';
 import { eligibleFactoriesRepository } from '../eligible-factories/eligible-factories.repository';
+import { joinFactoryTypeSequence } from '../eligible-factories/factory-type-sequence';
 import type {
   CreateEligibleFactoryInput,
   EligibleFactoryDTO,
@@ -93,10 +94,13 @@ async function syncEligibleFactoryFromForm(
     existingByRegistration?.monitoringPointFormId &&
     existingByRegistration.monitoringPointFormId !== form.id
   ) {
-    throw new ConflictError('Factory registration is already linked to another monitoring point form', {
-      factoryRegistrationNoNew: input.factoryRegistrationNoNew,
-      monitoringPointFormId: existingByRegistration.monitoringPointFormId,
-    });
+    throw new ConflictError(
+      'Factory registration is already linked to another monitoring point form',
+      {
+        factoryRegistrationNoNew: input.factoryRegistrationNoNew,
+        monitoringPointFormId: existingByRegistration.monitoringPointFormId,
+      },
+    );
   }
 
   if (existingByRegistration) {
@@ -119,9 +123,12 @@ function buildEligibleFactoryInput(
   const registrationNoNew = form.factory.factoryRegistrationNoNew?.trim();
   if (!registrationNoNew) {
     if (!options.requireRegistration) return null;
-    throw new BadRequestError('Factory registration number is required before selecting eligible factory', {
-      field: 'factory.factoryRegistrationNoNew',
-    });
+    throw new BadRequestError(
+      'Factory registration number is required before selecting eligible factory',
+      {
+        field: 'factory.factoryRegistrationNoNew',
+      },
+    );
   }
 
   return {
@@ -149,13 +156,6 @@ function buildEligibleFactoryInput(
   };
 }
 
-function joinFactoryTypeSequence(main?: string | null, sub?: string | null): string | null {
-  return [main, sub]
-    .map((value) => value?.trim())
-    .filter((value): value is string => Boolean(value))
-    .join(' / ') || null;
-}
-
 function buildProductionCapacitySummary(form: MonitoringPointFormDTO): string | null {
   const values = form.points
     .map((point) => point.productionCapacity?.trim())
@@ -165,12 +165,14 @@ function buildProductionCapacitySummary(form: MonitoringPointFormDTO): string | 
 }
 
 function buildFuelSummary(form: MonitoringPointFormDTO): string | null {
-  const values = form.points.flatMap((point) => [
-    point.primaryFuel?.trim(),
-    point.primaryFuelOther?.trim(),
-    point.secondaryFuel?.trim(),
-    point.secondaryFuelOther?.trim(),
-  ]).filter((value): value is string => Boolean(value));
+  const values = form.points
+    .flatMap((point) => [
+      point.primaryFuel?.trim(),
+      point.primaryFuelOther?.trim(),
+      point.secondaryFuel?.trim(),
+      point.secondaryFuelOther?.trim(),
+    ])
+    .filter((value): value is string => Boolean(value));
 
   return values.length ? Array.from(new Set(values)).join(', ') : null;
 }

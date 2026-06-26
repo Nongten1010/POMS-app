@@ -1,17 +1,10 @@
 import { z } from 'zod';
+import { joinFactoryTypeSequence } from './factory-type-sequence';
 
 const trimmedString = (max: number) => z.string().trim().min(1).max(max);
 const requiredNullableTrimmedString = (max: number) => trimmedString(max).nullable();
 const nullableNumber = z.number().nullable();
 const nullableBoolean = z.boolean().nullable();
-
-function joinFactoryTypeSequence(factoryClass?: string | null, factorySubclass?: string | null) {
-  return (
-    [factoryClass, factorySubclass]
-      .filter((value): value is string => Boolean(value))
-      .join(' / ') || null
-  );
-}
 
 export const createEligibleFactorySchema = z
   .object({
