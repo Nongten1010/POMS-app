@@ -113,6 +113,22 @@ describe('fac_import mapper', () => {
     expect(result.factorySubclass).toBe('0201');
   });
 
+  it('uses the last 4 digits from FACCLASS for subclass codes', () => {
+    const result = toEligibleFactoryCandidate(
+      {
+        ...row,
+        FID: 'factory-7000',
+        CLASS: '06000',
+      },
+      {
+        factoryClassCodesByFid: new Map([['factory-7000', ['07000', '007001']]]),
+      },
+    );
+
+    expect(result.factoryClass).toBe('6000');
+    expect(result.factorySubclass).toBe('7000,7001');
+  });
+
   it('uses the last 4 digits from CLASS for the main factory type only', () => {
     const result = toEligibleFactoryCandidate({
       ...row,

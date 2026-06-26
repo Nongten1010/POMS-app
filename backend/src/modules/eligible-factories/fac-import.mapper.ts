@@ -272,13 +272,13 @@ function factorySubclassCodes(
 function factorySubclassCodeFromMainClass(value: string): string | null {
   const digits = value.replace(/\D/g, '');
   if (!digits) return null;
-  return digits.slice(-3).padStart(4, '0');
+  return digits.slice(-4).padStart(4, '0');
 }
 
 function factorySubclassCodeFromSource(value: string): string | null {
   const digits = value.replace(/\D/g, '');
   if (!digits) return null;
-  return digits.slice(-3).padStart(4, '0');
+  return digits.slice(-4).padStart(4, '0');
 }
 
 function commaSeparatedValues(...values: Array<string | number | null | undefined>): string | null {

@@ -95,7 +95,7 @@ Source:
 Logic:
 
 - ดึงรายการ `CLASS` ทั้งหมดของ `FID` จาก `dbo.FACCLASS`
-- เอาเลข 3 หลักท้ายของแต่ละ `CLASS` แล้ว pad ซ้ายด้วย `0` ให้เป็น 4 หลัก
+- เอาเลข 4 หลักท้ายของแต่ละ `CLASS` แล้ว pad ซ้ายด้วย `0` ให้เป็น 4 หลัก
 - ตัดรหัสที่ซ้ำกับประเภทหลักออก เช่น `factoryClass = 0100` และ `FACCLASS.CLASS = 00100` จะไม่คืน `0100`
 - ตัดค่าซ้ำ และถ้าเหลือหลายค่าให้ join ด้วย comma
 - ถ้า `FACCLASS` ไม่มีค่า ให้คืน `null`
@@ -125,10 +125,10 @@ factorySubclass = 0201
 
 ```text
 fac_import.CLASS = 05301
-FACCLASS.CLASS = 00000, 00300, 00702
+FACCLASS.CLASS = 00000, 00300, 00702, 07000
 
 factoryClass = 5301
-factorySubclass = 0000,0300,0702
+factorySubclass = 0000,0300,0702,7000
 ```
 
 Risk:
@@ -285,8 +285,8 @@ Logic:
 - DB เก็บประเภทโรงงานเป็นค่าเดียว เช่น `9200 / 0200,0602,0605`
 - API แยกค่าหน้า `/` เป็น `factoryClass`
 - API แยกค่าหลัง `/` เป็นรายการ `factorySubclass`
-- ก่อนส่งออกและก่อนบันทึกข้อมูลใหม่ ระบบตัดรหัสรองที่ซ้ำกับประเภทหลักออก โดยเทียบเลข 3 หลักท้ายของ `factoryClass` กับรหัสใน `factorySubclass`
-- ระบบแสดงรหัสรองเป็น 4 หลัก เช่น `000` -> `0000`, `300` -> `0300`, `702` -> `0702`
+- ก่อนส่งออกและก่อนบันทึกข้อมูลใหม่ ระบบตัดรหัสรองที่ซ้ำกับประเภทหลักออก โดยเทียบเลข 4 หลักท้ายของ `factoryClass` กับรหัสใน `factorySubclass`
+- ระบบแสดงรหัสรองเป็น 4 หลัก เช่น `000` -> `0000`, `300` -> `0300`, `702` -> `0702`, `07000` -> `7000`
 - ถ้าตัดแล้วไม่เหลือรหัสรอง จะส่ง `factorySubclass = null`
 
 Example:
@@ -295,7 +295,7 @@ Example:
 factory_type_sequence = 9200 / 0200,0602,0605
 
 factoryClass = 9200
-factorySubclass = 0602,0605
+factorySubclass = 0200,0602,0605
 ```
 
 ```text
@@ -311,8 +311,10 @@ Cleanup:
 - ก่อน update migration จะสำรองเฉพาะแถวที่ถูกแก้ไว้ใน `eligible_factory_type_sequence_cleanup_0040`
 - Rollback migration จะคืนค่าเดิมจาก backup table
 - Migration `0041_format_eligible_factory_subclasses_to_four_digits.ts` ปรับข้อมูลเก่าที่เหลือให้ `factorySubclass` เป็น 4 หลัก และสำรองค่าก่อนแก้ไว้ใน `eligible_factory_type_sequence_cleanup_0041`
+- Migration `0042_use_last_four_digits_for_factory_subclasses.ts` ปรับ rule เป็นการใช้เลข 4 หลักท้ายจริง และสำรองค่าก่อนแก้ไว้ใน `eligible_factory_type_sequence_cleanup_0042`
 
 Risk:
 
-- Rule นี้ตัดเฉพาะรหัสรอง 4 หลักที่เท่ากับเลข 3 หลักท้ายของประเภทหลักหลัง pad เป็น 4 หลักเท่านั้น
-- เคสเช่น `0403 / 000,003` จะกลายเป็น `0403 / 0000,0003`
+- Rule นี้ตัดเฉพาะรหัสรอง 4 หลักที่เท่ากับเลข 4 หลักท้ายของประเภทหลักหลัง pad เป็น 4 หลักเท่านั้น
+- เคสเช่น `0403 / 000,003,00403` จะกลายเป็น `0403 / 0000,0003`
+- ถ้าข้อมูลเก่าถูก normalize ผิดจนสูญเลขหลักหน้าไปแล้ว เช่น source เดิม `07000` ถูกเก็บเป็น `0000` จะต้องเติมจาก source เดิมอีกครั้ง เพราะค่า `7000` ไม่เหลืออยู่ใน stored value

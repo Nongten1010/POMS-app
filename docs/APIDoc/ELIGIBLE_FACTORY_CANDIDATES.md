@@ -37,7 +37,7 @@ source: external
 | `factoryId` | `sqlservice.diw.go.th` / `diw.dbo.fac_import.FID` | query หลัก |
 | `factoryRegistrationNo` | `sqlservice.diw.go.th` / `diw.dbo.fac_import.DISPFACREG`, fallback `FACREG` | query หลัก |
 | `factoryClass` | `sqlservice.diw.go.th` / `diw.dbo.fac_import.CLASS` | เอาเลข 4 ตัวท้าย เช่น `00100` -> `0100` |
-| `factorySubclass` | `sqlservice.diw.go.th` / `diw.dbo.FACCLASS.CLASS` join ด้วย `FID` | ใช้เลข 3 หลักท้ายจาก `FACCLASS.CLASS`, ตัดค่าซ้ำและตัดรหัสที่ซ้ำกับ `factoryClass`, มากกว่า 1 ค่า join ด้วย comma; ถ้าไม่เหลือค่าให้คืน `null` |
+| `factorySubclass` | `sqlservice.diw.go.th` / `diw.dbo.FACCLASS.CLASS` join ด้วย `FID` | ใช้เลข 4 หลักท้ายจาก `FACCLASS.CLASS`, ตัดค่าซ้ำและตัดรหัสที่ซ้ำกับ `factoryClass`, มากกว่า 1 ค่า join ด้วย comma; ถ้าไม่เหลือค่าให้คืน `null` |
 | `address` | `sqlservice.diw.go.th` / `fac_import` address columns | query หลัก |
 | `provinceName` | `sqlservice.diw.go.th` / `fac_import.PROV` | map รหัสจังหวัด DIW เป็นชื่อจังหวัด |
 | `industrialEstateName` | `sqlservice.diw.go.th` / `diw.dbo.FAC_COLONY_INDUST` | join lookup จาก `fac_import.COLONY_INDUST_CODE` ไป `FAC_COLONY_INDUST.COLONY_INDUST_DESC` |
