@@ -1,9 +1,10 @@
 import { existsSync, readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
-import { cwd } from 'node:process'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
+const configDir = dirname(fileURLToPath(import.meta.url))
 const productionEnvFile = '.env.production'
 const productionOnlyEnvKeys = ['VITE_LONGDO_MAP_KEY']
 
@@ -37,7 +38,7 @@ function getProductionEnvDefines(mode) {
     return {}
   }
 
-  const productionEnv = parseEnvFile(resolve(cwd(), productionEnvFile))
+  const productionEnv = parseEnvFile(resolve(configDir, productionEnvFile))
 
   return productionOnlyEnvKeys.reduce((defines, key) => {
     defines[`import.meta.env.${key}`] = JSON.stringify(productionEnv[key] ?? '')
