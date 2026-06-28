@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Box,
   Button,
-  ButtonBase,
   Chip,
   Dialog,
   DialogActions,
@@ -32,7 +31,7 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import CloseIcon from '@mui/icons-material/Close'
 import SearchIcon from '@mui/icons-material/Search'
 import StarBorderIcon from '@mui/icons-material/StarBorder'
-import { DateCalendar } from '@mui/x-date-pickers/DateCalendar'
+import { DatePicker } from '@mui/x-date-pickers/DatePicker'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import { AdapterDayjsBuddhist } from '@mui/x-date-pickers/AdapterDayjsBuddhist'
 import { LineChart } from '@mui/x-charts/LineChart'
@@ -62,23 +61,6 @@ const connectedMeasurementPointsApiBaseUrl = import.meta.env.DEV
   ? '/api-proxy/v1/connected-measurement-points'
   : 'http://d-poms.diw.go.th/api/v1/connected-measurement-points'
 const logoBackgrounds = ['#dbeafe', '#fef3c7', '#fee2e2', '#dcfce7', '#e0f2fe', '#ffedd5', '#ecfdf3']
-const calendarStatusStyles = {
-  lowData: { backgroundColor: '#e5e7eb', borderColor: 'transparent' },
-  highData: { backgroundColor: '#dbeafe', borderColor: 'transparent' },
-  normal: { backgroundColor: 'transparent', borderColor: '#22c55e' },
-  warning: { backgroundColor: 'transparent', borderColor: '#f59e0b' },
-  exceeded: { backgroundColor: 'transparent', borderColor: '#ef4444' },
-  insufficient: { backgroundColor: 'transparent', borderColor: 'transparent' },
-  noData: { backgroundColor: 'transparent', borderColor: 'transparent' },
-  invalid: { backgroundColor: 'transparent', borderColor: 'transparent' },
-}
-const calendarLegendItems = [
-  { label: 'ส่งข้อมูลน้อยกว่า 80%', ...calendarStatusStyles.lowData },
-  { label: 'ส่งข้อมูลมากกว่า 80%', ...calendarStatusStyles.highData },
-  { label: 'ปกติทั้งวัน', ...calendarStatusStyles.normal },
-  { label: 'เฝ้าระวัง', ...calendarStatusStyles.warning },
-  { label: 'เกินมาตรฐาน', ...calendarStatusStyles.exceeded },
-]
 const statisticParameters = ['CO (ppm)', 'NOx (ppm)', 'Temp. (°C)', 'O2 (%)', 'Flow (m3/hr)']
 const statisticStatusColors = {
   normal: '#46b529',
@@ -184,24 +166,6 @@ function getMeasurementParameterValue(values, parameter) {
   }
 
   return values[parameter.label] ?? values[parameter.code] ?? null
-}
-
-function mapCalendarStatusByDay(days) {
-  if (!Array.isArray(days)) {
-    return {}
-  }
-
-  return days.reduce((result, day) => {
-    if (!day?.date) {
-      return result
-    }
-
-    result[day.date] = {
-      backgroundStatus: day.display?.backgroundStatus ?? day.dataCompletenessStatus ?? null,
-      borderStatus: day.display?.borderStatus ?? day.pollutionStatus ?? null,
-    }
-    return result
-  }, {})
 }
 
 function mapCalendarSummaryRows(rows) {
@@ -334,6 +298,7 @@ function mapOperatorFactory(row, index) {
     lat,
     logoText: getFactoryLogoText(row.factoryName, row.newRegistrationNo),
     logoBg: logoBackgrounds[index % logoBackgrounds.length],
+    logoUrl: row.factoryLogoUrl ?? row.logoUrl ?? '',
     isFavorite: row.isFavorite === true,
     measurementPoints: Array.isArray(row.measurementPoints) ? row.measurementPoints : [],
   }
@@ -770,7 +735,7 @@ function FactoryCard({ factory, onSelect }) {
             color="text.secondary"
             sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
           >
-            {[factory.factoryId, factory.newRegistrationNo ? `(${factory.newRegistrationNo})` : ''].filter(Boolean).join(' ')}
+            {[factory.factoryId, factory.oldRegistrationNo ? `(${factory.oldRegistrationNo})` : ''].filter(Boolean).join(' ')}
           </Typography>
           <Typography
             variant="body2"
@@ -963,6 +928,48 @@ function MeasurementTable({ table, sx }) {
   )
 }
 
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (character) => {
+    const replacements = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    }
+    return replacements[character]
+  })
+}
+
+function encodeSvgDataUrl(svg) {
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`
+}
+
+function getFactoryMapMarkerIcon(factory) {
+  const label = escapeHtml(factory.logoText || getFactoryLogoText(factory.name, factory.factoryId))
+  const fill = escapeHtml(factory.logoBg || '#dbeafe')
+  const image = factory.logoUrl
+    ? `
+      <clipPath id="marker-clip">
+        <circle cx="24" cy="24" r="21" />
+      </clipPath>
+      <image href="${escapeHtml(factory.logoUrl)}" x="3" y="3" width="42" height="42" clip-path="url(#marker-clip)" preserveAspectRatio="xMidYMid slice" />
+    `
+    : ''
+
+  return encodeSvgDataUrl(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+      <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+        <feDropShadow dx="0" dy="5" stdDeviation="4" flood-color="#0f172a" flood-opacity="0.25" />
+      </filter>
+      <circle cx="24" cy="24" r="22" fill="#ffffff" filter="url(#shadow)" />
+      <circle cx="24" cy="24" r="19" fill="${fill}" />
+      <text x="24" y="28" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="800" fill="#0f172a">${label}</text>
+      ${image}
+    </svg>
+  `)
+}
+
 function FactoryMap({ factories }) {
   const placeholderRef = useRef(null)
   const mapRef = useRef(null)
@@ -1014,6 +1021,11 @@ function FactoryMap({ factories }) {
           {
             title: factory.name,
             detail: `${factory.newRegistrationNo} (${factory.oldRegistrationNo})<br>${factory.address}`,
+            icon: {
+              url: getFactoryMapMarkerIcon(factory),
+              offset: { x: 24, y: 24 },
+              size: { width: 48, height: 48 },
+            },
             weight: longdo.OverlayWeight.Top,
           },
         ),
@@ -1073,7 +1085,6 @@ function FactoryBottomSheet({ factory, accessToken = '', open, onClose }) {
   const [selectedCalendarMonth, setSelectedCalendarMonth] = useState(() => dayjs())
   const [selectedStatisticPoint, setSelectedStatisticPoint] = useState('')
   const [selectedTrendParameter, setSelectedTrendParameter] = useState(statisticParameters[0])
-  const [calendarStatusByDay, setCalendarStatusByDay] = useState({})
   const [calendarSummary, setCalendarSummary] = useState([])
   const [calendarError, setCalendarError] = useState('')
   const [measurementStatisticParameters, setMeasurementStatisticParameters] = useState(statisticParameters)
@@ -1114,14 +1125,12 @@ function FactoryBottomSheet({ factory, accessToken = '', open, onClose }) {
         }
 
         if (isActive) {
-          setCalendarStatusByDay(mapCalendarStatusByDay(payload?.data?.calendar?.days))
           setCalendarSummary(mapCalendarSummaryRows(payload?.data?.monthlySummary))
           setCalendarError('')
         }
       })
       .catch((error) => {
         if (isActive) {
-          setCalendarStatusByDay({})
           setCalendarSummary([])
           setCalendarError(error instanceof Error ? error.message : 'โหลดข้อมูล calendar ไม่สำเร็จ')
         }
@@ -1278,184 +1287,12 @@ function FactoryBottomSheet({ factory, accessToken = '', open, onClose }) {
               pb: { xs: 2, md: 3 },
             }}
           >
-            <Box
-              sx={{
-                minWidth: 0,
-              }}
-            >
-              <Stack spacing={2}>
-                <Box
-                  sx={{
-                    display: 'grid',
-                    gridTemplateColumns: { xs: '1fr', sm: '320px minmax(0, 1fr)' },
-                    gap: 1.5,
-                    alignItems: 'start',
-                    border: 1,
-                    borderColor: 'divider',
-                    borderRadius: 1,
-                    bgcolor: 'background.paper',
-                    p: 1.5,
-                  }}
-                >
-                  <Typography
-                    variant="subtitle1"
-                    sx={{
-                      gridColumn: '1 / -1',
-                      color: 'text.primary',
-                      fontWeight: 700,
-                      lineHeight: 1.35,
-                    }}
-                  >
-                    ข้อมูล{' '}
-                    <Box component="span" sx={{ color: 'primary.main' }}>
-                      {activeStatisticPointLabel}
-                    </Box>
-                  </Typography>
-
-                  <Stack spacing={1.25} sx={{ width: { xs: '100%', sm: 320 }, alignItems: 'flex-start' }}>
-                    <LocalizationProvider dateAdapter={AdapterDayjsBuddhist} adapterLocale="th">
-                      <DateCalendar
-                        value={selectedDate}
-                        onChange={(nextDate) => {
-                          if (nextDate) {
-                            setSelectedDate(nextDate)
-                          }
-                        }}
-                        onMonthChange={(nextMonth) => setSelectedCalendarMonth(nextMonth)}
-                        sx={{
-                          width: { xs: '100%', sm: 320 },
-                          bgcolor: 'background.paper',
-                          m: 0,
-                        }}
-                        slots={{ day: CalendarStatusDay }}
-                        slotProps={{ day: { statusByDay: calendarStatusByDay } }}
-                      />
-                    </LocalizationProvider>
-
-                    {[calendarLegendItems.slice(0, 2), calendarLegendItems.slice(2)].map((legendRow, index) => (
-                      <Stack
-                        key={index}
-                        direction="row"
-                        spacing={1.5}
-                        useFlexGap
-                        sx={{ width: '100%', minWidth: 0, flexWrap: 'nowrap' }}
-                      >
-                        {legendRow.map((item) => (
-                          <Stack
-                            key={item.label}
-                            direction="row"
-                            spacing={0.75}
-                            sx={{ alignItems: 'center', minWidth: 0, flex: '0 0 auto' }}
-                          >
-                            <Box
-                              sx={{
-                                width: 14,
-                                height: item.backgroundColor === 'transparent' ? 10 : 6,
-                                borderRadius: 999,
-                                bgcolor: item.backgroundColor,
-                                border: 2,
-                                borderColor: item.borderColor,
-                                flex: '0 0 auto',
-                              }}
-                            />
-                            <Typography variant="caption" sx={{ color: 'text.primary', fontWeight: 600 }}>
-                              {item.label}
-                            </Typography>
-                          </Stack>
-                        ))}
-                      </Stack>
-                    ))}
-                  </Stack>
-
-                  <TableContainer
-                    sx={{
-                      minWidth: 0,
-                      border: 1,
-                      borderColor: 'divider',
-                    }}
-                  >
-                    <Table
-                      size="small"
-                      sx={{
-                        width: '100%',
-                        tableLayout: 'fixed',
-                        '& .MuiTableCell-root': {
-                          fontSize: '11px !important',
-                          lineHeight: 1.35,
-                          px: 0.75,
-                          py: 0.75,
-                          wordBreak: 'break-word',
-                        },
-                        '& .MuiTableCell-root:last-of-type': {
-                          borderRight: 0,
-                        },
-                        '& .MuiTableBody-root .MuiTableRow-root:last-of-type .MuiTableCell-root': {
-                          borderBottom: 0,
-                        },
-                        ...borderedTableSx,
-                      }}
-                    >
-                      <TableHead>
-                        <TableRow>
-                          <TableCell sx={{ width: '27%', bgcolor: '#f3f4f6', color: '#475569', fontWeight: 700 }}>
-                            พารามิเตอร์
-                          </TableCell>
-                          <TableCell align="center" sx={{ width: '20%', bgcolor: '#ef4444', color: '#fff', fontWeight: 700 }}>
-                            เกินมาตรฐาน
-                            <br />
-                            (วัน)
-                          </TableCell>
-                          <TableCell align="center" sx={{ width: '29%', bgcolor: '#f97316', color: '#fff', fontWeight: 700 }}>
-                            ข้อมูลไม่ถึง
-                            <br />
-                            ร้อยละ 80 ต่อวัน (วัน)
-                          </TableCell>
-                          <TableCell align="center" sx={{ width: '24%', bgcolor: '#2f9d4a', color: '#fff', fontWeight: 700 }}>
-                            การส่งข้อมูล
-                            <br />
-                            วันนี้ (%)
-                          </TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {activeCalendarSummaryRows.map((row) => (
-                          <TableRow key={row.parameter}>
-                            <TableCell sx={{ fontWeight: 700 }}>{row.parameter}</TableCell>
-                            <TableCell align="center" sx={{ fontWeight: 400 }}>
-                              {row.exceededDays}
-                            </TableCell>
-                            <TableCell align="center" sx={{ fontWeight: 400 }}>
-                              {row.lowDataDays}
-                            </TableCell>
-                            <TableCell align="center" sx={{ fontWeight: 700 }}>
-                              {row.todayPercent}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                        {activeCalendarSummaryRows.length === 0 ? (
-                          <TableRow>
-                            <TableCell colSpan={4} align="center" sx={{ fontWeight: 400, color: 'text.secondary' }}>
-                              {calendarError || 'ไม่มีข้อมูลสรุปรายเดือน'}
-                            </TableCell>
-                          </TableRow>
-                        ) : null}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                </Box>
-
-                <PollutionTrendPanel
-                  rows={statisticRows}
-                  parameters={activeStatisticParameters}
-                  selectedDate={selectedDate}
-                  selectedPointLabel={activeStatisticPointLabel}
-                  selectedParameter={activeTrendParameter}
-                  onParameterChange={setSelectedTrendParameter}
-                />
-              </Stack>
-            </Box>
             <FactoryStatisticPanel
               selectedDate={selectedDate}
+              onDateChange={(nextDate) => {
+                setSelectedDate(nextDate)
+                setSelectedCalendarMonth(nextDate)
+              }}
               points={statisticPoints}
               selectedPoint={activeStatisticPoint}
               onPointChange={setSelectedStatisticPoint}
@@ -1463,6 +1300,17 @@ function FactoryBottomSheet({ factory, accessToken = '', open, onClose }) {
               parameters={activeStatisticParameters}
               error={measurementStatisticError}
             />
+            <Stack spacing={2} sx={{ minWidth: 0 }}>
+              <PollutionTrendPanel
+                rows={statisticRows}
+                parameters={activeStatisticParameters}
+                selectedDate={selectedDate}
+                selectedPointLabel={activeStatisticPointLabel}
+                selectedParameter={activeTrendParameter}
+                onParameterChange={setSelectedTrendParameter}
+              />
+              <CalendarSummaryPanel rows={activeCalendarSummaryRows} error={calendarError} />
+            </Stack>
           </Box>
         </Box>
       ) : null}
@@ -1486,6 +1334,101 @@ function getStatisticPoints(factory) {
         { value: 'WP-01', label: 'WP-01' },
         { value: 'WP-02', label: 'WP-02' },
       ]
+}
+
+function CalendarSummaryPanel({ rows, error = '' }) {
+  return (
+    <Box
+      sx={{
+        minWidth: 0,
+        border: 1,
+        borderColor: 'divider',
+        borderRadius: 1,
+        bgcolor: 'background.paper',
+        overflow: 'hidden',
+        p: 1.5,
+      }}
+    >
+      <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 700 }}>
+        สรุปผลการตรวจวัด
+      </Typography>
+      <TableContainer
+        sx={{
+          minWidth: 0,
+          border: 1,
+          borderColor: 'divider',
+        }}
+      >
+        <Table
+          size="small"
+          sx={{
+            width: '100%',
+            tableLayout: 'fixed',
+            '& .MuiTableCell-root': {
+              fontSize: '11px !important',
+              lineHeight: 1.35,
+              px: 0.75,
+              py: 0.75,
+              wordBreak: 'break-word',
+            },
+            '& .MuiTableCell-root:last-of-type': {
+              borderRight: 0,
+            },
+            '& .MuiTableBody-root .MuiTableRow-root:last-of-type .MuiTableCell-root': {
+              borderBottom: 0,
+            },
+            ...borderedTableSx,
+          }}
+        >
+          <TableHead>
+            <TableRow>
+              <TableCell sx={{ width: '27%', bgcolor: '#f3f4f6', color: '#475569', fontWeight: 700 }}>
+                พารามิเตอร์
+              </TableCell>
+              <TableCell align="center" sx={{ width: '20%', bgcolor: '#ef4444', color: '#fff', fontWeight: 700 }}>
+                เกินมาตรฐาน
+                <br />
+                (วัน)
+              </TableCell>
+              <TableCell align="center" sx={{ width: '29%', bgcolor: '#f97316', color: '#fff', fontWeight: 700 }}>
+                ข้อมูลไม่ถึง
+                <br />
+                ร้อยละ 80 ต่อวัน (วัน)
+              </TableCell>
+              <TableCell align="center" sx={{ width: '24%', bgcolor: '#2f9d4a', color: '#fff', fontWeight: 700 }}>
+                การส่งข้อมูล
+                <br />
+                วันนี้ (%)
+              </TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {rows.map((row) => (
+              <TableRow key={row.parameter}>
+                <TableCell sx={{ fontWeight: 700 }}>{row.parameter}</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 400 }}>
+                  {row.exceededDays}
+                </TableCell>
+                <TableCell align="center" sx={{ fontWeight: 400 }}>
+                  {row.lowDataDays}
+                </TableCell>
+                <TableCell align="center" sx={{ fontWeight: 700 }}>
+                  {row.todayPercent}
+                </TableCell>
+              </TableRow>
+            ))}
+            {rows.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={4} align="center" sx={{ fontWeight: 400, color: 'text.secondary' }}>
+                  {error || 'ไม่มีข้อมูลสรุปรายเดือน'}
+                </TableCell>
+              </TableRow>
+            ) : null}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </Box>
+  )
 }
 
 function PollutionTrendPanel({ rows, parameters, selectedDate, selectedPointLabel, selectedParameter, onParameterChange }) {
@@ -1604,8 +1547,8 @@ function PollutionTrendPanel({ rows, parameters, selectedDate, selectedPointLabe
   )
 }
 
-function FactoryStatisticPanel({ selectedDate, points, selectedPoint, onPointChange, rows, parameters, error }) {
-  const selectedDateLabel = selectedDate?.format?.('D MMMM BBBB') ?? ''
+function FactoryStatisticPanel({ selectedDate, onDateChange, points, selectedPoint, onPointChange, rows, parameters, error }) {
+  const selectedDateValue = selectedDate?.format?.('YYYY-MM-DD') ?? ''
 
   return (
     <Box
@@ -1618,12 +1561,32 @@ function FactoryStatisticPanel({ selectedDate, points, selectedPoint, onPointCha
         overflow: 'hidden',
       }}
     >
-      <Typography variant="subtitle1" sx={{ px: 1.5, py: 1.25, fontWeight: 700 }}>
-        สถิติข้อมูล{' '}
-        <Box component="span" sx={{ color: 'primary.main' }}>
-          {selectedDateLabel}
-        </Box>
-      </Typography>
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        spacing={1.25}
+        sx={{ px: 1.5, py: 1.25, alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'space-between' }}
+      >
+        <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+          สถิติข้อมูล
+        </Typography>
+        <LocalizationProvider dateAdapter={AdapterDayjsBuddhist} adapterLocale="th">
+          <DatePicker
+            value={selectedDate}
+            format="DD-MM-YYYY"
+            onChange={(nextDate) => {
+              if (nextDate) {
+                onDateChange(nextDate)
+              }
+            }}
+            slotProps={{
+              textField: {
+                size: 'small',
+                sx: { width: 154 },
+              },
+            }}
+          />
+        </LocalizationProvider>
+      </Stack>
       <Tabs
         value={selectedPoint ?? false}
         onChange={(_, nextValue) => onPointChange(nextValue)}
@@ -1646,15 +1609,28 @@ function FactoryStatisticPanel({ selectedDate, points, selectedPoint, onPointCha
       </Tabs>
 
       <TableContainer sx={{ overflowX: 'auto' }}>
-        <Table size="small" sx={{ minWidth: 760, ...borderedTableSx }}>
+        <Table size="small" sx={{ minWidth: 880, ...borderedTableSx }}>
           <TableHead>
             <TableRow>
+              <TableCell
+                sx={{
+                  width: 120,
+                  minWidth: 120,
+                  position: 'sticky',
+                  left: 0,
+                  zIndex: 3,
+                  fontWeight: 700,
+                  bgcolor: 'neutral.50',
+                }}
+              >
+                วันที่
+              </TableCell>
               <TableCell
                 sx={{
                   width: 140,
                   minWidth: 140,
                   position: 'sticky',
-                  left: 0,
+                  left: 120,
                   zIndex: 2,
                   fontWeight: 700,
                   bgcolor: 'neutral.50',
@@ -1674,9 +1650,22 @@ function FactoryStatisticPanel({ selectedDate, points, selectedPoint, onPointCha
               <TableRow key={`${row.date}-${row.time}`}>
                 <TableCell
                   sx={{
-                    minWidth: 140,
+                    minWidth: 120,
                     position: 'sticky',
                     left: 0,
+                    zIndex: 2,
+                    bgcolor: 'background.paper',
+                    fontWeight: 600,
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {selectedDateValue || row.date}
+                </TableCell>
+                <TableCell
+                  sx={{
+                    minWidth: 140,
+                    position: 'sticky',
+                    left: 120,
                     zIndex: 1,
                     bgcolor: 'background.paper',
                     fontWeight: 600,
@@ -1700,7 +1689,7 @@ function FactoryStatisticPanel({ selectedDate, points, selectedPoint, onPointCha
               </TableRow>
             )) : (
               <TableRow>
-                <TableCell colSpan={parameters.length + 1} align="center" sx={{ fontWeight: 400 }}>
+                <TableCell colSpan={parameters.length + 2} align="center" sx={{ fontWeight: 400 }}>
                   <Typography variant="body2" color="text.secondary">
                     {error || 'ไม่มีข้อมูลสถิติ'}
                   </Typography>
@@ -1711,102 +1700,6 @@ function FactoryStatisticPanel({ selectedDate, points, selectedPoint, onPointCha
         </Table>
       </TableContainer>
     </Box>
-  )
-}
-
-function CalendarStatusDay({
-  day,
-  disabled,
-  disableHighlightToday,
-  isAnimating,
-  isFirstVisibleCell,
-  isLastVisibleCell,
-  isVisuallySelected,
-  outsideCurrentMonth,
-  selected,
-  showDaysOutsideCurrentMonth,
-  today,
-  statusByDay = {},
-  onBlur,
-  onDaySelect,
-  onFocus,
-  onKeyDown,
-  onMouseEnter,
-  sx,
-  ...other
-}) {
-  const status = outsideCurrentMonth ? null : statusByDay[day.format('YYYY-MM-DD')]
-  const backgroundStatus = typeof status === 'string' ? status : status?.backgroundStatus
-  const borderStatus = typeof status === 'string' ? status : status?.borderStatus
-  const backgroundStyle = backgroundStatus ? calendarStatusStyles[backgroundStatus] : null
-  const borderStyle = borderStatus ? calendarStatusStyles[borderStatus] : null
-  const statusStyle =
-    backgroundStyle || borderStyle
-      ? {
-          backgroundColor: backgroundStyle?.backgroundColor ?? 'transparent',
-          borderColor: borderStyle?.borderColor ?? 'transparent',
-        }
-      : null
-  const isSelected = selected || isVisuallySelected
-
-  void disableHighlightToday
-  void isAnimating
-  void isFirstVisibleCell
-  void isLastVisibleCell
-  void showDaysOutsideCurrentMonth
-
-  return (
-    <ButtonBase
-      {...other}
-      component="button"
-      disabled={disabled || outsideCurrentMonth}
-      onBlur={(event) => onBlur?.(event, day)}
-      onClick={() => onDaySelect?.(day)}
-      onFocus={(event) => onFocus?.(event, day)}
-      onKeyDown={(event) => onKeyDown?.(event, day)}
-      onMouseEnter={(event) => onMouseEnter?.(event, day)}
-      sx={{
-        width: 36,
-        height: 36,
-        m: '0 2px',
-        borderRadius: '50%',
-        fontSize: 14,
-        lineHeight: 1,
-        color: outsideCurrentMonth ? 'text.disabled' : 'text.primary',
-        bgcolor: isSelected ? 'primary.main' : 'transparent',
-        border: today ? 1 : 2,
-        borderColor: today ? 'primary.main' : 'transparent',
-        ...sx,
-        ...(statusStyle
-          ? {
-              bgcolor: isSelected
-                ? 'primary.main'
-                : statusStyle.backgroundColor === 'transparent'
-                  ? 'transparent'
-                  : statusStyle.backgroundColor,
-              border: 2,
-              borderColor: statusStyle.borderColor === 'transparent' && today ? 'primary.main' : statusStyle.borderColor,
-              color: isSelected ? 'primary.contrastText' : 'text.primary',
-              '&:hover': {
-                bgcolor: statusStyle.backgroundColor === 'transparent' ? 'action.hover' : statusStyle.backgroundColor,
-              },
-              ...(isSelected
-                ? {
-                    '&:hover': {
-                      bgcolor: 'primary.dark',
-                    },
-                  }
-                : null),
-            }
-          : {
-              '&:hover': {
-                bgcolor: 'action.hover',
-              },
-            }),
-      }}
-    >
-      {day.date()}
-    </ButtonBase>
   )
 }
 

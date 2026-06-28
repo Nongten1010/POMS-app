@@ -11,7 +11,7 @@ import EligibleFactoriesPage from './pages/EligibleFactoriesPage'
 import EmailTestPage from './pages/EmailTestPage'
 import FaqPage from './pages/FaqPage'
 import FeedbackPage from './pages/FeedbackPage'
-import HomePageMockup from './pages/HomePageMockup'
+import HomePage from './pages/HomePage'
 import KwpFormsPage from './pages/KwpFormsPage'
 import LawsPage from './pages/LawsPage'
 import MasterDataPage from './pages/MasterDataPage'
@@ -238,7 +238,7 @@ function App() {
         }}
       >
         {visibleSelectedMenu === 'home' ? (
-          <HomePageMockup />
+          <HomePage accessToken={accessToken} />
         ) : visibleSelectedMenu === 'master-data' ? (
           <MasterDataPage userType={userType} />
         ) : visibleSelectedMenu === 'permissions' ? (
@@ -272,7 +272,7 @@ function App() {
         ) : visibleSelectedMenu === 'email-test' ? (
           <EmailTestPage accessToken={accessToken} />
         ) : (
-          <HomePageMockup />
+          <HomePage accessToken={accessToken} />
         )}
       </Container>
     </Box>
