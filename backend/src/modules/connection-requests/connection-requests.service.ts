@@ -58,6 +58,9 @@ const DESIGN_REVIEW_STATUSES: ConnectionRequestStatus[] = [
 
 let nowProvider = () => new Date();
 
+const FACTORY_LOGO_DOCUMENT_TITLE = 'สัญลักษณ์ของโรงงานหรือโลโก้บริษัท';
+const FACTORY_LOGO_DOCUMENT_INDEX = 3;
+
 export const connectionRequestsService = {
   setClockForTests(provider: () => Date): void {
     nowProvider = provider;
@@ -196,26 +199,26 @@ export const connectionRequestsService = {
       connectionRequestsRepository.listFavoriteFactoryIds(actorUserId),
     ]);
     const favoriteFactoryIdSet = new Set(favoriteFactoryIds);
-    const measurementPointsByFactory = new Map<string, OperatorFactoryMeasurementPointDTO[]>();
+    const measurementPointsByFactory = new Map<string, CurrentFactoryMeasurementPointDTO[]>();
 
     connectedPoints.forEach((point) => {
       const factoryId = factoryIdByLookupKey.get(point.factoryId) ?? point.factoryId;
       const currentPoints = measurementPointsByFactory.get(factoryId) ?? [];
-      measurementPointsByFactory.set(factoryId, [
-        ...currentPoints,
-        toOperatorFactoryMeasurementPoint({ ...point, factoryId }),
-      ]);
+      measurementPointsByFactory.set(factoryId, [...currentPoints, { ...point, factoryId }]);
     });
 
     const data = eligibleFactories
       .map<OperatorFactoryDashboardRowDTO>((factory) => {
-        const measurementPoints = measurementPointsByFactory.get(factory.factoryId) ?? [];
-        const monitoringPointCountBySystem = countMeasurementPointsBySystem(measurementPoints);
+        const currentMeasurementPoints = measurementPointsByFactory.get(factory.factoryId) ?? [];
+        const measurementPoints = currentMeasurementPoints.map(toOperatorFactoryMeasurementPoint);
+        const monitoringPointCountBySystem = countMeasurementPointsBySystem(currentMeasurementPoints);
         return {
           id: factory.id,
           factoryId: factory.factoryId,
           factoryName: factory.factoryName,
           newRegistrationNo: factory.newRegistrationNo,
+          oldRegistrationNo: factory.oldRegistrationNo,
+          factoryLogoUrl: getFactoryLogoUrl(currentMeasurementPoints),
           province: factory.province,
           address: factory.address,
           latitude: factory.latitude,
@@ -1255,6 +1258,25 @@ function toOperatorFactoryMeasurementPoint(
     parameters: point.parameters.map(toParameterDisplayName),
     data: [],
   };
+}
+
+function getFactoryLogoUrl(points: CurrentFactoryMeasurementPointDTO[]): string | null {
+  const cemsPoints = points.filter((point) => point.systemType === 'CEMS');
+
+  for (const point of cemsPoints) {
+    const documentsAndImages = point.documentsAndImages ?? [];
+    const logoDocument = documentsAndImages.find(
+      (document) => document.title.trim() === FACTORY_LOGO_DOCUMENT_TITLE && document.fileUrl,
+    );
+    if (logoDocument?.fileUrl) return logoDocument.fileUrl;
+  }
+
+  for (const point of cemsPoints) {
+    const fallbackDocument = point.documentsAndImages?.[FACTORY_LOGO_DOCUMENT_INDEX];
+    if (fallbackDocument?.fileUrl) return fallbackDocument.fileUrl;
+  }
+
+  return null;
 }
 
 function buildFactoryLookupKeyMap(factories: FactorySummaryDTO[]): Map<string, string> {

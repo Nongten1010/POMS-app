@@ -84,6 +84,7 @@ interface CurrentFactoryMeasurementPointRow {
   point_code: string | null;
   system_type: 'CEMS' | 'WPMS';
   parameters_json: string;
+  documents_json: string | null;
 }
 
 interface StatusHistoryRow {
@@ -412,6 +413,7 @@ export const connectionRequestsRepository = {
         'point_code',
         'system_type',
         'parameters_json',
+        'documents_json',
       )
       .orderBy('factory_id', 'asc')
       .orderBy('point_code', 'asc')
@@ -424,6 +426,7 @@ export const connectionRequestsRepository = {
       pointCode: row.point_code,
       systemType: row.system_type,
       parameters: parseParameters(row.parameters_json),
+      documentsAndImages: parseJsonArray<RequestDocumentImageInput>(row.documents_json),
       data: [],
     }));
   },

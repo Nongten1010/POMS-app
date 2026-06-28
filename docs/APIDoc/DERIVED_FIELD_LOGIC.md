@@ -9,6 +9,39 @@
 - ถ้า logic เป็นเพียง fallback ชั่วคราว ให้เขียนไว้ชัดเจนว่า fallback จากอะไรไปอะไร
 - ถ้าไม่แน่ใจว่า field ควรตีความอย่างไร ให้หยุดที่ raw value และถามก่อน
 
+## Operator Factory Dashboard
+
+Endpoint: `GET /api/v1/operator-factory-dashboard`
+
+Code:
+
+- `backend/src/modules/connection-requests/connection-requests.repository.ts`
+- `backend/src/modules/connection-requests/connection-requests.service.ts`
+
+### `factoryLogoUrl`
+
+Source:
+
+- `cems_wpms_connected_measurement_points.documents_json`
+- nested field `documentsAndImages[].fileUrl`
+
+Logic:
+
+- ใช้เฉพาะ connected measurement point ที่ `system_type = CEMS`
+- หาเอกสารที่ `title = สัญลักษณ์ของโรงงานหรือโลโก้บริษัท` ก่อน
+- ถ้าไม่พบ title ดังกล่าว ให้ fallback ไปที่ `documentsAndImages[3]` ตามลำดับฟอร์ม CEMS ปัจจุบัน
+- คืน `fileUrl` ของเอกสารแรกที่พบ
+- ถ้าเป็น WPMS หรือไม่มี `fileUrl` ให้คืน `null`
+
+Reason:
+
+- รูป logo อยู่ใน section เอกสารและรูปภาพของฟอร์มคำขอ CEMS ไม่ได้อยู่ในตาราง `factories`
+- dashboard ต้องใช้ URL เดียวสำหรับแสดงโลโก้โรงงาน โดยไม่ส่ง `documentsAndImages` ทั้งก้อน
+
+Risk:
+
+- fallback index `3` อิงกับลำดับเอกสารของ frontend ปัจจุบัน หากลำดับฟอร์ม CEMS เปลี่ยน ควรอัปเดต logic หรือใช้ title เป็นหลักต่อไป
+
 ## Eligible Factory Candidates
 
 Endpoint: `GET /api/v1/eligible-factories/candidates`

@@ -52,6 +52,8 @@ describe('operator factory dashboard routes', () => {
           factoryId: 'factory-001',
           factoryName: 'บริษัท ทดสอบ จำกัด',
           newRegistrationNo: '3-106-33/50สบ',
+          oldRegistrationNo: 'รง.4-เก่า-001',
+          factoryLogoUrl: null,
           province: 'สระบุรี',
           address: '99 หมู่ 1',
           latitude: '13.7563',

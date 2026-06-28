@@ -2740,6 +2740,7 @@ curl "http://localhost:3000/api/v1/operator-factory-dashboard?systemType=CEMS" \
       "factoryName": "บริษัท ทดสอบ จำกัด",
       "newRegistrationNo": "3-106-33/50สบ",
       "oldRegistrationNo": "3-106-33/50สบ",
+      "factoryLogoUrl": "https://example.com/files/logo.png",
       "industryType": "ผลิตเคมีภัณฑ์",
       "industryMainOrder": "106",
       "industrySubOrder": "33",
@@ -2772,6 +2773,7 @@ Data dictionary response row:
 | `factoryName` | string | ชื่อโรงงาน |
 | `newRegistrationNo` | string|null | เลขทะเบียนใหม่ |
 | `oldRegistrationNo` | string|null | เลขทะเบียนเก่า |
+| `factoryLogoUrl` | string|null | URL รูปโลโก้จากเอกสารแนบ CEMS title `สัญลักษณ์ของโรงงานหรือโลโก้บริษัท`; ถ้าไม่มีคืน `null` |
 | `industryType` | string|null | ประเภทอุตสาหกรรม |
 | `industryMainOrder` | string|null | ลำดับโรงงานหลัก |
 | `industrySubOrder` | string|null | ลำดับโรงงานรอง |

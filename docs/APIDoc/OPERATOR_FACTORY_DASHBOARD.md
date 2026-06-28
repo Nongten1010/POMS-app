@@ -50,6 +50,8 @@ curl "http://localhost:3000/api/v1/operator-factory-dashboard?systemType=CEMS" \
       "factoryId": "factory-001",
       "factoryName": "บริษัท ทดสอบ จำกัด",
       "newRegistrationNo": "3-106-33/50สบ",
+      "oldRegistrationNo": "รง.4-เก่า-001",
+      "factoryLogoUrl": "https://example.com/files/logo.png",
       "province": "สระบุรี",
       "address": "99 หมู่ 1",
       "latitude": "13.7563",
@@ -113,6 +115,8 @@ curl "http://localhost:3000/api/v1/operator-factory-dashboard?systemType=CEMS" \
 | `factoryId` | string | รหัสโรงงานจาก `factories.fid` |
 | `factoryName` | string | ชื่อโรงงาน |
 | `newRegistrationNo` | string|null | เลขทะเบียนโรงงานใหม่จาก `factories.code` |
+| `oldRegistrationNo` | string|null | เลขทะเบียนโรงงานเก่าจาก `factories.factory_registration_no_old` |
+| `factoryLogoUrl` | string|null | URL รูปโลโก้จากเอกสารแนบ CEMS title `สัญลักษณ์ของโรงงานหรือโลโก้บริษัท`; ถ้าไม่มีคืน `null` |
 | `province` | string|null | จังหวัด |
 | `address` | string|null | ที่อยู่โรงงาน |
 | `latitude` | string|null | พิกัด latitude ของโรงงาน |

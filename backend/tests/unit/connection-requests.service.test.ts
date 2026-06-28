@@ -410,7 +410,9 @@ describe('connectionRequestsService', () => {
   });
 
   it('returns only visible operator factories in the dashboard response shape', async () => {
-    mockedRepository.listFactoriesForAccess.mockResolvedValue([factorySummary()]);
+    mockedRepository.listFactoriesForAccess.mockResolvedValue([
+      factorySummary({ oldRegistrationNo: 'รง.4-เก่า-001' }),
+    ]);
     mockedRepository.listFavoriteFactoryIds.mockResolvedValue(['factory-001']);
     mockedParameterValuesService.latestHourly.mockResolvedValueOnce({
       data: [
@@ -452,6 +454,24 @@ describe('connectionRequestsService', () => {
         pointCode: 'S0001',
         systemType: 'CEMS',
         parameters: ['CO', 'NOx', 'Temp', 'O2', 'Flow'],
+        documentsAndImages: [
+          {
+            title: 'รายงานผลการทำ RATA หรือ อื่นๆ ที่เทียบเท่า ของระบบ CEMS ครั้งล่าสุด',
+            fileUrl: 'https://example.com/files/rata.pdf',
+          },
+          {
+            title: 'เอกสารอื่น',
+            fileUrl: 'https://example.com/files/other.pdf',
+          },
+          {
+            title: 'ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน',
+            fileUrl: 'https://example.com/files/factory-front.png',
+          },
+          {
+            title: 'สัญลักษณ์ของโรงงานหรือโลโก้บริษัท',
+            fileUrl: 'https://example.com/files/logo.png',
+          },
+        ],
         data: [],
       },
     ]);
@@ -474,6 +494,8 @@ describe('connectionRequestsService', () => {
       factoryId: 'factory-001',
       factoryName: 'บริษัท ทดสอบ จำกัด',
       newRegistrationNo: '3-106-33/50สบ',
+      oldRegistrationNo: 'รง.4-เก่า-001',
+      factoryLogoUrl: 'https://example.com/files/logo.png',
       province: 'สระบุรี',
       address: '99 หมู่ 1',
       latitude: '13.7563',

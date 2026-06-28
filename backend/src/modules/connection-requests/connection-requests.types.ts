@@ -322,6 +322,8 @@ export interface OperatorFactoryDashboardRowDTO {
   factoryId: string;
   factoryName: string;
   newRegistrationNo: string;
+  oldRegistrationNo: string | null;
+  factoryLogoUrl: string | null;
   province: string | null;
   address: string | null;
   latitude: string | null;
@@ -348,6 +350,7 @@ export interface OperatorFactoryMeasurementPointDTO {
 
 export interface CurrentFactoryMeasurementPointDTO extends OperatorFactoryMeasurementPointDTO {
   factoryId: string;
+  documentsAndImages?: RequestDocumentImageInput[];
 }
 
 export interface FactoryFavoriteDTO {
