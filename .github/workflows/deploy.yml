@@ -104,6 +104,15 @@ jobs:
         working-directory: frontend
         timeout-minutes: 15
         run: |
+          $sourceEnv = "C:\apps\POMS-app\frontend\.env.production"
+          $workspaceEnv = ".env.production"
+
+          if (!(Test-Path $sourceEnv)) {
+            throw "Frontend .env.production was not found at $sourceEnv"
+          }
+
+          Copy-Item $sourceEnv $workspaceEnv -Force
+
           npm ci
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
