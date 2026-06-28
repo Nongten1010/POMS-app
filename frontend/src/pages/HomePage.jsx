@@ -29,9 +29,11 @@ import {
 } from '@mui/material'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import CloseIcon from '@mui/icons-material/Close'
+import FileDownloadIcon from '@mui/icons-material/FileDownload'
 import SearchIcon from '@mui/icons-material/Search'
 import StarBorderIcon from '@mui/icons-material/StarBorder'
 import { DatePicker } from '@mui/x-date-pickers/DatePicker'
+import { PickerDay } from '@mui/x-date-pickers/PickerDay'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import { AdapterDayjsBuddhist } from '@mui/x-date-pickers/AdapterDayjsBuddhist'
 import { LineChart } from '@mui/x-charts/LineChart'
@@ -61,6 +63,13 @@ const connectedMeasurementPointsApiBaseUrl = import.meta.env.DEV
   ? '/api-proxy/v1/connected-measurement-points'
   : 'http://d-poms.diw.go.th/api/v1/connected-measurement-points'
 const logoBackgrounds = ['#dbeafe', '#fef3c7', '#fee2e2', '#dcfce7', '#e0f2fe', '#ffedd5', '#ecfdf3']
+const datePickerStatusStyles = {
+  lowData: { backgroundColor: '#e5e7eb' },
+  highData: { backgroundColor: '#dbeafe' },
+  normal: { borderColor: '#22c55e' },
+  warning: { borderColor: '#f59e0b' },
+  exceeded: { borderColor: '#ef4444' },
+}
 const statisticParameters = ['CO (ppm)', 'NOx (ppm)', 'Temp. (°C)', 'O2 (%)', 'Flow (m3/hr)']
 const statisticStatusColors = {
   normal: '#46b529',
@@ -182,6 +191,24 @@ function mapCalendarSummaryRows(rows) {
         ? '-'
         : `${Number(row.todayDataCompletenessPercent).toLocaleString('th-TH')}%`,
   }))
+}
+
+function mapDatePickerStatusByDay(days) {
+  if (!Array.isArray(days)) {
+    return {}
+  }
+
+  return days.reduce((result, day) => {
+    if (!day?.date) {
+      return result
+    }
+
+    result[day.date] = {
+      backgroundStatus: day.display?.backgroundStatus ?? day.dataCompletenessStatus ?? null,
+      borderStatus: day.display?.borderStatus ?? day.pollutionStatus ?? null,
+    }
+    return result
+  }, {})
 }
 
 function mapMeasurementStatistics(payload, selectedPoint) {
@@ -1083,14 +1110,24 @@ function FactoryMap({ factories }) {
 function FactoryBottomSheet({ factory, accessToken = '', open, onClose }) {
   const [selectedDate, setSelectedDate] = useState(() => dayjs())
   const [selectedCalendarMonth, setSelectedCalendarMonth] = useState(() => dayjs())
+  const [selectedStatisticSystem, setSelectedStatisticSystem] = useState('')
   const [selectedStatisticPoint, setSelectedStatisticPoint] = useState('')
   const [selectedTrendParameter, setSelectedTrendParameter] = useState(statisticParameters[0])
+  const [exportDialogOpen, setExportDialogOpen] = useState(false)
+  const [datePickerStatusByDay, setDatePickerStatusByDay] = useState({})
   const [calendarSummary, setCalendarSummary] = useState([])
   const [calendarError, setCalendarError] = useState('')
   const [measurementStatisticParameters, setMeasurementStatisticParameters] = useState(statisticParameters)
   const [measurementStatisticRows, setMeasurementStatisticRows] = useState([])
   const [measurementStatisticError, setMeasurementStatisticError] = useState('')
-  const statisticPoints = useMemo(() => getStatisticPoints(factory), [factory])
+  const statisticSystemOptions = useMemo(() => getStatisticSystemOptions(factory), [factory])
+  const activeStatisticSystem = statisticSystemOptions.includes(selectedStatisticSystem)
+    ? selectedStatisticSystem
+    : statisticSystemOptions[0] ?? ''
+  const statisticPoints = useMemo(
+    () => getStatisticPointsBySystem(factory, activeStatisticSystem),
+    [activeStatisticSystem, factory],
+  )
   const activeStatisticPoint = statisticPoints.some((point) => point.value === selectedStatisticPoint)
     ? selectedStatisticPoint
     : statisticPoints[0]?.value
@@ -1103,6 +1140,13 @@ function FactoryBottomSheet({ factory, accessToken = '', open, onClose }) {
   const activeTrendParameter = activeStatisticParameters.includes(selectedTrendParameter)
     ? selectedTrendParameter
     : activeStatisticParameters[0] ?? statisticParameters[0]
+  const exportDialogKey = [
+    factory?.id,
+    activeStatisticSystem,
+    statisticPoints.map((point) => point.value).join(','),
+    activeStatisticParameters.join(','),
+    selectedDate?.format?.('YYYY-MM-DD'),
+  ].join('|')
 
   useEffect(() => {
     if (!open || !accessToken || !activeStatisticPoint) {
@@ -1125,12 +1169,14 @@ function FactoryBottomSheet({ factory, accessToken = '', open, onClose }) {
         }
 
         if (isActive) {
+          setDatePickerStatusByDay(mapDatePickerStatusByDay(payload?.data?.calendar?.days))
           setCalendarSummary(mapCalendarSummaryRows(payload?.data?.monthlySummary))
           setCalendarError('')
         }
       })
       .catch((error) => {
         if (isActive) {
+          setDatePickerStatusByDay({})
           setCalendarSummary([])
           setCalendarError(error instanceof Error ? error.message : 'โหลดข้อมูล calendar ไม่สำเร็จ')
         }
@@ -1293,12 +1339,21 @@ function FactoryBottomSheet({ factory, accessToken = '', open, onClose }) {
                 setSelectedDate(nextDate)
                 setSelectedCalendarMonth(nextDate)
               }}
+              statusByDay={datePickerStatusByDay}
+              onMonthChange={setSelectedCalendarMonth}
+              systemOptions={statisticSystemOptions}
+              selectedSystem={activeStatisticSystem}
+              onSystemChange={(nextSystem) => {
+                setSelectedStatisticSystem(nextSystem)
+                setSelectedStatisticPoint('')
+              }}
               points={statisticPoints}
               selectedPoint={activeStatisticPoint}
               onPointChange={setSelectedStatisticPoint}
               rows={statisticRows}
               parameters={activeStatisticParameters}
               error={measurementStatisticError}
+              onExport={() => setExportDialogOpen(true)}
             />
             <Stack spacing={2} sx={{ minWidth: 0 }}>
               <PollutionTrendPanel
@@ -1312,21 +1367,45 @@ function FactoryBottomSheet({ factory, accessToken = '', open, onClose }) {
               <CalendarSummaryPanel rows={activeCalendarSummaryRows} error={calendarError} />
             </Stack>
           </Box>
+          <ExportReportDialog
+            key={exportDialogKey}
+            open={exportDialogOpen}
+            factory={factory}
+            systemOptions={statisticSystemOptions}
+            selectedSystem={activeStatisticSystem}
+            points={statisticPoints}
+            parameters={activeStatisticParameters}
+            selectedDate={selectedDate}
+            onClose={() => setExportDialogOpen(false)}
+          />
         </Box>
       ) : null}
     </Drawer>
   )
 }
 
-function getStatisticPoints(factory) {
+function getStatisticSystemOptions(factory) {
   const points = Array.isArray(factory?.measurementPoints) ? factory.measurementPoints : []
-  const mappedPoints = points.map((point, index) => {
+  const pointSystems = points.map((point) => point?.systemType).filter(Boolean)
+  const factorySystems = Array.isArray(factory?.systems) ? factory.systems.filter(Boolean) : []
+
+  return Array.from(new Set([...pointSystems, ...factorySystems]))
+}
+
+function getStatisticPointsBySystem(factory, selectedSystem = '') {
+  const points = Array.isArray(factory?.measurementPoints) ? factory.measurementPoints : []
+  const filteredPoints = selectedSystem ? points.filter((point) => point?.systemType === selectedSystem) : points
+  const mappedPoints = filteredPoints.map((point, index) => {
     const label = point.pointCode ?? point.stationId ?? point.pointName ?? `จุดที่ ${index + 1}`
     return {
       value: point.stationId ?? point.pointCode ?? label,
       label,
     }
   })
+
+  if (points.length > 0) {
+    return mappedPoints
+  }
 
   return mappedPoints.length > 0
     ? mappedPoints
@@ -1435,11 +1514,26 @@ function PollutionTrendPanel({ rows, parameters, selectedDate, selectedPointLabe
   const selectedDateLabel = selectedDate?.format?.('D MMMM BBBB') ?? ''
   const chartData = useMemo(
     () =>
-      rows.map((row) => ({
+      rows.map((row, index) => ({
+        hour: Number(row.chartTime?.slice(0, 2)) || index,
         time: row.chartTime || row.time.slice(0, 5).replace('.', ':'),
         value: row.chartValues?.[selectedParameter] ?? toFiniteNumber(row.values[selectedParameter]),
+        color: statisticStatusColors[row.statuses?.[selectedParameter]] ?? statisticStatusColors.unavailable,
       })),
     [rows, selectedParameter],
+  )
+  const ColoredChartMark = useMemo(
+    () =>
+      function ColoredChartMark({ dataIndex, hidden, x, y }) {
+        const color = chartData[dataIndex]?.color ?? statisticStatusColors.unavailable
+
+        if (hidden || !Number.isFinite(x) || !Number.isFinite(y)) {
+          return null
+        }
+
+        return <circle cx={x} cy={y} r={4} fill={color} stroke={color} strokeWidth={2} />
+      },
+    [chartData],
   )
 
   return (
@@ -1486,13 +1580,15 @@ function PollutionTrendPanel({ rows, parameters, selectedDate, selectedPointLabe
           dataset={chartData}
           xAxis={[
             {
-              data: chartData.map((item) => item.time),
-              dataKey: 'time',
-              scaleType: 'band',
+              dataKey: 'hour',
+              scaleType: 'linear',
+              min: 0,
+              max: Math.max(23, chartData.length - 1),
               height: 56,
-              tickInterval: chartData.map((item) => item.time),
+              tickInterval: chartData.map((item) => item.hour),
               tickLabelInterval: () => true,
               tickLabelMinGap: 0,
+              valueFormatter: (value) => `${String(value).padStart(2, '0')}:00`,
               tickLabelStyle: {
                 angle: -35,
                 textAnchor: 'end',
@@ -1514,6 +1610,7 @@ function PollutionTrendPanel({ rows, parameters, selectedDate, selectedPointLabe
               curve: 'linear',
             },
           ]}
+          slots={{ mark: ColoredChartMark }}
           grid={{ horizontal: true, vertical: true }}
           margin={{ top: 20, right: 10, bottom: 10, left: 10 }}
           height={320}
@@ -1547,7 +1644,67 @@ function PollutionTrendPanel({ rows, parameters, selectedDate, selectedPointLabe
   )
 }
 
-function FactoryStatisticPanel({ selectedDate, onDateChange, points, selectedPoint, onPointChange, rows, parameters, error }) {
+function DatePickerStatusDay({ day, outsideCurrentMonth, statusByDay = {}, sx, ...other }) {
+  const status = outsideCurrentMonth ? null : statusByDay[day.format('YYYY-MM-DD')]
+  const backgroundColor = status?.backgroundStatus
+    ? datePickerStatusStyles[status.backgroundStatus]?.backgroundColor
+    : undefined
+  const borderColor = status?.borderStatus ? datePickerStatusStyles[status.borderStatus]?.borderColor : undefined
+
+  return (
+    <PickerDay
+      day={day}
+      outsideCurrentMonth={outsideCurrentMonth}
+      sx={{
+        position: 'relative',
+        bgcolor: backgroundColor,
+        '&:hover': {
+          bgcolor: backgroundColor ?? 'action.hover',
+        },
+        '&.Mui-selected': {
+          bgcolor: 'primary.main',
+          color: 'primary.contrastText',
+        },
+        '&.Mui-selected:hover': {
+          bgcolor: 'primary.dark',
+        },
+        ...(borderColor
+          ? {
+              '&::after': {
+                content: '""',
+                position: 'absolute',
+                left: 8,
+                right: 8,
+                bottom: 5,
+                height: 3,
+                borderRadius: 999,
+                bgcolor: borderColor,
+              },
+            }
+          : null),
+        ...sx,
+      }}
+      {...other}
+    />
+  )
+}
+
+function FactoryStatisticPanel({
+  selectedDate,
+  onDateChange,
+  statusByDay,
+  onMonthChange,
+  systemOptions,
+  selectedSystem,
+  onSystemChange,
+  points,
+  selectedPoint,
+  onPointChange,
+  rows,
+  parameters,
+  error,
+  onExport,
+}) {
   const selectedDateValue = selectedDate?.format?.('YYYY-MM-DD') ?? ''
 
   return (
@@ -1569,23 +1726,53 @@ function FactoryStatisticPanel({ selectedDate, onDateChange, points, selectedPoi
         <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
           สถิติข้อมูล
         </Typography>
-        <LocalizationProvider dateAdapter={AdapterDayjsBuddhist} adapterLocale="th">
-          <DatePicker
-            value={selectedDate}
-            format="DD-MM-YYYY"
-            onChange={(nextDate) => {
-              if (nextDate) {
-                onDateChange(nextDate)
-              }
-            }}
-            slotProps={{
-              textField: {
-                size: 'small',
-                sx: { width: 154 },
-              },
-            }}
-          />
-        </LocalizationProvider>
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{ justifyContent: { xs: 'flex-start', sm: 'flex-end' }, flexWrap: 'wrap', rowGap: 1 }}
+        >
+          <Button
+            size="small"
+            variant="contained"
+            startIcon={<FileDownloadIcon fontSize="small" />}
+            onClick={onExport}
+            sx={{ minWidth: 92, fontWeight: 700 }}
+          >
+            Export
+          </Button>
+          <FormControl size="small" sx={{ width: 150 }}>
+            <Select value={selectedSystem ?? ''} onChange={(event) => onSystemChange(event.target.value)} displayEmpty>
+              {systemOptions.length === 0 ? <MenuItem value="">--เลือก--</MenuItem> : null}
+              {systemOptions.map((system) => (
+                <MenuItem key={system} value={system}>
+                  {system}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <LocalizationProvider dateAdapter={AdapterDayjsBuddhist} adapterLocale="th">
+            <DatePicker
+              value={selectedDate}
+              format="DD-MM-YYYY"
+              onChange={(nextDate) => {
+                if (nextDate) {
+                  onDateChange(nextDate)
+                }
+              }}
+              onMonthChange={onMonthChange}
+              slotProps={{
+                day: {
+                  statusByDay,
+                },
+                textField: {
+                  size: 'small',
+                  sx: { width: 154 },
+                },
+              }}
+              slots={{ day: DatePickerStatusDay }}
+            />
+          </LocalizationProvider>
+        </Stack>
       </Stack>
       <Tabs
         value={selectedPoint ?? false}
@@ -1700,6 +1887,182 @@ function FactoryStatisticPanel({ selectedDate, onDateChange, points, selectedPoi
         </Table>
       </TableContainer>
     </Box>
+  )
+}
+
+function ExportReportDialog({
+  open,
+  factory,
+  systemOptions,
+  selectedSystem,
+  points,
+  parameters,
+  selectedDate,
+  onClose,
+}) {
+  const defaultPoint = points[0]?.value ?? ''
+  const [reportType, setReportType] = useState(() => selectedSystem)
+  const [measurementPoint, setMeasurementPoint] = useState(defaultPoint)
+  const [parameter, setParameter] = useState('all')
+  const [frequency, setFrequency] = useState('')
+  const [startDate, setStartDate] = useState(selectedDate)
+  const [endDate, setEndDate] = useState(selectedDate)
+
+  return (
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
+      <DialogTitle
+        sx={{
+          color: '#16a34a',
+          fontWeight: 700,
+          borderBottom: 1,
+          borderColor: 'divider',
+          pr: 6,
+        }}
+      >
+        ส่งออกรายงาน
+        <IconButton
+          aria-label="ปิด"
+          onClick={onClose}
+          sx={{ position: 'absolute', right: 12, top: 12, color: 'text.secondary' }}
+        >
+          <CloseIcon />
+        </IconButton>
+      </DialogTitle>
+      <DialogContent sx={{ pt: '24px !important' }}>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+            gap: 2,
+          }}
+        >
+          <TextField
+            size="small"
+            label="ชื่อโรงงาน"
+            value={factory?.name ?? ''}
+            InputProps={{ readOnly: true }}
+            fullWidth
+          />
+
+          <TextField
+            size="small"
+            label="เลขทะเบียนโรงงาน"
+            value={factory?.factoryId ?? ''}
+            InputProps={{ readOnly: true }}
+            fullWidth
+          />
+
+          <FormControl size="small" fullWidth>
+            <InputLabel id="export-report-type-label">ประเภท</InputLabel>
+            <Select
+              labelId="export-report-type-label"
+              value={reportType}
+              label="ประเภท"
+              onChange={(event) => setReportType(event.target.value)}
+              displayEmpty
+            >
+              <MenuItem value="">--เลือก--</MenuItem>
+              {systemOptions.map((system) => (
+                <MenuItem key={system} value={system}>
+                  {system}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          <FormControl size="small" fullWidth>
+            <InputLabel id="export-measurement-point-label">จุดตรวจวัด</InputLabel>
+            <Select
+              labelId="export-measurement-point-label"
+              value={measurementPoint}
+              label="จุดตรวจวัด"
+              onChange={(event) => setMeasurementPoint(event.target.value)}
+              displayEmpty
+            >
+              <MenuItem value="">--เลือก--</MenuItem>
+              {points.map((point) => (
+                <MenuItem key={point.value} value={point.value}>
+                  {point.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          <FormControl size="small" fullWidth>
+            <InputLabel id="export-parameter-label">พารามิเตอร์</InputLabel>
+            <Select
+              labelId="export-parameter-label"
+              value={parameter}
+              label="พารามิเตอร์"
+              onChange={(event) => setParameter(event.target.value)}
+              displayEmpty
+            >
+              <MenuItem value="all">ทั้งหมด</MenuItem>
+              {parameters.map((item) => (
+                <MenuItem key={item} value={item}>
+                  {item}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          <FormControl size="small" fullWidth>
+            <InputLabel id="export-frequency-label" shrink>
+              ความถี่
+            </InputLabel>
+            <Select
+              labelId="export-frequency-label"
+              value={frequency}
+              label="ความถี่"
+              notched
+              onChange={(event) => setFrequency(event.target.value)}
+              displayEmpty
+            >
+              <MenuItem value="">--เลือก--</MenuItem>
+              <MenuItem value="hourly">รายชั่วโมง</MenuItem>
+              <MenuItem value="daily">รายวัน</MenuItem>
+              <MenuItem value="monthly">รายเดือน</MenuItem>
+              <MenuItem value="yearly">รายปี</MenuItem>
+            </Select>
+          </FormControl>
+
+          <LocalizationProvider dateAdapter={AdapterDayjsBuddhist} adapterLocale="th">
+            <DatePicker
+              value={startDate}
+              label="วันที่เริ่ม"
+              format="DD-MM-YYYY"
+              onChange={(nextDate) => {
+                if (nextDate) {
+                  setStartDate(nextDate)
+                }
+              }}
+              slotProps={{ textField: { size: 'small', fullWidth: true, placeholder: '--เลือก--' } }}
+            />
+          </LocalizationProvider>
+          <LocalizationProvider dateAdapter={AdapterDayjsBuddhist} adapterLocale="th">
+            <DatePicker
+              value={endDate}
+              label="วันที่สิ้นสุด"
+              format="DD-MM-YYYY"
+              onChange={(nextDate) => {
+                if (nextDate) {
+                  setEndDate(nextDate)
+                }
+              }}
+              slotProps={{ textField: { size: 'small', fullWidth: true, placeholder: '--เลือก--' } }}
+            />
+          </LocalizationProvider>
+        </Box>
+      </DialogContent>
+      <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+        <Button variant="outlined" color="inherit" onClick={onClose}>
+          ปิด
+        </Button>
+        <Button variant="contained" onClick={onClose} sx={{ fontWeight: 700 }}>
+          ส่งออก CSV
+        </Button>
+      </DialogActions>
+    </Dialog>
   )
 }
 

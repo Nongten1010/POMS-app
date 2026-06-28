@@ -1,8 +1,53 @@
+import { existsSync, readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { cwd } from 'node:process'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
+const productionEnvFile = '.env.production'
+const productionOnlyEnvKeys = ['VITE_LONGDO_MAP_KEY']
+
+function parseEnvFile(filePath) {
+  if (!existsSync(filePath)) {
+    return {}
+  }
+
+  return readFileSync(filePath, 'utf8')
+    .split(/\r?\n/)
+    .reduce((env, line) => {
+      const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)?\s*$/)
+
+      if (!match) {
+        return env
+      }
+
+      const [, key, rawValue = ''] = match
+      const value = rawValue
+        .replace(/\s+#.*$/, '')
+        .trim()
+        .replace(/^(['"])(.*)\1$/, '$2')
+
+      env[key] = value
+      return env
+    }, {})
+}
+
+function getProductionEnvDefines(mode) {
+  if (mode !== 'production') {
+    return {}
+  }
+
+  const productionEnv = parseEnvFile(resolve(cwd(), productionEnvFile))
+
+  return productionOnlyEnvKeys.reduce((defines, key) => {
+    defines[`import.meta.env.${key}`] = JSON.stringify(productionEnv[key] ?? '')
+    return defines
+  }, {})
+}
+
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
+  define: getProductionEnvDefines(mode),
   plugins: [react()],
   server: {
     port: 5174,
@@ -11,11 +56,6 @@ export default defineConfig({
         target: 'http://d-poms.diw.go.th',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api-proxy/, '/api'),
-      },
-      '/api-local': {
-        target: 'http://localhost:3000',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api-local/, '/api'),
       },
     },
   },
@@ -27,11 +67,6 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api-proxy/, '/api'),
       },
-      '/api-local': {
-        target: 'http://localhost:3000',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api-local/, '/api'),
-      },
     },
   },
-})
+}))
