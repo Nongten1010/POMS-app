@@ -306,6 +306,52 @@ function getFactoryLogoText(factoryName, registrationNo) {
   return source.slice(0, 2).toUpperCase() || 'DP'
 }
 
+function normalizeUploadUrl(url) {
+  const value = String(url ?? '').trim()
+
+  if (!value) {
+    return ''
+  }
+
+  try {
+    const parsedUrl = new URL(value)
+
+    if (parsedUrl.pathname.startsWith('/uploads/')) {
+      return `${parsedUrl.pathname}${parsedUrl.search}${parsedUrl.hash}`
+    }
+
+    return value
+  } catch {
+    if (value.startsWith('/uploads/')) {
+      return value
+    }
+
+    if (value.startsWith('uploads/')) {
+      return `/${value}`
+    }
+
+    if (value.startsWith('/')) {
+      return value
+    }
+
+    return value
+  }
+}
+
+function getAbsoluteAssetUrl(url) {
+  const value = String(url ?? '').trim()
+
+  if (!value || /^https?:\/\//i.test(value) || value.startsWith('data:')) {
+    return value
+  }
+
+  if (typeof window === 'undefined') {
+    return value
+  }
+
+  return new URL(value.startsWith('/') ? value : `/${value}`, window.location.origin).toString()
+}
+
 function mapOperatorFactory(row, index) {
   const lon = toFiniteNumber(row.longitude)
   const lat = toFiniteNumber(row.latitude)
@@ -325,7 +371,7 @@ function mapOperatorFactory(row, index) {
     lat,
     logoText: getFactoryLogoText(row.factoryName, row.newRegistrationNo),
     logoBg: logoBackgrounds[index % logoBackgrounds.length],
-    logoUrl: row.factoryLogoUrl ?? row.logoUrl ?? '',
+    logoUrl: normalizeUploadUrl(row.factoryLogoUrl ?? row.logoUrl),
     isFavorite: row.isFavorite === true,
     measurementPoints: Array.isArray(row.measurementPoints) ? row.measurementPoints : [],
   }
@@ -739,9 +785,19 @@ function FactoryCard({ factory, onSelect }) {
             color: 'primary.900',
             fontWeight: 600,
             fontSize: 20,
+            overflow: 'hidden',
           }}
         >
-          {factory.logoText}
+          {factory.logoUrl ? (
+            <Box
+              component="img"
+              src={factory.logoUrl}
+              alt={factory.name || 'factory logo'}
+              sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+            />
+          ) : (
+            factory.logoText
+          )}
         </Box>
 
         <Box sx={{ minWidth: 0, flex: 1 }}>
@@ -973,16 +1029,12 @@ function encodeSvgDataUrl(svg) {
 }
 
 function getFactoryMapMarkerIcon(factory) {
+  if (factory.logoUrl) {
+    return getAbsoluteAssetUrl(factory.logoUrl)
+  }
+
   const label = escapeHtml(factory.logoText || getFactoryLogoText(factory.name, factory.factoryId))
   const fill = escapeHtml(factory.logoBg || '#dbeafe')
-  const image = factory.logoUrl
-    ? `
-      <clipPath id="marker-clip">
-        <circle cx="24" cy="24" r="21" />
-      </clipPath>
-      <image href="${escapeHtml(factory.logoUrl)}" x="3" y="3" width="42" height="42" clip-path="url(#marker-clip)" preserveAspectRatio="xMidYMid slice" />
-    `
-    : ''
 
   return encodeSvgDataUrl(`
     <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
@@ -992,7 +1044,6 @@ function getFactoryMapMarkerIcon(factory) {
       <circle cx="24" cy="24" r="22" fill="#ffffff" filter="url(#shadow)" />
       <circle cx="24" cy="24" r="19" fill="${fill}" />
       <text x="24" y="28" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="800" fill="#0f172a">${label}</text>
-      ${image}
     </svg>
   `)
 }
