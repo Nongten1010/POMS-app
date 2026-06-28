@@ -2,12 +2,6 @@
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
-## Production deploy
-
-Production frontend deploys are handled by GitHub Actions on pushes to `main`.
-The deploy workflow builds this app with `npm run build` and publishes `dist/`
-to the IIS site root at `C:\sites\poms`.
-
 Currently, two official plugins are available:
 
 - [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)

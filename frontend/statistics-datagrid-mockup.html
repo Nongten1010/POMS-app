@@ -1,0 +1,769 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>สถิติข้อมูล - DataGrid Mockup</title>
+  <style>
+    :root {
+      --bg: #f4f6f8;
+      --surface: #ffffff;
+      --line: #d7dee8;
+      --line-dark: #aeb8c5;
+      --text: #1f2937;
+      --muted: #667085;
+      --primary: #1769aa;
+      --primary-soft: #e8f2fb;
+      --success-soft: #edf7ed;
+      --warning-soft: #fff7e6;
+      --danger-soft: #fff1f0;
+      --header: #eef2f6;
+      --header-strong: #d9e0e8;
+      --shadow: 0 8px 22px rgba(16, 24, 40, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Arial, "Tahoma", sans-serif;
+      font-size: 14px;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    .page {
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 14px;
+    }
+
+    .title h1 {
+      margin: 0 0 4px;
+      font-size: 24px;
+      line-height: 1.25;
+      font-weight: 700;
+    }
+
+    .title p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .btn {
+      min-height: 36px;
+      border: 1px solid var(--line-dark);
+      background: #fff;
+      color: var(--text);
+      border-radius: 6px;
+      padding: 7px 12px;
+      cursor: pointer;
+    }
+
+    .btn.primary {
+      border-color: var(--primary);
+      background: var(--primary);
+      color: #fff;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .tab {
+      border: 0;
+      border-bottom: 3px solid transparent;
+      background: transparent;
+      color: var(--muted);
+      padding: 12px 18px 10px;
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    .tab.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: 330px minmax(0, 1fr);
+      gap: 14px;
+      align-items: start;
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+
+    .report-panel {
+      min-height: calc(100vh - 130px);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 14px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .panel-header h2 {
+      margin: 0;
+      font-size: 16px;
+    }
+
+    .report-list {
+      overflow: auto;
+      padding: 8px;
+    }
+
+    .report-item {
+      width: 100%;
+      border: 1px solid transparent;
+      background: transparent;
+      border-radius: 6px;
+      color: var(--text);
+      text-align: left;
+      padding: 10px 11px;
+      line-height: 1.35;
+      cursor: pointer;
+    }
+
+    .report-item:hover {
+      background: #f7f9fc;
+      border-color: var(--line);
+    }
+
+    .report-item.active {
+      background: var(--primary-soft);
+      border-color: #9cc8ed;
+      color: #0f4f82;
+      font-weight: 700;
+    }
+
+    .content {
+      min-width: 0;
+    }
+
+    .view-panel {
+      padding: 14px;
+      margin-bottom: 14px;
+    }
+
+    .view-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .view-label {
+      color: var(--muted);
+      font-weight: 700;
+      margin-right: 2px;
+    }
+
+    .chip {
+      border: 1px solid var(--line-dark);
+      background: #fff;
+      border-radius: 999px;
+      padding: 7px 12px;
+      cursor: pointer;
+    }
+
+    .chip.active {
+      border-color: var(--primary);
+      background: var(--primary-soft);
+      color: var(--primary);
+      font-weight: 700;
+    }
+
+    .grid-card {
+      overflow: hidden;
+    }
+
+    .grid-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .grid-title h2 {
+      margin: 0 0 4px;
+      font-size: 17px;
+    }
+
+    .grid-title p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .grid-scroll {
+      overflow: auto;
+      max-height: calc(100vh - 250px);
+      min-height: 380px;
+      background: #fff;
+    }
+
+    table.data-grid {
+      width: max-content;
+      min-width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      table-layout: fixed;
+    }
+
+    .data-grid th,
+    .data-grid td {
+      border-right: 1px solid var(--line-dark);
+      border-bottom: 1px solid var(--line-dark);
+      padding: 6px 8px;
+      height: 34px;
+      vertical-align: middle;
+      background: #fff;
+    }
+
+    .data-grid th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: var(--header);
+      text-align: center;
+      font-weight: 700;
+    }
+
+    .data-grid thead tr:first-child th {
+      background: var(--header-strong);
+      border-top: 1px solid var(--line-dark);
+    }
+
+    .data-grid th:first-child,
+    .data-grid td:first-child {
+      border-left: 1px solid var(--line-dark);
+    }
+
+    .pin-left {
+      position: sticky;
+      left: 0;
+      z-index: 3;
+    }
+
+    .pin-left-2 {
+      position: sticky;
+      left: 72px;
+      z-index: 3;
+    }
+
+    thead .pin-left,
+    thead .pin-left-2 {
+      z-index: 5;
+    }
+
+    .col-no {
+      width: 72px;
+      text-align: center;
+    }
+
+    .col-item {
+      width: 620px;
+      min-width: 620px;
+    }
+
+    .col-area {
+      width: 180px;
+      min-width: 180px;
+      font-weight: 700;
+    }
+
+    .col-small {
+      width: 94px;
+      min-width: 94px;
+      text-align: center;
+    }
+
+    .row-main td {
+      background: #f7f9fc;
+      font-weight: 700;
+    }
+
+    .row-sub td:nth-child(2) {
+      padding-left: 22px;
+    }
+
+    .row-alert td {
+      background: var(--warning-soft);
+    }
+
+    .number-link {
+      border: 0;
+      background: transparent;
+      color: var(--primary);
+      cursor: pointer;
+      font-weight: 700;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      padding: 0;
+    }
+
+    .muted-cell {
+      color: #98a2b3;
+    }
+
+    .grid-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(15, 23, 42, 0.45);
+      padding: 20px;
+      z-index: 20;
+    }
+
+    .modal-backdrop.show {
+      display: flex;
+    }
+
+    .modal {
+      width: min(880px, 100%);
+      max-height: 80vh;
+      overflow: hidden;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 24px 60px rgba(15, 23, 42, 0.25);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .modal-header h3 {
+      margin: 0;
+      font-size: 17px;
+    }
+
+    .modal-body {
+      overflow: auto;
+      padding: 14px 16px 16px;
+    }
+
+    .detail-table {
+      width: 100%;
+      min-width: 760px;
+      border-collapse: collapse;
+    }
+
+    .detail-table th,
+    .detail-table td {
+      border: 1px solid var(--line);
+      padding: 8px;
+      text-align: left;
+    }
+
+    .detail-table th {
+      background: var(--header);
+    }
+
+    @media (max-width: 1000px) {
+      .workspace {
+        grid-template-columns: 1fr;
+      }
+
+      .report-panel {
+        min-height: auto;
+        max-height: 330px;
+      }
+
+    }
+
+    @media (max-width: 640px) {
+      .page {
+        padding: 12px;
+      }
+
+      .topbar,
+      .grid-toolbar {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .tabs {
+        overflow-x: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="topbar">
+      <div class="title">
+        <h1>สถิติข้อมูล</h1>
+        <p>ตัวอย่างหน้าจอ DataGrid สำหรับตารางสรุปผลแบบติดตั้งและแบบแยกพารามิเตอร์</p>
+      </div>
+      <div class="actions">
+        <button class="btn">Export Excel</button>
+        <button class="btn">Export PDF</button>
+        <button class="btn primary">ค้นหาข้อมูล</button>
+      </div>
+    </section>
+
+    <nav class="tabs" aria-label="ประเภทชุดข้อมูล">
+      <button class="tab active" data-dataset="cems">CEMS</button>
+      <button class="tab" data-dataset="wpms">BOD/COD Online</button>
+    </nav>
+
+    <section class="workspace">
+      <aside class="panel report-panel">
+        <div class="panel-header">
+          <h2>เมนูรายงาน</h2>
+        </div>
+        <div id="reportList" class="report-list"></div>
+      </aside>
+
+      <section class="content">
+        <section class="panel view-panel">
+          <div class="view-row" aria-label="มุมมองการแยกข้อมูล">
+            <span class="view-label">แสดงผลแยกตาม:</span>
+            <button class="chip active" data-view="region">ภูมิภาค</button>
+            <button class="chip" data-view="province">จังหวัด</button>
+            <button class="chip" data-view="factoryType">ประเภทโรงงาน</button>
+            <button class="chip" data-view="fuel">ชนิดเชื้อเพลิง</button>
+            <button class="chip" data-view="attachment">บัญชีแนบท้าย</button>
+            <button class="chip" data-view="parameter">พารามิเตอร์ที่ติดตั้ง</button>
+          </div>
+        </section>
+
+        <section class="panel grid-card">
+          <div class="grid-toolbar">
+            <div class="grid-title">
+              <h2 id="gridTitle">สรุปข้อมูลการติดตั้ง CEMS</h2>
+              <p id="gridSubtitle">มุมมอง: แยกตามภูมิภาค</p>
+            </div>
+            <div class="actions">
+              <button class="btn">รีเฟรช</button>
+            </div>
+          </div>
+
+          <div id="gridScroll" class="grid-scroll"></div>
+
+          <div class="grid-footer">
+            <span>หมายเหตุ: ตัวเลขสีน้ำเงินคลิกเพื่อดูรายชื่อโรงงาน / เลขทะเบียนโรงงาน / จังหวัด / จุดตรวจวัด / วันที่</span>
+            <span id="rowCount">0 แถว</span>
+          </div>
+        </section>
+      </section>
+    </section>
+  </main>
+
+  <div id="detailModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <section class="modal">
+      <div class="modal-header">
+        <h3 id="modalTitle">รายละเอียดข้อมูลต้นทาง</h3>
+        <button id="closeModal" class="btn">ปิด</button>
+      </div>
+      <div class="modal-body">
+        <table class="detail-table">
+          <thead>
+            <tr>
+              <th>โรงงาน</th>
+              <th>เลขทะเบียนโรงงาน</th>
+              <th>จังหวัด</th>
+              <th>จุดตรวจวัด</th>
+              <th>วันที่</th>
+              <th>สถานะ</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>บริษัท ตัวอย่างอุตสาหกรรม จำกัด</td>
+              <td>3-88-12/45รย</td>
+              <td>ระยอง</td>
+              <td>ปล่อง Boiler 1</td>
+              <td>16/06/2569</td>
+              <td>เข้าเงื่อนไขรายงาน</td>
+            </tr>
+            <tr>
+              <td>บริษัท โรงงานสาธิต จำกัด</td>
+              <td>3-77-09/31ชบ</td>
+              <td>ชลบุรี</td>
+              <td>ปล่อง Furnace A</td>
+              <td>16/06/2569</td>
+              <td>เข้าเงื่อนไขรายงาน</td>
+            </tr>
+            <tr>
+              <td>บริษัท พลังงานตัวอย่าง จำกัด</td>
+              <td>3-55-18/22สป</td>
+              <td>สมุทรปราการ</td>
+              <td>ปล่อง Main Stack</td>
+              <td>15/06/2569</td>
+              <td>รอตรวจสอบ</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const reports = {
+      cems: [
+        { key: "cems-install", template: "installation", label: "สรุปข้อมูลการติดตั้ง CEMS" },
+        { key: "cems-report-80", template: "parameter", label: "สรุปผลการรายงาน CEMS ตั้งแต่ร้อยละ 80 ต่อวันขึ้นไป (ไม่นับ Shutdown)" },
+        { key: "cems-exceed-standard", template: "parameter", label: "สรุปผลการตรวจวัด CEMS เกินมาตรฐาน" },
+        { key: "cems-exceed-eia", template: "parameter", label: "สรุปผลการตรวจวัด CEMS เกินค่า EIA" },
+        { key: "cems-no-report-14", template: "parameter", label: "สรุปผลการไม่รายงาน CEMS ติดต่อกันเกิน 14 วัน (ไม่นับ Shutdown)" },
+        { key: "cems-report-low-80", template: "parameter", label: "สรุปผลการรายงาน CEMS ไม่ถึงร้อยละ 80 ต่อวัน (ไม่นับ Shutdown)" },
+        { key: "cems-shutdown", template: "parameter", label: "สรุปจำนวนโรงงานที่หยุดส่งข้อมูลเนื่องจากหยุดหน่วยการผลิต (Shutdown)" },
+        { key: "cems-abnormal", template: "parameter", label: "สรุปผลการรายงานผลตรวจวัด CEMS มีค่าผิดปกติ (ค่านิ่ง/ ค่า 0/ค่าติดลบ)" },
+        { key: "cems-exempt", template: "installation", label: "สรุปข้อมูลโรงงานที่ได้รับการยกเว้นการติดตั้ง CEMS" },
+        { key: "cems-form-01", template: "parameter", label: "สรุปข้อมูลการแจ้งแบบ กวภ. 01 (แจ้งหยุดส่งข้อมูล / หยุดหน่วยการผลิต (Shutdown)" },
+        { key: "cems-form-02", template: "parameter", label: "สรุปข้อมูลการแจ้งแบบ กวภ. 02 (รายงานผลการตรวจวัดกรณีหยุดส่งข้อมูลเกิน 14 วัน)" },
+        { key: "cems-form-04", template: "parameter", label: "สรุปข้อมูลการแจ้งแบบ กวภ. 04 (รายงานผลการตรวจวัดกรณีได้รับการยกเว้นการติดตั้ง CEMS)" },
+        { key: "cems-form-05", template: "parameter", label: "สรุปข้อมูลการแจ้งแบบ กวภ. 05 (รายงานผลการทวนสอบ/สอบเทียบ CEMS)" }
+      ],
+      wpms: [
+        { key: "wpms-install", template: "installation", label: "สรุปข้อมูลการติดตั้ง" },
+        { key: "wpms-report-80", template: "parameter", label: "สรุปผลการรายงาน BOD/COD Online ตั้งแต่ร้อยละ 80 ต่อวันขึ้นไป (ไม่นับไม่ระบายน้ำทิ้งออกนอกโรงงาน)" },
+        { key: "wpms-exceed-standard", template: "parameter", label: "สรุปผลการตรวจวัด BOD/COD Online เกินมาตรฐาน" },
+        { key: "wpms-exceed-eia", template: "parameter", label: "สรุปผลการตรวจวัด BOD/COD Online เกินค่า EIA" },
+        { key: "wpms-no-report-7", template: "parameter", label: "สรุปผลการไม่รายงาน WPMS ติดต่อกันเกิน 7 วัน (ไม่นับไม่ระบายน้ำทิ้งออกนอกโรงงาน)" },
+        { key: "wpms-report-low-80", template: "parameter", label: "สรุปผลรายงาน WPMS ไม่ถึงร้อยละ 80 ต่อวัน (ไม่นับไม่ระบายน้ำทิ้งออกนอกโรงงาน)" },
+        { key: "wpms-abnormal", template: "parameter", label: "สรุปผลการรายงานผลตรวจวัด BOD/COD Online มีค่าผิดปกติ (ค่านิ่ง/ ค่า 0/ค่าติดลบ)" },
+        { key: "wpms-shutdown", template: "parameter", label: "สรุปข้อมูลโรงงานที่ไม่มีการระบายน้ำทิ้งออกนอกโรงงาน (Shutdown)" },
+        { key: "wpms-error-check", template: "parameter", label: "สรุปข้อมูลการรายการตรวจสอบค่าความคลาดเคลื่อน BOD/COD Online" },
+        { key: "wpms-form-03", template: "parameter", label: "สรุปข้อมูลการแจ้งแบบ กวภ. 03 (แจ้งหยุดส่งข้อมูล / ไม่มีการระบายน้ำทิ้งออกนอกโรงงาน)" }
+      ]
+    };
+
+    const viewLabels = {
+      region: "แยกตามภูมิภาค",
+      province: "แยกรายจังหวัด",
+      factoryType: "แยกตามลำดับประเภทโรงงาน",
+      fuel: "แยกตามชนิดเชื้อเพลิง",
+      attachment: "แยกตามบัญชีแนบท้ายที่เข้าข่าย",
+      parameter: "แยกตามพารามิเตอร์ที่ติดตั้ง"
+    };
+
+    const viewRows = {
+      region: ["ทั่วประเทศ", "ภาคกลาง", "ภาคเหนือ", "ภาคใต้", "ภาคตะวันออก", "ภาคตะวันตก", "ภาคตะวันออกเฉียงเหนือ"],
+      province: ["ระยอง", "ชลบุรี", "สมุทรปราการ", "ฉะเชิงเทรา", "พระนครศรีอยุธยา", "ปทุมธานี"],
+      factoryType: ["ลำดับที่ 88", "ลำดับที่ 89", "ลำดับที่ 101", "ลำดับที่ 105", "ลำดับที่ 106"],
+      fuel: ["ก๊าซธรรมชาติ", "ถ่านหิน", "ชีวมวล", "น้ำมันเตา", "เชื้อเพลิงผสม"],
+      attachment: ["บัญชีแนบท้าย 1", "บัญชีแนบท้าย 2", "บัญชีแนบท้าย 3", "เข้าข่ายมากกว่า 1 บัญชี"],
+      parameter: ["Particulate", "SO2", "NOx", "CO", "HCl", "Hg", "Opacity", "H2S"]
+    };
+
+    const installationRows = [
+      { no: "1", item: "จำนวนโรงงานที่คาดว่าจะเข้าข่ายทั้งหมด", type: "main", values: [117, 119, 89, 91, 18, 18, 10, 10] },
+      { no: "2", item: "จำนวนโรงงานที่มีการเชื่อมต่อแล้ว (ทั้งครบถ้วนและไม่ครบถ้วน)", type: "main", values: [96, 101, 72, 78, 15, 15, 9, 8] },
+      { no: "3", item: "ดำเนินการเป็นไปตามกฎหมาย", type: "main", values: [82, 86, 62, 66, 13, 13, 7, 7] },
+      { no: "3.1", item: "ยังไม่แจ้งประกอบกิจการ", type: "sub", values: [5, 5, 3, 3, 1, 1, 1, 1] },
+      { no: "3.2", item: "แจ้งหยุดชั่วคราว", type: "sub", values: [6, 6, 4, 4, 1, 1, 1, 1] },
+      { no: "3.3", item: "ติดตั้งและเชื่อมต่อครบถ้วน", type: "sub", values: [71, 75, 55, 59, 11, 11, 5, 5] },
+      { no: "3.4", item: "ยกเว้นหรือแจ้งไม่ใช้บังคับ ตามประกาศข้อ 4(1) (2) และ 11(3) ทั้งโรงงาน", type: "sub", values: [9, 9, 6, 6, 2, 2, 1, 1] },
+      { no: "4", item: "ดำเนินการที่ไม่เป็นไปตามกฎหมาย", type: "main alert", values: [18, 18, 14, 14, 3, 3, 1, 1] },
+      { no: "4.1", item: "อยู่ระหว่างเชื่อมต่อ (ยังไม่ Online ในระบบ POMS)", type: "sub", values: [8, 8, 6, 6, 1, 1, 1, 1] },
+      { no: "4.2", item: "โรงงานที่ยังไม่ได้ดำเนินการ (รอจังหวัดตรวจสอบ)", type: "sub", values: [5, 5, 4, 4, 1, 1, 0, 0] },
+      { no: "4.3", item: "ติดตั้งแล้วแต่ยังไม่ครบถ้วน", type: "sub", values: [3, 3, 2, 2, 1, 1, 0, 0] },
+      { no: "4.4", item: "ยกเว้นหรือแจ้งไม่ใช้บังคับบางรายการ / รายการที่เหลือยังไม่ติดตั้ง", type: "sub", values: [2, 2, 2, 2, 0, 0, 0, 0] },
+      { no: "5", item: "อยู่ระหว่างขอขยายระยะเวลาดำเนินการ", type: "main", values: [11, 11, 8, 8, 2, 2, 1, 1] },
+      { no: "5.1", item: "ติดตั้งแล้วแต่ยังไม่ครบถ้วน / อยู่ระหว่างขยายเวลาติดตั้ง", type: "sub", values: [7, 7, 5, 5, 1, 1, 1, 1] },
+      { no: "5.2", item: "ยกเว้นหรือแจ้งไม่ใช้บังคับบางรายการ / รายการที่เหลืออยู่ระหว่างขยายเวลาติดตั้ง", type: "sub", values: [4, 4, 3, 3, 1, 1, 0, 0] }
+    ];
+
+    const state = {
+      dataset: "cems",
+      reportKey: "cems-install",
+      view: "region"
+    };
+
+    function activeReport() {
+      return reports[state.dataset].find((report) => report.key === state.reportKey) || reports[state.dataset][0];
+    }
+
+    function renderReports() {
+      const list = document.getElementById("reportList");
+      list.innerHTML = reports[state.dataset].map((report) => `
+        <button class="report-item ${report.key === state.reportKey ? "active" : ""}" data-report="${report.key}">
+          ${report.label}
+        </button>
+      `).join("");
+    }
+
+    function renderInstallationGrid(report) {
+      const groups = ["ทั่วประเทศ", "กรอ.", "สอจ.", "กนอ."];
+      const head = `
+        <thead>
+          <tr>
+            <th class="pin-left col-no" rowspan="2">ลำดับ</th>
+            <th class="pin-left-2 col-item" rowspan="2">รายการ</th>
+            ${groups.map((group) => `<th colspan="2">${group}</th>`).join("")}
+          </tr>
+          <tr>
+            ${groups.map(() => `<th class="col-small">โรงงาน</th><th class="col-small">ปล่อง</th>`).join("")}
+          </tr>
+        </thead>
+      `;
+      const body = installationRows.map((row) => `
+        <tr class="${row.type.includes("main") ? "row-main" : "row-sub"} ${row.type.includes("alert") ? "row-alert" : ""}">
+          <td class="pin-left col-no">${row.no}</td>
+          <td class="pin-left-2 col-item">${row.item}</td>
+          ${row.values.map((value) => `<td class="col-small">${value ? `<button class="number-link" data-detail="${report.label}">${value}</button>` : `<span class="muted-cell">-</span>`}</td>`).join("")}
+        </tr>
+      `).join("");
+      document.getElementById("rowCount").textContent = `${installationRows.length} แถว`;
+      return `<table class="data-grid">${head}<tbody>${body}</tbody></table>`;
+    }
+
+    function renderParameterGrid(report) {
+      const rows = viewRows[state.view] || viewRows.region;
+      const parameters = viewRows.parameter;
+      const head = `
+        <thead>
+          <tr>
+            <th class="pin-left col-area" rowspan="2">${state.view === "province" ? "จังหวัด" : "พื้นที่/โรงงาน"}</th>
+            <th colspan="2">ทุกพารามิเตอร์<br>(โรงงาน)</th>
+            ${parameters.map((parameter) => `<th colspan="2">${parameter}<br>(โรงงาน)</th>`).join("")}
+          </tr>
+          <tr>
+            <th class="col-small">นอกนิคม<br>อุตสาหกรรม</th>
+            <th class="col-small">ในนิคม<br>อุตสาหกรรม</th>
+            ${parameters.map(() => `<th class="col-small">นอกนิคม<br>อุตสาหกรรม</th><th class="col-small">ในนิคม<br>อุตสาหกรรม</th>`).join("")}
+          </tr>
+        </thead>
+      `;
+      const body = rows.map((row, rowIndex) => {
+        const allOutside = rowIndex === 0 ? 24 : 4 + (rowIndex % 2);
+        const allInside = rowIndex === 0 ? 8 : rowIndex % 3;
+        const cells = parameters.map((parameter, parameterIndex) => {
+          const outside = parameterIndex === 0 ? allOutside : Math.max(0, 20 - parameterIndex * 3 + rowIndex);
+          const inside = parameterIndex % 3 === 0 ? allInside : rowIndex % 2;
+          return `
+            <td class="col-small">${outside ? `<button class="number-link" data-detail="${parameter}">${outside}</button>` : `<span class="muted-cell">-</span>`}</td>
+            <td class="col-small">${inside ? `<button class="number-link" data-detail="${parameter}">${inside}</button>` : `<span class="muted-cell">-</span>`}</td>
+          `;
+        }).join("");
+
+        return `
+          <tr>
+            <td class="pin-left col-area">${row}</td>
+            <td class="col-small">${allOutside ? `<button class="number-link" data-detail="${report.label}">${allOutside}</button>` : `<span class="muted-cell">-</span>`}</td>
+            <td class="col-small">${allInside ? `<button class="number-link" data-detail="${report.label}">${allInside}</button>` : `<span class="muted-cell">-</span>`}</td>
+            ${cells}
+          </tr>
+        `;
+      }).join("");
+      document.getElementById("rowCount").textContent = `${rows.length} แถว`;
+      return `<table class="data-grid">${head}<tbody>${body}</tbody></table>`;
+    }
+
+    function renderGrid() {
+      const report = activeReport();
+      document.getElementById("gridTitle").textContent = report.label;
+      document.getElementById("gridSubtitle").textContent = `มุมมอง: ${viewLabels[state.view]}`;
+      document.getElementById("gridScroll").innerHTML = report.template === "installation"
+        ? renderInstallationGrid(report)
+        : renderParameterGrid(report);
+    }
+
+    function renderAll() {
+      renderReports();
+      renderGrid();
+    }
+
+    document.querySelectorAll(".tab").forEach((button) => {
+      button.addEventListener("click", () => {
+        state.dataset = button.dataset.dataset;
+        state.reportKey = reports[state.dataset][0].key;
+        document.querySelectorAll(".tab").forEach((tab) => tab.classList.toggle("active", tab === button));
+        renderAll();
+      });
+    });
+
+    document.querySelectorAll(".chip").forEach((button) => {
+      button.addEventListener("click", () => {
+        state.view = button.dataset.view;
+        document.querySelectorAll(".chip").forEach((chip) => chip.classList.toggle("active", chip === button));
+        renderGrid();
+      });
+    });
+
+    document.getElementById("reportList").addEventListener("click", (event) => {
+      const item = event.target.closest("[data-report]");
+      if (!item) return;
+      state.reportKey = item.dataset.report;
+      renderAll();
+    });
+
+    document.getElementById("gridScroll").addEventListener("click", (event) => {
+      const button = event.target.closest("[data-detail]");
+      if (!button) return;
+      document.getElementById("modalTitle").textContent = `รายละเอียดข้อมูลต้นทาง: ${button.dataset.detail}`;
+      document.getElementById("detailModal").classList.add("show");
+    });
+
+    document.getElementById("closeModal").addEventListener("click", () => {
+      document.getElementById("detailModal").classList.remove("show");
+    });
+
+    document.getElementById("detailModal").addEventListener("click", (event) => {
+      if (event.target.id === "detailModal") {
+        document.getElementById("detailModal").classList.remove("show");
+      }
+    });
+
+    renderAll();
+  </script>
+</body>
+</html>

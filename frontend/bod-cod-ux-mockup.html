@@ -1,0 +1,774 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>รายงานค่าความคลาดเคลื่อน BOD/COD Online</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Kanit", "Noto Sans Thai", Arial, sans-serif;
+      background: #f3f6fb;
+      color: #0f172a;
+    }
+    button, input, select, textarea { font: inherit; }
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 260px 1fr;
+    }
+    .sidebar {
+      background: #fff;
+      border-right: 1px solid #dbe3ef;
+      padding: 16px 12px;
+    }
+    .brand {
+      font-weight: 800;
+      font-size: 20px;
+      padding: 10px 12px 18px;
+    }
+    .menu { display: grid; gap: 4px; }
+    .menu button {
+      border: 0;
+      background: transparent;
+      text-align: left;
+      padding: 11px 12px;
+      border-radius: 6px;
+      color: #334155;
+      cursor: pointer;
+    }
+    .menu button.active {
+      background: #eef5ff;
+      color: #174ea6;
+      font-weight: 700;
+    }
+    .content {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .topbar {
+      height: 64px;
+      background: #fff;
+      border-bottom: 1px solid #dbe3ef;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+    }
+    .user { color: #475569; font-size: 14px; }
+    .workspace {
+      padding: 20px 24px 28px;
+      min-width: 0;
+    }
+    .page-head {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 14px;
+    }
+    h1 {
+      font-size: 22px;
+      margin: 0;
+      line-height: 1.35;
+    }
+    .subtitle {
+      margin-top: 4px;
+      color: #64748b;
+      font-size: 14px;
+    }
+    .role-switch {
+      display: inline-flex;
+      border: 1px solid #cbd5e1;
+      background: #fff;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .role-switch button {
+      border: 0;
+      background: transparent;
+      padding: 8px 12px;
+      cursor: pointer;
+      color: #334155;
+    }
+    .role-switch button.active {
+      background: #174ea6;
+      color: #fff;
+      font-weight: 700;
+    }
+    .surface {
+      background: #fff;
+      border: 1px solid #dbe3ef;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .tabs {
+      display: flex;
+      gap: 8px;
+      padding: 12px 16px 0;
+      border-bottom: 1px solid #dbe3ef;
+    }
+    .tabs button {
+      border: 0;
+      background: transparent;
+      padding: 11px 12px;
+      border-bottom: 3px solid transparent;
+      color: #475569;
+      cursor: pointer;
+    }
+    .tabs button.active {
+      border-bottom-color: #174ea6;
+      color: #174ea6;
+      font-weight: 700;
+    }
+    .filters {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(120px, 1fr)) auto;
+      gap: 12px;
+      padding: 16px;
+      border-bottom: 1px solid #dbe3ef;
+    }
+    .field {
+      display: grid;
+      gap: 6px;
+    }
+    .field label {
+      font-size: 12px;
+      color: #475569;
+      font-weight: 700;
+    }
+    .field input, .field select, .field textarea {
+      width: 100%;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      padding: 8px 10px;
+      min-height: 38px;
+      background: #fff;
+    }
+    .table-wrap { overflow: auto; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 1180px;
+    }
+    th, td {
+      border-bottom: 1px solid #dbe3ef;
+      border-right: 1px solid #e2e8f0;
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: middle;
+      font-size: 14px;
+      white-space: nowrap;
+    }
+    th {
+      background: #f8fafc;
+      font-weight: 800;
+      color: #0f172a;
+    }
+    th:last-child, td:last-child { border-right: 0; }
+    .actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: nowrap;
+    }
+    .btn {
+      border: 1px solid #9db7ea;
+      color: #174ea6;
+      background: #fff;
+      border-radius: 6px;
+      padding: 7px 11px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .btn.primary {
+      background: #174ea6;
+      border-color: #174ea6;
+      color: #fff;
+    }
+    .btn.ghost { color: #334155; border-color: #cbd5e1; }
+    .btn.danger { color: #b42318; border-color: #f3b4ad; }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      border-radius: 999px;
+      padding: 2px 10px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .chip.draft { background: #f1f5f9; color: #475569; }
+    .chip.pending { background: #fff7ed; color: #b45309; }
+    .chip.review { background: #eff6ff; color: #1d4ed8; }
+    .chip.pass { background: #ecfdf3; color: #027a48; }
+    .chip.fix { background: #fff1f3; color: #c01048; }
+    .summary-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      padding: 16px;
+      border-bottom: 1px solid #dbe3ef;
+    }
+    .stat {
+      border: 1px solid #dbe3ef;
+      border-radius: 8px;
+      padding: 12px;
+      background: #fff;
+    }
+    .stat .label { color: #64748b; font-size: 13px; }
+    .stat .value { font-size: 24px; font-weight: 800; margin-top: 4px; }
+    .modal-backdrop, .drawer-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.55);
+      display: none;
+      z-index: 40;
+    }
+    .modal-backdrop.open, .drawer-backdrop.open { display: block; }
+    .modal {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: min(1100px, calc(100vw - 48px));
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 24px 70px rgba(15, 23, 42, 0.35);
+      display: none;
+      z-index: 50;
+      overflow: hidden;
+    }
+    .modal.open { display: block; }
+    .dialog-title, .drawer-title {
+      padding: 18px 24px;
+      border-bottom: 1px solid #dbe3ef;
+      font-size: 18px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .dialog-body { padding: 18px 24px; }
+    .dialog-actions, .drawer-actions {
+      padding: 14px 24px;
+      border-top: 1px solid #dbe3ef;
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      background: #fff;
+    }
+    .drawer {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: calc(100vh - 64px);
+      background: #f3f6fb;
+      display: none;
+      z-index: 55;
+      border-radius: 12px 12px 0 0;
+      overflow: hidden;
+      box-shadow: 0 -16px 60px rgba(15, 23, 42, 0.24);
+    }
+    .drawer.open { display: flex; flex-direction: column; }
+    .drawer-body {
+      flex: 1;
+      overflow: auto;
+      padding: 18px 24px;
+    }
+    .sections {
+      display: grid;
+      gap: 14px;
+    }
+    .section {
+      background: #fff;
+      border: 1px solid #dbe3ef;
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .section h2 {
+      margin: 0 0 14px;
+      font-size: 16px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 12px;
+    }
+    .md3 { grid-column: span 3; }
+    .md4 { grid-column: span 4; }
+    .md6 { grid-column: span 6; }
+    .md12 { grid-column: span 12; }
+    .inline-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .paper-stage {
+      background: #eef2f7;
+      padding: 22px;
+      max-height: calc(100vh - 190px);
+      overflow: auto;
+    }
+    .paper {
+      width: 794px;
+      min-height: 1123px;
+      margin: 0 auto;
+      background: #fff;
+      color: #000;
+      padding: 42px 56px;
+      font-size: 14px;
+      line-height: 1.75;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
+    }
+    .paper h3 {
+      margin: 0;
+      font-size: 15px;
+      text-align: center;
+    }
+    .paper .right { text-align: right; font-weight: 700; }
+    .paper-table {
+      min-width: 0;
+      margin-top: 14px;
+      border: 1px solid #555;
+    }
+    .paper-table th, .paper-table td {
+      border: 1px solid #555;
+      color: #000;
+      white-space: normal;
+      text-align: center;
+      font-size: 13px;
+      padding: 6px;
+    }
+    .paper-table th { background: #c9c9c9; }
+    .line {
+      display: inline-block;
+      min-width: 170px;
+      border-bottom: 1px dotted #222;
+      padding: 0 6px;
+      min-height: 20px;
+    }
+    .hidden { display: none; }
+    @media (max-width: 1000px) {
+      .app { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .filters, .summary-row { grid-template-columns: 1fr 1fr; }
+      .md3, .md4, .md6 { grid-column: span 12; }
+      .paper { width: 720px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">D-POMS</div>
+      <nav class="menu">
+        <button>สถิติข้อมูล</button>
+        <button>ข้อมูลพื้นฐาน</button>
+        <button>ขอเชื่อมต่อ</button>
+        <button>แจ้งแบบ กวภ. 01 - กวภ. 05</button>
+        <button class="active">รายงานค่าความคลาดเคลื่อน BOD/COD Online</button>
+        <button>การแจ้งเตือน</button>
+        <button>จัดการสิทธิ์</button>
+      </nav>
+    </aside>
+
+    <main class="content">
+      <header class="topbar">
+        <strong>ระบบติดตามมลพิษโรงงาน</strong>
+        <span class="user">ผู้ประกอบการ | บริษัท ปูนซีเมนต์นครหลวง จำกัด (มหาชน)</span>
+      </header>
+
+      <section class="workspace">
+        <div class="page-head">
+          <div>
+            <h1>รายงานค่าความคลาดเคลื่อน BOD/COD Online</h1>
+            <div class="subtitle">ยื่นรายงานรายจุดตรวจวัด ปีละ 2 ครั้ง และติดตามผลพิจารณาจากเจ้าหน้าที่</div>
+          </div>
+          <div class="role-switch">
+            <button class="active" data-role="operator">ผู้ประกอบการ</button>
+            <button data-role="officer">เจ้าหน้าที่</button>
+          </div>
+        </div>
+
+        <div class="surface">
+          <div class="tabs" id="tabs">
+            <button class="active" data-tab="factories">รายชื่อโรงงาน</button>
+            <button data-tab="reports">รายการรายงาน</button>
+          </div>
+
+          <div id="factoryPanel">
+            <div class="summary-row">
+              <div class="stat"><div class="label">โรงงานทั้งหมด</div><div class="value">7</div></div>
+              <div class="stat"><div class="label">จุดตรวจวัด BOD/COD</div><div class="value">12</div></div>
+              <div class="stat"><div class="label">รอบที่ยังไม่ยื่น</div><div class="value">4</div></div>
+              <div class="stat"><div class="label">รอพิจารณา</div><div class="value">3</div></div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ชื่อโรงงาน/บริษัท</th>
+                    <th>เลขทะเบียนโรงงาน (ใหม่)</th>
+                    <th>เลขทะเบียนโรงงาน (เก่า)</th>
+                    <th>ประเภทอุตสาหกรรม</th>
+                    <th>จังหวัด</th>
+                    <th>จำนวนจุดตรวจวัด</th>
+                    <th>จัดการ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>บริษัท ปูนซีเมนต์นครหลวง จำกัด (มหาชน)</td>
+                    <td>10190000225448</td>
+                    <td>3-101-2/44สบ</td>
+                    <td>ผลิตปูนซีเมนต์</td>
+                    <td>สระบุรี</td>
+                    <td>2</td>
+                    <td><button class="btn" data-open="points">รายละเอียดจุดตรวจวัด</button></td>
+                  </tr>
+                  <tr>
+                    <td>บริษัท อินทรี อีโคไซเคิล จำกัด</td>
+                    <td>10190003325500</td>
+                    <td>3-106-33/50สบ</td>
+                    <td>จัดการของเสีย</td>
+                    <td>สระบุรี</td>
+                    <td>1</td>
+                    <td><button class="btn" data-open="points">รายละเอียดจุดตรวจวัด</button></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div id="reportPanel" class="hidden">
+            <div class="filters">
+              <div class="field"><label>ปี พ.ศ.</label><select><option>2569</option><option>2568</option></select></div>
+              <div class="field"><label>รอบรายงาน</label><select><option>ทั้งหมด</option><option>ครั้งที่ 1 เดือน 1 - 6</option><option>ครั้งที่ 2 เดือน 7 - 12</option></select></div>
+              <div class="field"><label>จังหวัด</label><select><option>ทั้งหมด</option><option>สระบุรี</option><option>สงขลา</option></select></div>
+              <div class="field"><label>สถานะ</label><select><option>ทั้งหมด</option><option>ร่าง</option><option>อยู่ระหว่างพิจารณา</option><option>ผ่านการพิจารณา</option></select></div>
+              <div class="field"><label>ค้นหา</label><input value="" placeholder="ชื่อโรงงาน / เลขทะเบียน / รหัสจุดตรวจวัด" /></div>
+              <button class="btn primary">ค้นหา</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ชื่อโรงงาน/บริษัท</th>
+                    <th>เลขทะเบียนโรงงาน</th>
+                    <th>จังหวัด</th>
+                    <th>รหัสจุดตรวจวัด</th>
+                    <th>ชื่อจุดตรวจวัด</th>
+                    <th>รอบรายงาน</th>
+                    <th>ปี พ.ศ.</th>
+                    <th>เลขที่รายงาน</th>
+                    <th>วันที่ยื่นรายงาน</th>
+                    <th>วันที่พิจารณา</th>
+                    <th>สถานะ</th>
+                    <th>จัดการ</th>
+                  </tr>
+                </thead>
+                <tbody id="reportRows"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="modal-backdrop" id="modalBackdrop"></div>
+  <div class="modal" id="pointsModal">
+    <div class="dialog-title">
+      รายการจุดตรวจวัด BOD/COD - บริษัท ปูนซีเมนต์นครหลวง จำกัด (มหาชน)
+      <button class="btn ghost" data-close="modal">ปิด</button>
+    </div>
+    <div class="dialog-body">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>รหัสจุดตรวจวัด</th>
+              <th>ชื่อจุดตรวจวัด</th>
+              <th>ประเภทจุดตรวจวัด</th>
+              <th>เครื่องตรวจวัด</th>
+              <th>ครั้งที่ 1 เดือน 1 - 6</th>
+              <th>ครั้งที่ 2 เดือน 7 - 12</th>
+              <th>จัดการ</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>WP001</td>
+              <td>จุดระบายน้ำทิ้ง A</td>
+              <td>WPMS</td>
+              <td>BOD, COD</td>
+              <td><span class="chip pending">ยังไม่ยื่น</span></td>
+              <td><span class="chip draft">ร่าง</span></td>
+              <td><button class="btn primary" data-open="drawer">รายงานค่าความคลาดเคลื่อน</button></td>
+            </tr>
+            <tr>
+              <td>WP002</td>
+              <td>จุดระบายน้ำทิ้ง B</td>
+              <td>WPMS</td>
+              <td>BOD, COD</td>
+              <td><span class="chip pass">ผ่านการพิจารณา</span></td>
+              <td><span class="chip pending">ยังไม่ยื่น</span></td>
+              <td><button class="btn primary" data-open="drawer">รายงานค่าความคลาดเคลื่อน</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="dialog-actions">
+      <button class="btn ghost" data-close="modal">ยกเลิก</button>
+    </div>
+  </div>
+
+  <div class="drawer-backdrop" id="drawerBackdrop"></div>
+  <div class="drawer" id="formDrawer">
+    <div class="drawer-title">
+      รายงานค่าความคลาดเคลื่อน BOD/COD Online
+      <button class="btn ghost" data-close="drawer">ปิด</button>
+    </div>
+    <div class="drawer-body">
+      <div class="sections">
+        <section class="section">
+          <h2>ข้อมูลทั่วไปของโรงงาน</h2>
+          <div class="grid">
+            <div class="field md6"><label>ชื่อโรงงาน</label><input readonly value="บริษัท ปูนซีเมนต์นครหลวง จำกัด (มหาชน)" /></div>
+            <div class="field md3"><label>ทะเบียนโรงงานเลขที่</label><input readonly value="10190000225448" /></div>
+            <div class="field md3"><label>จังหวัด</label><input readonly value="สระบุรี" /></div>
+            <div class="field md12"><label>สถานที่ตั้งโรงงาน</label><textarea readonly>ตำบลทับกวาง อำเภอแก่งคอย จังหวัดสระบุรี</textarea></div>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>ข้อมูลจุดตรวจวัดและรอบรายงาน</h2>
+          <div class="grid">
+            <div class="field md3"><label>รหัสจุดตรวจวัด</label><input readonly value="WP001" /></div>
+            <div class="field md3"><label>ชื่อจุดตรวจวัด</label><input readonly value="จุดระบายน้ำทิ้ง A" /></div>
+            <div class="field md3"><label>รอบรายงาน</label><select><option>ครั้งที่ 1 เดือน 1 - 6</option><option>ครั้งที่ 2 เดือน 7 - 12</option></select></div>
+            <div class="field md3"><label>ปี พ.ศ.</label><input value="2569" /></div>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="inline-head">
+            <h2>ข้อมูลค่าความคลาดเคลื่อน BOD/COD</h2>
+            <button class="btn">เพิ่มข้อมูลรายเดือน</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>เดือน</th>
+                  <th>BOD จากเครื่อง</th>
+                  <th>BOD จากห้องปฏิบัติการ</th>
+                  <th>ค่าความคลาดเคลื่อน BOD</th>
+                  <th>COD จากเครื่อง</th>
+                  <th>COD จากห้องปฏิบัติการ</th>
+                  <th>ค่าความคลาดเคลื่อน COD</th>
+                  <th>หมายเหตุ</th>
+                  <th>จัดการ</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>มกราคม</td>
+                  <td>24.20</td>
+                  <td>25.10</td>
+                  <td>3.59%</td>
+                  <td>88.40</td>
+                  <td>91.20</td>
+                  <td>3.07%</td>
+                  <td>-</td>
+                  <td><div class="actions"><button class="btn">แก้ไข</button><button class="btn danger">ลบ</button></div></td>
+                </tr>
+                <tr>
+                  <td>กุมภาพันธ์</td>
+                  <td>26.00</td>
+                  <td>25.40</td>
+                  <td>2.36%</td>
+                  <td>92.30</td>
+                  <td>90.10</td>
+                  <td>2.44%</td>
+                  <td>-</td>
+                  <td><div class="actions"><button class="btn">แก้ไข</button><button class="btn danger">ลบ</button></div></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>เอกสารแนบและผู้จัดทำรายงาน</h2>
+          <div class="grid">
+            <div class="field md6"><label>รายงานผลจากห้องปฏิบัติการ</label><input type="file" /></div>
+            <div class="field md6"><label>เอกสารประกอบอื่น ๆ</label><input type="file" /></div>
+            <div class="field md6"><label>ชื่อ-นามสกุล</label><input value="สมชาย รายงานดี" /></div>
+            <div class="field md6"><label>ตำแหน่ง</label><input value="ผู้จัดการสิ่งแวดล้อม" /></div>
+          </div>
+        </section>
+      </div>
+    </div>
+    <div class="drawer-actions">
+      <button class="btn ghost" data-close="drawer">ยกเลิก</button>
+      <button class="btn primary" data-open="preview">บันทึกแบบฟอร์ม</button>
+    </div>
+  </div>
+
+  <div class="modal" id="previewModal">
+    <div class="dialog-title">
+      ตัวอย่างแบบฟอร์มรายงานค่าความคลาดเคลื่อน BOD/COD
+      <button class="btn ghost" data-close="preview">ปิด</button>
+    </div>
+    <div class="paper-stage">
+      <div class="paper">
+        <div class="right">แบบรายงาน BOD/COD Online</div>
+        <h3>รายงานค่าความคลาดเคลื่อนของเครื่องตรวจวัด BOD/COD Online</h3>
+        <h3>ครั้งที่ <span class="line">1</span> ประจำปี พ.ศ. <span class="line">2569</span></h3>
+        <p>
+          ชื่อโรงงาน : <span class="line" style="min-width:420px">บริษัท ปูนซีเมนต์นครหลวง จำกัด (มหาชน)</span><br>
+          ทะเบียนโรงงานเลขที่ : <span class="line">10190000225448</span>
+          จังหวัด : <span class="line">สระบุรี</span><br>
+          รหัสจุดตรวจวัด : <span class="line">WP001</span>
+          ชื่อจุดตรวจวัด : <span class="line">จุดระบายน้ำทิ้ง A</span>
+        </p>
+        <table class="paper-table">
+          <thead>
+            <tr>
+              <th>เดือน</th>
+              <th>BOD<br>จากเครื่อง</th>
+              <th>BOD<br>จากห้องปฏิบัติการ</th>
+              <th>ค่าความคลาดเคลื่อน<br>BOD</th>
+              <th>COD<br>จากเครื่อง</th>
+              <th>COD<br>จากห้องปฏิบัติการ</th>
+              <th>ค่าความคลาดเคลื่อน<br>COD</th>
+              <th>หมายเหตุ</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>มกราคม</td><td>24.20</td><td>25.10</td><td>3.59%</td><td>88.40</td><td>91.20</td><td>3.07%</td><td>-</td></tr>
+            <tr><td>กุมภาพันธ์</td><td>26.00</td><td>25.40</td><td>2.36%</td><td>92.30</td><td>90.10</td><td>2.44%</td><td>-</td></tr>
+            <tr><td>มีนาคม</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+            <tr><td>เมษายน</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+            <tr><td>พฤษภาคม</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+            <tr><td>มิถุนายน</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+          </tbody>
+        </table>
+        <div style="margin-top:80px; text-align:center">
+          ข้าพเจ้าขอรับรองว่าข้อมูลข้างต้นเป็นจริงทุกประการ<br><br>
+          <span class="line" style="min-width:260px"></span> (ลงชื่อ)<br>
+          ( <span class="line" style="min-width:260px">สมชาย รายงานดี</span> )<br>
+          ตำแหน่ง <span class="line" style="min-width:260px">ผู้จัดการสิ่งแวดล้อม</span><br>
+          ผู้จัดทำรายงาน
+        </div>
+      </div>
+    </div>
+    <div class="dialog-actions">
+      <button class="btn ghost" data-close="preview">ยกเลิก</button>
+      <button class="btn primary">ยืนยันการส่งแบบฟอร์ม</button>
+    </div>
+  </div>
+
+  <script>
+    const reports = {
+      operator: [
+        ['บริษัท ปูนซีเมนต์นครหลวง จำกัด (มหาชน)', '10190000225448', 'สระบุรี', 'WP001', 'จุดระบายน้ำทิ้ง A', 'ครั้งที่ 1 เดือน 1 - 6', '2569', 'BODCOD-2569-0001', '15/06/2569', '-', 'อยู่ระหว่างพิจารณา', 'review'],
+        ['บริษัท ปูนซีเมนต์นครหลวง จำกัด (มหาชน)', '10190000225448', 'สระบุรี', 'WP002', 'จุดระบายน้ำทิ้ง B', 'ครั้งที่ 2 เดือน 7 - 12', '2569', '-', '-', '-', 'ร่าง', 'draft'],
+        ['บริษัท อินทรี อีโคไซเคิล จำกัด', '10190003325500', 'สระบุรี', 'WP003', 'จุดระบายน้ำทิ้งหลัก', 'ครั้งที่ 1 เดือน 1 - 6', '2569', 'BODCOD-2569-0002', '12/06/2569', '18/06/2569', 'ผ่านการพิจารณา', 'pass'],
+      ],
+      officer: [
+        ['บริษัท ปูนซีเมนต์นครหลวง จำกัด (มหาชน)', '10190000225448', 'สระบุรี', 'WP001', 'จุดระบายน้ำทิ้ง A', 'ครั้งที่ 1 เดือน 1 - 6', '2569', 'BODCOD-2569-0001', '15/06/2569', '-', 'รอตรวจสอบ', 'review'],
+        ['บริษัท อินทรี อีโคไซเคิล จำกัด', '10190003325500', 'สระบุรี', 'WP003', 'จุดระบายน้ำทิ้งหลัก', 'ครั้งที่ 1 เดือน 1 - 6', '2569', 'BODCOD-2569-0002', '12/06/2569', '18/06/2569', 'ผ่านการพิจารณา', 'pass'],
+        ['บริษัท อินทรี อีโคไซเคิล จำกัด', '72080000125562', 'สุพรรณบุรี', 'WP008', 'จุดระบายน้ำทิ้ง C', 'ครั้งที่ 1 เดือน 1 - 6', '2569', 'BODCOD-2569-0003', '10/06/2569', '17/06/2569', 'ส่งกลับแก้ไข', 'fix'],
+      ],
+    }
+    let currentRole = 'operator'
+
+    function chipClass(statusKey) {
+      return `chip ${statusKey}`
+    }
+
+    function renderReports() {
+      const body = document.getElementById('reportRows')
+      body.innerHTML = reports[currentRole].map((row) => {
+        const action = currentRole === 'officer'
+          ? '<button class="btn">เปิดดู</button><button class="btn primary">พิจารณา</button>'
+          : '<button class="btn">เปิดดู</button><button class="btn primary" data-open="drawer">แก้ไข</button>'
+        return `<tr>
+          ${row.slice(0, 10).map((cell) => `<td>${cell}</td>`).join('')}
+          <td><span class="${chipClass(row[11])}">${row[10]}</span></td>
+          <td><div class="actions">${action}</div></td>
+        </tr>`
+      }).join('')
+    }
+
+    function openModal(id) {
+      document.getElementById('modalBackdrop').classList.add('open')
+      document.getElementById(id).classList.add('open')
+    }
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('open')
+      if (!document.querySelector('.modal.open')) {
+        document.getElementById('modalBackdrop').classList.remove('open')
+      }
+    }
+    function openDrawer() {
+      document.getElementById('drawerBackdrop').classList.add('open')
+      document.getElementById('formDrawer').classList.add('open')
+    }
+    function closeDrawer() {
+      document.getElementById('drawerBackdrop').classList.remove('open')
+      document.getElementById('formDrawer').classList.remove('open')
+    }
+
+    document.addEventListener('click', (event) => {
+      const roleButton = event.target.closest('[data-role]')
+      if (roleButton) {
+        currentRole = roleButton.dataset.role
+        document.querySelectorAll('[data-role]').forEach((button) => button.classList.toggle('active', button === roleButton))
+        const isOfficer = currentRole === 'officer'
+        document.querySelector('[data-tab="factories"]').style.display = isOfficer ? 'none' : ''
+        document.querySelector('[data-tab="reports"]').click()
+        document.querySelector('.user').textContent = isOfficer ? 'เจ้าหน้าที่ | กรมโรงงานอุตสาหกรรม' : 'ผู้ประกอบการ | บริษัท ปูนซีเมนต์นครหลวง จำกัด (มหาชน)'
+        renderReports()
+      }
+
+      const tabButton = event.target.closest('[data-tab]')
+      if (tabButton) {
+        document.querySelectorAll('[data-tab]').forEach((button) => button.classList.toggle('active', button === tabButton))
+        document.getElementById('factoryPanel').classList.toggle('hidden', tabButton.dataset.tab !== 'factories')
+        document.getElementById('reportPanel').classList.toggle('hidden', tabButton.dataset.tab !== 'reports')
+      }
+
+      const opener = event.target.closest('[data-open]')
+      if (opener) {
+        if (opener.dataset.open === 'points') openModal('pointsModal')
+        if (opener.dataset.open === 'drawer') openDrawer()
+        if (opener.dataset.open === 'preview') openModal('previewModal')
+      }
+
+      const closer = event.target.closest('[data-close]')
+      if (closer) {
+        if (closer.dataset.close === 'modal') closeModal('pointsModal')
+        if (closer.dataset.close === 'drawer') closeDrawer()
+        if (closer.dataset.close === 'preview') closeModal('previewModal')
+      }
+    })
+
+    document.getElementById('modalBackdrop').addEventListener('click', () => {
+      closeModal('pointsModal')
+      closeModal('previewModal')
+    })
+    document.getElementById('drawerBackdrop').addEventListener('click', closeDrawer)
+    renderReports()
+  </script>
+</body>
+</html>

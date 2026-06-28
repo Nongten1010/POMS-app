@@ -8,14 +8,12 @@ import ChatPage from './pages/ChatPage'
 import ConditionalSearchPage from './pages/ConditionalSearchPage'
 import ConnectionRequestPage from './pages/ConnectionRequestPage'
 import EligibleFactoriesPage from './pages/EligibleFactoriesPage'
-import EmailTestPage from './pages/EmailTestPage'
 import FaqPage from './pages/FaqPage'
 import FeedbackPage from './pages/FeedbackPage'
 import HomePage from './pages/HomePage'
 import KwpFormsPage from './pages/KwpFormsPage'
 import LawsPage from './pages/LawsPage'
 import MasterDataPage from './pages/MasterDataPage'
-import MonitoringPointFormsPage from './pages/MonitoringPointFormsPage'
 import NotificationPage from './pages/NotificationPage'
 import PermissionManagementPage from './pages/PermissionManagementPage'
 import StatisticsPage from './pages/StatisticsPage'
@@ -40,17 +38,12 @@ const defaultPermissions = {
     data: 'ALL',
     view: true,
   },
-  email_test: {
-    data: 'ALL',
-    view: true,
-  },
 }
 
 const menuPermissionMap = {
   home: 'dashboard',
   'master-data': 'factories',
   'connection-request': 'connection',
-  'monitoring-points': 'connection',
   forms: 'kwp_forms',
   'bod-cod-report': 'bod_cod_errors',
   notifications: 'notifications',
@@ -63,7 +56,6 @@ const menuPermissionMap = {
   chat: 'chat',
   permissions: 'permissions',
   'eligible-factories': 'eligible_factories',
-  'email-test': 'email_test',
 }
 
 function loadStoredAuth() {
@@ -151,6 +143,10 @@ function getUserFromAuth(auth) {
     getResponseValue(response, ['name', 'fullName', 'displayName', 'username']) ||
     auth.username ||
     (auth.userType === 'officer' ? 'เจ้าหน้าที่ D-POMS' : 'ผู้ใช้งาน i-Industry')
+  const position =
+    getResponseValue(responseUser, ['position', 'jobTitle', 'title']) ||
+    getResponseValue(response, ['position', 'jobTitle', 'title']) ||
+    ''
   const role =
     auth.userType === 'officer'
       ? 'เจ้าหน้าที่'
@@ -158,7 +154,7 @@ function getUserFromAuth(auth) {
         ? 'ผู้ประกอบการ'
         : 'ประชาชนทั่วไป'
 
-  return { name, role }
+  return { name, position, role }
 }
 
 function App() {
@@ -179,7 +175,6 @@ function App() {
     visibleSelectedMenu === 'master-data' ||
     visibleSelectedMenu === 'permissions' ||
     visibleSelectedMenu === 'connection-request' ||
-    visibleSelectedMenu === 'monitoring-points' ||
     visibleSelectedMenu === 'forms' ||
     visibleSelectedMenu === 'bod-cod-report' ||
     visibleSelectedMenu === 'notifications' ||
@@ -190,8 +185,7 @@ function App() {
     visibleSelectedMenu === 'laws' ||
     visibleSelectedMenu === 'faq' ||
     visibleSelectedMenu === 'chat' ||
-    visibleSelectedMenu === 'eligible-factories' ||
-    visibleSelectedMenu === 'email-test'
+    visibleSelectedMenu === 'eligible-factories'
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
@@ -245,8 +239,6 @@ function App() {
           <PermissionManagementPage accessToken={accessToken} />
         ) : visibleSelectedMenu === 'connection-request' ? (
           <ConnectionRequestPage userType={userType} accessToken={accessToken} currentUser={currentUser} />
-        ) : visibleSelectedMenu === 'monitoring-points' ? (
-          <MonitoringPointFormsPage accessToken={accessToken} />
         ) : visibleSelectedMenu === 'forms' ? (
           <KwpFormsPage userType={userType} />
         ) : visibleSelectedMenu === 'bod-cod-report' ? (
@@ -269,8 +261,6 @@ function App() {
           <ChatPage isStaff={userType === 'officer' || roleCode === 'admin' || activePermissions?.chat?.edit === true} />
         ) : visibleSelectedMenu === 'eligible-factories' ? (
           <EligibleFactoriesPage accessToken={accessToken} />
-        ) : visibleSelectedMenu === 'email-test' ? (
-          <EmailTestPage accessToken={accessToken} />
         ) : (
           <HomePage accessToken={accessToken} />
         )}

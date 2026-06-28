@@ -18,9 +18,7 @@ import GavelIcon from '@mui/icons-material/Gavel'
 import HelpIcon from '@mui/icons-material/Help'
 import HomeIcon from '@mui/icons-material/Home'
 import LinkIcon from '@mui/icons-material/Link'
-import MarkEmailReadIcon from '@mui/icons-material/MarkEmailRead'
 import NotificationsIcon from '@mui/icons-material/Notifications'
-import PlaceIcon from '@mui/icons-material/Place'
 import QueryStatsIcon from '@mui/icons-material/QueryStats'
 import SearchIcon from '@mui/icons-material/Search'
 import SupportAgentIcon from '@mui/icons-material/SupportAgent'
@@ -49,12 +47,6 @@ const menuItems = [
     permissionKey: 'connection',
     icon: <LinkIcon />,
     notificationCount: 2,
-  },
-  {
-    label: 'ข้อมูลจุดตรวจวัด',
-    value: 'monitoring-points',
-    permissionKey: 'connection',
-    icon: <PlaceIcon />,
   },
   {
     label: 'แจ้งแบบ กวภ. 01 - กวภ. 05',
@@ -131,12 +123,6 @@ const menuItems = [
     permissionKey: 'eligible_factories',
     icon: <FactoryIcon />,
     notificationCount: 2,
-  },
-  {
-    label: 'ทดสอบส่งอีเมล',
-    value: 'email-test',
-    permissionKey: 'email_test',
-    icon: <MarkEmailReadIcon />,
   },
 ]
 

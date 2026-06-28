@@ -1,0 +1,622 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>D-POMS Chat Preview</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;600&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        --primary: #1f6feb;
+        --primary-dark: #185abc;
+        --primary-50: #eef6ff;
+        --neutral-50: #f8fafc;
+        --neutral-100: #f1f5f9;
+        --neutral-200: #e2e8f0;
+        --neutral-300: #cbd5e1;
+        --neutral-500: #64748b;
+        --neutral-700: #334155;
+        --neutral-900: #0f172a;
+        --success-bg: #dcfce7;
+        --success-text: #166534;
+        --warning-bg: #fef3c7;
+        --warning-text: #92400e;
+        --paper: #ffffff;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-width: 320px;
+        min-height: 100vh;
+        background: var(--neutral-50);
+        color: var(--neutral-900);
+        font-family: Kanit, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-weight: 300;
+      }
+
+      button,
+      input,
+      select,
+      textarea {
+        font: inherit;
+      }
+
+      .page {
+        min-height: 100vh;
+        padding: 24px;
+      }
+
+      .stack {
+        display: grid;
+        gap: 16px;
+      }
+
+      .header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 24px;
+        border: 1px solid var(--neutral-200);
+        border-radius: 8px;
+        background: var(--paper);
+      }
+
+      .header-icon {
+        display: grid;
+        width: 32px;
+        height: 32px;
+        place-items: center;
+        color: var(--primary);
+      }
+
+      .header-title {
+        flex: 1;
+        margin: 0;
+        font-size: 24px;
+        line-height: 1.35;
+        font-weight: 600;
+      }
+
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        min-height: 40px;
+        padding: 8px 16px;
+        border: 0;
+        border-radius: 8px;
+        background: var(--primary);
+        color: #ffffff;
+        cursor: pointer;
+        font-weight: 300;
+        white-space: nowrap;
+      }
+
+      .button:hover {
+        background: var(--primary-dark);
+      }
+
+      .button.secondary {
+        border: 1px solid var(--neutral-200);
+        background: var(--paper);
+        color: var(--neutral-700);
+      }
+
+      .button.secondary:hover {
+        background: var(--neutral-50);
+      }
+
+      .workspace {
+        display: grid;
+        grid-template-columns: 360px minmax(0, 1fr);
+        height: calc(100vh - 112px);
+        min-height: 640px;
+        border: 1px solid var(--neutral-200);
+        border-radius: 8px;
+        background: var(--paper);
+        overflow: hidden;
+      }
+
+      .thread-list {
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr) auto;
+        min-height: 0;
+        border-right: 1px solid var(--neutral-200);
+        background: #fbfdff;
+      }
+
+      .filters {
+        display: grid;
+        gap: 12px;
+        padding: 16px;
+        border-bottom: 1px solid var(--neutral-200);
+        background: var(--paper);
+      }
+
+      .filter-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+
+      .field {
+        width: 100%;
+        min-height: 40px;
+        padding: 0 12px;
+        border: 1px solid var(--neutral-300);
+        border-radius: 8px;
+        background: var(--paper);
+        color: var(--neutral-900);
+        outline: none;
+      }
+
+      .field:focus,
+      .message-input:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.12);
+      }
+
+      .threads {
+        display: grid;
+        align-content: start;
+        gap: 8px;
+        padding: 12px;
+        overflow: auto;
+        min-height: 0;
+      }
+
+      .thread {
+        display: grid;
+        gap: 8px;
+        padding: 12px;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        background: transparent;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .thread.active {
+        border-color: #b8dcff;
+        background: var(--primary-50);
+      }
+
+      .thread:hover {
+        border-color: var(--neutral-200);
+        background: var(--paper);
+      }
+
+      .thread-title {
+        margin: 0;
+        color: var(--neutral-900);
+        font-size: 15px;
+        font-weight: 600;
+        line-height: 1.45;
+      }
+
+      .thread-preview,
+      .meta-text {
+        color: var(--neutral-500);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      .meta-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        min-height: 24px;
+        padding: 2px 9px;
+        border-radius: 999px;
+        background: var(--primary-50);
+        color: var(--primary-dark);
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .chip.warning {
+        background: var(--warning-bg);
+        color: var(--warning-text);
+      }
+
+      .chip.success {
+        background: var(--success-bg);
+        color: var(--success-text);
+      }
+
+      .pagination {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 10px 12px;
+        border-top: 1px solid var(--neutral-200);
+        background: var(--paper);
+      }
+
+      .page-button {
+        display: inline-grid;
+        width: 34px;
+        height: 34px;
+        place-items: center;
+        border: 1px solid var(--neutral-200);
+        border-radius: 8px;
+        background: var(--paper);
+        color: var(--neutral-700);
+        cursor: pointer;
+      }
+
+      .page-button:hover {
+        background: var(--neutral-50);
+      }
+
+      .chat-panel {
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr) auto;
+        min-width: 0;
+        min-height: 0;
+        background: var(--paper);
+      }
+
+      .chat-header {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--neutral-200);
+      }
+
+      .chat-heading {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .chat-heading h2 {
+        margin: 0 0 8px;
+        font-size: 18px;
+        font-weight: 600;
+        line-height: 1.45;
+      }
+
+      .messages {
+        display: grid;
+        align-content: start;
+        gap: 14px;
+        padding: 20px;
+        overflow: auto;
+        background:
+          linear-gradient(#ffffffcc, #ffffffcc),
+          repeating-linear-gradient(135deg, #f8fafc 0, #f8fafc 12px, #ffffff 12px, #ffffff 24px);
+      }
+
+      .message-row {
+        display: flex;
+      }
+
+      .message-row.operator {
+        justify-content: flex-end;
+      }
+
+      .message {
+        max-width: min(680px, 78%);
+        display: grid;
+        gap: 6px;
+      }
+
+      .bubble {
+        padding: 12px 14px;
+        border: 1px solid var(--neutral-200);
+        border-radius: 8px;
+        background: var(--paper);
+        color: var(--neutral-700);
+        line-height: 1.75;
+      }
+
+      .operator .bubble {
+        border-color: #b8dcff;
+        background: var(--primary-50);
+        color: var(--neutral-900);
+      }
+
+      .sender {
+        color: var(--neutral-500);
+        font-size: 12px;
+      }
+
+      .operator .sender {
+        text-align: right;
+      }
+
+      .composer {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 10px;
+        align-items: end;
+        padding: 14px 16px;
+        border-top: 1px solid var(--neutral-200);
+        background: var(--paper);
+      }
+
+      .message-input {
+        min-height: 44px;
+        max-height: 120px;
+        resize: vertical;
+        padding: 10px 12px;
+        border: 1px solid var(--neutral-300);
+        border-radius: 8px;
+        outline: none;
+        color: var(--neutral-900);
+      }
+
+      .icon-button {
+        display: inline-grid;
+        width: 44px;
+        height: 44px;
+        place-items: center;
+        border: 1px solid var(--neutral-200);
+        border-radius: 8px;
+        background: var(--paper);
+        color: var(--primary-dark);
+        cursor: pointer;
+      }
+
+      .icon-button:hover {
+        background: var(--neutral-50);
+      }
+
+      @media (max-width: 920px) {
+        .workspace {
+          height: auto;
+        }
+
+        .workspace {
+          grid-template-columns: 1fr;
+        }
+
+        .thread-list {
+          border-right: 0;
+          border-bottom: 1px solid var(--neutral-200);
+        }
+
+        .threads {
+          grid-auto-flow: column;
+          grid-auto-columns: minmax(260px, 1fr);
+          overflow-x: auto;
+        }
+
+        .pagination {
+          display: none;
+        }
+
+      }
+
+      @media (max-width: 640px) {
+        .page {
+          padding: 16px;
+        }
+
+        .header {
+          align-items: stretch;
+          flex-direction: column;
+          padding: 12px 16px;
+        }
+
+        .message {
+          max-width: 92%;
+        }
+
+        .composer {
+          grid-template-columns: 44px minmax(0, 1fr);
+        }
+
+        .composer .button {
+          grid-column: 1 / -1;
+        }
+
+        .filter-row {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="stack">
+        <header class="header">
+          <div class="header-icon" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+              <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v8Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+              <path d="M8 9h8M8 13h5" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            </svg>
+          </div>
+          <h1 class="header-title">Chat</h1>
+          <button class="button" type="button">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            </svg>
+            ตั้งคำถาม
+          </button>
+        </header>
+
+        <section class="workspace">
+          <aside class="thread-list" aria-label="รายการคำถาม">
+            <div class="filters">
+              <input class="field" type="search" placeholder="ค้นหาเรื่องหรือข้อความ" />
+              <div class="filter-row">
+                <select class="field" aria-label="สถานะคำถาม">
+                  <option>ทุกสถานะ</option>
+                  <option>รอเจ้าหน้าที่</option>
+                  <option>กำลังดำเนินการ</option>
+                  <option>ปิดเรื่องแล้ว</option>
+                </select>
+                <select class="field" aria-label="หมวดหมู่คำถาม">
+                  <option>ทุกหมวดหมู่</option>
+                  <option>การเชื่อมต่อข้อมูล</option>
+                  <option>ข้อมูลโรงงาน</option>
+                  <option>แบบ กวภ.</option>
+                  <option>รายงานและสถิติ</option>
+                </select>
+              </div>
+              <select class="field" aria-label="เรียงลำดับรายการ">
+                <option>เรียง: ล่าสุดก่อน</option>
+                <option>เรียง: รอนานที่สุดก่อน</option>
+                <option>เรียง: ปิดเรื่องล่าสุด</option>
+              </select>
+            </div>
+
+            <div class="threads">
+              <button class="thread active" type="button">
+                <p class="thread-title">ปัญหาการส่งข้อมูล CEMS ไม่ต่อเนื่อง</p>
+                <div class="meta-row">
+                  <span class="chip warning">รอเจ้าหน้าที่</span>
+                  <span class="meta-text">วันนี้ 10:24</span>
+                </div>
+                <span class="thread-preview">ระบบส่งข้อมูลไม่ได้ตั้งแต่ช่วงเช้า ต้องตรวจสอบจุดใดก่อน...</span>
+              </button>
+
+              <button class="thread" type="button">
+                <p class="thread-title">ขอแก้ไขข้อมูลโรงงานในระบบ</p>
+                <div class="meta-row">
+                  <span class="chip">กำลังดำเนินการ</span>
+                  <span class="meta-text">เมื่อวาน 16:40</span>
+                </div>
+                <span class="thread-preview">ข้อมูลเบอร์ติดต่อของผู้ประสานงานไม่ถูกต้อง...</span>
+              </button>
+
+              <button class="thread" type="button">
+                <p class="thread-title">สอบถามการแจ้งแบบ กวภ. 02</p>
+                <div class="meta-row">
+                  <span class="chip success">ปิดเรื่องแล้ว</span>
+                  <span class="meta-text">2026-06-14</span>
+                </div>
+                <span class="thread-preview">กรณีหยุดส่งข้อมูลเกิน 14 วันต้องแนบเอกสารใดบ้าง...</span>
+              </button>
+
+              <button class="thread" type="button">
+                <p class="thread-title">สอบถามรายงานสถิติรายเดือน</p>
+                <div class="meta-row">
+                  <span class="chip">กำลังดำเนินการ</span>
+                  <span class="meta-text">2026-06-13</span>
+                </div>
+                <span class="thread-preview">ต้องการดาวน์โหลดข้อมูลเฉพาะจังหวัดและช่วงเวลา...</span>
+              </button>
+
+              <button class="thread" type="button">
+                <p class="thread-title">ไม่พบโรงงานในหน้าขอเชื่อมต่อ</p>
+                <div class="meta-row">
+                  <span class="chip warning">รอเจ้าหน้าที่</span>
+                  <span class="meta-text">2026-06-12</span>
+                </div>
+                <span class="thread-preview">เข้าสู่ระบบแล้วไม่พบรายการโรงงานที่ต้องการยื่นคำขอ...</span>
+              </button>
+
+              <button class="thread" type="button">
+                <p class="thread-title">ขอเปลี่ยนอีเมลผู้ประสานงาน</p>
+                <div class="meta-row">
+                  <span class="chip success">ปิดเรื่องแล้ว</span>
+                  <span class="meta-text">2026-06-10</span>
+                </div>
+                <span class="thread-preview">อีเมลเดิมไม่สามารถใช้งานได้ ต้องการเปลี่ยนผู้รับแจ้ง...</span>
+              </button>
+
+              <button class="thread" type="button">
+                <p class="thread-title">แนบไฟล์ประกอบแบบ กวภ. ไม่สำเร็จ</p>
+                <div class="meta-row">
+                  <span class="chip">กำลังดำเนินการ</span>
+                  <span class="meta-text">2026-06-09</span>
+                </div>
+                <span class="thread-preview">ระบบแจ้งว่าไฟล์มีขนาดเกิน ทั้งที่ไฟล์ไม่ถึง 5 MB...</span>
+              </button>
+            </div>
+
+            <div class="pagination">
+              <button class="page-button" type="button" aria-label="หน้าก่อนหน้า">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <path d="m15 18-6-6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </button>
+              <span class="meta-text">หน้า 1 / 50 · 25 รายการ</span>
+              <button class="page-button" type="button" aria-label="หน้าถัดไป">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <path d="m9 18 6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </button>
+            </div>
+          </aside>
+
+          <section class="chat-panel" aria-label="รายละเอียดคำถาม">
+            <div class="chat-header">
+              <div class="chat-heading">
+                <h2>ปัญหาการส่งข้อมูล CEMS ไม่ต่อเนื่อง</h2>
+                <div class="meta-row">
+                  <span class="chip warning">รอเจ้าหน้าที่</span>
+                  <span class="meta-text">ผู้ประกอบการ: บริษัท ตัวอย่างอุตสาหกรรม จำกัด</span>
+                  <span class="meta-text">หมวดหมู่: การเชื่อมต่อข้อมูล</span>
+                </div>
+              </div>
+              <button class="button secondary" type="button">ปิดเรื่อง</button>
+            </div>
+
+            <div class="messages">
+              <div class="message-row operator">
+                <div class="message">
+                  <div class="sender">ผู้ประกอบการ • วันนี้ 10:24</div>
+                  <div class="bubble">
+                    ระบบ CEMS ของโรงงานส่งข้อมูลเข้าระบบ D-POMS ไม่ต่อเนื่องตั้งแต่ช่วงเช้า แต่ฝั่งอุปกรณ์ยังแสดงค่าตรวจวัดตามปกติ ต้องตรวจสอบจุดใดก่อนครับ
+                  </div>
+                </div>
+              </div>
+
+              <div class="message-row officer">
+                <div class="message">
+                  <div class="sender">เจ้าหน้าที่ กวภ. • วันนี้ 10:42</div>
+                  <div class="bubble">
+                    เบื้องต้นให้ตรวจสอบสถานะ API Token, เวลาเครื่อง Server, และ log การส่งข้อมูลล่าสุด หากพบ error code จากระบบให้แนบภาพหรือข้อความ error กลับมาในกระทู้นี้ได้เลย
+                  </div>
+                </div>
+              </div>
+
+              <div class="message-row operator">
+                <div class="message">
+                  <div class="sender">ผู้ประกอบการ • วันนี้ 11:05</div>
+                  <div class="bubble">
+                    ตรวจสอบแล้วพบ error timeout จาก gateway ผมแนบ log เพิ่มเติมให้เจ้าหน้าที่ตรวจสอบต่อครับ
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <form class="composer">
+              <button class="icon-button" type="button" aria-label="แนบไฟล์">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <path d="m21.44 11.05-8.49 8.49a6 6 0 0 1-8.49-8.49l8.49-8.49a4 4 0 1 1 5.66 5.66l-8.49 8.49a2 2 0 0 1-2.83-2.83l7.78-7.78" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </button>
+              <textarea class="message-input" placeholder="พิมพ์ข้อความตอบกลับ"></textarea>
+              <button class="button" type="submit">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <path d="m22 2-7 20-4-9-9-4 20-7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+                  <path d="M22 2 11 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                </svg>
+                ส่ง
+              </button>
+            </form>
+          </section>
+        </section>
+      </section>
+    </main>
+  </body>
+</html>

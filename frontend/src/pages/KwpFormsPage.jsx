@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import {
   Alert,
+  Badge,
   Box,
   Button,
   Chip,
@@ -32,6 +33,7 @@ import {
   Typography,
 } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
+import FileDownloadIcon from '@mui/icons-material/FileDownload'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import { DataGrid } from '@mui/x-data-grid'
 import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers'
@@ -50,14 +52,13 @@ const appBarHeight = {
 
 const operatorSubMenus = [
   { value: 'factories', label: 'รายชื่อโรงงาน' },
-  { value: 'requests', label: 'รายการคำขอ' },
+  { value: 'requests', label: 'รายการคำขอ', badgeContent: 1 },
 ]
 
 const officerSubMenus = [
-  { value: 'requests', label: 'รายการคำขอ' },
+  { value: 'requests', label: 'รายการคำขอ', badgeContent: 1 },
 ]
 
-const emptyRows = []
 const factoryRows = [
   {
     id: 1,
@@ -144,12 +145,83 @@ const monitoringPointRowsByFactoryId = {
   ],
 }
 
+const requestRows = [
+  {
+    id: 'kwp-request-1',
+    factoryName: 'บริษัท ปูนซีเมนต์นครหลวง จำกัด (มหาชน)',
+    factoryRegistration: '10190000225448',
+    industryType: '10100 / 3',
+    factoryAddress: '9 หมู่ 9 ถนนมิตรภาพ ตำบลทับกวาง อำเภอแก่งคอย สระบุรี',
+    province: 'สระบุรี',
+    type: 'CEMS',
+    monitoringPointCode: 'S0001',
+    monitoringPointName: 'ปล่องระบาย A',
+    requestNo: 'KWP-69-00001',
+    form: 'กวภ.01',
+    submittedDate: '15/06/2569',
+    reviewedDate: '-',
+    status: 'รอพิจารณา',
+  },
+  {
+    id: 'kwp-request-2',
+    factoryName: 'บริษัท ปูนซีเมนต์นครหลวง จำกัด (มหาชน)',
+    factoryRegistration: '10190000325446',
+    industryType: '10100 / 3',
+    factoryAddress: '22 หมู่ 3 ถนนมิตรภาพ ตำบลทับกวาง อำเภอแก่งคอย สระบุรี',
+    province: 'สระบุรี',
+    type: 'CEMS',
+    monitoringPointCode: 'S0002',
+    monitoringPointName: 'ปล่องระบาย B',
+    requestNo: 'KWP-69-00002',
+    form: 'กวภ.02',
+    submittedDate: '14/06/2569',
+    reviewedDate: '15/06/2569',
+    status: 'รอโรงงานแก้ไข',
+  },
+  {
+    id: 'kwp-request-3',
+    factoryName: 'บริษัท อินทรี อีโคไซเคิล จำกัด',
+    factoryRegistration: '72080000125562',
+    industryType: '10600 / 3',
+    factoryAddress: '55 หมู่ 2 ตำบลสระแก้ว อำเภอเมืองสุพรรณบุรี สุพรรณบุรี',
+    province: 'สุพรรณบุรี',
+    type: 'WPMS',
+    monitoringPointCode: 'P0001',
+    monitoringPointName: 'จุดระบายน้ำทิ้ง A',
+    requestNo: 'KWP-69-00003',
+    form: 'กวภ.03',
+    submittedDate: '13/06/2569',
+    reviewedDate: '14/06/2569',
+    status: 'ยื่นแบบสำเร็จ',
+  },
+]
+
 const kwpFormOptions = [
-  'กวภ.01 แบบแจ้งเหตุขัดข้องของเครื่องมือหรือเครื่องอุปกรณ์พิเศษ',
-  'กวภ.02 แบบรายงานผลการตรวจวัดมลพิษอากาศจากปล่องระบาย',
-  'กวภ.03 แบบแจ้งเหตุขัดข้องหรือหยุดส่งข้อมูลการตรวจวัดมลพิษทางน้ำแบบอัตโนมัติอย่างต่อเนื่อง (WPMS)',
-  'กวภ.04 แบบรายงานผลการตรวจวัดมลพิษอากาศจากปล่องระบาย',
-  'กวภ.05 แบบรายงานผลการสอบเทียบหรือทวนสอบระบบตรวจวัดคุณภาพอากาศแบบอัตโนมัติอย่างต่อเนื่อง (CEMS)',
+  {
+    code: 'กวภ.01',
+    title: 'แบบแจ้งเหตุขัดข้องของเครื่องมือหรือเครื่องอุปกรณ์พิเศษ',
+    description: 'เพื่อรายงานมลพิษอากาศจากปล่องโรงงานหรือแจ้งหยุดหน่วยการผลิต',
+  },
+  {
+    code: 'กวภ.02',
+    title: 'แบบรายงานผลการตรวจวัดมลพิษอากาศจากปล่องระบาย',
+    description: 'กรณีเครื่องมือหรือเครื่องอุปกรณ์พิเศษมีเหตุขัดข้องและไม่สามารถรายงานผลการตรวจวัดได้ตั้งแต่ 15 วันขึ้นไป',
+  },
+  {
+    code: 'กวภ.03',
+    title: 'แบบแจ้งเหตุขัดข้องหรือหยุดส่งข้อมูลการตรวจวัดมลพิษทางนํ้าแบบอัตโนมัติอย่างต่อเนื่อง (WPMS)',
+    description: '',
+  },
+  {
+    code: 'กวภ.04',
+    title: 'แบบรายงานผลการตรวจวัดมลพิษอากาศจากปล่องระบาย',
+    description: 'ตามประกาศฯข้อ =4(1) (2) 11(3) และ 16',
+  },
+  {
+    code: 'กวภ.05',
+    title: 'แบบรายงานผลการสอบเทียบหรือทวนสอบระบบตรวจวัดคุณภาพอากาศแบบอัตโนมัติอย่างต่อเนื่อง (CEMS)',
+    description: '',
+  },
 ]
 
 const cemsParameterOptions = [
@@ -227,13 +299,20 @@ function FactoryActions({ row, onOpenMonitoringPoints }) {
   )
 }
 
-function RequestActions() {
+function RequestActions({ row, onOpenDocument }) {
+  const cannotProcess = ['ยื่นแบบสำเร็จ', 'รอโรงงานแก้ไข'].includes(row.status)
+
   return (
     <Stack direction="row" spacing={1} sx={tableActionStackSx}>
-      <Button size="small" variant="outlined">
+      <Button size="small" variant="outlined" onClick={() => onOpenDocument?.(row, 'view')}>
         เปิดดู
       </Button>
-      <Button size="small" variant="contained">
+      <Button
+        size="small"
+        variant="contained"
+        disabled={cannotProcess}
+        onClick={() => onOpenDocument?.(row, 'review')}
+      >
         ดำเนินการ
       </Button>
     </Stack>
@@ -264,18 +343,41 @@ function FormSelectionMenu({ factory, point, onSelectForm }) {
           },
         }}
       >
-        {kwpFormOptions.map((option) => (
-          <MenuItem
-            key={option}
-            onClick={() => {
-              onSelectForm?.({ title: option, factory, point })
-              setAnchorEl(null)
-            }}
-            sx={{ whiteSpace: 'normal' }}
-          >
-            {option}
-          </MenuItem>
-        ))}
+        {kwpFormOptions.map((option) => {
+          const fullTitle = `${option.code} ${option.title}`
+
+          return (
+            <MenuItem
+              key={option.code}
+              onClick={() => {
+                onSelectForm?.({
+                  title: fullTitle,
+                  code: option.code,
+                  titleText: option.title,
+                  description: option.description,
+                  factory,
+                  point,
+                })
+                setAnchorEl(null)
+              }}
+              sx={{ alignItems: 'flex-start', whiteSpace: 'normal', py: 1.25 }}
+            >
+              <Stack spacing={0.25}>
+                <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                  {option.code}
+                </Typography>
+                <Typography variant="body2">
+                  {option.title}
+                </Typography>
+                {option.description ? (
+                  <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.5 }}>
+                    {option.description}
+                  </Typography>
+                ) : null}
+              </Stack>
+            </MenuItem>
+          )
+        })}
       </Menu>
     </>
   )
@@ -289,7 +391,22 @@ function MonitoringPointDialog({ factory, open, onClose, onSelectForm }) {
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg">
-      <DialogTitle>{factoryTitle}</DialogTitle>
+      <DialogTitle
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 2,
+          pr: 1.5,
+        }}
+      >
+        <Typography variant="h6" component="span" sx={{ fontWeight: 700 }}>
+          {factoryTitle}
+        </Typography>
+        <IconButton aria-label="ปิด" onClick={onClose}>
+          <CloseIcon />
+        </IconButton>
+      </DialogTitle>
       <DialogContent dividers>
         <TableContainer sx={{ border: 1, borderColor: 'divider', overflowX: 'auto' }}>
           <Table size="small" sx={{ minWidth: 1040, ...borderedTableSx }}>
@@ -334,11 +451,6 @@ function MonitoringPointDialog({ factory, open, onClose, onSelectForm }) {
           </Table>
         </TableContainer>
       </DialogContent>
-      <DialogActions>
-        <Button variant="outlined" color="inherit" onClick={onClose}>
-          ยกเลิก
-        </Button>
-      </DialogActions>
     </Dialog>
   )
 }
@@ -712,6 +824,96 @@ function buildKwp05PreviewData(form, formElement, calibrationRows) {
     calibrationRows,
     reporterName: getFormText(formData, 'reporterName'),
     reporterPosition: getFormText(formData, 'reporterPosition'),
+  }
+}
+
+function buildKwpRequestPreviewData(row) {
+  const commonData = {
+    title: row.form,
+    factoryName: row.factoryName,
+    factoryRegistration: row.factoryRegistration,
+    industryType: row.industryType,
+    factoryAddress: row.factoryAddress,
+    contactName: 'นายสมชาย ใจดี',
+    contactPhone: '02-123-4567',
+    contactEmail: 'contact@example.com',
+    pointCode: row.monitoringPointCode,
+    pointName: row.monitoringPointName,
+    productionStack: row.monitoringPointName,
+    primaryFuel: 'ถ่านหิน',
+    secondaryFuel: 'ก๊าซธรรมชาติ',
+    combustionSystem: 'ระบบปิด',
+    productionCapacity: '120',
+    productionCapacityUnit: 'ตัน/ชั่วโมง',
+    reporterName: 'นายสมชาย ใจดี',
+    reporterPosition: 'ผู้จัดการสิ่งแวดล้อม',
+  }
+
+  if (row.form === 'กวภ.03') {
+    return {
+      formType: 'kwp03',
+      ...commonData,
+      instruments: ['ค่าบีโอดี (BOD)', 'ค่าซีโอดี (COD)'],
+      measurementTimes: ['Real Time'],
+      wastewaterSource: 'ระบบบำบัดน้ำเสียรวม',
+      receivingSource: 'คลองสาธารณะ',
+      treatmentSystemType: 'ระบบบำบัดชีวภาพ',
+      dischargePoint: '13.806601, 100.708653',
+      averageDischarge: '500',
+      minimumDischarge: '320',
+      maximumDischarge: '740',
+      issueReasons: ['ระบบรับส่งข้อมูล ระบบไฟฟ้า อินเทอร์เน็ต ขัดข้อง'],
+      reasonDetail: 'สัญญาณเครือข่ายขัดข้อง',
+      problemDate: row.submittedDate,
+      expectedDoneDate: row.reviewedDate,
+      totalDays: '2',
+      failedParameters: ['BOD', 'COD'],
+      correctiveAction: 'ประสานผู้ให้บริการและตรวจสอบระบบรับส่งข้อมูล',
+    }
+  }
+
+  if (row.form === 'กวภ.02' || row.form === 'กวภ.04') {
+    return {
+      formType: row.form === 'กวภ.04' ? 'kwp04' : 'kwp02',
+      ...commonData,
+      measurementRows: [
+        {
+          id: `${row.id}-measurement-1`,
+          pollutant: 'NOx',
+          sampleDate: '2026-06-14',
+          measuredValue: '120',
+          unit: 'ppm',
+          laboratoryNo: 'LAB-001',
+          reportNo: 'REP-69-001',
+          method: 'US EPA Method 7E',
+          samplingPhotoFileName: 'sampling-photo.jpg',
+          labReportFileName: 'lab-report.pdf',
+        },
+        {
+          id: `${row.id}-measurement-2`,
+          pollutant: 'SO2',
+          sampleDate: '2026-06-14',
+          measuredValue: '80',
+          unit: 'ppm',
+          laboratoryNo: 'LAB-001',
+          reportNo: 'REP-69-002',
+          method: 'US EPA Method 6C',
+          samplingPhotoFileName: 'sampling-photo-2.jpg',
+          labReportFileName: 'lab-report-2.pdf',
+        },
+      ],
+    }
+  }
+
+  return {
+    ...commonData,
+    issueReason: 'เครื่องมือหรือเครื่องอุปกรณ์พิเศษขัดข้อง',
+    reasonDetail: 'เครื่องวิเคราะห์ก๊าซไม่สามารถส่งข้อมูลได้',
+    problemDate: row.submittedDate,
+    expectedDoneDate: '20/06/2569',
+    totalDays: '6',
+    unreportedParameters: ['NOx (ppm)', 'SO2 (ppm)'],
+    correctiveAction: 'ซ่อมบำรุงเครื่องมือและตรวจสอบระบบรับส่งข้อมูล',
   }
 }
 
@@ -1453,7 +1655,7 @@ function Kwp05PaperDocument({ data }) {
   )
 }
 
-function Kwp01PreviewDialog({ open, data, onClose }) {
+function Kwp01PreviewDialog({ open, data, mode = 'submit', onClose }) {
   const previewFormNo =
     data?.formType === 'kwp04'
       ? 'กวภ.04'
@@ -1464,6 +1666,17 @@ function Kwp01PreviewDialog({ open, data, onClose }) {
           : data?.formType === 'kwp02'
             ? 'กวภ.02'
             : 'กวภ.01'
+  const handleDownload = () => {
+    if (!data) return
+
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${previewFormNo}-document.json`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg">
@@ -1475,12 +1688,37 @@ function Kwp01PreviewDialog({ open, data, onClose }) {
         {data && !['kwp02', 'kwp03', 'kwp04', 'kwp05'].includes(data.formType) ? <Kwp01PaperDocument data={data} /> : null}
       </DialogContent>
       <DialogActions sx={{ justifyContent: 'center' }}>
-        <Button variant="outlined" color="inherit" onClick={onClose}>
-          ยกเลิก
-        </Button>
-        <Button variant="contained">
-          ยืนยันการส่งแบบฟอร์ม
-        </Button>
+        {mode === 'review' ? (
+          <>
+            <Button variant="outlined" color="inherit" onClick={onClose}>
+              ยกเลิก
+            </Button>
+            <Button variant="outlined" color="warning">
+              แก้ไข
+            </Button>
+            <Button variant="contained">
+              ผ่านการพิจารณา
+            </Button>
+          </>
+        ) : mode === 'view' ? (
+          <>
+            <Button variant="outlined" color="inherit" onClick={onClose}>
+              ปิด
+            </Button>
+            <Button variant="contained" startIcon={<FileDownloadIcon />} disabled={!data} onClick={handleDownload}>
+              Download
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button variant="outlined" color="inherit" onClick={onClose}>
+              ยกเลิก
+            </Button>
+            <Button variant="contained">
+              ยืนยันการส่งแบบฟอร์ม
+            </Button>
+          </>
+        )}
       </DialogActions>
     </Dialog>
   )
@@ -2351,6 +2589,9 @@ function KwpFormBottomSheet({ form, open, onClose }) {
   const [wpmsFailedParameters, setWpmsFailedParameters] = useState([])
   const [calibrationRows, setCalibrationRows] = useState([])
   const [previewData, setPreviewData] = useState(null)
+  const headerCode = form?.code ?? form?.title?.split(' ')?.[0] ?? ''
+  const headerTitle = form?.titleText ?? form?.title?.replace(`${headerCode} `, '') ?? ''
+  const headerDescription = form?.description ?? ''
 
   const openPreview = () => {
     if (form?.title?.startsWith('กวภ.05')) {
@@ -2420,9 +2661,16 @@ function KwpFormBottomSheet({ form, open, onClose }) {
             }}
           >
             <Box sx={{ width: 40 }} />
-            <Typography variant="h6" component="h2" fontWeight={700} sx={{ textAlign: 'center' }}>
-              {form?.title ?? ''}
-            </Typography>
+            <Stack spacing={0.25} sx={{ minWidth: 0, flex: 1, textAlign: 'center' }}>
+              <Typography variant="h6" component="h2" fontWeight={700}>
+                {headerCode} {headerTitle}
+              </Typography>
+              {headerDescription ? (
+                <Typography variant="body2" color="text.secondary">
+                  {headerDescription}
+                </Typography>
+              ) : null}
+            </Stack>
             <IconButton aria-label="ปิด" onClick={onClose}>
               <CloseIcon />
             </IconButton>
@@ -2527,42 +2775,54 @@ function getFactoryColumns(onOpenMonitoringPoints) {
   ]
 }
 
-const requestColumns = [
-  { field: 'factoryName', headerName: 'ชื่อโรงงาน/บริษัท', width: 240 },
-  {
-    field: 'factoryRegistration',
-    headerName: 'เลขทะเบียนโรงงาน',
-    width: 190,
-    sortable: false,
-  },
-  { field: 'province', headerName: 'จังหวัด', width: 130 },
-  { field: 'type', headerName: 'ประเภทจุดตรวจวัด', width: 150 },
-  { field: 'monitoringPointCode', headerName: 'รหัสจุดตรวจวัด', width: 170 },
-  { field: 'requestNo', headerName: 'เลขที่คำขอ', width: 150 },
-  { field: 'form', headerName: 'แบบฟอร์ม', width: 150 },
-  { field: 'submittedDate', headerName: 'วันที่ยื่นคำขอ', width: 150 },
-  { field: 'reviewedDate', headerName: 'วันที่พิจารณา', width: 150 },
-  { field: 'status', headerName: 'สถานะ', width: 170 },
-  {
-    field: 'actions',
-    headerName: 'จัดการ',
-    width: 190,
-    sortable: false,
-    filterable: false,
-    renderCell: () => <RequestActions />,
-  },
-]
+function getRequestColumns(onOpenDocument) {
+  return [
+    { field: 'factoryName', headerName: 'ชื่อโรงงาน/บริษัท', width: 240 },
+    {
+      field: 'factoryRegistration',
+      headerName: 'เลขทะเบียนโรงงาน',
+      width: 190,
+      sortable: false,
+    },
+    { field: 'province', headerName: 'จังหวัด', width: 130 },
+    { field: 'type', headerName: 'ประเภทจุดตรวจวัด', width: 150 },
+    { field: 'monitoringPointCode', headerName: 'รหัสจุดตรวจวัด', width: 170 },
+    { field: 'requestNo', headerName: 'เลขที่คำขอ', width: 150 },
+    { field: 'form', headerName: 'แบบฟอร์ม', width: 150 },
+    { field: 'submittedDate', headerName: 'วันที่ยื่นคำขอ', width: 150 },
+    { field: 'reviewedDate', headerName: 'วันที่พิจารณา', width: 150 },
+    { field: 'status', headerName: 'สถานะ', width: 170 },
+    {
+      field: 'actions',
+      headerName: 'จัดการ',
+      width: 190,
+      sortable: false,
+      filterable: false,
+      renderCell: (params) => <RequestActions row={params.row} onOpenDocument={onOpenDocument} />,
+    },
+  ]
+}
 
 function KwpFormsPage({ userType = '' }) {
   const isOperator = userType === 'operator'
   const availableSubMenus = isOperator ? operatorSubMenus : officerSubMenus
   const [monitoringPointFactory, setMonitoringPointFactory] = useState(null)
   const [selectedForm, setSelectedForm] = useState(null)
+  const [requestDocument, setRequestDocument] = useState(null)
   const [selectedSubMenu, setSelectedSubMenu] = useState(() => (isOperator ? 'factories' : 'requests'))
   const effectiveSubMenu = availableSubMenus.some((menu) => menu.value === selectedSubMenu)
     ? selectedSubMenu
     : availableSubMenus[0].value
   const factoryColumns = useMemo(() => getFactoryColumns(setMonitoringPointFactory), [])
+  const requestColumns = useMemo(
+    () => getRequestColumns((row, mode) => {
+      setRequestDocument({
+        mode,
+        data: buildKwpRequestPreviewData(row),
+      })
+    }),
+    [],
+  )
   const table = useMemo(
     () =>
       effectiveSubMenu === 'factories'
@@ -2574,9 +2834,9 @@ function KwpFormsPage({ userType = '' }) {
         : {
             title: 'รายการคำขอ',
             columns: requestColumns,
-            rows: emptyRows,
+            rows: requestRows,
           },
-    [effectiveSubMenu, factoryColumns],
+    [effectiveSubMenu, factoryColumns, requestColumns],
   )
 
   return (
@@ -2616,7 +2876,29 @@ function KwpFormsPage({ userType = '' }) {
               }}
             >
               {availableSubMenus.map((menu) => (
-                <Tab key={menu.value} value={menu.value} label={menu.label} />
+                <Tab
+                  key={menu.value}
+                  value={menu.value}
+                  label={
+                    menu.badgeContent ? (
+                      <Badge
+                        badgeContent={menu.badgeContent}
+                        color="error"
+                        sx={{
+                          pr: 2,
+                          '& .MuiBadge-badge': {
+                            right: 2,
+                            top: 2,
+                          },
+                        }}
+                      >
+                        <Box component="span">{menu.label}</Box>
+                      </Badge>
+                    ) : (
+                      menu.label
+                    )
+                  }
+                />
               ))}
             </Tabs>
           </Stack>
@@ -2700,6 +2982,12 @@ function KwpFormsPage({ userType = '' }) {
         open={Boolean(selectedForm)}
         form={selectedForm}
         onClose={() => setSelectedForm(null)}
+      />
+      <Kwp01PreviewDialog
+        open={Boolean(requestDocument)}
+        data={requestDocument?.data}
+        mode={requestDocument?.mode}
+        onClose={() => setRequestDocument(null)}
       />
     </>
   )

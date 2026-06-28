@@ -248,7 +248,7 @@ const mockCemsMonitoringPointDetails = {
   connectedParameters: [],
   pendingParameters: mockCemsEligibleParameters,
   timeSharingParameters: [],
-  sharedStack: '',
+  sharedStackCode: '',
   stackShape: 'วงกลม',
   stackDiameter: '1.2',
   stackHeight: '30',
@@ -1116,6 +1116,8 @@ function buildMeasurementPointRequestBody(
     contactPersons,
     notificationEmails,
     officerNotificationEmails,
+    informationProviderName: getOptionalFormValue(formData, 'informationProviderName'),
+    informationProviderPosition: getOptionalFormValue(formData, 'informationProviderPosition'),
     measurementPoints: [
       isWpms
         ? {
@@ -1139,8 +1141,6 @@ function buildMeasurementPointRequestBody(
               dischargeReceivingSource: getFormValue(formData, 'dischargeReceivingSource'),
               connectionDevice: getFormValue(formData, 'connectionDevice'),
               connectionDeviceOther: getFormValue(formData, 'connectionDeviceOther'),
-              informationProviderName: getOptionalFormValue(formData, 'informationProviderName'),
-              informationProviderPosition: getOptionalFormValue(formData, 'informationProviderPosition'),
             },
             measurementInstruments: {
               converterBrand: converterBrand || null,
@@ -1164,7 +1164,7 @@ function buildMeasurementPointRequestBody(
               connectedParameters: getFormValues(formData, 'connectedParameters'),
               pendingParameters: getFormValues(formData, 'pendingParameters'),
               timeSharingParameters: getFormValues(formData, 'timeSharingParameters'),
-              sharedStack: getOptionalFormValue(formData, 'sharedStack'),
+              sharedStackCode: getOptionalFormValue(formData, 'sharedStackCode'),
               stackShape: getOptionalFormValue(formData, 'stackShape'),
               stackDiameter: toNumberOrNull(getFormValue(formData, 'stackDiameter')),
               stackWidth: toNumberOrNull(getFormValue(formData, 'stackWidth')),
@@ -1189,8 +1189,6 @@ function buildMeasurementPointRequestBody(
               stackLongitude: toNumberOrNull(getFormValue(formData, 'stackLongitude')),
               connectionDevice: getOptionalFormValue(formData, 'connectionDevice'),
               connectionDeviceOther: getOptionalFormValue(formData, 'connectionDeviceOther'),
-              informationProviderName: getOptionalFormValue(formData, 'informationProviderName'),
-              informationProviderPosition: getOptionalFormValue(formData, 'informationProviderPosition'),
             },
             documentsAndImages,
             measurementInstruments: {
@@ -2570,8 +2568,8 @@ function RequestDocumentDialog({
                       <Typography variant="caption" display="block">หมายถึง เลขช่องสัญญาณจากโปรแกรมส่งข้อมูล</Typography>
                     </Box>
                     <DocumentSignatureBlock
-                      name={details.informationProviderName}
-                      position={details.informationProviderPosition}
+                      name={request?.informationProviderName ?? details.informationProviderName}
+                      position={request?.informationProviderPosition ?? details.informationProviderPosition}
                     />
                   </Box>
                 </Stack>
@@ -2673,7 +2671,7 @@ function RequestDocumentDialog({
                   {!isWpms ? (
                     <Box sx={{ display: 'flex', gap: 1.5 }}>
                       <DocumentLine label="4.2.7 พารามิเตอร์ที่ติดตั้งแบบ Time sharing :" value={joinList(details.timeSharingParameters)} width="68%" />
-                      <DocumentLine label="ร่วมกับปล่อง :" value={details.sharedStack} width="32%" />
+                      <DocumentLine label="ร่วมกับปล่อง :" value={details.sharedStackCode ?? details.sharedStack} width="32%" />
                     </Box>
                   ) : null}
                 </Stack>
@@ -2796,8 +2794,8 @@ function RequestDocumentDialog({
               <Box sx={{ display: 'flex', justifyContent: 'space-between', pt: 2 }}>
                 <Typography variant="caption">หมายเหตุ: ✓ ใช่, ✕ ไม่ใช่</Typography>
                 <DocumentSignatureBlock
-                  name={details.informationProviderName}
-                  position={details.informationProviderPosition}
+                  name={request?.informationProviderName ?? details.informationProviderName}
+                  position={request?.informationProviderPosition ?? details.informationProviderPosition}
                 />
               </Box>
             </Stack>
@@ -4351,10 +4349,10 @@ function CemsMonitoringPointDetails({ initialPoint = {} }) {
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
           <TextField
-            name="sharedStack"
+            name="sharedStackCode"
             label="ร่วมกับปล่อง"
             size="small"
-            defaultValue={initialDetails.sharedStack}
+            defaultValue={initialDetails.sharedStackCode ?? initialDetails.sharedStack}
             fullWidth
           />
         </Grid>
@@ -4986,7 +4984,14 @@ function MeasurementInstrumentSection({ parameterOptions, rows, setRows, initial
   )
 }
 
-function InformationProviderSection({ currentUser }) {
+function InformationProviderSection({ currentUser, initialProvider = {}, useLoginDefaults = false }) {
+  const defaultName = useLoginDefaults
+    ? currentUser?.name ?? ''
+    : initialProvider.name ?? ''
+  const defaultPosition = useLoginDefaults
+    ? currentUser?.position ?? ''
+    : initialProvider.position ?? ''
+
   return (
     <Paper elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider' }}>
       <Stack spacing={2}>
@@ -4999,7 +5004,7 @@ function InformationProviderSection({ currentUser }) {
               name="informationProviderName"
               label="ชื่อ-นามสกุล"
               size="small"
-              defaultValue={currentUser?.name ?? ''}
+              defaultValue={defaultName}
               fullWidth
             />
           </Grid>
@@ -5008,6 +5013,7 @@ function InformationProviderSection({ currentUser }) {
               name="informationProviderPosition"
               label="ตำแหน่ง"
               size="small"
+              defaultValue={defaultPosition}
               fullWidth
             />
           </Grid>
@@ -5675,7 +5681,18 @@ function RequestFormBottomSheet({
                           setRows={setMeasurementInstrumentRows}
                           initialInstruments={point.type === initialMonitoringPointType ? initialInstruments : {}}
                         />
-                        <InformationProviderSection currentUser={currentUser} />
+                        <InformationProviderSection
+                          currentUser={currentUser}
+                          initialProvider={
+                            point.type === initialMonitoringPointType
+                              ? {
+                                  name: initialRequest?.informationProviderName ?? initialPoint.details?.informationProviderName,
+                                  position: initialRequest?.informationProviderPosition ?? initialPoint.details?.informationProviderPosition,
+                                }
+                              : {}
+                          }
+                          useLoginDefaults={!useInitialRequestValues}
+                        />
                       </Stack>
                     </Box>
                   ) : null,

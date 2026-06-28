@@ -249,6 +249,8 @@ function mapFactoryRow(row, index, idPrefix = 'factory') {
     location: row.address ?? emptyValue,
     province: row.provinceName ?? emptyValue,
     industrialEstate: row.industrialEstateName ?? emptyValue,
+    latitude: row.latitude ?? '',
+    longitude: row.longitude ?? '',
     coordinates: formatCoordinates(row.latitude, row.longitude),
     operation: row.businessActivity ?? emptyValue,
     operationStatus: row.operationStatus ?? emptyValue,
@@ -391,6 +393,8 @@ function createMonitoringPointFormPayload(row, monitoringPoints = []) {
       eiaInfo: normalizeDisplayValue(row.eia) || null,
       address: normalizeDisplayValue(row.location) || null,
       businessActivity: normalizeDisplayValue(row.operation) || null,
+      latitude: normalizeDisplayValue(row.latitude) || null,
+      longitude: normalizeDisplayValue(row.longitude) || null,
     },
     points: monitoringPoints.map(mapMonitoringPointFormPayload),
   }
@@ -683,16 +687,13 @@ function EligibleFactoriesPage({ accessToken = '' }) {
             body: JSON.stringify(createMonitoringPointFormPayload(row, nextMonitoringPoints)),
           },
         )
-        const response = await readJsonResponse(result, 'บันทึกข้อมูลจุดตรวจวัดไม่สำเร็จ')
-        const savedData = response?.data ?? {}
-        const savedFormId = savedData.id ?? formId
+        await readJsonResponse(result, 'บันทึกข้อมูลจุดตรวจวัดไม่สำเร็จ')
         const savedPoints = nextMonitoringPoints.map(mapMonitoringPointForEligibleState)
         const updateRows = (current) =>
           current.map((factoryRow) =>
             factoryRow.id === row.id || factoryRow.factoryKey === row.factoryKey
               ? {
                   ...factoryRow,
-                  monitoringPointFormId: savedFormId,
                   measurementPoints: savedPoints,
                   cemsPointCount: countMonitoringPointsByType(nextMonitoringPoints, 'CEMS'),
                   wpmsPointCount: countMonitoringPointsByType(nextMonitoringPoints, 'WPMS'),
@@ -701,7 +702,7 @@ function EligibleFactoriesPage({ accessToken = '' }) {
           )
 
         setFactoryRows(updateRows)
-        setEligibleFactoryRows(updateRows)
+        await loadEligibleFactories()
         handleCloseEligibleSheet()
         setSnackbarMessage('บันทึกข้อมูลจุดตรวจวัดสำเร็จ')
         setSnackbarOpen(true)
@@ -711,7 +712,7 @@ function EligibleFactoriesPage({ accessToken = '' }) {
         setSavingEligibleFactoryIds((current) => current.filter((id) => id !== row.id))
       }
     },
-    [accessToken, handleCloseEligibleSheet],
+    [accessToken, handleCloseEligibleSheet, loadEligibleFactories],
   )
 
   const handleRemoveEligible = useCallback(
@@ -952,6 +953,7 @@ function EligibleFactoriesPage({ accessToken = '' }) {
       )}
 
       <EligibleFactoryBottomSheet
+        key={selectedFactoryForSheet?.id ?? 'eligible-factory-sheet'}
         open={Boolean(selectedFactoryForSheet)}
         factory={selectedFactoryForSheet}
         monitoringPoints={monitoringPoints}
@@ -960,9 +962,9 @@ function EligibleFactoriesPage({ accessToken = '' }) {
         onClose={handleCloseEligibleSheet}
         onActiveMonitoringPointChange={setActiveMonitoringPointId}
         onMonitoringPointsChange={handleMonitoringPointsChange}
-        onSubmit={() => {
-          if (selectedFactoryForSheet) {
-            handleSaveMonitoringPointForm(selectedFactoryForSheet, monitoringPoints)
+        onSubmit={(factoryDraft) => {
+          if (factoryDraft) {
+            handleSaveMonitoringPointForm(factoryDraft, monitoringPoints)
           }
         }}
       />
@@ -981,6 +983,10 @@ function EligibleFactoryBottomSheet({
   onMonitoringPointsChange,
   onSubmit,
 }) {
+  const [factoryCoordinates, setFactoryCoordinates] = useState(() => ({
+    latitude: factory?.latitude ?? '',
+    longitude: factory?.longitude ?? '',
+  }))
   const activePoint = monitoringPoints.find((point) => point.id === activeMonitoringPointId) ?? monitoringPoints[0]
   const activePointIndex = Math.max(0, monitoringPoints.findIndex((point) => point.id === activePoint?.id))
 
@@ -1026,6 +1032,18 @@ function EligibleFactoryBottomSheet({
     onMonitoringPointsChange(nextPoints)
     onActiveMonitoringPointChange(nextPoints[0]?.id ?? '')
   }, [activePoint, monitoringPoints, onActiveMonitoringPointChange, onMonitoringPointsChange])
+
+  const handleSubmit = useCallback(() => {
+    if (!factory) {
+      return
+    }
+
+    onSubmit({
+      ...factory,
+      latitude: factoryCoordinates.latitude,
+      longitude: factoryCoordinates.longitude,
+    })
+  }, [factory, factoryCoordinates, onSubmit])
 
   return (
     <Drawer
@@ -1081,10 +1099,34 @@ function EligibleFactoryBottomSheet({
               <ReadOnlyField label="ข้อมูล EIA" value={factory?.eia} />
             </Grid>
             <Grid size={{ xs: 12, md: 6 }}>
-              <ReadOnlyField label="สถานที่ตั้ง" value={factory?.location} />
+              <ReadOnlyField label="การประกอบกิจการ" value={factory?.operation} />
             </Grid>
             <Grid size={{ xs: 12, md: 6 }}>
-              <ReadOnlyField label="การประกอบกิจการ" value={factory?.operation} />
+              <ReadOnlyField label="สถานที่ตั้ง" value={factory?.location} />
+            </Grid>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <TextField
+                label="ละติจูด"
+                size="small"
+                fullWidth
+                value={factoryCoordinates.latitude}
+                onChange={(event) =>
+                  setFactoryCoordinates((current) => ({ ...current, latitude: event.target.value }))
+                }
+                inputProps={{ inputMode: 'decimal' }}
+              />
+            </Grid>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <TextField
+                label="ลองติจูด"
+                size="small"
+                fullWidth
+                value={factoryCoordinates.longitude}
+                onChange={(event) =>
+                  setFactoryCoordinates((current) => ({ ...current, longitude: event.target.value }))
+                }
+                inputProps={{ inputMode: 'decimal' }}
+              />
             </Grid>
           </Grid>
         </Paper>
@@ -1152,7 +1194,7 @@ function EligibleFactoryBottomSheet({
           <Button variant="outlined" color="inherit" onClick={onClose}>
             ยกเลิก
           </Button>
-          <Button variant="contained" color="secondary" disabled={saving} startIcon={<AddTaskIcon />} onClick={onSubmit}>
+          <Button variant="contained" color="secondary" disabled={saving} startIcon={<AddTaskIcon />} onClick={handleSubmit}>
             {saving ? 'กำลังบันทึก' : 'บันทึก'}
           </Button>
         </Stack>

@@ -86,7 +86,88 @@ const notificationGroups = [
   },
 ]
 
-const notificationRows = []
+const commonFactories = [
+  {
+    factoryName: 'บริษัท พรีเมี่ยม อิควิปเม้นท์ แอนด์ เอ็นจิเนียริ่ง จำกัด',
+    factoryRegistrationNo: '82010400125514',
+    monitoringPoint: 'S0001 - STACK-A',
+  },
+  {
+    factoryName: 'บริษัท เอวาเวลล์ โฮมโพรดักส์ จำกัด',
+    factoryRegistrationNo: '82010000125609',
+    monitoringPoint: 'S0002 - STACK-B',
+  },
+  {
+    factoryName: 'บริษัท อินทรี อีโคไซเคิล จำกัด',
+    factoryRegistrationNo: '72080000125562',
+    monitoringPoint: 'P0001 - WW-01',
+  },
+]
+
+function makeMeasurementExceededRows(prefix, parameter, unit, standardValue, measuredValues) {
+  return commonFactories.map((factory, index) => ({
+    id: `${prefix}-${index + 1}`,
+    ...factory,
+    date: '15/06/2569',
+    time: `${String(8 + index).padStart(2, '0')}:00`,
+    parameter,
+    standardValue,
+    measuredValue: measuredValues[index],
+    unit,
+    notificationStatus: index === 0 ? 'รอส่งแจ้งเตือน' : index === 1 ? 'ส่งแจ้งเตือนแล้ว' : 'รับทราบแล้ว',
+  }))
+}
+
+function makeDailyReportRows(prefix, parameter, unit, percents) {
+  return commonFactories.map((factory, index) => ({
+    id: `${prefix}-${index + 1}`,
+    ...factory,
+    parameter,
+    unit,
+    date: '15/06/2569',
+    submissionPercent: percents[index],
+    notificationStatus: index === 0 ? 'รอส่งแจ้งเตือน' : index === 1 ? 'ส่งแจ้งเตือนแล้ว' : 'อยู่ระหว่างติดตาม',
+  }))
+}
+
+function makeMissingReportRows(prefix, parameter, unit, totalDays) {
+  return commonFactories.map((factory, index) => ({
+    id: `${prefix}-${index + 1}`,
+    ...factory,
+    parameter,
+    unit,
+    fromDate: '01/06/2569',
+    toDate: index === 0 ? '15/06/2569' : index === 1 ? '16/06/2569' : '17/06/2569',
+    totalDays: totalDays[index],
+    notificationStatus: index === 0 ? 'รอส่งแจ้งเตือน' : index === 1 ? 'ส่งแจ้งเตือนแล้ว' : 'อยู่ระหว่างติดตาม',
+  }))
+}
+
+function makeAbnormalRows(prefix, parameter, unit, abnormalities) {
+  return commonFactories.map((factory, index) => ({
+    id: `${prefix}-${index + 1}`,
+    ...factory,
+    parameter,
+    unit,
+    date: '15/06/2569',
+    time: `${String(10 + index).padStart(2, '0')}:00`,
+    abnormality: abnormalities[index],
+    notificationStatus: index === 0 ? 'รอส่งแจ้งเตือน' : index === 1 ? 'ส่งแจ้งเตือนแล้ว' : 'รับทราบแล้ว',
+  }))
+}
+
+const notificationRowsByMenu = {
+  'cems-standard-exceeded': makeMeasurementExceededRows('cems-standard', 'NOx', 'ppm', '180', ['195', '202', '190']),
+  'cems-eia-exceeded': makeMeasurementExceededRows('cems-eia', 'SO2', 'ppm', '120', ['135', '142', '131']),
+  'cems-daily-report-less-than-80': makeDailyReportRows('cems-daily', 'CO', 'ppm', ['72%', '68%', '75%']),
+  'cems-missing-more-than-14-days': makeMissingReportRows('cems-missing', 'NOx', 'ppm', ['15', '16', '17']),
+  'cems-abnormal-value': makeAbnormalRows('cems-abnormal', 'O2', '%', ['ค่านิ่งต่อเนื่อง', 'ค่า 0 ต่อเนื่อง', 'ค่าติดลบ']),
+  'bod-cod-standard-exceeded': makeMeasurementExceededRows('bod-standard', 'COD', 'mg/L', '120', ['138', '145', '132']),
+  'bod-cod-eia-exceeded': makeMeasurementExceededRows('bod-eia', 'BOD', 'mg/L', '20', ['28', '31', '25']),
+  'bod-cod-daily-report-less-than-80': makeDailyReportRows('bod-daily', 'COD', 'mg/L', ['70%', '76%', '65%']),
+  'bod-cod-missing-more-than-7-days': makeMissingReportRows('bod-missing', 'BOD', 'mg/L', ['8', '9', '10']),
+  'bod-cod-abnormal-value': makeAbnormalRows('bod-abnormal', 'COD', 'mg/L', ['ค่านิ่งต่อเนื่อง', 'ค่า 0 ต่อเนื่อง', 'ค่าติดลบ']),
+}
 const defaultNotificationColumns = [
   { field: 'order', headerName: 'ลำดับ', width: 90 },
   { field: 'factoryName', headerName: 'ชื่อโรงงาน', width: 280 },
@@ -168,6 +249,7 @@ function NotificationPage({ accessToken = '' }) {
           : activeMenuConfig.columnSet === 'abnormal-measurement'
             ? abnormalMeasurementColumns
             : defaultNotificationColumns
+  const activeRows = notificationRowsByMenu[activeMenuConfig.value] ?? []
 
   return (
     <Stack spacing={2} sx={{ height: '100%', minHeight: 0 }}>
@@ -298,7 +380,7 @@ function NotificationPage({ accessToken = '' }) {
       <NotificationTable
         title={activeMenuConfig.label}
         groupLabel={activeGroupConfig.label}
-        rows={accessToken ? notificationRows : []}
+        rows={accessToken ? activeRows : []}
         columns={activeColumns}
       />
     </Stack>
