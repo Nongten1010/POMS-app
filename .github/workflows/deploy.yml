@@ -132,7 +132,9 @@ jobs:
 
           Copy-Item $sourceEnv $workspaceEnv -Force
 
-          if ("${{ steps.changes.outputs.frontend_deps_changed }}" -eq 'true' -or !(Test-Path ".\node_modules")) {
+          $frontendDepsReady = Test-Path ".\node_modules\.bin\vite.cmd"
+
+          if ("${{ steps.changes.outputs.frontend_deps_changed }}" -eq 'true' -or !$frontendDepsReady) {
             Write-Host "Installing frontend dependencies with npm ci."
             npm ci
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -182,7 +184,9 @@ jobs:
         working-directory: backend
         timeout-minutes: 20
         run: |
-          if ("${{ steps.changes.outputs.backend_deps_changed }}" -eq 'true' -or !(Test-Path ".\node_modules")) {
+          $backendDepsReady = Test-Path ".\node_modules\.bin\tsc.cmd"
+
+          if ("${{ steps.changes.outputs.backend_deps_changed }}" -eq 'true' -or !$backendDepsReady) {
             Write-Host "Installing backend dependencies with npm ci."
             npm ci
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -222,7 +226,8 @@ jobs:
           Copy-Item ".\backend\package-lock.json" $env:BACKEND_RELEASE -Force
 
           $targetNodeModules = Join-Path $env:BACKEND_TARGET 'node_modules'
-          $installProductionDeps = "${{ steps.changes.outputs.backend_deps_changed }}" -eq 'true' -or !(Test-Path $targetNodeModules)
+          $productionDepsReady = (Test-Path (Join-Path $targetNodeModules '.package-lock.json')) -and (Test-Path (Join-Path $targetNodeModules 'express'))
+          $installProductionDeps = "${{ steps.changes.outputs.backend_deps_changed }}" -eq 'true' -or !$productionDepsReady
 
           if ($installProductionDeps) {
             Push-Location $env:BACKEND_RELEASE
