@@ -1,6 +1,7 @@
 import { describe, expect, it } from '@jest/globals';
 import {
   buildStatusHistoryNoteForTests,
+  buildStatusHistoryTimelineForTests,
   buildBaseQueryForTests,
   buildDuplicateActiveMeasurementPointCleanupSqlForTests,
   buildFactoriesForAccessQueryForTests,
@@ -32,10 +33,7 @@ describe('connectionRequestsRepository request numbers', () => {
   });
 
   it('does not link selected station history by duplicate measurement point names alone', () => {
-    const sql = buildBaseQueryForTests(
-      { stationId: 'S0001' },
-      { actorUserId: 42, scope: 'ALL' },
-    )
+    const sql = buildBaseQueryForTests({ stationId: 'S0001' }, { actorUserId: 42, scope: 'ALL' })
       .toSQL()
       .sql.toLowerCase();
 
@@ -93,5 +91,196 @@ describe('connectionRequestsRepository request numbers', () => {
         officerNote: 'แก้ mapping channel แล้วส่งยืนยันอีกครั้ง',
       }),
     ).toBe('ตั้งค่าอุปกรณ์ยังไม่ถูกต้อง\nแก้ mapping channel แล้วส่งยืนยันอีกครั้ง');
+  });
+
+  it('builds status history durations and summary from inclusive status dates', () => {
+    const timeline = buildStatusHistoryTimelineForTests([
+      {
+        id: 1,
+        request_id: 10,
+        status: CONNECTION_REQUEST_STATUS.PENDING_DESIGN_REVIEW,
+        note: 'ผู้ประกอบการส่งฟอร์ม',
+        changed_by: 4,
+        changed_by_username: 'operator_demo',
+        changed_by_prename_th: null,
+        changed_by_first_name: null,
+        changed_by_last_name: null,
+        changed_at: '2026-06-26T22:01:35.536Z',
+      },
+      {
+        id: 2,
+        request_id: 10,
+        status: CONNECTION_REQUEST_STATUS.WAITING_FACTORY_REVISION,
+        note: 'ขอเอกสารเพิ่มเติม',
+        changed_by: 7,
+        changed_by_username: 'officer_demo',
+        changed_by_prename_th: 'นาย',
+        changed_by_first_name: 'สมชาย',
+        changed_by_last_name: 'เจ้าหน้าที่',
+        changed_at: '2026-06-26T22:10:36.944Z',
+      },
+      {
+        id: 3,
+        request_id: 10,
+        status: CONNECTION_REQUEST_STATUS.CONNECTION_CONFIRMED,
+        note: 'ตั้งค่าอุปกรณ์และทดสอบแล้ว',
+        changed_by: 4,
+        changed_by_username: 'operator_demo',
+        changed_by_prename_th: null,
+        changed_by_first_name: null,
+        changed_by_last_name: null,
+        changed_at: '2026-06-26T23:07:18.191Z',
+      },
+      {
+        id: 4,
+        request_id: 10,
+        status: CONNECTION_REQUEST_STATUS.CONNECTED,
+        note: 'ตรวจสอบแล้ว',
+        changed_by: 7,
+        changed_by_username: 'officer_demo',
+        changed_by_prename_th: 'นาย',
+        changed_by_first_name: 'สมชาย',
+        changed_by_last_name: 'เจ้าหน้าที่',
+        changed_at: '2026-06-27T03:07:36.983Z',
+      },
+    ]);
+
+    expect(timeline.statusHistory).toMatchObject([
+      {
+        changedById: 4,
+        changedBy: 'operator_demo',
+        endedAt: '2026-06-26T22:10:36.944Z',
+        durationDays: 1,
+        durationText: '1 วัน',
+        isTerminal: false,
+      },
+      {
+        changedById: 7,
+        changedBy: 'นายสมชาย เจ้าหน้าที่',
+        durationDays: 1,
+        durationText: '1 วัน',
+        isTerminal: false,
+      },
+      {
+        changedById: 4,
+        changedBy: 'operator_demo',
+        endedAt: '2026-06-27T03:07:36.983Z',
+        durationDays: 2,
+        durationText: '2 วัน',
+        isTerminal: false,
+      },
+      {
+        changedById: 7,
+        changedBy: 'นายสมชาย เจ้าหน้าที่',
+        endedAt: '2026-06-27T03:07:36.983Z',
+        durationDays: 1,
+        durationText: '1 วัน',
+        isTerminal: true,
+      },
+    ]);
+    expect(timeline.statusDurationSummary).toEqual({
+      startedAt: '2026-06-26T22:01:35.536Z',
+      startDate: '2026-06-26',
+      startStatus: CONNECTION_REQUEST_STATUS.PENDING_DESIGN_REVIEW,
+      startStatusLabel: 'รอพิจารณาแบบ',
+      endedAt: '2026-06-27T03:07:36.983Z',
+      endDate: '2026-06-27',
+      endStatus: CONNECTION_REQUEST_STATUS.CONNECTED,
+      endStatusLabel: 'เชื่อมต่อแล้ว',
+      isTerminal: true,
+      terminalStatuses: [CONNECTION_REQUEST_STATUS.CONNECTED, CONNECTION_REQUEST_STATUS.CANCELED],
+      totalDurationDays: 2,
+      totalDurationText: '2 วัน',
+    });
+  });
+
+  it('stops status duration summaries when requests are canceled', () => {
+    const timeline = buildStatusHistoryTimelineForTests([
+      {
+        id: 1,
+        request_id: 10,
+        status: CONNECTION_REQUEST_STATUS.PENDING_DESIGN_REVIEW,
+        note: 'ผู้ประกอบการส่งฟอร์ม',
+        changed_by: 4,
+        changed_by_username: null,
+        changed_by_prename_th: null,
+        changed_by_first_name: null,
+        changed_by_last_name: null,
+        changed_at: '2026-06-26T09:00:00.000Z',
+      },
+      {
+        id: 2,
+        request_id: 10,
+        status: CONNECTION_REQUEST_STATUS.CANCELED,
+        note: 'ผู้ประกอบการยกเลิกคำขอ',
+        changed_by: 4,
+        changed_by_username: null,
+        changed_by_prename_th: null,
+        changed_by_first_name: null,
+        changed_by_last_name: null,
+        changed_at: '2026-06-27T10:30:00.000Z',
+      },
+    ]);
+
+    expect(timeline.statusHistory.at(-1)).toMatchObject({
+      status: CONNECTION_REQUEST_STATUS.CANCELED,
+      statusLabel: 'ยกเลิก',
+      changedBy: 'User #4',
+      isTerminal: true,
+      durationDays: 1,
+      durationText: '1 วัน',
+    });
+    expect(timeline.statusDurationSummary).toMatchObject({
+      endStatus: CONNECTION_REQUEST_STATUS.CANCELED,
+      endStatusLabel: 'ยกเลิก',
+      isTerminal: true,
+      totalDurationDays: 2,
+      totalDurationText: '2 วัน',
+    });
+  });
+
+  it('does not close the total duration while the latest status is not terminal', () => {
+    const timeline = buildStatusHistoryTimelineForTests([
+      {
+        id: 1,
+        request_id: 10,
+        status: CONNECTION_REQUEST_STATUS.PENDING_DESIGN_REVIEW,
+        note: 'ผู้ประกอบการส่งฟอร์ม',
+        changed_by: 4,
+        changed_by_username: 'operator_demo',
+        changed_by_prename_th: null,
+        changed_by_first_name: null,
+        changed_by_last_name: null,
+        changed_at: '2026-06-26T09:00:00.000Z',
+      },
+      {
+        id: 2,
+        request_id: 10,
+        status: CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+        note: 'อนุมัติแบบแล้ว',
+        changed_by: 7,
+        changed_by_username: 'officer_demo',
+        changed_by_prename_th: null,
+        changed_by_first_name: null,
+        changed_by_last_name: null,
+        changed_at: '2026-06-27T14:00:00.000Z',
+      },
+    ]);
+
+    expect(timeline.statusHistory.at(-1)).toMatchObject({
+      status: CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+      endedAt: null,
+      durationDays: null,
+      durationText: null,
+      isTerminal: false,
+    });
+    expect(timeline.statusDurationSummary).toMatchObject({
+      endedAt: null,
+      endDate: null,
+      endStatus: CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+      isTerminal: false,
+      totalDurationDays: null,
+      totalDurationText: null,
+    });
   });
 });

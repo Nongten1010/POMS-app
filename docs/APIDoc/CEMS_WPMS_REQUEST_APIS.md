@@ -1487,6 +1487,7 @@ Response เป็น shape เดียวกับข้อ 4 แต่ `conne
 | ยืนยันการเชื่อมต่อ | ผู้ประกอบการ | `POST /api/v1/cems-wpms-requests/:id/confirm-connection` | `{ "action": "CONFIRM", "note": "ตั้งค่าอุปกรณ์และทดสอบแล้ว" }` | `CONNECTION_CONFIRMED` | ยืนยันการเชื่อมต่อ |
 | ส่งกลับแก้ config | เจ้าหน้าที่ | `POST /api/v1/cems-wpms-requests/:id/status` | `{ "action": "RETURN_TO_WAITING_CONNECTION", "revisionReason": "..." }` | `WAITING_CONNECTION` | รอเชื่อมต่อ |
 | ตรวจสอบแล้วกดยืนยัน | เจ้าหน้าที่ | `POST /api/v1/cems-wpms-requests/:id/verify-connection` | `{ "note": "ตรวจสอบแล้ว" }` | `CONNECTED` | เชื่อมต่อแล้ว |
+| ยกเลิกคำขอ | ระบบ/เจ้าหน้าที่ | ยังไม่มี public endpoint เฉพาะในเอกสารนี้ | - | `CANCELED` | ยกเลิก |
 
 บันทึกข้อมูลการเชื่อมต่อ:
 
@@ -1714,10 +1715,29 @@ Response:
         "status": "PENDING_DESIGN_REVIEW",
         "statusLabel": "รอพิจารณาแบบ",
         "note": "ผู้ประกอบการส่งฟอร์ม",
-        "changedBy": 42,
-        "changedAt": "2026-05-30T10:00:00.000Z"
+        "changedById": 42,
+        "changedBy": "นายสมชาย เจ้าหน้าที่",
+        "changedAt": "2026-05-30T10:00:00.000Z",
+        "endedAt": "2026-05-31T09:00:00.000Z",
+        "durationDays": 2,
+        "durationText": "2 วัน",
+        "isTerminal": false
       }
     ],
+    "statusDurationSummary": {
+      "startedAt": "2026-05-30T10:00:00.000Z",
+      "startDate": "2026-05-30",
+      "startStatus": "PENDING_DESIGN_REVIEW",
+      "startStatusLabel": "รอพิจารณาแบบ",
+      "endedAt": null,
+      "endDate": null,
+      "endStatus": "WAITING_CONNECTION",
+      "endStatusLabel": "รอเชื่อมต่อ",
+      "isTerminal": false,
+      "terminalStatuses": ["CONNECTED", "CANCELED"],
+      "totalDurationDays": null,
+      "totalDurationText": null
+    },
     "deviceConfigs": [
       {
         "stationId": "S0001",
@@ -2867,7 +2887,13 @@ Data dictionary response:
 | `data.requestType` | string | ประเภทคำขอ |
 | `data.factory` | object | ข้อมูลโรงงาน snapshot/detail |
 | `data.measurementPoints` | array | รายจุดตรวจวัด ใช้ทำ PDF และเติมฟอร์มเพิ่มพารามิเตอร์ |
-| `data.statusHistory` | array | ประวัติสถานะ |
+| `data.statusHistory` | array | ประวัติสถานะ พร้อมชื่อผู้เปลี่ยนสถานะและจำนวนวันของแต่ละช่วง |
+| `data.statusHistory[].changedById` | number | user id เดิมจาก `cems_wpms_request_status_history.changed_by` |
+| `data.statusHistory[].changedBy` | string | ชื่อผู้เปลี่ยนสถานะจากตาราง `users`; fallback เป็น `username` หรือ `User #<id>` |
+| `data.statusHistory[].endedAt` | string/null | เวลาเริ่ม status ถัดไป หรือเวลา status เดิมถ้าเป็น terminal status |
+| `data.statusHistory[].durationDays` | number/null | จำนวนวันแบบนับรวมวันเริ่มและวันจบ เช่น `2026-06-26` ถึง `2026-06-27` = `2` |
+| `data.statusHistory[].isTerminal` | boolean | `true` เมื่อ status เป็น `CONNECTED` หรือ `CANCELED` |
+| `data.statusDurationSummary` | object | สรุประยะเวลาจาก status แรกถึง status สุดท้าย เฉพาะเมื่อ status สุดท้ายเป็น terminal |
 | `data.deviceConfigs` | array | config snapshot ของคำขอ โดยแต่ละ item จัด shape เหมือน payload: `{ stationId, device, channels, statusManagement }` |
 
 ### API 10: GET รายละเอียดจุดตรวจวัดที่เชื่อมต่อแล้วจากระบบ POMS ปัจจุบัน
@@ -3071,4 +3097,5 @@ REVISED_PENDING_DESIGN_REVIEW
 WAITING_CONNECTION
 CONNECTION_CONFIRMED
 CONNECTED
+CANCELED
 ```

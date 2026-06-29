@@ -19,6 +19,7 @@ import {
   type MeasurementPointDTO,
   type MeasurementPointInput,
   type RequestDocumentImageInput,
+  type StatusDurationSummaryDTO,
   type StatusHistoryDTO,
 } from './connection-requests.types';
 
@@ -93,6 +94,10 @@ interface StatusHistoryRow {
   status: ConnectionRequestStatus;
   note: string | null;
   changed_by: number | string;
+  changed_by_username: string | null;
+  changed_by_prename_th: string | null;
+  changed_by_first_name: string | null;
+  changed_by_last_name: string | null;
   changed_at: Date | string;
 }
 
@@ -182,6 +187,7 @@ interface FactoryFavoriteRow {
 
 const TEMPORARY_FACTORY_TEXT = 'ไม่ระบุ';
 const TEMPORARY_EIA_LABEL: 'ไม่มี' = 'ไม่มี';
+const TERMINAL_CONNECTION_REQUEST_STATUSES: ConnectionRequestStatus[] = ['CONNECTED', 'CANCELED'];
 
 export const connectionRequestsRepository = {
   async list(
@@ -293,13 +299,11 @@ export const connectionRequestsRepository = {
 
     if (isFavorite) {
       if (existing) {
-        await db('user_factory_favorites')
-          .where('id', existing.id)
-          .update({
-            deleted_at: null,
-            updated_by: actorUserId,
-            updated_at: db.fn.now(),
-          });
+        await db('user_factory_favorites').where('id', existing.id).update({
+          deleted_at: null,
+          updated_by: actorUserId,
+          updated_at: db.fn.now(),
+        });
       } else {
         await db('user_factory_favorites').insert({
           user_id: actorUserId,
@@ -309,13 +313,11 @@ export const connectionRequestsRepository = {
         });
       }
     } else if (existing && existing.deleted_at === null) {
-      await db('user_factory_favorites')
-        .where('id', existing.id)
-        .update({
-          deleted_at: db.fn.now(),
-          updated_by: actorUserId,
-          updated_at: db.fn.now(),
-        });
+      await db('user_factory_favorites').where('id', existing.id).update({
+        deleted_at: db.fn.now(),
+        updated_by: actorUserId,
+        updated_at: db.fn.now(),
+      });
     }
 
     return { factoryId, isFavorite };
@@ -408,7 +410,9 @@ export const connectionRequestsRepository = {
     const lookupKeys = [...new Set(factoryIds.filter((factoryId) => factoryId.trim().length > 0))];
     if (lookupKeys.length === 0) return [];
 
-    const rows = await db<CurrentFactoryMeasurementPointRow>('cems_wpms_connected_measurement_points')
+    const rows = await db<CurrentFactoryMeasurementPointRow>(
+      'cems_wpms_connected_measurement_points',
+    )
       .whereNull('deleted_at')
       .whereIn('factory_id', lookupKeys)
       .select(
@@ -561,7 +565,11 @@ export const connectionRequestsRepository = {
         const existing = await findConnectedPointForMeasurementPoint(trx, point);
         const pointParameters = getConnectedMeasurementPointParameters(point);
         const parameters = uniqueParameters([
-          ...(pointParameters.length > 0 ? [] : existing ? parseParameters(existing.parameters_json) : []),
+          ...(pointParameters.length > 0
+            ? []
+            : existing
+              ? parseParameters(existing.parameters_json)
+              : []),
           ...pointParameters,
         ]);
 
@@ -608,6 +616,13 @@ export function buildFactoriesForAccessQueryForTests(
   access: FactoryAccess,
 ): Knex.QueryBuilder<FactoryRow, FactoryRow[]> {
   return buildFactoriesForAccessQuery(access);
+}
+
+export function buildStatusHistoryTimelineForTests(historyRows: StatusHistoryRow[]): {
+  statusHistory: StatusHistoryDTO[];
+  statusDurationSummary: StatusDurationSummaryDTO;
+} {
+  return buildStatusHistoryTimeline(historyRows);
 }
 
 function buildFactoriesForAccessQuery(
@@ -841,9 +856,26 @@ async function hydrate(
       .whereNull('deleted_at')
       .orderBy('id', 'asc'),
     executor<StatusHistoryRow>('cems_wpms_request_status_history')
+      .leftJoin(
+        'users as changed_by_user',
+        'changed_by_user.id',
+        'cems_wpms_request_status_history.changed_by',
+      )
       .where('request_id', requestId)
-      .orderBy('changed_at', 'asc')
-      .orderBy('id', 'asc'),
+      .select(
+        'cems_wpms_request_status_history.id',
+        'cems_wpms_request_status_history.request_id',
+        'cems_wpms_request_status_history.status',
+        'cems_wpms_request_status_history.note',
+        'cems_wpms_request_status_history.changed_by',
+        'cems_wpms_request_status_history.changed_at',
+        'changed_by_user.username as changed_by_username',
+        'changed_by_user.prename_th as changed_by_prename_th',
+        'changed_by_user.first_name as changed_by_first_name',
+        'changed_by_user.last_name as changed_by_last_name',
+      )
+      .orderBy('cems_wpms_request_status_history.changed_at', 'asc')
+      .orderBy('cems_wpms_request_status_history.id', 'asc'),
   ]);
 
   return toConnectionRequestDTO(row, pointRows, historyRows);
@@ -860,10 +892,27 @@ async function hydrateMany(rows: ConnectionRequestRow[]): Promise<ConnectionRequ
       .orderBy('request_id', 'asc')
       .orderBy('id', 'asc'),
     db<StatusHistoryRow>('cems_wpms_request_status_history')
+      .leftJoin(
+        'users as changed_by_user',
+        'changed_by_user.id',
+        'cems_wpms_request_status_history.changed_by',
+      )
       .whereIn('request_id', requestIds)
-      .orderBy('request_id', 'asc')
-      .orderBy('changed_at', 'asc')
-      .orderBy('id', 'asc'),
+      .select(
+        'cems_wpms_request_status_history.id',
+        'cems_wpms_request_status_history.request_id',
+        'cems_wpms_request_status_history.status',
+        'cems_wpms_request_status_history.note',
+        'cems_wpms_request_status_history.changed_by',
+        'cems_wpms_request_status_history.changed_at',
+        'changed_by_user.username as changed_by_username',
+        'changed_by_user.prename_th as changed_by_prename_th',
+        'changed_by_user.first_name as changed_by_first_name',
+        'changed_by_user.last_name as changed_by_last_name',
+      )
+      .orderBy('cems_wpms_request_status_history.request_id', 'asc')
+      .orderBy('cems_wpms_request_status_history.changed_at', 'asc')
+      .orderBy('cems_wpms_request_status_history.id', 'asc'),
   ]);
 
   const pointsByRequestId = groupRowsByRequestId(pointRows);
@@ -895,6 +944,7 @@ function toConnectionRequestDTO(
   pointRows: MeasurementPointRow[],
   historyRows: StatusHistoryRow[],
 ): ConnectionRequestDTO {
+  const statusTimeline = buildStatusHistoryTimeline(historyRows);
   return {
     id: Number(row.id),
     requestNo: row.request_no,
@@ -931,7 +981,8 @@ function toConnectionRequestDTO(
     confirmedAt: toNullableIsoString(row.confirmed_at),
     verifiedAt: toNullableIsoString(row.verified_at),
     measurementPoints: pointRows.map(toMeasurementPointDTO),
-    statusHistory: historyRows.map(toStatusHistoryDTO),
+    statusHistory: statusTimeline.statusHistory,
+    statusDurationSummary: statusTimeline.statusDurationSummary,
     createdBy: Number(row.created_by),
     createdAt: toIsoString(row.created_at),
     updatedAt: toIsoString(row.updated_at),
@@ -1265,15 +1316,96 @@ function toMeasurementPointDTO(row: MeasurementPointRow): MeasurementPointDTO {
   };
 }
 
-function toStatusHistoryDTO(row: StatusHistoryRow): StatusHistoryDTO {
+function buildStatusHistoryTimeline(historyRows: StatusHistoryRow[]): {
+  statusHistory: StatusHistoryDTO[];
+  statusDurationSummary: StatusDurationSummaryDTO;
+} {
+  const statusHistory = historyRows.map((row, index) =>
+    toStatusHistoryDTO(row, historyRows[index + 1] ?? null),
+  );
+
+  return {
+    statusHistory,
+    statusDurationSummary: toStatusDurationSummary(statusHistory),
+  };
+}
+
+function toStatusHistoryDTO(
+  row: StatusHistoryRow,
+  nextRow: StatusHistoryRow | null,
+): StatusHistoryDTO {
+  const changedAt = toIsoString(row.changed_at);
+  const nextChangedAt = nextRow ? toIsoString(nextRow.changed_at) : null;
+  const isTerminal = TERMINAL_CONNECTION_REQUEST_STATUSES.includes(row.status);
+  const endedAt = nextChangedAt ?? (isTerminal ? changedAt : null);
+  const durationDays = endedAt ? countInclusiveDateDays(changedAt, endedAt) : null;
   return {
     id: Number(row.id),
     status: row.status,
     statusLabel: CONNECTION_REQUEST_STATUS_LABELS[row.status],
     note: row.note,
-    changedBy: Number(row.changed_by),
-    changedAt: toIsoString(row.changed_at),
+    changedById: Number(row.changed_by),
+    changedBy: toChangedByName(row),
+    changedAt,
+    endedAt,
+    durationDays,
+    durationText: durationDays === null ? null : `${durationDays} วัน`,
+    isTerminal,
   };
+}
+
+function toStatusDurationSummary(statusHistory: StatusHistoryDTO[]): StatusDurationSummaryDTO {
+  const first = statusHistory[0] ?? null;
+  const last = statusHistory[statusHistory.length - 1] ?? null;
+  const canCloseSummary = Boolean(first && last?.isTerminal);
+  const totalDurationDays =
+    canCloseSummary && first && last
+      ? countInclusiveDateDays(first.changedAt, last.changedAt)
+      : null;
+
+  return {
+    startedAt: first?.changedAt ?? null,
+    startDate: first ? toDatePart(first.changedAt) : null,
+    startStatus: first?.status ?? null,
+    startStatusLabel: first?.statusLabel ?? null,
+    endedAt: canCloseSummary ? (last?.changedAt ?? null) : null,
+    endDate: canCloseSummary && last ? toDatePart(last.changedAt) : null,
+    endStatus: last?.status ?? null,
+    endStatusLabel: last?.statusLabel ?? null,
+    isTerminal: Boolean(last?.isTerminal),
+    terminalStatuses: [...TERMINAL_CONNECTION_REQUEST_STATUSES],
+    totalDurationDays,
+    totalDurationText: totalDurationDays === null ? null : `${totalDurationDays} วัน`,
+  };
+}
+
+function toChangedByName(row: StatusHistoryRow): string {
+  const firstNameWithPrefix = [row.changed_by_prename_th, row.changed_by_first_name]
+    .filter((part): part is string => Boolean(part?.trim()))
+    .join('');
+  const fullName = [firstNameWithPrefix, row.changed_by_last_name]
+    .filter((part): part is string => Boolean(part?.trim()))
+    .join(' ')
+    .trim();
+
+  if (fullName) return fullName;
+  if (row.changed_by_username?.trim()) return row.changed_by_username.trim();
+  return `User #${Number(row.changed_by)}`;
+}
+
+function countInclusiveDateDays(startAt: string, endAt: string): number {
+  const start = toUtcDateStart(toDatePart(startAt));
+  const end = toUtcDateStart(toDatePart(endAt));
+  return Math.max(1, Math.floor((end.getTime() - start.getTime()) / 86_400_000) + 1);
+}
+
+function toUtcDateStart(datePart: string): Date {
+  const [year, month, day] = datePart.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+function toDatePart(value: string): string {
+  return value.slice(0, 10);
 }
 
 function toContactPersons(row: ConnectionRequestRow): ContactPersonInput[] {

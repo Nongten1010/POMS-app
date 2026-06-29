@@ -357,6 +357,7 @@ Status values:
 - `WAITING_CONNECTION` — รอเชื่อมต่อหลังอนุมัติแบบ หรือรอแก้ config หลังเจ้าหน้าที่ส่งกลับจากการยืนยันการเชื่อมต่อ
 - `CONNECTION_CONFIRMED` — ยืนยันการเชื่อมต่อ
 - `CONNECTED` — เชื่อมต่อแล้ว
+- `CANCELED` — ยกเลิก
 
 ### 5.5 `cems_wpms_measurement_points` — จุดตรวจวัดในคำขอ
 

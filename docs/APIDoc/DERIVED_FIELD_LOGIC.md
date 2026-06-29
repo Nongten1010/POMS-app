@@ -402,3 +402,87 @@ Risk:
 - Rule นี้ตัดเฉพาะรหัสรอง 4 หลักที่เท่ากับเลข 4 หลักท้ายของประเภทหลักหลัง pad เป็น 4 หลักเท่านั้น
 - เคสเช่น `0403 / 000,003,00403` จะกลายเป็น `0403 / 0000,0003`
 - ถ้าข้อมูลเก่าถูก normalize ผิดจนสูญเลขหลักหน้าไปแล้ว เช่น source เดิม `07000` ถูกเก็บเป็น `0000` จะต้องเติมจาก source เดิมอีกครั้ง เพราะค่า `7000` ไม่เหลืออยู่ใน stored value; migration `0043` ทำงานส่วนนี้เฉพาะแถวที่มี `source_factory_id`
+
+## CEMS/WPMS Request Status Timeline
+
+Endpoint: `GET /api/v1/cems-wpms-requests/:id` and request detail/list hydration surfaces that include `statusHistory`
+
+Code:
+
+- `backend/src/modules/connection-requests/connection-requests.repository.ts`
+- `backend/src/modules/connection-requests/connection-requests.types.ts`
+
+### `statusHistory[].changedBy`
+
+Source:
+
+- `cems_wpms_request_status_history.changed_by`
+- `users.id`
+- `users.prename_th`
+- `users.first_name`
+- `users.last_name`
+- `users.username`
+
+Logic:
+
+- API keeps the raw user id as `changedById`.
+- API returns `changedBy` as a display name from `users`.
+- Name format joins Thai prefix and first name without an extra space, then appends last name with a space, for example `นายสมชาย เจ้าหน้าที่`.
+- If the name fields are empty, fallback to `users.username`.
+- If username is also empty or the join does not find a user row, fallback to `User #<changedById>`.
+
+Reason:
+
+- Frontend timeline should display a human-readable actor while retaining the audit id.
+
+Risk:
+
+- Historical rows whose `users` record was deleted or never hydrated will show the fallback `User #<id>`.
+
+### `statusHistory[].durationDays` / `durationText`
+
+Source:
+
+- Current row `cems_wpms_request_status_history.changed_at`
+- Next row `cems_wpms_request_status_history.changed_at`
+- Terminal status list: `CONNECTED`, `CANCELED`
+
+Logic:
+
+- Each row's `endedAt` is the next status row's `changed_at`.
+- If the row itself is terminal and has no next row, `endedAt` equals its own `changedAt`.
+- If the row is the latest row but not terminal, `endedAt`, `durationDays`, and `durationText` are `null`.
+- `durationDays` counts inclusive calendar dates from ISO date parts, not elapsed hours. Example: `2026-06-26` to `2026-06-27` returns `2`.
+- `durationText` formats the value as `<N> วัน`.
+
+Reason:
+
+- Business reporting wants calendar-day counting, including both request start date and terminal status date.
+
+Risk:
+
+- The calculation uses the ISO date part in the stored timestamp response. It does not convert timestamps into local timezone dates before counting.
+
+### `statusDurationSummary`
+
+Source:
+
+- First `statusHistory` row
+- Last `statusHistory` row
+- Terminal status list: `CONNECTED`, `CANCELED`
+
+Logic:
+
+- `startedAt`, `startDate`, `startStatus`, and `startStatusLabel` come from the first status row.
+- `endStatus` and `endStatusLabel` come from the latest status row.
+- If the latest status is `CONNECTED` or `CANCELED`, `endedAt`, `endDate`, `totalDurationDays`, and `totalDurationText` are populated.
+- If the latest status is not terminal, those completion fields stay `null`.
+- `totalDurationDays` counts inclusive calendar dates from the first row's date to the latest terminal row's date.
+
+Reason:
+
+- The summary gives one clear total from the first submitted status through the final terminal state.
+
+Risk:
+
+- Requests without any status history return a null summary.

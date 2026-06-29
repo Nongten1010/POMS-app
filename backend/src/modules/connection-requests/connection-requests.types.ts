@@ -5,6 +5,7 @@ export const CONNECTION_REQUEST_STATUS = {
   REVISED_PENDING_DESIGN_REVIEW: 'REVISED_PENDING_DESIGN_REVIEW',
   CONNECTION_CONFIRMED: 'CONNECTION_CONFIRMED',
   CONNECTED: 'CONNECTED',
+  CANCELED: 'CANCELED',
 } as const;
 
 export type ConnectionRequestStatus =
@@ -32,6 +33,7 @@ export const CONNECTION_REQUEST_STATUS_LABELS: Record<ConnectionRequestStatus, s
   [CONNECTION_REQUEST_STATUS.REVISED_PENDING_DESIGN_REVIEW]: 'แก้ไขแล้ว/รอพิจารณาแบบ',
   [CONNECTION_REQUEST_STATUS.CONNECTION_CONFIRMED]: 'ยืนยันการเชื่อมต่อ',
   [CONNECTION_REQUEST_STATUS.CONNECTED]: 'เชื่อมต่อแล้ว',
+  [CONNECTION_REQUEST_STATUS.CANCELED]: 'ยกเลิก',
 };
 
 export type ConnectionSystemType = 'CEMS' | 'WPMS';
@@ -177,8 +179,28 @@ export interface StatusHistoryDTO {
   status: ConnectionRequestStatus;
   statusLabel: string;
   note: string | null;
-  changedBy: number;
+  changedById: number;
+  changedBy: string;
   changedAt: string;
+  endedAt: string | null;
+  durationDays: number | null;
+  durationText: string | null;
+  isTerminal: boolean;
+}
+
+export interface StatusDurationSummaryDTO {
+  startedAt: string | null;
+  startDate: string | null;
+  startStatus: ConnectionRequestStatus | null;
+  startStatusLabel: string | null;
+  endedAt: string | null;
+  endDate: string | null;
+  endStatus: ConnectionRequestStatus | null;
+  endStatusLabel: string | null;
+  isTerminal: boolean;
+  terminalStatuses: ConnectionRequestStatus[];
+  totalDurationDays: number | null;
+  totalDurationText: string | null;
 }
 
 export interface ConnectionRequestDTO {
@@ -217,6 +239,7 @@ export interface ConnectionRequestDTO {
   verifiedAt: string | null;
   measurementPoints: MeasurementPointDTO[];
   statusHistory: StatusHistoryDTO[];
+  statusDurationSummary: StatusDurationSummaryDTO;
   createdBy: number;
   createdAt: string;
   updatedAt: string;
