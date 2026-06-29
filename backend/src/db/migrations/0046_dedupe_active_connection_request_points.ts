@@ -47,8 +47,8 @@ export async function up(knex: Knex): Promise<void> {
       WHERE ranked.duplicate_rank > 1
         AND NOT EXISTS (
           SELECT 1
-          FROM ${BACKUP_TABLE} AS backup
-          WHERE backup.measurement_point_id = ranked.id
+          FROM ${BACKUP_TABLE} AS backup_rows
+          WHERE backup_rows.measurement_point_id = ranked.id
         );
     `);
 
