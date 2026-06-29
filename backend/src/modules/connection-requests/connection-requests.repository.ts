@@ -681,7 +681,6 @@ function buildBaseQuery(
                 .where((aliasBuilder) => {
                   aliasBuilder
                     .whereRaw('mp.point_code = cmp.point_code')
-                    .orWhereRaw('mp.point_name = cmp.point_name')
                     .orWhereRaw('mp.id = cmp.source_measurement_point_id');
                 });
             });

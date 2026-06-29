@@ -21,10 +21,21 @@ describe('connectionRequestsRepository request numbers', () => {
 
     expect(sql).toContain('cems_wpms_connected_measurement_points');
     expect(sql).toContain('cmp.point_code');
-    expect(sql).toContain('cmp.point_name');
+    expect(sql).toContain('[cmp].[point_name]');
     expect(sql).toContain('cmp.source_measurement_point_id');
     expect(sql).toContain('mp.point_code');
-    expect(sql).toContain('mp.point_name');
+    expect(sql).toContain('[mp].[point_name]');
+  });
+
+  it('does not link selected station history by duplicate measurement point names alone', () => {
+    const sql = buildBaseQueryForTests(
+      { stationId: 'S0001' },
+      { actorUserId: 42, scope: 'ALL' },
+    )
+      .toSQL()
+      .sql.toLowerCase();
+
+    expect(sql).not.toContain('mp.point_name = cmp.point_name');
   });
 
   it('keeps operator factory access even when no eligible factory record exists', () => {
