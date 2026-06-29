@@ -1455,10 +1455,14 @@ describe('connectionRequestsService', () => {
           pointName: 'ปล่องระบาย A',
           pointCode: 'STACK-A',
           pointType: 'STACK',
-          latitude: 13.7563,
-          longitude: 100.5018,
+          latitude: null,
+          longitude: null,
           parameters: ['CO (ppm)'],
           description: null,
+          details: {
+            stackLatitude: 13.7563,
+            stackLongitude: 100.5018,
+          },
         },
       ],
     });

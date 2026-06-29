@@ -417,8 +417,8 @@ export const connectionRequestsService = {
         measurementPoints: result.data.measurementPoints.map((measurementPoint) => ({
           ...measurementPoint,
           pointName: point.point.pointName,
-          latitude: point.point.latitude ?? null,
-          longitude: point.point.longitude ?? null,
+          latitude: measurementPointLatitude(point.point),
+          longitude: measurementPointLongitude(point.point),
         })),
       },
     };
@@ -776,6 +776,39 @@ function toMeasurementPointInput(point: MeasurementPointDTO): MeasurementPointIn
     documentsAndImages: point.documentsAndImages,
     measurementInstruments: point.measurementInstruments,
   };
+}
+
+function measurementPointLatitude(point: MeasurementPointDTO): number | null {
+  return (
+    point.latitude ??
+    coordinateFromDetails(point.details, 'stackLatitude') ??
+    coordinateFromDetails(point.details, 'instrumentLatitude')
+  );
+}
+
+function measurementPointLongitude(point: MeasurementPointDTO): number | null {
+  return (
+    point.longitude ??
+    coordinateFromDetails(point.details, 'stackLongitude') ??
+    coordinateFromDetails(point.details, 'instrumentLongitude')
+  );
+}
+
+function coordinateFromDetails(
+  details: MeasurementPointDTO['details'],
+  key: string,
+): number | null {
+  if (!details || typeof details !== 'object' || Array.isArray(details)) return null;
+
+  const value = (details as Record<string, unknown>)[key];
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === 'string') {
+    const parsed = Number(value.trim());
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
 }
 
 function toRequestTableRow(

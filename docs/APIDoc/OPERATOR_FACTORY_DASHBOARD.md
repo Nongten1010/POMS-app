@@ -252,6 +252,8 @@ Response หลัก: `data.factory`, `data.thresholds[]`, `data.measurementPoi
 
 `data.measurementPoints[]` คืนรายละเอียดจุดตรวจวัดที่เลือกพร้อมข้อมูลสถิติ ได้แก่ `pointCode`, `stationId`, `pointName`, `latitude`, `longitude`, `date`, และ `rows[]`
 
+`latitude`/`longitude` ใช้ค่าจาก `cems_wpms_measurement_points.latitude/longitude` ก่อน ถ้าไม่มีค่า จะ fallback ไปที่ `details.stackLatitude/stackLongitude` สำหรับ CEMS หรือ `details.instrumentLatitude/instrumentLongitude` สำหรับ WPMS
+
 หมายเหตุ `data.thresholds[]`: ต้องคืนรายการตามพารามิเตอร์ที่ถูกตั้งค่าไว้สำหรับจุดตรวจวัดนั้น เช่น `CO (ppm)`, `NOx (ppm)`, `Temp. (°C)` แม้บางพารามิเตอร์ยังไม่มีค่าเกณฑ์มาตรฐานครบ ให้คงแถวนั้นไว้และส่ง `normalMax: null`, `warningMax: null` เพื่อให้ frontend สร้าง column ได้ครบ ไม่ drop พารามิเตอร์ออกจากหน้าจอ
 
 ตัวอย่าง response:

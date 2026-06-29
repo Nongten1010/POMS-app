@@ -42,6 +42,47 @@ Risk:
 
 - fallback index `3` อิงกับลำดับเอกสารของ frontend ปัจจุบัน หากลำดับฟอร์ม CEMS เปลี่ยน ควรอัปเดต logic หรือใช้ title เป็นหลักต่อไป
 
+## Measurement Statistics
+
+Endpoint: `GET /api/v1/connected-measurement-points/:stationId/measurement-statistics`
+
+Code:
+
+- `backend/src/modules/connection-requests/connection-requests.service.ts`
+- `backend/src/modules/connection-requests/connection-requests.repository.ts`
+
+### `data.measurementPoints[].latitude` / `data.measurementPoints[].longitude`
+
+Source:
+
+- `dbo.cems_wpms_measurement_points.latitude`
+- `dbo.cems_wpms_measurement_points.longitude`
+- fallback `dbo.cems_wpms_measurement_points.details_json.stackLatitude`
+- fallback `dbo.cems_wpms_measurement_points.details_json.stackLongitude`
+- fallback `dbo.cems_wpms_measurement_points.details_json.instrumentLatitude`
+- fallback `dbo.cems_wpms_measurement_points.details_json.instrumentLongitude`
+
+Fallback order:
+
+- `latitude`: `latitude -> details.stackLatitude -> details.instrumentLatitude -> null`
+- `longitude`: `longitude -> details.stackLongitude -> details.instrumentLongitude -> null`
+
+Transformation:
+
+- Numeric DB values are returned as numbers.
+- String values from `details_json` are parsed to numbers.
+- Empty, missing, or non-numeric values return `null`.
+
+Reason:
+
+- Existing request forms store CEMS stack coordinates in `details_json.stackLatitude/stackLongitude` and WPMS instrument coordinates in `details_json.instrumentLatitude/instrumentLongitude`.
+- Older rows may have `cems_wpms_measurement_points.latitude/longitude` as `NULL` even though the request detail page has coordinates in `details_json`.
+
+Known risks:
+
+- If both the top-level columns and `details_json` values exist but differ, the top-level columns win.
+- The fallback depends on the current frontend field names in request details.
+
 ## Eligible Factory Candidates
 
 Endpoint: `GET /api/v1/eligible-factories/candidates`
