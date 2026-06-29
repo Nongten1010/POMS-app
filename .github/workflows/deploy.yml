@@ -34,10 +34,19 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          clean: false
 
       - name: Trust runner workspace
         run: |
           git config --global --add safe.directory "$env:GITHUB_WORKSPACE"
+
+      - name: Clean runner workspace except dependency installs
+        run: |
+          git reset --hard HEAD
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          git clean -ffdx -e backend/node_modules/ -e frontend/node_modules/
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Detect changed paths
         id: changes
@@ -61,12 +70,22 @@ jobs:
 
           $frontendChanged = $files | Where-Object { $_ -like 'frontend/*' }
           $backendChanged = $files | Where-Object { $_ -like 'backend/*' }
+          $frontendDepsChanged = $files | Where-Object {
+            $_ -eq 'frontend/package.json' -or $_ -eq 'frontend/package-lock.json'
+          }
+          $backendDepsChanged = $files | Where-Object {
+            $_ -eq 'backend/package.json' -or $_ -eq 'backend/package-lock.json'
+          }
 
           $frontend = if ($frontendChanged) { 'true' } else { 'false' }
           $backend = if ($backendChanged) { 'true' } else { 'false' }
+          $frontendDeps = if ($frontendDepsChanged) { 'true' } else { 'false' }
+          $backendDeps = if ($backendDepsChanged) { 'true' } else { 'false' }
 
           "frontend_changed=$frontend" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           "backend_changed=$backend" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "frontend_deps_changed=$frontendDeps" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "backend_deps_changed=$backendDeps" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
       - name: Update server git checkout
         if: steps.changes.outputs.frontend_changed == 'true' || steps.changes.outputs.backend_changed == 'true'
@@ -113,8 +132,13 @@ jobs:
 
           Copy-Item $sourceEnv $workspaceEnv -Force
 
-          npm ci
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ("${{ steps.changes.outputs.frontend_deps_changed }}" -eq 'true' -or !(Test-Path ".\node_modules")) {
+            Write-Host "Installing frontend dependencies with npm ci."
+            npm ci
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } else {
+            Write-Host "Reusing existing frontend node_modules; package files did not change."
+          }
 
           npm run build
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -158,8 +182,13 @@ jobs:
         working-directory: backend
         timeout-minutes: 20
         run: |
-          npm ci
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ("${{ steps.changes.outputs.backend_deps_changed }}" -eq 'true' -or !(Test-Path ".\node_modules")) {
+            Write-Host "Installing backend dependencies with npm ci."
+            npm ci
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } else {
+            Write-Host "Reusing existing backend node_modules; package files did not change."
+          }
 
           npm run typecheck
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -192,12 +221,20 @@ jobs:
           Copy-Item ".\backend\package.json" $env:BACKEND_RELEASE -Force
           Copy-Item ".\backend\package-lock.json" $env:BACKEND_RELEASE -Force
 
-          Push-Location $env:BACKEND_RELEASE
-          try {
-            npm ci --omit=dev
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          } finally {
-            Pop-Location
+          $targetNodeModules = Join-Path $env:BACKEND_TARGET 'node_modules'
+          $installProductionDeps = "${{ steps.changes.outputs.backend_deps_changed }}" -eq 'true' -or !(Test-Path $targetNodeModules)
+
+          if ($installProductionDeps) {
+            Push-Location $env:BACKEND_RELEASE
+            try {
+              Write-Host "Installing backend production dependencies with npm ci --omit=dev."
+              npm ci --omit=dev
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            } finally {
+              Pop-Location
+            }
+          } else {
+            Write-Host "Reusing existing backend production node_modules; package files did not change."
           }
 
           robocopy ".\backend\dist" (Join-Path $env:BACKEND_RELEASE 'dist') /MIR /R:3 /W:5 /NFL /NDL /NP
@@ -215,14 +252,16 @@ jobs:
           Copy-Item (Join-Path $env:BACKEND_RELEASE 'package.json') $env:BACKEND_TARGET -Force
           Copy-Item (Join-Path $env:BACKEND_RELEASE 'package-lock.json') $env:BACKEND_TARGET -Force
 
-          robocopy (Join-Path $env:BACKEND_RELEASE 'node_modules') (Join-Path $env:BACKEND_TARGET 'node_modules') /MIR /R:3 /W:5 /NFL /NDL /NP
-          $robocopyExit = $LASTEXITCODE
+          if ($installProductionDeps) {
+            robocopy (Join-Path $env:BACKEND_RELEASE 'node_modules') (Join-Path $env:BACKEND_TARGET 'node_modules') /MIR /R:3 /W:5 /NFL /NDL /NP
+            $robocopyExit = $LASTEXITCODE
 
-          if ($robocopyExit -gt 7) {
-            throw "robocopy node_modules failed with exit code $robocopyExit"
+            if ($robocopyExit -gt 7) {
+              throw "robocopy node_modules failed with exit code $robocopyExit"
+            }
+
+            $global:LASTEXITCODE = 0
           }
-
-          $global:LASTEXITCODE = 0
 
           robocopy (Join-Path $env:BACKEND_RELEASE 'dist') (Join-Path $env:BACKEND_TARGET 'dist') /MIR /R:3 /W:5 /NFL /NDL /NP
           $robocopyExit = $LASTEXITCODE
