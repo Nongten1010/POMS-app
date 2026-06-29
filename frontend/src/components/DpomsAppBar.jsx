@@ -14,6 +14,8 @@ import LogoutIcon from '@mui/icons-material/Logout'
 import MenuIcon from '@mui/icons-material/Menu'
 import logo from '../assets/logo.png'
 
+const APP_VERSION = 'v1.4'
+
 function DpomsAppBar({
   isAuthenticated = false,
   user = {
@@ -89,7 +91,7 @@ function DpomsAppBar({
                 color="text.secondary"
                 sx={{ flex: '0 0 auto', fontSize: 11, lineHeight: 1 }}
               >
-                v1.4
+                {APP_VERSION}
               </Typography>
             </Stack>
             <Typography
