@@ -414,6 +414,12 @@ export const connectionRequestsService = {
       data: {
         ...result.data,
         factory: toMeasurementDetailFactory(point),
+        measurementPoints: result.data.measurementPoints.map((measurementPoint) => ({
+          ...measurementPoint,
+          pointName: point.point.pointName,
+          latitude: point.point.latitude ?? null,
+          longitude: point.point.longitude ?? null,
+        })),
       },
     };
   },

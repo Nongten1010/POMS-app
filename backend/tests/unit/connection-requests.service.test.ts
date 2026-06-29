@@ -34,6 +34,7 @@ jest.mock('../../src/modules/parameter-values/parameter-values.service', () => (
   parameterValuesService: {
     calendarStatus: jest.fn(),
     latestHourly: jest.fn(),
+    measurementStatistics: jest.fn(),
   },
 }));
 
@@ -140,6 +141,33 @@ describe('connectionRequestsService', () => {
         count: 0,
         registeredParameters: [],
         returnedColumns: [],
+      },
+    });
+    mockedParameterValuesService.measurementStatistics.mockResolvedValue({
+      data: {
+        metadata: {
+          description: 'สถิติรายชั่วโมงสำหรับตารางสถิติข้อมูลและกราฟแนวโน้มสถานการณ์มลพิษ',
+          date: '2026-06-09',
+          valueDefinitions: {},
+        },
+        thresholds: [],
+        measurementPoints: [
+          {
+            pointCode: 'STACK-A',
+            stationId: 'STACK-A',
+            date: '2026-06-09',
+            rows: [],
+          },
+        ],
+      },
+      meta: {
+        stationId: 'STACK-A',
+        interval: '60m',
+        schemaName: 'ingest',
+        tableName: 'STACK-A_data_60m',
+        date: '2026-06-09',
+        count: 0,
+        registeredParameters: [],
       },
     });
     mockedParameterValuesService.calendarStatus.mockResolvedValue({
@@ -1413,6 +1441,54 @@ describe('connectionRequestsService', () => {
     expect(result).toMatchObject({
       data: [{ point: { pointCode: 'STACK-B' } }],
       meta: { total: 1 },
+    });
+  });
+
+  it('adds connected point name and coordinates to measurement statistics points', async () => {
+    const request = requestDto({
+      status: CONNECTION_REQUEST_STATUS.CONNECTED,
+      statusLabel: 'เชื่อมต่อแล้ว',
+      verifiedAt: '2026-05-29T10:00:00.000Z',
+      measurementPoints: [
+        {
+          id: 1,
+          pointName: 'ปล่องระบาย A',
+          pointCode: 'STACK-A',
+          pointType: 'STACK',
+          latitude: 13.7563,
+          longitude: 100.5018,
+          parameters: ['CO (ppm)'],
+          description: null,
+        },
+      ],
+    });
+    mockedRepository.list.mockResolvedValue({ rows: [request], total: 1 });
+    mockedRepository.findFactorySummariesForRequests.mockResolvedValue(
+      new Map([[request.factoryId, factorySummary()]]),
+    );
+
+    const result = await connectionRequestsService.getMeasurementStatistics(
+      'STACK-A',
+      { date: '2026-06-09' },
+      actorUserId,
+      'ALL',
+    );
+
+    expect(mockedParameterValuesService.measurementStatistics).toHaveBeenCalledWith(
+      { stationId: 'STACK-A', date: '2026-06-09' },
+      { actorUserId, scope: 'ALL' },
+      expect.objectContaining({
+        parameterEvaluations: expect.arrayContaining([
+          expect.objectContaining({ parameter: 'CO (ppm)' }),
+        ]),
+      }),
+    );
+    expect(result.data.measurementPoints[0]).toMatchObject({
+      pointCode: 'STACK-A',
+      stationId: 'STACK-A',
+      pointName: 'ปล่องระบาย A',
+      latitude: 13.7563,
+      longitude: 100.5018,
     });
   });
 

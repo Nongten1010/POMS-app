@@ -248,7 +248,9 @@ GET /api/v1/connected-measurement-points/S0001/measurement-statistics?date=2026-
 | --- | --- | --- | --- |
 | `date` | query string | Yes | วันที่รูปแบบ `YYYY-MM-DD` |
 
-Response หลัก: `data.factory`, `data.thresholds[]`, `data.measurementPoints[].rows[]`, `meta.tableName`, `meta.registeredParameters`
+Response หลัก: `data.factory`, `data.thresholds[]`, `data.measurementPoints[]`, `data.measurementPoints[].rows[]`, `meta.tableName`, `meta.registeredParameters`
+
+`data.measurementPoints[]` คืนรายละเอียดจุดตรวจวัดที่เลือกพร้อมข้อมูลสถิติ ได้แก่ `pointCode`, `stationId`, `pointName`, `latitude`, `longitude`, `date`, และ `rows[]`
 
 หมายเหตุ `data.thresholds[]`: ต้องคืนรายการตามพารามิเตอร์ที่ถูกตั้งค่าไว้สำหรับจุดตรวจวัดนั้น เช่น `CO (ppm)`, `NOx (ppm)`, `Temp. (°C)` แม้บางพารามิเตอร์ยังไม่มีค่าเกณฑ์มาตรฐานครบ ให้คงแถวนั้นไว้และส่ง `normalMax: null`, `warningMax: null` เพื่อให้ frontend สร้าง column ได้ครบ ไม่ drop พารามิเตอร์ออกจากหน้าจอ
 
@@ -290,6 +292,9 @@ Response หลัก: `data.factory`, `data.thresholds[]`, `data.measurementPoi
       {
         "pointCode": "S0001",
         "stationId": "S0001",
+        "pointName": "ปล่องระบาย S0001",
+        "latitude": 13.7563,
+        "longitude": 100.5018,
         "date": "2026-06-09",
         "rows": [
           {

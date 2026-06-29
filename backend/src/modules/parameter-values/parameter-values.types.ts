@@ -153,6 +153,9 @@ export interface MeasurementStatisticsDTO {
   measurementPoints: Array<{
     pointCode: string;
     stationId: string;
+    pointName?: string;
+    latitude?: number | null;
+    longitude?: number | null;
     date: string;
     rows: MeasurementStatisticRowDTO[];
   }>;

@@ -210,7 +210,17 @@ describe('connected measurement points route', () => {
           systemType: 'CEMS',
         },
         thresholds: [],
-        measurementPoints: [],
+        measurementPoints: [
+          {
+            pointCode: 'S0001',
+            stationId: 'S0001',
+            pointName: 'ปล่องระบาย S0001',
+            latitude: 13.7563,
+            longitude: 100.5018,
+            date: '2026-06-09',
+            rows: [],
+          },
+        ],
       },
       meta: {
         stationId: 'S0001',
@@ -389,6 +399,15 @@ describe('connected measurement points route', () => {
         factory: {
           factoryId: 'factory-001',
         },
+        measurementPoints: [
+          {
+            pointCode: 'S0001',
+            stationId: 'S0001',
+            pointName: 'ปล่องระบาย S0001',
+            latitude: 13.7563,
+            longitude: 100.5018,
+          },
+        ],
       },
       meta: {
         stationId: 'S0001',

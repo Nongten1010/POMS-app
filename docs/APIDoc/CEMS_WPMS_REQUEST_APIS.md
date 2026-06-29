@@ -97,7 +97,7 @@ Mapping:
 | ตั้งค่า | `GET /api/v1/connected-measurement-points/:stationId/device-configs` | คืน config ปัจจุบันจาก active settings ของจุดตรวจวัดที่เลือก |
 | ตั้งค่า | `POST /api/v1/connected-measurement-points/:stationId/device-configs` | บันทึก active settings ปัจจุบัน; payload ใช้รูปแบบเดียวกับ device config เดิม และ `stationId` ใน payload ต้องตรงกับ path |
 | ดูรายละเอียด | `GET /api/v1/connected-measurement-points/:stationId/calendar-status?month=2026-06` | คืนข้อมูลทำ DateCalendar รายเดือนจากตาราง `{stationId}_data_60m` |
-| ดูรายละเอียด | `GET /api/v1/connected-measurement-points/:stationId/measurement-statistics?date=2026-06-09` | คืนข้อมูลกราฟและตารางรายชั่วโมงจากตาราง `{stationId}_data_60m`; `data.thresholds[]` ต้องคงพารามิเตอร์ที่ตั้งค่าไว้ครบ แม้ไม่มีค่าเกณฑ์ โดยส่ง `normalMax: null`, `warningMax: null` |
+| ดูรายละเอียด | `GET /api/v1/connected-measurement-points/:stationId/measurement-statistics?date=2026-06-09` | คืนข้อมูลกราฟและตารางรายชั่วโมงจากตาราง `{stationId}_data_60m`; `data.measurementPoints[]` มี `pointName`, `latitude`, `longitude`; `data.thresholds[]` ต้องคงพารามิเตอร์ที่ตั้งค่าไว้ครบ แม้ไม่มีค่าเกณฑ์ โดยส่ง `normalMax: null`, `warningMax: null` |
 
 รายละเอียด API ของหน้าดูรายละเอียดอยู่ใน [`OPERATOR_FACTORY_DASHBOARD.md`](./OPERATOR_FACTORY_DASHBOARD.md#detail-page-apis)
 

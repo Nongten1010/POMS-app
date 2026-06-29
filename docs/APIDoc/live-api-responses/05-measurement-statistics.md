@@ -35,6 +35,9 @@ Response sample:
       {
         "pointCode": "P0001",
         "stationId": "P0001",
+        "pointName": "จุดตรวจวัด P0001",
+        "latitude": null,
+        "longitude": null,
         "date": "2026-06-09",
         "rows": [
           {
@@ -96,6 +99,9 @@ Response sample:
       {
         "pointCode": "S0001",
         "stationId": "S0001",
+        "pointName": "จุดตรวจวัด S0001",
+        "latitude": null,
+        "longitude": null,
         "date": "2026-06-09",
         "rows": [
           {
@@ -130,4 +136,3 @@ Response sample:
 ```
 
 Observation: meta มี `CO2 (%)` และ `CO2 (ppm)` แต่ `values` มี key เดียวคือ `CO2`.
-
