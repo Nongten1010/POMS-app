@@ -438,8 +438,9 @@ const connectionRequestFormObjectSchema = z
   })
   .strict();
 
-const connectionRequestFormBaseSchema =
-  connectionRequestFormObjectSchema.superRefine(validateContactSection);
+const connectionRequestFormBaseSchema = connectionRequestFormObjectSchema.superRefine(
+  validateConnectionRequestFormBase,
+);
 
 const connectionRequestFormSchema = connectionRequestFormBaseSchema.transform((payload) =>
   normalizeContacts(normalizeFactorySnapshot(stripFrontendSystemTypeAlias(payload))),
@@ -475,6 +476,14 @@ function validateContactSection(
       message: 'At least one contact person or contactName/contactPhone is required',
     });
   }
+}
+
+function validateConnectionRequestFormBase(
+  payload: ContactFormPayload,
+  ctx: z.RefinementCtx,
+): void {
+  validateContactSection(payload, ctx);
+  validateUniqueMeasurementPoints(payload.measurementPoints, ctx);
 }
 
 function stripFrontendSystemTypeAlias<T extends { type?: unknown }>(payload: T): Omit<T, 'type'> {
@@ -716,6 +725,8 @@ function validateMeasurementPointFormSections(
   ctx: z.RefinementCtx,
   options: { requireExistingPointCode?: boolean } = {},
 ): void {
+  validateUniqueMeasurementPoints(payload.measurementPoints, ctx);
+
   payload.measurementPoints.forEach((point, index) => {
     if (options.requireExistingPointCode && !point.pointCode) {
       ctx.addIssue({
@@ -747,6 +758,46 @@ function validateMeasurementPointFormSections(
     }
     validateMeasurementPointDetailsBySystem(payload.systemType, point, index, ctx);
   });
+}
+
+function validateUniqueMeasurementPoints(
+  measurementPoints: ContactFormPayloadWithoutRequestType['measurementPoints'],
+  ctx: z.RefinementCtx,
+): void {
+  const pointNameIndexes = new Map<string, number>();
+  const pointCodeIndexes = new Map<string, number>();
+
+  measurementPoints.forEach((point, index) => {
+    const pointName = normalizedDuplicateKey(point.pointName);
+    const previousPointNameIndex = pointNameIndexes.get(pointName);
+    if (previousPointNameIndex !== undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['measurementPoints', index, 'pointName'],
+        message: `Measurement point name duplicates measurementPoints.${previousPointNameIndex}.pointName`,
+      });
+    } else {
+      pointNameIndexes.set(pointName, index);
+    }
+
+    const pointCode = normalizedDuplicateKey(point.pointCode);
+    if (!pointCode) return;
+
+    const previousPointCodeIndex = pointCodeIndexes.get(pointCode);
+    if (previousPointCodeIndex !== undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['measurementPoints', index, 'pointCode'],
+        message: `Measurement point code duplicates measurementPoints.${previousPointCodeIndex}.pointCode`,
+      });
+    } else {
+      pointCodeIndexes.set(pointCode, index);
+    }
+  });
+}
+
+function normalizedDuplicateKey(value: string | null | undefined): string {
+  return value?.trim().toLowerCase() ?? '';
 }
 
 export const createConnectionRequestSchema = connectionRequestFormSchema.transform((payload) => ({

@@ -718,6 +718,22 @@ describe('connection request validators', () => {
     expect(result.success).toBe(false);
   });
 
+  it('rejects duplicated measurement point names in the same request', () => {
+    const result = createConnectionRequestSchema.safeParse({
+      ...validPayload,
+      measurementPoints: [
+        validPayload.measurementPoints[0],
+        {
+          ...validPayload.measurementPoints[0],
+          pointCode: 'S0002',
+          pointName: ' ปล่องระบาย A ',
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+  });
+
   it('rejects invalid coordinates', () => {
     const result = createConnectionRequestSchema.safeParse({
       ...validPayload,

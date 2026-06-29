@@ -1,6 +1,7 @@
 import { describe, expect, it } from '@jest/globals';
 import {
   buildBaseQueryForTests,
+  buildDuplicateActiveMeasurementPointCleanupSqlForTests,
   buildFactoriesForAccessQueryForTests,
   buildRequestNoPrefix,
 } from '../../src/modules/connection-requests/connection-requests.repository';
@@ -51,5 +52,15 @@ describe('connectionRequestsRepository request numbers', () => {
     expect(sql).toContain('[ef].[factory_registration_no_new] = [f].[code]');
     expect(sql).toContain('[ef].[source_factory_id] = [f].[fid]');
     expect(sql).toContain('[ef].[deleted_at] is null');
+  });
+
+  it('soft-deletes duplicate active measurement points before issuing station codes', () => {
+    const sql = buildDuplicateActiveMeasurementPointCleanupSqlForTests().toLowerCase();
+
+    expect(sql).toContain('row_number() over');
+    expect(sql).toContain('partition by request_id, lower(ltrim(rtrim(point_name)))');
+    expect(sql).toContain("nullif(ltrim(rtrim(point_code)), '') is null");
+    expect(sql).toContain('deleted_at = sysdatetime()');
+    expect(sql).toContain('where ranked.duplicate_rank > 1');
   });
 });

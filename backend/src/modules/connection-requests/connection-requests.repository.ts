@@ -513,6 +513,7 @@ export const connectionRequestsRepository = {
   ): Promise<ConnectionRequestDTO> {
     return db.transaction(async (trx) => {
       if (status === 'WAITING_CONNECTION') {
+        await softDeleteDuplicateActiveMeasurementPoints(trx, id, actorUserId);
         await issuePointCodesForRequest(trx, id, actorUserId);
       }
 
@@ -1004,6 +1005,43 @@ function getConnectedMeasurementPointParameters(point: MeasurementPointDTO): str
       ?.map((parameter) => parameter.parameter)
       .filter((parameter): parameter is string => Boolean(parameter)) ?? [];
   return instrumentParameters.length > 0 ? instrumentParameters : point.parameters;
+}
+
+const SOFT_DELETE_DUPLICATE_ACTIVE_MEASUREMENT_POINTS_SQL = `
+WITH ranked_points AS (
+  SELECT
+    id,
+    ROW_NUMBER() OVER (
+      PARTITION BY request_id, LOWER(LTRIM(RTRIM(point_name)))
+      ORDER BY
+        CASE WHEN NULLIF(LTRIM(RTRIM(point_code)), '') IS NULL THEN 1 ELSE 0 END,
+        id ASC
+    ) AS duplicate_rank
+  FROM cems_wpms_measurement_points
+  WHERE request_id = ?
+    AND deleted_at IS NULL
+)
+UPDATE mp
+SET
+  deleted_at = SYSDATETIME(),
+  updated_at = SYSDATETIME(),
+  updated_by = ?
+FROM cems_wpms_measurement_points AS mp
+JOIN ranked_points AS ranked
+  ON ranked.id = mp.id
+WHERE ranked.duplicate_rank > 1;
+`;
+
+export function buildDuplicateActiveMeasurementPointCleanupSqlForTests(): string {
+  return SOFT_DELETE_DUPLICATE_ACTIVE_MEASUREMENT_POINTS_SQL;
+}
+
+async function softDeleteDuplicateActiveMeasurementPoints(
+  trx: Knex.Transaction,
+  requestId: number,
+  actorUserId: number,
+): Promise<void> {
+  await trx.raw(SOFT_DELETE_DUPLICATE_ACTIVE_MEASUREMENT_POINTS_SQL, [requestId, actorUserId]);
 }
 
 async function findConnectedPointForMeasurementPoint(
