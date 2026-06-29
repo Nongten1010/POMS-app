@@ -193,6 +193,11 @@ Required information before pushing:
 - Whether to push directly or open a pull request
 - Commit message, or a concise message inferred from the requested work when the user does not provide one
 
+Push modes:
+
+- Narrow push: use when the user asks to push only the work just completed. Copy or stage only the files needed for that task.
+- Full frontend sync: use when the user explicitly says to sync the project with GitHub using local files as the source of truth. In this mode, the local workspace replaces the destination `frontend` folder.
+
 Recommended push steps:
 
 1. Confirm the local project is ready.
@@ -214,6 +219,21 @@ Recommended push steps:
 
 5. Sync the frontend project into the destination folder.
    - Use a scoped sync that excludes local-only and generated files.
+   - For full frontend sync from this workspace, use the local project root as the source and exclude secrets/local artifacts:
+
+```bash
+rsync -a --delete \
+  --exclude '.git/' \
+  --exclude 'node_modules/' \
+  --exclude 'dist/' \
+  --exclude '.DS_Store' \
+  --exclude '.env' \
+  --exclude '.env.*' \
+  /Users/panulaosuwan/Desktop/Project/d-poms/ \
+  /tmp/poms-app-push.<suffix>/frontend/
+```
+
+   - For a narrow push, copy or sync only the intended files when possible.
    - Example:
 
 ```bash
@@ -222,6 +242,8 @@ rsync -a --delete \
   --exclude 'node_modules/' \
   --exclude 'dist/' \
   --exclude '.DS_Store' \
+  --exclude '.env' \
+  --exclude '.env.*' \
   /path/to/local/frontend/ \
   /tmp/poms-app-push.<suffix>/frontend/
 ```
@@ -232,10 +254,13 @@ rsync -a --delete \
    - Run `npm run build`.
    - Report warnings such as Vite bundle-size warnings, but they do not block push unless they indicate a real failure.
 
-7. Stage only the intended destination folder.
-   - Prefer `git add frontend`.
+7. Stage the intended change set.
+   - For full frontend sync, stage the whole destination folder with `git add frontend`.
+   - For narrow pushes, stage only the intended files for the task.
    - Check `git status -sb` and `git diff --cached --stat` before committing.
    - Do not stage unrelated backend, docs, root, or user changes.
+   - Confirm no `.env*`, `node_modules`, `dist`, or `.DS_Store` files are staged.
+   - In full frontend sync mode, file deletions in GitHub are expected when those files do not exist locally.
 
 8. Commit and push.
    - Commit with a concise message, for example `Update frontend app`.

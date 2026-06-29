@@ -38,6 +38,7 @@ import {
 import AddIcon from '@mui/icons-material/Add'
 import CloseIcon from '@mui/icons-material/Close'
 import FileDownloadIcon from '@mui/icons-material/FileDownload'
+import HistoryIcon from '@mui/icons-material/History'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import UploadFileIcon from '@mui/icons-material/UploadFile'
 import WarningAmberIcon from '@mui/icons-material/WarningAmber'
@@ -870,6 +871,85 @@ function getLatestRevisionMessage(request = {}) {
     ?? ''
 }
 
+function getStatusHistoryDate(item = {}) {
+  return item.changedAt ?? null
+}
+
+function getStatusHistoryLabel(item = {}) {
+  return item.statusLabel ?? item.statusName ?? item.label ?? item.status ?? item.statusCode ?? '-'
+}
+
+function getStatusHistoryRecorder(item = {}) {
+  return item.changedByName
+    ?? item.changedByFullName
+    ?? item.createdByName
+    ?? item.updatedByName
+    ?? item.recorderName
+    ?? item.userName
+    ?? item.changedBy
+    ?? item.createdBy
+    ?? '-'
+}
+
+function getStatusHistoryNote(item = {}) {
+  return item.revisionReason ?? item.officerNote ?? item.note ?? ''
+}
+
+function formatStatusHistoryDate(value) {
+  if (!value) return '-'
+
+  if (typeof value === 'string') {
+    const datePartMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})/)
+    if (datePartMatch) {
+      const [, year, month, day] = datePartMatch
+      return `${day}/${month}/${Number(year) + 543}`
+    }
+  }
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '-'
+
+  return new Intl.DateTimeFormat('th-TH-u-ca-buddhist', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(date)
+}
+
+function formatStatusHistoryDuration(startValue, endValue, fallbackValue) {
+  if (fallbackValue) return fallbackValue
+  if (!startValue || !endValue) return ''
+
+  const startDate = new Date(startValue)
+  const endDate = new Date(endValue)
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) return ''
+
+  const diffMs = Math.max(0, endDate.getTime() - startDate.getTime())
+  const totalDays = Math.max(1, Math.ceil(diffMs / 86_400_000))
+
+  return `${totalDays} วัน`
+}
+
+function getStatusHistoryItems(history = []) {
+  return history
+    .filter(Boolean)
+    .map((item, index) => ({
+      ...item,
+      __index: index,
+      __date: getStatusHistoryDate(item),
+    }))
+    .sort((a, b) => {
+      const dateA = a.__date ? new Date(a.__date).getTime() : 0
+      const dateB = b.__date ? new Date(b.__date).getTime() : 0
+
+      if (dateA !== dateB) {
+        return dateA - dateB
+      }
+
+      return Number(a.id ?? a.__index) - Number(b.id ?? b.__index)
+    })
+}
+
 function withFormIds(items = []) {
   return items.length ? items.map((item, index) => ({ ...item, id: item.id ?? index + 1 })) : [{ id: 1 }]
 }
@@ -1557,7 +1637,22 @@ function MonitoringPointListDialog({ open, factory, isOperator, accessToken, onO
   return (
     <>
       <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg">
-        <DialogTitle>รายการจุดตรวจวัด{factory?.factoryName ? ` - ${factory.factoryName}` : ''}</DialogTitle>
+        <DialogTitle
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 2,
+            pr: 2,
+          }}
+        >
+          <Typography component="span" variant="h6" sx={{ minWidth: 0 }}>
+            รายการจุดตรวจวัด{factory?.factoryName ? ` - ${factory.factoryName}` : ''}
+          </Typography>
+          <IconButton aria-label="ปิด" size="small" onClick={onClose}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
         <DialogContent dividers>
           {loading ? (
             <Typography variant="body2" sx={{ mb: 2 }}>
@@ -1625,11 +1720,6 @@ function MonitoringPointListDialog({ open, factory, isOperator, accessToken, onO
           </Table>
         </TableContainer>
       </DialogContent>
-      <DialogActions>
-        <Button color="inherit" onClick={onClose}>
-          ปิด
-        </Button>
-      </DialogActions>
       </Dialog>
       <ConnectedPointRequestsDialog
         open={pointDetailOpen}
@@ -2353,6 +2443,103 @@ function isConnectionConfirmed(request) {
     || [request?.status, request?.statusLabel, request?.statusCode].includes('CONNECTION_CONFIRMED')
 }
 
+function StatusHistoryDialog({ open, history = [], onClose }) {
+  const items = useMemo(() => getStatusHistoryItems(history), [history])
+
+  return (
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
+      <DialogTitle
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 2,
+        }}
+      >
+        ประวัติสถานะ
+        <IconButton aria-label="ปิด" onClick={onClose} size="small">
+          <CloseIcon />
+        </IconButton>
+      </DialogTitle>
+      <DialogContent dividers>
+        {items.length ? (
+          <Stack spacing={0}>
+            {items.map((item, index) => {
+              const nextItem = items[index + 1]
+              const duration = formatStatusHistoryDuration(
+                item.__date,
+                nextItem?.__date,
+                item.durationLabel ?? item.durationText ?? item.duration,
+              )
+              const note = getStatusHistoryNote(item)
+              const title = `${getStatusHistoryLabel(item)}${duration ? ` (${duration})` : ''}`
+
+              return (
+                <Box
+                  key={item.id ?? `${item.status ?? 'status'}-${index}`}
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: '24px minmax(0, 1fr)',
+                    columnGap: 1.5,
+                  }}
+                >
+                  <Box sx={{ position: 'relative', display: 'flex', justifyContent: 'center' }}>
+                    <Box
+                      sx={{
+                        width: 12,
+                        height: 12,
+                        mt: 0.75,
+                        borderRadius: '50%',
+                        bgcolor: 'primary.main',
+                        border: 2,
+                        borderColor: 'background.paper',
+                        boxShadow: '0 0 0 1px',
+                        color: 'primary.main',
+                        zIndex: 1,
+                      }}
+                    />
+                    {index < items.length - 1 ? (
+                      <Box
+                        sx={{
+                          position: 'absolute',
+                          top: 22,
+                          bottom: 0,
+                          width: 2,
+                          bgcolor: 'divider',
+                        }}
+                      />
+                    ) : null}
+                  </Box>
+                  <Box sx={{ pb: index < items.length - 1 ? 2.5 : 0 }}>
+                    <Typography sx={{ fontWeight: 600 }}>{title}</Typography>
+                    {note ? (
+                      <Typography variant="body2" sx={{ mt: 0.75, whiteSpace: 'pre-line' }}>
+                        หมายเหตุ: {note}
+                      </Typography>
+                    ) : null}
+                    <Stack spacing={0.25} sx={{ mt: note ? 1.5 : 0.75 }}>
+                      <Typography variant="body2" color="text.secondary">
+                        วันที่: {formatStatusHistoryDate(item.__date)}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        ผู้บันทึก: {displayValue(getStatusHistoryRecorder(item), '-')}
+                      </Typography>
+                    </Stack>
+                  </Box>
+                </Box>
+              )
+            })}
+          </Stack>
+        ) : (
+          <Typography variant="body2" color="text.secondary">
+            ไม่มีประวัติสถานะ
+          </Typography>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function RequestDocumentDialog({
   open,
   request,
@@ -2397,6 +2584,9 @@ function RequestDocumentDialog({
   ]
   const canReview = mode === 'process' && isPendingDesignReview(request)
   const canVerifyConnection = mode === 'process' && isConnectionConfirmed(request)
+  const [statusHistoryOpen, setStatusHistoryOpen] = useState(false)
+  const statusHistory = Array.isArray(request?.statusHistory) ? request.statusHistory : []
+  const isReadonlyViewDialog = mode === 'view' && !footerContent && !footerActions
   const isRevisedPendingReview = mode === 'process'
     && (
       [request?.status, request?.statusLabel, request?.statusCode].includes('แก้ไขแล้ว/รอพิจารณาแบบ')
@@ -2416,8 +2606,46 @@ function RequestDocumentDialog({
   }, [request])
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg">
-      <DialogTitle>{title ?? `แบบฟอร์มคำขอ${request?.requestNo ? ` - ${request.requestNo}` : ''}`}</DialogTitle>
+    <Fragment>
+      <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg">
+        <DialogTitle
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 2,
+            pr: 3,
+          }}
+        >
+          <Typography component="span" variant="h6" sx={{ minWidth: 0 }}>
+            {title ?? `แบบฟอร์มคำขอ${request?.requestNo ? ` - ${request.requestNo}` : ''}`}
+          </Typography>
+          <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<HistoryIcon />}
+              disabled={loading || !request}
+              onClick={() => setStatusHistoryOpen(true)}
+            >
+              ประวัติสถานะ
+            </Button>
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<FileDownloadIcon />}
+              disabled={loading || !request}
+              onClick={handleDownload}
+            >
+              ดาวน์โหลด
+            </Button>
+            {isReadonlyViewDialog ? (
+              <IconButton aria-label="ปิด" size="small" onClick={onClose}>
+                <CloseIcon />
+              </IconButton>
+            ) : null}
+          </Stack>
+        </DialogTitle>
       <DialogContent dividers sx={{ bgcolor: 'neutral.100' }}>
         {loading ? (
           <Typography variant="body2" sx={{ mb: 2 }}>
@@ -2817,13 +3045,10 @@ function RequestDocumentDialog({
           {footerContent}
           {footerActions}
         </DialogActions>
-      ) : (
+      ) : isReadonlyViewDialog ? null : (
         <DialogActions sx={{ justifyContent: 'center', gap: 1 }}>
           <Button variant="outlined" color="inherit" disabled={approving} onClick={onClose}>
             ปิด
-          </Button>
-          <Button variant="contained" startIcon={<FileDownloadIcon />} disabled={loading || !request} onClick={handleDownload}>
-            ดาวน์โหลด
           </Button>
           {canReview ? (
             <>
@@ -2836,13 +3061,24 @@ function RequestDocumentDialog({
             </>
           ) : null}
           {canVerifyConnection ? (
-            <Button variant="contained" disabled={approving || loading} onClick={onVerifyConnection}>
-              {approving ? 'กำลังยืนยัน' : 'ยืนยันการเชื่อมต่อ'}
-            </Button>
+            <>
+              <Button variant="outlined" disabled={approving || loading} onClick={onRequestRevision}>
+                แจ้งแก้ไข
+              </Button>
+              <Button variant="contained" disabled={approving || loading} onClick={onVerifyConnection}>
+                {approving ? 'กำลังยืนยัน' : 'ยืนยันการเชื่อมต่อ'}
+              </Button>
+            </>
           ) : null}
         </DialogActions>
       )}
-    </Dialog>
+      </Dialog>
+      <StatusHistoryDialog
+        open={statusHistoryOpen}
+        history={statusHistory}
+        onClose={() => setStatusHistoryOpen(false)}
+      />
+    </Fragment>
   )
 }
 
@@ -3980,7 +4216,20 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose }) {
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg">
-      <DialogTitle>ตั้งค่าอุปกรณ์</DialogTitle>
+      <DialogTitle
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 2,
+          pr: 2,
+        }}
+      >
+        ตั้งค่าอุปกรณ์
+        <IconButton aria-label="ปิด" size="small" onClick={onClose}>
+          <CloseIcon />
+        </IconButton>
+      </DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2.5}>
           {deviceConfigLoading ? (
@@ -4118,9 +4367,6 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose }) {
         </Stack>
       </DialogContent>
       <DialogActions sx={{ justifyContent: 'center' }}>
-        <Button color="inherit" onClick={onClose}>
-          ปิด
-        </Button>
         <Button variant="contained" disabled={deviceConfigTesting || deviceConfigSaving || deviceConfigConfirming} onClick={handleTestConnection}>
           {deviceConfigTesting ? 'กำลังทดสอบ' : 'ทดสอบ'}
         </Button>
@@ -6151,6 +6397,7 @@ function ConnectionRequestPage({ userType = '', accessToken = '', currentUser = 
   }, [requestDocumentApproving])
   const requestRevisionDocument = useCallback(() => {
     const officerNote = revisionOfficerNote.trim()
+    const revisionAction = isConnectionConfirmed(requestDocument) ? 'RETURN_TO_WAITING_CONNECTION' : 'REQUEST_REVISION'
 
     if (!requestDocument?.id) {
       setRequestDocumentError('ไม่พบรหัสคำขอสำหรับแจ้งแก้ไข')
@@ -6177,7 +6424,7 @@ function ConnectionRequestPage({ userType = '', accessToken = '', currentUser = 
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        action: 'REQUEST_REVISION',
+        action: revisionAction,
         revisionReason: officerNote,
         officerNote,
       }),
@@ -6333,6 +6580,11 @@ function ConnectionRequestPage({ userType = '', accessToken = '', currentUser = 
     }
     setSelectedSubMenu('requests')
   }, [requestForm])
+  const isReturningConnectionConfig = isConnectionConfirmed(requestDocument)
+  const revisionDialogTitle = isReturningConnectionConfig ? 'แจ้งแก้ไขการเชื่อมต่อ' : 'แจ้งแก้ไขแบบฟอร์ม'
+  const revisionDialogDescription = isReturningConnectionConfig
+    ? 'ระบุหมายเหตุเจ้าหน้าที่สำหรับส่งกลับให้ผู้ประกอบการแก้ไขข้อมูลการเชื่อมต่อ'
+    : 'ระบุหมายเหตุเจ้าหน้าที่สำหรับแจ้งให้ผู้ประกอบการแก้ไขแบบฟอร์ม'
 
   return (
     <Stack spacing={2} sx={{ height: '100%', minHeight: 0 }}>
@@ -6600,11 +6852,11 @@ function ConnectionRequestPage({ userType = '', accessToken = '', currentUser = 
         </DialogActions>
       </Dialog>
       <Dialog open={revisionDialogOpen} onClose={closeRevisionDialog} fullWidth maxWidth="sm">
-        <DialogTitle>แจ้งแก้ไขแบบฟอร์ม</DialogTitle>
+        <DialogTitle>{revisionDialogTitle}</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2}>
             <Typography variant="body2" color="text.secondary">
-              ระบุหมายเหตุเจ้าหน้าที่สำหรับแจ้งให้ผู้ประกอบการแก้ไขแบบฟอร์ม
+              {revisionDialogDescription}
             </Typography>
             <TextField
               label="รายละเอียด"

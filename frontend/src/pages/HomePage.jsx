@@ -39,6 +39,8 @@ import { AdapterDayjsBuddhist } from '@mui/x-date-pickers/AdapterDayjsBuddhist'
 import { LineChart } from '@mui/x-charts/LineChart'
 import dayjs from 'dayjs'
 import 'dayjs/locale/th'
+import provinceOptions from '../option/provinceOptions.json'
+import regionOptions from '../option/regionOptions.json'
 
 const longdoMapKey = import.meta.env.VITE_LONGDO_MAP_KEY ?? ''
 const longdoMapScriptId = 'longdo-map-script'
@@ -63,6 +65,85 @@ const connectedMeasurementPointsApiBaseUrl = import.meta.env.DEV
   ? '/api-proxy/v1/connected-measurement-points'
   : 'http://d-poms.diw.go.th/api/v1/connected-measurement-points'
 const logoBackgrounds = ['#dbeafe', '#fef3c7', '#fee2e2', '#dcfce7', '#e0f2fe', '#ffedd5', '#ecfdf3']
+const provinceRegionMap = {
+  กรุงเทพมหานคร: 'ภาคกลาง',
+  กระบี่: 'ภาคใต้',
+  กาญจนบุรี: 'ภาคตะวันตก',
+  กาฬสินธุ์: 'ภาคตะวันออกเฉียงเหนือ',
+  กำแพงเพชร: 'ภาคเหนือ',
+  ขอนแก่น: 'ภาคตะวันออกเฉียงเหนือ',
+  จันทบุรี: 'ภาคตะวันออก',
+  ฉะเชิงเทรา: 'ภาคตะวันออก',
+  ชลบุรี: 'ภาคตะวันออก',
+  ชัยนาท: 'ภาคกลาง',
+  ชัยภูมิ: 'ภาคตะวันออกเฉียงเหนือ',
+  ชุมพร: 'ภาคใต้',
+  เชียงราย: 'ภาคเหนือ',
+  เชียงใหม่: 'ภาคเหนือ',
+  ตรัง: 'ภาคใต้',
+  ตราด: 'ภาคตะวันออก',
+  ตาก: 'ภาคตะวันตก',
+  นครนายก: 'ภาคกลาง',
+  นครปฐม: 'ภาคกลาง',
+  นครพนม: 'ภาคตะวันออกเฉียงเหนือ',
+  นครราชสีมา: 'ภาคตะวันออกเฉียงเหนือ',
+  นครศรีธรรมราช: 'ภาคใต้',
+  นครสวรรค์: 'ภาคกลาง',
+  นนทบุรี: 'ภาคกลาง',
+  นราธิวาส: 'ภาคใต้',
+  น่าน: 'ภาคเหนือ',
+  บึงกาฬ: 'ภาคตะวันออกเฉียงเหนือ',
+  บุรีรัมย์: 'ภาคตะวันออกเฉียงเหนือ',
+  ปทุมธานี: 'ภาคกลาง',
+  ประจวบคีรีขันธ์: 'ภาคตะวันตก',
+  ปราจีนบุรี: 'ภาคตะวันออก',
+  ปัตตานี: 'ภาคใต้',
+  พระนครศรีอยุธยา: 'ภาคกลาง',
+  พะเยา: 'ภาคเหนือ',
+  พังงา: 'ภาคใต้',
+  พัทลุง: 'ภาคใต้',
+  พิจิตร: 'ภาคเหนือ',
+  พิษณุโลก: 'ภาคเหนือ',
+  เพชรบุรี: 'ภาคตะวันตก',
+  เพชรบูรณ์: 'ภาคเหนือ',
+  แพร่: 'ภาคเหนือ',
+  ภูเก็ต: 'ภาคใต้',
+  มหาสารคาม: 'ภาคตะวันออกเฉียงเหนือ',
+  มุกดาหาร: 'ภาคตะวันออกเฉียงเหนือ',
+  แม่ฮ่องสอน: 'ภาคเหนือ',
+  ยโสธร: 'ภาคตะวันออกเฉียงเหนือ',
+  ยะลา: 'ภาคใต้',
+  ร้อยเอ็ด: 'ภาคตะวันออกเฉียงเหนือ',
+  ระนอง: 'ภาคใต้',
+  ระยอง: 'ภาคตะวันออก',
+  ราชบุรี: 'ภาคตะวันตก',
+  ลพบุรี: 'ภาคกลาง',
+  ลำปาง: 'ภาคเหนือ',
+  ลำพูน: 'ภาคเหนือ',
+  เลย: 'ภาคตะวันออกเฉียงเหนือ',
+  ศรีสะเกษ: 'ภาคตะวันออกเฉียงเหนือ',
+  สกลนคร: 'ภาคตะวันออกเฉียงเหนือ',
+  สงขลา: 'ภาคใต้',
+  สตูล: 'ภาคใต้',
+  สมุทรปราการ: 'ภาคกลาง',
+  สมุทรสงคราม: 'ภาคกลาง',
+  สมุทรสาคร: 'ภาคกลาง',
+  สระแก้ว: 'ภาคตะวันออก',
+  สระบุรี: 'ภาคกลาง',
+  สิงห์บุรี: 'ภาคกลาง',
+  สุโขทัย: 'ภาคเหนือ',
+  สุพรรณบุรี: 'ภาคกลาง',
+  สุราษฎร์ธานี: 'ภาคใต้',
+  สุรินทร์: 'ภาคตะวันออกเฉียงเหนือ',
+  หนองคาย: 'ภาคตะวันออกเฉียงเหนือ',
+  หนองบัวลำภู: 'ภาคตะวันออกเฉียงเหนือ',
+  อ่างทอง: 'ภาคกลาง',
+  อำนาจเจริญ: 'ภาคตะวันออกเฉียงเหนือ',
+  อุดรธานี: 'ภาคตะวันออกเฉียงเหนือ',
+  อุตรดิตถ์: 'ภาคเหนือ',
+  อุทัยธานี: 'ภาคกลาง',
+  อุบลราชธานี: 'ภาคตะวันออกเฉียงเหนือ',
+}
 const datePickerStatusStyles = {
   lowData: { backgroundColor: '#e5e7eb' },
   highData: { backgroundColor: '#dbeafe' },
@@ -270,6 +351,10 @@ function hasFactoryCoordinate(factory) {
   return Number.isFinite(factory.lon) && Number.isFinite(factory.lat)
 }
 
+function getRegionByProvince(province) {
+  return provinceRegionMap[province] ?? ''
+}
+
 function getDistanceFromReference(lon, lat) {
   if (!Number.isFinite(lon) || !Number.isFinite(lat)) {
     return null
@@ -365,6 +450,7 @@ function mapOperatorFactory(row, index) {
     oldRegistrationNo: row.oldRegistrationNo ?? row.factoryRegistrationNo ?? '',
     address: row.address ?? '',
     province: row.province ?? '',
+    industrialEstateCode: row.industrialEstateCode ?? '',
     systems,
     distance: getDistanceFromReference(lon, lat),
     lon,
@@ -412,18 +498,19 @@ function HomePage({ accessToken = '' }) {
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [selectedFactory, setSelectedFactory] = useState(null)
   const [isMobileListExpanded, setIsMobileListExpanded] = useState(true)
+  const [factoryOrderFilter, setFactoryOrderFilter] = useState('')
+  const [industrialEstateFilter, setIndustrialEstateFilter] = useState('all')
+  const [industrialEstateNameFilter, setIndustrialEstateNameFilter] = useState('')
+  const [regionFilter, setRegionFilter] = useState('all')
   const [provinceFilter, setProvinceFilter] = useState('all')
-  const [maxDistance, setMaxDistance] = useState('all')
+  const [districtFilter, setDistrictFilter] = useState('')
+  const [latestInspectionResultFilter, setLatestInspectionResultFilter] = useState('all')
+  const [monitoringFilter, setMonitoringFilter] = useState('all')
   const [factories, setFactories] = useState([])
   const [factoriesError, setFactoriesError] = useState('')
   const apiSystemType = factoryType === 'cems' ? 'CEMS' : factoryType === 'wpms' ? 'WPMS' : ''
   const effectiveFactories = useMemo(() => (accessToken ? factories : []), [accessToken, factories])
   const effectiveFactoriesError = accessToken ? factoriesError : 'กรุณาเข้าสู่ระบบเพื่อดูรายชื่อโรงงาน'
-  const provinceOptions = useMemo(
-    () => ['all', ...Array.from(new Set(effectiveFactories.map((factory) => factory.province).filter(Boolean)))],
-    [effectiveFactories],
-  )
-
   useEffect(() => {
     if (!accessToken) {
       return
@@ -466,9 +553,19 @@ function HomePage({ accessToken = '' }) {
     const filtered = effectiveFactories.filter((factory) => {
       const matchesType =
         factoryType === 'all' || factory.systems.some((system) => system.toLowerCase() === factoryType)
+      const matchesFactoryOrder =
+        !factoryOrderFilter.trim() || factory.newRegistrationNo.toLowerCase().includes(factoryOrderFilter.trim().toLowerCase())
+      const matchesIndustrialEstate =
+        industrialEstateFilter === 'all' ||
+        (industrialEstateFilter === 'industrial-estate' && Boolean(factory.industrialEstateCode)) ||
+        (industrialEstateFilter === 'outside-industrial-estate' && !factory.industrialEstateCode)
+      const matchesIndustrialEstateName =
+        !industrialEstateNameFilter.trim() ||
+        factory.industrialEstateCode.toLowerCase().includes(industrialEstateNameFilter.trim().toLowerCase())
+      const matchesRegion = regionFilter === 'all' || getRegionByProvince(factory.province) === regionFilter
       const matchesProvince = provinceFilter === 'all' || factory.province === provinceFilter
-      const matchesDistance =
-        maxDistance === 'all' || (factory.distance !== null && factory.distance <= Number(maxDistance))
+      const matchesDistrict =
+        !districtFilter.trim() || factory.address.toLowerCase().includes(districtFilter.trim().toLowerCase())
       const matchesKeyword =
         !keyword ||
         [factory.name, factory.newRegistrationNo, factory.oldRegistrationNo, factory.address, factory.province]
@@ -476,7 +573,16 @@ function HomePage({ accessToken = '' }) {
           .toLowerCase()
           .includes(keyword)
 
-      return matchesType && matchesProvince && matchesDistance && matchesKeyword
+      return (
+        matchesType &&
+        matchesFactoryOrder &&
+        matchesIndustrialEstate &&
+        matchesIndustrialEstateName &&
+        matchesRegion &&
+        matchesProvince &&
+        matchesDistrict &&
+        matchesKeyword
+      )
     })
 
     return filtered.toSorted((first, second) => {
@@ -486,7 +592,18 @@ function HomePage({ accessToken = '' }) {
 
       return (first.distance ?? Number.POSITIVE_INFINITY) - (second.distance ?? Number.POSITIVE_INFINITY)
     })
-  }, [effectiveFactories, factoryType, maxDistance, provinceFilter, searchValue, sortBy])
+  }, [
+    districtFilter,
+    effectiveFactories,
+    factoryOrderFilter,
+    factoryType,
+    industrialEstateNameFilter,
+    industrialEstateFilter,
+    provinceFilter,
+    regionFilter,
+    searchValue,
+    sortBy,
+  ])
 
   return (
     <Box
@@ -531,11 +648,27 @@ function HomePage({ accessToken = '' }) {
 
       <AdvancedSearchDialog
         open={advancedOpen}
-        provinceOptions={provinceOptions}
+        factoryOrderFilter={factoryOrderFilter}
+        industrialEstateFilter={industrialEstateFilter}
+        industrialEstateNameFilter={industrialEstateNameFilter}
+        regionFilter={regionFilter}
         provinceFilter={provinceFilter}
-        maxDistance={maxDistance}
+        districtFilter={districtFilter}
+        latestInspectionResultFilter={latestInspectionResultFilter}
+        monitoringFilter={monitoringFilter}
+        onFactoryOrderFilterChange={setFactoryOrderFilter}
+        onIndustrialEstateFilterChange={(nextValue) => {
+          setIndustrialEstateFilter(nextValue)
+          if (nextValue !== 'industrial-estate') {
+            setIndustrialEstateNameFilter('')
+          }
+        }}
+        onIndustrialEstateNameFilterChange={setIndustrialEstateNameFilter}
+        onRegionFilterChange={setRegionFilter}
         onProvinceFilterChange={setProvinceFilter}
-        onMaxDistanceChange={setMaxDistance}
+        onDistrictFilterChange={setDistrictFilter}
+        onLatestInspectionResultFilterChange={setLatestInspectionResultFilter}
+        onMonitoringFilterChange={setMonitoringFilter}
         onClose={() => setAdvancedOpen(false)}
       />
       <FactoryBottomSheet
@@ -1756,8 +1889,6 @@ function FactoryStatisticPanel({
   error,
   onExport,
 }) {
-  const selectedDateValue = selectedDate?.format?.('YYYY-MM-DD') ?? ''
-
   return (
     <Box
       sx={{
@@ -1847,29 +1978,16 @@ function FactoryStatisticPanel({
       </Tabs>
 
       <TableContainer sx={{ overflowX: 'auto' }}>
-        <Table size="small" sx={{ minWidth: 880, ...borderedTableSx }}>
+        <Table size="small" sx={{ minWidth: 760, ...borderedTableSx }}>
           <TableHead>
             <TableRow>
-              <TableCell
-                sx={{
-                  width: 120,
-                  minWidth: 120,
-                  position: 'sticky',
-                  left: 0,
-                  zIndex: 3,
-                  fontWeight: 700,
-                  bgcolor: 'neutral.50',
-                }}
-              >
-                วันที่
-              </TableCell>
               <TableCell
                 sx={{
                   width: 140,
                   minWidth: 140,
                   position: 'sticky',
-                  left: 120,
-                  zIndex: 2,
+                  left: 0,
+                  zIndex: 3,
                   fontWeight: 700,
                   bgcolor: 'neutral.50',
                 }}
@@ -1888,23 +2006,10 @@ function FactoryStatisticPanel({
               <TableRow key={`${row.date}-${row.time}`}>
                 <TableCell
                   sx={{
-                    minWidth: 120,
+                    minWidth: 140,
                     position: 'sticky',
                     left: 0,
                     zIndex: 2,
-                    bgcolor: 'background.paper',
-                    fontWeight: 600,
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {selectedDateValue || row.date}
-                </TableCell>
-                <TableCell
-                  sx={{
-                    minWidth: 140,
-                    position: 'sticky',
-                    left: 120,
-                    zIndex: 1,
                     bgcolor: 'background.paper',
                     fontWeight: 600,
                     whiteSpace: 'nowrap',
@@ -1927,7 +2032,7 @@ function FactoryStatisticPanel({
               </TableRow>
             )) : (
               <TableRow>
-                <TableCell colSpan={parameters.length + 2} align="center" sx={{ fontWeight: 400 }}>
+                <TableCell colSpan={parameters.length + 1} align="center" sx={{ fontWeight: 400 }}>
                   <Typography variant="body2" color="text.secondary">
                     {error || 'ไม่มีข้อมูลสถิติ'}
                   </Typography>
@@ -2143,71 +2248,179 @@ function FactoryMeta({ label, value, sx, valueSx, hideLabel = false }) {
 
 function AdvancedSearchDialog({
   open,
-  provinceOptions,
+  factoryOrderFilter,
+  industrialEstateFilter,
+  industrialEstateNameFilter,
+  regionFilter,
   provinceFilter,
-  maxDistance,
+  districtFilter,
+  latestInspectionResultFilter,
+  monitoringFilter,
+  onFactoryOrderFilterChange,
+  onIndustrialEstateFilterChange,
+  onIndustrialEstateNameFilterChange,
+  onRegionFilterChange,
   onProvinceFilterChange,
-  onMaxDistanceChange,
+  onDistrictFilterChange,
+  onLatestInspectionResultFilterChange,
+  onMonitoringFilterChange,
   onClose,
 }) {
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
-      <DialogTitle sx={{ pr: 6 }}>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth={false}
+      PaperProps={{
+        sx: {
+          width: { xs: 'calc(100vw - 24px)', sm: 492 },
+          maxWidth: { xs: 'calc(100vw - 24px)', sm: 492 },
+          borderRadius: 1.25,
+        },
+      }}
+    >
+      <DialogTitle
+        sx={{
+          pr: 6,
+          py: 1.25,
+          px: 1.5,
+          color: 'primary.main',
+          fontSize: 15,
+          fontWeight: 800,
+          borderBottom: 1,
+          borderColor: 'divider',
+        }}
+      >
         ค้นหาขั้นสูง
         <IconButton
           aria-label="ปิด"
           onClick={onClose}
-          sx={{ position: 'absolute', right: 12, top: 12 }}
+          sx={{ position: 'absolute', right: 10, top: 6, color: 'primary.900' }}
         >
           <CloseIcon />
         </IconButton>
       </DialogTitle>
-      <DialogContent>
-        <Stack spacing={2} sx={{ pt: 1 }}>
+      <DialogContent sx={{ px: 2.5, pt: '24px !important', pb: 2 }}>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' },
+            gap: 2,
+          }}
+        >
+          <TextField
+            size="small"
+            label="ลำดับประเภทโรงงาน"
+            value={factoryOrderFilter}
+            placeholder="พิมพ์เพื่อค้นหา"
+            onChange={(event) => onFactoryOrderFilterChange(event.target.value)}
+            fullWidth
+            sx={{ gridColumn: '1 / -1' }}
+          />
+
           <FormControl size="small" fullWidth>
-            <InputLabel id="province-filter-label">จังหวัด</InputLabel>
+            <InputLabel id="advanced-industrial-estate-filter-label">พื้นที่ประกอบกิจการ</InputLabel>
             <Select
-              labelId="province-filter-label"
-              value={provinceFilter}
-              label="จังหวัด"
-              onChange={(event) => onProvinceFilterChange(event.target.value)}
+              labelId="advanced-industrial-estate-filter-label"
+              value={industrialEstateFilter}
+              label="พื้นที่ประกอบกิจการ"
+              onChange={(event) => onIndustrialEstateFilterChange(event.target.value)}
             >
-              {provinceOptions.map((province) => (
-                <MenuItem key={province} value={province}>
-                  {province === 'all' ? 'ทุกจังหวัด' : province}
+              <MenuItem value="all">ทั้งหมด</MenuItem>
+              <MenuItem value="industrial-estate">ในนิคมอุตสาหกรรม</MenuItem>
+              <MenuItem value="outside-industrial-estate">นอกนิคมอุตสาหกรรม</MenuItem>
+            </Select>
+          </FormControl>
+
+          {industrialEstateFilter === 'industrial-estate' ? (
+            <TextField
+              size="small"
+              label="นิคมอุตสาหกรรม"
+              value={industrialEstateNameFilter}
+              placeholder="พิมพ์เพื่อค้นหา"
+              onChange={(event) => onIndustrialEstateNameFilterChange(event.target.value)}
+              fullWidth
+              sx={{ gridColumn: { xs: '1 / -1', sm: 'span 2' } }}
+            />
+          ) : null}
+
+          <FormControl size="small" fullWidth sx={{ gridColumn: { xs: '1 / -1', sm: '1' } }}>
+            <InputLabel id="advanced-region-label">ภาค</InputLabel>
+            <Select
+              labelId="advanced-region-label"
+              value={regionFilter}
+              label="ภาค"
+              onChange={(event) => onRegionFilterChange(event.target.value)}
+            >
+              {regionOptions.map((option) => (
+                <MenuItem key={option.value} value={option.value}>
+                  {option.label}
                 </MenuItem>
               ))}
             </Select>
           </FormControl>
 
           <FormControl size="small" fullWidth>
-            <InputLabel id="distance-filter-label">ระยะทาง</InputLabel>
+            <InputLabel id="advanced-province-label">จังหวัด</InputLabel>
             <Select
-              labelId="distance-filter-label"
-              value={maxDistance}
-              label="ระยะทาง"
-              onChange={(event) => onMaxDistanceChange(event.target.value)}
+              labelId="advanced-province-label"
+              value={provinceFilter}
+              label="จังหวัด"
+              onChange={(event) => onProvinceFilterChange(event.target.value)}
             >
-              <MenuItem value="all">ทุกระยะทาง</MenuItem>
-              <MenuItem value="10">ไม่เกิน 10 กม.</MenuItem>
-              <MenuItem value="30">ไม่เกิน 30 กม.</MenuItem>
-              <MenuItem value="50">ไม่เกิน 50 กม.</MenuItem>
+              {provinceOptions.map((option) => (
+                <MenuItem key={option.value} value={option.value}>
+                  {option.label}
+                </MenuItem>
+              ))}
             </Select>
           </FormControl>
-        </Stack>
+
+          <TextField
+            size="small"
+            label="เขต/อำเภอ"
+            value={districtFilter}
+            placeholder="พิมพ์เพื่อค้นหา"
+            onChange={(event) => onDistrictFilterChange(event.target.value)}
+            fullWidth
+          />
+
+          <FormControl size="small" fullWidth sx={{ gridColumn: { xs: '1 / -1', sm: '1' } }}>
+            <InputLabel id="advanced-latest-result-label">มีผลการตรวจวัดชั่วโมงล่าสุด</InputLabel>
+            <Select
+              labelId="advanced-latest-result-label"
+              value={latestInspectionResultFilter}
+              label="มีผลการตรวจวัดชั่วโมงล่าสุด"
+              onChange={(event) => onLatestInspectionResultFilterChange(event.target.value)}
+            >
+              <MenuItem value="all">ทั้งหมด</MenuItem>
+              <MenuItem value="has-result">มีผลการตรวจวัด</MenuItem>
+              <MenuItem value="no-result">ไม่มีผลการตรวจวัด</MenuItem>
+            </Select>
+          </FormControl>
+
+          <FormControl size="small" fullWidth>
+            <InputLabel id="advanced-monitoring-label">การเฝ้าระวัง</InputLabel>
+            <Select
+              labelId="advanced-monitoring-label"
+              value={monitoringFilter}
+              label="การเฝ้าระวัง"
+              onChange={(event) => onMonitoringFilterChange(event.target.value)}
+            >
+              <MenuItem value="all">ทั้งหมด</MenuItem>
+              <MenuItem value="normal">ปกติ</MenuItem>
+              <MenuItem value="watch">เฝ้าระวัง</MenuItem>
+              <MenuItem value="exceeded">เกินมาตรฐาน</MenuItem>
+            </Select>
+          </FormControl>
+        </Box>
       </DialogContent>
-      <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Button
-          variant="outlined"
-          onClick={() => {
-            onProvinceFilterChange('all')
-            onMaxDistanceChange('all')
-          }}
-        >
-          ล้างค่า
+      <DialogActions sx={{ px: 2, pb: 1.75, pt: 1, gap: 0.75 }}>
+        <Button variant="outlined" color="inherit" size="small" onClick={onClose} sx={{ minWidth: 40, height: 34 }}>
+          ปิด
         </Button>
-        <Button variant="contained" onClick={onClose}>
-          ใช้งาน
+        <Button variant="contained" size="small" onClick={onClose} sx={{ minWidth: 58, height: 34, fontWeight: 700 }}>
+          ค้นหา
         </Button>
       </DialogActions>
     </Dialog>

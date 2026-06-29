@@ -23,6 +23,7 @@ Content-Type: application/json
 - Backend จะล้าง `pointCode` ของคำขอเพิ่มจุดตรวจวัด/ขอเชื่อมต่อใหม่ ถึง frontend ส่งมาก็ไม่ใช้เป็นเลขจริง
 - เจ้าหน้าที่ตรวจผ่านด้วย `APPROVE_FORM` แล้วสถานะจะเปลี่ยน `PENDING_DESIGN_REVIEW` หรือ `REVISED_PENDING_DESIGN_REVIEW` -> `WAITING_CONNECTION`
 - ตอนเข้า `WAITING_CONNECTION` backend จะออกเลข `pointCode` ให้จุดที่ยังไม่มีเลขโดยอัตโนมัติ
+- ถ้าเจ้าหน้าที่ส่งกลับจาก `CONNECTION_CONFIRMED` ด้วย `RETURN_TO_WAITING_CONNECTION` ระบบใช้ `pointCode` เดิมและเปิดรอบแก้ config ใหม่
 - CEMS ใช้ prefix `S` เช่น `S0001`, `S0002`
 - WPMS ใช้ prefix `P` เช่น `P0001`, `P0002`
 
@@ -97,7 +98,7 @@ Mapping:
 | ตั้งค่า | `GET /api/v1/connected-measurement-points/:stationId/device-configs` | คืน config ปัจจุบันจาก active settings ของจุดตรวจวัดที่เลือก |
 | ตั้งค่า | `POST /api/v1/connected-measurement-points/:stationId/device-configs` | บันทึก active settings ปัจจุบัน; payload ใช้รูปแบบเดียวกับ device config เดิม และ `stationId` ใน payload ต้องตรงกับ path |
 | ดูรายละเอียด | `GET /api/v1/connected-measurement-points/:stationId/calendar-status?month=2026-06` | คืนข้อมูลทำ DateCalendar รายเดือนจากตาราง `{stationId}_data_60m` |
-| ดูรายละเอียด | `GET /api/v1/connected-measurement-points/:stationId/measurement-statistics?date=2026-06-09` | คืนข้อมูลกราฟและตารางรายชั่วโมงจากตาราง `{stationId}_data_60m`; `data.thresholds[]` ต้องคงพารามิเตอร์ที่ตั้งค่าไว้ครบ แม้ไม่มีค่าเกณฑ์ โดยส่ง `normalMax: null`, `warningMax: null` |
+| ดูรายละเอียด | `GET /api/v1/connected-measurement-points/:stationId/measurement-statistics?date=2026-06-09` | คืนข้อมูลกราฟและตารางรายชั่วโมงจากตาราง `{stationId}_data_60m`; `data.measurementPoints[]` มี `pointName`, `latitude`, `longitude` โดย fallback จากพิกัดใน `details` เมื่อ column หลักว่าง; `data.thresholds[]` ต้องคงพารามิเตอร์ที่ตั้งค่าไว้ครบ แม้ไม่มีค่าเกณฑ์ โดยส่ง `normalMax: null`, `warningMax: null` |
 
 รายละเอียด API ของหน้าดูรายละเอียดอยู่ใน [`OPERATOR_FACTORY_DASHBOARD.md`](./OPERATOR_FACTORY_DASHBOARD.md#detail-page-apis)
 
@@ -1484,7 +1485,9 @@ Response เป็น shape เดียวกับข้อ 4 แต่ `conne
 | แก้ไขแล้วส่งใหม่ | ผู้ประกอบการ | `PUT /api/v1/cems-wpms-requests/:id/form` | ไม่มี action | `REVISED_PENDING_DESIGN_REVIEW` | แก้ไขแล้ว/รอพิจารณาแบบ |
 | บันทึกข้อมูลการเชื่อมต่อ | ผู้ประกอบการ | `POST /api/v1/cems-wpms-requests/:id/confirm-connection` | `{ "action": "SAVE", "note": "บันทึก config ชั่วคราว" }` | `WAITING_CONNECTION` | รอเชื่อมต่อ |
 | ยืนยันการเชื่อมต่อ | ผู้ประกอบการ | `POST /api/v1/cems-wpms-requests/:id/confirm-connection` | `{ "action": "CONFIRM", "note": "ตั้งค่าอุปกรณ์และทดสอบแล้ว" }` | `CONNECTION_CONFIRMED` | ยืนยันการเชื่อมต่อ |
+| ส่งกลับแก้ config | เจ้าหน้าที่ | `POST /api/v1/cems-wpms-requests/:id/status` | `{ "action": "RETURN_TO_WAITING_CONNECTION", "revisionReason": "..." }` | `WAITING_CONNECTION` | รอเชื่อมต่อ |
 | ตรวจสอบแล้วกดยืนยัน | เจ้าหน้าที่ | `POST /api/v1/cems-wpms-requests/:id/verify-connection` | `{ "note": "ตรวจสอบแล้ว" }` | `CONNECTED` | เชื่อมต่อแล้ว |
+| ยกเลิกคำขอ | ระบบ/เจ้าหน้าที่ | ยังไม่มี public endpoint เฉพาะในเอกสารนี้ | - | `CANCELED` | ยกเลิก |
 
 บันทึกข้อมูลการเชื่อมต่อ:
 
@@ -1712,10 +1715,29 @@ Response:
         "status": "PENDING_DESIGN_REVIEW",
         "statusLabel": "รอพิจารณาแบบ",
         "note": "ผู้ประกอบการส่งฟอร์ม",
-        "changedBy": 42,
-        "changedAt": "2026-05-30T10:00:00.000Z"
+        "changedById": 42,
+        "changedBy": "นายสมชาย เจ้าหน้าที่",
+        "changedAt": "2026-05-30T10:00:00.000Z",
+        "endedAt": "2026-05-31T09:00:00.000Z",
+        "durationDays": 2,
+        "durationText": "2 วัน",
+        "isTerminal": false
       }
     ],
+    "statusDurationSummary": {
+      "startedAt": "2026-05-30T10:00:00.000Z",
+      "startDate": "2026-05-30",
+      "startStatus": "PENDING_DESIGN_REVIEW",
+      "startStatusLabel": "รอพิจารณาแบบ",
+      "endedAt": null,
+      "endDate": null,
+      "endStatus": "WAITING_CONNECTION",
+      "endStatusLabel": "รอเชื่อมต่อ",
+      "isTerminal": false,
+      "terminalStatuses": ["CONNECTED", "CANCELED"],
+      "totalDurationDays": null,
+      "totalDurationText": null
+    },
     "deviceConfigs": [
       {
         "stationId": "S0001",
@@ -2632,13 +2654,23 @@ curl "http://localhost:3000/api/v1/parameter-values/connection-test?stationId=S0
 }
 ```
 
+ตัวอย่าง JSON ส่งกลับแก้ config หลังผู้ประกอบการยืนยันการเชื่อมต่อแล้ว:
+
+```json
+{
+  "action": "RETURN_TO_WAITING_CONNECTION",
+  "revisionReason": "ตั้งค่าอุปกรณ์ยังไม่ถูกต้อง",
+  "officerNote": "แก้ mapping channel แล้วส่งยืนยันอีกครั้ง"
+}
+```
+
 Data dictionary:
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
-| `action` | string | Yes | `APPROVE_FORM` หรือ `REQUEST_REVISION` |
+| `action` | string | Yes | `APPROVE_FORM`, `REQUEST_REVISION`, หรือ `RETURN_TO_WAITING_CONNECTION` |
 | `officerNote` | string|null | No | หมายเหตุเจ้าหน้าที่ |
-| `revisionReason` | string | Conditional | ต้องส่งเมื่อ `action = REQUEST_REVISION` |
+| `revisionReason` | string | Conditional | ต้องส่งเมื่อ `action = REQUEST_REVISION` หรือ `RETURN_TO_WAITING_CONNECTION` |
 
 ### API 6: GET รายการคำขอทั้งหมด สำหรับตารางเจ้าหน้าที่
 
@@ -2740,6 +2772,7 @@ curl "http://localhost:3000/api/v1/operator-factory-dashboard?systemType=CEMS" \
       "factoryName": "บริษัท ทดสอบ จำกัด",
       "newRegistrationNo": "3-106-33/50สบ",
       "oldRegistrationNo": "3-106-33/50สบ",
+      "factoryLogoUrl": "https://example.com/files/logo.png",
       "industryType": "ผลิตเคมีภัณฑ์",
       "industryMainOrder": "106",
       "industrySubOrder": "33",
@@ -2772,6 +2805,7 @@ Data dictionary response row:
 | `factoryName` | string | ชื่อโรงงาน |
 | `newRegistrationNo` | string|null | เลขทะเบียนใหม่ |
 | `oldRegistrationNo` | string|null | เลขทะเบียนเก่า |
+| `factoryLogoUrl` | string|null | URL รูปโลโก้จากเอกสารแนบ CEMS title `สัญลักษณ์ของโรงงานหรือโลโก้บริษัท`; ถ้าไม่มีคืน `null` |
 | `industryType` | string|null | ประเภทอุตสาหกรรม |
 | `industryMainOrder` | string|null | ลำดับโรงงานหลัก |
 | `industrySubOrder` | string|null | ลำดับโรงงานรอง |
@@ -2853,7 +2887,13 @@ Data dictionary response:
 | `data.requestType` | string | ประเภทคำขอ |
 | `data.factory` | object | ข้อมูลโรงงาน snapshot/detail |
 | `data.measurementPoints` | array | รายจุดตรวจวัด ใช้ทำ PDF และเติมฟอร์มเพิ่มพารามิเตอร์ |
-| `data.statusHistory` | array | ประวัติสถานะ |
+| `data.statusHistory` | array | ประวัติสถานะ พร้อมชื่อผู้เปลี่ยนสถานะและจำนวนวันของแต่ละช่วง |
+| `data.statusHistory[].changedById` | number | user id เดิมจาก `cems_wpms_request_status_history.changed_by` |
+| `data.statusHistory[].changedBy` | string | ชื่อผู้เปลี่ยนสถานะจากตาราง `users`; fallback เป็น `username` หรือ `User #<id>` |
+| `data.statusHistory[].endedAt` | string/null | เวลาเริ่ม status ถัดไป หรือเวลา status เดิมถ้าเป็น terminal status |
+| `data.statusHistory[].durationDays` | number/null | จำนวนวันแบบนับรวมวันเริ่มและวันจบ เช่น `2026-06-26` ถึง `2026-06-27` = `2` |
+| `data.statusHistory[].isTerminal` | boolean | `true` เมื่อ status เป็น `CONNECTED` หรือ `CANCELED` |
+| `data.statusDurationSummary` | object | สรุประยะเวลาจาก status แรกถึง status สุดท้าย เฉพาะเมื่อ status สุดท้ายเป็น terminal |
 | `data.deviceConfigs` | array | config snapshot ของคำขอ โดยแต่ละ item จัด shape เหมือน payload: `{ stationId, device, channels, statusManagement }` |
 
 ### API 10: GET รายละเอียดจุดตรวจวัดที่เชื่อมต่อแล้วจากระบบ POMS ปัจจุบัน
@@ -3036,6 +3076,7 @@ MYSQL
 ```text
 APPROVE_FORM
 REQUEST_REVISION
+RETURN_TO_WAITING_CONNECTION
 ```
 
 ### pointCode
@@ -3056,4 +3097,5 @@ REVISED_PENDING_DESIGN_REVIEW
 WAITING_CONNECTION
 CONNECTION_CONFIRMED
 CONNECTED
+CANCELED
 ```
