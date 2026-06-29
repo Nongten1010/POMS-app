@@ -718,6 +718,16 @@ function mapOperatorFactoryRow(row) {
   }
 }
 
+function formatDatePartAsThaiDate(value) {
+  if (typeof value !== 'string') return ''
+
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (!match) return ''
+
+  const [, year, month, day] = match
+  return `${day}/${month}/${Number(year) + 543}`
+}
+
 function mapRequestTableRow(row) {
   return {
     id: row.id,
@@ -730,7 +740,7 @@ function mapRequestTableRow(row) {
     type: row.type ?? '',
     requestNo: row.requestNo ?? '',
     submittedAt: row.submittedAt ?? null,
-    submittedDate: row.submittedDate ?? '',
+    submittedDate: formatDatePartAsThaiDate(row.submittedAt) || row.submittedDate || '',
     monitoringPointCode: row.monitoringPointCode ?? '',
     codeIssuedAt: row.codeIssuedAt ?? null,
     codeIssuedDate: row.codeIssuedDate ?? '',
@@ -786,7 +796,7 @@ function mapRequestDetailRow(detail = {}, row = {}) {
     province: detail.province ?? factory.province ?? row.province ?? '',
     type: detail.type ?? detail.systemType ?? firstPoint?.details?.monitoringPointKind ?? row.type ?? '',
     requestNo: detail.requestNo ?? row.requestNo ?? '',
-    submittedDate: detail.submittedDate ?? row.submittedDate ?? '',
+    submittedDate: formatDatePartAsThaiDate(detail.submittedAt) || detail.submittedDate || row.submittedDate || '',
     monitoringPointCode: detail.monitoringPointCode ?? firstPoint?.code ?? firstPoint?.monitoringPointCode ?? row.monitoringPointCode ?? '',
     codeIssuedDate: detail.codeIssuedDate ?? row.codeIssuedDate ?? '',
     form: detail.form ?? row.form ?? '',
