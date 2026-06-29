@@ -6,6 +6,7 @@ jest.mock('../../src/modules/connection-requests/connection-requests.repository'
     findById: jest.fn(),
     findFactorySummariesForRequests: jest.fn(),
     replaceForm: jest.fn(),
+    autoCancelExpiredWaitingConnectionRequests: jest.fn(),
     syncConnectedMeasurementPoints: jest.fn(),
     updateStatus: jest.fn(),
     list: jest.fn(),
@@ -1805,10 +1806,11 @@ describe('connectionRequestsService', () => {
   });
 
   it('returns a confirmed connection back to waiting connection for device config revision', async () => {
+    const originalDueAt = '2026-06-30T00:00:00.000Z';
     mockedRepository.findById.mockResolvedValue(
       requestDto({
         status: CONNECTION_REQUEST_STATUS.CONNECTION_CONFIRMED,
-        connectionDueAt: '2026-06-30T00:00:00.000Z',
+        connectionDueAt: originalDueAt,
         confirmedAt: '2026-06-01T00:00:00.000Z',
         createdBy: actorUserId,
       }),
@@ -1816,7 +1818,7 @@ describe('connectionRequestsService', () => {
     mockedRepository.updateStatus.mockResolvedValue(
       requestDto({
         status: CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
-        connectionDueAt: dueAt,
+        connectionDueAt: originalDueAt,
         confirmedAt: null,
         createdBy: actorUserId,
       }),
@@ -1839,7 +1841,50 @@ describe('connectionRequestsService', () => {
       {
         officerNote: 'แก้ mapping channel',
         revisionReason: 'ตั้งค่าอุปกรณ์ยังไม่ถูกต้อง',
-        connectionDueAt: dueAt,
+        confirmedAt: null,
+      },
+      {
+        issueWaitingConnectionSideEffects: false,
+      },
+    );
+  });
+
+  it('cancels immediately when a confirmed connection is returned after its original due date', async () => {
+    mockedRepository.findById.mockResolvedValue(
+      requestDto({
+        status: CONNECTION_REQUEST_STATUS.CONNECTION_CONFIRMED,
+        connectionDueAt: '2026-05-01T00:00:00.000Z',
+        confirmedAt: '2026-04-30T10:00:00.000Z',
+        createdBy: actorUserId,
+      }),
+    );
+    mockedRepository.updateStatus.mockResolvedValue(
+      requestDto({
+        status: CONNECTION_REQUEST_STATUS.CANCELED,
+        connectionDueAt: '2026-05-01T00:00:00.000Z',
+        confirmedAt: null,
+        createdBy: actorUserId,
+      }),
+    );
+
+    await connectionRequestsService.changeStatus(
+      1,
+      {
+        action: 'RETURN_TO_WAITING_CONNECTION',
+        revisionReason: 'ตั้งค่าอุปกรณ์ยังไม่ถูกต้อง',
+        officerNote: 'ครบกำหนดแล้ว',
+      },
+      7,
+    );
+
+    expect(mockedRepository.updateStatus).toHaveBeenCalledWith(
+      1,
+      CONNECTION_REQUEST_STATUS.CANCELED,
+      7,
+      {
+        officerNote: 'ครบกำหนดแล้ว',
+        revisionReason:
+          'ตั้งค่าอุปกรณ์ยังไม่ถูกต้อง\nระบบยกเลิกคำขออัตโนมัติเนื่องจากครบกำหนดเชื่อมต่อ 30 วัน',
         confirmedAt: null,
       },
       {
@@ -2156,6 +2201,16 @@ describe('connectionRequestsService', () => {
       { ...payloadWithoutPointCodes, requestType: CONNECTION_REQUEST_TYPE.NEW_CONNECTION },
       actorUserId,
       CONNECTION_REQUEST_STATUS.REVISED_PENDING_DESIGN_REVIEW,
+    );
+  });
+
+  it('auto-cancels expired waiting connection requests', async () => {
+    mockedRepository.autoCancelExpiredWaitingConnectionRequests.mockResolvedValue(2);
+
+    await expect(connectionRequestsService.autoCancelExpiredWaitingConnections()).resolves.toBe(2);
+
+    expect(mockedRepository.autoCancelExpiredWaitingConnectionRequests).toHaveBeenCalledWith(
+      now.toISOString(),
     );
   });
 
