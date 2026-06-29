@@ -58,6 +58,9 @@ const DESIGN_REVIEW_STATUSES: ConnectionRequestStatus[] = [
 
 let nowProvider = () => new Date();
 
+const CONNECTION_TIMEOUT_AUTO_CANCEL_NOTE =
+  'ระบบยกเลิกคำขออัตโนมัติเนื่องจากครบกำหนดเชื่อมต่อ 30 วัน';
+
 const FACTORY_LOGO_DOCUMENT_TITLE = 'สัญลักษณ์ของโรงงานหรือโลโก้บริษัท';
 const FACTORY_LOGO_DOCUMENT_INDEX = 3;
 
@@ -576,20 +579,31 @@ export const connectionRequestsService = {
   ): Promise<ConnectionRequestDTO> {
     const request = await loadRequest(id);
     ensureStatus(request, [CONNECTION_REQUEST_STATUS.CONNECTION_CONFIRMED]);
+    const nextStatus = isPastConnectionDueDate(request.connectionDueAt, nowProvider())
+      ? CONNECTION_REQUEST_STATUS.CANCELED
+      : CONNECTION_REQUEST_STATUS.WAITING_CONNECTION;
 
     return connectionRequestsRepository.updateStatus(
       id,
-      CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+      nextStatus,
       actorUserId,
       {
         officerNote: input.officerNote ?? null,
-        revisionReason: input.revisionReason,
-        connectionDueAt: addDays(nowProvider(), 30).toISOString(),
+        revisionReason:
+          nextStatus === CONNECTION_REQUEST_STATUS.CANCELED
+            ? appendAutoCancelNote(input.revisionReason)
+            : input.revisionReason,
         confirmedAt: null,
       },
       {
         issueWaitingConnectionSideEffects: false,
       },
+    );
+  },
+
+  autoCancelExpiredWaitingConnections(): Promise<number> {
+    return connectionRequestsRepository.autoCancelExpiredWaitingConnectionRequests(
+      nowProvider().toISOString(),
     );
   },
 
@@ -1238,6 +1252,17 @@ function findCodeIssuedAt(request: ConnectionRequestDTO): string | null {
     (item) => item.status === CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
   );
   return history?.changedAt ?? request.connectionDueAt ?? null;
+}
+
+function isPastConnectionDueDate(connectionDueAt: string | null, now: Date): boolean {
+  if (!connectionDueAt) return false;
+  return new Date(connectionDueAt).getTime() < now.getTime();
+}
+
+function appendAutoCancelNote(revisionReason: string | null | undefined): string {
+  return [revisionReason, CONNECTION_TIMEOUT_AUTO_CANCEL_NOTE]
+    .filter((note): note is string => typeof note === 'string' && note.length > 0)
+    .join('\n');
 }
 
 function formatThaiDate(value: string): string {

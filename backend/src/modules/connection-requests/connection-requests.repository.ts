@@ -1,6 +1,7 @@
 import type { Knex } from 'knex';
 import { db } from '../../config/database';
 import {
+  CONNECTION_REQUEST_STATUS,
   CONNECTION_REQUEST_TYPE,
   CONNECTION_REQUEST_TYPE_LABELS,
   CONNECTION_REQUEST_STATUS_LABELS,
@@ -55,6 +56,7 @@ interface ConnectionRequestRow {
   confirmed_at: Date | string | null;
   verified_at: Date | string | null;
   created_by: number | string;
+  updated_by?: number | string | null;
   created_at: Date | string;
   updated_at: Date | string;
 }
@@ -188,6 +190,8 @@ interface FactoryFavoriteRow {
 const TEMPORARY_FACTORY_TEXT = 'ไม่ระบุ';
 const TEMPORARY_EIA_LABEL: 'ไม่มี' = 'ไม่มี';
 const TERMINAL_CONNECTION_REQUEST_STATUSES: ConnectionRequestStatus[] = ['CONNECTED', 'CANCELED'];
+const CONNECTION_TIMEOUT_AUTO_CANCEL_NOTE =
+  'ระบบยกเลิกคำขออัตโนมัติเนื่องจากครบกำหนดเชื่อมต่อ 30 วัน';
 
 export const connectionRequestsRepository = {
   async list(
@@ -553,6 +557,46 @@ export const connectionRequestsRepository = {
       const updated = await findByIdInTransaction(trx, id);
       if (!updated) throw new Error('Updated connection request could not be loaded');
       return updated;
+    });
+  },
+
+  async autoCancelExpiredWaitingConnectionRequests(cutoffIso: string): Promise<number> {
+    return db.transaction(async (trx) => {
+      const expiredRows = await trx<ConnectionRequestRow>('cems_wpms_connection_requests')
+        .whereNull('deleted_at')
+        .where('status', CONNECTION_REQUEST_STATUS.WAITING_CONNECTION)
+        .whereNotNull('connection_due_at')
+        .where('connection_due_at', '<', cutoffIso)
+        .select('id', 'created_by', 'updated_by');
+
+      const rowsWithActors = expiredRows.filter((row) => Number.isFinite(findAuditActorId(row)));
+      if (rowsWithActors.length === 0) return 0;
+
+      const requestIds = rowsWithActors.map((row) => Number(row.id));
+      await trx('cems_wpms_connection_requests')
+        .whereIn('id', requestIds)
+        .where('status', CONNECTION_REQUEST_STATUS.WAITING_CONNECTION)
+        .whereNull('deleted_at')
+        .update({
+          status: CONNECTION_REQUEST_STATUS.CANCELED,
+          revision_reason: CONNECTION_TIMEOUT_AUTO_CANCEL_NOTE,
+          officer_note: null,
+          confirmed_at: null,
+          updated_by: trx.raw('COALESCE(updated_by, created_by)'),
+          updated_at: trx.fn.now(),
+        });
+
+      for (const row of rowsWithActors) {
+        await insertHistory(
+          trx,
+          Number(row.id),
+          CONNECTION_REQUEST_STATUS.CANCELED,
+          findAuditActorId(row),
+          CONNECTION_TIMEOUT_AUTO_CANCEL_NOTE,
+        );
+      }
+
+      return rowsWithActors.length;
     });
   },
 
@@ -1277,6 +1321,10 @@ function shouldIssueWaitingConnectionSideEffects(
   options: StatusUpdateOptions,
 ): boolean {
   return status === 'WAITING_CONNECTION' && (options.issueWaitingConnectionSideEffects ?? true);
+}
+
+function findAuditActorId(row: Pick<ConnectionRequestRow, 'created_by' | 'updated_by'>): number {
+  return Number(row.updated_by ?? row.created_by);
 }
 
 async function nextRequestNo(trx: Knex.Transaction, systemType: 'CEMS' | 'WPMS'): Promise<string> {

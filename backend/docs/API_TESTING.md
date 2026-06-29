@@ -345,9 +345,9 @@ curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/status
   -d '{"action":"APPROVE_FORM","officerNote":"แบบถูกต้อง"}'
 ```
 
-หลังเจ้าหน้าที่อนุมัติ ฟอร์มจะเข้าสถานะ `WAITING_CONNECTION` และ backend จะออก `pointCode` ให้อัตโนมัติ โดย CEMS เริ่ม `S0001` และ WPMS เริ่ม `P0001`. Frontend ไม่ต้องส่ง `pointCode` ตอนเพิ่มจุดตรวจวัดใหม่.
+หลังเจ้าหน้าที่อนุมัติ ฟอร์มจะเข้าสถานะ `WAITING_CONNECTION` และ backend จะออก `pointCode` ให้อัตโนมัติ โดย CEMS เริ่ม `S0001` และ WPMS เริ่ม `P0001`. Frontend ไม่ต้องส่ง `pointCode` ตอนเพิ่มจุดตรวจวัดใหม่. การเข้า `WAITING_CONNECTION` ครั้งแรกจะตั้ง `connectionDueAt` อีก 30 วัน และ backend worker จะ auto-cancel เป็น `CANCELED` ถ้าคำขอยังค้าง `WAITING_CONNECTION` หลัง deadline.
 
-ถ้าผู้ประกอบการยืนยันการเชื่อมต่อแล้วแต่เจ้าหน้าที่ต้องให้กลับไปแก้ config ให้ใช้ action `RETURN_TO_WAITING_CONNECTION` จากสถานะ `CONNECTION_CONFIRMED`:
+ถ้าผู้ประกอบการยืนยันการเชื่อมต่อแล้วแต่เจ้าหน้าที่ต้องให้กลับไปแก้ config ให้ใช้ action `RETURN_TO_WAITING_CONNECTION` จากสถานะ `CONNECTION_CONFIRMED`. การส่งกลับนี้ใช้ deadline เดิมต่อ ไม่เริ่มนับ 30 วันใหม่; ถ้า deadline หมดแล้ว backend จะเปลี่ยนปลายทางเป็น `CANCELED` ทันที:
 
 ```bash
 curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/status" \

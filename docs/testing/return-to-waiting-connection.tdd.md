@@ -48,7 +48,7 @@ Test Suites: 2 passed, 2 total
 Tests:       79 passed, 79 total
 ```
 
-The GREEN state proves the new action is accepted, only `CONNECTION_CONFIRMED` can transition back to `WAITING_CONNECTION`, `confirmedAt` is cleared, a fresh 30-day `connectionDueAt` is set, and the return path skips point-code/duplicate-point side effects.
+The GREEN state proved the original action behavior at the time of that change. The timeout rule was later tightened: `RETURN_TO_WAITING_CONNECTION` now preserves the original `connectionDueAt` instead of setting a fresh 30-day due date, and cancels immediately when that original deadline has already passed. See `docs/testing/connection-request-timeout-auto-cancel.tdd.md`.
 
 ### Integration
 
@@ -74,7 +74,7 @@ The integration route test proves `POST /api/v1/cems-wpms-requests/:id/status` a
 |---|--------------------|----------------------|-----------|--------|----------|
 | 1 | `RETURN_TO_WAITING_CONNECTION` is accepted by the status-change schema when a revision reason is supplied | `backend/tests/unit/connection-requests.validator.test.ts` | Unit | PASS | `npm test -- --runTestsByPath ...` |
 | 2 | A confirmed request can be returned to `WAITING_CONNECTION` by an officer action | `backend/tests/unit/connection-requests.service.test.ts` | Unit | PASS | `npm test -- --runTestsByPath ...` |
-| 3 | Returning to waiting clears `confirmedAt`, stores the reason/note, and gives the operator a new 30-day due date | `backend/tests/unit/connection-requests.service.test.ts` | Unit | PASS | `npm test -- --runTestsByPath ...` |
+| 3 | Returning to waiting clears `confirmedAt`, stores the reason/note, and originally gave the operator a new 30-day due date; this guarantee is superseded by `docs/testing/connection-request-timeout-auto-cancel.tdd.md` | `backend/tests/unit/connection-requests.service.test.ts` | Unit | SUPERSEDED | `npm test -- --runTestsByPath ...` |
 | 4 | Returning to waiting is rejected from statuses other than `CONNECTION_CONFIRMED` | `backend/tests/unit/connection-requests.service.test.ts` | Unit | PASS | `npm test -- --runTestsByPath ...` |
 | 5 | Returning to waiting skips point-code and duplicate-point side effects so existing point codes/config snapshots can be revised in place | `backend/tests/unit/connection-requests.repository.test.ts` and `backend/tests/unit/connection-requests.service.test.ts` | Unit | PASS | `npm test -- --runTestsByPath ...` |
 | 6 | The status endpoint accepts the new action and rejects it without `revisionReason` | `backend/tests/unit/connection-requests.status.route.test.ts` | Integration | PASS | `npm test -- --runTestsByPath ...status.route.test.ts` |

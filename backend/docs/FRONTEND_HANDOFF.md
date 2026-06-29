@@ -931,10 +931,10 @@ cems_wpms_requests:approve
 | 3 | ระบบ/เจ้าหน้าที่ | หลังอนุมัติแบบ | ออกเลข `pointCode` ตามชนิดระบบ |
 | 4 | ผู้ประกอบการ | `POST /cems-wpms-requests/:id/device-configs` | บันทึก config |
 | 5 | ผู้ประกอบการ | `POST /cems-wpms-requests/:id/confirm-connection` | `CONNECTION_CONFIRMED` / ยืนยันการเชื่อมต่อ |
-| 6 | เจ้าหน้าที่ | `POST /cems-wpms-requests/:id/status` action=`RETURN_TO_WAITING_CONNECTION` | `WAITING_CONNECTION` / ส่งกลับแก้ config |
+| 6 | เจ้าหน้าที่ | `POST /cems-wpms-requests/:id/status` action=`RETURN_TO_WAITING_CONNECTION` | `WAITING_CONNECTION` / ส่งกลับแก้ config หรือ `CANCELED` ถ้า deadline เดิมหมดแล้ว |
 | 7 | เจ้าหน้าที่ | `POST /cems-wpms-requests/:id/verify-connection` | `CONNECTED` / เชื่อมต่อแล้ว |
 
-ถ้าเจ้าหน้าที่ขอแก้ฟอร์มก่อนอนุมัติแบบ ให้ใช้ `POST /cems-wpms-requests/:id/status` action=`REQUEST_REVISION` แล้ว frontend ส่งกลับด้วย `PUT /cems-wpms-requests/:id/form`. ถ้าเจ้าหน้าที่ตรวจหลังผู้ประกอบการยืนยันการเชื่อมต่อแล้วและต้องการให้แก้ config ให้ใช้ action=`RETURN_TO_WAITING_CONNECTION`; ผู้ประกอบการแก้ผ่าน `POST /cems-wpms-requests/:id/device-configs` แล้วกด confirm ใหม่
+ถ้าเจ้าหน้าที่ขอแก้ฟอร์มก่อนอนุมัติแบบ ให้ใช้ `POST /cems-wpms-requests/:id/status` action=`REQUEST_REVISION` แล้ว frontend ส่งกลับด้วย `PUT /cems-wpms-requests/:id/form`. ถ้าเจ้าหน้าที่ตรวจหลังผู้ประกอบการยืนยันการเชื่อมต่อแล้วและต้องการให้แก้ config ให้ใช้ action=`RETURN_TO_WAITING_CONNECTION`; ผู้ประกอบการแก้ผ่าน `POST /cems-wpms-requests/:id/device-configs` แล้วกด confirm ใหม่ โดยใช้ `connectionDueAt` เดิมต่อจาก `WAITING_CONNECTION` ครั้งแรก ไม่ reset 30 วันใหม่ และถ้า deadline หมดแล้ว response จะเป็น `CANCELED` ทันที
 
 ## 9. Device connection config API
 

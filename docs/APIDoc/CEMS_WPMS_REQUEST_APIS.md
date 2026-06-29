@@ -23,7 +23,8 @@ Content-Type: application/json
 - Backend จะล้าง `pointCode` ของคำขอเพิ่มจุดตรวจวัด/ขอเชื่อมต่อใหม่ ถึง frontend ส่งมาก็ไม่ใช้เป็นเลขจริง
 - เจ้าหน้าที่ตรวจผ่านด้วย `APPROVE_FORM` แล้วสถานะจะเปลี่ยน `PENDING_DESIGN_REVIEW` หรือ `REVISED_PENDING_DESIGN_REVIEW` -> `WAITING_CONNECTION`
 - ตอนเข้า `WAITING_CONNECTION` backend จะออกเลข `pointCode` ให้จุดที่ยังไม่มีเลขโดยอัตโนมัติ
-- ถ้าเจ้าหน้าที่ส่งกลับจาก `CONNECTION_CONFIRMED` ด้วย `RETURN_TO_WAITING_CONNECTION` ระบบใช้ `pointCode` เดิมและเปิดรอบแก้ config ใหม่
+- `WAITING_CONNECTION` ครั้งแรกเริ่ม deadline 30 วันใน `connectionDueAt`; ระบบ auto-cancel เป็น `CANCELED` เมื่อคำขอค้าง `WAITING_CONNECTION` เกินกำหนด
+- ถ้าเจ้าหน้าที่ส่งกลับจาก `CONNECTION_CONFIRMED` ด้วย `RETURN_TO_WAITING_CONNECTION` ระบบใช้ `pointCode` เดิมและ deadline เดิม ไม่เริ่มนับ 30 วันใหม่; ถ้า deadline หมดแล้ว ระบบเปลี่ยนเป็น `CANCELED` ทันที
 - CEMS ใช้ prefix `S` เช่น `S0001`, `S0002`
 - WPMS ใช้ prefix `P` เช่น `P0001`, `P0002`
 
@@ -1485,9 +1486,9 @@ Response เป็น shape เดียวกับข้อ 4 แต่ `conne
 | แก้ไขแล้วส่งใหม่ | ผู้ประกอบการ | `PUT /api/v1/cems-wpms-requests/:id/form` | ไม่มี action | `REVISED_PENDING_DESIGN_REVIEW` | แก้ไขแล้ว/รอพิจารณาแบบ |
 | บันทึกข้อมูลการเชื่อมต่อ | ผู้ประกอบการ | `POST /api/v1/cems-wpms-requests/:id/confirm-connection` | `{ "action": "SAVE", "note": "บันทึก config ชั่วคราว" }` | `WAITING_CONNECTION` | รอเชื่อมต่อ |
 | ยืนยันการเชื่อมต่อ | ผู้ประกอบการ | `POST /api/v1/cems-wpms-requests/:id/confirm-connection` | `{ "action": "CONFIRM", "note": "ตั้งค่าอุปกรณ์และทดสอบแล้ว" }` | `CONNECTION_CONFIRMED` | ยืนยันการเชื่อมต่อ |
-| ส่งกลับแก้ config | เจ้าหน้าที่ | `POST /api/v1/cems-wpms-requests/:id/status` | `{ "action": "RETURN_TO_WAITING_CONNECTION", "revisionReason": "..." }` | `WAITING_CONNECTION` | รอเชื่อมต่อ |
+| ส่งกลับแก้ config | เจ้าหน้าที่ | `POST /api/v1/cems-wpms-requests/:id/status` | `{ "action": "RETURN_TO_WAITING_CONNECTION", "revisionReason": "..." }` | `WAITING_CONNECTION` หรือ `CANCELED` ถ้า deadline เดิมหมดแล้ว | รอเชื่อมต่อ / ยกเลิก |
 | ตรวจสอบแล้วกดยืนยัน | เจ้าหน้าที่ | `POST /api/v1/cems-wpms-requests/:id/verify-connection` | `{ "note": "ตรวจสอบแล้ว" }` | `CONNECTED` | เชื่อมต่อแล้ว |
-| ยกเลิกคำขอ | ระบบ/เจ้าหน้าที่ | ยังไม่มี public endpoint เฉพาะในเอกสารนี้ | - | `CANCELED` | ยกเลิก |
+| ยกเลิกคำขอ | ระบบ/เจ้าหน้าที่ | ระบบภายใน auto-cancel จาก `connectionDueAt`; ยังไม่มี public endpoint เฉพาะในเอกสารนี้ | - | `CANCELED` | ยกเลิก |
 
 บันทึกข้อมูลการเชื่อมต่อ:
 

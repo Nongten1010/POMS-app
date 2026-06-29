@@ -354,10 +354,10 @@ Status values:
 - `PENDING_DESIGN_REVIEW` — รอพิจารณาแบบ
 - `WAITING_FACTORY_REVISION` — รอโรงงานแก้ไข
 - `REVISED_PENDING_DESIGN_REVIEW` — แก้ไขแล้ว/รอพิจารณาแบบ
-- `WAITING_CONNECTION` — รอเชื่อมต่อหลังอนุมัติแบบ หรือรอแก้ config หลังเจ้าหน้าที่ส่งกลับจากการยืนยันการเชื่อมต่อ
+- `WAITING_CONNECTION` — รอเชื่อมต่อหลังอนุมัติแบบ หรือรอแก้ config หลังเจ้าหน้าที่ส่งกลับจากการยืนยันการเชื่อมต่อ โดยใช้ `connection_due_at` เดิมจากการเข้า `WAITING_CONNECTION` ครั้งแรก
 - `CONNECTION_CONFIRMED` — ยืนยันการเชื่อมต่อ
 - `CONNECTED` — เชื่อมต่อแล้ว
-- `CANCELED` — ยกเลิก
+- `CANCELED` — ยกเลิก; backend worker เปลี่ยนอัตโนมัติเมื่อคำขอค้าง `WAITING_CONNECTION` หลัง `connection_due_at` หรือทันทีเมื่อ `RETURN_TO_WAITING_CONNECTION` หลัง deadline หมดแล้ว
 
 ### 5.5 `cems_wpms_measurement_points` — จุดตรวจวัดในคำขอ
 
