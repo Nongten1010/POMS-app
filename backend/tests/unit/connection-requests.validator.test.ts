@@ -764,6 +764,13 @@ describe('connection request validators', () => {
         revisionReason: 'เพิ่มเอกสาร config',
       }).success,
     ).toBe(true);
+    expect(
+      changeConnectionRequestStatusSchema.safeParse({
+        action: 'RETURN_TO_WAITING_CONNECTION',
+        revisionReason: 'ตั้งค่าอุปกรณ์ยังไม่ถูกต้อง',
+        officerNote: 'ส่งกลับให้แก้ config',
+      }).success,
+    ).toBe(true);
   });
 
   it('accepts connection confirmation and final verification payloads', () => {

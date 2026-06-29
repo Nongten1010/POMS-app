@@ -23,6 +23,7 @@ Content-Type: application/json
 - Backend จะล้าง `pointCode` ของคำขอเพิ่มจุดตรวจวัด/ขอเชื่อมต่อใหม่ ถึง frontend ส่งมาก็ไม่ใช้เป็นเลขจริง
 - เจ้าหน้าที่ตรวจผ่านด้วย `APPROVE_FORM` แล้วสถานะจะเปลี่ยน `PENDING_DESIGN_REVIEW` หรือ `REVISED_PENDING_DESIGN_REVIEW` -> `WAITING_CONNECTION`
 - ตอนเข้า `WAITING_CONNECTION` backend จะออกเลข `pointCode` ให้จุดที่ยังไม่มีเลขโดยอัตโนมัติ
+- ถ้าเจ้าหน้าที่ส่งกลับจาก `CONNECTION_CONFIRMED` ด้วย `RETURN_TO_WAITING_CONNECTION` ระบบใช้ `pointCode` เดิมและเปิดรอบแก้ config ใหม่
 - CEMS ใช้ prefix `S` เช่น `S0001`, `S0002`
 - WPMS ใช้ prefix `P` เช่น `P0001`, `P0002`
 
@@ -1484,6 +1485,7 @@ Response เป็น shape เดียวกับข้อ 4 แต่ `conne
 | แก้ไขแล้วส่งใหม่ | ผู้ประกอบการ | `PUT /api/v1/cems-wpms-requests/:id/form` | ไม่มี action | `REVISED_PENDING_DESIGN_REVIEW` | แก้ไขแล้ว/รอพิจารณาแบบ |
 | บันทึกข้อมูลการเชื่อมต่อ | ผู้ประกอบการ | `POST /api/v1/cems-wpms-requests/:id/confirm-connection` | `{ "action": "SAVE", "note": "บันทึก config ชั่วคราว" }` | `WAITING_CONNECTION` | รอเชื่อมต่อ |
 | ยืนยันการเชื่อมต่อ | ผู้ประกอบการ | `POST /api/v1/cems-wpms-requests/:id/confirm-connection` | `{ "action": "CONFIRM", "note": "ตั้งค่าอุปกรณ์และทดสอบแล้ว" }` | `CONNECTION_CONFIRMED` | ยืนยันการเชื่อมต่อ |
+| ส่งกลับแก้ config | เจ้าหน้าที่ | `POST /api/v1/cems-wpms-requests/:id/status` | `{ "action": "RETURN_TO_WAITING_CONNECTION", "revisionReason": "..." }` | `WAITING_CONNECTION` | รอเชื่อมต่อ |
 | ตรวจสอบแล้วกดยืนยัน | เจ้าหน้าที่ | `POST /api/v1/cems-wpms-requests/:id/verify-connection` | `{ "note": "ตรวจสอบแล้ว" }` | `CONNECTED` | เชื่อมต่อแล้ว |
 
 บันทึกข้อมูลการเชื่อมต่อ:
@@ -2632,13 +2634,23 @@ curl "http://localhost:3000/api/v1/parameter-values/connection-test?stationId=S0
 }
 ```
 
+ตัวอย่าง JSON ส่งกลับแก้ config หลังผู้ประกอบการยืนยันการเชื่อมต่อแล้ว:
+
+```json
+{
+  "action": "RETURN_TO_WAITING_CONNECTION",
+  "revisionReason": "ตั้งค่าอุปกรณ์ยังไม่ถูกต้อง",
+  "officerNote": "แก้ mapping channel แล้วส่งยืนยันอีกครั้ง"
+}
+```
+
 Data dictionary:
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
-| `action` | string | Yes | `APPROVE_FORM` หรือ `REQUEST_REVISION` |
+| `action` | string | Yes | `APPROVE_FORM`, `REQUEST_REVISION`, หรือ `RETURN_TO_WAITING_CONNECTION` |
 | `officerNote` | string|null | No | หมายเหตุเจ้าหน้าที่ |
-| `revisionReason` | string | Conditional | ต้องส่งเมื่อ `action = REQUEST_REVISION` |
+| `revisionReason` | string | Conditional | ต้องส่งเมื่อ `action = REQUEST_REVISION` หรือ `RETURN_TO_WAITING_CONNECTION` |
 
 ### API 6: GET รายการคำขอทั้งหมด สำหรับตารางเจ้าหน้าที่
 
@@ -3038,6 +3050,7 @@ MYSQL
 ```text
 APPROVE_FORM
 REQUEST_REVISION
+RETURN_TO_WAITING_CONNECTION
 ```
 
 ### pointCode

@@ -543,6 +543,10 @@ export const connectionRequestsService = {
     input: ChangeConnectionRequestStatusInput,
     actorUserId: number,
   ): Promise<ConnectionRequestDTO> {
+    if (input.action === 'RETURN_TO_WAITING_CONNECTION') {
+      return this.returnToWaitingConnection(id, input, actorUserId);
+    }
+
     if (input.action === 'REQUEST_REVISION') {
       return this.review(
         id,
@@ -562,6 +566,30 @@ export const connectionRequestsService = {
         officerNote: input.officerNote,
       },
       actorUserId,
+    );
+  },
+
+  async returnToWaitingConnection(
+    id: number,
+    input: ChangeConnectionRequestStatusInput,
+    actorUserId: number,
+  ): Promise<ConnectionRequestDTO> {
+    const request = await loadRequest(id);
+    ensureStatus(request, [CONNECTION_REQUEST_STATUS.CONNECTION_CONFIRMED]);
+
+    return connectionRequestsRepository.updateStatus(
+      id,
+      CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+      actorUserId,
+      {
+        officerNote: input.officerNote ?? null,
+        revisionReason: input.revisionReason,
+        connectionDueAt: addDays(nowProvider(), 30).toISOString(),
+        confirmedAt: null,
+      },
+      {
+        issueWaitingConnectionSideEffects: false,
+      },
     );
   },
 

@@ -1799,6 +1799,76 @@ describe('connectionRequestsService', () => {
     );
   });
 
+  it('returns a confirmed connection back to waiting connection for device config revision', async () => {
+    mockedRepository.findById.mockResolvedValue(
+      requestDto({
+        status: CONNECTION_REQUEST_STATUS.CONNECTION_CONFIRMED,
+        connectionDueAt: '2026-06-30T00:00:00.000Z',
+        confirmedAt: '2026-06-01T00:00:00.000Z',
+        createdBy: actorUserId,
+      }),
+    );
+    mockedRepository.updateStatus.mockResolvedValue(
+      requestDto({
+        status: CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+        connectionDueAt: dueAt,
+        confirmedAt: null,
+        createdBy: actorUserId,
+      }),
+    );
+
+    await connectionRequestsService.changeStatus(
+      1,
+      {
+        action: 'RETURN_TO_WAITING_CONNECTION',
+        revisionReason: 'ตั้งค่าอุปกรณ์ยังไม่ถูกต้อง',
+        officerNote: 'แก้ mapping channel',
+      },
+      7,
+    );
+
+    expect(mockedRepository.updateStatus).toHaveBeenCalledWith(
+      1,
+      CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+      7,
+      {
+        officerNote: 'แก้ mapping channel',
+        revisionReason: 'ตั้งค่าอุปกรณ์ยังไม่ถูกต้อง',
+        connectionDueAt: dueAt,
+        confirmedAt: null,
+      },
+      {
+        issueWaitingConnectionSideEffects: false,
+      },
+    );
+  });
+
+  it('rejects returning to waiting connection from a non-confirmed status', async () => {
+    mockedRepository.findById.mockResolvedValue(
+      requestDto({
+        status: CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+        createdBy: actorUserId,
+      }),
+    );
+
+    await expect(
+      connectionRequestsService.changeStatus(
+        1,
+        {
+          action: 'RETURN_TO_WAITING_CONNECTION',
+          revisionReason: 'ตั้งค่าอุปกรณ์ยังไม่ถูกต้อง',
+        },
+        7,
+      ),
+    ).rejects.toMatchObject({
+      details: {
+        currentStatus: CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+        allowedStatuses: [CONNECTION_REQUEST_STATUS.CONNECTION_CONFIRMED],
+      },
+    });
+    expect(mockedRepository.updateStatus).not.toHaveBeenCalled();
+  });
+
   it('stores device config only when station belongs to an approved owner request', async () => {
     const deviceConfig = {
       stationId: 'STACK-A',

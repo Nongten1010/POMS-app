@@ -159,14 +159,14 @@ Workflow status:
 | `PENDING_DESIGN_REVIEW` | รอพิจารณา | ผู้ประกอบการส่งฟอร์ม |
 | `WAITING_FACTORY_REVISION` | รอโรงงานแก้ไข | เจ้าหน้าที่ขอให้แก้ไข |
 | `REVISED_PENDING_DESIGN_REVIEW` | แก้ไขแล้ว/รอพิจารณา | ผู้ประกอบการส่งแบบที่แก้ไขแล้ว |
-| `WAITING_CONNECTION` | รอเชื่อมต่อ | เจ้าหน้าที่อนุมัติแบบ และระบบออกเลข `pointCode` |
+| `WAITING_CONNECTION` | รอเชื่อมต่อ | เจ้าหน้าที่อนุมัติแบบและระบบออกเลข `pointCode`, หรือเจ้าหน้าที่ส่งกลับให้แก้ config หลังผู้ประกอบการยืนยันแล้ว |
 | `CONNECTION_CONFIRMED` | ยืนยันการเชื่อมต่อ | ผู้ประกอบการยืนยันว่าส่งค่าเข้าระบบได้แล้ว |
 | `CONNECTED` | เชื่อมต่อแล้ว | เจ้าหน้าที่ตรวจค่าในระบบแล้ว |
 
 Security behavior:
 - `cems_wpms_requests:edit` ใช้สำหรับผู้ประกอบการสร้าง/แก้ไข/ยืนยัน request ของตัวเอง
 - `cems_wpms_requests:edit` ใช้สำหรับสร้าง config และ mock test connection อุปกรณ์ตรวจวัด
-- `cems_wpms_requests:approve` ใช้สำหรับเจ้าหน้าที่พิจารณาแบบและ verify การเชื่อมต่อ
+- `cems_wpms_requests:approve` ใช้สำหรับเจ้าหน้าที่พิจารณาแบบ, ส่งกลับแก้ config ด้วย `RETURN_TO_WAITING_CONNECTION`, และ verify การเชื่อมต่อ
 - request workflow list/detail ใช้ scope จาก `cems_wpms_requests:view`; scope `ALL` เห็นทั้งหมด, scope อื่นเห็นเฉพาะรายการที่ตัวเองสร้าง
 - `/device-connections` GET ไม่ต้องใช้ token เพราะอุปกรณ์ client login ไม่ได้; `GET /device-connections` ต้องส่ง `stationId`
 - `/device-connections` POST ยังใช้ `cems_wpms_requests:edit` สำหรับ create/test

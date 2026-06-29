@@ -164,6 +164,10 @@ interface StatusUpdate {
   verifiedAt?: string | null;
 }
 
+interface StatusUpdateOptions {
+  issueWaitingConnectionSideEffects?: boolean;
+}
+
 interface PointCodeSequenceRow {
   system_type: 'CEMS' | 'WPMS';
   prefix: 'S' | 'P';
@@ -510,9 +514,10 @@ export const connectionRequestsRepository = {
     status: ConnectionRequestStatus,
     actorUserId: number,
     update: StatusUpdate,
+    options: StatusUpdateOptions = {},
   ): Promise<ConnectionRequestDTO> {
     return db.transaction(async (trx) => {
-      if (status === 'WAITING_CONNECTION') {
+      if (shouldIssueWaitingConnectionSideEffects(status, options)) {
         await softDeleteDuplicateActiveMeasurementPoints(trx, id, actorUserId);
         await issuePointCodesForRequest(trx, id, actorUserId);
       }
@@ -538,7 +543,7 @@ export const connectionRequestsRepository = {
         id,
         status,
         actorUserId,
-        update.revisionReason ?? update.officerNote ?? null,
+        buildStatusHistoryNote(update),
       );
 
       const updated = await findByIdInTransaction(trx, id);
@@ -1196,6 +1201,31 @@ async function insertHistory(
     note,
     changed_by: actorUserId,
   });
+}
+
+function buildStatusHistoryNote(update: StatusUpdate): string | null {
+  const notes = [update.revisionReason, update.officerNote].filter(
+    (value): value is string => Boolean(value),
+  );
+  return notes.length > 0 ? notes.join('\n') : null;
+}
+
+export function shouldIssueWaitingConnectionSideEffectsForTests(
+  status: ConnectionRequestStatus,
+  options: StatusUpdateOptions = {},
+): boolean {
+  return shouldIssueWaitingConnectionSideEffects(status, options);
+}
+
+export function buildStatusHistoryNoteForTests(update: StatusUpdate): string | null {
+  return buildStatusHistoryNote(update);
+}
+
+function shouldIssueWaitingConnectionSideEffects(
+  status: ConnectionRequestStatus,
+  options: StatusUpdateOptions,
+): boolean {
+  return status === 'WAITING_CONNECTION' && (options.issueWaitingConnectionSideEffects ?? true);
 }
 
 async function nextRequestNo(trx: Knex.Transaction, systemType: 'CEMS' | 'WPMS'): Promise<string> {

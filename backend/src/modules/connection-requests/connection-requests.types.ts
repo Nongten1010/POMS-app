@@ -151,7 +151,7 @@ export interface ReviewConnectionRequestInput {
 }
 
 export interface ChangeConnectionRequestStatusInput {
-  action: 'APPROVE_FORM' | 'REQUEST_REVISION';
+  action: 'APPROVE_FORM' | 'REQUEST_REVISION' | 'RETURN_TO_WAITING_CONNECTION';
   revisionReason?: string | null;
   officerNote?: string | null;
 }

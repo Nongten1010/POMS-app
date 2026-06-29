@@ -1,10 +1,13 @@
 import { describe, expect, it } from '@jest/globals';
 import {
+  buildStatusHistoryNoteForTests,
   buildBaseQueryForTests,
   buildDuplicateActiveMeasurementPointCleanupSqlForTests,
   buildFactoriesForAccessQueryForTests,
   buildRequestNoPrefix,
+  shouldIssueWaitingConnectionSideEffectsForTests,
 } from '../../src/modules/connection-requests/connection-requests.repository';
+import { CONNECTION_REQUEST_STATUS } from '../../src/modules/connection-requests/connection-requests.types';
 
 describe('connectionRequestsRepository request numbers', () => {
   it('builds request number prefixes from system type and Thai Buddhist year', () => {
@@ -62,5 +65,33 @@ describe('connectionRequestsRepository request numbers', () => {
     expect(sql).toContain("nullif(ltrim(rtrim(point_code)), '') is null");
     expect(sql).toContain('deleted_at = sysdatetime()');
     expect(sql).toContain('where ranked.duplicate_rank > 1');
+  });
+
+  it('can skip waiting-connection point-code side effects for config revision returns', () => {
+    expect(
+      shouldIssueWaitingConnectionSideEffectsForTests(
+        CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+      ),
+    ).toBe(true);
+    expect(
+      shouldIssueWaitingConnectionSideEffectsForTests(
+        CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+        { issueWaitingConnectionSideEffects: false },
+      ),
+    ).toBe(false);
+    expect(
+      shouldIssueWaitingConnectionSideEffectsForTests(
+        CONNECTION_REQUEST_STATUS.CONNECTION_CONFIRMED,
+      ),
+    ).toBe(false);
+  });
+
+  it('keeps both revision reason and officer note in status history notes', () => {
+    expect(
+      buildStatusHistoryNoteForTests({
+        revisionReason: 'ตั้งค่าอุปกรณ์ยังไม่ถูกต้อง',
+        officerNote: 'แก้ mapping channel แล้วส่งยืนยันอีกครั้ง',
+      }),
+    ).toBe('ตั้งค่าอุปกรณ์ยังไม่ถูกต้อง\nแก้ mapping channel แล้วส่งยืนยันอีกครั้ง');
   });
 });

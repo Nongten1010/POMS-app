@@ -347,6 +347,15 @@ curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/status
 
 หลังเจ้าหน้าที่อนุมัติ ฟอร์มจะเข้าสถานะ `WAITING_CONNECTION` และ backend จะออก `pointCode` ให้อัตโนมัติ โดย CEMS เริ่ม `S0001` และ WPMS เริ่ม `P0001`. Frontend ไม่ต้องส่ง `pointCode` ตอนเพิ่มจุดตรวจวัดใหม่.
 
+ถ้าผู้ประกอบการยืนยันการเชื่อมต่อแล้วแต่เจ้าหน้าที่ต้องให้กลับไปแก้ config ให้ใช้ action `RETURN_TO_WAITING_CONNECTION` จากสถานะ `CONNECTION_CONFIRMED`:
+
+```bash
+curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/$REQUEST_ID/status" \
+  -H "Authorization: Bearer $OFFICER_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"action":"RETURN_TO_WAITING_CONNECTION","revisionReason":"ตั้งค่าอุปกรณ์ยังไม่ถูกต้อง","officerNote":"แก้ mapping channel แล้วส่งยืนยันอีกครั้ง"}'
+```
+
 ### 5.8 Device connection config mock API
 
 API ชุดนี้ใช้ตั้งค่า connection อุปกรณ์ตรวจวัดหลังแบบเชื่อมต่อพร้อมใช้งาน โดย 1 `stationId` คือ 1 จุดตรวจวัด และมีได้หลาย protocol รวมถึงมีหลายอุปกรณ์ใน protocol เดียวกันได้เมื่อ `deviceCode` ต่างกัน แต่ห้ามซ้ำ `stationId + protocol + deviceCode`:

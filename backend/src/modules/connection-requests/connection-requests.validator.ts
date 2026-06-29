@@ -947,6 +947,13 @@ export const changeConnectionRequestStatusSchema = z
         officerNote: optionalNullableTrimmedString(1000),
       })
       .strict(),
+    z
+      .object({
+        action: z.literal('RETURN_TO_WAITING_CONNECTION'),
+        revisionReason: trimmedString(1000),
+        officerNote: optionalNullableTrimmedString(1000),
+      })
+      .strict(),
   ])
   .transform((payload) => ({
     ...payload,
