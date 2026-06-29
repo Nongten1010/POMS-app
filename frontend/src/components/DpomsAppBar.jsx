@@ -89,7 +89,7 @@ function DpomsAppBar({
                 color="text.secondary"
                 sx={{ flex: '0 0 auto', fontSize: 11, lineHeight: 1 }}
               >
-                v1.3
+                v1.4
               </Typography>
             </Stack>
             <Typography
