@@ -199,11 +199,13 @@ describe('connectionRequestsService', () => {
   });
 
   it('returns request table rows formatted for officer/operator grids', async () => {
+    connectionRequestsService.setClockForTests(() => new Date('2026-06-08T10:00:00.000Z'));
     const request = requestDto({
       status: CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
       statusLabel: 'รอเชื่อมต่อ',
       requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT,
       requestTypeLabel: 'เพิ่มจุดตรวจวัด',
+      connectionDueAt: dueAt,
       measurementPoints: [
         {
           id: 1,
@@ -232,7 +234,13 @@ describe('connectionRequestsService', () => {
         },
       ],
     });
-    mockedRepository.list.mockResolvedValue({ rows: [request], total: 1 });
+    const connectedRequest = requestDto({
+      id: 2,
+      status: CONNECTION_REQUEST_STATUS.CONNECTED,
+      statusLabel: 'เชื่อมต่อแล้ว',
+      connectionDueAt: dueAt,
+    });
+    mockedRepository.list.mockResolvedValue({ rows: [request, connectedRequest], total: 2 });
     mockedRepository.findFactorySummariesForRequests.mockResolvedValue(
       new Map([[request.factoryId, factorySummary()]]),
     );
@@ -248,6 +256,15 @@ describe('connectionRequestsService', () => {
       codeIssuedDate: '28/05/2569',
       form: 'เพิ่มจุดตรวจวัด',
       status: 'รอเชื่อมต่อ',
+      connectionDueAt: dueAt,
+      waitingConnectionDaysRemaining: 18,
+      waitingConnectionText: 'รอเชื่อมต่อ 18 วัน',
+    });
+    expect(result.data[1]).toMatchObject({
+      status: 'เชื่อมต่อแล้ว',
+      connectionDueAt: null,
+      waitingConnectionDaysRemaining: null,
+      waitingConnectionText: null,
     });
   });
 

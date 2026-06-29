@@ -486,3 +486,36 @@ Reason:
 Risk:
 
 - Requests without any status history return a null summary.
+
+## CEMS/WPMS Request Table Waiting Connection Countdown
+
+Endpoint: `GET /api/v1/cems-wpms-requests/table-rows`
+
+Code:
+
+- `backend/src/modules/connection-requests/connection-requests.service.ts`
+- `backend/src/modules/connection-requests/connection-requests.types.ts`
+
+### `connectionDueAt` / `waitingConnectionDaysRemaining` / `waitingConnectionText`
+
+Source:
+
+- `cems_wpms_connection_requests.status`
+- `cems_wpms_connection_requests.connection_due_at`
+- Current server clock at response mapping time
+
+Logic:
+
+- These fields are populated only when the row status is `WAITING_CONNECTION` and `connection_due_at` is a valid timestamp.
+- `connectionDueAt` returns the ISO timestamp from `connection_due_at`.
+- `waitingConnectionDaysRemaining` is `ceil((connectionDueAt - now) / 1 day)`, clamped to `0` when the due date has already passed.
+- `waitingConnectionText` formats the value as `รอเชื่อมต่อ <N> วัน`.
+- Rows in any other status return `null` for all three fields.
+
+Reason:
+
+- The request table needs a direct display label such as `รอเชื่อมต่อ 18 วัน` without changing the existing `status` / `statusCode` contract.
+
+Risk:
+
+- The countdown is computed from the server clock at request time. Values can change between requests and may differ from a browser-side clock near day boundaries.

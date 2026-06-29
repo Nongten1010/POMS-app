@@ -859,6 +859,7 @@ function toRequestTableRow(
 ): ConnectionRequestTableRowDTO {
   const firstPoint = request.measurementPoints[0] ?? null;
   const codeIssuedAt = findCodeIssuedAt(request);
+  const waitingConnection = toWaitingConnectionCountdown(request);
   return {
     id: request.id,
     factoryId: request.factoryId,
@@ -872,10 +873,41 @@ function toRequestTableRow(
     monitoringPointCode: firstPoint?.pointCode ?? null,
     codeIssuedAt,
     codeIssuedDate: codeIssuedAt ? formatThaiDate(codeIssuedAt) : null,
+    connectionDueAt: waitingConnection.connectionDueAt,
+    waitingConnectionDaysRemaining: waitingConnection.daysRemaining,
+    waitingConnectionText: waitingConnection.text,
     form: request.requestTypeLabel,
     status: request.statusLabel,
     statusCode: request.status,
     requestType: request.requestType,
+  };
+}
+
+function toWaitingConnectionCountdown(request: ConnectionRequestDTO): {
+  connectionDueAt: string | null;
+  daysRemaining: number | null;
+  text: string | null;
+} {
+  if (request.status !== CONNECTION_REQUEST_STATUS.WAITING_CONNECTION || !request.connectionDueAt) {
+    return { connectionDueAt: null, daysRemaining: null, text: null };
+  }
+
+  const dueAt = new Date(request.connectionDueAt);
+  const now = nowProvider();
+  if (Number.isNaN(dueAt.getTime())) {
+    return { connectionDueAt: null, daysRemaining: null, text: null };
+  }
+
+  const millisecondsPerDay = 24 * 60 * 60 * 1000;
+  const daysRemaining = Math.max(
+    0,
+    Math.ceil((dueAt.getTime() - now.getTime()) / millisecondsPerDay),
+  );
+
+  return {
+    connectionDueAt: request.connectionDueAt,
+    daysRemaining,
+    text: `รอเชื่อมต่อ ${daysRemaining} วัน`,
   };
 }
 

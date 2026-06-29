@@ -1604,6 +1604,9 @@ Response:
       "monitoringPointCode": "S0001",
       "codeIssuedAt": "2026-05-30T10:05:00.000Z",
       "codeIssuedDate": "30/05/2569",
+      "connectionDueAt": "2026-06-29T10:05:00.000Z",
+      "waitingConnectionDaysRemaining": 18,
+      "waitingConnectionText": "รอเชื่อมต่อ 18 วัน",
       "form": "เพิ่มจุดตรวจวัด",
       "status": "รอเชื่อมต่อ",
       "statusCode": "WAITING_CONNECTION",
@@ -2706,6 +2709,9 @@ Data dictionary response row:
 | `type` | string | `CEMS` หรือ `WPMS` |
 | `requestNo` | string | เลขคำขอ |
 | `monitoringPointCode` | string|null | pointCode หลังอนุมัติ |
+| `connectionDueAt` | string|null | deadline การเชื่อมต่อ เฉพาะรายการที่ยังอยู่ `WAITING_CONNECTION`; status อื่นคืน `null` |
+| `waitingConnectionDaysRemaining` | number|null | จำนวนวันคงเหลือก่อนครบกำหนดเชื่อมต่อ เฉพาะ `WAITING_CONNECTION`; status อื่นคืน `null` |
+| `waitingConnectionText` | string|null | ข้อความพร้อมแสดงผล เช่น `รอเชื่อมต่อ 18 วัน`; status อื่นคืน `null` |
 | `form` | string | ชื่อฟอร์ม |
 | `status` | string | label สถานะ |
 | `statusCode` | string | code สถานะ |

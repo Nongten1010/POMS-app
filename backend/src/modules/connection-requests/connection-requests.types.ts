@@ -311,6 +311,9 @@ export interface ConnectionRequestTableRowDTO {
   monitoringPointCode: string | null;
   codeIssuedAt: string | null;
   codeIssuedDate: string | null;
+  connectionDueAt: string | null;
+  waitingConnectionDaysRemaining: number | null;
+  waitingConnectionText: string | null;
   form: string;
   status: string;
   statusCode: ConnectionRequestStatus;
