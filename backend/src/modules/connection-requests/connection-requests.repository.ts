@@ -1,5 +1,7 @@
 import type { Knex } from 'knex';
 import { db } from '../../config/database';
+import { env } from '../../config/env';
+import { factorySourceDb } from '../../config/factory-source-database';
 import {
   CONNECTION_REQUEST_STATUS,
   CONNECTION_REQUEST_TYPE,
@@ -10,7 +12,6 @@ import {
   type ConnectionRequestStatus,
   type ConnectionRequestType,
   type CreateConnectionRequestInput,
-  type ConnectionRequestSearchOptionsDTO,
   type CurrentFactoryMeasurementPointDTO,
   type FactoryFavoriteDTO,
   type FactoryGeneralDTO,
@@ -21,7 +22,6 @@ import {
   type MeasurementPointDTO,
   type MeasurementPointInput,
   type RequestDocumentImageInput,
-  type SearchOptionDTO,
   type StatusDurationSummaryDTO,
   type StatusHistoryDTO,
 } from './connection-requests.types';
@@ -79,12 +79,6 @@ interface RequestFactorySnapshotRow {
   factory_main_type_label: string | null;
 }
 
-interface SearchOptionRow {
-  code: string | null;
-  label: string | null;
-  description: string | null;
-}
-
 interface MeasurementPointRow {
   id: number | string;
   request_id: number | string;
@@ -138,7 +132,11 @@ interface FactoryRow {
   code: string;
   name: string;
   system_detail: string | null;
+  province_id: string | null;
+  province_region: string | null;
   province_name: string | null;
+  industrial_estate_code: string | null;
+  industrial_estate_name: string | null;
   is_active: boolean | number;
   factory_registration_no_old: string | null;
   factory_type_sequence: string | null;
@@ -148,6 +146,13 @@ interface FactoryRow {
   business_activity: string | null;
   has_eia: boolean | number | null;
   eligible_factory_id: number | string | null;
+}
+
+interface FactoryMainTypeLabelRow {
+  CLASS: string | null;
+  DISP_CLASS: string | null;
+  DESCRIPT: string | null;
+  FULL_DESCRIPTION: string | null;
 }
 
 interface FactoryGeneralRow {
@@ -247,34 +252,36 @@ export const connectionRequestsRepository = {
     return { rows: data, total };
   },
 
-  async listSearchOptions(access: ListAccess): Promise<ConnectionRequestSearchOptionsDTO> {
-    const [factoryMainTypes, regions, provinces, districts, subdistricts, industrialEstates] =
-      await Promise.all([
-        listSnapshotOptions(access, 'factory_main_type_code', 'factory_main_type_code', {
-          descriptionColumn: 'factory_main_type_label',
-        }),
-        listSnapshotOptions(access, 'region_code', 'region_name'),
-        listSnapshotOptions(access, 'province_code', 'province_name'),
-        listSnapshotOptions(access, 'district_code', 'district_name'),
-        listSnapshotOptions(access, 'subdistrict_code', 'subdistrict_name'),
-        listSnapshotOptions(access, 'industrial_estate_code', 'industrial_estate_name'),
-      ]);
-
-    return {
-      factoryMainTypes,
-      regions,
-      provinces,
-      districts,
-      subdistricts,
-      industrialEstates,
-    };
-  },
-
   async listFactoriesForAccess(access: FactoryAccess): Promise<FactorySummaryDTO[]> {
     const builder = buildFactoriesForAccessQuery(access);
 
     const rows = await builder;
     return rows.map(toFactorySummaryDTO);
+  },
+
+  async listFactoryMainTypeLabels(codes: string[]): Promise<Map<string, string>> {
+    const normalizedCodes = [...new Set(codes.map(normalizeFactoryMainTypeCode).filter(isString))];
+    if (normalizedCodes.length === 0) return new Map();
+
+    const rows = await factorySourceDb<FactoryMainTypeLabelRow>(`${env.FACTORY_DB_SCHEMA}.TCLASS`)
+      .whereIn(
+        'CLASS',
+        normalizedCodes.map((code) => code.padStart(5, '0')),
+      )
+      .select('CLASS', 'DISP_CLASS', 'DESCRIPT', 'FULL_DESCRIPTION');
+
+    return new Map(
+      rows
+        .map((row): [string, string] | null => {
+          const code = normalizeFactoryMainTypeCode(row.CLASS);
+          if (!code) return null;
+          const displayClass = row.DISP_CLASS?.trim();
+          const description = (row.FULL_DESCRIPTION ?? row.DESCRIPT)?.trim();
+          if (!displayClass || !description) return null;
+          return [code, `ประเภทโรงงานลำดับที่ ${displayClass}: ${description}`];
+        })
+        .filter(isTuple),
+    );
   },
 
   async findFactoryGeneral(
@@ -731,6 +738,7 @@ function buildFactoriesForAccessQuery(
 ): Knex.QueryBuilder<FactoryRow, FactoryRow[]> {
   const builder = db<FactoryRow>('factories as f')
     .leftJoin('provinces as p', 'p.id', 'f.province_id')
+    .leftJoin('industrial_estates as ie', 'ie.id', 'f.industrial_estate_id')
     .leftJoin('eligible_factories as ef', function joinEligibleFactory() {
       this.on(function joinFactoryKeys() {
         this.on('ef.factory_registration_no_new', '=', 'f.code')
@@ -747,7 +755,11 @@ function buildFactoriesForAccessQuery(
       'f.name',
       'f.system_detail',
       'f.is_active',
+      'p.id as province_id',
+      'p.region as province_region',
       'p.name_th as province_name',
+      'ie.code as industrial_estate_code',
+      'ie.name_th as industrial_estate_name',
       'ef.factory_registration_no_old',
       'ef.factory_type_sequence',
       'ef.address',
@@ -849,45 +861,6 @@ function buildBaseQuery(
   );
 }
 
-async function listSnapshotOptions(
-  access: ListAccess,
-  codeColumn: keyof RequestFactorySnapshotRow,
-  labelColumn: keyof RequestFactorySnapshotRow,
-  options: { descriptionColumn?: keyof RequestFactorySnapshotRow } = {},
-): Promise<SearchOptionDTO[]> {
-  const rows = await buildSnapshotOptionsBaseQuery(access)
-    .whereRaw('NULLIF(LTRIM(RTRIM(??)), ?) IS NOT NULL', [`fs.${labelColumn}`, ''])
-    .distinct(
-      db.raw('?? as ??', [`fs.${codeColumn}`, 'code']),
-      db.raw('?? as ??', [`fs.${labelColumn}`, 'label']),
-      options.descriptionColumn
-        ? db.raw('?? as ??', [`fs.${options.descriptionColumn}`, 'description'])
-        : db.raw('CAST(NULL AS NVARCHAR(500)) as ??', ['description']),
-    )
-    .orderBy('label', 'asc');
-
-  return (rows as SearchOptionRow[])
-    .filter((row) => Boolean(row.label?.trim()))
-    .map((row) => ({
-      code: row.code,
-      label: row.label?.trim() ?? '',
-      description: row.description?.trim() || null,
-    }));
-}
-
-function buildSnapshotOptionsBaseQuery(
-  access: ListAccess,
-): Knex.QueryBuilder<RequestFactorySnapshotRow, SearchOptionRow[]> {
-  const builder = db<RequestFactorySnapshotRow>('cems_wpms_request_factory_snapshots as fs')
-    .join('cems_wpms_connection_requests as r', 'r.id', 'fs.request_id')
-    .whereNull('fs.deleted_at')
-    .whereNull('r.deleted_at');
-
-  if (access.scope !== 'ALL') builder.where('r.created_by', access.actorUserId);
-
-  return builder as unknown as Knex.QueryBuilder<RequestFactorySnapshotRow, SearchOptionRow[]>;
-}
-
 function applyFactorySnapshotFilters(
   builder: Knex.QueryBuilder<ConnectionRequestRow, ConnectionRequestRow[]>,
   query: ListConnectionRequestsQuery,
@@ -926,6 +899,7 @@ function toFactorySummaryDTO(row: FactoryRow): FactorySummaryDTO {
   const { factoryClass, factorySubclass } = splitFactoryTypeSequence(row.factory_type_sequence);
   const hasEia = toNullableBoolean(row.has_eia);
   const isEligible = row.eligible_factory_id !== null && row.eligible_factory_id !== undefined;
+  const industrialArea = toIndustrialArea(row.industrial_estate_code, row.industrial_estate_name);
   return {
     id: Number(row.id),
     factoryId: row.fid,
@@ -937,15 +911,38 @@ function toFactorySummaryDTO(row: FactoryRow): FactorySummaryDTO {
     industrySubOrder: factorySubclass ?? TEMPORARY_FACTORY_TEXT,
     businessActivity: row.business_activity,
     eia: hasEia === null ? TEMPORARY_EIA_LABEL : hasEia ? 'มี' : 'ไม่มี',
+    hasEia,
     projectName: TEMPORARY_FACTORY_TEXT,
     address: row.address,
     latitude: nullableValueToString(row.latitude),
     longitude: nullableValueToString(row.longitude),
+    regionCode: row.province_region,
+    regionName: row.province_region,
+    provinceCode: row.province_id,
+    provinceName: row.province_name,
     province: row.province_name,
+    districtCode: null,
+    districtName: null,
+    industrialAreaType: industrialArea.type,
+    industrialAreaTypeLabel: industrialArea.label,
+    industrialEstateCode: row.industrial_estate_code,
+    industrialEstateName: row.industrial_estate_name,
     isEligible,
     eligibilityStatus: isEligible ? 'เข้าข่าย' : 'ไม่เข้าข่าย',
     isActive: toNullableBoolean(row.is_active) ?? false,
   };
+}
+
+function toIndustrialArea(
+  industrialEstateCode: string | null,
+  industrialEstateName: string | null,
+): {
+  type: 'INDUSTRIAL_ESTATE' | 'OUTSIDE_INDUSTRIAL_ESTATE';
+  label: 'ในนิคมอุตสาหกรรม' | 'นอกนิคมอุตสาหกรรม';
+} {
+  return industrialEstateCode || industrialEstateName
+    ? { type: 'INDUSTRIAL_ESTATE', label: 'ในนิคมอุตสาหกรรม' }
+    : { type: 'OUTSIDE_INDUSTRIAL_ESTATE', label: 'นอกนิคมอุตสาหกรรม' };
 }
 
 function toFactoryGeneralDTO(row: FactoryGeneralRow): FactoryGeneralDTO {
@@ -1006,6 +1003,22 @@ function splitFactoryTypeSequence(value: string | null): {
     factoryClass: factoryClass || null,
     factorySubclass: factorySubclass || null,
   };
+}
+
+function normalizeFactoryMainTypeCode(value: string | null | undefined): string | null {
+  const text = value?.trim();
+  if (!text) return null;
+  const digits = text.replace(/\D/g, '');
+  if (!digits) return text.length > 4 ? text.slice(-4) : text.padStart(4, '0');
+  return digits.slice(-4).padStart(4, '0');
+}
+
+function isString(value: string | null): value is string {
+  return value !== null;
+}
+
+function isTuple(value: [string, string] | null): value is [string, string] {
+  return value !== null;
 }
 
 async function findByIdInTransaction(

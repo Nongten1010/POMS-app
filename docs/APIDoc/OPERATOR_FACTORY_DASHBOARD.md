@@ -52,11 +52,27 @@ curl "http://localhost:3000/api/v1/operator-factory-dashboard?systemType=CEMS" \
       "newRegistrationNo": "3-106-33/50สบ",
       "oldRegistrationNo": "รง.4-เก่า-001",
       "factoryLogoUrl": "https://example.com/files/logo.png",
+      "industryMainOrder": "8802",
+      "industryMainOrderLabel": "ประเภทโรงงานลำดับที่ 88(2): การผลิตพลังงานไฟฟ้าจากพลังงานความร้อน",
+      "industrySubOrder": null,
+      "eia": "ไม่มี",
+      "hasEia": false,
+      "regionCode": "ภาคตะวันออก",
+      "regionName": "ภาคตะวันออก",
+      "provinceCode": "24",
+      "provinceName": "ฉะเชิงเทรา",
       "province": "สระบุรี",
       "address": "99 หมู่ 1",
       "latitude": "13.7563",
       "longitude": "100.5018",
+      "districtCode": null,
+      "districtName": null,
+      "industrialAreaType": "INDUSTRIAL_ESTATE",
+      "industrialAreaTypeLabel": "ในนิคมอุตสาหกรรม",
+      "industrialEstateCode": "MTP",
+      "industrialEstateName": "นิคมอุตสาหกรรมมาบตาพุด",
       "isFavorite": true,
+      "hasLatestHourlyMeasurement": true,
       "monitoringPointCountBySystem": [
         {
           "systemType": "CEMS",
@@ -117,11 +133,23 @@ curl "http://localhost:3000/api/v1/operator-factory-dashboard?systemType=CEMS" \
 | `newRegistrationNo` | string|null | เลขทะเบียนโรงงานใหม่จาก `factories.code` |
 | `oldRegistrationNo` | string|null | เลขทะเบียนโรงงานเก่าจาก `factories.factory_registration_no_old` |
 | `factoryLogoUrl` | string|null | URL รูปโลโก้จากเอกสารแนบ CEMS title `สัญลักษณ์ของโรงงานหรือโลโก้บริษัท`; ถ้าไม่มีคืน `null` |
-| `province` | string|null | จังหวัด |
+| `industryMainOrder` | string|null | รหัสประเภทโรงงานหลัก 4 หลักจาก `eligible_factories.factory_type_sequence` เช่น `8802` |
+| `industryMainOrderLabel` | string|null | คำอธิบายประเภทโรงงานหลักจาก DIW source `dbo.TCLASS` เช่น `ประเภทโรงงานลำดับที่ 88(2): ...` |
+| `industrySubOrder` | string|null | รหัสประเภทโรงงานรองจาก `eligible_factories.factory_type_sequence` |
+| `eia` | `มี`\|`ไม่มี`\|null | label ผล EIA/การเข้าข่าย EIA |
+| `hasEia` | boolean|null | boolean สำหรับ filter/logic ฝั่ง frontend |
+| `regionCode` / `regionName` | string|null | ภาคจาก `provinces.region` |
+| `provinceCode` / `provinceName` | string|null | จังหวัดจาก `factories.province_id` + `provinces.name_th` |
+| `province` | string|null | จังหวัดเดิมเพื่อ backward compatibility; ค่าเดียวกับ `provinceName` |
 | `address` | string|null | ที่อยู่โรงงาน |
 | `latitude` | string|null | พิกัด latitude ของโรงงาน |
 | `longitude` | string|null | พิกัด longitude ของโรงงาน |
+| `districtCode` / `districtName` | string|null | อำเภอ/เขต; ตอนนี้ยังไม่มี source แยกใน dashboard จึงคืน `null` |
+| `industrialAreaType` | `INDUSTRIAL_ESTATE`\|`OUTSIDE_INDUSTRIAL_ESTATE` | อยู่ในนิคม/นอกนิคม ใช้จากการมี `industrialEstateCode` หรือ `industrialEstateName` |
+| `industrialAreaTypeLabel` | string | label ไทยสำหรับพื้นที่ประกอบกิจการ |
+| `industrialEstateCode` / `industrialEstateName` | string|null | รหัส/ชื่อนิคมจาก `industrial_estates`; มีค่าเมื่อ `industrialAreaType = INDUSTRIAL_ESTATE` |
 | `isFavorite` | boolean | โรงงานนี้ถูก user ปัจจุบันติดดาวหรือไม่ |
+| `hasLatestHourlyMeasurement` | boolean | มีค่าตรวจวัดชั่วโมงล่าสุดใน `measurementPoints[].data` อย่างน้อย 1 แถวหรือไม่ |
 | `monitoringPointCountBySystem` | array | จำนวนจุดตรวจวัดแยกตามระบบ |
 | `status` | string | คืนเฉพาะ `แสดง` |
 | `measurementPoints[].stationId` | string|null | รหัสสถานีที่ใช้ lookup ตาราง parameter DB เช่น `S0001` |
@@ -137,6 +165,13 @@ curl "http://localhost:3000/api/v1/operator-factory-dashboard?systemType=CEMS" \
 | --- | --- |
 | ชื่อโรงงาน | `factoryName` |
 | เลขทะเบียน | `newRegistrationNo` |
+| ลำดับประเภทโรงงาน | `industryMainOrder`, `industryMainOrderLabel` |
+| ภาค | `regionName` |
+| จังหวัด | `provinceName` |
+| เขต/อำเภอ | `districtName` |
+| พื้นที่ประกอบกิจการ | `industrialAreaType`, `industrialAreaTypeLabel` |
+| นิคมอุตสาหกรรม | `industrialEstateName` |
+| มีผลการตรวจวัดชั่วโมงล่าสุด | `hasLatestHourlyMeasurement` |
 | ที่อยู่ | `address` |
 | ป้าย CEMS/WPMS | `monitoringPointCountBySystem[].count > 0` |
 | ดาว favorite | `isFavorite` |

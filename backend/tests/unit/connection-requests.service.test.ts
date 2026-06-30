@@ -11,6 +11,7 @@ jest.mock('../../src/modules/connection-requests/connection-requests.repository'
     updateStatus: jest.fn(),
     list: jest.fn(),
     listFactoriesForAccess: jest.fn(),
+    listFactoryMainTypeLabels: jest.fn(),
     findFactoryGeneral: jest.fn(),
     listConnectedMeasurementPointsForFactories: jest.fn(),
     listFavoriteFactoryIds: jest.fn(),
@@ -135,6 +136,7 @@ describe('connectionRequestsService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedRepository.listFavoriteFactoryIds.mockResolvedValue([]);
+    mockedRepository.listFactoryMainTypeLabels.mockResolvedValue(new Map());
     mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([]);
     mockedDeviceConnectionsService.listActiveSettings.mockResolvedValue([]);
     mockedDeviceConnectionsService.listByRequestId.mockResolvedValue([]);
@@ -473,8 +475,23 @@ describe('connectionRequestsService', () => {
 
   it('returns only visible operator factories in the dashboard response shape', async () => {
     mockedRepository.listFactoriesForAccess.mockResolvedValue([
-      factorySummary({ oldRegistrationNo: 'รง.4-เก่า-001' }),
+      factorySummary({
+        oldRegistrationNo: 'รง.4-เก่า-001',
+        industryMainOrder: '8802',
+        industrySubOrder: null,
+        eia: 'ไม่มี',
+        hasEia: false,
+        regionCode: 'ภาคตะวันออก',
+        regionName: 'ภาคตะวันออก',
+        provinceCode: '24',
+        provinceName: 'ฉะเชิงเทรา',
+        industrialEstateCode: 'MTP',
+        industrialEstateName: 'นิคมอุตสาหกรรมมาบตาพุด',
+      }),
     ]);
+    mockedRepository.listFactoryMainTypeLabels.mockResolvedValue(
+      new Map([['8802', 'ประเภทโรงงานลำดับที่ 88(2): การผลิตพลังงานไฟฟ้าจากพลังงานความร้อน']]),
+    );
     mockedRepository.listFavoriteFactoryIds.mockResolvedValue(['factory-001']);
     mockedParameterValuesService.latestHourly.mockResolvedValueOnce({
       data: [
@@ -558,11 +575,27 @@ describe('connectionRequestsService', () => {
       newRegistrationNo: '3-106-33/50สบ',
       oldRegistrationNo: 'รง.4-เก่า-001',
       factoryLogoUrl: 'https://example.com/files/logo.png',
+      industryMainOrder: '8802',
+      industryMainOrderLabel: 'ประเภทโรงงานลำดับที่ 88(2): การผลิตพลังงานไฟฟ้าจากพลังงานความร้อน',
+      industrySubOrder: null,
+      eia: 'ไม่มี',
+      hasEia: false,
+      regionCode: 'ภาคตะวันออก',
+      regionName: 'ภาคตะวันออก',
+      provinceCode: '24',
+      provinceName: 'ฉะเชิงเทรา',
       province: 'สระบุรี',
       address: '99 หมู่ 1',
       latitude: '13.7563',
       longitude: '100.5018',
+      districtCode: null,
+      districtName: null,
+      industrialAreaType: 'INDUSTRIAL_ESTATE',
+      industrialAreaTypeLabel: 'ในนิคมอุตสาหกรรม',
+      industrialEstateCode: 'MTP',
+      industrialEstateName: 'นิคมอุตสาหกรรมมาบตาพุด',
       isFavorite: true,
+      hasLatestHourlyMeasurement: true,
       monitoringPointCountBySystem: [
         { systemType: 'CEMS', count: 1 },
         { systemType: 'WPMS', count: 0 },

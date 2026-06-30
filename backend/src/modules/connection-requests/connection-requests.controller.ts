@@ -63,19 +63,6 @@ export const connectionRequestsController = {
     }
   },
 
-  async listSearchOptions(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const actorUserId = requireActorUserId(req);
-      const data = await connectionRequestsService.listSearchOptions(
-        actorUserId,
-        getScope(req, 'cems_wpms_requests:view'),
-      );
-      res.status(StatusCodes.OK).json({ success: true, data });
-    } catch (err) {
-      next(err);
-    }
-  },
-
   async listOperatorFactories(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const actorUserId = requireActorUserId(req);

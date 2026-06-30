@@ -72,7 +72,6 @@ Mapping:
 | 4.1 | รายละเอียดฟอร์ม ตั้งค่าอุปกรณ์ config ราย config             | GET    | `/cems-wpms-requests/:id/device-configs/:configId`         | `cems_wpms_requests:view`    |
 | 5   | ตรวจฟอร์ม เปลี่ยนสถานะ                                       | POST   | `/cems-wpms-requests/:id/status`                           | `cems_wpms_requests:approve` |
 | 6   | รายการคำขอทั้งหมด สำหรับตารางเจ้าหน้าที่                     | GET    | `/cems-wpms-requests/table-rows`                           | `cems_wpms_requests:view`    |
-| 6.1 | ตัวเลือกค้นหาขั้นสูงของรายการคำขอ                            | GET    | `/cems-wpms-requests/search-options`                       | `cems_wpms_requests:view`    |
 | 7   | รายการคำขอเฉพาะโรงงานตัวเอง สำหรับตารางผู้ประกอบการ          | GET    | `/cems-wpms-requests/table-rows`                           | `cems_wpms_requests:view`    |
 | 8   | รายชื่อโรงงาน สำหรับตารางผู้ประกอบการ                        | GET    | `/cems-wpms-requests/operator-factories`                   | `factories:view`             |
 | 8.1 | ติดดาว/ยกเลิกติดดาวโรงงาน                                   | PUT    | `/operator-factories/:factoryId/favorite` | `factories:view` + `dashboard.alerts:view` |
@@ -1646,39 +1645,6 @@ Response:
   }
 }
 ```
-
-## 6.1 ตัวเลือกค้นหาขั้นสูงของรายการคำขอ
-
-Endpoint นี้คืนค่าที่มีอยู่จริงจาก snapshot ของคำขอ (`cems_wpms_request_factory_snapshots`) เพื่อใช้สร้าง dropdown ของหน้าค้นหาขั้นสูง
-
-```bash
-curl "http://localhost:3000/api/v1/cems-wpms-requests/search-options" \
-  -H "Authorization: Bearer $OFFICER_TOKEN"
-```
-
-Response:
-
-```json
-{
-  "success": true,
-  "data": {
-    "factoryMainTypes": [
-      {
-        "code": "8802",
-        "label": "8802",
-        "description": "ประเภทโรงงานลำดับที่ 88(2): การผลิตพลังงานไฟฟ้าจากพลังงานความร้อน"
-      }
-    ],
-    "regions": [{ "code": "ภาคตะวันออก", "label": "ภาคตะวันออก" }],
-    "provinces": [{ "code": "21", "label": "ระยอง" }],
-    "districts": [{ "code": null, "label": "เมืองระยอง" }],
-    "subdistricts": [{ "code": null, "label": "มาบตาพุด" }],
-    "industrialEstates": [{ "code": "MTP", "label": "นิคมอุตสาหกรรมมาบตาพุด" }]
-  }
-}
-```
-
-ตัวเลือกประเภทโรงงานหลักใช้ `code` เป็นค่าที่ส่ง filter (`factoryMainTypeCode`) และใช้ `description` แสดงคำอธิบายใน dropdown เช่น `8802 - ประเภทโรงงานลำดับที่ 88(2): การผลิตพลังงานไฟฟ้าจากพลังงานความร้อน`
 
 ## 7. รายการคำขอเฉพาะโรงงานตัวเอง สำหรับลงตาราง รายการคำขอ ผู้ประกอบการ
 

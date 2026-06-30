@@ -4,7 +4,6 @@ import { signAccessToken } from '../../src/shared/utils/jwt';
 
 jest.mock('../../src/modules/connection-requests/connection-requests.service', () => ({
   connectionRequestsService: {
-    listSearchOptions: jest.fn(),
     listOperatorFactories: jest.fn(),
     listOperatorFactoryDashboard: jest.fn(),
     setOperatorFactoryFavorite: jest.fn(),
@@ -55,11 +54,28 @@ describe('operator factory dashboard routes', () => {
           newRegistrationNo: '3-106-33/50สบ',
           oldRegistrationNo: 'รง.4-เก่า-001',
           factoryLogoUrl: null,
+          industryMainOrder: '8802',
+          industryMainOrderLabel:
+            'ประเภทโรงงานลำดับที่ 88(2): การผลิตพลังงานไฟฟ้าจากพลังงานความร้อน',
+          industrySubOrder: null,
+          eia: 'ไม่มี',
+          hasEia: false,
+          regionCode: 'ภาคตะวันออก',
+          regionName: 'ภาคตะวันออก',
+          provinceCode: '24',
+          provinceName: 'ฉะเชิงเทรา',
           province: 'สระบุรี',
           address: '99 หมู่ 1',
           latitude: '13.7563',
           longitude: '100.5018',
+          districtCode: null,
+          districtName: null,
+          industrialAreaType: 'INDUSTRIAL_ESTATE',
+          industrialAreaTypeLabel: 'ในนิคมอุตสาหกรรม',
+          industrialEstateCode: 'MTP',
+          industrialEstateName: 'นิคมอุตสาหกรรมมาบตาพุด',
           isFavorite: true,
+          hasLatestHourlyMeasurement: true,
           monitoringPointCountBySystem: [
             { systemType: 'CEMS', count: 0 },
             { systemType: 'WPMS', count: 1 },
@@ -89,20 +105,6 @@ describe('operator factory dashboard routes', () => {
     mockedConnectionRequestsService.setOperatorFactoryFavorite.mockResolvedValue({
       factoryId: 'factory-001',
       isFavorite: true,
-    });
-    mockedConnectionRequestsService.listSearchOptions.mockResolvedValue({
-      factoryMainTypes: [
-        {
-          code: '8802',
-          label: '8802',
-          description: 'ประเภทโรงงานลำดับที่ 88(2): การผลิตพลังงานไฟฟ้าจากพลังงานความร้อน',
-        },
-      ],
-      regions: [{ code: 'ภาคตะวันออก', label: 'ภาคตะวันออก' }],
-      provinces: [{ code: '21', label: 'ระยอง' }],
-      districts: [{ code: null, label: 'เมืองระยอง' }],
-      subdistricts: [{ code: null, label: 'มาบตาพุด' }],
-      industrialEstates: [{ code: 'MTP', label: 'นิคมอุตสาหกรรมมาบตาพุด' }],
     });
   });
 
@@ -158,6 +160,19 @@ describe('operator factory dashboard routes', () => {
       'OWN_FACTORY',
       { systemType: 'WPMS', favoriteOnly: false, connectedOnly: true },
     );
+    expect(response.body.data[0]).toMatchObject({
+      industryMainOrder: '8802',
+      industryMainOrderLabel: 'ประเภทโรงงานลำดับที่ 88(2): การผลิตพลังงานไฟฟ้าจากพลังงานความร้อน',
+      regionName: 'ภาคตะวันออก',
+      provinceCode: '24',
+      provinceName: 'ฉะเชิงเทรา',
+      districtName: null,
+      industrialAreaType: 'INDUSTRIAL_ESTATE',
+      industrialAreaTypeLabel: 'ในนิคมอุตสาหกรรม',
+      industrialEstateCode: 'MTP',
+      industrialEstateName: 'นิคมอุตสาหกรรมมาบตาพุด',
+      hasLatestHourlyMeasurement: true,
+    });
   });
 
   it('does not expose the operator dashboard under cems-wpms requests', async () => {
@@ -189,37 +204,6 @@ describe('operator factory dashboard routes', () => {
     expect(response.body).toEqual({
       success: true,
       data: { factoryId: 'factory-001', isFavorite: true },
-    });
-  });
-
-  it('lists advanced-search options from request factory snapshots', async () => {
-    const app = createApp();
-
-    const response = await request(app)
-      .get('/api/v1/cems-wpms-requests/search-options')
-      .set('Authorization', `Bearer ${accessToken()}`);
-
-    expect(response.status).toBe(200);
-    expect(mockedConnectionRequestsService.listSearchOptions).toHaveBeenCalledWith(
-      42,
-      'OWN_FACTORY',
-    );
-    expect(response.body).toEqual({
-      success: true,
-      data: {
-        factoryMainTypes: [
-          {
-            code: '8802',
-            label: '8802',
-            description: 'ประเภทโรงงานลำดับที่ 88(2): การผลิตพลังงานไฟฟ้าจากพลังงานความร้อน',
-          },
-        ],
-        regions: [{ code: 'ภาคตะวันออก', label: 'ภาคตะวันออก' }],
-        provinces: [{ code: '21', label: 'ระยอง' }],
-        districts: [{ code: null, label: 'เมืองระยอง' }],
-        subdistricts: [{ code: null, label: 'มาบตาพุด' }],
-        industrialEstates: [{ code: 'MTP', label: 'นิคมอุตสาหกรรมมาบตาพุด' }],
-      },
     });
   });
 

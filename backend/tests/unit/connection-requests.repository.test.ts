@@ -74,6 +74,21 @@ describe('connectionRequestsRepository request numbers', () => {
     expect(sql).toContain('[ef].[deleted_at] is null');
   });
 
+  it('selects dashboard location and industrial estate fields for advanced filters', () => {
+    const sql = buildFactoriesForAccessQueryForTests({
+      actorUserId: 42,
+      scope: 'ALL',
+    })
+      .toSQL()
+      .sql.toLowerCase();
+
+    expect(sql).toContain('left join [industrial_estates] as [ie]');
+    expect(sql).toContain('[p].[id] as [province_id]');
+    expect(sql).toContain('[p].[region] as [province_region]');
+    expect(sql).toContain('[ie].[code] as [industrial_estate_code]');
+    expect(sql).toContain('[ie].[name_th] as [industrial_estate_name]');
+  });
+
   it('soft-deletes duplicate active measurement points before issuing station codes', () => {
     const sql = buildDuplicateActiveMeasurementPointCleanupSqlForTests().toLowerCase();
 

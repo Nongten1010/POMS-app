@@ -405,7 +405,7 @@ Risk:
 
 ## CEMS/WPMS Request Factory Snapshot
 
-Endpoint: `POST /api/v1/cems-wpms-requests/measurement-points`, `POST /api/v1/cems-wpms-requests/parameters`, `PUT /api/v1/cems-wpms-requests/:id/form`, `GET /api/v1/cems-wpms-requests/:id`, `GET /api/v1/cems-wpms-requests/search-options`
+Endpoint: `POST /api/v1/cems-wpms-requests/measurement-points`, `POST /api/v1/cems-wpms-requests/parameters`, `PUT /api/v1/cems-wpms-requests/:id/form`, `GET /api/v1/cems-wpms-requests/:id`
 
 Code:
 
@@ -470,7 +470,6 @@ Logic:
 
 - API keeps the machine filter code in `industryMainOrder`.
 - API stores and returns the display description separately as `industryMainOrderLabel`.
-- `GET /api/v1/cems-wpms-requests/search-options` returns factory main type options with `code = factory_main_type_code`, `label = factory_main_type_code`, and `description = factory_main_type_label`.
 
 Reason:
 

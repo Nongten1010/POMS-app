@@ -163,21 +163,6 @@ export interface ListOperatorFactoriesQuery {
   connectedOnly?: boolean;
 }
 
-export interface SearchOptionDTO {
-  code: string | null;
-  label: string;
-  description?: string | null;
-}
-
-export interface ConnectionRequestSearchOptionsDTO {
-  factoryMainTypes: SearchOptionDTO[];
-  regions: SearchOptionDTO[];
-  provinces: SearchOptionDTO[];
-  districts: SearchOptionDTO[];
-  subdistricts: SearchOptionDTO[];
-  industrialEstates: SearchOptionDTO[];
-}
-
 export interface ReviewConnectionRequestInput {
   decision: 'APPROVE_DESIGN' | 'REQUEST_REVISION';
   revisionReason?: string | null;
@@ -303,14 +288,26 @@ export interface FactorySummaryDTO {
   oldRegistrationNo: string | null;
   industryType: string | null;
   industryMainOrder: string | null;
+  industryMainOrderLabel?: string | null;
   industrySubOrder: string | null;
   businessActivity: string | null;
   eia: 'มี' | 'ไม่มี' | null;
+  hasEia?: boolean | null;
   projectName: string | null;
   address: string | null;
   latitude: string | null;
   longitude: string | null;
+  regionCode?: string | null;
+  regionName?: string | null;
+  provinceCode?: string | null;
+  provinceName?: string | null;
   province: string | null;
+  districtCode?: string | null;
+  districtName?: string | null;
+  industrialAreaType?: 'INDUSTRIAL_ESTATE' | 'OUTSIDE_INDUSTRIAL_ESTATE';
+  industrialAreaTypeLabel?: 'ในนิคมอุตสาหกรรม' | 'นอกนิคมอุตสาหกรรม';
+  industrialEstateCode?: string | null;
+  industrialEstateName?: string | null;
   isEligible?: boolean;
   eligibilityStatus?: 'เข้าข่าย' | 'ไม่เข้าข่าย';
   isActive?: boolean;
@@ -393,11 +390,27 @@ export interface OperatorFactoryDashboardRowDTO {
   newRegistrationNo: string;
   oldRegistrationNo: string | null;
   factoryLogoUrl: string | null;
+  industryMainOrder: string | null;
+  industryMainOrderLabel: string | null;
+  industrySubOrder: string | null;
+  eia: 'มี' | 'ไม่มี' | null;
+  hasEia: boolean | null;
+  regionCode: string | null;
+  regionName: string | null;
+  provinceCode: string | null;
+  provinceName: string | null;
   province: string | null;
   address: string | null;
   latitude: string | null;
   longitude: string | null;
+  districtCode: string | null;
+  districtName: string | null;
+  industrialAreaType: 'INDUSTRIAL_ESTATE' | 'OUTSIDE_INDUSTRIAL_ESTATE';
+  industrialAreaTypeLabel: 'ในนิคมอุตสาหกรรม' | 'นอกนิคมอุตสาหกรรม';
+  industrialEstateCode: string | null;
+  industrialEstateName: string | null;
   isFavorite: boolean;
+  hasLatestHourlyMeasurement: boolean;
   monitoringPointCountBySystem: OperatorFactorySystemPointCountDTO[];
   status: 'แสดง';
   measurementPoints: OperatorFactoryMeasurementPointDTO[];

@@ -24,7 +24,6 @@ import {
   type ConfirmConnectionInput,
   type ConnectionRequestDTO,
   type ConnectionRequestDetailDTO,
-  type ConnectionRequestSearchOptionsDTO,
   type ConnectionRequestStatus,
   type ConnectionRequestTableRowDTO,
   type ConnectionRequestType,
@@ -124,16 +123,6 @@ export const connectionRequestsService = {
     return { data, meta: { total } };
   },
 
-  listSearchOptions(
-    actorUserId: number,
-    viewScope: string | null | undefined,
-  ): Promise<ConnectionRequestSearchOptionsDTO> {
-    return connectionRequestsRepository.listSearchOptions({
-      actorUserId,
-      scope: viewScope,
-    });
-  },
-
   async listOperatorFactories(
     actorUserId: number,
     factoryViewScope: string | null | undefined,
@@ -214,6 +203,7 @@ export const connectionRequestsService = {
     ]);
     const favoriteFactoryIdSet = new Set(favoriteFactoryIds);
     const measurementPointsByFactory = new Map<string, CurrentFactoryMeasurementPointDTO[]>();
+    const factoryMainTypeLabels = await listFactoryMainTypeLabelsForDashboard(eligibleFactories);
 
     connectedPoints.forEach((point) => {
       const factoryId = factoryIdByLookupKey.get(point.factoryId) ?? point.factoryId;
@@ -234,11 +224,40 @@ export const connectionRequestsService = {
           newRegistrationNo: factory.newRegistrationNo,
           oldRegistrationNo: factory.oldRegistrationNo,
           factoryLogoUrl: getFactoryLogoUrl(currentMeasurementPoints),
+          industryMainOrder: factory.industryMainOrder,
+          industryMainOrderLabel:
+            (factory.industryMainOrder
+              ? factoryMainTypeLabels.get(factory.industryMainOrder)
+              : undefined) ??
+            factory.industryMainOrderLabel ??
+            null,
+          industrySubOrder: factory.industrySubOrder,
+          eia: factory.eia,
+          hasEia: factory.hasEia ?? null,
+          regionCode: factory.regionCode ?? factory.regionName ?? null,
+          regionName: factory.regionName ?? factory.regionCode ?? null,
+          provinceCode: factory.provinceCode ?? null,
+          provinceName: factory.provinceName ?? factory.province,
           province: factory.province,
           address: factory.address,
           latitude: factory.latitude,
           longitude: factory.longitude,
+          districtCode: factory.districtCode ?? null,
+          districtName: factory.districtName ?? null,
+          industrialAreaType:
+            factory.industrialAreaType ??
+            (factory.industrialEstateCode || factory.industrialEstateName
+              ? 'INDUSTRIAL_ESTATE'
+              : 'OUTSIDE_INDUSTRIAL_ESTATE'),
+          industrialAreaTypeLabel:
+            factory.industrialAreaTypeLabel ??
+            (factory.industrialEstateCode || factory.industrialEstateName
+              ? 'ในนิคมอุตสาหกรรม'
+              : 'นอกนิคมอุตสาหกรรม'),
+          industrialEstateCode: factory.industrialEstateCode ?? null,
+          industrialEstateName: factory.industrialEstateName ?? null,
           isFavorite: favoriteFactoryIdSet.has(factory.factoryId),
+          hasLatestHourlyMeasurement: false,
           monitoringPointCountBySystem,
           status: 'แสดง',
           measurementPoints,
@@ -1454,9 +1473,8 @@ async function populateLatestHourlyMeasurements(
   factoryViewScope: string | null | undefined,
 ): Promise<OperatorFactoryDashboardRowDTO[]> {
   return Promise.all(
-    factories.map(async (factory) => ({
-      ...factory,
-      measurementPoints: await Promise.all(
+    factories.map(async (factory) => {
+      const measurementPoints = await Promise.all(
         factory.measurementPoints.map(async (point) => ({
           ...point,
           data: await loadLatestHourlyMeasurementData(
@@ -1466,9 +1484,36 @@ async function populateLatestHourlyMeasurements(
             point.parameters,
           ),
         })),
-      ),
-    })),
+      );
+      return {
+        ...factory,
+        hasLatestHourlyMeasurement: measurementPoints.some((point) => point.data.length > 0),
+        measurementPoints,
+      };
+    }),
   );
+}
+
+async function listFactoryMainTypeLabelsForDashboard(
+  factories: FactorySummaryDTO[],
+): Promise<Map<string, string>> {
+  const codes = [
+    ...new Set(
+      factories
+        .map((factory) => factory.industryMainOrder)
+        .filter((code): code is string => Boolean(code?.trim()) && code !== 'ไม่ระบุ'),
+    ),
+  ];
+  if (codes.length === 0) return new Map();
+
+  try {
+    return await connectionRequestsRepository.listFactoryMainTypeLabels(codes);
+  } catch (error) {
+    logger.warn('[operator-factories] Failed to load factory main type labels', {
+      reason: error instanceof Error ? error.message : 'Unknown error',
+    });
+    return new Map();
+  }
 }
 
 async function loadLatestHourlyMeasurementData(
