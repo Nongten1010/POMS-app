@@ -14,7 +14,7 @@ import LogoutIcon from '@mui/icons-material/Logout'
 import MenuIcon from '@mui/icons-material/Menu'
 import logo from '../assets/logo.png'
 
-const APP_VERSION = 'v1.4'
+const APP_VERSION = 'v1.5'
 
 function DpomsAppBar({
   isAuthenticated = false,

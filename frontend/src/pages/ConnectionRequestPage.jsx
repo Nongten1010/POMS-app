@@ -3222,6 +3222,8 @@ function createEmptyParameterMappingRow(parameter, index) {
     unit: parameterUnitMap[parameter] ?? '',
     min: '',
     max: '',
+    alertLow: '',
+    alertHigh: '',
     valueFormat: '',
     offset: '',
     encodingData: '',
@@ -3237,6 +3239,7 @@ function mapParameterMappingRows(parameterMappings = [], parameterOptions = []) 
   return parameterMappings.map((mapping, index) => {
     const parameter = mapping.parameter ?? mapping.parameterName ?? mapping.dataType ?? ''
     const valueRange = mapping.valueRange ?? {}
+    const alertRange = mapping.alertRange ?? mapping.alert ?? {}
     const valueFormat = mapping.valueFormat ?? mapping.dataValueFormat ?? ''
     const encodingData = mapping.encodingData ?? mapping.encoding ?? ''
 
@@ -3249,6 +3252,8 @@ function mapParameterMappingRows(parameterMappings = [], parameterOptions = []) 
       unit: mapping.unit ?? parameterUnitMap[parameter] ?? '',
       min: mapping.min ?? mapping.measureMin ?? valueRange.min ?? '',
       max: mapping.max ?? mapping.measureMax ?? valueRange.max ?? '',
+      alertLow: mapping.alertLow ?? mapping.alert_low ?? alertRange.low ?? alertRange.min ?? '',
+      alertHigh: mapping.alertHigh ?? mapping.alert_high ?? alertRange.high ?? alertRange.max ?? '',
       valueFormat: valueFormatLabelMap[valueFormat] ?? valueFormat,
       offset: mapping.offset ?? '',
       encodingData: encodingLabelMap[encodingData] ?? encodingData,
@@ -3277,6 +3282,8 @@ function ConnectionParameterTable({ deviceCodeOptions, rows, setRows }) {
     { label: 'พารามิเตอร์', width: 144 },
     { label: 'Min', width: 108 },
     { label: 'Max', width: 108 },
+    { label: 'Alert(Low)', width: 118 },
+    { label: 'Alert(High)', width: 118 },
     { label: 'รูปแบบค่าข้อมูลตรวจวัด', width: 220 },
     { label: 'ค่า Offset', width: 108 },
     { label: 'Encoding data', width: 230 },
@@ -3289,7 +3296,7 @@ function ConnectionParameterTable({ deviceCodeOptions, rows, setRows }) {
         การเชื่อมต่อพารามิเตอร์
       </Typography>
       <TableContainer sx={{ border: 1, borderColor: 'divider', overflowX: 'auto' }}>
-        <Table size="small" sx={{ minWidth: 1302, ...borderedTableSx }}>
+        <Table size="small" sx={{ minWidth: 1538, ...borderedTableSx }}>
           <TableHead>
             <TableRow>
               {columns.map((column) => (
@@ -3350,6 +3357,22 @@ function ConnectionParameterTable({ deviceCodeOptions, rows, setRows }) {
                       size="small"
                       value={row.max}
                       onChange={(event) => updateRow(index, 'max', event.target.value)}
+                      fullWidth
+                    />
+                  </TableCell>
+                  <TableCell sx={{ minWidth: 118 }}>
+                    <TextField
+                      size="small"
+                      value={row.alertLow}
+                      onChange={(event) => updateRow(index, 'alertLow', event.target.value)}
+                      fullWidth
+                    />
+                  </TableCell>
+                  <TableCell sx={{ minWidth: 118 }}>
+                    <TextField
+                      size="small"
+                      value={row.alertHigh}
+                      onChange={(event) => updateRow(index, 'alertHigh', event.target.value)}
                       fullWidth
                     />
                   </TableCell>
@@ -3854,6 +3877,8 @@ function buildDeviceConfigChannels(rows, deviceCode) {
       addressId: toNumberOrNull(row.addressId),
       dataType: row.parameter,
       valueRange: buildValueRange(row.min, row.max),
+      alertLow: toNumberOrNull(row.alertLow),
+      alertHigh: toNumberOrNull(row.alertHigh),
       valueFormat: (valueFormatCodeMap[row.valueFormat] ?? row.valueFormat) || 'MEASUREMENT_VALUE',
       offset: toNumberOrNull(row.offset),
       encoding: (encodingCodeMap[row.encodingData] ?? row.encodingData) || 'UNSIGNED16_BIG_ENDIAN',

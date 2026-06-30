@@ -39,8 +39,7 @@ import { AdapterDayjsBuddhist } from '@mui/x-date-pickers/AdapterDayjsBuddhist'
 import { LineChart } from '@mui/x-charts/LineChart'
 import dayjs from 'dayjs'
 import 'dayjs/locale/th'
-import provinceOptions from '../option/provinceOptions.json'
-import regionOptions from '../option/regionOptions.json'
+import locationOptions from '../option/locationOptions.json'
 
 const longdoMapKey = import.meta.env.VITE_LONGDO_MAP_KEY ?? ''
 const longdoMapScriptId = 'longdo-map-script'
@@ -65,85 +64,10 @@ const connectedMeasurementPointsApiBaseUrl = import.meta.env.DEV
   ? '/api-proxy/v1/connected-measurement-points'
   : 'http://d-poms.diw.go.th/api/v1/connected-measurement-points'
 const logoBackgrounds = ['#dbeafe', '#fef3c7', '#fee2e2', '#dcfce7', '#e0f2fe', '#ffedd5', '#ecfdf3']
-const provinceRegionMap = {
-  กรุงเทพมหานคร: 'ภาคกลาง',
-  กระบี่: 'ภาคใต้',
-  กาญจนบุรี: 'ภาคตะวันตก',
-  กาฬสินธุ์: 'ภาคตะวันออกเฉียงเหนือ',
-  กำแพงเพชร: 'ภาคเหนือ',
-  ขอนแก่น: 'ภาคตะวันออกเฉียงเหนือ',
-  จันทบุรี: 'ภาคตะวันออก',
-  ฉะเชิงเทรา: 'ภาคตะวันออก',
-  ชลบุรี: 'ภาคตะวันออก',
-  ชัยนาท: 'ภาคกลาง',
-  ชัยภูมิ: 'ภาคตะวันออกเฉียงเหนือ',
-  ชุมพร: 'ภาคใต้',
-  เชียงราย: 'ภาคเหนือ',
-  เชียงใหม่: 'ภาคเหนือ',
-  ตรัง: 'ภาคใต้',
-  ตราด: 'ภาคตะวันออก',
-  ตาก: 'ภาคตะวันตก',
-  นครนายก: 'ภาคกลาง',
-  นครปฐม: 'ภาคกลาง',
-  นครพนม: 'ภาคตะวันออกเฉียงเหนือ',
-  นครราชสีมา: 'ภาคตะวันออกเฉียงเหนือ',
-  นครศรีธรรมราช: 'ภาคใต้',
-  นครสวรรค์: 'ภาคกลาง',
-  นนทบุรี: 'ภาคกลาง',
-  นราธิวาส: 'ภาคใต้',
-  น่าน: 'ภาคเหนือ',
-  บึงกาฬ: 'ภาคตะวันออกเฉียงเหนือ',
-  บุรีรัมย์: 'ภาคตะวันออกเฉียงเหนือ',
-  ปทุมธานี: 'ภาคกลาง',
-  ประจวบคีรีขันธ์: 'ภาคตะวันตก',
-  ปราจีนบุรี: 'ภาคตะวันออก',
-  ปัตตานี: 'ภาคใต้',
-  พระนครศรีอยุธยา: 'ภาคกลาง',
-  พะเยา: 'ภาคเหนือ',
-  พังงา: 'ภาคใต้',
-  พัทลุง: 'ภาคใต้',
-  พิจิตร: 'ภาคเหนือ',
-  พิษณุโลก: 'ภาคเหนือ',
-  เพชรบุรี: 'ภาคตะวันตก',
-  เพชรบูรณ์: 'ภาคเหนือ',
-  แพร่: 'ภาคเหนือ',
-  ภูเก็ต: 'ภาคใต้',
-  มหาสารคาม: 'ภาคตะวันออกเฉียงเหนือ',
-  มุกดาหาร: 'ภาคตะวันออกเฉียงเหนือ',
-  แม่ฮ่องสอน: 'ภาคเหนือ',
-  ยโสธร: 'ภาคตะวันออกเฉียงเหนือ',
-  ยะลา: 'ภาคใต้',
-  ร้อยเอ็ด: 'ภาคตะวันออกเฉียงเหนือ',
-  ระนอง: 'ภาคใต้',
-  ระยอง: 'ภาคตะวันออก',
-  ราชบุรี: 'ภาคตะวันตก',
-  ลพบุรี: 'ภาคกลาง',
-  ลำปาง: 'ภาคเหนือ',
-  ลำพูน: 'ภาคเหนือ',
-  เลย: 'ภาคตะวันออกเฉียงเหนือ',
-  ศรีสะเกษ: 'ภาคตะวันออกเฉียงเหนือ',
-  สกลนคร: 'ภาคตะวันออกเฉียงเหนือ',
-  สงขลา: 'ภาคใต้',
-  สตูล: 'ภาคใต้',
-  สมุทรปราการ: 'ภาคกลาง',
-  สมุทรสงคราม: 'ภาคกลาง',
-  สมุทรสาคร: 'ภาคกลาง',
-  สระแก้ว: 'ภาคตะวันออก',
-  สระบุรี: 'ภาคกลาง',
-  สิงห์บุรี: 'ภาคกลาง',
-  สุโขทัย: 'ภาคเหนือ',
-  สุพรรณบุรี: 'ภาคกลาง',
-  สุราษฎร์ธานี: 'ภาคใต้',
-  สุรินทร์: 'ภาคตะวันออกเฉียงเหนือ',
-  หนองคาย: 'ภาคตะวันออกเฉียงเหนือ',
-  หนองบัวลำภู: 'ภาคตะวันออกเฉียงเหนือ',
-  อ่างทอง: 'ภาคกลาง',
-  อำนาจเจริญ: 'ภาคตะวันออกเฉียงเหนือ',
-  อุดรธานี: 'ภาคตะวันออกเฉียงเหนือ',
-  อุตรดิตถ์: 'ภาคเหนือ',
-  อุทัยธานี: 'ภาคกลาง',
-  อุบลราชธานี: 'ภาคตะวันออกเฉียงเหนือ',
-}
+const allLocationOption = { label: 'ทั้งหมด', value: 'all' }
+const regionOptions = locationOptions.regions
+const locationProvinceItems = locationOptions.provinces
+const provinceRegionMap = Object.fromEntries(locationProvinceItems.map((province) => [province.value, province.region]))
 const datePickerStatusStyles = {
   lowData: { backgroundColor: '#e5e7eb' },
   highData: { backgroundColor: '#dbeafe' },
@@ -355,6 +279,20 @@ function getRegionByProvince(province) {
   return provinceRegionMap[province] ?? ''
 }
 
+function getProvinceOptionsByRegion(region) {
+  const provinces = region === 'all'
+    ? locationProvinceItems
+    : locationProvinceItems.filter((province) => province.region === region)
+
+  return [allLocationOption, ...provinces.map(({ label, value }) => ({ label, value }))]
+}
+
+function getDistrictOptionsByProvince(province) {
+  const selectedProvince = locationProvinceItems.find((item) => item.value === province)
+
+  return selectedProvince?.districts ?? [allLocationOption]
+}
+
 function getDistanceFromReference(lon, lat) {
   if (!Number.isFinite(lon) || !Number.isFinite(lat)) {
     return null
@@ -503,7 +441,7 @@ function HomePage({ accessToken = '' }) {
   const [industrialEstateNameFilter, setIndustrialEstateNameFilter] = useState('')
   const [regionFilter, setRegionFilter] = useState('all')
   const [provinceFilter, setProvinceFilter] = useState('all')
-  const [districtFilter, setDistrictFilter] = useState('')
+  const [districtFilter, setDistrictFilter] = useState('all')
   const [latestInspectionResultFilter, setLatestInspectionResultFilter] = useState('all')
   const [monitoringFilter, setMonitoringFilter] = useState('all')
   const [factories, setFactories] = useState([])
@@ -565,7 +503,7 @@ function HomePage({ accessToken = '' }) {
       const matchesRegion = regionFilter === 'all' || getRegionByProvince(factory.province) === regionFilter
       const matchesProvince = provinceFilter === 'all' || factory.province === provinceFilter
       const matchesDistrict =
-        !districtFilter.trim() || factory.address.toLowerCase().includes(districtFilter.trim().toLowerCase())
+        districtFilter === 'all' || factory.address.toLowerCase().includes(districtFilter.toLowerCase())
       const matchesKeyword =
         !keyword ||
         [factory.name, factory.newRegistrationNo, factory.oldRegistrationNo, factory.address, factory.province]
@@ -654,6 +592,8 @@ function HomePage({ accessToken = '' }) {
         regionFilter={regionFilter}
         provinceFilter={provinceFilter}
         districtFilter={districtFilter}
+        provinceOptions={getProvinceOptionsByRegion(regionFilter)}
+        districtOptions={getDistrictOptionsByProvince(provinceFilter)}
         latestInspectionResultFilter={latestInspectionResultFilter}
         monitoringFilter={monitoringFilter}
         onFactoryOrderFilterChange={setFactoryOrderFilter}
@@ -664,8 +604,15 @@ function HomePage({ accessToken = '' }) {
           }
         }}
         onIndustrialEstateNameFilterChange={setIndustrialEstateNameFilter}
-        onRegionFilterChange={setRegionFilter}
-        onProvinceFilterChange={setProvinceFilter}
+        onRegionFilterChange={(nextValue) => {
+          setRegionFilter(nextValue)
+          setProvinceFilter('all')
+          setDistrictFilter('all')
+        }}
+        onProvinceFilterChange={(nextValue) => {
+          setProvinceFilter(nextValue)
+          setDistrictFilter('all')
+        }}
         onDistrictFilterChange={setDistrictFilter}
         onLatestInspectionResultFilterChange={setLatestInspectionResultFilter}
         onMonitoringFilterChange={setMonitoringFilter}
@@ -2254,6 +2201,8 @@ function AdvancedSearchDialog({
   regionFilter,
   provinceFilter,
   districtFilter,
+  provinceOptions,
+  districtOptions,
   latestInspectionResultFilter,
   monitoringFilter,
   onFactoryOrderFilterChange,
@@ -2271,11 +2220,13 @@ function AdvancedSearchDialog({
       open={open}
       onClose={onClose}
       maxWidth={false}
-      PaperProps={{
-        sx: {
-          width: { xs: 'calc(100vw - 24px)', sm: 492 },
-          maxWidth: { xs: 'calc(100vw - 24px)', sm: 492 },
-          borderRadius: 1.25,
+      slotProps={{
+        paper: {
+          sx: {
+            width: 'min(692px, calc(100vw - 24px))',
+            maxWidth: 'min(692px, calc(100vw - 24px))',
+            borderRadius: 1.25,
+          },
         },
       }}
     >
@@ -2376,14 +2327,21 @@ function AdvancedSearchDialog({
             </Select>
           </FormControl>
 
-          <TextField
-            size="small"
-            label="เขต/อำเภอ"
-            value={districtFilter}
-            placeholder="พิมพ์เพื่อค้นหา"
-            onChange={(event) => onDistrictFilterChange(event.target.value)}
-            fullWidth
-          />
+          <FormControl size="small" fullWidth>
+            <InputLabel id="advanced-district-label">เขต/อำเภอ</InputLabel>
+            <Select
+              labelId="advanced-district-label"
+              value={districtFilter}
+              label="เขต/อำเภอ"
+              onChange={(event) => onDistrictFilterChange(event.target.value)}
+            >
+              {districtOptions.map((option) => (
+                <MenuItem key={option.value} value={option.value}>
+                  {option.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
 
           <FormControl size="small" fullWidth sx={{ gridColumn: { xs: '1 / -1', sm: '1' } }}>
             <InputLabel id="advanced-latest-result-label">มีผลการตรวจวัดชั่วโมงล่าสุด</InputLabel>
