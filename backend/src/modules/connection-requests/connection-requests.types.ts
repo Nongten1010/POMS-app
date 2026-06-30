@@ -97,12 +97,23 @@ export interface CreateConnectionRequestInput {
   factoryName: string;
   factoryRegistrationNo: string;
   industryMainOrder?: string | null;
+  industryMainOrderLabel?: string | null;
   industrySubOrder?: string | null;
   businessActivity?: string | null;
   eia?: 'มี' | 'ไม่มี' | null;
   hasEia?: boolean | null;
   projectName?: string | null;
   address?: string | null;
+  regionCode?: string | null;
+  regionName?: string | null;
+  provinceCode?: string | null;
+  provinceName?: string | null;
+  districtCode?: string | null;
+  districtName?: string | null;
+  subdistrictCode?: string | null;
+  subdistrictName?: string | null;
+  industrialEstateCode?: string | null;
+  industrialEstateName?: string | null;
   latitude?: number | null;
   longitude?: number | null;
   systemType: ConnectionSystemType;
@@ -133,6 +144,12 @@ export interface ListConnectionRequestsQuery {
   requestType?: ConnectionRequestType;
   factoryId?: string;
   stationId?: string;
+  regionName?: string;
+  provinceName?: string;
+  districtName?: string;
+  subdistrictName?: string;
+  industrialEstateName?: string;
+  factoryMainTypeCode?: string;
 }
 
 export interface ListConnectedMeasurementPointsQuery {
@@ -144,6 +161,21 @@ export interface ListOperatorFactoriesQuery {
   systemType?: ConnectionSystemType;
   favoriteOnly?: boolean;
   connectedOnly?: boolean;
+}
+
+export interface SearchOptionDTO {
+  code: string | null;
+  label: string;
+  description?: string | null;
+}
+
+export interface ConnectionRequestSearchOptionsDTO {
+  factoryMainTypes: SearchOptionDTO[];
+  regions: SearchOptionDTO[];
+  provinces: SearchOptionDTO[];
+  districts: SearchOptionDTO[];
+  subdistricts: SearchOptionDTO[];
+  industrialEstates: SearchOptionDTO[];
 }
 
 export interface ReviewConnectionRequestInput {
@@ -212,12 +244,23 @@ export interface ConnectionRequestDTO {
   factoryName: string;
   factoryRegistrationNo: string;
   industryMainOrder: string | null;
+  industryMainOrderLabel: string | null;
   industrySubOrder: string | null;
   businessActivity: string | null;
   eia: 'มี' | 'ไม่มี' | null;
   hasEia: boolean | null;
   projectName: string | null;
   address: string | null;
+  regionCode: string | null;
+  regionName: string | null;
+  provinceCode: string | null;
+  provinceName: string | null;
+  districtCode: string | null;
+  districtName: string | null;
+  subdistrictCode: string | null;
+  subdistrictName: string | null;
+  industrialEstateCode: string | null;
+  industrialEstateName: string | null;
   latitude: number | null;
   longitude: number | null;
   systemType: ConnectionSystemType;

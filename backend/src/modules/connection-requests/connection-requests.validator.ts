@@ -412,6 +412,7 @@ const connectionRequestFormObjectSchema = z
     factoryName: trimmedString(500),
     factoryRegistrationNo: requiredStringWithFallback(64),
     industryMainOrder: optionalNullableTrimmedString(128),
+    industryMainOrderLabel: optionalNullableTrimmedString(500),
     industrySubOrder: optionalNullableTrimmedString(128),
     businessActivity: optionalNullableTrimmedString(4000),
     eia: z.preprocess(
@@ -421,6 +422,16 @@ const connectionRequestFormObjectSchema = z
     hasEia: z.boolean().nullable().optional(),
     projectName: optionalNullableTrimmedString(500),
     address: optionalNullableTrimmedString(1000),
+    regionCode: optionalNullableTrimmedString(64),
+    regionName: optionalNullableTrimmedString(128),
+    provinceCode: optionalNullableTrimmedString(32),
+    provinceName: optionalNullableTrimmedString(128),
+    districtCode: optionalNullableTrimmedString(32),
+    districtName: optionalNullableTrimmedString(128),
+    subdistrictCode: optionalNullableTrimmedString(32),
+    subdistrictName: optionalNullableTrimmedString(128),
+    industrialEstateCode: optionalNullableTrimmedString(32),
+    industrialEstateName: optionalNullableTrimmedString(255),
     latitude: z.number().min(-90).max(90).nullable().optional(),
     longitude: z.number().min(-180).max(180).nullable().optional(),
     systemType: z.enum(['CEMS', 'WPMS']),
@@ -843,6 +854,12 @@ export const listConnectionRequestsQuerySchema = z
     requestType: z.nativeEnum(CONNECTION_REQUEST_TYPE).optional(),
     factoryId: z.string().trim().min(1).max(64).optional(),
     stationId: z.string().trim().min(1).max(64).optional(),
+    regionName: z.string().trim().min(1).max(128).optional(),
+    provinceName: z.string().trim().min(1).max(128).optional(),
+    districtName: z.string().trim().min(1).max(128).optional(),
+    subdistrictName: z.string().trim().min(1).max(128).optional(),
+    industrialEstateName: z.string().trim().min(1).max(255).optional(),
+    factoryMainTypeCode: z.string().trim().min(1).max(128).optional(),
   })
   .strict();
 

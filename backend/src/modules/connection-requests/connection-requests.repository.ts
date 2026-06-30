@@ -10,6 +10,7 @@ import {
   type ConnectionRequestStatus,
   type ConnectionRequestType,
   type CreateConnectionRequestInput,
+  type ConnectionRequestSearchOptionsDTO,
   type CurrentFactoryMeasurementPointDTO,
   type FactoryFavoriteDTO,
   type FactoryGeneralDTO,
@@ -20,6 +21,7 @@ import {
   type MeasurementPointDTO,
   type MeasurementPointInput,
   type RequestDocumentImageInput,
+  type SearchOptionDTO,
   type StatusDurationSummaryDTO,
   type StatusHistoryDTO,
 } from './connection-requests.types';
@@ -59,6 +61,28 @@ interface ConnectionRequestRow {
   updated_by?: number | string | null;
   created_at: Date | string;
   updated_at: Date | string;
+}
+
+interface RequestFactorySnapshotRow {
+  request_id: number | string;
+  region_code: string | null;
+  region_name: string | null;
+  province_code: string | null;
+  province_name: string | null;
+  district_code: string | null;
+  district_name: string | null;
+  subdistrict_code: string | null;
+  subdistrict_name: string | null;
+  industrial_estate_code: string | null;
+  industrial_estate_name: string | null;
+  factory_main_type_code: string | null;
+  factory_main_type_label: string | null;
+}
+
+interface SearchOptionRow {
+  code: string | null;
+  label: string | null;
+  description: string | null;
 }
 
 interface MeasurementPointRow {
@@ -137,6 +161,9 @@ interface FactoryGeneralRow {
   authorize_start: Date | string | null;
   authorize_end: Date | string | null;
   province_name: string | null;
+  province_id: string | null;
+  province_region: string | null;
+  industrial_estate_code: string | null;
   industrial_estate_name: string | null;
   juristic_id: string | null;
   juristic_name: string | null;
@@ -156,6 +183,14 @@ interface FactoryGeneralRow {
   boiler_size_each: string | null;
   fuel_used: string | null;
   has_eia: boolean | number | null;
+}
+
+interface FactorySnapshotSourceRow {
+  province_id: string | null;
+  province_name: string | null;
+  province_region: string | null;
+  industrial_estate_code: string | null;
+  industrial_estate_name: string | null;
 }
 
 interface FactoryAccess {
@@ -188,7 +223,7 @@ interface FactoryFavoriteRow {
 }
 
 const TEMPORARY_FACTORY_TEXT = 'ไม่ระบุ';
-const TEMPORARY_EIA_LABEL: 'ไม่มี' = 'ไม่มี';
+const TEMPORARY_EIA_LABEL = 'ไม่มี' as const;
 const TERMINAL_CONNECTION_REQUEST_STATUSES: ConnectionRequestStatus[] = ['CONNECTED', 'CANCELED'];
 const CONNECTION_TIMEOUT_AUTO_CANCEL_NOTE =
   'ระบบยกเลิกคำขออัตโนมัติเนื่องจากครบกำหนดเชื่อมต่อ 30 วัน';
@@ -210,6 +245,29 @@ export const connectionRequestsRepository = {
     const rows = await baseQuery.clone().orderBy('created_at', 'desc').orderBy('id', 'desc');
     const data = await hydrateMany(rows);
     return { rows: data, total };
+  },
+
+  async listSearchOptions(access: ListAccess): Promise<ConnectionRequestSearchOptionsDTO> {
+    const [factoryMainTypes, regions, provinces, districts, subdistricts, industrialEstates] =
+      await Promise.all([
+        listSnapshotOptions(access, 'factory_main_type_code', 'factory_main_type_code', {
+          descriptionColumn: 'factory_main_type_label',
+        }),
+        listSnapshotOptions(access, 'region_code', 'region_name'),
+        listSnapshotOptions(access, 'province_code', 'province_name'),
+        listSnapshotOptions(access, 'district_code', 'district_name'),
+        listSnapshotOptions(access, 'subdistrict_code', 'subdistrict_name'),
+        listSnapshotOptions(access, 'industrial_estate_code', 'industrial_estate_name'),
+      ]);
+
+    return {
+      factoryMainTypes,
+      regions,
+      provinces,
+      districts,
+      subdistricts,
+      industrialEstates,
+    };
   },
 
   async listFactoriesForAccess(access: FactoryAccess): Promise<FactorySummaryDTO[]> {
@@ -248,6 +306,9 @@ export const connectionRequestsRepository = {
         'f.verify_status',
         'f.authorize_start',
         'f.authorize_end',
+        'f.province_id',
+        'p.region as province_region',
+        'ie.code as industrial_estate_code',
         'p.name_th as province_name',
         'ie.name_th as industrial_estate_name',
         'j.juristic_id as juristic_id',
@@ -462,6 +523,7 @@ export const connectionRequestsRepository = {
         .returning('id');
 
       const requestId = Number(id);
+      await upsertFactorySnapshot(trx, requestId, input, actorUserId);
       await insertMeasurementPoints(trx, requestId, input.measurementPoints, actorUserId);
       await insertHistory(trx, requestId, initialStatus, actorUserId, 'ผู้ประกอบการส่งฟอร์ม');
 
@@ -509,6 +571,7 @@ export const connectionRequestsRepository = {
         });
 
       await insertMeasurementPoints(trx, id, input.measurementPoints, actorUserId);
+      await upsertFactorySnapshot(trx, id, input, actorUserId);
       await insertHistory(trx, id, nextStatus, actorUserId, 'ผู้ประกอบการแก้ไขและส่งฟอร์มอีกครั้ง');
 
       const updated = await findByIdInTransaction(trx, id);
@@ -546,13 +609,7 @@ export const connectionRequestsRepository = {
           updated_at: trx.fn.now(),
         });
 
-      await insertHistory(
-        trx,
-        id,
-        status,
-        actorUserId,
-        buildStatusHistoryNote(update),
-      );
+      await insertHistory(trx, id, status, actorUserId, buildStatusHistoryNote(update));
 
       const updated = await findByIdInTransaction(trx, id);
       if (!updated) throw new Error('Updated connection request could not be loaded');
@@ -722,6 +779,7 @@ function buildBaseQuery(
   if (query.status) builder.where('status', query.status);
   if (query.requestType) builder.where('request_type', query.requestType);
   if (query.factoryId) builder.where('factory_id', query.factoryId);
+  applyFactorySnapshotFilters(builder, query);
   if (query.stationId) {
     const stationId = query.stationId;
     builder.whereExists(function stationFilter() {
@@ -789,6 +847,79 @@ function buildBaseQuery(
     'created_at',
     'updated_at',
   );
+}
+
+async function listSnapshotOptions(
+  access: ListAccess,
+  codeColumn: keyof RequestFactorySnapshotRow,
+  labelColumn: keyof RequestFactorySnapshotRow,
+  options: { descriptionColumn?: keyof RequestFactorySnapshotRow } = {},
+): Promise<SearchOptionDTO[]> {
+  const rows = await buildSnapshotOptionsBaseQuery(access)
+    .whereRaw('NULLIF(LTRIM(RTRIM(??)), ?) IS NOT NULL', [`fs.${labelColumn}`, ''])
+    .distinct(
+      db.raw('?? as ??', [`fs.${codeColumn}`, 'code']),
+      db.raw('?? as ??', [`fs.${labelColumn}`, 'label']),
+      options.descriptionColumn
+        ? db.raw('?? as ??', [`fs.${options.descriptionColumn}`, 'description'])
+        : db.raw('CAST(NULL AS NVARCHAR(500)) as ??', ['description']),
+    )
+    .orderBy('label', 'asc');
+
+  return (rows as SearchOptionRow[])
+    .filter((row) => Boolean(row.label?.trim()))
+    .map((row) => ({
+      code: row.code,
+      label: row.label?.trim() ?? '',
+      description: row.description?.trim() || null,
+    }));
+}
+
+function buildSnapshotOptionsBaseQuery(
+  access: ListAccess,
+): Knex.QueryBuilder<RequestFactorySnapshotRow, SearchOptionRow[]> {
+  const builder = db<RequestFactorySnapshotRow>('cems_wpms_request_factory_snapshots as fs')
+    .join('cems_wpms_connection_requests as r', 'r.id', 'fs.request_id')
+    .whereNull('fs.deleted_at')
+    .whereNull('r.deleted_at');
+
+  if (access.scope !== 'ALL') builder.where('r.created_by', access.actorUserId);
+
+  return builder as unknown as Knex.QueryBuilder<RequestFactorySnapshotRow, SearchOptionRow[]>;
+}
+
+function applyFactorySnapshotFilters(
+  builder: Knex.QueryBuilder<ConnectionRequestRow, ConnectionRequestRow[]>,
+  query: ListConnectionRequestsQuery,
+): void {
+  const filters = {
+    regionName: query.regionName,
+    provinceName: query.provinceName,
+    districtName: query.districtName,
+    subdistrictName: query.subdistrictName,
+    industrialEstateName: query.industrialEstateName,
+    factoryMainTypeCode: query.factoryMainTypeCode,
+  };
+  const hasFilter = Object.values(filters).some((value) => Boolean(value));
+  if (!hasFilter) return;
+
+  builder.whereExists(function factorySnapshotFilter() {
+    this.select(db.raw('1'))
+      .from('cems_wpms_request_factory_snapshots as fs')
+      .whereRaw('[fs].[request_id] = [cems_wpms_connection_requests].[id]')
+      .whereNull('fs.deleted_at');
+
+    if (filters.regionName) this.where('fs.region_name', filters.regionName);
+    if (filters.provinceName) this.where('fs.province_name', filters.provinceName);
+    if (filters.districtName) this.where('fs.district_name', filters.districtName);
+    if (filters.subdistrictName) this.where('fs.subdistrict_name', filters.subdistrictName);
+    if (filters.industrialEstateName) {
+      this.where('fs.industrial_estate_name', filters.industrialEstateName);
+    }
+    if (filters.factoryMainTypeCode) {
+      this.where('fs.factory_main_type_code', filters.factoryMainTypeCode);
+    }
+  });
 }
 
 function toFactorySummaryDTO(row: FactoryRow): FactorySummaryDTO {
@@ -894,7 +1025,7 @@ async function hydrate(
 ): Promise<ConnectionRequestDTO> {
   const executor = trx ?? db;
   const requestId = Number(row.id);
-  const [pointRows, historyRows] = await Promise.all([
+  const [pointRows, historyRows, snapshotRow] = await Promise.all([
     executor<MeasurementPointRow>('cems_wpms_measurement_points')
       .where('request_id', requestId)
       .whereNull('deleted_at')
@@ -920,16 +1051,20 @@ async function hydrate(
       )
       .orderBy('cems_wpms_request_status_history.changed_at', 'asc')
       .orderBy('cems_wpms_request_status_history.id', 'asc'),
+    executor<RequestFactorySnapshotRow>('cems_wpms_request_factory_snapshots')
+      .where('request_id', requestId)
+      .whereNull('deleted_at')
+      .first(),
   ]);
 
-  return toConnectionRequestDTO(row, pointRows, historyRows);
+  return toConnectionRequestDTO(row, pointRows, historyRows, snapshotRow ?? null);
 }
 
 async function hydrateMany(rows: ConnectionRequestRow[]): Promise<ConnectionRequestDTO[]> {
   if (rows.length === 0) return [];
 
   const requestIds = rows.map((row) => Number(row.id));
-  const [pointRows, historyRows] = await Promise.all([
+  const [pointRows, historyRows, snapshotRows] = await Promise.all([
     db<MeasurementPointRow>('cems_wpms_measurement_points')
       .whereIn('request_id', requestIds)
       .whereNull('deleted_at')
@@ -957,10 +1092,16 @@ async function hydrateMany(rows: ConnectionRequestRow[]): Promise<ConnectionRequ
       .orderBy('cems_wpms_request_status_history.request_id', 'asc')
       .orderBy('cems_wpms_request_status_history.changed_at', 'asc')
       .orderBy('cems_wpms_request_status_history.id', 'asc'),
+    db<RequestFactorySnapshotRow>('cems_wpms_request_factory_snapshots')
+      .whereIn('request_id', requestIds)
+      .whereNull('deleted_at'),
   ]);
 
   const pointsByRequestId = groupRowsByRequestId(pointRows);
   const historyByRequestId = groupRowsByRequestId(historyRows);
+  const snapshotsByRequestId = new Map(
+    snapshotRows.map((snapshot) => [Number(snapshot.request_id), snapshot]),
+  );
 
   return rows.map((row) => {
     const requestId = Number(row.id);
@@ -968,6 +1109,7 @@ async function hydrateMany(rows: ConnectionRequestRow[]): Promise<ConnectionRequ
       row,
       pointsByRequestId.get(requestId) ?? [],
       historyByRequestId.get(requestId) ?? [],
+      snapshotsByRequestId.get(requestId) ?? null,
     );
   });
 }
@@ -987,6 +1129,7 @@ function toConnectionRequestDTO(
   row: ConnectionRequestRow,
   pointRows: MeasurementPointRow[],
   historyRows: StatusHistoryRow[],
+  snapshotRow: RequestFactorySnapshotRow | null = null,
 ): ConnectionRequestDTO {
   const statusTimeline = buildStatusHistoryTimeline(historyRows);
   return {
@@ -999,12 +1142,23 @@ function toConnectionRequestDTO(
     factoryName: row.factory_name,
     factoryRegistrationNo: row.factory_registration_no,
     industryMainOrder: row.industry_main_order,
+    industryMainOrderLabel: snapshotRow?.factory_main_type_label ?? null,
     industrySubOrder: row.industry_sub_order,
     businessActivity: row.business_activity,
     eia: toEiaLabel(row.has_eia),
     hasEia: toNullableBoolean(row.has_eia),
     projectName: row.project_name,
     address: row.address,
+    regionCode: snapshotRow?.region_code ?? null,
+    regionName: snapshotRow?.region_name ?? null,
+    provinceCode: snapshotRow?.province_code ?? null,
+    provinceName: snapshotRow?.province_name ?? null,
+    districtCode: snapshotRow?.district_code ?? null,
+    districtName: snapshotRow?.district_name ?? null,
+    subdistrictCode: snapshotRow?.subdistrict_code ?? null,
+    subdistrictName: snapshotRow?.subdistrict_name ?? null,
+    industrialEstateCode: snapshotRow?.industrial_estate_code ?? null,
+    industrialEstateName: snapshotRow?.industrial_estate_name ?? null,
     latitude: toNullableNumber(row.latitude),
     longitude: toNullableNumber(row.longitude),
     systemType: row.system_type,
@@ -1066,6 +1220,89 @@ function toRequestRow(input: CreateConnectionRequestInput): Record<string, unkno
     information_provider_name: input.informationProviderName ?? null,
     information_provider_position: input.informationProviderPosition ?? null,
     remarks: input.remarks ?? null,
+  };
+}
+
+async function upsertFactorySnapshot(
+  trx: Knex.Transaction,
+  requestId: number,
+  input: CreateConnectionRequestInput,
+  actorUserId: number,
+): Promise<void> {
+  const source = await findFactorySnapshotSource(trx, input);
+  const snapshotRow = toFactorySnapshotInsertRow(requestId, input, source, actorUserId);
+
+  await trx('cems_wpms_request_factory_snapshots')
+    .where('request_id', requestId)
+    .whereNull('deleted_at')
+    .update({
+      deleted_at: trx.fn.now(),
+      updated_by: actorUserId,
+      updated_at: trx.fn.now(),
+    });
+
+  await trx('cems_wpms_request_factory_snapshots').insert(snapshotRow);
+}
+
+async function findFactorySnapshotSource(
+  trx: Knex.Transaction,
+  input: CreateConnectionRequestInput,
+): Promise<FactorySnapshotSourceRow | null> {
+  return (
+    (await trx<FactorySnapshotSourceRow>('factories as f')
+      .leftJoin('provinces as p', 'p.id', 'f.province_id')
+      .leftJoin('industrial_estates as ie', 'ie.id', 'f.industrial_estate_id')
+      .leftJoin('eligible_factories as ef', function joinEligibleFactory() {
+        this.on(function joinFactoryKeys() {
+          this.on('ef.factory_registration_no_new', '=', 'f.code')
+            .orOn('ef.factory_registration_no_new', '=', 'f.fid')
+            .orOn('ef.source_factory_id', '=', 'f.fid')
+            .orOn('ef.source_factory_id', '=', 'f.code');
+        }).andOnNull('ef.deleted_at');
+      })
+      .whereNull('f.deleted_at')
+      .where((builder) => {
+        builder
+          .where('f.fid', input.factoryId)
+          .orWhere('f.code', input.factoryId)
+          .orWhere('f.code', input.factoryRegistrationNo)
+          .orWhere('ef.source_factory_id', input.factoryId)
+          .orWhere('ef.factory_registration_no_new', input.factoryRegistrationNo);
+      })
+      .select(
+        'f.province_id',
+        'p.name_th as province_name',
+        'p.region as province_region',
+        'ie.code as industrial_estate_code',
+        'ie.name_th as industrial_estate_name',
+      )
+      .first()) ?? null
+  );
+}
+
+function toFactorySnapshotInsertRow(
+  requestId: number,
+  input: CreateConnectionRequestInput,
+  source: FactorySnapshotSourceRow | null,
+  actorUserId: number,
+): Record<string, unknown> {
+  const regionName = input.regionName ?? source?.province_region ?? null;
+  return {
+    request_id: requestId,
+    region_code: input.regionCode ?? regionName,
+    region_name: regionName,
+    province_code: input.provinceCode ?? source?.province_id ?? null,
+    province_name: input.provinceName ?? source?.province_name ?? null,
+    district_code: input.districtCode ?? null,
+    district_name: input.districtName ?? null,
+    subdistrict_code: input.subdistrictCode ?? null,
+    subdistrict_name: input.subdistrictName ?? null,
+    industrial_estate_code: input.industrialEstateCode ?? source?.industrial_estate_code ?? null,
+    industrial_estate_name: input.industrialEstateName ?? source?.industrial_estate_name ?? null,
+    factory_main_type_code: input.industryMainOrder ?? null,
+    factory_main_type_label: input.industryMainOrderLabel ?? null,
+    created_by: actorUserId,
+    updated_by: actorUserId,
   };
 }
 
@@ -1299,8 +1536,8 @@ async function insertHistory(
 }
 
 function buildStatusHistoryNote(update: StatusUpdate): string | null {
-  const notes = [update.revisionReason, update.officerNote].filter(
-    (value): value is string => Boolean(value),
+  const notes = [update.revisionReason, update.officerNote].filter((value): value is string =>
+    Boolean(value),
   );
   return notes.length > 0 ? notes.join('\n') : null;
 }

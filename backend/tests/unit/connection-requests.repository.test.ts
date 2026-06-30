@@ -40,6 +40,25 @@ describe('connectionRequestsRepository request numbers', () => {
     expect(sql).not.toContain('mp.point_name = cmp.point_name');
   });
 
+  it('filters request list by factory snapshot fields for advanced search', () => {
+    const sql = buildBaseQueryForTests(
+      {
+        provinceName: 'ระยอง',
+        industrialEstateName: 'นิคมอุตสาหกรรมมาบตาพุด',
+        factoryMainTypeCode: '8802',
+      },
+      { actorUserId: 42, scope: 'ALL' },
+    )
+      .toSQL()
+      .sql.toLowerCase();
+
+    expect(sql).toContain('cems_wpms_request_factory_snapshots');
+    expect(sql).toContain('[fs].[request_id] = [cems_wpms_connection_requests].[id]');
+    expect(sql).toContain('[fs].[province_name]');
+    expect(sql).toContain('[fs].[industrial_estate_name]');
+    expect(sql).toContain('[fs].[factory_main_type_code]');
+  });
+
   it('keeps operator factory access even when no eligible factory record exists', () => {
     const sql = buildFactoriesForAccessQueryForTests({
       actorUserId: 42,
@@ -67,9 +86,7 @@ describe('connectionRequestsRepository request numbers', () => {
 
   it('can skip waiting-connection point-code side effects for config revision returns', () => {
     expect(
-      shouldIssueWaitingConnectionSideEffectsForTests(
-        CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
-      ),
+      shouldIssueWaitingConnectionSideEffectsForTests(CONNECTION_REQUEST_STATUS.WAITING_CONNECTION),
     ).toBe(true);
     expect(
       shouldIssueWaitingConnectionSideEffectsForTests(

@@ -24,6 +24,7 @@ import {
   type ConfirmConnectionInput,
   type ConnectionRequestDTO,
   type ConnectionRequestDetailDTO,
+  type ConnectionRequestSearchOptionsDTO,
   type ConnectionRequestStatus,
   type ConnectionRequestTableRowDTO,
   type ConnectionRequestType,
@@ -123,6 +124,16 @@ export const connectionRequestsService = {
     return { data, meta: { total } };
   },
 
+  listSearchOptions(
+    actorUserId: number,
+    viewScope: string | null | undefined,
+  ): Promise<ConnectionRequestSearchOptionsDTO> {
+    return connectionRequestsRepository.listSearchOptions({
+      actorUserId,
+      scope: viewScope,
+    });
+  },
+
   async listOperatorFactories(
     actorUserId: number,
     factoryViewScope: string | null | undefined,
@@ -214,7 +225,8 @@ export const connectionRequestsService = {
       .map<OperatorFactoryDashboardRowDTO>((factory) => {
         const currentMeasurementPoints = measurementPointsByFactory.get(factory.factoryId) ?? [];
         const measurementPoints = currentMeasurementPoints.map(toOperatorFactoryMeasurementPoint);
-        const monitoringPointCountBySystem = countMeasurementPointsBySystem(currentMeasurementPoints);
+        const monitoringPointCountBySystem =
+          countMeasurementPointsBySystem(currentMeasurementPoints);
         return {
           id: factory.id,
           factoryId: factory.factoryId,
@@ -1549,7 +1561,10 @@ function extractParameterUnit(parameter: string): string {
 }
 
 function normalizeParameterUnit(unit: string): string {
-  return unit.trim().toLowerCase().replace(/[^a-z0-9%]+/g, '');
+  return unit
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9%]+/g, '');
 }
 
 function toParameterColumnPrefix(parameter: string): string {

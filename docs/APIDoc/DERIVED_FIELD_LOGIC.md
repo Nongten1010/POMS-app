@@ -403,6 +403,83 @@ Risk:
 - เคสเช่น `0403 / 000,003,00403` จะกลายเป็น `0403 / 0000,0003`
 - ถ้าข้อมูลเก่าถูก normalize ผิดจนสูญเลขหลักหน้าไปแล้ว เช่น source เดิม `07000` ถูกเก็บเป็น `0000` จะต้องเติมจาก source เดิมอีกครั้ง เพราะค่า `7000` ไม่เหลืออยู่ใน stored value; migration `0043` ทำงานส่วนนี้เฉพาะแถวที่มี `source_factory_id`
 
+## CEMS/WPMS Request Factory Snapshot
+
+Endpoint: `POST /api/v1/cems-wpms-requests/measurement-points`, `POST /api/v1/cems-wpms-requests/parameters`, `PUT /api/v1/cems-wpms-requests/:id/form`, `GET /api/v1/cems-wpms-requests/:id`, `GET /api/v1/cems-wpms-requests/search-options`
+
+Code:
+
+- `backend/src/modules/connection-requests/connection-requests.repository.ts`
+- `backend/src/modules/connection-requests/connection-requests.validator.ts`
+- `backend/src/db/migrations/0048_create_request_factory_snapshots.ts`
+
+### `regionCode` / `regionName`
+
+Source:
+
+- request payload `regionCode`, `regionName`
+- fallback `provinces.region` from the current `factories.province_id`
+
+Logic:
+
+- When a request form is submitted, backend stores one active snapshot row in `cems_wpms_request_factory_snapshots`.
+- `regionName` uses payload `regionName` first, then falls back to `provinces.region`.
+- `regionCode` uses payload `regionCode` first, then falls back to the effective `regionName` because the current province master stores region as text, not a separate code.
+
+Reason:
+
+- Advanced search must use the factory location as it was when the request was submitted, not whatever the factory master changes to later.
+
+Risk:
+
+- Historical rows before migration can only be backfilled if the request still matches a row in `factories`; otherwise these fields remain `null`.
+
+### `provinceCode` / `provinceName` / `industrialEstateCode` / `industrialEstateName`
+
+Source:
+
+- request payload location fields
+- fallback `factories.province_id`
+- fallback `provinces.name_th`
+- fallback `industrial_estates.code`
+- fallback `industrial_estates.name_th`
+
+Logic:
+
+- Payload fields win because they represent the submitted form.
+- If payload omits province or estate, backend looks up `factories` by `factoryId` / `factoryRegistrationNo`, then joins `provinces` and `industrial_estates`.
+- Migration `0048` backfills old requests using the same factory/province/estate relationship where possible.
+
+Reason:
+
+- Keeps search dimensions denormalized and indexed for request search while preserving the submitted request state.
+
+Risk:
+
+- Old requests whose factory id or registration number no longer matches `factories` cannot be fully backfilled.
+- District/subdistrict are not derived from address text; they are stored only when the request payload sends separate fields.
+
+### `industryMainOrderLabel`
+
+Source:
+
+- request payload `industryMainOrderLabel`
+- stored `cems_wpms_request_factory_snapshots.factory_main_type_label`
+
+Logic:
+
+- API keeps the machine filter code in `industryMainOrder`.
+- API stores and returns the display description separately as `industryMainOrderLabel`.
+- `GET /api/v1/cems-wpms-requests/search-options` returns factory main type options with `code = factory_main_type_code`, `label = factory_main_type_code`, and `description = factory_main_type_label`.
+
+Reason:
+
+- Frontend needs dropdown display like `8802 - ประเภทโรงงานลำดับที่ 88(2): การผลิตพลังงานไฟฟ้าจากพลังงานความร้อน` while filtering by stable code `8802`.
+
+Risk:
+
+- Existing rows only have `industry_main_order`; their `industryMainOrderLabel` stays `null` until resubmitted or backfilled from a trusted factory type description source.
+
 ## CEMS/WPMS Request Status Timeline
 
 Endpoint: `GET /api/v1/cems-wpms-requests/:id` and request detail/list hydration surfaces that include `statusHistory`

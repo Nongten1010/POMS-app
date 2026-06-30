@@ -133,6 +133,53 @@ describe('connection request validators', () => {
     }
   });
 
+  it('accepts factory location snapshot fields for request forms', () => {
+    const result = addMeasurementPointRequestSchema.safeParse({
+      ...validPayload,
+      regionName: 'ภาคตะวันออก',
+      provinceCode: '21',
+      provinceName: 'ระยอง',
+      districtName: 'เมืองระยอง',
+      subdistrictName: 'มาบตาพุด',
+      industrialEstateCode: 'MAP',
+      industrialEstateName: 'นิคมอุตสาหกรรมมาบตาพุด',
+      industryMainOrderLabel: 'ประเภทโรงงานลำดับที่ 88(2): การผลิตพลังงานไฟฟ้าจากพลังงานความร้อน',
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.regionName).toBe('ภาคตะวันออก');
+      expect(result.data.provinceCode).toBe('21');
+      expect(result.data.provinceName).toBe('ระยอง');
+      expect(result.data.districtName).toBe('เมืองระยอง');
+      expect(result.data.subdistrictName).toBe('มาบตาพุด');
+      expect(result.data.industrialEstateCode).toBe('MAP');
+      expect(result.data.industrialEstateName).toBe('นิคมอุตสาหกรรมมาบตาพุด');
+      expect(result.data.industryMainOrderLabel).toBe(
+        'ประเภทโรงงานลำดับที่ 88(2): การผลิตพลังงานไฟฟ้าจากพลังงานความร้อน',
+      );
+    }
+  });
+
+  it('accepts advanced search filters on request list queries', () => {
+    const result = listConnectionRequestsQuerySchema.safeParse({
+      provinceName: ' ระยอง ',
+      districtName: 'เมืองระยอง',
+      industrialEstateName: 'นิคมอุตสาหกรรมมาบตาพุด',
+      factoryMainTypeCode: '8802',
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toMatchObject({
+        provinceName: 'ระยอง',
+        districtName: 'เมืองระยอง',
+        industrialEstateName: 'นิคมอุตสาหกรรมมาบตาพุด',
+        factoryMainTypeCode: '8802',
+      });
+    }
+  });
+
   it('accepts measurement instrument criteria thresholds', () => {
     const result = createConnectionRequestSchema.safeParse({
       ...validPayload,

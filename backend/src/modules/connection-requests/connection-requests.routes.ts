@@ -56,6 +56,11 @@ connectionRequestsRoutes.get(
   connectionRequestsController.listTableRows,
 );
 connectionRequestsRoutes.get(
+  '/search-options',
+  authorize('cems_wpms_requests:view'),
+  connectionRequestsController.listSearchOptions,
+);
+connectionRequestsRoutes.get(
   '/operator-factories',
   authorize('factories:view'),
   connectionRequestsController.listOperatorFactories,

@@ -4,6 +4,7 @@ import { signAccessToken } from '../../src/shared/utils/jwt';
 
 jest.mock('../../src/modules/connection-requests/connection-requests.service', () => ({
   connectionRequestsService: {
+    listSearchOptions: jest.fn(),
     listOperatorFactories: jest.fn(),
     listOperatorFactoryDashboard: jest.fn(),
     setOperatorFactoryFavorite: jest.fn(),
@@ -88,6 +89,20 @@ describe('operator factory dashboard routes', () => {
     mockedConnectionRequestsService.setOperatorFactoryFavorite.mockResolvedValue({
       factoryId: 'factory-001',
       isFavorite: true,
+    });
+    mockedConnectionRequestsService.listSearchOptions.mockResolvedValue({
+      factoryMainTypes: [
+        {
+          code: '8802',
+          label: '8802',
+          description: 'ประเภทโรงงานลำดับที่ 88(2): การผลิตพลังงานไฟฟ้าจากพลังงานความร้อน',
+        },
+      ],
+      regions: [{ code: 'ภาคตะวันออก', label: 'ภาคตะวันออก' }],
+      provinces: [{ code: '21', label: 'ระยอง' }],
+      districts: [{ code: null, label: 'เมืองระยอง' }],
+      subdistricts: [{ code: null, label: 'มาบตาพุด' }],
+      industrialEstates: [{ code: 'MTP', label: 'นิคมอุตสาหกรรมมาบตาพุด' }],
     });
   });
 
@@ -177,6 +192,37 @@ describe('operator factory dashboard routes', () => {
     });
   });
 
+  it('lists advanced-search options from request factory snapshots', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .get('/api/v1/cems-wpms-requests/search-options')
+      .set('Authorization', `Bearer ${accessToken()}`);
+
+    expect(response.status).toBe(200);
+    expect(mockedConnectionRequestsService.listSearchOptions).toHaveBeenCalledWith(
+      42,
+      'OWN_FACTORY',
+    );
+    expect(response.body).toEqual({
+      success: true,
+      data: {
+        factoryMainTypes: [
+          {
+            code: '8802',
+            label: '8802',
+            description: 'ประเภทโรงงานลำดับที่ 88(2): การผลิตพลังงานไฟฟ้าจากพลังงานความร้อน',
+          },
+        ],
+        regions: [{ code: 'ภาคตะวันออก', label: 'ภาคตะวันออก' }],
+        provinces: [{ code: '21', label: 'ระยอง' }],
+        districts: [{ code: null, label: 'เมืองระยอง' }],
+        subdistricts: [{ code: null, label: 'มาบตาพุด' }],
+        industrialEstates: [{ code: 'MTP', label: 'นิคมอุตสาหกรรมมาบตาพุด' }],
+      },
+    });
+  });
+
   it('does not expose favorite updates under cems-wpms requests', async () => {
     const app = createApp();
 
@@ -197,6 +243,7 @@ function accessToken(): string {
     roles: ['factory_operator'],
     scopes: {
       'factories:view': 'OWN_FACTORY',
+      'cems_wpms_requests:view': 'OWN_FACTORY',
       'dashboard.alerts:view': null,
     },
   });
