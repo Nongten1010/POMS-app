@@ -54,7 +54,7 @@ export default defineConfig(({ mode }) => ({
     port: 5174,
     proxy: {
       '/api-proxy': {
-        target: 'http://d-poms.diw.go.th',
+        target: 'https://d-poms.diw.go.th',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api-proxy/, '/api'),
       },
@@ -64,7 +64,7 @@ export default defineConfig(({ mode }) => ({
     port: 5174,
     proxy: {
       '/api-proxy': {
-        target: 'http://d-poms.diw.go.th',
+        target: 'https://d-poms.diw.go.th',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api-proxy/, '/api'),
       },

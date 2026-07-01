@@ -42,15 +42,15 @@ import wpmsParameterOptionItems from '../option/wpmsParameterOptions.json'
 
 const eligibleFactoryCandidatesApiUrl = import.meta.env.DEV
   ? '/api-proxy/v1/eligible-factories/candidates'
-  : 'http://d-poms.diw.go.th/api/v1/eligible-factories/candidates'
+  : 'https://d-poms.diw.go.th/api/v1/eligible-factories/candidates'
 
 const eligibleFactoriesApiUrl = import.meta.env.DEV
   ? '/api-proxy/v1/eligible-factories'
-  : 'http://d-poms.diw.go.th/api/v1/eligible-factories'
+  : 'https://d-poms.diw.go.th/api/v1/eligible-factories'
 
 const monitoringPointFormsApiUrl = import.meta.env.DEV
   ? '/api-proxy/v1/monitoring-point-forms'
-  : 'http://d-poms.diw.go.th/api/v1/monitoring-point-forms'
+  : 'https://d-poms.diw.go.th/api/v1/monitoring-point-forms'
 
 const emptyValue = '-'
 

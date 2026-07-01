@@ -59,10 +59,10 @@ const sortOptions = [
 const referencePoint = { lon: 100.574, lat: 13.91 }
 const operatorFactoriesApiUrl = import.meta.env.DEV
   ? '/api-proxy/v1/operator-factory-dashboard'
-  : 'http://d-poms.diw.go.th/api/v1/operator-factory-dashboard'
+  : 'https://d-poms.diw.go.th/api/v1/operator-factory-dashboard'
 const connectedMeasurementPointsApiBaseUrl = import.meta.env.DEV
   ? '/api-proxy/v1/connected-measurement-points'
-  : 'http://d-poms.diw.go.th/api/v1/connected-measurement-points'
+  : 'https://d-poms.diw.go.th/api/v1/connected-measurement-points'
 const logoBackgrounds = ['#dbeafe', '#fef3c7', '#fee2e2', '#dcfce7', '#e0f2fe', '#ffedd5', '#ecfdf3']
 const allLocationOption = { label: 'ทั้งหมด', value: 'all' }
 const regionOptions = locationOptions.regions

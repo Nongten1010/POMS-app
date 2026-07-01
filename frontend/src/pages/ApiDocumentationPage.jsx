@@ -567,7 +567,7 @@ const apiCategories = [
         id: 'auth-login',
         method: 'POST',
         path: '/auth/login',
-        url: 'http://d-poms.diw.go.th/api/v1/auth/login',
+        url: 'https://d-poms.diw.go.th/api/v1/auth/login',
         testUrl: '/api-proxy/v1/auth/login',
         description: 'เข้าสู่ระบบสำหรับเจ้าหน้าที่หรือผู้ใช้งานตามประเภทบัญชี',
         defaultHeaders: {},
@@ -611,7 +611,7 @@ const apiCategories = [
         id: 'auth-me',
         method: 'GET',
         path: '/auth/me',
-        url: 'http://d-poms.diw.go.th/api/v1/auth/me',
+        url: 'https://d-poms.diw.go.th/api/v1/auth/me',
         testUrl: '/api-proxy/v1/auth/me',
         description: 'ดึงข้อมูลผู้ใช้งานปัจจุบันจาก access token',
         defaultHeaders: {
@@ -652,7 +652,7 @@ const apiCategories = [
         id: 'users-create',
         method: 'POST',
         path: '/users/local-accounts',
-        url: 'http://d-poms.diw.go.th/api/v1/users/local-accounts',
+        url: 'https://d-poms.diw.go.th/api/v1/users/local-accounts',
         testUrl: '/api-proxy/v1/users/local-accounts',
         description: 'เพิ่มผู้ใช้งานจาก dialog เพิ่มผู้ใช้งาน',
         defaultHeaders: {
@@ -705,7 +705,7 @@ const apiCategories = [
         id: 'users-list-officers',
         method: 'GET',
         path: '/users?status=all',
-        url: 'http://d-poms.diw.go.th/api/v1/users?status=all',
+        url: 'https://d-poms.diw.go.th/api/v1/users?status=all',
         testUrl: '/api-proxy/v1/users?status=all',
         description: 'ดึงรายชื่อเจ้าหน้าที่ในระบบสำหรับหน้าสิทธิ์การใช้งาน',
         defaultHeaders: {
@@ -755,7 +755,7 @@ const apiCategories = [
         id: 'users-detail',
         method: 'GET',
         path: '/users/<id>',
-        url: 'http://d-poms.diw.go.th/api/v1/users/<id>',
+        url: 'https://d-poms.diw.go.th/api/v1/users/<id>',
         testUrl: '/api-proxy/v1/users/2',
         description: 'ดึงข้อมูลผู้ใช้งานและ permissions สำหรับ dialog แก้ไขสิทธิ์การใช้งาน',
         defaultHeaders: {
@@ -813,7 +813,7 @@ const apiCategories = [
         id: 'users-update',
         method: 'PATCH',
         path: '/users/:id',
-        url: 'http://d-poms.diw.go.th/api/v1/users/:id',
+        url: 'https://d-poms.diw.go.th/api/v1/users/:id',
         testUrl: '/api-proxy/v1/users/2',
         description: 'บันทึกข้อมูลจาก dialog แก้ไขสิทธิ์การใช้งาน',
         defaultHeaders: {
@@ -879,7 +879,7 @@ const apiCategories = [
         id: 'users-delete',
         method: 'DELETE',
         path: '/users/:id',
-        url: 'http://d-poms.diw.go.th/api/v1/users/:id',
+        url: 'https://d-poms.diw.go.th/api/v1/users/:id',
         testUrl: '/api-proxy/v1/users/2',
         description: 'ลบผู้ใช้งานจากหน้าสิทธิ์การใช้งาน',
         defaultHeaders: {
@@ -916,7 +916,7 @@ const apiCategories = [
         id: 'eligible-factory-candidates',
         method: 'GET',
         path: '/eligible-factories/candidates',
-        url: 'http://d-poms.diw.go.th/api/v1/eligible-factories/candidates',
+        url: 'https://d-poms.diw.go.th/api/v1/eligible-factories/candidates',
         testUrl: '/api-proxy/v1/eligible-factories/candidates',
         description: 'ดึงรายการโรงงานทั้งหมดจาก กรอ. สำหรับตารางโรงงานทั้งหมด',
         defaultHeaders: {
@@ -956,7 +956,7 @@ const apiCategories = [
         id: 'eligible-factories-list',
         method: 'GET',
         path: '/eligible-factories',
-        url: 'http://d-poms.diw.go.th/api/v1/eligible-factories',
+        url: 'https://d-poms.diw.go.th/api/v1/eligible-factories',
         testUrl: '/api-proxy/v1/eligible-factories',
         description: 'ดึงรายการโรงงานที่ถูกนำเข้าเป็นโรงงานที่เข้าข่ายแล้ว',
         defaultHeaders: {
@@ -993,7 +993,7 @@ const apiCategories = [
         id: 'eligible-factories-create',
         method: 'POST',
         path: '/eligible-factories',
-        url: 'http://d-poms.diw.go.th/api/v1/eligible-factories',
+        url: 'https://d-poms.diw.go.th/api/v1/eligible-factories',
         testUrl: '/api-proxy/v1/eligible-factories',
         description: 'นำเข้าโรงงานจากตารางโรงงานทั้งหมดเป็นโรงงานที่เข้าข่าย',
         defaultHeaders: {
@@ -1034,7 +1034,7 @@ const apiCategories = [
         id: 'eligible-factories-delete',
         method: 'DELETE',
         path: '/eligible-factories/:id',
-        url: 'http://d-poms.diw.go.th/api/v1/eligible-factories/:id',
+        url: 'https://d-poms.diw.go.th/api/v1/eligible-factories/:id',
         testUrl: '/api-proxy/v1/eligible-factories/1',
         description: 'นำโรงงานออกจากรายการโรงงานที่เข้าข่าย',
         defaultHeaders: {

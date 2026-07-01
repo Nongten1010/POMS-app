@@ -37,7 +37,7 @@ const publicUserTypes = [
 
 const loginUrl = import.meta.env.DEV
   ? '/api-proxy/v1/auth/login'
-  : 'http://d-poms.diw.go.th/api/v1/auth/login'
+  : 'https://d-poms.diw.go.th/api/v1/auth/login'
 
 function formatLoginError(result, response) {
   const statusLabel = [result.status, result.statusText].filter(Boolean).join(' ')

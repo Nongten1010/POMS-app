@@ -3,18 +3,21 @@ import {
   Box,
   Button,
   Checkbox,
-  Chip,
   Dialog,
   DialogContent,
   DialogTitle,
   Divider,
+  FormControl,
   FormControlLabel,
+  InputLabel,
+  MenuItem,
   Badge,
   List,
   ListItemButton,
   ListItemText,
   Paper,
   Popover,
+  Select,
   Stack,
   Tab,
   Tabs,
@@ -26,6 +29,7 @@ import TableChartIcon from '@mui/icons-material/TableChart'
 import FileDownloadIcon from '@mui/icons-material/FileDownload'
 import FilterListIcon from '@mui/icons-material/FilterList'
 import ViewColumnIcon from '@mui/icons-material/ViewColumn'
+import { BarChart } from '@mui/x-charts/BarChart'
 import {
   DataGrid,
   FilterPanelTrigger,
@@ -294,6 +298,8 @@ const baseGridLocaleText = {
 function StatisticsPage() {
   const [activeGroup, setActiveGroup] = useState(statisticGroups[0].value)
   const [activeView, setActiveView] = useState(summaryViews[0].value)
+  const [summaryDisplayMode, setSummaryDisplayMode] = useState('table')
+  const [selectedChartRowId, setSelectedChartRowId] = useState('')
   const [detailContext, setDetailContext] = useState(null)
   const [activeReportByGroup, setActiveReportByGroup] = useState(() =>
     statisticGroups.reduce(
@@ -314,6 +320,10 @@ function StatisticsPage() {
     [activeGroupConfig, activeReportValue],
   )
   const activeViewConfig = summaryViews.find((view) => view.value === activeView) ?? summaryViews[0]
+  const summaryRows = useMemo(() => getSummaryRows(activeReport, activeView), [activeReport, activeView])
+  const activeChartRowId = summaryRows.some((row) => row.id === selectedChartRowId)
+    ? selectedChartRowId
+    : summaryRows[0]?.id ?? ''
 
   const openDetail = (context) => setDetailContext(context)
 
@@ -453,11 +463,48 @@ function StatisticsPage() {
                   มุมมอง: {activeViewConfig.gridLabel}
                 </Typography>
               </Box>
-              <Chip label={activeGroupConfig.label} size="small" color="primary" variant="outlined" />
+              <Tabs
+                value={summaryDisplayMode}
+                onChange={(_, value) => setSummaryDisplayMode(value)}
+                aria-label="รูปแบบการแสดงผลสถิติ"
+                sx={{
+                  flex: '0 0 auto',
+                  minHeight: 32,
+                  p: 0.35,
+                  border: 1,
+                  borderColor: 'primary.light',
+                  borderRadius: 999,
+                  '& .MuiTabs-indicator': { display: 'none' },
+                  '& .MuiTab-root': {
+                    minHeight: 26,
+                    minWidth: 64,
+                    px: 1.5,
+                    borderRadius: 999,
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: 'primary.main',
+                    '&.Mui-selected': {
+                      bgcolor: 'primary.main',
+                      color: 'primary.contrastText',
+                    },
+                  },
+                }}
+              >
+                <Tab value="table" label="ตาราง" />
+                <Tab value="chart" label="กราฟ" />
+              </Tabs>
             </Stack>
 
             <Box sx={{ height: 'calc(100% - 67px)', minHeight: 420 }}>
-              {activeReport.template === 'installation' ? (
+              {summaryDisplayMode === 'chart' ? (
+                <SummaryBarChartSection
+                  report={activeReport}
+                  view={activeView}
+                  rows={summaryRows}
+                  selectedRowId={activeChartRowId}
+                  onSelectedRowChange={setSelectedChartRowId}
+                />
+              ) : activeReport.template === 'installation' ? (
                 <InstallationSummaryGrid report={activeReport} onOpenDetail={openDetail} />
               ) : (
                 <ParameterSummaryGrid report={activeReport} view={activeView} onOpenDetail={openDetail} />
@@ -531,6 +578,171 @@ function ReportList({ reports, activeReportValue, onSelectReport }) {
   )
 }
 
+function getSummaryRows(report, view) {
+  if (report.template === 'installation') {
+    return installationRows.map((row) => ({
+      ...row,
+      countryFactory: row.values[0],
+      countryStack: row.values[1],
+      diwFactory: row.values[2],
+      diwStack: row.values[3],
+      pioFactory: row.values[4],
+      pioStack: row.values[5],
+      ieatFactory: row.values[6],
+      ieatStack: row.values[7],
+    }))
+  }
+
+  return buildParameterRows(view)
+}
+
+function getSummaryRowLabel(row, report, view) {
+  if (!row) {
+    return ''
+  }
+
+  if (report.template === 'installation') {
+    return row.item ?? ''
+  }
+
+  return row.area ?? (view === 'province' ? 'จังหวัด' : 'พื้นที่/โรงงาน')
+}
+
+function getSummaryChartData(row, report) {
+  if (!row) {
+    return []
+  }
+
+  if (report.template === 'installation') {
+    return [
+      { label: 'ทั่วประเทศ', factory: row.countryFactory, stack: row.countryStack },
+      { label: 'กรอ.', factory: row.diwFactory, stack: row.diwStack },
+      { label: 'สอจ.', factory: row.pioFactory, stack: row.pioStack },
+      { label: 'กนอ.', factory: row.ieatFactory, stack: row.ieatStack },
+    ].map((item) => ({
+      ...item,
+      factory: Number(item.factory) || 0,
+      stack: Number(item.stack) || 0,
+    }))
+  }
+
+  return [
+    { label: 'ทุกพารามิเตอร์', outside: row.allOutside, inside: row.allInside },
+    ...parameterNames.map((parameter) => ({
+      label: parameter,
+      outside: row[`${parameter}Outside`],
+      inside: row[`${parameter}Inside`],
+    })),
+  ].map((item) => ({
+    ...item,
+    outside: Number(item.outside) || 0,
+    inside: Number(item.inside) || 0,
+  }))
+}
+
+function SummaryBarChartSection({ report, view, rows, selectedRowId, onSelectedRowChange }) {
+  const selectedRow = rows.find((row) => row.id === selectedRowId) ?? rows[0]
+  const chartData = getSummaryChartData(selectedRow, report)
+  const dropdownLabel = report.template === 'installation' ? 'รายการ' : view === 'province' ? 'จังหวัด' : 'พื้นที่/โรงงาน'
+  const chartSeries =
+    report.template === 'installation'
+      ? [
+          { dataKey: 'factory', label: 'โรงงาน', color: '#2563eb' },
+          { dataKey: 'stack', label: 'ปล่อง', color: '#f97316' },
+        ]
+      : [
+          { dataKey: 'outside', label: 'นอกนิคม', color: '#2563eb' },
+          { dataKey: 'inside', label: 'ในนิคม', color: '#f97316' },
+        ]
+
+  return (
+    <Box
+      sx={{
+        height: '100%',
+        minHeight: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        p: { xs: 1.5, md: 2 },
+        gap: 1.5,
+      }}
+    >
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        spacing={1.5}
+        sx={{ alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'space-between' }}
+      >
+        <Box sx={{ minWidth: 0 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+            กราฟสรุปข้อมูล
+          </Typography>
+          <Typography variant="body2" color="text.secondary" noWrap>
+            {selectedRow ? getSummaryRowLabel(selectedRow, report, view) : 'ไม่มีข้อมูล'}
+          </Typography>
+        </Box>
+        <FormControl size="small" sx={{ width: { xs: '100%', sm: 300 } }}>
+          <InputLabel id="summary-chart-row-label">{dropdownLabel}</InputLabel>
+          <Select
+            labelId="summary-chart-row-label"
+            value={selectedRow?.id ?? ''}
+            label={dropdownLabel}
+            onChange={(event) => onSelectedRowChange(event.target.value)}
+          >
+            {rows.map((row) => (
+              <MenuItem key={row.id} value={row.id}>
+                {getSummaryRowLabel(row, report, view)}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      </Stack>
+
+      <Box
+        sx={{
+          flex: '0 0 auto',
+          minHeight: 0,
+          border: 1,
+          borderColor: 'divider',
+          borderRadius: 1,
+          bgcolor: '#fff',
+          overflow: 'hidden',
+          p: 1,
+        }}
+      >
+        {chartData.length > 0 ? (
+          <Box sx={{ height: 380 }}>
+            <BarChart
+              dataset={chartData}
+              xAxis={[
+                {
+                  scaleType: 'band',
+                  dataKey: 'label',
+                  tickLabelInterval: () => true,
+                  tickLabelMinGap: 0,
+                  valueFormatter: (value) => value,
+                  tickLabelStyle: {
+                    fontSize: 11,
+                    fontWeight: 700,
+                    fill: '#64748b',
+                  },
+                },
+              ]}
+              yAxis={[{ min: 0, label: 'จำนวนโรงงาน' }]}
+              series={chartSeries}
+              grid={{ horizontal: true }}
+              margin={{ top: 36, right: 24, bottom: 48, left: 56 }}
+              height={380}
+            />
+          </Box>
+        ) : (
+          <Box sx={{ height: '100%', display: 'grid', placeItems: 'center', color: 'text.secondary' }}>
+            ไม่มีข้อมูลกราฟ
+          </Box>
+        )}
+      </Box>
+    </Box>
+  )
+}
+
 function InstallationSummaryGrid({ report, onOpenDetail }) {
   const columns = useMemo(
     () => [
@@ -585,21 +797,7 @@ function InstallationSummaryGrid({ report, onOpenDetail }) {
     ],
     [onOpenDetail, report],
   )
-  const rows = useMemo(
-    () =>
-      installationRows.map((row) => ({
-        ...row,
-        countryFactory: row.values[0],
-        countryStack: row.values[1],
-        diwFactory: row.values[2],
-        diwStack: row.values[3],
-        pioFactory: row.values[4],
-        pioStack: row.values[5],
-        ieatFactory: row.values[6],
-        ieatStack: row.values[7],
-      })),
-    [],
-  )
+  const rows = useMemo(() => getSummaryRows(report, ''), [report])
 
   return (
     <SummaryDataGrid

@@ -34,13 +34,16 @@ import {
 } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import FileDownloadIcon from '@mui/icons-material/FileDownload'
+import HistoryIcon from '@mui/icons-material/History'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
+import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import { DataGrid } from '@mui/x-data-grid'
 import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers'
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
 import dayjs from 'dayjs'
 import buddhistEra from 'dayjs/plugin/buddhistEra'
 import 'dayjs/locale/th'
+import OfficerStatisticsPanel from '../components/OfficerStatisticsPanel'
 
 dayjs.extend(buddhistEra)
 dayjs.locale('th')
@@ -57,6 +60,7 @@ const operatorSubMenus = [
 
 const officerSubMenus = [
   { value: 'requests', label: 'รายการคำขอ', badgeContent: 1 },
+  { value: 'statistics', label: 'สถิติข้อมูล' },
 ]
 
 const factoryRows = [
@@ -161,6 +165,16 @@ const requestRows = [
     submittedDate: '15/06/2569',
     reviewedDate: '-',
     status: 'รอพิจารณา',
+    statusHistory: [
+      {
+        id: 'kwp-request-1-history-1',
+        statusLabel: 'รอพิจารณา',
+        note: 'ผู้ประกอบการส่งแบบฟอร์ม กวภ.01 เพื่อให้เจ้าหน้าที่ตรวจสอบ',
+        changedAt: '15/06/2569',
+        durationText: 'อยู่ระหว่างดำเนินการ',
+        changedBy: 'บริษัท ปูนซีเมนต์นครหลวง จำกัด (มหาชน)',
+      },
+    ],
   },
   {
     id: 'kwp-request-2',
@@ -177,6 +191,25 @@ const requestRows = [
     submittedDate: '14/06/2569',
     reviewedDate: '15/06/2569',
     status: 'รอโรงงานแก้ไข',
+    revisionNote: 'กรุณาแนบเอกสารประกอบเพิ่มเติม และตรวจสอบรายละเอียดผลการตรวจวัดให้ครบถ้วน',
+    statusHistory: [
+      {
+        id: 'kwp-request-2-history-1',
+        statusLabel: 'รอพิจารณา',
+        note: 'ผู้ประกอบการส่งแบบฟอร์ม กวภ.02 พร้อมเอกสารประกอบ',
+        changedAt: '14/06/2569',
+        durationText: '1 วัน',
+        changedBy: 'บริษัท ปูนซีเมนต์นครหลวง จำกัด (มหาชน)',
+      },
+      {
+        id: 'kwp-request-2-history-2',
+        statusLabel: 'รอโรงงานแก้ไข',
+        note: 'กรุณาแนบเอกสารประกอบเพิ่มเติม และตรวจสอบรายละเอียดผลการตรวจวัดให้ครบถ้วน',
+        changedAt: '15/06/2569',
+        durationText: 'อยู่ระหว่างดำเนินการ',
+        changedBy: 'เจ้าหน้าที่ ก',
+      },
+    ],
   },
   {
     id: 'kwp-request-3',
@@ -193,6 +226,90 @@ const requestRows = [
     submittedDate: '13/06/2569',
     reviewedDate: '14/06/2569',
     status: 'ยื่นแบบสำเร็จ',
+    statusHistory: [
+      {
+        id: 'kwp-request-3-history-1',
+        statusLabel: 'รอพิจารณา',
+        note: 'ผู้ประกอบการส่งแบบฟอร์ม กวภ.03',
+        changedAt: '13/06/2569',
+        durationText: '1 วัน',
+        changedBy: 'บริษัท อินทรี อีโคไซเคิล จำกัด',
+      },
+      {
+        id: 'kwp-request-3-history-2',
+        statusLabel: 'ผ่านการพิจารณา',
+        note: 'เจ้าหน้าที่ตรวจสอบข้อมูลและเอกสารประกอบครบถ้วน',
+        changedAt: '14/06/2569',
+        durationText: '1 วัน',
+        changedBy: 'เจ้าหน้าที่ ก',
+      },
+      {
+        id: 'kwp-request-3-history-3',
+        statusLabel: 'ยื่นแบบสำเร็จ',
+        note: 'ระบบบันทึกผลการพิจารณาเรียบร้อยแล้ว',
+        changedAt: '14/06/2569',
+        changedBy: 'ระบบ',
+      },
+    ],
+  },
+  {
+    id: 'kwp-request-4',
+    factoryName: 'บริษัท ปูนซีเมนต์นครหลวง จำกัด (มหาชน)',
+    factoryRegistration: '10190000425445',
+    industryType: '10100 / 3',
+    factoryAddress: '88 หมู่ 7 ถนนมิตรภาพ ตำบลทับกวาง อำเภอแก่งคอย สระบุรี',
+    province: 'สระบุรี',
+    type: 'CEMS',
+    monitoringPointCode: 'S0004',
+    monitoringPointName: 'ปล่องระบาย C',
+    requestNo: 'KWP-69-00004',
+    form: 'กวภ.04',
+    submittedDate: '12/06/2569',
+    reviewedDate: '16/06/2569',
+    status: 'ผ่านการพิจารณา',
+    statusHistory: [
+      {
+        id: 'kwp-request-4-history-1',
+        statusLabel: 'รอพิจารณา',
+        note: 'ผู้ประกอบการส่งแบบฟอร์ม กวภ.04 พร้อมรายงานผลการตรวจวัด',
+        changedAt: '12/06/2569',
+        durationText: '4 วัน',
+        changedBy: 'บริษัท ปูนซีเมนต์นครหลวง จำกัด (มหาชน)',
+      },
+      {
+        id: 'kwp-request-4-history-2',
+        statusLabel: 'ผ่านการพิจารณา',
+        note: 'ตรวจสอบข้อมูลผลการตรวจวัดและเอกสารแนบถูกต้องครบถ้วน',
+        changedAt: '16/06/2569',
+        changedBy: 'เจ้าหน้าที่ ก',
+      },
+    ],
+  },
+  {
+    id: 'kwp-request-5',
+    factoryName: 'บริษัท เซาท์เทิร์นเพาเวอร์ จำกัด',
+    factoryRegistration: '90140000225610',
+    industryType: '08800 / 2',
+    factoryAddress: '11 หมู่ 5 ตำบลบางปูใหม่ อำเภอเมืองสมุทรปราการ สมุทรปราการ',
+    province: 'สมุทรปราการ',
+    type: 'CEMS',
+    monitoringPointCode: 'S0005',
+    monitoringPointName: 'ปล่องระบายหลัก',
+    requestNo: 'KWP-69-00005',
+    form: 'กวภ.05',
+    submittedDate: '10/06/2569',
+    reviewedDate: '17/06/2569',
+    status: 'รอพิจารณา',
+    statusHistory: [
+      {
+        id: 'kwp-request-5-history-1',
+        statusLabel: 'รอพิจารณา',
+        note: 'ผู้ประกอบการส่งแบบฟอร์ม กวภ.05 รายงานผลการสอบเทียบหรือทวนสอบ CEMS',
+        changedAt: '10/06/2569',
+        durationText: 'อยู่ระหว่างดำเนินการ',
+        changedBy: 'บริษัท เซาท์เทิร์นเพาเวอร์ จำกัด',
+      },
+    ],
   },
 ]
 
@@ -299,8 +416,36 @@ function FactoryActions({ row, onOpenMonitoringPoints }) {
   )
 }
 
-function RequestActions({ row, onOpenDocument }) {
+function RequestActions({ row, isOperator, onOpenDocument }) {
   const cannotProcess = ['ยื่นแบบสำเร็จ', 'รอโรงงานแก้ไข'].includes(row.status)
+  const canOperatorModify = row.status === 'รอโรงงานแก้ไข'
+
+  if (isOperator) {
+    return (
+      <Stack direction="row" spacing={1} sx={tableActionStackSx}>
+        <Button size="small" variant="outlined" onClick={() => onOpenDocument?.(row, 'view')}>
+          เปิดดู
+        </Button>
+        <Button
+          size="small"
+          variant="contained"
+          disabled={!canOperatorModify}
+          onClick={() => onOpenDocument?.(row, 'edit')}
+        >
+          แก้ไข
+        </Button>
+        <Button
+          size="small"
+          variant="outlined"
+          color="error"
+          disabled={!canOperatorModify}
+          onClick={() => onOpenDocument?.(row, 'cancel')}
+        >
+          ยกเลิก
+        </Button>
+      </Stack>
+    )
+  }
 
   return (
     <Stack direction="row" spacing={1} sx={tableActionStackSx}>
@@ -827,6 +972,141 @@ function buildKwp05PreviewData(form, formElement, calibrationRows) {
   }
 }
 
+function parseKwpHistoryDate(value) {
+  if (!value) return null
+
+  if (typeof value === 'string') {
+    const thaiDateMatch = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+    if (thaiDateMatch) {
+      const [, day, month, year] = thaiDateMatch
+      const christianYear = Number(year) > 2400 ? Number(year) - 543 : Number(year)
+
+      return new Date(christianYear, Number(month) - 1, Number(day))
+    }
+
+    const isoDateMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})/)
+    if (isoDateMatch) {
+      const [, year, month, day] = isoDateMatch
+
+      return new Date(Number(year), Number(month) - 1, Number(day))
+    }
+  }
+
+  const date = new Date(value)
+
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function formatKwpHistoryDate(value) {
+  const parsedDate = parseKwpHistoryDate(value)
+  if (!parsedDate) return '-'
+
+  const day = String(parsedDate.getDate()).padStart(2, '0')
+  const month = String(parsedDate.getMonth() + 1).padStart(2, '0')
+  const year = parsedDate.getFullYear() + 543
+
+  return `${day}/${month}/${year}`
+}
+
+function formatKwpHistoryDuration(startValue, endValue, fallbackValue) {
+  if (fallbackValue) return fallbackValue
+
+  const startDate = parseKwpHistoryDate(startValue)
+  const endDate = parseKwpHistoryDate(endValue)
+  if (!startDate || !endDate) return ''
+
+  const diffMs = Math.max(0, endDate.getTime() - startDate.getTime())
+  const totalDays = Math.max(1, Math.ceil(diffMs / 86_400_000))
+
+  return `${totalDays} วัน`
+}
+
+function getKwpStatusHistoryItems(history = []) {
+  return history
+    .filter(Boolean)
+    .map((item, index) => ({ ...item, __index: index, __date: item.changedAt ?? item.date ?? null }))
+    .sort((a, b) => {
+      const dateA = parseKwpHistoryDate(a.__date)?.getTime() ?? 0
+      const dateB = parseKwpHistoryDate(b.__date)?.getTime() ?? 0
+
+      if (dateA !== dateB) {
+        return dateA - dateB
+      }
+
+      return a.__index - b.__index
+    })
+}
+
+function buildKwpStatusHistory(row) {
+  if (Array.isArray(row.statusHistory) && row.statusHistory.length > 0) {
+    return row.statusHistory
+  }
+
+  const history = [
+    {
+      id: `${row.id}-submitted`,
+      statusLabel: 'รอพิจารณา',
+      note: 'ผู้ประกอบการส่งแบบฟอร์ม',
+      changedAt: row.submittedDate,
+      changedBy: 'ผู้ประกอบการ',
+    },
+  ]
+
+  if (row.status === 'รอโรงงานแก้ไข') {
+    history.push({
+      id: `${row.id}-revision`,
+      statusLabel: 'รอโรงงานแก้ไข',
+      note: row.revisionNote ?? '',
+      changedAt: row.reviewedDate,
+      changedBy: 'เจ้าหน้าที่ ก',
+    })
+  } else if (row.status === 'ผ่านการพิจารณา') {
+    history.push({
+      id: `${row.id}-reviewed`,
+      statusLabel: 'ผ่านการพิจารณา',
+      note: 'ตรวจสอบข้อมูลและเอกสารประกอบถูกต้องครบถ้วน',
+      changedAt: row.reviewedDate,
+      changedBy: 'เจ้าหน้าที่ ก',
+    })
+  } else if (row.status === 'ยื่นแบบสำเร็จ') {
+    history.push({
+      id: `${row.id}-completed`,
+      statusLabel: 'ยื่นแบบสำเร็จ',
+      note: 'บันทึกผลการพิจารณาเรียบร้อยแล้ว',
+      changedAt: row.reviewedDate,
+      changedBy: 'เจ้าหน้าที่ ก',
+    })
+  }
+
+  return history
+}
+
+function buildKwpEditForm(row) {
+  const option = kwpFormOptions.find((item) => item.code === row.form)
+  const titleText = option?.title ?? ''
+
+  return {
+    title: `${row.form} ${titleText}`.trim(),
+    code: row.form,
+    titleText,
+    description: option?.description ?? '',
+    mode: 'edit',
+    requestNo: row.requestNo,
+    latestRevisionMessage: row.revisionNote ?? '',
+    factory: {
+      factoryName: row.factoryName,
+      newRegistrationNo: row.factoryRegistration,
+      industryType: row.industryType,
+      address: row.factoryAddress,
+    },
+    point: {
+      code: row.monitoringPointCode,
+      name: row.monitoringPointName,
+      type: row.type,
+    },
+  }
+}
+
 function buildKwpRequestPreviewData(row) {
   const commonData = {
     title: row.form,
@@ -847,6 +1127,8 @@ function buildKwpRequestPreviewData(row) {
     productionCapacityUnit: 'ตัน/ชั่วโมง',
     reporterName: 'นายสมชาย ใจดี',
     reporterPosition: 'ผู้จัดการสิ่งแวดล้อม',
+    latestRevisionMessage: row.revisionNote ?? '',
+    statusHistory: buildKwpStatusHistory(row),
   }
 
   if (row.form === 'กวภ.03') {
@@ -905,6 +1187,44 @@ function buildKwpRequestPreviewData(row) {
     }
   }
 
+  if (row.form === 'กวภ.05') {
+    return {
+      formType: 'kwp05',
+      title: row.form,
+      companyName: row.factoryName,
+      factoryRegistration: row.factoryRegistration,
+      businessActivity: row.industryType,
+      factoryAddress: row.factoryAddress,
+      samplerName: 'นายสมชาย ใจดี',
+      officerRegistration: 'LAB-REG-2569-001',
+      laboratoryName: 'ห้องปฏิบัติการสิ่งแวดล้อมอุตสาหกรรม',
+      laboratoryRegistration: 'ทดสอบ-1234-2569',
+      pointCode: row.monitoringPointCode,
+      pointName: row.monitoringPointName,
+      cemsBrand: 'EnviroTech CEMS-5000',
+      cemsDetail: 'EnviroTech CEMS-5000',
+      reportRound: '1',
+      reportYear: String(new Date().getFullYear() + 543),
+      calibrationRows: [
+        {
+          id: `${row.id}-calibration-1`,
+          parameter: 'NOx (ppm)',
+          startDate: '2026-06-10',
+          endDate: '2026-06-11',
+          result: 'ผ่าน',
+          verifierCompany: 'บริษัท ตรวจวัดสิ่งแวดล้อมไทย จำกัด',
+          cemsModel: 'CEMS-5000',
+          linkQr1: 'https://example.com/rata-nox',
+          linkQr2: 'https://example.com/cert-nox',
+        },
+      ],
+      reporterName: 'นายสมชาย ใจดี',
+      reporterPosition: 'ผู้จัดการสิ่งแวดล้อม',
+      latestRevisionMessage: row.revisionNote ?? '',
+      statusHistory: buildKwpStatusHistory(row),
+    }
+  }
+
   return {
     ...commonData,
     issueReason: 'เครื่องมือหรือเครื่องอุปกรณ์พิเศษขัดข้อง',
@@ -940,7 +1260,7 @@ function PaperCheckbox({ checked, label }) {
   )
 }
 
-function DottedValue({ children, minWidth = 120 }) {
+function DottedValue({ children, minWidth = 120, sx }) {
   return (
     <Box
       component="span"
@@ -950,6 +1270,7 @@ function DottedValue({ children, minWidth = 120 }) {
         borderBottom: '1px dotted #222',
         px: 0.5,
         lineHeight: 1.4,
+        ...sx,
       }}
     >
       {children}
@@ -1527,10 +1848,22 @@ function Kwp03PaperDocument({ data }) {
   )
 }
 
-function Kwp05Line({ label, value, minWidth = 180, children }) {
+function Kwp05Field({ label, value, minWidth = 120, sx, valueSx }) {
   return (
-    <Box sx={{ fontSize: 14, lineHeight: 1.7 }}>
-      {label} : <DottedValue minWidth={minWidth}>{value}</DottedValue>
+    <Box sx={{ display: 'flex', alignItems: 'baseline', minWidth: 0, fontSize: 14, lineHeight: 1.6, ...sx }}>
+      <Box component="span" sx={{ whiteSpace: 'nowrap' }}>
+        {label} :
+      </Box>
+      <DottedValue minWidth={minWidth} sx={{ flex: 1, ml: 0.5, ...valueSx }}>
+        {value}
+      </DottedValue>
+    </Box>
+  )
+}
+
+function Kwp05FormRow({ children, sx }) {
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.25, minWidth: 0, ...sx }}>
       {children}
     </Box>
   )
@@ -1540,93 +1873,98 @@ function Kwp05PaperDocument({ data }) {
   const rowsForPaper = data.calibrationRows.length
     ? data.calibrationRows
     : Array.from({ length: 2 }, (_, index) => ({ id: `empty-${index}` }))
+  const tableColumns = [
+    { label: 'พารามิเตอร์', width: '11%' },
+    { label: 'วันที่เริ่มดำเนินการ', width: '11.5%' },
+    { label: 'วันที่สิ้นสุดดำเนินการ', width: '11.5%' },
+    { label: 'ผลการตรวจสอบ (ผ่าน / ไม่ผ่าน)', width: '10%' },
+    { label: 'บริษัทที่ทำการทวนสอบ / สอบเทียบ', width: '12%' },
+    { label: 'ยี่ห้อ/รุ่นของ CEMS', width: '10%' },
+    { label: 'Link / QR CODE', width: '17%' },
+    { label: 'Link / QR CODE', width: '17%' },
+  ]
 
   return (
     <KwpPaperShell>
-      <Stack spacing={1.4}>
-        <Typography sx={{ textAlign: 'right', fontWeight: 700, fontSize: 14 }}>แบบ กวภ.05</Typography>
-        <Box sx={{ textAlign: 'center' }}>
-          <Typography sx={{ fontWeight: 700, fontSize: 14 }}>
+      <Stack spacing={0.6}>
+        <Typography sx={{ textAlign: 'right', fontWeight: 700, fontSize: 13 }}>แบบ กวภ.05</Typography>
+        <Box sx={{ textAlign: 'center', pt: 0.25 }}>
+          <Typography sx={{ fontWeight: 700, fontSize: 13.5, lineHeight: 1.35 }}>
             แบบรายงานผลการสอบเทียบหรือทวนสอบระบบตรวจวัดคุณภาพอากาศ
           </Typography>
-          <Typography sx={{ fontWeight: 700, fontSize: 14 }}>
+          <Typography sx={{ fontWeight: 700, fontSize: 13.5, lineHeight: 1.35 }}>
             แบบอัตโนมัติอย่างต่อเนื่อง (CEMS)
           </Typography>
-          <Typography sx={{ fontWeight: 700, fontSize: 14 }}>
-            ครั้งที่ <DottedValue minWidth={72}>{data.reportRound}</DottedValue>ประจำปี พ.ศ. <DottedValue minWidth={88}>{data.reportYear}</DottedValue>
+          <Typography sx={{ fontWeight: 700, fontSize: 13.5, lineHeight: 1.35 }}>
+            ครั้งที่ <DottedValue minWidth={72}>{data.reportRound}</DottedValue> ประจำปี พ.ศ.{' '}
+            <DottedValue minWidth={88}>{data.reportYear}</DottedValue>
           </Typography>
         </Box>
 
-        <Box sx={{ px: 6, pt: 1 }}>
-          <Kwp05Line label="ชื่อบริษัท" value={data.companyName} minWidth={310} />
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, fontSize: 14, lineHeight: 1.7 }}>
-            <Box>
-              เลขทะเบียนโรงงาน : <DottedValue minWidth={230}>{data.factoryRegistration}</DottedValue>
-            </Box>
-            <Box sx={{ flex: 1, minWidth: 220 }}>
-              ประกอบกิจการ : <DottedValue minWidth={220}>{data.businessActivity}</DottedValue>
-            </Box>
-          </Box>
-          <Kwp05Line label="สถานที่ตั้งโรงงาน" value={data.factoryAddress} minWidth={520} />
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, fontSize: 14, lineHeight: 1.7 }}>
-            <Box>
-              ผู้เก็บตัวอย่าง : <DottedValue minWidth={260}>{data.samplerName}</DottedValue>
-            </Box>
-            <Box sx={{ flex: 1, minWidth: 220 }}>
-              ทะเบียนเจ้าหน้าที่ : <DottedValue minWidth={210}>{data.officerRegistration}</DottedValue>
-            </Box>
-          </Box>
-          <Kwp05Line label="หน่วยงาน/ชื่อห้องปฏิบัติการ" value={data.laboratoryName} minWidth={430} />
-          <Kwp05Line label="ทะเบียนห้องปฏิบัติการ" value={data.laboratoryRegistration} minWidth={250} />
-          <Kwp05Line label="รหัสจุดตรวจวัด" value={data.pointCode} minWidth={260} />
-          <Kwp05Line label="ชื่อจุดตรวจวัด" value={data.pointName} minWidth={270} />
-          <Box sx={{ fontSize: 14, lineHeight: 1.7 }}>
-            รายละเอียดของเครื่องมือหรือเครื่องอุปกรณ์พิเศษ : ยี่ห้อ (Brand) :{' '}
-            <DottedValue minWidth={250}>{data.cemsBrand || data.cemsDetail}</DottedValue>
-          </Box>
-          <Typography sx={{ fontWeight: 700, textDecoration: 'underline', fontSize: 14, mt: 0.5 }}>
+        <Box sx={{ pt: 2, fontSize: 14, display: 'grid', rowGap: 0.25 }}>
+          <Kwp05Field label="ชื่อบริษัท" value={data.companyName} minWidth={240} sx={{ width: 330 }} />
+          <Kwp05FormRow>
+            <Kwp05Field label="เลขทะเบียนโรงงาน" value={data.factoryRegistration} minWidth={190} sx={{ width: 340 }} />
+            <Kwp05Field label="ประกอบกิจการ" value={data.businessActivity} minWidth={190} sx={{ flex: 1 }} />
+          </Kwp05FormRow>
+          <Kwp05Field label="สถานที่ตั้ง" value={data.factoryAddress} minWidth={520} />
+          <Kwp05FormRow>
+            <Kwp05Field label="ผู้เก็บตัวอย่าง" value={data.samplerName} minWidth={250} sx={{ flex: 1.1 }} />
+            <Kwp05Field label="ทะเบียนเจ้าหน้าที่" value={data.officerRegistration} minWidth={170} sx={{ flex: 0.9 }} />
+          </Kwp05FormRow>
+          <Kwp05Field label="หน่วยงาน/ชื่อห้องปฏิบัติการ" value={data.laboratoryName} minWidth={420} />
+          <Kwp05Field label="ทะเบียนห้องปฏิบัติการ" value={data.laboratoryRegistration} minWidth={210} sx={{ width: 330 }} />
+          <Kwp05Field label="รหัสจุดตรวจวัด" value={data.pointCode} minWidth={230} sx={{ width: 360 }} />
+          <Kwp05Field label="ชื่อจุดตรวจวัด" value={data.pointName} minWidth={240} sx={{ width: 370 }} />
+          <Kwp05Field
+            label="รายละเอียดของเครื่องมือหรือเครื่องอุปกรณ์พิเศษ : ยี่ห้อ (Brand)"
+            value={data.cemsBrand || data.cemsDetail}
+            minWidth={180}
+          />
+          <Typography sx={{ fontWeight: 700, textDecoration: 'underline', fontSize: 14, mt: 0.35 }}>
             รายการผลการสอบเทียบหรือทวนสอบ CEMS
           </Typography>
         </Box>
 
-        <TableContainer sx={{ px: 6 }}>
+        <TableContainer sx={{ overflowX: 'visible' }}>
           <Table
             size="small"
             sx={{
+              width: '100%',
+              tableLayout: 'fixed',
               border: '1px solid #555',
               '& th, & td': {
                 border: '1px solid #555',
-                p: 0.65,
-                fontSize: 13,
+                p: 0.55,
+                fontSize: 12,
                 color: '#000',
                 textAlign: 'center',
                 verticalAlign: 'middle',
+                overflowWrap: 'anywhere',
+                wordBreak: 'break-word',
               },
               '& th': {
                 bgcolor: '#c9c9c9',
                 fontWeight: 700,
+                height: 96,
               },
             }}
           >
+            <colgroup>
+              {tableColumns.map((column) => (
+                <col key={column.label} style={{ width: column.width }} />
+              ))}
+            </colgroup>
             <TableHead>
               <TableRow>
-                {[
-                  'พารามิเตอร์',
-                  'วันที่เริ่มดำเนินการ',
-                  'วันที่สิ้นสุดดำเนินการ',
-                  'ผลการตรวจสอบ (ผ่าน /ไม่ผ่าน)',
-                  'บริษัทที่ทำการทวนสอบ / สอบเทียบ',
-                  'ยี่ห้อ/รุ่นของ CEMS',
-                  'Link / QR CODE',
-                  'Link / QR CODE',
-                ].map((column) => (
-                  <TableCell key={column}>{column}</TableCell>
+                {tableColumns.map((column) => (
+                  <TableCell key={column.label}>{column.label}</TableCell>
                 ))}
               </TableRow>
             </TableHead>
             <TableBody>
               {rowsForPaper.map((row) => (
-                <TableRow key={row.id} sx={{ height: 54 }}>
+                <TableRow key={row.id} sx={{ height: 88 }}>
                   <TableCell>{row.parameter}</TableCell>
                   <TableCell>{formatThaiDateValue(row.startDate)}</TableCell>
                   <TableCell>{formatThaiDateValue(row.endDate)}</TableCell>
@@ -1641,13 +1979,14 @@ function Kwp05PaperDocument({ data }) {
           </Table>
         </TableContainer>
 
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', px: 6, pt: 5 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', pt: 5 }}>
           <Box sx={{ width: 310, fontSize: 14, lineHeight: 1.8 }}>
             <Box>
-              ผู้รายงานผลการทดสอบ <DottedValue minWidth={130}>{data.reporterName}</DottedValue>
+              ผู้รายงานผลการทดสอบ <DottedValue minWidth={150} />
             </Box>
-            <Box sx={{ textAlign: 'center' }}>( <DottedValue minWidth={220} /> )</Box>
+            <Box sx={{ textAlign: 'center' }}>( <DottedValue minWidth={220}>{data.reporterName}</DottedValue> )</Box>
             <Box>ตำแหน่ง <DottedValue minWidth={220}>{data.reporterPosition}</DottedValue></Box>
+            <Box>ลงวันที่ <DottedValue minWidth={70} />/<DottedValue minWidth={70} />/<DottedValue minWidth={88} /></Box>
           </Box>
         </Box>
       </Stack>
@@ -1655,7 +1994,110 @@ function Kwp05PaperDocument({ data }) {
   )
 }
 
+function KwpStatusHistoryDialog({ open, history = [], onClose }) {
+  const items = useMemo(() => getKwpStatusHistoryItems(history), [history])
+
+  return (
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
+      <DialogTitle
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 2,
+        }}
+      >
+        ประวัติสถานะ
+        <IconButton aria-label="ปิด" onClick={onClose} size="small">
+          <CloseIcon />
+        </IconButton>
+      </DialogTitle>
+      <DialogContent dividers>
+        {items.length ? (
+          <Stack spacing={0}>
+            {items.map((item, index) => {
+              const nextItem = items[index + 1]
+              const duration = formatKwpHistoryDuration(
+                item.__date,
+                nextItem?.__date,
+                item.durationLabel ?? item.durationText ?? item.duration,
+              )
+              const note = item.revisionReason ?? item.officerNote ?? item.note ?? ''
+              const title = `${item.statusLabel ?? item.status ?? '-'}${duration ? ` (${duration})` : ''}`
+
+              return (
+                <Box
+                  key={item.id ?? `${item.statusLabel ?? 'status'}-${index}`}
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: '24px minmax(0, 1fr)',
+                    columnGap: 1.5,
+                  }}
+                >
+                  <Box sx={{ position: 'relative', display: 'flex', justifyContent: 'center' }}>
+                    <Box
+                      sx={{
+                        width: 12,
+                        height: 12,
+                        mt: 0.75,
+                        borderRadius: '50%',
+                        bgcolor: 'primary.main',
+                        border: 2,
+                        borderColor: 'background.paper',
+                        boxShadow: '0 0 0 1px',
+                        color: 'primary.main',
+                        zIndex: 1,
+                      }}
+                    />
+                    {index < items.length - 1 ? (
+                      <Box
+                        sx={{
+                          position: 'absolute',
+                          top: 22,
+                          bottom: 0,
+                          width: 2,
+                          bgcolor: 'divider',
+                        }}
+                      />
+                    ) : null}
+                  </Box>
+                  <Box sx={{ pb: index < items.length - 1 ? 2.5 : 0 }}>
+                    <Typography sx={{ fontWeight: 600 }}>{title}</Typography>
+                    {note ? (
+                      <Typography variant="body2" sx={{ mt: 0.75, whiteSpace: 'pre-line' }}>
+                        หมายเหตุ: {note}
+                      </Typography>
+                    ) : null}
+                    <Stack spacing={0.25} sx={{ mt: note ? 1.5 : 0.75 }}>
+                      <Typography variant="body2" color="text.secondary">
+                        วันที่: {formatKwpHistoryDate(item.__date)}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        ผู้บันทึก: {item.changedByName ?? item.changedBy ?? item.recorderName ?? '-'}
+                      </Typography>
+                    </Stack>
+                  </Box>
+                </Box>
+              )
+            })}
+          </Stack>
+        ) : (
+          <Typography variant="body2" color="text.secondary">
+            ไม่มีประวัติสถานะ
+          </Typography>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function Kwp01PreviewDialog({ open, data, mode = 'submit', onClose }) {
+  const [statusHistoryOpen, setStatusHistoryOpen] = useState(false)
+  const [revisionDialogOpen, setRevisionDialogOpen] = useState(false)
+  const [revisionOfficerNote, setRevisionOfficerNote] = useState('')
+  const [revisionSubmitting, setRevisionSubmitting] = useState(false)
+  const [revisionError, setRevisionError] = useState('')
+  const latestRevisionMessage = mode === 'edit' ? data?.latestRevisionMessage : ''
   const previewFormNo =
     data?.formType === 'kwp04'
       ? 'กวภ.04'
@@ -1677,50 +2119,183 @@ function Kwp01PreviewDialog({ open, data, mode = 'submit', onClose }) {
     link.click()
     URL.revokeObjectURL(url)
   }
+  const closeRevisionDialog = () => {
+    if (revisionSubmitting) {
+      return
+    }
+
+    setRevisionDialogOpen(false)
+    setRevisionOfficerNote('')
+    setRevisionError('')
+  }
+  const requestRevisionDocument = () => {
+    if (!revisionOfficerNote.trim()) {
+      setRevisionError('กรุณาระบุรายละเอียดการแจ้งแก้ไข')
+      return
+    }
+
+    setRevisionSubmitting(true)
+    window.setTimeout(() => {
+      setRevisionSubmitting(false)
+      setRevisionDialogOpen(false)
+      setRevisionOfficerNote('')
+      setRevisionError('')
+      onClose?.()
+    }, 300)
+  }
+  const closePreviewDialog = () => {
+    setStatusHistoryOpen(false)
+    onClose?.()
+  }
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg">
-      <DialogTitle>ตัวอย่างแบบฟอร์ม {previewFormNo}</DialogTitle>
-      <DialogContent dividers sx={{ bgcolor: 'neutral.100' }}>
-        {data?.formType === 'kwp02' || data?.formType === 'kwp04' ? <Kwp02PaperDocument data={data} /> : null}
-        {data?.formType === 'kwp03' ? <Kwp03PaperDocument data={data} /> : null}
-        {data?.formType === 'kwp05' ? <Kwp05PaperDocument data={data} /> : null}
-        {data && !['kwp02', 'kwp03', 'kwp04', 'kwp05'].includes(data.formType) ? <Kwp01PaperDocument data={data} /> : null}
-      </DialogContent>
-      <DialogActions sx={{ justifyContent: 'center' }}>
-        {mode === 'review' ? (
-          <>
-            <Button variant="outlined" color="inherit" onClick={onClose}>
-              ยกเลิก
-            </Button>
-            <Button variant="outlined" color="warning">
-              แก้ไข
-            </Button>
-            <Button variant="contained">
-              ผ่านการพิจารณา
-            </Button>
-          </>
-        ) : mode === 'view' ? (
-          <>
-            <Button variant="outlined" color="inherit" onClick={onClose}>
-              ปิด
-            </Button>
-            <Button variant="contained" startIcon={<FileDownloadIcon />} disabled={!data} onClick={handleDownload}>
-              Download
-            </Button>
-          </>
-        ) : (
-          <>
-            <Button variant="outlined" color="inherit" onClick={onClose}>
-              ยกเลิก
-            </Button>
-            <Button variant="contained">
-              ยืนยันการส่งแบบฟอร์ม
-            </Button>
-          </>
-        )}
-      </DialogActions>
-    </Dialog>
+    <>
+      <Dialog open={open} onClose={closePreviewDialog} fullWidth maxWidth="lg">
+        <DialogTitle
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 2,
+            pr: 3,
+          }}
+        >
+          <Typography component="span" variant="h6" sx={{ minWidth: 0 }}>
+            แบบฟอร์ม {previewFormNo}
+          </Typography>
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<HistoryIcon />}
+            disabled={!data}
+            onClick={() => setStatusHistoryOpen(true)}
+            sx={{ flexShrink: 0 }}
+          >
+            ประวัติสถานะ
+          </Button>
+        </DialogTitle>
+        <DialogContent dividers sx={{ bgcolor: 'neutral.100' }}>
+          {latestRevisionMessage ? (
+            <Paper
+              elevation={0}
+              sx={{
+                p: 2,
+                mb: 2,
+                border: 1,
+                borderColor: 'warning.main',
+                bgcolor: 'warning.50',
+                color: 'text.primary',
+              }}
+            >
+              <Stack direction="row" spacing={1.5} sx={{ alignItems: 'flex-start' }}>
+                <WarningAmberIcon color="warning" fontSize="small" sx={{ mt: 0.25 }} />
+                <Stack spacing={0.75}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                    รายละเอียดการแก้ไข
+                  </Typography>
+                  <Typography variant="body2">{latestRevisionMessage}</Typography>
+                </Stack>
+              </Stack>
+            </Paper>
+          ) : null}
+          {data?.formType === 'kwp02' || data?.formType === 'kwp04' ? <Kwp02PaperDocument data={data} /> : null}
+          {data?.formType === 'kwp03' ? <Kwp03PaperDocument data={data} /> : null}
+          {data?.formType === 'kwp05' ? <Kwp05PaperDocument data={data} /> : null}
+          {data && !['kwp02', 'kwp03', 'kwp04', 'kwp05'].includes(data.formType) ? <Kwp01PaperDocument data={data} /> : null}
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: 'center' }}>
+          {mode === 'review' ? (
+            <>
+              <Button variant="outlined" color="inherit" onClick={closePreviewDialog}>
+                ยกเลิก
+              </Button>
+              <Button variant="outlined" color="warning" onClick={() => setRevisionDialogOpen(true)}>
+                แจ้งแก้ไข
+              </Button>
+              <Button variant="contained">
+                ผ่านการพิจารณา
+              </Button>
+            </>
+          ) : mode === 'view' ? (
+            <>
+              <Button variant="outlined" color="inherit" onClick={closePreviewDialog}>
+                ปิด
+              </Button>
+              <Button variant="contained" startIcon={<FileDownloadIcon />} disabled={!data} onClick={handleDownload}>
+                Download
+              </Button>
+            </>
+          ) : mode === 'edit' ? (
+            <>
+              <Button variant="outlined" color="inherit" onClick={closePreviewDialog}>
+                ยกเลิก
+              </Button>
+              <Button variant="contained">
+                บันทึกการแก้ไข
+              </Button>
+            </>
+          ) : mode === 'cancel' ? (
+            <>
+              <Button variant="outlined" color="inherit" onClick={closePreviewDialog}>
+                ปิด
+              </Button>
+              <Button variant="contained" color="error">
+                ยืนยันการยกเลิก
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outlined" color="inherit" onClick={closePreviewDialog}>
+                ยกเลิก
+              </Button>
+              <Button variant="contained">
+                ยืนยันการส่งแบบฟอร์ม
+              </Button>
+            </>
+          )}
+        </DialogActions>
+      </Dialog>
+      <KwpStatusHistoryDialog
+        open={statusHistoryOpen}
+        history={data?.statusHistory ?? []}
+        onClose={() => setStatusHistoryOpen(false)}
+      />
+      <Dialog open={revisionDialogOpen} onClose={closeRevisionDialog} fullWidth maxWidth="sm">
+        <DialogTitle>แจ้งแก้ไขแบบฟอร์ม</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2}>
+            <Typography variant="body2" color="text.secondary">
+              ระบุหมายเหตุเจ้าหน้าที่สำหรับแจ้งให้ผู้ประกอบการแก้ไขแบบฟอร์ม
+            </Typography>
+            <TextField
+              label="รายละเอียด"
+              value={revisionOfficerNote}
+              onChange={(event) => {
+                setRevisionOfficerNote(event.target.value)
+                setRevisionError('')
+              }}
+              multiline
+              minRows={4}
+              fullWidth
+              autoFocus
+            />
+            {revisionError ? (
+              <Typography color="error" variant="body2">
+                {revisionError}
+              </Typography>
+            ) : null}
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: 'center' }}>
+          <Button color="inherit" disabled={revisionSubmitting} onClick={closeRevisionDialog}>
+            ยกเลิก
+          </Button>
+          <Button variant="contained" disabled={revisionSubmitting} onClick={requestRevisionDocument}>
+            {revisionSubmitting ? 'กำลังแจ้งแก้ไข' : 'ยืนยันแจ้งแก้ไข'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
   )
 }
 
@@ -2592,6 +3167,8 @@ function KwpFormBottomSheet({ form, open, onClose }) {
   const headerCode = form?.code ?? form?.title?.split(' ')?.[0] ?? ''
   const headerTitle = form?.titleText ?? form?.title?.replace(`${headerCode} `, '') ?? ''
   const headerDescription = form?.description ?? ''
+  const latestRevisionMessage = form?.latestRevisionMessage ?? ''
+  const isEditMode = form?.mode === 'edit'
 
   const openPreview = () => {
     if (form?.title?.startsWith('กวภ.05')) {
@@ -2681,6 +3258,29 @@ function KwpFormBottomSheet({ form, open, onClose }) {
             ref={formRef}
             sx={{ flex: 1, minHeight: 0, overflow: 'auto', p: { xs: 2, md: 3 } }}
           >
+            {latestRevisionMessage ? (
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 2,
+                  mb: 2,
+                  border: 1,
+                  borderColor: 'warning.main',
+                  bgcolor: 'warning.50',
+                  color: 'text.primary',
+                }}
+              >
+                <Stack direction="row" spacing={1.5} sx={{ alignItems: 'flex-start' }}>
+                  <WarningAmberIcon color="warning" fontSize="small" sx={{ mt: 0.25 }} />
+                  <Stack spacing={0.75}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                      รายละเอียดการแก้ไข
+                    </Typography>
+                    <Typography variant="body2">{latestRevisionMessage}</Typography>
+                  </Stack>
+                </Stack>
+              </Paper>
+            ) : null}
             {form?.title?.startsWith('กวภ.01') ? (
               <Kwp01Form
                 factory={form.factory}
@@ -2740,7 +3340,7 @@ function KwpFormBottomSheet({ form, open, onClose }) {
               ยกเลิก
             </Button>
             <Button variant="contained" onClick={openPreview}>
-              บันทึกแบบฟอร์ม
+              {isEditMode ? 'บันทึกการแก้ไข' : 'บันทึกแบบฟอร์ม'}
             </Button>
           </Stack>
         </Stack>
@@ -2775,7 +3375,7 @@ function getFactoryColumns(onOpenMonitoringPoints) {
   ]
 }
 
-function getRequestColumns(onOpenDocument) {
+function getRequestColumns(onOpenDocument, isOperator = false) {
   return [
     { field: 'factoryName', headerName: 'ชื่อโรงงาน/บริษัท', width: 240 },
     {
@@ -2795,10 +3395,10 @@ function getRequestColumns(onOpenDocument) {
     {
       field: 'actions',
       headerName: 'จัดการ',
-      width: 190,
+      width: isOperator ? 250 : 190,
       sortable: false,
       filterable: false,
-      renderCell: (params) => <RequestActions row={params.row} onOpenDocument={onOpenDocument} />,
+      renderCell: (params) => <RequestActions row={params.row} isOperator={isOperator} onOpenDocument={onOpenDocument} />,
     },
   ]
 }
@@ -2816,12 +3416,17 @@ function KwpFormsPage({ userType = '' }) {
   const factoryColumns = useMemo(() => getFactoryColumns(setMonitoringPointFactory), [])
   const requestColumns = useMemo(
     () => getRequestColumns((row, mode) => {
+      if (isOperator && mode === 'edit') {
+        setSelectedForm(buildKwpEditForm(row))
+        return
+      }
+
       setRequestDocument({
         mode,
         data: buildKwpRequestPreviewData(row),
       })
-    }),
-    [],
+    }, isOperator),
+    [isOperator],
   )
   const table = useMemo(
     () =>
@@ -2838,6 +3443,7 @@ function KwpFormsPage({ userType = '' }) {
           },
     [effectiveSubMenu, factoryColumns, requestColumns],
   )
+  const isStatisticsSubMenu = effectiveSubMenu === 'statistics'
 
   return (
     <>
@@ -2904,70 +3510,76 @@ function KwpFormsPage({ userType = '' }) {
           </Stack>
         </Paper>
 
-        <Paper
-          elevation={0}
-          sx={{
-            flex: 1,
-            minHeight: 0,
-            border: 1,
-            borderColor: 'divider',
-            overflow: 'hidden',
-          }}
-        >
-          <DataGrid
-            rows={table.rows}
-            columns={table.columns}
-            disableRowSelectionOnClick
-            showToolbar
-            showCellVerticalBorder
-            showColumnVerticalBorder
-            label={table.title}
-            pageSizeOptions={[10, 25, 50]}
-            initialState={{
-              pagination: {
-                paginationModel: { page: 0, pageSize: 10 },
-              },
-            }}
-            localeText={{
-              noRowsLabel: 'ไม่มีข้อมูล',
-              columnMenuSortAsc: 'เรียงจากน้อยไปมาก',
-              columnMenuSortDesc: 'เรียงจากมากไปน้อย',
-              columnMenuFilter: 'ตัวกรอง',
-              columnMenuHideColumn: 'ซ่อนคอลัมน์',
-              columnMenuManageColumns: 'จัดการคอลัมน์',
-              footerRowSelected: (count) => `เลือก ${count.toLocaleString('th-TH')} รายการ`,
-            }}
+        {isStatisticsSubMenu ? (
+          <Box sx={{ flex: 1, minHeight: 0 }}>
+            <OfficerStatisticsPanel title="สถิติข้อมูลแบบแจ้ง กวภ.01 - กวภ.05" />
+          </Box>
+        ) : (
+          <Paper
+            elevation={0}
             sx={{
-              border: 0,
-              '& .MuiDataGrid-columnHeaders': {
-                borderTop: 1,
-                borderBottom: 1,
-                borderColor: 'divider',
-              },
-              '& .MuiDataGrid-columnHeader': {
-                borderColor: 'divider',
-              },
-              '& .MuiDataGrid-columnHeaderTitle': {
-                fontWeight: 600,
-              },
-              '& .MuiDataGrid-cell': {
-                alignItems: 'center',
-                borderColor: 'divider',
-              },
-              '& .MuiDataGrid-cell--textLeft': {
-                display: 'flex',
-                alignItems: 'center',
-              },
-              '& .MuiDataGrid-row--lastVisible .MuiDataGrid-cell': {
-                borderBottom: 1,
-                borderColor: 'divider',
-              },
-              '& .MuiDataGrid-toolbarLabel': {
-                fontWeight: 600,
-              },
+              flex: 1,
+              minHeight: 0,
+              border: 1,
+              borderColor: 'divider',
+              overflow: 'hidden',
             }}
-          />
-        </Paper>
+          >
+            <DataGrid
+              rows={table.rows}
+              columns={table.columns}
+              disableRowSelectionOnClick
+              showToolbar
+              showCellVerticalBorder
+              showColumnVerticalBorder
+              label={table.title}
+              pageSizeOptions={[10, 25, 50]}
+              initialState={{
+                pagination: {
+                  paginationModel: { page: 0, pageSize: 10 },
+                },
+              }}
+              localeText={{
+                noRowsLabel: 'ไม่มีข้อมูล',
+                columnMenuSortAsc: 'เรียงจากน้อยไปมาก',
+                columnMenuSortDesc: 'เรียงจากมากไปน้อย',
+                columnMenuFilter: 'ตัวกรอง',
+                columnMenuHideColumn: 'ซ่อนคอลัมน์',
+                columnMenuManageColumns: 'จัดการคอลัมน์',
+                footerRowSelected: (count) => `เลือก ${count.toLocaleString('th-TH')} รายการ`,
+              }}
+              sx={{
+                border: 0,
+                '& .MuiDataGrid-columnHeaders': {
+                  borderTop: 1,
+                  borderBottom: 1,
+                  borderColor: 'divider',
+                },
+                '& .MuiDataGrid-columnHeader': {
+                  borderColor: 'divider',
+                },
+                '& .MuiDataGrid-columnHeaderTitle': {
+                  fontWeight: 600,
+                },
+                '& .MuiDataGrid-cell': {
+                  alignItems: 'center',
+                  borderColor: 'divider',
+                },
+                '& .MuiDataGrid-cell--textLeft': {
+                  display: 'flex',
+                  alignItems: 'center',
+                },
+                '& .MuiDataGrid-row--lastVisible .MuiDataGrid-cell': {
+                  borderBottom: 1,
+                  borderColor: 'divider',
+                },
+                '& .MuiDataGrid-toolbarLabel': {
+                  fontWeight: 600,
+                },
+              }}
+            />
+          </Paper>
+        )}
       </Stack>
       <MonitoringPointDialog
         open={Boolean(monitoringPointFactory)}
@@ -2979,6 +3591,7 @@ function KwpFormsPage({ userType = '' }) {
         }}
       />
       <KwpFormBottomSheet
+        key={selectedForm ? `${selectedForm.requestNo ?? 'new'}-${selectedForm.code ?? 'form'}-${selectedForm.mode ?? 'create'}` : 'empty-form'}
         open={Boolean(selectedForm)}
         form={selectedForm}
         onClose={() => setSelectedForm(null)}

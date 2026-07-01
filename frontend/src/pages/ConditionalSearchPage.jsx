@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Box, Button, MenuItem, Paper, Radio, Stack, TextField, Typography } from '@mui/material'
+import { Box, Button, Checkbox, FormControlLabel, MenuItem, Paper, Radio, Stack, TextField, Typography } from '@mui/material'
 import DownloadIcon from '@mui/icons-material/Download'
 import RestartAltIcon from '@mui/icons-material/RestartAlt'
 
@@ -130,6 +130,30 @@ const fields = [
   },
 ]
 
+const displayFieldOptions = [
+  'เลขทะเบียนโรงงานใหม่',
+  'เลขทะเบียนโรงงาน (เดิม)',
+  'ลำดับประเภทโรงงาน (หลัก รอง)',
+  'ที่อยู่',
+  'จังหวัด',
+  'นอกนิคม /เขต /สวนอุตสาหกรรม',
+  'นิคมอุตสาหกรรม',
+  'เขต/สวนอุตสาหกรรม',
+  'พิกัดโรงงาน',
+  'ชื่อจุดตรวจวัด',
+  'รหัสจุดตรวจวัด',
+  'พิกัดจุดตรวจวัด',
+  'เข้าข่ายตามบัญชีแนบท้ายลำดับ',
+  'พารามิเตอร์ที่เข้าข่าย',
+  'พารามิเตอร์ที่เชื่อมต่อแล้ว',
+  'พารามิเตอร์ที่ยกเว้น',
+  'พารามิเตอร์ที่ยังไม่เชื่อมต่อ',
+  'ชนิดเชื้อเพลิง (หลัก/รอง)',
+  'ผลการตรวจวัด',
+  'วันที่ / เวลา/ ที่ตรวจวัด',
+  'ค่าเฉลี่ย /สูงสุด/ต่ำสุด',
+]
+
 function quoteCsvValue(value) {
   const stringValue = String(value ?? '')
   return `"${stringValue.replaceAll('"', '""')}"`
@@ -141,11 +165,13 @@ function formatDateForFileName(date = new Date()) {
 
 function ConditionalSearchPage() {
   const [criteria, setCriteria] = useState(initialCriteria)
+  const [selectedDisplayFields, setSelectedDisplayFields] = useState(displayFieldOptions)
   const exportFields = useMemo(() => fields.filter((field) => field.type !== 'spacer'), [])
   const selectedCriteriaCount = useMemo(
     () => Object.values(criteria).filter((value) => value !== '').length,
     [criteria],
   )
+  const selectedDisplayFieldCount = selectedDisplayFields.length
 
   const updateCriteria = (name, value) => {
     setCriteria((current) => ({
@@ -156,11 +182,20 @@ function ConditionalSearchPage() {
 
   const resetCriteria = () => {
     setCriteria(initialCriteria)
+    setSelectedDisplayFields(displayFieldOptions)
+  }
+
+  const toggleDisplayField = (fieldLabel) => {
+    setSelectedDisplayFields((current) =>
+      current.includes(fieldLabel)
+        ? current.filter((item) => item !== fieldLabel)
+        : [...current, fieldLabel],
+    )
   }
 
   const exportCriteriaCsv = () => {
-    const headers = exportFields.map((field) => field.label)
-    const values = exportFields.map((field) => criteria[field.name])
+    const headers = [...exportFields.map((field) => field.label), 'หัวข้อที่จะแสดง']
+    const values = [...exportFields.map((field) => criteria[field.name]), selectedDisplayFields.join(', ')]
     const csvContent = [
       headers.map(quoteCsvValue).join(','),
       values.map(quoteCsvValue).join(','),
@@ -213,6 +248,9 @@ function ConditionalSearchPage() {
             borderRadius: 2,
           }}
         >
+          <Typography variant="h6" component="h2" sx={{ mb: 2, fontWeight: 700 }}>
+            เงื่อนไขการสืบค้น
+          </Typography>
           <Box
             sx={{
               display: 'grid',
@@ -245,41 +283,115 @@ function ConditionalSearchPage() {
               </Box>
             ))}
           </Box>
+      </Paper>
 
-          <Stack
-            direction={{ xs: 'column', sm: 'row' }}
-            spacing={1.5}
-            sx={{
-              mt: 3,
-              justifyContent: 'flex-end',
-              alignItems: { xs: 'stretch', sm: 'center' },
-            }}
-          >
-            <Button
-              variant="contained"
-              startIcon={<DownloadIcon />}
-              onClick={exportCriteriaCsv}
-              sx={{ minWidth: 132 }}
-            >
-              ส่งออกข้อมูล
-            </Button>
-            <Button
-              variant="contained"
-              color="inherit"
-              startIcon={<RestartAltIcon />}
-              onClick={resetCriteria}
-              disabled={selectedCriteriaCount === 0}
+      <Paper
+        elevation={0}
+        sx={{
+          p: { xs: 2, md: 3 },
+          border: 1,
+          borderColor: 'divider',
+          borderRadius: 2,
+        }}
+      >
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={1}
+          sx={{ mb: 2, alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between' }}
+        >
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="h6" component="h2" sx={{ fontWeight: 700 }}>
+              เลือกหัวข้อที่จะแสดง
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              เลือกแล้ว {selectedDisplayFieldCount.toLocaleString('th-TH')} รายการ
+            </Typography>
+          </Box>
+        </Stack>
+
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: {
+              xs: '1fr',
+              sm: 'repeat(2, minmax(0, 1fr))',
+              lg: 'repeat(3, minmax(0, 1fr))',
+            },
+            columnGap: 2,
+            rowGap: 0.75,
+          }}
+        >
+          {displayFieldOptions.map((option) => (
+            <FormControlLabel
+              key={option}
+              control={
+                <Checkbox
+                  checked={selectedDisplayFields.includes(option)}
+                  onChange={() => toggleDisplayField(option)}
+                  size="small"
+                />
+              }
+              label={option}
               sx={{
-                minWidth: 104,
-                bgcolor: 'neutral.100',
-                color: 'neutral.700',
-                boxShadow: 'none',
-                '&:hover': {
-                  bgcolor: 'neutral.200',
-                  boxShadow: 'none',
+                m: 0,
+                minWidth: 0,
+                alignItems: 'flex-start',
+                '& .MuiFormControlLabel-label': {
+                  pt: 0.35,
+                  fontSize: 14,
+                  lineHeight: 1.35,
                 },
               }}
-            >
+            />
+          ))}
+        </Box>
+      </Paper>
+
+      <Paper
+        elevation={0}
+        sx={{
+          mx: { xs: -0.5, md: 0 },
+          px: { xs: 2, md: 3 },
+          py: 1.5,
+          border: 1,
+          borderColor: 'divider',
+          borderRadius: 2,
+          bgcolor: 'background.paper',
+        }}
+      >
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={1.5}
+          sx={{
+            justifyContent: 'flex-end',
+            alignItems: { xs: 'stretch', sm: 'center' },
+          }}
+        >
+          <Button
+            variant="contained"
+            startIcon={<DownloadIcon />}
+            onClick={exportCriteriaCsv}
+            sx={{ minWidth: 132 }}
+          >
+            ส่งออกข้อมูล
+          </Button>
+          <Button
+            variant="contained"
+            color="inherit"
+            startIcon={<RestartAltIcon />}
+            onClick={resetCriteria}
+            disabled={selectedCriteriaCount === 0 && selectedDisplayFieldCount === displayFieldOptions.length}
+            sx={{
+              minWidth: 104,
+              bgcolor: 'neutral.100',
+              color: 'neutral.700',
+              boxShadow: 'none',
+              '&:hover': {
+                bgcolor: 'neutral.200',
+                boxShadow: 'none',
+              },
+            }}
+          >
             รีเซต
           </Button>
         </Stack>

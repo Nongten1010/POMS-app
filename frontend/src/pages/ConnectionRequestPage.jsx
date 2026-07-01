@@ -48,10 +48,12 @@ import cemsParameterOptionItems from '../option/cemsParameterOptions.json'
 import fuelOptionItems from '../option/fuelOptions.json'
 import treatmentSystemOptionItems from '../option/treatmentSystemOptions.json'
 import wpmsParameterOptionItems from '../option/wpmsParameterOptions.json'
+import OfficerStatisticsPanel from '../components/OfficerStatisticsPanel'
 
 const subMenus = [
   { value: 'factories', label: 'รายชื่อโรงงาน' },
   { value: 'requests', label: 'รายการคำขอ', badgeContent: 1 },
+  { value: 'statistics', label: 'สถิติข้อมูล' },
 ]
 
 const getOptionValue = (option) => (typeof option === 'string' ? option : option.value ?? option.label)
@@ -477,30 +479,30 @@ const appBarHeight = {
 const measurementPointsRequestApiUrl =
   import.meta.env.DEV
     ? '/api-proxy/v1/cems-wpms-requests/measurement-points'
-    : 'http://d-poms.diw.go.th/api/v1/cems-wpms-requests/measurement-points'
+    : 'https://d-poms.diw.go.th/api/v1/cems-wpms-requests/measurement-points'
 const parametersRequestApiUrl =
   import.meta.env.DEV
     ? '/api-proxy/v1/cems-wpms-requests/parameters'
-    : 'http://d-poms.diw.go.th/api/v1/cems-wpms-requests/parameters'
+    : 'https://d-poms.diw.go.th/api/v1/cems-wpms-requests/parameters'
 const documentImagesApiUrl =
   import.meta.env.DEV
     ? '/api-proxy/v1/cems-wpms-requests/document-images'
-    : 'http://d-poms.diw.go.th/api/v1/cems-wpms-requests/document-images'
+    : 'https://d-poms.diw.go.th/api/v1/cems-wpms-requests/document-images'
 const operatorFactoriesApiUrl = import.meta.env.DEV
   ? '/api-proxy/v1/cems-wpms-requests/operator-factories'
-  : 'http://d-poms.diw.go.th/api/v1/cems-wpms-requests/operator-factories'
+  : 'https://d-poms.diw.go.th/api/v1/cems-wpms-requests/operator-factories'
 const requestTableRowsApiUrl = import.meta.env.DEV
   ? '/api-proxy/v1/cems-wpms-requests/table-rows'
-  : 'http://d-poms.diw.go.th/api/v1/cems-wpms-requests/table-rows'
+  : 'https://d-poms.diw.go.th/api/v1/cems-wpms-requests/table-rows'
 const requestDetailApiBaseUrl = import.meta.env.DEV
   ? '/api-proxy/v1/cems-wpms-requests'
-  : 'http://d-poms.diw.go.th/api/v1/cems-wpms-requests'
+  : 'https://d-poms.diw.go.th/api/v1/cems-wpms-requests'
 const parameterValuesApiBaseUrl = import.meta.env.DEV
   ? '/api-proxy/v1/parameter-values'
-  : 'http://d-poms.diw.go.th/api/v1/parameter-values'
+  : 'https://d-poms.diw.go.th/api/v1/parameter-values'
 const connectedMeasurementPointsApiBaseUrl = import.meta.env.DEV
   ? '/api-proxy/v1/connected-measurement-points'
-  : 'http://d-poms.diw.go.th/api/v1/connected-measurement-points'
+  : 'https://d-poms.diw.go.th/api/v1/connected-measurement-points'
 
 function getMeasurementPointsRequestApiUrl() {
   if (typeof window === 'undefined') {
@@ -6123,7 +6125,10 @@ function ConnectionRequestPage({ userType = '', accessToken = '', currentUser = 
   const [requestTableError, setRequestTableError] = useState('')
   const isOperator = userType === 'operator'
   const availableSubMenus = useMemo(
-    () => (isOperator ? subMenus : subMenus.filter((menu) => menu.value !== 'factories')),
+    () =>
+      isOperator
+        ? subMenus.filter((menu) => menu.value !== 'statistics')
+        : subMenus.filter((menu) => menu.value !== 'factories'),
     [isOperator],
   )
   const [selectedSubMenu, setSelectedSubMenu] = useState(() => (userType === 'operator' ? 'factories' : 'requests'))
@@ -6592,6 +6597,7 @@ function ConnectionRequestPage({ userType = '', accessToken = '', currentUser = 
           },
     [accessToken, effectiveSubMenu, factoryColumns, isOperator, operatorFactoryRows, requestColumns, requestTableRows],
   )
+  const isStatisticsSubMenu = effectiveSubMenu === 'statistics'
   const effectiveOperatorFactoriesError =
     isOperator && effectiveSubMenu === 'factories' && !accessToken
       ? 'กรุณาเข้าสู่ระบบเพื่อดูรายชื่อโรงงาน'
@@ -6684,81 +6690,87 @@ function ConnectionRequestPage({ userType = '', accessToken = '', currentUser = 
         </Stack>
       </Paper>
 
-      <Paper
-        elevation={0}
-        sx={{
-          flex: 1,
-          minHeight: 0,
-          border: 1,
-          borderColor: 'divider',
-          overflow: 'hidden',
-        }}
-      >
-        {effectiveSubMenu === 'factories' && effectiveOperatorFactoriesError ? (
-          <Typography color="error" variant="body2" sx={{ px: 2, py: 1 }}>
-            {effectiveOperatorFactoriesError}
-          </Typography>
-        ) : null}
-        {effectiveSubMenu === 'requests' && effectiveRequestTableError ? (
-          <Typography color="error" variant="body2" sx={{ px: 2, py: 1 }}>
-            {effectiveRequestTableError}
-          </Typography>
-        ) : null}
-        <DataGrid
-          rows={table.rows}
-          columns={table.columns}
-          loading={table.loading}
-          disableRowSelectionOnClick
-          showToolbar
-          showCellVerticalBorder
-          showColumnVerticalBorder
-          label={table.title}
-          pageSizeOptions={[10, 25, 50]}
-          initialState={{
-            pagination: {
-              paginationModel: { page: 0, pageSize: 10 },
-            },
-          }}
-          localeText={{
-            noRowsLabel: 'ไม่มีข้อมูล',
-            columnMenuSortAsc: 'เรียงจากน้อยไปมาก',
-            columnMenuSortDesc: 'เรียงจากมากไปน้อย',
-            columnMenuFilter: 'ตัวกรอง',
-            columnMenuHideColumn: 'ซ่อนคอลัมน์',
-            columnMenuManageColumns: 'จัดการคอลัมน์',
-            footerRowSelected: (count) => `เลือก ${count.toLocaleString('th-TH')} รายการ`,
-          }}
+      {isStatisticsSubMenu ? (
+        <Box sx={{ flex: 1, minHeight: 0 }}>
+          <OfficerStatisticsPanel title="สถิติข้อมูลคำขอเชื่อมต่อ" />
+        </Box>
+      ) : (
+        <Paper
+          elevation={0}
           sx={{
-            border: 0,
-            '& .MuiDataGrid-columnHeaders': {
-              borderTop: 1,
-              borderBottom: 1,
-              borderColor: 'divider',
-            },
-            '& .MuiDataGrid-columnHeader': {
-              borderColor: 'divider',
-            },
-            '& .MuiDataGrid-columnHeaderTitle': {
-              fontWeight: 600,
-            },
-            '& .MuiDataGrid-cell': {
-              alignItems: 'center',
-              borderColor: 'divider',
-            },
-            '& .MuiDataGrid-cell--textLeft': {
-              display: 'flex',
-              alignItems: 'center',
-            },
-            '& .MuiDataGrid-row--lastVisible .MuiDataGrid-cell': {
-              borderBottom: 1,
-              borderColor: 'divider',
-            },
-            '& .MuiDataGrid-toolbarLabel': {
-              fontWeight: 600,
-            },
+            flex: 1,
+            minHeight: 0,
+            border: 1,
+            borderColor: 'divider',
+            overflow: 'hidden',
           }}
-        />
-      </Paper>
+        >
+          {effectiveSubMenu === 'factories' && effectiveOperatorFactoriesError ? (
+            <Typography color="error" variant="body2" sx={{ px: 2, py: 1 }}>
+              {effectiveOperatorFactoriesError}
+            </Typography>
+          ) : null}
+          {effectiveSubMenu === 'requests' && effectiveRequestTableError ? (
+            <Typography color="error" variant="body2" sx={{ px: 2, py: 1 }}>
+              {effectiveRequestTableError}
+            </Typography>
+          ) : null}
+          <DataGrid
+            rows={table.rows}
+            columns={table.columns}
+            loading={table.loading}
+            disableRowSelectionOnClick
+            showToolbar
+            showCellVerticalBorder
+            showColumnVerticalBorder
+            label={table.title}
+            pageSizeOptions={[10, 25, 50]}
+            initialState={{
+              pagination: {
+                paginationModel: { page: 0, pageSize: 10 },
+              },
+            }}
+            localeText={{
+              noRowsLabel: 'ไม่มีข้อมูล',
+              columnMenuSortAsc: 'เรียงจากน้อยไปมาก',
+              columnMenuSortDesc: 'เรียงจากมากไปน้อย',
+              columnMenuFilter: 'ตัวกรอง',
+              columnMenuHideColumn: 'ซ่อนคอลัมน์',
+              columnMenuManageColumns: 'จัดการคอลัมน์',
+              footerRowSelected: (count) => `เลือก ${count.toLocaleString('th-TH')} รายการ`,
+            }}
+            sx={{
+              border: 0,
+              '& .MuiDataGrid-columnHeaders': {
+                borderTop: 1,
+                borderBottom: 1,
+                borderColor: 'divider',
+              },
+              '& .MuiDataGrid-columnHeader': {
+                borderColor: 'divider',
+              },
+              '& .MuiDataGrid-columnHeaderTitle': {
+                fontWeight: 600,
+              },
+              '& .MuiDataGrid-cell': {
+                alignItems: 'center',
+                borderColor: 'divider',
+              },
+              '& .MuiDataGrid-cell--textLeft': {
+                display: 'flex',
+                alignItems: 'center',
+              },
+              '& .MuiDataGrid-row--lastVisible .MuiDataGrid-cell': {
+                borderBottom: 1,
+                borderColor: 'divider',
+              },
+              '& .MuiDataGrid-toolbarLabel': {
+                fontWeight: 600,
+              },
+            }}
+          />
+        </Paper>
+      )}
       <Dialog open={Boolean(intentRequestFactory)} onClose={closeIntentDialog} fullWidth maxWidth="sm">
         <DialogTitle>แจ้งความประสงค์</DialogTitle>
         <DialogContent dividers>

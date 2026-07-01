@@ -35,20 +35,20 @@ import { DataGrid } from '@mui/x-data-grid'
 
 const usersApiUrl = import.meta.env.DEV
   ? '/api-proxy/v1/users?status=all'
-  : 'http://d-poms.diw.go.th/api/v1/users?status=all'
+  : 'https://d-poms.diw.go.th/api/v1/users?status=all'
 
 const createUserApiUrl = import.meta.env.DEV
   ? '/api-proxy/v1/users/local-accounts'
-  : 'http://d-poms.diw.go.th/api/v1/users/local-accounts'
+  : 'https://d-poms.diw.go.th/api/v1/users/local-accounts'
 
 const getUserDetailApiUrl = (id) =>
-  import.meta.env.DEV ? `/api-proxy/v1/users/${id}` : `http://d-poms.diw.go.th/api/v1/users/${id}`
+  import.meta.env.DEV ? `/api-proxy/v1/users/${id}` : `https://d-poms.diw.go.th/api/v1/users/${id}`
 
 const getUpdateUserApiUrl = (id) =>
-  import.meta.env.DEV ? `/api-proxy/v1/users/${id}` : `http://d-poms.diw.go.th/api/v1/users/${id}`
+  import.meta.env.DEV ? `/api-proxy/v1/users/${id}` : `https://d-poms.diw.go.th/api/v1/users/${id}`
 
 const getDeleteUserApiUrl = (id) =>
-  import.meta.env.DEV ? `/api-proxy/v1/users/${id}` : `http://d-poms.diw.go.th/api/v1/users/${id}`
+  import.meta.env.DEV ? `/api-proxy/v1/users/${id}` : `https://d-poms.diw.go.th/api/v1/users/${id}`
 
 const roleNameThByCode = {
   public_anonymous: 'ประชาชน ไม่ login',

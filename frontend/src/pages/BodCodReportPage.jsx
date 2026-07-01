@@ -10,6 +10,7 @@ import {
   Divider,
   Drawer,
   Grid,
+  IconButton,
   MenuItem,
   Paper,
   Stack,
@@ -24,7 +25,11 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
+import CloseIcon from '@mui/icons-material/Close'
+import HistoryIcon from '@mui/icons-material/History'
+import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import { DataGrid } from '@mui/x-data-grid'
+import OfficerStatisticsPanel from '../components/OfficerStatisticsPanel'
 
 const appBarHeight = {
   xs: 64,
@@ -38,6 +43,7 @@ const operatorSubMenus = [
 
 const officerSubMenus = [
   { value: 'reports', label: 'รายการส่งแบบรายงาน' },
+  { value: 'statistics', label: 'สถิติข้อมูล' },
 ]
 
 const currentDate = new Date()
@@ -61,6 +67,14 @@ const factoryRows = [
     factoryRegistration: '10190003325500',
     industryType: 'จัดการของเสีย',
     province: 'สระบุรี',
+    monitoringPointCount: 1,
+  },
+  {
+    id: 3,
+    factoryName: 'บริษัท กรุงเทพอุตสาหกรรมน้ำทิ้ง จำกัด',
+    factoryRegistration: '10240000325407',
+    industryType: 'ผลิตอาหารและเครื่องดื่ม',
+    province: 'กรุงเทพมหานคร',
     monitoringPointCount: 1,
   },
 ]
@@ -106,6 +120,17 @@ const monitoringPointRowsByFactoryId = {
       round2Status: 'ยังไม่ยื่น',
     },
   ],
+  3: [
+    {
+      id: 5,
+      code: 'BKK-WP001',
+      name: 'จุดระบายน้ำทิ้งกรุงเทพฯ',
+      type: 'WPMS',
+      parameters: 'BOD, COD',
+      round1Status: 'ผ่านการพิจารณา',
+      round2Status: 'ยังไม่ยื่น',
+    },
+  ],
 }
 
 const reportRows = [
@@ -122,6 +147,16 @@ const reportRows = [
     submittedDate: '15/06/2569',
     reviewedDate: '-',
     status: 'รอพิจารณา',
+    statusHistory: [
+      {
+        id: 'bodcod-report-1-history-1',
+        statusLabel: 'รอพิจารณา',
+        note: 'ผู้ประกอบการส่งรายงานค่าความคลาดเคลื่อน BOD/COD',
+        changedAt: '15/06/2569',
+        durationText: 'อยู่ระหว่างดำเนินการ',
+        changedBy: 'บริษัท ปูนซีเมนต์นครหลวง จำกัด (มหาชน)',
+      },
+    ],
   },
   {
     id: 2,
@@ -136,6 +171,25 @@ const reportRows = [
     submittedDate: '12/06/2569',
     reviewedDate: '18/06/2569',
     status: 'รอโรงงานแก้ไข',
+    revisionNote: 'กรุณาตรวจสอบเอกสารรายงานผลจากห้องปฏิบัติการ และระบุค่าความคลาดเคลื่อนให้ครบถ้วน',
+    statusHistory: [
+      {
+        id: 'bodcod-report-2-history-1',
+        statusLabel: 'รอพิจารณา',
+        note: 'ผู้ประกอบการส่งรายงานพร้อมเอกสารประกอบ',
+        changedAt: '12/06/2569',
+        durationText: '6 วัน',
+        changedBy: 'บริษัท อินทรี อีโคไซเคิล จำกัด',
+      },
+      {
+        id: 'bodcod-report-2-history-2',
+        statusLabel: 'รอโรงงานแก้ไข',
+        note: 'กรุณาตรวจสอบเอกสารรายงานผลจากห้องปฏิบัติการ และระบุค่าความคลาดเคลื่อนให้ครบถ้วน',
+        changedAt: '18/06/2569',
+        durationText: 'อยู่ระหว่างดำเนินการ',
+        changedBy: 'เจ้าหน้าที่ ก',
+      },
+    ],
   },
   {
     id: 3,
@@ -150,6 +204,54 @@ const reportRows = [
     submittedDate: '20/12/2568',
     reviewedDate: '24/12/2568',
     status: 'ผ่านการพิจารณา',
+    statusHistory: [
+      {
+        id: 'bodcod-report-3-history-1',
+        statusLabel: 'รอพิจารณา',
+        note: 'ผู้ประกอบการส่งรายงานค่าความคลาดเคลื่อนรอบที่ 2',
+        changedAt: '20/12/2568',
+        durationText: '4 วัน',
+        changedBy: 'บริษัท ปูนซีเมนต์นครหลวง จำกัด (มหาชน)',
+      },
+      {
+        id: 'bodcod-report-3-history-2',
+        statusLabel: 'ผ่านการพิจารณา',
+        note: 'ตรวจสอบข้อมูลและเอกสารประกอบถูกต้องครบถ้วน',
+        changedAt: '24/12/2568',
+        changedBy: 'เจ้าหน้าที่ ก',
+      },
+    ],
+  },
+  {
+    id: 4,
+    factoryName: 'บริษัท กรุงเทพอุตสาหกรรมน้ำทิ้ง จำกัด',
+    factoryRegistration: '10240000325407',
+    province: 'กรุงเทพมหานคร',
+    monitoringPointCode: 'BKK-WP001',
+    monitoringPointName: 'จุดระบายน้ำทิ้งกรุงเทพฯ',
+    reportRound: 'ครั้งที่ 1',
+    year: currentBuddhistYear,
+    reportNo: `BODCOD-${currentBuddhistYear}-0004`,
+    submittedDate: '22/06/2569',
+    reviewedDate: '25/06/2569',
+    status: 'ผ่านการพิจารณา',
+    statusHistory: [
+      {
+        id: 'bodcod-report-4-history-1',
+        statusLabel: 'รอพิจารณา',
+        note: 'ผู้ประกอบการส่งรายงานค่าความคลาดเคลื่อน BOD/COD',
+        changedAt: '22/06/2569',
+        durationText: '3 วัน',
+        changedBy: 'บริษัท กรุงเทพอุตสาหกรรมน้ำทิ้ง จำกัด',
+      },
+      {
+        id: 'bodcod-report-4-history-2',
+        statusLabel: 'ผ่านการพิจารณา',
+        note: 'เจ้าหน้าที่ส่วนกลางตรวจสอบข้อมูลเรียบร้อยแล้ว',
+        changedAt: '25/06/2569',
+        changedBy: 'เจ้าหน้าที่ส่วนกลาง',
+      },
+    ],
   },
 ]
 
@@ -160,8 +262,108 @@ const officerReportRows = [
     status: 'แก้ไขแล้ว/รอพิจารณา',
     submittedDate: '20/06/2569',
     reviewedDate: '-',
+    statusHistory: [
+      ...reportRows[1].statusHistory,
+      {
+        id: 'bodcod-report-2-history-3',
+        statusLabel: 'แก้ไขแล้ว/รอพิจารณา',
+        note: 'ผู้ประกอบการแก้ไขข้อมูลและส่งกลับให้เจ้าหน้าที่พิจารณาอีกครั้ง',
+        changedAt: '20/06/2569',
+        durationText: 'อยู่ระหว่างดำเนินการ',
+        changedBy: 'บริษัท อินทรี อีโคไซเคิล จำกัด',
+      },
+    ],
   },
-  reportRows[2],
+  {
+    ...reportRows[2],
+    status: 'กรอกแบบแจ้งผล',
+    statusHistory: [
+      ...reportRows[2].statusHistory,
+      {
+        id: 'bodcod-report-3-history-3',
+        statusLabel: 'กรอกแบบแจ้งผล',
+        note: 'รายงานผ่านการพิจารณาแล้ว รอเจ้าหน้าที่บันทึกแบบแจ้งผล',
+        changedAt: '24/12/2568',
+        durationText: 'อยู่ระหว่างดำเนินการ',
+        changedBy: 'เจ้าหน้าที่ ก',
+      },
+    ],
+  },
+  {
+    ...reportRows[3],
+    status: 'รอทบทวน',
+    statusHistory: [
+      ...reportRows[3].statusHistory,
+      {
+        id: 'bodcod-report-4-history-3',
+        statusLabel: 'กรอกแบบแจ้งผล',
+        note: 'เจ้าหน้าที่บันทึกแบบแจ้งผลเรียบร้อยแล้ว',
+        changedAt: '25/06/2569',
+        durationText: '1 วัน',
+        changedBy: 'เจ้าหน้าที่ส่วนกลาง',
+      },
+      {
+        id: 'bodcod-report-4-history-4',
+        statusLabel: 'รอทบทวน',
+        note: 'ส่งต่อให้ผู้ทบทวนตรวจสอบความถูกต้องของแบบแจ้งผล',
+        changedAt: '26/06/2569',
+        durationText: 'อยู่ระหว่างดำเนินการ',
+        changedBy: 'เจ้าหน้าที่ส่วนกลาง',
+      },
+    ],
+  },
+  {
+    ...reportRows[3],
+    id: 5,
+    monitoringPointCode: 'BKK-WP002',
+    monitoringPointName: 'จุดระบายน้ำทิ้งกรุงเทพฯ 2',
+    reportNo: `BODCOD-${currentBuddhistYear}-0005`,
+    submittedDate: '18/06/2569',
+    reviewedDate: '28/06/2569',
+    status: 'รออนุมัติ',
+    statusHistory: [
+      {
+        id: 'bodcod-report-5-history-1',
+        statusLabel: 'รอพิจารณา',
+        note: 'ผู้ประกอบการส่งรายงานค่าความคลาดเคลื่อน BOD/COD',
+        changedAt: '18/06/2569',
+        durationText: '4 วัน',
+        changedBy: 'บริษัท กรุงเทพอุตสาหกรรมน้ำทิ้ง จำกัด',
+      },
+      {
+        id: 'bodcod-report-5-history-2',
+        statusLabel: 'ผ่านการพิจารณา',
+        note: 'เจ้าหน้าที่ตรวจสอบรายงานเรียบร้อยแล้ว',
+        changedAt: '22/06/2569',
+        durationText: '2 วัน',
+        changedBy: 'เจ้าหน้าที่ส่วนกลาง',
+      },
+      {
+        id: 'bodcod-report-5-history-3',
+        statusLabel: 'กรอกแบบแจ้งผล',
+        note: 'บันทึกแบบแจ้งผลเรียบร้อยแล้ว',
+        changedAt: '24/06/2569',
+        durationText: '4 วัน',
+        changedBy: 'เจ้าหน้าที่ส่วนกลาง',
+      },
+      {
+        id: 'bodcod-report-5-history-4',
+        statusLabel: 'รอทบทวน',
+        note: 'ผู้ทบทวนตรวจสอบแบบแจ้งผลเรียบร้อยแล้ว',
+        changedAt: '28/06/2569',
+        durationText: 'อยู่ระหว่างดำเนินการ',
+        changedBy: 'ผอ.กฝม.',
+      },
+      {
+        id: 'bodcod-report-5-history-5',
+        statusLabel: 'รออนุมัติ',
+        note: 'ส่งต่อให้ผู้มีอำนาจอนุมัติ',
+        changedAt: '28/06/2569',
+        durationText: 'อยู่ระหว่างดำเนินการ',
+        changedBy: 'ผอ.กฝม.',
+      },
+    ],
+  },
 ]
 
 const tableActionStackSx = {
@@ -198,7 +400,11 @@ function StatusChip({ value }) {
   const color =
     value === 'ผ่านการพิจารณา'
       ? 'success'
-      : value === 'รอพิจารณา' || value === 'แก้ไขแล้ว/รอพิจารณา'
+      : value === 'รอพิจารณา'
+        || value === 'แก้ไขแล้ว/รอพิจารณา'
+        || value === 'กรอกแบบแจ้งผล'
+        || value === 'รอทบทวน'
+        || value === 'รออนุมัติ'
         ? 'warning'
         : value === 'รอโรงงานแก้ไข'
           ? 'error'
@@ -227,6 +433,211 @@ function PaperLine({ children, minWidth = 160 }) {
     >
       {children}
     </Box>
+  )
+}
+
+function parseReportHistoryDate(value) {
+  if (!value) return null
+
+  if (typeof value === 'string') {
+    const thaiDateMatch = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+    if (thaiDateMatch) {
+      const [, day, month, year] = thaiDateMatch
+      const christianYear = Number(year) > 2400 ? Number(year) - 543 : Number(year)
+
+      return new Date(christianYear, Number(month) - 1, Number(day))
+    }
+
+    const isoDateMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})/)
+    if (isoDateMatch) {
+      const [, year, month, day] = isoDateMatch
+
+      return new Date(Number(year), Number(month) - 1, Number(day))
+    }
+  }
+
+  const date = new Date(value)
+
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function formatReportHistoryDate(value) {
+  const parsedDate = parseReportHistoryDate(value)
+  if (!parsedDate) return '-'
+
+  const day = String(parsedDate.getDate()).padStart(2, '0')
+  const month = String(parsedDate.getMonth() + 1).padStart(2, '0')
+  const year = parsedDate.getFullYear() + 543
+
+  return `${day}/${month}/${year}`
+}
+
+function formatReportHistoryDuration(startValue, endValue, fallbackValue) {
+  if (fallbackValue) return fallbackValue
+
+  const startDate = parseReportHistoryDate(startValue)
+  const endDate = parseReportHistoryDate(endValue)
+  if (!startDate || !endDate) return ''
+
+  const diffMs = Math.max(0, endDate.getTime() - startDate.getTime())
+  const totalDays = Math.max(1, Math.ceil(diffMs / 86_400_000))
+
+  return `${totalDays} วัน`
+}
+
+function getReportStatusHistoryItems(history = []) {
+  return history
+    .filter(Boolean)
+    .map((item, index) => ({ ...item, __index: index, __date: item.changedAt ?? item.date ?? null }))
+    .sort((a, b) => {
+      const dateA = parseReportHistoryDate(a.__date)?.getTime() ?? 0
+      const dateB = parseReportHistoryDate(b.__date)?.getTime() ?? 0
+
+      if (dateA !== dateB) {
+        return dateA - dateB
+      }
+
+      return a.__index - b.__index
+    })
+}
+
+function buildFallbackReportStatusHistory(report = {}) {
+  const safeReport = report ?? {}
+
+  if (Array.isArray(safeReport.statusHistory) && safeReport.statusHistory.length > 0) {
+    return safeReport.statusHistory
+  }
+
+  const history = [
+    {
+      id: `${safeReport.id ?? 'report'}-submitted`,
+      statusLabel: 'รอพิจารณา',
+      note: 'ผู้ประกอบการส่งรายงานค่าความคลาดเคลื่อน BOD/COD',
+      changedAt: safeReport.submittedDate,
+      changedBy: safeReport.factoryName,
+    },
+  ]
+
+  if (safeReport.status && !['รอพิจารณา', 'ยังไม่ยื่น'].includes(safeReport.status)) {
+    history.push({
+      id: `${safeReport.id ?? 'report'}-current`,
+      statusLabel: safeReport.status,
+      note: safeReport.revisionNote ?? '',
+      changedAt: safeReport.reviewedDate,
+      changedBy: 'เจ้าหน้าที่ ก',
+    })
+  }
+
+  return history
+}
+
+function getLatestReportRevisionMessage(report = {}) {
+  const safeReport = report ?? {}
+
+  if (safeReport.revisionNote || safeReport.officerNote) {
+    return safeReport.revisionNote ?? safeReport.officerNote
+  }
+
+  const history = Array.isArray(safeReport.statusHistory) ? safeReport.statusHistory : []
+  const revisionItem = [...history].reverse().find((item) => item.statusLabel === 'รอโรงงานแก้ไข')
+
+  return revisionItem?.note ?? ''
+}
+
+function ReportStatusHistoryDialog({ open, history = [], onClose }) {
+  const items = useMemo(() => getReportStatusHistoryItems(history), [history])
+
+  return (
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
+      <DialogTitle
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 2,
+        }}
+      >
+        ประวัติสถานะ
+        <IconButton aria-label="ปิด" onClick={onClose} size="small">
+          <CloseIcon />
+        </IconButton>
+      </DialogTitle>
+      <DialogContent dividers>
+        {items.length ? (
+          <Stack spacing={0}>
+            {items.map((item, index) => {
+              const nextItem = items[index + 1]
+              const duration = formatReportHistoryDuration(
+                item.__date,
+                nextItem?.__date,
+                item.durationLabel ?? item.durationText ?? item.duration,
+              )
+              const note = item.revisionReason ?? item.officerNote ?? item.note ?? ''
+              const title = `${item.statusLabel ?? item.status ?? '-'}${duration ? ` (${duration})` : ''}`
+
+              return (
+                <Box
+                  key={item.id ?? `${item.statusLabel ?? 'status'}-${index}`}
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: '24px minmax(0, 1fr)',
+                    columnGap: 1.5,
+                  }}
+                >
+                  <Box sx={{ position: 'relative', display: 'flex', justifyContent: 'center' }}>
+                    <Box
+                      sx={{
+                        width: 12,
+                        height: 12,
+                        mt: 0.75,
+                        borderRadius: '50%',
+                        bgcolor: 'primary.main',
+                        border: 2,
+                        borderColor: 'background.paper',
+                        boxShadow: '0 0 0 1px',
+                        color: 'primary.main',
+                        zIndex: 1,
+                      }}
+                    />
+                    {index < items.length - 1 ? (
+                      <Box
+                        sx={{
+                          position: 'absolute',
+                          top: 22,
+                          bottom: 0,
+                          width: 2,
+                          bgcolor: 'divider',
+                        }}
+                      />
+                    ) : null}
+                  </Box>
+                  <Box sx={{ pb: index < items.length - 1 ? 2.5 : 0 }}>
+                    <Typography sx={{ fontWeight: 600 }}>{title}</Typography>
+                    {note ? (
+                      <Typography variant="body2" sx={{ mt: 0.75, whiteSpace: 'pre-line' }}>
+                        หมายเหตุ: {note}
+                      </Typography>
+                    ) : null}
+                    <Stack spacing={0.25} sx={{ mt: note ? 1.5 : 0.75 }}>
+                      <Typography variant="body2" color="text.secondary">
+                        วันที่: {formatReportHistoryDate(item.__date)}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        ผู้บันทึก: {item.changedByName ?? item.changedBy ?? item.recorderName ?? '-'}
+                      </Typography>
+                    </Stack>
+                  </Box>
+                </Box>
+              )
+            })}
+          </Stack>
+        ) : (
+          <Typography variant="body2" color="text.secondary">
+            ไม่มีประวัติสถานะ
+          </Typography>
+        )}
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -388,22 +799,150 @@ function BodCodPaperDocument({ report }) {
   )
 }
 
-function ReportPreviewDialog({ open, report, onClose }) {
+function ReportPreviewDialog({ open, report, mode = 'view', onClose }) {
+  const [statusHistoryOpen, setStatusHistoryOpen] = useState(false)
+  const [revisionDialogOpen, setRevisionDialogOpen] = useState(false)
+  const [revisionOfficerNote, setRevisionOfficerNote] = useState('')
+  const [revisionSubmitting, setRevisionSubmitting] = useState(false)
+  const [revisionError, setRevisionError] = useState('')
+  const statusHistory = report ? buildFallbackReportStatusHistory(report) : []
+  const closePreviewDialog = () => {
+    setStatusHistoryOpen(false)
+    onClose?.()
+  }
+  const closeRevisionDialog = () => {
+    if (revisionSubmitting) {
+      return
+    }
+
+    setRevisionDialogOpen(false)
+    setRevisionOfficerNote('')
+    setRevisionError('')
+  }
+  const requestRevisionReport = () => {
+    if (!revisionOfficerNote.trim()) {
+      setRevisionError('กรุณาระบุรายละเอียดการแจ้งแก้ไข')
+      return
+    }
+
+    setRevisionSubmitting(true)
+    window.setTimeout(() => {
+      setRevisionSubmitting(false)
+      setRevisionDialogOpen(false)
+      setRevisionOfficerNote('')
+      setRevisionError('')
+      onClose?.()
+    }, 300)
+  }
+
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg">
-      <DialogTitle>แบบฟอร์มรายงานค่าความคลาดเคลื่อน BOD/COD</DialogTitle>
-      <DialogContent dividers sx={{ bgcolor: 'neutral.100' }}>
-        {report ? <BodCodPaperDocument report={report} /> : null}
-      </DialogContent>
-      <DialogActions sx={{ justifyContent: 'center' }}>
-        <Button variant="outlined" color="inherit" onClick={onClose}>
-          ปิด
-        </Button>
-        <Button variant="contained">
-          ยืนยันการส่งแบบฟอร์ม
-        </Button>
-      </DialogActions>
-    </Dialog>
+    <>
+      <Dialog open={open} onClose={closePreviewDialog} fullWidth maxWidth="lg">
+        <DialogTitle
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 2,
+            pr: 3,
+          }}
+        >
+          <Typography component="span" variant="h6" sx={{ minWidth: 0 }}>
+            แบบฟอร์มรายงานค่าความคลาดเคลื่อน BOD/COD
+          </Typography>
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<HistoryIcon />}
+            disabled={!report}
+            onClick={() => setStatusHistoryOpen(true)}
+            sx={{ flexShrink: 0 }}
+          >
+            ประวัติสถานะ
+          </Button>
+        </DialogTitle>
+        <DialogContent dividers sx={{ bgcolor: 'neutral.100' }}>
+          {report ? <BodCodPaperDocument report={report} /> : null}
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: 'center' }}>
+          {mode === 'review' ? (
+            <>
+              <Button variant="outlined" color="inherit" onClick={closePreviewDialog}>
+                ยกเลิก
+              </Button>
+              <Button variant="outlined" color="warning" onClick={() => setRevisionDialogOpen(true)}>
+                แก้ไข
+              </Button>
+              <Button variant="contained">
+                ผ่านการพิจารณา
+              </Button>
+            </>
+          ) : mode === 'cancel' ? (
+            <>
+              <Button variant="outlined" color="inherit" onClick={closePreviewDialog}>
+                ปิด
+              </Button>
+              <Button variant="contained" color="error">
+                ยืนยันการยกเลิก
+              </Button>
+            </>
+          ) : mode === 'submit' ? (
+            <>
+              <Button variant="outlined" color="inherit" onClick={closePreviewDialog}>
+                ยกเลิก
+              </Button>
+              <Button variant="contained">
+                ยืนยันการส่งแบบฟอร์ม
+              </Button>
+            </>
+          ) : (
+            <Button variant="outlined" color="inherit" onClick={closePreviewDialog}>
+              ปิด
+            </Button>
+          )}
+        </DialogActions>
+      </Dialog>
+      <ReportStatusHistoryDialog
+        open={statusHistoryOpen}
+        history={statusHistory}
+        onClose={() => setStatusHistoryOpen(false)}
+      />
+      <Dialog open={revisionDialogOpen} onClose={closeRevisionDialog} fullWidth maxWidth="sm">
+        <DialogTitle>แจ้งแก้ไขรายงาน</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2}>
+            <Typography variant="body2" color="text.secondary">
+              ระบุหมายเหตุเจ้าหน้าที่สำหรับแจ้งให้ผู้ประกอบการแก้ไขรายงานค่าความคลาดเคลื่อน BOD/COD
+            </Typography>
+            <TextField
+              label="รายละเอียด"
+              value={revisionOfficerNote}
+              onChange={(event) => {
+                setRevisionOfficerNote(event.target.value)
+                setRevisionError('')
+              }}
+              multiline
+              minRows={4}
+              fullWidth
+              autoFocus
+            />
+            {revisionError ? (
+              <Typography color="error" variant="body2">
+                {revisionError}
+              </Typography>
+            ) : null}
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: 'center' }}>
+          <Button color="inherit" disabled={revisionSubmitting} onClick={closeRevisionDialog}>
+            ยกเลิก
+          </Button>
+          <Button variant="contained" disabled={revisionSubmitting} onClick={requestRevisionReport}>
+            {revisionSubmitting ? 'กำลังแจ้งแก้ไข' : 'ยืนยันแจ้งแก้ไข'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
   )
 }
 
@@ -430,11 +969,16 @@ function ResultNoticePaperDocument({ report }) {
     flex: '0 0 auto',
     mt: 0.45,
   }
-  const signatureBlock = (role) => (
+  const signatureBlock = (role, position = '') => (
     <Box sx={{ width: 250, textAlign: 'center', fontSize: 14, lineHeight: 1.55 }}>
       <Box sx={{ borderBottom: '1px dotted #111', height: 22 }} />
       <Box>(<Box component="span" sx={{ display: 'inline-block', minWidth: 220, borderBottom: '1px dotted #111' }} />)</Box>
-      <Box>ตำแหน่ง <Box component="span" sx={{ display: 'inline-block', minWidth: 150, borderBottom: '1px dotted #111' }} /></Box>
+      <Box>
+        ตำแหน่ง{' '}
+        <Box component="span" sx={{ display: 'inline-block', minWidth: 150, borderBottom: '1px dotted #111' }}>
+          {position}
+        </Box>
+      </Box>
       <Box>{role}</Box>
       <Box>......../........../..........</Box>
     </Box>
@@ -535,14 +1079,14 @@ function ResultNoticePaperDocument({ report }) {
           <Stack spacing={4} sx={{ alignItems: 'center' }}>
             <Stack direction="row" spacing={10} sx={{ justifyContent: 'center' }}>
               {signatureBlock('ผู้ตรวจสอบ')}
-              {signatureBlock('ผู้ทบทวน')}
+              {signatureBlock('ผู้ทบทวน', 'ผอ.กฝม.')}
             </Stack>
-            {signatureBlock('ผู้อนุมัติ')}
+            {signatureBlock('ผู้อนุมัติ', 'ผอ.กวภ.')}
           </Stack>
         ) : (
           <Stack direction="row" spacing={10} sx={{ justifyContent: 'center' }}>
             {signatureBlock('ผู้ตรวจสอบ')}
-            {signatureBlock('ผู้อนุมัติ')}
+            {signatureBlock('ผู้อนุมัติ', 'ผอ.ศวภ.')}
           </Stack>
         )}
 
@@ -574,21 +1118,154 @@ function ResultNoticePaperDocument({ report }) {
   )
 }
 
-function ResultNoticeDialog({ open, report, onClose }) {
+function ResultNoticeDialog({ open, report, mode = 'view', onClose, onConfirm }) {
+  const [noticeForm, setNoticeForm] = useState({
+    reportCorrectness: 'ถูกต้องครบถ้วน',
+    checkedParameters: ['BOD', 'COD'],
+    reviewResult: 'เห็นควรแจ้งผลการตรวจสอบ',
+    comment: '',
+    inspectorName: 'เจ้าหน้าที่ ก',
+    inspectorPosition: 'นักวิชาการสิ่งแวดล้อม',
+  })
   const title = report && isBangkokProvince(report.province)
     ? 'แบบแจ้งผล (ส่วนกลาง)'
     : 'แบบแจ้งผล (ส่วนภูมิภาค)'
+  const isEditMode = mode === 'edit'
+  const updateNoticeForm = (field, value) => {
+    setNoticeForm((current) => ({ ...current, [field]: value }))
+  }
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg">
       <DialogTitle>{title}</DialogTitle>
-      <DialogContent dividers sx={{ bgcolor: 'neutral.100' }}>
-        {report ? <ResultNoticePaperDocument report={report} /> : null}
+      <DialogContent dividers sx={{ bgcolor: isEditMode ? 'background.default' : 'neutral.100' }}>
+        {report && isEditMode ? (
+          <Stack spacing={2}>
+            <SectionPaper title="ข้อมูลรายงาน">
+              <Grid container spacing={2}>
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <ReadOnlyField label="ชื่อโรงงาน" value={report.factoryName} />
+                </Grid>
+                <Grid size={{ xs: 12, md: 3 }}>
+                  <ReadOnlyField label="เลขทะเบียนโรงงาน" value={report.factoryRegistration} />
+                </Grid>
+                <Grid size={{ xs: 12, md: 3 }}>
+                  <ReadOnlyField label="รอบรายงาน" value={`${report.reportRound}/${report.year}`} />
+                </Grid>
+                <Grid size={{ xs: 12, md: 3 }}>
+                  <ReadOnlyField label="รหัสจุดตรวจวัด" value={report.monitoringPointCode} />
+                </Grid>
+                <Grid size={{ xs: 12, md: 3 }}>
+                  <ReadOnlyField label="วันที่ยื่นรายงาน" value={report.submittedDate} />
+                </Grid>
+              </Grid>
+            </SectionPaper>
+
+            <SectionPaper title="ผลการตรวจสอบแบบรายงาน">
+              <Grid container spacing={2}>
+                <Grid size={{ xs: 12, md: 4 }}>
+                  <TextField
+                    select
+                    label="ความถูกต้องของแบบรายงาน"
+                    size="small"
+                    value={noticeForm.reportCorrectness}
+                    onChange={(event) => updateNoticeForm('reportCorrectness', event.target.value)}
+                    fullWidth
+                  >
+                    <MenuItem value="ถูกต้องครบถ้วน">ถูกต้องครบถ้วน</MenuItem>
+                    <MenuItem value="ไม่ถูกต้องครบถ้วน">ไม่ถูกต้องครบถ้วน</MenuItem>
+                  </TextField>
+                </Grid>
+                <Grid size={{ xs: 12, md: 4 }}>
+                  <TextField
+                    select
+                    label="รายการที่ตรวจสอบ"
+                    size="small"
+                    value={noticeForm.checkedParameters}
+                    onChange={(event) => {
+                      const selectedValue = event.target.value
+                      updateNoticeForm('checkedParameters', typeof selectedValue === 'string' ? selectedValue.split(',') : selectedValue)
+                    }}
+                    slotProps={{
+                      select: {
+                        multiple: true,
+                        renderValue: (selected) => selected.join(', '),
+                      },
+                    }}
+                    fullWidth
+                  >
+                    <MenuItem value="BOD">BOD</MenuItem>
+                    <MenuItem value="COD">COD</MenuItem>
+                  </TextField>
+                </Grid>
+                <Grid size={{ xs: 12, md: 4 }}>
+                  <TextField
+                    select
+                    label="ผลการพิจารณา"
+                    size="small"
+                    value={noticeForm.reviewResult}
+                    onChange={(event) => updateNoticeForm('reviewResult', event.target.value)}
+                    fullWidth
+                  >
+                    <MenuItem value="เห็นควรแจ้งผลการตรวจสอบ">เห็นควรแจ้งผลการตรวจสอบ</MenuItem>
+                    <MenuItem value="เห็นควรให้แก้ไขเพิ่มเติม">เห็นควรให้แก้ไขเพิ่มเติม</MenuItem>
+                  </TextField>
+                </Grid>
+                <Grid size={{ xs: 12 }}>
+                  <TextField
+                    label="หมายเหตุ / รายละเอียดเพิ่มเติม"
+                    size="small"
+                    value={noticeForm.comment}
+                    onChange={(event) => updateNoticeForm('comment', event.target.value)}
+                    multiline
+                    minRows={3}
+                    fullWidth
+                  />
+                </Grid>
+              </Grid>
+            </SectionPaper>
+
+            <SectionPaper title="ผู้ตรวจสอบ">
+              <Grid container spacing={2}>
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <TextField
+                    label="ชื่อ-นามสกุล"
+                    size="small"
+                    value={noticeForm.inspectorName}
+                    onChange={(event) => updateNoticeForm('inspectorName', event.target.value)}
+                    fullWidth
+                  />
+                </Grid>
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <TextField
+                    label="ตำแหน่ง"
+                    size="small"
+                    value={noticeForm.inspectorPosition}
+                    onChange={(event) => updateNoticeForm('inspectorPosition', event.target.value)}
+                    fullWidth
+                  />
+                </Grid>
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <ReadOnlyField label="ผู้ทบทวน" value={isBangkokProvince(report.province) ? 'ผอ.กฝม.' : '-'} />
+                </Grid>
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <ReadOnlyField label="ผู้อนุมัติ" value={isBangkokProvince(report.province) ? 'ผอ.กวภ.' : 'ผอ.ศวภ.'} />
+                </Grid>
+              </Grid>
+            </SectionPaper>
+          </Stack>
+        ) : null}
+        {report && !isEditMode ? <ResultNoticePaperDocument report={report} /> : null}
       </DialogContent>
       <DialogActions sx={{ justifyContent: 'center' }}>
         <Button variant="outlined" color="inherit" onClick={onClose}>
-          ปิด
+          {isEditMode ? 'ยกเลิก' : 'ปิด'}
         </Button>
+        {isEditMode ? (
+          <Button variant="contained" onClick={() => onConfirm?.(report)}>
+            บันทึกและยืนยัน
+          </Button>
+        ) : null}
       </DialogActions>
     </Dialog>
   )
@@ -693,6 +1370,18 @@ function makeDraftReport(factory, point, reportRound) {
     submittedDate: '-',
     reviewedDate: '-',
     status: 'ยังไม่ยื่น',
+  }
+}
+
+function makeEditableReport(row) {
+  return {
+    ...row,
+    mode: 'edit',
+    roundNo: row.reportRound?.replace('ครั้งที่ ', '') ?? '',
+    businessActivity: row.businessActivity ?? '-',
+    factoryAddress: row.factoryAddress ?? `จังหวัด${row.province}`,
+    latestRevisionMessage: getLatestReportRevisionMessage(row),
+    statusHistory: buildFallbackReportStatusHistory(row),
   }
 }
 
@@ -859,6 +1548,8 @@ function BodCodReportFormSheet({ open, report, onClose, onPreview }) {
   })
   const [measurementRows, setMeasurementRows] = useState([])
   const [editingMeasurement, setEditingMeasurement] = useState(null)
+  const latestRevisionMessage = getLatestReportRevisionMessage(report)
+  const isEditMode = report?.mode === 'edit'
 
   if (!report) {
     return null
@@ -925,6 +1616,28 @@ function BodCodReportFormSheet({ open, report, onClose, onPreview }) {
         <Divider />
         <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', p: { xs: 2, md: 3 } }}>
           <Stack spacing={2}>
+            {latestRevisionMessage ? (
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 2,
+                  border: 1,
+                  borderColor: 'warning.main',
+                  bgcolor: 'warning.50',
+                  color: 'text.primary',
+                }}
+              >
+                <Stack direction="row" spacing={1.5} sx={{ alignItems: 'flex-start' }}>
+                  <WarningAmberIcon color="warning" fontSize="small" sx={{ mt: 0.25 }} />
+                  <Stack spacing={0.75}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                      รายละเอียดการแก้ไข
+                    </Typography>
+                    <Typography variant="body2">{latestRevisionMessage}</Typography>
+                  </Stack>
+                </Stack>
+              </Paper>
+            ) : null}
             <SectionPaper title="ข้อมูลทั่วไป">
               <Grid container spacing={2}>
                 <Grid size={{ xs: 12, md: 6 }}>
@@ -1131,7 +1844,7 @@ function BodCodReportFormSheet({ open, report, onClose, onPreview }) {
             ยกเลิก
           </Button>
           <Button variant="contained" onClick={handlePreview}>
-            บันทึกแบบฟอร์ม
+            {isEditMode ? 'บันทึกการแก้ไข' : 'บันทึกแบบฟอร์ม'}
           </Button>
         </Stack>
       </Stack>
@@ -1159,23 +1872,34 @@ function ReportActions({ row, mode, onOpenReport, onOpenResultNotice }) {
   const canEdit = mode === 'operator' && row.status === 'รอโรงงานแก้ไข'
   const canProcess = mode === 'officer' && ['รอพิจารณา', 'แก้ไขแล้ว/รอพิจารณา'].includes(row.status)
   const canOpenResultNotice = row.status === 'ผ่านการพิจารณา'
+  const canFillResultNotice = mode === 'officer' && row.status === 'กรอกแบบแจ้งผล'
 
   return (
     <Stack direction="row" spacing={1} sx={tableActionStackSx}>
-      <Button size="small" variant="outlined" onClick={() => onOpenReport?.(row)}>
+      <Button size="small" variant="outlined" onClick={() => onOpenReport?.(row, 'view')}>
         แบบรายงานผล
       </Button>
       <Button size="small" variant="outlined" disabled={!canOpenResultNotice} onClick={() => onOpenResultNotice?.(row)}>
         แบบแจ้งผล
       </Button>
       {mode === 'operator' ? (
-        <Button size="small" variant="contained" disabled={!canEdit} onClick={() => onOpenReport?.(row)}>
-          แก้ไข
-        </Button>
+        <>
+          <Button size="small" variant="contained" disabled={!canEdit} onClick={() => onOpenReport?.(row, 'edit')}>
+            แก้ไข
+          </Button>
+          <Button size="small" variant="outlined" color="error" disabled={!canEdit} onClick={() => onOpenReport?.(row, 'cancel')}>
+            ยกเลิก
+          </Button>
+        </>
       ) : (
-        <Button size="small" variant="contained" disabled={!canProcess} onClick={() => onOpenReport?.(row)}>
-          ดำเนินการ
-        </Button>
+        <>
+          <Button size="small" variant="outlined" disabled={!canFillResultNotice} onClick={() => onOpenResultNotice?.(row, 'edit')}>
+            กรอกแบบแจ้งผล
+          </Button>
+          <Button size="small" variant="contained" disabled={!canProcess} onClick={() => onOpenReport?.(row, 'review')}>
+            ดำเนินการ
+          </Button>
+        </>
       )}
     </Stack>
   )
@@ -1222,7 +1946,7 @@ function getReportColumns(mode, onOpenReport, onOpenResultNotice) {
     {
       field: 'actions',
       headerName: 'จัดการ',
-      width: mode === 'operator' ? 300 : 340,
+      width: mode === 'operator' ? 390 : 620,
       sortable: false,
       filterable: false,
       renderCell: (params) => (
@@ -1277,19 +2001,69 @@ const dataGridSx = {
 function BodCodReportPage({ userType = '' }) {
   const isOfficer = userType === 'officer'
   const availableSubMenus = isOfficer ? officerSubMenus : operatorSubMenus
+  const [officerRows, setOfficerRows] = useState(officerReportRows)
   const [selectedSubMenu, setSelectedSubMenu] = useState(() => (isOfficer ? 'reports' : 'factories'))
   const [monitoringPointFactory, setMonitoringPointFactory] = useState(null)
   const [reportForm, setReportForm] = useState(null)
   const [previewReport, setPreviewReport] = useState(null)
+  const [previewMode, setPreviewMode] = useState('view')
   const [resultNoticeReport, setResultNoticeReport] = useState(null)
+  const [resultNoticeMode, setResultNoticeMode] = useState('view')
   const effectiveSubMenu = availableSubMenus.some((menu) => menu.value === selectedSubMenu)
     ? selectedSubMenu
     : availableSubMenus[0].value
   const factoryColumns = useMemo(() => getFactoryColumns(setMonitoringPointFactory), [])
   const reportColumns = useMemo(
-    () => getReportColumns(isOfficer ? 'officer' : 'operator', setPreviewReport, setResultNoticeReport),
+    () => getReportColumns(isOfficer ? 'officer' : 'operator', (row, mode) => {
+      if (!isOfficer && mode === 'edit') {
+        setReportForm(makeEditableReport(row))
+        return
+      }
+
+      setPreviewMode(mode ?? 'view')
+      setPreviewReport({
+        ...row,
+        statusHistory: buildFallbackReportStatusHistory(row),
+      })
+    }, (row, mode = 'view') => {
+      setResultNoticeMode(mode)
+      setResultNoticeReport({
+        ...row,
+        statusHistory: buildFallbackReportStatusHistory(row),
+      })
+    }),
     [isOfficer],
   )
+  const confirmResultNotice = (report) => {
+    if (!report) return
+
+    setOfficerRows((currentRows) =>
+      currentRows.map((row) => {
+        if (row.id !== report.id) {
+          return row
+        }
+
+        return {
+          ...row,
+          status: 'รอทบทวน',
+          reviewedDate: '01/07/2569',
+          statusHistory: [
+            ...buildFallbackReportStatusHistory(row),
+            {
+              id: `bodcod-report-${row.id}-history-result-notice`,
+              statusLabel: 'รอทบทวน',
+              note: 'เจ้าหน้าที่บันทึกแบบแจ้งผลและยืนยันส่งต่อให้ผู้ทบทวน',
+              changedAt: '01/07/2569',
+              durationText: 'อยู่ระหว่างดำเนินการ',
+              changedBy: 'เจ้าหน้าที่ ก',
+            },
+          ],
+        }
+      }),
+    )
+    setResultNoticeReport(null)
+    setResultNoticeMode('view')
+  }
   const table = useMemo(() => {
     if (effectiveSubMenu === 'factories') {
       return {
@@ -1301,10 +2075,11 @@ function BodCodReportPage({ userType = '' }) {
 
     return {
       title: isOfficer ? 'รายการส่งแบบรายงาน' : 'ประวัติการรายงาน',
-      rows: isOfficer ? officerReportRows : reportRows,
+      rows: isOfficer ? officerRows : reportRows,
       columns: reportColumns,
     }
-  }, [effectiveSubMenu, factoryColumns, isOfficer, reportColumns])
+  }, [effectiveSubMenu, factoryColumns, isOfficer, officerRows, reportColumns])
+  const isStatisticsSubMenu = effectiveSubMenu === 'statistics'
 
   return (
     <>
@@ -1345,34 +2120,40 @@ function BodCodReportPage({ userType = '' }) {
           </Stack>
         </Paper>
 
-        <Paper
-          elevation={0}
-          sx={{
-            flex: 1,
-            minHeight: 0,
-            border: 1,
-            borderColor: 'divider',
-            overflow: 'hidden',
-          }}
-        >
-          <DataGrid
-            rows={table.rows}
-            columns={table.columns}
-            disableRowSelectionOnClick
-            showToolbar
-            showCellVerticalBorder
-            showColumnVerticalBorder
-            label={table.title}
-            pageSizeOptions={[10, 25, 50]}
-            initialState={{
-              pagination: {
-                paginationModel: { page: 0, pageSize: 10 },
-              },
+        {isStatisticsSubMenu ? (
+          <Box sx={{ flex: 1, minHeight: 0 }}>
+            <OfficerStatisticsPanel title="สถิติข้อมูลรายงานค่าความคลาดเคลื่อน BOD/COD Online" showRoundFilter />
+          </Box>
+        ) : (
+          <Paper
+            elevation={0}
+            sx={{
+              flex: 1,
+              minHeight: 0,
+              border: 1,
+              borderColor: 'divider',
+              overflow: 'hidden',
             }}
-            localeText={dataGridLocaleText}
-            sx={dataGridSx}
-          />
-        </Paper>
+          >
+            <DataGrid
+              rows={table.rows}
+              columns={table.columns}
+              disableRowSelectionOnClick
+              showToolbar
+              showCellVerticalBorder
+              showColumnVerticalBorder
+              label={table.title}
+              pageSizeOptions={[10, 25, 50]}
+              initialState={{
+                pagination: {
+                  paginationModel: { page: 0, pageSize: 10 },
+                },
+              }}
+              localeText={dataGridLocaleText}
+              sx={dataGridSx}
+            />
+          </Paper>
+        )}
       </Stack>
       <MonitoringPointDialog
         open={Boolean(monitoringPointFactory)}
@@ -1389,6 +2170,7 @@ function BodCodReportPage({ userType = '' }) {
         report={reportForm}
         onClose={() => setReportForm(null)}
         onPreview={(report) => {
+          setPreviewMode('submit')
           setPreviewReport(report)
           setReportForm(null)
         }}
@@ -1396,12 +2178,21 @@ function BodCodReportPage({ userType = '' }) {
       <ReportPreviewDialog
         open={Boolean(previewReport)}
         report={previewReport}
-        onClose={() => setPreviewReport(null)}
+        mode={previewMode}
+        onClose={() => {
+          setPreviewReport(null)
+          setPreviewMode('view')
+        }}
       />
       <ResultNoticeDialog
         open={Boolean(resultNoticeReport)}
         report={resultNoticeReport}
-        onClose={() => setResultNoticeReport(null)}
+        mode={resultNoticeMode}
+        onClose={() => {
+          setResultNoticeReport(null)
+          setResultNoticeMode('view')
+        }}
+        onConfirm={confirmResultNotice}
       />
     </>
   )
