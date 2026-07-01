@@ -1,6 +1,7 @@
 import jwt, { SignOptions } from 'jsonwebtoken';
 import crypto from 'node:crypto';
 import { env } from '../../config/env';
+import type { RegionalAccessDTO } from '../../modules/auth/regional-access';
 
 export interface AccessTokenPayload {
   sub: string; // user id (as string)
@@ -8,6 +9,8 @@ export interface AccessTokenPayload {
   roles: string[];
   /** permissionCode → scope (null = no scope dimension) */
   scopes: Record<string, string | null>;
+  /** จำกัดข้อมูลตามภาคที่เจ้าหน้าที่รับผิดชอบ; undefined/null = ไม่จำกัดเพิ่ม */
+  regionalAccess?: RegionalAccessDTO | null;
 }
 
 export function signAccessToken(payload: AccessTokenPayload): string {

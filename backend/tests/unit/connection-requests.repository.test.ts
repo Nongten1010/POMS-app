@@ -59,6 +59,22 @@ describe('connectionRequestsRepository request numbers', () => {
     expect(sql).toContain('[fs].[factory_main_type_code]');
   });
 
+  it('limits request list to assigned officer regions when regional access is present', () => {
+    const compiled = buildBaseQueryForTests(
+      {},
+      {
+        actorUserId: 42,
+        scope: 'ALL',
+        regionalAccess: { regions: ['ภาคตะวันออก'] },
+      },
+    ).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('cems_wpms_request_factory_snapshots');
+    expect(sql).toContain('[fs].[region_name]');
+    expect(compiled.bindings).toContain('ภาคตะวันออก');
+  });
+
   it('keeps operator factory access even when no eligible factory record exists', () => {
     const sql = buildFactoriesForAccessQueryForTests({
       actorUserId: 42,
@@ -87,6 +103,18 @@ describe('connectionRequestsRepository request numbers', () => {
     expect(sql).toContain('[p].[region] as [province_region]');
     expect(sql).toContain('[ie].[code] as [industrial_estate_code]');
     expect(sql).toContain('[ie].[name_th] as [industrial_estate_name]');
+  });
+
+  it('limits factory access to assigned officer regions when regional access is present', () => {
+    const compiled = buildFactoriesForAccessQueryForTests({
+      actorUserId: 42,
+      scope: 'ALL',
+      regionalAccess: { regions: ['ภาคตะวันออก'] },
+    }).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('[p].[region]');
+    expect(compiled.bindings).toContain('ภาคตะวันออก');
   });
 
   it('soft-deletes duplicate active measurement points before issuing station codes', () => {

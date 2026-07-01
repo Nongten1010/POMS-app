@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { permissionGroupsToScopes } from '../auth/permissions';
+import { normalizeRegionalAccess } from '../auth/regional-access';
 import type { PermissionGroups } from '../auth/permissions';
 
 const idParam = z.coerce.number().int().positive();
@@ -16,6 +17,12 @@ const optionalPasswordString = z.preprocess(
   (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
   z.string().min(8).max(128).optional(),
 );
+const regionalAccessSchema = z
+  .object({
+    regions: z.array(z.string().trim().min(1).max(128)).min(1).max(10),
+  })
+  .strict()
+  .transform((value) => normalizeRegionalAccess(value)!);
 
 export const userIdParamSchema = z.object({
   id: idParam,
@@ -61,6 +68,7 @@ export const officerProfileSchema = z
     perStatusName: optionalNullableTrimmedString,
     relocationType: optionalNullableTrimmedString,
     relocationName: optionalNullableTrimmedString,
+    regionalAccess: regionalAccessSchema.nullable().optional(),
   })
   .strict();
 
@@ -86,6 +94,7 @@ export const createLocalAccountSchema = z
     department: optionalTrimmedNonEmptyString(255),
     lineNameTh: optionalTrimmedNonEmptyString(128),
     levelNameTh: optionalTrimmedNonEmptyString(64),
+    regionalAccess: regionalAccessSchema.nullable().optional(),
     roles: z.string().trim().min(1).max(32),
     userType: z.enum(['officer', 'admin']).default('officer'),
     isActive: z.boolean().default(true),
@@ -113,15 +122,19 @@ export const createLocalAccountSchema = z
       path: ['permissionOverrides'],
     },
   )
-  .transform(({ department, lineNameTh, levelNameTh, roles, ...value }) => ({
+  .transform(({ department, lineNameTh, levelNameTh, regionalAccess, roles, ...value }) => ({
     ...value,
     roleCodes: [roles],
     profile:
-      department !== undefined || lineNameTh !== undefined || levelNameTh !== undefined
+      department !== undefined ||
+      lineNameTh !== undefined ||
+      levelNameTh !== undefined ||
+      regionalAccess !== undefined
         ? {
             departmentNameTh: department,
             lineNameTh,
             levelNameTh,
+            regionalAccess,
           }
         : undefined,
   }));
@@ -162,6 +175,7 @@ const editResponseUpdateSchema = z
         department: optionalTrimmedNonEmptyString(255),
         lineNameTh: optionalTrimmedNonEmptyString(128),
         levelNameTh: optionalTrimmedNonEmptyString(64),
+        regionalAccess: regionalAccessSchema.nullable().optional(),
         roles: z.string().trim().min(1).max(32),
         isActive: z.boolean(),
         source: z.enum(['api', 'created']).optional(),
@@ -177,11 +191,13 @@ const editResponseUpdateSchema = z
     const profile =
       user.department !== undefined ||
       user.lineNameTh !== undefined ||
-      user.levelNameTh !== undefined
+      user.levelNameTh !== undefined ||
+      user.regionalAccess !== undefined
         ? {
             departmentNameTh: user.department,
             lineNameTh: user.lineNameTh,
             levelNameTh: user.levelNameTh,
+            regionalAccess: user.regionalAccess,
           }
         : undefined;
     return {

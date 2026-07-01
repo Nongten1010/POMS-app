@@ -1,5 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
+import { ForbiddenError } from '../../shared/errors/AppError';
 import {
   createLocalAccountSchema,
   createManagedUserSchema,
@@ -36,6 +37,7 @@ export const usersController = {
       const actorUserId = req.user?.id;
       if (!actorUserId) throw new Error('Authenticated user missing from request');
       const payload = createManagedUserSchema.parse(req.body);
+      ensureCanManageRegionalAccess(req, payload);
       const data = await usersService.create(payload, actorUserId);
       res.status(StatusCodes.CREATED).location(`${req.baseUrl}/${data.id}`).json({
         success: true,
@@ -51,6 +53,7 @@ export const usersController = {
       const actorUserId = req.user?.id;
       if (!actorUserId) throw new Error('Authenticated user missing from request');
       const payload = createLocalAccountSchema.parse(req.body);
+      ensureCanManageRegionalAccess(req, payload);
       const data = await usersService.createLocalAccount(payload, actorUserId);
       res.status(StatusCodes.CREATED).location(`${req.baseUrl}/${data.id}`).json({
         success: true,
@@ -67,6 +70,7 @@ export const usersController = {
       if (!actorUserId) throw new Error('Authenticated user missing from request');
       const { id } = userIdParamSchema.parse(req.params);
       const payload = updateManagedUserSchema.parse(req.body);
+      ensureCanManageRegionalAccess(req, payload);
       const data = await usersService.update(id, payload, actorUserId);
       res.status(StatusCodes.OK).json({ success: true, data });
     } catch (err) {
@@ -109,3 +113,12 @@ export const usersController = {
     }
   },
 };
+
+function ensureCanManageRegionalAccess(
+  req: Request,
+  payload: { profile?: { regionalAccess?: unknown } },
+): void {
+  if (payload.profile?.regionalAccess === undefined) return;
+  if (req.user?.scopes['permissions:manage'] !== undefined) return;
+  throw new ForbiddenError('Missing required permission: permissions:manage');
+}

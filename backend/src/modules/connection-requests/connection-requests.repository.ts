@@ -2,6 +2,7 @@ import type { Knex } from 'knex';
 import { db } from '../../config/database';
 import { env } from '../../config/env';
 import { factorySourceDb } from '../../config/factory-source-database';
+import type { RegionalAccessDTO } from '../auth/regional-access';
 import {
   CONNECTION_REQUEST_STATUS,
   CONNECTION_REQUEST_TYPE,
@@ -124,6 +125,7 @@ interface StatusHistoryRow {
 interface ListAccess {
   actorUserId: number;
   scope: string | null | undefined;
+  regionalAccess?: RegionalAccessDTO | null;
 }
 
 interface FactoryRow {
@@ -201,6 +203,7 @@ interface FactorySnapshotSourceRow {
 interface FactoryAccess {
   actorUserId: number;
   scope: string | null | undefined;
+  regionalAccess?: RegionalAccessDTO | null;
 }
 
 interface StatusUpdate {
@@ -344,6 +347,7 @@ export const connectionRequestsRepository = {
         .where('uj.user_id', access.actorUserId)
         .whereNull('uj.revoked_at');
     }
+    applyFactoryRegionalAccessFilter(builder, access.regionalAccess);
 
     const row = await builder.first();
     return row ? toFactoryGeneralDTO(row) : null;
@@ -778,6 +782,7 @@ function buildFactoriesForAccessQuery(
       .where('uj.user_id', access.actorUserId)
       .whereNull('uj.revoked_at');
   }
+  applyFactoryRegionalAccessFilter(builder, access.regionalAccess);
 
   return builder as unknown as Knex.QueryBuilder<FactoryRow, FactoryRow[]>;
 }
@@ -823,6 +828,7 @@ function buildBaseQuery(
     });
   }
   if (access.scope !== 'ALL') builder.where('created_by', access.actorUserId);
+  applyRequestRegionalAccessFilter(builder, access.regionalAccess);
 
   return builder.select(
     'id',
@@ -859,6 +865,40 @@ function buildBaseQuery(
     'created_at',
     'updated_at',
   );
+}
+
+function applyRequestRegionalAccessFilter(
+  builder: Knex.QueryBuilder,
+  regionalAccess: RegionalAccessDTO | null | undefined,
+): void {
+  const regionValues = getRegionalFilterValues(regionalAccess);
+  if (regionValues.length === 0) return;
+
+  builder.whereExists(function regionalAccessFilter() {
+    this.select(db.raw('1'))
+      .from('cems_wpms_request_factory_snapshots as fs')
+      .whereRaw('fs.request_id = cems_wpms_connection_requests.id')
+      .whereNull('fs.deleted_at')
+      .where((regionBuilder) => {
+        regionBuilder
+          .whereIn('fs.region_name', regionValues)
+          .orWhereIn('fs.region_code', regionValues);
+      });
+  });
+}
+
+function applyFactoryRegionalAccessFilter(
+  builder: Knex.QueryBuilder,
+  regionalAccess: RegionalAccessDTO | null | undefined,
+): void {
+  const regionValues = getRegionalFilterValues(regionalAccess);
+  if (regionValues.length === 0) return;
+  builder.whereIn('p.region', regionValues);
+}
+
+function getRegionalFilterValues(regionalAccess: RegionalAccessDTO | null | undefined): string[] {
+  const values = regionalAccess?.regions ?? [];
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
 }
 
 function applyFactorySnapshotFilters(

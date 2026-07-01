@@ -39,10 +39,16 @@ describe('managed users validators', () => {
       profile: {
         departmentId: '3010000',
         lineNameTh: 'นักวิชาการสิ่งแวดล้อม',
+        regionalAccess: {
+          regions: [' ภาคตะวันออก '],
+        },
       },
     });
 
     expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.profile?.regionalAccess).toEqual({ regions: ['ภาคตะวันออก'] });
+    }
   });
 
   it('accepts a local account payload with combined fullName and no email or phone', () => {
@@ -53,6 +59,9 @@ describe('managed users validators', () => {
       department: 'กรมโรงงานอุตสาหกรรม',
       lineNameTh: 'นักวิทยาศาสตร์',
       levelNameTh: 'ชำนาญการ',
+      regionalAccess: {
+        regions: ['ภาคใต้'],
+      },
       roles: 'diw_central',
       permissionOverrides: [{ code: 'chat:ask', effect: 'allow' }],
     });
@@ -67,6 +76,7 @@ describe('managed users validators', () => {
         departmentNameTh: 'กรมโรงงานอุตสาหกรรม',
         lineNameTh: 'นักวิทยาศาสตร์',
         levelNameTh: 'ชำนาญการ',
+        regionalAccess: { regions: ['ภาคใต้'] },
       },
     });
   });
@@ -137,6 +147,9 @@ describe('managed users validators', () => {
         department: 'กรมโรงงานอุตสาหกรรม',
         lineNameTh: 'นักวิทยาศาสตร์',
         levelNameTh: 'ชำนาญการ',
+        regionalAccess: {
+          regions: ['ภาคเหนือ'],
+        },
         roles: 'diw_central',
         isActive: true,
       },
@@ -168,6 +181,9 @@ describe('managed users validators', () => {
         departmentNameTh: 'กรมโรงงานอุตสาหกรรม',
         lineNameTh: 'นักวิทยาศาสตร์',
         levelNameTh: 'ชำนาญการ',
+        regionalAccess: {
+          regions: ['ภาคเหนือ'],
+        },
       },
       permissionOverrides: expect.arrayContaining([
         { code: 'dashboard:view', effect: 'allow', scope: 'ALL' },

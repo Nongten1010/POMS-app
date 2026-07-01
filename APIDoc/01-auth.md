@@ -66,6 +66,9 @@
     "levelNameTh": "ชำนาญการ",
     "roles": "diw_central",
     "isActive": true,
+    "regionalAccess": {
+      "regions": ["ภาคตะวันออก"]
+    },
     "ownedFactoryIds": ["FAC001"]
   },
   "permissions": {
@@ -90,6 +93,7 @@
 | `user.levelNameTh` | string/null | ระดับตำแหน่ง |
 | `user.roles` | string | role code หลัก |
 | `user.isActive` | boolean | สถานะการใช้งาน |
+| `user.regionalAccess` | object/null | ภาคที่เจ้าหน้าที่รับผิดชอบ ถ้ามีค่า backend จะจำกัดข้อมูลคำขอ/โรงงานตาม `regions` เพิ่มจาก permission scope |
 | `user.ownedFactoryIds` | string[] | โรงงานที่ผู้ใช้เป็นเจ้าของ ใช้กับ operator ถ้ามี |
 | `permissions` | object | permission group สำหรับ UI |
 
@@ -117,7 +121,10 @@ Authorization: Bearer <accessToken>
     "lineNameTh": "นักวิชาการ",
     "levelNameTh": "ชำนาญการ",
     "roles": "diw_central",
-    "isActive": true
+    "isActive": true,
+    "regionalAccess": {
+      "regions": ["ภาคตะวันออก"]
+    }
   },
   "permissions": {
     "permissions": {
@@ -150,6 +157,10 @@ Authorization: Bearer <accessToken>
 ค่าที่ส่งใน `permissions` เป็น object แยกตาม module โดยแต่ละ module มี `data` เป็น scope และ action เป็น boolean
 
 หมายเหตุ: permission code ที่ใช้ตรวจ route บางตัวถูก alias ก่อนส่งให้ frontend เช่น `cems_wpms_requests:view` จะอยู่ใต้ response module `connection.view`, `permissions:manage` จะอยู่ใต้ `permissions.view`, และ `eligible_factories:manage` จะอยู่ใต้ `eligible_factories.view`
+
+หมายเหตุการจำกัดภาค: ถ้า `user.regionalAccess` มีค่า ระบบจะฝังค่านี้ลง JWT และกรอง endpoint อ่านข้อมูลคำขอ/โรงงาน เช่น `/cems-wpms-requests`, `/operator-factory-dashboard`, detail/config/statistics ตาม snapshot `regionCode`/`regionName` หรือ `provinces.region` แม้ permission scope ของ role จะเป็น `ALL`
+
+การกำหนด/แก้ไข `regionalAccess` ผ่าน user management ต้องใช้สิทธิ์ `permissions:manage`
 
 | Module | Actions |
 | --- | --- |

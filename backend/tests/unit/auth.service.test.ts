@@ -59,8 +59,10 @@ jest.mock('../../src/modules/auth/auth.repository', () => ({
 
 import { authRepository } from '../../src/modules/auth/auth.repository';
 import { authService } from '../../src/modules/auth/auth.service';
+import { signAccessToken } from '../../src/shared/utils/jwt';
 
 const mockedAuthRepository = jest.mocked(authRepository);
+const mockedSignAccessToken = jest.mocked(signAccessToken);
 const passwordField = 'password';
 const validTestPassword = 'valid-test-password';
 
@@ -275,6 +277,7 @@ describe('authService login completion', () => {
       province_id: '1',
       per_status: '1',
       per_status_name: 'ปกติ',
+      regional_access_json: JSON.stringify({ regions: ['ภาคตะวันออก'] }),
     });
     mockedAuthRepository.getRolesAndPermissions.mockResolvedValue({
       roles: ['diw_central'],
@@ -323,6 +326,7 @@ describe('authService login completion', () => {
         levelNameTh: 'ปฏิบัติการ',
         roles: 'diw_central',
         isActive: true,
+        regionalAccess: { regions: ['ภาคตะวันออก'] },
       },
       permissions: {
         dashboard: {
@@ -346,6 +350,11 @@ describe('authService login completion', () => {
         },
       },
     });
+    expect(mockedSignAccessToken).toHaveBeenCalledWith(
+      expect.objectContaining({
+        regionalAccess: { regions: ['ภาคตะวันออก'] },
+      }),
+    );
   });
 
   it('provisions a DIW DPIS industrial-estate officer before issuing a token', async () => {

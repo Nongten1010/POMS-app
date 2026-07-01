@@ -3,6 +3,7 @@ import { StatusCodes } from 'http-status-codes';
 import { env } from '../../config/env';
 import { getScope } from '../../shared/middlewares/authorize';
 import { createDeviceConnectionConfigRequestSchema } from '../device-connections/device-connections.validator';
+import type { RegionalAccessDTO } from '../auth/regional-access';
 import { createConnectionRequestDocumentImageService } from './connection-request-document-image.service';
 import { connectionRequestsService } from './connection-requests.service';
 import {
@@ -41,6 +42,7 @@ export const connectionRequestsController = {
         query,
         actorUserId,
         getScope(req, 'cems_wpms_requests:view'),
+        ...getRegionalAccessArg(req),
       );
       res.status(StatusCodes.OK).json({ success: true, ...result });
     } catch (err) {
@@ -56,6 +58,7 @@ export const connectionRequestsController = {
         query,
         actorUserId,
         getScope(req, 'cems_wpms_requests:view'),
+        ...getRegionalAccessArg(req),
       );
       res.status(StatusCodes.OK).json({ success: true, ...result });
     } catch (err) {
@@ -71,6 +74,7 @@ export const connectionRequestsController = {
         actorUserId,
         getScope(req, 'factories:view'),
         query,
+        ...getRegionalAccessArg(req),
       );
       res.status(StatusCodes.OK).json({ success: true, ...result });
     } catch (err) {
@@ -90,6 +94,7 @@ export const connectionRequestsController = {
         actorUserId,
         getScope(req, 'factories:view'),
         { ...query, connectedOnly: true },
+        ...getRegionalAccessArg(req),
       );
       res.status(StatusCodes.OK).json({ success: true, ...result });
     } catch (err) {
@@ -107,6 +112,7 @@ export const connectionRequestsController = {
         isFavorite,
         actorUserId,
         getScope(req, 'factories:view'),
+        ...getRegionalAccessArg(req),
       );
       res.status(StatusCodes.OK).json({ success: true, data });
     } catch (err) {
@@ -122,6 +128,7 @@ export const connectionRequestsController = {
         factoryId,
         actorUserId,
         getScope(req, 'factories:view'),
+        ...getRegionalAccessArg(req),
       );
       res.status(StatusCodes.OK).json({ success: true, data });
     } catch (err) {
@@ -141,6 +148,7 @@ export const connectionRequestsController = {
         query,
         actorUserId,
         getScope(req, 'cems_wpms_requests:view'),
+        ...getRegionalAccessArg(req),
       );
       res.status(StatusCodes.OK).json({ success: true, ...result });
     } catch (err) {
@@ -160,6 +168,7 @@ export const connectionRequestsController = {
         { stationId },
         actorUserId,
         getScope(req, 'cems_wpms_requests:view'),
+        ...getRegionalAccessArg(req),
       );
       res.status(StatusCodes.OK).json({ success: true, ...result });
     } catch (err) {
@@ -175,6 +184,7 @@ export const connectionRequestsController = {
         stationId,
         actorUserId,
         getScope(req, 'cems_wpms_requests:view'),
+        ...getRegionalAccessArg(req),
       );
       res.status(StatusCodes.OK).json({ success: true, data });
     } catch (err) {
@@ -194,6 +204,7 @@ export const connectionRequestsController = {
         stationId,
         actorUserId,
         getScope(req, 'cems_wpms_requests:view'),
+        ...getRegionalAccessArg(req),
       );
       res.status(StatusCodes.OK).json({ success: true, data });
     } catch (err) {
@@ -213,12 +224,14 @@ export const connectionRequestsController = {
               payload,
               actorUserId,
               getScope(req, 'cems_wpms_requests:edit'),
+              ...getRegionalAccessArg(req),
             )
           : await connectionRequestsService.saveCurrentDeviceConfig(
               stationId,
               payload,
               actorUserId,
               getScope(req, 'cems_wpms_requests:edit'),
+              ...getRegionalAccessArg(req),
             );
       res.status(StatusCodes.CREATED).json({ success: true, data });
     } catch (err) {
@@ -236,6 +249,7 @@ export const connectionRequestsController = {
         query,
         actorUserId,
         getScope(req, 'dashboard.stats:view'),
+        ...getRegionalAccessArg(req),
       );
       res.status(StatusCodes.OK).json({ success: true, ...result });
     } catch (err) {
@@ -253,6 +267,7 @@ export const connectionRequestsController = {
         query,
         actorUserId,
         getScope(req, 'dashboard.stats:view'),
+        ...getRegionalAccessArg(req),
       );
       res.status(StatusCodes.OK).json({ success: true, ...result });
     } catch (err) {
@@ -297,6 +312,7 @@ export const connectionRequestsController = {
         id,
         actorUserId,
         getScope(req, 'cems_wpms_requests:view'),
+        ...getRegionalAccessArg(req),
       );
       res.status(StatusCodes.OK).json({ success: true, data });
     } catch (err) {
@@ -312,6 +328,7 @@ export const connectionRequestsController = {
         id,
         actorUserId,
         getScope(req, 'cems_wpms_requests:view'),
+        ...getRegionalAccessArg(req),
       );
       res.status(StatusCodes.OK).json({ success: true, data });
     } catch (err) {
@@ -329,6 +346,7 @@ export const connectionRequestsController = {
         stationId,
         actorUserId,
         getScope(req, 'cems_wpms_requests:view'),
+        ...getRegionalAccessArg(req),
       );
       res.status(StatusCodes.OK).json({ success: true, data });
     } catch (err) {
@@ -349,6 +367,7 @@ export const connectionRequestsController = {
         configId,
         actorUserId,
         getScope(req, 'cems_wpms_requests:view'),
+        ...getRegionalAccessArg(req),
       );
       res.status(StatusCodes.OK).json({ success: true, data });
     } catch (err) {
@@ -494,6 +513,10 @@ function requireActorUserId(req: Request): number {
   const actorUserId = req.user?.id;
   if (!actorUserId) throw new Error('Authenticated user missing from request');
   return actorUserId;
+}
+
+function getRegionalAccessArg(req: Request): [] | [RegionalAccessDTO] {
+  return req.user?.regionalAccess ? [req.user.regionalAccess] : [];
 }
 
 function getSingleBodyValue(value: unknown): string | null {

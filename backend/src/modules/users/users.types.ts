@@ -1,5 +1,6 @@
 import type { PermissionGroups } from '../auth/permissions';
 import type { AuthUserDTO } from '../auth/auth.types';
+import type { RegionalAccessDTO } from '../auth/regional-access';
 
 export type ManagedUserType = 'officer' | 'admin';
 export type ManagedUserStatus = 'active' | 'suspended';
@@ -61,6 +62,7 @@ export interface OfficerProfileInput {
   perStatusName?: string | null;
   relocationType?: string | null;
   relocationName?: string | null;
+  regionalAccess?: RegionalAccessDTO | null;
 }
 
 export interface ManagedUserTableDTO {

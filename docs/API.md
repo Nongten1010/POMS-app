@@ -66,7 +66,10 @@
     "lineNameTh": "string",
     "levelNameTh": "string",
     "roles": "diw_central",
-    "isActive": true
+    "isActive": true,
+    "regionalAccess": {
+      "regions": ["ภาคตะวันออก"]
+    }
   },
   "permissions": {
     "dashboard": {
@@ -175,6 +178,7 @@
 | `levelNameTh` | string | ระดับภาษาไทย |
 | `roles` | string | บทบาทผู้ใช้งาน ดูรายการค่าที่เป็นไปได้ในหัวข้อ Role Codes |
 | `isActive` | boolean | สถานะการใช้งาน |
+| `regionalAccess` | object/null | ภาคที่เจ้าหน้าที่รับผิดชอบ ถ้ามีค่า backend จะกรองคำขอ/โรงงานตาม `regions` เพิ่มจาก permission scope |
 
 #### Role Codes
 
@@ -217,7 +221,10 @@
     "lineNameTh": "string",
     "levelNameTh": "string",
     "roles": "diw_central",
-    "isActive": true
+    "isActive": true,
+    "regionalAccess": {
+      "regions": ["ภาคตะวันออก"]
+    }
   },
   "permissions": {
     "dashboard": {

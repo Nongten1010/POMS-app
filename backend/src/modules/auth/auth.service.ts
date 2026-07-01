@@ -6,7 +6,9 @@ import { verifyPassword, bufferToHashString } from '../../shared/utils/password'
 import { getIdentityProvider } from './identity-provider';
 import { authRepository } from './auth.repository';
 import { groupPermissions } from './permissions';
+import { inferRegionalAccessFromText, parseRegionalAccessJson } from './regional-access';
 import type { UserRow } from './auth.repository';
+import type { RegionalAccessDTO } from './regional-access';
 import type {
   AuthUserDTO,
   LoginRequest,
@@ -156,7 +158,11 @@ export const authService = {
   },
 };
 
-function getOfficerRoleCode(profile: NonNullable<Awaited<ReturnType<ReturnType<typeof getIdentityProvider>['authenticateOfficer']>>>): string {
+function getOfficerRoleCode(
+  profile: NonNullable<
+    Awaited<ReturnType<ReturnType<typeof getIdentityProvider>['authenticateOfficer']>>
+  >,
+): string {
   if (profile.department_id === '100' || profile.department_id === '4019000') {
     return 'industrial_estate';
   }
@@ -269,6 +275,9 @@ function toOfficerDTO(
     ministryId: row.ministry_id,
     provinceId: row.province_id,
     perStatusName: row.per_status_name,
+    regionalAccess:
+      parseRegionalAccessJson(row.regional_access_json) ??
+      inferRegionalAccessFromText(row.department_name_th, row.line_name_th),
   };
 }
 
@@ -334,11 +343,13 @@ function buildLoginResponse(args: {
   roles: string[];
   scopes: Record<string, string | null>;
 }): LoginResponse {
+  const regionalAccess = getRegionalAccessFromProfile(args.profile);
   const accessToken = signAccessToken({
     sub: String(args.user.id),
     userType: args.user.userType,
     roles: args.roles,
     scopes: args.scopes,
+    regionalAccess,
   });
   return {
     accessToken,
@@ -386,8 +397,15 @@ function toAuthUserDTO(
     levelNameTh: officerProfile?.levelNameTh ?? null,
     roles: roles[0] ?? user.userType,
     isActive: user.isActive,
+    ...(officerProfile?.regionalAccess ? { regionalAccess: officerProfile.regionalAccess } : {}),
     ...operatorFields,
   };
+}
+
+function getRegionalAccessFromProfile(
+  profile: OfficerProfileDTO | OperatorProfileDTO | null,
+): RegionalAccessDTO | null {
+  return isOfficerProfile(profile) ? profile.regionalAccess : null;
 }
 
 function joinNamePrefix(prenameTh: string | null, firstName: string): string {

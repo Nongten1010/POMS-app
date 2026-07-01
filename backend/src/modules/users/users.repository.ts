@@ -1,5 +1,6 @@
 import type { Knex } from 'knex';
 import { db } from '../../config/database';
+import { parseRegionalAccessJson, serializeRegionalAccess } from '../auth/regional-access';
 import type {
   CreateLocalAccountInput,
   CreateManagedUserInput,
@@ -54,6 +55,7 @@ interface ManagedUserJoinedRow {
   per_status_name: string | null;
   relocation_type: string | null;
   relocation_name: string | null;
+  regional_access_json: string | null;
   role_code: string | null;
   role_name_th: string | null;
   role_name_en: string | null;
@@ -447,6 +449,7 @@ function managedUsersWithJoins(trx?: Knex.Transaction): Knex.QueryBuilder<Manage
       'officer_profiles.per_status_name',
       'officer_profiles.relocation_type',
       'officer_profiles.relocation_name',
+      'officer_profiles.regional_access_json',
       'roles.code as role_code',
       'roles.name_th as role_name_th',
       'roles.name_en as role_name_en',
@@ -518,6 +521,7 @@ function toDetailDTO(rows: ManagedUserJoinedRow[]): ManagedUserDetailDTO {
       perStatusName: first.per_status_name,
       relocationType: first.relocation_type,
       relocationName: first.relocation_name,
+      regionalAccess: parseRegionalAccessJson(first.regional_access_json),
     },
   };
 }
@@ -620,7 +624,8 @@ async function replaceUserPermissionOverridesInTransaction(
 }
 
 function toOfficerProfileRow(profile: OfficerProfileInput): Record<string, string | null> {
-  const mappings: Array<[keyof OfficerProfileInput, string]> = [
+  type OfficerProfileStringKey = Exclude<keyof OfficerProfileInput, 'regionalAccess'>;
+  const mappings: Array<[OfficerProfileStringKey, string]> = [
     ['posNo', 'pos_no'],
     ['pertypeId', 'pertype_id'],
     ['pertype', 'pertype'],
@@ -643,10 +648,13 @@ function toOfficerProfileRow(profile: OfficerProfileInput): Record<string, strin
     ['relocationType', 'relocation_type'],
     ['relocationName', 'relocation_name'],
   ];
-
-  return Object.fromEntries(
+  const row = Object.fromEntries(
     mappings
       .filter(([property]) => profile[property] !== undefined)
       .map(([property, column]) => [column, profile[property] ?? null]),
   );
+  if (profile.regionalAccess !== undefined) {
+    row.regional_access_json = serializeRegionalAccess(profile.regionalAccess);
+  }
+  return row;
 }

@@ -7,6 +7,7 @@ import type {
   DeviceConnectionConfigDTO,
 } from '../device-connections/device-connections.types';
 import { parameterValuesService } from '../parameter-values/parameter-values.service';
+import type { RegionalAccessDTO } from '../auth/regional-access';
 import type {
   CalendarStatusQuerySchemaInput,
   MeasurementStatisticsQuerySchemaInput,
@@ -73,10 +74,12 @@ export const connectionRequestsService = {
     query: ListConnectionRequestsQuery,
     actorUserId: number,
     viewScope: string | null | undefined,
+    regionalAccess?: RegionalAccessDTO | null,
   ): Promise<PaginatedConnectionRequestsDTO> {
     const { rows, total } = await connectionRequestsRepository.list(query, {
       actorUserId,
       scope: viewScope,
+      regionalAccess,
     });
     return { data: rows, meta: { total } };
   },
@@ -85,10 +88,12 @@ export const connectionRequestsService = {
     query: ListConnectionRequestsQuery,
     actorUserId: number,
     viewScope: string | null | undefined,
+    regionalAccess?: RegionalAccessDTO | null,
   ): Promise<PaginatedTableRowsDTO<ConnectionRequestTableRowDTO>> {
     const { rows, total } = await connectionRequestsRepository.list(query, {
       actorUserId,
       scope: viewScope,
+      regionalAccess,
     });
     const factoryMap = await connectionRequestsRepository.findFactorySummariesForRequests(rows);
     return {
@@ -103,10 +108,12 @@ export const connectionRequestsService = {
     query: ListConnectionRequestsQuery,
     actorUserId: number,
     viewScope: string | null | undefined,
+    regionalAccess?: RegionalAccessDTO | null,
   ): Promise<PaginatedTableRowsDTO<ConnectionRequestDetailDTO>> {
     const { rows, total } = await connectionRequestsRepository.list(query, {
       actorUserId,
       scope: viewScope,
+      regionalAccess,
     });
     const factoryMap = await connectionRequestsRepository.findFactorySummariesForRequests(rows);
     const data = await Promise.all(
@@ -127,11 +134,13 @@ export const connectionRequestsService = {
     actorUserId: number,
     factoryViewScope: string | null | undefined,
     query: ListOperatorFactoriesQuery = {},
+    regionalAccess?: RegionalAccessDTO | null,
   ): Promise<PaginatedTableRowsDTO<OperatorFactoryTableRowDTO>> {
     void query;
     const factories = await connectionRequestsRepository.listFactoriesForAccess({
       actorUserId,
       scope: factoryViewScope,
+      regionalAccess,
     });
     const requests = await connectionRequestsRepository.listRequestsForFactories(
       factories.map((factory) => factory.factoryId),
@@ -187,10 +196,12 @@ export const connectionRequestsService = {
     actorUserId: number,
     factoryViewScope: string | null | undefined,
     query: ListOperatorFactoriesQuery = {},
+    regionalAccess?: RegionalAccessDTO | null,
   ): Promise<PaginatedTableRowsDTO<OperatorFactoryDashboardRowDTO>> {
     const factories = await connectionRequestsRepository.listFactoriesForAccess({
       actorUserId,
       scope: factoryViewScope,
+      regionalAccess,
     });
     const eligibleFactories = factories.filter(
       (factory) => factory.isEligible !== false && factory.isActive !== false,
@@ -279,10 +290,12 @@ export const connectionRequestsService = {
     isFavorite: boolean,
     actorUserId: number,
     factoryViewScope: string | null | undefined,
+    regionalAccess?: RegionalAccessDTO | null,
   ): Promise<FactoryFavoriteDTO> {
     const factory = await connectionRequestsRepository.findFactoryGeneral(factoryId, {
       actorUserId,
       scope: factoryViewScope,
+      regionalAccess,
     });
     if (!factory) throw new NotFoundError('Factory not found for this user');
 
@@ -297,10 +310,12 @@ export const connectionRequestsService = {
     factoryId: string,
     actorUserId: number,
     factoryViewScope: string | null | undefined,
+    regionalAccess?: RegionalAccessDTO | null,
   ): Promise<FactoryGeneralDTO> {
     const factory = await connectionRequestsRepository.findFactoryGeneral(factoryId, {
       actorUserId,
       scope: factoryViewScope,
+      regionalAccess,
     });
     if (!factory) throw new NotFoundError('Factory general information not found');
     return factory;
@@ -310,9 +325,10 @@ export const connectionRequestsService = {
     id: number,
     actorUserId: number,
     viewScope: string | null | undefined,
+    regionalAccess?: RegionalAccessDTO | null,
   ): Promise<ConnectionRequestDTO> {
     const request = await loadRequest(id);
-    ensureCanRead(request, actorUserId, viewScope);
+    ensureCanRead(request, actorUserId, viewScope, regionalAccess);
     return request;
   },
 
@@ -320,8 +336,9 @@ export const connectionRequestsService = {
     id: number,
     actorUserId: number,
     viewScope: string | null | undefined,
+    regionalAccess?: RegionalAccessDTO | null,
   ): Promise<ConnectionRequestDetailDTO> {
-    const request = await this.getById(id, actorUserId, viewScope);
+    const request = await this.getById(id, actorUserId, viewScope, regionalAccess);
     const factoryMap = await connectionRequestsRepository.findFactorySummariesForRequests([
       request,
     ]);
@@ -339,8 +356,9 @@ export const connectionRequestsService = {
     stationId: string | undefined,
     actorUserId: number,
     viewScope: string | null | undefined,
+    regionalAccess?: RegionalAccessDTO | null,
   ): Promise<DeviceConfigFormDetailDTO> {
-    const request = await this.getById(id, actorUserId, viewScope);
+    const request = await this.getById(id, actorUserId, viewScope, regionalAccess);
     const configs = await deviceConnectionsService.listByRequestId(id);
     return toDeviceConfigFormDetail(request, configs, stationId);
   },
@@ -350,8 +368,9 @@ export const connectionRequestsService = {
     configId: number,
     actorUserId: number,
     viewScope: string | null | undefined,
+    regionalAccess?: RegionalAccessDTO | null,
   ): Promise<DeviceConfigFormDetailDTO> {
-    const request = await this.getById(id, actorUserId, viewScope);
+    const request = await this.getById(id, actorUserId, viewScope, regionalAccess);
     const configs = await deviceConnectionsService.listByRequestId(id);
     const config = configs.find((item) => item.id === configId);
     if (!config) throw new NotFoundError('Device connection config not found for request');
@@ -362,11 +381,13 @@ export const connectionRequestsService = {
     stationId: string,
     actorUserId: number,
     viewScope: string | null | undefined,
+    regionalAccess?: RegionalAccessDTO | null,
   ): Promise<AddParameterFormDetailDTO> {
     const { request, point } = await loadLatestConnectedRequestForStation(
       stationId,
       actorUserId,
       viewScope,
+      regionalAccess,
     );
 
     return toAddParameterFormDetail(request, point, stationId);
@@ -376,11 +397,13 @@ export const connectionRequestsService = {
     stationId: string,
     actorUserId: number,
     viewScope: string | null | undefined,
+    regionalAccess?: RegionalAccessDTO | null,
   ): Promise<DeviceConfigFormDetailDTO> {
     const { request } = await loadLatestConnectedRequestForStation(
       stationId,
       actorUserId,
       viewScope,
+      regionalAccess,
     );
     const configs = await deviceConnectionsService.listActiveSettings({ stationId });
     return toDeviceConfigFormDetail(request, configs, stationId);
@@ -390,6 +413,7 @@ export const connectionRequestsService = {
     query: ListConnectedMeasurementPointsQuery,
     actorUserId: number,
     viewScope: string | null | undefined,
+    regionalAccess?: RegionalAccessDTO | null,
   ): Promise<PaginatedTableRowsDTO<ConnectedMeasurementPointDetailDTO>> {
     const { rows } = await connectionRequestsRepository.list(
       {
@@ -399,6 +423,7 @@ export const connectionRequestsService = {
       {
         actorUserId,
         scope: viewScope,
+        regionalAccess,
       },
     );
     const factoryMap = await connectionRequestsRepository.findFactorySummariesForRequests(rows);
@@ -435,8 +460,14 @@ export const connectionRequestsService = {
     query: MeasurementStatisticsQuerySchemaInput,
     actorUserId: number,
     viewScope: string | null | undefined,
+    regionalAccess?: RegionalAccessDTO | null,
   ) {
-    const point = await loadConnectedMeasurementPointDetail(stationId, actorUserId, viewScope);
+    const point = await loadConnectedMeasurementPointDetail(
+      stationId,
+      actorUserId,
+      viewScope,
+      regionalAccess,
+    );
     const result = await parameterValuesService.measurementStatistics(
       { stationId, ...query },
       { actorUserId, scope: viewScope },
@@ -463,8 +494,14 @@ export const connectionRequestsService = {
     query: CalendarStatusQuerySchemaInput,
     actorUserId: number,
     viewScope: string | null | undefined,
+    regionalAccess?: RegionalAccessDTO | null,
   ) {
-    const point = await loadConnectedMeasurementPointDetail(stationId, actorUserId, viewScope);
+    const point = await loadConnectedMeasurementPointDetail(
+      stationId,
+      actorUserId,
+      viewScope,
+      regionalAccess,
+    );
     const result = await parameterValuesService.calendarStatus(
       { stationId, ...query },
       { actorUserId, scope: viewScope },
@@ -677,8 +714,9 @@ export const connectionRequestsService = {
     input: CreateDeviceConnectionConfigInput,
     actorUserId: number,
     editScope: string | null | undefined,
+    regionalAccess?: RegionalAccessDTO | null,
   ): Promise<DeviceConfigPayloadResponseDTO> {
-    await loadLatestConnectedRequestForStation(stationId, actorUserId, editScope);
+    await loadLatestConnectedRequestForStation(stationId, actorUserId, editScope, regionalAccess);
     ensureConfigStationMatchesRoute(stationId, input.stationId);
 
     const [saved] = await deviceConnectionsService.replaceCurrentStation(
@@ -694,8 +732,9 @@ export const connectionRequestsService = {
     input: CreateDeviceConnectionConfigsInput,
     actorUserId: number,
     editScope: string | null | undefined,
+    regionalAccess?: RegionalAccessDTO | null,
   ): Promise<DeviceConfigPayloadResponseDTO> {
-    await loadLatestConnectedRequestForStation(stationId, actorUserId, editScope);
+    await loadLatestConnectedRequestForStation(stationId, actorUserId, editScope, regionalAccess);
     for (const config of input.configs) {
       ensureConfigStationMatchesRoute(stationId, config.stationId);
     }
@@ -779,6 +818,7 @@ async function loadLatestConnectedRequestForStation(
   stationId: string,
   actorUserId: number,
   scope: string | null | undefined,
+  regionalAccess?: RegionalAccessDTO | null,
 ): Promise<{ request: ConnectionRequestDTO; point: MeasurementPointDTO }> {
   const { rows } = await connectionRequestsRepository.list(
     {
@@ -788,6 +828,7 @@ async function loadLatestConnectedRequestForStation(
     {
       actorUserId,
       scope,
+      regionalAccess,
     },
   );
 
@@ -1656,11 +1697,13 @@ async function loadConnectedMeasurementPointDetail(
   stationId: string,
   actorUserId: number,
   viewScope: string | null | undefined,
+  regionalAccess?: RegionalAccessDTO | null,
 ): Promise<ConnectedMeasurementPointDetailDTO> {
   const result = await connectionRequestsService.listConnectedMeasurementPoints(
     { stationId },
     actorUserId,
     viewScope,
+    regionalAccess,
   );
   const point = result.data[0];
   if (!point) throw new NotFoundError(`Connected measurement point ${stationId} not found`);
@@ -1752,10 +1795,25 @@ function ensureCanRead(
   request: ConnectionRequestDTO,
   actorUserId: number,
   viewScope: string | null | undefined,
+  regionalAccess?: RegionalAccessDTO | null,
 ): void {
-  if (viewScope === 'ALL') return;
+  if (viewScope === 'ALL' && requestMatchesRegionalAccess(request, regionalAccess)) return;
   if (request.createdBy === actorUserId) return;
   throw new ForbiddenError('Cannot access another operator connection request');
+}
+
+function requestMatchesRegionalAccess(
+  request: ConnectionRequestDTO,
+  regionalAccess: RegionalAccessDTO | null | undefined,
+): boolean {
+  const allowedRegions = new Set(
+    (regionalAccess?.regions ?? []).map((value) => value.trim()).filter(Boolean),
+  );
+  if (allowedRegions.size === 0) return true;
+  return Boolean(
+    (request.regionName && allowedRegions.has(request.regionName)) ||
+    (request.regionCode && allowedRegions.has(request.regionCode)),
+  );
 }
 
 function ensureOwner(request: ConnectionRequestDTO, actorUserId: number): void {

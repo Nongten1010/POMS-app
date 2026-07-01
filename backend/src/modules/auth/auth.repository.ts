@@ -39,6 +39,7 @@ export interface OfficerProfileRow {
   province_id: string | null;
   per_status: string | null;
   per_status_name: string | null;
+  regional_access_json?: string | null;
 }
 
 export interface OperatorProfileRow {
@@ -81,6 +82,7 @@ export const authRepository = {
         db.raw(
           'COALESCE(officer_profiles.department_name_th, department_org.name_th) as department_name_th',
         ),
+        'officer_profiles.regional_access_json',
       );
   },
 
@@ -132,16 +134,16 @@ export const authRepository = {
       await syncExternalOfficerProfileWithTrx(trx, userId, profile);
       await assignUserRole(trx, userId, roleCode);
 
-      const user = await trx<UserRow>('users').where({ id: userId }).whereNull('deleted_at').first();
+      const user = await trx<UserRow>('users')
+        .where({ id: userId })
+        .whereNull('deleted_at')
+        .first();
       if (!user) throw new Error('Synced officer user could not be loaded');
       return user;
     });
   },
 
-  async syncExternalOfficerProfile(
-    userId: number,
-    profile: ExternalOfficerProfile,
-  ): Promise<void> {
+  async syncExternalOfficerProfile(userId: number, profile: ExternalOfficerProfile): Promise<void> {
     await syncExternalOfficerProfileWithTrx(db, userId, profile);
   },
 
@@ -346,9 +348,7 @@ async function upsertExternalJuristic(
   trx: Knex.Transaction,
   juristic: ExternalOperatorJuristic,
 ): Promise<number> {
-  const existing = await trx('juristics')
-    .where({ juristic_id: juristic.juristic_id })
-    .first('id');
+  const existing = await trx('juristics').where({ juristic_id: juristic.juristic_id }).first('id');
   const payload = {
     name_th: juristic.name_th,
     name_en: juristic.name_en,
@@ -365,9 +365,7 @@ async function upsertExternalJuristic(
     juristic_id: juristic.juristic_id,
     ...payload,
   });
-  const inserted = await trx('juristics')
-    .where({ juristic_id: juristic.juristic_id })
-    .first('id');
+  const inserted = await trx('juristics').where({ juristic_id: juristic.juristic_id }).first('id');
   if (!inserted) throw new Error('Synced juristic could not be loaded');
 
   return Number(inserted.id);

@@ -1,4 +1,5 @@
 import type { PermissionGroups } from './permissions';
+import type { RegionalAccessDTO } from './regional-access';
 
 export type UserType = 'citizen' | 'operator' | 'officer' | 'admin';
 
@@ -36,6 +37,7 @@ export interface AuthUserDTO {
   levelNameTh: string | null;
   roles: string;
   isActive: boolean;
+  regionalAccess?: RegionalAccessDTO;
   ownedFactoryIds?: string[];
 }
 
@@ -52,6 +54,7 @@ export interface OfficerProfileDTO {
   ministryId: string | null;
   provinceId: string | null;
   perStatusName: string | null;
+  regionalAccess: RegionalAccessDTO | null;
 }
 
 export interface OperatorProfileDTO {

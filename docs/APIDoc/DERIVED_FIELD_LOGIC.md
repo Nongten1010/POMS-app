@@ -9,6 +9,58 @@
 - ถ้า logic เป็นเพียง fallback ชั่วคราว ให้เขียนไว้ชัดเจนว่า fallback จากอะไรไปอะไร
 - ถ้าไม่แน่ใจว่า field ควรตีความอย่างไร ให้หยุดที่ raw value และถามก่อน
 
+## Auth Regional Access
+
+Endpoints:
+
+- `POST /api/v1/auth/login`
+- `GET /api/v1/auth/me`
+- regional filters on connection-request/factory read endpoints that use the JWT claim
+
+Code:
+
+- `backend/src/modules/auth/auth.service.ts`
+- `backend/src/modules/auth/regional-access.ts`
+- `backend/src/modules/connection-requests/connection-requests.repository.ts`
+- `backend/src/modules/connection-requests/connection-requests.service.ts`
+
+### `user.regionalAccess`
+
+Source:
+
+- Primary: `dbo.officer_profiles.regional_access_json`
+- Backfill/fallback source for known regional centers: `dbo.officer_profiles.department_name_th`
+- Backfill/fallback source for known regional centers: `dbo.officer_profiles.line_name_th`
+
+Fallback order:
+
+- Parse `regional_access_json` first.
+- If no stored regional access exists, infer only when profile text contains a known regional center abbreviation:
+  - `ศวภ.ตอ.` -> `ภาคตะวันออก`
+  - `ศวภ.ตต.` -> `ภาคตะวันตก`
+  - `ศวภ.ตอน.` -> `ภาคตะวันออกเฉียงเหนือ`
+  - `ศวภ.น.` -> `ภาคเหนือ`
+  - `ศวภ.ต.` -> `ภาคใต้`
+- If neither source has a known region, return no `regionalAccess`.
+
+Transformation:
+
+- API stores and returns a normalized object: `{ "regions": ["ภาค..."] }`.
+- Duplicate and blank region values are removed.
+- Old JSON shapes with `regionCodes` or `regionNames` are parsed for compatibility and normalized into `regions`.
+- The JWT includes `regionalAccess` so request/factory reads can apply region filters without another DB lookup.
+
+Reason:
+
+- Regional officers and center directors must see only the requests/factories in their assigned region, while existing role permissions can remain unchanged.
+- POMS currently has `provinces.region` as the proven region source; there is no separate region-code master in this checkout.
+
+Known risks:
+
+- Officers without stored regional access and without one of the known `ศวภ.*` abbreviations remain governed by their existing permission scope.
+- Text inference is intentionally limited to known abbreviations and should be replaced by explicit `regional_access_json` where possible.
+- Existing JWTs issued before a regional access change keep their previous claim until the user logs in again or refreshes the session.
+
 ## Operator Factory Dashboard
 
 Endpoint: `GET /api/v1/operator-factory-dashboard`

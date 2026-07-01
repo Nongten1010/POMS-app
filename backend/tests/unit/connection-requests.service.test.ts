@@ -1022,6 +1022,25 @@ describe('connectionRequestsService', () => {
     });
   });
 
+  it('blocks regional officers from reading request detail outside their assigned region', async () => {
+    mockedRepository.findById.mockResolvedValue(
+      requestDto({
+        createdBy: 99,
+        regionName: 'ภาคเหนือ',
+        regionCode: 'ภาคเหนือ',
+      }),
+    );
+
+    await expect(
+      connectionRequestsService.getById(1, actorUserId, 'ALL', {
+        regions: ['ภาคตะวันออก'],
+      }),
+    ).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      message: 'Cannot access another operator connection request',
+    });
+  });
+
   it('returns device config form detail mapped to frontend field names', async () => {
     const request = requestDto({
       createdBy: actorUserId,
