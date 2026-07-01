@@ -38,6 +38,8 @@ export interface DeviceMeasurementChannelInput {
   dataType: string;
   unit?: string;
   valueRange?: MeasurementRangeInput | null;
+  alertLow?: number | null;
+  alertHigh?: number | null;
   valueFormat?: DataValueFormat | null;
   offset: number;
   encoding?: ModbusEncoding | null;

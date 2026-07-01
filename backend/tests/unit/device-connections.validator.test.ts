@@ -284,6 +284,107 @@ describe('device connection validators', () => {
     }
   });
 
+  it('accepts optional alert thresholds on Modbus channels', () => {
+    const result = createDeviceConnectionConfigSchema.safeParse({
+      stationId: 'STATION_001',
+      deviceCode: 'STATION_001/01',
+      protocol: 'MODBUS_TCP',
+      settings: {
+        hostIp: '192.168.1.10',
+        slaveId: 1,
+        port: 502,
+      },
+      channels: [
+        {
+          addressId: 40001,
+          dataType: 'CO',
+          unit: 'ppm',
+          valueRange: { min: 0, max: 500 },
+          alertLow: 80,
+          alertHigh: 400,
+          valueFormat: 'MEASUREMENT_VALUE',
+          offset: 0,
+          encoding: 'UNSIGNED16_BIG_ENDIAN',
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.channels[0]).toMatchObject({
+        dataType: 'CO (ppm)',
+        alertLow: 80,
+        alertHigh: 400,
+      });
+    }
+  });
+
+  it('normalizes legacy alert threshold fields from device setup forms', () => {
+    const result = createDeviceConnectionConfigSchema.safeParse({
+      stationId: 'SO001',
+      connection: 'Modbus RTU',
+      deviceCode: 'SO001/01',
+      COMPORT: '1',
+      slaveID: '1',
+      baudRate: '9600 (default)',
+      parity: 'None (default)',
+      stopBits: '1 (default)',
+      dataBits: '8 (default)',
+      measurementMin: '0',
+      measurementMax: '500',
+      quantity: '1',
+      channels: [
+        {
+          addressID: '40001',
+          parameter: 'CO (ppm)',
+          min: '0',
+          max: '500',
+          alertLow: '80',
+          alertHigh: '400',
+          format: 'ค่าข้อมูลตรวจวัด',
+          offset: '0',
+          encodingData: 'Signed16 - Big Endian',
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.channels[0]).toMatchObject({
+        alertLow: 80,
+        alertHigh: 400,
+      });
+    }
+  });
+
+  it('rejects inverted alert thresholds', () => {
+    const result = createDeviceConnectionConfigSchema.safeParse({
+      stationId: 'STATION_001',
+      deviceCode: 'STATION_001/01',
+      protocol: 'MODBUS_TCP',
+      settings: {
+        hostIp: '192.168.1.10',
+        slaveId: 1,
+        port: 502,
+      },
+      channels: [
+        {
+          addressId: 40001,
+          dataType: 'CO',
+          unit: 'ppm',
+          valueRange: { min: 0, max: 500 },
+          alertLow: 400,
+          alertHigh: 80,
+          valueFormat: 'MEASUREMENT_VALUE',
+          offset: 0,
+          encoding: 'UNSIGNED16_BIG_ENDIAN',
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+  });
+
   it('rejects Modbus channels without address ranges and encoding', () => {
     const result = createDeviceConnectionConfigSchema.safeParse({
       stationId: 'STATION_001',

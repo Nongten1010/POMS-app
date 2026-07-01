@@ -984,9 +984,11 @@ Frontend save rule:
 - endpoint `POST /cems-wpms-requests/:id/device-configs` รับได้ทั้ง payload เดี่ยวแบบเดิมและ structured payload `{ config: { stationId, device, channels, statusManagement } }`
 - ถ้าหน้าจอมีหลาย `connectionForms` ให้ส่ง `POST` ครั้งเดียวด้วย `config.device[]` และส่ง `config.channels[]` เป็น flat list โดยใส่ `deviceCode` เพื่อผูก channel กับอุปกรณ์
 - ช่อง `ช่วงข้อมูลตรวจวัด Min/Max` บนการ์ด Connection ให้ส่งใน `settings.valueRange.min/max` ของอุปกรณ์นั้น
+- ช่อง `Alert(Low)` และ `Alert(High)` ในตารางพารามิเตอร์ให้ส่งเป็น `channels[].alertLow` และ `channels[].alertHigh`; ถ้าไม่กรอกส่ง `null` หรือไม่ส่ง field ได้
 - backend จะตอบ `409 CONFLICT` เฉพาะเมื่อ active config ซ้ำชุด `stationId + protocol + deviceCode`
 - หลังบันทึกสำเร็จให้เรียก `GET /cems-wpms-requests/:id/device-configs?stationId=...` เพื่อ refresh ค่า `connectionForms`, `deviceCodeOptions`, `parameterMappings`, และ `rawConfigs`
 - device-config response จะจัด shape เหมือน payload: `{ stationId, device, channels, statusManagement }`; ฟิลด์ plural เช่น `deviceConfigs` จะเป็น array ของ shape นี้
+- device-config response จะคืน `rawConfigs.channels[].alertLow/alertHigh` เป็น number/null และคืน `parameterMappings[].alertLow/alertHigh` เป็น string หรือค่าว่างสำหรับ prefill form
 
 Channel shape:
 
@@ -996,6 +998,8 @@ Channel shape:
   "addressId": 40001,
   "dataType": "CO2 (ppm)",
   "valueRange": { "min": 0, "max": 200 },
+  "alertLow": 50,
+  "alertHigh": 180,
   "valueFormat": "MEASUREMENT_VALUE",
   "offset": 0,
   "encoding": "UNSIGNED16_BIG_ENDIAN",
@@ -1010,6 +1014,7 @@ Validation สำคัญ:
 | `addressId` | integer ตั้งแต่ `40001` |
 | `offset` | number ได้ทั้งบวกและลบ |
 | `valueRange.min/max` | `min <= max` |
+| `alertLow/alertHigh` | optional; ถ้าส่งทั้งคู่ต้องเป็น `alertLow <= alertHigh` |
 | `valueFormat` | รูปแบบค่าข้อมูลตรวจวัด: `MEASUREMENT_VALUE` = ค่าตรวจวัดปกติ, `CURRENT` = ค่ากระแสไฟฟ้า, `VOLTAGE` = ค่าแรงดันไฟฟ้า |
 | `status` | สถานะพารามิเตอร์ เช่น `Normal`, `Maintenance`, `Inactive` |
 | Modbus channel | ต้องมี `valueRange` และ `encoding` |

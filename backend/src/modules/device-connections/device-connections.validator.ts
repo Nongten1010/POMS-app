@@ -27,6 +27,10 @@ const measurementRangeSchema = z
   });
 
 const dataValueFormatSchema = z.enum(['MEASUREMENT_VALUE', 'CURRENT', 'VOLTAGE']);
+const optionalThresholdSchema = z.preprocess((value) => {
+  if (value === '' || value === null || value === undefined) return null;
+  return parseLeadingNumber(value);
+}, z.number().nullable());
 const parameterStatusSchema = trimmedString(64)
   .nullable()
   .optional()
@@ -71,16 +75,24 @@ const modbusChannelSchema = z
     dataType: trimmedString(128),
     unit: z.string().trim().max(64).optional().default(''),
     valueRange: measurementRangeSchema,
+    alertLow: optionalThresholdSchema.optional().default(null),
+    alertHigh: optionalThresholdSchema.optional().default(null),
     valueFormat: dataValueFormatSchema.nullable().optional().default('MEASUREMENT_VALUE'),
     offset: z.number(),
     encoding: modbusEncodingSchema,
     status: parameterStatusSchema,
   })
   .strict()
+  .refine(hasValidAlertThresholdOrder, {
+    message: 'alertLow must be less than or equal to alertHigh',
+    path: ['alertLow'],
+  })
   .transform((channel) => ({
     addressId: channel.addressId,
     dataType: toChannelDataType(channel.dataType, channel.unit),
     valueRange: channel.valueRange,
+    alertLow: channel.alertLow,
+    alertHigh: channel.alertHigh,
     valueFormat: channel.valueFormat ?? 'MEASUREMENT_VALUE',
     offset: channel.offset,
     encoding: channel.encoding,
@@ -92,13 +104,21 @@ const databaseChannelSchema = z
     addressId,
     dataType: trimmedString(128),
     unit: z.string().trim().max(64).optional().default(''),
+    alertLow: optionalThresholdSchema.optional().default(null),
+    alertHigh: optionalThresholdSchema.optional().default(null),
     offset: z.number(),
     status: parameterStatusSchema,
   })
   .strict()
+  .refine(hasValidAlertThresholdOrder, {
+    message: 'alertLow must be less than or equal to alertHigh',
+    path: ['alertLow'],
+  })
   .transform((channel) => ({
     addressId: channel.addressId,
     dataType: toChannelDataType(channel.dataType, channel.unit),
+    alertLow: channel.alertLow,
+    alertHigh: channel.alertHigh,
     offset: channel.offset,
     status: channel.status,
   }));
@@ -239,10 +259,7 @@ export const createDeviceConnectionConfigsSchema = z
 
 export const createDeviceConnectionConfigRequestSchema = z.preprocess(
   normalizeStructuredDeviceConfigPayload,
-  z.union([
-    createDeviceConnectionConfigsSchema,
-    createDeviceConnectionConfigSchema,
-  ]),
+  z.union([createDeviceConnectionConfigsSchema, createDeviceConnectionConfigSchema]),
 );
 
 export const testDeviceConnectionSchema = createDeviceConnectionConfigSchema;
@@ -330,7 +347,11 @@ function readDeviceCode(value: unknown): string | null {
   return trimmed || null;
 }
 
-function isChannelForDevice(channel: unknown, deviceCode: string | null, deviceCount: number): boolean {
+function isChannelForDevice(
+  channel: unknown,
+  deviceCode: string | null,
+  deviceCount: number,
+): boolean {
   if (!isRecord(channel)) return false;
   const channelDeviceCode = readDeviceCode(channel.deviceCode);
   if (channelDeviceCode !== null) return channelDeviceCode === deviceCode;
@@ -348,6 +369,15 @@ function toChannelDataType(dataType: string, unit?: string): string {
   return `${dataType} (${trimmedUnit})`;
 }
 
+function hasValidAlertThresholdOrder(channel: {
+  alertLow?: number | null;
+  alertHigh?: number | null;
+}): boolean {
+  if (channel.alertLow === null || channel.alertLow === undefined) return true;
+  if (channel.alertHigh === null || channel.alertHigh === undefined) return true;
+  return channel.alertLow <= channel.alertHigh;
+}
+
 function isLegacyModbusRtuPayload(value: Record<string, unknown>): boolean {
   if (typeof value.protocol === 'string') return false;
   return typeof value.connection === 'string' && normalizeToken(value.connection) === 'MODBUS_RTU';
@@ -359,11 +389,14 @@ function normalizeLegacyModbusChannels(value: unknown): unknown {
     if (!isRecord(channel)) return channel;
     const normalized: Record<string, unknown> = {
       addressId: parseLeadingNumber(channel.addressID),
-      dataType: typeof channel.parameter === 'string' ? channel.parameter.trim() : channel.parameter,
+      dataType:
+        typeof channel.parameter === 'string' ? channel.parameter.trim() : channel.parameter,
       valueRange: {
         min: parseLeadingNumber(channel.min),
         max: parseLeadingNumber(channel.max),
       },
+      alertLow: parseLeadingNumber(channel.alertLow),
+      alertHigh: parseLeadingNumber(channel.alertHigh),
       valueFormat: normalizeValueFormat(channel.format),
       offset: parseLeadingNumber(channel.offset),
       encoding: normalizeEncoding(channel.encodingData),

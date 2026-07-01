@@ -35,6 +35,8 @@ export interface IntegrationParameterConfigDTO {
   parameterName: string | null;
   parameterUnit: string | null;
   valueRange: { min: number; max: number } | null;
+  alertLow: number | null;
+  alertHigh: number | null;
   valueFormat: string | null;
   offset: number;
   encoding: string | null;

@@ -91,6 +91,8 @@ function toParameterConfig(
     parameterName: parameterParts.name,
     parameterUnit: parameterParts.unit,
     valueRange: channel.valueRange ?? null,
+    alertLow: channel.alertLow ?? null,
+    alertHigh: channel.alertHigh ?? null,
     valueFormat: channel.valueFormat ?? null,
     offset: channel.offset,
     encoding: channel.encoding ?? null,

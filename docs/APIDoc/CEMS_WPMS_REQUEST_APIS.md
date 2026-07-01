@@ -2404,6 +2404,8 @@ Path params:
       "addressId": 40001,
       "dataType": "NOx (ppm)",
       "valueRange": { "min": 0, "max": 200 },
+      "alertLow": 50,
+      "alertHigh": 180,
       "valueFormat": "MEASUREMENT_VALUE",
       "offset": 0,
       "encoding": "UNSIGNED16_BIG_ENDIAN",
@@ -2462,6 +2464,8 @@ Path params:
         "addressId": 40001,
         "dataType": "CO2 (%)",
         "valueRange": { "min": 20, "max": 200 },
+        "alertLow": 40,
+        "alertHigh": 180,
         "valueFormat": "MEASUREMENT_VALUE",
         "offset": 1,
         "encoding": "SIGNED16_BIG_ENDIAN",
@@ -2472,6 +2476,8 @@ Path params:
         "addressId": 40002,
         "dataType": "CO2 (ppm)",
         "valueRange": { "min": 0, "max": 180 },
+        "alertLow": null,
+        "alertHigh": 160,
         "valueFormat": "MEASUREMENT_VALUE",
         "offset": 1,
         "encoding": "SIGNED16_BIG_ENDIAN",
@@ -2528,6 +2534,8 @@ Data dictionary:
 | `config.channels[].dataType` | string | Yes | ชื่อพารามิเตอร์เต็มตามที่แสดงในฟอร์ม เช่น `CO2 (%)`, `CO2 (ppm)`, `NOx (ppm)`; backend เก็บตามค่าที่ส่งมา ไม่ตัดหรือประกอบหน่วยเอง |
 | `config.channels[].valueRange.min` | number|null | No | ค่าต่ำสุดของช่วงข้อมูล |
 | `config.channels[].valueRange.max` | number|null | No | ค่าสูงสุดของช่วงข้อมูล |
+| `config.channels[].alertLow` | number|null | No | ค่า Alert(Low) ของพารามิเตอร์; ถ้าไม่กรอกส่ง `null` หรือไม่ส่ง field ได้ |
+| `config.channels[].alertHigh` | number|null | No | ค่า Alert(High) ของพารามิเตอร์; ถ้าไม่กรอกส่ง `null` หรือไม่ส่ง field ได้ |
 | `config.channels[].valueFormat` | string|null | No | รูปแบบค่า: `MEASUREMENT_VALUE`, `CURRENT`, `VOLTAGE` |
 | `config.channels[].offset` | number|null | No | offset |
 | `config.channels[].encoding` | string|null | No | รูปแบบ encoding |

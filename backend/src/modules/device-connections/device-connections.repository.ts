@@ -26,6 +26,8 @@ interface DeviceMeasurementChannelRow {
   address_id: number | string;
   data_type: string;
   value_range_json: string | null;
+  alert_low: number | string | null;
+  alert_high: number | string | null;
   value_format: 'MEASUREMENT_VALUE' | 'CURRENT' | 'VOLTAGE' | null;
   offset_value: number | string;
   encoding: DeviceMeasurementChannelInput['encoding'];
@@ -380,6 +382,8 @@ async function insertChannels(
       address_id: channel.addressId,
       data_type: toStoredChannelDataType(channel),
       value_range_json: channel.valueRange ? JSON.stringify(channel.valueRange) : null,
+      alert_low: channel.alertLow ?? null,
+      alert_high: channel.alertHigh ?? null,
       value_format: channel.valueFormat ?? null,
       offset_value: channel.offset,
       encoding: channel.encoding ?? null,
@@ -396,6 +400,8 @@ function toChannelDTO(row: DeviceMeasurementChannelRow): DeviceMeasurementChanne
     dataType: row.data_type,
     offset: Number(row.offset_value),
     ...(row.value_range_json ? { valueRange: parseMeasurementRange(row.value_range_json) } : {}),
+    alertLow: toNullableNumber(row.alert_low),
+    alertHigh: toNullableNumber(row.alert_high),
     ...(row.value_format ? { valueFormat: row.value_format } : {}),
     ...(row.encoding ? { encoding: row.encoding } : {}),
     status: row.parameter_status ?? 'Normal',
@@ -469,4 +475,10 @@ function maskSensitiveSettings(settings: Record<string, unknown>): Record<string
 
 function toIsoString(value: Date | string): string {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+}
+
+function toNullableNumber(value: number | string | null): number | null {
+  if (value === null) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }

@@ -106,6 +106,8 @@ Response แยกเป็น 3 ชุด:
         "parameterName": "NOx",
         "parameterUnit": "ppm",
         "valueRange": { "min": 0, "max": 200 },
+        "alertLow": 50,
+        "alertHigh": 180,
         "valueFormat": "MEASUREMENT_VALUE",
         "offset": 0,
         "encoding": "UNSIGNED16_BIG_ENDIAN",
@@ -120,6 +122,8 @@ Response แยกเป็น 3 ชุด:
         "parameterName": "SO2",
         "parameterUnit": "ppm",
         "valueRange": { "min": 0, "max": 500 },
+        "alertLow": null,
+        "alertHigh": null,
         "valueFormat": "MEASUREMENT_VALUE",
         "offset": 0,
         "encoding": "UNSIGNED16_BIG_ENDIAN",
@@ -179,6 +183,8 @@ Response แยกเป็น 3 ชุด:
 | `parameterName` | string|null | ชื่อพารามิเตอร์ไม่รวมหน่วย เช่น `NOx` |
 | `parameterUnit` | string|null | หน่วยพารามิเตอร์ เช่น `ppm`; ถ้าไม่มีหน่วยส่ง `null` |
 | `valueRange` | object|null | ช่วงข้อมูลของ channel เช่น `{ "min": 0, "max": 200 }` |
+| `alertLow` | number|null | ค่า Alert(Low) ของ channel; ถ้าไม่ได้ตั้งค่าจะเป็น `null` |
+| `alertHigh` | number|null | ค่า Alert(High) ของ channel; ถ้าไม่ได้ตั้งค่าจะเป็น `null` |
 | `valueFormat` | string|null | `MEASUREMENT_VALUE`, `CURRENT`, `VOLTAGE` หรือ `null` |
 | `offset` | number | offset |
 | `encoding` | string|null | encoding สำหรับ Modbus |

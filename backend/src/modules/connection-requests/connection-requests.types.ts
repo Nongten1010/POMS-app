@@ -465,6 +465,8 @@ export interface DeviceConfigPayloadDTO {
     addressId: number;
     dataType: string;
     valueRange?: { min: number; max: number } | null;
+    alertLow?: number | null;
+    alertHigh?: number | null;
     valueFormat?: string | null;
     offset: number;
     encoding?: string | null;
@@ -509,6 +511,8 @@ export interface DeviceConfigFormParameterMappingDTO {
   parameter: string;
   min: string;
   max: string;
+  alertLow: string;
+  alertHigh: string;
   valueFormat: string;
   offset: string;
   encodingData: string;
