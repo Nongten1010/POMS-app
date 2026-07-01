@@ -40,6 +40,7 @@ import {
   type ListConnectedMeasurementPointsQuery,
   type ListConnectionRequestsQuery,
   type ListOperatorFactoriesQuery,
+  type ListPublicFactoryMapPointsQuery,
   type MeasurementPointDTO,
   type MeasurementPointInput,
   type OperatorFactoryDashboardRowDTO,
@@ -47,6 +48,7 @@ import {
   type OperatorFactoryTableRowDTO,
   type PaginatedConnectionRequestsDTO,
   type PaginatedTableRowsDTO,
+  type PublicFactoryMapPointDTO,
   type ResubmitConnectionRequestInput,
   type ReviewConnectionRequestInput,
   type VerifyConnectionInput,
@@ -283,6 +285,89 @@ export const connectionRequestsService = {
     );
 
     return { data: dataWithLatestHourlyMeasurements, meta: { total: data.length } };
+  },
+
+  async listPublicFactoryMapPoints(
+    query: ListPublicFactoryMapPointsQuery = {},
+  ): Promise<PaginatedTableRowsDTO<PublicFactoryMapPointDTO>> {
+    const factories = await connectionRequestsRepository.listFactoriesForAccess({
+      actorUserId: 0,
+      scope: 'ALL',
+      regionalAccess: undefined,
+    });
+    const eligibleFactories = factories.filter(
+      (factory) => factory.isEligible !== false && factory.isActive !== false,
+    );
+    const factoryIdByLookupKey = buildFactoryLookupKeyMap(eligibleFactories);
+    const [connectedPoints, factoryMainTypeLabels] = await Promise.all([
+      connectionRequestsRepository.listPublicConnectedMeasurementPointsForFactories([
+        ...factoryIdByLookupKey.keys(),
+      ]),
+      listFactoryMainTypeLabelsForDashboard(eligibleFactories),
+    ]);
+    const measurementPointsByFactory = new Map<string, CurrentFactoryMeasurementPointDTO[]>();
+
+    connectedPoints.forEach((point) => {
+      const factoryId = factoryIdByLookupKey.get(point.factoryId) ?? point.factoryId;
+      const currentPoints = measurementPointsByFactory.get(factoryId) ?? [];
+      measurementPointsByFactory.set(factoryId, [...currentPoints, { ...point, factoryId }]);
+    });
+
+    const data = eligibleFactories
+      .map<PublicFactoryMapPointDTO>((factory) => {
+        const currentMeasurementPoints = measurementPointsByFactory.get(factory.factoryId) ?? [];
+        const measurementPoints = currentMeasurementPoints
+          .map(toOperatorFactoryMeasurementPoint)
+          .map(toPublicFactoryMapMeasurementPoint);
+        const monitoringPointCountBySystem =
+          countMeasurementPointsBySystem(currentMeasurementPoints);
+
+        return {
+          id: factory.id,
+          factoryId: factory.factoryId,
+          factoryName: factory.factoryName,
+          newRegistrationNo: factory.newRegistrationNo,
+          oldRegistrationNo: factory.oldRegistrationNo,
+          industryMainOrder: factory.industryMainOrder,
+          industryMainOrderLabel:
+            (factory.industryMainOrder
+              ? factoryMainTypeLabels.get(factory.industryMainOrder)
+              : undefined) ??
+            factory.industryMainOrderLabel ??
+            null,
+          industrySubOrder: factory.industrySubOrder,
+          eia: factory.eia,
+          hasEia: factory.hasEia ?? null,
+          regionCode: factory.regionCode ?? factory.regionName ?? null,
+          regionName: factory.regionName ?? factory.regionCode ?? null,
+          provinceCode: factory.provinceCode ?? null,
+          provinceName: factory.provinceName ?? factory.province,
+          province: factory.province,
+          address: factory.address,
+          latitude: factory.latitude,
+          longitude: factory.longitude,
+          districtCode: factory.districtCode ?? null,
+          districtName: factory.districtName ?? null,
+          industrialAreaType:
+            factory.industrialAreaType ??
+            (factory.industrialEstateCode || factory.industrialEstateName
+              ? 'INDUSTRIAL_ESTATE'
+              : 'OUTSIDE_INDUSTRIAL_ESTATE'),
+          industrialAreaTypeLabel:
+            factory.industrialAreaTypeLabel ??
+            (factory.industrialEstateCode || factory.industrialEstateName
+              ? 'ในนิคมอุตสาหกรรม'
+              : 'นอกนิคมอุตสาหกรรม'),
+          industrialEstateCode: factory.industrialEstateCode ?? null,
+          industrialEstateName: factory.industrialEstateName ?? null,
+          monitoringPointCountBySystem,
+          status: 'แสดง',
+          measurementPoints,
+        };
+      })
+      .filter((factory) => matchesPublicFactoryMapPointsQuery(factory, query));
+
+    return { data, meta: { total: data.length } };
   },
 
   async setOperatorFactoryFavorite(
@@ -1460,6 +1545,13 @@ function toOperatorFactoryMeasurementPoint(
   };
 }
 
+function toPublicFactoryMapMeasurementPoint(
+  point: OperatorFactoryMeasurementPointDTO,
+): PublicFactoryMapPointDTO['measurementPoints'][number] {
+  const { data: _data, ...publicPoint } = point;
+  return publicPoint;
+}
+
 function getFactoryLogoUrl(points: CurrentFactoryMeasurementPointDTO[]): string | null {
   const cemsPoints = points.filter((point) => point.systemType === 'CEMS');
 
@@ -1690,6 +1782,20 @@ function matchesOperatorFactoryDashboardQuery(
     return false;
   }
   if (query.favoriteOnly && !factory.isFavorite) return false;
+  return true;
+}
+
+function matchesPublicFactoryMapPointsQuery(
+  factory: PublicFactoryMapPointDTO,
+  query: ListPublicFactoryMapPointsQuery,
+): boolean {
+  if (factory.measurementPoints.length === 0) return false;
+  if (
+    query.systemType &&
+    !factory.measurementPoints.some((point) => point.systemType === query.systemType)
+  ) {
+    return false;
+  }
   return true;
 }
 

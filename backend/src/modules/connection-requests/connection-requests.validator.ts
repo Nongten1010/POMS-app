@@ -889,6 +889,12 @@ export const listOperatorFactoriesQuerySchema = z
   })
   .strict();
 
+export const listPublicFactoryMapPointsQuerySchema = z
+  .object({
+    systemType: z.enum(['CEMS', 'WPMS']).optional(),
+  })
+  .strict();
+
 export const connectionRequestIdParamsSchema = z
   .object({
     id: z.coerce.number().int().min(1),

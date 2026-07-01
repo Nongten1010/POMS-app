@@ -14,6 +14,7 @@ jest.mock('../../src/modules/connection-requests/connection-requests.repository'
     listFactoryMainTypeLabels: jest.fn(),
     findFactoryGeneral: jest.fn(),
     listConnectedMeasurementPointsForFactories: jest.fn(),
+    listPublicConnectedMeasurementPointsForFactories: jest.fn(),
     listFavoriteFactoryIds: jest.fn(),
     listRequestsForFactories: jest.fn(),
     setFactoryFavorite: jest.fn(),
@@ -138,6 +139,7 @@ describe('connectionRequestsService', () => {
     mockedRepository.listFavoriteFactoryIds.mockResolvedValue([]);
     mockedRepository.listFactoryMainTypeLabels.mockResolvedValue(new Map());
     mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([]);
+    mockedRepository.listPublicConnectedMeasurementPointsForFactories.mockResolvedValue([]);
     mockedDeviceConnectionsService.listActiveSettings.mockResolvedValue([]);
     mockedDeviceConnectionsService.listByRequestId.mockResolvedValue([]);
     mockedDeviceConnectionsService.create.mockResolvedValue(deviceConnectionConfig());
@@ -898,6 +900,86 @@ describe('connectionRequestsService', () => {
       factoryId: 'factory-connected',
       measurementPoints: [{ stationId: 'S0001' }],
     });
+  });
+
+  it('returns only connected public factory map points without loading user-specific or raw measurement data', async () => {
+    mockedRepository.listFactoriesForAccess.mockResolvedValue([
+      factorySummary({
+        factoryId: 'factory-connected',
+        factoryName: 'โรงงานมีจุดตรวจวัด',
+      }),
+      factorySummary({
+        factoryId: 'factory-without-point',
+        factoryName: 'โรงงานไม่มีจุดตรวจวัด',
+      }),
+    ]);
+    mockedRepository.listFavoriteFactoryIds.mockResolvedValue(['factory-connected']);
+    mockedRepository.listPublicConnectedMeasurementPointsForFactories.mockResolvedValue([
+      {
+        factoryId: 'factory-connected',
+        stationId: 'S0001',
+        pointName: 'ปล่อง A',
+        pointCode: 'S0001',
+        systemType: 'CEMS',
+        parameters: ['NOx'],
+        data: [],
+      },
+    ]);
+    mockedParameterValuesService.latestHourly.mockResolvedValueOnce({
+      data: [
+        {
+          station_id: 'S0001',
+          nox_value: '10.5',
+          nox_units: 'ppm',
+          cdate: '2026-06-10',
+          ctime: '23:00:00',
+        },
+      ],
+      meta: {
+        stationId: 'S0001',
+        interval: '60m',
+        schemaName: 'ingest',
+        tableName: 'S0001_data_60m',
+        count: 1,
+        registeredParameters: ['NOx (ppm)'],
+        returnedColumns: ['station_id', 'nox_value', 'nox_units', 'cdate', 'ctime'],
+      },
+    });
+
+    const result = await connectionRequestsService.listPublicFactoryMapPoints();
+
+    expect(mockedRepository.listFactoriesForAccess).toHaveBeenCalledWith({
+      actorUserId: 0,
+      scope: 'ALL',
+      regionalAccess: undefined,
+    });
+    expect(mockedRepository.listPublicConnectedMeasurementPointsForFactories).toHaveBeenCalledWith(
+      expect.arrayContaining(['factory-connected', '3-106-33/50สบ']),
+    );
+    expect(mockedRepository.listConnectedMeasurementPointsForFactories).not.toHaveBeenCalled();
+    expect(mockedRepository.listFavoriteFactoryIds).not.toHaveBeenCalled();
+    expect(mockedParameterValuesService.latestHourly).not.toHaveBeenCalled();
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0]).toMatchObject({
+      factoryId: 'factory-connected',
+      monitoringPointCountBySystem: [
+        { systemType: 'CEMS', count: 1 },
+        { systemType: 'WPMS', count: 0 },
+      ],
+      measurementPoints: [
+        {
+          stationId: 'S0001',
+          pointName: 'ปล่อง A',
+          pointCode: 'S0001',
+          systemType: 'CEMS',
+          parameters: ['NOx (ppm)'],
+        },
+      ],
+    });
+    expect(result.data[0]).not.toHaveProperty('isFavorite');
+    expect(result.data[0]).not.toHaveProperty('factoryLogoUrl');
+    expect(result.data[0]).not.toHaveProperty('hasLatestHourlyMeasurement');
+    expect(result.data[0].measurementPoints[0]).not.toHaveProperty('data');
   });
 
   it('excludes factories that are not selected as eligible before displaying operator factories', async () => {

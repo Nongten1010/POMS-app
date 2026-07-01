@@ -163,6 +163,10 @@ export interface ListOperatorFactoriesQuery {
   connectedOnly?: boolean;
 }
 
+export interface ListPublicFactoryMapPointsQuery {
+  systemType?: ConnectionSystemType;
+}
+
 export interface ReviewConnectionRequestInput {
   decision: 'APPROVE_DESIGN' | 'REQUEST_REVISION';
   revisionReason?: string | null;
@@ -429,6 +433,15 @@ export interface OperatorFactoryMeasurementPointDTO {
   parameters: string[];
   data: Record<string, unknown>[];
 }
+
+export interface PublicFactoryMapPointDTO extends Omit<
+  OperatorFactoryDashboardRowDTO,
+  'factoryLogoUrl' | 'isFavorite' | 'hasLatestHourlyMeasurement' | 'measurementPoints'
+> {
+  measurementPoints: PublicFactoryMapMeasurementPointDTO[];
+}
+
+export type PublicFactoryMapMeasurementPointDTO = Omit<OperatorFactoryMeasurementPointDTO, 'data'>;
 
 export interface CurrentFactoryMeasurementPointDTO extends OperatorFactoryMeasurementPointDTO {
   factoryId: string;

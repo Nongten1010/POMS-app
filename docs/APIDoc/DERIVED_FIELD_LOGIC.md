@@ -94,6 +94,47 @@ Risk:
 
 - fallback index `3` อิงกับลำดับเอกสารของ frontend ปัจจุบัน หากลำดับฟอร์ม CEMS เปลี่ยน ควรอัปเดต logic หรือใช้ title เป็นหลักต่อไป
 
+## Public Factory Map Points
+
+Endpoint: `GET /api/v1/public/factory-map-points`
+
+Code:
+
+- `backend/src/modules/connection-requests/connection-requests.routes.ts`
+- `backend/src/modules/connection-requests/connection-requests.controller.ts`
+- `backend/src/modules/connection-requests/connection-requests.service.ts`
+
+### public map point rows
+
+Source:
+
+- Same eligible/visible factory summary source used by `GET /api/v1/operator-factory-dashboard`
+- `factories`, `eligible_factories`, `provinces`, `industrial_estates`
+- `cems_wpms_connected_measurement_points` for connected point counts and station metadata, selected without `documents_json`
+
+Logic:
+
+- The endpoint is intentionally public and does not require `Authorization`.
+- The service reads with factory scope `ALL` and no regional/user-owned filter.
+- Rows without connected measurement points are removed because they are not map points.
+- `systemType=CEMS|WPMS` filters by connected measurement point system type when supplied.
+- Rows reuse dashboard-derived location/type/count fields, then remove user-specific or internal fields:
+  - `isFavorite`
+  - `factoryLogoUrl`
+  - `hasLatestHourlyMeasurement`
+  - `measurementPoints[].data`
+- `measurementPoints[]` keeps only station/point identity, `systemType`, and parameter display labels.
+- Fallback order for all inherited dashboard-derived fields is unchanged from `GET /api/v1/operator-factory-dashboard`; this endpoint only applies the public-field removal step after those values are resolved.
+
+Reason:
+
+- The landing map must show factory points before login without exposing account-specific state or raw measurement payloads.
+- A separate public endpoint keeps the authenticated operator dashboard contract unchanged.
+
+Risk:
+
+- The endpoint exposes all visible eligible factories with at least one connected measurement point regardless of operator ownership; changes to public disclosure policy should be made here rather than by opening authenticated dashboard routes.
+
 ## Measurement Statistics
 
 Endpoint: `GET /api/v1/connected-measurement-points/:stationId/measurement-statistics`

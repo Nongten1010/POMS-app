@@ -6,6 +6,7 @@ jest.mock('../../src/modules/connection-requests/connection-requests.service', (
   connectionRequestsService: {
     listOperatorFactories: jest.fn(),
     listOperatorFactoryDashboard: jest.fn(),
+    listPublicFactoryMapPoints: jest.fn(),
     setOperatorFactoryFavorite: jest.fn(),
   },
 }));
@@ -102,6 +103,52 @@ describe('operator factory dashboard routes', () => {
       ],
       meta: { total: 1 },
     });
+    mockedConnectionRequestsService.listPublicFactoryMapPoints.mockResolvedValue({
+      data: [
+        {
+          id: 1,
+          factoryId: 'factory-001',
+          factoryName: 'บริษัท ทดสอบ จำกัด',
+          newRegistrationNo: '3-106-33/50สบ',
+          oldRegistrationNo: 'รง.4-เก่า-001',
+          industryMainOrder: '8802',
+          industryMainOrderLabel:
+            'ประเภทโรงงานลำดับที่ 88(2): การผลิตพลังงานไฟฟ้าจากพลังงานความร้อน',
+          industrySubOrder: null,
+          eia: 'ไม่มี',
+          hasEia: false,
+          regionCode: 'ภาคตะวันออก',
+          regionName: 'ภาคตะวันออก',
+          provinceCode: '24',
+          provinceName: 'ฉะเชิงเทรา',
+          province: 'ฉะเชิงเทรา',
+          address: '99 หมู่ 1',
+          latitude: '13.7563',
+          longitude: '100.5018',
+          districtCode: null,
+          districtName: null,
+          industrialAreaType: 'INDUSTRIAL_ESTATE',
+          industrialAreaTypeLabel: 'ในนิคมอุตสาหกรรม',
+          industrialEstateCode: 'MTP',
+          industrialEstateName: 'นิคมอุตสาหกรรมมาบตาพุด',
+          monitoringPointCountBySystem: [
+            { systemType: 'CEMS', count: 1 },
+            { systemType: 'WPMS', count: 0 },
+          ],
+          status: 'แสดง',
+          measurementPoints: [
+            {
+              stationId: 'S0001',
+              pointName: 'ปล่องระบาย A',
+              pointCode: 'S0001',
+              systemType: 'CEMS',
+              parameters: ['CO (ppm)'],
+            },
+          ],
+        },
+      ],
+      meta: { total: 1 },
+    });
     mockedConnectionRequestsService.setOperatorFactoryFavorite.mockResolvedValue({
       factoryId: 'factory-001',
       isFavorite: true,
@@ -173,6 +220,68 @@ describe('operator factory dashboard routes', () => {
       industrialEstateName: 'นิคมอุตสาหกรรมมาบตาพุด',
       hasLatestHourlyMeasurement: true,
     });
+  });
+
+  it('lists public factory map points without authentication and omits user-specific fields', async () => {
+    const app = createApp();
+
+    const response = await request(app).get('/api/v1/public/factory-map-points?systemType=CEMS');
+
+    expect(response.status).toBe(200);
+    expect(mockedConnectionRequestsService.listPublicFactoryMapPoints).toHaveBeenCalledWith({
+      systemType: 'CEMS',
+    });
+    expect(response.body).toEqual({
+      success: true,
+      data: [
+        {
+          id: 1,
+          factoryId: 'factory-001',
+          factoryName: 'บริษัท ทดสอบ จำกัด',
+          newRegistrationNo: '3-106-33/50สบ',
+          oldRegistrationNo: 'รง.4-เก่า-001',
+          industryMainOrder: '8802',
+          industryMainOrderLabel:
+            'ประเภทโรงงานลำดับที่ 88(2): การผลิตพลังงานไฟฟ้าจากพลังงานความร้อน',
+          industrySubOrder: null,
+          eia: 'ไม่มี',
+          hasEia: false,
+          regionCode: 'ภาคตะวันออก',
+          regionName: 'ภาคตะวันออก',
+          provinceCode: '24',
+          provinceName: 'ฉะเชิงเทรา',
+          province: 'ฉะเชิงเทรา',
+          address: '99 หมู่ 1',
+          latitude: '13.7563',
+          longitude: '100.5018',
+          districtCode: null,
+          districtName: null,
+          industrialAreaType: 'INDUSTRIAL_ESTATE',
+          industrialAreaTypeLabel: 'ในนิคมอุตสาหกรรม',
+          industrialEstateCode: 'MTP',
+          industrialEstateName: 'นิคมอุตสาหกรรมมาบตาพุด',
+          monitoringPointCountBySystem: [
+            { systemType: 'CEMS', count: 1 },
+            { systemType: 'WPMS', count: 0 },
+          ],
+          status: 'แสดง',
+          measurementPoints: [
+            {
+              stationId: 'S0001',
+              pointName: 'ปล่องระบาย A',
+              pointCode: 'S0001',
+              systemType: 'CEMS',
+              parameters: ['CO (ppm)'],
+            },
+          ],
+        },
+      ],
+      meta: { total: 1 },
+    });
+    expect(response.body.data[0]).not.toHaveProperty('isFavorite');
+    expect(response.body.data[0]).not.toHaveProperty('factoryLogoUrl');
+    expect(response.body.data[0]).not.toHaveProperty('hasLatestHourlyMeasurement');
+    expect(response.body.data[0].measurementPoints[0]).not.toHaveProperty('data');
   });
 
   it('does not expose the operator dashboard under cems-wpms requests', async () => {

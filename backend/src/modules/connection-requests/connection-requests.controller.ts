@@ -26,6 +26,7 @@ import {
   listConnectionRequestTableRowsQuerySchema,
   listConnectionRequestsQuerySchema,
   listOperatorFactoriesQuerySchema,
+  listPublicFactoryMapPointsQuerySchema,
   operatorFactoryFavoriteParamsSchema,
   operatorFactoryFavoriteSchema,
   resubmitConnectionRequestSchema,
@@ -96,6 +97,16 @@ export const connectionRequestsController = {
         { ...query, connectedOnly: true },
         ...getRegionalAccessArg(req),
       );
+      res.status(StatusCodes.OK).json({ success: true, ...result });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async listPublicFactoryMapPoints(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const query = listPublicFactoryMapPointsQuerySchema.parse(req.query);
+      const result = await connectionRequestsService.listPublicFactoryMapPoints(query);
       res.status(StatusCodes.OK).json({ success: true, ...result });
     } catch (err) {
       next(err);

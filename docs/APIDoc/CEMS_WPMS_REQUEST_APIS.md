@@ -2808,6 +2808,12 @@ curl "http://localhost:3000/api/v1/operator-factory-dashboard?systemType=CEMS" \
   -H "Authorization: Bearer $OPERATOR_TOKEN"
 ```
 
+สำหรับหน้า public map ก่อน login ให้ใช้ endpoint แยกที่ไม่ต้องส่ง `Authorization`:
+
+```bash
+curl "http://localhost:3000/api/v1/public/factory-map-points?systemType=CEMS"
+```
+
 ตัวอย่าง response:
 
 ```json
@@ -2869,6 +2875,112 @@ Data dictionary response row:
 | `monitoringPointCount` | number | จำนวนจุดตรวจวัด |
 | `requestStatusCode` | string|null | สถานะคำขอล่าสุดแบบ code |
 | `status` | string | สถานะการแสดงผลในตาราง |
+
+### API 8-public: GET จุดโรงงานบนแผนที่สำหรับผู้ใช้ที่ยังไม่ login
+
+| Item | Value |
+| --- | --- |
+| URL | `GET /api/v1/public/factory-map-points` |
+| Header | ไม่ต้องส่ง `Authorization` |
+| Body | ไม่มี |
+
+Query params:
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `systemType` | `CEMS`\|`WPMS` | No | กรองโรงงานที่มี connected measurement point ของระบบนั้น ถ้าไม่ส่งจะคืนทุกโรงงานที่มี connected measurement point อย่างน้อย 1 จุด |
+
+Endpoint นี้ใช้สำหรับแสดงจุดโรงงานบนหน้า public map ก่อน login โดยคืนเฉพาะโรงงานที่มี connected measurement point อย่างน้อย 1 จุด และคืนเฉพาะข้อมูลที่ใช้แสดง marker/filter เบื้องต้น ไม่คืนข้อมูลเฉพาะผู้ใช้ เช่น favorite, เอกสาร/logo, หรือ raw measurement data
+
+ตัวอย่าง request:
+
+```bash
+curl "http://localhost:3000/api/v1/public/factory-map-points?systemType=CEMS"
+```
+
+ตัวอย่าง response:
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "factoryId": "factory-001",
+      "factoryName": "บริษัท ทดสอบ จำกัด",
+      "newRegistrationNo": "3-106-33/50สบ",
+      "oldRegistrationNo": "รง.4-เก่า-001",
+      "industryMainOrder": "8802",
+      "industryMainOrderLabel": "ประเภทโรงงานลำดับที่ 88(2): การผลิตพลังงานไฟฟ้าจากพลังงานความร้อน",
+      "industrySubOrder": null,
+      "eia": "ไม่มี",
+      "hasEia": false,
+      "regionCode": "ภาคตะวันออก",
+      "regionName": "ภาคตะวันออก",
+      "provinceCode": "24",
+      "provinceName": "ฉะเชิงเทรา",
+      "province": "ฉะเชิงเทรา",
+      "address": "99 หมู่ 1",
+      "latitude": "13.7563",
+      "longitude": "100.5018",
+      "districtCode": null,
+      "districtName": null,
+      "industrialAreaType": "INDUSTRIAL_ESTATE",
+      "industrialAreaTypeLabel": "ในนิคมอุตสาหกรรม",
+      "industrialEstateCode": "MTP",
+      "industrialEstateName": "นิคมอุตสาหกรรมมาบตาพุด",
+      "monitoringPointCountBySystem": [
+        { "systemType": "CEMS", "count": 1 },
+        { "systemType": "WPMS", "count": 0 }
+      ],
+      "status": "แสดง",
+      "measurementPoints": [
+        {
+          "stationId": "S0001",
+          "pointName": "ปล่องระบาย A",
+          "pointCode": "S0001",
+          "systemType": "CEMS",
+          "parameters": ["CO (ppm)"]
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "total": 1
+  }
+}
+```
+
+Data dictionary response row:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `id` | number|null | primary key จาก `factories.id` สำหรับใช้เป็น row id |
+| `factoryId` | string | รหัสโรงงาน/รหัสอ้างอิงโรงงาน |
+| `factoryName` | string | ชื่อโรงงาน |
+| `newRegistrationNo` | string|null | เลขทะเบียนใหม่ |
+| `oldRegistrationNo` | string|null | เลขทะเบียนเก่า |
+| `industryMainOrder` | string|null | ลำดับโรงงานหลัก |
+| `industryMainOrderLabel` | string|null | ชื่อลำดับโรงงานหลักพร้อมคำอธิบายจาก DIW source เมื่อ lookup ได้ |
+| `industrySubOrder` | string|null | ลำดับโรงงานรอง |
+| `eia`, `hasEia` | string|null / boolean|null | สถานะ EIA แบบ label และ boolean |
+| `regionCode`, `regionName` | string|null | ภูมิภาคจาก master จังหวัด ปัจจุบันใช้ source เดียวกัน |
+| `provinceCode`, `provinceName`, `province` | string|null | จังหวัดของโรงงาน |
+| `address` | string|null | ที่อยู่โรงงาน |
+| `latitude`, `longitude` | string|null | พิกัดโรงงานสำหรับวาง marker |
+| `districtCode`, `districtName` | string|null | อำเภอ/เขต ถ้ามี source |
+| `industrialAreaType`, `industrialAreaTypeLabel` | string | ใน/นอกนิคมอุตสาหกรรม |
+| `industrialEstateCode`, `industrialEstateName` | string|null | รหัส/ชื่อนิคมอุตสาหกรรม |
+| `monitoringPointCountBySystem` | array | จำนวนจุดตรวจวัดแยกตาม `CEMS` / `WPMS` |
+| `status` | string | สถานะแสดงผลของ public map row |
+| `measurementPoints[]` | array | จุดตรวจวัดที่เชื่อมแล้ว เฉพาะ metadata สำหรับแผนที่ |
+
+Public endpoint นี้ตั้งใจไม่คืน field ต่อไปนี้:
+
+- `isFavorite`
+- `factoryLogoUrl`
+- `hasLatestHourlyMeasurement`
+- `measurementPoints[].data`
 
 ### API 8.1: PUT ติดดาว/ยกเลิกติดดาวโรงงาน
 

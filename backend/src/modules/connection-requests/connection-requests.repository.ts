@@ -515,6 +515,33 @@ export const connectionRequestsRepository = {
     }));
   },
 
+  async listPublicConnectedMeasurementPointsForFactories(
+    factoryIds: string[],
+  ): Promise<CurrentFactoryMeasurementPointDTO[]> {
+    const lookupKeys = [...new Set(factoryIds.filter((factoryId) => factoryId.trim().length > 0))];
+    if (lookupKeys.length === 0) return [];
+
+    const rows = await db<CurrentFactoryMeasurementPointRow>(
+      'cems_wpms_connected_measurement_points',
+    )
+      .whereNull('deleted_at')
+      .whereIn('factory_id', lookupKeys)
+      .select('factory_id', 'point_name', 'point_code', 'system_type', 'parameters_json')
+      .orderBy('factory_id', 'asc')
+      .orderBy('point_code', 'asc')
+      .orderBy('point_name', 'asc');
+
+    return rows.map((row) => ({
+      factoryId: row.factory_id,
+      stationId: row.point_code ?? row.point_name,
+      pointName: row.point_name,
+      pointCode: row.point_code,
+      systemType: row.system_type,
+      parameters: parseParameters(row.parameters_json),
+      data: [],
+    }));
+  },
+
   async create(
     input: CreateConnectionRequestInput,
     actorUserId: number,

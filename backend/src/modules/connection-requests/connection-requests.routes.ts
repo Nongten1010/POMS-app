@@ -12,6 +12,7 @@ import { connectionRequestsController } from './connection-requests.controller';
 export const connectionRequestsRoutes = Router();
 export const operatorFactoryDashboardRoutes = Router();
 export const operatorFactoryRoutes = Router();
+export const publicFactoryMapPointRoutes = Router();
 const documentImageUpload = multer({
   storage: multer.memoryStorage(),
   limits: {
@@ -37,6 +38,8 @@ operatorFactoryDashboardRoutes.get(
   authorize('factories:view'),
   connectionRequestsController.listOperatorFactoryDashboard,
 );
+
+publicFactoryMapPointRoutes.get('/', connectionRequestsController.listPublicFactoryMapPoints);
 
 operatorFactoryRoutes.put(
   '/:factoryId/favorite',
