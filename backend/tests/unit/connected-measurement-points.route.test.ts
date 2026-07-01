@@ -473,6 +473,17 @@ describe('connected measurement points route', () => {
     });
   });
 
+  it('rejects measurement statistics when the user only has request-view permission', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .get('/api/v1/connected-measurement-points/S0001/measurement-statistics?date=2026-06-09')
+      .set('Authorization', `Bearer ${requestViewOnlyAccessToken()}`);
+
+    expect(response.status).toBe(403);
+    expect(mockedConnectionRequestsService.getMeasurementStatistics).not.toHaveBeenCalled();
+  });
+
   it('rejects unsafe station ids before querying measurement statistics tables', async () => {
     const app = createApp();
 
@@ -494,6 +505,18 @@ function accessToken(): string {
     roles: ['officer'],
     scopes: {
       'cems_wpms_requests:view': 'ALL',
+      'dashboard.stats:view': 'ALL',
+    },
+  });
+}
+
+function requestViewOnlyAccessToken(): string {
+  return signAccessToken({
+    sub: '42',
+    userType: 'operator',
+    roles: ['factory_operator'],
+    scopes: {
+      'cems_wpms_requests:view': 'OWN_FACTORY',
     },
   });
 }

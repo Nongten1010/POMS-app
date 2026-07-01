@@ -235,7 +235,7 @@ export const connectionRequestsController = {
         stationId,
         query,
         actorUserId,
-        getScope(req, 'cems_wpms_requests:view'),
+        getScope(req, 'dashboard.stats:view'),
       );
       res.status(StatusCodes.OK).json({ success: true, ...result });
     } catch (err) {
@@ -252,7 +252,7 @@ export const connectionRequestsController = {
         stationId,
         query,
         actorUserId,
-        getScope(req, 'cems_wpms_requests:view'),
+        getScope(req, 'dashboard.stats:view'),
       );
       res.status(StatusCodes.OK).json({ success: true, ...result });
     } catch (err) {

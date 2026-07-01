@@ -29,12 +29,12 @@ connectedMeasurementPointsRoutes.get(
 );
 connectedMeasurementPointsRoutes.get(
   '/:stationId/measurement-statistics',
-  authorize('cems_wpms_requests:view'),
+  authorize('dashboard.stats:view'),
   connectionRequestsController.getMeasurementStatistics,
 );
 connectedMeasurementPointsRoutes.get(
   '/:stationId/calendar-status',
-  authorize('cems_wpms_requests:view'),
+  authorize('dashboard.stats:view'),
   connectionRequestsController.getCalendarStatus,
 );
 connectedMeasurementPointsRoutes.post(

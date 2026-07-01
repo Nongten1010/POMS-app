@@ -81,8 +81,8 @@ Mapping:
 | 12  | ดึงข้อมูลปัจจุบันลงฟอร์มเพิ่มพารามิเตอร์                     | GET    | `/connected-measurement-points/:stationId/parameter-form`  | `cems_wpms_requests:view`    |
 | 13  | ดึง config ปัจจุบันของจุดตรวจวัดที่เลือก                     | GET    | `/connected-measurement-points/:stationId/device-configs`  | `cems_wpms_requests:view`    |
 | 14  | บันทึก config ปัจจุบันของจุดตรวจวัดที่เลือก                  | POST   | `/connected-measurement-points/:stationId/device-configs`  | `cems_wpms_requests:edit`    |
-| 15  | ปฏิทินสถานะรายเดือนของจุดตรวจวัดที่เลือก                     | GET    | `/connected-measurement-points/:stationId/calendar-status` | `cems_wpms_requests:view`    |
-| 16  | สถิติรายชั่วโมง/กราฟแนวโน้มของจุดตรวจวัดที่เลือก             | GET    | `/connected-measurement-points/:stationId/measurement-statistics` | `cems_wpms_requests:view` |
+| 15  | ปฏิทินสถานะรายเดือนของจุดตรวจวัดที่เลือก                     | GET    | `/connected-measurement-points/:stationId/calendar-status` | `dashboard.stats:view`    |
+| 16  | สถิติรายชั่วโมง/กราฟแนวโน้มของจุดตรวจวัดที่เลือก             | GET    | `/connected-measurement-points/:stationId/measurement-statistics` | `dashboard.stats:view` |
 | 17  | Integration ดึง active device/parameter/status config         | GET    | `/integrations/device-configs/:stationId`                  | `X-API-Key`                  |
 
 รายละเอียด API integration สำหรับระบบภายนอกอยู่ใน [`INTEGRATION_DEVICE_CONFIGS.md`](./INTEGRATION_DEVICE_CONFIGS.md)

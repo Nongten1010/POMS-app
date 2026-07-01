@@ -35,7 +35,6 @@ const GRANTS: Grant[] = [
   // === factory_operator ===
   { role: 'factory_operator', permission: 'dashboard:view', scope: OWN },
   { role: 'factory_operator', permission: 'dashboard.alerts:view', scope: null },
-  { role: 'factory_operator', permission: 'dashboard.stats:view', scope: OWN },
   { role: 'factory_operator', permission: 'factories:view', scope: OWN },
   { role: 'factory_operator', permission: 'factories:edit', scope: null },
   { role: 'factory_operator', permission: 'cems_wpms_requests:view', scope: OWN },

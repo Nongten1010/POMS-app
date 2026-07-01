@@ -197,7 +197,7 @@ Header:
 Authorization: Bearer <accessToken>
 ```
 
-Permission: `cems_wpms_requests:view`
+Permission สำหรับ `calendar-status` และ `measurement-statistics`: `dashboard.stats:view`
 
 Data source:
 
