@@ -169,13 +169,13 @@ const measurementCriteriaSchema = z
       .strict(),
   )
   .superRefine((criteria, ctx) => {
-    if (criteria.enabled) return;
+    if (!criteria.enabled) return;
 
     if (criteria.standardValue === undefined || criteria.standardValue === null) {
       ctx.addIssue({
         code: 'custom',
         path: ['standardValue'],
-        message: 'standardValue is required when criteria is disabled',
+        message: 'standardValue is required when criteria is enabled',
       });
     }
 
@@ -209,16 +209,16 @@ const measurementCriteriaSchema = z
     });
   })
   .transform((criteria) => {
-    if (criteria.enabled) {
+    if (!criteria.enabled) {
       return {
-        enabled: true,
+        enabled: false,
         standardValue: null,
         rows: [],
       };
     }
 
     return {
-      enabled: false,
+      enabled: true,
       standardValue: criteria.standardValue,
       rows: criteria.rows ?? [],
     };

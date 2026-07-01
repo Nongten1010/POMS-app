@@ -192,7 +192,7 @@ describe('connection request validators', () => {
               {
                 ...measurementInstruments.parameters[0],
                 standardCriteria: {
-                  enabled: false,
+                  enabled: true,
                   standardValue: '120',
                   rows: [
                     { level: 'normal', min: 0, max: 80 },
@@ -201,7 +201,7 @@ describe('connection request validators', () => {
                   ],
                 },
                 eiaCriteria: {
-                  enabled: true,
+                  enabled: false,
                 },
               },
             ],
@@ -214,7 +214,7 @@ describe('connection request validators', () => {
     if (result.success) {
       const parameter = result.data.measurementPoints[0].measurementInstruments?.parameters[0];
       expect(parameter?.standardCriteria).toEqual({
-        enabled: false,
+        enabled: true,
         standardValue: '120',
         rows: [
           { level: 'normal', min: 0, max: 80 },
@@ -223,14 +223,14 @@ describe('connection request validators', () => {
         ],
       });
       expect(parameter?.eiaCriteria).toEqual({
-        enabled: true,
+        enabled: false,
         standardValue: null,
         rows: [],
       });
     }
   });
 
-  it('does not require criteria thresholds when criteria is enabled', () => {
+  it('does not require criteria thresholds when criteria is disabled', () => {
     const result = createConnectionRequestSchema.safeParse({
       ...validPayload,
       measurementPoints: [
@@ -242,10 +242,10 @@ describe('connection request validators', () => {
               {
                 ...measurementInstruments.parameters[0],
                 standardCriteria: {
-                  enabled: true,
+                  enabled: false,
                 },
                 eiaCriteria: {
-                  enabled: 'true',
+                  enabled: 'false',
                   standardValue: '',
                   rows: [{ level: 'normal', min: null, max: null }],
                 },
@@ -260,19 +260,74 @@ describe('connection request validators', () => {
     if (result.success) {
       const parameter = result.data.measurementPoints[0].measurementInstruments?.parameters[0];
       expect(parameter?.standardCriteria).toEqual({
-        enabled: true,
+        enabled: false,
         standardValue: null,
         rows: [],
       });
       expect(parameter?.eiaCriteria).toEqual({
-        enabled: true,
+        enabled: false,
         standardValue: null,
         rows: [],
       });
     }
   });
 
-  it('rejects disabled measurement criteria without all threshold levels', () => {
+  it('accepts WPMS submissions when standard criteria checkboxes are not selected', () => {
+    const result = createConnectionRequestSchema.safeParse({
+      ...validPayload,
+      systemType: 'WPMS',
+      measurementPoints: [
+        {
+          ...validPayload.measurementPoints[0],
+          pointName: 'จุดระบายน้ำทิ้ง A',
+          pointCode: 'P0001',
+          pointType: 'WASTEWATER',
+          parameters: ['BOD (mg/l)', 'COD (mg/l)'],
+          details: {
+            monitoringPointKind: 'WPMS',
+            averageWastewaterDischarge: 500,
+            minWastewaterDischarge: 300,
+            maxWastewaterDischarge: 800,
+            hasTreatmentSystem: 'มี',
+            treatmentSystem: 'ระบบบำบัดชีวภาพ',
+            maxTreatmentCapacity: 1000,
+            connectionDevice: 'POMS Box (กรอ.)',
+          },
+          measurementInstruments: {
+            ...measurementInstruments,
+            parameters: [
+              {
+                parameter: 'BOD (mg/l)',
+                standardCriteria: {
+                  enabled: false,
+                },
+                eiaCriteria: {
+                  enabled: false,
+                },
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const parameter = result.data.measurementPoints[0].measurementInstruments?.parameters[0];
+      expect(parameter?.standardCriteria).toEqual({
+        enabled: false,
+        standardValue: null,
+        rows: [],
+      });
+      expect(parameter?.eiaCriteria).toEqual({
+        enabled: false,
+        standardValue: null,
+        rows: [],
+      });
+    }
+  });
+
+  it('rejects enabled measurement criteria without all threshold levels', () => {
     const result = createConnectionRequestSchema.safeParse({
       ...validPayload,
       measurementPoints: [
@@ -284,7 +339,7 @@ describe('connection request validators', () => {
               {
                 ...measurementInstruments.parameters[0],
                 standardCriteria: {
-                  enabled: false,
+                  enabled: true,
                   standardValue: '120',
                   rows: [
                     { level: 'normal', min: 0, max: 80 },
@@ -301,7 +356,7 @@ describe('connection request validators', () => {
     expect(result.success).toBe(false);
   });
 
-  it('rejects disabled measurement criteria without a standard value', () => {
+  it('rejects enabled measurement criteria without a standard value', () => {
     const result = createConnectionRequestSchema.safeParse({
       ...validPayload,
       measurementPoints: [
@@ -313,7 +368,7 @@ describe('connection request validators', () => {
               {
                 ...measurementInstruments.parameters[0],
                 standardCriteria: {
-                  enabled: false,
+                  enabled: true,
                   rows: [
                     { level: 'normal', min: 0, max: 80 },
                     { level: 'warning', min: 80, max: 100 },
