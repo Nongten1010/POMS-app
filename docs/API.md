@@ -243,8 +243,8 @@ Backend accepts per-menu permission location fields:
 | Field | Type | Description |
 | --- | --- | --- |
 | `permissions.<module>.data` | string/null | `ALL`, `IN_REGION`, `IN_PROVINCE`, `IN_ESTATE`, `OWN_FACTORY`, หรือ `null` |
-| `permissions.<module>.region` | string/null | ใช้เมื่อ `data = IN_REGION`; backend เก็บใน `user_permissions.region_name` |
-| `permissions.<module>.province` | string/null | ใช้เมื่อ `data = IN_PROVINCE`; รับได้ทั้งชื่อจังหวัดไทยหรือรหัสจังหวัด แล้ว backend เก็บเป็น `user_permissions.province_id` |
+| `permissions.<module>.region` | string/null | ใช้เมื่อ `data = IN_REGION`; ส่ง `null`, `"all"`, หรือค่าว่างได้เพื่อไม่ล็อกภาค; ถ้ามีค่า backend เก็บใน `user_permissions.region_name` |
+| `permissions.<module>.province` | string/null | ใช้เมื่อ `data = IN_PROVINCE`; ส่ง `null`, `"all"`, หรือค่าว่างได้เพื่อไม่ล็อกจังหวัด; ถ้ามีค่ารับได้ทั้งชื่อจังหวัดไทยหรือรหัสจังหวัด แล้ว backend เก็บเป็น `user_permissions.province_id` |
 | `permissions.<module>.<action>` | boolean | เปิด/ปิด action ในเมนูนั้น เช่น `view`, `edit`, `approve`, `search` |
 
 Response จาก `GET /api/v1/users/:id` หลังบันทึก และ `POST /api/v1/auth/login` / `GET /api/v1/auth/me` สำหรับผู้ใช้เดียวกัน:

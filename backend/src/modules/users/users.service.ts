@@ -365,20 +365,6 @@ async function resolvePermissionOverride(
     };
   }
 
-  if (permission.scope === 'IN_REGION' && !region) {
-    throw new BadRequestError('Region is required for IN_REGION permission scope', {
-      permission: permission.code,
-      status: StatusCodes.BAD_REQUEST,
-    });
-  }
-
-  if (permission.scope === 'IN_PROVINCE' && !province) {
-    throw new BadRequestError('Province is required for IN_PROVINCE permission scope', {
-      permission: permission.code,
-      status: StatusCodes.BAD_REQUEST,
-    });
-  }
-
   if (!province) {
     return {
       ...permission,

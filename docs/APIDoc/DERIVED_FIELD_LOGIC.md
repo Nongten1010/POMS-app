@@ -129,8 +129,8 @@ Source:
 
 Transformation:
 
-- `permissions.<module>.data = IN_REGION` requires a non-empty `region`; backend stores it as `user_permissions.region_name`.
-- `permissions.<module>.data = IN_PROVINCE` requires a non-empty `province`; backend accepts either `provinces.id` or `provinces.name_th` and stores `provinces.id`.
+- `permissions.<module>.data = IN_REGION` accepts `region` as a string or `null`; backend stores non-empty values as `user_permissions.region_name`.
+- `permissions.<module>.data = IN_PROVINCE` accepts `province` as a string or `null`; backend accepts non-empty province values as either `provinces.id` or `provinces.name_th` and stores `provinces.id`.
 - For scopes other than `IN_REGION`, backend clears `region_name`.
 - For scopes other than `IN_PROVINCE`, backend clears `province_id`.
 - `GET /api/v1/users/:id`, `POST /api/v1/auth/login`, and `GET /api/v1/auth/me` return each permission group with `region` and `province`; `province` is the Thai display name when a province id is stored.
