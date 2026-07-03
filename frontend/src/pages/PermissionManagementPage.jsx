@@ -32,6 +32,8 @@ import DeleteIcon from '@mui/icons-material/Delete'
 import EditIcon from '@mui/icons-material/Edit'
 import SaveIcon from '@mui/icons-material/Save'
 import { DataGrid } from '@mui/x-data-grid'
+import provinceOptions from '../option/provinceOptions.json'
+import regionOptions from '../option/regionOptions.json'
 
 const usersApiUrl = import.meta.env.DEV
   ? '/api-proxy/v1/users?status=all'
@@ -78,6 +80,7 @@ const statusOptions = [
 const scopeOptions = [
   { label: 'ทั้งหมด', value: 'ALL' },
   { label: 'จังหวัด', value: 'IN_PROVINCE' },
+  { label: 'ภาค', value: 'IN_REGION' },
   { label: 'นิคม', value: 'IN_ESTATE' },
   { label: 'โรงงานตนเอง', value: 'OWN_FACTORY' },
   { label: 'ไม่อนุญาต', value: 'NONE' },
@@ -88,6 +91,7 @@ const permissionSections = [
     title: 'หน้าหลัก',
     permissionKey: 'dashboard',
     scope: true,
+    locationScope: true,
     permissions: [
       { label: 'ข้อมูลปัจจุบัน', action: 'view' },
       { label: 'Favorite', action: 'favorite' },
@@ -100,6 +104,7 @@ const permissionSections = [
     title: 'ข้อมูลพื้นฐาน',
     permissionKey: 'factories',
     scope: true,
+    locationScope: true,
     permissions: [
       { label: 'มีสิทธิ์ใช้งาน', action: 'view' },
       { label: 'การแก้ไข', action: 'edit' },
@@ -110,6 +115,7 @@ const permissionSections = [
     title: 'ขอเชื่อมต่อ',
     permissionKey: 'connection',
     scope: true,
+    locationScope: true,
     permissions: [
       { label: 'มีสิทธิ์ใช้งาน', action: 'view' },
       { label: 'การแก้ไข', action: 'edit' },
@@ -120,6 +126,7 @@ const permissionSections = [
     title: 'แจ้งแบบ กวภ. 01 - กวภ. 05',
     permissionKey: 'kwp_forms',
     scope: true,
+    locationScope: true,
     permissions: [
       { label: 'มีสิทธิ์ใช้งาน', action: 'view' },
       { label: 'การแก้ไข', action: 'edit' },
@@ -130,6 +137,7 @@ const permissionSections = [
     title: 'รายงานค่าความคลาดเคลื่อน BOD/COD Online',
     permissionKey: 'bod_cod_errors',
     scope: true,
+    locationScope: true,
     permissions: [
       { label: 'มีสิทธิ์ใช้งาน', action: 'view' },
       { label: 'การแก้ไข', action: 'edit' },
@@ -140,6 +148,7 @@ const permissionSections = [
     title: 'การแจ้งเตือน',
     permissionKey: 'notifications',
     scope: true,
+    locationScope: true,
     permissions: [
       { label: 'มีสิทธิ์ใช้งาน', action: 'view' },
       { label: 'สถานะการแจ้งเตือน', action: 'view_status' },
@@ -147,10 +156,16 @@ const permissionSections = [
       { label: 'อนุมัติ/อนุญาต', action: 'approve' },
     ],
   },
-  { title: 'สถิติข้อมูล', permissionKey: 'statistics', permissions: [{ label: 'มีสิทธิ์ใช้งาน', action: 'view' }] },
+  {
+    title: 'สถิติข้อมูล',
+    permissionKey: 'statistics',
+    locationScope: true,
+    permissions: [{ label: 'มีสิทธิ์ใช้งาน', action: 'view' }],
+  },
   {
     title: 'การสืบค้นข้อมูลแบบมีเงื่อนไข',
     permissionKey: 'conditional_search',
+    locationScope: true,
     permissions: [{ label: 'มีสิทธิ์ใช้งาน', action: 'view' }],
   },
   { title: 'แจ้งขอความช่วยเหลือ', permissionKey: 'helpdesk', permissions: [{ label: 'มีสิทธิ์ใช้งาน', action: 'view' }] },
@@ -234,11 +249,17 @@ function getPermissionDataValue(value) {
   return normalizedValue === 'NONE' ? null : normalizedValue
 }
 
+function getPermissionLocationValue(value) {
+  return String(value ?? 'all')
+}
+
 function buildPermissionsFromForm(formData, currentPermissions = {}) {
   return Object.fromEntries(
     permissionSections.map((section) => {
       const currentPermission = currentPermissions?.[section.permissionKey] ?? {}
       const scopeInput = formData.get(`permission.${section.permissionKey}.data`)
+      const regionInput = formData.get(`permission.${section.permissionKey}.region`)
+      const provinceInput = formData.get(`permission.${section.permissionKey}.province`)
       const permission = {
         data:
           scopeInput === null
@@ -246,6 +267,17 @@ function buildPermissionsFromForm(formData, currentPermissions = {}) {
               ? 'ALL'
               : currentPermission.data
             : getPermissionDataValue(scopeInput),
+      }
+
+      if (section.locationScope) {
+        permission.region =
+          regionInput === null
+            ? getPermissionLocationValue(currentPermission.region)
+            : getPermissionLocationValue(regionInput)
+        permission.province =
+          provinceInput === null
+            ? getPermissionLocationValue(currentPermission.province)
+            : getPermissionLocationValue(provinceInput)
       }
 
       section.permissions.forEach((item) => {
@@ -991,6 +1023,10 @@ function getScopeValue(value) {
   return value
 }
 
+function getLocationScopeValue(value) {
+  return value ?? 'all'
+}
+
 function isActionChecked(permission, action) {
   if (Array.isArray(action)) {
     return action.some((item) => permission?.[item] === true)
@@ -1001,6 +1037,9 @@ function isActionChecked(permission, action) {
 
 function PermissionSection({ section, permissions = {} }) {
   const permission = permissions?.[section.permissionKey]
+  const [scopeValue, setScopeValue] = useState(getScopeValue(permission?.data))
+  const isRegionEnabled = scopeValue === 'IN_REGION'
+  const isProvinceEnabled = scopeValue === 'IN_PROVINCE'
 
   return (
     <Box
@@ -1034,7 +1073,8 @@ function PermissionSection({ section, permissions = {} }) {
               labelId={`${section.title}-scope-label`}
               label="ข้อมูล"
               name={`permission.${section.permissionKey}.data`}
-              defaultValue={getScopeValue(permission?.data)}
+              value={scopeValue}
+              onChange={(event) => setScopeValue(event.target.value)}
             >
               {scopeOptions.map((scope) => (
                 <MenuItem key={scope.value} value={scope.value}>
@@ -1043,6 +1083,54 @@ function PermissionSection({ section, permissions = {} }) {
               ))}
             </Select>
           </FormControl>
+          {section.locationScope ? (
+            <FormControl fullWidth size="small">
+              <InputLabel id={`${section.title}-region-label`}>ภาค</InputLabel>
+              <Select
+                labelId={`${section.title}-region-label`}
+                label="ภาค"
+                name={`permission.${section.permissionKey}.region`}
+                defaultValue={getLocationScopeValue(permission?.region)}
+                disabled={!isRegionEnabled}
+              >
+                {regionOptions.map((region) => (
+                  <MenuItem key={region.value} value={region.value}>
+                    {region.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          ) : null}
+          {section.locationScope ? (
+            <FormControl fullWidth size="small">
+              <InputLabel id={`${section.title}-province-label`}>จังหวัด</InputLabel>
+              <Select
+                labelId={`${section.title}-province-label`}
+                label="จังหวัด"
+                name={`permission.${section.permissionKey}.province`}
+                defaultValue={getLocationScopeValue(permission?.province)}
+                disabled={!isProvinceEnabled}
+              >
+                {provinceOptions.map((province) => (
+                  <MenuItem key={province.value} value={province.value}>
+                    {province.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          ) : null}
+        </Box>
+        <Box
+          sx={{
+            display: 'grid',
+            gap: 1,
+            gridTemplateColumns: {
+              xs: '1fr',
+              sm: 'repeat(2, minmax(0, 1fr))',
+              lg: 'repeat(3, minmax(0, 1fr))',
+            },
+          }}
+        >
           {section.permissions.map((item) => (
             <FormControlLabel
               key={item.label}
