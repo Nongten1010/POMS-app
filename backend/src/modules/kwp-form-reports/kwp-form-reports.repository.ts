@@ -126,6 +126,18 @@ function buildFactoryQuery(
       }).andOnNull('cp.deleted_at');
     })
     .whereNull('f.deleted_at')
+    .whereExists(function connectedRequestFilter() {
+      this.select(db.raw('1'))
+        .from('cems_wpms_connection_requests as cr')
+        .whereNull('cr.deleted_at')
+        .where((requestBuilder) => {
+          requestBuilder
+            .whereRaw('cr.factory_id = f.fid')
+            .orWhereRaw('cr.factory_id = f.code')
+            .orWhereRaw('cr.factory_registration_no = f.code')
+            .orWhereRaw('cr.factory_registration_no = f.fid');
+        });
+    })
     .select(
       'f.id as factory_id',
       'f.fid as factory_fid',
