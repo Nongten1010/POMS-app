@@ -5,7 +5,8 @@ import { signAccessToken } from '../../shared/utils/jwt';
 import { verifyPassword, bufferToHashString } from '../../shared/utils/password';
 import { getIdentityProvider } from './identity-provider';
 import { authRepository } from './auth.repository';
-import { groupPermissions } from './permissions';
+import { flattenPermissionScopes, groupPermissions } from './permissions';
+import type { PermissionScopeDetails } from './permissions';
 import { inferRegionalAccessFromText, parseRegionalAccessJson } from './regional-access';
 import type { UserRow } from './auth.repository';
 import type { RegionalAccessDTO } from './regional-access';
@@ -341,14 +342,14 @@ function buildLoginResponse(args: {
   user: UserSummary;
   profile: OfficerProfileDTO | OperatorProfileDTO | null;
   roles: string[];
-  scopes: Record<string, string | null>;
+  scopes: Record<string, string | null | PermissionScopeDetails>;
 }): LoginResponse {
   const regionalAccess = getRegionalAccessFromProfile(args.profile);
   const accessToken = signAccessToken({
     sub: String(args.user.id),
     userType: args.user.userType,
     roles: args.roles,
-    scopes: args.scopes,
+    scopes: flattenPermissionScopes(args.scopes),
     regionalAccess,
   });
   return {
@@ -362,7 +363,7 @@ function buildMeResponse(args: {
   user: UserSummary;
   profile: OfficerProfileDTO | OperatorProfileDTO | null;
   roles: string[];
-  scopes: Record<string, string | null>;
+  scopes: Record<string, string | null | PermissionScopeDetails>;
 }): MeResponse {
   return {
     user: toAuthUserDTO(args.user, args.profile, args.roles),

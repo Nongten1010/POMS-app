@@ -83,7 +83,9 @@
       "export": true
     },
     "factories": {
-      "data": "ALL",
+      "data": "IN_PROVINCE",
+      "region": null,
+      "province": "ระยอง",
       "view": true,
       "edit": true,
       "approve": true
@@ -245,7 +247,7 @@ Backend accepts per-menu permission location fields:
 | `permissions.<module>.province` | string/null | ใช้เมื่อ `data = IN_PROVINCE`; รับได้ทั้งชื่อจังหวัดไทยหรือรหัสจังหวัด แล้ว backend เก็บเป็น `user_permissions.province_id` |
 | `permissions.<module>.<action>` | boolean | เปิด/ปิด action ในเมนูนั้น เช่น `view`, `edit`, `approve`, `search` |
 
-Response จาก `GET /api/v1/users/:id` หลังบันทึก:
+Response จาก `GET /api/v1/users/:id` หลังบันทึก และ `POST /api/v1/auth/login` / `GET /api/v1/auth/me` สำหรับผู้ใช้เดียวกัน:
 
 ```json
 {
@@ -280,6 +282,8 @@ Response จาก `GET /api/v1/users/:id` หลังบันทึก:
   }
 }
 ```
+
+หมายเหตุ: `accessToken` ยังเก็บ `scopes` เป็นค่า scope ต่อ permission code เช่น `"factories:view": "IN_PROVINCE"` เพื่อให้ middleware เดิมอ่านได้ ส่วนค่า `region`/`province` ส่งกลับใน `permissions` response สำหรับ frontend ใช้แสดงและ round-trip ฟอร์ม
 
 #### Role Codes
 

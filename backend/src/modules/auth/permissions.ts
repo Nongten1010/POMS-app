@@ -130,6 +130,14 @@ export function permissionGroupsToPermissionOverrides(
   return overrides;
 }
 
+export function flattenPermissionScopes(
+  scopes: Record<string, string | null | PermissionScopeDetails>,
+): Record<string, PermissionDataScope> {
+  return Object.fromEntries(
+    Object.entries(scopes).map(([code, details]) => [code, toScopeDetails(details).scope]),
+  );
+}
+
 function permissionCodesFromAlias(module: string, action: string): string[] {
   const matchedCodes = Object.entries(permissionAliases)
     .filter(([, aliases]) =>

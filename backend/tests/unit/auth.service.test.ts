@@ -220,7 +220,11 @@ describe('authService login completion', () => {
     mockedAuthRepository.getRolesAndPermissions.mockResolvedValue({
       roles: ['diw_central'],
       scopes: {
-        'dashboard:view': 'ALL',
+        'dashboard:view': {
+          scope: 'IN_REGION',
+          region: 'ภาคตะวันออก',
+          province: null,
+        },
       },
     });
 
@@ -237,9 +241,23 @@ describe('authService login completion', () => {
       department: 'กรมโรงงานอุตสาหกรรม',
       lineNameTh: 'นักวิทยาศาสตร์',
       levelNameTh: 'ชำนาญการ',
+      provinceId: null,
       roles: 'diw_central',
       isActive: true,
     });
+    expect(result.permissions.dashboard).toEqual({
+      data: 'IN_REGION',
+      region: 'ภาคตะวันออก',
+      province: null,
+      view: true,
+    });
+    expect(mockedSignAccessToken).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scopes: {
+          'dashboard:view': 'IN_REGION',
+        },
+      }),
+    );
     expect(mockedAuthRepository.updateLastLogin).toHaveBeenCalledWith(44);
   });
 
@@ -324,6 +342,7 @@ describe('authService login completion', () => {
         department: 'กรมโรงงานอุตสาหกรรม',
         lineNameTh: 'เจ้าหน้าที่',
         levelNameTh: 'ปฏิบัติการ',
+        provinceId: '1',
         roles: 'diw_central',
         isActive: true,
         regionalAccess: { regions: ['ภาคตะวันออก'] },

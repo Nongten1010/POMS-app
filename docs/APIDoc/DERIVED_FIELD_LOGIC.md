@@ -133,7 +133,8 @@ Transformation:
 - `permissions.<module>.data = IN_PROVINCE` requires a non-empty `province`; backend accepts either `provinces.id` or `provinces.name_th` and stores `provinces.id`.
 - For scopes other than `IN_REGION`, backend clears `region_name`.
 - For scopes other than `IN_PROVINCE`, backend clears `province_id`.
-- `GET /api/v1/users/:id` returns each permission group with `region` and `province`; `province` is the Thai display name when a province id is stored.
+- `GET /api/v1/users/:id`, `POST /api/v1/auth/login`, and `GET /api/v1/auth/me` return each permission group with `region` and `province`; `province` is the Thai display name when a province id is stored.
+- JWT `scopes` are flattened back to the broad scope string, such as `IN_REGION`, so existing authorization middleware can keep reading `req.user.scopes[permissionCode]`.
 
 Reason:
 
@@ -141,7 +142,7 @@ Reason:
 
 Known risks:
 
-- Runtime read filters must opt into these per-permission location fields. Existing routes that only read JWT `scopes` still know the broad scope value but not the per-menu selected region/province until their query layer is extended.
+- Runtime read filters that need the exact selected `region`/`province` must receive those values from the response contract or perform a DB lookup; the JWT intentionally carries only the broad scope value.
 
 ## Operator Factory Dashboard
 

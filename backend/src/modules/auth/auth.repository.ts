@@ -1,4 +1,5 @@
 import { db } from '../../config/database';
+import type { PermissionScopeDetails } from './permissions';
 import type { Knex } from 'knex';
 import type {
   ExternalOfficerProfile,
@@ -181,7 +182,7 @@ export const authRepository = {
 
   async getRolesAndPermissions(userId: number): Promise<{
     roles: string[];
-    scopes: Record<string, string | null>;
+    scopes: Record<string, string | null | PermissionScopeDetails>;
   }> {
     const roles: Array<{ code: string }> = await db('user_roles')
       .join('roles', 'user_roles.role_id', 'roles.id')
@@ -195,15 +196,23 @@ export const authRepository = {
       .where('user_roles.user_id', userId)
       .select('permissions.code as code', 'role_permissions.scope as scope');
 
-    const userPerms: Array<{ code: string; scope: string | null; effect: 'allow' | 'deny' }> =
-      await db('user_permissions')
-        .join('permissions', 'user_permissions.permission_id', 'permissions.id')
-        .where('user_permissions.user_id', userId)
-        .select(
-          'permissions.code as code',
-          'user_permissions.scope as scope',
-          'user_permissions.effect as effect',
-        );
+    const userPerms: Array<{
+      code: string;
+      scope: string | null;
+      effect: 'allow' | 'deny';
+      region_name: string | null;
+      province_name: string | null;
+    }> = await db('user_permissions')
+      .join('permissions', 'user_permissions.permission_id', 'permissions.id')
+      .leftJoin('provinces', 'provinces.id', 'user_permissions.province_id')
+      .where('user_permissions.user_id', userId)
+      .select(
+        'permissions.code as code',
+        'user_permissions.scope as scope',
+        'user_permissions.effect as effect',
+        'user_permissions.region_name as region_name',
+        'provinces.name_th as province_name',
+      );
 
     // ถ้า user มี permission เดียวกันแต่หลาย scope จาก หลาย role → เอา scope กว้างที่สุด
     // priority: ALL > IN_PROVINCE > IN_ESTATE > OWN_FACTORY > null
@@ -214,10 +223,11 @@ export const authRepository = {
       IN_ESTATE: 2,
       OWN_FACTORY: 1,
     };
-    const scopes: Record<string, string | null> = {};
+    const scopes: Record<string, string | null | PermissionScopeDetails> = {};
     for (const p of perms) {
       const current = scopes[p.code];
-      const currentRank = current === undefined ? -1 : (priority[current ?? 'NULL'] ?? 0);
+      const currentScope = current && typeof current === 'object' ? current.scope : current;
+      const currentRank = current === undefined ? -1 : (priority[currentScope ?? 'NULL'] ?? 0);
       const newRank = priority[p.scope ?? 'NULL'] ?? 0;
       if (newRank >= currentRank) scopes[p.code] = p.scope;
     }
@@ -230,7 +240,11 @@ export const authRepository = {
         delete scopes[p.code];
         continue;
       }
-      scopes[p.code] = p.scope;
+      scopes[p.code] = {
+        scope: p.scope as PermissionScopeDetails['scope'],
+        region: p.region_name,
+        province: p.province_name,
+      };
     }
 
     return {
