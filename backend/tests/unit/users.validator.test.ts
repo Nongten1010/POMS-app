@@ -240,6 +240,59 @@ describe('managed users validators', () => {
     });
   });
 
+  it('accepts per-menu region and province scopes from the permission form', () => {
+    const result = updateManagedUserSchema.parse({
+      user: {
+        fullName: 'สมชาย ทดสอบ',
+        username: 'local_officer',
+        password: '',
+        roles: 'monitoring_5_centers',
+        isActive: true,
+      },
+      permissions: {
+        dashboard: {
+          data: 'IN_REGION',
+          region: 'ภาคตะวันออก',
+          province: 'all',
+          view: true,
+          search: true,
+        },
+        factories: {
+          data: 'IN_PROVINCE',
+          region: 'all',
+          province: 'ระยอง',
+          view: true,
+        },
+      },
+    });
+
+    expect((result as { permissionOverrides?: unknown }).permissionOverrides).toEqual(
+      expect.arrayContaining([
+        {
+          code: 'dashboard:view',
+          effect: 'allow',
+          scope: 'IN_REGION',
+          region: 'ภาคตะวันออก',
+          province: null,
+        },
+        {
+          code: 'dashboard.search:basic',
+          effect: 'allow',
+          scope: 'IN_REGION',
+          region: 'ภาคตะวันออก',
+          province: null,
+        },
+        {
+          code: 'factories:view',
+          effect: 'allow',
+          scope: 'IN_PROVINCE',
+          region: null,
+          province: 'ระยอง',
+        },
+      ]),
+    );
+  });
+
   it('normalizes all location dropdown values to clear form scope', () => {
     const result = updateManagedUserSchema.parse({
       user: {
@@ -310,7 +363,12 @@ describe('managed users validators', () => {
   it('accepts user permission allow and deny overrides', () => {
     const result = replaceUserPermissionsSchema.safeParse({
       permissions: [
-        { code: 'dashboard:view', effect: 'allow', scope: 'ALL' },
+        {
+          code: 'dashboard:view',
+          effect: 'allow',
+          scope: 'IN_REGION',
+          region: 'ภาคตะวันออก',
+        },
         { code: 'factories:edit', effect: 'deny' },
       ],
     });
