@@ -104,7 +104,8 @@ export interface ManagedUserDetailDTO extends ManagedUserTableDTO {
 
 export type ManagedUserSource = 'api' | 'created';
 
-export interface ManagedUserEditUserDTO extends AuthUserDTO {
+export interface ManagedUserEditUserDTO
+  extends Omit<AuthUserDTO, 'provinceId' | 'provinceName' | 'regionalAccess'> {
   source: ManagedUserSource;
 }
 

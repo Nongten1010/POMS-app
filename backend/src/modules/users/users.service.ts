@@ -66,12 +66,9 @@ export const usersService = {
         department: user.department,
         lineNameTh: user.lineNameTh,
         levelNameTh: user.levelNameTh,
-        provinceId: user.profile.provinceId,
-        provinceName: user.profile.provinceName,
         roles: user.roles,
         isActive: user.isActive,
         source: toManagedUserSource(user.identityProvider),
-        ...(user.profile.regionalAccess ? { regionalAccess: user.profile.regionalAccess } : {}),
       },
       permissions: groupPermissions(effectivePermissionDetails),
     };

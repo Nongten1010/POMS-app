@@ -165,9 +165,6 @@ describe('managed users validators', () => {
         department: 'กรมโรงงานอุตสาหกรรม',
         lineNameTh: 'นักวิทยาศาสตร์',
         levelNameTh: 'ชำนาญการ',
-        regionalAccess: {
-          regions: ['ภาคเหนือ'],
-        },
         roles: 'diw_central',
         isActive: true,
       },
@@ -199,9 +196,6 @@ describe('managed users validators', () => {
         departmentNameTh: 'กรมโรงงานอุตสาหกรรม',
         lineNameTh: 'นักวิทยาศาสตร์',
         levelNameTh: 'ชำนาญการ',
-        regionalAccess: {
-          regions: ['ภาคเหนือ'],
-        },
       },
       permissionOverrides: expect.arrayContaining([
         { code: 'dashboard:view', effect: 'allow', scope: 'ALL' },
@@ -210,32 +204,56 @@ describe('managed users validators', () => {
     });
   });
 
-  it('accepts edit response-shaped location fields from the permission form', () => {
+  it('rejects user-level location fields from the permission form payload', () => {
+    expect(() =>
+      updateManagedUserSchema.parse({
+        user: {
+          fullName: 'สมชาย ทดสอบ',
+          username: 'local_officer',
+          password: '',
+          provinceName: 'ระยอง',
+          regionName: 'ภาคตะวันออก',
+          roles: 'monitoring_5_centers',
+          isActive: true,
+        },
+        permissions: {
+          dashboard: {
+            data: 'IN_PROVINCE',
+            view: true,
+          },
+        },
+      }),
+    ).toThrow();
+  });
+
+  it('accepts edit response-shaped permissions as the only location source', () => {
     const result = updateManagedUserSchema.parse({
       user: {
         fullName: 'สมชาย ทดสอบ',
         username: 'local_officer',
         password: '',
-        provinceName: 'ระยอง',
-        regionName: 'ภาคตะวันออก',
         roles: 'monitoring_5_centers',
         isActive: true,
       },
       permissions: {
         dashboard: {
           data: 'IN_PROVINCE',
+          region: null,
+          province: 'ระยอง',
           view: true,
         },
       },
     });
 
     expect(result).toMatchObject({
-      profile: {
-        provinceName: 'ระยอง',
-        regionalAccess: { regions: ['ภาคตะวันออก'] },
-      },
       permissionOverrides: expect.arrayContaining([
-        { code: 'dashboard:view', effect: 'allow', scope: 'IN_PROVINCE' },
+        {
+          code: 'dashboard:view',
+          effect: 'allow',
+          scope: 'IN_PROVINCE',
+          region: undefined,
+          province: 'ระยอง',
+        },
       ]),
     });
   });
@@ -293,25 +311,36 @@ describe('managed users validators', () => {
     );
   });
 
-  it('normalizes all location dropdown values to clear form scope', () => {
+  it('normalizes all permission location dropdown values to clear menu scope location', () => {
     const result = updateManagedUserSchema.parse({
       user: {
         fullName: 'สมชาย ทดสอบ',
         username: 'local_officer',
         password: '',
-        provinceName: 'all',
-        regionName: 'all',
         roles: 'monitoring_5_centers',
         isActive: true,
       },
-    });
-
-    expect(result).toMatchObject({
-      profile: {
-        provinceName: null,
-        regionalAccess: null,
+      permissions: {
+        dashboard: {
+          data: 'IN_REGION',
+          region: 'all',
+          province: 'all',
+          view: true,
+        },
       },
     });
+
+    expect((result as { permissionOverrides?: unknown }).permissionOverrides).toEqual(
+      expect.arrayContaining([
+        {
+          code: 'dashboard:view',
+          effect: 'allow',
+          scope: 'IN_REGION',
+          region: null,
+          province: null,
+        },
+      ]),
+    );
   });
 
   it('accepts disabled permission actions in edit response-shaped update payloads', () => {

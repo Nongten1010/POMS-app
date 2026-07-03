@@ -116,9 +116,18 @@ export const usersController = {
 
 function ensureCanManageRegionalAccess(
   req: Request,
-  payload: { profile?: { regionalAccess?: unknown } },
+  payload: { profile?: unknown },
 ): void {
-  if (payload.profile?.regionalAccess === undefined) return;
+  if (!hasRegionalAccessPatch(payload.profile)) return;
   if (req.user?.scopes['permissions:manage'] !== undefined) return;
   throw new ForbiddenError('Missing required permission: permissions:manage');
+}
+
+function hasRegionalAccessPatch(profile: unknown): boolean {
+  return (
+    typeof profile === 'object' &&
+    profile !== null &&
+    'regionalAccess' in profile &&
+    (profile as { regionalAccess?: unknown }).regionalAccess !== undefined
+  );
 }

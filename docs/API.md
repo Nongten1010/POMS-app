@@ -192,7 +192,7 @@
 - `POST /api/v1/users/local-accounts`
 - `PATCH /api/v1/users/:id`
 
-ฟอร์มสามารถส่งจังหวัด/ภาคระดับ user profile ได้ใน object `user` ตอนแก้ไข หรือเป็น field ระดับบนสุดตอนสร้าง local account และสามารถส่งภาค/จังหวัดรายเมนูใน `permissions.<module>`:
+ฟอร์มสิทธิ์การใช้งานต้องส่งภาค/จังหวัดเฉพาะรายเมนูใน `permissions.<module>` เท่านั้น ไม่ส่ง `provinceId`, `provinceName`, `regionName`, `regions`, หรือ `regionalAccess` ใน object `user`:
 
 ```json
 {
@@ -203,8 +203,6 @@
     "department": "สำนักงานปลัดกระทรวงอุตสาหกรรม",
     "lineNameTh": "นักวิชาการอุตสาหกรรม",
     "levelNameTh": "ชำนาญการ",
-    "provinceName": "ระยอง",
-    "regionName": "ภาคตะวันออก",
     "roles": "monitoring_5_centers",
     "isActive": true
   },
@@ -226,18 +224,6 @@
 }
 ```
 
-Backend accepts user profile location fields:
-
-| Field | Type | Description |
-| --- | --- | --- |
-| `provinceId` | string/null | รหัสจังหวัด เช่น `1021`; backend ตรวจจาก master `provinces` ก่อนบันทึก |
-| `provinceName` | string/null | ชื่อจังหวัดไทย เช่น `ระยอง`; backend แปลงเป็น `provinceId` ก่อนบันทึก |
-| `regionName` | string/null | ชื่อภาคเดียว เช่น `ภาคตะวันออก`; backend บันทึกเป็น `regionalAccess.regions` |
-| `regions` | string[]/null | รายชื่อภาคหลายค่า; backend normalize เป็น `regionalAccess.regions` |
-| `regionalAccess` | object/null | รูปแบบ canonical `{ "regions": ["ภาคตะวันออก"] }` |
-
-ค่า dropdown `all`, ค่าว่าง, หรือ `null` จะถูกตีความเป็นการไม่จำกัด/ล้างค่า scope นั้น ไม่บันทึกเป็นชื่อภาคหรือจังหวัดจริง
-
 Backend accepts per-menu permission location fields:
 
 | Field | Type | Description |
@@ -257,13 +243,8 @@ Response จาก `GET /api/v1/users/:id` หลังบันทึก แล
     "department": "สำนักงานปลัดกระทรวงอุตสาหกรรม",
     "lineNameTh": "นักวิชาการอุตสาหกรรม",
     "levelNameTh": "ชำนาญการ",
-    "provinceId": "1021",
-    "provinceName": "ระยอง",
     "roles": "monitoring_5_centers",
-    "isActive": true,
-    "regionalAccess": {
-      "regions": ["ภาคตะวันออก"]
-    }
+    "isActive": true
   },
   "permissions": {
     "dashboard": {

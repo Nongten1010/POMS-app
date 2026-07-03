@@ -86,7 +86,8 @@ Transformation:
 
 - Create/update payload may send either `provinceId` or `provinceName`.
 - If a Thai province name is sent, backend resolves it through `dbo.provinces.name_th` and stores only the matching `provinces.id` in `officer_profiles.province_id`.
-- `GET /api/v1/users/:id` returns `provinceId` from the profile and `provinceName` from the joined province master.
+- Profile/detail endpoints may return `provinceId` from the profile and `provinceName` from the joined province master.
+- The permission-management edit contract does not accept or return user-level `provinceId` / `provinceName`; menu location scope must use `permissions.<module>.province`.
 - `all`, blank string, or `null` is treated as clearing the province scope value.
 
 Reason:
@@ -117,7 +118,7 @@ Reason:
 
 Known risks:
 
-- This is user-level regional access used by login/auth filtering. Per-menu location scope is stored separately on `user_permissions`.
+- This is user-level regional access used by login/auth filtering. The permission-management edit contract does not accept or return user-level `regionName`, `regions`, or `regionalAccess`; per-menu location scope is stored separately on `user_permissions`.
 
 ### `permissions.<module>.region` / `permissions.<module>.province`
 
@@ -133,7 +134,7 @@ Transformation:
 - `permissions.<module>.data = IN_PROVINCE` accepts `province` as a string or `null`; backend accepts non-empty province values as either `provinces.id` or `provinces.name_th` and stores `provinces.id`.
 - For scopes other than `IN_REGION`, backend clears `region_name`.
 - For scopes other than `IN_PROVINCE`, backend clears `province_id`.
-- `GET /api/v1/users/:id`, `POST /api/v1/auth/login`, and `GET /api/v1/auth/me` return each permission group with `region` and `province`; `province` is the Thai display name when a province id is stored.
+- Permission-management `GET /api/v1/users/:id`, `POST /api/v1/auth/login`, and `GET /api/v1/auth/me` return each permission group with `region` and `province`; `province` is the Thai display name when a province id is stored.
 - JWT `scopes` are flattened back to the broad scope string, such as `IN_REGION`, so existing authorization middleware can keep reading `req.user.scopes[permissionCode]`.
 
 Reason:

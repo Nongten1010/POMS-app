@@ -90,4 +90,63 @@ describe('usersService permissions', () => {
       7,
     );
   });
+
+  it('keeps province and region out of the permission-management user payload', async () => {
+    mockedUsersRepository.findById.mockResolvedValue({
+      id: 44,
+      userType: 'officer',
+      externalId: 'local_officer',
+      username: 'local_officer',
+      identityProvider: 'local',
+      prenameTh: null,
+      firstName: 'สมชาย ทดสอบ',
+      lastName: '',
+      email: null,
+      phone: null,
+      department: 'สำนักงานปลัดกระทรวงอุตสาหกรรม',
+      lineNameTh: 'นักวิชาการอุตสาหกรรม',
+      levelNameTh: 'ชำนาญการ',
+      roles: 'monitoring_5_centers',
+      isActive: true,
+      status: 'active',
+      profile: {
+        provinceId: '1021',
+        provinceName: 'ระยอง',
+        regionalAccess: { regions: ['ภาคตะวันออก'] },
+      },
+    } as never);
+    mockedUsersRepository.getUserPermissionOverrides.mockResolvedValue([
+      {
+        code: 'dashboard:view',
+        resource: 'dashboard',
+        action: 'view',
+        description: null,
+        scope: 'IN_REGION',
+        region: 'ภาคตะวันออก',
+        provinceId: null,
+        provinceName: null,
+        effect: 'allow',
+      },
+    ]);
+
+    const result = await usersService.getAuthDetailById(44);
+
+    expect(result.user).toEqual({
+      userType: 'officer',
+      username: 'local_officer',
+      fullName: 'สมชาย ทดสอบ',
+      department: 'สำนักงานปลัดกระทรวงอุตสาหกรรม',
+      lineNameTh: 'นักวิชาการอุตสาหกรรม',
+      levelNameTh: 'ชำนาญการ',
+      roles: 'monitoring_5_centers',
+      isActive: true,
+      source: 'created',
+    });
+    expect(result.permissions.dashboard).toMatchObject({
+      data: 'IN_REGION',
+      region: 'ภาคตะวันออก',
+      province: null,
+      view: true,
+    });
+  });
 });

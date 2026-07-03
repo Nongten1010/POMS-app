@@ -236,11 +236,6 @@ const editResponseUpdateSchema = z
         department: optionalTrimmedNonEmptyString(255),
         lineNameTh: optionalTrimmedNonEmptyString(128),
         levelNameTh: optionalTrimmedNonEmptyString(64),
-        provinceId: optionalFormScopeValue(32),
-        provinceName: optionalFormScopeValue(128),
-        regionName: optionalFormScopeValue(128),
-        regions: formRegionsSchema,
-        regionalAccess: regionalAccessSchema.nullable().optional(),
         roles: z.string().trim().min(1).max(32),
         isActive: z.boolean(),
         source: z.enum(['api', 'created']).optional(),
@@ -253,41 +248,14 @@ const editResponseUpdateSchema = z
     const permissionOverrides = permissions
       ? permissionGroupsToPermissionOverrides(permissions as PermissionGroups)
       : undefined;
-    const profile =
-      (() => {
-        const hasRegionInput =
-          user.regionalAccess !== undefined ||
-          user.regions !== undefined ||
-          user.regionName !== undefined;
-        const formRegionalAccess =
-          user.regionalAccess ??
-          (hasRegionInput
-            ? normalizeRegionalAccess({
-                regions: [
-                  ...(user.regions ?? []),
-                  ...(user.regionName ? [user.regionName] : []),
-                ],
-              })
-            : undefined);
-        return {
-          hasRegionInput,
-          formRegionalAccess,
-        };
-      })();
     const profilePatch =
       user.department !== undefined ||
       user.lineNameTh !== undefined ||
-      user.levelNameTh !== undefined ||
-      user.provinceId !== undefined ||
-      user.provinceName !== undefined ||
-      profile.hasRegionInput
+      user.levelNameTh !== undefined
         ? {
             departmentNameTh: user.department,
             lineNameTh: user.lineNameTh,
             levelNameTh: user.levelNameTh,
-            provinceId: user.provinceId,
-            provinceName: user.provinceName,
-            regionalAccess: profile.formRegionalAccess,
           }
         : undefined;
     return {
