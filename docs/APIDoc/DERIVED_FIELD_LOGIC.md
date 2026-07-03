@@ -9,6 +9,78 @@
 - ถ้า logic เป็นเพียง fallback ชั่วคราว ให้เขียนไว้ชัดเจนว่า fallback จากอะไรไปอะไร
 - ถ้าไม่แน่ใจว่า field ควรตีความอย่างไร ให้หยุดที่ raw value และถามก่อน
 
+## BOD/COD Online Deviation Report Frontend Table Fields
+
+Endpoints:
+
+- `GET /api/v1/bod-cod-deviation-reports/factories`
+- `GET /api/v1/bod-cod-deviation-reports`
+
+Code:
+
+- `backend/src/modules/bod-cod-deviations/bod-cod-deviation-reports.repository.ts`
+
+### Factory table aliases and measurement point rows
+
+Source:
+
+- Base rows: `dbo.cems_wpms_connected_measurement_points`
+- Optional enrichment: `dbo.factories`, `dbo.eligible_factories`, `dbo.provinces`, `dbo.industrial_estates`
+- Current-year report slots: `dbo.bod_cod_deviation_reports`
+
+Fallback order:
+
+- `factoryId` / `id`: `factories.fid` first, then `cems_wpms_connected_measurement_points.factory_id`
+- `province`: same value as `provinces.name_th`
+- `industryType`: `eligible_factories.business_activity` first, then `factories.system_detail`
+- `address`: `eligible_factories.address` first, then `cems_wpms_connected_measurement_points.factory_address`
+- `measurementPoints[].stationId`: `point_code` first, then `point_name`
+- report slot lookup: `connected_measurement_point_id` first, then `point_code`
+
+Transformation:
+
+- `factoryRegistration` and `newRegistrationNo` both come from `cems_wpms_connected_measurement_points.factory_registration_no` for frontend table compatibility.
+- `measurementPoints[].code`, `name`, and `type` are frontend aliases for `point_code`, `point_name`, and `system_type`.
+- `measurementPoints[].parameters` is a comma-separated display string parsed from `parameters_json`; the parsed array is also returned as `parameterCodes`.
+- `round1Status` and `round2Status` are Thai display labels derived from the two current Buddhist-year report slots. Missing slots return `ยังไม่ยื่น`.
+
+Reason:
+
+- The BOD/COD frontend table binds directly to `newRegistrationNo`, `oldRegistrationNo`, `province`, `measurementPoints[].code`, `measurementPoints[].name`, `measurementPoints[].type`, `measurementPoints[].parameters`, `round1Status`, and `round2Status`.
+- Keeping the backend aliases lets the frontend consume API rows without renaming columns.
+
+Known risks:
+
+- `oldRegistrationNo` depends on optional enrichment from `eligible_factories`; if no enrichment row matches, it returns `null`.
+- `parameters_json` may contain labels such as `BOD (mg/l)` instead of plain `BOD`; frontend filtering should keep checking for BOD/COD text rather than exact array values.
+
+### Report table frontend fields
+
+Source:
+
+- Base rows: `dbo.bod_cod_deviation_reports`
+- Measurement count: `dbo.bod_cod_deviation_measurements`
+- Optional factory/province filtering: `dbo.factories`, `dbo.provinces`
+
+Transformation:
+
+- `factoryRegistration` is an alias for `factory_registration_no`; `factoryRegistrationNo` is preserved for backend consumers.
+- `province` is an alias for `province_name`; `provinceName` is preserved.
+- `reportRound` is converted from numeric `report_round` to Thai display text such as `ครั้งที่ 1`; the numeric value is preserved as `reportRoundNo`.
+- `year` is an alias for numeric `report_year`; `reportYear` is preserved.
+- `status` is Thai display text for frontend chips; machine status is preserved as `statusCode`.
+- `submittedDate` is `submitted_at` formatted as `DD/MM/BBBB`.
+- `reviewedDate` is `-` while status is `DRAFT`, `SUBMITTED`, or `UNDER_REVIEW`; otherwise it uses `updated_at` formatted as `DD/MM/BBBB`.
+
+Reason:
+
+- The frontend report grid binds directly to `factoryRegistration`, `province`, `reportRound`, `year`, `submittedDate`, `reviewedDate`, and `status`.
+- `statusCode`, `reportRoundNo`, ISO datetime fields, and backend name fields remain available for workflow logic and future forms.
+
+Known risks:
+
+- There is no dedicated reviewed-at column in the first BOD/COD report schema, so `reviewedDate` uses `updated_at` after review-like statuses. If exact review timestamps become required, add a stored review timestamp and replace this fallback.
+
 ## Auth Regional Access
 
 Endpoints:

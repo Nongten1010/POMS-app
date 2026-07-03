@@ -1,0 +1,189 @@
+# BOD/COD Online Deviation Report APIs
+
+Base URL: `http://localhost:3000/api/v1`
+
+Authentication: `Authorization: Bearer <access_token>`
+
+Permission: `bod_cod_errors:view`
+
+Data source:
+
+- Factory table uses connected factories from `cems_wpms_connected_measurement_points`.
+- Factory enrichment is best effort from `factories`, `eligible_factories`, `provinces`, and `industrial_estates`; missing enrichment does not remove a connected factory from the response.
+- Request table uses `bod_cod_deviation_reports`, with measurement count from `bod_cod_deviation_measurements`.
+- Operator scope `OWN_FACTORY` is filtered through `user_juristics`.
+- Officer scope follows the `bod_cod_errors:view` permission scope and `regionalAccess` in the access token.
+
+## 1. Operator Factory Table
+
+สำหรับตาราง "รายชื่อโรงงาน" ของผู้ประกอบการ
+
+Link:
+
+```text
+GET /api/v1/bod-cod-deviation-reports/factories
+```
+
+Payload / query parameters:
+
+```text
+ไม่มี query parameter ในรอบแรก
+```
+
+cURL:
+
+```bash
+curl "http://localhost:3000/api/v1/bod-cod-deviation-reports/factories" \
+  -H "Authorization: Bearer <access_token>"
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "FID-001",
+      "factoryId": "FID-001",
+      "factoryName": "บริษัท ทดสอบน้ำเสีย จำกัด",
+      "factoryRegistration": "10520000225172",
+      "newRegistrationNo": "10520000225172",
+      "oldRegistrationNo": "3-1-2/17ลป",
+      "industryType": "ผลิตอาหารและเครื่องดื่ม",
+      "province": "ลำปาง",
+      "provinceName": "ลำปาง",
+      "regionName": "ภาคเหนือ",
+      "industrialEstateName": null,
+      "address": "99 หมู่ 1",
+      "eligibleFactoryId": 10,
+      "monitoringPointCount": 1,
+      "measurementPoints": [
+        {
+          "id": 9,
+          "stationId": "P0001",
+          "code": "P0001",
+          "name": "จุดระบายน้ำทิ้ง A",
+          "type": "WPMS",
+          "parameters": "BOD, COD",
+          "parameterCodes": ["BOD", "COD"],
+          "round1Status": "ส่งรายงานแล้ว",
+          "round2Status": "ยังไม่ยื่น",
+          "pointCode": "P0001",
+          "pointName": "จุดระบายน้ำทิ้ง A",
+          "pointType": "WASTEWATER",
+          "systemType": "WPMS",
+          "reportSlots": [
+            {
+              "roundNo": 1,
+              "year": 2569,
+              "status": "SUBMITTED",
+              "statusLabel": "ส่งรายงานแล้ว",
+              "reportId": 5,
+              "reportNo": "BODCOD-2569-0005"
+            },
+            {
+              "roundNo": 2,
+              "year": 2569,
+              "status": "NOT_SUBMITTED",
+              "statusLabel": "ยังไม่ยื่น",
+              "reportId": null,
+              "reportNo": null
+            }
+          ]
+        }
+      ],
+      "latestReportId": 5,
+      "latestReportNo": "BODCOD-2569-0005",
+      "latestReportStatus": "SUBMITTED",
+      "latestReportStatusLabel": "ส่งรายงานแล้ว"
+    }
+  ],
+  "meta": {
+    "total": 1
+  }
+}
+```
+
+## 2. Report Request Table
+
+สำหรับตาราง "รายการคำขอ"
+
+Link:
+
+```text
+GET /api/v1/bod-cod-deviation-reports
+```
+
+Payload / query parameters:
+
+| Query | Required | Values | Description |
+|---|---:|---|---|
+| `status` | No | `DRAFT`, `SUBMITTED`, `UNDER_REVIEW`, `WAITING_APPROVAL`, `APPROVED`, `REVISION_REQUESTED`, `CANCELLED` | กรองสถานะคำขอ |
+| `parameterCode` | No | `BOD`, `COD` | กรอง parameter ที่รายงาน |
+| `factoryId` | No | string | กรองโรงงานจาก `factories.id`, `factories.fid`, `factories.code`, หรือ `factory_registration_no` |
+
+cURL:
+
+```bash
+curl "http://localhost:3000/api/v1/bod-cod-deviation-reports?status=SUBMITTED&parameterCode=BOD" \
+  -H "Authorization: Bearer <access_token>"
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 5,
+      "reportNo": "BODCOD-2569-0005",
+      "reportRound": "ครั้งที่ 2",
+      "reportRoundNo": 2,
+      "reportYear": 2569,
+      "year": 2569,
+      "selectedParameterCode": "BOD",
+      "selectedParameterLabel": "BOD (mg/l)",
+      "factoryId": "FID-001",
+      "factoryName": "บริษัท ทดสอบน้ำเสีย จำกัด",
+      "factoryRegistration": "10520000225172",
+      "factoryRegistrationNo": "10520000225172",
+      "monitoringPointId": 9,
+      "monitoringPointCode": "P0001",
+      "monitoringPointName": "จุดระบายน้ำทิ้ง A",
+      "province": "ลำปาง",
+      "provinceName": "ลำปาง",
+      "approvalTrack": "REGIONAL",
+      "status": "ส่งรายงานแล้ว",
+      "statusCode": "SUBMITTED",
+      "statusLabel": "ส่งรายงานแล้ว",
+      "submittedDate": "01/07/2569",
+      "reviewedDate": "-",
+      "submittedAt": "2026-07-01T10:00:00.000Z",
+      "createdAt": "2026-07-01T09:00:00.000Z",
+      "updatedAt": "2026-07-01T10:00:00.000Z",
+      "measurementCount": 1
+    }
+  ],
+  "meta": {
+    "total": 1
+  }
+}
+```
+
+## Screen Usage
+
+ผู้ประกอบการ:
+
+- Call `GET /api/v1/bod-cod-deviation-reports/factories` for "รายชื่อโรงงาน".
+- Call `GET /api/v1/bod-cod-deviation-reports` for "รายการคำขอ".
+- Token should include `bod_cod_errors:view = OWN_FACTORY`.
+- `measurementPoints[].reportSlots[]` returns two current-year slots; the frontend can enable/disable BOD/COD report buttons from those slot statuses.
+- Frontend table fields are returned directly: `newRegistrationNo`, `oldRegistrationNo`, `province`, `measurementPoints[].code`, `measurementPoints[].name`, `measurementPoints[].type`, `measurementPoints[].parameters`, `measurementPoints[].round1Status`, and `measurementPoints[].round2Status`.
+
+เจ้าหน้าที่:
+
+- Call only `GET /api/v1/bod-cod-deviation-reports` for "รายการคำขอ".
+- Token should include `bod_cod_errors:view` with the officer's menu/data scope.
+- Frontend report table fields are returned directly: `factoryRegistration`, `province`, `reportRound`, `year`, `submittedDate`, `reviewedDate`, and Thai display `status`. Machine status is preserved as `statusCode`.

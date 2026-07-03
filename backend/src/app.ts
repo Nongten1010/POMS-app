@@ -23,6 +23,7 @@ import { integrationsRoutes } from './modules/integrations/integrations.routes';
 import { alertEventsRoutes } from './modules/alert-events/alert-events.routes';
 import { emailTestRoutes } from './modules/email-test/email-test.routes';
 import { monitoringPointFormsRoutes } from './modules/monitoring-point-forms/monitoring-point-forms.routes';
+import { bodCodDeviationReportsRoutes } from './modules/bod-cod-deviations/bod-cod-deviation-reports.routes';
 import { kwpFormReportsRoutes } from './modules/kwp-form-reports/kwp-form-reports.routes';
 
 export function createApp(): Application {
@@ -80,6 +81,7 @@ export function createApp(): Application {
   app.use(`${env.API_PREFIX}/device-connections`, deviceConnectionsRoutes);
   app.use(`${env.API_PREFIX}/parameter-values`, parameterValuesRoutes);
   app.use(`${env.API_PREFIX}/monitoring-point-forms`, monitoringPointFormsRoutes);
+  app.use(`${env.API_PREFIX}/bod-cod-deviation-reports`, bodCodDeviationReportsRoutes);
   app.use(`${env.API_PREFIX}/kwp-form-reports`, kwpFormReportsRoutes);
   app.use(`${env.API_PREFIX}/integrations`, integrationsRoutes);
   app.use(`${env.API_PREFIX}/alert-events`, alertEventsRoutes);
