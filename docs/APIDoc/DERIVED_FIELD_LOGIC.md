@@ -61,6 +61,64 @@ Known risks:
 - Text inference is intentionally limited to known abbreviations and should be replaced by explicit `regional_access_json` where possible.
 - Existing JWTs issued before a regional access change keep their previous claim until the user logs in again or refreshes the session.
 
+## Managed User Permission Form Location Fields
+
+Endpoints:
+
+- `GET /api/v1/users/:id`
+- `POST /api/v1/users/local-accounts`
+- `PATCH /api/v1/users/:id`
+
+Code:
+
+- `backend/src/modules/users/users.validator.ts`
+- `backend/src/modules/users/users.service.ts`
+- `backend/src/modules/users/users.repository.ts`
+
+### `user.provinceId` / `user.provinceName`
+
+Source:
+
+- Stored value: `dbo.officer_profiles.province_id`
+- Display value: `dbo.provinces.name_th`
+
+Transformation:
+
+- Create/update payload may send either `provinceId` or `provinceName`.
+- If a Thai province name is sent, backend resolves it through `dbo.provinces.name_th` and stores only the matching `provinces.id` in `officer_profiles.province_id`.
+- `GET /api/v1/users/:id` returns `provinceId` from the profile and `provinceName` from the joined province master.
+- `all`, blank string, or `null` is treated as clearing the province scope value.
+
+Reason:
+
+- The permission-management form uses province labels for users, while permission scope enforcement relies on stable province IDs.
+
+Known risks:
+
+- If the province master is missing or renamed, saving by `provinceName` fails with `Unknown province`; clients should prefer `provinceId` when possible.
+
+### `user.regionalAccess` from form region fields
+
+Source:
+
+- Form payload fields: `regionName`, `regions`, or canonical `regionalAccess`
+- Stored value: `dbo.officer_profiles.regional_access_json`
+
+Transformation:
+
+- `regionName` is converted to `{ "regions": ["..."] }`.
+- `regions` is normalized through the same `regionalAccess.regions` contract.
+- Canonical `regionalAccess` takes precedence when both canonical and form-specific region fields are sent.
+- `all`, blank string, or `null` clears the regional access value.
+
+Reason:
+
+- The existing regional filtering code already consumes `regionalAccess.regions`, so form-specific region inputs are normalized into that single backend contract.
+
+Known risks:
+
+- This stores a user-level regional access value, not per-module/per-section province or region scope. Per-section permission rows still store only `ALL`, `IN_PROVINCE`, `IN_ESTATE`, `OWN_FACTORY`, or `NULL`.
+
 ## Operator Factory Dashboard
 
 Endpoint: `GET /api/v1/operator-factory-dashboard`

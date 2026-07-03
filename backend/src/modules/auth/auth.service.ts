@@ -395,6 +395,7 @@ function toAuthUserDTO(
     department: officerProfile?.departmentNameTh ?? officerProfile?.departmentId ?? null,
     lineNameTh: officerProfile?.lineNameTh ?? null,
     levelNameTh: officerProfile?.levelNameTh ?? null,
+    provinceId: officerProfile?.provinceId ?? null,
     roles: roles[0] ?? user.userType,
     isActive: user.isActive,
     ...(officerProfile?.regionalAccess ? { regionalAccess: officerProfile.regionalAccess } : {}),

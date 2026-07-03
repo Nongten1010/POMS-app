@@ -65,6 +65,7 @@
     "department": "string",
     "lineNameTh": "string",
     "levelNameTh": "string",
+    "provinceId": "1021",
     "roles": "diw_central",
     "isActive": true,
     "regionalAccess": {
@@ -176,9 +177,55 @@
 | `department` | string | หน่วยงาน |
 | `lineNameTh` | string | สายงานภาษาไทย |
 | `levelNameTh` | string | ระดับภาษาไทย |
+| `provinceId` | string/null | รหัสจังหวัดของเจ้าหน้าที่จาก `officer_profiles.province_id`; ใช้กับ scope `IN_PROVINCE` |
+| `provinceName` | string/null | ชื่อจังหวัดภาษาไทยใน API จัดการผู้ใช้ ดึงจาก `provinces.name_th` ตาม `provinceId` |
 | `roles` | string | บทบาทผู้ใช้งาน ดูรายการค่าที่เป็นไปได้ในหัวข้อ Role Codes |
 | `isActive` | boolean | สถานะการใช้งาน |
 | `regionalAccess` | object/null | ภาคที่เจ้าหน้าที่รับผิดชอบ ถ้ามีค่า backend จะกรองคำขอ/โรงงานตาม `regions` เพิ่มจาก permission scope |
+
+#### Managed User Form Save Contract
+
+ใช้กับหน้าจัดการสิทธิ์การใช้งาน:
+
+- `POST /api/v1/users/local-accounts`
+- `PATCH /api/v1/users/:id`
+
+ฟอร์มสามารถส่งจังหวัด/ภาคได้ใน object `user` ตอนแก้ไข หรือเป็น field ระดับบนสุดตอนสร้าง local account:
+
+```json
+{
+  "user": {
+    "fullName": "สมชาย ทดสอบ",
+    "username": "local_officer",
+    "password": "",
+    "department": "สำนักงานปลัดกระทรวงอุตสาหกรรม",
+    "lineNameTh": "นักวิชาการอุตสาหกรรม",
+    "levelNameTh": "ชำนาญการ",
+    "provinceName": "ระยอง",
+    "regionName": "ภาคตะวันออก",
+    "roles": "monitoring_5_centers",
+    "isActive": true
+  },
+  "permissions": {
+    "dashboard": {
+      "data": "IN_PROVINCE",
+      "view": true
+    }
+  }
+}
+```
+
+Backend accepts:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `provinceId` | string/null | รหัสจังหวัด เช่น `1021`; backend ตรวจจาก master `provinces` ก่อนบันทึก |
+| `provinceName` | string/null | ชื่อจังหวัดไทย เช่น `ระยอง`; backend แปลงเป็น `provinceId` ก่อนบันทึก |
+| `regionName` | string/null | ชื่อภาคเดียว เช่น `ภาคตะวันออก`; backend บันทึกเป็น `regionalAccess.regions` |
+| `regions` | string[]/null | รายชื่อภาคหลายค่า; backend normalize เป็น `regionalAccess.regions` |
+| `regionalAccess` | object/null | รูปแบบ canonical `{ "regions": ["ภาคตะวันออก"] }` |
+
+ค่า dropdown `all`, ค่าว่าง, หรือ `null` จะถูกตีความเป็นการไม่จำกัด/ล้างค่า scope นั้น ไม่บันทึกเป็นชื่อภาคหรือจังหวัดจริง
 
 #### Role Codes
 

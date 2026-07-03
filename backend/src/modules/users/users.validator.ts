@@ -13,6 +13,16 @@ const optionalTrimmedNonEmptyString = (max: number) =>
       value === null || (typeof value === 'string' && value.trim() === '') ? undefined : value,
     z.string().trim().min(1).max(max).optional(),
   );
+const optionalFormScopeValue = (max: number) =>
+  z.preprocess(
+    (value) => {
+      if (value === null || value === undefined) return undefined;
+      if (typeof value !== 'string') return value;
+      const trimmed = value.trim();
+      return trimmed === '' || trimmed.toLowerCase() === 'all' ? null : trimmed;
+    },
+    z.string().trim().min(1).max(max).nullable().optional(),
+  );
 const optionalPasswordString = z.preprocess(
   (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
   z.string().min(8).max(128).optional(),
@@ -23,6 +33,18 @@ const regionalAccessSchema = z
   })
   .strict()
   .transform((value) => normalizeRegionalAccess(value)!);
+const formRegionsSchema = z.preprocess(
+  (value) => {
+    if (value === null || value === undefined) return undefined;
+    const values = Array.isArray(value) ? value : [value];
+    const regions = values
+      .filter((item): item is string => typeof item === 'string')
+      .map((item) => item.trim())
+      .filter((item) => item && item.toLowerCase() !== 'all');
+    return regions.length > 0 ? regions : null;
+  },
+  z.array(z.string().trim().min(1).max(128)).max(10).nullable().optional(),
+);
 
 export const userIdParamSchema = z.object({
   id: idParam,
@@ -64,6 +86,7 @@ export const officerProfileSchema = z
     departmentId: optionalNullableTrimmedString,
     ministryId: optionalNullableTrimmedString,
     provinceId: optionalNullableTrimmedString,
+    provinceName: optionalFormScopeValue(128),
     perStatus: optionalNullableTrimmedString,
     perStatusName: optionalNullableTrimmedString,
     relocationType: optionalNullableTrimmedString,
@@ -94,6 +117,10 @@ export const createLocalAccountSchema = z
     department: optionalTrimmedNonEmptyString(255),
     lineNameTh: optionalTrimmedNonEmptyString(128),
     levelNameTh: optionalTrimmedNonEmptyString(64),
+    provinceId: optionalFormScopeValue(32),
+    provinceName: optionalFormScopeValue(128),
+    regionName: optionalFormScopeValue(128),
+    regions: formRegionsSchema,
     regionalAccess: regionalAccessSchema.nullable().optional(),
     roles: z.string().trim().min(1).max(32),
     userType: z.enum(['officer', 'admin']).default('officer'),
@@ -122,22 +149,50 @@ export const createLocalAccountSchema = z
       path: ['permissionOverrides'],
     },
   )
-  .transform(({ department, lineNameTh, levelNameTh, regionalAccess, roles, ...value }) => ({
-    ...value,
-    roleCodes: [roles],
-    profile:
-      department !== undefined ||
-      lineNameTh !== undefined ||
-      levelNameTh !== undefined ||
-      regionalAccess !== undefined
-        ? {
-            departmentNameTh: department,
-            lineNameTh,
-            levelNameTh,
-            regionalAccess,
-          }
-        : undefined,
-  }));
+  .transform(
+    ({
+      department,
+      lineNameTh,
+      levelNameTh,
+      provinceId,
+      provinceName,
+      regionName,
+      regions,
+      regionalAccess,
+      roles,
+      ...value
+    }) => {
+      const hasRegionInput =
+        regionalAccess !== undefined || regions !== undefined || regionName !== undefined;
+      const formRegionalAccess =
+        regionalAccess ??
+        (hasRegionInput
+          ? normalizeRegionalAccess({
+              regions: [...(regions ?? []), ...(regionName ? [regionName] : [])],
+            })
+          : undefined);
+      return {
+        ...value,
+        roleCodes: [roles],
+        profile:
+          department !== undefined ||
+          lineNameTh !== undefined ||
+          levelNameTh !== undefined ||
+          provinceId !== undefined ||
+          provinceName !== undefined ||
+          formRegionalAccess !== undefined
+            ? {
+                departmentNameTh: department,
+                lineNameTh,
+                levelNameTh,
+                provinceId,
+                provinceName,
+                regionalAccess: formRegionalAccess,
+              }
+            : undefined,
+      };
+    },
+  );
 
 export const createManagedUserSchema = z
   .object({
@@ -175,6 +230,10 @@ const editResponseUpdateSchema = z
         department: optionalTrimmedNonEmptyString(255),
         lineNameTh: optionalTrimmedNonEmptyString(128),
         levelNameTh: optionalTrimmedNonEmptyString(64),
+        provinceId: optionalFormScopeValue(32),
+        provinceName: optionalFormScopeValue(128),
+        regionName: optionalFormScopeValue(128),
+        regions: formRegionsSchema,
         regionalAccess: regionalAccessSchema.nullable().optional(),
         roles: z.string().trim().min(1).max(32),
         isActive: z.boolean(),
@@ -189,15 +248,40 @@ const editResponseUpdateSchema = z
       ? permissionGroupsToScopes(permissions as PermissionGroups)
       : undefined;
     const profile =
+      (() => {
+        const hasRegionInput =
+          user.regionalAccess !== undefined ||
+          user.regions !== undefined ||
+          user.regionName !== undefined;
+        const formRegionalAccess =
+          user.regionalAccess ??
+          (hasRegionInput
+            ? normalizeRegionalAccess({
+                regions: [
+                  ...(user.regions ?? []),
+                  ...(user.regionName ? [user.regionName] : []),
+                ],
+              })
+            : undefined);
+        return {
+          hasRegionInput,
+          formRegionalAccess,
+        };
+      })();
+    const profilePatch =
       user.department !== undefined ||
       user.lineNameTh !== undefined ||
       user.levelNameTh !== undefined ||
-      user.regionalAccess !== undefined
+      user.provinceId !== undefined ||
+      user.provinceName !== undefined ||
+      profile.hasRegionInput
         ? {
             departmentNameTh: user.department,
             lineNameTh: user.lineNameTh,
             levelNameTh: user.levelNameTh,
-            regionalAccess: user.regionalAccess,
+            provinceId: user.provinceId,
+            provinceName: user.provinceName,
+            regionalAccess: profile.formRegionalAccess,
           }
         : undefined;
     return {
@@ -208,7 +292,7 @@ const editResponseUpdateSchema = z
       password: user.password,
       isActive: user.isActive,
       roleCodes: [user.roles],
-      profile,
+      profile: profilePatch,
       permissionOverrides: permissionScopes
         ? Object.entries(permissionScopes).map(([code, scope]) => ({
             code,

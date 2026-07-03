@@ -58,6 +58,8 @@ export interface OfficerProfileInput {
   departmentNameTh?: string | null;
   ministryId?: string | null;
   provinceId?: string | null;
+  /** Form-only input; resolved to provinceId before persistence. */
+  provinceName?: string | null;
   perStatus?: string | null;
   perStatusName?: string | null;
   relocationType?: string | null;

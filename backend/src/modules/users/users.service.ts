@@ -14,6 +14,7 @@ import type {
   ListManagedUsersQuery,
   ManagedUserAuthDetailDTO,
   ManagedUserDetailDTO,
+  OfficerProfileInput,
   PaginatedManagedUsersDTO,
   PermissionGrantDTO,
   PermissionScope,
@@ -64,6 +65,8 @@ export const usersService = {
         department: user.department,
         lineNameTh: user.lineNameTh,
         levelNameTh: user.levelNameTh,
+        provinceId: user.profile.provinceId,
+        provinceName: user.profile.provinceName,
         roles: user.roles,
         isActive: user.isActive,
         source: toManagedUserSource(user.identityProvider),
@@ -76,7 +79,7 @@ export const usersService = {
   async create(input: CreateManagedUserInput, actorUserId: number): Promise<ManagedUserDetailDTO> {
     await ensureUniqueIdentity(input.username, input.externalId ?? input.username);
     await ensureRolesExist(input.roleCodes);
-    return usersRepository.create(input, actorUserId);
+    return usersRepository.create(await withResolvedOfficerProfile(input), actorUserId);
   },
 
   async createLocalAccount(
@@ -91,10 +94,10 @@ export const usersService = {
 
     const passwordHash = await hashPassword(input.password);
     return usersRepository.createLocalAccount(
-      {
+      await withResolvedOfficerProfile({
         ...input,
         passwordHash,
-      },
+      }),
       actorUserId,
     );
   },
@@ -123,10 +126,10 @@ export const usersService = {
     const { password, ...repositoryInput } = input;
     return usersRepository.update(
       userId,
-      {
+      await withResolvedOfficerProfile({
         ...repositoryInput,
         ...(password ? { passwordHash: await hashPassword(password) } : {}),
-      },
+      }),
       actorUserId,
     );
   },
@@ -252,4 +255,35 @@ async function ensurePermissionsExist(permissionCodes: string[]): Promise<void> 
       status: StatusCodes.BAD_REQUEST,
     });
   }
+}
+
+async function withResolvedOfficerProfile<T extends { profile?: OfficerProfileInput }>(
+  input: T,
+): Promise<T> {
+  if (input.profile === undefined) return input;
+  return {
+    ...input,
+    profile: await resolveOfficerProfile(input.profile),
+  };
+}
+
+async function resolveOfficerProfile(profile: OfficerProfileInput): Promise<OfficerProfileInput> {
+  const { provinceName, ...persistentProfile } = profile;
+  const provinceInput = profile.provinceId !== undefined ? profile.provinceId : provinceName;
+
+  if (provinceInput === undefined) return persistentProfile;
+  if (provinceInput === null) return { ...persistentProfile, provinceId: null };
+
+  const province = await usersRepository.findProvinceByIdOrName(provinceInput);
+  if (!province) {
+    throw new BadRequestError('Unknown province', {
+      province: provinceInput,
+      status: StatusCodes.BAD_REQUEST,
+    });
+  }
+
+  return {
+    ...persistentProfile,
+    provinceId: province.id,
+  };
 }

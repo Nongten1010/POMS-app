@@ -35,6 +35,8 @@ export interface AuthUserDTO {
   department: string | null;
   lineNameTh: string | null;
   levelNameTh: string | null;
+  provinceId?: string | null;
+  provinceName?: string | null;
   roles: string;
   isActive: boolean;
   regionalAccess?: RegionalAccessDTO;

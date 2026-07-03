@@ -51,6 +51,7 @@ interface ManagedUserJoinedRow {
   department_id: string | null;
   ministry_id: string | null;
   province_id: string | null;
+  province_name_th: string | null;
   per_status: string | null;
   per_status_name: string | null;
   relocation_type: string | null;
@@ -85,6 +86,12 @@ interface PermissionGrantRow {
   action: string;
   description: string | null;
   scope: 'ALL' | 'IN_PROVINCE' | 'IN_ESTATE' | 'OWN_FACTORY' | null;
+}
+
+interface ProvinceRow {
+  id: string;
+  name_th: string;
+  region: string | null;
 }
 
 interface UserPermissionOverrideRow extends PermissionGrantRow {
@@ -174,6 +181,17 @@ export const usersRepository = {
     return (trx ?? db)<PermissionRow>('permissions')
       .whereIn('code', permissionCodes)
       .select('id', 'code', 'resource', 'action', 'description');
+  },
+
+  async findProvinceByIdOrName(
+    value: string,
+    trx?: Knex.Transaction,
+  ): Promise<ProvinceRow | undefined> {
+    return (trx ?? db)<ProvinceRow>('provinces')
+      .where('id', value)
+      .orWhere('name_th', value)
+      .select('id', 'name_th', 'region')
+      .first();
   },
 
   async getRolePermissions(userId: number): Promise<PermissionGrantDTO[]> {
@@ -416,6 +434,7 @@ function managedUsersWithJoins(trx?: Knex.Transaction): Knex.QueryBuilder<Manage
         'organize',
       );
     })
+    .leftJoin('provinces', 'provinces.id', 'officer_profiles.province_id')
     .whereNull('users.deleted_at')
     .select(
       'users.id',
@@ -445,6 +464,7 @@ function managedUsersWithJoins(trx?: Knex.Transaction): Knex.QueryBuilder<Manage
       'officer_profiles.department_id',
       'officer_profiles.ministry_id',
       'officer_profiles.province_id',
+      'provinces.name_th as province_name_th',
       'officer_profiles.per_status',
       'officer_profiles.per_status_name',
       'officer_profiles.relocation_type',
@@ -517,6 +537,7 @@ function toDetailDTO(rows: ManagedUserJoinedRow[]): ManagedUserDetailDTO {
       departmentNameTh: first.department_name_th,
       ministryId: first.ministry_id,
       provinceId: first.province_id,
+      provinceName: first.province_name_th,
       perStatus: first.per_status,
       perStatusName: first.per_status_name,
       relocationType: first.relocation_type,
@@ -624,7 +645,10 @@ async function replaceUserPermissionOverridesInTransaction(
 }
 
 function toOfficerProfileRow(profile: OfficerProfileInput): Record<string, string | null> {
-  type OfficerProfileStringKey = Exclude<keyof OfficerProfileInput, 'regionalAccess'>;
+  type OfficerProfileStringKey = Exclude<
+    keyof OfficerProfileInput,
+    'regionalAccess' | 'provinceName'
+  >;
   const mappings: Array<[OfficerProfileStringKey, string]> = [
     ['posNo', 'pos_no'],
     ['pertypeId', 'pertype_id'],

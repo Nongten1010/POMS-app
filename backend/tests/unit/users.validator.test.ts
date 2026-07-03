@@ -81,6 +81,24 @@ describe('managed users validators', () => {
     });
   });
 
+  it('accepts local account location fields from the permission form', () => {
+    const result = createLocalAccountSchema.parse({
+      fullName: 'สมชาย ทดสอบ',
+      username: 'local_officer',
+      [passwordField]: validTestPassword,
+      provinceName: 'ระยอง',
+      regionName: 'ภาคตะวันออก',
+      roles: 'monitoring_5_centers',
+    });
+
+    expect(result).toMatchObject({
+      profile: {
+        provinceName: 'ระยอง',
+        regionalAccess: { regions: ['ภาคตะวันออก'] },
+      },
+    });
+  });
+
   it('treats empty optional local account profile fields as omitted', () => {
     const result = createLocalAccountSchema.parse({
       fullName: 'สมชาย ทดสอบ',
@@ -189,6 +207,57 @@ describe('managed users validators', () => {
         { code: 'dashboard:view', effect: 'allow', scope: 'ALL' },
         { code: 'dashboard.search:advanced', effect: 'allow', scope: null },
       ]),
+    });
+  });
+
+  it('accepts edit response-shaped location fields from the permission form', () => {
+    const result = updateManagedUserSchema.parse({
+      user: {
+        fullName: 'สมชาย ทดสอบ',
+        username: 'local_officer',
+        password: '',
+        provinceName: 'ระยอง',
+        regionName: 'ภาคตะวันออก',
+        roles: 'monitoring_5_centers',
+        isActive: true,
+      },
+      permissions: {
+        dashboard: {
+          data: 'IN_PROVINCE',
+          view: true,
+        },
+      },
+    });
+
+    expect(result).toMatchObject({
+      profile: {
+        provinceName: 'ระยอง',
+        regionalAccess: { regions: ['ภาคตะวันออก'] },
+      },
+      permissionOverrides: expect.arrayContaining([
+        { code: 'dashboard:view', effect: 'allow', scope: 'IN_PROVINCE' },
+      ]),
+    });
+  });
+
+  it('normalizes all location dropdown values to clear form scope', () => {
+    const result = updateManagedUserSchema.parse({
+      user: {
+        fullName: 'สมชาย ทดสอบ',
+        username: 'local_officer',
+        password: '',
+        provinceName: 'all',
+        regionName: 'all',
+        roles: 'monitoring_5_centers',
+        isActive: true,
+      },
+    });
+
+    expect(result).toMatchObject({
+      profile: {
+        provinceName: null,
+        regionalAccess: null,
+      },
     });
   });
 
