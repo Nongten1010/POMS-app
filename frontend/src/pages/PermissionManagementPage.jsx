@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Alert,
   Box,
@@ -14,6 +14,7 @@ import {
   Fade,
   FormControl,
   FormControlLabel,
+  FormHelperText,
   IconButton,
   InputLabel,
   MenuItem,
@@ -85,6 +86,15 @@ const scopeOptions = [
   { label: 'โรงงานตนเอง', value: 'OWN_FACTORY' },
   { label: 'ไม่อนุญาต', value: 'NONE' },
 ]
+
+function buildLocationOptions(options) {
+  const allOption = options.find((option) => option.value === 'all')
+  const specificOptions = options.filter((option) => option.value !== 'all')
+  return [{ label: '-', value: '' }, ...specificOptions, allOption].filter(Boolean)
+}
+
+const permissionRegionOptions = buildLocationOptions(regionOptions)
+const permissionProvinceOptions = buildLocationOptions(provinceOptions)
 
 const permissionSections = [
   {
@@ -250,7 +260,32 @@ function getPermissionDataValue(value) {
 }
 
 function getPermissionLocationValue(value) {
-  return String(value ?? 'all')
+  const normalizedValue = String(value ?? '').trim()
+  return normalizedValue ? normalizedValue : null
+}
+
+function validatePermissionLocationFields(formData) {
+  const errors = {}
+
+  permissionSections.forEach((section) => {
+    if (!section.locationScope) {
+      return
+    }
+
+    const data = getPermissionDataValue(formData.get(`permission.${section.permissionKey}.data`))
+    const region = getPermissionLocationValue(formData.get(`permission.${section.permissionKey}.region`))
+    const province = getPermissionLocationValue(formData.get(`permission.${section.permissionKey}.province`))
+
+    if (data === 'IN_REGION' && !region) {
+      errors[`${section.permissionKey}.region`] = 'กรุณาเลือกภาค'
+    }
+
+    if (data === 'IN_PROVINCE' && !province) {
+      errors[`${section.permissionKey}.province`] = 'กรุณาเลือกจังหวัด'
+    }
+  })
+
+  return errors
 }
 
 function getScopedLocationValue(dataScope, expectedScope, submittedValue, currentValue) {
@@ -322,62 +357,67 @@ function PermissionManagementPage({ accessToken = '' }) {
   const [isDeletingUser, setIsDeletingUser] = useState(false)
   const [deleteError, setDeleteError] = useState('')
 
+  const loadUsers = useCallback(async (signal) => {
+    if (!accessToken) {
+      return
+    }
+
+    setIsLoadingUsers(true)
+    setUsersError('')
+
+    try {
+      const result = await fetch(usersApiUrl, {
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        signal,
+      })
+      const rawText = await result.text()
+      let response = rawText
+
+      try {
+        response = rawText ? JSON.parse(rawText) : null
+      } catch {
+        response = rawText
+      }
+
+      if (!result.ok || response?.success === false) {
+        const message =
+          response?.error?.message ??
+          response?.message ??
+          `โหลดรายชื่อเจ้าหน้าที่ไม่สำเร็จ (${result.status} ${result.statusText})`
+        throw new Error(message)
+      }
+
+      const nextUsers = Array.isArray(response?.data) ? response.data.map(mapApiUser) : []
+      setUsers(nextUsers)
+    } catch (requestError) {
+      if (requestError.name !== 'AbortError') {
+        setUsers([])
+        setUsersError(requestError.message)
+      }
+    } finally {
+      if (!signal?.aborted) {
+        setIsLoadingUsers(false)
+      }
+    }
+  }, [accessToken])
+
   useEffect(() => {
     if (!accessToken) {
       return
     }
 
     const controller = new AbortController()
-
-    async function loadUsers() {
-      setIsLoadingUsers(true)
-      setUsersError('')
-
-      try {
-        const result = await fetch(usersApiUrl, {
-          headers: {
-            Accept: 'application/json',
-            Authorization: `Bearer ${accessToken}`,
-          },
-          signal: controller.signal,
-        })
-        const rawText = await result.text()
-        let response = rawText
-
-        try {
-          response = rawText ? JSON.parse(rawText) : null
-        } catch {
-          response = rawText
-        }
-
-        if (!result.ok || response?.success === false) {
-          const message =
-            response?.error?.message ??
-            response?.message ??
-            `โหลดรายชื่อเจ้าหน้าที่ไม่สำเร็จ (${result.status} ${result.statusText})`
-          throw new Error(message)
-        }
-
-        const nextUsers = Array.isArray(response?.data) ? response.data.map(mapApiUser) : []
-        setUsers(nextUsers)
-      } catch (requestError) {
-        if (requestError.name !== 'AbortError') {
-          setUsers([])
-          setUsersError(requestError.message)
-        }
-      } finally {
-        if (!controller.signal.aborted) {
-          setIsLoadingUsers(false)
-        }
-      }
-    }
-
-    loadUsers()
+    queueMicrotask(() => {
+      loadUsers(controller.signal)
+    })
 
     return () => {
       controller.abort()
     }
-  }, [accessToken])
+  }, [accessToken, loadUsers])
 
   const effectiveUsers = useMemo(() => (accessToken ? users : []), [accessToken, users])
   const effectiveUsersError = accessToken ? usersError : 'กรุณาเข้าสู่ระบบเพื่อดูรายชื่อเจ้าหน้าที่'
@@ -601,6 +641,10 @@ function PermissionManagementPage({ accessToken = '' }) {
         throw new Error(message)
       }
 
+      if (isAddMode) {
+        await loadUsers()
+      }
+
       setSelectedUser(null)
       setSnackbarMessage('Saved successfully')
       setSnackbarOpen(true)
@@ -747,6 +791,7 @@ function PermissionManagementPage({ accessToken = '' }) {
       </Paper>
 
       <UserPermissionDialog
+        key={`${dialogMode}-${selectedUser?.id ?? 'closed'}`}
         mode={dialogMode}
         open={Boolean(selectedUser)}
         user={selectedUser}
@@ -787,6 +832,7 @@ function StatusChip({ status }) {
 
 function UserPermissionDialog({ mode, open, user, isSaving = false, saveError = '', onClose, onSave }) {
   const isAddMode = mode === 'add'
+  const [permissionLocationErrors, setPermissionLocationErrors] = useState({})
   const title = isAddMode ? 'เพิ่มผู้ใช้งาน' : 'แก้ไขสิทธิ์การใช้งาน'
   const selectedRoleValue =
     user?.roleCode ?? roleOptions.find((role) => role.label === user?.role)?.value ?? roleOptions[0].value
@@ -800,6 +846,14 @@ function UserPermissionDialog({ mode, open, user, isSaving = false, saveError = 
         },
       ]
 
+  const clearPermissionLocationError = (permissionKey, field) => {
+    setPermissionLocationErrors((currentErrors) => {
+      const nextErrors = { ...currentErrors }
+      delete nextErrors[`${permissionKey}.${field}`]
+      return nextErrors
+    })
+  }
+
   return (
     <Dialog
       open={open}
@@ -812,6 +866,14 @@ function UserPermissionDialog({ mode, open, user, isSaving = false, saveError = 
           onSubmit: (event) => {
             event.preventDefault()
             const formData = new FormData(event.currentTarget)
+            const locationErrors = isAddMode ? {} : validatePermissionLocationFields(formData)
+
+            setPermissionLocationErrors(locationErrors)
+
+            if (Object.keys(locationErrors).length > 0) {
+              return
+            }
+
             const statusValue = String(formData.get('status') ?? statusOptions[0].value)
             const baseUserPayload = {
               fullName: String(formData.get('fullName') ?? '').trim(),
@@ -974,7 +1036,13 @@ function UserPermissionDialog({ mode, open, user, isSaving = false, saveError = 
           {isAddMode
             ? null
             : permissionSections.map((section) => (
-                <PermissionSection key={section.title} section={section} permissions={user?.permissions} />
+                <PermissionSection
+                  key={`${section.title}-${user?.detailVersion ?? 0}`}
+                  section={section}
+                  permissions={user?.permissions}
+                  locationErrors={permissionLocationErrors}
+                  onClearLocationError={clearPermissionLocationError}
+                />
               ))}
         </Stack>
       </DialogContent>
@@ -1039,7 +1107,7 @@ function getScopeValue(value) {
 }
 
 function getLocationScopeValue(value) {
-  return value ?? 'all'
+  return value ?? ''
 }
 
 function isActionChecked(permission, action) {
@@ -1050,23 +1118,21 @@ function isActionChecked(permission, action) {
   return permission?.[action] === true
 }
 
-function PermissionSection({ section, permissions = {} }) {
+function PermissionSection({ section, permissions = {}, locationErrors = {}, onClearLocationError }) {
   const permission = permissions?.[section.permissionKey]
   const [scopeValue, setScopeValue] = useState(getScopeValue(permission?.data))
   const [regionValue, setRegionValue] = useState(getLocationScopeValue(permission?.region))
   const [provinceValue, setProvinceValue] = useState(getLocationScopeValue(permission?.province))
   const isRegionEnabled = scopeValue === 'IN_REGION'
   const isProvinceEnabled = scopeValue === 'IN_PROVINCE'
-
-  useEffect(() => {
-    setScopeValue(getScopeValue(permission?.data))
-    setRegionValue(getLocationScopeValue(permission?.region))
-    setProvinceValue(getLocationScopeValue(permission?.province))
-  }, [permission?.data, permission?.province, permission?.region])
+  const regionError = locationErrors[`${section.permissionKey}.region`]
+  const provinceError = locationErrors[`${section.permissionKey}.province`]
 
   const handleScopeChange = (event) => {
     const nextScope = event.target.value
     setScopeValue(nextScope)
+    onClearLocationError?.(section.permissionKey, 'region')
+    onClearLocationError?.(section.permissionKey, 'province')
     if (nextScope !== 'IN_REGION') {
       setRegionValue('all')
     }
@@ -1118,41 +1184,49 @@ function PermissionSection({ section, permissions = {} }) {
             </Select>
           </FormControl>
           {section.locationScope ? (
-            <FormControl fullWidth size="small">
+            <FormControl fullWidth size="small" error={Boolean(regionError)}>
               <InputLabel id={`${section.title}-region-label`}>ภาค</InputLabel>
               <Select
                 labelId={`${section.title}-region-label`}
                 label="ภาค"
                 name={`permission.${section.permissionKey}.region`}
                 value={regionValue}
-                onChange={(event) => setRegionValue(event.target.value)}
                 disabled={!isRegionEnabled}
+                onChange={(event) => {
+                  setRegionValue(event.target.value)
+                  onClearLocationError?.(section.permissionKey, 'region')
+                }}
               >
-                {regionOptions.map((region) => (
+                {permissionRegionOptions.map((region) => (
                   <MenuItem key={region.value} value={region.value}>
                     {region.label}
                   </MenuItem>
                 ))}
               </Select>
+              {regionError ? <FormHelperText>{regionError}</FormHelperText> : null}
             </FormControl>
           ) : null}
           {section.locationScope ? (
-            <FormControl fullWidth size="small">
+            <FormControl fullWidth size="small" error={Boolean(provinceError)}>
               <InputLabel id={`${section.title}-province-label`}>จังหวัด</InputLabel>
               <Select
                 labelId={`${section.title}-province-label`}
                 label="จังหวัด"
                 name={`permission.${section.permissionKey}.province`}
                 value={provinceValue}
-                onChange={(event) => setProvinceValue(event.target.value)}
                 disabled={!isProvinceEnabled}
+                onChange={(event) => {
+                  setProvinceValue(event.target.value)
+                  onClearLocationError?.(section.permissionKey, 'province')
+                }}
               >
-                {provinceOptions.map((province) => (
+                {permissionProvinceOptions.map((province) => (
                   <MenuItem key={province.value} value={province.value}>
                     {province.label}
                   </MenuItem>
                 ))}
               </Select>
+              {provinceError ? <FormHelperText>{provinceError}</FormHelperText> : null}
             </FormControl>
           ) : null}
         </Box>
