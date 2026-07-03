@@ -57,6 +57,8 @@ const factoryRows = [
     id: 1,
     factoryName: 'บริษัท ปูนซีเมนต์นครหลวง จำกัด (มหาชน)',
     factoryRegistration: '10190000225448',
+    newRegistrationNo: '10190000225448',
+    oldRegistrationNo: '3-101-2/44สบ',
     industryType: 'ผลิตปูนซีเมนต์',
     province: 'สระบุรี',
     monitoringPointCount: 3,
@@ -65,6 +67,8 @@ const factoryRows = [
     id: 2,
     factoryName: 'บริษัท อินทรี อีโคไซเคิล จำกัด',
     factoryRegistration: '10190003325500',
+    newRegistrationNo: '10190003325500',
+    oldRegistrationNo: '3-106-33/50สบ',
     industryType: 'จัดการของเสีย',
     province: 'สระบุรี',
     monitoringPointCount: 1,
@@ -73,6 +77,8 @@ const factoryRows = [
     id: 3,
     factoryName: 'บริษัท กรุงเทพอุตสาหกรรมน้ำทิ้ง จำกัด',
     factoryRegistration: '10240000325407',
+    newRegistrationNo: '10240000325407',
+    oldRegistrationNo: '3-88(2)-3/40ฉช',
     industryType: 'ผลิตอาหารและเครื่องดื่ม',
     province: 'กรุงเทพมหานคร',
     monitoringPointCount: 1,
@@ -1907,15 +1913,16 @@ function ReportActions({ row, mode, onOpenReport, onOpenResultNotice }) {
 
 function getFactoryColumns(onOpenMonitoringPoints) {
   return [
-    { field: 'factoryName', headerName: 'ชื่อโรงงาน/บริษัท', width: 260 },
-    { field: 'factoryRegistration', headerName: 'เลขทะเบียนโรงงาน', width: 190 },
-    { field: 'industryType', headerName: 'ประเภทอุตสาหกรรม', width: 180 },
+    { field: 'factoryName', headerName: 'ชื่อโรงงาน/บริษัท', width: 240 },
+    { field: 'newRegistrationNo', headerName: 'เลขทะเบียนโรงงาน (ใหม่)', width: 190 },
+    { field: 'oldRegistrationNo', headerName: 'เลขทะเบียนโรงงาน (เก่า)', width: 190 },
+    { field: 'industryType', headerName: 'ประเภทอุตสาหกรรม', width: 170 },
     { field: 'province', headerName: 'จังหวัด', width: 130 },
-    { field: 'monitoringPointCount', headerName: 'จำนวนจุดตรวจวัด', width: 160, type: 'number' },
+    { field: 'monitoringPointCount', headerName: 'จำนวนจุดตรวจวัด', width: 150, type: 'number' },
     {
       field: 'actions',
       headerName: 'จัดการ',
-      width: 200,
+      width: 190,
       sortable: false,
       filterable: false,
       renderCell: (params) => (
