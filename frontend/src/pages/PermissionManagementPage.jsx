@@ -1053,8 +1053,27 @@ function isActionChecked(permission, action) {
 function PermissionSection({ section, permissions = {} }) {
   const permission = permissions?.[section.permissionKey]
   const [scopeValue, setScopeValue] = useState(getScopeValue(permission?.data))
+  const [regionValue, setRegionValue] = useState(getLocationScopeValue(permission?.region))
+  const [provinceValue, setProvinceValue] = useState(getLocationScopeValue(permission?.province))
   const isRegionEnabled = scopeValue === 'IN_REGION'
   const isProvinceEnabled = scopeValue === 'IN_PROVINCE'
+
+  useEffect(() => {
+    setScopeValue(getScopeValue(permission?.data))
+    setRegionValue(getLocationScopeValue(permission?.region))
+    setProvinceValue(getLocationScopeValue(permission?.province))
+  }, [permission?.data, permission?.province, permission?.region])
+
+  const handleScopeChange = (event) => {
+    const nextScope = event.target.value
+    setScopeValue(nextScope)
+    if (nextScope !== 'IN_REGION') {
+      setRegionValue('all')
+    }
+    if (nextScope !== 'IN_PROVINCE') {
+      setProvinceValue('all')
+    }
+  }
 
   return (
     <Box
@@ -1089,7 +1108,7 @@ function PermissionSection({ section, permissions = {} }) {
               label="ข้อมูล"
               name={`permission.${section.permissionKey}.data`}
               value={scopeValue}
-              onChange={(event) => setScopeValue(event.target.value)}
+              onChange={handleScopeChange}
             >
               {scopeOptions.map((scope) => (
                 <MenuItem key={scope.value} value={scope.value}>
@@ -1105,7 +1124,8 @@ function PermissionSection({ section, permissions = {} }) {
                 labelId={`${section.title}-region-label`}
                 label="ภาค"
                 name={`permission.${section.permissionKey}.region`}
-                defaultValue={getLocationScopeValue(permission?.region)}
+                value={regionValue}
+                onChange={(event) => setRegionValue(event.target.value)}
                 disabled={!isRegionEnabled}
               >
                 {regionOptions.map((region) => (
@@ -1123,7 +1143,8 @@ function PermissionSection({ section, permissions = {} }) {
                 labelId={`${section.title}-province-label`}
                 label="จังหวัด"
                 name={`permission.${section.permissionKey}.province`}
-                defaultValue={getLocationScopeValue(permission?.province)}
+                value={provinceValue}
+                onChange={(event) => setProvinceValue(event.target.value)}
                 disabled={!isProvinceEnabled}
               >
                 {provinceOptions.map((province) => (
