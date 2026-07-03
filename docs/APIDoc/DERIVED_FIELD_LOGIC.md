@@ -97,7 +97,7 @@ Known risks:
 
 - If the province master is missing or renamed, saving by `provinceName` fails with `Unknown province`; clients should prefer `provinceId` when possible.
 
-### `user.regionalAccess` from form region fields
+### `user.regionalAccess` from profile region fields
 
 Source:
 
@@ -117,7 +117,31 @@ Reason:
 
 Known risks:
 
-- This stores a user-level regional access value, not per-module/per-section province or region scope. Per-section permission rows still store only `ALL`, `IN_PROVINCE`, `IN_ESTATE`, `OWN_FACTORY`, or `NULL`.
+- This is user-level regional access used by login/auth filtering. Per-menu location scope is stored separately on `user_permissions`.
+
+### `permissions.<module>.region` / `permissions.<module>.province`
+
+Source:
+
+- Form payload fields: `permissions.<module>.region`, `permissions.<module>.province`
+- Stored values: `dbo.user_permissions.region_name`, `dbo.user_permissions.province_id`
+- Display value for province: `dbo.provinces.name_th`
+
+Transformation:
+
+- `permissions.<module>.data = IN_REGION` requires a non-empty `region`; backend stores it as `user_permissions.region_name`.
+- `permissions.<module>.data = IN_PROVINCE` requires a non-empty `province`; backend accepts either `provinces.id` or `provinces.name_th` and stores `provinces.id`.
+- For scopes other than `IN_REGION`, backend clears `region_name`.
+- For scopes other than `IN_PROVINCE`, backend clears `province_id`.
+- `GET /api/v1/users/:id` returns each permission group with `region` and `province`; `province` is the Thai display name when a province id is stored.
+
+Reason:
+
+- The permission-management screen edits data visibility by menu. A user can have dashboard scoped by region while factory data is scoped by province, so this cannot live only on the officer profile.
+
+Known risks:
+
+- Runtime read filters must opt into these per-permission location fields. Existing routes that only read JWT `scopes` still know the broad scope value but not the per-menu selected region/province until their query layer is extended.
 
 ## Operator Factory Dashboard
 

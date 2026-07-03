@@ -11,13 +11,21 @@ export interface RoleSummaryDTO {
   nameEn: string;
 }
 
-export type PermissionScope = 'ALL' | 'IN_PROVINCE' | 'IN_ESTATE' | 'OWN_FACTORY' | null;
+export type PermissionScope =
+  | 'ALL'
+  | 'IN_REGION'
+  | 'IN_PROVINCE'
+  | 'IN_ESTATE'
+  | 'OWN_FACTORY'
+  | null;
 export type UserPermissionEffect = 'allow' | 'deny';
 
 export interface PermissionOverrideInput {
   code: string;
   effect: UserPermissionEffect;
   scope?: PermissionScope;
+  region?: string | null;
+  province?: string | null;
 }
 
 export interface PermissionGrantDTO {
@@ -26,6 +34,9 @@ export interface PermissionGrantDTO {
   action: string;
   description: string | null;
   scope: PermissionScope;
+  region: string | null;
+  provinceId: string | null;
+  provinceName: string | null;
 }
 
 export interface UserPermissionOverrideDTO extends PermissionGrantDTO {

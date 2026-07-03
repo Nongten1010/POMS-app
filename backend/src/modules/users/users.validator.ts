@@ -1,12 +1,14 @@
 import { z } from 'zod';
-import { permissionGroupsToScopes } from '../auth/permissions';
+import { permissionGroupsToPermissionOverrides } from '../auth/permissions';
 import { normalizeRegionalAccess } from '../auth/regional-access';
 import type { PermissionGroups } from '../auth/permissions';
 
 const idParam = z.coerce.number().int().positive();
 const nullableTrimmedString = z.string().trim().min(1).max(255).nullable();
 const optionalNullableTrimmedString = nullableTrimmedString.optional();
-const permissionScopeSchema = z.enum(['ALL', 'IN_PROVINCE', 'IN_ESTATE', 'OWN_FACTORY']).nullable();
+const permissionScopeSchema = z
+  .enum(['ALL', 'IN_REGION', 'IN_PROVINCE', 'IN_ESTATE', 'OWN_FACTORY'])
+  .nullable();
 const optionalTrimmedNonEmptyString = (max: number) =>
   z.preprocess(
     (value) =>
@@ -132,6 +134,8 @@ export const createLocalAccountSchema = z
             code: z.string().trim().min(1).max(64),
             effect: z.enum(['allow', 'deny']),
             scope: permissionScopeSchema.optional(),
+            region: optionalFormScopeValue(128),
+            province: optionalFormScopeValue(128),
           })
           .strict(),
       )
@@ -217,6 +221,8 @@ const legacyUpdateManagedUserSchema = z
 const permissionGroupSchema = z
   .object({
     data: permissionScopeSchema.optional(),
+    region: optionalFormScopeValue(128),
+    province: optionalFormScopeValue(128),
   })
   .catchall(z.union([z.boolean(), permissionScopeSchema]));
 
@@ -244,8 +250,8 @@ const editResponseUpdateSchema = z
   })
   .strict()
   .transform(({ user, permissions }) => {
-    const permissionScopes = permissions
-      ? permissionGroupsToScopes(permissions as PermissionGroups)
+    const permissionOverrides = permissions
+      ? permissionGroupsToPermissionOverrides(permissions as PermissionGroups)
       : undefined;
     const profile =
       (() => {
@@ -293,11 +299,13 @@ const editResponseUpdateSchema = z
       isActive: user.isActive,
       roleCodes: [user.roles],
       profile: profilePatch,
-      permissionOverrides: permissionScopes
-        ? Object.entries(permissionScopes).map(([code, scope]) => ({
+      permissionOverrides: permissionOverrides
+        ? Object.entries(permissionOverrides).map(([code, details]) => ({
             code,
             effect: 'allow' as const,
-            scope,
+            scope: details.scope,
+            region: details.region,
+            province: details.province,
           }))
         : undefined,
     };
@@ -325,6 +333,8 @@ export const replaceUserPermissionsSchema = z
             code: z.string().trim().min(1).max(64),
             effect: z.enum(['allow', 'deny']),
             scope: permissionScopeSchema.optional(),
+            region: optionalFormScopeValue(128),
+            province: optionalFormScopeValue(128),
           })
           .strict(),
       )

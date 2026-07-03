@@ -81,4 +81,39 @@ describe('groupPermissions', () => {
       'chat:answer': null,
     });
   });
+
+  it('preserves per-menu region and province selections when mapping permissions', () => {
+    const grouped = groupPermissions({
+      'dashboard:view': {
+        scope: 'IN_REGION',
+        region: 'ภาคตะวันออก',
+        province: null,
+      },
+      'factories:view': {
+        scope: 'IN_PROVINCE',
+        region: null,
+        province: 'ระยอง',
+      },
+    });
+
+    expect(grouped).toMatchObject({
+      dashboard: {
+        data: 'IN_REGION',
+        region: 'ภาคตะวันออก',
+        province: null,
+        view: true,
+      },
+      factories: {
+        data: 'IN_PROVINCE',
+        region: null,
+        province: 'ระยอง',
+        view: true,
+      },
+    });
+
+    expect(permissionGroupsToScopes(grouped)).toEqual({
+      'dashboard:view': 'IN_REGION',
+      'factories:view': 'IN_PROVINCE',
+    });
+  });
 });

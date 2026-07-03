@@ -190,7 +190,7 @@
 - `POST /api/v1/users/local-accounts`
 - `PATCH /api/v1/users/:id`
 
-ฟอร์มสามารถส่งจังหวัด/ภาคได้ใน object `user` ตอนแก้ไข หรือเป็น field ระดับบนสุดตอนสร้าง local account:
+ฟอร์มสามารถส่งจังหวัด/ภาคระดับ user profile ได้ใน object `user` ตอนแก้ไข หรือเป็น field ระดับบนสุดตอนสร้าง local account และสามารถส่งภาค/จังหวัดรายเมนูใน `permissions.<module>`:
 
 ```json
 {
@@ -208,14 +208,23 @@
   },
   "permissions": {
     "dashboard": {
+      "data": "IN_REGION",
+      "region": "ภาคตะวันออก",
+      "province": "all",
+      "view": true,
+      "search": true
+    },
+    "factories": {
       "data": "IN_PROVINCE",
+      "region": "all",
+      "province": "ระยอง",
       "view": true
     }
   }
 }
 ```
 
-Backend accepts:
+Backend accepts user profile location fields:
 
 | Field | Type | Description |
 | --- | --- | --- |
@@ -226,6 +235,51 @@ Backend accepts:
 | `regionalAccess` | object/null | รูปแบบ canonical `{ "regions": ["ภาคตะวันออก"] }` |
 
 ค่า dropdown `all`, ค่าว่าง, หรือ `null` จะถูกตีความเป็นการไม่จำกัด/ล้างค่า scope นั้น ไม่บันทึกเป็นชื่อภาคหรือจังหวัดจริง
+
+Backend accepts per-menu permission location fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `permissions.<module>.data` | string/null | `ALL`, `IN_REGION`, `IN_PROVINCE`, `IN_ESTATE`, `OWN_FACTORY`, หรือ `null` |
+| `permissions.<module>.region` | string/null | ใช้เมื่อ `data = IN_REGION`; backend เก็บใน `user_permissions.region_name` |
+| `permissions.<module>.province` | string/null | ใช้เมื่อ `data = IN_PROVINCE`; รับได้ทั้งชื่อจังหวัดไทยหรือรหัสจังหวัด แล้ว backend เก็บเป็น `user_permissions.province_id` |
+| `permissions.<module>.<action>` | boolean | เปิด/ปิด action ในเมนูนั้น เช่น `view`, `edit`, `approve`, `search` |
+
+Response จาก `GET /api/v1/users/:id` หลังบันทึก:
+
+```json
+{
+  "user": {
+    "username": "local_officer",
+    "fullName": "สมชาย ทดสอบ",
+    "department": "สำนักงานปลัดกระทรวงอุตสาหกรรม",
+    "lineNameTh": "นักวิชาการอุตสาหกรรม",
+    "levelNameTh": "ชำนาญการ",
+    "provinceId": "1021",
+    "provinceName": "ระยอง",
+    "roles": "monitoring_5_centers",
+    "isActive": true,
+    "regionalAccess": {
+      "regions": ["ภาคตะวันออก"]
+    }
+  },
+  "permissions": {
+    "dashboard": {
+      "data": "IN_REGION",
+      "region": "ภาคตะวันออก",
+      "province": null,
+      "view": true,
+      "search": true
+    },
+    "factories": {
+      "data": "IN_PROVINCE",
+      "region": null,
+      "province": "ระยอง",
+      "view": true
+    }
+  }
+}
+```
 
 #### Role Codes
 

@@ -1,7 +1,18 @@
-export type PermissionDataScope = 'ALL' | 'IN_PROVINCE' | 'IN_ESTATE' | 'OWN_FACTORY' | null;
+export type PermissionDataScope =
+  | 'ALL'
+  | 'IN_REGION'
+  | 'IN_PROVINCE'
+  | 'IN_ESTATE'
+  | 'OWN_FACTORY'
+  | null;
+export interface PermissionScopeDetails {
+  scope: PermissionDataScope;
+  region?: string | null;
+  province?: string | null;
+}
 export type PermissionGroup = { data: PermissionDataScope } & Record<
   string,
-  true | PermissionDataScope
+  true | PermissionDataScope | string | null | undefined
 >;
 export type PermissionGroups = Record<string, PermissionGroup>;
 
@@ -52,24 +63,31 @@ const responseModules = new Set([
 
 const scopePriority: Record<string, number> = {
   ALL: 4,
+  IN_REGION: 3,
   IN_PROVINCE: 3,
   IN_ESTATE: 2,
   OWN_FACTORY: 1,
 };
 
-export function groupPermissions(scopes: Record<string, string | null>): PermissionGroups {
+export function groupPermissions(
+  scopes: Record<string, string | null | PermissionScopeDetails>,
+): PermissionGroups {
   const groups: PermissionGroups = {};
 
-  for (const [code, scope] of Object.entries(scopes)) {
+  for (const [code, permissionScope] of Object.entries(scopes)) {
     const permissions = toPermissionAliases(code);
     for (const permission of permissions) {
       if (!responseModules.has(permission.module)) continue;
+      const scopeDetails = toScopeDetails(permissionScope);
 
       const current = groups[permission.module];
       const currentData = current?.data;
+      const nextData = scopeDetails.scope as PermissionDataScope;
+      const data = widestScope(currentData, nextData);
       groups[permission.module] = {
-        ...(current ?? { data: scope as PermissionDataScope }),
-        data: widestScope(currentData, scope as PermissionDataScope),
+        ...(current ?? { data: nextData }),
+        data,
+        ...(data === nextData ? toGroupLocation(scopeDetails) : {}),
         [permission.action]: true,
       };
     }
@@ -79,18 +97,37 @@ export function groupPermissions(scopes: Record<string, string | null>): Permiss
 }
 
 export function permissionGroupsToScopes(groups: PermissionGroups): Record<string, PermissionDataScope> {
+  return Object.fromEntries(
+    Object.entries(permissionGroupsToPermissionOverrides(groups)).map(([code, details]) => [
+      code,
+      details.scope,
+    ]),
+  );
+}
+
+export function permissionGroupsToPermissionOverrides(
+  groups: PermissionGroups,
+): Record<string, PermissionScopeDetails> {
   const scopes: Record<string, PermissionDataScope> = {};
+  const overrides: Record<string, PermissionScopeDetails> = {};
 
   for (const [module, group] of Object.entries(groups)) {
     for (const [action, enabled] of Object.entries(group)) {
-      if (action === 'data' || enabled !== true) continue;
+      if (action === 'data' || action === 'region' || action === 'province' || enabled !== true) {
+        continue;
+      }
       for (const code of permissionCodesFromAlias(module, action)) {
         scopes[code] = group.data;
+        overrides[code] = {
+          scope: group.data,
+          region: normalizeLocationValue(group.region),
+          province: normalizeLocationValue(group.province),
+        };
       }
     }
   }
 
-  return scopes;
+  return overrides;
 }
 
 function permissionCodesFromAlias(module: string, action: string): string[] {
@@ -127,4 +164,33 @@ function widestScope(
   const currentRank = scopePriority[current ?? 'NULL'] ?? 0;
   const nextRank = scopePriority[next ?? 'NULL'] ?? 0;
   return nextRank > currentRank ? next : current;
+}
+
+function toScopeDetails(
+  value: string | null | PermissionScopeDetails,
+): PermissionScopeDetails {
+  if (value && typeof value === 'object') {
+    return value;
+  }
+  return { scope: value as PermissionDataScope };
+}
+
+function toGroupLocation(
+  details: PermissionScopeDetails,
+): Partial<Pick<PermissionGroup, 'region' | 'province'>> {
+  const location: Partial<Pick<PermissionGroup, 'region' | 'province'>> = {};
+  const region = normalizeLocationValue(details.region);
+  const province = normalizeLocationValue(details.province);
+  if (region !== undefined) location.region = region;
+  if (province !== undefined) location.province = province;
+  return location;
+}
+
+function normalizeLocationValue(value: unknown): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.toLowerCase() === 'all') return null;
+  return trimmed;
 }

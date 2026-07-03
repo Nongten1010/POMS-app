@@ -85,7 +85,10 @@ interface PermissionGrantRow {
   resource: string;
   action: string;
   description: string | null;
-  scope: 'ALL' | 'IN_PROVINCE' | 'IN_ESTATE' | 'OWN_FACTORY' | null;
+  scope: 'ALL' | 'IN_REGION' | 'IN_PROVINCE' | 'IN_ESTATE' | 'OWN_FACTORY' | null;
+  region_name: string | null;
+  province_id: string | null;
+  province_name_th: string | null;
 }
 
 interface ProvinceRow {
@@ -205,6 +208,9 @@ export const usersRepository = {
         'permissions.action as action',
         'permissions.description as description',
         'role_permissions.scope as scope',
+        db.raw('CAST(NULL AS NVARCHAR(128)) as region_name'),
+        db.raw('CAST(NULL AS VARCHAR(8)) as province_id'),
+        db.raw('CAST(NULL AS NVARCHAR(64)) as province_name_th'),
       );
 
     return rows.map(toPermissionGrantDTO);
@@ -213,6 +219,7 @@ export const usersRepository = {
   async getUserPermissionOverrides(userId: number): Promise<UserPermissionOverrideDTO[]> {
     const rows: UserPermissionOverrideRow[] = await db('user_permissions')
       .join('permissions', 'user_permissions.permission_id', 'permissions.id')
+      .leftJoin('provinces', 'provinces.id', 'user_permissions.province_id')
       .where('user_permissions.user_id', userId)
       .select(
         'permissions.code as code',
@@ -220,6 +227,9 @@ export const usersRepository = {
         'permissions.action as action',
         'permissions.description as description',
         'user_permissions.scope as scope',
+        'user_permissions.region_name as region_name',
+        'user_permissions.province_id as province_id',
+        'provinces.name_th as province_name_th',
         'user_permissions.effect as effect',
       );
 
@@ -567,6 +577,9 @@ function toPermissionGrantDTO(row: PermissionGrantRow): PermissionGrantDTO {
     action: row.action,
     description: row.description,
     scope: row.scope,
+    region: row.region_name,
+    provinceId: row.province_id,
+    provinceName: row.province_name_th,
   };
 }
 
@@ -638,6 +651,10 @@ async function replaceUserPermissionOverridesInTransaction(
         permission_id: permissionRow.id,
         effect: permission.effect,
         scope: permission.effect === 'allow' ? (permission.scope ?? null) : null,
+        region_name:
+          permission.effect === 'allow' ? normalizePermissionLocation(permission.region) : null,
+        province_id:
+          permission.effect === 'allow' ? normalizePermissionLocation(permission.province) : null,
         granted_by: actorUserId,
       };
     }),
@@ -681,4 +698,10 @@ function toOfficerProfileRow(profile: OfficerProfileInput): Record<string, strin
     row.regional_access_json = serializeRegionalAccess(profile.regionalAccess);
   }
   return row;
+}
+
+function normalizePermissionLocation(value: string | null | undefined): string | null {
+  if (value === null || value === undefined) return null;
+  const trimmed = value.trim();
+  return trimmed && trimmed.toLowerCase() !== 'all' ? trimmed : null;
 }

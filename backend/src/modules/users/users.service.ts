@@ -17,6 +17,7 @@ import type {
   OfficerProfileInput,
   PaginatedManagedUsersDTO,
   PermissionGrantDTO,
+  PermissionOverrideInput,
   PermissionScope,
   ReplaceUserPermissionsInput,
   UpdateManagedUserInput,
@@ -53,7 +54,7 @@ export const usersService = {
       usersRepository.getRolePermissions(userId),
       usersRepository.getUserPermissionOverrides(userId),
     ]);
-    const effectiveScopes = buildEffectiveScopes(rolePermissions, overrides);
+    const effectivePermissionDetails = buildEffectivePermissionDetails(rolePermissions, overrides);
 
     return {
       user: {
@@ -72,7 +73,7 @@ export const usersService = {
         source: toManagedUserSource(user.identityProvider),
         ...(user.profile.regionalAccess ? { regionalAccess: user.profile.regionalAccess } : {}),
       },
-      permissions: groupPermissions(effectiveScopes),
+      permissions: groupPermissions(effectivePermissionDetails),
     };
   },
 
@@ -88,16 +89,19 @@ export const usersService = {
   ): Promise<ManagedUserDetailDTO> {
     await ensureUniqueIdentity(input.username, input.username);
     await ensureRolesExist(input.roleCodes);
-    if (input.permissionOverrides) {
-      await ensurePermissionsExist(input.permissionOverrides.map((permission) => permission.code));
+    const resolvedInput = await withResolvedUserInput(input);
+    if (resolvedInput.permissionOverrides) {
+      await ensurePermissionsExist(
+        resolvedInput.permissionOverrides.map((permission) => permission.code),
+      );
     }
 
     const passwordHash = await hashPassword(input.password);
     return usersRepository.createLocalAccount(
-      await withResolvedOfficerProfile({
-        ...input,
+      {
+        ...resolvedInput,
         passwordHash,
-      }),
+      },
       actorUserId,
     );
   },
@@ -119,11 +123,14 @@ export const usersService = {
       );
     }
     if (input.roleCodes !== undefined) await ensureRolesExist(input.roleCodes);
-    if (input.permissionOverrides !== undefined) {
-      await ensurePermissionsExist(input.permissionOverrides.map((permission) => permission.code));
+    const resolvedInput = await withResolvedUserInput(input);
+    if (resolvedInput.permissionOverrides !== undefined) {
+      await ensurePermissionsExist(
+        resolvedInput.permissionOverrides.map((permission) => permission.code),
+      );
     }
 
-    const { password, ...repositoryInput } = input;
+    const { password, ...repositoryInput } = resolvedInput;
     return usersRepository.update(
       userId,
       await withResolvedOfficerProfile({
@@ -152,13 +159,14 @@ export const usersService = {
       usersRepository.getUserPermissionOverrides(userId),
     ]);
     const effectiveScopes = buildEffectiveScopes(rolePermissions, overrides);
+    const effectivePermissionDetails = buildEffectivePermissionDetails(rolePermissions, overrides);
 
     return {
       userId,
       rolePermissions,
       overrides,
       effectiveScopes,
-      permissions: groupPermissions(effectiveScopes),
+      permissions: groupPermissions(effectivePermissionDetails),
     };
   },
 
@@ -169,8 +177,9 @@ export const usersService = {
   ): Promise<UserPermissionsDTO> {
     const existing = await usersRepository.findById(userId);
     if (!existing) throw new NotFoundError('User not found');
-    await ensurePermissionsExist(input.permissions.map((permission) => permission.code));
-    await usersRepository.replaceUserPermissionOverrides(userId, input.permissions, actorUserId);
+    const permissions = await resolvePermissionOverrides(input.permissions);
+    await ensurePermissionsExist(permissions.map((permission) => permission.code));
+    await usersRepository.replaceUserPermissionOverrides(userId, permissions, actorUserId);
     return this.getPermissions(userId);
   },
 };
@@ -179,19 +188,49 @@ function buildEffectiveScopes(
   rolePermissions: PermissionGrantDTO[],
   overrides: Awaited<ReturnType<typeof usersRepository.getUserPermissionOverrides>>,
 ): Record<string, PermissionScope> {
+  return Object.fromEntries(
+    Object.entries(buildEffectivePermissionDetails(rolePermissions, overrides)).map(
+      ([code, details]) => [code, details.scope],
+    ),
+  );
+}
+
+function buildEffectivePermissionDetails(
+  rolePermissions: PermissionGrantDTO[],
+  overrides: Awaited<ReturnType<typeof usersRepository.getUserPermissionOverrides>>,
+): Record<
+  string,
+  {
+    scope: PermissionScope;
+    region?: string | null;
+    province?: string | null;
+  }
+> {
   const priority: Record<string, number> = {
     ALL: 4,
+    IN_REGION: 3,
     IN_PROVINCE: 3,
     IN_ESTATE: 2,
     OWN_FACTORY: 1,
   };
-  const scopes: Record<string, PermissionScope> = {};
+  const scopes: Record<
+    string,
+    {
+      scope: PermissionScope;
+      region?: string | null;
+      province?: string | null;
+    }
+  > = {};
 
   for (const permission of rolePermissions) {
     const current = scopes[permission.code];
-    const currentRank = current === undefined ? -1 : (priority[current ?? 'NULL'] ?? 0);
+    const currentRank = current === undefined ? -1 : (priority[current.scope ?? 'NULL'] ?? 0);
     const newRank = priority[permission.scope ?? 'NULL'] ?? 0;
-    if (newRank >= currentRank) scopes[permission.code] = permission.scope;
+    if (newRank >= currentRank) {
+      scopes[permission.code] = {
+        scope: permission.scope,
+      };
+    }
   }
 
   for (const override of overrides) {
@@ -199,7 +238,11 @@ function buildEffectiveScopes(
       delete scopes[override.code];
       continue;
     }
-    scopes[override.code] = override.scope;
+    scopes[override.code] = {
+      scope: override.scope,
+      region: override.region,
+      province: override.provinceName ?? override.provinceId,
+    };
   }
 
   return scopes;
@@ -267,6 +310,17 @@ async function withResolvedOfficerProfile<T extends { profile?: OfficerProfileIn
   };
 }
 
+async function withResolvedUserInput<
+  T extends { profile?: OfficerProfileInput; permissionOverrides?: PermissionOverrideInput[] },
+>(input: T): Promise<T> {
+  return {
+    ...(await withResolvedOfficerProfile(input)),
+    ...(input.permissionOverrides !== undefined
+      ? { permissionOverrides: await resolvePermissionOverrides(input.permissionOverrides) }
+      : {}),
+  };
+}
+
 async function resolveOfficerProfile(profile: OfficerProfileInput): Promise<OfficerProfileInput> {
   const { provinceName, ...persistentProfile } = profile;
   const provinceInput = profile.provinceId !== undefined ? profile.provinceId : provinceName;
@@ -286,4 +340,71 @@ async function resolveOfficerProfile(profile: OfficerProfileInput): Promise<Offi
     ...persistentProfile,
     provinceId: province.id,
   };
+}
+
+async function resolvePermissionOverrides(
+  permissions: PermissionOverrideInput[],
+): Promise<PermissionOverrideInput[]> {
+  return Promise.all(permissions.map(resolvePermissionOverride));
+}
+
+async function resolvePermissionOverride(
+  permission: PermissionOverrideInput,
+): Promise<PermissionOverrideInput> {
+  const region =
+    permission.scope === 'IN_REGION' ? normalizeLocationValue(permission.region) : null;
+  const province =
+    permission.scope === 'IN_PROVINCE' ? normalizeLocationValue(permission.province) : null;
+
+  if (permission.effect === 'deny') {
+    return {
+      ...permission,
+      scope: undefined,
+      region: null,
+      province: null,
+    };
+  }
+
+  if (permission.scope === 'IN_REGION' && !region) {
+    throw new BadRequestError('Region is required for IN_REGION permission scope', {
+      permission: permission.code,
+      status: StatusCodes.BAD_REQUEST,
+    });
+  }
+
+  if (permission.scope === 'IN_PROVINCE' && !province) {
+    throw new BadRequestError('Province is required for IN_PROVINCE permission scope', {
+      permission: permission.code,
+      status: StatusCodes.BAD_REQUEST,
+    });
+  }
+
+  if (!province) {
+    return {
+      ...permission,
+      region,
+      province: null,
+    };
+  }
+
+  const provinceRow = await usersRepository.findProvinceByIdOrName(province);
+  if (!provinceRow) {
+    throw new BadRequestError('Unknown permission province', {
+      permission: permission.code,
+      province,
+      status: StatusCodes.BAD_REQUEST,
+    });
+  }
+
+  return {
+    ...permission,
+    region,
+    province: provinceRow.id,
+  };
+}
+
+function normalizeLocationValue(value: string | null | undefined): string | null {
+  if (value === null || value === undefined) return null;
+  const trimmed = value.trim();
+  return trimmed && trimmed.toLowerCase() !== 'all' ? trimmed : null;
 }

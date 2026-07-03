@@ -253,6 +253,16 @@ function getPermissionLocationValue(value) {
   return String(value ?? 'all')
 }
 
+function getScopedLocationValue(dataScope, expectedScope, submittedValue, currentValue) {
+  if (dataScope !== expectedScope) {
+    return 'all'
+  }
+
+  return submittedValue === null
+    ? getPermissionLocationValue(currentValue)
+    : getPermissionLocationValue(submittedValue)
+}
+
 function buildPermissionsFromForm(formData, currentPermissions = {}) {
   return Object.fromEntries(
     permissionSections.map((section) => {
@@ -260,24 +270,29 @@ function buildPermissionsFromForm(formData, currentPermissions = {}) {
       const scopeInput = formData.get(`permission.${section.permissionKey}.data`)
       const regionInput = formData.get(`permission.${section.permissionKey}.region`)
       const provinceInput = formData.get(`permission.${section.permissionKey}.province`)
+      const dataScope =
+        scopeInput === null
+          ? currentPermission.data === undefined
+            ? 'ALL'
+            : currentPermission.data
+          : getPermissionDataValue(scopeInput)
       const permission = {
-        data:
-          scopeInput === null
-            ? currentPermission.data === undefined
-              ? 'ALL'
-              : currentPermission.data
-            : getPermissionDataValue(scopeInput),
+        data: dataScope,
       }
 
       if (section.locationScope) {
-        permission.region =
-          regionInput === null
-            ? getPermissionLocationValue(currentPermission.region)
-            : getPermissionLocationValue(regionInput)
-        permission.province =
-          provinceInput === null
-            ? getPermissionLocationValue(currentPermission.province)
-            : getPermissionLocationValue(provinceInput)
+        permission.region = getScopedLocationValue(
+          dataScope,
+          'IN_REGION',
+          regionInput,
+          currentPermission.region,
+        )
+        permission.province = getScopedLocationValue(
+          dataScope,
+          'IN_PROVINCE',
+          provinceInput,
+          currentPermission.province,
+        )
       }
 
       section.permissions.forEach((item) => {

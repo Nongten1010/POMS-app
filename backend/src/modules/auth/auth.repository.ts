@@ -209,6 +209,7 @@ export const authRepository = {
     // priority: ALL > IN_PROVINCE > IN_ESTATE > OWN_FACTORY > null
     const priority: Record<string, number> = {
       ALL: 4,
+      IN_REGION: 3,
       IN_PROVINCE: 3,
       IN_ESTATE: 2,
       OWN_FACTORY: 1,
