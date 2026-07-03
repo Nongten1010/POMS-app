@@ -290,7 +290,7 @@ function validatePermissionLocationFields(formData) {
 
 function getScopedLocationValue(dataScope, expectedScope, submittedValue, currentValue) {
   if (dataScope !== expectedScope) {
-    return 'all'
+    return null
   }
 
   return submittedValue === null
@@ -1120,9 +1120,14 @@ function isActionChecked(permission, action) {
 
 function PermissionSection({ section, permissions = {}, locationErrors = {}, onClearLocationError }) {
   const permission = permissions?.[section.permissionKey]
-  const [scopeValue, setScopeValue] = useState(getScopeValue(permission?.data))
-  const [regionValue, setRegionValue] = useState(getLocationScopeValue(permission?.region))
-  const [provinceValue, setProvinceValue] = useState(getLocationScopeValue(permission?.province))
+  const initialScopeValue = getScopeValue(permission?.data)
+  const [scopeValue, setScopeValue] = useState(initialScopeValue)
+  const [regionValue, setRegionValue] = useState(
+    initialScopeValue === 'IN_REGION' ? getLocationScopeValue(permission?.region) : '',
+  )
+  const [provinceValue, setProvinceValue] = useState(
+    initialScopeValue === 'IN_PROVINCE' ? getLocationScopeValue(permission?.province) : '',
+  )
   const isRegionEnabled = scopeValue === 'IN_REGION'
   const isProvinceEnabled = scopeValue === 'IN_PROVINCE'
   const regionError = locationErrors[`${section.permissionKey}.region`]
@@ -1134,10 +1139,10 @@ function PermissionSection({ section, permissions = {}, locationErrors = {}, onC
     onClearLocationError?.(section.permissionKey, 'region')
     onClearLocationError?.(section.permissionKey, 'province')
     if (nextScope !== 'IN_REGION') {
-      setRegionValue('all')
+      setRegionValue('')
     }
     if (nextScope !== 'IN_PROVINCE') {
-      setProvinceValue('all')
+      setProvinceValue('')
     }
   }
 
