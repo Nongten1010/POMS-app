@@ -215,7 +215,7 @@ Data source:
 GET /api/v1/connected-measurement-points/factories/factory-001
 ```
 
-ใช้กับ modal "รายละเอียดจุดตรวจวัด" โดยคืนรายการจุดตรวจวัดของโรงงาน และแต่ละแถวมีเฉพาะ 4 field:
+ใช้กับ modal "รายละเอียดจุดตรวจวัด" โดยคืนรายการจุดตรวจวัดของโรงงาน:
 
 ```json
 {
@@ -225,7 +225,9 @@ GET /api/v1/connected-measurement-points/factories/factory-001
       "pointCode": "S0001",
       "pointName": "ปล่อง A",
       "pointType": "STACK",
-      "parameterDetails": ["NOx (ppm)", "SO2 (ppm)"]
+      "parameterDetails": ["NOx (ppm)", "SO2 (ppm)"],
+      "primaryFuel": "ก๊าซธรรมชาติ",
+      "secondaryFuel": "น้ำมันเตา"
     }
   ],
   "meta": {

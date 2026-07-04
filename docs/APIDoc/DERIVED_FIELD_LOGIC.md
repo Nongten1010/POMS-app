@@ -19,27 +19,30 @@ Code:
 
 - `backend/src/modules/connection-requests/connection-requests.service.ts`
 
-### `parameterDetails`
+### `parameterDetails`, `primaryFuel`, `secondaryFuel`
 
 Source:
 
 - Current connected point lookup: `dbo.cems_wpms_connection_requests` with connected `measurementPoints`
 - Stored parameter source: `dbo.cems_wpms_measurement_points.parameters_json`
 - The connected/current copy in `dbo.cems_wpms_connected_measurement_points.parameters_json` is populated from the same measurement-point parameter set during connection sync.
+- Stored fuel source: `measurementPoints[].details.primaryFuel` and `measurementPoints[].details.secondaryFuel`, using the same camelCase field names as CEMS/WPMS request forms.
 
 Fallback order:
 
 - Match the requested `factoryId` against connected measurement points using existing `listConnectedMeasurementPoints({ factoryId })` behavior.
 - Return each matched point's parsed `parameters` array as `parameterDetails`.
+- Return each matched point's `details.primaryFuel` and `details.secondaryFuel`; missing, non-string, or blank values become `null`.
 
 Transformation:
 
 - `pointCode`, `pointName`, and `pointType` are direct aliases from each matched measurement point.
 - `parameterDetails` is the parsed parameter array returned by the backend DTO instead of the raw JSON string.
+- `primaryFuel` and `secondaryFuel` are trimmed string values from `details`; blank strings are normalized to `null`.
 
 Reason:
 
-- The "รายละเอียดจุดตรวจวัด" modal only needs four display columns: code, name, type, and parameter detail.
+- The "รายละเอียดจุดตรวจวัด" modal needs code, name, type, parameter detail, primary fuel, and secondary fuel.
 - Keeping this endpoint narrow avoids sending request, factory, and device-config fields into the modal.
 - The response is a collection because one factory can have multiple connected measurement points; when no connected points match, the API returns `data: []` with `meta.total: 0`.
 

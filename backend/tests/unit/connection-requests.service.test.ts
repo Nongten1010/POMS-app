@@ -1627,6 +1627,10 @@ describe('connectionRequestsService', () => {
           longitude: null,
           parameters: ['NOx (ppm)', 'SO2 (ppm)'],
           description: null,
+          details: {
+            primaryFuel: 'ก๊าซธรรมชาติ',
+            secondaryFuel: 'น้ำมันเตา',
+          },
         },
         {
           id: 2,
@@ -1637,6 +1641,10 @@ describe('connectionRequestsService', () => {
           longitude: null,
           parameters: ['BOD (mg/l)', 'COD (mg/l)'],
           description: null,
+          details: {
+            primaryFuel: null,
+            secondaryFuel: '',
+          },
         },
       ],
     });
@@ -1662,12 +1670,16 @@ describe('connectionRequestsService', () => {
           pointName: 'ปล่องระบาย A',
           pointType: 'STACK',
           parameterDetails: ['NOx (ppm)', 'SO2 (ppm)'],
+          primaryFuel: 'ก๊าซธรรมชาติ',
+          secondaryFuel: 'น้ำมันเตา',
         },
         {
           pointCode: 'WWTP-1',
           pointName: 'บ่อบำบัดน้ำเสีย',
           pointType: 'WASTEWATER',
           parameterDetails: ['BOD (mg/l)', 'COD (mg/l)'],
+          primaryFuel: null,
+          secondaryFuel: null,
         },
       ],
       meta: { total: 2 },

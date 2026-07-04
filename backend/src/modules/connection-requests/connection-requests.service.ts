@@ -1843,7 +1843,22 @@ function toConnectedMeasurementPointModalDetail(
     pointName: detail.point.pointName,
     pointType: detail.point.pointType,
     parameterDetails: detail.point.parameters,
+    primaryFuel: stringDetail(detail.point.details, 'primaryFuel'),
+    secondaryFuel: stringDetail(detail.point.details, 'secondaryFuel'),
   };
+}
+
+function stringDetail(
+  details: MeasurementPointDTO['details'],
+  key: string,
+): string | null {
+  if (!details || typeof details !== 'object' || Array.isArray(details)) return null;
+
+  const value = details[key];
+  if (typeof value !== 'string') return null;
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
 }
 
 function toMeasurementDetailFactory(point: ConnectedMeasurementPointDetailDTO): {

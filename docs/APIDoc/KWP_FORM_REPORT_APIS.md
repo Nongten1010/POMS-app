@@ -151,7 +151,9 @@ Response:
         "NOx (ppm)",
         "SO2 (ppm)",
         "Temp. (C°)"
-      ]
+      ],
+      "primaryFuel": "ก๊าซธรรมชาติ",
+      "secondaryFuel": "น้ำมันเตา"
     }
   ],
   "meta": {
@@ -170,6 +172,8 @@ Response:
 | `data[].pointName` | string | ชื่อจุดตรวจวัด |
 | `data[].pointType` | `STACK`\|`WASTEWATER`\|`OTHER` | ประเภทจุดตรวจวัด |
 | `data[].parameterDetails` | string[] | รายละเอียดพารามิเตอร์ที่ลงทะเบียนไว้กับจุดตรวจวัด พร้อมหน่วยถ้ามี เช่น `NOx (ppm)` |
+| `data[].primaryFuel` | string|null | เชื้อเพลิงหลัก ใช้ชื่อ field เดียวกับฟอร์มเดิม `details.primaryFuel` |
+| `data[].secondaryFuel` | string|null | เชื้อเพลิงสำรอง/รอง ใช้ชื่อ field เดียวกับฟอร์มเดิม `details.secondaryFuel` |
 | `meta.total` | number | จำนวนจุดตรวจวัดที่คืนใน `data[]` |
 
 ### Data source
@@ -177,6 +181,7 @@ Response:
 - API lookup จุดตรวจวัดจาก current connected measurement points ตาม `factoryId`
 - `pointCode`, `pointName`, `pointType` มาจากข้อมูลจุดตรวจวัดที่อยู่ใต้โรงงานนั้น
 - `parameterDetails` มาจากการ parse ค่า `parameters_json` เป็น array ไม่ส่ง raw JSON string กลับไปให้ frontend
+- `primaryFuel` และ `secondaryFuel` มาจาก `measurementPoints[].details.primaryFuel` และ `measurementPoints[].details.secondaryFuel`; ถ้าค่าว่างหรือไม่มีข้อมูลจะคืน `null`
 - ถ้า `parameters_json` เก็บเป็น code เปล่า backend จะคืน code นั้นตามที่เก็บไว้; ถ้าต้องการให้แสดงหน่วย ควรเก็บ label พร้อมหน่วยตั้งแต่ workflow เชื่อมต่อ เช่น `NOx (ppm)`
 
 ### Error behavior

@@ -513,6 +513,8 @@ export interface ConnectedMeasurementPointModalDetailDTO {
   pointName: string;
   pointType: MeasurementPointType;
   parameterDetails: string[];
+  primaryFuel: string | null;
+  secondaryFuel: string | null;
 }
 
 export interface DeviceConfigFormConnectionDTO {
