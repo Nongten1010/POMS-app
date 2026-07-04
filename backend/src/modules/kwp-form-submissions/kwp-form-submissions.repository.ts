@@ -4,6 +4,7 @@ import { db } from '../../config/database';
 import type {
   CreatedKwpFormSubmissionDTO,
   CreateKwp01SubmissionDTO,
+  CreateKwp02SubmissionDTO,
   KwpFormSubmissionAccess,
 } from './kwp-form-submissions.types';
 
@@ -18,6 +19,20 @@ interface Kwp01InsertRecords {
   submission: Record<string, unknown>;
   issueReport: Record<string, unknown>;
   unreportedParameters: Array<Record<string, unknown>>;
+  statusHistory: Record<string, unknown>;
+}
+
+interface Kwp02InsertInput {
+  payload: CreateKwp02SubmissionDTO;
+  submissionNo: string;
+  actorUserId: number;
+  now: Date;
+}
+
+interface Kwp02InsertRecords {
+  submission: Record<string, unknown>;
+  measurementItems: Array<Record<string, unknown>>;
+  attachmentsByItemIndex: Map<number, Array<Record<string, unknown>>>;
   statusHistory: Record<string, unknown>;
 }
 
@@ -72,6 +87,69 @@ export const kwpFormSubmissionsRepository = {
       };
     });
   },
+
+  async createKwp02(
+    payload: CreateKwp02SubmissionDTO,
+    access: KwpFormSubmissionAccess,
+  ): Promise<CreatedKwpFormSubmissionDTO> {
+    return db.transaction(async (trx) => {
+      await assertCanCreateForFactory(trx, payload.factoryId, access);
+
+      const now = new Date();
+      const submissionNo = await nextSubmissionNo(trx, now);
+      const records = toKwp02InsertRecords({
+        payload,
+        submissionNo,
+        actorUserId: access.actorUserId,
+        now,
+      });
+
+      const inserted = await trx('kwp_form_submissions')
+        .insert(records.submission)
+        .returning<{ id: number | string }[]>('id');
+      const submissionId = Number(inserted[0]?.id);
+
+      let attachmentCount = 0;
+      for (const [itemIndex, item] of records.measurementItems.entries()) {
+        const insertedItem = await trx('kwp_emission_measurement_items')
+          .insert({
+            ...item,
+            submission_id: submissionId,
+          })
+          .returning<{ id: number | string }[]>('id');
+        const itemId = Number(insertedItem[0]?.id);
+        const attachments = records.attachmentsByItemIndex.get(itemIndex) ?? [];
+
+        if (attachments.length > 0) {
+          await trx('kwp_form_attachments').insert(
+            attachments.map((attachment) => ({
+              ...attachment,
+              submission_id: submissionId,
+              related_table: 'kwp_emission_measurement_items',
+              related_id: itemId,
+            })),
+          );
+          attachmentCount += attachments.length;
+        }
+      }
+
+      await trx('kwp_form_status_history').insert({
+        ...records.statusHistory,
+        submission_id: submissionId,
+      });
+
+      return {
+        id: submissionId,
+        requestNo: submissionNo,
+        form: 'กวภ.02',
+        formType: 'KWP02',
+        status: 'SUBMITTED',
+        submittedAt: now.toISOString(),
+        measurementItemCount: records.measurementItems.length,
+        attachmentCount,
+      };
+    });
+  },
 };
 
 export function buildKwpFormSubmissionFactoryAccessQueryForTests(
@@ -83,6 +161,10 @@ export function buildKwpFormSubmissionFactoryAccessQueryForTests(
 
 export function toKwp01InsertRecordsForTests(input: Kwp01InsertInput): Kwp01InsertRecords {
   return toKwp01InsertRecords(input);
+}
+
+export function toKwp02InsertRecordsForTests(input: Kwp02InsertInput): Kwp02InsertRecords {
+  return toKwp02InsertRecords(input);
 }
 
 async function assertCanCreateForFactory(
@@ -133,9 +215,87 @@ async function nextSubmissionNo(trx: Knex.Transaction, now: Date): Promise<strin
 
 function toKwp01InsertRecords(input: Kwp01InsertInput): Kwp01InsertRecords {
   const { payload, submissionNo, actorUserId, now } = input;
-  const submission = {
+  const submission = toCommonSubmissionRecord(payload, 'KWP01', submissionNo, actorUserId, now);
+
+  return {
+    submission,
+    issueReport: {
+      issue_reason: payload.issueReason,
+      reason_detail: payload.reasonDetail ?? null,
+      problem_date: payload.problemDate ?? null,
+      expected_done_date: payload.expectedDoneDate ?? null,
+      total_days: payload.totalDays ?? null,
+      corrective_action: payload.correctiveAction ?? null,
+    },
+    unreportedParameters: payload.unreportedParameters.map((parameterName, index) => ({
+      parameter_name: parameterName,
+      sort_order: index + 1,
+    })),
+    statusHistory: {
+      status: 'SUBMITTED',
+      note: null,
+      changed_by: actorUserId,
+      changed_at: now,
+    },
+  };
+}
+
+function toKwp02InsertRecords(input: Kwp02InsertInput): Kwp02InsertRecords {
+  const { payload, submissionNo, actorUserId, now } = input;
+  const attachmentsByItemIndex = new Map<number, Array<Record<string, unknown>>>();
+
+  const measurementItems = payload.measurementItems.map((item, index) => {
+    const attachments = (item.attachments ?? []).map((attachment) => ({
+      attachment_type: attachment.attachmentType,
+      original_file_name: attachment.originalFileName,
+      stored_file_name: attachment.storedFileName ?? null,
+      mime_type: attachment.mimeType ?? null,
+      file_size: attachment.fileSize ?? null,
+      storage_path: attachment.storagePath ?? null,
+      uploaded_at: now,
+      uploaded_by: actorUserId,
+    }));
+
+    if (attachments.length > 0) {
+      attachmentsByItemIndex.set(index, attachments);
+    }
+
+    return {
+      pollutant: item.pollutant,
+      sample_date: item.sampleDate ?? null,
+      measured_value: numericMeasurementValue(item.measuredValue),
+      measured_value_text: measurementValueText(item.measuredValue),
+      unit: item.unit ?? null,
+      laboratory_no: item.laboratoryNo ?? null,
+      report_no: item.reportNo ?? null,
+      method: item.method ?? null,
+      sort_order: index + 1,
+    };
+  });
+
+  return {
+    submission: toCommonSubmissionRecord(payload, 'KWP02', submissionNo, actorUserId, now),
+    measurementItems,
+    attachmentsByItemIndex,
+    statusHistory: {
+      status: 'SUBMITTED',
+      note: null,
+      changed_by: actorUserId,
+      changed_at: now,
+    },
+  };
+}
+
+function toCommonSubmissionRecord(
+  payload: CreateKwp01SubmissionDTO | CreateKwp02SubmissionDTO,
+  formType: 'KWP01' | 'KWP02',
+  submissionNo: string,
+  actorUserId: number,
+  now: Date,
+): Record<string, unknown> {
+  return {
     submission_no: submissionNo,
-    form_type: 'KWP01',
+    form_type: formType,
     status: 'SUBMITTED',
     factory_id: payload.factoryId,
     factory_name: payload.factoryName,
@@ -163,26 +323,16 @@ function toKwp01InsertRecords(input: Kwp01InsertInput): Kwp01InsertRecords {
     created_by: actorUserId,
     updated_by: actorUserId,
   };
+}
 
-  return {
-    submission,
-    issueReport: {
-      issue_reason: payload.issueReason,
-      reason_detail: payload.reasonDetail ?? null,
-      problem_date: payload.problemDate ?? null,
-      expected_done_date: payload.expectedDoneDate ?? null,
-      total_days: payload.totalDays ?? null,
-      corrective_action: payload.correctiveAction ?? null,
-    },
-    unreportedParameters: payload.unreportedParameters.map((parameterName, index) => ({
-      parameter_name: parameterName,
-      sort_order: index + 1,
-    })),
-    statusHistory: {
-      status: 'SUBMITTED',
-      note: null,
-      changed_by: actorUserId,
-      changed_at: now,
-    },
-  };
+function numericMeasurementValue(value: string | number | null | undefined): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? numericValue : null;
+}
+
+function measurementValueText(value: string | number | null | undefined): string | null {
+  if (value === null || value === undefined || value === '') return null;
+  return String(value);
 }

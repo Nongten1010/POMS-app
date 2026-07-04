@@ -5,6 +5,7 @@ import { signAccessToken } from '../../src/shared/utils/jwt';
 jest.mock('../../src/modules/kwp-form-submissions/kwp-form-submissions.service', () => ({
   kwpFormSubmissionsService: {
     createKwp01: jest.fn(),
+    createKwp02: jest.fn(),
   },
 }));
 
@@ -23,6 +24,16 @@ describe('KWP form submission routes', () => {
       formType: 'KWP01',
       status: 'SUBMITTED',
       submittedAt: '2026-07-04T08:00:00.000Z',
+    });
+    mockedService.createKwp02.mockResolvedValue({
+      id: 13,
+      requestNo: 'KWP-69-00013',
+      form: 'กวภ.02',
+      formType: 'KWP02',
+      status: 'SUBMITTED',
+      submittedAt: '2026-07-04T08:15:00.000Z',
+      measurementItemCount: 2,
+      attachmentCount: 3,
     });
   });
 
@@ -88,6 +99,75 @@ describe('KWP form submission routes', () => {
     expect(response.status).toBe(403);
     expect(mockedService.createKwp01).not.toHaveBeenCalled();
   });
+
+  it('creates a submitted KWP02 form with measurement rows and file metadata', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .post('/api/v1/kwp-form-submissions/kwp02')
+      .set('Authorization', `Bearer ${operatorToken()}`)
+      .send(validKwp02Payload());
+
+    expect(response.status).toBe(201);
+    expect(response.headers.location).toBe('/api/v1/kwp-form-reports/requests/13');
+    expect(mockedService.createKwp02).toHaveBeenCalledWith(
+      expect.objectContaining({
+        factoryName: 'บริษัท ทดสอบ จำกัด',
+        measurementItems: [
+          expect.objectContaining({
+            pollutant: 'NOx (ppm)',
+            attachments: [
+              expect.objectContaining({
+                attachmentType: 'SAMPLING_PHOTO',
+                originalFileName: 'sampling-photo.jpg',
+              }),
+              expect.objectContaining({
+                attachmentType: 'LAB_REPORT',
+                originalFileName: 'lab-report.pdf',
+              }),
+            ],
+          }),
+          expect.objectContaining({
+            pollutant: 'SO2 (ppm)',
+            attachments: [expect.objectContaining({ attachmentType: 'LAB_REPORT' })],
+          }),
+        ],
+      }),
+      {
+        actorUserId: 42,
+        scope: 'OWN_FACTORY',
+      },
+    );
+    expect(response.body).toEqual({
+      success: true,
+      data: {
+        id: 13,
+        requestNo: 'KWP-69-00013',
+        form: 'กวภ.02',
+        formType: 'KWP02',
+        status: 'SUBMITTED',
+        submittedAt: '2026-07-04T08:15:00.000Z',
+        measurementItemCount: 2,
+        attachmentCount: 3,
+      },
+    });
+  });
+
+  it('rejects KWP02 payloads without measurement rows', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .post('/api/v1/kwp-form-submissions/kwp02')
+      .set('Authorization', `Bearer ${operatorToken()}`)
+      .send({
+        ...validKwp02Payload(),
+        measurementItems: [],
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    expect(mockedService.createKwp02).not.toHaveBeenCalled();
+  });
 });
 
 function validKwp01Payload() {
@@ -117,6 +197,78 @@ function validKwp01Payload() {
     totalDays: 5,
     unreportedParameters: ['NOx (ppm)', 'SO2 (ppm)'],
     correctiveAction: 'ซ่อมบำรุงเครื่องมือและตรวจสอบระบบรับส่งข้อมูล',
+    reporterName: 'สมชาย ทดสอบ',
+    reporterPosition: 'ผู้จัดการสิ่งแวดล้อม',
+  };
+}
+
+function validKwp02Payload() {
+  return {
+    factoryId: 'FID-001',
+    factoryName: 'บริษัท ทดสอบ จำกัด',
+    factoryRegistrationNo: '10190000225448',
+    factoryAddress: '9 หมู่ 9',
+    industryType: '10100 / 3',
+    connectedPointId: 8,
+    pointCode: 'S0001',
+    pointName: 'ปล่องระบาย A',
+    pointType: 'STACK',
+    productionStack: 'ปล่อง A',
+    primaryFuel: 'ก๊าซธรรมชาติ',
+    secondaryFuel: 'น้ำมันเตา',
+    combustionSystem: 'ระบบปิด',
+    productionCapacity: '100',
+    productionCapacityUnit: 'ตัน/วัน',
+    contactName: 'สมชาย ทดสอบ',
+    contactPhone: '0812345678',
+    contactEmail: 'operator@example.com',
+    measurementItems: [
+      {
+        pollutant: 'NOx (ppm)',
+        sampleDate: '2026-07-01',
+        measuredValue: '110.25',
+        unit: 'ppm',
+        laboratoryNo: 'LAB-001',
+        reportNo: 'RPT-001',
+        method: 'USEPA Method 7E',
+        attachments: [
+          {
+            attachmentType: 'SAMPLING_PHOTO',
+            originalFileName: 'sampling-photo.jpg',
+            storedFileName: '13-sampling-photo.jpg',
+            mimeType: 'image/jpeg',
+            fileSize: 120000,
+            storagePath: '/uploads/kwp/13-sampling-photo.jpg',
+          },
+          {
+            attachmentType: 'LAB_REPORT',
+            originalFileName: 'lab-report.pdf',
+            storedFileName: '13-lab-report.pdf',
+            mimeType: 'application/pdf',
+            fileSize: 880000,
+            storagePath: '/uploads/kwp/13-lab-report.pdf',
+          },
+        ],
+      },
+      {
+        pollutant: 'SO2 (ppm)',
+        sampleDate: '2026-07-01',
+        measuredValue: '<5',
+        unit: 'ppm',
+        laboratoryNo: 'LAB-002',
+        reportNo: 'RPT-002',
+        method: 'USEPA Method 6C',
+        attachments: [
+          {
+            attachmentType: 'LAB_REPORT',
+            originalFileName: 'lab-report-so2.pdf',
+            mimeType: 'application/pdf',
+            fileSize: 640000,
+            storagePath: '/uploads/kwp/13-lab-report-so2.pdf',
+          },
+        ],
+      },
+    ],
     reporterName: 'สมชาย ทดสอบ',
     reporterPosition: 'ผู้จัดการสิ่งแวดล้อม',
   };

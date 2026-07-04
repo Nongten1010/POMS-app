@@ -12,3 +12,9 @@ kwpFormSubmissionsRoutes.post(
   authorize('kwp_forms:edit'),
   kwpFormSubmissionsController.createKwp01,
 );
+
+kwpFormSubmissionsRoutes.post(
+  '/kwp02',
+  authorize('kwp_forms:edit'),
+  kwpFormSubmissionsController.createKwp02,
+);

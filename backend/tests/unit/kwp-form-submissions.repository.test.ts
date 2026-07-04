@@ -2,6 +2,7 @@ import { describe, expect, it } from '@jest/globals';
 import {
   buildKwpFormSubmissionFactoryAccessQueryForTests,
   toKwp01InsertRecordsForTests,
+  toKwp02InsertRecordsForTests,
 } from '../../src/modules/kwp-form-submissions/kwp-form-submissions.repository';
 
 describe('kwpFormSubmissionsRepository', () => {
@@ -76,6 +77,123 @@ describe('kwpFormSubmissionsRepository', () => {
       status: 'SUBMITTED',
       changed_by: 42,
       changed_at: new Date('2026-07-04T08:00:00.000Z'),
+    });
+  });
+
+  it('maps KWP02 payload to submission, emission measurement items, attachments, and initial history records', () => {
+    const records = toKwp02InsertRecordsForTests({
+      payload: {
+        factoryId: 'FID-001',
+        factoryName: 'บริษัท ทดสอบ จำกัด',
+        factoryRegistrationNo: '10190000225448',
+        factoryAddress: '9 หมู่ 9',
+        industryType: '10100 / 3',
+        connectedPointId: 8,
+        pointCode: 'S0001',
+        pointName: 'ปล่องระบาย A',
+        pointType: 'STACK',
+        productionStack: 'ปล่อง A',
+        primaryFuel: 'ก๊าซธรรมชาติ',
+        secondaryFuel: null,
+        combustionSystem: 'ระบบปิด',
+        productionCapacity: '100',
+        productionCapacityUnit: 'ตัน/วัน',
+        contactName: 'สมชาย ทดสอบ',
+        contactPhone: '0812345678',
+        contactEmail: 'operator@example.com',
+        measurementItems: [
+          {
+            pollutant: 'NOx (ppm)',
+            sampleDate: '2026-07-01',
+            measuredValue: '110.25',
+            unit: 'ppm',
+            laboratoryNo: 'LAB-001',
+            reportNo: 'RPT-001',
+            method: 'USEPA Method 7E',
+            attachments: [
+              {
+                attachmentType: 'SAMPLING_PHOTO',
+                originalFileName: 'sampling-photo.jpg',
+                storedFileName: '13-sampling-photo.jpg',
+                mimeType: 'image/jpeg',
+                fileSize: 120000,
+                storagePath: '/uploads/kwp/13-sampling-photo.jpg',
+              },
+            ],
+          },
+          {
+            pollutant: 'SO2 (ppm)',
+            sampleDate: '2026-07-01',
+            measuredValue: '<5',
+            unit: 'ppm',
+            laboratoryNo: 'LAB-002',
+            reportNo: 'RPT-002',
+            method: 'USEPA Method 6C',
+            attachments: [],
+          },
+        ],
+        reporterName: 'สมชาย ทดสอบ',
+        reporterPosition: 'ผู้จัดการสิ่งแวดล้อม',
+      },
+      submissionNo: 'KWP-69-00013',
+      actorUserId: 42,
+      now: new Date('2026-07-04T08:15:00.000Z'),
+    });
+
+    expect(records.submission).toMatchObject({
+      submission_no: 'KWP-69-00013',
+      form_type: 'KWP02',
+      status: 'SUBMITTED',
+      point_code: 'S0001',
+      submitted_at: new Date('2026-07-04T08:15:00.000Z'),
+      created_by: 42,
+    });
+    expect(records.measurementItems).toEqual([
+      {
+        pollutant: 'NOx (ppm)',
+        sample_date: '2026-07-01',
+        measured_value: 110.25,
+        measured_value_text: '110.25',
+        unit: 'ppm',
+        laboratory_no: 'LAB-001',
+        report_no: 'RPT-001',
+        method: 'USEPA Method 7E',
+        sort_order: 1,
+      },
+      {
+        pollutant: 'SO2 (ppm)',
+        sample_date: '2026-07-01',
+        measured_value: null,
+        measured_value_text: '<5',
+        unit: 'ppm',
+        laboratory_no: 'LAB-002',
+        report_no: 'RPT-002',
+        method: 'USEPA Method 6C',
+        sort_order: 2,
+      },
+    ]);
+    expect(records.attachmentsByItemIndex).toEqual(
+      new Map([
+        [
+          0,
+          [
+            {
+              attachment_type: 'SAMPLING_PHOTO',
+              original_file_name: 'sampling-photo.jpg',
+              stored_file_name: '13-sampling-photo.jpg',
+              mime_type: 'image/jpeg',
+              file_size: 120000,
+              storage_path: '/uploads/kwp/13-sampling-photo.jpg',
+              uploaded_at: new Date('2026-07-04T08:15:00.000Z'),
+              uploaded_by: 42,
+            },
+          ],
+        ],
+      ]),
+    );
+    expect(records.statusHistory).toMatchObject({
+      status: 'SUBMITTED',
+      changed_by: 42,
     });
   });
 });
