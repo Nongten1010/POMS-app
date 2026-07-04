@@ -17,6 +17,8 @@ describe('kwpFormReportsRepository access filters', () => {
     expect(sql).toContain('left join [eligible_factories] as [ef]');
     expect(sql).toContain('inner join [cems_wpms_connected_measurement_points] as [cp]');
     expect(sql).not.toContain('from [cems_wpms_connection_requests] as [cr]');
+    expect(sql).toContain('[ef].[business_activity]');
+    expect(sql).toContain('[ef].[factory_type_sequence]');
     expect(sql).toContain('join [user_juristics] as [uj]');
     expect(sql).toContain('[uj].[user_id]');
   });

@@ -33,6 +33,8 @@ export interface KwpFormFactoryTableRowDTO {
   newRegistrationNo: string;
   oldRegistrationNo: string | null;
   industryType: string | null;
+  industryMainOrder: string | null;
+  businessActivity: string | null;
   province: string | null;
   address: string | null;
   monitoringPointCount: number;

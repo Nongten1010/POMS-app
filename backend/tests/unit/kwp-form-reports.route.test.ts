@@ -26,6 +26,8 @@ describe('KWP form report routes', () => {
           newRegistrationNo: '10190000225448',
           oldRegistrationNo: '3-101-2/44สบ',
           industryType: '10100 / 3',
+          industryMainOrder: '1010',
+          businessActivity: 'ผลิตเคมีภัณฑ์',
           province: 'สระบุรี',
           address: '9 หมู่ 9',
           monitoringPointCount: 2,
@@ -78,6 +80,8 @@ describe('KWP form report routes', () => {
       factoryName: 'บริษัท ทดสอบ จำกัด',
       newRegistrationNo: '10190000225448',
       oldRegistrationNo: '3-101-2/44สบ',
+      industryMainOrder: '1010',
+      businessActivity: 'ผลิตเคมีภัณฑ์',
       monitoringPointCount: 2,
     });
   });

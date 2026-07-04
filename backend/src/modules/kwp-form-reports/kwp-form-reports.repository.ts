@@ -1,5 +1,6 @@
 import type { Knex } from 'knex';
 import { db } from '../../config/database';
+import { splitFactoryTypeSequence } from '../eligible-factories/factory-type-sequence';
 import type {
   KwpFormFactoryTableRowDTO,
   KwpFormReportAccess,
@@ -20,6 +21,8 @@ interface FactoryTableRow {
   province_region: string | null;
   old_registration_no: string | null;
   eligible_address: string | null;
+  eligible_business_activity: string | null;
+  eligible_factory_type_sequence: string | null;
   connected_point_count: number | string | null;
 }
 
@@ -136,6 +139,8 @@ function buildFactoryQuery(
       'p.region as province_region',
       'ef.factory_registration_no_old as old_registration_no',
       'ef.address as eligible_address',
+      'ef.business_activity as eligible_business_activity',
+      'ef.factory_type_sequence as eligible_factory_type_sequence',
     )
     .countDistinct<{ connected_point_count: number | string }>('cp.id as connected_point_count')
     .groupBy(
@@ -148,6 +153,8 @@ function buildFactoryQuery(
       'p.region',
       'ef.factory_registration_no_old',
       'ef.address',
+      'ef.business_activity',
+      'ef.factory_type_sequence',
     )
     .orderBy('f.name', 'asc')
     .orderBy('f.id', 'asc');
@@ -265,6 +272,7 @@ async function listStatusHistoryForSubmissions(
 }
 
 function toFactoryDTO(row: FactoryTableRow): KwpFormFactoryTableRowDTO {
+  const { factoryClass } = splitFactoryTypeSequence(row.eligible_factory_type_sequence);
   return {
     id: row.factory_fid,
     factoryId: row.factory_fid,
@@ -272,6 +280,8 @@ function toFactoryDTO(row: FactoryTableRow): KwpFormFactoryTableRowDTO {
     newRegistrationNo: row.factory_code,
     oldRegistrationNo: row.old_registration_no,
     industryType: row.factory_system_detail,
+    industryMainOrder: factoryClass,
+    businessActivity: row.eligible_business_activity,
     province: row.province_name,
     address: row.eligible_address,
     monitoringPointCount: Number(row.connected_point_count ?? 0),

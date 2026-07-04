@@ -29,6 +29,8 @@ Response:
       "newRegistrationNo": "10550000125197",
       "oldRegistrationNo": "3-1-1/19นน",
       "industryType": "100 / 003,000",
+      "industryMainOrder": "0100",
+      "businessActivity": "บ่มใบยาสูบ",
       "province": "น่าน",
       "address": "99 หมู่ 1",
       "monitoringPointCount": 2
@@ -44,7 +46,7 @@ Data source:
 
 - `cems_wpms_connected_measurement_points` เป็นตัวกรองหลักของ POMS current data; โรงงานที่มีเพียงคำขอแต่ยังไม่ `CONNECTED` จะไม่ถูกแสดง
 - `factories` เป็นฐานโรงงานหลักของ POMS สำหรับเติมชื่อโรงงาน/เลขทะเบียน/จังหวัดและตรวจสิทธิ์
-- `eligible_factories` enrich เลขทะเบียนเก่าและที่อยู่
+- `eligible_factories` enrich เลขทะเบียนเก่า ที่อยู่, `businessActivity` จาก `business_activity`, และ `industryMainOrder` จากลำดับหลักใน `factory_type_sequence`
 - `monitoringPointCount` นับจำนวนจุดตรวจวัดที่เชื่อมต่อแล้วจาก `cems_wpms_connected_measurement_points`
 
 ## 2. KWP request table

@@ -50,6 +50,43 @@ Known risks:
 
 - If `parameters_json` contains bare parameter codes instead of labels with units, this endpoint returns those stored values as-is. The submit/sync path should keep storing display-ready labels such as `NOx (ppm)` where available.
 
+## KWP Form Report Factory Table Fields
+
+Endpoint:
+
+- `GET /api/v1/kwp-form-reports/factories`
+
+Code:
+
+- `backend/src/modules/kwp-form-reports/kwp-form-reports.repository.ts`
+
+### `businessActivity`, `industryMainOrder`
+
+Source:
+
+- Base factory row: `dbo.factories`
+- Eligibility enrichment: `dbo.eligible_factories`
+
+Fallback order:
+
+- `businessActivity`: `eligible_factories.business_activity`
+- `industryMainOrder`: main factory class from `eligible_factories.factory_type_sequence`
+
+Transformation:
+
+- `businessActivity` is returned directly from the eligible-factory enrichment value.
+- `industryMainOrder` uses the same factory-type sequence parser as the connection-request/eligible-factory workflows and returns only the main 4-digit class.
+
+Reason:
+
+- The KWP factory table is built from POMS connected factories, but the more complete industry/business activity text is maintained in the eligible-factory enrichment table.
+- The frontend needs "การประกอบกิจการ" as a separate value matching the connection-request screen instead of overloading `industryType`.
+- The frontend also needs the main factory type sequence only, not the full main/sub sequence.
+
+Known risks:
+
+- If the eligible-factory join keys do not match the POMS factory row, `businessActivity` and `industryMainOrder` remain `null`.
+
 ## BOD/COD Online Deviation Report Frontend Table Fields
 
 Endpoints:
