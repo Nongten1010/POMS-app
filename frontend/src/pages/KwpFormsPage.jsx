@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   Badge,
@@ -53,265 +53,80 @@ const appBarHeight = {
   md: 72,
 }
 
+const kwpFormReportsApiBaseUrl = import.meta.env.DEV
+  ? '/api-proxy/v1/kwp-form-reports'
+  : 'https://d-poms.diw.go.th/api/v1/kwp-form-reports'
+
 const operatorSubMenus = [
   { value: 'factories', label: 'รายชื่อโรงงาน' },
-  { value: 'requests', label: 'รายการคำขอ', badgeContent: 1 },
+  { value: 'requests', label: 'รายการคำขอ' },
 ]
 
 const officerSubMenus = [
-  { value: 'requests', label: 'รายการคำขอ', badgeContent: 1 },
+  { value: 'requests', label: 'รายการคำขอ' },
   { value: 'statistics', label: 'สถิติข้อมูล' },
 ]
 
-const factoryRows = [
-  {
-    id: 1,
-    factoryName: 'บริษัท ปูนซีเมนต์นครหลวง จำกัด (มหาชน)',
-    newRegistrationNo: '10190000225448',
-    oldRegistrationNo: '3-101-2/44สบ',
-    industryType: '',
-    province: 'สระบุรี',
-    monitoringPointCount: 2,
-  },
-  {
-    id: 2,
-    factoryName: 'บริษัท ปูนซีเมนต์นครหลวง จำกัด (มหาชน)',
-    newRegistrationNo: '10190000325446',
-    oldRegistrationNo: '3-101-3/44สบ',
-    industryType: '',
-    province: 'สระบุรี',
-    monitoringPointCount: 0,
-  },
-  {
-    id: 3,
-    factoryName: 'บริษัท ปูนซีเมนต์นครหลวง จำกัด (มหาชน)',
-    newRegistrationNo: '10190000125572',
-    oldRegistrationNo: '3-101-1/57สบ',
-    industryType: '',
-    province: 'สระบุรี',
-    monitoringPointCount: 0,
-  },
-  {
-    id: 4,
-    factoryName: 'บริษัท อินทรี อีโคไซเคิล จำกัด',
-    newRegistrationNo: '10190003325500',
-    oldRegistrationNo: '3-106-33/50สบ',
-    industryType: '',
-    province: 'สระบุรี',
-    monitoringPointCount: 0,
-  },
-  {
-    id: 5,
-    factoryName: 'บริษัท อินทรี อีโคไซเคิล จำกัด',
-    newRegistrationNo: '72080000125562',
-    oldRegistrationNo: 'น.106-1/2556-จบหช.',
-    industryType: '',
-    province: 'สุพรรณบุรี',
-    monitoringPointCount: 0,
-  },
-  {
-    id: 6,
-    factoryName: 'บริษัท อินทรี อีโคไซเคิล จำกัด',
-    newRegistrationNo: '10900179425649',
-    oldRegistrationNo: '3-106-13/64สบ',
-    industryType: '',
-    province: 'สงขลา',
-    monitoringPointCount: 0,
-  },
-  {
-    id: 7,
-    factoryName: 'บริษัท อินทรี อีโคไซเคิล จำกัด',
-    newRegistrationNo: '10900061425657',
-    oldRegistrationNo: '3-105-35/65สบ',
-    industryType: '',
-    province: 'สงขลา',
-    monitoringPointCount: 0,
-  },
-]
-const monitoringPointRowsByFactoryId = {
-  1: [
-    {
-      id: 1,
-      code: 'SO002',
-      name: 'ปล่องระบาย A',
-      type: 'STACK',
-      parameters: 'NOx (ppm)',
-      status: 'เชื่อมต่อแล้ว',
-    },
-    {
-      id: 2,
-      code: 'SO001',
-      name: 'ปล่องระบาย A',
-      type: 'STACK',
-      parameters: 'CO (ppm), NOx (ppm), Temp. (°C), O2 (%), Flow (m³/hr)',
-      status: 'เชื่อมต่อแล้ว',
-    },
-  ],
+const monitoringPointRowsByFactoryId = {}
+
+async function readKwpApiResponse(result, fallbackMessage) {
+  const rawText = await result.text()
+  let response
+
+  try {
+    response = rawText ? JSON.parse(rawText) : null
+  } catch {
+    response = rawText
+  }
+
+  if (!result.ok || response?.success === false) {
+    const message =
+      response?.error?.message ??
+      response?.message ??
+      `${fallbackMessage} (${result.status} ${result.statusText})`
+    throw new Error(message)
+  }
+
+  return response
 }
 
-const requestRows = [
-  {
-    id: 'kwp-request-1',
-    factoryName: 'บริษัท ปูนซีเมนต์นครหลวง จำกัด (มหาชน)',
-    factoryRegistration: '10190000225448',
-    industryType: '10100 / 3',
-    factoryAddress: '9 หมู่ 9 ถนนมิตรภาพ ตำบลทับกวาง อำเภอแก่งคอย สระบุรี',
-    province: 'สระบุรี',
-    type: 'CEMS',
-    monitoringPointCode: 'S0001',
-    monitoringPointName: 'ปล่องระบาย A',
-    requestNo: 'KWP-69-00001',
-    form: 'กวภ.01',
-    submittedDate: '15/06/2569',
-    reviewedDate: '-',
-    status: 'รอพิจารณา',
-    statusHistory: [
-      {
-        id: 'kwp-request-1-history-1',
-        statusLabel: 'รอพิจารณา',
-        note: 'ผู้ประกอบการส่งแบบฟอร์ม กวภ.01 เพื่อให้เจ้าหน้าที่ตรวจสอบ',
-        changedAt: '15/06/2569',
-        durationText: 'อยู่ระหว่างดำเนินการ',
-        changedBy: 'บริษัท ปูนซีเมนต์นครหลวง จำกัด (มหาชน)',
-      },
-    ],
-  },
-  {
-    id: 'kwp-request-2',
-    factoryName: 'บริษัท ปูนซีเมนต์นครหลวง จำกัด (มหาชน)',
-    factoryRegistration: '10190000325446',
-    industryType: '10100 / 3',
-    factoryAddress: '22 หมู่ 3 ถนนมิตรภาพ ตำบลทับกวาง อำเภอแก่งคอย สระบุรี',
-    province: 'สระบุรี',
-    type: 'CEMS',
-    monitoringPointCode: 'S0002',
-    monitoringPointName: 'ปล่องระบาย B',
-    requestNo: 'KWP-69-00002',
-    form: 'กวภ.02',
-    submittedDate: '14/06/2569',
-    reviewedDate: '15/06/2569',
-    status: 'รอโรงงานแก้ไข',
-    revisionNote: 'กรุณาแนบเอกสารประกอบเพิ่มเติม และตรวจสอบรายละเอียดผลการตรวจวัดให้ครบถ้วน',
-    statusHistory: [
-      {
-        id: 'kwp-request-2-history-1',
-        statusLabel: 'รอพิจารณา',
-        note: 'ผู้ประกอบการส่งแบบฟอร์ม กวภ.02 พร้อมเอกสารประกอบ',
-        changedAt: '14/06/2569',
-        durationText: '1 วัน',
-        changedBy: 'บริษัท ปูนซีเมนต์นครหลวง จำกัด (มหาชน)',
-      },
-      {
-        id: 'kwp-request-2-history-2',
-        statusLabel: 'รอโรงงานแก้ไข',
-        note: 'กรุณาแนบเอกสารประกอบเพิ่มเติม และตรวจสอบรายละเอียดผลการตรวจวัดให้ครบถ้วน',
-        changedAt: '15/06/2569',
-        durationText: 'อยู่ระหว่างดำเนินการ',
-        changedBy: 'เจ้าหน้าที่ ก',
-      },
-    ],
-  },
-  {
-    id: 'kwp-request-3',
-    factoryName: 'บริษัท อินทรี อีโคไซเคิล จำกัด',
-    factoryRegistration: '72080000125562',
-    industryType: '10600 / 3',
-    factoryAddress: '55 หมู่ 2 ตำบลสระแก้ว อำเภอเมืองสุพรรณบุรี สุพรรณบุรี',
-    province: 'สุพรรณบุรี',
-    type: 'WPMS',
-    monitoringPointCode: 'P0001',
-    monitoringPointName: 'จุดระบายน้ำทิ้ง A',
-    requestNo: 'KWP-69-00003',
-    form: 'กวภ.03',
-    submittedDate: '13/06/2569',
-    reviewedDate: '14/06/2569',
-    status: 'ยื่นแบบสำเร็จ',
-    statusHistory: [
-      {
-        id: 'kwp-request-3-history-1',
-        statusLabel: 'รอพิจารณา',
-        note: 'ผู้ประกอบการส่งแบบฟอร์ม กวภ.03',
-        changedAt: '13/06/2569',
-        durationText: '1 วัน',
-        changedBy: 'บริษัท อินทรี อีโคไซเคิล จำกัด',
-      },
-      {
-        id: 'kwp-request-3-history-2',
-        statusLabel: 'ผ่านการพิจารณา',
-        note: 'เจ้าหน้าที่ตรวจสอบข้อมูลและเอกสารประกอบครบถ้วน',
-        changedAt: '14/06/2569',
-        durationText: '1 วัน',
-        changedBy: 'เจ้าหน้าที่ ก',
-      },
-      {
-        id: 'kwp-request-3-history-3',
-        statusLabel: 'ยื่นแบบสำเร็จ',
-        note: 'ระบบบันทึกผลการพิจารณาเรียบร้อยแล้ว',
-        changedAt: '14/06/2569',
-        changedBy: 'ระบบ',
-      },
-    ],
-  },
-  {
-    id: 'kwp-request-4',
-    factoryName: 'บริษัท ปูนซีเมนต์นครหลวง จำกัด (มหาชน)',
-    factoryRegistration: '10190000425445',
-    industryType: '10100 / 3',
-    factoryAddress: '88 หมู่ 7 ถนนมิตรภาพ ตำบลทับกวาง อำเภอแก่งคอย สระบุรี',
-    province: 'สระบุรี',
-    type: 'CEMS',
-    monitoringPointCode: 'S0004',
-    monitoringPointName: 'ปล่องระบาย C',
-    requestNo: 'KWP-69-00004',
-    form: 'กวภ.04',
-    submittedDate: '12/06/2569',
-    reviewedDate: '16/06/2569',
-    status: 'ผ่านการพิจารณา',
-    statusHistory: [
-      {
-        id: 'kwp-request-4-history-1',
-        statusLabel: 'รอพิจารณา',
-        note: 'ผู้ประกอบการส่งแบบฟอร์ม กวภ.04 พร้อมรายงานผลการตรวจวัด',
-        changedAt: '12/06/2569',
-        durationText: '4 วัน',
-        changedBy: 'บริษัท ปูนซีเมนต์นครหลวง จำกัด (มหาชน)',
-      },
-      {
-        id: 'kwp-request-4-history-2',
-        statusLabel: 'ผ่านการพิจารณา',
-        note: 'ตรวจสอบข้อมูลผลการตรวจวัดและเอกสารแนบถูกต้องครบถ้วน',
-        changedAt: '16/06/2569',
-        changedBy: 'เจ้าหน้าที่ ก',
-      },
-    ],
-  },
-  {
-    id: 'kwp-request-5',
-    factoryName: 'บริษัท เซาท์เทิร์นเพาเวอร์ จำกัด',
-    factoryRegistration: '90140000225610',
-    industryType: '08800 / 2',
-    factoryAddress: '11 หมู่ 5 ตำบลบางปูใหม่ อำเภอเมืองสมุทรปราการ สมุทรปราการ',
-    province: 'สมุทรปราการ',
-    type: 'CEMS',
-    monitoringPointCode: 'S0005',
-    monitoringPointName: 'ปล่องระบายหลัก',
-    requestNo: 'KWP-69-00005',
-    form: 'กวภ.05',
-    submittedDate: '10/06/2569',
-    reviewedDate: '17/06/2569',
-    status: 'รอพิจารณา',
-    statusHistory: [
-      {
-        id: 'kwp-request-5-history-1',
-        statusLabel: 'รอพิจารณา',
-        note: 'ผู้ประกอบการส่งแบบฟอร์ม กวภ.05 รายงานผลการสอบเทียบหรือทวนสอบ CEMS',
-        changedAt: '10/06/2569',
-        durationText: 'อยู่ระหว่างดำเนินการ',
-        changedBy: 'บริษัท เซาท์เทิร์นเพาเวอร์ จำกัด',
-      },
-    ],
-  },
-]
+function normalizeKwpFactoryRows(rows) {
+  return Array.isArray(rows)
+    ? rows.map((row, index) => ({
+        ...row,
+        id: row.id ?? row.factoryId ?? row.newRegistrationNo ?? `factory-${index + 1}`,
+        factoryName: row.factoryName ?? '',
+        newRegistrationNo: row.newRegistrationNo ?? row.factoryId ?? '',
+        oldRegistrationNo: row.oldRegistrationNo ?? '',
+        industryType: row.industryType ?? '',
+        province: row.province ?? '',
+        monitoringPointCount: Number(row.monitoringPointCount ?? 0),
+      }))
+    : []
+}
+
+function normalizeKwpRequestRows(rows) {
+  return Array.isArray(rows)
+    ? rows.map((row, index) => ({
+        ...row,
+        id: row.id ?? row.requestNo ?? `request-${index + 1}`,
+        factoryName: row.factoryName ?? '',
+        factoryRegistration: row.factoryRegistration ?? row.factoryId ?? '',
+        industryType: row.industryType ?? '',
+        factoryAddress: row.factoryAddress ?? '',
+        province: row.province ?? '',
+        type: row.type ?? '',
+        monitoringPointCode: row.monitoringPointCode ?? '',
+        monitoringPointName: row.monitoringPointName ?? '',
+        requestNo: row.requestNo ?? '',
+        form: row.form ?? row.formType ?? '',
+        submittedDate: row.submittedDate ?? '-',
+        reviewedDate: row.reviewedDate ?? '-',
+        status: row.status ?? '',
+        statusHistory: Array.isArray(row.statusHistory) ? row.statusHistory : [],
+      }))
+    : []
+}
 
 const kwpFormOptions = [
   {
@@ -3403,16 +3218,117 @@ function getRequestColumns(onOpenDocument, isOperator = false) {
   ]
 }
 
-function KwpFormsPage({ userType = '' }) {
+function KwpFormsPage({ userType = '', accessToken = '' }) {
   const isOperator = userType === 'operator'
   const availableSubMenus = isOperator ? operatorSubMenus : officerSubMenus
   const [monitoringPointFactory, setMonitoringPointFactory] = useState(null)
   const [selectedForm, setSelectedForm] = useState(null)
   const [requestDocument, setRequestDocument] = useState(null)
   const [selectedSubMenu, setSelectedSubMenu] = useState(() => (isOperator ? 'factories' : 'requests'))
+  const [factoryRows, setFactoryRows] = useState([])
+  const [requestRows, setRequestRows] = useState([])
+  const [isLoadingFactories, setIsLoadingFactories] = useState(false)
+  const [isLoadingRequests, setIsLoadingRequests] = useState(false)
+  const [factoriesError, setFactoriesError] = useState('')
+  const [requestsError, setRequestsError] = useState('')
   const effectiveSubMenu = availableSubMenus.some((menu) => menu.value === selectedSubMenu)
     ? selectedSubMenu
     : availableSubMenus[0].value
+
+  const loadFactoryRows = useCallback(async (signal) => {
+    if (!accessToken) {
+      setFactoryRows([])
+      setFactoriesError('กรุณาเข้าสู่ระบบเพื่อโหลดรายชื่อโรงงาน')
+      return
+    }
+
+    setIsLoadingFactories(true)
+    setFactoriesError('')
+
+    try {
+      const result = await fetch(`${kwpFormReportsApiBaseUrl}/factories`, {
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        signal,
+      })
+      const response = await readKwpApiResponse(result, 'โหลดรายชื่อโรงงานไม่สำเร็จ')
+      setFactoryRows(normalizeKwpFactoryRows(response?.data))
+    } catch (requestError) {
+      if (requestError.name !== 'AbortError') {
+        setFactoryRows([])
+        setFactoriesError(requestError.message)
+      }
+    } finally {
+      if (!signal?.aborted) {
+        setIsLoadingFactories(false)
+      }
+    }
+  }, [accessToken])
+
+  const loadRequestRows = useCallback(async (signal) => {
+    if (!accessToken) {
+      setRequestRows([])
+      setRequestsError('กรุณาเข้าสู่ระบบเพื่อโหลดรายการคำขอ')
+      return
+    }
+
+    setIsLoadingRequests(true)
+    setRequestsError('')
+
+    try {
+      const result = await fetch(`${kwpFormReportsApiBaseUrl}/requests`, {
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        signal,
+      })
+      const response = await readKwpApiResponse(result, 'โหลดรายการคำขอไม่สำเร็จ')
+      setRequestRows(normalizeKwpRequestRows(response?.data))
+    } catch (requestError) {
+      if (requestError.name !== 'AbortError') {
+        setRequestRows([])
+        setRequestsError(requestError.message)
+      }
+    } finally {
+      if (!signal?.aborted) {
+        setIsLoadingRequests(false)
+      }
+    }
+  }, [accessToken])
+
+  useEffect(() => {
+    if (effectiveSubMenu !== 'factories') {
+      return
+    }
+
+    const controller = new AbortController()
+    queueMicrotask(() => {
+      loadFactoryRows(controller.signal)
+    })
+
+    return () => {
+      controller.abort()
+    }
+  }, [effectiveSubMenu, loadFactoryRows])
+
+  useEffect(() => {
+    if (effectiveSubMenu !== 'requests') {
+      return
+    }
+
+    const controller = new AbortController()
+    queueMicrotask(() => {
+      loadRequestRows(controller.signal)
+    })
+
+    return () => {
+      controller.abort()
+    }
+  }, [effectiveSubMenu, loadRequestRows])
+
   const factoryColumns = useMemo(() => getFactoryColumns(setMonitoringPointFactory), [])
   const requestColumns = useMemo(
     () => getRequestColumns((row, mode) => {
@@ -3435,13 +3351,27 @@ function KwpFormsPage({ userType = '' }) {
             title: 'รายชื่อโรงงาน',
             columns: factoryColumns,
             rows: factoryRows,
+            loading: isLoadingFactories,
+            error: factoriesError,
           }
         : {
             title: 'รายการคำขอ',
             columns: requestColumns,
             rows: requestRows,
+            loading: isLoadingRequests,
+            error: requestsError,
           },
-    [effectiveSubMenu, factoryColumns, requestColumns],
+    [
+      effectiveSubMenu,
+      factoriesError,
+      factoryColumns,
+      factoryRows,
+      isLoadingFactories,
+      isLoadingRequests,
+      requestColumns,
+      requestRows,
+      requestsError,
+    ],
   )
   const isStatisticsSubMenu = effectiveSubMenu === 'statistics'
 
@@ -3523,11 +3453,19 @@ function KwpFormsPage({ userType = '' }) {
               border: 1,
               borderColor: 'divider',
               overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
             }}
           >
+            {table.error ? (
+              <Alert severity="error" sx={{ borderRadius: 0 }}>
+                {table.error}
+              </Alert>
+            ) : null}
             <DataGrid
               rows={table.rows}
               columns={table.columns}
+              loading={table.loading}
               disableRowSelectionOnClick
               showToolbar
               showCellVerticalBorder

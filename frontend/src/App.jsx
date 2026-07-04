@@ -240,7 +240,7 @@ function App() {
         ) : visibleSelectedMenu === 'connection-request' ? (
           <ConnectionRequestPage userType={userType} accessToken={accessToken} currentUser={currentUser} />
         ) : visibleSelectedMenu === 'forms' ? (
-          <KwpFormsPage userType={userType} />
+          <KwpFormsPage userType={userType} accessToken={accessToken} />
         ) : visibleSelectedMenu === 'bod-cod-report' ? (
           <BodCodReportPage userType={userType} />
         ) : visibleSelectedMenu === 'notifications' ? (
