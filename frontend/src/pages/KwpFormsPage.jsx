@@ -95,16 +95,18 @@ async function readKwpApiResponse(result, fallbackMessage) {
 function normalizeMonitoringPointDetailRows(rows) {
   return Array.isArray(rows)
     ? rows.map((row, index) => {
-        const parameterDetails = Array.isArray(row.parameterDetails)
-          ? row.parameterDetails.filter(Boolean).join(', ')
-          : ''
+        const parameterDetails = Array.isArray(row.parameterDetails) ? row.parameterDetails.filter(Boolean) : []
 
         return {
+          ...row,
           id: row.pointCode ?? row.stationId ?? row.pointName ?? `monitoring-point-detail-${index + 1}`,
           code: row.pointCode ?? '',
           name: row.pointName ?? '',
           type: row.pointType ?? '',
-          parameters: parameterDetails,
+          parameters: parameterDetails.join(', '),
+          parameterDetails,
+          primaryFuel: row.primaryFuel ?? row.mainFuel ?? row.fuelType ?? '',
+          secondaryFuel: row.secondaryFuel ?? row.subFuel ?? row.backupFuel ?? '',
         }
       })
     : []
@@ -112,6 +114,13 @@ function normalizeMonitoringPointDetailRows(rows) {
 
 function getMonitoringPointFactoryId(row) {
   return row?.factoryId ?? row?.newRegistrationNo ?? row?.factoryRegistration ?? row?.id ?? ''
+}
+
+function getFactoryIndustryTypePrefix(value) {
+  const industryType = String(value ?? '').trim()
+  if (!industryType) return ''
+
+  return industryType.split('/')[0].trim()
 }
 
 function normalizeKwpFactoryRows(rows) {
@@ -458,9 +467,10 @@ function MonitoringPointDialog({ context, rows, loading, error, open, onClose, o
   )
 }
 
-function ReadOnlyField({ label, value = '', multiline = false }) {
+function ReadOnlyField({ label, value = '', multiline = false, name }) {
   return (
     <TextField
+      name={name}
       label={label}
       value={value}
       size="small"
@@ -520,8 +530,8 @@ function OptionMultiSelect({ label, value, onChange, options }) {
   )
 }
 
-function ParameterMultiSelect({ label, value, onChange }) {
-  return <OptionMultiSelect label={label} value={value} onChange={onChange} options={cemsParameterOptions} />
+function ParameterMultiSelect({ label, value, onChange, options = cemsParameterOptions }) {
+  return <OptionMultiSelect label={label} value={value} onChange={onChange} options={options} />
 }
 
 function getDayRange(startDate, endDate) {
@@ -546,6 +556,9 @@ function Kwp01Form({
   const [combustionSystem, setCombustionSystem] = useState('')
   const [issueReason, setIssueReason] = useState('')
   const totalDays = getDayRange(problemDate, expectedDoneDate)
+  const unavailableParameterOptions = point?.parameterDetails ?? []
+  const primaryFuel = point?.primaryFuel ?? ''
+  const secondaryFuel = point?.secondaryFuel ?? ''
 
   return (
     <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="th">
@@ -559,7 +572,7 @@ function Kwp01Form({
               <ReadOnlyField label="ทะเบียนโรงงานเลขที่" value={factory?.newRegistrationNo ?? ''} />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <ReadOnlyField label="ลำดับประเภทโรงงาน" value={factory?.industryType ?? ''} />
+              <ReadOnlyField label="ลำดับประเภทโรงงาน" value={getFactoryIndustryTypePrefix(factory?.industryType)} />
             </Grid>
             <Grid size={{ xs: 12, md: 12 }}>
               <ReadOnlyField label="สถานที่ตั้งโรงงาน" value={factory?.address ?? ''} multiline />
@@ -577,43 +590,49 @@ function Kwp01Form({
         </SectionPaper>
 
         <SectionPaper title="ข้อมูลจุดตรวจวัด">
-          <Grid container spacing={2}>
-            <Grid size={{ xs: 12, md: 3 }}>
-              <ReadOnlyField label="รหัสจุดตรวจวัด" value={point?.code ?? ''} />
+          <Stack spacing={2}>
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12, md: 3 }}>
+                <ReadOnlyField label="รหัสจุดตรวจวัด" value={point?.code ?? ''} />
+              </Grid>
+              <Grid size={{ xs: 12, md: 3 }}>
+                <ReadOnlyField label="ชื่อจุดตรวจวัด" value={point?.name ?? ''} />
+              </Grid>
+              <Grid size={{ xs: 12, md: 3 }}>
+                <TextField name="productionStack" label="ปล่องจากกระบวนการผลิต" size="small" fullWidth />
+              </Grid>
             </Grid>
-            <Grid size={{ xs: 12, md: 3 }}>
-              <ReadOnlyField label="ชื่อจุดตรวจวัด" value={point?.name ?? ''} />
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12, md: 3 }}>
+                <ReadOnlyField name="primaryFuel" label="เชื้อเพลิงหลัก" value={primaryFuel} />
+              </Grid>
+              <Grid size={{ xs: 12, md: 3 }}>
+                <ReadOnlyField name="secondaryFuel" label="เชื้อเพลิงสำรอง" value={secondaryFuel} />
+              </Grid>
+              <Grid size={{ xs: 12, md: 3 }}>
+                <TextField
+                  select
+                  name="combustionSystem"
+                  label="ระบบการเผาไหม้เชื้อเพลิง"
+                  size="small"
+                  value={combustionSystem}
+                  onChange={(event) => setCombustionSystem(event.target.value)}
+                  fullWidth
+                >
+                  <MenuItem value="ระบบปิด">ระบบปิด</MenuItem>
+                  <MenuItem value="ระบบเปิด">ระบบเปิด</MenuItem>
+                </TextField>
+              </Grid>
             </Grid>
-            <Grid size={{ xs: 12, md: 3 }}>
-              <TextField name="productionStack" label="ปล่องจากกระบวนการผลิต" size="small" fullWidth />
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12, md: 3 }}>
+                <TextField name="productionCapacity" label="กำลังการผลิตของหน่วยการผลิต" size="small" fullWidth />
+              </Grid>
+              <Grid size={{ xs: 12, md: 3 }}>
+                <TextField name="productionCapacityUnit" label="หน่วยของกำลังการผลิต" size="small" fullWidth />
+              </Grid>
             </Grid>
-            <Grid size={{ xs: 12, md: 3 }}>
-              <TextField name="primaryFuel" label="เชื้อเพลิงหลัก" size="small" fullWidth />
-            </Grid>
-            <Grid size={{ xs: 12, md: 3 }}>
-              <TextField name="secondaryFuel" label="เชื้อเพลิงสำรอง" size="small" fullWidth />
-            </Grid>
-            <Grid size={{ xs: 12, md: 3 }}>
-              <TextField
-                select
-                name="combustionSystem"
-                label="ระบบการเผาไหม้เชื้อเพลิง"
-                size="small"
-                value={combustionSystem}
-                onChange={(event) => setCombustionSystem(event.target.value)}
-                fullWidth
-              >
-                <MenuItem value="ระบบปิด">ระบบปิด</MenuItem>
-                <MenuItem value="ระบบเปิด">ระบบเปิด</MenuItem>
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, md: 3 }}>
-              <TextField name="productionCapacity" label="กำลังการผลิตของหน่วยการผลิต" size="small" fullWidth />
-            </Grid>
-            <Grid size={{ xs: 12, md: 3 }}>
-              <TextField name="productionCapacityUnit" label="หน่วยของกำลังการผลิต" size="small" fullWidth />
-            </Grid>
-          </Grid>
+          </Stack>
         </SectionPaper>
 
         <SectionPaper title="สาเหตุของการไม่สามารถรายงานผลการตรวจวัดได้">
@@ -671,6 +690,7 @@ function Kwp01Form({
                 label="รายการตรวจวัด (พารามิเตอร์) ที่ไม่สามารถรายงานผลได้"
                 value={unreportedParameters}
                 onChange={onUnreportedParametersChange}
+                options={unavailableParameterOptions}
               />
             </Grid>
             <Grid size={{ xs: 12, md: 6 }}>
@@ -718,7 +738,7 @@ function buildKwp01PreviewData(form, formElement, dates, unreportedParameters) {
     title: form?.title ?? '',
     factoryName: form?.factory?.factoryName ?? '',
     factoryRegistration: form?.factory?.newRegistrationNo ?? '',
-    industryType: form?.factory?.industryType ?? '',
+    industryType: getFactoryIndustryTypePrefix(form?.factory?.industryType),
     factoryAddress: form?.factory?.address ?? '',
     contactName: getFormText(formData, 'contactName'),
     contactPhone: getFormText(formData, 'contactPhone'),
@@ -749,7 +769,7 @@ function buildCommonFormPreviewData(form, formElement) {
   return {
     factoryName: form?.factory?.factoryName ?? '',
     factoryRegistration: form?.factory?.newRegistrationNo ?? '',
-    industryType: form?.factory?.industryType ?? '',
+    industryType: getFactoryIndustryTypePrefix(form?.factory?.industryType),
     factoryAddress: form?.factory?.address ?? '',
     contactName: getFormText(formData, 'contactName'),
     contactPhone: getFormText(formData, 'contactPhone'),
@@ -3221,7 +3241,6 @@ function getFactoryColumns(onOpenMonitoringPoints) {
     { field: 'factoryName', headerName: 'ชื่อโรงงาน/บริษัท', width: 240 },
     { field: 'newRegistrationNo', headerName: 'เลขทะเบียนโรงงาน (ใหม่)', width: 190 },
     { field: 'oldRegistrationNo', headerName: 'เลขทะเบียนโรงงาน (เก่า)', width: 190 },
-    { field: 'industryType', headerName: 'ประเภทอุตสาหกรรม', width: 170 },
     { field: 'province', headerName: 'จังหวัด', width: 130 },
     { field: 'monitoringPointCount', headerName: 'จำนวนจุดตรวจวัด', width: 150, type: 'number' },
     {
@@ -3680,7 +3699,11 @@ function KwpFormsPage({ userType = '', accessToken = '' }) {
         }}
       />
       <KwpFormBottomSheet
-        key={selectedForm ? `${selectedForm.requestNo ?? 'new'}-${selectedForm.code ?? 'form'}-${selectedForm.mode ?? 'create'}` : 'empty-form'}
+        key={
+          selectedForm
+            ? `${selectedForm.requestNo ?? 'new'}-${selectedForm.code ?? 'form'}-${selectedForm.point?.code ?? 'point'}-${selectedForm.mode ?? 'create'}`
+            : 'empty-form'
+        }
         open={isFormSheetOpen}
         form={selectedForm}
         onClose={closeFormBottomSheet}
