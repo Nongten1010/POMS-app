@@ -2332,29 +2332,6 @@ const emptyEmissionMeasurement = {
   labReportFileType: '',
 }
 
-function SingleFileInputButton({ label, fileName, onChange }) {
-  return (
-    <Stack spacing={0.75}>
-      <Button component="label" size="small" variant="outlined">
-        แนบไฟล์
-        <input
-          hidden
-          type="file"
-          accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
-          onChange={(event) => {
-            const selectedFile = event.target.files?.[0] ?? null
-            event.target.value = ''
-            onChange(selectedFile)
-          }}
-        />
-      </Button>
-      <Typography variant="caption" color={fileName ? 'text.primary' : 'text.secondary'}>
-        {fileName || label}
-      </Typography>
-    </Stack>
-  )
-}
-
 function MultiFileInputButton({ label, files, onChange, maxFiles = 5 }) {
   const safeFiles = Array.isArray(files) ? files : []
   const isLimitReached = safeFiles.length >= maxFiles
@@ -2365,8 +2342,8 @@ function MultiFileInputButton({ label, files, onChange, maxFiles = 5 }) {
 
   return (
     <Stack spacing={1}>
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-        <Button component="label" size="small" variant="outlined" disabled={isLimitReached}>
+      <Stack spacing={0.75}>
+        <Button component="label" variant="outlined" fullWidth disabled={isLimitReached}>
           แนบไฟล์
           <input
             hidden
@@ -2444,15 +2421,6 @@ function EmissionMeasurementDialogContent({ value, parameterOptions, onClose, on
   const updateForm = (field, nextValue) => {
     setForm((current) => ({ ...current, [field]: nextValue }))
   }
-  const updateFile = (fieldPrefix, file) => {
-    setForm((current) => ({
-      ...current,
-      [`${fieldPrefix}File`]: file,
-      [`${fieldPrefix}FileName`]: file?.name ?? '',
-      [`${fieldPrefix}FileType`]: file?.type ?? '',
-      [`${fieldPrefix}FileUrl`]: '',
-    }))
-  }
 
   return (
     <Dialog open onClose={onClose} fullWidth maxWidth="md">
@@ -2528,20 +2496,6 @@ function EmissionMeasurementDialogContent({ value, parameterOptions, onClose, on
                 value={form.method}
                 onChange={(event) => updateForm('method', event.target.value)}
                 fullWidth
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <SingleFileInputButton
-                label="ภาพถ่ายขณะเก็บตัวอย่าง (JPG/PNG/PDF ไม่เกิน 5 MB)"
-                fileName={form.samplingPhotoFileName}
-                onChange={(file) => updateFile('samplingPhoto', file)}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <SingleFileInputButton
-                label="รายงานผลจากห้องปฏิบัติการ (JPG/PNG/PDF ไม่เกิน 5 MB)"
-                fileName={form.labReportFileName}
-                onChange={(file) => updateFile('labReport', file)}
               />
             </Grid>
           </Grid>
