@@ -194,7 +194,6 @@ export async function seed(knex: Knex): Promise<void> {
     const roleId = roleByCode.get(g.role);
     const permId = permByCode.get(g.permission);
     if (!roleId || !permId) {
-      // eslint-disable-next-line no-console
       console.warn(`[seed] skipped grant: role=${g.role} perm=${g.permission}`);
       return null;
     }
