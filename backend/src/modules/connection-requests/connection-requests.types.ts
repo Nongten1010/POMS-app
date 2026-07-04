@@ -508,6 +508,13 @@ export interface ConnectedMeasurementPointDetailDTO {
   deviceConfigs: DeviceConfigPayloadDTO[];
 }
 
+export interface ConnectedMeasurementPointModalDetailDTO {
+  pointCode: string | null;
+  pointName: string;
+  pointType: MeasurementPointType;
+  parameterDetails: string[];
+}
+
 export interface DeviceConfigFormConnectionDTO {
   id: number;
   configId: number;

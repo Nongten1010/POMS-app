@@ -187,6 +187,26 @@ export const connectionRequestsController = {
     }
   },
 
+  async getConnectedMeasurementPointDetail(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const actorUserId = requireActorUserId(req);
+      const { stationId } = connectedMeasurementPointParamsSchema.parse(req.params);
+      const data = await connectionRequestsService.getConnectedMeasurementPointDetail(
+        stationId,
+        actorUserId,
+        getScope(req, 'cems_wpms_requests:view'),
+        ...getRegionalAccessArg(req),
+      );
+      res.status(StatusCodes.OK).json({ success: true, data });
+    } catch (err) {
+      next(err);
+    }
+  },
+
   async getAddParameterFormDetail(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const actorUserId = requireActorUserId(req);

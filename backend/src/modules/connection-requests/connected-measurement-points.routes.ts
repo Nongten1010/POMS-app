@@ -37,6 +37,11 @@ connectedMeasurementPointsRoutes.get(
   authorize('dashboard.stats:view'),
   connectionRequestsController.getCalendarStatus,
 );
+connectedMeasurementPointsRoutes.get(
+  '/:stationId',
+  authorize('cems_wpms_requests:view'),
+  connectionRequestsController.getConnectedMeasurementPointDetail,
+);
 connectedMeasurementPointsRoutes.post(
   '/:stationId/device-configs',
   authorize('cems_wpms_requests:edit'),

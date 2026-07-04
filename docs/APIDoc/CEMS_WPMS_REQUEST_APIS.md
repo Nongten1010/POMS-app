@@ -77,6 +77,7 @@ Mapping:
 | 8.1 | ติดดาว/ยกเลิกติดดาวโรงงาน                                   | PUT    | `/operator-factories/:factoryId/favorite` | `factories:view` + `dashboard.alerts:view` |
 | 9   | รายละเอียดคำขอรายคำขอ สำหรับ PDF/เติมฟอร์มเพิ่มพารามิเตอร์   | GET    | `/cems-wpms-requests/:id/detail`                           | `cems_wpms_requests:view`    |
 | 10  | รายละเอียดจุดตรวจวัดที่เชื่อมต่อแล้วจากระบบ POMS ปัจจุบัน    | GET    | `/connected-measurement-points`                            | `cems_wpms_requests:view`    |
+| 10.1 | รายละเอียดจุดตรวจวัด 4 คอลัมน์สำหรับ modal                  | GET    | `/connected-measurement-points/:stationId`                 | `cems_wpms_requests:view`    |
 | 11  | รายการคำขอทุกคำขอของจุดตรวจวัดที่เลือก                      | GET    | `/connected-measurement-points/:stationId/requests`        | `cems_wpms_requests:view`    |
 | 12  | ดึงข้อมูลปัจจุบันลงฟอร์มเพิ่มพารามิเตอร์                     | GET    | `/connected-measurement-points/:stationId/parameter-form`  | `cems_wpms_requests:view`    |
 | 13  | ดึง config ปัจจุบันของจุดตรวจวัดที่เลือก                     | GET    | `/connected-measurement-points/:stationId/device-configs`  | `cems_wpms_requests:view`    |
@@ -93,6 +94,7 @@ Mapping:
 
 | ปุ่ม | ใช้ API | หมายเหตุ |
 | --- | --- | --- |
+| รายละเอียดจุดตรวจวัด | `GET /api/v1/connected-measurement-points/:stationId` | คืนเฉพาะ `pointCode`, `pointName`, `pointType`, `parameterDetails` สำหรับตารางใน modal |
 | เปิดดู | `GET /api/v1/connected-measurement-points/:stationId/requests` | คืนรายการคำขอทุกคำขอของจุดตรวจวัดที่เลือก โดยจับทั้งรหัส/ชื่อจุดจาก current connected point และแต่ละรายการใช้ shape เดียวกับ `GET /api/v1/cems-wpms-requests/:id/detail` |
 | เพิ่มพารามิเตอร์ | `GET /api/v1/connected-measurement-points/:stationId/parameter-form` | คืน `formDefaults` เป็น payload shape เดียวกับ `POST /api/v1/cems-wpms-requests/parameters` |
 | เพิ่มพารามิเตอร์ | `POST /api/v1/cems-wpms-requests/parameters` | บันทึกคำขอเพิ่มพารามิเตอร์; ใช้ฟอร์ม shape เดียวกับเพิ่มจุดตรวจวัด แต่ต้องมี `measurementPoints[0].pointCode` |
@@ -102,6 +104,27 @@ Mapping:
 | ดูรายละเอียด | `GET /api/v1/connected-measurement-points/:stationId/measurement-statistics?date=2026-06-09` | คืนข้อมูลกราฟและตารางรายชั่วโมงจากตาราง `{stationId}_data_60m`; `data.measurementPoints[]` มี `pointName`, `latitude`, `longitude` โดย fallback จากพิกัดใน `details` เมื่อ column หลักว่าง; `data.thresholds[]` ต้องคงพารามิเตอร์ที่ตั้งค่าไว้ครบ แม้ไม่มีค่าเกณฑ์ โดยส่ง `normalMax: null`, `warningMax: null` |
 
 รายละเอียด API ของหน้าดูรายละเอียดอยู่ใน [`OPERATOR_FACTORY_DASHBOARD.md`](./OPERATOR_FACTORY_DASHBOARD.md#detail-page-apis)
+
+### รายละเอียดจุดตรวจวัด 4 คอลัมน์สำหรับ modal
+
+```bash
+curl "http://localhost:3000/api/v1/connected-measurement-points/S0001" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "pointCode": "S0001",
+    "pointName": "ปล่อง A",
+    "pointType": "STACK",
+    "parameterDetails": ["NOx (ppm)", "SO2 (ppm)"]
+  }
+}
+```
 
 ## Flow เพิ่มจุดตรวจวัด จบ 1 คำขอ
 

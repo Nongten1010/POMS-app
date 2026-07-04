@@ -209,6 +209,26 @@ Data source:
 
 `stationId` ต้องเป็น safe SQL identifier เพราะ backend ใช้ประกอบชื่อตาราง parameter ingestion เช่น `S0001`, `P0001`
 
+### GET Measurement Point Modal Detail
+
+```http
+GET /api/v1/connected-measurement-points/S0001
+```
+
+ใช้กับ modal "รายละเอียดจุดตรวจวัด" โดยคืนเฉพาะ 4 field:
+
+```json
+{
+  "success": true,
+  "data": {
+    "pointCode": "S0001",
+    "pointName": "ปล่อง A",
+    "pointType": "STACK",
+    "parameterDetails": ["NOx (ppm)", "SO2 (ppm)"]
+  }
+}
+```
+
 ### GET Calendar Status
 
 ```http

@@ -28,6 +28,7 @@ import {
   type ConnectionRequestStatus,
   type ConnectionRequestTableRowDTO,
   type ConnectionRequestType,
+  type ConnectedMeasurementPointModalDetailDTO,
   type CreateConnectionRequestInput,
   type CurrentFactoryMeasurementPointDTO,
   type DeviceConfigFormConnectionDTO,
@@ -492,6 +493,26 @@ export const connectionRequestsService = {
     );
     const configs = await deviceConnectionsService.listActiveSettings({ stationId });
     return toDeviceConfigFormDetail(request, configs, stationId);
+  },
+
+  async getConnectedMeasurementPointDetail(
+    stationId: string,
+    actorUserId: number,
+    viewScope: string | null | undefined,
+    regionalAccess?: RegionalAccessDTO | null,
+  ): Promise<ConnectedMeasurementPointModalDetailDTO> {
+    const detail = await loadConnectedMeasurementPointDetail(
+      stationId,
+      actorUserId,
+      viewScope,
+      regionalAccess,
+    );
+    return {
+      pointCode: detail.point.pointCode ?? null,
+      pointName: detail.point.pointName,
+      pointType: detail.point.pointType,
+      parameterDetails: detail.point.parameters,
+    };
   },
 
   async listConnectedMeasurementPoints(

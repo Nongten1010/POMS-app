@@ -6,6 +6,7 @@ jest.mock('../../src/modules/connection-requests/connection-requests.service', (
   connectionRequestsService: {
     getAddParameterFormDetail: jest.fn(),
     getCalendarStatus: jest.fn(),
+    getConnectedMeasurementPointDetail: jest.fn(),
     getCurrentDeviceConfigFormDetail: jest.fn(),
     getMeasurementStatistics: jest.fn(),
     listConnectedMeasurementPoints: jest.fn(),
@@ -160,6 +161,12 @@ describe('connected measurement points route', () => {
         },
       ],
       meta: { total: 1 },
+    });
+    mockedConnectionRequestsService.getConnectedMeasurementPointDetail.mockResolvedValue({
+      pointCode: 'S0001',
+      pointName: 'ปล่อง A',
+      pointType: 'STACK',
+      parameterDetails: ['NOx (ppm)', 'SO2 (ppm)'],
     });
     mockedConnectionRequestsService.getAddParameterFormDetail.mockResolvedValue({
       requestType: 'ADD_PARAMETER',
@@ -338,6 +345,30 @@ describe('connected measurement points route', () => {
       requestNo: 'CEMS6900001',
       measurementPoints: [{ pointCode: 'S0001' }],
       deviceConfigs: [],
+    });
+  });
+
+  it('exposes only the modal detail fields for a selected connected measurement point', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .get('/api/v1/connected-measurement-points/S0001')
+      .set('Authorization', `Bearer ${accessToken()}`);
+
+    expect(response.status).toBe(200);
+    expect(mockedConnectionRequestsService.getConnectedMeasurementPointDetail).toHaveBeenCalledWith(
+      'S0001',
+      42,
+      'ALL',
+    );
+    expect(response.body).toEqual({
+      success: true,
+      data: {
+        pointCode: 'S0001',
+        pointName: 'ปล่อง A',
+        pointType: 'STACK',
+        parameterDetails: ['NOx (ppm)', 'SO2 (ppm)'],
+      },
     });
   });
 

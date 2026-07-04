@@ -9,6 +9,43 @@
 - ถ้า logic เป็นเพียง fallback ชั่วคราว ให้เขียนไว้ชัดเจนว่า fallback จากอะไรไปอะไร
 - ถ้าไม่แน่ใจว่า field ควรตีความอย่างไร ให้หยุดที่ raw value และถามก่อน
 
+## Connected Measurement Point Modal Detail
+
+Endpoint:
+
+- `GET /api/v1/connected-measurement-points/:stationId`
+
+Code:
+
+- `backend/src/modules/connection-requests/connection-requests.service.ts`
+
+### `parameterDetails`
+
+Source:
+
+- Current connected point lookup: `dbo.cems_wpms_connection_requests` with connected `measurementPoints`
+- Stored parameter source: `dbo.cems_wpms_measurement_points.parameters_json`
+- The connected/current copy in `dbo.cems_wpms_connected_measurement_points.parameters_json` is populated from the same measurement-point parameter set during connection sync.
+
+Fallback order:
+
+- Match the requested `stationId` against the connected measurement point using existing `listConnectedMeasurementPoints({ stationId })` behavior.
+- Return the matched point's parsed `parameters` array as `parameterDetails`.
+
+Transformation:
+
+- `pointCode`, `pointName`, and `pointType` are direct aliases from the matched measurement point.
+- `parameterDetails` is the parsed parameter array returned by the backend DTO instead of the raw JSON string.
+
+Reason:
+
+- The "รายละเอียดจุดตรวจวัด" modal only needs four display columns: code, name, type, and parameter detail.
+- Keeping this endpoint narrow avoids sending request, factory, and device-config fields into the modal.
+
+Known risks:
+
+- If `parameters_json` contains bare parameter codes instead of labels with units, this endpoint returns those stored values as-is. The submit/sync path should keep storing display-ready labels such as `NOx (ppm)` where available.
+
 ## BOD/COD Online Deviation Report Frontend Table Fields
 
 Endpoints:
