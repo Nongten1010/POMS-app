@@ -914,6 +914,59 @@ function buildKwp02SubmissionPayload(form, formElement, measurementRows, measure
   }
 }
 
+function buildKwp03SubmissionPayload(form, formElement, dates, selectedValues, attachments = []) {
+  const formData = formElement ? new FormData(formElement) : new FormData()
+
+  return {
+    ...buildKwpCommonSubmissionPayload(form, formElement),
+    instruments: selectedValues.instruments,
+    measurementTimes: selectedValues.measurementTimes,
+    wastewaterSource: getFormText(formData, 'wastewaterSource') || null,
+    receivingSource: getFormText(formData, 'receivingSource') || null,
+    treatmentSystemType: getFormText(formData, 'treatmentSystemType') || null,
+    dischargePoint: getFormText(formData, 'dischargePoint') || null,
+    averageDischarge: getFormText(formData, 'averageDischarge') || null,
+    minimumDischarge: getFormText(formData, 'minimumDischarge') || null,
+    maximumDischarge: getFormText(formData, 'maximumDischarge') || null,
+    issueReasons: selectedValues.issueReasons,
+    reasonDetail: getFormText(formData, 'reasonDetail') || null,
+    problemDate: formatApiDateValue(dates.problemDate),
+    expectedDoneDate: formatApiDateValue(dates.expectedDoneDate),
+    totalDays: Number(getDayRange(dates.problemDate, dates.expectedDoneDate)) || null,
+    failedParameters: selectedValues.failedParameters,
+    correctiveAction: getFormText(formData, 'correctiveAction') || null,
+    attachments,
+  }
+}
+
+function buildKwp05SubmissionPayload(form, formElement, calibrationRows) {
+  const formData = formElement ? new FormData(formElement) : new FormData()
+
+  return {
+    ...buildKwpCommonSubmissionPayload(form, formElement),
+    businessActivity: getFormText(formData, 'businessActivity') || null,
+    samplerName: getFormText(formData, 'samplerName') || null,
+    officerRegistration: getFormText(formData, 'officerRegistration') || null,
+    laboratoryName: getFormText(formData, 'laboratoryName') || null,
+    laboratoryRegistration: getFormText(formData, 'laboratoryRegistration') || null,
+    cemsBrand: getFormText(formData, 'cemsBrand') || null,
+    cemsDetail: getFormText(formData, 'cemsDetail') || null,
+    reportRound: getFormText(formData, 'reportRound') || null,
+    reportYear: getFormText(formData, 'reportYear') || null,
+    calibrationItems: calibrationRows.map((row) => ({
+      parameter: row.parameter ?? '',
+      startDate: formatApiDateValue(row.startDate),
+      endDate: formatApiDateValue(row.endDate),
+      result: row.result || null,
+      verifierCompany: row.verifierCompany || null,
+      cemsModel: row.cemsModel || null,
+      rataReportLink: row.rataReportLink || null,
+      calibrationPhotoLink: row.calibrationPhotoLink || null,
+      attachments: row.attachments ?? [],
+    })),
+  }
+}
+
 function buildKwp03PreviewData(form, formElement, dates, selectedValues) {
   const formData = formElement ? new FormData(formElement) : new FormData()
 
@@ -1103,133 +1156,188 @@ function buildKwpEditForm(row) {
   }
 }
 
-function buildKwpRequestPreviewData(row) {
-  const commonData = {
-    title: row.form,
-    factoryName: row.factoryName,
-    factoryRegistration: row.factoryRegistration,
-    industryType: row.industryMainOrder,
-    factoryAddress: row.factoryAddress,
-    contactName: 'นายสมชาย ใจดี',
-    contactPhone: '02-123-4567',
-    contactEmail: 'contact@example.com',
-    pointCode: row.monitoringPointCode,
-    pointName: row.monitoringPointName,
-    productionStack: row.monitoringPointName,
-    primaryFuel: 'ถ่านหิน',
-    secondaryFuel: 'ก๊าซธรรมชาติ',
-    combustionSystem: 'ระบบปิด',
-    productionCapacity: '120',
-    productionCapacityUnit: 'ตัน/ชั่วโมง',
-    reporterName: 'นายสมชาย ใจดี',
-    reporterPosition: 'ผู้จัดการสิ่งแวดล้อม',
-    latestRevisionMessage: row.revisionNote ?? '',
-    statusHistory: buildKwpStatusHistory(row),
+function getKwpSubmissionFormSlug(row) {
+  const formCode = String(row?.form ?? row?.formType ?? '').toUpperCase()
+  const formMap = {
+    'กวภ.01': 'kwp01',
+    'กวภ.02': 'kwp02',
+    'กวภ.03': 'kwp03',
+    'กวภ.04': 'kwp04',
+    'กวภ.05': 'kwp05',
+    KWP01: 'kwp01',
+    KWP02: 'kwp02',
+    KWP03: 'kwp03',
+    KWP04: 'kwp04',
+    KWP05: 'kwp05',
   }
 
-  if (row.form === 'กวภ.03') {
+  return formMap[formCode] ?? ''
+}
+
+function normalizeKwpAttachmentFile(file, index = 0) {
+  return {
+    id: file?.id ?? `${file?.originalFileName ?? 'attachment'}-${index}`,
+    name: file?.originalFileName ?? file?.storedFileName ?? `ไฟล์แนบ ${index + 1}`,
+    type: file?.mimeType ?? '',
+    url: file?.fileUrl ?? '',
+    isSubmitted: Boolean(file?.fileUrl),
+  }
+}
+
+function getKwpDetailCommonData(detail, row = {}) {
+  return {
+    title: detail.form ?? row.form ?? '',
+    factoryName: detail.factoryName ?? row.factoryName ?? '',
+    factoryRegistration: detail.factoryRegistrationNo ?? row.factoryRegistration ?? '',
+    industryType: detail.industryType ?? row.industryMainOrder ?? row.industryType ?? '',
+    factoryAddress: detail.factoryAddress ?? row.factoryAddress ?? '',
+    contactName: detail.contactName ?? '',
+    contactPhone: detail.contactPhone ?? '',
+    contactEmail: detail.contactEmail ?? '',
+    pointCode: detail.pointCode ?? row.monitoringPointCode ?? '',
+    pointName: detail.pointName ?? row.monitoringPointName ?? '',
+    productionStack: detail.productionStack ?? '',
+    primaryFuel: detail.primaryFuel ?? '',
+    secondaryFuel: detail.secondaryFuel ?? '',
+    combustionSystem: detail.combustionSystem ?? '',
+    productionCapacity: detail.productionCapacity ?? '',
+    productionCapacityUnit: detail.productionCapacityUnit ?? '',
+    reporterName: detail.reporterName ?? '',
+    reporterPosition: detail.reporterPosition ?? '',
+    latestRevisionMessage: row.revisionNote ?? '',
+    statusHistory: buildKwpStatusHistory({ ...row, submittedDate: detail.submittedAt ?? row.submittedDate }),
+  }
+}
+
+function buildKwpRequestPreviewDataFromDetail(detail, row = {}) {
+  const commonData = getKwpDetailCommonData(detail, row)
+  const formType = String(detail.formType ?? row.formType ?? '').toUpperCase()
+  const formCode = detail.form ?? row.form ?? ''
+
+  if (formType === 'KWP03' || formCode === 'กวภ.03') {
+    const issueReport = detail.wpmsIssueReport ?? {}
+
     return {
       formType: 'kwp03',
       ...commonData,
-      instruments: ['ค่าบีโอดี (BOD)', 'ค่าซีโอดี (COD)'],
-      measurementTimes: ['Real Time'],
-      wastewaterSource: 'ระบบบำบัดน้ำเสียรวม',
-      receivingSource: 'คลองสาธารณะ',
-      treatmentSystemType: 'ระบบบำบัดชีวภาพ',
-      dischargePoint: '13.806601, 100.708653',
-      averageDischarge: '500',
-      minimumDischarge: '320',
-      maximumDischarge: '740',
-      issueReasons: ['ระบบรับส่งข้อมูล ระบบไฟฟ้า อินเทอร์เน็ต ขัดข้อง'],
-      reasonDetail: 'สัญญาณเครือข่ายขัดข้อง',
-      problemDate: row.submittedDate,
-      expectedDoneDate: row.reviewedDate,
-      totalDays: '2',
-      failedParameters: ['BOD', 'COD'],
-      correctiveAction: 'ประสานผู้ให้บริการและตรวจสอบระบบรับส่งข้อมูล',
+      instruments: issueReport.instruments ?? [],
+      measurementTimes: issueReport.measurementTimes ?? [],
+      wastewaterSource: issueReport.wastewaterSource ?? '',
+      receivingSource: issueReport.receivingSource ?? '',
+      treatmentSystemType: issueReport.treatmentSystemType ?? '',
+      dischargePoint: issueReport.dischargePoint ?? '',
+      averageDischarge: issueReport.averageDischarge ?? '',
+      minimumDischarge: issueReport.minimumDischarge ?? '',
+      maximumDischarge: issueReport.maximumDischarge ?? '',
+      issueReasons: issueReport.issueReasons ?? [],
+      reasonDetail: issueReport.reasonDetail ?? '',
+      problemDate: formatThaiDateValue(issueReport.problemDate),
+      expectedDoneDate: formatThaiDateValue(issueReport.expectedDoneDate),
+      totalDays: issueReport.totalDays ?? '',
+      failedParameters: issueReport.failedParameters ?? [],
+      correctiveAction: issueReport.correctiveAction ?? '',
     }
   }
 
-  if (row.form === 'กวภ.02' || row.form === 'กวภ.04') {
+  if (formType === 'KWP02' || formType === 'KWP04' || formCode === 'กวภ.02' || formCode === 'กวภ.04') {
+    const isKwp04 = formType === 'KWP04' || formCode === 'กวภ.04'
+    const measurementRows = Array.isArray(detail.measurementItems)
+      ? detail.measurementItems.map((item, index) => ({
+          id: item.id ?? `measurement-${index + 1}`,
+          pollutant: item.pollutant ?? '',
+          sampleDate: item.sampleDate ?? null,
+          measuredValue: item.measuredValue ?? '',
+          unit: item.unit ?? '',
+          laboratoryNo: item.laboratoryNo ?? '',
+          reportNo: item.reportNo ?? '',
+          method: item.method ?? '',
+        }))
+      : []
+    const allAttachments = Array.isArray(detail.measurementItems)
+      ? detail.measurementItems.flatMap((item) => item.attachments ?? [])
+      : []
+
     return {
-      formType: row.form === 'กวภ.04' ? 'kwp04' : 'kwp02',
+      formType: isKwp04 ? 'kwp04' : 'kwp02',
       ...commonData,
-      measurementRows: [
+      measurementRows,
+      attachmentSections: [
         {
-          id: `${row.id}-measurement-1`,
-          pollutant: 'NOx',
-          sampleDate: '2026-06-14',
-          measuredValue: '120',
-          unit: 'ppm',
-          laboratoryNo: 'LAB-001',
-          reportNo: 'REP-69-001',
-          method: 'US EPA Method 7E',
-          samplingPhotoFileName: 'sampling-photo.jpg',
-          labReportFileName: 'lab-report.pdf',
+          key: 'samplingPhotos',
+          title: 'ภาพถ่ายขณะเก็บตัวอย่าง',
+          files: allAttachments
+            .filter((file) => file.attachmentType === 'SAMPLING_PHOTO')
+            .map(normalizeKwpAttachmentFile),
         },
         {
-          id: `${row.id}-measurement-2`,
-          pollutant: 'SO2',
-          sampleDate: '2026-06-14',
-          measuredValue: '80',
-          unit: 'ppm',
-          laboratoryNo: 'LAB-001',
-          reportNo: 'REP-69-002',
-          method: 'US EPA Method 6C',
-          samplingPhotoFileName: 'sampling-photo-2.jpg',
-          labReportFileName: 'lab-report-2.pdf',
+          key: 'labReports',
+          title: 'รายงานผลจากห้องปฏิบัติการ',
+          files: allAttachments
+            .filter((file) => file.attachmentType === 'LAB_REPORT')
+            .map(normalizeKwpAttachmentFile),
         },
       ],
     }
   }
 
-  if (row.form === 'กวภ.05') {
+  if (formType === 'KWP05' || formCode === 'กวภ.05') {
+    const report = detail.calibrationReport ?? {}
+    const calibrationRows = Array.isArray(detail.calibrationItems)
+      ? detail.calibrationItems.map((item, index) => ({
+          id: item.id ?? `calibration-${index + 1}`,
+          parameter: item.parameter ?? '',
+          startDate: item.startDate ?? null,
+          endDate: item.endDate ?? null,
+          result: item.result ?? '',
+          verifierCompany: item.verifierCompany ?? '',
+          cemsModel: item.cemsModel ?? '',
+          rataReportLink: item.rataReportLink ?? '',
+          calibrationPhotoLink: item.calibrationPhotoLink ?? '',
+          rataReportFiles: (item.attachments ?? [])
+            .filter((file) => file.attachmentType === 'RATA_REPORT')
+            .map(normalizeKwpAttachmentFile),
+          calibrationPhotoFiles: (item.attachments ?? [])
+            .filter((file) => file.attachmentType === 'CALIBRATION_PHOTO')
+            .map(normalizeKwpAttachmentFile),
+        }))
+      : []
+
     return {
       formType: 'kwp05',
-      title: row.form,
-      companyName: row.factoryName,
-      factoryRegistration: row.factoryRegistration,
-      businessActivity: row.businessActivity,
-      factoryAddress: row.factoryAddress,
-      samplerName: 'นายสมชาย ใจดี',
-      officerRegistration: 'LAB-REG-2569-001',
-      laboratoryName: 'ห้องปฏิบัติการสิ่งแวดล้อมอุตสาหกรรม',
-      laboratoryRegistration: 'ทดสอบ-1234-2569',
-      pointCode: row.monitoringPointCode,
-      pointName: row.monitoringPointName,
-      cemsBrand: 'EnviroTech CEMS-5000',
-      cemsDetail: 'EnviroTech CEMS-5000',
-      reportRound: '1',
-      reportYear: String(new Date().getFullYear() + 543),
-      calibrationRows: [
-        {
-          id: `${row.id}-calibration-1`,
-          parameter: 'NOx (ppm)',
-          startDate: '2026-06-10',
-          endDate: '2026-06-11',
-          result: 'ผ่าน',
-          verifierCompany: 'บริษัท ตรวจวัดสิ่งแวดล้อมไทย จำกัด',
-          cemsModel: 'CEMS-5000',
-          linkQr1: 'https://example.com/rata-nox',
-          linkQr2: 'https://example.com/cert-nox',
-        },
-      ],
-      reporterName: 'นายสมชาย ใจดี',
-      reporterPosition: 'ผู้จัดการสิ่งแวดล้อม',
+      title: detail.form ?? row.form ?? 'กวภ.05',
+      companyName: detail.factoryName ?? row.factoryName ?? '',
+      factoryRegistration: detail.factoryRegistrationNo ?? row.factoryRegistration ?? '',
+      businessActivity: report.businessActivity ?? '',
+      factoryAddress: detail.factoryAddress ?? row.factoryAddress ?? '',
+      samplerName: report.samplerName ?? '',
+      officerRegistration: report.officerRegistration ?? '',
+      laboratoryName: report.laboratoryName ?? '',
+      laboratoryRegistration: report.laboratoryRegistration ?? '',
+      pointCode: detail.pointCode ?? row.monitoringPointCode ?? '',
+      pointName: detail.pointName ?? row.monitoringPointName ?? '',
+      cemsBrand: report.cemsBrand ?? '',
+      cemsDetail: report.cemsDetail ?? '',
+      reportRound: report.reportRound ?? '',
+      reportYear: report.reportYear ?? '',
+      calibrationRows,
+      reporterName: detail.reporterName ?? '',
+      reporterPosition: detail.reporterPosition ?? '',
       latestRevisionMessage: row.revisionNote ?? '',
-      statusHistory: buildKwpStatusHistory(row),
+      statusHistory: buildKwpStatusHistory({ ...row, submittedDate: detail.submittedAt ?? row.submittedDate }),
     }
   }
+
+  const issueReport = detail.issueReport ?? {}
 
   return {
     ...commonData,
-    issueReason: 'เครื่องมือหรือเครื่องอุปกรณ์พิเศษขัดข้อง',
-    reasonDetail: 'เครื่องวิเคราะห์ก๊าซไม่สามารถส่งข้อมูลได้',
-    problemDate: row.submittedDate,
-    expectedDoneDate: '20/06/2569',
-    totalDays: '6',
-    unreportedParameters: ['NOx (ppm)', 'SO2 (ppm)'],
-    correctiveAction: 'ซ่อมบำรุงเครื่องมือและตรวจสอบระบบรับส่งข้อมูล',
+    issueReason: issueReport.issueReason ?? '',
+    reasonDetail: issueReport.reasonDetail ?? '',
+    problemDate: formatThaiDateValue(issueReport.problemDate),
+    expectedDoneDate: formatThaiDateValue(issueReport.expectedDoneDate),
+    totalDays: issueReport.totalDays ?? '',
+    unreportedParameters: issueReport.unreportedParameters ?? [],
+    correctiveAction: issueReport.correctiveAction ?? '',
   }
 }
 
@@ -1530,9 +1638,21 @@ function AttachmentPreviewFile({ file }) {
   }
 
   return file.url && file.isSubmitted ? (
-    <Button component="a" href={file.url} download={file.name} size="small" variant="outlined">
-      ดาวน์โหลด
-    </Button>
+    <Typography
+      component="a"
+      href={file.url}
+      download={file.name}
+      target="_blank"
+      rel="noreferrer"
+      sx={{
+        color: 'primary.main',
+        fontSize: 13,
+        textDecoration: 'underline',
+        overflowWrap: 'anywhere',
+      }}
+    >
+      {file.name}
+    </Typography>
   ) : (
     <Typography sx={{ fontSize: 13 }}>{file.name}</Typography>
   )
@@ -1897,15 +2017,16 @@ function Kwp05PaperDocument({ data }) {
     ? data.calibrationRows
     : Array.from({ length: 2 }, (_, index) => ({ id: `empty-${index}` }))
   const tableColumns = [
-    { label: 'พารามิเตอร์', width: '11%' },
-    { label: 'วันที่เริ่มดำเนินการ', width: '11.5%' },
-    { label: 'วันที่สิ้นสุดดำเนินการ', width: '11.5%' },
-    { label: 'ผลการตรวจสอบ (ผ่าน / ไม่ผ่าน)', width: '10%' },
-    { label: 'บริษัทที่ทำการทวนสอบ / สอบเทียบ', width: '12%' },
-    { label: 'ยี่ห้อ/รุ่นของ CEMS', width: '10%' },
-    { label: 'Link / QR CODE', width: '17%' },
-    { label: 'Link / QR CODE', width: '17%' },
+    { label: 'พารามิเตอร์' },
+    { label: 'วันที่เริ่มดำเนินการ' },
+    { label: 'วันที่สิ้นสุดดำเนินการ' },
+    { label: 'ผลการตรวจสอบ (ผ่าน / ไม่ผ่าน)' },
+    { label: 'บริษัทที่ทำการทวนสอบ / สอบเทียบ' },
+    { label: 'ยี่ห้อ/รุ่นของ CEMS' },
+    { label: 'Link / QR CODE' },
+    { label: 'Link / QR CODE' },
   ]
+  const tableColumnWidth = `${100 / tableColumns.length}%`
 
   return (
     <KwpPaperShell>
@@ -1962,7 +2083,6 @@ function Kwp05PaperDocument({ data }) {
                 fontSize: 12,
                 color: '#000',
                 textAlign: 'center',
-                verticalAlign: 'middle',
                 overflowWrap: 'anywhere',
                 wordBreak: 'break-word',
               },
@@ -1970,12 +2090,16 @@ function Kwp05PaperDocument({ data }) {
                 bgcolor: '#c9c9c9',
                 fontWeight: 700,
                 height: 96,
+                verticalAlign: 'middle',
+              },
+              '& td': {
+                verticalAlign: 'top',
               },
             }}
           >
             <colgroup>
               {tableColumns.map((column) => (
-                <col key={column.label} style={{ width: column.width }} />
+                <col key={column.label} style={{ width: tableColumnWidth }} />
               ))}
             </colgroup>
             <TableHead>
@@ -1995,11 +2119,11 @@ function Kwp05PaperDocument({ data }) {
                   <TableCell>{row.verifierCompany}</TableCell>
                   <TableCell>{row.cemsModel}</TableCell>
                   <TableCell>
-                    <Kwp05AttachmentText items={formatKwp05AttachmentText(row.rataReportFiles, row.rataReportLink)} />
+                    <Kwp05AttachmentText items={formatKwp05AttachmentItems(row.rataReportFiles, row.rataReportLink)} />
                   </TableCell>
                   <TableCell>
                     <Kwp05AttachmentText
-                      items={formatKwp05AttachmentText(row.calibrationPhotoFiles, row.calibrationPhotoLink)}
+                      items={formatKwp05AttachmentItems(row.calibrationPhotoFiles, row.calibrationPhotoLink)}
                     />
                   </TableCell>
                 </TableRow>
@@ -2120,7 +2244,7 @@ function KwpStatusHistoryDialog({ open, history = [], onClose }) {
   )
 }
 
-function Kwp01PreviewDialog({ open, data, mode = 'submit', submitting = false, submitError = '', onClose, onSubmit }) {
+function Kwp01PreviewDialog({ open, data, mode = 'submit', loading = false, submitting = false, submitError = '', onClose, onSubmit }) {
   const [statusHistoryOpen, setStatusHistoryOpen] = useState(false)
   const [revisionDialogOpen, setRevisionDialogOpen] = useState(false)
   const [revisionOfficerNote, setRevisionOfficerNote] = useState('')
@@ -2204,6 +2328,13 @@ function Kwp01PreviewDialog({ open, data, mode = 'submit', submitting = false, s
           </Button>
         </DialogTitle>
         <DialogContent dividers sx={{ bgcolor: 'neutral.100' }}>
+          {loading ? (
+            <Box sx={{ py: 8, textAlign: 'center' }}>
+              <Typography variant="body1" color="text.secondary">
+                กำลังโหลดข้อมูลแบบฟอร์ม...
+              </Typography>
+            </Box>
+          ) : null}
           {latestRevisionMessage ? (
             <Paper
               elevation={0}
@@ -2227,10 +2358,10 @@ function Kwp01PreviewDialog({ open, data, mode = 'submit', submitting = false, s
               </Stack>
             </Paper>
           ) : null}
-          {data?.formType === 'kwp02' || data?.formType === 'kwp04' ? <Kwp02PaperDocument data={data} /> : null}
-          {data?.formType === 'kwp03' ? <Kwp03PaperDocument data={data} /> : null}
-          {data?.formType === 'kwp05' ? <Kwp05PaperDocument data={data} /> : null}
-          {data && !['kwp02', 'kwp03', 'kwp04', 'kwp05'].includes(data.formType) ? <Kwp01PaperDocument data={data} /> : null}
+          {!loading && (data?.formType === 'kwp02' || data?.formType === 'kwp04') ? <Kwp02PaperDocument data={data} /> : null}
+          {!loading && data?.formType === 'kwp03' ? <Kwp03PaperDocument data={data} /> : null}
+          {!loading && data?.formType === 'kwp05' ? <Kwp05PaperDocument data={data} /> : null}
+          {!loading && data && !['kwp02', 'kwp03', 'kwp04', 'kwp05'].includes(data.formType) ? <Kwp01PaperDocument data={data} /> : null}
         </DialogContent>
         {submitError ? (
           <Alert severity="error" sx={{ borderRadius: 0 }}>
@@ -2814,7 +2945,7 @@ function Kwp03Form({
               />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <OptionMultiSelect
+              <OptionSelect
                 label="เวลาเครื่องตรวจวัด"
                 value={measurementTimes}
                 onChange={onMeasurementTimesChange}
@@ -2853,7 +2984,7 @@ function Kwp03Form({
         <SectionPaper title="สาเหตุของการไม่สามารถรายงานผลการตรวจวัดได้">
           <Grid container spacing={2}>
             <Grid size={{ xs: 12, md: 6 }}>
-              <OptionMultiSelect
+              <OptionSelect
                 label="สาเหตุ"
                 value={issueReasons}
                 onChange={onIssueReasonsChange}
@@ -2933,15 +3064,22 @@ const emptyCalibrationResult = {
   calibrationPhotoFiles: [],
 }
 
-function formatKwp05AttachmentText(files = [], link = '') {
+function formatKwp05AttachmentItems(files = [], link = '') {
   return [
-    ...files.map((file) => file.name).filter(Boolean),
-    String(link ?? '').trim(),
+    ...files.map((file, index) => ({
+      key: file.id ?? `${file.name ?? 'file'}-${index}`,
+      label: file.name,
+      url: file.url,
+      download: file.name,
+    })).filter((file) => file.label),
+    String(link ?? '').trim()
+      ? { key: `link-${link}`, label: String(link).trim(), url: String(link).trim() }
+      : null,
   ].filter(Boolean)
 }
 
 function Kwp05AttachmentText({ items }) {
-  const lines = items.filter(Boolean)
+  const lines = items.filter((item) => item?.label)
 
   if (!lines.length) {
     return '-'
@@ -2949,11 +3087,28 @@ function Kwp05AttachmentText({ items }) {
 
   return (
     <Stack spacing={0.25}>
-      {lines.map((line, index) => (
-        <Typography key={`${line}-${index}`} variant="body2">
-          {line}
-        </Typography>
-      ))}
+      {lines.map((item, index) => {
+        const key = item.key ?? `${item.label}-${index}`
+
+        return item.url ? (
+          <Typography
+            key={key}
+            component="a"
+            href={item.url}
+            download={item.download}
+            target="_blank"
+            rel="noreferrer"
+            variant="body2"
+            sx={{ color: 'primary.main', textDecoration: 'underline', overflowWrap: 'anywhere' }}
+          >
+            {item.label}
+          </Typography>
+        ) : (
+          <Typography key={key} variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+            {item.label}
+          </Typography>
+        )
+      })}
     </Stack>
   )
 }
@@ -3243,11 +3398,11 @@ function Kwp05Form({ factory, point, calibrationRows, setCalibrationRows }) {
                         <TableCell>{row.verifierCompany}</TableCell>
                         <TableCell>{row.cemsModel}</TableCell>
                         <TableCell sx={{ overflowWrap: 'anywhere' }}>
-                          <Kwp05AttachmentText items={formatKwp05AttachmentText(row.rataReportFiles, row.rataReportLink)} />
+                          <Kwp05AttachmentText items={formatKwp05AttachmentItems(row.rataReportFiles, row.rataReportLink)} />
                         </TableCell>
                         <TableCell sx={{ overflowWrap: 'anywhere' }}>
                           <Kwp05AttachmentText
-                            items={formatKwp05AttachmentText(row.calibrationPhotoFiles, row.calibrationPhotoLink)}
+                            items={formatKwp05AttachmentItems(row.calibrationPhotoFiles, row.calibrationPhotoLink)}
                           />
                         </TableCell>
                         <TableCell>
@@ -3312,8 +3467,8 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
   const [samplingPhotoFiles, setSamplingPhotoFiles] = useState([])
   const [labReportFiles, setLabReportFiles] = useState([])
   const [wpmsInstrument, setWpmsInstrument] = useState('')
-  const [wpmsMeasurementTimes, setWpmsMeasurementTimes] = useState([])
-  const [wpmsIssueReasons, setWpmsIssueReasons] = useState([])
+  const [wpmsMeasurementTime, setWpmsMeasurementTime] = useState('')
+  const [wpmsIssueReason, setWpmsIssueReason] = useState('')
   const [wpmsFailedParameters, setWpmsFailedParameters] = useState([])
   const [calibrationRows, setCalibrationRows] = useState([])
   const [previewData, setPreviewData] = useState(null)
@@ -3354,6 +3509,22 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
     }))
   }
 
+  const buildCalibrationRowsWithAttachments = async (rows) => {
+    const rowsWithAttachments = []
+
+    for (const row of rows) {
+      const rataReportAttachments = await uploadKwpAttachments(row.rataReportFiles ?? [], 'RATA_REPORT')
+      const calibrationPhotoAttachments = await uploadKwpAttachments(row.calibrationPhotoFiles ?? [], 'CALIBRATION_PHOTO')
+
+      rowsWithAttachments.push({
+        ...row,
+        attachments: [...rataReportAttachments, ...calibrationPhotoAttachments],
+      })
+    }
+
+    return rowsWithAttachments
+  }
+
   const submitForm = async () => {
     if (!form || !accessToken) {
       setSubmitError('กรุณาเข้าสู่ระบบเพื่อส่งแบบฟอร์ม')
@@ -3386,8 +3557,26 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
           measurementRows,
           [...samplingAttachments, ...labReportAttachments],
         )
+      } else if (form.code === 'กวภ.03') {
+        endpoint = 'kwp03'
+        payload = buildKwp03SubmissionPayload(
+          form,
+          formRef.current,
+          { problemDate, expectedDoneDate },
+          {
+            instruments: wpmsInstrument ? [wpmsInstrument] : [],
+            measurementTimes: wpmsMeasurementTime ? [wpmsMeasurementTime] : [],
+            issueReasons: wpmsIssueReason ? [wpmsIssueReason] : [],
+            failedParameters: wpmsFailedParameters,
+          },
+        )
+      } else if (form.code === 'กวภ.05') {
+        endpoint = 'kwp05'
+        const calibrationRowsWithAttachments = await buildCalibrationRowsWithAttachments(calibrationRows)
+
+        payload = buildKwp05SubmissionPayload(form, formRef.current, calibrationRowsWithAttachments)
       } else {
-        throw new Error('รองรับการส่งแบบฟอร์มเฉพาะ กวภ.01, กวภ.02 และ กวภ.04')
+        throw new Error('รองรับการส่งแบบฟอร์มเฉพาะ กวภ.01 - กวภ.05')
       }
 
       const result = await fetch(`${kwpFormSubmissionsApiBaseUrl}/${endpoint}`, {
@@ -3426,8 +3615,8 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
         { problemDate, expectedDoneDate },
         {
           instruments: wpmsInstrument ? [wpmsInstrument] : [],
-          measurementTimes: wpmsMeasurementTimes,
-          issueReasons: wpmsIssueReasons,
+          measurementTimes: wpmsMeasurementTime ? [wpmsMeasurementTime] : [],
+          issueReasons: wpmsIssueReason ? [wpmsIssueReason] : [],
           failedParameters: wpmsFailedParameters,
         },
       ))
@@ -3549,14 +3738,14 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
                 problemDate={problemDate}
                 expectedDoneDate={expectedDoneDate}
                 instruments={wpmsInstrument}
-                measurementTimes={wpmsMeasurementTimes}
-                issueReasons={wpmsIssueReasons}
+                measurementTimes={wpmsMeasurementTime}
+                issueReasons={wpmsIssueReason}
                 failedParameters={wpmsFailedParameters}
                 onProblemDateChange={setProblemDate}
                 onExpectedDoneDateChange={setExpectedDoneDate}
                 onInstrumentsChange={setWpmsInstrument}
-                onMeasurementTimesChange={setWpmsMeasurementTimes}
-                onIssueReasonsChange={setWpmsIssueReasons}
+                onMeasurementTimesChange={setWpmsMeasurementTime}
+                onIssueReasonsChange={setWpmsIssueReason}
                 onFailedParametersChange={setWpmsFailedParameters}
               />
             ) : form?.title?.startsWith('กวภ.02') || form?.title?.startsWith('กวภ.04') ? (
@@ -3861,6 +4050,65 @@ function KwpFormsPage({ userType = '', accessToken = '' }) {
     loadRequestRows()
   }, [loadRequestRows])
 
+  const openRequestDocument = useCallback(async (row, mode) => {
+    if (isOperator && mode === 'edit') {
+      openFormBottomSheet(buildKwpEditForm(row))
+      return
+    }
+
+    const formSlug = getKwpSubmissionFormSlug(row)
+    if (!formSlug) {
+      setRequestDocument({
+        mode,
+        data: null,
+        loading: false,
+        error: 'ไม่พบประเภทแบบฟอร์มสำหรับโหลดรายละเอียด',
+      })
+      return
+    }
+
+    if (!accessToken) {
+      setRequestDocument({
+        mode,
+        data: null,
+        loading: false,
+        error: 'กรุณาเข้าสู่ระบบเพื่อโหลดรายละเอียดแบบฟอร์ม',
+      })
+      return
+    }
+
+    setRequestDocument({
+      mode,
+      data: null,
+      loading: true,
+      error: '',
+    })
+
+    try {
+      const result = await fetch(`${kwpFormSubmissionsApiBaseUrl}/${formSlug}/${row.id}`, {
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+      })
+      const response = await readKwpApiResponse(result, 'โหลดรายละเอียดแบบฟอร์มไม่สำเร็จ')
+
+      setRequestDocument({
+        mode,
+        data: buildKwpRequestPreviewDataFromDetail(response?.data ?? {}, row),
+        loading: false,
+        error: '',
+      })
+    } catch (requestError) {
+      setRequestDocument({
+        mode,
+        data: null,
+        loading: false,
+        error: requestError.message,
+      })
+    }
+  }, [accessToken, isOperator, openFormBottomSheet])
+
   const closeMonitoringPointDialog = useCallback(() => {
     setMonitoringPointRows([])
     setMonitoringPointError('')
@@ -3872,20 +4120,10 @@ function KwpFormsPage({ userType = '', accessToken = '' }) {
   const requestColumns = useMemo(
     () =>
       getRequestColumns(
-        (row, mode) => {
-          if (isOperator && mode === 'edit') {
-            openFormBottomSheet(buildKwpEditForm(row))
-            return
-          }
-
-          setRequestDocument({
-            mode,
-            data: buildKwpRequestPreviewData(row),
-          })
-        },
+        openRequestDocument,
         isOperator,
       ),
-    [isOperator, openFormBottomSheet],
+    [isOperator, openRequestDocument],
   )
   const table = useMemo(
     () =>
@@ -4091,6 +4329,8 @@ function KwpFormsPage({ userType = '', accessToken = '' }) {
         open={Boolean(requestDocument)}
         data={requestDocument?.data}
         mode={requestDocument?.mode}
+        loading={Boolean(requestDocument?.loading)}
+        submitError={requestDocument?.error ?? ''}
         onClose={() => setRequestDocument(null)}
       />
     </>
