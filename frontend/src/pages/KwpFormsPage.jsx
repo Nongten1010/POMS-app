@@ -33,6 +33,7 @@ import {
   Typography,
 } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
+import DeleteIcon from '@mui/icons-material/Delete'
 import FileDownloadIcon from '@mui/icons-material/FileDownload'
 import HistoryIcon from '@mui/icons-material/History'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
@@ -116,11 +117,8 @@ function getMonitoringPointFactoryId(row) {
   return row?.factoryId ?? row?.newRegistrationNo ?? row?.factoryRegistration ?? row?.id ?? ''
 }
 
-function getFactoryIndustryTypePrefix(value) {
-  const industryType = String(value ?? '').trim()
-  if (!industryType) return ''
-
-  return industryType.split('/')[0].trim()
+function getFactoryIndustryMainOrder(factory) {
+  return factory?.industryMainOrder ?? ''
 }
 
 function normalizeKwpFactoryRows(rows) {
@@ -132,6 +130,8 @@ function normalizeKwpFactoryRows(rows) {
         newRegistrationNo: row.newRegistrationNo ?? row.factoryId ?? '',
         oldRegistrationNo: row.oldRegistrationNo ?? '',
         industryType: row.industryType ?? '',
+        industryMainOrder: row.industryMainOrder ?? '',
+        businessActivity: row.businessActivity ?? '',
         province: row.province ?? '',
         monitoringPointCount: Number(row.monitoringPointCount ?? 0),
       }))
@@ -146,6 +146,8 @@ function normalizeKwpRequestRows(rows) {
         factoryName: row.factoryName ?? '',
         factoryRegistration: row.factoryRegistration ?? row.factoryId ?? '',
         industryType: row.industryType ?? '',
+        industryMainOrder: row.industryMainOrder ?? '',
+        businessActivity: row.businessActivity ?? '',
         factoryAddress: row.factoryAddress ?? '',
         province: row.province ?? '',
         type: row.type ?? '',
@@ -572,7 +574,7 @@ function Kwp01Form({
               <ReadOnlyField label="ทะเบียนโรงงานเลขที่" value={factory?.newRegistrationNo ?? ''} />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <ReadOnlyField label="ลำดับประเภทโรงงาน" value={getFactoryIndustryTypePrefix(factory?.industryType)} />
+              <ReadOnlyField label="ลำดับประเภทโรงงาน" value={getFactoryIndustryMainOrder(factory)} />
             </Grid>
             <Grid size={{ xs: 12, md: 12 }}>
               <ReadOnlyField label="สถานที่ตั้งโรงงาน" value={factory?.address ?? ''} multiline />
@@ -738,7 +740,7 @@ function buildKwp01PreviewData(form, formElement, dates, unreportedParameters) {
     title: form?.title ?? '',
     factoryName: form?.factory?.factoryName ?? '',
     factoryRegistration: form?.factory?.newRegistrationNo ?? '',
-    industryType: getFactoryIndustryTypePrefix(form?.factory?.industryType),
+    industryType: getFactoryIndustryMainOrder(form?.factory),
     factoryAddress: form?.factory?.address ?? '',
     contactName: getFormText(formData, 'contactName'),
     contactPhone: getFormText(formData, 'contactPhone'),
@@ -769,7 +771,7 @@ function buildCommonFormPreviewData(form, formElement) {
   return {
     factoryName: form?.factory?.factoryName ?? '',
     factoryRegistration: form?.factory?.newRegistrationNo ?? '',
-    industryType: getFactoryIndustryTypePrefix(form?.factory?.industryType),
+    industryType: getFactoryIndustryMainOrder(form?.factory),
     factoryAddress: form?.factory?.address ?? '',
     contactName: getFormText(formData, 'contactName'),
     contactPhone: getFormText(formData, 'contactPhone'),
@@ -971,12 +973,14 @@ function buildKwpEditForm(row) {
     mode: 'edit',
     requestNo: row.requestNo,
     latestRevisionMessage: row.revisionNote ?? '',
-    factory: {
-      factoryName: row.factoryName,
-      newRegistrationNo: row.factoryRegistration,
-      industryType: row.industryType,
-      address: row.factoryAddress,
-    },
+      factory: {
+        factoryName: row.factoryName,
+        newRegistrationNo: row.factoryRegistration,
+        industryType: row.industryType,
+        industryMainOrder: row.industryMainOrder,
+        businessActivity: row.businessActivity,
+        address: row.factoryAddress,
+      },
     point: {
       code: row.monitoringPointCode,
       name: row.monitoringPointName,
@@ -990,7 +994,7 @@ function buildKwpRequestPreviewData(row) {
     title: row.form,
     factoryName: row.factoryName,
     factoryRegistration: row.factoryRegistration,
-    industryType: row.industryType,
+    industryType: row.industryMainOrder,
     factoryAddress: row.factoryAddress,
     contactName: 'นายสมชาย ใจดี',
     contactPhone: '02-123-4567',
@@ -1071,7 +1075,7 @@ function buildKwpRequestPreviewData(row) {
       title: row.form,
       companyName: row.factoryName,
       factoryRegistration: row.factoryRegistration,
-      businessActivity: row.industryType,
+      businessActivity: row.businessActivity,
       factoryAddress: row.factoryAddress,
       samplerName: 'นายสมชาย ใจดี',
       officerRegistration: 'LAB-REG-2569-001',
@@ -2193,9 +2197,14 @@ const emptyEmissionMeasurement = {
   labReportFileType: '',
 }
 
-function FileInputButton({ label, fileName, onChange }) {
+function MultiFileInputButton({ label, files, onChange, maxFiles = 5 }) {
+  const [fileError, setFileError] = useState('')
+  const removeFile = (fileIndex) => {
+    onChange(files.filter((_, index) => index !== fileIndex))
+  }
+
   return (
-    <Stack spacing={0.5}>
+    <Stack spacing={1}>
       <Button component="label" size="small" variant="outlined">
         แนบไฟล์
         <input
@@ -2203,19 +2212,75 @@ function FileInputButton({ label, fileName, onChange }) {
           type="file"
           accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
           onChange={(event) => {
-            const file = event.target.files?.[0]
-            onChange(file ?? null)
+            const selectedFile = event.target.files?.[0]
+            event.target.value = ''
+
+            if (!selectedFile) {
+              return
+            }
+
+            if (files.length >= maxFiles) {
+              setFileError(`แนบไฟล์ได้ไม่เกิน ${maxFiles} ไฟล์`)
+              return
+            }
+
+            if (selectedFile.size > 5 * 1024 * 1024) {
+              setFileError('ไฟล์ต้องมีขนาดไม่เกิน 5 MB')
+              return
+            }
+
+            setFileError('')
+            onChange([...files, selectedFile])
           }}
         />
       </Button>
       <Typography variant="caption" color="text.secondary">
-        {fileName || label}
+        {label}
       </Typography>
+      {fileError ? (
+        <Typography variant="caption" color="error">
+          {fileError}
+        </Typography>
+      ) : null}
+      <TableContainer sx={{ border: 1, borderColor: 'divider', overflowX: 'auto' }}>
+        <Table size="small" sx={borderedTableSx}>
+          <TableHead>
+            <TableRow>
+              <TableCell sx={{ fontWeight: 700, bgcolor: '#f8fafc', width: 80 }}>ลำดับ</TableCell>
+              <TableCell sx={{ fontWeight: 700, bgcolor: '#f8fafc' }}>{label}</TableCell>
+              <TableCell aria-label="จัดการ" sx={{ bgcolor: '#f8fafc', width: 72 }} />
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {files.length > 0 ? (
+              files.map((file, index) => (
+                <TableRow key={`${file.name}-${file.lastModified}-${index}`}>
+                  <TableCell>{index + 1}</TableCell>
+                  <TableCell>{file.name}</TableCell>
+                  <TableCell align="center">
+                    <IconButton size="small" color="error" aria-label="ลบไฟล์" onClick={() => removeFile(index)}>
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={3} align="center">
+                  <Typography variant="body2" color="text.secondary">
+                    ยังไม่มีไฟล์แนบ
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </TableContainer>
     </Stack>
   )
 }
 
-function EmissionMeasurementDialog({ open, value, onClose, onSave }) {
+function EmissionMeasurementDialog({ open, value, parameterOptions, onClose, onSave }) {
   if (!open) {
     return null
   }
@@ -2224,45 +2289,23 @@ function EmissionMeasurementDialog({ open, value, onClose, onSave }) {
     <EmissionMeasurementDialogContent
       key={value?.id ?? 'new'}
       value={value}
+      parameterOptions={parameterOptions}
       onClose={onClose}
       onSave={onSave}
     />
   )
 }
 
-function EmissionMeasurementDialogContent({ value, onClose, onSave }) {
+function EmissionMeasurementDialogContent({ value, parameterOptions, onClose, onSave }) {
   const [form, setForm] = useState(value ?? emptyEmissionMeasurement)
-  const [fileError, setFileError] = useState('')
 
   const updateForm = (field, nextValue) => {
     setForm((current) => ({ ...current, [field]: nextValue }))
   }
-  const handleFileChange = (field, file) => {
-    if (!file) {
-      updateForm(field, '')
-      return
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      setFileError('ไฟล์ต้องมีขนาดไม่เกิน 5 MB')
-      return
-    }
-
-    setFileError('')
-    const fileUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : ''
-    const fileTypeField = field.replace('FileName', 'FileType')
-    const fileUrlField = field.replace('FileName', 'FileUrl')
-    setForm((current) => ({
-      ...current,
-      [field]: file.name,
-      [fileTypeField]: file.type,
-      [fileUrlField]: fileUrl,
-    }))
-  }
 
   return (
     <Dialog open onClose={onClose} fullWidth maxWidth="md">
-      <DialogTitle>{value ? 'แก้ไขรายการตรวจวัด' : 'เพิ่มรายการตรวจวัด'}</DialogTitle>
+      <DialogTitle>รายการตรวจวัดมลพิษอากาศจากปล่องระบาย</DialogTitle>
       <DialogContent dividers>
         <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="th">
           <Grid container spacing={2}>
@@ -2275,7 +2318,7 @@ function EmissionMeasurementDialogContent({ value, onClose, onSave }) {
                 onChange={(event) => updateForm('pollutant', event.target.value)}
                 fullWidth
               >
-                {cemsParameterOptions.map((option) => (
+                {parameterOptions.map((option) => (
                   <MenuItem key={option} value={option}>
                     {option}
                   </MenuItem>
@@ -2336,25 +2379,6 @@ function EmissionMeasurementDialogContent({ value, onClose, onSave }) {
                 fullWidth
               />
             </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <FileInputButton
-                label="ภาพถ่ายขณะเก็บตัวอย่าง (JPG/PNG/PDF ไม่เกิน 5 MB)"
-                fileName={form.samplingPhotoFileName}
-                onChange={(file) => handleFileChange('samplingPhotoFileName', file)}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <FileInputButton
-                label="รายงานผลจากห้องปฏิบัติการ (JPG/PNG/PDF ไม่เกิน 5 MB)"
-                fileName={form.labReportFileName}
-                onChange={(file) => handleFileChange('labReportFileName', file)}
-              />
-            </Grid>
-            {fileError ? (
-              <Grid size={{ xs: 12 }}>
-                <Alert severity="error">{fileError}</Alert>
-              </Grid>
-            ) : null}
           </Grid>
         </LocalizationProvider>
       </DialogContent>
@@ -2373,6 +2397,11 @@ function EmissionMeasurementDialogContent({ value, onClose, onSave }) {
 function Kwp02Form({ factory, point, measurementRows, setMeasurementRows }) {
   const [combustionSystem, setCombustionSystem] = useState('')
   const [editingMeasurement, setEditingMeasurement] = useState(null)
+  const [samplingPhotoFiles, setSamplingPhotoFiles] = useState([])
+  const [labReportFiles, setLabReportFiles] = useState([])
+  const pollutantOptions = point?.parameterDetails ?? []
+  const primaryFuel = point?.primaryFuel ?? ''
+  const secondaryFuel = point?.secondaryFuel ?? ''
 
   const saveMeasurement = (row) => {
     setMeasurementRows((current) => {
@@ -2397,7 +2426,7 @@ function Kwp02Form({ factory, point, measurementRows, setMeasurementRows }) {
               <ReadOnlyField label="ทะเบียนโรงงานเลขที่" value={factory?.newRegistrationNo ?? ''} />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <ReadOnlyField label="ลำดับประเภทโรงงาน" value={factory?.industryType ?? ''} />
+              <ReadOnlyField label="ลำดับประเภทโรงงาน" value={getFactoryIndustryMainOrder(factory)} />
             </Grid>
             <Grid size={{ xs: 12, md: 12 }}>
               <ReadOnlyField label="สถานที่ตั้งโรงงาน" value={factory?.address ?? ''} multiline />
@@ -2415,43 +2444,49 @@ function Kwp02Form({ factory, point, measurementRows, setMeasurementRows }) {
         </SectionPaper>
 
         <SectionPaper title="ข้อมูลจุดตรวจวัด">
-          <Grid container spacing={2}>
-            <Grid size={{ xs: 12, md: 3 }}>
-              <ReadOnlyField label="รหัสจุดตรวจวัด" value={point?.code ?? ''} />
+          <Stack spacing={2}>
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12, md: 3 }}>
+                <ReadOnlyField label="รหัสจุดตรวจวัด" value={point?.code ?? ''} />
+              </Grid>
+              <Grid size={{ xs: 12, md: 3 }}>
+                <ReadOnlyField label="ชื่อจุดตรวจวัด" value={point?.name ?? ''} />
+              </Grid>
+              <Grid size={{ xs: 12, md: 3 }}>
+                <TextField name="productionStack" label="ปล่องจากกระบวนการผลิต" size="small" fullWidth />
+              </Grid>
             </Grid>
-            <Grid size={{ xs: 12, md: 3 }}>
-              <ReadOnlyField label="ชื่อจุดตรวจวัด" value={point?.name ?? ''} />
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12, md: 3 }}>
+                <ReadOnlyField name="primaryFuel" label="เชื้อเพลิงหลัก" value={primaryFuel} />
+              </Grid>
+              <Grid size={{ xs: 12, md: 3 }}>
+                <ReadOnlyField name="secondaryFuel" label="เชื้อเพลิงสำรอง" value={secondaryFuel} />
+              </Grid>
+              <Grid size={{ xs: 12, md: 3 }}>
+                <TextField
+                  select
+                  name="combustionSystem"
+                  label="ระบบการเผาไหม้เชื้อเพลิง"
+                  size="small"
+                  value={combustionSystem}
+                  onChange={(event) => setCombustionSystem(event.target.value)}
+                  fullWidth
+                >
+                  <MenuItem value="ระบบปิด">ระบบปิด</MenuItem>
+                  <MenuItem value="ระบบเปิด">ระบบเปิด</MenuItem>
+                </TextField>
+              </Grid>
             </Grid>
-            <Grid size={{ xs: 12, md: 3 }}>
-              <TextField name="productionStack" label="ปล่องจากกระบวนการผลิต" size="small" fullWidth />
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12, md: 3 }}>
+                <TextField name="productionCapacity" label="กำลังการผลิตของหน่วยการผลิต" size="small" fullWidth />
+              </Grid>
+              <Grid size={{ xs: 12, md: 3 }}>
+                <TextField name="productionCapacityUnit" label="หน่วยของกำลังการผลิต" size="small" fullWidth />
+              </Grid>
             </Grid>
-            <Grid size={{ xs: 12, md: 3 }}>
-              <TextField name="primaryFuel" label="เชื้อเพลิงหลัก" size="small" fullWidth />
-            </Grid>
-            <Grid size={{ xs: 12, md: 3 }}>
-              <TextField name="secondaryFuel" label="เชื้อเพลิงสำรอง" size="small" fullWidth />
-            </Grid>
-            <Grid size={{ xs: 12, md: 3 }}>
-              <TextField
-                select
-                name="combustionSystem"
-                label="ระบบการเผาไหม้เชื้อเพลิง"
-                size="small"
-                value={combustionSystem}
-                onChange={(event) => setCombustionSystem(event.target.value)}
-                fullWidth
-              >
-                <MenuItem value="ระบบปิด">ระบบปิด</MenuItem>
-                <MenuItem value="ระบบเปิด">ระบบเปิด</MenuItem>
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, md: 3 }}>
-              <TextField name="productionCapacity" label="กำลังการผลิตของหน่วยการผลิต" size="small" fullWidth />
-            </Grid>
-            <Grid size={{ xs: 12, md: 3 }}>
-              <TextField name="productionCapacityUnit" label="หน่วยของกำลังการผลิต" size="small" fullWidth />
-            </Grid>
-          </Grid>
+          </Stack>
         </SectionPaper>
 
         <SectionPaper title="รายการตรวจวัดมลพิษอากาศจากปล่องระบาย">
@@ -2473,8 +2508,6 @@ function Kwp02Form({ factory, point, measurementRows, setMeasurementRows }) {
                       'เลขที่ห้องปฏิบัติการ',
                       'เลขที่รายงาน',
                       'วิธีการตรวจวัดวิเคราะห์',
-                      'ภาพถ่ายขณะเก็บตัวอย่าง',
-                      'รายงานผลจากห้องปฏิบัติการ',
                       'จัดการ',
                     ].map((column) => (
                       <TableCell key={column} sx={{ fontWeight: 700, bgcolor: '#f8fafc' }}>
@@ -2494,8 +2527,6 @@ function Kwp02Form({ factory, point, measurementRows, setMeasurementRows }) {
                         <TableCell>{row.laboratoryNo}</TableCell>
                         <TableCell>{row.reportNo}</TableCell>
                         <TableCell>{row.method}</TableCell>
-                        <TableCell>{row.samplingPhotoFileName}</TableCell>
-                        <TableCell>{row.labReportFileName}</TableCell>
                         <TableCell>
                           <Stack direction="row" spacing={1} sx={tableActionStackSx}>
                             <Button size="small" variant="outlined" onClick={() => setEditingMeasurement(row)}>
@@ -2515,7 +2546,7 @@ function Kwp02Form({ factory, point, measurementRows, setMeasurementRows }) {
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={10} align="center">
+                      <TableCell colSpan={8} align="center">
                         <Typography variant="body2" color="text.secondary">
                           ไม่มีข้อมูลรายการตรวจวัด
                         </Typography>
@@ -2532,6 +2563,25 @@ function Kwp02Form({ factory, point, measurementRows, setMeasurementRows }) {
           </Stack>
         </SectionPaper>
 
+        <SectionPaper title="เอกสารแนบ">
+          <Grid container spacing={2}>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <MultiFileInputButton
+                label="ภาพถ่ายขณะเก็บตัวอย่าง (JPG/PNG/PDF ไม่เกิน 5 MB)"
+                files={samplingPhotoFiles}
+                onChange={setSamplingPhotoFiles}
+              />
+            </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <MultiFileInputButton
+                label="รายงานผลจากห้องปฏิบัติการ (JPG/PNG/PDF ไม่เกิน 5 MB)"
+                files={labReportFiles}
+                onChange={setLabReportFiles}
+              />
+            </Grid>
+          </Grid>
+        </SectionPaper>
+
         <SectionPaper title="ผู้ประกอบกิจการโรงงานหรือผู้รับมอบอำนาจ (ผู้จัดทำรายงาน)">
           <Grid container spacing={2}>
             <Grid size={{ xs: 12, md: 6 }}>
@@ -2546,6 +2596,7 @@ function Kwp02Form({ factory, point, measurementRows, setMeasurementRows }) {
       <EmissionMeasurementDialog
         open={Boolean(editingMeasurement)}
         value={editingMeasurement?.id ? editingMeasurement : null}
+        parameterOptions={pollutantOptions}
         onClose={() => setEditingMeasurement(null)}
         onSave={saveMeasurement}
       />
@@ -2583,7 +2634,7 @@ function Kwp03Form({
               <ReadOnlyField label="ทะเบียนโรงงานเลขที่" value={factory?.newRegistrationNo ?? ''} />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <ReadOnlyField label="ลำดับประเภทโรงงาน" value={factory?.industryType ?? ''} />
+              <ReadOnlyField label="ลำดับประเภทโรงงาน" value={getFactoryIndustryMainOrder(factory)} />
             </Grid>
             <Grid size={{ xs: 12 }}>
               <ReadOnlyField label="สถานที่ตั้งโรงงาน" value={factory?.address ?? ''} multiline />
@@ -3241,6 +3292,7 @@ function getFactoryColumns(onOpenMonitoringPoints) {
     { field: 'factoryName', headerName: 'ชื่อโรงงาน/บริษัท', width: 240 },
     { field: 'newRegistrationNo', headerName: 'เลขทะเบียนโรงงาน (ใหม่)', width: 190 },
     { field: 'oldRegistrationNo', headerName: 'เลขทะเบียนโรงงาน (เก่า)', width: 190 },
+    { field: 'businessActivity', headerName: 'การประกอบกิจการ', width: 220 },
     { field: 'province', headerName: 'จังหวัด', width: 130 },
     { field: 'monitoringPointCount', headerName: 'จำนวนจุดตรวจวัด', width: 150, type: 'number' },
     {
