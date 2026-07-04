@@ -1612,6 +1612,68 @@ describe('connectionRequestsService', () => {
     });
   });
 
+  it('returns modal detail rows for all connected measurement points in a factory', async () => {
+    const request = requestDto({
+      status: CONNECTION_REQUEST_STATUS.CONNECTED,
+      statusLabel: 'เชื่อมต่อแล้ว',
+      verifiedAt: '2026-05-29T10:00:00.000Z',
+      measurementPoints: [
+        {
+          id: 1,
+          pointName: 'ปล่องระบาย A',
+          pointCode: 'STACK-A',
+          pointType: 'STACK',
+          latitude: null,
+          longitude: null,
+          parameters: ['NOx (ppm)', 'SO2 (ppm)'],
+          description: null,
+        },
+        {
+          id: 2,
+          pointName: 'บ่อบำบัดน้ำเสีย',
+          pointCode: 'WWTP-1',
+          pointType: 'WASTEWATER',
+          latitude: null,
+          longitude: null,
+          parameters: ['BOD (mg/l)', 'COD (mg/l)'],
+          description: null,
+        },
+      ],
+    });
+    mockedRepository.list.mockResolvedValue({ rows: [request], total: 1 });
+    mockedRepository.findFactorySummariesForRequests.mockResolvedValue(
+      new Map([[request.factoryId, factorySummary()]]),
+    );
+
+    const result = await connectionRequestsService.getConnectedMeasurementPointDetailsByFactory(
+      'factory-001',
+      actorUserId,
+      'ALL',
+    );
+
+    expect(mockedRepository.list).toHaveBeenCalledWith(
+      { factoryId: 'factory-001', status: CONNECTION_REQUEST_STATUS.CONNECTED },
+      { actorUserId, scope: 'ALL' },
+    );
+    expect(result).toEqual({
+      data: [
+        {
+          pointCode: 'STACK-A',
+          pointName: 'ปล่องระบาย A',
+          pointType: 'STACK',
+          parameterDetails: ['NOx (ppm)', 'SO2 (ppm)'],
+        },
+        {
+          pointCode: 'WWTP-1',
+          pointName: 'บ่อบำบัดน้ำเสีย',
+          pointType: 'WASTEWATER',
+          parameterDetails: ['BOD (mg/l)', 'COD (mg/l)'],
+        },
+      ],
+      meta: { total: 2 },
+    });
+  });
+
   it('adds connected point name and coordinates to measurement statistics points', async () => {
     const request = requestDto({
       status: CONNECTION_REQUEST_STATUS.CONNECTED,

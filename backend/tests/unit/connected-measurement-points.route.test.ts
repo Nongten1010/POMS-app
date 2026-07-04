@@ -6,7 +6,7 @@ jest.mock('../../src/modules/connection-requests/connection-requests.service', (
   connectionRequestsService: {
     getAddParameterFormDetail: jest.fn(),
     getCalendarStatus: jest.fn(),
-    getConnectedMeasurementPointDetail: jest.fn(),
+    getConnectedMeasurementPointDetailsByFactory: jest.fn(),
     getCurrentDeviceConfigFormDetail: jest.fn(),
     getMeasurementStatistics: jest.fn(),
     listConnectedMeasurementPoints: jest.fn(),
@@ -162,11 +162,16 @@ describe('connected measurement points route', () => {
       ],
       meta: { total: 1 },
     });
-    mockedConnectionRequestsService.getConnectedMeasurementPointDetail.mockResolvedValue({
-      pointCode: 'S0001',
-      pointName: 'ปล่อง A',
-      pointType: 'STACK',
-      parameterDetails: ['NOx (ppm)', 'SO2 (ppm)'],
+    mockedConnectionRequestsService.getConnectedMeasurementPointDetailsByFactory.mockResolvedValue({
+      data: [
+        {
+          pointCode: 'S0001',
+          pointName: 'ปล่อง A',
+          pointType: 'STACK',
+          parameterDetails: ['NOx (ppm)', 'SO2 (ppm)'],
+        },
+      ],
+      meta: { total: 1 },
     });
     mockedConnectionRequestsService.getAddParameterFormDetail.mockResolvedValue({
       requestType: 'ADD_PARAMETER',
@@ -348,27 +353,32 @@ describe('connected measurement points route', () => {
     });
   });
 
-  it('exposes only the modal detail fields for a selected connected measurement point', async () => {
+  it('exposes only modal detail fields for a factory connected measurement points', async () => {
     const app = createApp();
 
     const response = await request(app)
-      .get('/api/v1/connected-measurement-points/S0001')
+      .get('/api/v1/connected-measurement-points/factories/factory-001')
       .set('Authorization', `Bearer ${accessToken()}`);
 
     expect(response.status).toBe(200);
-    expect(mockedConnectionRequestsService.getConnectedMeasurementPointDetail).toHaveBeenCalledWith(
-      'S0001',
+    expect(
+      mockedConnectionRequestsService.getConnectedMeasurementPointDetailsByFactory,
+    ).toHaveBeenCalledWith(
+      'factory-001',
       42,
       'ALL',
     );
     expect(response.body).toEqual({
       success: true,
-      data: {
-        pointCode: 'S0001',
-        pointName: 'ปล่อง A',
-        pointType: 'STACK',
-        parameterDetails: ['NOx (ppm)', 'SO2 (ppm)'],
-      },
+      data: [
+        {
+          pointCode: 'S0001',
+          pointName: 'ปล่อง A',
+          pointType: 'STACK',
+          parameterDetails: ['NOx (ppm)', 'SO2 (ppm)'],
+        },
+      ],
+      meta: { total: 1 },
     });
   });
 

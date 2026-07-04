@@ -495,23 +495,21 @@ export const connectionRequestsService = {
     return toDeviceConfigFormDetail(request, configs, stationId);
   },
 
-  async getConnectedMeasurementPointDetail(
-    stationId: string,
+  async getConnectedMeasurementPointDetailsByFactory(
+    factoryId: string,
     actorUserId: number,
     viewScope: string | null | undefined,
     regionalAccess?: RegionalAccessDTO | null,
-  ): Promise<ConnectedMeasurementPointModalDetailDTO> {
-    const detail = await loadConnectedMeasurementPointDetail(
-      stationId,
+  ): Promise<PaginatedTableRowsDTO<ConnectedMeasurementPointModalDetailDTO>> {
+    const result = await connectionRequestsService.listConnectedMeasurementPoints(
+      { factoryId },
       actorUserId,
       viewScope,
       regionalAccess,
     );
     return {
-      pointCode: detail.point.pointCode ?? null,
-      pointName: detail.point.pointName,
-      pointType: detail.point.pointType,
-      parameterDetails: detail.point.parameters,
+      data: result.data.map(toConnectedMeasurementPointModalDetail),
+      meta: { total: result.data.length },
     };
   },
 
@@ -1835,6 +1833,17 @@ async function loadConnectedMeasurementPointDetail(
   const point = result.data[0];
   if (!point) throw new NotFoundError(`Connected measurement point ${stationId} not found`);
   return point;
+}
+
+function toConnectedMeasurementPointModalDetail(
+  detail: ConnectedMeasurementPointDetailDTO,
+): ConnectedMeasurementPointModalDetailDTO {
+  return {
+    pointCode: detail.point.pointCode ?? null,
+    pointName: detail.point.pointName,
+    pointType: detail.point.pointType,
+    parameterDetails: detail.point.parameters,
+  };
 }
 
 function toMeasurementDetailFactory(point: ConnectedMeasurementPointDetailDTO): {

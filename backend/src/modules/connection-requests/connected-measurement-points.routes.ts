@@ -13,6 +13,11 @@ connectedMeasurementPointsRoutes.get(
   connectionRequestsController.listConnectedMeasurementPoints,
 );
 connectedMeasurementPointsRoutes.get(
+  '/factories/:factoryId',
+  authorize('cems_wpms_requests:view'),
+  connectionRequestsController.listConnectedMeasurementPointDetailsForFactory,
+);
+connectedMeasurementPointsRoutes.get(
   '/:stationId/requests',
   authorize('cems_wpms_requests:view'),
   connectionRequestsController.listRequestsForConnectedMeasurementPoint,
@@ -36,11 +41,6 @@ connectedMeasurementPointsRoutes.get(
   '/:stationId/calendar-status',
   authorize('dashboard.stats:view'),
   connectionRequestsController.getCalendarStatus,
-);
-connectedMeasurementPointsRoutes.get(
-  '/:stationId',
-  authorize('cems_wpms_requests:view'),
-  connectionRequestsController.getConnectedMeasurementPointDetail,
 );
 connectedMeasurementPointsRoutes.post(
   '/:stationId/device-configs',

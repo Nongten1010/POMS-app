@@ -212,19 +212,24 @@ Data source:
 ### GET Measurement Point Modal Detail
 
 ```http
-GET /api/v1/connected-measurement-points/S0001
+GET /api/v1/connected-measurement-points/factories/factory-001
 ```
 
-ใช้กับ modal "รายละเอียดจุดตรวจวัด" โดยคืนเฉพาะ 4 field:
+ใช้กับ modal "รายละเอียดจุดตรวจวัด" โดยคืนรายการจุดตรวจวัดของโรงงาน และแต่ละแถวมีเฉพาะ 4 field:
 
 ```json
 {
   "success": true,
-  "data": {
-    "pointCode": "S0001",
-    "pointName": "ปล่อง A",
-    "pointType": "STACK",
-    "parameterDetails": ["NOx (ppm)", "SO2 (ppm)"]
+  "data": [
+    {
+      "pointCode": "S0001",
+      "pointName": "ปล่อง A",
+      "pointType": "STACK",
+      "parameterDetails": ["NOx (ppm)", "SO2 (ppm)"]
+    }
+  ],
+  "meta": {
+    "total": 1
   }
 }
 ```

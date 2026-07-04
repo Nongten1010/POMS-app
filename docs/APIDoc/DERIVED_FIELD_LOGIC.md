@@ -13,7 +13,7 @@
 
 Endpoint:
 
-- `GET /api/v1/connected-measurement-points/:stationId`
+- `GET /api/v1/connected-measurement-points/factories/:factoryId`
 
 Code:
 
@@ -29,18 +29,19 @@ Source:
 
 Fallback order:
 
-- Match the requested `stationId` against the connected measurement point using existing `listConnectedMeasurementPoints({ stationId })` behavior.
-- Return the matched point's parsed `parameters` array as `parameterDetails`.
+- Match the requested `factoryId` against connected measurement points using existing `listConnectedMeasurementPoints({ factoryId })` behavior.
+- Return each matched point's parsed `parameters` array as `parameterDetails`.
 
 Transformation:
 
-- `pointCode`, `pointName`, and `pointType` are direct aliases from the matched measurement point.
+- `pointCode`, `pointName`, and `pointType` are direct aliases from each matched measurement point.
 - `parameterDetails` is the parsed parameter array returned by the backend DTO instead of the raw JSON string.
 
 Reason:
 
 - The "รายละเอียดจุดตรวจวัด" modal only needs four display columns: code, name, type, and parameter detail.
 - Keeping this endpoint narrow avoids sending request, factory, and device-config fields into the modal.
+- The response is a collection because one factory can have multiple connected measurement points; when no connected points match, the API returns `data: []` with `meta.total: 0`.
 
 Known risks:
 

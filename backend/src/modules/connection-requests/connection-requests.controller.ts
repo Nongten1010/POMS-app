@@ -187,21 +187,21 @@ export const connectionRequestsController = {
     }
   },
 
-  async getConnectedMeasurementPointDetail(
+  async listConnectedMeasurementPointDetailsForFactory(
     req: Request,
     res: Response,
     next: NextFunction,
   ): Promise<void> {
     try {
       const actorUserId = requireActorUserId(req);
-      const { stationId } = connectedMeasurementPointParamsSchema.parse(req.params);
-      const data = await connectionRequestsService.getConnectedMeasurementPointDetail(
-        stationId,
+      const { factoryId } = factoryGeneralParamsSchema.parse(req.params);
+      const result = await connectionRequestsService.getConnectedMeasurementPointDetailsByFactory(
+        factoryId,
         actorUserId,
         getScope(req, 'cems_wpms_requests:view'),
         ...getRegionalAccessArg(req),
       );
-      res.status(StatusCodes.OK).json({ success: true, data });
+      res.status(StatusCodes.OK).json({ success: true, ...result });
     } catch (err) {
       next(err);
     }
