@@ -159,6 +159,43 @@ Known risks:
 
 - There is no dedicated reviewed-at column in the first BOD/COD report schema, so `reviewedDate` uses `updated_at` after review-like statuses. If exact review timestamps become required, add a stored review timestamp and replace this fallback.
 
+### Saved form workflow and measurement fields
+
+Endpoints:
+
+- `POST /api/v1/bod-cod-deviation-reports`
+- `GET /api/v1/bod-cod-deviation-reports/:id`
+
+Source:
+
+- Form header: `dbo.bod_cod_deviation_reports`
+- Measurement rows: `dbo.bod_cod_deviation_measurements`
+- Attachment metadata: `dbo.bod_cod_deviation_attachments`
+- Workflow steps: `dbo.bod_cod_approval_steps`
+
+Transformation:
+
+- `approvalTrack` is derived from the submitted `provinceName`: `กรุงเทพมหานคร` becomes `CENTRAL`; every other province becomes `REGIONAL`.
+- `steps` are initialized from `approvalTrack` when the form is saved:
+  - `CENTRAL`: ผู้ตรวจสอบ -> ผู้ทบทวน (`ผอ.กฝม.`) -> ผู้อนุมัติ (`ผอ.กวภ.`)
+  - `REGIONAL`: ผู้ตรวจสอบ -> ผู้อนุมัติ (`ผอ.ศวภ.`)
+- `currentStep` is the step where `is_current = true`.
+- `allowedActions` is derived from report status, current step, and permission scope. Operator `OWN_FACTORY` currently receives `CANCEL` while the report is not final; officer scopes can receive review actions when the current step is pending.
+- `deviationValueMgL` comes from database generated column `device_value_mg_l - lab_value_mg_l`.
+- `isWithinStandard` is derived on save: if `standardDeviationMgL` is absent, return `null`; otherwise compare `ABS(deviationValueMgL) <= standardDeviationMgL`.
+- `selectedParameterLabel` keeps the unit with the parameter display name, e.g. `BOD (mg/l)` and `COD (mg/l)`.
+
+Reason:
+
+- The frontend should not hardcode Bangkok-vs-regional step branching. Backend owns `approvalTrack`, `steps`, `currentStep`, and `allowedActions`.
+- The saved form must be reopenable with the same values the paper-like preview needs: header fields, lab/device fields, measurements, attachment metadata, and workflow state.
+- Operator save access must be checked against `user_juristics`; the backend must not rely only on factory identifiers supplied in the request body.
+
+Known risks:
+
+- `reportNo` is generated from the current count for the submitted Buddhist year. If high concurrency becomes likely, replace it with a database-backed sequence.
+- Attachment upload bytes are not handled by this JSON endpoint; the endpoint stores metadata for files already uploaded or otherwise staged.
+
 ## Auth Regional Access
 
 Endpoints:

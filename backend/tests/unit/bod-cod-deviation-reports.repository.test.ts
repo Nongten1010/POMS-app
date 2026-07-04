@@ -1,7 +1,10 @@
 import { describe, expect, it } from '@jest/globals';
 import {
+  buildBodCodApprovalStepsForTests,
+  buildBodCodCreateAccessQueryForTests,
   buildBodCodDeviationFactoryQueryForTests,
   buildBodCodDeviationLatestReportSlotMapForTests,
+  buildBodCodDeviationReportDetailQueryForTests,
   buildBodCodDeviationReportQueryForTests,
 } from '../../src/modules/bod-cod-deviations/bod-cod-deviation-reports.repository';
 
@@ -94,5 +97,49 @@ describe('bodCodDeviationReportsRepository access filters', () => {
       report_id: 20,
       status: 'APPROVED',
     });
+  });
+
+  it('loads report details through the same access filters as the report list', () => {
+    const compiled = buildBodCodDeviationReportDetailQueryForTests(9, {
+      actorUserId: 42,
+      scope: 'OWN_FACTORY',
+    }).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('from [bod_cod_deviation_reports] as [r]');
+    expect(sql).toContain('join [user_juristics] as [uj]');
+    expect(sql).toContain('[r].[id]');
+    expect(compiled.bindings).toContain(9);
+  });
+
+  it('builds the documented central three-step and regional two-step workflow', () => {
+    expect(buildBodCodApprovalStepsForTests('CENTRAL')).toEqual([
+      { stepNo: 1, roleCode: 'INSPECTOR', roleLabel: 'ผู้ตรวจสอบ' },
+      { stepNo: 2, roleCode: 'REVIEWER', roleLabel: 'ผู้ทบทวน (ผอ.กฝม.)' },
+      { stepNo: 3, roleCode: 'APPROVER', roleLabel: 'ผู้อนุมัติ (ผอ.กวภ.)' },
+    ]);
+    expect(buildBodCodApprovalStepsForTests('REGIONAL')).toEqual([
+      { stepNo: 1, roleCode: 'INSPECTOR', roleLabel: 'ผู้ตรวจสอบ' },
+      { stepNo: 2, roleCode: 'APPROVER', roleLabel: 'ผู้อนุมัติ (ผอ.ศวภ.)' },
+    ]);
+  });
+
+  it('checks own-factory edit access before saving a submitted form', () => {
+    const compiled = buildBodCodCreateAccessQueryForTests(
+      {
+        factoryId: 'FID-001',
+        factoryRegistrationNo: '10520000225172',
+      },
+      {
+        actorUserId: 42,
+        scope: 'OWN_FACTORY',
+      },
+    ).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('from [factories] as [f]');
+    expect(sql).toContain('join [user_juristics] as [uj]');
+    expect(sql).toContain('[uj].[user_id]');
+    expect(compiled.bindings).toEqual(expect.arrayContaining([42, 'FID-001', '10520000225172']));
   });
 });

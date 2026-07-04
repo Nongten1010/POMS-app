@@ -6,11 +6,14 @@ jest.mock('../../src/modules/bod-cod-deviations/bod-cod-deviation-reports.servic
   bodCodDeviationReportsService: {
     listFactories: jest.fn(),
     listReports: jest.fn(),
+    createReport: jest.fn(),
+    getReportById: jest.fn(),
   },
 }));
 
 import { createApp } from '../../src/app';
 import { bodCodDeviationReportsService } from '../../src/modules/bod-cod-deviations/bod-cod-deviation-reports.service';
+import type { CreateBodCodDeviationReportDTO } from '../../src/modules/bod-cod-deviations/bod-cod-deviation-reports.types';
 
 const mockedService = jest.mocked(bodCodDeviationReportsService);
 
@@ -111,6 +114,117 @@ describe('BOD/COD deviation report routes', () => {
       ],
       meta: { total: 1 },
     });
+    mockedService.createReport.mockResolvedValue({
+      id: 9,
+      reportNo: 'BODCOD-2569-0009',
+      statusCode: 'SUBMITTED',
+      approvalTrack: 'REGIONAL',
+      currentStep: {
+        stepNo: 1,
+        roleCode: 'INSPECTOR',
+        roleLabel: 'ผู้ตรวจสอบ',
+        status: 'PENDING',
+        isCurrent: true,
+      },
+      steps: [
+        {
+          stepNo: 1,
+          roleCode: 'INSPECTOR',
+          roleLabel: 'ผู้ตรวจสอบ',
+          status: 'PENDING',
+          isCurrent: true,
+        },
+        {
+          stepNo: 2,
+          roleCode: 'APPROVER',
+          roleLabel: 'ผู้อนุมัติ (ผอ.ศวภ.)',
+          status: 'WAITING',
+          isCurrent: false,
+        },
+      ],
+      allowedActions: ['CANCEL'],
+    });
+    mockedService.getReportById.mockResolvedValue({
+      id: 9,
+      reportNo: 'BODCOD-2569-0009',
+      reportRound: 'ครั้งที่ 1',
+      reportRoundNo: 1,
+      reportYear: 2569,
+      year: 2569,
+      selectedParameterCode: 'BOD',
+      selectedParameterLabel: 'BOD (mg/l)',
+      factoryId: 'FID-001',
+      factoryName: 'บริษัท ทดสอบน้ำเสีย จำกัด',
+      factoryRegistration: '10520000225172',
+      factoryRegistrationNo: '10520000225172',
+      monitoringPointId: 9,
+      monitoringPointCode: 'P0001',
+      monitoringPointName: 'จุดระบายน้ำทิ้ง A',
+      province: 'ลำปาง',
+      provinceName: 'ลำปาง',
+      approvalTrack: 'REGIONAL',
+      status: 'ส่งรายงานแล้ว',
+      statusCode: 'SUBMITTED',
+      statusLabel: 'ส่งรายงานแล้ว',
+      submittedDate: '01/07/2569',
+      reviewedDate: '-',
+      submittedAt: '2026-07-01T10:00:00.000Z',
+      createdAt: '2026-07-01T09:00:00.000Z',
+      updatedAt: '2026-07-01T10:00:00.000Z',
+      businessActivity: 'ผลิตอาหารและเครื่องดื่ม',
+      factoryAddress: '99 หมู่ 1',
+      wastewaterFlowM3PerHour: 120.5,
+      samplerName: 'นายเก็บ ตัวอย่าง',
+      officerRegistrationNo: 'LAB-001',
+      laboratoryName: 'ห้องปฏิบัติการกลาง',
+      laboratoryRegistrationNo: 'LAB-REG-001',
+      labReportNo: 'LAB-REPORT-001',
+      analysisMethod: 'Standard Methods',
+      deviceBrand: 'Brand A',
+      deviceModel: 'Model B',
+      deviceSerialNo: 'SN-001',
+      reporterName: 'นายรายงาน ผล',
+      reporterPosition: 'เจ้าหน้าที่สิ่งแวดล้อม',
+      measurements: [
+        {
+          id: 1,
+          parameterCode: 'BOD',
+          sampleDate: '2026-07-01',
+          sampleTime: '09:30',
+          deviceValueMgL: 12.5,
+          labValueMgL: 10,
+          deviationValueMgL: 2.5,
+          standardDeviationMgL: 3,
+          isWithinStandard: true,
+          sortOrder: 1,
+        },
+      ],
+      attachments: [],
+      currentStep: {
+        stepNo: 1,
+        roleCode: 'INSPECTOR',
+        roleLabel: 'ผู้ตรวจสอบ',
+        status: 'PENDING',
+        isCurrent: true,
+      },
+      steps: [
+        {
+          stepNo: 1,
+          roleCode: 'INSPECTOR',
+          roleLabel: 'ผู้ตรวจสอบ',
+          status: 'PENDING',
+          isCurrent: true,
+        },
+        {
+          stepNo: 2,
+          roleCode: 'APPROVER',
+          roleLabel: 'ผู้อนุมัติ (ผอ.ศวภ.)',
+          status: 'WAITING',
+          isCurrent: false,
+        },
+      ],
+      allowedActions: ['CANCEL'],
+    });
   });
 
   it('lists operator factories for the factory table with own-factory scope', async () => {
@@ -190,6 +304,68 @@ describe('BOD/COD deviation report routes', () => {
     expect(response.status).toBe(403);
     expect(mockedService.listReports).not.toHaveBeenCalled();
   });
+
+  it('creates a submitted BOD/COD deviation form and initializes workflow steps', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .post('/api/v1/bod-cod-deviation-reports')
+      .set('Authorization', `Bearer ${operatorToken()}`)
+      .send(createReportPayload());
+
+    expect(response.status).toBe(201);
+    expect(response.headers.location).toBe('/api/v1/bod-cod-deviation-reports/9');
+    expect(mockedService.createReport).toHaveBeenCalledWith(createReportPayload(), {
+      actorUserId: 42,
+      scope: 'OWN_FACTORY',
+    });
+    expect(response.body).toEqual({
+      success: true,
+      data: expect.objectContaining({
+        id: 9,
+        reportNo: 'BODCOD-2569-0009',
+        statusCode: 'SUBMITTED',
+        approvalTrack: 'REGIONAL',
+        currentStep: expect.objectContaining({
+          stepNo: 1,
+          roleCode: 'INSPECTOR',
+        }),
+        allowedActions: ['CANCEL'],
+      }),
+    });
+  });
+
+  it('gets a saved BOD/COD deviation form by id with workflow steps', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .get('/api/v1/bod-cod-deviation-reports/9')
+      .set('Authorization', `Bearer ${operatorToken()}`);
+
+    expect(response.status).toBe(200);
+    expect(mockedService.getReportById).toHaveBeenCalledWith(9, {
+      actorUserId: 42,
+      scope: 'OWN_FACTORY',
+      regionalAccess: undefined,
+    });
+    expect(response.body.data).toMatchObject({
+      id: 9,
+      reportNo: 'BODCOD-2569-0009',
+      selectedParameterLabel: 'BOD (mg/l)',
+      measurements: [
+        expect.objectContaining({
+          parameterCode: 'BOD',
+          deviationValueMgL: 2.5,
+          isWithinStandard: true,
+        }),
+      ],
+      currentStep: expect.objectContaining({
+        stepNo: 1,
+        roleCode: 'INSPECTOR',
+      }),
+      allowedActions: ['CANCEL'],
+    });
+  });
 });
 
 function operatorToken(): string {
@@ -199,6 +375,7 @@ function operatorToken(): string {
     roles: ['factory_operator'],
     scopes: {
       'bod_cod_errors:view': 'OWN_FACTORY',
+      'bod_cod_errors:edit': 'OWN_FACTORY',
     },
   });
 }
@@ -224,4 +401,52 @@ function tokenWithoutBodCodPermission(): string {
       'factories:view': 'ALL',
     },
   });
+}
+
+function createReportPayload(): CreateBodCodDeviationReportDTO {
+  return {
+    reportRoundNo: 1,
+    reportYear: 2569,
+    factoryId: 'FID-001',
+    factoryName: 'บริษัท ทดสอบน้ำเสีย จำกัด',
+    factoryRegistrationNo: '10520000225172',
+    businessActivity: 'ผลิตอาหารและเครื่องดื่ม',
+    factoryAddress: '99 หมู่ 1',
+    provinceName: 'ลำปาง',
+    connectedMeasurementPointId: 9,
+    pointCode: 'P0001',
+    pointName: 'จุดระบายน้ำทิ้ง A',
+    wastewaterFlowM3PerHour: 120.5,
+    samplerName: 'นายเก็บ ตัวอย่าง',
+    officerRegistrationNo: 'LAB-001',
+    laboratoryName: 'ห้องปฏิบัติการกลาง',
+    laboratoryRegistrationNo: 'LAB-REG-001',
+    labReportNo: 'LAB-REPORT-001',
+    analysisMethod: 'Standard Methods',
+    deviceBrand: 'Brand A',
+    deviceModel: 'Model B',
+    deviceSerialNo: 'SN-001',
+    selectedParameterCode: 'BOD',
+    reporterName: 'นายรายงาน ผล',
+    reporterPosition: 'เจ้าหน้าที่สิ่งแวดล้อม',
+    measurements: [
+      {
+        sampleDate: '2026-07-01',
+        sampleTime: '09:30',
+        deviceValueMgL: 12.5,
+        labValueMgL: 10,
+        standardDeviationMgL: 3,
+      },
+    ],
+    attachments: [
+      {
+        attachmentType: 'LAB_REPORT',
+        originalFileName: 'lab-report.pdf',
+        storedFileName: 'lab-report-uuid.pdf',
+        mimeType: 'application/pdf',
+        fileSize: 12000,
+        storagePath: 'uploads/bod-cod/lab-report-uuid.pdf',
+      },
+    ],
+  };
 }

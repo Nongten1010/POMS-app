@@ -172,12 +172,239 @@ Response:
 }
 ```
 
+## 3. Save Deviation Report Form
+
+สำหรับบันทึกแบบ "แบบรายงานผลการตรวจสอบความคลาดเคลื่อนของเครื่องมือหรือเครื่องอุปกรณ์พิเศษ"
+
+Link:
+
+```text
+POST /api/v1/bod-cod-deviation-reports
+```
+
+Permission:
+
+```text
+bod_cod_errors:edit
+```
+
+Payload:
+
+```json
+{
+  "reportRoundNo": 1,
+  "reportYear": 2569,
+  "factoryId": "FID-001",
+  "factoryName": "บริษัท ทดสอบน้ำเสีย จำกัด",
+  "factoryRegistrationNo": "10520000225172",
+  "businessActivity": "ผลิตอาหารและเครื่องดื่ม",
+  "factoryAddress": "99 หมู่ 1",
+  "provinceName": "ลำปาง",
+  "connectedMeasurementPointId": 9,
+  "pointCode": "P0001",
+  "pointName": "จุดระบายน้ำทิ้ง A",
+  "wastewaterFlowM3PerHour": 120.5,
+  "samplerName": "นายเก็บ ตัวอย่าง",
+  "officerRegistrationNo": "LAB-001",
+  "laboratoryName": "ห้องปฏิบัติการกลาง",
+  "laboratoryRegistrationNo": "LAB-REG-001",
+  "labReportNo": "LAB-REPORT-001",
+  "analysisMethod": "Standard Methods",
+  "deviceBrand": "Brand A",
+  "deviceModel": "Model B",
+  "deviceSerialNo": "SN-001",
+  "selectedParameterCode": "BOD",
+  "reporterName": "นายรายงาน ผล",
+  "reporterPosition": "เจ้าหน้าที่สิ่งแวดล้อม",
+  "measurements": [
+    {
+      "sampleDate": "2026-07-01",
+      "sampleTime": "09:30",
+      "deviceValueMgL": 12.5,
+      "labValueMgL": 10,
+      "standardDeviationMgL": 3
+    }
+  ],
+  "attachments": [
+    {
+      "attachmentType": "LAB_REPORT",
+      "originalFileName": "lab-report.pdf",
+      "storedFileName": "lab-report-uuid.pdf",
+      "mimeType": "application/pdf",
+      "fileSize": 12000,
+      "storagePath": "uploads/bod-cod/lab-report-uuid.pdf"
+    }
+  ]
+}
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 9,
+    "reportNo": "BODCOD-2569-0009",
+    "statusCode": "SUBMITTED",
+    "approvalTrack": "REGIONAL",
+    "currentStep": {
+      "id": 15,
+      "stepNo": 1,
+      "roleCode": "INSPECTOR",
+      "roleLabel": "ผู้ตรวจสอบ",
+      "status": "PENDING",
+      "isCurrent": true
+    },
+    "steps": [
+      {
+        "id": 15,
+        "stepNo": 1,
+        "roleCode": "INSPECTOR",
+        "roleLabel": "ผู้ตรวจสอบ",
+        "status": "PENDING",
+        "isCurrent": true
+      },
+      {
+        "id": 16,
+        "stepNo": 2,
+        "roleCode": "APPROVER",
+        "roleLabel": "ผู้อนุมัติ (ผอ.ศวภ.)",
+        "status": "WAITING",
+        "isCurrent": false
+      }
+    ],
+    "allowedActions": ["CANCEL"]
+  }
+}
+```
+
+Notes:
+
+- `sampleDate` ใช้รูปแบบ `YYYY-MM-DD`
+- `sampleTime` ใช้รูปแบบ `HH:mm`
+- `attachmentType` ใช้ค่า `SAMPLE_PHOTO`, `DEVICE_PHOTO`, หรือ `LAB_REPORT`
+- ตอนบันทึก ระบบตั้งสถานะเริ่มต้นเป็น `SUBMITTED` และสร้าง approval steps ตาม `provinceName`
+- ถ้า token เป็น scope `OWN_FACTORY` ระบบตรวจสิทธิ์กับ `user_juristics` ก่อนบันทึก ไม่เชื่อ `factoryId` จาก payload เพียงอย่างเดียว
+
+## 4. Get Deviation Report Form
+
+สำหรับเรียกดูรายละเอียดแบบฟอร์มที่บันทึกแล้ว พร้อมรายการ measurement, attachment metadata และ workflow steps
+
+Link:
+
+```text
+GET /api/v1/bod-cod-deviation-reports/:id
+```
+
+Permission:
+
+```text
+bod_cod_errors:view
+```
+
+cURL:
+
+```bash
+curl "http://localhost:3000/api/v1/bod-cod-deviation-reports/9" \
+  -H "Authorization: Bearer <access_token>"
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 9,
+    "reportNo": "BODCOD-2569-0009",
+    "reportRound": "ครั้งที่ 1",
+    "reportRoundNo": 1,
+    "reportYear": 2569,
+    "year": 2569,
+    "selectedParameterCode": "BOD",
+    "selectedParameterLabel": "BOD (mg/l)",
+    "factoryId": "FID-001",
+    "factoryName": "บริษัท ทดสอบน้ำเสีย จำกัด",
+    "factoryRegistration": "10520000225172",
+    "factoryRegistrationNo": "10520000225172",
+    "monitoringPointId": 9,
+    "monitoringPointCode": "P0001",
+    "monitoringPointName": "จุดระบายน้ำทิ้ง A",
+    "province": "ลำปาง",
+    "provinceName": "ลำปาง",
+    "approvalTrack": "REGIONAL",
+    "status": "ส่งรายงานแล้ว",
+    "statusCode": "SUBMITTED",
+    "statusLabel": "ส่งรายงานแล้ว",
+    "businessActivity": "ผลิตอาหารและเครื่องดื่ม",
+    "factoryAddress": "99 หมู่ 1",
+    "wastewaterFlowM3PerHour": 120.5,
+    "samplerName": "นายเก็บ ตัวอย่าง",
+    "officerRegistrationNo": "LAB-001",
+    "laboratoryName": "ห้องปฏิบัติการกลาง",
+    "laboratoryRegistrationNo": "LAB-REG-001",
+    "labReportNo": "LAB-REPORT-001",
+    "analysisMethod": "Standard Methods",
+    "deviceBrand": "Brand A",
+    "deviceModel": "Model B",
+    "deviceSerialNo": "SN-001",
+    "reporterName": "นายรายงาน ผล",
+    "reporterPosition": "เจ้าหน้าที่สิ่งแวดล้อม",
+    "measurements": [
+      {
+        "id": 1,
+        "parameterCode": "BOD",
+        "sampleDate": "2026-07-01",
+        "sampleTime": "09:30",
+        "deviceValueMgL": 12.5,
+        "labValueMgL": 10,
+        "deviationValueMgL": 2.5,
+        "standardDeviationMgL": 3,
+        "isWithinStandard": true,
+        "sortOrder": 1
+      }
+    ],
+    "attachments": [],
+    "currentStep": {
+      "id": 15,
+      "stepNo": 1,
+      "roleCode": "INSPECTOR",
+      "roleLabel": "ผู้ตรวจสอบ",
+      "status": "PENDING",
+      "isCurrent": true
+    },
+    "steps": [
+      {
+        "id": 15,
+        "stepNo": 1,
+        "roleCode": "INSPECTOR",
+        "roleLabel": "ผู้ตรวจสอบ",
+        "status": "PENDING",
+        "isCurrent": true
+      },
+      {
+        "id": 16,
+        "stepNo": 2,
+        "roleCode": "APPROVER",
+        "roleLabel": "ผู้อนุมัติ (ผอ.ศวภ.)",
+        "status": "WAITING",
+        "isCurrent": false
+      }
+    ],
+    "allowedActions": ["CANCEL"]
+  }
+}
+```
+
 ## Screen Usage
 
 ผู้ประกอบการ:
 
 - Call `GET /api/v1/bod-cod-deviation-reports/factories` for "รายชื่อโรงงาน".
 - Call `GET /api/v1/bod-cod-deviation-reports` for "รายการคำขอ".
+- Call `POST /api/v1/bod-cod-deviation-reports` to save the BOD/COD deviation form.
+- Call `GET /api/v1/bod-cod-deviation-reports/:id` to reopen a saved form.
 - Token should include `bod_cod_errors:view = OWN_FACTORY`.
 - `measurementPoints[].reportSlots[]` returns two current-year slots; the frontend can enable/disable BOD/COD report buttons from those slot statuses.
 - Frontend table fields are returned directly: `newRegistrationNo`, `oldRegistrationNo`, `province`, `measurementPoints[].code`, `measurementPoints[].name`, `measurementPoints[].type`, `measurementPoints[].parameters`, `measurementPoints[].round1Status`, and `measurementPoints[].round2Status`.

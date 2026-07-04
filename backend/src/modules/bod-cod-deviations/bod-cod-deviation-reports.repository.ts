@@ -1,14 +1,24 @@
 import type { Knex } from 'knex';
 import { db } from '../../config/database';
+import { ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
 import type {
   BodCodApprovalTrack,
+  BodCodAllowedAction,
   BodCodDeviationAccess,
+  BodCodDeviationAttachmentDTO,
+  BodCodDeviationAttachmentInput,
   BodCodConnectedMeasurementPointDTO,
   BodCodDeviationFactoryTableRowDTO,
+  BodCodDeviationMeasurementDTO,
   BodCodDeviationReportStatus,
   BodCodReportSlotDTO,
+  BodCodWorkflowStepDTO,
   BodCodDeviationReportTableRowDTO,
   BodCodParameterCode,
+  CreateBodCodDeviationReportAccess,
+  CreateBodCodDeviationReportDTO,
+  CreatedBodCodDeviationReportDTO,
+  BodCodDeviationReportDetailDTO,
   ListBodCodDeviationReportsQuery,
 } from './bod-cod-deviation-reports.types';
 
@@ -61,6 +71,61 @@ interface ReportTableRow {
   measurement_count: number | string | null;
 }
 
+interface ReportDetailRow extends ReportTableRow {
+  business_activity: string | null;
+  address: string | null;
+  wastewater_flow_m3_per_hour: number | string | null;
+  sampler_name: string | null;
+  officer_registration_no: string | null;
+  laboratory_name: string | null;
+  laboratory_registration_no: string | null;
+  lab_report_no: string | null;
+  analysis_method: string | null;
+  device_brand: string | null;
+  device_model: string | null;
+  device_serial_no: string | null;
+  reporter_name: string | null;
+  reporter_position: string | null;
+}
+
+interface MeasurementRow {
+  id: number | string;
+  parameter_code: BodCodParameterCode;
+  sample_date: Date | string;
+  sample_time: Date | string;
+  device_value_mg_l: number | string;
+  lab_value_mg_l: number | string;
+  deviation_value_mg_l: number | string;
+  standard_deviation_mg_l: number | string | null;
+  is_within_standard: boolean | number | null;
+  sort_order: number | string;
+}
+
+interface AttachmentRow {
+  id: number | string;
+  attachment_type: BodCodDeviationAttachmentInput['attachmentType'];
+  original_file_name: string;
+  stored_file_name: string | null;
+  mime_type: string | null;
+  file_size: number | string | null;
+  storage_path: string | null;
+}
+
+interface ApprovalStepRow {
+  id: number | string;
+  step_no: number | string;
+  role_code: 'INSPECTOR' | 'REVIEWER' | 'APPROVER';
+  role_label: string;
+  status: 'PENDING' | 'WAITING' | 'APPROVED' | 'REVISION_REQUESTED';
+  actor_user_id: number | string | null;
+  actor_name: string | null;
+  actor_position: string | null;
+  decision: string | null;
+  comment: string | null;
+  decided_at: Date | string | null;
+  is_current: boolean | number;
+}
+
 export interface LatestReportRow {
   factory_id: number | string | null;
   connected_measurement_point_id: number | string | null;
@@ -102,6 +167,136 @@ export const bodCodDeviationReportsRepository = {
     const rows = await baseQuery.clone().orderBy('r.created_at', 'desc').orderBy('r.id', 'desc');
     return { rows: rows.map(toReportDTO), total };
   },
+
+  async createReport(
+    input: CreateBodCodDeviationReportDTO,
+    access: CreateBodCodDeviationReportAccess,
+  ): Promise<CreatedBodCodDeviationReportDTO> {
+    return db.transaction(async (trx) => {
+      const now = new Date();
+      await ensureCreateAccess(input, access, trx);
+      const approvalTrack = approvalTrackForProvince(input.provinceName);
+      const reportNo = await nextReportNo(input.reportYear, trx);
+      const inserted = await trx('bod_cod_deviation_reports')
+        .insert({
+          report_no: reportNo,
+          report_round: input.reportRoundNo,
+          report_year: input.reportYear,
+          factory_id: numericIdOrNull(input.factoryId ?? null),
+          connected_measurement_point_id: input.connectedMeasurementPointId ?? null,
+          point_code: input.pointCode ?? null,
+          point_name: input.pointName ?? null,
+          factory_name: input.factoryName,
+          factory_registration_no: input.factoryRegistrationNo,
+          business_activity: input.businessActivity ?? null,
+          address: input.factoryAddress ?? null,
+          province_name: input.provinceName,
+          approval_track: approvalTrack,
+          selected_parameter_code: input.selectedParameterCode,
+          wastewater_flow_m3_per_hour: input.wastewaterFlowM3PerHour ?? null,
+          sampler_name: input.samplerName ?? null,
+          officer_registration_no: input.officerRegistrationNo ?? null,
+          laboratory_name: input.laboratoryName ?? null,
+          laboratory_registration_no: input.laboratoryRegistrationNo ?? null,
+          lab_report_no: input.labReportNo ?? null,
+          analysis_method: input.analysisMethod ?? null,
+          device_brand: input.deviceBrand ?? null,
+          device_model: input.deviceModel ?? null,
+          device_serial_no: input.deviceSerialNo ?? null,
+          reporter_name: input.reporterName ?? null,
+          reporter_position: input.reporterPosition ?? null,
+          status: 'SUBMITTED',
+          submitted_at: now,
+          created_by: access.actorUserId,
+          updated_by: access.actorUserId,
+          created_at: now,
+          updated_at: now,
+        })
+        .returning('id');
+      const reportId = Number(inserted[0]?.id);
+
+      await trx('bod_cod_deviation_measurements').insert(
+        input.measurements.map((measurement, index) => {
+          const deviationValue = measurement.deviceValueMgL - measurement.labValueMgL;
+          const standard = measurement.standardDeviationMgL ?? null;
+          return {
+            report_id: reportId,
+            parameter_code: input.selectedParameterCode,
+            sample_date: measurement.sampleDate,
+            sample_time: measurement.sampleTime,
+            device_value_mg_l: measurement.deviceValueMgL,
+            lab_value_mg_l: measurement.labValueMgL,
+            standard_deviation_mg_l: standard,
+            is_within_standard: standard === null ? null : Math.abs(deviationValue) <= standard,
+            sort_order: index + 1,
+            created_at: now,
+            updated_at: now,
+          };
+        }),
+      );
+
+      if (input.attachments.length > 0) {
+        await trx('bod_cod_deviation_attachments').insert(
+          input.attachments.map((attachment) => ({
+            report_id: reportId,
+            attachment_type: attachment.attachmentType,
+            original_file_name: attachment.originalFileName,
+            stored_file_name: attachment.storedFileName ?? null,
+            mime_type: attachment.mimeType ?? null,
+            file_size: attachment.fileSize ?? null,
+            storage_path: attachment.storagePath ?? null,
+            uploaded_by: access.actorUserId,
+            uploaded_at: now,
+            created_at: now,
+            updated_at: now,
+          })),
+        );
+      }
+
+      const steps = approvalStepsForTrack(approvalTrack);
+      await trx('bod_cod_approval_steps').insert(
+        steps.map((step, index) => ({
+          report_id: reportId,
+          track: approvalTrack,
+          step_no: step.stepNo,
+          role_code: step.roleCode,
+          role_label: step.roleLabel,
+          status: index === 0 ? 'PENDING' : 'WAITING',
+          revision_no: 1,
+          is_current: index === 0,
+          created_at: now,
+          updated_at: now,
+        })),
+      );
+
+      const savedSteps = await listApprovalSteps(reportId, trx);
+      const currentStep = currentWorkflowStep(savedSteps);
+      return {
+        id: reportId,
+        reportNo,
+        statusCode: 'SUBMITTED',
+        approvalTrack,
+        currentStep,
+        steps: savedSteps,
+        allowedActions: allowedActionsFor('SUBMITTED', currentStep, access.scope),
+      };
+    });
+  },
+
+  async getReportById(
+    id: number,
+    access: BodCodDeviationAccess,
+  ): Promise<BodCodDeviationReportDetailDTO> {
+    const report = await buildReportDetailQuery(id, access).first();
+    if (!report) throw new NotFoundError('BOD/COD deviation report not found');
+
+    const [measurements, attachments, steps] = await Promise.all([
+      listMeasurements(id),
+      listAttachments(id),
+      listApprovalSteps(id),
+    ]);
+    return toReportDetailDTO(report, measurements, attachments, steps, access.scope);
+  },
 };
 
 export function buildBodCodDeviationFactoryQueryForTests(access: BodCodDeviationAccess) {
@@ -117,6 +312,24 @@ export function buildBodCodDeviationReportQueryForTests(
 
 export function buildBodCodDeviationLatestReportSlotMapForTests(reports: LatestReportRow[]) {
   return buildLatestReportSlotMap(reports);
+}
+
+export function buildBodCodDeviationReportDetailQueryForTests(
+  id: number,
+  access: BodCodDeviationAccess,
+) {
+  return buildReportDetailQuery(id, access);
+}
+
+export function buildBodCodApprovalStepsForTests(approvalTrack: BodCodApprovalTrack) {
+  return approvalStepsForTrack(approvalTrack);
+}
+
+export function buildBodCodCreateAccessQueryForTests(
+  input: Pick<CreateBodCodDeviationReportDTO, 'factoryId' | 'factoryRegistrationNo'>,
+  access: CreateBodCodDeviationReportAccess,
+) {
+  return buildCreateAccessQuery(input, access);
 }
 
 function buildFactoryQuery(
@@ -238,6 +451,71 @@ function buildReportQuery(
   applyRegionalAccessFilter(builder, access.regionalAccess);
 
   return builder as unknown as Knex.QueryBuilder<ReportTableRow, ReportTableRow[]>;
+}
+
+function buildReportDetailQuery(
+  id: number,
+  access: BodCodDeviationAccess,
+): Knex.QueryBuilder<ReportDetailRow, ReportDetailRow[]> {
+  const builder = buildReportQuery({}, access)
+    .where('r.id', id)
+    .select(
+      'r.business_activity',
+      'r.address',
+      'r.wastewater_flow_m3_per_hour',
+      'r.sampler_name',
+      'r.officer_registration_no',
+      'r.laboratory_name',
+      'r.laboratory_registration_no',
+      'r.lab_report_no',
+      'r.analysis_method',
+      'r.device_brand',
+      'r.device_model',
+      'r.device_serial_no',
+      'r.reporter_name',
+      'r.reporter_position',
+    );
+
+  return builder as unknown as Knex.QueryBuilder<ReportDetailRow, ReportDetailRow[]>;
+}
+
+function buildCreateAccessQuery(
+  input: Pick<CreateBodCodDeviationReportDTO, 'factoryId' | 'factoryRegistrationNo'>,
+  access: CreateBodCodDeviationReportAccess,
+  connection: Knex | Knex.Transaction = db,
+): Knex.QueryBuilder {
+  const builder = connection('factories as f').select('f.id').first();
+  if (access.scope === 'OWN_FACTORY') {
+    builder
+      .join('user_juristics as uj', 'uj.juristic_id', 'f.juristic_id')
+      .where('uj.user_id', access.actorUserId)
+      .whereNull('uj.revoked_at');
+  }
+  builder.where((factoryBuilder) => {
+    const factoryId = input.factoryId ?? '';
+    const numericFactoryId = numericIdOrNull(factoryId);
+    if (numericFactoryId !== null) factoryBuilder.orWhere('f.id', numericFactoryId);
+    if (factoryId) {
+      factoryBuilder.orWhere('f.fid', factoryId).orWhere('f.code', factoryId);
+    }
+    factoryBuilder.orWhere('f.fid', input.factoryRegistrationNo).orWhere(
+      'f.code',
+      input.factoryRegistrationNo,
+    );
+  });
+  return builder;
+}
+
+async function ensureCreateAccess(
+  input: CreateBodCodDeviationReportDTO,
+  access: CreateBodCodDeviationReportAccess,
+  trx: Knex.Transaction,
+): Promise<void> {
+  if (access.scope !== 'OWN_FACTORY') return;
+  const row = await buildCreateAccessQuery(input, access, trx);
+  if (!row) {
+    throw new ForbiddenError('Factory is not available for this user');
+  }
 }
 
 function applyFactoryAccessFilter(builder: Knex.QueryBuilder, access: BodCodDeviationAccess): void {
@@ -375,6 +653,98 @@ function buildLatestReportSlotMap(reports: LatestReportRow[]): Map<string, Lates
   return reportBySlotKey;
 }
 
+async function nextReportNo(reportYear: number, trx: Knex.Transaction): Promise<string> {
+  const row = await trx('bod_cod_deviation_reports')
+    .where('report_year', reportYear)
+    .count<{ total: number | string }>('id as total')
+    .first();
+  const nextSequence = Number(row?.total ?? 0) + 1;
+  return `BODCOD-${reportYear}-${String(nextSequence).padStart(4, '0')}`;
+}
+
+function approvalTrackForProvince(provinceName: string): BodCodApprovalTrack {
+  return provinceName.trim() === 'กรุงเทพมหานคร' ? 'CENTRAL' : 'REGIONAL';
+}
+
+function approvalStepsForTrack(
+  approvalTrack: BodCodApprovalTrack,
+): Array<Pick<BodCodWorkflowStepDTO, 'stepNo' | 'roleCode' | 'roleLabel'>> {
+  if (approvalTrack === 'CENTRAL') {
+    return [
+      { stepNo: 1, roleCode: 'INSPECTOR', roleLabel: 'ผู้ตรวจสอบ' },
+      { stepNo: 2, roleCode: 'REVIEWER', roleLabel: 'ผู้ทบทวน (ผอ.กฝม.)' },
+      { stepNo: 3, roleCode: 'APPROVER', roleLabel: 'ผู้อนุมัติ (ผอ.กวภ.)' },
+    ];
+  }
+  return [
+    { stepNo: 1, roleCode: 'INSPECTOR', roleLabel: 'ผู้ตรวจสอบ' },
+    { stepNo: 2, roleCode: 'APPROVER', roleLabel: 'ผู้อนุมัติ (ผอ.ศวภ.)' },
+  ];
+}
+
+async function listMeasurements(reportId: number): Promise<BodCodDeviationMeasurementDTO[]> {
+  const rows = await db<MeasurementRow>('bod_cod_deviation_measurements')
+    .where('report_id', reportId)
+    .whereNull('deleted_at')
+    .select(
+      'id',
+      'parameter_code',
+      'sample_date',
+      'sample_time',
+      'device_value_mg_l',
+      'lab_value_mg_l',
+      'deviation_value_mg_l',
+      'standard_deviation_mg_l',
+      'is_within_standard',
+      'sort_order',
+    )
+    .orderBy('sort_order', 'asc')
+    .orderBy('id', 'asc');
+  return rows.map(toMeasurementDTO);
+}
+
+async function listAttachments(reportId: number): Promise<BodCodDeviationAttachmentDTO[]> {
+  const rows = await db<AttachmentRow>('bod_cod_deviation_attachments')
+    .where('report_id', reportId)
+    .whereNull('deleted_at')
+    .select(
+      'id',
+      'attachment_type',
+      'original_file_name',
+      'stored_file_name',
+      'mime_type',
+      'file_size',
+      'storage_path',
+    )
+    .orderBy('id', 'asc');
+  return rows.map(toAttachmentDTO);
+}
+
+async function listApprovalSteps(
+  reportId: number,
+  connection: Knex | Knex.Transaction = db,
+): Promise<BodCodWorkflowStepDTO[]> {
+  const rows = await connection<ApprovalStepRow>('bod_cod_approval_steps')
+    .where('report_id', reportId)
+    .whereNull('deleted_at')
+    .select(
+      'id',
+      'step_no',
+      'role_code',
+      'role_label',
+      'status',
+      'actor_user_id',
+      'actor_name',
+      'actor_position',
+      'decision',
+      'comment',
+      'decided_at',
+      'is_current',
+    )
+    .orderBy('step_no', 'asc');
+  return rows.map(toApprovalStepDTO);
+}
+
 function toFactoryDTO(
   factoryId: string,
   row: FactoryTableRow,
@@ -440,6 +810,100 @@ function toReportDTO(row: ReportTableRow): BodCodDeviationReportTableRowDTO {
     updatedAt: toDateTimeString(row.updated_at) ?? '',
     measurementCount: Number(row.measurement_count ?? 0),
   };
+}
+
+function toReportDetailDTO(
+  row: ReportDetailRow,
+  measurements: BodCodDeviationMeasurementDTO[],
+  attachments: BodCodDeviationAttachmentDTO[],
+  steps: BodCodWorkflowStepDTO[],
+  scope: string | null | undefined,
+): BodCodDeviationReportDetailDTO {
+  const base = toReportDTO(row);
+  const currentStep = currentWorkflowStep(steps);
+  return {
+    ...base,
+    businessActivity: row.business_activity,
+    factoryAddress: row.address,
+    wastewaterFlowM3PerHour: toNumberOrNull(row.wastewater_flow_m3_per_hour),
+    samplerName: row.sampler_name,
+    officerRegistrationNo: row.officer_registration_no,
+    laboratoryName: row.laboratory_name,
+    laboratoryRegistrationNo: row.laboratory_registration_no,
+    labReportNo: row.lab_report_no,
+    analysisMethod: row.analysis_method,
+    deviceBrand: row.device_brand,
+    deviceModel: row.device_model,
+    deviceSerialNo: row.device_serial_no,
+    reporterName: row.reporter_name,
+    reporterPosition: row.reporter_position,
+    approvalTrack: row.approval_track,
+    currentStep,
+    steps,
+    allowedActions: allowedActionsFor(row.status, currentStep, scope),
+    measurements,
+    attachments,
+  };
+}
+
+function toMeasurementDTO(row: MeasurementRow): BodCodDeviationMeasurementDTO {
+  return {
+    id: Number(row.id),
+    parameterCode: row.parameter_code,
+    sampleDate: toDateOnlyString(row.sample_date),
+    sampleTime: toTimeString(row.sample_time),
+    deviceValueMgL: Number(row.device_value_mg_l),
+    labValueMgL: Number(row.lab_value_mg_l),
+    deviationValueMgL: Number(row.deviation_value_mg_l),
+    standardDeviationMgL: toNumberOrNull(row.standard_deviation_mg_l),
+    isWithinStandard: row.is_within_standard === null ? null : Boolean(row.is_within_standard),
+    sortOrder: Number(row.sort_order),
+  };
+}
+
+function toAttachmentDTO(row: AttachmentRow): BodCodDeviationAttachmentDTO {
+  return {
+    id: Number(row.id),
+    attachmentType: row.attachment_type,
+    originalFileName: row.original_file_name,
+    storedFileName: row.stored_file_name,
+    mimeType: row.mime_type,
+    fileSize: toNumberOrNull(row.file_size),
+    storagePath: row.storage_path,
+  };
+}
+
+function toApprovalStepDTO(row: ApprovalStepRow): BodCodWorkflowStepDTO {
+  return {
+    id: Number(row.id),
+    stepNo: Number(row.step_no),
+    roleCode: row.role_code,
+    roleLabel: row.role_label,
+    status: row.status,
+    actorUserId: toNumberOrNull(row.actor_user_id),
+    actorName: row.actor_name,
+    actorPosition: row.actor_position,
+    decision: row.decision,
+    comment: row.comment,
+    decidedAt: toDateTimeString(row.decided_at),
+    isCurrent: Boolean(row.is_current),
+  };
+}
+
+function currentWorkflowStep(steps: BodCodWorkflowStepDTO[]): BodCodWorkflowStepDTO | null {
+  return steps.find((step) => step.isCurrent) ?? null;
+}
+
+function allowedActionsFor(
+  status: BodCodDeviationReportStatus,
+  currentStep: BodCodWorkflowStepDTO | null,
+  scope: string | null | undefined,
+): BodCodAllowedAction[] {
+  if (status === 'APPROVED' || status === 'CANCELLED') return [];
+  if (scope === 'OWN_FACTORY') return ['CANCEL'];
+  const officerActions: BodCodAllowedAction[] =
+    currentStep?.status === 'PENDING' ? ['START_REVIEW', 'APPROVE', 'REQUEST_REVISION'] : [];
+  return [...officerActions, 'CANCEL'];
 }
 
 function connectedFactoryId(row: FactoryTableRow): string {
@@ -514,8 +978,24 @@ function toNumberOrNull(value: number | string | null): number | null {
   return Number.isFinite(numberValue) ? numberValue : null;
 }
 
+function numericIdOrNull(value: string | number | null): number | null {
+  if (value === null) return null;
+  const numberValue = Number(value);
+  return Number.isInteger(numberValue) && numberValue > 0 ? numberValue : null;
+}
+
 function toDateTimeString(value: Date | string | null): string | null {
   if (!value) return null;
   if (value instanceof Date) return value.toISOString();
   return new Date(value).toISOString();
+}
+
+function toDateOnlyString(value: Date | string): string {
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  return String(value).slice(0, 10);
+}
+
+function toTimeString(value: Date | string): string {
+  if (value instanceof Date) return value.toISOString().slice(11, 16);
+  return String(value).slice(0, 5);
 }

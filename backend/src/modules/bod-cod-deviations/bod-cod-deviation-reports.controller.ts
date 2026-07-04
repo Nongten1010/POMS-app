@@ -1,8 +1,13 @@
 import { NextFunction, Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
+import { env } from '../../config/env';
 import { getScope } from '../../shared/middlewares/authorize';
 import { bodCodDeviationReportsService } from './bod-cod-deviation-reports.service';
-import { listBodCodDeviationReportsQuerySchema } from './bod-cod-deviation-reports.validator';
+import {
+  bodCodDeviationReportIdParamsSchema,
+  createBodCodDeviationReportSchema,
+  listBodCodDeviationReportsQuerySchema,
+} from './bod-cod-deviation-reports.validator';
 
 export const bodCodDeviationReportsController = {
   async listFactories(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -30,6 +35,38 @@ export const bodCodDeviationReportsController = {
         req.user?.regionalAccess ?? undefined,
       );
       res.status(StatusCodes.OK).json({ success: true, ...result });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async getReportById(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const actorUserId = requireActorUserId(req);
+      const { id } = bodCodDeviationReportIdParamsSchema.parse(req.params);
+      const data = await bodCodDeviationReportsService.getReportById(id, {
+        actorUserId,
+        scope: getScope(req, 'bod_cod_errors:view'),
+        regionalAccess: req.user?.regionalAccess ?? undefined,
+      });
+      res.status(StatusCodes.OK).json({ success: true, data });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async createReport(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const actorUserId = requireActorUserId(req);
+      const payload = createBodCodDeviationReportSchema.parse(req.body);
+      const data = await bodCodDeviationReportsService.createReport(payload, {
+        actorUserId,
+        scope: getScope(req, 'bod_cod_errors:edit'),
+      });
+      res
+        .status(StatusCodes.CREATED)
+        .location(`${env.API_PREFIX}/bod-cod-deviation-reports/${data.id}`)
+        .json({ success: true, data });
     } catch (err) {
       next(err);
     }

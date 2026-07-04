@@ -2,7 +2,11 @@ import type { RegionalAccessDTO } from '../auth/regional-access';
 import { bodCodDeviationReportsRepository } from './bod-cod-deviation-reports.repository';
 import type {
   BodCodDeviationFactoryTableRowDTO,
+  BodCodDeviationReportDetailDTO,
   BodCodDeviationReportTableRowDTO,
+  CreateBodCodDeviationReportAccess,
+  CreateBodCodDeviationReportDTO,
+  CreatedBodCodDeviationReportDTO,
   ListBodCodDeviationReportsQuery,
   PaginatedBodCodDeviationTableRowsDTO,
 } from './bod-cod-deviation-reports.types';
@@ -27,5 +31,23 @@ export const bodCodDeviationReportsService = {
     return bodCodDeviationReportsRepository
       .listReports(query, { actorUserId, scope, regionalAccess })
       .then(({ rows, total }) => ({ data: rows, meta: { total } }));
+  },
+
+  createReport(
+    input: CreateBodCodDeviationReportDTO,
+    access: CreateBodCodDeviationReportAccess,
+  ): Promise<CreatedBodCodDeviationReportDTO> {
+    return bodCodDeviationReportsRepository.createReport(input, access);
+  },
+
+  getReportById(
+    id: number,
+    access: {
+      actorUserId: number;
+      scope: string | null | undefined;
+      regionalAccess?: RegionalAccessDTO | null;
+    },
+  ): Promise<BodCodDeviationReportDetailDTO> {
+    return bodCodDeviationReportsRepository.getReportById(id, access);
   },
 };

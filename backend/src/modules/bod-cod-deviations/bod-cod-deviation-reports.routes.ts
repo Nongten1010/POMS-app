@@ -13,6 +13,16 @@ bodCodDeviationReportsRoutes.get(
   bodCodDeviationReportsController.listFactories,
 );
 bodCodDeviationReportsRoutes.get(
+  '/:id',
+  authorize('bod_cod_errors:view'),
+  bodCodDeviationReportsController.getReportById,
+);
+bodCodDeviationReportsRoutes.post(
+  '/',
+  authorize('bod_cod_errors:edit'),
+  bodCodDeviationReportsController.createReport,
+);
+bodCodDeviationReportsRoutes.get(
   '/',
   authorize('bod_cod_errors:view'),
   bodCodDeviationReportsController.listReports,
