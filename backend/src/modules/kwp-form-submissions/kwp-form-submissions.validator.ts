@@ -12,6 +12,10 @@ const nullableText = (max: number) =>
   z.preprocess(emptyStringToNull, z.string().trim().min(1).max(max).nullable().optional());
 
 const requiredText = (max: number) => z.string().trim().min(1).max(max);
+const optionalNullableText = (max: number) =>
+  z
+    .preprocess(emptyStringToNull, z.string().trim().min(1).max(max).nullable().optional())
+    .transform((value) => value ?? null);
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected date format YYYY-MM-DD');
 
@@ -196,3 +200,30 @@ export const createKwp05SubmissionSchema = z
     calibrationItems: z.array(kwp05CalibrationItemSchema).min(1).max(100),
   })
   .strict();
+
+export const changeKwpWorkflowStatusSchema = z
+  .discriminatedUnion('action', [
+    z
+      .object({
+        action: z.literal('START_REVIEW'),
+        officerNote: optionalNullableText(1000),
+      })
+      .strict(),
+    z
+      .object({
+        action: z.literal('REQUEST_REVISION'),
+        revisionReason: requiredText(1000),
+        officerNote: optionalNullableText(1000),
+      })
+      .strict(),
+    z
+      .object({
+        action: z.literal('APPROVE'),
+        officerNote: optionalNullableText(1000),
+      })
+      .strict(),
+  ])
+  .transform((payload) => ({
+    ...payload,
+    officerNote: payload.officerNote ?? null,
+  }));

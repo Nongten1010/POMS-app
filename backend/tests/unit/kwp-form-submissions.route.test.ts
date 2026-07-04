@@ -5,6 +5,8 @@ import { signAccessToken } from '../../src/shared/utils/jwt';
 jest.mock('../../src/modules/kwp-form-submissions/kwp-form-submissions.service', () => ({
   kwpFormSubmissionsService: {
     getById: jest.fn(),
+    getWorkflow: jest.fn(),
+    changeWorkflowStatus: jest.fn(),
     createKwp01: jest.fn(),
     createKwp02: jest.fn(),
     createKwp03: jest.fn(),
@@ -83,6 +85,18 @@ describe('KWP form submission routes', () => {
       attachmentCount: 4,
     });
     mockedService.getById.mockResolvedValue(kwp02DetailResponse());
+    mockedService.getWorkflow.mockResolvedValue(kwpWorkflowResponse());
+    mockedService.changeWorkflowStatus.mockResolvedValue({
+      ...kwpWorkflowResponse(),
+      status: 'UNDER_REVIEW',
+      statusLabel: 'รอพิจารณา',
+      currentStep: {
+        key: 'OFFICER_REVIEW',
+        label: 'พิจารณา',
+        status: 'CURRENT',
+      },
+      allowedActions: ['REQUEST_REVISION', 'APPROVE'],
+    });
     mockSaveKwpAttachment.mockResolvedValue({
       originalFileName: 'lab-report.pdf',
       storedFileName: 'mock-lab-report.pdf',
@@ -371,6 +385,134 @@ describe('KWP form submission routes', () => {
 
     expect(response.status).toBe(404);
     expect(mockedService.getById).not.toHaveBeenCalled();
+  });
+
+  it('starts KWP workflow review through the public action endpoint', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .post('/api/v1/kwp-form-submissions/12/workflow-actions')
+      .set('Authorization', `Bearer ${officerApproveToken()}`)
+      .send({
+        action: 'START_REVIEW',
+        officerNote: 'รับเรื่องเข้าพิจารณา',
+      });
+
+    expect(response.status).toBe(200);
+    expect(mockedService.changeWorkflowStatus).toHaveBeenCalledWith(
+      12,
+      {
+        action: 'START_REVIEW',
+        officerNote: 'รับเรื่องเข้าพิจารณา',
+      },
+      {
+        actorUserId: 77,
+        scope: 'ALL',
+        regionalAccess: { regions: ['ภาคกลาง'] },
+      },
+    );
+    expect(response.body).toMatchObject({
+      success: true,
+      data: {
+        id: 12,
+        status: 'UNDER_REVIEW',
+        currentStep: {
+          key: 'OFFICER_REVIEW',
+          label: 'พิจารณา',
+        },
+        allowedActions: ['REQUEST_REVISION', 'APPROVE'],
+      },
+    });
+  });
+
+  it('gets KWP workflow steps and allowed actions from backend state', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .get('/api/v1/kwp-form-submissions/12/workflow')
+      .set('Authorization', `Bearer ${operatorViewToken()}`);
+
+    expect(response.status).toBe(200);
+    expect(mockedService.getWorkflow).toHaveBeenCalledWith(12, {
+      actorUserId: 42,
+      scope: 'OWN_FACTORY',
+      regionalAccess: undefined,
+    });
+    expect(response.body).toMatchObject({
+      success: true,
+      data: {
+        id: 12,
+        currentStep: {
+          key: 'SUBMITTED',
+          label: 'ส่งฟอร์ม',
+        },
+        allowedActions: ['START_REVIEW', 'REQUEST_REVISION'],
+      },
+    });
+  });
+
+  it('requests KWP workflow revision with required revision note', async () => {
+    mockedService.changeWorkflowStatus.mockResolvedValueOnce({
+      ...kwpWorkflowResponse(),
+      status: 'REVISION_REQUESTED',
+      statusLabel: 'รอโรงงานแก้ไข',
+      revisionReason: 'เพิ่มเอกสารแนบผลตรวจวัด',
+      officerNote: 'เพิ่มเอกสารแนบผลตรวจวัด',
+      currentStep: {
+        key: 'REVISION_REQUESTED',
+        label: 'ส่งแก้ไข',
+        status: 'CURRENT',
+      },
+      allowedActions: ['START_REVIEW'],
+    });
+    const app = createApp();
+
+    const response = await request(app)
+      .post('/api/v1/kwp-form-submissions/12/workflow-actions')
+      .set('Authorization', `Bearer ${officerApproveToken()}`)
+      .send({
+        action: 'REQUEST_REVISION',
+        revisionReason: 'เพิ่มเอกสารแนบผลตรวจวัด',
+        officerNote: 'ตรวจพบเอกสารแนบยังไม่ครบ',
+      });
+
+    expect(response.status).toBe(200);
+    expect(mockedService.changeWorkflowStatus).toHaveBeenCalledWith(
+      12,
+      {
+        action: 'REQUEST_REVISION',
+        revisionReason: 'เพิ่มเอกสารแนบผลตรวจวัด',
+        officerNote: 'ตรวจพบเอกสารแนบยังไม่ครบ',
+      },
+      {
+        actorUserId: 77,
+        scope: 'ALL',
+        regionalAccess: { regions: ['ภาคกลาง'] },
+      },
+    );
+    expect(response.body.data).toMatchObject({
+      status: 'REVISION_REQUESTED',
+      revisionReason: 'เพิ่มเอกสารแนบผลตรวจวัด',
+      currentStep: {
+        key: 'REVISION_REQUESTED',
+      },
+      allowedActions: ['START_REVIEW'],
+    });
+  });
+
+  it('requires a revision reason when requesting KWP workflow revision', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .post('/api/v1/kwp-form-submissions/12/workflow-actions')
+      .set('Authorization', `Bearer ${officerApproveToken()}`)
+      .send({
+        action: 'REQUEST_REVISION',
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    expect(mockedService.changeWorkflowStatus).not.toHaveBeenCalled();
   });
 
   it('creates a submitted KWP02 form with measurement rows and file metadata', async () => {
@@ -930,6 +1072,19 @@ function operatorViewToken(): string {
   });
 }
 
+function officerApproveToken(): string {
+  return signAccessToken({
+    sub: '77',
+    userType: 'officer',
+    roles: ['monitoring_kpm'],
+    scopes: {
+      'kwp_forms:view': 'ALL',
+      'kwp_forms:approve': 'ALL',
+    },
+    regionalAccess: { regions: ['ภาคกลาง'] },
+  });
+}
+
 function tokenWithoutKwpEditPermission(): string {
   return signAccessToken({
     sub: '7',
@@ -937,6 +1092,32 @@ function tokenWithoutKwpEditPermission(): string {
     roles: ['public_user'],
     scopes: {},
   });
+}
+
+function kwpWorkflowResponse() {
+  return {
+    id: 12,
+    requestNo: 'KWP-69-00012',
+    form: 'กวภ.01' as const,
+    formType: 'KWP01' as const,
+    status: 'SUBMITTED' as const,
+    statusLabel: 'รอพิจารณา',
+    revisionReason: null,
+    officerNote: null,
+    reviewedAt: null,
+    currentStep: {
+      key: 'SUBMITTED' as const,
+      label: 'ส่งฟอร์ม',
+      status: 'CURRENT' as const,
+    },
+    steps: [
+      { key: 'SUBMITTED' as const, label: 'ส่งฟอร์ม', status: 'CURRENT' as const },
+      { key: 'OFFICER_REVIEW' as const, label: 'พิจารณา', status: 'PENDING' as const },
+      { key: 'REVISION_REQUESTED' as const, label: 'ส่งแก้ไข', status: 'PENDING' as const },
+      { key: 'APPROVED' as const, label: 'ผ่านการพิจารณา', status: 'PENDING' as const },
+    ],
+    allowedActions: ['START_REVIEW' as const, 'REQUEST_REVISION' as const],
+  };
 }
 
 function kwp01DetailResponse() {

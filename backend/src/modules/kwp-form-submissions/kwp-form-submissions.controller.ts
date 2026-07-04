@@ -11,10 +11,42 @@ import {
   createKwp03SubmissionSchema,
   createKwp04SubmissionSchema,
   createKwp05SubmissionSchema,
+  changeKwpWorkflowStatusSchema,
 } from './kwp-form-submissions.validator';
 import type { KwpFormSubmissionDetailType } from './kwp-form-submissions.types';
 
 export const kwpFormSubmissionsController = {
+  async getWorkflow(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const actorUserId = requireActorUserId(req);
+      const id = requireSubmissionId(req);
+      const result = await kwpFormSubmissionsService.getWorkflow(id, {
+        actorUserId,
+        scope: getScope(req, 'kwp_forms:view'),
+        regionalAccess: req.user?.regionalAccess ?? undefined,
+      });
+      res.status(StatusCodes.OK).json({ success: true, data: result });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async changeWorkflowStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const actorUserId = requireActorUserId(req);
+      const id = requireSubmissionId(req);
+      const payload = changeKwpWorkflowStatusSchema.parse(req.body);
+      const result = await kwpFormSubmissionsService.changeWorkflowStatus(id, payload, {
+        actorUserId,
+        scope: getScope(req, 'kwp_forms:approve'),
+        regionalAccess: req.user?.regionalAccess ?? undefined,
+      });
+      res.status(StatusCodes.OK).json({ success: true, data: result });
+    } catch (err) {
+      next(err);
+    }
+  },
+
   async getKwp01ById(req: Request, res: Response, next: NextFunction): Promise<void> {
     await getById(req, res, next, 'KWP01');
   },
@@ -154,10 +186,7 @@ async function getById(
 ): Promise<void> {
   try {
     const actorUserId = requireActorUserId(req);
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id) || id <= 0) {
-      throw new BadRequestError('KWP form submission id must be a positive integer');
-    }
+    const id = requireSubmissionId(req);
 
     const result = await kwpFormSubmissionsService.getById(id, {
       actorUserId,
@@ -171,6 +200,14 @@ async function getById(
   } catch (err) {
     next(err);
   }
+}
+
+function requireSubmissionId(req: Request): number {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new BadRequestError('KWP form submission id must be a positive integer');
+  }
+  return id;
 }
 
 function requireActorUserId(req: Request): number {

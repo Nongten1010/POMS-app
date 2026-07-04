@@ -962,3 +962,61 @@ Reason:
 Risk:
 
 - If `PUBLIC_BASE_URL`, reverse-proxy headers, or `UPLOAD_PUBLIC_PATH` are misconfigured, the returned URL can point to the wrong host/path even though the stored file exists.
+
+## KWP Form Workflow Step Fields
+
+Endpoint:
+
+- `GET /api/v1/kwp-form-submissions/:id/workflow`
+- `POST /api/v1/kwp-form-submissions/:id/workflow-actions`
+
+Code:
+
+- `backend/src/modules/kwp-form-submissions/kwp-form-submissions.repository.ts`
+- `backend/src/modules/kwp-form-submissions/kwp-form-submissions.validator.ts`
+- `backend/src/modules/kwp-form-submissions/kwp-form-submissions.controller.ts`
+
+### `form` / `statusLabel` / `reviewedAt` / `currentStep` / `steps` / `allowedActions` / `revisionReason`
+
+Source:
+
+- `kwp_form_submissions.form_type`
+- `kwp_form_submissions.status`
+- `kwp_form_submissions.officer_note`
+- `kwp_form_submissions.reviewed_at`
+- `kwp_form_status_history.status`
+- `kwp_form_status_history.note`
+
+Logic:
+
+- `form` maps `form_type` to the Thai display form number: `KWP01` -> `กวภ.01`, `KWP02` -> `กวภ.02`, `KWP03` -> `กวภ.03`, `KWP04` -> `กวภ.04`, and `KWP05` -> `กวภ.05`.
+- `statusLabel` maps the machine status to the Thai display label used by KWP tables.
+- `reviewedAt` returns `kwp_form_submissions.reviewed_at` as an ISO timestamp. If the database value is `null`, the response returns `null`; if the value cannot be parsed as a date, the response returns the raw string value.
+- `steps` is derived from the current status and always returns the backend-owned sequence: `SUBMITTED`, `OFFICER_REVIEW`, `REVISION_REQUESTED`, and `APPROVED`.
+- `currentStep` is the first step whose derived step status is `CURRENT`.
+- `allowedActions` is derived from the current status:
+  - `SUBMITTED` returns `START_REVIEW` and `REQUEST_REVISION`.
+  - `UNDER_REVIEW` returns `REQUEST_REVISION` and `APPROVE`.
+  - `REVISION_REQUESTED` returns `START_REVIEW`.
+  - terminal or unsupported statuses return an empty array.
+- `revisionReason` returns the latest `kwp_form_status_history.note` whose status is `REVISION_REQUESTED`; if the workflow never requested revision or that history row has no note, the response returns `null`.
+- `POST /workflow-actions` also inserts each transition into `kwp_form_status_history` with the action note.
+
+Fallback order:
+
+- `form`: mapped from `form_type`; no fallback is used because `form_type` is constrained by the database to `KWP01`-`KWP05`.
+- `statusLabel`: mapped from `status`; no fallback is used because `status` is constrained by the database status set.
+- `reviewedAt`: ISO date conversion, then raw string if parsing fails, then `null` when the source is `null`.
+- `currentStep`: first `steps[]` item with `status = CURRENT`, then the first step in the generated step list, then a defensive pending `SUBMITTED` step if the generated list is unexpectedly empty.
+- `steps`: derived from the current status plus whether `kwp_form_status_history` contains any `REVISION_REQUESTED` row. When a revision happened and the current status later returns to `UNDER_REVIEW` or `APPROVED`, the `REVISION_REQUESTED` step is marked `DONE` instead of `SKIPPED`.
+- `allowedActions`: derived from current status only; unsupported statuses fall back to an empty array.
+- `revisionReason`: latest revision-request history note, then `null`.
+
+Reason:
+
+- Frontend must show the same step workflow for กวภ.01-05 without inferring action availability from Thai labels.
+- The revision note follows the same pattern as the CEMS/WPMS connection request workflow: a required reason is captured when the officer sends a request back for correction.
+
+Risk:
+
+- `kwp_form_submissions.officer_note` stores the latest officer note only. Full historical notes must be read from `kwp_form_status_history`.

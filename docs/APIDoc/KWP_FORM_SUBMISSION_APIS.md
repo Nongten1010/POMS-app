@@ -10,6 +10,8 @@ Permission:
 
 - Create/upload: `kwp_forms:edit`
 - Read detail: `kwp_forms:view`
+- Read workflow: `kwp_forms:view`
+- Change workflow status: `kwp_forms:approve`
 
 ## 0. Upload KWP attachment
 
@@ -1119,3 +1121,116 @@ Permission: `kwp_forms:view`
 | `id` ไม่ใช่ positive integer | `400` | path parameter ไม่ถูกต้อง |
 | ไม่พบรายการ, รายการถูกลบ, เรียก path ผิด form เช่น `/kwp02/:id` แต่ข้อมูลเป็น `KWP01`, หรืออยู่นอก scope | `404` | ไม่คืนข้อมูลให้ผู้ใช้ |
 | เรียก path กลางเดิม `/api/v1/kwp-form-submissions/:id` | `404` | ปิด path กลางแล้ว ให้ใช้ path แยกตาม form type |
+
+## 7. Get KWP workflow
+
+อ่านขั้นตอนปัจจุบันของแบบ กวภ.01-05 จาก backend เพื่อให้ frontend แสดง step และปุ่ม action โดยไม่ต้องเดาสถานะเอง
+
+```http
+GET /api/v1/kwp-form-submissions/:id/workflow
+```
+
+Permission: `kwp_forms:view`
+
+### Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 12,
+    "requestNo": "KWP-69-00012",
+    "form": "กวภ.01",
+    "formType": "KWP01",
+    "status": "SUBMITTED",
+    "statusLabel": "รอพิจารณา",
+    "revisionReason": null,
+    "officerNote": null,
+    "reviewedAt": null,
+    "currentStep": {
+      "key": "SUBMITTED",
+      "label": "ส่งฟอร์ม",
+      "status": "CURRENT"
+    },
+    "steps": [
+      { "key": "SUBMITTED", "label": "ส่งฟอร์ม", "status": "CURRENT" },
+      { "key": "OFFICER_REVIEW", "label": "พิจารณา", "status": "PENDING" },
+      { "key": "REVISION_REQUESTED", "label": "ส่งแก้ไข", "status": "PENDING" },
+      { "key": "APPROVED", "label": "ผ่านการพิจารณา", "status": "PENDING" }
+    ],
+    "allowedActions": ["START_REVIEW", "REQUEST_REVISION"]
+  }
+}
+```
+
+### Step/action mapping
+
+| Current status | Current step | Allowed actions |
+| --- | --- | --- |
+| `SUBMITTED` | `SUBMITTED` / ส่งฟอร์ม | `START_REVIEW`, `REQUEST_REVISION` |
+| `UNDER_REVIEW` | `OFFICER_REVIEW` / พิจารณา | `REQUEST_REVISION`, `APPROVE` |
+| `REVISION_REQUESTED` | `REVISION_REQUESTED` / ส่งแก้ไข | `START_REVIEW` |
+| `APPROVED` | `APPROVED` / ผ่านการพิจารณา | none |
+| `REJECTED`, `CANCELLED` | terminal status | none |
+
+## 8. Change KWP workflow status
+
+ให้เจ้าหน้าที่เปลี่ยนขั้นตอนของแบบ กวภ.01-05 ผ่าน action endpoint เดียว
+
+```http
+POST /api/v1/kwp-form-submissions/:id/workflow-actions
+```
+
+Permission: `kwp_forms:approve`
+
+### Request: start review
+
+```json
+{
+  "action": "START_REVIEW",
+  "officerNote": "รับเรื่องเข้าพิจารณา"
+}
+```
+
+### Request: request revision
+
+```json
+{
+  "action": "REQUEST_REVISION",
+  "revisionReason": "เพิ่มเอกสารแนบผลตรวจวัด",
+  "officerNote": "ตรวจพบเอกสารแนบยังไม่ครบ"
+}
+```
+
+`revisionReason` บังคับส่งเมื่อ `action = REQUEST_REVISION` และถูกบันทึกเป็น note ของสถานะเหมือน workflow คำขอเชื่อมต่อ
+
+### Request: approve
+
+```json
+{
+  "action": "APPROVE",
+  "officerNote": "ข้อมูลและเอกสารประกอบครบถ้วน"
+}
+```
+
+### Response
+
+คืน shape เดียวกับ `GET /workflow` แต่เป็นสถานะล่าสุดหลังเปลี่ยน step
+
+### Data source
+
+- `kwp_form_submissions.status` เก็บสถานะล่าสุด
+- `kwp_form_submissions.officer_note` เก็บ note ล่าสุดของเจ้าหน้าที่หรือเหตุผลส่งแก้ไข
+- `kwp_form_submissions.reviewed_at` และ `reviewed_by` ถูกเติมเมื่อ action เป็น `REQUEST_REVISION` หรือ `APPROVE`
+- `kwp_form_status_history` เก็บทุก status transition พร้อม note และผู้เปลี่ยนสถานะ; `revisionReason` ใน workflow response อ่านจาก note ล่าสุดของ history ที่เป็น `REVISION_REQUESTED`
+
+### Error behavior
+
+| Case | HTTP status | Meaning |
+| --- | --- | --- |
+| ไม่ส่ง token หรือ token ไม่ถูกต้อง | `401` | ต้อง login ก่อน |
+| token ไม่มี permission `kwp_forms:approve` | `403` | user ไม่มีสิทธิ์เปลี่ยน workflow |
+| `id` ไม่ใช่ positive integer | `400` | path parameter ไม่ถูกต้อง |
+| payload ไม่ถูกต้อง เช่นไม่ส่ง `revisionReason` ตอน `REQUEST_REVISION` | `400` | validation error |
+| action ไม่สอดคล้องกับ status ปัจจุบัน | `400` | backend คืน `allowedActions` ใน error details |
+| ไม่พบรายการ, รายการถูกลบ, หรืออยู่นอก scope | `404` | ไม่คืนข้อมูลให้ผู้ใช้ |

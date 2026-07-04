@@ -1,5 +1,5 @@
 import type { Knex } from 'knex';
-import { ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
+import { BadRequestError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
 import { db } from '../../config/database';
 import { buildPublicFileUrl } from './kwp-form-attachments.service';
 import type {
@@ -9,6 +9,7 @@ import type {
   CreateKwp03SubmissionDTO,
   CreateKwp04SubmissionDTO,
   CreateKwp05SubmissionDTO,
+  ChangeKwpFormWorkflowStatusDTO,
   KwpEmissionMeasurementItemDTO,
   Kwp03IssueReason,
   Kwp03WpmsIssueReportDTO,
@@ -17,9 +18,14 @@ import type {
   Kwp01IssueReason,
   KwpFormAttachmentDTO,
   KwpFormSubmissionDetailType,
+  KwpFormSubmissionStatus,
   KwpFormSubmissionDetailDTO,
   KwpFormSubmissionAccess,
   KwpFormSubmissionReadAccess,
+  KwpFormWorkflowAccess,
+  KwpFormWorkflowAction,
+  KwpFormWorkflowDTO,
+  KwpFormWorkflowStepDTO,
 } from './kwp-form-submissions.types';
 
 interface Kwp01InsertInput {
@@ -111,6 +117,24 @@ interface SubmissionDetailRow {
   updated_at: Date | string;
 }
 
+interface SubmissionWorkflowRow {
+  id: number | string;
+  submission_no: string;
+  form_type: KwpFormSubmissionDetailType;
+  status: KwpFormSubmissionStatus;
+  officer_note: string | null;
+  reviewed_at: Date | string | null;
+  created_at: Date | string;
+  updated_at: Date | string;
+  province_region: string | null;
+}
+
+interface WorkflowHistoryRow {
+  status: KwpFormSubmissionStatus;
+  note: string | null;
+  changed_at: Date | string;
+}
+
 interface Kwp01IssueReportRow {
   issue_reason: string;
   reason_detail: string | null;
@@ -197,6 +221,57 @@ interface Kwp05CalibrationItemRow {
 }
 
 export const kwpFormSubmissionsRepository = {
+  async getWorkflow(id: number, access: KwpFormWorkflowAccess): Promise<KwpFormWorkflowDTO> {
+    const submission = await buildWorkflowQuery(id, access).first();
+    if (!submission) {
+      throw new NotFoundError('KWP form submission not found');
+    }
+
+    const historyRows = await listWorkflowHistory(Number(submission.id));
+    return toWorkflowDTO(submission, historyRows);
+  },
+
+  async changeWorkflowStatus(
+    id: number,
+    input: ChangeKwpFormWorkflowStatusDTO,
+    access: KwpFormWorkflowAccess,
+  ): Promise<KwpFormWorkflowDTO> {
+    return db.transaction(async (trx) => {
+      const submission = await buildWorkflowQuery(id, access, trx).first();
+      if (!submission) {
+        throw new NotFoundError('KWP form submission not found');
+      }
+
+      const nextStatus = nextWorkflowStatus(submission.status, input.action);
+      const now = new Date();
+      const note = workflowHistoryNote(input);
+      await trx('kwp_form_submissions')
+        .where('id', id)
+        .update({
+          status: nextStatus,
+          officer_note: workflowOfficerNote(input),
+          reviewed_at: input.action === 'START_REVIEW' ? submission.reviewed_at : now,
+          reviewed_by: input.action === 'START_REVIEW' ? null : access.actorUserId,
+          updated_at: now,
+          updated_by: access.actorUserId,
+        });
+      await trx('kwp_form_status_history').insert({
+        submission_id: id,
+        status: nextStatus,
+        note,
+        changed_by: access.actorUserId,
+        changed_at: now,
+      });
+
+      const updated = await buildWorkflowQuery(id, access, trx).first();
+      if (!updated) {
+        throw new NotFoundError('KWP form submission not found');
+      }
+      const historyRows = await listWorkflowHistory(Number(updated.id), trx);
+      return toWorkflowDTO(updated, historyRows);
+    });
+  },
+
   async getById(
     id: number,
     access: KwpFormSubmissionReadAccess,
@@ -514,6 +589,13 @@ export function buildKwpFormSubmissionDetailQueryForTests(
   return buildSubmissionDetailQuery(id, access);
 }
 
+export function buildKwpFormSubmissionWorkflowQueryForTests(
+  id: number,
+  access: KwpFormWorkflowAccess,
+): Knex.QueryBuilder {
+  return buildWorkflowQuery(id, access);
+}
+
 export function toKwp01InsertRecordsForTests(input: Kwp01InsertInput): Kwp01InsertRecords {
   return toKwp01InsertRecords(input);
 }
@@ -528,6 +610,20 @@ export function toKwp03InsertRecordsForTests(input: Kwp03InsertInput): Kwp03Inse
 
 export function toKwp05InsertRecordsForTests(input: Kwp05InsertInput): Kwp05InsertRecords {
   return toKwp05InsertRecords(input);
+}
+
+export function toKwpWorkflowDTOForTests(
+  row: SubmissionWorkflowRow,
+  historyRows: WorkflowHistoryRow[] = [],
+): KwpFormWorkflowDTO {
+  return toWorkflowDTO(row, historyRows);
+}
+
+export function nextKwpWorkflowStatusForTests(
+  currentStatus: KwpFormSubmissionStatus,
+  action: KwpFormWorkflowAction,
+): KwpFormSubmissionStatus {
+  return nextWorkflowStatus(currentStatus, action);
 }
 
 async function assertCanCreateForFactory(
@@ -612,6 +708,47 @@ function buildSubmissionDetailQuery(
   applySubmissionReadAccessFilter(builder, access);
 
   return builder as unknown as Knex.QueryBuilder<SubmissionDetailRow, SubmissionDetailRow[]>;
+}
+
+function buildWorkflowQuery(
+  id: number,
+  access: KwpFormWorkflowAccess,
+  knexOrTrx: Knex | Knex.Transaction = db,
+): Knex.QueryBuilder<SubmissionWorkflowRow, SubmissionWorkflowRow[]> {
+  const builder = knexOrTrx<SubmissionWorkflowRow>('kwp_form_submissions as s')
+    .leftJoin('factories as f', function joinFactory() {
+      this.on('f.fid', '=', 's.factory_id')
+        .orOn('f.code', '=', 's.factory_id')
+        .orOn('f.code', '=', 's.factory_registration_no');
+    })
+    .leftJoin('provinces as p', 'p.id', 'f.province_id')
+    .where('s.id', id)
+    .whereNull('s.deleted_at')
+    .select(
+      's.id',
+      's.submission_no',
+      's.form_type',
+      's.status',
+      's.officer_note',
+      's.reviewed_at',
+      's.created_at',
+      's.updated_at',
+      'p.region as province_region',
+    );
+
+  if (access.scope === 'OWN_FACTORY') {
+    builder
+      .join('user_juristics as uj', 'uj.juristic_id', 'f.juristic_id')
+      .where('uj.user_id', access.actorUserId)
+      .whereNull('uj.revoked_at');
+  }
+
+  const regions = [
+    ...new Set((access.regionalAccess?.regions ?? []).map((region) => region.trim())),
+  ].filter(Boolean);
+  if (regions.length > 0) builder.whereIn('p.region', regions);
+
+  return builder as unknown as Knex.QueryBuilder<SubmissionWorkflowRow, SubmissionWorkflowRow[]>;
 }
 
 function applySubmissionReadAccessFilter(
@@ -890,6 +1027,17 @@ async function listAttachmentsByRelatedId(
   }, new Map<number, KwpFormAttachmentDTO[]>());
 }
 
+async function listWorkflowHistory(
+  submissionId: number,
+  knexOrTrx: Knex | Knex.Transaction = db,
+): Promise<WorkflowHistoryRow[]> {
+  return knexOrTrx<WorkflowHistoryRow>('kwp_form_status_history')
+    .where('submission_id', submissionId)
+    .orderBy('changed_at', 'asc')
+    .orderBy('id', 'asc')
+    .select('status', 'note', 'changed_at');
+}
+
 function toSubmissionDetailDTO(row: SubmissionDetailRow): KwpFormSubmissionDetailDTO {
   return {
     id: Number(row.id),
@@ -928,6 +1076,109 @@ function toSubmissionDetailDTO(row: SubmissionDetailRow): KwpFormSubmissionDetai
     reporterName: row.reporter_name,
     reporterPosition: row.reporter_position,
   };
+}
+
+function toWorkflowDTO(
+  row: SubmissionWorkflowRow,
+  historyRows: WorkflowHistoryRow[],
+): KwpFormWorkflowDTO {
+  const hasRevisionRequest = historyRows.some((history) => history.status === 'REVISION_REQUESTED');
+  const revisionReason = latestRevisionReason(historyRows);
+  const steps = workflowSteps(row.status, hasRevisionRequest);
+  const currentStep = steps.find((step) => step.status === 'CURRENT') ??
+    steps[0] ?? {
+      key: 'SUBMITTED',
+      label: 'ส่งฟอร์ม',
+      status: 'PENDING',
+    };
+  return {
+    id: Number(row.id),
+    requestNo: row.submission_no,
+    form: KWP_FORM_TYPE_LABELS[row.form_type],
+    formType: row.form_type,
+    status: row.status,
+    statusLabel: KWP_FORM_STATUS_LABELS[row.status],
+    revisionReason,
+    officerNote: row.officer_note,
+    reviewedAt: toIsoString(row.reviewed_at),
+    currentStep,
+    steps,
+    allowedActions: allowedWorkflowActions(row.status),
+  };
+}
+
+function workflowSteps(
+  status: KwpFormSubmissionStatus,
+  hasRevisionRequest: boolean,
+): KwpFormWorkflowStepDTO[] {
+  const revisionStepStatus: KwpFormWorkflowStepDTO['status'] =
+    status === 'REVISION_REQUESTED' ? 'CURRENT' : hasRevisionRequest ? 'DONE' : 'SKIPPED';
+  const approvedStepStatus: KwpFormWorkflowStepDTO['status'] =
+    status === 'APPROVED' ? 'CURRENT' : 'PENDING';
+
+  if (status === 'SUBMITTED') {
+    return [
+      { key: 'SUBMITTED', label: 'ส่งฟอร์ม', status: 'CURRENT' },
+      { key: 'OFFICER_REVIEW', label: 'พิจารณา', status: 'PENDING' },
+      { key: 'REVISION_REQUESTED', label: 'ส่งแก้ไข', status: 'PENDING' },
+      { key: 'APPROVED', label: 'ผ่านการพิจารณา', status: 'PENDING' },
+    ];
+  }
+
+  return [
+    { key: 'SUBMITTED', label: 'ส่งฟอร์ม', status: 'DONE' },
+    {
+      key: 'OFFICER_REVIEW',
+      label: 'พิจารณา',
+      status: status === 'UNDER_REVIEW' ? 'CURRENT' : 'DONE',
+    },
+    { key: 'REVISION_REQUESTED', label: 'ส่งแก้ไข', status: revisionStepStatus },
+    { key: 'APPROVED', label: 'ผ่านการพิจารณา', status: approvedStepStatus },
+  ];
+}
+
+function allowedWorkflowActions(status: KwpFormSubmissionStatus): KwpFormWorkflowAction[] {
+  if (status === 'SUBMITTED') return ['START_REVIEW', 'REQUEST_REVISION'];
+  if (status === 'UNDER_REVIEW') return ['REQUEST_REVISION', 'APPROVE'];
+  if (status === 'REVISION_REQUESTED') return ['START_REVIEW'];
+  return [];
+}
+
+function latestRevisionReason(historyRows: WorkflowHistoryRow[]): string | null {
+  return (
+    [...historyRows]
+      .reverse()
+      .find((history) => history.status === 'REVISION_REQUESTED' && history.note)?.note ?? null
+  );
+}
+
+function nextWorkflowStatus(
+  currentStatus: KwpFormSubmissionStatus,
+  action: KwpFormWorkflowAction,
+): KwpFormSubmissionStatus {
+  if (!allowedWorkflowActions(currentStatus).includes(action)) {
+    throw new BadRequestError('Invalid KWP workflow action for current status', {
+      currentStatus,
+      action,
+      allowedActions: allowedWorkflowActions(currentStatus),
+    });
+  }
+
+  if (action === 'START_REVIEW') return 'UNDER_REVIEW';
+  if (action === 'REQUEST_REVISION') return 'REVISION_REQUESTED';
+  return 'APPROVED';
+}
+
+function workflowOfficerNote(input: ChangeKwpFormWorkflowStatusDTO): string | null {
+  if (input.action === 'REQUEST_REVISION') return input.revisionReason ?? null;
+  return input.officerNote ?? null;
+}
+
+function workflowHistoryNote(input: ChangeKwpFormWorkflowStatusDTO): string | null {
+  if (input.action === 'REQUEST_REVISION') {
+    return [input.revisionReason, input.officerNote].filter(Boolean).join('\n') || null;
+  }
+  return input.officerNote ?? null;
 }
 
 function toAttachmentDTO(
@@ -1248,3 +1499,24 @@ function decimalText(value: number | string | null): string | null {
   if (value === null) return null;
   return String(value);
 }
+
+const KWP_FORM_TYPE_LABELS: Record<
+  KwpFormSubmissionDetailType,
+  'กวภ.01' | 'กวภ.02' | 'กวภ.03' | 'กวภ.04' | 'กวภ.05'
+> = {
+  KWP01: 'กวภ.01',
+  KWP02: 'กวภ.02',
+  KWP03: 'กวภ.03',
+  KWP04: 'กวภ.04',
+  KWP05: 'กวภ.05',
+};
+
+const KWP_FORM_STATUS_LABELS: Record<KwpFormSubmissionStatus, string> = {
+  DRAFT: 'แบบร่าง',
+  SUBMITTED: 'รอพิจารณา',
+  UNDER_REVIEW: 'รอพิจารณา',
+  APPROVED: 'ผ่านการพิจารณา',
+  REJECTED: 'ไม่ผ่านการพิจารณา',
+  REVISION_REQUESTED: 'รอโรงงานแก้ไข',
+  CANCELLED: 'ยกเลิก',
+};

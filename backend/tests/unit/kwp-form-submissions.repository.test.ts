@@ -3,10 +3,13 @@ import { buildPublicFileUrl } from '../../src/modules/kwp-form-submissions/kwp-f
 import {
   buildKwpFormSubmissionDetailQueryForTests,
   buildKwpFormSubmissionFactoryAccessQueryForTests,
+  buildKwpFormSubmissionWorkflowQueryForTests,
+  nextKwpWorkflowStatusForTests,
   toKwp01InsertRecordsForTests,
   toKwp02InsertRecordsForTests,
   toKwp03InsertRecordsForTests,
   toKwp05InsertRecordsForTests,
+  toKwpWorkflowDTOForTests,
 } from '../../src/modules/kwp-form-submissions/kwp-form-submissions.repository';
 
 describe('kwpFormSubmissionsRepository', () => {
@@ -63,6 +66,115 @@ describe('kwpFormSubmissionsRepository', () => {
     expect(sql).toContain('join [user_juristics] as [uj]');
     expect(sql).toContain('[uj].[user_id]');
     expect(sql).toContain('[p].[region] in (?)');
+  });
+
+  it('limits KWP workflow reads to requested submission id, operator factories, and regional access', () => {
+    const sql = buildKwpFormSubmissionWorkflowQueryForTests(12, {
+      actorUserId: 42,
+      scope: 'OWN_FACTORY',
+      regionalAccess: { regions: ['ภาคกลาง'] },
+    })
+      .toSQL()
+      .sql.toLowerCase();
+
+    expect(sql).toContain('from [kwp_form_submissions] as [s]');
+    expect(sql).toContain('[s].[id] = ?');
+    expect(sql).toContain('join [user_juristics] as [uj]');
+    expect(sql).toContain('[uj].[user_id]');
+    expect(sql).toContain('[p].[region] in (?)');
+  });
+
+  it('maps KWP workflow state for submitted, revision, and review transitions', () => {
+    const submitted = toKwpWorkflowDTOForTests({
+      id: 12,
+      submission_no: 'KWP-69-00012',
+      form_type: 'KWP01',
+      status: 'SUBMITTED',
+      officer_note: null,
+      reviewed_at: null,
+      created_at: '2026-07-04T08:00:00.000Z',
+      updated_at: '2026-07-04T08:00:00.000Z',
+      province_region: 'ภาคกลาง',
+    });
+    const revision = toKwpWorkflowDTOForTests(
+      {
+        id: 12,
+        submission_no: 'KWP-69-00012',
+        form_type: 'KWP01',
+        status: 'REVISION_REQUESTED',
+        officer_note: 'เพิ่มเอกสารแนบผลตรวจวัด',
+        reviewed_at: '2026-07-04T09:00:00.000Z',
+        created_at: '2026-07-04T08:00:00.000Z',
+        updated_at: '2026-07-04T09:00:00.000Z',
+        province_region: 'ภาคกลาง',
+      },
+      [
+        {
+          status: 'SUBMITTED',
+          note: null,
+          changed_at: '2026-07-04T08:00:00.000Z',
+        },
+        {
+          status: 'REVISION_REQUESTED',
+          note: 'เพิ่มเอกสารแนบผลตรวจวัด',
+          changed_at: '2026-07-04T09:00:00.000Z',
+        },
+      ],
+    );
+    const returnedToReview = toKwpWorkflowDTOForTests(
+      {
+        id: 12,
+        submission_no: 'KWP-69-00012',
+        form_type: 'KWP01',
+        status: 'UNDER_REVIEW',
+        officer_note: 'รับเรื่องแก้ไขเข้าพิจารณา',
+        reviewed_at: '2026-07-04T09:00:00.000Z',
+        created_at: '2026-07-04T08:00:00.000Z',
+        updated_at: '2026-07-04T10:00:00.000Z',
+        province_region: 'ภาคกลาง',
+      },
+      [
+        {
+          status: 'SUBMITTED',
+          note: null,
+          changed_at: '2026-07-04T08:00:00.000Z',
+        },
+        {
+          status: 'REVISION_REQUESTED',
+          note: 'เพิ่มเอกสารแนบผลตรวจวัด',
+          changed_at: '2026-07-04T09:00:00.000Z',
+        },
+        {
+          status: 'UNDER_REVIEW',
+          note: 'รับเรื่องแก้ไขเข้าพิจารณา',
+          changed_at: '2026-07-04T10:00:00.000Z',
+        },
+      ],
+    );
+
+    expect(submitted.currentStep).toMatchObject({ key: 'SUBMITTED', status: 'CURRENT' });
+    expect(submitted.allowedActions).toEqual(['START_REVIEW', 'REQUEST_REVISION']);
+    expect(nextKwpWorkflowStatusForTests('SUBMITTED', 'START_REVIEW')).toBe('UNDER_REVIEW');
+    expect(nextKwpWorkflowStatusForTests('SUBMITTED', 'REQUEST_REVISION')).toBe(
+      'REVISION_REQUESTED',
+    );
+    expect(revision.currentStep).toMatchObject({ key: 'REVISION_REQUESTED', status: 'CURRENT' });
+    expect(revision.revisionReason).toBe('เพิ่มเอกสารแนบผลตรวจวัด');
+    expect(revision.allowedActions).toEqual(['START_REVIEW']);
+    expect(nextKwpWorkflowStatusForTests('REVISION_REQUESTED', 'START_REVIEW')).toBe(
+      'UNDER_REVIEW',
+    );
+    expect(returnedToReview.currentStep).toMatchObject({
+      key: 'OFFICER_REVIEW',
+      status: 'CURRENT',
+    });
+    expect(returnedToReview.revisionReason).toBe('เพิ่มเอกสารแนบผลตรวจวัด');
+    expect(returnedToReview.steps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: 'REVISION_REQUESTED', status: 'DONE' }),
+      ]),
+    );
+    expect(nextKwpWorkflowStatusForTests('UNDER_REVIEW', 'APPROVE')).toBe('APPROVED');
   });
 
   it('maps KWP01 payload to submission, issue report, parameters, and initial history records', () => {

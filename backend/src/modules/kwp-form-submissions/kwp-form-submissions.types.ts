@@ -12,6 +12,15 @@ export const KWP03_ISSUE_REASONS = [
 export type Kwp01IssueReason = (typeof KWP01_ISSUE_REASONS)[number];
 export type Kwp03IssueReason = (typeof KWP03_ISSUE_REASONS)[number];
 export type KwpFormSubmissionDetailType = 'KWP01' | 'KWP02' | 'KWP03' | 'KWP04' | 'KWP05';
+export type KwpFormSubmissionStatus =
+  | 'DRAFT'
+  | 'SUBMITTED'
+  | 'UNDER_REVIEW'
+  | 'APPROVED'
+  | 'REJECTED'
+  | 'REVISION_REQUESTED'
+  | 'CANCELLED';
+export type KwpFormWorkflowAction = 'START_REVIEW' | 'REQUEST_REVISION' | 'APPROVE';
 
 export interface KwpFormSubmissionAccess {
   actorUserId: number;
@@ -23,6 +32,37 @@ export interface KwpFormSubmissionReadAccess extends KwpFormSubmissionAccess {
   regionalAccess?: { regions: string[] } | null;
   publicBaseUrl: string;
   publicPath: string;
+}
+
+export interface KwpFormWorkflowAccess extends KwpFormSubmissionAccess {
+  regionalAccess?: { regions: string[] } | null;
+}
+
+export interface ChangeKwpFormWorkflowStatusDTO {
+  action: KwpFormWorkflowAction;
+  revisionReason?: string;
+  officerNote?: string | null;
+}
+
+export interface KwpFormWorkflowStepDTO {
+  key: 'SUBMITTED' | 'OFFICER_REVIEW' | 'REVISION_REQUESTED' | 'APPROVED';
+  label: string;
+  status: 'DONE' | 'CURRENT' | 'PENDING' | 'SKIPPED';
+}
+
+export interface KwpFormWorkflowDTO {
+  id: number;
+  requestNo: string;
+  form: 'กวภ.01' | 'กวภ.02' | 'กวภ.03' | 'กวภ.04' | 'กวภ.05';
+  formType: KwpFormSubmissionDetailType;
+  status: KwpFormSubmissionStatus;
+  statusLabel: string;
+  revisionReason: string | null;
+  officerNote: string | null;
+  reviewedAt: string | null;
+  currentStep: KwpFormWorkflowStepDTO;
+  steps: KwpFormWorkflowStepDTO[];
+  allowedActions: KwpFormWorkflowAction[];
 }
 
 export interface CreateKwp01SubmissionDTO {

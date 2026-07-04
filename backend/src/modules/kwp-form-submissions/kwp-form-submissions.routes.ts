@@ -66,6 +66,18 @@ kwpFormSubmissionsRoutes.post(
 );
 
 kwpFormSubmissionsRoutes.get(
+  '/:id/workflow',
+  authorize('kwp_forms:view'),
+  kwpFormSubmissionsController.getWorkflow,
+);
+
+kwpFormSubmissionsRoutes.post(
+  '/:id/workflow-actions',
+  authorize('kwp_forms:approve'),
+  kwpFormSubmissionsController.changeWorkflowStatus,
+);
+
+kwpFormSubmissionsRoutes.get(
   '/kwp01/:id',
   authorize('kwp_forms:view'),
   kwpFormSubmissionsController.getKwp01ById,

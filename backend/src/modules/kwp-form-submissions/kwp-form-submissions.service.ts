@@ -1,6 +1,7 @@
 import { kwpFormSubmissionsRepository } from './kwp-form-submissions.repository';
 import type {
   CreatedKwpFormSubmissionDTO,
+  ChangeKwpFormWorkflowStatusDTO,
   CreateKwp01SubmissionDTO,
   CreateKwp02SubmissionDTO,
   CreateKwp03SubmissionDTO,
@@ -9,9 +10,23 @@ import type {
   KwpFormSubmissionAccess,
   KwpFormSubmissionDetailDTO,
   KwpFormSubmissionReadAccess,
+  KwpFormWorkflowAccess,
+  KwpFormWorkflowDTO,
 } from './kwp-form-submissions.types';
 
 export const kwpFormSubmissionsService = {
+  getWorkflow(id: number, access: KwpFormWorkflowAccess): Promise<KwpFormWorkflowDTO> {
+    return kwpFormSubmissionsRepository.getWorkflow(id, access);
+  },
+
+  changeWorkflowStatus(
+    id: number,
+    input: ChangeKwpFormWorkflowStatusDTO,
+    access: KwpFormWorkflowAccess,
+  ): Promise<KwpFormWorkflowDTO> {
+    return kwpFormSubmissionsRepository.changeWorkflowStatus(id, input, access);
+  },
+
   getById(id: number, access: KwpFormSubmissionReadAccess): Promise<KwpFormSubmissionDetailDTO> {
     return kwpFormSubmissionsRepository.getById(id, access);
   },
