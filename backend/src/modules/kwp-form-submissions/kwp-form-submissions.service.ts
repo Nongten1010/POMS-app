@@ -3,6 +3,7 @@ import type {
   CreatedKwpFormSubmissionDTO,
   CreateKwp01SubmissionDTO,
   CreateKwp02SubmissionDTO,
+  CreateKwp03SubmissionDTO,
   CreateKwp04SubmissionDTO,
   CreateKwp05SubmissionDTO,
   KwpFormSubmissionAccess,
@@ -27,6 +28,13 @@ export const kwpFormSubmissionsService = {
     access: KwpFormSubmissionAccess,
   ): Promise<CreatedKwpFormSubmissionDTO> {
     return kwpFormSubmissionsRepository.createKwp02(payload, access);
+  },
+
+  createKwp03(
+    payload: CreateKwp03SubmissionDTO,
+    access: KwpFormSubmissionAccess,
+  ): Promise<CreatedKwpFormSubmissionDTO> {
+    return kwpFormSubmissionsRepository.createKwp03(payload, access);
   },
 
   createKwp04(

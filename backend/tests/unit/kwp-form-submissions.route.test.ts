@@ -7,6 +7,7 @@ jest.mock('../../src/modules/kwp-form-submissions/kwp-form-submissions.service',
     getById: jest.fn(),
     createKwp01: jest.fn(),
     createKwp02: jest.fn(),
+    createKwp03: jest.fn(),
     createKwp04: jest.fn(),
     createKwp05: jest.fn(),
   },
@@ -51,6 +52,15 @@ describe('KWP form submission routes', () => {
       submittedAt: '2026-07-04T08:15:00.000Z',
       measurementItemCount: 2,
       attachmentCount: 3,
+    });
+    mockedService.createKwp03.mockResolvedValue({
+      id: 16,
+      requestNo: 'KWP-69-00016',
+      form: 'กวภ.03',
+      formType: 'KWP03',
+      status: 'SUBMITTED',
+      submittedAt: '2026-07-04T08:20:00.000Z',
+      attachmentCount: 2,
     });
     mockedService.createKwp04.mockResolvedValue({
       id: 14,
@@ -228,6 +238,42 @@ describe('KWP form submission routes', () => {
     });
   });
 
+  it('gets submitted KWP03 detail with WPMS issue data and file URLs', async () => {
+    mockedService.getById.mockResolvedValueOnce(kwp03DetailResponse());
+    const app = createApp();
+
+    const response = await request(app)
+      .get('/api/v1/kwp-form-submissions/kwp03/16')
+      .set('Authorization', `Bearer ${operatorViewToken()}`);
+
+    expect(response.status).toBe(200);
+    expect(mockedService.getById).toHaveBeenCalledWith(16, {
+      actorUserId: 42,
+      scope: 'OWN_FACTORY',
+      regionalAccess: undefined,
+      publicBaseUrl: 'http://d-poms.diw.go.th',
+      publicPath: '/uploads',
+      formType: 'KWP03',
+    });
+    expect(response.body.data).toMatchObject({
+      id: 16,
+      formType: 'KWP03',
+      form: 'กวภ.03',
+      wpmsIssueReport: {
+        wastewaterSource: 'ระบบบำบัดน้ำเสียส่วนกลาง',
+        instruments: ['ค่าบีโอดี (BOD)', 'ค่าซีโอดี (COD)'],
+        failedParameters: ['BOD (mg/l)', 'COD (mg/l)'],
+        attachments: [
+          {
+            attachmentType: 'WPMS_EVIDENCE',
+            fileUrl:
+              'http://localhost:3000/uploads/kwp/form-attachments/2026/07/16-wpms-evidence.pdf',
+          },
+        ],
+      },
+    });
+  });
+
   it('gets submitted KWP04 detail with measurement rows and file URLs', async () => {
     mockedService.getById.mockResolvedValueOnce({
       ...kwp02DetailResponse(),
@@ -378,6 +424,73 @@ describe('KWP form submission routes', () => {
         attachmentCount: 3,
       },
     });
+  });
+
+  it('creates a submitted KWP03 WPMS issue form with selected options and file metadata', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .post('/api/v1/kwp-form-submissions/kwp03')
+      .set('Authorization', `Bearer ${operatorToken()}`)
+      .send(validKwp03Payload());
+
+    expect(response.status).toBe(201);
+    expect(response.headers.location).toBe('/api/v1/kwp-form-reports/requests/16');
+    expect(mockedService.createKwp03).toHaveBeenCalledWith(
+      expect.objectContaining({
+        factoryName: 'บริษัท ทดสอบ จำกัด',
+        instruments: ['ค่าบีโอดี (BOD)', 'ค่าซีโอดี (COD)'],
+        measurementTimes: ['Real Time', '15 นาที'],
+        issueReasons: [
+          'เครื่องมือหรือเครื่องอุปกรณ์พิเศษขัดข้อง',
+          'ระบบรับส่งข้อมูล ระบบไฟฟ้า อินเทอร์เน็ต ขัดข้อง',
+        ],
+        failedParameters: ['BOD (mg/l)', 'COD (mg/l)'],
+        attachments: [
+          expect.objectContaining({
+            attachmentType: 'WPMS_EVIDENCE',
+            originalFileName: 'wpms-evidence.pdf',
+          }),
+          expect.objectContaining({
+            attachmentType: 'REPAIR_PLAN',
+            originalFileName: 'repair-plan.pdf',
+          }),
+        ],
+      }),
+      {
+        actorUserId: 42,
+        scope: 'OWN_FACTORY',
+      },
+    );
+    expect(response.body).toEqual({
+      success: true,
+      data: {
+        id: 16,
+        requestNo: 'KWP-69-00016',
+        form: 'กวภ.03',
+        formType: 'KWP03',
+        status: 'SUBMITTED',
+        submittedAt: '2026-07-04T08:20:00.000Z',
+        attachmentCount: 2,
+      },
+    });
+  });
+
+  it('rejects KWP03 payloads whose expected done date is before problem date', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .post('/api/v1/kwp-form-submissions/kwp03')
+      .set('Authorization', `Bearer ${operatorToken()}`)
+      .send({
+        ...validKwp03Payload(),
+        problemDate: '2026-07-10',
+        expectedDoneDate: '2026-07-09',
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    expect(mockedService.createKwp03).not.toHaveBeenCalled();
   });
 
   it('rejects KWP02 payloads without measurement rows', async () => {
@@ -649,6 +762,62 @@ function validKwp02Payload() {
   };
 }
 
+function validKwp03Payload() {
+  return {
+    factoryId: 'FID-001',
+    factoryName: 'บริษัท ทดสอบ จำกัด',
+    factoryRegistrationNo: '10190000225448',
+    factoryAddress: '9 หมู่ 9',
+    industryType: '10100 / 3',
+    connectedPointId: 8,
+    pointCode: 'P0001',
+    pointName: 'จุดระบายน้ำทิ้ง A',
+    pointType: 'WATER',
+    contactName: 'สมชาย ทดสอบ',
+    contactPhone: '0812345678',
+    contactEmail: 'operator@example.com',
+    instruments: ['ค่าบีโอดี (BOD)', 'ค่าซีโอดี (COD)'],
+    measurementTimes: ['Real Time', '15 นาที'],
+    wastewaterSource: 'ระบบบำบัดน้ำเสียส่วนกลาง',
+    receivingSource: 'คลองสาธารณะ',
+    treatmentSystemType: 'ระบบตะกอนเร่ง',
+    dischargePoint: 'UTM 123456, 987654',
+    averageDischarge: 125.5,
+    minimumDischarge: 100.25,
+    maximumDischarge: 150.75,
+    issueReasons: [
+      'เครื่องมือหรือเครื่องอุปกรณ์พิเศษขัดข้อง',
+      'ระบบรับส่งข้อมูล ระบบไฟฟ้า อินเทอร์เน็ต ขัดข้อง',
+    ],
+    reasonDetail: 'สัญญาณเครือข่ายขัดข้องและต้องเปลี่ยนอุปกรณ์ตรวจวัด',
+    problemDate: '2026-07-01',
+    expectedDoneDate: '2026-07-05',
+    totalDays: 5,
+    failedParameters: ['BOD (mg/l)', 'COD (mg/l)'],
+    correctiveAction: 'เปลี่ยนอุปกรณ์และทดสอบการส่งข้อมูล WPMS',
+    attachments: [
+      {
+        attachmentType: 'WPMS_EVIDENCE',
+        originalFileName: 'wpms-evidence.pdf',
+        storedFileName: '16-wpms-evidence.pdf',
+        mimeType: 'application/pdf',
+        fileSize: 760000,
+        storagePath: '/uploads/kwp/16-wpms-evidence.pdf',
+      },
+      {
+        attachmentType: 'REPAIR_PLAN',
+        originalFileName: 'repair-plan.pdf',
+        storedFileName: '16-repair-plan.pdf',
+        mimeType: 'application/pdf',
+        fileSize: 480000,
+        storagePath: '/uploads/kwp/16-repair-plan.pdf',
+      },
+    ],
+    reporterName: 'สมชาย ทดสอบ',
+    reporterPosition: 'ผู้จัดการสิ่งแวดล้อม',
+  };
+}
+
 function validKwp05Payload() {
   return {
     factoryId: 'FID-001',
@@ -827,6 +996,57 @@ function kwp02DetailResponse() {
         ],
       },
     ],
+  };
+}
+
+function kwp03DetailResponse() {
+  return {
+    ...commonDetailFields(),
+    id: 16,
+    requestNo: 'KWP-69-00016',
+    form: 'กวภ.03' as const,
+    formType: 'KWP03' as const,
+    status: 'SUBMITTED',
+    submittedAt: '2026-07-04T08:20:00.000Z',
+    pointCode: 'P0001',
+    pointName: 'จุดระบายน้ำทิ้ง A',
+    pointType: 'WATER',
+    wpmsIssueReport: {
+      wastewaterSource: 'ระบบบำบัดน้ำเสียส่วนกลาง',
+      receivingSource: 'คลองสาธารณะ',
+      treatmentSystemType: 'ระบบตะกอนเร่ง',
+      dischargePoint: 'UTM 123456, 987654',
+      averageDischarge: '125.500000',
+      minimumDischarge: '100.250000',
+      maximumDischarge: '150.750000',
+      reasonDetail: 'สัญญาณเครือข่ายขัดข้องและต้องเปลี่ยนอุปกรณ์ตรวจวัด',
+      problemDate: '2026-07-01',
+      expectedDoneDate: '2026-07-05',
+      totalDays: 5,
+      correctiveAction: 'เปลี่ยนอุปกรณ์และทดสอบการส่งข้อมูล WPMS',
+      instruments: ['ค่าบีโอดี (BOD)', 'ค่าซีโอดี (COD)'],
+      measurementTimes: ['Real Time', '15 นาที'],
+      issueReasons: [
+        'เครื่องมือหรือเครื่องอุปกรณ์พิเศษขัดข้อง' as const,
+        'ระบบรับส่งข้อมูล ระบบไฟฟ้า อินเทอร์เน็ต ขัดข้อง' as const,
+      ],
+      failedParameters: ['BOD (mg/l)', 'COD (mg/l)'],
+      attachments: [
+        {
+          id: 81,
+          attachmentType: 'WPMS_EVIDENCE',
+          originalFileName: 'wpms-evidence.pdf',
+          storedFileName: '16-wpms-evidence.pdf',
+          mimeType: 'application/pdf',
+          fileSize: 760000,
+          storagePath: 'kwp/form-attachments/2026/07/16-wpms-evidence.pdf',
+          fileUrl:
+            'http://localhost:3000/uploads/kwp/form-attachments/2026/07/16-wpms-evidence.pdf',
+          uploadedAt: '2026-07-04T08:20:00.000Z',
+          uploadedBy: 42,
+        },
+      ],
+    },
   };
 }
 

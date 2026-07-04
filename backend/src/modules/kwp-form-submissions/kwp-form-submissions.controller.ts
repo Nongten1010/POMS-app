@@ -8,6 +8,7 @@ import { kwpFormSubmissionsService } from './kwp-form-submissions.service';
 import {
   createKwp01SubmissionSchema,
   createKwp02SubmissionSchema,
+  createKwp03SubmissionSchema,
   createKwp04SubmissionSchema,
   createKwp05SubmissionSchema,
 } from './kwp-form-submissions.validator';
@@ -20,6 +21,10 @@ export const kwpFormSubmissionsController = {
 
   async getKwp02ById(req: Request, res: Response, next: NextFunction): Promise<void> {
     await getById(req, res, next, 'KWP02');
+  },
+
+  async getKwp03ById(req: Request, res: Response, next: NextFunction): Promise<void> {
+    await getById(req, res, next, 'KWP03');
   },
 
   async getKwp04ById(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -77,6 +82,23 @@ export const kwpFormSubmissionsController = {
       const actorUserId = requireActorUserId(req);
       const payload = createKwp02SubmissionSchema.parse(req.body);
       const result = await kwpFormSubmissionsService.createKwp02(payload, {
+        actorUserId,
+        scope: getScope(req, 'kwp_forms:edit'),
+      });
+      res
+        .status(StatusCodes.CREATED)
+        .location(`${env.API_PREFIX}/kwp-form-reports/requests/${result.id}`)
+        .json({ success: true, data: result });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async createKwp03(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const actorUserId = requireActorUserId(req);
+      const payload = createKwp03SubmissionSchema.parse(req.body);
+      const result = await kwpFormSubmissionsService.createKwp03(payload, {
         actorUserId,
         scope: getScope(req, 'kwp_forms:edit'),
       });

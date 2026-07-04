@@ -6,9 +6,12 @@ import type {
   CreatedKwpFormSubmissionDTO,
   CreateKwp01SubmissionDTO,
   CreateKwp02SubmissionDTO,
+  CreateKwp03SubmissionDTO,
   CreateKwp04SubmissionDTO,
   CreateKwp05SubmissionDTO,
   KwpEmissionMeasurementItemDTO,
+  Kwp03IssueReason,
+  Kwp03WpmsIssueReportDTO,
   Kwp05CalibrationItemDTO,
   Kwp05CalibrationReportDTO,
   Kwp01IssueReason,
@@ -45,6 +48,21 @@ interface Kwp02InsertRecords {
   submission: Record<string, unknown>;
   measurementItems: Array<Record<string, unknown>>;
   attachmentsByItemIndex: Map<number, Array<Record<string, unknown>>>;
+  statusHistory: Record<string, unknown>;
+}
+
+interface Kwp03InsertInput {
+  payload: CreateKwp03SubmissionDTO;
+  submissionNo: string;
+  actorUserId: number;
+  now: Date;
+}
+
+interface Kwp03InsertRecords {
+  submission: Record<string, unknown>;
+  wpmsIssueReport: Record<string, unknown>;
+  selectedOptions: Array<Record<string, unknown>>;
+  attachments: Array<Record<string, unknown>>;
   statusHistory: Record<string, unknown>;
 }
 
@@ -118,6 +136,27 @@ interface KwpEmissionMeasurementItemRow {
   method: string | null;
 }
 
+interface Kwp03WpmsIssueReportRow {
+  id: number | string;
+  wastewater_source: string | null;
+  receiving_source: string | null;
+  treatment_system_type: string | null;
+  discharge_point: string | null;
+  average_discharge: number | string | null;
+  minimum_discharge: number | string | null;
+  maximum_discharge: number | string | null;
+  reason_detail: string | null;
+  problem_date: Date | string | null;
+  expected_done_date: Date | string | null;
+  total_days: number | string | null;
+  corrective_action: string | null;
+}
+
+interface Kwp03SelectedOptionRow {
+  option_group: Kwp03OptionGroup;
+  option_value: string;
+}
+
 interface KwpAttachmentRow {
   id: number | string;
   related_id: number | string | null;
@@ -130,6 +169,8 @@ interface KwpAttachmentRow {
   uploaded_at: Date | string;
   uploaded_by: number | string | null;
 }
+
+type Kwp03OptionGroup = 'INSTRUMENT' | 'MEASUREMENT_TIME' | 'ISSUE_REASON' | 'FAILED_PARAMETER';
 
 interface Kwp05CalibrationReportRow {
   business_activity: string | null;
@@ -170,6 +211,13 @@ export const kwpFormSubmissionsRepository = {
       return {
         ...baseDetail,
         issueReport: await getKwp01IssueReport(Number(submission.id)),
+      };
+    }
+
+    if (submission.form_type === 'KWP03') {
+      return {
+        ...baseDetail,
+        wpmsIssueReport: await getKwp03WpmsIssueReport(Number(submission.id), access),
       };
     }
 
@@ -243,6 +291,72 @@ export const kwpFormSubmissionsRepository = {
     access: KwpFormSubmissionAccess,
   ): Promise<CreatedKwpFormSubmissionDTO> {
     return createKwpEmissionReport(payload, access, 'KWP02');
+  },
+
+  async createKwp03(
+    payload: CreateKwp03SubmissionDTO,
+    access: KwpFormSubmissionAccess,
+  ): Promise<CreatedKwpFormSubmissionDTO> {
+    return db.transaction(async (trx) => {
+      await assertCanCreateForFactory(trx, payload.factoryId, access);
+
+      const now = new Date();
+      const submissionNo = await nextSubmissionNo(trx, now);
+      const records = toKwp03InsertRecords({
+        payload,
+        submissionNo,
+        actorUserId: access.actorUserId,
+        now,
+      });
+
+      const inserted = await trx('kwp_form_submissions')
+        .insert(records.submission)
+        .returning<{ id: number | string }[]>('id');
+      const submissionId = Number(inserted[0]?.id);
+
+      const insertedReport = await trx('kwp03_wpms_issue_reports')
+        .insert({
+          ...records.wpmsIssueReport,
+          submission_id: submissionId,
+        })
+        .returning<{ id: number | string }[]>('id');
+      const wpmsIssueReportId = Number(insertedReport[0]?.id);
+
+      if (records.selectedOptions.length > 0) {
+        await trx('kwp03_selected_options').insert(
+          records.selectedOptions.map((option) => ({
+            ...option,
+            submission_id: submissionId,
+          })),
+        );
+      }
+
+      if (records.attachments.length > 0) {
+        await trx('kwp_form_attachments').insert(
+          records.attachments.map((attachment) => ({
+            ...attachment,
+            submission_id: submissionId,
+            related_table: 'kwp03_wpms_issue_reports',
+            related_id: wpmsIssueReportId,
+          })),
+        );
+      }
+
+      await trx('kwp_form_status_history').insert({
+        ...records.statusHistory,
+        submission_id: submissionId,
+      });
+
+      return {
+        id: submissionId,
+        requestNo: submissionNo,
+        form: 'กวภ.03',
+        formType: 'KWP03',
+        status: 'SUBMITTED',
+        submittedAt: now.toISOString(),
+        attachmentCount: records.attachments.length,
+      };
+    });
   },
 
   async createKwp04(
@@ -406,6 +520,10 @@ export function toKwp01InsertRecordsForTests(input: Kwp01InsertInput): Kwp01Inse
 
 export function toKwp02InsertRecordsForTests(input: Kwp02InsertInput): Kwp02InsertRecords {
   return toKwp02InsertRecords(input);
+}
+
+export function toKwp03InsertRecordsForTests(input: Kwp03InsertInput): Kwp03InsertRecords {
+  return toKwp03InsertRecords(input);
 }
 
 export function toKwp05InsertRecordsForTests(input: Kwp05InsertInput): Kwp05InsertRecords {
@@ -596,6 +714,64 @@ async function listEmissionMeasurementItems(
     method: row.method,
     attachments: attachmentsByItemId.get(Number(row.id)) ?? [],
   }));
+}
+
+async function getKwp03WpmsIssueReport(
+  submissionId: number,
+  access: KwpFormSubmissionReadAccess,
+): Promise<Kwp03WpmsIssueReportDTO> {
+  const row = await db<Kwp03WpmsIssueReportRow>('kwp03_wpms_issue_reports')
+    .where('submission_id', submissionId)
+    .first(
+      'id',
+      'wastewater_source',
+      'receiving_source',
+      'treatment_system_type',
+      'discharge_point',
+      'average_discharge',
+      'minimum_discharge',
+      'maximum_discharge',
+      'reason_detail',
+      'problem_date',
+      'expected_done_date',
+      'total_days',
+      'corrective_action',
+    );
+  const optionRows = await db<Kwp03SelectedOptionRow>('kwp03_selected_options')
+    .where('submission_id', submissionId)
+    .orderBy('option_group', 'asc')
+    .orderBy('sort_order', 'asc')
+    .orderBy('id', 'asc')
+    .select('option_group', 'option_value');
+  const optionsByGroup = groupKwp03Options(optionRows);
+  const reportId = row ? Number(row.id) : null;
+  const attachmentsByReportId = await listAttachmentsByRelatedId(
+    submissionId,
+    'kwp03_wpms_issue_reports',
+    reportId === null ? [] : [reportId],
+    access,
+  );
+
+  return {
+    wastewaterSource: row?.wastewater_source ?? null,
+    receivingSource: row?.receiving_source ?? null,
+    treatmentSystemType: row?.treatment_system_type ?? null,
+    dischargePoint: row?.discharge_point ?? null,
+    averageDischarge: decimalText(row?.average_discharge ?? null),
+    minimumDischarge: decimalText(row?.minimum_discharge ?? null),
+    maximumDischarge: decimalText(row?.maximum_discharge ?? null),
+    reasonDetail: row?.reason_detail ?? null,
+    problemDate: toDateOnly(row?.problem_date ?? null),
+    expectedDoneDate: toDateOnly(row?.expected_done_date ?? null),
+    totalDays:
+      row?.total_days === null || row?.total_days === undefined ? null : Number(row.total_days),
+    correctiveAction: row?.corrective_action ?? null,
+    instruments: optionsByGroup.INSTRUMENT,
+    measurementTimes: optionsByGroup.MEASUREMENT_TIME,
+    issueReasons: optionsByGroup.ISSUE_REASON.map(toKwp03IssueReason),
+    failedParameters: optionsByGroup.FAILED_PARAMETER,
+    attachments: reportId === null ? [] : (attachmentsByReportId.get(reportId) ?? []),
+  };
 }
 
 async function getKwp05CalibrationReport(submissionId: number): Promise<Kwp05CalibrationReportDTO> {
@@ -871,6 +1047,52 @@ function toKwp02InsertRecords(input: Kwp02InsertInput): Kwp02InsertRecords {
   };
 }
 
+function toKwp03InsertRecords(input: Kwp03InsertInput): Kwp03InsertRecords {
+  const { payload, submissionNo, actorUserId, now } = input;
+  const selectedOptions = [
+    ...toKwp03OptionRecords('INSTRUMENT', payload.instruments),
+    ...toKwp03OptionRecords('MEASUREMENT_TIME', payload.measurementTimes),
+    ...toKwp03OptionRecords('ISSUE_REASON', payload.issueReasons),
+    ...toKwp03OptionRecords('FAILED_PARAMETER', payload.failedParameters),
+  ];
+  const attachments = (payload.attachments ?? []).map((attachment) => ({
+    attachment_type: attachment.attachmentType,
+    original_file_name: attachment.originalFileName,
+    stored_file_name: attachment.storedFileName ?? null,
+    mime_type: attachment.mimeType ?? null,
+    file_size: attachment.fileSize ?? null,
+    storage_path: attachment.storagePath ?? null,
+    uploaded_at: now,
+    uploaded_by: actorUserId,
+  }));
+
+  return {
+    submission: toCommonSubmissionRecord(payload, 'KWP03', submissionNo, actorUserId, now),
+    wpmsIssueReport: {
+      wastewater_source: payload.wastewaterSource ?? null,
+      receiving_source: payload.receivingSource ?? null,
+      treatment_system_type: payload.treatmentSystemType ?? null,
+      discharge_point: payload.dischargePoint ?? null,
+      average_discharge: decimalValue(payload.averageDischarge),
+      minimum_discharge: decimalValue(payload.minimumDischarge),
+      maximum_discharge: decimalValue(payload.maximumDischarge),
+      reason_detail: payload.reasonDetail ?? null,
+      problem_date: payload.problemDate ?? null,
+      expected_done_date: payload.expectedDoneDate ?? null,
+      total_days: payload.totalDays ?? null,
+      corrective_action: payload.correctiveAction ?? null,
+    },
+    selectedOptions,
+    attachments,
+    statusHistory: {
+      status: 'SUBMITTED',
+      note: null,
+      changed_by: actorUserId,
+      changed_at: now,
+    },
+  };
+}
+
 function toKwp05InsertRecords(input: Kwp05InsertInput): Kwp05InsertRecords {
   const { payload, submissionNo, actorUserId, now } = input;
   const attachmentsByItemIndex = new Map<number, Array<Record<string, unknown>>>();
@@ -932,9 +1154,10 @@ function toCommonSubmissionRecord(
   payload:
     | CreateKwp01SubmissionDTO
     | CreateKwp02SubmissionDTO
+    | CreateKwp03SubmissionDTO
     | CreateKwp04SubmissionDTO
     | CreateKwp05SubmissionDTO,
-  formType: 'KWP01' | 'KWP02' | 'KWP04' | 'KWP05',
+  formType: KwpFormSubmissionDetailType,
   submissionNo: string,
   actorUserId: number,
   now: Date,
@@ -980,5 +1203,48 @@ function numericMeasurementValue(value: string | number | null | undefined): num
 
 function measurementValueText(value: string | number | null | undefined): string | null {
   if (value === null || value === undefined || value === '') return null;
+  return String(value);
+}
+
+function toKwp03OptionRecords(
+  optionGroup: Kwp03OptionGroup,
+  values: readonly string[],
+): Array<Record<string, unknown>> {
+  return values.map((value, index) => ({
+    option_group: optionGroup,
+    option_value: value,
+    sort_order: index + 1,
+  }));
+}
+
+function groupKwp03Options(rows: Kwp03SelectedOptionRow[]): Record<Kwp03OptionGroup, string[]> {
+  return rows.reduce(
+    (groups, row) => ({
+      ...groups,
+      [row.option_group]: [...groups[row.option_group], row.option_value],
+    }),
+    {
+      INSTRUMENT: [],
+      MEASUREMENT_TIME: [],
+      ISSUE_REASON: [],
+      FAILED_PARAMETER: [],
+    } as Record<Kwp03OptionGroup, string[]>,
+  );
+}
+
+function toKwp03IssueReason(value: string): Kwp03IssueReason {
+  if (value === 'ไม่มีการระบายน้ำทิ้งออกนอกโรงงาน') return value;
+  if (value === 'ระบบรับส่งข้อมูล ระบบไฟฟ้า อินเทอร์เน็ต ขัดข้อง') return value;
+  return 'เครื่องมือหรือเครื่องอุปกรณ์พิเศษขัดข้อง';
+}
+
+function decimalValue(value: string | number | null | undefined): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const numericValue = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(numericValue) ? numericValue : null;
+}
+
+function decimalText(value: number | string | null): string | null {
+  if (value === null) return null;
   return String(value);
 }

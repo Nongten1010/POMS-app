@@ -3,8 +3,15 @@ export const KWP01_ISSUE_REASONS = [
   'หยุดหน่วยการผลิต',
 ] as const;
 
+export const KWP03_ISSUE_REASONS = [
+  'เครื่องมือหรือเครื่องอุปกรณ์พิเศษขัดข้อง',
+  'ไม่มีการระบายน้ำทิ้งออกนอกโรงงาน',
+  'ระบบรับส่งข้อมูล ระบบไฟฟ้า อินเทอร์เน็ต ขัดข้อง',
+] as const;
+
 export type Kwp01IssueReason = (typeof KWP01_ISSUE_REASONS)[number];
-export type KwpFormSubmissionDetailType = 'KWP01' | 'KWP02' | 'KWP04' | 'KWP05';
+export type Kwp03IssueReason = (typeof KWP03_ISSUE_REASONS)[number];
+export type KwpFormSubmissionDetailType = 'KWP01' | 'KWP02' | 'KWP03' | 'KWP04' | 'KWP05';
 
 export interface KwpFormSubmissionAccess {
   actorUserId: number;
@@ -94,6 +101,46 @@ export interface CreateKwp02SubmissionDTO {
 
 export type CreateKwp04SubmissionDTO = CreateKwp02SubmissionDTO;
 
+export interface CreateKwp03SubmissionDTO {
+  factoryId: string;
+  factoryName: string;
+  factoryRegistrationNo?: string | null;
+  factoryAddress?: string | null;
+  industryType?: string | null;
+  connectedPointId?: number | null;
+  pointCode?: string | null;
+  pointName?: string | null;
+  pointType?: string | null;
+  productionStack?: string | null;
+  primaryFuel?: string | null;
+  secondaryFuel?: string | null;
+  combustionSystem?: string | null;
+  productionCapacity?: string | null;
+  productionCapacityUnit?: string | null;
+  contactName?: string | null;
+  contactPhone?: string | null;
+  contactEmail?: string | null;
+  instruments: string[];
+  measurementTimes: string[];
+  wastewaterSource?: string | null;
+  receivingSource?: string | null;
+  treatmentSystemType?: string | null;
+  dischargePoint?: string | null;
+  averageDischarge?: string | number | null;
+  minimumDischarge?: string | number | null;
+  maximumDischarge?: string | number | null;
+  issueReasons: Kwp03IssueReason[];
+  reasonDetail?: string | null;
+  problemDate?: string | null;
+  expectedDoneDate?: string | null;
+  totalDays?: number | null;
+  failedParameters: string[];
+  correctiveAction?: string | null;
+  attachments?: KwpFormAttachmentInput[];
+  reporterName?: string | null;
+  reporterPosition?: string | null;
+}
+
 export interface Kwp05CalibrationItemInput {
   parameter: string;
   startDate?: string | null;
@@ -142,7 +189,7 @@ export interface CreateKwp05SubmissionDTO {
 export interface CreatedKwpFormSubmissionDTO {
   id: number;
   requestNo: string;
-  form: 'กวภ.01' | 'กวภ.02' | 'กวภ.04' | 'กวภ.05';
+  form: 'กวภ.01' | 'กวภ.02' | 'กวภ.03' | 'กวภ.04' | 'กวภ.05';
   formType: KwpFormSubmissionDetailType;
   status: 'SUBMITTED';
   submittedAt: string;
@@ -212,10 +259,30 @@ export interface Kwp05CalibrationItemDTO {
   attachments: KwpFormAttachmentDTO[];
 }
 
+export interface Kwp03WpmsIssueReportDTO {
+  wastewaterSource: string | null;
+  receivingSource: string | null;
+  treatmentSystemType: string | null;
+  dischargePoint: string | null;
+  averageDischarge: string | null;
+  minimumDischarge: string | null;
+  maximumDischarge: string | null;
+  reasonDetail: string | null;
+  problemDate: string | null;
+  expectedDoneDate: string | null;
+  totalDays: number | null;
+  correctiveAction: string | null;
+  instruments: string[];
+  measurementTimes: string[];
+  issueReasons: Kwp03IssueReason[];
+  failedParameters: string[];
+  attachments: KwpFormAttachmentDTO[];
+}
+
 export interface KwpFormSubmissionDetailDTO {
   id: number;
   requestNo: string;
-  form: 'กวภ.01' | 'กวภ.02' | 'กวภ.04' | 'กวภ.05';
+  form: 'กวภ.01' | 'กวภ.02' | 'กวภ.03' | 'กวภ.04' | 'กวภ.05';
   formType: KwpFormSubmissionDetailType;
   status: string;
   submittedAt: string | null;
@@ -242,6 +309,7 @@ export interface KwpFormSubmissionDetailDTO {
   reporterName: string | null;
   reporterPosition: string | null;
   issueReport?: Kwp01IssueReportDTO;
+  wpmsIssueReport?: Kwp03WpmsIssueReportDTO;
   measurementItems?: KwpEmissionMeasurementItemDTO[];
   calibrationReport?: Kwp05CalibrationReportDTO;
   calibrationItems?: Kwp05CalibrationItemDTO[];

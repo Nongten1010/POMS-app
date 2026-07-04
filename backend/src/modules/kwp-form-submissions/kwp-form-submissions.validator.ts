@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { KWP01_ISSUE_REASONS } from './kwp-form-submissions.types';
+import { KWP01_ISSUE_REASONS, KWP03_ISSUE_REASONS } from './kwp-form-submissions.types';
 
 const emptyStringToNull = (value: unknown) => {
   if (value === undefined || value === null) return value;
@@ -68,6 +68,11 @@ const kwpEmissionMeasurementItemSchema = z
   })
   .strict();
 
+const decimalLike = z
+  .union([z.string().trim().min(1).max(100), z.coerce.number()])
+  .nullable()
+  .optional();
+
 const kwp05CalibrationItemSchema = z
   .object({
     parameter: requiredText(255),
@@ -126,6 +131,55 @@ export const createKwp02SubmissionSchema = z
   .strict();
 
 export const createKwp04SubmissionSchema = createKwp02SubmissionSchema;
+
+export const createKwp03SubmissionSchema = z
+  .object({
+    ...commonKwpSubmissionShape,
+    instruments: z
+      .array(requiredText(255))
+      .min(1)
+      .max(20)
+      .transform((values) => [...new Set(values)]),
+    measurementTimes: z
+      .array(requiredText(255))
+      .min(1)
+      .max(20)
+      .transform((values) => [...new Set(values)]),
+    wastewaterSource: nullableText(500),
+    receivingSource: nullableText(500),
+    treatmentSystemType: nullableText(500),
+    dischargePoint: nullableText(500),
+    averageDischarge: decimalLike,
+    minimumDischarge: decimalLike,
+    maximumDischarge: decimalLike,
+    issueReasons: z
+      .array(z.enum(KWP03_ISSUE_REASONS))
+      .min(1)
+      .max(KWP03_ISSUE_REASONS.length)
+      .transform((values) => [...new Set(values)]),
+    reasonDetail: nullableText(2000),
+    problemDate: z.preprocess(emptyStringToNull, isoDate.nullable().optional()),
+    expectedDoneDate: z.preprocess(emptyStringToNull, isoDate.nullable().optional()),
+    totalDays: z.coerce.number().int().min(0).max(366).nullable().optional(),
+    failedParameters: z
+      .array(requiredText(255))
+      .min(1)
+      .max(100)
+      .transform((parameters) => [...new Set(parameters)]),
+    correctiveAction: nullableText(2000),
+    attachments: z.array(kwpAttachmentSchema).max(20).optional().default([]),
+  })
+  .strict()
+  .refine(
+    (value) => {
+      if (!value.problemDate || !value.expectedDoneDate) return true;
+      return value.expectedDoneDate >= value.problemDate;
+    },
+    {
+      path: ['expectedDoneDate'],
+      message: 'Expected done date must be on or after problem date',
+    },
+  );
 
 export const createKwp05SubmissionSchema = z
   .object({

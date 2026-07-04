@@ -1,6 +1,6 @@
 # KWP Form Submission APIs
 
-API สำหรับบันทึกแบบแจ้ง กวภ.01 - กวภ.05 โดยเอกสารนี้เริ่มจากแบบ **กวภ.01 แบบแจ้งเหตุขัดข้องของเครื่องมือหรือเครื่องอุปกรณ์พิเศษ** และ **กวภ.02 แบบรายงานผลการตรวจวัดมลพิษอากาศจากปล่องระบาย**
+API สำหรับบันทึกแบบแจ้ง กวภ.01 - กวภ.05 โดยเอกสารนี้ครอบคลุมแบบ **กวภ.01 แบบแจ้งเหตุขัดข้องของเครื่องมือหรือเครื่องอุปกรณ์พิเศษ**, **กวภ.02 แบบรายงานผลการตรวจวัดมลพิษอากาศจากปล่องระบาย**, และ **กวภ.03 แบบแจ้งเหตุขัดข้องหรือหยุดส่งข้อมูลการตรวจวัดมลพิษทางน้ำแบบอัตโนมัติอย่างต่อเนื่อง (WPMS)**
 
 Base URL: `/api/v1/kwp-form-submissions`
 
@@ -51,7 +51,7 @@ HTTP/1.1 201 Created
 - Backend รับไฟล์ด้วย `multer.memoryStorage()` เหมือน endpoint เอกสารของคำขอเชื่อมต่อ CEMS/WPMS
 - ไฟล์ถูกเก็บใต้ `UPLOAD_DIR/kwp/form-attachments/YYYY/MM/<uuid>.<ext>`
 - ไฟล์ถูกเสิร์ฟผ่าน static path `UPLOAD_PUBLIC_PATH`
-- Response `fileUrl` ใช้แสดง preview/download ฝั่ง frontend ได้ แต่การบันทึก กวภ.02/กวภ.04 ใช้ `storagePath`, `storedFileName`, `originalFileName`, `mimeType`, และ `fileSize`
+- Response `fileUrl` ใช้แสดง preview/download ฝั่ง frontend ได้ แต่การบันทึก กวภ.02/กวภ.03/กวภ.04/กวภ.05 ใช้ `storagePath`, `storedFileName`, `originalFileName`, `mimeType`, และ `fileSize`
 
 ## 1. Create KWP01 submission
 
@@ -334,7 +334,138 @@ Location: /api/v1/kwp-form-reports/requests/13
 | ผู้ประกอบการ scope `OWN_FACTORY` ยื่นโรงงานที่ไม่ได้รับสิทธิ์ | `403` | backend ไม่อนุญาตให้ยื่นแทนโรงงานอื่น |
 | payload ไม่ถูกต้อง | `400` | validation error เช่นไม่มี `measurementItems`, วันที่ไม่ใช่ `YYYY-MM-DD`, หรือไฟล์แนบไม่มี `attachmentType`/`originalFileName` |
 
-## 3. Create KWP04 submission
+## 3. Create KWP03 submission
+
+บันทึกแบบ **กวภ.03 แบบแจ้งเหตุขัดข้องหรือหยุดส่งข้อมูลการตรวจวัดมลพิษทางน้ำแบบอัตโนมัติอย่างต่อเนื่อง (WPMS)** เป็นสถานะ `SUBMITTED` ทันที
+
+```http
+POST /api/v1/kwp-form-submissions/kwp03
+```
+
+### Request body
+
+ใช้ field snapshot โรงงาน/จุดตรวจวัด/ผู้ติดต่อ/ผู้รายงานชุดเดียวกับ กวภ.01/02 และมี field เฉพาะ WPMS ดังนี้
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `instruments` | string[] | Yes | เครื่องตรวจวัด เช่น `ค่าบีโอดี (BOD)`, `ค่าซีโอดี (COD)` |
+| `measurementTimes` | string[] | Yes | เวลาเครื่องตรวจวัด เช่น `Real Time`, `15 นาที` |
+| `wastewaterSource` | string|null | No | แหล่งกำเนิดน้ำเสีย |
+| `receivingSource` | string|null | No | แหล่งรองรับน้ำทิ้ง |
+| `treatmentSystemType` | string|null | No | ประเภทระบบบำบัดน้ำเสีย |
+| `dischargePoint` | string|null | No | จุดหรือพิกัดระบายน้ำทิ้ง |
+| `averageDischarge` | string\|number|null | No | ปริมาณน้ำทิ้งวันที่ขัดข้อง เฉลี่ย (ลบ.ม./วัน) |
+| `minimumDischarge` | string\|number|null | No | ปริมาณน้ำทิ้งวันที่ขัดข้อง ต่ำสุด (ลบ.ม./วัน) |
+| `maximumDischarge` | string\|number|null | No | ปริมาณน้ำทิ้งวันที่ขัดข้อง สูงสุด (ลบ.ม./วัน) |
+| `issueReasons` | enum[] | Yes | `เครื่องมือหรือเครื่องอุปกรณ์พิเศษขัดข้อง`, `ไม่มีการระบายน้ำทิ้งออกนอกโรงงาน`, `ระบบรับส่งข้อมูล ระบบไฟฟ้า อินเทอร์เน็ต ขัดข้อง` |
+| `reasonDetail` | string|null | No | รายละเอียดสาเหตุ |
+| `problemDate` | `YYYY-MM-DD`\|null | No | วันที่พบปัญหาหรือหยุดส่งข้อมูล |
+| `expectedDoneDate` | `YYYY-MM-DD`\|null | No | วันที่คาดว่าจะดำเนินการแล้วเสร็จ ต้องไม่ก่อน `problemDate` |
+| `totalDays` | number|null | No | รวมระยะเวลาปรับปรุงแก้ไขหรือหยุดส่งข้อมูล |
+| `failedParameters` | string[] | Yes | รายการตรวจวัดที่ไม่สามารถรายงานผลได้ ควรส่ง label พร้อมหน่วย เช่น `BOD (mg/l)`, `COD (mg/l)` |
+| `correctiveAction` | string|null | No | แนวทางการปรับปรุงแก้ไข |
+| `attachments` | object[] | No | ไฟล์แนบระดับรายงาน WPMS ที่ได้จาก `POST /attachments` |
+| `attachments[].attachmentType` | string | Yes | ประเภทไฟล์ เช่น `WPMS_EVIDENCE`, `REPAIR_PLAN` |
+| `attachments[].originalFileName` | string | Yes | ชื่อไฟล์เดิมจากผู้ใช้ |
+| `attachments[].storedFileName` | string|null | No | ชื่อไฟล์ที่ระบบจัดเก็บจริง |
+| `attachments[].mimeType` | string|null | No | MIME type เช่น `application/pdf` |
+| `attachments[].fileSize` | number|null | No | ขนาดไฟล์เป็น byte |
+| `attachments[].storagePath` | string|null | No | path หรือ object key ที่ backend/storage ใช้ดึงไฟล์ |
+
+> หมายเหตุ: frontend ต้องอัปโหลดไฟล์ผ่าน `POST /api/v1/kwp-form-submissions/attachments` ก่อน แล้วนำ metadata ที่ได้มาใส่ใน `attachments[]`
+
+### Example payload
+
+```json
+{
+  "factoryId": "FID-001",
+  "factoryName": "บริษัท ทดสอบ จำกัด",
+  "factoryRegistrationNo": "10190000225448",
+  "factoryAddress": "9 หมู่ 9",
+  "industryType": "10100 / 3",
+  "connectedPointId": 8,
+  "pointCode": "P0001",
+  "pointName": "จุดระบายน้ำทิ้ง A",
+  "pointType": "WATER",
+  "contactName": "สมชาย ทดสอบ",
+  "contactPhone": "0812345678",
+  "contactEmail": "operator@example.com",
+  "instruments": ["ค่าบีโอดี (BOD)", "ค่าซีโอดี (COD)"],
+  "measurementTimes": ["Real Time", "15 นาที"],
+  "wastewaterSource": "ระบบบำบัดน้ำเสียส่วนกลาง",
+  "receivingSource": "คลองสาธารณะ",
+  "treatmentSystemType": "ระบบตะกอนเร่ง",
+  "dischargePoint": "UTM 123456, 987654",
+  "averageDischarge": 125.5,
+  "minimumDischarge": 100.25,
+  "maximumDischarge": 150.75,
+  "issueReasons": [
+    "เครื่องมือหรือเครื่องอุปกรณ์พิเศษขัดข้อง",
+    "ระบบรับส่งข้อมูล ระบบไฟฟ้า อินเทอร์เน็ต ขัดข้อง"
+  ],
+  "reasonDetail": "สัญญาณเครือข่ายขัดข้องและต้องเปลี่ยนอุปกรณ์ตรวจวัด",
+  "problemDate": "2026-07-01",
+  "expectedDoneDate": "2026-07-05",
+  "totalDays": 5,
+  "failedParameters": ["BOD (mg/l)", "COD (mg/l)"],
+  "correctiveAction": "เปลี่ยนอุปกรณ์และทดสอบการส่งข้อมูล WPMS",
+  "attachments": [
+    {
+      "attachmentType": "WPMS_EVIDENCE",
+      "originalFileName": "wpms-evidence.pdf",
+      "storedFileName": "16-wpms-evidence.pdf",
+      "mimeType": "application/pdf",
+      "fileSize": 760000,
+      "storagePath": "/uploads/kwp/16-wpms-evidence.pdf"
+    }
+  ],
+  "reporterName": "สมชาย ทดสอบ",
+  "reporterPosition": "ผู้จัดการสิ่งแวดล้อม"
+}
+```
+
+### Response
+
+```http
+HTTP/1.1 201 Created
+Location: /api/v1/kwp-form-reports/requests/16
+```
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 16,
+    "requestNo": "KWP-69-00016",
+    "form": "กวภ.03",
+    "formType": "KWP03",
+    "status": "SUBMITTED",
+    "submittedAt": "2026-07-04T08:20:00.000Z",
+    "attachmentCount": 1
+  }
+}
+```
+
+### Tables and columns
+
+| Table | Columns used | Meaning |
+| --- | --- | --- |
+| `kwp_form_submissions` | `id`, `submission_no`, `form_type`, `status`, `factory_id`, `factory_name`, `factory_registration_no`, `factory_address`, `industry_type`, `connected_point_id`, `point_code`, `point_name`, `point_type`, `contact_name`, `contact_phone`, `contact_email`, `reporter_name`, `reporter_position`, `submitted_at`, `created_at`, `updated_at`, `created_by`, `updated_by`, `deleted_at` | หัวฟอร์มกลางและ snapshot โรงงาน/จุดตรวจวัด/ผู้ติดต่อ/ผู้รายงาน โดย `form_type = KWP03` |
+| `kwp03_wpms_issue_reports` | `id`, `submission_id`, `wastewater_source`, `receiving_source`, `treatment_system_type`, `discharge_point`, `average_discharge`, `minimum_discharge`, `maximum_discharge`, `reason_detail`, `problem_date`, `expected_done_date`, `total_days`, `corrective_action` | รายละเอียดเหตุขัดข้องหรือหยุดส่งข้อมูล WPMS |
+| `kwp03_selected_options` | `id`, `submission_id`, `option_group`, `option_value`, `sort_order` | ตัวเลือกหลายค่า แยกกลุ่ม `INSTRUMENT`, `MEASUREMENT_TIME`, `ISSUE_REASON`, `FAILED_PARAMETER` |
+| `kwp_form_attachments` | `id`, `submission_id`, `related_table`, `related_id`, `attachment_type`, `original_file_name`, `stored_file_name`, `mime_type`, `file_size`, `storage_path`, `uploaded_at`, `uploaded_by`, `deleted_at` | ไฟล์แนบ กวภ.03 เก็บ `related_table = "kwp03_wpms_issue_reports"` และ `related_id = kwp03_wpms_issue_reports.id` |
+| `kwp_form_status_history` | `id`, `submission_id`, `status`, `note`, `changed_by`, `changed_at` | ประวัติสถานะเริ่มต้น `SUBMITTED` |
+
+### Error behavior
+
+| Case | HTTP status | Meaning |
+| --- | --- | --- |
+| ไม่ส่ง token หรือ token ไม่ถูกต้อง | `401` | ต้อง login ก่อน |
+| token ไม่มี permission `kwp_forms:edit` | `403` | user ไม่มีสิทธิ์บันทึกแบบ กวภ. |
+| ผู้ประกอบการ scope `OWN_FACTORY` ยื่นโรงงานที่ไม่ได้รับสิทธิ์ | `403` | backend ไม่อนุญาตให้ยื่นแทนโรงงานอื่น |
+| payload ไม่ถูกต้อง | `400` | validation error เช่นไม่มี `issueReasons`, ไม่มี `failedParameters`, วันที่แล้วเสร็จก่อนวันที่พบปัญหา หรือไฟล์แนบไม่มี `attachmentType`/`originalFileName` |
+
+## 4. Create KWP04 submission
 
 บันทึกแบบ **กวภ.04 แบบรายงานผลการตรวจวัดมลพิษอากาศจากปล่องระบาย กรณีได้รับการยกเว้นการติดตั้ง CEMS** เป็นสถานะ `SUBMITTED` ทันที โดยใช้ payload และตารางจัดเก็บรายการตรวจวัด/ไฟล์แนบชุดเดียวกับ กวภ.02
 
@@ -475,7 +606,7 @@ Location: /api/v1/kwp-form-reports/requests/14
 | ผู้ประกอบการ scope `OWN_FACTORY` ยื่นโรงงานที่ไม่ได้รับสิทธิ์ | `403` | backend ไม่อนุญาตให้ยื่นแทนโรงงานอื่น |
 | payload ไม่ถูกต้อง | `400` | validation error เช่นไม่มี `measurementItems`, วันที่ไม่ใช่ `YYYY-MM-DD`, หรือไฟล์แนบไม่มี `attachmentType`/`originalFileName` |
 
-## 4. Create KWP05 submission
+## 5. Create KWP05 submission
 
 บันทึกแบบ **กวภ.05 แบบรายงานผลการสอบเทียบหรือทวนสอบระบบตรวจวัดคุณภาพอากาศแบบอัตโนมัติอย่างต่อเนื่อง (CEMS)** เป็นสถานะ `SUBMITTED` ทันที
 
@@ -704,13 +835,14 @@ GET /api/v1/kwp-form-submissions/kwp05/15
 | payload ไม่ถูกต้อง | `400` | validation error เช่นไม่มี `calibrationItems`, วันที่ไม่ใช่ `YYYY-MM-DD`, `endDate` ก่อน `startDate`, หรือไฟล์แนบไม่มี `attachmentType`/`originalFileName` |
 | เรียก detail path ผิด form เช่น `/kwp04/15` แต่ข้อมูลเป็น `KWP05` | `404` | ไม่คืนข้อมูลให้ผู้ใช้ |
 
-## 5. Get KWP submission detail
+## 6. Get KWP submission detail
 
-ดึงข้อมูลแบบ กวภ.01, กวภ.02, กวภ.04, หรือ กวภ.05 ตาม `id` เพื่อเปิดหน้ารายละเอียด/preview ข้อมูลที่เคยยื่นไว้ ถ้าเป็นแบบที่มีไฟล์แนบ backend จะคืน `attachments[].fileUrl` สำหรับเปิดดูหรือดาวน์โหลดไฟล์ได้จาก `UPLOAD_PUBLIC_PATH`
+ดึงข้อมูลแบบ กวภ.01, กวภ.02, กวภ.03, กวภ.04, หรือ กวภ.05 ตาม `id` เพื่อเปิดหน้ารายละเอียด/preview ข้อมูลที่เคยยื่นไว้ ถ้าเป็นแบบที่มีไฟล์แนบ backend จะคืน `attachments[].fileUrl` สำหรับเปิดดูหรือดาวน์โหลดไฟล์ได้จาก `UPLOAD_PUBLIC_PATH`
 
 ```http
 GET /api/v1/kwp-form-submissions/kwp01/:id
 GET /api/v1/kwp-form-submissions/kwp02/:id
+GET /api/v1/kwp-form-submissions/kwp03/:id
 GET /api/v1/kwp-form-submissions/kwp04/:id
 GET /api/v1/kwp-form-submissions/kwp05/:id
 ```
@@ -835,6 +967,73 @@ Permission: `kwp_forms:view`
 }
 ```
 
+### Response: KWP03
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 16,
+    "requestNo": "KWP-69-00016",
+    "form": "กวภ.03",
+    "formType": "KWP03",
+    "status": "SUBMITTED",
+    "submittedAt": "2026-07-04T08:20:00.000Z",
+    "createdAt": "2026-07-04T08:20:00.000Z",
+    "updatedAt": "2026-07-04T08:20:00.000Z",
+    "factoryId": "FID-001",
+    "factoryName": "บริษัท ทดสอบ จำกัด",
+    "factoryRegistrationNo": "10190000225448",
+    "factoryAddress": "9 หมู่ 9",
+    "industryType": "10100 / 3",
+    "connectedPointId": 8,
+    "pointCode": "P0001",
+    "pointName": "จุดระบายน้ำทิ้ง A",
+    "pointType": "WATER",
+    "contactName": "สมชาย ทดสอบ",
+    "contactPhone": "0812345678",
+    "contactEmail": "operator@example.com",
+    "reporterName": "สมชาย ทดสอบ",
+    "reporterPosition": "ผู้จัดการสิ่งแวดล้อม",
+    "wpmsIssueReport": {
+      "wastewaterSource": "ระบบบำบัดน้ำเสียส่วนกลาง",
+      "receivingSource": "คลองสาธารณะ",
+      "treatmentSystemType": "ระบบตะกอนเร่ง",
+      "dischargePoint": "UTM 123456, 987654",
+      "averageDischarge": "125.500000",
+      "minimumDischarge": "100.250000",
+      "maximumDischarge": "150.750000",
+      "reasonDetail": "สัญญาณเครือข่ายขัดข้องและต้องเปลี่ยนอุปกรณ์ตรวจวัด",
+      "problemDate": "2026-07-01",
+      "expectedDoneDate": "2026-07-05",
+      "totalDays": 5,
+      "correctiveAction": "เปลี่ยนอุปกรณ์และทดสอบการส่งข้อมูล WPMS",
+      "instruments": ["ค่าบีโอดี (BOD)", "ค่าซีโอดี (COD)"],
+      "measurementTimes": ["Real Time", "15 นาที"],
+      "issueReasons": [
+        "เครื่องมือหรือเครื่องอุปกรณ์พิเศษขัดข้อง",
+        "ระบบรับส่งข้อมูล ระบบไฟฟ้า อินเทอร์เน็ต ขัดข้อง"
+      ],
+      "failedParameters": ["BOD (mg/l)", "COD (mg/l)"],
+      "attachments": [
+        {
+          "id": 81,
+          "attachmentType": "WPMS_EVIDENCE",
+          "originalFileName": "wpms-evidence.pdf",
+          "storedFileName": "16-wpms-evidence.pdf",
+          "mimeType": "application/pdf",
+          "fileSize": 760000,
+          "storagePath": "kwp/form-attachments/2026/07/16-wpms-evidence.pdf",
+          "fileUrl": "https://d-poms.diw.go.th/uploads/kwp/form-attachments/2026/07/16-wpms-evidence.pdf",
+          "uploadedAt": "2026-07-04T08:20:00.000Z",
+          "uploadedBy": 42
+        }
+      ]
+    }
+  }
+}
+```
+
 ### Response: KWP04
 
 ```json
@@ -906,6 +1105,7 @@ Permission: `kwp_forms:view`
 | --- | --- |
 | Common submission fields | `kwp_form_submissions` |
 | `issueReport` | `kwp01_issue_reports` + `kwp01_unreported_parameters` |
+| `wpmsIssueReport` | `kwp03_wpms_issue_reports` + `kwp03_selected_options` + `kwp_form_attachments` |
 | `measurementItems` | `kwp_emission_measurement_items` |
 | `measurementItems[].attachments` | `kwp_form_attachments` where `related_table = "kwp_emission_measurement_items"` |
 | `attachments[].fileUrl` | Derived from `PUBLIC_BASE_URL` or request host + `UPLOAD_PUBLIC_PATH` + `storage_path` |

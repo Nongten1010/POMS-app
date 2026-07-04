@@ -5,6 +5,7 @@ import {
   buildKwpFormSubmissionFactoryAccessQueryForTests,
   toKwp01InsertRecordsForTests,
   toKwp02InsertRecordsForTests,
+  toKwp03InsertRecordsForTests,
   toKwp05InsertRecordsForTests,
 } from '../../src/modules/kwp-form-submissions/kwp-form-submissions.repository';
 
@@ -317,6 +318,116 @@ describe('kwpFormSubmissionsRepository', () => {
         storage_path: '/uploads/kwp/14-kwp04-lab-report.pdf',
       }),
     ]);
+  });
+
+  it('maps KWP03 payload to WPMS issue report, selected options, attachments, and initial history records', () => {
+    const records = toKwp03InsertRecordsForTests({
+      payload: {
+        factoryId: 'FID-001',
+        factoryName: 'บริษัท ทดสอบ จำกัด',
+        factoryRegistrationNo: '10190000225448',
+        factoryAddress: '9 หมู่ 9',
+        industryType: '10100 / 3',
+        connectedPointId: 8,
+        pointCode: 'P0001',
+        pointName: 'จุดระบายน้ำทิ้ง A',
+        pointType: 'WATER',
+        contactName: 'สมชาย ทดสอบ',
+        contactPhone: '0812345678',
+        contactEmail: 'operator@example.com',
+        instruments: ['ค่าบีโอดี (BOD)', 'ค่าซีโอดี (COD)'],
+        measurementTimes: ['Real Time', '15 นาที'],
+        wastewaterSource: 'ระบบบำบัดน้ำเสียส่วนกลาง',
+        receivingSource: 'คลองสาธารณะ',
+        treatmentSystemType: 'ระบบตะกอนเร่ง',
+        dischargePoint: 'UTM 123456, 987654',
+        averageDischarge: '125.5',
+        minimumDischarge: '100.25',
+        maximumDischarge: '150.75',
+        issueReasons: [
+          'เครื่องมือหรือเครื่องอุปกรณ์พิเศษขัดข้อง',
+          'ระบบรับส่งข้อมูล ระบบไฟฟ้า อินเทอร์เน็ต ขัดข้อง',
+        ],
+        reasonDetail: 'สัญญาณเครือข่ายขัดข้องและต้องเปลี่ยนอุปกรณ์ตรวจวัด',
+        problemDate: '2026-07-01',
+        expectedDoneDate: '2026-07-05',
+        totalDays: 5,
+        failedParameters: ['BOD (mg/l)', 'COD (mg/l)'],
+        correctiveAction: 'เปลี่ยนอุปกรณ์และทดสอบการส่งข้อมูล WPMS',
+        attachments: [
+          {
+            attachmentType: 'WPMS_EVIDENCE',
+            originalFileName: 'wpms-evidence.pdf',
+            storedFileName: '16-wpms-evidence.pdf',
+            mimeType: 'application/pdf',
+            fileSize: 760000,
+            storagePath: '/uploads/kwp/16-wpms-evidence.pdf',
+          },
+        ],
+        reporterName: 'สมชาย ทดสอบ',
+        reporterPosition: 'ผู้จัดการสิ่งแวดล้อม',
+      },
+      submissionNo: 'KWP-69-00016',
+      actorUserId: 42,
+      now: new Date('2026-07-04T08:20:00.000Z'),
+    });
+
+    expect(records.submission).toMatchObject({
+      submission_no: 'KWP-69-00016',
+      form_type: 'KWP03',
+      status: 'SUBMITTED',
+      point_code: 'P0001',
+      point_type: 'WATER',
+      created_by: 42,
+    });
+    expect(records.wpmsIssueReport).toMatchObject({
+      wastewater_source: 'ระบบบำบัดน้ำเสียส่วนกลาง',
+      receiving_source: 'คลองสาธารณะ',
+      treatment_system_type: 'ระบบตะกอนเร่ง',
+      discharge_point: 'UTM 123456, 987654',
+      average_discharge: 125.5,
+      minimum_discharge: 100.25,
+      maximum_discharge: 150.75,
+      reason_detail: 'สัญญาณเครือข่ายขัดข้องและต้องเปลี่ยนอุปกรณ์ตรวจวัด',
+      problem_date: '2026-07-01',
+      expected_done_date: '2026-07-05',
+      total_days: 5,
+      corrective_action: 'เปลี่ยนอุปกรณ์และทดสอบการส่งข้อมูล WPMS',
+    });
+    expect(records.selectedOptions).toEqual([
+      { option_group: 'INSTRUMENT', option_value: 'ค่าบีโอดี (BOD)', sort_order: 1 },
+      { option_group: 'INSTRUMENT', option_value: 'ค่าซีโอดี (COD)', sort_order: 2 },
+      { option_group: 'MEASUREMENT_TIME', option_value: 'Real Time', sort_order: 1 },
+      { option_group: 'MEASUREMENT_TIME', option_value: '15 นาที', sort_order: 2 },
+      {
+        option_group: 'ISSUE_REASON',
+        option_value: 'เครื่องมือหรือเครื่องอุปกรณ์พิเศษขัดข้อง',
+        sort_order: 1,
+      },
+      {
+        option_group: 'ISSUE_REASON',
+        option_value: 'ระบบรับส่งข้อมูล ระบบไฟฟ้า อินเทอร์เน็ต ขัดข้อง',
+        sort_order: 2,
+      },
+      { option_group: 'FAILED_PARAMETER', option_value: 'BOD (mg/l)', sort_order: 1 },
+      { option_group: 'FAILED_PARAMETER', option_value: 'COD (mg/l)', sort_order: 2 },
+    ]);
+    expect(records.attachments).toEqual([
+      {
+        attachment_type: 'WPMS_EVIDENCE',
+        original_file_name: 'wpms-evidence.pdf',
+        stored_file_name: '16-wpms-evidence.pdf',
+        mime_type: 'application/pdf',
+        file_size: 760000,
+        storage_path: '/uploads/kwp/16-wpms-evidence.pdf',
+        uploaded_at: new Date('2026-07-04T08:20:00.000Z'),
+        uploaded_by: 42,
+      },
+    ]);
+    expect(records.statusHistory).toMatchObject({
+      status: 'SUBMITTED',
+      changed_by: 42,
+    });
   });
 
   it('maps KWP05 payload to calibration report, calibration items, attachments, and initial history records', () => {
