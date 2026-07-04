@@ -535,6 +535,25 @@ function ParameterMultiSelect({ label, value, onChange, options = cemsParameterO
   return <OptionMultiSelect label={label} value={value} onChange={onChange} options={options} />
 }
 
+function OptionSelect({ label, value, onChange, options }) {
+  return (
+    <TextField
+      select
+      label={label}
+      size="small"
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      fullWidth
+    >
+      {options.map((option) => (
+        <MenuItem key={option} value={option}>
+          {option}
+        </MenuItem>
+      ))}
+    </TextField>
+  )
+}
+
 function getDayRange(startDate, endDate) {
   if (!startDate || !endDate || !dayjs(startDate).isValid() || !dayjs(endDate).isValid()) {
     return ''
@@ -2747,6 +2766,7 @@ function Kwp03Form({
   onFailedParametersChange,
 }) {
   const totalDays = getDayRange(problemDate, expectedDoneDate)
+  const failedParameterOptions = [...wpmsParameterOptions.filter((option) => option !== 'ทั้งหมด'), 'ทั้งหมด']
 
   return (
     <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="th">
@@ -2786,7 +2806,7 @@ function Kwp03Form({
               <ReadOnlyField label="ชื่อจุดตรวจวัด" value={point?.name ?? ''} />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <OptionMultiSelect
+              <OptionSelect
                 label="เครื่องตรวจวัด"
                 value={instruments}
                 onChange={onInstrumentsChange}
@@ -2869,7 +2889,7 @@ function Kwp03Form({
                 label="รายการตรวจวัด (พารามิเตอร์) ที่ไม่สามารถรายงานผลได้"
                 value={failedParameters}
                 onChange={onFailedParametersChange}
-                options={wpmsParameterOptions}
+                options={failedParameterOptions}
               />
             </Grid>
             <Grid size={{ xs: 12, md: 6 }}>
@@ -3291,7 +3311,7 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
   const [measurementRows, setMeasurementRows] = useState([])
   const [samplingPhotoFiles, setSamplingPhotoFiles] = useState([])
   const [labReportFiles, setLabReportFiles] = useState([])
-  const [wpmsInstruments, setWpmsInstruments] = useState([])
+  const [wpmsInstrument, setWpmsInstrument] = useState('')
   const [wpmsMeasurementTimes, setWpmsMeasurementTimes] = useState([])
   const [wpmsIssueReasons, setWpmsIssueReasons] = useState([])
   const [wpmsFailedParameters, setWpmsFailedParameters] = useState([])
@@ -3405,7 +3425,7 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
         formRef.current,
         { problemDate, expectedDoneDate },
         {
-          instruments: wpmsInstruments,
+          instruments: wpmsInstrument ? [wpmsInstrument] : [],
           measurementTimes: wpmsMeasurementTimes,
           issueReasons: wpmsIssueReasons,
           failedParameters: wpmsFailedParameters,
@@ -3528,13 +3548,13 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
                 point={form.point}
                 problemDate={problemDate}
                 expectedDoneDate={expectedDoneDate}
-                instruments={wpmsInstruments}
+                instruments={wpmsInstrument}
                 measurementTimes={wpmsMeasurementTimes}
                 issueReasons={wpmsIssueReasons}
                 failedParameters={wpmsFailedParameters}
                 onProblemDateChange={setProblemDate}
                 onExpectedDoneDateChange={setExpectedDoneDate}
-                onInstrumentsChange={setWpmsInstruments}
+                onInstrumentsChange={setWpmsInstrument}
                 onMeasurementTimesChange={setWpmsMeasurementTimes}
                 onIssueReasonsChange={setWpmsIssueReasons}
                 onFailedParametersChange={setWpmsFailedParameters}
