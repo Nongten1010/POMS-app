@@ -104,3 +104,84 @@ Data source:
 - `kwp_form_status_history` เป็นประวัติสถานะของแต่ละรายการ
 - `factories` และ `provinces` ใช้ตรวจสิทธิ์และเติมจังหวัดจากระบบ POMS
 - `cems_wpms_connected_measurement_points` เติม `systemType` ของจุดตรวจวัดเมื่อมี `connected_point_id`
+
+## 3. Measurement point detail modal
+
+ปุ่ม **รายละเอียดจุดตรวจวัด** ในหน้า KWP ใช้ API กลางของจุดตรวจวัดที่เชื่อมต่อแล้ว ไม่ได้อยู่ใต้ base path `/api/v1/kwp-form-reports`
+
+```http
+GET /api/v1/connected-measurement-points/:stationId
+```
+
+Auth: `Authorization: Bearer <access_token>`
+
+Permission: `cems_wpms_requests:view`
+
+### When to call
+
+ใช้เมื่อต้องการเปิด modal รายละเอียดจุดตรวจวัดจากแถวใน KWP request table หรือ factory table:
+
+1. อ่านรหัสจุดตรวจวัดจาก `monitoringPointCode` ของแถว KWP เช่น `S0001`
+2. ส่งค่านั้นเป็น `:stationId`
+3. แสดง response ในตาราง modal 4 คอลัมน์:
+   - รหัสจุดตรวจวัด
+   - ชื่อจุดตรวจวัด
+   - ประเภทจุดตรวจวัด
+   - รายละเอียดพารามิเตอร์
+
+ตัวอย่าง:
+
+```bash
+curl "http://d-poms.diw.go.th/api/v1/connected-measurement-points/S0001" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "pointCode": "S0001",
+    "pointName": "ปล่องระบาย A",
+    "pointType": "STACK",
+    "parameterDetails": [
+      "CO (ppm)",
+      "NOx (ppm)",
+      "SO2 (ppm)",
+      "Temp. (C°)"
+    ]
+  }
+}
+```
+
+### Response fields
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `success` | boolean | สถานะการเรียก API |
+| `data.pointCode` | string|null | รหัสจุดตรวจวัด เช่น `S0001`, `P0001`; ถ้าข้อมูลเดิมไม่มีรหัสจะเป็น `null` |
+| `data.pointName` | string | ชื่อจุดตรวจวัด |
+| `data.pointType` | `STACK`\|`WASTEWATER`\|`OTHER` | ประเภทจุดตรวจวัด |
+| `data.parameterDetails` | string[] | รายละเอียดพารามิเตอร์ที่ลงทะเบียนไว้กับจุดตรวจวัด พร้อมหน่วยถ้ามี เช่น `NOx (ppm)` |
+
+### Data source
+
+- API lookup จุดตรวจวัดจาก current connected measurement point ตาม `stationId`
+- `pointCode`, `pointName`, `pointType` มาจากข้อมูลจุดตรวจวัดที่ match กับ `stationId`
+- `parameterDetails` มาจากการ parse ค่า `parameters_json` เป็น array ไม่ส่ง raw JSON string กลับไปให้ frontend
+- ถ้า `parameters_json` เก็บเป็น code เปล่า backend จะคืน code นั้นตามที่เก็บไว้; ถ้าต้องการให้แสดงหน่วย ควรเก็บ label พร้อมหน่วยตั้งแต่ workflow เชื่อมต่อ เช่น `NOx (ppm)`
+
+### Error behavior
+
+| Case | HTTP status | Meaning |
+| --- | --- | --- |
+| ไม่ส่ง token หรือ token ไม่ถูกต้อง | `401` | ต้อง login ก่อน |
+| token ไม่มี permission `cems_wpms_requests:view` | `403` | user ไม่มีสิทธิ์ดูจุดตรวจวัด |
+| ไม่พบจุดตรวจวัดที่เชื่อมต่อแล้วสำหรับ `stationId` นี้ | `404` | `stationId` ไม่ match current connected measurement point |
+
+### Related documents
+
+- Contract หลักของ API นี้อยู่ที่ [`CEMS_WPMS_REQUEST_APIS.md`](./CEMS_WPMS_REQUEST_APIS.md)
+- API detail page อื่นของจุดตรวจวัดอยู่ที่ [`OPERATOR_FACTORY_DASHBOARD.md`](./OPERATOR_FACTORY_DASHBOARD.md)
+- Logic ของ `parameterDetails` อยู่ที่ [`DERIVED_FIELD_LOGIC.md`](./DERIVED_FIELD_LOGIC.md)
