@@ -26,6 +26,7 @@ import {
   Typography,
 } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
+import DeleteIcon from '@mui/icons-material/Delete'
 import HistoryIcon from '@mui/icons-material/History'
 import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import { DataGrid } from '@mui/x-data-grid'
@@ -1441,95 +1442,68 @@ const emptyMeasurementResult = {
   standardErrorValue: '',
 }
 
-function MeasurementResultDialog({ open, value, onClose, onSave }) {
-  if (!open) {
-    return null
+function AttachmentFileInput({ label, files, onChange }) {
+  const safeFiles = Array.isArray(files) ? files : []
+  const removeFile = (removeIndex) => {
+    onChange(safeFiles.filter((_, index) => index !== removeIndex))
   }
 
   return (
-    <MeasurementResultDialogContent
-      key={value?.id ?? 'new'}
-      value={value}
-      onClose={onClose}
-      onSave={onSave}
-    />
-  )
-}
-
-function MeasurementResultDialogContent({ value, onClose, onSave }) {
-  const [form, setForm] = useState(value ?? emptyMeasurementResult)
-  const errorValue = calculateErrorValue(form.deviceValue, form.labValue)
-
-  const updateForm = (field, nextValue) => {
-    setForm((current) => ({ ...current, [field]: nextValue }))
-  }
-
-  return (
-    <Dialog open onClose={onClose} fullWidth maxWidth="md">
-      <DialogTitle>{value ? 'แก้ไขผลการตรวจสอบความคลาดเคลื่อน' : 'เพิ่มผลการตรวจสอบความคลาดเคลื่อน'}</DialogTitle>
-      <DialogContent dividers>
-        <Grid container spacing={2}>
-          <Grid size={{ xs: 12, md: 4 }}>
-            <TextField
-              label="วันที่เก็บตัวอย่าง"
-              size="small"
-              value={form.sampleDate}
-              onChange={(event) => updateForm('sampleDate', event.target.value)}
-              placeholder="DD/MM/BBBB"
-              fullWidth
-            />
-          </Grid>
-          <Grid size={{ xs: 12, md: 4 }}>
-            <TextField
-              label="เวลาที่เก็บตัวอย่าง"
-              size="small"
-              value={form.sampleTime}
-              onChange={(event) => updateForm('sampleTime', event.target.value)}
-              placeholder="HH:mm"
-              fullWidth
-            />
-          </Grid>
-          <Grid size={{ xs: 12, md: 4 }}>
-            <TextField
-              label="ค่าที่เครื่องมือตรวจวัดได้ (M)"
-              size="small"
-              value={form.deviceValue}
-              onChange={(event) => updateForm('deviceValue', event.target.value)}
-              fullWidth
-            />
-          </Grid>
-          <Grid size={{ xs: 12, md: 4 }}>
-            <TextField
-              label="ค่าที่ห้องปฏิบัติการวิเคราะห์ได้ (T)"
-              size="small"
-              value={form.labValue}
-              onChange={(event) => updateForm('labValue', event.target.value)}
-              fullWidth
-            />
-          </Grid>
-          <Grid size={{ xs: 12, md: 4 }}>
-            <ReadOnlyField label="ค่าความคลาดเคลื่อน (E)" value={errorValue} />
-          </Grid>
-          <Grid size={{ xs: 12, md: 4 }}>
-            <TextField
-              label="ค่าความคลาดเคลื่อนตามประกาศฯ"
-              size="small"
-              value={form.standardErrorValue}
-              onChange={(event) => updateForm('standardErrorValue', event.target.value)}
-              fullWidth
-            />
-          </Grid>
-        </Grid>
-      </DialogContent>
-      <DialogActions sx={{ justifyContent: 'center' }}>
-        <Button color="inherit" onClick={onClose}>
-          ยกเลิก
+    <Stack spacing={1}>
+      <Stack spacing={0.75}>
+        <Button component="label" variant="outlined" fullWidth>
+          แนบไฟล์
+          <input
+            hidden
+            type="file"
+            accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
+            onChange={(event) => {
+              const selectedFile = event.target.files?.[0] ?? null
+              event.target.value = ''
+              if (!selectedFile) return
+              onChange([...safeFiles, selectedFile])
+            }}
+          />
         </Button>
-        <Button variant="contained" onClick={() => onSave({ ...form, errorValue })}>
-          บันทึก
-        </Button>
-      </DialogActions>
-    </Dialog>
+        <Typography variant="caption" color="text.secondary">
+          {label}
+        </Typography>
+      </Stack>
+      <TableContainer sx={{ border: 1, borderColor: 'divider' }}>
+        <Table size="small" sx={borderedTableSx}>
+          <TableHead>
+            <TableRow>
+              <TableCell sx={{ width: 72 }}>ลำดับ</TableCell>
+              <TableCell>{label}</TableCell>
+              <TableCell sx={{ width: 56 }} />
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {safeFiles.length > 0 ? (
+              safeFiles.map((file, index) => (
+                <TableRow key={`${file.name}-${file.lastModified ?? index}`}>
+                  <TableCell>{index + 1}</TableCell>
+                  <TableCell>{file.name}</TableCell>
+                  <TableCell align="center">
+                    <IconButton size="small" color="error" onClick={() => removeFile(index)}>
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={3} align="center">
+                  <Typography variant="body2" color="text.secondary">
+                    ยังไม่มีไฟล์แนบ
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </Stack>
   )
 }
 
@@ -1545,17 +1519,19 @@ function BodCodReportFormSheet({ open, report, onClose, onPreview }) {
     deviceBrand: '',
     deviceModel: '',
     serialNo: '',
-    parameter: [],
+    parameter: '',
     reporterName: '',
     reporterPosition: '',
-    samplePhotoFileName: '',
-    devicePhotoFileName: '',
-    labReportFileName: '',
   })
-  const [measurementRows, setMeasurementRows] = useState([])
-  const [editingMeasurement, setEditingMeasurement] = useState(null)
+  const [measurementResult, setMeasurementResult] = useState(emptyMeasurementResult)
+  const [attachmentFiles, setAttachmentFiles] = useState({
+    samplePhotos: [],
+    devicePhotos: [],
+    labReports: [],
+  })
   const latestRevisionMessage = getLatestReportRevisionMessage(report)
   const isEditMode = report?.mode === 'edit'
+  const measurementErrorValue = calculateErrorValue(measurementResult.deviceValue, measurementResult.labValue)
 
   if (!report) {
     return null
@@ -1564,24 +1540,22 @@ function BodCodReportFormSheet({ open, report, onClose, onPreview }) {
   const updateForm = (field, value) => {
     setForm((current) => ({ ...current, [field]: value }))
   }
-  const handleFileChange = (field, file) => {
-    updateForm(field, file?.name ?? '')
+  const updateMeasurementResult = (field, value) => {
+    setMeasurementResult((current) => ({ ...current, [field]: value }))
   }
-  const saveMeasurement = (row) => {
-    setMeasurementRows((current) => {
-      if (editingMeasurement?.id) {
-        return current.map((item) => (item.id === editingMeasurement.id ? { ...row, id: editingMeasurement.id } : item))
-      }
-
-      return [...current, { ...row, id: Date.now() }]
-    })
-    setEditingMeasurement(null)
+  const updateAttachmentFiles = (field, value) => {
+    setAttachmentFiles((current) => ({ ...current, [field]: value }))
   }
   const handlePreview = () => {
+    const hasMeasurementResult = Object.values(measurementResult).some((value) => String(value ?? '').trim())
+
     onPreview?.({
       ...report,
       ...form,
-      measurementRows,
+      attachmentFiles,
+      measurementRows: hasMeasurementResult
+        ? [{ ...measurementResult, id: 'measurement-1', errorValue: measurementErrorValue }]
+        : [],
     })
   }
 
@@ -1684,7 +1658,7 @@ function BodCodReportFormSheet({ open, report, onClose, onPreview }) {
                 <Grid size={{ xs: 12, md: 3 }}>
                   <TextField label="ทะเบียนเจ้าหน้าที่" size="small" value={form.officerRegistration} onChange={(event) => updateForm('officerRegistration', event.target.value)} fullWidth />
                 </Grid>
-                <Grid size={{ xs: 12, md: 6 }}>
+                <Grid size={{ xs: 12, md: 3 }}>
                   <TextField label="หน่วยงาน/ชื่อห้องปฏิบัติการ" size="small" value={form.laboratoryName} onChange={(event) => updateForm('laboratoryName', event.target.value)} fullWidth />
                 </Grid>
                 <Grid size={{ xs: 12, md: 3 }}>
@@ -1693,7 +1667,7 @@ function BodCodReportFormSheet({ open, report, onClose, onPreview }) {
                 <Grid size={{ xs: 12, md: 3 }}>
                   <TextField label="เลขที่ใบรายงานผลวิเคราะห์" size="small" value={form.labReportNo} onChange={(event) => updateForm('labReportNo', event.target.value)} fullWidth />
                 </Grid>
-                <Grid size={{ xs: 12, md: 6 }}>
+                <Grid size={{ xs: 12, md: 3 }}>
                   <TextField label="วิธีวิเคราะห์ทดสอบในห้องปฏิบัติการ" size="small" value={form.analysisMethod} onChange={(event) => updateForm('analysisMethod', event.target.value)} fullWidth />
                 </Grid>
               </Grid>
@@ -1716,16 +1690,7 @@ function BodCodReportFormSheet({ open, report, onClose, onPreview }) {
                     label="รายการที่ตรวจสอบค่าความคลาดเคลื่อน"
                     size="small"
                     value={form.parameter}
-                    onChange={(event) => {
-                      const selectedValue = event.target.value
-                      updateForm('parameter', typeof selectedValue === 'string' ? selectedValue.split(',') : selectedValue)
-                    }}
-                    slotProps={{
-                      select: {
-                        multiple: true,
-                        renderValue: (selected) => selected.join(', '),
-                      },
-                    }}
+                    onChange={(event) => updateForm('parameter', event.target.value)}
                     fullWidth
                   >
                     <MenuItem value="BOD">BOD</MenuItem>
@@ -1736,88 +1701,74 @@ function BodCodReportFormSheet({ open, report, onClose, onPreview }) {
             </SectionPaper>
 
             <SectionPaper title="ผลการตรวจสอบความคลาดเคลื่อน">
-              <Stack spacing={1.5}>
-                <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
-                  <Button variant="outlined" onClick={() => setEditingMeasurement({})}>
-                    เพิ่มข้อมูล
-                  </Button>
-                </Stack>
-                <TableContainer sx={{ border: 1, borderColor: 'divider', overflowX: 'auto' }}>
-                  <Table size="small" sx={{ minWidth: 1100, ...borderedTableSx }}>
-                    <TableHead>
-                      <TableRow>
-                        {[
-                          'วันที่เก็บตัวอย่าง',
-                          'เวลาที่เก็บตัวอย่าง',
-                          'ค่าที่เครื่องมือตรวจวัดได้ (M)',
-                          'ค่าที่ห้องปฏิบัติการวิเคราะห์ได้ (T)',
-                          'ค่าความคลาดเคลื่อน (E)',
-                          'ค่าความคลาดเคลื่อนตามประกาศฯ',
-                          'จัดการ',
-                        ].map((column) => (
-                          <TableCell key={column} sx={{ fontWeight: 700, bgcolor: '#f8fafc' }}>{column}</TableCell>
-                        ))}
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {measurementRows.length > 0 ? (
-                        measurementRows.map((row) => (
-                          <TableRow key={row.id}>
-                            <TableCell>{row.sampleDate}</TableCell>
-                            <TableCell>{row.sampleTime}</TableCell>
-                            <TableCell>{row.deviceValue}</TableCell>
-                            <TableCell>{row.labValue}</TableCell>
-                            <TableCell>{row.errorValue}</TableCell>
-                            <TableCell>{row.standardErrorValue}</TableCell>
-                            <TableCell>
-                              <Stack direction="row" spacing={1} sx={tableActionStackSx}>
-                                <Button size="small" variant="outlined" onClick={() => setEditingMeasurement(row)}>
-                                  แก้ไข
-                                </Button>
-                                <Button
-                                  size="small"
-                                  color="error"
-                                  variant="outlined"
-                                  onClick={() => setMeasurementRows((current) => current.filter((item) => item.id !== row.id))}
-                                >
-                                  ลบ
-                                </Button>
-                              </Stack>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      ) : (
-                        <TableRow>
-                          <TableCell colSpan={7} align="center">
-                            <Typography variant="body2" color="text.secondary">
-                              ไม่มีข้อมูลผลการตรวจสอบความคลาดเคลื่อน
-                            </Typography>
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </Stack>
+              <Grid container spacing={2}>
+                <Grid size={{ xs: 12, md: 3 }}>
+                  <TextField
+                    label="วันที่เก็บตัวอย่าง"
+                    size="small"
+                    value={measurementResult.sampleDate}
+                    onChange={(event) => updateMeasurementResult('sampleDate', event.target.value)}
+                    placeholder="DD/MM/BBBB"
+                    fullWidth
+                  />
+                </Grid>
+                <Grid size={{ xs: 12, md: 3 }}>
+                  <TextField
+                    label="เวลาที่เก็บตัวอย่าง"
+                    size="small"
+                    value={measurementResult.sampleTime}
+                    onChange={(event) => updateMeasurementResult('sampleTime', event.target.value)}
+                    placeholder="HH:mm"
+                    fullWidth
+                  />
+                </Grid>
+                <Grid size={{ xs: 12 }} sx={{ display: { xs: 'none', md: 'block' } }} />
+                <Grid size={{ xs: 12, md: 3 }}>
+                  <TextField
+                    label="ค่าที่เครื่องมือตรวจวัดได้ (M)"
+                    size="small"
+                    value={measurementResult.deviceValue}
+                    onChange={(event) => updateMeasurementResult('deviceValue', event.target.value)}
+                    fullWidth
+                  />
+                </Grid>
+                <Grid size={{ xs: 12, md: 3 }}>
+                  <TextField
+                    label="ค่าที่ห้องปฏิบัติการวิเคราะห์ได้ (T)"
+                    size="small"
+                    value={measurementResult.labValue}
+                    onChange={(event) => updateMeasurementResult('labValue', event.target.value)}
+                    fullWidth
+                  />
+                </Grid>
+                <Grid size={{ xs: 12, md: 3 }}>
+                  <ReadOnlyField label="ค่าความคลาดเคลื่อน (E)" value={measurementErrorValue} />
+                </Grid>
+                <Grid size={{ xs: 12, md: 3 }}>
+                  <TextField
+                    label="ค่าความคลาดเคลื่อนตามประกาศฯ"
+                    size="small"
+                    value={measurementResult.standardErrorValue}
+                    onChange={(event) => updateMeasurementResult('standardErrorValue', event.target.value)}
+                    fullWidth
+                  />
+                </Grid>
+              </Grid>
             </SectionPaper>
 
-            <SectionPaper title="แนบไฟล์ (JPG / PNG / PDF)">
+            <SectionPaper title="เอกสารแนบ (JPG / PNG / PDF) (ขนาดไม่เกิน 2 Mb)*">
               <Grid container spacing={2}>
                 {[
-                  ['samplePhotoFileName', 'ภาพถ่ายขณะเก็บตัวอย่าง (ขนาดไม่เกิน 2 Mb)*'],
-                  ['devicePhotoFileName', 'ภาพหน้าเครื่องมือตรวจวัดที่แสดง ณ เวลาที่เก็บตัวอย่าง (ขนาดไม่เกิน 2 Mb)*'],
-                  ['labReportFileName', 'รายงานผลจากห้องปฏิบัติการ (ขนาดไม่เกิน 2 Mb)*'],
+                  ['samplePhotos', 'ภาพถ่ายขณะเก็บตัวอย่าง'],
+                  ['devicePhotos', 'ภาพหน้าเครื่องมือตรวจวัดที่แสดง ณ เวลาที่เก็บตัวอย่าง'],
+                  ['labReports', 'รายงานผลจากห้องปฏิบัติการ'],
                 ].map(([field, label]) => (
                   <Grid key={field} size={{ xs: 12, md: 4 }}>
-                    <Stack spacing={0.5}>
-                      <Button component="label" variant="outlined">
-                        แนบไฟล์
-                        <input hidden type="file" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf" onChange={(event) => handleFileChange(field, event.target.files?.[0])} />
-                      </Button>
-                      <Typography variant="caption" color="text.secondary">
-                        {form[field] || label}
-                      </Typography>
-                    </Stack>
+                    <AttachmentFileInput
+                      label={label}
+                      files={attachmentFiles[field]}
+                      onChange={(nextFiles) => updateAttachmentFiles(field, nextFiles)}
+                    />
                   </Grid>
                 ))}
               </Grid>
@@ -1854,12 +1805,6 @@ function BodCodReportFormSheet({ open, report, onClose, onPreview }) {
           </Button>
         </Stack>
       </Stack>
-      <MeasurementResultDialog
-        open={Boolean(editingMeasurement)}
-        value={editingMeasurement?.id ? editingMeasurement : null}
-        onClose={() => setEditingMeasurement(null)}
-        onSave={saveMeasurement}
-      />
     </Drawer>
   )
 }
