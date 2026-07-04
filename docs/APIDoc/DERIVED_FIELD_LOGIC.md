@@ -922,3 +922,43 @@ Reason:
 Risk:
 
 - The countdown is computed from the server clock at request time. Values can change between requests and may differ from a browser-side clock near day boundaries.
+
+## KWP Form Submission Detail Attachment URLs
+
+Endpoint:
+
+- `GET /api/v1/kwp-form-submissions/kwp01/:id`
+- `GET /api/v1/kwp-form-submissions/kwp02/:id`
+- `GET /api/v1/kwp-form-submissions/kwp04/:id`
+
+Code:
+
+- `backend/src/modules/kwp-form-submissions/kwp-form-submissions.repository.ts`
+- `backend/src/modules/kwp-form-submissions/kwp-form-attachments.service.ts`
+- `backend/src/modules/kwp-form-submissions/kwp-form-submissions.controller.ts`
+
+### `measurementItems[].attachments[].fileUrl`
+
+Source:
+
+- `kwp_form_attachments.storage_path`
+- `PUBLIC_BASE_URL` when configured
+- request protocol/host when `PUBLIC_BASE_URL` is not configured
+- `UPLOAD_PUBLIC_PATH`
+
+Logic:
+
+- The database stores the file location in `storage_path`, for example `kwp/form-attachments/2026/07/13-lab-report.pdf`.
+- The detail API returns `fileUrl` only when `storage_path` is present.
+- `fileUrl` is built as `<baseUrl><UPLOAD_PUBLIC_PATH>/<encoded storage_path>`.
+- `baseUrl` comes from `PUBLIC_BASE_URL`; if that env value is empty, the controller derives it from the incoming request protocol and host.
+- If `storage_path` is already stored with a leading slash or starts with `UPLOAD_PUBLIC_PATH`, the helper strips that prefix before building the public URL to avoid duplicated paths such as `/uploads/uploads/...`.
+- Path parts are URL-encoded before joining.
+
+Reason:
+
+- Frontend detail pages need a direct URL to preview/download uploaded evidence while the database remains storage-backend neutral.
+
+Risk:
+
+- If `PUBLIC_BASE_URL`, reverse-proxy headers, or `UPLOAD_PUBLIC_PATH` are misconfigured, the returned URL can point to the wrong host/path even though the stored file exists.

@@ -10,8 +10,21 @@ import {
   createKwp02SubmissionSchema,
   createKwp04SubmissionSchema,
 } from './kwp-form-submissions.validator';
+import type { KwpFormSubmissionDetailType } from './kwp-form-submissions.types';
 
 export const kwpFormSubmissionsController = {
+  async getKwp01ById(req: Request, res: Response, next: NextFunction): Promise<void> {
+    await getById(req, res, next, 'KWP01');
+  },
+
+  async getKwp02ById(req: Request, res: Response, next: NextFunction): Promise<void> {
+    await getById(req, res, next, 'KWP02');
+  },
+
+  async getKwp04ById(req: Request, res: Response, next: NextFunction): Promise<void> {
+    await getById(req, res, next, 'KWP04');
+  },
+
   async uploadAttachment(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       requireActorUserId(req);
@@ -88,6 +101,33 @@ export const kwpFormSubmissionsController = {
     }
   },
 };
+
+async function getById(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+  formType: KwpFormSubmissionDetailType,
+): Promise<void> {
+  try {
+    const actorUserId = requireActorUserId(req);
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      throw new BadRequestError('KWP form submission id must be a positive integer');
+    }
+
+    const result = await kwpFormSubmissionsService.getById(id, {
+      actorUserId,
+      formType,
+      scope: getScope(req, 'kwp_forms:view'),
+      regionalAccess: req.user?.regionalAccess ?? undefined,
+      publicBaseUrl: getPublicBaseUrl(req),
+      publicPath: env.UPLOAD_PUBLIC_PATH,
+    });
+    res.status(StatusCodes.OK).json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+}
 
 function requireActorUserId(req: Request): number {
   const actorUserId = req.user?.id;

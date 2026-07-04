@@ -6,7 +6,10 @@ Base URL: `/api/v1/kwp-form-submissions`
 
 Auth: `Authorization: Bearer <access_token>`
 
-Permission: `kwp_forms:edit`
+Permission:
+
+- Create/upload: `kwp_forms:edit`
+- Read detail: `kwp_forms:view`
 
 ## 0. Upload KWP attachment
 
@@ -330,6 +333,221 @@ Location: /api/v1/kwp-form-reports/requests/13
 | token ไม่มี permission `kwp_forms:edit` | `403` | user ไม่มีสิทธิ์บันทึกแบบ กวภ. |
 | ผู้ประกอบการ scope `OWN_FACTORY` ยื่นโรงงานที่ไม่ได้รับสิทธิ์ | `403` | backend ไม่อนุญาตให้ยื่นแทนโรงงานอื่น |
 | payload ไม่ถูกต้อง | `400` | validation error เช่นไม่มี `measurementItems`, วันที่ไม่ใช่ `YYYY-MM-DD`, หรือไฟล์แนบไม่มี `attachmentType`/`originalFileName` |
+
+## 4. Get KWP submission detail
+
+ดึงข้อมูลแบบ กวภ.01, กวภ.02, หรือ กวภ.04 ตาม `id` เพื่อเปิดหน้ารายละเอียด/preview ข้อมูลที่เคยยื่นไว้ ถ้าเป็นแบบที่มีไฟล์แนบ backend จะคืน `attachments[].fileUrl` สำหรับเปิดดูหรือดาวน์โหลดไฟล์ได้จาก `UPLOAD_PUBLIC_PATH`
+
+```http
+GET /api/v1/kwp-form-submissions/kwp01/:id
+GET /api/v1/kwp-form-submissions/kwp02/:id
+GET /api/v1/kwp-form-submissions/kwp04/:id
+```
+
+Permission: `kwp_forms:view`
+
+### Path parameters
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | number | Yes | `kwp_form_submissions.id` ต้องเป็น positive integer |
+
+### Response: KWP01
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 12,
+    "requestNo": "KWP-69-00012",
+    "form": "กวภ.01",
+    "formType": "KWP01",
+    "status": "SUBMITTED",
+    "submittedAt": "2026-07-04T08:00:00.000Z",
+    "createdAt": "2026-07-04T08:00:00.000Z",
+    "updatedAt": "2026-07-04T08:00:00.000Z",
+    "factoryId": "FID-001",
+    "factoryName": "บริษัท ทดสอบ จำกัด",
+    "factoryRegistrationNo": "10190000225448",
+    "factoryAddress": "9 หมู่ 9",
+    "industryType": "10100 / 3",
+    "connectedPointId": 8,
+    "pointCode": "S0001",
+    "pointName": "ปล่องระบาย A",
+    "pointType": "STACK",
+    "productionStack": "ปล่อง A",
+    "primaryFuel": "ก๊าซธรรมชาติ",
+    "secondaryFuel": "น้ำมันเตา",
+    "combustionSystem": "ระบบปิด",
+    "productionCapacity": "100",
+    "productionCapacityUnit": "ตัน/วัน",
+    "contactName": "สมชาย ทดสอบ",
+    "contactPhone": "0812345678",
+    "contactEmail": "operator@example.com",
+    "reporterName": "สมชาย ทดสอบ",
+    "reporterPosition": "ผู้จัดการสิ่งแวดล้อม",
+    "issueReport": {
+      "issueReason": "เครื่องมือหรือเครื่องอุปกรณ์พิเศษขัดข้อง",
+      "reasonDetail": "เครื่องวิเคราะห์ก๊าซไม่สามารถส่งข้อมูลได้",
+      "problemDate": "2026-07-01",
+      "expectedDoneDate": "2026-07-05",
+      "totalDays": 5,
+      "correctiveAction": "ซ่อมบำรุงเครื่องมือและตรวจสอบระบบรับส่งข้อมูล",
+      "unreportedParameters": ["NOx (ppm)", "SO2 (ppm)"]
+    }
+  }
+}
+```
+
+### Response: KWP02
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 13,
+    "requestNo": "KWP-69-00013",
+    "form": "กวภ.02",
+    "formType": "KWP02",
+    "status": "SUBMITTED",
+    "submittedAt": "2026-07-04T08:15:00.000Z",
+    "createdAt": "2026-07-04T08:15:00.000Z",
+    "updatedAt": "2026-07-04T08:15:00.000Z",
+    "factoryId": "FID-001",
+    "factoryName": "บริษัท ทดสอบ จำกัด",
+    "factoryRegistrationNo": "10190000225448",
+    "factoryAddress": "9 หมู่ 9",
+    "industryType": "10100 / 3",
+    "connectedPointId": 8,
+    "pointCode": "S0001",
+    "pointName": "ปล่องระบาย A",
+    "pointType": "STACK",
+    "productionStack": "ปล่อง A",
+    "primaryFuel": "ก๊าซธรรมชาติ",
+    "secondaryFuel": "น้ำมันเตา",
+    "combustionSystem": "ระบบปิด",
+    "productionCapacity": "100",
+    "productionCapacityUnit": "ตัน/วัน",
+    "contactName": "สมชาย ทดสอบ",
+    "contactPhone": "0812345678",
+    "contactEmail": "operator@example.com",
+    "reporterName": "สมชาย ทดสอบ",
+    "reporterPosition": "ผู้จัดการสิ่งแวดล้อม",
+    "measurementItems": [
+      {
+        "id": 31,
+        "pollutant": "NOx (ppm)",
+        "sampleDate": "2026-07-01",
+        "measuredValue": "110.25",
+        "numericValue": 110.25,
+        "unit": "ppm",
+        "laboratoryNo": "LAB-001",
+        "reportNo": "RPT-001",
+        "method": "USEPA Method 7E",
+        "attachments": [
+          {
+            "id": 51,
+            "attachmentType": "LAB_REPORT",
+            "originalFileName": "lab-report.pdf",
+            "storedFileName": "13-lab-report.pdf",
+            "mimeType": "application/pdf",
+            "fileSize": 880000,
+            "storagePath": "kwp/form-attachments/2026/07/13-lab-report.pdf",
+            "fileUrl": "https://d-poms.diw.go.th/uploads/kwp/form-attachments/2026/07/13-lab-report.pdf",
+            "uploadedAt": "2026-07-04T08:15:00.000Z",
+            "uploadedBy": 42
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+### Response: KWP04
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 14,
+    "requestNo": "KWP-69-00014",
+    "form": "กวภ.04",
+    "formType": "KWP04",
+    "status": "SUBMITTED",
+    "submittedAt": "2026-07-04T08:30:00.000Z",
+    "createdAt": "2026-07-04T08:30:00.000Z",
+    "updatedAt": "2026-07-04T08:30:00.000Z",
+    "factoryId": "FID-001",
+    "factoryName": "บริษัท ทดสอบ จำกัด",
+    "factoryRegistrationNo": "10190000225448",
+    "factoryAddress": "9 หมู่ 9",
+    "industryType": "10100 / 3",
+    "connectedPointId": 8,
+    "pointCode": "S0001",
+    "pointName": "ปล่องระบาย A",
+    "pointType": "STACK",
+    "productionStack": "ปล่อง A",
+    "primaryFuel": "ก๊าซธรรมชาติ",
+    "secondaryFuel": "น้ำมันเตา",
+    "combustionSystem": "ระบบปิด",
+    "productionCapacity": "100",
+    "productionCapacityUnit": "ตัน/วัน",
+    "contactName": "สมชาย ทดสอบ",
+    "contactPhone": "0812345678",
+    "contactEmail": "operator@example.com",
+    "reporterName": "สมชาย ทดสอบ",
+    "reporterPosition": "ผู้จัดการสิ่งแวดล้อม",
+    "measurementItems": [
+      {
+        "id": 41,
+        "pollutant": "CO (ppm)",
+        "sampleDate": "2026-07-02",
+        "measuredValue": "12.5",
+        "numericValue": 12.5,
+        "unit": "ppm",
+        "laboratoryNo": "LAB-004",
+        "reportNo": "RPT-004",
+        "method": "USEPA Method 10",
+        "attachments": [
+          {
+            "id": 61,
+            "attachmentType": "LAB_REPORT",
+            "originalFileName": "kwp04-lab-report.pdf",
+            "storedFileName": "14-kwp04-lab-report.pdf",
+            "mimeType": "application/pdf",
+            "fileSize": 940000,
+            "storagePath": "kwp/form-attachments/2026/07/14-kwp04-lab-report.pdf",
+            "fileUrl": "https://d-poms.diw.go.th/uploads/kwp/form-attachments/2026/07/14-kwp04-lab-report.pdf",
+            "uploadedAt": "2026-07-04T08:30:00.000Z",
+            "uploadedBy": 42
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+### Data source
+
+| Response field | Source |
+| --- | --- |
+| Common submission fields | `kwp_form_submissions` |
+| `issueReport` | `kwp01_issue_reports` + `kwp01_unreported_parameters` |
+| `measurementItems` | `kwp_emission_measurement_items` |
+| `measurementItems[].attachments` | `kwp_form_attachments` where `related_table = "kwp_emission_measurement_items"` |
+| `attachments[].fileUrl` | Derived from `PUBLIC_BASE_URL` or request host + `UPLOAD_PUBLIC_PATH` + `storage_path` |
+
+### Error behavior
+
+| Case | HTTP status | Meaning |
+| --- | --- | --- |
+| ไม่ส่ง token หรือ token ไม่ถูกต้อง | `401` | ต้อง login ก่อน |
+| token ไม่มี permission `kwp_forms:view` | `403` | user ไม่มีสิทธิ์ดูรายละเอียดแบบ กวภ. |
+| `id` ไม่ใช่ positive integer | `400` | path parameter ไม่ถูกต้อง |
+| ไม่พบรายการ, รายการถูกลบ, เรียก path ผิด form เช่น `/kwp02/:id` แต่ข้อมูลเป็น `KWP01`, หรืออยู่นอก scope | `404` | ไม่คืนข้อมูลให้ผู้ใช้ |
+| เรียก path กลางเดิม `/api/v1/kwp-form-submissions/:id` | `404` | ปิด path กลางแล้ว ให้ใช้ path แยกตาม form type |
 
 ## 3. Create KWP04 submission
 

@@ -4,6 +4,7 @@ import { signAccessToken } from '../../src/shared/utils/jwt';
 
 jest.mock('../../src/modules/kwp-form-submissions/kwp-form-submissions.service', () => ({
   kwpFormSubmissionsService: {
+    getById: jest.fn(),
     createKwp01: jest.fn(),
     createKwp02: jest.fn(),
     createKwp04: jest.fn(),
@@ -60,6 +61,7 @@ describe('KWP form submission routes', () => {
       measurementItemCount: 2,
       attachmentCount: 3,
     });
+    mockedService.getById.mockResolvedValue(kwp02DetailResponse());
     mockSaveKwpAttachment.mockResolvedValue({
       originalFileName: 'lab-report.pdf',
       storedFileName: 'mock-lab-report.pdf',
@@ -163,6 +165,112 @@ describe('KWP form submission routes', () => {
 
     expect(response.status).toBe(403);
     expect(mockedService.createKwp01).not.toHaveBeenCalled();
+  });
+
+  it('gets submitted KWP01 detail with issue report and unreported parameters', async () => {
+    mockedService.getById.mockResolvedValueOnce(kwp01DetailResponse());
+    const app = createApp();
+
+    const response = await request(app)
+      .get('/api/v1/kwp-form-submissions/kwp01/12')
+      .set('Authorization', `Bearer ${operatorViewToken()}`);
+
+    expect(response.status).toBe(200);
+    expect(mockedService.getById).toHaveBeenCalledWith(12, {
+      actorUserId: 42,
+      scope: 'OWN_FACTORY',
+      regionalAccess: undefined,
+      publicBaseUrl: 'http://d-poms.diw.go.th',
+      publicPath: '/uploads',
+      formType: 'KWP01',
+    });
+    expect(response.body).toEqual({
+      success: true,
+      data: kwp01DetailResponse(),
+    });
+  });
+
+  it('gets submitted KWP02 detail with measurement rows and file URLs', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .get('/api/v1/kwp-form-submissions/kwp02/13')
+      .set('Authorization', `Bearer ${operatorViewToken()}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toMatchObject({
+      id: 13,
+      formType: 'KWP02',
+      form: 'กวภ.02',
+      measurementItems: [
+        {
+          pollutant: 'NOx (ppm)',
+          attachments: [
+            {
+              originalFileName: 'lab-report.pdf',
+              fileUrl:
+                'http://localhost:3000/uploads/kwp/form-attachments/2026/07/13-lab-report.pdf',
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  it('gets submitted KWP04 detail with measurement rows and file URLs', async () => {
+    mockedService.getById.mockResolvedValueOnce({
+      ...kwp02DetailResponse(),
+      id: 14,
+      requestNo: 'KWP-69-00014',
+      form: 'กวภ.04',
+      formType: 'KWP04',
+    });
+    const app = createApp();
+
+    const response = await request(app)
+      .get('/api/v1/kwp-form-submissions/kwp04/14')
+      .set('Authorization', `Bearer ${operatorViewToken()}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toMatchObject({
+      id: 14,
+      formType: 'KWP04',
+      form: 'กวภ.04',
+      measurementItems: [
+        {
+          pollutant: 'NOx (ppm)',
+          attachments: [
+            {
+              attachmentType: 'LAB_REPORT',
+              fileUrl:
+                'http://localhost:3000/uploads/kwp/form-attachments/2026/07/13-lab-report.pdf',
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  it('rejects users without KWP view permission for detail reads', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .get('/api/v1/kwp-form-submissions/kwp02/13')
+      .set('Authorization', `Bearer ${tokenWithoutKwpEditPermission()}`);
+
+    expect(response.status).toBe(403);
+    expect(mockedService.getById).not.toHaveBeenCalled();
+  });
+
+  it('does not expose the generic KWP submission detail route anymore', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .get('/api/v1/kwp-form-submissions/13')
+      .set('Authorization', `Bearer ${operatorViewToken()}`);
+
+    expect(response.status).toBe(404);
+    expect(mockedService.getById).not.toHaveBeenCalled();
   });
 
   it('creates a submitted KWP02 form with measurement rows and file metadata', async () => {
@@ -419,13 +527,109 @@ function operatorToken(): string {
   });
 }
 
+function operatorViewToken(): string {
+  return signAccessToken({
+    sub: '42',
+    userType: 'operator',
+    roles: ['factory_operator'],
+    scopes: {
+      'kwp_forms:view': 'OWN_FACTORY',
+    },
+  });
+}
+
 function tokenWithoutKwpEditPermission(): string {
   return signAccessToken({
     sub: '7',
     userType: 'officer',
     roles: ['public_user'],
-    scopes: {
-      'kwp_forms:view': 'ALL',
-    },
+    scopes: {},
   });
+}
+
+function kwp01DetailResponse() {
+  return {
+    ...commonDetailFields(),
+    id: 12,
+    requestNo: 'KWP-69-00012',
+    form: 'กวภ.01' as const,
+    formType: 'KWP01' as const,
+    status: 'SUBMITTED',
+    submittedAt: '2026-07-04T08:00:00.000Z',
+    issueReport: {
+      issueReason: 'เครื่องมือหรือเครื่องอุปกรณ์พิเศษขัดข้อง' as const,
+      reasonDetail: 'เครื่องวิเคราะห์ก๊าซไม่สามารถส่งข้อมูลได้',
+      problemDate: '2026-07-01',
+      expectedDoneDate: '2026-07-05',
+      totalDays: 5,
+      correctiveAction: 'ซ่อมบำรุงเครื่องมือและตรวจสอบระบบรับส่งข้อมูล',
+      unreportedParameters: ['NOx (ppm)', 'SO2 (ppm)'],
+    },
+  };
+}
+
+function kwp02DetailResponse() {
+  return {
+    ...commonDetailFields(),
+    id: 13,
+    requestNo: 'KWP-69-00013',
+    form: 'กวภ.02' as const,
+    formType: 'KWP02' as const,
+    status: 'SUBMITTED',
+    submittedAt: '2026-07-04T08:15:00.000Z',
+    measurementItems: [
+      {
+        id: 31,
+        pollutant: 'NOx (ppm)',
+        sampleDate: '2026-07-01',
+        measuredValue: '110.25',
+        numericValue: 110.25,
+        unit: 'ppm',
+        laboratoryNo: 'LAB-001',
+        reportNo: 'RPT-001',
+        method: 'USEPA Method 7E',
+        attachments: [
+          {
+            id: 51,
+            attachmentType: 'LAB_REPORT',
+            originalFileName: 'lab-report.pdf',
+            storedFileName: '13-lab-report.pdf',
+            mimeType: 'application/pdf',
+            fileSize: 880000,
+            storagePath: 'kwp/form-attachments/2026/07/13-lab-report.pdf',
+            fileUrl: 'http://localhost:3000/uploads/kwp/form-attachments/2026/07/13-lab-report.pdf',
+            uploadedAt: '2026-07-04T08:15:00.000Z',
+            uploadedBy: 42,
+          },
+        ],
+      },
+    ],
+  };
+}
+
+function commonDetailFields() {
+  return {
+    createdAt: '2026-07-04T08:00:00.000Z',
+    updatedAt: '2026-07-04T08:00:00.000Z',
+    factoryId: 'FID-001',
+    factoryName: 'บริษัท ทดสอบ จำกัด',
+    factoryRegistrationNo: '10190000225448',
+    factoryAddress: '9 หมู่ 9',
+    industryType: '10100 / 3',
+    connectedPointId: 8,
+    pointCode: 'S0001',
+    pointName: 'ปล่องระบาย A',
+    pointType: 'STACK',
+    productionStack: 'ปล่อง A',
+    primaryFuel: 'ก๊าซธรรมชาติ',
+    secondaryFuel: 'น้ำมันเตา',
+    combustionSystem: 'ระบบปิด',
+    productionCapacity: '100',
+    productionCapacityUnit: 'ตัน/วัน',
+    contactName: 'สมชาย ทดสอบ',
+    contactPhone: '0812345678',
+    contactEmail: 'operator@example.com',
+    reporterName: 'สมชาย ทดสอบ',
+    reporterPosition: 'ผู้จัดการสิ่งแวดล้อม',
+  };
 }

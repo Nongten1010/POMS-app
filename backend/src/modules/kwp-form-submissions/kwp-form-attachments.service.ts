@@ -101,15 +101,28 @@ function sanitizeOriginalFileName(value: string): string {
   return baseName || 'uploaded-file';
 }
 
-function buildPublicFileUrl(
+export function buildPublicFileUrl(
   publicBaseUrl: string,
   publicPath: string,
   storagePath: string,
 ): string {
   const baseUrl = publicBaseUrl.replace(/\/+$/, '');
   const normalizedPublicPath = `/${publicPath.replace(/^\/+|\/+$/g, '')}`;
-  return `${baseUrl}${normalizedPublicPath}/${storagePath
+  const normalizedStoragePath = normalizeStoredPathForPublicUrl(storagePath, normalizedPublicPath);
+  return `${baseUrl}${normalizedPublicPath}/${normalizedStoragePath
     .split('/')
     .map((part) => encodeURIComponent(part))
     .join('/')}`;
+}
+
+function normalizeStoredPathForPublicUrl(
+  storagePath: string,
+  normalizedPublicPath: string,
+): string {
+  const trimmedPath = storagePath.replace(/^\/+/, '');
+  const publicPathPrefix = `${normalizedPublicPath.replace(/^\/+/, '')}/`;
+  if (trimmedPath.toLowerCase().startsWith(publicPathPrefix.toLowerCase())) {
+    return trimmedPath.slice(publicPathPrefix.length);
+  }
+  return trimmedPath;
 }

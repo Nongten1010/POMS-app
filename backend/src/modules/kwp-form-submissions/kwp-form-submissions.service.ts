@@ -5,9 +5,15 @@ import type {
   CreateKwp02SubmissionDTO,
   CreateKwp04SubmissionDTO,
   KwpFormSubmissionAccess,
+  KwpFormSubmissionDetailDTO,
+  KwpFormSubmissionReadAccess,
 } from './kwp-form-submissions.types';
 
 export const kwpFormSubmissionsService = {
+  getById(id: number, access: KwpFormSubmissionReadAccess): Promise<KwpFormSubmissionDetailDTO> {
+    return kwpFormSubmissionsRepository.getById(id, access);
+  },
+
   createKwp01(
     payload: CreateKwp01SubmissionDTO,
     access: KwpFormSubmissionAccess,

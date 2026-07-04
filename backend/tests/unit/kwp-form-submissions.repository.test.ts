@@ -1,11 +1,33 @@
 import { describe, expect, it } from '@jest/globals';
+import { buildPublicFileUrl } from '../../src/modules/kwp-form-submissions/kwp-form-attachments.service';
 import {
+  buildKwpFormSubmissionDetailQueryForTests,
   buildKwpFormSubmissionFactoryAccessQueryForTests,
   toKwp01InsertRecordsForTests,
   toKwp02InsertRecordsForTests,
 } from '../../src/modules/kwp-form-submissions/kwp-form-submissions.repository';
 
 describe('kwpFormSubmissionsRepository', () => {
+  it('builds public file URLs from relative storage paths', () => {
+    expect(
+      buildPublicFileUrl(
+        'https://d-poms.diw.go.th/',
+        '/uploads',
+        'kwp/form-attachments/2026/07/lab report.pdf',
+      ),
+    ).toBe('https://d-poms.diw.go.th/uploads/kwp/form-attachments/2026/07/lab%20report.pdf');
+  });
+
+  it('does not duplicate upload public path when stored metadata already includes it', () => {
+    expect(
+      buildPublicFileUrl(
+        'https://d-poms.diw.go.th/',
+        '/uploads',
+        '/uploads/kwp/form-attachments/2026/07/lab-report.pdf',
+      ),
+    ).toBe('https://d-poms.diw.go.th/uploads/kwp/form-attachments/2026/07/lab-report.pdf');
+  });
+
   it('limits OWN_FACTORY submission creation to factories assigned to the operator', () => {
     const sql = buildKwpFormSubmissionFactoryAccessQueryForTests('FID-001', {
       actorUserId: 42,
@@ -19,6 +41,26 @@ describe('kwpFormSubmissionsRepository', () => {
     expect(sql).toContain('[uj].[user_id]');
     expect(sql).toContain('[f].[fid]');
     expect(sql).toContain('[f].[code]');
+  });
+
+  it('limits KWP detail reads to requested submission id, supported forms, and operator factories', () => {
+    const sql = buildKwpFormSubmissionDetailQueryForTests(13, {
+      actorUserId: 42,
+      scope: 'OWN_FACTORY',
+      regionalAccess: { regions: ['ภาคตะวันออก'] },
+      publicBaseUrl: 'http://d-poms.diw.go.th',
+      publicPath: '/uploads',
+      formType: 'KWP02',
+    })
+      .toSQL()
+      .sql.toLowerCase();
+
+    expect(sql).toContain('from [kwp_form_submissions] as [s]');
+    expect(sql).toContain('[s].[id] = ?');
+    expect(sql).toContain('[s].[form_type] = ?');
+    expect(sql).toContain('join [user_juristics] as [uj]');
+    expect(sql).toContain('[uj].[user_id]');
+    expect(sql).toContain('[p].[region] in (?)');
   });
 
   it('maps KWP01 payload to submission, issue report, parameters, and initial history records', () => {
