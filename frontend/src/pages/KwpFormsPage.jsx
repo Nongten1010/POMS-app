@@ -57,6 +57,10 @@ const kwpFormReportsApiBaseUrl = import.meta.env.DEV
   ? '/api-proxy/v1/kwp-form-reports'
   : 'https://d-poms.diw.go.th/api/v1/kwp-form-reports'
 
+const connectedMeasurementPointsApiBaseUrl = import.meta.env.DEV
+  ? '/api-proxy/v1/connected-measurement-points'
+  : 'https://d-poms.diw.go.th/api/v1/connected-measurement-points'
+
 const operatorSubMenus = [
   { value: 'factories', label: 'รายชื่อโรงงาน' },
   { value: 'requests', label: 'รายการคำขอ' },
@@ -66,8 +70,6 @@ const officerSubMenus = [
   { value: 'requests', label: 'รายการคำขอ' },
   { value: 'statistics', label: 'สถิติข้อมูล' },
 ]
-
-const monitoringPointRowsByFactoryId = {}
 
 async function readKwpApiResponse(result, fallbackMessage) {
   const rawText = await result.text()
@@ -88,6 +90,28 @@ async function readKwpApiResponse(result, fallbackMessage) {
   }
 
   return response
+}
+
+function normalizeMonitoringPointDetailRows(rows) {
+  return Array.isArray(rows)
+    ? rows.map((row, index) => {
+        const parameterDetails = Array.isArray(row.parameterDetails)
+          ? row.parameterDetails.filter(Boolean).join(', ')
+          : ''
+
+        return {
+          id: row.pointCode ?? row.stationId ?? row.pointName ?? `monitoring-point-detail-${index + 1}`,
+          code: row.pointCode ?? '',
+          name: row.pointName ?? '',
+          type: row.pointType ?? '',
+          parameters: parameterDetails,
+        }
+      })
+    : []
+}
+
+function getMonitoringPointFactoryId(row) {
+  return row?.factoryId ?? row?.newRegistrationNo ?? row?.factoryRegistration ?? row?.id ?? ''
 }
 
 function normalizeKwpFactoryRows(rows) {
@@ -231,13 +255,16 @@ function FactoryActions({ row, onOpenMonitoringPoints }) {
   )
 }
 
-function RequestActions({ row, isOperator, onOpenDocument }) {
+function RequestActions({ row, isOperator, onOpenDocument, onOpenMonitoringPoints }) {
   const cannotProcess = ['ยื่นแบบสำเร็จ', 'รอโรงงานแก้ไข'].includes(row.status)
   const canOperatorModify = row.status === 'รอโรงงานแก้ไข'
 
   if (isOperator) {
     return (
       <Stack direction="row" spacing={1} sx={tableActionStackSx}>
+        <Button size="small" variant="outlined" onClick={() => onOpenMonitoringPoints?.(row)}>
+          รายละเอียดจุดตรวจวัด
+        </Button>
         <Button size="small" variant="outlined" onClick={() => onOpenDocument?.(row, 'view')}>
           เปิดดู
         </Button>
@@ -264,6 +291,9 @@ function RequestActions({ row, isOperator, onOpenDocument }) {
 
   return (
     <Stack direction="row" spacing={1} sx={tableActionStackSx}>
+      <Button size="small" variant="outlined" onClick={() => onOpenMonitoringPoints?.(row)}>
+        รายละเอียดจุดตรวจวัด
+      </Button>
       <Button size="small" variant="outlined" onClick={() => onOpenDocument?.(row, 'view')}>
         เปิดดู
       </Button>
@@ -343,10 +373,9 @@ function FormSelectionMenu({ factory, point, onSelectForm }) {
   )
 }
 
-function MonitoringPointDialog({ factory, open, onClose, onSelectForm }) {
-  const rows = factory ? (monitoringPointRowsByFactoryId[factory.id] ?? []) : []
-  const factoryTitle = factory?.factoryName
-    ? `รายการจุดตรวจวัด - ${factory.factoryName}${factory.monitoringPointCount ? ` โรงงาน ${factory.monitoringPointCount}` : ''}`
+function MonitoringPointDialog({ context, rows, loading, error, open, onClose, onSelectForm }) {
+  const factoryTitle = context?.factoryName
+    ? `รายการจุดตรวจวัด - ${context.factoryName}${context.monitoringPointCount ? ` (${context.monitoringPointCount} จุด)` : ''}`
     : 'รายการจุดตรวจวัด'
 
   return (
@@ -386,7 +415,21 @@ function MonitoringPointDialog({ factory, open, onClose, onSelectForm }) {
               </TableRow>
             </TableHead>
             <TableBody>
-              {rows.length > 0 ? (
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={5} align="center">
+                    <Typography variant="body2" color="text.secondary">
+                      กำลังโหลดข้อมูลจุดตรวจวัด...
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              ) : error ? (
+                <TableRow>
+                  <TableCell colSpan={5}>
+                    <Alert severity="error">{error}</Alert>
+                  </TableCell>
+                </TableRow>
+              ) : rows.length > 0 ? (
                 rows.map((row) => (
                   <TableRow key={row.id}>
                     <TableCell>{row.code}</TableCell>
@@ -394,7 +437,7 @@ function MonitoringPointDialog({ factory, open, onClose, onSelectForm }) {
                     <TableCell>{row.type}</TableCell>
                     <TableCell>{row.parameters}</TableCell>
                     <TableCell>
-                      <FormSelectionMenu factory={factory} point={row} onSelectForm={onSelectForm} />
+                      <FormSelectionMenu factory={context} point={row} onSelectForm={onSelectForm} />
                     </TableCell>
                   </TableRow>
                 ))
@@ -2967,7 +3010,7 @@ function Kwp05Form({ factory, point, calibrationRows, setCalibrationRows }) {
   )
 }
 
-function KwpFormBottomSheet({ form, open, onClose }) {
+function KwpFormBottomSheet({ form, open, onClose, onExited }) {
   const formRef = useRef(null)
   const [problemDate, setProblemDate] = useState(null)
   const [expectedDoneDate, setExpectedDoneDate] = useState(null)
@@ -3039,6 +3082,10 @@ function KwpFormBottomSheet({ form, open, onClose }) {
               borderTopLeftRadius: 2,
               borderTopRightRadius: 2,
             },
+          },
+          transition: {
+            direction: 'up',
+            onExited,
           },
         }}
       >
@@ -3190,7 +3237,7 @@ function getFactoryColumns(onOpenMonitoringPoints) {
   ]
 }
 
-function getRequestColumns(onOpenDocument, isOperator = false) {
+function getRequestColumns(onOpenDocument, onOpenMonitoringPoints, isOperator = false) {
   return [
     { field: 'factoryName', headerName: 'ชื่อโรงงาน/บริษัท', width: 240 },
     {
@@ -3210,10 +3257,17 @@ function getRequestColumns(onOpenDocument, isOperator = false) {
     {
       field: 'actions',
       headerName: 'จัดการ',
-      width: isOperator ? 250 : 190,
+      width: isOperator ? 330 : 280,
       sortable: false,
       filterable: false,
-      renderCell: (params) => <RequestActions row={params.row} isOperator={isOperator} onOpenDocument={onOpenDocument} />,
+      renderCell: (params) => (
+        <RequestActions
+          row={params.row}
+          isOperator={isOperator}
+          onOpenDocument={onOpenDocument}
+          onOpenMonitoringPoints={onOpenMonitoringPoints}
+        />
+      ),
     },
   ]
 }
@@ -3221,8 +3275,12 @@ function getRequestColumns(onOpenDocument, isOperator = false) {
 function KwpFormsPage({ userType = '', accessToken = '' }) {
   const isOperator = userType === 'operator'
   const availableSubMenus = isOperator ? operatorSubMenus : officerSubMenus
-  const [monitoringPointFactory, setMonitoringPointFactory] = useState(null)
+  const [monitoringPointContext, setMonitoringPointContext] = useState(null)
+  const [monitoringPointRows, setMonitoringPointRows] = useState([])
+  const [isLoadingMonitoringPoint, setIsLoadingMonitoringPoint] = useState(false)
+  const [monitoringPointError, setMonitoringPointError] = useState('')
   const [selectedForm, setSelectedForm] = useState(null)
+  const [isFormSheetOpen, setIsFormSheetOpen] = useState(false)
   const [requestDocument, setRequestDocument] = useState(null)
   const [selectedSubMenu, setSelectedSubMenu] = useState(() => (isOperator ? 'factories' : 'requests'))
   const [factoryRows, setFactoryRows] = useState([])
@@ -3299,6 +3357,49 @@ function KwpFormsPage({ userType = '', accessToken = '' }) {
     }
   }, [accessToken])
 
+  const loadMonitoringPointRows = useCallback(async (context, signal) => {
+    const factoryId = getMonitoringPointFactoryId(context)
+
+    if (!factoryId) {
+      setMonitoringPointRows([])
+      setMonitoringPointError('ไม่พบรหัสโรงงานสำหรับเรียกข้อมูลรายละเอียดจุดตรวจวัด')
+      return
+    }
+
+    if (!accessToken) {
+      setMonitoringPointRows([])
+      setMonitoringPointError('กรุณาเข้าสู่ระบบเพื่อโหลดรายละเอียดจุดตรวจวัด')
+      return
+    }
+
+    setIsLoadingMonitoringPoint(true)
+    setMonitoringPointError('')
+
+    try {
+      const result = await fetch(
+        `${connectedMeasurementPointsApiBaseUrl}/factories/${encodeURIComponent(factoryId)}`,
+        {
+          headers: {
+            Accept: 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+          },
+          signal,
+        },
+      )
+      const response = await readKwpApiResponse(result, 'โหลดรายละเอียดจุดตรวจวัดไม่สำเร็จ')
+      setMonitoringPointRows(normalizeMonitoringPointDetailRows(response?.data))
+    } catch (requestError) {
+      if (requestError.name !== 'AbortError') {
+        setMonitoringPointRows([])
+        setMonitoringPointError(requestError.message)
+      }
+    } finally {
+      if (!signal?.aborted) {
+        setIsLoadingMonitoringPoint(false)
+      }
+    }
+  }, [accessToken])
+
   useEffect(() => {
     if (effectiveSubMenu !== 'factories') {
       return
@@ -3329,20 +3430,67 @@ function KwpFormsPage({ userType = '', accessToken = '' }) {
     }
   }, [effectiveSubMenu, loadRequestRows])
 
-  const factoryColumns = useMemo(() => getFactoryColumns(setMonitoringPointFactory), [])
-  const requestColumns = useMemo(
-    () => getRequestColumns((row, mode) => {
-      if (isOperator && mode === 'edit') {
-        setSelectedForm(buildKwpEditForm(row))
-        return
-      }
+  useEffect(() => {
+    if (!monitoringPointContext) {
+      return
+    }
 
-      setRequestDocument({
-        mode,
-        data: buildKwpRequestPreviewData(row),
-      })
-    }, isOperator),
-    [isOperator],
+    const controller = new AbortController()
+    queueMicrotask(() => {
+      loadMonitoringPointRows(monitoringPointContext, controller.signal)
+    })
+
+    return () => {
+      controller.abort()
+    }
+  }, [loadMonitoringPointRows, monitoringPointContext])
+
+  const openMonitoringPointDialog = useCallback((row) => {
+    setMonitoringPointRows([])
+    setMonitoringPointError('')
+    setIsLoadingMonitoringPoint(false)
+    setMonitoringPointContext(row)
+  }, [])
+
+  const openFormBottomSheet = useCallback((form) => {
+    setSelectedForm(form)
+    setIsFormSheetOpen(true)
+  }, [])
+
+  const closeFormBottomSheet = useCallback(() => {
+    setIsFormSheetOpen(false)
+  }, [])
+
+  const clearClosedFormBottomSheet = useCallback(() => {
+    setSelectedForm(null)
+  }, [])
+
+  const closeMonitoringPointDialog = useCallback(() => {
+    setMonitoringPointRows([])
+    setMonitoringPointError('')
+    setIsLoadingMonitoringPoint(false)
+    setMonitoringPointContext(null)
+  }, [])
+
+  const factoryColumns = useMemo(() => getFactoryColumns(openMonitoringPointDialog), [openMonitoringPointDialog])
+  const requestColumns = useMemo(
+    () =>
+      getRequestColumns(
+        (row, mode) => {
+          if (isOperator && mode === 'edit') {
+            openFormBottomSheet(buildKwpEditForm(row))
+            return
+          }
+
+          setRequestDocument({
+            mode,
+            data: buildKwpRequestPreviewData(row),
+          })
+        },
+        openMonitoringPointDialog,
+        isOperator,
+      ),
+    [isOperator, openFormBottomSheet, openMonitoringPointDialog],
   )
   const table = useMemo(
     () =>
@@ -3520,19 +3668,23 @@ function KwpFormsPage({ userType = '', accessToken = '' }) {
         )}
       </Stack>
       <MonitoringPointDialog
-        open={Boolean(monitoringPointFactory)}
-        factory={monitoringPointFactory}
-        onClose={() => setMonitoringPointFactory(null)}
+        open={Boolean(monitoringPointContext)}
+        context={monitoringPointContext}
+        rows={monitoringPointRows}
+        loading={isLoadingMonitoringPoint}
+        error={monitoringPointError}
+        onClose={closeMonitoringPointDialog}
         onSelectForm={(form) => {
-          setSelectedForm(form)
-          setMonitoringPointFactory(null)
+          openFormBottomSheet(form)
+          setMonitoringPointContext(null)
         }}
       />
       <KwpFormBottomSheet
         key={selectedForm ? `${selectedForm.requestNo ?? 'new'}-${selectedForm.code ?? 'form'}-${selectedForm.mode ?? 'create'}` : 'empty-form'}
-        open={Boolean(selectedForm)}
+        open={isFormSheetOpen}
         form={selectedForm}
-        onClose={() => setSelectedForm(null)}
+        onClose={closeFormBottomSheet}
+        onExited={clearClosedFormBottomSheet}
       />
       <Kwp01PreviewDialog
         open={Boolean(requestDocument)}
