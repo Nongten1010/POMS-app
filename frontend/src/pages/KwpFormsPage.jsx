@@ -33,7 +33,6 @@ import {
   Typography,
 } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
-import DeleteIcon from '@mui/icons-material/Delete'
 import FileDownloadIcon from '@mui/icons-material/FileDownload'
 import HistoryIcon from '@mui/icons-material/History'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
@@ -57,6 +56,10 @@ const appBarHeight = {
 const kwpFormReportsApiBaseUrl = import.meta.env.DEV
   ? '/api-proxy/v1/kwp-form-reports'
   : 'https://d-poms.diw.go.th/api/v1/kwp-form-reports'
+
+const kwpFormSubmissionsApiBaseUrl = import.meta.env.DEV
+  ? '/api-proxy/v1/kwp-form-submissions'
+  : 'https://d-poms.diw.go.th/api/v1/kwp-form-submissions'
 
 const connectedMeasurementPointsApiBaseUrl = import.meta.env.DEV
   ? '/api-proxy/v1/connected-measurement-points'
@@ -727,8 +730,103 @@ function getFormText(formData, name) {
   return String(formData.get(name) ?? '').trim()
 }
 
+function getOptionalFormText(formData, name) {
+  const value = getFormText(formData, name)
+  return value || null
+}
+
 function formatThaiDateValue(value) {
   return value && dayjs(value).isValid() ? dayjs(value).format('DD/MM/BBBB') : ''
+}
+
+function formatIsoDateValue(value) {
+  return value && dayjs(value).isValid() ? dayjs(value).format('YYYY-MM-DD') : null
+}
+
+async function uploadKwpAttachmentFile(file, accessToken) {
+  if (!(file instanceof File)) {
+    return null
+  }
+
+  const uploadFormData = new FormData()
+  uploadFormData.append('file', file)
+
+  const result = await fetch(`${kwpFormSubmissionsApiBaseUrl}/attachments`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: uploadFormData,
+  })
+  const response = await readKwpApiResponse(result, 'อัปโหลดไฟล์แนบแบบ กวภ. ไม่สำเร็จ')
+  return response?.data ?? null
+}
+
+function buildKwpAttachmentPayload(uploadedAttachment, attachmentType) {
+  if (!uploadedAttachment) return null
+
+  return {
+    attachmentType,
+    originalFileName: uploadedAttachment.originalFileName,
+    storedFileName: uploadedAttachment.storedFileName ?? null,
+    mimeType: uploadedAttachment.mimeType ?? null,
+    fileSize: uploadedAttachment.fileSize ?? null,
+    storagePath: uploadedAttachment.storagePath ?? null,
+  }
+}
+
+async function buildKwp02SubmissionPayload(form, formElement, measurementRows, accessToken) {
+  const formData = formElement ? new FormData(formElement) : new FormData()
+  const factory = form?.factory ?? {}
+  const point = form?.point ?? {}
+  const connectedPointId = Number(point.connectedPointId)
+  const measurementItems = []
+
+  for (const row of measurementRows) {
+    const [samplingPhoto, labReport] = await Promise.all([
+      uploadKwpAttachmentFile(row.samplingPhotoFile, accessToken),
+      uploadKwpAttachmentFile(row.labReportFile, accessToken),
+    ])
+    const attachments = [
+      buildKwpAttachmentPayload(samplingPhoto, 'SAMPLING_PHOTO'),
+      buildKwpAttachmentPayload(labReport, 'LAB_REPORT'),
+    ].filter(Boolean)
+
+    measurementItems.push({
+      pollutant: row.pollutant,
+      sampleDate: formatIsoDateValue(row.sampleDate),
+      measuredValue: row.measuredValue || null,
+      unit: row.unit || null,
+      laboratoryNo: row.laboratoryNo || null,
+      reportNo: row.reportNo || null,
+      method: row.method || null,
+      attachments,
+    })
+  }
+
+  return {
+    factoryId: factory.factoryId ?? factory.id ?? factory.newRegistrationNo ?? '',
+    factoryName: factory.factoryName ?? '',
+    factoryRegistrationNo: factory.newRegistrationNo ?? null,
+    factoryAddress: factory.address ?? null,
+    industryType: getFactoryIndustryMainOrder(factory) || factory.industryType || null,
+    connectedPointId: Number.isInteger(connectedPointId) && connectedPointId > 0 ? connectedPointId : null,
+    pointCode: point.code ?? null,
+    pointName: point.name ?? null,
+    pointType: point.type ?? null,
+    productionStack: getOptionalFormText(formData, 'productionStack'),
+    primaryFuel: point.primaryFuel || getOptionalFormText(formData, 'primaryFuel'),
+    secondaryFuel: point.secondaryFuel || getOptionalFormText(formData, 'secondaryFuel'),
+    combustionSystem: getOptionalFormText(formData, 'combustionSystem'),
+    productionCapacity: getOptionalFormText(formData, 'productionCapacity'),
+    productionCapacityUnit: getOptionalFormText(formData, 'productionCapacityUnit'),
+    contactName: getOptionalFormText(formData, 'contactName'),
+    contactPhone: getOptionalFormText(formData, 'contactPhone'),
+    contactEmail: getOptionalFormText(formData, 'contactEmail'),
+    measurementItems,
+    reporterName: getOptionalFormText(formData, 'reporterName'),
+    reporterPosition: getOptionalFormText(formData, 'reporterPosition'),
+  }
 }
 
 function buildKwp01PreviewData(form, formElement, dates, unreportedParameters) {
@@ -1973,7 +2071,7 @@ function KwpStatusHistoryDialog({ open, history = [], onClose }) {
   )
 }
 
-function Kwp01PreviewDialog({ open, data, mode = 'submit', onClose }) {
+function Kwp01PreviewDialog({ open, data, mode = 'submit', submitting = false, submitError = '', onClose, onSubmit }) {
   const [statusHistoryOpen, setStatusHistoryOpen] = useState(false)
   const [revisionDialogOpen, setRevisionDialogOpen] = useState(false)
   const [revisionOfficerNote, setRevisionOfficerNote] = useState('')
@@ -2085,6 +2183,11 @@ function Kwp01PreviewDialog({ open, data, mode = 'submit', onClose }) {
           {data?.formType === 'kwp05' ? <Kwp05PaperDocument data={data} /> : null}
           {data && !['kwp02', 'kwp03', 'kwp04', 'kwp05'].includes(data.formType) ? <Kwp01PaperDocument data={data} /> : null}
         </DialogContent>
+        {submitError ? (
+          <Typography color="error" variant="body2" sx={{ px: 3, pt: 1, textAlign: 'center' }}>
+            {submitError}
+          </Typography>
+        ) : null}
         <DialogActions sx={{ justifyContent: 'center' }}>
           {mode === 'review' ? (
             <>
@@ -2130,8 +2233,8 @@ function Kwp01PreviewDialog({ open, data, mode = 'submit', onClose }) {
               <Button variant="outlined" color="inherit" onClick={closePreviewDialog}>
                 ยกเลิก
               </Button>
-              <Button variant="contained">
-                ยืนยันการส่งแบบฟอร์ม
+              <Button variant="contained" disabled={submitting} onClick={onSubmit}>
+                {submitting ? 'กำลังส่งแบบฟอร์ม' : 'ยืนยันการส่งแบบฟอร์ม'}
               </Button>
             </>
           )}
@@ -2189,22 +2292,19 @@ const emptyEmissionMeasurement = {
   laboratoryNo: '',
   reportNo: '',
   method: '',
+  samplingPhotoFile: null,
   samplingPhotoFileName: '',
   samplingPhotoFileUrl: '',
   samplingPhotoFileType: '',
+  labReportFile: null,
   labReportFileName: '',
   labReportFileUrl: '',
   labReportFileType: '',
 }
 
-function MultiFileInputButton({ label, files, onChange, maxFiles = 5 }) {
-  const [fileError, setFileError] = useState('')
-  const removeFile = (fileIndex) => {
-    onChange(files.filter((_, index) => index !== fileIndex))
-  }
-
+function SingleFileInputButton({ label, fileName, onChange }) {
   return (
-    <Stack spacing={1}>
+    <Stack spacing={0.75}>
       <Button component="label" size="small" variant="outlined">
         แนบไฟล์
         <input
@@ -2212,70 +2312,15 @@ function MultiFileInputButton({ label, files, onChange, maxFiles = 5 }) {
           type="file"
           accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
           onChange={(event) => {
-            const selectedFile = event.target.files?.[0]
+            const selectedFile = event.target.files?.[0] ?? null
             event.target.value = ''
-
-            if (!selectedFile) {
-              return
-            }
-
-            if (files.length >= maxFiles) {
-              setFileError(`แนบไฟล์ได้ไม่เกิน ${maxFiles} ไฟล์`)
-              return
-            }
-
-            if (selectedFile.size > 5 * 1024 * 1024) {
-              setFileError('ไฟล์ต้องมีขนาดไม่เกิน 5 MB')
-              return
-            }
-
-            setFileError('')
-            onChange([...files, selectedFile])
+            onChange(selectedFile)
           }}
         />
       </Button>
-      <Typography variant="caption" color="text.secondary">
-        {label}
+      <Typography variant="caption" color={fileName ? 'text.primary' : 'text.secondary'}>
+        {fileName || label}
       </Typography>
-      {fileError ? (
-        <Typography variant="caption" color="error">
-          {fileError}
-        </Typography>
-      ) : null}
-      <TableContainer sx={{ border: 1, borderColor: 'divider', overflowX: 'auto' }}>
-        <Table size="small" sx={borderedTableSx}>
-          <TableHead>
-            <TableRow>
-              <TableCell sx={{ fontWeight: 700, bgcolor: '#f8fafc', width: 80 }}>ลำดับ</TableCell>
-              <TableCell sx={{ fontWeight: 700, bgcolor: '#f8fafc' }}>{label}</TableCell>
-              <TableCell aria-label="จัดการ" sx={{ bgcolor: '#f8fafc', width: 72 }} />
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {files.length > 0 ? (
-              files.map((file, index) => (
-                <TableRow key={`${file.name}-${file.lastModified}-${index}`}>
-                  <TableCell>{index + 1}</TableCell>
-                  <TableCell>{file.name}</TableCell>
-                  <TableCell align="center">
-                    <IconButton size="small" color="error" aria-label="ลบไฟล์" onClick={() => removeFile(index)}>
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell colSpan={3} align="center">
-                  <Typography variant="body2" color="text.secondary">
-                    ยังไม่มีไฟล์แนบ
-                  </Typography>
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
     </Stack>
   )
 }
@@ -2301,6 +2346,15 @@ function EmissionMeasurementDialogContent({ value, parameterOptions, onClose, on
 
   const updateForm = (field, nextValue) => {
     setForm((current) => ({ ...current, [field]: nextValue }))
+  }
+  const updateFile = (fieldPrefix, file) => {
+    setForm((current) => ({
+      ...current,
+      [`${fieldPrefix}File`]: file,
+      [`${fieldPrefix}FileName`]: file?.name ?? '',
+      [`${fieldPrefix}FileType`]: file?.type ?? '',
+      [`${fieldPrefix}FileUrl`]: '',
+    }))
   }
 
   return (
@@ -2379,6 +2433,20 @@ function EmissionMeasurementDialogContent({ value, parameterOptions, onClose, on
                 fullWidth
               />
             </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <SingleFileInputButton
+                label="ภาพถ่ายขณะเก็บตัวอย่าง (JPG/PNG/PDF ไม่เกิน 5 MB)"
+                fileName={form.samplingPhotoFileName}
+                onChange={(file) => updateFile('samplingPhoto', file)}
+              />
+            </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <SingleFileInputButton
+                label="รายงานผลจากห้องปฏิบัติการ (JPG/PNG/PDF ไม่เกิน 5 MB)"
+                fileName={form.labReportFileName}
+                onChange={(file) => updateFile('labReport', file)}
+              />
+            </Grid>
           </Grid>
         </LocalizationProvider>
       </DialogContent>
@@ -2397,8 +2465,6 @@ function EmissionMeasurementDialogContent({ value, parameterOptions, onClose, on
 function Kwp02Form({ factory, point, measurementRows, setMeasurementRows }) {
   const [combustionSystem, setCombustionSystem] = useState('')
   const [editingMeasurement, setEditingMeasurement] = useState(null)
-  const [samplingPhotoFiles, setSamplingPhotoFiles] = useState([])
-  const [labReportFiles, setLabReportFiles] = useState([])
   const pollutantOptions = point?.parameterDetails ?? []
   const primaryFuel = point?.primaryFuel ?? ''
   const secondaryFuel = point?.secondaryFuel ?? ''
@@ -2561,25 +2627,6 @@ function Kwp02Form({ factory, point, measurementRows, setMeasurementRows }) {
               หรือห้องปฏิบัติการวิเคราะห์เอกชนที่ขึ้นทะเบียนกับกรมโรงงานอุตสาหกรรม
             </Alert>
           </Stack>
-        </SectionPaper>
-
-        <SectionPaper title="เอกสารแนบ">
-          <Grid container spacing={2}>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <MultiFileInputButton
-                label="ภาพถ่ายขณะเก็บตัวอย่าง (JPG/PNG/PDF ไม่เกิน 5 MB)"
-                files={samplingPhotoFiles}
-                onChange={setSamplingPhotoFiles}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <MultiFileInputButton
-                label="รายงานผลจากห้องปฏิบัติการ (JPG/PNG/PDF ไม่เกิน 5 MB)"
-                files={labReportFiles}
-                onChange={setLabReportFiles}
-              />
-            </Grid>
-          </Grid>
         </SectionPaper>
 
         <SectionPaper title="ผู้ประกอบกิจการโรงงานหรือผู้รับมอบอำนาจ (ผู้จัดทำรายงาน)">
@@ -3081,7 +3128,7 @@ function Kwp05Form({ factory, point, calibrationRows, setCalibrationRows }) {
   )
 }
 
-function KwpFormBottomSheet({ form, open, onClose, onExited }) {
+function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubmitted }) {
   const formRef = useRef(null)
   const [problemDate, setProblemDate] = useState(null)
   const [expectedDoneDate, setExpectedDoneDate] = useState(null)
@@ -3093,6 +3140,8 @@ function KwpFormBottomSheet({ form, open, onClose, onExited }) {
   const [wpmsFailedParameters, setWpmsFailedParameters] = useState([])
   const [calibrationRows, setCalibrationRows] = useState([])
   const [previewData, setPreviewData] = useState(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
   const headerCode = form?.code ?? form?.title?.split(' ')?.[0] ?? ''
   const headerTitle = form?.titleText ?? form?.title?.replace(`${headerCode} `, '') ?? ''
   const headerDescription = form?.description ?? ''
@@ -3100,6 +3149,8 @@ function KwpFormBottomSheet({ form, open, onClose, onExited }) {
   const isEditMode = form?.mode === 'edit'
 
   const openPreview = () => {
+    setSubmitError('')
+
     if (form?.title?.startsWith('กวภ.05')) {
       setPreviewData(buildKwp05PreviewData(form, formRef.current, calibrationRows))
       return
@@ -3132,6 +3183,47 @@ function KwpFormBottomSheet({ form, open, onClose, onExited }) {
         { problemDate, expectedDoneDate },
         unreportedParameters,
       ))
+    }
+  }
+
+  const submitKwp02 = async () => {
+    if (!accessToken) {
+      setSubmitError('กรุณาเข้าสู่ระบบเพื่อส่งแบบฟอร์ม')
+      return
+    }
+
+    if (!measurementRows.length) {
+      setSubmitError('กรุณาเพิ่มรายการตรวจวัดมลพิษอากาศจากปล่องระบายอย่างน้อย 1 รายการ')
+      return
+    }
+
+    setIsSubmitting(true)
+    setSubmitError('')
+
+    try {
+      const requestBody = await buildKwp02SubmissionPayload(
+        form,
+        formRef.current,
+        measurementRows,
+        accessToken,
+      )
+      const result = await fetch(`${kwpFormSubmissionsApiBaseUrl}/kwp02`, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify(requestBody),
+      })
+      await readKwpApiResponse(result, 'ส่งแบบ กวภ.02 ไม่สำเร็จ')
+      setPreviewData(null)
+      onSubmitted?.()
+      onClose?.()
+    } catch (requestError) {
+      setSubmitError(requestError.message || 'ส่งแบบ กวภ.02 ไม่สำเร็จ')
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -3281,7 +3373,10 @@ function KwpFormBottomSheet({ form, open, onClose, onExited }) {
       <Kwp01PreviewDialog
         open={Boolean(previewData)}
         data={previewData}
+        submitting={isSubmitting}
+        submitError={submitError}
         onClose={() => setPreviewData(null)}
+        onSubmit={previewData?.formType === 'kwp02' ? submitKwp02 : undefined}
       />
     </>
   )
@@ -3758,8 +3853,13 @@ function KwpFormsPage({ userType = '', accessToken = '' }) {
         }
         open={isFormSheetOpen}
         form={selectedForm}
+        accessToken={accessToken}
         onClose={closeFormBottomSheet}
         onExited={clearClosedFormBottomSheet}
+        onSubmitted={() => {
+          setSelectedSubMenu('requests')
+          loadRequestRows()
+        }}
       />
       <Kwp01PreviewDialog
         open={Boolean(requestDocument)}

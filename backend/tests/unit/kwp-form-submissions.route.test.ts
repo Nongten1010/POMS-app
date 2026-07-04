@@ -9,6 +9,20 @@ jest.mock('../../src/modules/kwp-form-submissions/kwp-form-submissions.service',
   },
 }));
 
+const mockSaveKwpAttachment = jest.fn<(...args: unknown[]) => Promise<unknown>>();
+
+jest.mock('../../src/modules/kwp-form-submissions/kwp-form-attachments.service', () => ({
+  MAX_KWP_ATTACHMENT_FILE_SIZE_BYTES: 5 * 1024 * 1024,
+  allowedKwpAttachmentFileTypes: new Map([
+    ['image/jpeg', new Set(['.jpg', '.jpeg'])],
+    ['image/png', new Set(['.png'])],
+    ['application/pdf', new Set(['.pdf'])],
+  ]),
+  createKwpAttachmentStorage: jest.fn(() => ({
+    save: mockSaveKwpAttachment,
+  })),
+}));
+
 import { createApp } from '../../src/app';
 import { kwpFormSubmissionsService } from '../../src/modules/kwp-form-submissions/kwp-form-submissions.service';
 
@@ -34,6 +48,46 @@ describe('KWP form submission routes', () => {
       submittedAt: '2026-07-04T08:15:00.000Z',
       measurementItemCount: 2,
       attachmentCount: 3,
+    });
+    mockSaveKwpAttachment.mockResolvedValue({
+      originalFileName: 'lab-report.pdf',
+      storedFileName: 'mock-lab-report.pdf',
+      mimeType: 'application/pdf',
+      fileSize: 1024,
+      storagePath: 'kwp/form-attachments/2026/07/mock-lab-report.pdf',
+      fileUrl: 'http://localhost:3000/uploads/kwp/form-attachments/2026/07/mock-lab-report.pdf',
+    });
+  });
+
+  it('uploads a KWP attachment and returns stored file metadata', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .post('/api/v1/kwp-form-submissions/attachments')
+      .set('Authorization', `Bearer ${operatorToken()}`)
+      .attach('file', Buffer.from('%PDF-1.4'), {
+        filename: 'lab-report.pdf',
+        contentType: 'application/pdf',
+      });
+
+    expect(response.status).toBe(201);
+    expect(mockSaveKwpAttachment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        originalName: 'lab-report.pdf',
+        mimeType: 'application/pdf',
+        size: expect.any(Number),
+      }),
+    );
+    expect(response.body).toEqual({
+      success: true,
+      data: {
+        originalFileName: 'lab-report.pdf',
+        storedFileName: 'mock-lab-report.pdf',
+        mimeType: 'application/pdf',
+        fileSize: 1024,
+        storagePath: 'kwp/form-attachments/2026/07/mock-lab-report.pdf',
+        fileUrl: 'http://localhost:3000/uploads/kwp/form-attachments/2026/07/mock-lab-report.pdf',
+      },
     });
   });
 

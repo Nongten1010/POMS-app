@@ -8,6 +8,48 @@ Auth: `Authorization: Bearer <access_token>`
 
 Permission: `kwp_forms:edit`
 
+## 0. Upload KWP attachment
+
+อัปโหลดไฟล์แนบของแบบ กวภ. เพื่อให้ได้ metadata สำหรับส่งต่อใน payload บันทึกฟอร์ม เช่น `measurementItems[].attachments[]` ของ กวภ.02
+
+```http
+POST /api/v1/kwp-form-submissions/attachments
+Content-Type: multipart/form-data
+```
+
+### Request body
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `file` | file | Yes | รองรับ `.jpg`, `.jpeg`, `.png`, `.pdf` ขนาดไม่เกิน 5 MB |
+
+### Response
+
+```http
+HTTP/1.1 201 Created
+```
+
+```json
+{
+  "success": true,
+  "data": {
+    "originalFileName": "lab-report.pdf",
+    "storedFileName": "8ddfb2e2-5f37-4398-b032-f9db1972df70.pdf",
+    "mimeType": "application/pdf",
+    "fileSize": 640000,
+    "storagePath": "kwp/form-attachments/2026/07/8ddfb2e2-5f37-4398-b032-f9db1972df70.pdf",
+    "fileUrl": "https://d-poms.diw.go.th/uploads/kwp/form-attachments/2026/07/8ddfb2e2-5f37-4398-b032-f9db1972df70.pdf"
+  }
+}
+```
+
+### Storage behavior
+
+- Backend รับไฟล์ด้วย `multer.memoryStorage()` เหมือน endpoint เอกสารของคำขอเชื่อมต่อ CEMS/WPMS
+- ไฟล์ถูกเก็บใต้ `UPLOAD_DIR/kwp/form-attachments/YYYY/MM/<uuid>.<ext>`
+- ไฟล์ถูกเสิร์ฟผ่าน static path `UPLOAD_PUBLIC_PATH`
+- Response `fileUrl` ใช้แสดง preview/download ฝั่ง frontend ได้ แต่การบันทึก กวภ.02 ใช้ `storagePath`, `storedFileName`, `originalFileName`, `mimeType`, และ `fileSize`
+
 ## 1. Create KWP01 submission
 
 บันทึกแบบ กวภ.01 เป็นสถานะ `SUBMITTED` ทันที และสร้างประวัติสถานะเริ่มต้นใน `kwp_form_status_history`
@@ -172,7 +214,7 @@ POST /api/v1/kwp-form-submissions/kwp02
 | `reporterName` | string\|null | No | ชื่อผู้จัดทำรายงาน |
 | `reporterPosition` | string\|null | No | ตำแหน่งผู้จัดทำรายงาน |
 
-> หมายเหตุ: endpoint นี้รับ metadata ของไฟล์แนบที่ถูกจัดเก็บแล้ว ไม่รับ binary multipart โดยตรงในรอบนี้
+> หมายเหตุ: frontend ต้องอัปโหลดไฟล์ผ่าน `POST /api/v1/kwp-form-submissions/attachments` ก่อน แล้วนำ metadata ที่ได้มาใส่ใน `measurementItems[].attachments[]`
 
 ### Example
 

@@ -2,6 +2,8 @@ import { NextFunction, Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
 import { env } from '../../config/env';
 import { getScope } from '../../shared/middlewares/authorize';
+import { BadRequestError } from '../../shared/errors/AppError';
+import { createKwpAttachmentStorage } from './kwp-form-attachments.service';
 import { kwpFormSubmissionsService } from './kwp-form-submissions.service';
 import {
   createKwp01SubmissionSchema,
@@ -9,6 +11,31 @@ import {
 } from './kwp-form-submissions.validator';
 
 export const kwpFormSubmissionsController = {
+  async uploadAttachment(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      requireActorUserId(req);
+      if (!req.file) {
+        throw new BadRequestError('Attachment file is required');
+      }
+
+      const storage = createKwpAttachmentStorage({
+        uploadDir: env.UPLOAD_DIR,
+        publicPath: env.UPLOAD_PUBLIC_PATH,
+        publicBaseUrl: getPublicBaseUrl(req),
+      });
+      const data = await storage.save({
+        buffer: req.file.buffer,
+        originalName: req.file.originalname,
+        mimeType: req.file.mimetype,
+        size: req.file.size,
+      });
+
+      res.status(StatusCodes.CREATED).json({ success: true, data });
+    } catch (err) {
+      next(err);
+    }
+  },
+
   async createKwp01(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const actorUserId = requireActorUserId(req);
@@ -48,4 +75,9 @@ function requireActorUserId(req: Request): number {
   const actorUserId = req.user?.id;
   if (!actorUserId) throw new Error('Authenticated user id is required');
   return actorUserId;
+}
+
+function getPublicBaseUrl(req: Request): string {
+  if (env.PUBLIC_BASE_URL) return env.PUBLIC_BASE_URL;
+  return `${req.protocol}://${req.get('host')}`;
 }
