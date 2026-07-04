@@ -5,7 +5,7 @@ import {
 } from '../../src/modules/kwp-form-reports/kwp-form-reports.repository';
 
 describe('kwpFormReportsRepository access filters', () => {
-  it('builds factory table data from POMS factories and limits operators to assigned juristics', () => {
+  it('builds factory table data from current connected points and limits operators to assigned juristics', () => {
     const sql = buildKwpFormFactoryQueryForTests({
       actorUserId: 42,
       scope: 'OWN_FACTORY',
@@ -15,9 +15,8 @@ describe('kwpFormReportsRepository access filters', () => {
 
     expect(sql).toContain('from [factories] as [f]');
     expect(sql).toContain('left join [eligible_factories] as [ef]');
-    expect(sql).toContain('left join [cems_wpms_connected_measurement_points] as [cp]');
-    expect(sql).toContain('exists (select');
-    expect(sql).toContain('from [cems_wpms_connection_requests] as [cr]');
+    expect(sql).toContain('inner join [cems_wpms_connected_measurement_points] as [cp]');
+    expect(sql).not.toContain('from [cems_wpms_connection_requests] as [cr]');
     expect(sql).toContain('join [user_juristics] as [uj]');
     expect(sql).toContain('[uj].[user_id]');
   });

@@ -10,7 +10,7 @@ Permission: `kwp_forms:view`
 
 ## 1. Operator factory table
 
-ผู้ประกอบการใช้ API นี้สำหรับตาราง **รายชื่อโรงงาน** โดย backend จำกัดข้อมูลตาม scope `OWN_FACTORY` ผ่าน `user_juristics` และแสดงเฉพาะโรงงานที่มีคำขอเชื่อมต่อใน `cems_wpms_connection_requests`
+ผู้ประกอบการใช้ API นี้สำหรับตาราง **รายชื่อโรงงาน** โดย backend จำกัดข้อมูลตาม scope `OWN_FACTORY` ผ่าน `user_juristics` และแสดงเฉพาะโรงงานที่มี POMS current data หรือมีจุดตรวจวัดที่เชื่อมต่อแล้วใน `cems_wpms_connected_measurement_points`
 
 ```http
 GET /api/v1/kwp-form-reports/factories
@@ -42,9 +42,10 @@ Response:
 
 Data source:
 
-- `factories` เป็นฐานโรงงานหลักของ POMS และกรองเฉพาะโรงงานที่มีคำขอใน `cems_wpms_connection_requests`
+- `cems_wpms_connected_measurement_points` เป็นตัวกรองหลักของ POMS current data; โรงงานที่มีเพียงคำขอแต่ยังไม่ `CONNECTED` จะไม่ถูกแสดง
+- `factories` เป็นฐานโรงงานหลักของ POMS สำหรับเติมชื่อโรงงาน/เลขทะเบียน/จังหวัดและตรวจสิทธิ์
 - `eligible_factories` enrich เลขทะเบียนเก่าและที่อยู่
-- `cems_wpms_connected_measurement_points` นับจำนวนจุดตรวจวัด
+- `monitoringPointCount` นับจำนวนจุดตรวจวัดที่เชื่อมต่อแล้วจาก `cems_wpms_connected_measurement_points`
 
 ## 2. KWP request table
 
