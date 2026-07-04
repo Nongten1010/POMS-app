@@ -167,7 +167,7 @@ describe('connected measurement points route', () => {
         {
           pointCode: 'S0001',
           pointName: 'ปล่อง A',
-          pointType: 'STACK',
+          pointType: 'CEMS',
           parameterDetails: ['NOx (ppm)', 'SO2 (ppm)'],
           primaryFuel: 'ก๊าซธรรมชาติ',
           secondaryFuel: 'น้ำมันเตา',
@@ -376,7 +376,7 @@ describe('connected measurement points route', () => {
         {
           pointCode: 'S0001',
           pointName: 'ปล่อง A',
-          pointType: 'STACK',
+          pointType: 'CEMS',
           parameterDetails: ['NOx (ppm)', 'SO2 (ppm)'],
           primaryFuel: 'ก๊าซธรรมชาติ',
           secondaryFuel: 'น้ำมันเตา',

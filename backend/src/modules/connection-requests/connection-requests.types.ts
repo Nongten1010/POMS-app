@@ -511,7 +511,7 @@ export interface ConnectedMeasurementPointDetailDTO {
 export interface ConnectedMeasurementPointModalDetailDTO {
   pointCode: string | null;
   pointName: string;
-  pointType: MeasurementPointType;
+  pointType: ConnectionSystemType;
   parameterDetails: string[];
   primaryFuel: string | null;
   secondaryFuel: string | null;

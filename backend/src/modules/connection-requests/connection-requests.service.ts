@@ -1841,7 +1841,7 @@ function toConnectedMeasurementPointModalDetail(
   return {
     pointCode: detail.point.pointCode ?? null,
     pointName: detail.point.pointName,
-    pointType: detail.point.pointType,
+    pointType: detail.type,
     parameterDetails: detail.point.parameters,
     primaryFuel: stringDetail(detail.point.details, 'primaryFuel'),
     secondaryFuel: stringDetail(detail.point.details, 'secondaryFuel'),

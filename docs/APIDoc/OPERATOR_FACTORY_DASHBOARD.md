@@ -224,7 +224,7 @@ GET /api/v1/connected-measurement-points/factories/factory-001
     {
       "pointCode": "S0001",
       "pointName": "ปล่อง A",
-      "pointType": "STACK",
+      "pointType": "CEMS",
       "parameterDetails": ["NOx (ppm)", "SO2 (ppm)"],
       "primaryFuel": "ก๊าซธรรมชาติ",
       "secondaryFuel": "น้ำมันเตา"
@@ -235,6 +235,9 @@ GET /api/v1/connected-measurement-points/factories/factory-001
   }
 }
 ```
+
+`pointType` ใน endpoint นี้เป็นประเภทระบบของจุดตรวจวัดสำหรับแสดงผลใน modal:
+`CEMS` หรือ `WPMS` ไม่ใช่ค่า internal point shape เช่น `STACK`/`WASTEWATER`.
 
 ### GET Calendar Status
 

@@ -1632,6 +1632,16 @@ describe('connectionRequestsService', () => {
             secondaryFuel: 'น้ำมันเตา',
           },
         },
+      ],
+    });
+    const wpmsRequest = requestDto({
+      id: 2,
+      requestNo: 'WPMS-69-00001',
+      systemType: 'WPMS',
+      status: CONNECTION_REQUEST_STATUS.CONNECTED,
+      statusLabel: 'เชื่อมต่อแล้ว',
+      verifiedAt: '2026-05-29T10:00:00.000Z',
+      measurementPoints: [
         {
           id: 2,
           pointName: 'บ่อบำบัดน้ำเสีย',
@@ -1648,7 +1658,7 @@ describe('connectionRequestsService', () => {
         },
       ],
     });
-    mockedRepository.list.mockResolvedValue({ rows: [request], total: 1 });
+    mockedRepository.list.mockResolvedValue({ rows: [request, wpmsRequest], total: 2 });
     mockedRepository.findFactorySummariesForRequests.mockResolvedValue(
       new Map([[request.factoryId, factorySummary()]]),
     );
@@ -1668,7 +1678,7 @@ describe('connectionRequestsService', () => {
         {
           pointCode: 'STACK-A',
           pointName: 'ปล่องระบาย A',
-          pointType: 'STACK',
+          pointType: 'CEMS',
           parameterDetails: ['NOx (ppm)', 'SO2 (ppm)'],
           primaryFuel: 'ก๊าซธรรมชาติ',
           secondaryFuel: 'น้ำมันเตา',
@@ -1676,7 +1686,7 @@ describe('connectionRequestsService', () => {
         {
           pointCode: 'WWTP-1',
           pointName: 'บ่อบำบัดน้ำเสีย',
-          pointType: 'WASTEWATER',
+          pointType: 'WPMS',
           parameterDetails: ['BOD (mg/l)', 'COD (mg/l)'],
           primaryFuel: null,
           secondaryFuel: null,
