@@ -56,7 +56,10 @@ const kwpEmissionMeasurementItemSchema = z
   .object({
     pollutant: requiredText(255),
     sampleDate: z.preprocess(emptyStringToNull, isoDate.nullable().optional()),
-    measuredValue: z.union([z.string().trim().min(1).max(100), z.coerce.number()]).nullable().optional(),
+    measuredValue: z
+      .union([z.string().trim().min(1).max(100), z.coerce.number()])
+      .nullable()
+      .optional(),
     unit: nullableText(64),
     laboratoryNo: nullableText(100),
     reportNo: nullableText(100),
@@ -97,3 +100,5 @@ export const createKwp02SubmissionSchema = z
     measurementItems: z.array(kwpEmissionMeasurementItemSchema).min(1).max(100),
   })
   .strict();
+
+export const createKwp04SubmissionSchema = createKwp02SubmissionSchema;

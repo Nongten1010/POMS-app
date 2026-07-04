@@ -8,6 +8,7 @@ import { kwpFormSubmissionsService } from './kwp-form-submissions.service';
 import {
   createKwp01SubmissionSchema,
   createKwp02SubmissionSchema,
+  createKwp04SubmissionSchema,
 } from './kwp-form-submissions.validator';
 
 export const kwpFormSubmissionsController = {
@@ -58,6 +59,23 @@ export const kwpFormSubmissionsController = {
       const actorUserId = requireActorUserId(req);
       const payload = createKwp02SubmissionSchema.parse(req.body);
       const result = await kwpFormSubmissionsService.createKwp02(payload, {
+        actorUserId,
+        scope: getScope(req, 'kwp_forms:edit'),
+      });
+      res
+        .status(StatusCodes.CREATED)
+        .location(`${env.API_PREFIX}/kwp-form-reports/requests/${result.id}`)
+        .json({ success: true, data: result });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async createKwp04(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const actorUserId = requireActorUserId(req);
+      const payload = createKwp04SubmissionSchema.parse(req.body);
+      const result = await kwpFormSubmissionsService.createKwp04(payload, {
         actorUserId,
         scope: getScope(req, 'kwp_forms:edit'),
       });

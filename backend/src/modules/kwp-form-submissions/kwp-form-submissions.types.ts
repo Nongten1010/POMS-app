@@ -84,11 +84,13 @@ export interface CreateKwp02SubmissionDTO {
   reporterPosition?: string | null;
 }
 
+export type CreateKwp04SubmissionDTO = CreateKwp02SubmissionDTO;
+
 export interface CreatedKwpFormSubmissionDTO {
   id: number;
   requestNo: string;
-  form: 'กวภ.01' | 'กวภ.02';
-  formType: 'KWP01' | 'KWP02';
+  form: 'กวภ.01' | 'กวภ.02' | 'กวภ.04';
+  formType: 'KWP01' | 'KWP02' | 'KWP04';
   status: 'SUBMITTED';
   submittedAt: string;
   measurementItemCount?: number;

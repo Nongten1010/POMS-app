@@ -196,4 +196,83 @@ describe('kwpFormSubmissionsRepository', () => {
       changed_by: 42,
     });
   });
+
+  it('maps KWP04 payload to the shared emission measurement tables', () => {
+    const records = toKwp02InsertRecordsForTests({
+      payload: {
+        factoryId: 'FID-001',
+        factoryName: 'บริษัท ทดสอบ จำกัด',
+        factoryRegistrationNo: '10190000225448',
+        factoryAddress: '9 หมู่ 9',
+        industryType: '10100 / 3',
+        connectedPointId: 8,
+        pointCode: 'S0001',
+        pointName: 'ปล่องระบาย A',
+        pointType: 'STACK',
+        productionStack: 'ปล่อง A',
+        primaryFuel: 'ก๊าซธรรมชาติ',
+        secondaryFuel: null,
+        combustionSystem: 'ระบบปิด',
+        productionCapacity: '100',
+        productionCapacityUnit: 'ตัน/วัน',
+        contactName: 'สมชาย ทดสอบ',
+        contactPhone: '0812345678',
+        contactEmail: 'operator@example.com',
+        measurementItems: [
+          {
+            pollutant: 'CO (ppm)',
+            sampleDate: '2026-07-02',
+            measuredValue: '12.5',
+            unit: 'ppm',
+            laboratoryNo: 'LAB-004',
+            reportNo: 'RPT-004',
+            method: 'USEPA Method 10',
+            attachments: [
+              {
+                attachmentType: 'LAB_REPORT',
+                originalFileName: 'kwp04-lab-report.pdf',
+                storedFileName: '14-kwp04-lab-report.pdf',
+                mimeType: 'application/pdf',
+                fileSize: 940000,
+                storagePath: '/uploads/kwp/14-kwp04-lab-report.pdf',
+              },
+            ],
+          },
+        ],
+        reporterName: 'สมชาย ทดสอบ',
+        reporterPosition: 'ผู้จัดการสิ่งแวดล้อม',
+      },
+      submissionNo: 'KWP-69-00014',
+      actorUserId: 42,
+      now: new Date('2026-07-04T08:30:00.000Z'),
+      formType: 'KWP04',
+    });
+
+    expect(records.submission).toMatchObject({
+      submission_no: 'KWP-69-00014',
+      form_type: 'KWP04',
+      status: 'SUBMITTED',
+      point_code: 'S0001',
+    });
+    expect(records.measurementItems).toEqual([
+      {
+        pollutant: 'CO (ppm)',
+        sample_date: '2026-07-02',
+        measured_value: 12.5,
+        measured_value_text: '12.5',
+        unit: 'ppm',
+        laboratory_no: 'LAB-004',
+        report_no: 'RPT-004',
+        method: 'USEPA Method 10',
+        sort_order: 1,
+      },
+    ]);
+    expect(records.attachmentsByItemIndex.get(0)).toEqual([
+      expect.objectContaining({
+        attachment_type: 'LAB_REPORT',
+        original_file_name: 'kwp04-lab-report.pdf',
+        storage_path: '/uploads/kwp/14-kwp04-lab-report.pdf',
+      }),
+    ]);
+  });
 });

@@ -6,6 +6,7 @@ jest.mock('../../src/modules/kwp-form-submissions/kwp-form-submissions.service',
   kwpFormSubmissionsService: {
     createKwp01: jest.fn(),
     createKwp02: jest.fn(),
+    createKwp04: jest.fn(),
   },
 }));
 
@@ -46,6 +47,16 @@ describe('KWP form submission routes', () => {
       formType: 'KWP02',
       status: 'SUBMITTED',
       submittedAt: '2026-07-04T08:15:00.000Z',
+      measurementItemCount: 2,
+      attachmentCount: 3,
+    });
+    mockedService.createKwp04.mockResolvedValue({
+      id: 14,
+      requestNo: 'KWP-69-00014',
+      form: 'กวภ.04',
+      formType: 'KWP04',
+      status: 'SUBMITTED',
+      submittedAt: '2026-07-04T08:30:00.000Z',
       measurementItemCount: 2,
       attachmentCount: 3,
     });
@@ -221,6 +232,75 @@ describe('KWP form submission routes', () => {
     expect(response.status).toBe(400);
     expect(response.body.error.code).toBe('VALIDATION_ERROR');
     expect(mockedService.createKwp02).not.toHaveBeenCalled();
+  });
+
+  it('creates a submitted KWP04 form with measurement rows and file metadata', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .post('/api/v1/kwp-form-submissions/kwp04')
+      .set('Authorization', `Bearer ${operatorToken()}`)
+      .send(validKwp02Payload());
+
+    expect(response.status).toBe(201);
+    expect(response.headers.location).toBe('/api/v1/kwp-form-reports/requests/14');
+    expect(mockedService.createKwp04).toHaveBeenCalledWith(
+      expect.objectContaining({
+        factoryName: 'บริษัท ทดสอบ จำกัด',
+        measurementItems: [
+          expect.objectContaining({
+            pollutant: 'NOx (ppm)',
+            attachments: [
+              expect.objectContaining({
+                attachmentType: 'SAMPLING_PHOTO',
+                originalFileName: 'sampling-photo.jpg',
+              }),
+              expect.objectContaining({
+                attachmentType: 'LAB_REPORT',
+                originalFileName: 'lab-report.pdf',
+              }),
+            ],
+          }),
+          expect.objectContaining({
+            pollutant: 'SO2 (ppm)',
+            attachments: [expect.objectContaining({ attachmentType: 'LAB_REPORT' })],
+          }),
+        ],
+      }),
+      {
+        actorUserId: 42,
+        scope: 'OWN_FACTORY',
+      },
+    );
+    expect(response.body).toEqual({
+      success: true,
+      data: {
+        id: 14,
+        requestNo: 'KWP-69-00014',
+        form: 'กวภ.04',
+        formType: 'KWP04',
+        status: 'SUBMITTED',
+        submittedAt: '2026-07-04T08:30:00.000Z',
+        measurementItemCount: 2,
+        attachmentCount: 3,
+      },
+    });
+  });
+
+  it('rejects KWP04 payloads without measurement rows', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .post('/api/v1/kwp-form-submissions/kwp04')
+      .set('Authorization', `Bearer ${operatorToken()}`)
+      .send({
+        ...validKwp02Payload(),
+        measurementItems: [],
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    expect(mockedService.createKwp04).not.toHaveBeenCalled();
   });
 });
 

@@ -46,3 +46,9 @@ kwpFormSubmissionsRoutes.post(
   authorize('kwp_forms:edit'),
   kwpFormSubmissionsController.createKwp02,
 );
+
+kwpFormSubmissionsRoutes.post(
+  '/kwp04',
+  authorize('kwp_forms:edit'),
+  kwpFormSubmissionsController.createKwp04,
+);

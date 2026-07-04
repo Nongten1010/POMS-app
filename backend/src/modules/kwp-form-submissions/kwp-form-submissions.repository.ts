@@ -5,6 +5,7 @@ import type {
   CreatedKwpFormSubmissionDTO,
   CreateKwp01SubmissionDTO,
   CreateKwp02SubmissionDTO,
+  CreateKwp04SubmissionDTO,
   KwpFormSubmissionAccess,
 } from './kwp-form-submissions.types';
 
@@ -23,10 +24,11 @@ interface Kwp01InsertRecords {
 }
 
 interface Kwp02InsertInput {
-  payload: CreateKwp02SubmissionDTO;
+  payload: CreateKwp02SubmissionDTO | CreateKwp04SubmissionDTO;
   submissionNo: string;
   actorUserId: number;
   now: Date;
+  formType?: 'KWP02' | 'KWP04';
 }
 
 interface Kwp02InsertRecords {
@@ -92,65 +94,81 @@ export const kwpFormSubmissionsRepository = {
     payload: CreateKwp02SubmissionDTO,
     access: KwpFormSubmissionAccess,
   ): Promise<CreatedKwpFormSubmissionDTO> {
-    return db.transaction(async (trx) => {
-      await assertCanCreateForFactory(trx, payload.factoryId, access);
+    return createKwpEmissionReport(payload, access, 'KWP02');
+  },
 
-      const now = new Date();
-      const submissionNo = await nextSubmissionNo(trx, now);
-      const records = toKwp02InsertRecords({
-        payload,
-        submissionNo,
-        actorUserId: access.actorUserId,
-        now,
-      });
-
-      const inserted = await trx('kwp_form_submissions')
-        .insert(records.submission)
-        .returning<{ id: number | string }[]>('id');
-      const submissionId = Number(inserted[0]?.id);
-
-      let attachmentCount = 0;
-      for (const [itemIndex, item] of records.measurementItems.entries()) {
-        const insertedItem = await trx('kwp_emission_measurement_items')
-          .insert({
-            ...item,
-            submission_id: submissionId,
-          })
-          .returning<{ id: number | string }[]>('id');
-        const itemId = Number(insertedItem[0]?.id);
-        const attachments = records.attachmentsByItemIndex.get(itemIndex) ?? [];
-
-        if (attachments.length > 0) {
-          await trx('kwp_form_attachments').insert(
-            attachments.map((attachment) => ({
-              ...attachment,
-              submission_id: submissionId,
-              related_table: 'kwp_emission_measurement_items',
-              related_id: itemId,
-            })),
-          );
-          attachmentCount += attachments.length;
-        }
-      }
-
-      await trx('kwp_form_status_history').insert({
-        ...records.statusHistory,
-        submission_id: submissionId,
-      });
-
-      return {
-        id: submissionId,
-        requestNo: submissionNo,
-        form: 'กวภ.02',
-        formType: 'KWP02',
-        status: 'SUBMITTED',
-        submittedAt: now.toISOString(),
-        measurementItemCount: records.measurementItems.length,
-        attachmentCount,
-      };
-    });
+  async createKwp04(
+    payload: CreateKwp04SubmissionDTO,
+    access: KwpFormSubmissionAccess,
+  ): Promise<CreatedKwpFormSubmissionDTO> {
+    return createKwpEmissionReport(payload, access, 'KWP04');
   },
 };
+
+async function createKwpEmissionReport(
+  payload: CreateKwp02SubmissionDTO | CreateKwp04SubmissionDTO,
+  access: KwpFormSubmissionAccess,
+  formType: 'KWP02' | 'KWP04',
+): Promise<CreatedKwpFormSubmissionDTO> {
+  return db.transaction(async (trx) => {
+    await assertCanCreateForFactory(trx, payload.factoryId, access);
+
+    const now = new Date();
+    const submissionNo = await nextSubmissionNo(trx, now);
+    const records = toKwp02InsertRecords({
+      payload,
+      submissionNo,
+      actorUserId: access.actorUserId,
+      now,
+      formType,
+    });
+
+    const inserted = await trx('kwp_form_submissions')
+      .insert(records.submission)
+      .returning<{ id: number | string }[]>('id');
+    const submissionId = Number(inserted[0]?.id);
+
+    let attachmentCount = 0;
+    for (const [itemIndex, item] of records.measurementItems.entries()) {
+      const insertedItem = await trx('kwp_emission_measurement_items')
+        .insert({
+          ...item,
+          submission_id: submissionId,
+        })
+        .returning<{ id: number | string }[]>('id');
+      const itemId = Number(insertedItem[0]?.id);
+      const attachments = records.attachmentsByItemIndex.get(itemIndex) ?? [];
+
+      if (attachments.length > 0) {
+        await trx('kwp_form_attachments').insert(
+          attachments.map((attachment) => ({
+            ...attachment,
+            submission_id: submissionId,
+            related_table: 'kwp_emission_measurement_items',
+            related_id: itemId,
+          })),
+        );
+        attachmentCount += attachments.length;
+      }
+    }
+
+    await trx('kwp_form_status_history').insert({
+      ...records.statusHistory,
+      submission_id: submissionId,
+    });
+
+    return {
+      id: submissionId,
+      requestNo: submissionNo,
+      form: formType === 'KWP04' ? 'กวภ.04' : 'กวภ.02',
+      formType,
+      status: 'SUBMITTED',
+      submittedAt: now.toISOString(),
+      measurementItemCount: records.measurementItems.length,
+      attachmentCount,
+    };
+  });
+}
 
 export function buildKwpFormSubmissionFactoryAccessQueryForTests(
   factoryId: string,
@@ -241,7 +259,7 @@ function toKwp01InsertRecords(input: Kwp01InsertInput): Kwp01InsertRecords {
 }
 
 function toKwp02InsertRecords(input: Kwp02InsertInput): Kwp02InsertRecords {
-  const { payload, submissionNo, actorUserId, now } = input;
+  const { payload, submissionNo, actorUserId, now, formType = 'KWP02' } = input;
   const attachmentsByItemIndex = new Map<number, Array<Record<string, unknown>>>();
 
   const measurementItems = payload.measurementItems.map((item, index) => {
@@ -274,7 +292,7 @@ function toKwp02InsertRecords(input: Kwp02InsertInput): Kwp02InsertRecords {
   });
 
   return {
-    submission: toCommonSubmissionRecord(payload, 'KWP02', submissionNo, actorUserId, now),
+    submission: toCommonSubmissionRecord(payload, formType, submissionNo, actorUserId, now),
     measurementItems,
     attachmentsByItemIndex,
     statusHistory: {
@@ -287,8 +305,8 @@ function toKwp02InsertRecords(input: Kwp02InsertInput): Kwp02InsertRecords {
 }
 
 function toCommonSubmissionRecord(
-  payload: CreateKwp01SubmissionDTO | CreateKwp02SubmissionDTO,
-  formType: 'KWP01' | 'KWP02',
+  payload: CreateKwp01SubmissionDTO | CreateKwp02SubmissionDTO | CreateKwp04SubmissionDTO,
+  formType: 'KWP01' | 'KWP02' | 'KWP04',
   submissionNo: string,
   actorUserId: number,
   now: Date,

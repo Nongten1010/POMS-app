@@ -101,7 +101,11 @@ function sanitizeOriginalFileName(value: string): string {
   return baseName || 'uploaded-file';
 }
 
-function buildPublicFileUrl(publicBaseUrl: string, publicPath: string, storagePath: string): string {
+function buildPublicFileUrl(
+  publicBaseUrl: string,
+  publicPath: string,
+  storagePath: string,
+): string {
   const baseUrl = publicBaseUrl.replace(/\/+$/, '');
   const normalizedPublicPath = `/${publicPath.replace(/^\/+|\/+$/g, '')}`;
   return `${baseUrl}${normalizedPublicPath}/${storagePath
