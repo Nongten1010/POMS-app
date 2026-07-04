@@ -25,6 +25,7 @@ import { emailTestRoutes } from './modules/email-test/email-test.routes';
 import { monitoringPointFormsRoutes } from './modules/monitoring-point-forms/monitoring-point-forms.routes';
 import { bodCodDeviationReportsRoutes } from './modules/bod-cod-deviations/bod-cod-deviation-reports.routes';
 import { kwpFormReportsRoutes } from './modules/kwp-form-reports/kwp-form-reports.routes';
+import { kwpFormSubmissionsRoutes } from './modules/kwp-form-submissions/kwp-form-submissions.routes';
 
 export function createApp(): Application {
   const app = express();
@@ -83,6 +84,7 @@ export function createApp(): Application {
   app.use(`${env.API_PREFIX}/monitoring-point-forms`, monitoringPointFormsRoutes);
   app.use(`${env.API_PREFIX}/bod-cod-deviation-reports`, bodCodDeviationReportsRoutes);
   app.use(`${env.API_PREFIX}/kwp-form-reports`, kwpFormReportsRoutes);
+  app.use(`${env.API_PREFIX}/kwp-form-submissions`, kwpFormSubmissionsRoutes);
   app.use(`${env.API_PREFIX}/integrations`, integrationsRoutes);
   app.use(`${env.API_PREFIX}/alert-events`, alertEventsRoutes);
   app.use(`${env.API_PREFIX}/email-test`, emailTestRoutes);
