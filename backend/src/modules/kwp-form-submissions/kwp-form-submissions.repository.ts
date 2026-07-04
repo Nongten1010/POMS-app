@@ -7,7 +7,10 @@ import type {
   CreateKwp01SubmissionDTO,
   CreateKwp02SubmissionDTO,
   CreateKwp04SubmissionDTO,
+  CreateKwp05SubmissionDTO,
   KwpEmissionMeasurementItemDTO,
+  Kwp05CalibrationItemDTO,
+  Kwp05CalibrationReportDTO,
   Kwp01IssueReason,
   KwpFormAttachmentDTO,
   KwpFormSubmissionDetailType,
@@ -41,6 +44,21 @@ interface Kwp02InsertInput {
 interface Kwp02InsertRecords {
   submission: Record<string, unknown>;
   measurementItems: Array<Record<string, unknown>>;
+  attachmentsByItemIndex: Map<number, Array<Record<string, unknown>>>;
+  statusHistory: Record<string, unknown>;
+}
+
+interface Kwp05InsertInput {
+  payload: CreateKwp05SubmissionDTO;
+  submissionNo: string;
+  actorUserId: number;
+  now: Date;
+}
+
+interface Kwp05InsertRecords {
+  submission: Record<string, unknown>;
+  calibrationReport: Record<string, unknown>;
+  calibrationItems: Array<Record<string, unknown>>;
   attachmentsByItemIndex: Map<number, Array<Record<string, unknown>>>;
   statusHistory: Record<string, unknown>;
 }
@@ -113,6 +131,30 @@ interface KwpAttachmentRow {
   uploaded_by: number | string | null;
 }
 
+interface Kwp05CalibrationReportRow {
+  business_activity: string | null;
+  sampler_name: string | null;
+  officer_registration: string | null;
+  laboratory_name: string | null;
+  laboratory_registration: string | null;
+  cems_brand: string | null;
+  cems_detail: string | null;
+  report_round: string | null;
+  report_year: string | null;
+}
+
+interface Kwp05CalibrationItemRow {
+  id: number | string;
+  parameter_name: string;
+  start_date: Date | string | null;
+  end_date: Date | string | null;
+  result: string | null;
+  verifier_company: string | null;
+  cems_model: string | null;
+  link_qr1: string | null;
+  link_qr2: string | null;
+}
+
 export const kwpFormSubmissionsRepository = {
   async getById(
     id: number,
@@ -128,6 +170,14 @@ export const kwpFormSubmissionsRepository = {
       return {
         ...baseDetail,
         issueReport: await getKwp01IssueReport(Number(submission.id)),
+      };
+    }
+
+    if (submission.form_type === 'KWP05') {
+      return {
+        ...baseDetail,
+        calibrationReport: await getKwp05CalibrationReport(Number(submission.id)),
+        calibrationItems: await listKwp05CalibrationItems(Number(submission.id), access),
       };
     }
 
@@ -200,6 +250,74 @@ export const kwpFormSubmissionsRepository = {
     access: KwpFormSubmissionAccess,
   ): Promise<CreatedKwpFormSubmissionDTO> {
     return createKwpEmissionReport(payload, access, 'KWP04');
+  },
+
+  async createKwp05(
+    payload: CreateKwp05SubmissionDTO,
+    access: KwpFormSubmissionAccess,
+  ): Promise<CreatedKwpFormSubmissionDTO> {
+    return db.transaction(async (trx) => {
+      await assertCanCreateForFactory(trx, payload.factoryId, access);
+
+      const now = new Date();
+      const submissionNo = await nextSubmissionNo(trx, now);
+      const records = toKwp05InsertRecords({
+        payload,
+        submissionNo,
+        actorUserId: access.actorUserId,
+        now,
+      });
+
+      const inserted = await trx('kwp_form_submissions')
+        .insert(records.submission)
+        .returning<{ id: number | string }[]>('id');
+      const submissionId = Number(inserted[0]?.id);
+
+      await trx('kwp05_calibration_reports').insert({
+        ...records.calibrationReport,
+        submission_id: submissionId,
+      });
+
+      let attachmentCount = 0;
+      for (const [itemIndex, item] of records.calibrationItems.entries()) {
+        const insertedItem = await trx('kwp05_calibration_items')
+          .insert({
+            ...item,
+            submission_id: submissionId,
+          })
+          .returning<{ id: number | string }[]>('id');
+        const itemId = Number(insertedItem[0]?.id);
+        const attachments = records.attachmentsByItemIndex.get(itemIndex) ?? [];
+
+        if (attachments.length > 0) {
+          await trx('kwp_form_attachments').insert(
+            attachments.map((attachment) => ({
+              ...attachment,
+              submission_id: submissionId,
+              related_table: 'kwp05_calibration_items',
+              related_id: itemId,
+            })),
+          );
+          attachmentCount += attachments.length;
+        }
+      }
+
+      await trx('kwp_form_status_history').insert({
+        ...records.statusHistory,
+        submission_id: submissionId,
+      });
+
+      return {
+        id: submissionId,
+        requestNo: submissionNo,
+        form: 'กวภ.05',
+        formType: 'KWP05',
+        status: 'SUBMITTED',
+        submittedAt: now.toISOString(),
+        calibrationItemCount: records.calibrationItems.length,
+        attachmentCount,
+      };
+    });
   },
 };
 
@@ -288,6 +406,10 @@ export function toKwp01InsertRecordsForTests(input: Kwp01InsertInput): Kwp01Inse
 
 export function toKwp02InsertRecordsForTests(input: Kwp02InsertInput): Kwp02InsertRecords {
   return toKwp02InsertRecords(input);
+}
+
+export function toKwp05InsertRecordsForTests(input: Kwp05InsertInput): Kwp05InsertRecords {
+  return toKwp05InsertRecords(input);
 }
 
 async function assertCanCreateForFactory(
@@ -476,8 +598,90 @@ async function listEmissionMeasurementItems(
   }));
 }
 
+async function getKwp05CalibrationReport(submissionId: number): Promise<Kwp05CalibrationReportDTO> {
+  const row = await db<Kwp05CalibrationReportRow>('kwp05_calibration_reports')
+    .where('submission_id', submissionId)
+    .first(
+      'business_activity',
+      'sampler_name',
+      'officer_registration',
+      'laboratory_name',
+      'laboratory_registration',
+      'cems_brand',
+      'cems_detail',
+      'report_round',
+      'report_year',
+    );
+
+  return {
+    businessActivity: row?.business_activity ?? null,
+    samplerName: row?.sampler_name ?? null,
+    officerRegistration: row?.officer_registration ?? null,
+    laboratoryName: row?.laboratory_name ?? null,
+    laboratoryRegistration: row?.laboratory_registration ?? null,
+    cemsBrand: row?.cems_brand ?? null,
+    cemsDetail: row?.cems_detail ?? null,
+    reportRound: row?.report_round ?? null,
+    reportYear: row?.report_year ?? null,
+  };
+}
+
+async function listKwp05CalibrationItems(
+  submissionId: number,
+  access: KwpFormSubmissionReadAccess,
+): Promise<Kwp05CalibrationItemDTO[]> {
+  const itemRows = await db<Kwp05CalibrationItemRow>('kwp05_calibration_items')
+    .where('submission_id', submissionId)
+    .orderBy('sort_order', 'asc')
+    .orderBy('id', 'asc')
+    .select(
+      'id',
+      'parameter_name',
+      'start_date',
+      'end_date',
+      'result',
+      'verifier_company',
+      'cems_model',
+      'link_qr1',
+      'link_qr2',
+    );
+  const attachmentsByItemId = await listAttachmentsByRelatedId(
+    submissionId,
+    'kwp05_calibration_items',
+    itemRows.map((row) => Number(row.id)),
+    access,
+  );
+
+  return itemRows.map((row) => ({
+    id: Number(row.id),
+    parameter: row.parameter_name,
+    startDate: toDateOnly(row.start_date),
+    endDate: toDateOnly(row.end_date),
+    result: row.result,
+    verifierCompany: row.verifier_company,
+    cemsModel: row.cems_model,
+    rataReportLink: row.link_qr1,
+    calibrationPhotoLink: row.link_qr2,
+    attachments: attachmentsByItemId.get(Number(row.id)) ?? [],
+  }));
+}
+
 async function listAttachmentsByItemId(
   submissionId: number,
+  itemIds: number[],
+  access: KwpFormSubmissionReadAccess,
+): Promise<Map<number, KwpFormAttachmentDTO[]>> {
+  return listAttachmentsByRelatedId(
+    submissionId,
+    'kwp_emission_measurement_items',
+    itemIds,
+    access,
+  );
+}
+
+async function listAttachmentsByRelatedId(
+  submissionId: number,
+  relatedTable: string,
   itemIds: number[],
   access: KwpFormSubmissionReadAccess,
 ): Promise<Map<number, KwpFormAttachmentDTO[]>> {
@@ -485,7 +689,7 @@ async function listAttachmentsByItemId(
 
   const rows = await db<KwpAttachmentRow>('kwp_form_attachments')
     .where('submission_id', submissionId)
-    .where('related_table', 'kwp_emission_measurement_items')
+    .where('related_table', relatedTable)
     .whereIn('related_id', itemIds)
     .orderBy('attachment_type', 'asc')
     .orderBy('id', 'asc')
@@ -514,7 +718,14 @@ function toSubmissionDetailDTO(row: SubmissionDetailRow): KwpFormSubmissionDetai
   return {
     id: Number(row.id),
     requestNo: row.submission_no,
-    form: row.form_type === 'KWP04' ? 'กวภ.04' : row.form_type === 'KWP02' ? 'กวภ.02' : 'กวภ.01',
+    form:
+      row.form_type === 'KWP05'
+        ? 'กวภ.05'
+        : row.form_type === 'KWP04'
+          ? 'กวภ.04'
+          : row.form_type === 'KWP02'
+            ? 'กวภ.02'
+            : 'กวภ.01',
     formType: row.form_type,
     status: row.status,
     submittedAt: toIsoString(row.submitted_at),
@@ -660,9 +871,70 @@ function toKwp02InsertRecords(input: Kwp02InsertInput): Kwp02InsertRecords {
   };
 }
 
+function toKwp05InsertRecords(input: Kwp05InsertInput): Kwp05InsertRecords {
+  const { payload, submissionNo, actorUserId, now } = input;
+  const attachmentsByItemIndex = new Map<number, Array<Record<string, unknown>>>();
+
+  const calibrationItems = payload.calibrationItems.map((item, index) => {
+    const attachments = (item.attachments ?? []).map((attachment) => ({
+      attachment_type: attachment.attachmentType,
+      original_file_name: attachment.originalFileName,
+      stored_file_name: attachment.storedFileName ?? null,
+      mime_type: attachment.mimeType ?? null,
+      file_size: attachment.fileSize ?? null,
+      storage_path: attachment.storagePath ?? null,
+      uploaded_at: now,
+      uploaded_by: actorUserId,
+    }));
+
+    if (attachments.length > 0) {
+      attachmentsByItemIndex.set(index, attachments);
+    }
+
+    return {
+      parameter_name: item.parameter,
+      start_date: item.startDate ?? null,
+      end_date: item.endDate ?? null,
+      result: item.result ?? null,
+      verifier_company: item.verifierCompany ?? null,
+      cems_model: item.cemsModel ?? null,
+      link_qr1: item.rataReportLink ?? null,
+      link_qr2: item.calibrationPhotoLink ?? null,
+      sort_order: index + 1,
+    };
+  });
+
+  return {
+    submission: toCommonSubmissionRecord(payload, 'KWP05', submissionNo, actorUserId, now),
+    calibrationReport: {
+      business_activity: payload.businessActivity ?? null,
+      sampler_name: payload.samplerName ?? null,
+      officer_registration: payload.officerRegistration ?? null,
+      laboratory_name: payload.laboratoryName ?? null,
+      laboratory_registration: payload.laboratoryRegistration ?? null,
+      cems_brand: payload.cemsBrand ?? null,
+      cems_detail: payload.cemsDetail ?? null,
+      report_round: payload.reportRound ?? null,
+      report_year: payload.reportYear ?? null,
+    },
+    calibrationItems,
+    attachmentsByItemIndex,
+    statusHistory: {
+      status: 'SUBMITTED',
+      note: null,
+      changed_by: actorUserId,
+      changed_at: now,
+    },
+  };
+}
+
 function toCommonSubmissionRecord(
-  payload: CreateKwp01SubmissionDTO | CreateKwp02SubmissionDTO | CreateKwp04SubmissionDTO,
-  formType: 'KWP01' | 'KWP02' | 'KWP04',
+  payload:
+    | CreateKwp01SubmissionDTO
+    | CreateKwp02SubmissionDTO
+    | CreateKwp04SubmissionDTO
+    | CreateKwp05SubmissionDTO,
+  formType: 'KWP01' | 'KWP02' | 'KWP04' | 'KWP05',
   submissionNo: string,
   actorUserId: number,
   now: Date,

@@ -4,7 +4,7 @@ export const KWP01_ISSUE_REASONS = [
 ] as const;
 
 export type Kwp01IssueReason = (typeof KWP01_ISSUE_REASONS)[number];
-export type KwpFormSubmissionDetailType = 'KWP01' | 'KWP02' | 'KWP04';
+export type KwpFormSubmissionDetailType = 'KWP01' | 'KWP02' | 'KWP04' | 'KWP05';
 
 export interface KwpFormSubmissionAccess {
   actorUserId: number;
@@ -94,14 +94,60 @@ export interface CreateKwp02SubmissionDTO {
 
 export type CreateKwp04SubmissionDTO = CreateKwp02SubmissionDTO;
 
+export interface Kwp05CalibrationItemInput {
+  parameter: string;
+  startDate?: string | null;
+  endDate?: string | null;
+  result?: string | null;
+  verifierCompany?: string | null;
+  cemsModel?: string | null;
+  rataReportLink?: string | null;
+  calibrationPhotoLink?: string | null;
+  attachments?: KwpFormAttachmentInput[];
+}
+
+export interface CreateKwp05SubmissionDTO {
+  factoryId: string;
+  factoryName: string;
+  factoryRegistrationNo?: string | null;
+  factoryAddress?: string | null;
+  industryType?: string | null;
+  connectedPointId?: number | null;
+  pointCode?: string | null;
+  pointName?: string | null;
+  pointType?: string | null;
+  productionStack?: string | null;
+  primaryFuel?: string | null;
+  secondaryFuel?: string | null;
+  combustionSystem?: string | null;
+  productionCapacity?: string | null;
+  productionCapacityUnit?: string | null;
+  contactName?: string | null;
+  contactPhone?: string | null;
+  contactEmail?: string | null;
+  businessActivity?: string | null;
+  samplerName?: string | null;
+  officerRegistration?: string | null;
+  laboratoryName?: string | null;
+  laboratoryRegistration?: string | null;
+  cemsBrand?: string | null;
+  cemsDetail?: string | null;
+  reportRound?: string | null;
+  reportYear?: string | null;
+  calibrationItems: Kwp05CalibrationItemInput[];
+  reporterName?: string | null;
+  reporterPosition?: string | null;
+}
+
 export interface CreatedKwpFormSubmissionDTO {
   id: number;
   requestNo: string;
-  form: 'กวภ.01' | 'กวภ.02' | 'กวภ.04';
+  form: 'กวภ.01' | 'กวภ.02' | 'กวภ.04' | 'กวภ.05';
   formType: KwpFormSubmissionDetailType;
   status: 'SUBMITTED';
   submittedAt: string;
   measurementItemCount?: number;
+  calibrationItemCount?: number;
   attachmentCount?: number;
 }
 
@@ -141,11 +187,36 @@ export interface Kwp01IssueReportDTO {
   unreportedParameters: string[];
 }
 
+export interface Kwp05CalibrationReportDTO {
+  businessActivity: string | null;
+  samplerName: string | null;
+  officerRegistration: string | null;
+  laboratoryName: string | null;
+  laboratoryRegistration: string | null;
+  cemsBrand: string | null;
+  cemsDetail: string | null;
+  reportRound: string | null;
+  reportYear: string | null;
+}
+
+export interface Kwp05CalibrationItemDTO {
+  id: number;
+  parameter: string;
+  startDate: string | null;
+  endDate: string | null;
+  result: string | null;
+  verifierCompany: string | null;
+  cemsModel: string | null;
+  rataReportLink: string | null;
+  calibrationPhotoLink: string | null;
+  attachments: KwpFormAttachmentDTO[];
+}
+
 export interface KwpFormSubmissionDetailDTO {
   id: number;
   requestNo: string;
-  form: 'กวภ.01' | 'กวภ.02' | 'กวภ.04';
-  formType: 'KWP01' | 'KWP02' | 'KWP04';
+  form: 'กวภ.01' | 'กวภ.02' | 'กวภ.04' | 'กวภ.05';
+  formType: KwpFormSubmissionDetailType;
   status: string;
   submittedAt: string | null;
   createdAt: string;
@@ -172,4 +243,6 @@ export interface KwpFormSubmissionDetailDTO {
   reporterPosition: string | null;
   issueReport?: Kwp01IssueReportDTO;
   measurementItems?: KwpEmissionMeasurementItemDTO[];
+  calibrationReport?: Kwp05CalibrationReportDTO;
+  calibrationItems?: Kwp05CalibrationItemDTO[];
 }

@@ -9,6 +9,7 @@ import {
   createKwp01SubmissionSchema,
   createKwp02SubmissionSchema,
   createKwp04SubmissionSchema,
+  createKwp05SubmissionSchema,
 } from './kwp-form-submissions.validator';
 import type { KwpFormSubmissionDetailType } from './kwp-form-submissions.types';
 
@@ -23,6 +24,10 @@ export const kwpFormSubmissionsController = {
 
   async getKwp04ById(req: Request, res: Response, next: NextFunction): Promise<void> {
     await getById(req, res, next, 'KWP04');
+  },
+
+  async getKwp05ById(req: Request, res: Response, next: NextFunction): Promise<void> {
+    await getById(req, res, next, 'KWP05');
   },
 
   async uploadAttachment(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -89,6 +94,23 @@ export const kwpFormSubmissionsController = {
       const actorUserId = requireActorUserId(req);
       const payload = createKwp04SubmissionSchema.parse(req.body);
       const result = await kwpFormSubmissionsService.createKwp04(payload, {
+        actorUserId,
+        scope: getScope(req, 'kwp_forms:edit'),
+      });
+      res
+        .status(StatusCodes.CREATED)
+        .location(`${env.API_PREFIX}/kwp-form-reports/requests/${result.id}`)
+        .json({ success: true, data: result });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async createKwp05(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const actorUserId = requireActorUserId(req);
+      const payload = createKwp05SubmissionSchema.parse(req.body);
+      const result = await kwpFormSubmissionsService.createKwp05(payload, {
         actorUserId,
         scope: getScope(req, 'kwp_forms:edit'),
       });

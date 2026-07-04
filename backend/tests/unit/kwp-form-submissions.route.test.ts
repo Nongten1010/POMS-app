@@ -8,6 +8,7 @@ jest.mock('../../src/modules/kwp-form-submissions/kwp-form-submissions.service',
     createKwp01: jest.fn(),
     createKwp02: jest.fn(),
     createKwp04: jest.fn(),
+    createKwp05: jest.fn(),
   },
 }));
 
@@ -60,6 +61,16 @@ describe('KWP form submission routes', () => {
       submittedAt: '2026-07-04T08:30:00.000Z',
       measurementItemCount: 2,
       attachmentCount: 3,
+    });
+    mockedService.createKwp05.mockResolvedValue({
+      id: 15,
+      requestNo: 'KWP-69-00015',
+      form: 'กวภ.05',
+      formType: 'KWP05',
+      status: 'SUBMITTED',
+      submittedAt: '2026-07-04T08:45:00.000Z',
+      calibrationItemCount: 2,
+      attachmentCount: 4,
     });
     mockedService.getById.mockResolvedValue(kwp02DetailResponse());
     mockSaveKwpAttachment.mockResolvedValue({
@@ -251,6 +262,49 @@ describe('KWP form submission routes', () => {
     });
   });
 
+  it('gets submitted KWP05 detail with calibration rows and file URLs', async () => {
+    mockedService.getById.mockResolvedValueOnce(kwp05DetailResponse());
+    const app = createApp();
+
+    const response = await request(app)
+      .get('/api/v1/kwp-form-submissions/kwp05/15')
+      .set('Authorization', `Bearer ${operatorViewToken()}`);
+
+    expect(response.status).toBe(200);
+    expect(mockedService.getById).toHaveBeenCalledWith(15, {
+      actorUserId: 42,
+      scope: 'OWN_FACTORY',
+      regionalAccess: undefined,
+      publicBaseUrl: 'http://d-poms.diw.go.th',
+      publicPath: '/uploads',
+      formType: 'KWP05',
+    });
+    expect(response.body.data).toMatchObject({
+      id: 15,
+      formType: 'KWP05',
+      form: 'กวภ.05',
+      calibrationReport: {
+        businessActivity: 'ผลิตกระแสไฟฟ้า',
+        reportRound: '1',
+        reportYear: '2569',
+      },
+      calibrationItems: [
+        {
+          parameter: 'NOx (ppm)',
+          result: 'ผ่าน',
+          rataReportLink: 'https://example.com/rata-nox',
+          attachments: [
+            {
+              attachmentType: 'RATA_REPORT',
+              fileUrl:
+                'http://localhost:3000/uploads/kwp/form-attachments/2026/07/15-rata-report.pdf',
+            },
+          ],
+        },
+      ],
+    });
+  });
+
   it('rejects users without KWP view permission for detail reads', async () => {
     const app = createApp();
 
@@ -410,6 +464,85 @@ describe('KWP form submission routes', () => {
     expect(response.body.error.code).toBe('VALIDATION_ERROR');
     expect(mockedService.createKwp04).not.toHaveBeenCalled();
   });
+
+  it('creates a submitted KWP05 calibration report with rows and file metadata', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .post('/api/v1/kwp-form-submissions/kwp05')
+      .set('Authorization', `Bearer ${operatorToken()}`)
+      .send(validKwp05Payload());
+
+    expect(response.status).toBe(201);
+    expect(response.headers.location).toBe('/api/v1/kwp-form-reports/requests/15');
+    expect(mockedService.createKwp05).toHaveBeenCalledWith(
+      expect.objectContaining({
+        factoryName: 'บริษัท ทดสอบ จำกัด',
+        businessActivity: 'ผลิตกระแสไฟฟ้า',
+        reportRound: '1',
+        reportYear: '2569',
+        calibrationItems: [
+          expect.objectContaining({
+            parameter: 'NOx (ppm)',
+            result: 'ผ่าน',
+            attachments: [
+              expect.objectContaining({
+                attachmentType: 'RATA_REPORT',
+                originalFileName: 'rata-report.pdf',
+              }),
+              expect.objectContaining({
+                attachmentType: 'CALIBRATION_PHOTO',
+                originalFileName: 'calibration-photo.jpg',
+              }),
+            ],
+          }),
+          expect.objectContaining({
+            parameter: 'SO2 (ppm)',
+            result: 'ไม่ผ่าน',
+          }),
+        ],
+      }),
+      {
+        actorUserId: 42,
+        scope: 'OWN_FACTORY',
+      },
+    );
+    expect(response.body).toEqual({
+      success: true,
+      data: {
+        id: 15,
+        requestNo: 'KWP-69-00015',
+        form: 'กวภ.05',
+        formType: 'KWP05',
+        status: 'SUBMITTED',
+        submittedAt: '2026-07-04T08:45:00.000Z',
+        calibrationItemCount: 2,
+        attachmentCount: 4,
+      },
+    });
+  });
+
+  it('rejects KWP05 calibration rows whose end date is before start date', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .post('/api/v1/kwp-form-submissions/kwp05')
+      .set('Authorization', `Bearer ${operatorToken()}`)
+      .send({
+        ...validKwp05Payload(),
+        calibrationItems: [
+          {
+            ...validKwp05Payload().calibrationItems[0],
+            startDate: '2026-07-10',
+            endDate: '2026-07-09',
+          },
+        ],
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    expect(mockedService.createKwp05).not.toHaveBeenCalled();
+  });
 });
 
 function validKwp01Payload() {
@@ -516,6 +649,96 @@ function validKwp02Payload() {
   };
 }
 
+function validKwp05Payload() {
+  return {
+    factoryId: 'FID-001',
+    factoryName: 'บริษัท ทดสอบ จำกัด',
+    factoryRegistrationNo: '10190000225448',
+    factoryAddress: '9 หมู่ 9',
+    industryType: '10100 / 3',
+    connectedPointId: 8,
+    pointCode: 'S0001',
+    pointName: 'ปล่องระบาย A',
+    pointType: 'STACK',
+    productionStack: 'ปล่อง A',
+    primaryFuel: 'ก๊าซธรรมชาติ',
+    secondaryFuel: 'น้ำมันเตา',
+    combustionSystem: 'ระบบปิด',
+    productionCapacity: '100',
+    productionCapacityUnit: 'ตัน/วัน',
+    contactName: 'สมชาย ทดสอบ',
+    contactPhone: '0812345678',
+    contactEmail: 'operator@example.com',
+    businessActivity: 'ผลิตกระแสไฟฟ้า',
+    samplerName: 'สมหญิง เก็บตัวอย่าง',
+    officerRegistration: 'OFF-001',
+    laboratoryName: 'ห้องปฏิบัติการทดสอบ จำกัด',
+    laboratoryRegistration: 'LAB-REG-001',
+    cemsBrand: 'CEMS Brand A',
+    cemsDetail: 'CEMS Brand A รุ่น Model X',
+    reportRound: '1',
+    reportYear: '2569',
+    calibrationItems: [
+      {
+        parameter: 'NOx (ppm)',
+        startDate: '2026-07-01',
+        endDate: '2026-07-02',
+        result: 'ผ่าน',
+        verifierCompany: 'บริษัท สอบเทียบ จำกัด',
+        cemsModel: 'Model X',
+        rataReportLink: 'https://example.com/rata-nox',
+        calibrationPhotoLink: 'https://example.com/photo-nox',
+        attachments: [
+          {
+            attachmentType: 'RATA_REPORT',
+            originalFileName: 'rata-report.pdf',
+            storedFileName: '15-rata-report.pdf',
+            mimeType: 'application/pdf',
+            fileSize: 840000,
+            storagePath: '/uploads/kwp/15-rata-report.pdf',
+          },
+          {
+            attachmentType: 'CALIBRATION_PHOTO',
+            originalFileName: 'calibration-photo.jpg',
+            storedFileName: '15-calibration-photo.jpg',
+            mimeType: 'image/jpeg',
+            fileSize: 220000,
+            storagePath: '/uploads/kwp/15-calibration-photo.jpg',
+          },
+        ],
+      },
+      {
+        parameter: 'SO2 (ppm)',
+        startDate: '2026-07-03',
+        endDate: '2026-07-04',
+        result: 'ไม่ผ่าน',
+        verifierCompany: 'บริษัท สอบเทียบ จำกัด',
+        cemsModel: 'Model Y',
+        rataReportLink: null,
+        calibrationPhotoLink: null,
+        attachments: [
+          {
+            attachmentType: 'RATA_REPORT',
+            originalFileName: 'rata-report-so2.pdf',
+            mimeType: 'application/pdf',
+            fileSize: 640000,
+            storagePath: '/uploads/kwp/15-rata-report-so2.pdf',
+          },
+          {
+            attachmentType: 'CALIBRATION_PHOTO',
+            originalFileName: 'calibration-photo-so2.png',
+            mimeType: 'image/png',
+            fileSize: 180000,
+            storagePath: '/uploads/kwp/15-calibration-photo-so2.png',
+          },
+        ],
+      },
+    ],
+    reporterName: 'สมชาย ทดสอบ',
+    reporterPosition: 'ผู้จัดการสิ่งแวดล้อม',
+  };
+}
+
 function operatorToken(): string {
   return signAccessToken({
     sub: '42',
@@ -599,6 +822,57 @@ function kwp02DetailResponse() {
             storagePath: 'kwp/form-attachments/2026/07/13-lab-report.pdf',
             fileUrl: 'http://localhost:3000/uploads/kwp/form-attachments/2026/07/13-lab-report.pdf',
             uploadedAt: '2026-07-04T08:15:00.000Z',
+            uploadedBy: 42,
+          },
+        ],
+      },
+    ],
+  };
+}
+
+function kwp05DetailResponse() {
+  return {
+    ...commonDetailFields(),
+    id: 15,
+    requestNo: 'KWP-69-00015',
+    form: 'กวภ.05' as const,
+    formType: 'KWP05' as const,
+    status: 'SUBMITTED',
+    submittedAt: '2026-07-04T08:45:00.000Z',
+    calibrationReport: {
+      businessActivity: 'ผลิตกระแสไฟฟ้า',
+      samplerName: 'สมหญิง เก็บตัวอย่าง',
+      officerRegistration: 'OFF-001',
+      laboratoryName: 'ห้องปฏิบัติการทดสอบ จำกัด',
+      laboratoryRegistration: 'LAB-REG-001',
+      cemsBrand: 'CEMS Brand A',
+      cemsDetail: 'CEMS Brand A รุ่น Model X',
+      reportRound: '1',
+      reportYear: '2569',
+    },
+    calibrationItems: [
+      {
+        id: 61,
+        parameter: 'NOx (ppm)',
+        startDate: '2026-07-01',
+        endDate: '2026-07-02',
+        result: 'ผ่าน',
+        verifierCompany: 'บริษัท สอบเทียบ จำกัด',
+        cemsModel: 'Model X',
+        rataReportLink: 'https://example.com/rata-nox',
+        calibrationPhotoLink: 'https://example.com/photo-nox',
+        attachments: [
+          {
+            id: 71,
+            attachmentType: 'RATA_REPORT',
+            originalFileName: 'rata-report.pdf',
+            storedFileName: '15-rata-report.pdf',
+            mimeType: 'application/pdf',
+            fileSize: 840000,
+            storagePath: 'kwp/form-attachments/2026/07/15-rata-report.pdf',
+            fileUrl:
+              'http://localhost:3000/uploads/kwp/form-attachments/2026/07/15-rata-report.pdf',
+            uploadedAt: '2026-07-04T08:45:00.000Z',
             uploadedBy: 42,
           },
         ],

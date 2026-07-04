@@ -9,7 +9,8 @@ Journeys derived during this TDD run from requests to create APIs for **กว�
 - As a factory operator, I want to submit a KWP01 malfunction form so that DIW officers can review the incident.
 - As a factory operator, I want to submit a KWP02 emission measurement report with measurement rows and file metadata so that DIW officers can review lab evidence together with the form.
 - As a factory operator, I want to submit a KWP04 exempted-CEMS emission measurement report with measurement rows and file metadata so that DIW officers can review lab evidence together with the form.
-- As a KWP reviewer or factory operator, I want to open KWP01, KWP02, and KWP04 detail data by id so that saved form data and any uploaded evidence files can be displayed.
+- As a factory operator, I want to submit a KWP05 CEMS calibration/verification report with RATA/photo evidence files so that DIW officers can review the calibration result.
+- As a KWP reviewer or factory operator, I want to open KWP01, KWP02, KWP04, and KWP05 detail data by id so that saved form data and any uploaded evidence files can be displayed.
 - As a factory operator, I want KWP02 files to upload with the same two-step pattern as connection-request documents so that binary files are stored before the form payload is submitted.
 - As the backend, I want to reject invalid KWP01 payloads before writing data so that bad form states do not enter the database.
 - As the backend, I want to reject KWP02 payloads without measurement rows so that an empty report cannot be submitted.
@@ -30,6 +31,9 @@ Journeys derived during this TDD run from requests to create APIs for **กว�
 | `GET /api/v1/kwp-form-submissions/kwp01/:id`, `/kwp02/:id`, and `/kwp04/:id` return typed detail data | `npm test -- kwp-form-submissions --runInBand` failed at compile-time because `formType` did not exist on `KwpFormSubmissionReadAccess` | `npm test -- kwp-form-submissions --runInBand` passed 2 suites / 20 tests | Detail routes require `kwp_forms:view`, validate positive integer ids, pass the requested form type to the repository, and return KWP01 issue data or KWP02/KWP04 measurement rows with file URLs |
 | Repository detail access is scoped | focused repository test initially absent for the new behavior | `npm test -- kwp-form-submissions --runInBand` passed after adding query assertion | Detail query filters by id, supported form types `KWP01/KWP02/KWP04`, operator factory assignment, and regional access |
 | KWP attachment `fileUrl` avoids duplicated public path | local review found old metadata may store paths like `/uploads/...`, which could produce `/uploads/uploads/...` without normalization | `npm test -- kwp-form-submissions --runInBand` passed 2 suites / 20 tests | URL builder handles both relative storage paths and paths that already include `UPLOAD_PUBLIC_PATH` |
+| `POST /api/v1/kwp-form-submissions/kwp05` creates a submitted form | `npm test -- kwp-form-submissions --runInBand` failed at compile-time because `createKwp05`, `KWP05` detail DTOs, and `toKwp05InsertRecordsForTests` did not exist | `npm test -- kwp-form-submissions --runInBand` passed 2 suites / 24 tests | Route is mounted, requires auth/edit permission, validates body, returns 201 with calibration item and attachment counts |
+| Repository maps KWP05 payload to calibration tables and attachments | same RED compile failure because `toKwp05InsertRecordsForTests` did not exist | same GREEN command | KWP05 saves parent row with `form_type = KWP05`; header details map to `kwp05_calibration_reports`, rows map to `kwp05_calibration_items`, and evidence files map to `kwp_form_attachments` with `related_table = kwp05_calibration_items` |
+| `GET /api/v1/kwp-form-submissions/kwp05/:id` returns typed detail data | same RED compile failure because `KWP05` was not a supported form type | same GREEN command | Detail route requires `kwp_forms:view`, filters by `formType = KWP05`, and returns `calibrationReport`, `calibrationItems`, and attachment `fileUrl` values |
 
 ## Test specification
 
@@ -55,11 +59,16 @@ Journeys derived during this TDD run from requests to create APIs for **กว�
 | 18 | Relative KWP attachment storage paths are converted to public file URLs | `backend/tests/unit/kwp-form-submissions.repository.test.ts` | unit | PASS | `npm test -- kwp-form-submissions --runInBand` |
 | 19 | Storage paths already starting with `/uploads` do not duplicate the public path | `backend/tests/unit/kwp-form-submissions.repository.test.ts` | unit | PASS | `npm test -- kwp-form-submissions --runInBand` |
 | 20 | Generic detail path `/api/v1/kwp-form-submissions/:id` is no longer exposed | `backend/tests/unit/kwp-form-submissions.route.test.ts` | route | PASS | `npm test -- kwp-form-submissions --runInBand` |
+| 21 | Valid KWP05 payload with calibration rows and file metadata calls service and returns 201 with Location | `backend/tests/unit/kwp-form-submissions.route.test.ts` | route | PASS | `npm test -- kwp-form-submissions --runInBand` |
+| 22 | KWP05 payload rejects `endDate` before `startDate` before service execution | `backend/tests/unit/kwp-form-submissions.route.test.ts` | route | PASS | `npm test -- kwp-form-submissions --runInBand` |
+| 23 | KWP05 payload maps to `kwp05_calibration_reports`, `kwp05_calibration_items`, and `kwp_form_attachments` | `backend/tests/unit/kwp-form-submissions.repository.test.ts` | unit | PASS | `npm test -- kwp-form-submissions --runInBand` |
+| 24 | KWP05 detail returns calibration rows and `attachments[].fileUrl` | `backend/tests/unit/kwp-form-submissions.route.test.ts` | route | PASS | `npm test -- kwp-form-submissions --runInBand` |
 
 ## Coverage and known gaps
 
 - Targeted GREEN command for latest KWP02 change: `npm test -- --runTestsByPath tests/unit/kwp-form-submissions.route.test.ts tests/unit/kwp-form-submissions.repository.test.ts --runInBand`
 - Result after KWP typed-detail follow-up: 2 test suites passed, 20 tests passed.
+- Result after KWP05 follow-up: 2 test suites passed, 24 tests passed.
 - Frontend build command: `npm run build` in `frontend/`
 - Frontend build result: passed; Vite reported the existing large-chunk warning only.
 - Full coverage command: `npm run test:coverage -- --runInBand`
@@ -78,3 +87,5 @@ Journeys derived during this TDD run from requests to create APIs for **กว�
 - KWP04 follow-up GREEN: same focused route/repository command passed after adding `/kwp04`, reusing KWP02 measurement validation, storing `form_type = KWP04`, and documenting payload/response/table columns.
 - KWP detail follow-up RED: focused route test failed at compile-time because `getById` did not exist on `kwpFormSubmissionsService`.
 - KWP detail follow-up GREEN: same focused route/repository command passed after replacing the generic detail path with `GET /api/v1/kwp-form-submissions/kwp01/:id`, `/kwp02/:id`, and `/kwp04/:id`, scope-aware typed repository reads, attachment `fileUrl` derivation with public-path normalization, APIDoc response examples for 01/02/04, and derived-field documentation.
+- KWP05 RED: focused route/repository tests failed at compile-time because `createKwp05`, `KWP05` DTO support, and `toKwp05InsertRecordsForTests` did not exist.
+- KWP05 GREEN: same focused command passed after adding `/kwp05`, `GET /kwp05/:id`, validation, migration `0057_create_kwp05_calibration_tables`, repository transaction, APIDoc payload/response/table columns, and TDD evidence.

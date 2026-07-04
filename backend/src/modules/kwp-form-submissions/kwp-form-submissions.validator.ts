@@ -68,6 +68,30 @@ const kwpEmissionMeasurementItemSchema = z
   })
   .strict();
 
+const kwp05CalibrationItemSchema = z
+  .object({
+    parameter: requiredText(255),
+    startDate: z.preprocess(emptyStringToNull, isoDate.nullable().optional()),
+    endDate: z.preprocess(emptyStringToNull, isoDate.nullable().optional()),
+    result: nullableText(32),
+    verifierCompany: nullableText(500),
+    cemsModel: nullableText(500),
+    rataReportLink: nullableText(1000),
+    calibrationPhotoLink: nullableText(1000),
+    attachments: z.array(kwpAttachmentSchema).max(20).optional().default([]),
+  })
+  .strict()
+  .refine(
+    (value) => {
+      if (!value.startDate || !value.endDate) return true;
+      return value.endDate >= value.startDate;
+    },
+    {
+      path: ['endDate'],
+      message: 'Calibration end date must be on or after start date',
+    },
+  );
+
 export const createKwp01SubmissionSchema = z
   .object({
     ...commonKwpSubmissionShape,
@@ -102,3 +126,19 @@ export const createKwp02SubmissionSchema = z
   .strict();
 
 export const createKwp04SubmissionSchema = createKwp02SubmissionSchema;
+
+export const createKwp05SubmissionSchema = z
+  .object({
+    ...commonKwpSubmissionShape,
+    businessActivity: nullableText(500),
+    samplerName: nullableText(255),
+    officerRegistration: nullableText(100),
+    laboratoryName: nullableText(500),
+    laboratoryRegistration: nullableText(100),
+    cemsBrand: nullableText(255),
+    cemsDetail: nullableText(1000),
+    reportRound: nullableText(100),
+    reportYear: nullableText(4),
+    calibrationItems: z.array(kwp05CalibrationItemSchema).min(1).max(100),
+  })
+  .strict();
