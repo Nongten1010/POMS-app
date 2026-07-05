@@ -820,6 +820,24 @@ describe('connection request validators', () => {
           treatmentSystem: 'อื่นๆ',
         }),
       );
+      expect(point.measurementInstruments?.parameters[0].standardCriteria).toEqual({
+        enabled: false,
+        standardValue: '120',
+        rows: [
+          { level: 'normal', min: 0, max: 96 },
+          { level: 'warning', min: 96, max: 120 },
+          { level: 'critical', min: 120, max: null },
+        ],
+      });
+      expect(point.measurementInstruments?.parameters[0].eiaCriteria).toEqual({
+        enabled: false,
+        standardValue: '120',
+        rows: [
+          { level: 'normal', min: 0, max: 96 },
+          { level: 'warning', min: 96, max: 120 },
+          { level: 'critical', min: 120, max: null },
+        ],
+      });
       expect(point.measurementInstruments?.parameters[1].standardCriteria).toEqual({
         enabled: false,
         standardValue: null,

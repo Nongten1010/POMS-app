@@ -1158,9 +1158,10 @@ Backend เริ่มด้วย local disk storage (`UPLOAD_DIR`, `UPLOAD_PU
 
 - ถ้าไม่ได้เลือก checkbox ให้ไม่ส่ง field นี้, ส่ง `null`, หรือส่ง `{ "enabled": false }`
 - ถ้าเลือก checkbox ต้องส่ง `enabled: true`, `standardValue`, และ `rows` ให้ครบ 3 แถว
-- เพื่อรองรับ payload จากฟอร์มเดิม ถ้าส่ง `enabled: true` แต่ `standardValue` ว่าง
-  และค่า `rows[].min`/`rows[].max` ว่างทั้งหมด backend จะ normalize เป็น
-  `{ "enabled": false, "standardValue": null, "rows": [] }`
+- ถ้าส่ง `enabled: false` แต่มี `standardValue` หรือ `rows` ที่มีค่า backend จะเก็บค่า
+  เหล่านั้นไว้ เพื่อรองรับฟอร์มที่บันทึกค่าเกณฑ์ไว้แม้ checkbox ไม่ถูกเลือก
+- ถ้าส่ง `enabled: true` แต่ `standardValue` ว่าง และค่า `rows[].min`/`rows[].max`
+  ว่างทั้งหมด backend จะ normalize เป็น `{ "enabled": false, "standardValue": null, "rows": [] }`
 - `rows[].level` ต้องมีครบ `normal`, `warning`, `critical` ห้ามซ้ำ
 - `rows[].min` และ `rows[].max` เป็น number หรือ `null` กรณีช่องว่าง/ไม่จำกัด
 
@@ -3230,7 +3231,7 @@ Data dictionary response row:
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
-| `enabled` | boolean | Yes | `true` ถ้ามีการกรอกค่ามาตรฐานหรือตาราง MIN/MAX; ถ้าเปิดไว้แต่ค่าว่างทั้งหมด backend จะ normalize เป็น `false` |
+| `enabled` | boolean | Yes | `true` ถ้ามีการเลือกใช้เกณฑ์; ถ้าเป็น `false` แต่มีค่ามาตรฐาน/rows backend ยังเก็บค่าไว้ |
 | `standardValue` | string|null | No | ค่ามาตรฐาน |
 | `rows` | array | Conditional | ต้องส่งเมื่อ `enabled = true` |
 | `rows[].level` | string | Yes | `normal`, `warning`, `critical` |

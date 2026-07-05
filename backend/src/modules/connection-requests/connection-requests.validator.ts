@@ -223,6 +223,14 @@ const measurementCriteriaSchema = z
   })
   .transform((criteria) => {
     if (!criteria.enabled) {
+      if (hasCriteriaValue(criteria.standardValue, criteria.rows)) {
+        return {
+          enabled: false,
+          standardValue: criteria.standardValue ?? null,
+          rows: criteria.rows ?? [],
+        };
+      }
+
       return {
         enabled: false,
         standardValue: null,
@@ -236,6 +244,24 @@ const measurementCriteriaSchema = z
       rows: criteria.rows ?? [],
     };
   });
+
+function hasCriteriaValue(
+  standardValue: z.infer<typeof criteriaStandardValueSchema>,
+  rows: z.infer<typeof criteriaRangeRowSchema>[] | undefined,
+): boolean {
+  const hasStandardValue =
+    (typeof standardValue === 'string' && standardValue.trim().length > 0) ||
+    (typeof standardValue === 'number' && Number.isFinite(standardValue));
+  if (hasStandardValue) return true;
+
+  return (
+    rows?.some(
+      (row) =>
+        (typeof row.min === 'number' && Number.isFinite(row.min)) ||
+        (typeof row.max === 'number' && Number.isFinite(row.max)),
+    ) ?? false
+  );
+}
 
 const measurementInstrumentParameterSchema = z
   .object({
