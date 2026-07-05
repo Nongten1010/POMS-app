@@ -1089,8 +1089,6 @@ function ResultNoticeDialog({ open, report, mode = 'view', onClose, onConfirm })
     checkedParameters: ['BOD', 'COD'],
     reviewResult: 'เห็นควรแจ้งผลการตรวจสอบ',
     comment: '',
-    inspectorName: 'เจ้าหน้าที่ ก',
-    inspectorPosition: 'นักวิชาการสิ่งแวดล้อม',
   })
   const title = report && isBangkokProvince(report.province)
     ? 'แบบแจ้งผล (ส่วนกลาง)'
@@ -1190,34 +1188,6 @@ function ResultNoticeDialog({ open, report, mode = 'view', onClose, onConfirm })
               </Grid>
             </SectionPaper>
 
-            <SectionPaper title="ผู้ตรวจสอบ">
-              <Grid container spacing={2}>
-                <Grid size={{ xs: 12, md: 6 }}>
-                  <TextField
-                    label="ชื่อ-นามสกุล"
-                    size="small"
-                    value={noticeForm.inspectorName}
-                    onChange={(event) => updateNoticeForm('inspectorName', event.target.value)}
-                    fullWidth
-                  />
-                </Grid>
-                <Grid size={{ xs: 12, md: 6 }}>
-                  <TextField
-                    label="ตำแหน่ง"
-                    size="small"
-                    value={noticeForm.inspectorPosition}
-                    onChange={(event) => updateNoticeForm('inspectorPosition', event.target.value)}
-                    fullWidth
-                  />
-                </Grid>
-                <Grid size={{ xs: 12, md: 6 }}>
-                  <ReadOnlyField label="ผู้ทบทวน" value={isBangkokProvince(report.province) ? 'ผอ.กฝม.' : '-'} />
-                </Grid>
-                <Grid size={{ xs: 12, md: 6 }}>
-                  <ReadOnlyField label="ผู้อนุมัติ" value={isBangkokProvince(report.province) ? 'ผอ.กวภ.' : 'ผอ.ศวภ.'} />
-                </Grid>
-              </Grid>
-            </SectionPaper>
           </Stack>
         ) : null}
         {report && !isEditMode ? <ResultNoticePaperDocument report={report} /> : null}
