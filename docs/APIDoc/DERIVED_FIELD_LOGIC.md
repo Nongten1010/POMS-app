@@ -215,7 +215,7 @@ Source:
 
 Transformation:
 
-- `approvalTrack` is derived from the submitted `provinceName`: `กรุงเทพมหานคร` becomes `CENTRAL`; every other province becomes `REGIONAL`.
+- `approvalTrack` is derived from the submitted `provinceName`: provinces in `ภาคกลาง` become `CENTRAL`; every other province becomes `REGIONAL`.
 - `steps` are initialized from `approvalTrack` when the form is saved:
   - `CENTRAL`: เจ้าหน้าที่กฝม. (ตรวจสอบความถูกต้อง + บันทึก/แก้ไขแบบแจ้งผล) -> ผอ.กฝม. (ทบทวน) -> ผอ.กวภ. (อนุมัติ)
   - `REGIONAL`: เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์ (ตรวจสอบความถูกต้อง + บันทึก/แก้ไขแบบแจ้งผล) -> ผอ.ศูนย์ (อนุมัติ)

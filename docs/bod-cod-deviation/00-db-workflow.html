@@ -160,7 +160,7 @@
 
     <section class="note">
       <strong>หลักการเลือกแบบแจ้งผล</strong>
-      <p>ถ้าโรงงานอยู่ในกรุงเทพมหานคร ให้ใช้ workflow <code>CENTRAL</code> และแบบแจ้งผลส่วนกลาง ถ้าเป็นจังหวัดอื่นให้ใช้ workflow <code>REGIONAL</code> และแบบแจ้งผลส่วนภูมิภาค โดยควรเก็บค่า <code>province_name</code> และ <code>approval_track</code> เป็น snapshot ตอนส่งรายงาน เพื่อไม่ให้ประวัติเปลี่ยนตามข้อมูลโรงงานที่แก้ภายหลัง</p>
+      <p>ถ้าโรงงานอยู่ในภาคกลาง ให้ใช้ workflow <code>CENTRAL</code> และแบบแจ้งผลส่วนกลาง ถ้าเป็นจังหวัดนอกภาคกลางให้ใช้ workflow <code>REGIONAL</code> และแบบแจ้งผลส่วนภูมิภาค โดยควรเก็บค่า <code>province_name</code> และ <code>approval_track</code> เป็น snapshot ตอนส่งรายงาน เพื่อไม่ให้ประวัติเปลี่ยนตามข้อมูลโรงงานที่แก้ภายหลัง</p>
     </section>
 
     <h2>1. ตารางหลักที่เสนอ</h2>
@@ -252,7 +252,7 @@
     <h2>4. Step อนุมัติแยกตามพื้นที่</h2>
     <div class="grid">
       <div class="card">
-        <strong>ส่วนกลาง - กรุงเทพมหานคร</strong>
+        <strong>ส่วนกลาง - ภาคกลาง</strong>
         <p>1. ผู้ตรวจสอบ (<code>INSPECTOR</code>)</p>
         <p>2. ผู้ทบทวน (<code>REVIEWER</code>)</p>
         <p>3. ผู้อนุมัติ (<code>APPROVER</code>)</p>

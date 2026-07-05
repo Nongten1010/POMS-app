@@ -1,5 +1,6 @@
 import { describe, expect, it } from '@jest/globals';
 import {
+  buildBodCodApprovalTrackForProvinceForTests,
   buildBodCodApprovalStepsForTests,
   buildBodCodCreateAccessQueryForTests,
   buildBodCodDeviationFactoryQueryForTests,
@@ -199,6 +200,13 @@ describe('bodCodDeviationReportsRepository access filters', () => {
       },
       { stepNo: 3, roleCode: 'APPROVER', roleLabel: 'ผอ.ศูนย์ (อนุมัติ)' },
     ]);
+  });
+
+  it('routes every central-region province through the central approval track', () => {
+    expect(buildBodCodApprovalTrackForProvinceForTests('กรุงเทพมหานคร')).toBe('CENTRAL');
+    expect(buildBodCodApprovalTrackForProvinceForTests('ปทุมธานี')).toBe('CENTRAL');
+    expect(buildBodCodApprovalTrackForProvinceForTests('นครปฐม')).toBe('CENTRAL');
+    expect(buildBodCodApprovalTrackForProvinceForTests('ชลบุรี')).toBe('REGIONAL');
   });
 
   it('moves first approval into result-notice editing before review or final approval', () => {

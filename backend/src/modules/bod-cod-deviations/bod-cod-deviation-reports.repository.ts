@@ -35,6 +35,27 @@ import type {
 type BodCodApprovalEventAction = BodCodWorkflowAction | 'RESUBMIT_REVISION';
 type BodCodWorkflowNextStepRole = BodCodApprovalRoleCode | null;
 
+const CENTRAL_PROVINCE_NAMES = new Set([
+  'กรุงเทพมหานคร',
+  'สมุทรปราการ',
+  'นนทบุรี',
+  'ปทุมธานี',
+  'พระนครศรีอยุธยา',
+  'อ่างทอง',
+  'ลพบุรี',
+  'สิงห์บุรี',
+  'ชัยนาท',
+  'สระบุรี',
+  'นครนายก',
+  'นครสวรรค์',
+  'อุทัยธานี',
+  'กำแพงเพชร',
+  'สุพรรณบุรี',
+  'นครปฐม',
+  'สมุทรสาคร',
+  'สมุทรสงคราม',
+]);
+
 interface FactoryTableRow {
   connected_point_id: number | string;
   source_request_id: number | string;
@@ -550,6 +571,10 @@ export function buildBodCodDeviationReportDetailQueryForTests(
 
 export function buildBodCodApprovalStepsForTests(approvalTrack: BodCodApprovalTrack) {
   return approvalStepsForTrack(approvalTrack);
+}
+
+export function buildBodCodApprovalTrackForProvinceForTests(provinceName: string) {
+  return approvalTrackForProvince(provinceName);
 }
 
 export function buildBodCodCreateAccessQueryForTests(
@@ -1410,7 +1435,7 @@ async function nextReportNo(reportYear: number, trx: Knex.Transaction): Promise<
 }
 
 function approvalTrackForProvince(provinceName: string): BodCodApprovalTrack {
-  return provinceName.trim() === 'กรุงเทพมหานคร' ? 'CENTRAL' : 'REGIONAL';
+  return CENTRAL_PROVINCE_NAMES.has(provinceName.trim()) ? 'CENTRAL' : 'REGIONAL';
 }
 
 function approvalStepsForTrack(
