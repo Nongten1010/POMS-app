@@ -533,7 +533,7 @@ describe('KWP form submission routes', () => {
         label: 'ส่งแก้ไข',
         status: 'CURRENT',
       },
-      allowedActions: ['START_REVIEW'],
+      allowedActions: ['APPROVE'],
     });
     const app = createApp();
 
@@ -566,7 +566,7 @@ describe('KWP form submission routes', () => {
       currentStep: {
         key: 'REVISION_REQUESTED',
       },
-      allowedActions: ['START_REVIEW'],
+      allowedActions: ['APPROVE'],
     });
   });
 

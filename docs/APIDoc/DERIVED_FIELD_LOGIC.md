@@ -1041,7 +1041,7 @@ Logic:
 - `allowedActions` is derived from the current status:
   - `SUBMITTED` returns `START_REVIEW` and `REQUEST_REVISION`.
   - `UNDER_REVIEW` returns `REQUEST_REVISION` and `APPROVE`.
-  - `REVISION_REQUESTED` returns `START_REVIEW`.
+  - `REVISION_REQUESTED` returns `APPROVE`.
   - terminal or unsupported statuses return an empty array.
 - `revisionReason` returns the latest `kwp_form_status_history.note` whose status is `REVISION_REQUESTED`; if the workflow never requested revision or that history row has no note, the response returns `null`.
 - `POST /workflow-actions` also inserts each transition into `kwp_form_status_history` with the action note.

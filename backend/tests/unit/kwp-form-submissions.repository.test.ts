@@ -177,10 +177,8 @@ describe('kwpFormSubmissionsRepository', () => {
     );
     expect(revision.currentStep).toMatchObject({ key: 'REVISION_REQUESTED', status: 'CURRENT' });
     expect(revision.revisionReason).toBe('เพิ่มเอกสารแนบผลตรวจวัด');
-    expect(revision.allowedActions).toEqual(['START_REVIEW']);
-    expect(nextKwpWorkflowStatusForTests('REVISION_REQUESTED', 'START_REVIEW')).toBe(
-      'UNDER_REVIEW',
-    );
+    expect(revision.allowedActions).toEqual(['APPROVE']);
+    expect(nextKwpWorkflowStatusForTests('REVISION_REQUESTED', 'APPROVE')).toBe('APPROVED');
     expect(returnedToReview.currentStep).toMatchObject({
       key: 'OFFICER_REVIEW',
       status: 'CURRENT',

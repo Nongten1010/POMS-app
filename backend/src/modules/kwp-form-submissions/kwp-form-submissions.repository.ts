@@ -1491,7 +1491,7 @@ function workflowSteps(
 function allowedWorkflowActions(status: KwpFormSubmissionStatus): KwpFormWorkflowAction[] {
   if (status === 'SUBMITTED') return ['START_REVIEW', 'REQUEST_REVISION'];
   if (status === 'UNDER_REVIEW') return ['REQUEST_REVISION', 'APPROVE'];
-  if (status === 'REVISION_REQUESTED') return ['START_REVIEW'];
+  if (status === 'REVISION_REQUESTED') return ['APPROVE'];
   return [];
 }
 

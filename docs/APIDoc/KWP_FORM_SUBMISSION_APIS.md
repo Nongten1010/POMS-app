@@ -1169,7 +1169,7 @@ Permission: `kwp_forms:view`
 | --- | --- | --- |
 | `SUBMITTED` | `SUBMITTED` / ส่งฟอร์ม | `START_REVIEW`, `REQUEST_REVISION` |
 | `UNDER_REVIEW` | `OFFICER_REVIEW` / พิจารณา | `REQUEST_REVISION`, `APPROVE` |
-| `REVISION_REQUESTED` | `REVISION_REQUESTED` / ส่งแก้ไข | `START_REVIEW` |
+| `REVISION_REQUESTED` | `REVISION_REQUESTED` / ส่งแก้ไข | `APPROVE` |
 | `APPROVED` | `APPROVED` / ผ่านการพิจารณา | none |
 | `REJECTED`, `CANCELLED` | terminal status | none |
 
@@ -1257,6 +1257,7 @@ Behavior:
 - ถ้าอยู่นอก scope โรงงานของผู้ประกอบการ คืน `404`
 - ถ้าสถานะไม่ใช่ `REVISION_REQUESTED` คืน `409 CONFLICT`
 - การแก้ไข replace รายละเอียดฟอร์มและรายการลูกของฟอร์มนั้น แต่ไม่เปลี่ยนเลขคำขอหรือสถานะ workflow
+- หลังผู้ประกอบการบันทึกแก้ไขด้วย `PATCH` แล้ว สถานะยังเป็น `REVISION_REQUESTED` และเจ้าหน้าที่สามารถ `APPROVE` ได้จากสถานะนี้โดยตรง
 - Response คืน detail shape เดียวกับ `GET /api/v1/kwp-form-submissions/kwp01/:id`
 
 ## 10. Resubmit returned KWP submissions
