@@ -763,6 +763,28 @@ describe('BOD/COD deviation report routes', () => {
     });
   });
 
+  it('lets officers create the BOD/COD result notice form with POST as an upsert alias', async () => {
+    const app = createApp();
+    const payload = resultNoticePayload();
+
+    const response = await request(app)
+      .post('/api/v1/bod-cod-deviation-reports/9/result-notice')
+      .set('Authorization', `Bearer ${officerToken()}`)
+      .send(payload);
+
+    expect(response.status).toBe(200);
+    expect(mockedService.upsertResultNotice).toHaveBeenCalledWith(9, payload, {
+      actorUserId: 77,
+      scope: 'ALL',
+      regionalAccess: { regions: ['ภาคเหนือ'] },
+    });
+    expect(response.body.data.resultNotice).toMatchObject({
+      reportCorrectness: 'ถูกต้องครบถ้วน',
+      checkedParameters: ['BOD', 'COD'],
+      reviewResult: 'เห็นควรแจ้งผลการตรวจสอบ',
+    });
+  });
+
   it('rejects invalid BOD/COD result notice payloads before calling service', async () => {
     const app = createApp();
     const { inspectorName: _inspectorName, ...payload } = resultNoticePayload();

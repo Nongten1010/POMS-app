@@ -50,6 +50,11 @@ bodCodDeviationReportsRoutes.post(
   authorize('bod_cod_errors:approve'),
   bodCodDeviationReportsController.changeWorkflowStatus,
 );
+bodCodDeviationReportsRoutes.post(
+  '/:id/result-notice',
+  authorize('bod_cod_errors:approve'),
+  bodCodDeviationReportsController.upsertResultNotice,
+);
 bodCodDeviationReportsRoutes.put(
   '/:id/result-notice',
   authorize('bod_cod_errors:approve'),
