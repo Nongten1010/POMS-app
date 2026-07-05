@@ -230,6 +230,18 @@ interface FactoryFavoriteRow {
   deleted_at: Date | string | null;
 }
 
+interface OfficerNotificationEmailRecipientRow {
+  recipient_type: 'PROVINCE' | 'INDUSTRIAL_ESTATE';
+  province_name: string | null;
+  emails_json: string;
+}
+
+interface OfficerNotificationEmailLookupInput {
+  factoryId: string;
+  provinceName: string | null | undefined;
+  industrialAreaType?: 'INDUSTRIAL_ESTATE' | 'OUTSIDE_INDUSTRIAL_ESTATE';
+}
+
 const TEMPORARY_FACTORY_TEXT = 'ไม่ระบุ';
 const TEMPORARY_EIA_LABEL = 'ไม่มี' as const;
 const TERMINAL_CONNECTION_REQUEST_STATUSES: ConnectionRequestStatus[] = ['CONNECTED', 'CANCELED'];
@@ -478,6 +490,76 @@ export const connectionRequestsRepository = {
       );
 
     return hydrateMany(rows);
+  },
+
+  async listOfficerNotificationEmailsForFactories(
+    factories: OfficerNotificationEmailLookupInput[],
+  ): Promise<Map<string, string[]>> {
+    if (factories.length === 0) return new Map();
+
+    const lookupInputs = factories.map((factory) => ({
+      factoryId: factory.factoryId,
+      recipientType:
+        factory.industrialAreaType === 'INDUSTRIAL_ESTATE'
+          ? ('INDUSTRIAL_ESTATE' as const)
+          : ('PROVINCE' as const),
+      provinceName: normalizeLookupText(factory.provinceName),
+    }));
+    const provinceNames = [
+      ...new Set(
+        lookupInputs
+          .filter((factory) => factory.recipientType === 'PROVINCE')
+          .map((factory) => factory.provinceName)
+          .filter(isString),
+      ),
+    ];
+    const recipientTypes = new Set<OfficerNotificationEmailRecipientRow['recipient_type']>(
+      lookupInputs.map((factory) => factory.recipientType),
+    );
+    const emptyResult = new Map(lookupInputs.map((factory) => [factory.factoryId, []]));
+    if (!recipientTypes.has('INDUSTRIAL_ESTATE') && provinceNames.length === 0) {
+      return emptyResult;
+    }
+
+    const query = db<OfficerNotificationEmailRecipientRow>('officer_notification_email_recipients')
+      .where('is_active', true)
+      .whereNull('deleted_at')
+      .where((builder) => {
+        if (recipientTypes.has('INDUSTRIAL_ESTATE')) {
+          builder.orWhere('recipient_type', 'INDUSTRIAL_ESTATE');
+        }
+        if (provinceNames.length > 0) {
+          builder.orWhere((provinceBuilder) => {
+            provinceBuilder
+              .where('recipient_type', 'PROVINCE')
+              .whereIn('province_name', provinceNames);
+          });
+        }
+      })
+      .select('recipient_type', 'province_name', 'emails_json');
+
+    const rows = await query;
+    const emailsByLookupKey = new Map<string, string[]>();
+    rows.forEach((row) => {
+      const key =
+        row.recipient_type === 'INDUSTRIAL_ESTATE'
+          ? 'INDUSTRIAL_ESTATE'
+          : `PROVINCE:${normalizeLookupText(row.province_name) ?? ''}`;
+      emailsByLookupKey.set(key, normalizeEmailList(parseJsonArray<string>(row.emails_json)));
+    });
+
+    return new Map(
+      lookupInputs.map((factory) => {
+        const key =
+          factory.recipientType === 'INDUSTRIAL_ESTATE'
+            ? 'INDUSTRIAL_ESTATE'
+            : `PROVINCE:${factory.provinceName ?? ''}`;
+        return [
+          factory.factoryId,
+          emailsByLookupKey.get(key) ?? emptyResult.get(factory.factoryId) ?? [],
+        ];
+      }),
+    );
   },
 
   async listConnectedMeasurementPointsForFactories(
@@ -1082,6 +1164,20 @@ function normalizeFactoryMainTypeCode(value: string | null | undefined): string 
 
 function isString(value: string | null): value is string {
   return value !== null;
+}
+
+function normalizeLookupText(value: string | null | undefined): string | null {
+  const text = value?.trim();
+  return text ? text : null;
+}
+
+function normalizeEmailList(values: string[]): string[] {
+  const emails = new Set<string>();
+  values.forEach((value) => {
+    const email = value.trim();
+    if (email) emails.add(email);
+  });
+  return [...emails];
 }
 
 function isTuple(value: [string, string] | null): value is [string, string] {

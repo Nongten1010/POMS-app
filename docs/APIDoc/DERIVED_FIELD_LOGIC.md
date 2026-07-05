@@ -866,6 +866,32 @@ Risk:
 - Old requests whose factory id or registration number no longer matches `factories` cannot be fully backfilled.
 - District/subdistrict are not derived from address text; they are stored only when the request payload sends separate fields.
 
+### `operator-factories[].officerNotificationEmails`
+
+Source:
+
+- `GET /api/v1/cems-wpms-requests/operator-factories`
+- factory location from `factories` joined with `provinces` and `industrial_estates`
+- email master table `officer_notification_email_recipients`
+
+Logic:
+
+- Backend derives `industrialAreaType` from `industrialEstateCode` or `industrialEstateName`.
+- If `industrialAreaType = INDUSTRIAL_ESTATE`, backend returns the `INDUSTRIAL_ESTATE` email row from `officer_notification_email_recipients`.
+- If the factory is outside an industrial estate, backend looks up the `PROVINCE` row by `provinceName`.
+- If no matching row exists, backend returns an empty array instead of guessing an email address.
+
+Reason:
+
+- The request form needs officer notification recipients attached to the selected factory without hardcoding province/IEAT email rules in the frontend.
+- Keeping the email list in a table lets officers update province recipients through a future admin/data migration path.
+
+Risk:
+
+- Province names must match the master value returned by the factory query.
+- Provinces not present in the seeded source image currently return `[]` until the table is updated.
+- Email addresses are seeded from the provided spreadsheet screenshots and should be corrected in DB if an office changes mailbox.
+
 ### `industryMainOrderLabel`
 
 Source:

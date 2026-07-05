@@ -1750,6 +1750,7 @@ Response:
       "latitude": "13.7563",
       "longitude": "100.5018",
       "province": "สระบุรี",
+      "officerNotificationEmails": ["saraban_saraburi@industry.go.th"],
       "isEligible": true,
       "eligibilityStatus": "เข้าข่าย",
       "monitoringPointCount": 1,
@@ -2937,6 +2938,7 @@ Data dictionary response row:
 | `latitude` | string|null | พิกัด latitude |
 | `longitude` | string|null | พิกัด longitude |
 | `province` | string|null | จังหวัด |
+| `officerNotificationEmails` | string[] | อีเมลสำหรับแจ้งเตือนเจ้าหน้าที่ ถ้าโรงงานอยู่ในนิคมอุตสาหกรรมจะใช้เมลการนิคม `contact@ieat.mail.go.th`, `investment.1@ieat.mail.go.th`; ถ้านอกนิคมจะใช้เมลสำนักงานอุตสาหกรรมจังหวัดจากตาราง `officer_notification_email_recipients` |
 | `isEligible` | boolean | โรงงานอยู่ในรายการเข้าข่าย |
 | `eligibilityStatus` | string | `เข้าข่าย` |
 | `monitoringPointCount` | number | จำนวนจุดตรวจวัด |

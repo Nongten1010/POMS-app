@@ -15,6 +15,7 @@ jest.mock('../../src/modules/connection-requests/connection-requests.repository'
     findFactoryGeneral: jest.fn(),
     listConnectedMeasurementPointsForFactories: jest.fn(),
     listPublicConnectedMeasurementPointsForFactories: jest.fn(),
+    listOfficerNotificationEmailsForFactories: jest.fn(),
     listFavoriteFactoryIds: jest.fn(),
     listRequestsForFactories: jest.fn(),
     setFactoryFavorite: jest.fn(),
@@ -138,6 +139,7 @@ describe('connectionRequestsService', () => {
     jest.clearAllMocks();
     mockedRepository.listFavoriteFactoryIds.mockResolvedValue([]);
     mockedRepository.listFactoryMainTypeLabels.mockResolvedValue(new Map());
+    mockedRepository.listOfficerNotificationEmailsForFactories.mockResolvedValue(new Map());
     mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([]);
     mockedRepository.listPublicConnectedMeasurementPointsForFactories.mockResolvedValue([]);
     mockedDeviceConnectionsService.listActiveSettings.mockResolvedValue([]);
@@ -352,6 +354,9 @@ describe('connectionRequestsService', () => {
 
   it('returns operator factories in the original table response shape', async () => {
     mockedRepository.listFactoriesForAccess.mockResolvedValue([factorySummary()]);
+    mockedRepository.listOfficerNotificationEmailsForFactories.mockResolvedValue(
+      new Map([['factory-001', ['saraban_saraburi@industry.go.th']]]),
+    );
     mockedRepository.listRequestsForFactories.mockResolvedValue([
       requestDto({
         status: CONNECTION_REQUEST_STATUS.CONNECTED,
@@ -379,6 +384,13 @@ describe('connectionRequestsService', () => {
       actorUserId,
       scope: 'OWN_FACTORY',
     });
+    expect(mockedRepository.listOfficerNotificationEmailsForFactories).toHaveBeenCalledWith([
+      {
+        factoryId: 'factory-001',
+        provinceName: 'สระบุรี',
+        industrialAreaType: 'OUTSIDE_INDUSTRIAL_ESTATE',
+      },
+    ]);
     expect(mockedRepository.listRequestsForFactories).toHaveBeenCalledWith(['factory-001']);
     expect(mockedRepository.listFavoriteFactoryIds).not.toHaveBeenCalled();
     expect(mockedRepository.listConnectedMeasurementPointsForFactories).not.toHaveBeenCalled();
@@ -399,6 +411,7 @@ describe('connectionRequestsService', () => {
       latitude: '13.7563',
       longitude: '100.5018',
       province: 'สระบุรี',
+      officerNotificationEmails: ['saraban_saraburi@industry.go.th'],
       isEligible: true,
       eligibilityStatus: 'เข้าข่าย',
       monitoringPointCount: 1,
@@ -407,6 +420,37 @@ describe('connectionRequestsService', () => {
     });
     expect(result.data[0]).not.toHaveProperty('measurementPoints');
     expect(result.data[0]).not.toHaveProperty('monitoringPointCountBySystem');
+  });
+
+  it('uses IEAT officer notification emails for factories inside an industrial estate', async () => {
+    mockedRepository.listFactoriesForAccess.mockResolvedValue([
+      factorySummary({
+        industrialAreaType: 'INDUSTRIAL_ESTATE',
+        industrialEstateCode: 'MTP',
+        industrialEstateName: 'นิคมอุตสาหกรรมมาบตาพุด',
+      }),
+    ]);
+    mockedRepository.listOfficerNotificationEmailsForFactories.mockResolvedValue(
+      new Map([['factory-001', ['contact@ieat.mail.go.th', 'investment.1@ieat.mail.go.th']]]),
+    );
+    mockedRepository.listRequestsForFactories.mockResolvedValue([]);
+
+    const result = await connectionRequestsService.listOperatorFactories(
+      actorUserId,
+      'OWN_FACTORY',
+    );
+
+    expect(mockedRepository.listOfficerNotificationEmailsForFactories).toHaveBeenCalledWith([
+      {
+        factoryId: 'factory-001',
+        provinceName: 'สระบุรี',
+        industrialAreaType: 'INDUSTRIAL_ESTATE',
+      },
+    ]);
+    expect(result.data[0]?.officerNotificationEmails).toEqual([
+      'contact@ieat.mail.go.th',
+      'investment.1@ieat.mail.go.th',
+    ]);
   });
 
   it('keeps all accessible operator factories even when they are inactive or not eligible', async () => {

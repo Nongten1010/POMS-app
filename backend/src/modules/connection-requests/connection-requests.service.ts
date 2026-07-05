@@ -148,6 +148,14 @@ export const connectionRequestsService = {
     const requests = await connectionRequestsRepository.listRequestsForFactories(
       factories.map((factory) => factory.factoryId),
     );
+    const officerNotificationEmailsByFactory =
+      await connectionRequestsRepository.listOfficerNotificationEmailsForFactories(
+        factories.map((factory) => ({
+          factoryId: factory.factoryId,
+          provinceName: factory.provinceName ?? factory.province,
+          industrialAreaType: factory.industrialAreaType ?? 'OUTSIDE_INDUSTRIAL_ESTATE',
+        })),
+      );
     const latestRequestByFactory = new Map<string, ConnectionRequestDTO>();
     const connectedPointCountByFactory = new Map<string, number>();
 
@@ -183,6 +191,8 @@ export const connectionRequestsService = {
           latitude: factory.latitude,
           longitude: factory.longitude,
           province: factory.province,
+          officerNotificationEmails:
+            officerNotificationEmailsByFactory.get(factory.factoryId) ?? [],
           isEligible: factory.isEligible ?? false,
           eligibilityStatus: factory.eligibilityStatus ?? 'ไม่เข้าข่าย',
           monitoringPointCount: connectedPointCountByFactory.get(factory.factoryId) ?? 0,
@@ -1863,10 +1873,7 @@ function toConnectedMeasurementPointModalDetail(
   };
 }
 
-function stringDetail(
-  details: MeasurementPointDTO['details'],
-  key: string,
-): string | null {
+function stringDetail(details: MeasurementPointDTO['details'], key: string): string | null {
   if (!details || typeof details !== 'object' || Array.isArray(details)) return null;
 
   const value = details[key];

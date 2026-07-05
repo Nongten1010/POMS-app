@@ -380,6 +380,7 @@ export interface OperatorFactoryTableRowDTO {
   latitude: string | null;
   longitude: string | null;
   province: string | null;
+  officerNotificationEmails: string[];
   isEligible: boolean;
   eligibilityStatus: 'เข้าข่าย' | 'ไม่เข้าข่าย';
   monitoringPointCount: number;
