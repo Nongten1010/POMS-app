@@ -15,12 +15,11 @@ export type KwpFormSubmissionDetailType = 'KWP01' | 'KWP02' | 'KWP03' | 'KWP04' 
 export type KwpFormSubmissionStatus =
   | 'DRAFT'
   | 'SUBMITTED'
-  | 'UNDER_REVIEW'
   | 'APPROVED'
   | 'REJECTED'
   | 'REVISION_REQUESTED'
   | 'CANCELLED';
-export type KwpFormWorkflowAction = 'START_REVIEW' | 'REQUEST_REVISION' | 'APPROVE';
+export type KwpFormWorkflowAction = 'REQUEST_REVISION' | 'APPROVE';
 
 export interface KwpFormSubmissionAccess {
   actorUserId: number;
@@ -56,7 +55,7 @@ export interface ResubmitKwpFormSubmissionDTO {
 }
 
 export interface KwpFormWorkflowStepDTO {
-  key: 'SUBMITTED' | 'OFFICER_REVIEW' | 'REVISION_REQUESTED' | 'APPROVED';
+  key: 'SUBMITTED' | 'REVISION_REQUESTED' | 'APPROVED';
   label: string;
   status: 'DONE' | 'CURRENT' | 'PENDING' | 'SKIPPED';
 }

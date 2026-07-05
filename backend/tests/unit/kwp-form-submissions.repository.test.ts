@@ -138,58 +138,21 @@ describe('kwpFormSubmissionsRepository', () => {
         },
       ],
     );
-    const returnedToReview = toKwpWorkflowDTOForTests(
-      {
-        id: 12,
-        submission_no: 'KWP-69-00012',
-        form_type: 'KWP01',
-        status: 'UNDER_REVIEW',
-        officer_note: 'รับเรื่องแก้ไขเข้าพิจารณา',
-        reviewed_at: '2026-07-04T09:00:00.000Z',
-        created_at: '2026-07-04T08:00:00.000Z',
-        updated_at: '2026-07-04T10:00:00.000Z',
-        province_region: 'ภาคกลาง',
-      },
-      [
-        {
-          status: 'SUBMITTED',
-          note: null,
-          changed_at: '2026-07-04T08:00:00.000Z',
-        },
-        {
-          status: 'REVISION_REQUESTED',
-          note: 'เพิ่มเอกสารแนบผลตรวจวัด',
-          changed_at: '2026-07-04T09:00:00.000Z',
-        },
-        {
-          status: 'UNDER_REVIEW',
-          note: 'รับเรื่องแก้ไขเข้าพิจารณา',
-          changed_at: '2026-07-04T10:00:00.000Z',
-        },
-      ],
-    );
-
     expect(submitted.currentStep).toMatchObject({ key: 'SUBMITTED', status: 'CURRENT' });
-    expect(submitted.allowedActions).toEqual(['START_REVIEW', 'REQUEST_REVISION']);
-    expect(nextKwpWorkflowStatusForTests('SUBMITTED', 'START_REVIEW')).toBe('UNDER_REVIEW');
+    expect(submitted.steps.map((step) => step.key)).toEqual([
+      'SUBMITTED',
+      'REVISION_REQUESTED',
+      'APPROVED',
+    ]);
+    expect(submitted.allowedActions).toEqual(['REQUEST_REVISION', 'APPROVE']);
     expect(nextKwpWorkflowStatusForTests('SUBMITTED', 'REQUEST_REVISION')).toBe(
       'REVISION_REQUESTED',
     );
+    expect(nextKwpWorkflowStatusForTests('SUBMITTED', 'APPROVE')).toBe('APPROVED');
     expect(revision.currentStep).toMatchObject({ key: 'REVISION_REQUESTED', status: 'CURRENT' });
     expect(revision.revisionReason).toBe('เพิ่มเอกสารแนบผลตรวจวัด');
     expect(revision.allowedActions).toEqual(['APPROVE']);
     expect(nextKwpWorkflowStatusForTests('REVISION_REQUESTED', 'APPROVE')).toBe('APPROVED');
-    expect(returnedToReview.currentStep).toMatchObject({
-      key: 'OFFICER_REVIEW',
-      status: 'CURRENT',
-    });
-    expect(returnedToReview.revisionReason).toBe('เพิ่มเอกสารแนบผลตรวจวัด');
-    expect(returnedToReview.steps).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ key: 'REVISION_REQUESTED', status: 'DONE' }),
-      ]),
-    );
-    expect(nextKwpWorkflowStatusForTests('UNDER_REVIEW', 'APPROVE')).toBe('APPROVED');
   });
 
   it('maps a returned form that the operator resubmitted back to the submitted workflow state', () => {
@@ -228,7 +191,7 @@ describe('kwpFormSubmissionsRepository', () => {
     expect(resubmitted.statusLabel).toBe('แก้ไขแล้ว/รอพิจารณา');
     expect(resubmitted.revisionReason).toBe('เพิ่มเอกสารแนบผลตรวจวัด');
     expect(resubmitted.currentStep).toMatchObject({ key: 'SUBMITTED', status: 'CURRENT' });
-    expect(resubmitted.allowedActions).toEqual(['START_REVIEW', 'REQUEST_REVISION']);
+    expect(resubmitted.allowedActions).toEqual(['REQUEST_REVISION', 'APPROVE']);
   });
 
   it('maps KWP01 payload to submission, issue report, parameters, and initial history records', () => {

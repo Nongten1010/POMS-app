@@ -1036,11 +1036,10 @@ Logic:
 - `form` maps `form_type` to the Thai display form number: `KWP01` -> `กวภ.01`, `KWP02` -> `กวภ.02`, `KWP03` -> `กวภ.03`, `KWP04` -> `กวภ.04`, and `KWP05` -> `กวภ.05`.
 - `statusLabel` maps the machine status to the Thai display label used by KWP tables.
 - `reviewedAt` returns `kwp_form_submissions.reviewed_at` as an ISO timestamp. If the database value is `null`, the response returns `null`; if the value cannot be parsed as a date, the response returns the raw string value.
-- `steps` is derived from the current status and always returns the backend-owned sequence: `SUBMITTED`, `OFFICER_REVIEW`, `REVISION_REQUESTED`, and `APPROVED`.
+- `steps` is derived from the current status and always returns the backend-owned sequence: `SUBMITTED`, `REVISION_REQUESTED`, and `APPROVED`.
 - `currentStep` is the first step whose derived step status is `CURRENT`.
 - `allowedActions` is derived from the current status:
-  - `SUBMITTED` returns `START_REVIEW` and `REQUEST_REVISION`.
-  - `UNDER_REVIEW` returns `REQUEST_REVISION` and `APPROVE`.
+  - `SUBMITTED` returns `REQUEST_REVISION` and `APPROVE`.
   - `REVISION_REQUESTED` returns `APPROVE`.
   - terminal or unsupported statuses return an empty array.
 - `revisionReason` returns the latest `kwp_form_status_history.note` whose status is `REVISION_REQUESTED`; if the workflow never requested revision or that history row has no note, the response returns `null`.
@@ -1052,7 +1051,7 @@ Fallback order:
 - `statusLabel`: mapped from `status`; no fallback is used because `status` is constrained by the database status set.
 - `reviewedAt`: ISO date conversion, then raw string if parsing fails, then `null` when the source is `null`.
 - `currentStep`: first `steps[]` item with `status = CURRENT`, then the first step in the generated step list, then a defensive pending `SUBMITTED` step if the generated list is unexpectedly empty.
-- `steps`: derived from the current status plus whether `kwp_form_status_history` contains any `REVISION_REQUESTED` row. When a revision happened and the current status later returns to `UNDER_REVIEW` or `APPROVED`, the `REVISION_REQUESTED` step is marked `DONE` instead of `SKIPPED`.
+- `steps`: derived from the current status plus whether `kwp_form_status_history` contains any `REVISION_REQUESTED` row. When a revision happened and the current status later returns to `APPROVED`, the `REVISION_REQUESTED` step is marked `DONE` instead of `SKIPPED`.
 - `allowedActions`: derived from current status only; unsupported statuses fall back to an empty array.
 - `revisionReason`: latest revision-request history note, then `null`.
 

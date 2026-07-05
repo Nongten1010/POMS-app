@@ -98,14 +98,14 @@ describe('KWP form submission routes', () => {
     mockedService.getWorkflow.mockResolvedValue(kwpWorkflowResponse());
     mockedService.changeWorkflowStatus.mockResolvedValue({
       ...kwpWorkflowResponse(),
-      status: 'UNDER_REVIEW',
-      statusLabel: 'รอพิจารณา',
+      status: 'APPROVED',
+      statusLabel: 'ผ่านการพิจารณา',
       currentStep: {
-        key: 'OFFICER_REVIEW',
-        label: 'พิจารณา',
+        key: 'APPROVED',
+        label: 'ผ่านการพิจารณา',
         status: 'CURRENT',
       },
-      allowedActions: ['REQUEST_REVISION', 'APPROVE'],
+      allowedActions: [],
     });
     mockedService.updateKwp01.mockResolvedValue({
       ...kwp01DetailResponse(),
@@ -130,7 +130,7 @@ describe('KWP form submission routes', () => {
       status: 'SUBMITTED',
       statusLabel: 'รอพิจารณา',
       revisionReason: 'เพิ่มเอกสารแนบผลตรวจวัด',
-      allowedActions: ['START_REVIEW', 'REQUEST_REVISION'],
+      allowedActions: ['REQUEST_REVISION', 'APPROVE'],
     });
     mockedService.resubmitKwp02.mockResolvedValue(kwpWorkflowResponse());
     mockedService.resubmitKwp03.mockResolvedValue(kwpWorkflowResponse());
@@ -457,7 +457,7 @@ describe('KWP form submission routes', () => {
     expect(mockedService.getById).not.toHaveBeenCalled();
   });
 
-  it('starts KWP workflow review through the public action endpoint', async () => {
+  it('rejects removed START_REVIEW workflow action before calling service', async () => {
     const app = createApp();
 
     const response = await request(app)
@@ -468,31 +468,9 @@ describe('KWP form submission routes', () => {
         officerNote: 'รับเรื่องเข้าพิจารณา',
       });
 
-    expect(response.status).toBe(200);
-    expect(mockedService.changeWorkflowStatus).toHaveBeenCalledWith(
-      12,
-      {
-        action: 'START_REVIEW',
-        officerNote: 'รับเรื่องเข้าพิจารณา',
-      },
-      {
-        actorUserId: 77,
-        scope: 'ALL',
-        regionalAccess: { regions: ['ภาคกลาง'] },
-      },
-    );
-    expect(response.body).toMatchObject({
-      success: true,
-      data: {
-        id: 12,
-        status: 'UNDER_REVIEW',
-        currentStep: {
-          key: 'OFFICER_REVIEW',
-          label: 'พิจารณา',
-        },
-        allowedActions: ['REQUEST_REVISION', 'APPROVE'],
-      },
-    });
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    expect(mockedService.changeWorkflowStatus).not.toHaveBeenCalled();
   });
 
   it('gets KWP workflow steps and allowed actions from backend state', async () => {
@@ -516,7 +494,7 @@ describe('KWP form submission routes', () => {
           key: 'SUBMITTED',
           label: 'ส่งฟอร์ม',
         },
-        allowedActions: ['START_REVIEW', 'REQUEST_REVISION'],
+        allowedActions: ['REQUEST_REVISION', 'APPROVE'],
       },
     });
   });
@@ -1263,11 +1241,10 @@ function kwpWorkflowResponse() {
     },
     steps: [
       { key: 'SUBMITTED' as const, label: 'ส่งฟอร์ม', status: 'CURRENT' as const },
-      { key: 'OFFICER_REVIEW' as const, label: 'พิจารณา', status: 'PENDING' as const },
       { key: 'REVISION_REQUESTED' as const, label: 'ส่งแก้ไข', status: 'PENDING' as const },
       { key: 'APPROVED' as const, label: 'ผ่านการพิจารณา', status: 'PENDING' as const },
     ],
-    allowedActions: ['START_REVIEW' as const, 'REQUEST_REVISION' as const],
+    allowedActions: ['REQUEST_REVISION' as const, 'APPROVE' as const],
   };
 }
 

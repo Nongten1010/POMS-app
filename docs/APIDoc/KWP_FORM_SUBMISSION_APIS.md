@@ -1154,11 +1154,10 @@ Permission: `kwp_forms:view`
     },
     "steps": [
       { "key": "SUBMITTED", "label": "ส่งฟอร์ม", "status": "CURRENT" },
-      { "key": "OFFICER_REVIEW", "label": "พิจารณา", "status": "PENDING" },
       { "key": "REVISION_REQUESTED", "label": "ส่งแก้ไข", "status": "PENDING" },
       { "key": "APPROVED", "label": "ผ่านการพิจารณา", "status": "PENDING" }
     ],
-    "allowedActions": ["START_REVIEW", "REQUEST_REVISION"]
+    "allowedActions": ["REQUEST_REVISION", "APPROVE"]
   }
 }
 ```
@@ -1167,8 +1166,7 @@ Permission: `kwp_forms:view`
 
 | Current status | Current step | Allowed actions |
 | --- | --- | --- |
-| `SUBMITTED` | `SUBMITTED` / ส่งฟอร์ม | `START_REVIEW`, `REQUEST_REVISION` |
-| `UNDER_REVIEW` | `OFFICER_REVIEW` / พิจารณา | `REQUEST_REVISION`, `APPROVE` |
+| `SUBMITTED` | `SUBMITTED` / ส่งฟอร์ม | `REQUEST_REVISION`, `APPROVE` |
 | `REVISION_REQUESTED` | `REVISION_REQUESTED` / ส่งแก้ไข | `APPROVE` |
 | `APPROVED` | `APPROVED` / ผ่านการพิจารณา | none |
 | `REJECTED`, `CANCELLED` | terminal status | none |
@@ -1182,15 +1180,6 @@ POST /api/v1/kwp-form-submissions/:id/workflow-actions
 ```
 
 Permission: `kwp_forms:approve`
-
-### Request: start review
-
-```json
-{
-  "action": "START_REVIEW",
-  "officerNote": "รับเรื่องเข้าพิจารณา"
-}
-```
 
 ### Request: request revision
 

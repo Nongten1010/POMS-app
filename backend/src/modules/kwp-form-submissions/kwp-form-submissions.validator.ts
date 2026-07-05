@@ -205,12 +205,6 @@ export const changeKwpWorkflowStatusSchema = z
   .discriminatedUnion('action', [
     z
       .object({
-        action: z.literal('START_REVIEW'),
-        officerNote: optionalNullableText(1000),
-      })
-      .strict(),
-    z
-      .object({
         action: z.literal('REQUEST_REVISION'),
         revisionReason: requiredText(1000),
         officerNote: optionalNullableText(1000),

@@ -263,8 +263,8 @@ export const kwpFormSubmissionsRepository = {
         .update({
           status: nextStatus,
           officer_note: workflowOfficerNote(input),
-          reviewed_at: input.action === 'START_REVIEW' ? submission.reviewed_at : now,
-          reviewed_by: input.action === 'START_REVIEW' ? null : access.actorUserId,
+          reviewed_at: now,
+          reviewed_by: access.actorUserId,
           updated_at: now,
           updated_by: access.actorUserId,
         });
@@ -1470,7 +1470,6 @@ function workflowSteps(
   if (status === 'SUBMITTED') {
     return [
       { key: 'SUBMITTED', label: 'ส่งฟอร์ม', status: 'CURRENT' },
-      { key: 'OFFICER_REVIEW', label: 'พิจารณา', status: 'PENDING' },
       { key: 'REVISION_REQUESTED', label: 'ส่งแก้ไข', status: 'PENDING' },
       { key: 'APPROVED', label: 'ผ่านการพิจารณา', status: 'PENDING' },
     ];
@@ -1478,19 +1477,13 @@ function workflowSteps(
 
   return [
     { key: 'SUBMITTED', label: 'ส่งฟอร์ม', status: 'DONE' },
-    {
-      key: 'OFFICER_REVIEW',
-      label: 'พิจารณา',
-      status: status === 'UNDER_REVIEW' ? 'CURRENT' : 'DONE',
-    },
     { key: 'REVISION_REQUESTED', label: 'ส่งแก้ไข', status: revisionStepStatus },
     { key: 'APPROVED', label: 'ผ่านการพิจารณา', status: approvedStepStatus },
   ];
 }
 
 function allowedWorkflowActions(status: KwpFormSubmissionStatus): KwpFormWorkflowAction[] {
-  if (status === 'SUBMITTED') return ['START_REVIEW', 'REQUEST_REVISION'];
-  if (status === 'UNDER_REVIEW') return ['REQUEST_REVISION', 'APPROVE'];
+  if (status === 'SUBMITTED') return ['REQUEST_REVISION', 'APPROVE'];
   if (status === 'REVISION_REQUESTED') return ['APPROVE'];
   return [];
 }
@@ -1515,7 +1508,6 @@ function nextWorkflowStatus(
     });
   }
 
-  if (action === 'START_REVIEW') return 'UNDER_REVIEW';
   if (action === 'REQUEST_REVISION') return 'REVISION_REQUESTED';
   return 'APPROVED';
 }
@@ -1865,7 +1857,6 @@ const KWP_FORM_TYPE_LABELS: Record<
 const KWP_FORM_STATUS_LABELS: Record<KwpFormSubmissionStatus, string> = {
   DRAFT: 'แบบร่าง',
   SUBMITTED: 'รอพิจารณา',
-  UNDER_REVIEW: 'รอพิจารณา',
   APPROVED: 'ผ่านการพิจารณา',
   REJECTED: 'ไม่ผ่านการพิจารณา',
   REVISION_REQUESTED: 'รอโรงงานแก้ไข',
