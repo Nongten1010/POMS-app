@@ -6,6 +6,7 @@ import {
   buildBodCodDeviationLatestReportSlotMapForTests,
   buildBodCodDeviationReportDetailQueryForTests,
   buildBodCodDeviationReportQueryForTests,
+  buildBodCodFactoryInternalIdQueryForTests,
   buildBodCodReportStatusLabelForTests,
   buildBodCodResubmissionAccessQueryForTests,
   buildBodCodResubmissionWorkflowResetQueriesForTests,
@@ -168,6 +169,29 @@ describe('bodCodDeviationReportsRepository access filters', () => {
     expect(sql).toContain('join [user_juristics] as [uj]');
     expect(sql).toContain('[uj].[user_id]');
     expect(compiled.bindings).toEqual(expect.arrayContaining([42, 'FID-001', '10520000225172']));
+  });
+
+  it('resolves a frontend factory identifier to the internal factories.id before saving', () => {
+    const compiled = buildBodCodFactoryInternalIdQueryForTests(
+      {
+        factoryId: '72110100225390',
+        factoryRegistrationNo: 'น.60-2/2539-ญอน.',
+      },
+      {
+        actorUserId: 77,
+        scope: 'ALL',
+      },
+    ).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('select top (?) [f].[id]');
+    expect(sql).toContain('[f].[id]');
+    expect(sql).toContain('[f].[fid]');
+    expect(sql).toContain('[f].[code]');
+    expect(sql).not.toContain('join [user_juristics] as [uj]');
+    expect(compiled.bindings).toEqual(
+      expect.arrayContaining([1, 72110100225390, '72110100225390', 'น.60-2/2539-ญอน.']),
+    );
   });
 
   it('checks own-factory access and the current approval step before resubmission', () => {

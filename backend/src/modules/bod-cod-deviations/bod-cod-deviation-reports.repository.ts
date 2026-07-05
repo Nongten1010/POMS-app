@@ -182,7 +182,7 @@ export const bodCodDeviationReportsRepository = {
   ): Promise<CreatedBodCodDeviationReportDTO> {
     return db.transaction(async (trx) => {
       const now = new Date();
-      await ensureCreateAccess(input, access, trx);
+      const factoryInternalId = await resolveFactoryInternalId(input, access, trx);
       const approvalTrack = approvalTrackForProvince(input.provinceName);
       const reportNo = await nextReportNo(input.reportYear, trx);
       const inserted = await trx('bod_cod_deviation_reports')
@@ -190,7 +190,7 @@ export const bodCodDeviationReportsRepository = {
           report_no: reportNo,
           report_round: input.reportRoundNo,
           report_year: input.reportYear,
-          factory_id: numericIdOrNull(input.factoryId ?? null),
+          factory_id: factoryInternalId,
           connected_measurement_point_id: input.connectedMeasurementPointId ?? null,
           point_code: input.pointCode ?? null,
           point_name: input.pointName ?? null,
@@ -401,6 +401,13 @@ export function buildBodCodCreateAccessQueryForTests(
   return buildCreateAccessQuery(input, access);
 }
 
+export function buildBodCodFactoryInternalIdQueryForTests(
+  input: Pick<CreateBodCodDeviationReportDTO, 'factoryId' | 'factoryRegistrationNo'>,
+  access: CreateBodCodDeviationReportAccess,
+) {
+  return buildCreateAccessQuery(input, access);
+}
+
 export function buildBodCodResubmissionAccessQueryForTests(
   id: number,
   access: CreateBodCodDeviationReportAccess,
@@ -595,16 +602,19 @@ function buildCreateAccessQuery(
   return builder;
 }
 
-async function ensureCreateAccess(
+async function resolveFactoryInternalId(
   input: CreateBodCodDeviationReportDTO,
   access: CreateBodCodDeviationReportAccess,
   trx: Knex.Transaction,
-): Promise<void> {
-  if (access.scope !== 'OWN_FACTORY') return;
+): Promise<number | null> {
   const row = await buildCreateAccessQuery(input, access, trx);
   if (!row) {
-    throw new ForbiddenError('Factory is not available for this user');
+    if (access.scope === 'OWN_FACTORY') {
+      throw new ForbiddenError('Factory is not available for this user');
+    }
+    return null;
   }
+  return toNumberOrNull((row as { id?: number | string | null }).id ?? null);
 }
 
 async function assertCanResubmitReport(
