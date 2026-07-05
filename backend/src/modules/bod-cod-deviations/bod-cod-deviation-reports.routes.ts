@@ -17,6 +17,11 @@ bodCodDeviationReportsRoutes.put(
   authorize('bod_cod_errors:edit'),
   bodCodDeviationReportsController.resubmitReport,
 );
+bodCodDeviationReportsRoutes.post(
+  '/:id/workflow-actions',
+  authorize('bod_cod_errors:approve'),
+  bodCodDeviationReportsController.changeWorkflowStatus,
+);
 bodCodDeviationReportsRoutes.get(
   '/:id',
   authorize('bod_cod_errors:view'),

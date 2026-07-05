@@ -11,6 +11,7 @@ Data source:
 - Factory table uses connected factories from `cems_wpms_connected_measurement_points`.
 - Factory enrichment is best effort from `factories`, `eligible_factories`, `provinces`, and `industrial_estates`; missing enrichment does not remove a connected factory from the response.
 - Request table uses `bod_cod_deviation_reports`, with measurement count from `bod_cod_deviation_measurements`.
+- Workflow actions use `bod_cod_approval_steps` for the current step and `bod_cod_approval_events` for transition history.
 - Operator scope `OWN_FACTORY` is filtered through `user_juristics`.
 - Officer scope follows the `bod_cod_errors:view` permission scope and `regionalAccess` in the access token.
 
@@ -121,7 +122,7 @@ Payload / query parameters:
 
 | Query | Required | Values | Description |
 |---|---:|---|---|
-| `status` | No | `DRAFT`, `SUBMITTED`, `REVISED_PENDING_REVIEW`, `WAITING_APPROVAL`, `APPROVED`, `REVISION_REQUESTED`, `CANCELLED` | กรองสถานะคำขอ |
+| `status` | No | `DRAFT`, `SUBMITTED`, `REVISED_PENDING_REVIEW`, `WAITING_APPROVAL`, `APPROVED`, `REJECTED`, `REVISION_REQUESTED`, `CANCELLED` | กรองสถานะคำขอ |
 | `parameterCode` | No | `BOD`, `COD` | กรอง parameter ที่รายงาน |
 | `factoryId` | No | string | กรองโรงงานจาก `factories.id`, `factories.fid`, `factories.code`, หรือ `factory_registration_no` |
 
@@ -527,6 +528,127 @@ Notes:
 - ถ้ารายงานไม่ได้อยู่สถานะ `REVISION_REQUESTED` จะได้ `409 Conflict`
 - ถ้าไม่ใช่โรงงานของผู้ประกอบการ จะได้ `403 Forbidden` หรือ `404 Not Found` ตาม access filter
 
+## 6. Officer Workflow Action
+
+สำหรับเจ้าหน้าที่กด `แจ้งแก้ไข`, `ผ่านพิจารณา`, หรือ `ไม่ผ่านพิจารณา` ใน workflow BOD/COD
+
+Link:
+
+```text
+POST /api/v1/bod-cod-deviation-reports/:id/workflow-actions
+```
+
+Permission:
+
+```text
+bod_cod_errors:approve
+```
+
+Action mapping:
+
+| Current status | Scope | Current step | Allowed actions |
+|---|---|---|---|
+| `SUBMITTED` | เจ้าหน้าที่ | `PENDING` | `APPROVE`, `REQUEST_REVISION`, `REJECT` |
+| `REVISED_PENDING_REVIEW` | เจ้าหน้าที่ | `PENDING` | `APPROVE`, `REQUEST_REVISION`, `REJECT` |
+| `WAITING_APPROVAL` | เจ้าหน้าที่ | `PENDING` | `APPROVE`, `REQUEST_REVISION`, `REJECT` |
+| `REVISION_REQUESTED` | ผู้ประกอบการ (`OWN_FACTORY`) | `REVISION_REQUESTED` | `CANCEL` |
+| `APPROVED`, `REJECTED`, `CANCELLED` | any | terminal status | none |
+
+ไม่มี action `START_REVIEW` ใน BOD/COD workflow แล้ว ถ้าส่งมา backend จะคืน `400 VALIDATION_ERROR`
+
+Request: request revision
+
+```json
+{
+  "action": "REQUEST_REVISION",
+  "revisionReason": "กรุณาแนบรายงานผลวิเคราะห์จากห้องปฏิบัติการ",
+  "officerNote": "เอกสารแนบยังไม่ครบ"
+}
+```
+
+`revisionReason` บังคับส่งเมื่อ `action = REQUEST_REVISION`
+
+Request: approve
+
+```json
+{
+  "action": "APPROVE",
+  "officerNote": "ข้อมูลถูกต้อง ส่งต่อผู้อนุมัติ"
+}
+```
+
+Request: reject
+
+```json
+{
+  "action": "REJECT",
+  "officerNote": "ข้อมูลไม่เข้าเงื่อนไขการพิจารณา"
+}
+```
+
+Response:
+
+คืน workflow state ล่าสุด shape เดียวกับ create/resubmit
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 9,
+    "reportNo": "BODCOD-2569-0009",
+    "statusCode": "WAITING_APPROVAL",
+    "approvalTrack": "REGIONAL",
+    "currentStep": {
+      "id": 16,
+      "stepNo": 2,
+      "roleCode": "APPROVER",
+      "roleLabel": "ผอ.ศูนย์ (อนุมัติ)",
+      "status": "PENDING",
+      "isCurrent": true
+    },
+    "steps": [
+      {
+        "id": 15,
+        "stepNo": 1,
+        "roleCode": "INSPECTOR",
+        "roleLabel": "เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์",
+        "status": "APPROVED",
+        "decision": "APPROVED",
+        "comment": "ข้อมูลถูกต้อง ส่งต่อผู้อนุมัติ",
+        "isCurrent": false
+      },
+      {
+        "id": 16,
+        "stepNo": 2,
+        "roleCode": "APPROVER",
+        "roleLabel": "ผอ.ศูนย์ (อนุมัติ)",
+        "status": "PENDING",
+        "isCurrent": true
+      }
+    ],
+    "allowedActions": ["APPROVE", "REQUEST_REVISION", "REJECT"]
+  }
+}
+```
+
+Transition rules:
+
+- `APPROVE` ที่ยังมี step ถัดไป: current step เป็น `APPROVED`, step ถัดไปเป็น `PENDING`, report status เป็น `WAITING_APPROVAL`
+- `APPROVE` ที่ step สุดท้าย: report status เป็น `APPROVED` และ workflow จบ
+- `REQUEST_REVISION`: current step เป็น `REVISION_REQUESTED`, report status เป็น `REVISION_REQUESTED`; เมื่อผู้ประกอบการ resubmit จะกลับไป step 1 และไล่ flow ใหม่
+- `REJECT`: current step เป็น `REJECTED`, report status เป็น `REJECTED` และ workflow จบ
+
+Error behavior:
+
+| Case | HTTP status | Meaning |
+|---|---:|---|
+| ไม่ส่ง token หรือ token ไม่ถูกต้อง | `401` | ต้อง login ก่อน |
+| token ไม่มี permission `bod_cod_errors:approve` | `403` | user ไม่มีสิทธิ์ action เจ้าหน้าที่ |
+| `id` ไม่ใช่ positive integer | `400` | path parameter ไม่ถูกต้อง |
+| payload ไม่ถูกต้อง เช่น `START_REVIEW` หรือไม่ส่ง `revisionReason` ตอนแจ้งแก้ไข | `400` | validation error |
+| action ไม่สอดคล้องกับ status/step ปัจจุบัน | `409` | backend คืน `allowedActions` ใน error details |
+| ไม่พบรายการ, รายการถูกลบ, หรืออยู่นอก scope | `404` | ไม่คืนข้อมูลให้ผู้ใช้ |
+
 ## Screen Usage
 
 ผู้ประกอบการ:
@@ -544,6 +666,8 @@ Notes:
 เจ้าหน้าที่:
 
 - Call only `GET /api/v1/bod-cod-deviation-reports` for "รายการคำขอ".
+- Call `POST /api/v1/bod-cod-deviation-reports/:id/workflow-actions` for `แจ้งแก้ไข`, `ผ่านพิจารณา`, and `ไม่ผ่านพิจารณา`.
 - Token should include `bod_cod_errors:view` with the officer's menu/data scope.
+- Token should include `bod_cod_errors:approve` for workflow actions.
 - Officer views can use `statusCode` to distinguish first submission from `REVISED_PENDING_REVIEW`; corrected reports return to step 1 and must be reviewed through the full track again.
 - Frontend report table fields are returned directly: `factoryRegistration`, `province`, `reportRound`, `year`, `submittedDate`, `reviewedDate`, and Thai display `status`. Machine status is preserved as `statusCode`.

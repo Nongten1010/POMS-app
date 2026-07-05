@@ -3,6 +3,7 @@ import { db } from '../../config/database';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
 import type {
   BodCodApprovalTrack,
+  BodCodApprovalStepStatus,
   BodCodAllowedAction,
   BodCodDeviationAccess,
   BodCodDeviationAttachmentDTO,
@@ -15,13 +16,17 @@ import type {
   BodCodWorkflowStepDTO,
   BodCodDeviationReportTableRowDTO,
   BodCodParameterCode,
+  BodCodWorkflowAction,
   CreateBodCodDeviationReportAccess,
   CreateBodCodDeviationReportDTO,
   CreatedBodCodDeviationReportDTO,
   BodCodDeviationReportDetailDTO,
+  ChangeBodCodWorkflowStatusDTO,
   ListBodCodDeviationReportsQuery,
   ResubmitBodCodDeviationReportDTO,
 } from './bod-cod-deviation-reports.types';
+
+type BodCodApprovalEventAction = BodCodWorkflowAction | 'RESUBMIT_REVISION';
 
 interface FactoryTableRow {
   connected_point_id: number | string;
@@ -92,7 +97,7 @@ interface ReportDetailRow extends ReportTableRow {
 interface EditableReportRow extends ReportDetailRow {
   current_step_id: number | string | null;
   current_step_no: number | string | null;
-  current_step_status: 'PENDING' | 'WAITING' | 'APPROVED' | 'REVISION_REQUESTED' | null;
+  current_step_status: BodCodApprovalStepStatus | null;
 }
 
 interface MeasurementRow {
@@ -124,7 +129,7 @@ interface ApprovalStepRow {
   track: BodCodApprovalTrack;
   role_code: 'INSPECTOR' | 'REVIEWER' | 'APPROVER';
   role_label: string;
-  status: 'PENDING' | 'WAITING' | 'APPROVED' | 'REVISION_REQUESTED';
+  status: BodCodApprovalStepStatus;
   actor_user_id: number | string | null;
   actor_name: string | null;
   actor_position: string | null;
@@ -352,6 +357,57 @@ export const bodCodDeviationReportsRepository = {
     });
   },
 
+  async changeWorkflowStatus(
+    id: number,
+    input: ChangeBodCodWorkflowStatusDTO,
+    access: BodCodDeviationAccess,
+  ): Promise<CreatedBodCodDeviationReportDTO> {
+    return db.transaction(async (trx) => {
+      const now = new Date();
+      const report = await assertCanChangeWorkflowStatus(id, input, access, trx);
+      const currentStepId = Number(report.current_step_id);
+      const nextStep =
+        input.action === 'APPROVE'
+          ? await findNextApprovalStep(id, Number(report.current_step_no), trx)
+          : null;
+      const nextState = nextWorkflowState(input.action, nextStep !== null);
+      const note = workflowActionNote(input);
+
+      await updateCurrentApprovalStep(
+        currentStepId,
+        nextState.currentStepStatus,
+        note,
+        access,
+        now,
+        trx,
+      );
+
+      if (nextStep !== null && nextState.nextStepStatus !== null) {
+        await markNextApprovalStepCurrent(Number(nextStep.id), nextState.nextStepStatus, now, trx);
+      }
+
+      await trx('bod_cod_deviation_reports').where('id', id).update({
+        status: nextState.reportStatus,
+        updated_by: access.actorUserId,
+        updated_at: now,
+      });
+
+      await insertApprovalEvent(id, input.action, access.actorUserId, note, now, trx);
+
+      const savedSteps = await listApprovalSteps(id, trx);
+      const currentStep = currentWorkflowStep(savedSteps);
+      return {
+        id,
+        reportNo: report.report_no,
+        statusCode: nextState.reportStatus,
+        approvalTrack: report.approval_track,
+        currentStep,
+        steps: savedSteps,
+        allowedActions: allowedActionsFor(nextState.reportStatus, currentStep, access.scope),
+      };
+    });
+  },
+
   async getReportById(
     id: number,
     access: BodCodDeviationAccess,
@@ -420,6 +476,21 @@ export function buildBodCodReportStatusLabelForTests(
   scope?: string | null,
 ) {
   return reportStatusLabel(status, scope);
+}
+
+export function buildBodCodAllowedActionsForTests(
+  status: BodCodDeviationReportStatus,
+  currentStep: BodCodWorkflowStepDTO | null,
+  scope?: string | null,
+) {
+  return allowedActionsFor(status, currentStep, scope);
+}
+
+export function buildBodCodNextWorkflowStateForTests(
+  action: BodCodWorkflowAction,
+  hasNextStep: boolean,
+) {
+  return nextWorkflowState(action, hasNextStep);
 }
 
 export function buildBodCodResubmissionWorkflowResetQueriesForTests(reportId: number, now: Date) {
@@ -645,6 +716,48 @@ async function assertCanResubmitReport(
   return row;
 }
 
+async function assertCanChangeWorkflowStatus(
+  id: number,
+  input: ChangeBodCodWorkflowStatusDTO,
+  access: BodCodDeviationAccess,
+  trx: Knex.Transaction,
+): Promise<EditableReportRow> {
+  const row = await buildEditableReportQuery(id, access, trx).first();
+  if (!row) throw new NotFoundError('BOD/COD deviation report not found');
+
+  const currentStep = editableCurrentStep(row);
+  const allowedActions = allowedActionsFor(row.status, currentStep, access.scope);
+  if (!allowedActions.includes(input.action)) {
+    throw new ConflictError('BOD/COD workflow action is not allowed for current status', {
+      currentStatus: row.status,
+      currentStepStatus: row.current_step_status,
+      allowedActions,
+    });
+  }
+
+  if (row.current_step_id === null || row.current_step_no === null) {
+    throw new ConflictError('BOD/COD deviation report does not have a current approval step', {
+      currentStatus: row.status,
+      allowedActions,
+    });
+  }
+
+  return row;
+}
+
+function editableCurrentStep(row: EditableReportRow): BodCodWorkflowStepDTO | null {
+  if (row.current_step_no === null || row.current_step_status === null) return null;
+  const currentStepId = toNumberOrNull(row.current_step_id);
+  return {
+    ...(currentStepId === null ? {} : { id: currentStepId }),
+    stepNo: Number(row.current_step_no),
+    roleCode: 'INSPECTOR',
+    roleLabel: '',
+    status: row.current_step_status,
+    isCurrent: true,
+  };
+}
+
 function buildEditableReportQuery(
   id: number,
   access: CreateBodCodDeviationReportAccess,
@@ -703,6 +816,7 @@ function buildEditableReportQuery(
     );
 
   applyReportAccessFilter(builder, access);
+  applyRegionalAccessFilter(builder, access.regionalAccess);
 
   return builder as unknown as Knex.QueryBuilder<EditableReportRow, EditableReportRow[]>;
 }
@@ -845,9 +959,104 @@ function buildRestartFirstApprovalStepForResubmissionQuery(
     });
 }
 
+async function findNextApprovalStep(
+  reportId: number,
+  currentStepNo: number,
+  trx: Knex.Transaction,
+): Promise<Pick<ApprovalStepRow, 'id' | 'step_no'> | null> {
+  const row = await trx<ApprovalStepRow>('bod_cod_approval_steps')
+    .where('report_id', reportId)
+    .where('step_no', '>', currentStepNo)
+    .whereNull('deleted_at')
+    .select('id', 'step_no')
+    .orderBy('step_no', 'asc')
+    .first();
+  return row ?? null;
+}
+
+function nextWorkflowState(
+  action: BodCodWorkflowAction,
+  hasNextStep: boolean,
+): {
+  currentStepStatus: BodCodApprovalStepStatus;
+  nextStepStatus: BodCodApprovalStepStatus | null;
+  reportStatus: BodCodDeviationReportStatus;
+  closesWorkflow: boolean;
+} {
+  if (action === 'REQUEST_REVISION') {
+    return {
+      currentStepStatus: 'REVISION_REQUESTED',
+      nextStepStatus: null,
+      reportStatus: 'REVISION_REQUESTED',
+      closesWorkflow: false,
+    };
+  }
+  if (action === 'REJECT') {
+    return {
+      currentStepStatus: 'REJECTED',
+      nextStepStatus: null,
+      reportStatus: 'REJECTED',
+      closesWorkflow: true,
+    };
+  }
+  return hasNextStep
+    ? {
+        currentStepStatus: 'APPROVED',
+        nextStepStatus: 'PENDING',
+        reportStatus: 'WAITING_APPROVAL',
+        closesWorkflow: false,
+      }
+    : {
+        currentStepStatus: 'APPROVED',
+        nextStepStatus: null,
+        reportStatus: 'APPROVED',
+        closesWorkflow: true,
+      };
+}
+
+function workflowActionNote(input: ChangeBodCodWorkflowStatusDTO): string | null {
+  return input.action === 'REQUEST_REVISION'
+    ? (input.revisionReason ?? null)
+    : (input.officerNote ?? null);
+}
+
+async function updateCurrentApprovalStep(
+  stepId: number,
+  status: BodCodApprovalStepStatus,
+  note: string | null,
+  access: BodCodDeviationAccess,
+  now: Date,
+  trx: Knex.Transaction,
+): Promise<void> {
+  await trx('bod_cod_approval_steps')
+    .where('id', stepId)
+    .update({
+      status,
+      is_current: status === 'REVISION_REQUESTED',
+      actor_user_id: access.actorUserId,
+      decision: status,
+      comment: note,
+      decided_at: now,
+      updated_at: now,
+    });
+}
+
+async function markNextApprovalStepCurrent(
+  stepId: number,
+  status: BodCodApprovalStepStatus,
+  now: Date,
+  trx: Knex.Transaction,
+): Promise<void> {
+  await trx('bod_cod_approval_steps').where('id', stepId).update({
+    status,
+    is_current: true,
+    updated_at: now,
+  });
+}
+
 async function insertApprovalEvent(
   reportId: number,
-  action: 'RESUBMIT_REVISION',
+  action: BodCodApprovalEventAction,
   actorUserId: number,
   note: string | null | undefined,
   now: Date,
@@ -1255,11 +1464,9 @@ function allowedActionsFor(
   currentStep: BodCodWorkflowStepDTO | null,
   scope: string | null | undefined,
 ): BodCodAllowedAction[] {
-  if (status === 'APPROVED' || status === 'CANCELLED') return [];
+  if (status === 'APPROVED' || status === 'REJECTED' || status === 'CANCELLED') return [];
   if (scope === 'OWN_FACTORY') return ['CANCEL'];
-  const officerActions: BodCodAllowedAction[] =
-    currentStep?.status === 'PENDING' ? ['APPROVE', 'REQUEST_REVISION'] : [];
-  return [...officerActions, 'CANCEL'];
+  return currentStep?.status === 'PENDING' ? ['APPROVE', 'REQUEST_REVISION', 'REJECT'] : [];
 }
 
 function connectedFactoryId(row: FactoryTableRow): string {
@@ -1314,6 +1521,7 @@ function reportStatusLabel(status: BodCodDeviationReportStatus, scope?: string |
     REVISED_PENDING_REVIEW: 'แก้ไขแล้ว/รอพิจารณา',
     WAITING_APPROVAL: 'รออนุมัติ',
     APPROVED: 'ผ่านการพิจารณา',
+    REJECTED: 'ไม่ผ่านการพิจารณา',
     REVISION_REQUESTED: 'รอโรงงานแก้ไข',
     CANCELLED: 'ยกเลิก',
   };

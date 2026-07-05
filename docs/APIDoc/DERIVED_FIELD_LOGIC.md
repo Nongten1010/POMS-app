@@ -203,6 +203,7 @@ Endpoints:
 - `POST /api/v1/bod-cod-deviation-reports`
 - `GET /api/v1/bod-cod-deviation-reports/:id`
 - `PUT /api/v1/bod-cod-deviation-reports/:id/resubmission`
+- `POST /api/v1/bod-cod-deviation-reports/:id/workflow-actions`
 
 Source:
 
@@ -219,13 +220,18 @@ Transformation:
   - `CENTRAL`: เจ้าหน้าที่กฝม. (ตรวจสอบความถูกต้อง + บันทึก/แก้ไขแบบแจ้งผล) -> ผอ.กฝม. (ทบทวน) -> ผอ.กวภ. (อนุมัติ)
   - `REGIONAL`: เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์ (ตรวจสอบความถูกต้อง + บันทึก/แก้ไขแบบแจ้งผล) -> ผอ.ศูนย์ (อนุมัติ)
 - `currentStep` is the step where `is_current = true`.
-- `allowedActions` is derived from report status, current step, and permission scope. Operator `OWN_FACTORY` currently receives `CANCEL` while the report is not final; officer scopes can receive review actions when the current step is pending.
+- `allowedActions` is derived from report status, current step, and permission scope. Operator `OWN_FACTORY` currently receives `CANCEL` while the report is not final; officer scopes can receive `APPROVE`, `REQUEST_REVISION`, and `REJECT` when the current step is pending.
 - `deviationValueMgL` comes from database generated column `device_value_mg_l - lab_value_mg_l`.
 - `isWithinStandard` is derived on save: if `standardDeviationMgL` is absent, return `null`; otherwise compare `ABS(deviationValueMgL) <= standardDeviationMgL`.
 - `selectedParameterLabel` keeps the unit with the parameter display name, e.g. `BOD (mg/l)` and `COD (mg/l)`.
 - Resubmission is allowed only when the stored report status is `REVISION_REQUESTED` and the current approval step status is also `REVISION_REQUESTED`.
 - Resubmission sets report status to `REVISED_PENDING_REVIEW`, replaces measurement rows and attachment metadata, resets step 1 to `PENDING` + `is_current = true`, resets every later step to `WAITING` + `is_current = false`, clears prior per-step decisions from the current step rows, and records `RESUBMIT_REVISION` in `bod_cod_approval_events`.
 - Resubmission does not allow identity fields to drift from the original report slot: `reportRoundNo`, `reportYear`, `factoryRegistrationNo`, `connectedMeasurementPointId`, `pointCode`, and `selectedParameterCode` must match the stored report.
+- Officer workflow actions validate against the current report status, current step status, permission scope, and `regionalAccess`.
+- `APPROVE` sets the current step to `APPROVED`; if another step exists, that next step becomes `PENDING` and the report becomes `WAITING_APPROVAL`, otherwise the report becomes `APPROVED`.
+- `REQUEST_REVISION` sets the current step and report to `REVISION_REQUESTED`; the next operator resubmission restarts approval from step 1.
+- `REJECT` sets the current step to `REJECTED`, clears the active current step, and sets the report to terminal status `REJECTED`.
+- Each officer workflow action inserts a row into `bod_cod_approval_events`; `REQUEST_REVISION` stores `revisionReason` as the event note, while `APPROVE` and `REJECT` store `officerNote`.
 
 Reason:
 

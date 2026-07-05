@@ -4,6 +4,7 @@ import type {
   BodCodDeviationFactoryTableRowDTO,
   BodCodDeviationReportDetailDTO,
   BodCodDeviationReportTableRowDTO,
+  ChangeBodCodWorkflowStatusDTO,
   CreateBodCodDeviationReportAccess,
   CreateBodCodDeviationReportDTO,
   CreatedBodCodDeviationReportDTO,
@@ -47,6 +48,18 @@ export const bodCodDeviationReportsService = {
     access: CreateBodCodDeviationReportAccess,
   ): Promise<CreatedBodCodDeviationReportDTO> {
     return bodCodDeviationReportsRepository.resubmitReport(id, input, access);
+  },
+
+  changeWorkflowStatus(
+    id: number,
+    input: ChangeBodCodWorkflowStatusDTO,
+    access: {
+      actorUserId: number;
+      scope: string | null | undefined;
+      regionalAccess?: RegionalAccessDTO | null;
+    },
+  ): Promise<CreatedBodCodDeviationReportDTO> {
+    return bodCodDeviationReportsRepository.changeWorkflowStatus(id, input, access);
   },
 
   getReportById(
