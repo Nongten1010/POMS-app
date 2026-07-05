@@ -7,6 +7,16 @@ jest.mock('../../src/modules/kwp-form-submissions/kwp-form-submissions.service',
     getById: jest.fn(),
     getWorkflow: jest.fn(),
     changeWorkflowStatus: jest.fn(),
+    updateKwp01: jest.fn(),
+    updateKwp02: jest.fn(),
+    updateKwp03: jest.fn(),
+    updateKwp04: jest.fn(),
+    updateKwp05: jest.fn(),
+    resubmitKwp01: jest.fn(),
+    resubmitKwp02: jest.fn(),
+    resubmitKwp03: jest.fn(),
+    resubmitKwp04: jest.fn(),
+    resubmitKwp05: jest.fn(),
     createKwp01: jest.fn(),
     createKwp02: jest.fn(),
     createKwp03: jest.fn(),
@@ -97,6 +107,35 @@ describe('KWP form submission routes', () => {
       },
       allowedActions: ['REQUEST_REVISION', 'APPROVE'],
     });
+    mockedService.updateKwp01.mockResolvedValue({
+      ...kwp01DetailResponse(),
+      status: 'REVISION_REQUESTED',
+      issueReport: {
+        ...kwp01DetailResponse().issueReport,
+        correctiveAction: 'แก้ไขแผนซ่อมบำรุงตามข้อสังเกตเจ้าหน้าที่',
+      },
+    });
+    mockedService.updateKwp02.mockResolvedValue(kwp02DetailResponse());
+    mockedService.updateKwp03.mockResolvedValue(kwp03DetailResponse());
+    mockedService.updateKwp04.mockResolvedValue({
+      ...kwp02DetailResponse(),
+      id: 14,
+      requestNo: 'KWP-69-00014',
+      form: 'กวภ.04',
+      formType: 'KWP04',
+    });
+    mockedService.updateKwp05.mockResolvedValue(kwp05DetailResponse());
+    mockedService.resubmitKwp01.mockResolvedValue({
+      ...kwpWorkflowResponse(),
+      status: 'SUBMITTED',
+      statusLabel: 'รอพิจารณา',
+      revisionReason: 'เพิ่มเอกสารแนบผลตรวจวัด',
+      allowedActions: ['START_REVIEW', 'REQUEST_REVISION'],
+    });
+    mockedService.resubmitKwp02.mockResolvedValue(kwpWorkflowResponse());
+    mockedService.resubmitKwp03.mockResolvedValue(kwpWorkflowResponse());
+    mockedService.resubmitKwp04.mockResolvedValue(kwpWorkflowResponse());
+    mockedService.resubmitKwp05.mockResolvedValue(kwpWorkflowResponse());
     mockSaveKwpAttachment.mockResolvedValue({
       originalFileName: 'lab-report.pdf',
       storedFileName: 'mock-lab-report.pdf',
@@ -497,6 +536,87 @@ describe('KWP form submission routes', () => {
         key: 'REVISION_REQUESTED',
       },
       allowedActions: ['START_REVIEW'],
+    });
+  });
+
+  it('updates a returned KWP01 form through the form-specific edit endpoint', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .patch('/api/v1/kwp-form-submissions/kwp01/12')
+      .set('Authorization', `Bearer ${operatorToken()}`)
+      .send({
+        ...validKwp01Payload(),
+        correctiveAction: 'แก้ไขแผนซ่อมบำรุงตามข้อสังเกตเจ้าหน้าที่',
+      });
+
+    expect(response.status).toBe(200);
+    expect(mockedService.updateKwp01).toHaveBeenCalledWith(
+      12,
+      expect.objectContaining({
+        correctiveAction: 'แก้ไขแผนซ่อมบำรุงตามข้อสังเกตเจ้าหน้าที่',
+      }),
+      {
+        actorUserId: 42,
+        scope: 'OWN_FACTORY',
+        publicBaseUrl: 'http://d-poms.diw.go.th',
+        publicPath: '/uploads',
+      },
+    );
+    expect(response.body).toMatchObject({
+      success: true,
+      data: {
+        id: 12,
+        formType: 'KWP01',
+        status: 'REVISION_REQUESTED',
+        issueReport: {
+          correctiveAction: 'แก้ไขแผนซ่อมบำรุงตามข้อสังเกตเจ้าหน้าที่',
+        },
+      },
+    });
+  });
+
+  it('rejects invalid KWP01 edit payloads before calling service', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .patch('/api/v1/kwp-form-submissions/kwp01/12')
+      .set('Authorization', `Bearer ${operatorToken()}`)
+      .send({
+        ...validKwp01Payload(),
+        factoryName: '',
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    expect(mockedService.updateKwp01).not.toHaveBeenCalled();
+  });
+
+  it('resubmits a returned KWP01 form through the form-specific action endpoint', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .post('/api/v1/kwp-form-submissions/kwp01/12/resubmit')
+      .set('Authorization', `Bearer ${operatorToken()}`)
+      .send({ note: 'ปรับข้อมูลและแนบเอกสารครบแล้ว' });
+
+    expect(response.status).toBe(200);
+    expect(mockedService.resubmitKwp01).toHaveBeenCalledWith(
+      12,
+      { note: 'ปรับข้อมูลและแนบเอกสารครบแล้ว' },
+      {
+        actorUserId: 42,
+        scope: 'OWN_FACTORY',
+        regionalAccess: undefined,
+      },
+    );
+    expect(response.body).toMatchObject({
+      success: true,
+      data: {
+        id: 12,
+        formType: 'KWP01',
+        status: 'SUBMITTED',
+      },
     });
   });
 

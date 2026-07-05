@@ -65,6 +65,66 @@ kwpFormSubmissionsRoutes.post(
   kwpFormSubmissionsController.createKwp05,
 );
 
+kwpFormSubmissionsRoutes.patch(
+  '/kwp01/:id',
+  authorize('kwp_forms:edit'),
+  kwpFormSubmissionsController.updateKwp01,
+);
+
+kwpFormSubmissionsRoutes.patch(
+  '/kwp02/:id',
+  authorize('kwp_forms:edit'),
+  kwpFormSubmissionsController.updateKwp02,
+);
+
+kwpFormSubmissionsRoutes.patch(
+  '/kwp03/:id',
+  authorize('kwp_forms:edit'),
+  kwpFormSubmissionsController.updateKwp03,
+);
+
+kwpFormSubmissionsRoutes.patch(
+  '/kwp04/:id',
+  authorize('kwp_forms:edit'),
+  kwpFormSubmissionsController.updateKwp04,
+);
+
+kwpFormSubmissionsRoutes.patch(
+  '/kwp05/:id',
+  authorize('kwp_forms:edit'),
+  kwpFormSubmissionsController.updateKwp05,
+);
+
+kwpFormSubmissionsRoutes.post(
+  '/kwp01/:id/resubmit',
+  authorize('kwp_forms:edit'),
+  kwpFormSubmissionsController.resubmitKwp01,
+);
+
+kwpFormSubmissionsRoutes.post(
+  '/kwp02/:id/resubmit',
+  authorize('kwp_forms:edit'),
+  kwpFormSubmissionsController.resubmitKwp02,
+);
+
+kwpFormSubmissionsRoutes.post(
+  '/kwp03/:id/resubmit',
+  authorize('kwp_forms:edit'),
+  kwpFormSubmissionsController.resubmitKwp03,
+);
+
+kwpFormSubmissionsRoutes.post(
+  '/kwp04/:id/resubmit',
+  authorize('kwp_forms:edit'),
+  kwpFormSubmissionsController.resubmitKwp04,
+);
+
+kwpFormSubmissionsRoutes.post(
+  '/kwp05/:id/resubmit',
+  authorize('kwp_forms:edit'),
+  kwpFormSubmissionsController.resubmitKwp05,
+);
+
 kwpFormSubmissionsRoutes.get(
   '/:id/workflow',
   authorize('kwp_forms:view'),

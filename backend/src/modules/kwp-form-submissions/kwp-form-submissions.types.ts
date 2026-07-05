@@ -34,6 +34,13 @@ export interface KwpFormSubmissionReadAccess extends KwpFormSubmissionAccess {
   publicPath: string;
 }
 
+export interface KwpFormSubmissionUpdateAccess extends KwpFormSubmissionAccess {
+  formType: KwpFormSubmissionDetailType;
+  regionalAccess?: { regions: string[] } | null;
+  publicBaseUrl: string;
+  publicPath: string;
+}
+
 export interface KwpFormWorkflowAccess extends KwpFormSubmissionAccess {
   regionalAccess?: { regions: string[] } | null;
 }
@@ -42,6 +49,10 @@ export interface ChangeKwpFormWorkflowStatusDTO {
   action: KwpFormWorkflowAction;
   revisionReason?: string;
   officerNote?: string | null;
+}
+
+export interface ResubmitKwpFormSubmissionDTO {
+  note?: string | null;
 }
 
 export interface KwpFormWorkflowStepDTO {

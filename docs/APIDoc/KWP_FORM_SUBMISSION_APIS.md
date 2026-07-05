@@ -1234,3 +1234,59 @@ Permission: `kwp_forms:approve`
 | payload ไม่ถูกต้อง เช่นไม่ส่ง `revisionReason` ตอน `REQUEST_REVISION` | `400` | validation error |
 | action ไม่สอดคล้องกับ status ปัจจุบัน | `400` | backend คืน `allowedActions` ใน error details |
 | ไม่พบรายการ, รายการถูกลบ, หรืออยู่นอก scope | `404` | ไม่คืนข้อมูลให้ผู้ใช้ |
+
+## 9. Edit returned KWP submissions
+
+ให้ผู้ประกอบการแก้ไขข้อมูลเดิมได้เฉพาะรายการที่เจ้าหน้าที่ส่งกลับแก้ไขแล้ว (`REVISION_REQUESTED`) โดย endpoint แยกตามชนิดฟอร์มเพื่อให้ frontend ระบุฟอร์มชัดเจน
+
+```http
+PATCH /api/v1/kwp-form-submissions/kwp01/:id
+PATCH /api/v1/kwp-form-submissions/kwp02/:id
+PATCH /api/v1/kwp-form-submissions/kwp03/:id
+PATCH /api/v1/kwp-form-submissions/kwp04/:id
+PATCH /api/v1/kwp-form-submissions/kwp05/:id
+```
+
+Permission: `kwp_forms:edit`
+
+Payload ใช้ schema เดียวกับ create endpoint ของฟอร์มนั้น เช่น `PATCH /kwp01/:id` ใช้ payload เดียวกับ `POST /kwp01`
+
+Behavior:
+
+- ต้องเป็นรายการเดิมของ form type ตาม path เช่น `/kwp01/:id` ต้องเป็น `KWP01` เท่านั้น
+- ถ้าอยู่นอก scope โรงงานของผู้ประกอบการ คืน `404`
+- ถ้าสถานะไม่ใช่ `REVISION_REQUESTED` คืน `409 CONFLICT`
+- การแก้ไข replace รายละเอียดฟอร์มและรายการลูกของฟอร์มนั้น แต่ไม่เปลี่ยนเลขคำขอหรือสถานะ workflow
+- Response คืน detail shape เดียวกับ `GET /api/v1/kwp-form-submissions/kwp01/:id`
+
+## 10. Resubmit returned KWP submissions
+
+ให้ผู้ประกอบการส่งฟอร์มที่แก้ไขแล้วกลับเข้าสู่ workflow หลังจากสถานะ `REVISION_REQUESTED`
+
+```http
+POST /api/v1/kwp-form-submissions/kwp01/:id/resubmit
+POST /api/v1/kwp-form-submissions/kwp02/:id/resubmit
+POST /api/v1/kwp-form-submissions/kwp03/:id/resubmit
+POST /api/v1/kwp-form-submissions/kwp04/:id/resubmit
+POST /api/v1/kwp-form-submissions/kwp05/:id/resubmit
+```
+
+Permission: `kwp_forms:edit`
+
+Request body:
+
+```json
+{
+  "note": "ปรับข้อมูลและแนบเอกสารครบแล้ว"
+}
+```
+
+`note` เป็น optional string ไม่เกิน 1000 ตัวอักษร
+
+Behavior:
+
+- ต้องเป็นรายการเดิมของ form type ตาม path
+- ต้องอยู่สถานะ `REVISION_REQUESTED`
+- เมื่อสำเร็จ ระบบเปลี่ยนสถานะกลับเป็น `SUBMITTED`
+- ระบบเพิ่มประวัติใน `kwp_form_status_history` พร้อม note ของผู้ประกอบการ
+- Response คืน workflow shape เดียวกับ `GET /api/v1/kwp-form-submissions/:id/workflow`

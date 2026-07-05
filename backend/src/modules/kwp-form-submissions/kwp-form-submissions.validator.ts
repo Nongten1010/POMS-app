@@ -227,3 +227,12 @@ export const changeKwpWorkflowStatusSchema = z
     ...payload,
     officerNote: payload.officerNote ?? null,
   }));
+
+export const resubmitKwpFormSubmissionSchema = z
+  .object({
+    note: optionalNullableText(1000),
+  })
+  .strict()
+  .transform((payload) => ({
+    note: payload.note ?? null,
+  }));

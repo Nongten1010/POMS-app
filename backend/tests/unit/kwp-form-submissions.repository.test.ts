@@ -2,6 +2,7 @@ import { describe, expect, it } from '@jest/globals';
 import { buildPublicFileUrl } from '../../src/modules/kwp-form-submissions/kwp-form-attachments.service';
 import {
   buildKwpFormSubmissionDetailQueryForTests,
+  buildKwpFormEditableSubmissionQueryForTests,
   buildKwpFormSubmissionFactoryAccessQueryForTests,
   buildKwpFormSubmissionWorkflowQueryForTests,
   nextKwpWorkflowStatusForTests,
@@ -82,6 +83,22 @@ describe('kwpFormSubmissionsRepository', () => {
     expect(sql).toContain('join [user_juristics] as [uj]');
     expect(sql).toContain('[uj].[user_id]');
     expect(sql).toContain('[p].[region] in (?)');
+  });
+
+  it('limits returned-form edits to the requested id, form type, and operator factories', () => {
+    const sql = buildKwpFormEditableSubmissionQueryForTests(12, {
+      actorUserId: 42,
+      scope: 'OWN_FACTORY',
+      formType: 'KWP01',
+    })
+      .toSQL()
+      .sql.toLowerCase();
+
+    expect(sql).toContain('from [kwp_form_submissions] as [s]');
+    expect(sql).toContain('[s].[id] = ?');
+    expect(sql).toContain('[s].[form_type] = ?');
+    expect(sql).toContain('join [user_juristics] as [uj]');
+    expect(sql).toContain('[uj].[user_id]');
   });
 
   it('maps KWP workflow state for submitted, revision, and review transitions', () => {
@@ -175,6 +192,44 @@ describe('kwpFormSubmissionsRepository', () => {
       ]),
     );
     expect(nextKwpWorkflowStatusForTests('UNDER_REVIEW', 'APPROVE')).toBe('APPROVED');
+  });
+
+  it('maps a returned form that the operator resubmitted back to the submitted workflow state', () => {
+    const resubmitted = toKwpWorkflowDTOForTests(
+      {
+        id: 12,
+        submission_no: 'KWP-69-00012',
+        form_type: 'KWP01',
+        status: 'SUBMITTED',
+        officer_note: 'เพิ่มเอกสารแนบผลตรวจวัด',
+        reviewed_at: '2026-07-04T09:00:00.000Z',
+        created_at: '2026-07-04T08:00:00.000Z',
+        updated_at: '2026-07-04T10:30:00.000Z',
+        province_region: 'ภาคกลาง',
+      },
+      [
+        {
+          status: 'SUBMITTED',
+          note: null,
+          changed_at: '2026-07-04T08:00:00.000Z',
+        },
+        {
+          status: 'REVISION_REQUESTED',
+          note: 'เพิ่มเอกสารแนบผลตรวจวัด',
+          changed_at: '2026-07-04T09:00:00.000Z',
+        },
+        {
+          status: 'SUBMITTED',
+          note: 'ปรับข้อมูลและแนบเอกสารครบแล้ว',
+          changed_at: '2026-07-04T10:30:00.000Z',
+        },
+      ],
+    );
+
+    expect(resubmitted.status).toBe('SUBMITTED');
+    expect(resubmitted.revisionReason).toBe('เพิ่มเอกสารแนบผลตรวจวัด');
+    expect(resubmitted.currentStep).toMatchObject({ key: 'SUBMITTED', status: 'CURRENT' });
+    expect(resubmitted.allowedActions).toEqual(['START_REVIEW', 'REQUEST_REVISION']);
   });
 
   it('maps KWP01 payload to submission, issue report, parameters, and initial history records', () => {

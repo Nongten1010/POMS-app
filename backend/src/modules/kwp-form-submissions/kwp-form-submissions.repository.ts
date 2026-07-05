@@ -1,5 +1,10 @@
 import type { Knex } from 'knex';
-import { BadRequestError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
+import {
+  BadRequestError,
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+} from '../../shared/errors/AppError';
 import { db } from '../../config/database';
 import { buildPublicFileUrl } from './kwp-form-attachments.service';
 import type {
@@ -22,10 +27,12 @@ import type {
   KwpFormSubmissionDetailDTO,
   KwpFormSubmissionAccess,
   KwpFormSubmissionReadAccess,
+  KwpFormSubmissionUpdateAccess,
   KwpFormWorkflowAccess,
   KwpFormWorkflowAction,
   KwpFormWorkflowDTO,
   KwpFormWorkflowStepDTO,
+  ResubmitKwpFormSubmissionDTO,
 } from './kwp-form-submissions.types';
 
 interface Kwp01InsertInput {
@@ -127,6 +134,12 @@ interface SubmissionWorkflowRow {
   created_at: Date | string;
   updated_at: Date | string;
   province_region: string | null;
+}
+
+interface EditableSubmissionRow {
+  id: number | string;
+  form_type: KwpFormSubmissionDetailType;
+  status: KwpFormSubmissionStatus;
 }
 
 interface WorkflowHistoryRow {
@@ -308,6 +321,180 @@ export const kwpFormSubmissionsRepository = {
       ...baseDetail,
       measurementItems: await listEmissionMeasurementItems(Number(submission.id), access),
     };
+  },
+
+  async updateKwp01(
+    id: number,
+    payload: CreateKwp01SubmissionDTO,
+    access: KwpFormSubmissionUpdateAccess,
+  ): Promise<KwpFormSubmissionDetailDTO> {
+    await db.transaction(async (trx) => {
+      await assertCanEditReturnedSubmission(id, access, trx);
+      const now = new Date();
+      const records = toKwp01InsertRecords({
+        payload,
+        submissionNo: '',
+        actorUserId: access.actorUserId,
+        now,
+      });
+
+      await updateCommonSubmission(id, payload, access, now, trx);
+      await trx('kwp01_issue_reports').where('submission_id', id).update(records.issueReport);
+      await trx('kwp01_unreported_parameters').where('submission_id', id).delete();
+      if (records.unreportedParameters.length > 0) {
+        await trx('kwp01_unreported_parameters').insert(
+          records.unreportedParameters.map((parameter) => ({
+            ...parameter,
+            submission_id: id,
+          })),
+        );
+      }
+    });
+    return getUpdatedSubmissionDetail(id, access);
+  },
+
+  async updateKwp02(
+    id: number,
+    payload: CreateKwp02SubmissionDTO,
+    access: KwpFormSubmissionUpdateAccess,
+  ): Promise<KwpFormSubmissionDetailDTO> {
+    return updateKwpEmissionReport(id, payload, access);
+  },
+
+  async updateKwp03(
+    id: number,
+    payload: CreateKwp03SubmissionDTO,
+    access: KwpFormSubmissionUpdateAccess,
+  ): Promise<KwpFormSubmissionDetailDTO> {
+    await db.transaction(async (trx) => {
+      await assertCanEditReturnedSubmission(id, access, trx);
+      const now = new Date();
+      const records = toKwp03InsertRecords({
+        payload,
+        submissionNo: '',
+        actorUserId: access.actorUserId,
+        now,
+      });
+
+      await updateCommonSubmission(id, payload, access, now, trx);
+      await trx('kwp_form_attachments').where('submission_id', id).delete();
+      await trx('kwp03_selected_options').where('submission_id', id).delete();
+      await trx('kwp03_wpms_issue_reports')
+        .where('submission_id', id)
+        .update(records.wpmsIssueReport);
+
+      const issueReport = await trx('kwp03_wpms_issue_reports')
+        .where('submission_id', id)
+        .first<{ id: number | string }>('id');
+      const issueReportId = Number(issueReport?.id);
+
+      if (records.selectedOptions.length > 0) {
+        await trx('kwp03_selected_options').insert(
+          records.selectedOptions.map((option) => ({
+            ...option,
+            submission_id: id,
+          })),
+        );
+      }
+      if (records.attachments.length > 0) {
+        await trx('kwp_form_attachments').insert(
+          records.attachments.map((attachment) => ({
+            ...attachment,
+            submission_id: id,
+            related_table: 'kwp03_wpms_issue_reports',
+            related_id: issueReportId,
+          })),
+        );
+      }
+    });
+    return getUpdatedSubmissionDetail(id, access);
+  },
+
+  async updateKwp04(
+    id: number,
+    payload: CreateKwp04SubmissionDTO,
+    access: KwpFormSubmissionUpdateAccess,
+  ): Promise<KwpFormSubmissionDetailDTO> {
+    return updateKwpEmissionReport(id, payload, access);
+  },
+
+  async updateKwp05(
+    id: number,
+    payload: CreateKwp05SubmissionDTO,
+    access: KwpFormSubmissionUpdateAccess,
+  ): Promise<KwpFormSubmissionDetailDTO> {
+    await db.transaction(async (trx) => {
+      await assertCanEditReturnedSubmission(id, access, trx);
+      const now = new Date();
+      const records = toKwp05InsertRecords({
+        payload,
+        submissionNo: '',
+        actorUserId: access.actorUserId,
+        now,
+      });
+
+      await updateCommonSubmission(id, payload, access, now, trx);
+      await trx('kwp_form_attachments').where('submission_id', id).delete();
+      await trx('kwp05_calibration_items').where('submission_id', id).delete();
+      await trx('kwp05_calibration_reports')
+        .where('submission_id', id)
+        .update(records.calibrationReport);
+
+      for (const [itemIndex, item] of records.calibrationItems.entries()) {
+        const insertedItem = await trx('kwp05_calibration_items')
+          .insert({
+            ...item,
+            submission_id: id,
+          })
+          .returning<{ id: number | string }[]>('id');
+        const itemId = Number(insertedItem[0]?.id);
+        const attachments = records.attachmentsByItemIndex.get(itemIndex) ?? [];
+
+        if (attachments.length > 0) {
+          await trx('kwp_form_attachments').insert(
+            attachments.map((attachment) => ({
+              ...attachment,
+              submission_id: id,
+              related_table: 'kwp05_calibration_items',
+              related_id: itemId,
+            })),
+          );
+        }
+      }
+    });
+    return getUpdatedSubmissionDetail(id, access);
+  },
+
+  async resubmit(
+    id: number,
+    input: ResubmitKwpFormSubmissionDTO,
+    access: KwpFormWorkflowAccess & { formType: KwpFormSubmissionDetailType },
+  ): Promise<KwpFormWorkflowDTO> {
+    return db.transaction(async (trx) => {
+      await assertCanEditReturnedSubmission(id, access, trx);
+      const now = new Date();
+
+      await trx('kwp_form_submissions').where('id', id).update({
+        status: 'SUBMITTED',
+        submitted_at: now,
+        updated_at: now,
+        updated_by: access.actorUserId,
+      });
+      await trx('kwp_form_status_history').insert({
+        submission_id: id,
+        status: 'SUBMITTED',
+        note: input.note ?? null,
+        changed_by: access.actorUserId,
+        changed_at: now,
+      });
+
+      const updated = await buildWorkflowQuery(id, access, trx).first();
+      if (!updated) {
+        throw new NotFoundError('KWP form submission not found');
+      }
+      const historyRows = await listWorkflowHistory(Number(updated.id), trx);
+      return toWorkflowDTO(updated, historyRows);
+    });
   },
 
   async createKwp01(
@@ -575,6 +762,163 @@ async function createKwpEmissionReport(
   });
 }
 
+async function updateKwpEmissionReport(
+  id: number,
+  payload: CreateKwp02SubmissionDTO | CreateKwp04SubmissionDTO,
+  access: KwpFormSubmissionUpdateAccess,
+): Promise<KwpFormSubmissionDetailDTO> {
+  await db.transaction(async (trx) => {
+    await assertCanEditReturnedSubmission(id, access, trx);
+    const now = new Date();
+    const records = toKwp02InsertRecords({
+      payload,
+      submissionNo: '',
+      actorUserId: access.actorUserId,
+      now,
+      formType: access.formType === 'KWP04' ? 'KWP04' : 'KWP02',
+    });
+
+    await updateCommonSubmission(id, payload, access, now, trx);
+    await trx('kwp_form_attachments').where('submission_id', id).delete();
+    await trx('kwp_emission_measurement_items').where('submission_id', id).delete();
+
+    for (const [itemIndex, item] of records.measurementItems.entries()) {
+      const insertedItem = await trx('kwp_emission_measurement_items')
+        .insert({
+          ...item,
+          submission_id: id,
+        })
+        .returning<{ id: number | string }[]>('id');
+      const itemId = Number(insertedItem[0]?.id);
+      const attachments = records.attachmentsByItemIndex.get(itemIndex) ?? [];
+
+      if (attachments.length > 0) {
+        await trx('kwp_form_attachments').insert(
+          attachments.map((attachment) => ({
+            ...attachment,
+            submission_id: id,
+            related_table: 'kwp_emission_measurement_items',
+            related_id: itemId,
+          })),
+        );
+      }
+    }
+  });
+  return getUpdatedSubmissionDetail(id, access);
+}
+
+async function getUpdatedSubmissionDetail(
+  id: number,
+  access: KwpFormSubmissionUpdateAccess,
+): Promise<KwpFormSubmissionDetailDTO> {
+  return kwpFormSubmissionsRepository.getById(id, {
+    actorUserId: access.actorUserId,
+    formType: access.formType,
+    scope: access.scope,
+    regionalAccess: access.regionalAccess,
+    publicBaseUrl: access.publicBaseUrl,
+    publicPath: access.publicPath,
+  });
+}
+
+async function assertCanEditReturnedSubmission(
+  id: number,
+  access: KwpFormSubmissionAccess & {
+    formType: KwpFormSubmissionDetailType;
+    regionalAccess?: { regions: string[] } | null;
+  },
+  trx: Knex.Transaction,
+): Promise<EditableSubmissionRow> {
+  const row = await buildEditableSubmissionQuery(id, access, trx).first();
+  if (!row) {
+    throw new NotFoundError('KWP form submission not found');
+  }
+  if (row.status !== 'REVISION_REQUESTED') {
+    throw new ConflictError('KWP form submission can be edited only after revision is requested', {
+      currentStatus: row.status,
+      requiredStatus: 'REVISION_REQUESTED',
+    });
+  }
+  return row;
+}
+
+function buildEditableSubmissionQuery(
+  id: number,
+  access: KwpFormSubmissionAccess & {
+    formType: KwpFormSubmissionDetailType;
+    regionalAccess?: { regions: string[] } | null;
+  },
+  knexOrTrx: Knex | Knex.Transaction = db,
+): Knex.QueryBuilder<EditableSubmissionRow, EditableSubmissionRow[]> {
+  const builder = knexOrTrx<EditableSubmissionRow>('kwp_form_submissions as s')
+    .leftJoin('factories as f', function joinFactory() {
+      this.on('f.fid', '=', 's.factory_id')
+        .orOn('f.code', '=', 's.factory_id')
+        .orOn('f.code', '=', 's.factory_registration_no');
+    })
+    .leftJoin('provinces as p', 'p.id', 'f.province_id')
+    .where('s.id', id)
+    .where('s.form_type', access.formType)
+    .whereNull('s.deleted_at')
+    .select('s.id', 's.form_type', 's.status');
+
+  if (access.scope === 'OWN_FACTORY') {
+    builder
+      .join('user_juristics as uj', 'uj.juristic_id', 'f.juristic_id')
+      .where('uj.user_id', access.actorUserId)
+      .whereNull('uj.revoked_at');
+  }
+
+  const regions = [
+    ...new Set((access.regionalAccess?.regions ?? []).map((region) => region.trim())),
+  ].filter(Boolean);
+  if (regions.length > 0) builder.whereIn('p.region', regions);
+
+  return builder as unknown as Knex.QueryBuilder<EditableSubmissionRow, EditableSubmissionRow[]>;
+}
+
+async function updateCommonSubmission(
+  id: number,
+  payload:
+    | CreateKwp01SubmissionDTO
+    | CreateKwp02SubmissionDTO
+    | CreateKwp03SubmissionDTO
+    | CreateKwp04SubmissionDTO
+    | CreateKwp05SubmissionDTO,
+  access: KwpFormSubmissionUpdateAccess,
+  now: Date,
+  trx: Knex.Transaction,
+): Promise<void> {
+  await assertCanCreateForFactory(trx, payload.factoryId, access);
+
+  await trx('kwp_form_submissions')
+    .where('id', id)
+    .update({
+      factory_id: payload.factoryId,
+      factory_name: payload.factoryName,
+      factory_registration_no: payload.factoryRegistrationNo ?? null,
+      factory_address: payload.factoryAddress ?? null,
+      industry_type: payload.industryType ?? null,
+      connected_point_id: payload.connectedPointId ?? null,
+      point_code: payload.pointCode ?? null,
+      point_name: payload.pointName ?? null,
+      point_type: payload.pointType ?? null,
+      production_stack: payload.productionStack ?? null,
+      primary_fuel: payload.primaryFuel ?? null,
+      secondary_fuel: payload.secondaryFuel ?? null,
+      combustion_system: payload.combustionSystem ?? null,
+      production_capacity: payload.productionCapacity ?? null,
+      production_capacity_unit: payload.productionCapacityUnit ?? null,
+      contact_name: payload.contactName ?? null,
+      contact_phone: payload.contactPhone ?? null,
+      contact_email: payload.contactEmail ?? null,
+      reporter_name: payload.reporterName ?? null,
+      reporter_position: payload.reporterPosition ?? null,
+      updated_at: now,
+      updated_by: access.actorUserId,
+    });
+}
+
 export function buildKwpFormSubmissionFactoryAccessQueryForTests(
   factoryId: string,
   access: KwpFormSubmissionAccess,
@@ -594,6 +938,13 @@ export function buildKwpFormSubmissionWorkflowQueryForTests(
   access: KwpFormWorkflowAccess,
 ): Knex.QueryBuilder {
   return buildWorkflowQuery(id, access);
+}
+
+export function buildKwpFormEditableSubmissionQueryForTests(
+  id: number,
+  access: KwpFormSubmissionAccess & { formType: KwpFormSubmissionDetailType },
+): Knex.QueryBuilder {
+  return buildEditableSubmissionQuery(id, access);
 }
 
 export function toKwp01InsertRecordsForTests(input: Kwp01InsertInput): Kwp01InsertRecords {

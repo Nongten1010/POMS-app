@@ -12,6 +12,7 @@ import {
   createKwp04SubmissionSchema,
   createKwp05SubmissionSchema,
   changeKwpWorkflowStatusSchema,
+  resubmitKwpFormSubmissionSchema,
 } from './kwp-form-submissions.validator';
 import type { KwpFormSubmissionDetailType } from './kwp-form-submissions.types';
 
@@ -65,6 +66,46 @@ export const kwpFormSubmissionsController = {
 
   async getKwp05ById(req: Request, res: Response, next: NextFunction): Promise<void> {
     await getById(req, res, next, 'KWP05');
+  },
+
+  async updateKwp01(req: Request, res: Response, next: NextFunction): Promise<void> {
+    await updateById(req, res, next, 'KWP01');
+  },
+
+  async updateKwp02(req: Request, res: Response, next: NextFunction): Promise<void> {
+    await updateById(req, res, next, 'KWP02');
+  },
+
+  async updateKwp03(req: Request, res: Response, next: NextFunction): Promise<void> {
+    await updateById(req, res, next, 'KWP03');
+  },
+
+  async updateKwp04(req: Request, res: Response, next: NextFunction): Promise<void> {
+    await updateById(req, res, next, 'KWP04');
+  },
+
+  async updateKwp05(req: Request, res: Response, next: NextFunction): Promise<void> {
+    await updateById(req, res, next, 'KWP05');
+  },
+
+  async resubmitKwp01(req: Request, res: Response, next: NextFunction): Promise<void> {
+    await resubmitById(req, res, next, 'KWP01');
+  },
+
+  async resubmitKwp02(req: Request, res: Response, next: NextFunction): Promise<void> {
+    await resubmitById(req, res, next, 'KWP02');
+  },
+
+  async resubmitKwp03(req: Request, res: Response, next: NextFunction): Promise<void> {
+    await resubmitById(req, res, next, 'KWP03');
+  },
+
+  async resubmitKwp04(req: Request, res: Response, next: NextFunction): Promise<void> {
+    await resubmitById(req, res, next, 'KWP04');
+  },
+
+  async resubmitKwp05(req: Request, res: Response, next: NextFunction): Promise<void> {
+    await resubmitById(req, res, next, 'KWP05');
   },
 
   async uploadAttachment(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -196,6 +237,91 @@ async function getById(
       publicBaseUrl: getPublicBaseUrl(req),
       publicPath: env.UPLOAD_PUBLIC_PATH,
     });
+    res.status(StatusCodes.OK).json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function updateById(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+  formType: KwpFormSubmissionDetailType,
+): Promise<void> {
+  try {
+    const actorUserId = requireActorUserId(req);
+    const id = requireSubmissionId(req);
+    const access = {
+      actorUserId,
+      scope: getScope(req, 'kwp_forms:edit'),
+      regionalAccess: req.user?.regionalAccess ?? undefined,
+      publicBaseUrl: getPublicBaseUrl(req),
+      publicPath: env.UPLOAD_PUBLIC_PATH,
+    };
+    const result =
+      formType === 'KWP01'
+        ? await kwpFormSubmissionsService.updateKwp01(
+            id,
+            createKwp01SubmissionSchema.parse(req.body),
+            access,
+          )
+        : formType === 'KWP02'
+          ? await kwpFormSubmissionsService.updateKwp02(
+              id,
+              createKwp02SubmissionSchema.parse(req.body),
+              access,
+            )
+          : formType === 'KWP03'
+            ? await kwpFormSubmissionsService.updateKwp03(
+                id,
+                createKwp03SubmissionSchema.parse(req.body),
+                access,
+              )
+            : formType === 'KWP04'
+              ? await kwpFormSubmissionsService.updateKwp04(
+                  id,
+                  createKwp04SubmissionSchema.parse(req.body),
+                  access,
+                )
+              : await kwpFormSubmissionsService.updateKwp05(
+                  id,
+                  createKwp05SubmissionSchema.parse(req.body),
+                  access,
+                );
+
+    res.status(StatusCodes.OK).json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function resubmitById(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+  formType: KwpFormSubmissionDetailType,
+): Promise<void> {
+  try {
+    const actorUserId = requireActorUserId(req);
+    const id = requireSubmissionId(req);
+    const payload = resubmitKwpFormSubmissionSchema.parse(req.body ?? {});
+    const access = {
+      actorUserId,
+      scope: getScope(req, 'kwp_forms:edit'),
+      regionalAccess: req.user?.regionalAccess ?? undefined,
+    };
+    const result =
+      formType === 'KWP01'
+        ? await kwpFormSubmissionsService.resubmitKwp01(id, payload, access)
+        : formType === 'KWP02'
+          ? await kwpFormSubmissionsService.resubmitKwp02(id, payload, access)
+          : formType === 'KWP03'
+            ? await kwpFormSubmissionsService.resubmitKwp03(id, payload, access)
+            : formType === 'KWP04'
+              ? await kwpFormSubmissionsService.resubmitKwp04(id, payload, access)
+              : await kwpFormSubmissionsService.resubmitKwp05(id, payload, access);
+
     res.status(StatusCodes.OK).json({ success: true, data: result });
   } catch (err) {
     next(err);
