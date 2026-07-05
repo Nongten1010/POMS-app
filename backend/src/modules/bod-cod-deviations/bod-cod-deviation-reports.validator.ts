@@ -15,6 +15,7 @@ const emptyStringToNull = (value: unknown) => {
 };
 
 const requiredText = (max: number) => z.string().trim().min(1).max(max);
+const blankableRequiredText = (max: number) => z.string().trim().max(max);
 const nullableText = (max: number) =>
   z.preprocess(emptyStringToNull, z.string().trim().min(1).max(max).nullable().optional());
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected date format YYYY-MM-DD');
@@ -131,7 +132,7 @@ export const upsertBodCodResultNoticeSchema = z
       }),
     reviewResult: z.enum(['เห็นควรแจ้งผลการตรวจสอบ', 'เห็นควรให้แก้ไขเพิ่มเติม']),
     comment: nullableText(1000),
-    inspectorName: requiredText(255),
-    inspectorPosition: requiredText(255),
+    inspectorName: blankableRequiredText(255),
+    inspectorPosition: blankableRequiredText(255),
   })
   .strict();

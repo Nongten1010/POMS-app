@@ -720,8 +720,8 @@ Field contract:
 | `checkedParameters` | string[] | yes | `BOD`, `COD`; อย่างน้อย 1 ค่า และห้ามซ้ำ |
 | `reviewResult` | enum | yes | `เห็นควรแจ้งผลการตรวจสอบ` หรือ `เห็นควรให้แก้ไขเพิ่มเติม` |
 | `comment` | string/null | no | ความเห็นเพิ่มเติม สูงสุด 1000 ตัวอักษร |
-| `inspectorName` | string | yes | ชื่อเจ้าหน้าที่ผู้กรอก สูงสุด 255 ตัวอักษร |
-| `inspectorPosition` | string | yes | ตำแหน่งเจ้าหน้าที่ผู้กรอก สูงสุด 255 ตัวอักษร |
+| `inspectorName` | string | yes | ชื่อเจ้าหน้าที่ผู้กรอก สูงสุด 255 ตัวอักษร; ส่ง `""` ได้เมื่อยังไม่กรอกชื่อ |
+| `inspectorPosition` | string | yes | ตำแหน่งเจ้าหน้าที่ผู้กรอก สูงสุด 255 ตัวอักษร; ส่ง `""` ได้เมื่อยังไม่กรอกตำแหน่ง |
 
 Response:
 
@@ -771,7 +771,7 @@ Errors:
 | Case | HTTP | Meaning |
 |---|---:|---|
 | token ไม่มี permission `bod_cod_errors:approve` | `403` | user ไม่มีสิทธิ์กรอกแบบแจ้งผล |
-| payload ไม่ถูกต้อง เช่น ไม่ส่ง `inspectorName` หรือ `checkedParameters` ว่าง | `400` | validation error |
+| payload ไม่ถูกต้อง เช่น ไม่ส่ง `inspectorName` field, ไม่ส่ง `inspectorPosition` field, หรือ `checkedParameters` ว่าง | `400` | validation error |
 | รายงานไม่ได้อยู่ step `RESULT_NOTICE`/สถานะ `WAITING_RESULT_NOTICE` | `409` | ยังไม่ถึงจุดกรอกแบบแจ้งผล หรือผ่าน step นี้ไปแล้ว |
 | ไม่พบรายการ, รายการถูกลบ, หรืออยู่นอก scope/ภูมิภาค | `404` | ไม่คืนข้อมูลให้ผู้ใช้ |
 
