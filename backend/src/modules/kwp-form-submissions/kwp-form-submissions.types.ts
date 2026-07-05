@@ -20,6 +20,7 @@ export type KwpFormSubmissionStatus =
   | 'REVISION_REQUESTED'
   | 'CANCELLED';
 export type KwpFormWorkflowAction = 'REQUEST_REVISION' | 'APPROVE';
+export type KwpFormAllowedAction = KwpFormWorkflowAction | 'RESUBMIT';
 
 export interface KwpFormSubmissionAccess {
   actorUserId: number;
@@ -72,7 +73,7 @@ export interface KwpFormWorkflowDTO {
   reviewedAt: string | null;
   currentStep: KwpFormWorkflowStepDTO;
   steps: KwpFormWorkflowStepDTO[];
-  allowedActions: KwpFormWorkflowAction[];
+  allowedActions: KwpFormAllowedAction[];
 }
 
 export interface CreateKwp01SubmissionDTO {

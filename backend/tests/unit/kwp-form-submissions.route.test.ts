@@ -128,9 +128,9 @@ describe('KWP form submission routes', () => {
     mockedService.resubmitKwp01.mockResolvedValue({
       ...kwpWorkflowResponse(),
       status: 'SUBMITTED',
-      statusLabel: 'รอพิจารณา',
+      statusLabel: 'แก้ไขแล้ว/รอพิจารณา',
       revisionReason: 'เพิ่มเอกสารแนบผลตรวจวัด',
-      allowedActions: ['REQUEST_REVISION', 'APPROVE'],
+      allowedActions: [],
     });
     mockedService.resubmitKwp02.mockResolvedValue(kwpWorkflowResponse());
     mockedService.resubmitKwp03.mockResolvedValue(kwpWorkflowResponse());
@@ -474,6 +474,10 @@ describe('KWP form submission routes', () => {
   });
 
   it('gets KWP workflow steps and allowed actions from backend state', async () => {
+    mockedService.getWorkflow.mockResolvedValueOnce({
+      ...kwpWorkflowResponse(),
+      allowedActions: [],
+    });
     const app = createApp();
 
     const response = await request(app)
@@ -494,7 +498,7 @@ describe('KWP form submission routes', () => {
           key: 'SUBMITTED',
           label: 'ส่งฟอร์ม',
         },
-        allowedActions: ['REQUEST_REVISION', 'APPROVE'],
+        allowedActions: [],
       },
     });
   });
@@ -625,6 +629,8 @@ describe('KWP form submission routes', () => {
         id: 12,
         formType: 'KWP01',
         status: 'SUBMITTED',
+        statusLabel: 'แก้ไขแล้ว/รอพิจารณา',
+        allowedActions: [],
       },
     });
   });

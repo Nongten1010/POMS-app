@@ -1038,9 +1038,11 @@ Logic:
 - `reviewedAt` returns `kwp_form_submissions.reviewed_at` as an ISO timestamp. If the database value is `null`, the response returns `null`; if the value cannot be parsed as a date, the response returns the raw string value.
 - `steps` is derived from the current status and always returns the backend-owned sequence: `SUBMITTED`, `REVISION_REQUESTED`, and `APPROVED`.
 - `currentStep` is the first step whose derived step status is `CURRENT`.
-- `allowedActions` is derived from the current status:
-  - `SUBMITTED` returns `REQUEST_REVISION` and `APPROVE`.
-  - `REVISION_REQUESTED` returns `APPROVE`.
+- `allowedActions` is derived from the current status and caller scope:
+  - Officer scopes with `SUBMITTED` return `REQUEST_REVISION` and `APPROVE`.
+  - Officer scopes with `REVISION_REQUESTED` return `APPROVE`.
+  - Operator scope `OWN_FACTORY` with `REVISION_REQUESTED` returns `RESUBMIT`.
+  - Operator scope `OWN_FACTORY` with `SUBMITTED` returns an empty array.
   - terminal or unsupported statuses return an empty array.
 - `revisionReason` returns the latest `kwp_form_status_history.note` whose status is `REVISION_REQUESTED`; if the workflow never requested revision or that history row has no note, the response returns `null`.
 - `POST /workflow-actions` also inserts each transition into `kwp_form_status_history` with the action note.
@@ -1052,7 +1054,7 @@ Fallback order:
 - `reviewedAt`: ISO date conversion, then raw string if parsing fails, then `null` when the source is `null`.
 - `currentStep`: first `steps[]` item with `status = CURRENT`, then the first step in the generated step list, then a defensive pending `SUBMITTED` step if the generated list is unexpectedly empty.
 - `steps`: derived from the current status plus whether `kwp_form_status_history` contains any `REVISION_REQUESTED` row. When a revision happened and the current status later returns to `APPROVED`, the `REVISION_REQUESTED` step is marked `DONE` instead of `SKIPPED`.
-- `allowedActions`: derived from current status only; unsupported statuses fall back to an empty array.
+- `allowedActions`: derived from current status and caller scope; unsupported statuses fall back to an empty array.
 - `revisionReason`: latest revision-request history note, then `null`.
 
 Reason:

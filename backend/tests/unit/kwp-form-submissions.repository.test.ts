@@ -138,6 +138,32 @@ describe('kwpFormSubmissionsRepository', () => {
         },
       ],
     );
+    const operatorRevision = toKwpWorkflowDTOForTests(
+      {
+        id: 12,
+        submission_no: 'KWP-69-00012',
+        form_type: 'KWP01',
+        status: 'REVISION_REQUESTED',
+        officer_note: 'เพิ่มเอกสารแนบผลตรวจวัด',
+        reviewed_at: '2026-07-04T09:00:00.000Z',
+        created_at: '2026-07-04T08:00:00.000Z',
+        updated_at: '2026-07-04T09:00:00.000Z',
+        province_region: 'ภาคกลาง',
+      },
+      [
+        {
+          status: 'SUBMITTED',
+          note: null,
+          changed_at: '2026-07-04T08:00:00.000Z',
+        },
+        {
+          status: 'REVISION_REQUESTED',
+          note: 'เพิ่มเอกสารแนบผลตรวจวัด',
+          changed_at: '2026-07-04T09:00:00.000Z',
+        },
+      ],
+      'OWN_FACTORY',
+    );
     expect(submitted.currentStep).toMatchObject({ key: 'SUBMITTED', status: 'CURRENT' });
     expect(submitted.steps.map((step) => step.key)).toEqual([
       'SUBMITTED',
@@ -153,6 +179,7 @@ describe('kwpFormSubmissionsRepository', () => {
     expect(revision.revisionReason).toBe('เพิ่มเอกสารแนบผลตรวจวัด');
     expect(revision.allowedActions).toEqual(['APPROVE']);
     expect(nextKwpWorkflowStatusForTests('REVISION_REQUESTED', 'APPROVE')).toBe('APPROVED');
+    expect(operatorRevision.allowedActions).toEqual(['RESUBMIT']);
   });
 
   it('maps a returned form that the operator resubmitted back to the submitted workflow state', () => {
@@ -185,13 +212,14 @@ describe('kwpFormSubmissionsRepository', () => {
           changed_at: '2026-07-04T10:30:00.000Z',
         },
       ],
+      'OWN_FACTORY',
     );
 
     expect(resubmitted.status).toBe('SUBMITTED');
     expect(resubmitted.statusLabel).toBe('แก้ไขแล้ว/รอพิจารณา');
     expect(resubmitted.revisionReason).toBe('เพิ่มเอกสารแนบผลตรวจวัด');
     expect(resubmitted.currentStep).toMatchObject({ key: 'SUBMITTED', status: 'CURRENT' });
-    expect(resubmitted.allowedActions).toEqual(['REQUEST_REVISION', 'APPROVE']);
+    expect(resubmitted.allowedActions).toEqual([]);
   });
 
   it('maps KWP01 payload to submission, issue report, parameters, and initial history records', () => {

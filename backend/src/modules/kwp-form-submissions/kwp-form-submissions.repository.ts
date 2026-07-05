@@ -29,6 +29,7 @@ import type {
   KwpFormSubmissionReadAccess,
   KwpFormSubmissionUpdateAccess,
   KwpFormWorkflowAccess,
+  KwpFormAllowedAction,
   KwpFormWorkflowAction,
   KwpFormWorkflowDTO,
   KwpFormWorkflowStepDTO,
@@ -241,7 +242,7 @@ export const kwpFormSubmissionsRepository = {
     }
 
     const historyRows = await listWorkflowHistory(Number(submission.id));
-    return toWorkflowDTO(submission, historyRows);
+    return toWorkflowDTO(submission, historyRows, access.scope);
   },
 
   async changeWorkflowStatus(
@@ -281,7 +282,7 @@ export const kwpFormSubmissionsRepository = {
         throw new NotFoundError('KWP form submission not found');
       }
       const historyRows = await listWorkflowHistory(Number(updated.id), trx);
-      return toWorkflowDTO(updated, historyRows);
+      return toWorkflowDTO(updated, historyRows, access.scope);
     });
   },
 
@@ -493,7 +494,7 @@ export const kwpFormSubmissionsRepository = {
         throw new NotFoundError('KWP form submission not found');
       }
       const historyRows = await listWorkflowHistory(Number(updated.id), trx);
-      return toWorkflowDTO(updated, historyRows);
+      return toWorkflowDTO(updated, historyRows, access.scope);
     });
   },
 
@@ -966,8 +967,9 @@ export function toKwp05InsertRecordsForTests(input: Kwp05InsertInput): Kwp05Inse
 export function toKwpWorkflowDTOForTests(
   row: SubmissionWorkflowRow,
   historyRows: WorkflowHistoryRow[] = [],
+  scope?: string | null,
 ): KwpFormWorkflowDTO {
-  return toWorkflowDTO(row, historyRows);
+  return toWorkflowDTO(row, historyRows, scope);
 }
 
 export function nextKwpWorkflowStatusForTests(
@@ -1432,6 +1434,7 @@ function toSubmissionDetailDTO(row: SubmissionDetailRow): KwpFormSubmissionDetai
 function toWorkflowDTO(
   row: SubmissionWorkflowRow,
   historyRows: WorkflowHistoryRow[],
+  scope: string | null | undefined,
 ): KwpFormWorkflowDTO {
   const hasRevisionRequest = historyRows.some((history) => history.status === 'REVISION_REQUESTED');
   const revisionReason = latestRevisionReason(historyRows);
@@ -1454,7 +1457,7 @@ function toWorkflowDTO(
     reviewedAt: toIsoString(row.reviewed_at),
     currentStep,
     steps,
-    allowedActions: allowedWorkflowActions(row.status),
+    allowedActions: allowedWorkflowActions(row.status, scope),
   };
 }
 
@@ -1482,7 +1485,18 @@ function workflowSteps(
   ];
 }
 
-function allowedWorkflowActions(status: KwpFormSubmissionStatus): KwpFormWorkflowAction[] {
+function allowedWorkflowActions(
+  status: KwpFormSubmissionStatus,
+  scope: string | null | undefined,
+): KwpFormAllowedAction[] {
+  if (scope === 'OWN_FACTORY') {
+    if (status === 'REVISION_REQUESTED') return ['RESUBMIT'];
+    return [];
+  }
+  return allowedWorkflowStatusActions(status);
+}
+
+function allowedWorkflowStatusActions(status: KwpFormSubmissionStatus): KwpFormWorkflowAction[] {
   if (status === 'SUBMITTED') return ['REQUEST_REVISION', 'APPROVE'];
   if (status === 'REVISION_REQUESTED') return ['APPROVE'];
   return [];
@@ -1500,11 +1514,11 @@ function nextWorkflowStatus(
   currentStatus: KwpFormSubmissionStatus,
   action: KwpFormWorkflowAction,
 ): KwpFormSubmissionStatus {
-  if (!allowedWorkflowActions(currentStatus).includes(action)) {
+  if (!allowedWorkflowStatusActions(currentStatus).includes(action)) {
     throw new BadRequestError('Invalid KWP workflow action for current status', {
       currentStatus,
       action,
-      allowedActions: allowedWorkflowActions(currentStatus),
+      allowedActions: allowedWorkflowStatusActions(currentStatus),
     });
   }
 

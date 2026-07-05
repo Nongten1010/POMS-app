@@ -1164,12 +1164,16 @@ Permission: `kwp_forms:view`
 
 ### Step/action mapping
 
-| Current status | Current step | Allowed actions |
-| --- | --- | --- |
-| `SUBMITTED` | `SUBMITTED` / ส่งฟอร์ม | `REQUEST_REVISION`, `APPROVE` |
-| `REVISION_REQUESTED` | `REVISION_REQUESTED` / ส่งแก้ไข | `APPROVE` |
-| `APPROVED` | `APPROVED` / ผ่านการพิจารณา | none |
-| `REJECTED`, `CANCELLED` | terminal status | none |
+`allowedActions` ถูกกรองตาม scope ของผู้เรียก API ด้วย
+
+| Current status | Scope | Current step | Allowed actions |
+| --- | --- | --- | --- |
+| `SUBMITTED` | เจ้าหน้าที่ | `SUBMITTED` / ส่งฟอร์ม | `REQUEST_REVISION`, `APPROVE` |
+| `SUBMITTED` | ผู้ประกอบการ (`OWN_FACTORY`) | `SUBMITTED` / ส่งฟอร์ม | none |
+| `REVISION_REQUESTED` | เจ้าหน้าที่ | `REVISION_REQUESTED` / ส่งแก้ไข | `APPROVE` |
+| `REVISION_REQUESTED` | ผู้ประกอบการ (`OWN_FACTORY`) | `REVISION_REQUESTED` / ส่งแก้ไข | `RESUBMIT` |
+| `APPROVED` | any | `APPROVED` / ผ่านการพิจารณา | none |
+| `REJECTED`, `CANCELLED` | any | terminal status | none |
 
 ## 8. Change KWP workflow status
 
@@ -1279,5 +1283,6 @@ Behavior:
 - ต้องอยู่สถานะ `REVISION_REQUESTED`
 - เมื่อสำเร็จ ระบบเปลี่ยน machine status กลับเป็น `SUBMITTED`
 - ถ้ารายการเคยมีประวัติ `REVISION_REQUESTED` แล้วกลับมา `SUBMITTED` อีกครั้ง API จะแสดง label เป็น `แก้ไขแล้ว/รอพิจารณา`
+- ก่อนเรียก endpoint นี้ workflow response ของผู้ประกอบการจะคืน `allowedActions: ["RESUBMIT"]`
 - ระบบเพิ่มประวัติใน `kwp_form_status_history` พร้อม note ของผู้ประกอบการ
 - Response คืน workflow shape เดียวกับ `GET /api/v1/kwp-form-submissions/:id/workflow`
