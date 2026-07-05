@@ -26,7 +26,7 @@ import PersonAddIcon from '@mui/icons-material/PersonAdd'
 const officerTypes = [
   { label: 'สำนักงานปลัดกระทรวงอุตสาหกรรม', value: '1' },
   { label: 'กรมโรงงานอุตสาหกรรม', value: '2' },
-  { label: 'การนิคมแห่งประเทศไทย', value: '8' },
+  { label: 'การนิคมอุตสาหกรรมแห่งประเทศไทย', value: '8' },
   { label: 'หน่วยงานอื่นๆ', value: '0' },
 ]
 

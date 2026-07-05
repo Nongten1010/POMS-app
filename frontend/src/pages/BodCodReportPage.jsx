@@ -28,6 +28,7 @@ import {
 } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import DeleteIcon from '@mui/icons-material/Delete'
+import FileDownloadIcon from '@mui/icons-material/FileDownload'
 import HistoryIcon from '@mui/icons-material/History'
 import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import { DataGrid } from '@mui/x-data-grid'
@@ -84,27 +85,42 @@ const borderedTableSx = {
   },
 }
 
+const waitingStatusSx = {
+  bgcolor: '#5b21b6',
+  borderColor: '#5b21b6',
+  color: '#ffffff',
+}
+
 function StatusChip({ value }) {
   if (value === '-') {
     return <Typography variant="body2">-</Typography>
   }
 
+  if (
+    [
+      'รอพิจารณา',
+      'แก้ไขแล้ว/รอพิจารณา',
+      'SUBMITTED',
+      'REVISED_PENDING_REVIEW',
+    ].includes(value)
+  ) {
+    return <Chip label={value} size="small" variant="outlined" sx={{ ...waitingStatusSx, fontWeight: 300 }} />
+  }
+
   const color =
-    value === 'ผ่านการพิจารณา'
+    value === 'ผ่านการพิจารณา' || value === 'APPROVED'
       ? 'success'
-      : value === 'รอพิจารณา'
-        || value === 'แก้ไขแล้ว/รอพิจารณา'
-        || value === 'กรอกแบบแจ้งผล'
+      : value === 'รอโรงงานแก้ไข' || value === 'REVISION_REQUESTED'
         || value === 'รอทบทวน'
         || value === 'รออนุมัติ'
+        || value === 'WAITING_REVIEW'
+        || value === 'WAITING_APPROVAL'
         ? 'warning'
-        : value === 'รอโรงงานแก้ไข'
-          ? 'error'
-          : value === 'ยังไม่ยื่น'
-            ? 'default'
-            : 'info'
+        : value === 'กรอกแบบแจ้งผล' || value === 'WAITING_RESULT_NOTICE'
+          ? 'info'
+          : 'default'
 
-  return <Chip size="small" color={color} label={value || '-'} />
+  return <Chip size="small" color={color} label={value || '-'} variant={color === 'default' ? 'outlined' : 'filled'} />
 }
 
 function hasBodCodParameter(parameters = '') {
@@ -194,17 +210,16 @@ function normalizeBodCodStatusHistory(detail = {}) {
   const history = detail.statusHistory ?? detail.history ?? detail.workflowHistory ?? detail.events
 
   if (Array.isArray(history)) {
-    return history
-  }
-
-  if (Array.isArray(detail.steps)) {
-    return detail.steps.map((step) => ({
-      id: step.id,
-      statusLabel: step.statusLabel ?? step.roleLabel ?? step.status,
-      note: step.note ?? '',
-      changedAt: step.changedAt ?? detail.updatedAt,
-      changedBy: step.changedByName ?? step.roleLabel ?? '-',
-      durationText: step.durationText,
+    return history.map((item, index) => ({
+      ...item,
+      id: item.id ?? `${item.status ?? item.statusLabel ?? 'status'}-${index}`,
+      status: item.status ?? '',
+      statusLabel: item.statusLabel ?? item.status ?? '',
+      note: item.note ?? null,
+      changedAt: item.changedAt ?? item.date ?? null,
+      changedDate: item.changedDate ?? null,
+      changedBy: item.changedBy ?? item.changedByName ?? item.recorderName ?? null,
+      changedById: item.changedById ?? null,
     }))
   }
 
@@ -246,8 +261,25 @@ function mapBodCodFactoryRow(row = {}, index = 0) {
   }
 }
 
-function mapBodCodReportRow(row = {}, index = 0) {
+const operatorPendingStatusCodes = [
+  'SUBMITTED',
+  'REVISED_PENDING_REVIEW',
+  'WAITING_RESULT_NOTICE',
+  'WAITING_REVIEW',
+  'WAITING_APPROVAL',
+]
+
+function getBodCodDisplayStatus(row = {}, { isOperatorView = false } = {}) {
+  if (isOperatorView && operatorPendingStatusCodes.includes(row.statusCode)) {
+    return 'รอพิจารณา'
+  }
+
+  return row.status ?? row.statusLabel ?? row.statusCode ?? ''
+}
+
+function mapBodCodReportRow(row = {}, index = 0, options = {}) {
   const reportRoundNo = row.reportRoundNo ?? row.roundNo
+  const displayStatus = getBodCodDisplayStatus(row, options)
 
   return {
     ...row,
@@ -263,16 +295,16 @@ function mapBodCodReportRow(row = {}, index = 0) {
     reportNo: row.reportNo ?? '-',
     submittedDate: row.submittedDate ?? formatThaiDateValue(row.submittedAt),
     reviewedDate: row.reviewedDate ?? formatThaiDateValue(row.reviewedAt),
-    status: row.status ?? row.statusLabel ?? row.statusCode ?? '',
+    status: displayStatus,
     statusCode: row.statusCode ?? '',
-    statusLabel: row.statusLabel ?? row.status ?? '',
+    statusLabel: displayStatus || row.statusLabel || row.status || '',
     statusHistory: normalizeBodCodStatusHistory(row),
     revisionNote: row.revisionNote ?? row.officerNote ?? row.revisionReason ?? '',
   }
 }
 
-function mapBodCodReportDetail(detail = {}, row = {}) {
-  const mappedRow = mapBodCodReportRow({ ...row, ...detail })
+function mapBodCodReportDetail(detail = {}, row = {}, options = {}) {
+  const mappedRow = mapBodCodReportRow({ ...row, ...detail }, 0, options)
   const measurements = Array.isArray(detail.measurements) ? detail.measurements : []
   const measurementRows = measurements.map((measurement, index) => ({
     id: measurement.id ?? `measurement-${index + 1}`,
@@ -310,11 +342,37 @@ function mapBodCodReportDetail(detail = {}, row = {}) {
     allowedActions: detail.allowedActions ?? row.allowedActions ?? [],
     currentStep: detail.currentStep ?? row.currentStep ?? null,
     steps: detail.steps ?? row.steps ?? [],
+    resultNotice: detail.resultNotice ?? row.resultNotice ?? null,
   }
 }
 
-function buildBodCodAttachmentMetadata(files = [], attachmentType) {
-  return files.map((file) => ({
+function isBodCodLocalFile(file) {
+  return typeof File !== 'undefined' && file instanceof File
+}
+
+async function uploadBodCodAttachmentFile(file, accessToken) {
+  const formData = new FormData()
+  formData.append('file', file)
+
+  const result = await fetch(`${bodCodDeviationReportsApiBaseUrl}/attachments`, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: formData,
+  })
+  const response = await readBodCodApiResponse(result, 'อัปโหลดไฟล์แนบไม่สำเร็จ')
+
+  return response?.data ?? {}
+}
+
+async function buildBodCodAttachmentMetadata(files = [], attachmentType, accessToken) {
+  const metadataList = await Promise.all(
+    files.map(async (file) => (isBodCodLocalFile(file) ? uploadBodCodAttachmentFile(file, accessToken) : file)),
+  )
+
+  return metadataList.map((file) => ({
     attachmentType,
     originalFileName: file.originalFileName ?? file.name ?? '',
     storedFileName: file.storedFileName ?? null,
@@ -324,9 +382,14 @@ function buildBodCodAttachmentMetadata(files = [], attachmentType) {
   }))
 }
 
-function buildBodCodReportPayload(report = {}) {
+async function buildBodCodReportPayload(report = {}, accessToken = '') {
   const measurementRows = Array.isArray(report.measurementRows) ? report.measurementRows : []
   const attachmentFiles = report.attachmentFiles ?? {}
+  const attachments = [
+    ...(await buildBodCodAttachmentMetadata(attachmentFiles.samplePhotos ?? [], 'SAMPLE_PHOTO', accessToken)),
+    ...(await buildBodCodAttachmentMetadata(attachmentFiles.devicePhotos ?? [], 'DEVICE_PHOTO', accessToken)),
+    ...(await buildBodCodAttachmentMetadata(attachmentFiles.labReports ?? [], 'LAB_REPORT', accessToken)),
+  ]
 
   return {
     reportRoundNo: Number(report.roundNo ?? report.reportRoundNo ?? String(report.reportRound ?? '').replace('ครั้งที่ ', '')) || null,
@@ -361,12 +424,23 @@ function buildBodCodReportPayload(report = {}) {
       labValueMgL: toNumberOrNull(measurement.labValue),
       standardDeviationMgL: toNumberOrNull(measurement.standardErrorValue),
     })),
-    attachments: [
-      ...buildBodCodAttachmentMetadata(attachmentFiles.samplePhotos ?? [], 'SAMPLE_PHOTO'),
-      ...buildBodCodAttachmentMetadata(attachmentFiles.devicePhotos ?? [], 'DEVICE_PHOTO'),
-      ...buildBodCodAttachmentMetadata(attachmentFiles.labReports ?? [], 'LAB_REPORT'),
-      ...(Array.isArray(report.attachments) ? report.attachments : []),
-    ],
+    attachments,
+  }
+}
+
+function buildBodCodResultNoticePayload(noticeForm = {}) {
+  const checkedParameters = Array.isArray(noticeForm.checkedParameters)
+    ? noticeForm.checkedParameters
+    : [noticeForm.checkedParameters]
+  const uniqueCheckedParameters = [...new Set(checkedParameters.map((value) => String(value ?? '').trim()).filter(Boolean))]
+
+  return {
+    reportCorrectness: noticeForm.reportCorrectness ?? '',
+    checkedParameters: uniqueCheckedParameters,
+    reviewResult: noticeForm.reviewResult ?? '',
+    comment: String(noticeForm.comment ?? '').trim() || null,
+    inspectorName: String(noticeForm.inspectorName ?? '').trim(),
+    inspectorPosition: String(noticeForm.inspectorPosition ?? '').trim(),
   }
 }
 
@@ -384,6 +458,133 @@ function PaperLine({ children, minWidth = 160 }) {
     >
       {children}
     </Box>
+  )
+}
+
+function getBodCodAttachmentUrl(file = {}) {
+  const rawUrl =
+    file.url ??
+    file.downloadUrl ??
+    file.fileUrl ??
+    file.publicUrl ??
+    file.signedUrl ??
+    file.storageUrl ??
+    file.storagePath ??
+    file.filePath ??
+    file.path ??
+    ''
+
+  if (!rawUrl) {
+    return ''
+  }
+
+  if (/^https?:\/\//i.test(rawUrl)) {
+    return rawUrl
+  }
+
+  const normalizedPath = rawUrl.startsWith('/') ? rawUrl : `/${rawUrl}`
+
+  return import.meta.env.DEV ? normalizedPath : `https://d-poms.diw.go.th${normalizedPath}`
+}
+
+function buildBodCodPaperAttachmentFile(file = {}, index = 0) {
+  return {
+    id: file.id ?? `${getAttachmentFileName(file)}-${index}`,
+    name: getAttachmentFileName(file),
+    url: getBodCodAttachmentUrl(file),
+  }
+}
+
+function BodCodPaperShell({ children }) {
+  return (
+    <Paper
+      elevation={0}
+      sx={{
+        width: 794,
+        minHeight: 1123,
+        mx: 'auto',
+        p: '42px 56px',
+        color: '#000',
+        bgcolor: '#fff',
+        fontFamily: 'Kanit, sans-serif',
+        fontSize: 14,
+        lineHeight: 1.8,
+      }}
+    >
+      {children}
+    </Paper>
+  )
+}
+
+function BodCodAttachmentPreviewFile({ file }) {
+  if (!file?.name) {
+    return <Typography sx={{ fontSize: 13 }}>-</Typography>
+  }
+
+  return file.url ? (
+    <Typography
+      component="a"
+      href={file.url}
+      download={file.name}
+      target="_blank"
+      rel="noreferrer"
+      sx={{
+        color: 'primary.main',
+        cursor: 'pointer',
+        fontSize: 13,
+        textDecoration: 'underline',
+        overflowWrap: 'anywhere',
+      }}
+    >
+      {file.name}
+    </Typography>
+  ) : (
+    <Typography sx={{ fontSize: 13 }}>{file.name}</Typography>
+  )
+}
+
+function BodCodAttachmentPreviewTable({ title, files }) {
+  return (
+    <TableContainer sx={{ border: '1px solid #555' }}>
+      <Table
+        size="small"
+        sx={{
+          '& th, & td': {
+            border: '1px solid #555',
+            p: 1,
+            fontSize: 13,
+            color: '#000',
+            verticalAlign: 'top',
+          },
+          '& th': {
+            fontWeight: 700,
+          },
+        }}
+      >
+        <TableHead>
+          <TableRow>
+            <TableCell sx={{ width: 64 }}>ลำดับ</TableCell>
+            <TableCell>{title}</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {files.length > 0 ? (
+            files.map((file, index) => (
+              <TableRow key={file.id}>
+                <TableCell>{index + 1}</TableCell>
+                <TableCell>
+                  <BodCodAttachmentPreviewFile file={file} />
+                </TableCell>
+              </TableRow>
+            ))
+          ) : (
+            <TableRow>
+              <TableCell colSpan={2}>-</TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
+    </TableContainer>
   )
 }
 
@@ -439,7 +640,11 @@ function formatReportHistoryDuration(startValue, endValue, fallbackValue) {
 function getReportStatusHistoryItems(history = []) {
   return history
     .filter(Boolean)
-    .map((item, index) => ({ ...item, __index: index, __date: item.changedAt ?? item.date ?? null }))
+    .map((item, index) => ({
+      ...item,
+      __index: index,
+      __date: item.changedAt ?? item.changedDate ?? item.date ?? null,
+    }))
     .sort((a, b) => {
       const dateA = parseReportHistoryDate(a.__date)?.getTime() ?? 0
       const dateB = parseReportHistoryDate(b.__date)?.getTime() ?? 0
@@ -459,27 +664,7 @@ function buildFallbackReportStatusHistory(report = {}) {
     return safeReport.statusHistory
   }
 
-  const history = [
-    {
-      id: `${safeReport.id ?? 'report'}-submitted`,
-      statusLabel: 'รอพิจารณา',
-      note: 'ผู้ประกอบการส่งรายงานค่าความคลาดเคลื่อน BOD/COD',
-      changedAt: safeReport.submittedDate,
-      changedBy: safeReport.factoryName,
-    },
-  ]
-
-  if (safeReport.status && !['รอพิจารณา', 'ยังไม่ยื่น'].includes(safeReport.status)) {
-    history.push({
-      id: `${safeReport.id ?? 'report'}-current`,
-      statusLabel: safeReport.status,
-      note: safeReport.revisionNote ?? '',
-      changedAt: safeReport.reviewedDate,
-      changedBy: 'เจ้าหน้าที่ ก',
-    })
-  }
-
-  return history
+  return []
 }
 
 function getLatestReportRevisionMessage(report = {}) {
@@ -571,7 +756,7 @@ function ReportStatusHistoryDialog({ open, history = [], onClose }) {
                     ) : null}
                     <Stack spacing={0.25} sx={{ mt: note ? 1.5 : 0.75 }}>
                       <Typography variant="body2" color="text.secondary">
-                        วันที่: {formatReportHistoryDate(item.__date)}
+                        วันที่: {item.changedDate ?? formatReportHistoryDate(item.__date)}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
                         ผู้บันทึก: {item.changedByName ?? item.changedBy ?? item.recorderName ?? '-'}
@@ -598,165 +783,209 @@ function BodCodPaperDocument({ report }) {
     : [{ id: 'empty-1' }]
   const roundNo = report.roundNo ?? report.reportRound?.replace('ครั้งที่ ', '') ?? ''
   const selectedParameters = Array.isArray(report.parameter) ? report.parameter : [report.parameter].filter(Boolean)
+  const attachmentFiles = getBodCodAttachmentFiles(report)
+  const attachmentSections = [
+    {
+      key: 'samplePhotos',
+      title: 'ภาพถ่ายขณะเก็บตัวอย่าง',
+      files: attachmentFiles.samplePhotos.map(buildBodCodPaperAttachmentFile),
+    },
+    {
+      key: 'devicePhotos',
+      title: 'ภาพหน้าเครื่องมือตรวจวัดที่แสดง ณ เวลาที่เก็บตัวอย่าง',
+      files: attachmentFiles.devicePhotos.map(buildBodCodPaperAttachmentFile),
+    },
+    {
+      key: 'labReports',
+      title: 'รายงานผลจากห้องปฏิบัติการ',
+      files: attachmentFiles.labReports.map(buildBodCodPaperAttachmentFile),
+    },
+  ]
 
   return (
-    <Paper
-      elevation={0}
-      sx={{
-        width: 794,
-        minHeight: 1123,
-        mx: 'auto',
-        p: '42px 56px',
-        color: '#000',
-        bgcolor: '#fff',
-        fontFamily: 'Kanit, sans-serif',
-        fontSize: 14,
-        lineHeight: 1.8,
-      }}
-    >
-      <Stack spacing={1.6}>
-        <Box sx={{ textAlign: 'center' }}>
-          <Typography sx={{ fontWeight: 700, fontSize: 14 }}>
-            แบบรายงานผลการตรวจสอบความคลาดเคลื่อนของเครื่องมือหรือเครื่องอุปกรณ์พิเศษ
-          </Typography>
-          <Typography sx={{ fontWeight: 700, fontSize: 14 }}>
-            และเครื่องมือหรือเครื่องอุปกรณ์เพิ่มเติม
-          </Typography>
-          <Typography sx={{ fontWeight: 700, fontSize: 14 }}>
-            ครั้งที่ <PaperLine minWidth={70}>{roundNo}</PaperLine>/ปี<PaperLine minWidth={90}>{report.year}</PaperLine>
-          </Typography>
-        </Box>
-
-        <Box>
-          ชื่อบริษัท : <PaperLine minWidth={330}>{report.factoryName}</PaperLine>
-        </Box>
-        <Box>
-          เลขทะเบียนโรงงาน : <PaperLine minWidth={170}>{report.factoryRegistration}</PaperLine>
-          ประกอบกิจการ : <PaperLine minWidth={220}>{report.businessActivity}</PaperLine>
-        </Box>
-        <Box>
-          สถานที่ตั้ง : <PaperLine minWidth={520}>{report.factoryAddress}</PaperLine>
-        </Box>
-        <Box>
-          ปริมาณการระบายน้ำทิ้งขณะเก็บตัวอย่าง : <PaperLine minWidth={260}>{report.wastewaterFlow}</PaperLine> ลบ.ม./ชั่วโมง
-        </Box>
-        <Box>
-          ผู้เก็บตัวอย่าง : <PaperLine minWidth={245}>{report.samplerName}</PaperLine>
-          ทะเบียนเจ้าหน้าที่ : <PaperLine minWidth={180}>{report.officerRegistration}</PaperLine>
-        </Box>
-        <Box>
-          หน่วยงาน/ชื่อห้องปฏิบัติการ : <PaperLine minWidth={420}>{report.laboratoryName}</PaperLine>
-        </Box>
-        <Box>
-          ทะเบียนห้องปฏิบัติการ : <PaperLine minWidth={170}>{report.laboratoryRegistration}</PaperLine>
-          เลขที่ใบรายงานผลวิเคราะห์ : <PaperLine minWidth={170}>{report.labReportNo}</PaperLine>
-        </Box>
-        <Box>
-          วิธีวิเคราะห์ทดสอบในห้องปฏิบัติการ : <PaperLine minWidth={420}>{report.analysisMethod}</PaperLine>
-        </Box>
-        <Box>
-          รายละเอียดของเครื่องมือหรือเครื่องอุปกรณ์พิเศษฯ : ยี่ห้อ (Brand) : <PaperLine minWidth={210}>{report.deviceBrand}</PaperLine>
-        </Box>
-        <Box>
-          รุ่น (Model) : <PaperLine minWidth={210}>{report.deviceModel}</PaperLine>
-          หมายเลขเครื่อง (Serial No.) : <PaperLine minWidth={200}>{report.serialNo}</PaperLine>
-        </Box>
-        <Box>
-          รายการที่ตรวจสอบค่าความคลาดเคลื่อน :{' '}
-          <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75, mr: 2 }}>
-            <Box component="span" sx={{ width: 16, height: 16, border: '1px solid #333' }}>{selectedParameters.includes('BOD') ? '/' : ''}</Box>
-            BOD
+    <Stack spacing={2} sx={{ alignItems: 'center' }}>
+      <BodCodPaperShell>
+        <Stack spacing={1.6}>
+          <Box sx={{ textAlign: 'center' }}>
+            <Typography sx={{ fontWeight: 700, fontSize: 14 }}>
+              แบบรายงานผลการตรวจสอบความคลาดเคลื่อนของเครื่องมือหรือเครื่องอุปกรณ์พิเศษ
+            </Typography>
+            <Typography sx={{ fontWeight: 700, fontSize: 14 }}>
+              และเครื่องมือหรือเครื่องอุปกรณ์เพิ่มเติม
+            </Typography>
+            <Typography sx={{ fontWeight: 700, fontSize: 14 }}>
+              ครั้งที่ <PaperLine minWidth={70}>{roundNo}</PaperLine>/ปี<PaperLine minWidth={90}>{report.year}</PaperLine>
+            </Typography>
           </Box>
-          <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
-            <Box component="span" sx={{ width: 16, height: 16, border: '1px solid #333' }}>{selectedParameters.includes('COD') ? '/' : ''}</Box>
-            COD
-          </Box>
-        </Box>
 
-        <TableContainer>
-          <Table
-            size="small"
-            sx={{
-              border: '1px solid #555',
-              '& th, & td': {
+          <Box>
+            ชื่อบริษัท : <PaperLine minWidth={330}>{report.factoryName}</PaperLine>
+          </Box>
+          <Box>
+            เลขทะเบียนโรงงาน : <PaperLine minWidth={170}>{report.factoryRegistration}</PaperLine>
+            ประกอบกิจการ : <PaperLine minWidth={220}>{report.businessActivity}</PaperLine>
+          </Box>
+          <Box>
+            สถานที่ตั้ง : <PaperLine minWidth={520}>{report.factoryAddress}</PaperLine>
+          </Box>
+          <Box>
+            ปริมาณการระบายน้ำทิ้งขณะเก็บตัวอย่าง : <PaperLine minWidth={260}>{report.wastewaterFlow}</PaperLine> ลบ.ม./ชั่วโมง
+          </Box>
+          <Box>
+            ผู้เก็บตัวอย่าง : <PaperLine minWidth={245}>{report.samplerName}</PaperLine>
+            ทะเบียนเจ้าหน้าที่ : <PaperLine minWidth={180}>{report.officerRegistration}</PaperLine>
+          </Box>
+          <Box>
+            หน่วยงาน/ชื่อห้องปฏิบัติการ : <PaperLine minWidth={420}>{report.laboratoryName}</PaperLine>
+          </Box>
+          <Box>
+            ทะเบียนห้องปฏิบัติการ : <PaperLine minWidth={170}>{report.laboratoryRegistration}</PaperLine>
+            เลขที่ใบรายงานผลวิเคราะห์ : <PaperLine minWidth={170}>{report.labReportNo}</PaperLine>
+          </Box>
+          <Box>
+            วิธีวิเคราะห์ทดสอบในห้องปฏิบัติการ : <PaperLine minWidth={420}>{report.analysisMethod}</PaperLine>
+          </Box>
+          <Box>
+            รายละเอียดของเครื่องมือหรือเครื่องอุปกรณ์พิเศษฯ : ยี่ห้อ (Brand) : <PaperLine minWidth={210}>{report.deviceBrand}</PaperLine>
+          </Box>
+          <Box>
+            รุ่น (Model) : <PaperLine minWidth={210}>{report.deviceModel}</PaperLine>
+            หมายเลขเครื่อง (Serial No.) : <PaperLine minWidth={200}>{report.serialNo}</PaperLine>
+          </Box>
+          <Box>
+            รายการที่ตรวจสอบค่าความคลาดเคลื่อน :{' '}
+            <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75, mr: 2 }}>
+              <Box component="span" sx={{ width: 16, height: 16, border: '1px solid #333' }}>{selectedParameters.includes('BOD') ? '/' : ''}</Box>
+              BOD
+            </Box>
+            <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
+              <Box component="span" sx={{ width: 16, height: 16, border: '1px solid #333' }}>{selectedParameters.includes('COD') ? '/' : ''}</Box>
+              COD
+            </Box>
+          </Box>
+
+          <TableContainer>
+            <Table
+              size="small"
+              sx={{
                 border: '1px solid #555',
-                p: 0.65,
-                fontSize: 13,
-                color: '#000',
-                textAlign: 'center',
-                verticalAlign: 'middle',
-              },
-              '& th': {
-                bgcolor: '#c9c9c9',
-                fontWeight: 700,
-              },
-            }}
-          >
-            <TableHead>
-              <TableRow>
-                {[
-                  'วันที่เก็บตัวอย่าง',
-                  'เวลาที่เก็บตัวอย่าง',
-                  'ค่าที่เครื่องมือตรวจวัดได้ (มก./ลิตร) (M)',
-                  'ค่าที่ห้องปฏิบัติการวิเคราะห์ได้ (มก./ลิตร) (T)',
-                  'ค่าความคลาดเคลื่อน (มก./ลิตร) (E)',
-                  'ค่าความคลาดเคลื่อนตามประกาศฯ (มก./ลิตร)',
-                ].map((column) => (
-                  <TableCell key={column}>{column}</TableCell>
-                ))}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {rowsForPaper.map((row) => (
-                <TableRow key={row.id} sx={{ height: 88 }}>
-                  <TableCell>{row.sampleDate}</TableCell>
-                  <TableCell>{row.sampleTime}</TableCell>
-                  <TableCell>{row.deviceValue}</TableCell>
-                  <TableCell>{row.labValue}</TableCell>
-                  <TableCell>{row.errorValue}</TableCell>
-                  <TableCell>{row.standardErrorValue}</TableCell>
+                '& th, & td': {
+                  border: '1px solid #555',
+                  p: 0.65,
+                  fontSize: 13,
+                  color: '#000',
+                  textAlign: 'center',
+                  verticalAlign: 'middle',
+                },
+                '& th': {
+                  bgcolor: '#c9c9c9',
+                  fontWeight: 700,
+                },
+              }}
+            >
+              <TableHead>
+                <TableRow>
+                  {[
+                    'วันที่เก็บตัวอย่าง',
+                    'เวลาที่เก็บตัวอย่าง',
+                    'ค่าที่เครื่องมือตรวจวัดได้ (มก./ลิตร) (M)',
+                    'ค่าที่ห้องปฏิบัติการวิเคราะห์ได้ (มก./ลิตร) (T)',
+                    'ค่าความคลาดเคลื่อน (มก./ลิตร) (E)',
+                    'ค่าความคลาดเคลื่อนตามประกาศฯ (มก./ลิตร)',
+                  ].map((column) => (
+                    <TableCell key={column}>{column}</TableCell>
+                  ))}
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+              </TableHead>
+              <TableBody>
+                {rowsForPaper.map((row) => (
+                  <TableRow key={row.id} sx={{ height: 88 }}>
+                    <TableCell>{row.sampleDate}</TableCell>
+                    <TableCell>{row.sampleTime}</TableCell>
+                    <TableCell>{row.deviceValue}</TableCell>
+                    <TableCell>{row.labValue}</TableCell>
+                    <TableCell>{row.errorValue}</TableCell>
+                    <TableCell>{row.standardErrorValue}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
 
-        <Box sx={{ fontSize: 13 }}>
-          <Box sx={{ fontWeight: 700 }}>หมายเหตุ</Box>
-          <Box>1. คำนวณค่าความคลาดเคลื่อน โดยใช้สูตร E = M - T</Box>
-          <Box>
-            โดย E = ค่าความคลาดเคลื่อนของเครื่องตรวจวัดค่า BOD หรือเครื่องตรวจวัดค่า COD (มิลลิกรัมต่อลิตร)
+          <Box sx={{ fontSize: 13 }}>
+            <Box sx={{ fontWeight: 700 }}>หมายเหตุ</Box>
+            <Box>1. คำนวณค่าความคลาดเคลื่อน โดยใช้สูตร E = M - T</Box>
+            <Box>
+              โดย E = ค่าความคลาดเคลื่อนของเครื่องตรวจวัดค่า BOD หรือเครื่องตรวจวัดค่า COD (มิลลิกรัมต่อลิตร)
+            </Box>
+            <Box>
+              M = ผลการตรวจวัดค่า BOD หรือ COD ที่ได้จากเครื่องมือหรือเครื่องอุปกรณ์พิเศษขณะเก็บตัวอย่างน้ำ
+            </Box>
+            <Box>
+              T = ผลการตรวจวัดค่า BOD หรือ COD ที่ได้จากห้องปฏิบัติการ (มิลลิกรัมต่อลิตร)
+            </Box>
+            <Box>2. ในกรณีที่ผลตรวจวัดค่า BOD หรือ COD น้อยกว่าขีดจำกัดในการวิเคราะห์ของห้องปฏิบัติการให้ใช้ค่าจริงที่วิเคราะห์ได้ในการคำนวณ</Box>
+            <Box>3. การปัดเศษ ให้เป็นไปตาม มอก.929-2533</Box>
           </Box>
-          <Box>
-            M = ผลการตรวจวัดค่า BOD หรือ COD ที่ได้จากเครื่องมือหรือเครื่องอุปกรณ์พิเศษขณะเก็บตัวอย่างน้ำ
-          </Box>
-          <Box>
-            T = ผลการตรวจวัดค่า BOD หรือ COD ที่ได้จากห้องปฏิบัติการ (มิลลิกรัมต่อลิตร)
-          </Box>
-          <Box>2. ในกรณีที่ผลตรวจวัดค่า BOD หรือ COD น้อยกว่าขีดจำกัดในการวิเคราะห์ของห้องปฏิบัติการให้ใช้ค่าจริงที่วิเคราะห์ได้ในการคำนวณ</Box>
-          <Box>3. การปัดเศษ ให้เป็นไปตาม มอก.929-2533</Box>
-        </Box>
 
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
-          <Box sx={{ width: 360, fontSize: 13, lineHeight: 1.8 }}>
-            <Box>ผู้รายงานผลการทดสอบ <PaperLine minWidth={180}>{report.reporterName}</PaperLine></Box>
-            <Box sx={{ textAlign: 'center' }}>(<PaperLine minWidth={250} />)</Box>
-            <Box>ตำแหน่ง <PaperLine minWidth={250}>{report.reporterPosition}</PaperLine></Box>
-            <Box>ลงวันที่ <PaperLine minWidth={230} /></Box>
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
+            <Box sx={{ width: 360, fontSize: 13, lineHeight: 1.8 }}>
+              <Box>ผู้รายงานผลการทดสอบ <PaperLine minWidth={180}>{report.reporterName}</PaperLine></Box>
+              <Box sx={{ textAlign: 'center' }}>(<PaperLine minWidth={250} />)</Box>
+              <Box>ตำแหน่ง <PaperLine minWidth={250}>{report.reporterPosition}</PaperLine></Box>
+              <Box>ลงวันที่ <PaperLine minWidth={230} /></Box>
+            </Box>
           </Box>
-        </Box>
-      </Stack>
-    </Paper>
+        </Stack>
+      </BodCodPaperShell>
+      <BodCodPaperShell>
+        <Stack spacing={2}>
+          <Typography sx={{ textAlign: 'right', fontWeight: 700, fontSize: 14 }}>
+            เอกสารแนบ
+          </Typography>
+          <Stack spacing={2}>
+            {attachmentSections.map((section) => (
+              <Box key={section.key}>
+                <BodCodAttachmentPreviewTable title={section.title} files={section.files} />
+              </Box>
+            ))}
+          </Stack>
+        </Stack>
+      </BodCodPaperShell>
+    </Stack>
   )
 }
 
-function ReportPreviewDialog({ open, report, mode = 'view', submitting = false, submitError = '', onClose, onSubmit }) {
+function ReportPreviewDialog({
+  open,
+  report,
+  mode = 'view',
+  submitting = false,
+  submitError = '',
+  onClose,
+  onSubmit,
+  onRequestRevision,
+  onApprove,
+}) {
   const [statusHistoryOpen, setStatusHistoryOpen] = useState(false)
   const [revisionDialogOpen, setRevisionDialogOpen] = useState(false)
   const [revisionOfficerNote, setRevisionOfficerNote] = useState('')
   const [revisionSubmitting, setRevisionSubmitting] = useState(false)
   const [revisionError, setRevisionError] = useState('')
   const statusHistory = report ? buildFallbackReportStatusHistory(report) : []
+  const reportStatusValues = [report?.status, report?.statusCode, report?.statusLabel].filter(Boolean)
+  const isWaitingApproval = reportStatusValues.some((status) => ['WAITING_APPROVAL', 'รออนุมัติ'].includes(status))
+  const handleDownload = () => {
+    if (!report) return
+
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${report.reportNo || 'bod-cod-report'}.json`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
   const closePreviewDialog = () => {
     setStatusHistoryOpen(false)
     onClose?.()
@@ -770,20 +999,27 @@ function ReportPreviewDialog({ open, report, mode = 'view', submitting = false, 
     setRevisionOfficerNote('')
     setRevisionError('')
   }
-  const requestRevisionReport = () => {
-    if (!revisionOfficerNote.trim()) {
+  const requestRevisionReport = async () => {
+    const officerNote = revisionOfficerNote.trim()
+
+    if (!officerNote) {
       setRevisionError('กรุณาระบุรายละเอียดการแจ้งแก้ไข')
       return
     }
 
     setRevisionSubmitting(true)
-    window.setTimeout(() => {
+    setRevisionError('')
+
+    try {
+      await onRequestRevision?.(report, officerNote)
       setRevisionSubmitting(false)
       setRevisionDialogOpen(false)
       setRevisionOfficerNote('')
       setRevisionError('')
-      onClose?.()
-    }, 300)
+    } catch (error) {
+      setRevisionSubmitting(false)
+      setRevisionError(error instanceof Error ? error.message : 'แจ้งแก้ไขไม่สำเร็จ')
+    }
   }
 
   return (
@@ -801,16 +1037,29 @@ function ReportPreviewDialog({ open, report, mode = 'view', submitting = false, 
           <Typography component="span" variant="h6" sx={{ minWidth: 0 }}>
             แบบฟอร์มรายงานค่าความคลาดเคลื่อน BOD/COD
           </Typography>
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={<HistoryIcon />}
-            disabled={!report}
-            onClick={() => setStatusHistoryOpen(true)}
-            sx={{ flexShrink: 0 }}
-          >
-            ประวัติสถานะ
-          </Button>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexShrink: 0 }}>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<HistoryIcon />}
+              disabled={!report}
+              onClick={() => setStatusHistoryOpen(true)}
+            >
+              ประวัติสถานะ
+            </Button>
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<FileDownloadIcon />}
+              disabled={!report}
+              onClick={handleDownload}
+            >
+              ดาวน์โหลด
+            </Button>
+            <IconButton aria-label="ปิด" onClick={closePreviewDialog} size="small">
+              <CloseIcon />
+            </IconButton>
+          </Stack>
         </DialogTitle>
         <DialogContent dividers sx={{ bgcolor: 'neutral.100' }}>
           {report ? <BodCodPaperDocument report={report} /> : null}
@@ -820,52 +1069,56 @@ function ReportPreviewDialog({ open, report, mode = 'view', submitting = false, 
             {submitError}
           </Alert>
         ) : null}
-        <DialogActions sx={{ justifyContent: 'center' }}>
-          {mode === 'review' ? (
-            <>
-              <Button variant="outlined" color="inherit" onClick={closePreviewDialog}>
-                ยกเลิก
-              </Button>
-              <Button variant="outlined" color="warning" onClick={() => setRevisionDialogOpen(true)}>
-                แก้ไข
-              </Button>
-              <Button variant="contained">
-                ผ่านการพิจารณา
-              </Button>
-            </>
-          ) : mode === 'cancel' ? (
-            <>
-              <Button variant="outlined" color="inherit" onClick={closePreviewDialog}>
-                ปิด
-              </Button>
-              <Button variant="contained" color="error">
-                ยืนยันการยกเลิก
-              </Button>
-            </>
-          ) : mode === 'submit' ? (
-            <>
-              <Button variant="outlined" color="inherit" disabled={submitting} onClick={closePreviewDialog}>
-                ยกเลิก
-              </Button>
-              <Button variant="contained" disabled={submitting || !report} onClick={() => onSubmit?.(report)}>
-                {submitting ? 'กำลังส่งแบบฟอร์ม' : 'ยืนยันการส่งแบบฟอร์ม'}
-              </Button>
-            </>
-          ) : mode === 'edit' ? (
-            <>
-              <Button variant="outlined" color="inherit" disabled={submitting} onClick={closePreviewDialog}>
-                ยกเลิก
-              </Button>
-              <Button variant="contained" disabled={submitting || !report} onClick={() => onSubmit?.(report)}>
-                {submitting ? 'กำลังบันทึกการแก้ไข' : 'บันทึกการแก้ไข'}
-              </Button>
-            </>
-          ) : (
-            <Button variant="outlined" color="inherit" onClick={closePreviewDialog}>
-              ปิด
-            </Button>
-          )}
-        </DialogActions>
+        {mode === 'view' ? null : (
+          <DialogActions sx={{ justifyContent: 'center' }}>
+            {mode === 'review' ? (
+              <>
+                <Button variant="outlined" color="inherit" disabled={submitting} onClick={closePreviewDialog}>
+                  ยกเลิก
+                </Button>
+                <Button variant="outlined" color="warning" disabled={submitting || !report} onClick={() => setRevisionDialogOpen(true)}>
+                  แจ้งแก้ไข
+                </Button>
+                <Button variant="contained" disabled={submitting || !report} onClick={() => onApprove?.(report)}>
+                  {submitting
+                    ? isWaitingApproval
+                      ? 'กำลังอนุมัติ'
+                      : 'กำลังผ่านการพิจารณา'
+                    : isWaitingApproval
+                      ? 'อนุมัติ'
+                      : 'ผ่านการพิจารณา'}
+                </Button>
+              </>
+            ) : mode === 'cancel' ? (
+              <>
+                <Button variant="outlined" color="inherit" onClick={closePreviewDialog}>
+                  ปิด
+                </Button>
+                <Button variant="contained" color="error">
+                  ยืนยันการยกเลิก
+                </Button>
+              </>
+            ) : mode === 'submit' ? (
+              <>
+                <Button variant="outlined" color="inherit" disabled={submitting} onClick={closePreviewDialog}>
+                  ยกเลิก
+                </Button>
+                <Button variant="contained" disabled={submitting || !report} onClick={() => onSubmit?.(report)}>
+                  {submitting ? 'กำลังส่งแบบฟอร์ม' : 'ยืนยันการส่งแบบฟอร์ม'}
+                </Button>
+              </>
+            ) : mode === 'edit' ? (
+              <>
+                <Button variant="outlined" color="inherit" disabled={submitting} onClick={closePreviewDialog}>
+                  ยกเลิก
+                </Button>
+                <Button variant="contained" disabled={submitting || !report} onClick={() => onSubmit?.(report)}>
+                  {submitting ? 'กำลังบันทึกการแก้ไข' : 'บันทึกการแก้ไข'}
+                </Button>
+              </>
+            ) : null}
+          </DialogActions>
+        )}
       </Dialog>
       <ReportStatusHistoryDialog
         open={statusHistoryOpen}
@@ -925,6 +1178,15 @@ function NoticeBoldText({ children }) {
 
 function ResultNoticePaperDocument({ report }) {
   const isCentral = isBangkokProvince(report.province)
+  const noticeForm = getResultNoticeFormValues(report)
+  const checkedParameters = Array.isArray(report?.resultNotice?.checkedParameters)
+    ? report.resultNotice.checkedParameters
+    : [noticeForm.checkedParameters]
+  const hasCheckedParameter = (parameter) => checkedParameters.includes(parameter)
+  const isCorrectReport = noticeForm.reportCorrectness === 'ถูกต้องครบถ้วน'
+  const isIncorrectReport = noticeForm.reportCorrectness === 'ไม่ถูกต้องครบถ้วน'
+  const shouldNotifyResult = noticeForm.reviewResult === 'เห็นควรแจ้งผลการตรวจสอบ'
+  const shouldRequestCorrection = noticeForm.reviewResult === 'เห็นควรให้แก้ไขเพิ่มเติม'
   const noticeTitle = `แบบแจ้งผลการตรวจสอบ (${isCentral ? 'ส่วนกลาง' : 'ส่วนภูมิภาค'})`
   const checkboxSx = {
     width: 16,
@@ -934,14 +1196,24 @@ function ResultNoticePaperDocument({ report }) {
     flex: '0 0 auto',
     mt: 0.45,
   }
+  const checkboxMark = (checked) => (
+    <Box component="span" sx={{ ...checkboxSx, textAlign: 'center', lineHeight: '12px', fontSize: 13, fontWeight: 700 }}>
+      {checked ? '✓' : ''}
+    </Box>
+  )
   const signatureBlock = (role, position = '') => (
     <Box sx={{ width: 250, textAlign: 'center', fontSize: 14, lineHeight: 1.55 }}>
       <Box sx={{ borderBottom: '1px dotted #111', height: 22 }} />
-      <Box>(<Box component="span" sx={{ display: 'inline-block', minWidth: 220, borderBottom: '1px dotted #111' }} />)</Box>
+      <Box>(
+        <Box component="span" sx={{ display: 'inline-block', minWidth: 220, borderBottom: '1px dotted #111' }}>
+          {role === 'ผู้ตรวจสอบ' ? noticeForm.inspectorName : ''}
+        </Box>
+        )
+      </Box>
       <Box>
         ตำแหน่ง{' '}
         <Box component="span" sx={{ display: 'inline-block', minWidth: 150, borderBottom: '1px dotted #111' }}>
-          {position}
+          {role === 'ผู้ตรวจสอบ' ? noticeForm.inspectorPosition : position}
         </Box>
       </Box>
       <Box>{role}</Box>
@@ -993,20 +1265,20 @@ function ResultNoticePaperDocument({ report }) {
 
         <Box sx={{ fontWeight: 700 }}>
           1. ความถูกต้องของแบบรายงาน{' '}
-          <Box component="span" sx={{ ...checkboxSx, mx: 0.75, verticalAlign: 'middle' }} /> BOD{' '}
-          <Box component="span" sx={{ ...checkboxSx, mx: 0.75, verticalAlign: 'middle' }} /> COD
+          <Box component="span" sx={{ mx: 0.75, verticalAlign: 'middle' }}>{checkboxMark(hasCheckedParameter('BOD'))}</Box> BOD{' '}
+          <Box component="span" sx={{ mx: 0.75, verticalAlign: 'middle' }}>{checkboxMark(hasCheckedParameter('COD'))}</Box> COD
         </Box>
         <Stack spacing={0.8} sx={{ pl: 3.5, mt: -1 }}>
           <Stack direction="row" spacing={1.35}>
-            <Box sx={checkboxSx} />
+            {checkboxMark(isCorrectReport)}
             <Box>
               แบบรายงาน<NoticeBoldText>ถูกต้องครบถ้วน</NoticeBoldText>ตามประกาศกรมโรงงานอุตสาหกรรม เรื่อง หลักเกณฑ์การให้ความเห็นชอบให้โรงงานที่ต้องมีระบบบำบัดน้ำเสียต้องติดตั้งเครื่องมือหรือเครื่องอุปกรณ์พิเศษและเครื่องมือหรือเครื่องอุปกรณ์เพิ่มเติม (ฉบับที่ 2) พ.ศ. 2565
             </Box>
           </Stack>
           <Stack direction="row" spacing={1.35}>
-            <Box sx={checkboxSx} />
+            {checkboxMark(isIncorrectReport)}
             <Box>
-              แบบรายงาน<NoticeBoldText>ไม่ถูกต้องครบถ้วน</NoticeBoldText>ตามประกาศกรมโรงงานอุตสาหกรรม เรื่อง หลักเกณฑ์การให้ความเห็นชอบให้โรงงานที่ต้องมีระบบบำบัดน้ำเสียต้องติดตั้งเครื่องมือหรือเครื่องอุปกรณ์พิเศษและเครื่องมือหรือเครื่องอุปกรณ์เพิ่มเติม (ฉบับที่ 2) พ.ศ. 2565 เนื่องจาก <PaperLine minWidth={260} />
+              แบบรายงาน<NoticeBoldText>ไม่ถูกต้องครบถ้วน</NoticeBoldText>ตามประกาศกรมโรงงานอุตสาหกรรม เรื่อง หลักเกณฑ์การให้ความเห็นชอบให้โรงงานที่ต้องมีระบบบำบัดน้ำเสียต้องติดตั้งเครื่องมือหรือเครื่องอุปกรณ์พิเศษและเครื่องมือหรือเครื่องอุปกรณ์เพิ่มเติม (ฉบับที่ 2) พ.ศ. 2565 เนื่องจาก <PaperLine minWidth={260}>{isIncorrectReport ? noticeForm.comment : ''}</PaperLine>
               <Box sx={{ borderBottom: '1px dotted #111', minHeight: 20 }} />
               <Box sx={{ borderBottom: '1px dotted #111', minHeight: 20 }} />
             </Box>
@@ -1015,18 +1287,18 @@ function ResultNoticePaperDocument({ report }) {
 
         <Box sx={{ fontWeight: 700 }}>
           2.ค่าความคลาดเคลื่อน{' '}
-          <Box component="span" sx={{ ...checkboxSx, mx: 0.75, verticalAlign: 'middle' }} /> BOD{' '}
-          <Box component="span" sx={{ ...checkboxSx, mx: 0.75, verticalAlign: 'middle' }} /> COD
+          <Box component="span" sx={{ mx: 0.75, verticalAlign: 'middle' }}>{checkboxMark(hasCheckedParameter('BOD'))}</Box> BOD{' '}
+          <Box component="span" sx={{ mx: 0.75, verticalAlign: 'middle' }}>{checkboxMark(hasCheckedParameter('COD'))}</Box> COD
         </Box>
         <Stack spacing={0.8} sx={{ pl: 3.5, mt: -1 }}>
           <Stack direction="row" spacing={1.35}>
-            <Box sx={checkboxSx} />
+            {checkboxMark(shouldNotifyResult)}
             <Box>
               <NoticeBoldText>เป็นไปตามประกาศ</NoticeBoldText>กรมโรงงานอุตสาหกรรม เรื่อง หลักเกณฑ์การให้ความเห็นชอบให้โรงงานที่ต้องมีระบบบำบัดน้ำเสียต้องติดตั้งเครื่องมือหรือเครื่องอุปกรณ์พิเศษและเครื่องมือหรือเครื่องอุปกรณ์เพิ่มเติม พ.ศ. 2550
             </Box>
           </Stack>
           <Stack direction="row" spacing={1.35}>
-            <Box sx={checkboxSx} />
+            {checkboxMark(shouldRequestCorrection)}
             <Box>
               <NoticeBoldText>ไม่เป็นตามประกาศ</NoticeBoldText>กรมโรงงานอุตสาหกรรม เรื่อง หลักเกณฑ์การให้ความเห็นชอบให้โรงงานที่ต้องมีระบบบำบัดน้ำเสียต้องติดตั้งเครื่องมือหรือเครื่องอุปกรณ์พิเศษและเครื่องมือหรือเครื่องอุปกรณ์เพิ่มเติม พ.ศ. 2550
             </Box>
@@ -1083,126 +1355,201 @@ function ResultNoticePaperDocument({ report }) {
   )
 }
 
-function ResultNoticeDialog({ open, report, mode = 'view', onClose, onConfirm }) {
-  const [noticeForm, setNoticeForm] = useState({
-    reportCorrectness: 'ถูกต้องครบถ้วน',
-    checkedParameters: ['BOD', 'COD'],
-    reviewResult: 'เห็นควรแจ้งผลการตรวจสอบ',
-    comment: '',
-  })
+const defaultResultNoticeForm = {
+  reportCorrectness: '',
+  checkedParameters: '',
+  reviewResult: '',
+  comment: '',
+  inspectorName: '',
+  inspectorPosition: '',
+}
+
+function getResultNoticeFormValues(report = {}) {
+  const resultNotice = report?.resultNotice ?? {}
+  const checkedParameters = Array.isArray(resultNotice.checkedParameters)
+    ? resultNotice.checkedParameters
+    : [resultNotice.checkedParameters]
+  const firstCheckedParameter = checkedParameters.find((value) => value) ?? report?.parameter ?? defaultResultNoticeForm.checkedParameters
+
+  return {
+    reportCorrectness: resultNotice.reportCorrectness ?? defaultResultNoticeForm.reportCorrectness,
+    checkedParameters: firstCheckedParameter,
+    reviewResult: resultNotice.reviewResult ?? defaultResultNoticeForm.reviewResult,
+    comment: resultNotice.comment ?? defaultResultNoticeForm.comment,
+    inspectorName: resultNotice.inspectorName ?? defaultResultNoticeForm.inspectorName,
+    inspectorPosition: resultNotice.inspectorPosition ?? defaultResultNoticeForm.inspectorPosition,
+  }
+}
+
+function ResultNoticeDialog({ open, report, mode = 'view', submitting = false, submitError = '', onClose, onConfirm }) {
+  const [noticeForm, setNoticeForm] = useState(() => getResultNoticeFormValues(report))
+  const [statusHistoryOpen, setStatusHistoryOpen] = useState(false)
   const title = report && isBangkokProvince(report.province)
     ? 'แบบแจ้งผล (ส่วนกลาง)'
     : 'แบบแจ้งผล (ส่วนภูมิภาค)'
   const isEditMode = mode === 'edit'
+  const statusHistory = report ? buildFallbackReportStatusHistory(report) : []
   const updateNoticeForm = (field, value) => {
     setNoticeForm((current) => ({ ...current, [field]: value }))
   }
+  const handleDownload = () => {
+    if (!report) return
+
+    const blob = new Blob([JSON.stringify(report.resultNotice ?? report, null, 2)], { type: 'application/json;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${report.reportNo || 'bod-cod-result-notice'}.json`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+  const closeDialog = () => {
+    setStatusHistoryOpen(false)
+    onClose?.()
+  }
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg">
-      <DialogTitle>{title}</DialogTitle>
-      <DialogContent dividers sx={{ bgcolor: isEditMode ? 'background.default' : 'neutral.100' }}>
-        {report && isEditMode ? (
-          <Stack spacing={2}>
-            <SectionPaper title="ข้อมูลรายงาน">
-              <Grid container spacing={2}>
-                <Grid size={{ xs: 12, md: 6 }}>
-                  <ReadOnlyField label="ชื่อโรงงาน" value={report.factoryName} />
-                </Grid>
-                <Grid size={{ xs: 12, md: 3 }}>
-                  <ReadOnlyField label="เลขทะเบียนโรงงาน" value={report.factoryRegistration} />
-                </Grid>
-                <Grid size={{ xs: 12, md: 3 }}>
-                  <ReadOnlyField label="รอบรายงาน" value={`${report.reportRound}/${report.year}`} />
-                </Grid>
-                <Grid size={{ xs: 12, md: 3 }}>
-                  <ReadOnlyField label="รหัสจุดตรวจวัด" value={report.monitoringPointCode} />
-                </Grid>
-                <Grid size={{ xs: 12, md: 3 }}>
-                  <ReadOnlyField label="วันที่ยื่นรายงาน" value={report.submittedDate} />
-                </Grid>
-              </Grid>
-            </SectionPaper>
-
-            <SectionPaper title="ผลการตรวจสอบแบบรายงาน">
-              <Grid container spacing={2}>
-                <Grid size={{ xs: 12, md: 4 }}>
-                  <TextField
-                    select
-                    label="ความถูกต้องของแบบรายงาน"
-                    size="small"
-                    value={noticeForm.reportCorrectness}
-                    onChange={(event) => updateNoticeForm('reportCorrectness', event.target.value)}
-                    fullWidth
-                  >
-                    <MenuItem value="ถูกต้องครบถ้วน">ถูกต้องครบถ้วน</MenuItem>
-                    <MenuItem value="ไม่ถูกต้องครบถ้วน">ไม่ถูกต้องครบถ้วน</MenuItem>
-                  </TextField>
-                </Grid>
-                <Grid size={{ xs: 12, md: 4 }}>
-                  <TextField
-                    select
-                    label="รายการที่ตรวจสอบ"
-                    size="small"
-                    value={noticeForm.checkedParameters}
-                    onChange={(event) => {
-                      const selectedValue = event.target.value
-                      updateNoticeForm('checkedParameters', typeof selectedValue === 'string' ? selectedValue.split(',') : selectedValue)
-                    }}
-                    slotProps={{
-                      select: {
-                        multiple: true,
-                        renderValue: (selected) => selected.join(', '),
-                      },
-                    }}
-                    fullWidth
-                  >
-                    <MenuItem value="BOD">BOD</MenuItem>
-                    <MenuItem value="COD">COD</MenuItem>
-                  </TextField>
-                </Grid>
-                <Grid size={{ xs: 12, md: 4 }}>
-                  <TextField
-                    select
-                    label="ผลการพิจารณา"
-                    size="small"
-                    value={noticeForm.reviewResult}
-                    onChange={(event) => updateNoticeForm('reviewResult', event.target.value)}
-                    fullWidth
-                  >
-                    <MenuItem value="เห็นควรแจ้งผลการตรวจสอบ">เห็นควรแจ้งผลการตรวจสอบ</MenuItem>
-                    <MenuItem value="เห็นควรให้แก้ไขเพิ่มเติม">เห็นควรให้แก้ไขเพิ่มเติม</MenuItem>
-                  </TextField>
-                </Grid>
-                <Grid size={{ xs: 12 }}>
-                  <TextField
-                    label="หมายเหตุ / รายละเอียดเพิ่มเติม"
-                    size="small"
-                    value={noticeForm.comment}
-                    onChange={(event) => updateNoticeForm('comment', event.target.value)}
-                    multiline
-                    minRows={3}
-                    fullWidth
-                  />
-                </Grid>
-              </Grid>
-            </SectionPaper>
-
+    <>
+      <Dialog open={open} onClose={closeDialog} fullWidth maxWidth="lg">
+        <DialogTitle
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 2,
+            pr: 3,
+          }}
+        >
+          <Typography component="span" variant="h6" sx={{ minWidth: 0 }}>
+            {title}
+          </Typography>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexShrink: 0 }}>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<HistoryIcon />}
+              disabled={!report}
+              onClick={() => setStatusHistoryOpen(true)}
+            >
+              ประวัติสถานะ
+            </Button>
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<FileDownloadIcon />}
+              disabled={!report}
+              onClick={handleDownload}
+            >
+              ดาวน์โหลด
+            </Button>
+            <IconButton aria-label="ปิด" onClick={closeDialog} size="small">
+              <CloseIcon />
+            </IconButton>
           </Stack>
+        </DialogTitle>
+        <DialogContent dividers sx={{ bgcolor: isEditMode ? 'background.default' : 'neutral.100' }}>
+          {report && isEditMode ? (
+            <Stack spacing={2}>
+              <SectionPaper title="ข้อมูลรายงาน">
+                <Grid container spacing={2}>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <ReadOnlyField label="ชื่อโรงงาน" value={report.factoryName} />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 3 }}>
+                    <ReadOnlyField label="เลขทะเบียนโรงงาน" value={report.factoryRegistration} />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 3 }}>
+                    <ReadOnlyField label="รอบรายงาน" value={`${report.reportRound}/${report.year}`} />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 3 }}>
+                    <ReadOnlyField label="รหัสจุดตรวจวัด" value={report.monitoringPointCode} />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 3 }}>
+                    <ReadOnlyField label="วันที่ยื่นรายงาน" value={report.submittedDate} />
+                  </Grid>
+                </Grid>
+              </SectionPaper>
+
+              <SectionPaper title="ผลการตรวจสอบแบบรายงาน">
+                <Grid container spacing={2}>
+                  <Grid size={{ xs: 12, md: 4 }}>
+                    <TextField
+                      select
+                      label="ความถูกต้องของแบบรายงาน"
+                      size="small"
+                      value={noticeForm.reportCorrectness}
+                      onChange={(event) => updateNoticeForm('reportCorrectness', event.target.value)}
+                      fullWidth
+                    >
+                      <MenuItem value="ถูกต้องครบถ้วน">ถูกต้องครบถ้วน</MenuItem>
+                      <MenuItem value="ไม่ถูกต้องครบถ้วน">ไม่ถูกต้องครบถ้วน</MenuItem>
+                    </TextField>
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 4 }}>
+                    <TextField
+                      select
+                      label="รายการที่ตรวจสอบ"
+                      size="small"
+                      value={noticeForm.checkedParameters}
+                      onChange={(event) => updateNoticeForm('checkedParameters', event.target.value)}
+                      fullWidth
+                    >
+                      <MenuItem value="BOD">BOD</MenuItem>
+                      <MenuItem value="COD">COD</MenuItem>
+                    </TextField>
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 4 }}>
+                    <TextField
+                      select
+                      label="ผลการพิจารณา"
+                      size="small"
+                      value={noticeForm.reviewResult}
+                      onChange={(event) => updateNoticeForm('reviewResult', event.target.value)}
+                      fullWidth
+                    >
+                      <MenuItem value="เห็นควรแจ้งผลการตรวจสอบ">เห็นควรแจ้งผลการตรวจสอบ</MenuItem>
+                      <MenuItem value="เห็นควรให้แก้ไขเพิ่มเติม">เห็นควรให้แก้ไขเพิ่มเติม</MenuItem>
+                    </TextField>
+                  </Grid>
+                  <Grid size={{ xs: 12 }}>
+                    <TextField
+                      label="หมายเหตุ / รายละเอียดเพิ่มเติม"
+                      size="small"
+                      value={noticeForm.comment}
+                      onChange={(event) => updateNoticeForm('comment', event.target.value)}
+                      multiline
+                      minRows={3}
+                      fullWidth
+                    />
+                  </Grid>
+                </Grid>
+              </SectionPaper>
+            </Stack>
+          ) : null}
+          {report && !isEditMode ? <ResultNoticePaperDocument report={report} /> : null}
+        </DialogContent>
+        {submitError ? (
+          <Alert severity="error" sx={{ borderRadius: 0 }}>
+            {submitError}
+          </Alert>
         ) : null}
-        {report && !isEditMode ? <ResultNoticePaperDocument report={report} /> : null}
-      </DialogContent>
-      <DialogActions sx={{ justifyContent: 'center' }}>
-        <Button variant="outlined" color="inherit" onClick={onClose}>
-          {isEditMode ? 'ยกเลิก' : 'ปิด'}
-        </Button>
         {isEditMode ? (
-          <Button variant="contained" onClick={() => onConfirm?.(report)}>
-            บันทึกและยืนยัน
-          </Button>
+          <DialogActions sx={{ justifyContent: 'center' }}>
+            <Button variant="outlined" color="inherit" disabled={submitting} onClick={closeDialog}>
+              ยกเลิก
+            </Button>
+            <Button variant="contained" loading={submitting} onClick={() => onConfirm?.(report, noticeForm)}>
+              ส่งอนุมัติ
+            </Button>
+          </DialogActions>
         ) : null}
-      </DialogActions>
-    </Dialog>
+      </Dialog>
+      <ReportStatusHistoryDialog
+        open={statusHistoryOpen}
+        history={statusHistory}
+        onClose={() => setStatusHistoryOpen(false)}
+      />
+    </>
   )
 }
 
@@ -1368,9 +1715,9 @@ function makeEditableReport(row) {
   return {
     ...row,
     mode: 'edit',
-    roundNo: row.reportRound?.replace('ครั้งที่ ', '') ?? '',
-    businessActivity: row.businessActivity ?? '-',
-    factoryAddress: row.factoryAddress ?? `จังหวัด${row.province}`,
+    roundNo: row.roundNo ?? row.reportRoundNo ?? row.reportRound?.replace('ครั้งที่ ', '') ?? '',
+    businessActivity: row.businessActivity ?? '',
+    factoryAddress: row.factoryAddress ?? '',
     latestRevisionMessage: getLatestReportRevisionMessage(row),
     statusHistory: buildFallbackReportStatusHistory(row),
   }
@@ -1426,6 +1773,70 @@ const emptyMeasurementResult = {
   standardErrorValue: '',
 }
 
+const attachmentTypeFieldMap = {
+  SAMPLE_PHOTO: 'samplePhotos',
+  DEVICE_PHOTO: 'devicePhotos',
+  LAB_REPORT: 'labReports',
+}
+
+function getAttachmentFileName(file = {}) {
+  return file.originalFileName ?? file.name ?? file.storedFileName ?? ''
+}
+
+function getBodCodFormValues(report = {}) {
+  const safeReport = report ?? {}
+
+  return {
+    wastewaterFlow: safeReport.wastewaterFlow ?? '',
+    samplerName: safeReport.samplerName ?? '',
+    officerRegistration: safeReport.officerRegistration ?? '',
+    laboratoryName: safeReport.laboratoryName ?? '',
+    laboratoryRegistration: safeReport.laboratoryRegistration ?? '',
+    labReportNo: safeReport.labReportNo ?? '',
+    analysisMethod: safeReport.analysisMethod ?? '',
+    deviceBrand: safeReport.deviceBrand ?? '',
+    deviceModel: safeReport.deviceModel ?? '',
+    serialNo: safeReport.serialNo ?? '',
+    parameter: safeReport.parameter ?? '',
+    reporterName: safeReport.reporterName ?? '',
+    reporterPosition: safeReport.reporterPosition ?? '',
+  }
+}
+
+function getBodCodMeasurementResult(report = {}) {
+  return (report ?? {}).measurementRows?.[0] ?? emptyMeasurementResult
+}
+
+function getBodCodAttachmentFiles(report = {}) {
+  const safeReport = report ?? {}
+  const files = {
+    samplePhotos: [],
+    devicePhotos: [],
+    labReports: [],
+  }
+
+  if (safeReport.attachmentFiles) {
+    files.samplePhotos = safeReport.attachmentFiles.samplePhotos ?? []
+    files.devicePhotos = safeReport.attachmentFiles.devicePhotos ?? []
+    files.labReports = safeReport.attachmentFiles.labReports ?? []
+
+    return files
+  }
+
+  if (!Array.isArray(safeReport.attachments)) {
+    return files
+  }
+
+  safeReport.attachments.forEach((attachment) => {
+    const field = attachmentTypeFieldMap[attachment.attachmentType]
+    if (field) {
+      files[field].push(attachment)
+    }
+  })
+
+  return files
+}
+
 function AttachmentFileInput({ label, files, onChange }) {
   const safeFiles = Array.isArray(files) ? files : []
   const removeFile = (removeIndex) => {
@@ -1465,9 +1876,9 @@ function AttachmentFileInput({ label, files, onChange }) {
           <TableBody>
             {safeFiles.length > 0 ? (
               safeFiles.map((file, index) => (
-                <TableRow key={`${file.name}-${file.lastModified ?? index}`}>
+                <TableRow key={`${getAttachmentFileName(file)}-${file.lastModified ?? file.id ?? index}`}>
                   <TableCell>{index + 1}</TableCell>
-                  <TableCell>{file.name}</TableCell>
+                  <TableCell>{getAttachmentFileName(file)}</TableCell>
                   <TableCell align="center">
                     <IconButton size="small" color="error" onClick={() => removeFile(index)}>
                       <DeleteIcon fontSize="small" />
@@ -1492,27 +1903,9 @@ function AttachmentFileInput({ label, files, onChange }) {
 }
 
 function BodCodReportFormSheet({ open, report, onClose, onPreview }) {
-  const [form, setForm] = useState({
-    wastewaterFlow: report?.wastewaterFlow ?? '',
-    samplerName: report?.samplerName ?? '',
-    officerRegistration: report?.officerRegistration ?? '',
-    laboratoryName: report?.laboratoryName ?? '',
-    laboratoryRegistration: report?.laboratoryRegistration ?? '',
-    labReportNo: report?.labReportNo ?? '',
-    analysisMethod: report?.analysisMethod ?? '',
-    deviceBrand: report?.deviceBrand ?? '',
-    deviceModel: report?.deviceModel ?? '',
-    serialNo: report?.serialNo ?? '',
-    parameter: report?.parameter ?? '',
-    reporterName: report?.reporterName ?? '',
-    reporterPosition: report?.reporterPosition ?? '',
-  })
-  const [measurementResult, setMeasurementResult] = useState(() => report?.measurementRows?.[0] ?? emptyMeasurementResult)
-  const [attachmentFiles, setAttachmentFiles] = useState({
-    samplePhotos: [],
-    devicePhotos: [],
-    labReports: [],
-  })
+  const [form, setForm] = useState(() => getBodCodFormValues(report))
+  const [measurementResult, setMeasurementResult] = useState(() => getBodCodMeasurementResult(report))
+  const [attachmentFiles, setAttachmentFiles] = useState(() => getBodCodAttachmentFiles(report))
   const latestRevisionMessage = getLatestReportRevisionMessage(report)
   const isEditMode = report?.mode === 'edit'
   const measurementErrorValue = calculateErrorValue(measurementResult.deviceValue, measurementResult.labValue)
@@ -1803,13 +2196,24 @@ function FactoryActions({ row, onOpenMonitoringPoints }) {
   )
 }
 
-function ReportActions({ row, mode, onOpenReport, onOpenResultNotice }) {
+function ReportActions({ row, mode, roleCode = '', onOpenReport, onOpenResultNotice }) {
   const statusValues = [row.status, row.statusCode, row.statusLabel].filter(Boolean)
   const hasStatus = (statuses) => statusValues.some((status) => statuses.includes(status))
   const canEdit = mode === 'operator' && hasStatus(['รอโรงงานแก้ไข', 'REVISION_REQUESTED'])
-  const canProcess = mode === 'officer' && hasStatus(['รอพิจารณา', 'แก้ไขแล้ว/รอพิจารณา', 'SUBMITTED', 'REVISED_PENDING_REVIEW'])
+  const canReviewPending = hasStatus([
+    'รอพิจารณา',
+    'แก้ไขแล้ว/รอพิจารณา',
+    'SUBMITTED',
+    'REVISED_PENDING_REVIEW',
+  ])
+  const canReviewWaiting = roleCode === 'kpm_director' && hasStatus(['รอทบทวน', 'WAITING_REVIEW'])
+  const canApproveWaiting = ['center_director', 'kwp_director'].includes(roleCode) && hasStatus(['รออนุมัติ', 'WAITING_APPROVAL'])
+  const canProcess = mode === 'officer' && (canReviewPending || canReviewWaiting || canApproveWaiting)
   const canOpenResultNotice = hasStatus(['ผ่านการพิจารณา', 'APPROVED'])
-  const canFillResultNotice = mode === 'officer' && hasStatus(['กรอกแบบแจ้งผล', 'RESULT_FORM'])
+    || (mode === 'officer' && hasStatus(['รอทบทวน', 'รออนุมัติ', 'WAITING_REVIEW', 'WAITING_APPROVAL']))
+  const canFillResultNotice = mode === 'officer'
+    && roleCode === 'monitoring_kpm'
+    && row.statusCode === 'WAITING_RESULT_NOTICE'
 
   return (
     <Stack direction="row" spacing={1} sx={tableActionStackSx}>
@@ -1830,7 +2234,7 @@ function ReportActions({ row, mode, onOpenReport, onOpenResultNotice }) {
         </>
       ) : (
         <>
-          <Button size="small" variant="outlined" disabled={!canFillResultNotice} onClick={() => onOpenResultNotice?.(row, 'edit')}>
+          <Button size="small" variant="contained" disabled={!canFillResultNotice} onClick={() => onOpenResultNotice?.(row, 'edit')}>
             กรอกแบบแจ้งผล
           </Button>
           <Button size="small" variant="contained" disabled={!canProcess} onClick={() => onOpenReport?.(row, 'review')}>
@@ -1863,7 +2267,7 @@ function getFactoryColumns(onOpenMonitoringPoints) {
   ]
 }
 
-function getReportColumns(mode, onOpenReport, onOpenResultNotice) {
+function getReportColumns(mode, roleCode, onOpenReport, onOpenResultNotice) {
   return [
     { field: 'factoryName', headerName: 'ชื่อโรงงาน/บริษัท', width: 260 },
     { field: 'factoryRegistration', headerName: 'เลขทะเบียนโรงงาน', width: 190 },
@@ -1891,6 +2295,7 @@ function getReportColumns(mode, onOpenReport, onOpenResultNotice) {
         <ReportActions
           row={params.row}
           mode={mode}
+          roleCode={roleCode}
           onOpenReport={onOpenReport}
           onOpenResultNotice={onOpenResultNotice}
         />
@@ -1936,7 +2341,7 @@ const dataGridSx = {
   },
 }
 
-function BodCodReportPage({ userType = '', accessToken = '' }) {
+function BodCodReportPage({ userType = '', accessToken = '', roleCode = '' }) {
   const isOfficer = userType === 'officer'
   const availableSubMenus = isOfficer ? officerSubMenus : operatorSubMenus
   const [factoryTableRows, setFactoryTableRows] = useState([])
@@ -1952,6 +2357,8 @@ function BodCodReportPage({ userType = '', accessToken = '' }) {
   const [previewMode, setPreviewMode] = useState('view')
   const [resultNoticeReport, setResultNoticeReport] = useState(null)
   const [resultNoticeMode, setResultNoticeMode] = useState('view')
+  const [resultNoticeSubmitting, setResultNoticeSubmitting] = useState(false)
+  const [resultNoticeSubmitError, setResultNoticeSubmitError] = useState('')
   const effectiveSubMenu = availableSubMenus.some((menu) => menu.value === selectedSubMenu)
     ? selectedSubMenu
     : availableSubMenus[0].value
@@ -1983,8 +2390,10 @@ function BodCodReportPage({ userType = '', accessToken = '' }) {
     })
     const response = await readBodCodApiResponse(result, 'โหลดรายการรายงานไม่สำเร็จ')
 
-    return Array.isArray(response?.data) ? response.data.map(mapBodCodReportRow) : []
-  }, [accessToken])
+    return Array.isArray(response?.data)
+      ? response.data.map((row, index) => mapBodCodReportRow(row, index, { isOperatorView: !isOfficer }))
+      : []
+  }, [accessToken, isOfficer])
   const fetchReportDetail = useCallback(async (row) => {
     if (!accessToken) {
       throw new Error('กรุณาเข้าสู่ระบบเพื่อโหลดรายละเอียดรายงาน')
@@ -2001,8 +2410,8 @@ function BodCodReportPage({ userType = '', accessToken = '' }) {
     })
     const response = await readBodCodApiResponse(result, 'โหลดรายละเอียดรายงานไม่สำเร็จ')
 
-    return mapBodCodReportDetail(response?.data ?? {}, row)
-  }, [accessToken])
+    return mapBodCodReportDetail(response?.data ?? {}, row, { isOperatorView: !isOfficer })
+  }, [accessToken, isOfficer])
   const loadFactoryRows = useCallback(async (options) => {
     const rows = await fetchFactoryRows(options)
     setFactoryTableRows(rows)
@@ -2073,7 +2482,7 @@ function BodCodReportPage({ userType = '', accessToken = '' }) {
   }, [effectiveSubMenu, fetchReportRows, isOfficer])
   const factoryColumns = useMemo(() => getFactoryColumns(setMonitoringPointFactory), [])
   const reportColumns = useMemo(
-    () => getReportColumns(isOfficer ? 'officer' : 'operator', (row, mode) => {
+    () => getReportColumns(isOfficer ? 'officer' : 'operator', roleCode, (row, mode) => {
       setTableError('')
       fetchReportDetail(row)
         .then((detail) => {
@@ -2090,6 +2499,7 @@ function BodCodReportPage({ userType = '', accessToken = '' }) {
         })
     }, (row, mode = 'view') => {
       setTableError('')
+      setResultNoticeSubmitError('')
       fetchReportDetail(row)
         .then((detail) => {
           setResultNoticeMode(mode)
@@ -2099,16 +2509,39 @@ function BodCodReportPage({ userType = '', accessToken = '' }) {
           setTableError(error instanceof Error ? error.message : 'โหลดรายละเอียดรายงานไม่สำเร็จ')
         })
     }),
-    [fetchReportDetail, isOfficer],
+    [fetchReportDetail, isOfficer, roleCode],
   )
-  const confirmResultNotice = (report) => {
+  const confirmResultNotice = async (report, noticeForm) => {
     if (!report) return
 
-    loadReportRows().catch((error) => {
-      setTableError(error instanceof Error ? error.message : 'โหลดรายการรายงานไม่สำเร็จ')
-    })
-    setResultNoticeReport(null)
-    setResultNoticeMode('view')
+    if (!accessToken) {
+      setResultNoticeSubmitError('กรุณาเข้าสู่ระบบเจ้าหน้าที่เพื่อบันทึกแบบแจ้งผล')
+      return
+    }
+
+    setResultNoticeSubmitting(true)
+    setResultNoticeSubmitError('')
+
+    try {
+      const result = await fetch(`${bodCodDeviationReportsApiBaseUrl}/${report.id}/result-notice`, {
+        method: report.resultNotice ? 'PUT' : 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify(buildBodCodResultNoticePayload(noticeForm)),
+      })
+      await readBodCodApiResponse(result, 'บันทึกแบบแจ้งผลไม่สำเร็จ')
+      await submitWorkflowAction(report, 'APPROVE', 'บันทึกแบบแจ้งผลและส่งอนุมัติ')
+      setResultNoticeReport(null)
+      setResultNoticeMode('view')
+      await loadReportRows()
+    } catch (error) {
+      setResultNoticeSubmitError(error instanceof Error ? error.message : 'ส่งอนุมัติไม่สำเร็จ')
+    } finally {
+      setResultNoticeSubmitting(false)
+    }
   }
   const submitPreviewReport = async (report) => {
     if (!accessToken) {
@@ -2121,7 +2554,7 @@ function BodCodReportPage({ userType = '', accessToken = '' }) {
 
     try {
       const isEditMode = previewMode === 'edit' || report?.mode === 'edit'
-      const payload = buildBodCodReportPayload(report)
+      const payload = await buildBodCodReportPayload(report, accessToken)
       const result = await fetch(
         isEditMode
           ? `${bodCodDeviationReportsApiBaseUrl}/${report.id}/resubmission`
@@ -2142,6 +2575,58 @@ function BodCodReportPage({ userType = '', accessToken = '' }) {
       await reloadCurrentTable()
     } catch (error) {
       setPreviewSubmitError(error instanceof Error ? error.message : 'ส่งแบบฟอร์มไม่สำเร็จ')
+    } finally {
+      setPreviewSubmitting(false)
+    }
+  }
+  const submitWorkflowAction = async (report, action, officerNote = '') => {
+    if (!accessToken) {
+      throw new Error('กรุณาเข้าสู่ระบบเจ้าหน้าที่เพื่อดำเนินการ')
+    }
+
+    if (!report?.id) {
+      throw new Error('ไม่พบรหัสรายงานสำหรับดำเนินการ')
+    }
+
+    const note = String(officerNote ?? '').trim()
+    const payload = {
+      action,
+      officerNote: note || (action === 'APPROVE' ? 'ข้อมูลถูกต้อง ส่งต่อผู้อนุมัติ' : ''),
+    }
+
+    if (action === 'REQUEST_REVISION') {
+      payload.revisionReason = note
+    }
+
+    const result = await fetch(`${bodCodDeviationReportsApiBaseUrl}/${report.id}/workflow-actions`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(payload),
+    })
+    await readBodCodApiResponse(result, action === 'REQUEST_REVISION' ? 'แจ้งแก้ไขไม่สำเร็จ' : 'ผ่านการพิจารณาไม่สำเร็จ')
+  }
+  const requestReportRevision = async (report, officerNote) => {
+    setPreviewSubmitError('')
+    await submitWorkflowAction(report, 'REQUEST_REVISION', officerNote)
+    setPreviewReport(null)
+    setPreviewMode('view')
+    await loadReportRows()
+  }
+  const approveReport = async (report) => {
+    setPreviewSubmitting(true)
+    setPreviewSubmitError('')
+
+    try {
+      await submitWorkflowAction(report, 'APPROVE', 'ข้อมูลถูกต้อง ส่งต่อผู้อนุมัติ')
+      setPreviewReport(null)
+      setPreviewMode('view')
+      await loadReportRows()
+    } catch (error) {
+      setPreviewSubmitError(error instanceof Error ? error.message : 'ผ่านการพิจารณาไม่สำเร็จ')
     } finally {
       setPreviewSubmitting(false)
     }
@@ -2276,15 +2761,21 @@ function BodCodReportPage({ userType = '', accessToken = '' }) {
           setPreviewSubmitError('')
         }}
         onSubmit={submitPreviewReport}
+        onRequestRevision={requestReportRevision}
+        onApprove={approveReport}
       />
       <ResultNoticeDialog
+        key={resultNoticeReport ? `${resultNoticeReport.id}-${resultNoticeMode}-${resultNoticeReport.resultNotice?.updatedAt ?? 'new'}` : 'result-notice-dialog'}
         open={Boolean(resultNoticeReport)}
         report={resultNoticeReport}
         mode={resultNoticeMode}
         onClose={() => {
           setResultNoticeReport(null)
           setResultNoticeMode('view')
+          setResultNoticeSubmitError('')
         }}
+        submitting={resultNoticeSubmitting}
+        submitError={resultNoticeSubmitError}
         onConfirm={confirmResultNotice}
       />
     </>

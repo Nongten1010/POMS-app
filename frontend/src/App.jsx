@@ -232,7 +232,7 @@ function App() {
         }}
       >
         {visibleSelectedMenu === 'home' ? (
-          <HomePage accessToken={accessToken} />
+          <HomePage accessToken={accessToken} permissions={activePermissions} />
         ) : visibleSelectedMenu === 'master-data' ? (
           <MasterDataPage userType={userType} />
         ) : visibleSelectedMenu === 'permissions' ? (
@@ -242,7 +242,7 @@ function App() {
         ) : visibleSelectedMenu === 'forms' ? (
           <KwpFormsPage userType={userType} accessToken={accessToken} />
         ) : visibleSelectedMenu === 'bod-cod-report' ? (
-          <BodCodReportPage userType={userType} accessToken={accessToken} />
+          <BodCodReportPage userType={userType} accessToken={accessToken} roleCode={roleCode} />
         ) : visibleSelectedMenu === 'notifications' ? (
           <NotificationPage accessToken={accessToken} />
         ) : visibleSelectedMenu === 'statistics' ? (
@@ -262,7 +262,7 @@ function App() {
         ) : visibleSelectedMenu === 'eligible-factories' ? (
           <EligibleFactoriesPage accessToken={accessToken} />
         ) : (
-          <HomePage accessToken={accessToken} />
+          <HomePage accessToken={accessToken} permissions={activePermissions} />
         )}
       </Container>
     </Box>

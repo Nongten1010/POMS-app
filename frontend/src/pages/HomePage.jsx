@@ -31,6 +31,7 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import CloseIcon from '@mui/icons-material/Close'
 import FileDownloadIcon from '@mui/icons-material/FileDownload'
 import SearchIcon from '@mui/icons-material/Search'
+import StarIcon from '@mui/icons-material/Star'
 import StarBorderIcon from '@mui/icons-material/StarBorder'
 import { DatePicker } from '@mui/x-date-pickers/DatePicker'
 import { PickerDay } from '@mui/x-date-pickers/PickerDay'
@@ -118,6 +119,16 @@ function getOperatorFactoriesApiUrl(systemType) {
   }
 
   return params.toString() ? `${baseUrl}?${params.toString()}` : baseUrl
+}
+
+function getOperatorFactoryFavoriteApiUrl(factoryId) {
+  const encodedFactoryId = encodeURIComponent(factoryId)
+  const baseUrl =
+    typeof window !== 'undefined' && window.location.hostname === 'd-poms.diw.go.th'
+      ? '/api/v1/operator-factories'
+      : (import.meta.env.DEV ? '/api-proxy/v1/operator-factories' : 'https://d-poms.diw.go.th/api/v1/operator-factories')
+
+  return `${baseUrl}/${encodedFactoryId}/favorite`
 }
 
 function getConnectedMeasurementPointApiUrl(stationId, resource, params = {}) {
@@ -382,6 +393,7 @@ function mapOperatorFactory(row, index) {
 
   return {
     id: row.factoryId ?? row.id ?? row.newRegistrationNo ?? `factory-${index}`,
+    sourceId: row.id ?? null,
     factoryId: row.factoryId ?? row.id ?? '',
     name: row.factoryName ?? '',
     newRegistrationNo: row.newRegistrationNo ?? '',
@@ -429,7 +441,7 @@ function loadLongdoMapScript() {
   })
 }
 
-function HomePage({ accessToken = '' }) {
+function HomePage({ accessToken = '', permissions }) {
   const [factoryType, setFactoryType] = useState('all')
   const [sortBy, setSortBy] = useState('reference')
   const [searchValue, setSearchValue] = useState('')
@@ -438,6 +450,7 @@ function HomePage({ accessToken = '' }) {
   const [isMobileListExpanded, setIsMobileListExpanded] = useState(true)
   const [factoryOrderFilter, setFactoryOrderFilter] = useState('')
   const [industrialEstateFilter, setIndustrialEstateFilter] = useState('all')
+  const canUseFavorite = permissions?.dashboard?.favorite === true
   const [industrialEstateNameFilter, setIndustrialEstateNameFilter] = useState('')
   const [regionFilter, setRegionFilter] = useState('all')
   const [provinceFilter, setProvinceFilter] = useState('all')
@@ -446,6 +459,8 @@ function HomePage({ accessToken = '' }) {
   const [monitoringFilter, setMonitoringFilter] = useState('all')
   const [factories, setFactories] = useState([])
   const [factoriesError, setFactoriesError] = useState('')
+  const [favoriteUpdatingFactoryId, setFavoriteUpdatingFactoryId] = useState('')
+  const [favoriteError, setFavoriteError] = useState('')
   const apiSystemType = factoryType === 'cems' ? 'CEMS' : factoryType === 'wpms' ? 'WPMS' : ''
   const effectiveFactories = useMemo(() => (accessToken ? factories : []), [accessToken, factories])
   const effectiveFactoriesError = accessToken ? factoriesError : 'กรุณาเข้าสู่ระบบเพื่อดูรายชื่อโรงงาน'
@@ -542,6 +557,68 @@ function HomePage({ accessToken = '' }) {
     searchValue,
     sortBy,
   ])
+  const handleFavoriteToggle = async (factory) => {
+    const favoriteIdentifiers = [
+      factory?.factoryId,
+      factory?.newRegistrationNo,
+      factory?.sourceId,
+    ].filter((value, index, list) => value && list.indexOf(value) === index)
+
+    if (!accessToken || favoriteIdentifiers.length === 0) {
+      return
+    }
+
+    const nextFavorite = !factory.isFavorite
+    setFavoriteUpdatingFactoryId(factory.factoryId || factory.id)
+    setFavoriteError('')
+
+    try {
+      let favoritePayload = null
+      let favoriteError = null
+
+      for (const identifier of favoriteIdentifiers) {
+        const result = await fetch(getOperatorFactoryFavoriteApiUrl(identifier), {
+          method: 'PUT',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({ isFavorite: nextFavorite }),
+        })
+        const payload = await result.json().catch(() => null)
+
+        if (result.ok && payload?.success !== false) {
+          favoritePayload = payload
+          break
+        }
+
+        favoriteError = new Error(payload?.message ?? payload?.error?.message ?? `อัปเดตรายการติดตามไม่สำเร็จ (${result.status} ${result.statusText})`)
+        if (payload?.error?.code !== 'NOT_FOUND') {
+          break
+        }
+      }
+
+      if (!favoritePayload) {
+        throw favoriteError ?? new Error('อัปเดตรายการติดตามไม่สำเร็จ')
+      }
+
+      const updatedFavorite = favoritePayload?.data?.isFavorite ?? nextFavorite
+      const updateFactoryFavorite = (currentFactory) =>
+        currentFactory.factoryId === factory.factoryId ||
+        currentFactory.id === factory.id ||
+        currentFactory.sourceId === factory.sourceId
+          ? { ...currentFactory, isFavorite: updatedFavorite }
+          : currentFactory
+
+      setFactories((current) => current.map(updateFactoryFavorite))
+      setSelectedFactory((current) => (current ? updateFactoryFavorite(current) : current))
+    } catch (error) {
+      setFavoriteError(error instanceof Error ? error.message : 'อัปเดตรายการติดตามไม่สำเร็จ')
+    } finally {
+      setFavoriteUpdatingFactoryId('')
+    }
+  }
 
   return (
     <Box
@@ -576,10 +653,13 @@ function HomePage({ accessToken = '' }) {
         <FactoryList
           factories={filteredFactories}
           loading={false}
-          error={effectiveFactoriesError}
+          error={favoriteError || effectiveFactoriesError}
           isMobileExpanded={isMobileListExpanded}
+          canUseFavorite={canUseFavorite}
+          favoriteUpdatingFactoryId={favoriteUpdatingFactoryId}
           onMobileToggle={() => setIsMobileListExpanded((current) => !current)}
           onFactorySelect={setSelectedFactory}
+          onFavoriteToggle={handleFavoriteToggle}
         />
         <FactoryMap factories={filteredFactories} />
       </Box>
@@ -731,7 +811,17 @@ function HomeFilters({
   )
 }
 
-function FactoryList({ factories, loading, error, isMobileExpanded, onMobileToggle, onFactorySelect }) {
+function FactoryList({
+  factories,
+  loading,
+  error,
+  isMobileExpanded,
+  canUseFavorite = false,
+  favoriteUpdatingFactoryId = '',
+  onMobileToggle,
+  onFactorySelect,
+  onFavoriteToggle,
+}) {
   return (
     <Box
       sx={{
@@ -810,7 +900,14 @@ function FactoryList({ factories, loading, error, isMobileExpanded, onMobileTogg
         ) : null}
 
         {factories.map((factory) => (
-          <FactoryCard key={factory.id} factory={factory} onSelect={() => onFactorySelect(factory)} />
+          <FactoryCard
+            key={factory.id}
+            factory={factory}
+            canUseFavorite={canUseFavorite}
+            favoriteUpdating={favoriteUpdatingFactoryId === factory.factoryId}
+            onSelect={() => onFactorySelect(factory)}
+            onFavoriteToggle={() => onFavoriteToggle?.(factory)}
+          />
         ))}
 
         {!loading && !error && factories.length === 0 ? (
@@ -833,7 +930,7 @@ function FactoryList({ factories, loading, error, isMobileExpanded, onMobileTogg
   )
 }
 
-function FactoryCard({ factory, onSelect }) {
+function FactoryCard({ factory, canUseFavorite = false, favoriteUpdating = false, onSelect, onFavoriteToggle }) {
   const [activeSystem, setActiveSystem] = useState(null)
   const activeMeasurementTable = activeSystem ? getMeasurementTable(factory, activeSystem) : null
 
@@ -939,21 +1036,29 @@ function FactoryCard({ factory, onSelect }) {
         </Box>
 
         <Stack spacing={0.75} sx={{ flex: '0 0 auto', alignItems: 'center' }}>
-          <Tooltip title="ติดตาม">
-            <IconButton
-              size="small"
-              aria-label="ติดตาม"
-              sx={{
-                width: 38,
-                height: 38,
-                border: 1,
-                borderColor: 'divider',
-                color: factory.isFavorite ? 'secondary.600' : 'inherit',
-              }}
-            >
-              <StarBorderIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
+          {canUseFavorite ? (
+            <Tooltip title={factory.isFavorite ? 'ยกเลิกติดตาม' : 'ติดตาม'}>
+              <IconButton
+                size="small"
+                aria-label={factory.isFavorite ? 'ยกเลิกติดตาม' : 'ติดตาม'}
+                disabled={favoriteUpdating}
+                onClick={onFavoriteToggle}
+                sx={{
+                  width: 38,
+                  height: 38,
+                  border: 1,
+                  borderColor: factory.isFavorite ? '#facc15' : 'divider',
+                  bgcolor: factory.isFavorite ? '#fef9c3' : 'transparent',
+                  color: factory.isFavorite ? '#eab308' : 'inherit',
+                  '&:hover': {
+                    bgcolor: factory.isFavorite ? '#fef08a' : 'action.hover',
+                  },
+                }}
+              >
+                {factory.isFavorite ? <StarIcon fontSize="small" /> : <StarBorderIcon fontSize="small" />}
+              </IconButton>
+            </Tooltip>
+          ) : null}
           <Tooltip title="ดูรายละเอียด">
             <IconButton
               size="small"
