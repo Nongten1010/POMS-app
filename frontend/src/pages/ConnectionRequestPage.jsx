@@ -713,6 +713,21 @@ function isConnectedMeasurementPointDeviceConfigContext(context) {
   return context?.deviceConfigSource === 'connected-measurement-point'
 }
 
+function normalizeEmailList(value) {
+  if (Array.isArray(value)) {
+    return value.map((email) => String(email ?? '').trim()).filter(Boolean)
+  }
+
+  if (typeof value === 'string') {
+    return value
+      .split(',')
+      .map((email) => email.trim())
+      .filter(Boolean)
+  }
+
+  return []
+}
+
 function mapOperatorFactoryRow(row) {
   const monitoringPointCount = Number(row.monitoringPointCount ?? 0)
 
@@ -733,6 +748,7 @@ function mapOperatorFactoryRow(row) {
     latitude: row.latitude ?? '',
     longitude: row.longitude ?? '',
     province: row.province ?? '',
+    officerNotificationEmails: normalizeEmailList(row.officerNotificationEmails),
     monitoringPointCount,
     isEligible: row.isEligible === true,
     eligibilityStatus: row.eligibilityStatus ?? '',
@@ -5615,6 +5631,9 @@ function RequestFormBottomSheet({
   const initialNotificationEmails = useInitialRequestValues && Array.isArray(initialRequest?.notificationEmails) && initialRequest.notificationEmails.length
     ? initialRequest.notificationEmails.map((email, index) => ({ id: index + 1, value: email }))
     : [{ id: 1, value: '' }]
+  const initialOfficerNotificationEmails = normalizeEmailList(
+    useInitialRequestValues ? initialRequest?.officerNotificationEmails : formFactory?.officerNotificationEmails,
+  )
   const initialMonitoringPointType = useInitialRequestValues && initialRequest ? getRequestSystemType(initialRequest) : ''
   const initialMonitoringPoints = [{ id: 1, type: initialMonitoringPointType }]
   const [contacts, setContacts] = useState(initialContactPersons)
@@ -5628,7 +5647,7 @@ function RequestFormBottomSheet({
   const [submitPreviewRequest, setSubmitPreviewRequest] = useState(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
-  const officerEmails = ['']
+  const officerEmails = initialOfficerNotificationEmails.length ? initialOfficerNotificationEmails : ['']
   const showMonitoringPointSection = formType === 'เพิ่มจุดตรวจวัด' || isAddParameterMode
   const selectedMonitoringPoint = monitoringPoints.find((point) => point.id === selectedMonitoringPointId)
     ?? monitoringPoints[0]
@@ -5952,8 +5971,20 @@ function RequestFormBottomSheet({
                   <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
                     อีเมลสำหรับแจ้งเตือนเจ้าหน้าที่
                   </Typography>
-                  {officerEmails.map((email) => (
-                    <ReadOnlyField key={email || 'empty-officer-email'} label="อีเมล" value={email} />
+                  {officerEmails.map((email, index) => (
+                    <TextField
+                      key={`${email || 'empty-officer-email'}-${index}`}
+                      name="officerNotificationEmail"
+                      label="อีเมล"
+                      size="small"
+                      defaultValue={email}
+                      slotProps={{
+                        input: {
+                          readOnly: true,
+                        },
+                      }}
+                      fullWidth
+                    />
                   ))}
                 </Stack>
                 </Paper>
