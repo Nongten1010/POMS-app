@@ -1838,13 +1838,28 @@ async function loadConnectedMeasurementPointDetail(
 function toConnectedMeasurementPointModalDetail(
   detail: ConnectedMeasurementPointDetailDTO,
 ): ConnectedMeasurementPointModalDetailDTO {
-  return {
+  const baseDetail = {
     pointCode: detail.point.pointCode ?? null,
     pointName: detail.point.pointName,
     pointType: detail.type,
     parameterDetails: detail.point.parameters,
     primaryFuel: stringDetail(detail.point.details, 'primaryFuel'),
     secondaryFuel: stringDetail(detail.point.details, 'secondaryFuel'),
+  };
+
+  if (detail.type !== 'WPMS') return baseDetail;
+
+  return {
+    ...baseDetail,
+    instruments: deriveWpmsInstrumentOptions(detail.point),
+    measurementTimes: deriveWpmsMeasurementTimes(detail.point),
+    wastewaterSource: stringDetail(detail.point.details, 'wastewaterSource'),
+    receivingSource: stringDetail(detail.point.details, 'dischargeReceivingSource'),
+    treatmentSystemType: stringDetail(detail.point.details, 'treatmentSystem'),
+    dischargePoint: buildWpmsDischargePoint(detail.point.details),
+    averageDischarge: scalarDetail(detail.point.details, 'averageWastewaterDischarge'),
+    minimumDischarge: scalarDetail(detail.point.details, 'minWastewaterDischarge'),
+    maximumDischarge: scalarDetail(detail.point.details, 'maxWastewaterDischarge'),
   };
 }
 
@@ -1859,6 +1874,51 @@ function stringDetail(
 
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+function scalarDetail(
+  details: MeasurementPointDTO['details'],
+  key: string,
+): number | string | null {
+  if (!details || typeof details !== 'object' || Array.isArray(details)) return null;
+
+  const value = details[key];
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value !== 'string') return null;
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function buildWpmsDischargePoint(details: MeasurementPointDTO['details']): string | null {
+  const directValue = stringDetail(details, 'dischargePoint');
+  if (directValue) return directValue;
+
+  const latitude = scalarDetail(details, 'instrumentLatitude');
+  const longitude = scalarDetail(details, 'instrumentLongitude');
+  if (latitude === null || longitude === null) return null;
+
+  return `${latitude}, ${longitude}`;
+}
+
+function deriveWpmsInstrumentOptions(point: MeasurementPointDTO): string[] {
+  const parameterNames = point.parameters.map((parameter) => parameter.toLowerCase());
+  const hasBod = parameterNames.some((parameter) => parameter.includes('bod'));
+  const hasCod = parameterNames.some((parameter) => parameter.includes('cod'));
+
+  if (hasBod && hasCod) return ['ค่าบีโอดี (BOD) และ ค่าซีโอดี (COD)'];
+  if (hasBod) return ['ค่าบีโอดี (BOD)'];
+  if (hasCod) return ['ค่าซีโอดี (COD)'];
+
+  return [];
+}
+
+function deriveWpmsMeasurementTimes(point: MeasurementPointDTO): string[] {
+  const measurementTimes = point.measurementInstruments?.parameters
+    .map((parameter) => parameter.technique?.trim())
+    .filter((value): value is string => Boolean(value));
+
+  return [...new Set(measurementTimes ?? [])];
 }
 
 function toMeasurementDetailFactory(point: ConnectedMeasurementPointDetailDTO): {

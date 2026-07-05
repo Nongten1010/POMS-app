@@ -94,7 +94,7 @@ Mapping:
 
 | ปุ่ม | ใช้ API | หมายเหตุ |
 | --- | --- | --- |
-| รายละเอียดจุดตรวจวัด | `GET /api/v1/connected-measurement-points/factories/:factoryId` | คืนรายการจุดตรวจวัดของโรงงาน โดยแต่ละแถวมี `pointCode`, `pointName`, `pointType`, `parameterDetails`, `primaryFuel`, `secondaryFuel` สำหรับตารางใน modal |
+| รายละเอียดจุดตรวจวัด | `GET /api/v1/connected-measurement-points/factories/:factoryId` | คืนรายการจุดตรวจวัดของโรงงาน โดย CEMS คง field เดิม และ WPMS เพิ่ม field สำหรับ prefill แบบ กวภ.03 เช่น `instruments`, `measurementTimes`, `wastewaterSource`, `receivingSource`, `treatmentSystemType`, `dischargePoint`, `averageDischarge`, `minimumDischarge`, `maximumDischarge` |
 | เปิดดู | `GET /api/v1/connected-measurement-points/:stationId/requests` | คืนรายการคำขอทุกคำขอของจุดตรวจวัดที่เลือก โดยจับทั้งรหัส/ชื่อจุดจาก current connected point และแต่ละรายการใช้ shape เดียวกับ `GET /api/v1/cems-wpms-requests/:id/detail` |
 | เพิ่มพารามิเตอร์ | `GET /api/v1/connected-measurement-points/:stationId/parameter-form` | คืน `formDefaults` เป็น payload shape เดียวกับ `POST /api/v1/cems-wpms-requests/parameters` |
 | เพิ่มพารามิเตอร์ | `POST /api/v1/cems-wpms-requests/parameters` | บันทึกคำขอเพิ่มพารามิเตอร์; ใช้ฟอร์ม shape เดียวกับเพิ่มจุดตรวจวัด แต่ต้องมี `measurementPoints[0].pointCode` |
@@ -119,12 +119,21 @@ Response:
   "success": true,
   "data": [
     {
-      "pointCode": "S0001",
-      "pointName": "ปล่อง A",
-      "pointType": "STACK",
-      "parameterDetails": ["NOx (ppm)", "SO2 (ppm)"],
-      "primaryFuel": "ก๊าซธรรมชาติ",
-      "secondaryFuel": "น้ำมันเตา"
+      "pointCode": "P0001",
+      "pointName": "จุดระบายน้ำทิ้ง A",
+      "pointType": "WPMS",
+      "parameterDetails": ["BOD (mg/l)", "COD (mg/l)"],
+      "primaryFuel": null,
+      "secondaryFuel": null,
+      "instruments": ["ค่าบีโอดี (BOD) และ ค่าซีโอดี (COD)"],
+      "measurementTimes": ["Real Time", "15 นาที"],
+      "wastewaterSource": "ระบบบำบัดน้ำเสียส่วนกลาง",
+      "receivingSource": "คลองสาธารณะ",
+      "treatmentSystemType": "ระบบตะกอนเร่ง",
+      "dischargePoint": "13.7563, 100.5018",
+      "averageDischarge": 120.5,
+      "minimumDischarge": 95,
+      "maximumDischarge": 160
     }
   ],
   "meta": {
@@ -132,6 +141,20 @@ Response:
   }
 }
 ```
+
+WPMS-only fields for กวภ.03:
+
+| Field | Type | Source |
+| --- | --- | --- |
+| `instruments` | string[] | Derived from registered WPMS `parameterDetails`; returns the กวภ.03 option labels for BOD/COD |
+| `measurementTimes` | string[] | Unique non-empty `measurementInstruments.parameters[].technique` values |
+| `wastewaterSource` | string|null | `measurementPoints[].details.wastewaterSource` |
+| `receivingSource` | string|null | `measurementPoints[].details.dischargeReceivingSource` |
+| `treatmentSystemType` | string|null | `measurementPoints[].details.treatmentSystem` |
+| `dischargePoint` | string|null | `details.dischargePoint` if present, otherwise `instrumentLatitude, instrumentLongitude` |
+| `averageDischarge` | number|string|null | `measurementPoints[].details.averageWastewaterDischarge` |
+| `minimumDischarge` | number|string|null | `measurementPoints[].details.minWastewaterDischarge` |
+| `maximumDischarge` | number|string|null | `measurementPoints[].details.maxWastewaterDischarge` |
 
 ## Flow เพิ่มจุดตรวจวัด จบ 1 คำขอ
 

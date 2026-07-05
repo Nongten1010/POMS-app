@@ -50,6 +50,42 @@ Known risks:
 
 - If `parameters_json` contains bare parameter codes instead of labels with units, this endpoint returns those stored values as-is. The submit/sync path should keep storing display-ready labels such as `NOx (ppm)` where available.
 
+### WPMS กวภ.03 prefill fields
+
+Source:
+
+- Current connected point lookup: `dbo.cems_wpms_connection_requests` with connected `measurementPoints`
+- Stored WPMS detail source: `measurementPoints[].details` from `dbo.cems_wpms_measurement_points.details_json`
+- Stored instrument source: `measurementPoints[].measurementInstruments` from `dbo.cems_wpms_measurement_points.instruments_json`
+
+Fallback order:
+
+- `wastewaterSource`: `details.wastewaterSource -> null`
+- `receivingSource`: `details.dischargeReceivingSource -> null`
+- `treatmentSystemType`: `details.treatmentSystem -> null`
+- `dischargePoint`: `details.dischargePoint -> details.instrumentLatitude + details.instrumentLongitude -> null`
+- `averageDischarge`: `details.averageWastewaterDischarge -> null`
+- `minimumDischarge`: `details.minWastewaterDischarge -> null`
+- `maximumDischarge`: `details.maxWastewaterDischarge -> null`
+- `measurementTimes`: unique non-empty `measurementInstruments.parameters[].technique`
+- `instruments`: derived from registered WPMS parameter labels. If both BOD and COD are present, return `ค่าบีโอดี (BOD) และ ค่าซีโอดี (COD)`; otherwise return the matching single กวภ.03 option.
+
+Transformation:
+
+- These fields are added only when the connected point response row has system type `WPMS`; CEMS rows keep the existing modal shape.
+- String detail values are trimmed; blank or missing values become `null`.
+- Numeric detail values are returned as numbers when stored as numbers; string values are trimmed and returned as strings.
+- `dischargePoint` joins latitude and longitude as `<latitude>, <longitude>` only when both are present.
+
+Reason:
+
+- แบบ กวภ.03 needs the WPMS point and wastewater-discharge fields prefilled from the connected measurement point API used by the frontend: `GET /api/v1/connected-measurement-points/factories/:factoryId`.
+
+Known risks:
+
+- Historical rows with non-standard detail keys will return `null` for the new prefill fields until those keys are explicitly mapped.
+- `measurementTimes` depends on `technique`; if old WPMS submissions used technique for measurement method instead of interval, the frontend may still need manual user review.
+
 ## KWP Form Report Factory Table Fields
 
 Endpoint:

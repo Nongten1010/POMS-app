@@ -515,6 +515,15 @@ export interface ConnectedMeasurementPointModalDetailDTO {
   parameterDetails: string[];
   primaryFuel: string | null;
   secondaryFuel: string | null;
+  instruments?: string[];
+  measurementTimes?: string[];
+  wastewaterSource?: string | null;
+  receivingSource?: string | null;
+  treatmentSystemType?: string | null;
+  dischargePoint?: string | null;
+  averageDischarge?: number | string | null;
+  minimumDischarge?: number | string | null;
+  maximumDischarge?: number | string | null;
 }
 
 export interface DeviceConfigFormConnectionDTO {
