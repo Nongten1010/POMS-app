@@ -508,13 +508,15 @@ Response:
 | Field | Type | Description |
 |---|---|---|
 | `statusHistory[].id` | number | `id` ของ event; แถว `SUBMITTED` เริ่มต้นใช้ `report id` เพื่อรองรับรายงานเดิมที่ยังไม่มี event submit |
-| `statusHistory[].status` | string | สถานะของรายงานหลัง transition เช่น `SUBMITTED`, `WAITING_APPROVAL`, `REVISION_REQUESTED`, `REVISED_PENDING_REVIEW`, `APPROVED`, `REJECTED` |
+| `statusHistory[].status` | string | สถานะของ event ใน timeline เช่น `SUBMITTED`, `REVISION_REQUESTED`, `APPROVED`, `REJECTED`; ไม่ใช่ approval step ปัจจุบันของรายงาน |
 | `statusHistory[].statusLabel` | string | label ตาม scope ผู้เรียก เช่น operator เห็นสถานะระหว่างพิจารณาเป็น `รอพิจารณา` |
 | `statusHistory[].note` | string/null | note จาก workflow action หรือ `null` สำหรับ `SUBMITTED` เริ่มต้น |
 | `statusHistory[].changedById` | number/null | user id ผู้ทำรายการ |
 | `statusHistory[].changedBy` | string/null | ชื่อผู้ทำรายการจาก `users`; fallback เป็น `username` |
 | `statusHistory[].changedAt` | string | ISO datetime |
 | `statusHistory[].changedDate` | string | วันที่ไทยรูปแบบ `DD/MM/BBBB` |
+
+หมายเหตุ: `statusHistory` ใช้สำหรับแสดงประวัติเหตุการณ์เหมือน กวภ.01-05 ส่วนสถานะรายงานรวมและ approval step ปัจจุบันยังต้องอ่านจาก `statusCode`, `currentStep`, และ `steps`
 
 ## 5. Resubmit Returned Deviation Report Form
 
