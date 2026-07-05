@@ -564,7 +564,7 @@ function operatorToken(): string {
     roles: ['factory_operator'],
     scopes: {
       'bod_cod_errors:view': 'OWN_FACTORY',
-      'bod_cod_errors:edit': 'OWN_FACTORY',
+      'bod_cod_errors:edit': null,
     },
   });
 }
