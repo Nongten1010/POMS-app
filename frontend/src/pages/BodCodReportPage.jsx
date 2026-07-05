@@ -1599,8 +1599,8 @@ function MonitoringPointDialog({ factory, open, onClose, onOpenReport }) {
                 const canReportParameter = hasBodCodParameter(row.parameters)
                 const round1Status = canReportParameter ? row.round1Status : '-'
                 const round2Status = canReportParameter ? row.round2Status : '-'
-                const canReportRound1 = canReportParameter && isFirstRoundPeriod && row.round1Status === 'ยังไม่ยื่น'
-                const canReportRound2 = canReportParameter && isSecondRoundPeriod && row.round2Status === 'ยังไม่ยื่น'
+                const canReportRound1 = canReportParameter && isFirstRoundPeriod
+                const canReportRound2 = canReportParameter && isSecondRoundPeriod
 
                 return (
                   <TableRow key={row.id}>
@@ -1679,30 +1679,20 @@ function makeDraftReport(factory, point, reportRound) {
     submittedDate: '-',
     reviewedDate: '-',
     status: 'ยังไม่ยื่น',
-    wastewaterFlow: '120.5',
-    samplerName: 'นายสมชาย ใจดี',
-    officerRegistration: 'LAB-REG-2569-001',
-    laboratoryName: 'ห้องปฏิบัติการสิ่งแวดล้อมอุตสาหกรรม',
-    laboratoryRegistration: 'กวภ-LAB-1234-2569',
-    labReportNo: 'LAB-REPORT-2569-001',
-    analysisMethod: 'Standard Methods for the Examination of Water and Wastewater',
-    deviceBrand: 'EnviroTech',
-    deviceModel: 'WPMS-5000',
-    serialNo: 'SN-WPMS-2569-001',
+    wastewaterFlow: '',
+    samplerName: '',
+    officerRegistration: '',
+    laboratoryName: '',
+    laboratoryRegistration: '',
+    labReportNo: '',
+    analysisMethod: '',
+    deviceBrand: '',
+    deviceModel: '',
+    serialNo: '',
     parameter,
-    reporterName: 'นายสมชาย ใจดี',
-    reporterPosition: 'ผู้จัดการสิ่งแวดล้อม',
-    measurementRows: [
-      {
-        id: 'measurement-1',
-        sampleDate: '01/07/2569',
-        sampleTime: '09:30',
-        deviceValue: '12.50',
-        labValue: '10.00',
-        errorValue: '2.50',
-        standardErrorValue: '3.00',
-      },
-    ],
+    reporterName: '',
+    reporterPosition: '',
+    measurementRows: [],
     attachmentFiles: {
       samplePhotos: [],
       devicePhotos: [],
