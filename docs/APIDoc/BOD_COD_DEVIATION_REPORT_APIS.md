@@ -15,6 +15,64 @@ Data source:
 - Operator scope `OWN_FACTORY` is filtered through `user_juristics`.
 - Officer scope follows the `bod_cod_errors:view` permission scope and `regionalAccess` in the access token.
 
+## Attachment Upload
+
+อัปโหลดไฟล์แนบของแบบ BOD/COD ก่อนบันทึกฟอร์ม เพื่อให้ได้ metadata สำหรับส่งต่อใน `attachments[]` ของ `POST /api/v1/bod-cod-deviation-reports` หรือ `PUT /api/v1/bod-cod-deviation-reports/:id/resubmission`
+
+Link:
+
+```text
+POST /api/v1/bod-cod-deviation-reports/attachments
+```
+
+Permission:
+
+```text
+bod_cod_errors:edit
+```
+
+Content type:
+
+```text
+multipart/form-data
+```
+
+Form fields:
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `file` | File | Yes | ไฟล์รูป JPG/PNG หรือ PDF ขนาดไม่เกิน 5 MB |
+
+cURL:
+
+```bash
+curl "http://localhost:3000/api/v1/bod-cod-deviation-reports/attachments" \
+  -H "Authorization: Bearer <access_token>" \
+  -F "file=@lab-report.pdf"
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "originalFileName": "lab-report.pdf",
+    "storedFileName": "8ddfb2e2-5f37-4398-b032-f9db1972df70.pdf",
+    "mimeType": "application/pdf",
+    "fileSize": 12000,
+    "storagePath": "bod-cod/deviation-attachments/2026/07/8ddfb2e2-5f37-4398-b032-f9db1972df70.pdf",
+    "fileUrl": "https://d-poms.diw.go.th/uploads/bod-cod/deviation-attachments/2026/07/8ddfb2e2-5f37-4398-b032-f9db1972df70.pdf"
+  }
+}
+```
+
+Storage:
+
+- ไฟล์ถูกเก็บใต้ `UPLOAD_DIR/bod-cod/deviation-attachments/YYYY/MM/<uuid>.<ext>`
+- ไฟล์ถูกเสิร์ฟผ่าน static path `UPLOAD_PUBLIC_PATH`
+- Response `fileUrl` ใช้แสดง preview/download ได้ แต่ payload บันทึกฟอร์มใช้ `storagePath`, `storedFileName`, `originalFileName`, `mimeType`, และ `fileSize`
+
 ## 1. Operator Factory Table
 
 สำหรับตาราง "รายชื่อโรงงาน" ของผู้ประกอบการ
@@ -235,7 +293,7 @@ Payload:
       "storedFileName": "lab-report-uuid.pdf",
       "mimeType": "application/pdf",
       "fileSize": 12000,
-      "storagePath": "uploads/bod-cod/lab-report-uuid.pdf"
+      "storagePath": "bod-cod/deviation-attachments/2026/07/lab-report-uuid.pdf"
     }
   ]
 }
@@ -368,7 +426,18 @@ Response:
         "sortOrder": 1
       }
     ],
-    "attachments": [],
+    "attachments": [
+      {
+        "id": 17,
+        "attachmentType": "LAB_REPORT",
+        "originalFileName": "lab-report.pdf",
+        "storedFileName": "lab-report-uuid.pdf",
+        "mimeType": "application/pdf",
+        "fileSize": 12000,
+        "storagePath": "bod-cod/deviation-attachments/2026/07/lab-report-uuid.pdf",
+        "fileUrl": "https://d-poms.diw.go.th/uploads/bod-cod/deviation-attachments/2026/07/lab-report-uuid.pdf"
+      }
+    ],
     "currentStep": {
       "id": 15,
       "stepNo": 1,
@@ -473,7 +542,7 @@ Payload:
       "storedFileName": "lab-report-uuid.pdf",
       "mimeType": "application/pdf",
       "fileSize": 12000,
-      "storagePath": "uploads/bod-cod/lab-report-uuid.pdf"
+      "storagePath": "bod-cod/deviation-attachments/2026/07/lab-report-uuid.pdf"
     }
   ]
 }
@@ -655,6 +724,7 @@ Error behavior:
 
 - Call `GET /api/v1/bod-cod-deviation-reports/factories` for "รายชื่อโรงงาน".
 - Call `GET /api/v1/bod-cod-deviation-reports` for "รายการคำขอ".
+- Call `POST /api/v1/bod-cod-deviation-reports/attachments` before saving files; use the returned metadata in `attachments[]`.
 - Call `POST /api/v1/bod-cod-deviation-reports` to save the BOD/COD deviation form.
 - Call `GET /api/v1/bod-cod-deviation-reports/:id` to reopen a saved form.
 - Call `PUT /api/v1/bod-cod-deviation-reports/:id/resubmission` to submit a corrected returned form.

@@ -1,6 +1,7 @@
 import type { RegionalAccessDTO } from '../auth/regional-access';
 import { bodCodDeviationReportsRepository } from './bod-cod-deviation-reports.repository';
 import type {
+  BodCodDeviationAccess,
   BodCodDeviationFactoryTableRowDTO,
   BodCodDeviationReportDetailDTO,
   BodCodDeviationReportTableRowDTO,
@@ -64,11 +65,7 @@ export const bodCodDeviationReportsService = {
 
   getReportById(
     id: number,
-    access: {
-      actorUserId: number;
-      scope: string | null | undefined;
-      regionalAccess?: RegionalAccessDTO | null;
-    },
+    access: BodCodDeviationAccess,
   ): Promise<BodCodDeviationReportDetailDTO> {
     return bodCodDeviationReportsRepository.getReportById(id, access);
   },

@@ -1,6 +1,7 @@
 import type { Knex } from 'knex';
 import { db } from '../../config/database';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
+import { buildPublicFileUrl } from '../kwp-form-submissions/kwp-form-attachments.service';
 import type {
   BodCodApprovalTrack,
   BodCodApprovalStepStatus,
@@ -417,7 +418,7 @@ export const bodCodDeviationReportsRepository = {
 
     const [measurements, attachments, steps] = await Promise.all([
       listMeasurements(id),
-      listAttachments(id),
+      listAttachments(id, access),
       listApprovalSteps(id),
     ]);
     return toReportDetailDTO(report, measurements, attachments, steps, access.scope);
@@ -1264,7 +1265,10 @@ async function listMeasurements(reportId: number): Promise<BodCodDeviationMeasur
   return rows.map(toMeasurementDTO);
 }
 
-async function listAttachments(reportId: number): Promise<BodCodDeviationAttachmentDTO[]> {
+async function listAttachments(
+  reportId: number,
+  access: BodCodDeviationAccess,
+): Promise<BodCodDeviationAttachmentDTO[]> {
   const rows = await db<AttachmentRow>('bod_cod_deviation_attachments')
     .where('report_id', reportId)
     .whereNull('deleted_at')
@@ -1278,7 +1282,7 @@ async function listAttachments(reportId: number): Promise<BodCodDeviationAttachm
       'storage_path',
     )
     .orderBy('id', 'asc');
-  return rows.map(toAttachmentDTO);
+  return rows.map((row) => toAttachmentDTO(row, access));
 }
 
 async function listApprovalSteps(
@@ -1426,7 +1430,10 @@ function toMeasurementDTO(row: MeasurementRow): BodCodDeviationMeasurementDTO {
   };
 }
 
-function toAttachmentDTO(row: AttachmentRow): BodCodDeviationAttachmentDTO {
+function toAttachmentDTO(
+  row: AttachmentRow,
+  access: BodCodDeviationAccess,
+): BodCodDeviationAttachmentDTO {
   return {
     id: Number(row.id),
     attachmentType: row.attachment_type,
@@ -1435,6 +1442,10 @@ function toAttachmentDTO(row: AttachmentRow): BodCodDeviationAttachmentDTO {
     mimeType: row.mime_type,
     fileSize: toNumberOrNull(row.file_size),
     storagePath: row.storage_path,
+    fileUrl:
+      row.storage_path && access.publicBaseUrl && access.publicPath
+        ? buildPublicFileUrl(access.publicBaseUrl, access.publicPath, row.storage_path)
+        : null,
   };
 }
 

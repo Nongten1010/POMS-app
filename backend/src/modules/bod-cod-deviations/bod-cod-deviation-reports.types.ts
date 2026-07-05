@@ -29,6 +29,8 @@ export interface BodCodDeviationAccess {
   actorUserId: number;
   scope: string | null | undefined;
   regionalAccess?: RegionalAccessDTO | null;
+  publicBaseUrl?: string;
+  publicPath?: string;
 }
 
 export interface ListBodCodDeviationReportsQuery {
@@ -196,6 +198,7 @@ export interface BodCodDeviationAttachmentDTO {
   mimeType: string | null;
   fileSize: number | null;
   storagePath: string | null;
+  fileUrl: string | null;
 }
 
 export interface BodCodWorkflowStepDTO {
