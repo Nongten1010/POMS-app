@@ -1648,18 +1648,9 @@ function buildStatusHistoryByReportId(
   return reportRows.reduce((map, reportRow) => {
     const reportId = Number(reportRow.id);
     const rows = eventsByReportId.get(reportId) ?? [];
-    const totalApprovalSteps = approvalStepsForTrack(reportRow.approval_track).length;
-    let approveCount = 0;
     const history: BodCodStatusHistoryDTO[] = [
       toSubmittedStatusHistoryDTO(reportRow, scope),
-      ...rows.map((row) => {
-        if (row.action === 'APPROVE') approveCount += 1;
-        return toEventStatusHistoryDTO(
-          row,
-          eventStatus(row.action, approveCount, totalApprovalSteps),
-          scope,
-        );
-      }),
+      ...rows.map((row) => toEventStatusHistoryDTO(row, eventStatus(row.action), scope)),
     ];
     map.set(reportId, history);
     return map;
@@ -1710,15 +1701,11 @@ function toEventStatusHistoryDTO(
   };
 }
 
-function eventStatus(
-  action: BodCodApprovalEventAction,
-  approveCount: number,
-  totalApprovalSteps: number,
-): BodCodDeviationReportStatus {
+function eventStatus(action: BodCodApprovalEventAction): BodCodDeviationReportStatus {
   if (action === 'REQUEST_REVISION') return 'REVISION_REQUESTED';
-  if (action === 'RESUBMIT_REVISION') return 'REVISED_PENDING_REVIEW';
+  if (action === 'RESUBMIT_REVISION') return 'SUBMITTED';
   if (action === 'REJECT') return 'REJECTED';
-  return approveCount >= totalApprovalSteps ? 'APPROVED' : 'WAITING_APPROVAL';
+  return 'APPROVED';
 }
 
 function displayUserName(input: {

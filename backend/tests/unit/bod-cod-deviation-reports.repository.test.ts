@@ -243,14 +243,14 @@ describe('bodCodDeviationReportsRepository access filters', () => {
       }),
       expect.objectContaining({
         id: 13,
-        status: 'REVISED_PENDING_REVIEW',
-        statusLabel: 'แก้ไขแล้ว/รอพิจารณา',
+        status: 'SUBMITTED',
+        statusLabel: 'ส่งรายงานแล้ว',
         note: 'แก้ไขข้อมูลแล้ว',
       }),
       expect.objectContaining({
         id: 14,
-        status: 'WAITING_APPROVAL',
-        statusLabel: 'รออนุมัติ',
+        status: 'APPROVED',
+        statusLabel: 'ผ่านการพิจารณา',
         note: 'ข้อมูลถูกต้อง ส่งต่อผู้อนุมัติ',
       }),
       expect.objectContaining({

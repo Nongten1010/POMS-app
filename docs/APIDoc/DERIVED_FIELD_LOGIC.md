@@ -233,7 +233,7 @@ Transformation:
 - `REJECT` sets the current step to `REJECTED`, clears the active current step, and sets the report to terminal status `REJECTED`.
 - Each officer workflow action inserts a row into `bod_cod_approval_events`; `REQUEST_REVISION` stores `revisionReason` as the event note, while `APPROVE` and `REJECT` store `officerNote`.
 - `statusHistory` is returned by the list and detail APIs in the same shape as KWP form reports. The first `SUBMITTED` item is synthesized from `bod_cod_deviation_reports.submitted_at` and `created_by` so existing reports without a submit event still have a complete timeline. Later items come from `bod_cod_approval_events` joined to `users`.
-- `statusHistory.status` maps event actions back to report statuses: `REQUEST_REVISION` -> `REVISION_REQUESTED`, `RESUBMIT_REVISION` -> `REVISED_PENDING_REVIEW`, `REJECT` -> `REJECTED`, and `APPROVE` -> `WAITING_APPROVAL` until the final approval step for the report's `approvalTrack`, then `APPROVED`.
+- `statusHistory.status` maps event actions to timeline statuses, not the report-level workflow status: `REQUEST_REVISION` -> `REVISION_REQUESTED`, `RESUBMIT_REVISION` -> `SUBMITTED`, `REJECT` -> `REJECTED`, and every `APPROVE` event -> `APPROVED`. Report-level status and the active approval step remain separate fields under `statusCode`, `currentStep`, and `steps`.
 
 Reason:
 
