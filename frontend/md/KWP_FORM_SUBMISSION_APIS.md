@@ -1154,24 +1154,26 @@ Permission: `kwp_forms:view`
     },
     "steps": [
       { "key": "SUBMITTED", "label": "ส่งฟอร์ม", "status": "CURRENT" },
-      { "key": "OFFICER_REVIEW", "label": "พิจารณา", "status": "PENDING" },
       { "key": "REVISION_REQUESTED", "label": "ส่งแก้ไข", "status": "PENDING" },
       { "key": "APPROVED", "label": "ผ่านการพิจารณา", "status": "PENDING" }
     ],
-    "allowedActions": ["START_REVIEW", "REQUEST_REVISION"]
+    "allowedActions": ["REQUEST_REVISION", "APPROVE"]
   }
 }
 ```
 
 ### Step/action mapping
 
-| Current status | Current step | Allowed actions |
-| --- | --- | --- |
-| `SUBMITTED` | `SUBMITTED` / ส่งฟอร์ม | `START_REVIEW`, `REQUEST_REVISION` |
-| `UNDER_REVIEW` | `OFFICER_REVIEW` / พิจารณา | `REQUEST_REVISION`, `APPROVE` |
-| `REVISION_REQUESTED` | `REVISION_REQUESTED` / ส่งแก้ไข | `START_REVIEW` |
-| `APPROVED` | `APPROVED` / ผ่านการพิจารณา | none |
-| `REJECTED`, `CANCELLED` | terminal status | none |
+`allowedActions` ถูกกรองตาม scope ของผู้เรียก API ด้วย
+
+| Current status | Scope | Current step | Allowed actions |
+| --- | --- | --- | --- |
+| `SUBMITTED` | เจ้าหน้าที่ | `SUBMITTED` / ส่งฟอร์ม | `REQUEST_REVISION`, `APPROVE` |
+| `SUBMITTED` | ผู้ประกอบการ (`OWN_FACTORY`) | `SUBMITTED` / ส่งฟอร์ม | none |
+| `REVISION_REQUESTED` | เจ้าหน้าที่ | `REVISION_REQUESTED` / ส่งแก้ไข | `APPROVE` |
+| `REVISION_REQUESTED` | ผู้ประกอบการ (`OWN_FACTORY`) | `REVISION_REQUESTED` / ส่งแก้ไข | `RESUBMIT` |
+| `APPROVED` | any | `APPROVED` / ผ่านการพิจารณา | none |
+| `REJECTED`, `CANCELLED` | any | terminal status | none |
 
 ## 8. Change KWP workflow status
 
@@ -1182,15 +1184,6 @@ POST /api/v1/kwp-form-submissions/:id/workflow-actions
 ```
 
 Permission: `kwp_forms:approve`
-
-### Request: start review
-
-```json
-{
-  "action": "START_REVIEW",
-  "officerNote": "รับเรื่องเข้าพิจารณา"
-}
-```
 
 ### Request: request revision
 
@@ -1234,3 +1227,62 @@ Permission: `kwp_forms:approve`
 | payload ไม่ถูกต้อง เช่นไม่ส่ง `revisionReason` ตอน `REQUEST_REVISION` | `400` | validation error |
 | action ไม่สอดคล้องกับ status ปัจจุบัน | `400` | backend คืน `allowedActions` ใน error details |
 | ไม่พบรายการ, รายการถูกลบ, หรืออยู่นอก scope | `404` | ไม่คืนข้อมูลให้ผู้ใช้ |
+
+## 9. Edit returned KWP submissions
+
+ให้ผู้ประกอบการแก้ไขข้อมูลเดิมได้เฉพาะรายการที่เจ้าหน้าที่ส่งกลับแก้ไขแล้ว (`REVISION_REQUESTED`) โดย endpoint แยกตามชนิดฟอร์มเพื่อให้ frontend ระบุฟอร์มชัดเจน
+
+```http
+PATCH /api/v1/kwp-form-submissions/kwp01/:id
+PATCH /api/v1/kwp-form-submissions/kwp02/:id
+PATCH /api/v1/kwp-form-submissions/kwp03/:id
+PATCH /api/v1/kwp-form-submissions/kwp04/:id
+PATCH /api/v1/kwp-form-submissions/kwp05/:id
+```
+
+Permission: `kwp_forms:edit`
+
+Payload ใช้ schema เดียวกับ create endpoint ของฟอร์มนั้น เช่น `PATCH /kwp01/:id` ใช้ payload เดียวกับ `POST /kwp01`
+
+Behavior:
+
+- ต้องเป็นรายการเดิมของ form type ตาม path เช่น `/kwp01/:id` ต้องเป็น `KWP01` เท่านั้น
+- ถ้าอยู่นอก scope โรงงานของผู้ประกอบการ คืน `404`
+- ถ้าสถานะไม่ใช่ `REVISION_REQUESTED` คืน `409 CONFLICT`
+- การแก้ไข replace รายละเอียดฟอร์มและรายการลูกของฟอร์มนั้น แต่ไม่เปลี่ยนเลขคำขอหรือสถานะ workflow
+- หลังผู้ประกอบการบันทึกแก้ไขด้วย `PATCH` แล้ว สถานะยังเป็น `REVISION_REQUESTED` และเจ้าหน้าที่สามารถ `APPROVE` ได้จากสถานะนี้โดยตรง
+- Response คืน detail shape เดียวกับ `GET /api/v1/kwp-form-submissions/kwp01/:id`
+
+## 10. Resubmit returned KWP submissions
+
+ให้ผู้ประกอบการส่งฟอร์มที่แก้ไขแล้วกลับเข้าสู่ workflow หลังจากสถานะ `REVISION_REQUESTED`
+
+```http
+POST /api/v1/kwp-form-submissions/kwp01/:id/resubmit
+POST /api/v1/kwp-form-submissions/kwp02/:id/resubmit
+POST /api/v1/kwp-form-submissions/kwp03/:id/resubmit
+POST /api/v1/kwp-form-submissions/kwp04/:id/resubmit
+POST /api/v1/kwp-form-submissions/kwp05/:id/resubmit
+```
+
+Permission: `kwp_forms:edit`
+
+Request body:
+
+```json
+{
+  "note": "ปรับข้อมูลและแนบเอกสารครบแล้ว"
+}
+```
+
+`note` เป็น optional string ไม่เกิน 1000 ตัวอักษร
+
+Behavior:
+
+- ต้องเป็นรายการเดิมของ form type ตาม path
+- ต้องอยู่สถานะ `REVISION_REQUESTED`
+- เมื่อสำเร็จ ระบบเปลี่ยน machine status กลับเป็น `SUBMITTED`
+- ถ้ารายการเคยมีประวัติ `REVISION_REQUESTED` แล้วกลับมา `SUBMITTED` อีกครั้ง API จะแสดง label เป็น `แก้ไขแล้ว/รอพิจารณา`
+- ก่อนเรียก endpoint นี้ workflow response ของผู้ประกอบการจะคืน `allowedActions: ["RESUBMIT"]`
+- ระบบเพิ่มประวัติใน `kwp_form_status_history` พร้อม note ของผู้ประกอบการ
+- Response คืน workflow shape เดียวกับ `GET /api/v1/kwp-form-submissions/:id/workflow`

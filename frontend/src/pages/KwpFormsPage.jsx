@@ -101,9 +101,11 @@ function normalizeMonitoringPointDetailRows(rows) {
   return Array.isArray(rows)
     ? rows.map((row, index) => {
         const parameterDetails = Array.isArray(row.parameterDetails) ? row.parameterDetails.filter(Boolean) : []
+        const details = row.details && typeof row.details === 'object' ? row.details : {}
 
         return {
           ...row,
+          details,
           connectedPointId: row.connectedPointId ?? row.id ?? null,
           id: row.pointCode ?? row.stationId ?? row.pointName ?? `monitoring-point-detail-${index + 1}`,
           code: row.pointCode ?? '',
@@ -163,6 +165,8 @@ function normalizeKwpRequestRows(rows) {
         submittedDate: row.submittedDate ?? '-',
         reviewedDate: row.reviewedDate ?? '-',
         status: row.status ?? '',
+        statusCode: row.statusCode ?? '',
+        statusLabel: row.statusLabel ?? '',
         statusHistory: Array.isArray(row.statusHistory) ? row.statusHistory : [],
       }))
     : []
@@ -235,6 +239,105 @@ const wpmsIssueReasonOptions = [
 ]
 const calibrationResultOptions = ['ผ่าน', 'ไม่ผ่าน']
 
+function firstDefinedValue(...values) {
+  return values.find((value) => value !== undefined && value !== null && value !== '') ?? ''
+}
+
+function uniqueTextValues(values) {
+  return [...new Set(values.map((value) => String(value ?? '').trim()).filter(Boolean))]
+}
+
+function getPointDetailsValue(point, ...fieldNames) {
+  const details = point?.details && typeof point.details === 'object' ? point.details : {}
+
+  return firstDefinedValue(...fieldNames.flatMap((fieldName) => [details[fieldName], point?.[fieldName]]))
+}
+
+function formatCoordinatePair(latitude, longitude) {
+  const safeLatitude = firstDefinedValue(latitude)
+  const safeLongitude = firstDefinedValue(longitude)
+
+  return safeLatitude && safeLongitude ? `${safeLatitude}, ${safeLongitude}` : ''
+}
+
+function buildKwp03InitialFormValues(point) {
+  const failedParameters = uniqueTextValues(point?.parameterDetails ?? [])
+  const dischargePoint = firstDefinedValue(
+    getPointDetailsValue(
+      point,
+      'dischargePoint',
+      'dischargePointCoordinate',
+      'wastewaterDischargePoint',
+      'dischargeLocation',
+    ),
+    formatCoordinatePair(
+      getPointDetailsValue(point, 'dischargeLatitude', 'latitude'),
+      getPointDetailsValue(point, 'dischargeLongitude', 'longitude'),
+    ),
+  )
+
+  return {
+    defaults: {
+      wastewaterSource: getPointDetailsValue(point, 'wastewaterSource', 'wasteWaterSource'),
+      receivingSource: getPointDetailsValue(point, 'receivingSource', 'dischargeReceivingSource', 'receiverSource'),
+      treatmentSystemType: getPointDetailsValue(point, 'treatmentSystemType', 'treatmentSystem', 'wastewaterTreatmentSystem'),
+      dischargePoint,
+      averageDischarge: getPointDetailsValue(point, 'averageDischarge', 'averageWastewaterDischarge', 'avgDischarge'),
+      minimumDischarge: getPointDetailsValue(point, 'minimumDischarge', 'minWastewaterDischarge', 'minDischarge'),
+      maximumDischarge: getPointDetailsValue(point, 'maximumDischarge', 'maxWastewaterDischarge', 'maxDischarge'),
+    },
+    initialState: {
+      wpmsInstrument: getPointDetailsValue(point, 'instrument', 'instrumentName', 'monitoringInstrument'),
+      wpmsMeasurementTime: getPointDetailsValue(point, 'measurementTime', 'measurementInterval', 'reportingInterval'),
+      wpmsFailedParameters: failedParameters,
+    },
+  }
+}
+
+function getKwpFormInitialValues(formCode, point) {
+  if (formCode === 'กวภ.03') {
+    return buildKwp03InitialFormValues(point)
+  }
+
+  return {}
+}
+
+function getMonitoringPointSystemType(point) {
+  const candidates = [
+    point?.systemType,
+    point?.measurementSystemType,
+    point?.requestType,
+    point?.type,
+    point?.pointType,
+  ]
+    .map((value) => String(value ?? '').trim().toUpperCase())
+    .filter(Boolean)
+
+  if (candidates.some((value) => ['WPMS', 'WASTEWATER', 'WATER'].includes(value))) {
+    return 'WPMS'
+  }
+
+  if (candidates.some((value) => ['CEMS', 'STACK'].includes(value))) {
+    return 'CEMS'
+  }
+
+  return ''
+}
+
+function isKwpFormOptionDisabledForPoint(formCode, point) {
+  const systemType = getMonitoringPointSystemType(point)
+
+  if (systemType === 'WPMS') {
+    return formCode !== 'กวภ.03'
+  }
+
+  if (systemType === 'CEMS') {
+    return formCode === 'กวภ.03'
+  }
+
+  return false
+}
+
 const tableActionStackSx = {
   alignItems: 'center',
   flexWrap: 'nowrap',
@@ -272,8 +375,11 @@ function FactoryActions({ row, onOpenMonitoringPoints }) {
 }
 
 function RequestActions({ row, isOperator, onOpenDocument }) {
-  const cannotProcess = ['ยื่นแบบสำเร็จ', 'รอโรงงานแก้ไข'].includes(row.status)
-  const canOperatorModify = row.status === 'รอโรงงานแก้ไข'
+  const rowStatuses = [row.status, row.statusCode, row.statusLabel].filter(Boolean)
+  const cannotProcess = rowStatuses.some((status) => (
+    ['ผ่านการพิจารณา', 'APPROVED', 'REJECTED', 'CANCELLED'].includes(status)
+  ))
+  const canOperatorModify = rowStatuses.some((status) => ['รอโรงงานแก้ไข', 'REVISION_REQUESTED'].includes(status))
 
   if (isOperator) {
     return (
@@ -319,6 +425,16 @@ function RequestActions({ row, isOperator, onOpenDocument }) {
   )
 }
 
+function getKwpWorkflowStatusValues(source = {}) {
+  const safeSource = source ?? {}
+  return [safeSource.statusCode, safeSource.status, safeSource.statusLabel].filter(Boolean)
+}
+
+function hasKwpWorkflowStatus(source, statuses) {
+  const statusSet = new Set(statuses)
+  return getKwpWorkflowStatusValues(source).some((status) => statusSet.has(status))
+}
+
 function FormSelectionMenu({ factory, point, onSelectForm }) {
   const [anchorEl, setAnchorEl] = useState(null)
   const isOpen = Boolean(anchorEl)
@@ -345,11 +461,18 @@ function FormSelectionMenu({ factory, point, onSelectForm }) {
       >
         {kwpFormOptions.map((option) => {
           const fullTitle = `${option.code} ${option.title}`
+          const initialValues = getKwpFormInitialValues(option.code, point)
+          const isDisabled = isKwpFormOptionDisabledForPoint(option.code, point)
 
           return (
             <MenuItem
               key={option.code}
+              disabled={isDisabled}
               onClick={() => {
+                if (isDisabled) {
+                  return
+                }
+
                 onSelectForm?.({
                   title: fullTitle,
                   code: option.code,
@@ -357,6 +480,7 @@ function FormSelectionMenu({ factory, point, onSelectForm }) {
                   description: option.description,
                   factory,
                   point,
+                  ...initialValues,
                 })
                 setAnchorEl(null)
               }}
@@ -566,6 +690,7 @@ function getDayRange(startDate, endDate) {
 function Kwp01Form({
   factory,
   point,
+  defaults = {},
   problemDate,
   expectedDoneDate,
   unreportedParameters,
@@ -573,8 +698,8 @@ function Kwp01Form({
   onExpectedDoneDateChange,
   onUnreportedParametersChange,
 }) {
-  const [combustionSystem, setCombustionSystem] = useState('')
-  const [issueReason, setIssueReason] = useState('')
+  const [combustionSystem, setCombustionSystem] = useState(() => defaults.combustionSystem ?? '')
+  const [issueReason, setIssueReason] = useState(() => defaults.issueReason ?? '')
   const totalDays = getDayRange(problemDate, expectedDoneDate)
   const unavailableParameterOptions = point?.parameterDetails ?? []
   const primaryFuel = point?.primaryFuel ?? ''
@@ -598,13 +723,13 @@ function Kwp01Form({
               <ReadOnlyField label="สถานที่ตั้งโรงงาน" value={factory?.address ?? ''} multiline />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <TextField name="contactName" label="รายชื่อผู้ติดต่อ" size="small" fullWidth />
+              <TextField name="contactName" label="รายชื่อผู้ติดต่อ" size="small" defaultValue={defaults.contactName ?? ''} fullWidth />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <TextField name="contactPhone" label="เบอร์โทรศัพท์" size="small" fullWidth />
+              <TextField name="contactPhone" label="เบอร์โทรศัพท์" size="small" defaultValue={defaults.contactPhone ?? ''} fullWidth />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <TextField name="contactEmail" label="e-mail" type="email" size="small" fullWidth />
+              <TextField name="contactEmail" label="e-mail" type="email" size="small" defaultValue={defaults.contactEmail ?? ''} fullWidth />
             </Grid>
           </Grid>
         </SectionPaper>
@@ -619,7 +744,7 @@ function Kwp01Form({
                 <ReadOnlyField label="ชื่อจุดตรวจวัด" value={point?.name ?? ''} />
               </Grid>
               <Grid size={{ xs: 12, md: 3 }}>
-                <TextField name="productionStack" label="ปล่องจากกระบวนการผลิต" size="small" fullWidth />
+                <TextField name="productionStack" label="ปล่องจากกระบวนการผลิต" size="small" defaultValue={defaults.productionStack ?? ''} fullWidth />
               </Grid>
             </Grid>
             <Grid container spacing={2}>
@@ -646,10 +771,10 @@ function Kwp01Form({
             </Grid>
             <Grid container spacing={2}>
               <Grid size={{ xs: 12, md: 3 }}>
-                <TextField name="productionCapacity" label="กำลังการผลิตของหน่วยการผลิต" size="small" fullWidth />
+                <TextField name="productionCapacity" label="กำลังการผลิตของหน่วยการผลิต" size="small" defaultValue={defaults.productionCapacity ?? ''} fullWidth />
               </Grid>
               <Grid size={{ xs: 12, md: 3 }}>
-                <TextField name="productionCapacityUnit" label="หน่วยของกำลังการผลิต" size="small" fullWidth />
+                <TextField name="productionCapacityUnit" label="หน่วยของกำลังการผลิต" size="small" defaultValue={defaults.productionCapacityUnit ?? ''} fullWidth />
               </Grid>
             </Grid>
           </Stack>
@@ -674,7 +799,7 @@ function Kwp01Form({
               </TextField>
             </Grid>
             <Grid size={{ xs: 12, md: 9 }}>
-              <TextField name="reasonDetail" label="เนื่องจาก" size="small" multiline minRows={3} fullWidth />
+              <TextField name="reasonDetail" label="เนื่องจาก" size="small" defaultValue={defaults.reasonDetail ?? ''} multiline minRows={3} fullWidth />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
               <DatePicker
@@ -718,6 +843,7 @@ function Kwp01Form({
                 name="correctiveAction"
                 label="แนวทางการปรับปรุงแก้ไข (เฉพาะเครื่องมือหรืออุปกรณ์พิเศษขัดข้อง)"
                 size="small"
+                defaultValue={defaults.correctiveAction ?? ''}
                 multiline
                 minRows={3}
                 fullWidth
@@ -729,10 +855,10 @@ function Kwp01Form({
         <SectionPaper title="ผู้ประกอบกิจการโรงงานหรือผู้รับมอบอำนาจ (ผู้จัดทำรายงาน)">
           <Grid container spacing={2}>
             <Grid size={{ xs: 12, md: 6 }}>
-              <TextField name="reporterName" label="ชื่อ-นามสกุล" size="small" fullWidth />
+              <TextField name="reporterName" label="ชื่อ-นามสกุล" size="small" defaultValue={defaults.reporterName ?? ''} fullWidth />
             </Grid>
             <Grid size={{ xs: 12, md: 6 }}>
-              <TextField name="reporterPosition" label="ตำแหน่ง" size="small" fullWidth />
+              <TextField name="reporterPosition" label="ตำแหน่ง" size="small" defaultValue={defaults.reporterPosition ?? ''} fullWidth />
             </Grid>
           </Grid>
         </SectionPaper>
@@ -751,6 +877,10 @@ function formatThaiDateValue(value) {
 
 function formatApiDateValue(value) {
   return value && dayjs(value).isValid() ? dayjs(value).format('YYYY-MM-DD') : null
+}
+
+function getDatePickerValue(value) {
+  return value && dayjs(value).isValid() ? dayjs(value) : null
 }
 
 function buildKwp01PreviewData(form, formElement, dates, unreportedParameters) {
@@ -1128,30 +1258,192 @@ function buildKwpStatusHistory(row) {
   return history
 }
 
-function buildKwpEditForm(row) {
-  const option = kwpFormOptions.find((item) => item.code === row.form)
-  const titleText = option?.title ?? ''
+function getKwpDetailFormCode(detail = {}, row = {}) {
+  const formType = String(detail.formType ?? row.formType ?? '').toUpperCase()
+  const formCode = detail.form ?? row.form ?? ''
+  const formTypeMap = {
+    KWP01: 'กวภ.01',
+    KWP02: 'กวภ.02',
+    KWP03: 'กวภ.03',
+    KWP04: 'กวภ.04',
+    KWP05: 'กวภ.05',
+  }
+
+  return formTypeMap[formType] ?? formCode
+}
+
+function buildSubmittedAttachmentFile(file, index = 0) {
+  return {
+    id: file?.id ?? `${file?.originalFileName ?? 'attachment'}-${index}`,
+    name: file?.originalFileName ?? file?.storedFileName ?? `ไฟล์แนบ ${index + 1}`,
+    type: file?.mimeType ?? '',
+    size: file?.fileSize ?? 0,
+    url: file?.fileUrl ?? '',
+    isSubmitted: true,
+    attachmentType: file?.attachmentType ?? '',
+    originalFileName: file?.originalFileName ?? file?.storedFileName ?? `ไฟล์แนบ ${index + 1}`,
+    storedFileName: file?.storedFileName ?? null,
+    mimeType: file?.mimeType ?? null,
+    fileSize: file?.fileSize ?? null,
+    storagePath: file?.storagePath ?? null,
+  }
+}
+
+function getAttachmentsByType(attachments = [], attachmentType) {
+  return attachments
+    .filter((file) => file?.attachmentType === attachmentType)
+    .map(buildSubmittedAttachmentFile)
+}
+
+function getRawAttachmentsByType(attachments = [], attachmentType) {
+  return attachments.filter((file) => file?.attachmentType === attachmentType)
+}
+
+function normalizeKwpSubmissionDetailPayload(data = {}) {
+  if (!data?.submission || typeof data.submission !== 'object') {
+    return data ?? {}
+  }
 
   return {
-    title: `${row.form} ${titleText}`.trim(),
-    code: row.form,
-    titleText,
+    ...data.submission,
+    ...data,
+  }
+}
+
+function getKwp05CalibrationItems(detail = {}) {
+  const report = detail.calibrationReport ?? {}
+  const candidates = [
+    detail.calibrationItems,
+    detail.calibrationResults,
+    detail.items,
+    detail.rows,
+    detail.resultItems,
+    detail.kwp05CalibrationItems,
+    report.calibrationItems,
+    report.calibrationResults,
+    report.items,
+    report.rows,
+    report.resultItems,
+  ]
+
+  return candidates.find(Array.isArray) ?? []
+}
+
+function getKwp05ItemAttachments(item = {}) {
+  return item.attachments ?? item.files ?? item.attachmentFiles ?? []
+}
+
+function getKwp05ItemParameter(item = {}) {
+  return item.parameter ?? item.parameterName ?? item.parameter_name ?? item.parameterLabel ?? item.pollutant ?? ''
+}
+
+function buildKwp05CalibrationRow(item = {}, index = 0) {
+  const attachments = getKwp05ItemAttachments(item)
+
+  return {
+    id: item.id ?? item.itemId ?? item.calibrationItemId ?? `calibration-${index}`,
+    parameter: getKwp05ItemParameter(item),
+    startDate: getDatePickerValue(item.startDate ?? item.startedAt ?? item.start_date),
+    endDate: getDatePickerValue(item.endDate ?? item.endedAt ?? item.end_date),
+    result: item.result ?? item.resultLabel ?? item.inspectionResult ?? '',
+    verifierCompany: item.verifierCompany ?? item.verifier_company ?? item.companyName ?? '',
+    cemsModel: item.cemsModel ?? item.cems_model ?? item.cemsBrandModel ?? item.model ?? '',
+    rataReportLink: item.rataReportLink ?? item.linkQr1 ?? item.linkQR1 ?? item.link_qr1 ?? item.rataReportUrl ?? '',
+    calibrationPhotoLink:
+      item.calibrationPhotoLink ?? item.linkQr2 ?? item.linkQR2 ?? item.link_qr2 ?? item.calibrationPhotoUrl ?? '',
+    rataReportFiles: getAttachmentsByType(attachments, 'RATA_REPORT'),
+    calibrationPhotoFiles: getAttachmentsByType(attachments, 'CALIBRATION_PHOTO'),
+  }
+}
+
+function buildKwpEditFormFromDetail(detail = {}, row = {}) {
+  const code = getKwpDetailFormCode(detail, row)
+  const option = kwpFormOptions.find((item) => item.code === code)
+  const issueReport = detail.issueReport ?? {}
+  const wpmsIssueReport = detail.wpmsIssueReport ?? {}
+  const calibrationReport = detail.calibrationReport ?? {}
+  const measurementItems = Array.isArray(detail.measurementItems) ? detail.measurementItems : []
+  const calibrationItems = getKwp05CalibrationItems(detail)
+
+  return {
+    title: `${code} ${option?.title ?? ''}`.trim(),
+    code,
+    titleText: option?.title ?? '',
     description: option?.description ?? '',
     mode: 'edit',
-    requestNo: row.requestNo,
-    latestRevisionMessage: row.revisionNote ?? '',
-      factory: {
-        factoryName: row.factoryName,
-        newRegistrationNo: row.factoryRegistration,
-        industryType: row.industryType,
-        industryMainOrder: row.industryMainOrder,
-        businessActivity: row.businessActivity,
-        address: row.factoryAddress,
-      },
+    requestId: detail.id ?? row.id,
+    requestNo: detail.requestNo ?? row.requestNo,
+    latestRevisionMessage: row.revisionNote ?? detail.revisionReason ?? detail.officerNote ?? '',
+    factory: {
+      factoryId: detail.factoryId ?? row.factoryId,
+      factoryName: detail.factoryName ?? row.factoryName,
+      newRegistrationNo: detail.factoryRegistrationNo ?? row.factoryRegistration,
+      industryType: detail.industryType ?? row.industryType,
+      industryMainOrder: row.industryMainOrder ?? detail.industryType,
+      businessActivity: detail.businessActivity ?? calibrationReport.businessActivity ?? row.businessActivity,
+      address: detail.factoryAddress ?? row.factoryAddress,
+    },
     point: {
-      code: row.monitoringPointCode,
-      name: row.monitoringPointName,
-      type: row.type,
+      id: detail.connectedPointId ?? row.connectedPointId,
+      code: detail.pointCode ?? row.monitoringPointCode,
+      name: detail.pointName ?? row.monitoringPointName,
+      type: detail.pointType ?? row.type,
+      primaryFuel: detail.primaryFuel ?? row.primaryFuel,
+      secondaryFuel: detail.secondaryFuel ?? row.secondaryFuel,
+      parameterDetails: row.parameterDetails ?? [],
+    },
+    defaults: {
+      contactName: detail.contactName ?? '',
+      contactPhone: detail.contactPhone ?? '',
+      contactEmail: detail.contactEmail ?? '',
+      productionStack: detail.productionStack ?? '',
+      primaryFuel: detail.primaryFuel ?? '',
+      secondaryFuel: detail.secondaryFuel ?? '',
+      combustionSystem: detail.combustionSystem ?? '',
+      productionCapacity: detail.productionCapacity ?? '',
+      productionCapacityUnit: detail.productionCapacityUnit ?? '',
+      issueReason: issueReport.issueReason ?? '',
+      reasonDetail: issueReport.reasonDetail ?? wpmsIssueReport.reasonDetail ?? '',
+      correctiveAction: issueReport.correctiveAction ?? wpmsIssueReport.correctiveAction ?? '',
+      reporterName: detail.reporterName ?? '',
+      reporterPosition: detail.reporterPosition ?? '',
+      wastewaterSource: wpmsIssueReport.wastewaterSource ?? '',
+      receivingSource: wpmsIssueReport.receivingSource ?? '',
+      treatmentSystemType: wpmsIssueReport.treatmentSystemType ?? '',
+      dischargePoint: wpmsIssueReport.dischargePoint ?? '',
+      averageDischarge: wpmsIssueReport.averageDischarge ?? '',
+      minimumDischarge: wpmsIssueReport.minimumDischarge ?? '',
+      maximumDischarge: wpmsIssueReport.maximumDischarge ?? '',
+      businessActivity: calibrationReport.businessActivity ?? detail.businessActivity ?? '',
+      reportRound: calibrationReport.reportRound ?? '',
+      reportYear: calibrationReport.reportYear ?? '',
+      samplerName: calibrationReport.samplerName ?? '',
+      officerRegistration: calibrationReport.officerRegistration ?? '',
+      laboratoryName: calibrationReport.laboratoryName ?? '',
+      laboratoryRegistration: calibrationReport.laboratoryRegistration ?? '',
+      cemsBrand: calibrationReport.cemsBrand ?? '',
+    },
+    initialState: {
+      problemDate: issueReport.problemDate ?? wpmsIssueReport.problemDate ?? null,
+      expectedDoneDate: issueReport.expectedDoneDate ?? wpmsIssueReport.expectedDoneDate ?? null,
+      unreportedParameters: issueReport.unreportedParameters ?? [],
+      measurementRows: measurementItems.map((item, index) => ({
+        id: item.id ?? `measurement-${index}`,
+        pollutant: item.pollutant ?? '',
+        sampleDate: getDatePickerValue(item.sampleDate),
+        measuredValue: item.measuredValue ?? item.numericValue ?? '',
+        unit: item.unit ?? '',
+        laboratoryNo: item.laboratoryNo ?? '',
+        reportNo: item.reportNo ?? '',
+        method: item.method ?? '',
+      })),
+      samplingPhotoFiles: measurementItems.flatMap((item) => getAttachmentsByType(item.attachments, 'SAMPLING_PHOTO')),
+      labReportFiles: measurementItems.flatMap((item) => getAttachmentsByType(item.attachments, 'LAB_REPORT')),
+      wpmsInstrument: wpmsIssueReport.instruments?.[0] ?? '',
+      wpmsMeasurementTime: wpmsIssueReport.measurementTimes?.[0] ?? '',
+      wpmsIssueReason: wpmsIssueReport.issueReasons?.[0] ?? '',
+      wpmsFailedParameters: wpmsIssueReport.failedParameters ?? [],
+      calibrationRows: calibrationItems.map(buildKwp05CalibrationRow),
     },
   }
 }
@@ -1205,6 +1497,9 @@ function getKwpDetailCommonData(detail, row = {}) {
     reporterName: detail.reporterName ?? '',
     reporterPosition: detail.reporterPosition ?? '',
     latestRevisionMessage: row.revisionNote ?? '',
+    status: detail.status ?? row.status ?? '',
+    statusCode: detail.statusCode ?? row.statusCode ?? '',
+    statusLabel: detail.statusLabel ?? row.statusLabel ?? '',
     statusHistory: buildKwpStatusHistory({ ...row, submittedDate: detail.submittedAt ?? row.submittedDate }),
   }
 }
@@ -1282,25 +1577,19 @@ function buildKwpRequestPreviewDataFromDetail(detail, row = {}) {
 
   if (formType === 'KWP05' || formCode === 'กวภ.05') {
     const report = detail.calibrationReport ?? {}
-    const calibrationRows = Array.isArray(detail.calibrationItems)
-      ? detail.calibrationItems.map((item, index) => ({
-          id: item.id ?? `calibration-${index + 1}`,
-          parameter: item.parameter ?? '',
-          startDate: item.startDate ?? null,
-          endDate: item.endDate ?? null,
-          result: item.result ?? '',
-          verifierCompany: item.verifierCompany ?? '',
-          cemsModel: item.cemsModel ?? '',
-          rataReportLink: item.rataReportLink ?? '',
-          calibrationPhotoLink: item.calibrationPhotoLink ?? '',
-          rataReportFiles: (item.attachments ?? [])
-            .filter((file) => file.attachmentType === 'RATA_REPORT')
-            .map(normalizeKwpAttachmentFile),
-          calibrationPhotoFiles: (item.attachments ?? [])
-            .filter((file) => file.attachmentType === 'CALIBRATION_PHOTO')
-            .map(normalizeKwpAttachmentFile),
-        }))
-      : []
+    const calibrationRows = getKwp05CalibrationItems(detail).map((item, index) => {
+      const normalizedRow = buildKwp05CalibrationRow(item, index + 1)
+
+      return {
+        ...normalizedRow,
+        startDate: item.startDate ?? item.startedAt ?? item.start_date ?? null,
+        endDate: item.endDate ?? item.endedAt ?? item.end_date ?? null,
+        rataReportFiles: getRawAttachmentsByType(getKwp05ItemAttachments(item), 'RATA_REPORT')
+          .map((file) => normalizeKwpAttachmentFile(file, index)),
+        calibrationPhotoFiles: getRawAttachmentsByType(getKwp05ItemAttachments(item), 'CALIBRATION_PHOTO')
+          .map((file) => normalizeKwpAttachmentFile(file, index)),
+      }
+    })
 
     return {
       formType: 'kwp05',
@@ -1323,6 +1612,9 @@ function buildKwpRequestPreviewDataFromDetail(detail, row = {}) {
       reporterName: detail.reporterName ?? '',
       reporterPosition: detail.reporterPosition ?? '',
       latestRevisionMessage: row.revisionNote ?? '',
+      status: detail.status ?? row.status ?? '',
+      statusCode: detail.statusCode ?? row.statusCode ?? '',
+      statusLabel: detail.statusLabel ?? row.statusLabel ?? '',
       statusHistory: buildKwpStatusHistory({ ...row, submittedDate: detail.submittedAt ?? row.submittedDate }),
     }
   }
@@ -2017,14 +2309,14 @@ function Kwp05PaperDocument({ data }) {
     ? data.calibrationRows
     : Array.from({ length: 2 }, (_, index) => ({ id: `empty-${index}` }))
   const tableColumns = [
-    { label: 'พารามิเตอร์' },
-    { label: 'วันที่เริ่มดำเนินการ' },
-    { label: 'วันที่สิ้นสุดดำเนินการ' },
-    { label: 'ผลการตรวจสอบ (ผ่าน / ไม่ผ่าน)' },
-    { label: 'บริษัทที่ทำการทวนสอบ / สอบเทียบ' },
-    { label: 'ยี่ห้อ/รุ่นของ CEMS' },
-    { label: 'Link / QR CODE' },
-    { label: 'Link / QR CODE' },
+    { id: 'parameter', label: 'พารามิเตอร์' },
+    { id: 'startDate', label: 'วันที่เริ่มดำเนินการ' },
+    { id: 'endDate', label: 'วันที่สิ้นสุดดำเนินการ' },
+    { id: 'result', label: 'ผลการตรวจสอบ (ผ่าน / ไม่ผ่าน)' },
+    { id: 'verifierCompany', label: 'บริษัทที่ทำการทวนสอบ / สอบเทียบ' },
+    { id: 'cemsModel', label: 'ยี่ห้อ/รุ่นของ CEMS' },
+    { id: 'rataReportLink', label: 'Link / QR CODE' },
+    { id: 'calibrationPhotoLink', label: 'Link / QR CODE' },
   ]
   const tableColumnWidth = `${100 / tableColumns.length}%`
 
@@ -2099,13 +2391,13 @@ function Kwp05PaperDocument({ data }) {
           >
             <colgroup>
               {tableColumns.map((column) => (
-                <col key={column.label} style={{ width: tableColumnWidth }} />
+                <col key={column.id} style={{ width: tableColumnWidth }} />
               ))}
             </colgroup>
             <TableHead>
               <TableRow>
                 {tableColumns.map((column) => (
-                  <TableCell key={column.label}>{column.label}</TableCell>
+                  <TableCell key={column.id}>{column.label}</TableCell>
                 ))}
               </TableRow>
             </TableHead>
@@ -2244,13 +2536,40 @@ function KwpStatusHistoryDialog({ open, history = [], onClose }) {
   )
 }
 
-function Kwp01PreviewDialog({ open, data, mode = 'submit', loading = false, submitting = false, submitError = '', onClose, onSubmit }) {
+function Kwp01PreviewDialog({
+  open,
+  data,
+  mode = 'submit',
+  loading = false,
+  submitting = false,
+  submitError = '',
+  onClose,
+  onSubmit,
+  onRequestRevision,
+  onApprove,
+}) {
   const [statusHistoryOpen, setStatusHistoryOpen] = useState(false)
   const [revisionDialogOpen, setRevisionDialogOpen] = useState(false)
   const [revisionOfficerNote, setRevisionOfficerNote] = useState('')
   const [revisionSubmitting, setRevisionSubmitting] = useState(false)
+  const [approveSubmitting, setApproveSubmitting] = useState(false)
   const [revisionError, setRevisionError] = useState('')
   const latestRevisionMessage = mode === 'edit' ? data?.latestRevisionMessage : ''
+  const canRequestRevision = mode === 'review' && hasKwpWorkflowStatus(data, [
+    'SUBMITTED',
+    'ส่งฟอร์ม',
+    'ยื่นแบบสำเร็จ',
+    'แก้ไขแล้ว/รอพิจารณา',
+  ])
+  const canApprove = mode === 'review' && hasKwpWorkflowStatus(data, [
+    'SUBMITTED',
+    'ส่งฟอร์ม',
+    'ยื่นแบบสำเร็จ',
+    'แก้ไขแล้ว/รอพิจารณา',
+    'REVISION_REQUESTED',
+    'ส่งแก้ไข',
+    'รอโรงงานแก้ไข',
+  ])
   const previewFormNo =
     data?.formType === 'kwp04'
       ? 'กวภ.04'
@@ -2261,6 +2580,7 @@ function Kwp01PreviewDialog({ open, data, mode = 'submit', loading = false, subm
           : data?.formType === 'kwp02'
             ? 'กวภ.02'
             : 'กวภ.01'
+  const isReadonlyViewDialog = mode === 'view'
   const handleDownload = () => {
     if (!data) return
 
@@ -2281,24 +2601,45 @@ function Kwp01PreviewDialog({ open, data, mode = 'submit', loading = false, subm
     setRevisionOfficerNote('')
     setRevisionError('')
   }
-  const requestRevisionDocument = () => {
-    if (!revisionOfficerNote.trim()) {
+  const requestRevisionDocument = async () => {
+    const officerNote = revisionOfficerNote.trim()
+
+    if (!officerNote) {
       setRevisionError('กรุณาระบุรายละเอียดการแจ้งแก้ไข')
       return
     }
 
     setRevisionSubmitting(true)
-    window.setTimeout(() => {
+    setRevisionError('')
+
+    try {
+      await onRequestRevision?.(officerNote)
       setRevisionSubmitting(false)
       setRevisionDialogOpen(false)
       setRevisionOfficerNote('')
       setRevisionError('')
-      onClose?.()
-    }, 300)
+    } catch (requestError) {
+      setRevisionSubmitting(false)
+      setRevisionError(requestError instanceof Error ? requestError.message : 'แจ้งแก้ไขแบบฟอร์มไม่สำเร็จ')
+    }
   }
   const closePreviewDialog = () => {
+    if (approveSubmitting) {
+      return
+    }
+
     setStatusHistoryOpen(false)
     onClose?.()
+  }
+  const approveDocument = async () => {
+    setApproveSubmitting(true)
+
+    try {
+      await onApprove?.()
+      setApproveSubmitting(false)
+    } catch {
+      setApproveSubmitting(false)
+    }
   }
 
   return (
@@ -2316,16 +2657,33 @@ function Kwp01PreviewDialog({ open, data, mode = 'submit', loading = false, subm
           <Typography component="span" variant="h6" sx={{ minWidth: 0 }}>
             แบบฟอร์ม {previewFormNo}
           </Typography>
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={<HistoryIcon />}
-            disabled={!data}
-            onClick={() => setStatusHistoryOpen(true)}
-            sx={{ flexShrink: 0 }}
-          >
-            ประวัติสถานะ
-          </Button>
+          <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<HistoryIcon />}
+              disabled={!data}
+              onClick={() => setStatusHistoryOpen(true)}
+            >
+              ประวัติสถานะ
+            </Button>
+            {isReadonlyViewDialog ? (
+              <>
+                <Button
+                  variant="contained"
+                  size="small"
+                  startIcon={<FileDownloadIcon />}
+                  disabled={!data}
+                  onClick={handleDownload}
+                >
+                  ดาวน์โหลด
+                </Button>
+                <IconButton aria-label="ปิด" size="small" onClick={closePreviewDialog}>
+                  <CloseIcon />
+                </IconButton>
+              </>
+            ) : null}
+          </Stack>
         </DialogTitle>
         <DialogContent dividers sx={{ bgcolor: 'neutral.100' }}>
           {loading ? (
@@ -2368,35 +2726,31 @@ function Kwp01PreviewDialog({ open, data, mode = 'submit', loading = false, subm
             {submitError}
           </Alert>
         ) : null}
-        <DialogActions sx={{ justifyContent: 'center' }}>
-          {mode === 'review' ? (
+        {isReadonlyViewDialog ? null : (
+          <DialogActions sx={{ justifyContent: 'center' }}>
+            {mode === 'review' ? (
             <>
-              <Button variant="outlined" color="inherit" onClick={closePreviewDialog}>
+              <Button variant="outlined" color="inherit" disabled={approveSubmitting} onClick={closePreviewDialog}>
                 ยกเลิก
               </Button>
-              <Button variant="outlined" color="warning" onClick={() => setRevisionDialogOpen(true)}>
-                แจ้งแก้ไข
-              </Button>
-              <Button variant="contained">
-                ผ่านการพิจารณา
-              </Button>
-            </>
-          ) : mode === 'view' ? (
-            <>
-              <Button variant="outlined" color="inherit" onClick={closePreviewDialog}>
-                ปิด
-              </Button>
-              <Button variant="contained" startIcon={<FileDownloadIcon />} disabled={!data} onClick={handleDownload}>
-                Download
-              </Button>
+              {canRequestRevision ? (
+                <Button variant="outlined" color="warning" disabled={approveSubmitting} onClick={() => setRevisionDialogOpen(true)}>
+                  แจ้งแก้ไข
+                </Button>
+              ) : null}
+              {canApprove ? (
+                <Button variant="contained" disabled={approveSubmitting || !data} onClick={approveDocument}>
+                  {approveSubmitting ? 'กำลังผ่านการพิจารณา' : 'ผ่านการพิจารณา'}
+                </Button>
+              ) : null}
             </>
           ) : mode === 'edit' ? (
             <>
-              <Button variant="outlined" color="inherit" onClick={closePreviewDialog}>
+              <Button variant="outlined" color="inherit" disabled={submitting} onClick={closePreviewDialog}>
                 ยกเลิก
               </Button>
-              <Button variant="contained">
-                บันทึกการแก้ไข
+              <Button variant="contained" disabled={submitting || !data} onClick={onSubmit}>
+                {submitting ? 'กำลังบันทึกการแก้ไข' : 'บันทึกการแก้ไข'}
               </Button>
             </>
           ) : mode === 'cancel' ? (
@@ -2418,7 +2772,8 @@ function Kwp01PreviewDialog({ open, data, mode = 'submit', loading = false, subm
               </Button>
             </>
           )}
-        </DialogActions>
+          </DialogActions>
+        )}
       </Dialog>
       <KwpStatusHistoryDialog
         open={statusHistoryOpen}
@@ -2666,6 +3021,7 @@ function EmissionMeasurementDialogContent({ value, parameterOptions, onClose, on
 function Kwp02Form({
   factory,
   point,
+  defaults = {},
   measurementRows,
   setMeasurementRows,
   samplingPhotoFiles,
@@ -2673,7 +3029,7 @@ function Kwp02Form({
   labReportFiles,
   setLabReportFiles,
 }) {
-  const [combustionSystem, setCombustionSystem] = useState('')
+  const [combustionSystem, setCombustionSystem] = useState(() => defaults.combustionSystem ?? '')
   const [editingMeasurement, setEditingMeasurement] = useState(null)
   const pollutantOptions = point?.parameterDetails ?? []
   const primaryFuel = point?.primaryFuel ?? ''
@@ -2708,13 +3064,13 @@ function Kwp02Form({
               <ReadOnlyField label="สถานที่ตั้งโรงงาน" value={factory?.address ?? ''} multiline />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <TextField name="contactName" label="รายชื่อผู้ติดต่อ" size="small" fullWidth />
+              <TextField name="contactName" label="รายชื่อผู้ติดต่อ" size="small" defaultValue={defaults.contactName ?? ''} fullWidth />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <TextField name="contactPhone" label="เบอร์โทรศัพท์" size="small" fullWidth />
+              <TextField name="contactPhone" label="เบอร์โทรศัพท์" size="small" defaultValue={defaults.contactPhone ?? ''} fullWidth />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <TextField name="contactEmail" label="e-mail" type="email" size="small" fullWidth />
+              <TextField name="contactEmail" label="e-mail" type="email" size="small" defaultValue={defaults.contactEmail ?? ''} fullWidth />
             </Grid>
           </Grid>
         </SectionPaper>
@@ -2729,7 +3085,7 @@ function Kwp02Form({
                 <ReadOnlyField label="ชื่อจุดตรวจวัด" value={point?.name ?? ''} />
               </Grid>
               <Grid size={{ xs: 12, md: 3 }}>
-                <TextField name="productionStack" label="ปล่องจากกระบวนการผลิต" size="small" fullWidth />
+                <TextField name="productionStack" label="ปล่องจากกระบวนการผลิต" size="small" defaultValue={defaults.productionStack ?? ''} fullWidth />
               </Grid>
             </Grid>
             <Grid container spacing={2}>
@@ -2756,10 +3112,10 @@ function Kwp02Form({
             </Grid>
             <Grid container spacing={2}>
               <Grid size={{ xs: 12, md: 3 }}>
-                <TextField name="productionCapacity" label="กำลังการผลิตของหน่วยการผลิต" size="small" fullWidth />
+                <TextField name="productionCapacity" label="กำลังการผลิตของหน่วยการผลิต" size="small" defaultValue={defaults.productionCapacity ?? ''} fullWidth />
               </Grid>
               <Grid size={{ xs: 12, md: 3 }}>
-                <TextField name="productionCapacityUnit" label="หน่วยของกำลังการผลิต" size="small" fullWidth />
+                <TextField name="productionCapacityUnit" label="หน่วยของกำลังการผลิต" size="small" defaultValue={defaults.productionCapacityUnit ?? ''} fullWidth />
               </Grid>
             </Grid>
           </Stack>
@@ -2861,10 +3217,10 @@ function Kwp02Form({
         <SectionPaper title="ผู้ประกอบกิจการโรงงานหรือผู้รับมอบอำนาจ (ผู้จัดทำรายงาน)">
           <Grid container spacing={2}>
             <Grid size={{ xs: 12, md: 6 }}>
-              <TextField name="reporterName" label="ชื่อ-นามสกุล" size="small" fullWidth />
+              <TextField name="reporterName" label="ชื่อ-นามสกุล" size="small" defaultValue={defaults.reporterName ?? ''} fullWidth />
             </Grid>
             <Grid size={{ xs: 12, md: 6 }}>
-              <TextField name="reporterPosition" label="ตำแหน่ง" size="small" fullWidth />
+              <TextField name="reporterPosition" label="ตำแหน่ง" size="small" defaultValue={defaults.reporterPosition ?? ''} fullWidth />
             </Grid>
           </Grid>
         </SectionPaper>
@@ -2883,6 +3239,7 @@ function Kwp02Form({
 function Kwp03Form({
   factory,
   point,
+  defaults = {},
   problemDate,
   expectedDoneDate,
   instruments,
@@ -2897,7 +3254,13 @@ function Kwp03Form({
   onFailedParametersChange,
 }) {
   const totalDays = getDayRange(problemDate, expectedDoneDate)
-  const failedParameterOptions = [...wpmsParameterOptions.filter((option) => option !== 'ทั้งหมด'), 'ทั้งหมด']
+  const pointParameterOptions = uniqueTextValues(point?.parameterDetails ?? [])
+  const instrumentOptions = uniqueTextValues([...wpmsInstrumentOptions, instruments])
+  const measurementTimeOptions = uniqueTextValues([...wpmsMeasurementTimeOptions, measurementTimes])
+  const failedParameterOptions = [
+    ...(pointParameterOptions.length ? pointParameterOptions : wpmsParameterOptions).filter((option) => option !== 'ทั้งหมด'),
+    'ทั้งหมด',
+  ]
 
   return (
     <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="th">
@@ -2917,13 +3280,13 @@ function Kwp03Form({
               <ReadOnlyField label="สถานที่ตั้งโรงงาน" value={factory?.address ?? ''} multiline />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <TextField name="contactName" label="รายชื่อผู้ติดต่อ" size="small" fullWidth />
+              <TextField name="contactName" label="รายชื่อผู้ติดต่อ" size="small" defaultValue={defaults.contactName ?? ''} fullWidth />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <TextField name="contactPhone" label="เบอร์โทรศัพท์" size="small" fullWidth />
+              <TextField name="contactPhone" label="เบอร์โทรศัพท์" size="small" defaultValue={defaults.contactPhone ?? ''} fullWidth />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <TextField name="contactEmail" label="e-mail" type="email" size="small" fullWidth />
+              <TextField name="contactEmail" label="e-mail" type="email" size="small" defaultValue={defaults.contactEmail ?? ''} fullWidth />
             </Grid>
           </Grid>
         </SectionPaper>
@@ -2941,7 +3304,7 @@ function Kwp03Form({
                 label="เครื่องตรวจวัด"
                 value={instruments}
                 onChange={onInstrumentsChange}
-                options={wpmsInstrumentOptions}
+                options={instrumentOptions}
               />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
@@ -2949,7 +3312,7 @@ function Kwp03Form({
                 label="เวลาเครื่องตรวจวัด"
                 value={measurementTimes}
                 onChange={onMeasurementTimesChange}
-                options={wpmsMeasurementTimeOptions}
+                options={measurementTimeOptions}
               />
             </Grid>
           </Grid>
@@ -2958,25 +3321,25 @@ function Kwp03Form({
         <SectionPaper title="ข้อมูลนํ้าทิ้งระบายออกนอกโรงงาน (กรอกเฉพาะเครื่องมือหรือเครื่องอุปกรณ์พิเศษขัดข้อง)">
           <Grid container spacing={2}>
             <Grid size={{ xs: 12, md: 3 }}>
-              <TextField name="wastewaterSource" label="แหล่งกำเนิดน้ำเสีย" size="small" fullWidth />
+              <TextField name="wastewaterSource" label="แหล่งกำเนิดน้ำเสีย" size="small" defaultValue={defaults.wastewaterSource ?? ''} fullWidth />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <TextField name="receivingSource" label="แหล่งรองรับน้ำทิ้ง" size="small" fullWidth />
+              <TextField name="receivingSource" label="แหล่งรองรับน้ำทิ้ง" size="small" defaultValue={defaults.receivingSource ?? ''} fullWidth />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <TextField name="treatmentSystemType" label="ประเภทรบบบำบัด" size="small" fullWidth />
+              <TextField name="treatmentSystemType" label="ประเภทรบบบำบัด" size="small" defaultValue={defaults.treatmentSystemType ?? ''} fullWidth />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <TextField name="dischargePoint" label="พิกัดจุดระบายน้ำทิ้ง" size="small" fullWidth />
+              <TextField name="dischargePoint" label="พิกัดจุดระบายน้ำทิ้ง" size="small" defaultValue={defaults.dischargePoint ?? ''} fullWidth />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <TextField name="averageDischarge" label="ปริมาณนํ้าทิ้งระบายออกวันที่ขัดข้อง (ลบ.ม./วัน) เฉลี่ย" size="small" fullWidth />
+              <TextField name="averageDischarge" label="ปริมาณนํ้าทิ้งระบายออกวันที่ขัดข้อง (ลบ.ม./วัน) เฉลี่ย" size="small" defaultValue={defaults.averageDischarge ?? ''} fullWidth />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <TextField name="minimumDischarge" label="ปริมาณนํ้าทิ้งระบายออกวันที่ขัดข้อง (ลบ.ม./วัน) ต่ำสุด" size="small" fullWidth />
+              <TextField name="minimumDischarge" label="ปริมาณนํ้าทิ้งระบายออกวันที่ขัดข้อง (ลบ.ม./วัน) ต่ำสุด" size="small" defaultValue={defaults.minimumDischarge ?? ''} fullWidth />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <TextField name="maximumDischarge" label="ปริมาณนํ้าทิ้งระบายออกวันที่ขัดข้อง (ลบ.ม./วัน) สูงสุด" size="small" fullWidth />
+              <TextField name="maximumDischarge" label="ปริมาณนํ้าทิ้งระบายออกวันที่ขัดข้อง (ลบ.ม./วัน) สูงสุด" size="small" defaultValue={defaults.maximumDischarge ?? ''} fullWidth />
             </Grid>
           </Grid>
         </SectionPaper>
@@ -2992,7 +3355,7 @@ function Kwp03Form({
               />
             </Grid>
             <Grid size={{ xs: 12, md: 6 }}>
-              <TextField name="reasonDetail" label="เนื่องจาก" size="small" multiline minRows={3} fullWidth />
+              <TextField name="reasonDetail" label="เนื่องจาก" size="small" defaultValue={defaults.reasonDetail ?? ''} multiline minRows={3} fullWidth />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
               <DatePicker
@@ -3028,6 +3391,7 @@ function Kwp03Form({
                 name="correctiveAction"
                 label="แนวทางการปรับปรุงแก้ไข"
                 size="small"
+                defaultValue={defaults.correctiveAction ?? ''}
                 multiline
                 minRows={3}
                 fullWidth
@@ -3039,10 +3403,10 @@ function Kwp03Form({
         <SectionPaper title="ผู้จัดทำรายงาน/ผู้ดูแลระบบบำบัด">
           <Grid container spacing={2}>
             <Grid size={{ xs: 12, md: 6 }}>
-              <TextField name="reporterName" label="ชื่อ-นามสกุล" size="small" fullWidth />
+              <TextField name="reporterName" label="ชื่อ-นามสกุล" size="small" defaultValue={defaults.reporterName ?? ''} fullWidth />
             </Grid>
             <Grid size={{ xs: 12, md: 6 }}>
-              <TextField name="reporterPosition" label="ตำแหน่ง" size="small" fullWidth />
+              <TextField name="reporterPosition" label="ตำแหน่ง" size="small" defaultValue={defaults.reporterPosition ?? ''} fullWidth />
             </Grid>
           </Grid>
         </SectionPaper>
@@ -3114,15 +3478,15 @@ function Kwp05AttachmentText({ items }) {
 }
 
 const kwp05ResultTableColumns = [
-  { label: 'พารามิเตอร์' },
-  { label: 'วันที่เริ่มดำเนินการ' },
-  { label: 'วันที่สิ้นสุดดำเนินการ' },
-  { label: 'ผลการตรวจสอบ' },
-  { label: 'บริษัทที่ทำการทวนสอบ / สอบเทียบ' },
-  { label: 'ยี่ห้อ/รุ่นของ CEMS' },
-  { label: 'Link / QR CODE' },
-  { label: 'Link / QR CODE' },
-  { label: 'จัดการ' },
+  { id: 'parameter', label: 'พารามิเตอร์' },
+  { id: 'startDate', label: 'วันที่เริ่มดำเนินการ' },
+  { id: 'endDate', label: 'วันที่สิ้นสุดดำเนินการ' },
+  { id: 'result', label: 'ผลการตรวจสอบ' },
+  { id: 'verifierCompany', label: 'บริษัทที่ทำการทวนสอบ / สอบเทียบ' },
+  { id: 'cemsModel', label: 'ยี่ห้อ/รุ่นของ CEMS' },
+  { id: 'rataReportLink', label: 'Link / QR CODE' },
+  { id: 'calibrationPhotoLink', label: 'Link / QR CODE' },
+  { id: 'actions', label: 'จัดการ' },
 ]
 
 function CalibrationResultDialog({ open, value, onClose, onSave }) {
@@ -3285,7 +3649,7 @@ function CalibrationResultDialogContent({ value, onClose, onSave }) {
   )
 }
 
-function Kwp05Form({ factory, point, calibrationRows, setCalibrationRows }) {
+function Kwp05Form({ factory, point, defaults = {}, calibrationRows, setCalibrationRows }) {
   const [editingCalibration, setEditingCalibration] = useState(null)
 
   const saveCalibration = (row) => {
@@ -3311,7 +3675,7 @@ function Kwp05Form({ factory, point, calibrationRows, setCalibrationRows }) {
               <ReadOnlyField label="เลขทะเบียนโรงงาน" value={factory?.newRegistrationNo ?? ''} />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <TextField name="businessActivity" label="ประกอบกิจการ" size="small" fullWidth />
+              <TextField name="businessActivity" label="ประกอบกิจการ" size="small" defaultValue={defaults.businessActivity ?? ''} fullWidth />
             </Grid>
             <Grid size={{ xs: 12, md: 12 }}>
               <ReadOnlyField label="สถานที่ตั้งโรงงาน" value={factory?.address ?? ''} multiline />
@@ -3322,22 +3686,22 @@ function Kwp05Form({ factory, point, calibrationRows, setCalibrationRows }) {
         <SectionPaper title="รายละเอียดแบบรายงาน">
           <Grid container spacing={2}>
             <Grid size={{ xs: 12, md: 3 }}>
-              <TextField name="reportRound" label="ครั้งที่" size="small" fullWidth />
+              <TextField name="reportRound" label="ครั้งที่" size="small" defaultValue={defaults.reportRound ?? ''} fullWidth />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <TextField name="reportYear" label="ประจำปี พ.ศ." size="small" fullWidth />
+              <TextField name="reportYear" label="ประจำปี พ.ศ." size="small" defaultValue={defaults.reportYear ?? ''} fullWidth />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <TextField name="samplerName" label="ผู้เก็บตัวอย่าง" size="small" fullWidth />
+              <TextField name="samplerName" label="ผู้เก็บตัวอย่าง" size="small" defaultValue={defaults.samplerName ?? ''} fullWidth />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <TextField name="officerRegistration" label="ทะเบียนเจ้าหน้าที่" size="small" fullWidth />
+              <TextField name="officerRegistration" label="ทะเบียนเจ้าหน้าที่" size="small" defaultValue={defaults.officerRegistration ?? ''} fullWidth />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <TextField name="laboratoryName" label="หน่วยงาน/ชื่อห้องปฏิบัติการ" size="small" fullWidth />
+              <TextField name="laboratoryName" label="หน่วยงาน/ชื่อห้องปฏิบัติการ" size="small" defaultValue={defaults.laboratoryName ?? ''} fullWidth />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <TextField name="laboratoryRegistration" label="ทะเบียนห้องปฏิบัติการ" size="small" fullWidth />
+              <TextField name="laboratoryRegistration" label="ทะเบียนห้องปฏิบัติการ" size="small" defaultValue={defaults.laboratoryRegistration ?? ''} fullWidth />
             </Grid>
           </Grid>
         </SectionPaper>
@@ -3351,7 +3715,7 @@ function Kwp05Form({ factory, point, calibrationRows, setCalibrationRows }) {
               <ReadOnlyField label="ชื่อจุดตรวจวัด" value={point?.name ?? ''} />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <TextField name="cemsBrand" label="ยี่ห้อ (Brand)" size="small" fullWidth />
+              <TextField name="cemsBrand" label="ยี่ห้อ (Brand)" size="small" defaultValue={defaults.cemsBrand ?? ''} fullWidth />
             </Grid>
           </Grid>
         </SectionPaper>
@@ -3379,7 +3743,7 @@ function Kwp05Form({ factory, point, calibrationRows, setCalibrationRows }) {
                   <TableRow>
                     {kwp05ResultTableColumns.map((column) => (
                       <TableCell
-                        key={column.label}
+                        key={column.id}
                         sx={{ width: `${100 / kwp05ResultTableColumns.length}%`, fontWeight: 700, bgcolor: '#f8fafc' }}
                       >
                         {column.label}
@@ -3440,10 +3804,10 @@ function Kwp05Form({ factory, point, calibrationRows, setCalibrationRows }) {
         <SectionPaper title="ผู้รายงานผลการทดสอบ">
           <Grid container spacing={2}>
             <Grid size={{ xs: 12, md: 6 }}>
-              <TextField name="reporterName" label="ชื่อ-นามสกุล" size="small" fullWidth />
+              <TextField name="reporterName" label="ชื่อ-นามสกุล" size="small" defaultValue={defaults.reporterName ?? ''} fullWidth />
             </Grid>
             <Grid size={{ xs: 12, md: 6 }}>
-              <TextField name="reporterPosition" label="ตำแหน่ง" size="small" fullWidth />
+              <TextField name="reporterPosition" label="ตำแหน่ง" size="small" defaultValue={defaults.reporterPosition ?? ''} fullWidth />
             </Grid>
           </Grid>
         </SectionPaper>
@@ -3460,17 +3824,24 @@ function Kwp05Form({ factory, point, calibrationRows, setCalibrationRows }) {
 
 function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubmitted }) {
   const formRef = useRef(null)
-  const [problemDate, setProblemDate] = useState(null)
-  const [expectedDoneDate, setExpectedDoneDate] = useState(null)
-  const [unreportedParameters, setUnreportedParameters] = useState([])
-  const [measurementRows, setMeasurementRows] = useState([])
-  const [samplingPhotoFiles, setSamplingPhotoFiles] = useState([])
-  const [labReportFiles, setLabReportFiles] = useState([])
-  const [wpmsInstrument, setWpmsInstrument] = useState('')
-  const [wpmsMeasurementTime, setWpmsMeasurementTime] = useState('')
-  const [wpmsIssueReason, setWpmsIssueReason] = useState('')
-  const [wpmsFailedParameters, setWpmsFailedParameters] = useState([])
-  const [calibrationRows, setCalibrationRows] = useState([])
+  const initialState = form?.initialState ?? {}
+  const [problemDate, setProblemDate] = useState(() => (
+    initialState.problemDate && dayjs(initialState.problemDate).isValid() ? dayjs(initialState.problemDate) : null
+  ))
+  const [expectedDoneDate, setExpectedDoneDate] = useState(() => (
+    initialState.expectedDoneDate && dayjs(initialState.expectedDoneDate).isValid()
+      ? dayjs(initialState.expectedDoneDate)
+      : null
+  ))
+  const [unreportedParameters, setUnreportedParameters] = useState(() => initialState.unreportedParameters ?? [])
+  const [measurementRows, setMeasurementRows] = useState(() => initialState.measurementRows ?? [])
+  const [samplingPhotoFiles, setSamplingPhotoFiles] = useState(() => initialState.samplingPhotoFiles ?? [])
+  const [labReportFiles, setLabReportFiles] = useState(() => initialState.labReportFiles ?? [])
+  const [wpmsInstrument, setWpmsInstrument] = useState(() => initialState.wpmsInstrument ?? '')
+  const [wpmsMeasurementTime, setWpmsMeasurementTime] = useState(() => initialState.wpmsMeasurementTime ?? '')
+  const [wpmsIssueReason, setWpmsIssueReason] = useState(() => initialState.wpmsIssueReason ?? '')
+  const [wpmsFailedParameters, setWpmsFailedParameters] = useState(() => initialState.wpmsFailedParameters ?? [])
+  const [calibrationRows, setCalibrationRows] = useState(() => initialState.calibrationRows ?? [])
   const [previewData, setPreviewData] = useState(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
@@ -3481,6 +3852,16 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
   const isEditMode = form?.mode === 'edit'
 
   const uploadKwpAttachment = async (file) => {
+    if (file?.isSubmitted) {
+      return {
+        originalFileName: file.originalFileName ?? file.name ?? '',
+        storedFileName: file.storedFileName ?? null,
+        mimeType: file.mimeType ?? file.type ?? null,
+        fileSize: file.fileSize ?? file.size ?? null,
+        storagePath: file.storagePath ?? null,
+      }
+    }
+
     const uploadBody = new FormData()
     uploadBody.append('file', file)
 
@@ -3577,6 +3958,41 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
         payload = buildKwp05SubmissionPayload(form, formRef.current, calibrationRowsWithAttachments)
       } else {
         throw new Error('รองรับการส่งแบบฟอร์มเฉพาะ กวภ.01 - กวภ.05')
+      }
+
+      if (isEditMode) {
+        if (!form.requestId) {
+          throw new Error('ไม่พบรหัสคำขอสำหรับบันทึกการแก้ไข')
+        }
+
+        const updateResult = await fetch(`${kwpFormSubmissionsApiBaseUrl}/${endpoint}/${form.requestId}`, {
+          method: 'PATCH',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify(payload),
+        })
+        await readKwpApiResponse(updateResult, 'บันทึกการแก้ไขไม่สำเร็จ')
+
+        const resubmitResult = await fetch(`${kwpFormSubmissionsApiBaseUrl}/${endpoint}/${form.requestId}/resubmit`, {
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            note: 'ปรับข้อมูลและแนบเอกสารครบแล้ว',
+          }),
+        })
+        await readKwpApiResponse(resubmitResult, 'ส่งแบบฟอร์มที่แก้ไขแล้วไม่สำเร็จ')
+
+        setPreviewData(null)
+        onSubmitted?.()
+        onClose?.()
+        return
       }
 
       const result = await fetch(`${kwpFormSubmissionsApiBaseUrl}/${endpoint}`, {
@@ -3724,6 +4140,7 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
               <Kwp01Form
                 factory={form.factory}
                 point={form.point}
+                defaults={form.defaults}
                 problemDate={problemDate}
                 expectedDoneDate={expectedDoneDate}
                 unreportedParameters={unreportedParameters}
@@ -3735,6 +4152,7 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
               <Kwp03Form
                 factory={form.factory}
                 point={form.point}
+                defaults={form.defaults}
                 problemDate={problemDate}
                 expectedDoneDate={expectedDoneDate}
                 instruments={wpmsInstrument}
@@ -3752,6 +4170,7 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
               <Kwp02Form
                 factory={form.factory}
                 point={form.point}
+                defaults={form.defaults}
                 measurementRows={measurementRows}
                 setMeasurementRows={setMeasurementRows}
                 samplingPhotoFiles={samplingPhotoFiles}
@@ -3763,6 +4182,7 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
               <Kwp05Form
                 factory={form.factory}
                 point={form.point}
+                defaults={form.defaults}
                 calibrationRows={calibrationRows}
                 setCalibrationRows={setCalibrationRows}
               />
@@ -3791,6 +4211,7 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
       <Kwp01PreviewDialog
         open={Boolean(previewData)}
         data={previewData}
+        mode={isEditMode ? 'edit' : 'submit'}
         submitting={isSubmitting}
         submitError={submitError}
         onClose={() => {
@@ -4050,9 +4471,41 @@ function KwpFormsPage({ userType = '', accessToken = '' }) {
     loadRequestRows()
   }, [loadRequestRows])
 
+  const fetchKwpSubmissionDetail = useCallback(async (row) => {
+    const formSlug = getKwpSubmissionFormSlug(row)
+
+    if (!formSlug) {
+      throw new Error('ไม่พบประเภทแบบฟอร์มสำหรับโหลดรายละเอียด')
+    }
+
+    if (!accessToken) {
+      throw new Error('กรุณาเข้าสู่ระบบเพื่อโหลดรายละเอียดแบบฟอร์ม')
+    }
+
+    const result = await fetch(`${kwpFormSubmissionsApiBaseUrl}/${formSlug}/${row.id}`, {
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
+    const response = await readKwpApiResponse(result, 'โหลดรายละเอียดแบบฟอร์มไม่สำเร็จ')
+
+    return normalizeKwpSubmissionDetailPayload(response?.data)
+  }, [accessToken])
+
   const openRequestDocument = useCallback(async (row, mode) => {
     if (isOperator && mode === 'edit') {
-      openFormBottomSheet(buildKwpEditForm(row))
+      setRequestsError('')
+      setIsLoadingRequests(true)
+
+      try {
+        const detail = await fetchKwpSubmissionDetail(row)
+        openFormBottomSheet(buildKwpEditFormFromDetail(detail, row))
+      } catch (requestError) {
+        setRequestsError(requestError.message)
+      } finally {
+        setIsLoadingRequests(false)
+      }
       return
     }
 
@@ -4079,35 +4532,104 @@ function KwpFormsPage({ userType = '', accessToken = '' }) {
 
     setRequestDocument({
       mode,
+      row,
       data: null,
       loading: true,
       error: '',
     })
 
     try {
-      const result = await fetch(`${kwpFormSubmissionsApiBaseUrl}/${formSlug}/${row.id}`, {
-        headers: {
-          Accept: 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-      })
-      const response = await readKwpApiResponse(result, 'โหลดรายละเอียดแบบฟอร์มไม่สำเร็จ')
+      const detail = await fetchKwpSubmissionDetail(row)
 
       setRequestDocument({
         mode,
-        data: buildKwpRequestPreviewDataFromDetail(response?.data ?? {}, row),
+        row,
+        data: buildKwpRequestPreviewDataFromDetail(detail, row),
         loading: false,
         error: '',
       })
     } catch (requestError) {
       setRequestDocument({
         mode,
+        row,
         data: null,
         loading: false,
         error: requestError.message,
       })
     }
-  }, [accessToken, isOperator, openFormBottomSheet])
+  }, [accessToken, fetchKwpSubmissionDetail, isOperator, openFormBottomSheet])
+
+  const requestKwpDocumentRevision = useCallback(async (officerNote) => {
+    const requestId = requestDocument?.row?.id
+
+    if (!requestId) {
+      throw new Error('ไม่พบรหัสคำขอสำหรับแจ้งแก้ไข')
+    }
+
+    if (!accessToken) {
+      throw new Error('กรุณาเข้าสู่ระบบเจ้าหน้าที่เพื่อแจ้งแก้ไขแบบฟอร์ม')
+    }
+
+    const result = await fetch(`${kwpFormSubmissionsApiBaseUrl}/${requestId}/workflow-actions`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        action: 'REQUEST_REVISION',
+        revisionReason: officerNote,
+        officerNote,
+      }),
+    })
+
+    await readKwpApiResponse(result, 'แจ้งแก้ไขแบบฟอร์มไม่สำเร็จ')
+    setRequestDocument(null)
+    loadRequestRows()
+  }, [accessToken, loadRequestRows, requestDocument?.row?.id])
+
+  const approveKwpDocument = useCallback(async () => {
+    const requestId = requestDocument?.row?.id
+
+    try {
+      if (!requestId) {
+        throw new Error('ไม่พบรหัสคำขอสำหรับผ่านการพิจารณา')
+      }
+
+      if (!accessToken) {
+        throw new Error('กรุณาเข้าสู่ระบบเจ้าหน้าที่เพื่อผ่านการพิจารณาแบบฟอร์ม')
+      }
+
+      setRequestDocument((current) => ({
+        ...current,
+        error: '',
+      }))
+
+      const result = await fetch(`${kwpFormSubmissionsApiBaseUrl}/${requestId}/workflow-actions`, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'APPROVE',
+          officerNote: 'ข้อมูลและเอกสารประกอบครบถ้วน',
+        }),
+      })
+
+      await readKwpApiResponse(result, 'ผ่านการพิจารณาแบบฟอร์มไม่สำเร็จ')
+      setRequestDocument(null)
+      loadRequestRows()
+    } catch (requestError) {
+      setRequestDocument((current) => ({
+        ...current,
+        error: requestError instanceof Error ? requestError.message : 'ผ่านการพิจารณาแบบฟอร์มไม่สำเร็จ',
+      }))
+      throw requestError
+    }
+  }, [accessToken, loadRequestRows, requestDocument?.row?.id])
 
   const closeMonitoringPointDialog = useCallback(() => {
     setMonitoringPointRows([])
@@ -4332,6 +4854,8 @@ function KwpFormsPage({ userType = '', accessToken = '' }) {
         loading={Boolean(requestDocument?.loading)}
         submitError={requestDocument?.error ?? ''}
         onClose={() => setRequestDocument(null)}
+        onRequestRevision={requestKwpDocumentRevision}
+        onApprove={approveKwpDocument}
       />
     </>
   )

@@ -110,16 +110,6 @@ const emptyInstrumentParameter = {
   oxygenOrExcessAir: false,
 }
 
-const emptyCriteria = {
-  enabled: false,
-  standardValue: '',
-  rows: specialCriteriaRows.map((row) => ({
-    level: row.key,
-    min: '',
-    max: '',
-  })),
-}
-
 function createCriteria(standardValue = '', rows = {}) {
   return {
     enabled: true,
@@ -129,6 +119,38 @@ function createCriteria(standardValue = '', rows = {}) {
       min: rows[row.key]?.min ?? '',
       max: rows[row.key]?.max ?? '',
     })),
+  }
+}
+
+function normalizeInstrumentCriteria(criteria = {}) {
+  const rowsByLevel = Array.isArray(criteria?.rows)
+    ? Object.fromEntries(criteria.rows.map((row) => [row.level, row]))
+    : criteria?.rows ?? {}
+
+  return {
+    enabled: Boolean(criteria?.enabled),
+    standardValue: criteria?.standardValue ?? '',
+    rows: specialCriteriaRows.map((row) => ({
+      level: row.key,
+      min: rowsByLevel[row.key]?.min ?? '',
+      max: rowsByLevel[row.key]?.max ?? '',
+    })),
+  }
+}
+
+function buildInstrumentDialogForm(value = {}) {
+  return {
+    parameter: value?.parameter ?? '',
+    technique: value?.technique ?? emptyInstrumentParameter.technique,
+    range: value?.range ?? emptyInstrumentParameter.range,
+    brand: value?.brand ?? emptyInstrumentParameter.brand,
+    supplier: value?.supplier ?? emptyInstrumentParameter.supplier,
+    eiaStandard: value?.eiaStandard ?? emptyInstrumentParameter.eiaStandard,
+    standardCondition: value?.standardCondition ?? emptyInstrumentParameter.standardCondition,
+    dryBasis: value?.dryBasis ?? emptyInstrumentParameter.dryBasis,
+    oxygenOrExcessAir: value?.oxygenOrExcessAir ?? emptyInstrumentParameter.oxygenOrExcessAir,
+    standardCriteria: normalizeInstrumentCriteria(value?.standardCriteria),
+    eiaCriteria: normalizeInstrumentCriteria(value?.eiaCriteria),
   }
 }
 
@@ -784,11 +806,24 @@ function mapConnectedMeasurementPointRow(row) {
 
 function mapRequestDetailRow(detail = {}, row = {}) {
   const factory = detail.factory ?? {}
-  const firstPoint = Array.isArray(detail.measurementPoints) ? detail.measurementPoints[0] : null
+  const sourceMeasurementPoints = Array.isArray(detail.measurementPoints) ? detail.measurementPoints : row.measurementPoints
+  const measurementPoints = Array.isArray(sourceMeasurementPoints)
+    ? sourceMeasurementPoints.map((point) => ({
+        ...point,
+        pointCode: point.pointCode ?? point.code ?? point.monitoringPointCode ?? point.stationId ?? '',
+        pointName: point.pointName ?? point.name ?? point.monitoringPointName ?? '',
+        pointType: point.pointType ?? point.type ?? '',
+        details: point.details ?? {},
+        measurementInstruments: point.measurementInstruments ?? { parameters: [] },
+        documentsAndImages: Array.isArray(point.documentsAndImages) ? point.documentsAndImages : [],
+      }))
+    : sourceMeasurementPoints
+  const firstPoint = Array.isArray(measurementPoints) ? measurementPoints[0] : null
 
   return {
     ...row,
     ...detail,
+    measurementPoints,
     id: detail.id ?? row.id,
     factoryId: detail.factoryId ?? factory.factoryId ?? row.factoryId ?? '',
     factoryName: detail.factoryName ?? factory.factoryName ?? row.factoryName ?? '',
@@ -797,13 +832,15 @@ function mapRequestDetailRow(detail = {}, row = {}) {
     industryType: detail.industryType ?? factory.industryType ?? row.industryType ?? '',
     province: detail.province ?? factory.province ?? row.province ?? '',
     type: detail.type ?? detail.systemType ?? firstPoint?.details?.monitoringPointKind ?? row.type ?? '',
+    systemType: detail.systemType ?? detail.type ?? firstPoint?.details?.monitoringPointKind ?? row.systemType ?? row.type ?? '',
     requestNo: detail.requestNo ?? row.requestNo ?? '',
     submittedDate: formatDatePartAsThaiDate(detail.submittedAt) || detail.submittedDate || row.submittedDate || '',
-    monitoringPointCode: detail.monitoringPointCode ?? firstPoint?.code ?? firstPoint?.monitoringPointCode ?? row.monitoringPointCode ?? '',
+    monitoringPointCode: detail.monitoringPointCode ?? firstPoint?.pointCode ?? firstPoint?.code ?? firstPoint?.monitoringPointCode ?? row.monitoringPointCode ?? '',
     codeIssuedDate: detail.codeIssuedDate ?? row.codeIssuedDate ?? '',
     form: detail.form ?? row.form ?? '',
     status: detail.status ?? row.status ?? '',
     statusCode: detail.statusCode ?? row.statusCode ?? '',
+    statusLabel: detail.statusLabel ?? row.statusLabel ?? '',
     requestType: detail.requestType ?? row.requestType ?? '',
   }
 }
@@ -1905,6 +1942,18 @@ function joinList(values, fallback = '') {
   return Array.isArray(values) && values.length > 0 ? values.join(', ') : fallback
 }
 
+function firstDefinedValue(...values) {
+  return values.find((value) => !isBlankValue(value))
+}
+
+function formatValueWithUnit(value, unit = '') {
+  if (isBlankValue(value)) {
+    return ''
+  }
+
+  return `${value}${unit ? ` ${unit}` : ''}`
+}
+
 function normalizeStringArray(value) {
   if (Array.isArray(value)) {
     return value
@@ -2579,7 +2628,41 @@ function RequestDocumentDialog({
   const contactPersons = Array.isArray(request?.contactPersons) ? request.contactPersons : []
   const notificationEmails = Array.isArray(request?.notificationEmails) ? request.notificationEmails : []
   const officerNotificationEmails = Array.isArray(request?.officerNotificationEmails) ? request.officerNotificationEmails : []
-  const documentParameters = instrumentParameters
+  const pointName = point.pointName ?? point.name ?? point.monitoringPointName ?? ''
+  const fallbackParameterLabels = [
+    ...(Array.isArray(details.eligibleParameters) ? details.eligibleParameters : []),
+    ...(Array.isArray(details.connectedParameters) ? details.connectedParameters : []),
+    ...(Array.isArray(details.pendingParameters) ? details.pendingParameters : []),
+    ...(Array.isArray(point.parameters) ? point.parameters : []),
+  ]
+  const documentParameters = instrumentParameters.length
+    ? instrumentParameters
+    : Array.from(new Set(fallbackParameterLabels.filter(Boolean))).map((parameter) => ({ parameter }))
+  const wpmsAverageWastewaterDischarge = firstDefinedValue(
+    details.averageWastewaterDischarge,
+    details.averageDischarge,
+  )
+  const wpmsMinWastewaterDischarge = firstDefinedValue(
+    details.minWastewaterDischarge,
+    details.minimumWastewaterDischarge,
+    details.minDischarge,
+    details.minimumDischarge,
+  )
+  const wpmsMaxWastewaterDischarge = firstDefinedValue(
+    details.maxWastewaterDischarge,
+    details.maximumWastewaterDischarge,
+    details.maxDischarge,
+    details.maximumDischarge,
+  )
+  const wpmsTreatmentSystem = firstDefinedValue(details.treatmentSystemOther, details.treatmentSystem)
+  const wpmsMaxTreatmentCapacity = firstDefinedValue(details.maxTreatmentCapacity, details.treatmentCapacity)
+  const wpmsInstrumentLatitude = firstDefinedValue(details.instrumentLatitude, point.instrumentLatitude, point.latitude)
+  const wpmsInstrumentLongitude = firstDefinedValue(details.instrumentLongitude, point.instrumentLongitude, point.longitude)
+  const wpmsDischargeLatitude = firstDefinedValue(details.dischargeLatitude, details.outfallLatitude, point.latitude)
+  const wpmsDischargeLongitude = firstDefinedValue(details.dischargeLongitude, details.outfallLongitude, point.longitude)
+  const wpmsWastewaterSource = firstDefinedValue(details.wastewaterSource, details.wastewaterOrigin)
+  const wpmsDischargeReceivingSource = firstDefinedValue(details.dischargeReceivingSource, details.receivingSource)
+  const wpmsConnectionDevice = firstDefinedValue(details.connectionDeviceOther, details.connectionDevice)
   const systemName = isWpms
     ? 'ระบบตรวจวัดคุณภาพน้ำทิ้งอัตโนมัติอย่างต่อเนื่อง'
     : 'ระบบตรวจวัดคุณภาพอากาศจากปล่องแบบอัตโนมัติอย่างต่อเนื่อง'
@@ -2750,29 +2833,29 @@ function RequestDocumentDialog({
 
               <DocumentPage pageNo={2} totalPages={3} revisionText="แก้ไข : 14-11-67">
                 <Stack spacing={1.6}>
-                  <Typography sx={{ fontWeight: 700 }}>4. รายละเอียดจุดตรวจวัดจุดที่ : {point.pointName ?? ''}</Typography>
+                  <Typography sx={{ fontWeight: 700 }}>4. รายละเอียดจุดตรวจวัดจุดที่ : {pointName}</Typography>
                   <Box sx={{ pl: 3 }}>
                     <Typography>4.1 อัตราการระบายน้ำทิ้ง (Flow Rate)</Typography>
                     <Box sx={{ display: 'flex', gap: 2, pl: 5 }}>
-                      <DocumentLine label="เฉลี่ย :" value={details.averageWastewaterDischarge ? `${details.averageWastewaterDischarge} m³/d` : ''} />
-                      <DocumentLine label="ต่ำสุด :" value={details.minWastewaterDischarge ? `${details.minWastewaterDischarge} m³/d` : ''} />
-                      <DocumentLine label="สูงสุด :" value={details.maxWastewaterDischarge ? `${details.maxWastewaterDischarge} m³/d` : ''} />
+                      <DocumentLine label="เฉลี่ย :" value={formatValueWithUnit(wpmsAverageWastewaterDischarge, 'm³/d')} />
+                      <DocumentLine label="ต่ำสุด :" value={formatValueWithUnit(wpmsMinWastewaterDischarge, 'm³/d')} />
+                      <DocumentLine label="สูงสุด :" value={formatValueWithUnit(wpmsMaxWastewaterDischarge, 'm³/d')} />
                     </Box>
                     <Typography>
-                      4.2 ระบบบำบัด : □ ไม่มี &nbsp;&nbsp; □ มี (ระบุ) {details.treatmentSystemOther ?? details.treatmentSystem ?? ''}
-                      /ปริมาณรองรับน้ำเสียสูงสุดของระบบบำบัด : {displayValue(details.maxTreatmentCapacity)}
+                      4.2 ระบบบำบัด : {details.hasTreatmentSystem === 'ไม่มี' ? '☑' : '□'} ไม่มี &nbsp;&nbsp; {details.hasTreatmentSystem === 'มี' ? '☑' : '□'} มี (ระบุ) {displayValue(wpmsTreatmentSystem)}
+                      /ปริมาณรองรับน้ำเสียสูงสุดของระบบบำบัด : {displayValue(wpmsMaxTreatmentCapacity)}
                     </Typography>
                     <DocumentLine
                       label="4.3 พิกัดจุดที่ติดตั้งเครื่องมือตรวจวัด (BOD/COD Online) : ละติจูด"
-                      value={`${displayValue(details.instrumentLatitude)}  ลองติจูด ${displayValue(details.instrumentLongitude)}`}
+                      value={`${displayValue(wpmsInstrumentLatitude)}  ลองติจูด ${displayValue(wpmsInstrumentLongitude)}`}
                     />
                     <DocumentLine
                       label="4.4 พิกัดจุดระบายน้ำทิ้งออกนอกโรงงาน : ละติจูด"
-                      value={`${displayValue(point.latitude)}  ลองติจูด ${displayValue(point.longitude)}`}
+                      value={`${displayValue(wpmsDischargeLatitude)}  ลองติจูด ${displayValue(wpmsDischargeLongitude)}`}
                     />
-                    <DocumentLine label="4.5 แหล่งกำเนิดน้ำเสีย :" value={details.wastewaterSource} />
-                    <DocumentLine label="4.6 แหล่งรองรับน้ำทิ้ง :" value={details.dischargeReceivingSource} />
-                    <DocumentLine label="4.7 อุปกรณ์/โปรแกรมที่ใช้เชื่อมต่อ :" value={details.connectionDeviceOther ?? details.connectionDevice} />
+                    <DocumentLine label="4.5 แหล่งกำเนิดน้ำเสีย :" value={wpmsWastewaterSource} />
+                    <DocumentLine label="4.6 แหล่งรองรับน้ำทิ้ง :" value={wpmsDischargeReceivingSource} />
+                    <DocumentLine label="4.7 อุปกรณ์/โปรแกรมที่ใช้เชื่อมต่อ :" value={wpmsConnectionDevice} />
                     <DocumentLine
                       label="4.8 อุปกรณ์แปลงสัญญาณ (Converter) ยี่ห้อ :"
                       value={`${displayValue(instruments.converterBrand)}   รุ่น : ${displayValue(instruments.converterModel)}`}
@@ -2782,21 +2865,20 @@ function RequestDocumentDialog({
                     <Table size="small" sx={{ border: '1px solid #555', '& th, & td': { border: '1px solid #555', p: 0.7, fontSize: 12 } }}>
                       <TableHead>
                         <TableRow>
-                          {['พารามิเตอร์ที่ขอเชื่อมต่อ', 'เทคนิคตรวจวัด', 'ช่วงการวัด', 'ยี่ห้อเครื่องมือ', 'ผู้จำหน่ายเครื่องมือ', 'มาตรฐาน EIA', 'เลขช่องสัญญาณ'].map((column) => (
+                          {['พารามิเตอร์ที่ขอเชื่อมต่อ', 'เทคนิคตรวจวัด', 'ช่วงการวัด', 'ยี่ห้อเครื่องมือ', 'ผู้จำหน่ายเครื่องมือ', 'มาตรฐาน EIA'].map((column) => (
                             <TableCell key={column} align="center" sx={{ fontWeight: 700 }}>{column}</TableCell>
                           ))}
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {documentParameters.map((parameter) => (
-                          <TableRow key={parameter.parameter}>
+                        {documentParameters.map((parameter, index) => (
+                          <TableRow key={`${parameter.parameter ?? 'parameter'}-${parameter.signalChannel ?? index}`}>
                             <TableCell>{parameter.parameter}</TableCell>
                             <TableCell>{parameter.technique}</TableCell>
                             <TableCell>{parameter.range}</TableCell>
                             <TableCell>{parameter.brand}</TableCell>
                             <TableCell>{parameter.supplier}</TableCell>
                             <TableCell>{parameter.eiaStandard}</TableCell>
-                            <TableCell>{parameter.signalChannel}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -3917,7 +3999,7 @@ function buildDeviceConfigDeviceItem(form, deviceCode) {
   }
 }
 
-function ConnectionSettingsDialog({ open, context, accessToken, onClose }) {
+function ConnectionSettingsDialog({ open, context, accessToken, onClose, onSaved }) {
   const [deviceConfig, setDeviceConfig] = useState(null)
   const [deviceConfigLoading, setDeviceConfigLoading] = useState(false)
   const [deviceConfigError, setDeviceConfigError] = useState('')
@@ -4206,6 +4288,10 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose }) {
     setDeviceConfigSaving(true)
     setDeviceConfigError('')
     saveDeviceConfig()
+      .then(async () => {
+        await onSaved?.()
+        onClose?.()
+      })
       .catch((error) => {
         setDeviceConfigError(error instanceof Error ? error.message : 'บันทึกการตั้งค่าอุปกรณ์ไม่สำเร็จ')
       })
@@ -4241,7 +4327,8 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose }) {
           throw new Error(payload?.error?.message || payload?.message || `ยืนยันการเชื่อมต่อไม่สำเร็จ (${result.status} ${result.statusText})`)
         }
 
-        onClose()
+        await onSaved?.()
+        onClose?.()
       })
       .catch((error) => {
         setDeviceConfigError(error instanceof Error ? error.message : 'ยืนยันการเชื่อมต่อไม่สำเร็จ')
@@ -4977,19 +5064,7 @@ function StandardCriteriaSection({ label, value, onChange }) {
 }
 
 function InstrumentDataDialog({ open, parameterOptions, value, onClose, onSave }) {
-  const [form, setForm] = useState({
-    parameter: value?.parameter ?? '',
-    technique: value?.technique ?? emptyInstrumentParameter.technique,
-    range: value?.range ?? emptyInstrumentParameter.range,
-    brand: value?.brand ?? emptyInstrumentParameter.brand,
-    supplier: value?.supplier ?? emptyInstrumentParameter.supplier,
-    eiaStandard: value?.eiaStandard ?? emptyInstrumentParameter.eiaStandard,
-    standardCondition: value?.standardCondition ?? emptyInstrumentParameter.standardCondition,
-    dryBasis: value?.dryBasis ?? emptyInstrumentParameter.dryBasis,
-    oxygenOrExcessAir: value?.oxygenOrExcessAir ?? emptyInstrumentParameter.oxygenOrExcessAir,
-    standardCriteria: value?.standardCriteria ?? emptyCriteria,
-    eiaCriteria: value?.eiaCriteria ?? emptyCriteria,
-  })
+  const [form, setForm] = useState(() => buildInstrumentDialogForm(value))
 
   const updateForm = (field, nextValue) => setForm((current) => ({ ...current, [field]: nextValue }))
 
@@ -5055,16 +5130,6 @@ function InstrumentDataDialog({ open, parameterOptions, value, onClose, onSave }
                 value={form.supplier}
                 onChange={(event) => updateForm('supplier', event.target.value)}
                 placeholder="เช่น ABC Tech"
-                fullWidth
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <TextField
-                label="มาตรฐาน EIA"
-                size="small"
-                value={form.eiaStandard}
-                onChange={(event) => updateForm('eiaStandard', event.target.value)}
-                placeholder="เช่น 12000"
                 fullWidth
               />
             </Grid>
@@ -5656,7 +5721,7 @@ function RequestFormBottomSheet({
 
       setSubmitConfirmOpen(false)
       setSubmitPreviewRequest(null)
-      onSubmitted?.(response?.data ?? null)
+      await onSubmitted?.(response?.data ?? null)
       onClose()
     } catch (error) {
       const message = error instanceof TypeError
@@ -6146,6 +6211,50 @@ function ConnectionRequestPage({ userType = '', accessToken = '', currentUser = 
   const submitIntentRequest = useCallback(() => {
     closeIntentDialog()
   }, [closeIntentDialog])
+  const fetchOperatorFactoryRows = useCallback(async ({ signal } = {}) => {
+    if (!isOperator || !accessToken) {
+      return []
+    }
+
+    const result = await fetch(operatorFactoriesApiUrl, {
+      signal,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
+    const payload = await result.json().catch(() => null)
+
+    if (!result.ok) {
+      throw new Error(payload?.message || `โหลดรายชื่อโรงงานไม่สำเร็จ (${result.status} ${result.statusText})`)
+    }
+
+    return Array.isArray(payload?.data) ? payload.data.map(mapOperatorFactoryRow) : []
+  }, [accessToken, isOperator])
+  const fetchRequestTableRows = useCallback(async ({ signal } = {}) => {
+    if (!accessToken) {
+      return []
+    }
+
+    const result = await fetch(requestTableRowsApiUrl, {
+      signal,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
+    const payload = await result.json().catch(() => null)
+
+    if (!result.ok) {
+      throw new Error(payload?.message || `โหลดรายการคำขอไม่สำเร็จ (${result.status} ${result.statusText})`)
+    }
+
+    return Array.isArray(payload?.data) ? payload.data.map(mapRequestTableRow) : []
+  }, [accessToken])
+  const loadRequestTableRows = useCallback(async (options) => {
+    const rows = await fetchRequestTableRows(options)
+    setRequestTableRows(rows)
+    setRequestTableError('')
+    return rows
+  }, [fetchRequestTableRows])
   const factoryColumns = useMemo(
     () =>
       getFactoryColumns(
@@ -6351,11 +6460,8 @@ function ConnectionRequestPage({ userType = '', accessToken = '', currentUser = 
           throw new Error(payload?.message || `อนุมัติคำขอไม่สำเร็จ (${result.status} ${result.statusText})`)
         }
 
-        const updatedRequest = payload?.data ? mapRequestDetailRow(payload.data, requestDocument) : requestDocument
-        setRequestDocument(updatedRequest)
-        setRequestTableRows((rows) =>
-          rows.map((row) => (row.id === requestDocument.id ? { ...row, ...updatedRequest } : row)),
-        )
+        await loadRequestTableRows()
+        setRequestDocument(null)
         setApproveConfirmOpen(false)
       })
       .catch((error) => {
@@ -6364,7 +6470,7 @@ function ConnectionRequestPage({ userType = '', accessToken = '', currentUser = 
       .finally(() => {
         setRequestDocumentApproving(false)
       })
-  }, [accessToken, requestDocument])
+  }, [accessToken, loadRequestTableRows, requestDocument])
   const closeVerifyConnectionConfirmDialog = useCallback(() => {
     if (requestDocumentApproving) {
       return
@@ -6403,16 +6509,8 @@ function ConnectionRequestPage({ userType = '', accessToken = '', currentUser = 
           throw new Error(payload?.error?.message || payload?.message || `ยืนยันการเชื่อมต่อไม่สำเร็จ (${result.status} ${result.statusText})`)
         }
 
-        const updatedRequest = payload?.data ? mapRequestDetailRow(payload.data, requestDocument) : {
-          ...requestDocument,
-          status: 'เชื่อมต่อแล้ว',
-          statusLabel: 'เชื่อมต่อแล้ว',
-          statusCode: 'CONNECTED',
-        }
-        setRequestDocument(updatedRequest)
-        setRequestTableRows((rows) =>
-          rows.map((row) => (row.id === requestDocument.id ? { ...row, ...updatedRequest } : row)),
-        )
+        await loadRequestTableRows()
+        setRequestDocument(null)
         setVerifyConnectionConfirmOpen(false)
       })
       .catch((error) => {
@@ -6421,7 +6519,7 @@ function ConnectionRequestPage({ userType = '', accessToken = '', currentUser = 
       .finally(() => {
         setRequestDocumentApproving(false)
       })
-  }, [accessToken, requestDocument])
+  }, [accessToken, loadRequestTableRows, requestDocument])
   const openRevisionDialog = useCallback(() => {
     setRevisionOfficerNote('')
     setRequestDocumentError('')
@@ -6476,11 +6574,8 @@ function ConnectionRequestPage({ userType = '', accessToken = '', currentUser = 
           throw new Error(payload?.message || `แจ้งแก้ไขคำขอไม่สำเร็จ (${result.status} ${result.statusText})`)
         }
 
-        const updatedRequest = payload?.data ? mapRequestDetailRow(payload.data, requestDocument) : requestDocument
-        setRequestDocument(updatedRequest)
-        setRequestTableRows((rows) =>
-          rows.map((row) => (row.id === requestDocument.id ? { ...row, ...updatedRequest } : row)),
-        )
+        await loadRequestTableRows()
+        setRequestDocument(null)
         setRevisionDialogOpen(false)
         setRevisionOfficerNote('')
       })
@@ -6490,7 +6585,7 @@ function ConnectionRequestPage({ userType = '', accessToken = '', currentUser = 
       .finally(() => {
         setRequestDocumentApproving(false)
       })
-  }, [accessToken, requestDocument, revisionOfficerNote])
+  }, [accessToken, loadRequestTableRows, requestDocument, revisionOfficerNote])
   const requestColumns = useMemo(
     () =>
       getRequestColumns(
@@ -6511,36 +6606,24 @@ function ConnectionRequestPage({ userType = '', accessToken = '', currentUser = 
       return
     }
 
-    let isActive = true
+    const controller = new AbortController()
 
-    fetch(operatorFactoriesApiUrl, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    })
-      .then(async (result) => {
-        const payload = await result.json().catch(() => null)
-
-        if (!result.ok) {
-          throw new Error(payload?.message || `โหลดรายชื่อโรงงานไม่สำเร็จ (${result.status} ${result.statusText})`)
-        }
-
-        if (isActive) {
-          setOperatorFactoryRows(Array.isArray(payload?.data) ? payload.data.map(mapOperatorFactoryRow) : [])
-          setOperatorFactoriesError('')
-        }
+    fetchOperatorFactoryRows({ signal: controller.signal })
+      .then((rows) => {
+        setOperatorFactoryRows(rows)
+        setOperatorFactoriesError('')
       })
       .catch((error) => {
-        if (isActive) {
+        if (error.name !== 'AbortError') {
           setOperatorFactoryRows([])
           setOperatorFactoriesError(error instanceof Error ? error.message : 'โหลดรายชื่อโรงงานไม่สำเร็จ')
         }
       })
 
     return () => {
-      isActive = false
+      controller.abort()
     }
-  }, [accessToken, effectiveSubMenu, isOperator])
+  }, [accessToken, effectiveSubMenu, fetchOperatorFactoryRows, isOperator])
   useEffect(() => {
     if (effectiveSubMenu !== 'requests') {
       return
@@ -6550,36 +6633,24 @@ function ConnectionRequestPage({ userType = '', accessToken = '', currentUser = 
       return
     }
 
-    let isActive = true
+    const controller = new AbortController()
 
-    fetch(requestTableRowsApiUrl, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    })
-      .then(async (result) => {
-        const payload = await result.json().catch(() => null)
-
-        if (!result.ok) {
-          throw new Error(payload?.message || `โหลดรายการคำขอไม่สำเร็จ (${result.status} ${result.statusText})`)
-        }
-
-        if (isActive) {
-          setRequestTableRows(Array.isArray(payload?.data) ? payload.data.map(mapRequestTableRow) : [])
-          setRequestTableError('')
-        }
+    fetchRequestTableRows({ signal: controller.signal })
+      .then((rows) => {
+        setRequestTableRows(rows)
+        setRequestTableError('')
       })
       .catch((error) => {
-        if (isActive) {
+        if (error.name !== 'AbortError') {
           setRequestTableRows([])
           setRequestTableError(error instanceof Error ? error.message : 'โหลดรายการคำขอไม่สำเร็จ')
         }
       })
 
     return () => {
-      isActive = false
+      controller.abort()
     }
-  }, [accessToken, effectiveSubMenu])
+  }, [accessToken, effectiveSubMenu, fetchRequestTableRows])
   const table = useMemo(
     () =>
       effectiveSubMenu === 'factories'
@@ -6606,21 +6677,27 @@ function ConnectionRequestPage({ userType = '', accessToken = '', currentUser = 
     effectiveSubMenu === 'requests' && !accessToken
       ? 'กรุณาเข้าสู่ระบบเพื่อดูรายการคำขอ'
       : requestTableError
-  const handleRequestSubmitted = useCallback((request) => {
-    if (request) {
-      setRequestTableRows((rows) => {
-        const mappedRequest = mapRequestTableRow(request)
-        const editRequestId = requestForm?.mode === 'edit' ? requestForm.requestId : null
-
-        if (editRequestId) {
-          return rows.map((row) => (row.id === editRequestId ? { ...row, ...mappedRequest } : row))
-        }
-
-        return [mappedRequest, ...rows]
-      })
-    }
+  const handleRequestSubmitted = useCallback(async (request) => {
     setSelectedSubMenu('requests')
-  }, [requestForm])
+    try {
+      await loadRequestTableRows()
+    } catch (error) {
+      setRequestTableError(error instanceof Error ? error.message : 'โหลดรายการคำขอไม่สำเร็จ')
+
+      if (request) {
+        setRequestTableRows((rows) => {
+          const mappedRequest = mapRequestTableRow(request)
+          const editRequestId = requestForm?.mode === 'edit' ? requestForm.requestId : null
+
+          if (editRequestId) {
+            return rows.map((row) => (row.id === editRequestId ? { ...row, ...mappedRequest } : row))
+          }
+
+          return [mappedRequest, ...rows]
+        })
+      }
+    }
+  }, [loadRequestTableRows, requestForm])
   const isReturningConnectionConfig = isConnectionConfirmed(requestDocument)
   const revisionDialogTitle = isReturningConnectionConfig ? 'แจ้งแก้ไขการเชื่อมต่อ' : 'แจ้งแก้ไขแบบฟอร์ม'
   const revisionDialogDescription = isReturningConnectionConfig
@@ -6938,6 +7015,11 @@ function ConnectionRequestPage({ userType = '', accessToken = '', currentUser = 
         open={Boolean(connectionSettingsContext)}
         context={connectionSettingsContext}
         accessToken={accessToken}
+        onSaved={() =>
+          loadRequestTableRows().catch((error) => {
+            setRequestTableError(error instanceof Error ? error.message : 'โหลดรายการคำขอไม่สำเร็จ')
+          })
+        }
         onClose={() => setConnectionSettingsContext(null)}
       />
     </Stack>
