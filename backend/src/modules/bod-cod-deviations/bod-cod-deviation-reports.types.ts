@@ -16,7 +16,7 @@ export type BodCodParameterCode = 'BOD' | 'COD';
 export type BodCodApprovalTrack = 'CENTRAL' | 'REGIONAL';
 export type BodCodApprovalStepStatus = 'PENDING' | 'WAITING' | 'APPROVED' | 'REVISION_REQUESTED';
 export type BodCodApprovalRoleCode = 'INSPECTOR' | 'REVIEWER' | 'APPROVER';
-export type BodCodAllowedAction = 'CANCEL' | 'START_REVIEW' | 'APPROVE' | 'REQUEST_REVISION';
+export type BodCodAllowedAction = 'CANCEL' | 'APPROVE' | 'REQUEST_REVISION';
 
 export interface BodCodDeviationAccess {
   actorUserId: number;

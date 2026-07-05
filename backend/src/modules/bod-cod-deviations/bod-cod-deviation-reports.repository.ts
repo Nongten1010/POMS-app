@@ -1200,7 +1200,7 @@ function allowedActionsFor(
   if (status === 'APPROVED' || status === 'CANCELLED') return [];
   if (scope === 'OWN_FACTORY') return ['CANCEL'];
   const officerActions: BodCodAllowedAction[] =
-    currentStep?.status === 'PENDING' ? ['START_REVIEW', 'APPROVE', 'REQUEST_REVISION'] : [];
+    currentStep?.status === 'PENDING' ? ['APPROVE', 'REQUEST_REVISION'] : [];
   return [...officerActions, 'CANCEL'];
 }
 
