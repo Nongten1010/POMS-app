@@ -6,6 +6,7 @@ export const BOD_COD_DEVIATION_REPORT_STATUSES = [
   'REVISED_PENDING_REVIEW',
   'WAITING_APPROVAL',
   'APPROVED',
+  'REJECTED',
   'REVISION_REQUESTED',
   'CANCELLED',
 ] as const;
@@ -14,9 +15,15 @@ export type BodCodDeviationReportStatus = (typeof BOD_COD_DEVIATION_REPORT_STATU
 export type BodCodReportSlotStatus = BodCodDeviationReportStatus | 'NOT_SUBMITTED';
 export type BodCodParameterCode = 'BOD' | 'COD';
 export type BodCodApprovalTrack = 'CENTRAL' | 'REGIONAL';
-export type BodCodApprovalStepStatus = 'PENDING' | 'WAITING' | 'APPROVED' | 'REVISION_REQUESTED';
+export type BodCodApprovalStepStatus =
+  | 'PENDING'
+  | 'WAITING'
+  | 'APPROVED'
+  | 'REJECTED'
+  | 'REVISION_REQUESTED';
 export type BodCodApprovalRoleCode = 'INSPECTOR' | 'REVIEWER' | 'APPROVER';
-export type BodCodAllowedAction = 'CANCEL' | 'APPROVE' | 'REQUEST_REVISION';
+export type BodCodWorkflowAction = 'APPROVE' | 'REQUEST_REVISION' | 'REJECT';
+export type BodCodAllowedAction = 'CANCEL' | BodCodWorkflowAction;
 
 export interface BodCodDeviationAccess {
   actorUserId: number;
@@ -78,6 +85,12 @@ export interface CreateBodCodDeviationReportDTO {
 
 export interface ResubmitBodCodDeviationReportDTO extends CreateBodCodDeviationReportDTO {
   revisionNote?: string | null;
+}
+
+export interface ChangeBodCodWorkflowStatusDTO {
+  action: BodCodWorkflowAction;
+  revisionReason?: string | null;
+  officerNote?: string | null;
 }
 
 export interface CreateBodCodDeviationReportAccess extends BodCodDeviationAccess {

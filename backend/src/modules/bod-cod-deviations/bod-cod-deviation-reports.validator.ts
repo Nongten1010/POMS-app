@@ -96,3 +96,25 @@ export const resubmitBodCodDeviationReportSchema = createBodCodDeviationReportSc
     revisionNote: nullableText(1000),
   })
   .strict();
+
+export const changeBodCodWorkflowStatusSchema = z.discriminatedUnion('action', [
+  z
+    .object({
+      action: z.literal('REQUEST_REVISION'),
+      revisionReason: requiredText(1000),
+      officerNote: nullableText(1000),
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal('APPROVE'),
+      officerNote: nullableText(1000),
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal('REJECT'),
+      officerNote: nullableText(1000),
+    })
+    .strict(),
+]);

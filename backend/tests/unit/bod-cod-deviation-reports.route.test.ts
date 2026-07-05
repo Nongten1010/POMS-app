@@ -8,6 +8,7 @@ jest.mock('../../src/modules/bod-cod-deviations/bod-cod-deviation-reports.servic
     listReports: jest.fn(),
     createReport: jest.fn(),
     resubmitReport: jest.fn(),
+    changeWorkflowStatus: jest.fn(),
     getReportById: jest.fn(),
   },
 }));
@@ -177,6 +178,39 @@ describe('BOD/COD deviation report routes', () => {
         },
       ],
       allowedActions: ['CANCEL'],
+    });
+    mockedService.changeWorkflowStatus.mockResolvedValue({
+      id: 9,
+      reportNo: 'BODCOD-2569-0009',
+      statusCode: 'WAITING_APPROVAL',
+      approvalTrack: 'REGIONAL',
+      currentStep: {
+        id: 16,
+        stepNo: 2,
+        roleCode: 'APPROVER',
+        roleLabel: 'ผอ.ศูนย์ (อนุมัติ)',
+        status: 'PENDING',
+        isCurrent: true,
+      },
+      steps: [
+        {
+          id: 15,
+          stepNo: 1,
+          roleCode: 'INSPECTOR',
+          roleLabel: 'เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์',
+          status: 'APPROVED',
+          isCurrent: false,
+        },
+        {
+          id: 16,
+          stepNo: 2,
+          roleCode: 'APPROVER',
+          roleLabel: 'ผอ.ศูนย์ (อนุมัติ)',
+          status: 'PENDING',
+          isCurrent: true,
+        },
+      ],
+      allowedActions: ['APPROVE', 'REQUEST_REVISION', 'REJECT'],
     });
     mockedService.getReportById.mockResolvedValue({
       id: 9,
@@ -440,6 +474,87 @@ describe('BOD/COD deviation report routes', () => {
       allowedActions: ['CANCEL'],
     });
   });
+
+  it('lets officers apply BOD/COD workflow actions', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .post('/api/v1/bod-cod-deviation-reports/9/workflow-actions')
+      .set('Authorization', `Bearer ${officerToken()}`)
+      .send({
+        action: 'APPROVE',
+        officerNote: 'ข้อมูลถูกต้อง ส่งต่อผู้อนุมัติ',
+      });
+
+    expect(response.status).toBe(200);
+    expect(mockedService.changeWorkflowStatus).toHaveBeenCalledWith(
+      9,
+      {
+        action: 'APPROVE',
+        officerNote: 'ข้อมูลถูกต้อง ส่งต่อผู้อนุมัติ',
+      },
+      {
+        actorUserId: 77,
+        scope: 'ALL',
+        regionalAccess: { regions: ['ภาคเหนือ'] },
+      },
+    );
+    expect(response.body.data).toMatchObject({
+      id: 9,
+      statusCode: 'WAITING_APPROVAL',
+      currentStep: {
+        stepNo: 2,
+        status: 'PENDING',
+      },
+      allowedActions: ['APPROVE', 'REQUEST_REVISION', 'REJECT'],
+    });
+  });
+
+  it('rejects removed START_REVIEW workflow action before calling service', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .post('/api/v1/bod-cod-deviation-reports/9/workflow-actions')
+      .set('Authorization', `Bearer ${officerToken()}`)
+      .send({
+        action: 'START_REVIEW',
+        officerNote: 'รับเรื่องเข้าพิจารณา',
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    expect(mockedService.changeWorkflowStatus).not.toHaveBeenCalled();
+  });
+
+  it('requires a revision reason when officers return BOD/COD reports for correction', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .post('/api/v1/bod-cod-deviation-reports/9/workflow-actions')
+      .set('Authorization', `Bearer ${officerToken()}`)
+      .send({
+        action: 'REQUEST_REVISION',
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    expect(mockedService.changeWorkflowStatus).not.toHaveBeenCalled();
+  });
+
+  it('rejects operators from BOD/COD officer workflow actions', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .post('/api/v1/bod-cod-deviation-reports/9/workflow-actions')
+      .set('Authorization', `Bearer ${operatorToken()}`)
+      .send({
+        action: 'APPROVE',
+        officerNote: 'ข้อมูลถูกต้อง',
+      });
+
+    expect(response.status).toBe(403);
+    expect(mockedService.changeWorkflowStatus).not.toHaveBeenCalled();
+  });
 });
 
 function operatorToken(): string {
@@ -461,6 +576,7 @@ function officerToken(): string {
     roles: ['monitoring_kpm'],
     scopes: {
       'bod_cod_errors:view': 'ALL',
+      'bod_cod_errors:approve': 'ALL',
     },
     regionalAccess: { regions: ['ภาคเหนือ'] },
   });

@@ -5,6 +5,7 @@ import { getScope } from '../../shared/middlewares/authorize';
 import { bodCodDeviationReportsService } from './bod-cod-deviation-reports.service';
 import {
   bodCodDeviationReportIdParamsSchema,
+  changeBodCodWorkflowStatusSchema,
   createBodCodDeviationReportSchema,
   listBodCodDeviationReportsQuerySchema,
   resubmitBodCodDeviationReportSchema,
@@ -81,6 +82,22 @@ export const bodCodDeviationReportsController = {
       const data = await bodCodDeviationReportsService.resubmitReport(id, payload, {
         actorUserId,
         scope: getScope(req, 'bod_cod_errors:edit'),
+      });
+      res.status(StatusCodes.OK).json({ success: true, data });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async changeWorkflowStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const actorUserId = requireActorUserId(req);
+      const { id } = bodCodDeviationReportIdParamsSchema.parse(req.params);
+      const payload = changeBodCodWorkflowStatusSchema.parse(req.body);
+      const data = await bodCodDeviationReportsService.changeWorkflowStatus(id, payload, {
+        actorUserId,
+        scope: getScope(req, 'bod_cod_errors:approve'),
+        regionalAccess: req.user?.regionalAccess ?? undefined,
       });
       res.status(StatusCodes.OK).json({ success: true, data });
     } catch (err) {

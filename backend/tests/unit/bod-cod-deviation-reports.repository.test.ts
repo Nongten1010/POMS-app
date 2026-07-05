@@ -7,6 +7,8 @@ import {
   buildBodCodDeviationReportDetailQueryForTests,
   buildBodCodDeviationReportQueryForTests,
   buildBodCodFactoryInternalIdQueryForTests,
+  buildBodCodNextWorkflowStateForTests,
+  buildBodCodAllowedActionsForTests,
   buildBodCodReportStatusLabelForTests,
   buildBodCodResubmissionAccessQueryForTests,
   buildBodCodResubmissionWorkflowResetQueriesForTests,
@@ -150,6 +152,51 @@ describe('bodCodDeviationReportsRepository access filters', () => {
     expect(buildBodCodReportStatusLabelForTests('REVISED_PENDING_REVIEW', 'ALL')).toBe(
       'แก้ไขแล้ว/รอพิจารณา',
     );
+  });
+
+  it('exposes officer BOD/COD workflow actions while the current step is pending', () => {
+    const currentStep = {
+      stepNo: 1,
+      roleCode: 'INSPECTOR' as const,
+      roleLabel: 'เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์',
+      status: 'PENDING' as const,
+      isCurrent: true,
+    };
+
+    expect(buildBodCodAllowedActionsForTests('SUBMITTED', currentStep, 'ALL')).toEqual([
+      'APPROVE',
+      'REQUEST_REVISION',
+      'REJECT',
+    ]);
+    expect(buildBodCodAllowedActionsForTests('APPROVED', currentStep, 'ALL')).toEqual([]);
+    expect(buildBodCodAllowedActionsForTests('REJECTED', currentStep, 'ALL')).toEqual([]);
+  });
+
+  it('maps BOD/COD workflow actions to the next report and step state', () => {
+    expect(buildBodCodNextWorkflowStateForTests('APPROVE', true)).toEqual({
+      currentStepStatus: 'APPROVED',
+      nextStepStatus: 'PENDING',
+      reportStatus: 'WAITING_APPROVAL',
+      closesWorkflow: false,
+    });
+    expect(buildBodCodNextWorkflowStateForTests('APPROVE', false)).toEqual({
+      currentStepStatus: 'APPROVED',
+      nextStepStatus: null,
+      reportStatus: 'APPROVED',
+      closesWorkflow: true,
+    });
+    expect(buildBodCodNextWorkflowStateForTests('REQUEST_REVISION', false)).toEqual({
+      currentStepStatus: 'REVISION_REQUESTED',
+      nextStepStatus: null,
+      reportStatus: 'REVISION_REQUESTED',
+      closesWorkflow: false,
+    });
+    expect(buildBodCodNextWorkflowStateForTests('REJECT', false)).toEqual({
+      currentStepStatus: 'REJECTED',
+      nextStepStatus: null,
+      reportStatus: 'REJECTED',
+      closesWorkflow: true,
+    });
   });
 
   it('checks own-factory edit access before saving a submitted form', () => {
