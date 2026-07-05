@@ -224,6 +224,29 @@ describe('operator factory dashboard routes', () => {
     });
   });
 
+  it('uses dashboard view scope for dashboard data access when factory scope is narrower', async () => {
+    const app = createApp();
+    const token = accessToken({
+      scopes: {
+        'dashboard:view': 'ALL',
+        'factories:view': 'IN_REGION',
+      },
+      regionalAccess: { regions: ['ภาคตะวันออก'] },
+    });
+
+    const response = await request(app)
+      .get('/api/v1/operator-factory-dashboard?systemType=CEMS')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(mockedConnectionRequestsService.listOperatorFactoryDashboard).toHaveBeenCalledWith(
+      42,
+      'ALL',
+      { systemType: 'CEMS', favoriteOnly: false, connectedOnly: true },
+      { regions: ['ภาคตะวันออก'] },
+    );
+  });
+
   it('lists public factory map points without authentication and omits user-specific fields', async () => {
     const app = createApp();
 
@@ -331,15 +354,19 @@ describe('operator factory dashboard routes', () => {
   });
 });
 
-function accessToken(): string {
+function accessToken(
+  overrides: Partial<Parameters<typeof signAccessToken>[0]> = {},
+): string {
   return signAccessToken({
     sub: '42',
     userType: 'operator',
     roles: ['factory_operator'],
     scopes: {
+      'dashboard:view': 'OWN_FACTORY',
       'factories:view': 'OWN_FACTORY',
       'cems_wpms_requests:view': 'OWN_FACTORY',
       'dashboard.alerts:view': null,
     },
+    ...overrides,
   });
 }

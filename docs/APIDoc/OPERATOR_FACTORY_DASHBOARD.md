@@ -22,7 +22,7 @@
 | --- | --- |
 | URL | `GET /api/v1/operator-factory-dashboard` |
 | Header | `Authorization: Bearer <accessToken>` |
-| Permission | `factories:view` |
+| Permission | `dashboard:view` |
 | Body | ไม่มี |
 
 Query params:
@@ -467,6 +467,8 @@ Response:
 
 - ไม่ต้องส่ง `requestId` จาก frontend
 - response หน้านี้ไม่ใช้ `cems_wpms_connection_requests` เป็นข้อมูลหลัก
+- สิทธิ์ขอบเขตข้อมูลของหน้านี้อ่านจาก `dashboard:view` เช่น `ALL`, `IN_REGION`,
+  `OWN_FACTORY`; ไม่ใช้ scope ของ `factories:view`
 - ถ้ากดปุ่ม `CEMS` บน dashboard ให้เรียก `/api/v1/operator-factory-dashboard?systemType=CEMS`
 - ถ้ากดปุ่ม `WPMS` บน dashboard ให้เรียก `/api/v1/operator-factory-dashboard?systemType=WPMS`
 - ถ้าต้องแสดงเฉพาะ favorite ให้เรียก `?favoriteOnly=true`
