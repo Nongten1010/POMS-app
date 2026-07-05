@@ -11,6 +11,7 @@ import {
   createBodCodDeviationReportSchema,
   listBodCodDeviationReportsQuerySchema,
   resubmitBodCodDeviationReportSchema,
+  upsertBodCodResultNoticeSchema,
 } from './bod-cod-deviation-reports.validator';
 
 export const bodCodDeviationReportsController = {
@@ -124,6 +125,22 @@ export const bodCodDeviationReportsController = {
       const { id } = bodCodDeviationReportIdParamsSchema.parse(req.params);
       const payload = changeBodCodWorkflowStatusSchema.parse(req.body);
       const data = await bodCodDeviationReportsService.changeWorkflowStatus(id, payload, {
+        actorUserId,
+        scope: getScope(req, 'bod_cod_errors:approve'),
+        regionalAccess: req.user?.regionalAccess ?? undefined,
+      });
+      res.status(StatusCodes.OK).json({ success: true, data });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async upsertResultNotice(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const actorUserId = requireActorUserId(req);
+      const { id } = bodCodDeviationReportIdParamsSchema.parse(req.params);
+      const payload = upsertBodCodResultNoticeSchema.parse(req.body);
+      const data = await bodCodDeviationReportsService.upsertResultNotice(id, payload, {
         actorUserId,
         scope: getScope(req, 'bod_cod_errors:approve'),
         regionalAccess: req.user?.regionalAccess ?? undefined,

@@ -480,6 +480,18 @@ Response:
         "fileUrl": "https://d-poms.diw.go.th/uploads/bod-cod/deviation-attachments/2026/07/lab-report-uuid.pdf"
       }
     ],
+    "resultNotice": {
+      "id": 4,
+      "reportId": 9,
+      "reportCorrectness": "ถูกต้องครบถ้วน",
+      "checkedParameters": ["BOD", "COD"],
+      "reviewResult": "เห็นควรแจ้งผลการตรวจสอบ",
+      "comment": "ตรวจสอบแล้วข้อมูลครบถ้วน",
+      "inspectorName": "นางเจ้าหน้าที่ ตรวจสอบ",
+      "inspectorPosition": "นักวิชาการสิ่งแวดล้อมชำนาญการ",
+      "updatedBy": 77,
+      "updatedAt": "2026-07-06T10:00:00.000Z"
+    },
     "currentStep": {
       "id": 15,
       "stepNo": 1,
@@ -670,7 +682,99 @@ Notes:
 - ถ้ารายงานไม่ได้อยู่สถานะ `REVISION_REQUESTED` จะได้ `409 Conflict`
 - ถ้าไม่ใช่โรงงานของผู้ประกอบการ จะได้ `403 Forbidden` หรือ `404 Not Found` ตาม access filter
 
-## 6. Officer Workflow Action
+## 6. Save Result Notice Form
+
+สำหรับเจ้าหน้าที่บันทึก/แก้ไข “แบบแจ้งผล” เมื่อรายงานอยู่ step `RESULT_NOTICE`
+
+Link:
+
+```text
+PUT /api/v1/bod-cod-deviation-reports/:id/result-notice
+```
+
+Permission:
+
+```text
+bod_cod_errors:approve
+```
+
+Request:
+
+```json
+{
+  "reportCorrectness": "ถูกต้องครบถ้วน",
+  "checkedParameters": ["BOD", "COD"],
+  "reviewResult": "เห็นควรแจ้งผลการตรวจสอบ",
+  "comment": "ตรวจสอบแล้วข้อมูลครบถ้วน",
+  "inspectorName": "นางเจ้าหน้าที่ ตรวจสอบ",
+  "inspectorPosition": "นักวิชาการสิ่งแวดล้อมชำนาญการ"
+}
+```
+
+Field contract:
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `reportCorrectness` | enum | yes | `ถูกต้องครบถ้วน` หรือ `ไม่ถูกต้องครบถ้วน` |
+| `checkedParameters` | string[] | yes | `BOD`, `COD`; อย่างน้อย 1 ค่า และห้ามซ้ำ |
+| `reviewResult` | enum | yes | `เห็นควรแจ้งผลการตรวจสอบ` หรือ `เห็นควรให้แก้ไขเพิ่มเติม` |
+| `comment` | string/null | no | ความเห็นเพิ่มเติม สูงสุด 1000 ตัวอักษร |
+| `inspectorName` | string | yes | ชื่อเจ้าหน้าที่ผู้กรอก สูงสุด 255 ตัวอักษร |
+| `inspectorPosition` | string | yes | ตำแหน่งเจ้าหน้าที่ผู้กรอก สูงสุด 255 ตัวอักษร |
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 9,
+    "reportNo": "BODCOD-2569-0009",
+    "statusCode": "WAITING_RESULT_NOTICE",
+    "approvalTrack": "REGIONAL",
+    "currentStep": {
+      "id": 16,
+      "stepNo": 2,
+      "roleCode": "RESULT_NOTICE",
+      "roleLabel": "เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์ (บันทึก/แก้ไขแบบแจ้งผล)",
+      "status": "PENDING",
+      "isCurrent": true
+    },
+    "steps": [],
+    "allowedActions": ["APPROVE", "REQUEST_REVISION", "REJECT"],
+    "resultNotice": {
+      "id": 4,
+      "reportId": 9,
+      "reportCorrectness": "ถูกต้องครบถ้วน",
+      "checkedParameters": ["BOD", "COD"],
+      "reviewResult": "เห็นควรแจ้งผลการตรวจสอบ",
+      "comment": "ตรวจสอบแล้วข้อมูลครบถ้วน",
+      "inspectorName": "นางเจ้าหน้าที่ ตรวจสอบ",
+      "inspectorPosition": "นักวิชาการสิ่งแวดล้อมชำนาญการ",
+      "updatedBy": 77,
+      "updatedAt": "2026-07-06T10:00:00.000Z"
+    }
+  }
+}
+```
+
+Notes:
+
+- Endpoint นี้เป็น `PUT` แบบ upsert/full replacement: ถ้ายังไม่มีแถวใน `bod_cod_result_notices` จะสร้างใหม่ ถ้ามีแล้วจะ update แถวเดิม
+- ใช้ได้เฉพาะเมื่อรายงานมี `statusCode = WAITING_RESULT_NOTICE`, `currentStep.roleCode = RESULT_NOTICE`, และ `currentStep.status = PENDING`
+- หลังบันทึกแบบแจ้งผลแล้ว step ยังอยู่ที่ `RESULT_NOTICE`; เจ้าหน้าที่ต้องกด workflow action `APPROVE` ต่อ เพื่อส่งไป step ถัดไป (`APPROVER` ของภูมิภาค หรือ `REVIEWER` ของส่วนกลาง)
+- `GET /api/v1/bod-cod-deviation-reports/:id` จะคืน `resultNotice` เป็น object นี้เมื่อมีข้อมูลแล้ว หรือ `null` เมื่อยังไม่เคยบันทึก
+
+Errors:
+
+| Case | HTTP | Meaning |
+|---|---:|---|
+| token ไม่มี permission `bod_cod_errors:approve` | `403` | user ไม่มีสิทธิ์กรอกแบบแจ้งผล |
+| payload ไม่ถูกต้อง เช่น ไม่ส่ง `inspectorName` หรือ `checkedParameters` ว่าง | `400` | validation error |
+| รายงานไม่ได้อยู่ step `RESULT_NOTICE`/สถานะ `WAITING_RESULT_NOTICE` | `409` | ยังไม่ถึงจุดกรอกแบบแจ้งผล หรือผ่าน step นี้ไปแล้ว |
+| ไม่พบรายการ, รายการถูกลบ, หรืออยู่นอก scope/ภูมิภาค | `404` | ไม่คืนข้อมูลให้ผู้ใช้ |
+
+## 7. Officer Workflow Action
 
 สำหรับเจ้าหน้าที่กด `แจ้งแก้ไข`, `ผ่านพิจารณา`, หรือ `ไม่ผ่านพิจารณา` ใน workflow BOD/COD
 
@@ -789,7 +893,8 @@ Transition rules:
 - `APPROVE` ไปยัง step `REVIEWER`: current step เป็น `APPROVED`, step ถัดไปเป็น `PENDING`, report status เป็น `WAITING_REVIEW`
 - `APPROVE` ไปยัง step `APPROVER`: current step เป็น `APPROVED`, step ถัดไปเป็น `PENDING`, report status เป็น `WAITING_APPROVAL`
 - `APPROVE` ที่ step สุดท้าย: report status เป็น `APPROVED` และ workflow จบ
-- `REQUEST_REVISION`: current step เป็น `REVISION_REQUESTED`, report status เป็น `REVISION_REQUESTED`; เมื่อผู้ประกอบการ resubmit จะกลับไป step 1 และไล่ flow ใหม่
+- `REQUEST_REVISION` จาก step เจ้าหน้าที่ (`INSPECTOR` หรือ `RESULT_NOTICE`): current step เป็น `REVISION_REQUESTED`, report status เป็น `REVISION_REQUESTED`; เมื่อผู้ประกอบการ resubmit จะกลับไป step 1 และไล่ flow ใหม่
+- `REQUEST_REVISION` จาก step ผอ. (`REVIEWER` หรือ `APPROVER`): เป็นการตีกลับภายในให้เจ้าหน้าที่คนแรก ไม่ส่งถึงผู้ประกอบการ; report status กลับเป็น `SUBMITTED`, step 1 เป็น `PENDING` + `isCurrent: true`, และ step หลังจากนั้นเป็น `WAITING`
 - `REJECT`: current step เป็น `REJECTED`, report status เป็น `REJECTED` และ workflow จบ
 
 Error behavior:
@@ -821,6 +926,8 @@ Error behavior:
 เจ้าหน้าที่:
 
 - Call only `GET /api/v1/bod-cod-deviation-reports` for "รายการคำขอ".
+- Call `GET /api/v1/bod-cod-deviation-reports/:id` to open the saved form and prefill `resultNotice` when editing the result notice form.
+- Call `PUT /api/v1/bod-cod-deviation-reports/:id/result-notice` while `statusCode = WAITING_RESULT_NOTICE` and `currentStep.roleCode = RESULT_NOTICE` to save/edit the result notice form.
 - Call `POST /api/v1/bod-cod-deviation-reports/:id/workflow-actions` for `แจ้งแก้ไข`, `ผ่านพิจารณา`, and `ไม่ผ่านพิจารณา`.
 - Token should include `bod_cod_errors:view` with the officer's menu/data scope.
 - Token should include `bod_cod_errors:approve` for workflow actions.

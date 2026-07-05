@@ -10,6 +10,7 @@ import {
   buildBodCodFactoryInternalIdQueryForTests,
   buildBodCodNextWorkflowStateForTests,
   buildBodCodAllowedActionsForTests,
+  buildBodCodResultNoticeAccessQueryForTests,
   buildBodCodReportStatusLabelForTests,
   buildBodCodResubmissionAccessQueryForTests,
   buildBodCodResubmissionWorkflowResetQueriesForTests,
@@ -127,6 +128,21 @@ describe('bodCodDeviationReportsRepository access filters', () => {
     expect(sql).toContain('join [user_juristics] as [uj]');
     expect(sql).toContain('[r].[id]');
     expect(compiled.bindings).toContain(9);
+  });
+
+  it('loads result notice updates through the current-step and regional access filters', () => {
+    const compiled = buildBodCodResultNoticeAccessQueryForTests(9, {
+      actorUserId: 77,
+      scope: 'ALL',
+      regionalAccess: { regions: ['ภาคเหนือ'] },
+    }).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('from [bod_cod_deviation_reports] as [r]');
+    expect(sql).toContain('left join [bod_cod_approval_steps] as [s]');
+    expect(sql).toContain('[s].[role_code] as [current_step_role_code]');
+    expect(sql).toContain('[p].[region]');
+    expect(compiled.bindings).toEqual(expect.arrayContaining([9, 'ภาคเหนือ']));
   });
 
   it('builds the documented central and regional workflow with result-notice editing before approval', () => {
@@ -340,11 +356,19 @@ describe('bodCodDeviationReportsRepository access filters', () => {
       reportStatus: 'APPROVED',
       closesWorkflow: true,
     });
-    expect(buildBodCodNextWorkflowStateForTests('REQUEST_REVISION', null)).toEqual({
+    expect(buildBodCodNextWorkflowStateForTests('REQUEST_REVISION', null, 'INSPECTOR')).toEqual({
       currentStepStatus: 'REVISION_REQUESTED',
       nextStepStatus: null,
       reportStatus: 'REVISION_REQUESTED',
       closesWorkflow: false,
+      resetToFirstStep: false,
+    });
+    expect(buildBodCodNextWorkflowStateForTests('REQUEST_REVISION', null, 'APPROVER')).toEqual({
+      currentStepStatus: 'WAITING',
+      nextStepStatus: 'PENDING',
+      reportStatus: 'SUBMITTED',
+      closesWorkflow: false,
+      resetToFirstStep: true,
     });
     expect(buildBodCodNextWorkflowStateForTests('REJECT', null)).toEqual({
       currentStepStatus: 'REJECTED',
