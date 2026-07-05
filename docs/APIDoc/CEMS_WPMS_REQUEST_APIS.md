@@ -2583,6 +2583,9 @@ Data dictionary:
 | `config.channels[].status` | string|null | No | สถานะพารามิเตอร์ เช่น `Normal`, `Maintenance`, `Inactive`; ถ้าไม่ส่ง backend ใช้ `Normal` |
 | `config.statusManagement` | object|null | No | ข้อมูลจัดการสถานะชั่วคราวของชุด config |
 
+หมายเหตุ: `config.channels[].valueRange` ทั้ง object เป็น optional ได้ ถ้าผู้ใช้ไม่กรอก
+Min/Max ในตารางพารามิเตอร์ backend จะเก็บเป็น `null` แทนการ reject payload
+
 ### API 4: GET รายละเอียดฟอร์ม ตั้งค่าอุปกรณ์ config สำหรับ prefill
 
 API นี้คืน config snapshot ของคำขอเดิม ไม่ใช่ active setting ล่าสุดหลังเชื่อมต่อ

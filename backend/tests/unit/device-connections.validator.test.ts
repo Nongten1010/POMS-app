@@ -319,6 +319,69 @@ describe('device connection validators', () => {
     }
   });
 
+  it('accepts Modbus TCP request config channels without optional value ranges', () => {
+    const result = createDeviceConnectionConfigRequestSchema.safeParse({
+      stationId: 'P0001',
+      deviceCode: 'P0001/01',
+      protocol: 'MODBUS_TCP',
+      settings: {
+        hostIp: '127.0.0.1',
+        slaveId: 20,
+        port: 443,
+      },
+      channels: [
+        {
+          addressId: 40001,
+          dataType: 'COD (mg/l)',
+          valueRange: { min: 0, max: 200 },
+          alertLow: 0,
+          alertHigh: 100,
+          valueFormat: 'MEASUREMENT_VALUE',
+          offset: 1,
+          encoding: 'UNSIGNED16_BIG_ENDIAN',
+          status: 'Normal',
+        },
+        {
+          addressId: 40002,
+          dataType: 'Flow rate (m3/hr)',
+          valueFormat: 'MEASUREMENT_VALUE',
+          offset: 1,
+          encoding: 'UNSIGNED16_BIG_ENDIAN',
+          status: 'Normal',
+        },
+        {
+          addressId: 40003,
+          dataType: 'Watt (kW/hr)',
+          valueFormat: 'MEASUREMENT_VALUE',
+          offset: 1,
+          encoding: 'UNSIGNED16_BIG_ENDIAN',
+          status: 'Normal',
+        },
+      ],
+      statusManagement: {
+        selectedParameters: ['ทั้งหมด'],
+        startAt: null,
+        endAt: null,
+        status: 'Normal',
+        schedules: [],
+      },
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toMatchObject({
+        stationId: 'P0001',
+        deviceCode: 'P0001/01',
+        protocol: 'MODBUS_TCP',
+        channels: [
+          { addressId: 40001, valueRange: { min: 0, max: 200 } },
+          { addressId: 40002, valueRange: null },
+          { addressId: 40003, valueRange: null },
+        ],
+      });
+    }
+  });
+
   it('normalizes legacy alert threshold fields from device setup forms', () => {
     const result = createDeviceConnectionConfigSchema.safeParse({
       stationId: 'SO001',

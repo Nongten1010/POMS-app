@@ -74,7 +74,7 @@ const modbusChannelSchema = z
     addressId,
     dataType: trimmedString(128),
     unit: z.string().trim().max(64).optional().default(''),
-    valueRange: measurementRangeSchema,
+    valueRange: measurementRangeSchema.nullable().optional().default(null),
     alertLow: optionalThresholdSchema.optional().default(null),
     alertHigh: optionalThresholdSchema.optional().default(null),
     valueFormat: dataValueFormatSchema.nullable().optional().default('MEASUREMENT_VALUE'),
