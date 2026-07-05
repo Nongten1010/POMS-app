@@ -7,6 +7,7 @@ jest.mock('../../src/modules/bod-cod-deviations/bod-cod-deviation-reports.servic
     listFactories: jest.fn(),
     listReports: jest.fn(),
     createReport: jest.fn(),
+    resubmitReport: jest.fn(),
     getReportById: jest.fn(),
   },
 }));
@@ -135,6 +136,39 @@ describe('BOD/COD deviation report routes', () => {
           isCurrent: true,
         },
         {
+          stepNo: 2,
+          roleCode: 'APPROVER',
+          roleLabel: 'ผู้อนุมัติ (ผอ.ศวภ.)',
+          status: 'WAITING',
+          isCurrent: false,
+        },
+      ],
+      allowedActions: ['CANCEL'],
+    });
+    mockedService.resubmitReport.mockResolvedValue({
+      id: 9,
+      reportNo: 'BODCOD-2569-0009',
+      statusCode: 'SUBMITTED',
+      approvalTrack: 'REGIONAL',
+      currentStep: {
+        id: 15,
+        stepNo: 1,
+        roleCode: 'INSPECTOR',
+        roleLabel: 'ผู้ตรวจสอบ',
+        status: 'PENDING',
+        isCurrent: true,
+      },
+      steps: [
+        {
+          id: 15,
+          stepNo: 1,
+          roleCode: 'INSPECTOR',
+          roleLabel: 'ผู้ตรวจสอบ',
+          status: 'PENDING',
+          isCurrent: true,
+        },
+        {
+          id: 16,
           stepNo: 2,
           roleCode: 'APPROVER',
           roleLabel: 'ผู้อนุมัติ (ผอ.ศวภ.)',
@@ -363,6 +397,35 @@ describe('BOD/COD deviation report routes', () => {
         stepNo: 1,
         roleCode: 'INSPECTOR',
       }),
+      allowedActions: ['CANCEL'],
+    });
+  });
+
+  it('resubmits a returned BOD/COD deviation form with full replacement payload', async () => {
+    const app = createApp();
+    const payload = {
+      ...createReportPayload(),
+      revisionNote: 'แก้ไขผลตรวจวัดตามข้อสังเกตของเจ้าหน้าที่',
+    };
+
+    const response = await request(app)
+      .put('/api/v1/bod-cod-deviation-reports/9/resubmission')
+      .set('Authorization', `Bearer ${operatorToken()}`)
+      .send(payload);
+
+    expect(response.status).toBe(200);
+    expect(mockedService.resubmitReport).toHaveBeenCalledWith(9, payload, {
+      actorUserId: 42,
+      scope: 'OWN_FACTORY',
+    });
+    expect(response.body.data).toMatchObject({
+      id: 9,
+      statusCode: 'SUBMITTED',
+      currentStep: {
+        stepNo: 1,
+        status: 'PENDING',
+        isCurrent: true,
+      },
       allowedActions: ['CANCEL'],
     });
   });

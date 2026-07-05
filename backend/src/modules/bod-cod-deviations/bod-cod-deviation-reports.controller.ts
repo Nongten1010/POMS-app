@@ -7,6 +7,7 @@ import {
   bodCodDeviationReportIdParamsSchema,
   createBodCodDeviationReportSchema,
   listBodCodDeviationReportsQuerySchema,
+  resubmitBodCodDeviationReportSchema,
 } from './bod-cod-deviation-reports.validator';
 
 export const bodCodDeviationReportsController = {
@@ -67,6 +68,21 @@ export const bodCodDeviationReportsController = {
         .status(StatusCodes.CREATED)
         .location(`${env.API_PREFIX}/bod-cod-deviation-reports/${data.id}`)
         .json({ success: true, data });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async resubmitReport(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const actorUserId = requireActorUserId(req);
+      const { id } = bodCodDeviationReportIdParamsSchema.parse(req.params);
+      const payload = resubmitBodCodDeviationReportSchema.parse(req.body);
+      const data = await bodCodDeviationReportsService.resubmitReport(id, payload, {
+        actorUserId,
+        scope: getScope(req, 'bod_cod_errors:edit'),
+      });
+      res.status(StatusCodes.OK).json({ success: true, data });
     } catch (err) {
       next(err);
     }

@@ -90,3 +90,9 @@ export const createBodCodDeviationReportSchema = z
     attachments: z.array(bodCodDeviationAttachmentSchema).max(30).optional().default([]),
   })
   .strict();
+
+export const resubmitBodCodDeviationReportSchema = createBodCodDeviationReportSchema
+  .extend({
+    revisionNote: nullableText(1000),
+  })
+  .strict();

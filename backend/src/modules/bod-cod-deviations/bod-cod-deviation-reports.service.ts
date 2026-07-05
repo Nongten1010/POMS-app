@@ -9,6 +9,7 @@ import type {
   CreatedBodCodDeviationReportDTO,
   ListBodCodDeviationReportsQuery,
   PaginatedBodCodDeviationTableRowsDTO,
+  ResubmitBodCodDeviationReportDTO,
 } from './bod-cod-deviation-reports.types';
 
 export const bodCodDeviationReportsService = {
@@ -38,6 +39,14 @@ export const bodCodDeviationReportsService = {
     access: CreateBodCodDeviationReportAccess,
   ): Promise<CreatedBodCodDeviationReportDTO> {
     return bodCodDeviationReportsRepository.createReport(input, access);
+  },
+
+  resubmitReport(
+    id: number,
+    input: ResubmitBodCodDeviationReportDTO,
+    access: CreateBodCodDeviationReportAccess,
+  ): Promise<CreatedBodCodDeviationReportDTO> {
+    return bodCodDeviationReportsRepository.resubmitReport(id, input, access);
   },
 
   getReportById(

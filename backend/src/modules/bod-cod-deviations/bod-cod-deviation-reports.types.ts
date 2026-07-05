@@ -76,6 +76,10 @@ export interface CreateBodCodDeviationReportDTO {
   attachments: BodCodDeviationAttachmentInput[];
 }
 
+export interface ResubmitBodCodDeviationReportDTO extends CreateBodCodDeviationReportDTO {
+  revisionNote?: string | null;
+}
+
 export interface CreateBodCodDeviationReportAccess extends BodCodDeviationAccess {
   scope: string | null | undefined;
 }
@@ -210,7 +214,8 @@ export interface CreatedBodCodDeviationReportDTO extends BodCodWorkflowFieldsDTO
 }
 
 export interface BodCodDeviationReportDetailDTO
-  extends BodCodWorkflowFieldsDTO,
+  extends
+    BodCodWorkflowFieldsDTO,
     Omit<BodCodDeviationReportTableRowDTO, 'measurementCount' | 'approvalTrack'> {
   businessActivity: string | null;
   factoryAddress: string | null;

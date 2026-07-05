@@ -165,6 +165,7 @@ Endpoints:
 
 - `POST /api/v1/bod-cod-deviation-reports`
 - `GET /api/v1/bod-cod-deviation-reports/:id`
+- `PUT /api/v1/bod-cod-deviation-reports/:id/resubmission`
 
 Source:
 
@@ -172,6 +173,7 @@ Source:
 - Measurement rows: `dbo.bod_cod_deviation_measurements`
 - Attachment metadata: `dbo.bod_cod_deviation_attachments`
 - Workflow steps: `dbo.bod_cod_approval_steps`
+- Workflow events: `dbo.bod_cod_approval_events`
 
 Transformation:
 
@@ -184,17 +186,22 @@ Transformation:
 - `deviationValueMgL` comes from database generated column `device_value_mg_l - lab_value_mg_l`.
 - `isWithinStandard` is derived on save: if `standardDeviationMgL` is absent, return `null`; otherwise compare `ABS(deviationValueMgL) <= standardDeviationMgL`.
 - `selectedParameterLabel` keeps the unit with the parameter display name, e.g. `BOD (mg/l)` and `COD (mg/l)`.
+- Resubmission is allowed only when the stored report status is `REVISION_REQUESTED` and the current approval step status is also `REVISION_REQUESTED`.
+- Resubmission sets report status back to `SUBMITTED`, replaces measurement rows and attachment metadata, resets the same current approval step to `PENDING`, and records `RESUBMIT_REVISION` in `bod_cod_approval_events`.
+- Resubmission does not allow identity fields to drift from the original report slot: `reportRoundNo`, `reportYear`, `factoryRegistrationNo`, `connectedMeasurementPointId`, `pointCode`, and `selectedParameterCode` must match the stored report.
 
 Reason:
 
 - The frontend should not hardcode Bangkok-vs-regional step branching. Backend owns `approvalTrack`, `steps`, `currentStep`, and `allowedActions`.
 - The saved form must be reopenable with the same values the paper-like preview needs: header fields, lab/device fields, measurements, attachment metadata, and workflow state.
 - Operator save access must be checked against `user_juristics`; the backend must not rely only on factory identifiers supplied in the request body.
+- Operator resubmission must return the report to the exact step that requested revision, rather than starting the whole approval track again or moving to the next step automatically.
 
 Known risks:
 
 - `reportNo` is generated from the current count for the submitted Buddhist year. If high concurrency becomes likely, replace it with a database-backed sequence.
 - Attachment upload bytes are not handled by this JSON endpoint; the endpoint stores metadata for files already uploaded or otherwise staged.
+- The resubmission API soft-replaces attachment metadata only and does not delete object storage files; orphan file cleanup should be handled by a separate job.
 
 ## Auth Regional Access
 

@@ -12,6 +12,11 @@ bodCodDeviationReportsRoutes.get(
   authorize('bod_cod_errors:view'),
   bodCodDeviationReportsController.listFactories,
 );
+bodCodDeviationReportsRoutes.put(
+  '/:id/resubmission',
+  authorize('bod_cod_errors:edit'),
+  bodCodDeviationReportsController.resubmitReport,
+);
 bodCodDeviationReportsRoutes.get(
   '/:id',
   authorize('bod_cod_errors:view'),

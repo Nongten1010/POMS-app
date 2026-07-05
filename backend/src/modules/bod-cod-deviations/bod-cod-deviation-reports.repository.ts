@@ -1,6 +1,6 @@
 import type { Knex } from 'knex';
 import { db } from '../../config/database';
-import { ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
+import { ConflictError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
 import type {
   BodCodApprovalTrack,
   BodCodAllowedAction,
@@ -20,6 +20,7 @@ import type {
   CreatedBodCodDeviationReportDTO,
   BodCodDeviationReportDetailDTO,
   ListBodCodDeviationReportsQuery,
+  ResubmitBodCodDeviationReportDTO,
 } from './bod-cod-deviation-reports.types';
 
 interface FactoryTableRow {
@@ -86,6 +87,12 @@ interface ReportDetailRow extends ReportTableRow {
   device_serial_no: string | null;
   reporter_name: string | null;
   reporter_position: string | null;
+}
+
+interface EditableReportRow extends ReportDetailRow {
+  current_step_id: number | string | null;
+  current_step_no: number | string | null;
+  current_step_status: 'PENDING' | 'WAITING' | 'APPROVED' | 'REVISION_REQUESTED' | null;
 }
 
 interface MeasurementRow {
@@ -283,6 +290,67 @@ export const bodCodDeviationReportsRepository = {
     });
   },
 
+  async resubmitReport(
+    id: number,
+    input: ResubmitBodCodDeviationReportDTO,
+    access: CreateBodCodDeviationReportAccess,
+  ): Promise<CreatedBodCodDeviationReportDTO> {
+    return db.transaction(async (trx) => {
+      const now = new Date();
+      const report = await assertCanResubmitReport(id, input, access, trx);
+      const approvalTrack = report.approval_track;
+
+      await trx('bod_cod_deviation_reports')
+        .where('id', id)
+        .update({
+          factory_name: input.factoryName,
+          business_activity: input.businessActivity ?? null,
+          address: input.factoryAddress ?? null,
+          province_name: input.provinceName,
+          wastewater_flow_m3_per_hour: input.wastewaterFlowM3PerHour ?? null,
+          sampler_name: input.samplerName ?? null,
+          officer_registration_no: input.officerRegistrationNo ?? null,
+          laboratory_name: input.laboratoryName ?? null,
+          laboratory_registration_no: input.laboratoryRegistrationNo ?? null,
+          lab_report_no: input.labReportNo ?? null,
+          analysis_method: input.analysisMethod ?? null,
+          device_brand: input.deviceBrand ?? null,
+          device_model: input.deviceModel ?? null,
+          device_serial_no: input.deviceSerialNo ?? null,
+          reporter_name: input.reporterName ?? null,
+          reporter_position: input.reporterPosition ?? null,
+          status: 'SUBMITTED',
+          submitted_at: now,
+          updated_by: access.actorUserId,
+          updated_at: now,
+        });
+
+      await softReplaceMeasurements(id, input, now, trx);
+      await softReplaceAttachments(id, input, access.actorUserId, now, trx);
+      await resetRevisionStep(id, Number(report.current_step_id), now, trx);
+      await insertApprovalEvent(
+        id,
+        'RESUBMIT_REVISION',
+        access.actorUserId,
+        input.revisionNote,
+        now,
+        trx,
+      );
+
+      const savedSteps = await listApprovalSteps(id, trx);
+      const currentStep = currentWorkflowStep(savedSteps);
+      return {
+        id,
+        reportNo: report.report_no,
+        statusCode: 'SUBMITTED',
+        approvalTrack,
+        currentStep,
+        steps: savedSteps,
+        allowedActions: allowedActionsFor('SUBMITTED', currentStep, access.scope),
+      };
+    });
+  },
+
   async getReportById(
     id: number,
     access: BodCodDeviationAccess,
@@ -330,6 +398,13 @@ export function buildBodCodCreateAccessQueryForTests(
   access: CreateBodCodDeviationReportAccess,
 ) {
   return buildCreateAccessQuery(input, access);
+}
+
+export function buildBodCodResubmissionAccessQueryForTests(
+  id: number,
+  access: CreateBodCodDeviationReportAccess,
+) {
+  return buildEditableReportQuery(id, access);
 }
 
 function buildFactoryQuery(
@@ -498,10 +573,9 @@ function buildCreateAccessQuery(
     if (factoryId) {
       factoryBuilder.orWhere('f.fid', factoryId).orWhere('f.code', factoryId);
     }
-    factoryBuilder.orWhere('f.fid', input.factoryRegistrationNo).orWhere(
-      'f.code',
-      input.factoryRegistrationNo,
-    );
+    factoryBuilder
+      .orWhere('f.fid', input.factoryRegistrationNo)
+      .orWhere('f.code', input.factoryRegistrationNo);
   });
   return builder;
 }
@@ -516,6 +590,230 @@ async function ensureCreateAccess(
   if (!row) {
     throw new ForbiddenError('Factory is not available for this user');
   }
+}
+
+async function assertCanResubmitReport(
+  id: number,
+  input: ResubmitBodCodDeviationReportDTO,
+  access: CreateBodCodDeviationReportAccess,
+  trx: Knex.Transaction,
+): Promise<EditableReportRow> {
+  if (access.scope !== 'OWN_FACTORY') {
+    throw new ForbiddenError('Only own-factory operators can resubmit BOD/COD reports');
+  }
+
+  const row = await buildEditableReportQuery(id, access, trx).first();
+  if (!row) throw new NotFoundError('BOD/COD deviation report not found');
+  if (row.status !== 'REVISION_REQUESTED') {
+    throw new ConflictError(
+      'BOD/COD deviation report can be resubmitted only after revision is requested',
+      {
+        currentStatus: row.status,
+        requiredStatus: 'REVISION_REQUESTED',
+      },
+    );
+  }
+  if (row.current_step_status !== 'REVISION_REQUESTED' || row.current_step_id === null) {
+    throw new ConflictError('BOD/COD deviation report does not have a current revision step');
+  }
+  assertResubmissionIdentityMatches(row, input);
+  return row;
+}
+
+function buildEditableReportQuery(
+  id: number,
+  access: CreateBodCodDeviationReportAccess,
+  connection: Knex | Knex.Transaction = db,
+): Knex.QueryBuilder<EditableReportRow, EditableReportRow[]> {
+  const builder = connection<EditableReportRow>('bod_cod_deviation_reports as r')
+    .leftJoin('factories as f', function joinReportFactory() {
+      this.on('f.id', '=', 'r.factory_id')
+        .orOn('f.fid', '=', 'r.factory_registration_no')
+        .orOn('f.code', '=', 'r.factory_registration_no');
+    })
+    .leftJoin('provinces as p', 'p.name_th', 'r.province_name')
+    .leftJoin('bod_cod_approval_steps as s', function joinCurrentStep() {
+      this.on('s.report_id', '=', 'r.id')
+        .andOn('s.is_current', '=', db.raw('?', [true]))
+        .andOnNull('s.deleted_at');
+    })
+    .where('r.id', id)
+    .whereNull('r.deleted_at')
+    .select(
+      'r.id',
+      'r.report_no',
+      'r.report_round',
+      'r.report_year',
+      'r.factory_id',
+      'r.connected_measurement_point_id',
+      'r.point_code',
+      'r.point_name',
+      'f.fid as factory_fid',
+      'r.factory_name',
+      'r.factory_registration_no',
+      'r.province_name',
+      'r.approval_track',
+      'r.selected_parameter_code',
+      'r.status',
+      'r.submitted_at',
+      'r.created_at',
+      'r.updated_at',
+      'r.business_activity',
+      'r.address',
+      'r.wastewater_flow_m3_per_hour',
+      'r.sampler_name',
+      'r.officer_registration_no',
+      'r.laboratory_name',
+      'r.laboratory_registration_no',
+      'r.lab_report_no',
+      'r.analysis_method',
+      'r.device_brand',
+      'r.device_model',
+      'r.device_serial_no',
+      'r.reporter_name',
+      'r.reporter_position',
+      's.id as current_step_id',
+      's.step_no as current_step_no',
+      's.status as current_step_status',
+    );
+
+  applyReportAccessFilter(builder, access);
+
+  return builder as unknown as Knex.QueryBuilder<EditableReportRow, EditableReportRow[]>;
+}
+
+function assertResubmissionIdentityMatches(
+  row: EditableReportRow,
+  input: ResubmitBodCodDeviationReportDTO,
+): void {
+  const mismatches = [
+    [Number(row.report_round) !== input.reportRoundNo, 'reportRoundNo'],
+    [Number(row.report_year) !== input.reportYear, 'reportYear'],
+    [row.factory_registration_no !== input.factoryRegistrationNo, 'factoryRegistrationNo'],
+    [
+      toNumberOrNull(row.connected_measurement_point_id) !==
+        (input.connectedMeasurementPointId ?? null),
+      'connectedMeasurementPointId',
+    ],
+    [(row.point_code ?? null) !== (input.pointCode ?? null), 'pointCode'],
+    [row.selected_parameter_code !== input.selectedParameterCode, 'selectedParameterCode'],
+  ]
+    .filter(([isMismatch]) => isMismatch)
+    .map(([, field]) => field);
+
+  if (mismatches.length > 0) {
+    throw new ConflictError(
+      'BOD/COD report identity fields cannot be changed during resubmission',
+      {
+        fields: mismatches,
+      },
+    );
+  }
+}
+
+async function softReplaceMeasurements(
+  reportId: number,
+  input: ResubmitBodCodDeviationReportDTO,
+  now: Date,
+  trx: Knex.Transaction,
+): Promise<void> {
+  await trx('bod_cod_deviation_measurements')
+    .where('report_id', reportId)
+    .whereNull('deleted_at')
+    .update({ deleted_at: now, updated_at: now });
+
+  await trx('bod_cod_deviation_measurements').insert(
+    input.measurements.map((measurement, index) => {
+      const deviationValue = measurement.deviceValueMgL - measurement.labValueMgL;
+      const standard = measurement.standardDeviationMgL ?? null;
+      return {
+        report_id: reportId,
+        parameter_code: input.selectedParameterCode,
+        sample_date: measurement.sampleDate,
+        sample_time: measurement.sampleTime,
+        device_value_mg_l: measurement.deviceValueMgL,
+        lab_value_mg_l: measurement.labValueMgL,
+        standard_deviation_mg_l: standard,
+        is_within_standard: standard === null ? null : Math.abs(deviationValue) <= standard,
+        sort_order: index + 1,
+        created_at: now,
+        updated_at: now,
+      };
+    }),
+  );
+}
+
+async function softReplaceAttachments(
+  reportId: number,
+  input: ResubmitBodCodDeviationReportDTO,
+  actorUserId: number,
+  now: Date,
+  trx: Knex.Transaction,
+): Promise<void> {
+  await trx('bod_cod_deviation_attachments')
+    .where('report_id', reportId)
+    .whereNull('deleted_at')
+    .update({ deleted_at: now, updated_at: now });
+
+  if (input.attachments.length === 0) return;
+
+  await trx('bod_cod_deviation_attachments').insert(
+    input.attachments.map((attachment) => ({
+      report_id: reportId,
+      attachment_type: attachment.attachmentType,
+      original_file_name: attachment.originalFileName,
+      stored_file_name: attachment.storedFileName ?? null,
+      mime_type: attachment.mimeType ?? null,
+      file_size: attachment.fileSize ?? null,
+      storage_path: attachment.storagePath ?? null,
+      uploaded_by: actorUserId,
+      uploaded_at: now,
+      created_at: now,
+      updated_at: now,
+    })),
+  );
+}
+
+async function resetRevisionStep(
+  reportId: number,
+  revisionStepId: number,
+  now: Date,
+  trx: Knex.Transaction,
+): Promise<void> {
+  await trx('bod_cod_approval_steps')
+    .where('report_id', reportId)
+    .whereNull('deleted_at')
+    .whereNot('id', revisionStepId)
+    .update({ is_current: false, updated_at: now });
+
+  await trx('bod_cod_approval_steps')
+    .where('id', revisionStepId)
+    .where('report_id', reportId)
+    .whereNull('deleted_at')
+    .update({
+      status: 'PENDING',
+      is_current: true,
+      decision: null,
+      decided_at: null,
+      updated_at: now,
+    });
+}
+
+async function insertApprovalEvent(
+  reportId: number,
+  action: 'RESUBMIT_REVISION',
+  actorUserId: number,
+  note: string | null | undefined,
+  now: Date,
+  trx: Knex.Transaction,
+): Promise<void> {
+  await trx('bod_cod_approval_events').insert({
+    report_id: reportId,
+    action,
+    actor_user_id: actorUserId,
+    note: note ?? null,
+    created_at: now,
+  });
 }
 
 function applyFactoryAccessFilter(builder: Knex.QueryBuilder, access: BodCodDeviationAccess): void {

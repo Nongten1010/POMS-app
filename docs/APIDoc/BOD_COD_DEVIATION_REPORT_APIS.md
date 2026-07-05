@@ -397,6 +397,133 @@ Response:
 }
 ```
 
+## 5. Resubmit Returned Deviation Report Form
+
+สำหรับผู้ประกอบการบันทึกแบบที่เจ้าหน้าที่ส่งกลับให้แก้ไข และส่งกลับเข้าคิวตรวจซ้ำ
+
+Link:
+
+```text
+PUT /api/v1/bod-cod-deviation-reports/:id/resubmission
+```
+
+Permission:
+
+```text
+bod_cod_errors:edit
+```
+
+State rule:
+
+- เรียกได้เฉพาะรายงานสถานะ `REVISION_REQUESTED`
+- ผู้เรียกต้องเป็นผู้ประกอบการ scope `OWN_FACTORY` และต้องผ่าน `user_juristics` ของโรงงานในรายงานเดิม
+- หลังบันทึก ระบบตั้งรายงานกลับเป็น `SUBMITTED`
+- approval step ที่เป็นคนขอแก้ไขกลับเป็น `PENDING` และ `isCurrent = true`
+- step ก่อนหน้าที่ยืนยันแล้วคงสถานะเดิม และ step ถัดไปยัง `WAITING`
+- ระบบเพิ่ม event action `RESUBMIT_REVISION` พร้อม `revisionNote` ถ้ามี
+
+Payload:
+
+ใช้ payload ฟอร์มทั้งชุดรูปแบบเดียวกับ `POST /api/v1/bod-cod-deviation-reports` และเพิ่ม `revisionNote` ได้แบบ optional
+
+```json
+{
+  "reportRoundNo": 1,
+  "reportYear": 2569,
+  "factoryId": "FID-001",
+  "factoryName": "บริษัท ทดสอบน้ำเสีย จำกัด",
+  "factoryRegistrationNo": "10520000225172",
+  "businessActivity": "ผลิตอาหารและเครื่องดื่ม",
+  "factoryAddress": "99 หมู่ 1",
+  "provinceName": "ลำปาง",
+  "connectedMeasurementPointId": 9,
+  "pointCode": "P0001",
+  "pointName": "จุดระบายน้ำทิ้ง A",
+  "wastewaterFlowM3PerHour": 120.5,
+  "samplerName": "นายเก็บ ตัวอย่าง",
+  "officerRegistrationNo": "LAB-001",
+  "laboratoryName": "ห้องปฏิบัติการกลาง",
+  "laboratoryRegistrationNo": "LAB-REG-001",
+  "labReportNo": "LAB-REPORT-001",
+  "analysisMethod": "Standard Methods",
+  "deviceBrand": "Brand A",
+  "deviceModel": "Model B",
+  "deviceSerialNo": "SN-001",
+  "selectedParameterCode": "BOD",
+  "reporterName": "นายรายงาน ผล",
+  "reporterPosition": "เจ้าหน้าที่สิ่งแวดล้อม",
+  "revisionNote": "แก้ไขผลตรวจวัดตามข้อสังเกตของเจ้าหน้าที่",
+  "measurements": [
+    {
+      "sampleDate": "2026-07-01",
+      "sampleTime": "09:30",
+      "deviceValueMgL": 12.5,
+      "labValueMgL": 10,
+      "standardDeviationMgL": 3
+    }
+  ],
+  "attachments": [
+    {
+      "attachmentType": "LAB_REPORT",
+      "originalFileName": "lab-report.pdf",
+      "storedFileName": "lab-report-uuid.pdf",
+      "mimeType": "application/pdf",
+      "fileSize": 12000,
+      "storagePath": "uploads/bod-cod/lab-report-uuid.pdf"
+    }
+  ]
+}
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 9,
+    "reportNo": "BODCOD-2569-0009",
+    "statusCode": "SUBMITTED",
+    "approvalTrack": "REGIONAL",
+    "currentStep": {
+      "id": 15,
+      "stepNo": 1,
+      "roleCode": "INSPECTOR",
+      "roleLabel": "ผู้ตรวจสอบ",
+      "status": "PENDING",
+      "isCurrent": true
+    },
+    "steps": [
+      {
+        "id": 15,
+        "stepNo": 1,
+        "roleCode": "INSPECTOR",
+        "roleLabel": "ผู้ตรวจสอบ",
+        "status": "PENDING",
+        "isCurrent": true
+      },
+      {
+        "id": 16,
+        "stepNo": 2,
+        "roleCode": "APPROVER",
+        "roleLabel": "ผู้อนุมัติ (ผอ.ศวภ.)",
+        "status": "WAITING",
+        "isCurrent": false
+      }
+    ],
+    "allowedActions": ["CANCEL"]
+  }
+}
+```
+
+Notes:
+
+- ระบบ replace `bod_cod_deviation_measurements` และ `bod_cod_deviation_attachments` ใน DB ด้วยชุดใหม่ทั้งหมด
+- ระบบไม่ลบไฟล์จริงใน storage จาก API นี้; cleanup ไฟล์ orphan ควรทำเป็นงานแยก
+- `reportRoundNo`, `reportYear`, `factoryRegistrationNo`, `connectedMeasurementPointId`, `pointCode`, และ `selectedParameterCode` ต้องตรงกับรายงานเดิม เพื่อกันการย้ายรายงานข้ามรอบ/จุดตรวจ/พารามิเตอร์ระหว่าง resubmit
+- ถ้ารายงานไม่ได้อยู่สถานะ `REVISION_REQUESTED` จะได้ `409 Conflict`
+- ถ้าไม่ใช่โรงงานของผู้ประกอบการ จะได้ `403 Forbidden` หรือ `404 Not Found` ตาม access filter
+
 ## Screen Usage
 
 ผู้ประกอบการ:
@@ -405,6 +532,7 @@ Response:
 - Call `GET /api/v1/bod-cod-deviation-reports` for "รายการคำขอ".
 - Call `POST /api/v1/bod-cod-deviation-reports` to save the BOD/COD deviation form.
 - Call `GET /api/v1/bod-cod-deviation-reports/:id` to reopen a saved form.
+- Call `PUT /api/v1/bod-cod-deviation-reports/:id/resubmission` to submit a corrected returned form.
 - Token should include `bod_cod_errors:view = OWN_FACTORY`.
 - `measurementPoints[].reportSlots[]` returns two current-year slots; the frontend can enable/disable BOD/COD report buttons from those slot statuses.
 - Frontend table fields are returned directly: `newRegistrationNo`, `oldRegistrationNo`, `province`, `measurementPoints[].code`, `measurementPoints[].name`, `measurementPoints[].type`, `measurementPoints[].parameters`, `measurementPoints[].round1Status`, and `measurementPoints[].round2Status`.

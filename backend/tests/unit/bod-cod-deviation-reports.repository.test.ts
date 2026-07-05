@@ -6,6 +6,7 @@ import {
   buildBodCodDeviationLatestReportSlotMapForTests,
   buildBodCodDeviationReportDetailQueryForTests,
   buildBodCodDeviationReportQueryForTests,
+  buildBodCodResubmissionAccessQueryForTests,
 } from '../../src/modules/bod-cod-deviations/bod-cod-deviation-reports.repository';
 
 describe('bodCodDeviationReportsRepository access filters', () => {
@@ -141,5 +142,20 @@ describe('bodCodDeviationReportsRepository access filters', () => {
     expect(sql).toContain('join [user_juristics] as [uj]');
     expect(sql).toContain('[uj].[user_id]');
     expect(compiled.bindings).toEqual(expect.arrayContaining([42, 'FID-001', '10520000225172']));
+  });
+
+  it('checks own-factory access and the current approval step before resubmission', () => {
+    const compiled = buildBodCodResubmissionAccessQueryForTests(9, {
+      actorUserId: 42,
+      scope: 'OWN_FACTORY',
+    }).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('from [bod_cod_deviation_reports] as [r]');
+    expect(sql).toContain('left join [bod_cod_approval_steps] as [s]');
+    expect(sql).toContain('[s].[is_current]');
+    expect(sql).toContain('join [user_juristics] as [uj]');
+    expect(sql).toContain('[uj].[user_id]');
+    expect(compiled.bindings).toEqual(expect.arrayContaining([9, 42]));
   });
 });
