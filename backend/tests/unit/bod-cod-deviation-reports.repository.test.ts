@@ -129,16 +129,53 @@ describe('bodCodDeviationReportsRepository access filters', () => {
     expect(compiled.bindings).toContain(9);
   });
 
-  it('builds the documented central three-step and regional two-step workflow', () => {
+  it('builds the documented central and regional workflow with result-notice editing before approval', () => {
     expect(buildBodCodApprovalStepsForTests('CENTRAL')).toEqual([
-      { stepNo: 1, roleCode: 'INSPECTOR', roleLabel: 'เจ้าหน้าที่กฝม.' },
-      { stepNo: 2, roleCode: 'REVIEWER', roleLabel: 'ผอ.กฝม. (ทบทวน)' },
-      { stepNo: 3, roleCode: 'APPROVER', roleLabel: 'ผอ.กวภ. (อนุมัติ)' },
+      { stepNo: 1, roleCode: 'INSPECTOR', roleLabel: 'เจ้าหน้าที่กฝม. (ตรวจสอบความถูกต้อง)' },
+      {
+        stepNo: 2,
+        roleCode: 'RESULT_NOTICE',
+        roleLabel: 'เจ้าหน้าที่กฝม. (บันทึก/แก้ไขแบบแจ้งผล)',
+      },
+      { stepNo: 3, roleCode: 'REVIEWER', roleLabel: 'ผอ.กฝม. (ทบทวน)' },
+      { stepNo: 4, roleCode: 'APPROVER', roleLabel: 'ผอ.กวภ. (อนุมัติ)' },
     ]);
     expect(buildBodCodApprovalStepsForTests('REGIONAL')).toEqual([
-      { stepNo: 1, roleCode: 'INSPECTOR', roleLabel: 'เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์' },
-      { stepNo: 2, roleCode: 'APPROVER', roleLabel: 'ผอ.ศูนย์ (อนุมัติ)' },
+      {
+        stepNo: 1,
+        roleCode: 'INSPECTOR',
+        roleLabel: 'เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์ (ตรวจสอบความถูกต้อง)',
+      },
+      {
+        stepNo: 2,
+        roleCode: 'RESULT_NOTICE',
+        roleLabel: 'เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์ (บันทึก/แก้ไขแบบแจ้งผล)',
+      },
+      { stepNo: 3, roleCode: 'APPROVER', roleLabel: 'ผอ.ศูนย์ (อนุมัติ)' },
     ]);
+  });
+
+  it('moves first approval into result-notice editing before review or final approval', () => {
+    expect(buildBodCodNextWorkflowStateForTests('APPROVE', 'RESULT_NOTICE')).toMatchObject({
+      currentStepStatus: 'APPROVED',
+      nextStepStatus: 'PENDING',
+      reportStatus: 'WAITING_RESULT_NOTICE',
+    });
+    expect(buildBodCodNextWorkflowStateForTests('APPROVE', 'REVIEWER')).toMatchObject({
+      currentStepStatus: 'APPROVED',
+      nextStepStatus: 'PENDING',
+      reportStatus: 'WAITING_REVIEW',
+    });
+    expect(buildBodCodNextWorkflowStateForTests('APPROVE', 'APPROVER')).toMatchObject({
+      currentStepStatus: 'APPROVED',
+      nextStepStatus: 'PENDING',
+      reportStatus: 'WAITING_APPROVAL',
+    });
+    expect(buildBodCodNextWorkflowStateForTests('APPROVE', null)).toMatchObject({
+      currentStepStatus: 'APPROVED',
+      nextStepStatus: null,
+      reportStatus: 'APPROVED',
+    });
   });
 
   it('shows operator-facing in-review labels until final approval', () => {
@@ -146,6 +183,10 @@ describe('bodCodDeviationReportsRepository access filters', () => {
     expect(buildBodCodReportStatusLabelForTests('REVISED_PENDING_REVIEW', 'OWN_FACTORY')).toBe(
       'รอพิจารณา',
     );
+    expect(buildBodCodReportStatusLabelForTests('WAITING_RESULT_NOTICE', 'OWN_FACTORY')).toBe(
+      'รอพิจารณา',
+    );
+    expect(buildBodCodReportStatusLabelForTests('WAITING_REVIEW', 'OWN_FACTORY')).toBe('รอพิจารณา');
     expect(buildBodCodReportStatusLabelForTests('WAITING_APPROVAL', 'OWN_FACTORY')).toBe(
       'รอพิจารณา',
     );
@@ -153,6 +194,10 @@ describe('bodCodDeviationReportsRepository access filters', () => {
     expect(buildBodCodReportStatusLabelForTests('REVISED_PENDING_REVIEW', 'ALL')).toBe(
       'แก้ไขแล้ว/รอพิจารณา',
     );
+    expect(buildBodCodReportStatusLabelForTests('WAITING_RESULT_NOTICE', 'ALL')).toBe(
+      'บันทึก/แก้ไขแบบแจ้งผล',
+    );
+    expect(buildBodCodReportStatusLabelForTests('WAITING_REVIEW', 'ALL')).toBe('รอทบทวน');
   });
 
   it('maps BOD/COD submit and approval events into KWP-style status history', () => {
@@ -283,25 +328,25 @@ describe('bodCodDeviationReportsRepository access filters', () => {
   });
 
   it('maps BOD/COD workflow actions to the next report and step state', () => {
-    expect(buildBodCodNextWorkflowStateForTests('APPROVE', true)).toEqual({
+    expect(buildBodCodNextWorkflowStateForTests('APPROVE', 'APPROVER')).toEqual({
       currentStepStatus: 'APPROVED',
       nextStepStatus: 'PENDING',
       reportStatus: 'WAITING_APPROVAL',
       closesWorkflow: false,
     });
-    expect(buildBodCodNextWorkflowStateForTests('APPROVE', false)).toEqual({
+    expect(buildBodCodNextWorkflowStateForTests('APPROVE', null)).toEqual({
       currentStepStatus: 'APPROVED',
       nextStepStatus: null,
       reportStatus: 'APPROVED',
       closesWorkflow: true,
     });
-    expect(buildBodCodNextWorkflowStateForTests('REQUEST_REVISION', false)).toEqual({
+    expect(buildBodCodNextWorkflowStateForTests('REQUEST_REVISION', null)).toEqual({
       currentStepStatus: 'REVISION_REQUESTED',
       nextStepStatus: null,
       reportStatus: 'REVISION_REQUESTED',
       closesWorkflow: false,
     });
-    expect(buildBodCodNextWorkflowStateForTests('REJECT', false)).toEqual({
+    expect(buildBodCodNextWorkflowStateForTests('REJECT', null)).toEqual({
       currentStepStatus: 'REJECTED',
       nextStepStatus: null,
       reportStatus: 'REJECTED',

@@ -180,7 +180,7 @@ Payload / query parameters:
 
 | Query | Required | Values | Description |
 |---|---:|---|---|
-| `status` | No | `DRAFT`, `SUBMITTED`, `REVISED_PENDING_REVIEW`, `WAITING_APPROVAL`, `APPROVED`, `REJECTED`, `REVISION_REQUESTED`, `CANCELLED` | กรองสถานะคำขอ |
+| `status` | No | `DRAFT`, `SUBMITTED`, `REVISED_PENDING_REVIEW`, `WAITING_RESULT_NOTICE`, `WAITING_REVIEW`, `WAITING_APPROVAL`, `APPROVED`, `REJECTED`, `REVISION_REQUESTED`, `CANCELLED` | กรองสถานะคำขอ |
 | `parameterCode` | No | `BOD`, `COD` | กรอง parameter ที่รายงาน |
 | `factoryId` | No | string | กรองโรงงานจาก `factories.id`, `factories.fid`, `factories.code`, หรือ `factory_registration_no` |
 
@@ -325,7 +325,7 @@ Response:
       "id": 15,
       "stepNo": 1,
       "roleCode": "INSPECTOR",
-      "roleLabel": "เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์",
+      "roleLabel": "เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์ (ตรวจสอบความถูกต้อง)",
       "status": "PENDING",
       "isCurrent": true
     },
@@ -334,13 +334,21 @@ Response:
         "id": 15,
         "stepNo": 1,
         "roleCode": "INSPECTOR",
-        "roleLabel": "เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์",
+        "roleLabel": "เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์ (ตรวจสอบความถูกต้อง)",
         "status": "PENDING",
         "isCurrent": true
       },
       {
         "id": 16,
         "stepNo": 2,
+        "roleCode": "RESULT_NOTICE",
+        "roleLabel": "เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์ (บันทึก/แก้ไขแบบแจ้งผล)",
+        "status": "WAITING",
+        "isCurrent": false
+      },
+      {
+        "id": 17,
+        "stepNo": 3,
         "roleCode": "APPROVER",
         "roleLabel": "ผอ.ศูนย์ (อนุมัติ)",
         "status": "WAITING",
@@ -476,7 +484,7 @@ Response:
       "id": 15,
       "stepNo": 1,
       "roleCode": "INSPECTOR",
-      "roleLabel": "เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์",
+      "roleLabel": "เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์ (ตรวจสอบความถูกต้อง)",
       "status": "PENDING",
       "isCurrent": true
     },
@@ -485,13 +493,21 @@ Response:
         "id": 15,
         "stepNo": 1,
         "roleCode": "INSPECTOR",
-        "roleLabel": "เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์",
+        "roleLabel": "เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์ (ตรวจสอบความถูกต้อง)",
         "status": "PENDING",
         "isCurrent": true
       },
       {
         "id": 16,
         "stepNo": 2,
+        "roleCode": "RESULT_NOTICE",
+        "roleLabel": "เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์ (บันทึก/แก้ไขแบบแจ้งผล)",
+        "status": "WAITING",
+        "isCurrent": false
+      },
+      {
+        "id": 17,
+        "stepNo": 3,
         "roleCode": "APPROVER",
         "roleLabel": "ผอ.ศูนย์ (อนุมัติ)",
         "status": "WAITING",
@@ -611,7 +627,7 @@ Response:
       "id": 15,
       "stepNo": 1,
       "roleCode": "INSPECTOR",
-      "roleLabel": "เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์",
+      "roleLabel": "เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์ (ตรวจสอบความถูกต้อง)",
       "status": "PENDING",
       "isCurrent": true
     },
@@ -620,13 +636,21 @@ Response:
         "id": 15,
         "stepNo": 1,
         "roleCode": "INSPECTOR",
-        "roleLabel": "เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์",
+        "roleLabel": "เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์ (ตรวจสอบความถูกต้อง)",
         "status": "PENDING",
         "isCurrent": true
       },
       {
         "id": 16,
         "stepNo": 2,
+        "roleCode": "RESULT_NOTICE",
+        "roleLabel": "เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์ (บันทึก/แก้ไขแบบแจ้งผล)",
+        "status": "WAITING",
+        "isCurrent": false
+      },
+      {
+        "id": 17,
+        "stepNo": 3,
         "roleCode": "APPROVER",
         "roleLabel": "ผอ.ศูนย์ (อนุมัติ)",
         "status": "WAITING",
@@ -668,6 +692,8 @@ Action mapping:
 |---|---|---|---|
 | `SUBMITTED` | เจ้าหน้าที่ | `PENDING` | `APPROVE`, `REQUEST_REVISION`, `REJECT` |
 | `REVISED_PENDING_REVIEW` | เจ้าหน้าที่ | `PENDING` | `APPROVE`, `REQUEST_REVISION`, `REJECT` |
+| `WAITING_RESULT_NOTICE` | เจ้าหน้าที่ | `PENDING` | `APPROVE`, `REQUEST_REVISION`, `REJECT` |
+| `WAITING_REVIEW` | เจ้าหน้าที่ | `PENDING` | `APPROVE`, `REQUEST_REVISION`, `REJECT` |
 | `WAITING_APPROVAL` | เจ้าหน้าที่ | `PENDING` | `APPROVE`, `REQUEST_REVISION`, `REJECT` |
 | `REVISION_REQUESTED` | ผู้ประกอบการ (`OWN_FACTORY`) | `REVISION_REQUESTED` | `CANCEL` |
 | `APPROVED`, `REJECTED`, `CANCELLED` | any | terminal status | none |
@@ -714,13 +740,13 @@ Response:
   "data": {
     "id": 9,
     "reportNo": "BODCOD-2569-0009",
-    "statusCode": "WAITING_APPROVAL",
+    "statusCode": "WAITING_RESULT_NOTICE",
     "approvalTrack": "REGIONAL",
     "currentStep": {
       "id": 16,
       "stepNo": 2,
-      "roleCode": "APPROVER",
-      "roleLabel": "ผอ.ศูนย์ (อนุมัติ)",
+      "roleCode": "RESULT_NOTICE",
+      "roleLabel": "เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์ (บันทึก/แก้ไขแบบแจ้งผล)",
       "status": "PENDING",
       "isCurrent": true
     },
@@ -729,7 +755,7 @@ Response:
         "id": 15,
         "stepNo": 1,
         "roleCode": "INSPECTOR",
-        "roleLabel": "เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์",
+        "roleLabel": "เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์ (ตรวจสอบความถูกต้อง)",
         "status": "APPROVED",
         "decision": "APPROVED",
         "comment": "ข้อมูลถูกต้อง ส่งต่อผู้อนุมัติ",
@@ -738,10 +764,18 @@ Response:
       {
         "id": 16,
         "stepNo": 2,
-        "roleCode": "APPROVER",
-        "roleLabel": "ผอ.ศูนย์ (อนุมัติ)",
+        "roleCode": "RESULT_NOTICE",
+        "roleLabel": "เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์ (บันทึก/แก้ไขแบบแจ้งผล)",
         "status": "PENDING",
         "isCurrent": true
+      },
+      {
+        "id": 17,
+        "stepNo": 3,
+        "roleCode": "APPROVER",
+        "roleLabel": "ผอ.ศูนย์ (อนุมัติ)",
+        "status": "WAITING",
+        "isCurrent": false
       }
     ],
     "allowedActions": ["APPROVE", "REQUEST_REVISION", "REJECT"]
@@ -751,7 +785,9 @@ Response:
 
 Transition rules:
 
-- `APPROVE` ที่ยังมี step ถัดไป: current step เป็น `APPROVED`, step ถัดไปเป็น `PENDING`, report status เป็น `WAITING_APPROVAL`
+- `APPROVE` ไปยัง step `RESULT_NOTICE`: current step เป็น `APPROVED`, step ถัดไปเป็น `PENDING`, report status เป็น `WAITING_RESULT_NOTICE`
+- `APPROVE` ไปยัง step `REVIEWER`: current step เป็น `APPROVED`, step ถัดไปเป็น `PENDING`, report status เป็น `WAITING_REVIEW`
+- `APPROVE` ไปยัง step `APPROVER`: current step เป็น `APPROVED`, step ถัดไปเป็น `PENDING`, report status เป็น `WAITING_APPROVAL`
 - `APPROVE` ที่ step สุดท้าย: report status เป็น `APPROVED` และ workflow จบ
 - `REQUEST_REVISION`: current step เป็น `REVISION_REQUESTED`, report status เป็น `REVISION_REQUESTED`; เมื่อผู้ประกอบการ resubmit จะกลับไป step 1 และไล่ flow ใหม่
 - `REJECT`: current step เป็น `REJECTED`, report status เป็น `REJECTED` และ workflow จบ
@@ -778,7 +814,7 @@ Error behavior:
 - Call `GET /api/v1/bod-cod-deviation-reports/:id` to reopen a saved form.
 - Call `PUT /api/v1/bod-cod-deviation-reports/:id/resubmission` to submit a corrected returned form.
 - Token should include `bod_cod_errors:view = OWN_FACTORY`.
-- Display pending workflow states (`SUBMITTED`, `REVISED_PENDING_REVIEW`, `WAITING_APPROVAL`) as `รอพิจารณา` until the report becomes `APPROVED`.
+- Display pending workflow states (`SUBMITTED`, `REVISED_PENDING_REVIEW`, `WAITING_RESULT_NOTICE`, `WAITING_REVIEW`, `WAITING_APPROVAL`) as `รอพิจารณา` until the report becomes `APPROVED`.
 - `measurementPoints[].reportSlots[]` returns two current-year slots; the frontend can enable/disable BOD/COD report buttons from those slot statuses.
 - Frontend table fields are returned directly: `newRegistrationNo`, `oldRegistrationNo`, `province`, `measurementPoints[].code`, `measurementPoints[].name`, `measurementPoints[].type`, `measurementPoints[].parameters`, `measurementPoints[].round1Status`, and `measurementPoints[].round2Status`.
 

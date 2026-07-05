@@ -4,6 +4,8 @@ export const BOD_COD_DEVIATION_REPORT_STATUSES = [
   'DRAFT',
   'SUBMITTED',
   'REVISED_PENDING_REVIEW',
+  'WAITING_RESULT_NOTICE',
+  'WAITING_REVIEW',
   'WAITING_APPROVAL',
   'APPROVED',
   'REJECTED',
@@ -21,7 +23,7 @@ export type BodCodApprovalStepStatus =
   | 'APPROVED'
   | 'REJECTED'
   | 'REVISION_REQUESTED';
-export type BodCodApprovalRoleCode = 'INSPECTOR' | 'REVIEWER' | 'APPROVER';
+export type BodCodApprovalRoleCode = 'INSPECTOR' | 'RESULT_NOTICE' | 'REVIEWER' | 'APPROVER';
 export type BodCodWorkflowAction = 'APPROVE' | 'REQUEST_REVISION' | 'REJECT';
 export type BodCodAllowedAction = 'CANCEL' | BodCodWorkflowAction;
 
