@@ -6,6 +6,7 @@ import {
   buildBodCodDeviationLatestReportSlotMapForTests,
   buildBodCodDeviationReportDetailQueryForTests,
   buildBodCodDeviationReportQueryForTests,
+  buildBodCodStatusHistoryForTests,
   buildBodCodFactoryInternalIdQueryForTests,
   buildBodCodNextWorkflowStateForTests,
   buildBodCodAllowedActionsForTests,
@@ -152,6 +153,115 @@ describe('bodCodDeviationReportsRepository access filters', () => {
     expect(buildBodCodReportStatusLabelForTests('REVISED_PENDING_REVIEW', 'ALL')).toBe(
       'แก้ไขแล้ว/รอพิจารณา',
     );
+  });
+
+  it('maps BOD/COD submit and approval events into KWP-style status history', () => {
+    const history = buildBodCodStatusHistoryForTests(
+      [
+        {
+          id: 9,
+          approval_track: 'REGIONAL',
+          status: 'APPROVED',
+          submitted_at: new Date('2026-07-04T10:00:00.000Z'),
+          created_by: 4,
+          created_by_username: 'operator',
+          created_by_prename_th: 'นาย',
+          created_by_first_name: 'บรรณณ์',
+          created_by_last_name: 'ศิริวัฒน์',
+        },
+      ],
+      [
+        {
+          id: 12,
+          report_id: 9,
+          action: 'REQUEST_REVISION',
+          note: 'กรุณาแก้ไขผลตรวจวัด',
+          actor_user_id: 7,
+          actor_username: 'officer',
+          actor_prename_th: 'นาง',
+          actor_first_name: 'เจ้าหน้าที่',
+          actor_last_name: 'ตรวจสอบ',
+          created_at: new Date('2026-07-05T10:00:00.000Z'),
+        },
+        {
+          id: 13,
+          report_id: 9,
+          action: 'RESUBMIT_REVISION',
+          note: 'แก้ไขข้อมูลแล้ว',
+          actor_user_id: 4,
+          actor_username: 'operator',
+          actor_prename_th: 'นาย',
+          actor_first_name: 'บรรณณ์',
+          actor_last_name: 'ศิริวัฒน์',
+          created_at: new Date('2026-07-06T10:00:00.000Z'),
+        },
+        {
+          id: 14,
+          report_id: 9,
+          action: 'APPROVE',
+          note: 'ข้อมูลถูกต้อง ส่งต่อผู้อนุมัติ',
+          actor_user_id: 7,
+          actor_username: 'officer',
+          actor_prename_th: 'นาง',
+          actor_first_name: 'เจ้าหน้าที่',
+          actor_last_name: 'ตรวจสอบ',
+          created_at: new Date('2026-07-07T10:00:00.000Z'),
+        },
+        {
+          id: 15,
+          report_id: 9,
+          action: 'APPROVE',
+          note: 'ข้อมูลครบถ้วน',
+          actor_user_id: 8,
+          actor_username: 'approver',
+          actor_prename_th: 'นาย',
+          actor_first_name: 'ผู้อนุมัติ',
+          actor_last_name: 'รายงาน',
+          created_at: new Date('2026-07-08T10:00:00.000Z'),
+        },
+      ],
+      'ALL',
+    );
+
+    expect(history.get(9)).toEqual([
+      expect.objectContaining({
+        status: 'SUBMITTED',
+        statusLabel: 'ส่งรายงานแล้ว',
+        note: null,
+        changedById: 4,
+        changedBy: 'นาย บรรณณ์ ศิริวัฒน์',
+        changedAt: '2026-07-04T10:00:00.000Z',
+        changedDate: '04/07/2569',
+      }),
+      expect.objectContaining({
+        id: 12,
+        status: 'REVISION_REQUESTED',
+        statusLabel: 'รอโรงงานแก้ไข',
+        note: 'กรุณาแก้ไขผลตรวจวัด',
+        changedById: 7,
+        changedBy: 'นาง เจ้าหน้าที่ ตรวจสอบ',
+      }),
+      expect.objectContaining({
+        id: 13,
+        status: 'REVISED_PENDING_REVIEW',
+        statusLabel: 'แก้ไขแล้ว/รอพิจารณา',
+        note: 'แก้ไขข้อมูลแล้ว',
+      }),
+      expect.objectContaining({
+        id: 14,
+        status: 'WAITING_APPROVAL',
+        statusLabel: 'รออนุมัติ',
+        note: 'ข้อมูลถูกต้อง ส่งต่อผู้อนุมัติ',
+      }),
+      expect.objectContaining({
+        id: 15,
+        status: 'APPROVED',
+        statusLabel: 'ผ่านการพิจารณา',
+        note: 'ข้อมูลครบถ้วน',
+        changedById: 8,
+        changedBy: 'นาย ผู้อนุมัติ รายงาน',
+      }),
+    ]);
   });
 
   it('exposes officer BOD/COD workflow actions while the current step is pending', () => {

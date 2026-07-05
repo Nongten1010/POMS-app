@@ -224,7 +224,19 @@ Response:
       "submittedAt": "2026-07-01T10:00:00.000Z",
       "createdAt": "2026-07-01T09:00:00.000Z",
       "updatedAt": "2026-07-01T10:00:00.000Z",
-      "measurementCount": 1
+      "measurementCount": 1,
+      "statusHistory": [
+        {
+          "id": 5,
+          "status": "SUBMITTED",
+          "statusLabel": "ส่งรายงานแล้ว",
+          "note": null,
+          "changedById": 42,
+          "changedBy": "นาย บรรณณ์ ศิริวัฒน์",
+          "changedAt": "2026-07-01T10:00:00.000Z",
+          "changedDate": "01/07/2569"
+        }
+      ]
     }
   ],
   "meta": {
@@ -412,6 +424,28 @@ Response:
     "deviceSerialNo": "SN-001",
     "reporterName": "นายรายงาน ผล",
     "reporterPosition": "เจ้าหน้าที่สิ่งแวดล้อม",
+    "statusHistory": [
+      {
+        "id": 9,
+        "status": "SUBMITTED",
+        "statusLabel": "รอพิจารณา",
+        "note": null,
+        "changedById": 42,
+        "changedBy": "นาย บรรณณ์ ศิริวัฒน์",
+        "changedAt": "2026-07-01T10:00:00.000Z",
+        "changedDate": "01/07/2569"
+      },
+      {
+        "id": 12,
+        "status": "REVISION_REQUESTED",
+        "statusLabel": "รอโรงงานแก้ไข",
+        "note": "กรุณาแก้ไขผลตรวจวัด",
+        "changedById": 77,
+        "changedBy": "นาง เจ้าหน้าที่ ตรวจสอบ",
+        "changedAt": "2026-07-05T10:00:00.000Z",
+        "changedDate": "05/07/2569"
+      }
+    ],
     "measurements": [
       {
         "id": 1,
@@ -468,6 +502,19 @@ Response:
   }
 }
 ```
+
+`statusHistory` ใช้รูปแบบเดียวกับ กวภ.01-05 เพื่อให้หน้า frontend แสดง timeline ได้จาก field เดียวกัน:
+
+| Field | Type | Description |
+|---|---|---|
+| `statusHistory[].id` | number | `id` ของ event; แถว `SUBMITTED` เริ่มต้นใช้ `report id` เพื่อรองรับรายงานเดิมที่ยังไม่มี event submit |
+| `statusHistory[].status` | string | สถานะของรายงานหลัง transition เช่น `SUBMITTED`, `WAITING_APPROVAL`, `REVISION_REQUESTED`, `REVISED_PENDING_REVIEW`, `APPROVED`, `REJECTED` |
+| `statusHistory[].statusLabel` | string | label ตาม scope ผู้เรียก เช่น operator เห็นสถานะระหว่างพิจารณาเป็น `รอพิจารณา` |
+| `statusHistory[].note` | string/null | note จาก workflow action หรือ `null` สำหรับ `SUBMITTED` เริ่มต้น |
+| `statusHistory[].changedById` | number/null | user id ผู้ทำรายการ |
+| `statusHistory[].changedBy` | string/null | ชื่อผู้ทำรายการจาก `users`; fallback เป็น `username` |
+| `statusHistory[].changedAt` | string | ISO datetime |
+| `statusHistory[].changedDate` | string | วันที่ไทยรูปแบบ `DD/MM/BBBB` |
 
 ## 5. Resubmit Returned Deviation Report Form
 
