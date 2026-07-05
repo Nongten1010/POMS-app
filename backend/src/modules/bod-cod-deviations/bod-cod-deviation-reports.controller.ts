@@ -63,7 +63,7 @@ export const bodCodDeviationReportsController = {
       const payload = createBodCodDeviationReportSchema.parse(req.body);
       const data = await bodCodDeviationReportsService.createReport(payload, {
         actorUserId,
-        scope: getScope(req, 'bod_cod_errors:edit'),
+        scope: getBodCodWriteDataScope(req),
       });
       res
         .status(StatusCodes.CREATED)
@@ -81,7 +81,7 @@ export const bodCodDeviationReportsController = {
       const payload = resubmitBodCodDeviationReportSchema.parse(req.body);
       const data = await bodCodDeviationReportsService.resubmitReport(id, payload, {
         actorUserId,
-        scope: getScope(req, 'bod_cod_errors:edit'),
+        scope: getBodCodWriteDataScope(req),
       });
       res.status(StatusCodes.OK).json({ success: true, data });
     } catch (err) {
@@ -110,4 +110,8 @@ function requireActorUserId(req: Request): number {
   const actorUserId = req.user?.id;
   if (!actorUserId) throw new Error('Authenticated user id is required');
   return actorUserId;
+}
+
+function getBodCodWriteDataScope(req: Request): string | null | undefined {
+  return getScope(req, 'bod_cod_errors:edit') ?? getScope(req, 'bod_cod_errors:view');
 }
