@@ -785,6 +785,29 @@ describe('BOD/COD deviation report routes', () => {
     });
   });
 
+  it('lets officers save the BOD/COD result notice form when inspector signature fields are blank', async () => {
+    const app = createApp();
+    const payload: UpsertBodCodResultNoticeDTO = {
+      ...resultNoticePayload(),
+      checkedParameters: ['COD'],
+      comment: 'ถูกต้อง',
+      inspectorName: '',
+      inspectorPosition: '',
+    };
+
+    const response = await request(app)
+      .post('/api/v1/bod-cod-deviation-reports/9/result-notice')
+      .set('Authorization', `Bearer ${officerToken()}`)
+      .send(payload);
+
+    expect(response.status).toBe(200);
+    expect(mockedService.upsertResultNotice).toHaveBeenCalledWith(9, payload, {
+      actorUserId: 77,
+      scope: 'ALL',
+      regionalAccess: { regions: ['ภาคเหนือ'] },
+    });
+  });
+
   it('rejects invalid BOD/COD result notice payloads before calling service', async () => {
     const app = createApp();
     const { inspectorName: _inspectorName, ...payload } = resultNoticePayload();
