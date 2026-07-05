@@ -9,6 +9,7 @@ jest.mock('../../src/modules/bod-cod-deviations/bod-cod-deviation-reports.servic
     listReports: jest.fn(),
     createReport: jest.fn(),
     resubmitReport: jest.fn(),
+    upsertResultNotice: jest.fn(),
     changeWorkflowStatus: jest.fn(),
     getReportById: jest.fn(),
   },
@@ -30,7 +31,10 @@ jest.mock('../../src/modules/bod-cod-deviations/bod-cod-deviation-attachments.se
 
 import { createApp } from '../../src/app';
 import { bodCodDeviationReportsService } from '../../src/modules/bod-cod-deviations/bod-cod-deviation-reports.service';
-import type { CreateBodCodDeviationReportDTO } from '../../src/modules/bod-cod-deviations/bod-cod-deviation-reports.types';
+import type {
+  CreateBodCodDeviationReportDTO,
+  UpsertBodCodResultNoticeDTO,
+} from '../../src/modules/bod-cod-deviations/bod-cod-deviation-reports.types';
 
 const mockedService = jest.mocked(bodCodDeviationReportsService);
 
@@ -221,6 +225,54 @@ describe('BOD/COD deviation report routes', () => {
       ],
       allowedActions: ['CANCEL'],
     });
+    mockedService.upsertResultNotice.mockResolvedValue({
+      id: 9,
+      reportNo: 'BODCOD-2569-0009',
+      statusCode: 'WAITING_RESULT_NOTICE',
+      approvalTrack: 'REGIONAL',
+      currentStep: {
+        id: 16,
+        stepNo: 2,
+        roleCode: 'RESULT_NOTICE',
+        roleLabel: 'เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์ (บันทึก/แก้ไขแบบแจ้งผล)',
+        status: 'PENDING',
+        isCurrent: true,
+      },
+      steps: [
+        {
+          id: 15,
+          stepNo: 1,
+          roleCode: 'INSPECTOR',
+          roleLabel: 'เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์ (ตรวจสอบความถูกต้อง)',
+          status: 'APPROVED',
+          isCurrent: false,
+        },
+        {
+          id: 16,
+          stepNo: 2,
+          roleCode: 'RESULT_NOTICE',
+          roleLabel: 'เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์ (บันทึก/แก้ไขแบบแจ้งผล)',
+          status: 'PENDING',
+          isCurrent: true,
+        },
+        {
+          id: 17,
+          stepNo: 3,
+          roleCode: 'APPROVER',
+          roleLabel: 'ผอ.ศูนย์ (อนุมัติ)',
+          status: 'WAITING',
+          isCurrent: false,
+        },
+      ],
+      allowedActions: ['APPROVE', 'REQUEST_REVISION', 'REJECT'],
+      resultNotice: {
+        id: 4,
+        reportId: 9,
+        ...resultNoticePayload(),
+        updatedBy: 77,
+        updatedAt: '2026-07-06T10:00:00.000Z',
+      },
+    });
     mockedService.changeWorkflowStatus.mockResolvedValue({
       id: 9,
       reportNo: 'BODCOD-2569-0009',
@@ -330,6 +382,7 @@ describe('BOD/COD deviation report routes', () => {
         },
       ],
       attachments: [],
+      resultNotice: null,
       currentStep: {
         stepNo: 1,
         roleCode: 'INSPECTOR',
@@ -676,6 +729,66 @@ describe('BOD/COD deviation report routes', () => {
     });
   });
 
+  it('lets officers save the BOD/COD result notice form at the result-notice step', async () => {
+    const app = createApp();
+    const payload = resultNoticePayload();
+
+    const response = await request(app)
+      .put('/api/v1/bod-cod-deviation-reports/9/result-notice')
+      .set('Authorization', `Bearer ${officerToken()}`)
+      .send(payload);
+
+    expect(response.status).toBe(200);
+    expect(mockedService.upsertResultNotice).toHaveBeenCalledWith(9, payload, {
+      actorUserId: 77,
+      scope: 'ALL',
+      regionalAccess: { regions: ['ภาคเหนือ'] },
+    });
+    expect(response.body.data).toMatchObject({
+      id: 9,
+      statusCode: 'WAITING_RESULT_NOTICE',
+      currentStep: {
+        stepNo: 2,
+        roleCode: 'RESULT_NOTICE',
+        status: 'PENDING',
+      },
+      resultNotice: {
+        reportCorrectness: 'ถูกต้องครบถ้วน',
+        checkedParameters: ['BOD', 'COD'],
+        reviewResult: 'เห็นควรแจ้งผลการตรวจสอบ',
+        comment: 'ตรวจสอบแล้วข้อมูลครบถ้วน',
+        inspectorName: 'นางเจ้าหน้าที่ ตรวจสอบ',
+        inspectorPosition: 'นักวิชาการสิ่งแวดล้อมชำนาญการ',
+      },
+    });
+  });
+
+  it('rejects invalid BOD/COD result notice payloads before calling service', async () => {
+    const app = createApp();
+    const { inspectorName: _inspectorName, ...payload } = resultNoticePayload();
+
+    const response = await request(app)
+      .put('/api/v1/bod-cod-deviation-reports/9/result-notice')
+      .set('Authorization', `Bearer ${officerToken()}`)
+      .send(payload);
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    expect(mockedService.upsertResultNotice).not.toHaveBeenCalled();
+  });
+
+  it('rejects operators from saving the BOD/COD result notice form', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .put('/api/v1/bod-cod-deviation-reports/9/result-notice')
+      .set('Authorization', `Bearer ${operatorToken()}`)
+      .send(resultNoticePayload());
+
+    expect(response.status).toBe(403);
+    expect(mockedService.upsertResultNotice).not.toHaveBeenCalled();
+  });
+
   it('rejects removed START_REVIEW workflow action before calling service', async () => {
     const app = createApp();
 
@@ -815,5 +928,16 @@ function createReportPayload(): CreateBodCodDeviationReportDTO {
         storagePath: 'uploads/bod-cod/lab-report-uuid.pdf',
       },
     ],
+  };
+}
+
+function resultNoticePayload(): UpsertBodCodResultNoticeDTO {
+  return {
+    reportCorrectness: 'ถูกต้องครบถ้วน',
+    checkedParameters: ['BOD', 'COD'],
+    reviewResult: 'เห็นควรแจ้งผลการตรวจสอบ',
+    comment: 'ตรวจสอบแล้วข้อมูลครบถ้วน',
+    inspectorName: 'นางเจ้าหน้าที่ ตรวจสอบ',
+    inspectorPosition: 'นักวิชาการสิ่งแวดล้อมชำนาญการ',
   };
 }

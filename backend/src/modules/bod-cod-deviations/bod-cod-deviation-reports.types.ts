@@ -26,6 +26,8 @@ export type BodCodApprovalStepStatus =
 export type BodCodApprovalRoleCode = 'INSPECTOR' | 'RESULT_NOTICE' | 'REVIEWER' | 'APPROVER';
 export type BodCodWorkflowAction = 'APPROVE' | 'REQUEST_REVISION' | 'REJECT';
 export type BodCodAllowedAction = 'CANCEL' | BodCodWorkflowAction;
+export type BodCodResultNoticeCorrectness = 'ถูกต้องครบถ้วน' | 'ไม่ถูกต้องครบถ้วน';
+export type BodCodResultNoticeReviewResult = 'เห็นควรแจ้งผลการตรวจสอบ' | 'เห็นควรให้แก้ไขเพิ่มเติม';
 
 export interface BodCodDeviationAccess {
   actorUserId: number;
@@ -95,6 +97,15 @@ export interface ChangeBodCodWorkflowStatusDTO {
   action: BodCodWorkflowAction;
   revisionReason?: string | null;
   officerNote?: string | null;
+}
+
+export interface UpsertBodCodResultNoticeDTO {
+  reportCorrectness: BodCodResultNoticeCorrectness;
+  checkedParameters: BodCodParameterCode[];
+  reviewResult: BodCodResultNoticeReviewResult;
+  comment?: string | null;
+  inspectorName: string;
+  inspectorPosition: string;
 }
 
 export interface CreateBodCodDeviationReportAccess extends BodCodDeviationAccess {
@@ -230,6 +241,13 @@ export interface BodCodStatusHistoryDTO {
   changedDate: string;
 }
 
+export interface BodCodResultNoticeDTO extends UpsertBodCodResultNoticeDTO {
+  id: number;
+  reportId: number;
+  updatedBy: number | null;
+  updatedAt: string;
+}
+
 export interface BodCodWorkflowFieldsDTO {
   approvalTrack: BodCodApprovalTrack;
   currentStep: BodCodWorkflowStepDTO | null;
@@ -241,6 +259,10 @@ export interface CreatedBodCodDeviationReportDTO extends BodCodWorkflowFieldsDTO
   id: number;
   reportNo: string;
   statusCode: BodCodDeviationReportStatus;
+}
+
+export interface UpsertedBodCodResultNoticeResponseDTO extends CreatedBodCodDeviationReportDTO {
+  resultNotice: BodCodResultNoticeDTO;
 }
 
 export interface BodCodDeviationReportDetailDTO
@@ -263,6 +285,7 @@ export interface BodCodDeviationReportDetailDTO
   reporterPosition: string | null;
   measurements: BodCodDeviationMeasurementDTO[];
   attachments: BodCodDeviationAttachmentDTO[];
+  resultNotice: BodCodResultNoticeDTO | null;
 }
 
 export interface PaginatedBodCodDeviationTableRowsDTO<T> {

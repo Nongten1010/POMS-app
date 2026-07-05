@@ -118,3 +118,20 @@ export const changeBodCodWorkflowStatusSchema = z.discriminatedUnion('action', [
     })
     .strict(),
 ]);
+
+export const upsertBodCodResultNoticeSchema = z
+  .object({
+    reportCorrectness: z.enum(['ถูกต้องครบถ้วน', 'ไม่ถูกต้องครบถ้วน']),
+    checkedParameters: z
+      .array(z.enum(['BOD', 'COD']))
+      .min(1)
+      .max(2)
+      .refine((items) => new Set(items).size === items.length, {
+        message: 'checkedParameters must not contain duplicates',
+      }),
+    reviewResult: z.enum(['เห็นควรแจ้งผลการตรวจสอบ', 'เห็นควรให้แก้ไขเพิ่มเติม']),
+    comment: nullableText(1000),
+    inspectorName: requiredText(255),
+    inspectorPosition: requiredText(255),
+  })
+  .strict();

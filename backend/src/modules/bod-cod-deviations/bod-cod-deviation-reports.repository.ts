@@ -19,6 +19,7 @@ import type {
   BodCodWorkflowStepDTO,
   BodCodDeviationReportTableRowDTO,
   BodCodParameterCode,
+  BodCodResultNoticeDTO,
   BodCodWorkflowAction,
   CreateBodCodDeviationReportAccess,
   CreateBodCodDeviationReportDTO,
@@ -27,6 +28,8 @@ import type {
   ChangeBodCodWorkflowStatusDTO,
   ListBodCodDeviationReportsQuery,
   ResubmitBodCodDeviationReportDTO,
+  UpsertBodCodResultNoticeDTO,
+  UpsertedBodCodResultNoticeResponseDTO,
 } from './bod-cod-deviation-reports.types';
 
 type BodCodApprovalEventAction = BodCodWorkflowAction | 'RESUBMIT_REVISION';
@@ -106,7 +109,21 @@ interface ReportDetailRow extends ReportTableRow {
 interface EditableReportRow extends ReportDetailRow {
   current_step_id: number | string | null;
   current_step_no: number | string | null;
+  current_step_role_code: BodCodApprovalRoleCode | null;
   current_step_status: BodCodApprovalStepStatus | null;
+}
+
+interface ResultNoticeRow {
+  id: number | string;
+  report_id: number | string;
+  report_correctness: UpsertBodCodResultNoticeDTO['reportCorrectness'];
+  checked_parameters_json: string;
+  review_result: UpsertBodCodResultNoticeDTO['reviewResult'];
+  comment: string | null;
+  inspector_name: string;
+  inspector_position: string;
+  updated_by: number | string | null;
+  updated_at: Date | string;
 }
 
 interface MeasurementRow {
@@ -411,19 +428,28 @@ export const bodCodDeviationReportsRepository = {
         input.action === 'APPROVE'
           ? await findNextApprovalStep(id, Number(report.current_step_no), trx)
           : null;
-      const nextState = nextWorkflowState(input.action, nextStep?.role_code ?? null);
+      const nextState = nextWorkflowState(
+        input.action,
+        nextStep?.role_code ?? null,
+        report.current_step_role_code,
+      );
       const note = workflowActionNote(input);
 
-      await updateCurrentApprovalStep(
-        currentStepId,
-        nextState.currentStepStatus,
-        note,
-        access,
-        now,
-        trx,
-      );
+      if (nextState.resetToFirstStep) {
+        await buildResetApprovalStepsForResubmissionQuery(id, now, trx);
+        await buildRestartFirstApprovalStepForResubmissionQuery(id, now, trx);
+      } else {
+        await updateCurrentApprovalStep(
+          currentStepId,
+          nextState.currentStepStatus,
+          note,
+          access,
+          now,
+          trx,
+        );
+      }
 
-      if (nextStep !== null && nextState.nextStepStatus !== null) {
+      if (!nextState.resetToFirstStep && nextStep !== null && nextState.nextStepStatus !== null) {
         await markNextApprovalStepCurrent(Number(nextStep.id), nextState.nextStepStatus, now, trx);
       }
 
@@ -449,6 +475,31 @@ export const bodCodDeviationReportsRepository = {
     });
   },
 
+  async upsertResultNotice(
+    id: number,
+    input: UpsertBodCodResultNoticeDTO,
+    access: BodCodDeviationAccess,
+  ): Promise<UpsertedBodCodResultNoticeResponseDTO> {
+    return db.transaction(async (trx) => {
+      const now = new Date();
+      const report = await assertCanUpsertResultNotice(id, access, trx);
+      const resultNotice = await saveResultNotice(id, input, access.actorUserId, now, trx);
+      const savedSteps = await listApprovalSteps(id, trx);
+      const currentStep = currentWorkflowStep(savedSteps);
+
+      return {
+        id,
+        reportNo: report.report_no,
+        statusCode: report.status,
+        approvalTrack: report.approval_track,
+        currentStep,
+        steps: savedSteps,
+        allowedActions: allowedActionsFor(report.status, currentStep, access.scope),
+        resultNotice,
+      };
+    });
+  },
+
   async getReportById(
     id: number,
     access: BodCodDeviationAccess,
@@ -456,11 +507,12 @@ export const bodCodDeviationReportsRepository = {
     const report = await buildReportDetailQuery(id, access).first();
     if (!report) throw new NotFoundError('BOD/COD deviation report not found');
 
-    const [measurements, attachments, steps, historyByReportId] = await Promise.all([
+    const [measurements, attachments, steps, historyByReportId, resultNotice] = await Promise.all([
       listMeasurements(id),
       listAttachments(id, access),
       listApprovalSteps(id),
       listStatusHistoryForReports([report], access.scope),
+      getResultNotice(id),
     ]);
     return toReportDetailDTO(
       report,
@@ -468,6 +520,7 @@ export const bodCodDeviationReportsRepository = {
       attachments,
       steps,
       historyByReportId.get(Number(report.id)) ?? [],
+      resultNotice,
       access.scope,
     );
   },
@@ -520,6 +573,13 @@ export function buildBodCodResubmissionAccessQueryForTests(
   return buildEditableReportQuery(id, access);
 }
 
+export function buildBodCodResultNoticeAccessQueryForTests(
+  id: number,
+  access: BodCodDeviationAccess,
+) {
+  return buildEditableReportQuery(id, access);
+}
+
 export function buildBodCodReportStatusLabelForTests(
   status: BodCodDeviationReportStatus,
   scope?: string | null,
@@ -546,8 +606,9 @@ export function buildBodCodAllowedActionsForTests(
 export function buildBodCodNextWorkflowStateForTests(
   action: BodCodWorkflowAction,
   nextStepRole: BodCodWorkflowNextStepRole,
+  currentStepRole?: BodCodApprovalRoleCode | null,
 ) {
-  return nextWorkflowState(action, nextStepRole);
+  return nextWorkflowState(action, nextStepRole, currentStepRole);
 }
 
 export function buildBodCodResubmissionWorkflowResetQueriesForTests(reportId: number, now: Date) {
@@ -808,13 +869,48 @@ async function assertCanChangeWorkflowStatus(
   return row;
 }
 
+async function assertCanUpsertResultNotice(
+  id: number,
+  access: BodCodDeviationAccess,
+  trx: Knex.Transaction,
+): Promise<EditableReportRow> {
+  if (access.scope === 'OWN_FACTORY') {
+    throw new ForbiddenError('Only officers can save BOD/COD result notices');
+  }
+
+  const row = await buildEditableReportQuery(id, access, trx).first();
+  if (!row) throw new NotFoundError('BOD/COD deviation report not found');
+
+  if (
+    row.status !== 'WAITING_RESULT_NOTICE' ||
+    row.current_step_role_code !== 'RESULT_NOTICE' ||
+    row.current_step_status !== 'PENDING'
+  ) {
+    throw new ConflictError('BOD/COD result notice can be saved only at the result notice step', {
+      currentStatus: row.status,
+      currentStepRole: row.current_step_role_code,
+      currentStepStatus: row.current_step_status,
+      requiredStatus: 'WAITING_RESULT_NOTICE',
+      requiredStepRole: 'RESULT_NOTICE',
+    });
+  }
+
+  return row;
+}
+
 function editableCurrentStep(row: EditableReportRow): BodCodWorkflowStepDTO | null {
-  if (row.current_step_no === null || row.current_step_status === null) return null;
+  if (
+    row.current_step_no === null ||
+    row.current_step_role_code === null ||
+    row.current_step_status === null
+  ) {
+    return null;
+  }
   const currentStepId = toNumberOrNull(row.current_step_id);
   return {
     ...(currentStepId === null ? {} : { id: currentStepId }),
     stepNo: Number(row.current_step_no),
-    roleCode: 'INSPECTOR',
+    roleCode: row.current_step_role_code,
     roleLabel: '',
     status: row.current_step_status,
     isCurrent: true,
@@ -875,6 +971,7 @@ function buildEditableReportQuery(
       'r.reporter_position',
       's.id as current_step_id',
       's.step_no as current_step_no',
+      's.role_code as current_step_role_code',
       's.status as current_step_status',
     );
 
@@ -1040,18 +1137,30 @@ async function findNextApprovalStep(
 function nextWorkflowState(
   action: BodCodWorkflowAction,
   nextStepRole: BodCodWorkflowNextStepRole,
+  currentStepRole?: BodCodApprovalRoleCode | null,
 ): {
   currentStepStatus: BodCodApprovalStepStatus;
   nextStepStatus: BodCodApprovalStepStatus | null;
   reportStatus: BodCodDeviationReportStatus;
   closesWorkflow: boolean;
+  resetToFirstStep?: boolean;
 } {
   if (action === 'REQUEST_REVISION') {
+    if (currentStepRole === 'REVIEWER' || currentStepRole === 'APPROVER') {
+      return {
+        currentStepStatus: 'WAITING',
+        nextStepStatus: 'PENDING',
+        reportStatus: 'SUBMITTED',
+        closesWorkflow: false,
+        resetToFirstStep: true,
+      };
+    }
     return {
       currentStepStatus: 'REVISION_REQUESTED',
       nextStepStatus: null,
       reportStatus: 'REVISION_REQUESTED',
       closesWorkflow: false,
+      resetToFirstStep: false,
     };
   }
   if (action === 'REJECT') {
@@ -1372,6 +1481,68 @@ async function listAttachments(
   return rows.map((row) => toAttachmentDTO(row, access));
 }
 
+async function getResultNotice(
+  reportId: number,
+  connection: Knex | Knex.Transaction = db,
+): Promise<BodCodResultNoticeDTO | null> {
+  const row = await connection<ResultNoticeRow>('bod_cod_result_notices')
+    .where('report_id', reportId)
+    .whereNull('deleted_at')
+    .select(
+      'id',
+      'report_id',
+      'report_correctness',
+      'checked_parameters_json',
+      'review_result',
+      'comment',
+      'inspector_name',
+      'inspector_position',
+      'updated_by',
+      'updated_at',
+    )
+    .first();
+  return row ? toResultNoticeDTO(row) : null;
+}
+
+async function saveResultNotice(
+  reportId: number,
+  input: UpsertBodCodResultNoticeDTO,
+  actorUserId: number,
+  now: Date,
+  trx: Knex.Transaction,
+): Promise<BodCodResultNoticeDTO> {
+  const existing = await trx<ResultNoticeRow>('bod_cod_result_notices')
+    .where('report_id', reportId)
+    .whereNull('deleted_at')
+    .select('id')
+    .first();
+  const values = {
+    report_correctness: input.reportCorrectness,
+    checked_parameters_json: JSON.stringify(input.checkedParameters),
+    review_result: input.reviewResult,
+    comment: input.comment ?? null,
+    inspector_name: input.inspectorName,
+    inspector_position: input.inspectorPosition,
+    updated_by: actorUserId,
+    updated_at: now,
+  };
+
+  if (existing) {
+    await trx('bod_cod_result_notices').where('id', existing.id).update(values);
+  } else {
+    await trx('bod_cod_result_notices').insert({
+      report_id: reportId,
+      ...values,
+      created_by: actorUserId,
+      created_at: now,
+    });
+  }
+
+  const saved = await getResultNotice(reportId, trx);
+  if (!saved) throw new Error('BOD/COD result notice was not saved');
+  return saved;
+}
+
 async function listApprovalSteps(
   reportId: number,
   connection: Knex | Knex.Transaction = db,
@@ -1507,6 +1678,7 @@ function toReportDetailDTO(
   attachments: BodCodDeviationAttachmentDTO[],
   steps: BodCodWorkflowStepDTO[],
   statusHistory: BodCodStatusHistoryDTO[],
+  resultNotice: BodCodResultNoticeDTO | null,
   scope: string | null | undefined,
 ): BodCodDeviationReportDetailDTO {
   const base = toReportDTO(row, scope, statusHistory);
@@ -1533,6 +1705,7 @@ function toReportDetailDTO(
     allowedActions: allowedActionsFor(row.status, currentStep, scope),
     measurements,
     attachments,
+    resultNotice,
   };
 }
 
@@ -1567,6 +1740,21 @@ function toAttachmentDTO(
       row.storage_path && access.publicBaseUrl && access.publicPath
         ? buildPublicFileUrl(access.publicBaseUrl, access.publicPath, row.storage_path)
         : null,
+  };
+}
+
+function toResultNoticeDTO(row: ResultNoticeRow): BodCodResultNoticeDTO {
+  return {
+    id: Number(row.id),
+    reportId: Number(row.report_id),
+    reportCorrectness: row.report_correctness,
+    checkedParameters: parseCheckedParameters(row.checked_parameters_json),
+    reviewResult: row.review_result,
+    comment: row.comment,
+    inspectorName: row.inspector_name,
+    inspectorPosition: row.inspector_position,
+    updatedBy: toNumberOrNull(row.updated_by),
+    updatedAt: toDateTimeString(row.updated_at) ?? '',
   };
 }
 
@@ -1629,6 +1817,12 @@ function parseParameters(value: string): string[] {
   } catch {
     return [];
   }
+}
+
+function parseCheckedParameters(value: string): BodCodParameterCode[] {
+  return parseParameters(value).filter(
+    (parameter): parameter is BodCodParameterCode => parameter === 'BOD' || parameter === 'COD',
+  );
 }
 
 function parameterLabel(code: BodCodParameterCode): string {

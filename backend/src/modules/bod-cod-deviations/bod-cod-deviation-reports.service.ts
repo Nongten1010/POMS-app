@@ -12,6 +12,8 @@ import type {
   ListBodCodDeviationReportsQuery,
   PaginatedBodCodDeviationTableRowsDTO,
   ResubmitBodCodDeviationReportDTO,
+  UpsertBodCodResultNoticeDTO,
+  UpsertedBodCodResultNoticeResponseDTO,
 } from './bod-cod-deviation-reports.types';
 
 export const bodCodDeviationReportsService = {
@@ -61,6 +63,18 @@ export const bodCodDeviationReportsService = {
     },
   ): Promise<CreatedBodCodDeviationReportDTO> {
     return bodCodDeviationReportsRepository.changeWorkflowStatus(id, input, access);
+  },
+
+  upsertResultNotice(
+    id: number,
+    input: UpsertBodCodResultNoticeDTO,
+    access: {
+      actorUserId: number;
+      scope: string | null | undefined;
+      regionalAccess?: RegionalAccessDTO | null;
+    },
+  ): Promise<UpsertedBodCodResultNoticeResponseDTO> {
+    return bodCodDeviationReportsRepository.upsertResultNotice(id, input, access);
   },
 
   getReportById(
