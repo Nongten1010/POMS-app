@@ -4,6 +4,7 @@ import { ConflictError, ForbiddenError, NotFoundError } from '../../shared/error
 import { buildPublicFileUrl } from '../kwp-form-submissions/kwp-form-attachments.service';
 import type {
   BodCodApprovalTrack,
+  BodCodApprovalRoleCode,
   BodCodApprovalStepStatus,
   BodCodAllowedAction,
   BodCodDeviationAccess,
@@ -29,6 +30,7 @@ import type {
 } from './bod-cod-deviation-reports.types';
 
 type BodCodApprovalEventAction = BodCodWorkflowAction | 'RESUBMIT_REVISION';
+type BodCodWorkflowNextStepRole = BodCodApprovalRoleCode | null;
 
 interface FactoryTableRow {
   connected_point_id: number | string;
@@ -134,7 +136,7 @@ interface ApprovalStepRow {
   id: number | string;
   step_no: number | string;
   track: BodCodApprovalTrack;
-  role_code: 'INSPECTOR' | 'REVIEWER' | 'APPROVER';
+  role_code: BodCodApprovalRoleCode;
   role_label: string;
   status: BodCodApprovalStepStatus;
   actor_user_id: number | string | null;
@@ -409,7 +411,7 @@ export const bodCodDeviationReportsRepository = {
         input.action === 'APPROVE'
           ? await findNextApprovalStep(id, Number(report.current_step_no), trx)
           : null;
-      const nextState = nextWorkflowState(input.action, nextStep !== null);
+      const nextState = nextWorkflowState(input.action, nextStep?.role_code ?? null);
       const note = workflowActionNote(input);
 
       await updateCurrentApprovalStep(
@@ -543,9 +545,9 @@ export function buildBodCodAllowedActionsForTests(
 
 export function buildBodCodNextWorkflowStateForTests(
   action: BodCodWorkflowAction,
-  hasNextStep: boolean,
+  nextStepRole: BodCodWorkflowNextStepRole,
 ) {
-  return nextWorkflowState(action, hasNextStep);
+  return nextWorkflowState(action, nextStepRole);
 }
 
 export function buildBodCodResubmissionWorkflowResetQueriesForTests(reportId: number, now: Date) {
@@ -1024,12 +1026,12 @@ async function findNextApprovalStep(
   reportId: number,
   currentStepNo: number,
   trx: Knex.Transaction,
-): Promise<Pick<ApprovalStepRow, 'id' | 'step_no'> | null> {
+): Promise<Pick<ApprovalStepRow, 'id' | 'step_no' | 'role_code'> | null> {
   const row = await trx<ApprovalStepRow>('bod_cod_approval_steps')
     .where('report_id', reportId)
     .where('step_no', '>', currentStepNo)
     .whereNull('deleted_at')
-    .select('id', 'step_no')
+    .select('id', 'step_no', 'role_code')
     .orderBy('step_no', 'asc')
     .first();
   return row ?? null;
@@ -1037,7 +1039,7 @@ async function findNextApprovalStep(
 
 function nextWorkflowState(
   action: BodCodWorkflowAction,
-  hasNextStep: boolean,
+  nextStepRole: BodCodWorkflowNextStepRole,
 ): {
   currentStepStatus: BodCodApprovalStepStatus;
   nextStepStatus: BodCodApprovalStepStatus | null;
@@ -1060,19 +1062,30 @@ function nextWorkflowState(
       closesWorkflow: true,
     };
   }
-  return hasNextStep
-    ? {
-        currentStepStatus: 'APPROVED',
-        nextStepStatus: 'PENDING',
-        reportStatus: 'WAITING_APPROVAL',
-        closesWorkflow: false,
-      }
-    : {
-        currentStepStatus: 'APPROVED',
-        nextStepStatus: null,
-        reportStatus: 'APPROVED',
-        closesWorkflow: true,
-      };
+  if (nextStepRole === null) {
+    return {
+      currentStepStatus: 'APPROVED',
+      nextStepStatus: null,
+      reportStatus: 'APPROVED',
+      closesWorkflow: true,
+    };
+  }
+
+  const reportStatusByNextRole: Record<
+    Exclude<BodCodApprovalRoleCode, 'INSPECTOR'>,
+    BodCodDeviationReportStatus
+  > = {
+    RESULT_NOTICE: 'WAITING_RESULT_NOTICE',
+    REVIEWER: 'WAITING_REVIEW',
+    APPROVER: 'WAITING_APPROVAL',
+  };
+
+  return {
+    currentStepStatus: 'APPROVED',
+    nextStepStatus: 'PENDING',
+    reportStatus: nextStepRole === 'INSPECTOR' ? 'SUBMITTED' : reportStatusByNextRole[nextStepRole],
+    closesWorkflow: false,
+  };
 }
 
 function workflowActionNote(input: ChangeBodCodWorkflowStatusDTO): string | null {
@@ -1287,14 +1300,28 @@ function approvalStepsForTrack(
 ): Array<Pick<BodCodWorkflowStepDTO, 'stepNo' | 'roleCode' | 'roleLabel'>> {
   if (approvalTrack === 'CENTRAL') {
     return [
-      { stepNo: 1, roleCode: 'INSPECTOR', roleLabel: 'เจ้าหน้าที่กฝม.' },
-      { stepNo: 2, roleCode: 'REVIEWER', roleLabel: 'ผอ.กฝม. (ทบทวน)' },
-      { stepNo: 3, roleCode: 'APPROVER', roleLabel: 'ผอ.กวภ. (อนุมัติ)' },
+      { stepNo: 1, roleCode: 'INSPECTOR', roleLabel: 'เจ้าหน้าที่กฝม. (ตรวจสอบความถูกต้อง)' },
+      {
+        stepNo: 2,
+        roleCode: 'RESULT_NOTICE',
+        roleLabel: 'เจ้าหน้าที่กฝม. (บันทึก/แก้ไขแบบแจ้งผล)',
+      },
+      { stepNo: 3, roleCode: 'REVIEWER', roleLabel: 'ผอ.กฝม. (ทบทวน)' },
+      { stepNo: 4, roleCode: 'APPROVER', roleLabel: 'ผอ.กวภ. (อนุมัติ)' },
     ];
   }
   return [
-    { stepNo: 1, roleCode: 'INSPECTOR', roleLabel: 'เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์' },
-    { stepNo: 2, roleCode: 'APPROVER', roleLabel: 'ผอ.ศูนย์ (อนุมัติ)' },
+    {
+      stepNo: 1,
+      roleCode: 'INSPECTOR',
+      roleLabel: 'เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์ (ตรวจสอบความถูกต้อง)',
+    },
+    {
+      stepNo: 2,
+      roleCode: 'RESULT_NOTICE',
+      roleLabel: 'เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์ (บันทึก/แก้ไขแบบแจ้งผล)',
+    },
+    { stepNo: 3, roleCode: 'APPROVER', roleLabel: 'ผอ.ศูนย์ (อนุมัติ)' },
   ];
 }
 
@@ -1615,7 +1642,11 @@ function reportRoundLabel(roundNo: number): string {
 function reportStatusLabel(status: BodCodDeviationReportStatus, scope?: string | null): string {
   if (
     scope === 'OWN_FACTORY' &&
-    (status === 'SUBMITTED' || status === 'REVISED_PENDING_REVIEW' || status === 'WAITING_APPROVAL')
+    (status === 'SUBMITTED' ||
+      status === 'REVISED_PENDING_REVIEW' ||
+      status === 'WAITING_RESULT_NOTICE' ||
+      status === 'WAITING_REVIEW' ||
+      status === 'WAITING_APPROVAL')
   ) {
     return 'รอพิจารณา';
   }
@@ -1624,6 +1655,8 @@ function reportStatusLabel(status: BodCodDeviationReportStatus, scope?: string |
     DRAFT: 'แบบร่าง',
     SUBMITTED: 'ส่งรายงานแล้ว',
     REVISED_PENDING_REVIEW: 'แก้ไขแล้ว/รอพิจารณา',
+    WAITING_RESULT_NOTICE: 'บันทึก/แก้ไขแบบแจ้งผล',
+    WAITING_REVIEW: 'รอทบทวน',
     WAITING_APPROVAL: 'รออนุมัติ',
     APPROVED: 'ผ่านการพิจารณา',
     REJECTED: 'ไม่ผ่านการพิจารณา',
