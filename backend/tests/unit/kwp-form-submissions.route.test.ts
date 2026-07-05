@@ -178,6 +178,37 @@ describe('KWP form submission routes', () => {
     });
   });
 
+  it('preserves Thai KWP attachment filenames from multipart uploads', async () => {
+    const app = createApp();
+    const originalFileName = 'รายงานผลการตรวจวัด_INV2026060003_(1).pdf';
+    mockSaveKwpAttachment.mockResolvedValueOnce({
+      originalFileName,
+      storedFileName: 'mock-thai-report.pdf',
+      mimeType: 'application/pdf',
+      fileSize: 1024,
+      storagePath: 'kwp/form-attachments/2026/07/mock-thai-report.pdf',
+      fileUrl: 'http://localhost:3000/uploads/kwp/form-attachments/2026/07/mock-thai-report.pdf',
+    });
+
+    const response = await request(app)
+      .post('/api/v1/kwp-form-submissions/attachments')
+      .set('Authorization', `Bearer ${operatorToken()}`)
+      .attach('file', Buffer.from('%PDF-1.4'), {
+        filename: originalFileName,
+        contentType: 'application/pdf',
+      });
+
+    expect(response.status).toBe(201);
+    expect(mockSaveKwpAttachment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        originalName: originalFileName,
+        mimeType: 'application/pdf',
+        size: expect.any(Number),
+      }),
+    );
+    expect(response.body.data.originalFileName).toBe(originalFileName);
+  });
+
   it('creates a submitted KWP01 form with edit permission', async () => {
     const app = createApp();
 

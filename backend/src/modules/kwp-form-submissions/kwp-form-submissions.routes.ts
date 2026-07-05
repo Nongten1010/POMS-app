@@ -12,6 +12,7 @@ import { kwpFormSubmissionsController } from './kwp-form-submissions.controller'
 export const kwpFormSubmissionsRoutes = Router();
 const kwpAttachmentUpload = multer({
   storage: multer.memoryStorage(),
+  defParamCharset: 'utf8',
   limits: {
     fileSize: MAX_KWP_ATTACHMENT_FILE_SIZE_BYTES,
     files: 1,
