@@ -64,6 +64,16 @@ describe('bodCodDeviationReportsRepository access filters', () => {
     expect(compiled.bindings).toEqual(expect.arrayContaining(['SUBMITTED', 'BOD']));
   });
 
+  it('filters report requests by revised pending review status', () => {
+    const compiled = buildBodCodDeviationReportQueryForTests(
+      { status: 'REVISED_PENDING_REVIEW' },
+      { actorUserId: 42, scope: 'OWN_FACTORY' },
+    ).toSQL();
+
+    expect(compiled.sql.toLowerCase()).toContain('[r].[status]');
+    expect(compiled.bindings).toContain('REVISED_PENDING_REVIEW');
+  });
+
   it('keeps the newest current-year report slot when duplicate point and round rows are returned', () => {
     const slotMap = buildBodCodDeviationLatestReportSlotMapForTests([
       {

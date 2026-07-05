@@ -319,7 +319,7 @@ export const bodCodDeviationReportsRepository = {
           device_serial_no: input.deviceSerialNo ?? null,
           reporter_name: input.reporterName ?? null,
           reporter_position: input.reporterPosition ?? null,
-          status: 'SUBMITTED',
+          status: 'REVISED_PENDING_REVIEW',
           submitted_at: now,
           updated_by: access.actorUserId,
           updated_at: now,
@@ -342,11 +342,11 @@ export const bodCodDeviationReportsRepository = {
       return {
         id,
         reportNo: report.report_no,
-        statusCode: 'SUBMITTED',
+        statusCode: 'REVISED_PENDING_REVIEW',
         approvalTrack,
         currentStep,
         steps: savedSteps,
-        allowedActions: allowedActionsFor('SUBMITTED', currentStep, access.scope),
+        allowedActions: allowedActionsFor('REVISED_PENDING_REVIEW', currentStep, access.scope),
       };
     });
   },
@@ -1246,7 +1246,7 @@ function reportStatusLabel(status: BodCodDeviationReportStatus): string {
   const labels: Record<BodCodDeviationReportStatus, string> = {
     DRAFT: 'แบบร่าง',
     SUBMITTED: 'ส่งรายงานแล้ว',
-    UNDER_REVIEW: 'รอพิจารณา',
+    REVISED_PENDING_REVIEW: 'แก้ไขแล้ว/รอพิจารณา',
     WAITING_APPROVAL: 'รออนุมัติ',
     APPROVED: 'ผ่านการพิจารณา',
     REVISION_REQUESTED: 'รอโรงงานแก้ไข',
@@ -1256,7 +1256,9 @@ function reportStatusLabel(status: BodCodDeviationReportStatus): string {
 }
 
 function reviewedDateLabel(status: BodCodDeviationReportStatus, updatedAt: Date | string): string {
-  if (status === 'DRAFT' || status === 'SUBMITTED' || status === 'UNDER_REVIEW') return '-';
+  if (status === 'DRAFT' || status === 'SUBMITTED' || status === 'REVISED_PENDING_REVIEW') {
+    return '-';
+  }
   return formatThaiDate(updatedAt);
 }
 

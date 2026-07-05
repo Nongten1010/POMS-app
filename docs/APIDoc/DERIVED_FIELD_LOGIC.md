@@ -148,7 +148,7 @@ Transformation:
 - `year` is an alias for numeric `report_year`; `reportYear` is preserved.
 - `status` is Thai display text for frontend chips; machine status is preserved as `statusCode`.
 - `submittedDate` is `submitted_at` formatted as `DD/MM/BBBB`.
-- `reviewedDate` is `-` while status is `DRAFT`, `SUBMITTED`, or `UNDER_REVIEW`; otherwise it uses `updated_at` formatted as `DD/MM/BBBB`.
+- `reviewedDate` is `-` while status is `DRAFT`, `SUBMITTED`, or `REVISED_PENDING_REVIEW`; otherwise it uses `updated_at` formatted as `DD/MM/BBBB`.
 
 Reason:
 
@@ -187,7 +187,7 @@ Transformation:
 - `isWithinStandard` is derived on save: if `standardDeviationMgL` is absent, return `null`; otherwise compare `ABS(deviationValueMgL) <= standardDeviationMgL`.
 - `selectedParameterLabel` keeps the unit with the parameter display name, e.g. `BOD (mg/l)` and `COD (mg/l)`.
 - Resubmission is allowed only when the stored report status is `REVISION_REQUESTED` and the current approval step status is also `REVISION_REQUESTED`.
-- Resubmission sets report status back to `SUBMITTED`, replaces measurement rows and attachment metadata, resets the same current approval step to `PENDING`, and records `RESUBMIT_REVISION` in `bod_cod_approval_events`.
+- Resubmission sets report status to `REVISED_PENDING_REVIEW` (`แก้ไขแล้ว/รอพิจารณา`), replaces measurement rows and attachment metadata, resets the same current approval step to `PENDING`, and records `RESUBMIT_REVISION` in `bod_cod_approval_events`.
 - Resubmission does not allow identity fields to drift from the original report slot: `reportRoundNo`, `reportYear`, `factoryRegistrationNo`, `connectedMeasurementPointId`, `pointCode`, and `selectedParameterCode` must match the stored report.
 
 Reason:

@@ -3,7 +3,7 @@ import type { RegionalAccessDTO } from '../auth/regional-access';
 export const BOD_COD_DEVIATION_REPORT_STATUSES = [
   'DRAFT',
   'SUBMITTED',
-  'UNDER_REVIEW',
+  'REVISED_PENDING_REVIEW',
   'WAITING_APPROVAL',
   'APPROVED',
   'REVISION_REQUESTED',

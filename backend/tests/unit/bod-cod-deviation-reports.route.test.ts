@@ -148,7 +148,7 @@ describe('BOD/COD deviation report routes', () => {
     mockedService.resubmitReport.mockResolvedValue({
       id: 9,
       reportNo: 'BODCOD-2569-0009',
-      statusCode: 'SUBMITTED',
+      statusCode: 'REVISED_PENDING_REVIEW',
       approvalTrack: 'REGIONAL',
       currentStep: {
         id: 15,
@@ -339,6 +339,17 @@ describe('BOD/COD deviation report routes', () => {
     expect(mockedService.listReports).not.toHaveBeenCalled();
   });
 
+  it('rejects the removed UNDER_REVIEW status filter for BOD/COD reports', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .get('/api/v1/bod-cod-deviation-reports?status=UNDER_REVIEW')
+      .set('Authorization', `Bearer ${operatorToken()}`);
+
+    expect(response.status).toBe(400);
+    expect(mockedService.listReports).not.toHaveBeenCalled();
+  });
+
   it('creates a submitted BOD/COD deviation form and initializes workflow steps', async () => {
     const app = createApp();
 
@@ -420,7 +431,7 @@ describe('BOD/COD deviation report routes', () => {
     });
     expect(response.body.data).toMatchObject({
       id: 9,
-      statusCode: 'SUBMITTED',
+      statusCode: 'REVISED_PENDING_REVIEW',
       currentStep: {
         stepNo: 1,
         status: 'PENDING',

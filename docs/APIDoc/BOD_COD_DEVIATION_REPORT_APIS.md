@@ -119,7 +119,7 @@ Payload / query parameters:
 
 | Query | Required | Values | Description |
 |---|---:|---|---|
-| `status` | No | `DRAFT`, `SUBMITTED`, `UNDER_REVIEW`, `WAITING_APPROVAL`, `APPROVED`, `REVISION_REQUESTED`, `CANCELLED` | กรองสถานะคำขอ |
+| `status` | No | `DRAFT`, `SUBMITTED`, `REVISED_PENDING_REVIEW`, `WAITING_APPROVAL`, `APPROVED`, `REVISION_REQUESTED`, `CANCELLED` | กรองสถานะคำขอ |
 | `parameterCode` | No | `BOD`, `COD` | กรอง parameter ที่รายงาน |
 | `factoryId` | No | string | กรองโรงงานจาก `factories.id`, `factories.fid`, `factories.code`, หรือ `factory_registration_no` |
 
@@ -417,7 +417,7 @@ State rule:
 
 - เรียกได้เฉพาะรายงานสถานะ `REVISION_REQUESTED`
 - ผู้เรียกต้องเป็นผู้ประกอบการ scope `OWN_FACTORY` และต้องผ่าน `user_juristics` ของโรงงานในรายงานเดิม
-- หลังบันทึก ระบบตั้งรายงานกลับเป็น `SUBMITTED`
+- หลังบันทึก ระบบตั้งรายงานเป็น `REVISED_PENDING_REVIEW` และแสดงผลเป็น `แก้ไขแล้ว/รอพิจารณา`
 - approval step ที่เป็นคนขอแก้ไขกลับเป็น `PENDING` และ `isCurrent = true`
 - step ก่อนหน้าที่ยืนยันแล้วคงสถานะเดิม และ step ถัดไปยัง `WAITING`
 - ระบบเพิ่ม event action `RESUBMIT_REVISION` พร้อม `revisionNote` ถ้ามี
@@ -483,7 +483,7 @@ Response:
   "data": {
     "id": 9,
     "reportNo": "BODCOD-2569-0009",
-    "statusCode": "SUBMITTED",
+    "statusCode": "REVISED_PENDING_REVIEW",
     "approvalTrack": "REGIONAL",
     "currentStep": {
       "id": 15,
