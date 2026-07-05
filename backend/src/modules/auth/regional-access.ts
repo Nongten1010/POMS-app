@@ -2,7 +2,12 @@ export interface RegionalAccessDTO {
   regions: string[];
 }
 
-const regionNameByCenterAbbreviation: Record<string, string> = {
+const centralRegionTextValues: Record<string, string> = {
+  'กวภ.': 'ภาคกลาง',
+  กองวิจัยและเตือนภัยมลพิษโรงงาน: 'ภาคกลาง',
+};
+
+const regionalCenterRegionByAbbreviation: Record<string, string> = {
   'ศวภ.ตอ.': 'ภาคตะวันออก',
   'ศวภ.ตต.': 'ภาคตะวันตก',
   'ศวภ.ตอน.': 'ภาคตะวันออกเฉียงเหนือ',
@@ -49,13 +54,23 @@ export function serializeRegionalAccess(
 export function inferRegionalAccessFromText(
   ...values: Array<string | null | undefined>
 ): RegionalAccessDTO | null {
-  const matchedRegionNames = values.flatMap((value) => {
+  const regionalCenterRegionNames = values.flatMap((value) => {
     if (!value) return [];
-    return Object.entries(regionNameByCenterAbbreviation)
+    return Object.entries(regionalCenterRegionByAbbreviation)
       .filter(([abbreviation]) => value.includes(abbreviation))
       .map(([, regionName]) => regionName);
   });
-  return normalizeRegionalAccess({ regions: matchedRegionNames });
+  const regionalCenterAccess = normalizeRegionalAccess({ regions: regionalCenterRegionNames });
+  if (regionalCenterAccess) return regionalCenterAccess;
+
+  const centralRegionNames = values.flatMap((value) => {
+    if (!value) return [];
+    const trimmed = value.trim();
+    return Object.entries(centralRegionTextValues)
+      .filter(([text]) => trimmed.includes(text))
+      .map(([, regionName]) => regionName);
+  });
+  return normalizeRegionalAccess({ regions: centralRegionNames });
 }
 
 function uniqueTrimmed(values: string[]): string[] {

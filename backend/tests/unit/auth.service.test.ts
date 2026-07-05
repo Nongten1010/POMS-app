@@ -261,6 +261,67 @@ describe('authService login completion', () => {
     expect(mockedAuthRepository.updateLastLogin).toHaveBeenCalledWith(44);
   });
 
+  it('infers central-region access for กวภ officers before issuing a token', async () => {
+    mockedAuthRepository.findUserByUsername.mockResolvedValue({
+      id: 45,
+      external_id: 'local_central_officer',
+      identity_provider: 'local',
+      user_type: 'officer',
+      username: 'local_central_officer',
+      email: null,
+      phone: null,
+      prename_th: 'นางสาว',
+      first_name: 'กลาง',
+      last_name: 'ทดสอบ',
+      is_active: true,
+      password_hash: Buffer.from('hashed-password'),
+    });
+    mockedAuthRepository.getOfficerProfile.mockResolvedValue({
+      user_id: 45,
+      pos_no: null,
+      pertype_id: null,
+      pertype: null,
+      position_type_id: null,
+      position_type_th: null,
+      line_id: null,
+      line_name_th: 'เจ้าหน้าที่ กวภ.',
+      level_id: null,
+      level_name_th: 'ชำนาญการ',
+      organize_id: null,
+      division_id: null,
+      department_id: null,
+      department_name_th: 'กองวิจัยและเตือนภัยมลพิษโรงงาน',
+      ministry_id: null,
+      province_id: null,
+      per_status: null,
+      per_status_name: null,
+      regional_access_json: null,
+    });
+    mockedAuthRepository.getRolesAndPermissions.mockResolvedValue({
+      roles: ['diw_central'],
+      scopes: {
+        'bod_cod_errors:view': 'ALL',
+        'kwp_forms:view': 'ALL',
+      },
+    });
+
+    const result = await authService.login({
+      userType: 'officer',
+      username: 'local_central_officer',
+      [passwordField]: validTestPassword,
+    });
+
+    expect(result.user).toMatchObject({
+      username: 'local_central_officer',
+      regionalAccess: { regions: ['ภาคกลาง'] },
+    });
+    expect(mockedSignAccessToken).toHaveBeenCalledWith(
+      expect.objectContaining({
+        regionalAccess: { regions: ['ภาคกลาง'] },
+      }),
+    );
+  });
+
   it('returns the documented login contract for an officer', async () => {
     mockedAuthRepository.findUserByProviderAndExternalId.mockResolvedValue({
       id: 12,
