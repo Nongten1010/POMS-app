@@ -14,6 +14,7 @@ import type {
   BodCodDeviationMeasurementDTO,
   BodCodDeviationReportStatus,
   BodCodReportSlotDTO,
+  BodCodStatusHistoryDTO,
   BodCodWorkflowStepDTO,
   BodCodDeviationReportTableRowDTO,
   BodCodParameterCode,
@@ -73,6 +74,11 @@ interface ReportTableRow {
   selected_parameter_code: BodCodParameterCode;
   status: BodCodDeviationReportStatus;
   submitted_at: Date | string | null;
+  created_by: number | string | null;
+  created_by_username: string | null;
+  created_by_prename_th: string | null;
+  created_by_first_name: string | null;
+  created_by_last_name: string | null;
   created_at: Date | string;
   updated_at: Date | string;
   measurement_count: number | string | null;
@@ -140,6 +146,32 @@ interface ApprovalStepRow {
   is_current: boolean | number;
 }
 
+interface StatusHistoryReportRow {
+  id: number | string;
+  approval_track: BodCodApprovalTrack;
+  status: BodCodDeviationReportStatus;
+  submitted_at: Date | string | null;
+  created_at?: Date | string;
+  created_by: number | string | null;
+  created_by_username: string | null;
+  created_by_prename_th: string | null;
+  created_by_first_name: string | null;
+  created_by_last_name: string | null;
+}
+
+interface ApprovalEventRow {
+  id: number | string;
+  report_id: number | string;
+  action: BodCodApprovalEventAction;
+  note: string | null;
+  actor_user_id: number | string | null;
+  actor_username: string | null;
+  actor_prename_th: string | null;
+  actor_first_name: string | null;
+  actor_last_name: string | null;
+  created_at: Date | string;
+}
+
 export interface LatestReportRow {
   factory_id: number | string | null;
   connected_measurement_point_id: number | string | null;
@@ -179,7 +211,13 @@ export const bodCodDeviationReportsRepository = {
     const total = Number(totalRow?.total ?? 0);
 
     const rows = await baseQuery.clone().orderBy('r.created_at', 'desc').orderBy('r.id', 'desc');
-    return { rows: rows.map((row) => toReportDTO(row, access.scope)), total };
+    const historyByReportId = await listStatusHistoryForReports(rows, access.scope);
+    return {
+      rows: rows.map((row) =>
+        toReportDTO(row, access.scope, historyByReportId.get(Number(row.id)) ?? []),
+      ),
+      total,
+    };
   },
 
   async createReport(
@@ -416,12 +454,20 @@ export const bodCodDeviationReportsRepository = {
     const report = await buildReportDetailQuery(id, access).first();
     if (!report) throw new NotFoundError('BOD/COD deviation report not found');
 
-    const [measurements, attachments, steps] = await Promise.all([
+    const [measurements, attachments, steps, historyByReportId] = await Promise.all([
       listMeasurements(id),
       listAttachments(id, access),
       listApprovalSteps(id),
+      listStatusHistoryForReports([report], access.scope),
     ]);
-    return toReportDetailDTO(report, measurements, attachments, steps, access.scope);
+    return toReportDetailDTO(
+      report,
+      measurements,
+      attachments,
+      steps,
+      historyByReportId.get(Number(report.id)) ?? [],
+      access.scope,
+    );
   },
 };
 
@@ -477,6 +523,14 @@ export function buildBodCodReportStatusLabelForTests(
   scope?: string | null,
 ) {
   return reportStatusLabel(status, scope);
+}
+
+export function buildBodCodStatusHistoryForTests(
+  reportRows: StatusHistoryReportRow[],
+  eventRows: ApprovalEventRow[],
+  scope?: string | null,
+) {
+  return buildStatusHistoryByReportId(reportRows, eventRows, scope);
 }
 
 export function buildBodCodAllowedActionsForTests(
@@ -579,6 +633,7 @@ function buildReportQuery(
         .orOn('f.code', '=', 'r.factory_registration_no');
     })
     .leftJoin('provinces as p', 'p.name_th', 'r.province_name')
+    .leftJoin('users as cu', 'cu.id', 'r.created_by')
     .leftJoin(measurementCounts, 'm.report_id', 'r.id')
     .whereNull('r.deleted_at')
     .select(
@@ -598,6 +653,11 @@ function buildReportQuery(
       'r.selected_parameter_code',
       'r.status',
       'r.submitted_at',
+      'r.created_by',
+      'cu.username as created_by_username',
+      'cu.prename_th as created_by_prename_th',
+      'cu.first_name as created_by_first_name',
+      'cu.last_name as created_by_last_name',
       'r.created_at',
       'r.updated_at',
       'm.measurement_count',
@@ -1311,6 +1371,37 @@ async function listApprovalSteps(
   return rows.map(toApprovalStepDTO);
 }
 
+async function listStatusHistoryForReports(
+  reportRows: StatusHistoryReportRow[],
+  scope?: string | null,
+): Promise<Map<number, BodCodStatusHistoryDTO[]>> {
+  if (reportRows.length === 0) return new Map();
+
+  const rows = await db<ApprovalEventRow>('bod_cod_approval_events as e')
+    .leftJoin('users as u', 'u.id', 'e.actor_user_id')
+    .whereIn(
+      'e.report_id',
+      reportRows.map((row) => row.id),
+    )
+    .select(
+      'e.id',
+      'e.report_id',
+      'e.action',
+      'e.note',
+      'e.actor_user_id',
+      'u.username as actor_username',
+      'u.prename_th as actor_prename_th',
+      'u.first_name as actor_first_name',
+      'u.last_name as actor_last_name',
+      'e.created_at',
+    )
+    .orderBy('e.report_id', 'asc')
+    .orderBy('e.created_at', 'asc')
+    .orderBy('e.id', 'asc');
+
+  return buildStatusHistoryByReportId(reportRows, rows, scope);
+}
+
 function toFactoryDTO(
   factoryId: string,
   row: FactoryTableRow,
@@ -1347,6 +1438,7 @@ function toFactoryDTO(
 function toReportDTO(
   row: ReportTableRow,
   scope: string | null | undefined,
+  statusHistory: BodCodStatusHistoryDTO[],
 ): BodCodDeviationReportTableRowDTO {
   const reportRoundNo = Number(row.report_round);
   const statusLabel = reportStatusLabel(row.status, scope);
@@ -1378,6 +1470,7 @@ function toReportDTO(
     createdAt: toDateTimeString(row.created_at) ?? '',
     updatedAt: toDateTimeString(row.updated_at) ?? '',
     measurementCount: Number(row.measurement_count ?? 0),
+    statusHistory,
   };
 }
 
@@ -1386,9 +1479,10 @@ function toReportDetailDTO(
   measurements: BodCodDeviationMeasurementDTO[],
   attachments: BodCodDeviationAttachmentDTO[],
   steps: BodCodWorkflowStepDTO[],
+  statusHistory: BodCodStatusHistoryDTO[],
   scope: string | null | undefined,
 ): BodCodDeviationReportDetailDTO {
-  const base = toReportDTO(row, scope);
+  const base = toReportDTO(row, scope, statusHistory);
   const currentStep = currentWorkflowStep(steps);
   return {
     ...base,
@@ -1537,6 +1631,107 @@ function reportStatusLabel(status: BodCodDeviationReportStatus, scope?: string |
     CANCELLED: 'ยกเลิก',
   };
   return labels[status];
+}
+
+function buildStatusHistoryByReportId(
+  reportRows: StatusHistoryReportRow[],
+  eventRows: ApprovalEventRow[],
+  scope?: string | null,
+): Map<number, BodCodStatusHistoryDTO[]> {
+  const eventsByReportId = eventRows.reduce((map, row) => {
+    const reportId = Number(row.report_id);
+    const current = map.get(reportId) ?? [];
+    map.set(reportId, [...current, row]);
+    return map;
+  }, new Map<number, ApprovalEventRow[]>());
+
+  return reportRows.reduce((map, reportRow) => {
+    const reportId = Number(reportRow.id);
+    const rows = eventsByReportId.get(reportId) ?? [];
+    const totalApprovalSteps = approvalStepsForTrack(reportRow.approval_track).length;
+    let approveCount = 0;
+    const history: BodCodStatusHistoryDTO[] = [
+      toSubmittedStatusHistoryDTO(reportRow, scope),
+      ...rows.map((row) => {
+        if (row.action === 'APPROVE') approveCount += 1;
+        return toEventStatusHistoryDTO(
+          row,
+          eventStatus(row.action, approveCount, totalApprovalSteps),
+          scope,
+        );
+      }),
+    ];
+    map.set(reportId, history);
+    return map;
+  }, new Map<number, BodCodStatusHistoryDTO[]>());
+}
+
+function toSubmittedStatusHistoryDTO(
+  row: StatusHistoryReportRow,
+  scope?: string | null,
+): BodCodStatusHistoryDTO {
+  const changedAt = row.submitted_at ?? row.created_at ?? new Date(0);
+  return {
+    id: Number(row.id),
+    status: 'SUBMITTED',
+    statusLabel: reportStatusLabel('SUBMITTED', scope),
+    note: null,
+    changedById: toNumberOrNull(row.created_by),
+    changedBy: displayUserName({
+      prename: row.created_by_prename_th,
+      firstName: row.created_by_first_name,
+      lastName: row.created_by_last_name,
+      username: row.created_by_username,
+    }),
+    changedAt: new Date(changedAt).toISOString(),
+    changedDate: formatThaiDate(changedAt),
+  };
+}
+
+function toEventStatusHistoryDTO(
+  row: ApprovalEventRow,
+  status: BodCodDeviationReportStatus,
+  scope?: string | null,
+): BodCodStatusHistoryDTO {
+  return {
+    id: Number(row.id),
+    status,
+    statusLabel: reportStatusLabel(status, scope),
+    note: row.note,
+    changedById: toNumberOrNull(row.actor_user_id),
+    changedBy: displayUserName({
+      prename: row.actor_prename_th,
+      firstName: row.actor_first_name,
+      lastName: row.actor_last_name,
+      username: row.actor_username,
+    }),
+    changedAt: new Date(row.created_at).toISOString(),
+    changedDate: formatThaiDate(row.created_at),
+  };
+}
+
+function eventStatus(
+  action: BodCodApprovalEventAction,
+  approveCount: number,
+  totalApprovalSteps: number,
+): BodCodDeviationReportStatus {
+  if (action === 'REQUEST_REVISION') return 'REVISION_REQUESTED';
+  if (action === 'RESUBMIT_REVISION') return 'REVISED_PENDING_REVIEW';
+  if (action === 'REJECT') return 'REJECTED';
+  return approveCount >= totalApprovalSteps ? 'APPROVED' : 'WAITING_APPROVAL';
+}
+
+function displayUserName(input: {
+  prename: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  username: string | null;
+}): string | null {
+  const fullName = [input.prename, input.firstName, input.lastName]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+  return fullName || input.username;
 }
 
 function reviewedDateLabel(status: BodCodDeviationReportStatus, updatedAt: Date | string): string {

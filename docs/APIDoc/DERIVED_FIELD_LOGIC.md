@@ -232,11 +232,14 @@ Transformation:
 - `REQUEST_REVISION` sets the current step and report to `REVISION_REQUESTED`; the next operator resubmission restarts approval from step 1.
 - `REJECT` sets the current step to `REJECTED`, clears the active current step, and sets the report to terminal status `REJECTED`.
 - Each officer workflow action inserts a row into `bod_cod_approval_events`; `REQUEST_REVISION` stores `revisionReason` as the event note, while `APPROVE` and `REJECT` store `officerNote`.
+- `statusHistory` is returned by the list and detail APIs in the same shape as KWP form reports. The first `SUBMITTED` item is synthesized from `bod_cod_deviation_reports.submitted_at` and `created_by` so existing reports without a submit event still have a complete timeline. Later items come from `bod_cod_approval_events` joined to `users`.
+- `statusHistory.status` maps event actions back to report statuses: `REQUEST_REVISION` -> `REVISION_REQUESTED`, `RESUBMIT_REVISION` -> `REVISED_PENDING_REVIEW`, `REJECT` -> `REJECTED`, and `APPROVE` -> `WAITING_APPROVAL` until the final approval step for the report's `approvalTrack`, then `APPROVED`.
 
 Reason:
 
 - The frontend should not hardcode Bangkok-vs-regional step branching. Backend owns `approvalTrack`, `steps`, `currentStep`, and `allowedActions`.
 - The saved form must be reopenable with the same values the paper-like preview needs: header fields, lab/device fields, measurements, attachment metadata, and workflow state.
+- The frontend should be able to render BOD/COD and KWP timelines from the same `statusHistory[]` contract.
 - Operator save access must be checked against `user_juristics`; the backend must not rely only on factory identifiers supplied in the request body.
 - Operator resubmission must return the report to the first officer step, even if a later reviewer/approver requested the revision, so officers review the corrected report through the full track again.
 

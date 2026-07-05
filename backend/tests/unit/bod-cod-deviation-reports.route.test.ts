@@ -127,6 +127,18 @@ describe('BOD/COD deviation report routes', () => {
           createdAt: '2026-07-01T09:00:00.000Z',
           updatedAt: '2026-07-01T10:00:00.000Z',
           measurementCount: 1,
+          statusHistory: [
+            {
+              id: 5,
+              status: 'SUBMITTED',
+              statusLabel: 'ส่งรายงานแล้ว',
+              note: null,
+              changedById: 42,
+              changedBy: 'นาย บรรณณ์ ศิริวัฒน์',
+              changedAt: '2026-07-01T10:00:00.000Z',
+              changedDate: '01/07/2569',
+            },
+          ],
         },
       ],
       meta: { total: 1 },
@@ -268,6 +280,18 @@ describe('BOD/COD deviation report routes', () => {
       deviceSerialNo: 'SN-001',
       reporterName: 'นายรายงาน ผล',
       reporterPosition: 'เจ้าหน้าที่สิ่งแวดล้อม',
+      statusHistory: [
+        {
+          id: 9,
+          status: 'SUBMITTED',
+          statusLabel: 'รอพิจารณา',
+          note: null,
+          changedById: 42,
+          changedBy: 'นาย บรรณณ์ ศิริวัฒน์',
+          changedAt: '2026-07-01T10:00:00.000Z',
+          changedDate: '01/07/2569',
+        },
+      ],
       measurements: [
         {
           id: 1,
@@ -416,6 +440,12 @@ describe('BOD/COD deviation report routes', () => {
       statusCode: 'SUBMITTED',
       submittedDate: '01/07/2569',
       reviewedDate: '-',
+      statusHistory: [
+        expect.objectContaining({
+          status: 'SUBMITTED',
+          changedById: 42,
+        }),
+      ],
     });
   });
 
@@ -502,6 +532,12 @@ describe('BOD/COD deviation report routes', () => {
         roleCode: 'INSPECTOR',
       }),
       allowedActions: ['CANCEL'],
+      statusHistory: [
+        expect.objectContaining({
+          status: 'SUBMITTED',
+          changedById: 42,
+        }),
+      ],
     });
   });
 

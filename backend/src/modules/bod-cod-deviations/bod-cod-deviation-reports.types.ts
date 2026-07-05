@@ -175,6 +175,7 @@ export interface BodCodDeviationReportTableRowDTO {
   createdAt: string;
   updatedAt: string;
   measurementCount: number;
+  statusHistory: BodCodStatusHistoryDTO[];
 }
 
 export interface BodCodDeviationMeasurementDTO {
@@ -214,6 +215,17 @@ export interface BodCodWorkflowStepDTO {
   comment?: string | null;
   decidedAt?: string | null;
   isCurrent: boolean;
+}
+
+export interface BodCodStatusHistoryDTO {
+  id: number;
+  status: BodCodDeviationReportStatus;
+  statusLabel: string;
+  note: string | null;
+  changedById: number | null;
+  changedBy: string | null;
+  changedAt: string;
+  changedDate: string;
 }
 
 export interface BodCodWorkflowFieldsDTO {
