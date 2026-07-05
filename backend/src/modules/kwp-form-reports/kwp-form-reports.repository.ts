@@ -108,6 +108,13 @@ export function buildKwpFormRequestQueryForTests(
   return buildRequestQuery(query, access);
 }
 
+export function toKwpFormRequestDTOForTests(
+  row: SubmissionRow,
+  statusHistory: KwpFormStatusHistoryDTO[],
+): KwpFormRequestTableRowDTO {
+  return toRequestDTO(row, statusHistory);
+}
+
 function buildFactoryQuery(
   access: KwpFormReportAccess,
 ): Knex.QueryBuilder<FactoryTableRow, FactoryTableRow[]> {
@@ -309,7 +316,7 @@ function toRequestDTO(
     formType: row.form_type,
     submittedDate: submittedAt ? formatThaiDate(submittedAt) : '-',
     reviewedDate: row.reviewed_at ? formatThaiDate(row.reviewed_at) : '-',
-    status: KWP_FORM_STATUS_LABELS[row.status],
+    status: kwpFormStatusLabel(row.status, statusHistory),
     statusCode: row.status,
     revisionNote: row.officer_note,
     statusHistory,
@@ -336,11 +343,7 @@ function pointTypeToSystemType(pointType: string | null): 'CEMS' | 'WPMS' | stri
 }
 
 function displayUserName(row: StatusHistoryRow): string | null {
-  const fullName = [
-    row.changed_by_prename_th,
-    row.changed_by_first_name,
-    row.changed_by_last_name,
-  ]
+  const fullName = [row.changed_by_prename_th, row.changed_by_first_name, row.changed_by_last_name]
     .filter(Boolean)
     .join(' ')
     .trim();
@@ -372,3 +375,16 @@ const KWP_FORM_STATUS_LABELS: Record<KwpFormStatus, string> = {
   REVISION_REQUESTED: 'รอโรงงานแก้ไข',
   CANCELLED: 'ยกเลิก',
 };
+
+function kwpFormStatusLabel(
+  status: KwpFormStatus,
+  statusHistory: KwpFormStatusHistoryDTO[],
+): string {
+  if (
+    status === 'SUBMITTED' &&
+    statusHistory.some((history) => history.status === 'REVISION_REQUESTED')
+  ) {
+    return 'แก้ไขแล้ว/รอพิจารณา';
+  }
+  return KWP_FORM_STATUS_LABELS[status];
+}

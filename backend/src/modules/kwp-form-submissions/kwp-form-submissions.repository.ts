@@ -1448,7 +1448,7 @@ function toWorkflowDTO(
     form: KWP_FORM_TYPE_LABELS[row.form_type],
     formType: row.form_type,
     status: row.status,
-    statusLabel: KWP_FORM_STATUS_LABELS[row.status],
+    statusLabel: kwpFormStatusLabel(row.status, hasRevisionRequest),
     revisionReason,
     officerNote: row.officer_note,
     reviewedAt: toIsoString(row.reviewed_at),
@@ -1871,3 +1871,10 @@ const KWP_FORM_STATUS_LABELS: Record<KwpFormSubmissionStatus, string> = {
   REVISION_REQUESTED: 'รอโรงงานแก้ไข',
   CANCELLED: 'ยกเลิก',
 };
+
+function kwpFormStatusLabel(status: KwpFormSubmissionStatus, hasRevisionRequest: boolean): string {
+  if (status === 'SUBMITTED' && hasRevisionRequest) {
+    return 'แก้ไขแล้ว/รอพิจารณา';
+  }
+  return KWP_FORM_STATUS_LABELS[status];
+}

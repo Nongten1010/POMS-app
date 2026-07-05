@@ -1287,6 +1287,7 @@ Behavior:
 
 - ต้องเป็นรายการเดิมของ form type ตาม path
 - ต้องอยู่สถานะ `REVISION_REQUESTED`
-- เมื่อสำเร็จ ระบบเปลี่ยนสถานะกลับเป็น `SUBMITTED`
+- เมื่อสำเร็จ ระบบเปลี่ยน machine status กลับเป็น `SUBMITTED`
+- ถ้ารายการเคยมีประวัติ `REVISION_REQUESTED` แล้วกลับมา `SUBMITTED` อีกครั้ง API จะแสดง label เป็น `แก้ไขแล้ว/รอพิจารณา`
 - ระบบเพิ่มประวัติใน `kwp_form_status_history` พร้อม note ของผู้ประกอบการ
 - Response คืน workflow shape เดียวกับ `GET /api/v1/kwp-form-submissions/:id/workflow`

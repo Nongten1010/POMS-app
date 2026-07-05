@@ -227,6 +227,7 @@ describe('kwpFormSubmissionsRepository', () => {
     );
 
     expect(resubmitted.status).toBe('SUBMITTED');
+    expect(resubmitted.statusLabel).toBe('แก้ไขแล้ว/รอพิจารณา');
     expect(resubmitted.revisionReason).toBe('เพิ่มเอกสารแนบผลตรวจวัด');
     expect(resubmitted.currentStep).toMatchObject({ key: 'SUBMITTED', status: 'CURRENT' });
     expect(resubmitted.allowedActions).toEqual(['START_REVIEW', 'REQUEST_REVISION']);
