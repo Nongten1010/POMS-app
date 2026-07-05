@@ -1,5 +1,6 @@
 import request from 'supertest';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { ForbiddenError } from '../../src/shared/errors/AppError';
 import { signAccessToken } from '../../src/shared/utils/jwt';
 
 jest.mock('../../src/modules/bod-cod-deviations/bod-cod-deviation-reports.service', () => ({
@@ -475,6 +476,46 @@ describe('BOD/COD deviation report routes', () => {
     });
   });
 
+  it('uses the edit permission scope when resubmitting with an own-factory edit grant', async () => {
+    mockedService.resubmitReport.mockImplementationOnce(async (_id, _payload, access) => {
+      if (access.scope !== 'OWN_FACTORY') {
+        throw new ForbiddenError('Only own-factory operators can resubmit BOD/COD reports');
+      }
+      return {
+        id: 9,
+        reportNo: 'BODCOD-2569-0009',
+        statusCode: 'REVISED_PENDING_REVIEW',
+        approvalTrack: 'REGIONAL',
+        currentStep: {
+          id: 15,
+          stepNo: 1,
+          roleCode: 'INSPECTOR',
+          roleLabel: 'เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์',
+          status: 'PENDING',
+          isCurrent: true,
+        },
+        steps: [],
+        allowedActions: ['CANCEL'],
+      };
+    });
+    const app = createApp();
+    const payload = {
+      ...createReportPayload(),
+      revisionNote: 'แก้ไขผลตรวจวัดตามข้อสังเกตของเจ้าหน้าที่',
+    };
+
+    const response = await request(app)
+      .put('/api/v1/bod-cod-deviation-reports/9/resubmission')
+      .set('Authorization', `Bearer ${operatorEditOnlyToken()}`)
+      .send(payload);
+
+    expect(response.status).toBe(200);
+    expect(mockedService.resubmitReport).toHaveBeenCalledWith(9, payload, {
+      actorUserId: 42,
+      scope: 'OWN_FACTORY',
+    });
+  });
+
   it('lets officers apply BOD/COD workflow actions', async () => {
     const app = createApp();
 
@@ -565,6 +606,17 @@ function operatorToken(): string {
     scopes: {
       'bod_cod_errors:view': 'OWN_FACTORY',
       'bod_cod_errors:edit': null,
+    },
+  });
+}
+
+function operatorEditOnlyToken(): string {
+  return signAccessToken({
+    sub: '42',
+    userType: 'operator',
+    roles: ['factory_operator'],
+    scopes: {
+      'bod_cod_errors:edit': 'OWN_FACTORY',
     },
   });
 }

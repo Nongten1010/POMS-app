@@ -113,5 +113,5 @@ function requireActorUserId(req: Request): number {
 }
 
 function getBodCodWriteDataScope(req: Request): string | null | undefined {
-  return getScope(req, 'bod_cod_errors:view');
+  return getScope(req, 'bod_cod_errors:edit') ?? getScope(req, 'bod_cod_errors:view');
 }
