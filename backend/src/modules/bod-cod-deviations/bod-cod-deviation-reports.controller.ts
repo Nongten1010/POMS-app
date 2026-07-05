@@ -1,7 +1,9 @@
 import { NextFunction, Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
 import { env } from '../../config/env';
+import { BadRequestError } from '../../shared/errors/AppError';
 import { getScope } from '../../shared/middlewares/authorize';
+import { createBodCodAttachmentStorage } from './bod-cod-deviation-attachments.service';
 import { bodCodDeviationReportsService } from './bod-cod-deviation-reports.service';
 import {
   bodCodDeviationReportIdParamsSchema,
@@ -12,6 +14,31 @@ import {
 } from './bod-cod-deviation-reports.validator';
 
 export const bodCodDeviationReportsController = {
+  async uploadAttachment(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      requireActorUserId(req);
+      if (!req.file) {
+        throw new BadRequestError('Attachment file is required');
+      }
+
+      const storage = createBodCodAttachmentStorage({
+        uploadDir: env.UPLOAD_DIR,
+        publicPath: env.UPLOAD_PUBLIC_PATH,
+        publicBaseUrl: getPublicBaseUrl(req),
+      });
+      const data = await storage.save({
+        buffer: req.file.buffer,
+        originalName: req.file.originalname,
+        mimeType: req.file.mimetype,
+        size: req.file.size,
+      });
+
+      res.status(StatusCodes.CREATED).json({ success: true, data });
+    } catch (err) {
+      next(err);
+    }
+  },
+
   async listFactories(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const actorUserId = requireActorUserId(req);
@@ -50,6 +77,8 @@ export const bodCodDeviationReportsController = {
         actorUserId,
         scope: getScope(req, 'bod_cod_errors:view'),
         regionalAccess: req.user?.regionalAccess ?? undefined,
+        publicBaseUrl: getPublicBaseUrl(req),
+        publicPath: env.UPLOAD_PUBLIC_PATH,
       });
       res.status(StatusCodes.OK).json({ success: true, data });
     } catch (err) {
@@ -114,4 +143,9 @@ function requireActorUserId(req: Request): number {
 
 function getBodCodWriteDataScope(req: Request): string | null | undefined {
   return getScope(req, 'bod_cod_errors:edit') ?? getScope(req, 'bod_cod_errors:view');
+}
+
+function getPublicBaseUrl(req: Request): string {
+  if (env.PUBLIC_BASE_URL) return env.PUBLIC_BASE_URL;
+  return `${req.protocol}://${req.get('host')}`;
 }

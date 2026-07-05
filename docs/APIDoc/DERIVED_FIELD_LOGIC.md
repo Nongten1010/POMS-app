@@ -1076,6 +1076,39 @@ Risk:
 
 - If `PUBLIC_BASE_URL`, reverse-proxy headers, or `UPLOAD_PUBLIC_PATH` are misconfigured, the returned URL can point to the wrong host/path even though the stored file exists.
 
+## BOD/COD Deviation Attachment URLs
+
+Endpoint:
+
+- `POST /api/v1/bod-cod-deviation-reports/attachments`
+- `GET /api/v1/bod-cod-deviation-reports/:id`
+
+### `attachments[].fileUrl`
+
+Source:
+
+- `bod_cod_deviation_attachments.storage_path`
+- `PUBLIC_BASE_URL` when configured
+- request protocol/host when `PUBLIC_BASE_URL` is not configured
+- `UPLOAD_PUBLIC_PATH`
+
+Logic:
+
+- The upload API stores the file under `UPLOAD_DIR/bod-cod/deviation-attachments/YYYY/MM/<uuid>.<ext>` and returns `storagePath` plus `fileUrl`.
+- The database stores the file location in `storage_path`, for example `bod-cod/deviation-attachments/2026/07/lab-report.pdf`.
+- The detail API returns `fileUrl` only when `storage_path` is present and the request context provides a public base URL and public upload path.
+- `fileUrl` is built as `<baseUrl><UPLOAD_PUBLIC_PATH>/<encoded storage_path>`.
+- If `storage_path` is already stored with a leading slash or starts with `UPLOAD_PUBLIC_PATH`, the shared helper strips that prefix before building the public URL to avoid duplicated paths such as `/uploads/uploads/...`.
+
+Reason:
+
+- BOD/COD detail pages need a direct URL to preview/download uploaded sample photos, device photos, and lab reports while the database remains storage-backend neutral.
+
+Risk:
+
+- Existing BOD/COD attachment rows that were created before the upload API may have `storage_path = null`; those rows cannot produce `fileUrl` until the file is uploaded again and the returned metadata is saved.
+- If `PUBLIC_BASE_URL`, reverse-proxy headers, or `UPLOAD_PUBLIC_PATH` are misconfigured, the returned URL can point to the wrong host/path even though the stored file exists.
+
 ## KWP Form Workflow Step Fields
 
 Endpoint:
