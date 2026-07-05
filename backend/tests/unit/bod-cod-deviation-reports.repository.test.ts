@@ -6,7 +6,9 @@ import {
   buildBodCodDeviationLatestReportSlotMapForTests,
   buildBodCodDeviationReportDetailQueryForTests,
   buildBodCodDeviationReportQueryForTests,
+  buildBodCodReportStatusLabelForTests,
   buildBodCodResubmissionAccessQueryForTests,
+  buildBodCodResubmissionWorkflowResetQueriesForTests,
 } from '../../src/modules/bod-cod-deviations/bod-cod-deviation-reports.repository';
 
 describe('bodCodDeviationReportsRepository access filters', () => {
@@ -125,14 +127,28 @@ describe('bodCodDeviationReportsRepository access filters', () => {
 
   it('builds the documented central three-step and regional two-step workflow', () => {
     expect(buildBodCodApprovalStepsForTests('CENTRAL')).toEqual([
-      { stepNo: 1, roleCode: 'INSPECTOR', roleLabel: 'ผู้ตรวจสอบ' },
-      { stepNo: 2, roleCode: 'REVIEWER', roleLabel: 'ผู้ทบทวน (ผอ.กฝม.)' },
-      { stepNo: 3, roleCode: 'APPROVER', roleLabel: 'ผู้อนุมัติ (ผอ.กวภ.)' },
+      { stepNo: 1, roleCode: 'INSPECTOR', roleLabel: 'เจ้าหน้าที่กฝม.' },
+      { stepNo: 2, roleCode: 'REVIEWER', roleLabel: 'ผอ.กฝม. (ทบทวน)' },
+      { stepNo: 3, roleCode: 'APPROVER', roleLabel: 'ผอ.กวภ. (อนุมัติ)' },
     ]);
     expect(buildBodCodApprovalStepsForTests('REGIONAL')).toEqual([
-      { stepNo: 1, roleCode: 'INSPECTOR', roleLabel: 'ผู้ตรวจสอบ' },
-      { stepNo: 2, roleCode: 'APPROVER', roleLabel: 'ผู้อนุมัติ (ผอ.ศวภ.)' },
+      { stepNo: 1, roleCode: 'INSPECTOR', roleLabel: 'เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์' },
+      { stepNo: 2, roleCode: 'APPROVER', roleLabel: 'ผอ.ศูนย์ (อนุมัติ)' },
     ]);
+  });
+
+  it('shows operator-facing in-review labels until final approval', () => {
+    expect(buildBodCodReportStatusLabelForTests('SUBMITTED', 'OWN_FACTORY')).toBe('รอพิจารณา');
+    expect(buildBodCodReportStatusLabelForTests('REVISED_PENDING_REVIEW', 'OWN_FACTORY')).toBe(
+      'รอพิจารณา',
+    );
+    expect(buildBodCodReportStatusLabelForTests('WAITING_APPROVAL', 'OWN_FACTORY')).toBe(
+      'รอพิจารณา',
+    );
+    expect(buildBodCodReportStatusLabelForTests('APPROVED', 'OWN_FACTORY')).toBe('ผ่านการพิจารณา');
+    expect(buildBodCodReportStatusLabelForTests('REVISED_PENDING_REVIEW', 'ALL')).toBe(
+      'แก้ไขแล้ว/รอพิจารณา',
+    );
   });
 
   it('checks own-factory edit access before saving a submitted form', () => {
@@ -167,5 +183,20 @@ describe('bodCodDeviationReportsRepository access filters', () => {
     expect(sql).toContain('join [user_juristics] as [uj]');
     expect(sql).toContain('[uj].[user_id]');
     expect(compiled.bindings).toEqual(expect.arrayContaining([9, 42]));
+  });
+
+  it('resets corrected reports back to the first approval step', () => {
+    const now = new Date('2026-07-05T00:00:00.000Z');
+    const { resetAllSteps, restartFirstStep } = buildBodCodResubmissionWorkflowResetQueriesForTests(
+      9,
+      now,
+    );
+    const resetAllSql = resetAllSteps.toSQL();
+    const restartFirstSql = restartFirstStep.toSQL();
+
+    expect(resetAllSql.sql.toLowerCase()).toContain('[bod_cod_approval_steps]');
+    expect(resetAllSql.bindings).toEqual(expect.arrayContaining(['WAITING', false, 9]));
+    expect(restartFirstSql.sql.toLowerCase()).toContain('[step_no]');
+    expect(restartFirstSql.bindings).toEqual(expect.arrayContaining(['PENDING', true, 9, 1]));
   });
 });

@@ -39,6 +39,8 @@ curl "http://localhost:3000/api/v1/bod-cod-deviation-reports/factories" \
 
 Response:
 
+ตัวอย่างนี้เป็น response เมื่อเรียกด้วย scope เจ้าหน้าที่; ถ้าเรียกด้วย `OWN_FACTORY` สถานะ pending จะแสดงเป็น `รอพิจารณา` ตามกติกาหน้าผู้ประกอบการ
+
 ```json
 {
   "success": true,
@@ -67,7 +69,7 @@ Response:
           "type": "WPMS",
           "parameters": "BOD, COD",
           "parameterCodes": ["BOD", "COD"],
-          "round1Status": "ส่งรายงานแล้ว",
+          "round1Status": "รอพิจารณา",
           "round2Status": "ยังไม่ยื่น",
           "pointCode": "P0001",
           "pointName": "จุดระบายน้ำทิ้ง A",
@@ -78,7 +80,7 @@ Response:
               "roundNo": 1,
               "year": 2569,
               "status": "SUBMITTED",
-              "statusLabel": "ส่งรายงานแล้ว",
+              "statusLabel": "รอพิจารณา",
               "reportId": 5,
               "reportNo": "BODCOD-2569-0005"
             },
@@ -96,7 +98,7 @@ Response:
       "latestReportId": 5,
       "latestReportNo": "BODCOD-2569-0005",
       "latestReportStatus": "SUBMITTED",
-      "latestReportStatusLabel": "ส่งรายงานแล้ว"
+      "latestReportStatusLabel": "รอพิจารณา"
     }
   ],
   "meta": {
@@ -252,7 +254,7 @@ Response:
       "id": 15,
       "stepNo": 1,
       "roleCode": "INSPECTOR",
-      "roleLabel": "ผู้ตรวจสอบ",
+      "roleLabel": "เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์",
       "status": "PENDING",
       "isCurrent": true
     },
@@ -261,7 +263,7 @@ Response:
         "id": 15,
         "stepNo": 1,
         "roleCode": "INSPECTOR",
-        "roleLabel": "ผู้ตรวจสอบ",
+        "roleLabel": "เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์",
         "status": "PENDING",
         "isCurrent": true
       },
@@ -269,7 +271,7 @@ Response:
         "id": 16,
         "stepNo": 2,
         "roleCode": "APPROVER",
-        "roleLabel": "ผู้อนุมัติ (ผอ.ศวภ.)",
+        "roleLabel": "ผอ.ศูนย์ (อนุมัติ)",
         "status": "WAITING",
         "isCurrent": false
       }
@@ -334,9 +336,9 @@ Response:
     "province": "ลำปาง",
     "provinceName": "ลำปาง",
     "approvalTrack": "REGIONAL",
-    "status": "ส่งรายงานแล้ว",
+    "status": "รอพิจารณา",
     "statusCode": "SUBMITTED",
-    "statusLabel": "ส่งรายงานแล้ว",
+    "statusLabel": "รอพิจารณา",
     "businessActivity": "ผลิตอาหารและเครื่องดื่ม",
     "factoryAddress": "99 หมู่ 1",
     "wastewaterFlowM3PerHour": 120.5,
@@ -370,7 +372,7 @@ Response:
       "id": 15,
       "stepNo": 1,
       "roleCode": "INSPECTOR",
-      "roleLabel": "ผู้ตรวจสอบ",
+      "roleLabel": "เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์",
       "status": "PENDING",
       "isCurrent": true
     },
@@ -379,7 +381,7 @@ Response:
         "id": 15,
         "stepNo": 1,
         "roleCode": "INSPECTOR",
-        "roleLabel": "ผู้ตรวจสอบ",
+        "roleLabel": "เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์",
         "status": "PENDING",
         "isCurrent": true
       },
@@ -387,7 +389,7 @@ Response:
         "id": 16,
         "stepNo": 2,
         "roleCode": "APPROVER",
-        "roleLabel": "ผู้อนุมัติ (ผอ.ศวภ.)",
+        "roleLabel": "ผอ.ศูนย์ (อนุมัติ)",
         "status": "WAITING",
         "isCurrent": false
       }
@@ -417,9 +419,10 @@ State rule:
 
 - เรียกได้เฉพาะรายงานสถานะ `REVISION_REQUESTED`
 - ผู้เรียกต้องเป็นผู้ประกอบการ scope `OWN_FACTORY` และต้องผ่าน `user_juristics` ของโรงงานในรายงานเดิม
-- หลังบันทึก ระบบตั้งรายงานเป็น `REVISED_PENDING_REVIEW` และแสดงผลเป็น `แก้ไขแล้ว/รอพิจารณา`
-- approval step ที่เป็นคนขอแก้ไขกลับเป็น `PENDING` และ `isCurrent = true`
-- step ก่อนหน้าที่ยืนยันแล้วคงสถานะเดิม และ step ถัดไปยัง `WAITING`
+- หลังบันทึก ระบบตั้งรายงานเป็น `REVISED_PENDING_REVIEW`
+- ถ้าเป็นหน้าผู้ประกอบการ ให้แสดงสถานะรอพิจารณาเป็น `รอพิจารณา` จนกว่ารายงานจะอนุมัติ
+- approval steps ถูกเริ่มใหม่ทั้งชุด: step 1 กลับเป็น `PENDING` และ `isCurrent = true`; step อื่นกลับเป็น `WAITING` และ `isCurrent = false`
+- การตัดสินเดิมของแต่ละ step ถูกล้างจาก row ปัจจุบัน แต่ event เดิมยังอยู่ใน `bod_cod_approval_events` เพื่อ audit
 - ระบบเพิ่ม event action `RESUBMIT_REVISION` พร้อม `revisionNote` ถ้ามี
 
 Payload:
@@ -489,7 +492,7 @@ Response:
       "id": 15,
       "stepNo": 1,
       "roleCode": "INSPECTOR",
-      "roleLabel": "ผู้ตรวจสอบ",
+      "roleLabel": "เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์",
       "status": "PENDING",
       "isCurrent": true
     },
@@ -498,7 +501,7 @@ Response:
         "id": 15,
         "stepNo": 1,
         "roleCode": "INSPECTOR",
-        "roleLabel": "ผู้ตรวจสอบ",
+        "roleLabel": "เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์",
         "status": "PENDING",
         "isCurrent": true
       },
@@ -506,7 +509,7 @@ Response:
         "id": 16,
         "stepNo": 2,
         "roleCode": "APPROVER",
-        "roleLabel": "ผู้อนุมัติ (ผอ.ศวภ.)",
+        "roleLabel": "ผอ.ศูนย์ (อนุมัติ)",
         "status": "WAITING",
         "isCurrent": false
       }
@@ -534,6 +537,7 @@ Notes:
 - Call `GET /api/v1/bod-cod-deviation-reports/:id` to reopen a saved form.
 - Call `PUT /api/v1/bod-cod-deviation-reports/:id/resubmission` to submit a corrected returned form.
 - Token should include `bod_cod_errors:view = OWN_FACTORY`.
+- Display pending workflow states (`SUBMITTED`, `REVISED_PENDING_REVIEW`, `WAITING_APPROVAL`) as `รอพิจารณา` until the report becomes `APPROVED`.
 - `measurementPoints[].reportSlots[]` returns two current-year slots; the frontend can enable/disable BOD/COD report buttons from those slot statuses.
 - Frontend table fields are returned directly: `newRegistrationNo`, `oldRegistrationNo`, `province`, `measurementPoints[].code`, `measurementPoints[].name`, `measurementPoints[].type`, `measurementPoints[].parameters`, `measurementPoints[].round1Status`, and `measurementPoints[].round2Status`.
 
@@ -541,4 +545,5 @@ Notes:
 
 - Call only `GET /api/v1/bod-cod-deviation-reports` for "รายการคำขอ".
 - Token should include `bod_cod_errors:view` with the officer's menu/data scope.
+- Officer views can use `statusCode` to distinguish first submission from `REVISED_PENDING_REVIEW`; corrected reports return to step 1 and must be reviewed through the full track again.
 - Frontend report table fields are returned directly: `factoryRegistration`, `province`, `reportRound`, `year`, `submittedDate`, `reviewedDate`, and Thai display `status`. Machine status is preserved as `statusCode`.

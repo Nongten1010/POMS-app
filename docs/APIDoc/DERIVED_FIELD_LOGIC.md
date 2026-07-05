@@ -183,6 +183,7 @@ Transformation:
 - `reportRound` is converted from numeric `report_round` to Thai display text such as `ครั้งที่ 1`; the numeric value is preserved as `reportRoundNo`.
 - `year` is an alias for numeric `report_year`; `reportYear` is preserved.
 - `status` is Thai display text for frontend chips; machine status is preserved as `statusCode`.
+- For operator scope (`OWN_FACTORY`), pending workflow states `SUBMITTED`, `REVISED_PENDING_REVIEW`, and `WAITING_APPROVAL` display as `รอพิจารณา` until the report is approved.
 - `submittedDate` is `submitted_at` formatted as `DD/MM/BBBB`.
 - `reviewedDate` is `-` while status is `DRAFT`, `SUBMITTED`, or `REVISED_PENDING_REVIEW`; otherwise it uses `updated_at` formatted as `DD/MM/BBBB`.
 
@@ -215,15 +216,15 @@ Transformation:
 
 - `approvalTrack` is derived from the submitted `provinceName`: `กรุงเทพมหานคร` becomes `CENTRAL`; every other province becomes `REGIONAL`.
 - `steps` are initialized from `approvalTrack` when the form is saved:
-  - `CENTRAL`: ผู้ตรวจสอบ -> ผู้ทบทวน (`ผอ.กฝม.`) -> ผู้อนุมัติ (`ผอ.กวภ.`)
-  - `REGIONAL`: ผู้ตรวจสอบ -> ผู้อนุมัติ (`ผอ.ศวภ.`)
+  - `CENTRAL`: เจ้าหน้าที่กฝม. (ตรวจสอบความถูกต้อง + บันทึก/แก้ไขแบบแจ้งผล) -> ผอ.กฝม. (ทบทวน) -> ผอ.กวภ. (อนุมัติ)
+  - `REGIONAL`: เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์ (ตรวจสอบความถูกต้อง + บันทึก/แก้ไขแบบแจ้งผล) -> ผอ.ศูนย์ (อนุมัติ)
 - `currentStep` is the step where `is_current = true`.
 - `allowedActions` is derived from report status, current step, and permission scope. Operator `OWN_FACTORY` currently receives `CANCEL` while the report is not final; officer scopes can receive review actions when the current step is pending.
 - `deviationValueMgL` comes from database generated column `device_value_mg_l - lab_value_mg_l`.
 - `isWithinStandard` is derived on save: if `standardDeviationMgL` is absent, return `null`; otherwise compare `ABS(deviationValueMgL) <= standardDeviationMgL`.
 - `selectedParameterLabel` keeps the unit with the parameter display name, e.g. `BOD (mg/l)` and `COD (mg/l)`.
 - Resubmission is allowed only when the stored report status is `REVISION_REQUESTED` and the current approval step status is also `REVISION_REQUESTED`.
-- Resubmission sets report status to `REVISED_PENDING_REVIEW` (`แก้ไขแล้ว/รอพิจารณา`), replaces measurement rows and attachment metadata, resets the same current approval step to `PENDING`, and records `RESUBMIT_REVISION` in `bod_cod_approval_events`.
+- Resubmission sets report status to `REVISED_PENDING_REVIEW`, replaces measurement rows and attachment metadata, resets step 1 to `PENDING` + `is_current = true`, resets every later step to `WAITING` + `is_current = false`, clears prior per-step decisions from the current step rows, and records `RESUBMIT_REVISION` in `bod_cod_approval_events`.
 - Resubmission does not allow identity fields to drift from the original report slot: `reportRoundNo`, `reportYear`, `factoryRegistrationNo`, `connectedMeasurementPointId`, `pointCode`, and `selectedParameterCode` must match the stored report.
 
 Reason:
@@ -231,7 +232,7 @@ Reason:
 - The frontend should not hardcode Bangkok-vs-regional step branching. Backend owns `approvalTrack`, `steps`, `currentStep`, and `allowedActions`.
 - The saved form must be reopenable with the same values the paper-like preview needs: header fields, lab/device fields, measurements, attachment metadata, and workflow state.
 - Operator save access must be checked against `user_juristics`; the backend must not rely only on factory identifiers supplied in the request body.
-- Operator resubmission must return the report to the exact step that requested revision, rather than starting the whole approval track again or moving to the next step automatically.
+- Operator resubmission must return the report to the first officer step, even if a later reviewer/approver requested the revision, so officers review the corrected report through the full track again.
 
 Known risks:
 

@@ -121,6 +121,7 @@ interface AttachmentRow {
 interface ApprovalStepRow {
   id: number | string;
   step_no: number | string;
+  track: BodCodApprovalTrack;
   role_code: 'INSPECTOR' | 'REVIEWER' | 'APPROVER';
   role_label: string;
   status: 'PENDING' | 'WAITING' | 'APPROVED' | 'REVISION_REQUESTED';
@@ -153,7 +154,7 @@ export const bodCodDeviationReportsRepository = {
     const currentYear = currentBuddhistYear();
     const reports = await listCurrentYearReportsForConnectedPoints(rows, currentYear);
     const reportBySlotKey = buildLatestReportSlotMap(reports);
-    const data = toConnectedFactoryDTOs(rows, reportBySlotKey, currentYear);
+    const data = toConnectedFactoryDTOs(rows, reportBySlotKey, currentYear, access.scope);
 
     return { rows: data, total: data.length };
   },
@@ -172,7 +173,7 @@ export const bodCodDeviationReportsRepository = {
     const total = Number(totalRow?.total ?? 0);
 
     const rows = await baseQuery.clone().orderBy('r.created_at', 'desc').orderBy('r.id', 'desc');
-    return { rows: rows.map(toReportDTO), total };
+    return { rows: rows.map((row) => toReportDTO(row, access.scope)), total };
   },
 
   async createReport(
@@ -327,7 +328,7 @@ export const bodCodDeviationReportsRepository = {
 
       await softReplaceMeasurements(id, input, now, trx);
       await softReplaceAttachments(id, input, access.actorUserId, now, trx);
-      await resetRevisionStep(id, Number(report.current_step_id), now, trx);
+      await resetApprovalStepsForResubmission(id, now, trx);
       await insertApprovalEvent(
         id,
         'RESUBMIT_REVISION',
@@ -405,6 +406,20 @@ export function buildBodCodResubmissionAccessQueryForTests(
   access: CreateBodCodDeviationReportAccess,
 ) {
   return buildEditableReportQuery(id, access);
+}
+
+export function buildBodCodReportStatusLabelForTests(
+  status: BodCodDeviationReportStatus,
+  scope?: string | null,
+) {
+  return reportStatusLabel(status, scope);
+}
+
+export function buildBodCodResubmissionWorkflowResetQueriesForTests(reportId: number, now: Date) {
+  return {
+    resetAllSteps: buildResetApprovalStepsForResubmissionQuery(reportId, now),
+    restartFirstStep: buildRestartFirstApprovalStepForResubmissionQuery(reportId, now),
+  };
 }
 
 function buildFactoryQuery(
@@ -774,27 +789,48 @@ async function softReplaceAttachments(
   );
 }
 
-async function resetRevisionStep(
+async function resetApprovalStepsForResubmission(
   reportId: number,
-  revisionStepId: number,
   now: Date,
   trx: Knex.Transaction,
 ): Promise<void> {
-  await trx('bod_cod_approval_steps')
+  await buildResetApprovalStepsForResubmissionQuery(reportId, now, trx);
+  await buildRestartFirstApprovalStepForResubmissionQuery(reportId, now, trx);
+}
+
+function buildResetApprovalStepsForResubmissionQuery(
+  reportId: number,
+  now: Date,
+  connection: Knex | Knex.Transaction = db,
+): Knex.QueryBuilder {
+  return connection('bod_cod_approval_steps')
     .where('report_id', reportId)
     .whereNull('deleted_at')
-    .whereNot('id', revisionStepId)
-    .update({ is_current: false, updated_at: now });
+    .update({
+      status: 'WAITING',
+      is_current: false,
+      actor_user_id: null,
+      actor_name: null,
+      actor_position: null,
+      decision: null,
+      comment: null,
+      decided_at: null,
+      updated_at: now,
+    });
+}
 
-  await trx('bod_cod_approval_steps')
-    .where('id', revisionStepId)
+function buildRestartFirstApprovalStepForResubmissionQuery(
+  reportId: number,
+  now: Date,
+  connection: Knex | Knex.Transaction = db,
+): Knex.QueryBuilder {
+  return connection('bod_cod_approval_steps')
     .where('report_id', reportId)
+    .where('step_no', 1)
     .whereNull('deleted_at')
     .update({
       status: 'PENDING',
       is_current: true,
-      decision: null,
-      decided_at: null,
       updated_at: now,
     });
 }
@@ -881,6 +917,7 @@ function toConnectedFactoryDTOs(
   rows: FactoryTableRow[],
   reportBySlotKey: Map<string, LatestReportRow>,
   year: number,
+  scope: string | null | undefined,
 ): BodCodDeviationFactoryTableRowDTO[] {
   const factories = new Map<
     string,
@@ -890,7 +927,7 @@ function toConnectedFactoryDTOs(
   for (const row of rows) {
     const factoryId = connectedFactoryId(row);
     const current = factories.get(factoryId) ?? { firstRow: row, points: [] };
-    const reportSlots = buildReportSlots(row, reportBySlotKey, year);
+    const reportSlots = buildReportSlots(row, reportBySlotKey, year, scope);
     const parameterCodes = parseParameters(row.parameters_json);
     current.points = [
       ...current.points,
@@ -923,6 +960,7 @@ function buildReportSlots(
   row: FactoryTableRow,
   reportBySlotKey: Map<string, LatestReportRow>,
   year: number,
+  scope: string | null | undefined,
 ): BodCodReportSlotDTO[] {
   return ([1, 2] as const).map((roundNo) => {
     const report =
@@ -932,7 +970,7 @@ function buildReportSlots(
       roundNo,
       year,
       status: report?.status ?? 'NOT_SUBMITTED',
-      statusLabel: report ? reportStatusLabel(report.status) : 'ยังไม่ยื่น',
+      statusLabel: report ? reportStatusLabel(report.status, scope) : 'ยังไม่ยื่น',
       reportId: toNumberOrNull(report?.report_id ?? null),
       reportNo: report?.report_no ?? null,
     };
@@ -969,15 +1007,21 @@ function approvalStepsForTrack(
 ): Array<Pick<BodCodWorkflowStepDTO, 'stepNo' | 'roleCode' | 'roleLabel'>> {
   if (approvalTrack === 'CENTRAL') {
     return [
-      { stepNo: 1, roleCode: 'INSPECTOR', roleLabel: 'ผู้ตรวจสอบ' },
-      { stepNo: 2, roleCode: 'REVIEWER', roleLabel: 'ผู้ทบทวน (ผอ.กฝม.)' },
-      { stepNo: 3, roleCode: 'APPROVER', roleLabel: 'ผู้อนุมัติ (ผอ.กวภ.)' },
+      { stepNo: 1, roleCode: 'INSPECTOR', roleLabel: 'เจ้าหน้าที่กฝม.' },
+      { stepNo: 2, roleCode: 'REVIEWER', roleLabel: 'ผอ.กฝม. (ทบทวน)' },
+      { stepNo: 3, roleCode: 'APPROVER', roleLabel: 'ผอ.กวภ. (อนุมัติ)' },
     ];
   }
   return [
-    { stepNo: 1, roleCode: 'INSPECTOR', roleLabel: 'ผู้ตรวจสอบ' },
-    { stepNo: 2, roleCode: 'APPROVER', roleLabel: 'ผู้อนุมัติ (ผอ.ศวภ.)' },
+    { stepNo: 1, roleCode: 'INSPECTOR', roleLabel: 'เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์' },
+    { stepNo: 2, roleCode: 'APPROVER', roleLabel: 'ผอ.ศูนย์ (อนุมัติ)' },
   ];
+}
+
+function approvalStepRoleLabel(approvalTrack: BodCodApprovalTrack, stepNo: number): string | null {
+  return (
+    approvalStepsForTrack(approvalTrack).find((step) => step.stepNo === stepNo)?.roleLabel ?? null
+  );
 }
 
 async function listMeasurements(reportId: number): Promise<BodCodDeviationMeasurementDTO[]> {
@@ -1028,6 +1072,7 @@ async function listApprovalSteps(
     .select(
       'id',
       'step_no',
+      'track',
       'role_code',
       'role_label',
       'status',
@@ -1076,9 +1121,12 @@ function toFactoryDTO(
   };
 }
 
-function toReportDTO(row: ReportTableRow): BodCodDeviationReportTableRowDTO {
+function toReportDTO(
+  row: ReportTableRow,
+  scope: string | null | undefined,
+): BodCodDeviationReportTableRowDTO {
   const reportRoundNo = Number(row.report_round);
-  const statusLabel = reportStatusLabel(row.status);
+  const statusLabel = reportStatusLabel(row.status, scope);
   return {
     id: Number(row.id),
     reportNo: row.report_no,
@@ -1117,7 +1165,7 @@ function toReportDetailDTO(
   steps: BodCodWorkflowStepDTO[],
   scope: string | null | undefined,
 ): BodCodDeviationReportDetailDTO {
-  const base = toReportDTO(row);
+  const base = toReportDTO(row, scope);
   const currentStep = currentWorkflowStep(steps);
   return {
     ...base,
@@ -1176,7 +1224,7 @@ function toApprovalStepDTO(row: ApprovalStepRow): BodCodWorkflowStepDTO {
     id: Number(row.id),
     stepNo: Number(row.step_no),
     roleCode: row.role_code,
-    roleLabel: row.role_label,
+    roleLabel: approvalStepRoleLabel(row.track, Number(row.step_no)) ?? row.role_label,
     status: row.status,
     actorUserId: toNumberOrNull(row.actor_user_id),
     actorName: row.actor_name,
@@ -1242,7 +1290,14 @@ function reportRoundLabel(roundNo: number): string {
   return `ครั้งที่ ${roundNo}`;
 }
 
-function reportStatusLabel(status: BodCodDeviationReportStatus): string {
+function reportStatusLabel(status: BodCodDeviationReportStatus, scope?: string | null): string {
+  if (
+    scope === 'OWN_FACTORY' &&
+    (status === 'SUBMITTED' || status === 'REVISED_PENDING_REVIEW' || status === 'WAITING_APPROVAL')
+  ) {
+    return 'รอพิจารณา';
+  }
+
   const labels: Record<BodCodDeviationReportStatus, string> = {
     DRAFT: 'แบบร่าง',
     SUBMITTED: 'ส่งรายงานแล้ว',
