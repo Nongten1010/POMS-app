@@ -689,6 +689,7 @@ Notes:
 Link:
 
 ```text
+POST /api/v1/bod-cod-deviation-reports/:id/result-notice
 PUT /api/v1/bod-cod-deviation-reports/:id/result-notice
 ```
 
@@ -760,7 +761,7 @@ Response:
 
 Notes:
 
-- Endpoint นี้เป็น `PUT` แบบ upsert/full replacement: ถ้ายังไม่มีแถวใน `bod_cod_result_notices` จะสร้างใหม่ ถ้ามีแล้วจะ update แถวเดิม
+- `POST` และ `PUT` ใช้ controller เดียวกันแบบ upsert/full replacement: ถ้ายังไม่มีแถวใน `bod_cod_result_notices` จะสร้างใหม่ ถ้ามีแล้วจะ update แถวเดิม
 - ใช้ได้เฉพาะเมื่อรายงานมี `statusCode = WAITING_RESULT_NOTICE`, `currentStep.roleCode = RESULT_NOTICE`, และ `currentStep.status = PENDING`
 - หลังบันทึกแบบแจ้งผลแล้ว step ยังอยู่ที่ `RESULT_NOTICE`; เจ้าหน้าที่ต้องกด workflow action `APPROVE` ต่อ เพื่อส่งไป step ถัดไป (`APPROVER` ของภูมิภาค หรือ `REVIEWER` ของส่วนกลาง)
 - `GET /api/v1/bod-cod-deviation-reports/:id` จะคืน `resultNotice` เป็น object นี้เมื่อมีข้อมูลแล้ว หรือ `null` เมื่อยังไม่เคยบันทึก
@@ -927,7 +928,7 @@ Error behavior:
 
 - Call only `GET /api/v1/bod-cod-deviation-reports` for "รายการคำขอ".
 - Call `GET /api/v1/bod-cod-deviation-reports/:id` to open the saved form and prefill `resultNotice` when editing the result notice form.
-- Call `PUT /api/v1/bod-cod-deviation-reports/:id/result-notice` while `statusCode = WAITING_RESULT_NOTICE` and `currentStep.roleCode = RESULT_NOTICE` to save/edit the result notice form.
+- Call `POST /api/v1/bod-cod-deviation-reports/:id/result-notice` or `PUT /api/v1/bod-cod-deviation-reports/:id/result-notice` while `statusCode = WAITING_RESULT_NOTICE` and `currentStep.roleCode = RESULT_NOTICE` to save/edit the result notice form.
 - Call `POST /api/v1/bod-cod-deviation-reports/:id/workflow-actions` for `แจ้งแก้ไข`, `ผ่านพิจารณา`, and `ไม่ผ่านพิจารณา`.
 - Token should include `bod_cod_errors:view` with the officer's menu/data scope.
 - Token should include `bod_cod_errors:approve` for workflow actions.
