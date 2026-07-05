@@ -35,7 +35,7 @@ operatorFactoryRoutes.use(authenticate);
 
 operatorFactoryDashboardRoutes.get(
   '/',
-  authorize('factories:view'),
+  authorize('dashboard:view'),
   connectionRequestsController.listOperatorFactoryDashboard,
 );
 

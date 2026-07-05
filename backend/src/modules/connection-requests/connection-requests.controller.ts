@@ -93,7 +93,7 @@ export const connectionRequestsController = {
       const query = listOperatorFactoriesQuerySchema.parse(req.query);
       const result = await connectionRequestsService.listOperatorFactoryDashboard(
         actorUserId,
-        getScope(req, 'factories:view'),
+        getScope(req, 'dashboard:view'),
         { ...query, connectedOnly: true },
         ...getRegionalAccessArg(req),
       );
