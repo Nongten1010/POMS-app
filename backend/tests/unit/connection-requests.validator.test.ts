@@ -660,6 +660,174 @@ describe('connection request validators', () => {
     }
   });
 
+  it('accepts WPMS add measurement point payload from the frontend form defaults', () => {
+    const result = addMeasurementPointRequestSchema.safeParse({
+      factoryId: '72110100225390',
+      factoryName: 'บริษัท ไดกิ  อลูมิเนียม  อินดัสทรี  (ประเทศไทย) จำกัด',
+      factoryRegistrationNo: 'น.60-2/2539-ญอน.',
+      industryMainOrder: '6000',
+      industrySubOrder: 'ไม่ระบุ',
+      businessActivity:
+        '1. ผลิต ALUMINIUM ALLOY และหลอมตะกรันจากการหลอมอลูมิเนียม (ALUMINIUM DROSS) 2. ผลิต ตะกรันอะลูมิเนียม อะลูมิเนียมผงรีไซเคิล และอลูมิเนียมก้อนรีไซเคิล',
+      eia: 'ไม่มี',
+      hasEia: false,
+      projectName: 'ไม่ระบุ',
+      address: '700/99 หมู่ 1 ตำบล7 อำเภอ5 20160',
+      latitude: null,
+      longitude: null,
+      systemType: 'WPMS',
+      contactPersons: [
+        {
+          name: 'ภาณุ เล้าสุวรรณ',
+          position: 'ประสานงาน',
+          phone: '0944835438',
+          email: 'panu.laosuwan@gmail.com',
+        },
+      ],
+      notificationEmails: ['panu.laosuwan@gmail.com'],
+      officerNotificationEmails: [],
+      informationProviderName: 'ธนาภรณ์ ศรีอวบ',
+      informationProviderPosition: 'กรรมการโรงงาน',
+      measurementPoints: [
+        {
+          pointCode: '',
+          pointName: 'จุดระบายน้ำทิ้ง A',
+          pointType: 'WASTEWATER',
+          details: {
+            monitoringPointKind: 'WPMS',
+            averageWastewaterDischarge: 500,
+            minWastewaterDischarge: 300,
+            maxWastewaterDischarge: 800,
+            eligibleParameters: ['COD (mg/l)', 'Flow rate (m3/hr)', 'Watt (kW/hr)'],
+            connectedParameters: [],
+            pendingParameters: ['COD (mg/l)', 'Flow rate (m3/hr)', 'Watt (kW/hr)'],
+            hasTreatmentSystem: 'มี',
+            treatmentSystem: 'อื่นๆ',
+            maxTreatmentCapacity: 1000,
+            instrumentLatitude: 13.7563,
+            instrumentLongitude: 100.5018,
+            wastewaterSource: 'กระบวนการผลิต',
+            dischargeReceivingSource: 'คลองสาธารณะ',
+            connectionDevice: 'POMS Box (กรอ.)',
+            connectionDeviceOther: '',
+          },
+          measurementInstruments: {
+            converterBrand: 'Converter Brand',
+            converterModel: 'CV-100',
+            parameters: [
+              {
+                parameter: 'COD (mg/l)',
+                technique: '',
+                range: '',
+                brand: '',
+                supplier: '',
+                eiaStandard: '',
+                standardCondition: true,
+                dryBasis: false,
+                oxygenOrExcessAir: false,
+                standardCriteria: {
+                  enabled: false,
+                  standardValue: '120',
+                  rows: [
+                    { level: 'normal', min: 0, max: 96 },
+                    { level: 'warning', min: 96, max: 120 },
+                    { level: 'critical', min: 120, max: null },
+                  ],
+                },
+                eiaCriteria: {
+                  enabled: false,
+                  standardValue: '120',
+                  rows: [
+                    { level: 'normal', min: 0, max: 96 },
+                    { level: 'warning', min: 96, max: 120 },
+                    { level: 'critical', min: 120, max: null },
+                  ],
+                },
+              },
+              {
+                parameter: 'Flow rate (m3/hr)',
+                technique: '',
+                range: '',
+                brand: '',
+                supplier: '',
+                eiaStandard: '',
+                standardCondition: true,
+                dryBasis: false,
+                oxygenOrExcessAir: false,
+                standardCriteria: {
+                  enabled: true,
+                  standardValue: '',
+                  rows: [
+                    { level: 'normal', min: null, max: null },
+                    { level: 'warning', min: null, max: null },
+                    { level: 'critical', min: null, max: null },
+                  ],
+                },
+                eiaCriteria: {
+                  enabled: true,
+                  standardValue: '',
+                  rows: [
+                    { level: 'normal', min: null, max: null },
+                    { level: 'warning', min: null, max: null },
+                    { level: 'critical', min: null, max: null },
+                  ],
+                },
+              },
+              {
+                parameter: 'Watt (kW/hr)',
+                technique: '',
+                range: '',
+                brand: '',
+                supplier: '',
+                eiaStandard: '',
+                standardCondition: true,
+                dryBasis: false,
+                oxygenOrExcessAir: false,
+                standardCriteria: {
+                  enabled: true,
+                  standardValue: '',
+                  rows: [
+                    { level: 'normal', min: null, max: null },
+                    { level: 'warning', min: null, max: null },
+                    { level: 'critical', min: null, max: null },
+                  ],
+                },
+                eiaCriteria: {
+                  enabled: true,
+                  standardValue: '',
+                  rows: [
+                    { level: 'normal', min: null, max: null },
+                    { level: 'warning', min: null, max: null },
+                    { level: 'critical', min: null, max: null },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+      ],
+      remarks: 'ขอเพิ่มจุดตรวจวัด WPMS',
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const point = result.data.measurementPoints[0];
+      expect(point.pointCode).toBeNull();
+      expect(point.details).toEqual(
+        expect.objectContaining({
+          eligibleParameters: ['COD (mg/l)', 'Flow rate (m3/hr)', 'Watt (kW/hr)'],
+          pendingParameters: ['COD (mg/l)', 'Flow rate (m3/hr)', 'Watt (kW/hr)'],
+          treatmentSystem: 'อื่นๆ',
+        }),
+      );
+      expect(point.measurementInstruments?.parameters[1].standardCriteria).toEqual({
+        enabled: false,
+        standardValue: null,
+        rows: [],
+      });
+    }
+  });
+
   it('rejects missing conditional detail fields and wrong parameter group type', () => {
     const result = addMeasurementPointRequestSchema.safeParse({
       ...validPayload,

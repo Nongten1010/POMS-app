@@ -43,7 +43,7 @@ const measurementPointParameterFallbackFields = [
   'connectedParameters',
 ] as const;
 const cemsOnlyDetailFields = new Set([
-  ...parameterGroupFields,
+  'timeSharingParameters',
   'productionUnitType',
   'productionCapacity',
   'cemsInstallationRequiredBy',
@@ -150,10 +150,23 @@ function normalizeMeasurementCriteriaInput(value: unknown): unknown {
     typeof rawEnabled === 'string'
       ? rawEnabled.trim().toLowerCase() === 'true'
       : rawEnabled === true;
+  const standardValue =
+    typeof value.standardValue === 'string' ? value.standardValue.trim() : value.standardValue;
+  const hasStandardValue =
+    (typeof standardValue === 'string' && standardValue.length > 0) ||
+    (typeof standardValue === 'number' && Number.isFinite(standardValue));
+  const hasRangeValue =
+    Array.isArray(value.rows) &&
+    value.rows.some(
+      (row) =>
+        isRecord(row) &&
+        ((typeof row.min === 'number' && Number.isFinite(row.min)) ||
+          (typeof row.max === 'number' && Number.isFinite(row.max))),
+    );
 
   return {
     ...value,
-    enabled,
+    enabled: enabled && (hasStandardValue || hasRangeValue),
   };
 }
 
@@ -636,7 +649,8 @@ function validateWpmsDetails(
 
   validateMonitoringPointKind(details, index, ctx, 'WPMS');
   validateExcludedFields(details, cemsOnlyDetailFields, index, ctx, 'CEMS-only detail field');
-  validateTreatmentSystem(details, index, ctx);
+  validateParameterGroups(details, index, ctx);
+  validateTreatmentSystem(details, index, ctx, { requireOtherDescription: false });
   validateConnectionDevice(details, index, ctx);
 
   if (details.hasTreatmentSystem === 'มี') {
@@ -684,10 +698,11 @@ function validateTreatmentSystem(
   details: Record<string, unknown>,
   index: number,
   ctx: z.RefinementCtx,
+  options: { requireOtherDescription?: boolean } = {},
 ): void {
   if (details.hasTreatmentSystem !== 'มี') return;
   requireStringDetail(details, index, ctx, 'treatmentSystem');
-  if (details.treatmentSystem === 'อื่นๆ') {
+  if (details.treatmentSystem === 'อื่นๆ' && options.requireOtherDescription !== false) {
     requireStringDetail(details, index, ctx, 'treatmentSystemOther');
   }
 }
