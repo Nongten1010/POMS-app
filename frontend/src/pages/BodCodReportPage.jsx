@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
+  Alert,
   Box,
   Button,
   Chip,
@@ -37,6 +38,10 @@ const appBarHeight = {
   md: 72,
 }
 
+const bodCodDeviationReportsApiBaseUrl = import.meta.env.DEV
+  ? '/api-proxy/v1/bod-cod-deviation-reports'
+  : 'https://d-poms.diw.go.th/api/v1/bod-cod-deviation-reports'
+
 const operatorSubMenus = [
   { value: 'factories', label: 'รายชื่อโรงงาน' },
   { value: 'history', label: 'ประวัติการรายงาน' },
@@ -48,330 +53,10 @@ const officerSubMenus = [
 ]
 
 const currentDate = new Date()
-const currentMonth = 6
+const currentMonth = currentDate.getMonth() + 1
 const currentBuddhistYear = currentDate.getFullYear() + 543
 const isFirstRoundPeriod = currentMonth >= 1 && currentMonth <= 6
 const isSecondRoundPeriod = currentMonth >= 7 && currentMonth <= 12
-
-const factoryRows = [
-  {
-    id: 1,
-    factoryName: 'บริษัท ปูนซีเมนต์นครหลวง จำกัด (มหาชน)',
-    factoryRegistration: '10190000225448',
-    newRegistrationNo: '10190000225448',
-    oldRegistrationNo: '3-101-2/44สบ',
-    industryType: 'ผลิตปูนซีเมนต์',
-    province: 'สระบุรี',
-    monitoringPointCount: 3,
-  },
-  {
-    id: 2,
-    factoryName: 'บริษัท อินทรี อีโคไซเคิล จำกัด',
-    factoryRegistration: '10190003325500',
-    newRegistrationNo: '10190003325500',
-    oldRegistrationNo: '3-106-33/50สบ',
-    industryType: 'จัดการของเสีย',
-    province: 'สระบุรี',
-    monitoringPointCount: 1,
-  },
-  {
-    id: 3,
-    factoryName: 'บริษัท กรุงเทพอุตสาหกรรมน้ำทิ้ง จำกัด',
-    factoryRegistration: '10240000325407',
-    newRegistrationNo: '10240000325407',
-    oldRegistrationNo: '3-88(2)-3/40ฉช',
-    industryType: 'ผลิตอาหารและเครื่องดื่ม',
-    province: 'กรุงเทพมหานคร',
-    monitoringPointCount: 1,
-  },
-]
-
-const monitoringPointRowsByFactoryId = {
-  1: [
-    {
-      id: 1,
-      code: 'WP001',
-      name: 'จุดระบายน้ำทิ้ง A',
-      type: 'WPMS',
-      parameters: 'BOD, COD',
-      round1Status: 'ยังไม่ยื่น',
-      round2Status: 'ยังไม่ยื่น',
-    },
-    {
-      id: 2,
-      code: 'WP002',
-      name: 'จุดระบายน้ำทิ้ง B',
-      type: 'WPMS',
-      parameters: 'BOD, COD',
-      round1Status: 'ผ่านการพิจารณา',
-      round2Status: 'ยังไม่ยื่น',
-    },
-    {
-      id: 4,
-      code: 'WP004',
-      name: 'จุดระบายน้ำทิ้งสำรอง',
-      type: 'WPMS',
-      parameters: 'pH, flow',
-      round1Status: 'ยังไม่ยื่น',
-      round2Status: 'ยังไม่ยื่น',
-    },
-  ],
-  2: [
-    {
-      id: 3,
-      code: 'WP003',
-      name: 'จุดระบายน้ำทิ้งหลัก',
-      type: 'WPMS',
-      parameters: 'BOD, COD',
-      round1Status: 'รอโรงงานแก้ไข',
-      round2Status: 'ยังไม่ยื่น',
-    },
-  ],
-  3: [
-    {
-      id: 5,
-      code: 'BKK-WP001',
-      name: 'จุดระบายน้ำทิ้งกรุงเทพฯ',
-      type: 'WPMS',
-      parameters: 'BOD, COD',
-      round1Status: 'ผ่านการพิจารณา',
-      round2Status: 'ยังไม่ยื่น',
-    },
-  ],
-}
-
-const reportRows = [
-  {
-    id: 1,
-    factoryName: 'บริษัท ปูนซีเมนต์นครหลวง จำกัด (มหาชน)',
-    factoryRegistration: '10190000225448',
-    province: 'สระบุรี',
-    monitoringPointCode: 'WP001',
-    monitoringPointName: 'จุดระบายน้ำทิ้ง A',
-    reportRound: 'ครั้งที่ 1',
-    year: currentBuddhistYear,
-    reportNo: `BODCOD-${currentBuddhistYear}-0001`,
-    submittedDate: '15/06/2569',
-    reviewedDate: '-',
-    status: 'รอพิจารณา',
-    statusHistory: [
-      {
-        id: 'bodcod-report-1-history-1',
-        statusLabel: 'รอพิจารณา',
-        note: 'ผู้ประกอบการส่งรายงานค่าความคลาดเคลื่อน BOD/COD',
-        changedAt: '15/06/2569',
-        durationText: 'อยู่ระหว่างดำเนินการ',
-        changedBy: 'บริษัท ปูนซีเมนต์นครหลวง จำกัด (มหาชน)',
-      },
-    ],
-  },
-  {
-    id: 2,
-    factoryName: 'บริษัท อินทรี อีโคไซเคิล จำกัด',
-    factoryRegistration: '10190003325500',
-    province: 'สระบุรี',
-    monitoringPointCode: 'WP003',
-    monitoringPointName: 'จุดระบายน้ำทิ้งหลัก',
-    reportRound: 'ครั้งที่ 1',
-    year: currentBuddhistYear,
-    reportNo: `BODCOD-${currentBuddhistYear}-0002`,
-    submittedDate: '12/06/2569',
-    reviewedDate: '18/06/2569',
-    status: 'รอโรงงานแก้ไข',
-    revisionNote: 'กรุณาตรวจสอบเอกสารรายงานผลจากห้องปฏิบัติการ และระบุค่าความคลาดเคลื่อนให้ครบถ้วน',
-    statusHistory: [
-      {
-        id: 'bodcod-report-2-history-1',
-        statusLabel: 'รอพิจารณา',
-        note: 'ผู้ประกอบการส่งรายงานพร้อมเอกสารประกอบ',
-        changedAt: '12/06/2569',
-        durationText: '6 วัน',
-        changedBy: 'บริษัท อินทรี อีโคไซเคิล จำกัด',
-      },
-      {
-        id: 'bodcod-report-2-history-2',
-        statusLabel: 'รอโรงงานแก้ไข',
-        note: 'กรุณาตรวจสอบเอกสารรายงานผลจากห้องปฏิบัติการ และระบุค่าความคลาดเคลื่อนให้ครบถ้วน',
-        changedAt: '18/06/2569',
-        durationText: 'อยู่ระหว่างดำเนินการ',
-        changedBy: 'เจ้าหน้าที่ ก',
-      },
-    ],
-  },
-  {
-    id: 3,
-    factoryName: 'บริษัท ปูนซีเมนต์นครหลวง จำกัด (มหาชน)',
-    factoryRegistration: '10190000225448',
-    province: 'สระบุรี',
-    monitoringPointCode: 'WP002',
-    monitoringPointName: 'จุดระบายน้ำทิ้ง B',
-    reportRound: 'ครั้งที่ 2',
-    year: currentBuddhistYear - 1,
-    reportNo: `BODCOD-${currentBuddhistYear - 1}-0018`,
-    submittedDate: '20/12/2568',
-    reviewedDate: '24/12/2568',
-    status: 'ผ่านการพิจารณา',
-    statusHistory: [
-      {
-        id: 'bodcod-report-3-history-1',
-        statusLabel: 'รอพิจารณา',
-        note: 'ผู้ประกอบการส่งรายงานค่าความคลาดเคลื่อนรอบที่ 2',
-        changedAt: '20/12/2568',
-        durationText: '4 วัน',
-        changedBy: 'บริษัท ปูนซีเมนต์นครหลวง จำกัด (มหาชน)',
-      },
-      {
-        id: 'bodcod-report-3-history-2',
-        statusLabel: 'ผ่านการพิจารณา',
-        note: 'ตรวจสอบข้อมูลและเอกสารประกอบถูกต้องครบถ้วน',
-        changedAt: '24/12/2568',
-        changedBy: 'เจ้าหน้าที่ ก',
-      },
-    ],
-  },
-  {
-    id: 4,
-    factoryName: 'บริษัท กรุงเทพอุตสาหกรรมน้ำทิ้ง จำกัด',
-    factoryRegistration: '10240000325407',
-    province: 'กรุงเทพมหานคร',
-    monitoringPointCode: 'BKK-WP001',
-    monitoringPointName: 'จุดระบายน้ำทิ้งกรุงเทพฯ',
-    reportRound: 'ครั้งที่ 1',
-    year: currentBuddhistYear,
-    reportNo: `BODCOD-${currentBuddhistYear}-0004`,
-    submittedDate: '22/06/2569',
-    reviewedDate: '25/06/2569',
-    status: 'ผ่านการพิจารณา',
-    statusHistory: [
-      {
-        id: 'bodcod-report-4-history-1',
-        statusLabel: 'รอพิจารณา',
-        note: 'ผู้ประกอบการส่งรายงานค่าความคลาดเคลื่อน BOD/COD',
-        changedAt: '22/06/2569',
-        durationText: '3 วัน',
-        changedBy: 'บริษัท กรุงเทพอุตสาหกรรมน้ำทิ้ง จำกัด',
-      },
-      {
-        id: 'bodcod-report-4-history-2',
-        statusLabel: 'ผ่านการพิจารณา',
-        note: 'เจ้าหน้าที่ส่วนกลางตรวจสอบข้อมูลเรียบร้อยแล้ว',
-        changedAt: '25/06/2569',
-        changedBy: 'เจ้าหน้าที่ส่วนกลาง',
-      },
-    ],
-  },
-]
-
-const officerReportRows = [
-  reportRows[0],
-  {
-    ...reportRows[1],
-    status: 'แก้ไขแล้ว/รอพิจารณา',
-    submittedDate: '20/06/2569',
-    reviewedDate: '-',
-    statusHistory: [
-      ...reportRows[1].statusHistory,
-      {
-        id: 'bodcod-report-2-history-3',
-        statusLabel: 'แก้ไขแล้ว/รอพิจารณา',
-        note: 'ผู้ประกอบการแก้ไขข้อมูลและส่งกลับให้เจ้าหน้าที่พิจารณาอีกครั้ง',
-        changedAt: '20/06/2569',
-        durationText: 'อยู่ระหว่างดำเนินการ',
-        changedBy: 'บริษัท อินทรี อีโคไซเคิล จำกัด',
-      },
-    ],
-  },
-  {
-    ...reportRows[2],
-    status: 'กรอกแบบแจ้งผล',
-    statusHistory: [
-      ...reportRows[2].statusHistory,
-      {
-        id: 'bodcod-report-3-history-3',
-        statusLabel: 'กรอกแบบแจ้งผล',
-        note: 'รายงานผ่านการพิจารณาแล้ว รอเจ้าหน้าที่บันทึกแบบแจ้งผล',
-        changedAt: '24/12/2568',
-        durationText: 'อยู่ระหว่างดำเนินการ',
-        changedBy: 'เจ้าหน้าที่ ก',
-      },
-    ],
-  },
-  {
-    ...reportRows[3],
-    status: 'รอทบทวน',
-    statusHistory: [
-      ...reportRows[3].statusHistory,
-      {
-        id: 'bodcod-report-4-history-3',
-        statusLabel: 'กรอกแบบแจ้งผล',
-        note: 'เจ้าหน้าที่บันทึกแบบแจ้งผลเรียบร้อยแล้ว',
-        changedAt: '25/06/2569',
-        durationText: '1 วัน',
-        changedBy: 'เจ้าหน้าที่ส่วนกลาง',
-      },
-      {
-        id: 'bodcod-report-4-history-4',
-        statusLabel: 'รอทบทวน',
-        note: 'ส่งต่อให้ผู้ทบทวนตรวจสอบความถูกต้องของแบบแจ้งผล',
-        changedAt: '26/06/2569',
-        durationText: 'อยู่ระหว่างดำเนินการ',
-        changedBy: 'เจ้าหน้าที่ส่วนกลาง',
-      },
-    ],
-  },
-  {
-    ...reportRows[3],
-    id: 5,
-    monitoringPointCode: 'BKK-WP002',
-    monitoringPointName: 'จุดระบายน้ำทิ้งกรุงเทพฯ 2',
-    reportNo: `BODCOD-${currentBuddhistYear}-0005`,
-    submittedDate: '18/06/2569',
-    reviewedDate: '28/06/2569',
-    status: 'รออนุมัติ',
-    statusHistory: [
-      {
-        id: 'bodcod-report-5-history-1',
-        statusLabel: 'รอพิจารณา',
-        note: 'ผู้ประกอบการส่งรายงานค่าความคลาดเคลื่อน BOD/COD',
-        changedAt: '18/06/2569',
-        durationText: '4 วัน',
-        changedBy: 'บริษัท กรุงเทพอุตสาหกรรมน้ำทิ้ง จำกัด',
-      },
-      {
-        id: 'bodcod-report-5-history-2',
-        statusLabel: 'ผ่านการพิจารณา',
-        note: 'เจ้าหน้าที่ตรวจสอบรายงานเรียบร้อยแล้ว',
-        changedAt: '22/06/2569',
-        durationText: '2 วัน',
-        changedBy: 'เจ้าหน้าที่ส่วนกลาง',
-      },
-      {
-        id: 'bodcod-report-5-history-3',
-        statusLabel: 'กรอกแบบแจ้งผล',
-        note: 'บันทึกแบบแจ้งผลเรียบร้อยแล้ว',
-        changedAt: '24/06/2569',
-        durationText: '4 วัน',
-        changedBy: 'เจ้าหน้าที่ส่วนกลาง',
-      },
-      {
-        id: 'bodcod-report-5-history-4',
-        statusLabel: 'รอทบทวน',
-        note: 'ผู้ทบทวนตรวจสอบแบบแจ้งผลเรียบร้อยแล้ว',
-        changedAt: '28/06/2569',
-        durationText: 'อยู่ระหว่างดำเนินการ',
-        changedBy: 'ผอ.กฝม.',
-      },
-      {
-        id: 'bodcod-report-5-history-5',
-        statusLabel: 'รออนุมัติ',
-        note: 'ส่งต่อให้ผู้มีอำนาจอนุมัติ',
-        changedAt: '28/06/2569',
-        durationText: 'อยู่ระหว่างดำเนินการ',
-        changedBy: 'ผอ.กฝม.',
-      },
-    ],
-  },
-]
 
 const tableActionStackSx = {
   alignItems: 'center',
@@ -424,6 +109,265 @@ function StatusChip({ value }) {
 
 function hasBodCodParameter(parameters = '') {
   return /\b(BOD|COD)\b/i.test(parameters)
+}
+
+async function readBodCodApiResponse(result, fallbackMessage) {
+  const rawText = await result.text()
+  let response
+
+  try {
+    response = rawText ? JSON.parse(rawText) : null
+  } catch {
+    response = rawText
+  }
+
+  if (!result.ok || response?.success === false) {
+    const message =
+      response?.error?.message ??
+      response?.message ??
+      `${fallbackMessage} (${result.status} ${result.statusText})`
+    throw new Error(message)
+  }
+
+  return response
+}
+
+function toNumberOrNull(value) {
+  if (value === '' || value === undefined || value === null) {
+    return null
+  }
+
+  const numericValue = Number(value)
+  return Number.isFinite(numericValue) ? numericValue : null
+}
+
+function formatThaiDateValue(value) {
+  if (!value) return '-'
+
+  if (typeof value === 'string' && /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(value)) {
+    return value
+  }
+
+  const parsedDate = new Date(value)
+  if (Number.isNaN(parsedDate.getTime())) {
+    return value
+  }
+
+  const day = String(parsedDate.getDate()).padStart(2, '0')
+  const month = String(parsedDate.getMonth() + 1).padStart(2, '0')
+  const year = parsedDate.getFullYear() + 543
+
+  return `${day}/${month}/${year}`
+}
+
+function formatApiDateValue(value) {
+  if (!value) return null
+
+  if (typeof value === 'string') {
+    const thaiDateMatch = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+    if (thaiDateMatch) {
+      const [, day, month, year] = thaiDateMatch
+      const christianYear = Number(year) > 2400 ? Number(year) - 543 : Number(year)
+
+      return `${christianYear}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    }
+
+    const isoDateMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})/)
+    if (isoDateMatch) {
+      return `${isoDateMatch[1]}-${isoDateMatch[2]}-${isoDateMatch[3]}`
+    }
+  }
+
+  const parsedDate = new Date(value)
+  if (Number.isNaN(parsedDate.getTime())) {
+    return null
+  }
+
+  const year = parsedDate.getFullYear()
+  const month = String(parsedDate.getMonth() + 1).padStart(2, '0')
+  const day = String(parsedDate.getDate()).padStart(2, '0')
+
+  return `${year}-${month}-${day}`
+}
+
+function normalizeBodCodStatusHistory(detail = {}) {
+  const history = detail.statusHistory ?? detail.history ?? detail.workflowHistory ?? detail.events
+
+  if (Array.isArray(history)) {
+    return history
+  }
+
+  if (Array.isArray(detail.steps)) {
+    return detail.steps.map((step) => ({
+      id: step.id,
+      statusLabel: step.statusLabel ?? step.roleLabel ?? step.status,
+      note: step.note ?? '',
+      changedAt: step.changedAt ?? detail.updatedAt,
+      changedBy: step.changedByName ?? step.roleLabel ?? '-',
+      durationText: step.durationText,
+    }))
+  }
+
+  return []
+}
+
+function mapBodCodFactoryRow(row = {}, index = 0) {
+  const measurementPoints = Array.isArray(row.measurementPoints)
+    ? row.measurementPoints.map((point, pointIndex) => ({
+        ...point,
+        id: point.id ?? point.connectedMeasurementPointId ?? point.stationId ?? `point-${index}-${pointIndex}`,
+        code: point.code ?? point.pointCode ?? point.stationId ?? '',
+        name: point.name ?? point.pointName ?? '',
+        type: point.type ?? point.systemType ?? point.pointType ?? '',
+        parameters: point.parameters ?? (Array.isArray(point.parameterCodes) ? point.parameterCodes.join(', ') : ''),
+        round1Status:
+          point.round1Status ??
+          point.reportSlots?.find((slot) => Number(slot.roundNo) === 1)?.statusLabel ??
+          'ยังไม่ยื่น',
+        round2Status:
+          point.round2Status ??
+          point.reportSlots?.find((slot) => Number(slot.roundNo) === 2)?.statusLabel ??
+          'ยังไม่ยื่น',
+      }))
+    : []
+
+  return {
+    ...row,
+    id: row.id ?? row.factoryId ?? row.newRegistrationNo ?? `factory-${index + 1}`,
+    factoryId: row.factoryId ?? row.id ?? '',
+    factoryName: row.factoryName ?? '',
+    factoryRegistration: row.factoryRegistration ?? row.newRegistrationNo ?? '',
+    newRegistrationNo: row.newRegistrationNo ?? row.factoryRegistration ?? '',
+    oldRegistrationNo: row.oldRegistrationNo ?? '',
+    industryType: row.industryType ?? '',
+    province: row.province ?? row.provinceName ?? '',
+    monitoringPointCount: Number(row.monitoringPointCount ?? measurementPoints.length),
+    measurementPoints,
+  }
+}
+
+function mapBodCodReportRow(row = {}, index = 0) {
+  const reportRoundNo = row.reportRoundNo ?? row.roundNo
+
+  return {
+    ...row,
+    id: row.id ?? row.reportId ?? `report-${index + 1}`,
+    factoryName: row.factoryName ?? '',
+    factoryRegistration: row.factoryRegistration ?? row.factoryRegistrationNo ?? row.newRegistrationNo ?? '',
+    province: row.province ?? row.provinceName ?? '',
+    monitoringPointCode: row.monitoringPointCode ?? row.pointCode ?? '',
+    monitoringPointName: row.monitoringPointName ?? row.pointName ?? '',
+    reportRound: row.reportRound ?? (reportRoundNo ? `ครั้งที่ ${reportRoundNo}` : ''),
+    roundNo: String(reportRoundNo ?? '').trim(),
+    year: row.year ?? row.reportYear ?? currentBuddhistYear,
+    reportNo: row.reportNo ?? '-',
+    submittedDate: row.submittedDate ?? formatThaiDateValue(row.submittedAt),
+    reviewedDate: row.reviewedDate ?? formatThaiDateValue(row.reviewedAt),
+    status: row.status ?? row.statusLabel ?? row.statusCode ?? '',
+    statusCode: row.statusCode ?? '',
+    statusLabel: row.statusLabel ?? row.status ?? '',
+    statusHistory: normalizeBodCodStatusHistory(row),
+    revisionNote: row.revisionNote ?? row.officerNote ?? row.revisionReason ?? '',
+  }
+}
+
+function mapBodCodReportDetail(detail = {}, row = {}) {
+  const mappedRow = mapBodCodReportRow({ ...row, ...detail })
+  const measurements = Array.isArray(detail.measurements) ? detail.measurements : []
+  const measurementRows = measurements.map((measurement, index) => ({
+    id: measurement.id ?? `measurement-${index + 1}`,
+    sampleDate: formatThaiDateValue(measurement.sampleDate),
+    sampleTime: measurement.sampleTime ?? '',
+    deviceValue: measurement.deviceValueMgL ?? '',
+    labValue: measurement.labValueMgL ?? '',
+    errorValue: measurement.deviationValueMgL ?? calculateErrorValue(measurement.deviceValueMgL, measurement.labValueMgL),
+    standardErrorValue: measurement.standardDeviationMgL ?? '',
+  }))
+
+  return {
+    ...mappedRow,
+    factoryId: detail.factoryId ?? row.factoryId ?? '',
+    monitoringPointId: detail.monitoringPointId ?? detail.connectedMeasurementPointId ?? row.monitoringPointId ?? row.connectedMeasurementPointId,
+    businessActivity: detail.businessActivity ?? row.businessActivity ?? '',
+    factoryAddress: detail.factoryAddress ?? row.factoryAddress ?? '',
+    wastewaterFlow: detail.wastewaterFlowM3PerHour ?? row.wastewaterFlow ?? '',
+    samplerName: detail.samplerName ?? row.samplerName ?? '',
+    officerRegistration: detail.officerRegistrationNo ?? row.officerRegistration ?? '',
+    laboratoryName: detail.laboratoryName ?? row.laboratoryName ?? '',
+    laboratoryRegistration: detail.laboratoryRegistrationNo ?? row.laboratoryRegistration ?? '',
+    labReportNo: detail.labReportNo ?? row.labReportNo ?? '',
+    analysisMethod: detail.analysisMethod ?? row.analysisMethod ?? '',
+    deviceBrand: detail.deviceBrand ?? row.deviceBrand ?? '',
+    deviceModel: detail.deviceModel ?? row.deviceModel ?? '',
+    serialNo: detail.deviceSerialNo ?? row.serialNo ?? '',
+    parameter: detail.selectedParameterCode ?? row.selectedParameterCode ?? row.parameter ?? '',
+    reporterName: detail.reporterName ?? row.reporterName ?? '',
+    reporterPosition: detail.reporterPosition ?? row.reporterPosition ?? '',
+    measurementRows,
+    measurements,
+    attachments: Array.isArray(detail.attachments) ? detail.attachments : [],
+    statusHistory: normalizeBodCodStatusHistory(detail).length ? normalizeBodCodStatusHistory(detail) : mappedRow.statusHistory,
+    allowedActions: detail.allowedActions ?? row.allowedActions ?? [],
+    currentStep: detail.currentStep ?? row.currentStep ?? null,
+    steps: detail.steps ?? row.steps ?? [],
+  }
+}
+
+function buildBodCodAttachmentMetadata(files = [], attachmentType) {
+  return files.map((file) => ({
+    attachmentType,
+    originalFileName: file.originalFileName ?? file.name ?? '',
+    storedFileName: file.storedFileName ?? null,
+    mimeType: file.mimeType ?? file.type ?? null,
+    fileSize: file.fileSize ?? file.size ?? null,
+    storagePath: file.storagePath ?? null,
+  }))
+}
+
+function buildBodCodReportPayload(report = {}) {
+  const measurementRows = Array.isArray(report.measurementRows) ? report.measurementRows : []
+  const attachmentFiles = report.attachmentFiles ?? {}
+
+  return {
+    reportRoundNo: Number(report.roundNo ?? report.reportRoundNo ?? String(report.reportRound ?? '').replace('ครั้งที่ ', '')) || null,
+    reportYear: Number(report.year ?? report.reportYear) || currentBuddhistYear,
+    factoryId: report.factoryId ?? report.id ?? '',
+    factoryName: report.factoryName ?? '',
+    factoryRegistrationNo: report.factoryRegistration ?? report.factoryRegistrationNo ?? '',
+    businessActivity: report.businessActivity ?? null,
+    factoryAddress: report.factoryAddress ?? null,
+    provinceName: report.province ?? report.provinceName ?? null,
+    connectedMeasurementPointId: report.monitoringPointId ?? report.connectedMeasurementPointId ?? report.pointId ?? null,
+    pointCode: report.monitoringPointCode ?? report.pointCode ?? '',
+    pointName: report.monitoringPointName ?? report.pointName ?? '',
+    wastewaterFlowM3PerHour: toNumberOrNull(report.wastewaterFlow),
+    samplerName: report.samplerName ?? null,
+    officerRegistrationNo: report.officerRegistration ?? null,
+    laboratoryName: report.laboratoryName ?? null,
+    laboratoryRegistrationNo: report.laboratoryRegistration ?? null,
+    labReportNo: report.labReportNo ?? null,
+    analysisMethod: report.analysisMethod ?? null,
+    deviceBrand: report.deviceBrand ?? null,
+    deviceModel: report.deviceModel ?? null,
+    deviceSerialNo: report.serialNo ?? null,
+    selectedParameterCode: report.parameter ?? report.selectedParameterCode ?? '',
+    reporterName: report.reporterName ?? null,
+    reporterPosition: report.reporterPosition ?? null,
+    revisionNote: report.revisionNote ?? undefined,
+    measurements: measurementRows.map((measurement) => ({
+      sampleDate: formatApiDateValue(measurement.sampleDate),
+      sampleTime: measurement.sampleTime || null,
+      deviceValueMgL: toNumberOrNull(measurement.deviceValue),
+      labValueMgL: toNumberOrNull(measurement.labValue),
+      standardDeviationMgL: toNumberOrNull(measurement.standardErrorValue),
+    })),
+    attachments: [
+      ...buildBodCodAttachmentMetadata(attachmentFiles.samplePhotos ?? [], 'SAMPLE_PHOTO'),
+      ...buildBodCodAttachmentMetadata(attachmentFiles.devicePhotos ?? [], 'DEVICE_PHOTO'),
+      ...buildBodCodAttachmentMetadata(attachmentFiles.labReports ?? [], 'LAB_REPORT'),
+      ...(Array.isArray(report.attachments) ? report.attachments : []),
+    ],
+  }
 }
 
 function PaperLine({ children, minWidth = 160 }) {
@@ -806,7 +750,7 @@ function BodCodPaperDocument({ report }) {
   )
 }
 
-function ReportPreviewDialog({ open, report, mode = 'view', onClose }) {
+function ReportPreviewDialog({ open, report, mode = 'view', submitting = false, submitError = '', onClose, onSubmit }) {
   const [statusHistoryOpen, setStatusHistoryOpen] = useState(false)
   const [revisionDialogOpen, setRevisionDialogOpen] = useState(false)
   const [revisionOfficerNote, setRevisionOfficerNote] = useState('')
@@ -871,6 +815,11 @@ function ReportPreviewDialog({ open, report, mode = 'view', onClose }) {
         <DialogContent dividers sx={{ bgcolor: 'neutral.100' }}>
           {report ? <BodCodPaperDocument report={report} /> : null}
         </DialogContent>
+        {submitError ? (
+          <Alert severity="error" sx={{ borderRadius: 0 }}>
+            {submitError}
+          </Alert>
+        ) : null}
         <DialogActions sx={{ justifyContent: 'center' }}>
           {mode === 'review' ? (
             <>
@@ -895,11 +844,20 @@ function ReportPreviewDialog({ open, report, mode = 'view', onClose }) {
             </>
           ) : mode === 'submit' ? (
             <>
-              <Button variant="outlined" color="inherit" onClick={closePreviewDialog}>
+              <Button variant="outlined" color="inherit" disabled={submitting} onClick={closePreviewDialog}>
                 ยกเลิก
               </Button>
-              <Button variant="contained">
-                ยืนยันการส่งแบบฟอร์ม
+              <Button variant="contained" disabled={submitting || !report} onClick={() => onSubmit?.(report)}>
+                {submitting ? 'กำลังส่งแบบฟอร์ม' : 'ยืนยันการส่งแบบฟอร์ม'}
+              </Button>
+            </>
+          ) : mode === 'edit' ? (
+            <>
+              <Button variant="outlined" color="inherit" disabled={submitting} onClick={closePreviewDialog}>
+                ยกเลิก
+              </Button>
+              <Button variant="contained" disabled={submitting || !report} onClick={() => onSubmit?.(report)}>
+                {submitting ? 'กำลังบันทึกการแก้ไข' : 'บันทึกการแก้ไข'}
               </Button>
             </>
           ) : (
@@ -1279,12 +1237,25 @@ function ResultNoticeDialog({ open, report, mode = 'view', onClose, onConfirm })
 }
 
 function MonitoringPointDialog({ factory, open, onClose, onOpenReport }) {
-  const rows = factory ? (monitoringPointRowsByFactoryId[factory.id] ?? []) : []
+  const rows = Array.isArray(factory?.measurementPoints) ? factory.measurementPoints : []
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg">
-      <DialogTitle>
-        {factory?.factoryName ? `รายการจุดตรวจวัด - ${factory.factoryName}` : 'รายการจุดตรวจวัด'}
+      <DialogTitle
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 2,
+          pr: 1.5,
+        }}
+      >
+        <Typography component="span" variant="h6" sx={{ fontWeight: 700, minWidth: 0 }}>
+          {factory?.factoryName ? `รายการจุดตรวจวัด - ${factory.factoryName}` : 'รายการจุดตรวจวัด'}
+        </Typography>
+        <IconButton aria-label="ปิด" onClick={onClose}>
+          <CloseIcon />
+        </IconButton>
       </DialogTitle>
       <DialogContent dividers>
         <TableContainer sx={{ border: 1, borderColor: 'divider', overflowX: 'auto' }}>
@@ -1349,27 +1320,41 @@ function MonitoringPointDialog({ factory, open, onClose, onOpenReport }) {
           </Table>
         </TableContainer>
       </DialogContent>
-      <DialogActions sx={{ justifyContent: 'center' }}>
-        <Button variant="outlined" color="inherit" onClick={onClose}>
-          ปิด
-        </Button>
-      </DialogActions>
     </Dialog>
   )
 }
 
+function getDefaultBodCodParameter(parameters = '') {
+  const parameterText = String(parameters ?? '').toUpperCase()
+
+  if (parameterText.includes('BOD')) {
+    return 'BOD'
+  }
+
+  if (parameterText.includes('COD')) {
+    return 'COD'
+  }
+
+  return ''
+}
+
 function makeDraftReport(factory, point, reportRound) {
   const roundNo = reportRound === 'ครั้งที่ 1' ? '1' : '2'
+  const parameter = getDefaultBodCodParameter(point.parameters)
 
   return {
     id: `draft-${point.id}-${reportRound}`,
+    factoryId: factory.factoryId ?? factory.id ?? '',
     factoryName: factory.factoryName,
-    factoryRegistration: factory.factoryRegistration,
+    factoryRegistration: factory.factoryRegistration ?? factory.newRegistrationNo,
     province: factory.province,
     businessActivity: factory.industryType,
-    factoryAddress: 'ตำบลทับกวาง อำเภอแก่งคอย จังหวัดสระบุรี',
+    factoryAddress: factory.address ?? '',
+    monitoringPointId: point.id ?? point.connectedMeasurementPointId,
     monitoringPointCode: point.code,
     monitoringPointName: point.name,
+    pointCode: point.code,
+    pointName: point.name,
     reportRound,
     roundNo,
     year: currentBuddhistYear,
@@ -1377,6 +1362,35 @@ function makeDraftReport(factory, point, reportRound) {
     submittedDate: '-',
     reviewedDate: '-',
     status: 'ยังไม่ยื่น',
+    wastewaterFlow: '120.5',
+    samplerName: 'นายสมชาย ใจดี',
+    officerRegistration: 'LAB-REG-2569-001',
+    laboratoryName: 'ห้องปฏิบัติการสิ่งแวดล้อมอุตสาหกรรม',
+    laboratoryRegistration: 'กวภ-LAB-1234-2569',
+    labReportNo: 'LAB-REPORT-2569-001',
+    analysisMethod: 'Standard Methods for the Examination of Water and Wastewater',
+    deviceBrand: 'EnviroTech',
+    deviceModel: 'WPMS-5000',
+    serialNo: 'SN-WPMS-2569-001',
+    parameter,
+    reporterName: 'นายสมชาย ใจดี',
+    reporterPosition: 'ผู้จัดการสิ่งแวดล้อม',
+    measurementRows: [
+      {
+        id: 'measurement-1',
+        sampleDate: '01/07/2569',
+        sampleTime: '09:30',
+        deviceValue: '12.50',
+        labValue: '10.00',
+        errorValue: '2.50',
+        standardErrorValue: '3.00',
+      },
+    ],
+    attachmentFiles: {
+      samplePhotos: [],
+      devicePhotos: [],
+      labReports: [],
+    },
   }
 }
 
@@ -1509,21 +1523,21 @@ function AttachmentFileInput({ label, files, onChange }) {
 
 function BodCodReportFormSheet({ open, report, onClose, onPreview }) {
   const [form, setForm] = useState({
-    wastewaterFlow: '',
-    samplerName: '',
-    officerRegistration: '',
-    laboratoryName: '',
-    laboratoryRegistration: '',
-    labReportNo: '',
-    analysisMethod: '',
-    deviceBrand: '',
-    deviceModel: '',
-    serialNo: '',
-    parameter: '',
-    reporterName: '',
-    reporterPosition: '',
+    wastewaterFlow: report?.wastewaterFlow ?? '',
+    samplerName: report?.samplerName ?? '',
+    officerRegistration: report?.officerRegistration ?? '',
+    laboratoryName: report?.laboratoryName ?? '',
+    laboratoryRegistration: report?.laboratoryRegistration ?? '',
+    labReportNo: report?.labReportNo ?? '',
+    analysisMethod: report?.analysisMethod ?? '',
+    deviceBrand: report?.deviceBrand ?? '',
+    deviceModel: report?.deviceModel ?? '',
+    serialNo: report?.serialNo ?? '',
+    parameter: report?.parameter ?? '',
+    reporterName: report?.reporterName ?? '',
+    reporterPosition: report?.reporterPosition ?? '',
   })
-  const [measurementResult, setMeasurementResult] = useState(emptyMeasurementResult)
+  const [measurementResult, setMeasurementResult] = useState(() => report?.measurementRows?.[0] ?? emptyMeasurementResult)
   const [attachmentFiles, setAttachmentFiles] = useState({
     samplePhotos: [],
     devicePhotos: [],
@@ -1820,10 +1834,12 @@ function FactoryActions({ row, onOpenMonitoringPoints }) {
 }
 
 function ReportActions({ row, mode, onOpenReport, onOpenResultNotice }) {
-  const canEdit = mode === 'operator' && row.status === 'รอโรงงานแก้ไข'
-  const canProcess = mode === 'officer' && ['รอพิจารณา', 'แก้ไขแล้ว/รอพิจารณา'].includes(row.status)
-  const canOpenResultNotice = row.status === 'ผ่านการพิจารณา'
-  const canFillResultNotice = mode === 'officer' && row.status === 'กรอกแบบแจ้งผล'
+  const statusValues = [row.status, row.statusCode, row.statusLabel].filter(Boolean)
+  const hasStatus = (statuses) => statusValues.some((status) => statuses.includes(status))
+  const canEdit = mode === 'operator' && hasStatus(['รอโรงงานแก้ไข', 'REVISION_REQUESTED'])
+  const canProcess = mode === 'officer' && hasStatus(['รอพิจารณา', 'แก้ไขแล้ว/รอพิจารณา', 'SUBMITTED', 'REVISED_PENDING_REVIEW'])
+  const canOpenResultNotice = hasStatus(['ผ่านการพิจารณา', 'APPROVED'])
+  const canFillResultNotice = mode === 'officer' && hasStatus(['กรอกแบบแจ้งผล', 'RESULT_FORM'])
 
   return (
     <Stack direction="row" spacing={1} sx={tableActionStackSx}>
@@ -1950,10 +1966,15 @@ const dataGridSx = {
   },
 }
 
-function BodCodReportPage({ userType = '' }) {
+function BodCodReportPage({ userType = '', accessToken = '' }) {
   const isOfficer = userType === 'officer'
   const availableSubMenus = isOfficer ? officerSubMenus : operatorSubMenus
-  const [officerRows, setOfficerRows] = useState(officerReportRows)
+  const [factoryTableRows, setFactoryTableRows] = useState([])
+  const [reportTableRows, setReportTableRows] = useState([])
+  const [tableLoading, setTableLoading] = useState(false)
+  const [tableError, setTableError] = useState('')
+  const [previewSubmitting, setPreviewSubmitting] = useState(false)
+  const [previewSubmitError, setPreviewSubmitError] = useState('')
   const [selectedSubMenu, setSelectedSubMenu] = useState(() => (isOfficer ? 'reports' : 'factories'))
   const [monitoringPointFactory, setMonitoringPointFactory] = useState(null)
   const [reportForm, setReportForm] = useState(null)
@@ -1964,73 +1985,212 @@ function BodCodReportPage({ userType = '' }) {
   const effectiveSubMenu = availableSubMenus.some((menu) => menu.value === selectedSubMenu)
     ? selectedSubMenu
     : availableSubMenus[0].value
+  const fetchFactoryRows = useCallback(async ({ signal } = {}) => {
+    if (!accessToken) {
+      return []
+    }
+
+    const result = await fetch(`${bodCodDeviationReportsApiBaseUrl}/factories`, {
+      signal,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
+    const response = await readBodCodApiResponse(result, 'โหลดรายชื่อโรงงานไม่สำเร็จ')
+
+    return Array.isArray(response?.data) ? response.data.map(mapBodCodFactoryRow) : []
+  }, [accessToken])
+  const fetchReportRows = useCallback(async ({ signal } = {}) => {
+    if (!accessToken) {
+      return []
+    }
+
+    const result = await fetch(bodCodDeviationReportsApiBaseUrl, {
+      signal,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
+    const response = await readBodCodApiResponse(result, 'โหลดรายการรายงานไม่สำเร็จ')
+
+    return Array.isArray(response?.data) ? response.data.map(mapBodCodReportRow) : []
+  }, [accessToken])
+  const fetchReportDetail = useCallback(async (row) => {
+    if (!accessToken) {
+      throw new Error('กรุณาเข้าสู่ระบบเพื่อโหลดรายละเอียดรายงาน')
+    }
+
+    if (!row?.id) {
+      throw new Error('ไม่พบรหัสรายงาน')
+    }
+
+    const result = await fetch(`${bodCodDeviationReportsApiBaseUrl}/${row.id}`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
+    const response = await readBodCodApiResponse(result, 'โหลดรายละเอียดรายงานไม่สำเร็จ')
+
+    return mapBodCodReportDetail(response?.data ?? {}, row)
+  }, [accessToken])
+  const loadFactoryRows = useCallback(async (options) => {
+    const rows = await fetchFactoryRows(options)
+    setFactoryTableRows(rows)
+    return rows
+  }, [fetchFactoryRows])
+  const loadReportRows = useCallback(async (options) => {
+    const rows = await fetchReportRows(options)
+    setReportTableRows(rows)
+    return rows
+  }, [fetchReportRows])
+  const reloadCurrentTable = useCallback(async () => {
+    if (isOfficer || effectiveSubMenu !== 'factories') {
+      await loadReportRows()
+      return
+    }
+
+    await loadFactoryRows()
+  }, [effectiveSubMenu, isOfficer, loadFactoryRows, loadReportRows])
+  useEffect(() => {
+    if (isOfficer || effectiveSubMenu !== 'factories') {
+      return
+    }
+
+    const controller = new AbortController()
+    fetchFactoryRows({ signal: controller.signal })
+      .then((rows) => {
+        setFactoryTableRows(rows)
+        setTableError('')
+      })
+      .catch((error) => {
+        if (error.name !== 'AbortError') {
+          setFactoryTableRows([])
+          setTableError(error instanceof Error ? error.message : 'โหลดรายชื่อโรงงานไม่สำเร็จ')
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setTableLoading(false)
+        }
+      })
+
+    return () => controller.abort()
+  }, [effectiveSubMenu, fetchFactoryRows, isOfficer])
+  useEffect(() => {
+    if (!isOfficer && effectiveSubMenu === 'factories') {
+      return
+    }
+
+    const controller = new AbortController()
+    fetchReportRows({ signal: controller.signal })
+      .then((rows) => {
+        setReportTableRows(rows)
+        setTableError('')
+      })
+      .catch((error) => {
+        if (error.name !== 'AbortError') {
+          setReportTableRows([])
+          setTableError(error instanceof Error ? error.message : 'โหลดรายการรายงานไม่สำเร็จ')
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setTableLoading(false)
+        }
+      })
+
+    return () => controller.abort()
+  }, [effectiveSubMenu, fetchReportRows, isOfficer])
   const factoryColumns = useMemo(() => getFactoryColumns(setMonitoringPointFactory), [])
   const reportColumns = useMemo(
     () => getReportColumns(isOfficer ? 'officer' : 'operator', (row, mode) => {
-      if (!isOfficer && mode === 'edit') {
-        setReportForm(makeEditableReport(row))
-        return
-      }
+      setTableError('')
+      fetchReportDetail(row)
+        .then((detail) => {
+          if (!isOfficer && mode === 'edit') {
+            setReportForm(makeEditableReport(detail))
+            return
+          }
 
-      setPreviewMode(mode ?? 'view')
-      setPreviewReport({
-        ...row,
-        statusHistory: buildFallbackReportStatusHistory(row),
-      })
+          setPreviewMode(mode ?? 'view')
+          setPreviewReport(detail)
+        })
+        .catch((error) => {
+          setTableError(error instanceof Error ? error.message : 'โหลดรายละเอียดรายงานไม่สำเร็จ')
+        })
     }, (row, mode = 'view') => {
-      setResultNoticeMode(mode)
-      setResultNoticeReport({
-        ...row,
-        statusHistory: buildFallbackReportStatusHistory(row),
-      })
+      setTableError('')
+      fetchReportDetail(row)
+        .then((detail) => {
+          setResultNoticeMode(mode)
+          setResultNoticeReport(detail)
+        })
+        .catch((error) => {
+          setTableError(error instanceof Error ? error.message : 'โหลดรายละเอียดรายงานไม่สำเร็จ')
+        })
     }),
-    [isOfficer],
+    [fetchReportDetail, isOfficer],
   )
   const confirmResultNotice = (report) => {
     if (!report) return
 
-    setOfficerRows((currentRows) =>
-      currentRows.map((row) => {
-        if (row.id !== report.id) {
-          return row
-        }
-
-        return {
-          ...row,
-          status: 'รอทบทวน',
-          reviewedDate: '01/07/2569',
-          statusHistory: [
-            ...buildFallbackReportStatusHistory(row),
-            {
-              id: `bodcod-report-${row.id}-history-result-notice`,
-              statusLabel: 'รอทบทวน',
-              note: 'เจ้าหน้าที่บันทึกแบบแจ้งผลและยืนยันส่งต่อให้ผู้ทบทวน',
-              changedAt: '01/07/2569',
-              durationText: 'อยู่ระหว่างดำเนินการ',
-              changedBy: 'เจ้าหน้าที่ ก',
-            },
-          ],
-        }
-      }),
-    )
+    loadReportRows().catch((error) => {
+      setTableError(error instanceof Error ? error.message : 'โหลดรายการรายงานไม่สำเร็จ')
+    })
     setResultNoticeReport(null)
     setResultNoticeMode('view')
+  }
+  const submitPreviewReport = async (report) => {
+    if (!accessToken) {
+      setPreviewSubmitError('กรุณาเข้าสู่ระบบเพื่อส่งแบบฟอร์ม')
+      return
+    }
+
+    setPreviewSubmitting(true)
+    setPreviewSubmitError('')
+
+    try {
+      const isEditMode = previewMode === 'edit' || report?.mode === 'edit'
+      const payload = buildBodCodReportPayload(report)
+      const result = await fetch(
+        isEditMode
+          ? `${bodCodDeviationReportsApiBaseUrl}/${report.id}/resubmission`
+          : bodCodDeviationReportsApiBaseUrl,
+        {
+          method: isEditMode ? 'PUT' : 'POST',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify(payload),
+        },
+      )
+      await readBodCodApiResponse(result, isEditMode ? 'บันทึกการแก้ไขไม่สำเร็จ' : 'ส่งแบบฟอร์มไม่สำเร็จ')
+      setPreviewReport(null)
+      setPreviewMode('view')
+      await reloadCurrentTable()
+    } catch (error) {
+      setPreviewSubmitError(error instanceof Error ? error.message : 'ส่งแบบฟอร์มไม่สำเร็จ')
+    } finally {
+      setPreviewSubmitting(false)
+    }
   }
   const table = useMemo(() => {
     if (effectiveSubMenu === 'factories') {
       return {
         title: 'รายชื่อโรงงาน',
-        rows: factoryRows,
+        rows: factoryTableRows,
         columns: factoryColumns,
       }
     }
 
     return {
       title: isOfficer ? 'รายการส่งแบบรายงาน' : 'ประวัติการรายงาน',
-      rows: isOfficer ? officerRows : reportRows,
+      rows: reportTableRows,
       columns: reportColumns,
     }
-  }, [effectiveSubMenu, factoryColumns, isOfficer, officerRows, reportColumns])
+  }, [effectiveSubMenu, factoryColumns, factoryTableRows, isOfficer, reportColumns, reportTableRows])
   const isStatisticsSubMenu = effectiveSubMenu === 'statistics'
 
   return (
@@ -2087,9 +2247,15 @@ function BodCodReportPage({ userType = '' }) {
               overflow: 'hidden',
             }}
           >
+            {tableError ? (
+              <Alert severity="error" sx={{ borderRadius: 0 }}>
+                {tableError}
+              </Alert>
+            ) : null}
             <DataGrid
               rows={table.rows}
               columns={table.columns}
+              loading={tableLoading}
               disableRowSelectionOnClick
               showToolbar
               showCellVerticalBorder
@@ -2122,7 +2288,8 @@ function BodCodReportPage({ userType = '' }) {
         report={reportForm}
         onClose={() => setReportForm(null)}
         onPreview={(report) => {
-          setPreviewMode('submit')
+          setPreviewMode(report?.mode === 'edit' ? 'edit' : 'submit')
+          setPreviewSubmitError('')
           setPreviewReport(report)
           setReportForm(null)
         }}
@@ -2131,10 +2298,14 @@ function BodCodReportPage({ userType = '' }) {
         open={Boolean(previewReport)}
         report={previewReport}
         mode={previewMode}
+        submitting={previewSubmitting}
+        submitError={previewSubmitError}
         onClose={() => {
           setPreviewReport(null)
           setPreviewMode('view')
+          setPreviewSubmitError('')
         }}
+        onSubmit={submitPreviewReport}
       />
       <ResultNoticeDialog
         open={Boolean(resultNoticeReport)}

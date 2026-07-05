@@ -242,7 +242,7 @@ function App() {
         ) : visibleSelectedMenu === 'forms' ? (
           <KwpFormsPage userType={userType} accessToken={accessToken} />
         ) : visibleSelectedMenu === 'bod-cod-report' ? (
-          <BodCodReportPage userType={userType} />
+          <BodCodReportPage userType={userType} accessToken={accessToken} />
         ) : visibleSelectedMenu === 'notifications' ? (
           <NotificationPage accessToken={accessToken} />
         ) : visibleSelectedMenu === 'statistics' ? (
