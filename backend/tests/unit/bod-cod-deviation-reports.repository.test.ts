@@ -60,6 +60,36 @@ describe('bodCodDeviationReportsRepository access filters', () => {
     expect(compiled.bindings).toContain('ภาคเหนือ');
   });
 
+  it('prefers BOD/COD menu region selections over profile regional access', () => {
+    const compiled = buildBodCodDeviationReportQueryForTests(
+      {},
+      {
+        actorUserId: 77,
+        scope: 'IN_REGION',
+        regionalAccess: { regions: ['ภาคกลาง'] },
+        locationAccess: { regions: ['ภาคตะวันออก'] },
+      },
+    ).toSQL();
+
+    expect(compiled.sql.toLowerCase()).toContain('[p].[region]');
+    expect(compiled.bindings).toContain('ภาคตะวันออก');
+    expect(compiled.bindings).not.toContain('ภาคกลาง');
+  });
+
+  it('filters BOD/COD report requests by selected menu province', () => {
+    const compiled = buildBodCodDeviationReportQueryForTests(
+      {},
+      {
+        actorUserId: 77,
+        scope: 'IN_PROVINCE',
+        locationAccess: { provinces: ['ปทุมธานี'] },
+      },
+    ).toSQL();
+
+    expect(compiled.sql.toLowerCase()).toContain('[p].[name_th]');
+    expect(compiled.bindings).toContain('ปทุมธานี');
+  });
+
   it('filters report requests by status and parameter code', () => {
     const compiled = buildBodCodDeviationReportQueryForTests(
       { status: 'SUBMITTED', parameterCode: 'BOD' },

@@ -817,6 +817,7 @@ async function getUpdatedSubmissionDetail(
     formType: access.formType,
     scope: access.scope,
     regionalAccess: access.regionalAccess,
+    locationAccess: access.locationAccess,
     publicBaseUrl: access.publicBaseUrl,
     publicPath: access.publicPath,
   });
@@ -827,6 +828,7 @@ async function assertCanEditReturnedSubmission(
   access: KwpFormSubmissionAccess & {
     formType: KwpFormSubmissionDetailType;
     regionalAccess?: { regions: string[] } | null;
+    locationAccess?: { regions?: string[]; provinces?: string[] } | null;
   },
   trx: Knex.Transaction,
 ): Promise<EditableSubmissionRow> {
@@ -848,6 +850,7 @@ function buildEditableSubmissionQuery(
   access: KwpFormSubmissionAccess & {
     formType: KwpFormSubmissionDetailType;
     regionalAccess?: { regions: string[] } | null;
+    locationAccess?: { regions?: string[]; provinces?: string[] } | null;
   },
   knexOrTrx: Knex | Knex.Transaction = db,
 ): Knex.QueryBuilder<EditableSubmissionRow, EditableSubmissionRow[]> {
@@ -870,10 +873,7 @@ function buildEditableSubmissionQuery(
       .whereNull('uj.revoked_at');
   }
 
-  const regions = [
-    ...new Set((access.regionalAccess?.regions ?? []).map((region) => region.trim())),
-  ].filter(Boolean);
-  if (regions.length > 0) builder.whereIn('p.region', regions);
+  applyLocationAccessFilter(builder, access);
 
   return builder as unknown as Knex.QueryBuilder<EditableSubmissionRow, EditableSubmissionRow[]>;
 }
@@ -943,7 +943,11 @@ export function buildKwpFormSubmissionWorkflowQueryForTests(
 
 export function buildKwpFormEditableSubmissionQueryForTests(
   id: number,
-  access: KwpFormSubmissionAccess & { formType: KwpFormSubmissionDetailType },
+  access: KwpFormSubmissionAccess & {
+    formType: KwpFormSubmissionDetailType;
+    regionalAccess?: { regions: string[] } | null;
+    locationAccess?: { regions?: string[]; provinces?: string[] } | null;
+  },
 ): Knex.QueryBuilder {
   return buildEditableSubmissionQuery(id, access);
 }
@@ -1096,10 +1100,7 @@ function buildWorkflowQuery(
       .whereNull('uj.revoked_at');
   }
 
-  const regions = [
-    ...new Set((access.regionalAccess?.regions ?? []).map((region) => region.trim())),
-  ].filter(Boolean);
-  if (regions.length > 0) builder.whereIn('p.region', regions);
+  applyLocationAccessFilter(builder, access);
 
   return builder as unknown as Knex.QueryBuilder<SubmissionWorkflowRow, SubmissionWorkflowRow[]>;
 }
@@ -1115,8 +1116,30 @@ function applySubmissionReadAccessFilter(
       .whereNull('uj.revoked_at');
   }
 
+  applyLocationAccessFilter(builder, access);
+}
+
+function applyLocationAccessFilter(
+  builder: Knex.QueryBuilder,
+  access: {
+    regionalAccess?: { regions: string[] } | null;
+    locationAccess?: { regions?: string[]; provinces?: string[] } | null;
+  },
+): void {
+  const provinces = [
+    ...new Set((access.locationAccess?.provinces ?? []).map((province) => province.trim())),
+  ].filter(Boolean);
+  if (provinces.length > 0) {
+    builder.whereIn('p.name_th', provinces);
+    return;
+  }
+
   const regions = [
-    ...new Set((access.regionalAccess?.regions ?? []).map((region) => region.trim())),
+    ...new Set(
+      (access.locationAccess?.regions ?? access.regionalAccess?.regions ?? []).map((region) =>
+        region.trim(),
+      ),
+    ),
   ].filter(Boolean);
   if (regions.length > 0) builder.whereIn('p.region', regions);
 }

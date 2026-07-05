@@ -671,7 +671,7 @@ function buildFactoryQuery(
     .orderBy('cp.point_name', 'asc');
 
   applyFactoryAccessFilter(builder, access);
-  applyRegionalAccessFilter(builder, access.regionalAccess);
+  applyLocationAccessFilter(builder, access);
 
   return builder as unknown as Knex.QueryBuilder<FactoryTableRow, FactoryTableRow[]>;
 }
@@ -740,7 +740,7 @@ function buildReportQuery(
   }
 
   applyReportAccessFilter(builder, access);
-  applyRegionalAccessFilter(builder, access.regionalAccess);
+  applyLocationAccessFilter(builder, access);
 
   return builder as unknown as Knex.QueryBuilder<ReportTableRow, ReportTableRow[]>;
 }
@@ -976,7 +976,7 @@ function buildEditableReportQuery(
     );
 
   applyReportAccessFilter(builder, access);
-  applyRegionalAccessFilter(builder, access.regionalAccess);
+  applyLocationAccessFilter(builder, access);
 
   return builder as unknown as Knex.QueryBuilder<EditableReportRow, EditableReportRow[]>;
 }
@@ -1270,12 +1270,21 @@ function applyReportAccessFilter(builder: Knex.QueryBuilder, access: BodCodDevia
     .whereNull('uj.revoked_at');
 }
 
-function applyRegionalAccessFilter(
-  builder: Knex.QueryBuilder,
-  regionalAccess: BodCodDeviationAccess['regionalAccess'],
-): void {
+function applyLocationAccessFilter(builder: Knex.QueryBuilder, access: BodCodDeviationAccess): void {
+  const provinces = [
+    ...new Set((access.locationAccess?.provinces ?? []).map((province) => province.trim())),
+  ].filter(Boolean);
+  if (provinces.length > 0) {
+    builder.whereIn('p.name_th', provinces);
+    return;
+  }
+
   const regions = [
-    ...new Set((regionalAccess?.regions ?? []).map((region) => region.trim())),
+    ...new Set(
+      (access.locationAccess?.regions ?? access.regionalAccess?.regions ?? []).map((region) =>
+        region.trim(),
+      ),
+    ),
   ].filter(Boolean);
   if (regions.length === 0) return;
   builder.whereIn('p.region', regions);

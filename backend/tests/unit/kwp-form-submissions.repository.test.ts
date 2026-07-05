@@ -85,6 +85,19 @@ describe('kwpFormSubmissionsRepository', () => {
     expect(sql).toContain('[p].[region] in (?)');
   });
 
+  it('prefers KWP menu location selections for workflow access', () => {
+    const compiled = buildKwpFormSubmissionWorkflowQueryForTests(12, {
+      actorUserId: 77,
+      scope: 'IN_REGION',
+      regionalAccess: { regions: ['ภาคกลาง'] },
+      locationAccess: { regions: ['ภาคตะวันออก'] },
+    }).toSQL();
+
+    expect(compiled.sql.toLowerCase()).toContain('[p].[region] in (?)');
+    expect(compiled.bindings).toContain('ภาคตะวันออก');
+    expect(compiled.bindings).not.toContain('ภาคกลาง');
+  });
+
   it('limits returned-form edits to the requested id, form type, and operator factories', () => {
     const sql = buildKwpFormEditableSubmissionQueryForTests(12, {
       actorUserId: 42,

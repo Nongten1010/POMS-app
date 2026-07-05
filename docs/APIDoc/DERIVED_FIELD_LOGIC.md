@@ -376,6 +376,7 @@ Transformation:
 - For scopes other than `IN_PROVINCE`, backend clears `province_id`.
 - Permission-management `GET /api/v1/users/:id`, `POST /api/v1/auth/login`, and `GET /api/v1/auth/me` return each permission group with `region` and `province`; `province` is the Thai display name when a province id is stored.
 - JWT `scopes` are flattened back to the broad scope string, such as `IN_REGION`, so existing authorization middleware can keep reading `req.user.scopes[permissionCode]`.
+- JWT also includes `scopeDetails[permissionCode]` with the selected `region` / `province` so runtime filters for menu-scoped modules, including `kwp_forms` and `bod_cod_errors`, can apply the exact per-menu location selection.
 
 Reason:
 
@@ -383,7 +384,7 @@ Reason:
 
 Known risks:
 
-- Runtime read filters that need the exact selected `region`/`province` must receive those values from the response contract or perform a DB lookup; the JWT intentionally carries only the broad scope value.
+- Existing JWTs issued before `scopeDetails` was added still carry only the broad scope value; users should log in again or refresh their session before relying on per-menu `region` / `province` runtime filters.
 
 ## Operator Factory Dashboard
 

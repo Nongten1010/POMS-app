@@ -2,7 +2,8 @@ import { NextFunction, Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
 import { env } from '../../config/env';
 import { BadRequestError } from '../../shared/errors/AppError';
-import { getScope } from '../../shared/middlewares/authorize';
+import { getScope, getScopeDetails } from '../../shared/middlewares/authorize';
+import type { BodCodDeviationAccess } from './bod-cod-deviation-reports.types';
 import { createBodCodAttachmentStorage } from './bod-cod-deviation-attachments.service';
 import { bodCodDeviationReportsService } from './bod-cod-deviation-reports.service';
 import {
@@ -47,6 +48,7 @@ export const bodCodDeviationReportsController = {
         actorUserId,
         getScope(req, 'bod_cod_errors:view'),
         req.user?.regionalAccess ?? undefined,
+        getPermissionLocationAccess(req, 'bod_cod_errors:view'),
       );
       res.status(StatusCodes.OK).json({ success: true, ...result });
     } catch (err) {
@@ -63,6 +65,7 @@ export const bodCodDeviationReportsController = {
         actorUserId,
         getScope(req, 'bod_cod_errors:view'),
         req.user?.regionalAccess ?? undefined,
+        getPermissionLocationAccess(req, 'bod_cod_errors:view'),
       );
       res.status(StatusCodes.OK).json({ success: true, ...result });
     } catch (err) {
@@ -78,6 +81,7 @@ export const bodCodDeviationReportsController = {
         actorUserId,
         scope: getScope(req, 'bod_cod_errors:view'),
         regionalAccess: req.user?.regionalAccess ?? undefined,
+        locationAccess: getPermissionLocationAccess(req, 'bod_cod_errors:view'),
         publicBaseUrl: getPublicBaseUrl(req),
         publicPath: env.UPLOAD_PUBLIC_PATH,
       });
@@ -128,6 +132,7 @@ export const bodCodDeviationReportsController = {
         actorUserId,
         scope: getScope(req, 'bod_cod_errors:approve'),
         regionalAccess: req.user?.regionalAccess ?? undefined,
+        locationAccess: getPermissionLocationAccess(req, 'bod_cod_errors:approve'),
       });
       res.status(StatusCodes.OK).json({ success: true, data });
     } catch (err) {
@@ -144,6 +149,7 @@ export const bodCodDeviationReportsController = {
         actorUserId,
         scope: getScope(req, 'bod_cod_errors:approve'),
         regionalAccess: req.user?.regionalAccess ?? undefined,
+        locationAccess: getPermissionLocationAccess(req, 'bod_cod_errors:approve'),
       });
       res.status(StatusCodes.OK).json({ success: true, data });
     } catch (err) {
@@ -165,4 +171,26 @@ function getBodCodWriteDataScope(req: Request): string | null | undefined {
 function getPublicBaseUrl(req: Request): string {
   if (env.PUBLIC_BASE_URL) return env.PUBLIC_BASE_URL;
   return `${req.protocol}://${req.get('host')}`;
+}
+
+function getPermissionLocationAccess(
+  req: Request,
+  permission: string,
+): BodCodDeviationAccess['locationAccess'] {
+  const details = getScopeDetails(req, permission);
+  if (!details) return undefined;
+
+  const region = normalizeLocationValue(details.region);
+  if (details.scope === 'IN_REGION' && region) return { regions: [region] };
+
+  const province = normalizeLocationValue(details.province);
+  if (details.scope === 'IN_PROVINCE' && province) return { provinces: [province] };
+
+  return undefined;
+}
+
+function normalizeLocationValue(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed && trimmed.toLowerCase() !== 'all' ? trimmed : null;
 }

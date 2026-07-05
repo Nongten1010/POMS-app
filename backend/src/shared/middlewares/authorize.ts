@@ -1,5 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 import { ForbiddenError, UnauthorizedError } from '../errors/AppError';
+import type { PermissionScopeDetails } from '../../modules/auth/permissions';
 
 /**
  * Middleware เช็คว่า user มี permission อย่างน้อย 1 ใน list หรือไม่
@@ -29,4 +30,14 @@ export function getScope(req: Request, permission: string): string | null | unde
   if (!req.user) return undefined;
   if (!(permission in req.user.scopes)) return undefined;
   return req.user.scopes[permission];
+}
+
+export function getScopeDetails(
+  req: Request,
+  permission: string,
+): PermissionScopeDetails | undefined {
+  const detailedScope = req.user?.scopeDetails?.[permission];
+  if (detailedScope) return detailedScope;
+  const scope = getScope(req, permission);
+  return scope === undefined ? undefined : { scope: scope as PermissionScopeDetails['scope'] };
 }

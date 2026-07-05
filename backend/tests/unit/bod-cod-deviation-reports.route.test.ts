@@ -467,7 +467,7 @@ describe('BOD/COD deviation report routes', () => {
       .set('Authorization', `Bearer ${operatorToken()}`);
 
     expect(response.status).toBe(200);
-    expect(mockedService.listFactories).toHaveBeenCalledWith(42, 'OWN_FACTORY', undefined);
+    expect(mockedService.listFactories).toHaveBeenCalledWith(42, 'OWN_FACTORY', undefined, undefined);
     expect(response.body).toEqual({
       success: true,
       data: expect.any(Array),
@@ -511,6 +511,7 @@ describe('BOD/COD deviation report routes', () => {
       77,
       'ALL',
       { regions: ['ภาคเหนือ'] },
+      undefined,
     );
     expect(response.body.data[0]).toMatchObject({
       reportNo: 'BODCOD-2569-0005',
@@ -530,6 +531,23 @@ describe('BOD/COD deviation report routes', () => {
         }),
       ],
     });
+  });
+
+  it('passes selected BOD/COD menu region to report list access', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .get('/api/v1/bod-cod-deviation-reports')
+      .set('Authorization', `Bearer ${regionalBodCodOfficerToken()}`);
+
+    expect(response.status).toBe(200);
+    expect(mockedService.listReports).toHaveBeenCalledWith(
+      {},
+      78,
+      'IN_REGION',
+      { regions: ['ภาคกลาง'] },
+      { regions: ['ภาคตะวันออก'] },
+    );
   });
 
   it('rejects users without the BOD/COD report menu permission', async () => {
@@ -596,6 +614,7 @@ describe('BOD/COD deviation report routes', () => {
       actorUserId: 42,
       scope: 'OWN_FACTORY',
       regionalAccess: undefined,
+      locationAccess: undefined,
       publicBaseUrl: 'http://d-poms.diw.go.th',
       publicPath: '/uploads',
     });
@@ -715,6 +734,7 @@ describe('BOD/COD deviation report routes', () => {
         actorUserId: 77,
         scope: 'ALL',
         regionalAccess: { regions: ['ภาคเหนือ'] },
+        locationAccess: undefined,
       },
     );
     expect(response.body.data).toMatchObject({
@@ -743,6 +763,7 @@ describe('BOD/COD deviation report routes', () => {
       actorUserId: 77,
       scope: 'ALL',
       regionalAccess: { regions: ['ภาคเหนือ'] },
+      locationAccess: undefined,
     });
     expect(response.body.data).toMatchObject({
       id: 9,
@@ -777,6 +798,7 @@ describe('BOD/COD deviation report routes', () => {
       actorUserId: 77,
       scope: 'ALL',
       regionalAccess: { regions: ['ภาคเหนือ'] },
+      locationAccess: undefined,
     });
     expect(response.body.data.resultNotice).toMatchObject({
       reportCorrectness: 'ถูกต้องครบถ้วน',
@@ -805,6 +827,7 @@ describe('BOD/COD deviation report routes', () => {
       actorUserId: 77,
       scope: 'ALL',
       regionalAccess: { regions: ['ภาคเหนือ'] },
+      locationAccess: undefined,
     });
   });
 
@@ -914,6 +937,25 @@ function officerToken(): string {
       'bod_cod_errors:approve': 'ALL',
     },
     regionalAccess: { regions: ['ภาคเหนือ'] },
+  });
+}
+
+function regionalBodCodOfficerToken(): string {
+  return signAccessToken({
+    sub: '78',
+    userType: 'officer',
+    roles: ['monitoring_region'],
+    scopes: {
+      'bod_cod_errors:view': 'IN_REGION',
+    },
+    scopeDetails: {
+      'bod_cod_errors:view': {
+        scope: 'IN_REGION',
+        region: 'ภาคตะวันออก',
+        province: null,
+      },
+    },
+    regionalAccess: { regions: ['ภาคกลาง'] },
   });
 }
 

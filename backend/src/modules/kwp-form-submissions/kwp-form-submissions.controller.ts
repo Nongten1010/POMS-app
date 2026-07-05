@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
 import { env } from '../../config/env';
-import { getScope } from '../../shared/middlewares/authorize';
+import { getScope, getScopeDetails } from '../../shared/middlewares/authorize';
 import { BadRequestError } from '../../shared/errors/AppError';
 import { createKwpAttachmentStorage } from './kwp-form-attachments.service';
 import { kwpFormSubmissionsService } from './kwp-form-submissions.service';
@@ -14,7 +14,10 @@ import {
   changeKwpWorkflowStatusSchema,
   resubmitKwpFormSubmissionSchema,
 } from './kwp-form-submissions.validator';
-import type { KwpFormSubmissionDetailType } from './kwp-form-submissions.types';
+import type {
+  KwpFormSubmissionDetailType,
+  KwpFormWorkflowAccess,
+} from './kwp-form-submissions.types';
 
 export const kwpFormSubmissionsController = {
   async getWorkflow(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -25,6 +28,7 @@ export const kwpFormSubmissionsController = {
         actorUserId,
         scope: getScope(req, 'kwp_forms:view'),
         regionalAccess: req.user?.regionalAccess ?? undefined,
+        locationAccess: getPermissionLocationAccess(req, 'kwp_forms:view'),
       });
       res.status(StatusCodes.OK).json({ success: true, data: result });
     } catch (err) {
@@ -41,6 +45,7 @@ export const kwpFormSubmissionsController = {
         actorUserId,
         scope: getScope(req, 'kwp_forms:approve'),
         regionalAccess: req.user?.regionalAccess ?? undefined,
+        locationAccess: getPermissionLocationAccess(req, 'kwp_forms:approve'),
       });
       res.status(StatusCodes.OK).json({ success: true, data: result });
     } catch (err) {
@@ -234,6 +239,7 @@ async function getById(
       formType,
       scope: getScope(req, 'kwp_forms:view'),
       regionalAccess: req.user?.regionalAccess ?? undefined,
+      locationAccess: getPermissionLocationAccess(req, 'kwp_forms:view'),
       publicBaseUrl: getPublicBaseUrl(req),
       publicPath: env.UPLOAD_PUBLIC_PATH,
     });
@@ -256,6 +262,7 @@ async function updateById(
       actorUserId,
       scope: getScope(req, 'kwp_forms:edit'),
       regionalAccess: req.user?.regionalAccess ?? undefined,
+      locationAccess: getPermissionLocationAccess(req, 'kwp_forms:edit'),
       publicBaseUrl: getPublicBaseUrl(req),
       publicPath: env.UPLOAD_PUBLIC_PATH,
     };
@@ -310,6 +317,7 @@ async function resubmitById(
       actorUserId,
       scope: getScope(req, 'kwp_forms:edit'),
       regionalAccess: req.user?.regionalAccess ?? undefined,
+      locationAccess: getPermissionLocationAccess(req, 'kwp_forms:edit'),
     };
     const result =
       formType === 'KWP01'
@@ -345,4 +353,26 @@ function requireActorUserId(req: Request): number {
 function getPublicBaseUrl(req: Request): string {
   if (env.PUBLIC_BASE_URL) return env.PUBLIC_BASE_URL;
   return `${req.protocol}://${req.get('host')}`;
+}
+
+function getPermissionLocationAccess(
+  req: Request,
+  permission: string,
+): KwpFormWorkflowAccess['locationAccess'] {
+  const details = getScopeDetails(req, permission);
+  if (!details) return undefined;
+
+  const region = normalizeLocationValue(details.region);
+  if (details.scope === 'IN_REGION' && region) return { regions: [region] };
+
+  const province = normalizeLocationValue(details.province);
+  if (details.scope === 'IN_PROVINCE' && province) return { provinces: [province] };
+
+  return undefined;
+}
+
+function normalizeLocationValue(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed && trimmed.toLowerCase() !== 'all' ? trimmed : null;
 }

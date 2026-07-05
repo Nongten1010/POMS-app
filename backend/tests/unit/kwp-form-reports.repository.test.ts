@@ -53,6 +53,36 @@ describe('kwpFormReportsRepository access filters', () => {
     expect(compiled.bindings).toEqual(expect.arrayContaining(['KWP03', 'UNDER_REVIEW', 'ภาคกลาง']));
   });
 
+  it('prefers KWP menu region selections over profile regional access', () => {
+    const compiled = buildKwpFormRequestQueryForTests(
+      {},
+      {
+        actorUserId: 77,
+        scope: 'IN_REGION',
+        regionalAccess: { regions: ['ภาคกลาง'] },
+        locationAccess: { regions: ['ภาคตะวันออก'] },
+      },
+    ).toSQL();
+
+    expect(compiled.sql.toLowerCase()).toContain('[p].[region]');
+    expect(compiled.bindings).toContain('ภาคตะวันออก');
+    expect(compiled.bindings).not.toContain('ภาคกลาง');
+  });
+
+  it('filters KWP request rows by selected menu province', () => {
+    const compiled = buildKwpFormRequestQueryForTests(
+      {},
+      {
+        actorUserId: 77,
+        scope: 'IN_PROVINCE',
+        locationAccess: { provinces: ['ปทุมธานี'] },
+      },
+    ).toSQL();
+
+    expect(compiled.sql.toLowerCase()).toContain('[p].[name_th]');
+    expect(compiled.bindings).toContain('ปทุมธานี');
+  });
+
   it('limits operator request rows to assigned juristics', () => {
     const sql = buildKwpFormRequestQueryForTests({}, { actorUserId: 42, scope: 'OWN_FACTORY' })
       .toSQL()

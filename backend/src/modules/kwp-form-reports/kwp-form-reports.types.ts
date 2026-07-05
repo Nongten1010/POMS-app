@@ -18,6 +18,10 @@ export interface KwpFormReportAccess {
   actorUserId: number;
   scope: string | null | undefined;
   regionalAccess?: RegionalAccessDTO | null;
+  locationAccess?: {
+    regions?: string[];
+    provinces?: string[];
+  } | null;
 }
 
 export interface ListKwpFormRequestsQuery {

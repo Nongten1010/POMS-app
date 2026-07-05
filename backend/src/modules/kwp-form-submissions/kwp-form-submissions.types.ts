@@ -30,6 +30,7 @@ export interface KwpFormSubmissionAccess {
 export interface KwpFormSubmissionReadAccess extends KwpFormSubmissionAccess {
   formType: KwpFormSubmissionDetailType;
   regionalAccess?: { regions: string[] } | null;
+  locationAccess?: { regions?: string[]; provinces?: string[] } | null;
   publicBaseUrl: string;
   publicPath: string;
 }
@@ -37,12 +38,14 @@ export interface KwpFormSubmissionReadAccess extends KwpFormSubmissionAccess {
 export interface KwpFormSubmissionUpdateAccess extends KwpFormSubmissionAccess {
   formType: KwpFormSubmissionDetailType;
   regionalAccess?: { regions: string[] } | null;
+  locationAccess?: { regions?: string[]; provinces?: string[] } | null;
   publicBaseUrl: string;
   publicPath: string;
 }
 
 export interface KwpFormWorkflowAccess extends KwpFormSubmissionAccess {
   regionalAccess?: { regions: string[] } | null;
+  locationAccess?: { regions?: string[]; provinces?: string[] } | null;
 }
 
 export interface ChangeKwpFormWorkflowStatusDTO {

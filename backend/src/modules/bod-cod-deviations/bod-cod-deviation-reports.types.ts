@@ -33,6 +33,10 @@ export interface BodCodDeviationAccess {
   actorUserId: number;
   scope: string | null | undefined;
   regionalAccess?: RegionalAccessDTO | null;
+  locationAccess?: {
+    regions?: string[];
+    provinces?: string[];
+  } | null;
   publicBaseUrl?: string;
   publicPath?: string;
 }

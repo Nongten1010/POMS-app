@@ -75,6 +75,7 @@ describe('KWP form report routes', () => {
       42,
       'OWN_FACTORY',
       undefined,
+      undefined,
     );
     expect(response.body.data[0]).toMatchObject({
       factoryName: 'บริษัท ทดสอบ จำกัด',
@@ -99,6 +100,7 @@ describe('KWP form report routes', () => {
       77,
       'ALL',
       { regions: ['ภาคกลาง'] },
+      undefined,
     );
     expect(response.body.data[0]).toMatchObject({
       requestNo: 'KWP-69-00001',
@@ -106,6 +108,23 @@ describe('KWP form report routes', () => {
       submittedDate: '15/06/2569',
       status: 'รอพิจารณา',
     });
+  });
+
+  it('passes selected KWP menu region to request list access', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .get('/api/v1/kwp-form-reports/requests')
+      .set('Authorization', `Bearer ${regionalKwpOfficerToken()}`);
+
+    expect(response.status).toBe(200);
+    expect(mockedService.listRequests).toHaveBeenCalledWith(
+      {},
+      78,
+      'IN_REGION',
+      { regions: ['ภาคกลาง'] },
+      { regions: ['ภาคตะวันออก'] },
+    );
   });
 
   it('rejects users without KWP form permission', async () => {
@@ -138,6 +157,25 @@ function officerToken(): string {
     roles: ['monitoring_kpm'],
     scopes: {
       'kwp_forms:view': 'ALL',
+    },
+    regionalAccess: { regions: ['ภาคกลาง'] },
+  });
+}
+
+function regionalKwpOfficerToken(): string {
+  return signAccessToken({
+    sub: '78',
+    userType: 'officer',
+    roles: ['monitoring_region'],
+    scopes: {
+      'kwp_forms:view': 'IN_REGION',
+    },
+    scopeDetails: {
+      'kwp_forms:view': {
+        scope: 'IN_REGION',
+        region: 'ภาคตะวันออก',
+        province: null,
+      },
     },
     regionalAccess: { regions: ['ภาคกลาง'] },
   });

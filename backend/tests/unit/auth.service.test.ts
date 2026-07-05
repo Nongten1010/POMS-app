@@ -256,6 +256,13 @@ describe('authService login completion', () => {
         scopes: {
           'dashboard:view': 'IN_REGION',
         },
+        scopeDetails: {
+          'dashboard:view': {
+            scope: 'IN_REGION',
+            region: 'ภาคตะวันออก',
+            province: null,
+          },
+        },
       }),
     );
     expect(mockedAuthRepository.updateLastLogin).toHaveBeenCalledWith(44);

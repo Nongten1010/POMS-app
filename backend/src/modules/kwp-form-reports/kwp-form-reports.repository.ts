@@ -167,7 +167,7 @@ function buildFactoryQuery(
     .orderBy('f.id', 'asc');
 
   applyFactoryAccessFilter(builder, access);
-  applyRegionalAccessFilter(builder, access.regionalAccess);
+  applyLocationAccessFilter(builder, access);
 
   return builder as unknown as Knex.QueryBuilder<FactoryTableRow, FactoryTableRow[]>;
 }
@@ -223,7 +223,7 @@ function buildRequestQuery(
   }
 
   applyFactoryAccessFilter(builder, access);
-  applyRegionalAccessFilter(builder, access.regionalAccess);
+  applyLocationAccessFilter(builder, access);
 
   return builder as unknown as Knex.QueryBuilder<SubmissionRow, SubmissionRow[]>;
 }
@@ -236,12 +236,21 @@ function applyFactoryAccessFilter(builder: Knex.QueryBuilder, access: KwpFormRep
     .whereNull('uj.revoked_at');
 }
 
-function applyRegionalAccessFilter(
-  builder: Knex.QueryBuilder,
-  regionalAccess: KwpFormReportAccess['regionalAccess'],
-): void {
+function applyLocationAccessFilter(builder: Knex.QueryBuilder, access: KwpFormReportAccess): void {
+  const provinces = [
+    ...new Set((access.locationAccess?.provinces ?? []).map((province) => province.trim())),
+  ].filter(Boolean);
+  if (provinces.length > 0) {
+    builder.whereIn('p.name_th', provinces);
+    return;
+  }
+
   const regions = [
-    ...new Set((regionalAccess?.regions ?? []).map((region) => region.trim())),
+    ...new Set(
+      (access.locationAccess?.regions ?? access.regionalAccess?.regions ?? []).map((region) =>
+        region.trim(),
+      ),
+    ),
   ].filter(Boolean);
   if (regions.length === 0) return;
   builder.whereIn('p.region', regions);
