@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Alert,
   Box,
@@ -12,6 +12,10 @@ import {
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive'
 import { DataGrid } from '@mui/x-data-grid'
 
+const alertEventsApiBaseUrl = import.meta.env.DEV
+  ? '/api-proxy/v1/alert-events'
+  : 'https://d-poms.diw.go.th/api/v1/alert-events'
+
 const notificationGroups = [
   {
     value: 'cems',
@@ -21,27 +25,32 @@ const notificationGroups = [
         value: 'cems-standard-exceeded',
         label: 'ผลการตรวจวัด CEMS เกินมาตรฐาน',
         columnSet: 'measurement-exceeded',
+        query: { systemType: 'CEMS', alertType: 'STANDARD_EXCEEDED', thresholdType: 'STANDARD' },
       },
       {
         value: 'cems-eia-exceeded',
         label: 'ผลการตรวจวัด CEMS เกินค่า EIA กำหนด',
         columnSet: 'measurement-exceeded',
+        query: { systemType: 'CEMS', alertType: 'EIA_EXCEEDED', thresholdType: 'EIA' },
       },
       {
         value: 'cems-daily-report-less-than-80',
         label: 'รายงานผล CEMS ไม่ถึงร้อยละ 80 ต่อวัน',
         columnSet: 'daily-report-less-than-80',
+        query: { systemType: 'CEMS', alertType: 'DAILY_COMPLETENESS_LOW' },
       },
       {
         value: 'cems-missing-more-than-14-days',
         label: 'ไม่รายงานผล CEMS ติดต่อกันเกิน 14 วัน',
         columnSet: 'consecutive-missing-report',
+        query: { systemType: 'CEMS', alertType: 'CONSECUTIVE_NO_REPORT' },
       },
       {
         value: 'cems-abnormal-value',
         label: 'รายงานผลตรวจวัด CEMS มีค่าผิดปกติ (ค่านิ่ง/ ค่า 0/ค่าติดลบ)',
         tabLabelLines: ['รายงานผลตรวจวัด CEMS', 'มีค่าผิดปกติ (ค่านิ่ง/ ค่า 0/ค่าติดลบ)'],
         columnSet: 'abnormal-measurement',
+        query: { systemType: 'CEMS', alertType: 'ABNORMAL_VALUE' },
       },
     ],
   },
@@ -54,24 +63,28 @@ const notificationGroups = [
         label: 'ผลการตรวจวัด BOD/COD Online เกินมาตรฐาน',
         tabLabelLines: ['ผลการตรวจวัด BOD/COD Online', 'เกินมาตรฐาน'],
         columnSet: 'measurement-exceeded',
+        query: { systemType: 'WPMS', displaySystemType: 'BOD_COD_ONLINE', alertType: 'STANDARD_EXCEEDED', thresholdType: 'STANDARD' },
       },
       {
         value: 'bod-cod-eia-exceeded',
         label: 'ผลการตรวจวัด BOD/COD Online เกินค่า EIA กำหนด',
         tabLabelLines: ['ผลการตรวจวัด BOD/COD Online', 'เกินค่า EIA กำหนด'],
         columnSet: 'measurement-exceeded',
+        query: { systemType: 'WPMS', displaySystemType: 'BOD_COD_ONLINE', alertType: 'EIA_EXCEEDED', thresholdType: 'EIA' },
       },
       {
         value: 'bod-cod-daily-report-less-than-80',
         label: 'รายงานผล BOD/COD Online ไม่ถึงร้อยละ 80 ต่อวัน',
         tabLabelLines: ['รายงานผล BOD/COD Online', 'ไม่ถึงร้อยละ 80 ต่อวัน'],
         columnSet: 'daily-report-less-than-80',
+        query: { systemType: 'WPMS', displaySystemType: 'BOD_COD_ONLINE', alertType: 'DAILY_COMPLETENESS_LOW' },
       },
       {
         value: 'bod-cod-missing-more-than-7-days',
         label: 'ไม่รายงานผล BOD/COD Online ติดต่อกันเกิน 7 วัน',
         tabLabelLines: ['ไม่รายงานผล BOD/COD Online', 'ติดต่อกันเกิน 7 วัน'],
         columnSet: 'consecutive-missing-report',
+        query: { systemType: 'WPMS', displaySystemType: 'BOD_COD_ONLINE', alertType: 'CONSECUTIVE_NO_REPORT' },
       },
       {
         value: 'bod-cod-abnormal-value',
@@ -81,92 +94,68 @@ const notificationGroups = [
           'มีค่าผิดปกติ (ค่านิ่ง/ ค่า 0/ค่าติดลบ)',
         ],
         columnSet: 'abnormal-measurement',
+        query: { systemType: 'WPMS', displaySystemType: 'BOD_COD_ONLINE', alertType: 'ABNORMAL_VALUE' },
       },
     ],
   },
 ]
 
-const commonFactories = [
-  {
-    factoryName: 'บริษัท พรีเมี่ยม อิควิปเม้นท์ แอนด์ เอ็นจิเนียริ่ง จำกัด',
-    factoryRegistrationNo: '82010400125514',
-    monitoringPoint: 'S0001 - STACK-A',
-  },
-  {
-    factoryName: 'บริษัท เอวาเวลล์ โฮมโพรดักส์ จำกัด',
-    factoryRegistrationNo: '82010000125609',
-    monitoringPoint: 'S0002 - STACK-B',
-  },
-  {
-    factoryName: 'บริษัท อินทรี อีโคไซเคิล จำกัด',
-    factoryRegistrationNo: '72080000125562',
-    monitoringPoint: 'P0001 - WW-01',
-  },
-]
+async function readAlertEventsApiResponse(result) {
+  const rawText = await result.text()
+  let response
 
-function makeMeasurementExceededRows(prefix, parameter, unit, standardValue, measuredValues) {
-  return commonFactories.map((factory, index) => ({
-    id: `${prefix}-${index + 1}`,
-    ...factory,
-    date: '15/06/2569',
-    time: `${String(8 + index).padStart(2, '0')}:00`,
-    parameter,
-    standardValue,
-    measuredValue: measuredValues[index],
-    unit,
-    notificationStatus: index === 0 ? 'รอส่งแจ้งเตือน' : index === 1 ? 'ส่งแจ้งเตือนแล้ว' : 'รับทราบแล้ว',
-  }))
+  try {
+    response = rawText ? JSON.parse(rawText) : null
+  } catch {
+    response = rawText
+  }
+
+  if (!result.ok || response?.success === false) {
+    const message =
+      response?.error?.message ??
+      response?.message ??
+      `โหลดข้อมูลการแจ้งเตือนไม่สำเร็จ (${result.status} ${result.statusText})`
+    throw new Error(message)
+  }
+
+  return response
 }
 
-function makeDailyReportRows(prefix, parameter, unit, percents) {
-  return commonFactories.map((factory, index) => ({
-    id: `${prefix}-${index + 1}`,
-    ...factory,
-    parameter,
-    unit,
-    date: '15/06/2569',
-    submissionPercent: percents[index],
-    notificationStatus: index === 0 ? 'รอส่งแจ้งเตือน' : index === 1 ? 'ส่งแจ้งเตือนแล้ว' : 'อยู่ระหว่างติดตาม',
-  }))
+function formatAlertNumber(value, suffix = '') {
+  if (value === null || value === undefined || value === '') return ''
+
+  return `${value}${suffix}`
 }
 
-function makeMissingReportRows(prefix, parameter, unit, totalDays) {
-  return commonFactories.map((factory, index) => ({
-    id: `${prefix}-${index + 1}`,
-    ...factory,
-    parameter,
-    unit,
-    fromDate: '01/06/2569',
-    toDate: index === 0 ? '15/06/2569' : index === 1 ? '16/06/2569' : '17/06/2569',
-    totalDays: totalDays[index],
-    notificationStatus: index === 0 ? 'รอส่งแจ้งเตือน' : index === 1 ? 'ส่งแจ้งเตือนแล้ว' : 'อยู่ระหว่างติดตาม',
-  }))
+function getMonitoringPointLabel(row = {}) {
+  const code = row.pointCode ?? row.stationId ?? ''
+  const name = row.pointName ?? ''
+
+  return [code, name].filter(Boolean).join(' - ')
 }
 
-function makeAbnormalRows(prefix, parameter, unit, abnormalities) {
-  return commonFactories.map((factory, index) => ({
-    id: `${prefix}-${index + 1}`,
-    ...factory,
-    parameter,
-    unit,
-    date: '15/06/2569',
-    time: `${String(10 + index).padStart(2, '0')}:00`,
-    abnormality: abnormalities[index],
-    notificationStatus: index === 0 ? 'รอส่งแจ้งเตือน' : index === 1 ? 'ส่งแจ้งเตือนแล้ว' : 'รับทราบแล้ว',
-  }))
-}
-
-const notificationRowsByMenu = {
-  'cems-standard-exceeded': makeMeasurementExceededRows('cems-standard', 'NOx', 'ppm', '180', ['195', '202', '190']),
-  'cems-eia-exceeded': makeMeasurementExceededRows('cems-eia', 'SO2', 'ppm', '120', ['135', '142', '131']),
-  'cems-daily-report-less-than-80': makeDailyReportRows('cems-daily', 'CO', 'ppm', ['72%', '68%', '75%']),
-  'cems-missing-more-than-14-days': makeMissingReportRows('cems-missing', 'NOx', 'ppm', ['15', '16', '17']),
-  'cems-abnormal-value': makeAbnormalRows('cems-abnormal', 'O2', '%', ['ค่านิ่งต่อเนื่อง', 'ค่า 0 ต่อเนื่อง', 'ค่าติดลบ']),
-  'bod-cod-standard-exceeded': makeMeasurementExceededRows('bod-standard', 'COD', 'mg/L', '120', ['138', '145', '132']),
-  'bod-cod-eia-exceeded': makeMeasurementExceededRows('bod-eia', 'BOD', 'mg/L', '20', ['28', '31', '25']),
-  'bod-cod-daily-report-less-than-80': makeDailyReportRows('bod-daily', 'COD', 'mg/L', ['70%', '76%', '65%']),
-  'bod-cod-missing-more-than-7-days': makeMissingReportRows('bod-missing', 'BOD', 'mg/L', ['8', '9', '10']),
-  'bod-cod-abnormal-value': makeAbnormalRows('bod-abnormal', 'COD', 'mg/L', ['ค่านิ่งต่อเนื่อง', 'ค่า 0 ต่อเนื่อง', 'ค่าติดลบ']),
+function mapAlertEventRow(row = {}, index = 0) {
+  return {
+    ...row,
+    id: row.id ?? `alert-event-${index + 1}`,
+    order: index + 1,
+    factoryName: row.factoryName ?? '',
+    factoryRegistrationNo: row.factoryRegistrationNo ?? '',
+    date: row.eventDateText ?? row.eventDate ?? row.alertDateText ?? '',
+    detectedAt: row.detectedAt ?? row.createdAt ?? '',
+    time: row.timeRange ?? '',
+    monitoringPoint: getMonitoringPointLabel(row),
+    parameter: row.parameterLabel ?? row.parameterName ?? row.parameterCode ?? '',
+    standardValue: formatAlertNumber(row.thresholdValue),
+    measuredValue: formatAlertNumber(row.measuredValue),
+    unit: row.unit ?? '',
+    submissionPercent: row.completenessPercentText ?? formatAlertNumber(row.completenessPercent),
+    fromDate: row.dateFromText ?? row.dateFrom ?? row.startedAt ?? '',
+    toDate: row.dateToText ?? row.dateTo ?? row.endedAt ?? '',
+    totalDays: row.consecutiveDays ?? '',
+    abnormality: row.abnormalLabel ?? row.abnormalType ?? '',
+    notificationStatus: row.notificationStatusLabel ?? row.notificationStatus ?? '',
+  }
 }
 const defaultNotificationColumns = [
   { field: 'order', headerName: 'ลำดับ', width: 90 },
@@ -221,6 +210,9 @@ const abnormalMeasurementColumns = [
 
 function NotificationPage({ accessToken = '' }) {
   const [activeGroup, setActiveGroup] = useState(notificationGroups[0].value)
+  const [notificationRows, setNotificationRows] = useState([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [loadError, setLoadError] = useState('')
   const activeGroupConfig = useMemo(
     () => notificationGroups.find((group) => group.value === activeGroup) ?? notificationGroups[0],
     [activeGroup],
@@ -249,7 +241,57 @@ function NotificationPage({ accessToken = '' }) {
           : activeMenuConfig.columnSet === 'abnormal-measurement'
             ? abnormalMeasurementColumns
             : defaultNotificationColumns
-  const activeRows = notificationRowsByMenu[activeMenuConfig.value] ?? []
+  const buildAlertEventsUrl = useCallback((menuConfig) => {
+    const query = new URLSearchParams()
+
+    Object.entries(menuConfig.query ?? {}).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        query.set(key, value)
+      }
+    })
+    query.set('page', '1')
+    query.set('pageSize', '100')
+
+    return `${alertEventsApiBaseUrl}?${query.toString()}`
+  }, [])
+
+  useEffect(() => {
+    if (!accessToken) {
+      return
+    }
+
+    const controller = new AbortController()
+    const loadAlertEvents = async () => {
+      setIsLoading(true)
+      setLoadError('')
+
+      try {
+        const result = await fetch(buildAlertEventsUrl(activeMenuConfig), {
+          signal: controller.signal,
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        })
+        const response = await readAlertEventsApiResponse(result)
+        const rows = Array.isArray(response?.data) ? response.data : []
+
+        setNotificationRows(rows.map(mapAlertEventRow))
+      } catch (error) {
+        if (error.name !== 'AbortError') {
+          setNotificationRows([])
+          setLoadError(error instanceof Error ? error.message : 'โหลดข้อมูลการแจ้งเตือนไม่สำเร็จ')
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    loadAlertEvents()
+
+    return () => controller.abort()
+  }, [accessToken, activeMenuConfig, buildAlertEventsUrl])
 
   return (
     <Stack spacing={2} sx={{ height: '100%', minHeight: 0 }}>
@@ -376,12 +418,14 @@ function NotificationPage({ accessToken = '' }) {
       </Paper>
 
       {!accessToken ? <Alert severity="warning">กรุณาเข้าสู่ระบบเพื่อดูข้อมูลการแจ้งเตือน</Alert> : null}
+      {accessToken && loadError ? <Alert severity="error">{loadError}</Alert> : null}
 
       <NotificationTable
         title={activeMenuConfig.label}
         groupLabel={activeGroupConfig.label}
-        rows={accessToken ? activeRows : []}
+        rows={accessToken ? notificationRows : []}
         columns={activeColumns}
+        loading={Boolean(accessToken) && isLoading}
       />
     </Stack>
   )
@@ -403,7 +447,7 @@ function TabLabel({ menu }) {
   )
 }
 
-function NotificationTable({ title, groupLabel, rows, columns }) {
+function NotificationTable({ title, groupLabel, rows, columns, loading = false }) {
   return (
     <Paper
       elevation={0}
@@ -437,6 +481,7 @@ function NotificationTable({ title, groupLabel, rows, columns }) {
         <DataGrid
           rows={rows}
           columns={columns}
+          loading={loading}
           disableRowSelectionOnClick
           showToolbar
           showCellVerticalBorder
