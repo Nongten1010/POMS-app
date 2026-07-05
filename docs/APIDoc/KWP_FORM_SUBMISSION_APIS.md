@@ -1154,8 +1154,7 @@ Permission: `kwp_forms:view`
     },
     "steps": [
       { "key": "SUBMITTED", "label": "ส่งฟอร์ม", "status": "CURRENT" },
-      { "key": "REVISION_REQUESTED", "label": "ส่งแก้ไข", "status": "PENDING" },
-      { "key": "APPROVED", "label": "ผ่านการพิจารณา", "status": "PENDING" }
+      { "key": "REVISION_REQUESTED", "label": "ส่งแก้ไข", "status": "PENDING" }
     ],
     "allowedActions": ["REQUEST_REVISION", "APPROVE"]
   }
@@ -1172,7 +1171,7 @@ Permission: `kwp_forms:view`
 | `SUBMITTED` | ผู้ประกอบการ (`OWN_FACTORY`) | `SUBMITTED` / ส่งฟอร์ม | none |
 | `REVISION_REQUESTED` | เจ้าหน้าที่ | `REVISION_REQUESTED` / ส่งแก้ไข | `APPROVE` |
 | `REVISION_REQUESTED` | ผู้ประกอบการ (`OWN_FACTORY`) | `REVISION_REQUESTED` / ส่งแก้ไข | `RESUBMIT` |
-| `APPROVED` | any | `APPROVED` / ผ่านการพิจารณา | none |
+| `APPROVED` | any | terminal status | none |
 | `REJECTED`, `CANCELLED` | any | terminal status | none |
 
 ## 8. Change KWP workflow status

@@ -1036,7 +1036,7 @@ Logic:
 - `form` maps `form_type` to the Thai display form number: `KWP01` -> `กวภ.01`, `KWP02` -> `กวภ.02`, `KWP03` -> `กวภ.03`, `KWP04` -> `กวภ.04`, and `KWP05` -> `กวภ.05`.
 - `statusLabel` maps the machine status to the Thai display label used by KWP tables.
 - `reviewedAt` returns `kwp_form_submissions.reviewed_at` as an ISO timestamp. If the database value is `null`, the response returns `null`; if the value cannot be parsed as a date, the response returns the raw string value.
-- `steps` is derived from the current status and always returns the backend-owned sequence: `SUBMITTED`, `REVISION_REQUESTED`, and `APPROVED`.
+- `steps` is derived from the current status and always returns the backend-owned sequence: `SUBMITTED` and `REVISION_REQUESTED`. `APPROVED` is a terminal status, not a progress step.
 - `currentStep` is the first step whose derived step status is `CURRENT`.
 - `allowedActions` is derived from the current status and caller scope:
   - Officer scopes with `SUBMITTED` return `REQUEST_REVISION` and `APPROVE`.

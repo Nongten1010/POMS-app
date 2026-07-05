@@ -56,7 +56,7 @@ export interface ResubmitKwpFormSubmissionDTO {
 }
 
 export interface KwpFormWorkflowStepDTO {
-  key: 'SUBMITTED' | 'REVISION_REQUESTED' | 'APPROVED';
+  key: 'SUBMITTED' | 'REVISION_REQUESTED';
   label: string;
   status: 'DONE' | 'CURRENT' | 'PENDING' | 'SKIPPED';
 }

@@ -39,6 +39,7 @@ Journeys derived during this TDD run from requests to create APIs for **กว�
 | Submitted KWP forms can be approved directly | focused repository test failed because `SUBMITTED` returned only `START_REVIEW`, `REQUEST_REVISION` and rejected `APPROVE` | `npm test -- --runTestsByPath tests/unit/kwp-form-submissions.repository.test.ts tests/unit/kwp-form-submissions.route.test.ts --runInBand` passed 2 suites / 40 tests | Reviewer action path can transition `SUBMITTED` + `APPROVE` to `APPROVED` without requiring `START_REVIEW` |
 | KWP workflow removes START_REVIEW and UNDER_REVIEW | focused route/repository tests failed while the API still accepted `START_REVIEW` and returned `OFFICER_REVIEW` steps | `npm test -- --runTestsByPath tests/unit/kwp-form-submissions.repository.test.ts tests/unit/kwp-form-submissions.route.test.ts --runInBand` passed after removing review-only actions and steps | KWP workflow now supports only `SUBMITTED -> APPROVE`, `SUBMITTED -> REQUEST_REVISION`, and `REVISION_REQUESTED -> APPROVE` |
 | Operator returned KWP forms expose RESUBMIT instead of APPROVE | focused repository test failed because `OWN_FACTORY` revision workflow still exposed officer action `APPROVE` | `npm test -- --runTestsByPath tests/unit/kwp-form-submissions.repository.test.ts tests/unit/kwp-form-submissions.route.test.ts --runInBand` passed after scope-filtering allowed actions | Operator can see `RESUBMIT`; officer can still see `APPROVE` |
+| KWP workflow omits approved progress step | focused route/repository tests and docs still returned `APPROVED` inside `steps[]` | `npm test -- --runTestsByPath tests/unit/kwp-form-submissions.repository.test.ts tests/unit/kwp-form-submissions.route.test.ts --runInBand` passed after keeping `APPROVED` as terminal status only | UI progress receives only `SUBMITTED` and `REVISION_REQUESTED`; final approval is represented by top-level `status = APPROVED` |
 
 ## Test specification
 
@@ -75,6 +76,7 @@ Journeys derived during this TDD run from requests to create APIs for **กว�
 | 29 | KWP submitted state allows direct `APPROVE` to `APPROVED` | `backend/tests/unit/kwp-form-submissions.repository.test.ts` | unit | PASS | `npm test -- --runTestsByPath tests/unit/kwp-form-submissions.repository.test.ts tests/unit/kwp-form-submissions.route.test.ts --runInBand` |
 | 30 | KWP workflow rejects removed `START_REVIEW` action before service execution | `backend/tests/unit/kwp-form-submissions.route.test.ts` | route | PASS | same focused command |
 | 31 | KWP operator revision workflow exposes `RESUBMIT` instead of `APPROVE` | `backend/tests/unit/kwp-form-submissions.repository.test.ts` | unit | PASS | same focused command |
+| 32 | KWP workflow omits `APPROVED` from `steps[]` | `backend/tests/unit/kwp-form-submissions.repository.test.ts` | unit | PASS | same focused command |
 
 ## Coverage and known gaps
 
@@ -114,6 +116,8 @@ Journeys derived during this TDD run from requests to create APIs for **กว�
 - Removed review-state RED: focused tests showed `START_REVIEW`, `UNDER_REVIEW`, and `OFFICER_REVIEW` still existed in route fixtures, workflow steps, and allowed actions.
 - Removed review-state GREEN: focused repository/route command passed after removing `START_REVIEW` from validation/actions and removing `OFFICER_REVIEW` from workflow steps.
 - Operator RESUBMIT RED: focused repository test showed `OWN_FACTORY` revision workflow exposed `APPROVE`.
+- Approved-step RED: focused fixtures/docs still included `APPROVED` as a progress step.
+- Approved-step GREEN: focused repository/route command passed after removing `APPROVED` from workflow steps while preserving terminal status `APPROVED`.
 - Operator RESUBMIT GREEN: focused repository/route command passed after adding scope-filtered `RESUBMIT` for operator revision workflow.
 
 ## Returned-form status-label follow-up

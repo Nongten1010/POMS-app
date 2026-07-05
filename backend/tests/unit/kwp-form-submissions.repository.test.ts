@@ -165,11 +165,7 @@ describe('kwpFormSubmissionsRepository', () => {
       'OWN_FACTORY',
     );
     expect(submitted.currentStep).toMatchObject({ key: 'SUBMITTED', status: 'CURRENT' });
-    expect(submitted.steps.map((step) => step.key)).toEqual([
-      'SUBMITTED',
-      'REVISION_REQUESTED',
-      'APPROVED',
-    ]);
+    expect(submitted.steps.map((step) => step.key)).toEqual(['SUBMITTED', 'REVISION_REQUESTED']);
     expect(submitted.allowedActions).toEqual(['REQUEST_REVISION', 'APPROVE']);
     expect(nextKwpWorkflowStatusForTests('SUBMITTED', 'REQUEST_REVISION')).toBe(
       'REVISION_REQUESTED',

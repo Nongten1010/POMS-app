@@ -101,9 +101,9 @@ describe('KWP form submission routes', () => {
       status: 'APPROVED',
       statusLabel: 'ผ่านการพิจารณา',
       currentStep: {
-        key: 'APPROVED',
-        label: 'ผ่านการพิจารณา',
-        status: 'CURRENT',
+        key: 'SUBMITTED',
+        label: 'ส่งฟอร์ม',
+        status: 'DONE',
       },
       allowedActions: [],
     });
@@ -1248,7 +1248,6 @@ function kwpWorkflowResponse() {
     steps: [
       { key: 'SUBMITTED' as const, label: 'ส่งฟอร์ม', status: 'CURRENT' as const },
       { key: 'REVISION_REQUESTED' as const, label: 'ส่งแก้ไข', status: 'PENDING' as const },
-      { key: 'APPROVED' as const, label: 'ผ่านการพิจารณา', status: 'PENDING' as const },
     ],
     allowedActions: ['REQUEST_REVISION' as const, 'APPROVE' as const],
   };

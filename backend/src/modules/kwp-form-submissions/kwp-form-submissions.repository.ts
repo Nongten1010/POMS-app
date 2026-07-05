@@ -1467,21 +1467,17 @@ function workflowSteps(
 ): KwpFormWorkflowStepDTO[] {
   const revisionStepStatus: KwpFormWorkflowStepDTO['status'] =
     status === 'REVISION_REQUESTED' ? 'CURRENT' : hasRevisionRequest ? 'DONE' : 'SKIPPED';
-  const approvedStepStatus: KwpFormWorkflowStepDTO['status'] =
-    status === 'APPROVED' ? 'CURRENT' : 'PENDING';
 
   if (status === 'SUBMITTED') {
     return [
       { key: 'SUBMITTED', label: 'ส่งฟอร์ม', status: 'CURRENT' },
       { key: 'REVISION_REQUESTED', label: 'ส่งแก้ไข', status: 'PENDING' },
-      { key: 'APPROVED', label: 'ผ่านการพิจารณา', status: 'PENDING' },
     ];
   }
 
   return [
     { key: 'SUBMITTED', label: 'ส่งฟอร์ม', status: 'DONE' },
     { key: 'REVISION_REQUESTED', label: 'ส่งแก้ไข', status: revisionStepStatus },
-    { key: 'APPROVED', label: 'ผ่านการพิจารณา', status: approvedStepStatus },
   ];
 }
 
