@@ -1,3 +1,5 @@
+import type { PermissionScopeDetails } from '../auth/permissions';
+
 export const PARAMETER_VALUE_INTERVALS = ['real', '1m', '5m', '60m', '1day', 'test'] as const;
 
 export type ParameterValueInterval = (typeof PARAMETER_VALUE_INTERVALS)[number];
@@ -45,7 +47,7 @@ export type MeasurementStatisticsEvaluationOptions = ParameterEvaluationOptions;
 
 export interface ParameterValueAccessContext {
   actorUserId: number;
-  scope: string | null | undefined;
+  scope: string | null | undefined | PermissionScopeDetails;
 }
 
 export interface ParameterValuesTableDTO {

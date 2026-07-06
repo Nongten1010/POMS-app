@@ -167,7 +167,7 @@ describe('operator factory dashboard routes', () => {
     expect(response.status).toBe(200);
     expect(mockedConnectionRequestsService.listOperatorFactories).toHaveBeenCalledWith(
       42,
-      'OWN_FACTORY',
+      { scope: 'OWN_FACTORY' },
       { systemType: 'WPMS', favoriteOnly: false },
     );
     expect(response.body.data[0]).toEqual({
@@ -367,7 +367,7 @@ describe('operator factory dashboard routes', () => {
       'factory-001',
       true,
       42,
-      'OWN_FACTORY',
+      { scope: 'OWN_FACTORY' },
     );
     expect(response.body).toEqual({
       success: true,

@@ -75,6 +75,44 @@ describe('connectionRequestsRepository request numbers', () => {
     expect(compiled.bindings).toContain('ภาคตะวันออก');
   });
 
+  it('limits request list to selected permission province without requiring request ownership', () => {
+    const compiled = buildBaseQueryForTests(
+      { stationId: 'S0001' },
+      {
+        actorUserId: 42,
+        scope: {
+          scope: 'IN_PROVINCE',
+          region: null,
+          province: 'ฉะเชิงเทรา',
+        },
+      },
+    ).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('cems_wpms_request_factory_snapshots');
+    expect(sql).toContain('[fs].[province_name]');
+    expect(sql).not.toContain('[created_by] = ?');
+    expect(compiled.bindings).toContain('ฉะเชิงเทรา');
+  });
+
+  it('keeps request list owner-scoped when a province scope has no selected province', () => {
+    const compiled = buildBaseQueryForTests(
+      { stationId: 'S0001' },
+      {
+        actorUserId: 42,
+        scope: {
+          scope: 'IN_PROVINCE',
+          region: null,
+          province: null,
+        },
+      },
+    ).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('[created_by] = ?');
+    expect(compiled.bindings).toContain(42);
+  });
+
   it('keeps operator factory access even when no eligible factory record exists', () => {
     const sql = buildFactoriesForAccessQueryForTests({
       actorUserId: 42,
@@ -131,6 +169,21 @@ describe('connectionRequestsRepository request numbers', () => {
     expect(sql).toContain('[p].[name_th]');
     expect(sql).not.toContain('user_juristics');
     expect(compiled.bindings).toContain('ฉะเชิงเทรา');
+  });
+
+  it('keeps factory access assigned when a province scope has no selected province', () => {
+    const compiled = buildFactoriesForAccessQueryForTests({
+      actorUserId: 42,
+      scope: {
+        scope: 'IN_PROVINCE',
+        region: null,
+        province: null,
+      },
+    }).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('user_juristics');
+    expect(compiled.bindings).toContain(42);
   });
 
   it('limits dashboard factory access to a selected permission region', () => {

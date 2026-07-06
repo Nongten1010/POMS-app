@@ -949,7 +949,10 @@ function buildBaseQuery(
         });
     });
   }
-  if (getAccessScopeValue(access.scope) !== 'ALL') builder.where('created_by', access.actorUserId);
+  if (requiresAssignedRequestAccess(access.scope)) {
+    builder.where('created_by', access.actorUserId);
+  }
+  applyRequestPermissionLocationFilter(builder, access.scope);
   applyRequestRegionalAccessFilter(builder, access.regionalAccess);
 
   return builder.select(
@@ -1015,7 +1018,21 @@ function getAccessScopeValue(scope: AccessScope): string | null | undefined {
 
 function requiresAssignedFactoryAccess(scope: AccessScope): boolean {
   const scopeValue = getAccessScopeValue(scope);
-  return scopeValue !== 'ALL' && scopeValue !== 'IN_REGION' && scopeValue !== 'IN_PROVINCE';
+  if (scopeValue === 'ALL') return false;
+  return !hasPermissionLocationFilter(scope);
+}
+
+function requiresAssignedRequestAccess(scope: AccessScope): boolean {
+  const scopeValue = getAccessScopeValue(scope);
+  if (scopeValue === 'ALL') return false;
+  return !hasPermissionLocationFilter(scope);
+}
+
+function hasPermissionLocationFilter(scope: AccessScope): boolean {
+  if (!scope || typeof scope !== 'object') return false;
+  if (scope.scope === 'IN_REGION') return Boolean(normalizeLocationValue(scope.region));
+  if (scope.scope === 'IN_PROVINCE') return Boolean(normalizeLocationValue(scope.province));
+  return false;
 }
 
 function applyFactoryRegionalAccessFilter(
@@ -1042,6 +1059,37 @@ function applyFactoryPermissionLocationFilter(
   if (scope.scope === 'IN_PROVINCE' && province) {
     builder.where('p.name_th', province);
   }
+}
+
+function applyRequestPermissionLocationFilter(
+  builder: Knex.QueryBuilder,
+  scope: AccessScope,
+): void {
+  if (!scope || typeof scope !== 'object') return;
+  const region = normalizeLocationValue(scope.region);
+  const province = normalizeLocationValue(scope.province);
+  if (scope.scope !== 'IN_REGION' && scope.scope !== 'IN_PROVINCE') return;
+  if (scope.scope === 'IN_REGION' && !region) return;
+  if (scope.scope === 'IN_PROVINCE' && !province) return;
+
+  builder.whereExists(function permissionLocationFilter() {
+    this.select(db.raw('1'))
+      .from('cems_wpms_request_factory_snapshots as fs')
+      .whereRaw('fs.request_id = cems_wpms_connection_requests.id')
+      .whereNull('fs.deleted_at');
+
+    if (scope.scope === 'IN_REGION' && region) {
+      this.where((regionBuilder) => {
+        regionBuilder.where('fs.region_name', region).orWhere('fs.region_code', region);
+      });
+    }
+
+    if (scope.scope === 'IN_PROVINCE' && province) {
+      this.where((provinceBuilder) => {
+        provinceBuilder.where('fs.province_name', province).orWhere('fs.province_code', province);
+      });
+    }
+  });
 }
 
 function getRegionalFilterValues(regionalAccess: RegionalAccessDTO | null | undefined): string[] {

@@ -325,7 +325,7 @@ describe('connected measurement points route', () => {
     expect(mockedConnectionRequestsService.listConnectedMeasurementPoints).toHaveBeenCalledWith(
       { stationId: 'S0001', factoryId: undefined },
       42,
-      'ALL',
+      { scope: 'ALL' },
     );
     expect(response.body).toMatchObject({
       success: true,
@@ -354,7 +354,7 @@ describe('connected measurement points route', () => {
     expect(mockedConnectionRequestsService.listDetails).toHaveBeenCalledWith(
       { stationId: 'S0001' },
       42,
-      'ALL',
+      { scope: 'ALL' },
     );
     expect(response.body.data[0]).toMatchObject({
       id: 10,
@@ -377,7 +377,7 @@ describe('connected measurement points route', () => {
     ).toHaveBeenCalledWith(
       'factory-001',
       42,
-      'ALL',
+      { scope: 'ALL' },
     );
     expect(response.body).toEqual({
       success: true,
@@ -415,7 +415,7 @@ describe('connected measurement points route', () => {
     expect(mockedConnectionRequestsService.getAddParameterFormDetail).toHaveBeenCalledWith(
       'S0001',
       42,
-      'ALL',
+      { scope: 'ALL' },
     );
     expect(response.body.data.formDefaults.measurementPoints[0]).toMatchObject({
       pointCode: 'S0001',
@@ -433,7 +433,7 @@ describe('connected measurement points route', () => {
     expect(mockedConnectionRequestsService.getCurrentDeviceConfigFormDetail).toHaveBeenCalledWith(
       'S0001',
       42,
-      'ALL',
+      { scope: 'ALL' },
     );
 
     const postResponse = await request(app)
@@ -482,7 +482,7 @@ describe('connected measurement points route', () => {
       'S0001',
       { date: '2026-06-09' },
       42,
-      'ALL',
+      { scope: 'ALL' },
     );
     expect(response.body).toMatchObject({
       success: true,
@@ -519,7 +519,7 @@ describe('connected measurement points route', () => {
       'S0001',
       { month: '2026-06' },
       42,
-      'ALL',
+      { scope: 'ALL' },
     );
     expect(response.body).toMatchObject({
       success: true,

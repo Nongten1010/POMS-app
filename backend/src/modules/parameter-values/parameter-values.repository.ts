@@ -1,6 +1,7 @@
 import { env } from '../../config/env';
 import { db } from '../../config/database';
 import { parameterSourceDb } from '../../config/parameter-source-database';
+import type { Knex } from 'knex';
 import {
   type LatestParameterValueQuery,
   type ListParameterValuesQuery,
@@ -306,12 +307,18 @@ function uniqueRegisteredParameters(parameters: string[]): string[] {
 function buildStationAccessQuery(access: ParameterValueAccessContext) {
   const query = db('cems_wpms_connected_measurement_points as p').whereNull('p.deleted_at');
 
-  if (access.scope === 'ALL') return query;
+  const scopeValue = getAccessScopeValue(access.scope);
+  if (scopeValue === 'ALL') return query;
 
-  return query
+  const scopedQuery = query
     .leftJoin('factories as f', function joinFactory() {
       this.on('f.fid', '=', 'p.factory_id').andOnNull('f.deleted_at');
     })
+    .leftJoin('provinces as pr', 'pr.id', 'f.province_id');
+
+  if (applyStationLocationFilter(scopedQuery, access.scope)) return scopedQuery;
+
+  return scopedQuery
     .leftJoin('user_juristics as uj', function joinUserJuristic() {
       this.on('uj.juristic_id', '=', 'f.juristic_id')
         .andOnVal('uj.user_id', access.actorUserId)
@@ -329,12 +336,18 @@ function buildWaitingConnectionStationAccessQuery(access: ParameterValueAccessCo
     .whereNull('r.deleted_at')
     .where('r.status', 'WAITING_CONNECTION');
 
-  if (access.scope === 'ALL') return query;
+  const scopeValue = getAccessScopeValue(access.scope);
+  if (scopeValue === 'ALL') return query;
 
-  return query
+  const scopedQuery = query
     .leftJoin('factories as f', function joinFactory() {
       this.on('f.fid', '=', 'r.factory_id').andOnNull('f.deleted_at');
     })
+    .leftJoin('provinces as pr', 'pr.id', 'f.province_id');
+
+  if (applyStationLocationFilter(scopedQuery, access.scope)) return scopedQuery;
+
+  return scopedQuery
     .leftJoin('user_juristics as uj', function joinUserJuristic() {
       this.on('uj.juristic_id', '=', 'f.juristic_id')
         .andOnVal('uj.user_id', access.actorUserId)
@@ -363,6 +376,39 @@ function serializeRow(row: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(
     Object.entries(row).map(([key, value]) => [key, serializeValue(key, value)]),
   );
+}
+
+function getAccessScopeValue(
+  scope: ParameterValueAccessContext['scope'],
+): string | null | undefined {
+  return scope && typeof scope === 'object' ? scope.scope : scope;
+}
+
+function applyStationLocationFilter(
+  query: Knex.QueryBuilder,
+  scope: ParameterValueAccessContext['scope'],
+): boolean {
+  if (!scope || typeof scope !== 'object') return false;
+  const region = normalizeLocationValue(scope.region);
+  const province = normalizeLocationValue(scope.province);
+
+  if (scope.scope === 'IN_REGION' && region) {
+    query.where('pr.region', region);
+    return true;
+  }
+
+  if (scope.scope === 'IN_PROVINCE' && province) {
+    query.where('pr.name_th', province);
+    return true;
+  }
+
+  return false;
+}
+
+function normalizeLocationValue(value: string | null | undefined): string | null {
+  if (value === null || value === undefined) return null;
+  const trimmed = value.trim();
+  return trimmed && trimmed.toLowerCase() !== 'all' ? trimmed : null;
 }
 
 function serializeValue(key: string, value: unknown): unknown {

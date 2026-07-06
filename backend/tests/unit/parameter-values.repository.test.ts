@@ -101,6 +101,40 @@ describe('parameterValuesRepository', () => {
     expect(sql).toContain('[p].[created_by]');
   });
 
+  it('allows connected station access by selected permission province', () => {
+    const compiled = buildStationAccessQueryForTests({
+      actorUserId: 42,
+      scope: {
+        scope: 'IN_PROVINCE',
+        region: null,
+        province: 'ฉะเชิงเทรา',
+      },
+    }).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('left join [factories] as [f]');
+    expect(sql).toContain('left join [provinces] as [pr]');
+    expect(sql).toContain('[pr].[name_th]');
+    expect(sql).not.toContain('user_juristics');
+    expect(compiled.bindings).toContain('ฉะเชิงเทรา');
+  });
+
+  it('falls back to owner or juristic access when province scope has no selected province', () => {
+    const compiled = buildStationAccessQueryForTests({
+      actorUserId: 42,
+      scope: {
+        scope: 'IN_PROVINCE',
+        region: null,
+        province: null,
+      },
+    }).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('user_juristics');
+    expect(sql).toContain('[p].[created_by]');
+    expect(compiled.bindings).toContain(42);
+  });
+
   it('uses waiting connection requests for connection-test station access', () => {
     const compiled = buildWaitingConnectionStationAccessQueryForTests({
       actorUserId: 42,
@@ -114,6 +148,24 @@ describe('parameterValuesRepository', () => {
     expect(compiled.bindings).toContain('WAITING_CONNECTION');
     expect(sql).toContain('[r].[factory_id]');
     expect(sql).toContain('[r].[created_by]');
+  });
+
+  it('allows waiting connection-test station access by selected permission province', () => {
+    const compiled = buildWaitingConnectionStationAccessQueryForTests({
+      actorUserId: 42,
+      scope: {
+        scope: 'IN_PROVINCE',
+        region: null,
+        province: 'ฉะเชิงเทรา',
+      },
+    }).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('left join [factories] as [f]');
+    expect(sql).toContain('left join [provinces] as [pr]');
+    expect(sql).toContain('[pr].[name_th]');
+    expect(sql).not.toContain('user_juristics');
+    expect(compiled.bindings).toContain('ฉะเชิงเทรา');
   });
 
   it('prefers instrument parameters over all eligible registered parameters', () => {

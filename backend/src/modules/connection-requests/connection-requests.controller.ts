@@ -42,7 +42,7 @@ export const connectionRequestsController = {
       const result = await connectionRequestsService.list(
         query,
         actorUserId,
-        getScope(req, 'cems_wpms_requests:view'),
+        getScopeDetails(req, 'cems_wpms_requests:view'),
         ...getRegionalAccessArg(req),
       );
       res.status(StatusCodes.OK).json({ success: true, ...result });
@@ -58,7 +58,7 @@ export const connectionRequestsController = {
       const result = await connectionRequestsService.listTableRows(
         query,
         actorUserId,
-        getScope(req, 'cems_wpms_requests:view'),
+        getScopeDetails(req, 'cems_wpms_requests:view'),
         ...getRegionalAccessArg(req),
       );
       res.status(StatusCodes.OK).json({ success: true, ...result });
@@ -73,7 +73,7 @@ export const connectionRequestsController = {
       const query = listOperatorFactoriesQuerySchema.parse(req.query);
       const result = await connectionRequestsService.listOperatorFactories(
         actorUserId,
-        getScope(req, 'factories:view'),
+        getScopeDetails(req, 'factories:view'),
         query,
         ...getRegionalAccessArg(req),
       );
@@ -122,7 +122,7 @@ export const connectionRequestsController = {
         factoryId,
         isFavorite,
         actorUserId,
-        getScope(req, 'factories:view'),
+        getScopeDetails(req, 'factories:view'),
         ...getRegionalAccessArg(req),
       );
       res.status(StatusCodes.OK).json({ success: true, data });
@@ -138,7 +138,7 @@ export const connectionRequestsController = {
       const data = await connectionRequestsService.getFactoryGeneral(
         factoryId,
         actorUserId,
-        getScope(req, 'factories:view'),
+        getScopeDetails(req, 'factories:view'),
         ...getRegionalAccessArg(req),
       );
       res.status(StatusCodes.OK).json({ success: true, data });
@@ -158,7 +158,7 @@ export const connectionRequestsController = {
       const result = await connectionRequestsService.listConnectedMeasurementPoints(
         query,
         actorUserId,
-        getScope(req, 'cems_wpms_requests:view'),
+        getScopeDetails(req, 'cems_wpms_requests:view'),
         ...getRegionalAccessArg(req),
       );
       res.status(StatusCodes.OK).json({ success: true, ...result });
@@ -178,7 +178,7 @@ export const connectionRequestsController = {
       const result = await connectionRequestsService.listDetails(
         { stationId },
         actorUserId,
-        getScope(req, 'cems_wpms_requests:view'),
+        getScopeDetails(req, 'cems_wpms_requests:view'),
         ...getRegionalAccessArg(req),
       );
       res.status(StatusCodes.OK).json({ success: true, ...result });
@@ -198,7 +198,7 @@ export const connectionRequestsController = {
       const result = await connectionRequestsService.getConnectedMeasurementPointDetailsByFactory(
         factoryId,
         actorUserId,
-        getScope(req, 'cems_wpms_requests:view'),
+        getScopeDetails(req, 'cems_wpms_requests:view'),
         ...getRegionalAccessArg(req),
       );
       res.status(StatusCodes.OK).json({ success: true, ...result });
@@ -214,7 +214,7 @@ export const connectionRequestsController = {
       const data = await connectionRequestsService.getAddParameterFormDetail(
         stationId,
         actorUserId,
-        getScope(req, 'cems_wpms_requests:view'),
+        getScopeDetails(req, 'cems_wpms_requests:view'),
         ...getRegionalAccessArg(req),
       );
       res.status(StatusCodes.OK).json({ success: true, data });
@@ -234,7 +234,7 @@ export const connectionRequestsController = {
       const data = await connectionRequestsService.getCurrentDeviceConfigFormDetail(
         stationId,
         actorUserId,
-        getScope(req, 'cems_wpms_requests:view'),
+        getScopeDetails(req, 'cems_wpms_requests:view'),
         ...getRegionalAccessArg(req),
       );
       res.status(StatusCodes.OK).json({ success: true, data });
@@ -279,7 +279,7 @@ export const connectionRequestsController = {
         stationId,
         query,
         actorUserId,
-        getScope(req, 'dashboard.stats:view'),
+        getScopeDetails(req, 'dashboard.stats:view'),
         ...getRegionalAccessArg(req),
       );
       res.status(StatusCodes.OK).json({ success: true, ...result });
@@ -297,7 +297,7 @@ export const connectionRequestsController = {
         stationId,
         query,
         actorUserId,
-        getScope(req, 'dashboard.stats:view'),
+        getScopeDetails(req, 'dashboard.stats:view'),
         ...getRegionalAccessArg(req),
       );
       res.status(StatusCodes.OK).json({ success: true, ...result });
@@ -342,7 +342,7 @@ export const connectionRequestsController = {
       const data = await connectionRequestsService.getById(
         id,
         actorUserId,
-        getScope(req, 'cems_wpms_requests:view'),
+        getScopeDetails(req, 'cems_wpms_requests:view'),
         ...getRegionalAccessArg(req),
       );
       res.status(StatusCodes.OK).json({ success: true, data });
@@ -358,7 +358,7 @@ export const connectionRequestsController = {
       const data = await connectionRequestsService.getDetail(
         id,
         actorUserId,
-        getScope(req, 'cems_wpms_requests:view'),
+        getScopeDetails(req, 'cems_wpms_requests:view'),
         ...getRegionalAccessArg(req),
       );
       res.status(StatusCodes.OK).json({ success: true, data });
@@ -376,7 +376,7 @@ export const connectionRequestsController = {
         id,
         stationId,
         actorUserId,
-        getScope(req, 'cems_wpms_requests:view'),
+        getScopeDetails(req, 'cems_wpms_requests:view'),
         ...getRegionalAccessArg(req),
       );
       res.status(StatusCodes.OK).json({ success: true, data });
@@ -397,7 +397,7 @@ export const connectionRequestsController = {
         id,
         configId,
         actorUserId,
-        getScope(req, 'cems_wpms_requests:view'),
+        getScopeDetails(req, 'cems_wpms_requests:view'),
         ...getRegionalAccessArg(req),
       );
       res.status(StatusCodes.OK).json({ success: true, data });

@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
-import { getScope } from '../../shared/middlewares/authorize';
+import { getScopeDetails } from '../../shared/middlewares/authorize';
 import { parameterValuesService } from './parameter-values.service';
 import { type ParameterValueAccessContext } from './parameter-values.types';
 import {
@@ -56,6 +56,6 @@ function requireAccess(req: Request): ParameterValueAccessContext {
 
   return {
     actorUserId,
-    scope: getScope(req, 'cems_wpms_requests:view'),
+    scope: getScopeDetails(req, 'cems_wpms_requests:view'),
   };
 }

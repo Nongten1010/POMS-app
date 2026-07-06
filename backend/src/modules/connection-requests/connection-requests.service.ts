@@ -77,7 +77,7 @@ export const connectionRequestsService = {
   async list(
     query: ListConnectionRequestsQuery,
     actorUserId: number,
-    viewScope: string | null | undefined,
+    viewScope: AccessScope,
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<PaginatedConnectionRequestsDTO> {
     const { rows, total } = await connectionRequestsRepository.list(query, {
@@ -91,7 +91,7 @@ export const connectionRequestsService = {
   async listTableRows(
     query: ListConnectionRequestsQuery,
     actorUserId: number,
-    viewScope: string | null | undefined,
+    viewScope: AccessScope,
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<PaginatedTableRowsDTO<ConnectionRequestTableRowDTO>> {
     const { rows, total } = await connectionRequestsRepository.list(query, {
@@ -111,7 +111,7 @@ export const connectionRequestsService = {
   async listDetails(
     query: ListConnectionRequestsQuery,
     actorUserId: number,
-    viewScope: string | null | undefined,
+    viewScope: AccessScope,
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<PaginatedTableRowsDTO<ConnectionRequestDetailDTO>> {
     const { rows, total } = await connectionRequestsRepository.list(query, {
@@ -136,7 +136,7 @@ export const connectionRequestsService = {
 
   async listOperatorFactories(
     actorUserId: number,
-    factoryViewScope: string | null | undefined,
+    factoryViewScope: AccessScope,
     query: ListOperatorFactoriesQuery = {},
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<PaginatedTableRowsDTO<OperatorFactoryTableRowDTO>> {
@@ -293,7 +293,7 @@ export const connectionRequestsService = {
     const dataWithLatestHourlyMeasurements = await populateLatestHourlyMeasurements(
       data,
       actorUserId,
-      getAccessScopeValue(factoryViewScope),
+      factoryViewScope,
     );
 
     return { data: dataWithLatestHourlyMeasurements, meta: { total: data.length } };
@@ -387,7 +387,7 @@ export const connectionRequestsService = {
     factoryId: string,
     isFavorite: boolean,
     actorUserId: number,
-    factoryViewScope: string | null | undefined,
+    factoryViewScope: AccessScope,
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<FactoryFavoriteDTO> {
     const factory = await connectionRequestsRepository.findFactoryGeneral(factoryId, {
@@ -407,7 +407,7 @@ export const connectionRequestsService = {
   async getFactoryGeneral(
     factoryId: string,
     actorUserId: number,
-    factoryViewScope: string | null | undefined,
+    factoryViewScope: AccessScope,
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<FactoryGeneralDTO> {
     const factory = await connectionRequestsRepository.findFactoryGeneral(factoryId, {
@@ -422,7 +422,7 @@ export const connectionRequestsService = {
   async getById(
     id: number,
     actorUserId: number,
-    viewScope: string | null | undefined,
+    viewScope: AccessScope,
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<ConnectionRequestDTO> {
     const request = await loadRequest(id);
@@ -433,7 +433,7 @@ export const connectionRequestsService = {
   async getDetail(
     id: number,
     actorUserId: number,
-    viewScope: string | null | undefined,
+    viewScope: AccessScope,
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<ConnectionRequestDetailDTO> {
     const request = await this.getById(id, actorUserId, viewScope, regionalAccess);
@@ -453,7 +453,7 @@ export const connectionRequestsService = {
     id: number,
     stationId: string | undefined,
     actorUserId: number,
-    viewScope: string | null | undefined,
+    viewScope: AccessScope,
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<DeviceConfigFormDetailDTO> {
     const request = await this.getById(id, actorUserId, viewScope, regionalAccess);
@@ -465,7 +465,7 @@ export const connectionRequestsService = {
     id: number,
     configId: number,
     actorUserId: number,
-    viewScope: string | null | undefined,
+    viewScope: AccessScope,
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<DeviceConfigFormDetailDTO> {
     const request = await this.getById(id, actorUserId, viewScope, regionalAccess);
@@ -478,7 +478,7 @@ export const connectionRequestsService = {
   async getAddParameterFormDetail(
     stationId: string,
     actorUserId: number,
-    viewScope: string | null | undefined,
+    viewScope: AccessScope,
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<AddParameterFormDetailDTO> {
     const { request, point } = await loadLatestConnectedRequestForStation(
@@ -494,7 +494,7 @@ export const connectionRequestsService = {
   async getCurrentDeviceConfigFormDetail(
     stationId: string,
     actorUserId: number,
-    viewScope: string | null | undefined,
+    viewScope: AccessScope,
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<DeviceConfigFormDetailDTO> {
     const { request } = await loadLatestConnectedRequestForStation(
@@ -510,7 +510,7 @@ export const connectionRequestsService = {
   async getConnectedMeasurementPointDetailsByFactory(
     factoryId: string,
     actorUserId: number,
-    viewScope: string | null | undefined,
+    viewScope: AccessScope,
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<PaginatedTableRowsDTO<ConnectedMeasurementPointModalDetailDTO>> {
     const result = await connectionRequestsService.listConnectedMeasurementPoints(
@@ -528,7 +528,7 @@ export const connectionRequestsService = {
   async listConnectedMeasurementPoints(
     query: ListConnectedMeasurementPointsQuery,
     actorUserId: number,
-    viewScope: string | null | undefined,
+    viewScope: AccessScope,
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<PaginatedTableRowsDTO<ConnectedMeasurementPointDetailDTO>> {
     const { rows } = await connectionRequestsRepository.list(
@@ -575,7 +575,7 @@ export const connectionRequestsService = {
     stationId: string,
     query: MeasurementStatisticsQuerySchemaInput,
     actorUserId: number,
-    viewScope: string | null | undefined,
+    viewScope: AccessScope,
     regionalAccess?: RegionalAccessDTO | null,
   ) {
     const point = await loadConnectedMeasurementPointDetail(
@@ -609,7 +609,7 @@ export const connectionRequestsService = {
     stationId: string,
     query: CalendarStatusQuerySchemaInput,
     actorUserId: number,
-    viewScope: string | null | undefined,
+    viewScope: AccessScope,
     regionalAccess?: RegionalAccessDTO | null,
   ) {
     const point = await loadConnectedMeasurementPointDetail(
@@ -933,7 +933,7 @@ function stationMatchesMeasurementPoint(point: MeasurementPointDTO, stationId?: 
 async function loadLatestConnectedRequestForStation(
   stationId: string,
   actorUserId: number,
-  scope: string | null | undefined,
+  scope: AccessScope,
   regionalAccess?: RegionalAccessDTO | null,
 ): Promise<{ request: ConnectionRequestDTO; point: MeasurementPointDTO }> {
   const { rows } = await connectionRequestsRepository.list(
@@ -1638,7 +1638,7 @@ function toParameterDisplayName(parameter: string): string {
 async function populateLatestHourlyMeasurements(
   factories: OperatorFactoryDashboardRowDTO[],
   actorUserId: number,
-  factoryViewScope: string | null | undefined,
+  factoryViewScope: AccessScope,
 ): Promise<OperatorFactoryDashboardRowDTO[]> {
   return Promise.all(
     factories.map(async (factory) => {
@@ -1687,7 +1687,7 @@ async function listFactoryMainTypeLabelsForDashboard(
 async function loadLatestHourlyMeasurementData(
   stationId: string | null,
   actorUserId: number,
-  factoryViewScope: string | null | undefined,
+  factoryViewScope: AccessScope,
   parameterDisplayNames: string[],
 ): Promise<Record<string, unknown>[]> {
   if (!stationId || !isSafeStationId(stationId)) return [];
@@ -1713,6 +1713,12 @@ type AccessScope = string | null | undefined | PermissionScopeDetails;
 
 function getAccessScopeValue(scope: AccessScope): string | null | undefined {
   return scope && typeof scope === 'object' ? scope.scope : scope;
+}
+
+function normalizeLocationValue(value: string | null | undefined): string | null {
+  if (value === null || value === undefined) return null;
+  const trimmed = value.trim();
+  return trimmed && trimmed.toLowerCase() !== 'all' ? trimmed : null;
 }
 
 function toDashboardMeasurementRow(
@@ -1838,7 +1844,7 @@ function matchesPublicFactoryMapPointsQuery(
 async function loadConnectedMeasurementPointDetail(
   stationId: string,
   actorUserId: number,
-  viewScope: string | null | undefined,
+  viewScope: AccessScope,
   regionalAccess?: RegionalAccessDTO | null,
 ): Promise<ConnectedMeasurementPointDetailDTO> {
   const result = await connectionRequestsService.listConnectedMeasurementPoints(
@@ -2019,12 +2025,33 @@ async function loadRequest(id: number): Promise<ConnectionRequestDTO> {
 function ensureCanRead(
   request: ConnectionRequestDTO,
   actorUserId: number,
-  viewScope: string | null | undefined,
+  viewScope: AccessScope,
   regionalAccess?: RegionalAccessDTO | null,
 ): void {
-  if (viewScope === 'ALL' && requestMatchesRegionalAccess(request, regionalAccess)) return;
+  if (
+    requestMatchesPermissionScope(request, viewScope) &&
+    requestMatchesRegionalAccess(request, regionalAccess)
+  ) {
+    return;
+  }
   if (request.createdBy === actorUserId) return;
   throw new ForbiddenError('Cannot access another operator connection request');
+}
+
+function requestMatchesPermissionScope(request: ConnectionRequestDTO, scope: AccessScope): boolean {
+  const scopeValue = getAccessScopeValue(scope);
+  if (scopeValue === 'ALL') return true;
+  if (!scope || typeof scope !== 'object') return false;
+
+  const region = normalizeLocationValue(scope.region);
+  const province = normalizeLocationValue(scope.province);
+  if (scope.scope === 'IN_REGION' && region) {
+    return request.regionName === region || request.regionCode === region;
+  }
+  if (scope.scope === 'IN_PROVINCE' && province) {
+    return request.provinceName === province || request.provinceCode === province;
+  }
+  return false;
 }
 
 function requestMatchesRegionalAccess(
