@@ -79,10 +79,26 @@ export const authRepository = {
       })
       .where({ user_id: userId })
       .first(
-        'officer_profiles.*',
+        'officer_profiles.user_id',
+        'officer_profiles.pos_no',
+        'officer_profiles.pertype_id',
+        'officer_profiles.pertype',
+        'officer_profiles.position_type_id',
+        'officer_profiles.position_type_th',
+        'officer_profiles.line_id',
+        'officer_profiles.line_name_th',
+        'officer_profiles.level_id',
+        'officer_profiles.level_name_th',
+        'officer_profiles.organize_id',
+        'officer_profiles.division_id',
+        'officer_profiles.department_id',
         db.raw(
           'COALESCE(officer_profiles.department_name_th, department_org.name_th) as department_name_th',
         ),
+        'officer_profiles.ministry_id',
+        'officer_profiles.province_id',
+        'officer_profiles.per_status',
+        'officer_profiles.per_status_name',
         'officer_profiles.regional_access_json',
       );
   },

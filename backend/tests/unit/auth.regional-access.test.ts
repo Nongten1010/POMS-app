@@ -21,4 +21,10 @@ describe('regional access inference', () => {
       ),
     ).toEqual({ regions: ['ภาคใต้'] });
   });
+
+  it('handles duplicate-column array values from MSSQL without throwing', () => {
+    expect(inferRegionalAccessFromText(['กองวิจัยและเตือนภัยมลพิษโรงงาน'], null)).toEqual({
+      regions: ['ภาคกลาง'],
+    });
+  });
 });

@@ -52,10 +52,10 @@ export function serializeRegionalAccess(
 }
 
 export function inferRegionalAccessFromText(
-  ...values: Array<string | null | undefined>
+  ...values: Array<unknown>
 ): RegionalAccessDTO | null {
-  const regionalCenterRegionNames = values.flatMap((value) => {
-    if (!value) return [];
+  const textValues = values.flatMap(toTextValues);
+  const regionalCenterRegionNames = textValues.flatMap((value) => {
     return Object.entries(regionalCenterRegionByAbbreviation)
       .filter(([abbreviation]) => value.includes(abbreviation))
       .map(([, regionName]) => regionName);
@@ -63,14 +63,19 @@ export function inferRegionalAccessFromText(
   const regionalCenterAccess = normalizeRegionalAccess({ regions: regionalCenterRegionNames });
   if (regionalCenterAccess) return regionalCenterAccess;
 
-  const centralRegionNames = values.flatMap((value) => {
-    if (!value) return [];
+  const centralRegionNames = textValues.flatMap((value) => {
     const trimmed = value.trim();
     return Object.entries(centralRegionTextValues)
       .filter(([text]) => trimmed.includes(text))
       .map(([, regionName]) => regionName);
   });
   return normalizeRegionalAccess({ regions: centralRegionNames });
+}
+
+function toTextValues(value: unknown): string[] {
+  if (typeof value === 'string') return value ? [value] : [];
+  if (Array.isArray(value)) return value.flatMap(toTextValues);
+  return [];
 }
 
 function uniqueTrimmed(values: string[]): string[] {
