@@ -61,6 +61,9 @@ const referencePoint = { lon: 100.574, lat: 13.91 }
 const operatorFactoriesApiUrl = import.meta.env.DEV
   ? '/api-proxy/v1/operator-factory-dashboard'
   : 'https://d-poms.diw.go.th/api/v1/operator-factory-dashboard'
+const publicFactoryMapPointsApiUrl = import.meta.env.DEV
+  ? '/api-proxy/v1/public/factory-map-points'
+  : 'https://d-poms.diw.go.th/api/v1/public/factory-map-points'
 const connectedMeasurementPointsApiBaseUrl = import.meta.env.DEV
   ? '/api-proxy/v1/connected-measurement-points'
   : 'https://d-poms.diw.go.th/api/v1/connected-measurement-points'
@@ -112,6 +115,20 @@ function getOperatorFactoriesApiUrl(systemType) {
     typeof window !== 'undefined' && window.location.hostname === 'd-poms.diw.go.th'
       ? '/api/v1/operator-factory-dashboard'
       : operatorFactoriesApiUrl
+  const params = new URLSearchParams()
+
+  if (systemType === 'CEMS' || systemType === 'WPMS') {
+    params.set('systemType', systemType)
+  }
+
+  return params.toString() ? `${baseUrl}?${params.toString()}` : baseUrl
+}
+
+function getPublicFactoryMapPointsApiUrl(systemType) {
+  const baseUrl =
+    typeof window !== 'undefined' && window.location.hostname === 'd-poms.diw.go.th'
+      ? '/api/v1/public/factory-map-points'
+      : publicFactoryMapPointsApiUrl
   const params = new URLSearchParams()
 
   if (systemType === 'CEMS' || systemType === 'WPMS') {
@@ -462,20 +479,22 @@ function HomePage({ accessToken = '', permissions }) {
   const [favoriteUpdatingFactoryId, setFavoriteUpdatingFactoryId] = useState('')
   const [favoriteError, setFavoriteError] = useState('')
   const apiSystemType = factoryType === 'cems' ? 'CEMS' : factoryType === 'wpms' ? 'WPMS' : ''
-  const effectiveFactories = useMemo(() => (accessToken ? factories : []), [accessToken, factories])
-  const effectiveFactoriesError = accessToken ? factoriesError : 'กรุณาเข้าสู่ระบบเพื่อดูรายชื่อโรงงาน'
+  const effectiveFactories = factories
+  const effectiveFactoriesError = factoriesError
   useEffect(() => {
-    if (!accessToken) {
-      return
-    }
-
     let isActive = true
+    const requestUrl = accessToken
+      ? getOperatorFactoriesApiUrl(apiSystemType)
+      : getPublicFactoryMapPointsApiUrl(apiSystemType)
+    const requestOptions = accessToken
+      ? {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      : undefined
 
-    fetch(getOperatorFactoriesApiUrl(apiSystemType), {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    })
+    fetch(requestUrl, requestOptions)
       .then(async (result) => {
         const payload = await result.json().catch(() => null)
 
