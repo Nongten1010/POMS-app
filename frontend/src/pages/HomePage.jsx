@@ -675,6 +675,7 @@ function HomePage({ accessToken = '', permissions }) {
           error={favoriteError || effectiveFactoriesError}
           isMobileExpanded={isMobileListExpanded}
           canUseFavorite={canUseFavorite}
+          canViewDetails={Boolean(accessToken)}
           favoriteUpdatingFactoryId={favoriteUpdatingFactoryId}
           onMobileToggle={() => setIsMobileListExpanded((current) => !current)}
           onFactorySelect={setSelectedFactory}
@@ -836,6 +837,7 @@ function FactoryList({
   error,
   isMobileExpanded,
   canUseFavorite = false,
+  canViewDetails = false,
   favoriteUpdatingFactoryId = '',
   onMobileToggle,
   onFactorySelect,
@@ -923,6 +925,7 @@ function FactoryList({
             key={factory.id}
             factory={factory}
             canUseFavorite={canUseFavorite}
+            canViewDetails={canViewDetails}
             favoriteUpdating={favoriteUpdatingFactoryId === factory.factoryId}
             onSelect={() => onFactorySelect(factory)}
             onFavoriteToggle={() => onFavoriteToggle?.(factory)}
@@ -949,7 +952,14 @@ function FactoryList({
   )
 }
 
-function FactoryCard({ factory, canUseFavorite = false, favoriteUpdating = false, onSelect, onFavoriteToggle }) {
+function FactoryCard({
+  factory,
+  canUseFavorite = false,
+  canViewDetails = false,
+  favoriteUpdating = false,
+  onSelect,
+  onFavoriteToggle,
+}) {
   const [activeSystem, setActiveSystem] = useState(null)
   const activeMeasurementTable = activeSystem ? getMeasurementTable(factory, activeSystem) : null
 
@@ -1078,16 +1088,18 @@ function FactoryCard({ factory, canUseFavorite = false, favoriteUpdating = false
               </IconButton>
             </Tooltip>
           ) : null}
-          <Tooltip title="ดูรายละเอียด">
-            <IconButton
-              size="small"
-              aria-label={`ดูรายละเอียด ${factory.name}`}
-              onClick={onSelect}
-              sx={{ width: 38, height: 38, color: 'neutral.400' }}
-            >
-              <ChevronRightIcon />
-            </IconButton>
-          </Tooltip>
+          {canViewDetails ? (
+            <Tooltip title="ดูรายละเอียด">
+              <IconButton
+                size="small"
+                aria-label={`ดูรายละเอียด ${factory.name}`}
+                onClick={onSelect}
+                sx={{ width: 38, height: 38, color: 'neutral.400' }}
+              >
+                <ChevronRightIcon />
+              </IconButton>
+            </Tooltip>
+          ) : null}
         </Stack>
       </Stack>
 
