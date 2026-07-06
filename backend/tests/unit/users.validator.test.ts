@@ -199,7 +199,7 @@ describe('managed users validators', () => {
       },
       permissionOverrides: expect.arrayContaining([
         { code: 'dashboard:view', effect: 'allow', scope: 'ALL' },
-        { code: 'dashboard.search:advanced', effect: 'allow', scope: null },
+        { code: 'dashboard.search:advanced', effect: 'allow', scope: 'ALL' },
       ]),
     });
   });
@@ -306,6 +306,66 @@ describe('managed users validators', () => {
           scope: 'IN_PROVINCE',
           region: null,
           province: 'ระยอง',
+        },
+      ]),
+    );
+  });
+
+  it('keeps dashboard province scope when statistics menu has all-data scope', () => {
+    const result = updateManagedUserSchema.parse({
+      user: {
+        fullName: 'นางนางพัชริดา จันทรมณี',
+        username: '1420900141152',
+        password: '',
+        department: 'สำนักงานปลัดกระทรวงอุตสาหกรรม',
+        lineNameTh: 'นักวิชาการอุตสาหกรรม',
+        levelNameTh: 'ชำนาญการ',
+        roles: 'provincial_office',
+        isActive: true,
+        source: 'api',
+      },
+      permissions: {
+        dashboard: {
+          data: 'IN_PROVINCE',
+          region: null,
+          province: 'ฉะเชิงเทรา',
+          view: true,
+          favorite: true,
+          search: true,
+          advanced_search: true,
+          statistics: true,
+          export: true,
+        },
+        statistics: {
+          data: 'ALL',
+          region: null,
+          province: null,
+          view: true,
+        },
+        conditional_search: {
+          data: null,
+          region: null,
+          province: null,
+          view: true,
+        },
+      },
+    });
+
+    expect((result as { permissionOverrides?: unknown }).permissionOverrides).toEqual(
+      expect.arrayContaining([
+        {
+          code: 'dashboard.stats:view',
+          effect: 'allow',
+          scope: 'IN_PROVINCE',
+          region: undefined,
+          province: 'ฉะเชิงเทรา',
+        },
+        {
+          code: 'dashboard.search:advanced',
+          effect: 'allow',
+          scope: 'IN_PROVINCE',
+          region: undefined,
+          province: 'ฉะเชิงเทรา',
         },
       ]),
     );

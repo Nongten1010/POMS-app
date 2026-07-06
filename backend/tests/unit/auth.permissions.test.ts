@@ -75,7 +75,7 @@ describe('groupPermissions', () => {
       'dashboard:view': 'ALL',
       'dashboard.alerts:view': 'ALL',
       'dashboard.search:basic': 'ALL',
-      'dashboard.search:advanced': null,
+      'dashboard.search:advanced': 'ALL',
       'dashboard.stats:view': 'ALL',
       'chat:ask': null,
       'chat:answer': null,
@@ -114,6 +114,35 @@ describe('groupPermissions', () => {
     expect(permissionGroupsToScopes(grouped)).toEqual({
       'dashboard:view': 'IN_REGION',
       'factories:view': 'IN_PROVINCE',
+    });
+  });
+
+  it('does not let secondary alias modules overwrite dashboard location scopes', () => {
+    expect(
+      permissionGroupsToScopes({
+        dashboard: {
+          data: 'IN_PROVINCE',
+          region: null,
+          province: 'ฉะเชิงเทรา',
+          view: true,
+          advanced_search: true,
+          statistics: true,
+          export: true,
+        },
+        statistics: {
+          data: 'ALL',
+          view: true,
+        },
+        conditional_search: {
+          data: null,
+          view: true,
+        },
+      }),
+    ).toMatchObject({
+      'dashboard:view': 'IN_PROVINCE',
+      'dashboard.search:advanced': 'IN_PROVINCE',
+      'dashboard.stats:view': 'IN_PROVINCE',
+      'dashboard.stats:export': 'IN_PROVINCE',
     });
   });
 });

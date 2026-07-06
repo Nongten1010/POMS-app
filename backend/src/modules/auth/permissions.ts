@@ -120,6 +120,9 @@ export function permissionGroupsToPermissionOverrides(
         continue;
       }
       for (const code of permissionCodesFromAlias(module, action)) {
+        if (overrides[code] && !isPrimaryPermissionAlias(code, module, action)) {
+          continue;
+        }
         scopes[code] = group.data;
         overrides[code] = {
           scope: group.data,
@@ -151,6 +154,13 @@ function permissionCodesFromAlias(module: string, action: string): string[] {
     .map(([code]) => code);
   if (matchedCodes.length > 0) return matchedCodes;
   return [`${module}:${action}`];
+}
+
+function isPrimaryPermissionAlias(code: string, module: string, action: string): boolean {
+  const aliases = permissionAliases[code];
+  if (!aliases) return true;
+  const [primaryAlias] = Array.isArray(aliases) ? aliases : [aliases];
+  return primaryAlias?.module === module && primaryAlias.action === action;
 }
 
 function toPermissionAliases(code: string): Array<{ module: string; action: string }> {
