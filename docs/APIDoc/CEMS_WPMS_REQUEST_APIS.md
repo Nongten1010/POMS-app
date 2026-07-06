@@ -2451,6 +2451,7 @@ Path params:
 - payload เดี่ยว response `data` เป็น object; structured/batch payload response `data` เป็น array ตามลำดับ `config.device`
 - หลังบันทึกหลายอุปกรณ์สำเร็จ ให้เรียก `GET /cems-wpms-requests/:id/device-configs?stationId=...` ซ้ำเพื่อ refresh snapshot ของคำขอ หรือเรียก `GET /device-connections?stationId=...` เมื่อต้องการดู active setting ล่าสุด
 - `protocol` สำหรับ Microsoft SQL ต้องส่ง `MSSQL`
+- สำหรับ `MSSQL`/`MYSQL` backend รับ metadata ของ channel เช่น `valueRange`, `alertLow`, `alertHigh`, `valueFormat`, และ `encoding` ได้เหมือน payload จากฟอร์ม เพื่อเก็บช่วงค่า/รูปแบบค่าที่ใช้แสดงผลหรือส่งต่อ integration; field เหล่านี้ยังเป็น optional ทั้งหมด
 
 ตัวอย่าง JSON payload เดี่ยวแบบเดิม:
 
@@ -2603,7 +2604,7 @@ Data dictionary:
 | `config.channels[].alertHigh` | number|null | No | ค่า Alert(High) ของพารามิเตอร์; ถ้าไม่กรอกส่ง `null` หรือไม่ส่ง field ได้ |
 | `config.channels[].valueFormat` | string|null | No | รูปแบบค่า: `MEASUREMENT_VALUE`, `CURRENT`, `VOLTAGE` |
 | `config.channels[].offset` | number|null | No | offset |
-| `config.channels[].encoding` | string|null | No | รูปแบบ encoding |
+| `config.channels[].encoding` | string|null | No | รูปแบบ encoding หรือ metadata ของ channel; ใช้ได้กับ `MODBUS_RTU`, `MODBUS_TCP`, `MSSQL`, และ `MYSQL` |
 | `config.channels[].status` | string|null | No | สถานะพารามิเตอร์ เช่น `Normal`, `Maintenance`, `Inactive`; ถ้าไม่ส่ง backend ใช้ `Normal` |
 | `config.statusManagement` | object|null | No | ข้อมูลจัดการสถานะชั่วคราวของชุด config |
 

@@ -104,9 +104,12 @@ const databaseChannelSchema = z
     addressId,
     dataType: trimmedString(128),
     unit: z.string().trim().max(64).optional().default(''),
+    valueRange: measurementRangeSchema.nullable().optional().default(null),
     alertLow: optionalThresholdSchema.optional().default(null),
     alertHigh: optionalThresholdSchema.optional().default(null),
+    valueFormat: dataValueFormatSchema.nullable().optional().default(null),
     offset: z.number(),
+    encoding: modbusEncodingSchema.nullable().optional().default(null),
     status: parameterStatusSchema,
   })
   .strict()
@@ -117,9 +120,12 @@ const databaseChannelSchema = z
   .transform((channel) => ({
     addressId: channel.addressId,
     dataType: toChannelDataType(channel.dataType, channel.unit),
+    valueRange: channel.valueRange,
     alertLow: channel.alertLow,
     alertHigh: channel.alertHigh,
+    valueFormat: channel.valueFormat,
     offset: channel.offset,
+    encoding: channel.encoding,
     status: channel.status,
   }));
 

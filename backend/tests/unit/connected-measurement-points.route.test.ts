@@ -470,6 +470,75 @@ describe('connected measurement points route', () => {
     );
   });
 
+  it('accepts current MSSQL device configs with measurement range fields', async () => {
+    const app = createApp();
+
+    mockedConnectionRequestsService.saveCurrentDeviceConfig.mockResolvedValue({
+      stationId: 'S0001',
+      device: [],
+      channels: [],
+      statusManagement: {
+        selectedParameters: ['ทั้งหมด'],
+        startAt: null,
+        endAt: null,
+        status: 'Normal',
+        schedules: [],
+      },
+    });
+
+    const response = await request(app)
+      .post('/api/v1/connected-measurement-points/S0001/device-configs')
+      .set('Authorization', `Bearer ${editAccessToken()}`)
+      .send({
+        stationId: 'S0001',
+        deviceCode: 'S0001/01',
+        protocol: 'MSSQL',
+        settings: {
+          hostIp: '127.0.0.1',
+          port: 433,
+          dbUser: 'user',
+          dbPass: 'P@ssw0rd',
+          dbName: 'db',
+        },
+        channels: [
+          {
+            addressId: 40001,
+            dataType: 'CO (ppm)',
+            valueRange: { min: 0, max: 500 },
+            valueFormat: 'MEASUREMENT_VALUE',
+            offset: 1,
+            encoding: 'UNSIGNED16_BIG_ENDIAN',
+            status: 'Normal',
+          },
+        ],
+        statusManagement: {
+          selectedParameters: ['ทั้งหมด'],
+          startAt: null,
+          endAt: null,
+          status: 'Normal',
+          schedules: [],
+        },
+      });
+
+    expect(response.status).toBe(201);
+    expect(mockedConnectionRequestsService.saveCurrentDeviceConfig).toHaveBeenCalledWith(
+      'S0001',
+      expect.objectContaining({
+        protocol: 'MSSQL',
+        channels: [
+          expect.objectContaining({
+            dataType: 'CO (ppm)',
+            valueRange: { min: 0, max: 500 },
+            valueFormat: 'MEASUREMENT_VALUE',
+            encoding: 'UNSIGNED16_BIG_ENDIAN',
+          }),
+        ],
+      }),
+      42,
+      'ALL',
+    );
+  });
+
   it('exposes measurement statistics for the selected connected measurement point', async () => {
     const app = createApp();
 

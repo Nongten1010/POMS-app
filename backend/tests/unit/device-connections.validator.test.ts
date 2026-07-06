@@ -494,7 +494,7 @@ describe('device connection validators', () => {
     expect(result.success).toBe(true);
   });
 
-  it('rejects database-only channels that include Modbus fields', () => {
+  it('accepts database channels with optional measurement metadata', () => {
     const result = createDeviceConnectionConfigSchema.safeParse({
       stationId: 'STATION_001',
       protocol: 'MYSQL',
@@ -518,7 +518,13 @@ describe('device connection validators', () => {
       ],
     });
 
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
+    expect(result.data?.channels[0]).toMatchObject({
+      dataType: 'COD (mg/L)',
+      valueRange: { min: 0, max: 200 },
+      valueFormat: 'MEASUREMENT_VALUE',
+      encoding: 'UNSIGNED',
+    });
   });
 
   it('rejects unknown fields and invalid IPs', () => {
