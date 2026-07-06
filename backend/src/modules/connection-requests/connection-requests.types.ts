@@ -437,7 +437,7 @@ export interface OperatorFactoryMeasurementPointDTO {
 
 export interface PublicFactoryMapPointDTO extends Omit<
   OperatorFactoryDashboardRowDTO,
-  'factoryLogoUrl' | 'isFavorite' | 'hasLatestHourlyMeasurement' | 'measurementPoints'
+  'isFavorite' | 'hasLatestHourlyMeasurement' | 'measurementPoints'
 > {
   measurementPoints: PublicFactoryMapMeasurementPointDTO[];
 }

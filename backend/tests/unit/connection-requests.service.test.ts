@@ -966,6 +966,12 @@ describe('connectionRequestsService', () => {
         pointCode: 'S0001',
         systemType: 'CEMS',
         parameters: ['NOx'],
+        documentsAndImages: [
+          {
+            title: 'สัญลักษณ์ของโรงงานหรือโลโก้บริษัท',
+            fileUrl: 'https://example.com/files/public-logo.png',
+          },
+        ],
         data: [],
       },
     ]);
@@ -1006,6 +1012,7 @@ describe('connectionRequestsService', () => {
     expect(result.data).toHaveLength(1);
     expect(result.data[0]).toMatchObject({
       factoryId: 'factory-connected',
+      factoryLogoUrl: 'https://example.com/files/public-logo.png',
       monitoringPointCountBySystem: [
         { systemType: 'CEMS', count: 1 },
         { systemType: 'WPMS', count: 0 },
@@ -1021,7 +1028,6 @@ describe('connectionRequestsService', () => {
       ],
     });
     expect(result.data[0]).not.toHaveProperty('isFavorite');
-    expect(result.data[0]).not.toHaveProperty('factoryLogoUrl');
     expect(result.data[0]).not.toHaveProperty('hasLatestHourlyMeasurement');
     expect(result.data[0].measurementPoints[0]).not.toHaveProperty('data');
   });

@@ -339,6 +339,7 @@ export const connectionRequestsService = {
           factoryName: factory.factoryName,
           newRegistrationNo: factory.newRegistrationNo,
           oldRegistrationNo: factory.oldRegistrationNo,
+          factoryLogoUrl: getFactoryLogoUrl(currentMeasurementPoints),
           industryMainOrder: factory.industryMainOrder,
           industryMainOrderLabel:
             (factory.industryMainOrder

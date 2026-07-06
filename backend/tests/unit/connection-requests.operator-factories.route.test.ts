@@ -112,6 +112,7 @@ describe('operator factory dashboard routes', () => {
           factoryName: 'บริษัท ทดสอบ จำกัด',
           newRegistrationNo: '3-106-33/50สบ',
           oldRegistrationNo: 'รง.4-เก่า-001',
+          factoryLogoUrl: 'https://example.com/files/public-logo.png',
           industryMainOrder: '8802',
           industryMainOrderLabel:
             'ประเภทโรงงานลำดับที่ 88(2): การผลิตพลังงานไฟฟ้าจากพลังงานความร้อน',
@@ -265,6 +266,7 @@ describe('operator factory dashboard routes', () => {
           factoryName: 'บริษัท ทดสอบ จำกัด',
           newRegistrationNo: '3-106-33/50สบ',
           oldRegistrationNo: 'รง.4-เก่า-001',
+          factoryLogoUrl: 'https://example.com/files/public-logo.png',
           industryMainOrder: '8802',
           industryMainOrderLabel:
             'ประเภทโรงงานลำดับที่ 88(2): การผลิตพลังงานไฟฟ้าจากพลังงานความร้อน',
@@ -304,7 +306,6 @@ describe('operator factory dashboard routes', () => {
       meta: { total: 1 },
     });
     expect(response.body.data[0]).not.toHaveProperty('isFavorite');
-    expect(response.body.data[0]).not.toHaveProperty('factoryLogoUrl');
     expect(response.body.data[0]).not.toHaveProperty('hasLatestHourlyMeasurement');
     expect(response.body.data[0].measurementPoints[0]).not.toHaveProperty('data');
   });

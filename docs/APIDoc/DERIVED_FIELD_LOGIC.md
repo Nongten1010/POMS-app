@@ -434,7 +434,7 @@ Source:
 
 - Same eligible/visible factory summary source used by `GET /api/v1/operator-factory-dashboard`
 - `factories`, `eligible_factories`, `provinces`, `industrial_estates`
-- `cems_wpms_connected_measurement_points` for connected point counts and station metadata, selected without `documents_json`
+- `cems_wpms_connected_measurement_points` for connected point counts, station metadata, and `documents_json` used only to derive `factoryLogoUrl`
 
 Logic:
 
@@ -442,11 +442,11 @@ Logic:
 - The service reads with factory scope `ALL` and no regional/user-owned filter.
 - Rows without connected measurement points are removed because they are not map points.
 - `systemType=CEMS|WPMS` filters by connected measurement point system type when supplied.
-- Rows reuse dashboard-derived location/type/count fields, then remove user-specific or internal fields:
+- Rows reuse dashboard-derived location/type/count fields and derive `factoryLogoUrl` with the same CEMS document-title fallback as `GET /api/v1/operator-factory-dashboard`, then remove user-specific or internal fields:
   - `isFavorite`
-  - `factoryLogoUrl`
   - `hasLatestHourlyMeasurement`
   - `measurementPoints[].data`
+- The endpoint returns `factoryLogoUrl` but does not expose `documentsAndImages` or other document metadata.
 - `measurementPoints[]` keeps only station/point identity, `systemType`, and parameter display labels.
 - Fallback order for all inherited dashboard-derived fields is unchanged from `GET /api/v1/operator-factory-dashboard`; this endpoint only applies the public-field removal step after those values are resolved.
 

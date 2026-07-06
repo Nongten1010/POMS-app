@@ -608,7 +608,14 @@ export const connectionRequestsRepository = {
     )
       .whereNull('deleted_at')
       .whereIn('factory_id', lookupKeys)
-      .select('factory_id', 'point_name', 'point_code', 'system_type', 'parameters_json')
+      .select(
+        'factory_id',
+        'point_name',
+        'point_code',
+        'system_type',
+        'parameters_json',
+        'documents_json',
+      )
       .orderBy('factory_id', 'asc')
       .orderBy('point_code', 'asc')
       .orderBy('point_name', 'asc');
@@ -620,6 +627,7 @@ export const connectionRequestsRepository = {
       pointCode: row.point_code,
       systemType: row.system_type,
       parameters: parseParameters(row.parameters_json),
+      documentsAndImages: parseJsonArray<RequestDocumentImageInput>(row.documents_json),
       data: [],
     }));
   },

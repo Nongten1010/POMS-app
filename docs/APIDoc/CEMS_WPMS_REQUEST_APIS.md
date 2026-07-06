@@ -2959,7 +2959,7 @@ Query params:
 | --- | --- | --- | --- |
 | `systemType` | `CEMS`\|`WPMS` | No | กรองโรงงานที่มี connected measurement point ของระบบนั้น ถ้าไม่ส่งจะคืนทุกโรงงานที่มี connected measurement point อย่างน้อย 1 จุด |
 
-Endpoint นี้ใช้สำหรับแสดงจุดโรงงานบนหน้า public map ก่อน login โดยคืนเฉพาะโรงงานที่มี connected measurement point อย่างน้อย 1 จุด และคืนเฉพาะข้อมูลที่ใช้แสดง marker/filter เบื้องต้น ไม่คืนข้อมูลเฉพาะผู้ใช้ เช่น favorite, เอกสาร/logo, หรือ raw measurement data
+Endpoint นี้ใช้สำหรับแสดงจุดโรงงานบนหน้า public map ก่อน login โดยคืนเฉพาะโรงงานที่มี connected measurement point อย่างน้อย 1 จุด และคืนเฉพาะข้อมูลที่ใช้แสดง marker/filter เบื้องต้น รวมถึง `factoryLogoUrl` จากเอกสารแนบ CEMS สำหรับแสดง logo บนแผนที่ แต่ไม่คืนข้อมูลเฉพาะผู้ใช้ เช่น favorite หรือ raw measurement data
 
 ตัวอย่าง request:
 
@@ -2979,6 +2979,7 @@ curl "http://localhost:3000/api/v1/public/factory-map-points?systemType=CEMS"
       "factoryName": "บริษัท ทดสอบ จำกัด",
       "newRegistrationNo": "3-106-33/50สบ",
       "oldRegistrationNo": "รง.4-เก่า-001",
+      "factoryLogoUrl": "https://example.com/files/logo.png",
       "industryMainOrder": "8802",
       "industryMainOrderLabel": "ประเภทโรงงานลำดับที่ 88(2): การผลิตพลังงานไฟฟ้าจากพลังงานความร้อน",
       "industrySubOrder": null,
@@ -3029,6 +3030,7 @@ Data dictionary response row:
 | `factoryName` | string | ชื่อโรงงาน |
 | `newRegistrationNo` | string|null | เลขทะเบียนใหม่ |
 | `oldRegistrationNo` | string|null | เลขทะเบียนเก่า |
+| `factoryLogoUrl` | string|null | URL รูปโลโก้จากเอกสารแนบ CEMS title `สัญลักษณ์ของโรงงานหรือโลโก้บริษัท`; ถ้าไม่มีคืน `null` |
 | `industryMainOrder` | string|null | ลำดับโรงงานหลัก |
 | `industryMainOrderLabel` | string|null | ชื่อลำดับโรงงานหลักพร้อมคำอธิบายจาก DIW source เมื่อ lookup ได้ |
 | `industrySubOrder` | string|null | ลำดับโรงงานรอง |
@@ -3047,7 +3049,6 @@ Data dictionary response row:
 Public endpoint นี้ตั้งใจไม่คืน field ต่อไปนี้:
 
 - `isFavorite`
-- `factoryLogoUrl`
 - `hasLatestHourlyMeasurement`
 - `measurementPoints[].data`
 
