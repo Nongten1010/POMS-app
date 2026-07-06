@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
 import { env } from '../../config/env';
-import { getScope } from '../../shared/middlewares/authorize';
+import { getScope, getScopeDetails } from '../../shared/middlewares/authorize';
 import { createDeviceConnectionConfigRequestSchema } from '../device-connections/device-connections.validator';
 import type { RegionalAccessDTO } from '../auth/regional-access';
 import { createConnectionRequestDocumentImageService } from './connection-request-document-image.service';
@@ -93,7 +93,7 @@ export const connectionRequestsController = {
       const query = listOperatorFactoriesQuerySchema.parse(req.query);
       const result = await connectionRequestsService.listOperatorFactoryDashboard(
         actorUserId,
-        getScope(req, 'dashboard:view'),
+        getScopeDetails(req, 'dashboard:view'),
         { ...query, connectedOnly: true },
         ...getRegionalAccessArg(req),
       );

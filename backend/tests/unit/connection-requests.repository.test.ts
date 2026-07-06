@@ -117,6 +117,38 @@ describe('connectionRequestsRepository request numbers', () => {
     expect(compiled.bindings).toContain('ภาคตะวันออก');
   });
 
+  it('limits dashboard factory access to a selected permission province', () => {
+    const compiled = buildFactoriesForAccessQueryForTests({
+      actorUserId: 42,
+      scope: {
+        scope: 'IN_PROVINCE',
+        region: null,
+        province: 'ฉะเชิงเทรา',
+      },
+    }).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('[p].[name_th]');
+    expect(sql).not.toContain('user_juristics');
+    expect(compiled.bindings).toContain('ฉะเชิงเทรา');
+  });
+
+  it('limits dashboard factory access to a selected permission region', () => {
+    const compiled = buildFactoriesForAccessQueryForTests({
+      actorUserId: 42,
+      scope: {
+        scope: 'IN_REGION',
+        region: 'ภาคตะวันออก',
+        province: null,
+      },
+    }).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('[p].[region]');
+    expect(sql).not.toContain('user_juristics');
+    expect(compiled.bindings).toContain('ภาคตะวันออก');
+  });
+
   it('soft-deletes duplicate active measurement points before issuing station codes', () => {
     const sql = buildDuplicateActiveMeasurementPointCleanupSqlForTests().toLowerCase();
 

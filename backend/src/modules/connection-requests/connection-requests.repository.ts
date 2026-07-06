@@ -2,6 +2,7 @@ import type { Knex } from 'knex';
 import { db } from '../../config/database';
 import { env } from '../../config/env';
 import { factorySourceDb } from '../../config/factory-source-database';
+import type { PermissionScopeDetails } from '../auth/permissions';
 import type { RegionalAccessDTO } from '../auth/regional-access';
 import {
   CONNECTION_REQUEST_STATUS,
@@ -124,7 +125,7 @@ interface StatusHistoryRow {
 
 interface ListAccess {
   actorUserId: number;
-  scope: string | null | undefined;
+  scope: AccessScope;
   regionalAccess?: RegionalAccessDTO | null;
 }
 
@@ -202,9 +203,11 @@ interface FactorySnapshotSourceRow {
 
 interface FactoryAccess {
   actorUserId: number;
-  scope: string | null | undefined;
+  scope: AccessScope;
   regionalAccess?: RegionalAccessDTO | null;
 }
+
+type AccessScope = string | null | undefined | PermissionScopeDetails;
 
 interface StatusUpdate {
   revisionReason?: string | null;
@@ -353,12 +356,13 @@ export const connectionRequestsRepository = {
         'ef.has_eia',
       );
 
-    if (access.scope !== 'ALL') {
+    if (requiresAssignedFactoryAccess(access.scope)) {
       builder
         .join('user_juristics as uj', 'uj.juristic_id', 'f.juristic_id')
         .where('uj.user_id', access.actorUserId)
         .whereNull('uj.revoked_at');
     }
+    applyFactoryPermissionLocationFilter(builder, access.scope);
     applyFactoryRegionalAccessFilter(builder, access.regionalAccess);
 
     const row = await builder.first();
@@ -893,12 +897,13 @@ function buildFactoriesForAccessQuery(
     .orderBy('f.name', 'asc')
     .orderBy('f.id', 'asc');
 
-  if (access.scope !== 'ALL') {
+  if (requiresAssignedFactoryAccess(access.scope)) {
     builder
       .join('user_juristics as uj', 'uj.juristic_id', 'f.juristic_id')
       .where('uj.user_id', access.actorUserId)
       .whereNull('uj.revoked_at');
   }
+  applyFactoryPermissionLocationFilter(builder, access.scope);
   applyFactoryRegionalAccessFilter(builder, access.regionalAccess);
 
   return builder as unknown as Knex.QueryBuilder<FactoryRow, FactoryRow[]>;
@@ -944,7 +949,7 @@ function buildBaseQuery(
         });
     });
   }
-  if (access.scope !== 'ALL') builder.where('created_by', access.actorUserId);
+  if (getAccessScopeValue(access.scope) !== 'ALL') builder.where('created_by', access.actorUserId);
   applyRequestRegionalAccessFilter(builder, access.regionalAccess);
 
   return builder.select(
@@ -1004,6 +1009,15 @@ function applyRequestRegionalAccessFilter(
   });
 }
 
+function getAccessScopeValue(scope: AccessScope): string | null | undefined {
+  return scope && typeof scope === 'object' ? scope.scope : scope;
+}
+
+function requiresAssignedFactoryAccess(scope: AccessScope): boolean {
+  const scopeValue = getAccessScopeValue(scope);
+  return scopeValue !== 'ALL' && scopeValue !== 'IN_REGION' && scopeValue !== 'IN_PROVINCE';
+}
+
 function applyFactoryRegionalAccessFilter(
   builder: Knex.QueryBuilder,
   regionalAccess: RegionalAccessDTO | null | undefined,
@@ -1013,9 +1027,32 @@ function applyFactoryRegionalAccessFilter(
   builder.whereIn('p.region', regionValues);
 }
 
+function applyFactoryPermissionLocationFilter(
+  builder: Knex.QueryBuilder,
+  scope: AccessScope,
+): void {
+  if (!scope || typeof scope !== 'object') return;
+  const region = normalizeLocationValue(scope.region);
+  const province = normalizeLocationValue(scope.province);
+
+  if (scope.scope === 'IN_REGION' && region) {
+    builder.where('p.region', region);
+  }
+
+  if (scope.scope === 'IN_PROVINCE' && province) {
+    builder.where('p.name_th', province);
+  }
+}
+
 function getRegionalFilterValues(regionalAccess: RegionalAccessDTO | null | undefined): string[] {
   const values = regionalAccess?.regions ?? [];
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+}
+
+function normalizeLocationValue(value: string | null | undefined): string | null {
+  if (value === null || value === undefined) return null;
+  const trimmed = value.trim();
+  return trimmed && trimmed.toLowerCase() !== 'all' ? trimmed : null;
 }
 
 function applyFactorySnapshotFilters(

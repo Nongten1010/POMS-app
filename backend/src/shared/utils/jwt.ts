@@ -1,6 +1,7 @@
 import jwt, { SignOptions } from 'jsonwebtoken';
 import crypto from 'node:crypto';
 import { env } from '../../config/env';
+import type { PermissionScopeDetails } from '../../modules/auth/permissions';
 import type { RegionalAccessDTO } from '../../modules/auth/regional-access';
 
 export interface AccessTokenPayload {
@@ -9,6 +10,8 @@ export interface AccessTokenPayload {
   roles: string[];
   /** permissionCode → scope (null = no scope dimension) */
   scopes: Record<string, string | null>;
+  /** permissionCode → detailed menu scope, including region/province selections */
+  scopeDetails?: Record<string, PermissionScopeDetails>;
   /** จำกัดข้อมูลตามภาคที่เจ้าหน้าที่รับผิดชอบ; undefined/null = ไม่จำกัดเพิ่ม */
   regionalAccess?: RegionalAccessDTO | null;
 }

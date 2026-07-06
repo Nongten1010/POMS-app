@@ -15,6 +15,7 @@ export function authenticate(req: Request, _res: Response, next: NextFunction): 
       userType: payload.userType,
       roles: payload.roles,
       scopes: payload.scopes,
+      scopeDetails: payload.scopeDetails ?? undefined,
       regionalAccess: payload.regionalAccess ?? null,
     };
     return next();

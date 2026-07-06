@@ -207,7 +207,7 @@ describe('operator factory dashboard routes', () => {
     expect(response.status).toBe(200);
     expect(mockedConnectionRequestsService.listOperatorFactoryDashboard).toHaveBeenCalledWith(
       42,
-      'OWN_FACTORY',
+      { scope: 'OWN_FACTORY' },
       { systemType: 'WPMS', favoriteOnly: false, connectedOnly: true },
     );
     expect(response.body.data[0]).toMatchObject({
@@ -242,9 +242,42 @@ describe('operator factory dashboard routes', () => {
     expect(response.status).toBe(200);
     expect(mockedConnectionRequestsService.listOperatorFactoryDashboard).toHaveBeenCalledWith(
       42,
-      'ALL',
+      { scope: 'ALL' },
       { systemType: 'CEMS', favoriteOnly: false, connectedOnly: true },
       { regions: ['ภาคตะวันออก'] },
+    );
+  });
+
+  it('passes dashboard permission location details to the dashboard data service', async () => {
+    const app = createApp();
+    const token = accessToken({
+      scopes: {
+        'dashboard:view': 'IN_PROVINCE',
+        'factories:view': 'ALL',
+      },
+      scopeDetails: {
+        'dashboard:view': {
+          scope: 'IN_PROVINCE',
+          region: null,
+          province: 'ฉะเชิงเทรา',
+        },
+        'factories:view': { scope: 'ALL' },
+      },
+    });
+
+    const response = await request(app)
+      .get('/api/v1/operator-factory-dashboard')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(mockedConnectionRequestsService.listOperatorFactoryDashboard).toHaveBeenCalledWith(
+      42,
+      {
+        scope: 'IN_PROVINCE',
+        region: null,
+        province: 'ฉะเชิงเทรา',
+      },
+      { favoriteOnly: false, connectedOnly: true },
     );
   });
 

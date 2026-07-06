@@ -350,6 +350,7 @@ function buildLoginResponse(args: {
     userType: args.user.userType,
     roles: args.roles,
     scopes: flattenPermissionScopes(args.scopes),
+    scopeDetails: normalizePermissionScopeDetails(args.scopes),
     regionalAccess,
   });
   return {
@@ -408,6 +409,19 @@ function getRegionalAccessFromProfile(
   profile: OfficerProfileDTO | OperatorProfileDTO | null,
 ): RegionalAccessDTO | null {
   return isOfficerProfile(profile) ? profile.regionalAccess : null;
+}
+
+function normalizePermissionScopeDetails(
+  scopes: Record<string, string | null | PermissionScopeDetails>,
+): Record<string, PermissionScopeDetails> {
+  return Object.fromEntries(
+    Object.entries(scopes).map(([code, details]) => [
+      code,
+      typeof details === 'object' && details !== null
+        ? details
+        : { scope: details as PermissionScopeDetails['scope'] },
+    ]),
+  );
 }
 
 function joinNamePrefix(prenameTh: string | null, firstName: string): string {

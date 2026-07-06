@@ -7,6 +7,7 @@ import type {
   DeviceConnectionConfigDTO,
 } from '../device-connections/device-connections.types';
 import { parameterValuesService } from '../parameter-values/parameter-values.service';
+import type { PermissionScopeDetails } from '../auth/permissions';
 import type { RegionalAccessDTO } from '../auth/regional-access';
 import type {
   CalendarStatusQuerySchemaInput,
@@ -207,7 +208,7 @@ export const connectionRequestsService = {
 
   async listOperatorFactoryDashboard(
     actorUserId: number,
-    factoryViewScope: string | null | undefined,
+    factoryViewScope: AccessScope,
     query: ListOperatorFactoriesQuery = {},
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<PaginatedTableRowsDTO<OperatorFactoryDashboardRowDTO>> {
@@ -292,7 +293,7 @@ export const connectionRequestsService = {
     const dataWithLatestHourlyMeasurements = await populateLatestHourlyMeasurements(
       data,
       actorUserId,
-      factoryViewScope,
+      getAccessScopeValue(factoryViewScope),
     );
 
     return { data: dataWithLatestHourlyMeasurements, meta: { total: data.length } };
@@ -1708,6 +1709,11 @@ async function loadLatestHourlyMeasurementData(
 }
 
 const dashboardBaseMeasurementColumns = new Set(['station_id', 'cdate', 'ctime']);
+type AccessScope = string | null | undefined | PermissionScopeDetails;
+
+function getAccessScopeValue(scope: AccessScope): string | null | undefined {
+  return scope && typeof scope === 'object' ? scope.scope : scope;
+}
 
 function toDashboardMeasurementRow(
   row: Record<string, unknown>,
