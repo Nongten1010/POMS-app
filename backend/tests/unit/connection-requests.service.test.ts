@@ -68,6 +68,7 @@ import {
   CONNECTION_REQUEST_TYPE,
   type ConnectionRequestDTO,
   type CreateConnectionRequestInput,
+  type CurrentFactoryMeasurementPointDTO,
   type FactoryGeneralDTO,
   type FactorySummaryDTO,
 } from '../../src/modules/connection-requests/connection-requests.types';
@@ -540,6 +541,13 @@ describe('connectionRequestsService', () => {
     mockedRepository.listOfficerNotificationEmailsForFactories.mockResolvedValue(
       new Map([['3-88(2)-5/49อบ', ['contact@ieat.mail.go.th']]]),
     );
+    mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
+      currentFactoryMeasurementPoint({
+        factoryId: '3-88(2)-5/49อบ',
+        pointCode: 'POM-WPMS-001',
+        systemType: 'WPMS',
+      }),
+    ]);
 
     const result = await connectionRequestsService.listOfficerEligibleFactories(
       { scope: 'ALL' },
@@ -552,6 +560,9 @@ describe('connectionRequestsService', () => {
     expect(mockedEligibleFactoriesService.list).toHaveBeenCalledWith({});
     expect(mockedRepository.listProvinceRegions).toHaveBeenCalledWith(['ชลบุรี']);
     expect(mockedRepository.listRequestsForFactories).not.toHaveBeenCalled();
+    expect(mockedRepository.listConnectedMeasurementPointsForFactories).toHaveBeenCalledWith([
+      '3-88(2)-5/49อบ',
+    ]);
     expect(mockedRepository.listOfficerNotificationEmailsForFactories).toHaveBeenCalledWith([
       {
         factoryId: '3-88(2)-5/49อบ',
@@ -632,6 +643,10 @@ describe('connectionRequestsService', () => {
 
     expect(mockedRepository.listFavoriteFactoryIds).not.toHaveBeenCalled();
     expect(mockedRepository.listRequestsForFactories).not.toHaveBeenCalled();
+    expect(mockedRepository.listConnectedMeasurementPointsForFactories).toHaveBeenCalledWith([
+      'factory-favorite-east',
+      'factory-not-favorite-east',
+    ]);
     expect(result.data.map((factory) => factory.factoryId)).toEqual([
       'factory-favorite-east',
       'factory-not-favorite-east',
@@ -3037,6 +3052,22 @@ function selectedEligibleFactory(
     fuelUsed: null,
     hasEia: false,
     measurementPoints: [],
+    ...overrides,
+  };
+}
+
+function currentFactoryMeasurementPoint(
+  overrides: Partial<CurrentFactoryMeasurementPointDTO> = {},
+): CurrentFactoryMeasurementPointDTO {
+  return {
+    factoryId: 'factory-001',
+    stationId: 'S0001',
+    pointName: 'ปล่องระบาย A',
+    pointCode: 'S0001',
+    systemType: 'CEMS',
+    parameters: ['NOx (ppm)'],
+    documentsAndImages: [],
+    data: [],
     ...overrides,
   };
 }

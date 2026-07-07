@@ -216,16 +216,27 @@ export const connectionRequestsService = {
   ): Promise<PaginatedTableRowsDTO<OperatorFactoryTableRowDTO>> {
     const result = await eligibleFactoriesService.list({});
     const provinceRegionsByName = await loadProvinceRegionsByName(result.data);
-    const eligibleFactories = filterEligibleFactoryRowsByQuery(
-      result.data.filter((factory) =>
-        eligibleFactoryMatchesOfficerAccess(
-          factory,
-          viewScope,
-          regionalAccess,
-          provinceRegionsByName,
-        ),
+    const accessibleFactories = result.data.filter((factory) =>
+      eligibleFactoryMatchesOfficerAccess(
+        factory,
+        viewScope,
+        regionalAccess,
+        provinceRegionsByName,
       ),
+    );
+    const factoryIdByLookupKey = buildEligibleFactoryLookupKeyMap(accessibleFactories);
+    const connectedPoints =
+      await connectionRequestsRepository.listConnectedMeasurementPointsForFactories([
+        ...factoryIdByLookupKey.keys(),
+      ]);
+    const measurementPointsByFactory = mapConnectedMeasurementPointsToEligibleFactories(
+      connectedPoints,
+      factoryIdByLookupKey,
+    );
+    const eligibleFactories = filterEligibleFactoryRowsByQuery(
+      accessibleFactories,
       query,
+      measurementPointsByFactory,
     );
     const officerNotificationEmailsByFactory =
       await connectionRequestsRepository.listOfficerNotificationEmailsForFactories(
@@ -242,7 +253,7 @@ export const connectionRequestsService = {
       ...toOfficerEligibleFactoryTableRow(factory),
       officerNotificationEmails: officerNotificationEmailsByFactory.get(factory.factoryId) ?? [],
       monitoringPointCount: filterMeasurementPointsBySystem(
-        factory.measurementPoints ?? [],
+        measurementPointsByFactory.get(factory.factoryId) ?? [],
         query.systemType,
       ).length,
     }));
@@ -1682,13 +1693,46 @@ function toParameterDisplayName(parameter: string): string {
 function filterEligibleFactoryRowsByQuery(
   factories: SelectedEligibleFactoryDTO[],
   query: ListOperatorFactoriesQuery,
+  measurementPointsByFactory: Map<string, CurrentFactoryMeasurementPointDTO[]>,
 ): SelectedEligibleFactoryDTO[] {
   if (!query.systemType) return factories;
 
   return factories.filter(
     (factory) =>
-      filterMeasurementPointsBySystem(factory.measurementPoints ?? [], query.systemType).length > 0,
+      filterMeasurementPointsBySystem(
+        measurementPointsByFactory.get(factory.factoryId) ?? [],
+        query.systemType,
+      ).length > 0,
   );
+}
+
+function buildEligibleFactoryLookupKeyMap(
+  factories: SelectedEligibleFactoryDTO[],
+): Map<string, string> {
+  const keys = new Map<string, string>();
+
+  factories.forEach((factory) => {
+    [factory.factoryId, factory.factoryRegistrationNo].forEach((key) => {
+      if (key) keys.set(key, factory.factoryId);
+    });
+  });
+
+  return keys;
+}
+
+function mapConnectedMeasurementPointsToEligibleFactories(
+  connectedPoints: CurrentFactoryMeasurementPointDTO[],
+  factoryIdByLookupKey: Map<string, string>,
+): Map<string, CurrentFactoryMeasurementPointDTO[]> {
+  const measurementPointsByFactory = new Map<string, CurrentFactoryMeasurementPointDTO[]>();
+
+  connectedPoints.forEach((point) => {
+    const factoryId = factoryIdByLookupKey.get(point.factoryId) ?? point.factoryId;
+    const currentPoints = measurementPointsByFactory.get(factoryId) ?? [];
+    measurementPointsByFactory.set(factoryId, [...currentPoints, { ...point, factoryId }]);
+  });
+
+  return measurementPointsByFactory;
 }
 
 function toOfficerEligibleFactoryTableRow(

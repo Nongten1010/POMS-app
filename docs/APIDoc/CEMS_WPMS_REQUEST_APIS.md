@@ -3042,7 +3042,7 @@ Data dictionary response row:
 | `officerNotificationEmails` | string[] | อีเมลเจ้าหน้าที่ตามจังหวัดหรือนิคมอุตสาหกรรม |
 | `isEligible` | boolean | `true` เสมอสำหรับ endpoint นี้ |
 | `eligibilityStatus` | string | `เข้าข่าย` |
-| `monitoringPointCount` | number | จำนวนจุดตรวจวัดในแบบโรงงานเข้าข่าย หลังกรอง `systemType` ถ้ามี |
+| `monitoringPointCount` | number | จำนวนจุดตรวจวัดจากระบบ POMS ปัจจุบันใน `cems_wpms_connected_measurement_points` หลังกรอง `systemType` ถ้ามี |
 | `requestStatusCode` | null | คืน `null` เสมอ เพราะ endpoint นี้ไม่อ่านข้อมูลคำขอ |
 | `status` | string | `แสดง` |
 

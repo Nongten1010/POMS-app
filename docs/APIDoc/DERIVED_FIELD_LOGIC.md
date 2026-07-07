@@ -1205,7 +1205,7 @@ Source:
 - `eligible_factories.industrial_estate_name`
 - `eligible_factories.business_activity`
 - `eligible_factories.has_eia`
-- monitoring point rows linked through the selected eligible factory's monitoring point form
+- `cems_wpms_connected_measurement_points` for current POMS monitoring point counts
 - `provinces.name_th`
 - `provinces.region`
 - `officer_notification_email_recipients` via `connectionRequestsRepository.listOfficerNotificationEmailsForFactories`
@@ -1219,7 +1219,7 @@ Logic:
 - `eia` maps `has_eia`: `true` -> `มี`, `false` -> `ไม่มี`, and `null` -> `null`.
 - `latitude` and `longitude` are stringified when present to match the existing operator factory table response.
 - `officerNotificationEmails` are looked up by factory id, province, and whether `industrialEstateName` is present.
-- `monitoringPointCount` counts linked eligible-factory monitoring points after applying the optional `systemType` filter.
+- `monitoringPointCount` counts current POMS monitoring points from `cems_wpms_connected_measurement_points` after applying the optional `systemType` filter.
 - `requestStatusCode` is always `null` because this endpoint is a factory-reference endpoint for filling a new/officer-side form, not a request workflow listing.
 - `status` is always `แสดง` and `eligibilityStatus` is always `เข้าข่าย` because only non-deleted selected eligible factories are returned.
 - Permission scope filtering happens before the response mapping:
@@ -1235,7 +1235,7 @@ Fallback order:
 - `industryType`: `businessActivity`, then `null`.
 - `eia`: boolean mapping from `has_eia`, then `null`.
 - `officerNotificationEmails`: email lookup result, then an empty array.
-- `monitoringPointCount`: filtered linked monitoring points, then `0`.
+- `monitoringPointCount`: filtered current POMS monitoring points, then `0`.
 - `requestStatusCode`: always `null`.
 - `permission scope`: exact province match for `IN_PROVINCE`; exact region match after province lookup for `IN_REGION`; no fallback to broader access when the required province/region is missing.
 
@@ -1248,5 +1248,5 @@ Risk:
 
 - `industryType` is not a dedicated DIW industry label in this response; it intentionally mirrors `businessActivity` until a separate source field is added.
 - `oldRegistrationNo` depends on the selected eligible factory DTO. If that DTO omits the old registration value, the response returns `null` even when the database has an old registration column.
-- `systemType` filtering depends on eligible-factory monitoring point form data. Eligible factories without linked monitoring points are excluded when `systemType` is provided.
+- `systemType` filtering depends on current POMS monitoring points. Eligible factories without matching connected/current POMS points are excluded when `systemType` is provided.
 - Region filtering depends on `provinces.name_th` matching `eligible_factories.province_name`; mismatched province spelling can hide a row for region-scoped users.
