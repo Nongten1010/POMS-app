@@ -540,15 +540,8 @@ describe('connectionRequestsService', () => {
     mockedRepository.listOfficerNotificationEmailsForFactories.mockResolvedValue(
       new Map([['3-88(2)-5/49อบ', ['contact@ieat.mail.go.th']]]),
     );
-    mockedRepository.listRequestsForFactories.mockResolvedValue([
-      requestDto({
-        factoryId: '3-88(2)-5/49อบ',
-        status: CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
-      }),
-    ]);
 
     const result = await connectionRequestsService.listOfficerEligibleFactories(
-      actorUserId,
       { scope: 'ALL' },
       {
         systemType: 'WPMS',
@@ -558,7 +551,7 @@ describe('connectionRequestsService', () => {
 
     expect(mockedEligibleFactoriesService.list).toHaveBeenCalledWith({});
     expect(mockedRepository.listProvinceRegions).toHaveBeenCalledWith(['ชลบุรี']);
-    expect(mockedRepository.listRequestsForFactories).toHaveBeenCalledWith(['3-88(2)-5/49อบ']);
+    expect(mockedRepository.listRequestsForFactories).not.toHaveBeenCalled();
     expect(mockedRepository.listOfficerNotificationEmailsForFactories).toHaveBeenCalledWith([
       {
         factoryId: '3-88(2)-5/49อบ',
@@ -588,7 +581,7 @@ describe('connectionRequestsService', () => {
           isEligible: true,
           eligibilityStatus: 'เข้าข่าย',
           monitoringPointCount: 1,
-          requestStatusCode: CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+          requestStatusCode: null,
           status: 'แสดง',
         },
       ],
@@ -596,7 +589,7 @@ describe('connectionRequestsService', () => {
     });
   });
 
-  it('filters officer eligible factories by permission region and current user favorites', async () => {
+  it('filters officer eligible factories by permission region without using request or favorite data', async () => {
     mockedEligibleFactoriesService.list.mockResolvedValue({
       data: [
         selectedEligibleFactory({
@@ -626,11 +619,8 @@ describe('connectionRequestsService', () => {
         ['ราชบุรี', 'ภาคตะวันตก'],
       ]),
     );
-    mockedRepository.listFavoriteFactoryIds.mockResolvedValue(['factory-favorite-east']);
-    mockedRepository.listRequestsForFactories.mockResolvedValue([]);
 
     const result = await connectionRequestsService.listOfficerEligibleFactories(
-      actorUserId,
       {
         scope: 'IN_REGION',
         region: 'ภาคตะวันออก',
@@ -640,12 +630,13 @@ describe('connectionRequestsService', () => {
       { regions: ['ภาคตะวันออก'] },
     );
 
-    expect(mockedRepository.listFavoriteFactoryIds).toHaveBeenCalledWith(actorUserId);
-    expect(mockedRepository.listRequestsForFactories).toHaveBeenCalledWith([
+    expect(mockedRepository.listFavoriteFactoryIds).not.toHaveBeenCalled();
+    expect(mockedRepository.listRequestsForFactories).not.toHaveBeenCalled();
+    expect(result.data.map((factory) => factory.factoryId)).toEqual([
       'factory-favorite-east',
+      'factory-not-favorite-east',
     ]);
-    expect(result.data.map((factory) => factory.factoryId)).toEqual(['factory-favorite-east']);
-    expect(result.meta.total).toBe(1);
+    expect(result.meta.total).toBe(2);
   });
 
   it('keeps all accessible operator factories even when they are inactive or not eligible', async () => {

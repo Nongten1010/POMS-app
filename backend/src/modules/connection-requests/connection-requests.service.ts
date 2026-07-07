@@ -210,16 +210,12 @@ export const connectionRequestsService = {
   },
 
   async listOfficerEligibleFactories(
-    actorUserId: number,
     viewScope: AccessScope,
     query: ListOperatorFactoriesQuery = {},
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<PaginatedTableRowsDTO<OperatorFactoryTableRowDTO>> {
     const result = await eligibleFactoriesService.list({});
     const provinceRegionsByName = await loadProvinceRegionsByName(result.data);
-    const favoriteFactoryIds = query.favoriteOnly
-      ? new Set(await connectionRequestsRepository.listFavoriteFactoryIds(actorUserId))
-      : null;
     const eligibleFactories = filterEligibleFactoryRowsByQuery(
       result.data.filter((factory) =>
         eligibleFactoryMatchesOfficerAccess(
@@ -230,9 +226,6 @@ export const connectionRequestsService = {
         ),
       ),
       query,
-    ).filter((factory) => !favoriteFactoryIds || favoriteFactoryIds.has(factory.factoryId));
-    const requests = await connectionRequestsRepository.listRequestsForFactories(
-      eligibleFactories.map((factory) => factory.factoryId),
     );
     const officerNotificationEmailsByFactory =
       await connectionRequestsRepository.listOfficerNotificationEmailsForFactories(
@@ -244,10 +237,9 @@ export const connectionRequestsService = {
             : 'OUTSIDE_INDUSTRIAL_ESTATE',
         })),
       );
-    const latestRequestByFactory = buildLatestRequestByFactory(requests);
 
     const data = eligibleFactories.map<OperatorFactoryTableRowDTO>((factory) => ({
-      ...toOfficerEligibleFactoryTableRow(factory, latestRequestByFactory),
+      ...toOfficerEligibleFactoryTableRow(factory),
       officerNotificationEmails: officerNotificationEmailsByFactory.get(factory.factoryId) ?? [],
       monitoringPointCount: filterMeasurementPointsBySystem(
         factory.measurementPoints ?? [],
@@ -1699,21 +1691,8 @@ function filterEligibleFactoryRowsByQuery(
   );
 }
 
-function buildLatestRequestByFactory(
-  requests: ConnectionRequestDTO[],
-): Map<string, ConnectionRequestDTO> {
-  const latestRequestByFactory = new Map<string, ConnectionRequestDTO>();
-  requests.forEach((request) => {
-    if (!latestRequestByFactory.has(request.factoryId)) {
-      latestRequestByFactory.set(request.factoryId, request);
-    }
-  });
-  return latestRequestByFactory;
-}
-
 function toOfficerEligibleFactoryTableRow(
   factory: SelectedEligibleFactoryDTO,
-  latestRequestByFactory: Map<string, ConnectionRequestDTO>,
 ): Omit<OperatorFactoryTableRowDTO, 'officerNotificationEmails' | 'monitoringPointCount'> {
   return {
     id: factory.id,
@@ -1734,7 +1713,7 @@ function toOfficerEligibleFactoryTableRow(
     province: factory.provinceName,
     isEligible: true,
     eligibilityStatus: 'เข้าข่าย',
-    requestStatusCode: latestRequestByFactory.get(factory.factoryId)?.status ?? null,
+    requestStatusCode: null,
     status: 'แสดง',
   };
 }

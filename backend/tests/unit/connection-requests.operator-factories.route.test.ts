@@ -242,7 +242,6 @@ describe('operator factory dashboard routes', () => {
 
     expect(response.status).toBe(200);
     expect(mockedConnectionRequestsService.listOfficerEligibleFactories).toHaveBeenCalledWith(
-      42,
       { scope: 'ALL' },
       {
         systemType: 'WPMS',

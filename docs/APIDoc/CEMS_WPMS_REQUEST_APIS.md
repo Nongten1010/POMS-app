@@ -2960,9 +2960,8 @@ Query params:
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
 | `systemType` | `CEMS`\|`WPMS` | No | กรองจากจุดตรวจวัดที่ผูกกับแบบคัดเลือกโรงงานเข้าข่ายใน `eligible_factories.measurement_points` |
-| `favoriteOnly` | boolean | No | `true` เพื่อแสดงเฉพาะโรงงานที่ user ปัจจุบันติดดาวไว้ |
 
-Endpoint นี้ใช้สำหรับ tab รายชื่อโรงงานบนหน้าขอเชื่อมต่อฝั่งเจ้าหน้าที่ เพื่อดึงโรงงานที่อยู่ใน `eligible_factories` มาเป็นข้อมูลตั้งต้นสำหรับกรอกฟอร์มจากข้อมูลระบบเดิม โดย response ใช้รูปแบบเดียวกับ `/cems-wpms-requests/operator-factories` ให้ frontend นำไปแสดงในตารางเดียวกันได้
+Endpoint นี้ใช้สำหรับ tab รายชื่อโรงงานบนหน้าขอเชื่อมต่อฝั่งเจ้าหน้าที่ เพื่อดึงโรงงานที่อยู่ใน `eligible_factories` มาเป็นข้อมูลตั้งต้นสำหรับกรอกฟอร์มจากข้อมูลระบบเดิม โดยใช้ pattern response เดียวกับ `/cems-wpms-requests/operator-factories` ให้ frontend นำไปแสดงในตารางเดียวกันได้ แต่ endpoint นี้คืนข้อมูลโรงงานเพื่ออ้างอิงเท่านั้น ไม่อ่านสถานะคำขอเดิมหรือข้อมูล favorite ของผู้ใช้
 
 การมองเห็นข้อมูล:
 
@@ -3004,7 +3003,7 @@ curl "http://localhost:3000/api/v1/cems-wpms-requests/eligible-factories?systemT
       "isEligible": true,
       "eligibilityStatus": "เข้าข่าย",
       "monitoringPointCount": 1,
-      "requestStatusCode": "WAITING_CONNECTION",
+      "requestStatusCode": null,
       "status": "แสดง"
     }
   ],
@@ -3019,7 +3018,7 @@ curl "http://localhost:3000/api/v1/cems-wpms-requests/eligible-factories?systemT
 - `factoryId` และ `newRegistrationNo` ใช้ `eligible_factories.factory_registration_no_new`
 - `industryMainOrder` / `industrySubOrder` มาจาก `eligible_factories.factory_type_sequence` ที่ backend แยกเป็นประเภทหลัก/รองแล้ว
 - `eia` แปลงจาก `hasEia`: `true` -> `มี`, `false` -> `ไม่มี`, `null` -> `null`
-- `requestStatusCode` มาจากคำขอล่าสุดของโรงงานนั้นใน `cems_wpms_connection_requests`; ถ้ายังไม่เคยมีคำขอคืน `null`
+- `requestStatusCode` คืน `null` เสมอ เพราะ endpoint นี้ใช้ข้อมูลโรงงานเป็น reference สำหรับกรอกฟอร์ม ไม่ใช่รายการ workflow คำขอ
 
 Data dictionary response row:
 
@@ -3044,7 +3043,7 @@ Data dictionary response row:
 | `isEligible` | boolean | `true` เสมอสำหรับ endpoint นี้ |
 | `eligibilityStatus` | string | `เข้าข่าย` |
 | `monitoringPointCount` | number | จำนวนจุดตรวจวัดในแบบโรงงานเข้าข่าย หลังกรอง `systemType` ถ้ามี |
-| `requestStatusCode` | string|null | สถานะคำขอล่าสุดของโรงงาน ถ้ายังไม่มีคำขอคืน `null` |
+| `requestStatusCode` | null | คืน `null` เสมอ เพราะ endpoint นี้ไม่อ่านข้อมูลคำขอ |
 | `status` | string | `แสดง` |
 
 ### API 8-public: GET จุดโรงงานบนแผนที่สำหรับผู้ใช้ที่ยังไม่ login

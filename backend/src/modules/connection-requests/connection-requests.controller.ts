@@ -89,10 +89,9 @@ export const connectionRequestsController = {
     next: NextFunction,
   ): Promise<void> {
     try {
-      const actorUserId = requireActorUserId(req);
+      requireActorUserId(req);
       const query = listOperatorFactoriesQuerySchema.parse(req.query);
       const result = await connectionRequestsService.listOfficerEligibleFactories(
-        actorUserId,
         getScopeDetails(req, 'cems_wpms_requests:view'),
         query,
         ...getRegionalAccessArg(req),

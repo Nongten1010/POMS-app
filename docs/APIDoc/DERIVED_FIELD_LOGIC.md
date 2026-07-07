@@ -1208,9 +1208,6 @@ Source:
 - monitoring point rows linked through the selected eligible factory's monitoring point form
 - `provinces.name_th`
 - `provinces.region`
-- `cems_wpms_connection_requests.factory_id`
-- `cems_wpms_connection_requests.status`
-- `user_factory_favorites.factory_id`
 - `officer_notification_email_recipients` via `connectionRequestsRepository.listOfficerNotificationEmailsForFactories`
 
 Logic:
@@ -1223,14 +1220,13 @@ Logic:
 - `latitude` and `longitude` are stringified when present to match the existing operator factory table response.
 - `officerNotificationEmails` are looked up by factory id, province, and whether `industrialEstateName` is present.
 - `monitoringPointCount` counts linked eligible-factory monitoring points after applying the optional `systemType` filter.
-- `requestStatusCode` is the latest connection request status for the eligible factory id; if no request exists, it returns `null`.
+- `requestStatusCode` is always `null` because this endpoint is a factory-reference endpoint for filling a new/officer-side form, not a request workflow listing.
 - `status` is always `แสดง` and `eligibilityStatus` is always `เข้าข่าย` because only non-deleted selected eligible factories are returned.
 - Permission scope filtering happens before the response mapping:
   - `ALL` returns all selected eligible factories.
   - `IN_REGION` uses `eligible_factories.province_name -> provinces.name_th -> provinces.region` and keeps only matching regions.
   - `IN_PROVINCE` keeps only matching `eligible_factories.province_name`.
   - `regionalAccess.regions` applies an additional region allow-list using the same province-region lookup.
-- `favoriteOnly=true` keeps only factories whose id appears in the current user's `user_factory_favorites` rows.
 
 Fallback order:
 
@@ -1240,9 +1236,8 @@ Fallback order:
 - `eia`: boolean mapping from `has_eia`, then `null`.
 - `officerNotificationEmails`: email lookup result, then an empty array.
 - `monitoringPointCount`: filtered linked monitoring points, then `0`.
-- `requestStatusCode`: latest request status by `factory_id`, then `null`.
+- `requestStatusCode`: always `null`.
 - `permission scope`: exact province match for `IN_PROVINCE`; exact region match after province lookup for `IN_REGION`; no fallback to broader access when the required province/region is missing.
-- `favoriteOnly`: current user's favorites set, then no favorite filter when the query param is false or omitted.
 
 Reason:
 
