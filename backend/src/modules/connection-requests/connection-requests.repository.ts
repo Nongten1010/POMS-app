@@ -233,6 +233,11 @@ interface FactoryFavoriteRow {
   deleted_at: Date | string | null;
 }
 
+interface ProvinceRegionRow {
+  name_th: string;
+  region: string | null;
+}
+
 interface OfficerNotificationEmailRecipientRow {
   recipient_type: 'PROVINCE' | 'INDUSTRIAL_ESTATE';
   province_name: string | null;
@@ -299,6 +304,23 @@ export const connectionRequestsRepository = {
           return [code, `ประเภทโรงงานลำดับที่ ${displayClass}: ${description}`];
         })
         .filter(isTuple),
+    );
+  },
+
+  async listProvinceRegions(provinceNames: string[]): Promise<Map<string, string>> {
+    const normalizedProvinceNames = [...new Set(provinceNames.map((value) => value.trim()))].filter(
+      Boolean,
+    );
+    if (normalizedProvinceNames.length === 0) return new Map();
+
+    const rows = await db<ProvinceRegionRow>('provinces')
+      .whereIn('name_th', normalizedProvinceNames)
+      .select('name_th', 'region');
+
+    return new Map(
+      rows
+        .filter((row) => row.name_th && row.region)
+        .map((row) => [row.name_th, row.region as string]),
     );
   },
 

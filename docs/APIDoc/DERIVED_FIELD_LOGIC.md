@@ -215,7 +215,7 @@ Source:
 
 Transformation:
 
-- `approvalTrack` is derived from the submitted `provinceName`: `กรุงเทพมหานคร` becomes `CENTRAL`; every other province becomes `REGIONAL`.
+- `approvalTrack` is derived from the submitted `provinceName`: provinces in `ภาคกลาง` become `CENTRAL`; every other province becomes `REGIONAL`.
 - `steps` are initialized from `approvalTrack` when the form is saved:
   - `CENTRAL`: เจ้าหน้าที่กฝม. (ตรวจสอบความถูกต้อง + บันทึก/แก้ไขแบบแจ้งผล) -> ผอ.กฝม. (ทบทวน) -> ผอ.กวภ. (อนุมัติ)
   - `REGIONAL`: เจ้าหน้าที่ศูนย์เฝ้าฯ 5 ศูนย์ (ตรวจสอบความถูกต้อง + บันทึก/แก้ไขแบบแจ้งผล) -> ผอ.ศูนย์ (อนุมัติ)
@@ -229,7 +229,8 @@ Transformation:
 - Resubmission does not allow identity fields to drift from the original report slot: `reportRoundNo`, `reportYear`, `factoryRegistrationNo`, `connectedMeasurementPointId`, `pointCode`, and `selectedParameterCode` must match the stored report.
 - Officer workflow actions validate against the current report status, current step status, permission scope, and `regionalAccess`.
 - `APPROVE` sets the current step to `APPROVED`; if another step exists, that next step becomes `PENDING` and the report becomes `WAITING_APPROVAL`, otherwise the report becomes `APPROVED`.
-- `REQUEST_REVISION` sets the current step and report to `REVISION_REQUESTED`; the next operator resubmission restarts approval from step 1.
+- `REQUEST_REVISION` from the first officer-side steps (`INSPECTOR` or `RESULT_NOTICE`) sets the current step and report to `REVISION_REQUESTED`; the next operator resubmission restarts approval from step 1.
+- `REQUEST_REVISION` from director-side steps (`REVIEWER` or `APPROVER`) is an internal rollback, not an operator revision request: the report returns to `SUBMITTED`, step 1 becomes `PENDING` + `is_current = true`, later steps become `WAITING` + `is_current = false`, and the revision reason is still kept in `bod_cod_approval_events`.
 - `REJECT` sets the current step to `REJECTED`, clears the active current step, and sets the report to terminal status `REJECTED`.
 - Each officer workflow action inserts a row into `bod_cod_approval_events`; `REQUEST_REVISION` stores `revisionReason` as the event note, while `APPROVE` and `REJECT` store `officerNote`.
 - `statusHistory` is returned by the list and detail APIs in the same shape as KWP form reports. The first `SUBMITTED` item is synthesized from `bod_cod_deviation_reports.submitted_at` and `created_by` so existing reports without a submit event still have a complete timeline. Later items come from `bod_cod_approval_events` joined to `users`.
@@ -275,12 +276,14 @@ Source:
 Fallback order:
 
 - Parse `regional_access_json` first.
-- If no stored regional access exists, infer only when profile text contains a known regional center abbreviation:
+- If no stored regional access exists, infer only when profile text contains a known regional-center abbreviation first:
   - `ศวภ.ตอ.` -> `ภาคตะวันออก`
   - `ศวภ.ตต.` -> `ภาคตะวันตก`
   - `ศวภ.ตอน.` -> `ภาคตะวันออกเฉียงเหนือ`
   - `ศวภ.น.` -> `ภาคเหนือ`
   - `ศวภ.ต.` -> `ภาคใต้`
+- If no regional-center abbreviation is found, infer central office text:
+  - `กวภ.` or `กองวิจัยและเตือนภัยมลพิษโรงงาน` -> `ภาคกลาง`
 - If neither source has a known region, return no `regionalAccess`.
 
 Transformation:
@@ -297,7 +300,8 @@ Reason:
 
 Known risks:
 
-- Officers without stored regional access and without one of the known `ศวภ.*` abbreviations remain governed by their existing permission scope.
+- Officers without stored regional access and without one of the known `ศวภ.*`/`กวภ.` office texts remain governed by their existing permission scope.
+- If a profile contains both the parent division name and a `ศวภ.*` abbreviation, the `ศวภ.*` region wins so regional users are not accidentally granted `ภาคกลาง`.
 - Text inference is intentionally limited to known abbreviations and should be replaced by explicit `regional_access_json` where possible.
 - Existing JWTs issued before a regional access change keep their previous claim until the user logs in again or refreshes the session.
 
@@ -376,6 +380,7 @@ Transformation:
 - For scopes other than `IN_PROVINCE`, backend clears `province_id`.
 - Permission-management `GET /api/v1/users/:id`, `POST /api/v1/auth/login`, and `GET /api/v1/auth/me` return each permission group with `region` and `province`; `province` is the Thai display name when a province id is stored.
 - JWT `scopes` are flattened back to the broad scope string, such as `IN_REGION`, so existing authorization middleware can keep reading `req.user.scopes[permissionCode]`.
+- JWT also includes `scopeDetails[permissionCode]` with the selected `region` / `province` so runtime filters for menu-scoped modules, including `kwp_forms` and `bod_cod_errors`, can apply the exact per-menu location selection.
 
 Reason:
 
@@ -383,7 +388,7 @@ Reason:
 
 Known risks:
 
-- Runtime read filters that need the exact selected `region`/`province` must receive those values from the response contract or perform a DB lookup; the JWT intentionally carries only the broad scope value.
+- Existing JWTs issued before `scopeDetails` was added still carry only the broad scope value; users should log in again or refresh their session before relying on per-menu `region` / `province` runtime filters.
 
 ## Operator Factory Dashboard
 
@@ -1170,3 +1175,83 @@ Reason:
 Risk:
 
 - `kwp_form_submissions.officer_note` stores the latest officer note only. Full historical notes must be read from `kwp_form_status_history`.
+
+## Officer Connection Request Eligible Factory Fields
+
+Endpoint:
+
+- `GET /api/v1/cems-wpms-requests/eligible-factories`
+
+Code:
+
+- `backend/src/modules/connection-requests/connection-requests.controller.ts`
+- `backend/src/modules/connection-requests/connection-requests.service.ts`
+- `backend/src/modules/eligible-factories/eligible-factories.service.ts`
+- `backend/src/modules/eligible-factories/eligible-factories.repository.ts`
+
+### Operator-table-compatible factory fields
+
+Source:
+
+- `eligible_factories.id`
+- `eligible_factories.factory_registration_no_new`
+- `eligible_factories.factory_registration_no_old`
+- `eligible_factories.factory_name`
+- `eligible_factories.factory_type_sequence`
+- `eligible_factories.address`
+- `eligible_factories.latitude`
+- `eligible_factories.longitude`
+- `eligible_factories.province_name`
+- `eligible_factories.industrial_estate_name`
+- `eligible_factories.business_activity`
+- `eligible_factories.has_eia`
+- monitoring point rows linked through the selected eligible factory's monitoring point form
+- `provinces.name_th`
+- `provinces.region`
+- `cems_wpms_connection_requests.factory_id`
+- `cems_wpms_connection_requests.status`
+- `user_factory_favorites.factory_id`
+- `officer_notification_email_recipients` via `connectionRequestsRepository.listOfficerNotificationEmailsForFactories`
+
+Logic:
+
+- `factoryId` and `newRegistrationNo` both return `factory_registration_no_new` so the officer form can use the same identifier shape as `/cems-wpms-requests/operator-factories`.
+- `oldRegistrationNo` returns `null` when the old registration value is the same as `factory_registration_no_new`; otherwise it returns the old registration value exposed by the eligible factory DTO.
+- `industryMainOrder` and `industrySubOrder` come from splitting `factory_type_sequence` through the eligible factory service mapping.
+- `industryType` mirrors `businessActivity` because the selected eligible factory data has business activity text but no separate industry-type label.
+- `eia` maps `has_eia`: `true` -> `มี`, `false` -> `ไม่มี`, and `null` -> `null`.
+- `latitude` and `longitude` are stringified when present to match the existing operator factory table response.
+- `officerNotificationEmails` are looked up by factory id, province, and whether `industrialEstateName` is present.
+- `monitoringPointCount` counts linked eligible-factory monitoring points after applying the optional `systemType` filter.
+- `requestStatusCode` is the latest connection request status for the eligible factory id; if no request exists, it returns `null`.
+- `status` is always `แสดง` and `eligibilityStatus` is always `เข้าข่าย` because only non-deleted selected eligible factories are returned.
+- Permission scope filtering happens before the response mapping:
+  - `ALL` returns all selected eligible factories.
+  - `IN_REGION` uses `eligible_factories.province_name -> provinces.name_th -> provinces.region` and keeps only matching regions.
+  - `IN_PROVINCE` keeps only matching `eligible_factories.province_name`.
+  - `regionalAccess.regions` applies an additional region allow-list using the same province-region lookup.
+- `favoriteOnly=true` keeps only factories whose id appears in the current user's `user_factory_favorites` rows.
+
+Fallback order:
+
+- `factoryId` / `newRegistrationNo`: `factory_registration_no_new`.
+- `oldRegistrationNo`: distinct old registration value, then `null`.
+- `industryType`: `businessActivity`, then `null`.
+- `eia`: boolean mapping from `has_eia`, then `null`.
+- `officerNotificationEmails`: email lookup result, then an empty array.
+- `monitoringPointCount`: filtered linked monitoring points, then `0`.
+- `requestStatusCode`: latest request status by `factory_id`, then `null`.
+- `permission scope`: exact province match for `IN_PROVINCE`; exact region match after province lookup for `IN_REGION`; no fallback to broader access when the required province/region is missing.
+- `favoriteOnly`: current user's favorites set, then no favorite filter when the query param is false or omitted.
+
+Reason:
+
+- The officer connection-request page needs the same table contract as the operator factory list, but its source is the selected eligible factory data imported from the old/DIW source so officers can start filling forms for any eligible factory.
+- Officer-visible results must respect the same location-bound permission model as other officer connection-request views.
+
+Risk:
+
+- `industryType` is not a dedicated DIW industry label in this response; it intentionally mirrors `businessActivity` until a separate source field is added.
+- `oldRegistrationNo` depends on the selected eligible factory DTO. If that DTO omits the old registration value, the response returns `null` even when the database has an old registration column.
+- `systemType` filtering depends on eligible-factory monitoring point form data. Eligible factories without linked monitoring points are excluded when `systemType` is provided.
+- Region filtering depends on `provinces.name_th` matching `eligible_factories.province_name`; mismatched province spelling can hide a row for region-scoped users.

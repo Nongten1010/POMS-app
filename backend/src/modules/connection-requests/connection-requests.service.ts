@@ -9,6 +9,8 @@ import type {
 import { parameterValuesService } from '../parameter-values/parameter-values.service';
 import type { PermissionScopeDetails } from '../auth/permissions';
 import type { RegionalAccessDTO } from '../auth/regional-access';
+import { eligibleFactoriesService } from '../eligible-factories/eligible-factories.service';
+import type { SelectedEligibleFactoryDTO } from '../eligible-factories/eligible-factories.types';
 import type {
   CalendarStatusQuerySchemaInput,
   MeasurementStatisticsQuerySchemaInput,
@@ -23,6 +25,7 @@ import {
   type AddParameterRequestInput,
   type ChangeConnectionRequestStatusInput,
   type ConnectedMeasurementPointDetailDTO,
+  type ConnectionSystemType,
   type ConfirmConnectionInput,
   type ConnectionRequestDTO,
   type ConnectionRequestDetailDTO,
@@ -202,6 +205,55 @@ export const connectionRequestsService = {
         };
       })
       .filter((factory) => factory.status === 'แสดง');
+
+    return { data, meta: { total: data.length } };
+  },
+
+  async listOfficerEligibleFactories(
+    actorUserId: number,
+    viewScope: AccessScope,
+    query: ListOperatorFactoriesQuery = {},
+    regionalAccess?: RegionalAccessDTO | null,
+  ): Promise<PaginatedTableRowsDTO<OperatorFactoryTableRowDTO>> {
+    const result = await eligibleFactoriesService.list({});
+    const provinceRegionsByName = await loadProvinceRegionsByName(result.data);
+    const favoriteFactoryIds = query.favoriteOnly
+      ? new Set(await connectionRequestsRepository.listFavoriteFactoryIds(actorUserId))
+      : null;
+    const eligibleFactories = filterEligibleFactoryRowsByQuery(
+      result.data.filter((factory) =>
+        eligibleFactoryMatchesOfficerAccess(
+          factory,
+          viewScope,
+          regionalAccess,
+          provinceRegionsByName,
+        ),
+      ),
+      query,
+    ).filter((factory) => !favoriteFactoryIds || favoriteFactoryIds.has(factory.factoryId));
+    const requests = await connectionRequestsRepository.listRequestsForFactories(
+      eligibleFactories.map((factory) => factory.factoryId),
+    );
+    const officerNotificationEmailsByFactory =
+      await connectionRequestsRepository.listOfficerNotificationEmailsForFactories(
+        eligibleFactories.map((factory) => ({
+          factoryId: factory.factoryId,
+          provinceName: factory.provinceName,
+          industrialAreaType: factory.industrialEstateName
+            ? 'INDUSTRIAL_ESTATE'
+            : 'OUTSIDE_INDUSTRIAL_ESTATE',
+        })),
+      );
+    const latestRequestByFactory = buildLatestRequestByFactory(requests);
+
+    const data = eligibleFactories.map<OperatorFactoryTableRowDTO>((factory) => ({
+      ...toOfficerEligibleFactoryTableRow(factory, latestRequestByFactory),
+      officerNotificationEmails: officerNotificationEmailsByFactory.get(factory.factoryId) ?? [],
+      monitoringPointCount: filterMeasurementPointsBySystem(
+        factory.measurementPoints ?? [],
+        query.systemType,
+      ).length,
+    }));
 
     return { data, meta: { total: data.length } };
   },
@@ -1633,6 +1685,123 @@ function toParameterDisplayName(parameter: string): string {
 
   const normalized = trimmed.toLowerCase().replace(/[^a-z0-9]+/g, '');
   return parameterUnitLabels[normalized] ?? trimmed;
+}
+
+function filterEligibleFactoryRowsByQuery(
+  factories: SelectedEligibleFactoryDTO[],
+  query: ListOperatorFactoriesQuery,
+): SelectedEligibleFactoryDTO[] {
+  if (!query.systemType) return factories;
+
+  return factories.filter(
+    (factory) =>
+      filterMeasurementPointsBySystem(factory.measurementPoints ?? [], query.systemType).length > 0,
+  );
+}
+
+function buildLatestRequestByFactory(
+  requests: ConnectionRequestDTO[],
+): Map<string, ConnectionRequestDTO> {
+  const latestRequestByFactory = new Map<string, ConnectionRequestDTO>();
+  requests.forEach((request) => {
+    if (!latestRequestByFactory.has(request.factoryId)) {
+      latestRequestByFactory.set(request.factoryId, request);
+    }
+  });
+  return latestRequestByFactory;
+}
+
+function toOfficerEligibleFactoryTableRow(
+  factory: SelectedEligibleFactoryDTO,
+  latestRequestByFactory: Map<string, ConnectionRequestDTO>,
+): Omit<OperatorFactoryTableRowDTO, 'officerNotificationEmails' | 'monitoringPointCount'> {
+  return {
+    id: factory.id,
+    factoryId: factory.factoryId,
+    factoryName: factory.factoryName,
+    newRegistrationNo: factory.factoryId,
+    oldRegistrationNo:
+      factory.factoryRegistrationNo === factory.factoryId ? null : factory.factoryRegistrationNo,
+    industryType: factory.businessActivity,
+    industryMainOrder: factory.factoryClass,
+    industrySubOrder: factory.factorySubclass,
+    businessActivity: factory.businessActivity,
+    eia: toEiaLabel(factory.hasEia),
+    projectName: null,
+    address: factory.address,
+    latitude: toStringOrNull(factory.latitude),
+    longitude: toStringOrNull(factory.longitude),
+    province: factory.provinceName,
+    isEligible: true,
+    eligibilityStatus: 'เข้าข่าย',
+    requestStatusCode: latestRequestByFactory.get(factory.factoryId)?.status ?? null,
+    status: 'แสดง',
+  };
+}
+
+async function loadProvinceRegionsByName(
+  factories: SelectedEligibleFactoryDTO[],
+): Promise<Map<string, string>> {
+  return connectionRequestsRepository.listProvinceRegions(
+    factories.map((factory) => factory.provinceName),
+  );
+}
+
+function eligibleFactoryMatchesOfficerAccess(
+  factory: SelectedEligibleFactoryDTO,
+  viewScope: AccessScope,
+  regionalAccess: RegionalAccessDTO | null | undefined,
+  provinceRegionsByName: Map<string, string>,
+): boolean {
+  const regionName = provinceRegionsByName.get(factory.provinceName) ?? null;
+
+  if (!eligibleFactoryMatchesPermissionScope(factory, regionName, viewScope)) return false;
+  return eligibleFactoryMatchesRegionalAccess(regionName, regionalAccess);
+}
+
+function eligibleFactoryMatchesPermissionScope(
+  factory: SelectedEligibleFactoryDTO,
+  regionName: string | null,
+  scope: AccessScope,
+): boolean {
+  const scopeValue = getAccessScopeValue(scope);
+  if (scopeValue === 'ALL') return true;
+  if (!scope || typeof scope !== 'object') return false;
+
+  const region = normalizeLocationValue(scope.region);
+  const province = normalizeLocationValue(scope.province);
+  if (scope.scope === 'IN_REGION' && region) return regionName === region;
+  if (scope.scope === 'IN_PROVINCE' && province) return factory.provinceName === province;
+  return false;
+}
+
+function eligibleFactoryMatchesRegionalAccess(
+  regionName: string | null,
+  regionalAccess: RegionalAccessDTO | null | undefined,
+): boolean {
+  const allowedRegions = new Set(
+    (regionalAccess?.regions ?? []).map((value) => value.trim()).filter(Boolean),
+  );
+  if (allowedRegions.size === 0) return true;
+  return Boolean(regionName && allowedRegions.has(regionName));
+}
+
+function filterMeasurementPointsBySystem<T extends { systemType: ConnectionSystemType }>(
+  measurementPoints: T[],
+  systemType: ConnectionSystemType | undefined,
+): T[] {
+  if (!systemType) return measurementPoints;
+  return measurementPoints.filter((point) => point.systemType === systemType);
+}
+
+function toEiaLabel(value: boolean | null | undefined): 'มี' | 'ไม่มี' | null {
+  if (value === null || value === undefined) return null;
+  return value ? 'มี' : 'ไม่มี';
+}
+
+function toStringOrNull(value: string | number | null | undefined): string | null {
+  if (value === null || value === undefined) return null;
+  return String(value);
 }
 
 async function populateLatestHourlyMeasurements(

@@ -75,6 +75,7 @@ Mapping:
 | 7   | รายการคำขอเฉพาะโรงงานตัวเอง สำหรับตารางผู้ประกอบการ          | GET    | `/cems-wpms-requests/table-rows`                           | `cems_wpms_requests:view`    |
 | 8   | รายชื่อโรงงาน สำหรับตารางผู้ประกอบการ                        | GET    | `/cems-wpms-requests/operator-factories`                   | `factories:view`             |
 | 8.1 | ติดดาว/ยกเลิกติดดาวโรงงาน                                   | PUT    | `/operator-factories/:factoryId/favorite` | `factories:view` + `dashboard.alerts:view` |
+| 8.2 | รายชื่อโรงงานเข้าข่ายทั้งหมด สำหรับหน้าขอเชื่อมต่อเจ้าหน้าที่ | GET    | `/cems-wpms-requests/eligible-factories`                   | `cems_wpms_requests:view`    |
 | 9   | รายละเอียดคำขอรายคำขอ สำหรับ PDF/เติมฟอร์มเพิ่มพารามิเตอร์   | GET    | `/cems-wpms-requests/:id/detail`                           | `cems_wpms_requests:view`    |
 | 10  | รายละเอียดจุดตรวจวัดที่เชื่อมต่อแล้วจากระบบ POMS ปัจจุบัน    | GET    | `/connected-measurement-points`                            | `cems_wpms_requests:view`    |
 | 10.1 | รายละเอียดจุดตรวจวัดสำหรับ modal ตามโรงงาน                   | GET    | `/connected-measurement-points/factories/:factoryId`       | `cems_wpms_requests:view`    |
@@ -2945,6 +2946,106 @@ Data dictionary response row:
 | `monitoringPointCount` | number | จำนวนจุดตรวจวัด |
 | `requestStatusCode` | string|null | สถานะคำขอล่าสุดแบบ code |
 | `status` | string | สถานะการแสดงผลในตาราง |
+
+### API 8.2: GET รายชื่อโรงงานเข้าข่ายทั้งหมดสำหรับหน้าขอเชื่อมต่อเจ้าหน้าที่
+
+| Item | Value |
+| --- | --- |
+| URL | `GET /api/v1/cems-wpms-requests/eligible-factories` |
+| Header | `Authorization: Bearer <officerAccessToken>` |
+| Body | ไม่มี |
+
+Query params:
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `systemType` | `CEMS`\|`WPMS` | No | กรองจากจุดตรวจวัดที่ผูกกับแบบคัดเลือกโรงงานเข้าข่ายใน `eligible_factories.measurement_points` |
+| `favoriteOnly` | boolean | No | `true` เพื่อแสดงเฉพาะโรงงานที่ user ปัจจุบันติดดาวไว้ |
+
+Endpoint นี้ใช้สำหรับ tab รายชื่อโรงงานบนหน้าขอเชื่อมต่อฝั่งเจ้าหน้าที่ เพื่อดึงโรงงานที่อยู่ใน `eligible_factories` มาเป็นข้อมูลตั้งต้นสำหรับกรอกฟอร์มจากข้อมูลระบบเดิม โดย response ใช้รูปแบบเดียวกับ `/cems-wpms-requests/operator-factories` ให้ frontend นำไปแสดงในตารางเดียวกันได้
+
+การมองเห็นข้อมูล:
+
+- ผู้ใช้ที่มี scope `ALL` เห็นโรงงานเข้าข่ายทุกจังหวัด
+- scope `IN_REGION` เห็นเฉพาะโรงงานที่ `eligible_factories.province_name` อยู่ในภาคนั้น โดย lookup ภาคจากตาราง `provinces`
+- scope `IN_PROVINCE` เห็นเฉพาะโรงงานในจังหวัดนั้น
+- ถ้า JWT มี `regionalAccess.regions` จะกรองซ้ำให้เหลือเฉพาะภาคใน claim นั้น
+
+ตัวอย่าง request:
+
+```bash
+curl "http://localhost:3000/api/v1/cems-wpms-requests/eligible-factories?systemType=WPMS" \
+  -H "Authorization: Bearer $OFFICER_TOKEN"
+```
+
+ตัวอย่าง response:
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 7,
+      "factoryId": "3-88(2)-5/49อบ",
+      "factoryName": "โรงงานเข้าข่ายจากระบบเดิม จำกัด",
+      "newRegistrationNo": "3-88(2)-5/49อบ",
+      "oldRegistrationNo": null,
+      "industryType": "ผลิตพลังงานไฟฟ้า",
+      "industryMainOrder": "8802",
+      "industrySubOrder": "0001,0002",
+      "businessActivity": "ผลิตพลังงานไฟฟ้า",
+      "eia": "ไม่มี",
+      "projectName": null,
+      "address": "88 หมู่ 2",
+      "latitude": "13.5001",
+      "longitude": "100.7002",
+      "province": "ชลบุรี",
+      "officerNotificationEmails": ["contact@ieat.mail.go.th"],
+      "isEligible": true,
+      "eligibilityStatus": "เข้าข่าย",
+      "monitoringPointCount": 1,
+      "requestStatusCode": "WAITING_CONNECTION",
+      "status": "แสดง"
+    }
+  ],
+  "meta": {
+    "total": 1
+  }
+}
+```
+
+หมายเหตุ response:
+
+- `factoryId` และ `newRegistrationNo` ใช้ `eligible_factories.factory_registration_no_new`
+- `industryMainOrder` / `industrySubOrder` มาจาก `eligible_factories.factory_type_sequence` ที่ backend แยกเป็นประเภทหลัก/รองแล้ว
+- `eia` แปลงจาก `hasEia`: `true` -> `มี`, `false` -> `ไม่มี`, `null` -> `null`
+- `requestStatusCode` มาจากคำขอล่าสุดของโรงงานนั้นใน `cems_wpms_connection_requests`; ถ้ายังไม่เคยมีคำขอคืน `null`
+
+Data dictionary response row:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `id` | number | primary key จาก `eligible_factories.id` |
+| `factoryId` | string | เลขทะเบียนโรงงานใหม่จาก `eligible_factories.factory_registration_no_new` |
+| `factoryName` | string | ชื่อโรงงาน |
+| `newRegistrationNo` | string | เลขทะเบียนโรงงานใหม่ ใช้ค่าเดียวกับ `factoryId` |
+| `oldRegistrationNo` | string|null | เลขทะเบียนเก่า ถ้าค่าเหมือนเลขทะเบียนใหม่จะคืน `null` |
+| `industryType` | string|null | ใช้ค่าเดียวกับ `businessActivity` เพื่อให้ตารางเดิมมี field นี้ |
+| `industryMainOrder` | string|null | ลำดับโรงงานหลักที่แยกจาก `factory_type_sequence` |
+| `industrySubOrder` | string|null | ลำดับโรงงานรองที่แยกจาก `factory_type_sequence` |
+| `businessActivity` | string|null | รายละเอียดการประกอบกิจการจากข้อมูลโรงงานเข้าข่าย |
+| `eia` | `มี`\|`ไม่มี`\|null | แปลงจาก `has_eia` |
+| `projectName` | null | endpoint นี้ยังไม่มีแหล่งข้อมูลชื่อโครงการ |
+| `address` | string|null | ที่อยู่โรงงาน |
+| `latitude` | string|null | พิกัด latitude แบบ string เพื่อให้ตรงกับตารางผู้ประกอบการเดิม |
+| `longitude` | string|null | พิกัด longitude แบบ string เพื่อให้ตรงกับตารางผู้ประกอบการเดิม |
+| `province` | string | จังหวัดจาก `eligible_factories.province_name` |
+| `officerNotificationEmails` | string[] | อีเมลเจ้าหน้าที่ตามจังหวัดหรือนิคมอุตสาหกรรม |
+| `isEligible` | boolean | `true` เสมอสำหรับ endpoint นี้ |
+| `eligibilityStatus` | string | `เข้าข่าย` |
+| `monitoringPointCount` | number | จำนวนจุดตรวจวัดในแบบโรงงานเข้าข่าย หลังกรอง `systemType` ถ้ามี |
+| `requestStatusCode` | string|null | สถานะคำขอล่าสุดของโรงงาน ถ้ายังไม่มีคำขอคืน `null` |
+| `status` | string | `แสดง` |
 
 ### API 8-public: GET จุดโรงงานบนแผนที่สำหรับผู้ใช้ที่ยังไม่ login
 

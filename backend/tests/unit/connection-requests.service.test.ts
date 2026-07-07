@@ -12,6 +12,7 @@ jest.mock('../../src/modules/connection-requests/connection-requests.repository'
     list: jest.fn(),
     listFactoriesForAccess: jest.fn(),
     listFactoryMainTypeLabels: jest.fn(),
+    listProvinceRegions: jest.fn(),
     findFactoryGeneral: jest.fn(),
     listConnectedMeasurementPointsForFactories: jest.fn(),
     listPublicConnectedMeasurementPointsForFactories: jest.fn(),
@@ -42,6 +43,12 @@ jest.mock('../../src/modules/parameter-values/parameter-values.service', () => (
   },
 }));
 
+jest.mock('../../src/modules/eligible-factories/eligible-factories.service', () => ({
+  eligibleFactoriesService: {
+    list: jest.fn(),
+  },
+}));
+
 jest.mock('../../src/config/logger', () => ({
   logger: {
     warn: jest.fn(),
@@ -51,6 +58,8 @@ jest.mock('../../src/config/logger', () => ({
 import { deviceConnectionsService } from '../../src/modules/device-connections/device-connections.service';
 import type { DeviceConnectionConfigDTO } from '../../src/modules/device-connections/device-connections.types';
 import { parameterValuesService } from '../../src/modules/parameter-values/parameter-values.service';
+import { eligibleFactoriesService } from '../../src/modules/eligible-factories/eligible-factories.service';
+import type { SelectedEligibleFactoryDTO } from '../../src/modules/eligible-factories/eligible-factories.types';
 import { logger } from '../../src/config/logger';
 import { connectionRequestsRepository } from '../../src/modules/connection-requests/connection-requests.repository';
 import { connectionRequestsService } from '../../src/modules/connection-requests/connection-requests.service';
@@ -66,6 +75,7 @@ import {
 const mockedRepository = jest.mocked(connectionRequestsRepository);
 const mockedDeviceConnectionsService = jest.mocked(deviceConnectionsService);
 const mockedParameterValuesService = jest.mocked(parameterValuesService);
+const mockedEligibleFactoriesService = jest.mocked(eligibleFactoriesService);
 const mockedLogger = jest.mocked(logger);
 
 describe('connectionRequestsService', () => {
@@ -139,9 +149,11 @@ describe('connectionRequestsService', () => {
     jest.clearAllMocks();
     mockedRepository.listFavoriteFactoryIds.mockResolvedValue([]);
     mockedRepository.listFactoryMainTypeLabels.mockResolvedValue(new Map());
+    mockedRepository.listProvinceRegions.mockResolvedValue(new Map());
     mockedRepository.listOfficerNotificationEmailsForFactories.mockResolvedValue(new Map());
     mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([]);
     mockedRepository.listPublicConnectedMeasurementPointsForFactories.mockResolvedValue([]);
+    mockedEligibleFactoriesService.list.mockResolvedValue({ data: [], meta: { total: 0 } });
     mockedDeviceConnectionsService.listActiveSettings.mockResolvedValue([]);
     mockedDeviceConnectionsService.listByRequestId.mockResolvedValue([]);
     mockedDeviceConnectionsService.create.mockResolvedValue(deviceConnectionConfig());
@@ -451,6 +463,189 @@ describe('connectionRequestsService', () => {
       'contact@ieat.mail.go.th',
       'investment.1@ieat.mail.go.th',
     ]);
+  });
+
+  it('returns selected eligible factories for officer connection request forms in the operator table shape', async () => {
+    mockedEligibleFactoriesService.list.mockResolvedValue({
+      data: [
+        {
+          id: 7,
+          monitoringPointFormId: 3,
+          factoryId: '3-88(2)-5/49อบ',
+          factoryName: 'โรงงานเข้าข่ายจากระบบเดิม จำกัด',
+          factoryRegistrationNo: '3-88(2)-5/49อบ',
+          factoryClass: '8802',
+          factorySubclass: '0001,0002',
+          address: '88 หมู่ 2',
+          provinceName: 'ชลบุรี',
+          industrialEstateName: 'นิคมอุตสาหกรรมอมตะซิตี้ ชลบุรี',
+          longitude: 100.7002,
+          latitude: 13.5001,
+          businessActivity: 'ผลิตพลังงานไฟฟ้า',
+          operationStatus: 'ประกอบกิจการ',
+          capitalAmount: null,
+          machineryHorsepower: null,
+          productionCapacity: '10 เมกะวัตต์',
+          wastewaterDischargeInfo: null,
+          boilerCount: null,
+          boilerSizeEach: null,
+          fuelUsed: null,
+          hasEia: false,
+          measurementPoints: [
+            {
+              systemType: 'CEMS',
+              pointCode: 'S001',
+              pointName: 'ปล่อง A',
+              productionUnitType: null,
+              productionCapacity: null,
+              cemsInstallationRequiredBy: null,
+              cemsInstallationRequiredOther: null,
+              legalAnnexNo: [],
+              accountingConnectionStatus: null,
+              eligibleParameters: ['NOx'],
+              exemptedParameters: [],
+              connectedParameters: [],
+              pendingParameters: [],
+              primaryFuel: null,
+              primaryFuelOther: null,
+              secondaryFuel: null,
+              secondaryFuelOther: null,
+              details: null,
+            },
+            {
+              systemType: 'WPMS',
+              pointCode: 'W001',
+              pointName: 'น้ำทิ้ง A',
+              productionUnitType: null,
+              productionCapacity: null,
+              cemsInstallationRequiredBy: null,
+              cemsInstallationRequiredOther: null,
+              legalAnnexNo: [],
+              accountingConnectionStatus: null,
+              eligibleParameters: ['BOD'],
+              exemptedParameters: [],
+              connectedParameters: [],
+              pendingParameters: [],
+              primaryFuel: null,
+              primaryFuelOther: null,
+              secondaryFuel: null,
+              secondaryFuelOther: null,
+              details: null,
+            },
+          ],
+        },
+      ],
+      meta: { total: 1 },
+    });
+    mockedRepository.listOfficerNotificationEmailsForFactories.mockResolvedValue(
+      new Map([['3-88(2)-5/49อบ', ['contact@ieat.mail.go.th']]]),
+    );
+    mockedRepository.listRequestsForFactories.mockResolvedValue([
+      requestDto({
+        factoryId: '3-88(2)-5/49อบ',
+        status: CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+      }),
+    ]);
+
+    const result = await connectionRequestsService.listOfficerEligibleFactories(
+      actorUserId,
+      { scope: 'ALL' },
+      {
+        systemType: 'WPMS',
+        favoriteOnly: false,
+      },
+    );
+
+    expect(mockedEligibleFactoriesService.list).toHaveBeenCalledWith({});
+    expect(mockedRepository.listProvinceRegions).toHaveBeenCalledWith(['ชลบุรี']);
+    expect(mockedRepository.listRequestsForFactories).toHaveBeenCalledWith(['3-88(2)-5/49อบ']);
+    expect(mockedRepository.listOfficerNotificationEmailsForFactories).toHaveBeenCalledWith([
+      {
+        factoryId: '3-88(2)-5/49อบ',
+        provinceName: 'ชลบุรี',
+        industrialAreaType: 'INDUSTRIAL_ESTATE',
+      },
+    ]);
+    expect(result).toEqual({
+      data: [
+        {
+          id: 7,
+          factoryId: '3-88(2)-5/49อบ',
+          factoryName: 'โรงงานเข้าข่ายจากระบบเดิม จำกัด',
+          newRegistrationNo: '3-88(2)-5/49อบ',
+          oldRegistrationNo: null,
+          industryType: 'ผลิตพลังงานไฟฟ้า',
+          industryMainOrder: '8802',
+          industrySubOrder: '0001,0002',
+          businessActivity: 'ผลิตพลังงานไฟฟ้า',
+          eia: 'ไม่มี',
+          projectName: null,
+          address: '88 หมู่ 2',
+          latitude: '13.5001',
+          longitude: '100.7002',
+          province: 'ชลบุรี',
+          officerNotificationEmails: ['contact@ieat.mail.go.th'],
+          isEligible: true,
+          eligibilityStatus: 'เข้าข่าย',
+          monitoringPointCount: 1,
+          requestStatusCode: CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+          status: 'แสดง',
+        },
+      ],
+      meta: { total: 1 },
+    });
+  });
+
+  it('filters officer eligible factories by permission region and current user favorites', async () => {
+    mockedEligibleFactoriesService.list.mockResolvedValue({
+      data: [
+        selectedEligibleFactory({
+          id: 10,
+          factoryId: 'factory-favorite-east',
+          factoryRegistrationNo: 'factory-favorite-east',
+          provinceName: 'ชลบุรี',
+        }),
+        selectedEligibleFactory({
+          id: 11,
+          factoryId: 'factory-not-favorite-east',
+          factoryRegistrationNo: 'factory-not-favorite-east',
+          provinceName: 'ชลบุรี',
+        }),
+        selectedEligibleFactory({
+          id: 12,
+          factoryId: 'factory-west',
+          factoryRegistrationNo: 'factory-west',
+          provinceName: 'ราชบุรี',
+        }),
+      ],
+      meta: { total: 3 },
+    });
+    mockedRepository.listProvinceRegions.mockResolvedValue(
+      new Map([
+        ['ชลบุรี', 'ภาคตะวันออก'],
+        ['ราชบุรี', 'ภาคตะวันตก'],
+      ]),
+    );
+    mockedRepository.listFavoriteFactoryIds.mockResolvedValue(['factory-favorite-east']);
+    mockedRepository.listRequestsForFactories.mockResolvedValue([]);
+
+    const result = await connectionRequestsService.listOfficerEligibleFactories(
+      actorUserId,
+      {
+        scope: 'IN_REGION',
+        region: 'ภาคตะวันออก',
+        province: null,
+      },
+      { favoriteOnly: true },
+      { regions: ['ภาคตะวันออก'] },
+    );
+
+    expect(mockedRepository.listFavoriteFactoryIds).toHaveBeenCalledWith(actorUserId);
+    expect(mockedRepository.listRequestsForFactories).toHaveBeenCalledWith([
+      'factory-favorite-east',
+    ]);
+    expect(result.data.map((factory) => factory.factoryId)).toEqual(['factory-favorite-east']);
+    expect(result.meta.total).toBe(1);
   });
 
   it('keeps all accessible operator factories even when they are inactive or not eligible', async () => {
@@ -2820,6 +3015,37 @@ function factorySummary(overrides: Partial<FactorySummaryDTO> = {}): FactorySumm
     province: 'สระบุรี',
     isEligible: true,
     eligibilityStatus: 'เข้าข่าย',
+    ...overrides,
+  };
+}
+
+function selectedEligibleFactory(
+  overrides: Partial<SelectedEligibleFactoryDTO> = {},
+): SelectedEligibleFactoryDTO {
+  return {
+    id: 7,
+    monitoringPointFormId: 3,
+    factoryId: '3-88(2)-5/49อบ',
+    factoryName: 'โรงงานเข้าข่ายจากระบบเดิม จำกัด',
+    factoryRegistrationNo: '3-88(2)-5/49อบ',
+    factoryClass: '8802',
+    factorySubclass: '0001',
+    address: '88 หมู่ 2',
+    provinceName: 'ชลบุรี',
+    industrialEstateName: null,
+    longitude: 100.7002,
+    latitude: 13.5001,
+    businessActivity: 'ผลิตพลังงานไฟฟ้า',
+    operationStatus: 'ประกอบกิจการ',
+    capitalAmount: null,
+    machineryHorsepower: null,
+    productionCapacity: '10 เมกะวัตต์',
+    wastewaterDischargeInfo: null,
+    boilerCount: null,
+    boilerSizeEach: null,
+    fuelUsed: null,
+    hasEia: false,
+    measurementPoints: [],
     ...overrides,
   };
 }

@@ -5,6 +5,7 @@ import { signAccessToken } from '../../src/shared/utils/jwt';
 jest.mock('../../src/modules/connection-requests/connection-requests.service', () => ({
   connectionRequestsService: {
     listOperatorFactories: jest.fn(),
+    listOfficerEligibleFactories: jest.fn(),
     listOperatorFactoryDashboard: jest.fn(),
     listPublicFactoryMapPoints: jest.fn(),
     setOperatorFactoryFavorite: jest.fn(),
@@ -42,6 +43,34 @@ describe('operator factory dashboard routes', () => {
           eligibilityStatus: 'เข้าข่าย',
           monitoringPointCount: 1,
           requestStatusCode: 'CONNECTED',
+          status: 'แสดง',
+        },
+      ],
+      meta: { total: 1 },
+    });
+    mockedConnectionRequestsService.listOfficerEligibleFactories.mockResolvedValue({
+      data: [
+        {
+          id: 7,
+          factoryId: 'eligible-001',
+          factoryName: 'โรงงานเข้าข่ายจากระบบเดิม จำกัด',
+          newRegistrationNo: '3-88(2)-5/49อบ',
+          oldRegistrationNo: null,
+          industryType: 'ผลิตพลังงานไฟฟ้าจากพลังงานความร้อน',
+          industryMainOrder: '8802',
+          industrySubOrder: '0001',
+          businessActivity: 'ผลิตพลังงานไฟฟ้า',
+          eia: 'ไม่มี',
+          projectName: null,
+          address: '88 หมู่ 2',
+          latitude: '13.5001',
+          longitude: '100.7002',
+          province: 'ชลบุรี',
+          officerNotificationEmails: ['saraban_chonburi@industry.go.th'],
+          isEligible: true,
+          eligibilityStatus: 'เข้าข่าย',
+          monitoringPointCount: 2,
+          requestStatusCode: null,
           status: 'แสดง',
         },
       ],
@@ -195,6 +224,60 @@ describe('operator factory dashboard routes', () => {
     });
     expect(response.body.data[0]).not.toHaveProperty('measurementPoints');
     expect(response.body.data[0]).not.toHaveProperty('monitoringPointCountBySystem');
+  });
+
+  it('lists all eligible factories for officer connection request forms in the operator table shape', async () => {
+    const app = createApp();
+    const token = accessToken({
+      userType: 'officer',
+      roles: ['diw_officer'],
+      scopes: {
+        'cems_wpms_requests:view': 'ALL',
+      },
+    });
+
+    const response = await request(app)
+      .get('/api/v1/cems-wpms-requests/eligible-factories?systemType=WPMS')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(mockedConnectionRequestsService.listOfficerEligibleFactories).toHaveBeenCalledWith(
+      42,
+      { scope: 'ALL' },
+      {
+        systemType: 'WPMS',
+        favoriteOnly: false,
+      },
+    );
+    expect(response.body).toEqual({
+      success: true,
+      data: [
+        {
+          id: 7,
+          factoryId: 'eligible-001',
+          factoryName: 'โรงงานเข้าข่ายจากระบบเดิม จำกัด',
+          newRegistrationNo: '3-88(2)-5/49อบ',
+          oldRegistrationNo: null,
+          industryType: 'ผลิตพลังงานไฟฟ้าจากพลังงานความร้อน',
+          industryMainOrder: '8802',
+          industrySubOrder: '0001',
+          businessActivity: 'ผลิตพลังงานไฟฟ้า',
+          eia: 'ไม่มี',
+          projectName: null,
+          address: '88 หมู่ 2',
+          latitude: '13.5001',
+          longitude: '100.7002',
+          province: 'ชลบุรี',
+          officerNotificationEmails: ['saraban_chonburi@industry.go.th'],
+          isEligible: true,
+          eligibilityStatus: 'เข้าข่าย',
+          monitoringPointCount: 2,
+          requestStatusCode: null,
+          status: 'แสดง',
+        },
+      ],
+      meta: { total: 1 },
+    });
   });
 
   it('uses a separate connected-only route for the operator dashboard', async () => {
@@ -388,9 +471,7 @@ describe('operator factory dashboard routes', () => {
   });
 });
 
-function accessToken(
-  overrides: Partial<Parameters<typeof signAccessToken>[0]> = {},
-): string {
+function accessToken(overrides: Partial<Parameters<typeof signAccessToken>[0]> = {}): string {
   return signAccessToken({
     sub: '42',
     userType: 'operator',

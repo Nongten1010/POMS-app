@@ -83,6 +83,26 @@ export const connectionRequestsController = {
     }
   },
 
+  async listOfficerEligibleFactories(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const actorUserId = requireActorUserId(req);
+      const query = listOperatorFactoriesQuerySchema.parse(req.query);
+      const result = await connectionRequestsService.listOfficerEligibleFactories(
+        actorUserId,
+        getScopeDetails(req, 'cems_wpms_requests:view'),
+        query,
+        ...getRegionalAccessArg(req),
+      );
+      res.status(StatusCodes.OK).json({ success: true, ...result });
+    } catch (err) {
+      next(err);
+    }
+  },
+
   async listOperatorFactoryDashboard(
     req: Request,
     res: Response,

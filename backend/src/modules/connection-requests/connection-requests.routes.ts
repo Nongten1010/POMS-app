@@ -63,6 +63,11 @@ connectionRequestsRoutes.get(
   authorize('factories:view'),
   connectionRequestsController.listOperatorFactories,
 );
+connectionRequestsRoutes.get(
+  '/eligible-factories',
+  authorize('cems_wpms_requests:view'),
+  connectionRequestsController.listOfficerEligibleFactories,
+);
 connectionRequestsRoutes.get('/operator-factory-dashboard', (_req, res) => {
   res.status(404).json({
     success: false,
