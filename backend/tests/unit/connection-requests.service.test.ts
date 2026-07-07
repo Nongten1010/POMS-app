@@ -384,8 +384,30 @@ describe('connectionRequestsService', () => {
             parameters: ['NOx'],
             description: null,
           },
+          {
+            id: 2,
+            pointName: 'ปล่องระบาย B',
+            pointCode: 'S0002',
+            pointType: 'STACK',
+            latitude: 13.7564,
+            longitude: 100.5019,
+            parameters: ['SO2'],
+            description: null,
+          },
         ],
       }),
+    ]);
+    mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
+      {
+        factoryId: '3-106-33/50สบ',
+        stationId: 'S0001',
+        pointName: 'ปล่องระบาย A',
+        pointCode: 'S0001',
+        systemType: 'CEMS',
+        parameters: ['NOx'],
+        documentsAndImages: [],
+        data: [],
+      },
     ]);
 
     const result = await connectionRequestsService.listOperatorFactories(
@@ -406,7 +428,10 @@ describe('connectionRequestsService', () => {
     ]);
     expect(mockedRepository.listRequestsForFactories).toHaveBeenCalledWith(['factory-001']);
     expect(mockedRepository.listFavoriteFactoryIds).not.toHaveBeenCalled();
-    expect(mockedRepository.listConnectedMeasurementPointsForFactories).not.toHaveBeenCalled();
+    expect(mockedRepository.listConnectedMeasurementPointsForFactories).toHaveBeenCalledWith([
+      'factory-001',
+      '3-106-33/50สบ',
+    ]);
     expect(mockedParameterValuesService.latestHourly).not.toHaveBeenCalled();
     expect(result.data[0]).toEqual({
       id: 1,

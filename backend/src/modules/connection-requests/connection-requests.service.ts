@@ -149,9 +149,14 @@ export const connectionRequestsService = {
       scope: factoryViewScope,
       regionalAccess,
     });
-    const requests = await connectionRequestsRepository.listRequestsForFactories(
-      factories.map((factory) => factory.factoryId),
-    );
+    const factoryIdByLookupKey = buildFactoryLookupKeyMap(factories);
+    const factoryLookupKeys = [...factoryIdByLookupKey.keys()];
+    const [requests, connectedPoints] = await Promise.all([
+      connectionRequestsRepository.listRequestsForFactories(
+        factories.map((factory) => factory.factoryId),
+      ),
+      connectionRequestsRepository.listConnectedMeasurementPointsForFactories(factoryLookupKeys),
+    ]);
     const officerNotificationEmailsByFactory =
       await connectionRequestsRepository.listOfficerNotificationEmailsForFactories(
         factories.map((factory) => ({
@@ -163,16 +168,17 @@ export const connectionRequestsService = {
     const latestRequestByFactory = new Map<string, ConnectionRequestDTO>();
     const connectedPointCountByFactory = new Map<string, number>();
 
+    connectedPoints.forEach((point) => {
+      const factoryId = factoryIdByLookupKey.get(point.factoryId) ?? point.factoryId;
+      connectedPointCountByFactory.set(
+        factoryId,
+        (connectedPointCountByFactory.get(factoryId) ?? 0) + 1,
+      );
+    });
+
     requests.forEach((request) => {
       if (!latestRequestByFactory.has(request.factoryId)) {
         latestRequestByFactory.set(request.factoryId, request);
-      }
-      if (request.status === CONNECTION_REQUEST_STATUS.CONNECTED) {
-        connectedPointCountByFactory.set(
-          request.factoryId,
-          (connectedPointCountByFactory.get(request.factoryId) ?? 0) +
-            request.measurementPoints.length,
-        );
       }
     });
 
