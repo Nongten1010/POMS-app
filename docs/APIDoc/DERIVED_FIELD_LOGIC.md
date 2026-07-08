@@ -111,7 +111,7 @@ Fallback order:
 Transformation:
 
 - `businessActivity` is returned directly from the eligible-factory enrichment value.
-- `industryMainOrder` uses the same factory-type sequence parser as the connection-request/eligible-factory workflows and returns only the main 4-digit class.
+- `industryMainOrder` uses the same factory-type sequence parser as the connection-request/eligible-factory workflows and returns only the main 5-digit class.
 
 Reason:
 
@@ -569,13 +569,13 @@ Source:
 Logic:
 
 - เอาเฉพาะตัวเลข
-- ใช้เลข 4 หลักท้าย
-- pad ซ้ายด้วย `0` ให้ครบ 4 หลัก
+- ใช้เลข 5 หลักท้าย
+- pad ซ้ายด้วย `0` ให้ครบ 5 หลัก
 
 Example:
 
 ```text
-CLASS = 00100 -> factoryClass = 0100
+CLASS = 00100 -> factoryClass = 00100
 ```
 
 Status:
@@ -591,8 +591,8 @@ Source:
 Logic:
 
 - ดึงรายการ `CLASS` ทั้งหมดของ `FID` จาก `dbo.FACCLASS`
-- เอาเลข 4 หลักท้ายของแต่ละ `CLASS` แล้ว pad ซ้ายด้วย `0` ให้เป็น 4 หลัก
-- ตัดรหัสที่ซ้ำกับประเภทหลักออก เช่น `factoryClass = 0100` และ `FACCLASS.CLASS = 00100` จะไม่คืน `0100`
+- เอาเลข 5 หลักท้ายของแต่ละ `CLASS` แล้ว pad ซ้ายด้วย `0` ให้เป็น 5 หลัก
+- ตัดรหัสที่ซ้ำกับประเภทหลักออก เช่น `factoryClass = 00100` และ `FACCLASS.CLASS = 00100` จะไม่คืน `00100`
 - ตัดค่าซ้ำ และถ้าเหลือหลายค่าให้ join ด้วย comma
 - ถ้า `FACCLASS` ไม่มีค่า ให้คืน `null`
 - ไม่ใช้ `fac_import.DISPFACREG`
@@ -607,7 +607,7 @@ Example:
 fac_import.CLASS = 00100
 FACCLASS.CLASS = 00100
 
-factoryClass = 0100
+factoryClass = 00100
 factorySubclass = null
 ```
 
@@ -615,16 +615,16 @@ factorySubclass = null
 fac_import.CLASS = 00100
 FACCLASS.CLASS = 00100, 00201
 
-factoryClass = 0100
-factorySubclass = 0201
+factoryClass = 00100
+factorySubclass = 00201
 ```
 
 ```text
 fac_import.CLASS = 05301
 FACCLASS.CLASS = 07000, 07300, 07702
 
-factoryClass = 5301
-factorySubclass = 7000,7300,7702
+factoryClass = 05301
+factorySubclass = 07000,07300,07702
 ```
 
 ```text
@@ -786,27 +786,27 @@ Source:
 
 Logic:
 
-- DB เก็บประเภทโรงงานเป็นค่าเดียว เช่น `9200 / 0200,0602,0605`
+- DB เก็บประเภทโรงงานเป็นค่าเดียว เช่น `09200 / 00200,00602,00605`
 - API แยกค่าหน้า `/` เป็น `factoryClass`
 - API แยกค่าหลัง `/` เป็นรายการ `factorySubclass`
-- ก่อนส่งออกและก่อนบันทึกข้อมูลใหม่ ระบบตัดรหัสรองที่ซ้ำกับประเภทหลักออก โดยเทียบเลข 4 หลักท้ายของ `factoryClass` กับรหัสใน `factorySubclass`
-- สำหรับข้อมูลใหม่จากหน้า “โรงงานทั้งหมด (กรอ.)” ค่า `factorySubclass` มาจาก raw `FACCLASS.CLASS` แล้วใช้เลข 4 หลักท้าย เช่น `07000` -> `7000`, `07300` -> `7300`, `07702` -> `7702`
-- ค่า `0000` หรือ `0003` จะเกิดได้เฉพาะเมื่อ raw source เป็นค่าแบบ `00000` หรือ `00003` จริง ไม่ใช่การเดาจาก stored value ที่เหลือแค่ `000` หรือ `003`
+- ก่อนส่งออกและก่อนบันทึกข้อมูลใหม่ ระบบตัดรหัสรองที่ซ้ำกับประเภทหลักออก โดยเทียบรหัส 5 หลักของ `factoryClass` กับรหัสใน `factorySubclass`
+- สำหรับข้อมูลใหม่จากหน้า “โรงงานทั้งหมด (กรอ.)” ค่า `factorySubclass` มาจาก raw `FACCLASS.CLASS` แล้วใช้เลข 5 หลักท้าย เช่น `07000` -> `07000`, `07300` -> `07300`, `07702` -> `07702`
+- ค่า `00000` หรือ `00003` จะเกิดได้เฉพาะเมื่อ raw source เป็นค่าแบบ `00000` หรือ `00003` จริง ไม่ใช่การเดาจาก stored value ที่เหลือแค่ `000` หรือ `003`
 - ถ้าตัดแล้วไม่เหลือรหัสรอง จะส่ง `factorySubclass = null`
 
 Example:
 
 ```text
-factory_type_sequence = 9200 / 0200,0602,0605
+factory_type_sequence = 09200 / 00200,00602,00605
 
-factoryClass = 9200
-factorySubclass = 0200,0602,0605
+factoryClass = 09200
+factorySubclass = 00200,00602,00605
 ```
 
 ```text
-factory_type_sequence = 0902 / 902
+factory_type_sequence = 00902 / 902
 
-factoryClass = 0902
+factoryClass = 00902
 factorySubclass = null
 ```
 
@@ -818,11 +818,12 @@ Cleanup:
 - Migration `0041_format_eligible_factory_subclasses_to_four_digits.ts` ปรับข้อมูลเก่าที่เหลือให้ `factorySubclass` เป็น 4 หลัก และสำรองค่าก่อนแก้ไว้ใน `eligible_factory_type_sequence_cleanup_0041`
 - Migration `0042_use_last_four_digits_for_factory_subclasses.ts` ปรับ rule เป็นการใช้เลข 4 หลักท้ายจริง และสำรองค่าก่อนแก้ไว้ใน `eligible_factory_type_sequence_cleanup_0042`
 - Migration `0043_rehydrate_eligible_factory_subclasses_from_source.ts` ปรับข้อมูลเก่าซ้ำอีกครั้งโดยใช้ `eligible_factories.source_factory_id` ไปดึง raw `FACCLASS.CLASS` จากฐาน กรอ. จริง แล้วสำรองค่าก่อนแก้ไว้ใน `eligible_factory_type_sequence_cleanup_0043`
+- Migration `0065_rehydrate_factory_type_sequences_to_five_digits.ts` ปรับข้อมูลเก่าให้ใช้รหัสหลัก/รอง 5 หลักจาก `fac_import.CLASS` และ `FACCLASS.CLASS` พร้อม backup ใน `eligible_factory_type_sequence_cleanup_0065`
 
 Risk:
 
-- Rule นี้ตัดเฉพาะรหัสรอง 4 หลักที่เท่ากับเลข 4 หลักท้ายของประเภทหลักหลัง pad เป็น 4 หลักเท่านั้น
-- เคสเช่น `0403 / 000,003,00403` จะกลายเป็น `0403 / 0000,0003`
+- Rule นี้ตัดเฉพาะรหัสรอง 5 หลักที่เท่ากับรหัสหลักหลัง pad เป็น 5 หลักเท่านั้น
+- เคสเช่น `00403 / 000,003,00403` จะกลายเป็น `00403 / 00000,00003`
 - ถ้าข้อมูลเก่าถูก normalize ผิดจนสูญเลขหลักหน้าไปแล้ว เช่น source เดิม `07000` ถูกเก็บเป็น `0000` จะต้องเติมจาก source เดิมอีกครั้ง เพราะค่า `7000` ไม่เหลืออยู่ใน stored value; migration `0043` ทำงานส่วนนี้เฉพาะแถวที่มี `source_factory_id`
 
 ## CEMS/WPMS Request Factory Snapshot
@@ -921,7 +922,7 @@ Logic:
 
 Reason:
 
-- Frontend needs dropdown display like `8802 - ประเภทโรงงานลำดับที่ 88(2): การผลิตพลังงานไฟฟ้าจากพลังงานความร้อน` while filtering by stable code `8802`.
+- Frontend needs dropdown display like `08802 - ประเภทโรงงานลำดับที่ 88(2): การผลิตพลังงานไฟฟ้าจากพลังงานความร้อน` while filtering by stable code `08802`.
 
 Risk:
 

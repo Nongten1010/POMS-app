@@ -1,5 +1,7 @@
 import type { BoilerLookupValue, EligibleFactoryCandidateDTO } from './eligible-factories.types';
 
+const FACTORY_TYPE_CODE_LENGTH = 5;
+
 export interface FacImportRow {
   FACREG: string | null;
   FACREQ: string | null;
@@ -245,8 +247,12 @@ function factoryMainClass(value: string | number | null | undefined): string | n
   const text = firstText(value);
   if (!text) return null;
   const digits = text.replace(/\D/g, '');
-  if (!digits) return text.length > 4 ? text.slice(-4) : text.padStart(4, '0');
-  return digits.slice(-4).padStart(4, '0');
+  if (!digits) {
+    return text.length > FACTORY_TYPE_CODE_LENGTH
+      ? text.slice(-FACTORY_TYPE_CODE_LENGTH)
+      : text.padStart(FACTORY_TYPE_CODE_LENGTH, '0');
+  }
+  return digits.slice(-FACTORY_TYPE_CODE_LENGTH).padStart(FACTORY_TYPE_CODE_LENGTH, '0');
 }
 
 function factorySubclassCodes(
@@ -272,13 +278,13 @@ function factorySubclassCodes(
 function factorySubclassCodeFromMainClass(value: string): string | null {
   const digits = value.replace(/\D/g, '');
   if (!digits) return null;
-  return digits.slice(-4).padStart(4, '0');
+  return digits.slice(-FACTORY_TYPE_CODE_LENGTH).padStart(FACTORY_TYPE_CODE_LENGTH, '0');
 }
 
 function factorySubclassCodeFromSource(value: string): string | null {
   const digits = value.replace(/\D/g, '');
   if (!digits) return null;
-  return digits.slice(-4).padStart(4, '0');
+  return digits.slice(-FACTORY_TYPE_CODE_LENGTH).padStart(FACTORY_TYPE_CODE_LENGTH, '0');
 }
 
 function commaSeparatedValues(...values: Array<string | number | null | undefined>): string | null {

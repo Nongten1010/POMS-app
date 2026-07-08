@@ -50,8 +50,8 @@ describe('fac_import mapper', () => {
       factoryName: 'ห้างหุ้นส่วนจำกัด โรงกลึงก๊กกวง',
       factoryId: '10100302325234',
       factoryRegistrationNo: '3-64(6)-45/17',
-      factoryClass: '0064',
-      factorySubclass: '0065',
+      factoryClass: '00064',
+      factorySubclass: '00065',
       provinceName: 'กรุงเทพมหานคร',
       businessActivity: 'ทำผลิตภัณฑ์โลหะต่าง ๆ',
       operationStatus: 'แจ้งประกอบแล้ว',
@@ -94,8 +94,8 @@ describe('fac_import mapper', () => {
       },
     );
 
-    expect(result.factoryClass).toBe('0101');
-    expect(result.factorySubclass).toBe('0102,0103');
+    expect(result.factoryClass).toBe('00101');
+    expect(result.factorySubclass).toBe('00102,00103');
   });
 
   it('sorts FACCLASS subclass codes for stable display', () => {
@@ -110,10 +110,10 @@ describe('fac_import mapper', () => {
       },
     );
 
-    expect(result.factorySubclass).toBe('0201');
+    expect(result.factorySubclass).toBe('00201');
   });
 
-  it('uses the last 4 digits from FACCLASS for subclass codes', () => {
+  it('uses the last 5 digits from FACCLASS for subclass codes', () => {
     const result = toEligibleFactoryCandidate(
       {
         ...row,
@@ -125,11 +125,11 @@ describe('fac_import mapper', () => {
       },
     );
 
-    expect(result.factoryClass).toBe('6000');
-    expect(result.factorySubclass).toBe('7000,7001');
+    expect(result.factoryClass).toBe('06000');
+    expect(result.factorySubclass).toBe('07000,07001');
   });
 
-  it('uses the last 4 digits from CLASS for the main factory type only', () => {
+  it('uses the last 5 digits from CLASS for the main factory type only', () => {
     const result = toEligibleFactoryCandidate({
       ...row,
       DISPFACREG: '3-1-1/19นน',
@@ -139,7 +139,7 @@ describe('fac_import mapper', () => {
       EXPSEQ: '0',
     });
 
-    expect(result.factoryClass).toBe('0100');
+    expect(result.factoryClass).toBe('00100');
     expect(result.factorySubclass).toBeNull();
   });
 
@@ -151,7 +151,7 @@ describe('fac_import mapper', () => {
       CLASS: '03000',
     });
 
-    expect(result.factoryClass).toBe('3000');
+    expect(result.factoryClass).toBe('03000');
     expect(result.factorySubclass).toBeNull();
   });
 
@@ -172,8 +172,8 @@ describe('fac_import mapper', () => {
       },
     );
 
-    expect(result.factoryClass).toBe('0100');
-    expect(result.factorySubclass).toBe('0201');
+    expect(result.factoryClass).toBe('00100');
+    expect(result.factorySubclass).toBe('00201');
   });
 
   it('omits FACCLASS subclass when it only repeats the main class', () => {
@@ -193,7 +193,7 @@ describe('fac_import mapper', () => {
       },
     );
 
-    expect(result.factoryClass).toBe('0100');
+    expect(result.factoryClass).toBe('00100');
     expect(result.factorySubclass).toBeNull();
   });
 
@@ -214,7 +214,7 @@ describe('fac_import mapper', () => {
       },
     );
 
-    expect(result.factoryClass).toBe('0100');
+    expect(result.factoryClass).toBe('00100');
     expect(result.factorySubclass).toBeNull();
   });
 

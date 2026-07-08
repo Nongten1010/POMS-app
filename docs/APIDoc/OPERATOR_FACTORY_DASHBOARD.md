@@ -52,7 +52,7 @@ curl "http://localhost:3000/api/v1/operator-factory-dashboard?systemType=CEMS" \
       "newRegistrationNo": "3-106-33/50สบ",
       "oldRegistrationNo": "รง.4-เก่า-001",
       "factoryLogoUrl": "https://example.com/files/logo.png",
-      "industryMainOrder": "8802",
+      "industryMainOrder": "08802",
       "industryMainOrderLabel": "ประเภทโรงงานลำดับที่ 88(2): การผลิตพลังงานไฟฟ้าจากพลังงานความร้อน",
       "industrySubOrder": null,
       "eia": "ไม่มี",
@@ -133,7 +133,7 @@ curl "http://localhost:3000/api/v1/operator-factory-dashboard?systemType=CEMS" \
 | `newRegistrationNo` | string|null | เลขทะเบียนโรงงานใหม่จาก `factories.code` |
 | `oldRegistrationNo` | string|null | เลขทะเบียนโรงงานเก่าจาก `factories.factory_registration_no_old` |
 | `factoryLogoUrl` | string|null | URL รูปโลโก้จากเอกสารแนบ CEMS title `สัญลักษณ์ของโรงงานหรือโลโก้บริษัท`; ถ้าไม่มีคืน `null` |
-| `industryMainOrder` | string|null | รหัสประเภทโรงงานหลัก 4 หลักจาก `eligible_factories.factory_type_sequence` เช่น `8802` |
+| `industryMainOrder` | string|null | รหัสประเภทโรงงานหลัก 5 หลักจาก `eligible_factories.factory_type_sequence` เช่น `08802` |
 | `industryMainOrderLabel` | string|null | คำอธิบายประเภทโรงงานหลักจาก DIW source `dbo.TCLASS` เช่น `ประเภทโรงงานลำดับที่ 88(2): ...` |
 | `industrySubOrder` | string|null | รหัสประเภทโรงงานรองจาก `eligible_factories.factory_type_sequence` |
 | `eia` | `มี`\|`ไม่มี`\|null | label ผล EIA/การเข้าข่าย EIA |

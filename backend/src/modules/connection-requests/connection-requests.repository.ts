@@ -28,6 +28,8 @@ import {
   type StatusHistoryDTO,
 } from './connection-requests.types';
 
+const FACTORY_TYPE_CODE_LENGTH = 5;
+
 interface ConnectionRequestRow {
   id: number | string;
   request_no: string;
@@ -1263,9 +1265,17 @@ function splitFactoryTypeSequence(value: string | null): {
 } {
   if (!value) return { factoryClass: null, factorySubclass: null };
   const [factoryClass, factorySubclass] = value.split(' / ', 2);
+  const normalizedFactoryClass = normalizeFactoryMainTypeCode(factoryClass);
+  const normalizedFactorySubclass =
+    factorySubclass
+      ?.split(/[,\s/|;]+/)
+      .map(normalizeFactoryMainTypeCode)
+      .filter((code): code is string => Boolean(code && code !== normalizedFactoryClass))
+      .join(',') || null;
+
   return {
-    factoryClass: factoryClass || null,
-    factorySubclass: factorySubclass || null,
+    factoryClass: normalizedFactoryClass,
+    factorySubclass: normalizedFactorySubclass,
   };
 }
 
@@ -1273,8 +1283,12 @@ function normalizeFactoryMainTypeCode(value: string | null | undefined): string 
   const text = value?.trim();
   if (!text) return null;
   const digits = text.replace(/\D/g, '');
-  if (!digits) return text.length > 4 ? text.slice(-4) : text.padStart(4, '0');
-  return digits.slice(-4).padStart(4, '0');
+  if (!digits) {
+    return text.length > FACTORY_TYPE_CODE_LENGTH
+      ? text.slice(-FACTORY_TYPE_CODE_LENGTH)
+      : text.padStart(FACTORY_TYPE_CODE_LENGTH, '0');
+  }
+  return digits.slice(-FACTORY_TYPE_CODE_LENGTH).padStart(FACTORY_TYPE_CODE_LENGTH, '0');
 }
 
 function isString(value: string | null): value is string {

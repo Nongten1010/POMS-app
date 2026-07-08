@@ -2,7 +2,7 @@ import type { Knex } from 'knex';
 import { env } from '../../config/env';
 import { factorySourceDb } from '../../config/factory-source-database';
 
-const BACKUP_TABLE = 'eligible_factory_type_sequence_cleanup_0043';
+const BACKUP_TABLE = 'eligible_factory_type_sequence_cleanup_0065';
 const EXTERNAL_QUERY_TIMEOUT_MS = 300000;
 const FACTORY_TYPE_CODE_LENGTH = 5;
 
@@ -17,7 +17,7 @@ interface BackupRow {
   original_factory_type_sequence: string | null;
 }
 
-interface FactoryClassRow {
+interface SourceFactoryClassRow {
   FID: string | null;
   CLASS: string | null;
 }
@@ -29,19 +29,19 @@ export async function up(knex: Knex): Promise<void> {
     .whereNull('deleted_at')
     .whereNotNull('source_factory_id')
     .select('id', 'source_factory_id', 'factory_type_sequence');
-  const sourceClassesByFid = await loadSourceFactoryClassCodesByFid(rows);
+
+  const sourceMainClassesByFid = await loadSourceMainClassByFid(rows);
+  const sourceSubclassCodesByFid = await loadSourceSubclassCodesByFid(rows);
 
   await knex.transaction(async (trx) => {
     for (const row of rows) {
       const sourceFactoryId = row.source_factory_id?.trim();
       if (!sourceFactoryId) continue;
 
-      const sourceSubclassCodes = sourceClassesByFid.get(sourceFactoryId);
-      if (!sourceSubclassCodes || sourceSubclassCodes.length === 0) continue;
-
       const normalized = normalizeStoredFactoryTypeSequence(
         row.factory_type_sequence,
-        sourceSubclassCodes,
+        sourceMainClassesByFid.get(sourceFactoryId) ?? null,
+        sourceSubclassCodesByFid.get(sourceFactoryId) ?? [],
       );
       if (normalized === row.factory_type_sequence) continue;
 
@@ -99,27 +99,46 @@ async function ensureBackupTable(knex: Knex): Promise<void> {
   });
 }
 
-async function loadSourceFactoryClassCodesByFid(
+async function loadSourceMainClassByFid(
   rows: EligibleFactoryTypeSequenceRow[],
-): Promise<Map<string, string[]>> {
-  const fids = [
-    ...new Set(
-      rows
-        .map((row) => row.source_factory_id?.trim())
-        .filter((value): value is string => Boolean(value)),
-    ),
-  ];
-  const codesByFid = new Map<string, string[]>();
+): Promise<Map<string, string>> {
+  const codesByFid = new Map<string, string>();
 
-  for (const fidChunk of chunks(fids, 1000)) {
-    const sourceRows = await factorySourceDb<FactoryClassRow>(`${env.FACTORY_DB_SCHEMA}.FACCLASS`)
+  for (const fidChunk of chunks(sourceFactoryIds(rows), 1000)) {
+    const sourceRows = await factorySourceDb<SourceFactoryClassRow>(
+      `${env.FACTORY_DB_SCHEMA}.${env.FACTORY_DB_TABLE}`,
+    )
       .whereIn('FID', fidChunk)
       .timeout(EXTERNAL_QUERY_TIMEOUT_MS)
       .select('FID', 'CLASS');
 
     for (const sourceRow of sourceRows) {
       const fid = sourceRow.FID?.trim();
-      const classCode = sourceRow.CLASS?.trim();
+      const classCode = normalizeFactoryTypeCode(sourceRow.CLASS);
+      if (!fid || !classCode) continue;
+      codesByFid.set(fid, classCode);
+    }
+  }
+
+  return codesByFid;
+}
+
+async function loadSourceSubclassCodesByFid(
+  rows: EligibleFactoryTypeSequenceRow[],
+): Promise<Map<string, string[]>> {
+  const codesByFid = new Map<string, string[]>();
+
+  for (const fidChunk of chunks(sourceFactoryIds(rows), 1000)) {
+    const sourceRows = await factorySourceDb<SourceFactoryClassRow>(
+      `${env.FACTORY_DB_SCHEMA}.FACCLASS`,
+    )
+      .whereIn('FID', fidChunk)
+      .timeout(EXTERNAL_QUERY_TIMEOUT_MS)
+      .select('FID', 'CLASS');
+
+    for (const sourceRow of sourceRows) {
+      const fid = sourceRow.FID?.trim();
+      const classCode = normalizeFactoryTypeCode(sourceRow.CLASS);
       if (!fid || !classCode) continue;
       codesByFid.set(fid, [...(codesByFid.get(fid) ?? []), classCode]);
     }
@@ -130,51 +149,72 @@ async function loadSourceFactoryClassCodesByFid(
 
 export function normalizeStoredFactoryTypeSequence(
   value: string | null,
+  sourceMainClass: string | number | null | undefined,
   sourceSubclassCodes: Array<string | number | null | undefined>,
 ): string | null {
-  if (!value) return null;
+  const fallback = splitFactoryTypeSequence(value);
+  const factoryClass =
+    normalizeFactoryTypeCode(sourceMainClass) ?? normalizeFactoryTypeCode(fallback.main);
+  const factorySubclass = normalizeFactorySubclassCodes(
+    sourceSubclassCodes.length > 0 ? sourceSubclassCodes : fallback.subclass,
+    factoryClass,
+  );
 
+  return (
+    [factoryClass, factorySubclass].filter((item): item is string => Boolean(item)).join(' / ') ||
+    null
+  );
+}
+
+function splitFactoryTypeSequence(value: string | null): {
+  main: string | null;
+  subclass: string[];
+} {
+  if (!value) return { main: null, subclass: [] };
   const separatorIndex = value.indexOf('/');
-  const rawFactoryClass =
-    separatorIndex >= 0 ? value.slice(0, separatorIndex).trim() : value.trim();
-  const factoryClass = normalizeSubclassToken(rawFactoryClass);
-  const factorySubclass = normalizeFactorySubclassCodes(sourceSubclassCodes, factoryClass || null);
-
-  return [factoryClass || null, factorySubclass]
-    .filter((item): item is string => Boolean(item))
-    .join(' / ');
+  const main = separatorIndex >= 0 ? value.slice(0, separatorIndex).trim() : value.trim();
+  const subclass = separatorIndex >= 0 ? value.slice(separatorIndex + 1).trim() : '';
+  return {
+    main: main || null,
+    subclass: subclass ? subclass.split(/[,\s/|;]+/) : [],
+  };
 }
 
 function normalizeFactorySubclassCodes(
   sourceSubclassCodes: Array<string | number | null | undefined>,
   factoryClass: string | null,
 ): string | null {
-  const duplicateSubclassCode = factoryClass
-    ? factorySubclassCodeFromMainClass(factoryClass)
-    : null;
   const subclassCodes = new Set<string>();
 
   for (const sourceSubclassCode of sourceSubclassCodes) {
-    const normalizedCode = normalizeSubclassToken(sourceSubclassCode);
-    if (!normalizedCode || normalizedCode === duplicateSubclassCode) continue;
+    const normalizedCode = normalizeFactoryTypeCode(sourceSubclassCode);
+    if (!normalizedCode || normalizedCode === factoryClass) continue;
     subclassCodes.add(normalizedCode);
   }
 
   return subclassCodes.size > 0 ? [...subclassCodes].sort().join(',') : null;
 }
 
-function normalizeSubclassToken(value: string | number | null | undefined): string | null {
+function normalizeFactoryTypeCode(value: string | number | null | undefined): string | null {
   const text = value === null || value === undefined ? null : String(value).trim();
   if (!text) return null;
   const digits = text.replace(/\D/g, '');
-  if (!digits) return null;
+  if (!digits) {
+    return text.length > FACTORY_TYPE_CODE_LENGTH
+      ? text.slice(-FACTORY_TYPE_CODE_LENGTH)
+      : text.padStart(FACTORY_TYPE_CODE_LENGTH, '0');
+  }
   return digits.slice(-FACTORY_TYPE_CODE_LENGTH).padStart(FACTORY_TYPE_CODE_LENGTH, '0');
 }
 
-function factorySubclassCodeFromMainClass(value: string): string | null {
-  const digits = value.replace(/\D/g, '');
-  if (!digits) return null;
-  return digits.slice(-FACTORY_TYPE_CODE_LENGTH).padStart(FACTORY_TYPE_CODE_LENGTH, '0');
+function sourceFactoryIds(rows: EligibleFactoryTypeSequenceRow[]): string[] {
+  return [
+    ...new Set(
+      rows
+        .map((row) => row.source_factory_id?.trim())
+        .filter((value): value is string => Boolean(value)),
+    ),
+  ];
 }
 
 function chunks<T>(values: T[], size: number): T[][] {

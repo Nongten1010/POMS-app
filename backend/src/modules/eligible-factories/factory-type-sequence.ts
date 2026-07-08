@@ -1,5 +1,7 @@
 import type { EligibleFactoryCandidateDTO } from './eligible-factories.types';
 
+const FACTORY_TYPE_CODE_LENGTH = 5;
+
 export function joinFactoryTypeSequence(
   factoryClass?: string | null,
   factorySubclass?: string | null,
@@ -28,7 +30,7 @@ export function normalizeFactoryTypeSequence(
   factoryClass?: string | null,
   factorySubclass?: string | null,
 ): Pick<EligibleFactoryCandidateDTO, 'factoryClass' | 'factorySubclass'> {
-  const normalizedClass = normalizeText(factoryClass);
+  const normalizedClass = normalizeFactoryTypeCode(factoryClass);
   const duplicateSubclassCode = normalizedClass
     ? factorySubclassCodeFromMainClass(normalizedClass)
     : null;
@@ -51,10 +53,18 @@ function normalizeText(value?: string | null): string | null {
   return text ? text : null;
 }
 
+function normalizeFactoryTypeCode(value?: string | null): string | null {
+  const text = normalizeText(value);
+  if (!text) return null;
+  const digits = text.replace(/\D/g, '');
+  if (!digits) return text;
+  return digits.slice(-FACTORY_TYPE_CODE_LENGTH).padStart(FACTORY_TYPE_CODE_LENGTH, '0');
+}
+
 function factorySubclassCodeFromMainClass(value: string): string | null {
   const digits = value.replace(/\D/g, '');
   if (!digits) return null;
-  return digits.slice(-4).padStart(4, '0');
+  return digits.slice(-FACTORY_TYPE_CODE_LENGTH).padStart(FACTORY_TYPE_CODE_LENGTH, '0');
 }
 
 function normalizeSubclassToken(value: string): string | null {
@@ -66,5 +76,5 @@ function normalizeSubclassToken(value: string): string | null {
 function factorySubclassCodeFromSource(value: string): string | null {
   const digits = value.replace(/\D/g, '');
   if (!digits) return null;
-  return digits.slice(-4).padStart(4, '0');
+  return digits.slice(-FACTORY_TYPE_CODE_LENGTH).padStart(FACTORY_TYPE_CODE_LENGTH, '0');
 }

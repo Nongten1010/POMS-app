@@ -18,7 +18,7 @@ Journeys derived from the request: build read APIs for the "แจ้งแบ�
 | 2 | KWP request route validates filters and passes regional access to service | `backend/tests/unit/kwp-form-reports.route.test.ts` | route | RED then GREEN | `npm test -- kwp-form-reports --runInBand` |
 | 3 | Repository factory query starts from POMS `factories`, joins eligible factory data, connected points, and operator juristic filter | `backend/tests/unit/kwp-form-reports.repository.test.ts` | unit | RED then GREEN | `npm test -- kwp-form-reports --runInBand` |
 | 4 | Repository request query starts from `kwp_form_submissions` and applies form/status/region filters | `backend/tests/unit/kwp-form-reports.repository.test.ts` | unit | RED then GREEN | `npm test -- kwp-form-reports --runInBand` |
-| 5 | KWP factory table selects eligible-factory enrichment for `businessActivity` and main 4-digit `industryMainOrder` while preserving the existing factory `industryType` field | `backend/tests/unit/kwp-form-reports.repository.test.ts`; `backend/tests/unit/kwp-form-reports.route.test.ts` | unit + route | RED then GREEN | `npm test -- --runInBand tests/unit/kwp-form-reports.repository.test.ts tests/unit/kwp-form-reports.route.test.ts` |
+| 5 | KWP factory table selects eligible-factory enrichment for `businessActivity` and main 5-digit `industryMainOrder` while preserving the existing factory `industryType` field | `backend/tests/unit/kwp-form-reports.repository.test.ts`; `backend/tests/unit/kwp-form-reports.route.test.ts` | unit + route | RED then GREEN | `npm test -- --runInBand tests/unit/kwp-form-reports.repository.test.ts tests/unit/kwp-form-reports.route.test.ts` |
 
 ## RED/GREEN evidence
 

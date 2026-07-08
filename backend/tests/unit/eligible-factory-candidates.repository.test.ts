@@ -218,7 +218,7 @@ describe('eligibleFactoryCandidatesRepository', () => {
     expect(result.data[1]?.eia).toBeNull();
     expect(result.data[1]?.hasEia).toBeNull();
     expect(result.data[1]?.productionCapacity).toBe('น้ำตาลทราย 1200 ตัน/ปี, กากน้ำตาล 300 ตัน/ปี');
-    expect(result.data[0]?.factorySubclass).toBe('0201');
+    expect(result.data[0]?.factorySubclass).toBe('00201');
     expect(result.data[1]?.boilerSizeEach).toBeNull();
     expect(result.data[1]?.fuelUsed).toBeNull();
     expect(countQuery.count).toHaveBeenCalledWith({ total: '*' });
@@ -255,7 +255,7 @@ describe('eligibleFactoryCandidatesRepository', () => {
       source: 'external',
     });
     expect(result.data).toHaveLength(5001);
-    expect(result.data[0]?.factorySubclass).toBe('0201');
+    expect(result.data[0]?.factorySubclass).toBe('00201');
     expect(activeFacClassQuery.join).not.toHaveBeenCalled();
     expect(facClassQuery.whereIn).not.toHaveBeenCalled();
     expect(activeFacClassQuery.whereIn).toHaveBeenCalled();
