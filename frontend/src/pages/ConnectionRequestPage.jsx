@@ -399,6 +399,21 @@ function formatProductionCapacity(value, unit) {
   return [value, unit].map((item) => String(item ?? '').trim()).filter(Boolean).join(' ')
 }
 
+function normalizeDecimalInput(value, maxDecimals = 4) {
+  const rawValue = String(value ?? '')
+
+  if (!rawValue.includes('.')) {
+    return rawValue
+  }
+
+  const [integerPart, decimalPart = ''] = rawValue.split('.')
+  return `${integerPart}.${decimalPart.slice(0, maxDecimals)}`
+}
+
+function formatCriteriaNumber(value) {
+  return Number(value.toFixed(4)).toString()
+}
+
 function createInstrumentRowForParameter(parameter) {
   return {
     ...emptyInstrumentParameter,
@@ -439,7 +454,16 @@ function getHasEiaFormValue(formData, factory = {}) {
 }
 
 function createCriteriaRowsFromStandardValue(standardValue) {
-  return deriveCriteriaRows(standardValue) ?? createCriteria(standardValue).rows
+  const derivedRows = deriveCriteriaRows(standardValue)
+  if (!derivedRows) {
+    return createCriteria(standardValue).rows
+  }
+
+  return derivedRows.map((row) => ({
+    ...row,
+    min: row.min === '' ? '' : formatCriteriaNumber(Number(row.min)),
+    max: row.max === '' ? '' : formatCriteriaNumber(Number(row.max)),
+  }))
 }
 
 function getDefaultConnectionForm(type) {
@@ -497,7 +521,6 @@ const documentImageItems = [
   {
     title: 'ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน',
     uploadLabel: 'ภาพ/ไฟล์/QR Code',
-    accept: 'image/jpeg,image/png',
   },
   {
     title: 'สัญลักษณ์ของโรงงานหรือโลโก้บริษัท',
@@ -509,12 +532,10 @@ const documentImageItems = [
   {
     title: 'ภาพถ่ายปล่อง',
     uploadLabel: 'ภาพ/ไฟล์/QR Code',
-    accept: 'image/jpeg,image/png',
   },
   {
     title: 'ภาพถ่ายเครื่องมือตรวจวัดที่ติดตั้ง (CEMS)',
     uploadLabel: 'ภาพ/ไฟล์/QR Code',
-    accept: 'image/jpeg,image/png',
   },
   {
     title: 'ระบบบำบัด',
@@ -523,7 +544,6 @@ const documentImageItems = [
   {
     title: 'ภาพถ่ายเครื่องมือตรวจวัดที่ติดตั้ง (WPMS)',
     uploadLabel: 'ภาพ/ไฟล์/QR Code',
-    accept: 'image/jpeg,image/png',
   },
 ]
 
@@ -4644,8 +4664,70 @@ function ReadOnlyField({ label, value, sx }) {
   )
 }
 
-function UploadFileField({ label, accept, name, currentFileName = '', multiple = true, helperText = 'ขนาดไม่เกิน 5 Mb' }) {
-  const [fileName, setFileName] = useState('')
+function UploadFileField({ label, accept, name, currentFileName = '', multiple = true, helperText = 'ขนาดไม่เกิน 5 Mb', maxFiles = multiple ? 3 : 1 }) {
+  const inputRef = useRef(null)
+  const [selectedFiles, setSelectedFiles] = useState([])
+  const selectedFilesRef = useRef([])
+  const fileNames = selectedFiles.map((item) => item.file.name).join(', ')
+  const buttonLabel = fileNames || currentFileName || label
+
+  useEffect(() => {
+    selectedFilesRef.current = selectedFiles
+  }, [selectedFiles])
+
+  useEffect(() => () => {
+    selectedFilesRef.current.forEach((item) => {
+      if (item.previewUrl) {
+        URL.revokeObjectURL(item.previewUrl)
+      }
+    })
+  }, [])
+
+  const syncInputFiles = (items) => {
+    if (!inputRef.current) {
+      return
+    }
+
+    const dataTransfer = new DataTransfer()
+    items.forEach((item) => dataTransfer.items.add(item.file))
+    inputRef.current.files = dataTransfer.files
+  }
+
+  const handleFilesChange = (event) => {
+    const incomingFiles = Array.from(event.target.files ?? []).map((file) => ({
+      id: `${file.name}-${file.lastModified}-${file.size}`,
+      file,
+      previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : '',
+    }))
+    const filesById = new Map(selectedFiles.map((item) => [item.id, item]))
+
+    incomingFiles.forEach((item) => {
+      const duplicateItem = filesById.get(item.id)
+      if (duplicateItem) {
+        if (item.previewUrl) {
+          URL.revokeObjectURL(item.previewUrl)
+        }
+        return
+      }
+      filesById.set(item.id, item)
+    })
+
+    const nextFiles = multiple ? Array.from(filesById.values()).slice(0, maxFiles) : incomingFiles.slice(0, 1)
+    setSelectedFiles(nextFiles)
+    syncInputFiles(nextFiles)
+    event.target.value = ''
+  }
+
+  const removeSelectedFile = (targetIndex) => {
+    const removedFile = selectedFiles[targetIndex]
+    if (removedFile?.previewUrl) {
+      URL.revokeObjectURL(removedFile.previewUrl)
+    }
+
+    const nextFiles = selectedFiles.filter((_, index) => index !== targetIndex)
+    setSelectedFiles(nextFiles)
+    syncInputFiles(nextFiles)
+  }
 
   return (
     <Stack spacing={0.75}>
@@ -4659,7 +4741,7 @@ function UploadFileField({ label, accept, name, currentFileName = '', multiple =
           minHeight: 40,
           justifyContent: 'flex-start',
           borderStyle: 'dashed',
-          color: fileName || currentFileName ? 'text.primary' : 'text.secondary',
+          color: fileNames || currentFileName ? 'text.primary' : 'text.secondary',
           bgcolor: 'background.paper',
           '&:hover': {
             borderStyle: 'dashed',
@@ -4667,23 +4749,87 @@ function UploadFileField({ label, accept, name, currentFileName = '', multiple =
           },
         }}
       >
-        {fileName || currentFileName || label}
+        {buttonLabel}
         <Box
           component="input"
+          ref={inputRef}
           type="file"
           name={name}
           accept={accept}
           multiple={multiple}
           hidden
-          onChange={(event) => {
-            const files = Array.from(event.target.files ?? [])
-            setFileName(files.map((file) => file.name).join(', '))
-          }}
+          onChange={handleFilesChange}
         />
       </Button>
       <Typography variant="caption" color="text.secondary">
-        {currentFileName && !fileName ? `ไฟล์เดิม: ${currentFileName} • ${helperText}` : helperText}
+        {currentFileName && !fileNames ? `ไฟล์เดิม: ${currentFileName} • ${helperText}` : `${helperText}${multiple ? ` • อัปโหลดได้ไม่เกิน ${maxFiles} ไฟล์` : ''}`}
       </Typography>
+      {selectedFiles.length ? (
+        <Stack spacing={1}>
+          {selectedFiles.map((item, index) => (
+            <Box
+              key={item.id}
+              sx={{
+                display: 'flex',
+                gap: 1,
+                alignItems: 'center',
+                p: 1,
+                border: 1,
+                borderColor: 'divider',
+                borderRadius: 1,
+                bgcolor: 'background.paper',
+              }}
+            >
+              {item.previewUrl ? (
+                <Box
+                  component="img"
+                  src={item.previewUrl}
+                  alt={item.file.name}
+                  sx={{
+                    width: 48,
+                    height: 48,
+                    objectFit: 'cover',
+                    borderRadius: 1,
+                    border: 1,
+                    borderColor: 'divider',
+                    flex: '0 0 auto',
+                  }}
+                />
+              ) : (
+                <Box
+                  sx={{
+                    width: 48,
+                    height: 48,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    border: 1,
+                    borderColor: 'divider',
+                    borderRadius: 1,
+                    bgcolor: 'neutral.50',
+                    flex: '0 0 auto',
+                  }}
+                >
+                  <Typography variant="caption" sx={{ fontWeight: 700 }}>
+                    FILE
+                  </Typography>
+                </Box>
+              )}
+              <Box sx={{ minWidth: 0, flex: 1 }}>
+                <Typography variant="body2" noWrap title={item.file.name}>
+                  {item.file.name}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {(item.file.size / 1024 / 1024).toFixed(2)} MB
+                </Typography>
+              </Box>
+              <IconButton size="small" aria-label={`ลบไฟล์ ${item.file.name}`} onClick={() => removeSelectedFile(index)}>
+                <CloseIcon fontSize="small" />
+              </IconButton>
+            </Box>
+          ))}
+        </Stack>
+      ) : null}
     </Stack>
   )
 }
@@ -5095,6 +5241,16 @@ function DocumentsAndImagesSection({ initialDocuments = [], systemType = 'CEMS' 
               ) : null}
             </Box>
             <Grid container spacing={2}>
+              <Grid size={{ xs: 12, md: 3 }}>
+                <UploadFileField
+                  name={`documentImageFile-${item.index}`}
+                  label={item.uploadLabel}
+                  accept={item.accept}
+                  currentFileName={initialDocuments.find((document) => document?.title === item.title)?.fileName ?? ''}
+                  multiple={!item.singleFile}
+                  helperText={item.helperText ?? 'ขนาดไม่เกิน 5 Mb'}
+                />
+              </Grid>
               {item.hasLink ? (
                 <Grid size={{ xs: 12, md: 3 }}>
                   <TextField
@@ -5106,16 +5262,6 @@ function DocumentsAndImagesSection({ initialDocuments = [], systemType = 'CEMS' 
                   />
                 </Grid>
               ) : null}
-              <Grid size={{ xs: 12, md: 3 }}>
-                <UploadFileField
-                  name={`documentImageFile-${item.index}`}
-                  label={item.uploadLabel}
-                  accept={item.accept}
-                  currentFileName={initialDocuments.find((document) => document?.title === item.title)?.fileName ?? ''}
-                  multiple={!item.singleFile}
-                  helperText={item.helperText ?? 'ขนาดไม่เกิน 5 Mb'}
-                />
-              </Grid>
             </Grid>
           </Stack>
         ))}
@@ -5130,6 +5276,15 @@ function SpecialCriteriaTable({ value, onChange, disabled = false }) {
       ...value,
       rows: value.rows.map((row) => (row.level === level ? { ...row, [field]: nextValue } : row)),
     })
+  }
+  const getCriteriaOperators = (level) => {
+    if (level === 'normal') {
+      return { left: '≤', right: '≤' }
+    }
+    if (level === 'warning') {
+      return { left: '<', right: '≤' }
+    }
+    return { left: '<', right: '<' }
   }
 
   return (
@@ -5155,16 +5310,16 @@ function SpecialCriteriaTable({ value, onChange, disabled = false }) {
                 <TextField
                   size="small"
                   value={value.rows.find((criteriaRow) => criteriaRow.level === row.key)?.min ?? ''}
-                  onChange={(event) => updateRow(row.key, 'min', event.target.value)}
+                  onChange={(event) => updateRow(row.key, 'min', normalizeDecimalInput(event.target.value))}
                   disabled={disabled}
                   fullWidth
                 />
               </TableCell>
               <TableCell align="center">
                 <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', justifyContent: 'center' }}>
-                  <Typography variant="body2">{'<'}</Typography>
+                  <Typography variant="body2">{getCriteriaOperators(row.key).left}</Typography>
                   <Chip label={row.label} color={row.color} size="small" sx={{ fontWeight: 700 }} />
-                  <Typography variant="body2">{'≤'}</Typography>
+                  <Typography variant="body2">{getCriteriaOperators(row.key).right}</Typography>
                 </Stack>
               </TableCell>
               <TableCell>
@@ -5173,7 +5328,7 @@ function SpecialCriteriaTable({ value, onChange, disabled = false }) {
                   value={row.key === 'critical'
                     ? '-'
                     : value.rows.find((criteriaRow) => criteriaRow.level === row.key)?.max ?? ''}
-                  onChange={(event) => updateRow(row.key, 'max', event.target.value)}
+                  onChange={(event) => updateRow(row.key, 'max', normalizeDecimalInput(event.target.value))}
                   disabled={disabled}
                   fullWidth
                 />
@@ -5202,11 +5357,12 @@ function StandardCriteriaSection({ label, value, onChange }) {
     })
   }
   const updateStandardValue = (nextValue) => {
+    const normalizedValue = normalizeDecimalInput(nextValue)
     onChange({
       ...value,
       enabled: true,
-      standardValue: nextValue,
-      rows: createCriteriaRowsFromStandardValue(nextValue),
+      standardValue: normalizedValue,
+      rows: createCriteriaRowsFromStandardValue(normalizedValue),
     })
   }
 
