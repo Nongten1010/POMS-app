@@ -53,7 +53,7 @@ Index:
 | `production_capacity` | NVARCHAR(255) | No | กำลังการผลิตต่อหน่วย |
 | `cems_installation_required_by` | NVARCHAR(255) | No | สถานะการเข้าข่ายติดตั้ง CEMS |
 | `cems_installation_required_other` | NVARCHAR(255) | No | รายละเอียดอื่นๆ |
-| `legal_annex_no` | NVARCHAR(255) | No | ลำดับบัญชีแนบท้ายที่เข้าข่าย เก็บหลายค่าแบบ comma-separated เช่น `1,3,5` |
+| `legal_annex_no` | NVARCHAR(255) | Conditional | ลำดับบัญชีแนบท้าย เก็บหลายค่าแบบ comma-separated เช่น `1,3,5`; ส่งได้เฉพาะจุด `CEMS` ที่เลือกประกาศกระทรวงอุตสาหกรรม พ.ศ. 2565 หรือประกาศ กทม. พ.ศ. 2569 |
 | `accounting_connection_status` | NVARCHAR(255) | No | สถานะการเข้าข่ายตามบัญชีแนบท้าย |
 | `eligible_parameters_json` | NVARCHAR(MAX) | Yes | พารามิเตอร์ที่เข้าข่าย |
 | `exempted_parameters_json` | NVARCHAR(MAX) | Yes | พารามิเตอร์ที่ได้รับการยกเว้น |
@@ -175,7 +175,7 @@ Payload ที่ใช้ทดสอบยิง production โดยมี `C
       "pointName": "ปล่องทดสอบ Production 1",
       "productionUnitType": "หม้อไอน้ำ",
       "productionCapacity": "10 ตันไอน้ำ/ชั่วโมง",
-      "cemsInstallationRequiredBy": "เข้าข่ายต้องติดตั้ง CEMS ตามกฎหมาย",
+      "cemsInstallationRequiredBy": "ประกาศกระทรวงอุตสาหกรรม เรื่อง กำหนดให้โรงงานต้องติดตั้งเครื่องมือหรือเครื่องอุปกรณ์พิเศษเพื่อรายงานมลพิษอากาศจากปล่องโรงงาน พ.ศ. 2565",
       "cemsInstallationRequiredOther": null,
       "legalAnnexNo": ["1"],
       "accountingConnectionStatus": "เข้าข่ายตามบัญชีแนบท้ายลำดับที่",
@@ -197,7 +197,7 @@ Payload ที่ใช้ทดสอบยิง production โดยมี `C
       "productionCapacity": "500 ลบ.ม./วัน",
       "cemsInstallationRequiredBy": null,
       "cemsInstallationRequiredOther": null,
-      "legalAnnexNo": ["2"],
+      "legalAnnexNo": [],
       "accountingConnectionStatus": "เข้าข่ายตามบัญชีแนบท้ายลำดับที่",
       "eligibleParameters": ["BOD (mg/l)", "COD (mg/l)", "Flow (m³/hr)"],
       "exemptedParameters": [],
@@ -378,7 +378,8 @@ Request:
       "pointName": "ปล่องหลัก",
       "productionUnitType": "หม้อไอน้ำ",
       "productionCapacity": "10 ตัน/ชั่วโมง",
-      "cemsInstallationRequiredBy": "เข้าข่ายต้องติดตั้ง CEMS ตามกฎหมาย",
+      "cemsInstallationRequiredBy": "ประกาศกระทรวงอุตสาหกรรม เรื่อง กำหนดให้โรงงานต้องติดตั้งเครื่องมือหรือเครื่องอุปกรณ์พิเศษเพื่อรายงานมลพิษอากาศจากปล่องโรงงาน พ.ศ. 2565",
+      "legalAnnexNo": ["1"],
       "accountingConnectionStatus": "เข้าข่ายตามบัญชีแนบท้ายลำดับที่",
       "eligibleParameters": ["NOx (ppm)", "SO2 (ppm)"],
       "exemptedParameters": [],
@@ -474,4 +475,5 @@ Response:
 - `points` ว่างได้ ใช้กรณีบันทึกข้อมูลโรงงานไว้ก่อนโดยยังไม่ระบุจุดตรวจวัด
 - ถ้ามีรายการใน `points` แต่ละจุดต้องมี `systemType` เป็น `CEMS` หรือ `WPMS`
 - ช่องอื่นของจุดตรวจวัด เช่น `pointName`, `pointCode`, พารามิเตอร์, เชื้อเพลิง และบัญชีแนบท้าย ว่างได้
+- `legalAnnexNo` ส่งค่าได้เฉพาะจุด `CEMS` ที่ `cemsInstallationRequiredBy` เป็นหนึ่งในสองประกาศนี้: ประกาศกระทรวงอุตสาหกรรมเรื่องปล่องโรงงาน พ.ศ. 2565 หรือประกาศกระทรวงอุตสาหกรรมสำหรับกรุงเทพมหานคร พ.ศ. 2569; กรณีอื่น รวมถึง `WPMS` ต้องส่งเป็น `[]`
 - รายการพารามิเตอร์เก็บเป็น array และ backend แปลงเป็น JSON ในฐานข้อมูล
