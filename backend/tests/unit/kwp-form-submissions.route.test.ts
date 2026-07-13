@@ -43,6 +43,7 @@ import { createApp } from '../../src/app';
 import { kwpFormSubmissionsService } from '../../src/modules/kwp-form-submissions/kwp-form-submissions.service';
 
 const mockedService = jest.mocked(kwpFormSubmissionsService);
+const expectedPublicBaseUrl = process.env.PUBLIC_BASE_URL ?? 'http://d-poms.diw.go.th';
 
 describe('KWP form submission routes', () => {
   beforeEach(() => {
@@ -285,7 +286,7 @@ describe('KWP form submission routes', () => {
       actorUserId: 42,
       scope: 'OWN_FACTORY',
       regionalAccess: undefined,
-      publicBaseUrl: 'http://d-poms.diw.go.th',
+      publicBaseUrl: expectedPublicBaseUrl,
       publicPath: '/uploads',
       formType: 'KWP01',
     });
@@ -335,7 +336,7 @@ describe('KWP form submission routes', () => {
       actorUserId: 42,
       scope: 'OWN_FACTORY',
       regionalAccess: undefined,
-      publicBaseUrl: 'http://d-poms.diw.go.th',
+      publicBaseUrl: expectedPublicBaseUrl,
       publicPath: '/uploads',
       formType: 'KWP03',
     });
@@ -405,7 +406,7 @@ describe('KWP form submission routes', () => {
       actorUserId: 42,
       scope: 'OWN_FACTORY',
       regionalAccess: undefined,
-      publicBaseUrl: 'http://d-poms.diw.go.th',
+      publicBaseUrl: expectedPublicBaseUrl,
       publicPath: '/uploads',
       formType: 'KWP05',
     });
@@ -572,8 +573,9 @@ describe('KWP form submission routes', () => {
       {
         actorUserId: 42,
         scope: 'OWN_FACTORY',
-        publicBaseUrl: 'http://d-poms.diw.go.th',
+        publicBaseUrl: expectedPublicBaseUrl,
         publicPath: '/uploads',
+        regionalAccess: undefined,
       },
     );
     expect(response.body).toMatchObject({

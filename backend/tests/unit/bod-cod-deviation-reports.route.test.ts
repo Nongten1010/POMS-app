@@ -37,6 +37,7 @@ import type {
 } from '../../src/modules/bod-cod-deviations/bod-cod-deviation-reports.types';
 
 const mockedService = jest.mocked(bodCodDeviationReportsService);
+const expectedPublicBaseUrl = process.env.PUBLIC_BASE_URL ?? 'http://d-poms.diw.go.th';
 
 describe('BOD/COD deviation report routes', () => {
   beforeEach(() => {
@@ -596,7 +597,7 @@ describe('BOD/COD deviation report routes', () => {
       actorUserId: 42,
       scope: 'OWN_FACTORY',
       regionalAccess: undefined,
-      publicBaseUrl: 'http://d-poms.diw.go.th',
+      publicBaseUrl: expectedPublicBaseUrl,
       publicPath: '/uploads',
     });
     expect(response.body.data).toMatchObject({
