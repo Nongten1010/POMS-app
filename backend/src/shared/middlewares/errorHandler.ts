@@ -23,6 +23,12 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
         code: 'VALIDATION_ERROR',
         message: 'Request validation failed',
         details: err.flatten().fieldErrors,
+        issues: err.issues.map((issue) => ({
+          code: issue.code,
+          path: [...issue.path],
+          pathString: issue.path.map(String).join('.'),
+          message: issue.message,
+        })),
       },
     });
     return;

@@ -749,9 +749,7 @@ export const connectionRequestsService = {
       requestType: request.requestType,
     });
     if (!effectiveInputResult.success) {
-      throw new BadRequestError('Invalid connection request form', {
-        issues: effectiveInputResult.error.issues,
-      });
+      throw effectiveInputResult.error;
     }
     const effectiveInput = effectiveInputResult.data;
     ensureRequestFormSections(effectiveInput, effectiveInput.requestType);
@@ -1050,6 +1048,7 @@ function toAddParameterFormDetail(
       industrySubOrder: request.industrySubOrder,
       businessActivity: request.businessActivity,
       eia: request.eia,
+      eiaOther: request.eiaOther,
       hasEia: request.hasEia,
       projectName: request.projectName,
       address: request.address,
@@ -1062,6 +1061,8 @@ function toAddParameterFormDetail(
       contactPersons: request.contactPersons,
       notificationEmails: request.notificationEmails,
       officerNotificationEmails: request.officerNotificationEmails,
+      informationProviderName: request.informationProviderName,
+      informationProviderPosition: request.informationProviderPosition,
       measurementPoints: [toMeasurementPointInput(point)],
       remarks: null,
     },
@@ -1518,7 +1519,7 @@ function findFactorySummary(
       industryMainOrder: summary.industryMainOrder ?? request.industryMainOrder,
       industrySubOrder: summary.industrySubOrder ?? request.industrySubOrder,
       businessActivity: summary.businessActivity ?? request.businessActivity,
-      eia: summary.eia ?? request.eia,
+      eia: summary.eia ?? toLegacyEiaLabel(request.hasEia),
       projectName: summary.projectName ?? request.projectName,
       address: summary.address ?? request.address,
       latitude: summary.latitude ?? (request.latitude === null ? null : String(request.latitude)),
@@ -1537,13 +1538,18 @@ function findFactorySummary(
     industryMainOrder: request.industryMainOrder,
     industrySubOrder: request.industrySubOrder,
     businessActivity: request.businessActivity,
-    eia: request.eia,
+    eia: toLegacyEiaLabel(request.hasEia),
     projectName: request.projectName,
     address: request.address,
     latitude: request.latitude === null ? null : String(request.latitude),
     longitude: request.longitude === null ? null : String(request.longitude),
     province: null,
   };
+}
+
+function toLegacyEiaLabel(hasEia: boolean | null): 'มี' | 'ไม่มี' | null {
+  if (hasEia === null) return null;
+  return hasEia ? 'มี' : 'ไม่มี';
 }
 
 function findCodeIssuedAt(request: ConnectionRequestDTO): string | null {
@@ -1606,6 +1612,7 @@ function ensureRequestFormSections(
         });
       }
       if (
+        requestType === CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT &&
         input.systemType === 'CEMS' &&
         (!point.documentsAndImages || point.documentsAndImages.length === 0)
       ) {

@@ -1,3 +1,5 @@
+import type { ConnectionRequestEiaAssessment } from './connection-request-eia';
+
 export const CONNECTION_REQUEST_STATUS = {
   PENDING_DESIGN_REVIEW: 'PENDING_DESIGN_REVIEW',
   WAITING_CONNECTION: 'WAITING_CONNECTION',
@@ -100,7 +102,8 @@ export interface CreateConnectionRequestInput {
   industryMainOrderLabel?: string | null;
   industrySubOrder?: string | null;
   businessActivity?: string | null;
-  eia?: 'มี' | 'ไม่มี' | null;
+  eia?: ConnectionRequestEiaAssessment | null;
+  eiaOther?: string | null;
   hasEia?: boolean | null;
   projectName?: string | null;
   address?: string | null;
@@ -236,7 +239,8 @@ export interface ConnectionRequestDTO {
   industryMainOrderLabel: string | null;
   industrySubOrder: string | null;
   businessActivity: string | null;
-  eia: 'มี' | 'ไม่มี' | null;
+  eia: ConnectionRequestEiaAssessment | null;
+  eiaOther: string | null;
   hasEia: boolean | null;
   projectName: string | null;
   address: string | null;

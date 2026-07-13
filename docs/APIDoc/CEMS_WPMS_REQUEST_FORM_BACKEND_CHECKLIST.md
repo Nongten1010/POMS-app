@@ -2,6 +2,19 @@
 
 วันที่ตรวจ: 2026-07-13
 
+## Payload/response round-trip follow-up
+
+| Area | Backend | Frontend จาก source audit ล่าสุด |
+| --- | --- | --- |
+| EIA categorical snapshot | `DONE`: รับ `มี`, `ไม่มี`, `มี IEE`, `มี EIA`, `มี EHIA`, `อื่นๆ`; เก็บ `eia_assessment`/`eia_other`; DB constraint กันค่าไม่สอดคล้อง; response derive `hasEia` จาก categorical snapshot | ส่งครบแล้ว แต่ mapper หน้าแก้ไขยังไม่อ่าน `eiaOther` กลับเข้า state |
+| พารามิเตอร์ยกเว้นตามประกาศฯ ข้อ | `DONE`: ใช้ `measurementPoints[].details.exemptedParameterRegulationClauses: string[]` | ช่อง tag ยังไม่มี name/state/payload binding |
+| Empty document rows | `DONE`: กรองเฉพาะ placeholder shape ที่รู้จัก; malformed object ถูก strict validation reject; retained row ต้องมี `link` หรือ `fileUrl` | CEMS สร้าง placeholder หลาย title; WPMS ยังทำ metadata ที่ upload แล้วหล่นจาก final JSON |
+| Response envelope | `DONE`: create คืน `201`, `Location`, `{ success, data }`; validation คืน `400`, `VALIDATION_ERROR`, legacy `details` และ full-path `issues[]` | ต้องผูก nested error ด้วย `error.issues[].pathString` |
+| Resubmit validation | `DONE`: request-type-specific failure ใช้ `VALIDATION_ERROR` shape เดียวกับ create | ใช้ `error.issues[].pathString` ได้เหมือน submit ครั้งแรก |
+| Add-parameter prefill | `DONE`: คืน EIA ทั้งสาม field และข้อมูลผู้ให้ข้อมูล/ตำแหน่งใน `formDefaults` | ต้องอ่าน field เหล่านี้กลับเข้าฟอร์ม |
+
+สรุป end-to-end: backend contract ที่พบว่าไม่รองรับถูกแก้แล้ว แต่หน้าปัจจุบันยังไม่พร้อมถือว่า round-trip ครบ เพราะ WPMS documents, comma-containing treatment option, contact-array alignment, regulation-clause tag และ `eiaOther` response prefill ยังเป็น frontend gaps.
+
 ## สถานะงานจัดการเครื่องมือตรวจวัด (รอบ cross-stack)
 
 | ข้อที่ขอ | สถานะ | สิ่งที่แก้และตรวจแล้ว |
@@ -18,7 +31,7 @@
 
 - งาน backend audit เดิมแก้ production code ใต้ `backend/`, tests และเอกสาร Markdown.
 - รอบ follow-up นี้ผู้ใช้ระบุให้แก้ frontend โดยตรง จึงเพิ่ม frontend implementation/helper/test สำหรับเกณฑ์ 80% และ UI ที่เกี่ยวข้อง.
-- ข้อมูลรายละเอียด เอกสาร และรูปภาพยังเก็บใน JSON columns เดิมของ measurement point จึงไม่ต้องเพิ่ม migration.
+- ข้อมูลรายละเอียด เอกสาร และรูปภาพยังเก็บใน JSON columns เดิมของ measurement point; EIA categorical snapshot ที่หัวคำขอเพิ่ม migration `0066_add_connection_request_eia_assessment.ts`.
 
 หลักฐาน TDD และคำสั่งที่รันอยู่ที่ [cems-wpms-request-form-update.tdd.md](../testing/cems-wpms-request-form-update.tdd.md) และ contract สำหรับ frontend อยู่ที่ [CEMS_WPMS_REQUEST_FORM_FRONTEND_HANDOFF.md](./CEMS_WPMS_REQUEST_FORM_FRONTEND_HANDOFF.md).
 
@@ -69,13 +82,15 @@
 
 ## ข้อที่ยังบล็อก end-to-end บน frontend `origin/main`
 
-ต้องแก้อย่างน้อย 5 จุดก่อนถือว่าหน้าปัจจุบันพร้อมส่งจริง:
+ต้องแก้อย่างน้อย 7 จุดก่อนถือว่าหน้าปัจจุบันพร้อมส่งจริง:
 
 1. ให้ requested-parameter options มาจาก `pendingParameters` เท่านั้น.
 2. ใส่ `documentsAndImages` ใน WPMS measurement point payload.
 3. เปลี่ยน CS2 label เป็น `CS2 (mg/m³)` ให้ตรง contract.
 4. ทำ `ไม่มี` ให้ exclusive และเติม exempted field ของ WPMS หาก requirement ยืนยันว่าต้องมี.
-5. แก้ EIA payload ที่อยู่นอก requirement ชุดนี้: frontend ปัจจุบันส่ง `eia: "มี EIA"` และ `eiaOther`, แต่ connection-request backend ปัจจุบันรับ `eia: "มี"|"ไม่มี"|null` และไม่มี `eiaOther`. หากไม่แก้ จุดนี้ยังทำให้ request ได้ HTTP 400 แม้ 15 ข้อด้านบนจะรองรับแล้ว.
+5. อ่าน `eiaOther` จาก response กลับเข้า edit state; backend รองรับและ persist EIA แบบละเอียดแล้ว.
+6. Bind ช่อง tag ประกาศฯ ข้อเป็น `details.exemptedParameterRegulationClauses`.
+7. เลิก comma-split ค่า multiselect และประกอบ `contactPersons[]` เป็นราย object เพื่อไม่ให้ค่า/คนเหลื่อมกัน.
 
 ## หลักฐานตรวจ
 

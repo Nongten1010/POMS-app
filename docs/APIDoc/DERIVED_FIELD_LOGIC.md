@@ -9,6 +9,48 @@
 - ถ้า logic เป็นเพียง fallback ชั่วคราว ให้เขียนไว้ชัดเจนว่า fallback จากอะไรไปอะไร
 - ถ้าไม่แน่ใจว่า field ควรตีความอย่างไร ให้หยุดที่ raw value และถามก่อน
 
+## Connection Request Environmental-Assessment Response
+
+Endpoint:
+
+- `POST /api/v1/cems-wpms-requests/measurement-points`
+- `POST /api/v1/cems-wpms-requests/parameters`
+- `PUT /api/v1/cems-wpms-requests/:id/form`
+- `GET /api/v1/cems-wpms-requests/:id`
+
+Code:
+
+- `backend/src/modules/connection-requests/connection-request-eia.ts`
+- `backend/src/modules/connection-requests/connection-requests.repository.ts`
+- `backend/src/db/migrations/0066_add_connection_request_eia_assessment.ts`
+
+Source:
+
+- `cems_wpms_connection_requests.eia_assessment`
+- `cems_wpms_connection_requests.eia_other`
+- legacy/fallback field `cems_wpms_connection_requests.has_eia`
+
+Fallback order:
+
+1. ถ้า `eia_assessment` เป็นค่าที่รองรับ คืน categorical value เดิม.
+2. ถ้า categorical value เป็น `อื่นๆ` คืน `eia_other`; ค่าอื่นคืน `eiaOther: null`.
+3. ถ้า row เก่ายังไม่มี `eia_assessment`, แปลง `has_eia = true` เป็น `eia: "มี"`, `false` เป็น `eia: "ไม่มี"`, และ `null` เป็น `eia: null`.
+
+Transformation:
+
+- ตอนรับ payload backend derive `hasEia = true` สำหรับ `มี`, `มี IEE`, `มี EIA`, `มี EHIA` และ `false` สำหรับ `ไม่มี`, `อื่นๆ`.
+- ถ้า row มี categorical snapshot ที่รองรับ response จะ derive `hasEia` จาก categorical value แทนการเชื่อ `has_eia` ที่อาจไม่สอดคล้อง; migration constraint บังคับให้ค่าใหม่ตรงกัน.
+- Response คืน `eia`, `eiaOther`, `hasEia` เพื่อให้หน้าแก้ไขสร้างค่าเดิมได้โดยไม่เดาจาก boolean.
+
+Reason:
+
+- `has_eia` เดิมเก็บได้เพียง boolean และไม่สามารถแยก IEE/EIA/EHIA/Other ได้ จึงต้องมี categorical snapshot ที่หัวคำขอ.
+
+Known risks:
+
+- คำขอเก่าที่มีเพียง `has_eia` สูญ subtype ไปแล้ว; fallback คืนได้เพียง `มี` หรือ `ไม่มี` และไม่ควรถูกตีความว่าเป็น subtype ที่ยืนยันแล้ว.
+- ตาม contract ของหน้า frontend ปัจจุบัน `อื่นๆ` derive เป็น `hasEia: false`; หากนิยามทางธุรกิจเปลี่ยน ต้องแก้ validator, migration constraint และ response mapping พร้อมกัน.
+
 ## Connected Measurement Point Modal Detail
 
 Endpoint:

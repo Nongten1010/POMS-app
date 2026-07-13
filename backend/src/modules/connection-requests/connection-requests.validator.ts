@@ -1,5 +1,10 @@
 import { z } from 'zod';
 import { MAX_DOCUMENT_FILE_SIZE_BYTES } from './connection-request-document-image.service';
+import {
+  CONNECTION_REQUEST_EIA_ASSESSMENTS,
+  deriveHasEiaFromAssessment,
+  type ConnectionRequestEiaAssessment,
+} from './connection-request-eia';
 import { CONNECTION_REQUEST_STATUS, CONNECTION_REQUEST_TYPE } from './connection-requests.types';
 
 const trimmedString = (max: number) => z.string().trim().min(1).max(max);
@@ -60,6 +65,7 @@ const cemsOnlyDetailFields = new Set([
   'cemsInstallationRequiredBy',
   'cemsInstallationRequiredOther',
   'legalAnnexNo',
+  'exemptedParameterRegulationClauses',
   'sharedStackCode',
   'stackShape',
   'stackDiameter',
@@ -117,6 +123,14 @@ const requestDocumentImageSchema = z
     fileSize: z.number().int().min(1).max(MAX_DOCUMENT_FILE_SIZE_BYTES).nullable().optional(),
   })
   .strict()
+  .superRefine((document, ctx) => {
+    if (hasNonBlankString(document.link) || hasNonBlankString(document.fileUrl)) return;
+    ctx.addIssue({
+      code: 'custom',
+      path: ['fileUrl'],
+      message: 'Document must include link or fileUrl',
+    });
+  })
   .transform((document) => ({
     ...document,
     description: document.description ?? null,
@@ -389,13 +403,58 @@ function normalizeMeasurementPointInput(value: unknown): unknown {
     point,
   );
   const parameters = normalizeMeasurementPointParameterNames(point);
+  const documentsAndImages = normalizeDocumentImages(point.documentsAndImages);
 
   return {
     ...point,
     ...(inferredPointType ? { pointType: inferredPointType } : {}),
     ...(parameters.length > 0 ? { parameters } : {}),
     ...(measurementInstruments ? { measurementInstruments } : {}),
+    ...(documentsAndImages !== undefined ? { documentsAndImages } : {}),
   };
+}
+
+function normalizeDocumentImages(value: unknown): unknown {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) return value;
+
+  return value.filter((document) => !isEmptyDocumentPlaceholder(document));
+}
+
+function isEmptyDocumentPlaceholder(value: unknown): boolean {
+  if (!isRecord(value) || !hasNonBlankString(value.title)) return false;
+  const recognizedKeys = new Set([
+    'title',
+    'description',
+    'link',
+    'fileName',
+    'fileUrl',
+    'fileType',
+    'fileSize',
+  ]);
+  if (Object.keys(value).some((key) => !recognizedKeys.has(key))) return false;
+  if (hasNonBlankString(value.link) || hasNonBlankString(value.fileUrl)) return false;
+  if (
+    value.description !== undefined &&
+    value.description !== null &&
+    typeof value.description !== 'string'
+  ) {
+    return false;
+  }
+
+  const fileMetadataTextFields = ['link', 'fileName', 'fileUrl', 'fileType'];
+  const hasUnexpectedTextValue = fileMetadataTextFields.some((field) => {
+    const fieldValue = value[field];
+    if (fieldValue === undefined || fieldValue === null) return false;
+    return typeof fieldValue !== 'string' || fieldValue.trim().length > 0;
+  });
+  if (hasUnexpectedTextValue) return false;
+
+  return value.fileSize === undefined || value.fileSize === null;
+}
+
+function hasNonBlankString(value: unknown): boolean {
+  return typeof value === 'string' && value.trim().length > 0;
 }
 
 function normalizeMeasurementInstrumentsInput(
@@ -535,8 +594,9 @@ const connectionRequestFormObjectSchema = z
     businessActivity: optionalNullableTrimmedString(4000),
     eia: z.preprocess(
       (value) => (typeof value === 'string' && value.trim() === '' ? null : value),
-      z.enum(['มี', 'ไม่มี']).nullable().optional(),
+      z.enum(CONNECTION_REQUEST_EIA_ASSESSMENTS).nullable().optional(),
     ),
+    eiaOther: optionalNullableTrimmedString(500),
     hasEia: z.boolean().nullable().optional(),
     projectName: optionalNullableTrimmedString(500),
     address: optionalNullableTrimmedString(1000),
@@ -616,8 +676,53 @@ function validateConnectionRequestFormBase(
   ctx: z.RefinementCtx,
 ): void {
   validateContactSection(payload, ctx);
+  validateEnvironmentalAssessment(payload, ctx);
+
+  if (payload.requestType === CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT) {
+    validateMeasurementPointFormSections(payload, ctx);
+    return;
+  }
+
+  if (payload.requestType === CONNECTION_REQUEST_TYPE.ADD_PARAMETER) {
+    if (payload.measurementPoints.length !== 1) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['measurementPoints'],
+        message: 'Add parameter request must reference exactly one measurement point',
+      });
+    }
+    validateMeasurementPointFormSections(payload, ctx, {
+      requireExistingPointCode: true,
+      requireCemsDocuments: false,
+    });
+    return;
+  }
+
   validateUniqueMeasurementPoints(payload.measurementPoints, ctx);
   validateSingleFactoryLogo(payload.measurementPoints, ctx);
+}
+
+function validateEnvironmentalAssessment(
+  payload: ContactFormPayload | ContactFormPayloadWithoutRequestType,
+  ctx: z.RefinementCtx,
+): void {
+  if (payload.eia === 'อื่นๆ' && !payload.eiaOther) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['eiaOther'],
+      message: 'eiaOther is required when eia is อื่นๆ',
+    });
+  }
+
+  if (payload.eia === undefined || payload.eia === null || payload.hasEia == null) return;
+  const expectedHasEia = deriveHasEiaFromAssessment(payload.eia);
+  if (payload.hasEia === expectedHasEia) return;
+
+  ctx.addIssue({
+    code: 'custom',
+    path: ['hasEia'],
+    message: `hasEia must be ${expectedHasEia} when eia is ${payload.eia}`,
+  });
 }
 
 function stripFrontendSystemTypeAlias<T extends { type?: unknown }>(payload: T): Omit<T, 'type'> {
@@ -631,12 +736,17 @@ function normalizeFactorySnapshot<
   payload: T,
 ): T & {
   factoryRegistrationNo: string;
-  eia: 'มี' | 'ไม่มี' | null;
+  eia: ConnectionRequestEiaAssessment | null;
+  eiaOther: string | null;
+  hasEia: boolean | null;
 } {
+  const eia = payload.eia ?? null;
   return {
     ...payload,
     factoryRegistrationNo: payload.factoryRegistrationNo ?? payload.factoryId,
-    eia: payload.eia ?? null,
+    eia,
+    eiaOther: payload.eiaOther ?? null,
+    hasEia: eia ? deriveHasEiaFromAssessment(eia) : (payload.hasEia ?? null),
   };
 }
 
@@ -721,6 +831,7 @@ function validateCemsDetails(
   validateMonitoringPointKind(details, index, ctx, 'CEMS');
   validateExcludedFields(details, wpmsOnlyDetailFields, index, ctx, 'WPMS-only detail field');
   validateParameterGroups(details, index, ctx);
+  validateRegulationClauseTags(details, index, ctx);
   validateRequestedParameters(point, index, ctx);
   validateLegalAnnexNumbers(details, index, ctx);
 
@@ -746,6 +857,23 @@ function validateCemsDetails(
 
   validateTreatmentSystem(details, index, ctx);
   validateConnectionDevice(details, index, ctx);
+}
+
+function validateRegulationClauseTags(
+  details: Record<string, unknown>,
+  index: number,
+  ctx: z.RefinementCtx,
+): void {
+  const clauses = details.exemptedParameterRegulationClauses;
+  if (clauses === undefined || clauses === null) return;
+  if (!isStringArray(clauses) || clauses.some((clause) => clause.trim().length === 0)) {
+    addDetailIssue(
+      ctx,
+      index,
+      'exemptedParameterRegulationClauses',
+      'exemptedParameterRegulationClauses must be string[]',
+    );
+  }
 }
 
 function validateWpmsDetails(
@@ -1080,7 +1208,7 @@ function addDetailIssue(ctx: z.RefinementCtx, index: number, field: string, mess
 function validateMeasurementPointFormSections(
   payload: ContactFormPayloadWithoutRequestType,
   ctx: z.RefinementCtx,
-  options: { requireExistingPointCode?: boolean } = {},
+  options: { requireExistingPointCode?: boolean; requireCemsDocuments?: boolean } = {},
 ): void {
   validateUniqueMeasurementPoints(payload.measurementPoints, ctx);
   validateSingleFactoryLogo(payload.measurementPoints, ctx);
@@ -1100,7 +1228,11 @@ function validateMeasurementPointFormSections(
         message: 'Measurement point detail section is required',
       });
     }
-    if (payload.systemType === 'CEMS' && point.documentsAndImages.length === 0) {
+    if (
+      options.requireCemsDocuments !== false &&
+      payload.systemType === 'CEMS' &&
+      point.documentsAndImages.length === 0
+    ) {
       ctx.addIssue({
         code: 'custom',
         path: ['measurementPoints', index, 'documentsAndImages'],
@@ -1163,6 +1295,7 @@ function validateResubmitConnectionRequest(
   ctx: z.RefinementCtx,
 ): void {
   validateContactSection(payload, ctx);
+  validateEnvironmentalAssessment(payload, ctx);
 
   if (payload.requestType === CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT) {
     validateMeasurementPointFormSections(payload, ctx);
@@ -1177,7 +1310,10 @@ function validateResubmitConnectionRequest(
         message: 'Add parameter request must reference exactly one measurement point',
       });
     }
-    validateMeasurementPointFormSections(payload, ctx, { requireExistingPointCode: true });
+    validateMeasurementPointFormSections(payload, ctx, {
+      requireExistingPointCode: true,
+      requireCemsDocuments: false,
+    });
     return;
   }
 
@@ -1212,6 +1348,7 @@ export const addMeasurementPointRequestSchema = connectionRequestFormObjectSchem
   .omit({ requestType: true })
   .superRefine((payload, ctx) => {
     validateContactSection(payload, ctx);
+    validateEnvironmentalAssessment(payload, ctx);
     validateMeasurementPointFormSections(payload, ctx);
   })
   .transform((payload) => ({
@@ -1223,6 +1360,7 @@ export const addParameterRequestSchema = connectionRequestFormObjectSchema
   .omit({ requestType: true })
   .superRefine((payload, ctx) => {
     validateContactSection(payload, ctx);
+    validateEnvironmentalAssessment(payload, ctx);
     if (payload.measurementPoints.length !== 1) {
       ctx.addIssue({
         code: 'custom',
@@ -1230,7 +1368,10 @@ export const addParameterRequestSchema = connectionRequestFormObjectSchema
         message: 'Add parameter request must reference exactly one measurement point',
       });
     }
-    validateMeasurementPointFormSections(payload, ctx, { requireExistingPointCode: true });
+    validateMeasurementPointFormSections(payload, ctx, {
+      requireExistingPointCode: true,
+      requireCemsDocuments: false,
+    });
   })
   .transform((payload) => ({
     ...normalizeContacts(normalizeFactorySnapshot(stripFrontendSystemTypeAlias(payload))),

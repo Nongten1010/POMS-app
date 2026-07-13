@@ -32,6 +32,16 @@ describe('connectionRequestsRepository request numbers', () => {
     expect(sql).toContain('[mp].[point_name]');
   });
 
+  it('selects the categorical EIA snapshot columns needed by list responses', () => {
+    const sql = buildBaseQueryForTests({}, { actorUserId: 42, scope: 'ALL' })
+      .toSQL()
+      .sql.toLowerCase();
+
+    expect(sql).toContain('[eia_assessment]');
+    expect(sql).toContain('[eia_other]');
+    expect(sql).toContain('[has_eia]');
+  });
+
   it('does not link selected station history by duplicate measurement point names alone', () => {
     const sql = buildBaseQueryForTests({ stationId: 'S0001' }, { actorUserId: 42, scope: 'ALL' })
       .toSQL()

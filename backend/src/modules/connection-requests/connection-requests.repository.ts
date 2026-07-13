@@ -5,6 +5,10 @@ import { factorySourceDb } from '../../config/factory-source-database';
 import type { PermissionScopeDetails } from '../auth/permissions';
 import type { RegionalAccessDTO } from '../auth/regional-access';
 import {
+  deriveHasEiaFromAssessment,
+  resolveStoredConnectionRequestEia,
+} from './connection-request-eia';
+import {
   CONNECTION_REQUEST_STATUS,
   CONNECTION_REQUEST_TYPE,
   CONNECTION_REQUEST_TYPE_LABELS,
@@ -40,6 +44,8 @@ interface ConnectionRequestRow {
   industry_main_order: string | null;
   industry_sub_order: string | null;
   business_activity: string | null;
+  eia_assessment: string | null;
+  eia_other: string | null;
   has_eia: boolean | number | null;
   project_name: string | null;
   address: string | null;
@@ -491,6 +497,8 @@ export const connectionRequestsRepository = {
         'industry_main_order',
         'industry_sub_order',
         'business_activity',
+        'eia_assessment',
+        'eia_other',
         'has_eia',
         'project_name',
         'address',
@@ -989,6 +997,8 @@ function buildBaseQuery(
     'industry_main_order',
     'industry_sub_order',
     'business_activity',
+    'eia_assessment',
+    'eia_other',
     'has_eia',
     'project_name',
     'address',
@@ -1437,6 +1447,11 @@ function toConnectionRequestDTO(
   snapshotRow: RequestFactorySnapshotRow | null = null,
 ): ConnectionRequestDTO {
   const statusTimeline = buildStatusHistoryTimeline(historyRows);
+  const environmentalAssessment = resolveStoredConnectionRequestEia({
+    eiaAssessment: row.eia_assessment,
+    eiaOther: row.eia_other,
+    hasEia: row.has_eia,
+  });
   return {
     id: Number(row.id),
     requestNo: row.request_no,
@@ -1450,8 +1465,9 @@ function toConnectionRequestDTO(
     industryMainOrderLabel: snapshotRow?.factory_main_type_label ?? null,
     industrySubOrder: row.industry_sub_order,
     businessActivity: row.business_activity,
-    eia: toEiaLabel(row.has_eia),
-    hasEia: toNullableBoolean(row.has_eia),
+    eia: environmentalAssessment.eia,
+    eiaOther: environmentalAssessment.eiaOther,
+    hasEia: environmentalAssessment.hasEia,
     projectName: row.project_name,
     address: row.address,
     regionCode: snapshotRow?.region_code ?? null,
@@ -1493,7 +1509,7 @@ function toConnectionRequestDTO(
 }
 
 function toRequestRow(input: CreateConnectionRequestInput): Record<string, unknown> {
-  const hasEia = input.hasEia ?? toBooleanFromEiaLabel(input.eia ?? null);
+  const hasEia = input.eia ? deriveHasEiaFromAssessment(input.eia) : (input.hasEia ?? null);
   return {
     factory_id: input.factoryId,
     factory_name: input.factoryName,
@@ -1501,6 +1517,8 @@ function toRequestRow(input: CreateConnectionRequestInput): Record<string, unkno
     industry_main_order: input.industryMainOrder ?? null,
     industry_sub_order: input.industrySubOrder ?? null,
     business_activity: input.businessActivity ?? null,
+    eia_assessment: input.eia ?? null,
+    eia_other: input.eia === 'อื่นๆ' ? (input.eiaOther ?? null) : null,
     has_eia: hasEia,
     project_name: input.projectName ?? null,
     address: input.address ?? null,
@@ -1526,6 +1544,10 @@ function toRequestRow(input: CreateConnectionRequestInput): Record<string, unkno
     information_provider_position: input.informationProviderPosition ?? null,
     remarks: input.remarks ?? null,
   };
+}
+
+export function toRequestRowForTests(input: CreateConnectionRequestInput): Record<string, unknown> {
+  return toRequestRow(input);
 }
 
 async function upsertFactorySnapshot(
@@ -2025,18 +2047,6 @@ function toOfficerNotificationEmails(row: ConnectionRequestRow): string[] {
   return parseJsonArray<string>(row.officer_notification_emails_json).filter(
     (email) => typeof email === 'string' && email.length > 0,
   );
-}
-
-function toEiaLabel(value: boolean | number | null): 'มี' | 'ไม่มี' | null {
-  const hasEia = toNullableBoolean(value);
-  if (hasEia === null) return null;
-  return hasEia ? 'มี' : 'ไม่มี';
-}
-
-function toBooleanFromEiaLabel(value: 'มี' | 'ไม่มี' | null): boolean | null {
-  if (value === 'มี') return true;
-  if (value === 'ไม่มี') return false;
-  return null;
 }
 
 function parseParameters(value: string): string[] {

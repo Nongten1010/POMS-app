@@ -94,6 +94,7 @@ describe('connected measurement points route', () => {
           industrySubOrder: null,
           businessActivity: null,
           eia: null,
+          eiaOther: null,
           hasEia: null,
           projectName: null,
           address: null,

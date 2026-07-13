@@ -93,6 +93,7 @@ describe('connectionRequestsService', () => {
     industrySubOrder: '33',
     businessActivity: 'ผลิตเคมีภัณฑ์',
     eia: 'มี',
+    eiaOther: null,
     hasEia: true,
     projectName: 'โครงการทดสอบ CEMS',
     address: '99 หมู่ 1 ตำบลทดสอบ อำเภอเมือง จังหวัดสระบุรี',
@@ -1617,6 +1618,11 @@ describe('connectionRequestsService', () => {
         requestType: CONNECTION_REQUEST_TYPE.ADD_PARAMETER,
         factoryId: 'factory-001',
         systemType: 'CEMS',
+        eia: 'มี',
+        eiaOther: null,
+        hasEia: true,
+        informationProviderName: 'ธนากรณ์ ศรีคอม',
+        informationProviderPosition: 'ผู้จัดการโรงงาน',
         measurementPoints: [
           {
             pointCode: 'STACK-A',
@@ -2217,7 +2223,7 @@ describe('connectionRequestsService', () => {
     );
   });
 
-  it('creates an add parameter request for exactly one measurement point', async () => {
+  it('creates a CEMS add parameter request without requiring documents', async () => {
     const addParameterPayload = {
       ...payload,
       requestType: CONNECTION_REQUEST_TYPE.ADD_PARAMETER,
@@ -2230,15 +2236,7 @@ describe('connectionRequestsService', () => {
             stackDiameter: 1.2,
             connectionDevice: 'POMS Box (กรอ.)',
           },
-          documentsAndImages: [
-            {
-              title: 'ภาพถ่ายปล่อง',
-              fileName: 'stack.png',
-              fileUrl: 'https://example.com/files/stack.png',
-              fileType: 'image/png',
-              fileSize: 1024,
-            },
-          ],
+          documentsAndImages: [],
           measurementInstruments: {
             converterBrand: 'Converter Brand',
             converterModel: 'CV-100',
@@ -2773,7 +2771,7 @@ describe('connectionRequestsService', () => {
     );
   });
 
-  it('preserves the original request type when resubmitting an add parameter form', async () => {
+  it('preserves the original request type when resubmitting an add parameter form without documents', async () => {
     const revisedPayload = {
       ...payload,
       measurementPoints: [
@@ -2785,15 +2783,7 @@ describe('connectionRequestsService', () => {
             stackDiameter: 1.2,
             connectionDevice: 'POMS Box (กรอ.)',
           },
-          documentsAndImages: [
-            {
-              title: 'ภาพถ่ายปล่อง',
-              fileName: 'stack.png',
-              fileUrl: 'https://example.com/files/stack.png',
-              fileType: 'image/png',
-              fileSize: 1024,
-            },
-          ],
+          documentsAndImages: [],
           measurementInstruments: {
             converterBrand: 'Converter Brand',
             converterModel: 'CV-100',
@@ -2870,7 +2860,11 @@ describe('connectionRequestsService', () => {
     await expect(
       connectionRequestsService.resubmit(1, revisedPayload, actorUserId),
     ).rejects.toMatchObject({
-      code: 'BAD_REQUEST',
+      issues: expect.arrayContaining([
+        expect.objectContaining({
+          path: ['measurementPoints', 0, 'details', 'legalAnnexNo'],
+        }),
+      ]),
     });
     expect(mockedRepository.replaceForm).not.toHaveBeenCalled();
   });
@@ -2907,7 +2901,11 @@ describe('connectionRequestsService', () => {
 
     await expect(connectionRequestsService.resubmit(1, payload, actorUserId)).rejects.toMatchObject(
       {
-        code: 'BAD_REQUEST',
+        issues: expect.arrayContaining([
+          expect.objectContaining({
+            path: ['measurementPoints', 0, 'measurementInstruments'],
+          }),
+        ]),
       },
     );
   });
@@ -3045,6 +3043,7 @@ function requestDto(overrides: Partial<ConnectionRequestDTO> = {}): ConnectionRe
     industrySubOrder: '33',
     businessActivity: 'ผลิตเคมีภัณฑ์',
     eia: 'มี',
+    eiaOther: null,
     hasEia: true,
     projectName: 'โครงการทดสอบ CEMS',
     address: '99 หมู่ 1 ตำบลทดสอบ อำเภอเมือง จังหวัดสระบุรี',

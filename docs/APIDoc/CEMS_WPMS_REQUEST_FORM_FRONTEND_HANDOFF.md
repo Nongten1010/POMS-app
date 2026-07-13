@@ -64,11 +64,28 @@ details: {
 - CEMS canonical labels ใหม่คือ `CS2 (ppm)`, `CS2 (ppb)`, `CS2 (mg/m³)`. แก้ frontend JSON จาก `mg/m3` เป็น `mg/m³`.
 - `measurementInstruments.parameters[]` ควรมี row เฉพาะ requested parameters และใช้ label พร้อมหน่วยเดียวกัน.
 
+### EIA ของหัวคำขอ
+
+```ts
+{
+  eia: 'มี' | 'ไม่มี' | 'มี IEE' | 'มี EIA' | 'มี EHIA' | 'อื่นๆ' | null;
+  eiaOther: string | null;
+  hasEia: boolean | null;
+}
+```
+
+- Backend รับ payload แบบละเอียดจาก frontend แล้ว และ response จะคืน `eia`, `eiaOther`, `hasEia` ทั้งสาม field.
+- `eia = "อื่นๆ"` ต้องส่ง `eiaOther` ที่ไม่ว่าง.
+- `hasEia` ต้องสอดคล้องกับ `eia`: `ไม่มี`/`อื่นๆ` เป็น `false`; ค่า `มี`, `มี IEE`, `มี EIA`, `มี EHIA` เป็น `true`.
+- คำขอเก่าที่ยังไม่มี categorical snapshot จะ fallback จาก `has_eia` เป็น `มี`/`ไม่มี`; จึงไม่สามารถกู้ subtype เดิมของข้อมูลเก่าได้.
+- หน้าแก้ไขต้องอ่าน `response.data.eiaOther` กลับเข้าฟอร์มด้วย ไม่เช่นนั้นค่า `อื่นๆ` จะหายตอน resubmit.
+
 ### CEMS
 
 ```ts
 details: {
   legalAnnexNo: Array<'1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '10' | '11' | '12' | '13'>;
+  exemptedParameterRegulationClauses: string[];
   primaryFuel: string | null;
   primaryFuelOther: string | null;
   secondaryFuel: string | null;
@@ -84,6 +101,7 @@ details: {
 - `ชีวมวล`, `Biomass`, `อื่นๆ` ต้องกรอก fuel Other ของช่องเดียวกัน.
 - ถ้าเลือก treatment `อื่นๆ` ต้องกรอก `treatmentSystemOther`.
 - เปลี่ยน visible option จาก `POMS` เป็น `D-POMS`; backend ยังคงรับค่าเก่าเพื่อ history.
+- ช่อง `พารามิเตอร์ที่ได้รับการยกเว้นตามประกาศฯ ข้อ` ต้อง bind เป็น `details.exemptedParameterRegulationClauses`; backend รับและเก็บ `string[]` แล้ว.
 
 ### WPMS
 
@@ -132,6 +150,8 @@ type DocumentImage = {
 - โลโก้ใช้ข้อความ `ขนาด 512 × 512 Pixel และไม่เกิน 5 MB` และ input ต้องไม่เป็น multiple.
 - Title โลโก้ต้องเป็น `สัญลักษณ์ของโรงงานหรือโลโก้บริษัท`; backend รับได้ไม่เกินหนึ่ง metadata row ต่อคำขอ แม้คำขอจะมีหลาย measurement point.
 - Title อื่นส่งซ้ำได้หลาย row.
+- ทุก document row ที่ส่งจริงต้องมี URL อย่างน้อยหนึ่ง field ระหว่าง `link` หรือ `fileUrl`; `fileName` อย่างเดียวไม่ถือว่าอัปโหลดสำเร็จ.
+- Backend กรองได้เฉพาะ empty placeholder shape ที่ frontend สร้างตาม contract; object ที่มี field ผิด, file size ผิด หรือ metadata บางส่วนจะถูก reject ไม่ถูกทิ้งเงียบ ๆ.
 - Backend รอบนี้ไม่ตรวจ pixel dimension จาก binary เพราะ requirement ระบุเป็น UI note; frontend ควรตรวจ 512 × 512 ก่อน upload หากต้องการบังคับจริง.
 - ไฟล์ PNG/JPEG/PDF ต้องมี binary signature ตรงกับ MIME type และนามสกุล; เปลี่ยนเฉพาะชื่อไฟล์หรือ MIME ไม่ทำให้ไฟล์ชนิดอื่นผ่าน.
 
@@ -147,7 +167,10 @@ Frontend ไม่จำเป็นต้องส่ง `requestType` ใน `
 | --- | --- | --- |
 | P0 | `ConnectionRequestPage.jsx` WPMS payload | เพิ่ม `documentsAndImages` ใน measurement point |
 | P0 | requested parameter fields | ใช้ pending list เป็น options และ sync instrument rows จาก requested list |
-| P0 | EIA fields | อย่าส่ง `eiaOther` และ map EIA กลับเป็น `มี`/`ไม่มี` สำหรับ connection-request contract เดิม หรือเปิด backend/DB change แยกต่างหาก |
+| P0 | EIA response prefill | อ่าน `eiaOther` จาก response กลับเข้า state เมื่อแก้ไขคำขอ |
+| P0 | treatment multiselect serialization | ห้าม split ทุกค่าด้วย comma เพราะ option WPMS บางค่ามี comma อยู่ใน label; เก็บ array จาก component โดยตรง |
+| P0 | contact serialization | สร้างแต่ละ contact เป็น object ก่อนกรอง อย่ากรอง name/position/phone/email แยก array แล้วจับคู่ด้วย index |
+| P1 | exemption regulation tags | bind ช่อง tag กับ `details.exemptedParameterRegulationClauses` |
 | P1 | parameter multiselect | ทำ `ไม่มี` exclusive; ตรวจว่าต้องเพิ่ม exempted field ให้ WPMS |
 | P1 | `cemsParameterOptions.json` | เปลี่ยน `CS2 (mg/m3)` เป็น `CS2 (mg/m³)` |
 | P1 | connection device options | เปลี่ยน visible `POMS ...` ทุกค่าที่ requirement ต้องการเป็น `D-POMS ...` |
@@ -160,6 +183,7 @@ Backend validation issue paths ที่เกี่ยวข้อง:
 
 ```text
 measurementPoints.0.details.legalAnnexNo
+measurementPoints.0.details.exemptedParameterRegulationClauses
 measurementPoints.0.details.requestedParameters
 measurementPoints.0.details.pendingParameters
 measurementPoints.0.details.primaryFuelOther
@@ -168,9 +192,13 @@ measurementPoints.0.details.treatmentSystem
 measurementPoints.0.details.treatmentSystemOther
 measurementPoints.0.documentsAndImages
 measurementPoints.0.documentsAndImages.0.fileSize
+eiaOther
+hasEia
 ```
 
 Upload มากกว่า 5 MB คืน HTTP 400 และ `error.code = "UPLOAD_ERROR"`.
+
+Validation error คืน `error.details` เดิมสำหรับ compatibility และเพิ่ม `error.issues[]` ซึ่งมี `code`, `path`, `pathString`, `message`; frontend ควรใช้ `pathString` ผูก error กับ nested field.
 
 ## Acceptance checklist สำหรับ frontend
 
@@ -182,4 +210,6 @@ Upload มากกว่า 5 MB คืน HTTP 400 และ `error.code = "UP
 - [ ] แนบ non-logo title เดียวกัน 2 ไฟล์แล้ว final JSON มี 2 rows.
 - [ ] โลโก้เลือกได้ไฟล์เดียวและ note ตรงข้อความ.
 - [ ] ไฟล์ 5 MB ผ่าน; 5 MB + 1 byte แสดง error ก่อนหรือหลัง upload อย่างชัดเจน.
-- [ ] ตรวจ network payload ว่าไม่มี `eiaOther` จนกว่าจะมี connection-request EIA contract ใหม่.
+- [ ] EIA ทุกชนิดส่ง `eia`/`eiaOther`/`hasEia` แล้วเปิดแก้ไขได้ค่าเดิมจาก response.
+- [ ] ช่องประกาศฯ ข้อ ส่งเป็น `details.exemptedParameterRegulationClauses: string[]`.
+- [ ] WPMS treatment label ที่มี comma round-trip แล้วจำนวนตัวเลือกไม่เพิ่ม.

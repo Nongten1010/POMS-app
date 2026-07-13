@@ -1,6 +1,8 @@
 import { describe, expect, it } from '@jest/globals';
 import {
+  addParameterRequestSchema,
   addMeasurementPointRequestSchema,
+  createConnectionRequestSchema,
   resubmitConnectionRequestSchema,
 } from '../../src/modules/connection-requests/connection-requests.validator';
 
@@ -129,6 +131,59 @@ function createWpmsPayload() {
 }
 
 describe('CEMS/WPMS monitoring-point form enhancements', () => {
+  it('accepts a CEMS add-parameter request without documents', () => {
+    const payload = createCemsPayload();
+
+    const result = addParameterRequestSchema.safeParse({
+      ...payload,
+      measurementPoints: [
+        {
+          ...payload.measurementPoints[0],
+          pointCode: 'S0001',
+          documentsAndImages: [],
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts a legacy CEMS add-parameter request without documents', () => {
+    const payload = createCemsPayload();
+
+    const result = createConnectionRequestSchema.safeParse({
+      ...payload,
+      requestType: 'ADD_PARAMETER',
+      measurementPoints: [
+        {
+          ...payload.measurementPoints[0],
+          pointCode: 'S0001',
+          documentsAndImages: [],
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it('applies add-parameter section rules when the legacy create route declares that type', () => {
+    const result = createConnectionRequestSchema.safeParse({
+      ...createCemsPayload(),
+      requestType: 'ADD_PARAMETER',
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: ['measurementPoints', 0, 'pointCode'],
+          }),
+        ]),
+      );
+    }
+  });
+
   it('accepts the new CEMS contract and derives requested CS2 parameters from pending parameters', () => {
     const result = addMeasurementPointRequestSchema.safeParse(createCemsPayload());
 
@@ -556,6 +611,196 @@ describe('CEMS/WPMS monitoring-point form enhancements', () => {
     expect(addMeasurementPointRequestSchema.safeParse(payload).success).toBe(false);
   });
 
+  it('drops empty frontend document placeholders before persistence', () => {
+    const payload = createCemsPayload();
+    const point = payload.measurementPoints[0];
+    const result = addMeasurementPointRequestSchema.safeParse({
+      ...payload,
+      measurementPoints: [
+        {
+          ...point,
+          documentsAndImages: [
+            ...point.documentsAndImages,
+            {
+              title: 'ระบบบำบัด',
+              description: null,
+              link: null,
+              fileName: null,
+              fileUrl: null,
+              fileType: null,
+              fileSize: null,
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.measurementPoints[0].documentsAndImages).toHaveLength(3);
+      expect(result.data.measurementPoints[0].documentsAndImages).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ title: 'ระบบบำบัด' })]),
+      );
+    }
+  });
+
+  it('treats whitespace-only placeholder metadata as empty', () => {
+    const payload = createCemsPayload();
+    const point = payload.measurementPoints[0];
+    const result = addMeasurementPointRequestSchema.safeParse({
+      ...payload,
+      measurementPoints: [
+        {
+          ...point,
+          documentsAndImages: [
+            ...point.documentsAndImages,
+            {
+              title: 'ระบบบำบัด',
+              description: '   ',
+              link: null,
+              fileName: null,
+              fileUrl: null,
+              fileType: null,
+              fileSize: null,
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.measurementPoints[0].documentsAndImages).toHaveLength(3);
+    }
+  });
+
+  it('drops a frontend placeholder that only carries static guidance text', () => {
+    const payload = createCemsPayload();
+    const point = payload.measurementPoints[0];
+    const result = addMeasurementPointRequestSchema.safeParse({
+      ...payload,
+      measurementPoints: [
+        {
+          ...point,
+          documentsAndImages: [
+            ...point.documentsAndImages,
+            {
+              title: 'ข้อมูลรายละเอียดการรายงานค่าที่สภาวะมาตรฐาน',
+              description: 'ข้อความแนะนำคงที่จาก frontend',
+              link: null,
+              fileName: null,
+              fileUrl: null,
+              fileType: null,
+              fileSize: null,
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.measurementPoints[0].documentsAndImages).toHaveLength(3);
+    }
+  });
+
+  it('does not let empty document placeholders satisfy the CEMS document section', () => {
+    const payload = createCemsPayload();
+    const point = payload.measurementPoints[0];
+    const result = addMeasurementPointRequestSchema.safeParse({
+      ...payload,
+      measurementPoints: [
+        {
+          ...point,
+          documentsAndImages: [
+            {
+              title: 'ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน',
+              description: null,
+              link: null,
+              fileName: null,
+              fileUrl: null,
+              fileType: null,
+              fileSize: null,
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: ['measurementPoints', 0, 'documentsAndImages'],
+          }),
+        ]),
+      );
+    }
+  });
+
+  it('rejects malformed document objects instead of silently treating them as placeholders', () => {
+    const payload = createCemsPayload();
+    const point = payload.measurementPoints[0];
+    const result = addMeasurementPointRequestSchema.safeParse({
+      ...payload,
+      measurementPoints: [
+        {
+          ...point,
+          documentsAndImages: [
+            ...point.documentsAndImages,
+            {
+              title: 'เอกสารผิดรูปแบบ',
+              fileSize: -99,
+              unexpected: 'must not be ignored',
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: ['measurementPoints', 0, 'documentsAndImages', 3],
+          }),
+        ]),
+      );
+    }
+  });
+
+  it('does not count file metadata without a link or fileUrl as a real CEMS document', () => {
+    const payload = createCemsPayload();
+    const point = payload.measurementPoints[0];
+    const result = addMeasurementPointRequestSchema.safeParse({
+      ...payload,
+      measurementPoints: [
+        {
+          ...point,
+          documentsAndImages: [
+            {
+              title: 'เอกสารที่ยังไม่ได้อัปโหลด',
+              fileName: 'missing-upload.pdf',
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: ['measurementPoints', 0, 'documentsAndImages', 0, 'fileUrl'],
+          }),
+        ]),
+      );
+    }
+  });
+
   it('applies the same add-point rules when a revised request is resubmitted', () => {
     const payload = createCemsPayload();
     const point = payload.measurementPoints[0];
@@ -607,6 +852,134 @@ describe('CEMS/WPMS monitoring-point form enhancements', () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.requestType).toBeUndefined();
+    }
+  });
+
+  it.each(['มี IEE', 'มี EIA', 'มี EHIA'] as const)(
+    'accepts the frontend environmental assessment value %s without losing it',
+    (eia) => {
+      const result = addMeasurementPointRequestSchema.safeParse({
+        ...createCemsPayload(),
+        eia,
+        eiaOther: null,
+        hasEia: true,
+        projectName: 'โครงการทดสอบ',
+      });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data).toMatchObject({
+          eia,
+          eiaOther: null,
+          hasEia: true,
+          projectName: 'โครงการทดสอบ',
+        });
+      }
+    },
+  );
+
+  it('accepts and preserves the frontend Other environmental assessment detail', () => {
+    const result = addMeasurementPointRequestSchema.safeParse({
+      ...createCemsPayload(),
+      eia: 'อื่นๆ',
+      eiaOther: 'รายงานสิ่งแวดล้อมประเภทเฉพาะ',
+      hasEia: false,
+      projectName: null,
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toMatchObject({
+        eia: 'อื่นๆ',
+        eiaOther: 'รายงานสิ่งแวดล้อมประเภทเฉพาะ',
+        hasEia: false,
+      });
+    }
+  });
+
+  it('rejects a missing Other environmental assessment detail', () => {
+    const result = addMeasurementPointRequestSchema.safeParse({
+      ...createCemsPayload(),
+      eia: 'อื่นๆ',
+      eiaOther: null,
+      hasEia: false,
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([expect.objectContaining({ path: ['eiaOther'] })]),
+      );
+    }
+  });
+
+  it('rejects a frontend environmental assessment that contradicts hasEia', () => {
+    const result = addMeasurementPointRequestSchema.safeParse({
+      ...createCemsPayload(),
+      eia: 'ไม่มี',
+      eiaOther: null,
+      hasEia: true,
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([expect.objectContaining({ path: ['hasEia'] })]),
+      );
+    }
+  });
+
+  it('accepts CEMS regulation-clause tags as a string array', () => {
+    const payload = createCemsPayload();
+    const point = payload.measurementPoints[0];
+
+    const result = addMeasurementPointRequestSchema.safeParse({
+      ...payload,
+      measurementPoints: [
+        {
+          ...point,
+          details: {
+            ...point.details,
+            exemptedParameterRegulationClauses: ['ข้อ 5 (1)', 'ข้อ 7'],
+          },
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.measurementPoints[0].details).toMatchObject({
+        exemptedParameterRegulationClauses: ['ข้อ 5 (1)', 'ข้อ 7'],
+      });
+    }
+  });
+
+  it('rejects a non-string CEMS regulation-clause tag list', () => {
+    const payload = createCemsPayload();
+    const point = payload.measurementPoints[0];
+
+    const result = addMeasurementPointRequestSchema.safeParse({
+      ...payload,
+      measurementPoints: [
+        {
+          ...point,
+          details: {
+            ...point.details,
+            exemptedParameterRegulationClauses: 7,
+          },
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: ['measurementPoints', 0, 'details', 'exemptedParameterRegulationClauses'],
+          }),
+        ]),
+      );
     }
   });
 });
