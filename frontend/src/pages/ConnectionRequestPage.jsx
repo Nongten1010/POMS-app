@@ -5379,7 +5379,7 @@ function StandardCriteriaSection({ label, value, onChange }) {
         label={label}
       />
       <Grid container spacing={2}>
-        <Grid size={{ xs: 12, md: 6 }}>
+        <Grid size={{ xs: 12, md: 8 }}>
           <TextField
             label="ค่ามาตรฐาน"
             type="number"
@@ -5389,11 +5389,16 @@ function StandardCriteriaSection({ label, value, onChange }) {
             disabled={hasNoStandard}
             error={hasInvalidStandard}
             helperText={hasInvalidStandard ? 'ค่ามาตรฐานต้องเป็นตัวเลขมากกว่า 0' : 'ค่าเฝ้าระวังคำนวณอัตโนมัติที่ 80%'}
+            slotProps={{
+              formHelperText: {
+                sx: { whiteSpace: 'nowrap' },
+              },
+            }}
             fullWidth
           />
         </Grid>
       </Grid>
-      <SpecialCriteriaTable value={value} onChange={onChange} disabled />
+      <SpecialCriteriaTable value={value} onChange={onChange} disabled={hasNoStandard} />
     </Stack>
   )
 }
