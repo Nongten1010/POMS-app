@@ -2,10 +2,22 @@
 
 วันที่ตรวจ: 2026-07-13
 
+## สถานะงานจัดการเครื่องมือตรวจวัด (รอบ cross-stack)
+
+| ข้อที่ขอ | สถานะ | สิ่งที่แก้และตรวจแล้ว |
+| --- | --- | --- |
+| คำนวณ ปกติ/เฝ้าระวัง/แจ้งเตือน จากค่ามาตรฐาน | `DONE` | Frontend คำนวณ 80% และแสดง `0 < ปกติ ≤ 80`, `80 < เฝ้าระวัง ≤ 100`, `100 < แจ้งเตือน ≤ -`; backend derive ค่าเดียวกันสำหรับ CEMS/WPMS เมื่อ `standardValue` เป็นตัวเลขบวก |
+| Footer ของ dialog อยู่กึ่งกลาง | `DONE` | `InstrumentDataDialog` ใช้ `DialogActions` แบบ `justifyContent: center` ร่วมกันทั้ง CEMS/WPMS |
+| ยืนยันก่อนบันทึก/แก้ไข และแจ้งสำเร็จ | `DONE` | เปิด dialog ยืนยันก่อนเปลี่ยนแถวและแสดง success Snackbar; ปิดปุ่มบันทึกเมื่อเกณฑ์ที่เปิดใช้ไม่มีค่ามาตรฐานที่ถูกต้อง |
+| ยืนยันการลบ/แจ้งลบสำเร็จ | `NOT_APPLICABLE` | ข้อกำหนดเดียวกันสั่งเอาปุ่มลบออก จึงไม่มี delete action หรือ delete API ให้เรียก |
+| ตารางแสดงเฉพาะพารามิเตอร์ที่ขอเชื่อมและไม่มีปุ่มลบ | `DONE` | Frontend sync แถวตาม `requestedParameters`; backend reject เมื่อชุด instrument parameters ไม่ตรงกัน |
+| เอาปุ่มเพิ่มพารามิเตอร์ออกจาก section | `DONE` | เอาออกเฉพาะ section รายละเอียดเครื่องมือ; workflow เพิ่มพารามิเตอร์ของจุดที่เชื่อมต่อแล้วเป็นคนละส่วน |
+| WPMS ไม่มีหัวข้อ/คอลัมน์การรายงานค่า | `DONE` | ซ่อน `standardCondition`, `dryBasis`, `oxygenOrExcessAir` ใน dialog/table ของ WPMS โดย backend ยังรองรับค่าเก่า |
+
 ## ขอบเขตงาน
 
-- งานรอบนี้แก้ production code ใต้ `backend/`, tests และเอกสาร Markdown เพื่อรองรับ payload ของแบบฟอร์ม CEMS/WPMS.
-- ไม่แก้ application code ใต้ `frontend/`; สถานะ frontend ด้านล่างมาจาก source audit และรายการที่ frontend ต้องตรวจต่ออยู่ในเอกสาร handoff.
+- งาน backend audit เดิมแก้ production code ใต้ `backend/`, tests และเอกสาร Markdown.
+- รอบ follow-up นี้ผู้ใช้ระบุให้แก้ frontend โดยตรง จึงเพิ่ม frontend implementation/helper/test สำหรับเกณฑ์ 80% และ UI ที่เกี่ยวข้อง.
 - ข้อมูลรายละเอียด เอกสาร และรูปภาพยังเก็บใน JSON columns เดิมของ measurement point จึงไม่ต้องเพิ่ม migration.
 
 หลักฐาน TDD และคำสั่งที่รันอยู่ที่ [cems-wpms-request-form-update.tdd.md](../testing/cems-wpms-request-form-update.tdd.md) และ contract สำหรับ frontend อยู่ที่ [CEMS_WPMS_REQUEST_FORM_FRONTEND_HANDOFF.md](./CEMS_WPMS_REQUEST_FORM_FRONTEND_HANDOFF.md).

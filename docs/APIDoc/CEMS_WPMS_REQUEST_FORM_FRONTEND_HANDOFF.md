@@ -12,6 +12,38 @@ POST /api/v1/cems-wpms-requests/measurement-points
 POST /api/v1/cems-wpms-requests/parameters
 ```
 
+## Contract เกณฑ์ 80% สำหรับ CEMS/WPMS
+
+```json
+{
+  "enabled": true,
+  "standardValue": "100",
+  "rows": [
+    { "level": "normal", "min": 0, "max": 80 },
+    { "level": "warning", "min": 80, "max": 100 },
+    { "level": "critical", "min": 100, "max": null }
+  ]
+}
+```
+
+- ความหมายคือ `0 < ปกติ ≤ 80`, `80 < เฝ้าระวัง ≤ 100`, `100 < แจ้งเตือน ≤ -`.
+- Frontend คำนวณทันทีและไม่ให้แก้ MIN/MAX ที่ derive แล้วเอง.
+- Checkbox `พารามิเตอร์ไม่มีค่ามาตรฐาน ...` ถูกเลือก หมายถึง `{ "enabled": false }`; เมื่อเอา checkbox ออกจึงเปิดช่องค่ามาตรฐานและส่ง `enabled: true`.
+- ค่ามาตรฐานใหม่ต้องเป็น finite number มากกว่า `0` และสร้างขอบ 80% ที่ต่างจากค่ามาตรฐานได้; frontend แสดง error และปิดปุ่มบันทึกสำหรับค่าว่าง ศูนย์ ค่าติดลบ overflow หรือค่าจิ๋วจนช่วงเฝ้าระวังว่าง.
+- Backend derive/เขียนทับ numeric rows ด้วยสูตร 80% ในทุก write flow เพื่อป้องกัน payload ที่ไม่สอดคล้องกัน.
+- `enabled` รับ boolean หรือ legacy string `"true"`/`"false"`; ค่าอื่นถูก reject.
+- ค่า legacy ที่ไม่ใช่ตัวเลขยังใช้ rows ที่ส่งมาครบ 3 ระดับได้.
+
+ไม่ต้องมี endpoint ใหม่หรือ migration; ค่าเกณฑ์ยังอยู่ใน `measurementPoints[].measurementInstruments` ตามเดิม.
+
+## UI ที่แก้แล้วในรอบนี้
+
+- Footer dialog อยู่กึ่งกลางทั้ง CEMS/WPMS.
+- บันทึกและแก้ไขผ่าน dialog ยืนยัน แล้วแสดง success Snackbar.
+- ตารางไม่มีปุ่มลบ จึงไม่มี delete flow.
+- ตารางสร้างแถวจาก `requestedParameters` และไม่มีปุ่มเพิ่มพารามิเตอร์ภายใน section.
+- WPMS ไม่แสดงหัวข้อ/คอลัมน์การรายงานค่า; CEMS ยังแสดงตามเดิม.
+
 ## Payload rules ที่ backend บังคับแล้ว
 
 ### พารามิเตอร์

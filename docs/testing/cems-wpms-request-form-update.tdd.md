@@ -89,3 +89,25 @@ Result: 6 suites passed, 127 tests passed.
 7. Logo pixel dimensions are UI guidance only in this change; the server enforces MIME/extension, 5 MB, and one-logo cardinality but does not parse 512 × 512 dimensions.
 8. Existing request metadata over 5 MiB now fails resubmit and must be removed or replaced; no automatic migration was applied.
 9. Uploaded document URLs remain public static URLs under the existing upload path, and submitted metadata is not yet bound to an actor/factory-owned upload ID. Private downloads, quota, ownership, and orphan cleanup need a separately designed security change.
+
+## TDD addendum: instrument criteria and dialog/table UI
+
+### RED evidence
+
+| Target | Command | Actual RED |
+| --- | --- | --- |
+| Frontend 80% helper | `cd frontend && node --test src/utils/instrumentCriteria.test.mjs` | FAIL `ERR_MODULE_NOT_FOUND`; helper did not exist |
+| Backend canonical rows | `cd backend && npm test -- --runInBand tests/unit/connection-requests.validator.test.ts -t "derives canonical 80 percent"` | FAIL because rows were mandatory and not derived |
+| Invalid enabled criteria | `cd frontend && npm test` | FAIL because validity helper was not exported |
+| Backend tamper cases | focused validator test for `invalid numeric standard|unsupported enabled` | FAIL 5 tests: zero, negative, overflow, subnormal, and `enabled: "yes"` were accepted |
+
+### GREEN evidence
+
+| Guarantee | Result |
+| --- | --- |
+| Frontend derives 80%, handles decimals and rejects invalid/subnormal standards | 4/4 tests PASS; helper coverage 100% |
+| Backend derives canonical rows and rejects numeric/boolean tampering | focused connection-request suites PASS |
+| Frontend/backend compile and lint | PASS |
+| Full backend regression suite in clean release worktree | 47 suites / 508 tests PASS |
+
+Delete confirmation is not applicable because the requested UI removes the delete action. Component-level React tests and browser E2E are not present; the pure calculation is unit-tested and the UI guarantees are build/source-audited.

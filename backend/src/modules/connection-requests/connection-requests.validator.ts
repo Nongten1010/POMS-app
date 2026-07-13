@@ -151,10 +151,10 @@ function normalizeMeasurementCriteriaInput(value: unknown): unknown {
   if (!isRecord(value)) return value;
 
   const rawEnabled = value.enabled;
-  const enabled =
-    typeof rawEnabled === 'string'
-      ? rawEnabled.trim().toLowerCase() === 'true'
-      : rawEnabled === true;
+  const enabled = normalizeCriteriaEnabled(rawEnabled);
+  if (typeof enabled !== 'boolean') {
+    return { ...value, enabled };
+  }
   const standardValue =
     typeof value.standardValue === 'string' ? value.standardValue.trim() : value.standardValue;
   const hasStandardValue =
@@ -168,11 +168,67 @@ function normalizeMeasurementCriteriaInput(value: unknown): unknown {
         ((typeof row.min === 'number' && Number.isFinite(row.min)) ||
           (typeof row.max === 'number' && Number.isFinite(row.max))),
     );
+  const numericStandardValue = toFinitePositiveNumber(standardValue);
 
   return {
     ...value,
     enabled: enabled && (hasStandardValue || hasRangeValue),
+    ...(enabled && numericStandardValue !== null
+      ? { rows: deriveCriteriaRows(numericStandardValue) }
+      : {}),
   };
+}
+
+function normalizeCriteriaEnabled(value: unknown): unknown {
+  if (value === undefined) return false;
+  if (typeof value === 'boolean') return value;
+  if (typeof value !== 'string') return value;
+
+  const normalizedValue = value.trim().toLowerCase();
+  if (normalizedValue === 'true') return true;
+  if (normalizedValue === 'false') return false;
+  return value;
+}
+
+function toFinitePositiveNumber(value: unknown): number | null {
+  if (typeof value === 'string' && value.trim() === '') return null;
+  const numericValue = parseDecimalStandardValue(value);
+  if (numericValue === null || numericValue <= 0) return null;
+
+  const warningValue = calculateWarningValue(numericValue);
+  return warningValue > 0 && warningValue < numericValue ? numericValue : null;
+}
+
+function deriveCriteriaRows(standardValue: number): z.infer<typeof criteriaRangeRowSchema>[] {
+  const warningValue = calculateWarningValue(standardValue);
+  return [
+    { level: 'normal', min: 0, max: warningValue },
+    { level: 'warning', min: warningValue, max: standardValue },
+    { level: 'critical', min: standardValue, max: null },
+  ];
+}
+
+function calculateWarningValue(standardValue: number): number {
+  return Number((standardValue * 0.8).toPrecision(15));
+}
+
+function parseDecimalStandardValue(value: unknown): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value !== 'string') return null;
+
+  const normalizedValue = value.trim();
+  if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(normalizedValue)) {
+    return null;
+  }
+
+  const numericValue = Number(normalizedValue);
+  return Number.isFinite(numericValue) ? numericValue : null;
+}
+
+function isNumericStandardValue(value: unknown): boolean {
+  if (typeof value === 'number') return true;
+  if (typeof value !== 'string') return false;
+  return /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(value.trim());
 }
 
 const measurementCriteriaSchema = z
@@ -194,6 +250,18 @@ const measurementCriteriaSchema = z
         code: 'custom',
         path: ['standardValue'],
         message: 'standardValue is required when criteria is enabled',
+      });
+    }
+
+    if (
+      isNumericStandardValue(criteria.standardValue) &&
+      toFinitePositiveNumber(criteria.standardValue) === null
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['standardValue'],
+        message:
+          'standardValue must be a finite positive number with a distinct 80 percent boundary',
       });
     }
 

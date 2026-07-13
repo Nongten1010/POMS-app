@@ -1185,7 +1185,14 @@ Backend เริ่มด้วย local disk storage (`UPLOAD_DIR`, `UPLOAD_PU
 รูปแบบ `standardCriteria` และ `eiaCriteria`:
 
 - ถ้าไม่ได้เลือก checkbox ให้ไม่ส่ง field นี้, ส่ง `null`, หรือส่ง `{ "enabled": false }`
-- ถ้าเลือก checkbox ต้องส่ง `enabled: true`, `standardValue`, และ `rows` ให้ครบ 3 แถว
+- Checkbox ข้อความ `พารามิเตอร์ไม่มีค่ามาตรฐาน ...` เมื่อถูกเลือก ให้ส่ง
+  `{ "enabled": false }`; เมื่อผู้ใช้ระบุค่ามาตรฐานให้ส่ง `enabled: true`
+- ถ้า `enabled: true` และ `standardValue` เป็นตัวเลขบวก frontend จะส่ง `rows` หรือไม่ก็ได้;
+  backend derive/เขียนทับ `rows` เป็น `normal = 0..80%`, `warning = 80%..100%`,
+  `critical = 100%..null`
+- Boundary เป็น lower-exclusive/upper-inclusive:
+  `0 < normal ≤ 80%`, `80% < warning ≤ 100%`, `100% < critical ≤ ไม่จำกัด`
+- ค่า legacy ที่ `standardValue` ไม่ใช่ตัวเลขต้องส่ง `rows` ให้ครบ 3 แถว
 - ถ้าส่ง `enabled: false` แต่มี `standardValue` หรือ `rows` ที่มีค่า backend จะเก็บค่า
   เหล่านั้นไว้ เพื่อรองรับฟอร์มที่บันทึกค่าเกณฑ์ไว้แม้ checkbox ไม่ถูกเลือก
 - ถ้าส่ง `enabled: true` แต่ `standardValue` ว่าง และค่า `rows[].min`/`rows[].max`
@@ -3368,8 +3375,8 @@ Data dictionary response row:
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
 | `enabled` | boolean | Yes | `true` ถ้ามีการเลือกใช้เกณฑ์; ถ้าเป็น `false` แต่มีค่ามาตรฐาน/rows backend ยังเก็บค่าไว้ |
-| `standardValue` | string|null | No | ค่ามาตรฐาน |
-| `rows` | array | Conditional | ต้องส่งเมื่อ `enabled = true` |
+| `standardValue` | string\|number\|null | No | ค่า numeric ใหม่ต้องเป็น finite positive number ที่สร้างขอบ 80% ซึ่งต่างจากค่ามาตรฐานได้ |
+| `rows` | array | Conditional | Numeric standard ไม่ต้องส่งเพราะ backend derive ให้; ค่า legacy ที่ไม่ใช่ตัวเลขต้องส่งครบ 3 แถว |
 | `rows[].level` | string | Yes | `normal`, `warning`, `critical` |
 | `rows[].min` | number|null | No | ค่า MIN |
 | `rows[].max` | number|null | No | ค่า MAX |

@@ -1252,3 +1252,41 @@ Risk:
 - `oldRegistrationNo` depends on the selected eligible factory DTO. If that DTO omits the old registration value, the response returns `null` even when the database has an old registration column.
 - `systemType` filtering depends on current POMS monitoring points. Eligible factories without matching connected/current POMS points are excluded when `systemType` is provided.
 - Region filtering depends on `provinces.name_th` matching `eligible_factories.province_name`; mismatched province spelling can hide a row for region-scoped users.
+
+## CEMS/WPMS measurement criteria ranges
+
+Applies to:
+
+- `POST /api/v1/cems-wpms-requests/measurement-points`
+- `POST /api/v1/cems-wpms-requests/parameters`
+- `PUT /api/v1/cems-wpms-requests/:id/form`
+- create/resubmit flows sharing `measurementCriteriaSchema`
+
+Source:
+
+- `measurementPoints[].measurementInstruments.parameters[].standardCriteria.standardValue`
+- `measurementPoints[].measurementInstruments.parameters[].eiaCriteria.standardValue`
+
+Logic:
+
+- For finite positive numeric standard `S`, derive `normal = { min: 0, max: 0.8S }`, `warning = { min: 0.8S, max: S }`, and `critical = { min: S, max: null }`.
+- MIN is an exclusive lower boundary and MAX is an inclusive upper boundary.
+- Floating-point noise is reduced with 15 significant digits.
+- Numeric client rows are overwritten by the canonical derived rows.
+
+Fallback order:
+
+1. Derive from a valid numeric `standardValue`.
+2. Retain complete three-level rows for legacy non-numeric standards.
+3. Normalize disabled empty criteria to `{ enabled: false, standardValue: null, rows: [] }`.
+
+Numeric-looking zero, negative, overflow, or subnormal values that cannot produce a distinct 80% interval are rejected. Unsupported `enabled` coercions are rejected; only booleans and legacy strings `"true"`/`"false"` are normalized.
+
+Reason:
+
+- Frontend displays the surveillance boundary immediately while backend prevents inconsistent or tampered ranges from being persisted.
+
+Risk:
+
+- Existing numeric criteria with custom rows are canonicalized on their next write.
+- The JSON does not encode inclusive/exclusive operators; consumers must follow this documented boundary meaning.

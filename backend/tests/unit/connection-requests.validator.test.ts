@@ -217,9 +217,9 @@ describe('connection request validators', () => {
         enabled: true,
         standardValue: '120',
         rows: [
-          { level: 'normal', min: 0, max: 80 },
-          { level: 'warning', min: 80, max: 100 },
-          { level: 'critical', min: 100, max: null },
+          { level: 'normal', min: 0, max: 96 },
+          { level: 'warning', min: 96, max: 120 },
+          { level: 'critical', min: 120, max: null },
         ],
       });
       expect(parameter?.eiaCriteria).toEqual({
@@ -228,6 +228,107 @@ describe('connection request validators', () => {
         rows: [],
       });
     }
+  });
+
+  it('derives canonical 80 percent criteria rows from a numeric standard value', () => {
+    const result = createConnectionRequestSchema.safeParse({
+      ...validPayload,
+      measurementPoints: [
+        {
+          ...validPayload.measurementPoints[0],
+          measurementInstruments: {
+            ...measurementInstruments,
+            parameters: [
+              {
+                ...measurementInstruments.parameters[0],
+                standardCriteria: {
+                  enabled: true,
+                  standardValue: '100',
+                },
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(
+        result.data.measurementPoints[0].measurementInstruments?.parameters[0]?.standardCriteria,
+      ).toEqual({
+        enabled: true,
+        standardValue: '100',
+        rows: [
+          { level: 'normal', min: 0, max: 80 },
+          { level: 'warning', min: 80, max: 100 },
+          { level: 'critical', min: 100, max: null },
+        ],
+      });
+    }
+  });
+
+  it.each(['0', '-100', '1e309', '5e-324'])(
+    'rejects an invalid numeric standard %s even when client rows are supplied',
+    (standardValue) => {
+      const result = createConnectionRequestSchema.safeParse({
+        ...validPayload,
+        measurementPoints: [
+          {
+            ...validPayload.measurementPoints[0],
+            measurementInstruments: {
+              ...measurementInstruments,
+              parameters: [
+                {
+                  ...measurementInstruments.parameters[0],
+                  standardCriteria: {
+                    enabled: true,
+                    standardValue,
+                    rows: [
+                      { level: 'normal', min: 1, max: 2 },
+                      { level: 'warning', min: 2, max: 3 },
+                      { level: 'critical', min: 3, max: null },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      });
+
+      expect(result.success).toBe(false);
+    },
+  );
+
+  it('rejects unsupported enabled coercions instead of silently disabling criteria', () => {
+    const result = createConnectionRequestSchema.safeParse({
+      ...validPayload,
+      measurementPoints: [
+        {
+          ...validPayload.measurementPoints[0],
+          measurementInstruments: {
+            ...measurementInstruments,
+            parameters: [
+              {
+                ...measurementInstruments.parameters[0],
+                standardCriteria: {
+                  enabled: 'yes',
+                  standardValue: '100',
+                  rows: [
+                    { level: 'normal', min: 0, max: 80 },
+                    { level: 'warning', min: 80, max: 100 },
+                    { level: 'critical', min: 100, max: null },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
   });
 
   it('does not require criteria thresholds when criteria is disabled', () => {
@@ -327,7 +428,7 @@ describe('connection request validators', () => {
     }
   });
 
-  it('rejects enabled measurement criteria without all threshold levels', () => {
+  it('rejects legacy non-numeric criteria without all threshold levels', () => {
     const result = createConnectionRequestSchema.safeParse({
       ...validPayload,
       measurementPoints: [
@@ -340,7 +441,7 @@ describe('connection request validators', () => {
                 ...measurementInstruments.parameters[0],
                 standardCriteria: {
                   enabled: true,
-                  standardValue: '120',
+                  standardValue: 'ตามประกาศเฉพาะ',
                   rows: [
                     { level: 'normal', min: 0, max: 80 },
                     { level: 'warning', min: 80, max: 100 },

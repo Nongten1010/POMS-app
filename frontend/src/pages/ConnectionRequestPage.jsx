@@ -52,6 +52,7 @@ import treatmentSystemOptionItems from '../option/treatmentSystemOptions.json'
 import wpmsTreatmentSystemOptionItems from '../option/wpmsTreatmentSystemOptions.json'
 import wpmsParameterOptionItems from '../option/wpmsParameterOptions.json'
 import OfficerStatisticsPanel from '../components/OfficerStatisticsPanel'
+import { deriveCriteriaRows, isCriteriaInputValid } from '../utils/instrumentCriteria.mjs'
 
 const subMenus = [
   { value: 'factories', label: 'รายชื่อโรงงาน' },
@@ -125,9 +126,9 @@ const emptyInstrumentParameter = {
   oxygenOrExcessAir: false,
 }
 
-function createCriteria(standardValue = '', rows = {}) {
+function createCriteria(standardValue = '', rows = {}, enabled = false) {
   return {
-    enabled: true,
+    enabled,
     standardValue,
     rows: specialCriteriaRows.map((row) => ({
       level: row.key,
@@ -438,19 +439,7 @@ function getHasEiaFormValue(formData, factory = {}) {
 }
 
 function createCriteriaRowsFromStandardValue(standardValue) {
-  const numericValue = Number(standardValue)
-
-  if (Number.isNaN(numericValue) || standardValue === '') {
-    return createCriteria(standardValue).rows
-  }
-
-  const warningValue = numericValue * 0.8
-
-  return [
-    { level: 'normal', min: '0', max: String(warningValue) },
-    { level: 'warning', min: String(warningValue), max: String(numericValue) },
-    { level: 'critical', min: String(numericValue), max: '' },
-  ]
+  return deriveCriteriaRows(standardValue) ?? createCriteria(standardValue).rows
 }
 
 function getDefaultConnectionForm(type) {
@@ -5173,15 +5162,17 @@ function SpecialCriteriaTable({ value, onChange, disabled = false }) {
               </TableCell>
               <TableCell align="center">
                 <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', justifyContent: 'center' }}>
-                  <Typography variant="body2">{row.key === 'critical' ? '<' : '≤'}</Typography>
+                  <Typography variant="body2">{'<'}</Typography>
                   <Chip label={row.label} color={row.color} size="small" sx={{ fontWeight: 700 }} />
-                  <Typography variant="body2">{row.key === 'critical' ? '<' : '≤'}</Typography>
+                  <Typography variant="body2">{'≤'}</Typography>
                 </Stack>
               </TableCell>
               <TableCell>
                 <TextField
                   size="small"
-                  value={value.rows.find((criteriaRow) => criteriaRow.level === row.key)?.max ?? ''}
+                  value={row.key === 'critical'
+                    ? '-'
+                    : value.rows.find((criteriaRow) => criteriaRow.level === row.key)?.max ?? ''}
                   onChange={(event) => updateRow(row.key, 'max', event.target.value)}
                   disabled={disabled}
                   fullWidth
@@ -5196,11 +5187,12 @@ function SpecialCriteriaTable({ value, onChange, disabled = false }) {
 }
 
 function StandardCriteriaSection({ label, value, onChange }) {
-  const fieldsDisabled = Boolean(value.enabled)
-  const updateEnabled = (checked) => {
+  const hasNoStandard = !value.enabled
+  const hasInvalidStandard = !isCriteriaInputValid(value)
+  const updateHasNoStandard = (checked) => {
     onChange({
       ...value,
-      enabled: checked,
+      enabled: !checked,
       ...(checked
         ? {
             standardValue: '',
@@ -5212,6 +5204,7 @@ function StandardCriteriaSection({ label, value, onChange }) {
   const updateStandardValue = (nextValue) => {
     onChange({
       ...value,
+      enabled: true,
       standardValue: nextValue,
       rows: createCriteriaRowsFromStandardValue(nextValue),
     })
@@ -5223,8 +5216,8 @@ function StandardCriteriaSection({ label, value, onChange }) {
         control={
           <Checkbox
             size="small"
-            checked={value.enabled}
-            onChange={(event) => updateEnabled(event.target.checked)}
+            checked={hasNoStandard}
+            onChange={(event) => updateHasNoStandard(event.target.checked)}
           />
         }
         label={label}
@@ -5233,15 +5226,18 @@ function StandardCriteriaSection({ label, value, onChange }) {
         <Grid size={{ xs: 12, md: 6 }}>
           <TextField
             label="ค่ามาตรฐาน"
+            type="number"
             size="small"
             value={value.standardValue}
             onChange={(event) => updateStandardValue(event.target.value)}
-            disabled={fieldsDisabled}
+            disabled={hasNoStandard}
+            error={hasInvalidStandard}
+            helperText={hasInvalidStandard ? 'ค่ามาตรฐานต้องเป็นตัวเลขมากกว่า 0' : 'ค่าเฝ้าระวังคำนวณอัตโนมัติที่ 80%'}
             fullWidth
           />
         </Grid>
       </Grid>
-      <SpecialCriteriaTable value={value} onChange={onChange} disabled={fieldsDisabled} />
+      <SpecialCriteriaTable value={value} onChange={onChange} disabled />
     </Stack>
   )
 }
@@ -5251,6 +5247,9 @@ function InstrumentDataDialog({ open, parameterOptions, value, onClose, onSave, 
   const [saveConfirmOpen, setSaveConfirmOpen] = useState(false)
 
   const updateForm = (field, nextValue) => setForm((current) => ({ ...current, [field]: nextValue }))
+  const canSave = Boolean(form.parameter)
+    && isCriteriaInputValid(form.standardCriteria)
+    && isCriteriaInputValid(form.eiaCriteria)
   const confirmSave = () => {
     onSave(form)
     setSaveConfirmOpen(false)
@@ -5384,7 +5383,7 @@ function InstrumentDataDialog({ open, parameterOptions, value, onClose, onSave, 
         <Button color="inherit" onClick={onClose}>
           ปิด
         </Button>
-        <Button variant="contained" disabled={!form.parameter} onClick={() => setSaveConfirmOpen(true)}>
+        <Button variant="contained" disabled={!canSave} onClick={() => setSaveConfirmOpen(true)}>
           บันทึก
         </Button>
       </DialogActions>
