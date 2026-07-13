@@ -703,6 +703,7 @@ describe('connection request validators', () => {
             pendingParameters: ['COD (mg/l)', 'Flow rate (m3/hr)', 'Watt (kW/hr)'],
             hasTreatmentSystem: 'มี',
             treatmentSystem: 'อื่นๆ',
+            treatmentSystemOther: 'ระบบบำบัดเฉพาะของโรงงาน',
             maxTreatmentCapacity: 1000,
             instrumentLatitude: 13.7563,
             instrumentLongitude: 100.5018,
@@ -818,6 +819,7 @@ describe('connection request validators', () => {
           eligibleParameters: ['COD (mg/l)', 'Flow rate (m3/hr)', 'Watt (kW/hr)'],
           pendingParameters: ['COD (mg/l)', 'Flow rate (m3/hr)', 'Watt (kW/hr)'],
           treatmentSystem: 'อื่นๆ',
+          treatmentSystemOther: 'ระบบบำบัดเฉพาะของโรงงาน',
         }),
       );
       expect(point.measurementInstruments?.parameters[0].standardCriteria).toEqual({

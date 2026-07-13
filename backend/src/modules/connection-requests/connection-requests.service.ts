@@ -58,6 +58,7 @@ import {
   type ReviewConnectionRequestInput,
   type VerifyConnectionInput,
 } from './connection-requests.types';
+import { resubmitConnectionRequestWithTypeSchema } from './connection-requests.validator';
 
 const DESIGN_REVIEW_STATUSES: ConnectionRequestStatus[] = [
   CONNECTION_REQUEST_STATUS.PENDING_DESIGN_REVIEW,
@@ -736,10 +737,23 @@ export const connectionRequestsService = {
     const request = await loadRequest(id);
     ensureOwner(request, actorUserId);
     ensureStatus(request, [CONNECTION_REQUEST_STATUS.WAITING_FACTORY_REVISION]);
-    const effectiveInput = {
+    if (input.requestType && input.requestType !== request.requestType) {
+      throw new BadRequestError('Request type cannot be changed during resubmission', {
+        path: 'requestType',
+        expected: request.requestType,
+        received: input.requestType,
+      });
+    }
+    const effectiveInputResult = resubmitConnectionRequestWithTypeSchema.safeParse({
       ...input,
-      requestType: input.requestType ?? request.requestType,
-    };
+      requestType: request.requestType,
+    });
+    if (!effectiveInputResult.success) {
+      throw new BadRequestError('Invalid connection request form', {
+        issues: effectiveInputResult.error.issues,
+      });
+    }
+    const effectiveInput = effectiveInputResult.data;
     ensureRequestFormSections(effectiveInput, effectiveInput.requestType);
     const formInput =
       effectiveInput.requestType === CONNECTION_REQUEST_TYPE.ADD_PARAMETER
@@ -2076,7 +2090,7 @@ function toConnectedMeasurementPointModalDetail(
     measurementTimes: deriveWpmsMeasurementTimes(detail.point),
     wastewaterSource: stringDetail(detail.point.details, 'wastewaterSource'),
     receivingSource: stringDetail(detail.point.details, 'dischargeReceivingSource'),
-    treatmentSystemType: stringDetail(detail.point.details, 'treatmentSystem'),
+    treatmentSystemType: joinedStringDetail(detail.point.details, 'treatmentSystem'),
     dischargePoint: buildWpmsDischargePoint(detail.point.details),
     averageDischarge: scalarDetail(detail.point.details, 'averageWastewaterDischarge'),
     minimumDischarge: scalarDetail(detail.point.details, 'minWastewaterDischarge'),
@@ -2092,6 +2106,21 @@ function stringDetail(details: MeasurementPointDTO['details'], key: string): str
 
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+function joinedStringDetail(details: MeasurementPointDTO['details'], key: string): string | null {
+  const scalarValue = stringDetail(details, key);
+  if (scalarValue) return scalarValue;
+  if (!details || typeof details !== 'object' || Array.isArray(details)) return null;
+
+  const value = details[key];
+  if (!Array.isArray(value)) return null;
+
+  const normalizedValues = value
+    .filter((item): item is string => typeof item === 'string')
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return normalizedValues.length > 0 ? [...new Set(normalizedValues)].join(', ') : null;
 }
 
 function scalarDetail(

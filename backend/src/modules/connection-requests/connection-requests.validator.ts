@@ -1,8 +1,11 @@
 import { z } from 'zod';
+import { MAX_DOCUMENT_FILE_SIZE_BYTES } from './connection-request-document-image.service';
 import { CONNECTION_REQUEST_STATUS, CONNECTION_REQUEST_TYPE } from './connection-requests.types';
 
 const trimmedString = (max: number) => z.string().trim().min(1).max(max);
 const optionalTrimmedString = (max: number) => z.string().trim().min(1).max(max).optional();
+const httpUrl = (max: number) =>
+  z.string().trim().url().max(max).refine(isHttpUrl, { message: 'URL must use http or https' });
 const optionalNullableTrimmedString = (max: number) =>
   z
     .preprocess((value) => {
@@ -29,15 +32,22 @@ const jsonValueSchema: z.ZodType<unknown> = z.lazy(() =>
 );
 
 const measurementPointDetailsSchema = z.record(z.string().min(1).max(128), jsonValueSchema);
+const PARAMETER_NONE_OPTION = 'ไม่มี';
+const TREATMENT_SYSTEM_OTHER_OPTION = 'อื่นๆ';
+const FACTORY_LOGO_DOCUMENT_TITLE = 'สัญลักษณ์ของโรงงานหรือโลโก้บริษัท';
+const LEGAL_ANNEX_NUMBERS = new Set(Array.from({ length: 13 }, (_, index) => String(index + 1)));
+const COMBUSTION_CONTROL_SYSTEM_VALUES = new Set(['ระบบปิด', 'ระบบเปิด', 'ควบคุมอัตโนมัติ']);
 
 const parameterGroupFields = [
   'eligibleParameters',
   'exemptedParameters',
   'connectedParameters',
   'pendingParameters',
+  'requestedParameters',
   'timeSharingParameters',
 ] as const;
 const measurementPointParameterFallbackFields = [
+  'requestedParameters',
   'pendingParameters',
   'eligibleParameters',
   'connectedParameters',
@@ -100,17 +110,11 @@ const requestDocumentImageSchema = z
   .object({
     title: trimmedString(255),
     description: optionalNullableTrimmedString(1000),
-    link: z.string().trim().url().max(2048).nullable().optional(),
+    link: httpUrl(2048).nullable().optional(),
     fileName: optionalNullableTrimmedString(255),
-    fileUrl: z.string().trim().url().max(2048).nullable().optional(),
+    fileUrl: httpUrl(2048).nullable().optional(),
     fileType: optionalNullableTrimmedString(128),
-    fileSize: z
-      .number()
-      .int()
-      .min(0)
-      .max(20 * 1024 * 1024)
-      .nullable()
-      .optional(),
+    fileSize: z.number().int().min(1).max(MAX_DOCUMENT_FILE_SIZE_BYTES).nullable().optional(),
   })
   .strict()
   .transform((document) => ({
@@ -344,14 +348,19 @@ function normalizeMeasurementInstrumentsInput(
 }
 
 function normalizeMeasurementPointParameterNames(point: Record<string, unknown>): string[] {
+  if (isRecord(point.details) && Array.isArray(point.details.requestedParameters)) {
+    return normalizeParameterNameList(point.details.requestedParameters);
+  }
+
   const directParameters = normalizeParameterNameList(point.parameters);
   if (directParameters.length > 0) return directParameters;
 
   if (!isRecord(point.details)) return [];
 
   for (const field of measurementPointParameterFallbackFields) {
+    if (!Array.isArray(point.details[field])) continue;
     const detailParameters = normalizeParameterNameList(point.details[field]);
-    if (detailParameters.length > 0) return detailParameters;
+    return detailParameters;
   }
 
   return [];
@@ -365,7 +374,7 @@ function normalizeParameterNameList(value: unknown): string[] {
     return item
       .split(',')
       .map((parameter) => parameter.trim())
-      .filter((parameter) => parameter.length > 0);
+      .filter((parameter) => parameter.length > 0 && parameter !== PARAMETER_NONE_OPTION);
   });
 
   return [...new Set(parameterNames)];
@@ -431,7 +440,8 @@ const measurementPointSchema = z
         documentsAndImages: z.array(requestDocumentImageSchema).max(50).optional(),
         measurementInstruments: measurementInstrumentsSchema.nullable().optional(),
       })
-      .strict(),
+      .strict()
+      .superRefine(validateMeasurementPointDocuments),
   )
   .transform((point) => ({
     ...point,
@@ -510,7 +520,11 @@ function deriveMeasurementPointParameters(
 function selectMeasurementPointParameters(point: {
   parameters?: string[];
   measurementInstruments?: z.infer<typeof measurementInstrumentsSchema> | null;
+  details?: Record<string, unknown> | null;
 }): string[] {
+  if (point.details && Array.isArray(point.details.requestedParameters)) {
+    return normalizeParameterNameList(point.details.requestedParameters);
+  }
   const instrumentParameters = deriveMeasurementPointParameters(point.measurementInstruments);
   if (instrumentParameters.length > 0) return instrumentParameters;
   return point.parameters ?? [];
@@ -535,6 +549,7 @@ function validateConnectionRequestFormBase(
 ): void {
   validateContactSection(payload, ctx);
   validateUniqueMeasurementPoints(payload.measurementPoints, ctx);
+  validateSingleFactoryLogo(payload.measurementPoints, ctx);
 }
 
 function stripFrontendSystemTypeAlias<T extends { type?: unknown }>(payload: T): Omit<T, 'type'> {
@@ -638,6 +653,8 @@ function validateCemsDetails(
   validateMonitoringPointKind(details, index, ctx, 'CEMS');
   validateExcludedFields(details, wpmsOnlyDetailFields, index, ctx, 'WPMS-only detail field');
   validateParameterGroups(details, index, ctx);
+  validateRequestedParameters(point, index, ctx);
+  validateLegalAnnexNumbers(details, index, ctx);
 
   const stackShape = details.stackShape;
   if (stackShape === 'วงกลม') {
@@ -651,12 +668,13 @@ function validateCemsDetails(
     addDetailIssue(ctx, index, 'stackShape', 'CEMS stackShape is required');
   }
 
-  if (details.primaryFuel === 'อื่นๆ') {
+  if (requiresFuelDescription(details.primaryFuel)) {
     requireStringDetail(details, index, ctx, 'primaryFuelOther');
   }
-  if (details.secondaryFuel === 'อื่นๆ') {
+  if (requiresFuelDescription(details.secondaryFuel)) {
     requireStringDetail(details, index, ctx, 'secondaryFuelOther');
   }
+  validateCombustionControlSystem(details, index, ctx);
 
   validateTreatmentSystem(details, index, ctx);
   validateConnectionDevice(details, index, ctx);
@@ -677,7 +695,8 @@ function validateWpmsDetails(
   validateMonitoringPointKind(details, index, ctx, 'WPMS');
   validateExcludedFields(details, cemsOnlyDetailFields, index, ctx, 'CEMS-only detail field');
   validateParameterGroups(details, index, ctx);
-  validateTreatmentSystem(details, index, ctx, { requireOtherDescription: false });
+  validateRequestedParameters(point, index, ctx);
+  validateTreatmentSystem(details, index, ctx);
   validateConnectionDevice(details, index, ctx);
 
   if (details.hasTreatmentSystem === 'มี') {
@@ -716,8 +735,13 @@ function validateParameterGroups(
   parameterGroupFields.forEach((field) => {
     const value = details[field];
     if (value === undefined || value === null) return;
-    if (Array.isArray(value) && value.every((item) => typeof item === 'string')) return;
-    addDetailIssue(ctx, index, field, `${field} must be string[]`);
+    if (!Array.isArray(value) || !value.every((item) => typeof item === 'string')) {
+      addDetailIssue(ctx, index, field, `${field} must be string[]`);
+      return;
+    }
+    if (value.includes(PARAMETER_NONE_OPTION) && value.length > 1) {
+      addDetailIssue(ctx, index, field, `${PARAMETER_NONE_OPTION} must be selected by itself`);
+    }
   });
 }
 
@@ -725,12 +749,224 @@ function validateTreatmentSystem(
   details: Record<string, unknown>,
   index: number,
   ctx: z.RefinementCtx,
-  options: { requireOtherDescription?: boolean } = {},
 ): void {
-  if (details.hasTreatmentSystem !== 'มี') return;
-  requireStringDetail(details, index, ctx, 'treatmentSystem');
-  if (details.treatmentSystem === 'อื่นๆ' && options.requireOtherDescription !== false) {
+  const treatmentSystems = toDetailStringList(details.treatmentSystem);
+  const hasTreatmentSystem = details.hasTreatmentSystem;
+
+  if (
+    hasTreatmentSystem !== undefined &&
+    hasTreatmentSystem !== null &&
+    hasTreatmentSystem !== 'มี' &&
+    hasTreatmentSystem !== 'ไม่มี'
+  ) {
+    addDetailIssue(ctx, index, 'hasTreatmentSystem', 'hasTreatmentSystem must be มี or ไม่มี');
+  }
+
+  if (details.treatmentSystem !== undefined && !treatmentSystems) {
+    addDetailIssue(ctx, index, 'treatmentSystem', 'treatmentSystem must be string or string[]');
+    return;
+  }
+  if (treatmentSystems?.includes(PARAMETER_NONE_OPTION) && treatmentSystems.length > 1) {
+    addDetailIssue(
+      ctx,
+      index,
+      'treatmentSystem',
+      `${PARAMETER_NONE_OPTION} must be selected by itself`,
+    );
+  }
+  if (treatmentSystems?.includes(TREATMENT_SYSTEM_OTHER_OPTION)) {
     requireStringDetail(details, index, ctx, 'treatmentSystemOther');
+  }
+
+  if (hasTreatmentSystem === 'ไม่มี') {
+    if (treatmentSystems?.some((treatmentSystem) => treatmentSystem !== PARAMETER_NONE_OPTION)) {
+      addDetailIssue(
+        ctx,
+        index,
+        'treatmentSystem',
+        `treatmentSystem must be empty or ${PARAMETER_NONE_OPTION} when no system is selected`,
+      );
+    }
+    return;
+  }
+
+  if (hasTreatmentSystem !== 'มี') return;
+  if (!treatmentSystems?.length || treatmentSystems.includes(PARAMETER_NONE_OPTION)) {
+    addDetailIssue(ctx, index, 'treatmentSystem', 'treatmentSystem is required');
+  }
+}
+
+function validateRequestedParameters(
+  point: z.infer<typeof measurementPointSchema>,
+  index: number,
+  ctx: z.RefinementCtx,
+): void {
+  const details = point.details;
+  if (!details) return;
+  if (details.requestedParameters === undefined || details.requestedParameters === null) return;
+  if (!isStringArray(details.requestedParameters)) return;
+
+  const requestedParameters = details.requestedParameters.filter(
+    (parameter) => parameter !== PARAMETER_NONE_OPTION,
+  );
+  if (requestedParameters.length !== details.requestedParameters.length) {
+    addDetailIssue(
+      ctx,
+      index,
+      'requestedParameters',
+      `${PARAMETER_NONE_OPTION} cannot be requested as a measurement parameter`,
+    );
+    return;
+  }
+
+  if (!isStringArray(details.pendingParameters)) {
+    if (requestedParameters.length > 0) {
+      addDetailIssue(
+        ctx,
+        index,
+        'requestedParameters',
+        'requestedParameters requires pendingParameters',
+      );
+    }
+    return;
+  }
+
+  const pendingParameters = new Set(
+    details.pendingParameters.filter((parameter) => parameter !== PARAMETER_NONE_OPTION),
+  );
+  const unavailableParameters = requestedParameters.filter(
+    (parameter) => !pendingParameters.has(parameter),
+  );
+  if (unavailableParameters.length > 0) {
+    addDetailIssue(
+      ctx,
+      index,
+      'requestedParameters',
+      `requestedParameters must be selected from pendingParameters: ${unavailableParameters.join(', ')}`,
+    );
+  }
+
+  const instrumentParameters =
+    point.measurementInstruments?.parameters.map((parameter) => parameter.parameter) ?? [];
+  if (!hasSameStringValues(requestedParameters, instrumentParameters)) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['measurementPoints', index, 'measurementInstruments', 'parameters'],
+      message: 'measurementInstruments.parameters must match requestedParameters',
+    });
+  }
+}
+
+function validateCombustionControlSystem(
+  details: Record<string, unknown>,
+  index: number,
+  ctx: z.RefinementCtx,
+): void {
+  const value = details.combustionControlSystem;
+  if (value === undefined || value === null) return;
+  if (typeof value === 'string' && COMBUSTION_CONTROL_SYSTEM_VALUES.has(value.trim())) return;
+  addDetailIssue(
+    ctx,
+    index,
+    'combustionControlSystem',
+    'combustionControlSystem must be ระบบปิด or ระบบเปิด',
+  );
+}
+
+function validateLegalAnnexNumbers(
+  details: Record<string, unknown>,
+  index: number,
+  ctx: z.RefinementCtx,
+): void {
+  const legalAnnexNo = details.legalAnnexNo;
+  if (legalAnnexNo === undefined || legalAnnexNo === null) return;
+  if (
+    !isStringArray(legalAnnexNo) ||
+    legalAnnexNo.some((annexNumber) => !LEGAL_ANNEX_NUMBERS.has(annexNumber))
+  ) {
+    addDetailIssue(ctx, index, 'legalAnnexNo', 'legalAnnexNo must contain only 1-13');
+  }
+}
+
+function validateMeasurementPointDocuments(
+  point: { documentsAndImages?: z.infer<typeof requestDocumentImageSchema>[] },
+  ctx: z.RefinementCtx,
+): void {
+  const logoCount =
+    point.documentsAndImages?.filter((document) => document.title === FACTORY_LOGO_DOCUMENT_TITLE)
+      .length ?? 0;
+  if (logoCount <= 1) return;
+
+  ctx.addIssue({
+    code: 'custom',
+    path: ['documentsAndImages'],
+    message: 'Company logo accepts only one file',
+  });
+}
+
+function validateSingleFactoryLogo(
+  points: ContactFormPayloadWithoutRequestType['measurementPoints'],
+  ctx: z.RefinementCtx,
+): void {
+  let foundLogo = false;
+
+  points.forEach((point, pointIndex) => {
+    point.documentsAndImages.forEach((document) => {
+      if (document.title !== FACTORY_LOGO_DOCUMENT_TITLE) return;
+      if (!foundLogo) {
+        foundLogo = true;
+        return;
+      }
+
+      ctx.addIssue({
+        code: 'custom',
+        path: ['measurementPoints', pointIndex, 'documentsAndImages'],
+        message: 'Company logo accepts only one file per request',
+      });
+    });
+  });
+}
+
+function requiresFuelDescription(value: unknown): boolean {
+  if (typeof value !== 'string') return false;
+  const normalizedValue = value.trim().toLowerCase();
+  return (
+    normalizedValue.includes('อื่นๆ') ||
+    normalizedValue.includes('ชีวมวล') ||
+    normalizedValue.includes('biomass')
+  );
+}
+
+function toDetailStringList(value: unknown): string[] | null {
+  if (typeof value === 'string') {
+    const normalizedValue = value.trim();
+    return normalizedValue ? [normalizedValue] : [];
+  }
+  if (!isStringArray(value)) return null;
+
+  const normalizedValues = value.map((item) => item.trim()).filter(Boolean);
+  return normalizedValues;
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string');
+}
+
+function hasSameStringValues(left: string[], right: string[]): boolean {
+  const leftValues = [...new Set(left)];
+  const rightValues = [...new Set(right)];
+  return (
+    leftValues.length === rightValues.length &&
+    leftValues.every((value) => rightValues.includes(value))
+  );
+}
+
+function isHttpUrl(value: string): boolean {
+  try {
+    const protocol = new URL(value).protocol;
+    return protocol === 'http:' || protocol === 'https:';
+  } catch {
+    return false;
   }
 }
 
@@ -779,6 +1015,7 @@ function validateMeasurementPointFormSections(
   options: { requireExistingPointCode?: boolean } = {},
 ): void {
   validateUniqueMeasurementPoints(payload.measurementPoints, ctx);
+  validateSingleFactoryLogo(payload.measurementPoints, ctx);
 
   payload.measurementPoints.forEach((point, index) => {
     if (options.requireExistingPointCode && !point.pointCode) {
@@ -853,13 +1090,55 @@ function normalizedDuplicateKey(value: string | null | undefined): string {
   return value?.trim().toLowerCase() ?? '';
 }
 
+function validateResubmitConnectionRequest(
+  payload: ContactFormPayload,
+  ctx: z.RefinementCtx,
+): void {
+  validateContactSection(payload, ctx);
+
+  if (payload.requestType === CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT) {
+    validateMeasurementPointFormSections(payload, ctx);
+    return;
+  }
+
+  if (payload.requestType === CONNECTION_REQUEST_TYPE.ADD_PARAMETER) {
+    if (payload.measurementPoints.length !== 1) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['measurementPoints'],
+        message: 'Add parameter request must reference exactly one measurement point',
+      });
+    }
+    validateMeasurementPointFormSections(payload, ctx, { requireExistingPointCode: true });
+    return;
+  }
+
+  validateUniqueMeasurementPoints(payload.measurementPoints, ctx);
+  validateSingleFactoryLogo(payload.measurementPoints, ctx);
+}
+
+function normalizeResubmitConnectionRequest<T extends ContactFormPayload>(payload: T) {
+  return {
+    ...normalizeContacts(normalizeFactorySnapshot(stripFrontendSystemTypeAlias(payload))),
+    requestType: payload.requestType,
+    remarks: payload.remarks ?? null,
+  };
+}
+
 export const createConnectionRequestSchema = connectionRequestFormSchema.transform((payload) => ({
   ...payload,
   requestType: payload.requestType ?? CONNECTION_REQUEST_TYPE.NEW_CONNECTION,
   remarks: payload.remarks ?? null,
 }));
 
-export const resubmitConnectionRequestSchema = createConnectionRequestSchema;
+export const resubmitConnectionRequestSchema = connectionRequestFormObjectSchema
+  .superRefine(validateResubmitConnectionRequest)
+  .transform(normalizeResubmitConnectionRequest);
+
+export const resubmitConnectionRequestWithTypeSchema = connectionRequestFormObjectSchema
+  .extend({ requestType: z.nativeEnum(CONNECTION_REQUEST_TYPE) })
+  .superRefine(validateResubmitConnectionRequest)
+  .transform(normalizeResubmitConnectionRequest);
 
 export const addMeasurementPointRequestSchema = connectionRequestFormObjectSchema
   .omit({ requestType: true })

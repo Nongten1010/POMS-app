@@ -63,6 +63,7 @@ import type { SelectedEligibleFactoryDTO } from '../../src/modules/eligible-fact
 import { logger } from '../../src/config/logger';
 import { connectionRequestsRepository } from '../../src/modules/connection-requests/connection-requests.repository';
 import { connectionRequestsService } from '../../src/modules/connection-requests/connection-requests.service';
+import { resubmitConnectionRequestWithTypeSchema } from '../../src/modules/connection-requests/connection-requests.validator';
 import {
   CONNECTION_REQUEST_STATUS,
   CONNECTION_REQUEST_TYPE,
@@ -1932,7 +1933,7 @@ describe('connectionRequestsService', () => {
             secondaryFuel: '',
             wastewaterSource: 'ระบบบำบัดน้ำเสียส่วนกลาง',
             dischargeReceivingSource: 'คลองสาธารณะ',
-            treatmentSystem: 'ระบบตะกอนเร่ง',
+            treatmentSystem: ['ระบบตะกอนเร่ง', 'ระบบกรองชีวภาพ'],
             instrumentLatitude: '13.7563',
             instrumentLongitude: '100.5018',
             averageWastewaterDischarge: 120.5,
@@ -1986,7 +1987,7 @@ describe('connectionRequestsService', () => {
           measurementTimes: ['Real Time', '15 นาที'],
           wastewaterSource: 'ระบบบำบัดน้ำเสียส่วนกลาง',
           receivingSource: 'คลองสาธารณะ',
-          treatmentSystemType: 'ระบบตะกอนเร่ง',
+          treatmentSystemType: 'ระบบตะกอนเร่ง, ระบบกรองชีวภาพ',
           dischargePoint: '13.7563, 100.5018',
           averageDischarge: 120.5,
           minimumDischarge: 95,
@@ -2743,9 +2744,20 @@ describe('connectionRequestsService', () => {
 
     await connectionRequestsService.resubmit(1, payload, actorUserId);
 
+    const normalizedPayload = resubmitConnectionRequestWithTypeSchema.parse({
+      ...payload,
+      requestType: CONNECTION_REQUEST_TYPE.NEW_CONNECTION,
+    });
+
     expect(mockedRepository.replaceForm).toHaveBeenCalledWith(
       1,
-      { ...payloadWithoutPointCodes, requestType: CONNECTION_REQUEST_TYPE.NEW_CONNECTION },
+      {
+        ...normalizedPayload,
+        measurementPoints: normalizedPayload.measurementPoints.map((point) => ({
+          ...point,
+          pointCode: null,
+        })),
+      },
       actorUserId,
       CONNECTION_REQUEST_STATUS.REVISED_PENDING_DESIGN_REVIEW,
     );
@@ -2807,12 +2819,81 @@ describe('connectionRequestsService', () => {
 
     await connectionRequestsService.resubmit(1, revisedPayload, actorUserId);
 
+    const normalizedPayload = resubmitConnectionRequestWithTypeSchema.parse({
+      ...revisedPayload,
+      requestType: CONNECTION_REQUEST_TYPE.ADD_PARAMETER,
+    });
+
     expect(mockedRepository.replaceForm).toHaveBeenCalledWith(
       1,
-      { ...revisedPayload, requestType: CONNECTION_REQUEST_TYPE.ADD_PARAMETER },
+      normalizedPayload,
       actorUserId,
       CONNECTION_REQUEST_STATUS.REVISED_PENDING_DESIGN_REVIEW,
     );
+  });
+
+  it('validates an omitted resubmit request type against the original add-point rules', async () => {
+    const revisedPayload: CreateConnectionRequestInput = {
+      ...payload,
+      measurementPoints: [
+        {
+          pointName: 'ปล่องระบาย A',
+          pointType: 'STACK',
+          details: {
+            legalAnnexNo: ['14'],
+          },
+          documentsAndImages: [
+            {
+              title: 'ภาพถ่ายปล่อง',
+              fileName: 'stack.png',
+              fileUrl: 'https://example.com/files/stack.png',
+              fileType: 'image/png',
+              fileSize: 1024,
+            },
+          ],
+          measurementInstruments: {
+            converterBrand: 'Converter Brand',
+            converterModel: 'CV-100',
+            parameters: [{ parameter: 'CO (ppm)', technique: 'NDIR' }],
+          },
+        },
+      ],
+    };
+    mockedRepository.findById.mockResolvedValue(
+      requestDto({
+        requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT,
+        status: CONNECTION_REQUEST_STATUS.WAITING_FACTORY_REVISION,
+        createdBy: actorUserId,
+      }),
+    );
+
+    await expect(
+      connectionRequestsService.resubmit(1, revisedPayload, actorUserId),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+    expect(mockedRepository.replaceForm).not.toHaveBeenCalled();
+  });
+
+  it('rejects changing the request type while resubmitting a revised form', async () => {
+    mockedRepository.findById.mockResolvedValue(
+      requestDto({
+        requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT,
+        status: CONNECTION_REQUEST_STATUS.WAITING_FACTORY_REVISION,
+        createdBy: actorUserId,
+      }),
+    );
+
+    await expect(
+      connectionRequestsService.resubmit(
+        1,
+        { ...payload, requestType: CONNECTION_REQUEST_TYPE.NEW_CONNECTION },
+        actorUserId,
+      ),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+    expect(mockedRepository.replaceForm).not.toHaveBeenCalled();
   });
 
   it('rejects resubmitting an add parameter form without measurement instruments', async () => {

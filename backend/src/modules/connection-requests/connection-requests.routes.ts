@@ -18,6 +18,10 @@ const documentImageUpload = multer({
   limits: {
     fileSize: MAX_DOCUMENT_FILE_SIZE_BYTES,
     files: 1,
+    fields: 3,
+    parts: 5,
+    fieldNameSize: 64,
+    fieldSize: 4096,
   },
   fileFilter: (_req, file, callback) => {
     if (allowedDocumentFileTypes.has(file.mimetype)) {

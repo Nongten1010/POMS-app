@@ -36,6 +36,10 @@ describe('connection request document image upload route', () => {
   it('accepts multipart file uploads and returns document metadata for form submission', async () => {
     await withTempUploadDir(async () => {
       const app = createApp();
+      const pngBuffer = Buffer.concat([
+        Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+        Buffer.from('image!'),
+      ]);
 
       const response = await request(app)
         .post('/api/v1/cems-wpms-requests/document-images')
@@ -43,7 +47,7 @@ describe('connection request document image upload route', () => {
         .field('title', 'ภาพถ่ายปล่อง')
         .field('description', '')
         .field('link', 'https://example.com/stack-reference.pdf')
-        .attach('file', Buffer.from('fake png bytes'), {
+        .attach('file', pngBuffer, {
           filename: 'stack.png',
           contentType: 'image/png',
         });
@@ -82,6 +86,29 @@ describe('connection request document image upload route', () => {
 
       expect(response.status).toBe(400);
       expect(response.body.error.message).toBe('Unsupported file type');
+    });
+  });
+
+  it('rejects multipart files above 5 MB with a client error', async () => {
+    await withTempUploadDir(async () => {
+      const app = createApp();
+
+      const response = await request(app)
+        .post('/api/v1/cems-wpms-requests/document-images')
+        .set('Authorization', `Bearer ${accessToken()}`)
+        .field('title', 'ภาพถ่ายหน้าโรงงาน')
+        .attach('file', Buffer.alloc(5 * 1024 * 1024 + 1, 1), {
+          filename: 'factory.png',
+          contentType: 'image/png',
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toMatchObject({
+        success: false,
+        error: {
+          code: 'UPLOAD_ERROR',
+        },
+      });
     });
   });
 });

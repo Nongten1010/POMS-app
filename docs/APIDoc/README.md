@@ -9,6 +9,8 @@
 | File | Description |
 | --- | --- |
 | [CEMS_WPMS_REQUEST_APIS.md](./CEMS_WPMS_REQUEST_APIS.md) | API คำขอ CEMS/WPMS ครบ 10 รายการ พร้อมตัวอย่าง request/response และ field mapping ทุกช่อง |
+| [CEMS_WPMS_REQUEST_FORM_BACKEND_CHECKLIST.md](./CEMS_WPMS_REQUEST_FORM_BACKEND_CHECKLIST.md) | Checklist ข้อกำหนดแบบฟอร์มเพิ่มจุดตรวจวัด แยกสถานะ backend/frontend พร้อมสิ่งที่ตรวจแล้ว |
+| [CEMS_WPMS_REQUEST_FORM_FRONTEND_HANDOFF.md](./CEMS_WPMS_REQUEST_FORM_FRONTEND_HANDOFF.md) | Handoff สำหรับ frontend: payload ใหม่, upload flow, validation และรายการที่ยังต้องแก้ |
 | [KWP_FORM_SUBMISSION_APIS.md](./KWP_FORM_SUBMISSION_APIS.md) | API บันทึกแบบ กวภ. เริ่มจาก `POST /api/v1/kwp-form-submissions/kwp01` สำหรับแบบ กวภ.01 |
 | [KWP_FORM_REPORT_APIS.md](./KWP_FORM_REPORT_APIS.md) | API ตารางรายงาน/รายการคำขอ กวภ.01-กวภ.05 |
 | [INTEGRATION_DEVICE_CONFIGS.md](./INTEGRATION_DEVICE_CONFIGS.md) | API สำหรับระบบภายนอก/worker ดึง active device config, parameter config, และ status schedule ด้วย `X-API-Key` |

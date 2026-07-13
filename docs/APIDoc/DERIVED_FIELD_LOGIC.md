@@ -62,7 +62,7 @@ Fallback order:
 
 - `wastewaterSource`: `details.wastewaterSource -> null`
 - `receivingSource`: `details.dischargeReceivingSource -> null`
-- `treatmentSystemType`: `details.treatmentSystem -> null`
+- `treatmentSystemType`: `details.treatmentSystem` แบบ string -> trim; แบบ string[] -> ตัดค่าว่าง/ค่าซ้ำแล้ว join ด้วย `, ` -> null
 - `dischargePoint`: `details.dischargePoint -> details.instrumentLatitude + details.instrumentLongitude -> null`
 - `averageDischarge`: `details.averageWastewaterDischarge -> null`
 - `minimumDischarge`: `details.minWastewaterDischarge -> null`
@@ -74,6 +74,7 @@ Transformation:
 
 - These fields are added only when the connected point response row has system type `WPMS`; CEMS rows keep the existing modal shape.
 - String detail values are trimmed; blank or missing values become `null`.
+- `treatmentSystemType` คง response type เป็น `string|null` เพื่อ backward compatibility: ค่า Multiselect แบบ array จะถูก join เป็นข้อความเดียวตามลำดับที่บันทึก.
 - Numeric detail values are returned as numbers when stored as numbers; string values are trimmed and returned as strings.
 - `dischargePoint` joins latitude and longitude as `<latitude>, <longitude>` only when both are present.
 

@@ -3,7 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { BadRequestError } from '../../shared/errors/AppError';
 
-export const MAX_DOCUMENT_FILE_SIZE_BYTES = 20 * 1024 * 1024;
+export const MAX_DOCUMENT_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 const STORAGE_PREFIX = 'cems-wpms/document-images';
 export const allowedDocumentFileTypes = new Map([
   ['image/jpeg', new Set(['.jpg', '.jpeg'])],
@@ -123,7 +123,7 @@ function validateDocumentFile(file: UploadedDocumentFile): void {
   }
 
   if (!Number.isInteger(file.size) || file.size <= 0 || file.size > MAX_DOCUMENT_FILE_SIZE_BYTES) {
-    throw new BadRequestError('Uploaded file size must be between 1 byte and 20 MB');
+    throw new BadRequestError('Uploaded file size must be between 1 byte and 5 MB');
   }
 
   if (file.buffer.length !== file.size) {
@@ -139,6 +139,25 @@ function validateDocumentFile(file: UploadedDocumentFile): void {
   if (!extension || !allowedExtensions.has(extension)) {
     throw new BadRequestError('Unsupported file extension');
   }
+
+  if (!hasExpectedFileSignature(file)) {
+    throw new BadRequestError('Uploaded file content does not match file type');
+  }
+}
+
+function hasExpectedFileSignature(file: UploadedDocumentFile): boolean {
+  if (file.mimeType === 'image/png') {
+    return file.buffer
+      .subarray(0, 8)
+      .equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  }
+  if (file.mimeType === 'image/jpeg') {
+    return file.buffer.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff]));
+  }
+  if (file.mimeType === 'application/pdf') {
+    return file.buffer.subarray(0, 1024).includes(Buffer.from('%PDF-'));
+  }
+  return false;
 }
 
 function normalizeText(value: string | null | undefined): string | null {

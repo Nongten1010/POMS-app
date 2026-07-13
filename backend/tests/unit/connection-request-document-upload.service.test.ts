@@ -18,11 +18,15 @@ describe('connection request document image upload service', () => {
     }
   }
 
+  const pngBuffer = Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    Buffer.from('image!'),
+  ]);
   const pngFile: UploadedDocumentFile = {
-    buffer: Buffer.from('fake png bytes'),
+    buffer: pngBuffer,
     originalName: '../../stack photo.png',
     mimeType: 'image/png',
-    size: 14,
+    size: pngBuffer.length,
   };
 
   it('stores an uploaded file under the configured local root and returns reusable metadata', async () => {
