@@ -131,6 +131,11 @@ export interface AdministrativeAreaNames {
   districtName: string | null;
 }
 
+export type FacImportAddressRow = Pick<
+  FacImportRow,
+  'FADDR' | 'FMOO' | 'SOI' | 'ROAD' | 'TUMBOL' | 'AMP' | 'ZIPCODE'
+>;
+
 interface FacImportMapperOptions {
   industrialEstateNamesByCode?: Map<string, string>;
   administrativeAreaNamesByCode?: Map<string, AdministrativeAreaNames>;
@@ -173,7 +178,7 @@ export function toEligibleFactoryCandidate(
     factoryRegistrationNo: registrationNoNew,
     factoryClass,
     factorySubclass,
-    address: joinAddress(row, administrativeAreaNames),
+    address: formatFacImportAddress(row, administrativeAreaNames),
     provinceName,
     industrialEstateName: industrialEstateName(row.COLONY_INDUST_CODE, options),
     longitude: coordinates?.longitude ?? null,
@@ -223,8 +228,8 @@ function operationStatusFromFlag(value: string | number | null): string {
   return `สถานะ ${flag}`;
 }
 
-function joinAddress(
-  row: FacImportRow,
+export function formatFacImportAddress(
+  row: FacImportAddressRow,
   administrativeAreaNames?: AdministrativeAreaNames,
 ): string | null {
   const parts = [

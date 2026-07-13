@@ -1308,6 +1308,49 @@ Risk:
 - `systemType` filtering depends on current POMS monitoring points. Eligible factories without matching connected/current POMS points are excluded when `systemType` is provided.
 - Region filtering depends on `provinces.name_th` matching `eligible_factories.province_name`; mismatched province spelling can hide a row for region-scoped users.
 
+## Selected Eligible Factory Address Names
+
+Endpoint:
+
+- `GET /api/v1/eligible-factories`
+
+Code:
+
+- `backend/src/modules/eligible-factories/eligible-factories.repository.ts`
+- `backend/src/modules/eligible-factories/eligible-factory-source-hydration.ts`
+- `backend/src/modules/eligible-factories/fac-import.mapper.ts`
+
+Source:
+
+- Stored selection and form values: `eligible_factories.source_factory_id`, `eligible_factories.factory_registration_no_new`, `eligible_factories.address`, and `eligible_factories.machinery_horsepower`
+- DIW factory source: configured `FACTORY_DB_SCHEMA.FACTORY_DB_TABLE` (normally `dbo.fac_import`) fields `FID`, `FACREG`, `DISPFACREG`, `FADDR`, `FMOO`, `SOI`, `ROAD`, `PROV`, `AMP`, `TUMBOL`, `ZIPCODE`, `HP`, and `HP2`
+- DIW administrative master: `dbo.TUMBOL.PROV`, `AMP`, `TUMBOL`, `TUMNAME`, and `AMPNAME`
+
+Logic:
+
+- The selected row is matched to `fac_import` by `source_factory_id` or `factory_registration_no_new` against `FID`, `DISPFACREG`, and `FACREG`.
+- Source keys are queried in chunks of 500 so the three `WHERE IN` predicates stay below SQL Server's 2,100-parameter limit.
+- The administrative name key is normalized as `PROV:AMP:TUMBOL`; the matching `TUMNAME` and `AMPNAME` become `ตำบล{name}` and `อำเภอ{name}`.
+- `address` is rebuilt from `FADDR`, `FMOO`, `SOI`, `ROAD`, resolved subdistrict, resolved district, and `ZIPCODE` only when the stored address is `null` or contains a numeric administrative label such as `ตำบล7` or `อำเภอ4`.
+- A readable address entered in a monitoring-point form is preserved.
+- The response envelope and field names are unchanged: `{ data: SelectedEligibleFactoryDTO[], meta: { total } }`.
+
+Fallback order:
+
+1. Match the DIW row by `source_factory_id`.
+2. Match by `factory_registration_no_new` against `FID`, `DISPFACREG`, or `FACREG`.
+3. If `dbo.TUMBOL` is unavailable or has no matching key, rebuild the address without displaying raw `TUMBOL`/`AMP` codes as names.
+4. If `fac_import` is unavailable or has no matching factory, return the stored `eligible_factories.address` unchanged.
+
+Reason:
+
+- Historical selected rows copied numeric DIW area codes into the address text. The selected-factory API must display the same real Thai administrative names as the candidates API without writing data during a safe `GET` request.
+
+Risk:
+
+- A numeric administrative label intentionally typed into a stored address will be treated as legacy DIW code text and replaced when a source row exists.
+- If both the DIW factory source and stored address are stale, the endpoint falls back to the stored value because a read request does not mutate or backfill `eligible_factories`.
+
 ## CEMS/WPMS measurement criteria ranges
 
 Applies to:
