@@ -1,6 +1,11 @@
 import { describe, expect, it } from '@jest/globals';
 import { saveMonitoringPointFormSchema } from '../../src/modules/monitoring-point-forms/monitoring-point-forms.validator';
 
+const cemsAnnexRequiredBy = [
+  'ประกาศกระทรวงอุตสาหกรรม เรื่อง กำหนดให้โรงงานต้องติดตั้งเครื่องมือหรือเครื่องอุปกรณ์พิเศษเพื่อรายงานมลพิษอากาศจากปล่องโรงงาน พ.ศ. 2565',
+  'ประกาศกระทรวงอุตสาหกรรม เรื่อง กำหนดให้โรงงานในท้องที่กรุงเทพมหานครต้องติดตั้งเครื่องมือหรือเครื่องอุปกรณ์พิเศษเพื่อรายงานมลพิษอากาศจากปล่องโรงงาน พ.ศ. 2569',
+] as const;
+
 describe('monitoring point form validator', () => {
   it('accepts one factory with multiple CEMS and WPMS points', () => {
     const result = saveMonitoringPointFormSchema.parse({
@@ -15,6 +20,7 @@ describe('monitoring point form validator', () => {
           systemType: 'CEMS',
           pointCode: 'S0001',
           pointName: 'ปล่องหลัก',
+          cemsInstallationRequiredBy: cemsAnnexRequiredBy[0],
           legalAnnexNo: ['1', '3'],
           eligibleParameters: ['NOx (ppm)', 'SO2 (ppm)'],
           primaryFuel: 'ก๊าซธรรมชาติ',
@@ -26,7 +32,6 @@ describe('monitoring point form validator', () => {
           systemType: 'WPMS',
           pointCode: 'P0001',
           pointName: 'จุดระบายน้ำทิ้ง',
-          legalAnnexNo: '2,4',
           eligibleParameters: ['BOD (mg/l)', 'COD (mg/l)'],
         },
       ],
@@ -43,7 +48,7 @@ describe('monitoring point form validator', () => {
       pendingParameters: [],
       details: null,
     });
-    expect(result.points[1]?.legalAnnexNo).toEqual(['2', '4']);
+    expect(result.points[1]?.legalAnnexNo).toEqual([]);
   });
 
   it('accepts forms without monitoring points', () => {
@@ -121,6 +126,7 @@ describe('monitoring point form validator', () => {
         {
           systemType: 'CEMS',
           pointName: 'ปล่องหลัก',
+          cemsInstallationRequiredBy: cemsAnnexRequiredBy[0],
           legalAnnexNo: ['', '1', '  ', '3'],
           eligibleParameters: ['', 'NOx (ppm)', '  '],
           exemptedParameters: [''],
@@ -147,6 +153,54 @@ describe('monitoring point form validator', () => {
         {
           systemType: 'MOBILE',
           pointName: 'จุดทดสอบ',
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it.each(cemsAnnexRequiredBy)(
+    'accepts legal annex numbers for the eligible CEMS announcement: %s',
+    (cemsInstallationRequiredBy) => {
+      const result = saveMonitoringPointFormSchema.safeParse({
+        factory: {},
+        points: [
+          {
+            systemType: 'CEMS',
+            cemsInstallationRequiredBy,
+            legalAnnexNo: ['1'],
+          },
+        ],
+      });
+
+      expect(result.success).toBe(true);
+    },
+  );
+
+  it('rejects legal annex numbers for a CEMS announcement that does not use the annex list', () => {
+    const result = saveMonitoringPointFormSchema.safeParse({
+      factory: {},
+      points: [
+        {
+          systemType: 'CEMS',
+          cemsInstallationRequiredBy:
+            'ระเบียบคณะกรรมการกำกับกิจการพลังงานว่าด้วยหลักเกณฑ์การจัดทำรายงานประมวลหลักการปฏิบัติ และรายงานผลการปฏิบัติตามประมวลหลักการปฏิบัติ สำหรับการประกอบกิจการผลิตไฟฟ้า พ.ศ. 2565',
+          legalAnnexNo: ['1'],
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects legal annex numbers for WPMS points', () => {
+    const result = saveMonitoringPointFormSchema.safeParse({
+      factory: {},
+      points: [
+        {
+          systemType: 'WPMS',
+          legalAnnexNo: ['1'],
         },
       ],
     });
