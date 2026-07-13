@@ -3414,6 +3414,7 @@ function ConnectionParameterTable({ deviceCodeOptions, rows, setRows }) {
     { label: 'รหัสอุปกรณ์', width: 170 },
     { label: 'Address ID', width: 124 },
     { label: 'พารามิเตอร์', width: 144 },
+    { label: 'สถานะ', width: 170 },
     { label: 'Min', width: 108 },
     { label: 'Max', width: 108 },
     { label: 'Alert(Low)', width: 118 },
@@ -3421,7 +3422,6 @@ function ConnectionParameterTable({ deviceCodeOptions, rows, setRows }) {
     { label: 'รูปแบบค่าข้อมูลตรวจวัด', width: 220 },
     { label: 'ค่า Offset', width: 108 },
     { label: 'Encoding data', width: 230 },
-    { label: 'สถานะ', width: 170 },
   ]
 
   return (
@@ -3477,6 +3477,24 @@ function ConnectionParameterTable({ deviceCodeOptions, rows, setRows }) {
                       fullWidth
                       slotProps={{ input: { readOnly: true } }}
                     />
+                  </TableCell>
+                  <TableCell sx={{ minWidth: 170 }}>
+                    <TextField
+                      select
+                      size="small"
+                      value={row.status}
+                      onChange={(event) => updateRow(index, 'status', event.target.value)}
+                      fullWidth
+                    >
+                      <MenuItem value="">
+                        <em>ไม่ระบุ</em>
+                      </MenuItem>
+                      {connectionParameterStatusOptions.map((option) => (
+                        <MenuItem key={option} value={option}>
+                          {option}
+                        </MenuItem>
+                      ))}
+                    </TextField>
                   </TableCell>
                   <TableCell sx={{ minWidth: 108 }}>
                     <TextField
@@ -3549,24 +3567,6 @@ function ConnectionParameterTable({ deviceCodeOptions, rows, setRows }) {
                         <em>ไม่ระบุ</em>
                       </MenuItem>
                       {encodingDataOptions.map((option) => (
-                        <MenuItem key={option} value={option}>
-                          {option}
-                        </MenuItem>
-                      ))}
-                    </TextField>
-                  </TableCell>
-                  <TableCell sx={{ minWidth: 170 }}>
-                    <TextField
-                      select
-                      size="small"
-                      value={row.status}
-                      onChange={(event) => updateRow(index, 'status', event.target.value)}
-                      fullWidth
-                    >
-                      <MenuItem value="">
-                        <em>ไม่ระบุ</em>
-                      </MenuItem>
-                      {connectionParameterStatusOptions.map((option) => (
                         <MenuItem key={option} value={option}>
                           {option}
                         </MenuItem>
