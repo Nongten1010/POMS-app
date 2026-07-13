@@ -756,18 +756,31 @@ Source:
 - `dbo.fac_import.FMOO`
 - `dbo.fac_import.SOI`
 - `dbo.fac_import.ROAD`
-- `dbo.fac_import.TUMBOL`
-- `dbo.fac_import.AMP`
+- `dbo.fac_import.PROV`, `dbo.fac_import.AMP`, `dbo.fac_import.TUMBOL` เป็น composite lookup key
+- `dbo.TUMBOL.TUMNAME` เป็นชื่อตำบล
+- `dbo.TUMBOL.AMPNAME` เป็นชื่ออำเภอ
 - `dbo.fac_import.ZIPCODE`
 
 Logic:
 
+- จับคู่ตาราง master `dbo.TUMBOL` ด้วยทั้ง 3 field: `PROV + AMP + TUMBOL` เพื่อไม่ให้รหัสตำบลหรืออำเภอของคนละจังหวัดชนกัน
 - รวม field ที่มีข้อมูลเป็น string เดียว
-- เติมคำหน้า เช่น `หมู่`, `ซอย`, `ถนน`, `ตำบล`, `อำเภอ`
+- เติมคำหน้า `หมู่`, `ซอย`, `ถนน`, `ตำบล`, `อำเภอ` โดย `ตำบล` และ `อำเภอ` ใช้ชื่อจาก master เท่านั้น
+
+Fallback order:
+
+1. ใช้ `TUMNAME` และ `AMPNAME` จาก master row ที่ตรงกับ `PROV + AMP + TUMBOL`
+2. ถ้าหา master row ไม่พบ หรือ query master ล้มเหลว ให้ตัดส่วนตำบล/อำเภอออกจาก address แต่ยังคงบ้านเลขที่ หมู่ ซอย ถนน และรหัสไปรษณีย์ที่มีข้อมูล
+3. ห้ามนำ raw code มาต่อเป็นข้อความ เช่น `ตำบล7` หรือ `อำเภอ4`
+
+Reason:
+
+- `fac_import.TUMBOL` และ `fac_import.AMP` เป็นรหัส ไม่ใช่ชื่อสถานที่ การใส่คำหน้าให้ raw code ทำให้ API แสดงที่อยู่ผิดความหมาย
 
 Risk:
 
 - เป็น formatted address ของระบบ ไม่ใช่ raw DB field เดี่ยว
+- ถ้า master ขาดข้อมูลหรือสิทธิ์อ่าน `dbo.TUMBOL` มีปัญหา address จะไม่มีตำบล/อำเภอแทนการเดาชื่อจากรหัส
 
 ## Selected Eligible Factories
 

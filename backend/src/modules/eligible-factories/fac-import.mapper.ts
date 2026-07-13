@@ -12,8 +12,8 @@ export interface FacImportRow {
   FMOO: string | null;
   SOI: string | null;
   ROAD: string | null;
-  TUMBOL?: string | null;
-  AMP?: string | null;
+  TUMBOL?: string | number | null;
+  AMP?: string | number | null;
   PROV: string | number | null;
   ZIPCODE?: string | number | null;
   CANAL: string | null;
@@ -126,8 +126,14 @@ const PROVINCE_BY_DIW_CODE: Record<string, string> = {
 const ACTIVE_FACTORY_FLAG = '1';
 const TEMPORARY_STOPPED_FACTORY_FLAG = '3';
 
+export interface AdministrativeAreaNames {
+  subdistrictName: string | null;
+  districtName: string | null;
+}
+
 interface FacImportMapperOptions {
   industrialEstateNamesByCode?: Map<string, string>;
+  administrativeAreaNamesByCode?: Map<string, AdministrativeAreaNames>;
   eiaFactoryKeys?: Set<string>;
   eiaLookupSkipped?: boolean;
   productionCapacitiesByFid?: Map<string, string>;
@@ -156,6 +162,10 @@ export function toEligibleFactoryCandidate(
   );
   const hasEia = options.eiaLookupSkipped ? null : hasFactoryEia(row, options);
   const boilerValue = options.boilerValuesByFid?.get(sourceFactoryId);
+  const administrativeAreaKey = diwAdministrativeAreaKey(row.PROV, row.AMP, row.TUMBOL);
+  const administrativeAreaNames = administrativeAreaKey
+    ? options.administrativeAreaNamesByCode?.get(administrativeAreaKey)
+    : undefined;
 
   return {
     factoryName,
@@ -163,7 +173,7 @@ export function toEligibleFactoryCandidate(
     factoryRegistrationNo: registrationNoNew,
     factoryClass,
     factorySubclass,
-    address: joinAddress(row),
+    address: joinAddress(row, administrativeAreaNames),
     provinceName,
     industrialEstateName: industrialEstateName(row.COLONY_INDUST_CODE, options),
     longitude: coordinates?.longitude ?? null,
@@ -193,6 +203,18 @@ export function diwFactoryFlagFromOperationStatus(operationStatus: string): stri
   return null;
 }
 
+export function diwAdministrativeAreaKey(
+  provinceCode: string | number | null | undefined,
+  districtCode: string | number | null | undefined,
+  subdistrictCode: string | number | null | undefined,
+): string | null {
+  const province = normalizeNumberCode(provinceCode);
+  const district = normalizeNumberCode(districtCode);
+  const subdistrict = normalizeNumberCode(subdistrictCode);
+  if (!province || !district || !subdistrict) return null;
+  return `${province}:${district}:${subdistrict}`;
+}
+
 function operationStatusFromFlag(value: string | number | null): string {
   const flag = normalizeNumberCode(value);
   if (flag === ACTIVE_FACTORY_FLAG) return 'แจ้งประกอบแล้ว';
@@ -201,14 +223,19 @@ function operationStatusFromFlag(value: string | number | null): string {
   return `สถานะ ${flag}`;
 }
 
-function joinAddress(row: FacImportRow): string | null {
+function joinAddress(
+  row: FacImportRow,
+  administrativeAreaNames?: AdministrativeAreaNames,
+): string | null {
   const parts = [
     firstText(row.FADDR),
     firstText(row.FMOO) ? `หมู่ ${firstText(row.FMOO)}` : null,
     firstText(row.SOI) ? `ซอย${firstText(row.SOI)}` : null,
     firstText(row.ROAD) ? `ถนน${firstText(row.ROAD)}` : null,
-    firstText(row.TUMBOL) ? `ตำบล${firstText(row.TUMBOL)}` : null,
-    firstText(row.AMP) ? `อำเภอ${firstText(row.AMP)}` : null,
+    administrativeAreaNames?.subdistrictName
+      ? `ตำบล${administrativeAreaNames.subdistrictName}`
+      : null,
+    administrativeAreaNames?.districtName ? `อำเภอ${administrativeAreaNames.districtName}` : null,
     firstText(row.ZIPCODE),
   ].filter((part): part is string => part !== null);
 
@@ -327,7 +354,7 @@ function firstNumber(...values: Array<string | number | null | undefined>): numb
   return null;
 }
 
-function normalizeNumberCode(value: string | number | null): string | null {
+function normalizeNumberCode(value: string | number | null | undefined): string | null {
   const numeric = firstNumber(value);
   if (numeric === null) return firstText(value);
   return String(Math.trunc(numeric));

@@ -61,6 +61,53 @@ describe('fac_import mapper', () => {
     });
   });
 
+  it('uses administrative master names instead of DIW numeric codes in the address', () => {
+    const result = toEligibleFactoryCandidate(
+      {
+        ...row,
+        FADDR: '197',
+        FMOO: '5',
+        SOI: null,
+        ROAD: null,
+        TUMBOL: 7,
+        AMP: 4,
+        PROV: 18,
+        ZIPCODE: '17150',
+      },
+      {
+        administrativeAreaNamesByCode: new Map([
+          [
+            '18:4:7',
+            {
+              subdistrictName: 'หาดอาษา',
+              districtName: 'สรรพยา',
+            },
+          ],
+        ]),
+      },
+    );
+
+    expect(result.address).toBe('197 หมู่ 5 ตำบลหาดอาษา อำเภอสรรพยา 17150');
+  });
+
+  it('omits unresolved administrative codes instead of presenting them as names', () => {
+    const result = toEligibleFactoryCandidate({
+      ...row,
+      FADDR: '197',
+      FMOO: '5',
+      SOI: null,
+      ROAD: null,
+      TUMBOL: 7,
+      AMP: 4,
+      PROV: 18,
+      ZIPCODE: '17150',
+    });
+
+    expect(result.address).toBe('197 หมู่ 5 17150');
+    expect(result.address).not.toContain('ตำบล7');
+    expect(result.address).not.toContain('อำเภอ4');
+  });
+
   it('marks EIA when the factory registration or FID exists in check_eia', () => {
     const result = toEligibleFactoryCandidate(row, {
       eiaFactoryKeys: new Set(['10100302325234']),

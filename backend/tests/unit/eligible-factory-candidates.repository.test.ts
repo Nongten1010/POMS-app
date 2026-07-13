@@ -35,13 +35,18 @@ const mockedFactorySourceDb = jest.mocked(factorySourceDb);
 const mockedBoilerSourceDb = jest.mocked(boilerSourceDb);
 
 describe('eligibleFactoryCandidatesRepository', () => {
-  const externalRows = [
+  const externalRows: Array<Record<string, unknown>> = [
     {
       FNAME: 'โรงงานจริง 1',
       FID: 'real-1',
       DISPFACREG: 'real-reg-1',
       CLASS: '00100',
-      PROV: 10,
+      FADDR: '197',
+      FMOO: '5',
+      TUMBOL: 7,
+      AMP: 4,
+      PROV: 18,
+      ZIPCODE: '17150',
       FFLAG: 1,
     },
     {
@@ -55,7 +60,7 @@ describe('eligibleFactoryCandidatesRepository', () => {
     },
   ];
 
-  function mockExternalCandidates(candidateRows = externalRows) {
+  function mockExternalCandidates(candidateRows: Array<Record<string, unknown>> = externalRows) {
     const informationSchemaQuery = {
       where: jest.fn().mockReturnThis(),
       whereIn: jest.fn().mockReturnThis(),
@@ -66,7 +71,12 @@ describe('eligibleFactoryCandidatesRepository', () => {
           { COLUMN_NAME: 'FID' },
           { COLUMN_NAME: 'DISPFACREG' },
           { COLUMN_NAME: 'CLASS' },
+          { COLUMN_NAME: 'FADDR' },
+          { COLUMN_NAME: 'FMOO' },
+          { COLUMN_NAME: 'TUMBOL' },
+          { COLUMN_NAME: 'AMP' },
           { COLUMN_NAME: 'PROV' },
+          { COLUMN_NAME: 'ZIPCODE' },
           { COLUMN_NAME: 'FFLAG' },
         ]),
     };
@@ -118,6 +128,31 @@ describe('eligibleFactoryCandidatesRepository', () => {
           >
         >()
         .mockResolvedValue([{ COLONY_INDUST_CODE: '000022', COLONY_INDUST_DESC: 'แหลมฉบัง' }]),
+    };
+    const administrativeAreaQuery = {
+      whereIn: jest.fn().mockReturnThis(),
+      timeout: jest.fn().mockReturnThis(),
+      select: jest
+        .fn<
+          (...columns: string[]) => Promise<
+            Array<{
+              PROV: string | number | null;
+              AMP: string | number | null;
+              TUMBOL: string | number | null;
+              TUMNAME: string | null;
+              AMPNAME: string | null;
+            }>
+          >
+        >()
+        .mockResolvedValue([
+          {
+            PROV: 18,
+            AMP: 4,
+            TUMBOL: 7,
+            TUMNAME: 'หาดอาษา',
+            AMPNAME: 'สรรพยา',
+          },
+        ]),
     };
     const facProdQuery = {
       join: jest.fn().mockReturnThis(),
@@ -181,6 +216,7 @@ describe('eligibleFactoryCandidatesRepository', () => {
       if (tableName === 'INFORMATION_SCHEMA.COLUMNS') return informationSchemaQuery as never;
       if (tableName === 'dbo.check_eia') return checkEiaQuery as never;
       if (tableName === 'dbo.FAC_COLONY_INDUST') return industrialEstateQuery as never;
+      if (tableName === 'dbo.TUMBOL') return administrativeAreaQuery as never;
       if (tableName === 'dbo.FAC_PROD as fp') return facProdQuery as never;
       if (tableName === 'dbo.FACCLASS') return facClassQuery as never;
       if (tableName === 'dbo.FACCLASS as fc') return activeFacClassQuery as never;
@@ -195,8 +231,25 @@ describe('eligibleFactoryCandidatesRepository', () => {
       facClassQuery,
       activeFacClassQuery,
       industrialEstateQuery,
+      administrativeAreaQuery,
     };
   }
+
+  it('maps DIW administrative codes to district and subdistrict names in the address', async () => {
+    const { administrativeAreaQuery } = mockExternalCandidates();
+    mockedEligibleFactoriesRepository.listActiveRegistrationNumbers.mockResolvedValue([]);
+
+    const result = await eligibleFactoryCandidatesRepository.list({ page: 1, perPage: 50 });
+
+    expect(result.data[0]?.address).toBe('197 หมู่ 5 ตำบลหาดอาษา อำเภอสรรพยา 17150');
+    expect(administrativeAreaQuery.select).toHaveBeenCalledWith(
+      'PROV',
+      'AMP',
+      'TUMBOL',
+      'TUMNAME',
+      'AMPNAME',
+    );
+  });
 
   it('paginates candidates before loading related lookup data', async () => {
     const { countQuery, facImportQuery, facProdQuery, facClassQuery, industrialEstateQuery } =

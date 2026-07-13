@@ -2,7 +2,12 @@ import type { Knex } from 'knex';
 import { logger } from '../../config/logger';
 import { env } from '../../config/env';
 import { factorySourceDb, factorySourceTableName } from '../../config/factory-source-database';
-import { type FacImportRow, toEligibleFactoryCandidate } from './fac-import.mapper';
+import {
+  type AdministrativeAreaNames,
+  diwAdministrativeAreaKey,
+  type FacImportRow,
+  toEligibleFactoryCandidate,
+} from './fac-import.mapper';
 import { eligibleFactoriesRepository } from './eligible-factories.repository';
 import type {
   EligibleFactoryCandidateDTO,
@@ -45,15 +50,22 @@ async function listExternalCandidates(
   const rows = isPaginated
     ? await executableRowsQuery.offset((page - 1) * perPage).limit(perPage)
     : await executableRowsQuery;
-  const [industrialEstateNamesByCode, factoryClassCodesByFid, productionCapacitiesByFid] =
+  const [
+    industrialEstateNamesByCode,
+    administrativeAreaNamesByCode,
+    factoryClassCodesByFid,
+    productionCapacitiesByFid,
+  ] =
     rows.length > BULK_LOOKUP_THRESHOLD
       ? [
           await loadIndustrialEstateNamesByCode(rows),
+          await loadAdministrativeAreaNamesByCode(rows),
           await loadFactoryClassCodesByFid(rows),
           await loadProductionCapacitiesByFid(rows),
         ]
       : await Promise.all([
           loadIndustrialEstateNamesByCode(rows),
+          loadAdministrativeAreaNamesByCode(rows),
           loadFactoryClassCodesByFid(rows),
           loadProductionCapacitiesByFid(rows),
         ]);
@@ -61,6 +73,7 @@ async function listExternalCandidates(
     rows.map((row) =>
       toEligibleFactoryCandidate(row, {
         industrialEstateNamesByCode,
+        administrativeAreaNamesByCode,
         eiaLookupSkipped: true,
         productionCapacitiesByFid,
         factoryClassCodesByFid,
@@ -82,6 +95,39 @@ async function listExternalCandidates(
         : {}),
     },
   };
+}
+
+async function loadAdministrativeAreaNamesByCode(
+  rows: FacImportRow[],
+): Promise<Map<string, AdministrativeAreaNames>> {
+  const provinceCodes = [
+    ...new Set(
+      rows.map((row) => normalizedCode(row.PROV)).filter((code): code is string => code !== null),
+    ),
+  ];
+  if (provinceCodes.length === 0) return new Map();
+
+  try {
+    const lookupRows = await factorySourceDb<AdministrativeAreaRow>(
+      `${env.FACTORY_DB_SCHEMA}.TUMBOL`,
+    )
+      .whereIn('PROV', provinceCodes)
+      .timeout(EXTERNAL_QUERY_TIMEOUT_MS)
+      .select('PROV', 'AMP', 'TUMBOL', 'TUMNAME', 'AMPNAME');
+
+    const result = new Map<string, AdministrativeAreaNames>();
+    for (const row of lookupRows) {
+      const key = diwAdministrativeAreaKey(row.PROV, row.AMP, row.TUMBOL);
+      const subdistrictName = trimmedText(row.TUMNAME);
+      const districtName = trimmedText(row.AMPNAME);
+      if (!key || (!subdistrictName && !districtName)) continue;
+      result.set(key, { subdistrictName, districtName });
+    }
+    return result;
+  } catch (error) {
+    logger.warn('[eligible-factories] Failed to load administrative area names', { error });
+    return new Map();
+  }
 }
 
 function applyCandidateFilters(
@@ -257,6 +303,27 @@ interface ProductionCapacityRow {
 interface FactoryClassRow {
   FID: string | null;
   CLASS: string | null;
+}
+
+interface AdministrativeAreaRow {
+  PROV: string | number | null;
+  AMP: string | number | null;
+  TUMBOL: string | number | null;
+  TUMNAME: string | null;
+  AMPNAME: string | null;
+}
+
+function normalizedCode(value: string | number | null | undefined): string | null {
+  if (value === null || value === undefined) return null;
+  const numeric = Number(value);
+  if (Number.isFinite(numeric)) return String(Math.trunc(numeric));
+  const text = String(value).trim();
+  return text.length > 0 ? text : null;
+}
+
+function trimmedText(value: string | null | undefined): string | null {
+  const text = value?.trim();
+  return text ? text : null;
 }
 
 function formatProductionCapacity(row: ProductionCapacityRow): string | null {
