@@ -22,6 +22,7 @@ import { parameterValuesRoutes } from './modules/parameter-values/parameter-valu
 import { integrationsRoutes } from './modules/integrations/integrations.routes';
 import { alertEventsRoutes } from './modules/alert-events/alert-events.routes';
 import { emailTestRoutes } from './modules/email-test/email-test.routes';
+import { officerNotificationEmailRecipientsRoutes } from './modules/officer-notification-email-recipients/officer-notification-email-recipients.routes';
 import { monitoringPointFormsRoutes } from './modules/monitoring-point-forms/monitoring-point-forms.routes';
 import { bodCodDeviationReportsRoutes } from './modules/bod-cod-deviations/bod-cod-deviation-reports.routes';
 import { kwpFormReportsRoutes } from './modules/kwp-form-reports/kwp-form-reports.routes';
@@ -88,6 +89,10 @@ export function createApp(): Application {
   app.use(`${env.API_PREFIX}/integrations`, integrationsRoutes);
   app.use(`${env.API_PREFIX}/alert-events`, alertEventsRoutes);
   app.use(`${env.API_PREFIX}/email-test`, emailTestRoutes);
+  app.use(
+    `${env.API_PREFIX}/officer-notification-email-recipients`,
+    officerNotificationEmailRecipientsRoutes,
+  );
   // TODO: mount more feature routes when ready
   // app.use(`${env.API_PREFIX}/factories`, factoriesRoutes);
 
