@@ -52,7 +52,7 @@ backend ควรส่ง structure กลับมาให้ frontend โด
 | เอกสารและรูปภาพ | ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน | `documentImageFile-{index}` | upload ได้หลายไฟล์ | ไม่เกิน 3 ไฟล์ |
 | เอกสารและรูปภาพ | สัญลักษณ์ของโรงงานหรือโลโก้บริษัท | `documentImageFile-{index}` | upload ได้ 1 ไฟล์ | ยกเว้นจากหลายไฟล์ |
 | เอกสารและรูปภาพ | ช่อง upload เอกสาร/ภาพทั่วไป | `documentImageFile-{index}` | upload ได้หลายไฟล์ | ไม่เกิน 3 ไฟล์ต่อรายการ |
-| รายละเอียดเครื่องมือตรวจวัด | รายละเอียดพารามิเตอร์เครื่องมือตรวจวัด | instrument rows | มีหลายแถวตาม `requestedParameters` | ควรจัดเป็น array ของ object ต่อ 1 parameter |
+| รายละเอียดเครื่องมือตรวจวัด | รายละเอียดพารามิเตอร์เครื่องมือตรวจวัด | instrument rows | มีหลายแถวตาม `requestedParameters` | ควรจัดเป็น array ของ object ต่อ 1 parameter; ไม่รวม `converterBrand` และ `converterModel` |
 | เกณฑ์มาตรฐาน | ตาราง MIN/MAX | `standardCriteria.rows`, `eiaCriteria.rows` | มีหลาย row | ต้องรองรับ `normal`, `warning`, `critical` |
 
 ## ข้อมูลทั่วไปของโรงงาน
@@ -217,10 +217,14 @@ backend ควรส่ง structure กลับมาให้ frontend โด
 
 ใช้ทั้ง CEMS และ WPMS โดยแถวในตารางอิงจาก `พารามิเตอร์ที่ขอเชื่อมต่อ`
 
+ตารางนี้ต้องส่งข้อมูลได้หลายชุด โดย 1 แถว = 1 ชุดข้อมูลของพารามิเตอร์ที่ขอเชื่อมต่อ และควรออกแบบเป็น array เช่น `measurementInstruments.parameters[]`
+
+`อุปกรณ์แปลงสัญญาณ (Converter) ยี่ห้อ` และ `อุปกรณ์แปลงสัญญาณ (Converter) รุ่น` เป็นข้อมูลระดับชุดเครื่องมือ ไม่ได้อยู่ใน array ของแต่ละพารามิเตอร์
+
 | UI label | Frontend field/key ปัจจุบัน | ประเภท UI | เงื่อนไข/หมายเหตุ |
 | --- | --- | --- | --- |
-| อุปกรณ์แปลงสัญญาณ (Converter) ยี่ห้อ | `converterBrand` | text |  |
-| อุปกรณ์แปลงสัญญาณ (Converter) รุ่น | `converterModel` | text |  |
+| อุปกรณ์แปลงสัญญาณ (Converter) ยี่ห้อ | `converterBrand` | text | field ระดับ `measurementInstruments`, ไม่อยู่ใน `parameters[]` |
+| อุปกรณ์แปลงสัญญาณ (Converter) รุ่น | `converterModel` | text | field ระดับ `measurementInstruments`, ไม่อยู่ใน `parameters[]` |
 | พารามิเตอร์ที่ขอเชื่อมต่อ | instrument row `parameter` | dropdown ใน dialog | option จาก requested parameters |
 | เทคนิคตรวจวัด | instrument row `technique` | text |  |
 | ช่วงการวัด | instrument row `range` | text |  |
