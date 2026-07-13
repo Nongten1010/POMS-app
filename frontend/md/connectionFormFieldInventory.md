@@ -26,6 +26,35 @@ backend ควรส่ง structure กลับมาให้ frontend โด
 
 สำหรับ field ที่ซ่อนตามเงื่อนไข ควรยังมี key ใน structure เพื่อให้ frontend สามารถเติมค่าเดิมตอนแก้ไขฟอร์มได้ แม้ field นั้นจะยังไม่แสดงใน UI ณ ตอนเปิดฟอร์ม
 
+## รายการที่รองรับหลายรายการ
+
+รายการเหล่านี้ใน frontend ปัจจุบันสามารถเพิ่มข้อมูลได้หลายอัน หรือเลือกได้หลายค่า backend ควรออกแบบเป็น array:
+
+| กลุ่ม | UI label | Frontend field/key ปัจจุบัน | รูปแบบหลายรายการ | ข้อจำกัด/หมายเหตุ |
+| --- | --- | --- | --- | --- |
+| ผู้ติดต่อประสานงาน | ผู้ติดต่อประสานงาน | `contactName`, `contactPosition`, `contactPhone`, `contactEmail` | เพิ่มได้หลายคน | ควรจัดเป็น array ของ object ต่อ 1 ผู้ติดต่อ |
+| อีเมลแจ้งเตือน | อีเมลสำหรับแจ้งเตือนโรงงาน | `notificationEmail` | เพิ่มได้หลายอีเมล | string array |
+| อีเมลแจ้งเตือน | อีเมลสำหรับแจ้งเตือนเจ้าหน้าที่ | `officerNotificationEmail` | รองรับหลายอีเมล | ปัจจุบันเป็น read-only จากค่า default/ข้อมูลเดิม |
+| CEMS | เข้าข่ายตามบัญชีแนบท้ายลำดับที่ | `legalAnnexNo` | เลือกได้หลายค่า | แสดงแบบมีเงื่อนไข, ตัวเลือก `1`-`13` |
+| CEMS | พารามิเตอร์ที่เข้าข่าย | `eligibleParameters` | เลือกได้หลายค่า | มีตัวเลือก `ไม่มี` |
+| CEMS | พารามิเตอร์ที่ได้รับการยกเว้น | `exemptedParameters` | เลือกได้หลายค่า | มีตัวเลือก `ไม่มี` |
+| CEMS | พารามิเตอร์ที่เชื่อมต่อแล้ว | `connectedParameters` | เลือกได้หลายค่า | มีตัวเลือก `ไม่มี` |
+| CEMS | พารามิเตอร์ที่ยังไม่เชื่อมต่อ | `pendingParameters` | เลือกได้หลายค่า | มีตัวเลือก `ไม่มี` |
+| CEMS | พารามิเตอร์ที่ขอเชื่อมต่อ | `requestedParameters` | เลือกได้หลายค่า | ใช้สร้างแถวรายละเอียดเครื่องมือตรวจวัด |
+| CEMS | พารามิเตอร์ที่ได้รับการยกเว้นตามประกาศฯ ข้อ | ยังไม่ผูก payload | เพิ่ม tag ได้หลายอัน | รอ backend กำหนด key/shape |
+| CEMS | พารามิเตอร์ที่ติดตั้งแบบ Time sharing | `timeSharingParameters` | เลือกได้หลายค่า | มีตัวเลือก `ไม่มี`; ถ้าเลือก `ไม่มี` ซ่อน `sharedStackCode` |
+| CEMS | ระบบบำบัด | `treatmentSystem` | เลือกได้หลายค่า | ถ้ามี `อื่นๆ` แสดง `treatmentSystemOther` |
+| WPMS | พารามิเตอร์ที่เข้าข่าย | `eligibleParameters` | เลือกได้หลายค่า | มีตัวเลือก `ไม่มี` |
+| WPMS | พารามิเตอร์ที่เชื่อมต่อแล้ว | `connectedParameters` | เลือกได้หลายค่า | มีตัวเลือก `ไม่มี` |
+| WPMS | พารามิเตอร์ที่ยังไม่เชื่อมต่อ | `pendingParameters` | เลือกได้หลายค่า | มีตัวเลือก `ไม่มี` |
+| WPMS | พารามิเตอร์ที่ขอเชื่อมต่อ | `requestedParameters` | เลือกได้หลายค่า | ใช้สร้างแถวรายละเอียดเครื่องมือตรวจวัด |
+| WPMS | ระบบบำบัด | `treatmentSystem` | เลือกได้หลายค่า | ถ้ามี `อื่นๆ` แสดง `treatmentSystemOther` |
+| เอกสารและรูปภาพ | ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน | `documentImageFile-{index}` | upload ได้หลายไฟล์ | ไม่เกิน 3 ไฟล์ |
+| เอกสารและรูปภาพ | สัญลักษณ์ของโรงงานหรือโลโก้บริษัท | `documentImageFile-{index}` | upload ได้ 1 ไฟล์ | ยกเว้นจากหลายไฟล์ |
+| เอกสารและรูปภาพ | ช่อง upload เอกสาร/ภาพทั่วไป | `documentImageFile-{index}` | upload ได้หลายไฟล์ | ไม่เกิน 3 ไฟล์ต่อรายการ |
+| รายละเอียดเครื่องมือตรวจวัด | รายละเอียดพารามิเตอร์เครื่องมือตรวจวัด | instrument rows | มีหลายแถวตาม `requestedParameters` | ควรจัดเป็น array ของ object ต่อ 1 parameter |
+| เกณฑ์มาตรฐาน | ตาราง MIN/MAX | `standardCriteria.rows`, `eiaCriteria.rows` | มีหลาย row | ต้องรองรับ `normal`, `warning`, `critical` |
+
 ## ข้อมูลทั่วไปของโรงงาน
 
 ใช้ทั้ง CEMS และ WPMS
@@ -260,10 +289,10 @@ backend ควรส่ง structure กลับมาให้ frontend โด
 - field ไหน required
 - field ไหน nullable
 - field ไหนเป็น array และรูปแบบ item
+- field ไหนเพิ่มได้หลายรายการ และจำกัดจำนวนเท่าไร
 - field ไหนเป็น number/string/boolean
 - ค่า enum ของ dropdown/multiselect
 - conditional visibility ที่ backend ต้องการให้ frontend ยึด
 - default value สำหรับ edit mode
 - วิธีเก็บเอกสารหลายไฟล์ต่อ 1 รายการ
 - key สำหรับช่อง `พารามิเตอร์ที่ได้รับการยกเว้นตามประกาศฯ ข้อ`
-
