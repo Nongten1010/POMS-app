@@ -46,6 +46,7 @@ const cemsOnlyDetailFields = new Set([
   'timeSharingParameters',
   'productionUnitType',
   'productionCapacity',
+  'productionCapacityUnit',
   'cemsInstallationRequiredBy',
   'cemsInstallationRequiredOther',
   'legalAnnexNo',

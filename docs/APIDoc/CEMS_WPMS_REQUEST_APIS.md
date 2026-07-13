@@ -353,7 +353,8 @@ curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/measurement-points
         "pointType": "STACK",
         "details": {
           "productionUnitType": "หม้อไอน้ำ",
-          "productionCapacity": "10 ตันไอน้ำ/ชั่วโมง",
+          "productionCapacity": "10",
+          "productionCapacityUnit": "ตันไอน้ำ/ชั่วโมง",
           "cemsInstallationRequiredBy": "ประกาศ อก.",
           "cemsInstallationRequiredOther": null,
           "legalAnnexNo": ["1", "3"],
@@ -842,6 +843,7 @@ Mapping:
 | ------------------------------------------ | ----------------------------------------------------------- |
 | ประเภทของหน่วยการผลิต                      | `measurementPoints[].details.productionUnitType`            |
 | กำลังการผลิตต่อหน่วย                       | `measurementPoints[].details.productionCapacity`            |
+| หน่วยกำลังการผลิต                           | `measurementPoints[].details.productionCapacityUnit`        |
 | เข้าข่ายต้องติดตั้ง CEMS ตามกฎหมาย         | `measurementPoints[].details.cemsInstallationRequiredBy`    |
 | อื่นๆ โปรดระบุของเข้าข่ายต้องติดตั้ง       | `measurementPoints[].details.cemsInstallationRequiredOther` |
 | เข้าข่ายตามบัญชีแนบท้ายลำดับที่            | `measurementPoints[].details.legalAnnexNo`                  |
@@ -909,6 +911,7 @@ Backend ยังรับ alias `type: "CEMS" | "WPMS"` และ infer `pointT
 | ------------------------------------------ | ----------------------------------------------------------- |
 | ประเภทของหน่วยการผลิต                      | `measurementPoints[].details.productionUnitType`            |
 | กำลังการผลิตต่อหน่วย                       | `measurementPoints[].details.productionCapacity`            |
+| หน่วยกำลังการผลิต                           | `measurementPoints[].details.productionCapacityUnit`        |
 | เข้าข่ายต้องติดตั้ง CEMS ตามกฎหมาย         | `measurementPoints[].details.cemsInstallationRequiredBy`    |
 | อื่นๆ โปรดระบุ                             | `measurementPoints[].details.cemsInstallationRequiredOther` |
 | เข้าข่ายตามบัญชีแนบท้ายลำดับที่            | `measurementPoints[].details.legalAnnexNo`                  |
@@ -3302,6 +3305,7 @@ Data dictionary response row:
 | `maxTreatmentCapacity` | number|null | Conditional | ปริมาณรองรับน้ำเสียสูงสุดของระบบบำบัด ต้องส่งเมื่อ WPMS และ `hasTreatmentSystem = มี` |
 | `productionUnitType` | string|null | No | ประเภทหน่วยการผลิต |
 | `productionCapacity` | string|null | No | กำลังการผลิต |
+| `productionCapacityUnit` | string|null | CEMS | หน่วยกำลังการผลิต แยกจาก `productionCapacity` |
 | `cemsInstallationRequiredBy` | string|null | No | เข้าข่ายต้องติดตั้ง CEMS ตามกฎหมาย |
 | `legalAnnexNo` | string[] | CEMS | เข้าข่ายตามบัญชีแนบท้ายลำดับที่ เลือกได้หลายลำดับ |
 | `eligibleParameters` | string[] | No | พารามิเตอร์ที่เข้าข่าย เพิ่มได้หลายตัว |

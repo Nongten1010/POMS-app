@@ -879,6 +879,7 @@ describe('connection request validators', () => {
             monitoringPointKind: 'WPMS',
             stackShape: 'วงกลม',
             stackDiameter: 1.2,
+            productionCapacityUnit: 'ตัน/ชั่วโมง',
             hasTreatmentSystem: 'ไม่มี',
             connectionDevice: 'POMS Box (กรอ.)',
           },
@@ -887,6 +888,15 @@ describe('connection request validators', () => {
     });
 
     expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: ['measurementPoints', 0, 'details', 'productionCapacityUnit'],
+          }),
+        ]),
+      );
+    }
   });
 
   it('rejects add measurement point request without the three required form sections', () => {
