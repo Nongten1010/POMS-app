@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  Autocomplete,
   Badge,
   Box,
   Button,
@@ -4928,6 +4929,51 @@ function OptionMultiSelect({
   )
 }
 
+function TagInputField({ label, value: controlledValue, defaultValue = [], onChange, placeholder = 'พิมพ์แล้วกด Enter' }) {
+  const [internalValue, setInternalValue] = useState(defaultValue)
+  const value = controlledValue ?? internalValue
+
+  return (
+    <Autocomplete
+      multiple
+      freeSolo
+      options={[]}
+      value={value}
+      onChange={(_, nextValue) => {
+        const normalizedValue = nextValue.map((item) => String(item).trim()).filter(Boolean)
+        if (onChange) {
+          onChange(normalizedValue)
+        } else {
+          setInternalValue(normalizedValue)
+        }
+      }}
+      renderTags={(tagValue, getTagProps) =>
+        tagValue.map((option, index) => {
+          const { key, ...tagProps } = getTagProps({ index })
+
+          return (
+            <Chip
+              key={key}
+              label={option}
+              size="small"
+              {...tagProps}
+            />
+          )
+        })
+      }
+      renderInput={(params) => (
+        <TextField
+          {...params}
+          label={label}
+          size="small"
+          placeholder={placeholder}
+          fullWidth
+        />
+      )}
+    />
+  )
+}
+
 function CemsMonitoringPointDetails({ initialPoint = {}, requestedParameters = [], onRequestedParametersChange }) {
   const initialDetails = { ...mockCemsMonitoringPointDetails, ...(initialPoint.details ?? {}) }
   const initialProductionCapacity = splitProductionCapacity(initialDetails)
@@ -5020,6 +5066,9 @@ function CemsMonitoringPointDetails({ initialPoint = {}, requestedParameters = [
             value={requestedParameters}
             onChange={onRequestedParametersChange}
           />
+        </Grid>
+        <Grid size={{ xs: 12, md: 3 }}>
+          <TagInputField label="พารามิเตอร์ที่ได้รับการยกเว้นตามประกาศฯ ข้อ" />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
           <ParameterMultiSelect
