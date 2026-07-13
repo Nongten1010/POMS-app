@@ -377,6 +377,27 @@ function normalizeArrayValue(value) {
   return []
 }
 
+function splitProductionCapacity(details = {}) {
+  if (details.productionCapacityValue || details.productionCapacityUnit) {
+    return {
+      value: details.productionCapacityValue ?? '',
+      unit: details.productionCapacityUnit ?? '',
+    }
+  }
+
+  const productionCapacity = details.productionCapacity ?? ''
+  const [value = '', ...unitParts] = String(productionCapacity).trim().split(/\s+/)
+
+  return {
+    value,
+    unit: unitParts.join(' '),
+  }
+}
+
+function formatProductionCapacity(value, unit) {
+  return [value, unit].map((item) => String(item ?? '').trim()).filter(Boolean).join(' ')
+}
+
 function createInstrumentRowForParameter(parameter) {
   return {
     ...emptyInstrumentParameter,
@@ -1327,7 +1348,12 @@ function buildMeasurementPointRequestBody(
             details: {
               monitoringPointKind: 'CEMS',
               productionUnitType: getOptionalFormValue(formData, 'productionUnitType'),
-              productionCapacity: getOptionalFormValue(formData, 'productionCapacity'),
+              productionCapacity: formatProductionCapacity(
+                getFormValue(formData, 'productionCapacityValue'),
+                getFormValue(formData, 'productionCapacityUnit'),
+              ) || null,
+              productionCapacityValue: getOptionalFormValue(formData, 'productionCapacityValue'),
+              productionCapacityUnit: getOptionalFormValue(formData, 'productionCapacityUnit'),
               cemsInstallationRequiredBy: getOptionalFormValue(formData, 'cemsInstallationRequiredBy'),
               cemsInstallationRequiredOther: getOptionalFormValue(formData, 'cemsInstallationRequiredOther'),
               legalAnnexNo: getFormValues(formData, 'legalAnnexNo'),
@@ -3028,7 +3054,11 @@ function RequestDocumentDialog({
                   <DocumentLine label="4.1.1 รหัสจุดตรวจวัด :" value={point.pointCode ?? request?.monitoringPointCode} width="66%" />
                   <DocumentLine label="4.1.2 ชื่อจุดตรวจวัด :" value={point.pointName} width="66%" />
                   <DocumentLine label="4.1.3 ประเภทของหน่วยการผลิต :" value={details.productionUnitType ?? (isWpms ? 'ระบบบำบัดน้ำเสีย' : '')} width="66%" />
-                  <DocumentLine label="4.1.4 กำลังการผลิตต่อหน่วย :" value={details.productionCapacity} width="66%" />
+                  <DocumentLine
+                    label="4.1.4 กำลังการผลิตต่อหน่วย :"
+                    value={details.productionCapacity ?? formatProductionCapacity(details.productionCapacityValue, details.productionCapacityUnit)}
+                    width="66%"
+                  />
                 </Stack>
               </Box>
               <Box>
@@ -4765,6 +4795,7 @@ function OptionMultiSelect({
 
 function CemsMonitoringPointDetails({ initialPoint = {}, requestedParameters = [], onRequestedParametersChange }) {
   const initialDetails = { ...mockCemsMonitoringPointDetails, ...(initialPoint.details ?? {}) }
+  const initialProductionCapacity = splitProductionCapacity(initialDetails)
   const [stackShape, setStackShape] = useState(initialDetails.stackShape)
   const [primaryFuel, setPrimaryFuel] = useState(initialDetails.primaryFuel)
   const [secondaryFuel, setSecondaryFuel] = useState(initialDetails.secondaryFuel)
@@ -4791,8 +4822,11 @@ function CemsMonitoringPointDetails({ initialPoint = {}, requestedParameters = [
         <Grid size={{ xs: 12, md: 3 }}>
           <TextField name="productionUnitType" label="ประเภทของหน่วยการผลิต" size="small" defaultValue={initialDetails.productionUnitType} fullWidth />
         </Grid>
-        <Grid size={{ xs: 12, md: 3 }}>
-          <TextField name="productionCapacity" label="กำลังการผลิตต่อหน่วย" size="small" defaultValue={initialDetails.productionCapacity} fullWidth />
+        <Grid size={{ xs: 12, md: 1 }}>
+          <TextField name="productionCapacityValue" label="กำลังการผลิต" size="small" defaultValue={initialProductionCapacity.value} fullWidth />
+        </Grid>
+        <Grid size={{ xs: 12, md: 2 }}>
+          <TextField name="productionCapacityUnit" label="หน่วยกำลังการผลิต" size="small" defaultValue={initialProductionCapacity.unit} fullWidth />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
           <TextField
