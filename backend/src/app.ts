@@ -89,6 +89,7 @@ export function createApp(): Application {
   app.use(`${env.API_PREFIX}/integrations`, integrationsRoutes);
   app.use(`${env.API_PREFIX}/alert-events`, alertEventsRoutes);
   app.use(`${env.API_PREFIX}/email-test`, emailTestRoutes);
+  // Admin-managed email recipients for connection-request officer notifications.
   app.use(
     `${env.API_PREFIX}/officer-notification-email-recipients`,
     officerNotificationEmailRecipientsRoutes,
