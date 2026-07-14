@@ -68,7 +68,7 @@ const cemsParameterOptions = cemsParameterOptionItems.map((option) => option.lab
 const parameterNoneOption = 'ไม่มี'
 const withNoneOption = (options = []) => [parameterNoneOption, ...options.filter((option) => option !== parameterNoneOption)]
 
-const monitoringPointTypeOptions = ['CEMS', 'WPMS', 'Mobile', 'Station']
+const monitoringPointTypeOptions = ['CEMS', 'WPMS']
 
 const wpmsInstrumentParameters = wpmsParameterOptionItems.map((option) => option.label)
 const cemsInstallationRequiredOptions = cemsInstallationRequiredOptionItems.map((option) => ({
@@ -370,6 +370,14 @@ function normalizeArrayValue(value) {
   }
 
   if (typeof value === 'string') {
+    const trimmedValue = value.trim()
+    if (!trimmedValue) {
+      return []
+    }
+    if (isKnownMultiSelectOption(trimmedValue)) {
+      return [trimmedValue]
+    }
+
     return value
       .split(',')
       .map((item) => item.trim())
@@ -377,6 +385,19 @@ function normalizeArrayValue(value) {
   }
 
   return []
+}
+
+function isKnownMultiSelectOption(value) {
+  const optionValues = [
+    parameterNoneOption,
+    ...cemsParameterOptions,
+    ...wpmsInstrumentParameters,
+    ...legalAnnexNoOptions,
+    ...treatmentSystemOptions.map((option) => option.value),
+    ...wpmsTreatmentSystemOptions.map((option) => option.value),
+  ]
+
+  return optionValues.includes(value)
 }
 
 function splitProductionCapacity(details = {}) {
@@ -943,6 +964,7 @@ function getInitialRequestFactory(request = {}, fallbackFactory = {}) {
     industrySubOrder: safeRequest.industrySubOrder ?? factory.industrySubOrder ?? fallbackFactory.industrySubOrder ?? '',
     businessActivity: safeRequest.businessActivity ?? factory.businessActivity ?? fallbackFactory.businessActivity ?? '',
     eia: safeRequest.eia ?? factory.eia ?? fallbackFactory.eia ?? '',
+    eiaOther: safeRequest.eiaOther ?? factory.eiaOther ?? fallbackFactory.eiaOther ?? '',
     hasEia: safeRequest.hasEia ?? factory.hasEia ?? fallbackFactory.hasEia,
     projectName: safeRequest.projectName ?? factory.projectName ?? fallbackFactory.projectName ?? '',
     address: safeRequest.address ?? factory.address ?? fallbackFactory.address ?? '',
@@ -1095,9 +1117,48 @@ function getFormValues(formData, key) {
 
   return formData
     .getAll(key)
-    .flatMap((value) => String(value).split(','))
-    .map((value) => value.trim())
+    .flatMap((value) => {
+      const stringValue = String(value)
+      try {
+        const parsedValue = JSON.parse(stringValue)
+        return Array.isArray(parsedValue) ? parsedValue : [parsedValue]
+      } catch {
+        return [stringValue]
+      }
+    })
+    .map((value) => String(value).trim())
     .filter(Boolean)
+}
+
+function buildContactPersons(formData) {
+  if (!formData) {
+    return []
+  }
+
+  const names = formData.getAll('contactName')
+  const positions = formData.getAll('contactPosition')
+  const phones = formData.getAll('contactPhone')
+  const emails = formData.getAll('contactEmail')
+  const rowCount = Math.max(names.length, positions.length, phones.length, emails.length)
+
+  return Array.from({ length: rowCount }, (_, index) => ({
+    name: String(names[index] ?? '').trim(),
+    position: String(positions[index] ?? '').trim() || null,
+    phone: String(phones[index] ?? '').trim(),
+    email: String(emails[index] ?? '').trim() || null,
+  })).filter((contact) => contact.name || contact.position || contact.phone || contact.email)
+}
+
+function formatApiErrorMessage(response, fallbackMessage) {
+  const issues = Array.isArray(response?.error?.issues) ? response.error.issues : []
+  if (issues.length) {
+    return issues
+      .map((issue) => [issue.pathString, issue.message].filter(Boolean).join(': '))
+      .filter(Boolean)
+      .join('\n')
+  }
+
+  return response?.error?.message ?? response?.message ?? fallbackMessage
 }
 
 function getOptionalFormValue(formData, key) {
@@ -1283,12 +1344,7 @@ function buildMeasurementPointRequestBody(
 ) {
   const isWpms = monitoringPointType === 'WPMS'
   const systemType = isWpms ? 'WPMS' : 'CEMS'
-  const contactPersons = getFormValues(formData, 'contactName').map((name, index) => ({
-    name,
-    position: getFormValues(formData, 'contactPosition')[index] ?? '',
-    phone: getFormValues(formData, 'contactPhone')[index] ?? '',
-    email: getFormValues(formData, 'contactEmail')[index] ?? '',
-  }))
+  const contactPersons = buildContactPersons(formData)
   const notificationEmails = getFormValues(formData, 'notificationEmail')
   const officerNotificationEmails = getFormValues(formData, 'officerNotificationEmail')
   const pointCode = getFormValue(formData, 'pointCode')
@@ -1345,6 +1401,7 @@ function buildMeasurementPointRequestBody(
               connectionDevice: getFormValue(formData, 'connectionDevice'),
               connectionDeviceOther: getFormValue(formData, 'connectionDeviceOther'),
             },
+            documentsAndImages,
             measurementInstruments: {
               converterBrand: converterBrand || null,
               converterModel: converterModel || null,
@@ -1372,6 +1429,7 @@ function buildMeasurementPointRequestBody(
               connectedParameters: getFormValues(formData, 'connectedParameters'),
               pendingParameters: getFormValues(formData, 'pendingParameters'),
               requestedParameters: getFormValues(formData, 'requestedParameters'),
+              exemptedParameterRegulationClauses: getFormValues(formData, 'exemptedParameterRegulationClauses'),
               timeSharingParameters: getFormValues(formData, 'timeSharingParameters'),
               sharedStackCode: getOptionalFormValue(formData, 'sharedStackCode'),
               stackShape: getOptionalFormValue(formData, 'stackShape'),
@@ -2061,9 +2119,29 @@ function formatFactoryRegistration(request, factory = {}) {
   return candidates[0] || ''
 }
 
+function normalizeDocumentUrl(url) {
+  if (!url || typeof window === 'undefined') {
+    return url
+  }
+
+  try {
+    const parsedUrl = new URL(url, window.location.origin)
+    if (parsedUrl.protocol === 'http:' && parsedUrl.host === window.location.host && window.location.protocol === 'https:') {
+      parsedUrl.protocol = 'https:'
+      return parsedUrl.toString()
+    }
+  } catch {
+    return url
+  }
+
+  return url
+}
+
 function DocumentImagePreview({ document }) {
-  const linkIsImage = document?.link && /\.(png|jpe?g|gif|webp)(\?.*)?$/i.test(document.link)
-  const imageUrl = document?.filePreviewUrl ?? document?.fileUrl ?? (linkIsImage ? document.link : null)
+  const normalizedLink = normalizeDocumentUrl(document?.link)
+  const normalizedFileUrl = normalizeDocumentUrl(document?.fileUrl)
+  const linkIsImage = normalizedLink && /\.(png|jpe?g|gif|webp)(\?.*)?$/i.test(normalizedLink)
+  const imageUrl = document?.filePreviewUrl ?? normalizedFileUrl ?? (linkIsImage ? normalizedLink : null)
   const isImage =
     Boolean(imageUrl) &&
     (document?.fileType?.startsWith('image/') || /\.(png|jpe?g|gif|webp)(\?.*)?$/i.test(imageUrl) || linkIsImage)
@@ -2085,30 +2163,30 @@ function DocumentImagePreview({ document }) {
               bgcolor: '#fff',
             }}
           />
-          {document?.link && !linkIsImage ? (
+          {normalizedLink && !linkIsImage ? (
             <Typography
               component="a"
-              href={document.link}
+              href={normalizedLink}
               target="_blank"
               rel="noreferrer"
               sx={{ color: '#0b57d0', wordBreak: 'break-all' }}
             >
-              {document.link}
+              {normalizedLink}
             </Typography>
           ) : null}
         </Stack>
       ) : document?.fileName ? (
         <Stack spacing={0.5}>
           <Typography>{document.fileName}</Typography>
-          {document?.link ? (
-            <Typography component="a" href={document.link} target="_blank" rel="noreferrer" sx={{ color: '#0b57d0', wordBreak: 'break-all' }}>
-              {document.link}
+          {normalizedLink ? (
+            <Typography component="a" href={normalizedLink} target="_blank" rel="noreferrer" sx={{ color: '#0b57d0', wordBreak: 'break-all' }}>
+              {normalizedLink}
             </Typography>
           ) : null}
         </Stack>
-      ) : document?.link ? (
-        <Typography component="a" href={document.link} target="_blank" rel="noreferrer" sx={{ color: '#0b57d0', wordBreak: 'break-all' }}>
-          {document.link}
+      ) : normalizedLink ? (
+        <Typography component="a" href={normalizedLink} target="_blank" rel="noreferrer" sx={{ color: '#0b57d0', wordBreak: 'break-all' }}>
+          {normalizedLink}
         </Typography>
       ) : (
         <Typography color="text.secondary">-</Typography>
@@ -4843,15 +4921,15 @@ function ParameterMultiSelect({
   defaultValue = [],
   onChange,
 }) {
-  const [internalValue, setInternalValue] = useState(defaultValue)
+  const [internalValue, setInternalValue] = useState(normalizeArrayValue(defaultValue))
   const value = controlledValue ?? internalValue
 
   return (
     <FormControl size="small" fullWidth>
+      {name ? <input type="hidden" name={name} value={JSON.stringify(value)} /> : null}
       <InputLabel>{label}</InputLabel>
       <Select
         multiple
-        name={name}
         value={value}
         label={label}
         input={<OutlinedInput label={label} />}
@@ -4890,15 +4968,15 @@ function OptionMultiSelect({
   defaultValue = [],
   onChange,
 }) {
-  const [internalValue, setInternalValue] = useState(defaultValue)
+  const [internalValue, setInternalValue] = useState(normalizeArrayValue(defaultValue))
   const value = controlledValue ?? internalValue
 
   return (
     <FormControl size="small" fullWidth>
+      {name ? <input type="hidden" name={name} value={JSON.stringify(value)} /> : null}
       <InputLabel>{label}</InputLabel>
       <Select
         multiple
-        name={name}
         value={value}
         label={label}
         input={<OutlinedInput label={label} />}
@@ -4929,48 +5007,51 @@ function OptionMultiSelect({
   )
 }
 
-function TagInputField({ label, value: controlledValue, defaultValue = [], onChange, placeholder = 'พิมพ์แล้วกด Enter' }) {
-  const [internalValue, setInternalValue] = useState(defaultValue)
+function TagInputField({ label, name, value: controlledValue, defaultValue = [], onChange, placeholder = 'พิมพ์แล้วกด Enter' }) {
+  const [internalValue, setInternalValue] = useState(normalizeArrayValue(defaultValue))
   const value = controlledValue ?? internalValue
 
   return (
-    <Autocomplete
-      multiple
-      freeSolo
-      options={[]}
-      value={value}
-      onChange={(_, nextValue) => {
-        const normalizedValue = nextValue.map((item) => String(item).trim()).filter(Boolean)
-        if (onChange) {
-          onChange(normalizedValue)
-        } else {
-          setInternalValue(normalizedValue)
-        }
-      }}
-      renderTags={(tagValue, getTagProps) =>
-        tagValue.map((option, index) => {
-          const { key, ...tagProps } = getTagProps({ index })
+    <>
+      {name ? <input type="hidden" name={name} value={JSON.stringify(value)} /> : null}
+      <Autocomplete
+        multiple
+        freeSolo
+        options={[]}
+        value={value}
+        onChange={(_, nextValue) => {
+          const normalizedValue = nextValue.map((item) => String(item).trim()).filter(Boolean)
+          if (onChange) {
+            onChange(normalizedValue)
+          } else {
+            setInternalValue(normalizedValue)
+          }
+        }}
+        renderTags={(tagValue, getTagProps) =>
+          tagValue.map((option, index) => {
+            const { key, ...tagProps } = getTagProps({ index })
 
-          return (
-            <Chip
-              key={key}
-              label={option}
-              size="small"
-              {...tagProps}
-            />
-          )
-        })
-      }
-      renderInput={(params) => (
-        <TextField
-          {...params}
-          label={label}
-          size="small"
-          placeholder={placeholder}
-          fullWidth
-        />
-      )}
-    />
+            return (
+              <Chip
+                key={key}
+                label={option}
+                size="small"
+                {...tagProps}
+              />
+            )
+          })
+        }
+        renderInput={(params) => (
+          <TextField
+            {...params}
+            label={label}
+            size="small"
+            placeholder={placeholder}
+            fullWidth
+          />
+        )}
+      />
+    </>
   )
 }
 
@@ -5068,7 +5149,11 @@ function CemsMonitoringPointDetails({ initialPoint = {}, requestedParameters = [
           />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TagInputField label="พารามิเตอร์ที่ได้รับการยกเว้นตามประกาศฯ ข้อ" />
+          <TagInputField
+            name="exemptedParameterRegulationClauses"
+            label="พารามิเตอร์ที่ได้รับการยกเว้นตามประกาศฯ ข้อ"
+            defaultValue={normalizeStringArray(initialDetails.exemptedParameterRegulationClauses)}
+          />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
           <ParameterMultiSelect
@@ -6149,11 +6234,7 @@ function RequestFormBottomSheet({
       }
 
       if (!result.ok || response?.success === false) {
-        const message =
-          response?.error?.message ??
-          response?.message ??
-          `ส่งแบบฟอร์มไม่สำเร็จ (${result.status} ${result.statusText})`
-        throw new Error(message)
+        throw new Error(formatApiErrorMessage(response, `ส่งแบบฟอร์มไม่สำเร็จ (${result.status} ${result.statusText})`))
       }
 
       setSubmitConfirmOpen(false)
@@ -6558,7 +6639,7 @@ function RequestFormBottomSheet({
               เมื่อส่งแบบฟอร์มคำขอแล้วจะไม่สามารถแก้ไขได้ จนกว่าจะผ่านการพิจารณาจากเจ้าหน้าที่
             </Typography>
             {submitError ? (
-              <Typography color="error" variant="body2">
+              <Typography color="error" variant="body2" sx={{ whiteSpace: 'pre-line' }}>
                 {submitError}
               </Typography>
             ) : null}
