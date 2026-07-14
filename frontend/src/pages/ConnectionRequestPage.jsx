@@ -4745,9 +4745,12 @@ function ReadOnlyField({ label, value, sx }) {
   )
 }
 
+const maxUploadFileSizeBytes = 5 * 1024 * 1024
+
 function UploadFileField({ label, accept, name, currentFileName = '', multiple = true, helperText = 'ขนาดไม่เกิน 5 Mb', maxFiles = multiple ? 3 : 1 }) {
   const inputRef = useRef(null)
   const [selectedFiles, setSelectedFiles] = useState([])
+  const [fileError, setFileError] = useState('')
   const selectedFilesRef = useRef([])
   const fileNames = selectedFiles.map((item) => item.file.name).join(', ')
   const buttonLabel = fileNames || currentFileName || label
@@ -4775,12 +4778,18 @@ function UploadFileField({ label, accept, name, currentFileName = '', multiple =
   }
 
   const handleFilesChange = (event) => {
-    const incomingFiles = Array.from(event.target.files ?? []).map((file) => ({
+    const selectedInputFiles = Array.from(event.target.files ?? [])
+    const oversizedFiles = selectedInputFiles.filter((file) => file.size > maxUploadFileSizeBytes)
+    const acceptedFiles = selectedInputFiles.filter((file) => file.size <= maxUploadFileSizeBytes)
+    const incomingFiles = acceptedFiles.map((file) => ({
       id: `${file.name}-${file.lastModified}-${file.size}`,
       file,
       previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : '',
     }))
     const filesById = new Map(selectedFiles.map((item) => [item.id, item]))
+    setFileError(oversizedFiles.length
+      ? `ไฟล์ ${oversizedFiles.map((file) => file.name).join(', ')} มีขนาดเกิน 5 MB`
+      : '')
 
     incomingFiles.forEach((item) => {
       const duplicateItem = filesById.get(item.id)
@@ -4807,6 +4816,7 @@ function UploadFileField({ label, accept, name, currentFileName = '', multiple =
 
     const nextFiles = selectedFiles.filter((_, index) => index !== targetIndex)
     setSelectedFiles(nextFiles)
+    setFileError('')
     syncInputFiles(nextFiles)
   }
 
@@ -4845,6 +4855,11 @@ function UploadFileField({ label, accept, name, currentFileName = '', multiple =
       <Typography variant="caption" color="text.secondary">
         {currentFileName && !fileNames ? `ไฟล์เดิม: ${currentFileName} • ${helperText}` : `${helperText}${multiple ? ` • อัปโหลดได้ไม่เกิน ${maxFiles} ไฟล์` : ''}`}
       </Typography>
+      {fileError ? (
+        <Typography variant="caption" color="error">
+          {fileError}
+        </Typography>
+      ) : null}
       {selectedFiles.length ? (
         <Stack spacing={1}>
           {selectedFiles.map((item, index) => (
