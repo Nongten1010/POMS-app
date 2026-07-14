@@ -1396,6 +1396,8 @@ function buildMeasurementPointRequestBody(
               maxTreatmentCapacity: toNumberOrNull(getFormValue(formData, 'maxTreatmentCapacity')),
               instrumentLatitude: toNumberOrNull(getFormValue(formData, 'instrumentLatitude')),
               instrumentLongitude: toNumberOrNull(getFormValue(formData, 'instrumentLongitude')),
+              dischargeLatitude: toNumberOrNull(getFormValue(formData, 'dischargeLatitude')),
+              dischargeLongitude: toNumberOrNull(getFormValue(formData, 'dischargeLongitude')),
               wastewaterSource: getFormValue(formData, 'wastewaterSource'),
               dischargeReceivingSource: getFormValue(formData, 'dischargeReceivingSource'),
               connectionDevice: getFormValue(formData, 'connectionDevice'),
@@ -5964,6 +5966,12 @@ function WpmsMonitoringPointDetails({ initialPoint = {}, requestedParameters = [
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
           <TextField name="instrumentLongitude" label="พิกัดจุดติดตั้งเครื่องมือตรวจวัด (ลองติจูด)" size="small" defaultValue={initialDetails.instrumentLongitude} fullWidth />
+        </Grid>
+        <Grid size={{ xs: 12, md: 3 }}>
+          <TextField name="dischargeLatitude" label="พิกัดจุดระบายน้ำทิ้งออกนอกโรงงาน (ละติจูด)" size="small" defaultValue={initialDetails.dischargeLatitude ?? initialDetails.outfallLatitude} fullWidth />
+        </Grid>
+        <Grid size={{ xs: 12, md: 3 }}>
+          <TextField name="dischargeLongitude" label="พิกัดจุดระบายน้ำทิ้งออกนอกโรงงาน (ลองติจูด)" size="small" defaultValue={initialDetails.dischargeLongitude ?? initialDetails.outfallLongitude} fullWidth />
         </Grid>
       </Grid>
       <Grid container spacing={2}>

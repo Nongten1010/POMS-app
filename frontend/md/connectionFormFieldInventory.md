@@ -170,6 +170,8 @@ backend ควรส่ง structure กลับมาให้ frontend โด
 | ปริมาณรองรับน้ำเสียสูงสุดของระบบบำบัด | `maxTreatmentCapacity` | text/number | แสดงเมื่อ `hasTreatmentSystem = มี` |
 | พิกัดจุดติดตั้งเครื่องมือตรวจวัด (ละติจูด) | `instrumentLatitude` | text/number |  |
 | พิกัดจุดติดตั้งเครื่องมือตรวจวัด (ลองติจูด) | `instrumentLongitude` | text/number |  |
+| พิกัดจุดระบายน้ำทิ้งออกนอกโรงงาน (ละติจูด) | `dischargeLatitude` | text/number | อยู่หลังพิกัดจุดติดตั้งเครื่องมือตรวจวัด |
+| พิกัดจุดระบายน้ำทิ้งออกนอกโรงงาน (ลองติจูด) | `dischargeLongitude` | text/number | อยู่หลังพิกัดจุดติดตั้งเครื่องมือตรวจวัด |
 | แหล่งกำเนิดน้ำเสีย | `wastewaterSource` | text |  |
 | แหล่งรองรับน้ำทิ้ง | `dischargeReceivingSource` | text |  |
 | อุปกรณ์/โปรแกรมที่ใช้เชื่อมต่อ | `connectionDevice` | dropdown | `POMS Box (กรอ.)`, `POMS Box (กนอ.)`, `POMS Client (เดิม)`, `D-POMS Client (ใหม่)`, `อื่นๆ` |
