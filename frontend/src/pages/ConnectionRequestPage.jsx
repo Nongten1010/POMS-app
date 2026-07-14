@@ -53,6 +53,7 @@ import treatmentSystemOptionItems from '../option/treatmentSystemOptions.json'
 import wpmsTreatmentSystemOptionItems from '../option/wpmsTreatmentSystemOptions.json'
 import wpmsParameterOptionItems from '../option/wpmsParameterOptions.json'
 import OfficerStatisticsPanel from '../components/OfficerStatisticsPanel'
+import { createConnectionRequestPdf } from '../utils/connectionRequestPdf'
 import { deriveCriteriaRows, isCriteriaInputValid } from '../utils/instrumentCriteria.mjs'
 
 const subMenus = [
@@ -2780,6 +2781,10 @@ function RequestDocumentDialog({
   contentHeader,
   footerContent,
   footerActions,
+  pdfPreviewUrl,
+  pdfPreviewFileName,
+  pdfPreviewLoading,
+  pdfPreviewError,
 }) {
   const isWpms = request?.type === 'WPMS' || request?.systemType === 'WPMS'
   const factory = request?.factory ?? {}
@@ -2855,7 +2860,15 @@ function RequestDocumentDialog({
     )
   const latestRevisionMessage = isRevisedPendingReview ? getLatestRevisionMessage(request) : ''
   const handleDownload = useCallback(() => {
-    if (!request) return
+    if (!request || pdfPreviewLoading) return
+
+    if (pdfPreviewUrl) {
+      const link = document.createElement('a')
+      link.href = pdfPreviewUrl
+      link.download = pdfPreviewFileName || `${request.requestNo || 'connection-request'}.pdf`
+      link.click()
+      return
+    }
 
     const blob = new Blob([JSON.stringify(request, null, 2)], { type: 'application/json;charset=utf-8' })
     const url = URL.createObjectURL(blob)
@@ -2864,7 +2877,7 @@ function RequestDocumentDialog({
     link.download = `${request.requestNo || 'connection-request'}.json`
     link.click()
     URL.revokeObjectURL(url)
-  }, [request])
+  }, [pdfPreviewFileName, pdfPreviewLoading, pdfPreviewUrl, request])
 
   return (
     <Fragment>
@@ -2895,7 +2908,7 @@ function RequestDocumentDialog({
               variant="contained"
               size="small"
               startIcon={<FileDownloadIcon />}
-              disabled={loading || !request}
+              disabled={loading || pdfPreviewLoading || !request || Boolean(pdfPreviewFileName && !pdfPreviewUrl)}
               onClick={handleDownload}
             >
               ดาวน์โหลด
@@ -2942,6 +2955,30 @@ function RequestDocumentDialog({
           </Paper>
         ) : null}
         {contentHeader}
+        {pdfPreviewLoading ? (
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            กำลังสร้าง PDF preview...
+          </Typography>
+        ) : null}
+        {pdfPreviewError ? (
+          <Typography color="error" variant="body2" sx={{ mb: 2 }}>
+            {pdfPreviewError}
+          </Typography>
+        ) : null}
+        {pdfPreviewUrl ? (
+          <Box
+            component="iframe"
+            title="PDF preview"
+            src={pdfPreviewUrl}
+            sx={{
+              display: 'block',
+              width: '100%',
+              height: { xs: '70vh', md: '78vh' },
+              border: 0,
+              bgcolor: '#fff',
+            }}
+          />
+        ) : (
         <Stack spacing={2} sx={{ alignItems: 'center' }}>
           {isWpms ? (
             <>
@@ -3157,7 +3194,8 @@ function RequestDocumentDialog({
                   <DocumentWrappingLine label={`4.2.1 เข้าข่ายต้องติดตั้ง ${isWpms ? 'WPMS' : 'CEMS'} ตามกฎหมาย :`} value={details.cemsInstallationRequiredOther ?? details.cemsInstallationRequiredBy} />
                   <DocumentLine label="4.2.2 เข้าข่ายตามบัญชีแนบท้ายลำดับที่ :" value={joinList(details.legalAnnexNo)} />
                   <DocumentWrappingLine label="4.2.3 พารามิเตอร์ที่เข้าข่าย :" value={joinList(details.eligibleParameters ?? point.parameters)} />
-                  <DocumentWrappingLine label="4.2.4 พารามิเตอร์ที่ได้รับการยกเว้นตามประกาศฯ ข้อ :" value={joinList(details.exemptedParameters)} />
+                  <DocumentWrappingLine label="4.2.4 พารามิเตอร์ที่ได้รับการยกเว้นตามประกาศฯ ข้อ :" value={joinList(details.exemptedParameterRegulationClauses)} />
+                  <DocumentWrappingLine label="พารามิเตอร์ :" value={joinList(details.exemptedParameters)} />
                   <DocumentWrappingLine label="4.2.5 พารามิเตอร์ที่เชื่อมต่อแล้ว :" value={joinList(details.connectedParameters)} />
                   <DocumentWrappingLine label="4.2.6 พารามิเตอร์ที่ยังไม่เชื่อมต่อ :" value={joinList(details.pendingParameters ?? point.parameters)} />
                   {!isWpms ? (
@@ -3303,6 +3341,7 @@ function RequestDocumentDialog({
             </>
           )}
         </Stack>
+        )}
       </DialogContent>
       {footerContent || footerActions ? (
         <DialogActions sx={{ display: 'block', px: 3, py: 2 }}>
@@ -4805,7 +4844,6 @@ function UploadFileField({ label, accept, name, currentFileName = '', multiple =
     const nextFiles = multiple ? Array.from(filesById.values()).slice(0, maxFiles) : incomingFiles.slice(0, 1)
     setSelectedFiles(nextFiles)
     syncInputFiles(nextFiles)
-    event.target.value = ''
   }
 
   const removeSelectedFile = (targetIndex) => {
@@ -5072,8 +5110,9 @@ function TagInputField({ label, name, value: controlledValue, defaultValue = [],
   )
 }
 
-function CemsMonitoringPointDetails({ initialPoint = {}, requestedParameters = [], onRequestedParametersChange }) {
+function CemsMonitoringPointDetails({ initialPoint = {}, requestedParameters = [], onRequestedParametersChange, isOperator = false }) {
   const initialDetails = { ...mockCemsMonitoringPointDetails, ...(initialPoint.details ?? {}) }
+  const pointCodeValue = initialPoint.pointCode ?? initialPoint.code ?? (isOperator ? '' : initialDetails.pointCode)
   const initialProductionCapacity = splitProductionCapacity(initialDetails)
   const [stackShape, setStackShape] = useState(initialDetails.stackShape)
   const [primaryFuel, setPrimaryFuel] = useState(initialDetails.primaryFuel)
@@ -5093,7 +5132,18 @@ function CemsMonitoringPointDetails({ initialPoint = {}, requestedParameters = [
     <Stack spacing={2}>
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField name="pointCode" label="รหัสจุดตรวจวัด" size="small" defaultValue={initialPoint.pointCode ?? initialPoint.code ?? initialDetails.pointCode} fullWidth />
+          <TextField
+            name="pointCode"
+            label="รหัสจุดตรวจวัด"
+            size="small"
+            defaultValue={pointCodeValue}
+            slotProps={{
+              input: {
+                readOnly: isOperator,
+              },
+            }}
+            fullWidth
+          />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
           <TextField name="pointName" label="ชื่อจุดตรวจวัด" size="small" defaultValue={initialPoint.pointName ?? initialDetails.pointName} fullWidth />
@@ -5886,8 +5936,9 @@ function InformationProviderSection({ currentUser, initialProvider = {}, useLogi
   )
 }
 
-function WpmsMonitoringPointDetails({ initialPoint = {}, requestedParameters = [], onRequestedParametersChange }) {
+function WpmsMonitoringPointDetails({ initialPoint = {}, requestedParameters = [], onRequestedParametersChange, isOperator = false }) {
   const initialDetails = { ...mockWpmsMonitoringPointDetails, ...(initialPoint.details ?? {}) }
+  const pointCodeValue = initialPoint.pointCode ?? initialPoint.code ?? (isOperator ? '' : initialDetails.pointCode)
   const [treatmentSystem, setTreatmentSystem] = useState(normalizeArrayValue(initialDetails.treatmentSystem))
   const [connectionDevice, setConnectionDevice] = useState(initialDetails.connectionDevice)
   const hasTreatmentSystem = treatmentSystem.length > 0 && !treatmentSystem.includes('ไม่มี') ? 'มี' : 'ไม่มี'
@@ -5897,7 +5948,18 @@ function WpmsMonitoringPointDetails({ initialPoint = {}, requestedParameters = [
     <Stack spacing={2}>
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField name="pointCode" label="รหัสจุดตรวจวัด" size="small" defaultValue={initialPoint.pointCode ?? initialPoint.code ?? initialDetails.pointCode} fullWidth />
+          <TextField
+            name="pointCode"
+            label="รหัสจุดตรวจวัด"
+            size="small"
+            defaultValue={pointCodeValue}
+            slotProps={{
+              input: {
+                readOnly: isOperator,
+              },
+            }}
+            fullWidth
+          />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
           <TextField name="pointName" label="ชื่อจุดตรวจวัด" size="small" defaultValue={initialPoint.pointName ?? initialDetails.pointName} fullWidth />
@@ -6088,13 +6150,14 @@ function StationMonitoringPointDetails() {
   )
 }
 
-function MonitoringPointDetails({ point, initialPoint = {}, requestedParameters = [], onRequestedParametersChange }) {
+function MonitoringPointDetails({ point, initialPoint = {}, requestedParameters = [], onRequestedParametersChange, isOperator = false }) {
   if (point.type === 'CEMS') {
     return (
       <CemsMonitoringPointDetails
         initialPoint={initialPoint}
         requestedParameters={requestedParameters}
         onRequestedParametersChange={onRequestedParametersChange}
+        isOperator={isOperator}
       />
     )
   }
@@ -6104,6 +6167,7 @@ function MonitoringPointDetails({ point, initialPoint = {}, requestedParameters 
         initialPoint={initialPoint}
         requestedParameters={requestedParameters}
         onRequestedParametersChange={onRequestedParametersChange}
+        isOperator={isOperator}
       />
     )
   }
@@ -6122,6 +6186,7 @@ function RequestFormBottomSheet({
   factory,
   accessToken,
   currentUser,
+  isOperator = false,
   mode = 'create',
   requestId,
   initialRequest,
@@ -6131,6 +6196,7 @@ function RequestFormBottomSheet({
   onSubmitted,
 }) {
   const formRef = useRef(null)
+  const submitPreviewPdfUrlRef = useRef('')
   const isEditMode = mode === 'edit'
   const isAddParameterMode = mode === 'add-parameter'
   const useInitialRequestValues = isEditMode || isAddParameterMode
@@ -6165,6 +6231,10 @@ function RequestFormBottomSheet({
   const [selectedMonitoringPointId, setSelectedMonitoringPointId] = useState(1)
   const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false)
   const [submitPreviewRequest, setSubmitPreviewRequest] = useState(null)
+  const [submitPreviewPdfUrl, setSubmitPreviewPdfUrl] = useState('')
+  const [submitPreviewPdfFileName, setSubmitPreviewPdfFileName] = useState('')
+  const [submitPreviewPdfLoading, setSubmitPreviewPdfLoading] = useState(false)
+  const [submitPreviewPdfError, setSubmitPreviewPdfError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const [submitSuccessOpen, setSubmitSuccessOpen] = useState(false)
@@ -6196,10 +6266,51 @@ function RequestFormBottomSheet({
 
     return requestBody
   }
-  const openSubmitConfirm = () => {
+  const clearSubmitPreviewPdf = useCallback(() => {
+    if (submitPreviewPdfUrlRef.current) {
+      URL.revokeObjectURL(submitPreviewPdfUrlRef.current)
+      submitPreviewPdfUrlRef.current = ''
+    }
+    setSubmitPreviewPdfUrl('')
+    setSubmitPreviewPdfFileName('')
+    setSubmitPreviewPdfLoading(false)
+    setSubmitPreviewPdfError('')
+  }, [])
+
+  useEffect(() => () => {
+    if (submitPreviewPdfUrlRef.current) {
+      URL.revokeObjectURL(submitPreviewPdfUrlRef.current)
+      submitPreviewPdfUrlRef.current = ''
+    }
+  }, [])
+
+  const closeSubmitConfirm = useCallback(() => {
+    setSubmitConfirmOpen(false)
+    setSubmitPreviewRequest(null)
+    clearSubmitPreviewPdf()
+  }, [clearSubmitPreviewPdf])
+
+  const openSubmitConfirm = async () => {
     setSubmitError('')
-    setSubmitPreviewRequest(buildCurrentRequestBody())
+    clearSubmitPreviewPdf()
+    const requestBody = buildCurrentRequestBody()
+    const pdfFileName = `${requestBody.requestNo || requestBody.systemType || 'connection-request'}.pdf`
+    setSubmitPreviewRequest(requestBody)
+    setSubmitPreviewPdfFileName(pdfFileName)
     setSubmitConfirmOpen(true)
+    setSubmitPreviewPdfLoading(true)
+
+    try {
+      const pdfBytes = await createConnectionRequestPdf(requestBody)
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' })
+      const pdfUrl = URL.createObjectURL(blob)
+      submitPreviewPdfUrlRef.current = pdfUrl
+      setSubmitPreviewPdfUrl(pdfUrl)
+    } catch (error) {
+      setSubmitPreviewPdfError(error instanceof Error ? error.message : 'สร้าง PDF preview ไม่สำเร็จ')
+    } finally {
+      setSubmitPreviewPdfLoading(false)
+    }
   }
   const submitRequest = async () => {
     if (!accessToken) {
@@ -6260,8 +6371,7 @@ function RequestFormBottomSheet({
         throw new Error(formatApiErrorMessage(response, `ส่งแบบฟอร์มไม่สำเร็จ (${result.status} ${result.statusText})`))
       }
 
-      setSubmitConfirmOpen(false)
-      setSubmitPreviewRequest(null)
+      closeSubmitConfirm()
       await onSubmitted?.(response?.data ?? null)
       setSubmitSuccessOpen(true)
     } catch (error) {
@@ -6586,6 +6696,7 @@ function RequestFormBottomSheet({
                         initialPoint={point.type === initialMonitoringPointType ? initialPoint : {}}
                         requestedParameters={requestedParameters}
                         onRequestedParametersChange={updateRequestedParameters}
+                        isOperator={isOperator}
                       />
                     </Box>
                   ))}
@@ -6651,10 +6762,11 @@ function RequestFormBottomSheet({
         open={submitConfirmOpen}
         request={submitPreviewRequest}
         title="ยืนยันการส่งแบบฟอร์มคำขอ"
-        onClose={() => {
-          setSubmitConfirmOpen(false)
-          setSubmitPreviewRequest(null)
-        }}
+        onClose={closeSubmitConfirm}
+        pdfPreviewUrl={submitPreviewPdfUrl}
+        pdfPreviewFileName={submitPreviewPdfFileName}
+        pdfPreviewLoading={submitPreviewPdfLoading}
+        pdfPreviewError={submitPreviewPdfError}
         footerContent={
           <Stack spacing={0.5} sx={{ alignItems: 'center', textAlign: 'center', mb: 1.5 }}>
             <Typography>กรุณาตรวจสอบความถูกต้องของข้อมูลในแบบฟอร์ม</Typography>
@@ -6673,10 +6785,7 @@ function RequestFormBottomSheet({
             <Button
               color="inherit"
               disabled={isSubmitting}
-              onClick={() => {
-                setSubmitConfirmOpen(false)
-                setSubmitPreviewRequest(null)
-              }}
+              onClick={closeSubmitConfirm}
             >
               ยกเลิก
             </Button>
@@ -7490,6 +7599,7 @@ function ConnectionRequestPage({ userType = '', roleCode = '', accessToken = '',
         factory={requestForm?.factory}
         accessToken={accessToken}
         currentUser={currentUser}
+        isOperator={isOperator}
         mode={requestForm?.mode ?? 'create'}
         requestId={requestForm?.requestId}
         initialRequest={requestForm?.initialRequest}
