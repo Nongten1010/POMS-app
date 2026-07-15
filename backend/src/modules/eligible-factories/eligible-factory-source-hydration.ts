@@ -34,6 +34,13 @@ interface AdministrativeAreaRow {
 
 const EXTERNAL_LOOKUP_TIMEOUT_MS = 300000;
 const FACTORY_SOURCE_LOOKUP_CHUNK_SIZE = 500;
+const LEGACY_AREA_CODE_PATTERN = /(?:ตำบล|อำเภอ)\s*\d+(?:\s|$)/u;
+
+interface EligibleFactoryAddressStorageInput {
+  sourceFactoryId: string | null;
+  factoryRegistrationNoNew: string;
+  address?: string | null;
+}
 
 export async function hydrateEligibleFactoriesFromSource(
   rows: EligibleFactoryDTO[],
@@ -57,6 +64,55 @@ export async function hydrateEligibleFactoriesFromSource(
       error,
     });
     return rows;
+  }
+}
+
+export async function resolveEligibleFactoryAddressForStorage(
+  input: EligibleFactoryAddressStorageInput,
+): Promise<string | null | undefined> {
+  const storedAddress = input.address;
+  const containsLegacyCodes = Boolean(
+    storedAddress && LEGACY_AREA_CODE_PATTERN.test(storedAddress),
+  );
+  if (storedAddress !== null && storedAddress !== undefined && !containsLegacyCodes) {
+    return storedAddress;
+  }
+
+  const keys = uniqueNonEmpty([input.sourceFactoryId, input.factoryRegistrationNoNew]);
+  if (keys.length === 0) return containsLegacyCodes ? undefined : storedAddress;
+
+  try {
+    const sourceRows = await loadFactorySourceRows(keys);
+    const sourceRow = findSourceRowForFactory(
+      sourceRows,
+      input.sourceFactoryId,
+      input.factoryRegistrationNoNew,
+    );
+    if (!sourceRow) return containsLegacyCodes ? undefined : storedAddress;
+
+    const administrativeAreaNamesByCode = await loadAdministrativeAreaNames([sourceRow]);
+    const administrativeAreaKey = diwAdministrativeAreaKey(
+      sourceRow.PROV,
+      sourceRow.AMP,
+      sourceRow.TUMBOL,
+    );
+    const names = administrativeAreaKey
+      ? administrativeAreaNamesByCode.get(administrativeAreaKey)
+      : undefined;
+    if (!names?.subdistrictName || !names.districtName) {
+      return containsLegacyCodes ? undefined : storedAddress;
+    }
+
+    if (containsLegacyCodes && storedAddress) {
+      return storedAddress
+        .replace(/ตำบล\s*\d+(?=\s|$)/u, `ตำบล${names.subdistrictName}`)
+        .replace(/อำเภอ\s*\d+(?=\s|$)/u, `อำเภอ${names.districtName}`);
+    }
+
+    return formatFacImportAddress(sourceRow, names) ?? storedAddress;
+  } catch (error) {
+    logger.warn('[eligible-factories] Failed to resolve address for storage', { error });
+    return containsLegacyCodes ? undefined : storedAddress;
   }
 }
 
@@ -133,6 +189,30 @@ function indexSourceRows(
   return sourceRowByFactoryKey;
 }
 
+function findSourceRowForFactory(
+  rows: FactorySourceHydrationRow[],
+  sourceFactoryId: string | null,
+  registrationNo: string,
+): FactorySourceHydrationRow | undefined {
+  const normalizedSourceFactoryId = normalizeText(sourceFactoryId);
+  const normalizedRegistrationNo = normalizeText(registrationNo);
+
+  return (
+    (normalizedSourceFactoryId
+      ? rows.find((row) => normalizeText(row.FID) === normalizedSourceFactoryId)
+      : undefined) ??
+    (normalizedRegistrationNo
+      ? rows.find((row) => normalizeText(row.DISPFACREG) === normalizedRegistrationNo)
+      : undefined) ??
+    (normalizedRegistrationNo
+      ? rows.find((row) => normalizeText(row.FACREG) === normalizedRegistrationNo)
+      : undefined) ??
+    (normalizedRegistrationNo
+      ? rows.find((row) => normalizeText(row.FID) === normalizedRegistrationNo)
+      : undefined)
+  );
+}
+
 function hydrateFactoryRow(
   row: EligibleFactoryDTO,
   sourceRowByFactoryKey: Map<string, FactorySourceHydrationRow>,
@@ -165,7 +245,7 @@ function hydrateFactoryRow(
 }
 
 function shouldHydrateAddress(address: string | null): boolean {
-  return address === null || /(?:ตำบล|อำเภอ)\s*\d+(?:\s|$)/u.test(address);
+  return address === null || LEGACY_AREA_CODE_PATTERN.test(address);
 }
 
 function uniqueNonEmpty(values: Array<string | null>): string[] {

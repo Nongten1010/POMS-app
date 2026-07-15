@@ -1319,6 +1319,7 @@ Code:
 - `backend/src/modules/eligible-factories/eligible-factories.repository.ts`
 - `backend/src/modules/eligible-factories/eligible-factory-source-hydration.ts`
 - `backend/src/modules/eligible-factories/fac-import.mapper.ts`
+- `backend/src/db/migrations/0070_backfill_eligible_factory_address_names.ts`
 
 Source:
 
@@ -1333,6 +1334,10 @@ Logic:
 - The administrative name key is normalized as `PROV:AMP:TUMBOL`; the matching `TUMNAME` and `AMPNAME` become `ตำบล{name}` and `อำเภอ{name}`.
 - `address` is rebuilt from `FADDR`, `FMOO`, `SOI`, `ROAD`, resolved subdistrict, resolved district, and `ZIPCODE` only when the stored address is `null` or contains a numeric administrative label such as `ตำบล7` or `อำเภอ4`.
 - A readable address entered in a monitoring-point form is preserved.
+- Migration `0070_backfill_eligible_factory_address_names` replaces only the numeric `ตำบล`/`อำเภอ` tokens in `eligible_factories.address` for active legacy rows, preserving the other stored address details. It requires both `TUMNAME` and `AMPNAME`, uses the original address as a compare-and-set condition to avoid overwriting a concurrent edit, and records the original and normalized values in `eligible_factory_address_cleanup_0070`.
+- New candidate selections already persist the resolved address produced by the same `PROV:AMP:TUMBOL` name lookup, so raw `TUMBOL`/`AMP` codes are not saved as display names.
+- Monitoring-point form synchronization resolves numeric administrative labels before writing. If the DIW names cannot be resolved, the update omits `address` so it cannot overwrite a readable stored address with numeric codes; a new row stores `NULL` rather than the raw labels.
+- Direct eligible-factory creation applies the same storage resolver before repository create/restore; unresolved numeric labels are omitted and therefore persist as `NULL`, not as display text.
 - The response envelope and field names are unchanged: `{ data: SelectedEligibleFactoryDTO[], meta: { total } }`.
 
 Fallback order:
@@ -1341,15 +1346,18 @@ Fallback order:
 2. Match by `factory_registration_no_new` against `FID`, `DISPFACREG`, or `FACREG`.
 3. If `dbo.TUMBOL` is unavailable or has no matching key, rebuild the address without displaying raw `TUMBOL`/`AMP` codes as names.
 4. If `fac_import` is unavailable or has no matching factory, return the stored `eligible_factories.address` unchanged.
+5. During migration `0070`, skip persistence unless the source factory and both administrative names resolve; never replace stored text with an incomplete or guessed address.
 
 Reason:
 
-- Historical selected rows copied numeric DIW area codes into the address text. The selected-factory API must display the same real Thai administrative names as the candidates API without writing data during a safe `GET` request.
+- Historical selected rows copied numeric DIW area codes into the address text. Migration `0070` repairs the stored source of truth so all consumers, including `/cems-wpms-requests/operator-factories`, read the same real Thai administrative names without adding write side effects to a safe `GET` request.
 
 Risk:
 
 - A numeric administrative label intentionally typed into a stored address will be treated as legacy DIW code text and replaced when a source row exists.
-- If both the DIW factory source and stored address are stale, the endpoint falls back to the stored value because a read request does not mutate or backfill `eligible_factories`.
+- Migration `0070` depends on the configured DIW factory source and `dbo.TUMBOL`; if either lookup fails, the migration fails before updating rows and must be retried after source connectivity is restored.
+- Rows without a matching source factory or complete `TUMNAME`/`AMPNAME` remain unchanged for manual review rather than being overwritten with incomplete data.
+- Rollback restores a backup only while the current address still equals the normalized value written by migration `0070`; a later manual edit is preserved.
 
 ## CEMS/WPMS measurement criteria ranges
 

@@ -9,6 +9,7 @@ import type {
   SelectedEligibleFactoryDTO,
 } from './eligible-factories.types';
 import { eligibleFactoryCandidatesRepository } from './eligible-factory-candidates.repository';
+import { resolveEligibleFactoryAddressForStorage } from './eligible-factory-source-hydration';
 import { splitFactoryTypeSequence } from './factory-type-sequence';
 
 export const eligibleFactoriesService = {
@@ -34,7 +35,17 @@ export const eligibleFactoriesService = {
       });
     }
 
-    return eligibleFactoriesRepository.create(input, actorUserId);
+    const resolvedAddress = await resolveEligibleFactoryAddressForStorage({
+      sourceFactoryId: input.sourceFactoryId ?? null,
+      factoryRegistrationNoNew: input.factoryRegistrationNoNew,
+      address: input.address,
+    });
+    const normalizedInput =
+      resolvedAddress === undefined && input.address === undefined
+        ? input
+        : { ...input, address: resolvedAddress };
+
+    return eligibleFactoriesRepository.create(normalizedInput, actorUserId);
   },
 
   async remove(id: number, actorUserId: number): Promise<void> {

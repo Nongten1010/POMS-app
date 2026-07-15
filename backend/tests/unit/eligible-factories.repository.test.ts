@@ -19,6 +19,7 @@ jest.mock('../../src/config/factory-source-database', () => ({
 }));
 
 import { eligibleFactoriesRepository } from '../../src/modules/eligible-factories/eligible-factories.repository';
+import { resolveEligibleFactoryAddressForStorage } from '../../src/modules/eligible-factories/eligible-factory-source-hydration';
 
 describe('eligibleFactoriesRepository.list', () => {
   const selectedFactoryRow = {
@@ -200,5 +201,58 @@ describe('eligibleFactoriesRepository.list', () => {
     const result = await eligibleFactoriesRepository.list({});
 
     expect(result.rows[0]?.address).toBe('197 หมู่ 5 ตำบล7 อำเภอ4 17150');
+  });
+
+  it('resolves legacy numeric labels before persisting a form address', async () => {
+    await expect(
+      resolveEligibleFactoryAddressForStorage({
+        sourceFactoryId: '10180000125417',
+        factoryRegistrationNoNew: '10180000125417',
+        address: '197 หมู่ 5 ตำบล7 อำเภอ4 17150 (ประตู 2)',
+      }),
+    ).resolves.toBe('197 หมู่ 5 ตำบลหาดอาษา อำเภอสรรพยา 17150 (ประตู 2)');
+  });
+
+  it('returns undefined instead of persisting numeric labels when names cannot be resolved', async () => {
+    mockFactorySourceDb.mockImplementation((tableName: unknown) => {
+      if (tableName === 'dbo.fac_import') {
+        const sourceWhereBuilder = {
+          whereIn: jest.fn().mockReturnThis(),
+          orWhereIn: jest.fn().mockReturnThis(),
+        };
+        const query = {
+          where: jest.fn((callback: (builder: typeof sourceWhereBuilder) => void) => {
+            callback(sourceWhereBuilder);
+            return query;
+          }),
+          timeout: jest.fn().mockReturnThis(),
+          select: jest.fn().mockResolvedValue([
+            {
+              FID: '10180000125417',
+              FACREG: '10180000125417',
+              DISPFACREG: null,
+              FADDR: '197',
+              FMOO: '5',
+              SOI: null,
+              ROAD: null,
+              PROV: 18,
+              AMP: 4,
+              TUMBOL: 7,
+              ZIPCODE: '17150',
+            },
+          ] as never),
+        };
+        return query;
+      }
+      throw new Error('TUMBOL is unavailable');
+    });
+
+    await expect(
+      resolveEligibleFactoryAddressForStorage({
+        sourceFactoryId: '10180000125417',
+        factoryRegistrationNoNew: '10180000125417',
+        address: '197 หมู่ 5 ตำบล7 อำเภอ4 17150',
+      }),
+    ).resolves.toBeUndefined();
   });
 });

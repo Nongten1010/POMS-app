@@ -17,8 +17,14 @@ jest.mock('../../src/modules/eligible-factories/eligible-factories.repository', 
     updateFromMonitoringPointForm: jest.fn(),
   },
 }));
+jest.mock('../../src/modules/eligible-factories/eligible-factory-source-hydration', () => ({
+  resolveEligibleFactoryAddressForStorage: jest.fn(
+    async (input: { address?: string | null }) => input.address,
+  ),
+}));
 
 import { eligibleFactoriesRepository } from '../../src/modules/eligible-factories/eligible-factories.repository';
+import { resolveEligibleFactoryAddressForStorage } from '../../src/modules/eligible-factories/eligible-factory-source-hydration';
 import { monitoringPointFormsRepository } from '../../src/modules/monitoring-point-forms/monitoring-point-forms.repository';
 import { monitoringPointFormsService } from '../../src/modules/monitoring-point-forms/monitoring-point-forms.service';
 import type {
@@ -28,6 +34,7 @@ import type {
 
 const mockedRepository = jest.mocked(monitoringPointFormsRepository);
 const mockedEligibleRepository = jest.mocked(eligibleFactoriesRepository);
+const mockedResolveAddress = jest.mocked(resolveEligibleFactoryAddressForStorage);
 
 function toFactoryDTO(factory: MonitoringPointFormFactoryInput) {
   return {
@@ -223,6 +230,62 @@ describe('monitoringPointFormsService', () => {
       42,
     );
     expect(result.id).toBe(1);
+  });
+
+  it('stores resolved Thai area names instead of numeric DIW area codes', async () => {
+    const numericAddress = '4 หมู่ 6 ตำบล10 อำเภอ4 24130';
+    const resolvedAddress = '4 หมู่ 6 ตำบลท่าข้าม อำเภอบางปะกง 24130';
+    mockedRepository.update.mockResolvedValue({
+      id: 1,
+      factory: toFactoryDTO({ ...input.factory, address: numericAddress }),
+      points: [],
+      createdAt: '2026-06-22T00:00:00.000Z',
+      updatedAt: '2026-06-23T00:00:00.000Z',
+    });
+    mockedResolveAddress.mockResolvedValueOnce(resolvedAddress);
+    mockedEligibleRepository.findByMonitoringPointFormId.mockResolvedValue(
+      createEligibleFactoryDTO({ id: 88, address: resolvedAddress }),
+    );
+    mockedEligibleRepository.updateFromMonitoringPointForm.mockResolvedValue(
+      createEligibleFactoryDTO({ id: 88, address: resolvedAddress }),
+    );
+
+    await monitoringPointFormsService.update(1, input, 42);
+
+    expect(mockedResolveAddress).toHaveBeenCalledWith({
+      sourceFactoryId: '10520000225172',
+      factoryRegistrationNoNew: '10520000225172',
+      address: numericAddress,
+    });
+    expect(mockedEligibleRepository.updateFromMonitoringPointForm).toHaveBeenCalledWith(
+      88,
+      expect.objectContaining({ address: resolvedAddress }),
+      42,
+    );
+  });
+
+  it('omits an unresolved numeric address so it cannot overwrite the stored readable address', async () => {
+    const numericAddress = '4 หมู่ 6 ตำบล10 อำเภอ4 24130';
+    const readableAddress = '4 หมู่ 6 ตำบลท่าข้าม อำเภอบางปะกง 24130';
+    mockedRepository.update.mockResolvedValue({
+      id: 1,
+      factory: toFactoryDTO({ ...input.factory, address: numericAddress }),
+      points: [],
+      createdAt: '2026-06-22T00:00:00.000Z',
+      updatedAt: '2026-06-23T00:00:00.000Z',
+    });
+    mockedResolveAddress.mockResolvedValueOnce(undefined);
+    mockedEligibleRepository.findByMonitoringPointFormId.mockResolvedValue(
+      createEligibleFactoryDTO({ id: 88, address: readableAddress }),
+    );
+    mockedEligibleRepository.updateFromMonitoringPointForm.mockResolvedValue(
+      createEligibleFactoryDTO({ id: 88, address: readableAddress }),
+    );
+
+    await monitoringPointFormsService.update(1, input, 42);
+
+    const updateInput = mockedEligibleRepository.updateFromMonitoringPointForm.mock.calls[0]?.[1];
+    expect(updateInput?.address).toBeUndefined();
   });
 
   it('throws not found when updating an unknown form', async () => {

@@ -16,15 +16,22 @@ jest.mock('../../src/modules/eligible-factories/eligible-factory-candidates.repo
     list: jest.fn(),
   },
 }));
+jest.mock('../../src/modules/eligible-factories/eligible-factory-source-hydration', () => ({
+  resolveEligibleFactoryAddressForStorage: jest.fn(
+    async (input: { address?: string | null }) => input.address,
+  ),
+}));
 
 import { ConflictError } from '../../src/shared/errors/AppError';
 import { eligibleFactoryCandidatesRepository } from '../../src/modules/eligible-factories/eligible-factory-candidates.repository';
 import { eligibleFactoriesRepository } from '../../src/modules/eligible-factories/eligible-factories.repository';
 import { eligibleFactoriesService } from '../../src/modules/eligible-factories/eligible-factories.service';
+import { resolveEligibleFactoryAddressForStorage } from '../../src/modules/eligible-factories/eligible-factory-source-hydration';
 import type { CreateEligibleFactoryInput } from '../../src/modules/eligible-factories/eligible-factories.types';
 
 const mockedRepository = jest.mocked(eligibleFactoriesRepository);
 const mockedCandidatesRepository = jest.mocked(eligibleFactoryCandidatesRepository);
+const mockedResolveAddress = jest.mocked(resolveEligibleFactoryAddressForStorage);
 
 describe('eligibleFactoriesService', () => {
   const payload: CreateEligibleFactoryInput = {
@@ -77,6 +84,43 @@ describe('eligibleFactoriesService', () => {
 
     expect(mockedRepository.create).toHaveBeenCalledWith(payload, 42);
     expect(result.factoryRegistrationNoNew).toBe(payload.factoryRegistrationNoNew);
+  });
+
+  it('resolves numeric administrative labels before direct eligible-factory create', async () => {
+    const numericAddress = '4 หมู่ 6 ตำบล10 อำเภอ4 24130';
+    const resolvedAddress = '4 หมู่ 6 ตำบลท่าข้าม อำเภอบางปะกง 24130';
+    const numericPayload = {
+      ...payload,
+      sourceFactoryId: '10240000325407',
+      factoryRegistrationNoNew: '10240000325407',
+      address: numericAddress,
+    };
+    mockedRepository.findByRegistrationNoNew.mockResolvedValue(null);
+    mockedResolveAddress.mockResolvedValueOnce(resolvedAddress);
+    mockedRepository.create.mockResolvedValue({ address: resolvedAddress } as never);
+
+    await eligibleFactoriesService.create(numericPayload, 42);
+
+    expect(mockedRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ address: resolvedAddress }),
+      42,
+    );
+  });
+
+  it('does not persist unresolved numeric labels from direct eligible-factory create', async () => {
+    const numericPayload = {
+      ...payload,
+      sourceFactoryId: '10240000325407',
+      factoryRegistrationNoNew: '10240000325407',
+      address: '4 หมู่ 6 ตำบล10 อำเภอ4 24130',
+    };
+    mockedRepository.findByRegistrationNoNew.mockResolvedValue(null);
+    mockedResolveAddress.mockResolvedValueOnce(undefined);
+    mockedRepository.create.mockResolvedValue({ address: null } as never);
+
+    await eligibleFactoriesService.create(numericPayload, 42);
+
+    expect(mockedRepository.create.mock.calls[0]?.[0].address).toBeUndefined();
   });
 
   it('removes an eligible factory selection by id with the actor user id', async () => {

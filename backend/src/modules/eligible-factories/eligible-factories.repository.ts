@@ -295,7 +295,7 @@ function toMonitoringPointFormUpdateRow(input: CreateEligibleFactoryInput): Reco
     factory_registration_no_old: input.factoryRegistrationNoOld ?? null,
     factory_name: input.factoryName,
     factory_type_sequence: input.factoryTypeSequence ?? null,
-    address: input.address ?? null,
+    ...(input.address !== undefined ? { address: input.address } : {}),
     province_name: input.provinceName,
     industrial_estate_name: input.industrialEstateName ?? null,
     latitude: input.coordinates?.latitude ?? null,

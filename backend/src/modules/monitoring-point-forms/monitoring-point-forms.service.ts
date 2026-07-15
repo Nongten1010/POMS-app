@@ -1,5 +1,6 @@
 import { BadRequestError, ConflictError, NotFoundError } from '../../shared/errors/AppError';
 import { eligibleFactoriesRepository } from '../eligible-factories/eligible-factories.repository';
+import { resolveEligibleFactoryAddressForStorage } from '../eligible-factories/eligible-factory-source-hydration';
 import { joinFactoryTypeSequence } from '../eligible-factories/factory-type-sequence';
 import type {
   CreateEligibleFactoryInput,
@@ -73,8 +74,17 @@ async function syncEligibleFactoryFromForm(
   actorUserId: number,
   options: { requireRegistration: boolean },
 ): Promise<EligibleFactoryDTO | null> {
-  const input = buildEligibleFactoryInput(form, options);
-  if (!input) return null;
+  const rawInput = buildEligibleFactoryInput(form, options);
+  if (!rawInput) return null;
+  const resolvedAddress = await resolveEligibleFactoryAddressForStorage({
+    sourceFactoryId: rawInput.sourceFactoryId ?? null,
+    factoryRegistrationNoNew: rawInput.factoryRegistrationNoNew,
+    address: rawInput.address,
+  });
+  const input: CreateEligibleFactoryInput = {
+    ...rawInput,
+    address: resolvedAddress,
+  };
 
   const existingByForm = await eligibleFactoriesRepository.findByMonitoringPointFormId(form.id);
   if (existingByForm) {
