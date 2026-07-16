@@ -1,5 +1,5 @@
 import fontkit from '@pdf-lib/fontkit'
-import { PDFDocument, PageSizes, rgb } from 'pdf-lib'
+import { PDFDocument, PDFName, PDFString, PageSizes, rgb } from 'pdf-lib'
 import sarabunBoldUrl from '../assets/fonts/THSarabunNew-Bold.ttf?url'
 import sarabunRegularUrl from '../assets/fonts/THSarabunNew.ttf?url'
 
@@ -10,6 +10,7 @@ const colors = {
   lightBorder: rgb(0.76, 0.8, 0.86),
   headerFill: rgb(0.9, 0.94, 1),
   muted: rgb(0.35, 0.38, 0.44),
+  link: rgb(0.02, 0.28, 0.72),
 }
 
 const specialCriteriaRows = [
@@ -105,12 +106,12 @@ function normalizeDocumentUrl(url) {
 }
 
 function isImageDocument(document = {}) {
-  const fileUrl = normalizeDocumentUrl(document.filePreviewUrl ?? document.fileUrl)
+  const fileUrl = normalizeDocumentUrl(document.filePreviewUrl ?? document.fileUrl ?? document.url ?? document.storageUrl ?? document.path)
   const link = normalizeDocumentUrl(document.link)
   const candidateUrl = fileUrl || link
 
   return Boolean(candidateUrl) && (
-    document.fileType?.startsWith('image/') ||
+    (document.fileType ?? document.mimeType ?? document.type)?.startsWith('image/') ||
     /\.(png|jpe?g|webp)(\?.*)?$/i.test(candidateUrl)
   )
 }
@@ -120,7 +121,7 @@ function getDocumentImageUrl(document = {}) {
     return ''
   }
 
-  const fileUrl = normalizeDocumentUrl(document.filePreviewUrl ?? document.fileUrl)
+  const fileUrl = normalizeDocumentUrl(document.filePreviewUrl ?? document.fileUrl ?? document.url ?? document.storageUrl ?? document.path)
   const link = normalizeDocumentUrl(document.link)
 
   return fileUrl || link
@@ -228,8 +229,8 @@ async function fetchFontBytes(url) {
   return response.arrayBuffer()
 }
 
-async function embedImageFromUrl(pdfDoc, url) {
-  const response = await fetch(url)
+async function embedImageFromUrl(pdfDoc, url, document = {}) {
+  const response = await fetch(url, { credentials: 'include' })
 
   if (!response.ok) {
     return null
@@ -237,8 +238,11 @@ async function embedImageFromUrl(pdfDoc, url) {
 
   const bytes = await response.arrayBuffer()
   const contentType = response.headers.get('content-type') ?? ''
-  const isPng = contentType.includes('png') || /\.png(\?.*)?$/i.test(url) || url.startsWith('data:image/png')
-  const isJpeg = contentType.includes('jpeg') || contentType.includes('jpg') || /\.(jpe?g)(\?.*)?$/i.test(url) || url.startsWith('data:image/jpeg')
+  const fileType = document.fileType ?? document.mimeType ?? document.type ?? ''
+  const fileName = getDocumentFileName(document)
+  const imageTypeHint = `${contentType} ${fileType} ${fileName} ${url}`
+  const isPng = /image\/png|\.png(\?.*)?$/i.test(imageTypeHint) || url.startsWith('data:image/png')
+  const isJpeg = /image\/jpe?g|\.jpe?g(\?.*)?$/i.test(imageTypeHint) || url.startsWith('data:image/jpeg')
 
   if (isPng) {
     return pdfDoc.embedPng(bytes)
@@ -468,6 +472,82 @@ class PdfLayout {
       color: colors.muted,
       dashArray: [1.4, 2.4],
     })
+  }
+
+  addLinkAnnotation(x, y, width, height, url) {
+    const normalizedUrl = normalizeDocumentUrl(url)
+
+    if (!normalizedUrl) {
+      return
+    }
+
+    const annotation = this.pdfDoc.context.obj({
+      Type: PDFName.of('Annot'),
+      Subtype: PDFName.of('Link'),
+      Rect: [x, y, x + width, y + height],
+      Border: [0, 0, 0],
+      NewWindow: true,
+      A: {
+        Type: PDFName.of('Action'),
+        S: PDFName.of('URI'),
+        URI: PDFString.of(normalizedUrl),
+        NewWindow: true,
+      },
+    })
+    const annotationRef = this.pdfDoc.context.register(annotation)
+    const { Annots } = this.page.node.normalizedEntries()
+    Annots.push(annotationRef)
+  }
+
+  drawExternalLinkIcon(x, y, size = 8) {
+    const stroke = { thickness: 0.8, color: colors.link }
+    this.page.drawLine({ start: { x, y }, end: { x: x + size * 0.62, y }, ...stroke })
+    this.page.drawLine({ start: { x, y }, end: { x, y: y + size * 0.62 }, ...stroke })
+    this.page.drawLine({ start: { x, y: y + size * 0.62 }, end: { x: x + size * 0.38, y: y + size * 0.62 }, ...stroke })
+    this.page.drawLine({ start: { x: x + size * 0.62, y }, end: { x: x + size * 0.62, y: y + size * 0.38 }, ...stroke })
+    this.page.drawLine({ start: { x: x + size * 0.28, y: y + size * 0.32 }, end: { x: x + size, y: y + size }, ...stroke })
+    this.page.drawLine({ start: { x: x + size * 0.62, y: y + size }, end: { x: x + size, y: y + size }, ...stroke })
+    this.page.drawLine({ start: { x: x + size, y: y + size * 0.62 }, end: { x: x + size, y: y + size }, ...stroke })
+  }
+
+  drawLinkItem(label, url, options = {}) {
+    const indent = options.indent ?? 30
+    const x = this.margin.left + indent
+    const size = options.size ?? pdfTextSizes.body
+    const lineHeight = options.lineHeight ?? size * 1.45
+    const maxWidth = this.contentWidth - indent
+    const showIcon = options.showIcon !== false
+    const iconWidth = showIcon ? 14 : 0
+    const lines = this.wrapText(label, Math.max(48, maxWidth - iconWidth), size)
+    const height = Math.max(lineHeight, lines.length * lineHeight)
+
+    this.ensureSpace(height + 2)
+
+    lines.forEach((line, index) => {
+      const lineY = this.y - size - (index * lineHeight)
+      const lineWidth = this.textWidth(line, size)
+
+      this.page.drawText(line, {
+        x,
+        y: lineY,
+        size,
+        font: this.fonts.regular,
+        color: colors.link,
+      })
+      this.page.drawLine({
+        start: { x, y: lineY - 1.5 },
+        end: { x: x + lineWidth, y: lineY - 1.5 },
+        thickness: 0.45,
+        color: colors.link,
+      })
+
+      if (showIcon && index === lines.length - 1) {
+        this.drawExternalLinkIcon(x + lineWidth + 5, lineY + 3, 8)
+      }
+    })
+
+    this.addLinkAnnotation(x, this.y - height, maxWidth, height, url)
+    this.y -= height
   }
 
   labelValue(label, value, options = {}) {
@@ -1300,7 +1380,11 @@ function getRequestContext(request) {
   const details = point.details ?? {}
   const instruments = point.measurementInstruments ?? {}
   const instrumentParameters = Array.isArray(instruments.parameters) ? instruments.parameters : []
-  const documentsAndImages = Array.isArray(point.documentsAndImages) ? point.documentsAndImages : []
+  const documentsAndImages = mergeDocumentItems(
+    getDocumentItemsFromSource(point),
+    getDocumentItemsFromSource(request),
+    getDocumentItemsFromSource(request?.request),
+  )
   const fallbackParameterLabels = [
     ...normalizeArrayValue(details.eligibleParameters),
     ...normalizeArrayValue(details.connectedParameters),
@@ -1324,6 +1408,72 @@ function getRequestContext(request) {
     notificationEmails: Array.isArray(request?.notificationEmails) ? request.notificationEmails : [],
     officerNotificationEmails: Array.isArray(request?.officerNotificationEmails) ? request.officerNotificationEmails : [],
   }
+}
+
+const documentCollectionKeys = [
+  'documentsAndImages',
+  'documentImages',
+  'documents',
+  'attachments',
+  'files',
+]
+
+function normalizeDocumentItem(document = {}) {
+  if (!document || typeof document !== 'object') {
+    return null
+  }
+
+  const files = Array.isArray(document.files)
+    ? document.files.map((file) => ({
+        ...file,
+        fileName: file.fileName ?? file.originalFileName ?? file.name ?? file.storedFileName ?? '',
+        fileUrl: file.fileUrl ?? file.url ?? file.storageUrl ?? file.path ?? '',
+        fileType: file.fileType ?? file.mimeType ?? file.type ?? '',
+        fileSize: file.fileSize ?? file.size ?? null,
+      }))
+    : document.files
+
+  return {
+    ...document,
+    title: document.title ?? document.documentTitle ?? document.documentType ?? document.category ?? '',
+    link: document.link ?? document.urlLink ?? document.documentLink ?? '',
+    fileName: document.fileName ?? document.originalFileName ?? document.name ?? document.storedFileName ?? '',
+    fileUrl: document.fileUrl ?? document.url ?? document.storageUrl ?? document.path ?? '',
+    fileType: document.fileType ?? document.mimeType ?? document.type ?? '',
+    fileSize: document.fileSize ?? document.size ?? null,
+    ...(Array.isArray(files) ? { files } : {}),
+  }
+}
+
+function getDocumentItemsFromSource(source = {}) {
+  return documentCollectionKeys
+    .flatMap((key) => (Array.isArray(source?.[key]) ? source[key] : []))
+    .map(normalizeDocumentItem)
+    .filter(Boolean)
+}
+
+function mergeDocumentItems(...documentGroups) {
+  const seen = new Set()
+
+  return documentGroups.flat().filter((document) => {
+    const key = [
+      document.id,
+      document.title,
+      document.link,
+      document.fileUrl,
+      document.fileName,
+    ].filter(Boolean).join('|')
+
+    if (key && seen.has(key)) {
+      return false
+    }
+
+    if (key) {
+      seen.add(key)
+    }
+
+    return true
+  })
 }
 
 function renderGeneralFactorySection(layout, request, context) {
@@ -1508,29 +1658,64 @@ function renderDeviceConfigPages(layout, request) {
 
 function getDocumentFileName(document = {}) {
   if (Array.isArray(document.files)) {
-    return document.files.map((file) => file.fileName ?? file.name).filter(Boolean).join(', ')
+    return document.files
+      .map((file) => file.fileName ?? file.originalFileName ?? file.name ?? file.storedFileName)
+      .filter(Boolean)
+      .join(', ')
   }
 
-  return document.fileName ?? document.name ?? ''
+  return document.fileName ?? document.originalFileName ?? document.name ?? document.storedFileName ?? ''
+}
+
+function getDocumentFileUrl(document = {}) {
+  return normalizeDocumentUrl(document.filePreviewUrl ?? document.fileUrl ?? document.url ?? document.storageUrl ?? document.path)
+}
+
+function expandDocumentFiles(document = {}) {
+  if (!Array.isArray(document.files) || !document.files.length) {
+    return [document]
+  }
+
+  return document.files.map((file, index) => ({
+    ...document,
+    ...file,
+    title: document.title,
+    description: document.description,
+    link: index === 0 ? document.link : '',
+  }))
 }
 
 async function renderDocumentAttachmentList(layout, documents) {
-  const link = documents.map((document) => document?.link).find(Boolean)
-  const nonImageDocuments = documents.filter((document) => {
+  const expandedDocuments = documents.flatMap(expandDocumentFiles)
+  const listItems = expandedDocuments.flatMap((document) => {
+    const items = []
+    const linkUrl = normalizeDocumentUrl(document?.link)
     const fileName = getDocumentFileName(document)
+    const fileUrl = getDocumentFileUrl(document)
 
-    return fileName && !isImageDocument(document)
+    if (linkUrl) {
+      items.push({ text: linkUrl, url: linkUrl, showIcon: true })
+    }
+
+    if (fileName && !isImageDocument(document)) {
+      items.push({ text: fileName, url: fileUrl, showIcon: false })
+    }
+
+    return items
   })
-  const listItems = [
-    ...(link ? [link] : []),
-    ...nonImageDocuments.map(getDocumentFileName),
-  ].filter(Boolean)
 
   listItems.forEach((item, index) => {
-    layout.labelValue(`${index + 1}) `, item, { indent: 30 })
+    const text = `${index + 1}) ${item.text}`
+
+    if (item.url) {
+      layout.drawLinkItem(text, item.url, { indent: 30, showIcon: item.showIcon })
+      return
+    }
+
+    layout.labelValue(`${index + 1}) `, item.text, { indent: 30 })
   })
 
-  const imageDocuments = documents.filter(isImageDocument)
+  const imageDocuments = expandedDocuments.filter(isImageDocument)
   for (const document of imageDocuments) {
     const imageUrl = getDocumentImageUrl(document)
     if (!imageUrl) {
@@ -1538,7 +1723,7 @@ async function renderDocumentAttachmentList(layout, documents) {
     }
 
     try {
-      const image = await embedImageFromUrl(layout.pdfDoc, imageUrl)
+      const image = await embedImageFromUrl(layout.pdfDoc, imageUrl, document)
       if (image) {
         layout.drawEmbeddedImage(image, { indent: 30 })
       }

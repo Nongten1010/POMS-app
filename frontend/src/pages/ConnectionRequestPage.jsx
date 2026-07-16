@@ -578,6 +578,76 @@ function documentTitleMatchesItem(document, item) {
   return [item.title, ...(item.legacyTitles ?? [])].includes(document?.title)
 }
 
+const documentCollectionKeys = [
+  'documentsAndImages',
+  'documentImages',
+  'documents',
+  'attachments',
+  'files',
+]
+
+function normalizeDocumentFile(file = {}) {
+  return {
+    ...file,
+    fileName: file.fileName ?? file.originalFileName ?? file.name ?? file.storedFileName ?? '',
+    fileUrl: file.fileUrl ?? file.url ?? file.storageUrl ?? file.path ?? '',
+    fileType: file.fileType ?? file.mimeType ?? file.type ?? '',
+    fileSize: file.fileSize ?? file.size ?? null,
+  }
+}
+
+function normalizeDocumentItem(document = {}) {
+  if (!document || typeof document !== 'object') {
+    return null
+  }
+
+  const files = Array.isArray(document.files)
+    ? document.files.map(normalizeDocumentFile)
+    : document.files
+
+  return {
+    ...document,
+    title: document.title ?? document.documentTitle ?? document.documentType ?? document.category ?? '',
+    link: document.link ?? document.urlLink ?? document.documentLink ?? '',
+    fileName: document.fileName ?? document.originalFileName ?? document.name ?? document.storedFileName ?? '',
+    fileUrl: document.fileUrl ?? document.url ?? document.storageUrl ?? document.path ?? '',
+    fileType: document.fileType ?? document.mimeType ?? document.type ?? '',
+    fileSize: document.fileSize ?? document.size ?? null,
+    ...(Array.isArray(files) ? { files } : {}),
+  }
+}
+
+function getDocumentItemsFromSource(source = {}) {
+  return documentCollectionKeys
+    .flatMap((key) => (Array.isArray(source?.[key]) ? source[key] : []))
+    .map(normalizeDocumentItem)
+    .filter(Boolean)
+}
+
+function mergeDocumentItems(...documentGroups) {
+  const seen = new Set()
+
+  return documentGroups.flat().filter((document) => {
+    const key = [
+      document.id,
+      document.title,
+      document.link,
+      document.fileUrl,
+      document.fileName,
+    ].filter(Boolean).join('|')
+
+    if (key && seen.has(key)) {
+      return false
+    }
+
+    if (key) {
+      seen.add(key)
+    }
+
+    return true
+  })
+}
+
 const appBarHeight = {
   xs: 64,
   md: 72,
@@ -909,16 +979,28 @@ function mapConnectedMeasurementPointRow(row) {
 function mapRequestDetailRow(detail = {}, row = {}) {
   const factory = detail.factory ?? {}
   const sourceMeasurementPoints = Array.isArray(detail.measurementPoints) ? detail.measurementPoints : row.measurementPoints
+  const requestDocuments = mergeDocumentItems(
+    getDocumentItemsFromSource(row),
+    getDocumentItemsFromSource(detail),
+    getDocumentItemsFromSource(detail.request),
+  )
   const measurementPoints = Array.isArray(sourceMeasurementPoints)
-    ? sourceMeasurementPoints.map((point) => ({
-        ...point,
-        pointCode: point.pointCode ?? point.code ?? point.monitoringPointCode ?? point.stationId ?? '',
-        pointName: point.pointName ?? point.name ?? point.monitoringPointName ?? '',
-        pointType: point.pointType ?? point.type ?? '',
-        details: point.details ?? {},
-        measurementInstruments: point.measurementInstruments ?? { parameters: [] },
-        documentsAndImages: Array.isArray(point.documentsAndImages) ? point.documentsAndImages : [],
-      }))
+    ? sourceMeasurementPoints.map((point, index) => {
+        const pointDocuments = getDocumentItemsFromSource(point)
+        const documentsAndImages = index === 0
+          ? mergeDocumentItems(pointDocuments, requestDocuments)
+          : pointDocuments
+
+        return {
+          ...point,
+          pointCode: point.pointCode ?? point.code ?? point.monitoringPointCode ?? point.stationId ?? '',
+          pointName: point.pointName ?? point.name ?? point.monitoringPointName ?? '',
+          pointType: point.pointType ?? point.type ?? '',
+          details: point.details ?? {},
+          measurementInstruments: point.measurementInstruments ?? { parameters: [] },
+          documentsAndImages,
+        }
+      })
     : sourceMeasurementPoints
   const firstPoint = Array.isArray(measurementPoints) ? measurementPoints[0] : null
 
@@ -1966,13 +2048,23 @@ function getConnectedPointTabLabel(row, index) {
 function mapConnectedPointRequestToDocumentRequest(row = {}) {
   if (Array.isArray(row.measurementPoints)) {
     const factory = row.factory ?? {}
+    const requestDocuments = mergeDocumentItems(
+      getDocumentItemsFromSource(row),
+      getDocumentItemsFromSource(row.request),
+    )
+    const measurementPoints = row.measurementPoints.map((point, index) => ({
+      ...point,
+      documentsAndImages: index === 0
+        ? mergeDocumentItems(getDocumentItemsFromSource(point), requestDocuments)
+        : getDocumentItemsFromSource(point),
+    }))
 
     return {
       ...row,
       id: row.id ?? row.requestId,
       requestNo: row.requestNo ?? row.request?.requestNo ?? '',
-      type: row.type ?? row.systemType ?? row.measurementPoints?.[0]?.details?.monitoringPointKind ?? '',
-      systemType: row.systemType ?? row.type ?? row.measurementPoints?.[0]?.details?.monitoringPointKind ?? '',
+      type: row.type ?? row.systemType ?? measurementPoints?.[0]?.details?.monitoringPointKind ?? '',
+      systemType: row.systemType ?? row.type ?? measurementPoints?.[0]?.details?.monitoringPointKind ?? '',
       status: row.status ?? row.statusLabel ?? '',
       statusCode: row.statusCode ?? '',
       factoryId: row.factoryId ?? factory.factoryId ?? '',
@@ -1982,12 +2074,18 @@ function mapConnectedPointRequestToDocumentRequest(row = {}) {
       industryType: row.industryType ?? factory.industryType ?? '',
       province: row.province ?? factory.province ?? '',
       factory,
+      measurementPoints,
       deviceConfigs: Array.isArray(row.deviceConfigs) ? row.deviceConfigs : [],
     }
   }
 
   const point = row?.point ?? {}
   const factory = row?.factory ?? {}
+  const documentsAndImages = mergeDocumentItems(
+    getDocumentItemsFromSource(point),
+    getDocumentItemsFromSource(row),
+    getDocumentItemsFromSource(row.request),
+  )
 
   return {
     ...row,
@@ -2015,7 +2113,7 @@ function mapConnectedPointRequestToDocumentRequest(row = {}) {
         parameters: Array.isArray(point.parameters) ? point.parameters : [],
         details: point.details ?? {},
         measurementInstruments: point.measurementInstruments ?? { parameters: [] },
-        documentsAndImages: Array.isArray(point.documentsAndImages) ? point.documentsAndImages : [],
+        documentsAndImages,
       },
     ],
     deviceConfigs: Array.isArray(row.deviceConfigs) ? row.deviceConfigs : [],
@@ -5273,7 +5371,10 @@ function RequestFormBottomSheet({
   const useInitialRequestValues = isEditMode || isAddParameterMode
   const initialPoint = getInitialRequestPoint(initialRequest)
   const initialInstruments = initialPoint.measurementInstruments ?? {}
-  const initialDocuments = Array.isArray(initialPoint.documentsAndImages) ? initialPoint.documentsAndImages : []
+  const initialDocuments = mergeDocumentItems(
+    getDocumentItemsFromSource(initialPoint),
+    getDocumentItemsFromSource(initialRequest),
+  )
   const formFactory = useInitialRequestValues ? getInitialRequestFactory(initialRequest, factory) : factory
   const latestRevisionMessage = isEditMode ? getLatestRevisionMessage(initialRequest) : ''
   const initialContactPersons = useInitialRequestValues && Array.isArray(initialRequest?.contactPersons)
