@@ -30,15 +30,29 @@ const pdfTextSizes = {
 }
 
 function isBlankValue(value) {
-  return value === null || value === undefined || value === ''
+  if (value === null || value === undefined) {
+    return true
+  }
+
+  if (typeof value !== 'string') {
+    return false
+  }
+
+  const normalizedValue = value.trim().toLowerCase()
+
+  return normalizedValue === ''
+    || normalizedValue === 'null'
+    || normalizedValue === 'none'
+    || normalizedValue === 'ไม่มี'
+    || normalizedValue === 'ไม่ระบุ'
 }
 
-function displayValue(value, fallback = '') {
+function displayValue(value, fallback = '-') {
   if (isBlankValue(value)) {
     return fallback
   }
 
-  return String(value)
+  return String(value).trim()
 }
 
 function normalizeArrayValue(value) {
@@ -56,12 +70,14 @@ function normalizeArrayValue(value) {
   return []
 }
 
-function joinList(values, fallback = '') {
+function joinList(values, fallback = '-') {
   if (typeof values === 'string') {
-    return values || fallback
+    return isBlankValue(values) ? fallback : values
   }
 
-  return Array.isArray(values) && values.length ? values.join(', ') : fallback
+  const normalizedValues = Array.isArray(values) ? values.filter((value) => !isBlankValue(value)) : []
+
+  return normalizedValues.length ? normalizedValues.join(', ') : fallback
 }
 
 function firstDefinedValue(...values) {
@@ -110,14 +126,6 @@ function getDocumentImageUrl(document = {}) {
   return fileUrl || link
 }
 
-function formatValueWithUnit(value, unit = '') {
-  if (isBlankValue(value)) {
-    return ''
-  }
-
-  return `${value}${unit ? ` ${unit}` : ''}`
-}
-
 function formatProductionCapacity(value, unit) {
   return [value, unit].map((item) => String(item ?? '').trim()).filter(Boolean).join(' ')
 }
@@ -147,16 +155,6 @@ function formatFactoryRegistration(request, factory = {}) {
   ].filter(Boolean)
 
   return candidates[0] ?? ''
-}
-
-function formatIndustryOrder(request, factory = {}) {
-  return [
-    request?.industryMainOrder ?? factory.industryMainOrder,
-    request?.industrySubOrder ?? factory.industrySubOrder,
-  ]
-    .map((item) => String(item ?? '').trim())
-    .filter(Boolean)
-    .join(' / ')
 }
 
 function getCriteriaRow(criteria, level) {
@@ -479,7 +477,7 @@ class PdfLayout {
     const size = options.size ?? pdfTextSizes.body
     const lineHeight = options.lineHeight ?? size * 1.45
     const labelText = String(label ?? '')
-    const valueText = displayValue(value, options.fallback ?? '')
+    const valueText = displayValue(value, options.fallback)
     const labelWidth = this.textWidth(labelText, size, options.bold)
     const suffixText = options.suffix ? String(options.suffix) : ''
     const suffixWidth = suffixText ? this.textWidth(suffixText, size, options.bold) + 8 : 0
@@ -544,7 +542,7 @@ class PdfLayout {
   drawInlineField(x, width, label, value, options = {}) {
     const size = options.size ?? pdfTextSizes.body
     const labelText = String(label ?? '')
-    const valueText = displayValue(value, options.fallback ?? '')
+    const valueText = displayValue(value, options.fallback)
     const labelWidth = this.textWidth(labelText, size, options.bold)
     const suffixText = options.suffix ? String(options.suffix) : ''
     const suffixWidth = suffixText ? this.textWidth(suffixText, size, options.bold) + 8 : 0
@@ -609,7 +607,7 @@ class PdfLayout {
     const measuredItems = items.map((item) => {
       const width = item.width ?? flexibleWidth
       const labelText = String(item.label ?? '')
-      const valueText = displayValue(item.value, item.fallback ?? '')
+      const valueText = displayValue(item.value, item.fallback)
       const labelWidth = this.textWidth(labelText, size, item.bold ?? options.bold)
       const suffixText = item.suffix ? String(item.suffix) : ''
       const suffixWidth = suffixText ? this.textWidth(suffixText, size, item.bold ?? options.bold) + 8 : 0
@@ -872,8 +870,8 @@ class PdfLayout {
     const childHeaderHeight = options.childHeaderHeight ?? 68
     const headerHeight = groupHeaderHeight + childHeaderHeight
     const rowHeight = options.rowHeight ?? 30
-    const reportingStartIndex = 6
-    const reportingWidth = widths.slice(reportingStartIndex).reduce((sum, width) => sum + width, 0)
+    const reportingStartIndex = options.reportingStartIndex === null ? null : (options.reportingStartIndex ?? 6)
+    const reportingWidth = reportingStartIndex === null ? 0 : widths.slice(reportingStartIndex).reduce((sum, width) => sum + width, 0)
 
     const drawCellBox = (cellX, yTop, width, height) => {
       this.page.drawRectangle({
@@ -969,17 +967,24 @@ class PdfLayout {
     this.ensureSpace(headerHeight + rowHeight + 12)
 
     let cellX = x
-    columns.slice(0, reportingStartIndex).forEach((column) => {
-      drawCell(cellX, this.y, column.width, headerHeight, column.label, { header: true })
-      cellX += column.width
-    })
+    if (reportingStartIndex === null) {
+      columns.forEach((column) => {
+        drawCell(cellX, this.y, column.width, headerHeight, column.label, { header: true })
+        cellX += column.width
+      })
+    } else {
+      columns.slice(0, reportingStartIndex).forEach((column) => {
+        drawCell(cellX, this.y, column.width, headerHeight, column.label, { header: true })
+        cellX += column.width
+      })
 
-    drawCell(cellX, this.y, reportingWidth, groupHeaderHeight, 'การรายงานค่า²', { header: true })
-    let childX = cellX
-    columns.slice(reportingStartIndex).forEach((column) => {
-      drawCell(childX, this.y - groupHeaderHeight, column.width, childHeaderHeight, column.label, { header: true })
-      childX += column.width
-    })
+      drawCell(cellX, this.y, reportingWidth, groupHeaderHeight, 'การรายงานค่า²', { header: true })
+      let childX = cellX
+      columns.slice(reportingStartIndex).forEach((column) => {
+        drawCell(childX, this.y - groupHeaderHeight, column.width, childHeaderHeight, column.label, { header: true })
+        childX += column.width
+      })
+    }
     this.y -= headerHeight
 
     const displayRows = rows.length ? rows : [columns.map(() => '')]
@@ -987,7 +992,7 @@ class PdfLayout {
       this.ensureSpace(rowHeight + 4)
       let rowX = x
       row.forEach((cell, index) => {
-        if (index >= reportingStartIndex) {
+        if (reportingStartIndex !== null && index >= reportingStartIndex) {
           drawCheckbox(rowX, this.y, widths[index], rowHeight, Boolean(cell))
         } else {
           drawCell(rowX, this.y, widths[index], rowHeight, displayValue(cell))
@@ -1328,7 +1333,10 @@ function renderGeneralFactorySection(layout, request, context) {
     { label: 'ชื่อโรงงาน : ', value: request?.factoryName ?? factory.factoryName },
     { label: 'เลขทะเบียน : ', value: formatFactoryRegistration(request, factory) },
   ])
-  layout.labelValue('ลำดับประเภทโรงงาน : ', formatIndustryOrder(request, factory))
+  layout.labelValueRow([
+    { label: 'ลำดับประเภทโรงงาน (หลัก) : ', value: request?.industryMainOrder ?? factory.industryMainOrder },
+    { label: 'ลำดับประเภทโรงงาน (รอง) : ', value: request?.industrySubOrder ?? factory.industrySubOrder },
+  ])
   layout.labelValue('ประกอบกิจการ : ', request?.businessActivity ?? factory.businessActivity)
   layout.labelValue('เขตประกอบการ/นิคมอุตสาหกรรม (ถ้ามี) : ', request?.industrialEstate ?? factory.industrialEstate)
   layout.labelValue('การประเมินผลกระทบสิ่งแวดล้อม : ', request?.eia ?? factory.eia)
@@ -1350,23 +1358,15 @@ function renderContactsSection(layout, context) {
       { label: 'ตำแหน่ง : ', value: contact.position },
       { label: 'อีเมล : ', value: contact.email },
     ])
-    layout.labelValueRow([
-      { label: 'โทรศัพท์ : ', value: contact.phone },
-      { label: 'โทรศัพท์มือถือ : ', value: contact.mobilePhone ?? contact.mobile ?? contact.phone },
-    ])
+    layout.drawInlineField(layout.margin.left + 18, (layout.contentWidth - 18 - 16) / 2, 'โทรศัพท์ : ', contact.phone)
+    layout.y -= pdfTextSizes.body * 1.45
   })
 }
 
-function renderEmailsSection(layout, context, isWpms) {
+function renderEmailsSection(layout, context) {
   layout.sectionTitle('3. อีเมลสำหรับแจ้งเตือนค่าเกินมาตรฐาน')
   const notificationEmails = nonEmptyList(context.notificationEmails)
   const officerNotificationEmails = nonEmptyList(context.officerNotificationEmails)
-
-  if (isWpms) {
-    layout.labelValue('3.1 ', notificationEmails[0])
-    layout.labelValue('3.2 ', notificationEmails[1] ?? officerNotificationEmails[0])
-    return
-  }
 
   layout.paragraph('3.1 สำหรับโรงงาน', { indent: 18, bold: true })
   ;(notificationEmails.length ? notificationEmails : ['']).forEach((email, index) => (
@@ -1431,10 +1431,13 @@ function renderInstrumentTable(layout, parameters, isWpms) {
     return
   }
 
-  layout.table(columns, rows, {
-    fontSize: isWpms ? pdfTextSizes.table : 10.8,
-    minRowHeight: isWpms ? 32 : 30,
-    headerHeight: isWpms ? 34 : 58,
+  layout.cemsInstrumentTable(columns, rows, {
+    fontSize: 11,
+    headerFontSize: 11,
+    rowHeight: 22,
+    groupHeaderHeight: 0,
+    childHeaderHeight: 58,
+    reportingStartIndex: null,
   })
 }
 
@@ -1545,32 +1548,61 @@ async function renderDocumentAttachmentList(layout, documents) {
   }
 }
 
+function getDocumentsByTitles(documentsAndImages, titles) {
+  return documentsAndImages.filter((document) => titles.includes(document?.title))
+}
+
 async function renderCemsDocumentSections(layout, documentsAndImages) {
-  const getDocumentsByTitle = (title) => documentsAndImages.filter((document) => document?.title === title)
   const items = [
     {
-      label: '',
+      label: 'ข้อมูลรายละเอียดการรายงานค่าที่สภาวะมาตรฐาน',
       title: 'ข้อมูลรายละเอียดการรายงานค่าที่สภาวะมาตรฐาน',
+      descriptionLines: [
+        'ให้แสดงรายละเอียดหรือแนบเอกสารหรือรูปภาพหน้าโปรแกรมของเครื่องมือที่แสดงให้เห็นถึงการคำนวณ',
+        'และการรายงานค่าของมลพิษในอากาศเสียที่สภาวะมาตรฐาน ความดัน 1 บรรยากาศ หรือ 760 มิลลิเมตร',
+        'ปรอท อุณหภูมิ 25 องศาเซลเซียสที่สภาวะแห้ง (Dry basis) โดยมีปริมาตรอากาศส่วนเกินในการเผาไหม้',
+        '(Excess air) ร้อยละ 50 หรือมีปริมาตรออกซิเจนในอากาศเสีย ร้อยละ 7 หรือ ปริมาตรออกซิเจนในอากาศเสีย',
+        'ณ สภาวะจริงในขณะตรวจวัด (การเผาไหม้แบบระบบปิดหรือไม่มีการเผาไหม้)',
+      ],
     },
     {
-      label: '4.6 รายงานผลการทำ RATA หรือ อื่นๆ ที่เทียบเท่า ของระบบ CEMS ครั้งล่าสุด (สามารถแนบไฟล์เอกสาร หรือ QR Code ได้) : ',
+      label: 'รายงานผลการทำ RATA หรือ อื่นๆ ที่เทียบเท่า ของระบบ CEMS ครั้งล่าสุด (สามารถแนบไฟล์เอกสาร หรือ QR Code ได้)',
       title: 'รายงานผลการทำ RATA หรือ อื่นๆ ที่เทียบเท่า ของระบบ CEMS ครั้งล่าสุด',
     },
-    { label: '4.7 ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน : ', title: 'ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน', leader: false },
-    { label: '4.8 สัญลักษณ์ของโรงงานหรือโลโก้บริษัท : ', title: 'สัญลักษณ์ของโรงงานหรือโลโก้บริษัท', leader: false },
-    { label: '4.9 ภาพถ่ายปล่อง : ', title: 'ภาพถ่ายปล่อง', leader: false },
-    { label: '4.10 ภาพถ่ายเครื่องมือตรวจวัดที่ติดตั้ง (CEMS) : ', title: 'ภาพถ่ายเครื่องมือตรวจวัดที่ติดตั้ง (CEMS)', leader: false },
+    { label: 'ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน', title: 'ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน' },
+    { label: 'สัญลักษณ์ของโรงงานหรือโลโก้บริษัท', title: 'สัญลักษณ์ของโรงงานหรือโลโก้บริษัท' },
+    { label: 'ภาพถ่ายปล่อง', title: 'ภาพถ่ายปล่อง' },
+    { label: 'ภาพถ่ายเครื่องมือตรวจวัดที่ติดตั้ง (CEMS)', title: 'ภาพถ่ายเครื่องมือตรวจวัดที่ติดตั้ง (CEMS)' },
   ]
 
+  layout.addPage()
+  layout.sectionTitle('เอกสารและรูปภาพ')
   for (const item of items) {
-    if (item.label) {
-      layout.paragraph(item.label, { indent: 18, bold: true })
+    layout.paragraph(item.label, { indent: 18, bold: true })
+    if (item.descriptionLines) {
+      layout.fixedLines(item.descriptionLines, { indent: 30, lineHeight: 19 })
     }
-    await renderDocumentAttachmentList(layout, getDocumentsByTitle(item.title))
+    await renderDocumentAttachmentList(layout, getDocumentsByTitles(documentsAndImages, [item.title]))
   }
 }
 
-function renderWpms(layout, request, context) {
+async function renderWpmsDocumentSections(layout, documentsAndImages) {
+  const items = [
+    { label: 'ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน', titles: ['ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน'] },
+    { label: 'สัญลักษณ์ของโรงงานหรือโลโก้บริษัท', titles: ['สัญลักษณ์ของโรงงานหรือโลโก้บริษัท'] },
+    { label: 'ภาพถ่ายระบบบำบัด', titles: ['ภาพถ่ายระบบบำบัด', 'ระบบบำบัด'] },
+    { label: 'ภาพถ่ายเครื่องมือตรวจวัดที่ติดตั้ง (WPMS)', titles: ['ภาพถ่ายเครื่องมือตรวจวัดที่ติดตั้ง (WPMS)'] },
+  ]
+
+  layout.addPage()
+  layout.sectionTitle('เอกสารและรูปภาพ')
+  for (const item of items) {
+    layout.paragraph(item.label, { indent: 18, bold: true })
+    await renderDocumentAttachmentList(layout, getDocumentsByTitles(documentsAndImages, item.titles))
+  }
+}
+
+async function renderWpms(layout, request, context) {
   const { details, point, instruments, documentParameters } = context
   const treatmentSystemLabel = joinList(normalizeArrayValue(details.treatmentSystem))
   const wpmsTreatmentSystem = firstDefinedValue(details.treatmentSystemOther, treatmentSystemLabel)
@@ -1582,16 +1614,15 @@ function renderWpms(layout, request, context) {
   ])
   renderGeneralFactorySection(layout, request, context)
   renderContactsSection(layout, context)
-  renderEmailsSection(layout, context, true)
+  renderEmailsSection(layout, context)
+  layout.addPage()
   layout.sectionTitle('4. รายละเอียดจุดตรวจวัด')
   layout.paragraph('4.1 อัตราการระบายน้ำทิ้ง (Flow Rate)', { indent: 18 })
-  layout.labelValueRow([
-    { label: 'เฉลี่ย : ', value: formatValueWithUnit(details.averageWastewaterDischarge ?? details.averageDischarge, 'm³/d') },
-    { label: 'ต่ำสุด : ', value: formatValueWithUnit(details.minWastewaterDischarge ?? details.minDischarge, 'm³/d') },
-    { label: 'สูงสุด : ', value: formatValueWithUnit(details.maxWastewaterDischarge ?? details.maxDischarge, 'm³/d') },
-  ], { indent: 34, gap: 12 })
-  layout.treatmentSystemLine('4.2 ระบบบำบัด :', details.hasTreatmentSystem, wpmsTreatmentSystem, { indent: 0 })
-  layout.labelValue('ปริมาณรองรับน้ำเสียสูงสุดของระบบบำบัด : ', firstDefinedValue(details.maxTreatmentCapacity, details.treatmentCapacity))
+  layout.labelValue('4.1.1 อัตราการระบายน้ำทิ้ง (Flow Rate) เฉลี่ย : ', details.averageWastewaterDischarge ?? details.averageDischarge, { indent: 30, suffix: 'm³/d' })
+  layout.labelValue('4.1.2 อัตราการระบายน้ำทิ้ง (Flow Rate) ต่ำสุด : ', details.minWastewaterDischarge ?? details.minDischarge, { indent: 30, suffix: 'm³/d' })
+  layout.labelValue('4.1.3 อัตราการระบายน้ำทิ้ง (Flow Rate) สูงสุด : ', details.maxWastewaterDischarge ?? details.maxDischarge, { indent: 30, suffix: 'm³/d' })
+  layout.treatmentSystemLine('4.2 ระบบบำบัด :', details.hasTreatmentSystem, wpmsTreatmentSystem, { indent: 18 })
+  layout.labelValue('ปริมาณรองรับน้ำเสียสูงสุดของระบบบำบัด : ', firstDefinedValue(details.maxTreatmentCapacity, details.treatmentCapacity), { indent: 30 })
   layout.labelValueRow([
     { label: '4.3 พิกัดจุดที่ติดตั้งเครื่องมือตรวจวัด ละติจูด : ', value: details.instrumentLatitude ?? point.instrumentLatitude ?? point.latitude, width: 310 },
     { label: 'ลองจิจูด : ', value: details.instrumentLongitude ?? point.instrumentLongitude ?? point.longitude },
@@ -1603,13 +1634,20 @@ function renderWpms(layout, request, context) {
   layout.labelValue('4.5 แหล่งกำเนิดน้ำเสีย : ', firstDefinedValue(details.wastewaterSource, details.wastewaterOrigin))
   layout.labelValue('4.6 แหล่งรองรับน้ำทิ้ง : ', firstDefinedValue(details.dischargeReceivingSource, details.receivingSource))
   layout.labelValue('4.7 อุปกรณ์/โปรแกรมที่ใช้เชื่อมต่อ : ', firstDefinedValue(details.connectionDeviceOther, details.connectionDevice))
+  layout.addPage()
+  layout.sectionTitle('5. รายละเอียดเครื่องมือตรวจวัด')
   layout.labelValueRow([
-    { label: '4.8 อุปกรณ์แปลงสัญญาณ (Converter) ยี่ห้อ : ', value: instruments.converterBrand, width: 300 },
+    { label: 'อุปกรณ์แปลงสัญญาณ (Converter) ยี่ห้อ : ', value: instruments.converterBrand, width: 300 },
     { label: 'รุ่น : ', value: instruments.converterModel },
   ])
+  layout.space(8)
   renderInstrumentTable(layout, documentParameters, true)
-  layout.signature(request?.informationProviderName ?? details.informationProviderName, request?.informationProviderPosition ?? details.informationProviderPosition)
+  layout.cemsInstrumentSignature(
+    request?.informationProviderName ?? details.informationProviderName,
+    request?.informationProviderPosition ?? details.informationProviderPosition,
+  )
   renderStandardCriteriaAttachment(layout, documentParameters)
+  await renderWpmsDocumentSections(layout, context.documentsAndImages)
   renderDeviceConfigPages(layout, request)
 }
 
@@ -1626,7 +1664,8 @@ async function renderCems(layout, request, context) {
   ])
   renderGeneralFactorySection(layout, request, context)
   renderContactsSection(layout, context)
-  renderEmailsSection(layout, context, false)
+  renderEmailsSection(layout, context)
+  layout.addPage()
   layout.sectionTitle('4. รายละเอียดจุดตรวจวัด')
   layout.paragraph('4.1 รายละเอียดของหน่วยที่ติดตั้ง CEMS', { indent: 22, bold: true })
   layout.labelValue('4.1.1 รหัสจุดตรวจวัด : ', point.pointCode ?? request?.monitoringPointCode, { indent: 38 })
@@ -1684,16 +1723,6 @@ async function renderCems(layout, request, context) {
   ], { indent: 30 })
   layout.paragraph('4.4 รายละเอียดคอมพิวเตอร์หรืออุปกรณ์ติดตั้งโปรแกรม', { indent: 18, bold: true })
   layout.labelValue('อุปกรณ์/โปรแกรมที่ใช้เชื่อมต่อ : ', details.connectionDeviceOther ?? details.connectionDevice, { indent: 30 })
-  layout.paragraph('4.5 ข้อมูลรายละเอียดการรายงานค่าที่สภาวะมาตรฐาน', { indent: 18, bold: true })
-  const standardReportLines = [
-    'ให้แสดงรายละเอียดหรือแนบเอกสารหรือรูปภาพหน้าโปรแกรมของเครื่องมือที่แสดงให้เห็นถึงการคำนวณ',
-    'และการรายงานค่าของมลพิษในอากาศเสียที่สภาวะมาตรฐาน ความดัน 1 บรรยากาศ หรือ 760 มิลลิเมตร',
-    'ปรอท อุณหภูมิ 25 องศาเซลเซียสที่สภาวะแห้ง (Dry basis) โดยมีปริมาตรอากาศส่วนเกินในการเผาไหม้',
-    '(Excess air) ร้อยละ 50 หรือมีปริมาตรออกซิเจนในอากาศเสีย ร้อยละ 7 หรือ ปริมาตรออกซิเจนในอากาศเสีย',
-    'ณ สภาวะจริงในขณะตรวจวัด (การเผาไหม้แบบระบบปิดหรือไม่มีการเผาไหม้)',
-  ]
-  layout.fixedLines(standardReportLines, { indent: 30, lineHeight: 19 })
-  await renderCemsDocumentSections(layout, context.documentsAndImages)
   layout.addPage()
   layout.sectionTitle('5. รายละเอียดเครื่องมือตรวจวัด')
   layout.labelValueRow([
@@ -1707,6 +1736,7 @@ async function renderCems(layout, request, context) {
     request?.informationProviderPosition ?? details.informationProviderPosition,
   )
   renderStandardCriteriaAttachment(layout, documentParameters)
+  await renderCemsDocumentSections(layout, context.documentsAndImages)
   renderDeviceConfigPages(layout, request)
 }
 
@@ -1729,7 +1759,7 @@ export async function createConnectionRequestPdf(request) {
   const context = getRequestContext(request)
 
   if (context.isWpms) {
-    renderWpms(layout, request, context)
+    await renderWpms(layout, request, context)
   } else {
     await renderCems(layout, request, context)
   }

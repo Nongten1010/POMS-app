@@ -40,7 +40,6 @@ import {
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import CloseIcon from '@mui/icons-material/Close'
-import FileDownloadIcon from '@mui/icons-material/FileDownload'
 import HistoryIcon from '@mui/icons-material/History'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import UploadFileIcon from '@mui/icons-material/UploadFile'
@@ -561,7 +560,8 @@ const documentImageItems = [
     uploadLabel: 'ภาพ/ไฟล์/QR Code',
   },
   {
-    title: 'ระบบบำบัด',
+    title: 'ภาพถ่ายระบบบำบัด',
+    legacyTitles: ['ระบบบำบัด'],
     uploadLabel: 'ภาพ/ไฟล์/QR Code',
   },
   {
@@ -572,7 +572,11 @@ const documentImageItems = [
 
 const factoryGeneralDocumentImageTitles = ['ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน', 'สัญลักษณ์ของโรงงานหรือโลโก้บริษัท']
 const cemsDocumentImageTitles = ['ข้อมูลรายละเอียดการรายงานค่าที่สภาวะมาตรฐาน', 'รายงานผลการทำ RATA หรือ อื่นๆ ที่เทียบเท่า ของระบบ CEMS ครั้งล่าสุด', 'ภาพถ่ายปล่อง', 'ภาพถ่ายเครื่องมือตรวจวัดที่ติดตั้ง (CEMS)']
-const wpmsDocumentImageTitles = ['ระบบบำบัด', 'ภาพถ่ายเครื่องมือตรวจวัดที่ติดตั้ง (WPMS)']
+const wpmsDocumentImageTitles = ['ภาพถ่ายระบบบำบัด', 'ภาพถ่ายเครื่องมือตรวจวัดที่ติดตั้ง (WPMS)']
+
+function documentTitleMatchesItem(document, item) {
+  return [item.title, ...(item.legacyTitles ?? [])].includes(document?.title)
+}
 
 const appBarHeight = {
   xs: 64,
@@ -1230,8 +1234,8 @@ function getDocumentImageFiles(formData, index) {
 
 function buildDocumentsAndImages(formData, uploadedDocuments = [], { includePreviewUrls = false, existingDocuments = [] } = {}) {
   return documentImageItems.flatMap((item, index) => {
-    const uploadedItems = uploadedDocuments.filter((document) => document?.title === item.title)
-    const existingItems = existingDocuments.filter((document) => document?.title === item.title)
+    const uploadedItems = uploadedDocuments.filter((document) => documentTitleMatchesItem(document, item))
+    const existingItems = existingDocuments.filter((document) => documentTitleMatchesItem(document, item))
     const files = getDocumentImageFiles(formData, index)
     const documentPayload = {
       title: item.title,
@@ -1247,7 +1251,7 @@ function buildDocumentsAndImages(formData, uploadedDocuments = [], { includePrev
       return uploadedItems.map((document) => ({
         ...documentPayload,
         ...document,
-        title: document.title ?? item.title,
+        title: item.title,
         description: document.description ?? item.description ?? null,
       }))
     }
@@ -1266,7 +1270,7 @@ function buildDocumentsAndImages(formData, uploadedDocuments = [], { includePrev
       return existingItems.map((document) => ({
         ...documentPayload,
         ...document,
-        title: document.title ?? item.title,
+        title: item.title,
         description: document.description ?? item.description ?? null,
       }))
     }
@@ -1930,169 +1934,12 @@ function MonitoringPointListDialog({ open, factory, useOperatorActions, accessTo
   )
 }
 
-function DocumentLine({ label, value = '', width = '100%' }) {
-  return (
-    <Box component="span" sx={{ display: 'inline-flex', alignItems: 'baseline', width, minWidth: 0 }}>
-      <Box component="span" sx={{ flex: '0 0 auto' }}>
-        {label}
-      </Box>
-      <Box
-        component="span"
-        sx={{
-          flex: 1,
-          minWidth: 48,
-          mx: 0.5,
-          borderBottom: '1px dotted #555',
-          lineHeight: 1.4,
-          px: 0.5,
-        }}
-      >
-        {value}
-      </Box>
-    </Box>
-  )
-}
-
-function DocumentSignatureBlock({ name = '', position = '' }) {
-  const signatureName = displayValue(name, '........................................')
-
-  return (
-    <Stack spacing={0.25} sx={{ width: 250 }}>
-      <Box sx={{ display: 'flex', alignItems: 'baseline', width: '100%' }}>
-        <Box component="span" sx={{ flex: '0 0 auto' }}>
-          ลงชื่อ
-        </Box>
-        <Box
-          component="span"
-          sx={{
-            flex: 1,
-            minWidth: 72,
-            mx: 0.5,
-            borderBottom: '1px dotted #555',
-            lineHeight: 1.4,
-          }}
-        />
-        <Box component="span" sx={{ flex: '0 0 auto', fontWeight: 400 }}>
-          ผู้ให้ข้อมูล
-        </Box>
-      </Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', lineHeight: 1.4 }}>
-        <Box component="span">(</Box>
-        <Box component="span">{signatureName}</Box>
-        <Box component="span">)</Box>
-      </Box>
-      <DocumentLine label="ตำแหน่ง" value={position} />
-      <Box sx={{ display: 'flex', alignItems: 'baseline', width: '100%' }}>
-        <Box component="span" sx={{ flex: '0 0 auto' }}>
-          วันที่
-        </Box>
-        <Box
-          component="span"
-          sx={{
-            display: 'inline-block',
-            flex: '0 0 auto',
-            minWidth: 190,
-            mx: 0.5,
-            lineHeight: 1.4,
-            px: 0.5,
-          }}
-        >
-          ................/................/................
-        </Box>
-      </Box>
-    </Stack>
-  )
-}
-
-function DocumentWrappingLine({ label, value = '' }) {
-  const displayedValue = displayValue(value)
-
-  if (!displayedValue) {
-    return <DocumentLine label={label} value="" />
-  }
-
-  return (
-    <Box
-      sx={{
-        width: '100%',
-        lineHeight: 1.9,
-        overflowWrap: 'anywhere',
-      }}
-    >
-      <Box component="span" sx={{ pr: 0.5 }}>
-        {label}
-      </Box>
-      <Box
-        component="span"
-        sx={{
-          px: 0.5,
-          borderBottom: '1px dotted #555',
-          boxDecorationBreak: 'clone',
-          WebkitBoxDecorationBreak: 'clone',
-        }}
-      >
-        {displayedValue}
-      </Box>
-    </Box>
-  )
-}
-
-function DocumentPage({ children, revisionText = 'แก้ไข : 14 พฤศจิกายน 2567' }) {
-  return (
-    <Paper
-      elevation={0}
-      sx={{
-        width: 794,
-        minHeight: 1123,
-        mx: 'auto',
-        p: '54px 72px',
-        color: '#000',
-        bgcolor: '#fff',
-        fontFamily: 'Kanit, sans-serif',
-        fontSize: 16,
-        lineHeight: 1.9,
-        position: 'relative',
-        overflow: 'visible',
-        breakAfter: 'page',
-        pageBreakAfter: 'always',
-        breakInside: 'auto',
-        pageBreakInside: 'auto',
-      }}
-    >
-      <Typography variant="body2" sx={{ position: 'absolute', top: 18, right: 72, fontWeight: 400 }}>
-        {revisionText}
-      </Typography>
-      {children}
-    </Paper>
-  )
-}
-
 function displayValue(value, fallback = '') {
   if (isBlankValue(value)) {
     return fallback
   }
 
   return String(value)
-}
-
-function joinList(values, fallback = '') {
-  if (typeof values === 'string') {
-    return values || fallback
-  }
-
-  return Array.isArray(values) && values.length > 0 ? values.join(', ') : fallback
-}
-
-function firstDefinedValue(...values) {
-  return values.find((value) => !isBlankValue(value))
-}
-
-function formatValueWithUnit(value, unit = '') {
-  if (isBlankValue(value)) {
-    return ''
-  }
-
-  return `${value}${unit ? ` ${unit}` : ''}`
 }
 
 function normalizeStringArray(value) {
@@ -2103,404 +1950,8 @@ function normalizeStringArray(value) {
   return value ? [value] : []
 }
 
-function formatFuel(name, other, percent) {
-  const fuelName = other || name
-  const fuelPercent = percent || percent === 0 ? ` ร้อยละโดยประมาณ ${percent}` : ''
-  return fuelName ? `${fuelName}${fuelPercent}` : ''
-}
-
-function formatFactoryRegistration(request, factory = {}) {
-  const candidates = [
-    request?.factoryId,
-    factory.factoryId,
-    factory.newRegistrationNo,
-    request?.newRegistrationNo,
-    request?.factoryRegistrationNo,
-    factory.oldRegistrationNo,
-  ].filter(Boolean)
-
-  return candidates[0] || ''
-}
-
-function normalizeDocumentUrl(url) {
-  if (!url || typeof window === 'undefined') {
-    return url
-  }
-
-  try {
-    const parsedUrl = new URL(url, window.location.origin)
-    if (parsedUrl.protocol === 'http:' && parsedUrl.host === window.location.host && window.location.protocol === 'https:') {
-      parsedUrl.protocol = 'https:'
-      return parsedUrl.toString()
-    }
-  } catch {
-    return url
-  }
-
-  return url
-}
-
-function DocumentImagePreview({ document }) {
-  const normalizedLink = normalizeDocumentUrl(document?.link)
-  const normalizedFileUrl = normalizeDocumentUrl(document?.fileUrl)
-  const linkIsImage = normalizedLink && /\.(png|jpe?g|gif|webp)(\?.*)?$/i.test(normalizedLink)
-  const imageUrl = document?.filePreviewUrl ?? normalizedFileUrl ?? (linkIsImage ? normalizedLink : null)
-  const isImage =
-    Boolean(imageUrl) &&
-    (document?.fileType?.startsWith('image/') || /\.(png|jpe?g|gif|webp)(\?.*)?$/i.test(imageUrl) || linkIsImage)
-
-  return (
-    <Stack spacing={0.75} sx={{ pl: 3, mt: 0.75, breakInside: 'avoid' }}>
-      {isImage ? (
-        <Stack spacing={0.75}>
-          <Box
-            component="img"
-            src={imageUrl}
-            alt={document.title}
-            sx={{
-              width: '100%',
-              maxWidth: 520,
-              maxHeight: 360,
-              objectFit: 'contain',
-              border: '1px solid #999',
-              bgcolor: '#fff',
-            }}
-          />
-          {normalizedLink && !linkIsImage ? (
-            <Typography
-              component="a"
-              href={normalizedLink}
-              target="_blank"
-              rel="noreferrer"
-              sx={{ color: '#0b57d0', wordBreak: 'break-all' }}
-            >
-              {normalizedLink}
-            </Typography>
-          ) : null}
-        </Stack>
-      ) : document?.fileName ? (
-        <Stack spacing={0.5}>
-          <Typography>{document.fileName}</Typography>
-          {normalizedLink ? (
-            <Typography component="a" href={normalizedLink} target="_blank" rel="noreferrer" sx={{ color: '#0b57d0', wordBreak: 'break-all' }}>
-              {normalizedLink}
-            </Typography>
-          ) : null}
-        </Stack>
-      ) : normalizedLink ? (
-        <Typography component="a" href={normalizedLink} target="_blank" rel="noreferrer" sx={{ color: '#0b57d0', wordBreak: 'break-all' }}>
-          {normalizedLink}
-        </Typography>
-      ) : (
-        <Typography color="text.secondary">-</Typography>
-      )}
-    </Stack>
-  )
-}
-
-function DocumentImageLine({ label, document }) {
-  return (
-    <Box sx={{ breakInside: 'avoid' }}>
-      <Typography sx={{ fontWeight: 700 }}>{label}</Typography>
-      <DocumentImagePreview document={document} />
-    </Box>
-  )
-}
-
-function chunkArray(items, size) {
-  const chunks = []
-
-  for (let index = 0; index < items.length; index += size) {
-    chunks.push(items.slice(index, index + size))
-  }
-
-  return chunks
-}
-
-function DocumentImagePages({ items }) {
-  return chunkArray(items, 2).map((chunk, pageIndex) => (
-    <DocumentPage key={`document-images-${pageIndex}`}>
-      <Stack spacing={3}>
-        {chunk.map((item) => (
-          <DocumentImageLine key={item.label} label={item.label} document={item.document} />
-        ))}
-      </Stack>
-    </DocumentPage>
-  ))
-}
-
-function getSpecialCriteriaLabel(level) {
-  return specialCriteriaRows.find((row) => row.key === level)?.label ?? displayValue(level)
-}
-
-function getCriteriaRow(criteria, level) {
-  return criteria?.rows?.find((row) => row.level === level) ?? {}
-}
-
 function getEiaStandardDisplay(parameter = {}) {
   return parameter.eiaCriteria?.standardValue || parameter.eiaStandard || '-'
-}
-
-function StandardCriteriaAttachmentTable({ parameters }) {
-  const displayParameters = parameters.length ? parameters : [{ parameter: '' }]
-
-  return (
-    <TableContainer sx={{ overflow: 'visible' }}>
-      <Table
-        size="small"
-        sx={{
-          tableLayout: 'fixed',
-          border: '1px solid #111',
-          '& th, & td': {
-            border: '1px solid #111',
-            p: 0.65,
-            fontSize: 12,
-            lineHeight: 1.45,
-            verticalAlign: 'middle',
-            wordBreak: 'break-word',
-          },
-          '& th': {
-            fontWeight: 700,
-          },
-        }}
-      >
-        <TableHead>
-          <TableRow>
-            <TableCell align="center" rowSpan={2} sx={{ width: 92 }}>พารามิเตอร์</TableCell>
-            <TableCell align="center" rowSpan={2} sx={{ width: 120 }}>เกณฑ์มลพิษ</TableCell>
-            <TableCell align="center" colSpan={3}>ตามประกาศ อก.</TableCell>
-            <TableCell align="center" colSpan={3}>ตาม EIA</TableCell>
-          </TableRow>
-          <TableRow>
-            {['MIN', 'MAX', 'ค่ามาตรฐาน', 'MIN', 'MAX', 'ค่ามาตรฐาน'].map((header) => (
-              <TableCell key={header} align="center" sx={{ width: 80 }}>{header}</TableCell>
-            ))}
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {displayParameters.flatMap((parameter) => specialCriteriaRows.map((criteriaLevel, criteriaIndex) => {
-            const standardRow = getCriteriaRow(parameter.standardCriteria, criteriaLevel.key)
-            const eiaRow = getCriteriaRow(parameter.eiaCriteria, criteriaLevel.key)
-            const rowKey = `${parameter.parameter || 'parameter'}-${criteriaLevel.key}`
-
-            return (
-              <TableRow key={rowKey}>
-                {criteriaIndex === 0 ? (
-                  <TableCell rowSpan={specialCriteriaRows.length}>{displayValue(parameter.parameter)}</TableCell>
-                ) : null}
-                <TableCell align="center">{getSpecialCriteriaLabel(criteriaLevel.key)}</TableCell>
-                <TableCell align="center">{displayValue(standardRow.min)}</TableCell>
-                <TableCell align="center">{displayValue(standardRow.max)}</TableCell>
-                {criteriaIndex === 0 ? (
-                  <TableCell align="center" rowSpan={specialCriteriaRows.length}>
-                    {displayValue(parameter.standardCriteria?.standardValue)}
-                  </TableCell>
-                ) : null}
-                <TableCell align="center">{displayValue(eiaRow.min)}</TableCell>
-                <TableCell align="center">{displayValue(eiaRow.max)}</TableCell>
-                {criteriaIndex === 0 ? (
-                  <TableCell align="center" rowSpan={specialCriteriaRows.length}>
-                    {displayValue(parameter.eiaCriteria?.standardValue)}
-                  </TableCell>
-                ) : null}
-              </TableRow>
-            )
-          }))}
-        </TableBody>
-      </Table>
-    </TableContainer>
-  )
-}
-
-function getRequestDeviceConfigs(request) {
-  return Array.isArray(request?.deviceConfigs) ? request.deviceConfigs.filter(Boolean) : []
-}
-
-function formatDeviceSettingValue(label, value) {
-  if (value === null || value === undefined || value === '') {
-    return ''
-  }
-
-  return `${label}: ${value}`
-}
-
-function formatDeviceSettings(settings = {}) {
-  const valueRange = settings.valueRange ?? {}
-  const values = [
-    formatDeviceSettingValue('COMPORT', settings.comPort ?? settings.comport),
-    formatDeviceSettingValue('Slave ID', settings.slaveId),
-    formatDeviceSettingValue('Baud Rate', settings.baudRate),
-    formatDeviceSettingValue('Parity', settings.parity),
-    formatDeviceSettingValue('Stop bits', settings.stopBits),
-    formatDeviceSettingValue('Data bits', settings.dataBits),
-    formatDeviceSettingValue('Quantity', settings.quantity),
-    formatDeviceSettingValue('Host IP', settings.hostIp),
-    formatDeviceSettingValue('Port', settings.port),
-    formatDeviceSettingValue('dbUser', settings.dbUser),
-    formatDeviceSettingValue('dbName', settings.dbName),
-    valueRange.min !== undefined || valueRange.max !== undefined
-      ? `ช่วงข้อมูลตรวจวัด: ${displayValue(valueRange.min, '-')} - ${displayValue(valueRange.max, '-')}`
-      : '',
-  ].filter(Boolean)
-
-  return values.join(', ')
-}
-
-function getDeviceConfigDevices(deviceConfigs) {
-  return deviceConfigs.flatMap((config) =>
-    Array.isArray(config?.device)
-      ? config.device.map((device) => ({ ...device, stationId: config.stationId }))
-      : [],
-  )
-}
-
-function getDeviceConfigChannels(deviceConfigs) {
-  return deviceConfigs.flatMap((config) =>
-    Array.isArray(config?.channels)
-      ? config.channels.map((channel) => ({ ...channel, stationId: config.stationId }))
-      : [],
-  )
-}
-
-function DeviceConfigDeviceTable({ devices }) {
-  return (
-    <TableContainer sx={{ overflow: 'visible' }}>
-      <Table
-        size="small"
-        sx={{
-          tableLayout: 'fixed',
-          border: '1px solid #111',
-          '& th, & td': {
-            border: '1px solid #111',
-            p: 0.65,
-            fontSize: 11,
-            lineHeight: 1.45,
-            verticalAlign: 'top',
-            wordBreak: 'break-word',
-          },
-          '& th': { fontWeight: 700 },
-        }}
-      >
-        <TableHead>
-          <TableRow>
-            <TableCell align="center" sx={{ width: 92 }}>รหัสจุดตรวจวัด</TableCell>
-            <TableCell align="center" sx={{ width: 110 }}>รหัสอุปกรณ์</TableCell>
-            <TableCell align="center" sx={{ width: 102 }}>Protocol</TableCell>
-            <TableCell align="center">รายละเอียดการเชื่อมต่อ</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {devices.map((device, index) => (
-            <TableRow key={`${device.stationId}-${device.deviceCode}-${index}`}>
-              <TableCell>{displayValue(device.stationId)}</TableCell>
-              <TableCell>{displayValue(device.deviceCode)}</TableCell>
-              <TableCell>{displayValue(device.protocol)}</TableCell>
-              <TableCell>{formatDeviceSettings(device.settings)}</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </TableContainer>
-  )
-}
-
-function DeviceConfigChannelTable({ channels }) {
-  return (
-    <TableContainer sx={{ overflow: 'visible' }}>
-      <Table
-        size="small"
-        sx={{
-          tableLayout: 'fixed',
-          border: '1px solid #111',
-          '& th, & td': {
-            border: '1px solid #111',
-            p: 0.5,
-            fontSize: 10,
-            lineHeight: 1.3,
-            verticalAlign: 'top',
-            wordBreak: 'break-word',
-          },
-          '& th': { fontWeight: 700 },
-        }}
-      >
-        <TableHead>
-          <TableRow>
-            {[
-              ['รหัสอุปกรณ์', 86],
-              ['Address ID', 68],
-              ['พารามิเตอร์', 92],
-              ['Min', 46],
-              ['Max', 46],
-              ['รูปแบบค่า', 100],
-              ['Offset', 48],
-              ['Encoding', 108],
-            ].map(([label, width]) => (
-              <TableCell key={label} align="center" sx={{ width }}>{label}</TableCell>
-            ))}
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {channels.map((channel, index) => {
-            const valueRange = channel.valueRange ?? {}
-
-            return (
-              <TableRow key={`${channel.deviceCode}-${channel.addressId}-${channel.dataType}-${index}`}>
-                <TableCell>{displayValue(channel.deviceCode)}</TableCell>
-                <TableCell>{displayValue(channel.addressId)}</TableCell>
-                <TableCell>{displayValue(channel.dataType)}</TableCell>
-                <TableCell>{displayValue(valueRange.min)}</TableCell>
-                <TableCell>{displayValue(valueRange.max)}</TableCell>
-                <TableCell>{displayValue(channel.valueFormat)}</TableCell>
-                <TableCell>{displayValue(channel.offset)}</TableCell>
-                <TableCell>{displayValue(channel.encoding)}</TableCell>
-              </TableRow>
-            )
-          })}
-        </TableBody>
-      </Table>
-    </TableContainer>
-  )
-}
-
-function DeviceConfigDocumentPages({ request }) {
-  const deviceConfigs = getRequestDeviceConfigs(request)
-
-  if (!deviceConfigs.length) {
-    return null
-  }
-
-  const devices = getDeviceConfigDevices(deviceConfigs)
-  const channels = getDeviceConfigChannels(deviceConfigs)
-  const channelChunks = chunkArray(channels, 12)
-
-  return (
-    <>
-      <DocumentPage>
-        <Stack spacing={2.2}>
-          <Typography sx={{ fontWeight: 700 }}>การตั้งค่าอุปกรณ์</Typography>
-          <Box>
-            <Typography sx={{ fontWeight: 700, mb: 1 }}>ข้อมูลอุปกรณ์</Typography>
-            <DeviceConfigDeviceTable devices={devices} />
-          </Box>
-          <Box>
-            <Typography sx={{ fontWeight: 700, mb: 1 }}>การเชื่อมต่อพารามิเตอร์</Typography>
-            <DeviceConfigChannelTable channels={channelChunks[0] ?? []} />
-          </Box>
-        </Stack>
-      </DocumentPage>
-      {channelChunks.slice(1).map((chunk, index) => (
-        <DocumentPage key={`device-config-channels-${index}`}>
-          <Stack spacing={2.2}>
-            <Typography sx={{ fontWeight: 700 }}>การตั้งค่าอุปกรณ์</Typography>
-            <Box>
-              <Typography sx={{ fontWeight: 700, mb: 1 }}>การเชื่อมต่อพารามิเตอร์</Typography>
-              <DeviceConfigChannelTable channels={chunk} />
-            </Box>
-          </Stack>
-        </DocumentPage>
-      ))}
-    </>
-  )
 }
 
 function getConnectedPointTabLabel(row, index) {
@@ -2628,7 +2079,59 @@ function getParameterFormDefaultsFromPayload(payload, point = {}) {
 
 function ConnectedPointRequestsDialog({ open, rows, loading, error, selectedIndex, onSelectedIndexChange, onClose }) {
   const selectedRow = rows[selectedIndex] ?? rows[0] ?? null
-  const selectedRequest = selectedRow ? mapConnectedPointRequestToDocumentRequest(selectedRow) : null
+  const selectedRequest = useMemo(
+    () => (selectedRow ? mapConnectedPointRequestToDocumentRequest(selectedRow) : null),
+    [selectedRow],
+  )
+  const selectedRequestKey = selectedRequest
+    ? `${selectedRequest.id || selectedRequest.requestId || selectedRequest.requestNo || selectedIndex}`
+    : ''
+  const [pdfPreviewState, setPdfPreviewState] = useState({ key: '', url: '', error: '' })
+  const pdfPreviewUrl = pdfPreviewState.key === selectedRequestKey ? pdfPreviewState.url : ''
+  const pdfPreviewError = pdfPreviewState.key === selectedRequestKey ? pdfPreviewState.error : ''
+  const shouldGeneratePdfPreview = Boolean(open && !loading && !error && selectedRequest && selectedRequestKey)
+  const pdfPreviewLoading = shouldGeneratePdfPreview && pdfPreviewState.key !== selectedRequestKey
+
+  useEffect(() => {
+    if (!shouldGeneratePdfPreview) {
+      return undefined
+    }
+
+    let isActive = true
+    let nextPdfUrl = ''
+
+    createConnectionRequestPdf(selectedRequest)
+      .then((pdfBytes) => {
+        const blob = new Blob([pdfBytes], { type: 'application/pdf' })
+        nextPdfUrl = URL.createObjectURL(blob)
+
+        if (isActive) {
+          setPdfPreviewState({ key: selectedRequestKey, url: nextPdfUrl, error: '' })
+        }
+      })
+      .catch((pdfError) => {
+        if (isActive) {
+          setPdfPreviewState({
+            key: selectedRequestKey,
+            url: '',
+            error: pdfError instanceof Error ? pdfError.message : 'สร้าง PDF preview ไม่สำเร็จ',
+          })
+        }
+      })
+
+    return () => {
+      isActive = false
+
+      if (nextPdfUrl) {
+        URL.revokeObjectURL(nextPdfUrl)
+      }
+    }
+  }, [selectedRequest, selectedRequestKey, shouldGeneratePdfPreview])
+  useEffect(() => () => {
+    if (pdfPreviewState.url) {
+      URL.revokeObjectURL(pdfPreviewState.url)
+    }
+  }, [pdfPreviewState.url])
   const tabsContent = rows.length > 1 ? (
     <Paper elevation={0} sx={{ mb: 2, mx: 'auto', maxWidth: 794, border: 1, borderColor: 'divider' }}>
       <Tabs
@@ -2652,6 +2155,9 @@ function ConnectedPointRequestsDialog({ open, rows, loading, error, selectedInde
       loading={loading}
       error={error}
       onClose={onClose}
+      pdfPreviewUrl={pdfPreviewUrl}
+      pdfPreviewLoading={pdfPreviewLoading}
+      pdfPreviewError={pdfPreviewError}
       contentHeader={tabsContent}
     />
   )
@@ -2782,106 +2288,32 @@ function RequestDocumentDialog({
   footerContent,
   footerActions,
   pdfPreviewUrl,
-  pdfPreviewFileName,
   pdfPreviewLoading,
   pdfPreviewError,
+  onExited,
 }) {
-  const isWpms = request?.type === 'WPMS' || request?.systemType === 'WPMS'
-  const factory = request?.factory ?? {}
-  const points = Array.isArray(request?.measurementPoints) ? request.measurementPoints : []
-  const point = points[0] ?? {}
-  const details = point.details ?? {}
-  const instruments = point.measurementInstruments ?? {}
-  const instrumentParameters = Array.isArray(instruments.parameters) ? instruments.parameters : []
-  const documentsAndImages = Array.isArray(point.documentsAndImages) ? point.documentsAndImages : []
-  const contactPersons = Array.isArray(request?.contactPersons) ? request.contactPersons : []
-  const notificationEmails = Array.isArray(request?.notificationEmails) ? request.notificationEmails : []
-  const officerNotificationEmails = Array.isArray(request?.officerNotificationEmails) ? request.officerNotificationEmails : []
-  const pointName = point.pointName ?? point.name ?? point.monitoringPointName ?? ''
-  const fallbackParameterLabels = [
-    ...(Array.isArray(details.eligibleParameters) ? details.eligibleParameters : []),
-    ...(Array.isArray(details.connectedParameters) ? details.connectedParameters : []),
-    ...(Array.isArray(details.pendingParameters) ? details.pendingParameters : []),
-    ...(Array.isArray(point.parameters) ? point.parameters : []),
-  ]
-  const documentParameters = instrumentParameters.length
-    ? instrumentParameters
-    : Array.from(new Set(fallbackParameterLabels.filter(Boolean))).map((parameter) => ({ parameter }))
-  const wpmsAverageWastewaterDischarge = firstDefinedValue(
-    details.averageWastewaterDischarge,
-    details.averageDischarge,
-  )
-  const wpmsMinWastewaterDischarge = firstDefinedValue(
-    details.minWastewaterDischarge,
-    details.minimumWastewaterDischarge,
-    details.minDischarge,
-    details.minimumDischarge,
-  )
-  const wpmsMaxWastewaterDischarge = firstDefinedValue(
-    details.maxWastewaterDischarge,
-    details.maximumWastewaterDischarge,
-    details.maxDischarge,
-    details.maximumDischarge,
-  )
-  const treatmentSystemLabel = joinList(normalizeArrayValue(details.treatmentSystem))
-  const wpmsTreatmentSystem = firstDefinedValue(details.treatmentSystemOther, treatmentSystemLabel)
-  const wpmsMaxTreatmentCapacity = firstDefinedValue(details.maxTreatmentCapacity, details.treatmentCapacity)
-  const wpmsInstrumentLatitude = firstDefinedValue(details.instrumentLatitude, point.instrumentLatitude, point.latitude)
-  const wpmsInstrumentLongitude = firstDefinedValue(details.instrumentLongitude, point.instrumentLongitude, point.longitude)
-  const wpmsDischargeLatitude = firstDefinedValue(details.dischargeLatitude, details.outfallLatitude, point.latitude)
-  const wpmsDischargeLongitude = firstDefinedValue(details.dischargeLongitude, details.outfallLongitude, point.longitude)
-  const wpmsWastewaterSource = firstDefinedValue(details.wastewaterSource, details.wastewaterOrigin)
-  const wpmsDischargeReceivingSource = firstDefinedValue(details.dischargeReceivingSource, details.receivingSource)
-  const wpmsConnectionDevice = firstDefinedValue(details.connectionDeviceOther, details.connectionDevice)
-  const systemName = isWpms
-    ? 'ระบบตรวจวัดคุณภาพน้ำทิ้งอัตโนมัติอย่างต่อเนื่อง'
-    : 'ระบบตรวจวัดคุณภาพอากาศจากปล่องแบบอัตโนมัติอย่างต่อเนื่อง'
-  const systemCode = isWpms ? 'Water Pollution Monitoring System : WPMS' : 'Continuous Emission Monitoring Systems : CEMS'
-  const getDocumentByTitle = (title) => documentsAndImages.find((document) => document?.title === title)
-  const cemsDocumentImageItems = [
-    {
-      label: '4.6 รายงานผลการทำ RATA หรือ อื่นๆ ที่เทียบเท่า ของระบบ CEMS ครั้งล่าสุด',
-      document: getDocumentByTitle('รายงานผลการทำ RATA หรือ อื่นๆ ที่เทียบเท่า ของระบบ CEMS ครั้งล่าสุด'),
-    },
-    { label: '4.7 ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน', document: getDocumentByTitle('ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน') },
-    { label: '4.8 สัญลักษณ์ของโรงงานหรือโลโก้บริษัท', document: getDocumentByTitle('สัญลักษณ์ของโรงงานหรือโลโก้บริษัท') },
-    { label: '4.9 ภาพถ่ายปล่อง', document: getDocumentByTitle('ภาพถ่ายปล่อง') },
-    { label: '4.10 ภาพถ่ายเครื่องมือตรวจวัดที่ติดตั้ง (CEMS)', document: getDocumentByTitle('ภาพถ่ายเครื่องมือตรวจวัดที่ติดตั้ง (CEMS)') },
-  ]
   const canReview = mode === 'process' && isPendingDesignReview(request)
   const canVerifyConnection = mode === 'process' && isConnectionConfirmed(request)
   const [statusHistoryOpen, setStatusHistoryOpen] = useState(false)
   const statusHistory = Array.isArray(request?.statusHistory) ? request.statusHistory : []
   const isReadonlyViewDialog = mode === 'view' && !footerContent && !footerActions
+  const hasPdfPreviewContent = Boolean(pdfPreviewUrl || pdfPreviewLoading || pdfPreviewError)
   const isRevisedPendingReview = mode === 'process'
     && (
       [request?.status, request?.statusLabel, request?.statusCode].includes('แก้ไขแล้ว/รอพิจารณาแบบ')
       || [request?.status, request?.statusLabel, request?.statusCode].includes('REVISED_PENDING_DESIGN_REVIEW')
     )
   const latestRevisionMessage = isRevisedPendingReview ? getLatestRevisionMessage(request) : ''
-  const handleDownload = useCallback(() => {
-    if (!request || pdfPreviewLoading) return
-
-    if (pdfPreviewUrl) {
-      const link = document.createElement('a')
-      link.href = pdfPreviewUrl
-      link.download = pdfPreviewFileName || `${request.requestNo || 'connection-request'}.pdf`
-      link.click()
-      return
-    }
-
-    const blob = new Blob([JSON.stringify(request, null, 2)], { type: 'application/json;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `${request.requestNo || 'connection-request'}.json`
-    link.click()
-    URL.revokeObjectURL(url)
-  }, [pdfPreviewFileName, pdfPreviewLoading, pdfPreviewUrl, request])
 
   return (
     <Fragment>
-      <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg">
+      <Dialog
+        open={open}
+        onClose={onClose}
+        fullWidth
+        maxWidth="lg"
+        slotProps={{ transition: { onExited } }}
+      >
         <DialogTitle
           sx={{
             display: 'flex',
@@ -2904,15 +2336,6 @@ function RequestDocumentDialog({
             >
               ประวัติสถานะ
             </Button>
-            <Button
-              variant="contained"
-              size="small"
-              startIcon={<FileDownloadIcon />}
-              disabled={loading || pdfPreviewLoading || !request || Boolean(pdfPreviewFileName && !pdfPreviewUrl)}
-              onClick={handleDownload}
-            >
-              ดาวน์โหลด
-            </Button>
             {isReadonlyViewDialog ? (
               <IconButton aria-label="ปิด" size="small" onClick={onClose}>
                 <CloseIcon />
@@ -2920,7 +2343,18 @@ function RequestDocumentDialog({
             ) : null}
           </Stack>
         </DialogTitle>
-      <DialogContent dividers sx={{ bgcolor: 'neutral.100' }}>
+      <DialogContent
+        dividers
+        sx={{
+          bgcolor: 'neutral.100',
+          ...(hasPdfPreviewContent
+            ? {
+                minHeight: { xs: '70vh', md: '78vh' },
+                overflow: 'hidden',
+              }
+            : {}),
+        }}
+      >
         {loading ? (
           <Typography variant="body2" sx={{ mb: 2 }}>
             กำลังโหลดข้อมูลแบบฟอร์ม...
@@ -2978,370 +2412,7 @@ function RequestDocumentDialog({
               bgcolor: '#fff',
             }}
           />
-        ) : (
-        <Stack spacing={2} sx={{ alignItems: 'center' }}>
-          {isWpms ? (
-            <>
-              <DocumentPage pageNo={1} totalPages={3} revisionText="แก้ไข : 14-11-67">
-                <Stack spacing={3}>
-                  <Box sx={{ textAlign: 'center', mt: 3 }}>
-                    <Typography sx={{ fontSize: 20, fontWeight: 700 }}>แบบบันทึกข้อมูลโรงงานสำหรับการขอเชื่อมต่อระบบเฝ้าระวังและเตือนภัย</Typography>
-                    <Typography sx={{ fontSize: 20, fontWeight: 700 }}>
-                      มลพิษระยะไกล (Digital Pollution Online Monitoring System : D-POMS)
-                    </Typography>
-                    <Typography sx={{ fontSize: 18, fontWeight: 700 }}>
-                      (สำหรับระบบเฝ้าระวังมลพิษน้ำระยะไกล (Water Pollution Monitoring : WPMS))
-                    </Typography>
-                  </Box>
-                  <Box>
-                    <Typography sx={{ fontWeight: 700 }}>1. ข้อมูลทั่วไปของโรงงาน</Typography>
-                    <Stack spacing={1.1} sx={{ pl: 3, mt: 1 }}>
-                      <Box sx={{ display: 'flex', gap: 2 }}>
-                        <DocumentLine label="ชื่อโรงงาน" value={request?.factoryName ?? factory.factoryName} />
-                        <DocumentLine label="เลขทะเบียน" value={formatFactoryRegistration(request, factory)} />
-                      </Box>
-                      <DocumentLine label="ประกอบกิจการ" value={request?.businessActivity ?? factory.businessActivity} />
-                      <DocumentLine label="เขตประกอบการ/นิคมอุตสาหกรรม (ถ้ามี)" value="" />
-                      <DocumentLine label="ที่ตั้ง เลขที่" value={request?.address ?? factory.address} />
-                      <DocumentLine label="ตำบล" value="" />
-                      <Box sx={{ display: 'flex', gap: 2 }}>
-                        <DocumentLine label="พิกัดโรงงาน ละติจูด" value={displayValue(request?.latitude ?? factory.latitude)} />
-                        <DocumentLine label="ลองติจูด" value={displayValue(request?.longitude ?? factory.longitude)} />
-                      </Box>
-                    </Stack>
-                  </Box>
-                  <Box>
-                    <Typography sx={{ fontWeight: 700 }}>2. ข้อมูลผู้ติดต่อประสานงาน</Typography>
-                    {[1, 2].map((index) => (
-                      <Stack key={index} spacing={1} sx={{ pl: 3, mt: 1 }}>
-                        <DocumentLine label={`2.${index} ชื่อผู้ติดต่อประสานงาน`} value={contactPersons[index - 1]?.name} />
-                        <DocumentLine label="ตำแหน่ง" value={contactPersons[index - 1]?.position} />
-                        <Box sx={{ display: 'flex', gap: 2 }}>
-                          <DocumentLine label="โทรศัพท์" value={contactPersons[index - 1]?.phone} />
-                          <DocumentLine label="โทรศัพท์มือถือ" value={contactPersons[index - 1]?.phone} />
-                        </Box>
-                        <DocumentLine label="อีเมล" value={contactPersons[index - 1]?.email} />
-                      </Stack>
-                    ))}
-                  </Box>
-                  <Box>
-                    <Typography sx={{ fontWeight: 700 }}>3. อีเมลสำหรับแจ้งเตือนค่าเกินมาตรฐาน</Typography>
-                    <Stack spacing={0.5} sx={{ pl: 3, mt: 1 }}>
-                      <DocumentLine label="3.1" value={notificationEmails[0]} />
-                      <DocumentLine label="3.2" value={notificationEmails[1] ?? officerNotificationEmails[0]} />
-                    </Stack>
-                  </Box>
-                </Stack>
-              </DocumentPage>
-
-              <DocumentPage pageNo={2} totalPages={3} revisionText="แก้ไข : 14-11-67">
-                <Stack spacing={1.6}>
-                  <Typography sx={{ fontWeight: 700 }}>4. รายละเอียดจุดตรวจวัดจุดที่ : {pointName}</Typography>
-                  <Box sx={{ pl: 3 }}>
-                    <Typography>4.1 อัตราการระบายน้ำทิ้ง (Flow Rate)</Typography>
-                    <Box sx={{ display: 'flex', gap: 2, pl: 5 }}>
-                      <DocumentLine label="เฉลี่ย :" value={formatValueWithUnit(wpmsAverageWastewaterDischarge, 'm³/d')} />
-                      <DocumentLine label="ต่ำสุด :" value={formatValueWithUnit(wpmsMinWastewaterDischarge, 'm³/d')} />
-                      <DocumentLine label="สูงสุด :" value={formatValueWithUnit(wpmsMaxWastewaterDischarge, 'm³/d')} />
-                    </Box>
-                    <Typography>
-                      4.2 ระบบบำบัด : {details.hasTreatmentSystem === 'ไม่มี' ? '☑' : '□'} ไม่มี &nbsp;&nbsp; {details.hasTreatmentSystem === 'มี' ? '☑' : '□'} มี (ระบุ) {displayValue(wpmsTreatmentSystem)}
-                      /ปริมาณรองรับน้ำเสียสูงสุดของระบบบำบัด : {displayValue(wpmsMaxTreatmentCapacity)}
-                    </Typography>
-                    <DocumentLine
-                      label="4.3 พิกัดจุดที่ติดตั้งเครื่องมือตรวจวัด (BOD/COD Online) : ละติจูด"
-                      value={`${displayValue(wpmsInstrumentLatitude)}  ลองติจูด ${displayValue(wpmsInstrumentLongitude)}`}
-                    />
-                    <DocumentLine
-                      label="4.4 พิกัดจุดระบายน้ำทิ้งออกนอกโรงงาน : ละติจูด"
-                      value={`${displayValue(wpmsDischargeLatitude)}  ลองติจูด ${displayValue(wpmsDischargeLongitude)}`}
-                    />
-                    <DocumentLine label="4.5 แหล่งกำเนิดน้ำเสีย :" value={wpmsWastewaterSource} />
-                    <DocumentLine label="4.6 แหล่งรองรับน้ำทิ้ง :" value={wpmsDischargeReceivingSource} />
-                    <DocumentLine label="4.7 อุปกรณ์/โปรแกรมที่ใช้เชื่อมต่อ :" value={wpmsConnectionDevice} />
-                    <DocumentLine
-                      label="4.8 อุปกรณ์แปลงสัญญาณ (Converter) ยี่ห้อ :"
-                      value={`${displayValue(instruments.converterBrand)}   รุ่น : ${displayValue(instruments.converterModel)}`}
-                    />
-                  </Box>
-                  <TableContainer>
-                    <Table size="small" sx={{ border: '1px solid #555', '& th, & td': { border: '1px solid #555', p: 0.7, fontSize: 12 } }}>
-                      <TableHead>
-                        <TableRow>
-                          {['พารามิเตอร์ที่ขอเชื่อมต่อ', 'เทคนิคตรวจวัด', 'ช่วงการวัด', 'ยี่ห้อเครื่องมือ', 'ผู้จำหน่ายเครื่องมือ', 'มาตรฐาน EIA'].map((column) => (
-                            <TableCell key={column} align="center" sx={{ fontWeight: 700 }}>{column}</TableCell>
-                          ))}
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {documentParameters.map((parameter, index) => (
-                          <TableRow key={`${parameter.parameter ?? 'parameter'}-${parameter.signalChannel ?? index}`}>
-                            <TableCell>{parameter.parameter}</TableCell>
-                            <TableCell>{parameter.technique}</TableCell>
-                            <TableCell>{parameter.range}</TableCell>
-                            <TableCell>{parameter.brand}</TableCell>
-                            <TableCell>{parameter.supplier}</TableCell>
-                            <TableCell>{parameter.eiaStandard}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', pt: 1 }}>
-                    <Box>
-                      <Typography variant="caption">หมายถึง ค่าที่ส่งต้องเป็นหน่วยเดียวกับหน่วยที่กำหนดในตาราง</Typography>
-                      <Typography variant="caption" display="block">หมายถึง เลขช่องสัญญาณจากโปรแกรมส่งข้อมูล</Typography>
-                    </Box>
-                    <DocumentSignatureBlock
-                      name={request?.informationProviderName ?? details.informationProviderName}
-                      position={request?.informationProviderPosition ?? details.informationProviderPosition}
-                    />
-                  </Box>
-                </Stack>
-              </DocumentPage>
-
-              <DocumentPage pageNo={3} totalPages={3} revisionText="แก้ไข : 14-11-67">
-                <Stack spacing={3}>
-                  <Typography sx={{ fontWeight: 700 }}>แนบรายละเอียดเกณฑ์มาตรฐาน</Typography>
-                  <StandardCriteriaAttachmentTable parameters={documentParameters} />
-                </Stack>
-              </DocumentPage>
-              <DeviceConfigDocumentPages request={request} />
-            </>
-          ) : (
-            <>
-          <DocumentPage pageNo={1}>
-            <Stack spacing={3}>
-              <Box sx={{ textAlign: 'center', mt: 3 }}>
-                <Typography sx={{ fontSize: 20, fontWeight: 700 }}>แบบบันทึกข้อมูลโรงงานสำหรับการขอเชื่อมต่อระบบเฝ้าระวัง</Typography>
-                <Typography sx={{ fontSize: 20, fontWeight: 700 }}>
-                  และเตือนภัยมลพิษระยะไกล (Digital Pollution Online Monitoring System : D-POMS)
-                </Typography>
-                <Typography sx={{ fontSize: 18, fontWeight: 700 }}>({systemName}</Typography>
-                <Typography sx={{ fontSize: 18, fontWeight: 700 }}>{systemCode})</Typography>
-              </Box>
-              <Box>
-                <Typography sx={{ fontWeight: 700 }}>1. ข้อมูลทั่วไปของโรงงาน</Typography>
-                <Stack spacing={1.1} sx={{ pl: 3, mt: 1 }}>
-                  <Box sx={{ display: 'flex', gap: 2 }}>
-                    <DocumentLine label="ชื่อโรงงาน" value={request?.factoryName ?? factory.factoryName} />
-                    <DocumentLine label="เลขทะเบียน" value={formatFactoryRegistration(request, factory)} />
-                  </Box>
-                  <DocumentLine label="ลำดับประเภทโรงงาน" value={request?.industryMainOrder ?? factory.industryMainOrder} width="58%" />
-                  <DocumentLine label="ประกอบกิจการ" value={request?.businessActivity ?? factory.businessActivity} width="58%" />
-                  <DocumentLine label="เขตประกอบการ/นิคมอุตสาหกรรม (ถ้ามี)" value="-" width="85%" />
-                  <DocumentLine label="การประเมินผลกระทบสิ่งแวดล้อม" value={request?.eia ?? factory.eia} width="85%" />
-                  <DocumentLine label="ที่ตั้ง เลขที่" value={request?.address ?? factory.address} />
-                  <Box sx={{ display: 'flex', gap: 2 }}>
-                    <DocumentLine label="พิกัดโรงงาน ละติจูด" value={displayValue(request?.latitude ?? factory.latitude)} />
-                    <DocumentLine label="ลองติจูด" value={displayValue(request?.longitude ?? factory.longitude)} />
-                  </Box>
-                </Stack>
-              </Box>
-              <Box>
-                <Typography sx={{ fontWeight: 700 }}>2. ข้อมูลผู้ติดต่อประสานงาน</Typography>
-                {[1, 2].map((index) => (
-                  <Stack key={index} spacing={1} sx={{ pl: 3, mt: 1 }}>
-                    <DocumentLine label={`2.${index} ชื่อผู้ติดต่อประสานงาน`} value={contactPersons[index - 1]?.name} width="62%" />
-                    <DocumentLine label="ตำแหน่ง" value={contactPersons[index - 1]?.position} width="62%" />
-                    <Box sx={{ display: 'flex', gap: 2 }}>
-                      <DocumentLine label="โทรศัพท์" value={contactPersons[index - 1]?.phone} />
-                      <DocumentLine label="โทรศัพท์มือถือ" value={contactPersons[index - 1]?.phone} />
-                    </Box>
-                    <DocumentLine label="อีเมล" value={contactPersons[index - 1]?.email} width="50%" />
-                  </Stack>
-                ))}
-              </Box>
-              <Box>
-                <Typography sx={{ fontWeight: 700 }}>3. อีเมลสำหรับแจ้งเตือนค่าเกินมาตรฐาน</Typography>
-                <Typography sx={{ pl: 3, fontWeight: 700 }}>3.1 สำหรับโรงงาน</Typography>
-                <Stack spacing={0.5} sx={{ pl: 4 }}>
-                  <DocumentLine label="1)" value={notificationEmails[0]} width="46%" />
-                  <DocumentLine label="2)" value={notificationEmails[1]} width="46%" />
-                </Stack>
-              </Box>
-            </Stack>
-          </DocumentPage>
-
-          <DocumentPage pageNo={2}>
-            <Stack spacing={2.5}>
-              <Box>
-                <Typography sx={{ pl: 3, fontWeight: 700 }}>3.2 สำหรับเจ้าหน้าที่</Typography>
-                <Stack spacing={0.5} sx={{ pl: 4 }}>
-                  <DocumentLine label="1)" value={officerNotificationEmails[0]} width="46%" />
-                  <DocumentLine label="2)" value={officerNotificationEmails[1]} width="46%" />
-                </Stack>
-              </Box>
-              <Box>
-                <Typography sx={{ fontWeight: 700 }}>4. รายละเอียดจุดตรวจวัดจุดที่ : ...</Typography>
-                <Typography sx={{ pl: 3, mt: 1, fontWeight: 700 }}>
-                  4.1 รายละเอียดของหน่วยที่ติดตั้ง {isWpms ? 'WPMS (จุดระบายน้ำทิ้ง)' : 'CEMS'}
-                </Typography>
-                <Stack spacing={1} sx={{ pl: 5, mt: 1 }}>
-                  <DocumentLine label="4.1.1 รหัสจุดตรวจวัด :" value={point.pointCode ?? request?.monitoringPointCode} width="66%" />
-                  <DocumentLine label="4.1.2 ชื่อจุดตรวจวัด :" value={point.pointName} width="66%" />
-                  <DocumentLine label="4.1.3 ประเภทของหน่วยการผลิต :" value={details.productionUnitType ?? (isWpms ? 'ระบบบำบัดน้ำเสีย' : '')} width="66%" />
-                  <DocumentLine
-                    label="4.1.4 กำลังการผลิตต่อหน่วย :"
-                    value={details.productionCapacity ?? formatProductionCapacity(details.productionCapacityValue, details.productionCapacityUnit)}
-                    width="66%"
-                  />
-                </Stack>
-              </Box>
-              <Box>
-                <Typography sx={{ pl: 3, fontWeight: 700 }}>4.2 การติดตั้ง {isWpms ? 'WPMS' : 'CEMS'}</Typography>
-                <Stack spacing={1} sx={{ pl: 5, mt: 1 }}>
-                  <DocumentWrappingLine label={`4.2.1 เข้าข่ายต้องติดตั้ง ${isWpms ? 'WPMS' : 'CEMS'} ตามกฎหมาย :`} value={details.cemsInstallationRequiredOther ?? details.cemsInstallationRequiredBy} />
-                  <DocumentLine label="4.2.2 เข้าข่ายตามบัญชีแนบท้ายลำดับที่ :" value={joinList(details.legalAnnexNo)} />
-                  <DocumentWrappingLine label="4.2.3 พารามิเตอร์ที่เข้าข่าย :" value={joinList(details.eligibleParameters ?? point.parameters)} />
-                  <DocumentWrappingLine label="4.2.4 พารามิเตอร์ที่ได้รับการยกเว้นตามประกาศฯ ข้อ :" value={joinList(details.exemptedParameterRegulationClauses)} />
-                  <DocumentWrappingLine label="พารามิเตอร์ :" value={joinList(details.exemptedParameters)} />
-                  <DocumentWrappingLine label="4.2.5 พารามิเตอร์ที่เชื่อมต่อแล้ว :" value={joinList(details.connectedParameters)} />
-                  <DocumentWrappingLine label="4.2.6 พารามิเตอร์ที่ยังไม่เชื่อมต่อ :" value={joinList(details.pendingParameters ?? point.parameters)} />
-                  {!isWpms ? (
-                    <Box sx={{ display: 'flex', gap: 1.5 }}>
-                      <DocumentLine label="4.2.7 พารามิเตอร์ที่ติดตั้งแบบ Time sharing :" value={joinList(details.timeSharingParameters)} width="68%" />
-                      <DocumentLine label="ร่วมกับปล่อง :" value={details.sharedStackCode ?? details.sharedStack} width="32%" />
-                    </Box>
-                  ) : null}
-                </Stack>
-              </Box>
-              <Box>
-                <Typography sx={{ pl: 3, fontWeight: 700 }}>4.3 รายละเอียด{isWpms ? 'จุดติดตั้งเครื่องมือตรวจวัด' : 'ปล่อง'}</Typography>
-                <Stack spacing={1} sx={{ pl: 5, mt: 1 }}>
-                  {isWpms ? (
-                    <>
-                      <DocumentLine label="4.3.1 อัตราการระบายน้ำทิ้งเฉลี่ย :" value={details.averageWastewaterDischarge} />
-                      <DocumentLine label="4.3.2 อัตราการระบายน้ำทิ้งต่ำสุด :" value={details.minWastewaterDischarge} />
-                      <DocumentLine label="4.3.3 อัตราการระบายน้ำทิ้งสูงสุด :" value={details.maxWastewaterDischarge} />
-                      <DocumentLine label="4.3.4 พิกัดจุดติดตั้งเครื่องมือตรวจวัด ละติจูด :" value={`${displayValue(details.instrumentLatitude)}  ลองติจูด ${displayValue(details.instrumentLongitude)}`} />
-                    </>
-                  ) : (
-                    <>
-                      <Typography>
-                        4.3.1 ลักษณะปล่อง : □ วงกลม (เส้นผ่านศูนย์กลาง {displayValue(details.stackDiameter, '............')} เมตร)
-                      </Typography>
-                      <Typography sx={{ pl: 12 }}>
-                        □ สี่เหลี่ยม (กว้าง {displayValue(details.stackWidth, '............')} เมตร / ยาว {displayValue(details.stackLength, '............')} เมตร)
-                      </Typography>
-                      <Typography sx={{ pl: 12 }}>□ อื่นๆ (ระบุ) {displayValue(details.stackShapeOther, '....................................................')}</Typography>
-                      <DocumentLine label="4.3.2 ความสูงปล่อง :" value={`${displayValue(details.stackHeight)} เมตร / ความสูงของจุดตรวจวัด : ${displayValue(details.monitoringHeight)} เมตร`} />
-                      <Typography>4.3.3 อัตราการระบายอากาศ (Flow Rate)</Typography>
-                      <Stack spacing={1} sx={{ pl: 5 }}>
-                        <DocumentLine
-                          label="4.3.3.1 อัตราการระบายอากาศ (Flow Rate) เฉลี่ย :"
-                          value={details.averageFlowRate || details.averageFlowRate === 0 ? `${details.averageFlowRate} m³/hr` : ''}
-                          width="82%"
-                        />
-                        <DocumentLine
-                          label="4.3.3.2 อัตราการระบายอากาศ (Flow Rate) ต่ำสุด :"
-                          value={details.minFlowRate || details.minFlowRate === 0 ? `${details.minFlowRate} m³/hr` : ''}
-                          width="82%"
-                        />
-                        <DocumentLine
-                          label="4.3.3.3 อัตราการระบายอากาศ (Flow Rate) สูงสุด :"
-                          value={details.maxFlowRate || details.maxFlowRate === 0 ? `${details.maxFlowRate} m³/hr` : ''}
-                          width="82%"
-                        />
-                      </Stack>
-                      <DocumentLine label="4.3.4 เชื้อเพลิงหลักที่ใช้ :" value={formatFuel(details.primaryFuel, details.primaryFuelOther, details.primaryFuelPercent)} />
-                    </>
-                  )}
-                </Stack>
-              </Box>
-            </Stack>
-          </DocumentPage>
-
-          <DocumentPage pageNo={3}>
-            <Stack spacing={3}>
-              <Box>
-                <Stack spacing={1} sx={{ pl: 5 }}>
-                  <DocumentLine label="4.3.5 เชื้อเพลิงรอง (ถ้ามี) :" value={formatFuel(details.secondaryFuel, details.secondaryFuelOther, details.secondaryFuelPercent)} />
-                  <DocumentLine label="4.3.6 ระบบการควบคุมปริมาณอากาศและสภาวะการเผาไหม้ :" value={details.combustionControlSystem} />
-                  <Typography>
-                    4.3.7 ระบบบำบัด : □ ไม่มี &nbsp;&nbsp; □ มี (ระบุ) {details.treatmentSystemOther ?? joinList(normalizeArrayValue(details.treatmentSystem)) ?? ''}
-                  </Typography>
-                  <DocumentLine label={`4.3.8 พิกัด${isWpms ? 'จุดติดตั้งเครื่องมือ' : 'ปล่องที่ติดตั้ง CEMS'} : ละติจูด`} value={`${displayValue(details.stackLatitude ?? details.instrumentLatitude)}  ลองติจูด ${displayValue(details.stackLongitude ?? details.instrumentLongitude)}`} />
-                </Stack>
-              </Box>
-              <Box>
-                <Typography sx={{ fontWeight: 700 }}>4.4 รายละเอียดคอมพิวเตอร์หรืออุปกรณ์ติดตั้งโปรแกรม</Typography>
-                <DocumentLine label="อุปกรณ์/โปรแกรมที่ใช้เชื่อมต่อ :" value={details.connectionDeviceOther ?? details.connectionDevice} />
-              </Box>
-              {!isWpms ? (
-                <>
-                  <Box>
-                    <Typography sx={{ fontWeight: 700 }}>4.5 ข้อมูลรายละเอียดการรายงานค่าที่สภาวะมาตรฐาน</Typography>
-                    <Typography sx={{ textIndent: 48, mt: 1 }}>
-                      ให้แสดงรายละเอียดหรือแนบเอกสารหรือรูปภาพหน้าโปรแกรมของเครื่องมือที่แสดงให้เห็นถึงการคำนวณและการรายงานค่าของมลพิษในอากาศเสียที่สภาวะมาตรฐาน ความดัน 1 บรรยากาศ หรือ 760 มิลลิเมตรปรอท อุณหภูมิ 25 องศาเซลเซียสที่สภาวะแห้ง (Dry basis)
-                    </Typography>
-                    <Box sx={{ mt: 2 }}>
-                      <DocumentImagePreview document={documentsAndImages[0]} />
-                    </Box>
-                  </Box>
-                </>
-              ) : (
-                <>
-                  <Typography sx={{ fontWeight: 700 }}>4.5 แหล่งกำเนิดน้ำเสีย : {details.wastewaterSource ?? ''}</Typography>
-                  <Typography sx={{ fontWeight: 700 }}>4.6 แหล่งรองรับน้ำทิ้ง : {details.dischargeReceivingSource ?? ''}</Typography>
-                </>
-              )}
-            </Stack>
-          </DocumentPage>
-
-          {!isWpms ? <DocumentImagePages items={cemsDocumentImageItems} /> : null}
-
-          <DocumentPage pageNo={4}>
-            <Stack spacing={2}>
-              <Typography sx={{ fontWeight: 700 }}>5. รายละเอียดเครื่องมือตรวจวัด</Typography>
-              <DocumentLine label="อุปกรณ์แปลงสัญญาณ (Converter) ยี่ห้อ :" value={`${displayValue(instruments.converterBrand)}   รุ่น : ${displayValue(instruments.converterModel)}`} />
-              <TableContainer>
-                <Table size="small" sx={{ border: '1px solid #555', '& th, & td': { border: '1px solid #555', p: 0.7, fontSize: 12 } }}>
-                  <TableHead>
-                    <TableRow>
-                      {['พารามิเตอร์ที่ขอเชื่อมต่อ', 'เทคนิคตรวจวัด', 'ช่วงการวัด', 'ยี่ห้อเครื่องมือ', 'ผู้จำหน่ายเครื่องมือ', 'มาตรฐาน EIA', 'สภาวะมาตรฐาน', 'Dry basis', 'O₂ @ 7%'].map((column) => (
-                        <TableCell key={column} align="center" sx={{ fontWeight: 700 }}>{column}</TableCell>
-                      ))}
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {documentParameters.map((parameter) => (
-                      <TableRow key={parameter.parameter}>
-                        <TableCell>{parameter.parameter}</TableCell>
-                        <TableCell>{parameter.technique}</TableCell>
-                        <TableCell>{parameter.range}</TableCell>
-                        <TableCell>{parameter.brand}</TableCell>
-                        <TableCell>{parameter.supplier}</TableCell>
-                        <TableCell>{parameter.eiaStandard}</TableCell>
-                        <TableCell align="center">{parameter.standardCondition ? '✓' : ''}</TableCell>
-                        <TableCell align="center">{parameter.dryBasis ? '✓' : ''}</TableCell>
-                        <TableCell align="center">{parameter.oxygenOrExcessAir ? '✓' : ''}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', pt: 2 }}>
-                <Typography variant="caption">หมายเหตุ: ✓ ใช่, ✕ ไม่ใช่</Typography>
-                <DocumentSignatureBlock
-                  name={request?.informationProviderName ?? details.informationProviderName}
-                  position={request?.informationProviderPosition ?? details.informationProviderPosition}
-                />
-              </Box>
-            </Stack>
-          </DocumentPage>
-
-          <DocumentPage pageNo={5}>
-            <Stack spacing={3}>
-              <Typography sx={{ fontWeight: 700 }}>แนบรายละเอียดเกณฑ์มาตรฐาน</Typography>
-              <StandardCriteriaAttachmentTable parameters={documentParameters} />
-            </Stack>
-          </DocumentPage>
-          <DeviceConfigDocumentPages request={request} />
-            </>
-          )}
-        </Stack>
-        )}
+        ) : null}
       </DialogContent>
       {footerContent || footerActions ? (
         <DialogActions sx={{ display: 'block', px: 3, py: 2 }}>
@@ -5447,7 +4518,7 @@ function DocumentsAndImagesSection({ initialDocuments = [], systemType = 'CEMS' 
                   name={`documentImageFile-${item.index}`}
                   label={item.uploadLabel}
                   accept={item.accept}
-                  currentFileName={initialDocuments.find((document) => document?.title === item.title)?.fileName ?? ''}
+                  currentFileName={initialDocuments.find((document) => documentTitleMatchesItem(document, item))?.fileName ?? ''}
                   multiple={!item.singleFile}
                   helperText={item.helperText ?? 'ขนาดไม่เกิน 5 Mb'}
                 />
@@ -6232,12 +5303,12 @@ function RequestFormBottomSheet({
   const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false)
   const [submitPreviewRequest, setSubmitPreviewRequest] = useState(null)
   const [submitPreviewPdfUrl, setSubmitPreviewPdfUrl] = useState('')
-  const [submitPreviewPdfFileName, setSubmitPreviewPdfFileName] = useState('')
   const [submitPreviewPdfLoading, setSubmitPreviewPdfLoading] = useState(false)
   const [submitPreviewPdfError, setSubmitPreviewPdfError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const [submitSuccessOpen, setSubmitSuccessOpen] = useState(false)
+  const submitPreviewSessionRef = useRef(0)
   const [eiaAssessment, setEiaAssessment] = useState(getEiaAssessmentValue(formFactory))
   const officerEmails = initialOfficerNotificationEmails.length ? initialOfficerNotificationEmails : ['']
   const showMonitoringPointSection = formType === 'เพิ่มจุดตรวจวัด' || isAddParameterMode
@@ -6272,7 +5343,6 @@ function RequestFormBottomSheet({
       submitPreviewPdfUrlRef.current = ''
     }
     setSubmitPreviewPdfUrl('')
-    setSubmitPreviewPdfFileName('')
     setSubmitPreviewPdfLoading(false)
     setSubmitPreviewPdfError('')
   }, [])
@@ -6286,6 +5356,10 @@ function RequestFormBottomSheet({
 
   const closeSubmitConfirm = useCallback(() => {
     setSubmitConfirmOpen(false)
+  }, [])
+
+  const handleSubmitConfirmExited = useCallback(() => {
+    submitPreviewSessionRef.current += 1
     setSubmitPreviewRequest(null)
     clearSubmitPreviewPdf()
   }, [clearSubmitPreviewPdf])
@@ -6293,10 +5367,10 @@ function RequestFormBottomSheet({
   const openSubmitConfirm = async () => {
     setSubmitError('')
     clearSubmitPreviewPdf()
+    const previewSessionId = submitPreviewSessionRef.current + 1
+    submitPreviewSessionRef.current = previewSessionId
     const requestBody = buildCurrentRequestBody()
-    const pdfFileName = `${requestBody.requestNo || requestBody.systemType || 'connection-request'}.pdf`
     setSubmitPreviewRequest(requestBody)
-    setSubmitPreviewPdfFileName(pdfFileName)
     setSubmitConfirmOpen(true)
     setSubmitPreviewPdfLoading(true)
 
@@ -6304,12 +5378,20 @@ function RequestFormBottomSheet({
       const pdfBytes = await createConnectionRequestPdf(requestBody)
       const blob = new Blob([pdfBytes], { type: 'application/pdf' })
       const pdfUrl = URL.createObjectURL(blob)
+      if (submitPreviewSessionRef.current !== previewSessionId) {
+        URL.revokeObjectURL(pdfUrl)
+        return
+      }
       submitPreviewPdfUrlRef.current = pdfUrl
       setSubmitPreviewPdfUrl(pdfUrl)
     } catch (error) {
-      setSubmitPreviewPdfError(error instanceof Error ? error.message : 'สร้าง PDF preview ไม่สำเร็จ')
+      if (submitPreviewSessionRef.current === previewSessionId) {
+        setSubmitPreviewPdfError(error instanceof Error ? error.message : 'สร้าง PDF preview ไม่สำเร็จ')
+      }
     } finally {
-      setSubmitPreviewPdfLoading(false)
+      if (submitPreviewSessionRef.current === previewSessionId) {
+        setSubmitPreviewPdfLoading(false)
+      }
     }
   }
   const submitRequest = async () => {
@@ -6542,7 +5624,7 @@ function RequestFormBottomSheet({
                             name={`documentImageFile-${item.index}`}
                             label={item.uploadLabel}
                             accept={item.accept}
-                            currentFileName={initialDocuments.find((document) => document?.title === item.title)?.fileName ?? ''}
+                            currentFileName={initialDocuments.find((document) => documentTitleMatchesItem(document, item))?.fileName ?? ''}
                             multiple={!item.singleFile}
                             helperText={item.helperText ?? 'ขนาดไม่เกิน 5 Mb'}
                           />
@@ -6764,9 +5846,9 @@ function RequestFormBottomSheet({
         title="ยืนยันการส่งแบบฟอร์มคำขอ"
         onClose={closeSubmitConfirm}
         pdfPreviewUrl={submitPreviewPdfUrl}
-        pdfPreviewFileName={submitPreviewPdfFileName}
         pdfPreviewLoading={submitPreviewPdfLoading}
         pdfPreviewError={submitPreviewPdfError}
+        onExited={handleSubmitConfirmExited}
         footerContent={
           <Stack spacing={0.5} sx={{ alignItems: 'center', textAlign: 'center', mb: 1.5 }}>
             <Typography>กรุณาตรวจสอบความถูกต้องของข้อมูลในแบบฟอร์ม</Typography>
@@ -6870,11 +5952,15 @@ function getRequestColumns(
 function ConnectionRequestPage({ userType = '', roleCode = '', accessToken = '', currentUser = null }) {
   const [requestForm, setRequestForm] = useState(null)
   const [requestFormError, setRequestFormError] = useState('')
+  const [requestDocumentOpen, setRequestDocumentOpen] = useState(false)
   const [requestDocument, setRequestDocument] = useState(null)
   const [requestDocumentMode, setRequestDocumentMode] = useState('view')
   const [requestDocumentLoading, setRequestDocumentLoading] = useState(false)
   const [requestDocumentApproving, setRequestDocumentApproving] = useState(false)
   const [requestDocumentError, setRequestDocumentError] = useState('')
+  const [requestDocumentPdfUrl, setRequestDocumentPdfUrl] = useState('')
+  const [requestDocumentPdfLoading, setRequestDocumentPdfLoading] = useState(false)
+  const [requestDocumentPdfError, setRequestDocumentPdfError] = useState('')
   const [approveConfirmOpen, setApproveConfirmOpen] = useState(false)
   const [verifyConnectionConfirmOpen, setVerifyConnectionConfirmOpen] = useState(false)
   const [revisionDialogOpen, setRevisionDialogOpen] = useState(false)
@@ -6963,6 +6049,31 @@ function ConnectionRequestPage({ userType = '', roleCode = '', accessToken = '',
     setRequestTableError('')
     return rows
   }, [fetchRequestTableRows])
+  const clearRequestDocumentPdf = useCallback(() => {
+    setRequestDocumentPdfUrl('')
+    setRequestDocumentPdfLoading(false)
+    setRequestDocumentPdfError('')
+  }, [])
+  const generateRequestDocumentPdf = useCallback(async (request) => {
+    setRequestDocumentPdfLoading(true)
+    setRequestDocumentPdfError('')
+
+    try {
+      const pdfBytes = await createConnectionRequestPdf(request)
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' })
+      const pdfUrl = URL.createObjectURL(blob)
+      setRequestDocumentPdfUrl(pdfUrl)
+    } catch (error) {
+      setRequestDocumentPdfError(error instanceof Error ? error.message : 'สร้าง PDF preview ไม่สำเร็จ')
+    } finally {
+      setRequestDocumentPdfLoading(false)
+    }
+  }, [])
+  useEffect(() => () => {
+    if (requestDocumentPdfUrl) {
+      URL.revokeObjectURL(requestDocumentPdfUrl)
+    }
+  }, [requestDocumentPdfUrl])
   const factoryColumns = useMemo(
     () =>
       getFactoryColumns(
@@ -6974,10 +6085,12 @@ function ConnectionRequestPage({ userType = '', roleCode = '', accessToken = '',
       ),
     [canViewFactoryTable, isOperator, openIntentDialog],
   )
-  const handleOpenRequestDocument = useCallback((row, mode = 'view') => {
+  const handleOpenRequestDocument = useCallback(async (row, mode = 'view') => {
+    clearRequestDocumentPdf()
     setRequestDocument(row)
     setRequestDocumentMode(mode)
     setRequestDocumentError('')
+    setRequestDocumentOpen(true)
 
     if (!row?.id) {
       setRequestDocumentLoading(false)
@@ -6993,28 +6106,28 @@ function ConnectionRequestPage({ userType = '', roleCode = '', accessToken = '',
 
     setRequestDocumentLoading(true)
 
-    fetch(getRequestDetailApiUrl(row.id), {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    })
-      .then(async (result) => {
-        const payload = await result.json().catch(() => null)
+    try {
+      const result = await fetch(getRequestDetailApiUrl(row.id), {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      })
+      const payload = await result.json().catch(() => null)
 
-        if (!result.ok) {
-          throw new Error(payload?.message || `โหลดรายละเอียดคำขอไม่สำเร็จ (${result.status} ${result.statusText})`)
-        }
+      if (!result.ok) {
+        throw new Error(payload?.message || `โหลดรายละเอียดคำขอไม่สำเร็จ (${result.status} ${result.statusText})`)
+      }
 
-        setRequestDocument(mapRequestDetailRow(payload?.data ?? {}, row))
-        setRequestDocumentError('')
-      })
-      .catch((error) => {
-        setRequestDocumentError(error instanceof Error ? error.message : 'โหลดรายละเอียดคำขอไม่สำเร็จ')
-      })
-      .finally(() => {
-        setRequestDocumentLoading(false)
-      })
-  }, [accessToken])
+      const detailedRequest = mapRequestDetailRow(payload?.data ?? {}, row)
+      setRequestDocument(detailedRequest)
+      setRequestDocumentError('')
+      setRequestDocumentLoading(false)
+      await generateRequestDocumentPdf(detailedRequest)
+    } catch (error) {
+      setRequestDocumentError(error instanceof Error ? error.message : 'โหลดรายละเอียดคำขอไม่สำเร็จ')
+      setRequestDocumentLoading(false)
+    }
+  }, [accessToken, clearRequestDocumentPdf, generateRequestDocumentPdf])
   const handleOpenEditRequestForm = useCallback((row) => {
     setRequestFormError('')
 
@@ -7137,6 +6250,21 @@ function ConnectionRequestPage({ userType = '', roleCode = '', accessToken = '',
         setRequestFormError(error instanceof Error ? error.message : 'โหลดข้อมูลสำหรับเพิ่มพารามิเตอร์ไม่สำเร็จ')
       })
   }, [accessToken])
+  const closeRequestDocumentDialog = useCallback(() => {
+    setRequestDocumentOpen(false)
+  }, [])
+  const handleRequestDocumentExited = useCallback(() => {
+    setRequestDocument(null)
+    setRequestDocumentMode('view')
+    setRequestDocumentError('')
+    setRequestDocumentLoading(false)
+    setRequestDocumentApproving(false)
+    setApproveConfirmOpen(false)
+    setVerifyConnectionConfirmOpen(false)
+    setRevisionDialogOpen(false)
+    setRevisionOfficerNote('')
+    clearRequestDocumentPdf()
+  }, [clearRequestDocumentPdf])
   const approveRequestDocument = useCallback(() => {
     if (!requestDocument?.id) {
       setRequestDocumentError('ไม่พบรหัสคำขอสำหรับอนุมัติ')
@@ -7170,7 +6298,7 @@ function ConnectionRequestPage({ userType = '', roleCode = '', accessToken = '',
         }
 
         await loadRequestTableRows()
-        setRequestDocument(null)
+        setRequestDocumentOpen(false)
         setApproveConfirmOpen(false)
       })
       .catch((error) => {
@@ -7219,7 +6347,7 @@ function ConnectionRequestPage({ userType = '', roleCode = '', accessToken = '',
         }
 
         await loadRequestTableRows()
-        setRequestDocument(null)
+        setRequestDocumentOpen(false)
         setVerifyConnectionConfirmOpen(false)
       })
       .catch((error) => {
@@ -7284,7 +6412,7 @@ function ConnectionRequestPage({ userType = '', roleCode = '', accessToken = '',
         }
 
         await loadRequestTableRows()
-        setRequestDocument(null)
+        setRequestDocumentOpen(false)
         setRevisionDialogOpen(false)
         setRevisionOfficerNote('')
       })
@@ -7295,16 +6423,22 @@ function ConnectionRequestPage({ userType = '', roleCode = '', accessToken = '',
         setRequestDocumentApproving(false)
       })
   }, [accessToken, loadRequestTableRows, requestDocument, revisionOfficerNote])
+  const handleOpenRequestDocumentView = useCallback((row) => {
+    void handleOpenRequestDocument(row, 'view')
+  }, [handleOpenRequestDocument])
+  const handleOpenRequestDocumentProcess = useCallback((row) => {
+    void handleOpenRequestDocument(row, 'process')
+  }, [handleOpenRequestDocument])
   const requestColumns = useMemo(
     () =>
       getRequestColumns(
         isOperator,
         setConnectionSettingsContext,
-        (row) => handleOpenRequestDocument(row, 'view'),
-        (row) => handleOpenRequestDocument(row, 'process'),
+        handleOpenRequestDocumentView,
+        handleOpenRequestDocumentProcess,
         handleOpenEditRequestForm,
       ),
-    [handleOpenEditRequestForm, handleOpenRequestDocument, isOperator],
+    [handleOpenEditRequestForm, handleOpenRequestDocumentProcess, handleOpenRequestDocumentView, isOperator],
   )
   useEffect(() => {
     if (!canViewFactoryTable || effectiveSubMenu !== 'factories') {
@@ -7621,22 +6755,16 @@ function ConnectionRequestPage({ userType = '', roleCode = '', accessToken = '',
         onClose={() => setMonitoringPointFactory(null)}
       />
       <RequestDocumentDialog
-        open={Boolean(requestDocument)}
+        open={requestDocumentOpen}
         request={requestDocument}
         mode={requestDocumentMode}
         loading={requestDocumentLoading}
         error={requestDocumentError}
-        onClose={() => {
-          setRequestDocument(null)
-          setRequestDocumentMode('view')
-          setRequestDocumentError('')
-          setRequestDocumentLoading(false)
-          setRequestDocumentApproving(false)
-          setApproveConfirmOpen(false)
-          setVerifyConnectionConfirmOpen(false)
-          setRevisionDialogOpen(false)
-          setRevisionOfficerNote('')
-        }}
+        onClose={closeRequestDocumentDialog}
+        pdfPreviewUrl={requestDocumentPdfUrl}
+        pdfPreviewLoading={requestDocumentPdfLoading}
+        pdfPreviewError={requestDocumentPdfError}
+        onExited={handleRequestDocumentExited}
         approving={requestDocumentApproving}
         onApprove={() => setApproveConfirmOpen(true)}
         onVerifyConnection={() => setVerifyConnectionConfirmOpen(true)}
