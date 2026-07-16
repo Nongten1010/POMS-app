@@ -2574,13 +2574,29 @@ function RequestDocumentDialog({
                       }}
                     >
                       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 0 }}>
-                        {item.type === 'link' ? (
-                          <LinkIcon fontSize="small" color="primary" />
-                        ) : (
-                          <DescriptionIcon fontSize="small" color="action" />
-                        )}
+                        <Box
+                          sx={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: 1.25,
+                            bgcolor: item.type === 'link' ? '#eff6ff' : 'grey.100',
+                            border: '1px solid',
+                            borderColor: item.type === 'link' ? '#bfdbfe' : 'grey.200',
+                            color: item.type === 'link' ? 'primary.main' : 'text.secondary',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                          }}
+                        >
+                          {item.type === 'link' ? (
+                            <LinkIcon fontSize="small" />
+                          ) : (
+                            <DescriptionIcon fontSize="small" />
+                          )}
+                        </Box>
                         <Box sx={{ minWidth: 0 }}>
-                          <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
+                          <Typography variant="body2" noWrap>
                             {item.label}
                           </Typography>
                           <Typography variant="caption" color="text.secondary">

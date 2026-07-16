@@ -1687,7 +1687,12 @@ async function renderDocumentAttachmentList(layout, documents) {
   const expandedDocuments = documents.flatMap(expandDocumentFiles)
   const listItems = expandedDocuments.flatMap((document) => {
     const items = []
+    const linkUrl = normalizeDocumentUrl(document.link)
     const fileName = getDocumentFileName(document)
+
+    if (linkUrl) {
+      items.push(`Link: ${linkUrl}`)
+    }
 
     if (fileName && !isImageDocument(document)) {
       items.push(fileName)
@@ -1697,7 +1702,7 @@ async function renderDocumentAttachmentList(layout, documents) {
   })
 
   listItems.forEach((item, index) => {
-    layout.labelValue(`${index + 1}) `, item, { indent: 30 })
+    layout.labelValue(`${index + 1}) `, item, { indent: 30, leader: false })
   })
 
   const imageDocuments = expandedDocuments.filter(isImageDocument)
