@@ -1643,21 +1643,130 @@ function buildMeasurementPointRequestBody(
   }
 }
 
-function StatusChip({ value }) {
-  if (value === 'รอเชื่อมต่อ') {
-    return <Chip label={value} size="small" variant="outlined" sx={{ ...waitingConnectionSx, fontWeight: 300 }} />
+const statusChipStyles = {
+  blue: {
+    bgcolor: '#2563eb',
+    borderColor: '#2563eb',
+    color: '#ffffff',
+  },
+  orange: {
+    bgcolor: '#f97316',
+    borderColor: '#f97316',
+    color: '#ffffff',
+  },
+  purple: {
+    bgcolor: '#7c3aed',
+    borderColor: '#7c3aed',
+    color: '#ffffff',
+  },
+  green: {
+    bgcolor: '#16a34a',
+    borderColor: '#16a34a',
+    color: '#ffffff',
+  },
+  red: {
+    bgcolor: '#dc2626',
+    borderColor: '#dc2626',
+    color: '#ffffff',
+  },
+}
+
+function getStatusChipStyle(value) {
+  const normalizedValue = String(value ?? '').trim()
+
+  if (['รอพิจารณาแบบ', 'PENDING_DESIGN_REVIEW'].includes(normalizedValue)) {
+    return statusChipStyles.blue
   }
 
-  const color =
-    value === 'เชื่อมต่อแล้ว'
-      ? 'success'
-      : value === 'รอโรงงานแก้ไข'
-        ? 'warning'
-        : value === 'ยืนยันการเชื่อมต่อ'
-          ? 'info'
-          : 'default'
+  if (
+    [
+      'รอโรงงานแก้ไข',
+      'WAITING_FACTORY_REVISION',
+      'รอโรงงานตั้งค่าอุปกรณ์',
+      'WAITING_FACTORY_DEVICE_CONFIG',
+      'WAITING_FACTORY_DEVICE_CONFIGURATION',
+      'WAITING_DEVICE_CONFIG',
+    ].includes(normalizedValue)
+  ) {
+    return statusChipStyles.orange
+  }
 
-  return <Chip label={value} color={color} size="small" variant={color === 'default' ? 'outlined' : 'filled'} />
+  if (
+    [
+      'แก้ไขแล้ว/รอพิจารณาแบบ',
+      'REVISED_PENDING_DESIGN_REVIEW',
+      'รอเชื่อมต่อ',
+      'WAITING_CONNECTION',
+      'ยืนยันการเชื่อมต่อ',
+      'CONNECTION_CONFIRMED',
+    ].includes(normalizedValue)
+  ) {
+    return statusChipStyles.purple
+  }
+
+  if (['เชื่อมต่อแล้ว', 'CONNECTED'].includes(normalizedValue)) {
+    return statusChipStyles.green
+  }
+
+  if (['ยกเลิก', 'CANCELED', 'CANCELLED'].includes(normalizedValue)) {
+    return statusChipStyles.red
+  }
+
+  return null
+}
+
+const requestStatusPriorityGroups = [
+  ['รอพิจารณาแบบ', 'PENDING_DESIGN_REVIEW', 'แก้ไขแล้ว/รอพิจารณาแบบ', 'REVISED_PENDING_DESIGN_REVIEW', 'รอเชื่อมต่อ', 'WAITING_CONNECTION'],
+  ['รอโรงงานแก้ไข', 'WAITING_FACTORY_REVISION'],
+  ['รอโรงงานตั้งค่าอุปกรณ์', 'WAITING_FACTORY_DEVICE_CONFIG', 'WAITING_FACTORY_DEVICE_CONFIGURATION', 'WAITING_DEVICE_CONFIG'],
+  ['เชื่อมต่อแล้ว', 'CONNECTED'],
+  ['ยกเลิก', 'CANCELED', 'CANCELLED'],
+]
+
+function getRequestStatusPriority(row = {}) {
+  const statusValues = [row.status, row.statusLabel, row.statusCode].map((value) => String(value ?? '').trim())
+  const priority = requestStatusPriorityGroups.findIndex((group) => statusValues.some((value) => group.includes(value)))
+
+  return priority === -1 ? requestStatusPriorityGroups.length : priority
+}
+
+function getRequestSubmittedTime(row = {}) {
+  const time = Date.parse(row.submittedAt ?? '')
+  return Number.isNaN(time) ? 0 : time
+}
+
+function sortOfficerRequestRows(rows = []) {
+  return rows
+    .map((row, index) => ({ row, index }))
+    .sort((a, b) => {
+      const priorityDiff = getRequestStatusPriority(a.row) - getRequestStatusPriority(b.row)
+
+      if (priorityDiff !== 0) {
+        return priorityDiff
+      }
+
+      const dateDiff = getRequestSubmittedTime(b.row) - getRequestSubmittedTime(a.row)
+
+      if (dateDiff !== 0) {
+        return dateDiff
+      }
+
+      return a.index - b.index
+    })
+    .map(({ row }) => row)
+}
+
+function StatusChip({ value }) {
+  const chipStyle = getStatusChipStyle(value)
+
+  return (
+    <Chip
+      label={value || '-'}
+      size="small"
+      variant={chipStyle ? 'filled' : 'outlined'}
+      sx={chipStyle ? { ...chipStyle, fontWeight: 500 } : undefined}
+    />
+  )
 }
 
 function MenuButton({ label, options, onSelect, disabled = false }) {
@@ -1746,8 +1855,9 @@ function OperatorFactoryActions({ row, onOpenRequestForm, onOpenMonitoringPoints
   )
 }
 
-function OfficerRequestActions({ row, onOpenRequestDocument, onOpenRequestProcess }) {
-  const isProcessDisabled = [row?.status, row?.statusLabel, row?.statusCode].includes('รอโรงงานแก้ไข')
+function OfficerRequestActions({ row, canProcessRequest = false, onOpenRequestDocument, onOpenRequestProcess }) {
+  const isProcessDisabled = !canProcessRequest
+    || [row?.status, row?.statusLabel, row?.statusCode].includes('รอโรงงานแก้ไข')
     || [row?.status, row?.statusLabel, row?.statusCode].includes('WAITING_FACTORY_REVISION')
     || [row?.status, row?.statusLabel, row?.statusCode].includes('รอเชื่อมต่อ')
     || [row?.status, row?.statusLabel, row?.statusCode].includes('WAITING_CONNECTION')
@@ -2148,6 +2258,8 @@ function mapConnectedPointRequestToDocumentRequest(row = {}) {
       ...row,
       id: row.id ?? row.requestId,
       requestNo: row.requestNo ?? row.request?.requestNo ?? '',
+      submittedAt: row.submittedAt ?? row.request?.submittedAt ?? '',
+      submittedDate: formatDatePartAsThaiDate(row.submittedAt ?? row.request?.submittedAt) || row.submittedDate || row.request?.submittedDate || '',
       type: row.type ?? row.systemType ?? measurementPoints?.[0]?.details?.monitoringPointKind ?? '',
       systemType: row.systemType ?? row.type ?? measurementPoints?.[0]?.details?.monitoringPointKind ?? '',
       status: row.status ?? row.statusLabel ?? '',
@@ -2176,6 +2288,8 @@ function mapConnectedPointRequestToDocumentRequest(row = {}) {
     ...row,
     id: row.requestId ?? row.id,
     requestNo: row.requestNo ?? '',
+    submittedAt: row.submittedAt ?? row.request?.submittedAt ?? '',
+    submittedDate: formatDatePartAsThaiDate(row.submittedAt ?? row.request?.submittedAt) || row.submittedDate || row.request?.submittedDate || '',
     type: row.type ?? '',
     systemType: row.type ?? row.systemType ?? '',
     status: row.status ?? '',
@@ -2283,7 +2397,7 @@ function ConnectedPointRequestsDialog({ open, rows, loading, error, selectedInde
     let isActive = true
     let nextPdfUrl = ''
 
-    createConnectionRequestPdf(selectedRequest)
+    createConnectionRequestPdf(selectedRequest, { showRequestMetaHeader: true })
       .then((pdfBytes) => {
         const blob = new Blob([pdfBytes], { type: 'application/pdf' })
         nextPdfUrl = URL.createObjectURL(blob)
@@ -6186,6 +6300,7 @@ function RequestFormBottomSheet({
 
 function getRequestColumns(
   isOperator,
+  canProcessRequest,
   onOpenConnectionSettings,
   onOpenRequestDocument,
   onOpenRequestProcess,
@@ -6234,6 +6349,7 @@ function getRequestColumns(
         ) : (
           <OfficerRequestActions
             row={params.row}
+            canProcessRequest={canProcessRequest}
             onOpenRequestDocument={onOpenRequestDocument}
             onOpenRequestProcess={onOpenRequestProcess}
           />
@@ -6242,7 +6358,13 @@ function getRequestColumns(
   ]
 }
 
-function ConnectionRequestPage({ userType = '', roleCode = '', accessToken = '', currentUser = null }) {
+function ConnectionRequestPage({
+  userType = '',
+  roleCode = '',
+  accessToken = '',
+  currentUser = null,
+  permissions = {},
+}) {
   const [requestForm, setRequestForm] = useState(null)
   const [requestFormError, setRequestFormError] = useState('')
   const [requestDocumentOpen, setRequestDocumentOpen] = useState(false)
@@ -6268,22 +6390,24 @@ function ConnectionRequestPage({ userType = '', roleCode = '', accessToken = '',
   const [requestTableError, setRequestTableError] = useState('')
   const isOperator = userType === 'operator'
   const isAdmin = roleCode === 'admin'
-  const canViewFactoryTable = isOperator || isAdmin
+  const canApproveConnectionRequests = userType === 'officer' && permissions?.connection?.approve === true
+  const canUseEligibleFactoryRows = isAdmin || canApproveConnectionRequests
+  const canViewFactoryTable = isOperator || canUseEligibleFactoryRows
   const availableSubMenus = useMemo(
     () => {
       if (isOperator) {
         return subMenus.filter((menu) => menu.value !== 'statistics')
       }
 
-      if (isAdmin) {
+      if (canUseEligibleFactoryRows) {
         return subMenus
       }
 
       return subMenus.filter((menu) => menu.value !== 'factories')
     },
-    [isAdmin, isOperator],
+    [canUseEligibleFactoryRows, isOperator],
   )
-  const [selectedSubMenu, setSelectedSubMenu] = useState(() => (userType === 'operator' || roleCode === 'admin' ? 'factories' : 'requests'))
+  const [selectedSubMenu, setSelectedSubMenu] = useState(() => (canViewFactoryTable ? 'factories' : 'requests'))
   const effectiveSubMenu = availableSubMenus.some((menu) => menu.value === selectedSubMenu)
     ? selectedSubMenu
     : availableSubMenus[0]?.value
@@ -6303,7 +6427,7 @@ function ConnectionRequestPage({ userType = '', roleCode = '', accessToken = '',
       return []
     }
 
-    const result = await fetch(isAdmin ? eligibleFactoriesApiUrl : operatorFactoriesApiUrl, {
+    const result = await fetch(canUseEligibleFactoryRows ? eligibleFactoriesApiUrl : operatorFactoriesApiUrl, {
       signal,
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -6316,7 +6440,7 @@ function ConnectionRequestPage({ userType = '', roleCode = '', accessToken = '',
     }
 
     return Array.isArray(payload?.data) ? payload.data.map(mapOperatorFactoryRow) : []
-  }, [accessToken, canViewFactoryTable, isAdmin])
+  }, [accessToken, canUseEligibleFactoryRows, canViewFactoryTable])
   const fetchRequestTableRows = useCallback(async ({ signal } = {}) => {
     if (!accessToken) {
       return []
@@ -6352,7 +6476,7 @@ function ConnectionRequestPage({ userType = '', roleCode = '', accessToken = '',
     setRequestDocumentPdfError('')
 
     try {
-      const pdfBytes = await createConnectionRequestPdf(request)
+      const pdfBytes = await createConnectionRequestPdf(request, { showRequestMetaHeader: true })
       const blob = new Blob([pdfBytes], { type: 'application/pdf' })
       const pdfUrl = URL.createObjectURL(blob)
       setRequestDocumentPdfUrl(pdfUrl)
@@ -6726,12 +6850,19 @@ function ConnectionRequestPage({ userType = '', roleCode = '', accessToken = '',
     () =>
       getRequestColumns(
         isOperator,
+        canApproveConnectionRequests,
         setConnectionSettingsContext,
         handleOpenRequestDocumentView,
         handleOpenRequestDocumentProcess,
         handleOpenEditRequestForm,
       ),
-    [handleOpenEditRequestForm, handleOpenRequestDocumentProcess, handleOpenRequestDocumentView, isOperator],
+    [
+      canApproveConnectionRequests,
+      handleOpenEditRequestForm,
+      handleOpenRequestDocumentProcess,
+      handleOpenRequestDocumentView,
+      isOperator,
+    ],
   )
   useEffect(() => {
     if (!canViewFactoryTable || effectiveSubMenu !== 'factories') {
@@ -6787,6 +6918,10 @@ function ConnectionRequestPage({ userType = '', roleCode = '', accessToken = '',
       controller.abort()
     }
   }, [accessToken, effectiveSubMenu, fetchRequestTableRows])
+  const sortedRequestTableRows = useMemo(
+    () => (userType === 'officer' ? sortOfficerRequestRows(requestTableRows) : requestTableRows),
+    [requestTableRows, userType],
+  )
   const table = useMemo(
     () =>
       effectiveSubMenu === 'factories'
@@ -6798,11 +6933,11 @@ function ConnectionRequestPage({ userType = '', roleCode = '', accessToken = '',
           }
         : {
             title: 'รายการคำขอ',
-            rows: accessToken ? requestTableRows : [],
+            rows: accessToken ? sortedRequestTableRows : [],
             columns: requestColumns,
             loading: false,
           },
-    [accessToken, effectiveSubMenu, factoryColumns, operatorFactoryRows, requestColumns, requestTableRows],
+    [accessToken, effectiveSubMenu, factoryColumns, operatorFactoryRows, requestColumns, sortedRequestTableRows],
   )
   const isStatisticsSubMenu = effectiveSubMenu === 'statistics'
   const effectiveOperatorFactoriesError =

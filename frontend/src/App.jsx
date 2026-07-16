@@ -238,7 +238,13 @@ function App() {
         ) : visibleSelectedMenu === 'permissions' ? (
           <PermissionManagementPage accessToken={accessToken} />
         ) : visibleSelectedMenu === 'connection-request' ? (
-          <ConnectionRequestPage userType={userType} accessToken={accessToken} currentUser={currentUser} />
+          <ConnectionRequestPage
+            userType={userType}
+            roleCode={roleCode}
+            accessToken={accessToken}
+            currentUser={currentUser}
+            permissions={activePermissions}
+          />
         ) : visibleSelectedMenu === 'forms' ? (
           <KwpFormsPage userType={userType} accessToken={accessToken} />
         ) : visibleSelectedMenu === 'bod-cod-report' ? (

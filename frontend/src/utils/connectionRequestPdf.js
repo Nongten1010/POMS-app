@@ -265,6 +265,24 @@ function trimLineEnd(value) {
   return String(value).replace(/\s+$/u, '')
 }
 
+function formatRequestSubmittedDate(value) {
+  if (isBlankValue(value)) {
+    return ''
+  }
+
+  if (typeof value === 'string') {
+    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/)
+    if (match) {
+      const [, year, month, day] = match
+      return `${day}/${month}/${Number(year) + 543}`
+    }
+
+    return value
+  }
+
+  return String(value)
+}
+
 class PdfLayout {
   constructor(pdfDoc, fonts) {
     this.pdfDoc = pdfDoc
@@ -452,6 +470,35 @@ class PdfLayout {
       this.y -= size * 1.55
     })
     this.space(6)
+  }
+
+  requestMetaHeader(request) {
+    const firstPage = this.pages[0]
+    if (!firstPage) {
+      return
+    }
+
+    const size = pdfTextSizes.body
+    const requestNo = displayValue(request?.requestNo)
+    const submittedDate = displayValue(request?.submittedDate || formatRequestSubmittedDate(request?.submittedAt))
+    const leftText = `เลขที่คำขอ : ${requestNo}`
+    const rightText = `วันที่ยื่นคำขอ : ${submittedDate}`
+    const y = this.pageSize[1] - 30
+
+    firstPage.drawText(leftText, {
+      x: this.margin.left,
+      y,
+      size,
+      font: this.fonts.regular,
+      color: colors.black,
+    })
+    firstPage.drawText(rightText, {
+      x: this.width - this.margin.right - this.textWidth(rightText, size),
+      y,
+      size,
+      font: this.fonts.regular,
+      color: colors.black,
+    })
   }
 
   sectionTitle(text) {
@@ -1267,7 +1314,7 @@ class PdfLayout {
     this.y -= 98
   }
 
-  cemsInstrumentSignature(name, position) {
+  cemsInstrumentSignature(name, position, date = formatThaiDate()) {
     const size = pdfTextSizes.body - 2
     const lineHeight = 22
     const signatureX = this.width - this.margin.right - 245
@@ -1353,7 +1400,7 @@ class PdfLayout {
       color: colors.black,
     })
     drawSignatureLine('ตำแหน่ง ', position, yTop - size - (lineHeight * 2), '', { center: true })
-    drawSignatureLine('วันที่ ', formatThaiDate(), yTop - size - (lineHeight * 3), '', { center: true })
+    drawSignatureLine('วันที่ ', date, yTop - size - (lineHeight * 3), '', { center: true })
     this.y -= 92
   }
 
@@ -1778,7 +1825,7 @@ async function renderWpmsDocumentSections(layout, documentsAndImages) {
 }
 
 async function renderWpms(layout, request, context) {
-  const { details, point, instruments, documentParameters } = context
+  const { details, point, instruments, documentParameters, signatureDate } = context
   const treatmentSystemLabel = joinList(normalizeArrayValue(details.treatmentSystem))
   const wpmsTreatmentSystem = firstDefinedValue(details.treatmentSystemOther, treatmentSystemLabel)
 
@@ -1820,6 +1867,7 @@ async function renderWpms(layout, request, context) {
   layout.cemsInstrumentSignature(
     request?.informationProviderName ?? details.informationProviderName,
     request?.informationProviderPosition ?? details.informationProviderPosition,
+    signatureDate,
   )
   renderStandardCriteriaAttachment(layout, documentParameters)
   renderDeviceConfigPages(layout, request)
@@ -1827,7 +1875,7 @@ async function renderWpms(layout, request, context) {
 }
 
 async function renderCems(layout, request, context) {
-  const { details, point, instruments, documentParameters } = context
+  const { details, point, instruments, documentParameters, signatureDate } = context
   const systemName = 'ระบบตรวจวัดคุณภาพอากาศจากปล่องแบบอัตโนมัติอย่างต่อเนื่อง'
   const systemCode = 'Continuous Emission Monitoring Systems : CEMS'
 
@@ -1909,13 +1957,14 @@ async function renderCems(layout, request, context) {
   layout.cemsInstrumentSignature(
     request?.informationProviderName ?? details.informationProviderName,
     request?.informationProviderPosition ?? details.informationProviderPosition,
+    signatureDate,
   )
   renderStandardCriteriaAttachment(layout, documentParameters)
   renderDeviceConfigPages(layout, request)
   await renderCemsDocumentSections(layout, context.documentsAndImages)
 }
 
-export async function createConnectionRequestPdf(request) {
+export async function createConnectionRequestPdf(request, options = {}) {
   if (!request) {
     throw new Error('ไม่พบข้อมูลสำหรับสร้าง PDF')
   }
@@ -1931,12 +1980,21 @@ export async function createConnectionRequestPdf(request) {
     bold: await pdfDoc.embedFont(boldFontBytes),
   }
   const layout = new PdfLayout(pdfDoc, fonts)
-  const context = getRequestContext(request)
+  const context = {
+    ...getRequestContext(request),
+    signatureDate: options.showRequestMetaHeader
+      ? displayValue(request?.submittedDate || formatRequestSubmittedDate(request?.submittedAt))
+      : undefined,
+  }
 
   if (context.isWpms) {
     await renderWpms(layout, request, context)
   } else {
     await renderCems(layout, request, context)
+  }
+
+  if (options.showRequestMetaHeader) {
+    layout.requestMetaHeader(request)
   }
 
   layout.footer()
