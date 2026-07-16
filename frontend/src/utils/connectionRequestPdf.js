@@ -888,7 +888,7 @@ class PdfLayout {
           height: rowHeight,
           borderColor: colors.border,
           borderWidth: 0.7,
-          color: header ? colors.headerFill : colors.white,
+          color: options.headerFill === false || !header ? colors.white : colors.headerFill,
         })
         this.drawTextAt(displayValue(cell), cellX + rowPadding, yTop - rowPadding - fontSize, {
           size: fontSize,
@@ -1607,14 +1607,16 @@ function renderDeviceConfigPages(layout, request) {
 
   const devices = getDeviceConfigDevices(deviceConfigs)
   const channels = getDeviceConfigChannels(deviceConfigs)
+  const standardTableX = layout.margin.left + ((layout.contentWidth - 492) / 2)
+  layout.addPage()
   layout.sectionTitle('การตั้งค่าอุปกรณ์')
-  layout.paragraph('ข้อมูลอุปกรณ์', { bold: true })
+  layout.paragraph('ข้อมูลอุปกรณ์', { indent: 18, bold: true })
   layout.table(
     [
-      { label: 'รหัสจุดตรวจวัด', width: 82 },
-      { label: 'รหัสอุปกรณ์', width: 78 },
-      { label: 'Protocol', width: 74 },
-      { label: 'รายละเอียดการเชื่อมต่อ', width: 270 },
+      { label: 'รหัสจุดตรวจวัด', width: 92 },
+      { label: 'รหัสอุปกรณ์', width: 100 },
+      { label: 'Protocol', width: 80 },
+      { label: 'รายละเอียดการเชื่อมต่อ', width: 220 },
     ],
     devices.map((device) => [
       device.stationId,
@@ -1622,20 +1624,20 @@ function renderDeviceConfigPages(layout, request) {
       device.protocol,
       formatDeviceSettings(device.settings),
     ]),
-    { fontSize: pdfTextSizes.compactTable, minRowHeight: 30, headerHeight: 34 },
+    { x: standardTableX, fontSize: 11, minRowHeight: 30, headerHeight: 34, headerFill: false },
   )
-  layout.paragraph('การเชื่อมต่อพารามิเตอร์', { bold: true })
+  layout.paragraph('การเชื่อมต่อพารามิเตอร์', { indent: 18, bold: true })
   layout.table(
     [
-      { label: 'รหัสอุปกรณ์', width: 68 },
+      { label: 'รหัสอุปกรณ์', width: 58 },
       { label: 'Address ID', width: 54 },
-      { label: 'พารามิเตอร์', width: 74 },
-      { label: 'สถานะ', width: 58 },
+      { label: 'พารามิเตอร์', width: 62 },
+      { label: 'สถานะ', width: 52 },
       { label: 'Min', width: 42 },
       { label: 'Max', width: 42 },
-      { label: 'รูปแบบค่า', width: 74 },
+      { label: 'รูปแบบค่า', width: 70 },
       { label: 'Offset', width: 42 },
-      { label: 'Encoding', width: 90 },
+      { label: 'Encoding', width: 70 },
     ],
     channels.map((channel) => {
       const valueRange = channel.valueRange ?? {}
@@ -1652,7 +1654,7 @@ function renderDeviceConfigPages(layout, request) {
         channel.encoding,
       ]
     }),
-    { fontSize: 10, minRowHeight: 28, headerHeight: 32 },
+    { x: standardTableX, fontSize: 11, minRowHeight: 28, headerHeight: 32, headerFill: false },
   )
 }
 
@@ -1665,10 +1667,6 @@ function getDocumentFileName(document = {}) {
   }
 
   return document.fileName ?? document.originalFileName ?? document.name ?? document.storedFileName ?? ''
-}
-
-function getDocumentFileUrl(document = {}) {
-  return normalizeDocumentUrl(document.filePreviewUrl ?? document.fileUrl ?? document.url ?? document.storageUrl ?? document.path)
 }
 
 function expandDocumentFiles(document = {}) {
@@ -1689,30 +1687,17 @@ async function renderDocumentAttachmentList(layout, documents) {
   const expandedDocuments = documents.flatMap(expandDocumentFiles)
   const listItems = expandedDocuments.flatMap((document) => {
     const items = []
-    const linkUrl = normalizeDocumentUrl(document?.link)
     const fileName = getDocumentFileName(document)
-    const fileUrl = getDocumentFileUrl(document)
-
-    if (linkUrl) {
-      items.push({ text: linkUrl, url: linkUrl, showIcon: true })
-    }
 
     if (fileName && !isImageDocument(document)) {
-      items.push({ text: fileName, url: fileUrl, showIcon: false })
+      items.push(fileName)
     }
 
     return items
   })
 
   listItems.forEach((item, index) => {
-    const text = `${index + 1}) ${item.text}`
-
-    if (item.url) {
-      layout.drawLinkItem(text, item.url, { indent: 30, showIcon: item.showIcon })
-      return
-    }
-
-    layout.labelValue(`${index + 1}) `, item.text, { indent: 30 })
+    layout.labelValue(`${index + 1}) `, item, { indent: 30 })
   })
 
   const imageDocuments = expandedDocuments.filter(isImageDocument)
@@ -1832,8 +1817,8 @@ async function renderWpms(layout, request, context) {
     request?.informationProviderPosition ?? details.informationProviderPosition,
   )
   renderStandardCriteriaAttachment(layout, documentParameters)
-  await renderWpmsDocumentSections(layout, context.documentsAndImages)
   renderDeviceConfigPages(layout, request)
+  await renderWpmsDocumentSections(layout, context.documentsAndImages)
 }
 
 async function renderCems(layout, request, context) {
@@ -1921,8 +1906,8 @@ async function renderCems(layout, request, context) {
     request?.informationProviderPosition ?? details.informationProviderPosition,
   )
   renderStandardCriteriaAttachment(layout, documentParameters)
-  await renderCemsDocumentSections(layout, context.documentsAndImages)
   renderDeviceConfigPages(layout, request)
+  await renderCemsDocumentSections(layout, context.documentsAndImages)
 }
 
 export async function createConnectionRequestPdf(request) {

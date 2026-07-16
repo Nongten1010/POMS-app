@@ -21,6 +21,7 @@ import {
   MenuItem,
   OutlinedInput,
   Paper,
+  Popover,
   Radio,
   RadioGroup,
   Select,
@@ -40,8 +41,10 @@ import {
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import CloseIcon from '@mui/icons-material/Close'
+import DescriptionIcon from '@mui/icons-material/Description'
 import HistoryIcon from '@mui/icons-material/History'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
+import LinkIcon from '@mui/icons-material/Link'
 import UploadFileIcon from '@mui/icons-material/UploadFile'
 import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import { DataGrid } from '@mui/x-data-grid'
@@ -646,6 +649,88 @@ function mergeDocumentItems(...documentGroups) {
 
     return true
   })
+}
+
+function normalizeAttachmentUrl(url) {
+  if (!url) {
+    return ''
+  }
+
+  if (/^(blob:|data:|https?:\/\/)/i.test(url)) {
+    return url
+  }
+
+  return `https://d-poms.diw.go.th${url.startsWith('/') ? url : `/${url}`}`
+}
+
+function getAttachmentFileName(document = {}) {
+  return document.fileName ?? document.originalFileName ?? document.name ?? document.storedFileName ?? ''
+}
+
+function getAttachmentFileUrl(document = {}) {
+  return normalizeAttachmentUrl(document.filePreviewUrl ?? document.fileUrl ?? document.url ?? document.storageUrl ?? document.path)
+}
+
+function isImageAttachment(document = {}) {
+  const fileUrl = getAttachmentFileUrl(document)
+  const link = normalizeAttachmentUrl(document.link)
+  const fileType = document.fileType ?? document.mimeType ?? document.type ?? ''
+  const fileName = getAttachmentFileName(document)
+  const candidate = `${fileUrl || link} ${fileName}`
+
+  return fileType.startsWith('image/') || /\.(png|jpe?g|webp)(\?.*)?$/i.test(candidate)
+}
+
+function expandAttachmentFiles(document = {}) {
+  if (!Array.isArray(document.files) || !document.files.length) {
+    return [document]
+  }
+
+  return document.files.map((file, index) => ({
+    ...document,
+    ...file,
+    title: document.title,
+    description: document.description,
+    link: index === 0 ? document.link : '',
+  }))
+}
+
+function getRequestAttachmentGroups(request = {}) {
+  const firstPoint = Array.isArray(request?.measurementPoints) ? request.measurementPoints[0] : null
+  const documents = mergeDocumentItems(
+    getDocumentItemsFromSource(firstPoint),
+    getDocumentItemsFromSource(request),
+    getDocumentItemsFromSource(request?.request),
+  )
+  const groups = new Map()
+
+  documents.flatMap(expandAttachmentFiles).forEach((document) => {
+    const title = document.title || 'เอกสารแนบ'
+    const linkUrl = normalizeAttachmentUrl(document.link)
+    const fileName = getAttachmentFileName(document)
+    const fileUrl = getAttachmentFileUrl(document)
+    const items = []
+
+    if (linkUrl) {
+      items.push({ type: 'link', label: linkUrl, url: linkUrl })
+    }
+
+    if (fileName && !isImageAttachment(document)) {
+      items.push({ type: 'file', label: fileName, url: fileUrl })
+    }
+
+    if (!items.length) {
+      return
+    }
+
+    if (!groups.has(title)) {
+      groups.set(title, [])
+    }
+
+    groups.get(title).push(...items)
+  })
+
+  return Array.from(groups.entries()).map(([title, items]) => ({ title, items }))
 }
 
 const appBarHeight = {
@@ -2273,100 +2358,83 @@ function isConnectionConfirmed(request) {
     || [request?.status, request?.statusLabel, request?.statusCode].includes('CONNECTION_CONFIRMED')
 }
 
-function StatusHistoryDialog({ open, history = [], onClose }) {
+function StatusHistoryContent({ history = [] }) {
   const items = useMemo(() => getStatusHistoryItems(history), [history])
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 2,
-        }}
-      >
-        ประวัติสถานะ
-        <IconButton aria-label="ปิด" onClick={onClose} size="small">
-          <CloseIcon />
-        </IconButton>
-      </DialogTitle>
-      <DialogContent dividers>
-        {items.length ? (
-          <Stack spacing={0}>
-            {items.map((item, index) => {
-              const nextItem = items[index + 1]
-              const duration = formatStatusHistoryDuration(
-                item.__date,
-                nextItem?.__date,
-                item.durationLabel ?? item.durationText ?? item.duration,
-              )
-              const note = getStatusHistoryNote(item)
-              const title = `${getStatusHistoryLabel(item)}${duration ? ` (${duration})` : ''}`
+    items.length ? (
+      <Stack spacing={0}>
+        {items.map((item, index) => {
+          const nextItem = items[index + 1]
+          const duration = formatStatusHistoryDuration(
+            item.__date,
+            nextItem?.__date,
+            item.durationLabel ?? item.durationText ?? item.duration,
+          )
+          const note = getStatusHistoryNote(item)
+          const title = `${getStatusHistoryLabel(item)}${duration ? ` (${duration})` : ''}`
 
-              return (
+          return (
+            <Box
+              key={item.id ?? `${item.status ?? 'status'}-${index}`}
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: '24px minmax(0, 1fr)',
+                columnGap: 1.5,
+              }}
+            >
+              <Box sx={{ position: 'relative', display: 'flex', justifyContent: 'center' }}>
                 <Box
-                  key={item.id ?? `${item.status ?? 'status'}-${index}`}
                   sx={{
-                    display: 'grid',
-                    gridTemplateColumns: '24px minmax(0, 1fr)',
-                    columnGap: 1.5,
+                    width: 12,
+                    height: 12,
+                    mt: 0.75,
+                    borderRadius: '50%',
+                    bgcolor: 'primary.main',
+                    border: 2,
+                    borderColor: 'background.paper',
+                    boxShadow: '0 0 0 1px',
+                    color: 'primary.main',
+                    zIndex: 1,
                   }}
-                >
-                  <Box sx={{ position: 'relative', display: 'flex', justifyContent: 'center' }}>
-                    <Box
-                      sx={{
-                        width: 12,
-                        height: 12,
-                        mt: 0.75,
-                        borderRadius: '50%',
-                        bgcolor: 'primary.main',
-                        border: 2,
-                        borderColor: 'background.paper',
-                        boxShadow: '0 0 0 1px',
-                        color: 'primary.main',
-                        zIndex: 1,
-                      }}
-                    />
-                    {index < items.length - 1 ? (
-                      <Box
-                        sx={{
-                          position: 'absolute',
-                          top: 22,
-                          bottom: 0,
-                          width: 2,
-                          bgcolor: 'divider',
-                        }}
-                      />
-                    ) : null}
-                  </Box>
-                  <Box sx={{ pb: index < items.length - 1 ? 2.5 : 0 }}>
-                    <Typography sx={{ fontWeight: 600 }}>{title}</Typography>
-                    {note ? (
-                      <Typography variant="body2" sx={{ mt: 0.75, whiteSpace: 'pre-line' }}>
-                        หมายเหตุ: {note}
-                      </Typography>
-                    ) : null}
-                    <Stack spacing={0.25} sx={{ mt: note ? 1.5 : 0.75 }}>
-                      <Typography variant="body2" color="text.secondary">
-                        วันที่: {formatStatusHistoryDate(item.__date)}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        ผู้บันทึก: {displayValue(getStatusHistoryRecorder(item), '-')}
-                      </Typography>
-                    </Stack>
-                  </Box>
-                </Box>
-              )
-            })}
-          </Stack>
-        ) : (
-          <Typography variant="body2" color="text.secondary">
-            ไม่มีประวัติสถานะ
-          </Typography>
-        )}
-      </DialogContent>
-    </Dialog>
+                />
+                {index < items.length - 1 ? (
+                  <Box
+                    sx={{
+                      position: 'absolute',
+                      top: 22,
+                      bottom: 0,
+                      width: 2,
+                      bgcolor: 'divider',
+                    }}
+                  />
+                ) : null}
+              </Box>
+              <Box sx={{ pb: index < items.length - 1 ? 2.5 : 0 }}>
+                <Typography sx={{ fontWeight: 600 }}>{title}</Typography>
+                {note ? (
+                  <Typography variant="body2" sx={{ mt: 0.75, whiteSpace: 'pre-line' }}>
+                    หมายเหตุ: {note}
+                  </Typography>
+                ) : null}
+                <Stack spacing={0.25} sx={{ mt: note ? 1.5 : 0.75 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    วันที่: {formatStatusHistoryDate(item.__date)}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    ผู้บันทึก: {displayValue(getStatusHistoryRecorder(item), '-')}
+                  </Typography>
+                </Stack>
+              </Box>
+            </Box>
+          )
+        })}
+      </Stack>
+    ) : (
+      <Typography variant="body2" color="text.secondary">
+        ไม่มีประวัติสถานะ
+      </Typography>
+    )
   )
 }
 
@@ -2392,8 +2460,13 @@ function RequestDocumentDialog({
 }) {
   const canReview = mode === 'process' && isPendingDesignReview(request)
   const canVerifyConnection = mode === 'process' && isConnectionConfirmed(request)
-  const [statusHistoryOpen, setStatusHistoryOpen] = useState(false)
+  const [statusHistoryAnchorEl, setStatusHistoryAnchorEl] = useState(null)
+  const [attachmentAnchorEl, setAttachmentAnchorEl] = useState(null)
   const statusHistory = Array.isArray(request?.statusHistory) ? request.statusHistory : []
+  const attachmentGroups = useMemo(() => getRequestAttachmentGroups(request), [request])
+  const attachmentCount = attachmentGroups.reduce((sum, group) => sum + group.items.length, 0)
+  const isAttachmentPopoverOpen = Boolean(attachmentAnchorEl)
+  const isStatusHistoryPopoverOpen = Boolean(statusHistoryAnchorEl)
   const isReadonlyViewDialog = mode === 'view' && !footerContent && !footerActions
   const hasPdfPreviewContent = Boolean(pdfPreviewUrl || pdfPreviewLoading || pdfPreviewError)
   const isRevisedPendingReview = mode === 'process'
@@ -2428,9 +2501,18 @@ function RequestDocumentDialog({
             <Button
               variant="outlined"
               size="small"
+              startIcon={<DescriptionIcon />}
+              disabled={loading || !request || attachmentCount === 0}
+              onClick={(event) => setAttachmentAnchorEl(event.currentTarget)}
+            >
+              เอกสารแนบ{attachmentCount ? ` (${attachmentCount})` : ''}
+            </Button>
+            <Button
+              variant="outlined"
+              size="small"
               startIcon={<HistoryIcon />}
               disabled={loading || !request}
-              onClick={() => setStatusHistoryOpen(true)}
+              onClick={(event) => setStatusHistoryAnchorEl(event.currentTarget)}
             >
               ประวัติสถานะ
             </Button>
@@ -2441,6 +2523,105 @@ function RequestDocumentDialog({
             ) : null}
           </Stack>
         </DialogTitle>
+      <Popover
+        open={isAttachmentPopoverOpen}
+        anchorEl={attachmentAnchorEl}
+        onClose={() => setAttachmentAnchorEl(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+        slotProps={{
+          paper: {
+            sx: {
+              width: 380,
+              maxWidth: 'calc(100vw - 32px)',
+              maxHeight: 520,
+              overflowY: 'auto',
+              p: 2,
+              borderRadius: 2,
+              boxShadow: '0 18px 48px rgba(15, 23, 42, 0.18)',
+            },
+          },
+        }}
+      >
+        <Stack spacing={1.5}>
+          {attachmentGroups.length ? (
+            attachmentGroups.map((group) => (
+              <Box key={group.title}>
+                <Typography variant="subtitle2" sx={{ mb: 0.75, fontWeight: 700 }}>
+                  {group.title}
+                </Typography>
+                <Stack spacing={0.5}>
+                  {group.items.map((item, index) => (
+                    <Button
+                      key={`${group.title}-${item.type}-${item.label}-${index}`}
+                      variant="text"
+                      disabled={!item.url}
+                      onClick={() => {
+                        if (item.url) {
+                          window.open(item.url, '_blank', 'noopener,noreferrer')
+                          setAttachmentAnchorEl(null)
+                        }
+                      }}
+                      sx={{
+                        justifyContent: 'flex-start',
+                        minHeight: 44,
+                        px: 1,
+                        py: 0.75,
+                        color: 'text.primary',
+                        textAlign: 'left',
+                        textTransform: 'none',
+                        borderRadius: 1.5,
+                      }}
+                    >
+                      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 0 }}>
+                        {item.type === 'link' ? (
+                          <LinkIcon fontSize="small" color="primary" />
+                        ) : (
+                          <DescriptionIcon fontSize="small" color="action" />
+                        )}
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
+                            {item.label}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {item.type === 'link' ? 'Link' : 'File'}
+                          </Typography>
+                        </Box>
+                      </Stack>
+                    </Button>
+                  ))}
+                </Stack>
+              </Box>
+            ))
+          ) : (
+            <Typography variant="body2" color="text.secondary">
+              ไม่มีเอกสารแนบ
+            </Typography>
+          )}
+        </Stack>
+      </Popover>
+      <Popover
+        open={isStatusHistoryPopoverOpen}
+        anchorEl={statusHistoryAnchorEl}
+        onClose={() => setStatusHistoryAnchorEl(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+        slotProps={{
+          paper: {
+            sx: {
+              width: 420,
+              maxWidth: 'calc(100vw - 32px)',
+              maxHeight: 520,
+              overflowY: 'auto',
+              p: 2,
+              borderRadius: 2,
+              boxShadow: '0 18px 48px rgba(15, 23, 42, 0.18)',
+            },
+          },
+        }}
+      >
+        <StatusHistoryContent history={statusHistory} />
+      </Popover>
       <DialogContent
         dividers
         sx={{
@@ -2545,11 +2726,6 @@ function RequestDocumentDialog({
         </DialogActions>
       )}
       </Dialog>
-      <StatusHistoryDialog
-        open={statusHistoryOpen}
-        history={statusHistory}
-        onClose={() => setStatusHistoryOpen(false)}
-      />
     </Fragment>
   )
 }
