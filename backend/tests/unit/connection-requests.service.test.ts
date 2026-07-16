@@ -234,7 +234,7 @@ describe('connectionRequestsService', () => {
     connectionRequestsService.setClockForTests(() => new Date('2026-06-08T10:00:00.000Z'));
     const request = requestDto({
       status: CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
-      statusLabel: 'รอเชื่อมต่อ',
+      statusLabel: 'รอโรงงานตั้งค่าอุปกรณ์',
       requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT,
       requestTypeLabel: 'เพิ่มจุดตรวจวัด',
       connectionDueAt: dueAt,
@@ -254,7 +254,7 @@ describe('connectionRequestsService', () => {
         {
           id: 1,
           status: CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
-          statusLabel: 'รอเชื่อมต่อ',
+          statusLabel: 'รอโรงงานตั้งค่าอุปกรณ์',
           note: null,
           changedById: 7,
           changedBy: 'นายสมชาย เจ้าหน้าที่',
@@ -287,10 +287,10 @@ describe('connectionRequestsService', () => {
       monitoringPointCode: 'STACK-A',
       codeIssuedDate: '28/05/2569',
       form: 'เพิ่มจุดตรวจวัด',
-      status: 'รอเชื่อมต่อ',
+      status: 'รอโรงงานตั้งค่าอุปกรณ์',
       connectionDueAt: dueAt,
       waitingConnectionDaysRemaining: 18,
-      waitingConnectionText: 'รอเชื่อมต่อ 18 วัน',
+      waitingConnectionText: 'รอโรงงานตั้งค่าอุปกรณ์ 18 วัน',
     });
     expect(result.data[1]).toMatchObject({
       status: 'เชื่อมต่อแล้ว',

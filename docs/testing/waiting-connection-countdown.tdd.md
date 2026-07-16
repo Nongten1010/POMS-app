@@ -4,7 +4,7 @@
 
 No separate plan file was provided. The user requested that
 `GET /api/v1/cems-wpms-requests/table-rows` include a display-ready waiting
-connection countdown such as `รอเชื่อมต่อ 30 วัน` or `รอเชื่อมต่อ 18 วัน`.
+connection countdown such as `รอโรงงานตั้งค่าอุปกรณ์ 30 วัน` or `รอโรงงานตั้งค่าอุปกรณ์ 18 วัน`.
 
 ## User Journey
 
@@ -22,7 +22,7 @@ that the UI can show a clear label without changing the existing status field.
 
 | # | What is guaranteed | Test file or command | Test type | Result | Evidence |
 | --- | --- | --- | --- | --- | --- |
-| 1 | A waiting connection row with `connectionDueAt = 2026-06-26T10:00:00.000Z` and server clock `2026-06-08T10:00:00.000Z` returns `waitingConnectionDaysRemaining = 18` and `waitingConnectionText = รอเชื่อมต่อ 18 วัน`. | `backend/tests/unit/connection-requests.service.test.ts` | Unit | PASS | `npm test -- --runTestsByPath tests/unit/connection-requests.service.test.ts --runInBand` |
+| 1 | A waiting connection row with `connectionDueAt = 2026-06-26T10:00:00.000Z` and server clock `2026-06-08T10:00:00.000Z` returns `waitingConnectionDaysRemaining = 18` and `waitingConnectionText = รอโรงงานตั้งค่าอุปกรณ์ 18 วัน`. | `backend/tests/unit/connection-requests.service.test.ts` | Unit | PASS | `npm test -- --runTestsByPath tests/unit/connection-requests.service.test.ts --runInBand` |
 | 2 | A non-waiting row does not expose countdown fields even if `connectionDueAt` exists on the request DTO. | `backend/tests/unit/connection-requests.service.test.ts` | Unit | PASS | `npm test -- --runTestsByPath tests/unit/connection-requests.service.test.ts --runInBand` |
 | 3 | Route-level mocks that use `ConnectionRequestTableRowDTO` include the new nullable fields for non-waiting rows. | `backend/tests/unit/connected-measurement-points.route.test.ts` | Unit | PASS | `npm test -- --runTestsByPath tests/unit/connected-measurement-points.route.test.ts --runInBand` |
 | 4 | The backend unit suite still passes with coverage enabled after the response contract update. | `backend` | Coverage | PASS | `npm test -- --coverage --runInBand` passed with `35 passed, 35 total` suites and `326 passed, 326 total` tests. |

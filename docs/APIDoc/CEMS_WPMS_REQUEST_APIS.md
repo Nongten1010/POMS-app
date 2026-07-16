@@ -1575,12 +1575,12 @@ Response เป็น shape เดียวกับข้อ 4 แต่ `conne
 | --- | --- | --- | --- | --- | --- |
 | เพิ่มแบบฟอร์ม เพิ่มจุดตรวจวัด | ผู้ประกอบการ | `POST /api/v1/cems-wpms-requests/measurement-points` | ไม่มี action | `PENDING_DESIGN_REVIEW` | รอพิจารณาแบบ |
 | เพิ่มแบบฟอร์ม เพิ่มพารามิเตอร์ | ผู้ประกอบการ | `POST /api/v1/cems-wpms-requests/parameters` | ไม่มี action | `PENDING_DESIGN_REVIEW` | รอพิจารณาแบบ |
-| อนุมัติแบบ | เจ้าหน้าที่ | `POST /api/v1/cems-wpms-requests/:id/status` | `{ "action": "APPROVE_FORM" }` | `WAITING_CONNECTION` | รอเชื่อมต่อ |
+| อนุมัติแบบ | เจ้าหน้าที่ | `POST /api/v1/cems-wpms-requests/:id/status` | `{ "action": "APPROVE_FORM" }` | `WAITING_CONNECTION` | รอโรงงานตั้งค่าอุปกรณ์ |
 | ส่งกลับแก้ไข | เจ้าหน้าที่ | `POST /api/v1/cems-wpms-requests/:id/status` | `{ "action": "REQUEST_REVISION", "revisionReason": "..." }` | `WAITING_FACTORY_REVISION` | รอโรงงานแก้ไข |
 | แก้ไขแล้วส่งใหม่ | ผู้ประกอบการ | `PUT /api/v1/cems-wpms-requests/:id/form` | ไม่มี action | `REVISED_PENDING_DESIGN_REVIEW` | แก้ไขแล้ว/รอพิจารณาแบบ |
-| บันทึกข้อมูลการเชื่อมต่อ | ผู้ประกอบการ | `POST /api/v1/cems-wpms-requests/:id/confirm-connection` | `{ "action": "SAVE", "note": "บันทึก config ชั่วคราว" }` | `WAITING_CONNECTION` | รอเชื่อมต่อ |
-| ยืนยันการเชื่อมต่อ | ผู้ประกอบการ | `POST /api/v1/cems-wpms-requests/:id/confirm-connection` | `{ "action": "CONFIRM", "note": "ตั้งค่าอุปกรณ์และทดสอบแล้ว" }` | `CONNECTION_CONFIRMED` | ยืนยันการเชื่อมต่อ |
-| ส่งกลับแก้ config | เจ้าหน้าที่ | `POST /api/v1/cems-wpms-requests/:id/status` | `{ "action": "RETURN_TO_WAITING_CONNECTION", "revisionReason": "..." }` | `WAITING_CONNECTION` หรือ `CANCELED` ถ้า deadline เดิมหมดแล้ว | รอเชื่อมต่อ / ยกเลิก |
+| บันทึกข้อมูลการเชื่อมต่อ | ผู้ประกอบการ | `POST /api/v1/cems-wpms-requests/:id/confirm-connection` | `{ "action": "SAVE", "note": "บันทึก config ชั่วคราว" }` | `WAITING_CONNECTION` | รอโรงงานตั้งค่าอุปกรณ์ |
+| ยืนยันการเชื่อมต่อ | ผู้ประกอบการ | `POST /api/v1/cems-wpms-requests/:id/confirm-connection` | `{ "action": "CONFIRM", "note": "ตั้งค่าอุปกรณ์และทดสอบแล้ว" }` | `CONNECTION_CONFIRMED` | รอเชื่อมต่อ |
+| ส่งกลับแก้ config | เจ้าหน้าที่ | `POST /api/v1/cems-wpms-requests/:id/status` | `{ "action": "RETURN_TO_WAITING_CONNECTION", "revisionReason": "..." }` | `WAITING_CONNECTION` หรือ `CANCELED` ถ้า deadline เดิมหมดแล้ว | รอโรงงานตั้งค่าอุปกรณ์ / ยกเลิก |
 | ตรวจสอบแล้วกดยืนยัน | เจ้าหน้าที่ | `POST /api/v1/cems-wpms-requests/:id/verify-connection` | `{ "note": "ตรวจสอบแล้ว" }` | `CONNECTED` | เชื่อมต่อแล้ว |
 | ยกเลิกคำขอ | ระบบ/เจ้าหน้าที่ | ระบบภายใน auto-cancel จาก `connectionDueAt`; ยังไม่มี public endpoint เฉพาะในเอกสารนี้ | - | `CANCELED` | ยกเลิก |
 
@@ -1642,7 +1642,7 @@ Response:
     "id": 1,
     "requestNo": "CEMS-69-00001",
     "status": "WAITING_CONNECTION",
-    "statusLabel": "รอเชื่อมต่อ",
+    "statusLabel": "รอโรงงานตั้งค่าอุปกรณ์",
     "officerNote": "แบบถูกต้อง",
     "measurementPoints": [
       {
@@ -1711,9 +1711,9 @@ Response:
       "codeIssuedDate": "30/05/2569",
       "connectionDueAt": "2026-06-29T10:05:00.000Z",
       "waitingConnectionDaysRemaining": 18,
-      "waitingConnectionText": "รอเชื่อมต่อ 18 วัน",
+      "waitingConnectionText": "รอโรงงานตั้งค่าอุปกรณ์ 18 วัน",
       "form": "เพิ่มจุดตรวจวัด",
-      "status": "รอเชื่อมต่อ",
+      "status": "รอโรงงานตั้งค่าอุปกรณ์",
       "statusCode": "WAITING_CONNECTION",
       "requestType": "ADD_MEASUREMENT_POINT"
     }
@@ -1801,7 +1801,7 @@ Response:
     "factoryName": "บริษัท ทดสอบ จำกัด",
     "systemType": "CEMS",
     "status": "WAITING_CONNECTION",
-    "statusLabel": "รอเชื่อมต่อ",
+    "statusLabel": "รอโรงงานตั้งค่าอุปกรณ์",
     "factory": {
       "id": 1,
       "factoryId": "factory-001",
@@ -2836,7 +2836,7 @@ Data dictionary response row:
 | `monitoringPointCode` | string|null | pointCode หลังอนุมัติ |
 | `connectionDueAt` | string|null | deadline การเชื่อมต่อ เฉพาะรายการที่ยังอยู่ `WAITING_CONNECTION`; status อื่นคืน `null` |
 | `waitingConnectionDaysRemaining` | number|null | จำนวนวันคงเหลือก่อนครบกำหนดเชื่อมต่อ เฉพาะ `WAITING_CONNECTION`; status อื่นคืน `null` |
-| `waitingConnectionText` | string|null | ข้อความพร้อมแสดงผล เช่น `รอเชื่อมต่อ 18 วัน`; status อื่นคืน `null` |
+| `waitingConnectionText` | string|null | ข้อความพร้อมแสดงผล เช่น `รอโรงงานตั้งค่าอุปกรณ์ 18 วัน`; status อื่นคืน `null` |
 | `form` | string | ชื่อฟอร์ม |
 | `status` | string | label สถานะ |
 | `statusCode` | string | code สถานะ |

@@ -19,7 +19,7 @@ describe('connection request status route', () => {
     mockedConnectionRequestsService.changeStatus.mockResolvedValue({
       id: 1,
       status: CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
-      statusLabel: 'รอเชื่อมต่อ',
+      statusLabel: 'รอโรงงานตั้งค่าอุปกรณ์',
       revisionReason: 'ตั้งค่าอุปกรณ์ยังไม่ถูกต้อง',
       officerNote: 'แก้ mapping channel แล้วส่งยืนยันอีกครั้ง',
       connectionDueAt: '2026-06-26T10:00:00.000Z',

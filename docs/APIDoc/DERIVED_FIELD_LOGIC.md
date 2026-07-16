@@ -1090,16 +1090,18 @@ Logic:
 - These fields are populated only when the row status is `WAITING_CONNECTION` and `connection_due_at` is a valid timestamp.
 - `connectionDueAt` returns the ISO timestamp from `connection_due_at`.
 - `waitingConnectionDaysRemaining` is `ceil((connectionDueAt - now) / 1 day)`, clamped to `0` when the due date has already passed.
-- `waitingConnectionText` formats the value as `รอเชื่อมต่อ <N> วัน`.
+- `waitingConnectionText` formats the value from the `WAITING_CONNECTION` display label as `รอโรงงานตั้งค่าอุปกรณ์ <N> วัน`.
 - Rows in any other status return `null` for all three fields.
 
 Reason:
 
-- The request table needs a direct display label such as `รอเชื่อมต่อ 18 วัน` without changing the existing `status` / `statusCode` contract.
+- The request table needs a direct display label such as `รอโรงงานตั้งค่าอุปกรณ์ 18 วัน` without changing the existing `status` / `statusCode` contract.
+- The machine status remains `WAITING_CONNECTION`; only its Thai display label changes.
 
 Risk:
 
 - The countdown is computed from the server clock at request time. Values can change between requests and may differ from a browser-side clock near day boundaries.
+- Clients that compare Thai labels instead of `statusCode` must migrate to the new labels; workflow decisions should use the unchanged machine status codes.
 
 ## KWP Form Submission Detail Attachment URLs
 

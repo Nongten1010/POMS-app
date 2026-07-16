@@ -19,6 +19,7 @@ import type { ParameterEvaluationOptions } from '../parameter-values/parameter-v
 import { connectionRequestsRepository } from './connection-requests.repository';
 import {
   CONNECTION_REQUEST_STATUS,
+  CONNECTION_REQUEST_STATUS_LABELS,
   CONNECTION_REQUEST_TYPE,
   type AddParameterFormDetailDTO,
   type AddMeasurementPointRequestInput,
@@ -1171,7 +1172,7 @@ function toWaitingConnectionCountdown(request: ConnectionRequestDTO): {
   return {
     connectionDueAt: request.connectionDueAt,
     daysRemaining,
-    text: `รอเชื่อมต่อ ${daysRemaining} วัน`,
+    text: `${CONNECTION_REQUEST_STATUS_LABELS.WAITING_CONNECTION} ${daysRemaining} วัน`,
   };
 }
 
