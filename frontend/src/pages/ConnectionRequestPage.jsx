@@ -1674,7 +1674,16 @@ const statusChipStyles = {
 function getStatusChipStyle(value) {
   const normalizedValue = String(value ?? '').trim()
 
-  if (['รอพิจารณาแบบ', 'PENDING_DESIGN_REVIEW'].includes(normalizedValue)) {
+  if (
+    [
+      'รอพิจารณาแบบ',
+      'PENDING_DESIGN_REVIEW',
+      'แก้ไขแล้ว/รอพิจารณาแบบ',
+      'REVISED_PENDING_DESIGN_REVIEW',
+      'รอเชื่อมต่อ',
+      'WAITING_CONNECTION',
+    ].includes(normalizedValue)
+  ) {
     return statusChipStyles.blue
   }
 
@@ -1693,10 +1702,6 @@ function getStatusChipStyle(value) {
 
   if (
     [
-      'แก้ไขแล้ว/รอพิจารณาแบบ',
-      'REVISED_PENDING_DESIGN_REVIEW',
-      'รอเชื่อมต่อ',
-      'WAITING_CONNECTION',
       'ยืนยันการเชื่อมต่อ',
       'CONNECTION_CONFIRMED',
     ].includes(normalizedValue)
@@ -1716,18 +1721,33 @@ function getStatusChipStyle(value) {
 }
 
 const requestStatusPriorityGroups = [
-  ['รอพิจารณาแบบ', 'PENDING_DESIGN_REVIEW', 'แก้ไขแล้ว/รอพิจารณาแบบ', 'REVISED_PENDING_DESIGN_REVIEW', 'รอเชื่อมต่อ', 'WAITING_CONNECTION'],
-  ['รอโรงงานแก้ไข', 'WAITING_FACTORY_REVISION'],
-  ['รอโรงงานตั้งค่าอุปกรณ์', 'WAITING_FACTORY_DEVICE_CONFIG', 'WAITING_FACTORY_DEVICE_CONFIGURATION', 'WAITING_DEVICE_CONFIG'],
-  ['เชื่อมต่อแล้ว', 'CONNECTED'],
-  ['ยกเลิก', 'CANCELED', 'CANCELLED'],
+  ['รอพิจารณาแบบ', 'แก้ไขแล้ว/รอพิจารณาแบบ', 'รอเชื่อมต่อ'],
+  ['รอโรงงานแก้ไข'],
+  ['รอโรงงานตั้งค่าอุปกรณ์'],
+  ['เชื่อมต่อแล้ว'],
+  ['ยกเลิก'],
+]
+
+const requestStatusCodePriorityGroups = [
+  ['PENDING_DESIGN_REVIEW', 'REVISED_PENDING_DESIGN_REVIEW', 'WAITING_CONNECTION'],
+  ['WAITING_FACTORY_REVISION'],
+  ['WAITING_FACTORY_DEVICE_CONFIG', 'WAITING_FACTORY_DEVICE_CONFIGURATION', 'WAITING_DEVICE_CONFIG'],
+  ['CONNECTED'],
+  ['CANCELED', 'CANCELLED'],
 ]
 
 function getRequestStatusPriority(row = {}) {
-  const statusValues = [row.status, row.statusLabel, row.statusCode].map((value) => String(value ?? '').trim())
-  const priority = requestStatusPriorityGroups.findIndex((group) => statusValues.some((value) => group.includes(value)))
+  const statusLabels = [row.status, row.statusLabel].map((value) => String(value ?? '').trim())
+  const labelPriority = requestStatusPriorityGroups.findIndex((group) => statusLabels.some((value) => group.includes(value)))
 
-  return priority === -1 ? requestStatusPriorityGroups.length : priority
+  if (labelPriority !== -1) {
+    return labelPriority
+  }
+
+  const statusCode = String(row.statusCode ?? '').trim()
+  const codePriority = requestStatusCodePriorityGroups.findIndex((group) => group.includes(statusCode))
+
+  return codePriority === -1 ? requestStatusPriorityGroups.length : codePriority
 }
 
 function getRequestSubmittedTime(row = {}) {
@@ -6385,8 +6405,10 @@ function ConnectionRequestPage({
   const [intentRequestFactory, setIntentRequestFactory] = useState(null)
   const [intentReason, setIntentReason] = useState('')
   const [operatorFactoryRows, setOperatorFactoryRows] = useState([])
+  const [operatorFactoriesLoading, setOperatorFactoriesLoading] = useState(false)
   const [operatorFactoriesError, setOperatorFactoriesError] = useState('')
   const [requestTableRows, setRequestTableRows] = useState([])
+  const [requestTableLoading, setRequestTableLoading] = useState(false)
   const [requestTableError, setRequestTableError] = useState('')
   const isOperator = userType === 'operator'
   const isAdmin = roleCode === 'admin'
@@ -6461,10 +6483,15 @@ function ConnectionRequestPage({
     return Array.isArray(payload?.data) ? payload.data.map(mapRequestTableRow) : []
   }, [accessToken])
   const loadRequestTableRows = useCallback(async (options) => {
-    const rows = await fetchRequestTableRows(options)
-    setRequestTableRows(rows)
-    setRequestTableError('')
-    return rows
+    setRequestTableLoading(true)
+    try {
+      const rows = await fetchRequestTableRows(options)
+      setRequestTableRows(rows)
+      setRequestTableError('')
+      return rows
+    } finally {
+      setRequestTableLoading(false)
+    }
   }, [fetchRequestTableRows])
   const clearRequestDocumentPdf = useCallback(() => {
     setRequestDocumentPdfUrl('')
@@ -6875,7 +6902,13 @@ function ConnectionRequestPage({
 
     const controller = new AbortController()
 
-    fetchFactoryRows({ signal: controller.signal })
+    Promise.resolve()
+      .then(() => {
+        if (!controller.signal.aborted) {
+          setOperatorFactoriesLoading(true)
+        }
+        return fetchFactoryRows({ signal: controller.signal })
+      })
       .then((rows) => {
         setOperatorFactoryRows(rows)
         setOperatorFactoriesError('')
@@ -6886,9 +6919,15 @@ function ConnectionRequestPage({
           setOperatorFactoriesError(error instanceof Error ? error.message : 'โหลดรายชื่อโรงงานไม่สำเร็จ')
         }
       })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setOperatorFactoriesLoading(false)
+        }
+      })
 
     return () => {
       controller.abort()
+      setOperatorFactoriesLoading(false)
     }
   }, [accessToken, canViewFactoryTable, effectiveSubMenu, fetchFactoryRows])
   useEffect(() => {
@@ -6902,7 +6941,13 @@ function ConnectionRequestPage({
 
     const controller = new AbortController()
 
-    fetchRequestTableRows({ signal: controller.signal })
+    Promise.resolve()
+      .then(() => {
+        if (!controller.signal.aborted) {
+          setRequestTableLoading(true)
+        }
+        return fetchRequestTableRows({ signal: controller.signal })
+      })
       .then((rows) => {
         setRequestTableRows(rows)
         setRequestTableError('')
@@ -6913,14 +6958,20 @@ function ConnectionRequestPage({
           setRequestTableError(error instanceof Error ? error.message : 'โหลดรายการคำขอไม่สำเร็จ')
         }
       })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setRequestTableLoading(false)
+        }
+      })
 
     return () => {
       controller.abort()
+      setRequestTableLoading(false)
     }
   }, [accessToken, effectiveSubMenu, fetchRequestTableRows])
   const sortedRequestTableRows = useMemo(
-    () => (userType === 'officer' ? sortOfficerRequestRows(requestTableRows) : requestTableRows),
-    [requestTableRows, userType],
+    () => (!isOperator ? sortOfficerRequestRows(requestTableRows) : requestTableRows),
+    [isOperator, requestTableRows],
   )
   const table = useMemo(
     () =>
@@ -6929,15 +6980,24 @@ function ConnectionRequestPage({
             title: 'รายชื่อโรงงาน',
             rows: accessToken ? operatorFactoryRows : [],
             columns: factoryColumns,
-            loading: false,
+            loading: operatorFactoriesLoading,
           }
         : {
             title: 'รายการคำขอ',
             rows: accessToken ? sortedRequestTableRows : [],
             columns: requestColumns,
-            loading: false,
+            loading: requestTableLoading,
           },
-    [accessToken, effectiveSubMenu, factoryColumns, operatorFactoryRows, requestColumns, sortedRequestTableRows],
+    [
+      accessToken,
+      effectiveSubMenu,
+      factoryColumns,
+      operatorFactoriesLoading,
+      operatorFactoryRows,
+      requestColumns,
+      requestTableLoading,
+      sortedRequestTableRows,
+    ],
   )
   const isStatisticsSubMenu = effectiveSubMenu === 'statistics'
   const effectiveOperatorFactoriesError =
