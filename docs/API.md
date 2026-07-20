@@ -21,7 +21,6 @@
 
 ```json
 {
-  "accountType": "api",
   "userType": "officer",
   "username": "U-code-or-13-digit-login",
   "password": "password",
@@ -31,11 +30,20 @@
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
-| `accountType` | string | Recommended | `poms` ตรวจเฉพาะบัญชีที่สร้างใน POMS; `api` ตรวจเฉพาะ external API. Request เก่าที่ยังไม่ส่งค่านี้รองรับชั่วคราวเท่านั้น |
 | `userType` | string | Yes | ประเภทผู้ใช้งาน: `officer`, `operator`, `citizen` |
 | `username` | string | Yes | เลขบัตรประชาชน หรือ UID |
 | `password` | string | Yes | รหัสผ่าน |
 | `departmentID` | string | เมื่อเป็น API officer | รหัสหน่วยงานสำหรับเจ้าหน้าที่ API; บัญชี POMS ไม่ต้องส่ง |
+
+Client ใหม่ไม่ต้องส่ง `accountType`. Backend ตรวจบัญชี POMS ที่มี `identity_provider = local`
+ก่อน หากไม่พบบัญชีหรือ local credential ไม่ผ่านจึงตรวจ external API ต่อ. ถ้า credential เดียวกัน
+ผ่านทั้งสองระบบ บัญชี POMS มีลำดับก่อน. เมื่อเป็นเจ้าหน้าที่และต้อง fallback ไป API request ต้องมี
+`departmentID`; บัญชี POMS ไม่ใช้ field นี้แม้ client จะส่งมาด้วย.
+
+ระหว่างช่วง backward compatibility backend ยังรับ `accountType: "poms" | "api"` และ
+`provider: "local"` จาก client รุ่นเก่าเป็น explicit route hint. Client ใหม่ไม่ควรส่ง field เหล่านี้.
+Response ยังคงคืน `user.accountType` ซึ่ง derive จาก identity provider เพื่อให้ client ทราบว่าล็อกอิน
+สำเร็จผ่านบัญชี POMS หรือ API.
 
 #### User Types
 

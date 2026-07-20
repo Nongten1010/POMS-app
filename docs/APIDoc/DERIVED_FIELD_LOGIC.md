@@ -1408,7 +1408,7 @@ Endpoints:
 
 Source:
 
-- Submitted login request `accountType` and `username`
+- Submitted login request `username`; `accountType`/`provider` are accepted only as legacy route hints
 - DIW Officer Login V2 `msg[0].mposition`
 - DIW Officer Login V2 `msg[0].organize_id` and `msg[0].organize_th`
 - DIW Officer Login V2 `msg[0].division`
@@ -1418,6 +1418,9 @@ Source:
 Logic:
 
 - `accountType` is derived as `poms` when `users.identity_provider = local`; every other provider returns `api`.
+- New login requests omit `accountType`. Backend authenticates a provider-scoped local account first and falls back to the external provider when the local account is absent or its credential does not pass.
+- A successful local credential has priority when the same username/password could authenticate both POMS and API. If neither path succeeds, the response is the same generic `401 Invalid credentials`.
+- Legacy `accountType=poms|api` and `provider=local` remain explicit route hints during the compatibility window and do not change how response `accountType` is derived.
 - An API officer login beginning with `U` uses `identity_provider = diw_dpis`; a 13-digit submitted login uses `identity_provider = i_industry`.
 - `users.external_id` and the public `user.username` use the trimmed submitted login key. Provider response fields `percardno` and `per_cardno` are not persisted, returned, or used to find/link accounts.
 - User lookup and provisioning use `(identity_provider, external_id)`, so equal person numbers or equal usernames in different providers remain separate `users.id` values with separate roles, overrides, and audit history.

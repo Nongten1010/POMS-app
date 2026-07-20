@@ -13,14 +13,13 @@
 
 ใช้ login ได้ 3 ประเภทผู้ใช้: เจ้าหน้าที่, ผู้ประกอบการ, ประชาชนทั่วไป
 
-หมายเหตุฝั่ง backend: login เดิมยังทำงานเหมือนเดิม โดยระบบจะตรวจ local POMS account ก่อน จากนั้นใช้ identity provider หลัก (`IDENTITY_PROVIDER=mock` ใน demo). ถ้าเปิด `DIW_USER_LOGIN_ENABLED=true` ผู้ประกอบการ (`userType: "operator"`) จะมี fallback เพิ่มไปยัง DIW `UserLogin` API ด้วย `clientId + username + password`; ถ้าเปิด `DIW_OFFICER_LOGIN_ENABLED=true` เจ้าหน้าที่ (`userType: "officer"`) จะมี fallback เพิ่มไปยัง DIW DPIS `UserLogin` API ด้วย `clientId + username + password + departmentID`. `ClientID` ต้องเก็บใน env `DIW_USER_LOGIN_CLIENT_ID` เท่านั้น ห้าม hardcode ลง source code.
+หมายเหตุฝั่ง backend: client ไม่ต้องส่ง `accountType`. ระบบจะตรวจ local POMS account ก่อน และใช้บัญชี POMS เมื่อ local credential ผ่าน; ถ้าไม่พบบัญชีหรือ credential ไม่ผ่านจึงใช้ identity provider หลัก (`IDENTITY_PROVIDER=mock` ใน demo). ถ้าเปิด `DIW_USER_LOGIN_ENABLED=true` ผู้ประกอบการ (`userType: "operator"`) จะมี fallback เพิ่มไปยัง DIW `UserLogin` API ด้วย `clientId + username + password`; ถ้าเปิด `DIW_OFFICER_LOGIN_ENABLED=true` เจ้าหน้าที่ (`userType: "officer"`) จะมี fallback เพิ่มไปยัง DIW DPIS `UserLogin` API ด้วย `clientId + username + password + departmentID`. ถ้า credential เดียวกันผ่านทั้งสองระบบ บัญชี POMS มีลำดับก่อน. `ClientID` ต้องเก็บใน env `DIW_USER_LOGIN_CLIENT_ID` เท่านั้น ห้าม hardcode ลง source code.
 
 ### Request Body
 
 ```json
 {
   "userType": "officer",
-  "provider": "local",
   "username": "citizenID-or-UID",
   "password": "password",
   "departmentID": "2"
@@ -30,10 +29,13 @@
 | Field | Type | Required | Validation | Description |
 | --- | --- | --- | --- | --- |
 | `userType` | string | Yes | `officer`, `operator`, `citizen` | ประเภทผู้ใช้ |
-| `provider` | string | No | `local` เท่านั้นถ้าส่งมา | ใช้ local POMS account แทน external/mock IdP |
 | `username` | string | Yes | trim, 1-64 chars | เลขบัตรประชาชน, UID, หรือ username |
 | `password` | string | Yes | 1-128 chars | รหัสผ่าน |
-| `departmentID` | string | No | trim, 1-32 chars | ใช้กับ officer external/mock flow |
+| `departmentID` | string | เมื่อเป็น API officer | trim, 1-32 chars | ใช้กับ officer external/mock flow; POMS ไม่ใช้ |
+
+`accountType` ไม่ใช่ field ที่ client ใหม่ต้องส่ง และยังคงมีเฉพาะ `user.accountType` ใน response.
+ระหว่างช่วง backward compatibility backend ยังรับ `accountType: "poms" | "api"` หรือ
+`provider: "local"` จาก client รุ่นเก่าเป็น explicit route hint.
 
 ### User Type Values
 

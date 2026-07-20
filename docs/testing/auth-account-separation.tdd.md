@@ -2,6 +2,10 @@
 
 วันที่: 2026-07-20
 
+> หมายเหตุ follow-up: หลักฐานชุดนี้บันทึก contract เดิมที่ใช้ request `accountType` แยกเส้นทาง.
+> Contract ปัจจุบันให้ client ใหม่ไม่ส่ง field นี้และให้ backend resolve POMS/API โดยยังคง
+> `user.accountType` ใน response. ดู `login-without-account-type.tdd.md` สำหรับ RED/GREEN ล่าสุด.
+
 ## Scope
 
 - แยกบัญชี POMS กับ API ด้วย request `accountType`.
@@ -61,5 +65,5 @@ npm test -- --runInBand
 
 - Apply migrations `0071` และ `0072` บน staging MSSQL และตรวจ unresolved legacy division rows.
 - สร้าง report ของ `identity_provider = officer_dpis`; ห้าม auto-merge หรือ auto-copy permissions.
-- ปรับ frontend ให้ส่ง `accountType` และอ่าน `roleCodes`/canonical nested fields ก่อนยกเลิก legacy aliases/fallback.
+- ยืนยัน frontend ไม่ส่ง `accountType` และอ่าน `roleCodes`/canonical nested fields; backend ยังคงรับ legacy route hint ชั่วคราว.
 - ทดสอบ staging ด้วยบัญชีทดสอบของทั้งสามช่องทางโดยไม่บันทึก credential หรือ raw upstream payload ลง log.
