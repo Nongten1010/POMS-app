@@ -957,6 +957,10 @@ function UserPermissionDialog({ mode, open, user, isSaving = false, saveError = 
               : isApiAccount
                 ? {
                     user: {
+                      accountType: 'api',
+                      source: 'api',
+                      username: user?.username ?? '',
+                      fullName: user?.fullName ?? '',
                       roleCodes: baseUserPayload.roleCodes,
                       isActive: baseUserPayload.isActive,
                     },
