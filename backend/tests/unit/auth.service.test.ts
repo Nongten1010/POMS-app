@@ -44,7 +44,6 @@ jest.mock('../../src/modules/auth/identity-provider', () => ({
 jest.mock('../../src/modules/auth/auth.repository', () => ({
   authRepository: {
     findUserByProviderAndExternalId: jest.fn(),
-    findUserByUsername: jest.fn(),
     findUserById: jest.fn(),
     updateLastLogin: jest.fn(),
     getOfficerProfile: jest.fn(),
@@ -58,7 +57,7 @@ jest.mock('../../src/modules/auth/auth.repository', () => ({
 }));
 
 import { authRepository } from '../../src/modules/auth/auth.repository';
-import { authService } from '../../src/modules/auth/auth.service';
+import { authService, getOfficerRoleCode } from '../../src/modules/auth/auth.service';
 import { signAccessToken } from '../../src/shared/utils/jwt';
 
 const mockedAuthRepository = jest.mocked(authRepository);
@@ -66,9 +65,96 @@ const mockedSignAccessToken = jest.mocked(signAccessToken);
 const passwordField = 'password';
 const validTestPassword = 'valid-test-password';
 
+describe('getOfficerRoleCode', () => {
+  it('uses V2 department names and preserves provincial code 4019000', () => {
+    expect(
+      getOfficerRoleCode({
+        department_id: '01000',
+        department_name_th: 'การนิคมอุตสาหกรรมแห่งประเทศไทย',
+      }),
+    ).toBe('industrial_estate');
+    expect(
+      getOfficerRoleCode({
+        department_id: '4019000',
+        department_name_th: 'สำนักงานอุตสาหกรรมจังหวัดสระบุรี',
+      }),
+    ).toBe('provincial_office');
+  });
+
+  it('prefers a recognized V2 department name when a legacy code conflicts', () => {
+    expect(
+      getOfficerRoleCode({
+        department_id: '01000',
+        department_name_th: 'กรมโรงงานอุตสาหกรรม',
+      }),
+    ).toBe('diw_central');
+    expect(
+      getOfficerRoleCode({
+        department_id: '3010000',
+        department_name_th: 'การนิคมอุตสาหกรรมแห่งประเทศไทย',
+      }),
+    ).toBe('industrial_estate');
+  });
+});
+
 describe('authService login completion', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  it('resolves an explicit POMS account with a provider-scoped local identity', async () => {
+    mockedAuthRepository.findUserByProviderAndExternalId.mockResolvedValue({
+      id: 41,
+      external_id: 'shared_login',
+      identity_provider: 'local',
+      user_type: 'citizen',
+      username: 'shared_login',
+      email: null,
+      phone: null,
+      prename_th: null,
+      first_name: 'ผู้ใช้',
+      last_name: 'พอมส์',
+      is_active: true,
+      password_hash: Buffer.from('hashed-password'),
+    });
+    mockedAuthRepository.getRolesAndPermissions.mockResolvedValue({
+      roles: ['citizen'],
+      scopes: {},
+    });
+
+    const result = await authService.login({
+      accountType: 'poms',
+      userType: 'citizen',
+      username: 'shared_login',
+      [passwordField]: validTestPassword,
+    } as never);
+
+    expect(mockedAuthRepository.findUserByProviderAndExternalId).toHaveBeenCalledWith(
+      'local',
+      'shared_login',
+    );
+    expect(result.user).toMatchObject({
+      accountType: 'poms',
+      username: 'shared_login',
+      roleCodes: ['citizen'],
+    });
+  });
+
+  it('never falls back to a local account for an explicit API login', async () => {
+    await expect(
+      authService.login({
+        accountType: 'api',
+        userType: 'officer',
+        username: 'U100',
+        departmentID: '8',
+        [passwordField]: validTestPassword,
+      } as never),
+    ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+
+    expect(mockedAuthRepository.findUserByProviderAndExternalId).not.toHaveBeenCalledWith(
+      'local',
+      'U100',
+    );
   });
 
   it('uses a generic unauthorized error when an authenticated officer is not provisioned', async () => {
@@ -92,7 +178,6 @@ describe('authService login completion', () => {
         level_id: '1',
         level_name_th: 'ปฏิบัติการ',
         organize_id: '1',
-        division_id: '1',
         department_id: '1',
         ministry_id: '1',
         province_id: '1',
@@ -139,7 +224,6 @@ describe('authService login completion', () => {
         level_id: '1',
         level_name_th: 'ปฏิบัติการ',
         organize_id: '1',
-        division_id: '1',
         department_id: '1',
         ministry_id: '1',
         province_id: '1',
@@ -154,7 +238,7 @@ describe('authService login completion', () => {
   });
 
   it('rejects local login when the username is not a local identity', async () => {
-    mockedAuthRepository.findUserByUsername.mockResolvedValue({
+    mockedAuthRepository.findUserByProviderAndExternalId.mockResolvedValue({
       id: 12,
       external_id: '1102001567054',
       identity_provider: 'mock',
@@ -183,7 +267,7 @@ describe('authService login completion', () => {
   });
 
   it('checks local accounts before requiring officer departmentID', async () => {
-    mockedAuthRepository.findUserByUsername.mockResolvedValue({
+    mockedAuthRepository.findUserByProviderAndExternalId.mockResolvedValue({
       id: 44,
       external_id: 'local_officer',
       identity_provider: 'local',
@@ -209,7 +293,6 @@ describe('authService login completion', () => {
       level_id: null,
       level_name_th: 'ชำนาญการ',
       organize_id: null,
-      division_id: null,
       department_id: null,
       department_name_th: 'กรมโรงงานอุตสาหกรรม',
       ministry_id: null,
@@ -234,13 +317,19 @@ describe('authService login completion', () => {
       [passwordField]: validTestPassword,
     });
 
-    expect(result.user).toEqual({
+    expect(result.user).toMatchObject({
       userType: 'officer',
       username: 'local_officer',
       fullName: 'สมชาย ทดสอบ',
+      prenameTh: null,
+      firstName: 'สมชาย ทดสอบ',
+      lastName: '',
       department: 'กรมโรงงานอุตสาหกรรม',
       lineNameTh: 'นักวิทยาศาสตร์',
       levelNameTh: 'ชำนาญการ',
+      mposition: null,
+      organize: null,
+      division: null,
       provinceId: null,
       roles: 'diw_central',
       isActive: true,
@@ -256,13 +345,20 @@ describe('authService login completion', () => {
         scopes: {
           'dashboard:view': 'IN_REGION',
         },
+        scopeDetails: {
+          'dashboard:view': {
+            scope: 'IN_REGION',
+            region: 'ภาคตะวันออก',
+            province: null,
+          },
+        },
       }),
     );
     expect(mockedAuthRepository.updateLastLogin).toHaveBeenCalledWith(44);
   });
 
   it('infers central-region access for กวภ officers before issuing a token', async () => {
-    mockedAuthRepository.findUserByUsername.mockResolvedValue({
+    mockedAuthRepository.findUserByProviderAndExternalId.mockResolvedValue({
       id: 45,
       external_id: 'local_central_officer',
       identity_provider: 'local',
@@ -288,7 +384,6 @@ describe('authService login completion', () => {
       level_id: null,
       level_name_th: 'ชำนาญการ',
       organize_id: null,
-      division_id: null,
       department_id: null,
       department_name_th: 'กองวิจัยและเตือนภัยมลพิษโรงงาน',
       ministry_id: null,
@@ -348,8 +443,10 @@ describe('authService login completion', () => {
       line_name_th: 'เจ้าหน้าที่',
       level_id: '1',
       level_name_th: 'ปฏิบัติการ',
+      mposition: 'นักวิชาการ',
       organize_id: '1',
-      division_id: '1',
+      organize_name_th: 'กลุ่มทดสอบ',
+      division_name_th: 'กองทดสอบ',
       department_id: '2',
       department_name_th: 'กรมโรงงานอุตสาหกรรม',
       ministry_id: '1',
@@ -386,7 +483,6 @@ describe('authService login completion', () => {
       level_id: '1',
       level_name_th: 'ปฏิบัติการ',
       organize_id: '1',
-      division_id: '1',
       department_id: '2',
       ministry_id: '1',
       province_id: '1',
@@ -397,16 +493,38 @@ describe('authService login completion', () => {
     expect(result).toEqual({
       accessToken: 'signed-access-token',
       user: {
+        accountType: 'api',
         userType: 'officer',
         username: '1102001567054',
         fullName: 'นายทดสอบ ระบบ',
+        name: {
+          prenameTh: 'นาย',
+          firstName: 'ทดสอบ',
+          lastName: 'ระบบ',
+          fullName: 'นายทดสอบ ระบบ',
+        },
+        prenameTh: 'นาย',
+        firstName: 'ทดสอบ',
+        lastName: 'ระบบ',
         department: 'กรมโรงงานอุตสาหกรรม',
         lineNameTh: 'เจ้าหน้าที่',
         levelNameTh: 'ปฏิบัติการ',
+        mposition: 'นักวิชาการ',
+        organize: 'กลุ่มทดสอบ',
+        division: 'กองทดสอบ',
         provinceId: '1',
         roles: 'diw_central',
+        roleCodes: ['diw_central'],
         isActive: true,
         regionalAccess: { regions: ['ภาคตะวันออก'] },
+        officerProfile: {
+          lineNameTh: 'เจ้าหน้าที่',
+          levelNameTh: 'ปฏิบัติการ',
+          mposition: 'นักวิชาการ',
+          organize: { id: '1', name: 'กลุ่มทดสอบ' },
+          division: 'กองทดสอบ',
+          department: { id: '2', name: 'กรมโรงงานอุตสาหกรรม' },
+        },
       },
       permissions: {
         dashboard: {
@@ -440,27 +558,30 @@ describe('authService login completion', () => {
   it('provisions a DIW DPIS industrial-estate officer before issuing a token', async () => {
     const officerProfile = {
       identity_provider: 'officer_dpis' as const,
-      external_id: '1102002574259',
+      external_id: '1111111111111',
       prename_th: 'นาย',
-      first_name: 'คณาพัฒน์',
-      last_name: 'ปลั่งศรีสกุล',
+      first_name: 'ทดสอบกนอ',
+      last_name: 'ระบบ',
       email: null,
       phone: null,
-      pos_no: '2071',
-      pertype_id: '99',
-      pertype: 'พนักงานจ้างเหมาบริการ',
-      position_type_id: '12',
-      position_type_th: 'งานสนับสนุน',
-      line_id: '',
-      line_name_th: 'พนักงานจ้างเหมาบริการ',
-      level_id: '',
-      level_name_th: 'ลูกจ้างเหมา',
-      organize_id: '401',
-      division_id: '40101',
-      department_id: '100',
-      department_name_th: 'การนิคมอุตสาหกรรมแห่งประเทศไทย (กนอ.)',
-      ministry_id: '',
-      province_id: '',
+      pos_no: '307',
+      pertype_id: 'M01',
+      pertype: 'พนักงานรายเดือน',
+      position_type_id: '14',
+      position_type_th: 'วิศวกร',
+      line_id: '40000',
+      line_name_th: 'สายงานพัฒนาที่ยั่งยืน (สายงาน)',
+      level_id: '5',
+      level_name_th: '5',
+      mposition_id: '14',
+      mposition: 'วิศวกร',
+      organize_id: '40100',
+      organize_name_th: 'ฝ่ายบริการผู้ประกอบกิจการ',
+      division_name_th: 'กองอนุญาตผู้ประกอบกิจการ',
+      department_id: '01000',
+      department_name_th: 'การนิคมอุตสาหกรรมแห่งประเทศไทย',
+      ministry_id: '22',
+      province_id: '1000',
       per_status: '1',
       per_status_name: 'ทำงาน',
     };
@@ -473,8 +594,8 @@ describe('authService login completion', () => {
       email: null,
       phone: null,
       prename_th: 'นาย',
-      first_name: 'คณาพัฒน์',
-      last_name: 'ปลั่งศรีสกุล',
+      first_name: 'ทดสอบกนอ',
+      last_name: 'ระบบ',
       is_active: true,
       password_hash: null,
     });
@@ -489,10 +610,12 @@ describe('authService login completion', () => {
       line_name_th: 'พนักงานจ้างเหมาบริการ',
       level_id: '',
       level_name_th: 'ลูกจ้างเหมา',
-      organize_id: '401',
-      division_id: '40101',
-      department_id: '100',
-      department_name_th: 'การนิคมอุตสาหกรรมแห่งประเทศไทย (กนอ.)',
+      mposition: 'วิศวกร',
+      organize_id: '40100',
+      organize_name_th: 'ฝ่ายบริการผู้ประกอบกิจการ',
+      division_name_th: 'กองอนุญาตผู้ประกอบกิจการ',
+      department_id: '01000',
+      department_name_th: 'การนิคมอุตสาหกรรมแห่งประเทศไทย',
       ministry_id: '',
       province_id: '',
       per_status: '1',
@@ -514,10 +637,115 @@ describe('authService login completion', () => {
     expect(mockedAuthRepository.syncExternalOfficerProfile).not.toHaveBeenCalled();
     expect(result.user).toMatchObject({
       userType: 'officer',
-      username: '1102002574259',
-      fullName: 'นายคณาพัฒน์ ปลั่งศรีสกุล',
-      department: 'การนิคมอุตสาหกรรมแห่งประเทศไทย (กนอ.)',
+      username: '1111111111111',
+      fullName: 'นายทดสอบกนอ ระบบ',
+      prenameTh: 'นาย',
+      firstName: 'ทดสอบกนอ',
+      lastName: 'ระบบ',
+      department: 'การนิคมอุตสาหกรรมแห่งประเทศไทย',
+      mposition: 'วิศวกร',
+      organize: 'ฝ่ายบริการผู้ประกอบกิจการ',
+      division: 'กองอนุญาตผู้ประกอบกิจการ',
       roles: 'industrial_estate',
+      isActive: true,
+    });
+  });
+
+  it('provisions the second DIW V2 officer variant with display fields', async () => {
+    const officerProfile = {
+      identity_provider: 'officer_dpis' as const,
+      external_id: '2222222222222',
+      prename_th: 'นาย',
+      first_name: 'ทดสอบกรอ',
+      last_name: 'ระบบ',
+      email: null,
+      phone: null,
+      pos_no: '383',
+      pertype_id: '5',
+      pertype: 'ข้าราชการพลเรือนสามัญ',
+      position_type_id: '2',
+      position_type_th: 'วิชาการ',
+      line_id: '79',
+      line_name_th: 'นักวิทยาศาสตร์',
+      level_id: '17',
+      level_name_th: 'ชำนาญการ',
+      mposition_id: '',
+      mposition: '',
+      organize_id: '3010065',
+      organize_name_th: 'กลุ่มเฝ้าระวังและเตือนภัยมลพิษโรงงาน',
+      division_name_th: 'กองวิจัยและเตือนภัยมลพิษโรงงาน',
+      department_id: '3010000',
+      department_name_th: 'กรมโรงงานอุตสาหกรรม',
+      ministry_id: '22',
+      province_id: '1000',
+      per_status: '1',
+      per_status_name: 'ปกติ',
+      relocation_type: '1',
+      relocation_name: 'มอบหมายงาน',
+    };
+    mockedAuthRepository.upsertExternalOfficerUser.mockResolvedValue({
+      id: 89,
+      external_id: officerProfile.external_id,
+      identity_provider: 'officer_dpis',
+      user_type: 'officer',
+      username: 'OFFICER_TEST',
+      email: null,
+      phone: null,
+      prename_th: 'นาย',
+      first_name: 'ทดสอบกรอ',
+      last_name: 'ระบบ',
+      is_active: true,
+      password_hash: null,
+    });
+    mockedAuthRepository.getOfficerProfile.mockResolvedValue({
+      user_id: 89,
+      pos_no: '383',
+      pertype_id: '5',
+      pertype: 'ข้าราชการพลเรือนสามัญ',
+      position_type_id: '2',
+      position_type_th: 'วิชาการ',
+      line_id: '79',
+      line_name_th: 'นักวิทยาศาสตร์',
+      level_id: '17',
+      level_name_th: 'ชำนาญการ',
+      mposition_id: '',
+      mposition: '',
+      organize_id: '3010065',
+      organize_name_th: 'กลุ่มเฝ้าระวังและเตือนภัยมลพิษโรงงาน',
+      division_name_th: 'กองวิจัยและเตือนภัยมลพิษโรงงาน',
+      department_id: '3010000',
+      department_name_th: 'กรมโรงงานอุตสาหกรรม',
+      ministry_id: '22',
+      province_id: '1000',
+      per_status: '1',
+      per_status_name: 'ปกติ',
+    });
+    mockedAuthRepository.getRolesAndPermissions.mockResolvedValue({
+      roles: ['diw_central'],
+      scopes: {
+        'dashboard:view': 'ALL',
+      },
+    });
+
+    const result = await authService.completeLoginAsOfficer(officerProfile);
+
+    expect(mockedAuthRepository.upsertExternalOfficerUser).toHaveBeenCalledWith(
+      officerProfile,
+      'diw_central',
+    );
+    expect(result.user).toMatchObject({
+      userType: 'officer',
+      username: '2222222222222',
+      fullName: 'นายทดสอบกรอ ระบบ',
+      prenameTh: 'นาย',
+      firstName: 'ทดสอบกรอ',
+      lastName: 'ระบบ',
+      levelNameTh: 'ชำนาญการ',
+      mposition: null,
+      organize: 'กลุ่มเฝ้าระวังและเตือนภัยมลพิษโรงงาน',
+      division: 'กองวิจัยและเตือนภัยมลพิษโรงงาน',
+      department: 'กรมโรงงานอุตสาหกรรม',
+      roles: 'diw_central',
       isActive: true,
     });
   });

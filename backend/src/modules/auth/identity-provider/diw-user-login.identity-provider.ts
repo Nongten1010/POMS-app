@@ -53,7 +53,6 @@ interface DiwOfficer {
   levelname_th?: unknown;
   mposition_id?: unknown;
   mposition?: unknown;
-  division_id?: unknown;
   division?: unknown;
   department_id?: unknown;
   department?: unknown;
@@ -105,7 +104,7 @@ export class DiwUserLoginIdentityProvider implements IdentityProvider {
       departmentID,
     });
     if (!data) return null;
-    return parseDiwOfficerLoginResponse(data);
+    return parseDiwOfficerLoginResponse(data, username);
   }
 
   async authenticateOperator(
@@ -164,7 +163,10 @@ export class DiwUserLoginIdentityProvider implements IdentityProvider {
   }
 }
 
-export function parseDiwOfficerLoginResponse(data: unknown): ExternalOfficerProfile | null {
+export function parseDiwOfficerLoginResponse(
+  data: unknown,
+  submittedUsername: string,
+): ExternalOfficerProfile | null {
   if (!isRecord(data)) return null;
 
   const payload = data as DiwOfficerLoginResponse;
@@ -175,12 +177,12 @@ export function parseDiwOfficerLoginResponse(data: unknown): ExternalOfficerProf
   if (!isRecord(first)) return null;
 
   const officer = first as DiwOfficer;
-  const externalId = toStringValue(officer.per_cardno) ?? toStringValue(officer.percardno);
-  if (!externalId) return null;
+  const accountIdentity = classifyOfficerAccountIdentity(submittedUsername);
+  if (!accountIdentity) return null;
 
   return {
-    identity_provider: 'officer_dpis',
-    external_id: externalId,
+    identity_provider: accountIdentity.provider,
+    external_id: accountIdentity.externalId,
     prename_th: toStringValue(officer.prename_th) ?? '',
     first_name: toStringValue(officer.per_name) ?? '',
     last_name: toStringValue(officer.per_surname) ?? '',
@@ -197,9 +199,10 @@ export function parseDiwOfficerLoginResponse(data: unknown): ExternalOfficerProf
     level_name_th: toStringValue(officer.levelname_th) ?? '',
     mposition_id: toStringValue(officer.mposition_id) ?? '',
     mposition: toStringValue(officer.mposition) ?? '',
-    organize_id: toStringValue(officer.organize_id) ?? '',
-    division_id: toStringValue(officer.division_id) ?? '',
-    department_id: toStringValue(officer.department_id) ?? '',
+    organize_id: toOrganizationId(officer.organize_id) ?? '',
+    organize_name_th: toStringValue(officer.organize_th) ?? '',
+    division_name_th: toStringValue(officer.division) ?? '',
+    department_id: toOrganizationId(officer.department_id) ?? '',
     department_name_th: toStringValue(officer.department) ?? '',
     ministry_id: toStringValue(officer.ministry_id) ?? '',
     province_id: toStringValue(officer.province_id) ?? '',
@@ -208,6 +211,15 @@ export function parseDiwOfficerLoginResponse(data: unknown): ExternalOfficerProf
     relocation_type: toStringValue(officer.relocation_type) ?? '',
     relocation_name: toStringValue(officer.relocation_name) ?? '',
   };
+}
+
+function classifyOfficerAccountIdentity(
+  submittedUsername: string,
+): { provider: 'diw_dpis' | 'i_industry'; externalId: string } | null {
+  const externalId = submittedUsername.trim();
+  if (/^\d{13}$/.test(externalId)) return { provider: 'i_industry', externalId };
+  if (/^U[A-Za-z0-9._-]+$/i.test(externalId)) return { provider: 'diw_dpis', externalId };
+  return null;
 }
 
 export function parseDiwOperatorLoginResponse(
@@ -320,6 +332,12 @@ function toStringValue(value: unknown): string | null {
   }
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);
   return null;
+}
+
+function toOrganizationId(value: unknown): string | null {
+  const normalized = toStringValue(value);
+  if (!normalized || !/^[A-Za-z0-9][A-Za-z0-9._/-]{0,15}$/.test(normalized)) return null;
+  return normalized;
 }
 
 function toNumberValue(value: unknown): number | null {

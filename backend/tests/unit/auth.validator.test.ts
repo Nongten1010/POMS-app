@@ -61,6 +61,56 @@ describe('loginSchema', () => {
     });
   });
 
+  it('accepts an explicit POMS account without departmentID', () => {
+    const result = loginSchema.parse({
+      accountType: 'poms',
+      userType: 'officer',
+      username: 'local_officer',
+      [passwordField]: validTestPassword,
+    });
+
+    expect(result.accountType).toBe('poms');
+  });
+
+  it.each(['U100', '1111111111111'])(
+    'accepts an explicit API officer account (%s) with departmentID',
+    (username) => {
+      const result = loginSchema.parse({
+        accountType: 'api',
+        userType: 'officer',
+        username,
+        departmentID: '8',
+        [passwordField]: validTestPassword,
+      });
+
+      expect(result).toMatchObject({ accountType: 'api', username, departmentID: '8' });
+    },
+  );
+
+  it('rejects an explicit API officer account without departmentID', () => {
+    const result = loginSchema.safeParse({
+      accountType: 'api',
+      userType: 'officer',
+      username: 'U100',
+      [passwordField]: validTestPassword,
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a conflicting API account and legacy local provider', () => {
+    const result = loginSchema.safeParse({
+      accountType: 'api',
+      provider: 'local',
+      userType: 'officer',
+      username: 'U100',
+      departmentID: '8',
+      [passwordField]: validTestPassword,
+    });
+
+    expect(result.success).toBe(false);
+  });
+
   it('rejects oversized login payload fields', () => {
     const result = loginSchema.safeParse({
       userType: 'operator',

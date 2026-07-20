@@ -9,8 +9,9 @@
  */
 
 export interface ExternalOfficerProfile {
-  identity_provider?: 'mock' | 'officer_dpis';
-  external_id: string; // per_cardno
+  identity_provider?: 'mock' | 'officer_dpis' | 'diw_dpis' | 'i_industry';
+  /** Provider-scoped submitted login key; never derive this from percardno/per_cardno. */
+  external_id: string;
   prename_th: string;
   first_name: string;
   last_name: string;
@@ -28,7 +29,8 @@ export interface ExternalOfficerProfile {
   mposition_id?: string;
   mposition?: string;
   organize_id: string;
-  division_id: string;
+  organize_name_th?: string;
+  division_name_th?: string;
   department_id: string;
   department_name_th?: string;
   ministry_id: string;
@@ -83,14 +85,8 @@ export interface IdentityProvider {
   ): Promise<ExternalOfficerProfile | null>;
 
   /** Authenticate ผู้ประกอบการ (ใช้ username + password) */
-  authenticateOperator(
-    username: string,
-    password: string,
-  ): Promise<ExternalOperatorProfile | null>;
+  authenticateOperator(username: string, password: string): Promise<ExternalOperatorProfile | null>;
 
   /** Authenticate ประชาชนทั่วไป */
-  authenticateCitizen(
-    username: string,
-    password: string,
-  ): Promise<ExternalCitizenProfile | null>;
+  authenticateCitizen(username: string, password: string): Promise<ExternalCitizenProfile | null>;
 }

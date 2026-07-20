@@ -22,12 +22,14 @@ import type {
 
 export const authService = {
   async login(payload: LoginRequest): Promise<LoginResponse> {
-    if (payload.provider === 'local') {
+    if (payload.accountType === 'poms' || payload.provider === 'local') {
       return this.loginLocal(payload);
     }
 
-    const localResponse = await this.tryLoginLocalFirst(payload);
-    if (localResponse) return localResponse;
+    if (payload.accountType === undefined) {
+      const localResponse = await this.tryLoginLocalFirst(payload);
+      if (localResponse) return localResponse;
+    }
 
     const provider = getIdentityProvider();
 
@@ -35,22 +37,22 @@ export const authService = {
     if (payload.userType === 'officer') {
       if (!payload.departmentID) throw new UnauthorizedError('Invalid credentials');
       const profile = await provider.authenticateOfficer(
-        payload.username!,
+        payload.username,
         payload.password,
-        payload.departmentID!,
+        payload.departmentID,
       );
       if (!profile) throw new UnauthorizedError('Invalid credentials');
       return await this.completeLoginAsOfficer(profile);
     }
 
     if (payload.userType === 'operator') {
-      const profile = await provider.authenticateOperator(payload.username!, payload.password);
+      const profile = await provider.authenticateOperator(payload.username, payload.password);
       if (!profile) throw new UnauthorizedError('Invalid credentials');
       return await this.completeLoginAsOperator(profile);
     }
 
     // citizen
-    const profile = await provider.authenticateCitizen(payload.username!, payload.password);
+    const profile = await provider.authenticateCitizen(payload.username, payload.password);
     if (!profile) throw new UnauthorizedError('Invalid credentials');
     return await this.completeLoginAsCitizen(profile);
   },
@@ -69,14 +71,14 @@ export const authService = {
   },
 
   async tryLoginLocalFirst(payload: LoginRequest): Promise<LoginResponse | null> {
-    const user = await authRepository.findUserByUsername(payload.username!);
-    if (!user || user.identity_provider !== 'local') return null;
+    const user = await authRepository.findUserByProviderAndExternalId('local', payload.username);
+    if (!user) return null;
     return completeLocalLogin(payload, user);
   },
 
   async loginLocal(payload: LoginRequest): Promise<LoginResponse> {
-    const user = await authRepository.findUserByUsername(payload.username!);
-    if (!user || user.identity_provider !== 'local') {
+    const user = await authRepository.findUserByProviderAndExternalId('local', payload.username);
+    if (!user) {
       throw new UnauthorizedError('Invalid credentials');
     }
     return completeLocalLogin(payload, user);
@@ -86,13 +88,14 @@ export const authService = {
     profile: Awaited<ReturnType<ReturnType<typeof getIdentityProvider>['authenticateOfficer']>>,
   ): Promise<LoginResponse> {
     if (!profile) throw new UnauthorizedError('Invalid credentials');
-    const user =
-      profile.identity_provider === 'officer_dpis'
-        ? await authRepository.upsertExternalOfficerUser(profile, getOfficerRoleCode(profile))
-        : await authRepository.findUserByProviderAndExternalId('mock', profile.external_id);
-    ensureLoginUserAvailable(user, 'officer', profile.external_id);
+    const isApiOfficer =
+      profile.identity_provider !== undefined && profile.identity_provider !== 'mock';
+    const user = isApiOfficer
+      ? await authRepository.upsertExternalOfficerUser(profile, getOfficerRoleCode(profile))
+      : await authRepository.findUserByProviderAndExternalId('mock', profile.external_id);
+    ensureLoginUserAvailable(user, 'officer');
     await authRepository.updateLastLogin(user.id);
-    if (profile.identity_provider !== 'officer_dpis') {
+    if (!isApiOfficer) {
       await authRepository.syncExternalOfficerProfile(user.id, profile);
     }
 
@@ -112,7 +115,7 @@ export const authService = {
   ): Promise<LoginResponse> {
     if (!profile) throw new UnauthorizedError('Invalid credentials');
     const user = await authRepository.findUserByProviderAndExternalId('mock', profile.citizen_id);
-    ensureLoginUserAvailable(user, 'operator', profile.citizen_id);
+    ensureLoginUserAvailable(user, 'operator');
     await authRepository.updateLastLogin(user.id);
     await authRepository.syncExternalOperatorProfile(user.id, profile);
 
@@ -132,7 +135,7 @@ export const authService = {
   ): Promise<LoginResponse> {
     if (!profile) throw new UnauthorizedError('Invalid credentials');
     const user = await authRepository.findUserByProviderAndExternalId('mock', profile.external_id);
-    ensureLoginUserAvailable(user, 'citizen', profile.external_id);
+    ensureLoginUserAvailable(user, 'citizen');
     await authRepository.updateLastLogin(user.id);
     const { roles, scopes } = await authRepository.getRolesAndPermissions(user.id);
     return buildLoginResponse({
@@ -145,7 +148,7 @@ export const authService = {
 
   async me(userId: number): Promise<MeResponse> {
     const user = await authRepository.findUserById(userId);
-    ensureLoginUserAvailable(user, 'citizen', String(userId));
+    ensureLoginUserAvailable(user, 'citizen');
 
     const profile = await buildProfileForUser(user);
     const { roles, scopes } = await authRepository.getRolesAndPermissions(user.id);
@@ -159,18 +162,26 @@ export const authService = {
   },
 };
 
-function getOfficerRoleCode(
-  profile: NonNullable<
-    Awaited<ReturnType<ReturnType<typeof getIdentityProvider>['authenticateOfficer']>>
-  >,
-): string {
-  if (profile.department_id === '100' || profile.department_id === '4019000') {
+export function getOfficerRoleCode(profile: {
+  department_id: string;
+  department_name_th?: string;
+}): string {
+  const departmentName = normalizeOrganizationName(profile.department_name_th);
+  if (departmentName.includes('การนิคมอุตสาหกรรมแห่งประเทศไทย')) {
     return 'industrial_estate';
   }
-  if (profile.department_id === '3010000' || profile.department_id === '2') {
+  if (departmentName.includes('กรมโรงงานอุตสาหกรรม')) {
     return 'diw_central';
   }
+  if (profile.department_id === '01000' || profile.department_id === '100') {
+    return 'industrial_estate';
+  }
+  if (profile.department_id === '3010000' || profile.department_id === '2') return 'diw_central';
   return 'provincial_office';
+}
+
+function normalizeOrganizationName(value: string | undefined): string {
+  return (value ?? '').trim().replace(/\s+/g, ' ');
 }
 
 function ensureLocalLoginTypeAllowed(
@@ -191,12 +202,10 @@ function ensureLoginUserAvailable(
       }
     | undefined,
   userType: LoginRequest['userType'],
-  externalId: string,
 ): asserts user is { id: number; is_active: boolean } {
   if (!user) {
     logger.warn(`[auth] ${userType} login rejected: external identity is not provisioned`, {
       userType,
-      externalId,
     });
     throw new UnauthorizedError('Invalid credentials');
   }
@@ -217,7 +226,7 @@ async function completeLocalLogin(payload: LoginRequest, user: UserRow): Promise
   const matches = await verifyPassword(payload.password, hashString);
   if (!matches) throw new UnauthorizedError('Invalid credentials');
   ensureLocalLoginTypeAllowed(user.user_type, payload.userType);
-  ensureLoginUserAvailable(user, payload.userType, user.external_id);
+  ensureLoginUserAvailable(user, payload.userType);
   await authRepository.updateLastLogin(user.id);
 
   const profile = await buildProfileForUser(user);
@@ -234,6 +243,7 @@ async function completeLocalLogin(payload: LoginRequest, user: UserRow): Promise
 function toUserSummary(row: {
   id: number | string;
   external_id: string;
+  identity_provider: string;
   user_type: 'citizen' | 'operator' | 'officer' | 'admin';
   username: string | null;
   prename_th: string | null;
@@ -249,6 +259,7 @@ function toUserSummary(row: {
     id: Number(row.id), // BIGINT จาก MSSQL driver มาเป็น string — cast เป็น number (precision-safe จนถึง 2^53)
     userType: row.user_type,
     externalId: row.external_id,
+    identityProvider: row.identity_provider,
     username: row.username,
     prenameTh: row.prename_th,
     firstName: row.first_name,
@@ -269,8 +280,10 @@ function toOfficerDTO(
     positionTypeTh: row.position_type_th,
     lineNameTh: row.line_name_th,
     levelNameTh: row.level_name_th,
+    mposition: row.mposition ?? null,
     organizeId: row.organize_id,
-    divisionId: row.division_id,
+    organizeNameTh: row.organize_name_th ?? null,
+    divisionNameTh: row.division_name_th ?? null,
     departmentId: row.department_id,
     departmentNameTh: row.department_name_th,
     ministryId: row.ministry_id,
@@ -391,18 +404,53 @@ function toAuthUserDTO(
     : {};
 
   return {
+    accountType: user.identityProvider === 'local' ? 'poms' : 'api',
     userType: user.userType,
     username: user.externalId,
     fullName,
-    department: officerProfile?.departmentNameTh ?? officerProfile?.departmentId ?? null,
-    lineNameTh: officerProfile?.lineNameTh ?? null,
-    levelNameTh: officerProfile?.levelNameTh ?? null,
-    provinceId: officerProfile?.provinceId ?? null,
+    name: {
+      prenameTh: user.prenameTh,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      fullName,
+    },
+    prenameTh: user.prenameTh,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    department: normalizeOptionalText(officerProfile?.departmentNameTh),
+    lineNameTh: normalizeOptionalText(officerProfile?.lineNameTh),
+    levelNameTh: normalizeOptionalText(officerProfile?.levelNameTh),
+    mposition: normalizeOptionalText(officerProfile?.mposition),
+    organize: normalizeOptionalText(officerProfile?.organizeNameTh),
+    division: normalizeOptionalText(officerProfile?.divisionNameTh),
+    provinceId: normalizeOptionalText(officerProfile?.provinceId),
     roles: roles[0] ?? user.userType,
+    roleCodes: [...roles],
     isActive: user.isActive,
+    officerProfile: officerProfile
+      ? {
+          lineNameTh: normalizeOptionalText(officerProfile.lineNameTh),
+          levelNameTh: normalizeOptionalText(officerProfile.levelNameTh),
+          mposition: normalizeOptionalText(officerProfile.mposition),
+          organize: {
+            id: normalizeOptionalText(officerProfile.organizeId),
+            name: normalizeOptionalText(officerProfile.organizeNameTh),
+          },
+          division: normalizeOptionalText(officerProfile.divisionNameTh),
+          department: {
+            id: normalizeOptionalText(officerProfile.departmentId),
+            name: normalizeOptionalText(officerProfile.departmentNameTh),
+          },
+        }
+      : null,
     ...(officerProfile?.regionalAccess ? { regionalAccess: officerProfile.regionalAccess } : {}),
     ...operatorFields,
   };
+}
+
+function normalizeOptionalText(value: string | null | undefined): string | null {
+  const normalized = value?.trim();
+  return normalized ? normalized : null;
 }
 
 function getRegionalAccessFromProfile(

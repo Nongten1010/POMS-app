@@ -21,8 +21,9 @@
 
 ```json
 {
+  "accountType": "api",
   "userType": "officer",
-  "username": "citizenID-or-UID",
+  "username": "U-code-or-13-digit-login",
   "password": "password",
   "departmentID": "2"
 }
@@ -30,10 +31,11 @@
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
+| `accountType` | string | Recommended | `poms` ตรวจเฉพาะบัญชีที่สร้างใน POMS; `api` ตรวจเฉพาะ external API. Request เก่าที่ยังไม่ส่งค่านี้รองรับชั่วคราวเท่านั้น |
 | `userType` | string | Yes | ประเภทผู้ใช้งาน: `officer`, `operator`, `citizen` |
 | `username` | string | Yes | เลขบัตรประชาชน หรือ UID |
 | `password` | string | Yes | รหัสผ่าน |
-| `departmentID` | string | No | รหัสหน่วยงานสำหรับเจ้าหน้าที่ API/mock; ถ้าเป็นบัญชีที่สร้างใน POMS backend จะเช็ก local ก่อนและไม่ต้องส่ง |
+| `departmentID` | string | เมื่อเป็น API officer | รหัสหน่วยงานสำหรับเจ้าหน้าที่ API; บัญชี POMS ไม่ต้องส่ง |
 
 #### User Types
 
@@ -51,7 +53,7 @@
 | --- | --- |
 | สำนักงานปลัดกระทรวงอุตสาหกรรม | `1` |
 | กรมโรงงานอุตสาหกรรม | `2` |
-| การนิคมแห่งประเทศไทย | `8` |
+| การนิคมอุตสาหกรรมแห่งประเทศไทย | `8` |
 | หน่วยงานอื่นๆ | `0` |
 
 #### Response Body
@@ -60,13 +62,35 @@
 {
   "accessToken": "string",
   "user": {
+    "accountType": "api",
     "username": "string",
     "fullName": "string",
+    "prenameTh": "นาย",
+    "firstName": "สมชาย",
+    "lastName": "ทดสอบ",
+    "name": {
+      "prenameTh": "นาย",
+      "firstName": "สมชาย",
+      "lastName": "ทดสอบ",
+      "fullName": "นายสมชาย ทดสอบ"
+    },
     "department": "string",
     "lineNameTh": "string",
     "levelNameTh": "string",
+    "mposition": "วิศวกร",
+    "organize": "ฝ่ายบริการผู้ประกอบกิจการ",
+    "division": "กองอนุญาตผู้ประกอบกิจการ",
     "provinceId": "1021",
     "roles": "diw_central",
+    "roleCodes": ["diw_central"],
+    "officerProfile": {
+      "lineNameTh": "string",
+      "levelNameTh": "string",
+      "mposition": "วิศวกร",
+      "organize": { "id": "40100", "name": "ฝ่ายบริการผู้ประกอบกิจการ" },
+      "division": "กองอนุญาตผู้ประกอบกิจการ",
+      "department": { "id": "01000", "name": "การนิคมอุตสาหกรรมแห่งประเทศไทย" }
+    },
     "isActive": true,
     "regionalAccess": {
       "regions": ["ภาคตะวันออก"]
@@ -174,14 +198,24 @@
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `username` | string | เลขประจำตัวผู้ใช้งานจากระบบต้นทาง เช่น `per_cardno` สำหรับเจ้าหน้าที่ |
+| `accountType` | `poms`/`api` | ประเภทบัญชีสาธารณะ derive จาก internal provider |
+| `username` | string | account login key ของช่องทางนั้น เช่น POMS username, U-code หรือเลข 13 หลัก; ไม่ derive จาก `percardno`/`per_cardno` |
 | `fullName` | string | ชื่อ-นามสกุล |
+| `prenameTh` | string/null | คำนำหน้าชื่อภาษาไทยจาก DIW Officer Login V2 |
+| `firstName` | string | ชื่อภาษาไทย |
+| `lastName` | string | นามสกุลภาษาไทย |
 | `department` | string | หน่วยงาน |
 | `lineNameTh` | string | สายงานภาษาไทย |
 | `levelNameTh` | string | ระดับภาษาไทย |
+| `mposition` | string/null | ตำแหน่งบริหาร/ตำแหน่งงานจาก `mposition` |
+| `organize` | string/null | legacy alias ของ `officerProfile.organize.name`; ไม่มี ID fallback |
+| `division` | string/null | legacy alias ของ `officerProfile.division`; ไม่มี `division_id` fallback |
 | `provinceId` | string/null | รหัสจังหวัดของเจ้าหน้าที่จาก `officer_profiles.province_id`; ใช้กับ scope `IN_PROVINCE` |
 | `provinceName` | string/null | ชื่อจังหวัดภาษาไทยใน API จัดการผู้ใช้ ดึงจาก `provinces.name_th` ตาม `provinceId` |
 | `roles` | string | บทบาทผู้ใช้งาน ดูรายการค่าที่เป็นไปได้ในหัวข้อ Role Codes |
+| `roleCodes` | string[] | บทบาททั้งหมดของผู้ใช้; frontend ใหม่ควรใช้ field นี้แทน `roles` |
+| `name` | object | โครงสร้างชื่อ canonical; flat name fields ยังอยู่ช่วง compatibility |
+| `officerProfile` | object/null | โครงสร้างสายงาน/ระดับ/ตำแหน่ง/หน่วยงาน; `null` สำหรับ user ที่ไม่มี officer profile |
 | `isActive` | boolean | สถานะการใช้งาน |
 | `regionalAccess` | object/null | ภาคที่เจ้าหน้าที่รับผิดชอบ ถ้ามีค่า backend จะกรองคำขอ/โรงงานตาม `regions` เพิ่มจาก permission scope |
 
@@ -303,9 +337,15 @@ Response จาก `GET /api/v1/users/:id` หลังบันทึก แล
   "user": {
     "username": "string",
     "fullName": "string",
+    "prenameTh": "นาย",
+    "firstName": "สมชาย",
+    "lastName": "ทดสอบ",
     "department": "string",
     "lineNameTh": "string",
     "levelNameTh": "string",
+    "mposition": "วิศวกร",
+    "organize": "ฝ่ายบริการผู้ประกอบกิจการ",
+    "division": "กองอนุญาตผู้ประกอบกิจการ",
     "roles": "diw_central",
     "isActive": true,
     "regionalAccess": {

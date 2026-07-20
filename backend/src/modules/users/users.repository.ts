@@ -47,7 +47,6 @@ interface ManagedUserJoinedRow {
   mposition_id: string | null;
   mposition: string | null;
   organize_id: string | null;
-  division_id: string | null;
   department_id: string | null;
   ministry_id: string | null;
   province_id: string | null;
@@ -144,15 +143,6 @@ export const usersRepository = {
       .orderBy('roles.code', 'asc');
     if (rows.length === 0) return null;
     return toDetailDTO(rows);
-  },
-
-  async findByUsername(
-    username: string,
-    excludeUserId?: number,
-  ): Promise<{ id: number } | undefined> {
-    const query = db('users').where({ username }).whereNull('deleted_at').select('id').first();
-    if (excludeUserId !== undefined) query.whereNot('id', excludeUserId);
-    return query;
   },
 
   async findByExternalId(
@@ -402,13 +392,14 @@ function buildManagedUsersBaseQuery(query: ListManagedUsersQuery): Knex.QueryBui
     });
   }
 
-  if (query.roleCode) {
+  const roleCode = query.roleCode;
+  if (roleCode) {
     builder.whereExists(function roleFilter() {
       this.select(db.raw('1'))
         .from('user_roles')
         .join('roles', 'roles.id', 'user_roles.role_id')
         .whereRaw('user_roles.user_id = users.id')
-        .where('roles.code', query.roleCode!)
+        .where('roles.code', roleCode)
         .whereNull('roles.deleted_at');
     });
   }
@@ -428,13 +419,6 @@ function managedUsersWithJoins(trx?: Knex.Transaction): Knex.QueryBuilder<Manage
         'department_org.level',
         '=',
         'department',
-      );
-    })
-    .leftJoin({ division_org: 'organizations' }, function joinDivision() {
-      this.on('officer_profiles.division_id', '=', 'division_org.external_id').andOnVal(
-        'division_org.level',
-        '=',
-        'division',
       );
     })
     .leftJoin({ organize_org: 'organizations' }, function joinOrganize() {
@@ -470,7 +454,7 @@ function managedUsersWithJoins(trx?: Knex.Transaction): Knex.QueryBuilder<Manage
       'officer_profiles.mposition_id',
       'officer_profiles.mposition',
       'officer_profiles.organize_id',
-      'officer_profiles.division_id',
+      'officer_profiles.division_name_th',
       'officer_profiles.department_id',
       'officer_profiles.ministry_id',
       'officer_profiles.province_id',
@@ -486,8 +470,9 @@ function managedUsersWithJoins(trx?: Knex.Transaction): Knex.QueryBuilder<Manage
       db.raw(
         'COALESCE(officer_profiles.department_name_th, department_org.name_th) as department_name_th',
       ),
-      'division_org.name_th as division_name_th',
-      'organize_org.name_th as organize_name_th',
+      db.raw(
+        'COALESCE(officer_profiles.organize_name_th, organize_org.name_th) as organize_name_th',
+      ),
     );
 }
 
@@ -501,24 +486,29 @@ function toTableDTOs(rows: ManagedUserJoinedRow[]): ManagedUserTableDTO[] {
 }
 
 function toTableDTO(rows: ManagedUserJoinedRow[]): ManagedUserTableDTO {
-  const first = rows[0]!;
+  const first = rows[0];
+  if (!first) throw new Error('Managed user rows must not be empty');
   const roles = collectRoles(rows);
   const isActive = Boolean(first.is_active);
   return {
     id: Number(first.id),
-    username: first.username ?? '',
+    accountType: first.identity_provider === 'local' ? 'poms' : 'api',
+    identityProvider: first.identity_provider,
+    username: first.username ?? first.external_id,
     fullName: `${first.first_name} ${first.last_name}`.trim(),
     department:
       first.department_name_th ?? first.division_name_th ?? first.organize_name_th ?? null,
     lineNameTh: first.line_name_th ?? first.position_type_th ?? first.mposition ?? null,
     levelNameTh: first.level_name_th,
     roles: roles[0]?.code ?? first.user_type,
+    roleCodes: roles.map((role) => role.code),
     isActive,
   };
 }
 
 function toDetailDTO(rows: ManagedUserJoinedRow[]): ManagedUserDetailDTO {
-  const first = rows[0]!;
+  const first = rows[0];
+  if (!first) throw new Error('Managed user rows must not be empty');
   return {
     ...toTableDTO(rows),
     userType: first.user_type,
@@ -542,7 +532,7 @@ function toDetailDTO(rows: ManagedUserJoinedRow[]): ManagedUserDetailDTO {
       mpositionId: first.mposition_id,
       mposition: first.mposition,
       organizeId: first.organize_id,
-      divisionId: first.division_id,
+      divisionNameTh: first.division_name_th,
       departmentId: first.department_id,
       departmentNameTh: first.department_name_th,
       ministryId: first.ministry_id,
@@ -679,7 +669,7 @@ function toOfficerProfileRow(profile: OfficerProfileInput): Record<string, strin
     ['mpositionId', 'mposition_id'],
     ['mposition', 'mposition'],
     ['organizeId', 'organize_id'],
-    ['divisionId', 'division_id'],
+    ['divisionNameTh', 'division_name_th'],
     ['departmentId', 'department_id'],
     ['departmentNameTh', 'department_name_th'],
     ['ministryId', 'ministry_id'],

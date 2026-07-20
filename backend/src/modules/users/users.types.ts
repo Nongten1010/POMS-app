@@ -1,5 +1,4 @@
 import type { PermissionGroups } from '../auth/permissions';
-import type { AuthUserDTO } from '../auth/auth.types';
 import type { RegionalAccessDTO } from '../auth/regional-access';
 
 export type ManagedUserType = 'officer' | 'admin';
@@ -64,7 +63,7 @@ export interface OfficerProfileInput {
   mpositionId?: string | null;
   mposition?: string | null;
   organizeId?: string | null;
-  divisionId?: string | null;
+  divisionNameTh?: string | null;
   departmentId?: string | null;
   departmentNameTh?: string | null;
   ministryId?: string | null;
@@ -80,12 +79,15 @@ export interface OfficerProfileInput {
 
 export interface ManagedUserTableDTO {
   id: number;
+  accountType: 'poms' | 'api';
+  identityProvider: string;
   username: string;
   fullName: string;
   department: string | null;
   lineNameTh: string | null;
   levelNameTh: string | null;
   roles: string;
+  roleCodes: string[];
   isActive: boolean;
 }
 
@@ -104,8 +106,18 @@ export interface ManagedUserDetailDTO extends ManagedUserTableDTO {
 
 export type ManagedUserSource = 'api' | 'created';
 
-export interface ManagedUserEditUserDTO
-  extends Omit<AuthUserDTO, 'provinceId' | 'provinceName' | 'regionalAccess'> {
+export interface ManagedUserEditUserDTO {
+  accountType: 'poms' | 'api';
+  identityProvider: string;
+  userType: ManagedUserType;
+  username: string;
+  fullName: string;
+  department: string | null;
+  lineNameTh: string | null;
+  levelNameTh: string | null;
+  roles: string;
+  roleCodes: string[];
+  isActive: boolean;
   source: ManagedUserSource;
 }
 

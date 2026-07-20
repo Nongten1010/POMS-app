@@ -16,15 +16,12 @@ const optionalTrimmedNonEmptyString = (max: number) =>
     z.string().trim().min(1).max(max).optional(),
   );
 const optionalFormScopeValue = (max: number) =>
-  z.preprocess(
-    (value) => {
-      if (value === null || value === undefined) return undefined;
-      if (typeof value !== 'string') return value;
-      const trimmed = value.trim();
-      return trimmed === '' || trimmed.toLowerCase() === 'all' ? null : trimmed;
-    },
-    z.string().trim().min(1).max(max).nullable().optional(),
-  );
+  z.preprocess((value) => {
+    if (value === null || value === undefined) return undefined;
+    if (typeof value !== 'string') return value;
+    const trimmed = value.trim();
+    return trimmed === '' || trimmed.toLowerCase() === 'all' ? null : trimmed;
+  }, z.string().trim().min(1).max(max).nullable().optional());
 const optionalPasswordString = z.preprocess(
   (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
   z.string().min(8).max(128).optional(),
@@ -34,7 +31,7 @@ const regionalAccessSchema = z
     regions: z.array(z.string().trim().min(1).max(128)).min(1).max(10),
   })
   .strict()
-  .transform((value) => normalizeRegionalAccess(value)!);
+  .transform((value) => normalizeRegionalAccess(value) ?? value);
 const formRegionsSchema = z.preprocess(
   (value) => {
     if (value === null || value === undefined) return undefined;
@@ -84,7 +81,7 @@ export const officerProfileSchema = z
     mpositionId: optionalNullableTrimmedString,
     mposition: optionalNullableTrimmedString,
     organizeId: optionalNullableTrimmedString,
-    divisionId: optionalNullableTrimmedString,
+    divisionNameTh: optionalNullableTrimmedString,
     departmentId: optionalNullableTrimmedString,
     ministryId: optionalNullableTrimmedString,
     provinceId: optionalNullableTrimmedString,
@@ -230,21 +227,29 @@ const editResponseUpdateSchema = z
   .object({
     user: z
       .object({
+        accountType: z.enum(['poms', 'api']).optional(),
+        identityProvider: z.string().trim().min(1).max(32).optional(),
         fullName: z.string().trim().min(1).max(255),
         username: z.string().trim().min(3).max(64),
         password: optionalPasswordString,
         department: optionalTrimmedNonEmptyString(255),
         lineNameTh: optionalTrimmedNonEmptyString(128),
         levelNameTh: optionalTrimmedNonEmptyString(64),
-        roles: z.string().trim().min(1).max(32),
+        roles: z.string().trim().min(1).max(32).optional(),
+        roleCodes: z.array(z.string().trim().min(1).max(32)).min(1).max(20).optional(),
         isActive: z.boolean(),
         source: z.enum(['api', 'created']).optional(),
+      })
+      .refine((user) => user.roles !== undefined || user.roleCodes !== undefined, {
+        message: 'roles or roleCodes is required',
+        path: ['roleCodes'],
       })
       .strict(),
     permissions: z.record(z.string(), permissionGroupSchema).optional(),
   })
   .strict()
   .transform(({ user, permissions }) => {
+    const isApiAccount = user.source === 'api' || user.accountType === 'api';
     const permissionOverrides = permissions
       ? permissionGroupsToPermissionOverrides(permissions as PermissionGroups)
       : undefined;
@@ -260,13 +265,13 @@ const editResponseUpdateSchema = z
         : undefined;
     return {
       username: user.username,
-      externalId: user.username,
-      firstName: user.fullName,
-      lastName: '',
+      externalId: isApiAccount ? undefined : user.username,
+      firstName: isApiAccount ? undefined : user.fullName,
+      lastName: isApiAccount ? undefined : '',
       password: user.password,
       isActive: user.isActive,
-      roleCodes: [user.roles],
-      profile: profilePatch,
+      roleCodes: user.roleCodes ?? (user.roles ? [user.roles] : undefined),
+      profile: isApiAccount ? undefined : profilePatch,
       permissionOverrides: permissionOverrides
         ? Object.entries(permissionOverrides).map(([code, details]) => ({
             code,

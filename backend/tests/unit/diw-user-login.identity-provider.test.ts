@@ -12,39 +12,64 @@ jest.mock('../../src/config/logger', () => ({
 }));
 
 describe('parseDiwOfficerLoginResponse', () => {
-  it('maps DIW DPIS UserLogin msg into an officer profile', () => {
-    const result = parseDiwOfficerLoginResponse({
+  it('keeps U-code and 13-digit logins separate even when upstream returns one person number', () => {
+    const response = {
       status: 'true',
       msg: JSON.stringify([
         {
-          organize_id: '3010089',
-          organize_th: 'ฝ่ายบริหารทั่วไป',
-          percardno: '1234567890123',
-          prename_th: 'นางสาว',
-          per_name: 'สมหญิง',
+          percardno: '9999999999999',
+          per_name: 'เจ้าหน้าที่',
           per_surname: 'ทดสอบ',
-          pos_no: '2071',
-          pertype_id: '99',
-          pertype: 'พนักงานจ้างเหมาบริการ',
-          positiontype_id: '12',
-          positiontype_th: 'งานสนับสนุน',
-          line_id: '',
-          linename_th: 'พนักงานจ้างเหมาบริการ',
-          level_id: '',
-          levelname_th: 'ลูกจ้างเหมา',
-          division_id: '3010088',
-          department_id: '3010000',
-          ministry_id: '22',
-          province_id: '1000',
-          per_status: '1',
-          per_status_name: 'ปกติ',
         },
       ]),
+    };
+
+    const dpis = parseDiwOfficerLoginResponse(response, 'U100');
+    const iIndustry = parseDiwOfficerLoginResponse(response, '1111111111111');
+
+    expect(dpis).toMatchObject({ identity_provider: 'diw_dpis', external_id: 'U100' });
+    expect(iIndustry).toMatchObject({
+      identity_provider: 'i_industry',
+      external_id: '1111111111111',
     });
+  });
+
+  it('maps DIW DPIS UserLogin msg into an officer profile', () => {
+    const result = parseDiwOfficerLoginResponse(
+      {
+        status: 'true',
+        msg: JSON.stringify([
+          {
+            organize_id: '3010089',
+            organize_th: 'ฝ่ายบริหารทั่วไป',
+            percardno: '1234567890123',
+            prename_th: 'นางสาว',
+            per_name: 'สมหญิง',
+            per_surname: 'ทดสอบ',
+            pos_no: '2071',
+            pertype_id: '99',
+            pertype: 'พนักงานจ้างเหมาบริการ',
+            positiontype_id: '12',
+            positiontype_th: 'งานสนับสนุน',
+            line_id: '',
+            linename_th: 'พนักงานจ้างเหมาบริการ',
+            level_id: '',
+            levelname_th: 'ลูกจ้างเหมา',
+            division_id: '3010088',
+            department_id: '3010000',
+            ministry_id: '22',
+            province_id: '1000',
+            per_status: '1',
+            per_status_name: 'ปกติ',
+          },
+        ]),
+      },
+      'U100',
+    );
 
     expect(result).toEqual({
-      identity_provider: 'officer_dpis',
-      external_id: '1234567890123',
+      identity_provider: 'diw_dpis',
+      external_id: 'U100',
       prename_th: 'นางสาว',
       first_name: 'สมหญิง',
       last_name: 'ทดสอบ',
@@ -62,7 +87,8 @@ describe('parseDiwOfficerLoginResponse', () => {
       mposition_id: '',
       mposition: '',
       organize_id: '3010089',
-      division_id: '3010088',
+      organize_name_th: 'ฝ่ายบริหารทั่วไป',
+      division_name_th: '',
       department_id: '3010000',
       department_name_th: '',
       ministry_id: '22',
@@ -74,8 +100,79 @@ describe('parseDiwOfficerLoginResponse', () => {
     });
   });
 
+  it('maps the live IEAT V2 officer names while preserving leading-zero organization codes', () => {
+    const result = parseDiwOfficerLoginResponse(
+      {
+        status: 'true',
+        msg: JSON.stringify([
+          {
+            percardno: '1111111111111',
+            prename_th: 'นาย',
+            per_name: 'ทดสอบกนอ',
+            per_surname: 'ระบบ',
+            levelname_th: '5',
+            mposition: 'วิศวกร',
+            organize_id: '40100',
+            organize_th: 'ฝ่ายบริการผู้ประกอบกิจการ',
+            division_id: '40101',
+            division: 'กองอนุญาตผู้ประกอบกิจการ',
+            department_id: '01000',
+            department: 'การนิคมอุตสาหกรรมแห่งประเทศไทย',
+          },
+        ]),
+      },
+      '1111111111111',
+    );
+
+    expect(result).toMatchObject({
+      external_id: '1111111111111',
+      identity_provider: 'i_industry',
+      mposition: 'วิศวกร',
+      organize_id: '40100',
+      organize_name_th: 'ฝ่ายบริการผู้ประกอบกิจการ',
+      division_name_th: 'กองอนุญาตผู้ประกอบกิจการ',
+      department_id: '01000',
+      department_name_th: 'การนิคมอุตสาหกรรมแห่งประเทศไทย',
+    });
+  });
+
+  it('accepts per_cardno and does not store a V2 organization name as division_id', () => {
+    const result = parseDiwOfficerLoginResponse(
+      {
+        status: 'true',
+        msg: JSON.stringify([
+          {
+            per_cardno: '2222222222222',
+            prename_th: 'นาย',
+            per_name: 'ทดสอบกรอ',
+            per_surname: 'ระบบ',
+            levelname_th: 'ชำนาญการ',
+            mposition: '',
+            organize_id: '3010065',
+            organize_th: 'กลุ่มเฝ้าระวังและเตือนภัยมลพิษโรงงาน',
+            division_id: 'กลุ่มเฝ้าระวังและเตือนภัยมลพิษโรงงาน',
+            division: 'กองวิจัยและเตือนภัยมลพิษโรงงาน ',
+            department_id: '3010000',
+            department: 'กรมโรงงานอุตสาหกรรม',
+          },
+        ]),
+      },
+      'U200',
+    );
+
+    expect(result).toMatchObject({
+      external_id: 'U200',
+      identity_provider: 'diw_dpis',
+      organize_id: '3010065',
+      organize_name_th: 'กลุ่มเฝ้าระวังและเตือนภัยมลพิษโรงงาน',
+      division_name_th: 'กองวิจัยและเตือนภัยมลพิษโรงงาน',
+      department_id: '3010000',
+      department_name_th: 'กรมโรงงานอุตสาหกรรม',
+    });
+  });
+
   it('rejects unsuccessful DIW DPIS login responses', () => {
-    expect(parseDiwOfficerLoginResponse({ status: 'false', msg: '[]' })).toBeNull();
+    expect(parseDiwOfficerLoginResponse({ status: 'false', msg: '[]' }, 'U200')).toBeNull();
   });
 });
 
@@ -220,7 +317,7 @@ describe('DiwUserLoginIdentityProvider', () => {
       fetchImpl,
     });
 
-    const result = await provider.authenticateOfficer('officer_user', 'secret-password', '2');
+    const result = await provider.authenticateOfficer('U100', 'secret-password', '2');
 
     expect(fetchImpl).toHaveBeenCalledWith(
       'https://diwws.diw.go.th/idiwdpislogin/v1/UserLogin',
@@ -228,16 +325,48 @@ describe('DiwUserLoginIdentityProvider', () => {
         method: 'POST',
         body: JSON.stringify({
           clientId: 'test-client-id',
-          username: 'officer_user',
+          username: 'U100',
           password: 'secret-password',
           departmentID: '2',
         }),
       }),
     );
     expect(result).toMatchObject({
-      external_id: '1234567890123',
+      identity_provider: 'diw_dpis',
+      external_id: 'U100',
       first_name: 'สมหญิง',
       last_name: 'ทดสอบ',
+    });
+  });
+
+  it('keeps a 13-digit submitted login as an i-Industry account key', async () => {
+    const fetchImpl = jest.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        status: true,
+        msg: JSON.stringify([
+          {
+            percardno: '9999999999999',
+            per_name: 'สมชาย',
+            per_surname: 'ทดสอบ',
+          },
+        ]),
+      }),
+    })) as unknown as typeof fetch;
+    const provider = new DiwUserLoginIdentityProvider({
+      operatorUrl: 'https://example.test/operator',
+      officerUrl: 'https://example.test/officer',
+      clientId: 'test-client-id',
+      timeoutMs: 1000,
+      defaultProvinceId: '1000',
+      fetchImpl,
+    });
+
+    const result = await provider.authenticateOfficer('1111111111111', 'secret-password', '8');
+
+    expect(result).toMatchObject({
+      identity_provider: 'i_industry',
+      external_id: '1111111111111',
     });
   });
 });

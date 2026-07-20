@@ -2,13 +2,16 @@ import type { PermissionGroups } from './permissions';
 import type { RegionalAccessDTO } from './regional-access';
 
 export type UserType = 'citizen' | 'operator' | 'officer' | 'admin';
+export type AccountType = 'poms' | 'api';
 
 export interface LoginRequest {
+  /** Explicit account boundary. Omitted only for the temporary legacy login flow. */
+  accountType?: AccountType;
   userType: 'officer' | 'operator' | 'citizen';
   /** local = username/password in POMS DB, omitted = external/mock IdP flow */
   provider?: 'local';
   /** ทุก user type ใช้ username */
-  username?: string;
+  username: string;
   /** officer: department selector from DIW login flow */
   departmentID?: string;
   password: string;
@@ -18,6 +21,7 @@ export interface UserSummary {
   id: number;
   userType: UserType;
   externalId: string;
+  identityProvider: string;
   username: string | null;
   prenameTh: string | null;
   firstName: string;
@@ -29,16 +33,38 @@ export interface UserSummary {
 }
 
 export interface AuthUserDTO {
+  accountType: AccountType;
   userType: UserType;
   username: string;
   fullName: string;
+  name: {
+    prenameTh: string | null;
+    firstName: string;
+    lastName: string;
+    fullName: string;
+  };
+  prenameTh: string | null;
+  firstName: string;
+  lastName: string;
   department: string | null;
   lineNameTh: string | null;
   levelNameTh: string | null;
+  mposition: string | null;
+  organize: string | null;
+  division: string | null;
   provinceId?: string | null;
   provinceName?: string | null;
   roles: string;
+  roleCodes: string[];
   isActive: boolean;
+  officerProfile: {
+    lineNameTh: string | null;
+    levelNameTh: string | null;
+    mposition: string | null;
+    organize: { id: string | null; name: string | null };
+    division: string | null;
+    department: { id: string | null; name: string | null };
+  } | null;
   regionalAccess?: RegionalAccessDTO;
   ownedFactoryIds?: string[];
 }
@@ -49,8 +75,10 @@ export interface OfficerProfileDTO {
   positionTypeTh: string | null;
   lineNameTh: string | null;
   levelNameTh: string | null;
+  mposition: string | null;
   organizeId: string | null;
-  divisionId: string | null;
+  organizeNameTh: string | null;
+  divisionNameTh: string | null;
   departmentId: string | null;
   departmentNameTh: string | null;
   ministryId: string | null;

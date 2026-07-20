@@ -51,6 +51,18 @@ describe('managed users validators', () => {
     }
   });
 
+  it('rejects deprecated divisionId profile input', () => {
+    const result = createManagedUserSchema.safeParse({
+      username: 'officer9002',
+      firstName: 'ทดสอบ',
+      lastName: 'ระบบ',
+      roleCodes: ['admin'],
+      profile: { divisionId: '3010001' },
+    });
+
+    expect(result.success).toBe(false);
+  });
+
   it('accepts a local account payload with combined fullName and no email or phone', () => {
     const result = createLocalAccountSchema.parse({
       fullName: 'สมชาย ทดสอบ',
@@ -201,6 +213,28 @@ describe('managed users validators', () => {
         { code: 'dashboard:view', effect: 'allow', scope: 'ALL' },
         { code: 'dashboard.search:advanced', effect: 'allow', scope: 'ALL' },
       ]),
+    });
+  });
+
+  it('does not derive an API external identity from an editable response username', () => {
+    const result = updateManagedUserSchema.parse({
+      user: {
+        accountType: 'api',
+        identityProvider: 'diw_dpis',
+        fullName: 'เจ้าหน้าที่ ทดสอบ',
+        username: 'U100',
+        password: '',
+        roleCodes: ['diw_central'],
+        roles: 'diw_central',
+        isActive: true,
+        source: 'api',
+      },
+    });
+
+    expect(result).toMatchObject({
+      username: 'U100',
+      externalId: undefined,
+      roleCodes: ['diw_central'],
     });
   });
 

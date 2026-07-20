@@ -39,14 +39,11 @@ const envSchema = z
       .string()
       .default('false')
       .transform((v) => v === 'true'),
-    DIW_USER_LOGIN_URL: z
-      .string()
-      .url()
-      .default('https://diwws.diw.go.th/ulogin/v1/UserLogin'),
+    DIW_USER_LOGIN_URL: z.string().url().default('https://diwws.diw.go.th/ulogin/v1/UserLogin'),
     DIW_OFFICER_LOGIN_URL: z
       .string()
       .url()
-      .default('https://diwws.diw.go.th/idiwdpislogin/v1/UserLogin'),
+      .default('https://diwws.diw.go.th/idiwdpisloginV2/v1/UserLogin'),
     DIW_USER_LOGIN_CLIENT_ID: z.string().min(1).optional(),
     DIW_USER_LOGIN_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
     DIW_USER_LOGIN_DEFAULT_PROVINCE_ID: z.string().min(1).max(8).default('1000'),
@@ -183,8 +180,7 @@ const envSchema = z
       ctx.addIssue({
         code: 'custom',
         path: ['DIW_USER_LOGIN_CLIENT_ID'],
-        message:
-          'DIW_USER_LOGIN_CLIENT_ID is required when DIW UserLogin integration is enabled',
+        message: 'DIW_USER_LOGIN_CLIENT_ID is required when DIW UserLogin integration is enabled',
       });
     }
   });

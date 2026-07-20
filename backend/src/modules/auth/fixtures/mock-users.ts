@@ -27,7 +27,6 @@ export interface MockOfficer {
     level_id: string;
     level_name_th: string;
     organize_id: string;
-    division_id: string;
     department_id: string;
     ministry_id: string;
     province_id: string;
@@ -88,7 +87,6 @@ export const MOCK_OFFICERS: MockOfficer[] = [
       level_id: '17',
       level_name_th: 'ชำนาญการ',
       organize_id: '3010073',
-      division_id: '3010071',
       department_id: '3010000',
       ministry_id: '22',
       province_id: '1000',
@@ -117,7 +115,6 @@ export const MOCK_OFFICERS: MockOfficer[] = [
       level_id: '17',
       level_name_th: 'ชำนาญการ',
       organize_id: '3010080',
-      division_id: '3010080',
       department_id: '3010000',
       ministry_id: '22',
       province_id: '1000',
@@ -146,7 +143,6 @@ export const MOCK_OFFICERS: MockOfficer[] = [
       level_id: '17',
       level_name_th: 'ชำนาญการ',
       organize_id: '4019000',
-      division_id: '4019000',
       department_id: '4019000',
       ministry_id: '22',
       province_id: '1019',

@@ -1398,3 +1398,56 @@ Risk:
 
 - Existing numeric criteria with custom rows are canonicalized on their next write.
 - The JSON does not encode inclusive/exclusive operators; consumers must follow this documented boundary meaning.
+
+## DIW Officer Login V2 Organization Profile
+
+Endpoints:
+
+- `POST /api/v1/auth/login`
+- `GET /api/v1/auth/me`
+
+Source:
+
+- Submitted login request `accountType` and `username`
+- DIW Officer Login V2 `msg[0].mposition`
+- DIW Officer Login V2 `msg[0].organize_id` and `msg[0].organize_th`
+- DIW Officer Login V2 `msg[0].division`
+- DIW Officer Login V2 `msg[0].department_id` and `msg[0].department`
+- Persisted fields in `users` and `officer_profiles`
+
+Logic:
+
+- `accountType` is derived as `poms` when `users.identity_provider = local`; every other provider returns `api`.
+- An API officer login beginning with `U` uses `identity_provider = diw_dpis`; a 13-digit submitted login uses `identity_provider = i_industry`.
+- `users.external_id` and the public `user.username` use the trimmed submitted login key. Provider response fields `percardno` and `per_cardno` are not persisted, returned, or used to find/link accounts.
+- User lookup and provisioning use `(identity_provider, external_id)`, so equal person numbers or equal usernames in different providers remain separate `users.id` values with separate roles, overrides, and audit history.
+- `organize_th`, `division`, and `department` are trimmed and persisted as Unicode display names. Empty display values normalize to `null` in the canonical response.
+- `division_id` from the provider is ignored. New login syncs do not write `officer_profiles.division_id`; the existing column remains temporarily only for legacy backfill/compatibility.
+- Organization IDs that remain in the contract (`organize_id`, `department_id`) are strings and preserve leading zeroes. An ID is accepted only when it is a 1-16 character ASCII code matching `[A-Za-z0-9._/-]`.
+- `roleCodes` is copied from all effective role codes; legacy `roles` is the first role during the compatibility window.
+- Canonical `name` and `officerProfile` are derived from persisted user/profile rows. Legacy flat aliases are returned additively in `/api/v1` until the frontend migrates.
+- Officer base role resolution prefers the normalized department display name:
+  1. a name containing `การนิคมอุตสาหกรรมแห่งประเทศไทย`, or legacy ID `01000`/`100`, maps to `industrial_estate`;
+  2. a name containing `กรมโรงงานอุตสาหกรรม`, or legacy ID `3010000`/`2`, maps to `diw_central`;
+  3. other departments map to `provincial_office`.
+- On each external officer login, the current IdP-derived base role replaces every prior organization base role (`diw_central`, `provincial_office`, or `industrial_estate`), regardless of who assigned it. Roles outside this organization-base set are preserved.
+
+Fallback order:
+
+1. Use persisted V2 display-name fields for `organize`, `division`, and `department`.
+2. Normalize missing/blank display names to `null`; do not substitute an organization ID into a display-name field.
+3. For role resolution only, use the department name first, then the explicit legacy department-ID aliases, then `provincial_office`.
+4. For legacy rows with blank `division_name_th`, migration `0072` backfills from `organizations.name_th` only when `division_id` matches a division-level organization and never overwrites a nonblank name.
+
+Reason:
+
+- The same person may authenticate through multiple upstream login channels. Preserving the submitted provider-scoped login key prevents accidental account/permission merging.
+- V2 payload variants disagree about whether `division_id` is a code or a Thai name. Ignoring it for new syncs and using `division` as the display value prevents hierarchy corruption and truncation.
+
+Risk:
+
+- Department-name matching depends on the trusted DIW provider retaining recognizable Thai department names; explicit ID aliases remain as compatibility fallback.
+- An unknown future organize/department ID containing characters outside the accepted ASCII code set will be stored as `NULL` until the allow-list is deliberately expanded.
+- Legacy `officer_dpis` rows cannot be safely reclassified because the original submitted login key is unavailable; they require a report and manual decision and are never auto-merged.
+- Administrator-assigned organization base roles are replaced at the user's next external login because DIW V2 is authoritative for the officer's current organization. Any exceptional access must use a separate non-base role or permission override.
+- `industrial_estate` still requires a separately defined estate-access assignment if access must be limited to particular industrial estates; the V2 officer payload does not provide that mapping.

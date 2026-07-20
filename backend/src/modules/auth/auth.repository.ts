@@ -32,8 +32,11 @@ export interface OfficerProfileRow {
   line_name_th: string | null;
   level_id: string | null;
   level_name_th: string | null;
+  mposition_id?: string | null;
+  mposition?: string | null;
   organize_id: string | null;
-  division_id: string | null;
+  organize_name_th?: string | null;
+  division_name_th?: string | null;
   department_id: string | null;
   department_name_th: string | null;
   ministry_id: string | null;
@@ -58,10 +61,6 @@ export const authRepository = {
       .where({ identity_provider: provider, external_id: externalId })
       .whereNull('deleted_at')
       .first();
-  },
-
-  findUserByUsername(username: string): Promise<UserRow | undefined> {
-    return db<UserRow>('users').where({ username }).whereNull('deleted_at').first();
   },
 
   findUserById(userId: number): Promise<UserRow | undefined> {
@@ -89,8 +88,11 @@ export const authRepository = {
         'officer_profiles.line_name_th',
         'officer_profiles.level_id',
         'officer_profiles.level_name_th',
+        'officer_profiles.mposition_id',
+        'officer_profiles.mposition',
         'officer_profiles.organize_id',
-        'officer_profiles.division_id',
+        'officer_profiles.organize_name_th',
+        'officer_profiles.division_name_th',
         'officer_profiles.department_id',
         db.raw(
           'COALESCE(officer_profiles.department_name_th, department_org.name_th) as department_name_th',
@@ -112,7 +114,10 @@ export const authRepository = {
     roleCode: string,
   ): Promise<UserRow> {
     return db.transaction(async (trx) => {
-      const provider = profile.identity_provider ?? 'officer_dpis';
+      const provider = profile.identity_provider;
+      if (!provider || provider === 'mock') {
+        throw new Error('External officer profile is missing an API identity provider');
+      }
       const existingUser = await trx<UserRow>('users')
         .where({ identity_provider: provider, external_id: profile.external_id })
         .whereNull('deleted_at')
@@ -149,7 +154,7 @@ export const authRepository = {
       }
 
       await syncExternalOfficerProfileWithTrx(trx, userId, profile);
-      await assignUserRole(trx, userId, roleCode);
+      await syncIdentityProviderBaseRole(trx, userId, roleCode);
 
       const user = await trx<UserRow>('users')
         .where({ id: userId })
@@ -335,9 +340,10 @@ async function syncExternalOfficerProfileWithTrx(
     level_name_th: profile.level_name_th,
     mposition_id: profile.mposition_id ?? null,
     mposition: profile.mposition ?? null,
-    organize_id: profile.organize_id,
-    division_id: profile.division_id,
-    department_id: profile.department_id,
+    organize_id: profile.organize_id || null,
+    organize_name_th: profile.organize_name_th ?? null,
+    division_name_th: profile.division_name_th ?? null,
+    department_id: profile.department_id || null,
     department_name_th: profile.department_name_th ?? null,
     ministry_id: profile.ministry_id,
     province_id: profile.province_id,
@@ -359,7 +365,13 @@ async function syncExternalOfficerProfileWithTrx(
   });
 }
 
-async function assignUserRole(
+const IDENTITY_PROVIDER_BASE_ROLE_CODES = [
+  'diw_central',
+  'provincial_office',
+  'industrial_estate',
+] as const;
+
+export async function syncIdentityProviderBaseRole(
   trx: Knex.Transaction,
   userId: number,
   roleCode: string,
@@ -367,11 +379,20 @@ async function assignUserRole(
   const role = await trx('roles').where({ code: roleCode }).whereNull('deleted_at').first('id');
   if (!role) throw new Error(`Role ${roleCode} is not provisioned`);
 
+  const identityRoleRows: Array<{ id: number }> = await trx('roles')
+    .whereIn('code', [...IDENTITY_PROVIDER_BASE_ROLE_CODES])
+    .whereNull('deleted_at')
+    .select('id');
+  const identityRoleIds = identityRoleRows.map((item) => item.id);
+  if (identityRoleIds.length > 0) {
+    await trx('user_roles').where({ user_id: userId }).whereIn('role_id', identityRoleIds).del();
+  }
+
   const existing = await trx('user_roles')
     .where({ user_id: userId, role_id: role.id })
     .first('user_id');
   if (!existing) {
-    await trx('user_roles').insert({ user_id: userId, role_id: role.id });
+    await trx('user_roles').insert({ user_id: userId, role_id: role.id, assigned_by: null });
   }
 }
 

@@ -58,8 +58,10 @@ export const usersService = {
 
     return {
       user: {
+        accountType: user.accountType ?? (user.identityProvider === 'local' ? 'poms' : 'api'),
+        identityProvider: user.identityProvider,
         userType: user.userType,
-        username: user.externalId,
+        username: user.username,
         fullName: [joinNamePrefix(user.prenameTh, user.firstName), user.lastName]
           .filter(Boolean)
           .join(' '),
@@ -67,6 +69,7 @@ export const usersService = {
         lineNameTh: user.lineNameTh,
         levelNameTh: user.levelNameTh,
         roles: user.roles,
+        roleCodes: [...(user.roleCodes ?? [user.roles])],
         isActive: user.isActive,
         source: toManagedUserSource(user.identityProvider),
       },
@@ -75,7 +78,10 @@ export const usersService = {
   },
 
   async create(input: CreateManagedUserInput, actorUserId: number): Promise<ManagedUserDetailDTO> {
-    await ensureUniqueIdentity(input.username, input.externalId ?? input.username);
+    if (input.externalId !== undefined && input.externalId !== input.username) {
+      throw new BadRequestError('POMS username and account key must match');
+    }
+    await ensureUniqueIdentity(input.externalId ?? input.username);
     await ensureRolesExist(input.roleCodes);
     return usersRepository.create(await withResolvedOfficerProfile(input), actorUserId);
   },
@@ -84,7 +90,7 @@ export const usersService = {
     input: CreateLocalAccountInput,
     actorUserId: number,
   ): Promise<ManagedUserDetailDTO> {
-    await ensureUniqueIdentity(input.username, input.username);
+    await ensureUniqueIdentity(input.username);
     await ensureRolesExist(input.roleCodes);
     const resolvedInput = await withResolvedUserInput(input);
     if (resolvedInput.permissionOverrides) {
@@ -111,16 +117,21 @@ export const usersService = {
     const existing = await usersRepository.findById(userId);
     if (!existing) throw new NotFoundError('User not found');
 
-    if (input.username !== undefined || input.externalId !== undefined) {
+    const identitySafeInput = sanitizeIdentityUpdate(existing, input);
+    if (
+      existing.identityProvider === 'local' &&
+      (identitySafeInput.username !== undefined || identitySafeInput.externalId !== undefined)
+    ) {
       await ensureUniqueIdentity(
-        input.username ?? existing.username,
-        input.externalId ?? existing.externalId,
+        identitySafeInput.externalId ?? identitySafeInput.username ?? existing.externalId,
         existing.identityProvider,
         userId,
       );
     }
-    if (input.roleCodes !== undefined) await ensureRolesExist(input.roleCodes);
-    const resolvedInput = await withResolvedUserInput(input);
+    if (identitySafeInput.roleCodes !== undefined) {
+      await ensureRolesExist(identitySafeInput.roleCodes);
+    }
+    const resolvedInput = await withResolvedUserInput(identitySafeInput);
     if (resolvedInput.permissionOverrides !== undefined) {
       await ensurePermissionsExist(
         resolvedInput.permissionOverrides.map((permission) => permission.code),
@@ -254,17 +265,65 @@ function toManagedUserSource(identityProvider: string): 'api' | 'created' {
 }
 
 async function ensureUniqueIdentity(
-  username: string,
   externalId: string,
   identityProvider = 'local',
   excludeUserId?: number,
 ): Promise<void> {
-  const [usernameOwner, externalIdOwner] = await Promise.all([
-    usersRepository.findByUsername(username, excludeUserId),
-    usersRepository.findByExternalId(identityProvider, externalId, excludeUserId),
-  ]);
-  if (usernameOwner) throw new ConflictError('Username already exists');
+  const externalIdOwner = await usersRepository.findByExternalId(
+    identityProvider,
+    externalId,
+    excludeUserId,
+  );
   if (externalIdOwner) throw new ConflictError('External ID already exists');
+}
+
+function sanitizeIdentityUpdate(
+  existing: Pick<ManagedUserDetailDTO, 'identityProvider' | 'externalId' | 'username'>,
+  input: UpdateManagedUserInput,
+): UpdateManagedUserInput {
+  if (existing.identityProvider === 'local') {
+    if (
+      input.username !== undefined &&
+      input.externalId !== undefined &&
+      input.username !== input.externalId
+    ) {
+      throw new BadRequestError('POMS username and account key must match');
+    }
+    const accountKey = input.externalId ?? input.username;
+    return accountKey === undefined
+      ? input
+      : { ...input, username: accountKey, externalId: accountKey };
+  }
+
+  if (
+    (input.username !== undefined && input.username !== existing.username) ||
+    (input.externalId !== undefined && input.externalId !== existing.externalId)
+  ) {
+    throw new BadRequestError('API account identity cannot be changed');
+  }
+
+  if (
+    input.userType !== undefined ||
+    input.prenameTh !== undefined ||
+    input.firstName !== undefined ||
+    input.lastName !== undefined ||
+    input.email !== undefined ||
+    input.phone !== undefined ||
+    input.profile !== undefined ||
+    input.password !== undefined ||
+    input.passwordHash !== undefined
+  ) {
+    throw new BadRequestError('API account profile is managed by its identity provider');
+  }
+
+  const {
+    username: _username,
+    externalId: _externalId,
+    password: _password,
+    passwordHash: _passwordHash,
+    ...safeInput
+  } = input;
+  return safeInput;
 }
 
 async function ensureRolesExist(roleCodes: string[]): Promise<void> {
