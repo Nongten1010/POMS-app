@@ -73,7 +73,13 @@ export const authService = {
   async tryLoginLocalFirst(payload: LoginRequest): Promise<LoginResponse | null> {
     const user = await authRepository.findUserByProviderAndExternalId('local', payload.username);
     if (!user) return null;
-    return completeLocalLogin(payload, user);
+
+    try {
+      return await completeLocalLogin(payload, user);
+    } catch (error) {
+      if (error instanceof UnauthorizedError) return null;
+      throw error;
+    }
   },
 
   async loginLocal(payload: LoginRequest): Promise<LoginResponse> {

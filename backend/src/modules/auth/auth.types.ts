@@ -5,7 +5,7 @@ export type UserType = 'citizen' | 'operator' | 'officer' | 'admin';
 export type AccountType = 'poms' | 'api';
 
 export interface LoginRequest {
-  /** Explicit account boundary. Omitted only for the temporary legacy login flow. */
+  /** Deprecated route hint for older clients. New clients omit it and let the backend resolve the account. */
   accountType?: AccountType;
   userType: 'officer' | 'operator' | 'citizen';
   /** local = username/password in POMS DB, omitted = external/mock IdP flow */
