@@ -19,7 +19,8 @@ import PermissionManagementPage from './pages/PermissionManagementPage'
 import StatisticsPage from './pages/StatisticsPage'
 import SupportRequestPage from './pages/SupportRequestPage'
 
-const authStorageKey = 'dpoms.authResponse'
+const authStorageKey = 'dpoms.authResponse.v2'
+const legacyAuthStorageKeys = ['dpoms.authResponse']
 
 const defaultPermissions = {
   dashboard: {
@@ -68,18 +69,14 @@ function loadStoredAuth() {
   }
 }
 
-function getResponseValue(response, keys) {
-  if (!response || typeof response !== 'object') {
-    return ''
-  }
-
-  for (const key of keys) {
-    if (response[key]) {
-      return response[key]
+function getStringValue(...values) {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) {
+      return value
     }
   }
 
-  return getResponseValue(response.data, keys) || getResponseValue(response.user, keys)
+  return ''
 }
 
 function getAuthResponsePayload(auth) {
@@ -107,19 +104,27 @@ function getAccessTokenFromAuth(auth) {
 }
 
 function getUserTypeFromAuth(auth) {
-  return auth?.userType ?? getAuthResponsePayload(auth)?.userType ?? ''
+  const response = getAuthResponsePayload(auth)
+  const responseUser = response?.user ?? response?.data?.user
+  return auth?.userType ?? responseUser?.userType ?? response?.userType ?? ''
 }
 
 function getRoleCodeFromAuth(auth) {
   const response = getAuthResponsePayload(auth)
   const responseUser = response?.user ?? response?.data?.user
+  const roleCodes = responseUser?.roleCodes ?? response?.roleCodes ?? auth?.roleCodes
+
+  if (Array.isArray(roleCodes) && roleCodes.length) {
+    return roleCodes[0] ?? ''
+  }
+
   const roles = responseUser?.roles ?? response?.roles ?? auth?.roles
 
   if (typeof roles === 'string') {
     return roles
   }
 
-  return responseUser?.primaryRole?.code ?? roles?.[0]?.code ?? ''
+  return responseUser?.primaryRole?.code ?? roles?.[0]?.code ?? roles?.[0] ?? ''
 }
 
 function canViewMenu(menuValue, permissions) {
@@ -139,22 +144,39 @@ function getUserFromAuth(auth) {
   const response = getAuthResponsePayload(auth)
   const responseUser = response?.user ?? response?.data?.user
   const name =
-    getResponseValue(responseUser, ['name', 'fullName', 'displayName', 'username']) ||
-    getResponseValue(response, ['name', 'fullName', 'displayName', 'username']) ||
+    getStringValue(
+      responseUser?.fullName,
+      responseUser?.name?.fullName,
+      responseUser?.displayName,
+      responseUser?.username,
+      response?.fullName,
+      response?.name,
+      response?.displayName,
+      response?.username,
+    ) ||
     auth.username ||
     (auth.userType === 'officer' ? 'เจ้าหน้าที่ D-POMS' : 'ผู้ใช้งาน i-Industry')
   const position =
-    getResponseValue(responseUser, ['position', 'jobTitle', 'title']) ||
-    getResponseValue(response, ['position', 'jobTitle', 'title']) ||
+    getStringValue(
+      responseUser?.officerProfile?.lineNameTh,
+      responseUser?.lineNameTh,
+      responseUser?.position,
+      responseUser?.jobTitle,
+      responseUser?.title,
+      response?.position,
+      response?.jobTitle,
+      response?.title,
+    ) ||
     ''
+  const userType = getUserTypeFromAuth(auth)
   const role =
-    auth.userType === 'officer'
+    userType === 'officer'
       ? 'เจ้าหน้าที่'
-      : auth.userType === 'operator'
+      : userType === 'operator'
         ? 'ผู้ประกอบการ'
         : 'ประชาชนทั่วไป'
 
-  return { name, position, role }
+  return { name, position, role, accountType: responseUser?.accountType ?? '' }
 }
 
 function App() {
@@ -196,6 +218,7 @@ function App() {
         onLogin={() => setIsLoginOpen(true)}
         onLogout={() => {
           localStorage.removeItem(authStorageKey)
+          legacyAuthStorageKeys.forEach((key) => localStorage.removeItem(key))
           setAuthResponse(null)
         }}
       />
@@ -210,6 +233,7 @@ function App() {
         open={isLoginOpen}
         onClose={() => setIsLoginOpen(false)}
         onLoginSuccess={(auth) => {
+          legacyAuthStorageKeys.forEach((key) => localStorage.removeItem(key))
           localStorage.setItem(authStorageKey, JSON.stringify(auth))
           setAuthResponse(auth)
           setIsLoginOpen(false)

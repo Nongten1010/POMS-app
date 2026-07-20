@@ -78,6 +78,11 @@ const statusOptions = [
   { label: 'ระงับใช้งาน', value: 'suspended' },
 ]
 
+const accountTypeLabels = {
+  poms: 'POMS',
+  api: 'API',
+}
+
 const scopeOptions = [
   { label: 'ทั้งหมด', value: 'ALL' },
   { label: 'จังหวัด', value: 'IN_PROVINCE' },
@@ -217,6 +222,8 @@ const permissionSections = [
 ]
 
 const defaultUser = {
+  accountType: 'poms',
+  identityProvider: 'local',
   username: '',
   fullName: '',
   affiliation: '',
@@ -230,21 +237,63 @@ const defaultUser = {
   permissions: {},
 }
 
+function getRoleCodeFromUser(user = {}) {
+  const roleCodes = user.roleCodes
+
+  if (Array.isArray(roleCodes) && roleCodes.length) {
+    return roleCodes[0] ?? ''
+  }
+
+  if (typeof user.roles === 'string') {
+    return user.roles
+  }
+
+  return user.primaryRole?.code ?? user.roles?.[0]?.code ?? user.roles?.[0] ?? ''
+}
+
+function getAccountTypeFromUser(user = {}) {
+  if (user.accountType === 'poms' || user.accountType === 'api') {
+    return user.accountType
+  }
+
+  if (user.source === 'created') {
+    return 'poms'
+  }
+
+  if (user.source === 'api') {
+    return 'api'
+  }
+
+  return 'poms'
+}
+
+function getDisplayName(value) {
+  if (typeof value === 'string') {
+    return value
+  }
+
+  return value?.name ?? ''
+}
+
 function mapApiUser(user, permissions = {}, fallbackId) {
-  const roleCode = typeof user.roles === 'string' ? user.roles : user.primaryRole?.code ?? user.roles?.[0]?.code
+  const roleCode = getRoleCodeFromUser(user)
+  const accountType = getAccountTypeFromUser(user)
 
   return {
     id: user.id ?? fallbackId,
+    accountType,
+    accountTypeLabel: accountTypeLabels[accountType] ?? accountType,
+    identityProvider: user.identityProvider ?? '',
     username: user.username ?? '',
-    fullName: user.fullName ?? '',
-    affiliation: user.department ?? '',
-    position: user.lineNameTh ?? '',
-    level: user.levelNameTh ?? '',
+    fullName: user.fullName ?? user.name?.fullName ?? '',
+    affiliation: getDisplayName(user.department ?? user.officerProfile?.department),
+    position: user.lineNameTh ?? user.officerProfile?.lineNameTh ?? '',
+    level: user.levelNameTh ?? user.officerProfile?.levelNameTh ?? '',
     role: roleNameThByCode[roleCode] ?? user.primaryRole?.nameTh ?? user.roles?.[0]?.nameTh ?? roleCode ?? '-',
     roleCode: roleCode ?? '',
     status: user.isActive ? 'ใช้งาน' : 'ระงับใช้งาน',
     statusValue: user.isActive ? 'active' : 'suspended',
-    source: user.source ?? 'created',
+    source: user.source ?? (accountType === 'api' ? 'api' : 'created'),
     permissions,
   }
 }
@@ -424,6 +473,12 @@ function PermissionManagementPage({ accessToken = '' }) {
   const isTableLoading = Boolean(accessToken) && isLoadingUsers
 
   const userColumns = [
+    {
+      field: 'accountTypeLabel',
+      headerName: 'แหล่งบัญชี',
+      width: 120,
+      renderCell: (params) => <Chip label={params.value || '-'} size="small" variant="outlined" sx={{ fontWeight: 300 }} />,
+    },
     { field: 'username', headerName: 'Username', width: 180 },
     { field: 'fullName', headerName: 'ชื่อ-นามสกุล', width: 220 },
     { field: 'affiliation', headerName: 'สังกัด', width: 260 },
@@ -832,6 +887,7 @@ function StatusChip({ status }) {
 
 function UserPermissionDialog({ mode, open, user, isSaving = false, saveError = '', onClose, onSave }) {
   const isAddMode = mode === 'add'
+  const isApiAccount = !isAddMode && user?.accountType === 'api'
   const [permissionLocationErrors, setPermissionLocationErrors] = useState({})
   const title = isAddMode ? 'เพิ่มผู้ใช้งาน' : 'แก้ไขสิทธิ์การใช้งาน'
   const selectedRoleValue =
@@ -875,31 +931,44 @@ function UserPermissionDialog({ mode, open, user, isSaving = false, saveError = 
             }
 
             const statusValue = String(formData.get('status') ?? statusOptions[0].value)
+            const roleCode = String(formData.get('roleCode') ?? roleOptions[0].value)
+            const permissions = isAddMode ? {} : buildPermissionsFromForm(formData, user?.permissions)
             const baseUserPayload = {
               fullName: String(formData.get('fullName') ?? '').trim(),
               username: String(formData.get('username') ?? '').trim(),
               department: emptyToNull(formData.get('department')),
               lineNameTh: emptyToNull(formData.get('lineNameTh')),
               levelNameTh: emptyToNull(formData.get('levelNameTh')),
-              roles: String(formData.get('roles') ?? roleOptions[0].value),
+              roleCodes: [roleCode],
               isActive: statusValue === 'active',
             }
             const payload = isAddMode
               ? {
-                  ...baseUserPayload,
-                  department: baseUserPayload.department ?? '',
-                  lineNameTh: baseUserPayload.lineNameTh ?? '',
-                  levelNameTh: baseUserPayload.levelNameTh ?? '',
-                  password: String(formData.get('password') ?? ''),
-                }
-              : {
                   user: {
                     ...baseUserPayload,
+                    userType: 'officer',
+                    department: baseUserPayload.department ?? '',
+                    lineNameTh: baseUserPayload.lineNameTh ?? '',
+                    levelNameTh: baseUserPayload.levelNameTh ?? '',
                     password: String(formData.get('password') ?? ''),
-                    source: user?.source ?? 'created',
                   },
-                  permissions: buildPermissionsFromForm(formData, user?.permissions),
+                  permissions,
                 }
+              : isApiAccount
+                ? {
+                    user: {
+                      roleCodes: baseUserPayload.roleCodes,
+                      isActive: baseUserPayload.isActive,
+                    },
+                    permissions,
+                  }
+                : {
+                    user: {
+                      ...baseUserPayload,
+                      password: String(formData.get('password') ?? ''),
+                    },
+                    permissions,
+                  }
 
             onSave?.(payload)
           },
@@ -946,6 +1015,14 @@ function UserPermissionDialog({ mode, open, user, isSaving = false, saveError = 
               <Typography variant="body2" sx={{ fontWeight: 600 }}>
                 ข้อมูลพื้นฐาน
               </Typography>
+              {!isAddMode ? (
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+                  <Chip label={`แหล่งบัญชี: ${user?.accountTypeLabel ?? '-'}`} size="small" variant="outlined" />
+                  {user?.identityProvider ? (
+                    <Chip label={`Provider: ${user.identityProvider}`} size="small" variant="outlined" />
+                  ) : null}
+                </Stack>
+              ) : null}
               <Box
                 sx={{
                   display: 'grid',
@@ -958,6 +1035,7 @@ function UserPermissionDialog({ mode, open, user, isSaving = false, saveError = 
                   name="username"
                   defaultValue={user?.username}
                   required
+                  InputProps={{ readOnly: isApiAccount }}
                   fullWidth
                 />
                 <TextField
@@ -966,6 +1044,7 @@ function UserPermissionDialog({ mode, open, user, isSaving = false, saveError = 
                   type="password"
                   autoComplete="new-password"
                   required={isAddMode}
+                  disabled={isApiAccount}
                   slotProps={{
                     htmlInput: {
                       minLength: isAddMode ? 8 : undefined,
@@ -979,24 +1058,28 @@ function UserPermissionDialog({ mode, open, user, isSaving = false, saveError = 
                   name="fullName"
                   defaultValue={user?.fullName}
                   required
+                  InputProps={{ readOnly: isApiAccount }}
                   fullWidth
                 />
                 <TextField
                   label="สังกัด"
                   name="department"
                   defaultValue={user?.affiliation}
+                  InputProps={{ readOnly: isApiAccount }}
                   fullWidth
                 />
                 <TextField
                   label="ตำแหน่ง"
                   name="lineNameTh"
                   defaultValue={user?.position}
+                  InputProps={{ readOnly: isApiAccount }}
                   fullWidth
                 />
                 <TextField
                   label="ระดับ"
                   name="levelNameTh"
                   defaultValue={user?.level}
+                  InputProps={{ readOnly: isApiAccount }}
                   fullWidth
                 />
                 <FormControl fullWidth required>
@@ -1004,7 +1087,7 @@ function UserPermissionDialog({ mode, open, user, isSaving = false, saveError = 
                   <Select
                     labelId="system-role-label"
                     label="สิทธิ์ในระบบ"
-                    name="roles"
+                    name="roleCode"
                     defaultValue={selectedRoleValue}
                   >
                     {dialogRoleOptions.map((role) => (

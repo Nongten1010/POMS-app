@@ -27,7 +27,8 @@ function DpomsAppBar({
   onLogout,
   onProfileClick,
 }) {
-  const initials = user.name
+  const displayName = typeof user.name === 'string' && user.name.trim() ? user.name : 'D-POMS User'
+  const initials = displayName
     .split(' ')
     .filter(Boolean)
     .map((word) => word[0])
@@ -139,7 +140,7 @@ function DpomsAppBar({
                     }}
                   >
                     <Typography variant="body2" sx={{ fontWeight: 300, lineHeight: 1.2 }}>
-                      {user.name}
+                      {displayName}
                     </Typography>
                     <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.2 }}>
                       {user.role}
