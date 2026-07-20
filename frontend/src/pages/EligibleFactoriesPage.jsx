@@ -64,6 +64,8 @@ const cemsParameterOptions = cemsParameterOptionItems.map((option) => option.lab
 const wpmsParameterOptions = wpmsParameterOptionItems.map((option) => option.label)
 const legalAnnexOptions = Array.from({ length: 12 }, (_, index) => String(index + 1))
 const fuelOtherTriggerValues = ['เชื้อเพลิงชีวมวล (Biomass)', 'เชื้อเพลิงอื่นๆ']
+const eiaAssessmentOptions = ['ไม่มี', 'มี IEE', 'มี EIA', 'มี EHIA', 'อื่นๆ']
+const eiaProjectOptions = ['มี IEE', 'มี EIA', 'มี EHIA']
 
 const baseColumns = [
   { field: 'factoryName', headerName: 'ชื่อโรงงาน', width: 240 },
@@ -263,6 +265,20 @@ function mapFactoryRow(row, index, idPrefix = 'factory') {
     cemsPointCount: countMonitoringPointsByType(measurementPoints, 'CEMS'),
     wpmsPointCount: countMonitoringPointsByType(measurementPoints, 'WPMS'),
   }
+}
+
+function getEiaAssessmentValue(factory = {}) {
+  const eia = factory?.eia ?? ''
+
+  if (eiaAssessmentOptions.includes(eia)) {
+    return eia
+  }
+
+  if (eia === 'มี') {
+    return 'มี EIA'
+  }
+
+  return eia || 'ไม่มี'
 }
 
 function mapCandidateFactory(row, index) {
@@ -987,6 +1003,9 @@ function EligibleFactoryBottomSheet({
     latitude: factory?.latitude ?? '',
     longitude: factory?.longitude ?? '',
   }))
+  const [eiaAssessment, setEiaAssessment] = useState(() => getEiaAssessmentValue(factory))
+  const [eiaOther, setEiaOther] = useState('')
+  const [eiaProjectName, setEiaProjectName] = useState('')
   const activePoint = monitoringPoints.find((point) => point.id === activeMonitoringPointId) ?? monitoringPoints[0]
   const activePointIndex = Math.max(0, monitoringPoints.findIndex((point) => point.id === activePoint?.id))
 
@@ -1040,10 +1059,11 @@ function EligibleFactoryBottomSheet({
 
     onSubmit({
       ...factory,
+      eia: eiaAssessment,
       latitude: factoryCoordinates.latitude,
       longitude: factoryCoordinates.longitude,
     })
-  }, [factory, factoryCoordinates, onSubmit])
+  }, [eiaAssessment, factory, factoryCoordinates, onSubmit])
 
   return (
     <Drawer
@@ -1095,12 +1115,47 @@ function EligibleFactoryBottomSheet({
             <Grid size={{ xs: 12, md: 3 }}>
               <ReadOnlyField label="สถานะการประกอบกิจการ" value={factory?.operationStatus} />
             </Grid>
-            <Grid size={{ xs: 12, md: 3 }}>
-              <ReadOnlyField label="ข้อมูล EIA" value={factory?.eia} />
-            </Grid>
             <Grid size={{ xs: 12, md: 6 }}>
               <ReadOnlyField label="การประกอบกิจการ" value={factory?.operation} />
             </Grid>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <TextField
+                select
+                label="ข้อมูล EIA"
+                size="small"
+                value={eiaAssessment}
+                onChange={(event) => setEiaAssessment(event.target.value)}
+                fullWidth
+              >
+                {eiaAssessmentOptions.map((option) => (
+                  <MenuItem key={option} value={option}>
+                    {option}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+            {eiaAssessment === 'อื่นๆ' ? (
+              <Grid size={{ xs: 12, md: 3 }}>
+                <TextField
+                  label="ระบุ"
+                  size="small"
+                  value={eiaOther}
+                  onChange={(event) => setEiaOther(event.target.value)}
+                  fullWidth
+                />
+              </Grid>
+            ) : null}
+            {eiaProjectOptions.includes(eiaAssessment) ? (
+              <Grid size={{ xs: 12, md: 3 }}>
+                <TextField
+                  label="ชื่อโครงการ"
+                  size="small"
+                  value={eiaProjectName}
+                  onChange={(event) => setEiaProjectName(event.target.value)}
+                  fullWidth
+                />
+              </Grid>
+            ) : null}
             <Grid size={{ xs: 12, md: 6 }}>
               <ReadOnlyField label="สถานที่ตั้ง" value={factory?.location} />
             </Grid>
