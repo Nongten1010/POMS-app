@@ -58,9 +58,11 @@ jest.mock('../../src/modules/auth/auth.repository', () => ({
 
 import { authRepository } from '../../src/modules/auth/auth.repository';
 import { authService, getOfficerRoleCode } from '../../src/modules/auth/auth.service';
+import { getIdentityProvider } from '../../src/modules/auth/identity-provider';
 import { signAccessToken } from '../../src/shared/utils/jwt';
 
 const mockedAuthRepository = jest.mocked(authRepository);
+const mockedGetIdentityProvider = jest.mocked(getIdentityProvider);
 const mockedSignAccessToken = jest.mocked(signAccessToken);
 const passwordField = 'password';
 const validTestPassword = 'valid-test-password';
@@ -155,6 +157,108 @@ describe('authService login completion', () => {
       'local',
       'U100',
     );
+  });
+
+  it('falls back to an API account when an accountType-less local password does not match', async () => {
+    const externalProfile = {
+      identity_provider: 'officer_dpis' as const,
+      external_id: 'U100',
+      prename_th: 'นาย',
+      first_name: 'ผู้ใช้',
+      last_name: 'เอพีไอ',
+      email: null,
+      phone: null,
+      pos_no: '100',
+      pertype_id: '1',
+      pertype: 'ข้าราชการ',
+      position_type_id: '1',
+      position_type_th: 'ทั่วไป',
+      line_id: '1',
+      line_name_th: 'เจ้าหน้าที่',
+      level_id: '1',
+      level_name_th: 'ปฏิบัติการ',
+      organize_id: '1',
+      department_id: '2',
+      department_name_th: 'กรมโรงงานอุตสาหกรรม',
+      ministry_id: '1',
+      province_id: '1',
+      per_status: '1',
+      per_status_name: 'ปกติ',
+    };
+    const authenticateOfficer = jest.fn(
+      async (_username: string, _password: string, _departmentID: string) => externalProfile,
+    );
+    mockedGetIdentityProvider.mockReturnValue({
+      authenticateOfficer,
+      authenticateOperator: jest.fn(async (_username: string, _password: string) => null),
+      authenticateCitizen: jest.fn(async (_username: string, _password: string) => null),
+    });
+    mockedAuthRepository.findUserByProviderAndExternalId.mockResolvedValue({
+      id: 41,
+      external_id: 'U100',
+      identity_provider: 'local',
+      user_type: 'officer',
+      username: 'U100',
+      email: null,
+      phone: null,
+      prename_th: null,
+      first_name: 'ผู้ใช้',
+      last_name: 'พอมส์',
+      is_active: true,
+      password_hash: Buffer.from('hashed-password'),
+    });
+    mockedAuthRepository.upsertExternalOfficerUser.mockResolvedValue({
+      id: 52,
+      external_id: 'U100',
+      identity_provider: 'officer_dpis',
+      user_type: 'officer',
+      username: 'U100',
+      email: null,
+      phone: null,
+      prename_th: 'นาย',
+      first_name: 'ผู้ใช้',
+      last_name: 'เอพีไอ',
+      is_active: true,
+      password_hash: null,
+    });
+    mockedAuthRepository.getOfficerProfile.mockResolvedValue({
+      user_id: 52,
+      pos_no: '100',
+      pertype_id: '1',
+      pertype: 'ข้าราชการ',
+      position_type_id: '1',
+      position_type_th: 'ทั่วไป',
+      line_id: '1',
+      line_name_th: 'เจ้าหน้าที่',
+      level_id: '1',
+      level_name_th: 'ปฏิบัติการ',
+      organize_id: '1',
+      department_id: '2',
+      department_name_th: 'กรมโรงงานอุตสาหกรรม',
+      ministry_id: '1',
+      province_id: '1',
+      per_status: '1',
+      per_status_name: 'ปกติ',
+    });
+    mockedAuthRepository.getRolesAndPermissions.mockResolvedValue({
+      roles: ['diw_central'],
+      scopes: {},
+    });
+
+    const result = await authService.login({
+      userType: 'officer',
+      username: 'U100',
+      departmentID: '2',
+      [passwordField]: 'api-valid-password',
+    });
+
+    expect(authenticateOfficer).toHaveBeenCalledWith('U100', 'api-valid-password', '2');
+    expect(mockedAuthRepository.updateLastLogin).toHaveBeenCalledWith(52);
+    expect(result.user).toMatchObject({
+      accountType: 'api',
+      username: 'U100',
+      roleCodes: ['diw_central'],
+    });
   });
 
   it('uses a generic unauthorized error when an authenticated officer is not provisioned', async () => {
@@ -355,6 +459,7 @@ describe('authService login completion', () => {
       }),
     );
     expect(mockedAuthRepository.updateLastLogin).toHaveBeenCalledWith(44);
+    expect(mockedGetIdentityProvider).not.toHaveBeenCalled();
   });
 
   it('infers central-region access for กวภ officers before issuing a token', async () => {
