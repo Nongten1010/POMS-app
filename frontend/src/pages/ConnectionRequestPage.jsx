@@ -1028,6 +1028,8 @@ function mapRequestTableRow(row) {
     form: row.form ?? '',
     status: row.status ?? '',
     statusCode: row.statusCode ?? '',
+    statusLabel: row.statusLabel ?? '',
+    waitingConnectionText: row.waitingConnectionText ?? '',
     requestType: row.requestType ?? '',
   }
 }
@@ -1110,6 +1112,7 @@ function mapRequestDetailRow(detail = {}, row = {}) {
     status: detail.status ?? row.status ?? '',
     statusCode: detail.statusCode ?? row.statusCode ?? '',
     statusLabel: detail.statusLabel ?? row.statusLabel ?? '',
+    waitingConnectionText: detail.waitingConnectionText ?? row.waitingConnectionText ?? '',
     requestType: detail.requestType ?? row.requestType ?? '',
   }
 }
@@ -1750,6 +1753,22 @@ function getRequestStatusPriority(row = {}) {
   return codePriority === -1 ? requestStatusPriorityGroups.length : codePriority
 }
 
+function isWaitingFactoryDeviceConfigStatus(row = {}) {
+  return [row?.status, row?.statusLabel, row?.statusCode].includes('รอโรงงานตั้งค่าอุปกรณ์')
+    || [row?.status, row?.statusLabel, row?.statusCode].includes('WAITING_CONNECTION')
+    || [row?.status, row?.statusLabel, row?.statusCode].includes('WAITING_FACTORY_DEVICE_CONFIG')
+    || [row?.status, row?.statusLabel, row?.statusCode].includes('WAITING_FACTORY_DEVICE_CONFIGURATION')
+    || [row?.status, row?.statusLabel, row?.statusCode].includes('WAITING_DEVICE_CONFIG')
+}
+
+function getRequestStatusChipValue(row = {}) {
+  if (isWaitingFactoryDeviceConfigStatus(row) && row.waitingConnectionText) {
+    return row.waitingConnectionText
+  }
+
+  return row.status ?? row.statusLabel ?? row.statusCode ?? ''
+}
+
 function getRequestSubmittedTime(row = {}) {
   const time = Date.parse(row.submittedAt ?? '')
   return Number.isNaN(time) ? 0 : time
@@ -1776,8 +1795,8 @@ function sortOfficerRequestRows(rows = []) {
     .map(({ row }) => row)
 }
 
-function StatusChip({ value }) {
-  const chipStyle = getStatusChipStyle(value)
+function StatusChip({ value, styleValue = value }) {
+  const chipStyle = getStatusChipStyle(styleValue)
 
   return (
     <Chip
@@ -1930,7 +1949,7 @@ function OperatorRequestActions({ row, onOpenConnectionSettings, onOpenRequestDo
   const { status, statusCode } = row
   const canModifyRequest = [status, statusCode].includes('รอโรงงานแก้ไข')
     || [status, statusCode].includes('WAITING_FACTORY_REVISION')
-  const canConfigureConnection = status === 'รอเชื่อมต่อ'
+  const canConfigureConnection = isWaitingFactoryDeviceConfigStatus(row)
 
   return (
     <Stack direction="row" spacing={1} sx={tableActionStackSx}>
@@ -6350,7 +6369,12 @@ function getRequestColumns(
       field: 'status',
       headerName: 'สถานะ',
       width: 170,
-      renderCell: (params) => <StatusChip value={params.value} />,
+      renderCell: (params) => (
+        <StatusChip
+          value={getRequestStatusChipValue(params.row)}
+          styleValue={params.row.status || params.row.statusLabel || params.row.statusCode}
+        />
+      ),
     },
     {
       field: 'actions',
