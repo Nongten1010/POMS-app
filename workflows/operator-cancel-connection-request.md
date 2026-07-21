@@ -1,6 +1,6 @@
 # Operator Cancel Connection Request Workflow
 
-Status: Approved — ready for implementation
+Status: Implemented and verified
 
 ## Goal
 
@@ -111,6 +111,8 @@ Status: Approved — ready for implementation
 - RED/GREEN evidence ยืนยัน happy path, optional reason, forbidden ownership, invalid status, idempotent retry และ concurrency-safe persistence.
 - Canonical backend API document อธิบาย contract และลิงก์กลับมาที่ workflow นี้.
 - Focused tests, typecheck และ coverage ของ changed code ผ่านเกณฑ์ TDD โดยไม่มีการแก้ `frontend/`.
+
+Implementation evidence: [`docs/testing/operator-cancel-connection-request.tdd.md`](../docs/testing/operator-cancel-connection-request.tdd.md).
 
 ## Cancel Request Body
 

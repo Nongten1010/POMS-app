@@ -5,11 +5,7 @@ import { factorySourceDb } from '../../config/factory-source-database';
 import type { PermissionScopeDetails } from '../auth/permissions';
 import type { RegionalAccessDTO } from '../auth/regional-access';
 import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
-import {
-  ConflictError,
-  ForbiddenError,
-  NotFoundError,
-} from '../../shared/errors/AppError';
+import { ConflictError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
 import {
   deriveHasEiaFromAssessment,
   resolveStoredConnectionRequestEia,
@@ -906,24 +902,15 @@ export const connectionRequestsRepository = {
         });
       }
 
-      await trx('cems_wpms_connection_requests')
-        .where('id', id)
-        .whereNull('deleted_at')
-        .update({
-          status: CONNECTION_REQUEST_STATUS.CANCELED,
-          revision_reason: reason,
-          officer_note: null,
-          updated_by: actorUserId,
-          updated_at: trx.fn.now(),
-        });
+      await trx('cems_wpms_connection_requests').where('id', id).whereNull('deleted_at').update({
+        status: CONNECTION_REQUEST_STATUS.CANCELED,
+        revision_reason: reason,
+        officer_note: null,
+        updated_by: actorUserId,
+        updated_at: trx.fn.now(),
+      });
 
-      await insertHistory(
-        trx,
-        id,
-        CONNECTION_REQUEST_STATUS.CANCELED,
-        actorUserId,
-        reason,
-      );
+      await insertHistory(trx, id, CONNECTION_REQUEST_STATUS.CANCELED, actorUserId, reason);
     });
 
     const updated = await this.findById(id);

@@ -58,11 +58,7 @@ describe('connectionRequestsService.cancel', () => {
     mockedRepository.cancelOperatorRequest.mockResolvedValue(canceled);
 
     await expect(
-      connectionRequestsService.cancel(
-        1,
-        { reason: 'ยุติโครงการติดตั้งระบบตรวจวัด' },
-        actorUserId,
-      ),
+      connectionRequestsService.cancel(1, { reason: 'ยุติโครงการติดตั้งระบบตรวจวัด' }, actorUserId),
     ).resolves.toBe(canceled);
 
     expect(mockedRepository.cancelOperatorRequest).toHaveBeenCalledWith(
