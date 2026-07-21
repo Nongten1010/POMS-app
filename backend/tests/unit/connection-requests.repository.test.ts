@@ -4,6 +4,7 @@ import {
   buildStatusHistoryTimelineForTests,
   buildBaseQueryForTests,
   buildDuplicateActiveMeasurementPointCleanupSqlForTests,
+  buildDirectConnectionFactoryQueryForTests,
   buildFactoriesForAccessQueryForTests,
   buildRequestNoPrefix,
   shouldIssueWaitingConnectionSideEffectsForTests,
@@ -11,6 +12,37 @@ import {
 import { CONNECTION_REQUEST_STATUS } from '../../src/modules/connection-requests/connection-requests.types';
 
 describe('connectionRequestsRepository request numbers', () => {
+  it('resolves direct connections from active eligible factories without requiring a POMS factory row', () => {
+    const compiled = buildDirectConnectionFactoryQueryForTests(
+      { factoryId: '10120000325542', factoryRegistrationNo: '3-34(3)-3/54นบ' },
+      { actorUserId: 42, scope: 'ALL' },
+    ).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('from [eligible_factories] as [ef]');
+    expect(sql).not.toContain('from [factories] as [f]');
+    expect(sql).toContain('[ef].[factory_name]');
+    expect(sql).toContain('[ef].[deleted_at] is null');
+    expect(compiled.bindings).toEqual(
+      expect.arrayContaining(['10120000325542', '3-34(3)-3/54นบ']),
+    );
+  });
+
+  it('applies the officer region to the eligible-factory location for direct connections', () => {
+    const compiled = buildDirectConnectionFactoryQueryForTests(
+      { factoryId: '10120000325542', factoryRegistrationNo: '10120000325542' },
+      {
+        actorUserId: 42,
+        scope: { scope: 'IN_REGION', region: 'ภาคกลาง', province: null },
+        regionalAccess: { regions: ['ภาคกลาง'] },
+      },
+    ).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('[p].[region]');
+    expect(compiled.bindings.filter((binding: unknown) => binding === 'ภาคกลาง')).toHaveLength(2);
+  });
+
   it('builds request number prefixes from system type and Thai Buddhist year', () => {
     const date = new Date('2026-05-30T12:00:00.000+07:00');
 

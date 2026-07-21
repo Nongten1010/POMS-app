@@ -133,11 +133,14 @@ describe('connectionRequestsService.createDirectConnection', () => {
 
     await expect(directService.createDirectConnection(validInput(), actor)).resolves.toBe(created);
 
-    expect(mockedRepository.findDirectConnectionFactory).toHaveBeenCalledWith('factory-input', {
-      actorUserId: 42,
-      scope: { scope: 'ALL' },
-      regionalAccess: undefined,
-    });
+    expect(mockedRepository.findDirectConnectionFactory).toHaveBeenCalledWith(
+      { factoryId: 'factory-input', factoryRegistrationNo: 'REG-INPUT' },
+      {
+        actorUserId: 42,
+        scope: { scope: 'ALL' },
+        regionalAccess: undefined,
+      },
+    );
     expect(mockedRepository.createDirectConnection).toHaveBeenCalledWith(
       expect.objectContaining({
         eligibleFactoryId: 17,
