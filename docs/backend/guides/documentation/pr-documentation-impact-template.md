@@ -1,6 +1,6 @@
-# PR Documentation-impact Block
+# Documentation-impact Block
 
-ใส่ block นี้ใน pull request ที่แตะ path ใต้ `backend/` และแทนค่าหลัง `:` โดยคงชื่อ field เดิมเพื่อให้ CI อ่านได้
+ใส่ block นี้ใน pull request body หรือ change summary ของ explicit direct push ที่แตะ path ใต้ `backend/` และแทนค่าหลัง `:` โดยคงชื่อ field เดิมเพื่อให้ CI อ่านได้
 
 ```text
 Docs impact: updated | none

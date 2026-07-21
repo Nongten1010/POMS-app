@@ -73,11 +73,11 @@ CI ตรวจได้ว่า endpoint มีอยู่ทั้งใน 
 
 ## Trigger
 
-- CI docs guard รันเมื่อเกิด pull request ทุกครั้ง เพื่อจับ Markdown ที่ถูกเพิ่มผิดตำแหน่งแม้ PR นั้นไม่แตะ backend
+- CI docs guard รันใน delivery path ที่ใช้งานจริง: pull request เมื่อใช้ PR workflow และ push validation เมื่อผู้ใช้สั่ง direct push
 - Documentation impact assessment ทำงานเมื่อ change set แตะ path ใดก็ตามใต้ `backend/`
 - Trigger ครอบคลุม code, tests, migrations, configuration และเอกสารเดิมใต้ `backend/` เพราะ contract หรือ behavior อาจเปลี่ยนนอก route file
 
-`main` ต้องเป็น protected branch และ backend changes ต้องเข้าผ่าน pull request หลัง required code/docs checks ผ่านแล้วเท่านั้น Existing production deployment จึงเริ่มหลัง merge จาก push event บน `main`
+Git delivery ทำตามคำสั่งของผู้ใช้ Direct push เข้า `main` อนุญาตเฉพาะเมื่อผู้ใช้สั่งชัดเจนและตรวจ exact commit range, changed files และ relevant checks แล้ว PR และ protected branch เป็น optional hardening ที่เปิดใช้ภายหลังได้ ไม่ใช่ prerequisite ของ documentation architecture นี้ Existing production deployment อาจเริ่มจาก push event บน `main` ไม่ว่าจะมาจาก direct push หรือ merge
 
 ## Enforcement Phases
 
@@ -109,7 +109,7 @@ CI ตรวจได้ว่า endpoint มีอยู่ทั้งใน 
 4. Canonical documents ทุกไฟล์ reachable จาก hub และไม่มี broken relative links
 5. Parameter-value auth, permission vocabulary และ connection-workflow conflicts ถูกตรวจเทียบกับ code/tests แล้ว
 6. Frozen `frontend/md` paths ไม่เปลี่ยน และ skill-managed `NOTES.md`/`workflows/*.md` อยู่ใน explicit allowlist
-7. PR docs guard ผ่านและ `main` เปิด branch protection พร้อม required checks แล้ว
+7. Docs guard ผ่านใน delivery path ที่ใช้งานจริง; branch protection เป็น optional hardening เมื่อผู้ใช้เลือกเปิด
 
 ## Required Impact Declaration
 
@@ -218,7 +218,7 @@ CI ต้องเตรียม brief ที่มี:
 - กำหนด language และ naming convention แล้ว
 - กำหนด example policy และ documentation templates แล้ว
 - กำหนด change-history policy แล้ว
-- กำหนด PR-gated delivery และ protected `main` แล้ว
+- กำหนดให้ Git delivery ทำตามคำสั่งผู้ใช้ โดย direct push ต้องได้รับคำสั่งชัดเจนและตรวจ scope ก่อน
 - กำหนด solo-backend-owner review model แล้ว
 - กำหนด machine-readable PR impact block แล้ว
 - กำหนด transition และ strict enforcement phases แล้ว
@@ -228,10 +228,10 @@ CI ต้องเตรียม brief ที่มี:
 - กำหนด file-by-file migration map แล้ว
 - กำหนด CI docs guard specification และ acceptance tests แล้ว
 - ยังไม่ย้าย legacy documents และยังไม่สร้าง CI docs guard
-- Repository history ปัจจุบันยังเป็น direct-push pattern และ production workflow ทำงานเมื่อ push เข้า `main`; ต้องเปลี่ยน branch protection และเพิ่ม PR checks ก่อน workflow target นี้จะมีผลจริง
+- Repository รองรับ direct-push pattern ตามคำสั่งผู้ใช้ และ production workflow ทำงานเมื่อ push เข้า `main`; PR/branch protection เป็นทางเลือกที่เปิดภายหลังได้
 
 ## Implementation Backlog
 
 - ย้ายเอกสารตาม [migration map](./documentation-migration-map.md) ทีละ batch
 - implement route extractor และ CI workflow ตาม [docs guard specification](../guides/documentation/docs-guard-spec.md)
-- เปิด branch protection และ required checks หลัง transition-mode guard ผ่านใน repository จริง
+- เชื่อม docs guard เข้ากับ delivery path ที่ใช้งานจริง และเปิด branch protection เฉพาะเมื่อผู้ใช้เลือกใช้ PR-only workflow

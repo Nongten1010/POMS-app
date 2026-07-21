@@ -81,14 +81,14 @@ PR ใช้ machine-readable fields: `Docs impact`, `Canonical docs`, `Reason`,
 
 CI docs guard ยังไม่ได้ implement แต่ข้อกำหนด, checkpoint, transition allowlists และ acceptance fixtures ถูกสรุปไว้ใน [CI documentation guard specification](./guides/documentation/docs-guard-spec.md)
 
-Backend delivery target คือ feature branch → pull request → code/docs checks → merge เข้า protected `main` → production deploy ห้ามใช้ direct push เข้า `main` สำหรับ backend changes
+Git delivery ต้องทำตามคำสั่งของผู้ใช้ในงานนั้น Direct push เข้า `main` ทำได้เมื่อผู้ใช้สั่งชัดเจนและตรวจ exact commit range, changed files และ relevant checks แล้ว ส่วน feature branch → pull request → checks → merge เป็นแนวทางสำหรับงานที่ต้องการ review ไม่ใช่ข้อห้ามถาวร ทั้งสองทางต้องคำนึงว่า push เข้า `main` อาจเริ่ม production deployment
 
 ### CI enforcement phases
 
 - `Transition mode`: บังคับ PR declaration, ห้ามเพิ่ม Markdown ใหม่ใน legacy locations และตรวจ links/orphans ใต้ `docs/backend/` โดยไม่ fail จาก legacy files ที่ยังไม่ถูกแตะ
 - `Strict mode`: เปิดหลัง migration เสร็จและตรวจ placement ของ active backend documentation ทั้ง repository
 
-เปิด strict mode ได้เมื่อ endpoint coverage ครบ, legacy pointers ผ่านหนึ่ง deployment cycle, repository links ไม่ชี้ legacy paths ที่จะลบ, canonical tree ไม่มี orphan/broken links, high-risk conflicts ถูกตรวจเทียบกับ code/tests, frozen frontend files ไม่เปลี่ยน และ protected `main` พร้อม required docs guard ทำงานแล้ว
+เปิด strict mode ได้เมื่อ endpoint coverage ครบ, legacy pointers ผ่านหนึ่ง deployment cycle, repository links ไม่ชี้ legacy paths ที่จะลบ, canonical tree ไม่มี orphan/broken links, high-risk conflicts ถูกตรวจเทียบกับ code/tests, frozen frontend files ไม่เปลี่ยน และ docs guard ทำงานใน delivery path ที่ใช้งานจริง ไม่ว่าจะเป็น PR หรือ explicit direct push
 
 ### Review checkpoint
 
