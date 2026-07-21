@@ -237,7 +237,7 @@ interface StatusUpdateOptions {
 
 interface PointCodeSequenceRow {
   system_type: 'CEMS' | 'WPMS';
-  prefix: 'S' | 'P';
+  prefix: 'S' | 'W';
   last_sequence: number | string;
 }
 
@@ -266,6 +266,7 @@ interface OfficerNotificationEmailLookupInput {
 
 const TEMPORARY_FACTORY_TEXT = 'ไม่ระบุ';
 const TEMPORARY_EIA_LABEL = 'ไม่มี' as const;
+const POINT_CODE_INITIAL_SEQUENCE = 2000;
 const TERMINAL_CONNECTION_REQUEST_STATUSES: ConnectionRequestStatus[] = ['CONNECTED', 'CANCELED'];
 const CONNECTION_TIMEOUT_AUTO_CANCEL_NOTE =
   'ระบบยกเลิกคำขออัตโนมัติเนื่องจากครบกำหนดเชื่อมต่อ 30 วัน';
@@ -1925,6 +1926,7 @@ async function issuePointCodesForRequest(
   const request = await trx<ConnectionRequestRow>('cems_wpms_connection_requests')
     .where('id', requestId)
     .whereNull('deleted_at')
+    .forUpdate()
     .first('system_type', 'request_type');
   if (!request) return;
   if (request.request_type === CONNECTION_REQUEST_TYPE.ADD_PARAMETER) return;
@@ -1954,7 +1956,7 @@ async function reservePointCodes(
   systemType: 'CEMS' | 'WPMS',
   quantity: number,
 ): Promise<string[]> {
-  const prefix = systemType === 'CEMS' ? 'S' : 'P';
+  const prefix = systemType === 'CEMS' ? 'S' : 'W';
   let sequence = await trx<PointCodeSequenceRow>('cems_wpms_point_code_sequences')
     .where('system_type', systemType)
     .forUpdate()
@@ -1972,7 +1974,10 @@ async function reservePointCodes(
       .first();
   }
 
-  const currentSequence = Number(sequence?.last_sequence ?? 0);
+  const currentSequence = Math.max(
+    Number(sequence?.last_sequence ?? 0),
+    POINT_CODE_INITIAL_SEQUENCE,
+  );
   const existingMaxSequence = await findMaxExistingPointCodeSequence(trx, prefix);
   const firstSequence = Math.max(currentSequence, existingMaxSequence) + 1;
   const lastSequence = firstSequence + quantity - 1;
@@ -1990,7 +1995,7 @@ async function reservePointCodes(
 
 async function findMaxExistingPointCodeSequence(
   trx: Knex.Transaction,
-  prefix: 'S' | 'P',
+  prefix: 'S' | 'W',
 ): Promise<number> {
   const rows = await trx<MeasurementPointRow>('cems_wpms_measurement_points')
     .whereNull('deleted_at')

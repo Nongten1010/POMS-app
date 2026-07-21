@@ -33,6 +33,10 @@ menus/
 | การแจ้งเตือน | `notifications/` | alert list, detail และ status |
 | สิทธิ์การใช้งาน | `permissions/` | users, roles และ permission overrides |
 
+## Canonical Menu Pages
+
+- [ขอเชื่อมต่อ](./connection-requests/README.md) — contract คำขอ CEMS/WPMS และการออกรหัสจุดตรวจวัด
+
 API ที่หลายเมนูใช้ร่วมกัน เช่น authentication และ connected measurement points อยู่ใต้ `../shared/` และให้หน้าเมนูลิงก์อ้างอิง
 
 Canonical links จะเพิ่มเมื่อแต่ละหน้าได้รับการตรวจเทียบกับ routes, validators, types และ tests แล้ว ห้ามสร้างหน้า contract เปล่าเพื่อให้ดูเหมือนมี coverage
