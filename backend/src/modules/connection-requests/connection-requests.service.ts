@@ -713,7 +713,12 @@ export const connectionRequestsService = {
     };
   },
 
-  create(input: CreateConnectionRequestInput, actorUserId: number): Promise<ConnectionRequestDTO> {
+  async create(
+    input: CreateConnectionRequestInput,
+    actorUserId: number,
+  ): Promise<ConnectionRequestDTO> {
+    await requireActiveEligibleFactory(input);
+
     return connectionRequestsRepository.create(
       clearPendingPointCodes(input),
       actorUserId,
@@ -721,10 +726,12 @@ export const connectionRequestsService = {
     );
   },
 
-  createMeasurementPointRequest(
+  async createMeasurementPointRequest(
     input: AddMeasurementPointRequestInput,
     actorUserId: number,
   ): Promise<ConnectionRequestDTO> {
+    await requireActiveEligibleFactory(input);
+
     return connectionRequestsRepository.create(
       clearPendingPointCodes({
         ...input,
@@ -772,7 +779,9 @@ export const connectionRequestsService = {
       scope: actor.scope,
       regionalAccess: actor.regionalAccess,
     });
-    if (!factory) throw new NotFoundError('Factory not found within officer access scope');
+    if (!factory || factory.isEligible !== true) {
+      throw new NotFoundError('Active eligible factory not found within officer access scope');
+    }
 
     const directInput: DirectConnectionRequestInput = {
       ...input,
@@ -786,11 +795,13 @@ export const connectionRequestsService = {
     return connectionRequestsRepository.createDirectConnection(directInput, actor.actorUserId);
   },
 
-  createParameterRequest(
+  async createParameterRequest(
     input: AddParameterRequestInput,
     actorUserId: number,
   ): Promise<ConnectionRequestDTO> {
     ensureRequestFormSections(input, CONNECTION_REQUEST_TYPE.ADD_PARAMETER);
+    await requireActiveEligibleFactory(input);
+
     return connectionRequestsRepository.create(
       { ...input, requestType: CONNECTION_REQUEST_TYPE.ADD_PARAMETER },
       actorUserId,
@@ -1095,6 +1106,15 @@ export const connectionRequestsService = {
     return connected;
   },
 };
+
+async function requireActiveEligibleFactory(input: {
+  factoryId: string;
+  factoryRegistrationNo: string;
+}): Promise<void> {
+  const eligibleFactory =
+    await connectionRequestsRepository.findActiveEligibleFactoryReference(input);
+  if (!eligibleFactory) throw new NotFoundError('Active eligible factory not found');
+}
 
 function stationMatchesMeasurementPoint(point: MeasurementPointDTO, stationId?: string): boolean {
   if (!stationId) return true;

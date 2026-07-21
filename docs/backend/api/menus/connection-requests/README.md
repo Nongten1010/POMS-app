@@ -35,6 +35,10 @@ curl --request POST \
 
 | งาน | Method | Path | Auth | Permission | Contract |
 | --- | --- | --- | --- | --- | --- |
+| สร้างคำขอเชื่อมต่อใหม่ | `POST` | `/api/v1/cems-wpms-requests` | Bearer | `cems_wpms_requests:edit` | [Eligibility gate](#eligibility-gate) |
+| สร้างคำขอเพิ่มจุดตรวจวัด | `POST` | `/api/v1/cems-wpms-requests/measurement-points` | Bearer | `cems_wpms_requests:edit` | [Eligibility gate](#eligibility-gate) |
+| สร้างคำขอเพิ่มพารามิเตอร์ | `POST` | `/api/v1/cems-wpms-requests/parameters` | Bearer | `cems_wpms_requests:edit` | [Eligibility gate](#eligibility-gate) |
+| เชื่อมต่อโดยเจ้าหน้าที่โดยตรง | `POST` | `/api/v1/cems-wpms-requests/direct-connections` | Bearer | `cems_wpms_requests:direct_connect` | [Eligibility gate](#eligibility-gate) |
 | อนุมัติแบบและออกรหัสจุดตรวจวัด | `POST` | `/api/v1/cems-wpms-requests/:id/review` | Bearer | `cems_wpms_requests:approve` | [Approve design](#approve-design) |
 | อ่านรายละเอียดคำขอและรหัสจุด | `GET` | `/api/v1/cems-wpms-requests/:id` | Bearer | `cems_wpms_requests:view` | [Read request](#read-request) |
 | อ่านจุดตรวจวัดที่เชื่อมต่อแล้ว | `GET` | `/api/v1/connected-measurement-points` | Bearer | `cems_wpms_requests:view` | [Connected points](#connected-points) |
@@ -58,6 +62,38 @@ curl --request POST \
 - การจองเลขและการเปลี่ยนสถานะทำใน transaction เดียวกันเพื่อไม่ให้คำขอพร้อมกันได้รหัสซ้ำ.
 
 ## Contracts
+
+### Eligibility gate
+
+ทุก endpoint ที่สร้างคำขอรับเฉพาะโรงงานที่มี active row ใน `eligible_factories` โดย resolve จาก identifier aliases ของโรงงานก่อนเริ่ม transaction สร้างคำขอ พฤติกรรมนี้ใช้กับ `NEW_CONNECTION`, `ADD_MEASUREMENT_POINT`, `ADD_PARAMETER` และ Direct Connection.
+
+Relevant request fields:
+
+| Field | Type | Required | Rules |
+| --- | --- | --- | --- |
+| `factoryId` | string | yes | ต้อง resolve ไปยัง `eligible_factories.source_factory_id` หรือ `factory_registration_no_new` ที่ active |
+| `factoryRegistrationNo` | string | yes | ใช้เป็น alias สำรองสำหรับ `eligible_factories.factory_registration_no_new` |
+
+Minimal relevant request fragment:
+
+```json
+{
+  "factoryId": "F000123",
+  "factoryRegistrationNo": "3-106-33/50สบ"
+}
+```
+
+ถ้า resolve ไม่พบ ระบบไม่สร้าง request, history หรือ measurement point และตอบ:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Active eligible factory not found"
+  }
+}
+```
 
 ### Approve design
 
@@ -170,6 +206,7 @@ Minimal response:
 - `401 Unauthorized` เมื่อไม่มี bearer token ที่ถูกต้อง.
 - `403 Forbidden` เมื่อไม่มี permission หรืออ่านคำขอนอก scope.
 - `404 Not Found` เมื่อไม่พบคำขอหรือจุดตรวจวัดใน scope.
+- `404 Not Found` เมื่อ endpoint สร้างคำขอ resolve active eligible factory ไม่สำเร็จ.
 - `400 Bad Request` เมื่อ payload หรือสถานะปัจจุบันไม่อนุญาตให้ทำ action.
 
 ## Business Flow And Explanations

@@ -205,6 +205,7 @@ interface FactoryGeneralRow {
   boiler_size_each: string | null;
   fuel_used: string | null;
   has_eia: boolean | number | null;
+  eligible_factory_id: number | string | null;
 }
 
 interface FactorySnapshotSourceRow {
@@ -264,6 +265,12 @@ interface OfficerNotificationEmailLookupInput {
   industrialAreaType?: 'INDUSTRIAL_ESTATE' | 'OUTSIDE_INDUSTRIAL_ESTATE';
 }
 
+interface EligibleFactoryReferenceRow {
+  id: number | string;
+  source_factory_id: string | null;
+  factory_registration_no_new: string;
+}
+
 const TEMPORARY_FACTORY_TEXT = 'ไม่ระบุ';
 const TEMPORARY_EIA_LABEL = 'ไม่มี' as const;
 const POINT_CODE_INITIAL_SEQUENCE = 2000;
@@ -272,6 +279,34 @@ const CONNECTION_TIMEOUT_AUTO_CANCEL_NOTE =
   'ระบบยกเลิกคำขออัตโนมัติเนื่องจากครบกำหนดเชื่อมต่อ 30 วัน';
 
 export const connectionRequestsRepository = {
+  async findActiveEligibleFactoryReference(input: {
+    factoryId: string;
+    factoryRegistrationNo: string;
+  }): Promise<{
+    id: number;
+    sourceFactoryId: string | null;
+    factoryRegistrationNoNew: string;
+  } | null> {
+    const row = await db<EligibleFactoryReferenceRow>('eligible_factories')
+      .whereNull('deleted_at')
+      .where((builder) => {
+        builder
+          .where('source_factory_id', input.factoryId)
+          .orWhere('factory_registration_no_new', input.factoryId)
+          .orWhere('factory_registration_no_new', input.factoryRegistrationNo);
+      })
+      .select('id', 'source_factory_id', 'factory_registration_no_new')
+      .first();
+
+    return row
+      ? {
+          id: Number(row.id),
+          sourceFactoryId: row.source_factory_id,
+          factoryRegistrationNoNew: row.factory_registration_no_new,
+        }
+      : null;
+  },
+
   async list(
     query: ListConnectionRequestsQuery,
     access: ListAccess,
@@ -391,6 +426,7 @@ export const connectionRequestsRepository = {
         'ef.boiler_size_each',
         'ef.fuel_used',
         'ef.has_eia',
+        'ef.id as eligible_factory_id',
       );
 
     if (requiresAssignedFactoryAccess(access.scope)) {
@@ -1397,6 +1433,7 @@ function toFactoryGeneralDTO(row: FactoryGeneralRow): FactoryGeneralDTO {
     boilerSizeEach: row.boiler_size_each,
     fuelUsed: row.fuel_used,
     hasEia: toNullableBoolean(row.has_eia),
+    isEligible: row.eligible_factory_id !== null && row.eligible_factory_id !== undefined,
     formDefaults: {
       factoryId: row.fid,
       factoryName: row.name,

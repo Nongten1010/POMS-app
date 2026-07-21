@@ -14,6 +14,7 @@ jest.mock('../../src/modules/connection-requests/connection-requests.repository'
     listFactoryMainTypeLabels: jest.fn(),
     listProvinceRegions: jest.fn(),
     findFactoryGeneral: jest.fn(),
+    findActiveEligibleFactoryReference: jest.fn(),
     listConnectedMeasurementPointsForFactories: jest.fn(),
     listPublicConnectedMeasurementPointsForFactories: jest.fn(),
     listOfficerNotificationEmailsForFactories: jest.fn(),
@@ -156,6 +157,11 @@ describe('connectionRequestsService', () => {
     mockedRepository.listOfficerNotificationEmailsForFactories.mockResolvedValue(new Map());
     mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([]);
     mockedRepository.listPublicConnectedMeasurementPointsForFactories.mockResolvedValue([]);
+    mockedRepository.findActiveEligibleFactoryReference.mockResolvedValue({
+      id: 9,
+      sourceFactoryId: 'factory-001',
+      factoryRegistrationNoNew: '3-106-33/50สบ',
+    });
     mockedEligibleFactoriesService.list.mockResolvedValue({ data: [], meta: { total: 0 } });
     mockedDeviceConnectionsService.listActiveSettings.mockResolvedValue([]);
     mockedDeviceConnectionsService.listByRequestId.mockResolvedValue([]);
@@ -2198,6 +2204,17 @@ describe('connectionRequestsService', () => {
     expect(result.statusLabel).toBe('รอพิจารณาแบบ');
   });
 
+  it('rejects request submission when the factory is not actively eligible', async () => {
+    mockedRepository.findActiveEligibleFactoryReference.mockResolvedValueOnce(null);
+
+    await expect(connectionRequestsService.create(payload, actorUserId)).rejects.toMatchObject({
+      statusCode: 404,
+      code: 'NOT_FOUND',
+    });
+
+    expect(mockedRepository.create).not.toHaveBeenCalled();
+  });
+
   it('creates an add measurement point request with the specific request type', async () => {
     mockedRepository.create.mockResolvedValue(
       requestDto({
@@ -2221,6 +2238,19 @@ describe('connectionRequestsService', () => {
       actorUserId,
       CONNECTION_REQUEST_STATUS.PENDING_DESIGN_REVIEW,
     );
+  });
+
+  it('rejects an add measurement point request when the factory is not actively eligible', async () => {
+    mockedRepository.findActiveEligibleFactoryReference.mockResolvedValueOnce(null);
+
+    await expect(
+      connectionRequestsService.createMeasurementPointRequest(
+        { ...payload, requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT },
+        actorUserId,
+      ),
+    ).rejects.toMatchObject({ statusCode: 404, code: 'NOT_FOUND' });
+
+    expect(mockedRepository.create).not.toHaveBeenCalled();
   });
 
   it('creates a CEMS add parameter request without requiring documents', async () => {
@@ -2260,6 +2290,37 @@ describe('connectionRequestsService', () => {
       actorUserId,
       CONNECTION_REQUEST_STATUS.PENDING_DESIGN_REVIEW,
     );
+  });
+
+  it('rejects an add parameter request when the factory is not actively eligible', async () => {
+    mockedRepository.findActiveEligibleFactoryReference.mockResolvedValueOnce(null);
+    const addParameterPayload = {
+      ...payload,
+      requestType: CONNECTION_REQUEST_TYPE.ADD_PARAMETER,
+      measurementPoints: [
+        {
+          ...payload.measurementPoints[0],
+          parameters: ['CO'],
+          details: {
+            stackShape: 'วงกลม',
+            stackDiameter: 1.2,
+            connectionDevice: 'POMS Box (กรอ.)',
+          },
+          documentsAndImages: [],
+          measurementInstruments: {
+            converterBrand: 'Converter Brand',
+            converterModel: 'CV-100',
+            parameters: [{ parameter: 'CO', technique: 'NDIR' }],
+          },
+        },
+      ],
+    };
+
+    await expect(
+      connectionRequestsService.createParameterRequest(addParameterPayload, actorUserId),
+    ).rejects.toMatchObject({ statusCode: 404, code: 'NOT_FOUND' });
+
+    expect(mockedRepository.create).not.toHaveBeenCalled();
   });
 
   it('moves an approved design to waiting connection with a 30 day due date', async () => {
