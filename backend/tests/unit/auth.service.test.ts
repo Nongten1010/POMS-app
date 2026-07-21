@@ -59,6 +59,7 @@ jest.mock('../../src/modules/auth/auth.repository', () => ({
 import { authRepository } from '../../src/modules/auth/auth.repository';
 import { authService, getOfficerRoleCode } from '../../src/modules/auth/auth.service';
 import { getIdentityProvider } from '../../src/modules/auth/identity-provider';
+import { MockIdentityProvider } from '../../src/modules/auth/identity-provider/mock.identity-provider';
 import { signAccessToken } from '../../src/shared/utils/jwt';
 
 const mockedAuthRepository = jest.mocked(authRepository);
@@ -883,6 +884,7 @@ describe('authService login completion', () => {
       operatorFactoryRow('0107536001346', '10190000125572'),
       operatorFactoryRow('0107536001346', '10190000225448'),
       operatorFactoryRow('0107536001346', '10190000325446'),
+      operatorFactoryRow('0107536001346', '10120000325542'),
     ]);
     mockedAuthRepository.getRolesAndPermissions.mockResolvedValue({
       roles: ['factory_operator'],
@@ -891,36 +893,12 @@ describe('authService login completion', () => {
       },
     });
 
-    const operatorProfile = {
-      citizen_id: '3191000135709',
-      user_code: '53495',
-      first_name: 'ธนาภรณ์',
-      last_name: 'ศรีอวบ',
-      email: 'operator@example.com',
-      phone: '0999454594',
-      regis_date: '2023-06-09 12:01:53',
-      juristics: [
-        {
-          juristic_id: '0105556125804',
-          name_th: 'บริษัท อินทรี อีโคไซเคิล จำกัด',
-          name_en: 'INSEE ECOCYCLE COMPANY LIMITED',
-          factories: [
-            {
-              fid: '10190003325500',
-              code: '3-106-33/50สบ',
-              name: 'บริษัท อินทรี อีโคไซเคิล จำกัด',
-              province_id: '1019',
-              system_id: 12,
-              verify_status: 1,
-              authorize_start: '2024-09-02',
-              authorize_end: '2024-09-30',
-              juristic_start: '2024-08-05',
-              verify_date: '2024-09-13',
-            },
-          ],
-        },
-      ],
-    };
+    const operatorProfile = await new MockIdentityProvider().authenticateOperator(
+      'operator_demo',
+      'demo1234',
+    );
+    expect(operatorProfile).not.toBeNull();
+    if (!operatorProfile) throw new Error('operator_demo fixture is missing');
 
     const result = await authService.completeLoginAsOperator(operatorProfile);
 
@@ -941,6 +919,7 @@ describe('authService login completion', () => {
         '10190000125572',
         '10190000225448',
         '10190000325446',
+        '10120000325542',
       ],
     });
   });
