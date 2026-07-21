@@ -11,7 +11,7 @@
 - ไม่รวม `express.static`, 404 fallback และ middleware-only surfaces
 - Registry นี้ไม่เก็บ request/response body เพื่อไม่ให้เกิด contract ซ้ำ
 
-จำนวน explicit endpoints: **105**
+จำนวน explicit endpoints: **106**
 
 | Method | Full path | Canonical owner | Guard | Route source |
 | --- | --- | --- | --- | --- |
@@ -61,6 +61,7 @@
 | `PUT` | `/api/v1/cems-wpms-requests/:id/form` | `docs/backend/api/menus/connection-requests/` | `authenticate + authorize(cems_wpms_requests:edit)` | `backend/src/modules/connection-requests/connection-requests.routes.ts` |
 | `POST` | `/api/v1/cems-wpms-requests/:id/review` | `docs/backend/api/menus/connection-requests/` | `authenticate + authorize(cems_wpms_requests:approve)` | `backend/src/modules/connection-requests/connection-requests.routes.ts` |
 | `POST` | `/api/v1/cems-wpms-requests/:id/status` | `docs/backend/api/menus/connection-requests/` | `authenticate + authorize(cems_wpms_requests:approve)` | `backend/src/modules/connection-requests/connection-requests.routes.ts` |
+| `POST` | `/api/v1/cems-wpms-requests/:id/cancel` | `docs/backend/api/menus/connection-requests/` | `authenticate + authorize(cems_wpms_requests:edit)` | `backend/src/modules/connection-requests/connection-requests.routes.ts` |
 | `POST` | `/api/v1/cems-wpms-requests/:id/device-configs` | `docs/backend/api/menus/connection-requests/` | `authenticate + authorize(cems_wpms_requests:edit)` | `backend/src/modules/connection-requests/connection-requests.routes.ts` |
 | `POST` | `/api/v1/cems-wpms-requests/:id/confirm-connection` | `docs/backend/api/menus/connection-requests/` | `authenticate + authorize(cems_wpms_requests:edit)` | `backend/src/modules/connection-requests/connection-requests.routes.ts` |
 | `POST` | `/api/v1/cems-wpms-requests/:id/verify-connection` | `docs/backend/api/menus/connection-requests/` | `authenticate + authorize(cems_wpms_requests:approve)` | `backend/src/modules/connection-requests/connection-requests.routes.ts` |
