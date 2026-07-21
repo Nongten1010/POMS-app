@@ -159,7 +159,10 @@ describe('eligibleFactoriesService', () => {
           boilerCount: null,
           boilerSizeEach: null,
           fuelUsed: null,
+          eia: null,
+          eiaOther: null,
           hasEia: null,
+          projectName: null,
           selectedReason: null,
           selectedBy: 7,
           selectedAt: '2026-05-26T20:18:00.143Z',
@@ -237,7 +240,10 @@ describe('eligibleFactoriesService', () => {
           boilerCount: null,
           boilerSizeEach: null,
           fuelUsed: null,
+          eia: null,
+          eiaOther: null,
           hasEia: null,
+          projectName: null,
           monitoringPointFormId: null,
           measurementPoints: [
             expect.objectContaining({ systemType: 'CEMS', pointCode: 'CEMS-1' }),
@@ -247,7 +253,7 @@ describe('eligibleFactoriesService', () => {
       ],
       meta: { total: 1 },
     });
-    expect(Object.keys(result.data[0] ?? {})).toHaveLength(23);
+    expect(Object.keys(result.data[0] ?? {})).toHaveLength(26);
   });
 
   it('throws not found when removing an unknown eligible factory selection', async () => {

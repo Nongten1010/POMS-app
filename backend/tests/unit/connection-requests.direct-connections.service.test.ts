@@ -37,6 +37,8 @@ describe('connectionRequestsService.createDirectConnection', () => {
     factoryId: 'canonical-factory-id',
     factoryName: 'โรงงานจากฐานข้อมูล',
     newRegistrationNo: 'REG-CANONICAL',
+    isEligible: true,
+    eligibleFactoryId: 17,
   };
   const created = {
     id: 91,
@@ -64,6 +66,7 @@ describe('connectionRequestsService.createDirectConnection', () => {
         factoryId: 'canonical-factory-id',
         factoryName: 'โรงงานจากฐานข้อมูล',
         factoryRegistrationNo: 'REG-CANONICAL',
+        eligibleFactoryId: 17,
         measurementPoints: [expect.objectContaining({ pointCode: 'free-form/ก-01' })],
       }),
       42,
@@ -113,6 +116,20 @@ describe('connectionRequestsService.createDirectConnection', () => {
 
   it('does not create anything when the selected factory is outside the officer scope', async () => {
     mockedRepository.findFactoryGeneral.mockResolvedValueOnce(null);
+
+    await expect(directService.createDirectConnection(validInput(), actor)).rejects.toMatchObject({
+      statusCode: 404,
+      code: 'NOT_FOUND',
+    });
+
+    expect(mockedRepository.createDirectConnection).not.toHaveBeenCalled();
+  });
+
+  it('does not create anything when the selected factory is not actively eligible', async () => {
+    mockedRepository.findFactoryGeneral.mockResolvedValueOnce({
+      ...canonicalFactory,
+      isEligible: false,
+    });
 
     await expect(directService.createDirectConnection(validInput(), actor)).rejects.toMatchObject({
       statusCode: 404,

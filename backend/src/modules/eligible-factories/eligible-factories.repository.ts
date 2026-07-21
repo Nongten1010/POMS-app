@@ -1,5 +1,6 @@
 import type { Knex } from 'knex';
 import { db } from '../../config/database';
+import { ConflictError } from '../../shared/errors/AppError';
 import type {
   CreateEligibleFactoryInput,
   EligibleFactoryDTO,
@@ -31,7 +32,10 @@ interface EligibleFactoryRow {
   boiler_count: number | string | null;
   boiler_size_each: string | null;
   fuel_used: string | null;
+  eia_assessment: string | null;
+  eia_other: string | null;
   has_eia: boolean | number | null;
+  project_name: string | null;
   selected_reason: string | null;
   selected_by: number | string;
   selected_at: Date | string;
@@ -146,13 +150,36 @@ export const eligibleFactoriesRepository = {
   },
 
   async softDelete(id: number, actorUserId: number): Promise<boolean> {
-    const affected = await db('eligible_factories').where('id', id).whereNull('deleted_at').update({
-      deleted_at: db.fn.now(),
-      updated_at: db.fn.now(),
-      updated_by: actorUserId,
-    });
+    return db.transaction(async (trx) => {
+      const eligibleFactory = await trx('eligible_factories')
+        .where('id', id)
+        .whereNull('deleted_at')
+        .forUpdate()
+        .first('id');
+      if (!eligibleFactory) return false;
 
-    return affected > 0;
+      const connectedPoint = await trx('cems_wpms_connected_measurement_points')
+        .where('eligible_factory_id', id)
+        .whereNull('deleted_at')
+        .first('id');
+      if (connectedPoint) {
+        throw new ConflictError(
+          'Connected POMS factory cannot be removed from eligible factories',
+          { eligibleFactoryId: id },
+        );
+      }
+
+      const affected = await trx('eligible_factories')
+        .where('id', id)
+        .whereNull('deleted_at')
+        .update({
+          deleted_at: trx.fn.now(),
+          updated_at: trx.fn.now(),
+          updated_by: actorUserId,
+        });
+
+      return affected > 0;
+    });
   },
 
   async attachMonitoringPointForm(
@@ -219,7 +246,10 @@ function buildEligibleFactoriesBaseQuery(): Knex.QueryBuilder<
     'boiler_count',
     'boiler_size_each',
     'fuel_used',
+    'eia_assessment',
+    'eia_other',
     'has_eia',
+    'project_name',
     'selected_reason',
     'selected_by',
     'selected_at',
@@ -342,13 +372,28 @@ function toDTO(row: EligibleFactoryRow): EligibleFactoryDTO {
     boilerCount: toNullableNumber(row.boiler_count),
     boilerSizeEach: row.boiler_size_each,
     fuelUsed: row.fuel_used,
+    eia: isStoredEiaAssessment(row.eia_assessment)
+      ? row.eia_assessment
+      : toNullableBoolean(row.has_eia) === null
+        ? null
+        : toNullableBoolean(row.has_eia)
+          ? 'มี'
+          : 'ไม่มี',
+    eiaOther: row.eia_assessment === 'อื่นๆ' ? row.eia_other : null,
     hasEia: toNullableBoolean(row.has_eia),
+    projectName: row.project_name,
     selectedReason: row.selected_reason,
     selectedBy: Number(row.selected_by),
     selectedAt: toIsoString(row.selected_at),
     createdAt: toIsoString(row.created_at),
     updatedAt: toIsoString(row.updated_at),
   };
+}
+
+function isStoredEiaAssessment(
+  value: string | null,
+): value is NonNullable<EligibleFactoryDTO['eia']> {
+  return ['มี', 'ไม่มี', 'มี IEE', 'มี EIA', 'มี EHIA', 'อื่นๆ'].includes(value ?? '');
 }
 
 async function hydrateMeasurementPoints(rows: EligibleFactoryDTO[]): Promise<EligibleFactoryDTO[]> {

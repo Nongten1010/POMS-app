@@ -19,6 +19,8 @@ Backend เป็นเจ้าของและดูแลเอกสาร
 - [Officer direct connection workflow](../../workflows/officer-direct-connection-request.md)
 - [KWP form step workflow](../../workflows/kwp-form-step-workflow.md)
 - [Permission menu location-scope workflow](../../workflows/permission-menu-location-scope.md)
+- [Operator cancel connection request workflow](../../workflows/operator-cancel-connection-request.md)
+- [Connected factory profile sync workflow](../../workflows/connected-factory-profile-sync.md)
 
 ## ข้อตกลงที่ยืนยันแล้ว
 

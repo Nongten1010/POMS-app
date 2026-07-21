@@ -108,4 +108,19 @@ describe('connection request environmental assessment snapshot', () => {
       }),
     );
   });
+
+  it('persists the resolved eligible factory relationship with the request snapshot', () => {
+    const row = toRequestRowForTests({
+      eligibleFactoryId: 25,
+      factoryId: 'FAC-001',
+      factoryName: 'โรงงานทดสอบ',
+      factoryRegistrationNo: 'REG-001',
+      systemType: 'CEMS',
+      contactName: 'ผู้ประสานงาน',
+      contactPhone: '0812345678',
+      measurementPoints: [],
+    });
+
+    expect(row).toEqual(expect.objectContaining({ eligible_factory_id: 25 }));
+  });
 });

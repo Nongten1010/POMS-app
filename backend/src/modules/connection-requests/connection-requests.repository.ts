@@ -11,6 +11,11 @@ import {
   resolveStoredConnectionRequestEia,
 } from './connection-request-eia';
 import {
+  buildConnectedFactoryProfilePatch,
+  buildEligibleFactoryProfilePatch,
+  type FactoryProfileSyncSource,
+} from './connected-factory-profile';
+import {
   CANCELLABLE_CONNECTION_REQUEST_STATUSES,
   CONNECTION_REQUEST_STATUS,
   CONNECTION_REQUEST_SUBMISSION_SOURCE,
@@ -41,6 +46,7 @@ const FACTORY_TYPE_CODE_LENGTH = 5;
 
 interface ConnectionRequestRow {
   id: number | string;
+  eligible_factory_id: number | string | null;
   request_no: string;
   submission_source: 'OPERATOR_FORM' | 'OFFICER_DIRECT_API' | null;
   request_type: ConnectionRequestType;
@@ -115,12 +121,24 @@ interface ConnectedMeasurementPointRow {
   parameters_json: string;
 }
 
+interface ConnectedFactoryProfileRow {
+  factory_latitude: number | string | null;
+  factory_longitude: number | string | null;
+  factory_eia_assessment: string | null;
+  factory_eia_other: string | null;
+  factory_has_eia: boolean | number | null;
+  factory_project_name: string | null;
+  factory_front_photos_json: string | null;
+  factory_logo_json: string | null;
+}
+
 interface CurrentFactoryMeasurementPointRow {
   factory_id: string;
   point_name: string;
   point_code: string | null;
   system_type: 'CEMS' | 'WPMS';
   parameters_json: string;
+  factory_logo_json: string | null;
   documents_json: string | null;
 }
 
@@ -269,6 +287,16 @@ interface EligibleFactoryReferenceRow {
   id: number | string;
   source_factory_id: string | null;
   factory_registration_no_new: string;
+}
+
+interface EligibleFactoryProfileRow {
+  id: number | string;
+  latitude: number | string | null;
+  longitude: number | string | null;
+  eia_assessment: string | null;
+  eia_other: string | null;
+  has_eia: boolean | number | null;
+  project_name: string | null;
 }
 
 const TEMPORARY_FACTORY_TEXT = 'ไม่ระบุ';
@@ -532,6 +560,7 @@ export const connectionRequestsRepository = {
         'request_no',
         'submission_source',
         'request_type',
+        'eligible_factory_id',
         'factory_id',
         'factory_name',
         'factory_registration_no',
@@ -656,6 +685,7 @@ export const connectionRequestsRepository = {
         'point_code',
         'system_type',
         'parameters_json',
+        'factory_logo_json',
         'documents_json',
       )
       .orderBy('factory_id', 'asc')
@@ -669,6 +699,7 @@ export const connectionRequestsRepository = {
       pointCode: row.point_code,
       systemType: row.system_type,
       parameters: parseParameters(row.parameters_json),
+      factoryLogo: parseJsonObject<RequestDocumentImageInput>(row.factory_logo_json),
       documentsAndImages: parseJsonArray<RequestDocumentImageInput>(row.documents_json),
       data: [],
     }));
@@ -691,6 +722,7 @@ export const connectionRequestsRepository = {
         'point_code',
         'system_type',
         'parameters_json',
+        'factory_logo_json',
         'documents_json',
       )
       .orderBy('factory_id', 'asc')
@@ -704,6 +736,7 @@ export const connectionRequestsRepository = {
       pointCode: row.point_code,
       systemType: row.system_type,
       parameters: parseParameters(row.parameters_json),
+      factoryLogo: parseJsonObject<RequestDocumentImageInput>(row.factory_logo_json),
       documentsAndImages: parseJsonArray<RequestDocumentImageInput>(row.documents_json),
       data: [],
     }));
@@ -715,6 +748,7 @@ export const connectionRequestsRepository = {
     initialStatus: ConnectionRequestStatus,
   ): Promise<ConnectionRequestDTO> {
     return db.transaction(async (trx) => {
+      await requireActiveEligibleFactoryInTransaction(trx, input.eligibleFactoryId);
       const requestNo = await nextRequestNo(trx, input.systemType);
       const [{ id }] = await trx('cems_wpms_connection_requests')
         .insert({
@@ -752,6 +786,10 @@ export const connectionRequestsRepository = {
 
     try {
       return await db.transaction(async (trx) => {
+        const activeEligibleFactory = await requireActiveEligibleFactoryInTransaction(
+          trx,
+          input.eligibleFactoryId,
+        );
         await ensureDirectPointCodeAvailable(trx, pointCode);
         const connectedAt = new Date();
         const requestNo = await nextDirectRequestNo(trx, input.systemType, connectedAt);
@@ -784,15 +822,21 @@ export const connectionRequestsRepository = {
           actorUserId,
           'เจ้าหน้าที่เพิ่มจุดตรวจวัดและเชื่อมต่อโดยตรงผ่าน API',
         );
+        const factoryProfile = await syncFactoryProfileInTransaction(
+          trx,
+          activeEligibleFactory,
+          input,
+          actorUserId,
+        );
         await trx('cems_wpms_connected_measurement_points').insert({
           source_request_id: requestId,
           source_measurement_point_id: pointId,
+          eligible_factory_id: Number(activeEligibleFactory.id),
           factory_id: input.factoryId,
           factory_name: input.factoryName,
           factory_registration_no: input.factoryRegistrationNo,
           factory_address: input.address ?? null,
-          factory_latitude: input.latitude ?? null,
-          factory_longitude: input.longitude ?? null,
+          ...factoryProfile,
           system_type: input.systemType,
           point_name: point.pointName,
           point_code: pointCode,
@@ -837,6 +881,7 @@ export const connectionRequestsRepository = {
     nextStatus: ConnectionRequestStatus,
   ): Promise<ConnectionRequestDTO> {
     return db.transaction(async (trx) => {
+      await requireActiveEligibleFactoryInTransaction(trx, input.eligibleFactoryId);
       await trx('cems_wpms_connection_requests')
         .where('id', id)
         .whereNull('deleted_at')
@@ -903,6 +948,68 @@ export const connectionRequestsRepository = {
       const updated = await findByIdInTransaction(trx, id);
       if (!updated) throw new Error('Updated connection request could not be loaded');
       return updated;
+    });
+  },
+
+  async connect(
+    id: number,
+    actorUserId: number,
+    update: Pick<StatusUpdate, 'verifiedAt' | 'officerNote'>,
+  ): Promise<ConnectionRequestDTO> {
+    return db.transaction(async (trx) => {
+      const current = await trx<ConnectionRequestRow>('cems_wpms_connection_requests')
+        .where('id', id)
+        .whereNull('deleted_at')
+        .forUpdate()
+        .first('id', 'status', 'eligible_factory_id');
+
+      if (!current) throw new NotFoundError('Connection request not found');
+      if (current.status !== CONNECTION_REQUEST_STATUS.CONNECTION_CONFIRMED) {
+        throw new ConflictError('Connection request cannot be connected from its current status', {
+          currentStatus: current.status,
+          allowedStatuses: [CONNECTION_REQUEST_STATUS.CONNECTION_CONFIRMED],
+        });
+      }
+
+      const eligibleFactoryId = Number(current.eligible_factory_id);
+      if (!Number.isFinite(eligibleFactoryId)) {
+        throw new ConflictError('Connection request is not linked to an eligible factory');
+      }
+
+      const activeEligibleFactory = await requireActiveEligibleFactoryInTransaction(
+        trx,
+        eligibleFactoryId,
+      );
+
+      await trx('cems_wpms_connection_requests')
+        .where('id', id)
+        .whereNull('deleted_at')
+        .update({
+          status: CONNECTION_REQUEST_STATUS.CONNECTED,
+          revision_reason: null,
+          officer_note: update.officerNote ?? null,
+          verified_at: update.verifiedAt ?? null,
+          updated_by: actorUserId,
+          updated_at: trx.fn.now(),
+        });
+
+      await insertHistory(
+        trx,
+        id,
+        CONNECTION_REQUEST_STATUS.CONNECTED,
+        actorUserId,
+        buildStatusHistoryNote(update),
+      );
+
+      const connected = await findByIdInTransaction(trx, id);
+      if (!connected) throw new Error('Connected request could not be loaded');
+      await syncConnectedMeasurementPointsInTransaction(
+        trx,
+        connected,
+        actorUserId,
+        activeEligibleFactory,
+      );
+      return connected;
     });
   },
 
@@ -1000,49 +1107,153 @@ export const connectionRequestsRepository = {
     actorUserId: number,
   ): Promise<void> {
     await db.transaction(async (trx) => {
-      for (const point of request.measurementPoints) {
-        const existing = await findConnectedPointForMeasurementPoint(trx, point);
-        const pointParameters = getConnectedMeasurementPointParameters(point);
-        const parameters = uniqueParameters([
-          ...(pointParameters.length > 0
-            ? []
-            : existing
-              ? parseParameters(existing.parameters_json)
-              : []),
-          ...pointParameters,
-        ]);
-
-        await softDeleteConnectedPoint(trx, point, actorUserId);
-        await trx('cems_wpms_connected_measurement_points').insert({
-          source_request_id: request.id,
-          source_measurement_point_id: point.id,
-          factory_id: request.factoryId,
-          factory_name: request.factoryName,
-          factory_registration_no: request.factoryRegistrationNo,
-          factory_address: request.address,
-          factory_latitude: request.latitude,
-          factory_longitude: request.longitude,
-          system_type: request.systemType,
-          point_name: point.pointName,
-          point_code: point.pointCode,
-          point_type: point.pointType,
-          parameters_json: JSON.stringify(parameters),
-          details_json: point.details ? JSON.stringify(point.details) : null,
-          documents_json:
-            point.documentsAndImages && point.documentsAndImages.length > 0
-              ? JSON.stringify(point.documentsAndImages)
-              : null,
-          instruments_json: point.measurementInstruments
-            ? JSON.stringify(point.measurementInstruments)
-            : null,
-          connected_at: request.verifiedAt,
-          created_by: actorUserId,
-          updated_by: actorUserId,
-        });
-      }
+      const activeEligibleFactory = await requireActiveEligibleFactoryInTransaction(
+        trx,
+        request.eligibleFactoryId ?? undefined,
+      );
+      await syncConnectedMeasurementPointsInTransaction(
+        trx,
+        request,
+        actorUserId,
+        activeEligibleFactory,
+      );
     });
   },
 };
+
+async function syncConnectedMeasurementPointsInTransaction(
+  trx: Knex.Transaction,
+  request: ConnectionRequestDTO,
+  actorUserId: number,
+  activeEligibleFactory: EligibleFactoryProfileRow,
+): Promise<void> {
+  const factoryProfile = await syncFactoryProfileInTransaction(
+    trx,
+    activeEligibleFactory,
+    request,
+    actorUserId,
+  );
+  for (const point of request.measurementPoints) {
+    const existing = await findConnectedPointForMeasurementPoint(trx, point);
+    const pointParameters = getConnectedMeasurementPointParameters(point);
+    const parameters = uniqueParameters([
+      ...(pointParameters.length > 0
+        ? []
+        : existing
+          ? parseParameters(existing.parameters_json)
+          : []),
+      ...pointParameters,
+    ]);
+
+    await softDeleteConnectedPoint(trx, point, actorUserId);
+    await trx('cems_wpms_connected_measurement_points').insert({
+      source_request_id: request.id,
+      source_measurement_point_id: point.id,
+      eligible_factory_id: Number(activeEligibleFactory.id),
+      factory_id: request.factoryId,
+      factory_name: request.factoryName,
+      factory_registration_no: request.factoryRegistrationNo,
+      factory_address: request.address,
+      ...factoryProfile,
+      system_type: request.systemType,
+      point_name: point.pointName,
+      point_code: point.pointCode,
+      point_type: point.pointType,
+      parameters_json: JSON.stringify(parameters),
+      details_json: point.details ? JSON.stringify(point.details) : null,
+      documents_json:
+        point.documentsAndImages && point.documentsAndImages.length > 0
+          ? JSON.stringify(point.documentsAndImages)
+          : null,
+      instruments_json: point.measurementInstruments
+        ? JSON.stringify(point.measurementInstruments)
+        : null,
+      connected_at: request.verifiedAt,
+      created_by: actorUserId,
+      updated_by: actorUserId,
+    });
+  }
+}
+
+async function requireActiveEligibleFactoryInTransaction(
+  trx: Knex.Transaction,
+  eligibleFactoryId: number | undefined,
+): Promise<EligibleFactoryProfileRow> {
+  if (!Number.isFinite(eligibleFactoryId)) {
+    throw new ConflictError('Connection request is not linked to an eligible factory');
+  }
+
+  const activeEligibleFactory = await trx<EligibleFactoryProfileRow>('eligible_factories')
+    .where('id', eligibleFactoryId as number)
+    .whereNull('deleted_at')
+    .forUpdate()
+    .first('id', 'latitude', 'longitude', 'eia_assessment', 'eia_other', 'has_eia', 'project_name');
+  if (!activeEligibleFactory) {
+    throw new ConflictError('Eligible factory is no longer active', { eligibleFactoryId });
+  }
+  return activeEligibleFactory;
+}
+
+async function syncFactoryProfileInTransaction(
+  trx: Knex.Transaction,
+  activeEligibleFactory: EligibleFactoryProfileRow,
+  source: FactoryProfileSyncSource,
+  actorUserId: number,
+): Promise<ConnectedFactoryProfileRow> {
+  const eligibleFactoryId = Number(activeEligibleFactory.id);
+  const existingProfile = await trx<ConnectedFactoryProfileRow>(
+    'cems_wpms_connected_measurement_points',
+  )
+    .where('eligible_factory_id', eligibleFactoryId)
+    .whereNull('deleted_at')
+    .orderBy('id', 'desc')
+    .first(
+      'factory_latitude',
+      'factory_longitude',
+      'factory_eia_assessment',
+      'factory_eia_other',
+      'factory_has_eia',
+      'factory_project_name',
+      'factory_front_photos_json',
+      'factory_logo_json',
+    );
+  const connectedPatch = buildConnectedFactoryProfilePatch(source);
+  const eligiblePatch = buildEligibleFactoryProfilePatch(source);
+
+  if (existingProfile && Object.keys(connectedPatch).length > 0) {
+    await trx('cems_wpms_connected_measurement_points')
+      .where('eligible_factory_id', eligibleFactoryId)
+      .whereNull('deleted_at')
+      .update({
+        ...connectedPatch,
+        updated_by: actorUserId,
+        updated_at: trx.fn.now(),
+      });
+  }
+  if (Object.keys(eligiblePatch).length > 0) {
+    await trx('eligible_factories')
+      .where('id', eligibleFactoryId)
+      .whereNull('deleted_at')
+      .update({
+        ...eligiblePatch,
+        updated_by: actorUserId,
+        updated_at: trx.fn.now(),
+      });
+  }
+
+  return {
+    factory_latitude: activeEligibleFactory.latitude,
+    factory_longitude: activeEligibleFactory.longitude,
+    factory_eia_assessment: activeEligibleFactory.eia_assessment,
+    factory_eia_other: activeEligibleFactory.eia_other,
+    factory_has_eia: activeEligibleFactory.has_eia,
+    factory_project_name: activeEligibleFactory.project_name,
+    factory_front_photos_json: null,
+    factory_logo_json: null,
+    ...(existingProfile ?? {}),
+    ...connectedPatch,
+  };
+}
 
 export function buildBaseQueryForTests(
   query: ListConnectionRequestsQuery,
@@ -1163,6 +1374,7 @@ function buildBaseQuery(
     'request_no',
     'submission_source',
     'request_type',
+    'eligible_factory_id',
     'factory_id',
     'factory_name',
     'factory_registration_no',
@@ -1434,6 +1646,7 @@ function toFactoryGeneralDTO(row: FactoryGeneralRow): FactoryGeneralDTO {
     fuelUsed: row.fuel_used,
     hasEia: toNullableBoolean(row.has_eia),
     isEligible: row.eligible_factory_id !== null && row.eligible_factory_id !== undefined,
+    eligibleFactoryId: toNullableNumber(row.eligible_factory_id),
     formDefaults: {
       factoryId: row.fid,
       factoryName: row.name,
@@ -1627,6 +1840,7 @@ function toConnectionRequestDTO(
   });
   return {
     id: Number(row.id),
+    eligibleFactoryId: toNullableNumber(row.eligible_factory_id),
     requestNo: row.request_no,
     submissionSource: row.submission_source ?? CONNECTION_REQUEST_SUBMISSION_SOURCE.OPERATOR_FORM,
     requestType: row.request_type ?? CONNECTION_REQUEST_TYPE.NEW_CONNECTION,
@@ -1685,6 +1899,7 @@ function toConnectionRequestDTO(
 function toRequestRow(input: CreateConnectionRequestInput): Record<string, unknown> {
   const hasEia = input.eia ? deriveHasEiaFromAssessment(input.eia) : (input.hasEia ?? null);
   return {
+    eligible_factory_id: input.eligibleFactoryId ?? null,
     factory_id: input.factoryId,
     factory_name: input.factoryName,
     factory_registration_no: input.factoryRegistrationNo,

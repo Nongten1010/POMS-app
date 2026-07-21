@@ -24,6 +24,39 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
     jest.useRealTimers();
   });
 
+  it('rejects without writing when the linked eligible factory is no longer active', async () => {
+    const eligibleLookup = makeChain({ first: async () => undefined });
+    const trx = Object.assign(
+      jest.fn((tableName: string) => {
+        if (tableName === 'eligible_factories') return eligibleLookup;
+        throw new Error(`Unexpected write or query for ${tableName}`);
+      }),
+      { fn: { now: jest.fn(() => 'db-now') } },
+    );
+    mockedDb.transaction.mockImplementationOnce(async (...args: unknown[]) => {
+      const callback = args[0] as (transaction: typeof trx) => Promise<unknown>;
+      return callback(trx);
+    });
+
+    await expect(
+      connectionRequestsRepository.createDirectConnection(directInput() as never, 42),
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      details: { eligibleFactoryId: 17 },
+    });
+
+    expect(trx).toHaveBeenCalledTimes(1);
+    expect(eligibleLookup.first).toHaveBeenCalledWith(
+      'id',
+      'latitude',
+      'longitude',
+      'eia_assessment',
+      'eia_other',
+      'has_eia',
+      'project_name',
+    );
+  });
+
   it('atomically persists the connected request and hydrates the created response', async () => {
     const fixedNow = new Date('2026-07-21T03:04:05.000Z');
     const requestInsert = jest.fn((_: unknown) => ({
@@ -36,7 +69,9 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
     const historyInsert = jest.fn(async (_: unknown) => 1);
     const connectedPointInsert = jest.fn(async (_: unknown) => 1);
 
+    const eligibleLookup = makeChain({ first: async () => ({ id: 17 }) });
     const duplicateLookup = makeChain({ first: async () => undefined });
+    const existingProfileLookup = makeChain({ first: async () => undefined });
     const sequenceSelect = makeChain({ first: async () => ({ last_sequence: 0 }) });
     const sequenceUpdate = makeChain({ update: async () => 1 });
     const factorySource = makeChain({
@@ -58,9 +93,10 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
     const snapshotRead = makeChain({ first: async () => factorySnapshotRow() });
 
     const queues = new Map<string, unknown[]>([
+      ['eligible_factories', [eligibleLookup]],
       [
         'cems_wpms_connected_measurement_points',
-        [duplicateLookup, { insert: connectedPointInsert }],
+        [duplicateLookup, existingProfileLookup, { insert: connectedPointInsert }],
       ],
       ['cems_wpms_direct_request_sequences', [sequenceSelect, sequenceUpdate]],
       ['cems_wpms_connection_requests', [{ insert: requestInsert }, requestRead]],
@@ -94,6 +130,7 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
     expect(requestInsert).toHaveBeenCalledWith(
       expect.objectContaining({
         request_no: 'OLDC-69-00001',
+        eligible_factory_id: 17,
         request_type: 'ADD_MEASUREMENT_POINT',
         submission_source: 'OFFICER_DIRECT_API',
         status: 'CONNECTED',
@@ -132,6 +169,7 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
       expect.objectContaining({
         source_request_id: 101,
         source_measurement_point_id: 202,
+        eligible_factory_id: 17,
         factory_id: 'factory-001',
         system_type: 'CEMS',
         point_code: 'free form / จุด-01',
@@ -255,6 +293,7 @@ function makeChain(options: {
 
 function directInput() {
   return {
+    eligibleFactoryId: 17,
     requestType: 'ADD_MEASUREMENT_POINT',
     factoryId: 'factory-001',
     factoryName: 'โรงงานทดสอบ',
@@ -276,6 +315,7 @@ function directInput() {
 function requestRow(now: Date) {
   return {
     id: 101,
+    eligible_factory_id: 17,
     request_no: 'OLDC-69-00001',
     submission_source: 'OFFICER_DIRECT_API',
     request_type: 'ADD_MEASUREMENT_POINT',

@@ -1,3 +1,5 @@
+import type { ConnectionRequestEiaAssessment } from '../connection-requests/connection-request-eia';
+
 export interface CoordinatesInput {
   latitude: number;
   longitude: number;
@@ -55,7 +57,9 @@ export interface EligibleFactoryCandidateDTO {
   boilerCount?: number | null;
   boilerSizeEach: string | null;
   fuelUsed: string | null;
-  eia?: 'มี' | 'ไม่มี' | null;
+  eia?: ConnectionRequestEiaAssessment | null;
+  eiaOther?: string | null;
+  projectName?: string | null;
   hasEia: boolean | null;
 }
 
@@ -113,7 +117,10 @@ export interface EligibleFactoryDTO {
   boilerCount: number | null;
   boilerSizeEach: string | null;
   fuelUsed: string | null;
+  eia?: ConnectionRequestEiaAssessment | null;
+  eiaOther?: string | null;
   hasEia: boolean | null;
+  projectName?: string | null;
   selectedReason: string | null;
   selectedBy: number;
   selectedAt: string;

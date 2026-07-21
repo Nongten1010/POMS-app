@@ -110,6 +110,7 @@ export interface MeasurementPointInput {
 }
 
 export interface CreateConnectionRequestInput {
+  eligibleFactoryId?: number;
   requestType?: ConnectionRequestType;
   factoryId: string;
   factoryName: string;
@@ -253,6 +254,7 @@ export interface StatusDurationSummaryDTO {
 
 export interface ConnectionRequestDTO {
   id: number;
+  eligibleFactoryId?: number | null;
   requestNo: string;
   submissionSource: ConnectionRequestSubmissionSource;
   requestType: ConnectionRequestType;
@@ -347,6 +349,7 @@ export interface FactorySummaryDTO {
 }
 
 export interface FactoryGeneralDTO extends FactorySummaryDTO {
+  eligibleFactoryId: number | null;
   juristicId: string | null;
   juristicName: string | null;
   industrialEstateName: string | null;
@@ -475,6 +478,7 @@ export type PublicFactoryMapMeasurementPointDTO = Omit<OperatorFactoryMeasuremen
 
 export interface CurrentFactoryMeasurementPointDTO extends OperatorFactoryMeasurementPointDTO {
   factoryId: string;
+  factoryLogo?: RequestDocumentImageInput | null;
   documentsAndImages?: RequestDocumentImageInput[];
 }
 

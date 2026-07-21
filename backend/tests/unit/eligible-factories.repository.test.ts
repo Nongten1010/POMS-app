@@ -45,7 +45,10 @@ describe('eligibleFactoriesRepository.list', () => {
     boiler_count: null,
     boiler_size_each: null,
     fuel_used: null,
-    has_eia: null,
+    eia_assessment: null as string | null,
+    eia_other: null as string | null,
+    project_name: null as string | null,
+    has_eia: null as boolean | null,
     selected_reason: null,
     selected_by: 1,
     selected_at: '2026-07-13T00:00:00.000Z',
@@ -137,6 +140,25 @@ describe('eligibleFactoriesRepository.list', () => {
 
     expect(result.rows).toHaveLength(1);
     expect(result.rows[0]?.address).toBe('197 หมู่ 5 ตำบลหาดอาษา อำเภอสรรพยา 17150');
+  });
+
+  it('returns the synchronized EIA assessment and project name from eligible factory data', async () => {
+    selectedRowForTest = {
+      ...selectedFactoryRow,
+      eia_assessment: 'มี EHIA',
+      eia_other: null,
+      project_name: 'โครงการขยายกำลังผลิต',
+      has_eia: true,
+    };
+
+    const result = await eligibleFactoriesRepository.list({});
+
+    expect(result.rows[0]).toMatchObject({
+      eia: 'มี EHIA',
+      eiaOther: null,
+      hasEia: true,
+      projectName: 'โครงการขยายกำลังผลิต',
+    });
   });
 
   it('preserves a readable address entered in the monitoring-point form', async () => {

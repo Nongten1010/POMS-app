@@ -81,7 +81,10 @@ function toSelectedEligibleFactory(factory: EligibleFactoryDTO): SelectedEligibl
     boilerCount: factory.boilerCount,
     boilerSizeEach: factory.boilerSizeEach,
     fuelUsed: factory.fuelUsed,
+    eia: factory.eia ?? null,
+    eiaOther: factory.eiaOther ?? null,
     hasEia: factory.hasEia,
+    projectName: factory.projectName ?? null,
     measurementPoints: factory.measurementPoints ?? [],
   };
 }

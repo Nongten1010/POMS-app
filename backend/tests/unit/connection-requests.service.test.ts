@@ -8,6 +8,7 @@ jest.mock('../../src/modules/connection-requests/connection-requests.repository'
     replaceForm: jest.fn(),
     autoCancelExpiredWaitingConnectionRequests: jest.fn(),
     syncConnectedMeasurementPoints: jest.fn(),
+    connect: jest.fn(),
     updateStatus: jest.fn(),
     list: jest.fn(),
     listFactoriesForAccess: jest.fn(),
@@ -813,6 +814,10 @@ describe('connectionRequestsService', () => {
         pointCode: 'S0001',
         systemType: 'CEMS',
         parameters: ['CO', 'NOx', 'Temp', 'O2', 'Flow'],
+        factoryLogo: {
+          title: 'สัญลักษณ์ของโรงงานหรือโลโก้บริษัท',
+          fileUrl: 'https://example.com/files/current-profile-logo.png',
+        },
         documentsAndImages: [
           {
             title: 'รายงานผลการทำ RATA หรือ อื่นๆ ที่เทียบเท่า ของระบบ CEMS ครั้งล่าสุด',
@@ -854,7 +859,7 @@ describe('connectionRequestsService', () => {
       factoryName: 'บริษัท ทดสอบ จำกัด',
       newRegistrationNo: '3-106-33/50สบ',
       oldRegistrationNo: 'รง.4-เก่า-001',
-      factoryLogoUrl: 'https://example.com/files/logo.png',
+      factoryLogoUrl: 'https://example.com/files/current-profile-logo.png',
       industryMainOrder: '8802',
       industryMainOrderLabel: 'ประเภทโรงงานลำดับที่ 88(2): การผลิตพลังงานไฟฟ้าจากพลังงานความร้อน',
       industrySubOrder: null,
@@ -2197,7 +2202,7 @@ describe('connectionRequestsService', () => {
     const result = await connectionRequestsService.create(payload, actorUserId);
 
     expect(mockedRepository.create).toHaveBeenCalledWith(
-      payloadWithoutPointCodes,
+      { ...payloadWithoutPointCodes, eligibleFactoryId: 9 },
       actorUserId,
       CONNECTION_REQUEST_STATUS.PENDING_DESIGN_REVIEW,
     );
@@ -2233,6 +2238,7 @@ describe('connectionRequestsService', () => {
     expect(mockedRepository.create).toHaveBeenCalledWith(
       {
         ...payloadWithoutPointCodes,
+        eligibleFactoryId: 9,
         requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT,
       },
       actorUserId,
@@ -2286,7 +2292,7 @@ describe('connectionRequestsService', () => {
     await connectionRequestsService.createParameterRequest(addParameterPayload, actorUserId);
 
     expect(mockedRepository.create).toHaveBeenCalledWith(
-      addParameterPayload,
+      { ...addParameterPayload, eligibleFactoryId: 9 },
       actorUserId,
       CONNECTION_REQUEST_STATUS.PENDING_DESIGN_REVIEW,
     );
@@ -2812,6 +2818,7 @@ describe('connectionRequestsService', () => {
       1,
       {
         ...normalizedPayload,
+        eligibleFactoryId: 9,
         measurementPoints: normalizedPayload.measurementPoints.map((point) => ({
           ...point,
           pointCode: null,
@@ -2877,7 +2884,7 @@ describe('connectionRequestsService', () => {
 
     expect(mockedRepository.replaceForm).toHaveBeenCalledWith(
       1,
-      normalizedPayload,
+      { ...normalizedPayload, eligibleFactoryId: 9 },
       actorUserId,
       CONNECTION_REQUEST_STATUS.REVISED_PENDING_DESIGN_REVIEW,
     );
@@ -3059,7 +3066,7 @@ describe('connectionRequestsService', () => {
         createdBy: actorUserId,
       }),
     );
-    mockedRepository.updateStatus.mockResolvedValue(
+    mockedRepository.connect.mockResolvedValue(
       requestDto({
         status: CONNECTION_REQUEST_STATUS.CONNECTED,
         createdBy: actorUserId,
@@ -3072,22 +3079,12 @@ describe('connectionRequestsService', () => {
       7,
     );
 
-    expect(mockedRepository.updateStatus).toHaveBeenCalledWith(
-      1,
-      CONNECTION_REQUEST_STATUS.CONNECTED,
-      7,
-      {
-        verifiedAt: '2026-05-27T11:00:00.000Z',
-        officerNote: null,
-      },
-    );
-    expect(mockedRepository.syncConnectedMeasurementPoints).toHaveBeenCalledWith(
-      expect.objectContaining({
-        status: CONNECTION_REQUEST_STATUS.CONNECTED,
-        address: '99 หมู่ 1 ตำบลทดสอบ อำเภอเมือง จังหวัดสระบุรี',
-      }),
-      7,
-    );
+    expect(mockedRepository.connect).toHaveBeenCalledWith(1, 7, {
+      verifiedAt: '2026-05-27T11:00:00.000Z',
+      officerNote: null,
+    });
+    expect(mockedRepository.updateStatus).not.toHaveBeenCalled();
+    expect(mockedRepository.syncConnectedMeasurementPoints).not.toHaveBeenCalled();
   });
 });
 
@@ -3260,6 +3257,7 @@ function deviceConnectionConfig(
 function factoryGeneral(overrides: Partial<FactoryGeneralDTO> = {}): FactoryGeneralDTO {
   return {
     ...factorySummary(),
+    eligibleFactoryId: 9,
     juristicId: '0105556125804',
     juristicName: 'บริษัท ทดสอบ จำกัด',
     industrialEstateName: null,

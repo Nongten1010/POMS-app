@@ -1,6 +1,6 @@
 # Connected Factory Profile Sync Workflow
 
-Status: Ready for implementation
+Status: Implemented (migration prepared but not executed)
 
 ## Goal
 
@@ -109,6 +109,7 @@ Decision: อัปเดต factory-profile fields ของทุก active co
 - หาก eligible row ถูก soft-delete/ถอดออก ให้ตอบ `409 Conflict` ด้วย project-standard error envelope.
 - คงสถานะคำขอเดิมและ rollback mutation ทั้งหมด; ห้าม materialize หรือแก้ POMS current/live.
 - ผู้ใช้ต้องทำให้โรงงานกลับมาเป็น active eligible factory ผ่าน workflow คัดเลือกโรงงานก่อนจึงลองเชื่อมต่อใหม่ได้.
+- หากโรงงานมี active POMS connected point ระบบไม่อนุญาตให้ soft-delete eligible row และตอบ `409 Conflict`; ต้องยุติ/ถอดการเชื่อมต่อผ่าน workflow ที่เหมาะสมก่อน.
 
 ## Resolved Decision: Legacy POMS Eligibility Backfill
 
@@ -129,7 +130,8 @@ Migration นี้ต้อง:
 3. เพิ่ม EIA categorical และชื่อโครงการให้ `eligible_factories` โดยคง `has_eia` สำหรับ compatibility.
 4. นำ active POMS rows เดิมมาจับคู่กับ active `eligible_factories` ผ่าน `factory_id`, `factory_registration_no`, `source_factory_id` และ `factory_registration_no_new`.
 5. เติม `eligible_factory_id` เมื่อจับคู่ได้เพียงหนึ่งรายการ.
-6. เพิ่ม foreign key และ active-row integrity checks หลัง backfill สำเร็จ.
+6. ใช้ request ล่าสุดของ POMS row เดิมแต่ละโรงงาน backfill พิกัดโรงงาน, EIA และชื่อโครงการไปยัง `eligible_factories` ด้วย patch semantics; ไม่แตะพิกัดจุดตรวจวัด.
+7. เพิ่ม foreign key และ active-row integrity checks หลัง backfill สำเร็จ.
 
 หากมี active POMS row ที่จับคู่ไม่ได้หรือจับคู่ได้หลาย eligible rows ระบบจะ throw error และ rollback migration ทั้งชุด. ผลคือ schema และข้อมูลเดิมยังอยู่ครบ ไม่มีการอัปเดตครึ่งหนึ่ง, ไม่มีการลบ POMS data และไม่มีการสร้าง eligible factory เพื่อกลบปัญหา. ผู้ดูแลต้องแก้ eligibility/identifier ผ่าน workflow ที่ถูกต้อง แล้วรัน migration ใหม่.
 
@@ -156,3 +158,5 @@ eligible_factories.factory_registration_no_new: 3-106-33/50สบ
 - Missing optional values คง current values เดิม และ point-specific coordinates/documents ไม่ถูกแก้.
 - Migration rollback เมื่อ legacy active POMS row จับคู่ eligible ไม่ได้.
 - Public contract, canonical backend docs, typecheck, tests และ security checks ผ่าน.
+
+หมายเหตุการส่งมอบ: migration `0076_sync_connected_factory_profiles_with_eligible_factories.ts` ถูกเตรียมและทดสอบแบบ static เท่านั้นตามคำสั่ง “หยุด migration”; งานนี้ไม่ได้สั่ง `db:migrate` และไม่ได้เปลี่ยนฐานข้อมูลจริง.

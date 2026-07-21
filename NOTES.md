@@ -36,3 +36,5 @@
 - ก่อนสร้างคำขอเชื่อมต่อทุกชนิดต้อง resolve active โรงงานเข้าข่ายจาก identifier aliases ให้สำเร็จ หากไม่พบให้ปฏิเสธ submission โดยไม่สร้าง request, history, measurement point หรือ POMS data.
 - ก่อนเข้าสู่ `CONNECTED` ต้องตรวจว่า `eligible_factory_id` ของคำขอยังเป็น active eligible factory; หากถูกถอด/soft-delete ให้ตอบ `409 Conflict`, คงสถานะคำขอเดิม และไม่แก้ POMS current/live.
 - Migration ต้องหยุดและ rollback หาก active POMS data เดิมจับคู่กับ active `eligible_factories` ไม่ได้; ห้ามลบ POMS row หรือสร้าง eligible row อัตโนมัติเพื่อให้ migration ผ่าน.
+- โรงงานที่มี active POMS connected point ห้ามถูก soft-delete ออกจาก `eligible_factories`; endpoint ต้องตอบ `409 Conflict` เพื่อรักษา POMS eligibility invariant.
+- งานรอบนี้เตรียม migration `0076_sync_connected_factory_profiles_with_eligible_factories.ts` และทดสอบ SQL แบบ static เท่านั้น โดยไม่ได้สั่งรัน migration กับฐานข้อมูลจริง.

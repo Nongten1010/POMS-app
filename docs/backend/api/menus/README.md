@@ -36,6 +36,7 @@ menus/
 ## Canonical Menu Pages
 
 - [ขอเชื่อมต่อ](./connection-requests/README.md) — contract คำขอ CEMS/WPMS และการออกรหัสจุดตรวจวัด
+- [โรงงานที่เข้าข่าย](./eligible-factories/README.md) — contract รายการโรงงานเข้าข่าย ข้อมูลที่ซิงก์ และเงื่อนไขการถอดออก
 
 API ที่หลายเมนูใช้ร่วมกัน เช่น authentication และ connected measurement points อยู่ใต้ `../shared/` และให้หน้าเมนูลิงก์อ้างอิง
 

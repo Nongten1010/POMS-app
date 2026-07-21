@@ -717,10 +717,10 @@ export const connectionRequestsService = {
     input: CreateConnectionRequestInput,
     actorUserId: number,
   ): Promise<ConnectionRequestDTO> {
-    await requireActiveEligibleFactory(input);
+    const eligibleFactory = await requireActiveEligibleFactory(input);
 
     return connectionRequestsRepository.create(
-      clearPendingPointCodes(input),
+      { ...clearPendingPointCodes(input), eligibleFactoryId: eligibleFactory.id },
       actorUserId,
       CONNECTION_REQUEST_STATUS.PENDING_DESIGN_REVIEW,
     );
@@ -730,11 +730,12 @@ export const connectionRequestsService = {
     input: AddMeasurementPointRequestInput,
     actorUserId: number,
   ): Promise<ConnectionRequestDTO> {
-    await requireActiveEligibleFactory(input);
+    const eligibleFactory = await requireActiveEligibleFactory(input);
 
     return connectionRequestsRepository.create(
       clearPendingPointCodes({
         ...input,
+        eligibleFactoryId: eligibleFactory.id,
         requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT,
       }),
       actorUserId,
@@ -779,12 +780,13 @@ export const connectionRequestsService = {
       scope: actor.scope,
       regionalAccess: actor.regionalAccess,
     });
-    if (!factory || factory.isEligible !== true) {
+    if (!factory || factory.isEligible !== true || factory.eligibleFactoryId === null) {
       throw new NotFoundError('Active eligible factory not found within officer access scope');
     }
 
     const directInput: DirectConnectionRequestInput = {
       ...input,
+      eligibleFactoryId: factory.eligibleFactoryId,
       requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT,
       factoryId: factory.factoryId,
       factoryName: factory.factoryName,
@@ -800,10 +802,14 @@ export const connectionRequestsService = {
     actorUserId: number,
   ): Promise<ConnectionRequestDTO> {
     ensureRequestFormSections(input, CONNECTION_REQUEST_TYPE.ADD_PARAMETER);
-    await requireActiveEligibleFactory(input);
+    const eligibleFactory = await requireActiveEligibleFactory(input);
 
     return connectionRequestsRepository.create(
-      { ...input, requestType: CONNECTION_REQUEST_TYPE.ADD_PARAMETER },
+      {
+        ...input,
+        eligibleFactoryId: eligibleFactory.id,
+        requestType: CONNECTION_REQUEST_TYPE.ADD_PARAMETER,
+      },
       actorUserId,
       CONNECTION_REQUEST_STATUS.PENDING_DESIGN_REVIEW,
     );
@@ -837,10 +843,11 @@ export const connectionRequestsService = {
       effectiveInput.requestType === CONNECTION_REQUEST_TYPE.ADD_PARAMETER
         ? effectiveInput
         : clearPendingPointCodes(effectiveInput);
+    const eligibleFactory = await requireActiveEligibleFactory(formInput);
 
     return connectionRequestsRepository.replaceForm(
       id,
-      formInput,
+      { ...formInput, eligibleFactoryId: eligibleFactory.id },
       actorUserId,
       CONNECTION_REQUEST_STATUS.REVISED_PENDING_DESIGN_REVIEW,
     );
@@ -1093,27 +1100,21 @@ export const connectionRequestsService = {
     const request = await loadRequest(id);
     ensureStatus(request, [CONNECTION_REQUEST_STATUS.CONNECTION_CONFIRMED]);
 
-    const connected = await connectionRequestsRepository.updateStatus(
-      id,
-      CONNECTION_REQUEST_STATUS.CONNECTED,
-      actorUserId,
-      {
-        verifiedAt: input.verifiedAt ?? nowProvider().toISOString(),
-        officerNote: input.note ?? null,
-      },
-    );
-    await connectionRequestsRepository.syncConnectedMeasurementPoints(connected, actorUserId);
-    return connected;
+    return connectionRequestsRepository.connect(id, actorUserId, {
+      verifiedAt: input.verifiedAt ?? nowProvider().toISOString(),
+      officerNote: input.note ?? null,
+    });
   },
 };
 
 async function requireActiveEligibleFactory(input: {
   factoryId: string;
   factoryRegistrationNo: string;
-}): Promise<void> {
+}): Promise<{ id: number }> {
   const eligibleFactory =
     await connectionRequestsRepository.findActiveEligibleFactoryReference(input);
   if (!eligibleFactory) throw new NotFoundError('Active eligible factory not found');
+  return eligibleFactory;
 }
 
 function stationMatchesMeasurementPoint(point: MeasurementPointDTO, stationId?: string): boolean {
@@ -1784,6 +1785,10 @@ function toPublicFactoryMapMeasurementPoint(
 }
 
 function getFactoryLogoUrl(points: CurrentFactoryMeasurementPointDTO[]): string | null {
+  for (const point of points) {
+    if (point.factoryLogo?.fileUrl) return point.factoryLogo.fileUrl;
+  }
+
   const cemsPoints = points.filter((point) => point.systemType === 'CEMS');
 
   for (const point of cemsPoints) {

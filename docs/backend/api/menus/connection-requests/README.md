@@ -39,6 +39,7 @@ curl --request POST \
 | สร้างคำขอเพิ่มจุดตรวจวัด | `POST` | `/api/v1/cems-wpms-requests/measurement-points` | Bearer | `cems_wpms_requests:edit` | [Eligibility gate](#eligibility-gate) |
 | สร้างคำขอเพิ่มพารามิเตอร์ | `POST` | `/api/v1/cems-wpms-requests/parameters` | Bearer | `cems_wpms_requests:edit` | [Eligibility gate](#eligibility-gate) |
 | เชื่อมต่อโดยเจ้าหน้าที่โดยตรง | `POST` | `/api/v1/cems-wpms-requests/direct-connections` | Bearer | `cems_wpms_requests:direct_connect` | [Eligibility gate](#eligibility-gate) |
+| ตรวจสอบและเปลี่ยนคำขอเป็นเชื่อมต่อแล้ว | `POST` | `/api/v1/cems-wpms-requests/:id/verify-connection` | Bearer | `cems_wpms_requests:approve` | [Connected factory profile sync](#connected-factory-profile-sync) |
 | อนุมัติแบบและออกรหัสจุดตรวจวัด | `POST` | `/api/v1/cems-wpms-requests/:id/review` | Bearer | `cems_wpms_requests:approve` | [Approve design](#approve-design) |
 | อ่านรายละเอียดคำขอและรหัสจุด | `GET` | `/api/v1/cems-wpms-requests/:id` | Bearer | `cems_wpms_requests:view` | [Read request](#read-request) |
 | อ่านจุดตรวจวัดที่เชื่อมต่อแล้ว | `GET` | `/api/v1/connected-measurement-points` | Bearer | `cems_wpms_requests:view` | [Connected points](#connected-points) |
@@ -91,6 +92,55 @@ Minimal relevant request fragment:
   "error": {
     "code": "NOT_FOUND",
     "message": "Active eligible factory not found"
+  }
+}
+```
+
+ระบบเก็บ `eligibleFactoryId` ที่ resolve ได้ใน response ของคำขอ เพื่อยืนยันความสัมพันธ์เดียวกันระหว่างคำขอ โรงงานเข้าข่าย และข้อมูล current/live ของ POMS. Field นี้เป็น server-resolved response field; client ไม่ใช้เลือก eligible row โดยตรง.
+
+### Connected factory profile sync
+
+เมื่อ Direct Connection สำเร็จ หรือ `POST /api/v1/cems-wpms-requests/:id/verify-connection` เปลี่ยนคำขอจาก `CONNECTION_CONFIRMED` เป็น `CONNECTED` ระบบทำงานต่อไปนี้ใน transaction เดียว:
+
+| ข้อมูลจาก request snapshot | POMS current/live (`cems_wpms_connected_measurement_points`) | `eligible_factories` |
+| --- | --- | --- |
+| `latitude` + `longitude` | `factory_latitude` + `factory_longitude` | `latitude` + `longitude` |
+| `eia`, `eiaOther`, derived `hasEia` | factory-profile fields | `eia_assessment`, `eia_other`, `has_eia` |
+| `projectName` | `factory_project_name` | `project_name` |
+| เอกสาร title `ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน` | `factory_front_photos_json` | ไม่เขียน |
+| เอกสาร title `สัญลักษณ์ของโรงงานหรือโลโก้บริษัท` | `factory_logo_json` | ไม่เขียน |
+
+พิกัดข้างต้นเป็นพิกัดโรงงานเท่านั้น ระบบไม่เปลี่ยน `cems_wpms_measurement_points.latitude` / `longitude` ซึ่งเป็นพิกัดจุดตรวจวัด และไม่เขียนทับ `documents_json` ของจุดตรวจวัดเดิม.
+
+การอัปเดตใช้ patch semantics:
+
+- พิกัดอัปเดตเมื่อมีทั้ง `latitude` และ `longitude`; หากมาไม่ครบให้คงพิกัดเดิมทั้งคู่.
+- `eia`, `projectName`, รูปหน้าโรงงาน และโลโก้ที่เป็น `null`, ไม่ส่งมา หรือไม่พบ document title จะคงค่าเดิม.
+- ค่าใหม่ของ factory profile ถูกใช้กับทุก active POMS point ของโรงงานเดียวกัน แต่ข้อมูลเฉพาะจุดยังคงเดิม.
+- ก่อนเปลี่ยนสถานะ ระบบตรวจ `eligibleFactoryId` ซ้ำภายใน transaction; หาก eligible row ถูกถอดออกแล้วตอบ `409 Conflict`, คงสถานะคำขอเดิม และไม่เขียน POMS.
+
+Minimal verify request:
+
+```json
+{
+  "verifiedAt": "2026-07-21T05:00:00.000Z",
+  "note": null
+}
+```
+
+Minimal response (`200 OK`):
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 101,
+    "eligibleFactoryId": 25,
+    "status": "CONNECTED",
+    "latitude": 13.7563,
+    "longitude": 100.5018,
+    "eia": "มี EIA",
+    "projectName": "โครงการปรับปรุงโรงงาน"
   }
 }
 ```
@@ -207,11 +257,13 @@ Minimal response:
 - `403 Forbidden` เมื่อไม่มี permission หรืออ่านคำขอนอก scope.
 - `404 Not Found` เมื่อไม่พบคำขอหรือจุดตรวจวัดใน scope.
 - `404 Not Found` เมื่อ endpoint สร้างคำขอ resolve active eligible factory ไม่สำเร็จ.
+- `409 Conflict` เมื่อคำขอเคยผูก eligible factory ไว้ แต่ eligible row ไม่ active แล้วในเวลาที่เชื่อมต่อ.
 - `400 Bad Request` เมื่อ payload หรือสถานะปัจจุบันไม่อนุญาตให้ทำ action.
 
 ## Business Flow And Explanations
 
 - Workflow spec: [`workflows/operator-normal-connection-point-code.md`](../../../../../workflows/operator-normal-connection-point-code.md)
+- [Connected factory profile sync workflow](../../../../../workflows/connected-factory-profile-sync.md) — นิยาม POMS/eligible, patch semantics และ migration fail-fast.
 - [Contract ผู้ประกอบการยกเลิกคำขอ](./operator-cancel-request.md) และ [workflow spec](../../../../../workflows/operator-cancel-connection-request.md)
 - การเชื่อมต่อโดยเจ้าหน้าที่โดยตรงเป็น flow แยกและไม่ใช้ลำดับอัตโนมัตินี้.
 
@@ -223,5 +275,6 @@ Minimal response:
 | Validators | [`connection-requests.validator.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.validator.ts) |
 | Public types | [`connection-requests.types.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.types.ts) |
 | Sequence implementation | [`connection-requests.repository.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.repository.ts) |
-| Migration | [`0075_start_operator_point_codes_at_2001.ts`](../../../../../backend/src/db/migrations/0075_start_operator_point_codes_at_2001.ts) |
-| Tests | [`connection-requests.point-code-sequence.repository.test.ts`](../../../../../backend/tests/unit/connection-requests.point-code-sequence.repository.test.ts), [`connection-point-code-sequence-migration.test.ts`](../../../../../backend/tests/unit/connection-point-code-sequence-migration.test.ts) |
+| Factory-profile patch rules | [`connected-factory-profile.ts`](../../../../../backend/src/modules/connection-requests/connected-factory-profile.ts) |
+| Migrations | [`0075_start_operator_point_codes_at_2001.ts`](../../../../../backend/src/db/migrations/0075_start_operator_point_codes_at_2001.ts), [`0076_sync_connected_factory_profiles_with_eligible_factories.ts`](../../../../../backend/src/db/migrations/0076_sync_connected_factory_profiles_with_eligible_factories.ts) |
+| Tests | [`connection-requests.point-code-sequence.repository.test.ts`](../../../../../backend/tests/unit/connection-requests.point-code-sequence.repository.test.ts), [`connected-factory-profile-sync.test.ts`](../../../../../backend/tests/unit/connected-factory-profile-sync.test.ts), [`connection-requests.connect.repository.test.ts`](../../../../../backend/tests/unit/connection-requests.connect.repository.test.ts), [`connected-factory-profile-migration.test.ts`](../../../../../backend/tests/unit/connected-factory-profile-migration.test.ts) |
