@@ -11,6 +11,10 @@
 - Snapshot ต้องระบุว่าเป็นหลักฐาน ณ เวลาหนึ่ง ห้ามให้ frontend ใช้แทน request/response contract ปัจจุบัน
 - เอกสาร evidence ใหม่ต้องลิงก์กลับไป canonical API page หรือ explanation ที่มันสนับสนุน
 
+## Connection requests
+
+- [เจ้าหน้าที่เชื่อมต่อโรงงานเข้าข่ายโดยตรง](./connection-requests/officer-direct-eligible-lookup.tdd.md)
+
 ## Migration Targets
 
 | Legacy evidence | Destination pattern |

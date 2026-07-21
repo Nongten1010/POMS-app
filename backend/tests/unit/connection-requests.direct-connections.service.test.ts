@@ -58,11 +58,15 @@ describe('connectionRequestsService.createDirectConnection', () => {
   it('checks factory scope, canonicalizes factory identity, and keeps the officer point code', async () => {
     const result = await directService.createDirectConnection(validInput(), actor);
 
-    expect(mockedRepository.findFactoryGeneral).toHaveBeenCalledWith('factory-input', {
-      actorUserId: 42,
-      scope: { scope: 'ALL' },
-      regionalAccess: undefined,
-    });
+    expect(mockedRepository.findDirectConnectionFactory).toHaveBeenCalledWith(
+      { factoryId: 'factory-input', factoryRegistrationNo: 'REG-INPUT' },
+      {
+        actorUserId: 42,
+        scope: { scope: 'ALL' },
+        regionalAccess: undefined,
+      },
+    );
+    expect(mockedRepository.findFactoryGeneral).not.toHaveBeenCalled();
     expect(mockedRepository.createDirectConnection).toHaveBeenCalledWith(
       expect.objectContaining({
         requestType: 'ADD_MEASUREMENT_POINT',
@@ -87,6 +91,7 @@ describe('connectionRequestsService.createDirectConnection', () => {
     ).rejects.toMatchObject({ statusCode: 403, code: 'FORBIDDEN' });
 
     expect(mockedRepository.findFactoryGeneral).not.toHaveBeenCalled();
+    expect(mockedRepository.findDirectConnectionFactory).not.toHaveBeenCalled();
     expect(mockedRepository.createDirectConnection).not.toHaveBeenCalled();
   });
 
@@ -100,6 +105,7 @@ describe('connectionRequestsService.createDirectConnection', () => {
     ).rejects.toMatchObject({ statusCode: 400, code: 'BAD_REQUEST' });
 
     expect(mockedRepository.findFactoryGeneral).not.toHaveBeenCalled();
+    expect(mockedRepository.findDirectConnectionFactory).not.toHaveBeenCalled();
   });
 
   it('rejects a missing point code when the service is called without HTTP validation', async () => {
@@ -115,10 +121,11 @@ describe('connectionRequestsService.createDirectConnection', () => {
     ).rejects.toMatchObject({ statusCode: 400, code: 'BAD_REQUEST' });
 
     expect(mockedRepository.findFactoryGeneral).not.toHaveBeenCalled();
+    expect(mockedRepository.findDirectConnectionFactory).not.toHaveBeenCalled();
   });
 
   it('does not create anything when the selected factory is outside the officer scope', async () => {
-    mockedRepository.findFactoryGeneral.mockResolvedValueOnce(null);
+    mockedRepository.findDirectConnectionFactory.mockResolvedValueOnce(null);
 
     await expect(directService.createDirectConnection(validInput(), actor)).rejects.toMatchObject({
       statusCode: 404,
@@ -150,13 +157,11 @@ describe('connectionRequestsService.createDirectConnection', () => {
       }),
       42,
     );
+    expect(mockedRepository.findFactoryGeneral).not.toHaveBeenCalled();
   });
 
   it('does not create anything when the selected factory is not actively eligible', async () => {
-    mockedRepository.findFactoryGeneral.mockResolvedValueOnce({
-      ...canonicalFactory,
-      isEligible: false,
-    });
+    mockedRepository.findDirectConnectionFactory.mockResolvedValueOnce(null);
 
     await expect(directService.createDirectConnection(validInput(), actor)).rejects.toMatchObject({
       statusCode: 404,

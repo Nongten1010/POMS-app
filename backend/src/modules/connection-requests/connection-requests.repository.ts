@@ -289,6 +289,12 @@ interface EligibleFactoryReferenceRow {
   factory_registration_no_new: string;
 }
 
+interface DirectConnectionFactoryRow {
+  eligible_factory_id: number | string;
+  factory_registration_no_new: string;
+  factory_name: string;
+}
+
 interface EligibleFactoryProfileRow {
   id: number | string;
   latitude: number | string | null;
@@ -333,6 +339,26 @@ export const connectionRequestsRepository = {
           factoryRegistrationNoNew: row.factory_registration_no_new,
         }
       : null;
+  },
+
+  async findDirectConnectionFactory(
+    input: { factoryId: string; factoryRegistrationNo: string },
+    access: FactoryAccess,
+  ): Promise<{
+    eligibleFactoryId: number;
+    factoryId: string;
+    factoryName: string;
+    newRegistrationNo: string;
+  } | null> {
+    const row = await buildDirectConnectionFactoryQuery(input, access).first();
+    if (!row) return null;
+
+    return {
+      eligibleFactoryId: Number(row.eligible_factory_id),
+      factoryId: row.factory_registration_no_new,
+      factoryName: row.factory_name,
+      newRegistrationNo: row.factory_registration_no_new,
+    };
   },
 
   async list(
@@ -1268,6 +1294,13 @@ export function buildFactoriesForAccessQueryForTests(
   return buildFactoriesForAccessQuery(access);
 }
 
+export function buildDirectConnectionFactoryQueryForTests(
+  input: { factoryId: string; factoryRegistrationNo: string },
+  access: FactoryAccess,
+): Knex.QueryBuilder<DirectConnectionFactoryRow, DirectConnectionFactoryRow[]> {
+  return buildDirectConnectionFactoryQuery(input, access);
+}
+
 export function buildStatusHistoryTimelineForTests(historyRows: StatusHistoryRow[]): {
   statusHistory: StatusHistoryDTO[];
   statusDurationSummary: StatusDurationSummaryDTO;
@@ -1321,6 +1354,56 @@ function buildFactoriesForAccessQuery(
   applyFactoryRegionalAccessFilter(builder, access.regionalAccess);
 
   return builder as unknown as Knex.QueryBuilder<FactoryRow, FactoryRow[]>;
+}
+
+function buildDirectConnectionFactoryQuery(
+  input: { factoryId: string; factoryRegistrationNo: string },
+  access: FactoryAccess,
+): Knex.QueryBuilder<DirectConnectionFactoryRow, DirectConnectionFactoryRow[]> {
+  const identifiers = [...new Set([input.factoryId, input.factoryRegistrationNo])]
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const builder = db<DirectConnectionFactoryRow>('eligible_factories as ef')
+    .leftJoin('provinces as p', 'p.name_th', 'ef.province_name')
+    .whereNull('ef.deleted_at')
+    .where((identifierBuilder) => {
+      identifierBuilder
+        .whereIn('ef.source_factory_id', identifiers)
+        .orWhereIn('ef.factory_registration_no_new', identifiers)
+        .orWhereIn('ef.factory_registration_no_old', identifiers);
+    })
+    .select('ef.id as eligible_factory_id', 'ef.factory_registration_no_new', 'ef.factory_name');
+
+  applyDirectConnectionFactoryAccessFilter(builder, access.scope);
+  applyFactoryRegionalAccessFilter(builder, access.regionalAccess);
+  return builder as unknown as Knex.QueryBuilder<
+    DirectConnectionFactoryRow,
+    DirectConnectionFactoryRow[]
+  >;
+}
+
+function applyDirectConnectionFactoryAccessFilter(
+  builder: Knex.QueryBuilder,
+  scope: AccessScope,
+): void {
+  const scopeValue = getAccessScopeValue(scope);
+  if (scopeValue === 'ALL') return;
+  if (!scope || typeof scope !== 'object') {
+    builder.whereRaw('1 = 0');
+    return;
+  }
+
+  const region = normalizeLocationValue(scope.region);
+  const province = normalizeLocationValue(scope.province);
+  if (scope.scope === 'IN_REGION' && region) {
+    builder.where('p.region', region);
+    return;
+  }
+  if (scope.scope === 'IN_PROVINCE' && province) {
+    builder.where('ef.province_name', province);
+    return;
+  }
+  builder.whereRaw('1 = 0');
 }
 
 function buildBaseQuery(

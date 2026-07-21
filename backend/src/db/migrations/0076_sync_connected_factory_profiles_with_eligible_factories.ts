@@ -26,7 +26,9 @@ export async function up(knex: Knex): Promise<void> {
       eia_assessment NVARCHAR(32) NULL,
       eia_other NVARCHAR(500) NULL,
       project_name NVARCHAR(500) NULL;
+  `);
 
+  await knex.schema.raw(`
     UPDATE ${ELIGIBLE_FACTORIES_TABLE}
     SET eia_assessment = CASE
       WHEN has_eia = 1 THEN N'มี'

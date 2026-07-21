@@ -775,12 +775,18 @@ export const connectionRequestsService = {
       );
     }
 
-    const factory = await connectionRequestsRepository.findFactoryGeneral(input.factoryId, {
-      actorUserId: actor.actorUserId,
-      scope: actor.scope,
-      regionalAccess: actor.regionalAccess,
-    });
-    if (!factory || factory.isEligible !== true || factory.eligibleFactoryId === null) {
+    const factory = await connectionRequestsRepository.findDirectConnectionFactory(
+      {
+        factoryId: input.factoryId,
+        factoryRegistrationNo: input.factoryRegistrationNo,
+      },
+      {
+        actorUserId: actor.actorUserId,
+        scope: actor.scope,
+        regionalAccess: actor.regionalAccess,
+      },
+    );
+    if (!factory) {
       throw new NotFoundError('Active eligible factory not found within officer access scope');
     }
 

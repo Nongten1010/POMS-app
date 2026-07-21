@@ -11,7 +11,7 @@ import {
 } from '../../src/modules/connection-requests/connection-requests.repository';
 import { CONNECTION_REQUEST_STATUS } from '../../src/modules/connection-requests/connection-requests.types';
 
-describe('connectionRequestsRepository request numbers', () => {
+describe('connectionRequestsRepository query helpers', () => {
   it('resolves direct connections from active eligible factories without requiring a POMS factory row', () => {
     const compiled = buildDirectConnectionFactoryQueryForTests(
       { factoryId: '10120000325542', factoryRegistrationNo: '3-34(3)-3/54นบ' },
@@ -22,10 +22,9 @@ describe('connectionRequestsRepository request numbers', () => {
     expect(sql).toContain('from [eligible_factories] as [ef]');
     expect(sql).not.toContain('from [factories] as [f]');
     expect(sql).toContain('[ef].[factory_name]');
+    expect(sql).toContain('[ef].[factory_registration_no_old]');
     expect(sql).toContain('[ef].[deleted_at] is null');
-    expect(compiled.bindings).toEqual(
-      expect.arrayContaining(['10120000325542', '3-34(3)-3/54นบ']),
-    );
+    expect(compiled.bindings).toEqual(expect.arrayContaining(['10120000325542', '3-34(3)-3/54นบ']));
   });
 
   it('applies the officer region to the eligible-factory location for direct connections', () => {
@@ -41,6 +40,44 @@ describe('connectionRequestsRepository request numbers', () => {
 
     expect(sql).toContain('[p].[region]');
     expect(compiled.bindings.filter((binding: unknown) => binding === 'ภาคกลาง')).toHaveLength(2);
+  });
+
+  it('denies a direct connection scope that cannot be evaluated against eligible factories', () => {
+    const sql = buildDirectConnectionFactoryQueryForTests(
+      { factoryId: '10120000325542', factoryRegistrationNo: '10120000325542' },
+      { actorUserId: 42, scope: 'OWN_FACTORY' },
+    )
+      .toSQL()
+      .sql.toLowerCase();
+
+    expect(sql).toContain('1 = 0');
+  });
+
+  it('applies a province-scoped direct connection to eligible factory province data', () => {
+    const compiled = buildDirectConnectionFactoryQueryForTests(
+      { factoryId: '10120000325542', factoryRegistrationNo: '10120000325542' },
+      {
+        actorUserId: 42,
+        scope: { scope: 'IN_PROVINCE', region: null, province: 'นนทบุรี' },
+      },
+    ).toSQL();
+
+    expect(compiled.sql.toLowerCase()).toContain('[ef].[province_name]');
+    expect(compiled.bindings).toContain('นนทบุรี');
+  });
+
+  it('denies a location scope that omits its required location value', () => {
+    const sql = buildDirectConnectionFactoryQueryForTests(
+      { factoryId: '10120000325542', factoryRegistrationNo: '10120000325542' },
+      {
+        actorUserId: 42,
+        scope: { scope: 'IN_REGION', region: null, province: null },
+      },
+    )
+      .toSQL()
+      .sql.toLowerCase();
+
+    expect(sql).toContain('1 = 0');
   });
 
   it('builds request number prefixes from system type and Thai Buddhist year', () => {

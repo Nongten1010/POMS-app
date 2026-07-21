@@ -68,12 +68,14 @@ curl --request POST \
 
 ทุก endpoint ที่สร้างคำขอรับเฉพาะโรงงานที่มี active row ใน `eligible_factories` โดย resolve จาก identifier aliases ของโรงงานก่อนเริ่ม transaction สร้างคำขอ พฤติกรรมนี้ใช้กับ `NEW_CONNECTION`, `ADD_MEASUREMENT_POINT`, `ADD_PARAMETER` และ Direct Connection.
 
+Direct Connection resolve และตรวจ scope จาก `eligible_factories` โดยตรง โรงงานจึงยังไม่ต้องมี row ใน `factories` หรือ `cems_wpms_connected_measurement_points` มาก่อน ชื่อและเลขทะเบียน canonical ที่บันทึกมาจาก active eligible row; backend ไม่ใช้ `factoryName` จาก client เป็นแหล่งยืนยันตัวตน.
+
 Relevant request fields:
 
 | Field | Type | Required | Rules |
 | --- | --- | --- | --- |
-| `factoryId` | string | yes | ต้อง resolve ไปยัง `eligible_factories.source_factory_id` หรือ `factory_registration_no_new` ที่ active |
-| `factoryRegistrationNo` | string | yes | ใช้เป็น alias สำรองสำหรับ `eligible_factories.factory_registration_no_new` |
+| `factoryId` | string | yes | ต้อง resolve ไปยัง `eligible_factories.source_factory_id`, `factory_registration_no_new` หรือ `factory_registration_no_old` ที่ active |
+| `factoryRegistrationNo` | string | yes | ใช้เป็น alias สำรองกับ identifier ทั้งสามแบบข้างต้น |
 
 Minimal relevant request fragment:
 
@@ -95,6 +97,8 @@ Minimal relevant request fragment:
   }
 }
 ```
+
+สำหรับ Direct Connection เงื่อนไข “ไม่พบ” รวมถึง active eligible row ที่อยู่นอก region/province ของเจ้าหน้าที่ และใช้ข้อความ `Active eligible factory not found within officer access scope` เพื่อไม่เปิดเผยข้อมูลโรงงานนอกขอบเขตสิทธิ์.
 
 ระบบเก็บ `eligibleFactoryId` ที่ resolve ได้ใน response ของคำขอ เพื่อยืนยันความสัมพันธ์เดียวกันระหว่างคำขอ โรงงานเข้าข่าย และข้อมูล current/live ของ POMS. Field นี้เป็น server-resolved response field; client ไม่ใช้เลือก eligible row โดยตรง.
 
