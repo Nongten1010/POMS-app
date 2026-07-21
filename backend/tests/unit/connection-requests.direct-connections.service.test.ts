@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 jest.mock('../../src/modules/connection-requests/connection-requests.repository', () => ({
   connectionRequestsRepository: {
     findFactoryGeneral: jest.fn(),
+    findDirectConnectionFactory: jest.fn(),
     createDirectConnection: jest.fn(),
   },
 }));
@@ -12,6 +13,7 @@ import { connectionRequestsService } from '../../src/modules/connection-requests
 
 const mockedRepository = connectionRequestsRepository as unknown as {
   findFactoryGeneral: jest.Mock<(...args: unknown[]) => Promise<unknown>>;
+  findDirectConnectionFactory: jest.Mock<(...args: unknown[]) => Promise<unknown>>;
   createDirectConnection: jest.Mock<(...args: unknown[]) => Promise<unknown>>;
 };
 const directService = connectionRequestsService as unknown as {
@@ -49,6 +51,7 @@ describe('connectionRequestsService.createDirectConnection', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedRepository.findFactoryGeneral.mockResolvedValue(canonicalFactory);
+    mockedRepository.findDirectConnectionFactory.mockResolvedValue(canonicalFactory);
     mockedRepository.createDirectConnection.mockResolvedValue(created);
   });
 
@@ -123,6 +126,27 @@ describe('connectionRequestsService.createDirectConnection', () => {
     });
 
     expect(mockedRepository.createDirectConnection).not.toHaveBeenCalled();
+  });
+
+  it('connects an active eligible factory even when it has no current POMS factory row', async () => {
+    mockedRepository.findFactoryGeneral.mockResolvedValueOnce(null);
+
+    await expect(directService.createDirectConnection(validInput(), actor)).resolves.toBe(created);
+
+    expect(mockedRepository.findDirectConnectionFactory).toHaveBeenCalledWith('factory-input', {
+      actorUserId: 42,
+      scope: { scope: 'ALL' },
+      regionalAccess: undefined,
+    });
+    expect(mockedRepository.createDirectConnection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eligibleFactoryId: 17,
+        factoryId: 'canonical-factory-id',
+        factoryName: 'โรงงานจากฐานข้อมูล',
+        factoryRegistrationNo: 'REG-CANONICAL',
+      }),
+      42,
+    );
   });
 
   it('does not create anything when the selected factory is not actively eligible', async () => {
