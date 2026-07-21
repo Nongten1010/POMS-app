@@ -6,6 +6,25 @@ import {
 } from '../../src/db/migrations/0076_sync_connected_factory_profiles_with_eligible_factories';
 
 describe('connected factory profile migration', () => {
+  it('executes new-column DDL before any SQL batch references those columns', async () => {
+    const raw = jest.fn().mockResolvedValue(undefined as never);
+    const knex = { schema: { raw } } as unknown as Knex;
+
+    await up(knex);
+
+    const statements = raw.mock.calls.map(([statement]) => String(statement));
+    const addColumnsIndex = statements.findIndex((statement) =>
+      statement.includes('eia_assessment NVARCHAR(32) NULL'),
+    );
+    const backfillIndex = statements.findIndex((statement) =>
+      statement.includes('SET eia_assessment = CASE'),
+    );
+
+    expect(addColumnsIndex).toBeGreaterThanOrEqual(0);
+    expect(backfillIndex).toBeGreaterThan(addColumnsIndex);
+    expect(statements[addColumnsIndex]).not.toContain('SET eia_assessment = CASE');
+  });
+
   it('fails the transaction when an active POMS row cannot resolve exactly one eligible factory', async () => {
     const raw = jest.fn().mockResolvedValue(undefined as never);
     const knex = { schema: { raw } } as unknown as Knex;
