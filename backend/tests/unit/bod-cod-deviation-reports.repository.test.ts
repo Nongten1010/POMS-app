@@ -27,7 +27,8 @@ describe('bodCodDeviationReportsRepository access filters', () => {
 
     expect(sql).toContain('from [cems_wpms_connected_measurement_points] as [cp]');
     expect(sql).toContain('left join [factories] as [f]');
-    expect(sql).toContain('join [user_juristics] as [uj]');
+    expect(sql).toContain('user_juristics');
+    expect(sql).toContain('user_factory_access');
     expect(sql).toContain('[uj].[user_id]');
   });
 
@@ -125,7 +126,8 @@ describe('bodCodDeviationReportsRepository access filters', () => {
     const sql = compiled.sql.toLowerCase();
 
     expect(sql).toContain('from [bod_cod_deviation_reports] as [r]');
-    expect(sql).toContain('join [user_juristics] as [uj]');
+    expect(sql).toContain('user_juristics');
+    expect(sql).toContain('user_factory_access');
     expect(sql).toContain('[r].[id]');
     expect(compiled.bindings).toContain(9);
   });
@@ -392,7 +394,8 @@ describe('bodCodDeviationReportsRepository access filters', () => {
     const sql = compiled.sql.toLowerCase();
 
     expect(sql).toContain('from [factories] as [f]');
-    expect(sql).toContain('join [user_juristics] as [uj]');
+    expect(sql).toContain('user_juristics');
+    expect(sql).toContain('user_factory_access');
     expect(sql).toContain('[uj].[user_id]');
     expect(compiled.bindings).toEqual(expect.arrayContaining([42, 'FID-001', '10520000225172']));
   });
@@ -430,7 +433,8 @@ describe('bodCodDeviationReportsRepository access filters', () => {
     expect(sql).toContain('from [bod_cod_deviation_reports] as [r]');
     expect(sql).toContain('left join [bod_cod_approval_steps] as [s]');
     expect(sql).toContain('[s].[is_current]');
-    expect(sql).toContain('join [user_juristics] as [uj]');
+    expect(sql).toContain('user_juristics');
+    expect(sql).toContain('user_factory_access');
     expect(sql).toContain('[uj].[user_id]');
     expect(compiled.bindings).toEqual(expect.arrayContaining([9, 42]));
   });

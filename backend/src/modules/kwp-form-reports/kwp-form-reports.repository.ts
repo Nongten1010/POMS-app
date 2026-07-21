@@ -1,5 +1,6 @@
 import type { Knex } from 'knex';
 import { db } from '../../config/database';
+import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
 import { splitFactoryTypeSequence } from '../eligible-factories/factory-type-sequence';
 import type {
   KwpFormFactoryTableRowDTO,
@@ -230,10 +231,7 @@ function buildRequestQuery(
 
 function applyFactoryAccessFilter(builder: Knex.QueryBuilder, access: KwpFormReportAccess): void {
   if (access.scope !== 'OWN_FACTORY') return;
-  builder
-    .join('user_juristics as uj', 'uj.juristic_id', 'f.juristic_id')
-    .where('uj.user_id', access.actorUserId)
-    .whereNull('uj.revoked_at');
+  applyAssignedFactoryAccessFilter(builder, access.actorUserId);
 }
 
 function applyRegionalAccessFilter(

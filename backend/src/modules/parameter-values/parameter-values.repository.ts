@@ -2,6 +2,7 @@ import { env } from '../../config/env';
 import { db } from '../../config/database';
 import { parameterSourceDb } from '../../config/parameter-source-database';
 import type { Knex } from 'knex';
+import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
 import {
   type LatestParameterValueQuery,
   type ListParameterValuesQuery,
@@ -318,15 +319,11 @@ function buildStationAccessQuery(access: ParameterValueAccessContext) {
 
   if (applyStationLocationFilter(scopedQuery, access.scope)) return scopedQuery;
 
-  return scopedQuery
-    .leftJoin('user_juristics as uj', function joinUserJuristic() {
-      this.on('uj.juristic_id', '=', 'f.juristic_id')
-        .andOnVal('uj.user_id', access.actorUserId)
-        .andOnNull('uj.revoked_at');
-    })
-    .where((builder) => {
-      builder.where('p.created_by', access.actorUserId).orWhereNotNull('uj.user_id');
+  return scopedQuery.where((builder) => {
+    builder.where('p.created_by', access.actorUserId).orWhere((factoryAccessBuilder) => {
+      applyAssignedFactoryAccessFilter(factoryAccessBuilder, access.actorUserId);
     });
+  });
 }
 
 function buildWaitingConnectionStationAccessQuery(access: ParameterValueAccessContext) {
@@ -347,15 +344,11 @@ function buildWaitingConnectionStationAccessQuery(access: ParameterValueAccessCo
 
   if (applyStationLocationFilter(scopedQuery, access.scope)) return scopedQuery;
 
-  return scopedQuery
-    .leftJoin('user_juristics as uj', function joinUserJuristic() {
-      this.on('uj.juristic_id', '=', 'f.juristic_id')
-        .andOnVal('uj.user_id', access.actorUserId)
-        .andOnNull('uj.revoked_at');
-    })
-    .where((builder) => {
-      builder.where('r.created_by', access.actorUserId).orWhereNotNull('uj.user_id');
+  return scopedQuery.where((builder) => {
+    builder.where('r.created_by', access.actorUserId).orWhere((factoryAccessBuilder) => {
+      applyAssignedFactoryAccessFilter(factoryAccessBuilder, access.actorUserId);
     });
+  });
 }
 
 export function buildStationAccessQueryForTests(access: ParameterValueAccessContext) {

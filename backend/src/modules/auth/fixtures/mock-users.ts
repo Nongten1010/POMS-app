@@ -4,7 +4,7 @@
  * ใช้ตอน IDENTITY_PROVIDER=mock — สลับเป็น external (กรอ. API จริง) ภายหลัง
  * Data ที่สมจริง: ดึงจาก sample txt files ที่ user แนบมา
  *   - เจ้าหน้าที่: "วีกิจ ชมญาติ" (per_cardno=1102001567054)
- *   - ผู้ประกอบการ: "ธนาภรณ์ ศรีอวบ" (citizen_id=3191000135709) + 2 บริษัท + 7 โรงงาน
+ *   - ผู้ประกอบการ: "ธนาภรณ์ ศรีอวบ" (citizen_id=3191000135709) + 3 นิติบุคคล + 8 โรงงาน
  */
 
 export interface MockOfficer {
@@ -261,10 +261,17 @@ export const MOCK_OPERATORS: MockOperator[] = [
             juristic_start: null,
             verify_date: null,
           },
+        ],
+      },
+      {
+        juristic_id: '9900000009999',
+        name_th: 'โรงงาน 10120000325542',
+        name_en: '',
+        factories: [
           {
             fid: '10120000325542',
-            code: '3-101-3/55นบ',
-            name: 'บริษัท ปูนซิเมนต์นครหลวง จำกัด (มหาชน) โรงงาน 3',
+            code: '10120000325542',
+            name: 'โรงงาน 10120000325542',
             province_id: '1012',
             system_id: 12,
             verify_status: 0,

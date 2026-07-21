@@ -1,11 +1,23 @@
-import { describe, expect, it, jest } from '@jest/globals';
+import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import type { Knex } from 'knex';
+
+const mockGrantTargetOperatorFactoryAccess = jest.fn();
+jest.mock('../../src/db/migrations/0073_grant_operator_demo_factory_access', () => ({
+  grantTargetOperatorFactoryAccess: mockGrantTargetOperatorFactoryAccess,
+}));
+
 import {
+  buildOperatorFactoriesQueryForTests,
   shouldInsertUserJuristicAccess,
+  syncManualOperatorFactoryAccess,
   syncIdentityProviderBaseRole,
 } from '../../src/modules/auth/auth.repository';
 
 describe('authRepository operator juristic sync', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   it('inserts juristic access only when no existing user_juristics row exists', () => {
     expect(shouldInsertUserJuristicAccess(undefined)).toBe(true);
     expect(shouldInsertUserJuristicAccess(null)).toBe(true);
@@ -19,6 +31,65 @@ describe('authRepository operator juristic sync', () => {
         revoked_at: '2026-06-25T21:15:53.124+07:00',
       }),
     ).toBe(false);
+  });
+
+  it('includes direct per-factory grants in the operator factory list', () => {
+    const compiled = buildOperatorFactoriesQueryForTests(88).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('user_juristics');
+    expect(sql).toContain('user_factory_access');
+    expect(sql).toContain('ufa.factory_id = factories.id');
+    expect(sql).toContain('from [factories] inner join [juristics]');
+    expect(compiled.bindings.filter((binding: unknown) => binding === 88)).toHaveLength(2);
+  });
+
+  it('creates the requested direct factory grant when the operator logs in later', async () => {
+    const factoryBuilder = chainableBuilder({ first: async () => ({ id: 501 }) });
+    const accessBuilder = chainableBuilder({ first: async () => undefined });
+    const insertBuilder = chainableBuilder({ insert: async () => [1] });
+    const builders = [factoryBuilder, accessBuilder, insertBuilder];
+    const trx = jest.fn((table: string) => {
+      if (table === 'factories' || table === 'user_factory_access') return builders.shift();
+      throw new Error(`Unexpected table ${table}`);
+    }) as unknown as Knex.Transaction;
+    Object.assign(trx, { raw: jest.fn(() => 'now') });
+
+    await syncManualOperatorFactoryAccess(trx, 88, '3191000135709');
+
+    expect(factoryBuilder.where).toHaveBeenCalledWith({ fid: '10120000325542' });
+    expect(insertBuilder.insert).toHaveBeenCalledWith({
+      user_id: 88,
+      factory_id: 501,
+    });
+  });
+
+  it('does not restore a direct factory grant that was explicitly revoked', async () => {
+    const factoryBuilder = chainableBuilder({ first: async () => ({ id: 501 }) });
+    const accessBuilder = chainableBuilder({
+      first: async () => ({ revoked_at: '2026-07-01' }),
+    });
+    const builders = [factoryBuilder, accessBuilder];
+    const trx = jest.fn((table: string) => {
+      if (table === 'factories' || table === 'user_factory_access') return builders.shift();
+      throw new Error(`Unexpected table ${table}`);
+    }) as unknown as Knex.Transaction;
+
+    await syncManualOperatorFactoryAccess(trx, 88, '3191000135709');
+
+    expect(builders).toHaveLength(0);
+  });
+
+  it('hydrates and grants the target factory when a production user logs in after migration', async () => {
+    const factoryBuilder = chainableBuilder({ first: async () => undefined });
+    const trx = jest.fn((table: string) => {
+      if (table === 'factories') return factoryBuilder;
+      throw new Error(`Unexpected table ${table}`);
+    }) as unknown as Knex.Transaction;
+
+    await syncManualOperatorFactoryAccess(trx, 88, '3191000135709');
+
+    expect(mockGrantTargetOperatorFactoryAccess).toHaveBeenCalledWith(trx, 88);
   });
 });
 
@@ -61,6 +132,7 @@ function chainableBuilder(terminalMethods: Record<string, (...args: unknown[]) =
     select: jest.fn(),
     del: jest.fn(),
     insert: jest.fn(),
+    update: jest.fn(),
   };
   builder.where.mockReturnValue(builder);
   builder.whereIn.mockReturnValue(builder);

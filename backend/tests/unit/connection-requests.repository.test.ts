@@ -193,7 +193,23 @@ describe('connectionRequestsRepository request numbers', () => {
     const sql = compiled.sql.toLowerCase();
 
     expect(sql).toContain('user_juristics');
+    expect(sql).toContain('user_factory_access');
+    expect(sql).toContain('exists');
     expect(compiled.bindings).toContain(42);
+  });
+
+  it('allows an OWN_FACTORY operator through either juristic or direct factory access', () => {
+    const compiled = buildFactoriesForAccessQueryForTests({
+      actorUserId: 42,
+      scope: 'OWN_FACTORY',
+    }).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('user_juristics');
+    expect(sql).toContain('user_factory_access');
+    expect(sql).toContain('ufa.factory_id = f.id');
+    expect(sql).not.toContain('inner join [user_juristics]');
+    expect(compiled.bindings.filter((binding) => binding === 42)).toHaveLength(2);
   });
 
   it('limits dashboard factory access to a selected permission region', () => {

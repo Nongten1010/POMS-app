@@ -6,6 +6,7 @@ import {
   NotFoundError,
 } from '../../shared/errors/AppError';
 import { db } from '../../config/database';
+import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
 import { buildPublicFileUrl } from './kwp-form-attachments.service';
 import type {
   CreatedKwpFormSubmissionDTO,
@@ -864,10 +865,7 @@ function buildEditableSubmissionQuery(
     .select('s.id', 's.form_type', 's.status');
 
   if (access.scope === 'OWN_FACTORY') {
-    builder
-      .join('user_juristics as uj', 'uj.juristic_id', 'f.juristic_id')
-      .where('uj.user_id', access.actorUserId)
-      .whereNull('uj.revoked_at');
+    applyAssignedFactoryAccessFilter(builder, access.actorUserId);
   }
 
   const regions = [
@@ -1005,10 +1003,7 @@ function buildFactoryAccessQuery(
     .select('f.id');
 
   if (access.scope === 'OWN_FACTORY') {
-    builder
-      .join('user_juristics as uj', 'uj.juristic_id', 'f.juristic_id')
-      .where('uj.user_id', access.actorUserId)
-      .whereNull('uj.revoked_at');
+    applyAssignedFactoryAccessFilter(builder, access.actorUserId);
   }
 
   return builder;
@@ -1090,10 +1085,7 @@ function buildWorkflowQuery(
     );
 
   if (access.scope === 'OWN_FACTORY') {
-    builder
-      .join('user_juristics as uj', 'uj.juristic_id', 'f.juristic_id')
-      .where('uj.user_id', access.actorUserId)
-      .whereNull('uj.revoked_at');
+    applyAssignedFactoryAccessFilter(builder, access.actorUserId);
   }
 
   const regions = [
@@ -1109,10 +1101,7 @@ function applySubmissionReadAccessFilter(
   access: KwpFormSubmissionReadAccess,
 ): void {
   if (access.scope === 'OWN_FACTORY') {
-    builder
-      .join('user_juristics as uj', 'uj.juristic_id', 'f.juristic_id')
-      .where('uj.user_id', access.actorUserId)
-      .whereNull('uj.revoked_at');
+    applyAssignedFactoryAccessFilter(builder, access.actorUserId);
   }
 
   const regions = [

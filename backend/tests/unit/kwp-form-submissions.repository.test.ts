@@ -43,7 +43,8 @@ describe('kwpFormSubmissionsRepository', () => {
       .sql.toLowerCase();
 
     expect(sql).toContain('from [factories] as [f]');
-    expect(sql).toContain('join [user_juristics] as [uj]');
+    expect(sql).toContain('user_juristics');
+    expect(sql).toContain('user_factory_access');
     expect(sql).toContain('[uj].[user_id]');
     expect(sql).toContain('[f].[fid]');
     expect(sql).toContain('[f].[code]');
@@ -64,7 +65,8 @@ describe('kwpFormSubmissionsRepository', () => {
     expect(sql).toContain('from [kwp_form_submissions] as [s]');
     expect(sql).toContain('[s].[id] = ?');
     expect(sql).toContain('[s].[form_type] = ?');
-    expect(sql).toContain('join [user_juristics] as [uj]');
+    expect(sql).toContain('user_juristics');
+    expect(sql).toContain('user_factory_access');
     expect(sql).toContain('[uj].[user_id]');
     expect(sql).toContain('[p].[region] in (?)');
   });
@@ -80,7 +82,8 @@ describe('kwpFormSubmissionsRepository', () => {
 
     expect(sql).toContain('from [kwp_form_submissions] as [s]');
     expect(sql).toContain('[s].[id] = ?');
-    expect(sql).toContain('join [user_juristics] as [uj]');
+    expect(sql).toContain('user_juristics');
+    expect(sql).toContain('user_factory_access');
     expect(sql).toContain('[uj].[user_id]');
     expect(sql).toContain('[p].[region] in (?)');
   });
@@ -97,7 +100,8 @@ describe('kwpFormSubmissionsRepository', () => {
     expect(sql).toContain('from [kwp_form_submissions] as [s]');
     expect(sql).toContain('[s].[id] = ?');
     expect(sql).toContain('[s].[form_type] = ?');
-    expect(sql).toContain('join [user_juristics] as [uj]');
+    expect(sql).toContain('user_juristics');
+    expect(sql).toContain('user_factory_access');
     expect(sql).toContain('[uj].[user_id]');
   });
 

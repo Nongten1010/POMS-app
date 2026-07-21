@@ -1,5 +1,6 @@
 import type { Knex } from 'knex';
 import { db } from '../../config/database';
+import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
 import { buildPublicFileUrl } from '../kwp-form-submissions/kwp-form-attachments.service';
 import type {
@@ -778,10 +779,7 @@ function buildCreateAccessQuery(
 ): Knex.QueryBuilder {
   const builder = connection('factories as f').select('f.id').first();
   if (access.scope === 'OWN_FACTORY') {
-    builder
-      .join('user_juristics as uj', 'uj.juristic_id', 'f.juristic_id')
-      .where('uj.user_id', access.actorUserId)
-      .whereNull('uj.revoked_at');
+    applyAssignedFactoryAccessFilter(builder, access.actorUserId);
   }
   builder.where((factoryBuilder) => {
     const factoryId = input.factoryId ?? '';
@@ -1256,18 +1254,12 @@ async function insertApprovalEvent(
 
 function applyFactoryAccessFilter(builder: Knex.QueryBuilder, access: BodCodDeviationAccess): void {
   if (access.scope !== 'OWN_FACTORY') return;
-  builder
-    .join('user_juristics as uj', 'uj.juristic_id', 'f.juristic_id')
-    .where('uj.user_id', access.actorUserId)
-    .whereNull('uj.revoked_at');
+  applyAssignedFactoryAccessFilter(builder, access.actorUserId);
 }
 
 function applyReportAccessFilter(builder: Knex.QueryBuilder, access: BodCodDeviationAccess): void {
   if (access.scope !== 'OWN_FACTORY') return;
-  builder
-    .join('user_juristics as uj', 'uj.juristic_id', 'f.juristic_id')
-    .where('uj.user_id', access.actorUserId)
-    .whereNull('uj.revoked_at');
+  applyAssignedFactoryAccessFilter(builder, access.actorUserId);
 }
 
 function applyRegionalAccessFilter(

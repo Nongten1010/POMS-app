@@ -5,6 +5,8 @@ import type {
   ExternalOfficerProfile,
   ExternalOperatorProfile,
 } from './identity-provider/identity-provider.interface';
+import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
+import { grantTargetOperatorFactoryAccess } from '../../db/migrations/0073_grant_operator_demo_factory_access';
 
 export interface UserRow {
   id: number;
@@ -51,6 +53,10 @@ export interface OperatorProfileRow {
   user_code: string | null;
   regis_date: string | null;
 }
+
+const MANUAL_OPERATOR_FACTORY_ACCESS: Readonly<Record<string, readonly string[]>> = {
+  '3191000135709': ['10120000325542'],
+};
 
 export const authRepository = {
   findUserByProviderAndExternalId(
@@ -198,6 +204,8 @@ export const authRepository = {
           await upsertExternalFactory(trx, juristicId, factory);
         }
       }
+
+      await syncManualOperatorFactoryAccess(trx, userId, profile.citizen_id);
     });
   },
 
@@ -289,26 +297,7 @@ export const authRepository = {
       authorize_end: string | null;
     }>
   > {
-    return db('user_juristics')
-      .join('juristics', 'user_juristics.juristic_id', 'juristics.id')
-      .join('factories', 'factories.juristic_id', 'juristics.id')
-      .where('user_juristics.user_id', userId)
-      .whereNull('factories.deleted_at')
-      .whereNull('juristics.deleted_at')
-      .whereNull('user_juristics.revoked_at')
-      .select(
-        'juristics.juristic_id as juristic_id',
-        'juristics.name_th as juristic_name_th',
-        'juristics.name_en as juristic_name_en',
-        'factories.fid as fid',
-        'factories.code as code',
-        'factories.name as name',
-        'factories.province_id as province_id',
-        'factories.system_id as system_id',
-        'factories.verify_status as verify_status',
-        'factories.authorize_start as authorize_start',
-        'factories.authorize_end as authorize_end',
-      );
+    return buildOperatorFactoriesQuery(userId);
   },
 
   updateLastLogin(userId: number, trx?: Knex.Transaction): Promise<number> {
@@ -318,6 +307,31 @@ export const authRepository = {
     return q;
   },
 };
+
+function buildOperatorFactoriesQuery(userId: number) {
+  return db('factories')
+    .join('juristics', 'factories.juristic_id', 'juristics.id')
+    .whereNull('factories.deleted_at')
+    .whereNull('juristics.deleted_at')
+    .modify((builder) => applyAssignedFactoryAccessFilter(builder, userId, 'factories'))
+    .select(
+      'juristics.juristic_id as juristic_id',
+      'juristics.name_th as juristic_name_th',
+      'juristics.name_en as juristic_name_en',
+      'factories.fid as fid',
+      'factories.code as code',
+      'factories.name as name',
+      'factories.province_id as province_id',
+      'factories.system_id as system_id',
+      'factories.verify_status as verify_status',
+      'factories.authorize_start as authorize_start',
+      'factories.authorize_end as authorize_end',
+    );
+}
+
+export function buildOperatorFactoriesQueryForTests(userId: number) {
+  return buildOperatorFactoriesQuery(userId);
+}
 
 type ExternalOperatorJuristic = ExternalOperatorProfile['juristics'][number];
 type ExternalOperatorFactory = ExternalOperatorJuristic['factories'][number];
@@ -441,6 +455,28 @@ async function upsertUserJuristicAccess(
 
 export function shouldInsertUserJuristicAccess(existing: unknown): boolean {
   return !existing;
+}
+
+export async function syncManualOperatorFactoryAccess(
+  trx: Knex.Transaction,
+  userId: number,
+  operatorExternalId: string,
+): Promise<void> {
+  const factoryFids = MANUAL_OPERATOR_FACTORY_ACCESS[operatorExternalId] ?? [];
+  for (const fid of factoryFids) {
+    const factory = await trx('factories').where({ fid }).whereNull('deleted_at').first('id');
+    if (!factory) {
+      await grantTargetOperatorFactoryAccess(trx, userId);
+      continue;
+    }
+
+    const existing = await trx('user_factory_access')
+      .where({ user_id: userId, factory_id: factory.id })
+      .first('revoked_at');
+    if (existing) continue;
+
+    await trx('user_factory_access').insert({ user_id: userId, factory_id: factory.id });
+  }
 }
 
 async function upsertExternalFactory(

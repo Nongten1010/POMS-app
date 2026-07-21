@@ -131,6 +131,7 @@ describe('parameterValuesRepository', () => {
     const sql = compiled.sql.toLowerCase();
 
     expect(sql).toContain('user_juristics');
+    expect(sql).toContain('user_factory_access');
     expect(sql).toContain('[p].[created_by]');
     expect(compiled.bindings).toContain(42);
   });
@@ -170,7 +171,13 @@ describe('parameterValuesRepository', () => {
 
   it('prefers instrument parameters over all eligible registered parameters', () => {
     const result = parseRegisteredParametersFromRowForTests({
-      parameters_json: JSON.stringify(['CO (ppm)', 'NOx (ppm)', 'Temp. (°C)', 'O2 (%)', 'Flow (m³/hr)']),
+      parameters_json: JSON.stringify([
+        'CO (ppm)',
+        'NOx (ppm)',
+        'Temp. (°C)',
+        'O2 (%)',
+        'Flow (m³/hr)',
+      ]),
       instruments_json: JSON.stringify({
         converterBrand: 'Converter Brand',
         converterModel: 'CV-100',

@@ -4,6 +4,7 @@ import { env } from '../../config/env';
 import { factorySourceDb } from '../../config/factory-source-database';
 import type { PermissionScopeDetails } from '../auth/permissions';
 import type { RegionalAccessDTO } from '../auth/regional-access';
+import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
 import {
   deriveHasEiaFromAssessment,
   resolveStoredConnectionRequestEia,
@@ -387,10 +388,7 @@ export const connectionRequestsRepository = {
       );
 
     if (requiresAssignedFactoryAccess(access.scope)) {
-      builder
-        .join('user_juristics as uj', 'uj.juristic_id', 'f.juristic_id')
-        .where('uj.user_id', access.actorUserId)
-        .whereNull('uj.revoked_at');
+      applyAssignedFactoryAccessFilter(builder, access.actorUserId);
     }
     applyFactoryPermissionLocationFilter(builder, access.scope);
     applyFactoryRegionalAccessFilter(builder, access.regionalAccess);
@@ -930,10 +928,7 @@ function buildFactoriesForAccessQuery(
     .orderBy('f.id', 'asc');
 
   if (requiresAssignedFactoryAccess(access.scope)) {
-    builder
-      .join('user_juristics as uj', 'uj.juristic_id', 'f.juristic_id')
-      .where('uj.user_id', access.actorUserId)
-      .whereNull('uj.revoked_at');
+    applyAssignedFactoryAccessFilter(builder, access.actorUserId);
   }
   applyFactoryPermissionLocationFilter(builder, access.scope);
   applyFactoryRegionalAccessFilter(builder, access.regionalAccess);

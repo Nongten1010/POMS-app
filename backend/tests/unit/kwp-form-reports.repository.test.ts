@@ -20,7 +20,8 @@ describe('kwpFormReportsRepository access filters', () => {
     expect(sql).not.toContain('from [cems_wpms_connection_requests] as [cr]');
     expect(sql).toContain('[ef].[business_activity]');
     expect(sql).toContain('[ef].[factory_type_sequence]');
-    expect(sql).toContain('join [user_juristics] as [uj]');
+    expect(sql).toContain('user_juristics');
+    expect(sql).toContain('user_factory_access');
     expect(sql).toContain('[uj].[user_id]');
   });
 
@@ -59,7 +60,8 @@ describe('kwpFormReportsRepository access filters', () => {
       .sql.toLowerCase();
 
     expect(sql).toContain('from [kwp_form_submissions] as [s]');
-    expect(sql).toContain('join [user_juristics] as [uj]');
+    expect(sql).toContain('user_juristics');
+    expect(sql).toContain('user_factory_access');
     expect(sql).toContain('[uj].[user_id]');
   });
 
