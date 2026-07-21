@@ -746,6 +746,10 @@ const parametersRequestApiUrl =
   import.meta.env.DEV
     ? '/api-proxy/v1/cems-wpms-requests/parameters'
     : 'https://d-poms.diw.go.th/api/v1/cems-wpms-requests/parameters'
+const directConnectionsApiUrl =
+  import.meta.env.DEV
+    ? '/api-proxy/v1/cems-wpms-requests/direct-connections'
+    : 'https://d-poms.diw.go.th/api/v1/cems-wpms-requests/direct-connections'
 const documentImagesApiUrl =
   import.meta.env.DEV
     ? '/api-proxy/v1/cems-wpms-requests/document-images'
@@ -791,6 +795,18 @@ function getParametersRequestApiUrl() {
   }
 
   return parametersRequestApiUrl
+}
+
+function getDirectConnectionsApiUrl() {
+  if (typeof window === 'undefined') {
+    return directConnectionsApiUrl
+  }
+
+  if (window.location.hostname === 'd-poms.diw.go.th') {
+    return '/api/v1/cems-wpms-requests/direct-connections'
+  }
+
+  return directConnectionsApiUrl
 }
 
 function getDocumentImagesApiUrl() {
@@ -4624,9 +4640,9 @@ function TagInputField({ label, name, value: controlledValue, defaultValue = [],
   )
 }
 
-function CemsMonitoringPointDetails({ initialPoint = {}, requestedParameters = [], onRequestedParametersChange, isOperator = false }) {
+function CemsMonitoringPointDetails({ initialPoint = {}, requestedParameters = [], onRequestedParametersChange, isOperator = false, isDirectConnectionMode = false }) {
   const initialDetails = { ...mockCemsMonitoringPointDetails, ...(initialPoint.details ?? {}) }
-  const pointCodeValue = initialPoint.pointCode ?? initialPoint.code ?? (isOperator ? '' : initialDetails.pointCode)
+  const pointCodeValue = initialPoint.pointCode ?? initialPoint.code ?? (isOperator || isDirectConnectionMode ? '' : initialDetails.pointCode)
   const initialProductionCapacity = splitProductionCapacity(initialDetails)
   const [stackShape, setStackShape] = useState(initialDetails.stackShape)
   const [primaryFuel, setPrimaryFuel] = useState(initialDetails.primaryFuel)
@@ -5450,9 +5466,9 @@ function InformationProviderSection({ currentUser, initialProvider = {}, useLogi
   )
 }
 
-function WpmsMonitoringPointDetails({ initialPoint = {}, requestedParameters = [], onRequestedParametersChange, isOperator = false }) {
+function WpmsMonitoringPointDetails({ initialPoint = {}, requestedParameters = [], onRequestedParametersChange, isOperator = false, isDirectConnectionMode = false }) {
   const initialDetails = { ...mockWpmsMonitoringPointDetails, ...(initialPoint.details ?? {}) }
-  const pointCodeValue = initialPoint.pointCode ?? initialPoint.code ?? (isOperator ? '' : initialDetails.pointCode)
+  const pointCodeValue = initialPoint.pointCode ?? initialPoint.code ?? (isOperator || isDirectConnectionMode ? '' : initialDetails.pointCode)
   const [treatmentSystem, setTreatmentSystem] = useState(normalizeArrayValue(initialDetails.treatmentSystem))
   const [connectionDevice, setConnectionDevice] = useState(initialDetails.connectionDevice)
   const hasTreatmentSystem = treatmentSystem.length > 0 && !treatmentSystem.includes('ไม่มี') ? 'มี' : 'ไม่มี'
@@ -5664,7 +5680,7 @@ function StationMonitoringPointDetails() {
   )
 }
 
-function MonitoringPointDetails({ point, initialPoint = {}, requestedParameters = [], onRequestedParametersChange, isOperator = false }) {
+function MonitoringPointDetails({ point, initialPoint = {}, requestedParameters = [], onRequestedParametersChange, isOperator = false, isDirectConnectionMode = false }) {
   if (point.type === 'CEMS') {
     return (
       <CemsMonitoringPointDetails
@@ -5672,6 +5688,7 @@ function MonitoringPointDetails({ point, initialPoint = {}, requestedParameters 
         requestedParameters={requestedParameters}
         onRequestedParametersChange={onRequestedParametersChange}
         isOperator={isOperator}
+        isDirectConnectionMode={isDirectConnectionMode}
       />
     )
   }
@@ -5682,6 +5699,7 @@ function MonitoringPointDetails({ point, initialPoint = {}, requestedParameters 
         requestedParameters={requestedParameters}
         onRequestedParametersChange={onRequestedParametersChange}
         isOperator={isOperator}
+        isDirectConnectionMode={isDirectConnectionMode}
       />
     )
   }
@@ -5701,6 +5719,7 @@ function RequestFormBottomSheet({
   accessToken,
   currentUser,
   isOperator = false,
+  isDirectConnectionMode = false,
   mode = 'create',
   requestId,
   initialRequest,
@@ -5713,6 +5732,7 @@ function RequestFormBottomSheet({
   const submitPreviewPdfUrlRef = useRef('')
   const isEditMode = mode === 'edit'
   const isAddParameterMode = mode === 'add-parameter'
+  const shouldUseDirectConnection = isDirectConnectionMode && !isEditMode && !isAddParameterMode
   const useInitialRequestValues = isEditMode || isAddParameterMode
   const initialPoint = getInitialRequestPoint(initialRequest)
   const initialInstruments = initialPoint.measurementInstruments ?? {}
@@ -5783,6 +5803,23 @@ function RequestFormBottomSheet({
 
     return requestBody
   }
+  const validateDirectConnectionRequest = (requestBody) => {
+    if (!shouldUseDirectConnection) {
+      return
+    }
+
+    const pointCode = String(requestBody.measurementPoints?.[0]?.pointCode ?? '').trim()
+
+    if (!pointCode) {
+      throw new Error('กรุณาระบุรหัสจุดตรวจวัด')
+    }
+
+    if (pointCode.length > 64) {
+      throw new Error('รหัสจุดตรวจวัดต้องไม่เกิน 64 ตัวอักษร')
+    }
+
+    requestBody.measurementPoints[0].pointCode = pointCode
+  }
   const clearSubmitPreviewPdf = useCallback(() => {
     if (submitPreviewPdfUrlRef.current) {
       URL.revokeObjectURL(submitPreviewPdfUrlRef.current)
@@ -5815,7 +5852,16 @@ function RequestFormBottomSheet({
     clearSubmitPreviewPdf()
     const previewSessionId = submitPreviewSessionRef.current + 1
     submitPreviewSessionRef.current = previewSessionId
-    const requestBody = buildCurrentRequestBody()
+    let requestBody
+
+    try {
+      requestBody = buildCurrentRequestBody()
+      validateDirectConnectionRequest(requestBody)
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'ข้อมูลไม่ถูกต้อง')
+      return
+    }
+
     setSubmitPreviewRequest(requestBody)
     setSubmitConfirmOpen(true)
     setSubmitPreviewPdfLoading(true)
@@ -5872,10 +5918,14 @@ function RequestFormBottomSheet({
         requestBody.remarks = 'ขอเพิ่มพารามิเตอร์'
       }
 
+      validateDirectConnectionRequest(requestBody)
+
       const submitApiUrl = isEditMode
         ? getRequestFormApiUrl(requestId)
         : isAddParameterMode
           ? getParametersRequestApiUrl()
+          : shouldUseDirectConnection
+            ? getDirectConnectionsApiUrl()
           : getMeasurementPointsRequestApiUrl()
 
       const result = await fetch(submitApiUrl, {
@@ -6225,6 +6275,7 @@ function RequestFormBottomSheet({
                         requestedParameters={requestedParameters}
                         onRequestedParametersChange={updateRequestedParameters}
                         isOperator={isOperator}
+                        isDirectConnectionMode={isDirectConnectionMode}
                       />
                     </Box>
                   ))}
@@ -6546,12 +6597,16 @@ function ConnectionRequestPage({
     () =>
       getFactoryColumns(
         isOperator,
-        (factory, formType) => setRequestForm({ factory, formType }),
+        (factory, formType) => setRequestForm({
+          factory,
+          formType,
+          isDirectConnectionMode: canUseEligibleFactoryRows && !isOperator && formType === 'เพิ่มจุดตรวจวัด',
+        }),
         setMonitoringPointFactory,
         openIntentDialog,
         canViewFactoryTable,
       ),
-    [canViewFactoryTable, isOperator, openIntentDialog],
+    [canUseEligibleFactoryRows, canViewFactoryTable, isOperator, openIntentDialog],
   )
   const handleOpenRequestDocument = useCallback(async (row, mode = 'view') => {
     clearRequestDocumentPdf()
@@ -7246,6 +7301,7 @@ function ConnectionRequestPage({
         accessToken={accessToken}
         currentUser={currentUser}
         isOperator={isOperator}
+        isDirectConnectionMode={requestForm?.isDirectConnectionMode === true}
         mode={requestForm?.mode ?? 'create'}
         requestId={requestForm?.requestId}
         initialRequest={requestForm?.initialRequest}
