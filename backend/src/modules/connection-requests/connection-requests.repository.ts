@@ -5,12 +5,14 @@ import { factorySourceDb } from '../../config/factory-source-database';
 import type { PermissionScopeDetails } from '../auth/permissions';
 import type { RegionalAccessDTO } from '../auth/regional-access';
 import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
+import { ConflictError } from '../../shared/errors/AppError';
 import {
   deriveHasEiaFromAssessment,
   resolveStoredConnectionRequestEia,
 } from './connection-request-eia';
 import {
   CONNECTION_REQUEST_STATUS,
+  CONNECTION_REQUEST_SUBMISSION_SOURCE,
   CONNECTION_REQUEST_TYPE,
   CONNECTION_REQUEST_TYPE_LABELS,
   CONNECTION_REQUEST_STATUS_LABELS,
@@ -20,6 +22,7 @@ import {
   type ConnectionRequestType,
   type CreateConnectionRequestInput,
   type CurrentFactoryMeasurementPointDTO,
+  type DirectConnectionRequestInput,
   type FactoryFavoriteDTO,
   type FactoryGeneralDTO,
   type FactorySummaryDTO,
@@ -38,6 +41,7 @@ const FACTORY_TYPE_CODE_LENGTH = 5;
 interface ConnectionRequestRow {
   id: number | string;
   request_no: string;
+  submission_source: 'OPERATOR_FORM' | 'OFFICER_DIRECT_API' | null;
   request_type: ConnectionRequestType;
   factory_id: string;
   factory_name: string;
@@ -488,6 +492,7 @@ export const connectionRequestsRepository = {
       .select(
         'id',
         'request_no',
+        'submission_source',
         'request_type',
         'factory_id',
         'factory_name',
@@ -693,6 +698,90 @@ export const connectionRequestsRepository = {
       if (!created) throw new Error('Created connection request could not be loaded');
       return created;
     });
+  },
+
+  async createDirectConnection(
+    input: DirectConnectionRequestInput,
+    actorUserId: number,
+  ): Promise<ConnectionRequestDTO> {
+    const point = input.measurementPoints[0];
+    const pointCode = point?.pointCode?.trim();
+    if (input.measurementPoints.length !== 1 || !point || !pointCode) {
+      throw new Error(
+        'Direct connection repository requires exactly one measurement point with a code',
+      );
+    }
+
+    try {
+      return await db.transaction(async (trx) => {
+        await ensureDirectPointCodeAvailable(trx, pointCode);
+        const connectedAt = new Date();
+        const requestNo = await nextDirectRequestNo(trx, input.systemType, connectedAt);
+        const [{ id }] = await trx('cems_wpms_connection_requests')
+          .insert({
+            request_no: requestNo,
+            request_type: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT,
+            submission_source: CONNECTION_REQUEST_SUBMISSION_SOURCE.OFFICER_DIRECT_API,
+            ...toRequestRow(input),
+            status: CONNECTION_REQUEST_STATUS.CONNECTED,
+            verified_at: connectedAt,
+            created_by: actorUserId,
+            updated_by: actorUserId,
+          })
+          .returning('id');
+
+        const requestId = Number(id);
+        await upsertFactorySnapshot(trx, requestId, input, actorUserId);
+        const pointId = await insertDirectMeasurementPoint(
+          trx,
+          requestId,
+          { ...point, pointCode },
+          actorUserId,
+        );
+
+        await insertHistory(
+          trx,
+          requestId,
+          CONNECTION_REQUEST_STATUS.CONNECTED,
+          actorUserId,
+          'เจ้าหน้าที่เพิ่มจุดตรวจวัดและเชื่อมต่อโดยตรงผ่าน API',
+        );
+        await trx('cems_wpms_connected_measurement_points').insert({
+          source_request_id: requestId,
+          source_measurement_point_id: pointId,
+          factory_id: input.factoryId,
+          factory_name: input.factoryName,
+          factory_registration_no: input.factoryRegistrationNo,
+          factory_address: input.address ?? null,
+          factory_latitude: input.latitude ?? null,
+          factory_longitude: input.longitude ?? null,
+          system_type: input.systemType,
+          point_name: point.pointName,
+          point_code: pointCode,
+          point_type: point.pointType,
+          parameters_json: JSON.stringify(point.parameters ?? []),
+          details_json: point.details ? JSON.stringify(point.details) : null,
+          documents_json:
+            point.documentsAndImages && point.documentsAndImages.length > 0
+              ? JSON.stringify(point.documentsAndImages)
+              : null,
+          instruments_json: point.measurementInstruments
+            ? JSON.stringify(point.measurementInstruments)
+            : null,
+          connected_at: connectedAt,
+          created_by: actorUserId,
+          updated_by: actorUserId,
+        });
+
+        const created = await findByIdInTransaction(trx, requestId);
+        if (!created) throw new Error('Created direct connection request could not be loaded');
+        return created;
+      });
+    } catch (error) {
+      if (error instanceof ConflictError) throw error;
+      if (isActivePointCodeUniqueViolation(error)) throw directPointCodeConflict(pointCode);
+      throw error;
+    }
   },
 
   async findById(id: number): Promise<ConnectionRequestDTO | null> {
@@ -985,6 +1074,7 @@ function buildBaseQuery(
   return builder.select(
     'id',
     'request_no',
+    'submission_source',
     'request_type',
     'factory_id',
     'factory_name',
@@ -1450,6 +1540,7 @@ function toConnectionRequestDTO(
   return {
     id: Number(row.id),
     requestNo: row.request_no,
+    submissionSource: row.submission_source ?? CONNECTION_REQUEST_SUBMISSION_SOURCE.OPERATOR_FORM,
     requestType: row.request_type ?? CONNECTION_REQUEST_TYPE.NEW_CONNECTION,
     requestTypeLabel:
       CONNECTION_REQUEST_TYPE_LABELS[row.request_type ?? CONNECTION_REQUEST_TYPE.NEW_CONNECTION],
@@ -1635,27 +1726,48 @@ async function insertMeasurementPoints(
   actorUserId: number,
 ): Promise<void> {
   await trx('cems_wpms_measurement_points').insert(
-    points.map((point) => ({
-      request_id: requestId,
-      point_name: point.pointName,
-      point_code: point.pointCode ?? null,
-      point_type: point.pointType,
-      latitude: point.latitude ?? null,
-      longitude: point.longitude ?? null,
-      parameters_json: JSON.stringify(point.parameters ?? []),
-      description: point.description ?? null,
-      details_json: point.details ? JSON.stringify(point.details) : null,
-      documents_json:
-        point.documentsAndImages && point.documentsAndImages.length > 0
-          ? JSON.stringify(point.documentsAndImages)
-          : null,
-      instruments_json: point.measurementInstruments
-        ? JSON.stringify(point.measurementInstruments)
-        : null,
-      created_by: actorUserId,
-      updated_by: actorUserId,
-    })),
+    points.map((point) => toMeasurementPointInsertRow(requestId, point, actorUserId)),
   );
+}
+
+async function insertDirectMeasurementPoint(
+  trx: Knex.Transaction,
+  requestId: number,
+  point: MeasurementPointInput,
+  actorUserId: number,
+): Promise<number> {
+  const [{ id }] = await trx('cems_wpms_measurement_points')
+    .insert(toMeasurementPointInsertRow(requestId, point, actorUserId))
+    .returning('id');
+
+  return Number(id);
+}
+
+function toMeasurementPointInsertRow(
+  requestId: number,
+  point: MeasurementPointInput,
+  actorUserId: number,
+): Record<string, unknown> {
+  return {
+    request_id: requestId,
+    point_name: point.pointName,
+    point_code: point.pointCode ?? null,
+    point_type: point.pointType,
+    latitude: point.latitude ?? null,
+    longitude: point.longitude ?? null,
+    parameters_json: JSON.stringify(point.parameters ?? []),
+    description: point.description ?? null,
+    details_json: point.details ? JSON.stringify(point.details) : null,
+    documents_json:
+      point.documentsAndImages && point.documentsAndImages.length > 0
+        ? JSON.stringify(point.documentsAndImages)
+        : null,
+    instruments_json: point.measurementInstruments
+      ? JSON.stringify(point.measurementInstruments)
+      : null,
+    created_by: actorUserId,
+    updated_by: actorUserId,
+  };
 }
 
 function getConnectedMeasurementPointParameters(point: MeasurementPointDTO): string[] {
@@ -1886,6 +1998,95 @@ function findAuditActorId(row: Pick<ConnectionRequestRow, 'created_by' | 'update
   return Number(row.updated_by ?? row.created_by);
 }
 
+async function ensureDirectPointCodeAvailable(
+  trx: Knex.Transaction,
+  pointCode: string,
+): Promise<void> {
+  const existing = await trx('cems_wpms_connected_measurement_points')
+    .whereNull('deleted_at')
+    .whereRaw('LOWER(LTRIM(RTRIM(point_code))) = LOWER(LTRIM(RTRIM(?)))', [pointCode])
+    .first('id');
+  if (existing) throw directPointCodeConflict(pointCode);
+}
+
+function directPointCodeConflict(pointCode: string): ConflictError {
+  return new ConflictError('Measurement point code is already connected', {
+    path: 'measurementPoints.0.pointCode',
+    pointCode,
+  });
+}
+
+function isActivePointCodeUniqueViolation(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const candidate = error as {
+    number?: number;
+    code?: number | string;
+    message?: string;
+    originalError?: { info?: { number?: number; message?: string }; message?: string };
+  };
+  const number = Number(
+    candidate.number ?? candidate.code ?? candidate.originalError?.info?.number,
+  );
+  if (number !== 2601 && number !== 2627) return false;
+  const message = [
+    candidate.message,
+    candidate.originalError?.message,
+    candidate.originalError?.info?.message,
+  ]
+    .filter((value): value is string => Boolean(value))
+    .join(' ')
+    .toLowerCase();
+  return message.includes('uq_connected_points_point_code');
+}
+
+async function nextDirectRequestNo(
+  trx: Knex.Transaction,
+  systemType: 'CEMS' | 'WPMS',
+  date: Date,
+): Promise<string> {
+  const buddhistYear = buddhistYearSuffix(date);
+  const sequenceRow = await trx<{ last_sequence: number | string }>(
+    'cems_wpms_direct_request_sequences',
+  )
+    .where({ system_type: systemType, buddhist_year: buddhistYear })
+    .forUpdate()
+    .first('last_sequence');
+  if (!sequenceRow) {
+    throw new Error(`Direct request sequence is not provisioned for ${systemType}-${buddhistYear}`);
+  }
+
+  const sequence = Number(sequenceRow.last_sequence) + 1;
+  const requestNo = buildDirectRequestNo(systemType, sequence, date);
+  await trx('cems_wpms_direct_request_sequences')
+    .where({ system_type: systemType, buddhist_year: buddhistYear })
+    .update({ last_sequence: sequence, updated_at: trx.fn.now() });
+  return requestNo;
+}
+
+export function reserveDirectRequestNoForTests(
+  trx: Knex.Transaction,
+  systemType: 'CEMS' | 'WPMS',
+  date: Date,
+): Promise<string> {
+  return nextDirectRequestNo(trx, systemType, date);
+}
+
+function buildDirectRequestNo(systemType: 'CEMS' | 'WPMS', sequence: number, date: Date): string {
+  if (!Number.isInteger(sequence) || sequence < 1 || sequence > 99_999) {
+    throw new RangeError('Direct connection request sequence must be between 1 and 99999');
+  }
+  const prefix = systemType === 'CEMS' ? 'OLDC' : 'OLDW';
+  return `${prefix}-${buddhistYearSuffix(date)}-${String(sequence).padStart(5, '0')}`;
+}
+
+export function buildDirectRequestNoForTests(
+  systemType: 'CEMS' | 'WPMS',
+  sequence: number,
+  date = new Date(),
+): string {
+  return buildDirectRequestNo(systemType, sequence, date);
+}
+
 async function nextRequestNo(trx: Knex.Transaction, systemType: 'CEMS' | 'WPMS'): Promise<string> {
   const prefix = buildRequestNoPrefix(systemType);
   const totalRow = await trx('cems_wpms_connection_requests')
@@ -1897,14 +2098,17 @@ async function nextRequestNo(trx: Knex.Transaction, systemType: 'CEMS' | 'WPMS')
 }
 
 export function buildRequestNoPrefix(systemType: 'CEMS' | 'WPMS', date = new Date()): string {
+  return `${systemType}-${buddhistYearSuffix(date)}`;
+}
+
+function buddhistYearSuffix(date: Date): string {
   const gregorianYear = Number(
     new Intl.DateTimeFormat('en-US', {
       timeZone: 'Asia/Bangkok',
       year: 'numeric',
     }).format(date),
   );
-  const buddhistYear = String((gregorianYear + 543) % 100).padStart(2, '0');
-  return `${systemType}-${buddhistYear}`;
+  return String((gregorianYear + 543) % 100).padStart(2, '0');
 }
 
 function toMeasurementPointDTO(row: MeasurementPointRow): MeasurementPointDTO {

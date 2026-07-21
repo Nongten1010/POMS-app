@@ -35,6 +35,12 @@ Content-Type: application/json
 - CEMS ปี 2569: `CEMS-69-00001`, `CEMS-69-00002`
 - WPMS ปี 2569: `WPMS-69-00001`, `WPMS-69-00002`
 
+คำขอที่เจ้าหน้าที่สร้างและเชื่อมต่อโดยตรงใช้ชุดเลขแยกจากคำขอปกติและแยก CEMS/WPMS ออกจากกัน:
+
+- CEMS ปี 2569: `OLDC-69-00001`, `OLDC-69-00002`
+- WPMS ปี 2569: `OLDW-69-00001`, `OLDW-69-00002`
+- running เป็น 5 หลัก รีเซ็ตเมื่อเลขปี พ.ศ. 2 หลักเปลี่ยน และจองเลขด้วย sequence row lock ภายใน transaction
+
 ## Contact And Notification Emails
 
 รองรับผู้ติดต่อและอีเมลแจ้งเตือนได้หลายรายการ:
@@ -66,6 +72,7 @@ Mapping:
 | 0   | ดึงข้อมูลทั่วไปของโรงงานสำหรับลงฟอร์มเพิ่มจุดตรวจวัด         | GET    | `/cems-wpms-requests/factories/:factoryId/general`         | `factories:view`             |
 | 1   | บันทึกฟอร์ม เพิ่มจุดตรวจวัด                                  | POST   | `/cems-wpms-requests/measurement-points`                   | `cems_wpms_requests:edit`    |
 | 1.1 | อัปโหลด/บันทึกลิงก์เอกสารและรูปภาพของฟอร์ม CEMS             | POST   | `/cems-wpms-requests/document-images`                      | `cems_wpms_requests:edit`    |
+| 1.2 | เจ้าหน้าที่เพิ่มหนึ่งจุดและเชื่อมต่อทันที                    | POST   | `/cems-wpms-requests/direct-connections`                   | `cems_wpms_requests:direct_connect` |
 | 2   | บันทึกฟอร์ม เพิ่มพารามิเตอร์                                 | POST   | `/cems-wpms-requests/parameters`                           | `cems_wpms_requests:edit`    |
 | 3   | บันทึกฟอร์ม ตั้งค่าอุปกรณ์ config                            | POST   | `/cems-wpms-requests/:id/device-configs`                   | `cems_wpms_requests:edit`    |
 | 4   | รายละเอียดฟอร์ม ตั้งค่าอุปกรณ์ config สำหรับดึงข้อมูลลงฟอร์ม | GET    | `/cems-wpms-requests/:id/device-configs?stationId=S0001`   | `cems_wpms_requests:view`    |
@@ -88,6 +95,65 @@ Mapping:
 | 17  | Integration ดึง active device/parameter/status config         | GET    | `/integrations/device-configs/:stationId`                  | `X-API-Key`                  |
 
 รายละเอียด API integration สำหรับระบบภายนอกอยู่ใน [`INTEGRATION_DEVICE_CONFIGS.md`](./INTEGRATION_DEVICE_CONFIGS.md)
+
+## เจ้าหน้าที่เพิ่มจุดและเชื่อมต่อทันที
+
+`POST /api/v1/cems-wpms-requests/direct-connections` ใช้ payload ส่วนฟอร์มเดียวกับ endpoint เพิ่มจุดตรวจวัด โดยมีข้อกำหนดเพิ่มดังนี้:
+
+- ใช้ได้เฉพาะผู้ใช้เจ้าหน้าที่/ผู้ดูแลระบบ role `monitoring_kpm` หรือ `admin` ที่มี permission `cems_wpms_requests:direct_connect`
+- ต้องส่ง `measurementPoints` exactly 1 รายการ
+- ต้องส่ง `measurementPoints[0].pointCode` เป็นข้อความไม่ว่างหลัง trim ความยาวไม่เกิน 64 ตัวอักษร และไม่มีข้อบังคับ prefix/รูปแบบ
+- backend ตรวจ factory ตาม scope ของเจ้าหน้าที่และใช้ชื่อ/เลขทะเบียนจาก master data
+- client ห้ามส่ง `requestType`, `requestNo`, `status`, `submissionSource` หรือ audit fields
+
+ค่าที่ backend กำหนดเอง:
+
+| Field | Value |
+| --- | --- |
+| `requestType` | `ADD_MEASUREMENT_POINT` |
+| `status` | `CONNECTED` |
+| `statusLabel` | `เชื่อมต่อแล้ว` |
+| `submissionSource` | `OFFICER_DIRECT_API` |
+| CEMS request no | `OLDC-YY-#####` |
+| WPMS request no | `OLDW-YY-#####` |
+
+ตัวอย่าง WPMS:
+
+```bash
+curl -X POST "http://localhost:3000/api/v1/cems-wpms-requests/direct-connections" \
+  -H "Authorization: Bearer $OFFICER_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "factoryId": "factory-001",
+    "factoryName": "บริษัท ทดสอบ จำกัด",
+    "factoryRegistrationNo": "3-106-33/50สบ",
+    "systemType": "WPMS",
+    "contactPersons": [{ "name": "สมชาย ใจดี", "phone": "0812345678" }],
+    "measurementPoints": [{
+      "pointName": "จุดระบายน้ำทิ้ง A",
+      "pointCode": "รหัสที่เจ้าหน้าที่กำหนดเอง",
+      "pointType": "WASTEWATER",
+      "details": {
+        "monitoringPointKind": "WPMS",
+        "eligibleParameters": ["BOD (mg/l)"],
+        "exemptedParameters": ["ไม่มี"],
+        "connectedParameters": ["ไม่มี"],
+        "pendingParameters": ["BOD (mg/l)"],
+        "requestedParameters": ["BOD (mg/l)"],
+        "hasTreatmentSystem": "มี",
+        "treatmentSystem": ["Activated Sludge"],
+        "maxTreatmentCapacity": 100,
+        "connectionDevice": "D-POMS Client (ใหม่)"
+      },
+      "documentsAndImages": [],
+      "measurementInstruments": { "parameters": [] }
+    }]
+  }'
+```
+
+สำเร็จตอบ `201 Created`, ส่ง `Location: /api/v1/cems-wpms-requests/:id` และ response envelope มาตรฐาน รายการจะมองเห็นได้ทันทีทั้ง API รายการคำขอและ connected measurement points โดยบันทึกหัวคำขอ, factory snapshot, จุดในคำขอ, status history และ current/live point ใน transaction เดียวกัน Endpoint นี้ไม่สร้าง device config หรือ measurement channels
+
+ถ้า `pointCode` ซ้ำกับ active connected point ตอบ `409 Conflict` และ rollback ทั้ง transaction โดยไม่ย้ายหรือแทนที่จุดเดิม
 
 ## API Mapping สำหรับปุ่มบนจุดตรวจวัด
 

@@ -37,6 +37,7 @@ const permissionAliases: Record<string, PermissionAlias | PermissionAlias[]> = {
   'cems_wpms_requests:view': { module: 'connection', action: 'view' },
   'cems_wpms_requests:edit': { module: 'connection', action: 'edit' },
   'cems_wpms_requests:approve': { module: 'connection', action: 'approve' },
+  'cems_wpms_requests:direct_connect': { module: 'connection', action: 'direct_connect' },
   'helpdesk:submit': { module: 'helpdesk', action: 'view' },
   'feedback:submit': { module: 'feedback', action: 'view' },
   'chat:ask': { module: 'chat', action: 'view' },
@@ -99,7 +100,9 @@ export function groupPermissions(
   return groups;
 }
 
-export function permissionGroupsToScopes(groups: PermissionGroups): Record<string, PermissionDataScope> {
+export function permissionGroupsToScopes(
+  groups: PermissionGroups,
+): Record<string, PermissionDataScope> {
   return Object.fromEntries(
     Object.entries(permissionGroupsToPermissionOverrides(groups)).map(([code, details]) => [
       code,
@@ -172,9 +175,11 @@ function toPermissionAliases(code: string): Array<{ module: string; action: stri
 
   const resourcePath = code.slice(0, separatorIndex);
   const action = code.slice(separatorIndex + 1);
-  const [module, ...children] = resourcePath.split('.');
+  const resourceSegments = resourcePath.split('.');
+  const [module, ...children] = resourceSegments;
+  if (!module) return [];
   const permissionAction = children.length > 0 ? `${children.join('.')}:${action}` : action;
-  return [{ module: module!, action: permissionAction }];
+  return [{ module, action: permissionAction }];
 }
 
 function widestScope(
@@ -187,9 +192,7 @@ function widestScope(
   return nextRank > currentRank ? next : current;
 }
 
-function toScopeDetails(
-  value: string | null | PermissionScopeDetails,
-): PermissionScopeDetails {
+function toScopeDetails(value: string | null | PermissionScopeDetails): PermissionScopeDetails {
   if (value && typeof value === 'object') {
     return value;
   }

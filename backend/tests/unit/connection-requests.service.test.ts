@@ -3104,6 +3104,7 @@ function requestDto(overrides: Partial<ConnectionRequestDTO> = {}): ConnectionRe
     subdistrictName: overrides.subdistrictName ?? null,
     industrialEstateCode: overrides.industrialEstateCode ?? null,
     industrialEstateName: overrides.industrialEstateName ?? null,
+    submissionSource: overrides.submissionSource ?? 'OPERATOR_FORM',
   };
 }
 

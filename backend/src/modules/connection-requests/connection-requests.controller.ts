@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
 import { env } from '../../config/env';
+import { ForbiddenError } from '../../shared/errors/AppError';
 import { getScope, getScopeDetails } from '../../shared/middlewares/authorize';
 import { createDeviceConnectionConfigRequestSchema } from '../device-connections/device-connections.validator';
 import type { RegionalAccessDTO } from '../auth/regional-access';
@@ -21,6 +22,7 @@ import {
   connectionRequestIdParamsSchema,
   createConnectionRequestSchema,
   deviceConfigFormQuerySchema,
+  directConnectionRequestSchema,
   factoryGeneralParamsSchema,
   listConnectedMeasurementPointsQuerySchema,
   listConnectionRequestTableRowsQuerySchema,
@@ -460,6 +462,26 @@ export const connectionRequestsController = {
     }
   },
 
+  async createDirectConnection(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const actor = requireDirectConnectionActor(req);
+      const payload = directConnectionRequestSchema.parse(req.body);
+      const data = await connectionRequestsService.createDirectConnection(payload, {
+        actorUserId: actor.id,
+        userType: actor.userType,
+        roles: actor.roles,
+        scope: getScopeDetails(req, 'cems_wpms_requests:direct_connect'),
+        regionalAccess: actor.regionalAccess,
+      });
+      res.status(StatusCodes.CREATED).location(`${req.baseUrl}/${data.id}`).json({
+        success: true,
+        data,
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+
   async createParameterRequest(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const actorUserId = requireActorUserId(req);
@@ -563,6 +585,19 @@ function requireActorUserId(req: Request): number {
   const actorUserId = req.user?.id;
   if (!actorUserId) throw new Error('Authenticated user missing from request');
   return actorUserId;
+}
+
+function requireDirectConnectionActor(req: Request): NonNullable<Request['user']> {
+  const actor = req.user;
+  if (!actor) throw new Error('Authenticated user missing from request');
+
+  const isOfficerUser = actor.userType === 'officer' || actor.userType === 'admin';
+  const hasDirectRole = actor.roles.some((role) => role === 'monitoring_kpm' || role === 'admin');
+  if (!isOfficerUser || !hasDirectRole) {
+    throw new ForbiddenError('Officer direct connection is limited to monitoring_kpm and admin');
+  }
+
+  return actor;
 }
 
 function getRegionalAccessArg(req: Request): [] | [RegionalAccessDTO] {

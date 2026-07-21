@@ -22,6 +22,14 @@ export const CONNECTION_REQUEST_TYPE = {
 export type ConnectionRequestType =
   (typeof CONNECTION_REQUEST_TYPE)[keyof typeof CONNECTION_REQUEST_TYPE];
 
+export const CONNECTION_REQUEST_SUBMISSION_SOURCE = {
+  OPERATOR_FORM: 'OPERATOR_FORM',
+  OFFICER_DIRECT_API: 'OFFICER_DIRECT_API',
+} as const;
+
+export type ConnectionRequestSubmissionSource =
+  (typeof CONNECTION_REQUEST_SUBMISSION_SOURCE)[keyof typeof CONNECTION_REQUEST_SUBMISSION_SOURCE];
+
 export const CONNECTION_REQUEST_TYPE_LABELS: Record<ConnectionRequestType, string> = {
   [CONNECTION_REQUEST_TYPE.NEW_CONNECTION]: 'ขอเชื่อมต่อใหม่',
   [CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT]: 'เพิ่มจุดตรวจวัด',
@@ -138,6 +146,10 @@ export interface AddMeasurementPointRequestInput extends CreateConnectionRequest
   requestType: typeof CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT;
 }
 
+export interface DirectConnectionRequestInput extends AddMeasurementPointRequestInput {
+  measurementPoints: MeasurementPointInput[];
+}
+
 export interface AddParameterRequestInput extends CreateConnectionRequestInput {
   requestType: typeof CONNECTION_REQUEST_TYPE.ADD_PARAMETER;
 }
@@ -230,6 +242,7 @@ export interface StatusDurationSummaryDTO {
 export interface ConnectionRequestDTO {
   id: number;
   requestNo: string;
+  submissionSource: ConnectionRequestSubmissionSource;
   requestType: ConnectionRequestType;
   requestTypeLabel: string;
   factoryId: string;

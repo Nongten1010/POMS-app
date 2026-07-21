@@ -111,6 +111,7 @@ const GRANTS: Grant[] = [
   { role: 'monitoring_kpm', permission: 'cems_wpms_requests:view', scope: ALL },
   { role: 'monitoring_kpm', permission: 'cems_wpms_requests:edit', scope: null },
   { role: 'monitoring_kpm', permission: 'cems_wpms_requests:approve', scope: null },
+  { role: 'monitoring_kpm', permission: 'cems_wpms_requests:direct_connect', scope: ALL },
   { role: 'monitoring_kpm', permission: 'kwp_forms:view', scope: ALL },
   { role: 'monitoring_kpm', permission: 'kwp_forms:edit', scope: null },
   { role: 'monitoring_kpm', permission: 'kwp_forms:approve', scope: null },
@@ -204,7 +205,8 @@ export async function seed(knex: Knex): Promise<void> {
   const seen = new Set<string>();
   const deduped: typeof rows = [];
   for (let i = rows.length - 1; i >= 0; i--) {
-    const r = rows[i]!;
+    const r = rows[i];
+    if (!r) continue;
     const key = `${r.role_id}:${r.permission_id}`;
     if (!seen.has(key)) {
       seen.add(key);

@@ -84,6 +84,7 @@ describe('connected measurement points route', () => {
         {
           id: 10,
           requestNo: 'CEMS6900001',
+          submissionSource: 'OPERATOR_FORM',
           requestType: 'ADD_PARAMETER',
           requestTypeLabel: 'เพิ่มพารามิเตอร์',
           factoryId: 'factory-001',
@@ -375,11 +376,7 @@ describe('connected measurement points route', () => {
     expect(response.status).toBe(200);
     expect(
       mockedConnectionRequestsService.getConnectedMeasurementPointDetailsByFactory,
-    ).toHaveBeenCalledWith(
-      'factory-001',
-      42,
-      { scope: 'ALL' },
-    );
+    ).toHaveBeenCalledWith('factory-001', 42, { scope: 'ALL' });
     expect(response.body).toEqual({
       success: true,
       data: [

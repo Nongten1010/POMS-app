@@ -54,6 +54,24 @@ describe('POST /api/v1/cems-wpms-requests/direct-connections', () => {
     );
   });
 
+  it('allows an admin with the dedicated direct-connection permission', async () => {
+    const response = await request(createApp())
+      .post('/api/v1/cems-wpms-requests/direct-connections')
+      .set('Authorization', `Bearer ${adminToken()}`)
+      .send(validPayload());
+
+    expect(response.status).toBe(201);
+    expect(mockedService.createDirectConnection).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        actorUserId: 7,
+        userType: 'admin',
+        roles: ['admin'],
+        scope: { scope: 'ALL' },
+      }),
+    );
+  });
+
   it('rejects a request containing more than one measurement point', async () => {
     const payload = validPayload();
     const response = await request(createApp())
@@ -67,11 +85,11 @@ describe('POST /api/v1/cems-wpms-requests/direct-connections', () => {
     expect(response.status).toBe(400);
     expect(response.body).toMatchObject({
       success: false,
-      error: {
-        code: 'VALIDATION_ERROR',
-        issues: [expect.objectContaining({ pathString: 'measurementPoints' })],
-      },
+      error: { code: 'VALIDATION_ERROR' },
     });
+    expect(response.body.error.issues).toEqual(
+      expect.arrayContaining([expect.objectContaining({ pathString: 'measurementPoints' })]),
+    );
     expect(mockedService.createDirectConnection).not.toHaveBeenCalled();
   });
 
@@ -90,9 +108,7 @@ describe('POST /api/v1/cems-wpms-requests/direct-connections', () => {
       success: false,
       error: {
         code: 'VALIDATION_ERROR',
-        issues: [
-          expect.objectContaining({ pathString: 'measurementPoints.0.pointCode' }),
-        ],
+        issues: [expect.objectContaining({ pathString: 'measurementPoints.0.pointCode' })],
       },
     });
     expect(mockedService.createDirectConnection).not.toHaveBeenCalled();
@@ -228,6 +244,15 @@ function operatorTokenWithDirectPermission(): string {
     sub: '42',
     userType: 'operator',
     roles: ['factory_operator'],
+    scopes: { 'cems_wpms_requests:direct_connect': 'ALL' },
+  });
+}
+
+function adminToken(): string {
+  return signAccessToken({
+    sub: '7',
+    userType: 'admin',
+    roles: ['admin'],
     scopes: { 'cems_wpms_requests:direct_connect': 'ALL' },
   });
 }

@@ -1356,6 +1356,36 @@ export const addMeasurementPointRequestSchema = connectionRequestFormObjectSchem
     requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT,
   }));
 
+export const directConnectionRequestSchema = connectionRequestFormObjectSchema
+  .omit({ requestType: true })
+  .superRefine((payload, ctx) => {
+    validateContactSection(payload, ctx);
+    validateEnvironmentalAssessment(payload, ctx);
+
+    if (payload.measurementPoints.length !== 1) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['measurementPoints'],
+        message: 'Direct connection request must contain exactly one measurement point',
+      });
+    }
+
+    payload.measurementPoints.forEach((point, index) => {
+      if (point.pointCode) return;
+      ctx.addIssue({
+        code: 'custom',
+        path: ['measurementPoints', index, 'pointCode'],
+        message: 'Measurement point code is required for an officer direct connection',
+      });
+    });
+
+    validateMeasurementPointFormSections(payload, ctx);
+  })
+  .transform((payload) => ({
+    ...normalizeContacts(normalizeFactorySnapshot(stripFrontendSystemTypeAlias(payload))),
+    requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT,
+  }));
+
 export const addParameterRequestSchema = connectionRequestFormObjectSchema
   .omit({ requestType: true })
   .superRefine((payload, ctx) => {

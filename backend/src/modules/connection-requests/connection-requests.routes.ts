@@ -97,6 +97,11 @@ connectionRequestsRoutes.post(
   connectionRequestsController.createMeasurementPointRequest,
 );
 connectionRequestsRoutes.post(
+  '/direct-connections',
+  authorize('cems_wpms_requests:direct_connect'),
+  connectionRequestsController.createDirectConnection,
+);
+connectionRequestsRoutes.post(
   '/document-images',
   authorize('cems_wpms_requests:edit'),
   documentImageUpload.single('file'),

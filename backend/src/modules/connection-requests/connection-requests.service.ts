@@ -40,6 +40,7 @@ import {
   type DeviceConfigFormDetailDTO,
   type DeviceConfigFormParameterMappingDTO,
   type DeviceConfigPayloadResponseDTO,
+  type DirectConnectionRequestInput,
   type FactoryGeneralDTO,
   type FactoryFavoriteDTO,
   type FactorySummaryDTO,
@@ -73,6 +74,14 @@ const CONNECTION_TIMEOUT_AUTO_CANCEL_NOTE =
 
 const FACTORY_LOGO_DOCUMENT_TITLE = 'สัญลักษณ์ของโรงงานหรือโลโก้บริษัท';
 const FACTORY_LOGO_DOCUMENT_INDEX = 3;
+
+export interface DirectConnectionActorContext {
+  actorUserId: number;
+  userType: 'citizen' | 'operator' | 'officer' | 'admin';
+  roles: string[];
+  scope: AccessScope;
+  regionalAccess?: RegionalAccessDTO | null;
+}
 
 export const connectionRequestsService = {
   setClockForTests(provider: () => Date): void {
@@ -716,6 +725,57 @@ export const connectionRequestsService = {
       actorUserId,
       CONNECTION_REQUEST_STATUS.PENDING_DESIGN_REVIEW,
     );
+  },
+
+  async createDirectConnection(
+    input: DirectConnectionRequestInput,
+    actor: DirectConnectionActorContext,
+  ): Promise<ConnectionRequestDTO> {
+    ensureDirectConnectionActor(actor);
+
+    if (input.measurementPoints.length !== 1) {
+      throw new BadRequestError(
+        'Direct connection request must contain exactly one measurement point',
+        {
+          path: 'measurementPoints',
+        },
+      );
+    }
+
+    const point = input.measurementPoints[0];
+    if (!point) {
+      throw new BadRequestError(
+        'Direct connection request must contain exactly one measurement point',
+        { path: 'measurementPoints' },
+      );
+    }
+    const pointCode = point.pointCode?.trim();
+    if (!pointCode || pointCode.length > 64) {
+      throw new BadRequestError(
+        'Measurement point code is required and must not exceed 64 characters',
+        {
+          path: 'measurementPoints.0.pointCode',
+        },
+      );
+    }
+
+    const factory = await connectionRequestsRepository.findFactoryGeneral(input.factoryId, {
+      actorUserId: actor.actorUserId,
+      scope: actor.scope,
+      regionalAccess: actor.regionalAccess,
+    });
+    if (!factory) throw new NotFoundError('Factory not found within officer access scope');
+
+    const directInput: DirectConnectionRequestInput = {
+      ...input,
+      requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT,
+      factoryId: factory.factoryId,
+      factoryName: factory.factoryName,
+      factoryRegistrationNo: factory.newRegistrationNo,
+      measurementPoints: [{ ...point, pointCode }],
+    };
+
+    return connectionRequestsRepository.createDirectConnection(directInput, actor.actorUserId);
   },
 
   createParameterRequest(
@@ -1930,6 +1990,14 @@ async function loadLatestHourlyMeasurementData(
 
 const dashboardBaseMeasurementColumns = new Set(['station_id', 'cdate', 'ctime']);
 type AccessScope = string | null | undefined | PermissionScopeDetails;
+
+function ensureDirectConnectionActor(actor: DirectConnectionActorContext): void {
+  const isOfficerUser = actor.userType === 'officer' || actor.userType === 'admin';
+  const hasDirectRole = actor.roles.some((role) => role === 'monitoring_kpm' || role === 'admin');
+  if (!isOfficerUser || !hasDirectRole) {
+    throw new ForbiddenError('Officer direct connection is limited to monitoring_kpm and admin');
+  }
+}
 
 function getAccessScopeValue(scope: AccessScope): string | null | undefined {
   return scope && typeof scope === 'object' ? scope.scope : scope;
