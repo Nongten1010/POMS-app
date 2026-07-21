@@ -17,6 +17,14 @@ Rules for AI assistants and contributors working in this repository.
 - For request-form field changes in this project, work in the backend contract/validation and Markdown documentation only. Do not edit `frontend/` in any case unless the user explicitly says the exact phrase "แก้ frontend ด้วย".
 - Mentions of "หน้าขอเชื่อมต่อ", screenshots, field labels, or missing inputs describe the desired backend/API contract unless the user explicitly says "แก้ frontend ด้วย".
 
+## Factory Data Terminology
+
+- Interpret "โรงงานในระบบ POMS" or "ข้อมูลโรงงานระบบ POMS" as the current/live factory data after a connection succeeds. In the current schema this data is represented by active rows in `cems_wpms_connected_measurement_points`, not by the `factories` table.
+- Interpret "โรงงานที่เข้าข่าย" or "ข้อมูลโรงงานที่เข้าข่าย" as the selected eligible-factory data stored in `eligible_factories`.
+- The `factories` table is supporting factory master/identity and access data. Do not describe it as the set of connected POMS factories.
+- Eligible-factory data and connected POMS data are stored separately even when they describe the same factory. APIs may join or combine them by factory identifiers or registration numbers.
+- When a user asks to update both "โรงงานในระบบ POMS" and "โรงงานที่เข้าข่าย" after connection, interpret this as synchronizing the requested fields to the current/live connected POMS data and to `eligible_factories`; do not infer an update to `factories` unless the user explicitly names that table.
+
 ## Backend Documentation
 
 - `docs/backend/` is the canonical home and the only entry point for active backend documentation shared with frontend, backend, and QA.
