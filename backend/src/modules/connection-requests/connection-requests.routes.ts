@@ -153,6 +153,11 @@ connectionRequestsRoutes.post(
   connectionRequestsController.changeStatus,
 );
 connectionRequestsRoutes.post(
+  '/:id/cancel',
+  authorize('cems_wpms_requests:edit'),
+  connectionRequestsController.cancel,
+);
+connectionRequestsRoutes.post(
   '/:id/device-configs',
   authorize('cems_wpms_requests:edit'),
   connectionRequestsController.createDeviceConfig,

@@ -13,6 +13,14 @@ export const CONNECTION_REQUEST_STATUS = {
 export type ConnectionRequestStatus =
   (typeof CONNECTION_REQUEST_STATUS)[keyof typeof CONNECTION_REQUEST_STATUS];
 
+export const CANCELLABLE_CONNECTION_REQUEST_STATUSES: readonly ConnectionRequestStatus[] = [
+  CONNECTION_REQUEST_STATUS.PENDING_DESIGN_REVIEW,
+  CONNECTION_REQUEST_STATUS.WAITING_FACTORY_REVISION,
+  CONNECTION_REQUEST_STATUS.REVISED_PENDING_DESIGN_REVIEW,
+  CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+  CONNECTION_REQUEST_STATUS.CONNECTION_CONFIRMED,
+];
+
 export const CONNECTION_REQUEST_TYPE = {
   NEW_CONNECTION: 'NEW_CONNECTION',
   ADD_MEASUREMENT_POINT: 'ADD_MEASUREMENT_POINT',
@@ -192,6 +200,10 @@ export interface ChangeConnectionRequestStatusInput {
   action: 'APPROVE_FORM' | 'REQUEST_REVISION' | 'RETURN_TO_WAITING_CONNECTION';
   revisionReason?: string | null;
   officerNote?: string | null;
+}
+
+export interface CancelConnectionRequestInput {
+  reason?: string | null;
 }
 
 export interface ConfirmConnectionInput {

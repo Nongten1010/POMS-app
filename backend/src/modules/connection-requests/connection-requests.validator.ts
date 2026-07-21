@@ -1543,6 +1543,12 @@ export const changeConnectionRequestStatusSchema = z
     officerNote: payload.officerNote ?? null,
   }));
 
+export const cancelConnectionRequestSchema = z
+  .object({
+    reason: optionalNullableTrimmedString(1000),
+  })
+  .strict();
+
 export const confirmConnectionSchema = z
   .object({
     action: z.enum(['SAVE', 'CONFIRM']).default('CONFIRM'),

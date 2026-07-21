@@ -15,6 +15,7 @@ import {
 import {
   addMeasurementPointRequestSchema,
   addParameterRequestSchema,
+  cancelConnectionRequestSchema,
   changeConnectionRequestStatusSchema,
   confirmConnectionSchema,
   connectedMeasurementPointParamsSchema,
@@ -526,6 +527,18 @@ export const connectionRequestsController = {
       const { id } = connectionRequestIdParamsSchema.parse(req.params);
       const payload = changeConnectionRequestStatusSchema.parse(req.body);
       const data = await connectionRequestsService.changeStatus(id, payload, actorUserId);
+      res.status(StatusCodes.OK).json({ success: true, data });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async cancel(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const actorUserId = requireActorUserId(req);
+      const { id } = connectionRequestIdParamsSchema.parse(req.params);
+      const payload = cancelConnectionRequestSchema.parse(req.body);
+      const data = await connectionRequestsService.cancel(id, payload, actorUserId);
       res.status(StatusCodes.OK).json({ success: true, data });
     } catch (err) {
       next(err);
