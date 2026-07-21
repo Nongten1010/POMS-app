@@ -1,4 +1,9 @@
-import { BadRequestError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
+import {
+  BadRequestError,
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+} from '../../shared/errors/AppError';
 import { logger } from '../../config/logger';
 import { deviceConnectionsService } from '../device-connections/device-connections.service';
 import type {
@@ -18,12 +23,15 @@ import type {
 import type { ParameterEvaluationOptions } from '../parameter-values/parameter-values.types';
 import { connectionRequestsRepository } from './connection-requests.repository';
 import {
+  CANCELLABLE_CONNECTION_REQUEST_STATUSES,
   CONNECTION_REQUEST_STATUS,
   CONNECTION_REQUEST_STATUS_LABELS,
+  CONNECTION_REQUEST_SUBMISSION_SOURCE,
   CONNECTION_REQUEST_TYPE,
   type AddParameterFormDetailDTO,
   type AddMeasurementPointRequestInput,
   type AddParameterRequestInput,
+  type CancelConnectionRequestInput,
   type ChangeConnectionRequestStatusInput,
   type ConnectedMeasurementPointDetailDTO,
   type ConnectionSystemType,
@@ -887,6 +895,35 @@ export const connectionRequestsService = {
         officerNote: input.officerNote,
       },
       actorUserId,
+    );
+  },
+
+  async cancel(
+    id: number,
+    input: CancelConnectionRequestInput,
+    actorUserId: number,
+  ): Promise<ConnectionRequestDTO> {
+    const request = await loadRequest(id);
+    ensureOwner(request, actorUserId);
+
+    if (request.submissionSource !== CONNECTION_REQUEST_SUBMISSION_SOURCE.OPERATOR_FORM) {
+      throw new ConflictError('Only operator-form connection requests can be canceled', {
+        submissionSource: request.submissionSource,
+      });
+    }
+
+    if (request.status === CONNECTION_REQUEST_STATUS.CANCELED) return request;
+    if (!CANCELLABLE_CONNECTION_REQUEST_STATUSES.includes(request.status)) {
+      throw new ConflictError('Connection request cannot be canceled from its current status', {
+        currentStatus: request.status,
+        allowedStatuses: CANCELLABLE_CONNECTION_REQUEST_STATUSES,
+      });
+    }
+
+    return connectionRequestsRepository.cancelOperatorRequest(
+      id,
+      actorUserId,
+      input.reason ?? null,
     );
   },
 

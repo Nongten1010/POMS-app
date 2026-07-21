@@ -5,12 +5,17 @@ import { factorySourceDb } from '../../config/factory-source-database';
 import type { PermissionScopeDetails } from '../auth/permissions';
 import type { RegionalAccessDTO } from '../auth/regional-access';
 import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
-import { ConflictError } from '../../shared/errors/AppError';
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+} from '../../shared/errors/AppError';
 import {
   deriveHasEiaFromAssessment,
   resolveStoredConnectionRequestEia,
 } from './connection-request-eia';
 import {
+  CANCELLABLE_CONNECTION_REQUEST_STATUSES,
   CONNECTION_REQUEST_STATUS,
   CONNECTION_REQUEST_SUBMISSION_SOURCE,
   CONNECTION_REQUEST_TYPE,
@@ -866,6 +871,64 @@ export const connectionRequestsRepository = {
       if (!updated) throw new Error('Updated connection request could not be loaded');
       return updated;
     });
+  },
+
+  async cancelOperatorRequest(
+    id: number,
+    actorUserId: number,
+    reason: string | null,
+  ): Promise<ConnectionRequestDTO> {
+    await db.transaction(async (trx) => {
+      const current = await trx<ConnectionRequestRow>('cems_wpms_connection_requests')
+        .where('id', id)
+        .whereNull('deleted_at')
+        .forUpdate()
+        .first('id', 'status', 'submission_source', 'created_by');
+
+      if (!current) throw new NotFoundError('Connection request not found');
+      if (Number(current.created_by) !== actorUserId) {
+        throw new ForbiddenError('Only the request owner can perform this action');
+      }
+
+      const submissionSource =
+        current.submission_source ?? CONNECTION_REQUEST_SUBMISSION_SOURCE.OPERATOR_FORM;
+      if (submissionSource !== CONNECTION_REQUEST_SUBMISSION_SOURCE.OPERATOR_FORM) {
+        throw new ConflictError('Only operator-form connection requests can be canceled', {
+          submissionSource,
+        });
+      }
+
+      if (current.status === CONNECTION_REQUEST_STATUS.CANCELED) return;
+      if (!CANCELLABLE_CONNECTION_REQUEST_STATUSES.includes(current.status)) {
+        throw new ConflictError('Connection request cannot be canceled from its current status', {
+          currentStatus: current.status,
+          allowedStatuses: CANCELLABLE_CONNECTION_REQUEST_STATUSES,
+        });
+      }
+
+      await trx('cems_wpms_connection_requests')
+        .where('id', id)
+        .whereNull('deleted_at')
+        .update({
+          status: CONNECTION_REQUEST_STATUS.CANCELED,
+          revision_reason: reason,
+          officer_note: null,
+          updated_by: actorUserId,
+          updated_at: trx.fn.now(),
+        });
+
+      await insertHistory(
+        trx,
+        id,
+        CONNECTION_REQUEST_STATUS.CANCELED,
+        actorUserId,
+        reason,
+      );
+    });
+
+    const updated = await this.findById(id);
+    if (!updated) throw new NotFoundError('Connection request not found');
+    return updated;
   },
 
   async autoCancelExpiredWaitingConnectionRequests(cutoffIso: string): Promise<number> {
