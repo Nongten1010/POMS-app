@@ -26,7 +26,10 @@ export interface CreateEligibleFactoryInput {
   boilerCount?: number | null;
   boilerSizeEach?: string | null;
   fuelUsed?: string | null;
+  eia?: ConnectionRequestEiaAssessment | null;
+  eiaOther?: string | null;
   hasEia?: boolean | null;
+  projectName?: string | null;
   selectedReason?: string | null;
 }
 

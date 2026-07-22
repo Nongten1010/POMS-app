@@ -46,6 +46,8 @@ function toFactoryDTO(factory: MonitoringPointFormFactoryInput) {
     factoryTypeSub: factory.factoryTypeSub ?? null,
     operationStatus: factory.operationStatus ?? null,
     eiaInfo: factory.eiaInfo ?? null,
+    eiaOther: factory.eiaOther ?? null,
+    projectName: factory.projectName ?? null,
     address: factory.address ?? null,
     businessActivity: factory.businessActivity ?? null,
     machineryHorsepower: factory.machineryHorsepower ?? null,
@@ -152,6 +154,69 @@ describe('monitoringPointFormsService', () => {
       42,
     );
     expect(result.id).toBe(1);
+  });
+
+  it('synchronizes explicit project and Other EIA fields to the eligible factory', async () => {
+    const projectInput: SaveMonitoringPointFormInput = {
+      ...input,
+      factory: {
+        ...input.factory,
+        eiaInfo: 'อื่นๆ',
+        eiaOther: 'รายงานสิ่งแวดล้อมประเภทเฉพาะ',
+        projectName: 'โครงการขยายกำลังผลิต',
+      },
+    };
+    mockedRepository.list.mockResolvedValue([]);
+    mockedRepository.create.mockResolvedValue({
+      id: 1,
+      factory: toFactoryDTO(projectInput.factory),
+      points: [],
+      createdAt: '2026-06-22T00:00:00.000Z',
+      updatedAt: '2026-06-22T00:00:00.000Z',
+    });
+    mockedEligibleRepository.findByMonitoringPointFormId.mockResolvedValue(null);
+    mockedEligibleRepository.findByRegistrationNoNew.mockResolvedValue(null);
+    mockedEligibleRepository.create.mockResolvedValue(createEligibleFactoryDTO());
+
+    await monitoringPointFormsService.create(projectInput, 42);
+
+    expect(mockedEligibleRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eia: 'อื่นๆ',
+        eiaOther: 'รายงานสิ่งแวดล้อมประเภทเฉพาะ',
+        hasEia: false,
+        projectName: 'โครงการขยายกำลังผลิต',
+      }),
+      42,
+    );
+  });
+
+  it('does not partially synchronize a legacy free-text EIA value', async () => {
+    const legacyInput: SaveMonitoringPointFormInput = {
+      ...input,
+      factory: {
+        ...input.factory,
+        eiaInfo: 'มีรายงานแนบ',
+      },
+    };
+    mockedRepository.list.mockResolvedValue([]);
+    mockedRepository.create.mockResolvedValue({
+      id: 1,
+      factory: toFactoryDTO(legacyInput.factory),
+      points: [],
+      createdAt: '2026-06-22T00:00:00.000Z',
+      updatedAt: '2026-06-22T00:00:00.000Z',
+    });
+    mockedEligibleRepository.findByMonitoringPointFormId.mockResolvedValue(null);
+    mockedEligibleRepository.findByRegistrationNoNew.mockResolvedValue(null);
+    mockedEligibleRepository.create.mockResolvedValue(createEligibleFactoryDTO());
+
+    await monitoringPointFormsService.create(legacyInput, 42);
+
+    const eligibleInput = mockedEligibleRepository.create.mock.calls[0]?.[0];
+    expect(eligibleInput).not.toHaveProperty('eia');
+    expect(eligibleInput).not.toHaveProperty('eiaOther');
+    expect(eligibleInput).not.toHaveProperty('hasEia');
   });
 
   it('rejects duplicate factory forms so users edit the existing set', async () => {

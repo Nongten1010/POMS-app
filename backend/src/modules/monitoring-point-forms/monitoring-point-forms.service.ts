@@ -2,6 +2,11 @@ import { BadRequestError, ConflictError, NotFoundError } from '../../shared/erro
 import { eligibleFactoriesRepository } from '../eligible-factories/eligible-factories.repository';
 import { resolveEligibleFactoryAddressForStorage } from '../eligible-factories/eligible-factory-source-hydration';
 import { joinFactoryTypeSequence } from '../eligible-factories/factory-type-sequence';
+import {
+  CONNECTION_REQUEST_EIA_ASSESSMENTS,
+  deriveHasEiaFromAssessment,
+  type ConnectionRequestEiaAssessment,
+} from '../connection-requests/connection-request-eia';
 import type {
   CreateEligibleFactoryInput,
   EligibleFactoryDTO,
@@ -161,9 +166,30 @@ function buildEligibleFactoryInput(
     machineryHorsepower: form.factory.machineryHorsepower ?? null,
     productionCapacity: buildProductionCapacitySummary(form),
     fuelUsed: buildFuelSummary(form),
-    hasEia: parseEiaFlag(form.factory.eiaInfo),
+    ...buildEligibleFactoryEiaPatch(form.factory.eiaInfo, form.factory.eiaOther),
+    ...(form.factory.projectName != null ? { projectName: form.factory.projectName } : {}),
     selectedReason: 'selected_from_monitoring_point_form',
   };
+}
+
+function buildEligibleFactoryEiaPatch(
+  eiaInfo?: string | null,
+  eiaOther?: string | null,
+): Pick<CreateEligibleFactoryInput, 'eia' | 'eiaOther' | 'hasEia'> {
+  const assessment = eiaInfo?.trim();
+  if (isConnectionRequestEiaAssessment(assessment)) {
+    return {
+      eia: assessment,
+      eiaOther: assessment === 'อื่นๆ' ? (eiaOther ?? null) : null,
+      hasEia: deriveHasEiaFromAssessment(assessment),
+    };
+  }
+
+  return {};
+}
+
+function isConnectionRequestEiaAssessment(value?: string): value is ConnectionRequestEiaAssessment {
+  return CONNECTION_REQUEST_EIA_ASSESSMENTS.some((assessment) => assessment === value);
 }
 
 function buildCoordinates(
@@ -197,12 +223,4 @@ function buildFuelSummary(form: MonitoringPointFormDTO): string | null {
     .filter((value): value is string => Boolean(value));
 
   return values.length ? Array.from(new Set(values)).join(', ') : null;
-}
-
-function parseEiaFlag(value?: string | null): boolean | null {
-  const normalized = value?.trim().toLowerCase();
-  if (!normalized || normalized === '-') return null;
-  if (normalized.includes('ไม่มี')) return false;
-  if (normalized.includes('มี') || normalized === 'yes' || normalized === 'true') return true;
-  return null;
 }

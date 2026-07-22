@@ -15,6 +15,10 @@
 - **Connection-request eligibility invariant**: โรงงานต้องมี active row ใน `eligible_factories` ก่อนจึงจะส่งคำขอเชื่อมต่อได้; request workflow และการเชื่อมต่อห้ามสร้าง eligible row โดยอัตโนมัติ.
 - **POMS eligibility invariant**: ข้อมูล current/live ใน POMS ต้องสืบทอดความสัมพันธ์ `eligible_factory_id` จากคำขอที่ผ่าน eligibility precondition แล้ว.
 - **พิกัดโรงงาน**: `latitude` / `longitude` ระดับ factory profile จากคำขอ ซึ่ง sync ไปยัง `cems_wpms_connected_measurement_points.factory_latitude` / `factory_longitude` และ `eligible_factories.latitude` / `longitude`; ไม่ใช่พิกัดจุดตรวจวัดใน `cems_wpms_measurement_points.latitude` / `longitude`.
+- **ช่อง “ระบุ” ในข้อมูล EIA**: `eiaOther` ระดับ factory profile ใช้เมื่อค่า EIA เป็น `อื่นๆ`; ต้องมีข้อความที่ไม่ว่างในกรณีนั้น และเป็น `null` สำหรับค่า EIA อื่น เช่นเดียวกับหน้าขอเชื่อมต่อ.
+- **EIA ในฟอร์มข้อมูลจุดตรวจวัด**: คง `factory.eiaInfo` เป็น field เลือก EIA เพื่อรักษา compatibility; เพิ่ม `factory.eiaOther` และ `factory.projectName` โดยไม่เปลี่ยนชื่อ `eiaInfo` เป็น `eia`.
+- **การ sync โครงการ/EIA จากฟอร์มข้อมูลจุดตรวจวัด**: ใช้ patch semantics กับ `eligible_factories`; ค่า `null` หรือไม่ได้ส่งไม่ล้างค่าปัจจุบัน แต่ค่า EIA ที่ระบุชัดจะอัปเดต selection และ normalize `eiaOther` ให้สอดคล้อง.
+- **EIA free-text เดิมในฟอร์มข้อมูลจุดตรวจวัด**: ค่าที่ไม่ตรง `มี`, `ไม่มี`, `มี IEE`, `มี EIA`, `มี EHIA` หรือ `อื่นๆ` ยังคงเก็บใน `factory.eiaInfo` ได้ แต่ไม่ sync บางส่วนไป `eligible_factories` เพื่อไม่ให้ categorical EIA ขัดกับ `hasEia`.
 
 ## Confirmed Context
 

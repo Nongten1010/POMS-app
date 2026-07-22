@@ -11,6 +11,8 @@ export interface MonitoringPointFormFactoryInput {
   factoryTypeSub?: string | null;
   operationStatus?: string | null;
   eiaInfo?: string | null;
+  eiaOther?: string | null;
+  projectName?: string | null;
   address?: string | null;
   businessActivity?: string | null;
   machineryHorsepower?: number | null;

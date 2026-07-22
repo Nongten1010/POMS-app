@@ -308,7 +308,10 @@ function toInsertRow(
     boiler_count: input.boilerCount ?? null,
     boiler_size_each: input.boilerSizeEach ?? null,
     fuel_used: input.fuelUsed ?? null,
+    eia_assessment: input.eia ?? null,
+    eia_other: input.eia === 'อื่นๆ' ? (input.eiaOther ?? null) : null,
     has_eia: input.hasEia ?? null,
+    project_name: input.projectName ?? null,
     selected_reason: input.selectedReason ?? null,
     selected_by: actorUserId,
     created_by: actorUserId,
@@ -335,7 +338,16 @@ function toMonitoringPointFormUpdateRow(input: CreateEligibleFactoryInput): Reco
     machinery_horsepower: input.machineryHorsepower ?? null,
     production_capacity: input.productionCapacity ?? null,
     fuel_used: input.fuelUsed ?? null,
-    has_eia: input.hasEia ?? null,
+    ...(input.eia != null
+      ? {
+          eia_assessment: input.eia,
+          eia_other: input.eia === 'อื่นๆ' ? (input.eiaOther ?? null) : null,
+          has_eia: input.hasEia ?? null,
+        }
+      : input.hasEia != null
+        ? { has_eia: input.hasEia }
+        : {}),
+    ...(input.projectName != null ? { project_name: input.projectName } : {}),
     selected_reason: input.selectedReason ?? null,
   };
 }

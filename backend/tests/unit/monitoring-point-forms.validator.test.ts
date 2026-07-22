@@ -7,6 +7,52 @@ const cemsAnnexRequiredBy = [
 ] as const;
 
 describe('monitoring point form validator', () => {
+  it('accepts and preserves project fields when EIA is Other', () => {
+    const result = saveMonitoringPointFormSchema.parse({
+      factory: {
+        eiaInfo: 'อื่นๆ',
+        eiaOther: 'รายงานสิ่งแวดล้อมประเภทเฉพาะ',
+        projectName: 'โครงการปรับปรุงระบบตรวจวัด',
+      },
+      points: [],
+    });
+
+    expect(result.factory).toMatchObject({
+      eiaInfo: 'อื่นๆ',
+      eiaOther: 'รายงานสิ่งแวดล้อมประเภทเฉพาะ',
+      projectName: 'โครงการปรับปรุงระบบตรวจวัด',
+    });
+  });
+
+  it('requires an EIA detail when EIA is Other', () => {
+    const result = saveMonitoringPointFormSchema.safeParse({
+      factory: {
+        eiaInfo: 'อื่นๆ',
+        eiaOther: '   ',
+      },
+      points: [],
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([expect.objectContaining({ path: ['factory', 'eiaOther'] })]),
+      );
+    }
+  });
+
+  it('normalizes an EIA detail to null when EIA is not Other', () => {
+    const result = saveMonitoringPointFormSchema.parse({
+      factory: {
+        eiaInfo: 'มี EIA',
+        eiaOther: 'ข้อความที่ไม่ควรถูกบันทึก',
+      },
+      points: [],
+    });
+
+    expect(result.factory.eiaOther).toBeNull();
+  });
+
   it('accepts one factory with multiple CEMS and WPMS points', () => {
     const result = saveMonitoringPointFormSchema.parse({
       factory: {

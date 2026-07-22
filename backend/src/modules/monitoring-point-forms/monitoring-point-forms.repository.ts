@@ -20,6 +20,8 @@ interface MonitoringPointFormRow {
   factory_type_sub: string | null;
   operation_status: string | null;
   eia_info: string | null;
+  eia_other: string | null;
+  project_name: string | null;
   address: string | null;
   business_activity: string | null;
   machinery_horsepower: number | string | null;
@@ -76,6 +78,8 @@ export const monitoringPointFormsRepository = {
         'f.factory_type_sub',
         'f.operation_status',
         'f.eia_info',
+        'f.eia_other',
+        'f.project_name',
         'f.address',
         'f.business_activity',
         'f.machinery_horsepower',
@@ -94,6 +98,8 @@ export const monitoringPointFormsRepository = {
         'f.factory_type_sub',
         'f.operation_status',
         'f.eia_info',
+        'f.eia_other',
+        'f.project_name',
         'f.address',
         'f.business_activity',
         'f.machinery_horsepower',
@@ -218,6 +224,8 @@ function toFormInsertRow(
     factory_type_sub: factory.factoryTypeSub ?? null,
     operation_status: factory.operationStatus ?? null,
     eia_info: factory.eiaInfo ?? null,
+    eia_other: factory.eiaOther ?? null,
+    project_name: factory.projectName ?? null,
     address: factory.address ?? null,
     business_activity: factory.businessActivity ?? null,
     machinery_horsepower: factory.machineryHorsepower ?? null,
@@ -286,6 +294,8 @@ function toFactoryDTO(row: MonitoringPointFormRow): Required<MonitoringPointForm
     factoryTypeSub: row.factory_type_sub,
     operationStatus: row.operation_status,
     eiaInfo: row.eia_info,
+    eiaOther: row.eia_other,
+    projectName: row.project_name,
     address: row.address,
     businessActivity: row.business_activity,
     machineryHorsepower: toNullableNumber(row.machinery_horsepower),

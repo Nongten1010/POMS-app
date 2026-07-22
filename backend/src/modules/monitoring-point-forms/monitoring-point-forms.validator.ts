@@ -65,13 +65,28 @@ export const saveMonitoringPointFormSchema = z
         factoryTypeSub: optionalText(128),
         operationStatus: optionalText(128),
         eiaInfo: optionalText(255),
+        eiaOther: optionalText(500),
+        projectName: optionalText(500),
         address: optionalText(1000),
         businessActivity: optionalText(4000),
         machineryHorsepower: optionalNumber,
         latitude: optionalCoordinate(-90, 90),
         longitude: optionalCoordinate(-180, 180),
       })
-      .strict(),
+      .strict()
+      .superRefine((factory, context) => {
+        if (factory.eiaInfo === 'อื่นๆ' && !factory.eiaOther) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['eiaOther'],
+            message: 'eiaOther is required when eiaInfo is อื่นๆ',
+          });
+        }
+      })
+      .transform((factory) => ({
+        ...factory,
+        eiaOther: factory.eiaInfo === 'อื่นๆ' ? factory.eiaOther : null,
+      })),
     points: z
       .array(
         z
