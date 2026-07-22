@@ -296,7 +296,7 @@ describe('connectionRequestsRepository query helpers', () => {
     expect(compiled.bindings).toContain(42);
   });
 
-  it('keeps operator factory access even when no eligible factory record exists', () => {
+  it('uses factory master only for operator access and sources displayed factory data from eligible factories', () => {
     const sql = buildFactoriesForAccessQueryForTests({
       actorUserId: 42,
       scope: 'ALL',
@@ -304,11 +304,18 @@ describe('connectionRequestsRepository query helpers', () => {
       .toSQL()
       .sql.toLowerCase();
 
-    expect(sql).toContain('left join [eligible_factories] as [ef]');
-    expect(sql).not.toContain('inner join [eligible_factories] as [ef]');
+    expect(sql).toContain('inner join [eligible_factories] as [ef]');
+    expect(sql).not.toContain('left join [eligible_factories] as [ef]');
     expect(sql).toContain('[ef].[factory_registration_no_new] = [f].[code]');
     expect(sql).toContain('[ef].[source_factory_id] = [f].[fid]');
     expect(sql).toContain('[ef].[deleted_at] is null');
+    expect(sql).toContain('[ef].[factory_name] as [name]');
+    expect(sql).toContain('[ef].[factory_registration_no_new] as [code]');
+    expect(sql).toContain('[ef].[province_name] as [province_name]');
+    expect(sql).toContain('[ef].[industrial_estate_name] as [industrial_estate_name]');
+    expect(sql).toContain('[ef].[project_name]');
+    expect(sql).not.toContain('[f].[name]');
+    expect(sql).not.toContain('[f].[system_detail]');
   });
 
   it('prefers the latest current POMS factory name in the connected dashboard', () => {
@@ -327,7 +334,7 @@ describe('connectionRequestsRepository query helpers', () => {
     expect(normalizedSql).toContain('), ef.factory_name, f.name ) as name');
   });
 
-  it('selects dashboard location and industrial estate fields for advanced filters', () => {
+  it('selects eligible-factory location and industrial estate fields for advanced filters', () => {
     const sql = buildFactoriesForAccessQueryForTests({
       actorUserId: 42,
       scope: 'ALL',
@@ -339,7 +346,8 @@ describe('connectionRequestsRepository query helpers', () => {
     expect(sql).toContain('[p].[id] as [province_id]');
     expect(sql).toContain('[p].[region] as [province_region]');
     expect(sql).toContain('[ie].[code] as [industrial_estate_code]');
-    expect(sql).toContain('[ie].[name_th] as [industrial_estate_name]');
+    expect(sql).toContain('[ef].[province_name] as [province_name]');
+    expect(sql).toContain('[ef].[industrial_estate_name] as [industrial_estate_name]');
   });
 
   it('limits factory access to assigned officer regions when regional access is present', () => {

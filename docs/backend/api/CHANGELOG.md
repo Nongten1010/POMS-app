@@ -2,6 +2,14 @@
 
 ไฟล์นี้บันทึกเฉพาะการเปลี่ยน API ที่ทำให้ client ต้องแก้ตาม การเปลี่ยนทั่วไปและประวัติรายละเอียดดูจาก Git history
 
+## 2026-07-22 — จำกัดรายชื่อโรงงานของผู้ประกอบการไว้ที่โรงงานเข้าข่าย
+
+- **Affected menu:** [ขอเชื่อมต่อ](./menus/connection-requests/README.md)
+- **Impact:** `GET /api/v1/cems-wpms-requests/operator-factories` จะไม่ส่งโรงงานที่ user เข้าถึงได้แต่ไม่มี active `eligible_factories` อีกต่อไป และค่า descriptive fields อาจเปลี่ยนเป็นค่าล่าสุดจากโรงงานเข้าข่าย
+- **Migration:** client ต้องไม่ใช้ endpoint นี้เป็นรายการโรงงานทั้งหมดของ user หรือคาดหวัง action สำหรับโรงงานไม่เข้าข่าย; หากต้องมี workflow แจ้งความประสงค์สำหรับโรงงานไม่เข้าข่าย ให้ใช้ contract แยกต่างหาก
+- **Old contract:** ใช้ `factories` เป็นฐานข้อมูลโรงงานและ left join `eligible_factories` เพื่อเสริมข้อมูล จึงอาจส่งโรงงานไม่เข้าข่ายและใช้ชื่อจาก `factories.name`
+- **New contract:** ใช้ `factories` เฉพาะตรวจสิทธิ์/ความสัมพันธ์ของ user รับเฉพาะ active `eligible_factories` และส่งชื่อ เลขทะเบียน ประเภทโรงงาน การประกอบกิจการ ที่อยู่ จังหวัด พิกัด EIA และชื่อโครงการจาก `eligible_factories`
+
 ## 2026-07-21 — เปลี่ยน prefix รหัสจุดตรวจวัด WPMS ที่ออกใหม่
 
 - **Affected menu:** [ขอเชื่อมต่อ](./menus/connection-requests/README.md)

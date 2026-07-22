@@ -13,6 +13,14 @@
 3. Backend เปลี่ยนสถานะเป็น `WAITING_CONNECTION` และออกรหัสเรียงตามลำดับจุดในคำขอ.
 4. Client ใช้ `measurementPoints[].pointCode` จาก response สำหรับตั้งค่าอุปกรณ์และเรียก API ที่ใช้ `stationId` ต่อไป.
 
+ผู้ประกอบการอ่านรายชื่อโรงงานเข้าข่ายที่ตนมีสิทธิ์:
+
+```bash
+curl --request GET \
+  --url '<BASE_URL>/api/v1/cems-wpms-requests/operator-factories' \
+  --header 'Authorization: Bearer <ACCESS_TOKEN>'
+```
+
 ```bash
 curl --request POST \
   --url '<BASE_URL>/api/v1/cems-wpms-requests/101/review' \
@@ -35,6 +43,7 @@ curl --request POST \
 
 | งาน | Method | Path | Auth | Permission | Contract |
 | --- | --- | --- | --- | --- | --- |
+| อ่านรายชื่อโรงงานเข้าข่ายของผู้ประกอบการ | `GET` | `/api/v1/cems-wpms-requests/operator-factories` | Bearer | `factories:view` | [Operator factory list source](#operator-factory-list-source) |
 | สร้างคำขอเชื่อมต่อใหม่ | `POST` | `/api/v1/cems-wpms-requests` | Bearer | `cems_wpms_requests:edit` | [Eligibility gate](#eligibility-gate) |
 | สร้างคำขอเพิ่มจุดตรวจวัด | `POST` | `/api/v1/cems-wpms-requests/measurement-points` | Bearer | `cems_wpms_requests:edit` | [Eligibility gate](#eligibility-gate) |
 | สร้างคำขอเพิ่มพารามิเตอร์ | `POST` | `/api/v1/cems-wpms-requests/parameters` | Bearer | `cems_wpms_requests:edit` | [Eligibility gate](#eligibility-gate) |
@@ -63,6 +72,53 @@ curl --request POST \
 - การจองเลขและการเปลี่ยนสถานะทำใน transaction เดียวกันเพื่อไม่ให้คำขอพร้อมกันได้รหัสซ้ำ.
 
 ## Contracts
+
+### Operator factory list source
+
+`GET /api/v1/cems-wpms-requests/operator-factories` ใช้ `factories` เฉพาะตรวจความสัมพันธ์และสิทธิ์ว่า user เข้าถึงโรงงานใดได้ จากนั้นรับเฉพาะโรงงานที่จับคู่กับ active row ใน `eligible_factories` ได้ ข้อมูลโรงงานที่ส่งกลับ เช่น ชื่อโรงงาน เลขทะเบียน ประเภทโรงงาน การประกอบกิจการ ที่อยู่ จังหวัด พิกัด EIA และชื่อโครงการ ต้องอ่านจาก `eligible_factories`; ห้ามใช้ descriptive fields จาก `factories` เป็น fallback.
+
+จำนวนจุดตรวจวัดยังคำนวณจาก active rows ใน `cems_wpms_connected_measurement_points` และสถานะคำขออ่านจากคำขอล่าสุดของโรงงานตามเดิม.
+
+| Response field | Type | Source/Meaning |
+| --- | --- | --- |
+| `data[].factoryId` | string | `eligible_factories.source_factory_id`; fallback เป็น `factory_registration_no_new` เมื่อ source id ไม่มีค่า |
+| `data[].factoryName` | string | `eligible_factories.factory_name` |
+| `data[].newRegistrationNo` | string | `eligible_factories.factory_registration_no_new` |
+| `data[].oldRegistrationNo` | string \| null | `eligible_factories.factory_registration_no_old` |
+| `data[].industryMainOrder`, `industrySubOrder` | string \| null | แยกจาก `eligible_factories.factory_type_sequence` |
+| `data[].businessActivity` | string \| null | `eligible_factories.business_activity` |
+| `data[].address`, `province` | string \| null | `eligible_factories.address`, `province_name` |
+| `data[].latitude`, `longitude` | string \| null | พิกัดโรงงานจาก `eligible_factories` |
+| `data[].eia`, `projectName` | string \| null | `eligible_factories.eia_assessment`, `project_name` |
+| `data[].monitoringPointCount` | number | จำนวน active POMS points ที่จับคู่กับโรงงาน |
+| `data[].requestStatusCode` | string \| null | สถานะคำขอล่าสุดของโรงงาน |
+
+Minimal response:
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "factoryId": "F000123",
+      "factoryName": "บริษัท โรงงานตัวอย่าง จำกัด",
+      "newRegistrationNo": "10120000325542",
+      "oldRegistrationNo": "3-34(3)-3/54นบ",
+      "businessActivity": "ผลิตผลิตภัณฑ์ตัวอย่าง",
+      "province": "นนทบุรี",
+      "latitude": "13.8621",
+      "longitude": "100.5144",
+      "eia": "มี EIA",
+      "projectName": "โครงการโรงงานตัวอย่าง",
+      "monitoringPointCount": 1,
+      "requestStatusCode": "CONNECTED"
+    }
+  ],
+  "meta": {
+    "total": 1
+  }
+}
+```
 
 ### Eligibility gate
 

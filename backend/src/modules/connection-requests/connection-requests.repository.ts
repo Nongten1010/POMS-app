@@ -181,7 +181,10 @@ interface FactoryRow {
   latitude: number | string | null;
   longitude: number | string | null;
   business_activity: string | null;
+  eia_assessment: string | null;
+  eia_other: string | null;
   has_eia: boolean | number | null;
+  project_name: string | null;
   eligible_factory_id: number | string | null;
 }
 
@@ -1345,9 +1348,7 @@ function buildFactoriesForAccessQuery(
   access: FactoryAccess,
 ): Knex.QueryBuilder<FactoryRow, FactoryRow[]> {
   const builder = db<FactoryRow>('factories as f')
-    .leftJoin('provinces as p', 'p.id', 'f.province_id')
-    .leftJoin('industrial_estates as ie', 'ie.id', 'f.industrial_estate_id')
-    .leftJoin('eligible_factories as ef', function joinEligibleFactory() {
+    .innerJoin('eligible_factories as ef', function joinEligibleFactory() {
       this.on(function joinFactoryKeys() {
         this.on('ef.factory_registration_no_new', '=', 'f.code')
           .orOn('ef.factory_registration_no_new', '=', 'f.fid')
@@ -1355,29 +1356,34 @@ function buildFactoriesForAccessQuery(
           .orOn('ef.source_factory_id', '=', 'f.code');
       }).andOnNull('ef.deleted_at');
     })
+    .leftJoin('provinces as p', 'p.name_th', 'ef.province_name')
+    .leftJoin('industrial_estates as ie', 'ie.name_th', 'ef.industrial_estate_name')
     .whereNull('f.deleted_at')
     .select(
       'f.id',
-      'f.fid',
-      'f.code',
-      'f.name',
-      'f.system_detail',
-      'f.is_active',
+      db.raw('COALESCE(ef.source_factory_id, ef.factory_registration_no_new) as fid'),
+      'ef.factory_registration_no_new as code',
+      'ef.factory_name as name',
+      db.raw('CAST(NULL AS NVARCHAR(500)) as system_detail'),
+      db.raw('CAST(1 AS BIT) as is_active'),
       'p.id as province_id',
       'p.region as province_region',
-      'p.name_th as province_name',
+      'ef.province_name as province_name',
       'ie.code as industrial_estate_code',
-      'ie.name_th as industrial_estate_name',
+      'ef.industrial_estate_name as industrial_estate_name',
       'ef.factory_registration_no_old',
       'ef.factory_type_sequence',
       'ef.address',
       'ef.latitude',
       'ef.longitude',
       'ef.business_activity',
+      'ef.eia_assessment',
+      'ef.eia_other',
       'ef.has_eia',
+      'ef.project_name',
       'ef.id as eligible_factory_id',
     )
-    .orderBy('f.name', 'asc')
+    .orderBy('ef.factory_name', 'asc')
     .orderBy('f.id', 'asc');
 
   if (requiresAssignedFactoryAccess(access.scope)) {
@@ -1440,7 +1446,10 @@ function buildConnectedFactoriesForAccessQuery(
       'ef.latitude',
       'ef.longitude',
       'ef.business_activity',
+      'ef.eia_assessment',
+      'ef.eia_other',
       'ef.has_eia',
+      'ef.project_name',
       'ef.id as eligible_factory_id',
     )
     .orderBy('ef.factory_name', 'asc')
@@ -1784,7 +1793,12 @@ function applyFactorySnapshotFilters(
 
 function toFactorySummaryDTO(row: FactoryRow): FactorySummaryDTO {
   const { factoryClass, factorySubclass } = splitFactoryTypeSequence(row.factory_type_sequence);
-  const hasEia = toNullableBoolean(row.has_eia);
+  const environmentalAssessment = resolveStoredConnectionRequestEia({
+    eiaAssessment: row.eia_assessment,
+    eiaOther: row.eia_other,
+    hasEia: row.has_eia,
+  });
+  const hasEia = environmentalAssessment.hasEia;
   const isEligible = row.eligible_factory_id !== null && row.eligible_factory_id !== undefined;
   const industrialArea = toIndustrialArea(row.industrial_estate_code, row.industrial_estate_name);
   return {
@@ -1798,9 +1812,9 @@ function toFactorySummaryDTO(row: FactoryRow): FactorySummaryDTO {
     industryMainOrder: factoryClass ?? TEMPORARY_FACTORY_TEXT,
     industrySubOrder: factorySubclass ?? TEMPORARY_FACTORY_TEXT,
     businessActivity: row.business_activity,
-    eia: hasEia === null ? TEMPORARY_EIA_LABEL : hasEia ? 'มี' : 'ไม่มี',
+    eia: environmentalAssessment.eia,
     hasEia,
-    projectName: TEMPORARY_FACTORY_TEXT,
+    projectName: row.project_name ?? null,
     address: row.address,
     latitude: nullableValueToString(row.latitude),
     longitude: nullableValueToString(row.longitude),

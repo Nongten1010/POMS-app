@@ -327,7 +327,7 @@ export interface FactorySummaryDTO {
   industryMainOrderLabel?: string | null;
   industrySubOrder: string | null;
   businessActivity: string | null;
-  eia: 'มี' | 'ไม่มี' | null;
+  eia: ConnectionRequestEiaAssessment | null;
   hasEia?: boolean | null;
   projectName: string | null;
   address: string | null;
@@ -407,7 +407,7 @@ export interface OperatorFactoryTableRowDTO {
   industryMainOrder: string | null;
   industrySubOrder: string | null;
   businessActivity: string | null;
-  eia: 'มี' | 'ไม่มี' | null;
+  eia: ConnectionRequestEiaAssessment | null;
   projectName: string | null;
   address: string | null;
   latitude: string | null;
@@ -431,7 +431,7 @@ export interface OperatorFactoryDashboardRowDTO {
   industryMainOrder: string | null;
   industryMainOrderLabel: string | null;
   industrySubOrder: string | null;
-  eia: 'มี' | 'ไม่มี' | null;
+  eia: ConnectionRequestEiaAssessment | null;
   hasEia: boolean | null;
   regionCode: string | null;
   regionName: string | null;
