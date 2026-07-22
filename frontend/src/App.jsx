@@ -168,6 +168,13 @@ function getUserFromAuth(auth) {
       response?.title,
     ) ||
     ''
+  const department =
+    getStringValue(
+      responseUser?.department,
+      responseUser?.officerProfile?.department,
+      response?.department,
+    ) ||
+    ''
   const userType = getUserTypeFromAuth(auth)
   const role =
     userType === 'officer'
@@ -176,7 +183,7 @@ function getUserFromAuth(auth) {
         ? 'ผู้ประกอบการ'
         : 'ประชาชนทั่วไป'
 
-  return { name, position, role, accountType: responseUser?.accountType ?? '' }
+  return { name, position, department, role, accountType: responseUser?.accountType ?? '' }
 }
 
 function App() {

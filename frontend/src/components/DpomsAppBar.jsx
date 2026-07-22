@@ -28,6 +28,9 @@ function DpomsAppBar({
   onProfileClick,
 }) {
   const displayName = typeof user.name === 'string' && user.name.trim() ? user.name : 'D-POMS User'
+  const displayDepartment = typeof user.department === 'string' && user.department.trim()
+    ? user.department
+    : 'ไม่ระบุ'
   const initials = displayName
     .split(' ')
     .filter(Boolean)
@@ -143,7 +146,7 @@ function DpomsAppBar({
                       {displayName}
                     </Typography>
                     <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.2 }}>
-                      {user.role}
+                      {displayDepartment}
                     </Typography>
                   </Box>
                 </Stack>
