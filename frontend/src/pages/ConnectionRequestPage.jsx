@@ -2222,7 +2222,7 @@ function MonitoringPointListDialog({ open, factory, useOperatorActions, accessTo
                   <TableRow key={row.id}>
                     <TableCell>{row.code}</TableCell>
                     <TableCell>{row.name}</TableCell>
-                    <TableCell>{row.typeLabel}</TableCell>
+                    <TableCell>{row.type}</TableCell>
                     <TableCell>{row.parameters.join(', ')}</TableCell>
                     <TableCell>
                       <StatusChip value={row.status} />
