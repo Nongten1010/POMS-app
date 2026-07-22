@@ -1026,12 +1026,20 @@ function formatDatePartAsThaiDate(value) {
 }
 
 function mapRequestTableRow(row) {
+  const newRegistrationNo = row.newRegistrationNo ?? row.factoryId ?? ''
+  const oldRegistrationNo = row.oldRegistrationNo ?? row.factoryRegistrationNo ?? ''
+  const factoryRegistration = [newRegistrationNo, oldRegistrationNo]
+    .map((value) => String(value ?? '').trim())
+    .filter(Boolean)
+    .join(' ')
+
   return {
     id: row.id,
     factoryId: row.factoryId ?? '',
     factoryName: row.factoryName ?? '',
-    newRegistrationNo: row.newRegistrationNo ?? row.factoryId ?? '',
-    oldRegistrationNo: row.oldRegistrationNo ?? row.factoryRegistrationNo ?? '',
+    newRegistrationNo,
+    oldRegistrationNo,
+    factoryRegistration,
     industryType: row.industryType ?? '',
     province: row.province ?? '',
     type: row.type ?? '',
@@ -5773,7 +5781,6 @@ function RequestFormBottomSheet({
   const [submitPreviewPdfError, setSubmitPreviewPdfError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
-  const [submitSuccessOpen, setSubmitSuccessOpen] = useState(false)
   const submitPreviewSessionRef = useRef(0)
   const [eiaAssessment, setEiaAssessment] = useState(getEiaAssessmentValue(formFactory))
   const officerEmails = initialOfficerNotificationEmails.length ? initialOfficerNotificationEmails : ['']
@@ -5950,8 +5957,11 @@ function RequestFormBottomSheet({
       }
 
       closeSubmitConfirm()
-      await onSubmitted?.(response?.data ?? null)
-      setSubmitSuccessOpen(true)
+      setIsSubmitting(false)
+      await onSubmitted?.(response?.data ?? null, {
+        successMessage: isEditMode ? 'แก้ไขแบบฟอร์มคำขอสำเร็จ' : 'บันทึกแบบฟอร์มคำขอสำเร็จ',
+      })
+      return
     } catch (error) {
       const message = error instanceof TypeError
         ? 'ส่งแบบฟอร์มไม่สำเร็จ: browser ไม่สามารถเชื่อมต่อ API ได้ กรุณาเปิดผ่าน Vite dev server หรือ domain d-poms.diw.go.th และตรวจ CORS/HTTPS ของ API'
@@ -6374,16 +6384,6 @@ function RequestFormBottomSheet({
           </Stack>
         }
       />
-      <Snackbar
-        open={submitSuccessOpen}
-        autoHideDuration={3000}
-        onClose={() => setSubmitSuccessOpen(false)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert severity="success" variant="filled" onClose={() => setSubmitSuccessOpen(false)}>
-          {isEditMode ? 'แก้ไขแบบฟอร์มคำขอสำเร็จ' : 'บันทึกแบบฟอร์มคำขอสำเร็จ'}
-        </Alert>
-      </Snackbar>
     </Drawer>
   )
 }
@@ -6485,6 +6485,7 @@ function ConnectionRequestPage({
   const [requestTableRows, setRequestTableRows] = useState([])
   const [requestTableLoading, setRequestTableLoading] = useState(false)
   const [requestTableError, setRequestTableError] = useState('')
+  const [requestFormSuccessMessage, setRequestFormSuccessMessage] = useState('')
   const isOperator = userType === 'operator'
   const isAdmin = roleCode === 'admin'
   const canApproveConnectionRequests = userType === 'officer' && permissions?.connection?.approve === true
@@ -7087,7 +7088,7 @@ function ConnectionRequestPage({
     effectiveSubMenu === 'requests' && !accessToken
       ? 'กรุณาเข้าสู่ระบบเพื่อดูรายการคำขอ'
       : requestTableError
-  const handleRequestSubmitted = useCallback(async (request) => {
+  const handleRequestSubmitted = useCallback(async (request, options = {}) => {
     setSelectedSubMenu('requests')
     try {
       await loadRequestTableRows()
@@ -7107,6 +7108,9 @@ function ConnectionRequestPage({
         })
       }
     }
+    setRequestForm(null)
+    setRequestFormError('')
+    setRequestFormSuccessMessage(options.successMessage ?? 'บันทึกแบบฟอร์มคำขอสำเร็จ')
   }, [loadRequestTableRows, requestForm])
   const isReturningConnectionConfig = isConnectionConfirmed(requestDocument)
   const revisionDialogTitle = isReturningConnectionConfig ? 'แจ้งแก้ไขการเชื่อมต่อ' : 'แจ้งแก้ไขแบบฟอร์ม'
@@ -7430,6 +7434,16 @@ function ConnectionRequestPage({
         }
         onClose={() => setConnectionSettingsContext(null)}
       />
+      <Snackbar
+        open={Boolean(requestFormSuccessMessage)}
+        autoHideDuration={3000}
+        onClose={() => setRequestFormSuccessMessage('')}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert severity="success" variant="filled" onClose={() => setRequestFormSuccessMessage('')}>
+          {requestFormSuccessMessage}
+        </Alert>
+      </Snackbar>
     </Stack>
   )
 }
