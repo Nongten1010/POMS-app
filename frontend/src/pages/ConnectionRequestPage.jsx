@@ -845,6 +845,14 @@ function getRequestFormApiUrl(id) {
   return `${requestDetailApiBaseUrl}/${id}/form`
 }
 
+function getRequestCancelApiUrl(id) {
+  if (typeof window !== 'undefined' && window.location.hostname === 'd-poms.diw.go.th') {
+    return `/api/v1/cems-wpms-requests/${id}/cancel`
+  }
+
+  return `${requestDetailApiBaseUrl}/${id}/cancel`
+}
+
 function getConnectedMeasurementPointsApiUrl(filters = {}) {
   const normalizedFilters = typeof filters === 'string' ? { factoryId: filters } : filters
   const searchParams = new URLSearchParams()
@@ -1969,7 +1977,7 @@ function ConnectionSettingsButton({ disabled, onClick }) {
   )
 }
 
-function OperatorRequestActions({ row, onOpenConnectionSettings, onOpenRequestDocument, onOpenRequestEdit }) {
+function OperatorRequestActions({ row, onOpenConnectionSettings, onOpenRequestDocument, onOpenRequestEdit, onOpenRequestCancel }) {
   const { status, statusCode } = row
   const canModifyRequest = [status, statusCode].includes('รอโรงงานแก้ไข')
     || [status, statusCode].includes('WAITING_FACTORY_REVISION')
@@ -1988,7 +1996,13 @@ function OperatorRequestActions({ row, onOpenConnectionSettings, onOpenRequestDo
       >
         แก้ไข
       </Button>
-      <Button size="small" color="error" variant="outlined" disabled={!canModifyRequest}>
+      <Button
+        size="small"
+        color="error"
+        variant="outlined"
+        disabled={!canModifyRequest}
+        onClick={() => onOpenRequestCancel?.(row)}
+      >
         ยกเลิกคำขอ
       </Button>
       <ConnectionSettingsButton
@@ -6395,6 +6409,7 @@ function getRequestColumns(
   onOpenRequestDocument,
   onOpenRequestProcess,
   onOpenRequestEdit,
+  onOpenRequestCancel,
 ) {
   return [
     { field: 'factoryName', headerName: 'ชื่อโรงงาน/บริษัท', width: 240 },
@@ -6440,6 +6455,7 @@ function getRequestColumns(
             onOpenConnectionSettings={onOpenConnectionSettings}
             onOpenRequestDocument={onOpenRequestDocument}
             onOpenRequestEdit={onOpenRequestEdit}
+            onOpenRequestCancel={onOpenRequestCancel}
           />
         ) : (
           <OfficerRequestActions
@@ -6475,6 +6491,9 @@ function ConnectionRequestPage({
   const [verifyConnectionConfirmOpen, setVerifyConnectionConfirmOpen] = useState(false)
   const [revisionDialogOpen, setRevisionDialogOpen] = useState(false)
   const [revisionOfficerNote, setRevisionOfficerNote] = useState('')
+  const [cancelRequestRow, setCancelRequestRow] = useState(null)
+  const [cancelRequestLoading, setCancelRequestLoading] = useState(false)
+  const [cancelRequestError, setCancelRequestError] = useState('')
   const [monitoringPointFactory, setMonitoringPointFactory] = useState(null)
   const [connectionSettingsContext, setConnectionSettingsContext] = useState(null)
   const [intentRequestFactory, setIntentRequestFactory] = useState(null)
@@ -6953,6 +6972,56 @@ function ConnectionRequestPage({
   const handleOpenRequestDocumentProcess = useCallback((row) => {
     void handleOpenRequestDocument(row, 'process')
   }, [handleOpenRequestDocument])
+  const openCancelRequestDialog = useCallback((row) => {
+    setCancelRequestRow(row)
+    setCancelRequestError('')
+  }, [])
+  const closeCancelRequestDialog = useCallback(() => {
+    if (cancelRequestLoading) {
+      return
+    }
+
+    setCancelRequestRow(null)
+    setCancelRequestError('')
+  }, [cancelRequestLoading])
+  const cancelOperatorRequest = useCallback(async () => {
+    if (!cancelRequestRow?.id) {
+      setCancelRequestError('ไม่พบรหัสคำขอสำหรับยกเลิก')
+      return
+    }
+
+    if (!accessToken) {
+      setCancelRequestError('กรุณาเข้าสู่ระบบเพื่อยกเลิกคำขอ')
+      return
+    }
+
+    setCancelRequestLoading(true)
+    setCancelRequestError('')
+
+    try {
+      const result = await fetch(getRequestCancelApiUrl(cancelRequestRow.id), {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      })
+      const payload = await result.json().catch(() => null)
+
+      if (!result.ok || payload?.success === false) {
+        throw new Error(formatApiErrorMessage(payload, `ยกเลิกคำขอไม่สำเร็จ (${result.status} ${result.statusText})`))
+      }
+
+      await loadRequestTableRows()
+      setCancelRequestRow(null)
+      setRequestFormSuccessMessage('ยกเลิกคำขอสำเร็จ')
+    } catch (error) {
+      setCancelRequestError(error instanceof Error ? error.message : 'ยกเลิกคำขอไม่สำเร็จ')
+    } finally {
+      setCancelRequestLoading(false)
+    }
+  }, [accessToken, cancelRequestRow, loadRequestTableRows])
   const requestColumns = useMemo(
     () =>
       getRequestColumns(
@@ -6962,6 +7031,7 @@ function ConnectionRequestPage({
         handleOpenRequestDocumentView,
         handleOpenRequestDocumentProcess,
         handleOpenEditRequestForm,
+        openCancelRequestDialog,
       ),
     [
       canApproveConnectionRequests,
@@ -6969,6 +7039,7 @@ function ConnectionRequestPage({
       handleOpenRequestDocumentProcess,
       handleOpenRequestDocumentView,
       isOperator,
+      openCancelRequestDialog,
     ],
   )
   useEffect(() => {
@@ -7366,6 +7437,39 @@ function ConnectionRequestPage({
             onClick={approveRequestDocument}
           >
             {requestDocumentApproving ? 'กำลังอนุมัติ' : 'ยืนยันอนุมัติ'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog open={Boolean(cancelRequestRow)} onClose={closeCancelRequestDialog} fullWidth maxWidth="sm">
+        <DialogTitle>ยืนยันการยกเลิกคำขอ</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={1.5}>
+            <Typography>
+              เมื่อตกลงยกเลิกคำขอแล้ว สถานะคำขอจะเปลี่ยนเป็นยกเลิกและไม่สามารถดำเนินการต่อจากคำขอนี้ได้
+            </Typography>
+            {cancelRequestRow?.requestNo ? (
+              <Typography variant="body2" color="text.secondary">
+                เลขที่คำขอ: {cancelRequestRow.requestNo}
+              </Typography>
+            ) : null}
+            {cancelRequestError ? (
+              <Typography color="error" variant="body2">
+                {cancelRequestError}
+              </Typography>
+            ) : null}
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: 'center' }}>
+          <Button color="inherit" disabled={cancelRequestLoading} onClick={closeCancelRequestDialog}>
+            ยกเลิก
+          </Button>
+          <Button
+            color="error"
+            variant="contained"
+            disabled={cancelRequestLoading}
+            onClick={cancelOperatorRequest}
+          >
+            {cancelRequestLoading ? 'กำลังยกเลิก' : 'ยืนยันยกเลิกคำขอ'}
           </Button>
         </DialogActions>
       </Dialog>
