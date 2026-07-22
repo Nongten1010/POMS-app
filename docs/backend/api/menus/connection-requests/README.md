@@ -78,6 +78,13 @@ curl --request POST \
 
 `GET /api/v1/cems-wpms-requests/table-rows` คืน `data[].province` จาก factory snapshot ของคำขอ โดย snapshot ต้องรับจังหวัดจาก active row ใน `eligible_factories` ที่เชื่อมด้วย `eligibleFactoryId`. โรงงานที่ไม่มี row ใน `factories` ต้องยังคงจังหวัดเดิมหลังส่งคำขอ และ backend ต้องไม่ใช้การมีอยู่ของ factory master เป็นเงื่อนไขในการคืนจังหวัด.
 
+`data[].factoryName` ใช้ชื่อจาก active current/live POMS point ใน `cems_wpms_connected_measurement_points` ที่อัปเดตล่าสุดและจับคู่ด้วย `eligibleFactoryId`, `factoryId` หรือเลขทะเบียนโรงงาน โดยไม่บังคับว่าต้องมี factory master. ถ้ายังไม่มี current/live point ให้ fallback ไป `factories.name` และชื่อ snapshot ในคำขอตามลำดับ. กติกานี้ใช้เหมือนกันทั้งผู้ประกอบการและเจ้าหน้าที่; role มีผลเฉพาะ permission/scope ของรายการที่มองเห็น.
+
+| Response field | Type | Source/Meaning |
+| --- | --- | --- |
+| `data[].factoryName` | string | active current/live POMS point ล่าสุด; fallback เป็น factory master แล้วจึง request snapshot |
+| `data[].province` | string \| null | factory snapshot ของคำขอที่มาจาก active eligible factory |
+
 ### Operator factory list source
 
 `GET /api/v1/cems-wpms-requests/operator-factories` ใช้ `factories` เฉพาะตรวจความสัมพันธ์และสิทธิ์ว่า user เข้าถึงโรงงานใดได้ จากนั้นรับเฉพาะโรงงานที่จับคู่กับ active row ใน `eligible_factories` ได้ ข้อมูลโรงงานที่ส่งกลับ เช่น ชื่อโรงงาน เลขทะเบียน ประเภทโรงงาน การประกอบกิจการ ที่อยู่ จังหวัด พิกัด EIA และชื่อโครงการ ต้องอ่านจาก `eligible_factories`; ห้ามใช้ descriptive fields จาก `factories` เป็น fallback.
@@ -350,3 +357,4 @@ Minimal response:
 | Factory-profile patch rules | [`connected-factory-profile.ts`](../../../../../backend/src/modules/connection-requests/connected-factory-profile.ts) |
 | Migrations | [`0075_start_operator_point_codes_at_2001.ts`](../../../../../backend/src/db/migrations/0075_start_operator_point_codes_at_2001.ts), [`0076_sync_connected_factory_profiles_with_eligible_factories.ts`](../../../../../backend/src/db/migrations/0076_sync_connected_factory_profiles_with_eligible_factories.ts) |
 | Tests | [`connection-requests.point-code-sequence.repository.test.ts`](../../../../../backend/tests/unit/connection-requests.point-code-sequence.repository.test.ts), [`connected-factory-profile-sync.test.ts`](../../../../../backend/tests/unit/connected-factory-profile-sync.test.ts), [`connection-requests.connect.repository.test.ts`](../../../../../backend/tests/unit/connection-requests.connect.repository.test.ts), [`connected-factory-profile-migration.test.ts`](../../../../../backend/tests/unit/connected-factory-profile-migration.test.ts) |
+| Evidence | [Request table current/live POMS factory name TDD](../../../evidence/connection-requests/request-table-current-factory-name.tdd.md) |

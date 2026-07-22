@@ -143,6 +143,14 @@ interface CurrentFactoryMeasurementPointRow {
   documents_json: string | null;
 }
 
+interface CurrentPomsFactoryNameRow {
+  id: number | string;
+  factory_id: string;
+  eligible_factory_id: number | string | null;
+  factory_name: string;
+  updated_at: Date | string;
+}
+
 interface StatusHistoryRow {
   id: number | string;
   request_id: number | string;
@@ -585,6 +593,56 @@ export const connectionRequestsRepository = {
       map.set(row.code, dto);
     });
     return map;
+  },
+
+  async findCurrentPomsFactoryNamesForRequests(
+    requests: ConnectionRequestDTO[],
+  ): Promise<Map<string, string>> {
+    const factoryIds = [
+      ...new Set(
+        requests
+          .flatMap((request) => [request.factoryId, request.factoryRegistrationNo])
+          .filter((factoryId) => factoryId.trim().length > 0),
+      ),
+    ];
+    const eligibleFactoryIds = [
+      ...new Set(
+        requests
+          .map((request) => request.eligibleFactoryId)
+          .filter((id): id is number => id !== null && Number.isInteger(id)),
+      ),
+    ];
+    if (factoryIds.length === 0 && eligibleFactoryIds.length === 0) return new Map();
+
+    const rows = await buildCurrentPomsFactoryNamesQuery(factoryIds, eligibleFactoryIds);
+    const namesByFactoryId = new Map<string, string>();
+    const namesByEligibleFactoryId = new Map<number, string>();
+    rows.forEach((row) => {
+      const factoryName = row.factory_name.trim();
+      if (!factoryName) return;
+      if (!namesByFactoryId.has(row.factory_id)) {
+        namesByFactoryId.set(row.factory_id, factoryName);
+      }
+      const eligibleFactoryId = toNullableNumber(row.eligible_factory_id);
+      if (eligibleFactoryId !== null && !namesByEligibleFactoryId.has(eligibleFactoryId)) {
+        namesByEligibleFactoryId.set(eligibleFactoryId, factoryName);
+      }
+    });
+
+    const result = new Map<string, string>();
+    requests.forEach((request) => {
+      const eligibleFactoryId = request.eligibleFactoryId;
+      const currentName =
+        (typeof eligibleFactoryId === 'number'
+          ? namesByEligibleFactoryId.get(eligibleFactoryId)
+          : undefined) ??
+        namesByFactoryId.get(request.factoryId) ??
+        namesByFactoryId.get(request.factoryRegistrationNo);
+      if (!currentName) return;
+      result.set(request.factoryId, currentName);
+      result.set(request.factoryRegistrationNo, currentName);
+    });
+    return result;
   },
 
   async listRequestsForFactories(factoryIds: string[]): Promise<ConnectionRequestDTO[]> {
@@ -1310,6 +1368,13 @@ export function buildFactoriesForAccessQueryForTests(
   return buildFactoriesForAccessQuery(access);
 }
 
+export function buildCurrentPomsFactoryNamesQueryForTests(
+  factoryIds: string[],
+  eligibleFactoryIds: number[],
+): Knex.QueryBuilder<CurrentPomsFactoryNameRow, CurrentPomsFactoryNameRow[]> {
+  return buildCurrentPomsFactoryNamesQuery(factoryIds, eligibleFactoryIds);
+}
+
 export function buildConnectedFactoriesForAccessQueryForTests(
   access: FactoryAccess,
 ): Knex.QueryBuilder<FactoryRow, FactoryRow[]> {
@@ -1393,6 +1458,38 @@ function buildFactoriesForAccessQuery(
   applyFactoryRegionalAccessFilter(builder, access.regionalAccess);
 
   return builder as unknown as Knex.QueryBuilder<FactoryRow, FactoryRow[]>;
+}
+
+function buildCurrentPomsFactoryNamesQuery(
+  factoryIds: string[],
+  eligibleFactoryIds: number[],
+): Knex.QueryBuilder<CurrentPomsFactoryNameRow, CurrentPomsFactoryNameRow[]> {
+  const query = db<CurrentPomsFactoryNameRow>('cems_wpms_connected_measurement_points as cp_name')
+    .whereNull('cp_name.deleted_at')
+    .where((builder) => {
+      if (factoryIds.length > 0) builder.whereIn('cp_name.factory_id', factoryIds);
+      if (eligibleFactoryIds.length > 0) {
+        if (factoryIds.length > 0) {
+          builder.orWhereIn('cp_name.eligible_factory_id', eligibleFactoryIds);
+        } else {
+          builder.whereIn('cp_name.eligible_factory_id', eligibleFactoryIds);
+        }
+      }
+    })
+    .select(
+      'cp_name.id',
+      'cp_name.factory_id',
+      'cp_name.eligible_factory_id',
+      'cp_name.factory_name',
+      'cp_name.updated_at',
+    )
+    .orderBy('cp_name.updated_at', 'desc')
+    .orderBy('cp_name.id', 'desc');
+
+  return query as unknown as Knex.QueryBuilder<
+    CurrentPomsFactoryNameRow,
+    CurrentPomsFactoryNameRow[]
+  >;
 }
 
 function buildConnectedFactoriesForAccessQuery(

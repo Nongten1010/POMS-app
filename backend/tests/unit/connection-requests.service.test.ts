@@ -5,6 +5,7 @@ jest.mock('../../src/modules/connection-requests/connection-requests.repository'
     create: jest.fn(),
     findById: jest.fn(),
     findFactorySummariesForRequests: jest.fn(),
+    findCurrentPomsFactoryNamesForRequests: jest.fn(),
     replaceForm: jest.fn(),
     autoCancelExpiredWaitingConnectionRequests: jest.fn(),
     syncConnectedMeasurementPoints: jest.fn(),
@@ -158,6 +159,7 @@ describe('connectionRequestsService', () => {
     mockedRepository.listOfficerNotificationEmailsForFactories.mockResolvedValue(new Map());
     mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([]);
     mockedRepository.listPublicConnectedMeasurementPointsForFactories.mockResolvedValue([]);
+    mockedRepository.findCurrentPomsFactoryNamesForRequests.mockResolvedValue(new Map());
     mockedRepository.findActiveEligibleFactoryReference.mockResolvedValue({
       id: 9,
       sourceFactoryId: 'factory-001',
@@ -319,6 +321,25 @@ describe('connectionRequestsService', () => {
     const result = await connectionRequestsService.listTableRows({}, actorUserId, 'ALL');
 
     expect(result.data[0]?.province).toBe('กรุงเทพมหานคร');
+  });
+
+  it('uses the current POMS factory name in request rows without a factory master', async () => {
+    const request = requestDto({
+      factoryId: '10120000325542',
+      factoryName: 'ชื่อ snapshot เดิม',
+      factoryRegistrationNo: '10120000325542',
+      status: CONNECTION_REQUEST_STATUS.CONNECTED,
+    });
+    mockedRepository.list.mockResolvedValue({ rows: [request], total: 1 });
+    mockedRepository.findFactorySummariesForRequests.mockResolvedValue(new Map());
+    mockedRepository.findCurrentPomsFactoryNamesForRequests.mockResolvedValue(
+      new Map([['10120000325542', 'บริษัท เมโทร ปาร์ติเกิล จำกัด']]),
+    );
+
+    const result = await connectionRequestsService.listTableRows({}, actorUserId, 'ALL');
+
+    expect(mockedRepository.findCurrentPomsFactoryNamesForRequests).toHaveBeenCalledWith([request]);
+    expect(result.data[0]?.factoryName).toBe('บริษัท เมโทร ปาร์ติเกิล จำกัด');
   });
 
   it('passes stationId filters through request table rows for selected monitoring point history', async () => {

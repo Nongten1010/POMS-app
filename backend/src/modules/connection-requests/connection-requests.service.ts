@@ -121,10 +121,19 @@ export const connectionRequestsService = {
       scope: viewScope,
       regionalAccess,
     });
-    const factoryMap = await connectionRequestsRepository.findFactorySummariesForRequests(rows);
+    const [factoryMap, currentPomsFactoryNames] = await Promise.all([
+      connectionRequestsRepository.findFactorySummariesForRequests(rows),
+      connectionRequestsRepository.findCurrentPomsFactoryNamesForRequests(rows),
+    ]);
     return {
       data: rows.map((request) =>
-        toRequestTableRow(request, findFactorySummary(request, factoryMap)),
+        toRequestTableRow(
+          request,
+          findFactorySummary(request, factoryMap),
+          currentPomsFactoryNames.get(request.factoryId) ??
+            currentPomsFactoryNames.get(request.factoryRegistrationNo) ??
+            null,
+        ),
       ),
       meta: { total },
     };
@@ -1274,6 +1283,7 @@ function coordinateFromDetails(
 function toRequestTableRow(
   request: ConnectionRequestDTO,
   factory: FactorySummaryDTO | null,
+  currentPomsFactoryName: string | null,
 ): ConnectionRequestTableRowDTO {
   const firstPoint = request.measurementPoints[0] ?? null;
   const codeIssuedAt = findCodeIssuedAt(request);
@@ -1281,7 +1291,7 @@ function toRequestTableRow(
   return {
     id: request.id,
     factoryId: request.factoryId,
-    factoryName: factory?.factoryName ?? request.factoryName,
+    factoryName: currentPomsFactoryName ?? factory?.factoryName ?? request.factoryName,
     industryType: factory?.industryType ?? null,
     province: request.provinceName ?? factory?.province ?? null,
     type: request.systemType,

@@ -8,6 +8,7 @@ import {
   buildConnectedFactoriesForAccessQueryForTests,
   buildConnectedFactoryGeneralForAccessQueryForTests,
   buildConnectedMeasurementPointsQueryForTests,
+  buildCurrentPomsFactoryNamesQueryForTests,
   buildFactoriesForAccessQueryForTests,
   buildRequestNoPrefix,
   shouldIssueWaitingConnectionSideEffectsForTests,
@@ -332,6 +333,18 @@ describe('connectionRequestsRepository query helpers', () => {
     expect(sql).toContain('cp_name.deleted_at is null');
     expect(sql).toContain('order by cp_name.updated_at desc, cp_name.id desc');
     expect(normalizedSql).toContain('), ef.factory_name, f.name ) as name');
+  });
+
+  it('loads current POMS factory names without requiring a factory master', () => {
+    const compiled = buildCurrentPomsFactoryNamesQueryForTests(['10120000325542'], [225]).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('from [cems_wpms_connected_measurement_points] as [cp_name]');
+    expect(sql).toContain('[cp_name].[factory_id] in (?)');
+    expect(sql).toContain('or [cp_name].[eligible_factory_id] in (?)');
+    expect(sql).toContain('[cp_name].[deleted_at] is null');
+    expect(sql).toContain('order by [cp_name].[updated_at] desc, [cp_name].[id] desc');
+    expect(compiled.bindings).toEqual(['10120000325542', 225]);
   });
 
   it('selects eligible-factory location and industrial estate fields for advanced filters', () => {
