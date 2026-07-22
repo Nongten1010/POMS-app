@@ -648,6 +648,7 @@ export const connectionRequestsService = {
         actorUserId,
         scope: viewScope,
         regionalAccess,
+        useAssignedFactoryAccess: true,
       },
     );
     const factoryMap = await connectionRequestsRepository.findFactorySummariesForRequests(rows);

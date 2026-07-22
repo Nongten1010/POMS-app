@@ -1893,7 +1893,12 @@ describe('connectionRequestsService', () => {
 
     expect(mockedRepository.list).toHaveBeenCalledWith(
       { status: CONNECTION_REQUEST_STATUS.CONNECTED },
-      { actorUserId, scope: 'ALL' },
+      {
+        actorUserId,
+        scope: 'ALL',
+        regionalAccess: undefined,
+        useAssignedFactoryAccess: true,
+      },
     );
     expect(mockedDeviceConnectionsService.listActiveSettings).toHaveBeenCalledWith({
       stationId: 'STACK-A',
@@ -1946,7 +1951,12 @@ describe('connectionRequestsService', () => {
 
     expect(mockedRepository.list).toHaveBeenCalledWith(
       { factoryId: 'factory-001', status: CONNECTION_REQUEST_STATUS.CONNECTED },
-      { actorUserId, scope: 'ALL' },
+      {
+        actorUserId,
+        scope: 'ALL',
+        regionalAccess: undefined,
+        useAssignedFactoryAccess: true,
+      },
     );
     expect(mockedDeviceConnectionsService.listActiveSettings).toHaveBeenCalledTimes(1);
     expect(mockedDeviceConnectionsService.listActiveSettings).toHaveBeenCalledWith({
@@ -2033,7 +2043,12 @@ describe('connectionRequestsService', () => {
 
     expect(mockedRepository.list).toHaveBeenCalledWith(
       { factoryId: 'factory-001', status: CONNECTION_REQUEST_STATUS.CONNECTED },
-      { actorUserId, scope: 'ALL' },
+      {
+        actorUserId,
+        scope: 'ALL',
+        regionalAccess: undefined,
+        useAssignedFactoryAccess: true,
+      },
     );
     expect(result).toEqual({
       data: [

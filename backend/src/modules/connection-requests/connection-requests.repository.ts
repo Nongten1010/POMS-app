@@ -160,6 +160,7 @@ interface ListAccess {
   actorUserId: number;
   scope: AccessScope;
   regionalAccess?: RegionalAccessDTO | null;
+  useAssignedFactoryAccess?: boolean;
 }
 
 interface FactoryRow {
@@ -1546,7 +1547,10 @@ function buildBaseQuery(
         });
     });
   }
-  if (requiresAssignedRequestAccess(access.scope)) {
+  const scopeValue = getAccessScopeValue(access.scope);
+  if (scopeValue === 'OWN_FACTORY' && access.useAssignedFactoryAccess) {
+    applyAssignedRequestFactoryAccessFilter(builder, access.actorUserId);
+  } else if (requiresAssignedRequestAccess(access.scope)) {
     builder.where('created_by', access.actorUserId);
   }
   applyRequestPermissionLocationFilter(builder, access.scope);
@@ -1627,6 +1631,34 @@ function requiresAssignedRequestAccess(scope: AccessScope): boolean {
   const scopeValue = getAccessScopeValue(scope);
   if (scopeValue === 'ALL') return false;
   return !hasPermissionLocationFilter(scope);
+}
+
+function applyAssignedRequestFactoryAccessFilter(
+  builder: Knex.QueryBuilder,
+  actorUserId: number,
+): void {
+  builder.whereExists(function assignedRequestFactoryAccess() {
+    this.select(db.raw('1'))
+      .from('factories as f')
+      .leftJoin('eligible_factories as ef', function joinEligibleFactory() {
+        this.on(function joinFactoryIdentifiers() {
+          this.on('f.code', '=', 'ef.factory_registration_no_new')
+            .orOn('f.fid', '=', 'ef.factory_registration_no_new')
+            .orOn('f.fid', '=', 'ef.source_factory_id')
+            .orOn('f.code', '=', 'ef.source_factory_id');
+        }).andOnNull('ef.deleted_at');
+      })
+      .whereNull('f.deleted_at')
+      .where(function requestFactoryIdentifier() {
+        this.whereRaw('f.fid = cems_wpms_connection_requests.factory_id')
+          .orWhereRaw('f.code = cems_wpms_connection_requests.factory_id')
+          .orWhereRaw('ef.id = cems_wpms_connection_requests.eligible_factory_id')
+          .orWhereRaw('ef.source_factory_id = cems_wpms_connection_requests.factory_id')
+          .orWhereRaw('ef.factory_registration_no_new = cems_wpms_connection_requests.factory_id')
+          .orWhereRaw('ef.factory_registration_no_old = cems_wpms_connection_requests.factory_id');
+      });
+    applyAssignedFactoryAccessFilter(this, actorUserId);
+  });
 }
 
 function hasPermissionLocationFilter(scope: AccessScope): boolean {
