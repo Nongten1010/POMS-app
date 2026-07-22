@@ -43,6 +43,7 @@ curl --request POST \
 
 | งาน | Method | Path | Auth | Permission | Contract |
 | --- | --- | --- | --- | --- | --- |
+| อ่านรายการคำขอสำหรับตาราง | `GET` | `/api/v1/cems-wpms-requests/table-rows` | Bearer | `cems_wpms_requests:view` | [Request table location source](#request-table-location-source) |
 | อ่านรายชื่อโรงงานเข้าข่ายของผู้ประกอบการ | `GET` | `/api/v1/cems-wpms-requests/operator-factories` | Bearer | `factories:view` | [Operator factory list source](#operator-factory-list-source) |
 | สร้างคำขอเชื่อมต่อใหม่ | `POST` | `/api/v1/cems-wpms-requests` | Bearer | `cems_wpms_requests:edit` | [Eligibility gate](#eligibility-gate) |
 | สร้างคำขอเพิ่มจุดตรวจวัด | `POST` | `/api/v1/cems-wpms-requests/measurement-points` | Bearer | `cems_wpms_requests:edit` | [Eligibility gate](#eligibility-gate) |
@@ -72,6 +73,10 @@ curl --request POST \
 - การจองเลขและการเปลี่ยนสถานะทำใน transaction เดียวกันเพื่อไม่ให้คำขอพร้อมกันได้รหัสซ้ำ.
 
 ## Contracts
+
+### Request table location source
+
+`GET /api/v1/cems-wpms-requests/table-rows` คืน `data[].province` จาก factory snapshot ของคำขอ โดย snapshot ต้องรับจังหวัดจาก active row ใน `eligible_factories` ที่เชื่อมด้วย `eligibleFactoryId`. โรงงานที่ไม่มี row ใน `factories` ต้องยังคงจังหวัดเดิมหลังส่งคำขอ และ backend ต้องไม่ใช้การมีอยู่ของ factory master เป็นเงื่อนไขในการคืนจังหวัด.
 
 ### Operator factory list source
 

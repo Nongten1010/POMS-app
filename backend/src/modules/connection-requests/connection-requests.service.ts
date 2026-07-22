@@ -1283,7 +1283,7 @@ function toRequestTableRow(
     factoryId: request.factoryId,
     factoryName: factory?.factoryName ?? request.factoryName,
     industryType: factory?.industryType ?? null,
-    province: factory?.province ?? null,
+    province: request.provinceName ?? factory?.province ?? null,
     type: request.systemType,
     requestNo: request.requestNo,
     submittedAt: request.createdAt,

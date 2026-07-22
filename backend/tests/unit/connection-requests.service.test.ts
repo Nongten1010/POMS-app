@@ -307,6 +307,20 @@ describe('connectionRequestsService', () => {
     });
   });
 
+  it('keeps the request snapshot province when no factory master row exists', async () => {
+    const request = requestDto({
+      factoryId: '40100007125560',
+      factoryRegistrationNo: '40100007125560',
+      provinceName: 'กรุงเทพมหานคร',
+    });
+    mockedRepository.list.mockResolvedValue({ rows: [request], total: 1 });
+    mockedRepository.findFactorySummariesForRequests.mockResolvedValue(new Map());
+
+    const result = await connectionRequestsService.listTableRows({}, actorUserId, 'ALL');
+
+    expect(result.data[0]?.province).toBe('กรุงเทพมหานคร');
+  });
+
   it('passes stationId filters through request table rows for selected monitoring point history', async () => {
     mockedRepository.list.mockResolvedValue({ rows: [], total: 0 });
     mockedRepository.findFactorySummariesForRequests.mockResolvedValue(new Map());

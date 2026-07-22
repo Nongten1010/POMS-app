@@ -57,7 +57,7 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
     );
   });
 
-  it('atomically persists the connected request and hydrates the created response', async () => {
+  it('persists eligible-factory location when no factory master row exists', async () => {
     const fixedNow = new Date('2026-07-21T03:04:05.000Z');
     const requestInsert = jest.fn((_: unknown) => ({
       returning: jest.fn(async () => [{ id: 101 }]),
@@ -74,7 +74,7 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
     const existingProfileLookup = makeChain({ first: async () => undefined });
     const sequenceSelect = makeChain({ first: async () => ({ last_sequence: 0 }) });
     const sequenceUpdate = makeChain({ update: async () => 1 });
-    const factorySource = makeChain({
+    const eligibleFactorySource = makeChain({
       first: async () => ({
         province_id: '10',
         province_name: 'กรุงเทพมหานคร',
@@ -100,7 +100,7 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
       ],
       ['cems_wpms_direct_request_sequences', [sequenceSelect, sequenceUpdate]],
       ['cems_wpms_connection_requests', [{ insert: requestInsert }, requestRead]],
-      ['factories as f', [factorySource]],
+      ['eligible_factories as ef', [eligibleFactorySource]],
       [
         'cems_wpms_request_factory_snapshots',
         [snapshotSoftDelete, { insert: snapshotInsert }, snapshotRead],

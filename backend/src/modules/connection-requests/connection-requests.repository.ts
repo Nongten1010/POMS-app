@@ -2237,32 +2237,27 @@ async function findFactorySnapshotSource(
   input: CreateConnectionRequestInput,
 ): Promise<FactorySnapshotSourceRow | null> {
   return (
-    (await trx<FactorySnapshotSourceRow>('factories as f')
-      .leftJoin('provinces as p', 'p.id', 'f.province_id')
-      .leftJoin('industrial_estates as ie', 'ie.id', 'f.industrial_estate_id')
-      .leftJoin('eligible_factories as ef', function joinEligibleFactory() {
-        this.on(function joinFactoryKeys() {
-          this.on('ef.factory_registration_no_new', '=', 'f.code')
-            .orOn('ef.factory_registration_no_new', '=', 'f.fid')
-            .orOn('ef.source_factory_id', '=', 'f.fid')
-            .orOn('ef.source_factory_id', '=', 'f.code');
-        }).andOnNull('ef.deleted_at');
-      })
-      .whereNull('f.deleted_at')
+    (await trx<FactorySnapshotSourceRow>('eligible_factories as ef')
+      .leftJoin('provinces as p', 'p.name_th', 'ef.province_name')
+      .leftJoin('industrial_estates as ie', 'ie.name_th', 'ef.industrial_estate_name')
+      .whereNull('ef.deleted_at')
       .where((builder) => {
+        if (input.eligibleFactoryId !== undefined && input.eligibleFactoryId !== null) {
+          builder.where('ef.id', input.eligibleFactoryId);
+          return;
+        }
         builder
-          .where('f.fid', input.factoryId)
-          .orWhere('f.code', input.factoryId)
-          .orWhere('f.code', input.factoryRegistrationNo)
-          .orWhere('ef.source_factory_id', input.factoryId)
+          .where('ef.source_factory_id', input.factoryId)
+          .orWhere('ef.factory_registration_no_new', input.factoryId)
+          .orWhere('ef.factory_registration_no_old', input.factoryRegistrationNo)
           .orWhere('ef.factory_registration_no_new', input.factoryRegistrationNo);
       })
       .select(
-        'f.province_id',
-        'p.name_th as province_name',
+        'p.id as province_id',
+        'ef.province_name as province_name',
         'p.region as province_region',
         'ie.code as industrial_estate_code',
-        'ie.name_th as industrial_estate_name',
+        'ef.industrial_estate_name as industrial_estate_name',
       )
       .first()) ?? null
   );
