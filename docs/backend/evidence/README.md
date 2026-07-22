@@ -18,6 +18,7 @@
 ## Home
 
 - [โรงงานที่เจ้าหน้าที่เชื่อมต่อแสดงบนหน้าหลัก](./home/officer-direct-connected-dashboard.tdd.md)
+- [ชื่อโรงงานหน้าหลักใช้ข้อมูล current/live POMS](./home/operator-dashboard-current-factory-name.tdd.md)
 
 ## Migration Targets
 

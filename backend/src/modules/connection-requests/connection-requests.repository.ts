@@ -1414,7 +1414,19 @@ function buildConnectedFactoriesForAccessQuery(
       'f.id',
       db.raw('COALESCE(f.fid, ef.factory_registration_no_new) as fid'),
       db.raw('COALESCE(f.code, ef.factory_registration_no_new) as code'),
-      db.raw('COALESCE(f.name, ef.factory_name) as name'),
+      db.raw(`
+        COALESCE(
+          (
+            SELECT TOP (1) cp_name.factory_name
+            FROM cems_wpms_connected_measurement_points AS cp_name
+            WHERE cp_name.eligible_factory_id = ef.id
+              AND cp_name.deleted_at IS NULL
+            ORDER BY cp_name.updated_at DESC, cp_name.id DESC
+          ),
+          ef.factory_name,
+          f.name
+        ) as name
+      `),
       'f.system_detail',
       db.raw('COALESCE(f.is_active, 1) as is_active'),
       'p.id as province_id',

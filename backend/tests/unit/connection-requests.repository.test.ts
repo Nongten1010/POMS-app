@@ -311,6 +311,22 @@ describe('connectionRequestsRepository query helpers', () => {
     expect(sql).toContain('[ef].[deleted_at] is null');
   });
 
+  it('prefers the latest current POMS factory name in the connected dashboard', () => {
+    const sql = buildConnectedFactoriesForAccessQueryForTests({
+      actorUserId: 42,
+      scope: 'ALL',
+    })
+      .toSQL()
+      .sql.toLowerCase();
+    const normalizedSql = sql.replace(/\s+/g, ' ');
+
+    expect(sql).toContain('select top (1) cp_name.factory_name');
+    expect(sql).toContain('cp_name.eligible_factory_id = ef.id');
+    expect(sql).toContain('cp_name.deleted_at is null');
+    expect(sql).toContain('order by cp_name.updated_at desc, cp_name.id desc');
+    expect(normalizedSql).toContain('), ef.factory_name, f.name ) as name');
+  });
+
   it('selects dashboard location and industrial estate fields for advanced filters', () => {
     const sql = buildFactoriesForAccessQueryForTests({
       actorUserId: 42,
