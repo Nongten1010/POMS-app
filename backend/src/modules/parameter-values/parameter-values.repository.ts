@@ -312,10 +312,20 @@ function buildStationAccessQuery(access: ParameterValueAccessContext) {
   if (scopeValue === 'ALL') return query;
 
   const scopedQuery = query
-    .leftJoin('factories as f', function joinFactory() {
-      this.on('f.fid', '=', 'p.factory_id').andOnNull('f.deleted_at');
+    .leftJoin('eligible_factories as ef', function joinEligibleFactory() {
+      this.on('ef.id', '=', 'p.eligible_factory_id').andOnNull('ef.deleted_at');
     })
-    .leftJoin('provinces as pr', 'pr.id', 'f.province_id');
+    .leftJoin('factories as f', function joinFactory() {
+      this.on(function joinFactoryKeys() {
+        this.on('f.fid', '=', 'p.factory_id')
+          .orOn('f.code', '=', 'p.factory_id')
+          .orOn('f.fid', '=', 'ef.source_factory_id')
+          .orOn('f.code', '=', 'ef.factory_registration_no_new')
+          .orOn('f.fid', '=', 'ef.factory_registration_no_new')
+          .orOn('f.code', '=', 'ef.source_factory_id');
+      }).andOnNull('f.deleted_at');
+    })
+    .leftJoin('provinces as pr', 'pr.name_th', 'ef.province_name');
 
   if (applyStationLocationFilter(scopedQuery, access.scope)) return scopedQuery;
 

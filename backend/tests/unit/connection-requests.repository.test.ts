@@ -5,6 +5,9 @@ import {
   buildBaseQueryForTests,
   buildDuplicateActiveMeasurementPointCleanupSqlForTests,
   buildDirectConnectionFactoryQueryForTests,
+  buildConnectedFactoriesForAccessQueryForTests,
+  buildConnectedFactoryGeneralForAccessQueryForTests,
+  buildConnectedMeasurementPointsQueryForTests,
   buildFactoriesForAccessQueryForTests,
   buildRequestNoPrefix,
   shouldIssueWaitingConnectionSideEffectsForTests,
@@ -12,6 +15,80 @@ import {
 import { CONNECTION_REQUEST_STATUS } from '../../src/modules/connection-requests/connection-requests.types';
 
 describe('connectionRequestsRepository query helpers', () => {
+  it('sources connected dashboard factories from active POMS points without requiring a factory master row', () => {
+    const sql = buildConnectedFactoriesForAccessQueryForTests({
+      actorUserId: 42,
+      scope: 'ALL',
+    })
+      .toSQL()
+      .sql.toLowerCase();
+
+    expect(sql).toContain('from [eligible_factories] as [ef]');
+    expect(sql).toContain('from [cems_wpms_connected_measurement_points] as [cp]');
+    expect(sql).toContain('cp.eligible_factory_id = ef.id');
+    expect(sql).toContain('[cp].[deleted_at] is null');
+    expect(sql).toContain('left join [factories] as [f]');
+    expect(sql).toContain('coalesce(f.fid, ef.factory_registration_no_new) as fid');
+  });
+
+  it('keeps connected dashboard factories fail-closed for OWN_FACTORY access', () => {
+    const compiled = buildConnectedFactoriesForAccessQueryForTests({
+      actorUserId: 42,
+      scope: 'OWN_FACTORY',
+    }).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('user_juristics');
+    expect(sql).toContain('user_factory_access');
+    expect(sql).toContain('ufa.factory_id = f.id');
+    expect(compiled.bindings.filter((binding: unknown) => binding === 42)).toHaveLength(2);
+  });
+
+  it('filters connected dashboard factories by eligible-factory location', () => {
+    const compiled = buildConnectedFactoriesForAccessQueryForTests({
+      actorUserId: 42,
+      scope: {
+        scope: 'IN_PROVINCE',
+        region: null,
+        province: 'นนทบุรี',
+      },
+      regionalAccess: { regions: ['ภาคกลาง'] },
+    }).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('[p].[name_th] = [ef].[province_name]');
+    expect(sql).toContain('[p].[region]');
+    expect(compiled.bindings).toEqual(expect.arrayContaining(['นนทบุรี', 'ภาคกลาง']));
+  });
+
+  it('resolves connected factory detail from eligible data when no factory master row exists', () => {
+    const compiled = buildConnectedFactoryGeneralForAccessQueryForTests('40100007125560', {
+      actorUserId: 42,
+      scope: 'ALL',
+    }).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('from [eligible_factories] as [ef]');
+    expect(sql).toContain('from [cems_wpms_connected_measurement_points] as [cp]');
+    expect(sql).toContain('cp.eligible_factory_id = ef.id');
+    expect(sql).toContain('[ef].[source_factory_id]');
+    expect(sql).toContain('[ef].[factory_registration_no_new]');
+    expect(sql).toContain('[ef].[factory_registration_no_old]');
+    expect(compiled.bindings).toEqual(
+      expect.arrayContaining(['40100007125560', '40100007125560', '40100007125560']),
+    );
+  });
+
+  it('loads connected points by eligible factory id when the stored factory id is an old alias', () => {
+    const compiled = buildConnectedMeasurementPointsQueryForTests(['40100007125560'], [17]).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('[factory_id] in (?)');
+    expect(sql).toContain('or [eligible_factory_id] in (?)');
+    expect(sql).toContain('[deleted_at] is null');
+    expect(compiled.bindings).toEqual(['40100007125560', 17]);
+  });
+
   it('resolves direct connections from active eligible factories without requiring a POMS factory row', () => {
     const compiled = buildDirectConnectionFactoryQueryForTests(
       { factoryId: '10120000325542', factoryRegistrationNo: '3-34(3)-3/54นบ' },

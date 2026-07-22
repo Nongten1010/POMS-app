@@ -296,14 +296,24 @@ export const connectionRequestsService = {
       actorUserId,
       scope: factoryViewScope,
       regionalAccess,
+      connectedPomsOnly: true,
     });
     const eligibleFactories = factories.filter(
       (factory) => factory.isEligible !== false && factory.isActive !== false,
     );
     const factoryIdByLookupKey = buildFactoryLookupKeyMap(eligibleFactories);
+    const factoryIdByEligibleFactoryId = buildEligibleFactoryIdMap(eligibleFactories);
     const factoryLookupKeys = [...factoryIdByLookupKey.keys()];
+    const eligibleFactoryIds = [...factoryIdByEligibleFactoryId.keys()];
     const [connectedPoints, favoriteFactoryIds] = await Promise.all([
-      connectionRequestsRepository.listConnectedMeasurementPointsForFactories(factoryLookupKeys),
+      eligibleFactoryIds.length > 0
+        ? connectionRequestsRepository.listConnectedMeasurementPointsForFactories(
+            factoryLookupKeys,
+            eligibleFactoryIds,
+          )
+        : connectionRequestsRepository.listConnectedMeasurementPointsForFactories(
+            factoryLookupKeys,
+          ),
       connectionRequestsRepository.listFavoriteFactoryIds(actorUserId),
     ]);
     const favoriteFactoryIdSet = new Set(favoriteFactoryIds);
@@ -311,7 +321,12 @@ export const connectionRequestsService = {
     const factoryMainTypeLabels = await listFactoryMainTypeLabelsForDashboard(eligibleFactories);
 
     connectedPoints.forEach((point) => {
-      const factoryId = factoryIdByLookupKey.get(point.factoryId) ?? point.factoryId;
+      const factoryId =
+        (point.eligibleFactoryId === null || point.eligibleFactoryId === undefined
+          ? undefined
+          : factoryIdByEligibleFactoryId.get(point.eligibleFactoryId)) ??
+        factoryIdByLookupKey.get(point.factoryId) ??
+        point.factoryId;
       const currentPoints = measurementPointsByFactory.get(factoryId) ?? [];
       measurementPointsByFactory.set(factoryId, [...currentPoints, { ...point, factoryId }]);
     });
@@ -386,21 +401,34 @@ export const connectionRequestsService = {
       actorUserId: 0,
       scope: 'ALL',
       regionalAccess: undefined,
+      connectedPomsOnly: true,
     });
     const eligibleFactories = factories.filter(
       (factory) => factory.isEligible !== false && factory.isActive !== false,
     );
     const factoryIdByLookupKey = buildFactoryLookupKeyMap(eligibleFactories);
+    const factoryIdByEligibleFactoryId = buildEligibleFactoryIdMap(eligibleFactories);
+    const eligibleFactoryIds = [...factoryIdByEligibleFactoryId.keys()];
     const [connectedPoints, factoryMainTypeLabels] = await Promise.all([
-      connectionRequestsRepository.listPublicConnectedMeasurementPointsForFactories([
-        ...factoryIdByLookupKey.keys(),
-      ]),
+      eligibleFactoryIds.length > 0
+        ? connectionRequestsRepository.listPublicConnectedMeasurementPointsForFactories(
+            [...factoryIdByLookupKey.keys()],
+            eligibleFactoryIds,
+          )
+        : connectionRequestsRepository.listPublicConnectedMeasurementPointsForFactories([
+            ...factoryIdByLookupKey.keys(),
+          ]),
       listFactoryMainTypeLabelsForDashboard(eligibleFactories),
     ]);
     const measurementPointsByFactory = new Map<string, CurrentFactoryMeasurementPointDTO[]>();
 
     connectedPoints.forEach((point) => {
-      const factoryId = factoryIdByLookupKey.get(point.factoryId) ?? point.factoryId;
+      const factoryId =
+        (point.eligibleFactoryId === null || point.eligibleFactoryId === undefined
+          ? undefined
+          : factoryIdByEligibleFactoryId.get(point.eligibleFactoryId)) ??
+        factoryIdByLookupKey.get(point.factoryId) ??
+        point.factoryId;
       const currentPoints = measurementPointsByFactory.get(factoryId) ?? [];
       measurementPointsByFactory.set(factoryId, [...currentPoints, { ...point, factoryId }]);
     });
@@ -1823,6 +1851,16 @@ function buildFactoryLookupKeyMap(factories: FactorySummaryDTO[]): Map<string, s
   });
 
   return keys;
+}
+
+function buildEligibleFactoryIdMap(factories: FactorySummaryDTO[]): Map<number, string> {
+  return new Map(
+    factories.flatMap((factory) =>
+      factory.eligibleFactoryId === null || factory.eligibleFactoryId === undefined
+        ? []
+        : [[factory.eligibleFactoryId, factory.factoryId] as const],
+    ),
+  );
 }
 
 const parameterUnitLabels: Record<string, string> = {

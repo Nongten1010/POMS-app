@@ -35,6 +35,7 @@ menus/
 
 ## Canonical Menu Pages
 
+- [หน้าหลัก](./home/README.md) — dashboard โรงงาน current/live, public map และ favorite
 - [ขอเชื่อมต่อ](./connection-requests/README.md) — contract คำขอ CEMS/WPMS และการออกรหัสจุดตรวจวัด
 - [โรงงานที่เข้าข่าย](./eligible-factories/README.md) — contract รายการโรงงานเข้าข่าย ข้อมูลที่ซิงก์ และเงื่อนไขการถอดออก
 

@@ -848,6 +848,7 @@ describe('connectionRequestsService', () => {
     expect(mockedRepository.listFactoriesForAccess).toHaveBeenCalledWith({
       actorUserId,
       scope: 'OWN_FACTORY',
+      connectedPomsOnly: true,
     });
     expect(mockedRepository.listConnectedMeasurementPointsForFactories).toHaveBeenCalledWith(
       expect.arrayContaining(['factory-001', '3-106-33/50สบ']),
@@ -1049,6 +1050,56 @@ describe('connectionRequestsService', () => {
     });
   });
 
+  it('returns an officer-connected eligible factory without a factory master row', async () => {
+    mockedRepository.listFactoriesForAccess.mockResolvedValue([
+      factorySummary({
+        id: null,
+        eligibleFactoryId: 17,
+        factoryId: '40100007125560',
+        factoryName: 'โรงงานที่เจ้าหน้าที่เชื่อมต่อ',
+        newRegistrationNo: '40100007125560',
+        isActive: true,
+      }),
+    ]);
+    mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
+      {
+        factoryId: 'LEGACY-SOURCE-ID',
+        eligibleFactoryId: 17,
+        stationId: 'S4010',
+        pointName: 'จุดตรวจวัดจากเจ้าหน้าที่',
+        pointCode: 'S4010',
+        systemType: 'CEMS',
+        parameters: ['CO (ppm)'],
+        data: [],
+      },
+    ]);
+
+    const result = await connectionRequestsService.listOperatorFactoryDashboard(
+      actorUserId,
+      { scope: 'ALL' },
+      { connectedOnly: true },
+    );
+
+    expect(mockedRepository.listFactoriesForAccess).toHaveBeenCalledWith({
+      actorUserId,
+      scope: { scope: 'ALL' },
+      regionalAccess: undefined,
+      connectedPomsOnly: true,
+    });
+    expect(mockedRepository.listConnectedMeasurementPointsForFactories).toHaveBeenCalledWith(
+      expect.arrayContaining(['40100007125560']),
+      [17],
+    );
+    expect(result.data).toEqual([
+      expect.objectContaining({
+        id: null,
+        factoryId: '40100007125560',
+        newRegistrationNo: '40100007125560',
+        measurementPoints: [expect.objectContaining({ stationId: 'S4010' })],
+      }),
+    ]);
+  });
+
   it('keeps factory rows loadable when latest hourly parameter values fail', async () => {
     mockedRepository.listFactoriesForAccess.mockResolvedValue([factorySummary()]);
     mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
@@ -1241,6 +1292,7 @@ describe('connectionRequestsService', () => {
       actorUserId: 0,
       scope: 'ALL',
       regionalAccess: undefined,
+      connectedPomsOnly: true,
     });
     expect(mockedRepository.listPublicConnectedMeasurementPointsForFactories).toHaveBeenCalledWith(
       expect.arrayContaining(['factory-connected', '3-106-33/50สบ']),

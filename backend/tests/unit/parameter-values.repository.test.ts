@@ -112,8 +112,14 @@ describe('parameterValuesRepository', () => {
     }).toSQL();
     const sql = compiled.sql.toLowerCase();
 
+    expect(sql).toContain('left join [eligible_factories] as [ef]');
+    expect(sql).toContain('[ef].[id] = [p].[eligible_factory_id]');
+    expect(sql).toContain('[ef].[deleted_at] is null');
     expect(sql).toContain('left join [factories] as [f]');
+    expect(sql).toContain('[f].[fid] = [ef].[factory_registration_no_new]');
+    expect(sql).toContain('[f].[code] = [ef].[source_factory_id]');
     expect(sql).toContain('left join [provinces] as [pr]');
+    expect(sql).toContain('[pr].[name_th] = [ef].[province_name]');
     expect(sql).toContain('[pr].[name_th]');
     expect(sql).not.toContain('user_juristics');
     expect(compiled.bindings).toContain('ฉะเชิงเทรา');

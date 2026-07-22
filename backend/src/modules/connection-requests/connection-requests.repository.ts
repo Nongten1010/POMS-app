@@ -134,6 +134,7 @@ interface ConnectedFactoryProfileRow {
 
 interface CurrentFactoryMeasurementPointRow {
   factory_id: string;
+  eligible_factory_id: number | string | null;
   point_name: string;
   point_code: string | null;
   system_type: 'CEMS' | 'WPMS';
@@ -162,7 +163,7 @@ interface ListAccess {
 }
 
 interface FactoryRow {
-  id: number | string;
+  id: number | string | null;
   fid: string;
   code: string;
   name: string;
@@ -172,7 +173,7 @@ interface FactoryRow {
   province_name: string | null;
   industrial_estate_code: string | null;
   industrial_estate_name: string | null;
-  is_active: boolean | number;
+  is_active: boolean | number | null;
   factory_registration_no_old: string | null;
   factory_type_sequence: string | null;
   address: string | null;
@@ -238,6 +239,7 @@ interface FactoryAccess {
   actorUserId: number;
   scope: AccessScope;
   regionalAccess?: RegionalAccessDTO | null;
+  connectedPomsOnly?: boolean;
 }
 
 type AccessScope = string | null | undefined | PermissionScopeDetails;
@@ -380,7 +382,9 @@ export const connectionRequestsRepository = {
   },
 
   async listFactoriesForAccess(access: FactoryAccess): Promise<FactorySummaryDTO[]> {
-    const builder = buildFactoriesForAccessQuery(access);
+    const builder = access.connectedPomsOnly
+      ? buildConnectedFactoriesForAccessQuery(access)
+      : buildFactoriesForAccessQuery(access);
 
     const rows = await builder;
     return rows.map(toFactorySummaryDTO);
@@ -490,7 +494,13 @@ export const connectionRequestsRepository = {
     applyFactoryRegionalAccessFilter(builder, access.regionalAccess);
 
     const row = await builder.first();
-    return row ? toFactoryGeneralDTO(row) : null;
+    if (row) return toFactoryGeneralDTO(row);
+
+    const connectedFactory = await buildConnectedFactoryGeneralForAccessQuery(
+      factoryId,
+      access,
+    ).first();
+    return connectedFactory ? toConnectedFactoryGeneralDTO(connectedFactory) : null;
   },
 
   async listFavoriteFactoryIds(actorUserId: number): Promise<string[]> {
@@ -696,17 +706,17 @@ export const connectionRequestsRepository = {
 
   async listConnectedMeasurementPointsForFactories(
     factoryIds: string[],
+    eligibleFactoryIds: number[] = [],
   ): Promise<CurrentFactoryMeasurementPointDTO[]> {
     const lookupKeys = [...new Set(factoryIds.filter((factoryId) => factoryId.trim().length > 0))];
-    if (lookupKeys.length === 0) return [];
+    const eligibleLookupIds = [...new Set(eligibleFactoryIds.filter(Number.isInteger))];
+    if (lookupKeys.length === 0 && eligibleLookupIds.length === 0) return [];
 
-    const rows = await db<CurrentFactoryMeasurementPointRow>(
-      'cems_wpms_connected_measurement_points',
-    )
-      .whereNull('deleted_at')
-      .whereIn('factory_id', lookupKeys)
+    const query = buildConnectedMeasurementPointsQuery(lookupKeys, eligibleLookupIds);
+    const rows = await query
       .select(
         'factory_id',
+        'eligible_factory_id',
         'point_name',
         'point_code',
         'system_type',
@@ -720,6 +730,7 @@ export const connectionRequestsRepository = {
 
     return rows.map((row) => ({
       factoryId: row.factory_id,
+      eligibleFactoryId: toNullableNumber(row.eligible_factory_id),
       stationId: row.point_code ?? row.point_name,
       pointName: row.point_name,
       pointCode: row.point_code,
@@ -733,17 +744,17 @@ export const connectionRequestsRepository = {
 
   async listPublicConnectedMeasurementPointsForFactories(
     factoryIds: string[],
+    eligibleFactoryIds: number[] = [],
   ): Promise<CurrentFactoryMeasurementPointDTO[]> {
     const lookupKeys = [...new Set(factoryIds.filter((factoryId) => factoryId.trim().length > 0))];
-    if (lookupKeys.length === 0) return [];
+    const eligibleLookupIds = [...new Set(eligibleFactoryIds.filter(Number.isInteger))];
+    if (lookupKeys.length === 0 && eligibleLookupIds.length === 0) return [];
 
-    const rows = await db<CurrentFactoryMeasurementPointRow>(
-      'cems_wpms_connected_measurement_points',
-    )
-      .whereNull('deleted_at')
-      .whereIn('factory_id', lookupKeys)
+    const query = buildConnectedMeasurementPointsQuery(lookupKeys, eligibleLookupIds);
+    const rows = await query
       .select(
         'factory_id',
+        'eligible_factory_id',
         'point_name',
         'point_code',
         'system_type',
@@ -757,6 +768,7 @@ export const connectionRequestsRepository = {
 
     return rows.map((row) => ({
       factoryId: row.factory_id,
+      eligibleFactoryId: toNullableNumber(row.eligible_factory_id),
       stationId: row.point_code ?? row.point_name,
       pointName: row.point_name,
       pointCode: row.point_code,
@@ -1294,6 +1306,26 @@ export function buildFactoriesForAccessQueryForTests(
   return buildFactoriesForAccessQuery(access);
 }
 
+export function buildConnectedFactoriesForAccessQueryForTests(
+  access: FactoryAccess,
+): Knex.QueryBuilder<FactoryRow, FactoryRow[]> {
+  return buildConnectedFactoriesForAccessQuery(access);
+}
+
+export function buildConnectedFactoryGeneralForAccessQueryForTests(
+  factoryId: string,
+  access: FactoryAccess,
+): Knex.QueryBuilder<FactoryRow, FactoryRow[]> {
+  return buildConnectedFactoryGeneralForAccessQuery(factoryId, access);
+}
+
+export function buildConnectedMeasurementPointsQueryForTests(
+  factoryIds: string[],
+  eligibleFactoryIds: number[],
+): Knex.QueryBuilder<CurrentFactoryMeasurementPointRow, CurrentFactoryMeasurementPointRow[]> {
+  return buildConnectedMeasurementPointsQuery(factoryIds, eligibleFactoryIds);
+}
+
 export function buildDirectConnectionFactoryQueryForTests(
   input: { factoryId: string; factoryRegistrationNo: string },
   access: FactoryAccess,
@@ -1354,6 +1386,74 @@ function buildFactoriesForAccessQuery(
   applyFactoryRegionalAccessFilter(builder, access.regionalAccess);
 
   return builder as unknown as Knex.QueryBuilder<FactoryRow, FactoryRow[]>;
+}
+
+function buildConnectedFactoriesForAccessQuery(
+  access: FactoryAccess,
+): Knex.QueryBuilder<FactoryRow, FactoryRow[]> {
+  const builder = db<FactoryRow>('eligible_factories as ef')
+    .leftJoin('factories as f', function joinFactoryMaster() {
+      this.on(function joinFactoryKeys() {
+        this.on('f.code', '=', 'ef.factory_registration_no_new')
+          .orOn('f.fid', '=', 'ef.factory_registration_no_new')
+          .orOn('f.fid', '=', 'ef.source_factory_id')
+          .orOn('f.code', '=', 'ef.source_factory_id');
+      }).andOnNull('f.deleted_at');
+    })
+    .leftJoin('provinces as p', 'p.name_th', 'ef.province_name')
+    .leftJoin('industrial_estates as ie', 'ie.id', 'f.industrial_estate_id')
+    .whereNull('ef.deleted_at')
+    .whereExists(function activeConnectedPomsPoint() {
+      this.select(db.raw('1'))
+        .from('cems_wpms_connected_measurement_points as cp')
+        .whereRaw('cp.eligible_factory_id = ef.id')
+        .whereNull('cp.deleted_at');
+    })
+    .select(
+      'f.id',
+      db.raw('COALESCE(f.fid, ef.factory_registration_no_new) as fid'),
+      db.raw('COALESCE(f.code, ef.factory_registration_no_new) as code'),
+      db.raw('COALESCE(f.name, ef.factory_name) as name'),
+      'f.system_detail',
+      db.raw('COALESCE(f.is_active, 1) as is_active'),
+      'p.id as province_id',
+      'p.region as province_region',
+      'p.name_th as province_name',
+      'ie.code as industrial_estate_code',
+      db.raw('COALESCE(ie.name_th, ef.industrial_estate_name) as industrial_estate_name'),
+      'ef.factory_registration_no_old',
+      'ef.factory_type_sequence',
+      'ef.address',
+      'ef.latitude',
+      'ef.longitude',
+      'ef.business_activity',
+      'ef.has_eia',
+      'ef.id as eligible_factory_id',
+    )
+    .orderBy('ef.factory_name', 'asc')
+    .orderBy('ef.id', 'asc');
+
+  if (requiresAssignedFactoryAccess(access.scope)) {
+    applyAssignedFactoryAccessFilter(builder, access.actorUserId);
+  }
+  applyFactoryPermissionLocationFilter(builder, access.scope);
+  applyFactoryRegionalAccessFilter(builder, access.regionalAccess);
+
+  return builder as unknown as Knex.QueryBuilder<FactoryRow, FactoryRow[]>;
+}
+
+function buildConnectedFactoryGeneralForAccessQuery(
+  factoryId: string,
+  access: FactoryAccess,
+): Knex.QueryBuilder<FactoryRow, FactoryRow[]> {
+  return buildConnectedFactoriesForAccessQuery(access).where((identifierBuilder) => {
+    identifierBuilder
+      .where('ef.source_factory_id', factoryId)
+      .orWhere('ef.factory_registration_no_new', factoryId)
+      .orWhere('ef.factory_registration_no_old', factoryId)
+      .orWhere('f.fid', factoryId)
+      .orWhere('f.code', factoryId);
+  });
 }
 
 function buildDirectConnectionFactoryQuery(
@@ -1644,7 +1744,8 @@ function toFactorySummaryDTO(row: FactoryRow): FactorySummaryDTO {
   const isEligible = row.eligible_factory_id !== null && row.eligible_factory_id !== undefined;
   const industrialArea = toIndustrialArea(row.industrial_estate_code, row.industrial_estate_name);
   return {
-    id: Number(row.id),
+    id: row.id === null ? null : Number(row.id),
+    eligibleFactoryId: toNullableNumber(row.eligible_factory_id),
     factoryId: row.fid,
     factoryName: row.name,
     newRegistrationNo: row.code,
@@ -1734,6 +1835,36 @@ function toFactoryGeneralDTO(row: FactoryGeneralRow): FactoryGeneralDTO {
       factoryId: row.fid,
       factoryName: row.name,
       factoryRegistrationNo: row.code,
+    },
+  };
+}
+
+function toConnectedFactoryGeneralDTO(row: FactoryRow): FactoryGeneralDTO {
+  const summary = toFactorySummaryDTO(row);
+  return {
+    ...summary,
+    eligibleFactoryId: summary.eligibleFactoryId ?? null,
+    juristicId: null,
+    juristicName: null,
+    industrialEstateName: summary.industrialEstateName ?? null,
+    systemId: null,
+    systemDetail: summary.industryType,
+    verifyStatus: null,
+    authorizeStart: null,
+    authorizeEnd: null,
+    operationStatus: null,
+    capitalAmount: null,
+    machineryHorsepower: null,
+    productionCapacity: null,
+    wastewaterDischargeInfo: null,
+    boilerCount: null,
+    boilerSizeEach: null,
+    fuelUsed: null,
+    hasEia: summary.hasEia ?? null,
+    formDefaults: {
+      factoryId: summary.factoryId,
+      factoryName: summary.factoryName,
+      factoryRegistrationNo: summary.newRegistrationNo,
     },
   };
 }
@@ -2647,6 +2778,34 @@ function parseParameters(value: string): string[] {
   } catch {
     return [];
   }
+}
+
+function applyConnectedFactoryLookup(
+  query: Knex.QueryBuilder,
+  factoryIds: string[],
+  eligibleFactoryIds: number[],
+): void {
+  query.where((lookupBuilder) => {
+    if (factoryIds.length > 0) lookupBuilder.whereIn('factory_id', factoryIds);
+    if (eligibleFactoryIds.length > 0) {
+      if (factoryIds.length > 0) {
+        lookupBuilder.orWhereIn('eligible_factory_id', eligibleFactoryIds);
+      } else {
+        lookupBuilder.whereIn('eligible_factory_id', eligibleFactoryIds);
+      }
+    }
+  });
+}
+
+function buildConnectedMeasurementPointsQuery(
+  factoryIds: string[],
+  eligibleFactoryIds: number[],
+): Knex.QueryBuilder<CurrentFactoryMeasurementPointRow, CurrentFactoryMeasurementPointRow[]> {
+  const query = db<CurrentFactoryMeasurementPointRow>(
+    'cems_wpms_connected_measurement_points',
+  ).whereNull('deleted_at');
+  applyConnectedFactoryLookup(query, factoryIds, eligibleFactoryIds);
+  return query;
 }
 
 function parseJsonObject<T extends object = MeasurementPointDetailsInput>(

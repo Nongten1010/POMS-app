@@ -317,6 +317,7 @@ export interface PaginatedConnectionRequestsDTO {
 
 export interface FactorySummaryDTO {
   id: number | null;
+  eligibleFactoryId?: number | null;
   factoryId: string;
   factoryName: string;
   newRegistrationNo: string;
@@ -478,6 +479,7 @@ export type PublicFactoryMapMeasurementPointDTO = Omit<OperatorFactoryMeasuremen
 
 export interface CurrentFactoryMeasurementPointDTO extends OperatorFactoryMeasurementPointDTO {
   factoryId: string;
+  eligibleFactoryId?: number | null;
   factoryLogo?: RequestDocumentImageInput | null;
   documentsAndImages?: RequestDocumentImageInput[];
 }
