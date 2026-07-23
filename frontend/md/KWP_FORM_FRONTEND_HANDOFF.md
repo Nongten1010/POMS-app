@@ -532,3 +532,337 @@ Field ที่ backend ควรพิจารณา:
 - `cemsBrand`
 - `calibrationItems[].verifierCompany`
 - attachment file size policy ของ กวภ.05 ควรสอดคล้องกับ 10 MB
+
+---
+
+# KWP01 connected measurement point prefill fields
+
+เอกสารส่วนนี้บันทึก field ที่ frontend ต้องการให้ backend เพิ่มใน API จุดตรวจวัด เพื่อ prefill แบบ **กวภ.01** ในหน้า **แจ้งแบบ กวภ.01 - กวภ.05**
+
+## API ที่เกี่ยวข้อง
+
+```http
+GET /api/v1/connected-measurement-points/factories/:factoryId
+```
+
+## Scope ที่ต้องการ
+
+- ใช้กับ flow สร้าง e-form ใหม่จากตาราง `รายชื่อโรงงาน`
+- เมื่อผู้ใช้เลือกโรงงาน แล้วเลือกจุดตรวจวัด จากนั้นเปิดแบบ **กวภ.01**
+- ข้อมูลจาก response ของ API นี้ควรช่วย prefill ช่องใน section `ข้อมูลจุดตรวจวัด`
+
+## Field ที่ต้องการเพิ่มใน response
+
+| Response field | ช่องใน e-form กวภ.01 | หมายเหตุ |
+| --- | --- | --- |
+| `productionStack` | `ปล่องจากกระบวนการผลิต` | ควรเป็น string หรือ null |
+| `combustionSystem` | `ระบบการเผาไหม้เชื้อเพลิง` | ควรเป็น `ระบบปิด`, `ระบบเปิด`, หรือ null |
+| `productionCapacity` | `กำลังการผลิตของหน่วยการผลิต` | ควรเป็น string หรือ null |
+| `productionCapacityUnit` | `หน่วยของกำลังการผลิต` | ควรเป็น string หรือ null |
+
+## Field ที่ API มีใช้งานแล้วใน frontend
+
+ข้อมูลที่ frontend ใช้จาก API นี้อยู่แล้ว:
+
+- `pointCode` -> `รหัสจุดตรวจวัด`
+- `pointName` -> `ชื่อจุดตรวจวัด`
+- `pointType`
+- `parameterDetails` -> option ของ `รายการตรวจวัด (พารามิเตอร์) ที่ไม่สามารถรายงานผลได้`
+- `primaryFuel` -> `เชื้อเพลิงหลัก`
+- `secondaryFuel` -> `เชื้อเพลิงสำรอง`
+
+## ตัวอย่าง response shape ที่ต้องการ
+
+```json
+{
+  "pointCode": "S0001",
+  "pointName": "ปล่องระบาย A",
+  "pointType": "CEMS",
+  "parameterDetails": ["NOx (ppm)", "SO2 (ppm)"],
+  "primaryFuel": "ก๊าซธรรมชาติ",
+  "secondaryFuel": "น้ำมันเตา",
+  "productionStack": "ปล่องจากหม้อไอน้ำ",
+  "combustionSystem": "ระบบปิด",
+  "productionCapacity": "100",
+  "productionCapacityUnit": "ตัน/วัน"
+}
+```
+
+## API impact
+
+- เป็นการเพิ่ม field ใน response ของ `GET /api/v1/connected-measurement-points/factories/:factoryId`
+- ไม่ควร breaking change กับ frontend เดิม เพราะเป็น optional response field
+- เมื่อ backend เพิ่ม field แล้ว frontend จะสามารถนำไป prefill ช่อง กวภ.01 ได้ครบขึ้น
+
+---
+
+# KWP05 CEMS brand/model prefill source
+
+เอกสารส่วนนี้บันทึก field ที่ frontend ต้องการให้ backend เตรียมข้อมูลสำหรับช่อง **ยี่ห้อ/รุ่นของ CEMS** ในแบบ **กวภ.05**
+
+## ช่องที่ต้องการ prefill
+
+- แบบฟอร์ม: **กวภ.05**
+- Dialog: `เพิ่มรายการผลการสอบเทียบหรือทวนสอบ CEMS` / `แก้ไขรายการผลการสอบเทียบหรือทวนสอบ CEMS`
+- Field ใน e-form: `ยี่ห้อ/รุ่นของ CEMS`
+- Field ใน frontend row state ปัจจุบัน: `cemsModel`
+
+## Source data ที่ต้องการให้ backend ใช้
+
+ให้ใช้ข้อมูลจากช่อง **ยี่ห้อเครื่องมือ** ใน dialog **จัดการข้อมูลเครื่องมือตรวจวัด** ของหน้าขอเชื่อมต่อ
+
+Source path ที่อ้างอิง:
+
+```text
+measurementPoints.measurementInstruments.parameters.brand
+```
+
+## Field ที่ต้องการเพิ่ม/คืนใน response
+
+แนะนำให้ backend คืน field สำหรับ frontend ใช้ prefill เช่น:
+
+| Response field | ช่องใน e-form กวภ.05 | Source |
+| --- | --- | --- |
+| `cemsModel` | `ยี่ห้อ/รุ่นของ CEMS` | `measurementPoints.measurementInstruments.parameters.brand` |
+
+## หมายเหตุการ map ข้อมูล
+
+- ถ้าในหนึ่งจุดตรวจวัดมีหลาย parameter และ brand เหมือนกัน ให้คืนค่า brand เดียว
+- ถ้ามีหลาย brand ให้ backend พิจารณา format ที่เหมาะสม เช่น join ด้วย `, ` หรือแยกเป็นรายการตาม parameter
+- ถ้าไม่มีค่า brand ให้คืน `null` หรือ string ว่างตาม contract ที่ backend กำหนด
+- Frontend change รอบนี้เป็นการบันทึก requirement ให้ backend ก่อน ยังไม่ได้เปลี่ยน payload contract
+
+---
+
+# CEMS connected point API response and KWP payload summary
+
+เอกสารส่วนนี้สรุป API จุดตรวจวัดสำหรับ **CEMS** และ inventory payload ที่แต่ละแบบ กวภ.01 - กวภ.05 ควรมี เพื่อให้ backend ใช้ตรวจ contract/validation ต่อ
+
+## API สำหรับ CEMS ที่เกี่ยวข้อง
+
+```http
+GET /api/v1/connected-measurement-points/factories/:factoryId
+```
+
+API นี้ใช้ตอน frontend โหลดข้อมูลจุดตรวจวัดของโรงงาน เพื่อเลือกจุดตรวจวัดและ prefill ข้อมูลใน e-form กวภ.
+
+## Response เดิมที่ frontend ใช้อยู่
+
+รายการ field เดิมที่ frontend ใช้จาก response จุดตรวจวัด CEMS:
+
+| Field | ใช้กับช่อง/ส่วนไหน |
+| --- | --- |
+| `id` หรือ `connectedPointId` | อ้างอิงจุดตรวจวัดที่เลือก |
+| `pointCode` | `รหัสจุดตรวจวัด` |
+| `pointName` | `ชื่อจุดตรวจวัด` |
+| `pointType` | ประเภทจุดตรวจวัด เช่น CEMS/WPMS |
+| `parameterDetails` | ตัวเลือก/รายการพารามิเตอร์ของจุดตรวจวัด |
+| `primaryFuel` | `เชื้อเพลิงหลัก` |
+| `secondaryFuel` | `เชื้อเพลิงสำรอง` |
+| `details` | raw detail object สำหรับข้อมูลประกอบที่ backend ส่งมา |
+
+## Response ใหม่ที่ต้องการเพิ่มสำหรับ CEMS
+
+รายการ field ที่ต้องการให้ backend เพิ่มใน response เพื่อให้ frontend prefill แบบ กวภ. ได้ครบขึ้น:
+
+| Field ใหม่ | ใช้กับช่อง | หมายเหตุ |
+| --- | --- | --- |
+| `productionStack` | `ปล่องจากกระบวนการผลิต` | ใช้ใน กวภ.01 |
+| `combustionSystem` | `ระบบการเผาไหม้เชื้อเพลิง` | ใช้ใน กวภ.01 |
+| `productionCapacity` | `กำลังการผลิตของหน่วยการผลิต` | ใช้ใน กวภ.01 |
+| `productionCapacityUnit` | `หน่วยของกำลังการผลิต` | ใช้ใน กวภ.01 |
+| `cemsModel` | `ยี่ห้อ/รุ่นของ CEMS` | ใช้ใน กวภ.05, source จาก `measurementPoints.measurementInstruments.parameters.brand` |
+
+แนะนำให้ field ใหม่เป็น optional หรือ nullable เพื่อไม่กระทบข้อมูลเก่าที่ยังไม่มีค่า
+
+## Payload กลางที่ควรมีในทุกแบบฟอร์ม
+
+ทุกแบบ กวภ.01 - กวภ.05 ควรมีข้อมูลอ้างอิงโรงงาน/จุดตรวจวัด/ผู้จัดทำรายงานชุดเดียวกัน:
+
+```json
+{
+  "factoryId": "string | number",
+  "factoryName": "string",
+  "factoryRegistrationNo": "string",
+  "factoryAddress": "string",
+  "industryType": "string",
+  "connectedPointId": "string | number",
+  "pointCode": "string",
+  "pointName": "string",
+  "pointType": "CEMS | WPMS",
+  "productionStack": "string",
+  "primaryFuel": "string",
+  "secondaryFuel": "string",
+  "combustionSystem": "string",
+  "productionCapacity": "string | number",
+  "productionCapacityUnit": "string",
+  "contactName": "string",
+  "contactPhone": "string",
+  "contactEmail": "string",
+  "reporterName": "string",
+  "reporterPosition": "string"
+}
+```
+
+## Payload กวภ.01
+
+แบบ กวภ.01 ควรมี payload เพิ่มจาก payload กลาง:
+
+```json
+{
+  "issueReason": "string",
+  "reasonDetail": "string",
+  "problemDate": "ISO datetime string",
+  "expectedDoneDate": "ISO datetime string",
+  "durationText": "string",
+  "totalHours": "number",
+  "unreportedParameters": ["string"],
+  "correctiveAction": "string"
+}
+```
+
+หมายเหตุ:
+
+- ช่องวัน/เดือน/ปีใน กวภ.01 เลือกชั่วโมงได้แล้ว แต่ไม่เลือกนาที
+- ระยะเวลาควรรองรับหน่วยชั่วโมง เช่น `3 วัน 22 ชั่วโมง` หรือ `21 ชั่วโมง`
+
+## Payload กวภ.02
+
+แบบ กวภ.02 ควรมี payload เพิ่มจาก payload กลาง:
+
+```json
+{
+  "measurementItems": [
+    {
+      "pollutant": "string",
+      "sampleDate": "ISO date/datetime string",
+      "measuredValue": "string | number",
+      "unit": "string",
+      "laboratoryNo": "string",
+      "reportNo": "string",
+      "method": "string",
+      "attachments": [
+        {
+          "fileName": "string",
+          "fileUrl": "string",
+          "fileType": "string"
+        }
+      ]
+    }
+  ]
+}
+```
+
+หมายเหตุ:
+
+- `method` มาจาก dropdown วิธีการตรวจวัดวิเคราะห์
+- ตัวเลือก `method` ต้องสัมพันธ์กับ `pollutant` โดยไม่สนใจหน่วย เช่น `CO (ppm)` และ `CO (%)` ใช้ชุดตัวเลือกเดียวกับ `CO`
+
+## Payload กวภ.03
+
+แบบ กวภ.03 ควรมี payload เพิ่มจาก payload กลาง:
+
+```json
+{
+  "instruments": ["string"],
+  "wastewaterSource": "string",
+  "receivingSource": "string",
+  "treatmentSystemType": "string",
+  "dischargePoint": "string",
+  "averageDischarge": "string | number",
+  "minimumDischarge": "string | number",
+  "maximumDischarge": "string | number",
+  "issueReasons": ["string"],
+  "reasonDetail": "string",
+  "problemDate": "ISO datetime string",
+  "expectedDoneDate": "ISO datetime string",
+  "durationText": "string",
+  "totalHours": "number",
+  "failedParameters": ["string"],
+  "correctiveAction": "string",
+  "attachments": [
+    {
+      "fileName": "string",
+      "fileUrl": "string",
+      "fileType": "string"
+    }
+  ]
+}
+```
+
+หมายเหตุ:
+
+- Frontend ตัดช่อง `เวลาเครื่องตรวจวัด` ออกจาก e-form กวภ.03 แล้ว
+- ถ้า backend ยังต้องการ field เวลาเดิม ให้กำหนด contract ใหม่ให้ชัดเจนอีกครั้ง
+
+## Payload กวภ.04
+
+แบบ กวภ.04 ใช้โครงสร้างใกล้กับ กวภ.02:
+
+```json
+{
+  "measurementItems": [
+    {
+      "pollutant": "string",
+      "sampleDate": "ISO date/datetime string",
+      "measuredValue": "string | number",
+      "unit": "string",
+      "laboratoryNo": "string",
+      "reportNo": "string",
+      "method": "string",
+      "attachments": [
+        {
+          "fileName": "string",
+          "fileUrl": "string",
+          "fileType": "string"
+        }
+      ]
+    }
+  ]
+}
+```
+
+หมายเหตุ:
+
+- `method` ใช้ option mapping ชุดเดียวกับ กวภ.02
+
+## Payload กวภ.05
+
+แบบ กวภ.05 ควรมี payload เพิ่มจาก payload กลาง:
+
+```json
+{
+  "businessActivity": "string",
+  "samplerName": "string",
+  "officerRegistration": "string",
+  "laboratoryName": "string",
+  "laboratoryRegistration": "string",
+  "cemsDetail": "string",
+  "reportRound": "string | number",
+  "reportYear": "string | number",
+  "calibrationItems": [
+    {
+      "parameter": "string",
+      "startDate": "ISO date/datetime string",
+      "endDate": "ISO date/datetime string",
+      "result": "string",
+      "cemsModel": "string",
+      "rataReportLink": "string",
+      "calibrationPhotoLink": "string",
+      "attachments": [
+        {
+          "fileName": "string",
+          "fileUrl": "string",
+          "fileType": "string"
+        }
+      ]
+    }
+  ]
+}
+```
+
+หมายเหตุ:
+
+- Frontend ตัดช่อง `ยี่ห้อ (Brand)` ออกจาก e-form กวภ.05 แล้ว จึงไม่ควรบังคับ field `cemsBrand` ใน payload
+- Frontend ตัดช่อง `บริษัทที่ทำการทวนสอบ / สอบเทียบ` ออกจาก dialog แล้ว จึงไม่ควรบังคับ field `calibrationItems[].verifierCompany`
+- `calibrationItems[].cemsModel` ควรใช้ค่าจาก `cemsModel` ที่ backend เพิ่มใน response จุดตรวจวัด CEMS
