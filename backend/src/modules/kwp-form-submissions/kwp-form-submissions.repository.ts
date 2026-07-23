@@ -8,6 +8,7 @@ import {
 import { db } from '../../config/database';
 import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
 import { buildPublicFileUrl } from './kwp-form-attachments.service';
+import { isHourlyKwpFormDateTime, toKwpFormDateOnly } from './kwp-form-duration';
 import type {
   CreatedKwpFormSubmissionDTO,
   CreateKwp01SubmissionDTO,
@@ -155,7 +156,10 @@ interface Kwp01IssueReportRow {
   reason_detail: string | null;
   problem_date: Date | string | null;
   expected_done_date: Date | string | null;
+  problem_datetime: string | null;
+  expected_done_datetime: string | null;
   total_days: number | string | null;
+  total_hours: number | string | null;
   corrective_action: string | null;
 }
 
@@ -187,7 +191,10 @@ interface Kwp03WpmsIssueReportRow {
   reason_detail: string | null;
   problem_date: Date | string | null;
   expected_done_date: Date | string | null;
+  problem_datetime: string | null;
+  expected_done_datetime: string | null;
   total_days: number | string | null;
+  total_hours: number | string | null;
   corrective_action: string | null;
 }
 
@@ -946,6 +953,10 @@ export function buildKwpFormEditableSubmissionQueryForTests(
   return buildEditableSubmissionQuery(id, access);
 }
 
+export function buildKwpCivilDateTimeSelectForTests(column: string): Knex.Raw {
+  return buildKwpCivilDateTimeSelect(column);
+}
+
 export function toKwp01InsertRecordsForTests(input: Kwp01InsertInput): Kwp01InsertRecords {
   return toKwp01InsertRecords(input);
 }
@@ -1111,16 +1122,19 @@ function applySubmissionReadAccessFilter(
 }
 
 async function getKwp01IssueReport(submissionId: number) {
-  const issueReport = await db<Kwp01IssueReportRow>('kwp01_issue_reports')
+  const issueReport = (await db<Kwp01IssueReportRow>('kwp01_issue_reports')
     .where('submission_id', submissionId)
     .first(
       'issue_reason',
       'reason_detail',
       'problem_date',
       'expected_done_date',
+      buildKwpCivilDateTimeSelect('problem_datetime'),
+      buildKwpCivilDateTimeSelect('expected_done_datetime'),
       'total_days',
+      'total_hours',
       'corrective_action',
-    );
+    )) as Kwp01IssueReportRow | undefined;
 
   const parameterRows = await db<Kwp01UnreportedParameterRow>('kwp01_unreported_parameters')
     .where('submission_id', submissionId)
@@ -1135,6 +1149,7 @@ async function getKwp01IssueReport(submissionId: number) {
       problemDate: null,
       expectedDoneDate: null,
       totalDays: null,
+      totalHours: null,
       correctiveAction: null,
       unreportedParameters: parameterRows.map((row) => row.parameter_name),
     };
@@ -1148,9 +1163,13 @@ async function getKwp01IssueReport(submissionId: number) {
   return {
     issueReason,
     reasonDetail: issueReport.reason_detail,
-    problemDate: toDateOnly(issueReport.problem_date),
-    expectedDoneDate: toDateOnly(issueReport.expected_done_date),
+    problemDate:
+      toKwpHourDateTime(issueReport.problem_datetime) ?? toDateOnly(issueReport.problem_date),
+    expectedDoneDate:
+      toKwpHourDateTime(issueReport.expected_done_datetime) ??
+      toDateOnly(issueReport.expected_done_date),
     totalDays: issueReport.total_days === null ? null : Number(issueReport.total_days),
+    totalHours: issueReport.total_hours === null ? null : Number(issueReport.total_hours),
     correctiveAction: issueReport.corrective_action,
     unreportedParameters: parameterRows.map((row) => row.parameter_name),
   };
@@ -1199,7 +1218,7 @@ async function getKwp03WpmsIssueReport(
   submissionId: number,
   access: KwpFormSubmissionReadAccess,
 ): Promise<Kwp03WpmsIssueReportDTO> {
-  const row = await db<Kwp03WpmsIssueReportRow>('kwp03_wpms_issue_reports')
+  const row = (await db<Kwp03WpmsIssueReportRow>('kwp03_wpms_issue_reports')
     .where('submission_id', submissionId)
     .first(
       'id',
@@ -1213,9 +1232,12 @@ async function getKwp03WpmsIssueReport(
       'reason_detail',
       'problem_date',
       'expected_done_date',
+      buildKwpCivilDateTimeSelect('problem_datetime'),
+      buildKwpCivilDateTimeSelect('expected_done_datetime'),
       'total_days',
+      'total_hours',
       'corrective_action',
-    );
+    )) as Kwp03WpmsIssueReportRow | undefined;
   const optionRows = await db<Kwp03SelectedOptionRow>('kwp03_selected_options')
     .where('submission_id', submissionId)
     .orderBy('option_group', 'asc')
@@ -1240,10 +1262,15 @@ async function getKwp03WpmsIssueReport(
     minimumDischarge: decimalText(row?.minimum_discharge ?? null),
     maximumDischarge: decimalText(row?.maximum_discharge ?? null),
     reasonDetail: row?.reason_detail ?? null,
-    problemDate: toDateOnly(row?.problem_date ?? null),
-    expectedDoneDate: toDateOnly(row?.expected_done_date ?? null),
+    problemDate:
+      toKwpHourDateTime(row?.problem_datetime ?? null) ?? toDateOnly(row?.problem_date ?? null),
+    expectedDoneDate:
+      toKwpHourDateTime(row?.expected_done_datetime ?? null) ??
+      toDateOnly(row?.expected_done_date ?? null),
     totalDays:
       row?.total_days === null || row?.total_days === undefined ? null : Number(row.total_days),
+    totalHours:
+      row?.total_hours === null || row?.total_hours === undefined ? null : Number(row.total_hours),
     correctiveAction: row?.corrective_action ?? null,
     instruments: optionsByGroup.INSTRUMENT,
     measurementTimes: optionsByGroup.MEASUREMENT_TIME,
@@ -1549,11 +1576,23 @@ function toIsoString(value: Date | string | null): string | null {
   return Number.isNaN(date.getTime()) ? String(value) : date.toISOString();
 }
 
+function buildKwpCivilDateTimeSelect(column: string): Knex.Raw {
+  // DATETIME2 stores Bangkok civil time without an offset. Format it in SQL so the
+  // driver cannot shift the wall-clock hour while materializing a JavaScript Date.
+  return db.raw('CONVERT(VARCHAR(19), ??, 126) AS ??', [column, column]);
+}
+
 function toDateOnly(value: Date | string | null): string | null {
   if (value === null) return null;
   if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
   const iso = toIsoString(value);
   return iso ? iso.slice(0, 10) : null;
+}
+
+function toKwpHourDateTime(value: string | null): string | null {
+  if (value === null) return null;
+  const match = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}):(\d{2}):(\d{2})/.exec(value);
+  return match ? `${match[1]}T${match[2]}:${match[3]}:${match[4]}` : null;
 }
 
 async function nextSubmissionNo(trx: Knex.Transaction, now: Date): Promise<string> {
@@ -1576,9 +1615,14 @@ function toKwp01InsertRecords(input: Kwp01InsertInput): Kwp01InsertRecords {
     issueReport: {
       issue_reason: payload.issueReason,
       reason_detail: payload.reasonDetail ?? null,
-      problem_date: payload.problemDate ?? null,
-      expected_done_date: payload.expectedDoneDate ?? null,
+      problem_date: toKwpFormDateOnly(payload.problemDate),
+      expected_done_date: toKwpFormDateOnly(payload.expectedDoneDate),
+      problem_datetime: isHourlyKwpFormDateTime(payload.problemDate) ? payload.problemDate : null,
+      expected_done_datetime: isHourlyKwpFormDateTime(payload.expectedDoneDate)
+        ? payload.expectedDoneDate
+        : null,
       total_days: payload.totalDays ?? null,
+      total_hours: payload.totalHours ?? null,
       corrective_action: payload.correctiveAction ?? null,
     },
     unreportedParameters: payload.unreportedParameters.map((parameterName, index) => ({
@@ -1670,9 +1714,14 @@ function toKwp03InsertRecords(input: Kwp03InsertInput): Kwp03InsertRecords {
       minimum_discharge: decimalValue(payload.minimumDischarge),
       maximum_discharge: decimalValue(payload.maximumDischarge),
       reason_detail: payload.reasonDetail ?? null,
-      problem_date: payload.problemDate ?? null,
-      expected_done_date: payload.expectedDoneDate ?? null,
+      problem_date: toKwpFormDateOnly(payload.problemDate),
+      expected_done_date: toKwpFormDateOnly(payload.expectedDoneDate),
+      problem_datetime: isHourlyKwpFormDateTime(payload.problemDate) ? payload.problemDate : null,
+      expected_done_datetime: isHourlyKwpFormDateTime(payload.expectedDoneDate)
+        ? payload.expectedDoneDate
+        : null,
       total_days: payload.totalDays ?? null,
+      total_hours: payload.totalHours ?? null,
       corrective_action: payload.correctiveAction ?? null,
     },
     selectedOptions,

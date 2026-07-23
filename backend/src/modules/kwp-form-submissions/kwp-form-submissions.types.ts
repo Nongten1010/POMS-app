@@ -100,6 +100,7 @@ export interface CreateKwp01SubmissionDTO {
   problemDate?: string | null;
   expectedDoneDate?: string | null;
   totalDays?: number | null;
+  totalHours?: number | null;
   unreportedParameters: string[];
   correctiveAction?: string | null;
   reporterName?: string | null;
@@ -185,6 +186,7 @@ export interface CreateKwp03SubmissionDTO {
   problemDate?: string | null;
   expectedDoneDate?: string | null;
   totalDays?: number | null;
+  totalHours?: number | null;
   failedParameters: string[];
   correctiveAction?: string | null;
   attachments?: KwpFormAttachmentInput[];
@@ -281,6 +283,7 @@ export interface Kwp01IssueReportDTO {
   problemDate: string | null;
   expectedDoneDate: string | null;
   totalDays: number | null;
+  totalHours: number | null;
   correctiveAction: string | null;
   unreportedParameters: string[];
 }
@@ -322,6 +325,7 @@ export interface Kwp03WpmsIssueReportDTO {
   problemDate: string | null;
   expectedDoneDate: string | null;
   totalDays: number | null;
+  totalHours: number | null;
   correctiveAction: string | null;
   instruments: string[];
   measurementTimes: string[];

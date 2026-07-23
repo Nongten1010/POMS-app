@@ -121,6 +121,7 @@ export const kwpFormSubmissionsController = {
         publicBaseUrl: getPublicBaseUrl(req),
       });
       const data = await storage.save({
+        attachmentType: optionalAttachmentType(req.body?.attachmentType),
         buffer: req.file.buffer,
         originalName: req.file.originalname,
         mimeType: req.file.mimetype,
@@ -345,4 +346,16 @@ function requireActorUserId(req: Request): number {
 function getPublicBaseUrl(req: Request): string {
   if (env.PUBLIC_BASE_URL) return env.PUBLIC_BASE_URL;
   return `${req.protocol}://${req.get('host')}`;
+}
+
+function optionalAttachmentType(value: unknown): string | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (typeof value !== 'string') {
+    throw new BadRequestError('Attachment type must be a string');
+  }
+  const attachmentType = value.trim();
+  if (!attachmentType || attachmentType.length > 64) {
+    throw new BadRequestError('Attachment type must contain between 1 and 64 characters');
+  }
+  return attachmentType;
 }

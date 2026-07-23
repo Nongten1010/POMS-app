@@ -1,6 +1,7 @@
 import { describe, expect, it } from '@jest/globals';
 import { buildPublicFileUrl } from '../../src/modules/kwp-form-submissions/kwp-form-attachments.service';
 import {
+  buildKwpCivilDateTimeSelectForTests,
   buildKwpFormSubmissionDetailQueryForTests,
   buildKwpFormEditableSubmissionQueryForTests,
   buildKwpFormSubmissionFactoryAccessQueryForTests,
@@ -14,6 +15,12 @@ import {
 } from '../../src/modules/kwp-form-submissions/kwp-form-submissions.repository';
 
 describe('kwpFormSubmissionsRepository', () => {
+  it('reads KWP DATETIME2 values as civil-time strings without timezone conversion', () => {
+    const sql = buildKwpCivilDateTimeSelectForTests('problem_datetime').toSQL().sql.toLowerCase();
+
+    expect(sql).toContain('convert(varchar(19), [problem_datetime], 126) as [problem_datetime]');
+  });
+
   it('builds public file URLs from relative storage paths', () => {
     expect(
       buildPublicFileUrl(
@@ -245,9 +252,10 @@ describe('kwpFormSubmissionsRepository', () => {
         contactEmail: 'operator@example.com',
         issueReason: 'เครื่องมือหรือเครื่องอุปกรณ์พิเศษขัดข้อง',
         reasonDetail: 'เครื่องวิเคราะห์ก๊าซไม่สามารถส่งข้อมูลได้',
-        problemDate: '2026-07-01',
-        expectedDoneDate: '2026-07-05',
+        problemDate: '2026-07-01T08:00:00',
+        expectedDoneDate: '2026-07-05T06:00:00',
         totalDays: 5,
+        totalHours: 94,
         unreportedParameters: ['NOx (ppm)', 'SO2 (ppm)'],
         correctiveAction: 'ซ่อมบำรุงเครื่องมือ',
         reporterName: 'สมชาย ทดสอบ',
@@ -268,7 +276,12 @@ describe('kwpFormSubmissionsRepository', () => {
     });
     expect(records.issueReport).toMatchObject({
       issue_reason: 'เครื่องมือหรือเครื่องอุปกรณ์พิเศษขัดข้อง',
+      problem_date: '2026-07-01',
+      expected_done_date: '2026-07-05',
+      problem_datetime: '2026-07-01T08:00:00',
+      expected_done_datetime: '2026-07-05T06:00:00',
       total_days: 5,
+      total_hours: 94,
     });
     expect(records.unreportedParameters).toEqual([
       { parameter_name: 'NOx (ppm)', sort_order: 1 },
@@ -506,9 +519,10 @@ describe('kwpFormSubmissionsRepository', () => {
           'ระบบรับส่งข้อมูล ระบบไฟฟ้า อินเทอร์เน็ต ขัดข้อง',
         ],
         reasonDetail: 'สัญญาณเครือข่ายขัดข้องและต้องเปลี่ยนอุปกรณ์ตรวจวัด',
-        problemDate: '2026-07-01',
-        expectedDoneDate: '2026-07-05',
+        problemDate: '2026-07-01T08:00:00',
+        expectedDoneDate: '2026-07-05T06:00:00',
         totalDays: 5,
+        totalHours: 94,
         failedParameters: ['BOD (mg/l)', 'COD (mg/l)'],
         correctiveAction: 'เปลี่ยนอุปกรณ์และทดสอบการส่งข้อมูล WPMS',
         attachments: [
@@ -548,7 +562,10 @@ describe('kwpFormSubmissionsRepository', () => {
       reason_detail: 'สัญญาณเครือข่ายขัดข้องและต้องเปลี่ยนอุปกรณ์ตรวจวัด',
       problem_date: '2026-07-01',
       expected_done_date: '2026-07-05',
+      problem_datetime: '2026-07-01T08:00:00',
+      expected_done_datetime: '2026-07-05T06:00:00',
       total_days: 5,
+      total_hours: 94,
       corrective_action: 'เปลี่ยนอุปกรณ์และทดสอบการส่งข้อมูล WPMS',
     });
     expect(records.selectedOptions).toEqual([

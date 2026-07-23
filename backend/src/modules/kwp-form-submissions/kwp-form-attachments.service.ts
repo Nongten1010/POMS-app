@@ -3,8 +3,11 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { BadRequestError } from '../../shared/errors/AppError';
 
-export const MAX_KWP_ATTACHMENT_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+export const DEFAULT_KWP_ATTACHMENT_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+export const KWP05_ATTACHMENT_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+export const MAX_KWP_ATTACHMENT_FILE_SIZE_BYTES = KWP05_ATTACHMENT_FILE_SIZE_BYTES;
 const STORAGE_PREFIX = 'kwp/form-attachments';
+const KWP05_TEN_MEGABYTE_ATTACHMENT_TYPES = new Set(['RATA_REPORT', 'CALIBRATION_PHOTO']);
 
 export const allowedKwpAttachmentFileTypes = new Map([
   ['image/jpeg', new Set(['.jpg', '.jpeg'])],
@@ -13,6 +16,7 @@ export const allowedKwpAttachmentFileTypes = new Map([
 ]);
 
 export interface UploadedKwpAttachmentFile {
+  attachmentType?: string;
   buffer: Buffer;
   originalName: string;
   mimeType: string;
@@ -73,12 +77,12 @@ function validateKwpAttachmentFile(file: UploadedKwpAttachmentFile): void {
     throw new BadRequestError('Uploaded file is empty');
   }
 
-  if (
-    !Number.isInteger(file.size) ||
-    file.size <= 0 ||
-    file.size > MAX_KWP_ATTACHMENT_FILE_SIZE_BYTES
-  ) {
-    throw new BadRequestError('Uploaded file size must be between 1 byte and 5 MB');
+  const maximumFileSize = getKwpAttachmentFileSizeLimit(file.attachmentType);
+  if (!Number.isInteger(file.size) || file.size <= 0 || file.size > maximumFileSize) {
+    const maximumMegabytes = maximumFileSize / (1024 * 1024);
+    throw new BadRequestError(
+      `Uploaded file size must be between 1 byte and ${maximumMegabytes} MB`,
+    );
   }
 
   if (file.buffer.length !== file.size) {
@@ -94,6 +98,31 @@ function validateKwpAttachmentFile(file: UploadedKwpAttachmentFile): void {
   if (!extension || !allowedExtensions.has(extension)) {
     throw new BadRequestError('Unsupported file extension');
   }
+
+  if (!hasMatchingFileSignature(file.buffer, file.mimeType)) {
+    throw new BadRequestError('Uploaded file content does not match its declared type');
+  }
+}
+
+export function getKwpAttachmentFileSizeLimit(attachmentType?: string): number {
+  return attachmentType && KWP05_TEN_MEGABYTE_ATTACHMENT_TYPES.has(attachmentType)
+    ? KWP05_ATTACHMENT_FILE_SIZE_BYTES
+    : DEFAULT_KWP_ATTACHMENT_FILE_SIZE_BYTES;
+}
+
+function hasMatchingFileSignature(buffer: Buffer, mimeType: string): boolean {
+  if (mimeType === 'application/pdf') {
+    return buffer.subarray(0, 5).equals(Buffer.from('%PDF-'));
+  }
+  if (mimeType === 'image/png') {
+    return buffer
+      .subarray(0, 8)
+      .equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  }
+  if (mimeType === 'image/jpeg') {
+    return buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  }
+  return false;
 }
 
 function sanitizeOriginalFileName(value: string): string {

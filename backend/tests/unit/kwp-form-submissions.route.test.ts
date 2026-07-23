@@ -28,7 +28,7 @@ jest.mock('../../src/modules/kwp-form-submissions/kwp-form-submissions.service',
 const mockSaveKwpAttachment = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 
 jest.mock('../../src/modules/kwp-form-submissions/kwp-form-attachments.service', () => ({
-  MAX_KWP_ATTACHMENT_FILE_SIZE_BYTES: 5 * 1024 * 1024,
+  MAX_KWP_ATTACHMENT_FILE_SIZE_BYTES: 10 * 1024 * 1024,
   allowedKwpAttachmentFileTypes: new Map([
     ['image/jpeg', new Set(['.jpg', '.jpeg'])],
     ['image/png', new Set(['.png'])],
@@ -153,6 +153,7 @@ describe('KWP form submission routes', () => {
     const response = await request(app)
       .post('/api/v1/kwp-form-submissions/attachments')
       .set('Authorization', `Bearer ${operatorToken()}`)
+      .field('attachmentType', 'RATA_REPORT')
       .attach('file', Buffer.from('%PDF-1.4'), {
         filename: 'lab-report.pdf',
         contentType: 'application/pdf',
@@ -161,6 +162,7 @@ describe('KWP form submission routes', () => {
     expect(response.status).toBe(201);
     expect(mockSaveKwpAttachment).toHaveBeenCalledWith(
       expect.objectContaining({
+        attachmentType: 'RATA_REPORT',
         originalName: 'lab-report.pdf',
         mimeType: 'application/pdf',
         size: expect.any(Number),
@@ -177,6 +179,29 @@ describe('KWP form submission routes', () => {
         fileUrl: 'http://localhost:3000/uploads/kwp/form-attachments/2026/07/mock-lab-report.pdf',
       },
     });
+  });
+
+  it('allows a KWP05 attachment larger than 5 MB through multipart transport', async () => {
+    const app = createApp();
+    const file = Buffer.alloc(6 * 1024 * 1024, 0x20);
+    file.write('%PDF-1.7\n');
+
+    const response = await request(app)
+      .post('/api/v1/kwp-form-submissions/attachments')
+      .set('Authorization', `Bearer ${operatorToken()}`)
+      .field('attachmentType', 'RATA_REPORT')
+      .attach('file', file, {
+        filename: 'large-rata-report.pdf',
+        contentType: 'application/pdf',
+      });
+
+    expect(response.status).toBe(201);
+    expect(mockSaveKwpAttachment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attachmentType: 'RATA_REPORT',
+        size: file.length,
+      }),
+    );
   });
 
   it('preserves Thai KWP attachment filenames from multipart uploads', async () => {
@@ -242,6 +267,51 @@ describe('KWP form submission routes', () => {
         submittedAt: '2026-07-04T08:00:00.000Z',
       },
     });
+  });
+
+  it('accepts hourly KWP01 datetimes and derives duration on the backend', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .post('/api/v1/kwp-form-submissions/kwp01')
+      .set('Authorization', `Bearer ${operatorToken()}`)
+      .send({
+        ...validKwp01Payload(),
+        problemDate: '2026-07-01T08:00:00',
+        expectedDoneDate: '2026-07-05T06:00:00',
+        totalDays: 1,
+      });
+
+    expect(response.status).toBe(201);
+    expect(mockedService.createKwp01).toHaveBeenCalledWith(
+      expect.objectContaining({
+        problemDate: '2026-07-01T08:00:00',
+        expectedDoneDate: '2026-07-05T06:00:00',
+        totalHours: 94,
+        totalDays: 5,
+      }),
+      {
+        actorUserId: 42,
+        scope: 'OWN_FACTORY',
+      },
+    );
+  });
+
+  it('rejects KWP01 datetimes that are not aligned to the top of the hour', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .post('/api/v1/kwp-form-submissions/kwp01')
+      .set('Authorization', `Bearer ${operatorToken()}`)
+      .send({
+        ...validKwp01Payload(),
+        problemDate: '2026-07-01T08:30:00',
+        expectedDoneDate: '2026-07-05T06:00:00',
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    expect(mockedService.createKwp01).not.toHaveBeenCalled();
   });
 
   it('rejects invalid KWP01 payloads before calling service', async () => {
@@ -755,6 +825,55 @@ describe('KWP form submission routes', () => {
     });
   });
 
+  it('creates KWP03 without the removed measurementTimes field', async () => {
+    const app = createApp();
+    const { measurementTimes: _removedMeasurementTimes, ...payload } = validKwp03Payload();
+
+    const response = await request(app)
+      .post('/api/v1/kwp-form-submissions/kwp03')
+      .set('Authorization', `Bearer ${operatorToken()}`)
+      .send(payload);
+
+    expect(response.status).toBe(201);
+    expect(mockedService.createKwp03).toHaveBeenCalledWith(
+      expect.objectContaining({
+        measurementTimes: [],
+      }),
+      {
+        actorUserId: 42,
+        scope: 'OWN_FACTORY',
+      },
+    );
+  });
+
+  it('accepts hourly KWP03 datetimes and derives duration on the backend', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .post('/api/v1/kwp-form-submissions/kwp03')
+      .set('Authorization', `Bearer ${operatorToken()}`)
+      .send({
+        ...validKwp03Payload(),
+        problemDate: '2026-07-01T08:00:00',
+        expectedDoneDate: '2026-07-05T06:00:00',
+        totalDays: 1,
+      });
+
+    expect(response.status).toBe(201);
+    expect(mockedService.createKwp03).toHaveBeenCalledWith(
+      expect.objectContaining({
+        problemDate: '2026-07-01T08:00:00',
+        expectedDoneDate: '2026-07-05T06:00:00',
+        totalHours: 94,
+        totalDays: 5,
+      }),
+      {
+        actorUserId: 42,
+        scope: 'OWN_FACTORY',
+      },
+    );
+  });
+
   it('rejects KWP03 payloads whose expected done date is before problem date', async () => {
     const app = createApp();
 
@@ -912,6 +1031,24 @@ describe('KWP form submission routes', () => {
         attachmentCount: 4,
       },
     });
+  });
+
+  it('creates KWP05 without the removed cemsBrand and verifierCompany fields', async () => {
+    const app = createApp();
+    const { cemsBrand: _removedCemsBrand, ...payload } = validKwp05Payload();
+    const calibrationItems = payload.calibrationItems.map(
+      ({ verifierCompany: _removedVerifierCompany, ...item }) => item,
+    );
+
+    const response = await request(app)
+      .post('/api/v1/kwp-form-submissions/kwp05')
+      .set('Authorization', `Bearer ${operatorToken()}`)
+      .send({ ...payload, calibrationItems });
+
+    expect(response.status).toBe(201);
+    const submittedPayload = mockedService.createKwp05.mock.calls[0]?.[0];
+    expect(submittedPayload).not.toHaveProperty('cemsBrand');
+    expect(submittedPayload?.calibrationItems[0]).not.toHaveProperty('verifierCompany');
   });
 
   it('rejects KWP05 calibration rows whose end date is before start date', async () => {
@@ -1270,6 +1407,7 @@ function kwp01DetailResponse() {
       problemDate: '2026-07-01',
       expectedDoneDate: '2026-07-05',
       totalDays: 5,
+      totalHours: null,
       correctiveAction: 'ซ่อมบำรุงเครื่องมือและตรวจสอบระบบรับส่งข้อมูล',
       unreportedParameters: ['NOx (ppm)', 'SO2 (ppm)'],
     },
@@ -1339,6 +1477,7 @@ function kwp03DetailResponse() {
       problemDate: '2026-07-01',
       expectedDoneDate: '2026-07-05',
       totalDays: 5,
+      totalHours: null,
       correctiveAction: 'เปลี่ยนอุปกรณ์และทดสอบการส่งข้อมูล WPMS',
       instruments: ['ค่าบีโอดี (BOD)', 'ค่าซีโอดี (COD)'],
       measurementTimes: ['Real Time', '15 นาที'],

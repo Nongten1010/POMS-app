@@ -1,5 +1,10 @@
 import { z } from 'zod';
 import { KWP01_ISSUE_REASONS, KWP03_ISSUE_REASONS } from './kwp-form-submissions.types';
+import {
+  deriveKwpFormDuration,
+  isKwpFormDateRangeOrdered,
+  parseKwpFormDateTime,
+} from './kwp-form-duration';
 
 const emptyStringToNull = (value: unknown) => {
   if (value === undefined || value === null) return value;
@@ -18,6 +23,14 @@ const optionalNullableText = (max: number) =>
     .transform((value) => value ?? null);
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected date format YYYY-MM-DD');
+const kwpDateOrHourDateTime = z.string().superRefine((value, context) => {
+  if (!parseKwpFormDateTime(value)) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Expected YYYY-MM-DD or YYYY-MM-DDTHH:00:00 with a valid date and hour',
+    });
+  }
+});
 
 const commonKwpSubmissionShape = {
   factoryId: requiredText(64),
@@ -106,8 +119,8 @@ export const createKwp01SubmissionSchema = z
     ...commonKwpSubmissionShape,
     issueReason: z.enum(KWP01_ISSUE_REASONS),
     reasonDetail: nullableText(2000),
-    problemDate: z.preprocess(emptyStringToNull, isoDate.nullable().optional()),
-    expectedDoneDate: z.preprocess(emptyStringToNull, isoDate.nullable().optional()),
+    problemDate: z.preprocess(emptyStringToNull, kwpDateOrHourDateTime.nullable().optional()),
+    expectedDoneDate: z.preprocess(emptyStringToNull, kwpDateOrHourDateTime.nullable().optional()),
     totalDays: z.coerce.number().int().min(0).max(366).nullable().optional(),
     unreportedParameters: z
       .array(requiredText(255))
@@ -116,16 +129,14 @@ export const createKwp01SubmissionSchema = z
     correctiveAction: nullableText(2000),
   })
   .strict()
-  .refine(
-    (value) => {
-      if (!value.problemDate || !value.expectedDoneDate) return true;
-      return value.expectedDoneDate >= value.problemDate;
-    },
-    {
-      path: ['expectedDoneDate'],
-      message: 'Expected done date must be on or after problem date',
-    },
-  );
+  .refine((value) => isKwpFormDateRangeOrdered(value.problemDate, value.expectedDoneDate), {
+    path: ['expectedDoneDate'],
+    message: 'Expected done date must be on or after problem date',
+  })
+  .transform((value) => ({
+    ...value,
+    ...deriveKwpFormDuration(value.problemDate, value.expectedDoneDate),
+  }));
 
 export const createKwp02SubmissionSchema = z
   .object({
@@ -146,8 +157,9 @@ export const createKwp03SubmissionSchema = z
       .transform((values) => [...new Set(values)]),
     measurementTimes: z
       .array(requiredText(255))
-      .min(1)
       .max(20)
+      .optional()
+      .default([])
       .transform((values) => [...new Set(values)]),
     wastewaterSource: nullableText(500),
     receivingSource: nullableText(500),
@@ -162,8 +174,8 @@ export const createKwp03SubmissionSchema = z
       .max(KWP03_ISSUE_REASONS.length)
       .transform((values) => [...new Set(values)]),
     reasonDetail: nullableText(2000),
-    problemDate: z.preprocess(emptyStringToNull, isoDate.nullable().optional()),
-    expectedDoneDate: z.preprocess(emptyStringToNull, isoDate.nullable().optional()),
+    problemDate: z.preprocess(emptyStringToNull, kwpDateOrHourDateTime.nullable().optional()),
+    expectedDoneDate: z.preprocess(emptyStringToNull, kwpDateOrHourDateTime.nullable().optional()),
     totalDays: z.coerce.number().int().min(0).max(366).nullable().optional(),
     failedParameters: z
       .array(requiredText(255))
@@ -174,16 +186,14 @@ export const createKwp03SubmissionSchema = z
     attachments: z.array(kwpAttachmentSchema).max(20).optional().default([]),
   })
   .strict()
-  .refine(
-    (value) => {
-      if (!value.problemDate || !value.expectedDoneDate) return true;
-      return value.expectedDoneDate >= value.problemDate;
-    },
-    {
-      path: ['expectedDoneDate'],
-      message: 'Expected done date must be on or after problem date',
-    },
-  );
+  .refine((value) => isKwpFormDateRangeOrdered(value.problemDate, value.expectedDoneDate), {
+    path: ['expectedDoneDate'],
+    message: 'Expected done date must be on or after problem date',
+  })
+  .transform((value) => ({
+    ...value,
+    ...deriveKwpFormDuration(value.problemDate, value.expectedDoneDate),
+  }));
 
 export const createKwp05SubmissionSchema = z
   .object({
