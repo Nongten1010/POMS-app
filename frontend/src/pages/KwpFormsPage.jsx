@@ -3899,6 +3899,15 @@ function Kwp05Form({ factory, point, defaults = {}, calibrationRows, setCalibrat
             <Grid size={{ xs: 12, md: 12 }}>
               <ReadOnlyField label="สถานที่ตั้งโรงงาน" value={factory?.address ?? ''} multiline />
             </Grid>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <TextField name="contactName" label="รายชื่อผู้ติดต่อ" size="small" defaultValue={defaults.contactName ?? ''} fullWidth />
+            </Grid>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <TextField name="contactPhone" label="เบอร์โทรศัพท์" size="small" defaultValue={defaults.contactPhone ?? ''} fullWidth />
+            </Grid>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <TextField name="contactEmail" label="e-mail" type="email" size="small" defaultValue={defaults.contactEmail ?? ''} fullWidth />
+            </Grid>
           </Grid>
         </SectionPaper>
 
