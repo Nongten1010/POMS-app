@@ -141,7 +141,23 @@ function buildFactoryQuery(
       'f.id as factory_id',
       'f.fid as factory_fid',
       'f.code as factory_code',
-      'f.name as factory_name',
+      db.raw(`
+        COALESCE(
+          (
+            SELECT TOP (1) cp_name.factory_name
+            FROM cems_wpms_connected_measurement_points AS cp_name
+            WHERE (
+                cp_name.factory_id = f.fid
+                OR cp_name.factory_id = f.code
+                OR cp_name.factory_registration_no = f.code
+              )
+              AND cp_name.deleted_at IS NULL
+            ORDER BY cp_name.updated_at DESC, cp_name.id DESC
+          ),
+          ef.factory_name,
+          f.name
+        ) as factory_name
+      `),
       'f.system_detail as factory_system_detail',
       'p.name_th as province_name',
       'p.region as province_region',
@@ -159,6 +175,7 @@ function buildFactoryQuery(
       'f.system_detail',
       'p.name_th',
       'p.region',
+      'ef.factory_name',
       'ef.factory_registration_no_old',
       'ef.address',
       'ef.business_activity',

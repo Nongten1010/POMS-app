@@ -6,6 +6,19 @@ import {
 } from '../../src/modules/kwp-form-reports/kwp-form-reports.repository';
 
 describe('kwpFormReportsRepository access filters', () => {
+  it.each([
+    ['operator', { actorUserId: 42, scope: 'OWN_FACTORY' as const }],
+    ['officer', { actorUserId: 77, scope: 'ALL' as const }],
+  ])('uses the current live POMS factory name for the %s factory table', (_role, access) => {
+    const sql = buildKwpFormFactoryQueryForTests(access).toSQL().sql.toLowerCase();
+
+    expect(sql).toContain('select top (1) cp_name.factory_name');
+    expect(sql).toContain('cp_name.deleted_at is null');
+    expect(sql).toContain('order by cp_name.updated_at desc, cp_name.id desc');
+    expect(sql).toMatch(/group by .*\[ef\]\.\[factory_name\]/);
+    expect(sql).not.toContain('[f].[name] as [factory_name]');
+  });
+
   it('builds factory table data from current connected points and limits operators to assigned juristics', () => {
     const sql = buildKwpFormFactoryQueryForTests({
       actorUserId: 42,

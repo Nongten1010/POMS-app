@@ -532,6 +532,12 @@ Minimal response:
 
 Response ใช้สำหรับรายชื่อโรงงานในเมนู กวภ. โดยแต่ละแถวมี `factoryId`, `factoryName`, `newRegistrationNo`, `province` และ `monitoringPointCount`
 
+`factoryName` ใช้ชื่อ current/live POMS จาก active row ล่าสุดใน
+`cems_wpms_connected_measurement_points` โดยเรียง `updated_at DESC, id DESC`
+เหมือนกันสำหรับผู้ประกอบการและเจ้าหน้าที่ ความแตกต่างระหว่างสองบทบาทมีเฉพาะขอบเขต
+โรงงานที่มองเห็นเท่านั้น หากไม่มีชื่อ current/live ให้ fallback ไปยัง
+`eligible_factories.factory_name` และ `factories.name` ตามลำดับ
+
 ```json
 {
   "success": true,
