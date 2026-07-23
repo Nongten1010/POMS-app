@@ -1,0 +1,497 @@
+[
+  {
+    "parameterNames": [
+      "Sb"
+    ],
+    "parameterLabels": [
+      "Sb (mg/m3)"
+    ],
+    "label": "Isokinetic Sampling, Digestion, Inductively Coupled Plasma Method",
+    "value": "Isokinetic Sampling, Digestion, Inductively Coupled Plasma Method"
+  },
+  {
+    "parameterNames": [
+      "Sb"
+    ],
+    "parameterLabels": [
+      "Sb (mg/m3)"
+    ],
+    "label": "Isokinetic Sampling, Digestion, Direct Air-Acetylene Flame Method",
+    "value": "Isokinetic Sampling, Digestion, Direct Air-Acetylene Flame Method"
+  },
+  {
+    "parameterNames": [
+      "Sb"
+    ],
+    "parameterLabels": [
+      "Sb (mg/m3)"
+    ],
+    "label": "Isokinetic Sampling, Digestion, Hydride Generation/Atomic Absorption Spectrometric Method",
+    "value": "Isokinetic Sampling, Digestion, Hydride Generation/Atomic Absorption Spectrometric Method"
+  },
+  {
+    "parameterNames": [
+      "Sb"
+    ],
+    "parameterLabels": [
+      "Sb (mg/m3)"
+    ],
+    "label": "Isokinetic Sampling, Digestion, Graphite Furnace Atomic Absorption Spectrometric Method",
+    "value": "Isokinetic Sampling, Digestion, Graphite Furnace Atomic Absorption Spectrometric Method"
+  },
+  {
+    "parameterNames": [
+      "Sb"
+    ],
+    "parameterLabels": [
+      "Sb (mg/m3)"
+    ],
+    "label": "Isokinetic Sampling, Digestion, Inductively Coupled Plasma/Mass Spectrometric Method",
+    "value": "Isokinetic Sampling, Digestion, Inductively Coupled Plasma/Mass Spectrometric Method"
+  },
+  {
+    "parameterNames": [
+      "As"
+    ],
+    "parameterLabels": [
+      "As (mg/m3)"
+    ],
+    "label": "Isokinetic Sampling, Digestion, Hydride Generation/Atomic Absorption Spectrometric Method",
+    "value": "Isokinetic Sampling, Digestion, Hydride Generation/Atomic Absorption Spectrometric Method"
+  },
+  {
+    "parameterNames": [
+      "As"
+    ],
+    "parameterLabels": [
+      "As (mg/m3)"
+    ],
+    "label": "Isokinetic Sampling, Digestion, Inductively Coupled Plasma Method",
+    "value": "Isokinetic Sampling, Digestion, Inductively Coupled Plasma Method"
+  },
+  {
+    "parameterNames": [
+      "As"
+    ],
+    "parameterLabels": [
+      "As (mg/m3)"
+    ],
+    "label": "Isokinetic Sampling, Digestion, Graphite Furnace Atomic Absorption Spectrometric Method",
+    "value": "Isokinetic Sampling, Digestion, Graphite Furnace Atomic Absorption Spectrometric Method"
+  },
+  {
+    "parameterNames": [
+      "As"
+    ],
+    "parameterLabels": [
+      "As (mg/m3)"
+    ],
+    "label": "Isokinetic Sampling, Digestion, Inductively Coupled Plasma/Mass Spectrometric Method",
+    "value": "Isokinetic Sampling, Digestion, Inductively Coupled Plasma/Mass Spectrometric Method"
+  },
+  {
+    "parameterNames": [
+      "CO"
+    ],
+    "parameterLabels": [
+      "CO (ppm)"
+    ],
+    "label": "Instrumental Analyzer Method",
+    "value": "Instrumental Analyzer Method"
+  },
+  {
+    "parameterNames": [
+      "Cl"
+    ],
+    "parameterLabels": [
+      "Cl (mg/m3)",
+      "Cl (ppm)"
+    ],
+    "label": "Absorption Sampling, Ion Chromatographic Method",
+    "value": "Absorption Sampling, Ion Chromatographic Method"
+  },
+  {
+    "parameterNames": [
+      "Cl"
+    ],
+    "parameterLabels": [
+      "Cl (mg/m3)",
+      "Cl (ppm)"
+    ],
+    "label": "Isokinetic Sampling, Ion Chromatographic Method",
+    "value": "Isokinetic Sampling, Ion Chromatographic Method"
+  },
+  {
+    "parameterNames": [
+      "Cu"
+    ],
+    "parameterLabels": [
+      "Cu (mg/m3)"
+    ],
+    "label": "Isokinetic Sampling, Digestion, Inductively Coupled Plasma Method",
+    "value": "Isokinetic Sampling, Digestion, Inductively Coupled Plasma Method"
+  },
+  {
+    "parameterNames": [
+      "Cu"
+    ],
+    "parameterLabels": [
+      "Cu (mg/m3)"
+    ],
+    "label": "Isokinetic Sampling, Digestion, Direct Air-Acetylene Flame Method",
+    "value": "Isokinetic Sampling, Digestion, Direct Air-Acetylene Flame Method"
+  },
+  {
+    "parameterNames": [
+      "Cu"
+    ],
+    "parameterLabels": [
+      "Cu (mg/m3)"
+    ],
+    "label": "Isokinetic Sampling, Digestion, Inductively Coupled Plasma/Mass Spectrometric Method",
+    "value": "Isokinetic Sampling, Digestion, Inductively Coupled Plasma/Mass Spectrometric Method"
+  },
+  {
+    "parameterNames": [
+      "Cresol"
+    ],
+    "parameterLabels": [
+      "Cresol (ppm)"
+    ],
+    "label": "Bag Sampling, Gas Chromatographic Method",
+    "value": "Bag Sampling, Gas Chromatographic Method"
+  },
+  {
+    "parameterNames": [
+      "Cresol"
+    ],
+    "parameterLabels": [
+      "Cresol (ppm)"
+    ],
+    "label": "Bag Sampling, Gas Chromatographic/Mass Spectrometric Method",
+    "value": "Bag Sampling, Gas Chromatographic/Mass Spectrometric Method"
+  },
+  {
+    "parameterNames": [
+      "Cresol"
+    ],
+    "parameterLabels": [
+      "Cresol (ppm)"
+    ],
+    "label": "Adsorption Sampling, Gas Chromatographic/Mass Spectrometric Method",
+    "value": "Adsorption Sampling, Gas Chromatographic/Mass Spectrometric Method"
+  },
+  {
+    "parameterNames": [
+      "Cresol"
+    ],
+    "parameterLabels": [
+      "Cresol (ppm)"
+    ],
+    "label": "Adsorption Sampling, Gas Chromatographic Method",
+    "value": "Adsorption Sampling, Gas Chromatographic Method"
+  },
+  {
+    "parameterNames": [
+      "Dioxins/Furans"
+    ],
+    "parameterLabels": [
+      "Dioxins/Furans (µg/m3)"
+    ],
+    "label": "Isokinetic Sampling, Extraction, High Resolution Gas Chromatograph/High Resolution Mass Spectrometric Method",
+    "value": "Isokinetic Sampling, Extraction, High Resolution Gas Chromatograph/High Resolution Mass Spectrometric Method"
+  },
+  {
+    "parameterNames": [
+      "Dioxins/Furans"
+    ],
+    "parameterLabels": [
+      "Dioxins/Furans (µg/m3)"
+    ],
+    "label": "Isokinetic Sampling",
+    "value": "Isokinetic Sampling"
+  },
+  {
+    "parameterNames": [
+      "HCl"
+    ],
+    "parameterLabels": [
+      "HCl (mg/m3)",
+      "HCl (ppm)"
+    ],
+    "label": "Absorption Sampling, Ion Chromatographic Method",
+    "value": "Absorption Sampling, Ion Chromatographic Method"
+  },
+  {
+    "parameterNames": [
+      "HCl"
+    ],
+    "parameterLabels": [
+      "HCl (mg/m3)",
+      "HCl (ppm)"
+    ],
+    "label": "Isokinetic Sampling, Ion Chromatographic Method",
+    "value": "Isokinetic Sampling, Ion Chromatographic Method"
+  },
+  {
+    "parameterNames": [
+      "HF"
+    ],
+    "parameterLabels": [
+      "HF (ppm)"
+    ],
+    "label": "Absorption Sampling, Ion Chromatographic Method",
+    "value": "Absorption Sampling, Ion Chromatographic Method"
+  },
+  {
+    "parameterNames": [
+      "HF"
+    ],
+    "parameterLabels": [
+      "HF (ppm)"
+    ],
+    "label": "Isokinetic Sampling, Ion Chromatographic Method",
+    "value": "Isokinetic Sampling, Ion Chromatographic Method"
+  },
+  {
+    "parameterNames": [
+      "H2S"
+    ],
+    "parameterLabels": [
+      "H2S (ppm)"
+    ],
+    "label": "Absorption Sampling, Iodometric Method",
+    "value": "Absorption Sampling, Iodometric Method"
+  },
+  {
+    "parameterNames": [
+      "H2S"
+    ],
+    "parameterLabels": [
+      "H2S (ppm)"
+    ],
+    "label": "Gas Chromatographic/Flame Photometric Method",
+    "value": "Gas Chromatographic/Flame Photometric Method"
+  },
+  {
+    "parameterNames": [
+      "Pb"
+    ],
+    "parameterLabels": [
+      "Pb (mg/m3)"
+    ],
+    "label": "Isokinetic Sampling, Digestion, Inductively Coupled Plasma Method",
+    "value": "Isokinetic Sampling, Digestion, Inductively Coupled Plasma Method"
+  },
+  {
+    "parameterNames": [
+      "Pb"
+    ],
+    "parameterLabels": [
+      "Pb (mg/m3)"
+    ],
+    "label": "Isokinetic Sampling, Digestion, Direct Air-Acetylene Flame Method",
+    "value": "Isokinetic Sampling, Digestion, Direct Air-Acetylene Flame Method"
+  },
+  {
+    "parameterNames": [
+      "Pb"
+    ],
+    "parameterLabels": [
+      "Pb (mg/m3)"
+    ],
+    "label": "Isokinetic Sampling, Digestion, Graphite Furnace Atomic Absorption Spectrometric Method",
+    "value": "Isokinetic Sampling, Digestion, Graphite Furnace Atomic Absorption Spectrometric Method"
+  },
+  {
+    "parameterNames": [
+      "Pb"
+    ],
+    "parameterLabels": [
+      "Pb (mg/m3)"
+    ],
+    "label": "Isokinetic Sampling, Digestion, Inductively Coupled Plasma/Mass Spectrometric Method",
+    "value": "Isokinetic Sampling, Digestion, Inductively Coupled Plasma/Mass Spectrometric Method"
+  },
+  {
+    "parameterNames": [
+      "Hg"
+    ],
+    "parameterLabels": [
+      "Hg (mg/m3)"
+    ],
+    "label": "Isokinetic Sampling, Digestion, Cold-Vapor Atomic Absorption Spectrometric Method",
+    "value": "Isokinetic Sampling, Digestion, Cold-Vapor Atomic Absorption Spectrometric Method"
+  },
+  {
+    "parameterNames": [
+      "Opacity"
+    ],
+    "parameterLabels": [
+      "Opacity (%)",
+      "Opacity (mg/m3)"
+    ],
+    "label": "Ringelmann's Method",
+    "value": "Ringelmann's Method"
+  },
+  {
+    "parameterNames": [
+      "NOx"
+    ],
+    "parameterLabels": [
+      "NOx (ppm)"
+    ],
+    "label": "Absorption Sampling, Phenoldisulfonic acid Method",
+    "value": "Absorption Sampling, Phenoldisulfonic acid Method"
+  },
+  {
+    "parameterNames": [
+      "NOx"
+    ],
+    "parameterLabels": [
+      "NOx (ppm)"
+    ],
+    "label": "Absorption Sampling, Ion Chromatographic Method",
+    "value": "Absorption Sampling, Ion Chromatographic Method"
+  },
+  {
+    "parameterNames": [
+      "NOx"
+    ],
+    "parameterLabels": [
+      "NOx (ppm)"
+    ],
+    "label": "Absorption Sampling, UV Spectrophotometric Method",
+    "value": "Absorption Sampling, UV Spectrophotometric Method"
+  },
+  {
+    "parameterNames": [
+      "NOx"
+    ],
+    "parameterLabels": [
+      "NOx (ppm)"
+    ],
+    "label": "Absorption Sampling, Alkaline Permanganate/Colorimetric Method",
+    "value": "Absorption Sampling, Alkaline Permanganate/Colorimetric Method"
+  },
+  {
+    "parameterNames": [
+      "NOx"
+    ],
+    "parameterLabels": [
+      "NOx (ppm)"
+    ],
+    "label": "Absorption Sampling, Alkaline Permanganate/Ion Chromatographic Method",
+    "value": "Absorption Sampling, Alkaline Permanganate/Ion Chromatographic Method"
+  },
+  {
+    "parameterNames": [
+      "NOx"
+    ],
+    "parameterLabels": [
+      "NOx (ppm)"
+    ],
+    "label": "Instrumental Analyzer Method",
+    "value": "Instrumental Analyzer Method"
+  },
+  {
+    "parameterNames": [
+      "SO2"
+    ],
+    "parameterLabels": [
+      "SO2 (ppm)"
+    ],
+    "label": "Isokinetic Sampling, Barium-Thorin Titrimetric Method",
+    "value": "Isokinetic Sampling, Barium-Thorin Titrimetric Method"
+  },
+  {
+    "parameterNames": [
+      "SO2"
+    ],
+    "parameterLabels": [
+      "SO2 (ppm)"
+    ],
+    "label": "Absorption Sampling, Barium-Thorin Titrimetric Method",
+    "value": "Absorption Sampling, Barium-Thorin Titrimetric Method"
+  },
+  {
+    "parameterNames": [
+      "SO2"
+    ],
+    "parameterLabels": [
+      "SO2 (ppm)"
+    ],
+    "label": "Instrumental Analyzer Method",
+    "value": "Instrumental Analyzer Method"
+  },
+  {
+    "parameterNames": [
+      "H2SO4"
+    ],
+    "parameterLabels": [
+      "H2SO4 (ppm)"
+    ],
+    "label": "Isokinetic Sampling, Barium-Thorin Titrimetric Method",
+    "value": "Isokinetic Sampling, Barium-Thorin Titrimetric Method"
+  },
+  {
+    "parameterNames": [
+      "Particulate"
+    ],
+    "parameterLabels": [
+      "Particulate (mg/m3)"
+    ],
+    "label": "Isokinetic Sampling, Gravimetric Method",
+    "value": "Isokinetic Sampling, Gravimetric Method"
+  },
+  {
+    "parameterNames": [
+      "Particulate"
+    ],
+    "parameterLabels": [
+      "Particulate (mg/m3)"
+    ],
+    "label": "Paired Train, Isokinetic Sampling, Gravimetric Method",
+    "value": "Paired Train, Isokinetic Sampling, Gravimetric Method"
+  },
+  {
+    "parameterNames": [
+      "Xylene"
+    ],
+    "parameterLabels": [
+      "Xylene (ppm)"
+    ],
+    "label": "Bag Sampling, Gas Chromatographic Method",
+    "value": "Bag Sampling, Gas Chromatographic Method"
+  },
+  {
+    "parameterNames": [
+      "Xylene"
+    ],
+    "parameterLabels": [
+      "Xylene (ppm)"
+    ],
+    "label": "Bag Sampling, Gas Chromatographic/Mass Spectrometric Method",
+    "value": "Bag Sampling, Gas Chromatographic/Mass Spectrometric Method"
+  },
+  {
+    "parameterNames": [
+      "Xylene"
+    ],
+    "parameterLabels": [
+      "Xylene (ppm)"
+    ],
+    "label": "Adsorption Sampling, Gas Chromatographic Method",
+    "value": "Adsorption Sampling, Gas Chromatographic Method"
+  },
+  {
+    "parameterNames": [
+      "Xylene"
+    ],
+    "parameterLabels": [
+      "Xylene (ppm)"
+    ],
+    "label": "Adsorption Sampling, Gas Chromatographic/Mass Spectrometric Method",
+    "value": "Adsorption Sampling, Gas Chromatographic/Mass Spectrometric Method"
+  }
+]

@@ -39,12 +39,13 @@ import HistoryIcon from '@mui/icons-material/History'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import { DataGrid } from '@mui/x-data-grid'
-import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers'
+import { DatePicker, DateTimePicker, LocalizationProvider } from '@mui/x-date-pickers'
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
 import dayjs from 'dayjs'
 import buddhistEra from 'dayjs/plugin/buddhistEra'
 import 'dayjs/locale/th'
 import OfficerStatisticsPanel from '../components/OfficerStatisticsPanel'
+import kwpEmissionMeasurementMethodOptionItems from '../option/kwpEmissionMeasurementMethodOptions.json'
 
 dayjs.extend(buddhistEra)
 dayjs.locale('th')
@@ -230,13 +231,18 @@ const wpmsInstrumentOptions = [
   'ค่าบีโอดี (BOD) และ ค่าซีโอดี (COD)',
 ]
 
-const wpmsMeasurementTimeOptions = ['Real Time', '5 นาที', '10 นาที', '15 นาที', '20 นาที', '30 นาที']
 const wpmsParameterOptions = ['BOD', 'COD', 'flow', 'watt']
 const wpmsIssueReasonOptions = [
   'เครื่องมือหรือเครื่องอุปกรณ์พิเศษขัดข้อง',
   'ไม่มีการระบายน้ำทิ้งออกนอกโรงงาน',
   'ระบบรับส่งข้อมูล ระบบไฟฟ้า อินเทอร์เน็ต ขัดข้อง',
 ]
+const kwpEmissionMeasurementMethodOptions = kwpEmissionMeasurementMethodOptionItems.map((option) => ({
+  label: option.label ?? option.value ?? '',
+  value: option.value ?? option.label ?? '',
+  parameterNames: Array.isArray(option.parameterNames) ? option.parameterNames : [],
+  parameterLabels: Array.isArray(option.parameterLabels) ? option.parameterLabels : [],
+}))
 const calibrationResultOptions = ['ผ่าน', 'ไม่ผ่าน']
 
 function firstDefinedValue(...values) {
@@ -245,6 +251,29 @@ function firstDefinedValue(...values) {
 
 function uniqueTextValues(values) {
   return [...new Set(values.map((value) => String(value ?? '').trim()).filter(Boolean))]
+}
+
+function normalizeParameterKey(value) {
+  return String(value ?? '')
+    .replace(/\([^)]*\)/g, '')
+    .trim()
+    .toLowerCase()
+}
+
+function getEmissionMeasurementMethodOptions(pollutant) {
+  const selectedLabel = String(pollutant ?? '').trim()
+  const selectedName = normalizeParameterKey(selectedLabel)
+
+  if (!selectedLabel) {
+    return []
+  }
+
+  return kwpEmissionMeasurementMethodOptions.filter((option) => {
+    const labels = option.parameterLabels.map(normalizeParameterKey)
+    const names = option.parameterNames.map(normalizeParameterKey)
+
+    return labels.includes(selectedName) || names.includes(selectedName)
+  })
 }
 
 function getPointDetailsValue(point, ...fieldNames) {
@@ -288,7 +317,6 @@ function buildKwp03InitialFormValues(point) {
     },
     initialState: {
       wpmsInstrument: getPointDetailsValue(point, 'instrument', 'instrumentName', 'monitoringInstrument'),
-      wpmsMeasurementTime: getPointDetailsValue(point, 'measurementTime', 'measurementInterval', 'reportingInterval'),
       wpmsFailedParameters: failedParameters,
     },
   }
@@ -687,6 +715,78 @@ function getDayRange(startDate, endDate) {
   return diff >= 0 ? String(diff + 1) : ''
 }
 
+function normalizeHourDateTime(value) {
+  return value && dayjs(value).isValid() ? dayjs(value).minute(0).second(0).millisecond(0) : null
+}
+
+function getHourDuration(startDate, endDate) {
+  const start = normalizeHourDateTime(startDate)
+  const end = normalizeHourDateTime(endDate)
+
+  if (!start || !end) {
+    return ''
+  }
+
+  const diffHours = end.diff(start, 'hour')
+  if (diffHours < 0) {
+    return ''
+  }
+
+  const days = Math.floor(diffHours / 24)
+  const hours = diffHours % 24
+
+  if (days > 0 && hours > 0) {
+    return `${days} วัน ${hours} ชั่วโมง`
+  }
+
+  if (days > 0) {
+    return `${days} วัน`
+  }
+
+  return `${hours} ชั่วโมง`
+}
+
+function formatDurationHours(totalHours) {
+  const numericHours = Number(totalHours)
+
+  if (!Number.isFinite(numericHours) || numericHours < 0) {
+    return ''
+  }
+
+  const days = Math.floor(numericHours / 24)
+  const hours = numericHours % 24
+
+  if (days > 0 && hours > 0) {
+    return `${days} วัน ${hours} ชั่วโมง`
+  }
+
+  if (days > 0) {
+    return `${days} วัน`
+  }
+
+  return `${hours} ชั่วโมง`
+}
+
+function formatKwp01DurationValue(issueReport = {}) {
+  if (issueReport.totalDuration || issueReport.totalDurationText) {
+    return issueReport.totalDuration ?? issueReport.totalDurationText
+  }
+
+  if (issueReport.totalHours !== null && issueReport.totalHours !== undefined) {
+    return formatDurationHours(issueReport.totalHours)
+  }
+
+  if (issueReport.totalDays !== null && issueReport.totalDays !== undefined && issueReport.totalDays !== '') {
+    return `${issueReport.totalDays} วัน`
+  }
+
+  return ''
+}
+
+function handleHourDateTimeChange(onChange) {
+  return (value) => onChange(normalizeHourDateTime(value))
+}
+
 function Kwp01Form({
   factory,
   point,
@@ -700,7 +800,7 @@ function Kwp01Form({
 }) {
   const [combustionSystem, setCombustionSystem] = useState(() => defaults.combustionSystem ?? '')
   const [issueReason, setIssueReason] = useState(() => defaults.issueReason ?? '')
-  const totalDays = getDayRange(problemDate, expectedDoneDate)
+  const totalDuration = getHourDuration(problemDate, expectedDoneDate)
   const unavailableParameterOptions = point?.parameterDetails ?? []
   const primaryFuel = point?.primaryFuel ?? ''
   const secondaryFuel = point?.secondaryFuel ?? ''
@@ -802,27 +902,31 @@ function Kwp01Form({
               <TextField name="reasonDetail" label="เนื่องจาก" size="small" defaultValue={defaults.reasonDetail ?? ''} multiline minRows={3} fullWidth />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <DatePicker
+              <DateTimePicker
                 label="วัน/เดือน/ปี ที่พบปัญหาหรือหยุดหน่วยการผลิต"
                 value={problemDate}
-                onChange={onProblemDateChange}
-                format="DD/MM/YYYY"
+                onChange={handleHourDateTimeChange(onProblemDateChange)}
+                format="DD/MM/YYYY HH:00"
+                views={['year', 'month', 'day', 'hours']}
+                ampm={false}
                 slotProps={{ textField: { size: 'small', fullWidth: true } }}
               />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <DatePicker
+              <DateTimePicker
                 label="วัน/เดือน/ปี ที่คาดว่าจะดำเนินการแล้วเสร็จ"
                 value={expectedDoneDate}
-                onChange={onExpectedDoneDateChange}
-                format="DD/MM/YYYY"
+                onChange={handleHourDateTimeChange(onExpectedDoneDateChange)}
+                format="DD/MM/YYYY HH:00"
+                views={['year', 'month', 'day', 'hours']}
+                ampm={false}
                 slotProps={{ textField: { size: 'small', fullWidth: true } }}
               />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
               <ReadOnlyField
-                label="รวมระยะเวลาปรับปรุงแก้ไขหรือระยะเวลาหยุดหน่วยการผลิต (วัน)"
-                value={totalDays}
+                label="รวมระยะเวลาปรับปรุงแก้ไขหรือระยะเวลาหยุดหน่วยการผลิต"
+                value={totalDuration}
               />
             </Grid>
             <Grid size={{ xs: 12 }}>
@@ -854,10 +958,10 @@ function Kwp01Form({
 
         <SectionPaper title="ผู้ประกอบกิจการโรงงานหรือผู้รับมอบอำนาจ (ผู้จัดทำรายงาน)">
           <Grid container spacing={2}>
-            <Grid size={{ xs: 12, md: 6 }}>
+            <Grid size={{ xs: 12, md: 3 }}>
               <TextField name="reporterName" label="ชื่อ-นามสกุล" size="small" defaultValue={defaults.reporterName ?? ''} fullWidth />
             </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
+            <Grid size={{ xs: 12, md: 3 }}>
               <TextField name="reporterPosition" label="ตำแหน่ง" size="small" defaultValue={defaults.reporterPosition ?? ''} fullWidth />
             </Grid>
           </Grid>
@@ -873,6 +977,11 @@ function getFormText(formData, name) {
 
 function formatThaiDateValue(value) {
   return value && dayjs(value).isValid() ? dayjs(value).format('DD/MM/BBBB') : ''
+}
+
+function formatThaiDateHourValue(value) {
+  const date = normalizeHourDateTime(value)
+  return date ? date.format('DD/MM/BBBB HH:00') : ''
 }
 
 function formatApiDateValue(value) {
@@ -907,9 +1016,9 @@ function buildKwp01PreviewData(form, formElement, dates, unreportedParameters) {
     productionCapacityUnit: getFormText(formData, 'productionCapacityUnit'),
     issueReason: getFormText(formData, 'issueReason'),
     reasonDetail: getFormText(formData, 'reasonDetail'),
-    problemDate: formatThaiDateValue(startDate),
-    expectedDoneDate: formatThaiDateValue(endDate),
-    totalDays: getDayRange(startDate, endDate),
+    problemDate: formatThaiDateHourValue(startDate),
+    expectedDoneDate: formatThaiDateHourValue(endDate),
+    totalDays: getHourDuration(startDate, endDate),
     unreportedParameters,
     correctiveAction: getFormText(formData, 'correctiveAction'),
     reporterName: getFormText(formData, 'reporterName'),
@@ -1115,9 +1224,9 @@ function buildKwp03PreviewData(form, formElement, dates, selectedValues) {
     maximumDischarge: getFormText(formData, 'maximumDischarge'),
     issueReasons: selectedValues.issueReasons,
     reasonDetail: getFormText(formData, 'reasonDetail'),
-    problemDate: formatThaiDateValue(dates.problemDate),
-    expectedDoneDate: formatThaiDateValue(dates.expectedDoneDate),
-    totalDays: getDayRange(dates.problemDate, dates.expectedDoneDate),
+    problemDate: formatThaiDateHourValue(dates.problemDate),
+    expectedDoneDate: formatThaiDateHourValue(dates.expectedDoneDate),
+    totalDays: getHourDuration(dates.problemDate, dates.expectedDoneDate),
     failedParameters: selectedValues.failedParameters,
     correctiveAction: getFormText(formData, 'correctiveAction'),
   }
@@ -1440,7 +1549,6 @@ function buildKwpEditFormFromDetail(detail = {}, row = {}) {
       samplingPhotoFiles: measurementItems.flatMap((item) => getAttachmentsByType(item.attachments, 'SAMPLING_PHOTO')),
       labReportFiles: measurementItems.flatMap((item) => getAttachmentsByType(item.attachments, 'LAB_REPORT')),
       wpmsInstrument: wpmsIssueReport.instruments?.[0] ?? '',
-      wpmsMeasurementTime: wpmsIssueReport.measurementTimes?.[0] ?? '',
       wpmsIssueReason: wpmsIssueReport.issueReasons?.[0] ?? '',
       wpmsFailedParameters: wpmsIssueReport.failedParameters ?? [],
       calibrationRows: calibrationItems.map(buildKwp05CalibrationRow),
@@ -1526,9 +1634,9 @@ function buildKwpRequestPreviewDataFromDetail(detail, row = {}) {
       maximumDischarge: issueReport.maximumDischarge ?? '',
       issueReasons: issueReport.issueReasons ?? [],
       reasonDetail: issueReport.reasonDetail ?? '',
-      problemDate: formatThaiDateValue(issueReport.problemDate),
-      expectedDoneDate: formatThaiDateValue(issueReport.expectedDoneDate),
-      totalDays: issueReport.totalDays ?? '',
+      problemDate: formatThaiDateHourValue(issueReport.problemDate),
+      expectedDoneDate: formatThaiDateHourValue(issueReport.expectedDoneDate),
+      totalDays: formatKwp01DurationValue(issueReport),
       failedParameters: issueReport.failedParameters ?? [],
       correctiveAction: issueReport.correctiveAction ?? '',
     }
@@ -1625,9 +1733,9 @@ function buildKwpRequestPreviewDataFromDetail(detail, row = {}) {
     ...commonData,
     issueReason: issueReport.issueReason ?? '',
     reasonDetail: issueReport.reasonDetail ?? '',
-    problemDate: formatThaiDateValue(issueReport.problemDate),
-    expectedDoneDate: formatThaiDateValue(issueReport.expectedDoneDate),
-    totalDays: issueReport.totalDays ?? '',
+    problemDate: formatThaiDateHourValue(issueReport.problemDate),
+    expectedDoneDate: formatThaiDateHourValue(issueReport.expectedDoneDate),
+    totalDays: formatKwp01DurationValue(issueReport),
     unreportedParameters: issueReport.unreportedParameters ?? [],
     correctiveAction: issueReport.correctiveAction ?? '',
   }
@@ -1795,7 +1903,7 @@ function Kwp01PaperDocument({ data }) {
               </TableRow>
               <TableRow>
                 <TableCell colSpan={2} sx={{ pl: 5 }}>
-                  รวมระยะเวลาปรับปรุงแก้ไขหรือระยะเวลาหยุดหน่วยการผลิต (วัน) :{' '}
+                  รวมระยะเวลาปรับปรุงแก้ไขหรือระยะเวลาหยุดหน่วยการผลิต :{' '}
                   <DottedValue minWidth={160}>{data.totalDays}</DottedValue>
                   <Typography sx={{ fontWeight: 700, fontSize: 13 }}>
                     (หมายเหตุ : กรณีเครื่องมือหรืออุปกรณ์พิเศษมีเหตุขัดข้องและไม่สามารถรายงานผลการตรวจวัดได้ตั้งแต่ 15 วันขึ้นไป ต้องรายงานแบบ กวภ.02 ด้วย)
@@ -2198,12 +2306,6 @@ function Kwp03PaperDocument({ data }) {
                 </TableCell>
               </TableRow>
               <TableRow>
-                <TableCell colSpan={4}>
-                  เวลาเครื่องตรวจวัด : <MultiPaperCheckboxes options={wpmsMeasurementTimeOptions} selected={data.measurementTimes} />
-                  <DottedValue minWidth={80} /> นาที
-                </TableCell>
-              </TableRow>
-              <TableRow>
                 <TableCell component="th" colSpan={4}>
                   3.ข้อมูลนํ้าทิ้งระบายออกนอกโรงงาน (กรอกเฉพาะเครื่องมือหรือเครื่องอุปกรณ์พิเศษขัดข้อง)
                 </TableCell>
@@ -2213,7 +2315,7 @@ function Kwp03PaperDocument({ data }) {
                 <TableCell colSpan={2}>แหล่งรองรับน้ำทิ้ง : {data.receivingSource}</TableCell>
               </TableRow>
               <TableRow>
-                <TableCell colSpan={2}>ประเภทรบบบำบัด : {data.treatmentSystemType}</TableCell>
+                <TableCell colSpan={2}>ประเภทระบบบำบัด : {data.treatmentSystemType}</TableCell>
                 <TableCell colSpan={2}>พิกัดจุดระบายน้ำทิ้ง : {data.dischargePoint}</TableCell>
               </TableRow>
               <TableRow>
@@ -2245,7 +2347,7 @@ function Kwp03PaperDocument({ data }) {
               </TableRow>
               <TableRow>
                 <TableCell colSpan={4}>
-                  รวมระยะเวลาปรับปรุงแก้ไขหรือระยะเวลาหยุดหน่วยการผลิต (วัน) : <DottedValue minWidth={250}>{data.totalDays}</DottedValue>
+                  รวมระยะเวลาปรับปรุงแก้ไขหรือระยะเวลาหยุดหน่วยการผลิต : <DottedValue minWidth={250}>{data.totalDays}</DottedValue>
                 </TableCell>
               </TableRow>
               <TableRow>
@@ -2922,9 +3024,18 @@ function EmissionMeasurementDialog({ open, value, parameterOptions, onClose, onS
 
 function EmissionMeasurementDialogContent({ value, parameterOptions, onClose, onSave }) {
   const [form, setForm] = useState(value ?? emptyEmissionMeasurement)
+  const measurementMethodOptions = getEmissionMeasurementMethodOptions(form.pollutant)
 
   const updateForm = (field, nextValue) => {
-    setForm((current) => ({ ...current, [field]: nextValue }))
+    setForm((current) => {
+      const nextForm = { ...current, [field]: nextValue }
+
+      if (field === 'pollutant') {
+        nextForm.method = ''
+      }
+
+      return nextForm
+    })
   }
 
   return (
@@ -2996,12 +3107,25 @@ function EmissionMeasurementDialogContent({ value, parameterOptions, onClose, on
             </Grid>
             <Grid size={{ xs: 12 }}>
               <TextField
+                select
                 label="วิธีการตรวจวัดวิเคราะห์"
                 size="small"
                 value={form.method}
                 onChange={(event) => updateForm('method', event.target.value)}
+                disabled={!form.pollutant || measurementMethodOptions.length === 0}
+                helperText={
+                  form.pollutant && measurementMethodOptions.length === 0
+                    ? 'ไม่มีตัวเลือกวิธีการตรวจวัดวิเคราะห์สำหรับสารมลพิษนี้'
+                    : ''
+                }
                 fullWidth
-              />
+              >
+                {measurementMethodOptions.map((option) => (
+                  <MenuItem key={option.value} value={option.value}>
+                    {option.label}
+                  </MenuItem>
+                ))}
+              </TextField>
             </Grid>
           </Grid>
         </LocalizationProvider>
@@ -3216,10 +3340,10 @@ function Kwp02Form({
 
         <SectionPaper title="ผู้ประกอบกิจการโรงงานหรือผู้รับมอบอำนาจ (ผู้จัดทำรายงาน)">
           <Grid container spacing={2}>
-            <Grid size={{ xs: 12, md: 6 }}>
+            <Grid size={{ xs: 12, md: 3 }}>
               <TextField name="reporterName" label="ชื่อ-นามสกุล" size="small" defaultValue={defaults.reporterName ?? ''} fullWidth />
             </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
+            <Grid size={{ xs: 12, md: 3 }}>
               <TextField name="reporterPosition" label="ตำแหน่ง" size="small" defaultValue={defaults.reporterPosition ?? ''} fullWidth />
             </Grid>
           </Grid>
@@ -3243,20 +3367,17 @@ function Kwp03Form({
   problemDate,
   expectedDoneDate,
   instruments,
-  measurementTimes,
   issueReasons,
   failedParameters,
   onProblemDateChange,
   onExpectedDoneDateChange,
   onInstrumentsChange,
-  onMeasurementTimesChange,
   onIssueReasonsChange,
   onFailedParametersChange,
 }) {
-  const totalDays = getDayRange(problemDate, expectedDoneDate)
+  const totalDuration = getHourDuration(problemDate, expectedDoneDate)
   const pointParameterOptions = uniqueTextValues(point?.parameterDetails ?? [])
   const instrumentOptions = uniqueTextValues([...wpmsInstrumentOptions, instruments])
-  const measurementTimeOptions = uniqueTextValues([...wpmsMeasurementTimeOptions, measurementTimes])
   const failedParameterOptions = [
     ...(pointParameterOptions.length ? pointParameterOptions : wpmsParameterOptions).filter((option) => option !== 'ทั้งหมด'),
     'ทั้งหมด',
@@ -3307,14 +3428,6 @@ function Kwp03Form({
                 options={instrumentOptions}
               />
             </Grid>
-            <Grid size={{ xs: 12, md: 3 }}>
-              <OptionSelect
-                label="เวลาเครื่องตรวจวัด"
-                value={measurementTimes}
-                onChange={onMeasurementTimesChange}
-                options={measurementTimeOptions}
-              />
-            </Grid>
           </Grid>
         </SectionPaper>
 
@@ -3327,7 +3440,7 @@ function Kwp03Form({
               <TextField name="receivingSource" label="แหล่งรองรับน้ำทิ้ง" size="small" defaultValue={defaults.receivingSource ?? ''} fullWidth />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <TextField name="treatmentSystemType" label="ประเภทรบบบำบัด" size="small" defaultValue={defaults.treatmentSystemType ?? ''} fullWidth />
+              <TextField name="treatmentSystemType" label="ประเภทระบบบำบัด" size="small" defaultValue={defaults.treatmentSystemType ?? ''} fullWidth />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
               <TextField name="dischargePoint" label="พิกัดจุดระบายน้ำทิ้ง" size="small" defaultValue={defaults.dischargePoint ?? ''} fullWidth />
@@ -3358,25 +3471,29 @@ function Kwp03Form({
               <TextField name="reasonDetail" label="เนื่องจาก" size="small" defaultValue={defaults.reasonDetail ?? ''} multiline minRows={3} fullWidth />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <DatePicker
+              <DateTimePicker
                 label="วัน/เดือน/ปี ที่พบปัญหาหรือหยุดหน่วยการผลิต"
                 value={problemDate}
-                onChange={onProblemDateChange}
-                format="DD/MM/YYYY"
+                onChange={handleHourDateTimeChange(onProblemDateChange)}
+                format="DD/MM/YYYY HH:00"
+                views={['year', 'month', 'day', 'hours']}
+                ampm={false}
                 slotProps={{ textField: { size: 'small', fullWidth: true } }}
               />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <DatePicker
+              <DateTimePicker
                 label="วัน/เดือน/ปี ที่คาดว่าจะดำเนินการแล้วเสร็จ"
                 value={expectedDoneDate}
-                onChange={onExpectedDoneDateChange}
-                format="DD/MM/YYYY"
+                onChange={handleHourDateTimeChange(onExpectedDoneDateChange)}
+                format="DD/MM/YYYY HH:00"
+                views={['year', 'month', 'day', 'hours']}
+                ampm={false}
                 slotProps={{ textField: { size: 'small', fullWidth: true } }}
               />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <ReadOnlyField label="รวมระยะเวลา (วัน)" value={totalDays} />
+              <ReadOnlyField label="รวมระยะเวลา" value={totalDuration} />
             </Grid>
             <Grid size={{ xs: 12, md: 6 }}>
               <OptionMultiSelect
@@ -3402,10 +3519,10 @@ function Kwp03Form({
 
         <SectionPaper title="ผู้จัดทำรายงาน/ผู้ดูแลระบบบำบัด">
           <Grid container spacing={2}>
-            <Grid size={{ xs: 12, md: 6 }}>
+            <Grid size={{ xs: 12, md: 3 }}>
               <TextField name="reporterName" label="ชื่อ-นามสกุล" size="small" defaultValue={defaults.reporterName ?? ''} fullWidth />
             </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
+            <Grid size={{ xs: 12, md: 3 }}>
               <TextField name="reporterPosition" label="ตำแหน่ง" size="small" defaultValue={defaults.reporterPosition ?? ''} fullWidth />
             </Grid>
           </Grid>
@@ -3571,15 +3688,6 @@ function CalibrationResultDialogContent({ value, onClose, onSave }) {
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
               <TextField
-                label="บริษัทที่ทำการทวนสอบ / สอบเทียบ"
-                size="small"
-                value={form.verifierCompany}
-                onChange={(event) => updateForm('verifierCompany', event.target.value)}
-                fullWidth
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 3 }}>
-              <TextField
                 label="ยี่ห้อ/รุ่นของ CEMS"
                 size="small"
                 value={form.cemsModel}
@@ -3597,14 +3705,14 @@ function CalibrationResultDialogContent({ value, onClose, onSave }) {
             </Grid>
             <Grid size={{ xs: 12, md: 6 }}>
               <MultiFileInputButton
-                label="รายงานผล RATA"
+                label="รายงานผล RATA (JPG/PNG/PDF ไม่เกิน 10 MB)"
                 files={rataReportFiles}
                 onChange={setRataReportFiles}
               />
             </Grid>
             <Grid size={{ xs: 12, md: 6 }}>
               <MultiFileInputButton
-                label="ภาพขณะสอบเทียบ"
+                label="ภาพขณะสอบเทียบ (JPG/PNG/PDF ไม่เกิน 10 MB)"
                 files={calibrationPhotoFiles}
                 onChange={setCalibrationPhotoFiles}
               />
@@ -3714,9 +3822,6 @@ function Kwp05Form({ factory, point, defaults = {}, calibrationRows, setCalibrat
             <Grid size={{ xs: 12, md: 3 }}>
               <ReadOnlyField label="ชื่อจุดตรวจวัด" value={point?.name ?? ''} />
             </Grid>
-            <Grid size={{ xs: 12, md: 3 }}>
-              <TextField name="cemsBrand" label="ยี่ห้อ (Brand)" size="small" defaultValue={defaults.cemsBrand ?? ''} fullWidth />
-            </Grid>
           </Grid>
         </SectionPaper>
 
@@ -3803,10 +3908,10 @@ function Kwp05Form({ factory, point, defaults = {}, calibrationRows, setCalibrat
 
         <SectionPaper title="ผู้รายงานผลการทดสอบ">
           <Grid container spacing={2}>
-            <Grid size={{ xs: 12, md: 6 }}>
+            <Grid size={{ xs: 12, md: 3 }}>
               <TextField name="reporterName" label="ชื่อ-นามสกุล" size="small" defaultValue={defaults.reporterName ?? ''} fullWidth />
             </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
+            <Grid size={{ xs: 12, md: 3 }}>
               <TextField name="reporterPosition" label="ตำแหน่ง" size="small" defaultValue={defaults.reporterPosition ?? ''} fullWidth />
             </Grid>
           </Grid>
@@ -3838,7 +3943,6 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
   const [samplingPhotoFiles, setSamplingPhotoFiles] = useState(() => initialState.samplingPhotoFiles ?? [])
   const [labReportFiles, setLabReportFiles] = useState(() => initialState.labReportFiles ?? [])
   const [wpmsInstrument, setWpmsInstrument] = useState(() => initialState.wpmsInstrument ?? '')
-  const [wpmsMeasurementTime, setWpmsMeasurementTime] = useState(() => initialState.wpmsMeasurementTime ?? '')
   const [wpmsIssueReason, setWpmsIssueReason] = useState(() => initialState.wpmsIssueReason ?? '')
   const [wpmsFailedParameters, setWpmsFailedParameters] = useState(() => initialState.wpmsFailedParameters ?? [])
   const [calibrationRows, setCalibrationRows] = useState(() => initialState.calibrationRows ?? [])
@@ -3946,7 +4050,6 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
           { problemDate, expectedDoneDate },
           {
             instruments: wpmsInstrument ? [wpmsInstrument] : [],
-            measurementTimes: wpmsMeasurementTime ? [wpmsMeasurementTime] : [],
             issueReasons: wpmsIssueReason ? [wpmsIssueReason] : [],
             failedParameters: wpmsFailedParameters,
           },
@@ -4031,7 +4134,6 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
         { problemDate, expectedDoneDate },
         {
           instruments: wpmsInstrument ? [wpmsInstrument] : [],
-          measurementTimes: wpmsMeasurementTime ? [wpmsMeasurementTime] : [],
           issueReasons: wpmsIssueReason ? [wpmsIssueReason] : [],
           failedParameters: wpmsFailedParameters,
         },
@@ -4156,13 +4258,11 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
                 problemDate={problemDate}
                 expectedDoneDate={expectedDoneDate}
                 instruments={wpmsInstrument}
-                measurementTimes={wpmsMeasurementTime}
                 issueReasons={wpmsIssueReason}
                 failedParameters={wpmsFailedParameters}
                 onProblemDateChange={setProblemDate}
                 onExpectedDoneDateChange={setExpectedDoneDate}
                 onInstrumentsChange={setWpmsInstrument}
-                onMeasurementTimesChange={setWpmsMeasurementTime}
                 onIssueReasonsChange={setWpmsIssueReason}
                 onFailedParametersChange={setWpmsFailedParameters}
               />
