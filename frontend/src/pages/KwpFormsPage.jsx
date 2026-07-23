@@ -250,7 +250,8 @@ function firstDefinedValue(...values) {
 }
 
 function uniqueTextValues(values) {
-  return [...new Set(values.map((value) => String(value ?? '').trim()).filter(Boolean))]
+  const source = Array.isArray(values) ? values : [values]
+  return [...new Set(source.map((value) => String(value ?? '').trim()).filter(Boolean))]
 }
 
 function normalizeParameterKey(value) {
@@ -291,6 +292,7 @@ function formatCoordinatePair(latitude, longitude) {
 
 function buildKwp03InitialFormValues(point) {
   const failedParameters = uniqueTextValues(point?.parameterDetails ?? [])
+  const instruments = uniqueTextValues(getPointDetailsValue(point, 'instruments'))
   const dischargePoint = firstDefinedValue(
     getPointDetailsValue(
       point,
@@ -316,8 +318,20 @@ function buildKwp03InitialFormValues(point) {
       maximumDischarge: getPointDetailsValue(point, 'maximumDischarge', 'maxWastewaterDischarge', 'maxDischarge'),
     },
     initialState: {
-      wpmsInstrument: getPointDetailsValue(point, 'instrument', 'instrumentName', 'monitoringInstrument'),
+      wpmsInstrument: instruments[0] ?? getPointDetailsValue(point, 'instrument', 'instrumentName', 'monitoringInstrument'),
       wpmsFailedParameters: failedParameters,
+    },
+  }
+}
+
+function buildKwpCemsInitialFormValues(point) {
+  return {
+    defaults: {
+      productionStack: getPointDetailsValue(point, 'productionStack', 'productionUnitType'),
+      combustionSystem: getPointDetailsValue(point, 'combustionSystem', 'combustionControlSystem'),
+      productionCapacity: getPointDetailsValue(point, 'productionCapacity'),
+      productionCapacityUnit: getPointDetailsValue(point, 'productionCapacityUnit'),
+      cemsModel: getPointDetailsValue(point, 'cemsModel'),
     },
   }
 }
@@ -325,6 +339,10 @@ function buildKwp03InitialFormValues(point) {
 function getKwpFormInitialValues(formCode, point) {
   if (formCode === 'กวภ.03') {
     return buildKwp03InitialFormValues(point)
+  }
+
+  if (['กวภ.01', 'กวภ.02', 'กวภ.04', 'กวภ.05'].includes(formCode)) {
+    return buildKwpCemsInitialFormValues(point)
   }
 
   return {}
@@ -461,6 +479,102 @@ function getKwpWorkflowStatusValues(source = {}) {
 function hasKwpWorkflowStatus(source, statuses) {
   const statusSet = new Set(statuses)
   return getKwpWorkflowStatusValues(source).some((status) => statusSet.has(status))
+}
+
+const kwpStatusChipStyles = {
+  blue: {
+    bgcolor: '#2563eb',
+    borderColor: '#2563eb',
+    color: '#ffffff',
+  },
+  orange: {
+    bgcolor: '#f97316',
+    borderColor: '#f97316',
+    color: '#ffffff',
+  },
+  purple: {
+    bgcolor: '#7c3aed',
+    borderColor: '#7c3aed',
+    color: '#ffffff',
+  },
+  green: {
+    bgcolor: '#16a34a',
+    borderColor: '#16a34a',
+    color: '#ffffff',
+  },
+  red: {
+    bgcolor: '#dc2626',
+    borderColor: '#dc2626',
+    color: '#ffffff',
+  },
+}
+
+const kwpStatusDisplayLabels = {
+  DRAFT: 'ร่าง',
+  SUBMITTED: 'รอพิจารณา',
+  UNDER_REVIEW: 'อยู่ระหว่างพิจารณา',
+  REVISION_REQUESTED: 'รอโรงงานแก้ไข',
+  APPROVED: 'ผ่านการพิจารณา',
+  REJECTED: 'ไม่ผ่านการพิจารณา',
+  CANCELLED: 'ยกเลิก',
+  CANCELED: 'ยกเลิก',
+}
+
+function getKwpStatusChipStyle(value) {
+  const normalizedValue = String(value ?? '').trim()
+
+  if (
+    [
+      'รอพิจารณา',
+      'SUBMITTED',
+      'แก้ไขแล้ว/รอพิจารณา',
+      'อยู่ระหว่างพิจารณา',
+      'UNDER_REVIEW',
+    ].includes(normalizedValue)
+  ) {
+    return kwpStatusChipStyles.blue
+  }
+
+  if (['รอโรงงานแก้ไข', 'REVISION_REQUESTED'].includes(normalizedValue)) {
+    return kwpStatusChipStyles.orange
+  }
+
+  if (['ผ่านการพิจารณา', 'APPROVED'].includes(normalizedValue)) {
+    return kwpStatusChipStyles.green
+  }
+
+  if (['ไม่ผ่านการพิจารณา', 'REJECTED', 'ยกเลิก', 'CANCELLED', 'CANCELED'].includes(normalizedValue)) {
+    return kwpStatusChipStyles.red
+  }
+
+  if (['ร่าง', 'DRAFT'].includes(normalizedValue)) {
+    return null
+  }
+
+  return null
+}
+
+function getKwpStatusChipDisplayValue(row = {}) {
+  const displayValue = row.statusLabel || row.status || row.statusCode || ''
+  return kwpStatusDisplayLabels[displayValue] ?? displayValue
+}
+
+function getKwpStatusChipStyleValue(row = {}) {
+  return row.statusCode || row.status || row.statusLabel || ''
+}
+
+function KwpStatusChip({ row = {} }) {
+  const displayValue = getKwpStatusChipDisplayValue(row)
+  const chipStyle = getKwpStatusChipStyle(getKwpStatusChipStyleValue(row)) ?? getKwpStatusChipStyle(displayValue)
+
+  return (
+    <Chip
+      label={displayValue || '-'}
+      size="small"
+      variant={chipStyle ? 'filled' : 'outlined'}
+      sx={chipStyle ? { ...chipStyle, fontWeight: 500 } : undefined}
+    />
+  )
 }
 
 function FormSelectionMenu({ factory, point, onSelectForm }) {
@@ -704,15 +818,6 @@ function OptionSelect({ label, value, onChange, options }) {
       ))}
     </TextField>
   )
-}
-
-function getDayRange(startDate, endDate) {
-  if (!startDate || !endDate || !dayjs(startDate).isValid() || !dayjs(endDate).isValid()) {
-    return ''
-  }
-
-  const diff = dayjs(endDate).startOf('day').diff(dayjs(startDate).startOf('day'), 'day')
-  return diff >= 0 ? String(diff + 1) : ''
 }
 
 function normalizeHourDateTime(value) {
@@ -988,6 +1093,11 @@ function formatApiDateValue(value) {
   return value && dayjs(value).isValid() ? dayjs(value).format('YYYY-MM-DD') : null
 }
 
+function formatApiHourDateTimeValue(value) {
+  const date = normalizeHourDateTime(value)
+  return date ? date.format('YYYY-MM-DDTHH:00:00') : null
+}
+
 function getDatePickerValue(value) {
   return value && dayjs(value).isValid() ? dayjs(value) : null
 }
@@ -1123,9 +1233,8 @@ function buildKwp01SubmissionPayload(form, formElement, dates, unreportedParamet
     ...buildKwpCommonSubmissionPayload(form, formElement),
     issueReason: getFormText(formData, 'issueReason'),
     reasonDetail: getFormText(formData, 'reasonDetail'),
-    problemDate: formatApiDateValue(dates.problemDate),
-    expectedDoneDate: formatApiDateValue(dates.expectedDoneDate),
-    totalDays: Number(getDayRange(dates.problemDate, dates.expectedDoneDate)) || null,
+    problemDate: formatApiHourDateTimeValue(dates.problemDate),
+    expectedDoneDate: formatApiHourDateTimeValue(dates.expectedDoneDate),
     unreportedParameters,
     correctiveAction: getFormText(formData, 'correctiveAction'),
   }
@@ -1159,7 +1268,6 @@ function buildKwp03SubmissionPayload(form, formElement, dates, selectedValues, a
   return {
     ...buildKwpCommonSubmissionPayload(form, formElement),
     instruments: selectedValues.instruments,
-    measurementTimes: selectedValues.measurementTimes,
     wastewaterSource: getFormText(formData, 'wastewaterSource') || null,
     receivingSource: getFormText(formData, 'receivingSource') || null,
     treatmentSystemType: getFormText(formData, 'treatmentSystemType') || null,
@@ -1169,9 +1277,8 @@ function buildKwp03SubmissionPayload(form, formElement, dates, selectedValues, a
     maximumDischarge: getFormText(formData, 'maximumDischarge') || null,
     issueReasons: selectedValues.issueReasons,
     reasonDetail: getFormText(formData, 'reasonDetail') || null,
-    problemDate: formatApiDateValue(dates.problemDate),
-    expectedDoneDate: formatApiDateValue(dates.expectedDoneDate),
-    totalDays: Number(getDayRange(dates.problemDate, dates.expectedDoneDate)) || null,
+    problemDate: formatApiHourDateTimeValue(dates.problemDate),
+    expectedDoneDate: formatApiHourDateTimeValue(dates.expectedDoneDate),
     failedParameters: selectedValues.failedParameters,
     correctiveAction: getFormText(formData, 'correctiveAction') || null,
     attachments,
@@ -1188,7 +1295,6 @@ function buildKwp05SubmissionPayload(form, formElement, calibrationRows) {
     officerRegistration: getFormText(formData, 'officerRegistration') || null,
     laboratoryName: getFormText(formData, 'laboratoryName') || null,
     laboratoryRegistration: getFormText(formData, 'laboratoryRegistration') || null,
-    cemsBrand: getFormText(formData, 'cemsBrand') || null,
     cemsDetail: getFormText(formData, 'cemsDetail') || null,
     reportRound: getFormText(formData, 'reportRound') || null,
     reportYear: getFormText(formData, 'reportYear') || null,
@@ -1197,7 +1303,6 @@ function buildKwp05SubmissionPayload(form, formElement, calibrationRows) {
       startDate: formatApiDateValue(row.startDate),
       endDate: formatApiDateValue(row.endDate),
       result: row.result || null,
-      verifierCompany: row.verifierCompany || null,
       cemsModel: row.cemsModel || null,
       rataReportLink: row.rataReportLink || null,
       calibrationPhotoLink: row.calibrationPhotoLink || null,
@@ -1214,7 +1319,7 @@ function buildKwp03PreviewData(form, formElement, dates, selectedValues) {
     title: form?.title ?? '',
     ...buildCommonFormPreviewData(form, formElement),
     instruments: selectedValues.instruments,
-    measurementTimes: selectedValues.measurementTimes,
+    measurementTimes: selectedValues.measurementTimes ?? [],
     wastewaterSource: getFormText(formData, 'wastewaterSource'),
     receivingSource: getFormText(formData, 'receivingSource'),
     treatmentSystemType: getFormText(formData, 'treatmentSystemType'),
@@ -3606,7 +3711,7 @@ const kwp05ResultTableColumns = [
   { id: 'actions', label: 'จัดการ' },
 ]
 
-function CalibrationResultDialog({ open, value, onClose, onSave }) {
+function CalibrationResultDialog({ open, value, defaultCemsModel = '', onClose, onSave }) {
   if (!open) {
     return null
   }
@@ -3615,14 +3720,19 @@ function CalibrationResultDialog({ open, value, onClose, onSave }) {
     <CalibrationResultDialogContent
       key={value?.id ?? 'new'}
       value={value}
+      defaultCemsModel={defaultCemsModel}
       onClose={onClose}
       onSave={onSave}
     />
   )
 }
 
-function CalibrationResultDialogContent({ value, onClose, onSave }) {
-  const [form, setForm] = useState(value ?? emptyCalibrationResult)
+function CalibrationResultDialogContent({ value, defaultCemsModel = '', onClose, onSave }) {
+  const [form, setForm] = useState(() => (
+    value
+      ? { ...emptyCalibrationResult, ...value }
+      : { ...emptyCalibrationResult, cemsModel: defaultCemsModel }
+  ))
   const [rataReportFiles, setRataReportFiles] = useState(value?.rataReportFiles ?? [])
   const [calibrationPhotoFiles, setCalibrationPhotoFiles] = useState(value?.calibrationPhotoFiles ?? [])
 
@@ -3759,6 +3869,7 @@ function CalibrationResultDialogContent({ value, onClose, onSave }) {
 
 function Kwp05Form({ factory, point, defaults = {}, calibrationRows, setCalibrationRows }) {
   const [editingCalibration, setEditingCalibration] = useState(null)
+  const defaultCemsModel = defaults.cemsModel ?? point?.cemsModel ?? ''
 
   const saveCalibration = (row) => {
     setCalibrationRows((current) => {
@@ -3920,6 +4031,7 @@ function Kwp05Form({ factory, point, defaults = {}, calibrationRows, setCalibrat
       <CalibrationResultDialog
         open={Boolean(editingCalibration)}
         value={editingCalibration?.id ? editingCalibration : null}
+        defaultCemsModel={defaultCemsModel}
         onClose={() => setEditingCalibration(null)}
         onSave={saveCalibration}
       />
@@ -3955,7 +4067,7 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
   const latestRevisionMessage = form?.latestRevisionMessage ?? ''
   const isEditMode = form?.mode === 'edit'
 
-  const uploadKwpAttachment = async (file) => {
+  const uploadKwpAttachment = async (file, attachmentType) => {
     if (file?.isSubmitted) {
       return {
         originalFileName: file.originalFileName ?? file.name ?? '',
@@ -3963,10 +4075,14 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
         mimeType: file.mimeType ?? file.type ?? null,
         fileSize: file.fileSize ?? file.size ?? null,
         storagePath: file.storagePath ?? null,
+        fileUrl: file.fileUrl ?? file.url ?? null,
       }
     }
 
     const uploadBody = new FormData()
+    if (attachmentType) {
+      uploadBody.append('attachmentType', attachmentType)
+    }
     uploadBody.append('file', file)
 
     const result = await fetch(`${kwpFormSubmissionsApiBaseUrl}/attachments`, {
@@ -3982,7 +4098,7 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
   }
 
   const uploadKwpAttachments = async (files, attachmentType) => {
-    const uploadedFiles = await Promise.all(files.map((file) => uploadKwpAttachment(file)))
+    const uploadedFiles = await Promise.all(files.map((file) => uploadKwpAttachment(file, attachmentType)))
 
     return uploadedFiles.map((file) => ({
       attachmentType,
@@ -3991,6 +4107,7 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
       mimeType: file?.mimeType ?? null,
       fileSize: file?.fileSize ?? null,
       storagePath: file?.storagePath ?? null,
+      fileUrl: file?.fileUrl ?? null,
     }))
   }
 
@@ -4361,7 +4478,12 @@ function getRequestColumns(onOpenDocument, isOperator = false) {
     { field: 'form', headerName: 'แบบฟอร์ม', width: 150 },
     { field: 'submittedDate', headerName: 'วันที่ยื่นคำขอ', width: 150 },
     { field: 'reviewedDate', headerName: 'วันที่พิจารณา', width: 150 },
-    { field: 'status', headerName: 'สถานะ', width: 170 },
+    {
+      field: 'status',
+      headerName: 'สถานะ',
+      width: 190,
+      renderCell: (params) => <KwpStatusChip row={params.row} />,
+    },
     {
       field: 'actions',
       headerName: 'จัดการ',
