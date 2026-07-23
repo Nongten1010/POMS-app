@@ -58,13 +58,16 @@ curl --request GET \
 | `data[].pointName` | string | No | ชื่อจุดตรวจวัด |
 | `data[].pointType` | `CEMS` \| `WPMS` | No | ระบบตรวจวัดของจุด |
 | `data[].parameterDetails` | string[] | No | ชื่อพารามิเตอร์พร้อมหน่วย เช่น `CO (ppm)` |
+| `data[].parameterInstrumentDetails` | object[] | No | ข้อมูลเครื่องมือตรวจวัดของแต่ละพารามิเตอร์ เรียงลำดับเดียวกับ `parameterDetails`; เป็น `[]` สำหรับ WPMS |
+| `data[].parameterInstrumentDetails[].parameter` | string | No | ชื่อพารามิเตอร์พร้อมหน่วย โดยมีค่าเดียวกับสมาชิกที่ตำแหน่งเดียวกันใน `parameterDetails` |
+| `data[].parameterInstrumentDetails[].cemsModel` | string | Yes | brand/model สำหรับพารามิเตอร์นั้น; หลายค่าที่ไม่ซ้ำกันคั่นด้วย `, ` และเป็น `null` เมื่อยังไม่มีข้อมูล |
 | `data[].primaryFuel` | string | Yes | เชื้อเพลิงหลัก |
 | `data[].secondaryFuel` | string | Yes | เชื้อเพลิงสำรอง |
 | `data[].productionStack` | string | Yes | ข้อมูลปล่อง/หน่วยการผลิตสำหรับ prefill กวภ.01 |
 | `data[].combustionSystem` | `ระบบปิด` \| `ระบบเปิด` | Yes | ระบบการเผาไหม้สำหรับ prefill กวภ.01 |
 | `data[].productionCapacity` | string | Yes | ค่ากำลังการผลิต ไม่รวมหน่วยเมื่อข้อมูลต้นทางแยกค่าและหน่วยได้ |
 | `data[].productionCapacityUnit` | string | Yes | หน่วยกำลังการผลิต |
-| `data[].cemsModel` | string | Yes | brand ของเครื่องมือตรวจวัดที่ไม่ซ้ำกัน คั่นด้วย `, ` สำหรับ prefill กวภ.05 |
+| `data[].cemsModel` | string | Yes | compatibility field ที่รวม brand ของเครื่องมือตรวจวัดซึ่งไม่ซ้ำกัน คั่นด้วย `, `; client ใหม่ควรใช้ `parameterInstrumentDetails[].cemsModel` |
 | `data[].instruments` | string[] | Yes | ตัวเลือกเครื่องมือสำหรับ WPMS |
 | `data[].measurementTimes` | string[] | Yes | รอบเวลาตรวจวัดสำหรับ WPMS |
 | `data[].wastewaterSource` | string | Yes | แหล่งกำเนิดน้ำเสียสำหรับ WPMS |
@@ -88,13 +91,27 @@ curl --request GET \
       "pointName": "Boiler 35 T",
       "pointType": "CEMS",
       "parameterDetails": ["CO (ppm)", "NOx (ppm)", "SO2 (ppm)"],
+      "parameterInstrumentDetails": [
+        {
+          "parameter": "CO (ppm)",
+          "cemsModel": "CO Analyzer A"
+        },
+        {
+          "parameter": "NOx (ppm)",
+          "cemsModel": "NOx Analyzer B"
+        },
+        {
+          "parameter": "SO2 (ppm)",
+          "cemsModel": null
+        }
+      ],
       "primaryFuel": "ไม่มี",
       "secondaryFuel": "ไม่มี",
       "productionStack": "หม้อไอน้ำ",
       "combustionSystem": "ระบบปิด",
       "productionCapacity": "35",
       "productionCapacityUnit": "ตัน/ชั่วโมง",
-      "cemsModel": "Acme CEMS"
+      "cemsModel": "CO Analyzer A, NOx Analyzer B"
     }
   ],
   "meta": {
@@ -108,9 +125,11 @@ curl --request GET \
 - `productionStack` อ่านจาก `details.productionStack` ก่อน แล้ว fallback ไป `details.productionUnitType`
 - `combustionSystem` อ่านจาก `details.combustionSystem` หรือ `details.combustionControlSystem` และคืนเฉพาะ `ระบบปิด`, `ระบบเปิด` หรือ `null`
 - `productionCapacity` ใช้ `details.productionCapacityValue` ก่อน และ fallback ไป `details.productionCapacity`; ถ้ามี `productionCapacityUnit` ต่อท้ายค่าแบบ legacy backend จะแยกหน่วยออก
-- `cemsModel` รวมค่า `measurementInstruments.parameters[].brand` หลัง trim และตัดค่าซ้ำ โดยคงลำดับเดิม
+- `parameterInstrumentDetails` สร้างจาก `parameterDetails` ทุกตัว แล้วจับคู่กับ `measurementInstruments.parameters[].parameter` หลัง trim และเทียบแบบไม่สนตัวพิมพ์เล็ก-ใหญ่
+- `parameterInstrumentDetails[].cemsModel` ใช้ `measurementInstruments.parameters[].brand` ของพารามิเตอร์ที่จับคู่ได้ หลัง trim และตัดค่าซ้ำ; ถ้าไม่มี brand จะคืน `null`
+- `cemsModel` ระดับจุดตรวจวัดยังรวม brand จาก `measurementInstruments.parameters[]` หลัง trim และตัดค่าซ้ำเพื่อ backward compatibility เท่านั้น
 - `connectedPointId` resolve จาก active connected point ด้วย `source_measurement_point_id`; backend ไม่ใช้ ID ของ request snapshot แทน
-- สำหรับ WPMS field prefill ของ CEMS ทั้งห้ารายการจะเป็น `null` และ field WPMS จะยังคืนตาม contract เดิม
+- สำหรับ WPMS `parameterInstrumentDetails` จะเป็น `[]`, field prefill CEMS อื่นจะเป็น `null` และ field WPMS จะยังคืนตาม contract เดิม
 - API ใช้ conditional response ของ Express ได้ จึงอาจเห็น `304 Not Modified` เมื่อ browser ส่ง `If-None-Match`; `304` หมายถึง client ใช้ representation ที่ cache ไว้ ไม่ใช่ response contract ใหม่หายไป
 
 ### Errors

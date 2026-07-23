@@ -8,7 +8,7 @@
 
 ### Main Flow
 
-1. อ่านจุดตรวจวัดและข้อมูล prefill ด้วย `GET /api/v1/connected-measurement-points/factories/:factoryId`
+1. อ่านจุดตรวจวัดและข้อมูล prefill ด้วย `GET /api/v1/connected-measurement-points/factories/:factoryId`; สำหรับ กวภ.05 ใช้ `parameterInstrumentDetails[].cemsModel` ตามพารามิเตอร์ที่เลือก
 2. อัปโหลดไฟล์แนบด้วย `POST /api/v1/kwp-form-submissions/attachments` และเก็บ metadata กลับไปผูกในฟอร์ม
 3. ส่งแบบ `POST /api/v1/kwp-form-submissions/kwp01` ถึง `kwp05`
 4. อ่านรายการและรายละเอียดแบบผ่าน `kwp-form-reports/*` และ `kwp-form-submissions/*`
@@ -334,6 +334,7 @@ curl --request POST \
 | `calibrationItems[].verifierCompany` | body | string | No | legacy field; omit ได้ในแต่ละรายการ |
 | `calibrationItems` | body | array | Yes | รายการผล calibration อย่างน้อย 1 รายการ |
 | `calibrationItems[].parameter` | body | string | Yes | พารามิเตอร์ที่สอบเทียบ ควรมีหน่วยใน label |
+| `calibrationItems[].cemsModel` | body | string | No | brand/model ของเครื่องมือตรวจวัดสำหรับพารามิเตอร์รายการนี้; prefill จาก `parameterInstrumentDetails` ของ connected-point response |
 | `calibrationItems[].startDate` | body | `YYYY-MM-DD` | No | วันที่เริ่มสอบเทียบ |
 | `calibrationItems[].endDate` | body | `YYYY-MM-DD` | No | วันที่สิ้นสุด ต้องไม่ก่อน `startDate` |
 
@@ -346,6 +347,7 @@ curl --request POST \
   "calibrationItems": [
     {
       "parameter": "SO2 (ppm)",
+      "cemsModel": "SO2 Analyzer A",
       "startDate": "2026-07-01",
       "endDate": "2026-07-02",
       "result": "ผ่าน"
@@ -387,6 +389,7 @@ curl --request POST \
 ### Validation And Business Rules
 
 - `cemsBrand` และ `verifierCompany` เป็น optional/nullable compatibility fields; client ใหม่ไม่จำเป็นต้องส่ง
+- Client ใหม่ควรจับคู่ `calibrationItems[].parameter` กับ `parameterInstrumentDetails[].parameter` แล้วใช้ `parameterInstrumentDetails[].cemsModel`; ไม่ควรใช้ `cemsModel` ระดับจุดตรวจวัดเมื่อแต่ละพารามิเตอร์ใช้คนละเครื่องมือ
 - attachment metadata ของแต่ละ calibration item ยังคงใช้ contract เดิม
 
 ### Errors

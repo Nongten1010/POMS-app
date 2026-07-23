@@ -546,12 +546,18 @@ export interface ConnectedMeasurementPointDetailDTO {
   deviceConfigs: DeviceConfigPayloadDTO[];
 }
 
+export interface ConnectedMeasurementPointParameterInstrumentDetailDTO {
+  parameter: string;
+  cemsModel: string | null;
+}
+
 export interface ConnectedMeasurementPointModalDetailDTO {
   connectedPointId: number | null;
   pointCode: string | null;
   pointName: string;
   pointType: ConnectionSystemType;
   parameterDetails: string[];
+  parameterInstrumentDetails: ConnectedMeasurementPointParameterInstrumentDetailDTO[];
   primaryFuel: string | null;
   secondaryFuel: string | null;
   productionStack: string | null;

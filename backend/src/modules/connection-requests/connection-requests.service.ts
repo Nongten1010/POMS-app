@@ -2291,6 +2291,7 @@ function toConnectedMeasurementPointModalDetail(
     pointName: detail.point.pointName,
     pointType: detail.type,
     parameterDetails: detail.point.parameters,
+    parameterInstrumentDetails: isCems ? deriveCemsParameterInstrumentDetails(detail.point) : [],
     primaryFuel: stringDetail(detail.point.details, 'primaryFuel'),
     secondaryFuel: stringDetail(detail.point.details, 'secondaryFuel'),
     productionStack: isCems
@@ -2370,6 +2371,33 @@ function deriveCemsModel(point: MeasurementPointDTO): string | null {
       .filter((brand): brand is string => Boolean(brand)) ?? [];
   const uniqueBrands = [...new Set(brands)];
   return uniqueBrands.length > 0 ? uniqueBrands.join(', ') : null;
+}
+
+function deriveCemsParameterInstrumentDetails(
+  point: MeasurementPointDTO,
+): ConnectedMeasurementPointModalDetailDTO['parameterInstrumentDetails'] {
+  const instrumentParameters = point.measurementInstruments?.parameters ?? [];
+
+  return point.parameters.map((parameter) => {
+    const normalizedParameter = normalizeParameterName(parameter);
+    const brands = instrumentParameters
+      .filter(
+        (instrumentParameter) =>
+          normalizeParameterName(instrumentParameter.parameter) === normalizedParameter,
+      )
+      .map((instrumentParameter) => instrumentParameter.brand?.trim())
+      .filter((brand): brand is string => Boolean(brand));
+    const uniqueBrands = [...new Set(brands)];
+
+    return {
+      parameter,
+      cemsModel: uniqueBrands.length > 0 ? uniqueBrands.join(', ') : null,
+    };
+  });
+}
+
+function normalizeParameterName(parameter: string): string {
+  return parameter.trim().toLowerCase();
 }
 
 function joinedStringDetail(details: MeasurementPointDTO['details'], key: string): string | null {

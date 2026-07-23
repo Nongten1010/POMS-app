@@ -2031,8 +2031,8 @@ describe('connectionRequestsService', () => {
             converterModel: null,
             parameters: [
               { parameter: 'NOx (ppm)', brand: 'Acme CEMS' },
-              { parameter: 'SO2 (ppm)', brand: ' Acme CEMS ' },
-              { parameter: 'O2 (%)', brand: 'Beta Monitor' },
+              { parameter: 'SO2 (ppm)', brand: ' Beta Monitor ' },
+              { parameter: 'O2 (%)', brand: 'Acme CEMS' },
               { parameter: 'Opacity (%)', brand: null },
             ],
           },
@@ -2134,6 +2134,10 @@ describe('connectionRequestsService', () => {
           pointName: 'ปล่องระบาย A',
           pointType: 'CEMS',
           parameterDetails: ['NOx (ppm)', 'SO2 (ppm)'],
+          parameterInstrumentDetails: [
+            { parameter: 'NOx (ppm)', cemsModel: 'Acme CEMS' },
+            { parameter: 'SO2 (ppm)', cemsModel: 'Beta Monitor' },
+          ],
           primaryFuel: 'ก๊าซธรรมชาติ',
           secondaryFuel: 'น้ำมันเตา',
           productionStack: 'หม้อไอน้ำ',
@@ -2148,6 +2152,7 @@ describe('connectionRequestsService', () => {
           pointName: 'บ่อบำบัดน้ำเสีย',
           pointType: 'WPMS',
           parameterDetails: ['BOD (mg/l)', 'COD (mg/l)'],
+          parameterInstrumentDetails: [],
           primaryFuel: null,
           secondaryFuel: null,
           productionStack: null,
@@ -2217,6 +2222,7 @@ describe('connectionRequestsService', () => {
       productionCapacity: '35',
       productionCapacityUnit: 'ตัน/ชั่วโมง',
       cemsModel: null,
+      parameterInstrumentDetails: [{ parameter: 'CO (ppm)', cemsModel: null }],
     });
   });
 
