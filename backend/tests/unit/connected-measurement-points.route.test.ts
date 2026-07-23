@@ -167,12 +167,18 @@ describe('connected measurement points route', () => {
     mockedConnectionRequestsService.getConnectedMeasurementPointDetailsByFactory.mockResolvedValue({
       data: [
         {
+          connectedPointId: 1,
           pointCode: 'P0001',
           pointName: 'จุดระบายน้ำทิ้ง A',
           pointType: 'WPMS',
           parameterDetails: ['BOD (mg/l)', 'COD (mg/l)'],
           primaryFuel: null,
           secondaryFuel: null,
+          productionStack: null,
+          combustionSystem: null,
+          productionCapacity: null,
+          productionCapacityUnit: null,
+          cemsModel: null,
           instruments: ['ค่าบีโอดี (BOD) และ ค่าซีโอดี (COD)'],
           measurementTimes: ['Real Time', '15 นาที'],
           wastewaterSource: 'ระบบบำบัดน้ำเสียส่วนกลาง',
@@ -381,12 +387,18 @@ describe('connected measurement points route', () => {
       success: true,
       data: [
         {
+          connectedPointId: 1,
           pointCode: 'P0001',
           pointName: 'จุดระบายน้ำทิ้ง A',
           pointType: 'WPMS',
           parameterDetails: ['BOD (mg/l)', 'COD (mg/l)'],
           primaryFuel: null,
           secondaryFuel: null,
+          productionStack: null,
+          combustionSystem: null,
+          productionCapacity: null,
+          productionCapacityUnit: null,
+          cemsModel: null,
           instruments: ['ค่าบีโอดี (BOD) และ ค่าซีโอดี (COD)'],
           measurementTimes: ['Real Time', '15 นาที'],
           wastewaterSource: 'ระบบบำบัดน้ำเสียส่วนกลาง',
@@ -396,6 +408,55 @@ describe('connected measurement points route', () => {
           averageDischarge: 120.5,
           minimumDischarge: 95,
           maximumDischarge: 160,
+        },
+      ],
+      meta: { total: 1 },
+    });
+  });
+
+  it('exposes KWP prefill fields for a CEMS connected measurement point', async () => {
+    mockedConnectionRequestsService.getConnectedMeasurementPointDetailsByFactory.mockResolvedValue({
+      data: [
+        {
+          connectedPointId: 25,
+          pointCode: 'S1125',
+          pointName: 'Boiler 35 T',
+          pointType: 'CEMS',
+          parameterDetails: ['CO (ppm)', 'NOx (ppm)'],
+          primaryFuel: 'ไม่มี',
+          secondaryFuel: 'ไม่มี',
+          productionStack: 'หม้อไอน้ำ',
+          combustionSystem: 'ระบบปิด',
+          productionCapacity: '35',
+          productionCapacityUnit: 'ตัน/ชั่วโมง',
+          cemsModel: 'Acme CEMS',
+        },
+      ],
+      meta: { total: 1 },
+    });
+    const app = createApp();
+
+    const response = await request(app)
+      .get('/api/v1/connected-measurement-points/factories/10120000325542')
+      .set('Authorization', `Bearer ${accessToken()}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      success: true,
+      data: [
+        {
+          connectedPointId: 25,
+          pointCode: 'S1125',
+          pointName: 'Boiler 35 T',
+          pointType: 'CEMS',
+          parameterDetails: ['CO (ppm)', 'NOx (ppm)'],
+          primaryFuel: 'ไม่มี',
+          secondaryFuel: 'ไม่มี',
+          productionStack: 'หม้อไอน้ำ',
+          combustionSystem: 'ระบบปิด',
+          productionCapacity: '35',
+          productionCapacityUnit: 'ตัน/ชั่วโมง',
+          cemsModel: 'Acme CEMS',
         },
       ],
       meta: { total: 1 },

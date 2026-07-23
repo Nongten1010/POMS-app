@@ -8,10 +8,11 @@
 
 ### Main Flow
 
-1. อัปโหลดไฟล์แนบด้วย `POST /api/v1/kwp-form-submissions/attachments` และเก็บ metadata กลับไปผูกในฟอร์ม
-2. ส่งแบบ `POST /api/v1/kwp-form-submissions/kwp01` ถึง `kwp05`
-3. อ่านรายการและรายละเอียดแบบผ่าน `kwp-form-reports/*` และ `kwp-form-submissions/*`
-4. เจ้าหน้าที่อ่าน workflow และอนุมัติหรือ request revision ผ่าน workflow endpoints
+1. อ่านจุดตรวจวัดและข้อมูล prefill ด้วย `GET /api/v1/connected-measurement-points/factories/:factoryId`
+2. อัปโหลดไฟล์แนบด้วย `POST /api/v1/kwp-form-submissions/attachments` และเก็บ metadata กลับไปผูกในฟอร์ม
+3. ส่งแบบ `POST /api/v1/kwp-form-submissions/kwp01` ถึง `kwp05`
+4. อ่านรายการและรายละเอียดแบบผ่าน `kwp-form-reports/*` และ `kwp-form-submissions/*`
+5. เจ้าหน้าที่อ่าน workflow และอนุมัติหรือ request revision ผ่าน workflow endpoints
 
 ```bash
 curl --request POST \
@@ -33,6 +34,7 @@ curl --request POST \
 
 | งาน | Method | Path | Auth | Permission | Contract |
 | --- | --- | --- | --- | --- | --- |
+| อ่านจุดตรวจวัดและข้อมูล prefill | `GET` | `/api/v1/connected-measurement-points/factories/:factoryId` | Bearer | `cems_wpms_requests:view` | [Connected measurement points](../../shared/connected-measurement-points/README.md) |
 | อัปโหลดไฟล์แนบ | `POST` | `/api/v1/kwp-form-submissions/attachments` | Bearer | `kwp_forms:edit` | [Upload attachment](#post-apiv1kwp-form-submissionsattachments) |
 | ส่งแบบ กวภ.01 | `POST` | `/api/v1/kwp-form-submissions/kwp01` | Bearer | `kwp_forms:edit` | [KWP01 submit/update](#postpatch-kwp01-hourly-duration-contract) |
 | แก้ไขแบบ กวภ.01 | `PATCH` | `/api/v1/kwp-form-submissions/kwp01/:id` | Bearer | `kwp_forms:edit` | [KWP01 submit/update](#postpatch-kwp01-hourly-duration-contract) |
@@ -124,6 +126,22 @@ curl --request POST \
 | `400` | `UPLOAD_ERROR` | ไฟล์เกิน transport limit 10 MB หรือ multipart ส่งไฟล์เกิน 1 ไฟล์ | ลดขนาดหรือจำนวนไฟล์แล้วส่งใหม่ |
 | `401` | `UNAUTHORIZED` | ไม่ได้ login | login ใหม่ |
 | `403` | `FORBIDDEN` | ไม่มี `kwp_forms:edit` | ปิดปุ่มหรือแจ้งสิทธิ์ไม่พอ |
+
+### Common factory and connected-point references
+
+กฎนี้ใช้กับ `POST` และ `PATCH` ของ กวภ.01-กวภ.05:
+
+| Field | Location | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `factoryId` | body | string | Yes | รหัสโรงงานที่ backend ใช้ตรวจ data scope |
+| `factoryRegistrationNo` | body | string | No | เลขทะเบียนโรงงาน ใช้เป็น identifier สำรอง |
+| `connectedPointId` | body | positive integer | No | ID จาก `GET /api/v1/connected-measurement-points/factories/:factoryId`; ส่ง `null` หรือ omit ได้เมื่อ endpoint คืน `null` |
+
+ถ้าส่ง `connectedPointId` backend จะตรวจว่าเป็น active row ใน `cems_wpms_connected_measurement_points` และต้องตรงกับ `factoryId` ที่ผ่าน data-scope access control แล้วเท่านั้น ระบบจะไม่ใช้ `factoryRegistrationNo` จาก payload เพื่อขยายสิทธิ์ เพื่อป้องกันการผูกแบบกับจุดตรวจวัดของโรงงานอื่น
+
+| HTTP status | Code | Condition | Client action |
+| --- | --- | --- | --- |
+| `403` | `FORBIDDEN` | `connectedPointId` ไม่ active หรือไม่ใช่ของโรงงานใน payload | โหลดรายการจุดตรวจวัดใหม่และเลือกจุดของโรงงานปัจจุบัน |
 
 ### `POST/PATCH` KWP01 hourly duration contract
 

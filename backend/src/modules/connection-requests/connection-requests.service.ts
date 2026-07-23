@@ -636,8 +636,22 @@ export const connectionRequestsService = {
       viewScope,
       regionalAccess,
     );
+    const currentPoints =
+      await connectionRequestsRepository.listConnectedMeasurementPointsForFactories([factoryId]);
+    const connectedPointIdsBySourcePointId = new Map(
+      currentPoints.flatMap((point) =>
+        point.connectedPointId !== undefined && point.sourceMeasurementPointId !== undefined
+          ? [[point.sourceMeasurementPointId, point.connectedPointId] as const]
+          : [],
+      ),
+    );
     return {
-      data: result.data.map(toConnectedMeasurementPointModalDetail),
+      data: result.data.map((detail) =>
+        toConnectedMeasurementPointModalDetail(
+          detail,
+          connectedPointIdsBySourcePointId.get(detail.point.id) ?? null,
+        ),
+      ),
       meta: { total: result.data.length },
     };
   },
@@ -2265,14 +2279,27 @@ async function loadConnectedMeasurementPointDetail(
 
 function toConnectedMeasurementPointModalDetail(
   detail: ConnectedMeasurementPointDetailDTO,
+  connectedPointId: number | null,
 ): ConnectedMeasurementPointModalDetailDTO {
+  const isCems = detail.type === 'CEMS';
+  const productionCapacity = isCems
+    ? deriveCemsProductionCapacity(detail.point.details)
+    : { value: null, unit: null };
   const baseDetail = {
+    connectedPointId,
     pointCode: detail.point.pointCode ?? null,
     pointName: detail.point.pointName,
     pointType: detail.type,
     parameterDetails: detail.point.parameters,
     primaryFuel: stringDetail(detail.point.details, 'primaryFuel'),
     secondaryFuel: stringDetail(detail.point.details, 'secondaryFuel'),
+    productionStack: isCems
+      ? firstStringDetail(detail.point.details, 'productionStack', 'productionUnitType')
+      : null,
+    combustionSystem: isCems ? deriveCemsCombustionSystem(detail.point.details) : null,
+    productionCapacity: productionCapacity.value,
+    productionCapacityUnit: productionCapacity.unit,
+    cemsModel: isCems ? deriveCemsModel(detail.point) : null,
   };
 
   if (detail.type !== 'WPMS') return baseDetail;
@@ -2299,6 +2326,50 @@ function stringDetail(details: MeasurementPointDTO['details'], key: string): str
 
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+function firstStringDetail(
+  details: MeasurementPointDTO['details'],
+  ...keys: string[]
+): string | null {
+  for (const key of keys) {
+    const value = stringDetail(details, key);
+    if (value) return value;
+  }
+  return null;
+}
+
+function deriveCemsCombustionSystem(
+  details: MeasurementPointDTO['details'],
+): 'ระบบปิด' | 'ระบบเปิด' | null {
+  const value = firstStringDetail(details, 'combustionSystem', 'combustionControlSystem');
+  return value === 'ระบบปิด' || value === 'ระบบเปิด' ? value : null;
+}
+
+function deriveCemsProductionCapacity(details: MeasurementPointDTO['details']): {
+  value: string | null;
+  unit: string | null;
+} {
+  const unit = stringDetail(details, 'productionCapacityUnit');
+  const explicitValue = scalarTextDetail(details, 'productionCapacityValue');
+  if (explicitValue) return { value: explicitValue, unit };
+
+  const combinedValue = scalarTextDetail(details, 'productionCapacity');
+  if (!combinedValue || !unit || !combinedValue.endsWith(unit)) {
+    return { value: combinedValue, unit };
+  }
+
+  const valueWithoutUnit = combinedValue.slice(0, -unit.length).trim();
+  return { value: valueWithoutUnit || combinedValue, unit };
+}
+
+function deriveCemsModel(point: MeasurementPointDTO): string | null {
+  const brands =
+    point.measurementInstruments?.parameters
+      .map((parameter) => parameter.brand?.trim())
+      .filter((brand): brand is string => Boolean(brand)) ?? [];
+  const uniqueBrands = [...new Set(brands)];
+  return uniqueBrands.length > 0 ? uniqueBrands.join(', ') : null;
 }
 
 function joinedStringDetail(details: MeasurementPointDTO['details'], key: string): string | null {
@@ -2328,6 +2399,11 @@ function scalarDetail(
 
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+function scalarTextDetail(details: MeasurementPointDTO['details'], key: string): string | null {
+  const value = scalarDetail(details, key);
+  return value === null ? null : String(value);
 }
 
 function buildWpmsDischargePoint(details: MeasurementPointDTO['details']): string | null {

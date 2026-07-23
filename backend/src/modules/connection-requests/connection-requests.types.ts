@@ -478,6 +478,8 @@ export interface PublicFactoryMapPointDTO extends Omit<
 export type PublicFactoryMapMeasurementPointDTO = Omit<OperatorFactoryMeasurementPointDTO, 'data'>;
 
 export interface CurrentFactoryMeasurementPointDTO extends OperatorFactoryMeasurementPointDTO {
+  connectedPointId?: number;
+  sourceMeasurementPointId?: number;
   factoryId: string;
   eligibleFactoryId?: number | null;
   factoryLogo?: RequestDocumentImageInput | null;
@@ -545,12 +547,18 @@ export interface ConnectedMeasurementPointDetailDTO {
 }
 
 export interface ConnectedMeasurementPointModalDetailDTO {
+  connectedPointId: number | null;
   pointCode: string | null;
   pointName: string;
   pointType: ConnectionSystemType;
   parameterDetails: string[];
   primaryFuel: string | null;
   secondaryFuel: string | null;
+  productionStack: string | null;
+  combustionSystem: 'ระบบปิด' | 'ระบบเปิด' | null;
+  productionCapacity: string | null;
+  productionCapacityUnit: string | null;
+  cemsModel: string | null;
   instruments?: string[];
   measurementTimes?: string[];
   wastewaterSource?: string | null;

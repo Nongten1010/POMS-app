@@ -1,7 +1,10 @@
-import { describe, expect, it } from '@jest/globals';
+import { describe, expect, it, jest } from '@jest/globals';
+import type { Knex } from 'knex';
 import { buildPublicFileUrl } from '../../src/modules/kwp-form-submissions/kwp-form-attachments.service';
 import {
+  assertKwpConnectedPointBelongsToFactoryForTests,
   buildKwpCivilDateTimeSelectForTests,
+  buildKwpConnectedPointFactoryQueryForTests,
   buildKwpFormSubmissionDetailQueryForTests,
   buildKwpFormEditableSubmissionQueryForTests,
   buildKwpFormSubmissionFactoryAccessQueryForTests,
@@ -55,6 +58,38 @@ describe('kwpFormSubmissionsRepository', () => {
     expect(sql).toContain('[uj].[user_id]');
     expect(sql).toContain('[f].[fid]');
     expect(sql).toContain('[f].[code]');
+  });
+
+  it('validates a connected point against the access-checked factory id', () => {
+    const compiled = buildKwpConnectedPointFactoryQueryForTests(8, 'FID-001').toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('from [cems_wpms_connected_measurement_points]');
+    expect(sql).toContain('[id] = ?');
+    expect(sql).toContain('[factory_id] = ?');
+    expect(sql).not.toContain('[factory_registration_no]');
+    expect(sql).toContain('[deleted_at] is null');
+    expect(compiled.bindings).toEqual(expect.arrayContaining([8, 'FID-001']));
+  });
+
+  it('rejects a connected point that is not active for the submitted factory', async () => {
+    const trx = connectedPointTransaction(undefined);
+
+    await expect(
+      assertKwpConnectedPointBelongsToFactoryForTests(trx, 8, 'FID-001'),
+    ).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      statusCode: 403,
+      message: 'Connected measurement point does not belong to this factory',
+    });
+  });
+
+  it('accepts an active connected point from the submitted factory', async () => {
+    const trx = connectedPointTransaction({ id: 8 });
+
+    await expect(
+      assertKwpConnectedPointBelongsToFactoryForTests(trx, 8, 'FID-001'),
+    ).resolves.toBeUndefined();
   });
 
   it('limits KWP detail reads to requested submission id, supported forms, and operator factories', () => {
@@ -732,3 +767,14 @@ describe('kwpFormSubmissionsRepository', () => {
     });
   });
 });
+
+function connectedPointTransaction(firstResult: { id: number } | undefined): Knex.Transaction {
+  const builder = {
+    where: jest.fn().mockReturnThis(),
+    whereNull: jest.fn().mockReturnThis(),
+    select: jest.fn().mockReturnThis(),
+    first: jest.fn<() => Promise<{ id: number } | undefined>>().mockResolvedValue(firstResult),
+  };
+
+  return jest.fn(() => builder) as unknown as Knex.Transaction;
+}

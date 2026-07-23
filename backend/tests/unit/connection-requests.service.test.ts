@@ -2021,6 +2021,20 @@ describe('connectionRequestsService', () => {
           details: {
             primaryFuel: 'ก๊าซธรรมชาติ',
             secondaryFuel: 'น้ำมันเตา',
+            productionUnitType: 'หม้อไอน้ำ',
+            productionCapacityValue: '100',
+            productionCapacityUnit: 'ตัน/วัน',
+            combustionControlSystem: 'ระบบปิด',
+          },
+          measurementInstruments: {
+            converterBrand: null,
+            converterModel: null,
+            parameters: [
+              { parameter: 'NOx (ppm)', brand: 'Acme CEMS' },
+              { parameter: 'SO2 (ppm)', brand: ' Acme CEMS ' },
+              { parameter: 'O2 (%)', brand: 'Beta Monitor' },
+              { parameter: 'Opacity (%)', brand: null },
+            ],
           },
         },
       ],
@@ -2069,6 +2083,30 @@ describe('connectionRequestsService', () => {
     mockedRepository.findFactorySummariesForRequests.mockResolvedValue(
       new Map([[request.factoryId, factorySummary()]]),
     );
+    mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
+      {
+        connectedPointId: 101,
+        sourceMeasurementPointId: 1,
+        factoryId: 'factory-001',
+        stationId: 'STACK-A',
+        pointName: 'ปล่องระบาย A',
+        pointCode: 'STACK-A',
+        systemType: 'CEMS',
+        parameters: ['NOx (ppm)', 'SO2 (ppm)'],
+        data: [],
+      } as unknown as CurrentFactoryMeasurementPointDTO,
+      {
+        connectedPointId: 102,
+        sourceMeasurementPointId: 2,
+        factoryId: 'factory-001',
+        stationId: 'WWTP-1',
+        pointName: 'บ่อบำบัดน้ำเสีย',
+        pointCode: 'WWTP-1',
+        systemType: 'WPMS',
+        parameters: ['BOD (mg/l)', 'COD (mg/l)'],
+        data: [],
+      } as unknown as CurrentFactoryMeasurementPointDTO,
+    ]);
 
     const result = await connectionRequestsService.getConnectedMeasurementPointDetailsByFactory(
       'factory-001',
@@ -2085,23 +2123,38 @@ describe('connectionRequestsService', () => {
         useAssignedFactoryAccess: true,
       },
     );
+    expect(mockedRepository.listConnectedMeasurementPointsForFactories).toHaveBeenCalledWith([
+      'factory-001',
+    ]);
     expect(result).toEqual({
       data: [
         {
+          connectedPointId: 101,
           pointCode: 'STACK-A',
           pointName: 'ปล่องระบาย A',
           pointType: 'CEMS',
           parameterDetails: ['NOx (ppm)', 'SO2 (ppm)'],
           primaryFuel: 'ก๊าซธรรมชาติ',
           secondaryFuel: 'น้ำมันเตา',
+          productionStack: 'หม้อไอน้ำ',
+          combustionSystem: 'ระบบปิด',
+          productionCapacity: '100',
+          productionCapacityUnit: 'ตัน/วัน',
+          cemsModel: 'Acme CEMS, Beta Monitor',
         },
         {
+          connectedPointId: 102,
           pointCode: 'WWTP-1',
           pointName: 'บ่อบำบัดน้ำเสีย',
           pointType: 'WPMS',
           parameterDetails: ['BOD (mg/l)', 'COD (mg/l)'],
           primaryFuel: null,
           secondaryFuel: null,
+          productionStack: null,
+          combustionSystem: null,
+          productionCapacity: null,
+          productionCapacityUnit: null,
+          cemsModel: null,
           instruments: ['ค่าบีโอดี (BOD) และ ค่าซีโอดี (COD)'],
           measurementTimes: ['Real Time', '15 นาที'],
           wastewaterSource: 'ระบบบำบัดน้ำเสียส่วนกลาง',
@@ -2114,6 +2167,56 @@ describe('connectionRequestsService', () => {
         },
       ],
       meta: { total: 2 },
+    });
+  });
+
+  it('normalizes legacy CEMS prefill values without substituting a request snapshot id', async () => {
+    const request = requestDto({
+      status: CONNECTION_REQUEST_STATUS.CONNECTED,
+      statusLabel: 'เชื่อมต่อแล้ว',
+      measurementPoints: [
+        {
+          id: 3,
+          pointName: 'ปล่องเตาเผา',
+          pointCode: 'STACK-C',
+          pointType: 'STACK',
+          latitude: null,
+          longitude: null,
+          parameters: ['CO (ppm)'],
+          description: null,
+          details: {
+            productionStack: ' ปล่องจากเตาเผา ',
+            productionUnitType: 'เตาเผา',
+            productionCapacity: '35 ตัน/ชั่วโมง',
+            productionCapacityUnit: 'ตัน/ชั่วโมง',
+            combustionControlSystem: 'ควบคุมอัตโนมัติ',
+          },
+          measurementInstruments: {
+            converterBrand: null,
+            converterModel: null,
+            parameters: [{ parameter: 'CO (ppm)', brand: '   ' }],
+          },
+        },
+      ],
+    });
+    mockedRepository.list.mockResolvedValue({ rows: [request], total: 1 });
+    mockedRepository.findFactorySummariesForRequests.mockResolvedValue(
+      new Map([[request.factoryId, factorySummary()]]),
+    );
+
+    const result = await connectionRequestsService.getConnectedMeasurementPointDetailsByFactory(
+      'factory-001',
+      actorUserId,
+      'ALL',
+    );
+
+    expect(result.data[0]).toMatchObject({
+      connectedPointId: null,
+      productionStack: 'ปล่องจากเตาเผา',
+      combustionSystem: null,
+      productionCapacity: '35',
+      productionCapacityUnit: 'ตัน/ชั่วโมง',
+      cemsModel: null,
     });
   });
 

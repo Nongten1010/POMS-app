@@ -97,6 +97,11 @@ interface Kwp05InsertRecords {
   statusHistory: Record<string, unknown>;
 }
 
+interface KwpSubmissionFactoryReference {
+  factoryId: string;
+  connectedPointId?: number | null;
+}
+
 interface SubmissionDetailRow {
   id: number | string;
   submission_no: string;
@@ -511,7 +516,7 @@ export const kwpFormSubmissionsRepository = {
     access: KwpFormSubmissionAccess,
   ): Promise<CreatedKwpFormSubmissionDTO> {
     return db.transaction(async (trx) => {
-      await assertCanCreateForFactory(trx, payload.factoryId, access);
+      await assertCanCreateForFactory(trx, payload, access);
 
       const now = new Date();
       const submissionNo = await nextSubmissionNo(trx, now);
@@ -569,7 +574,7 @@ export const kwpFormSubmissionsRepository = {
     access: KwpFormSubmissionAccess,
   ): Promise<CreatedKwpFormSubmissionDTO> {
     return db.transaction(async (trx) => {
-      await assertCanCreateForFactory(trx, payload.factoryId, access);
+      await assertCanCreateForFactory(trx, payload, access);
 
       const now = new Date();
       const submissionNo = await nextSubmissionNo(trx, now);
@@ -642,7 +647,7 @@ export const kwpFormSubmissionsRepository = {
     access: KwpFormSubmissionAccess,
   ): Promise<CreatedKwpFormSubmissionDTO> {
     return db.transaction(async (trx) => {
-      await assertCanCreateForFactory(trx, payload.factoryId, access);
+      await assertCanCreateForFactory(trx, payload, access);
 
       const now = new Date();
       const submissionNo = await nextSubmissionNo(trx, now);
@@ -712,7 +717,7 @@ async function createKwpEmissionReport(
   formType: 'KWP02' | 'KWP04',
 ): Promise<CreatedKwpFormSubmissionDTO> {
   return db.transaction(async (trx) => {
-    await assertCanCreateForFactory(trx, payload.factoryId, access);
+    await assertCanCreateForFactory(trx, payload, access);
 
     const now = new Date();
     const submissionNo = await nextSubmissionNo(trx, now);
@@ -895,7 +900,7 @@ async function updateCommonSubmission(
   now: Date,
   trx: Knex.Transaction,
 ): Promise<void> {
-  await assertCanCreateForFactory(trx, payload.factoryId, access);
+  await assertCanCreateForFactory(trx, payload, access);
 
   await trx('kwp_form_submissions')
     .where('id', id)
@@ -930,6 +935,21 @@ export function buildKwpFormSubmissionFactoryAccessQueryForTests(
   access: KwpFormSubmissionAccess,
 ): Knex.QueryBuilder {
   return buildFactoryAccessQuery(db, factoryId, access);
+}
+
+export function buildKwpConnectedPointFactoryQueryForTests(
+  connectedPointId: number,
+  factoryId: string,
+): Knex.QueryBuilder {
+  return buildConnectedPointFactoryQuery(db, connectedPointId, factoryId);
+}
+
+export async function assertKwpConnectedPointBelongsToFactoryForTests(
+  trx: Knex.Transaction,
+  connectedPointId: number,
+  factoryId: string,
+): Promise<void> {
+  await assertConnectedPointBelongsToFactory(trx, { connectedPointId, factoryId });
 }
 
 export function buildKwpFormSubmissionDetailQueryForTests(
@@ -990,15 +1010,45 @@ export function nextKwpWorkflowStatusForTests(
 
 async function assertCanCreateForFactory(
   trx: Knex.Transaction,
-  factoryId: string,
+  payload: KwpSubmissionFactoryReference,
   access: KwpFormSubmissionAccess,
 ): Promise<void> {
-  if (access.scope !== 'OWN_FACTORY') return;
-
-  const row = await buildFactoryAccessQuery(trx, factoryId, access).first();
-  if (!row) {
-    throw new ForbiddenError('User cannot submit KWP form for this factory');
+  if (access.scope === 'OWN_FACTORY') {
+    const row = await buildFactoryAccessQuery(trx, payload.factoryId, access).first();
+    if (!row) {
+      throw new ForbiddenError('User cannot submit KWP form for this factory');
+    }
   }
+
+  await assertConnectedPointBelongsToFactory(trx, payload);
+}
+
+async function assertConnectedPointBelongsToFactory(
+  trx: Knex.Transaction,
+  payload: KwpSubmissionFactoryReference,
+): Promise<void> {
+  if (payload.connectedPointId === null || payload.connectedPointId === undefined) return;
+
+  const row = await buildConnectedPointFactoryQuery(
+    trx,
+    payload.connectedPointId,
+    payload.factoryId,
+  ).first();
+  if (!row) {
+    throw new ForbiddenError('Connected measurement point does not belong to this factory');
+  }
+}
+
+function buildConnectedPointFactoryQuery(
+  knexOrTrx: Knex | Knex.Transaction,
+  connectedPointId: number,
+  factoryId: string,
+): Knex.QueryBuilder {
+  return knexOrTrx('cems_wpms_connected_measurement_points')
+    .where('id', connectedPointId)
+    .whereNull('deleted_at')
+    .where('factory_id', factoryId)
+    .select('id');
 }
 
 function buildFactoryAccessQuery(

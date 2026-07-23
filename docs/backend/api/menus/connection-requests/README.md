@@ -53,6 +53,7 @@ curl --request POST \
 | อนุมัติแบบและออกรหัสจุดตรวจวัด | `POST` | `/api/v1/cems-wpms-requests/:id/review` | Bearer | `cems_wpms_requests:approve` | [Approve design](#approve-design) |
 | อ่านรายละเอียดคำขอและรหัสจุด | `GET` | `/api/v1/cems-wpms-requests/:id` | Bearer | `cems_wpms_requests:view` | [Read request](#read-request) |
 | อ่านจุดตรวจวัดที่เชื่อมต่อแล้ว | `GET` | `/api/v1/connected-measurement-points` | Bearer | `cems_wpms_requests:view` | [Connected points](#connected-points) |
+| อ่านจุดตรวจวัดของโรงงานและข้อมูล prefill | `GET` | `/api/v1/connected-measurement-points/factories/:factoryId` | Bearer | `cems_wpms_requests:view` | [Shared connected-point contract](../../shared/connected-measurement-points/README.md) |
 | ผู้ประกอบการยกเลิกคำขอ | `POST` | `/api/v1/cems-wpms-requests/:id/cancel` | Bearer | `cems_wpms_requests:edit` + owner | [Cancel request](./operator-cancel-request.md) |
 
 ## Point-code Contract

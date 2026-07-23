@@ -133,6 +133,8 @@ interface ConnectedFactoryProfileRow {
 }
 
 interface CurrentFactoryMeasurementPointRow {
+  id: number | string;
+  source_measurement_point_id: number | string;
   factory_id: string;
   eligible_factory_id: number | string | null;
   point_name: string;
@@ -777,6 +779,8 @@ export const connectionRequestsRepository = {
     const query = buildConnectedMeasurementPointsQuery(lookupKeys, eligibleLookupIds);
     const rows = await query
       .select(
+        'id',
+        'source_measurement_point_id',
         'factory_id',
         'eligible_factory_id',
         'point_name',
@@ -791,6 +795,8 @@ export const connectionRequestsRepository = {
       .orderBy('point_name', 'asc');
 
     return rows.map((row) => ({
+      connectedPointId: Number(row.id),
+      sourceMeasurementPointId: Number(row.source_measurement_point_id),
       factoryId: row.factory_id,
       eligibleFactoryId: toNullableNumber(row.eligible_factory_id),
       stationId: row.point_code ?? row.point_name,
