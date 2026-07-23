@@ -336,6 +336,14 @@ function buildKwpCemsInitialFormValues(point) {
   }
 }
 
+function getKwp05ParameterOptions(point) {
+  return uniqueTextValues(point?.parameterDetails ?? [])
+}
+
+function getKwp05ParameterInstrumentDetails(point) {
+  return Array.isArray(point?.parameterInstrumentDetails) ? point.parameterInstrumentDetails : []
+}
+
 function getKwpFormInitialValues(formCode, point) {
   if (formCode === 'กวภ.03') {
     return buildKwp03InitialFormValues(point)
@@ -1604,7 +1612,8 @@ function buildKwpEditFormFromDetail(detail = {}, row = {}) {
       type: detail.pointType ?? row.type,
       primaryFuel: detail.primaryFuel ?? row.primaryFuel,
       secondaryFuel: detail.secondaryFuel ?? row.secondaryFuel,
-      parameterDetails: row.parameterDetails ?? [],
+      parameterDetails: detail.parameterDetails ?? row.parameterDetails ?? [],
+      parameterInstrumentDetails: detail.parameterInstrumentDetails ?? row.parameterInstrumentDetails ?? [],
     },
     defaults: {
       contactName: detail.contactName ?? '',
@@ -3711,7 +3720,7 @@ const kwp05ResultTableColumns = [
   { id: 'actions', label: 'จัดการ' },
 ]
 
-function CalibrationResultDialog({ open, value, defaultCemsModel = '', onClose, onSave }) {
+function CalibrationResultDialog({ open, value, parameterOptions = [], parameterInstrumentDetails = [], onClose, onSave }) {
   if (!open) {
     return null
   }
@@ -3720,18 +3729,27 @@ function CalibrationResultDialog({ open, value, defaultCemsModel = '', onClose, 
     <CalibrationResultDialogContent
       key={value?.id ?? 'new'}
       value={value}
-      defaultCemsModel={defaultCemsModel}
+      parameterOptions={parameterOptions}
+      parameterInstrumentDetails={parameterInstrumentDetails}
       onClose={onClose}
       onSave={onSave}
     />
   )
 }
 
-function CalibrationResultDialogContent({ value, defaultCemsModel = '', onClose, onSave }) {
+function CalibrationResultDialogContent({ value, parameterOptions = [], parameterInstrumentDetails = [], onClose, onSave }) {
+  const getCemsModelByParameter = (parameter) => {
+    const normalizedParameter = String(parameter ?? '').trim()
+    const instrumentDetail = parameterInstrumentDetails.find((item) =>
+      String(item?.parameter ?? '').trim() === normalizedParameter
+    )
+
+    return instrumentDetail?.cemsModel ?? ''
+  }
   const [form, setForm] = useState(() => (
     value
       ? { ...emptyCalibrationResult, ...value }
-      : { ...emptyCalibrationResult, cemsModel: defaultCemsModel }
+      : emptyCalibrationResult
   ))
   const [rataReportFiles, setRataReportFiles] = useState(value?.rataReportFiles ?? [])
   const [calibrationPhotoFiles, setCalibrationPhotoFiles] = useState(value?.calibrationPhotoFiles ?? [])
@@ -3752,10 +3770,17 @@ function CalibrationResultDialogContent({ value, defaultCemsModel = '', onClose,
                 label="พารามิเตอร์"
                 size="small"
                 value={form.parameter}
-                onChange={(event) => updateForm('parameter', event.target.value)}
+                onChange={(event) => {
+                  const nextParameter = event.target.value
+                  setForm((current) => ({
+                    ...current,
+                    parameter: nextParameter,
+                    cemsModel: getCemsModelByParameter(nextParameter),
+                  }))
+                }}
                 fullWidth
               >
-                {cemsParameterOptions.map((option) => (
+                {parameterOptions.map((option) => (
                   <MenuItem key={option} value={option}>
                     {option}
                   </MenuItem>
@@ -3869,7 +3894,8 @@ function CalibrationResultDialogContent({ value, defaultCemsModel = '', onClose,
 
 function Kwp05Form({ factory, point, defaults = {}, calibrationRows, setCalibrationRows }) {
   const [editingCalibration, setEditingCalibration] = useState(null)
-  const defaultCemsModel = defaults.cemsModel ?? point?.cemsModel ?? ''
+  const parameterOptions = getKwp05ParameterOptions(point)
+  const parameterInstrumentDetails = getKwp05ParameterInstrumentDetails(point)
 
   const saveCalibration = (row) => {
     setCalibrationRows((current) => {
@@ -4040,7 +4066,8 @@ function Kwp05Form({ factory, point, defaults = {}, calibrationRows, setCalibrat
       <CalibrationResultDialog
         open={Boolean(editingCalibration)}
         value={editingCalibration?.id ? editingCalibration : null}
-        defaultCemsModel={defaultCemsModel}
+        parameterOptions={parameterOptions}
+        parameterInstrumentDetails={parameterInstrumentDetails}
         onClose={() => setEditingCalibration(null)}
         onSave={saveCalibration}
       />
@@ -4504,7 +4531,28 @@ function getRequestColumns(onOpenDocument, isOperator = false) {
   ]
 }
 
-function KwpFormsPage({ userType = '', accessToken = '' }) {
+function applyKwpLoginDefaults(form, currentUser) {
+  const loginName = String(currentUser?.name ?? '').trim()
+  const loginPosition = String(currentUser?.position ?? '').trim()
+
+  if (!loginName && !loginPosition) {
+    return form
+  }
+
+  const defaults = form?.defaults ?? {}
+
+  return {
+    ...form,
+    defaults: {
+      ...defaults,
+      contactName: defaults.contactName || loginName,
+      reporterName: defaults.reporterName || loginName,
+      reporterPosition: defaults.reporterPosition || loginPosition,
+    },
+  }
+}
+
+function KwpFormsPage({ userType = '', accessToken = '', currentUser = null }) {
   const isOperator = userType === 'operator'
   const availableSubMenus = isOperator ? operatorSubMenus : officerSubMenus
   const [monitoringPointContext, setMonitoringPointContext] = useState(null)
@@ -5061,7 +5109,7 @@ function KwpFormsPage({ userType = '', accessToken = '' }) {
         error={monitoringPointError}
         onClose={closeMonitoringPointDialog}
         onSelectForm={(form) => {
-          openFormBottomSheet(form)
+          openFormBottomSheet(applyKwpLoginDefaults(form, currentUser))
           setMonitoringPointContext(null)
         }}
       />
