@@ -2,6 +2,14 @@
 
 ไฟล์นี้บันทึกเฉพาะการเปลี่ยน API ที่ทำให้ client ต้องแก้ตาม การเปลี่ยนทั่วไปและประวัติรายละเอียดดูจาก Git history
 
+## 2026-07-24 — เปลี่ยนรูปแบบเลขรายงานความคลาดเคลื่อน BOD/COD และแยก running ตามภาคกับปี
+
+- **Affected menu:** [รายงานค่าความคลาดเคลื่อน BOD/COD Online](./menus/bod-cod-deviation-reports/README.md)
+- **Impact:** `reportNo` ของรายงานที่สร้างใหม่มี `/` และเปลี่ยนรูปแบบ; client ที่ validate, sort หรือแยกส่วนเลขตามรูปแบบเดิมต้องปรับให้ใช้เป็น opaque string
+- **Migration:** รองรับ `BODCOD-YYYY-NNNN` สำหรับข้อมูลเดิมและ `Error-RR-NNNN/YYYY` สำหรับข้อมูลใหม่ ไม่ต้องส่ง `regionCode` เพิ่มเพราะ backend หา region จากข้อมูลโรงงาน และต้อง URL-encode หากนำเลขไปใช้เป็น path/query value
+- **Old contract:** รายงานใหม่ใช้ running รวมรายปีรูปแบบ `BODCOD-2569-0001`
+- **New contract:** รายงานใหม่ใช้ `Error-02-0001/2569` เป็นต้น โดย running แยกตาม `ภาค + ปีรายงาน พ.ศ.` ใช้ร่วมกันระหว่าง BOD/COD และรอบ 1-2 และจำกัดลำดับที่ `0001`-`9999`
+
 ## 2026-07-24 — เปลี่ยนรูปแบบเลขคำขอ กวภ. และแยก running ตามแบบ ภาค และปี
 
 - **Affected menu:** [แจ้งแบบ กวภ. 01 - กวภ. 05](./menus/kwp-forms/README.md)

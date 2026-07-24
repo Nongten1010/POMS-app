@@ -27,6 +27,10 @@
 - [เลขคำขอ กวภ. แยกตามแบบ ภาค และปี](./kwp-forms/request-numbering.tdd.md)
 - [ชื่อโรงงานในเมนู กวภ. ใช้ข้อมูล current/live POMS](./kwp-forms/factory-table-current-factory-name.tdd.md)
 
+## BOD/COD deviation reports
+
+- [เลขรายงาน BOD/COD แยกตามภาคและปี](./bod-cod-deviation-reports/request-numbering.tdd.md)
+
 ## Migration Targets
 
 | Legacy evidence | Destination pattern |

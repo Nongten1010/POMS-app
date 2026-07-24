@@ -3,6 +3,11 @@ import { db } from '../../config/database';
 import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
 import { buildPublicFileUrl } from '../kwp-form-submissions/kwp-form-attachments.service';
+import {
+  buildBodCodNumberingFactoryQueryForTests,
+  reserveBodCodDeviationReportNumber,
+  resolveBodCodCreateNumberingContext,
+} from './bod-cod-deviation-report-numbering.repository';
 import type {
   BodCodApprovalTrack,
   BodCodApprovalRoleCode,
@@ -246,15 +251,21 @@ export const bodCodDeviationReportsRepository = {
   ): Promise<CreatedBodCodDeviationReportDTO> {
     return db.transaction(async (trx) => {
       const now = new Date();
-      const factoryInternalId = await resolveFactoryInternalId(input, access, trx);
-      const approvalTrack = approvalTrackForProvince(input.provinceName);
-      const reportNo = await nextReportNo(input.reportYear, trx);
+      const numberingContext = await resolveBodCodCreateNumberingContext(input, access, trx);
+      const approvalTrack = approvalTrackForProvince(numberingContext.provinceName);
+      const numbering = await reserveBodCodDeviationReportNumber(
+        trx,
+        numberingContext.regionCode,
+        input.reportYear,
+      );
       const inserted = await trx('bod_cod_deviation_reports')
         .insert({
-          report_no: reportNo,
+          report_no: numbering.reportNo,
           report_round: input.reportRoundNo,
           report_year: input.reportYear,
-          factory_id: factoryInternalId,
+          numbering_region_code: numbering.regionCode,
+          numbering_sequence: numbering.sequence,
+          factory_id: numberingContext.factoryInternalId,
           connected_measurement_point_id: input.connectedMeasurementPointId ?? null,
           point_code: input.pointCode ?? null,
           point_name: input.pointName ?? null,
@@ -345,7 +356,7 @@ export const bodCodDeviationReportsRepository = {
       const currentStep = currentWorkflowStep(savedSteps);
       return {
         id: reportId,
-        reportNo,
+        reportNo: numbering.reportNo,
         statusCode: 'SUBMITTED',
         approvalTrack,
         currentStep,
@@ -557,14 +568,14 @@ export function buildBodCodCreateAccessQueryForTests(
   input: Pick<CreateBodCodDeviationReportDTO, 'factoryId' | 'factoryRegistrationNo'>,
   access: CreateBodCodDeviationReportAccess,
 ) {
-  return buildCreateAccessQuery(input, access);
+  return buildBodCodNumberingFactoryQueryForTests(input, access);
 }
 
 export function buildBodCodFactoryInternalIdQueryForTests(
   input: Pick<CreateBodCodDeviationReportDTO, 'factoryId' | 'factoryRegistrationNo'>,
   access: CreateBodCodDeviationReportAccess,
 ) {
-  return buildCreateAccessQuery(input, access);
+  return buildBodCodNumberingFactoryQueryForTests(input, access);
 }
 
 export function buildBodCodResubmissionAccessQueryForTests(
@@ -770,44 +781,6 @@ function buildReportDetailQuery(
     );
 
   return builder as unknown as Knex.QueryBuilder<ReportDetailRow, ReportDetailRow[]>;
-}
-
-function buildCreateAccessQuery(
-  input: Pick<CreateBodCodDeviationReportDTO, 'factoryId' | 'factoryRegistrationNo'>,
-  access: CreateBodCodDeviationReportAccess,
-  connection: Knex | Knex.Transaction = db,
-): Knex.QueryBuilder {
-  const builder = connection('factories as f').select('f.id').first();
-  if (access.scope === 'OWN_FACTORY') {
-    applyAssignedFactoryAccessFilter(builder, access.actorUserId);
-  }
-  builder.where((factoryBuilder) => {
-    const factoryId = input.factoryId ?? '';
-    const numericFactoryId = numericIdOrNull(factoryId);
-    if (numericFactoryId !== null) factoryBuilder.orWhere('f.id', numericFactoryId);
-    if (factoryId) {
-      factoryBuilder.orWhere('f.fid', factoryId).orWhere('f.code', factoryId);
-    }
-    factoryBuilder
-      .orWhere('f.fid', input.factoryRegistrationNo)
-      .orWhere('f.code', input.factoryRegistrationNo);
-  });
-  return builder;
-}
-
-async function resolveFactoryInternalId(
-  input: CreateBodCodDeviationReportDTO,
-  access: CreateBodCodDeviationReportAccess,
-  trx: Knex.Transaction,
-): Promise<number | null> {
-  const row = await buildCreateAccessQuery(input, access, trx);
-  if (!row) {
-    if (access.scope === 'OWN_FACTORY') {
-      throw new ForbiddenError('Factory is not available for this user');
-    }
-    return null;
-  }
-  return toNumberOrNull((row as { id?: number | string | null }).id ?? null);
 }
 
 async function assertCanResubmitReport(
@@ -1383,15 +1356,6 @@ function buildLatestReportSlotMap(reports: LatestReportRow[]): Map<string, Lates
   return reportBySlotKey;
 }
 
-async function nextReportNo(reportYear: number, trx: Knex.Transaction): Promise<string> {
-  const row = await trx('bod_cod_deviation_reports')
-    .where('report_year', reportYear)
-    .count<{ total: number | string }>('id as total')
-    .first();
-  const nextSequence = Number(row?.total ?? 0) + 1;
-  return `BODCOD-${reportYear}-${String(nextSequence).padStart(4, '0')}`;
-}
-
 function approvalTrackForProvince(provinceName: string): BodCodApprovalTrack {
   return provinceName.trim() === 'กรุงเทพมหานคร' ? 'CENTRAL' : 'REGIONAL';
 }
@@ -1961,12 +1925,6 @@ function toNumberOrNull(value: number | string | null): number | null {
   if (value === null) return null;
   const numberValue = Number(value);
   return Number.isFinite(numberValue) ? numberValue : null;
-}
-
-function numericIdOrNull(value: string | number | null): number | null {
-  if (value === null) return null;
-  const numberValue = Number(value);
-  return Number.isInteger(numberValue) && numberValue > 0 ? numberValue : null;
 }
 
 function toDateTimeString(value: Date | string | null): string | null {
