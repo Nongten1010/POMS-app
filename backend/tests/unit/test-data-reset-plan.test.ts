@@ -3,6 +3,7 @@ import {
   buildDeletePlan,
   findParameterTables,
   quoteSqlIdentifier,
+  validateProductionDatabaseTargets,
   type ForeignKeyEdge,
 } from '../../src/db/maintenance/test-data-reset-plan';
 
@@ -56,5 +57,25 @@ describe('production test-data reset plan', () => {
     expect(() => quoteSqlIdentifier('requests]; DROP TABLE users;--')).toThrow(
       'Unsafe SQL identifier',
     );
+  });
+
+  it('allows a co-located parameter database but never a local primary database', () => {
+    expect(() =>
+      validateProductionDatabaseTargets({
+        databaseName: 'POMS',
+        databaseHost: '172.16.31.184',
+        parameterDatabaseName: 'parameter_ingest',
+        parameterDatabaseHost: 'localhost',
+      }),
+    ).not.toThrow();
+
+    expect(() =>
+      validateProductionDatabaseTargets({
+        databaseName: 'POMS',
+        databaseHost: 'localhost',
+        parameterDatabaseName: 'parameter_ingest',
+        parameterDatabaseHost: 'localhost',
+      }),
+    ).toThrow('primary database on localhost');
   });
 });
