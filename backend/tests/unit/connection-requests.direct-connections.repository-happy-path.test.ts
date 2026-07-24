@@ -72,8 +72,7 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
     const eligibleLookup = makeChain({ first: async () => ({ id: 17 }) });
     const duplicateLookup = makeChain({ first: async () => undefined });
     const existingProfileLookup = makeChain({ first: async () => undefined });
-    const sequenceSelect = makeChain({ first: async () => ({ last_sequence: 0 }) });
-    const sequenceUpdate = makeChain({ update: async () => 1 });
+    const requestNumberLookup = makeChain({ first: async () => ({ total: 0 }) });
     const eligibleFactorySource = makeChain({
       first: async () => ({
         province_id: '10',
@@ -98,8 +97,10 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
         'cems_wpms_connected_measurement_points',
         [duplicateLookup, existingProfileLookup, { insert: connectedPointInsert }],
       ],
-      ['cems_wpms_direct_request_sequences', [sequenceSelect, sequenceUpdate]],
-      ['cems_wpms_connection_requests', [{ insert: requestInsert }, requestRead]],
+      [
+        'cems_wpms_connection_requests',
+        [requestNumberLookup, { insert: requestInsert }, requestRead],
+      ],
       ['eligible_factories as ef', [eligibleFactorySource]],
       [
         'cems_wpms_request_factory_snapshots',
@@ -129,7 +130,7 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
     expect(mockedDb.transaction).toHaveBeenCalledTimes(1);
     expect(requestInsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        request_no: 'OLDC-69-00001',
+        request_no: 'CEMS-69-00001',
         eligible_factory_id: 17,
         request_type: 'ADD_MEASUREMENT_POINT',
         submission_source: 'OFFICER_DIRECT_API',
@@ -179,7 +180,7 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
     );
     expect(created).toMatchObject({
       id: 101,
-      requestNo: 'OLDC-69-00001',
+      requestNo: 'CEMS-69-00001',
       requestType: 'ADD_MEASUREMENT_POINT',
       submissionSource: 'OFFICER_DIRECT_API',
       status: 'CONNECTED',
@@ -189,6 +190,12 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
       statusHistory: [expect.objectContaining({ status: 'CONNECTED', changedById: 42 })],
     });
     expect([...queues.values()].every((queue) => queue.length === 0)).toBe(true);
+    expect(requestNumberLookup.where).toHaveBeenCalledWith(
+      'request_no',
+      'like',
+      'CEMS-69-%',
+    );
+    expect(requestNumberLookup.count).toHaveBeenCalledWith('id as total');
   });
 
   it('preserves OFFICER_DIRECT_API when rows are read back through list()', async () => {
@@ -254,7 +261,7 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
       total: 1,
       rows: [
         expect.objectContaining({
-          requestNo: 'OLDC-69-00001',
+          requestNo: 'CEMS-69-00001',
           submissionSource: 'OFFICER_DIRECT_API',
         }),
       ],
@@ -275,6 +282,7 @@ function makeChain(options: {
     where: returnChain,
     whereNull: returnChain,
     whereRaw: returnChain,
+    count: returnChain,
     forUpdate: returnChain,
     leftJoin: returnChain,
     select: returnChain,
@@ -316,7 +324,7 @@ function requestRow(now: Date) {
   return {
     id: 101,
     eligible_factory_id: 17,
-    request_no: 'OLDC-69-00001',
+    request_no: 'CEMS-69-00001',
     submission_source: 'OFFICER_DIRECT_API',
     request_type: 'ADD_MEASUREMENT_POINT',
     factory_id: 'factory-001',

@@ -28,7 +28,7 @@ describe('POST /api/v1/cems-wpms-requests/direct-connections integration', () =>
     });
     mockedRepository.createDirectConnection.mockResolvedValue({
       id: 91,
-      requestNo: 'OLDC-69-00001',
+      requestNo: 'CEMS-69-00001',
       requestType: 'ADD_MEASUREMENT_POINT',
       status: 'CONNECTED',
       statusLabel: 'เชื่อมต่อแล้ว',
@@ -49,7 +49,7 @@ describe('POST /api/v1/cems-wpms-requests/direct-connections integration', () =>
     expect(response.body).toMatchObject({
       success: true,
       data: {
-        requestNo: 'OLDC-69-00001',
+        requestNo: 'CEMS-69-00001',
         status: 'CONNECTED',
         submissionSource: 'OFFICER_DIRECT_API',
       },
