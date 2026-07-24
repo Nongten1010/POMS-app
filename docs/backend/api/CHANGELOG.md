@@ -2,13 +2,21 @@
 
 ไฟล์นี้บันทึกเฉพาะการเปลี่ยน API ที่ทำให้ client ต้องแก้ตาม การเปลี่ยนทั่วไปและประวัติรายละเอียดดูจาก Git history
 
+## 2026-07-24 — คืนรหัสจุดตรวจวัดที่ออกหลังอนุมัติเป็น S/W เริ่มที่ 2001
+
+- **Affected menu:** [ขอเชื่อมต่อ](./menus/connection-requests/README.md)
+- **Impact:** `measurementPoints[].pointCode` ที่ backend ออกใหม่หลังอนุมัติแบบผู้ประกอบการเปลี่ยนกลับเป็น `S...`/`W...`; Direct Connection ยังคงใช้รหัสที่เจ้าหน้าที่กรอกเอง.
+- **Migration:** client ต้องรับรหัสจุดเป็น opaque string และรองรับ `S2001`, `S2002`, ... สำหรับ CEMS กับ `W2001`, `W2002`, ... สำหรับ WPMS; การรองรับรหัสที่มี `/` เดิมยังคงไว้เพื่อ backward compatibility.
+- **Old contract:** CEMS ออก `CEMS-NNNN/YYYY` และ WPMS ออก `WEMS-NNNN/YYYY` โดยเริ่ม sequence ใหม่ทุกปี พ.ศ.
+- **New contract:** CEMS ออก `S2001`, `S2002`, ... และ WPMS ออก `W2001`, `W2002`, ... โดยแยก sequence ตามระบบและไม่เริ่มใหม่เมื่อเปลี่ยนปี.
+
 ## 2026-07-24 — เปลี่ยนรูปแบบเลขที่คำขอเชื่อมต่อเป็นลำดับ 4 หลักและปี พ.ศ. เต็ม
 
 - **Affected menu:** [ขอเชื่อมต่อ](./menus/connection-requests/README.md)
 - **Impact:** `requestNo` ของคำขอ CEMS/WPMS ที่สร้างใหม่เปลี่ยนรูปแบบทั้งคำขอผู้ประกอบการและ Direct Connection; ฟิลด์และกติกาของรหัสจุดตรวจวัดไม่เปลี่ยน.
 - **Migration:** client ต้องรองรับ `/` ใน `requestNo`, แสดงค่าเป็น opaque string และไม่แยกปีหรือลำดับจากรูปแบบเดิม.
 - **Old contract:** คำขอใหม่ใช้ `CEMS-YY-NNNNN` หรือ `WPMS-YY-NNNNN`.
-- **New contract:** คำขอใหม่ใช้ `CEMS-NNNN/YYYY` หรือ `WPMS-NNNN/YYYY` เช่น `CEMS-0001/2569` และ `WPMS-0001/2569`; ลำดับแยกตามระบบและเริ่มใหม่ตามปี พ.ศ. โดยผู้ประกอบการกับเจ้าหน้าที่ใช้ลำดับร่วมกัน.
+- **New contract:** คำขอใหม่ใช้ `CEMS-NNNN/YYYY` หรือ `WEMS-NNNN/YYYY` เช่น `CEMS-0001/2569` และ `WEMS-0001/2569`; ลำดับแยกตามระบบและเริ่มใหม่ตามปี พ.ศ. โดยผู้ประกอบการกับเจ้าหน้าที่ใช้ลำดับร่วมกัน.
 
 ## 2026-07-24 — ใช้เลขที่คำขอชุดเดียวกันสำหรับ Direct Connection
 
@@ -40,7 +48,7 @@
 - **Impact:** `measurementPoints[].pointCode` ที่ backend ออกใหม่หลังอนุมัติแบบเปลี่ยนรูปแบบ และมี `/` อยู่ใน identifier; client ที่ส่งรหัสผ่าน path parameter ต้อง URL-encode path segment.
 - **Migration:** รองรับ `CEMS-NNNN/YYYY` และ `WEMS-NNNN/YYYY`, ใช้ `encodeURIComponent(pointCode)` เมื่อนำไปวางใน path และยังคงรับรหัสเดิมเป็น opaque identifier โดยไม่แปลงค่า.
 - **Old contract:** CEMS ออก `S2001`, `S2002`, ... และ WPMS ออก `W2001`, `W2002`, ... โดยใช้ลำดับต่อเนื่องแยกตามระบบแต่ไม่แยกปี.
-- **New contract:** CEMS ออก `CEMS-0001/2569`, `CEMS-0002/2569`, ... และ WPMS ออก `WEMS-0001/2569`, `WEMS-0002/2569`, ... โดยแยกลำดับตามระบบและปี พ.ศ. และเริ่มใหม่ที่ `0001` เมื่อขึ้นปีใหม่.
+- **New contract ณ เวลาที่เปลี่ยน:** CEMS ออก `CEMS-0001/2569`, `CEMS-0002/2569`, ... และ WPMS ออก `WEMS-0001/2569`, `WEMS-0002/2569`, ...; contract นี้ถูกแทนที่ภายหลังด้วยรายการคืนรหัสเป็น `S2001`/`W2001` ด้านบน.
 
 ## 2026-07-22 — จำกัดรายชื่อโรงงานของผู้ประกอบการไว้ที่โรงงานเข้าข่าย
 

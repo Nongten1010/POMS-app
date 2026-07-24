@@ -44,7 +44,7 @@ describe('connectionRequestsService.createDirectConnection', () => {
   };
   const created = {
     id: 91,
-    requestNo: 'WPMS-0001/2569',
+    requestNo: 'WEMS-0001/2569',
     status: 'CONNECTED',
   };
 

@@ -2078,7 +2078,7 @@ describe('connectionRequestsService', () => {
     });
     const wpmsRequest = requestDto({
       id: 2,
-      requestNo: 'WPMS-0001/2569',
+      requestNo: 'WEMS-0001/2569',
       systemType: 'WPMS',
       status: CONNECTION_REQUEST_STATUS.CONNECTED,
       statusLabel: 'เชื่อมต่อแล้ว',

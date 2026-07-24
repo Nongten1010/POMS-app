@@ -1,5 +1,7 @@
 # หลักฐาน TDD: รหัสจุดตรวจวัดแบบลำดับรายปี
 
+> หลักฐานนี้เป็นประวัติของ contract ที่ถูกแทนที่แล้ว รูปแบบปัจจุบันอ้างอิง [legacy-point-code-format-restored.tdd.md](./legacy-point-code-format-restored.tdd.md).
+
 เอกสารนี้สนับสนุน [contract เมนูขอเชื่อมต่อ](../../api/menus/connection-requests/README.md#point-code-contract) และไม่ใช้แทน canonical API contract.
 
 ## Source Plan

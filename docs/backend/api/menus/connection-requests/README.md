@@ -63,7 +63,7 @@ curl --request POST \
 | `systemType` | รูปแบบ | ตัวอย่างแรกของปี 2569 |
 | --- | --- | --- |
 | `CEMS` | `CEMS-` + ลำดับอย่างน้อย 4 หลัก + `/` + ปี พ.ศ. 4 หลัก | `CEMS-0001/2569` |
-| `WPMS` | `WPMS-` + ลำดับอย่างน้อย 4 หลัก + `/` + ปี พ.ศ. 4 หลัก | `WPMS-0001/2569` |
+| `WPMS` | `WEMS-` + ลำดับอย่างน้อย 4 หลัก + `/` + ปี พ.ศ. 4 หลัก | `WEMS-0001/2569` |
 
 - `POST /api/v1/cems-wpms-requests/direct-connections` ใช้ลำดับเดียวกับคำขอของผู้ประกอบการ ไม่ใช้ prefix `OLDC` หรือ `OLDW` สำหรับคำขอใหม่.
 - ค่า `submissionSource` ยังคงแยกแหล่งที่มา: ผู้ประกอบการเป็น `OPERATOR_FORM` และเจ้าหน้าที่เชื่อมต่อโดยตรงเป็น `OFFICER_DIRECT_API`.
@@ -76,19 +76,17 @@ curl --request POST \
 
 | `systemType` | รูปแบบรหัสใหม่ | รหัสแรกขั้นต่ำ | ตัวอย่างลำดับ |
 | --- | --- | --- | --- |
-| `CEMS` | `CEMS-` + ลำดับอย่างน้อย 4 หลัก + `/` + ปี พ.ศ. 4 หลัก | `CEMS-0001/2569` | `CEMS-0001/2569`, `CEMS-0002/2569`, ... |
-| `WPMS` | `WEMS-` + ลำดับอย่างน้อย 4 หลัก + `/` + ปี พ.ศ. 4 หลัก | `WEMS-0001/2569` | `WEMS-0001/2569`, `WEMS-0002/2569`, ... |
+| `CEMS` | `S` + ลำดับอย่างน้อย 4 หลัก | `S2001` | `S2001`, `S2002`, ... |
+| `WPMS` | `W` + ลำดับอย่างน้อย 4 หลัก | `W2001` | `W2001`, `W2002`, ... |
 
-- CEMS และ WPMS ใช้ลำดับแยกกัน และแต่ละระบบเริ่มลำดับใหม่ที่ `0001` เมื่อเปลี่ยนปี พ.ศ. ตามเขตเวลา `Asia/Bangkok`.
-- ถ้ามีรหัสรูปแบบใหม่ของระบบและปีเดียวกันอยู่แล้ว ระบบออกเลขต่อจาก sequence สูงสุดของปีนั้น.
-- ตัวอย่างปีถัดไป: `CEMS-0001/2570`, `WEMS-0001/2570`; WPMS ลำดับที่ 3 ในปี 2571 คือ `WEMS-0003/2571`.
-- รหัสเดิมทุกรูปแบบ เช่น `Sxxxx`, `Pxxxx` และ `Wxxxx` ไม่ถูก migrate; client ต้องยังอ่านและส่งรหัสเดิมเหล่านั้นเป็น opaque identifier ได้.
-- รหัสเดิมและรหัสของปีอื่นไม่ถูกนำมาคำนวณลำดับของปีปัจจุบัน.
+- CEMS และ WPMS ใช้ลำดับแยกกัน เริ่มขั้นต่ำที่ `2001` และไม่เริ่มใหม่เมื่อเปลี่ยนปี.
+- ระบบออกเลขต่อจากค่าที่มากกว่าระหว่าง sequence ที่บันทึกไว้กับรหัส `S...`/`W...` สูงสุดที่ยังใช้งานอยู่.
+- รหัสเดิมรูปแบบอื่น เช่น `Pxxxx`, `CEMS-NNNN/YYYY` และ `WEMS-NNNN/YYYY` ยังอ่านเป็น opaque identifier ได้ แต่ไม่ถูกนำมาคำนวณเลขใหม่.
 - คำขอ `ADD_PARAMETER` ใช้รหัสจุดเดิมและไม่ออกรหัสใหม่.
 - `POST /api/v1/cems-wpms-requests/direct-connections` ไม่ใช้ลำดับรหัสจุดนี้ และเก็บรหัสที่เจ้าหน้าที่ส่งใน `measurementPoints[0].pointCode`.
 - การจองเลขและการเปลี่ยนสถานะทำใน transaction เดียวกันเพื่อไม่ให้คำขอพร้อมกันได้รหัสซ้ำ.
 
-เมื่อใช้รหัสรูปแบบใหม่เป็น `stationId`:
+เพื่อรองรับข้อมูลที่เคยมี `/` อยู่ในรหัสจุด:
 
 - ใน query string หรือ JSON body ให้ส่งค่ารหัสตามปกติ เช่น `stationId=CEMS-0001/2569`.
 - ใน path parameter ต้อง URL-encode อักขระ `/` เป็น `%2F` เช่น
@@ -281,7 +279,7 @@ Minimal response:
       {
         "id": 201,
         "pointName": "จุดระบายน้ำทิ้ง 1",
-        "pointCode": "WEMS-0001/2569"
+        "pointCode": "W2001"
       }
     ]
   }
@@ -309,7 +307,7 @@ Minimal response:
     "measurementPoints": [
       {
         "id": 201,
-        "pointCode": "CEMS-0001/2569"
+        "pointCode": "S2001"
       }
     ]
   }
@@ -342,7 +340,7 @@ Minimal response:
     {
       "type": "WPMS",
       "point": {
-        "pointCode": "WEMS-0001/2569"
+        "pointCode": "W2001"
       }
     }
   ],
@@ -377,9 +375,9 @@ Minimal response:
 | Routes | [`connection-requests.routes.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.routes.ts), [`connected-measurement-points.routes.ts`](../../../../../backend/src/modules/connection-requests/connected-measurement-points.routes.ts) |
 | Validators | [`connection-requests.validator.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.validator.ts), [`parameter-values.validator.ts`](../../../../../backend/src/modules/parameter-values/parameter-values.validator.ts), [`alert-events.validator.ts`](../../../../../backend/src/modules/alert-events/alert-events.validator.ts), [`integration-device-configs.validator.ts`](../../../../../backend/src/modules/integrations/integration-device-configs.validator.ts) |
 | Public types | [`connection-requests.types.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.types.ts) |
-| Sequence implementation | [`connection-requests.repository.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.repository.ts), [`monitoring-point-code.ts`](../../../../../backend/src/shared/utils/monitoring-point-code.ts) |
+| Sequence implementation | [`connection-requests.repository.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.repository.ts) |
 | Reverse-proxy path normalization | [`annual-point-code-path.ts`](../../../../../backend/src/shared/middlewares/annual-point-code-path.ts), [`connected-measurement-points.routes.ts`](../../../../../backend/src/modules/connection-requests/connected-measurement-points.routes.ts), [`integrations.routes.ts`](../../../../../backend/src/modules/integrations/integrations.routes.ts) |
 | Factory-profile patch rules | [`connected-factory-profile.ts`](../../../../../backend/src/modules/connection-requests/connected-factory-profile.ts) |
-| Migrations | [`0080_create_annual_point_code_sequences.ts`](../../../../../backend/src/db/migrations/0080_create_annual_point_code_sequences.ts), [`0076_sync_connected_factory_profiles_with_eligible_factories.ts`](../../../../../backend/src/db/migrations/0076_sync_connected_factory_profiles_with_eligible_factories.ts) |
-| Tests | [`connection-requests.point-code-sequence.repository.test.ts`](../../../../../backend/tests/unit/connection-requests.point-code-sequence.repository.test.ts), [`annual-point-code-sequence-migration.test.ts`](../../../../../backend/tests/unit/annual-point-code-sequence-migration.test.ts), [`parameter-values.validator.test.ts`](../../../../../backend/tests/unit/parameter-values.validator.test.ts), [`alert-events.route.test.ts`](../../../../../backend/tests/unit/alert-events.route.test.ts), [`connected-measurement-points.route.test.ts`](../../../../../backend/tests/unit/connected-measurement-points.route.test.ts), [`integration-device-configs.route.test.ts`](../../../../../backend/tests/unit/integration-device-configs.route.test.ts) |
-| Evidence | [Annual point-code format TDD](../../../evidence/connection-requests/annual-point-code-format.tdd.md), [Request table current/live POMS factory name TDD](../../../evidence/connection-requests/request-table-current-factory-name.tdd.md) |
+| Migrations | [`0075_start_operator_point_codes_at_2001.ts`](../../../../../backend/src/db/migrations/0075_start_operator_point_codes_at_2001.ts), [`0076_sync_connected_factory_profiles_with_eligible_factories.ts`](../../../../../backend/src/db/migrations/0076_sync_connected_factory_profiles_with_eligible_factories.ts) |
+| Tests | [`connection-requests.point-code-sequence.repository.test.ts`](../../../../../backend/tests/unit/connection-requests.point-code-sequence.repository.test.ts), [`parameter-values.validator.test.ts`](../../../../../backend/tests/unit/parameter-values.validator.test.ts), [`alert-events.route.test.ts`](../../../../../backend/tests/unit/alert-events.route.test.ts), [`connected-measurement-points.route.test.ts`](../../../../../backend/tests/unit/connected-measurement-points.route.test.ts), [`integration-device-configs.route.test.ts`](../../../../../backend/tests/unit/integration-device-configs.route.test.ts) |
+| Evidence | [Restore S/W point-code format TDD](../../../evidence/connection-requests/legacy-point-code-format-restored.tdd.md), [Request table current/live POMS factory name TDD](../../../evidence/connection-requests/request-table-current-factory-name.tdd.md) |

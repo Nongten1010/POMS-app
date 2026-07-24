@@ -36,10 +36,7 @@ describe('normal operator connection point-code sequence', () => {
       { connectionDueAt: '2026-08-20T00:00:00.000Z' },
     );
 
-    expect(updated.measurementPoints.map((point) => point.pointCode)).toEqual([
-      'S2001',
-      'S2002',
-    ]);
+    expect(updated.measurementPoints.map((point) => point.pointCode)).toEqual(['S2001', 'S2002']);
     expect(harness.sequenceUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ last_sequence: 2002 }),
     );
@@ -76,10 +73,7 @@ describe('normal operator connection point-code sequence', () => {
       { connectionDueAt: '2026-08-20T00:00:00.000Z' },
     );
 
-    expect(updated.measurementPoints.map((point) => point.pointCode)).toEqual([
-      'S2051',
-      'S2052',
-    ]);
+    expect(updated.measurementPoints.map((point) => point.pointCode)).toEqual(['S2051', 'S2052']);
   });
 
   it('continues the next request from the persisted point-code sequence', async () => {
@@ -93,10 +87,7 @@ describe('normal operator connection point-code sequence', () => {
       { connectionDueAt: '2026-08-20T00:00:00.000Z' },
     );
 
-    expect(updated.measurementPoints.map((point) => point.pointCode)).toEqual([
-      'S2003',
-      'S2004',
-    ]);
+    expect(updated.measurementPoints.map((point) => point.pointCode)).toEqual(['S2003', 'S2004']);
   });
 
   it('does not reset the point-code sequence when the Buddhist year changes', async () => {
@@ -131,10 +122,7 @@ describe('normal operator connection point-code sequence', () => {
       { connectionDueAt: '2026-08-20T00:00:00.000Z' },
     );
 
-    expect(updated.measurementPoints.map((point) => point.pointCode)).toEqual([
-      'W2006',
-      'W2007',
-    ]);
+    expect(updated.measurementPoints.map((point) => point.pointCode)).toEqual(['W2006', 'W2007']);
   });
 
   it('issues point codes only once when the same request is approved concurrently', async () => {
@@ -150,14 +138,8 @@ describe('normal operator connection point-code sequence', () => {
       );
     const [first, second] = await Promise.all([approve(), approve()]);
 
-    expect(first.measurementPoints.map((point) => point.pointCode)).toEqual([
-      'S2001',
-      'S2002',
-    ]);
-    expect(second.measurementPoints.map((point) => point.pointCode)).toEqual([
-      'S2001',
-      'S2002',
-    ]);
+    expect(first.measurementPoints.map((point) => point.pointCode)).toEqual(['S2001', 'S2002']);
+    expect(second.measurementPoints.map((point) => point.pointCode)).toEqual(['S2001', 'S2002']);
     expect(harness.lastSequence()).toBe(2002);
   });
 });

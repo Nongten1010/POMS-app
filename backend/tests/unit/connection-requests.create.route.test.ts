@@ -19,7 +19,7 @@ const mockedService = jest.mocked(connectionRequestsService);
 describe('create measurement-point request route', () => {
   const serviceResponse = {
     id: 17,
-    requestNo: 'WPMS-0017/2569',
+    requestNo: 'WEMS-0017/2569',
     requestType: 'ADD_MEASUREMENT_POINT',
     eia: 'มี EIA',
     eiaOther: null,
