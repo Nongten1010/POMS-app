@@ -43,6 +43,10 @@ describe('normal operator connection point-code sequence', () => {
     expect(harness.sequenceUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ last_sequence: 2 }),
     );
+    expect(harness.raw).toHaveBeenCalledWith(
+      expect.stringContaining('WITH (UPDLOCK, HOLDLOCK)'),
+      ['CEMS', '2569', 'CEMS', '2569'],
+    );
   });
 
   it('issues WEMS-0003/2571 for the third WPMS point in Buddhist year 2571', async () => {
@@ -99,6 +103,24 @@ describe('normal operator connection point-code sequence', () => {
     ]);
   });
 
+  it('starts the same system at 0001 again when the Buddhist year changes', async () => {
+    jest.setSystemTime(new Date('2027-07-24T00:00:00.000Z'));
+    const harness = pointCodeHarness('CEMS', {
+      existingPointCodes: ['CEMS-9999/2569'],
+      pointIds: [201],
+    });
+    mockedDb.transaction.mockImplementationOnce(harness.runTransaction);
+
+    const updated = await connectionRequestsRepository.updateStatus(
+      101,
+      CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+      42,
+      { connectionDueAt: '2027-08-20T00:00:00.000Z' },
+    );
+
+    expect(updated.measurementPoints.map((point) => point.pointCode)).toEqual(['CEMS-0001/2570']);
+  });
+
   it('does not use legacy point codes when starting the WEMS annual sequence', async () => {
     const harness = pointCodeHarness('WPMS', {
       existingPointCodes: ['P9999', 'W2001', 'WEMS-0099/2568'],
@@ -153,6 +175,7 @@ function pointCodeHarness(
 ) {
   const pointIds = options.pointIds ?? [201, 202];
   const assignedCodes = new Map<number, string>();
+  const raw = jest.fn(async (_statement: string, _bindings: unknown[]) => undefined);
   const sequenceUpdate = jest.fn(async (_values: Record<string, unknown>) => 1);
   const pointUpdate = (pointId: number) =>
     makeChain({
@@ -213,12 +236,13 @@ function pointCodeHarness(
       return builder;
     }),
     {
-      raw: jest.fn(async () => undefined),
+      raw,
       fn: { now: jest.fn(() => 'db-now') },
     },
   );
 
   return {
+    raw,
     sequenceUpdate,
     runTransaction: async (...args: unknown[]) => {
       const callback = args[0] as (transaction: typeof trx) => Promise<unknown>;

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isAnnualMonitoringPointCode } from '../../shared/utils/monitoring-point-code';
 
 export const integrationDeviceConfigParamsSchema = z
   .object({
@@ -7,6 +8,9 @@ export const integrationDeviceConfigParamsSchema = z
       .trim()
       .min(1)
       .max(64)
-      .regex(/^[A-Za-z0-9_-]+$/, 'stationId contains unsupported characters'),
+      .refine(
+        (value) => /^[A-Za-z0-9_-]+$/.test(value) || isAnnualMonitoringPointCode(value),
+        'stationId must be a legacy safe identifier or an annual monitoring point code',
+      ),
   })
   .strict();

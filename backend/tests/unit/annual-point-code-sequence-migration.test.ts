@@ -1,21 +1,15 @@
 import { describe, expect, it, jest } from '@jest/globals';
 import type { Knex } from 'knex';
-import {
-  config,
-  down,
-  up,
-} from '../../src/db/migrations/0080_create_annual_point_code_sequences';
+import { config, down, up } from '../../src/db/migrations/0080_create_annual_point_code_sequences';
 
 describe('annual point-code sequence migration', () => {
   it('creates an annual sequence table without rewriting historical point codes', async () => {
     const specificType = jest.fn();
     const primary = jest.fn();
     const raw = jest.fn().mockResolvedValue(undefined as never);
-    const createTable = jest.fn(
-      async (_tableName: string, callback: (table: unknown) => void) => {
-        callback({ specificType, primary });
-      },
-    );
+    const createTable = jest.fn(async (_tableName: string, callback: (table: unknown) => void) => {
+      callback({ specificType, primary });
+    });
     const knex = {
       schema: { createTable, raw },
     } as unknown as Knex;

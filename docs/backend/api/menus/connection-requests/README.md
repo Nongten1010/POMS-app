@@ -62,16 +62,24 @@ curl --request POST \
 
 | `systemType` | รูปแบบรหัสใหม่ | รหัสแรกขั้นต่ำ | ตัวอย่างลำดับ |
 | --- | --- | --- | --- |
-| `CEMS` | `S` + ตัวเลขอย่างน้อย 4 หลัก | `S2001` | `S2001`, `S2002`, ... |
-| `WPMS` | `W` + ตัวเลขอย่างน้อย 4 หลัก | `W2001` | `W2001`, `W2002`, ... |
+| `CEMS` | `CEMS-` + ลำดับอย่างน้อย 4 หลัก + `/` + ปี พ.ศ. 4 หลัก | `CEMS-0001/2569` | `CEMS-0001/2569`, `CEMS-0002/2569`, ... |
+| `WPMS` | `WEMS-` + ลำดับอย่างน้อย 4 หลัก + `/` + ปี พ.ศ. 4 หลัก | `WEMS-0001/2569` | `WEMS-0001/2569`, `WEMS-0002/2569`, ... |
 
-- CEMS และ WPMS ใช้ลำดับแยกกัน.
-- ถ้ามีรหัส prefix เดียวกันซึ่งมีเลขสูงกว่า `2000` อยู่แล้ว ระบบออกเลขต่อจากค่าสูงสุด.
-- รหัส `Sxxxx` และ `Pxxxx` เดิมไม่ถูก migrate; client ต้องยังอ่านและส่งรหัสเดิมเหล่านั้นเป็น opaque identifier ได้.
-- รหัส `Pxxxx` เดิมไม่ถูกนำมาคำนวณลำดับ `Wxxxx`.
+- CEMS และ WPMS ใช้ลำดับแยกกัน และแต่ละระบบเริ่มลำดับใหม่ที่ `0001` เมื่อเปลี่ยนปี พ.ศ. ตามเขตเวลา `Asia/Bangkok`.
+- ถ้ามีรหัสรูปแบบใหม่ของระบบและปีเดียวกันอยู่แล้ว ระบบออกเลขต่อจาก sequence สูงสุดของปีนั้น.
+- ตัวอย่างปีถัดไป: `CEMS-0001/2570`, `WEMS-0001/2570`; WPMS ลำดับที่ 3 ในปี 2571 คือ `WEMS-0003/2571`.
+- รหัสเดิมทุกรูปแบบ เช่น `Sxxxx`, `Pxxxx` และ `Wxxxx` ไม่ถูก migrate; client ต้องยังอ่านและส่งรหัสเดิมเหล่านั้นเป็น opaque identifier ได้.
+- รหัสเดิมและรหัสของปีอื่นไม่ถูกนำมาคำนวณลำดับของปีปัจจุบัน.
 - คำขอ `ADD_PARAMETER` ใช้รหัสจุดเดิมและไม่ออกรหัสใหม่.
 - `POST /api/v1/cems-wpms-requests/direct-connections` ไม่ใช้ลำดับนี้ และเก็บรหัสที่เจ้าหน้าที่ส่งใน `measurementPoints[0].pointCode`.
 - การจองเลขและการเปลี่ยนสถานะทำใน transaction เดียวกันเพื่อไม่ให้คำขอพร้อมกันได้รหัสซ้ำ.
+
+เมื่อใช้รหัสรูปแบบใหม่เป็น `stationId`:
+
+- ใน query string หรือ JSON body ให้ส่งค่ารหัสตามปกติ เช่น `stationId=CEMS-0001/2569`.
+- ใน path parameter ต้อง URL-encode อักขระ `/` เป็น `%2F` เช่น
+  `/api/v1/connected-measurement-points/CEMS-0001%2F2569/requests`.
+- Client ควรสร้าง path segment ด้วย `encodeURIComponent(pointCode)` และต้องไม่แยกหรือคำนวณความหมายจากรหัสเอง.
 
 ## Contracts
 
@@ -258,7 +266,7 @@ Minimal response:
       {
         "id": 201,
         "pointName": "จุดระบายน้ำทิ้ง 1",
-        "pointCode": "W2001"
+        "pointCode": "WEMS-0001/2569"
       }
     ]
   }
@@ -286,7 +294,7 @@ Minimal response:
     "measurementPoints": [
       {
         "id": 201,
-        "pointCode": "S2001"
+        "pointCode": "CEMS-0001/2569"
       }
     ]
   }
@@ -319,7 +327,7 @@ Minimal response:
     {
       "type": "WPMS",
       "point": {
-        "pointCode": "W2001"
+        "pointCode": "WEMS-0001/2569"
       }
     }
   ],
@@ -352,10 +360,10 @@ Minimal response:
 | Concern | Canonical source |
 | --- | --- |
 | Routes | [`connection-requests.routes.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.routes.ts), [`connected-measurement-points.routes.ts`](../../../../../backend/src/modules/connection-requests/connected-measurement-points.routes.ts) |
-| Validators | [`connection-requests.validator.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.validator.ts) |
+| Validators | [`connection-requests.validator.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.validator.ts), [`parameter-values.validator.ts`](../../../../../backend/src/modules/parameter-values/parameter-values.validator.ts), [`alert-events.validator.ts`](../../../../../backend/src/modules/alert-events/alert-events.validator.ts), [`integration-device-configs.validator.ts`](../../../../../backend/src/modules/integrations/integration-device-configs.validator.ts) |
 | Public types | [`connection-requests.types.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.types.ts) |
-| Sequence implementation | [`connection-requests.repository.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.repository.ts) |
+| Sequence implementation | [`connection-requests.repository.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.repository.ts), [`monitoring-point-code.ts`](../../../../../backend/src/shared/utils/monitoring-point-code.ts) |
 | Factory-profile patch rules | [`connected-factory-profile.ts`](../../../../../backend/src/modules/connection-requests/connected-factory-profile.ts) |
-| Migrations | [`0075_start_operator_point_codes_at_2001.ts`](../../../../../backend/src/db/migrations/0075_start_operator_point_codes_at_2001.ts), [`0076_sync_connected_factory_profiles_with_eligible_factories.ts`](../../../../../backend/src/db/migrations/0076_sync_connected_factory_profiles_with_eligible_factories.ts) |
-| Tests | [`connection-requests.point-code-sequence.repository.test.ts`](../../../../../backend/tests/unit/connection-requests.point-code-sequence.repository.test.ts), [`connected-factory-profile-sync.test.ts`](../../../../../backend/tests/unit/connected-factory-profile-sync.test.ts), [`connection-requests.connect.repository.test.ts`](../../../../../backend/tests/unit/connection-requests.connect.repository.test.ts), [`connected-factory-profile-migration.test.ts`](../../../../../backend/tests/unit/connected-factory-profile-migration.test.ts) |
-| Evidence | [Request table current/live POMS factory name TDD](../../../evidence/connection-requests/request-table-current-factory-name.tdd.md) |
+| Migrations | [`0080_create_annual_point_code_sequences.ts`](../../../../../backend/src/db/migrations/0080_create_annual_point_code_sequences.ts), [`0076_sync_connected_factory_profiles_with_eligible_factories.ts`](../../../../../backend/src/db/migrations/0076_sync_connected_factory_profiles_with_eligible_factories.ts) |
+| Tests | [`connection-requests.point-code-sequence.repository.test.ts`](../../../../../backend/tests/unit/connection-requests.point-code-sequence.repository.test.ts), [`annual-point-code-sequence-migration.test.ts`](../../../../../backend/tests/unit/annual-point-code-sequence-migration.test.ts), [`parameter-values.validator.test.ts`](../../../../../backend/tests/unit/parameter-values.validator.test.ts), [`alert-events.route.test.ts`](../../../../../backend/tests/unit/alert-events.route.test.ts), [`connected-measurement-points.route.test.ts`](../../../../../backend/tests/unit/connected-measurement-points.route.test.ts), [`integration-device-configs.route.test.ts`](../../../../../backend/tests/unit/integration-device-configs.route.test.ts) |
+| Evidence | [Annual point-code format TDD](../../../evidence/connection-requests/annual-point-code-format.tdd.md), [Request table current/live POMS factory name TDD](../../../evidence/connection-requests/request-table-current-factory-name.tdd.md) |

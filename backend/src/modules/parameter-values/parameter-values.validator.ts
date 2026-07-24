@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isAnnualMonitoringPointCode } from '../../shared/utils/monitoring-point-code';
 import { PARAMETER_VALUE_INTERVALS } from './parameter-values.types';
 
 export const stationIdSchema = z
@@ -6,7 +7,10 @@ export const stationIdSchema = z
   .trim()
   .min(1)
   .max(64)
-  .regex(/^[A-Za-z][A-Za-z0-9_]*$/, 'stationId must be a safe SQL identifier fragment');
+  .refine(
+    (value) => /^[A-Za-z][A-Za-z0-9_]*$/.test(value) || isAnnualMonitoringPointCode(value),
+    'stationId must be a legacy safe identifier or an annual monitoring point code',
+  );
 
 export const dateSchema = z
   .string()

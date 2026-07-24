@@ -373,6 +373,20 @@ describe('connected measurement points route', () => {
     });
   });
 
+  it('decodes an annual point code supplied as an encoded path segment', async () => {
+    const app = createApp();
+    const stationId = 'CEMS-0001/2569';
+
+    const response = await request(app)
+      .get(`/api/v1/connected-measurement-points/${encodeURIComponent(stationId)}/requests`)
+      .set('Authorization', `Bearer ${accessToken()}`);
+
+    expect(response.status).toBe(200);
+    expect(mockedConnectionRequestsService.listDetails).toHaveBeenCalledWith({ stationId }, 42, {
+      scope: 'ALL',
+    });
+  });
+
   it('exposes only modal detail fields for a factory connected measurement points', async () => {
     const app = createApp();
 

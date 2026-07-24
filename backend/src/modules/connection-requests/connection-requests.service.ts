@@ -5,6 +5,7 @@ import {
   NotFoundError,
 } from '../../shared/errors/AppError';
 import { logger } from '../../config/logger';
+import { isAnnualMonitoringPointCode } from '../../shared/utils/monitoring-point-code';
 import { deviceConnectionsService } from '../device-connections/device-connections.service';
 import type {
   CreateDeviceConnectionConfigInput,
@@ -2219,7 +2220,7 @@ function toParameterColumnPrefix(parameter: string): string {
 }
 
 function isSafeStationId(stationId: string): boolean {
-  return /^[A-Za-z][A-Za-z0-9_]*$/.test(stationId);
+  return /^[A-Za-z][A-Za-z0-9_]*$/.test(stationId) || isAnnualMonitoringPointCode(stationId);
 }
 
 function countMeasurementPointsBySystem(

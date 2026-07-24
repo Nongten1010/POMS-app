@@ -5,6 +5,12 @@ import { factorySourceDb } from '../../config/factory-source-database';
 import type { PermissionScopeDetails } from '../auth/permissions';
 import type { RegionalAccessDTO } from '../auth/regional-access';
 import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
+import {
+  annualPointCodePrefix,
+  buddhistCalendarYear,
+  formatAnnualPointCode,
+  parseAnnualPointCodeSequence,
+} from '../../shared/utils/monitoring-point-code';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
 import {
   deriveHasEiaFromAssessment,
@@ -271,8 +277,6 @@ interface StatusUpdateOptions {
 }
 
 interface PointCodeSequenceRow {
-  system_type: 'CEMS' | 'WPMS';
-  prefix: 'S' | 'W';
   last_sequence: number | string;
 }
 
@@ -323,7 +327,6 @@ interface EligibleFactoryProfileRow {
 
 const TEMPORARY_FACTORY_TEXT = 'ไม่ระบุ';
 const TEMPORARY_EIA_LABEL = 'ไม่มี' as const;
-const POINT_CODE_INITIAL_SEQUENCE = 2000;
 const TERMINAL_CONNECTION_REQUEST_STATUSES: ConnectionRequestStatus[] = ['CONNECTED', 'CANCELED'];
 const CONNECTION_TIMEOUT_AUTO_CANCEL_NOTE =
   'ระบบยกเลิกคำขออัตโนมัติเนื่องจากครบกำหนดเชื่อมต่อ 30 วัน';
@@ -2578,56 +2581,70 @@ async function reservePointCodes(
   systemType: 'CEMS' | 'WPMS',
   quantity: number,
 ): Promise<string[]> {
-  const prefix = systemType === 'CEMS' ? 'S' : 'W';
-  let sequence = await trx<PointCodeSequenceRow>('cems_wpms_point_code_sequences')
-    .where('system_type', systemType)
-    .forUpdate()
-    .first();
+  const buddhistYear = buddhistCalendarYear();
+  await ensureAnnualPointCodeSequence(trx, systemType, buddhistYear);
 
+  const sequence = await trx<PointCodeSequenceRow>('cems_wpms_annual_point_code_sequences')
+    .where({ system_type: systemType, buddhist_year: buddhistYear })
+    .forUpdate()
+    .first('last_sequence');
   if (!sequence) {
-    await trx('cems_wpms_point_code_sequences').insert({
-      system_type: systemType,
-      prefix,
-      last_sequence: 0,
-    });
-    sequence = await trx<PointCodeSequenceRow>('cems_wpms_point_code_sequences')
-      .where('system_type', systemType)
-      .forUpdate()
-      .first();
+    throw new Error(`Annual point-code sequence is unavailable for ${systemType}-${buddhistYear}`);
   }
 
-  const currentSequence = Math.max(
-    Number(sequence?.last_sequence ?? 0),
-    POINT_CODE_INITIAL_SEQUENCE,
-  );
-  const existingMaxSequence = await findMaxExistingPointCodeSequence(trx, prefix);
+  const currentSequence = Number(sequence.last_sequence);
+  const existingMaxSequence = await findMaxExistingPointCodeSequence(trx, systemType, buddhistYear);
   const firstSequence = Math.max(currentSequence, existingMaxSequence) + 1;
   const lastSequence = firstSequence + quantity - 1;
 
-  await trx('cems_wpms_point_code_sequences').where('system_type', systemType).update({
-    last_sequence: lastSequence,
-    updated_at: trx.fn.now(),
-  });
+  await trx('cems_wpms_annual_point_code_sequences')
+    .where({ system_type: systemType, buddhist_year: buddhistYear })
+    .update({
+      last_sequence: lastSequence,
+      updated_at: trx.fn.now(),
+    });
 
-  return Array.from(
-    { length: quantity },
-    (_, index) => `${prefix}${String(firstSequence + index).padStart(4, '0')}`,
+  return Array.from({ length: quantity }, (_, index) =>
+    formatAnnualPointCode(systemType, firstSequence + index, buddhistYear),
+  );
+}
+
+async function ensureAnnualPointCodeSequence(
+  trx: Knex.Transaction,
+  systemType: 'CEMS' | 'WPMS',
+  buddhistYear: string,
+): Promise<void> {
+  await trx.raw(
+    `
+      IF NOT EXISTS (
+        SELECT 1
+        FROM cems_wpms_annual_point_code_sequences WITH (UPDLOCK, HOLDLOCK)
+        WHERE system_type = ? AND buddhist_year = ?
+      )
+      BEGIN
+        INSERT INTO cems_wpms_annual_point_code_sequences
+          (system_type, buddhist_year, last_sequence)
+        VALUES (?, ?, 0);
+      END;
+    `,
+    [systemType, buddhistYear, systemType, buddhistYear],
   );
 }
 
 async function findMaxExistingPointCodeSequence(
   trx: Knex.Transaction,
-  prefix: 'S' | 'W',
+  systemType: 'CEMS' | 'WPMS',
+  buddhistYear: string,
 ): Promise<number> {
+  const prefix = annualPointCodePrefix(systemType);
   const rows = await trx<MeasurementPointRow>('cems_wpms_measurement_points')
     .whereNull('deleted_at')
-    .where('point_code', 'like', `${prefix}%`)
+    .where('point_code', 'like', `${prefix}-%/${buddhistYear}`)
     .select('point_code');
 
   return rows.reduce((maxSequence, row) => {
-    const match = row.point_code?.match(new RegExp(`^${prefix}(\\d+)$`));
-    if (!match) return maxSequence;
-    return Math.max(maxSequence, Number(match[1]));
+    const sequence = parseAnnualPointCodeSequence(row.point_code, systemType, buddhistYear);
+    return sequence === null ? maxSequence : Math.max(maxSequence, sequence);
   }, 0);
 }
 

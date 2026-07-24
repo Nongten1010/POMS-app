@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isAnnualMonitoringPointCode } from '../../shared/utils/monitoring-point-code';
 import {
   ALERT_EVENT_ALERT_TYPES,
   ALERT_EVENT_DISPLAY_SYSTEM_TYPES,
@@ -12,6 +13,14 @@ import type {
 } from './alert-events.types';
 
 const safeCodeSchema = z.string().trim().regex(/^[A-Za-z0-9_-]+$/).max(128);
+const monitoringPointCodeSchema = z
+  .string()
+  .trim()
+  .max(128)
+  .refine(
+    (value) => /^[A-Za-z0-9_-]+$/.test(value) || isAnnualMonitoringPointCode(value),
+    'stationId must be a legacy safe identifier or an annual monitoring point code',
+  );
 const unitSchema = z.string().trim().min(1).max(64);
 const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const timeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
@@ -19,8 +28,8 @@ const timeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
 export const createIntegrationAlertEventSchema = z
   .object({
     systemType: z.enum(ALERT_EVENT_SYSTEM_TYPES),
-    stationId: safeCodeSchema,
-    pointCode: safeCodeSchema.optional().nullable(),
+    stationId: monitoringPointCodeSchema,
+    pointCode: monitoringPointCodeSchema.optional().nullable(),
     parameterCode: safeCodeSchema.transform((value) => value.toLowerCase()),
     unit: unitSchema,
     eventDate: isoDateSchema,
@@ -95,7 +104,7 @@ export const listAlertEventsQuerySchema = z
     alertType: z.enum(ALERT_EVENT_ALERT_TYPES).optional(),
     thresholdType: z.enum(ALERT_EVENT_THRESHOLD_TYPES).optional(),
     factoryId: z.string().trim().max(128).optional(),
-    stationId: safeCodeSchema.optional(),
+    stationId: monitoringPointCodeSchema.optional(),
     parameterCode: safeCodeSchema.transform((value) => value.toLowerCase()).optional(),
     dateFrom: isoDateSchema.optional(),
     dateTo: isoDateSchema.optional(),
