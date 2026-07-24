@@ -6,6 +6,13 @@ export interface ForeignKeyEdge {
 const PARAMETER_INTERVALS = new Set(['real', '1m', '5m', '60m', '1day', 'test']);
 const SAFE_IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
+interface ProductionDatabaseTargets {
+  databaseName: string;
+  databaseHost: string;
+  parameterDatabaseName: string;
+  parameterDatabaseHost: string;
+}
+
 export function buildDeletePlan(roots: string[], edges: ForeignKeyEdge[]): string[] {
   const childrenByParent = new Map<string, string[]>();
   for (const edge of edges) {
@@ -53,4 +60,23 @@ export function quoteSqlIdentifier(identifier: string): string {
     throw new Error(`Unsafe SQL identifier: ${identifier}`);
   }
   return `[${identifier}]`;
+}
+
+export function validateProductionDatabaseTargets(targets: ProductionDatabaseTargets): void {
+  if (targets.databaseName !== 'POMS') {
+    throw new Error('Refusing to reset a database other than POMS');
+  }
+  if (targets.parameterDatabaseName !== 'parameter_ingest') {
+    throw new Error('Refusing to reset a parameter database other than parameter_ingest');
+  }
+  if (isLocalHost(targets.databaseHost)) {
+    throw new Error('Refusing to reset the primary database on localhost');
+  }
+  if (!targets.parameterDatabaseHost.trim()) {
+    throw new Error('Parameter database host is required');
+  }
+}
+
+function isLocalHost(host: string): boolean {
+  return ['localhost', '127.0.0.1', '::1'].includes(host.toLowerCase());
 }

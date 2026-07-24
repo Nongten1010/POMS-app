@@ -14,6 +14,7 @@ Foreign Key พร้อมล้างข้อมูลวัดของ stat
 | 2 | หยุดทำงานเมื่อพบวงจร Foreign Key | `test-data-reset-plan.test.ts` | PASS |
 | 3 | ล้างเฉพาะตาราง parameter ที่ตรงกับ station ที่บันทึกไว้ | `test-data-reset-plan.test.ts` | PASS |
 | 4 | ปฏิเสธ SQL identifier ที่ไม่ปลอดภัย | `test-data-reset-plan.test.ts` | PASS |
+| 5 | ยอมรับ parameter DB ที่อยู่บน production runner แต่ยังปฏิเสธฐานหลักที่เป็น localhost | `test-data-reset-plan.test.ts` | PASS |
 
 ## Operational safeguards
 
@@ -32,5 +33,5 @@ GREEN:
 
 ```text
 Test Suites: 1 passed, 1 total
-Tests:       4 passed, 4 total
+Tests:       5 passed, 5 total
 ```

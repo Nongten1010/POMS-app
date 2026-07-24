@@ -4,6 +4,7 @@ import {
   buildDeletePlan,
   findParameterTables,
   quoteSqlIdentifier,
+  validateProductionDatabaseTargets,
   type ForeignKeyEdge,
 } from '../db/maintenance/test-data-reset-plan';
 
@@ -87,17 +88,12 @@ function parseMode(value: string | undefined): ResetMode {
 }
 
 function validateEnvironment(mode: ResetMode): void {
-  if (requiredEnv('DB_NAME') !== REQUIRED_DATABASE) {
-    throw new Error(`Refusing to reset a database other than ${REQUIRED_DATABASE}`);
-  }
-  if (requiredEnv('PARAMETER_DB_NAME') !== REQUIRED_PARAMETER_DATABASE) {
-    throw new Error(
-      `Refusing to reset a parameter database other than ${REQUIRED_PARAMETER_DATABASE}`,
-    );
-  }
-  if (isLocalHost(requiredEnv('DB_HOST')) || isLocalHost(requiredEnv('PARAMETER_DB_HOST'))) {
-    throw new Error('This production maintenance command refuses localhost database targets');
-  }
+  validateProductionDatabaseTargets({
+    databaseName: requiredEnv('DB_NAME'),
+    databaseHost: requiredEnv('DB_HOST'),
+    parameterDatabaseName: requiredEnv('PARAMETER_DB_NAME'),
+    parameterDatabaseHost: requiredEnv('PARAMETER_DB_HOST'),
+  });
   if (mode === 'execute' && process.env.RESET_CONFIRMATION !== RESET_CONFIRMATION) {
     throw new Error(`RESET_CONFIRMATION must equal ${RESET_CONFIRMATION}`);
   }
@@ -302,10 +298,6 @@ function requiredEnv(name: string): string {
   const value = process.env[name]?.trim();
   if (!value) throw new Error(`${name} is required`);
   return value;
-}
-
-function isLocalHost(host: string): boolean {
-  return ['localhost', '127.0.0.1', '::1'].includes(host.toLowerCase());
 }
 
 main().catch((error: unknown) => {
