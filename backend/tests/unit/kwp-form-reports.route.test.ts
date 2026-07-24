@@ -48,7 +48,7 @@ describe('KWP form report routes', () => {
           type: 'CEMS',
           monitoringPointCode: 'S0001',
           monitoringPointName: 'ปล่องระบาย A',
-          requestNo: 'KWP-69-00001',
+          requestNo: 'F01-07-0001/2569',
           form: 'กวภ.01',
           formType: 'KWP01',
           submittedDate: '15/06/2569',
@@ -71,11 +71,7 @@ describe('KWP form report routes', () => {
       .set('Authorization', `Bearer ${operatorToken()}`);
 
     expect(response.status).toBe(200);
-    expect(mockedService.listFactories).toHaveBeenCalledWith(
-      42,
-      'OWN_FACTORY',
-      undefined,
-    );
+    expect(mockedService.listFactories).toHaveBeenCalledWith(42, 'OWN_FACTORY', undefined);
     expect(response.body.data[0]).toMatchObject({
       factoryName: 'บริษัท ทดสอบ จำกัด',
       newRegistrationNo: '10190000225448',
@@ -101,7 +97,7 @@ describe('KWP form report routes', () => {
       { regions: ['ภาคกลาง'] },
     );
     expect(response.body.data[0]).toMatchObject({
-      requestNo: 'KWP-69-00001',
+      requestNo: 'F01-07-0001/2569',
       form: 'กวภ.01',
       submittedDate: '15/06/2569',
       status: 'รอพิจารณา',

@@ -63,7 +63,10 @@ describe('kwpFormReportsRepository access filters', () => {
 
     expect(sql).toContain('from [kwp_form_submissions] as [s]');
     expect(sql).toContain('left join [factories] as [f]');
-    expect(sql).toContain('[p].[region]');
+    expect(sql).toContain(
+      'coalesce([s].[submission_region_name], [p].[region]) as [province_region]',
+    );
+    expect(sql).toContain('coalesce([s].[submission_region_name], [p].[region]) in (?)');
     expect(compiled.bindings).toEqual(expect.arrayContaining(['KWP03', 'UNDER_REVIEW', 'ภาคกลาง']));
   });
 
@@ -82,7 +85,7 @@ describe('kwpFormReportsRepository access filters', () => {
     const row = toKwpFormRequestDTOForTests(
       {
         id: 12,
-        submission_no: 'KWP-69-00012',
+        submission_no: 'F01-07-0001/2569',
         form_type: 'KWP01',
         status: 'SUBMITTED',
         factory_id: 'FID-001',
@@ -138,5 +141,6 @@ describe('kwpFormReportsRepository access filters', () => {
     );
 
     expect(row.status).toBe('แก้ไขแล้ว/รอพิจารณา');
+    expect(row.requestNo).toBe('F01-07-0001/2569');
   });
 });

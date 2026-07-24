@@ -9,6 +9,12 @@ import { db } from '../../config/database';
 import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
 import { buildPublicFileUrl } from './kwp-form-attachments.service';
 import { isHourlyKwpFormDateTime, toKwpFormDateOnly } from './kwp-form-duration';
+import {
+  buddhistYearInBangkok,
+  formatKwpFormSubmissionNo,
+  kwpRegionCode,
+  type KwpSubmissionRegionCode,
+} from './kwp-form-submission-number';
 import type {
   CreatedKwpFormSubmissionDTO,
   CreateKwp01SubmissionDTO,
@@ -41,6 +47,7 @@ import type {
 interface Kwp01InsertInput {
   payload: CreateKwp01SubmissionDTO;
   submissionNo: string;
+  numbering?: KwpSubmissionNumberReservation;
   actorUserId: number;
   now: Date;
 }
@@ -55,6 +62,7 @@ interface Kwp01InsertRecords {
 interface Kwp02InsertInput {
   payload: CreateKwp02SubmissionDTO | CreateKwp04SubmissionDTO;
   submissionNo: string;
+  numbering?: KwpSubmissionNumberReservation;
   actorUserId: number;
   now: Date;
   formType?: 'KWP02' | 'KWP04';
@@ -70,6 +78,7 @@ interface Kwp02InsertRecords {
 interface Kwp03InsertInput {
   payload: CreateKwp03SubmissionDTO;
   submissionNo: string;
+  numbering?: KwpSubmissionNumberReservation;
   actorUserId: number;
   now: Date;
 }
@@ -85,6 +94,7 @@ interface Kwp03InsertRecords {
 interface Kwp05InsertInput {
   payload: CreateKwp05SubmissionDTO;
   submissionNo: string;
+  numbering?: KwpSubmissionNumberReservation;
   actorUserId: number;
   now: Date;
 }
@@ -100,6 +110,18 @@ interface Kwp05InsertRecords {
 interface KwpSubmissionFactoryReference {
   factoryId: string;
   connectedPointId?: number | null;
+}
+
+interface KwpSubmissionRegionRow {
+  region_name: string | null;
+}
+
+interface KwpSubmissionNumberReservation {
+  submissionNo: string;
+  regionCode: KwpSubmissionRegionCode;
+  regionName: string;
+  buddhistYear: string;
+  sequence: number;
 }
 
 interface SubmissionDetailRow {
@@ -519,10 +541,12 @@ export const kwpFormSubmissionsRepository = {
       await assertCanCreateForFactory(trx, payload, access);
 
       const now = new Date();
-      const submissionNo = await nextSubmissionNo(trx, now);
+      const numbering = await reserveNumberForFactory(trx, 'KWP01', payload.factoryId, now);
+      const submissionNo = numbering.submissionNo;
       const records = toKwp01InsertRecords({
         payload,
         submissionNo,
+        numbering,
         actorUserId: access.actorUserId,
         now,
       });
@@ -577,10 +601,12 @@ export const kwpFormSubmissionsRepository = {
       await assertCanCreateForFactory(trx, payload, access);
 
       const now = new Date();
-      const submissionNo = await nextSubmissionNo(trx, now);
+      const numbering = await reserveNumberForFactory(trx, 'KWP03', payload.factoryId, now);
+      const submissionNo = numbering.submissionNo;
       const records = toKwp03InsertRecords({
         payload,
         submissionNo,
+        numbering,
         actorUserId: access.actorUserId,
         now,
       });
@@ -650,10 +676,12 @@ export const kwpFormSubmissionsRepository = {
       await assertCanCreateForFactory(trx, payload, access);
 
       const now = new Date();
-      const submissionNo = await nextSubmissionNo(trx, now);
+      const numbering = await reserveNumberForFactory(trx, 'KWP05', payload.factoryId, now);
+      const submissionNo = numbering.submissionNo;
       const records = toKwp05InsertRecords({
         payload,
         submissionNo,
+        numbering,
         actorUserId: access.actorUserId,
         now,
       });
@@ -720,10 +748,12 @@ async function createKwpEmissionReport(
     await assertCanCreateForFactory(trx, payload, access);
 
     const now = new Date();
-    const submissionNo = await nextSubmissionNo(trx, now);
+    const numbering = await reserveNumberForFactory(trx, formType, payload.factoryId, now);
+    const submissionNo = numbering.submissionNo;
     const records = toKwp02InsertRecords({
       payload,
       submissionNo,
+      numbering,
       actorUserId: access.actorUserId,
       now,
       formType,
@@ -883,7 +913,7 @@ function buildEditableSubmissionQuery(
   const regions = [
     ...new Set((access.regionalAccess?.regions ?? []).map((region) => region.trim())),
   ].filter(Boolean);
-  if (regions.length > 0) builder.whereIn('p.region', regions);
+  applySubmissionRegionFilter(builder, regions);
 
   return builder as unknown as Knex.QueryBuilder<EditableSubmissionRow, EditableSubmissionRow[]>;
 }
@@ -942,6 +972,20 @@ export function buildKwpConnectedPointFactoryQueryForTests(
   factoryId: string,
 ): Knex.QueryBuilder {
   return buildConnectedPointFactoryQuery(db, connectedPointId, factoryId);
+}
+
+export function buildKwpSubmissionRegionQueryForTests(factoryId: string): Knex.QueryBuilder {
+  return buildSubmissionRegionQuery(db, factoryId);
+}
+
+export function reserveKwpSubmissionNumberForTests(
+  trx: Knex.Transaction,
+  formType: KwpFormSubmissionDetailType,
+  regionCode: KwpSubmissionRegionCode,
+  regionName: string,
+  now: Date,
+): Promise<KwpSubmissionNumberReservation> {
+  return reserveKwpSubmissionNumber(trx, formType, regionCode, regionName, now);
 }
 
 export async function assertKwpConnectedPointBelongsToFactoryForTests(
@@ -1070,6 +1114,38 @@ function buildFactoryAccessQuery(
   return builder;
 }
 
+function buildSubmissionRegionQuery(
+  knexOrTrx: Knex | Knex.Transaction,
+  factoryId: string,
+): Knex.QueryBuilder<KwpSubmissionRegionRow, KwpSubmissionRegionRow[]> {
+  return knexOrTrx<KwpSubmissionRegionRow>('factories as f')
+    .join('provinces as p', 'p.id', 'f.province_id')
+    .whereNull('f.deleted_at')
+    .where((factoryBuilder) => {
+      factoryBuilder.where('f.fid', factoryId).orWhere('f.code', factoryId);
+    })
+    .select('p.region as region_name');
+}
+
+async function reserveNumberForFactory(
+  trx: Knex.Transaction,
+  formType: KwpFormSubmissionDetailType,
+  factoryId: string,
+  now: Date,
+): Promise<KwpSubmissionNumberReservation> {
+  const regionRow = await buildSubmissionRegionQuery(trx, factoryId).first();
+  const regionName = regionRow?.region_name?.trim() ?? null;
+  const regionCode = kwpRegionCode(regionName);
+  if (!regionName || !regionCode) {
+    throw new BadRequestError('Factory region is unavailable for KWP submission numbering', {
+      factoryId,
+      regionName,
+    });
+  }
+
+  return reserveKwpSubmissionNumber(trx, formType, regionCode, regionName, now);
+}
+
 function buildSubmissionDetailQuery(
   id: number,
   access: KwpFormSubmissionReadAccess,
@@ -1142,7 +1218,7 @@ function buildWorkflowQuery(
       's.reviewed_at',
       's.created_at',
       's.updated_at',
-      'p.region as province_region',
+      submissionRegionSelect(knexOrTrx),
     );
 
   if (access.scope === 'OWN_FACTORY') {
@@ -1152,7 +1228,7 @@ function buildWorkflowQuery(
   const regions = [
     ...new Set((access.regionalAccess?.regions ?? []).map((region) => region.trim())),
   ].filter(Boolean);
-  if (regions.length > 0) builder.whereIn('p.region', regions);
+  applySubmissionRegionFilter(builder, regions);
 
   return builder as unknown as Knex.QueryBuilder<SubmissionWorkflowRow, SubmissionWorkflowRow[]>;
 }
@@ -1168,7 +1244,25 @@ function applySubmissionReadAccessFilter(
   const regions = [
     ...new Set((access.regionalAccess?.regions ?? []).map((region) => region.trim())),
   ].filter(Boolean);
-  if (regions.length > 0) builder.whereIn('p.region', regions);
+  applySubmissionRegionFilter(builder, regions);
+}
+
+function submissionRegionSelect(knexOrTrx: Knex | Knex.Transaction): Knex.Raw {
+  return knexOrTrx.raw('COALESCE(??, ??) as ??', [
+    's.submission_region_name',
+    'p.region',
+    'province_region',
+  ]);
+}
+
+function applySubmissionRegionFilter(builder: Knex.QueryBuilder, regions: string[]): void {
+  if (regions.length === 0) return;
+  const placeholders = regions.map(() => '?').join(', ');
+  builder.whereRaw(`COALESCE(??, ??) IN (${placeholders})`, [
+    's.submission_region_name',
+    'p.region',
+    ...regions,
+  ]);
 }
 
 async function getKwp01IssueReport(submissionId: number) {
@@ -1645,20 +1739,92 @@ function toKwpHourDateTime(value: string | null): string | null {
   return match ? `${match[1]}T${match[2]}:${match[3]}:${match[4]}` : null;
 }
 
-async function nextSubmissionNo(trx: Knex.Transaction, now: Date): Promise<string> {
-  const buddhistYearSuffix = String(now.getFullYear() + 543).slice(-2);
-  const prefix = `KWP-${buddhistYearSuffix}-`;
-  const latest = await trx('kwp_form_submissions')
-    .where('submission_no', 'like', `${prefix}%`)
-    .orderBy('submission_no', 'desc')
-    .first<{ submission_no: string }>('submission_no');
-  const nextSequence = Number(latest?.submission_no.slice(prefix.length) ?? '0') + 1;
-  return `${prefix}${String(nextSequence).padStart(5, '0')}`;
+async function reserveKwpSubmissionNumber(
+  trx: Knex.Transaction,
+  formType: KwpFormSubmissionDetailType,
+  regionCode: KwpSubmissionRegionCode,
+  regionName: string,
+  now: Date,
+): Promise<KwpSubmissionNumberReservation> {
+  const buddhistYear = buddhistYearInBangkok(now);
+  await ensureKwpSubmissionSequence(trx, formType, regionCode, buddhistYear);
+
+  const sequenceRow = await trx<{ last_sequence: number | string }>('kwp_form_submission_sequences')
+    .where({
+      form_type: formType,
+      region_code: regionCode,
+      buddhist_year: buddhistYear,
+    })
+    .forUpdate()
+    .first('last_sequence');
+  if (!sequenceRow) {
+    throw new Error(
+      `KWP submission sequence is unavailable for ${formType}-${regionCode}-${buddhistYear}`,
+    );
+  }
+
+  const sequence = Number(sequenceRow.last_sequence) + 1;
+  if (sequence > 9_999) {
+    throw new ConflictError('KWP submission sequence has reached 9999', {
+      formType,
+      regionCode,
+      buddhistYear,
+    });
+  }
+
+  await trx('kwp_form_submission_sequences')
+    .where({
+      form_type: formType,
+      region_code: regionCode,
+      buddhist_year: buddhistYear,
+    })
+    .update({
+      last_sequence: sequence,
+      updated_at: trx.fn.now(),
+    });
+
+  return {
+    submissionNo: formatKwpFormSubmissionNo(formType, regionCode, sequence, buddhistYear),
+    regionCode,
+    regionName,
+    buddhistYear,
+    sequence,
+  };
+}
+
+async function ensureKwpSubmissionSequence(
+  trx: Knex.Transaction,
+  formType: KwpFormSubmissionDetailType,
+  regionCode: KwpSubmissionRegionCode,
+  buddhistYear: string,
+): Promise<void> {
+  await trx.raw(
+    `
+      IF NOT EXISTS (
+        SELECT 1
+        FROM kwp_form_submission_sequences WITH (UPDLOCK, HOLDLOCK)
+        WHERE form_type = ? AND region_code = ? AND buddhist_year = ?
+      )
+      BEGIN
+        INSERT INTO kwp_form_submission_sequences
+          (form_type, region_code, buddhist_year, last_sequence)
+        VALUES (?, ?, ?, 0);
+      END;
+    `,
+    [formType, regionCode, buddhistYear, formType, regionCode, buddhistYear],
+  );
 }
 
 function toKwp01InsertRecords(input: Kwp01InsertInput): Kwp01InsertRecords {
-  const { payload, submissionNo, actorUserId, now } = input;
-  const submission = toCommonSubmissionRecord(payload, 'KWP01', submissionNo, actorUserId, now);
+  const { payload, submissionNo, numbering, actorUserId, now } = input;
+  const submission = toCommonSubmissionRecord(
+    payload,
+    'KWP01',
+    submissionNo,
+    actorUserId,
+    now,
+    numbering,
+  );
 
   return {
     submission,
@@ -1689,7 +1855,7 @@ function toKwp01InsertRecords(input: Kwp01InsertInput): Kwp01InsertRecords {
 }
 
 function toKwp02InsertRecords(input: Kwp02InsertInput): Kwp02InsertRecords {
-  const { payload, submissionNo, actorUserId, now, formType = 'KWP02' } = input;
+  const { payload, submissionNo, numbering, actorUserId, now, formType = 'KWP02' } = input;
   const attachmentsByItemIndex = new Map<number, Array<Record<string, unknown>>>();
 
   const measurementItems = payload.measurementItems.map((item, index) => {
@@ -1722,7 +1888,14 @@ function toKwp02InsertRecords(input: Kwp02InsertInput): Kwp02InsertRecords {
   });
 
   return {
-    submission: toCommonSubmissionRecord(payload, formType, submissionNo, actorUserId, now),
+    submission: toCommonSubmissionRecord(
+      payload,
+      formType,
+      submissionNo,
+      actorUserId,
+      now,
+      numbering,
+    ),
     measurementItems,
     attachmentsByItemIndex,
     statusHistory: {
@@ -1735,7 +1908,7 @@ function toKwp02InsertRecords(input: Kwp02InsertInput): Kwp02InsertRecords {
 }
 
 function toKwp03InsertRecords(input: Kwp03InsertInput): Kwp03InsertRecords {
-  const { payload, submissionNo, actorUserId, now } = input;
+  const { payload, submissionNo, numbering, actorUserId, now } = input;
   const selectedOptions = [
     ...toKwp03OptionRecords('INSTRUMENT', payload.instruments),
     ...toKwp03OptionRecords('MEASUREMENT_TIME', payload.measurementTimes),
@@ -1754,7 +1927,14 @@ function toKwp03InsertRecords(input: Kwp03InsertInput): Kwp03InsertRecords {
   }));
 
   return {
-    submission: toCommonSubmissionRecord(payload, 'KWP03', submissionNo, actorUserId, now),
+    submission: toCommonSubmissionRecord(
+      payload,
+      'KWP03',
+      submissionNo,
+      actorUserId,
+      now,
+      numbering,
+    ),
     wpmsIssueReport: {
       wastewater_source: payload.wastewaterSource ?? null,
       receiving_source: payload.receivingSource ?? null,
@@ -1786,7 +1966,7 @@ function toKwp03InsertRecords(input: Kwp03InsertInput): Kwp03InsertRecords {
 }
 
 function toKwp05InsertRecords(input: Kwp05InsertInput): Kwp05InsertRecords {
-  const { payload, submissionNo, actorUserId, now } = input;
+  const { payload, submissionNo, numbering, actorUserId, now } = input;
   const attachmentsByItemIndex = new Map<number, Array<Record<string, unknown>>>();
 
   const calibrationItems = payload.calibrationItems.map((item, index) => {
@@ -1819,7 +1999,14 @@ function toKwp05InsertRecords(input: Kwp05InsertInput): Kwp05InsertRecords {
   });
 
   return {
-    submission: toCommonSubmissionRecord(payload, 'KWP05', submissionNo, actorUserId, now),
+    submission: toCommonSubmissionRecord(
+      payload,
+      'KWP05',
+      submissionNo,
+      actorUserId,
+      now,
+      numbering,
+    ),
     calibrationReport: {
       business_activity: payload.businessActivity ?? null,
       sampler_name: payload.samplerName ?? null,
@@ -1853,9 +2040,14 @@ function toCommonSubmissionRecord(
   submissionNo: string,
   actorUserId: number,
   now: Date,
+  numbering?: KwpSubmissionNumberReservation,
 ): Record<string, unknown> {
   return {
-    submission_no: submissionNo,
+    submission_no: numbering?.submissionNo ?? submissionNo,
+    submission_region_code: numbering?.regionCode ?? null,
+    submission_region_name: numbering?.regionName ?? null,
+    submission_buddhist_year: numbering?.buddhistYear ?? null,
+    submission_sequence: numbering?.sequence ?? null,
     form_type: formType,
     status: 'SUBMITTED',
     factory_id: payload.factoryId,

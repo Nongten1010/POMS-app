@@ -143,6 +143,35 @@ curl --request POST \
 | --- | --- | --- | --- |
 | `403` | `FORBIDDEN` | `connectedPointId` ไม่ active หรือไม่ใช่ของโรงงานใน payload | โหลดรายการจุดตรวจวัดใหม่และเลือกจุดของโรงงานปัจจุบัน |
 
+### เลขที่คำขอ `requestNo`
+
+คำขอ กวภ. ที่สร้างใหม่ใช้รูปแบบ
+`F{เลขแบบ 2 หลัก}-{รหัสภาค 2 หลัก}-{ลำดับ 4 หลัก}/{ปี พ.ศ. 4 หลัก}`
+เช่น `F02-05-0005/2570`
+
+| ส่วน | ความหมาย |
+| --- | --- |
+| `F01`-`F05` | แบบ กวภ.01-กวภ.05 |
+| `02` | ภาคตะวันตก |
+| `03` | ภาคตะวันออก |
+| `04` | ภาคเหนือ |
+| `05` | ภาคใต้ |
+| `06` | ภาคตะวันออกเฉียงเหนือ |
+| `07` | กฝม. (ภาคกลาง) |
+| `0001`-`9999` | running แยกตามแบบ ภาค และปี |
+| `2570` | ปี พ.ศ. ตามเวลา `Asia/Bangkok` |
+
+- Backend หา region จากจังหวัดของโรงงานในระบบ ไม่รับรหัสภาคจาก request body
+- คำขอใหม่เก็บภาคที่ใช้ออกเลขเป็น snapshot และใช้ snapshot นี้กับสิทธิ์ตามภาคและรายงาน; ข้อมูลเดิมที่ไม่มี snapshot จะ fallback ไปภาคปัจจุบันของโรงงาน
+- เมื่อเปลี่ยนปี running ของแต่ละชุด `แบบ + ภาค` เริ่มใหม่ที่ `0001`
+- การแก้ไข ส่งกลับหลังแก้ไข หรือยกเลิกคำขอไม่ออกเลขใหม่และไม่นำเลขเดิมกลับมาใช้ซ้ำ
+- เลขเดิมรูปแบบ `KWP-YY-NNNNN` ยังคงอ่านและแสดงได้ตามค่าที่บันทึกไว้ โดยไม่มีการเปลี่ยนย้อนหลัง
+
+| HTTP status | Code | Condition | Client action |
+| --- | --- | --- | --- |
+| `400` | `BAD_REQUEST` | ไม่พบโรงงาน จังหวัด หรือภาคที่รองรับสำหรับออกเลข | โหลดข้อมูลโรงงานใหม่และตรวจ master data |
+| `409` | `CONFLICT` | running ของแบบ/ภาค/ปีนั้นครบ `9999` แล้ว | แจ้งผู้ดูแลระบบเพื่อกำหนดกติกาเลขชุดถัดไป |
+
 ### `POST/PATCH` KWP01 hourly duration contract
 
 ใช้กับ `POST /api/v1/kwp-form-submissions/kwp01` และ `PATCH /api/v1/kwp-form-submissions/kwp01/:id`
@@ -438,7 +467,7 @@ Minimal response:
   "success": true,
   "data": {
     "id": 12,
-    "requestNo": "KWP-69-00012",
+    "requestNo": "F01-04-0045/2569",
     "formType": "KWP01",
     "status": "SUBMITTED"
   }
@@ -575,7 +604,7 @@ Minimal response:
   "data": [
     {
       "id": 12,
-      "requestNo": "KWP-69-00012",
+      "requestNo": "F01-04-0045/2569",
       "formType": "KWP01",
       "statusCode": "SUBMITTED",
       "factoryName": "บริษัท โรงงานตัวอย่าง จำกัด"
@@ -588,12 +617,14 @@ Minimal response:
 ## Business Flow And Explanations
 
 - Client migration checklist:
+  - ใช้ `requestNo` เป็น opaque string และรองรับทั้งเลขเดิม `KWP-YY-NNNNN` กับเลขใหม่ `FNN-RR-NNNN/YYYY`; ห้ามแยกค่าด้วยตำแหน่งจากรูปแบบเดิม
   - serialize `problemDate` และ `expectedDoneDate` ของ กวภ.01/03 เป็น `YYYY-MM-DDTHH:00:00` เมื่อต้องเก็บชั่วโมง
   - ใช้ `totalHours` จาก detail response สำหรับแสดง duration และ fallback `totalDays` สำหรับข้อมูลเดิม
   - กวภ.03 สามารถละ `measurementTimes` ได้
   - ส่ง multipart `attachmentType` พร้อม `file` ตอน upload; ใส่ type เฉพาะใน metadata หลัง upload ไม่เพียงพอสำหรับเพดาน 10 MB
 - Migration เพิ่มคอลัมน์ datetime/hour แบบ nullable และยังคงคอลัมน์ date/day เดิมไว้ ข้อมูลเก่าจึงยังอ่านด้วย date-only fallback โดยไม่มีการ backfill เวลาเที่ยงคืนเทียม
-- Deployment ต้องรัน migration `0079` ก่อนเปิดใช้ application version นี้; rollback ต้องย้อน application ก่อนจึงค่อยรัน migration down
+- Migration `0081` เพิ่ม sequence แยกตามแบบ/ภาค/ปีและ snapshot ข้อมูลที่ใช้ออกเลข โดยไม่แก้ `submission_no` เดิม
+- Deployment ต้องรัน migrations ถึง `0081` ก่อนเปิดใช้ application version นี้; rollback ต้องย้อน application ก่อนจึงค่อยรัน migration down
 - [Endpoint registry owner map](../../ENDPOINTS.md)
 - [ขอเชื่อมต่อ](../connection-requests/README.md)
 
@@ -605,6 +636,6 @@ Minimal response:
 | Report routes | [`kwp-form-reports.routes.ts`](../../../../../backend/src/modules/kwp-form-reports/kwp-form-reports.routes.ts) |
 | Validators | [`kwp-form-submissions.validator.ts`](../../../../../backend/src/modules/kwp-form-submissions/kwp-form-submissions.validator.ts), [`kwp-form-reports.validator.ts`](../../../../../backend/src/modules/kwp-form-reports/kwp-form-reports.validator.ts) |
 | Public types | [`kwp-form-submissions.types.ts`](../../../../../backend/src/modules/kwp-form-submissions/kwp-form-submissions.types.ts), [`kwp-form-reports.types.ts`](../../../../../backend/src/modules/kwp-form-reports/kwp-form-reports.types.ts) |
-| Repository | [`kwp-form-submissions.repository.ts`](../../../../../backend/src/modules/kwp-form-submissions/kwp-form-submissions.repository.ts), [`kwp-form-reports.repository.ts`](../../../../../backend/src/modules/kwp-form-reports/kwp-form-reports.repository.ts) |
-| Tests | [`kwp-form-submissions.route.test.ts`](../../../../../backend/tests/unit/kwp-form-submissions.route.test.ts), [`kwp-form-submissions.repository.test.ts`](../../../../../backend/tests/unit/kwp-form-submissions.repository.test.ts), [`kwp-form-duration.test.ts`](../../../../../backend/tests/unit/kwp-form-duration.test.ts), [`kwp-form-attachments.service.test.ts`](../../../../../backend/tests/unit/kwp-form-attachments.service.test.ts), [`kwp-hourly-duration-migration.test.ts`](../../../../../backend/tests/unit/kwp-hourly-duration-migration.test.ts), [`kwp-form-reports.route.test.ts`](../../../../../backend/tests/unit/kwp-form-reports.route.test.ts) |
-| Migration | [`0079_add_kwp_hourly_duration_fields.ts`](../../../../../backend/src/db/migrations/0079_add_kwp_hourly_duration_fields.ts) |
+| Repository | [`kwp-form-submissions.repository.ts`](../../../../../backend/src/modules/kwp-form-submissions/kwp-form-submissions.repository.ts), [`kwp-form-submission-number.ts`](../../../../../backend/src/modules/kwp-form-submissions/kwp-form-submission-number.ts), [`kwp-form-reports.repository.ts`](../../../../../backend/src/modules/kwp-form-reports/kwp-form-reports.repository.ts) |
+| Tests | [`kwp-form-submissions.route.test.ts`](../../../../../backend/tests/unit/kwp-form-submissions.route.test.ts), [`kwp-form-submissions.repository.test.ts`](../../../../../backend/tests/unit/kwp-form-submissions.repository.test.ts), [`kwp-form-submission-number.test.ts`](../../../../../backend/tests/unit/kwp-form-submission-number.test.ts), [`kwp-form-submission-sequence.repository.test.ts`](../../../../../backend/tests/unit/kwp-form-submission-sequence.repository.test.ts), [`kwp-form-submission-create-numbering.repository.test.ts`](../../../../../backend/tests/unit/kwp-form-submission-create-numbering.repository.test.ts), [`kwp-form-duration.test.ts`](../../../../../backend/tests/unit/kwp-form-duration.test.ts), [`kwp-form-attachments.service.test.ts`](../../../../../backend/tests/unit/kwp-form-attachments.service.test.ts), [`kwp-hourly-duration-migration.test.ts`](../../../../../backend/tests/unit/kwp-hourly-duration-migration.test.ts), [`kwp-form-reports.route.test.ts`](../../../../../backend/tests/unit/kwp-form-reports.route.test.ts) |
+| Migration | [`0079_add_kwp_hourly_duration_fields.ts`](../../../../../backend/src/db/migrations/0079_add_kwp_hourly_duration_fields.ts), [`0081_create_kwp_form_submission_sequences.ts`](../../../../../backend/src/db/migrations/0081_create_kwp_form_submission_sequences.ts) |
