@@ -2735,27 +2735,33 @@ function isActivePointCodeUniqueViolation(error: unknown): boolean {
 }
 
 async function nextRequestNo(trx: Knex.Transaction, systemType: 'CEMS' | 'WPMS'): Promise<string> {
-  const prefix = buildRequestNoPrefix(systemType);
+  const date = new Date();
+  const buddhistYear = buddhistCalendarYear(date);
   const totalRow = await trx('cems_wpms_connection_requests')
-    .where('request_no', 'like', `${prefix}-%`)
+    .where('request_no', 'like', `${systemType}-%/${buddhistYear}`)
     .count<{ total: number | string }>('id as total')
     .first();
   const sequence = Number(totalRow?.total ?? 0) + 1;
-  return `${prefix}-${String(sequence).padStart(5, '0')}`;
+  return buildRequestNo(systemType, sequence, date);
 }
 
-export function buildRequestNoPrefix(systemType: 'CEMS' | 'WPMS', date = new Date()): string {
-  return `${systemType}-${buddhistYearSuffix(date)}`;
+function buildRequestNo(
+  systemType: 'CEMS' | 'WPMS',
+  sequence: number,
+  date = new Date(),
+): string {
+  if (!Number.isInteger(sequence) || sequence < 1) {
+    throw new RangeError('Connection request sequence must be a positive integer');
+  }
+  return `${systemType}-${String(sequence).padStart(4, '0')}/${buddhistCalendarYear(date)}`;
 }
 
-function buddhistYearSuffix(date: Date): string {
-  const gregorianYear = Number(
-    new Intl.DateTimeFormat('en-US', {
-      timeZone: 'Asia/Bangkok',
-      year: 'numeric',
-    }).format(date),
-  );
-  return String((gregorianYear + 543) % 100).padStart(2, '0');
+export function buildRequestNoForTests(
+  systemType: 'CEMS' | 'WPMS',
+  sequence: number,
+  date = new Date(),
+): string {
+  return buildRequestNo(systemType, sequence, date);
 }
 
 function toMeasurementPointDTO(row: MeasurementPointRow): MeasurementPointDTO {
