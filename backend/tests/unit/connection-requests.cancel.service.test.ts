@@ -136,7 +136,7 @@ describe('connectionRequestsService.cancel', () => {
 function requestDto(overrides: Partial<ConnectionRequestDTO> = {}): ConnectionRequestDTO {
   return {
     id: 1,
-    requestNo: 'CEMS-69-00001',
+    requestNo: 'CEMS-0001/2569',
     submissionSource: CONNECTION_REQUEST_SUBMISSION_SOURCE.OPERATOR_FORM,
     requestType: 'NEW_CONNECTION',
     requestTypeLabel: 'ขอเชื่อมต่อใหม่',

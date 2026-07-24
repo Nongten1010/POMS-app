@@ -2,13 +2,21 @@
 
 ไฟล์นี้บันทึกเฉพาะการเปลี่ยน API ที่ทำให้ client ต้องแก้ตาม การเปลี่ยนทั่วไปและประวัติรายละเอียดดูจาก Git history
 
+## 2026-07-24 — เปลี่ยนรูปแบบเลขที่คำขอเชื่อมต่อเป็นลำดับ 4 หลักและปี พ.ศ. เต็ม
+
+- **Affected menu:** [ขอเชื่อมต่อ](./menus/connection-requests/README.md)
+- **Impact:** `requestNo` ของคำขอ CEMS/WPMS ที่สร้างใหม่เปลี่ยนรูปแบบทั้งคำขอผู้ประกอบการและ Direct Connection; ฟิลด์และกติกาของรหัสจุดตรวจวัดไม่เปลี่ยน.
+- **Migration:** client ต้องรองรับ `/` ใน `requestNo`, แสดงค่าเป็น opaque string และไม่แยกปีหรือลำดับจากรูปแบบเดิม.
+- **Old contract:** คำขอใหม่ใช้ `CEMS-YY-NNNNN` หรือ `WPMS-YY-NNNNN`.
+- **New contract:** คำขอใหม่ใช้ `CEMS-NNNN/YYYY` หรือ `WPMS-NNNN/YYYY` เช่น `CEMS-0001/2569` และ `WPMS-0001/2569`; ลำดับแยกตามระบบและเริ่มใหม่ตามปี พ.ศ. โดยผู้ประกอบการกับเจ้าหน้าที่ใช้ลำดับร่วมกัน.
+
 ## 2026-07-24 — ใช้เลขที่คำขอชุดเดียวกันสำหรับ Direct Connection
 
 - **Affected menu:** [ขอเชื่อมต่อ](./menus/connection-requests/README.md)
 - **Impact:** `requestNo` ใน response ของ `POST /api/v1/cems-wpms-requests/direct-connections` เปลี่ยน prefix สำหรับรายการใหม่; สถานะ `CONNECTED`, `submissionSource=OFFICER_DIRECT_API` และรหัสจุดที่เจ้าหน้าที่กรอกเองไม่เปลี่ยน.
 - **Migration:** client ต้องแยก Direct Connection ด้วย `submissionSource` แทนการตรวจ prefix `OLDC`/`OLDW` และต้องรองรับเลขชุดเดียวกับคำขอผู้ประกอบการ.
 - **Old contract:** Direct Connection ใช้ `OLDC-YY-NNNNN` สำหรับ CEMS และ `OLDW-YY-NNNNN` สำหรับ WPMS โดยมี sequence แยก.
-- **New contract:** Direct Connection ใช้ `CEMS-YY-NNNNN` หรือ `WPMS-YY-NNNNN` และนับลำดับร่วมกับคำขอผู้ประกอบการของระบบและปีเดียวกัน; รายการเดิมไม่ถูกแก้ย้อนหลัง.
+- **New contract ณ เวลาที่เปลี่ยน:** Direct Connection ใช้ลำดับร่วมกับคำขอผู้ประกอบการของระบบและปีเดียวกัน; รูปแบบ `CEMS-YY-NNNNN`/`WPMS-YY-NNNNN` ถูกแทนที่ภายหลังด้วยรายการ breaking change ด้านบน.
 
 ## 2026-07-24 — เปลี่ยนรูปแบบเลขรายงานความคลาดเคลื่อน BOD/COD และแยก running ตามภาคกับปี
 

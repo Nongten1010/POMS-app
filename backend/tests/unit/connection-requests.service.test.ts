@@ -394,7 +394,7 @@ describe('connectionRequestsService', () => {
     );
     expect(result.data[0]).toMatchObject({
       id: 1,
-      requestNo: 'CEMS-69-00001',
+      requestNo: 'CEMS-0001/2569',
       factory: {
         factoryId: 'factory-001',
       },
@@ -1747,7 +1747,7 @@ describe('connectionRequestsService', () => {
     expect(result).toMatchObject({
       requestType: CONNECTION_REQUEST_TYPE.ADD_PARAMETER,
       sourceRequestId: 1,
-      sourceRequestNo: 'CEMS-69-00001',
+      sourceRequestNo: 'CEMS-0001/2569',
       stationId: 'STACK-A',
       formDefaults: {
         requestType: CONNECTION_REQUEST_TYPE.ADD_PARAMETER,
@@ -1976,7 +1976,7 @@ describe('connectionRequestsService', () => {
       stationId: 'STACK-A',
     });
     expect(result.data[0]).toMatchObject({
-      requestNo: 'CEMS-69-00001',
+      requestNo: 'CEMS-0001/2569',
       connectedAt: '2026-05-29T10:00:00.000Z',
       point: { pointCode: 'STACK-A' },
     });
@@ -2078,7 +2078,7 @@ describe('connectionRequestsService', () => {
     });
     const wpmsRequest = requestDto({
       id: 2,
-      requestNo: 'WPMS-69-00001',
+      requestNo: 'WPMS-0001/2569',
       systemType: 'WPMS',
       status: CONNECTION_REQUEST_STATUS.CONNECTED,
       statusLabel: 'เชื่อมต่อแล้ว',
@@ -3339,7 +3339,7 @@ describe('connectionRequestsService', () => {
 function requestDto(overrides: Partial<ConnectionRequestDTO> = {}): ConnectionRequestDTO {
   return {
     id: 1,
-    requestNo: 'CEMS-69-00001',
+    requestNo: 'CEMS-0001/2569',
     requestType: CONNECTION_REQUEST_TYPE.NEW_CONNECTION,
     requestTypeLabel: 'ขอเชื่อมต่อใหม่',
     factoryId: 'factory-001',

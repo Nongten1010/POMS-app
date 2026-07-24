@@ -2745,11 +2745,7 @@ async function nextRequestNo(trx: Knex.Transaction, systemType: 'CEMS' | 'WPMS')
   return buildRequestNo(systemType, sequence, date);
 }
 
-function buildRequestNo(
-  systemType: 'CEMS' | 'WPMS',
-  sequence: number,
-  date = new Date(),
-): string {
+function buildRequestNo(systemType: 'CEMS' | 'WPMS', sequence: number, date = new Date()): string {
   if (!Number.isInteger(sequence) || sequence < 1) {
     throw new RangeError('Connection request sequence must be a positive integer');
   }

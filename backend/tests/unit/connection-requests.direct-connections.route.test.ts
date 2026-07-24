@@ -19,7 +19,7 @@ const mockedService = connectionRequestsService as unknown as {
 describe('POST /api/v1/cems-wpms-requests/direct-connections', () => {
   const serviceResponse = {
     id: 91,
-    requestNo: 'WPMS-69-00001',
+    requestNo: 'WPMS-0001/2569',
     requestType: 'ADD_MEASUREMENT_POINT',
     status: 'CONNECTED',
     statusLabel: 'เชื่อมต่อแล้ว',

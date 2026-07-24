@@ -1,5 +1,7 @@
 # เลขคำขอเจ้าหน้าที่ใช้ลำดับร่วมกับผู้ประกอบการ
 
+> หลักฐานนี้บันทึกการรวม sequence ณ เวลาที่ `requestNo` ยังใช้รูปแบบปี 2 หลักและลำดับ 5 หลัก รูปแบบปัจจุบันอ้างอิง [request-number-full-year-format.tdd.md](./request-number-full-year-format.tdd.md).
+
 ## Source
 
 User journey และ acceptance criteria มาจากคำขอในงานนี้ ไม่มีไฟล์แผนภายนอก.
