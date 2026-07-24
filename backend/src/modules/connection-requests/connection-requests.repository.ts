@@ -901,6 +901,7 @@ export const connectionRequestsRepository = {
         );
         await ensureDirectPointCodeAvailable(trx, pointCode);
         const connectedAt = new Date();
+        // Officer-direct connections share the operator request-number series.
         const requestNo = await nextRequestNo(trx, input.systemType);
         const [{ id }] = await trx('cems_wpms_connection_requests')
           .insert({
