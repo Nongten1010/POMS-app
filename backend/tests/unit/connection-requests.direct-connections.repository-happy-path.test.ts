@@ -130,7 +130,7 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
     expect(mockedDb.transaction).toHaveBeenCalledTimes(1);
     expect(requestInsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        request_no: 'CEMS-69-00001',
+        request_no: 'CEMS-0001/2569',
         eligible_factory_id: 17,
         request_type: 'ADD_MEASUREMENT_POINT',
         submission_source: 'OFFICER_DIRECT_API',
@@ -180,7 +180,7 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
     );
     expect(created).toMatchObject({
       id: 101,
-      requestNo: 'CEMS-69-00001',
+      requestNo: 'CEMS-0001/2569',
       requestType: 'ADD_MEASUREMENT_POINT',
       submissionSource: 'OFFICER_DIRECT_API',
       status: 'CONNECTED',
@@ -190,7 +190,11 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
       statusHistory: [expect.objectContaining({ status: 'CONNECTED', changedById: 42 })],
     });
     expect([...queues.values()].every((queue) => queue.length === 0)).toBe(true);
-    expect(requestNumberLookup.where).toHaveBeenCalledWith('request_no', 'like', 'CEMS-69-%');
+    expect(requestNumberLookup.where).toHaveBeenCalledWith(
+      'request_no',
+      'like',
+      'CEMS-%/2569',
+    );
     expect(requestNumberLookup.count).toHaveBeenCalledWith('id as total');
   });
 
@@ -257,7 +261,7 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
       total: 1,
       rows: [
         expect.objectContaining({
-          requestNo: 'CEMS-69-00001',
+          requestNo: 'CEMS-0001/2569',
           submissionSource: 'OFFICER_DIRECT_API',
         }),
       ],
@@ -320,7 +324,7 @@ function requestRow(now: Date) {
   return {
     id: 101,
     eligible_factory_id: 17,
-    request_no: 'CEMS-69-00001',
+    request_no: 'CEMS-0001/2569',
     submission_source: 'OFFICER_DIRECT_API',
     request_type: 'ADD_MEASUREMENT_POINT',
     factory_id: 'factory-001',
