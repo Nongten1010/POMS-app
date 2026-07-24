@@ -3,7 +3,7 @@ import { isAnnualMonitoringPointCode } from '../utils/monitoring-point-code';
 
 export const normalizeAnnualPointCodePath: RequestHandler = (req, _res, next) => {
   const { stationId, buddhistYear } = req.params;
-  if (!stationId || !buddhistYear) return next();
+  if (!buddhistYear) return next();
 
   const annualPointCode = `${stationId}/${buddhistYear}`;
   if (isAnnualMonitoringPointCode(annualPointCode)) {

@@ -26,7 +26,7 @@ Status: Implemented
 
 ## Public Interface
 
-ไม่มี endpoint ใหม่และ request payload ไม่เปลี่ยน พฤติกรรมที่สังเกตได้คือ เมื่อ status action ของคำขอปกติทำให้ backend ออกรหัสจุดตรวจวัด จุด CEMS แรกของปีได้ `CEMS-0001/YYYY` และจุด WPMS แรกของปีได้ `WEMS-0001/YYYY`; API รายละเอียดคำขอและ API จุดตรวจวัดที่เชื่อมต่อแล้วต้องคืนรหัสเดียวกัน. เมื่อใช้รหัสใน path parameter client ต้อง URL-encode `/` เป็น `%2F`.
+ไม่มี endpoint ใหม่และ request payload ไม่เปลี่ยน พฤติกรรมที่สังเกตได้คือ เมื่อ status action ของคำขอปกติทำให้ backend ออกรหัสจุดตรวจวัด จุด CEMS แรกของปีได้ `CEMS-0001/YYYY` และจุด WPMS แรกของปีได้ `WEMS-0001/YYYY`; API รายละเอียดคำขอและ API จุดตรวจวัดที่เชื่อมต่อแล้วต้องคืนรหัสเดียวกัน. เมื่อใช้รหัสใน path parameter client ต้อง URL-encode `/` เป็น `%2F`; backend ต้องรองรับกรณี reverse proxy ถอด `%2F` เป็น `/` ก่อนส่งต่อด้วย.
 
 ## Failure And Consistency Rules
 
@@ -41,6 +41,7 @@ Status: Implemented
 3. ลำดับ CEMS และ WPMS ไม่กระทบกัน.
 4. เมื่อเปลี่ยนปี แต่ละระบบเริ่มลำดับใหม่ที่ `0001`.
 5. Direct Connect ไม่ถูกสร้างรหัสอัตโนมัติและเก็บรหัสที่เจ้าหน้าที่ส่งมาเหมือนเดิม.
+6. Route ที่รับ station ID ต้องประกอบ `CEMS-0001/2569` หรือ `WEMS-0003/2571` กลับได้เมื่อ reverse proxy ส่งมาเป็นสอง path segments.
 
 ## Resolved Decisions
 

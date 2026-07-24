@@ -80,6 +80,7 @@ curl --request POST \
 - ใน path parameter ต้อง URL-encode อักขระ `/` เป็น `%2F` เช่น
   `/api/v1/connected-measurement-points/CEMS-0001%2F2569/requests`.
 - Client ควรสร้าง path segment ด้วย `encodeURIComponent(pointCode)` และต้องไม่แยกหรือคำนวณความหมายจากรหัสเอง.
+- Backend รองรับทั้ง `%2F` ที่ส่งถึง Express โดยตรง และ path สอง segment ที่ reverse proxy ถอด `%2F` เป็น `/` ก่อนส่งต่อ โดยประกอบกลับเป็น point code เดิมก่อน validation.
 
 ## Contracts
 
@@ -363,6 +364,7 @@ Minimal response:
 | Validators | [`connection-requests.validator.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.validator.ts), [`parameter-values.validator.ts`](../../../../../backend/src/modules/parameter-values/parameter-values.validator.ts), [`alert-events.validator.ts`](../../../../../backend/src/modules/alert-events/alert-events.validator.ts), [`integration-device-configs.validator.ts`](../../../../../backend/src/modules/integrations/integration-device-configs.validator.ts) |
 | Public types | [`connection-requests.types.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.types.ts) |
 | Sequence implementation | [`connection-requests.repository.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.repository.ts), [`monitoring-point-code.ts`](../../../../../backend/src/shared/utils/monitoring-point-code.ts) |
+| Reverse-proxy path normalization | [`annual-point-code-path.ts`](../../../../../backend/src/shared/middlewares/annual-point-code-path.ts), [`connected-measurement-points.routes.ts`](../../../../../backend/src/modules/connection-requests/connected-measurement-points.routes.ts), [`integrations.routes.ts`](../../../../../backend/src/modules/integrations/integrations.routes.ts) |
 | Factory-profile patch rules | [`connected-factory-profile.ts`](../../../../../backend/src/modules/connection-requests/connected-factory-profile.ts) |
 | Migrations | [`0080_create_annual_point_code_sequences.ts`](../../../../../backend/src/db/migrations/0080_create_annual_point_code_sequences.ts), [`0076_sync_connected_factory_profiles_with_eligible_factories.ts`](../../../../../backend/src/db/migrations/0076_sync_connected_factory_profiles_with_eligible_factories.ts) |
 | Tests | [`connection-requests.point-code-sequence.repository.test.ts`](../../../../../backend/tests/unit/connection-requests.point-code-sequence.repository.test.ts), [`annual-point-code-sequence-migration.test.ts`](../../../../../backend/tests/unit/annual-point-code-sequence-migration.test.ts), [`parameter-values.validator.test.ts`](../../../../../backend/tests/unit/parameter-values.validator.test.ts), [`alert-events.route.test.ts`](../../../../../backend/tests/unit/alert-events.route.test.ts), [`connected-measurement-points.route.test.ts`](../../../../../backend/tests/unit/connected-measurement-points.route.test.ts), [`integration-device-configs.route.test.ts`](../../../../../backend/tests/unit/integration-device-configs.route.test.ts) |

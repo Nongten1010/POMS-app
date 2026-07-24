@@ -11,7 +11,7 @@
 1. ในฐานะเจ้าหน้าที่ เมื่ออนุมัติแบบ CEMS ฉันต้องได้รับรหัส `CEMS-NNNN/YYYY` เพื่อให้รหัสแสดงระบบ ลำดับ และปี พ.ศ. ชัดเจน.
 2. ในฐานะเจ้าหน้าที่ เมื่ออนุมัติแบบ WPMS ฉันต้องได้รับรหัส prefix `WEMS` เช่น `WEMS-0003/2571`.
 3. ในฐานะผู้ดูแลระบบ ฉันต้องการให้ CEMS/WPMS แยกลำดับกันและเริ่ม `0001` ใหม่ทุกปี โดยคำขอพร้อมกันต้องไม่รับเลขซ้ำ.
-4. ในฐานะ client ฉันต้องยังใช้รหัสเดิมได้ และใช้รหัสใหม่เป็น `stationId` ใน integration, query และ URL-encoded path ได้.
+4. ในฐานะ client ฉันต้องยังใช้รหัสเดิมได้ และใช้รหัสใหม่เป็น `stationId` ใน integration, query และ URL-encoded path ได้ แม้ reverse proxy จะถอด `%2F` ก่อนส่งเข้า Express.
 
 ## RED Evidence
 
@@ -36,6 +36,16 @@ npm test -- --runInBand \
 
 ผล: `2 failed`; alert integration ตอบ `400` และ dashboard ไม่โหลด hourly measurement สำหรับ station ID รูปแบบใหม่.
 
+Reverse-proxy compatibility RED:
+
+```bash
+npm test -- --runInBand \
+  tests/unit/connected-measurement-points.route.test.ts \
+  tests/unit/integration-device-configs.route.test.ts
+```
+
+ผล: `2 failed` จาก test ใหม่ โดยทั้งสอง route ตอบ `404` เมื่อรับ path สอง segment เช่น `CEMS-0001/2569`; ตรงกับ production probe ผ่าน IIS/ARR ก่อนแก้ไข.
+
 ## GREEN Evidence
 
 | # | สิ่งที่รับประกัน | Test | ประเภท | ผล |
@@ -47,13 +57,13 @@ npm test -- --runInBand \
 | 5 | ตาราง sequence แยก key ด้วย `system_type + buddhist_year` โดยไม่แก้ point code เดิม | `annual-point-code-sequence-migration.test.ts` | migration/unit | PASS |
 | 6 | ปี พ.ศ. เปลี่ยนตามเขตเวลา `Asia/Bangkok` | `monitoring-point-code.test.ts` | unit | PASS |
 | 7 | Parameter API, alert integration, integration device-configs และ dashboard รองรับ station ID รูปแบบใหม่ | `parameter-values.validator.test.ts`, `alert-events.route.test.ts`, `integration-device-configs.route.test.ts`, `connection-requests.service.test.ts` | unit/integration | PASS |
-| 8 | Path ที่ส่ง `%2F` ถูก decode กลับเป็น `/` ก่อนส่งเข้า service | `connected-measurement-points.route.test.ts`, `integration-device-configs.route.test.ts` | route/integration | PASS |
+| 8 | Path ที่ส่ง `%2F` โดยตรงหรือถูก reverse proxy ถอดเป็นสอง segment ถูกประกอบกลับเป็น point code เดิมก่อนส่งเข้า service | `connected-measurement-points.route.test.ts`, `integration-device-configs.route.test.ts` | route/integration | PASS |
 
 Targeted GREEN:
 
 ```text
 Test Suites: 8 passed, 8 total
-Tests:       121 passed, 121 total
+Tests:       124 passed, 124 total
 ```
 
 ## Coverage And Verification
@@ -76,5 +86,7 @@ Checks:
 
 ## Merge Evidence
 
-- RED checkpoints: `5295cbb`, `50ab002`.
-- GREEN implementation และ docs อยู่ใน commit ถัดจาก checkpoints.
+- Annual point-code RED checkpoints หลัง rebase: `5103d8f`, `f739221`.
+- Annual point-code GREEN implementation หลัง rebase: `38f51aa`.
+- Reverse-proxy RED checkpoint: `3fd9c73`.
+- Reverse-proxy GREEN implementation: `02a315b`.

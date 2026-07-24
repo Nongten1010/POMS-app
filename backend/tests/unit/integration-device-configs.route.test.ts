@@ -157,6 +157,17 @@ describe('integration device configs route', () => {
     expect(mockedIntegrationDeviceConfigsService.getByStationId).toHaveBeenCalledWith(stationId);
   });
 
+  it('rejects malformed point codes split into multiple path segments', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .get('/api/v1/integrations/device-configs/WEMS-0003/not-a-year')
+      .set('X-API-Key', 'test-integration-key');
+
+    expect(response.status).toBe(400);
+    expect(mockedIntegrationDeviceConfigsService.getByStationId).not.toHaveBeenCalled();
+  });
+
   it('rejects alert event scoped API keys for device config endpoints', async () => {
     process.env.INTEGRATION_API_KEYS = '';
     process.env.DEVICE_CONFIG_API_KEYS = 'device-config-key';
