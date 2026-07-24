@@ -56,6 +56,20 @@ curl --request POST \
 | อ่านจุดตรวจวัดของโรงงานและข้อมูล prefill | `GET` | `/api/v1/connected-measurement-points/factories/:factoryId` | Bearer | `cems_wpms_requests:view` | [Shared connected-point contract](../../shared/connected-measurement-points/README.md) |
 | ผู้ประกอบการยกเลิกคำขอ | `POST` | `/api/v1/cems-wpms-requests/:id/cancel` | Bearer | `cems_wpms_requests:edit` + owner | [Cancel request](./operator-cancel-request.md) |
 
+## Request-number Contract
+
+คำขอที่สร้างใหม่ใช้เลขชุดเดียวกันตาม `systemType` และปี พ.ศ. ไม่ว่าผู้ส่งจะเป็นผู้ประกอบการหรือเจ้าหน้าที่เชื่อมต่อโดยตรง:
+
+| `systemType` | รูปแบบ | ตัวอย่างแรกของปี 2569 |
+| --- | --- | --- |
+| `CEMS` | `CEMS-` + ปี พ.ศ. 2 หลัก + `-` + ลำดับ 5 หลัก | `CEMS-69-00001` |
+| `WPMS` | `WPMS-` + ปี พ.ศ. 2 หลัก + `-` + ลำดับ 5 หลัก | `WPMS-69-00001` |
+
+- `POST /api/v1/cems-wpms-requests/direct-connections` ใช้ลำดับเดียวกับคำขอของผู้ประกอบการ ไม่ใช้ prefix `OLDC` หรือ `OLDW` สำหรับคำขอใหม่.
+- ค่า `submissionSource` ยังคงแยกแหล่งที่มา: ผู้ประกอบการเป็น `OPERATOR_FORM` และเจ้าหน้าที่เชื่อมต่อโดยตรงเป็น `OFFICER_DIRECT_API`.
+- Direct Connection ยังคงสถานะ `CONNECTED` ทันทีและเก็บ `measurementPoints[0].pointCode` ที่เจ้าหน้าที่กรอกเอง; การเปลี่ยนนี้มีผลเฉพาะ `requestNo`.
+- คำขอเดิมที่มี `OLDC-*` หรือ `OLDW-*` ไม่ถูกแก้ย้อนหลัง.
+
 ## Point-code Contract
 
 กติกานี้ใช้เฉพาะ flow ปกติของผู้ประกอบการ:
@@ -71,7 +85,7 @@ curl --request POST \
 - รหัสเดิมทุกรูปแบบ เช่น `Sxxxx`, `Pxxxx` และ `Wxxxx` ไม่ถูก migrate; client ต้องยังอ่านและส่งรหัสเดิมเหล่านั้นเป็น opaque identifier ได้.
 - รหัสเดิมและรหัสของปีอื่นไม่ถูกนำมาคำนวณลำดับของปีปัจจุบัน.
 - คำขอ `ADD_PARAMETER` ใช้รหัสจุดเดิมและไม่ออกรหัสใหม่.
-- `POST /api/v1/cems-wpms-requests/direct-connections` ไม่ใช้ลำดับนี้ และเก็บรหัสที่เจ้าหน้าที่ส่งใน `measurementPoints[0].pointCode`.
+- `POST /api/v1/cems-wpms-requests/direct-connections` ไม่ใช้ลำดับรหัสจุดนี้ และเก็บรหัสที่เจ้าหน้าที่ส่งใน `measurementPoints[0].pointCode`.
 - การจองเลขและการเปลี่ยนสถานะทำใน transaction เดียวกันเพื่อไม่ให้คำขอพร้อมกันได้รหัสซ้ำ.
 
 เมื่อใช้รหัสรูปแบบใหม่เป็น `stationId`:

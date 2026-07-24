@@ -901,7 +901,7 @@ export const connectionRequestsRepository = {
         );
         await ensureDirectPointCodeAvailable(trx, pointCode);
         const connectedAt = new Date();
-        const requestNo = await nextDirectRequestNo(trx, input.systemType, connectedAt);
+        const requestNo = await nextRequestNo(trx, input.systemType);
         const [{ id }] = await trx('cems_wpms_connection_requests')
           .insert({
             request_no: requestNo,
@@ -2731,54 +2731,6 @@ function isActivePointCodeUniqueViolation(error: unknown): boolean {
     .join(' ')
     .toLowerCase();
   return message.includes('uq_connected_points_point_code');
-}
-
-async function nextDirectRequestNo(
-  trx: Knex.Transaction,
-  systemType: 'CEMS' | 'WPMS',
-  date: Date,
-): Promise<string> {
-  const buddhistYear = buddhistYearSuffix(date);
-  const sequenceRow = await trx<{ last_sequence: number | string }>(
-    'cems_wpms_direct_request_sequences',
-  )
-    .where({ system_type: systemType, buddhist_year: buddhistYear })
-    .forUpdate()
-    .first('last_sequence');
-  if (!sequenceRow) {
-    throw new Error(`Direct request sequence is not provisioned for ${systemType}-${buddhistYear}`);
-  }
-
-  const sequence = Number(sequenceRow.last_sequence) + 1;
-  const requestNo = buildDirectRequestNo(systemType, sequence, date);
-  await trx('cems_wpms_direct_request_sequences')
-    .where({ system_type: systemType, buddhist_year: buddhistYear })
-    .update({ last_sequence: sequence, updated_at: trx.fn.now() });
-  return requestNo;
-}
-
-export function reserveDirectRequestNoForTests(
-  trx: Knex.Transaction,
-  systemType: 'CEMS' | 'WPMS',
-  date: Date,
-): Promise<string> {
-  return nextDirectRequestNo(trx, systemType, date);
-}
-
-function buildDirectRequestNo(systemType: 'CEMS' | 'WPMS', sequence: number, date: Date): string {
-  if (!Number.isInteger(sequence) || sequence < 1 || sequence > 99_999) {
-    throw new RangeError('Direct connection request sequence must be between 1 and 99999');
-  }
-  const prefix = systemType === 'CEMS' ? 'OLDC' : 'OLDW';
-  return `${prefix}-${buddhistYearSuffix(date)}-${String(sequence).padStart(5, '0')}`;
-}
-
-export function buildDirectRequestNoForTests(
-  systemType: 'CEMS' | 'WPMS',
-  sequence: number,
-  date = new Date(),
-): string {
-  return buildDirectRequestNo(systemType, sequence, date);
 }
 
 async function nextRequestNo(trx: Knex.Transaction, systemType: 'CEMS' | 'WPMS'): Promise<string> {

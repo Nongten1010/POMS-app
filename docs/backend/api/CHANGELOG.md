@@ -2,6 +2,14 @@
 
 ไฟล์นี้บันทึกเฉพาะการเปลี่ยน API ที่ทำให้ client ต้องแก้ตาม การเปลี่ยนทั่วไปและประวัติรายละเอียดดูจาก Git history
 
+## 2026-07-24 — ใช้เลขที่คำขอชุดเดียวกันสำหรับ Direct Connection
+
+- **Affected menu:** [ขอเชื่อมต่อ](./menus/connection-requests/README.md)
+- **Impact:** `requestNo` ใน response ของ `POST /api/v1/cems-wpms-requests/direct-connections` เปลี่ยน prefix สำหรับรายการใหม่; สถานะ `CONNECTED`, `submissionSource=OFFICER_DIRECT_API` และรหัสจุดที่เจ้าหน้าที่กรอกเองไม่เปลี่ยน.
+- **Migration:** client ต้องแยก Direct Connection ด้วย `submissionSource` แทนการตรวจ prefix `OLDC`/`OLDW` และต้องรองรับเลขชุดเดียวกับคำขอผู้ประกอบการ.
+- **Old contract:** Direct Connection ใช้ `OLDC-YY-NNNNN` สำหรับ CEMS และ `OLDW-YY-NNNNN` สำหรับ WPMS โดยมี sequence แยก.
+- **New contract:** Direct Connection ใช้ `CEMS-YY-NNNNN` หรือ `WPMS-YY-NNNNN` และนับลำดับร่วมกับคำขอผู้ประกอบการของระบบและปีเดียวกัน; รายการเดิมไม่ถูกแก้ย้อนหลัง.
+
 ## 2026-07-24 — เปลี่ยนรูปแบบเลขรายงานความคลาดเคลื่อน BOD/COD และแยก running ตามภาคกับปี
 
 - **Affected menu:** [รายงานค่าความคลาดเคลื่อน BOD/COD Online](./menus/bod-cod-deviation-reports/README.md)

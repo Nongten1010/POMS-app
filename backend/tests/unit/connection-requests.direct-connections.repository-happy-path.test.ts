@@ -190,11 +190,7 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
       statusHistory: [expect.objectContaining({ status: 'CONNECTED', changedById: 42 })],
     });
     expect([...queues.values()].every((queue) => queue.length === 0)).toBe(true);
-    expect(requestNumberLookup.where).toHaveBeenCalledWith(
-      'request_no',
-      'like',
-      'CEMS-69-%',
-    );
+    expect(requestNumberLookup.where).toHaveBeenCalledWith('request_no', 'like', 'CEMS-69-%');
     expect(requestNumberLookup.count).toHaveBeenCalledWith('id as total');
   });
 
