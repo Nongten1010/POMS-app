@@ -14,6 +14,7 @@
 ## Connection requests
 
 - [รหัสจุดตรวจวัดแบบลำดับรายปี](./connection-requests/annual-point-code-format.tdd.md)
+- [การล้างข้อมูลทดสอบ Production และรีเซ็ตลำดับเลข](./connection-requests/production-test-data-reset.tdd.md)
 - [เจ้าหน้าที่เชื่อมต่อโรงงานเข้าข่ายโดยตรง](./connection-requests/officer-direct-eligible-lookup.tdd.md)
 - [ชื่อโรงงานในตารางรายการคำขอใช้ current/live POMS](./connection-requests/request-table-current-factory-name.tdd.md)
 

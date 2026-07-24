@@ -33,9 +33,7 @@ describe('production test-data reset plan', () => {
       { parentTable: 'points', childTable: 'requests' },
     ];
 
-    expect(() => buildDeletePlan(['requests'], cyclicEdges)).toThrow(
-      'Foreign-key cycle detected',
-    );
+    expect(() => buildDeletePlan(['requests'], cyclicEdges)).toThrow('Foreign-key cycle detected');
   });
 
   it('selects only exact parameter tables owned by the captured stations', () => {
@@ -54,9 +52,7 @@ describe('production test-data reset plan', () => {
   });
 
   it('quotes safe SQL identifiers and rejects injected identifiers', () => {
-    expect(quoteSqlIdentifier('device_connection_configs')).toBe(
-      '[device_connection_configs]',
-    );
+    expect(quoteSqlIdentifier('device_connection_configs')).toBe('[device_connection_configs]');
     expect(() => quoteSqlIdentifier('requests]; DROP TABLE users;--')).toThrow(
       'Unsafe SQL identifier',
     );

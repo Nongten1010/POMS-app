@@ -1,0 +1,92 @@
+name: Reset POMS test data
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Run a read-only preview or execute the reset
+        required: true
+        type: choice
+        options:
+          - preview
+          - execute
+      confirmation:
+        description: For execute, enter RESET-POMS-TEST-DATA
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: poms-prod-maintenance
+  cancel-in-progress: false
+
+jobs:
+  reset:
+    name: Preview or reset production test data
+    runs-on: [self-hosted, poms, windows, prod]
+    timeout-minutes: 45
+
+    defaults:
+      run:
+        shell: powershell
+
+    env:
+      POMS_ENV_FILE: C:\apps\POMS-app\backend\.env
+      RESET_MODE: ${{ inputs.mode }}
+      RESET_CONFIRMATION: ${{ inputs.confirmation }}
+      BACKEND_SERVICE: poms-app-backend
+      BACKEND_HEALTH_URL: http://127.0.0.1:3000/health
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Validate execute confirmation
+        if: inputs.mode == 'execute'
+        run: |
+          if ("${{ inputs.confirmation }}" -ne "RESET-POMS-TEST-DATA") {
+            throw "Execute confirmation does not match RESET-POMS-TEST-DATA"
+          }
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Stop backend before execute
+        if: inputs.mode == 'execute'
+        run: |
+          Stop-Service -Name $env:BACKEND_SERVICE -Force
+          (Get-Service -Name $env:BACKEND_SERVICE).WaitForStatus('Stopped', '00:00:30')
+
+      - name: Preview or execute reset
+        working-directory: backend
+        run: npx tsx src/scripts/reset-production-test-data.ts
+
+      - name: Ensure backend service is running
+        if: always() && inputs.mode == 'execute'
+        run: |
+          $service = Get-Service -Name $env:BACKEND_SERVICE
+          if ($service.Status -ne 'Running') {
+            Start-Service -Name $env:BACKEND_SERVICE
+          }
+          (Get-Service -Name $env:BACKEND_SERVICE).WaitForStatus('Running', '00:00:30')
+
+      - name: Verify backend health
+        if: inputs.mode == 'execute'
+        run: |
+          $deadline = (Get-Date).AddSeconds(60)
+          do {
+            try {
+              $response = Invoke-WebRequest $env:BACKEND_HEALTH_URL -UseBasicParsing -TimeoutSec 5
+              if ($response.StatusCode -eq 200) {
+                Write-Host "Backend health check passed: $($response.Content)"
+                exit 0
+              }
+            } catch {
+              Write-Host "Waiting for backend health check: $($_.Exception.Message)"
+            }
+            Start-Sleep -Seconds 2
+          } while ((Get-Date) -lt $deadline)
+          throw "Backend health check did not pass within 60 seconds."
