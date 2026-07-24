@@ -59,13 +59,16 @@ describe('production test-data reset plan', () => {
     );
   });
 
-  it('allows a co-located parameter database but never a local primary database', () => {
+  it('allows co-located production databases only from the trusted main workflow', () => {
     expect(() =>
       validateProductionDatabaseTargets({
         databaseName: 'POMS',
-        databaseHost: '172.16.31.184',
+        databaseHost: 'localhost',
         parameterDatabaseName: 'parameter_ingest',
         parameterDatabaseHost: 'localhost',
+        githubActions: 'true',
+        githubRepository: 'Nongten1010/POMS-app',
+        githubRefName: 'main',
       }),
     ).not.toThrow();
 
@@ -75,7 +78,10 @@ describe('production test-data reset plan', () => {
         databaseHost: 'localhost',
         parameterDatabaseName: 'parameter_ingest',
         parameterDatabaseHost: 'localhost',
+        githubActions: 'false',
+        githubRepository: 'Nongten1010/POMS-app',
+        githubRefName: 'main',
       }),
-    ).toThrow('primary database on localhost');
+    ).toThrow('trusted GitHub Actions main workflow');
   });
 });
