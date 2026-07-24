@@ -174,40 +174,6 @@ function buildInstrumentDialogForm(value = {}) {
   }
 }
 
-const mockCemsEligibleParameters = [
-  'NOx (ppm)',
-  'SO2 (ppm)',
-  'CO (ppm)',
-  'Temp. (C°)',
-  'O2 (%)',
-  'Opacity (%)',
-  'Flow Rate (m3/hr)',
-  'Particulate (mg/m3)',
-]
-
-const mockCemsExemptedParameters = [
-  'As (mg/m3)',
-  'Cl (mg/m3)',
-  'Cl (ppm)',
-  'CO2 (%)',
-  'Cresol (ppm)',
-  'Cu (mg/m3)',
-  'Dioxins/Furans (µg/m3)',
-  'H2S (ppm)',
-  'H2SO4 (ppm)',
-  'HCl (mg/m3)',
-  'HCl (ppm)',
-  'HF (ppm)',
-  'Hg (mg/m3)',
-  'Moisture (%)',
-  'Opacity (mg/m3)',
-  'Pb (mg/m3)',
-  'Pressure (mmHg)',
-  'Sb (mg/m3)',
-  'TRS (ppm)',
-  'Xylene (ppm)',
-]
-
 function getInitialInstrumentRows(initialInstruments = {}) {
   if (Array.isArray(initialInstruments.parameters) && initialInstruments.parameters.length) {
     return initialInstruments.parameters
@@ -216,60 +182,62 @@ function getInitialInstrumentRows(initialInstruments = {}) {
   return []
 }
 
-const mockCemsMonitoringPointDetails = {
-  pointCode: 'CEMS-STACK-001',
-  pointName: 'ปล่องระบาย A',
-  productionUnitType: 'หม้อไอน้ำ',
-  productionCapacity: '10 ตันไอน้ำ/ชั่วโมง',
-  cemsInstallationRequiredBy: cemsInstallationRequiredOptions[0]?.value ?? '',
-  legalAnnexNo: ['1'],
-  eligibleParameters: mockCemsEligibleParameters,
-  exemptedParameters: mockCemsExemptedParameters,
+const emptyCemsMonitoringPointDetails = {
+  pointCode: '',
+  pointName: '',
+  productionUnitType: '',
+  productionCapacity: '',
+  cemsInstallationRequiredBy: '',
+  legalAnnexNo: [],
+  eligibleParameters: [],
+  exemptedParameters: [],
   connectedParameters: [],
-  pendingParameters: mockCemsEligibleParameters,
+  pendingParameters: [],
   timeSharingParameters: [],
   sharedStackCode: '',
-  stackShape: 'วงกลม',
-  stackDiameter: '1.2',
-  stackHeight: '30',
-  monitoringHeight: '20',
-  averageFlowRate: '1200',
-  minFlowRate: '1000',
-  maxFlowRate: '1500',
-  primaryFuel: 'ก๊าซธรรมชาติ (NG)',
-  primaryFuelPercent: '80',
-  secondaryFuel: 'ไม่มี',
-  combustionControlSystem: 'ควบคุมอัตโนมัติ',
-  hasTreatmentSystem: 'มี',
-  treatmentSystem: 'สครับเบอร์แบบเปียก (ไม่มี media) (Wet Scrubber)',
-  stackLatitude: '13.7563',
-  stackLongitude: '100.5018',
-  connectionDevice: 'POMS Box (กรอ.)',
+  stackShape: '',
+  stackDiameter: '',
+  stackHeight: '',
+  monitoringHeight: '',
+  averageFlowRate: '',
+  minFlowRate: '',
+  maxFlowRate: '',
+  primaryFuel: '',
+  primaryFuelPercent: '',
+  secondaryFuel: '',
+  combustionControlSystem: '',
+  hasTreatmentSystem: '',
+  treatmentSystem: [],
+  stackLatitude: '',
+  stackLongitude: '',
+  connectionDevice: '',
 }
 
-const mockWpmsMonitoringPointDetails = {
-  pointCode: 'WPMS-WW-001',
-  pointName: 'จุดระบายน้ำทิ้ง A',
-  eligibleParameters: ['BOD (mg/l)', 'COD (mg/l)', 'Flow rate (m3/hr)'],
+const emptyWpmsMonitoringPointDetails = {
+  pointCode: '',
+  pointName: '',
+  eligibleParameters: [],
   connectedParameters: [],
-  pendingParameters: ['BOD (mg/l)', 'COD (mg/l)', 'Flow rate (m3/hr)'],
-  averageWastewaterDischarge: '500',
-  minWastewaterDischarge: '300',
-  maxWastewaterDischarge: '800',
-  hasTreatmentSystem: 'มี',
-  treatmentSystem: 'อื่นๆ',
-  treatmentSystemOther: 'ระบบบำบัดชีวภาพ',
-  maxTreatmentCapacity: '1000',
-  instrumentLatitude: '13.7563',
-  instrumentLongitude: '100.5018',
-  wastewaterSource: 'กระบวนการผลิต',
-  dischargeReceivingSource: 'คลองสาธารณะ',
-  connectionDevice: 'POMS Box (กรอ.)',
+  pendingParameters: [],
+  averageWastewaterDischarge: '',
+  minWastewaterDischarge: '',
+  maxWastewaterDischarge: '',
+  hasTreatmentSystem: '',
+  treatmentSystem: [],
+  treatmentSystemOther: '',
+  maxTreatmentCapacity: '',
+  instrumentLatitude: '',
+  instrumentLongitude: '',
+  dischargeLatitude: '',
+  dischargeLongitude: '',
+  wastewaterSource: '',
+  dischargeReceivingSource: '',
+  connectionDevice: '',
 }
 
-const mockMeasurementInstrumentDetails = {
-  converterBrand: 'Converter Brand',
-  converterModel: 'CV-100',
+const emptyMeasurementInstrumentDetails = {
+  converterBrand: '',
+  converterModel: '',
 }
 
 const waitingConnectionSx = {
@@ -4663,7 +4631,7 @@ function TagInputField({ label, name, value: controlledValue, defaultValue = [],
 }
 
 function CemsMonitoringPointDetails({ initialPoint = {}, requestedParameters = [], onRequestedParametersChange, isOperator = false, isDirectConnectionMode = false }) {
-  const initialDetails = { ...mockCemsMonitoringPointDetails, ...(initialPoint.details ?? {}) }
+  const initialDetails = { ...emptyCemsMonitoringPointDetails, ...(initialPoint.details ?? {}) }
   const pointCodeValue = initialPoint.pointCode ?? initialPoint.code ?? (isOperator || isDirectConnectionMode ? '' : initialDetails.pointCode)
   const initialProductionCapacity = splitProductionCapacity(initialDetails)
   const [stackShape, setStackShape] = useState(initialDetails.stackShape)
@@ -5342,7 +5310,7 @@ function MeasurementInstrumentSection({ parameterOptions, rows, setRows, initial
                 name="converterBrand"
                 label="อุปกรณ์แปลงสัญญาณ (Converter) ยี่ห้อ"
                 size="small"
-                defaultValue={initialInstruments.converterBrand ?? mockMeasurementInstrumentDetails.converterBrand}
+                defaultValue={initialInstruments.converterBrand ?? emptyMeasurementInstrumentDetails.converterBrand}
                 fullWidth
               />
             </Grid>
@@ -5351,7 +5319,7 @@ function MeasurementInstrumentSection({ parameterOptions, rows, setRows, initial
                 name="converterModel"
                 label="อุปกรณ์แปลงสัญญาณ (Converter) รุ่น"
                 size="small"
-                defaultValue={initialInstruments.converterModel ?? mockMeasurementInstrumentDetails.converterModel}
+                defaultValue={initialInstruments.converterModel ?? emptyMeasurementInstrumentDetails.converterModel}
                 fullWidth
               />
             </Grid>
@@ -5489,7 +5457,7 @@ function InformationProviderSection({ currentUser, initialProvider = {}, useLogi
 }
 
 function WpmsMonitoringPointDetails({ initialPoint = {}, requestedParameters = [], onRequestedParametersChange, isOperator = false, isDirectConnectionMode = false }) {
-  const initialDetails = { ...mockWpmsMonitoringPointDetails, ...(initialPoint.details ?? {}) }
+  const initialDetails = { ...emptyWpmsMonitoringPointDetails, ...(initialPoint.details ?? {}) }
   const pointCodeValue = initialPoint.pointCode ?? initialPoint.code ?? (isOperator || isDirectConnectionMode ? '' : initialDetails.pointCode)
   const [treatmentSystem, setTreatmentSystem] = useState(normalizeArrayValue(initialDetails.treatmentSystem))
   const [connectionDevice, setConnectionDevice] = useState(initialDetails.connectionDevice)
