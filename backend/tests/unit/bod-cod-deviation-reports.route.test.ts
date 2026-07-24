@@ -150,7 +150,7 @@ describe('BOD/COD deviation report routes', () => {
     });
     mockedService.createReport.mockResolvedValue({
       id: 9,
-      reportNo: 'BODCOD-2569-0009',
+      reportNo: 'Error-04-0009/2569',
       statusCode: 'SUBMITTED',
       approvalTrack: 'REGIONAL',
       currentStep: {
@@ -573,7 +573,7 @@ describe('BOD/COD deviation report routes', () => {
       success: true,
       data: expect.objectContaining({
         id: 9,
-        reportNo: 'BODCOD-2569-0009',
+        reportNo: 'Error-04-0009/2569',
         statusCode: 'SUBMITTED',
         approvalTrack: 'REGIONAL',
         currentStep: expect.objectContaining({

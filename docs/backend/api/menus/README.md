@@ -39,6 +39,7 @@ menus/
 - [ขอเชื่อมต่อ](./connection-requests/README.md) — contract คำขอ CEMS/WPMS และการออกรหัสจุดตรวจวัด
 - [โรงงานที่เข้าข่าย](./eligible-factories/README.md) — contract รายการโรงงานเข้าข่าย ข้อมูลที่ซิงก์ และเงื่อนไขการถอดออก
 - [แจ้งแบบ กวภ. 01 - กวภ. 05](./kwp-forms/README.md) — contract การส่งแบบ กวภ., upload เอกสาร, workflow และรายงานรายการคำขอ
+- [รายงานค่าความคลาดเคลื่อน BOD/COD Online](./bod-cod-deviation-reports/README.md) — contract การส่งรายงาน, เลขที่รายงาน, เอกสารแนบ และ workflow พิจารณา
 
 API ที่หลายเมนูใช้ร่วมกัน เช่น authentication และ connected measurement points อยู่ใต้ `../shared/` และให้หน้าเมนูลิงก์อ้างอิง
 

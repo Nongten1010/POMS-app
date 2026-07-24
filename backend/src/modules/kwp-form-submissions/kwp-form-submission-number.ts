@@ -1,6 +1,11 @@
 import type { KwpFormSubmissionDetailType } from './kwp-form-submissions.types';
+import {
+  formatRegionalDocumentNumber,
+  regionalDocumentRegionCode,
+  type RegionalDocumentRegionCode,
+} from '../../shared/utils/regional-document-number';
 
-export type KwpSubmissionRegionCode = '02' | '03' | '04' | '05' | '06' | '07';
+export type KwpSubmissionRegionCode = RegionalDocumentRegionCode;
 
 const KWP_FORM_PREFIXES: Record<KwpFormSubmissionDetailType, string> = {
   KWP01: 'F01',
@@ -10,17 +15,6 @@ const KWP_FORM_PREFIXES: Record<KwpFormSubmissionDetailType, string> = {
   KWP05: 'F05',
 };
 
-const KWP_REGION_CODES: Record<string, KwpSubmissionRegionCode> = {
-  ภาคตะวันตก: '02',
-  ภาคตะวันออก: '03',
-  ภาคเหนือ: '04',
-  ภาคใต้: '05',
-  ภาคตะวันออกเฉียงเหนือ: '06',
-  ภาคกลาง: '07',
-};
-
-const VALID_REGION_CODES = new Set<KwpSubmissionRegionCode>(Object.values(KWP_REGION_CODES));
-
 export function kwpFormPrefix(formType: KwpFormSubmissionDetailType): string {
   return KWP_FORM_PREFIXES[formType];
 }
@@ -28,8 +22,7 @@ export function kwpFormPrefix(formType: KwpFormSubmissionDetailType): string {
 export function kwpRegionCode(
   regionName: string | null | undefined,
 ): KwpSubmissionRegionCode | null {
-  if (!regionName) return null;
-  return KWP_REGION_CODES[regionName.trim()] ?? null;
+  return regionalDocumentRegionCode(regionName);
 }
 
 export function buddhistYearInBangkok(date = new Date()): string {
@@ -48,15 +41,5 @@ export function formatKwpFormSubmissionNo(
   sequence: number,
   buddhistYear: string,
 ): string {
-  if (!VALID_REGION_CODES.has(regionCode)) {
-    throw new RangeError('KWP submission region code is invalid');
-  }
-  if (!Number.isInteger(sequence) || sequence < 1 || sequence > 9_999) {
-    throw new RangeError('KWP submission sequence must be between 1 and 9999');
-  }
-  if (!/^\d{4}$/.test(buddhistYear)) {
-    throw new RangeError('KWP submission Buddhist year must contain four digits');
-  }
-
-  return `${kwpFormPrefix(formType)}-${regionCode}-${String(sequence).padStart(4, '0')}/${buddhistYear}`;
+  return formatRegionalDocumentNumber(kwpFormPrefix(formType), regionCode, sequence, buddhistYear);
 }
