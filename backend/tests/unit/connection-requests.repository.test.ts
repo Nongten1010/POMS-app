@@ -162,7 +162,7 @@ describe('connectionRequestsRepository query helpers', () => {
     const date = new Date('2026-05-30T12:00:00.000+07:00');
 
     expect(buildRequestNoForTests('CEMS', 1, date)).toBe('CEMS-0001/2569');
-    expect(buildRequestNoForTests('WPMS', 3, date)).toBe('WPMS-0003/2569');
+    expect(buildRequestNoForTests('WPMS', 3, date)).toBe('WEMS-0003/2569');
   });
 
   it('filters request history by selected station aliases from connected measurement points', () => {
