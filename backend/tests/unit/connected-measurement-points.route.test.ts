@@ -387,6 +387,20 @@ describe('connected measurement points route', () => {
     });
   });
 
+  it('recombines an annual point code after a reverse proxy decodes the path slash', async () => {
+    const app = createApp();
+    const stationId = 'CEMS-0001/2569';
+
+    const response = await request(app)
+      .get('/api/v1/connected-measurement-points/CEMS-0001/2569/requests')
+      .set('Authorization', `Bearer ${accessToken()}`);
+
+    expect(response.status).toBe(200);
+    expect(mockedConnectionRequestsService.listDetails).toHaveBeenCalledWith({ stationId }, 42, {
+      scope: 'ALL',
+    });
+  });
+
   it('exposes only modal detail fields for a factory connected measurement points', async () => {
     const app = createApp();
 
