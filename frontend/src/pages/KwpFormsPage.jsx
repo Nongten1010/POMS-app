@@ -3896,6 +3896,7 @@ function Kwp05Form({ factory, point, defaults = {}, calibrationRows, setCalibrat
   const [editingCalibration, setEditingCalibration] = useState(null)
   const parameterOptions = getKwp05ParameterOptions(point)
   const parameterInstrumentDetails = getKwp05ParameterInstrumentDetails(point)
+  const businessActivityDefault = firstDefinedValue(defaults.businessActivity, factory?.businessActivity)
 
   const saveCalibration = (row) => {
     setCalibrationRows((current) => {
@@ -3920,7 +3921,7 @@ function Kwp05Form({ factory, point, defaults = {}, calibrationRows, setCalibrat
               <ReadOnlyField label="เลขทะเบียนโรงงาน" value={factory?.newRegistrationNo ?? ''} />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <TextField name="businessActivity" label="ประกอบกิจการ" size="small" defaultValue={defaults.businessActivity ?? ''} fullWidth />
+              <TextField name="businessActivity" label="ประกอบกิจการ" size="small" defaultValue={businessActivityDefault} fullWidth />
             </Grid>
             <Grid size={{ xs: 12, md: 12 }}>
               <ReadOnlyField label="สถานที่ตั้งโรงงาน" value={factory?.address ?? ''} multiline />
