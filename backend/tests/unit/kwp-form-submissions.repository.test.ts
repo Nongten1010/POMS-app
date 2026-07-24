@@ -110,7 +110,7 @@ describe('kwpFormSubmissionsRepository', () => {
     expect(sql).toContain('user_juristics');
     expect(sql).toContain('user_factory_access');
     expect(sql).toContain('[uj].[user_id]');
-    expect(sql).toContain('[p].[region] in (?)');
+    expect(sql).toContain('coalesce([s].[submission_region_name], [p].[region]) in (?)');
   });
 
   it('limits KWP workflow reads to requested submission id, operator factories, and regional access', () => {
@@ -127,7 +127,10 @@ describe('kwpFormSubmissionsRepository', () => {
     expect(sql).toContain('user_juristics');
     expect(sql).toContain('user_factory_access');
     expect(sql).toContain('[uj].[user_id]');
-    expect(sql).toContain('[p].[region] in (?)');
+    expect(sql).toContain('coalesce([s].[submission_region_name], [p].[region]) in (?)');
+    expect(sql).toContain(
+      'coalesce([s].[submission_region_name], [p].[region]) as [province_region]',
+    );
   });
 
   it('limits returned-form edits to the requested id, form type, and operator factories', () => {
@@ -297,12 +300,23 @@ describe('kwpFormSubmissionsRepository', () => {
         reporterPosition: 'ผู้จัดการสิ่งแวดล้อม',
       },
       submissionNo: 'KWP-69-00012',
+      numbering: {
+        submissionNo: 'F01-07-0001/2569',
+        regionCode: '07',
+        regionName: 'ภาคกลาง',
+        buddhistYear: '2569',
+        sequence: 1,
+      },
       actorUserId: 42,
       now: new Date('2026-07-04T08:00:00.000Z'),
     });
 
     expect(records.submission).toMatchObject({
-      submission_no: 'KWP-69-00012',
+      submission_no: 'F01-07-0001/2569',
+      submission_region_code: '07',
+      submission_region_name: 'ภาคกลาง',
+      submission_buddhist_year: '2569',
+      submission_sequence: 1,
       form_type: 'KWP01',
       status: 'SUBMITTED',
       factory_name: 'บริษัท ทดสอบ จำกัด',
@@ -385,12 +399,23 @@ describe('kwpFormSubmissionsRepository', () => {
         reporterPosition: 'ผู้จัดการสิ่งแวดล้อม',
       },
       submissionNo: 'KWP-69-00013',
+      numbering: {
+        submissionNo: 'F02-07-0001/2569',
+        regionCode: '07',
+        regionName: 'ภาคกลาง',
+        buddhistYear: '2569',
+        sequence: 1,
+      },
       actorUserId: 42,
       now: new Date('2026-07-04T08:15:00.000Z'),
     });
 
     expect(records.submission).toMatchObject({
-      submission_no: 'KWP-69-00013',
+      submission_no: 'F02-07-0001/2569',
+      submission_region_code: '07',
+      submission_region_name: 'ภาคกลาง',
+      submission_buddhist_year: '2569',
+      submission_sequence: 1,
       form_type: 'KWP02',
       status: 'SUBMITTED',
       point_code: 'S0001',
@@ -492,13 +517,20 @@ describe('kwpFormSubmissionsRepository', () => {
         reporterPosition: 'ผู้จัดการสิ่งแวดล้อม',
       },
       submissionNo: 'KWP-69-00014',
+      numbering: {
+        submissionNo: 'F04-07-0001/2569',
+        regionCode: '07',
+        regionName: 'ภาคกลาง',
+        buddhistYear: '2569',
+        sequence: 1,
+      },
       actorUserId: 42,
       now: new Date('2026-07-04T08:30:00.000Z'),
       formType: 'KWP04',
     });
 
     expect(records.submission).toMatchObject({
-      submission_no: 'KWP-69-00014',
+      submission_no: 'F04-07-0001/2569',
       form_type: 'KWP04',
       status: 'SUBMITTED',
       point_code: 'S0001',
@@ -574,12 +606,19 @@ describe('kwpFormSubmissionsRepository', () => {
         reporterPosition: 'ผู้จัดการสิ่งแวดล้อม',
       },
       submissionNo: 'KWP-69-00016',
+      numbering: {
+        submissionNo: 'F03-07-0001/2569',
+        regionCode: '07',
+        regionName: 'ภาคกลาง',
+        buddhistYear: '2569',
+        sequence: 1,
+      },
       actorUserId: 42,
       now: new Date('2026-07-04T08:20:00.000Z'),
     });
 
     expect(records.submission).toMatchObject({
-      submission_no: 'KWP-69-00016',
+      submission_no: 'F03-07-0001/2569',
       form_type: 'KWP03',
       status: 'SUBMITTED',
       point_code: 'P0001',
@@ -706,12 +745,19 @@ describe('kwpFormSubmissionsRepository', () => {
         reporterPosition: 'ผู้จัดการสิ่งแวดล้อม',
       },
       submissionNo: 'KWP-69-00015',
+      numbering: {
+        submissionNo: 'F05-07-0001/2569',
+        regionCode: '07',
+        regionName: 'ภาคกลาง',
+        buddhistYear: '2569',
+        sequence: 1,
+      },
       actorUserId: 42,
       now: new Date('2026-07-04T08:45:00.000Z'),
     });
 
     expect(records.submission).toMatchObject({
-      submission_no: 'KWP-69-00015',
+      submission_no: 'F05-07-0001/2569',
       form_type: 'KWP05',
       status: 'SUBMITTED',
       point_code: 'S0001',

@@ -50,7 +50,7 @@ describe('KWP form submission routes', () => {
     jest.clearAllMocks();
     mockedService.createKwp01.mockResolvedValue({
       id: 12,
-      requestNo: 'KWP-69-00012',
+      requestNo: 'F01-07-0012/2569',
       form: 'กวภ.01',
       formType: 'KWP01',
       status: 'SUBMITTED',
@@ -58,7 +58,7 @@ describe('KWP form submission routes', () => {
     });
     mockedService.createKwp02.mockResolvedValue({
       id: 13,
-      requestNo: 'KWP-69-00013',
+      requestNo: 'F02-07-0013/2569',
       form: 'กวภ.02',
       formType: 'KWP02',
       status: 'SUBMITTED',
@@ -68,7 +68,7 @@ describe('KWP form submission routes', () => {
     });
     mockedService.createKwp03.mockResolvedValue({
       id: 16,
-      requestNo: 'KWP-69-00016',
+      requestNo: 'F03-07-0016/2569',
       form: 'กวภ.03',
       formType: 'KWP03',
       status: 'SUBMITTED',
@@ -77,7 +77,7 @@ describe('KWP form submission routes', () => {
     });
     mockedService.createKwp04.mockResolvedValue({
       id: 14,
-      requestNo: 'KWP-69-00014',
+      requestNo: 'F04-07-0014/2569',
       form: 'กวภ.04',
       formType: 'KWP04',
       status: 'SUBMITTED',
@@ -87,7 +87,7 @@ describe('KWP form submission routes', () => {
     });
     mockedService.createKwp05.mockResolvedValue({
       id: 15,
-      requestNo: 'KWP-69-00015',
+      requestNo: 'F05-07-0015/2569',
       form: 'กวภ.05',
       formType: 'KWP05',
       status: 'SUBMITTED',
@@ -121,7 +121,7 @@ describe('KWP form submission routes', () => {
     mockedService.updateKwp04.mockResolvedValue({
       ...kwp02DetailResponse(),
       id: 14,
-      requestNo: 'KWP-69-00014',
+      requestNo: 'F04-07-0014/2569',
       form: 'กวภ.04',
       formType: 'KWP04',
     });
@@ -260,7 +260,7 @@ describe('KWP form submission routes', () => {
       success: true,
       data: {
         id: 12,
-        requestNo: 'KWP-69-00012',
+        requestNo: 'F01-07-0012/2569',
         form: 'กวภ.01',
         formType: 'KWP01',
         status: 'SUBMITTED',
@@ -764,7 +764,7 @@ describe('KWP form submission routes', () => {
       success: true,
       data: {
         id: 13,
-        requestNo: 'KWP-69-00013',
+        requestNo: 'F02-07-0013/2569',
         form: 'กวภ.02',
         formType: 'KWP02',
         status: 'SUBMITTED',
@@ -815,7 +815,7 @@ describe('KWP form submission routes', () => {
       success: true,
       data: {
         id: 16,
-        requestNo: 'KWP-69-00016',
+        requestNo: 'F03-07-0016/2569',
         form: 'กวภ.03',
         formType: 'KWP03',
         status: 'SUBMITTED',
@@ -949,7 +949,7 @@ describe('KWP form submission routes', () => {
       success: true,
       data: {
         id: 14,
-        requestNo: 'KWP-69-00014',
+        requestNo: 'F04-07-0014/2569',
         form: 'กวภ.04',
         formType: 'KWP04',
         status: 'SUBMITTED',
@@ -1022,7 +1022,7 @@ describe('KWP form submission routes', () => {
       success: true,
       data: {
         id: 15,
-        requestNo: 'KWP-69-00015',
+        requestNo: 'F05-07-0015/2569',
         form: 'กวภ.05',
         formType: 'KWP05',
         status: 'SUBMITTED',

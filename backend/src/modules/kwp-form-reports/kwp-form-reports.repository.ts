@@ -223,7 +223,7 @@ function buildRequestQuery(
       's.created_at',
       's.updated_at',
       'p.name_th as province_name',
-      'p.region as province_region',
+      submissionRegionSelect(),
       'cp.system_type',
     );
 
@@ -259,7 +259,20 @@ function applyRegionalAccessFilter(
     ...new Set((regionalAccess?.regions ?? []).map((region) => region.trim())),
   ].filter(Boolean);
   if (regions.length === 0) return;
-  builder.whereIn('p.region', regions);
+  const placeholders = regions.map(() => '?').join(', ');
+  builder.whereRaw(`COALESCE(??, ??) IN (${placeholders})`, [
+    's.submission_region_name',
+    'p.region',
+    ...regions,
+  ]);
+}
+
+function submissionRegionSelect(): Knex.Raw {
+  return db.raw('COALESCE(??, ??) as ??', [
+    's.submission_region_name',
+    'p.region',
+    'province_region',
+  ]);
 }
 
 async function listStatusHistoryForSubmissions(
