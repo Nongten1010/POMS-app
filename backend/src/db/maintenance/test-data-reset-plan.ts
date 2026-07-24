@@ -11,6 +11,9 @@ interface ProductionDatabaseTargets {
   databaseHost: string;
   parameterDatabaseName: string;
   parameterDatabaseHost: string;
+  githubActions: string;
+  githubRepository: string;
+  githubRefName: string;
 }
 
 export function buildDeletePlan(roots: string[], edges: ForeignKeyEdge[]): string[] {
@@ -69,14 +72,14 @@ export function validateProductionDatabaseTargets(targets: ProductionDatabaseTar
   if (targets.parameterDatabaseName !== 'parameter_ingest') {
     throw new Error('Refusing to reset a parameter database other than parameter_ingest');
   }
-  if (isLocalHost(targets.databaseHost)) {
-    throw new Error('Refusing to reset the primary database on localhost');
+  if (!targets.databaseHost.trim() || !targets.parameterDatabaseHost.trim()) {
+    throw new Error('Database hosts are required');
   }
-  if (!targets.parameterDatabaseHost.trim()) {
-    throw new Error('Parameter database host is required');
+  if (
+    targets.githubActions !== 'true' ||
+    targets.githubRepository !== 'Nongten1010/POMS-app' ||
+    targets.githubRefName !== 'main'
+  ) {
+    throw new Error('Reset must run from the trusted GitHub Actions main workflow');
   }
-}
-
-function isLocalHost(host: string): boolean {
-  return ['localhost', '127.0.0.1', '::1'].includes(host.toLowerCase());
 }

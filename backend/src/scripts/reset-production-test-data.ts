@@ -93,6 +93,9 @@ function validateEnvironment(mode: ResetMode): void {
     databaseHost: requiredEnv('DB_HOST'),
     parameterDatabaseName: requiredEnv('PARAMETER_DB_NAME'),
     parameterDatabaseHost: requiredEnv('PARAMETER_DB_HOST'),
+    githubActions: requiredEnv('GITHUB_ACTIONS'),
+    githubRepository: requiredEnv('GITHUB_REPOSITORY'),
+    githubRefName: requiredEnv('GITHUB_REF_NAME'),
   });
   if (mode === 'execute' && process.env.RESET_CONFIRMATION !== RESET_CONFIRMATION) {
     throw new Error(`RESET_CONFIRMATION must equal ${RESET_CONFIRMATION}`);
