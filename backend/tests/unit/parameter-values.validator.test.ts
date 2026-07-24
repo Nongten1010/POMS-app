@@ -22,6 +22,15 @@ describe('parameter value validators', () => {
     });
   });
 
+  it.each(['CEMS-0001/2569', 'WEMS-0003/2571'])(
+    'accepts annual point code %s as a safe station identifier',
+    (stationId) => {
+      const result = connectionTestQuerySchema.parse({ stationId });
+
+      expect(result).toEqual({ stationId });
+    },
+  );
+
   it('rejects pagination values because list reads use date ranges', () => {
     const result = listParameterValuesQuerySchema.safeParse({
       stationId: 'S0001',

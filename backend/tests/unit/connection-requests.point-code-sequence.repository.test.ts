@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 jest.mock('../../src/config/database', () => ({
   db: Object.assign(jest.fn(), {
@@ -17,9 +17,15 @@ const mockedDb = db as unknown as jest.Mock<(...args: unknown[]) => unknown> & {
 describe('normal operator connection point-code sequence', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-07-24T00:00:00.000Z'));
   });
 
-  it('issues S2001 and S2002 for the first CEMS points', async () => {
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('issues CEMS-0001/2569 and CEMS-0002/2569 for the first CEMS points', async () => {
     const harness = pointCodeHarness('CEMS');
     mockedDb.transaction.mockImplementationOnce(harness.runTransaction);
 
@@ -30,14 +36,18 @@ describe('normal operator connection point-code sequence', () => {
       { connectionDueAt: '2026-08-20T00:00:00.000Z' },
     );
 
-    expect(updated.measurementPoints.map((point) => point.pointCode)).toEqual(['S2001', 'S2002']);
+    expect(updated.measurementPoints.map((point) => point.pointCode)).toEqual([
+      'CEMS-0001/2569',
+      'CEMS-0002/2569',
+    ]);
     expect(harness.sequenceUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ last_sequence: 2002 }),
+      expect.objectContaining({ last_sequence: 2 }),
     );
   });
 
-  it('issues W2001 and W2002 for the first WPMS points', async () => {
-    const harness = pointCodeHarness('WPMS');
+  it('issues WEMS-0003/2571 for the third WPMS point in Buddhist year 2571', async () => {
+    jest.setSystemTime(new Date('2028-07-24T00:00:00.000Z'));
+    const harness = pointCodeHarness('WPMS', { initialSequence: 2, pointIds: [201] });
     mockedDb.transaction.mockImplementationOnce(harness.runTransaction);
 
     const updated = await connectionRequestsRepository.updateStatus(
@@ -47,14 +57,16 @@ describe('normal operator connection point-code sequence', () => {
       { connectionDueAt: '2026-08-20T00:00:00.000Z' },
     );
 
-    expect(updated.measurementPoints.map((point) => point.pointCode)).toEqual(['W2001', 'W2002']);
+    expect(updated.measurementPoints.map((point) => point.pointCode)).toEqual(['WEMS-0003/2571']);
     expect(harness.sequenceUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ last_sequence: 2002 }),
+      expect.objectContaining({ last_sequence: 3 }),
     );
   });
 
-  it('continues after the highest existing code with the same prefix', async () => {
-    const harness = pointCodeHarness('CEMS', { existingPointCodes: ['S1999', 'S2050'] });
+  it('continues after the highest existing code for the same system and Buddhist year', async () => {
+    const harness = pointCodeHarness('CEMS', {
+      existingPointCodes: ['CEMS-0099/2568', 'CEMS-0050/2569'],
+    });
     mockedDb.transaction.mockImplementationOnce(harness.runTransaction);
 
     const updated = await connectionRequestsRepository.updateStatus(
@@ -64,11 +76,14 @@ describe('normal operator connection point-code sequence', () => {
       { connectionDueAt: '2026-08-20T00:00:00.000Z' },
     );
 
-    expect(updated.measurementPoints.map((point) => point.pointCode)).toEqual(['S2051', 'S2052']);
+    expect(updated.measurementPoints.map((point) => point.pointCode)).toEqual([
+      'CEMS-0051/2569',
+      'CEMS-0052/2569',
+    ]);
   });
 
-  it('continues the next request from the persisted sequence', async () => {
-    const harness = pointCodeHarness('CEMS', { initialSequence: 2002 });
+  it('continues the next request from the persisted sequence for the current year', async () => {
+    const harness = pointCodeHarness('CEMS', { initialSequence: 2 });
     mockedDb.transaction.mockImplementationOnce(harness.runTransaction);
 
     const updated = await connectionRequestsRepository.updateStatus(
@@ -78,11 +93,16 @@ describe('normal operator connection point-code sequence', () => {
       { connectionDueAt: '2026-08-20T00:00:00.000Z' },
     );
 
-    expect(updated.measurementPoints.map((point) => point.pointCode)).toEqual(['S2003', 'S2004']);
+    expect(updated.measurementPoints.map((point) => point.pointCode)).toEqual([
+      'CEMS-0003/2569',
+      'CEMS-0004/2569',
+    ]);
   });
 
-  it('does not use legacy P codes when starting the W sequence', async () => {
-    const harness = pointCodeHarness('WPMS', { existingPointCodes: ['P9999'] });
+  it('does not use legacy point codes when starting the WEMS annual sequence', async () => {
+    const harness = pointCodeHarness('WPMS', {
+      existingPointCodes: ['P9999', 'W2001', 'WEMS-0099/2568'],
+    });
     mockedDb.transaction.mockImplementationOnce(harness.runTransaction);
 
     const updated = await connectionRequestsRepository.updateStatus(
@@ -92,7 +112,10 @@ describe('normal operator connection point-code sequence', () => {
       { connectionDueAt: '2026-08-20T00:00:00.000Z' },
     );
 
-    expect(updated.measurementPoints.map((point) => point.pointCode)).toEqual(['W2001', 'W2002']);
+    expect(updated.measurementPoints.map((point) => point.pointCode)).toEqual([
+      'WEMS-0001/2569',
+      'WEMS-0002/2569',
+    ]);
   });
 
   it('issues point codes only once when the same request is approved concurrently', async () => {
@@ -108,16 +131,27 @@ describe('normal operator connection point-code sequence', () => {
       );
     const [first, second] = await Promise.all([approve(), approve()]);
 
-    expect(first.measurementPoints.map((point) => point.pointCode)).toEqual(['S2001', 'S2002']);
-    expect(second.measurementPoints.map((point) => point.pointCode)).toEqual(['S2001', 'S2002']);
-    expect(harness.lastSequence()).toBe(2002);
+    expect(first.measurementPoints.map((point) => point.pointCode)).toEqual([
+      'CEMS-0001/2569',
+      'CEMS-0002/2569',
+    ]);
+    expect(second.measurementPoints.map((point) => point.pointCode)).toEqual([
+      'CEMS-0001/2569',
+      'CEMS-0002/2569',
+    ]);
+    expect(harness.lastSequence()).toBe(2);
   });
 });
 
 function pointCodeHarness(
   systemType: 'CEMS' | 'WPMS',
-  options: { existingPointCodes?: string[]; initialSequence?: number } = {},
+  options: {
+    existingPointCodes?: string[];
+    initialSequence?: number;
+    pointIds?: number[];
+  } = {},
 ) {
+  const pointIds = options.pointIds ?? [201, 202];
   const assignedCodes = new Map<number, string>();
   const sequenceUpdate = jest.fn(async (_values: Record<string, unknown>) => 1);
   const pointUpdate = (pointId: number) =>
@@ -144,23 +178,20 @@ function pointCodeHarness(
     [
       'cems_wpms_measurement_points',
       [
-        makeChain({ select: async () => [{ id: 201 }, { id: 202 }] }),
+        makeChain({ select: async () => pointIds.map((id) => ({ id })) }),
         makeChain({
           select: async () =>
             (options.existingPointCodes ?? []).map((pointCode) => ({ point_code: pointCode })),
         }),
-        pointUpdate(201),
-        pointUpdate(202),
+        ...pointIds.map(pointUpdate),
         makeChain({
-          terminalOrderBy: async () => [
-            measurementPointRow(201, assignedCodes.get(201) ?? null),
-            measurementPointRow(202, assignedCodes.get(202) ?? null),
-          ],
+          terminalOrderBy: async () =>
+            pointIds.map((id) => measurementPointRow(id, assignedCodes.get(id) ?? null)),
         }),
       ],
     ],
     [
-      'cems_wpms_point_code_sequences',
+      'cems_wpms_annual_point_code_sequences',
       [
         makeChain({
           first: async () => ({
@@ -308,7 +339,7 @@ function measurementPointRow(id: number, pointCode: string | null) {
 }
 
 function concurrentApprovalHarness(systemType: 'CEMS' | 'WPMS') {
-  const prefix = systemType === 'CEMS' ? 'S' : 'W';
+  const prefix = systemType === 'CEMS' ? 'CEMS' : 'WEMS';
   const assignedCodes = new Map<number, string | null>([
     [201, null],
     [202, null],
@@ -380,7 +411,7 @@ function concurrentApprovalHarness(systemType: 'CEMS' | 'WPMS') {
           });
         }
 
-        if (tableName === 'cems_wpms_point_code_sequences') {
+        if (tableName === 'cems_wpms_annual_point_code_sequences') {
           if (state.missingIds.length === 0) {
             throw new Error(
               'Sequence must not be reserved when all request points already have codes',
