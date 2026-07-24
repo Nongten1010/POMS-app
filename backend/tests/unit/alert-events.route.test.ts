@@ -82,6 +82,50 @@ describe('alert events routes', () => {
     });
   });
 
+  it('accepts annual monitoring point codes from the integration', async () => {
+    mockedAlertEventsService.createBatchFromIntegration.mockResolvedValue({
+      total: 1,
+      created: 1,
+      duplicate: 0,
+      failed: 0,
+      results: [
+        {
+          index: 0,
+          success: true,
+          created: true,
+          duplicate: false,
+          event: alertEventFixture({
+            stationId: 'WEMS-0003/2571',
+            pointCode: 'WEMS-0003/2571',
+          }),
+        },
+      ],
+    });
+
+    const app = createApp();
+    const response = await request(app)
+      .post('/api/v1/integrations/alert-events')
+      .set('X-API-Key', 'test-integration-key')
+      .send({
+        events: [
+          {
+            ...integrationPayload(),
+            systemType: 'WPMS',
+            stationId: 'WEMS-0003/2571',
+            pointCode: 'WEMS-0003/2571',
+          },
+        ],
+      });
+
+    expect(response.status).toBe(200);
+    expect(mockedAlertEventsService.createBatchFromIntegration).toHaveBeenCalledWith([
+      expect.objectContaining({
+        stationId: 'WEMS-0003/2571',
+        pointCode: 'WEMS-0003/2571',
+      }),
+    ]);
+  });
+
   it('returns duplicate metadata in the unified events array response', async () => {
     mockedAlertEventsService.createBatchFromIntegration.mockResolvedValue({
       total: 1,

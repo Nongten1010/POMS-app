@@ -955,6 +955,43 @@ describe('connectionRequestsService', () => {
     expect(result.data[0].measurementPoints[0]).not.toHaveProperty('latestHourlyMeasurement');
   });
 
+  it('loads hourly measurements when the station id uses the annual point-code format', async () => {
+    const stationId = 'CEMS-0001/2569';
+    mockedRepository.listFactoriesForAccess.mockResolvedValue([
+      factorySummary({ factoryId: 'factory-001', factoryName: 'บริษัท ทดสอบ จำกัด' }),
+    ]);
+    mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
+      {
+        factoryId: 'factory-001',
+        stationId,
+        pointName: 'ปล่องระบาย A',
+        pointCode: stationId,
+        systemType: 'CEMS',
+        parameters: ['NOx (ppm)'],
+        data: [],
+      },
+    ]);
+    mockedParameterValuesService.latestHourly.mockResolvedValue({
+      data: [],
+      meta: {
+        stationId,
+        interval: '60m',
+        schemaName: 'ingest',
+        tableName: `${stationId}_data_60m`,
+        count: 0,
+        registeredParameters: ['NOx (ppm)'],
+        returnedColumns: [],
+      },
+    });
+
+    await connectionRequestsService.listOperatorFactoryDashboard(actorUserId, 'OWN_FACTORY');
+
+    expect(mockedParameterValuesService.latestHourly).toHaveBeenCalledWith(stationId, {
+      actorUserId,
+      scope: 'OWN_FACTORY',
+    });
+  });
+
   it('keeps dashboard measurement values for registered parameters that share a base code', async () => {
     mockedRepository.listFactoriesForAccess.mockResolvedValue([
       factorySummary({ factoryId: 'factory-001', factoryName: 'บริษัท ทดสอบ จำกัด' }),
