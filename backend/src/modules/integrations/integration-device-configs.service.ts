@@ -22,7 +22,7 @@ export const integrationDeviceConfigsService = {
     const configs = await deviceConnectionsService.listActiveSettings({
       stationId: point.stationId,
     });
-    const standards = buildStandardLookup(point);
+    const parameterMetadata = buildParameterMetadataLookup(point);
 
     return {
       stationId: point.stationId,
@@ -32,7 +32,7 @@ export const integrationDeviceConfigsService = {
           toParameterConfig(
             getDeviceCode(config, point.stationId, configIndex),
             channel,
-            standards.get(channel.dataType) ?? null,
+            parameterMetadata.get(channel.dataType) ?? null,
           ),
         ),
       ),
@@ -41,7 +41,7 @@ export const integrationDeviceConfigsService = {
   },
 };
 
-interface StandardValues {
+interface ParameterMetadata {
   standardCriteria: number | string | null;
   eiaCriteria: number | string | null;
   standardCondition: boolean | null;
@@ -49,8 +49,8 @@ interface StandardValues {
   oxygenOrExcessAir: boolean | null;
 }
 
-interface StandardLookup {
-  get(parameterName: string): StandardValues | null;
+interface ParameterMetadataLookup {
+  get(parameterName: string): ParameterMetadata | null;
 }
 
 function toDeviceConfig(
@@ -87,7 +87,7 @@ function toDeviceConfig(
 function toParameterConfig(
   deviceCode: string,
   channel: DeviceConnectionConfigDTO['channels'][number],
-  standard: StandardValues | null,
+  metadata: ParameterMetadata | null,
 ): IntegrationParameterConfigDTO {
   const parameterParts = splitParameterAndUnit(channel.dataType);
   return {
@@ -102,11 +102,11 @@ function toParameterConfig(
     valueFormat: channel.valueFormat ?? null,
     offset: channel.offset,
     encoding: channel.encoding ?? null,
-    standardCriteria: standard?.standardCriteria ?? null,
-    eiaCriteria: standard?.eiaCriteria ?? null,
-    standardCondition: standard?.standardCondition ?? null,
-    dryBasis: standard?.dryBasis ?? null,
-    oxygenOrExcessAir: standard?.oxygenOrExcessAir ?? null,
+    standardCriteria: metadata?.standardCriteria ?? null,
+    eiaCriteria: metadata?.eiaCriteria ?? null,
+    standardCondition: metadata?.standardCondition ?? null,
+    dryBasis: metadata?.dryBasis ?? null,
+    oxygenOrExcessAir: metadata?.oxygenOrExcessAir ?? null,
     status: channel.status ?? 'Normal',
   };
 }
@@ -152,16 +152,16 @@ function toStatusSchedules(configs: DeviceConnectionConfigDTO[]): IntegrationSta
   return schedules;
 }
 
-function buildStandardLookup(point: IntegrationConnectedPointDTO): StandardLookup {
-  const exact = new Map<string, StandardValues>();
-  const looseBuckets = new Map<string, Array<[string, StandardValues]>>();
+function buildParameterMetadataLookup(point: IntegrationConnectedPointDTO): ParameterMetadataLookup {
+  const exact = new Map<string, ParameterMetadata>();
+  const looseBuckets = new Map<string, Array<[string, ParameterMetadata]>>();
   const parameters = point.measurementInstruments?.parameters ?? [];
 
   for (const parameter of parameters) {
     const name = parameter.parameter?.trim();
     if (!name) continue;
 
-    const values = toStandardValues(parameter);
+    const values = toParameterMetadata(parameter);
     const exactKey = normalizeParameterKey(name);
     exact.set(exactKey, values);
 
@@ -172,7 +172,7 @@ function buildStandardLookup(point: IntegrationConnectedPointDTO): StandardLooku
   }
 
   return {
-    get(parameterName: string): StandardValues | null {
+    get(parameterName: string): ParameterMetadata | null {
       const exactMatch = exact.get(normalizeParameterKey(parameterName));
       if (exactMatch) return exactMatch;
 
@@ -185,7 +185,7 @@ function buildStandardLookup(point: IntegrationConnectedPointDTO): StandardLooku
   };
 }
 
-function toStandardValues(parameter: MeasurementInstrumentParameterInput): StandardValues {
+function toParameterMetadata(parameter: MeasurementInstrumentParameterInput): ParameterMetadata {
   return {
     standardCriteria: readStandardValue(parameter.standardCriteria),
     eiaCriteria: readStandardValue(parameter.eiaCriteria),
