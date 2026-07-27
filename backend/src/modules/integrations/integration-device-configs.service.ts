@@ -44,6 +44,9 @@ export const integrationDeviceConfigsService = {
 interface StandardValues {
   standardCriteria: number | string | null;
   eiaCriteria: number | string | null;
+  standardCondition: boolean | null;
+  dryBasis: boolean | null;
+  oxygenOrExcessAir: boolean | null;
 }
 
 interface StandardLookup {
@@ -101,6 +104,9 @@ function toParameterConfig(
     encoding: channel.encoding ?? null,
     standardCriteria: standard?.standardCriteria ?? null,
     eiaCriteria: standard?.eiaCriteria ?? null,
+    standardCondition: standard?.standardCondition ?? null,
+    dryBasis: standard?.dryBasis ?? null,
+    oxygenOrExcessAir: standard?.oxygenOrExcessAir ?? null,
     status: channel.status ?? 'Normal',
   };
 }
@@ -183,6 +189,9 @@ function toStandardValues(parameter: MeasurementInstrumentParameterInput): Stand
   return {
     standardCriteria: readStandardValue(parameter.standardCriteria),
     eiaCriteria: readStandardValue(parameter.eiaCriteria),
+    standardCondition: readBoolean(parameter.standardCondition),
+    dryBasis: readBoolean(parameter.dryBasis),
+    oxygenOrExcessAir: readBoolean(parameter.oxygenOrExcessAir),
   };
 }
 
@@ -198,6 +207,10 @@ function readStandardValue(criteria: unknown): number | string | null {
 
   const numeric = Number(trimmed);
   return Number.isFinite(numeric) ? numeric : trimmed;
+}
+
+function readBoolean(value: unknown): boolean | null {
+  return typeof value === 'boolean' ? value : null;
 }
 
 function getDeviceCode(

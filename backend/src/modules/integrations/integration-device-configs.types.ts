@@ -45,6 +45,9 @@ export interface IntegrationParameterConfigDTO {
   encoding: string | null;
   standardCriteria: number | string | null;
   eiaCriteria: number | string | null;
+  standardCondition: boolean | null;
+  dryBasis: boolean | null;
+  oxygenOrExcessAir: boolean | null;
   status: string;
 }
 
