@@ -1660,6 +1660,102 @@ describe('connectionRequestsService', () => {
     expect(result.rawConfigs.channels[0]).not.toHaveProperty('unit');
   });
 
+  it('returns database table names and blank form values for nullable device config fields', async () => {
+    const request = requestDto({
+      createdBy: actorUserId,
+      measurementPoints: [
+        {
+          id: 1,
+          pointName: 'ปล่องระบาย A',
+          pointCode: 'STACK-A',
+          pointType: 'STACK',
+          latitude: null,
+          longitude: null,
+          parameters: ['NOx (ppm)'],
+          description: null,
+        },
+      ],
+    });
+    mockedRepository.findById.mockResolvedValue(request);
+    mockedDeviceConnectionsService.listByRequestId.mockResolvedValue([
+      deviceConnectionConfig({
+        id: 11,
+        requestId: 1,
+        stationId: 'STACK-A',
+        deviceCode: 'STACK-A/DB-01',
+        protocol: 'MSSQL',
+        settings: {
+          hostIp: null,
+          port: null,
+          dbUser: null,
+          dbPass: null,
+          dbName: null,
+          minuteTableName: 'measurements_1m',
+          fiveMinuteTableName: 'measurements_5m',
+          hourlyTableName: 'measurements_1h',
+          valueRange: { min: null, max: 500 },
+        },
+        channels: [
+          {
+            addressId: null,
+            dataType: 'NOx (ppm)',
+            valueRange: { min: null, max: 500 },
+            alertLow: null,
+            alertHigh: null,
+            valueFormat: null,
+            offset: null,
+            encoding: null,
+            status: null,
+          },
+        ],
+      }),
+    ]);
+
+    const result = await connectionRequestsService.getDeviceConfigFormDetail(
+      1,
+      'STACK-A',
+      actorUserId,
+      'OWN_FACTORY',
+    );
+
+    expect(result.connectionForms[0].values).toMatchObject({
+      hostIp: '',
+      port: '',
+      dbUser: '',
+      dbPass: '',
+      dbName: '',
+      minuteTableName: 'measurements_1m',
+      fiveMinuteTableName: 'measurements_5m',
+      hourlyTableName: 'measurements_1h',
+      measureMin: '',
+      measureMax: '500',
+    });
+    expect(result.parameterMappings[0]).toMatchObject({
+      addressId: '',
+      min: '',
+      max: '500',
+      alertLow: '',
+      alertHigh: '',
+      valueFormat: '',
+      offset: '',
+      encodingData: '',
+      status: '',
+    });
+    expect(result.rawConfigs.device[0].settings).toMatchObject({
+      minuteTableName: 'measurements_1m',
+      fiveMinuteTableName: 'measurements_5m',
+      hourlyTableName: 'measurements_1h',
+    });
+    expect(result.rawConfigs.channels[0]).toMatchObject({
+      addressId: null,
+      valueRange: { min: null, max: 500 },
+      valueFormat: null,
+      offset: null,
+      encoding: null,
+      status: null,
+    });
+  });
+
   it('matches device config form detail by monitoring point code or name aliases', async () => {
     const request = requestDto({
       createdBy: actorUserId,

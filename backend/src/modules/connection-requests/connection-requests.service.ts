@@ -1501,16 +1501,16 @@ function toDeviceConfigParameterMapping(
   return {
     configId,
     deviceCode,
-    addressId: String(channel.addressId),
+    addressId: valueToString(channel.addressId),
     parameter: channel.dataType,
-    min: channel.valueRange ? String(channel.valueRange.min) : '',
-    max: channel.valueRange ? String(channel.valueRange.max) : '',
+    min: channel.valueRange ? valueToString(channel.valueRange.min) : '',
+    max: channel.valueRange ? valueToString(channel.valueRange.max) : '',
     alertLow: channel.alertLow == null ? '' : String(channel.alertLow),
     alertHigh: channel.alertHigh == null ? '' : String(channel.alertHigh),
-    valueFormat: valueFormatToThai(channel.valueFormat ?? 'MEASUREMENT_VALUE'),
-    offset: String(channel.offset),
+    valueFormat: valueFormatToThai(channel.valueFormat ?? null),
+    offset: valueToString(channel.offset),
     encodingData: encodingToFormLabel(channel.encoding ?? null),
-    status: channel.status ?? 'Normal',
+    status: channel.status ?? '',
   };
 }
 
@@ -1537,7 +1537,7 @@ function toDeviceConfigRawConfig(
         valueFormat: channel.valueFormat ?? null,
         offset: channel.offset,
         encoding: channel.encoding ?? null,
-        status: channel.status ?? 'Normal',
+        status: channel.status ?? null,
       })),
     ),
     statusManagement,
@@ -1615,19 +1615,28 @@ function settingsToFormValues(
   }
 
   if (protocol === 'MODBUS_TCP') {
+    const range = readRange(settings.valueRange);
     return {
       slaveId: valueToString(settings.slaveId),
       hostIp: valueToString(settings.hostIp),
       port: valueToString(settings.port),
+      measureMin: range.min,
+      measureMax: range.max,
     };
   }
 
+  const range = readRange(settings.valueRange);
   return {
     hostIp: valueToString(settings.hostIp),
     port: valueToString(settings.port),
     dbUser: valueToString(settings.dbUser),
     dbPass: valueToString(settings.dbPass),
     dbName: valueToString(settings.dbName),
+    minuteTableName: valueToString(settings.minuteTableName),
+    fiveMinuteTableName: valueToString(settings.fiveMinuteTableName),
+    hourlyTableName: valueToString(settings.hourlyTableName),
+    measureMin: range.min,
+    measureMax: range.max,
   };
 }
 
@@ -1645,17 +1654,20 @@ function readRange(value: unknown): { min: string; max: string } {
 function parityToFormLabel(value: unknown): string {
   if (value === 'EVEN') return 'Even';
   if (value === 'ODD') return 'Odd';
-  return 'None';
+  if (value === 'NONE') return 'None';
+  return valueToString(value);
 }
 
-function valueFormatToThai(value: string): string {
+function valueFormatToThai(value: string | null): string {
+  if (!value) return '';
   if (value === 'CURRENT') return 'ค่ากระแสไฟฟ้า';
   if (value === 'VOLTAGE') return 'ค่าแรงดันไฟฟ้า';
-  return 'ค่าข้อมูลตรวจวัด';
+  if (value === 'MEASUREMENT_VALUE') return 'ค่าข้อมูลตรวจวัด';
+  return value;
 }
 
 function encodingToFormLabel(value: string | null): string {
-  if (!value) return 'Unsigned16 - Big Endian';
+  if (!value) return '';
   const known: Record<string, string> = {
     SIGNED: 'Signed',
     UNSIGNED: 'Unsigned',

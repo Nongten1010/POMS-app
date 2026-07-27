@@ -237,16 +237,21 @@ describe('deviceConnectionsService', () => {
     });
   });
 
-  it('rejects duplicate channel addresses', async () => {
-    await expect(
-      deviceConnectionsService.testConnection({
-        ...modbusTcpPayload,
-        channels: [
-          ...modbusTcpPayload.channels,
-          { ...modbusTcpPayload.channels[0], dataType: 'SO2' },
-        ],
-      }),
-    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+  it('does not validate duplicate channel addresses', async () => {
+    const result = await deviceConnectionsService.testConnection({
+      ...modbusTcpPayload,
+      channels: [
+        ...modbusTcpPayload.channels,
+        { ...modbusTcpPayload.channels[0], dataType: 'SO2' },
+      ],
+    });
+
+    expect(result).toMatchObject({
+      success: true,
+      details: {
+        channelCount: 2,
+      },
+    });
   });
 
   it('tests then stores a valid active setting', async () => {

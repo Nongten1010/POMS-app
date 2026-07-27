@@ -636,6 +636,80 @@ describe('connected measurement points route', () => {
     );
   });
 
+  it('accepts structured database config payloads with nullable fields and table names', async () => {
+    const response = await request(createApp())
+      .post('/api/v1/connected-measurement-points/S0001/device-configs')
+      .set('Authorization', `Bearer ${editAccessToken()}`)
+      .send({
+        config: {
+          stationId: 'S0001',
+          device: [
+            {
+              deviceCode: 'S0001/DB-01',
+              protocol: 'MYSQL',
+              settings: {
+                hostIp: null,
+                port: null,
+                dbUser: null,
+                dbPass: null,
+                dbName: null,
+                minuteTableName: 'measurements_1m',
+                fiveMinuteTableName: 'measurements_5m',
+                hourlyTableName: 'measurements_1h',
+                valueRange: null,
+              },
+            },
+          ],
+          channels: [
+            {
+              deviceCode: 'S0001/DB-01',
+              addressId: null,
+              dataType: 'NOx (ppm)',
+              valueRange: { min: null, max: null },
+              alertLow: null,
+              alertHigh: null,
+              valueFormat: null,
+              offset: null,
+              encoding: null,
+              status: null,
+            },
+          ],
+          statusManagement: null,
+        },
+      });
+
+    expect(response.status).toBe(201);
+    expect(mockedConnectionRequestsService.saveCurrentDeviceConfigs).toHaveBeenCalledWith(
+      'S0001',
+      {
+        configs: [
+          expect.objectContaining({
+            stationId: 'S0001',
+            deviceCode: 'S0001/DB-01',
+            protocol: 'MYSQL',
+            settings: expect.objectContaining({
+              minuteTableName: 'measurements_1m',
+              fiveMinuteTableName: 'measurements_5m',
+              hourlyTableName: 'measurements_1h',
+            }),
+            channels: [
+              expect.objectContaining({
+                addressId: null,
+                valueFormat: null,
+                offset: null,
+                encoding: null,
+                status: null,
+              }),
+            ],
+            statusManagement: null,
+          }),
+        ],
+      },
+      42,
+      'ALL',
+    );
+  });
+
   it('exposes measurement statistics for the selected connected measurement point', async () => {
     const app = createApp();
 

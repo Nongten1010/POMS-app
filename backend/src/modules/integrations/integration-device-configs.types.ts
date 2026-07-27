@@ -24,21 +24,24 @@ export interface IntegrationDeviceConfigDTO {
   dbUser: string | null;
   dbPass: string | null;
   dbName: string | null;
+  minuteTableName: string | null;
+  fiveMinuteTableName: string | null;
+  hourlyTableName: string | null;
   deviceValueRangeMin: number | null;
   deviceValueRangeMax: number | null;
 }
 
 export interface IntegrationParameterConfigDTO {
   deviceCode: string;
-  addressId: number;
+  addressId: number | null;
   parameter: string;
   parameterName: string | null;
   parameterUnit: string | null;
-  valueRange: { min: number; max: number } | null;
+  valueRange: { min: number | null; max: number | null } | null;
   alertLow: number | null;
   alertHigh: number | null;
   valueFormat: string | null;
-  offset: number;
+  offset: number | null;
   encoding: string | null;
   standardCriteria: number | string | null;
   eiaCriteria: number | string | null;

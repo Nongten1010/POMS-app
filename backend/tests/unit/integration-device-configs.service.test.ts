@@ -133,6 +133,9 @@ describe('integrationDeviceConfigsService', () => {
           dbUser: null,
           dbPass: null,
           dbName: null,
+          minuteTableName: null,
+          fiveMinuteTableName: null,
+          hourlyTableName: null,
           deviceValueRangeMin: null,
           deviceValueRangeMax: null,
         },
@@ -151,6 +154,9 @@ describe('integrationDeviceConfigsService', () => {
           dbUser: null,
           dbPass: null,
           dbName: null,
+          minuteTableName: null,
+          fiveMinuteTableName: null,
+          hourlyTableName: null,
           deviceValueRangeMin: 20,
           deviceValueRangeMax: 200,
         },
@@ -203,6 +209,64 @@ describe('integrationDeviceConfigsService', () => {
           status: 'Calibration',
         },
       ],
+    });
+  });
+
+  it('returns database table names and preserves nullable channel config values', async () => {
+    mockedDeviceConnectionsService.listActiveSettings.mockResolvedValue([
+      {
+        id: 3,
+        requestId: null,
+        stationId: 'S0002',
+        deviceCode: 'S0002/DB-01',
+        protocol: 'MSSQL',
+        settings: {
+          hostIp: null,
+          port: null,
+          dbUser: null,
+          dbPass: null,
+          dbName: null,
+          minuteTableName: 'measurements_1m',
+          fiveMinuteTableName: 'measurements_5m',
+          hourlyTableName: 'measurements_1h',
+          valueRange: { min: null, max: 500 },
+        },
+        channels: [
+          {
+            addressId: null,
+            dataType: 'NOx (ppm)',
+            valueRange: { min: null, max: 500 },
+            alertLow: null,
+            alertHigh: null,
+            valueFormat: null,
+            offset: null,
+            encoding: null,
+            status: null,
+          },
+        ],
+        statusManagement: null,
+        createdBy: 42,
+        createdAt: '2026-06-12T00:00:00.000Z',
+        updatedAt: '2026-06-12T00:00:00.000Z',
+      },
+    ]);
+
+    const result = await integrationDeviceConfigsService.getByStationId('S0002');
+
+    expect(result.deviceConfigs[0]).toMatchObject({
+      minuteTableName: 'measurements_1m',
+      fiveMinuteTableName: 'measurements_5m',
+      hourlyTableName: 'measurements_1h',
+      deviceValueRangeMin: null,
+      deviceValueRangeMax: 500,
+    });
+    expect(result.parameterConfigs[0]).toMatchObject({
+      addressId: null,
+      valueRange: { min: null, max: 500 },
+      valueFormat: null,
+      offset: null,
+      encoding: null,
+      status: 'Normal',
     });
   });
 

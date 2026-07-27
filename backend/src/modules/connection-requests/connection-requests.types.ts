@@ -513,13 +513,13 @@ export interface DeviceConfigPayloadDTO {
   }>;
   channels: Array<{
     deviceCode: string;
-    addressId: number;
+    addressId: number | null;
     dataType: string;
-    valueRange?: { min: number; max: number } | null;
+    valueRange?: { min: number | null; max: number | null } | null;
     alertLow?: number | null;
     alertHigh?: number | null;
     valueFormat?: string | null;
-    offset: number;
+    offset: number | null;
     encoding?: string | null;
     status?: string | null;
   }>;
