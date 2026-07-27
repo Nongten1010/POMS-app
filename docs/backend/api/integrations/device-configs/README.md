@@ -97,6 +97,9 @@ X-API-Key: <DEVICE_CONFIG_API_KEY>
 | `encoding` | string | Yes | encoding ของ channel |
 | `standardCriteria` | number \| string | Yes | `standardValue` ตามประกาศ อก.; แปลงเป็น number เมื่อทำได้ |
 | `eiaCriteria` | number \| string | Yes | `standardValue` ตาม EIA; แปลงเป็น number เมื่อทำได้ |
+| `standardCondition` | boolean | Yes | การรายงานค่าที่สภาวะมาตรฐาน; `false` หมายถึงไม่ได้เลือก |
+| `dryBasis` | boolean | Yes | การรายงานค่าแบบ Dry basis; `false` หมายถึงไม่ได้เลือก |
+| `oxygenOrExcessAir` | boolean | Yes | การรายงานค่าแบบ O₂ @ 7% หรือ Excess Air 50%; `false` หมายถึงไม่ได้เลือก |
 | `status` | string | No | สถานะ channel; fallback เป็น `Normal` เมื่อ config เก็บ `null` |
 
 #### `statusSchedules[]`
@@ -156,6 +159,9 @@ X-API-Key: <DEVICE_CONFIG_API_KEY>
         "encoding": null,
         "standardCriteria": 120,
         "eiaCriteria": null,
+        "standardCondition": true,
+        "dryBasis": true,
+        "oxygenOrExcessAir": false,
         "status": "Normal"
       }
     ],
@@ -173,7 +179,8 @@ X-API-Key: <DEVICE_CONFIG_API_KEY>
 - settings ที่ไม่มีค่าแปลงเป็น `null`; `minuteTableName`, `fiveMinuteTableName` และ `hourlyTableName` มีค่ากับ `MSSQL`/`MYSQL` เมื่อบันทึกไว้
 - `parameterConfigs.addressId`, `offset`, `valueRange.min` และ `valueRange.max` รักษา `null` ตาม storage contract
 - `parameterName` และ `parameterUnit` แยกจากวงเล็บท้าย `parameter`; client ควรใช้ `parameter` เป็น display label ที่มีชื่อพร้อมหน่วย
-- `standardCriteria` และ `eiaCriteria` จับคู่กับเครื่องมือของ connected point ด้วยชื่อพารามิเตอร์พร้อมหน่วยก่อน หากต้อง fallback แบบไม่รวมหน่วยจะใช้เฉพาะกรณีที่ตรงเพียงรายการเดียว
+- `standardCriteria`, `eiaCriteria`, `standardCondition`, `dryBasis` และ `oxygenOrExcessAir` จับคู่กับเครื่องมือของ connected point ด้วยชื่อพารามิเตอร์พร้อมหน่วยก่อน หากต้อง fallback แบบไม่รวมหน่วยจะใช้เฉพาะกรณีที่ตรงเพียงรายการเดียว
+- ค่าในกลุ่มการรายงานค่าเป็น `null` เมื่อข้อมูลต้นทางไม่ได้บันทึกค่า หรือไม่พบพารามิเตอร์ต้นทางที่จับคู่ได้; ค่า `false` จะคงเป็น `false` และไม่ถูกแปลงเป็น `null`
 - `statusSchedules` ตัดรายการซ้ำที่มี `parameter`, `startAt`, `endAt` และ `status` เหมือนกัน
 
 ### Errors
@@ -196,3 +203,4 @@ X-API-Key: <DEVICE_CONFIG_API_KEY>
 - Service and repository: [`integration-device-configs.service.ts`](../../../../../backend/src/modules/integrations/integration-device-configs.service.ts), [`integration-device-configs.repository.ts`](../../../../../backend/src/modules/integrations/integration-device-configs.repository.ts)
 - Device config storage: [`device-connections.repository.ts`](../../../../../backend/src/modules/device-connections/device-connections.repository.ts), [`0083_relax_device_config_form_constraints.ts`](../../../../../backend/src/db/migrations/0083_relax_device_config_form_constraints.ts)
 - Tests: [`integration-device-configs.route.test.ts`](../../../../../backend/tests/unit/integration-device-configs.route.test.ts), [`integration-device-configs.service.test.ts`](../../../../../backend/tests/unit/integration-device-configs.service.test.ts)
+- Evidence: [การรายงานค่าต่อพารามิเตอร์](../../../evidence/integrations/device-config-parameter-reporting.tdd.md)
