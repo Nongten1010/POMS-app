@@ -295,6 +295,75 @@ describe('integrationDeviceConfigsService', () => {
     });
   });
 
+  it('uses reporting settings from a unique unitless match and avoids ambiguous matches', async () => {
+    mockedRepository.findConnectedPointByStationId.mockResolvedValue({
+      stationId: 'S0002',
+      measurementInstruments: {
+        parameters: [
+          {
+            parameter: 'NOx (ppm)',
+            standardCondition: true,
+            dryBasis: false,
+            oxygenOrExcessAir: true,
+          },
+          {
+            parameter: 'SO2 (ppm)',
+            standardCondition: true,
+            dryBasis: true,
+            oxygenOrExcessAir: false,
+          },
+          {
+            parameter: 'SO2 (mg/m3)',
+            standardCondition: false,
+            dryBasis: false,
+            oxygenOrExcessAir: true,
+          },
+        ],
+      },
+    });
+    mockedDeviceConnectionsService.listActiveSettings.mockResolvedValue([
+      {
+        id: 4,
+        requestId: null,
+        stationId: 'S0002',
+        deviceCode: 'S0002/03',
+        protocol: 'MODBUS_TCP',
+        settings: {},
+        channels: [
+          {
+            addressId: null,
+            dataType: 'NOx',
+            offset: null,
+          },
+          {
+            addressId: null,
+            dataType: 'SO2',
+            offset: null,
+          },
+        ],
+        statusManagement: null,
+        createdBy: 42,
+        createdAt: '2026-06-12T00:00:00.000Z',
+        updatedAt: '2026-06-12T00:00:00.000Z',
+      },
+    ]);
+
+    const result = await integrationDeviceConfigsService.getByStationId('S0002');
+
+    expect(result.parameterConfigs[0]).toMatchObject({
+      parameter: 'NOx',
+      standardCondition: true,
+      dryBasis: false,
+      oxygenOrExcessAir: true,
+    });
+    expect(result.parameterConfigs[1]).toMatchObject({
+      parameter: 'SO2',
+      standardCondition: null,
+      dryBasis: null,
+      oxygenOrExcessAir: null,
+    });
+  });
+
   it('throws not found when the station is not connected', async () => {
     mockedRepository.findConnectedPointByStationId.mockResolvedValue(null);
     mockedDeviceConnectionsService.listActiveSettings.mockResolvedValue([]);
