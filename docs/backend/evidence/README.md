@@ -34,6 +34,10 @@
 
 - [เลขรายงาน BOD/COD แยกตามภาคและปี](./bod-cod-deviation-reports/request-numbering.tdd.md)
 
+## Integrations
+
+- [การรายงานค่าต่อพารามิเตอร์ใน Device Config](./integrations/device-config-parameter-reporting.tdd.md)
+
 ## Migration Targets
 
 | Legacy evidence | Destination pattern |
