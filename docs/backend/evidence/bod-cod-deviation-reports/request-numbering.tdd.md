@@ -47,7 +47,7 @@ Targeted suite หลัง implementation:
 
 ```text
 Test Suites: 10 passed, 10 total
-Tests:       89 passed, 89 total
+Tests:       88 passed, 88 total
 ```
 
 คำสั่งที่ใช้:
@@ -79,7 +79,8 @@ npm run build
 ผลใน environment นี้:
 
 - `npm run typecheck`, `npm run build` และ `npm audit --omit=dev --offline` ผ่าน
-- Full suite ผ่าน `96` suites / `832` tests
+- Regression ที่ไม่รวม `officer-notification-email-recipients.route.test.ts` ผ่าน `96` suites / `834` tests
+- Full suite ผ่าน `96` suites แต่ suite `officer-notification-email-recipients.route.test.ts` ล้มเหลว `3` tests เพราะอ่านข้อมูล recipient/province จากฐานข้อมูลของ environment แทน test fixture; ความล้มเหลวไม่อยู่ใน flow BOD/COD
 
 เอกสารนี้ไม่กล่าวอ้างผลจากฐานข้อมูล production และ targeted tests ของ BOD/COD ไม่ต้องใช้ข้อมูลโรงงานจริง
 
