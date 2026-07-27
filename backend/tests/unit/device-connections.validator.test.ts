@@ -411,6 +411,9 @@ describe('device connection validators', () => {
       ],
     });
 
+    if (!result.success) {
+      throw new Error(JSON.stringify(result.error.issues));
+    }
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.channels[0]).toMatchObject({
@@ -420,7 +423,7 @@ describe('device connection validators', () => {
     }
   });
 
-  it('rejects inverted alert thresholds', () => {
+  it('does not validate alert threshold order in device config payloads', () => {
     const result = createDeviceConnectionConfigSchema.safeParse({
       stationId: 'STATION_001',
       deviceCode: 'STATION_001/01',
@@ -445,53 +448,199 @@ describe('device connection validators', () => {
       ],
     });
 
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
   });
 
-  it('rejects Modbus channels without address ranges and encoding', () => {
+  it('accepts nullable Modbus channel values without config-form validation', () => {
     const result = createDeviceConnectionConfigSchema.safeParse({
       stationId: 'STATION_001',
       protocol: 'MODBUS_TCP',
       settings: {
-        hostIp: '192.168.1.10',
-        slaveId: 1,
-        port: 502,
+        hostIp: null,
+        slaveId: null,
+        port: null,
+        valueRange: {
+          min: null,
+          max: null,
+        },
       },
       channels: [
         {
-          addressId: 40001,
+          addressId: null,
           dataType: 'CO2',
           unit: 'ppm',
-          offset: 0,
-        },
-      ],
-    });
-
-    expect(result.success).toBe(false);
-  });
-
-  it('accepts database config and keeps dbPass required on input', () => {
-    const result = createDeviceConnectionConfigSchema.safeParse({
-      stationId: 'STATION_001',
-      protocol: 'MSSQL',
-      settings: {
-        hostIp: '192.168.1.254',
-        port: 1433,
-        dbUser: 'sensor_user',
-        dbPass: 'secret-pass',
-        dbName: 'sensor_db',
-      },
-      channels: [
-        {
-          addressId: 40001,
-          dataType: 'COD',
-          unit: 'mg/L',
-          offset: -0.5,
+          valueRange: null,
+          alertLow: null,
+          alertHigh: null,
+          valueFormat: null,
+          offset: null,
+          encoding: null,
+          status: null,
         },
       ],
     });
 
     expect(result.success).toBe(true);
+    expect(result.data).toMatchObject({
+      settings: {
+        hostIp: null,
+        slaveId: null,
+        port: null,
+        valueRange: {
+          min: null,
+          max: null,
+        },
+      },
+      channels: [
+        {
+          addressId: null,
+          dataType: 'CO2 (ppm)',
+          valueRange: null,
+          alertLow: null,
+          alertHigh: null,
+          valueFormat: null,
+          offset: null,
+          encoding: null,
+          status: null,
+        },
+      ],
+    });
+  });
+
+  it.each(['MODBUS_RTU', 'MODBUS_TCP', 'MSSQL', 'MYSQL'] as const)(
+    'accepts empty settings and channels for %s',
+    (protocol) => {
+      const result = createDeviceConnectionConfigSchema.safeParse({
+        stationId: 'STATION_001',
+        protocol,
+        settings: {},
+        channels: [],
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data).toMatchObject({
+        stationId: 'STATION_001',
+        protocol,
+        settings: {},
+        channels: [],
+      });
+    },
+  );
+
+  it('defaults omitted or null settings and channels without config-form validation', () => {
+    const omitted = createDeviceConnectionConfigSchema.safeParse({
+      stationId: 'STATION_001',
+      protocol: 'MYSQL',
+    });
+    const nullable = createDeviceConnectionConfigSchema.safeParse({
+      stationId: 'STATION_001',
+      protocol: 'MSSQL',
+      settings: null,
+      channels: null,
+    });
+
+    expect(omitted.success).toBe(true);
+    expect(nullable.success).toBe(true);
+    if (omitted.success) {
+      expect(omitted.data).toMatchObject({ settings: {}, channels: [] });
+    }
+    if (nullable.success) {
+      expect(nullable.data).toMatchObject({ settings: {}, channels: [] });
+    }
+  });
+
+  it('rejects malformed container types while allowing nullable form values', () => {
+    const invalidSettings = createDeviceConnectionConfigSchema.safeParse({
+      stationId: 'STATION_001',
+      protocol: 'MYSQL',
+      settings: 'not-an-object',
+      channels: [],
+    });
+    const invalidChannels = createDeviceConnectionConfigSchema.safeParse({
+      stationId: 'STATION_001',
+      protocol: 'MYSQL',
+      settings: {},
+      channels: {},
+    });
+    const invalidStatusManagement = createDeviceConnectionConfigSchema.safeParse({
+      stationId: 'STATION_001',
+      protocol: 'MYSQL',
+      settings: {},
+      channels: [],
+      statusManagement: 'not-an-object',
+    });
+    const invalidStatusScheduleContainer = createDeviceConnectionConfigSchema.safeParse({
+      stationId: 'STATION_001',
+      protocol: 'MYSQL',
+      settings: {},
+      channels: [],
+      statusManagement: {
+        selectedParameters: [],
+        status: 'Normal',
+        schedules: {},
+      },
+    });
+
+    expect(invalidSettings.success).toBe(false);
+    expect(invalidChannels.success).toBe(false);
+    expect(invalidStatusManagement.success).toBe(false);
+    expect(invalidStatusScheduleContainer.success).toBe(false);
+  });
+
+  it('accepts nullable status-management fields from the config form', () => {
+    const result = createDeviceConnectionConfigSchema.safeParse({
+      stationId: 'STATION_001',
+      protocol: 'MYSQL',
+      settings: {},
+      channels: [],
+      statusManagement: {
+        selectedParameters: null,
+        startAt: null,
+        endAt: null,
+        status: null,
+        schedules: [],
+      },
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.data).toMatchObject({
+      statusManagement: null,
+    });
+  });
+
+  it('accepts database config without requiring connection values', () => {
+    const result = createDeviceConnectionConfigSchema.safeParse({
+      stationId: 'STATION_001',
+      protocol: 'MSSQL',
+      settings: {
+        hostIp: null,
+        port: null,
+        dbUser: null,
+        dbPass: null,
+        dbName: null,
+        minuteTableName: null,
+        fiveMinuteTableName: null,
+        hourlyTableName: null,
+        valueRange: null,
+      },
+      channels: [],
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.data).toMatchObject({
+      settings: {
+        hostIp: null,
+        port: null,
+        dbUser: null,
+        dbPass: null,
+        dbName: null,
+        minuteTableName: null,
+        fiveMinuteTableName: null,
+        hourlyTableName: null,
+        valueRange: null,
+      },
+      channels: [],
+    });
   });
 
   it('accepts database channels with optional measurement metadata', () => {
@@ -527,21 +676,43 @@ describe('device connection validators', () => {
     });
   });
 
-  it('rejects unknown fields and invalid IPs', () => {
+  it('does not validate config-specific formats or reject extra config fields', () => {
     const result = createDeviceConnectionConfigSchema.safeParse({
       stationId: 'STATION_001',
       protocol: 'MYSQL',
       settings: {
         hostIp: 'not-an-ip',
-        port: 3306,
+        port: -1,
         dbUser: 'sensor_user',
         dbPass: 'secret-pass',
         dbName: 'sensor_db',
+        futureConfigField: 'accepted',
       },
-      channels: [{ addressId: 40001, dataType: 'COD', unit: 'mg/L', offset: 0 }],
-      rawSql: 'DROP TABLE device_connection_configs',
+      channels: [
+        {
+          addressId: -99,
+          dataType: 'COD',
+          unit: 'mg/L',
+          offset: 0,
+          futureChannelField: 'accepted',
+        },
+      ],
     });
 
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
+    expect(result.data).toMatchObject({
+      settings: {
+        hostIp: 'not-an-ip',
+        port: -1,
+        futureConfigField: 'accepted',
+      },
+      channels: [
+        {
+          addressId: -99,
+          dataType: 'COD (mg/L)',
+          futureChannelField: 'accepted',
+        },
+      ],
+    });
   });
 });

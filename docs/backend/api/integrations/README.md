@@ -6,7 +6,7 @@ API contract ในกลุ่มนี้ใช้สำหรับอุป�
 
 | Directory | Contract |
 | --- | --- |
-| `device-configs/` | ระบบภายนอกดึง device, parameter และ status config |
+| [`device-configs/`](./device-configs/README.md) | ระบบภายนอกดึง device, parameter และ status config |
 | `alert-events/` | ระบบภายนอกส่ง alert events |
 | `device-connections/` | Connection configuration และ connection test |
 

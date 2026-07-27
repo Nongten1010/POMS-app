@@ -54,7 +54,6 @@ export const deviceConnectionsService = {
     input: CreateDeviceConnectionConfigInput,
     actorUserId: number,
   ): Promise<DeviceConnectionConfigDTO> {
-    ensureChannelAddressesAreUnique(input);
     return deviceConnectionsRepository.replaceActive(input, actorUserId);
   },
 
@@ -63,9 +62,6 @@ export const deviceConnectionsService = {
     actorUserId: number,
   ): Promise<DeviceConnectionConfigDTO[]> {
     ensureBatchDeviceKeysAreUnique(inputs);
-    for (const input of inputs) {
-      ensureChannelAddressesAreUnique(input);
-    }
     return deviceConnectionsRepository.replaceManyActive(inputs, actorUserId);
   },
 
@@ -75,9 +71,6 @@ export const deviceConnectionsService = {
     actorUserId: number,
   ): Promise<DeviceConnectionConfigDTO[]> {
     ensureBatchDeviceKeysAreUnique(inputs);
-    for (const input of inputs) {
-      ensureChannelAddressesAreUnique(input);
-    }
     return deviceConnectionsRepository.replaceManyActiveForStation(stationId, inputs, actorUserId);
   },
 
@@ -86,7 +79,6 @@ export const deviceConnectionsService = {
     actorUserId: number,
     requestId: number,
   ): Promise<DeviceConnectionConfigDTO> {
-    ensureChannelAddressesAreUnique(input);
     const [saved] = await deviceConnectionsRepository.replaceManyForRequestAndActiveSettings(
       [input],
       actorUserId,
@@ -101,9 +93,6 @@ export const deviceConnectionsService = {
     requestId: number,
   ): Promise<DeviceConnectionConfigDTO[]> {
     ensureBatchDeviceKeysAreUnique(inputs);
-    for (const input of inputs) {
-      ensureChannelAddressesAreUnique(input);
-    }
     return deviceConnectionsRepository.replaceManyForRequestAndActiveSettings(
       inputs,
       actorUserId,
@@ -112,7 +101,6 @@ export const deviceConnectionsService = {
   },
 
   async testConnection(input: TestDeviceConnectionInput): Promise<DeviceConnectionTestResultDTO> {
-    ensureChannelAddressesAreUnique(input);
     return {
       success: true,
       mode: 'MOCK',
@@ -127,23 +115,6 @@ export const deviceConnectionsService = {
     };
   },
 };
-
-function ensureChannelAddressesAreUnique(input: TestDeviceConnectionInput): void {
-  const seen = new Set<number>();
-  const duplicates = input.channels
-    .map((channel) => channel.addressId)
-    .filter((addressId) => {
-      if (seen.has(addressId)) return true;
-      seen.add(addressId);
-      return false;
-    });
-
-  if (duplicates.length > 0) {
-    throw new BadRequestError('Channel addressId must be unique per connection config', {
-      addressIds: Array.from(new Set(duplicates)),
-    });
-  }
-}
 
 function ensureBatchDeviceKeysAreUnique(inputs: CreateDeviceConnectionConfigInput[]): void {
   const seen = new Set<string>();
@@ -177,14 +148,22 @@ function ensureBatchDeviceKeysAreUnique(inputs: CreateDeviceConnectionConfigInpu
 function describeEndpoint(input: TestDeviceConnectionInput): string {
   if (input.protocol === DEVICE_CONNECTION_PROTOCOL.MODBUS_RTU) {
     const settings = input.settings;
-    return `COM${settings.comPort}:slave-${settings.slaveId}`;
+    return `COM${settingToText(settings.comPort)}:slave-${settingToText(settings.slaveId)}`;
   }
 
   if (input.protocol === DEVICE_CONNECTION_PROTOCOL.MODBUS_TCP) {
     const settings = input.settings;
-    return `${settings.hostIp}:${settings.port}:slave-${settings.slaveId}`;
+    return `${settingToText(settings.hostIp)}:${settingToText(settings.port)}:slave-${settingToText(
+      settings.slaveId,
+    )}`;
   }
 
   const settings = input.settings;
-  return `${settings.hostIp}:${settings.port}/${settings.dbName}`;
+  return `${settingToText(settings.hostIp)}:${settingToText(settings.port)}/${settingToText(
+    settings.dbName,
+  )}`;
+}
+
+function settingToText(value: unknown): string {
+  return value === null || value === undefined ? '' : String(value);
 }

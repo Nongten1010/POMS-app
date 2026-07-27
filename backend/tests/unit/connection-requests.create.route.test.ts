@@ -7,6 +7,8 @@ jest.mock('../../src/modules/connection-requests/connection-requests.service', (
   connectionRequestsService: {
     createMeasurementPointRequest: jest.fn(),
     createParameterRequest: jest.fn(),
+    createDeviceConfig: jest.fn(),
+    createDeviceConfigs: jest.fn(),
     resubmit: jest.fn(),
   },
 }));
@@ -29,6 +31,18 @@ describe('create measurement-point request route', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedService.createMeasurementPointRequest.mockResolvedValue(serviceResponse as never);
+    mockedService.createDeviceConfigs.mockResolvedValue({
+      stationId: 'S0001',
+      device: [],
+      channels: [],
+      statusManagement: {
+        selectedParameters: ['ทั้งหมด'],
+        startAt: null,
+        endAt: null,
+        status: 'Normal',
+        schedules: [],
+      },
+    });
   });
 
   it('returns 201, Location, and the standard success envelope', async () => {
@@ -110,6 +124,59 @@ describe('create measurement-point request route', () => {
           }),
         ],
       }),
+      42,
+    );
+  });
+
+  it('accepts request-bound database config payloads with nullable fields and table names', async () => {
+    const response = await request(createApp())
+      .post('/api/v1/cems-wpms-requests/17/device-configs')
+      .set('Authorization', `Bearer ${accessToken()}`)
+      .send({
+        config: {
+          stationId: 'S0001',
+          device: [
+            {
+              deviceCode: 'S0001/DB-01',
+              protocol: 'MSSQL',
+              settings: {
+                hostIp: null,
+                port: null,
+                dbUser: null,
+                dbPass: null,
+                dbName: null,
+                minuteTableName: 'measurements_1m',
+                fiveMinuteTableName: 'measurements_5m',
+                hourlyTableName: 'measurements_1h',
+                valueRange: null,
+              },
+            },
+          ],
+          channels: [],
+          statusManagement: null,
+        },
+      });
+
+    expect(response.status).toBe(201);
+    expect(mockedService.createDeviceConfigs).toHaveBeenCalledWith(
+      17,
+      {
+        configs: [
+          expect.objectContaining({
+            stationId: 'S0001',
+            deviceCode: 'S0001/DB-01',
+            protocol: 'MSSQL',
+            settings: expect.objectContaining({
+              hostIp: null,
+              minuteTableName: 'measurements_1m',
+              fiveMinuteTableName: 'measurements_5m',
+              hourlyTableName: 'measurements_1h',
+            }),
+            channels: [],
+            statusManagement: null,
+          }),
+        ],
+      },
       42,
     );
   });

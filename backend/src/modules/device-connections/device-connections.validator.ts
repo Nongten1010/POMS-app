@@ -2,57 +2,12 @@ import { z } from 'zod';
 import { DEVICE_CONNECTION_PROTOCOL } from './device-connections.types';
 
 const trimmedString = (max: number) => z.string().trim().min(1).max(max);
-const ipv4Address = z
-  .string()
-  .trim()
-  .max(45)
-  .regex(
-    /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/,
-    'Invalid IPv4 address',
-  );
-
-const positiveInt = z.number().int().positive();
-const portNumber = positiveInt.max(65535);
-const addressId = z.number().int().min(40001);
-
 const measurementRangeSchema = z
   .object({
-    min: z.number(),
-    max: z.number(),
+    min: z.number().nullable().optional().default(null),
+    max: z.number().nullable().optional().default(null),
   })
-  .strict()
-  .refine((range) => range.min <= range.max, {
-    message: 'min must be less than or equal to max',
-    path: ['min'],
-  });
-
-const dataValueFormatSchema = z.enum(['MEASUREMENT_VALUE', 'CURRENT', 'VOLTAGE']);
-const optionalThresholdSchema = z.preprocess((value) => {
-  if (value === '' || value === null || value === undefined) return null;
-  return parseLeadingNumber(value);
-}, z.number().nullable());
-const parameterStatusSchema = trimmedString(64)
-  .nullable()
-  .optional()
-  .transform((status) => status ?? 'Normal');
-const modbusEncodingSchema = z.enum([
-  'SIGNED',
-  'UNSIGNED',
-  'BIG_ENDIAN',
-  'LITTLE_ENDIAN',
-  'SIGNED16_BIG_ENDIAN',
-  'SIGNED16_LITTLE_ENDIAN',
-  'UNSIGNED16_BIG_ENDIAN',
-  'UNSIGNED16_LITTLE_ENDIAN',
-  'SIGNED32_BIG_ENDIAN',
-  'SIGNED32_LITTLE_ENDIAN',
-  'UNSIGNED32_BIG_ENDIAN',
-  'UNSIGNED32_LITTLE_ENDIAN',
-  'FLOAT32_BIG_ENDIAN',
-  'FLOAT32_LITTLE_ENDIAN',
-  'FLOAT64_BIG_ENDIAN',
-  'FLOAT64_LITTLE_ENDIAN',
-]);
+  .passthrough();
 
 const modbusEncodingAliases = {
   SIGNED16_BIG_ENDIAN: 'SIGNED16_BIG_ENDIAN',
@@ -69,156 +24,101 @@ const modbusEncodingAliases = {
   FLOAT64_LITTLE_ENDIAN: 'FLOAT64_LITTLE_ENDIAN',
 } as const;
 
-const modbusChannelSchema = z
+const nullableNumber = z.number().nullable().optional().default(null);
+const nullableString = z.string().nullable().optional().default(null);
+
+const modbusRtuSettingsSchema = defaultNullishObject(
+  z
+    .object({
+      comPort: z.union([z.number(), z.string()]).nullable().optional(),
+      slaveId: z.number().nullable().optional(),
+      baudRate: z.number().nullable().optional(),
+      parity: z.string().nullable().optional(),
+      stopBits: z.number().nullable().optional(),
+      dataBits: z.number().nullable().optional(),
+      quantity: z.number().nullable().optional(),
+      valueRange: measurementRangeSchema.nullable().optional(),
+    })
+    .passthrough(),
+);
+
+const modbusTcpSettingsSchema = defaultNullishObject(
+  z
+    .object({
+      hostIp: z.string().nullable().optional(),
+      slaveId: z.number().nullable().optional(),
+      port: z.number().nullable().optional(),
+      valueRange: measurementRangeSchema.nullable().optional(),
+    })
+    .passthrough(),
+);
+
+const databaseSettingsSchema = defaultNullishObject(
+  z
+    .object({
+      hostIp: z.string().nullable().optional(),
+      port: z.number().nullable().optional(),
+      dbUser: z.string().nullable().optional(),
+      dbPass: z.string().nullable().optional(),
+      dbName: z.string().nullable().optional(),
+      minuteTableName: z.string().nullable().optional(),
+      fiveMinuteTableName: z.string().nullable().optional(),
+      hourlyTableName: z.string().nullable().optional(),
+      valueRange: measurementRangeSchema.nullable().optional(),
+    })
+    .passthrough(),
+);
+
+const configChannelSchema = z
   .object({
-    addressId,
-    dataType: trimmedString(128),
-    unit: z.string().trim().max(64).optional().default(''),
+    addressId: nullableNumber,
+    dataType: z.string(),
+    unit: z.string().nullable().optional().default(null),
     valueRange: measurementRangeSchema.nullable().optional().default(null),
-    alertLow: optionalThresholdSchema.optional().default(null),
-    alertHigh: optionalThresholdSchema.optional().default(null),
-    valueFormat: dataValueFormatSchema.nullable().optional().default('MEASUREMENT_VALUE'),
-    offset: z.number(),
-    encoding: modbusEncodingSchema,
-    status: parameterStatusSchema,
+    alertLow: nullableNumber,
+    alertHigh: nullableNumber,
+    valueFormat: nullableString,
+    offset: nullableNumber,
+    encoding: nullableString,
+    status: nullableString,
   })
-  .strict()
-  .refine(hasValidAlertThresholdOrder, {
-    message: 'alertLow must be less than or equal to alertHigh',
-    path: ['alertLow'],
-  })
-  .transform((channel) => ({
-    addressId: channel.addressId,
-    dataType: toChannelDataType(channel.dataType, channel.unit),
-    valueRange: channel.valueRange,
-    alertLow: channel.alertLow,
-    alertHigh: channel.alertHigh,
-    valueFormat: channel.valueFormat ?? 'MEASUREMENT_VALUE',
-    offset: channel.offset,
-    encoding: channel.encoding,
-    status: channel.status,
+  .passthrough()
+  .transform(({ unit, ...channel }) => ({
+    ...channel,
+    dataType: toChannelDataType(channel.dataType, unit),
   }));
 
-const databaseChannelSchema = z
-  .object({
-    addressId,
-    dataType: trimmedString(128),
-    unit: z.string().trim().max(64).optional().default(''),
-    valueRange: measurementRangeSchema.nullable().optional().default(null),
-    alertLow: optionalThresholdSchema.optional().default(null),
-    alertHigh: optionalThresholdSchema.optional().default(null),
-    valueFormat: dataValueFormatSchema.nullable().optional().default(null),
-    offset: z.number(),
-    encoding: modbusEncodingSchema.nullable().optional().default(null),
-    status: parameterStatusSchema,
-  })
-  .strict()
-  .refine(hasValidAlertThresholdOrder, {
-    message: 'alertLow must be less than or equal to alertHigh',
-    path: ['alertLow'],
-  })
-  .transform((channel) => ({
-    addressId: channel.addressId,
-    dataType: toChannelDataType(channel.dataType, channel.unit),
-    valueRange: channel.valueRange,
-    alertLow: channel.alertLow,
-    alertHigh: channel.alertHigh,
-    valueFormat: channel.valueFormat,
-    offset: channel.offset,
-    encoding: channel.encoding,
-    status: channel.status,
-  }));
+const configChannelsSchema = z.preprocess(
+  (value) => (value === null || value === undefined ? [] : value),
+  z.array(configChannelSchema).max(200),
+);
 
-const modbusRtuSettingsSchema = z
+const statusScheduleSchema = z
   .object({
-    comPort: positiveInt,
-    slaveId: positiveInt,
-    baudRate: z.union([
-      z.literal(2400),
-      z.literal(4800),
-      z.literal(9600),
-      z.literal(14400),
-      z.literal(19200),
-      z.literal(38400),
-    ]),
-    parity: z.enum(['EVEN', 'ODD', 'NONE']).default('NONE'),
-    stopBits: z.union([z.literal(1), z.literal(2)]).default(1),
-    dataBits: z.union([z.literal(7), z.literal(8)]).default(8),
-    quantity: positiveInt,
-    valueRange: measurementRangeSchema.nullable().optional(),
+    selectedParameters: z.array(z.string()).nullable().optional(),
+    startAt: z.string().nullable().optional(),
+    endAt: z.string().nullable().optional(),
+    status: z.string().nullable().optional(),
   })
-  .strict()
-  .transform((settings) => ({
-    ...settings,
-    valueRange: settings.valueRange ?? null,
-  }));
+  .passthrough();
 
-const modbusTcpSettingsSchema = z
+const statusManagementSchema = z
   .object({
-    hostIp: ipv4Address,
-    slaveId: positiveInt,
-    port: portNumber.default(502),
+    selectedParameters: z.array(z.string()).nullable().optional(),
+    startAt: z.string().nullable().optional(),
+    endAt: z.string().nullable().optional(),
+    status: z.string().nullable().optional(),
+    schedules: z.array(statusScheduleSchema).nullable().optional(),
   })
-  .strict();
-
-const mssqlSettingsSchema = z
-  .object({
-    hostIp: ipv4Address,
-    port: portNumber.default(1433),
-    dbUser: trimmedString(128),
-    dbPass: trimmedString(512),
-    dbName: trimmedString(128),
-  })
-  .strict();
-
-const mysqlSettingsSchema = z
-  .object({
-    hostIp: ipv4Address,
-    port: portNumber.default(3306),
-    dbUser: trimmedString(128),
-    dbPass: trimmedString(512),
-    dbName: trimmedString(128),
-  })
-  .strict();
+  .passthrough()
+  .nullable()
+  .optional()
+  .transform(normalizeStatusManagement);
 
 const baseDeviceConnectionSchema = z.object({
   stationId: trimmedString(64),
   deviceCode: trimmedString(64).nullable().optional().default(null),
-  statusManagement: z
-    .object({
-      selectedParameters: z.array(trimmedString(128)).min(1).max(50),
-      startAt: z.string().trim().min(1).max(64).nullable().optional(),
-      endAt: z.string().trim().min(1).max(64).nullable().optional(),
-      status: trimmedString(64),
-      schedules: z
-        .array(
-          z
-            .object({
-              selectedParameters: z.array(trimmedString(128)).min(1).max(50),
-              startAt: z.string().trim().min(1).max(64).nullable().optional(),
-              endAt: z.string().trim().min(1).max(64).nullable().optional(),
-              status: trimmedString(64),
-            })
-            .strict()
-            .transform((schedule) => ({
-              ...schedule,
-              startAt: schedule.startAt ?? null,
-              endAt: schedule.endAt ?? null,
-            })),
-        )
-        .max(50)
-        .optional()
-        .default([]),
-    })
-    .strict()
-    .transform((statusManagement) => ({
-      ...statusManagement,
-      startAt: statusManagement.startAt ?? null,
-      endAt: statusManagement.endAt ?? null,
-    }))
-    .nullable()
-    .optional()
-    .default(null),
+  statusManagement: statusManagementSchema,
 });
 
 const deviceConnectionConfigSchema = z.discriminatedUnion('protocol', [
@@ -226,28 +126,28 @@ const deviceConnectionConfigSchema = z.discriminatedUnion('protocol', [
     .extend({
       protocol: z.literal(DEVICE_CONNECTION_PROTOCOL.MODBUS_RTU),
       settings: modbusRtuSettingsSchema,
-      channels: z.array(modbusChannelSchema).min(1).max(200),
+      channels: configChannelsSchema,
     })
     .strict(),
   baseDeviceConnectionSchema
     .extend({
       protocol: z.literal(DEVICE_CONNECTION_PROTOCOL.MODBUS_TCP),
       settings: modbusTcpSettingsSchema,
-      channels: z.array(modbusChannelSchema).min(1).max(200),
+      channels: configChannelsSchema,
     })
     .strict(),
   baseDeviceConnectionSchema
     .extend({
       protocol: z.literal(DEVICE_CONNECTION_PROTOCOL.MSSQL),
-      settings: mssqlSettingsSchema,
-      channels: z.array(databaseChannelSchema).min(1).max(200),
+      settings: databaseSettingsSchema,
+      channels: configChannelsSchema,
     })
     .strict(),
   baseDeviceConnectionSchema
     .extend({
       protocol: z.literal(DEVICE_CONNECTION_PROTOCOL.MYSQL),
-      settings: mysqlSettingsSchema,
-      channels: z.array(databaseChannelSchema).min(1).max(200),
+      settings: databaseSettingsSchema,
+      channels: configChannelsSchema,
     })
     .strict(),
 ]);
@@ -369,19 +269,63 @@ function removeChannelDeviceCode(channel: unknown): unknown {
   return Object.fromEntries(Object.entries(channel).filter(([key]) => key !== 'deviceCode'));
 }
 
-function toChannelDataType(dataType: string, unit?: string): string {
+function normalizeStatusManagement(value: unknown): {
+  selectedParameters: string[];
+  startAt: string | null;
+  endAt: string | null;
+  status: string;
+  schedules: Array<{
+    selectedParameters: string[];
+    startAt: string | null;
+    endAt: string | null;
+    status: string;
+  }>;
+} | null {
+  if (!isRecord(value)) return null;
+
+  const selectedParameters = readStringArray(value.selectedParameters);
+  const status = typeof value.status === 'string' ? value.status : null;
+  if (selectedParameters === null || status === null) return null;
+
+  const schedules = Array.isArray(value.schedules)
+    ? value.schedules.flatMap((schedule) => {
+        if (!isRecord(schedule)) return [];
+        const scheduleParameters = readStringArray(schedule.selectedParameters);
+        const scheduleStatus = typeof schedule.status === 'string' ? schedule.status : null;
+        if (scheduleParameters === null || scheduleStatus === null) return [];
+        return [
+          {
+            selectedParameters: scheduleParameters,
+            startAt: readNullableString(schedule.startAt),
+            endAt: readNullableString(schedule.endAt),
+            status: scheduleStatus,
+          },
+        ];
+      })
+    : [];
+
+  return {
+    selectedParameters,
+    startAt: readNullableString(value.startAt),
+    endAt: readNullableString(value.endAt),
+    status,
+    schedules,
+  };
+}
+
+function readStringArray(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null;
+  return value.filter((item): item is string => typeof item === 'string');
+}
+
+function readNullableString(value: unknown): string | null {
+  return typeof value === 'string' ? value : null;
+}
+
+function toChannelDataType(dataType: string, unit?: string | null): string {
   const trimmedUnit = unit?.trim() ?? '';
   if (!trimmedUnit || /\([^)]*\)\s*$/.test(dataType)) return dataType;
   return `${dataType} (${trimmedUnit})`;
-}
-
-function hasValidAlertThresholdOrder(channel: {
-  alertLow?: number | null;
-  alertHigh?: number | null;
-}): boolean {
-  if (channel.alertLow === null || channel.alertLow === undefined) return true;
-  if (channel.alertHigh === null || channel.alertHigh === undefined) return true;
-  return channel.alertLow <= channel.alertHigh;
 }
 
 function isLegacyModbusRtuPayload(value: Record<string, unknown>): boolean {
@@ -482,6 +426,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
+function defaultNullishObject<T extends z.ZodType<Record<string, unknown>>>(schema: T) {
+  return z.preprocess((value) => (value === null || value === undefined ? {} : value), schema);
+}
+
 function copyUnknownFields(
   source: Record<string, unknown>,
   target: Record<string, unknown>,
@@ -522,6 +470,8 @@ const legacyModbusChannelKeys = new Set([
   'parameter',
   'min',
   'max',
+  'alertLow',
+  'alertHigh',
   'format',
   'offset',
   'encodingData',

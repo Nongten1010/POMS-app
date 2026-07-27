@@ -73,6 +73,9 @@ function toDeviceConfig(
     dbUser: readString(settings.dbUser),
     dbPass: readString(settings.dbPass),
     dbName: readString(settings.dbName),
+    minuteTableName: readString(settings.minuteTableName),
+    fiveMinuteTableName: readString(settings.fiveMinuteTableName),
+    hourlyTableName: readString(settings.hourlyTableName),
     deviceValueRangeMin: range?.min ?? null,
     deviceValueRangeMax: range?.max ?? null,
   };
@@ -208,8 +211,13 @@ function getDeviceCode(
 function readRange(value: unknown): MeasurementRangeInput | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const range = value as { min?: unknown; max?: unknown };
-  if (typeof range.min !== 'number' || typeof range.max !== 'number') return null;
-  return { min: range.min, max: range.max };
+  const hasMin = Object.prototype.hasOwnProperty.call(range, 'min');
+  const hasMax = Object.prototype.hasOwnProperty.call(range, 'max');
+  if (!hasMin && !hasMax) return null;
+  return {
+    min: readNumber(range.min),
+    max: readNumber(range.max),
+  };
 }
 
 function readString(value: unknown): string | null {

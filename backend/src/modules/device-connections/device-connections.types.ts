@@ -29,52 +29,54 @@ export type ModbusEncoding =
   | 'FLOAT64_LITTLE_ENDIAN';
 
 export interface MeasurementRangeInput {
-  min: number;
-  max: number;
+  min: number | null;
+  max: number | null;
 }
 
 export interface DeviceMeasurementChannelInput {
-  addressId: number;
+  addressId: number | null;
   dataType: string;
-  unit?: string;
+  unit?: string | null;
   valueRange?: MeasurementRangeInput | null;
   alertLow?: number | null;
   alertHigh?: number | null;
-  valueFormat?: DataValueFormat | null;
-  offset: number;
-  encoding?: ModbusEncoding | null;
+  valueFormat?: string | null;
+  offset: number | null;
+  encoding?: string | null;
   status?: string | null;
 }
 
-export interface ModbusRtuConnectionSettingsInput {
-  comPort: number;
-  slaveId: number;
-  baudRate: 2400 | 4800 | 9600 | 14400 | 19200 | 38400;
-  parity: ModbusParity;
-  stopBits: 1 | 2;
-  dataBits: 7 | 8;
-  quantity: number;
+export interface ModbusRtuConnectionSettingsInput extends Record<string, unknown> {
+  comPort?: number | string | null;
+  slaveId?: number | null;
+  baudRate?: number | null;
+  parity?: ModbusParity | string | null;
+  stopBits?: number | null;
+  dataBits?: number | null;
+  quantity?: number | null;
   valueRange?: MeasurementRangeInput | null;
 }
 
-export interface ModbusTcpConnectionSettingsInput {
-  hostIp: string;
-  slaveId: number;
-  port: number;
+export interface ModbusTcpConnectionSettingsInput extends Record<string, unknown> {
+  hostIp?: string | null;
+  slaveId?: number | null;
+  port?: number | null;
+  valueRange?: MeasurementRangeInput | null;
 }
 
-export interface DatabaseConnectionSettingsInput {
-  hostIp: string;
-  port: number;
-  dbUser: string;
-  dbPass: string;
-  dbName: string;
+export interface DatabaseConnectionSettingsInput extends Record<string, unknown> {
+  hostIp?: string | null;
+  port?: number | null;
+  dbUser?: string | null;
+  dbPass?: string | null;
+  dbName?: string | null;
+  minuteTableName?: string | null;
+  fiveMinuteTableName?: string | null;
+  hourlyTableName?: string | null;
+  valueRange?: MeasurementRangeInput | null;
 }
 
-export type DeviceConnectionSettingsInput =
-  | ModbusRtuConnectionSettingsInput
-  | ModbusTcpConnectionSettingsInput
-  | DatabaseConnectionSettingsInput;
+export type DeviceConnectionSettingsInput = Record<string, unknown>;
 
 export interface BaseDeviceConnectionConfigInput {
   stationId: string;
@@ -96,22 +98,22 @@ export interface DeviceConnectionStatusManagementInput extends DeviceConnectionS
 
 export interface CreateModbusRtuConnectionConfigInput extends BaseDeviceConnectionConfigInput {
   protocol: typeof DEVICE_CONNECTION_PROTOCOL.MODBUS_RTU;
-  settings: ModbusRtuConnectionSettingsInput;
+  settings: DeviceConnectionSettingsInput;
 }
 
 export interface CreateModbusTcpConnectionConfigInput extends BaseDeviceConnectionConfigInput {
   protocol: typeof DEVICE_CONNECTION_PROTOCOL.MODBUS_TCP;
-  settings: ModbusTcpConnectionSettingsInput;
+  settings: DeviceConnectionSettingsInput;
 }
 
 export interface CreateMssqlConnectionConfigInput extends BaseDeviceConnectionConfigInput {
   protocol: typeof DEVICE_CONNECTION_PROTOCOL.MSSQL;
-  settings: DatabaseConnectionSettingsInput;
+  settings: DeviceConnectionSettingsInput;
 }
 
 export interface CreateMysqlConnectionConfigInput extends BaseDeviceConnectionConfigInput {
   protocol: typeof DEVICE_CONNECTION_PROTOCOL.MYSQL;
-  settings: DatabaseConnectionSettingsInput;
+  settings: DeviceConnectionSettingsInput;
 }
 
 export type CreateDeviceConnectionConfigInput =

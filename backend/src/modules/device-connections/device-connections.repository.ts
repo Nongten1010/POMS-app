@@ -23,14 +23,14 @@ interface DeviceConnectionConfigRow {
 }
 
 interface DeviceMeasurementChannelRow {
-  address_id: number | string;
+  address_id: number | string | null;
   data_type: string;
   value_range_json: string | null;
   alert_low: number | string | null;
   alert_high: number | string | null;
-  value_format: 'MEASUREMENT_VALUE' | 'CURRENT' | 'VOLTAGE' | null;
-  offset_value: number | string;
-  encoding: DeviceMeasurementChannelInput['encoding'];
+  value_format: string | null;
+  offset_value: number | string | null;
+  encoding: string | null;
   parameter_status: string | null;
 }
 
@@ -376,6 +376,8 @@ async function insertChannels(
   channels: DeviceMeasurementChannelInput[],
   actorUserId: number,
 ): Promise<void> {
+  if (channels.length === 0) return;
+
   await trx('device_measurement_channels').insert(
     channels.map((channel) => ({
       config_id: configId,
@@ -387,7 +389,7 @@ async function insertChannels(
       value_format: channel.valueFormat ?? null,
       offset_value: channel.offset,
       encoding: channel.encoding ?? null,
-      parameter_status: channel.status ?? 'Normal',
+      parameter_status: channel.status ?? null,
       created_by: actorUserId,
       updated_by: actorUserId,
     })),
@@ -396,15 +398,15 @@ async function insertChannels(
 
 function toChannelDTO(row: DeviceMeasurementChannelRow): DeviceMeasurementChannelInput {
   return {
-    addressId: Number(row.address_id),
+    addressId: toNullableNumber(row.address_id),
     dataType: row.data_type,
-    offset: Number(row.offset_value),
-    ...(row.value_range_json ? { valueRange: parseMeasurementRange(row.value_range_json) } : {}),
+    valueRange: row.value_range_json ? parseMeasurementRange(row.value_range_json) : null,
     alertLow: toNullableNumber(row.alert_low),
     alertHigh: toNullableNumber(row.alert_high),
-    ...(row.value_format ? { valueFormat: row.value_format } : {}),
-    ...(row.encoding ? { encoding: row.encoding } : {}),
-    status: row.parameter_status ?? 'Normal',
+    valueFormat: row.value_format ?? null,
+    offset: toNullableNumber(row.offset_value),
+    encoding: row.encoding ?? null,
+    status: row.parameter_status ?? null,
   };
 }
 
@@ -428,10 +430,13 @@ function parseJsonObject(value: string): Record<string, unknown> {
 
 function parseMeasurementRange(value: string): MeasurementRangeInput | null {
   const parsed = parseJsonObject(value);
-  const min = parsed.min;
-  const max = parsed.max;
-  if (typeof min !== 'number' || typeof max !== 'number') return null;
-  return { min, max };
+  const hasMin = Object.prototype.hasOwnProperty.call(parsed, 'min');
+  const hasMax = Object.prototype.hasOwnProperty.call(parsed, 'max');
+  if (!hasMin && !hasMax) return null;
+  return {
+    min: toNullableNumber(parsed.min),
+    max: toNullableNumber(parsed.max),
+  };
 }
 
 function parseStatusManagement(
@@ -469,7 +474,9 @@ function parseStatusManagement(
 }
 
 function maskSensitiveSettings(settings: Record<string, unknown>): Record<string, unknown> {
-  if (!('dbPass' in settings)) return settings;
+  if (!Object.prototype.hasOwnProperty.call(settings, 'dbPass') || settings.dbPass == null) {
+    return settings;
+  }
   return { ...settings, dbPass: '********' };
 }
 
@@ -477,8 +484,10 @@ function toIsoString(value: Date | string): string {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 }
 
-function toNullableNumber(value: number | string | null): number | null {
-  if (value === null) return null;
+function toNullableNumber(value: unknown): number | null {
+  if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) {
+    return null;
+  }
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
