@@ -28,11 +28,17 @@ describe('integrationDeviceConfigsService', () => {
         parameters: [
           {
             parameter: 'NOx (ppm)',
+            standardCondition: true,
+            dryBasis: true,
+            oxygenOrExcessAir: false,
             standardCriteria: { enabled: true, standardValue: '120' },
             eiaCriteria: { enabled: true, standardValue: '100' },
           },
           {
             parameter: 'SO2 (ppm)',
+            standardCondition: false,
+            dryBasis: null,
+            oxygenOrExcessAir: true,
             standardCriteria: { enabled: true, standardValue: '300' },
             eiaCriteria: null,
           },
@@ -176,6 +182,9 @@ describe('integrationDeviceConfigsService', () => {
           encoding: 'UNSIGNED16_BIG_ENDIAN',
           standardCriteria: 120,
           eiaCriteria: 100,
+          standardCondition: true,
+          dryBasis: true,
+          oxygenOrExcessAir: false,
           status: 'Normal',
         },
         {
@@ -192,6 +201,9 @@ describe('integrationDeviceConfigsService', () => {
           encoding: 'UNSIGNED16_BIG_ENDIAN',
           standardCriteria: 300,
           eiaCriteria: null,
+          standardCondition: false,
+          dryBasis: null,
+          oxygenOrExcessAir: true,
           status: 'Normal',
         },
       ],
@@ -213,6 +225,16 @@ describe('integrationDeviceConfigsService', () => {
   });
 
   it('returns database table names and preserves nullable channel config values', async () => {
+    mockedRepository.findConnectedPointByStationId.mockResolvedValue({
+      stationId: 'S0002',
+      measurementInstruments: {
+        parameters: [
+          {
+            parameter: 'NOx (ppm)',
+          },
+        ],
+      },
+    });
     mockedDeviceConnectionsService.listActiveSettings.mockResolvedValue([
       {
         id: 3,
@@ -266,6 +288,9 @@ describe('integrationDeviceConfigsService', () => {
       valueFormat: null,
       offset: null,
       encoding: null,
+      standardCondition: null,
+      dryBasis: null,
+      oxygenOrExcessAir: null,
       status: 'Normal',
     });
   });
