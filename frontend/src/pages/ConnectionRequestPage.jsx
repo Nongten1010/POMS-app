@@ -487,6 +487,9 @@ function getDefaultConnectionForm(type) {
       dbUser: '',
       dbPass: '',
       dbName: '',
+      minuteTableName: '',
+      fiveMinuteTableName: '',
+      hourlyTableName: '',
     }
   }
   return {
@@ -495,6 +498,9 @@ function getDefaultConnectionForm(type) {
     dbUser: '',
     dbPass: '',
     dbName: '',
+    minuteTableName: '',
+    fiveMinuteTableName: '',
+    hourlyTableName: '',
   }
 }
 
@@ -3022,6 +3028,33 @@ function ConnectionFormFields({ connectionType, value, onChange }) {
       <Grid size={{ xs: 12, md: 3 }}>
         <TextField label="dbName" size="small" value={value.dbName} onChange={(event) => updateField('dbName', event.target.value)} fullWidth />
       </Grid>
+      <Grid size={{ xs: 12, md: 3 }}>
+        <TextField
+          label="ชื่อ Table ข้อมูลแบบรายนาที"
+          size="small"
+          value={value.minuteTableName ?? ''}
+          onChange={(event) => updateField('minuteTableName', event.target.value)}
+          fullWidth
+        />
+      </Grid>
+      <Grid size={{ xs: 12, md: 3 }}>
+        <TextField
+          label="ชื่อ Table ข้อมูลแบบราย 5 นาที"
+          size="small"
+          value={value.fiveMinuteTableName ?? ''}
+          onChange={(event) => updateField('fiveMinuteTableName', event.target.value)}
+          fullWidth
+        />
+      </Grid>
+      <Grid size={{ xs: 12, md: 3 }}>
+        <TextField
+          label="ชื่อ Table ข้อมูลแบบรายชั่วโมง"
+          size="small"
+          value={value.hourlyTableName ?? ''}
+          onChange={(event) => updateField('hourlyTableName', event.target.value)}
+          fullWidth
+        />
+      </Grid>
     </Grid>
   )
 }
@@ -3144,7 +3177,7 @@ function ConnectionParameterTable({ deviceCodeOptions, rows, setRows }) {
                   <TableCell sx={{ minWidth: 124 }}>
                     <PositiveNumberField
                       label=""
-                      min={40001}
+                      min={1}
                       value={row.addressId}
                       onChange={(nextValue) => updateRow(index, 'addressId', nextValue)}
                     />
@@ -3433,6 +3466,9 @@ function mapConnectionForms(forms = []) {
         comPort: getComPortValue(values),
         measureMin: values.measureMin ?? valueRange.min ?? '',
         measureMax: values.measureMax ?? valueRange.max ?? '',
+        minuteTableName: values.minuteTableName ?? values.minute_table_name ?? values.minuteDataTableName ?? '',
+        fiveMinuteTableName: values.fiveMinuteTableName ?? values.five_minute_table_name ?? values.fiveMinuteDataTableName ?? '',
+        hourlyTableName: values.hourlyTableName ?? values.hourly_table_name ?? values.hourlyDataTableName ?? '',
       },
     }
   })
@@ -3591,10 +3627,8 @@ function getComPortValue(values) {
     ?? ''
 }
 
-function compactObject(value) {
-  return Object.fromEntries(
-    Object.entries(value).filter(([, item]) => item !== '' && item !== null && item !== undefined),
-  )
+function nullIfBlank(value) {
+  return value === '' || value === null || value === undefined ? null : value
 }
 
 function buildValueRange(min, max) {
@@ -3615,68 +3649,46 @@ function buildConnectionSettings(form) {
   const type = normalizeConnectionType(form?.type)
 
   if (type === 'Modbus RTU') {
-    return compactObject({
+    return {
       comPort: toNumberOrStringOrNull(getComPortValue(values)),
       slaveId: toNumberOrNull(values.slaveId),
       baudRate: toNumberOrNull(values.baudRate),
-      parity: parityCodeMap[values.parity] ?? values.parity,
+      parity: nullIfBlank(parityCodeMap[values.parity] ?? values.parity),
       stopBits: toNumberOrNull(values.stopBits),
       dataBits: toNumberOrNull(values.dataBits),
       quantity: toNumberOrNull(values.quantity),
-      valueRange: buildValueRange(values.measureMin, values.measureMax),
-    })
+      valueRange: buildValueRange(values.measureMin, values.measureMax) ?? null,
+    }
   }
 
   if (type === 'Modbus TCP') {
-    return compactObject({
-      hostIp: values.hostIp,
+    return {
+      hostIp: nullIfBlank(values.hostIp),
       slaveId: toNumberOrNull(values.slaveId),
       port: toNumberOrNull(values.port),
-      valueRange: buildValueRange(values.measureMin, values.measureMax),
-    })
+      valueRange: buildValueRange(values.measureMin, values.measureMax) ?? null,
+    }
   }
 
-  return compactObject({
-    hostIp: values.hostIp,
+  return {
+    hostIp: nullIfBlank(values.hostIp),
     port: toNumberOrNull(values.port),
-    dbUser: values.dbUser,
-    dbPass: values.dbPass,
-    dbName: values.dbName,
-    valueRange: buildValueRange(values.measureMin, values.measureMax),
-  })
+    dbUser: nullIfBlank(values.dbUser),
+    dbPass: nullIfBlank(values.dbPass),
+    dbName: nullIfBlank(values.dbName),
+    minuteTableName: nullIfBlank(values.minuteTableName),
+    fiveMinuteTableName: nullIfBlank(values.fiveMinuteTableName),
+    hourlyTableName: nullIfBlank(values.hourlyTableName),
+    valueRange: buildValueRange(values.measureMin, values.measureMax) ?? null,
+  }
 }
 
 function validateDeviceConfigForm(form) {
-  const values = form?.values ?? {}
   const type = normalizeConnectionType(form?.type)
   const protocol = getConnectionProtocolCode(form?.type)
 
-  if (!type) {
-    return 'กรุณาเลือกอุปกรณ์ (Connection)'
-  }
-
-  if (!protocol) {
+  if (type && !protocol) {
     return 'กรุณาเลือกอุปกรณ์ (Connection) ให้ถูกต้อง'
-  }
-
-  if (type === 'Modbus RTU' && !getComPortValue(values)) {
-    return 'กรุณากรอก COMPORT'
-  }
-
-  if (type === 'Modbus TCP' && !values.hostIp) {
-    return 'กรุณากรอก Host IP'
-  }
-
-  if (type === 'Modbus TCP' && !values.port) {
-    return 'กรุณากรอก Port'
-  }
-
-  if (['Microsoft SQL', 'MySQL'].includes(type) && !values.hostIp) {
-    return 'กรุณากรอก Host IP'
-  }
-
-  if (['Microsoft SQL', 'MySQL'].includes(type) && !values.port) {
-    return 'กรุณากรอก Port'
   }
 
   return ''
@@ -3685,26 +3697,26 @@ function validateDeviceConfigForm(form) {
 function buildDeviceConfigChannels(rows, deviceCode) {
   return rows
     .filter((row) => row.parameter)
-    .map((row) => compactObject({
-      deviceCode,
+    .map((row) => ({
+      deviceCode: nullIfBlank(deviceCode),
       addressId: toNumberOrNull(row.addressId),
       dataType: row.parameter,
-      valueRange: buildValueRange(row.min, row.max),
+      valueRange: buildValueRange(row.min, row.max) ?? null,
       alertLow: toNumberOrNull(row.alertLow),
       alertHigh: toNumberOrNull(row.alertHigh),
-      valueFormat: (valueFormatCodeMap[row.valueFormat] ?? row.valueFormat) || 'MEASUREMENT_VALUE',
+      valueFormat: nullIfBlank(valueFormatCodeMap[row.valueFormat] ?? row.valueFormat),
       offset: toNumberOrNull(row.offset),
-      encoding: (encodingCodeMap[row.encodingData] ?? row.encodingData) || 'UNSIGNED16_BIG_ENDIAN',
-      status: row.status || 'Normal',
+      encoding: nullIfBlank(encodingCodeMap[row.encodingData] ?? row.encodingData),
+      status: nullIfBlank(row.status),
     }))
 }
 
 function buildDeviceConfigStatusManagement(statusManagement) {
   return {
-    selectedParameters: statusManagement?.selectedParameters?.length ? statusManagement.selectedParameters : ['ทั้งหมด'],
+    selectedParameters: statusManagement?.selectedParameters?.length ? statusManagement.selectedParameters : null,
     startAt: statusManagement?.startAt || null,
     endAt: statusManagement?.endAt || null,
-    status: statusManagement?.status || 'Normal',
+    status: statusManagement?.status || null,
     schedules: statusManagement?.schedules ?? [],
   }
 }
@@ -3712,8 +3724,8 @@ function buildDeviceConfigStatusManagement(statusManagement) {
 function buildDeviceConfigPayloadItem({ form, stationId, deviceCode, channels, statusManagement }) {
   return {
     stationId,
-    deviceCode,
-    protocol: getConnectionProtocolCode(form.type),
+    deviceCode: nullIfBlank(deviceCode),
+    protocol: nullIfBlank(getConnectionProtocolCode(form.type)),
     settings: buildConnectionSettings(form),
     channels,
     statusManagement: buildDeviceConfigStatusManagement(statusManagement),
@@ -3733,8 +3745,8 @@ function buildStructuredDeviceConfigPayload({ stationId, deviceItems, channelGro
 
 function buildDeviceConfigDeviceItem(form, deviceCode) {
   return {
-    deviceCode,
-    protocol: getConnectionProtocolCode(form.type),
+    deviceCode: nullIfBlank(deviceCode),
+    protocol: nullIfBlank(getConnectionProtocolCode(form.type)),
     settings: buildConnectionSettings(form),
   }
 }
@@ -3929,10 +3941,6 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose, onSaved
       throw new Error(validationMessage)
     }
 
-    if (forms.length > 1 && parameterMappingRows.some((row) => !row.deviceCode)) {
-      throw new Error('กรุณาเลือกรหัสอุปกรณ์ในตารางการเชื่อมต่อพารามิเตอร์ให้ครบ')
-    }
-
     const deviceItems = forms.map((form, index) => {
       const deviceCode = form.deviceCode || deviceCodeOptions[index] || getConnectionDeviceCode(context, index)
 
@@ -3947,14 +3955,6 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose, onSaved
 
       return buildDeviceConfigChannels(configRows, useConnectedPointDeviceConfigs || forms.length > 1 ? deviceCode : undefined)
     })
-
-    if (channelGroups.some((channels) => channels.length === 0)) {
-      throw new Error('กรุณาเพิ่ม mapping ค่าพารามิเตอร์อย่างน้อย 1 รายการ')
-    }
-
-    if (channelGroups.some((channels) => channels.some((channel) => channel.addressId === null || channel.addressId === undefined))) {
-      throw new Error('กรุณากรอก Address ID ในตารางการเชื่อมต่อพารามิเตอร์ให้ครบ')
-    }
 
     const requestBody = useConnectedPointDeviceConfigs || forms.length > 1
       ? buildStructuredDeviceConfigPayload({
