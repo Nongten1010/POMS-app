@@ -152,7 +152,9 @@ function toStatusSchedules(configs: DeviceConnectionConfigDTO[]): IntegrationSta
   return schedules;
 }
 
-function buildParameterMetadataLookup(point: IntegrationConnectedPointDTO): ParameterMetadataLookup {
+function buildParameterMetadataLookup(
+  point: IntegrationConnectedPointDTO,
+): ParameterMetadataLookup {
   const exact = new Map<string, ParameterMetadata>();
   const looseBuckets = new Map<string, Array<[string, ParameterMetadata]>>();
   const parameters = point.measurementInstruments?.parameters ?? [];
