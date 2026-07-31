@@ -91,8 +91,14 @@ const wpmsTreatmentSystemOptions = wpmsTreatmentSystemOptionItems.map((option) =
   value: getOptionValue(option),
 }))
 const legalAnnexNoOptions = Array.from({ length: 13 }, (_, index) => String(index + 1))
-const isOtherOption = (value = '') => value === 'อื่นๆ' || value.includes('อื่นๆ')
-const isBiomassOption = (value = '') => value.includes('ชีวมวล') || value.toLowerCase().includes('biomass')
+const isOtherOption = (value = '') => {
+  const normalizedValue = String(value ?? '')
+  return normalizedValue === 'อื่นๆ' || normalizedValue.includes('อื่นๆ')
+}
+const isBiomassOption = (value = '') => {
+  const normalizedValue = String(value ?? '')
+  return normalizedValue.includes('ชีวมวล') || normalizedValue.toLowerCase().includes('biomass')
+}
 const eiaAssessmentOptions = ['ไม่มี', 'มี IEE', 'มี EIA', 'มี EHIA', 'อื่นๆ']
 const eiaProjectOptions = ['มี IEE', 'มี EIA', 'มี EHIA']
 const combustionControlSystemOptions = ['ระบบปิด', 'ระบบเปิด']
@@ -3345,7 +3351,9 @@ function StatusManagementSection({ parameterOptions, statusManagement, onChange 
               onChange={(event) => {
                 const selectedValue = event.target.value
                 const nextValue = typeof selectedValue === 'string' ? selectedValue.split(',') : selectedValue
-                const nextSelectedParameters = Array.isArray(nextValue) && nextValue.includes(allOption) ? [allOption] : nextValue
+                const nextSelectedParameters = Array.isArray(nextValue)
+                  ? (nextValue.includes(allOption) ? [allOption] : nextValue)
+                  : []
                 setSelectedParameters(nextSelectedParameters)
                 updateStatusManagement({ selectedParameters: nextSelectedParameters })
               }}
@@ -3359,7 +3367,7 @@ function StatusManagementSection({ parameterOptions, statusManagement, onChange 
             >
               {[allOption, ...parameterOptions].map((option) => (
                 <MenuItem key={option} value={option}>
-                  <Checkbox checked={selectedParameters.includes(option)} />
+                  <Checkbox checked={(Array.isArray(selectedParameters) ? selectedParameters : []).includes(option)} />
                   {option}
                 </MenuItem>
               ))}
@@ -4634,7 +4642,7 @@ function TagInputField({ label, name, value: controlledValue, defaultValue = [],
 }
 
 function CemsMonitoringPointDetails({ initialPoint = {}, requestedParameters = [], onRequestedParametersChange, isOperator = false, isDirectConnectionMode = false }) {
-  const initialDetails = { ...emptyCemsMonitoringPointDetails, ...(initialPoint.details ?? {}) }
+  const initialDetails = { ...emptyCemsMonitoringPointDetails, ...compactDefinedObject(initialPoint.details ?? {}) }
   const pointCodeValue = initialPoint.pointCode ?? initialPoint.code ?? (isOperator || isDirectConnectionMode ? '' : initialDetails.pointCode)
   const initialProductionCapacity = splitProductionCapacity(initialDetails)
   const [stackShape, setStackShape] = useState(initialDetails.stackShape)
@@ -5460,7 +5468,7 @@ function InformationProviderSection({ currentUser, initialProvider = {}, useLogi
 }
 
 function WpmsMonitoringPointDetails({ initialPoint = {}, requestedParameters = [], onRequestedParametersChange, isOperator = false, isDirectConnectionMode = false }) {
-  const initialDetails = { ...emptyWpmsMonitoringPointDetails, ...(initialPoint.details ?? {}) }
+  const initialDetails = { ...emptyWpmsMonitoringPointDetails, ...compactDefinedObject(initialPoint.details ?? {}) }
   const pointCodeValue = initialPoint.pointCode ?? initialPoint.code ?? (isOperator || isDirectConnectionMode ? '' : initialDetails.pointCode)
   const [treatmentSystem, setTreatmentSystem] = useState(normalizeArrayValue(initialDetails.treatmentSystem))
   const [connectionDevice, setConnectionDevice] = useState(initialDetails.connectionDevice)
