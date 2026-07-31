@@ -83,6 +83,17 @@ describe('test-data cleanup SQL scripts', () => {
     );
   });
 
+  it('counts every KWP child table that cascades with a targeted submission', () => {
+    const sql = readSql(mainCleanupPath);
+
+    expect(sql).toMatch(
+      /KWP status history[\s\S]*FROM\s+dbo\.kwp_form_status_history\s+AS\s+history[\s\S]*INNER\s+JOIN\s+#TargetKwpSubmissionIds/i,
+    );
+    expect(sql).toMatch(
+      /KWP emission measurement items[\s\S]*FROM\s+dbo\.kwp_emission_measurement_items\s+AS\s+item[\s\S]*INNER\s+JOIN\s+#TargetKwpSubmissionIds/i,
+    );
+  });
+
   it('preserves master data, accounts, eligible factories, and number sequences', () => {
     const sql = readSql(mainCleanupPath);
 

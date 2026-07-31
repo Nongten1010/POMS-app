@@ -25,6 +25,7 @@
 | Store cleanup evidence and index it | `npm test -- --runInBand tests/unit/test-data-cleanup-sql.test.ts` | GREEN: 5 tests passed | The cleanup workflow has indexed evidence |
 | Make cleanup rerunnable in the same SQL session | `npm test -- --runInBand tests/unit/test-data-cleanup-sql.test.ts` | RED on retained temp tables, then GREEN: 6 tests passed | A dry run or commit no longer causes duplicate `#Target...` errors on the next run |
 | Harden destructive cleanup review | `npm test -- --runInBand tests/unit/test-data-cleanup-sql.test.ts` | RED: 2 failed, 5 passed because alert detail output was missing and Parameter scope was preloaded; GREEN: 7 passed | POMS dry runs show targeted alerts and Parameter execution requires an explicit empty-by-default scope plus an exact reviewed row count |
+| Report all KWP cascade impact | `npm test -- --runInBand tests/unit/test-data-cleanup-sql.test.ts` | RED: 1 failed, 7 passed because two cascading child tables were absent from dry-run counts; GREEN: 8 passed | The operator can review status-history, emission-item, and attachment row counts before deleting a KWP submission |
 
 ## Test specification
 
@@ -38,6 +39,7 @@
 | 6 | Cleanup workflow stores a canonical evidence document under `docs/backend/evidence/` | `backend/tests/unit/test-data-cleanup-sql.test.ts` | unit/static | PASS | `npm test -- test-data-cleanup-sql.test.ts` |
 | 7 | Parameter deletion scope is empty by default and execution requires explicit scope confirmation plus an exact reviewed total | `backend/tests/unit/test-data-cleanup-sql.test.ts` | unit/static | PASS | `npm test -- test-data-cleanup-sql.test.ts` |
 | 8 | POMS dry run lists each targeted mock alert with its identifying fields | `backend/tests/unit/test-data-cleanup-sql.test.ts` | unit/static | PASS | `npm test -- test-data-cleanup-sql.test.ts` |
+| 9 | POMS dry run counts `kwp_form_status_history` and `kwp_emission_measurement_items` rows that cascade with targeted KWP submissions | `backend/tests/unit/test-data-cleanup-sql.test.ts` | unit/static | PASS | `npm test -- test-data-cleanup-sql.test.ts` |
 
 ## RED/GREEN excerpts
 
@@ -70,6 +72,24 @@ Test Suites: 1 passed, 1 total
 Tests:       7 passed, 7 total
 ```
 
+### Final-review cascade RED/GREEN
+
+RED:
+
+```text
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 7 passed, 8 total
+```
+
+Root cause: dry-run counts omitted `kwp_form_status_history` and `kwp_emission_measurement_items`, although both tables cascade when a targeted KWP submission is deleted.
+
+GREEN after adding both counts:
+
+```text
+Test Suites: 1 passed, 1 total
+Tests:       8 passed, 8 total
+```
+
 ## Coverage and known gaps
 
 - Validation in this task is static and document-oriented; it checks the SQL structure and safety guards, not live database execution.
@@ -77,11 +97,11 @@ Tests:       7 passed, 7 total
 - Parameter rows have no durable seed-origin marker, so operators must keep the scope empty until they verify each station/table/date bucket and its exact candidate count.
 - File deletion from storage is intentionally out of scope for the SQL scripts; operators must review `storage_path` outputs separately.
 - Full backend attempt with placeholder environment: `96/98` suites and `847/854` tests passed; four failures came from omitting `PARAMETER_DB_SCHEMA=ingest` and three from the suite that requires a live SQL Server.
-- Rerun with `PARAMETER_DB_SCHEMA=ingest` and only `officer-notification-email-recipients.route.test.ts` excluded: `97/97` suites and `851/851` tests passed.
+- Final rerun with `PARAMETER_DB_SCHEMA=ingest` and only `officer-notification-email-recipients.route.test.ts` excluded: `97/97` suites and `852/852` tests passed.
 - `npm run build`, `npm run typecheck`, ESLint/Prettier on the new test, and `git diff --check` passed.
 - `npm audit --audit-level=high` reported pre-existing transitive advisories in `brace-expansion` (high) and `body-parser` (low); this change does not modify dependency manifests.
 
 ## Merge evidence
 
-- RED: the safety suite caught preloaded Parameter deletion scope and missing alert-level dry-run output.
-- GREEN: guarded scripts, indexed evidence, and the operational guide passed the focused suite; the Parameter scope/count guards are asserted to occur before the first executable `DELETE`.
+- RED: the safety suite caught preloaded Parameter deletion scope, missing alert-level output, and incomplete KWP cascade counts.
+- GREEN: guarded scripts, indexed evidence, and the operational guide passed the focused suite; Parameter scope/count guards occur before the first executable `DELETE`, and all known KWP cascade tables are included in dry-run counts.
