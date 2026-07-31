@@ -99,6 +99,67 @@ curl --request POST \
 
 ## Contracts
 
+### เชื่อมต่อโดยเจ้าหน้าที่โดยตรง
+
+`POST /api/v1/cems-wpms-requests/direct-connections` ใช้ request schema แยกจากฟอร์มคำขอปกติ โดย client ต้องส่งเฉพาะข้อมูลที่ใช้เลือกโรงงาน ระบบ และรหัสจุดตรวจวัด ส่วน field อื่นไม่ส่งหรือส่ง `null` ได้.
+
+Request fields ที่ต้องมีจริง:
+
+| Field | Type | Required | Rules |
+| --- | --- | --- | --- |
+| `factoryId` | string \| null | conditional | ต้องมี `factoryId` หรือ `factoryRegistrationNo` อย่างน้อยหนึ่งค่า เพื่อ resolve active `eligible_factories` และตรวจ scope |
+| `factoryRegistrationNo` | string \| null | conditional | เป็น identifier สำรอง; ส่ง `null` ได้เมื่อมี `factoryId` |
+| `systemType` | `CEMS` \| `WPMS` | yes | ห้ามเป็น `null` |
+| `measurementPoints` | array | yes | ต้องมีหนึ่งรายการเท่านั้น |
+| `measurementPoints[0].pointCode` | string | yes | trim แล้วต้องไม่ว่าง, ยาวไม่เกิน 64 ตัวอักษร และห้ามซ้ำกับ active point ใน `cems_wpms_connected_measurement_points` |
+
+Minimal request:
+
+```json
+{
+  "factoryId": "F000123",
+  "factoryRegistrationNo": null,
+  "systemType": "CEMS",
+  "measurementPoints": [
+    {
+      "pointCode": "S1125"
+    }
+  ]
+}
+```
+
+Minimal response (`201 Created`):
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 91,
+    "eligibleFactoryId": 17,
+    "requestNo": "OLDC-69-00001",
+    "requestType": "ADD_MEASUREMENT_POINT",
+    "submissionSource": "OFFICER_DIRECT_API",
+    "systemType": "CEMS",
+    "status": "CONNECTED",
+    "measurementPoints": [
+      {
+        "pointName": "S1125",
+        "pointCode": "S1125",
+        "pointType": "STACK"
+      }
+    ]
+  }
+}
+```
+
+Field อื่นของ Direct Connection เช่น `factoryName`, ข้อมูล EIA, ที่อยู่, พิกัด, ผู้ติดต่อ, `remarks`, `pointName`, `pointType`, parameters, details, เอกสาร และเครื่องมือวัด เป็น optional และรับ `null`. เมื่อไม่ส่งหรือส่ง `null`:
+
+- backend ใช้ชื่อและเลขทะเบียน canonical จาก `eligible_factories`;
+- `pointName` ใช้ค่า `pointCode`;
+- `pointType` ใช้ `STACK` สำหรับ `CEMS` และ `WASTEWATER` สำหรับ `WPMS`;
+- PK, request number, `eligibleFactoryId`, request/measurement-point FK และ audit fields เป็น server-owned;
+- ถ้า `pointCode` ซ้ำ ระบบตอบ `409 Conflict` ที่ path `measurementPoints.0.pointCode`.
+
 ### Request table location source
 
 `GET /api/v1/cems-wpms-requests/table-rows` คืน `data[].province` จาก factory snapshot ของคำขอ โดย snapshot ต้องรับจังหวัดจาก active row ใน `eligible_factories` ที่เชื่อมด้วย `eligibleFactoryId`. โรงงานที่ไม่มี row ใน `factories` ต้องยังคงจังหวัดเดิมหลังส่งคำขอ และ backend ต้องไม่ใช้การมีอยู่ของ factory master เป็นเงื่อนไขในการคืนจังหวัด.
@@ -167,15 +228,15 @@ Relevant request fields:
 
 | Field | Type | Required | Rules |
 | --- | --- | --- | --- |
-| `factoryId` | string | yes | ต้อง resolve ไปยัง `eligible_factories.source_factory_id`, `factory_registration_no_new` หรือ `factory_registration_no_old` ที่ active |
-| `factoryRegistrationNo` | string | yes | ใช้เป็น alias สำรองกับ identifier ทั้งสามแบบข้างต้น |
+| `factoryId` | string \| null | conditional | Direct Connection ต้องมี field นี้หรือ `factoryRegistrationNo` อย่างน้อยหนึ่งค่า; endpoint สร้างคำขอแบบอื่นยังต้องส่งตาม schema ของฟอร์มนั้น |
+| `factoryRegistrationNo` | string \| null | conditional | ใช้เป็น alias สำรองกับ identifier ทั้งสามแบบข้างต้น |
 
 Minimal relevant request fragment:
 
 ```json
 {
   "factoryId": "F000123",
-  "factoryRegistrationNo": "3-106-33/50สบ"
+  "factoryRegistrationNo": null
 }
 ```
 

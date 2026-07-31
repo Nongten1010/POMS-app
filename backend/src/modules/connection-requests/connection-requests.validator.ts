@@ -1356,35 +1356,129 @@ export const addMeasurementPointRequestSchema = connectionRequestFormObjectSchem
     requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT,
   }));
 
-export const directConnectionRequestSchema = connectionRequestFormObjectSchema
-  .omit({ requestType: true })
-  .superRefine((payload, ctx) => {
-    validateContactSection(payload, ctx);
-    validateEnvironmentalAssessment(payload, ctx);
+const directConnectionMeasurementPointSchema = z
+  .object({
+    pointName: optionalNullableTrimmedString(255),
+    pointCode: trimmedString(64),
+    pointType: z.enum(['STACK', 'WASTEWATER', 'OTHER']).nullable().optional(),
+    latitude: z.number().min(-90).max(90).nullable().optional(),
+    longitude: z.number().min(-180).max(180).nullable().optional(),
+    parameters: z.array(trimmedString(64)).max(50).nullable().optional(),
+    description: optionalNullableTrimmedString(1000),
+    details: measurementPointDetailsSchema.nullable().optional(),
+    documentsAndImages: z.array(requestDocumentImageSchema).max(50).nullable().optional(),
+    measurementInstruments: measurementInstrumentsSchema.nullable().optional(),
+  })
+  .strict();
 
-    if (payload.measurementPoints.length !== 1) {
+const directConnectionRequestObjectSchema = z
+  .object({
+    factoryId: optionalNullableTrimmedString(64),
+    factoryName: optionalNullableTrimmedString(500),
+    factoryRegistrationNo: optionalNullableTrimmedString(64),
+    industryMainOrder: optionalNullableTrimmedString(128),
+    industryMainOrderLabel: optionalNullableTrimmedString(500),
+    industrySubOrder: optionalNullableTrimmedString(128),
+    businessActivity: optionalNullableTrimmedString(4000),
+    eia: z.enum(CONNECTION_REQUEST_EIA_ASSESSMENTS).nullable().optional(),
+    eiaOther: optionalNullableTrimmedString(500),
+    hasEia: z.boolean().nullable().optional(),
+    projectName: optionalNullableTrimmedString(500),
+    address: optionalNullableTrimmedString(1000),
+    regionCode: optionalNullableTrimmedString(64),
+    regionName: optionalNullableTrimmedString(128),
+    provinceCode: optionalNullableTrimmedString(32),
+    provinceName: optionalNullableTrimmedString(128),
+    districtCode: optionalNullableTrimmedString(32),
+    districtName: optionalNullableTrimmedString(128),
+    subdistrictCode: optionalNullableTrimmedString(32),
+    subdistrictName: optionalNullableTrimmedString(128),
+    industrialEstateCode: optionalNullableTrimmedString(32),
+    industrialEstateName: optionalNullableTrimmedString(255),
+    latitude: z.number().min(-90).max(90).nullable().optional(),
+    longitude: z.number().min(-180).max(180).nullable().optional(),
+    systemType: z.enum(['CEMS', 'WPMS']),
+    type: z.enum(['CEMS', 'WPMS']).nullable().optional(),
+    contactName: optionalNullableTrimmedString(255),
+    contactPhone: optionalNullableTrimmedString(64),
+    contactEmail: z.string().trim().email().max(255).nullable().optional(),
+    contactPersons: z.array(contactPersonSchema).max(20).nullable().optional(),
+    notificationEmails: z.array(z.string().trim().email().max(255)).max(20).nullable().optional(),
+    officerNotificationEmails: z
+      .array(z.string().trim().email().max(255))
+      .max(20)
+      .nullable()
+      .optional(),
+    informationProviderName: optionalNullableTrimmedString(255),
+    informationProviderPosition: optionalNullableTrimmedString(255),
+    measurementPoints: z.array(directConnectionMeasurementPointSchema).length(1),
+    remarks: optionalNullableTrimmedString(1000),
+  })
+  .strict();
+
+export const directConnectionRequestSchema = directConnectionRequestObjectSchema
+  .superRefine((payload, ctx) => {
+    if (!payload.factoryId && !payload.factoryRegistrationNo) {
       ctx.addIssue({
         code: 'custom',
-        path: ['measurementPoints'],
-        message: 'Direct connection request must contain exactly one measurement point',
+        path: ['factoryId'],
+        message: 'factoryId or factoryRegistrationNo is required to resolve an eligible factory',
       });
     }
-
-    payload.measurementPoints.forEach((point, index) => {
-      if (point.pointCode) return;
+    if (payload.eia === 'อื่นๆ' && !payload.eiaOther) {
       ctx.addIssue({
         code: 'custom',
-        path: ['measurementPoints', index, 'pointCode'],
-        message: 'Measurement point code is required for an officer direct connection',
+        path: ['eiaOther'],
+        message: 'eiaOther is required when eia is อื่นๆ',
       });
-    });
-
-    validateMeasurementPointFormSections(payload, ctx);
+    }
   })
-  .transform((payload) => ({
-    ...normalizeContacts(normalizeFactorySnapshot(stripFrontendSystemTypeAlias(payload))),
-    requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT,
-  }));
+  .transform((payload) => {
+    const { type: _type, ...directPayload } = payload;
+    const factoryIdentifier = payload.factoryId ?? payload.factoryRegistrationNo ?? '';
+    const point = payload.measurementPoints[0];
+    const pointType = point.pointType ?? (payload.systemType === 'CEMS' ? 'STACK' : 'WASTEWATER');
+    const details = point.details ?? null;
+    const measurementInstruments = point.measurementInstruments ?? null;
+    const parameters = selectMeasurementPointParameters({
+      parameters: point.parameters ?? [],
+      details,
+      measurementInstruments,
+    });
+    const eia = payload.eia ?? null;
+
+    return {
+      ...directPayload,
+      requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT,
+      factoryId: payload.factoryId ?? factoryIdentifier,
+      factoryName: payload.factoryName ?? '',
+      factoryRegistrationNo: payload.factoryRegistrationNo ?? factoryIdentifier,
+      eia,
+      eiaOther: eia === 'อื่นๆ' ? (payload.eiaOther ?? null) : null,
+      hasEia: eia ? deriveHasEiaFromAssessment(eia) : (payload.hasEia ?? null),
+      contactName: payload.contactName ?? payload.contactPersons?.[0]?.name ?? '',
+      contactPhone: payload.contactPhone ?? payload.contactPersons?.[0]?.phone ?? '',
+      contactEmail: payload.contactEmail ?? payload.contactPersons?.[0]?.email ?? null,
+      contactPersons: payload.contactPersons ?? [],
+      notificationEmails: payload.notificationEmails ?? [],
+      officerNotificationEmails: payload.officerNotificationEmails ?? [],
+      measurementPoints: [
+        {
+          pointName: point.pointName ?? point.pointCode,
+          pointCode: point.pointCode,
+          pointType,
+          latitude: point.latitude ?? null,
+          longitude: point.longitude ?? null,
+          parameters,
+          description: point.description ?? null,
+          details,
+          documentsAndImages: point.documentsAndImages ?? [],
+          measurementInstruments,
+        },
+      ],
+      remarks: payload.remarks ?? null,
+    };
+  });
 
 export const addParameterRequestSchema = connectionRequestFormObjectSchema
   .omit({ requestType: true })

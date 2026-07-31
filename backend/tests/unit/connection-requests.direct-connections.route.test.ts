@@ -54,6 +54,53 @@ describe('POST /api/v1/cems-wpms-requests/direct-connections', () => {
     );
   });
 
+  it('accepts the minimal direct-connection contract with nullable optional fields', async () => {
+    const response = await request(createApp())
+      .post('/api/v1/cems-wpms-requests/direct-connections')
+      .set('Authorization', `Bearer ${officerToken()}`)
+      .send({
+        factoryId: 'factory-001',
+        factoryName: null,
+        factoryRegistrationNo: null,
+        systemType: 'CEMS',
+        contactName: null,
+        contactPhone: null,
+        contactEmail: null,
+        contactPersons: null,
+        measurementPoints: [
+          {
+            pointName: null,
+            pointCode: ' CEMS/manual-01 ',
+            pointType: null,
+            parameters: null,
+            details: null,
+            documentsAndImages: null,
+            measurementInstruments: null,
+          },
+        ],
+        remarks: null,
+      });
+
+    expect(response.status).toBe(201);
+    expect(mockedService.createDirectConnection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        factoryId: 'factory-001',
+        factoryRegistrationNo: 'factory-001',
+        systemType: 'CEMS',
+        contactName: '',
+        contactPhone: '',
+        measurementPoints: [
+          expect.objectContaining({
+            pointName: 'CEMS/manual-01',
+            pointCode: 'CEMS/manual-01',
+            pointType: 'STACK',
+          }),
+        ],
+      }),
+      expect.anything(),
+    );
+  });
+
   it('allows an admin with the dedicated direct-connection permission', async () => {
     const response = await request(createApp())
       .post('/api/v1/cems-wpms-requests/direct-connections')
