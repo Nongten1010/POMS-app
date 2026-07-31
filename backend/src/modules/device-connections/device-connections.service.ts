@@ -14,6 +14,7 @@ import {
 } from './device-connections.types';
 
 let nowProvider = () => new Date();
+const MASKED_DATABASE_PASSWORD = '********';
 
 export const deviceConnectionsService = {
   setClockForTests(provider: () => Date): void {
@@ -60,7 +61,8 @@ export const deviceConnectionsService = {
     input: CreateDeviceConnectionConfigInput,
     actorUserId: number,
   ): Promise<DeviceConnectionConfigDTO> {
-    return deviceConnectionsRepository.replaceActive(input, actorUserId);
+    const [preparedInput] = await preserveStoredDatabasePasswords([input]);
+    return deviceConnectionsRepository.replaceActive(preparedInput, actorUserId);
   },
 
   async createMany(
@@ -68,7 +70,8 @@ export const deviceConnectionsService = {
     actorUserId: number,
   ): Promise<DeviceConnectionConfigDTO[]> {
     ensureBatchDeviceKeysAreUnique(inputs);
-    return deviceConnectionsRepository.replaceManyActive(inputs, actorUserId);
+    const preparedInputs = await preserveStoredDatabasePasswords(inputs);
+    return deviceConnectionsRepository.replaceManyActive(preparedInputs, actorUserId);
   },
 
   async replaceCurrentStation(
@@ -77,7 +80,12 @@ export const deviceConnectionsService = {
     actorUserId: number,
   ): Promise<DeviceConnectionConfigDTO[]> {
     ensureBatchDeviceKeysAreUnique(inputs);
-    return deviceConnectionsRepository.replaceManyActiveForStation(stationId, inputs, actorUserId);
+    const preparedInputs = await preserveStoredDatabasePasswords(inputs);
+    return deviceConnectionsRepository.replaceManyActiveForStation(
+      stationId,
+      preparedInputs,
+      actorUserId,
+    );
   },
 
   async createForRequest(
@@ -85,8 +93,9 @@ export const deviceConnectionsService = {
     actorUserId: number,
     requestId: number,
   ): Promise<DeviceConnectionConfigDTO> {
+    const [preparedInput] = await preserveStoredDatabasePasswords([input]);
     const [saved] = await deviceConnectionsRepository.replaceManyForRequestAndActiveSettings(
-      [input],
+      [preparedInput],
       actorUserId,
       requestId,
     );
@@ -99,8 +108,9 @@ export const deviceConnectionsService = {
     requestId: number,
   ): Promise<DeviceConnectionConfigDTO[]> {
     ensureBatchDeviceKeysAreUnique(inputs);
+    const preparedInputs = await preserveStoredDatabasePasswords(inputs);
     return deviceConnectionsRepository.replaceManyForRequestAndActiveSettings(
-      inputs,
+      preparedInputs,
       actorUserId,
       requestId,
     );
@@ -121,6 +131,67 @@ export const deviceConnectionsService = {
     };
   },
 };
+
+async function preserveStoredDatabasePasswords(
+  inputs: CreateDeviceConnectionConfigInput[],
+): Promise<CreateDeviceConnectionConfigInput[]> {
+  const maskedInputs = inputs.filter(hasMaskedDatabasePassword);
+  if (maskedInputs.length === 0) return inputs;
+
+  const stationIds = [...new Set(maskedInputs.map((input) => input.stationId))];
+  const existingConfigs = (
+    await Promise.all(
+      stationIds.map((stationId) =>
+        deviceConnectionsRepository.listActiveForIntegration({ stationId }),
+      ),
+    )
+  ).flat();
+  const existingByDeviceKey = new Map(
+    existingConfigs.map((config) => [toDeviceKey(config), config]),
+  );
+
+  return inputs.map((input) => {
+    if (!hasMaskedDatabasePassword(input)) return input;
+
+    const existingConfig = existingByDeviceKey.get(toDeviceKey(input));
+    const storedPassword = existingConfig?.settings.dbPass;
+    if (
+      typeof storedPassword !== 'string' ||
+      storedPassword.length === 0 ||
+      storedPassword === MASKED_DATABASE_PASSWORD
+    ) {
+      throw new BadRequestError(
+        'Database password must be entered again because no real stored password is available',
+        {
+          stationId: input.stationId,
+          protocol: input.protocol,
+          deviceCode: input.deviceCode ?? null,
+        },
+      );
+    }
+
+    return {
+      ...input,
+      settings: {
+        ...input.settings,
+        dbPass: storedPassword,
+      },
+    };
+  });
+}
+
+function hasMaskedDatabasePassword(input: CreateDeviceConnectionConfigInput): boolean {
+  return input.settings.dbPass === MASKED_DATABASE_PASSWORD;
+}
+
+function toDeviceKey(
+  config: Pick<
+    CreateDeviceConnectionConfigInput,
+    'stationId' | 'protocol' | 'deviceCode'
+  >,
+): string {
+  return `${config.stationId}\u0000${config.protocol}\u0000${config.deviceCode ?? ''}`;
+}
 
 function ensureBatchDeviceKeysAreUnique(inputs: CreateDeviceConnectionConfigInput[]): void {
   const seen = new Set<string>();

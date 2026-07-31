@@ -2,6 +2,14 @@
 
 ไฟล์นี้บันทึกเฉพาะการเปลี่ยน API ที่ทำให้ client ต้องแก้ตาม การเปลี่ยนทั่วไปและประวัติรายละเอียดดูจาก Git history
 
+## 2026-07-31 — รักษารหัสฐานข้อมูลจริงเมื่อบันทึก Device Config จากค่า masked
+
+- **Affected menu:** [ตั้งค่าอุปกรณ์ในเมนูขอเชื่อมต่อ](./menus/connection-requests/device-configs.md)
+- **Impact:** POST Device Config จะไม่บันทึก `settings.dbPass = "********"` ทับรหัสจริงอีกต่อไป โดยรักษารหัสเดิมที่มี device key เดียวกัน หรือคืน `400 BAD_REQUEST` เมื่อไม่มีรหัสจริงให้รักษา
+- **Migration:** client ใช้ `********` เป็น placeholder สำหรับ “ไม่เปลี่ยนรหัส” ได้ แต่ต้องให้ผู้ใช้กรอกรหัสจริงใหม่เมื่อได้รับ `400 BAD_REQUEST` จากข้อมูลเดิมที่เคยถูกเขียนทับ
+- **Old contract:** backend ยอมรับ `********` เป็น password ใหม่และบันทึกลง `settings_json`
+- **New contract:** backend รักษารหัสจริงเดิมเมื่อรับ `********`; password ค่าอื่นรวมถึงค่าที่ผู้ใช้กรอกใหม่จะถูกบันทึกตาม request
+
 ## 2026-07-31 — Integration Device Config ส่ง database password จริงให้ Worker
 
 - **Affected integration:** [Integration Device Config](./integrations/device-configs/README.md)
