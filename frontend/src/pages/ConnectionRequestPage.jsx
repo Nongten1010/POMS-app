@@ -3305,7 +3305,10 @@ function ConnectionParameterTable({ deviceCodeOptions, rows, setRows }) {
 
 function StatusManagementSection({ parameterOptions, statusManagement, onChange }) {
   const allOption = 'ทั้งหมด'
-  const [selectedParameters, setSelectedParameters] = useState(statusManagement?.selectedParameters ?? [])
+  const initialSelectedParameters = Array.isArray(statusManagement?.selectedParameters)
+    ? statusManagement.selectedParameters
+    : []
+  const [selectedParameters, setSelectedParameters] = useState(initialSelectedParameters)
   const [status, setStatus] = useState(statusManagement?.status ?? '')
   const [startAt, setStartAt] = useState(statusManagement?.startAt ?? '')
   const [endAt, setEndAt] = useState(statusManagement?.endAt ?? '')
@@ -3342,13 +3345,13 @@ function StatusManagementSection({ parameterOptions, statusManagement, onChange 
               onChange={(event) => {
                 const selectedValue = event.target.value
                 const nextValue = typeof selectedValue === 'string' ? selectedValue.split(',') : selectedValue
-                const nextSelectedParameters = nextValue.includes(allOption) ? [allOption] : nextValue
+                const nextSelectedParameters = Array.isArray(nextValue) && nextValue.includes(allOption) ? [allOption] : nextValue
                 setSelectedParameters(nextSelectedParameters)
                 updateStatusManagement({ selectedParameters: nextSelectedParameters })
               }}
               renderValue={(selected) => (
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                  {selected.map((item) => (
+                  {(Array.isArray(selected) ? selected : []).map((item) => (
                     <Chip key={item} label={item} size="small" />
                   ))}
                 </Box>
