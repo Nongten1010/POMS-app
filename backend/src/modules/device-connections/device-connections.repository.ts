@@ -36,17 +36,13 @@ interface DeviceMeasurementChannelRow {
 
 export const deviceConnectionsRepository = {
   async list(query: ListDeviceConnectionConfigsQuery): Promise<DeviceConnectionConfigDTO[]> {
-    const rows = await db<DeviceConnectionConfigRow>('device_connection_configs')
-      .whereNull('deleted_at')
-      .whereNull('request_id')
-      .modify((builder) => {
-        if (query.stationId) builder.where('station_id', query.stationId);
-        if (query.protocol) builder.where('protocol', query.protocol);
-      })
-      .orderBy('updated_at', 'desc')
-      .orderBy('id', 'desc');
+    return listActiveConfigs(query, 'masked');
+  },
 
-    return Promise.all(rows.map((row: DeviceConnectionConfigRow) => hydrate(row)));
+  async listActiveForIntegration(
+    query: ListDeviceConnectionConfigsQuery,
+  ): Promise<DeviceConnectionConfigDTO[]> {
+    return listActiveConfigs(query, 'plaintext');
   },
 
   async findById(id: number): Promise<DeviceConnectionConfigDTO | null> {
@@ -190,6 +186,29 @@ export const deviceConnectionsRepository = {
     });
   },
 };
+
+type SensitiveSettingsMode = 'masked' | 'plaintext';
+
+async function listActiveConfigs(
+  query: ListDeviceConnectionConfigsQuery,
+  sensitiveSettingsMode: SensitiveSettingsMode,
+): Promise<DeviceConnectionConfigDTO[]> {
+  const rows = await db<DeviceConnectionConfigRow>('device_connection_configs')
+    .whereNull('deleted_at')
+    .whereNull('request_id')
+    .modify((builder) => {
+      if (query.stationId) builder.where('station_id', query.stationId);
+      if (query.protocol) builder.where('protocol', query.protocol);
+    })
+    .orderBy('updated_at', 'desc')
+    .orderBy('id', 'desc');
+
+  return Promise.all(
+    rows.map((row: DeviceConnectionConfigRow) =>
+      hydrate(row, undefined, sensitiveSettingsMode),
+    ),
+  );
+}
 
 async function insertConfigs(
   trx: Knex.Transaction,
@@ -347,9 +366,11 @@ async function findByIdInTransaction(
 async function hydrate(
   row: DeviceConnectionConfigRow,
   trx?: Knex.Transaction,
+  sensitiveSettingsMode: SensitiveSettingsMode = 'masked',
 ): Promise<DeviceConnectionConfigDTO> {
   const executor = trx ?? db;
   const configId = Number(row.id);
+  const settings = parseJsonObject(row.settings_json);
   const channels = await executor<DeviceMeasurementChannelRow>('device_measurement_channels')
     .where('config_id', configId)
     .whereNull('deleted_at')
@@ -361,7 +382,8 @@ async function hydrate(
     stationId: row.station_id,
     deviceCode: row.device_code ?? null,
     protocol: row.protocol,
-    settings: maskSensitiveSettings(parseJsonObject(row.settings_json)),
+    settings:
+      sensitiveSettingsMode === 'plaintext' ? settings : maskSensitiveSettings(settings),
     channels: channels.map(toChannelDTO),
     statusManagement: parseStatusManagement(row.status_management_json),
     createdBy: Number(row.created_by),

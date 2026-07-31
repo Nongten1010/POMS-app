@@ -34,7 +34,7 @@ describe('integration device configs route', () => {
           dataBits: null,
           quantity: null,
           dbUser: null,
-          dbPass: null,
+          dbPass: 'secret-pass',
           dbName: null,
           minuteTableName: null,
           fiveMinuteTableName: null,
@@ -83,12 +83,19 @@ describe('integration device configs route', () => {
       .set('X-API-Key', 'test-integration-key');
 
     expect(response.status).toBe(200);
+    expect(response.headers['cache-control']).toBe('no-store');
     expect(mockedIntegrationDeviceConfigsService.getByStationId).toHaveBeenCalledWith('S0002');
     expect(response.body).toMatchObject({
       success: true,
       data: {
         stationId: 'S0002',
-        deviceConfigs: [{ deviceCode: 'S0002/01', protocol: 'MODBUS_TCP' }],
+        deviceConfigs: [
+          {
+            deviceCode: 'S0002/01',
+            protocol: 'MODBUS_TCP',
+            dbPass: 'secret-pass',
+          },
+        ],
         parameterConfigs: [
           {
             parameter: 'NOx (ppm)',

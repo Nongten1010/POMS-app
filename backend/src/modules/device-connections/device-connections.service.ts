@@ -36,6 +36,12 @@ export const deviceConnectionsService = {
     return deviceConnectionsRepository.list(query);
   },
 
+  listActiveSettingsForIntegration(
+    query: ListDeviceConnectionConfigsQuery,
+  ): Promise<DeviceConnectionConfigDTO[]> {
+    return deviceConnectionsRepository.listActiveForIntegration(query);
+  },
+
   async getById(id: number): Promise<DeviceConnectionConfigDTO> {
     const config = await deviceConnectionsRepository.findById(id);
     if (config) return config;

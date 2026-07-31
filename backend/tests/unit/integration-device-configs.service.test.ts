@@ -8,7 +8,7 @@ jest.mock('../../src/modules/integrations/integration-device-configs.repository'
 
 jest.mock('../../src/modules/device-connections/device-connections.service', () => ({
   deviceConnectionsService: {
-    listActiveSettings: jest.fn(),
+    listActiveSettingsForIntegration: jest.fn(),
   },
 }));
 
@@ -48,7 +48,7 @@ describe('integrationDeviceConfigsService', () => {
   });
 
   it('returns separated device, parameter, and schedule config for a station', async () => {
-    mockedDeviceConnectionsService.listActiveSettings.mockResolvedValue([
+    mockedDeviceConnectionsService.listActiveSettingsForIntegration.mockResolvedValue([
       {
         id: 1,
         requestId: null,
@@ -235,7 +235,7 @@ describe('integrationDeviceConfigsService', () => {
         ],
       },
     });
-    mockedDeviceConnectionsService.listActiveSettings.mockResolvedValue([
+    mockedDeviceConnectionsService.listActiveSettingsForIntegration.mockResolvedValue([
       {
         id: 3,
         requestId: null,
@@ -246,7 +246,7 @@ describe('integrationDeviceConfigsService', () => {
           hostIp: null,
           port: null,
           dbUser: null,
-          dbPass: null,
+          dbPass: 'secret-pass',
           dbName: null,
           minuteTableName: 'measurements_1m',
           fiveMinuteTableName: 'measurements_5m',
@@ -276,6 +276,7 @@ describe('integrationDeviceConfigsService', () => {
     const result = await integrationDeviceConfigsService.getByStationId('S0002');
 
     expect(result.deviceConfigs[0]).toMatchObject({
+      dbPass: 'secret-pass',
       minuteTableName: 'measurements_1m',
       fiveMinuteTableName: 'measurements_5m',
       hourlyTableName: 'measurements_1h',
@@ -321,7 +322,7 @@ describe('integrationDeviceConfigsService', () => {
         ],
       },
     });
-    mockedDeviceConnectionsService.listActiveSettings.mockResolvedValue([
+    mockedDeviceConnectionsService.listActiveSettingsForIntegration.mockResolvedValue([
       {
         id: 4,
         requestId: null,
@@ -366,11 +367,11 @@ describe('integrationDeviceConfigsService', () => {
 
   it('throws not found when the station is not connected', async () => {
     mockedRepository.findConnectedPointByStationId.mockResolvedValue(null);
-    mockedDeviceConnectionsService.listActiveSettings.mockResolvedValue([]);
+    mockedDeviceConnectionsService.listActiveSettingsForIntegration.mockResolvedValue([]);
 
     await expect(integrationDeviceConfigsService.getByStationId('S9999')).rejects.toThrow(
       'Connected measurement point not found',
     );
-    expect(mockedDeviceConnectionsService.listActiveSettings).not.toHaveBeenCalled();
+    expect(mockedDeviceConnectionsService.listActiveSettingsForIntegration).not.toHaveBeenCalled();
   });
 });

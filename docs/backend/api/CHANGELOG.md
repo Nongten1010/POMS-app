@@ -2,6 +2,14 @@
 
 ไฟล์นี้บันทึกเฉพาะการเปลี่ยน API ที่ทำให้ client ต้องแก้ตาม การเปลี่ยนทั่วไปและประวัติรายละเอียดดูจาก Git history
 
+## 2026-07-31 — Integration Device Config ส่ง database password จริงให้ Worker
+
+- **Affected integration:** [Integration Device Config](./integrations/device-configs/README.md)
+- **Impact:** `GET /api/v1/integrations/device-configs/:stationId` เปลี่ยนความหมายของ `deviceConfigs[].dbPass` จาก masked placeholder เป็น database password จริงเมื่อมีการตั้งค่า จึงเป็นข้อมูลลับที่ห้าม cache หรือบันทึกลง log
+- **Migration:** จำกัด `DEVICE_CONFIG_API_KEYS` เฉพาะ Worker ที่จำเป็น เรียกผ่าน HTTPS ตรวจว่า client ไม่ log header/response และใช้ค่าจาก `dbPass` เป็น credential จริง; response มี `Cache-Control: no-store`
+- **Old contract:** `dbPass` เป็น `********` เมื่อมีค่า และเป็น `null` เมื่อไม่ได้ตั้ง
+- **New contract:** `dbPass` เป็น password จริงเมื่อมีค่า และเป็น `null` เมื่อไม่ได้ตั้ง โดย endpoint อื่นยังคง mask password
+
 ## 2026-07-24 — คืนรหัสจุดตรวจวัดที่ออกหลังอนุมัติเป็น S/W เริ่มที่ 2001
 
 - **Affected menu:** [ขอเชื่อมต่อ](./menus/connection-requests/README.md)
