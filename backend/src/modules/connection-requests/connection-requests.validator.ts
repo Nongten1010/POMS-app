@@ -1371,48 +1371,26 @@ const directConnectionMeasurementPointSchema = z
   })
   .strict();
 
-const directConnectionRequestObjectSchema = z
-  .object({
+const directConnectionEmailListSchema = z
+  .array(z.string().trim().email().max(255))
+  .max(20)
+  .nullable()
+  .optional();
+
+const directConnectionRequestObjectSchema = connectionRequestFormObjectSchema
+  .omit({ requestType: true })
+  .partial()
+  .extend({
     factoryId: optionalNullableTrimmedString(64),
     factoryName: optionalNullableTrimmedString(500),
-    factoryRegistrationNo: optionalNullableTrimmedString(64),
-    industryMainOrder: optionalNullableTrimmedString(128),
-    industryMainOrderLabel: optionalNullableTrimmedString(500),
-    industrySubOrder: optionalNullableTrimmedString(128),
-    businessActivity: optionalNullableTrimmedString(4000),
-    eia: z.enum(CONNECTION_REQUEST_EIA_ASSESSMENTS).nullable().optional(),
-    eiaOther: optionalNullableTrimmedString(500),
-    hasEia: z.boolean().nullable().optional(),
-    projectName: optionalNullableTrimmedString(500),
-    address: optionalNullableTrimmedString(1000),
-    regionCode: optionalNullableTrimmedString(64),
-    regionName: optionalNullableTrimmedString(128),
-    provinceCode: optionalNullableTrimmedString(32),
-    provinceName: optionalNullableTrimmedString(128),
-    districtCode: optionalNullableTrimmedString(32),
-    districtName: optionalNullableTrimmedString(128),
-    subdistrictCode: optionalNullableTrimmedString(32),
-    subdistrictName: optionalNullableTrimmedString(128),
-    industrialEstateCode: optionalNullableTrimmedString(32),
-    industrialEstateName: optionalNullableTrimmedString(255),
-    latitude: z.number().min(-90).max(90).nullable().optional(),
-    longitude: z.number().min(-180).max(180).nullable().optional(),
     systemType: z.enum(['CEMS', 'WPMS']),
     type: z.enum(['CEMS', 'WPMS']).nullable().optional(),
     contactName: optionalNullableTrimmedString(255),
     contactPhone: optionalNullableTrimmedString(64),
-    contactEmail: z.string().trim().email().max(255).nullable().optional(),
     contactPersons: z.array(contactPersonSchema).max(20).nullable().optional(),
-    notificationEmails: z.array(z.string().trim().email().max(255)).max(20).nullable().optional(),
-    officerNotificationEmails: z
-      .array(z.string().trim().email().max(255))
-      .max(20)
-      .nullable()
-      .optional(),
-    informationProviderName: optionalNullableTrimmedString(255),
-    informationProviderPosition: optionalNullableTrimmedString(255),
+    notificationEmails: directConnectionEmailListSchema,
+    officerNotificationEmails: directConnectionEmailListSchema,
     measurementPoints: z.array(directConnectionMeasurementPointSchema).length(1),
-    remarks: optionalNullableTrimmedString(1000),
   })
   .strict();
 

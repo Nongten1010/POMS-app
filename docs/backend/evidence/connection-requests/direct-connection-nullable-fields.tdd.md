@@ -16,10 +16,10 @@ Canonical contract: [`connection-requests`](../../api/menus/connection-requests/
 | --- | --- | --- | --- |
 | RED | `npm test -- --runInBand tests/unit/connection-requests.direct-connections.validator.test.ts tests/unit/connection-requests.direct-connections.route.test.ts` | FAIL: 2 suites, 2 tests; minimal nullable payload ได้ `400` และ schema parse ไม่ผ่าน | tests เรียก path ของ endpoint/schema เดิมจริงและจับ required fields ส่วนเกินได้ |
 | GREEN | command เดียวกับ RED | PASS: 2 suites, 17 tests | Direct Connection รับ optional fields เป็น `null`, normalize ค่า DB-required และยังคง validation/authorization/error contract เดิม |
-| Regression | focused Direct Connection suites บน temporary worktree จาก `origin/main` | PASS: 7 suites, 35 tests | eligibility/scope lookup, canonical factory identity, repository transaction และ duplicate point-code conflict ยังทำงาน |
+| Regression + refactor | focused Direct Connection suites บน temporary worktree จาก `origin/main` | PASS: 9 suites, 40 tests | schema ที่ลดความซ้ำซ้อนยังรักษา eligibility/scope lookup, canonical factory identity, repository transaction และ duplicate point-code conflict |
 | Type safety | `npm run typecheck` | PASS | request schema ที่ normalize แล้วเข้ากับ service/repository types |
-| Coverage | `npm run test:coverage -- --runInBand tests/unit/connection-requests.direct-connections.validator.test.ts tests/unit/connection-requests.validator.test.ts tests/unit/connection-request-form-enhancements.validator.test.ts --collectCoverageFrom=src/modules/connection-requests/connection-requests.validator.ts` | PASS: 3 suites, 92 tests; statements 88.92%, branches 86.05%, functions 97.39%, lines 91.26% | validator ที่เปลี่ยนมี coverage ทุก metric มากกว่า 80% |
-| Full suite | `npm test -- --runInBand` บน temporary `origin/main` worktree ด้วย placeholder environment | 93/97 suites และ 835/847 tests ผ่าน; 12 failures อยู่นอก Direct Connection และเกิดจากค่า `PUBLIC_BASE_URL`/parameter schema ต่างจาก test fixture รวมถึงไม่มี local SQL Server | focused Direct Connection regression และ typecheck ยังผ่านทั้งหมด |
+| Coverage | `npm run test:coverage -- --runInBand tests/unit/connection-requests.direct-connections.validator.test.ts tests/unit/connection-requests.validator.test.ts tests/unit/connection-request-form-enhancements.validator.test.ts --collectCoverageFrom=src/modules/connection-requests/connection-requests.validator.ts` | PASS: 3 suites, 92 tests; statements 89.13%, branches 86.21%, functions 97.39%, lines 91.28% | validator ที่ refactor มี coverage ทุก metric มากกว่า 80% |
+| Full suite | `npm test -- --runInBand` บน temporary `origin/main` worktree ด้วย placeholder environment | 94/98 suites และ 842/855 tests ผ่าน; 13 failures อยู่นอก Direct Connection โดย 10 tests ผ่านเมื่อ rerun ด้วย `PUBLIC_BASE_URL`/`PARAMETER_DB_SCHEMA` ตาม fixture และอีก 3 tests ต้องใช้ local SQL Server | focused Direct Connection regression และ typecheck ยังผ่านทั้งหมด |
 
 ## Test specification
 
@@ -33,8 +33,8 @@ Canonical contract: [`connection-requests`](../../api/menus/connection-requests/
 
 ## Coverage and known gaps
 
-`connection-requests.validator.ts` มี statements 88.92%, branches 86.05%, functions 97.39% และ lines 91.26%. Full suite ใน isolated worktree ไม่ clean เพราะไม่มี environment/SQL Server ของ workspace หลัก; failures ไม่อยู่ใน Direct Connection path. ไม่มี browser E2E เพราะการเปลี่ยนครั้งนี้จำกัดเฉพาะ backend API และไม่ได้รับอนุญาตให้แก้ frontend.
+`connection-requests.validator.ts` มี statements 89.13%, branches 86.21%, functions 97.39% และ lines 91.28%. Full suite ใน isolated worktree ไม่ clean เพราะ environment เริ่มต้นต่างจาก fixture และไม่มี local SQL Server; 10 config-sensitive tests ผ่านเมื่อ rerun ด้วยค่าตาม fixture ส่วน 3 notification-recipient tests ยังเชื่อมต่อ `localhost:1433` ไม่ได้. Failures ไม่อยู่ใน Direct Connection path. ไม่มี browser E2E เพราะการเปลี่ยนครั้งนี้จำกัดเฉพาะ backend API และไม่ได้รับอนุญาตให้แก้ frontend.
 
 ## Merge evidence
 
-RED/GREEN แยกยืนยันด้วยคำสั่งเดียวกัน จากนั้นย้ายเฉพาะไฟล์ใน scope ไปสร้าง commit ใหม่บนฐาน `origin/main` เพื่อไม่รวม commit และไฟล์ค้างอื่นจาก working branch.
+behavior เดิมอยู่ใน commit `71f7633`; refactor ลดความซ้ำซ้อนรอบนี้ยืนยันด้วย focused regression, typecheck, lint, format และ coverage ก่อนสร้าง commit ต่อจาก `origin/main` ล่าสุด โดยไม่รวมไฟล์ค้างอื่นจาก working branch.

@@ -224,19 +224,19 @@ Minimal response:
 
 Direct Connection resolve และตรวจ scope จาก `eligible_factories` โดยตรง โรงงานจึงยังไม่ต้องมี row ใน `factories` หรือ `cems_wpms_connected_measurement_points` มาก่อน ชื่อและเลขทะเบียน canonical ที่บันทึกมาจาก active eligible row; backend ไม่ใช้ `factoryName` จาก client เป็นแหล่งยืนยันตัวตน.
 
-Relevant request fields:
+Field requirements ของ Direct Connection อยู่ที่ [เชื่อมต่อโดยเจ้าหน้าที่โดยตรง](#เชื่อมต่อโดยเจ้าหน้าที่โดยตรง). ตารางต่อไปนี้ใช้กับ endpoint ฟอร์มคำขอปกติ:
 
 | Field | Type | Required | Rules |
 | --- | --- | --- | --- |
-| `factoryId` | string \| null | conditional | Direct Connection ต้องมี field นี้หรือ `factoryRegistrationNo` อย่างน้อยหนึ่งค่า; endpoint สร้างคำขอแบบอื่นยังต้องส่งตาม schema ของฟอร์มนั้น |
-| `factoryRegistrationNo` | string \| null | conditional | ใช้เป็น alias สำรองกับ identifier ทั้งสามแบบข้างต้น |
+| `factoryId` | string | yes | ต้อง resolve เป็น active eligible factory |
+| `factoryRegistrationNo` | string | yes | ใช้เป็น alias กับ identifier ทั้งสามแบบข้างต้น |
 
 Minimal relevant request fragment:
 
 ```json
 {
   "factoryId": "F000123",
-  "factoryRegistrationNo": null
+  "factoryRegistrationNo": "3-106-33/50สบ"
 }
 ```
 
