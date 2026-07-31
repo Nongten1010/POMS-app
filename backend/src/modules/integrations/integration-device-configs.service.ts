@@ -19,7 +19,7 @@ export const integrationDeviceConfigsService = {
     const point = await integrationDeviceConfigsRepository.findConnectedPointByStationId(stationId);
     if (!point) throw new NotFoundError('Connected measurement point not found');
 
-    const configs = await deviceConnectionsService.listActiveSettings({
+    const configs = await deviceConnectionsService.listActiveSettingsForIntegration({
       stationId: point.stationId,
     });
     const parameterMetadata = buildParameterMetadataLookup(point);

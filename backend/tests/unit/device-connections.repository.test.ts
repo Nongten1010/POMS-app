@@ -88,6 +88,48 @@ describe('deviceConnectionsRepository', () => {
       }),
     ]);
   });
+
+  it('returns the stored database password only for the integration-specific reader', async () => {
+    mockedDb.mockImplementation((tableName: unknown) => {
+      if (tableName === 'device_connection_configs') {
+        return rowsQuery([
+          {
+            id: '11',
+            request_id: null,
+            station_id: 'S0002',
+            device_code: 'S0002/DB-01',
+            protocol: 'MSSQL',
+            settings_json: JSON.stringify({
+              dbUser: 'integration_reader',
+              dbPass: 'secret-pass',
+              dbName: 'measurements',
+            }),
+            status_management_json: null,
+            created_by: '42',
+            created_at: '2026-07-31T00:00:00.000Z',
+            updated_at: '2026-07-31T00:00:00.000Z',
+          },
+        ]);
+      }
+
+      if (tableName === 'device_measurement_channels') {
+        return rowsQuery([]);
+      }
+
+      throw new Error(`Unexpected table: ${String(tableName)}`);
+    });
+
+    const [result] = await deviceConnectionsRepository.listActiveForIntegration({
+      stationId: 'S0002',
+      protocol: 'MSSQL',
+    });
+
+    expect(result.settings).toMatchObject({
+      dbUser: 'integration_reader',
+      dbPass: 'secret-pass',
+      dbName: 'measurements',
+    });
+  });
 });
 
 function rowsQuery(rows: unknown[]) {

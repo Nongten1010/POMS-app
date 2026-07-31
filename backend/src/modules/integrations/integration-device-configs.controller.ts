@@ -8,6 +8,7 @@ export const integrationDeviceConfigsController = {
     try {
       const { stationId } = integrationDeviceConfigParamsSchema.parse(req.params);
       const data = await integrationDeviceConfigsService.getByStationId(stationId);
+      res.set('Cache-Control', 'no-store');
       res.status(StatusCodes.OK).json({ success: true, data });
     } catch (err) {
       next(err);

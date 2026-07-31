@@ -5,3 +5,7 @@
 ## Documentation
 
 - [Documentation templates](./documentation/README.md)
+
+## Integrations
+
+- [คู่มือการเชื่อมโยง Integration Device Config API (PDF)](./integrations/integration-device-config-api-user-guide.pdf)

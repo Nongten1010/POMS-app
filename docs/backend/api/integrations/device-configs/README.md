@@ -14,6 +14,8 @@ curl --request GET \
 
 ใช้ key จาก `DEVICE_CONFIG_API_KEYS` สำหรับ endpoint นี้ หาก deployment เดิมยังไม่ได้กำหนด scoped key ระบบ fallback ไปอ่าน `INTEGRATION_API_KEYS` ชั่วคราว ห้ามเก็บ key จริงใน source code หรือเอกสาร
 
+> คำเตือน: endpoint นี้อาจคืน `dbPass` จริงสำหรับ Worker ที่ต้องเชื่อมฐานข้อมูล จึงต้องเรียกผ่าน HTTPS, จำกัด key เฉพาะระบบที่จำเป็น และห้ามบันทึก header หรือ response body ลง log
+
 ## `GET /api/v1/integrations/device-configs/:stationId`
 
 คืน config แยกเป็น `deviceConfigs`, `parameterConfigs` และ `statusSchedules` โดยตอบ `200 OK`
@@ -70,7 +72,7 @@ X-API-Key: <DEVICE_CONFIG_API_KEY>
 | `dataBits` | number | Yes | data bits สำหรับ `MODBUS_RTU` |
 | `quantity` | number | Yes | quantity สำหรับ `MODBUS_RTU` |
 | `dbUser` | string | Yes | database username สำหรับ `MSSQL`/`MYSQL` |
-| `dbPass` | string | Yes | database password ที่ถูก mask เป็น `********`; เป็น `null` เมื่อไม่ได้ตั้ง |
+| `dbPass` | string | Yes | database password จริงสำหรับ Worker; เป็น `null` เมื่อไม่ได้ตั้ง ถือเป็นข้อมูลลับและห้าม log |
 | `dbName` | string | Yes | ชื่อฐานข้อมูล |
 | `minuteTableName` | string | Yes | ชื่อ Table ข้อมูลแบบรายนาที |
 | `fiveMinuteTableName` | string | Yes | ชื่อ Table ข้อมูลแบบราย 5 นาที |
@@ -132,7 +134,7 @@ X-API-Key: <DEVICE_CONFIG_API_KEY>
         "dataBits": null,
         "quantity": null,
         "dbUser": null,
-        "dbPass": null,
+        "dbPass": "<DATABASE_PASSWORD>",
         "dbName": null,
         "minuteTableName": "measurements_1m",
         "fiveMinuteTableName": "measurements_5m",
@@ -177,6 +179,8 @@ X-API-Key: <DEVICE_CONFIG_API_KEY>
 - API คืนเฉพาะจุดที่มี active row ใน `cems_wpms_connected_measurement_points`; ไม่พบจุดให้ตอบ `404`
 - `deviceConfigs` อ่านเฉพาะ active config ของ canonical station ID
 - settings ที่ไม่มีค่าแปลงเป็น `null`; `minuteTableName`, `fiveMinuteTableName` และ `hourlyTableName` มีค่ากับ `MSSQL`/`MYSQL` เมื่อบันทึกไว้
+- `dbPass` คืนค่าจริงเฉพาะ endpoint integration นี้; device-config endpoint สำหรับ UI และระบบภายในอื่นยังคง mask เป็น `********`
+- success response กำหนด `Cache-Control: no-store`; client ต้องไม่ cache response และห้ามบันทึก `X-API-Key` หรือ response body ลง log
 - `parameterConfigs.addressId`, `offset`, `valueRange.min` และ `valueRange.max` รักษา `null` ตาม storage contract
 - `parameterName` และ `parameterUnit` แยกจากวงเล็บท้าย `parameter`; client ควรใช้ `parameter` เป็น display label ที่มีชื่อพร้อมหน่วย
 - `standardCriteria`, `eiaCriteria`, `standardCondition`, `dryBasis` และ `oxygenOrExcessAir` จับคู่กับเครื่องมือของ connected point ด้วยชื่อพารามิเตอร์พร้อมหน่วยก่อน หากต้อง fallback แบบไม่รวมหน่วยจะใช้เฉพาะกรณีที่ตรงเพียงรายการเดียว
