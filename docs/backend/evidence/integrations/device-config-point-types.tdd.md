@@ -32,7 +32,7 @@ Result:
 - `3` suites failed ก่อนเริ่ม production change
 - compile-time RED ระบุว่า `IntegrationConnectedPointDTO` ยังไม่มี `systemType`, `pointType`, `monitoringPointKind`
 - compile-time RED ระบุว่า `IntegrationDeviceConfigsResponseDTO` ยังไม่มี `measurementPointType`
-- RED checkpoint: `b4b1019 test: define device config point type contract`
+- RED checkpoint: `56ac713 test: define device config point type contract`
 
 ## GREEN
 
@@ -43,8 +43,8 @@ Test Suites: 3 passed, 3 total
 Tests:       25 passed, 25 total
 ```
 
-- GREEN checkpoint: `169b08d feat: expose device config point types`
-- Refactor checkpoint: `6c03369 refactor: format device config point type tests`
+- GREEN checkpoint: `bca0d9c feat: expose device config point types`
+- Refactor checkpoint: `bf2cf3a refactor: format device config point type tests`
 - หลังจัดรูปแบบ test files รัน target เดิมซ้ำและยังผ่าน `25/25`
 
 ## Task Report
@@ -95,7 +95,7 @@ Tests:       25 passed, 25 total
 
 ## Merge Evidence
 
-- RED: `b4b1019 test: define device config point type contract`
-- GREEN: `169b08d feat: expose device config point types`
-- Refactor: `6c03369 refactor: format device config point type tests`
+- RED: `56ac713 test: define device config point type contract`
+- GREEN: `bca0d9c feat: expose device config point types`
+- Refactor: `bf2cf3a refactor: format device config point type tests`
 - หาก delivery ภายหลัง squash commits ให้คง RED/GREEN summary นี้ไว้ใน PR หรือ squash commit body
