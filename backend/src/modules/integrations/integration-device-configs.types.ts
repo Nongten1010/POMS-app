@@ -2,10 +2,20 @@ import type {
   DeviceConnectionConfigDTO,
   DeviceConnectionProtocol,
 } from '../device-connections/device-connections.types';
-import type { MeasurementInstrumentsInput } from '../connection-requests/connection-requests.types';
+import type {
+  ConnectionSystemType,
+  MeasurementInstrumentsInput,
+  MeasurementPointType,
+} from '../connection-requests/connection-requests.types';
+
+export type IntegrationMonitoringPointKind = 'CEMS' | 'WPMS' | 'MOBILE' | 'STATION';
+export type IntegrationMeasurementPointType = IntegrationMonitoringPointKind | 'UNKNOWN';
 
 export interface IntegrationConnectedPointDTO {
   stationId: string;
+  systemType: ConnectionSystemType;
+  pointType: MeasurementPointType;
+  monitoringPointKind: unknown;
   measurementInstruments: MeasurementInstrumentsInput | null;
 }
 
@@ -60,6 +70,10 @@ export interface IntegrationStatusScheduleDTO {
 
 export interface IntegrationDeviceConfigsResponseDTO {
   stationId: string;
+  measurementPointType: IntegrationMeasurementPointType;
+  systemType: ConnectionSystemType;
+  pointType: MeasurementPointType;
+  monitoringPointKind: IntegrationMonitoringPointKind | null;
   deviceConfigs: IntegrationDeviceConfigDTO[];
   parameterConfigs: IntegrationParameterConfigDTO[];
   statusSchedules: IntegrationStatusScheduleDTO[];

@@ -419,7 +419,7 @@ describe('integrationDeviceConfigsService', () => {
         monitoringPointKind: 'STATION',
       },
     },
-  ])('returns normalized measurement-point metadata for a $label', async ({ source, expected }) => {
+  ] as const)('returns normalized measurement-point metadata for a $label', async ({ source, expected }) => {
     const connectedPoint = {
       stationId: 'S0002',
       ...source,

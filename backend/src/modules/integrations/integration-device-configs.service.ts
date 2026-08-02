@@ -10,6 +10,8 @@ import type {
   IntegrationConnectedPointDTO,
   IntegrationDeviceConfigDTO,
   IntegrationDeviceConfigsResponseDTO,
+  IntegrationMeasurementPointType,
+  IntegrationMonitoringPointKind,
   IntegrationParameterConfigDTO,
   IntegrationStatusScheduleDTO,
 } from './integration-device-configs.types';
@@ -23,9 +25,11 @@ export const integrationDeviceConfigsService = {
       stationId: point.stationId,
     });
     const parameterMetadata = buildParameterMetadataLookup(point);
+    const measurementPointMetadata = toMeasurementPointMetadata(point);
 
     return {
       stationId: point.stationId,
+      ...measurementPointMetadata,
       deviceConfigs: configs.map((config, index) => toDeviceConfig(config, point.stationId, index)),
       parameterConfigs: configs.flatMap((config, configIndex) =>
         config.channels.map((channel) =>
@@ -40,6 +44,78 @@ export const integrationDeviceConfigsService = {
     };
   },
 };
+
+interface IntegrationMeasurementPointMetadata {
+  measurementPointType: IntegrationMeasurementPointType;
+  systemType: IntegrationConnectedPointDTO['systemType'];
+  pointType: IntegrationConnectedPointDTO['pointType'];
+  monitoringPointKind: IntegrationMonitoringPointKind | null;
+}
+
+function toMeasurementPointMetadata(
+  point: IntegrationConnectedPointDTO,
+): IntegrationMeasurementPointMetadata {
+  const normalizedKind = normalizeMonitoringPointKind(point.monitoringPointKind);
+  const hasUnknownKind =
+    typeof point.monitoringPointKind === 'string' &&
+    point.monitoringPointKind.trim().length > 0 &&
+    normalizedKind === null;
+
+  return {
+    measurementPointType: hasUnknownKind
+      ? 'UNKNOWN'
+      : deriveMeasurementPointType(point.systemType, point.pointType, normalizedKind),
+    systemType: point.systemType,
+    pointType: point.pointType,
+    monitoringPointKind: normalizedKind,
+  };
+}
+
+function normalizeMonitoringPointKind(value: unknown): IntegrationMonitoringPointKind | null {
+  if (typeof value !== 'string') return null;
+
+  const normalized = value.trim().toUpperCase();
+  if (
+    normalized === 'CEMS' ||
+    normalized === 'WPMS' ||
+    normalized === 'MOBILE' ||
+    normalized === 'STATION'
+  ) {
+    return normalized;
+  }
+  return null;
+}
+
+function deriveMeasurementPointType(
+  systemType: IntegrationConnectedPointDTO['systemType'],
+  pointType: IntegrationConnectedPointDTO['pointType'],
+  monitoringPointKind: IntegrationMonitoringPointKind | null,
+): IntegrationMeasurementPointType {
+  if (
+    pointType === 'OTHER' &&
+    (monitoringPointKind === 'MOBILE' || monitoringPointKind === 'STATION')
+  ) {
+    return monitoringPointKind;
+  }
+
+  if (
+    systemType === 'CEMS' &&
+    pointType === 'STACK' &&
+    (monitoringPointKind === null || monitoringPointKind === 'CEMS')
+  ) {
+    return 'CEMS';
+  }
+
+  if (
+    systemType === 'WPMS' &&
+    pointType === 'WASTEWATER' &&
+    (monitoringPointKind === null || monitoringPointKind === 'WPMS')
+  ) {
+    return 'WPMS';
+  }
+
+  return 'UNKNOWN';
+}
 
 interface ParameterMetadata {
   standardCriteria: number | string | null;
