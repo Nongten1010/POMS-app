@@ -65,7 +65,8 @@ describe('integrationDeviceConfigsRepository', () => {
 });
 
 function connectedPointQuery(row: Record<string, unknown>) {
-  const first = jest.fn<(...columns: string[]) => Promise<Record<string, unknown>>>()
+  const first = jest
+    .fn<(...columns: string[]) => Promise<Record<string, unknown>>>()
     .mockResolvedValue(row);
   const nestedWhere = {
     where: jest.fn().mockReturnThis(),
