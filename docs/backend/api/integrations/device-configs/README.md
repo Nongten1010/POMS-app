@@ -50,11 +50,56 @@ X-API-Key: <DEVICE_CONFIG_API_KEY>
 | --- | --- | --- | --- |
 | `success` | boolean | No | `true` เมื่อสำเร็จ |
 | `data.stationId` | string | No | canonical station ID; ใช้ `pointCode` ก่อนและ fallback เป็น `pointName` |
+| `data.measurementPointType` | `CEMS` \| `WPMS` \| `MOBILE` \| `STATION` \| `UNKNOWN` | No | ประเภทสรุปสำหรับ client; ใช้ field นี้เมื่อต้องเลือก flow ตามประเภทจุดตรวจวัด |
+| `data.systemType` | `CEMS` \| `WPMS` | No | ระบบหลักของจุดตรวจวัดจาก connected-point snapshot |
+| `data.pointType` | `STACK` \| `WASTEWATER` \| `OTHER` | No | ประเภททางกายภาพของจุดตรวจวัด |
+| `data.monitoringPointKind` | `CEMS` \| `WPMS` \| `MOBILE` \| `STATION` | Yes | ประเภทจุดที่ normalize เป็นตัวพิมพ์ใหญ่; เป็น `null` เมื่อข้อมูลต้นทางไม่มีหรือไม่อยู่ใน enum |
 | `data.deviceConfigs` | object[] | No | หนึ่งรายการต่อ active device config |
 | `data.parameterConfigs` | object[] | No | หนึ่งรายการต่อ channel/parameter |
 | `data.statusSchedules` | object[] | No | หนึ่งรายการต่อ parameter และช่วงสถานะ |
 
 หากพบ connected point แต่ยังไม่มี active device config ระบบตอบ arrays ว่างและยังเป็น `200 OK`
+
+#### การแยกประเภทจุดตรวจวัด
+
+| Source metadata | `measurementPointType` | หมายเหตุ |
+| --- | --- | --- |
+| `systemType=CEMS`, `pointType=STACK`, kind เป็น `CEMS` หรือไม่มีค่า | `CEMS` | รองรับข้อมูลเดิมที่ยังไม่มี `monitoringPointKind` |
+| `systemType=WPMS`, `pointType=WASTEWATER`, kind เป็น `WPMS` หรือไม่มีค่า | `WPMS` | รองรับข้อมูลเดิมที่ยังไม่มี `monitoringPointKind` |
+| `pointType=OTHER`, `monitoringPointKind=MOBILE` | `MOBILE` | `systemType` ยังคงเป็น `CEMS` หรือ `WPMS` ตามระบบหลัก |
+| `pointType=OTHER`, `monitoringPointKind=STATION` | `STATION` | แยกจาก Mobile ด้วย `monitoringPointKind` |
+| ข้อมูลไม่ครบ ขัดแย้ง หรือ kind ไม่อยู่ใน enum | `UNKNOWN` | ระบบไม่เดาประเภทจาก `OTHER` เพียงอย่างเดียว |
+
+ตัวอย่าง metadata ทั้งสี่ประเภท:
+
+```json
+[
+  {
+    "measurementPointType": "CEMS",
+    "systemType": "CEMS",
+    "pointType": "STACK",
+    "monitoringPointKind": "CEMS"
+  },
+  {
+    "measurementPointType": "WPMS",
+    "systemType": "WPMS",
+    "pointType": "WASTEWATER",
+    "monitoringPointKind": "WPMS"
+  },
+  {
+    "measurementPointType": "MOBILE",
+    "systemType": "CEMS",
+    "pointType": "OTHER",
+    "monitoringPointKind": "MOBILE"
+  },
+  {
+    "measurementPointType": "STATION",
+    "systemType": "WPMS",
+    "pointType": "OTHER",
+    "monitoringPointKind": "STATION"
+  }
+]
+```
 
 #### `deviceConfigs[]`
 
@@ -120,6 +165,10 @@ X-API-Key: <DEVICE_CONFIG_API_KEY>
   "success": true,
   "data": {
     "stationId": "S0002",
+    "measurementPointType": "CEMS",
+    "systemType": "CEMS",
+    "pointType": "STACK",
+    "monitoringPointKind": "CEMS",
     "deviceConfigs": [
       {
         "deviceCode": "S0002/DB-01",
@@ -178,6 +227,11 @@ X-API-Key: <DEVICE_CONFIG_API_KEY>
 - เมื่อ annual code อยู่ใน path client ต้อง encode `/` เป็น `%2F`; backend รองรับกรณี reverse proxy decode slash ก่อนส่งต่อด้วย
 - API คืนเฉพาะจุดที่มี active row ใน `cems_wpms_connected_measurement_points`; ไม่พบจุดให้ตอบ `404`
 - `deviceConfigs` อ่านเฉพาะ active config ของ canonical station ID
+- `systemType`, `pointType` และ `monitoringPointKind` อ่านจาก connected-point snapshot และไม่ถูกเก็บซ้ำใน device config แต่ละรายการ
+- `monitoringPointKind` normalize แบบไม่สนตัวพิมพ์ใหญ่-เล็กและช่องว่างหัวท้าย โดยคืนเฉพาะ `CEMS`, `WPMS`, `MOBILE`, `STATION` หรือ `null`
+- `measurementPointType` เป็น field สรุป; ระบบคืน `UNKNOWN` เมื่อข้อมูลขัดแย้งหรือไม่พอสำหรับจำแนกอย่างปลอดภัย
+- `Mobile` และ `Station` ต้องใช้ `pointType=OTHER` ร่วมกับ `monitoringPointKind`; ระบบไม่แยกสองประเภทนี้จาก `systemType` เพียงอย่างเดียว
+- การเพิ่ม response fields รอบนี้ไม่เปลี่ยน connection-request write validator; API จะคืน `MOBILE`/`STATION` เมื่อ connected-point snapshot มี kind ดังกล่าวอยู่แล้วเท่านั้น
 - settings ที่ไม่มีค่าแปลงเป็น `null`; `minuteTableName`, `fiveMinuteTableName` และ `hourlyTableName` มีค่ากับ `MSSQL`/`MYSQL` เมื่อบันทึกไว้
 - `dbPass` คืนค่าจริงเฉพาะ endpoint integration นี้; device-config endpoint สำหรับ UI และระบบภายในอื่นยังคง mask เป็น `********`
 - success response กำหนด `Cache-Control: no-store`; client ต้องไม่ cache response และห้ามบันทึก `X-API-Key` หรือ response body ลง log
@@ -207,4 +261,4 @@ X-API-Key: <DEVICE_CONFIG_API_KEY>
 - Service and repository: [`integration-device-configs.service.ts`](../../../../../backend/src/modules/integrations/integration-device-configs.service.ts), [`integration-device-configs.repository.ts`](../../../../../backend/src/modules/integrations/integration-device-configs.repository.ts)
 - Device config storage: [`device-connections.repository.ts`](../../../../../backend/src/modules/device-connections/device-connections.repository.ts), [`0083_relax_device_config_form_constraints.ts`](../../../../../backend/src/db/migrations/0083_relax_device_config_form_constraints.ts)
 - Tests: [`integration-device-configs.route.test.ts`](../../../../../backend/tests/unit/integration-device-configs.route.test.ts), [`integration-device-configs.service.test.ts`](../../../../../backend/tests/unit/integration-device-configs.service.test.ts)
-- Evidence: [การรายงานค่าต่อพารามิเตอร์](../../../evidence/integrations/device-config-parameter-reporting.tdd.md)
+- Evidence: [การรายงานค่าต่อพารามิเตอร์](../../../evidence/integrations/device-config-parameter-reporting.tdd.md), [ประเภทจุดตรวจวัด](../../../evidence/integrations/device-config-point-types.tdd.md)
