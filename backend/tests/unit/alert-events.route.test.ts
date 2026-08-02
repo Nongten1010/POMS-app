@@ -201,7 +201,7 @@ describe('alert events routes', () => {
     expect(mockedAlertEventsService.createBatchFromIntegration).not.toHaveBeenCalled();
   });
 
-  it('rejects invalid event time ranges', async () => {
+  it('rejects alert event times that are not aligned to the start of an hour', async () => {
     const app = createApp();
     const response = await request(app)
       .post('/api/v1/integrations/alert-events')
@@ -209,7 +209,24 @@ describe('alert events routes', () => {
       .send({
         events: [{
           ...integrationPayload(),
-          startTime: '21:00',
+          time: '20:30',
+        }],
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    expect(mockedAlertEventsService.createBatchFromIntegration).not.toHaveBeenCalled();
+  });
+
+  it('rejects legacy startTime and endTime fields', async () => {
+    const app = createApp();
+    const response = await request(app)
+      .post('/api/v1/integrations/alert-events')
+      .set('X-API-Key', 'test-integration-key')
+      .send({
+        events: [{
+          ...integrationPayload(),
+          startTime: '20:00',
           endTime: '20:59',
         }],
       });
@@ -374,8 +391,7 @@ describe('alert events routes', () => {
           {
             ...integrationPayload(),
             stationId: 'S0002',
-            startTime: '21:00',
-            endTime: '20:59',
+            time: '21:15',
           },
         ],
       });
@@ -432,8 +448,7 @@ function integrationPayload() {
     parameterCode: 'so2',
     unit: 'ppm',
     eventDate: '2026-03-02',
-    startTime: '20:00',
-    endTime: '20:59',
+    time: '20:00',
     measuredValue: 150,
     thresholdValue: 60,
     thresholdType: 'STANDARD',
