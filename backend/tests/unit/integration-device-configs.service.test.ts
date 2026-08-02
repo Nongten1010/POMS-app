@@ -24,6 +24,9 @@ describe('integrationDeviceConfigsService', () => {
     jest.clearAllMocks();
     mockedRepository.findConnectedPointByStationId.mockResolvedValue({
       stationId: 'S0002',
+      systemType: 'CEMS',
+      pointType: 'STACK',
+      monitoringPointKind: 'CEMS',
       measurementInstruments: {
         parameters: [
           {
@@ -123,6 +126,10 @@ describe('integrationDeviceConfigsService', () => {
 
     expect(result).toEqual({
       stationId: 'S0002',
+      measurementPointType: 'CEMS',
+      systemType: 'CEMS',
+      pointType: 'STACK',
+      monitoringPointKind: 'CEMS',
       deviceConfigs: [
         {
           deviceCode: 'S0002/01',
@@ -227,6 +234,9 @@ describe('integrationDeviceConfigsService', () => {
   it('returns database table names and preserves nullable channel config values', async () => {
     mockedRepository.findConnectedPointByStationId.mockResolvedValue({
       stationId: 'S0002',
+      systemType: 'CEMS',
+      pointType: 'STACK',
+      monitoringPointKind: 'CEMS',
       measurementInstruments: {
         parameters: [
           {
@@ -299,6 +309,9 @@ describe('integrationDeviceConfigsService', () => {
   it('uses reporting settings from a unique unitless match and avoids ambiguous matches', async () => {
     mockedRepository.findConnectedPointByStationId.mockResolvedValue({
       stationId: 'S0002',
+      systemType: 'CEMS',
+      pointType: 'STACK',
+      monitoringPointKind: 'CEMS',
       measurementInstruments: {
         parameters: [
           {
@@ -364,6 +377,117 @@ describe('integrationDeviceConfigsService', () => {
       oxygenOrExcessAir: null,
     });
   });
+
+  it.each([
+    {
+      label: 'CEMS point',
+      source: { systemType: 'CEMS', pointType: 'STACK', monitoringPointKind: 'CEMS' },
+      expected: {
+        measurementPointType: 'CEMS',
+        systemType: 'CEMS',
+        pointType: 'STACK',
+        monitoringPointKind: 'CEMS',
+      },
+    },
+    {
+      label: 'WPMS point',
+      source: { systemType: 'WPMS', pointType: 'WASTEWATER', monitoringPointKind: 'WPMS' },
+      expected: {
+        measurementPointType: 'WPMS',
+        systemType: 'WPMS',
+        pointType: 'WASTEWATER',
+        monitoringPointKind: 'WPMS',
+      },
+    },
+    {
+      label: 'mobile point',
+      source: { systemType: 'CEMS', pointType: 'OTHER', monitoringPointKind: ' Mobile ' },
+      expected: {
+        measurementPointType: 'MOBILE',
+        systemType: 'CEMS',
+        pointType: 'OTHER',
+        monitoringPointKind: 'MOBILE',
+      },
+    },
+    {
+      label: 'station point',
+      source: { systemType: 'WPMS', pointType: 'OTHER', monitoringPointKind: 'station' },
+      expected: {
+        measurementPointType: 'STATION',
+        systemType: 'WPMS',
+        pointType: 'OTHER',
+        monitoringPointKind: 'STATION',
+      },
+    },
+  ])('returns normalized measurement-point metadata for a $label', async ({ source, expected }) => {
+    const connectedPoint = {
+      stationId: 'S0002',
+      ...source,
+      measurementInstruments: null,
+    };
+    mockedRepository.findConnectedPointByStationId.mockResolvedValue(connectedPoint);
+    mockedDeviceConnectionsService.listActiveSettingsForIntegration.mockResolvedValue([]);
+
+    const result = await integrationDeviceConfigsService.getByStationId('S0002');
+
+    expect(result).toMatchObject(expected);
+  });
+
+  it.each([
+    ['CEMS', 'STACK', 'CEMS'],
+    ['WPMS', 'WASTEWATER', 'WPMS'],
+  ] as const)(
+    'falls back to %s for a legacy point without monitoringPointKind',
+    async (systemType, pointType, expectedType) => {
+      const connectedPoint = {
+        stationId: 'S0002',
+        systemType,
+        pointType,
+        monitoringPointKind: null,
+        measurementInstruments: null,
+      };
+      mockedRepository.findConnectedPointByStationId.mockResolvedValue(connectedPoint);
+      mockedDeviceConnectionsService.listActiveSettingsForIntegration.mockResolvedValue([]);
+
+      const result = await integrationDeviceConfigsService.getByStationId('S0002');
+
+      expect(result).toMatchObject({
+        measurementPointType: expectedType,
+        systemType,
+        pointType,
+        monitoringPointKind: null,
+      });
+    },
+  );
+
+  it.each([
+    ['CEMS', 'OTHER', null],
+    ['CEMS', 'STACK', 'STATION'],
+    ['WPMS', 'OTHER', 'unexpected-kind'],
+  ] as const)(
+    'returns UNKNOWN instead of guessing for ambiguous metadata %s/%s/%s',
+    async (systemType, pointType, monitoringPointKind) => {
+      const connectedPoint = {
+        stationId: 'S0002',
+        systemType,
+        pointType,
+        monitoringPointKind,
+        measurementInstruments: null,
+      };
+      mockedRepository.findConnectedPointByStationId.mockResolvedValue(connectedPoint);
+      mockedDeviceConnectionsService.listActiveSettingsForIntegration.mockResolvedValue([]);
+
+      const result = await integrationDeviceConfigsService.getByStationId('S0002');
+
+      expect(result).toMatchObject({
+        measurementPointType: 'UNKNOWN',
+        systemType,
+        pointType,
+        monitoringPointKind:
+          monitoringPointKind === 'STATION' ? 'STATION' : null,
+      });
+    },
+  );
 
   it('throws not found when the station is not connected', async () => {
     mockedRepository.findConnectedPointByStationId.mockResolvedValue(null);

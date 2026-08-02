@@ -20,6 +20,10 @@ describe('integration device configs route', () => {
     process.env.ALERT_EVENT_API_KEYS = '';
     mockedIntegrationDeviceConfigsService.getByStationId.mockResolvedValue({
       stationId: 'S0002',
+      measurementPointType: 'MOBILE',
+      systemType: 'CEMS',
+      pointType: 'OTHER',
+      monitoringPointKind: 'MOBILE',
       deviceConfigs: [
         {
           deviceCode: 'S0002/01',
@@ -89,6 +93,10 @@ describe('integration device configs route', () => {
       success: true,
       data: {
         stationId: 'S0002',
+        measurementPointType: 'MOBILE',
+        systemType: 'CEMS',
+        pointType: 'OTHER',
+        monitoringPointKind: 'MOBILE',
         deviceConfigs: [
           {
             deviceCode: 'S0002/01',
