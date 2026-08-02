@@ -2,6 +2,14 @@
 
 ไฟล์นี้บันทึกเฉพาะการเปลี่ยน API ที่ทำให้ client ต้องแก้ตาม การเปลี่ยนทั่วไปและประวัติรายละเอียดดูจาก Git history
 
+## 2026-08-02 — Integration Alert Events รับเวลาเริ่มชั่วโมงเพียงค่าเดียว
+
+- **Affected integration:** [Integration Alert Events](./integrations/alert-events/README.md)
+- **Impact:** `POST /api/v1/integrations/alert-events` ไม่รับ `events[].startTime` และ `events[].endTime`; strict validation จะตอบ `400 VALIDATION_ERROR` หาก client ยังส่ง field เดิม
+- **Migration:** เปลี่ยนเป็นส่ง `events[].time` รูปแบบ `HH:00` โดยใช้เวลาเริ่มของชั่วโมงที่พบค่าเกิน เช่น `20:00`; backend จะสร้างช่วง `20:00:00` ถึง `20:59:59` ใน timezone `+07:00` ให้เอง
+- **Old contract:** แต่ละ event ต้องส่ง `eventDate`, `startTime` รูปแบบ `HH:mm` และ `endTime` รูปแบบ `HH:mm`
+- **New contract:** แต่ละ event ต้องส่ง `eventDate` และ `time` รูปแบบต้นชั่วโมง `HH:00`; response ยังคงมี `startedAt`, `endedAt` และ `timeRange`
+
 ## 2026-07-31 — Integration Device Config ส่ง database password จริงให้ Worker
 
 - **Affected integration:** [Integration Device Config](./integrations/device-configs/README.md)
