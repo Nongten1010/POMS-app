@@ -44,6 +44,7 @@ Tests:       25 passed, 25 total
 ```
 
 - GREEN checkpoint: `169b08d feat: expose device config point types`
+- Refactor checkpoint: `6c03369 refactor: format device config point type tests`
 - หลังจัดรูปแบบ test files รัน target เดิมซ้ำและยังผ่าน `25/25`
 
 ## Task Report
@@ -96,4 +97,5 @@ Tests:       25 passed, 25 total
 
 - RED: `b4b1019 test: define device config point type contract`
 - GREEN: `169b08d feat: expose device config point types`
+- Refactor: `6c03369 refactor: format device config point type tests`
 - หาก delivery ภายหลัง squash commits ให้คง RED/GREEN summary นี้ไว้ใน PR หรือ squash commit body
