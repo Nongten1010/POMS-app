@@ -1366,7 +1366,10 @@ const directConnectionMeasurementPointSchema = z
     parameters: z.array(trimmedString(64)).max(50).nullable().optional(),
     description: optionalNullableTrimmedString(1000),
     details: measurementPointDetailsSchema.nullable().optional(),
-    documentsAndImages: z.array(requestDocumentImageSchema).max(50).nullable().optional(),
+    documentsAndImages: z.preprocess(
+      normalizeDocumentImages,
+      z.array(requestDocumentImageSchema).max(50).nullable().optional(),
+    ),
     measurementInstruments: measurementInstrumentsSchema.nullable().optional(),
   })
   .strict();
