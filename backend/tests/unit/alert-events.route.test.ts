@@ -82,7 +82,7 @@ describe('alert events routes', () => {
     });
   });
 
-  it('accepts annual monitoring point codes from the integration', async () => {
+  it('accepts an EIA alert for an annual monitoring point without pointCode', async () => {
     mockedAlertEventsService.createBatchFromIntegration.mockResolvedValue({
       total: 1,
       created: 1,
@@ -96,7 +96,7 @@ describe('alert events routes', () => {
           duplicate: false,
           event: alertEventFixture({
             stationId: 'WEMS-0003/2571',
-            pointCode: 'WEMS-0003/2571',
+            pointCode: null,
           }),
         },
       ],
@@ -112,7 +112,8 @@ describe('alert events routes', () => {
             ...integrationPayload(),
             systemType: 'WPMS',
             stationId: 'WEMS-0003/2571',
-            pointCode: 'WEMS-0003/2571',
+            pointCode: null,
+            thresholdType: 'EIA',
           },
         ],
       });
@@ -121,7 +122,9 @@ describe('alert events routes', () => {
     expect(mockedAlertEventsService.createBatchFromIntegration).toHaveBeenCalledWith([
       expect.objectContaining({
         stationId: 'WEMS-0003/2571',
-        pointCode: 'WEMS-0003/2571',
+        pointCode: null,
+        pointName: 'WEMS-0003/2571',
+        alertType: 'EIA_EXCEEDED',
       }),
     ]);
   });
@@ -436,6 +439,17 @@ describe('alert events routes', () => {
     const response = await request(app).get('/api/v1/alert-events?systemType=CEMS');
 
     expect(response.status).toBe(401);
+    expect(mockedAlertEventsService.list).not.toHaveBeenCalled();
+  });
+
+  it('rejects an inverted alert event list date range', async () => {
+    const app = createApp();
+    const response = await request(app)
+      .get('/api/v1/alert-events?dateFrom=2026-03-03&dateTo=2026-03-02')
+      .set('Authorization', `Bearer ${accessToken()}`);
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
     expect(mockedAlertEventsService.list).not.toHaveBeenCalled();
   });
 });
