@@ -419,19 +419,22 @@ describe('integrationDeviceConfigsService', () => {
         monitoringPointKind: 'STATION',
       },
     },
-  ] as const)('returns normalized measurement-point metadata for a $label', async ({ source, expected }) => {
-    const connectedPoint = {
-      stationId: 'S0002',
-      ...source,
-      measurementInstruments: null,
-    };
-    mockedRepository.findConnectedPointByStationId.mockResolvedValue(connectedPoint);
-    mockedDeviceConnectionsService.listActiveSettingsForIntegration.mockResolvedValue([]);
+  ] as const)(
+    'returns normalized measurement-point metadata for a $label',
+    async ({ source, expected }) => {
+      const connectedPoint = {
+        stationId: 'S0002',
+        ...source,
+        measurementInstruments: null,
+      };
+      mockedRepository.findConnectedPointByStationId.mockResolvedValue(connectedPoint);
+      mockedDeviceConnectionsService.listActiveSettingsForIntegration.mockResolvedValue([]);
 
-    const result = await integrationDeviceConfigsService.getByStationId('S0002');
+      const result = await integrationDeviceConfigsService.getByStationId('S0002');
 
-    expect(result).toMatchObject(expected);
-  });
+      expect(result).toMatchObject(expected);
+    },
+  );
 
   it.each([
     ['CEMS', 'STACK', 'CEMS'],
@@ -483,8 +486,7 @@ describe('integrationDeviceConfigsService', () => {
         measurementPointType: 'UNKNOWN',
         systemType,
         pointType,
-        monitoringPointKind:
-          monitoringPointKind === 'STATION' ? 'STATION' : null,
+        monitoringPointKind: monitoringPointKind === 'STATION' ? 'STATION' : null,
       });
     },
   );
