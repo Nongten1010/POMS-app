@@ -23,7 +23,9 @@ const monitoringPointCodeSchema = z
   );
 const unitSchema = z.string().trim().min(1).max(64);
 const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
-const timeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+const hourlyTimeSchema = z
+  .string()
+  .regex(/^([01]\d|2[0-3]):00$/, 'time must use HH:00 for an hourly alert');
 
 export const createIntegrationAlertEventSchema = z
   .object({
@@ -33,27 +35,18 @@ export const createIntegrationAlertEventSchema = z
     parameterCode: safeCodeSchema.transform((value) => value.toLowerCase()),
     unit: unitSchema,
     eventDate: isoDateSchema,
-    startTime: timeSchema,
-    endTime: timeSchema,
+    time: hourlyTimeSchema,
     measuredValue: z.coerce.number().finite(),
     thresholdValue: z.coerce.number().finite(),
     thresholdType: z.enum(ALERT_EVENT_THRESHOLD_TYPES),
   })
   .strict()
-  .superRefine((value, ctx) => {
-    if (timeToMinutes(value.startTime) > timeToMinutes(value.endTime)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['endTime'],
-        message: 'endTime must be on or after startTime',
-      });
-    }
-  })
   .transform((value) => {
     const alertType = alertTypeFor(value.thresholdType);
     const parameterName = value.parameterCode.toUpperCase();
-    const startedAt = `${value.eventDate}T${value.startTime}:00+07:00`;
-    const endedAt = `${value.eventDate}T${value.endTime}:59+07:00`;
+    const hour = value.time.slice(0, 2);
+    const startedAt = `${value.eventDate}T${value.time}:00+07:00`;
+    const endedAt = `${value.eventDate}T${hour}:59:59+07:00`;
 
     return {
       ...value,
@@ -82,11 +75,6 @@ export const createIntegrationAlertEventBatchSchema = z
     events: z.array(createIntegrationAlertEventSchema).min(1).max(500),
   })
   .strict();
-
-function timeToMinutes(value: string): number {
-  const [hour, minute] = value.split(':').map(Number);
-  return hour * 60 + minute;
-}
 
 function displaySystemTypeFor(systemType: (typeof ALERT_EVENT_SYSTEM_TYPES)[number]) {
   return (systemType === 'CEMS' ? 'CEMS' : 'BOD_COD_ONLINE') as
