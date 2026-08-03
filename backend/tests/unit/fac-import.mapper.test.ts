@@ -87,7 +87,8 @@ describe('fac_import mapper', () => {
       },
     );
 
-    expect(result.address).toBe('197 หมู่ 5 ตำบลหาดอาษา อำเภอสรรพยา 17150');
+    expect(result.address).toBe('197 หมู่ 5 ตำบลหาดอาษา อำเภอสรรพยา จังหวัดชัยนาท 17150');
+    expect(result.provinceName).toBe('ชัยนาท');
   });
 
   it('omits unresolved administrative codes instead of presenting them as names', () => {
@@ -103,7 +104,7 @@ describe('fac_import mapper', () => {
       ZIPCODE: '17150',
     });
 
-    expect(result.address).toBe('197 หมู่ 5 17150');
+    expect(result.address).toBe('197 หมู่ 5 จังหวัดชัยนาท 17150');
     expect(result.address).not.toContain('ตำบล7');
     expect(result.address).not.toContain('อำเภอ4');
   });

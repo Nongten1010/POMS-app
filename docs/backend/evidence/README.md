@@ -22,6 +22,10 @@
 - [เจ้าหน้าที่เชื่อมต่อโรงงานเข้าข่ายโดยตรง](./connection-requests/officer-direct-eligible-lookup.tdd.md)
 - [ชื่อโรงงานในตารางรายการคำขอใช้ current/live POMS](./connection-requests/request-table-current-factory-name.tdd.md)
 
+## Eligible factories
+
+- [จังหวัดในที่อยู่ตั้งแต่ Candidate ถึง connected POMS](./eligible-factories/factory-address-province.tdd.md)
+
 ## Shared operations
 
 - [ล้างข้อมูลทดสอบด้วย SQL](./shared/test-data-cleanup.tdd.md)

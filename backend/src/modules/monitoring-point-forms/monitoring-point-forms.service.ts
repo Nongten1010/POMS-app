@@ -1,6 +1,7 @@
 import { BadRequestError, ConflictError, NotFoundError } from '../../shared/errors/AppError';
 import { eligibleFactoriesRepository } from '../eligible-factories/eligible-factories.repository';
 import { resolveEligibleFactoryAddressForStorage } from '../eligible-factories/eligible-factory-source-hydration';
+import { withProvinceInFactoryAddress } from '../eligible-factories/factory-address';
 import { joinFactoryTypeSequence } from '../eligible-factories/factory-type-sequence';
 import {
   CONNECTION_REQUEST_EIA_ASSESSMENTS,
@@ -34,19 +35,20 @@ export const monitoringPointFormsService = {
     input: SaveMonitoringPointFormInput,
     actorUserId: number,
   ): Promise<MonitoringPointFormDTO> {
-    if (input.factory.factoryRegistrationNoNew) {
+    const normalizedInput = normalizeMonitoringPointFormAddress(input);
+    if (normalizedInput.factory.factoryRegistrationNoNew) {
       const existingForms = await monitoringPointFormsRepository.list({
-        factoryRegistrationNoNew: input.factory.factoryRegistrationNoNew,
+        factoryRegistrationNoNew: normalizedInput.factory.factoryRegistrationNoNew,
       });
       if (existingForms.length > 0) {
         throw new ConflictError('Monitoring point form already exists for this factory', {
           id: existingForms[0]?.id,
-          factoryRegistrationNoNew: input.factory.factoryRegistrationNoNew,
+          factoryRegistrationNoNew: normalizedInput.factory.factoryRegistrationNoNew,
         });
       }
     }
 
-    const created = await monitoringPointFormsRepository.create(input, actorUserId);
+    const created = await monitoringPointFormsRepository.create(normalizedInput, actorUserId);
     await syncEligibleFactoryFromForm(created, actorUserId, { requireRegistration: false });
     return created;
   },
@@ -56,7 +58,8 @@ export const monitoringPointFormsService = {
     input: SaveMonitoringPointFormInput,
     actorUserId: number,
   ): Promise<MonitoringPointFormDTO> {
-    const updated = await monitoringPointFormsRepository.update(id, input, actorUserId);
+    const normalizedInput = normalizeMonitoringPointFormAddress(input);
+    const updated = await monitoringPointFormsRepository.update(id, normalizedInput, actorUserId);
     if (!updated) throw new NotFoundError('Monitoring point form not found');
     await syncEligibleFactoryFromForm(updated, actorUserId, { requireRegistration: false });
     return updated;
@@ -74,6 +77,18 @@ export const monitoringPointFormsService = {
   },
 };
 
+function normalizeMonitoringPointFormAddress(
+  input: SaveMonitoringPointFormInput,
+): SaveMonitoringPointFormInput {
+  return {
+    ...input,
+    factory: {
+      ...input.factory,
+      address: withProvinceInFactoryAddress(input.factory.address, input.factory.provinceName),
+    },
+  };
+}
+
 async function syncEligibleFactoryFromForm(
   form: MonitoringPointFormDTO,
   actorUserId: number,
@@ -85,6 +100,7 @@ async function syncEligibleFactoryFromForm(
     sourceFactoryId: rawInput.sourceFactoryId ?? null,
     factoryRegistrationNoNew: rawInput.factoryRegistrationNoNew,
     address: rawInput.address,
+    provinceName: rawInput.provinceName,
   });
   const input: CreateEligibleFactoryInput = {
     ...rawInput,

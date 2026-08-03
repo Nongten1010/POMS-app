@@ -26,6 +26,12 @@ curl --request GET \
 | แก้ไขข้อมูลจุดตรวจวัด | `PUT` | `/api/v1/monitoring-point-forms/:id` | Bearer | `cems_wpms_requests:edit` |
 | เลือกฟอร์มเป็นโรงงานเข้าข่าย | `POST` | `/api/v1/monitoring-point-forms/:id/select-eligible` | Bearer | `eligible_factories:manage` |
 
+## กติกาที่อยู่และจังหวัด
+
+Candidate จาก `fac_import`, โรงงานที่เข้าข่าย และฟอร์มข้อมูลจุดตรวจวัดยังคืน/รับ `provinceName` แยกจาก `address` ตามเดิม แต่ `address` ที่มีค่าต้องเป็นที่อยู่เต็มและมีจังหวัดก่อนรหัสไปรษณีย์ เช่น `89 หมู่ 1 ตำบลบ้านเลน อำเภอบางปะอิน จังหวัดพระนครศรีอยุธยา 13160`. กรุงเทพมหานครใช้ `กรุงเทพมหานคร` โดยไม่เติมคำนำหน้า `จังหวัด`.
+
+Backend เติมจังหวัดแบบ idempotent จึงไม่เติมซ้ำเมื่อ address มีจังหวัดเดียวกันอยู่แล้ว และไม่สร้าง address ที่มีเพียงจังหวัดเมื่อ address เดิมเป็น `null`. ถ้า address ระบุจังหวัดอื่นอย่างชัดเจน ระบบรักษาค่าเดิมไว้เพื่อให้ตรวจข้อมูลขัดแย้งแทนการเติมจังหวัดซ้อน.
+
 ## ฟอร์มเพิ่ม/แก้ไขข้อมูลจุดตรวจวัด
 
 `POST /api/v1/monitoring-point-forms` และ `PUT /api/v1/monitoring-point-forms/:id` ใช้ request body shape เดียวกัน โดยข้อมูลโครงการและ EIA เป็นข้อมูลระดับโรงงานภายใต้ `factory` ไม่ใช่ข้อมูลของแต่ละ `points[]`.
@@ -102,6 +108,8 @@ Relevant response fields:
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `data[].id` | integer | `eligible_factory_id` ที่ใช้ผูก request/POMS |
+| `data[].address` | string \| null | ที่อยู่เต็มซึ่งมีจังหวัดก่อนรหัสไปรษณีย์เมื่อมี `provinceName` ที่ใช้งานได้ |
+| `data[].provinceName` | string | จังหวัดแบบ machine-filterable ที่คงแยกจาก `address` |
 | `data[].latitude` | number \| null | ละติจูดโรงงาน |
 | `data[].longitude` | number \| null | ลองจิจูดโรงงาน |
 | `data[].eia` | string \| null | `มี`, `ไม่มี`, `มี IEE`, `มี EIA`, `มี EHIA` หรือ `อื่นๆ` |

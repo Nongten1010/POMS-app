@@ -223,7 +223,7 @@ Field อื่นของ Direct Connection เช่น `factoryName`, ข้
 | `data[].oldRegistrationNo` | string \| null | `eligible_factories.factory_registration_no_old` |
 | `data[].industryMainOrder`, `industrySubOrder` | string \| null | แยกจาก `eligible_factories.factory_type_sequence` |
 | `data[].businessActivity` | string \| null | `eligible_factories.business_activity` |
-| `data[].address`, `province` | string \| null | `eligible_factories.address`, `province_name` |
+| `data[].address`, `province` | string \| null | `eligible_factories.address`, `province_name`; `address` มีจังหวัดก่อนรหัสไปรษณีย์และ `province` ยังคงเป็น field แยกสำหรับ filter/scope |
 | `data[].latitude`, `longitude` | string \| null | พิกัดโรงงานจาก `eligible_factories` |
 | `data[].eia`, `projectName` | string \| null | `eligible_factories.eia_assessment`, `project_name` |
 | `data[].monitoringPointCount` | number | จำนวน active POMS points ที่จับคู่กับโรงงาน |

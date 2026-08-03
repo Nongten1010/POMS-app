@@ -39,6 +39,7 @@ export const eligibleFactoriesService = {
       sourceFactoryId: input.sourceFactoryId ?? null,
       factoryRegistrationNoNew: input.factoryRegistrationNoNew,
       address: input.address,
+      provinceName: input.provinceName,
     });
     const normalizedInput =
       resolvedAddress === undefined && input.address === undefined

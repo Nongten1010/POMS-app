@@ -7,6 +7,7 @@ import {
   diwAdministrativeAreaKey,
   formatFacImportAddress,
 } from './fac-import.mapper';
+import { withProvinceInFactoryAddress } from './factory-address';
 
 interface FactorySourceHydrationRow {
   FID: string | null;
@@ -40,6 +41,7 @@ interface EligibleFactoryAddressStorageInput {
   sourceFactoryId: string | null;
   factoryRegistrationNoNew: string;
   address?: string | null;
+  provinceName?: string | null;
 }
 
 export async function hydrateEligibleFactoriesFromSource(
@@ -47,7 +49,9 @@ export async function hydrateEligibleFactoriesFromSource(
 ): Promise<EligibleFactoryDTO[]> {
   const sourceFactoryIds = uniqueNonEmpty(rows.map((row) => row.sourceFactoryId));
   const registrationNumbers = uniqueNonEmpty(rows.map((row) => row.factoryRegistrationNoNew));
-  if (sourceFactoryIds.length === 0 && registrationNumbers.length === 0) return rows;
+  if (sourceFactoryIds.length === 0 && registrationNumbers.length === 0) {
+    return normalizeStoredFactoryAddresses(rows);
+  }
 
   try {
     const sourceRows = await loadFactorySourceRows([
@@ -63,8 +67,15 @@ export async function hydrateEligibleFactoriesFromSource(
     logger.warn('[eligible-factories] Failed to hydrate selected factory data from source DB', {
       error,
     });
-    return rows;
+    return normalizeStoredFactoryAddresses(rows);
   }
+}
+
+function normalizeStoredFactoryAddresses(rows: EligibleFactoryDTO[]): EligibleFactoryDTO[] {
+  return rows.map((row) => ({
+    ...row,
+    address: withProvinceInFactoryAddress(row.address, row.provinceName) ?? null,
+  }));
 }
 
 export async function resolveEligibleFactoryAddressForStorage(
@@ -75,7 +86,7 @@ export async function resolveEligibleFactoryAddressForStorage(
     storedAddress && LEGACY_AREA_CODE_PATTERN.test(storedAddress),
   );
   if (storedAddress !== null && storedAddress !== undefined && !containsLegacyCodes) {
-    return storedAddress;
+    return withProvinceInFactoryAddress(storedAddress, input.provinceName);
   }
 
   const keys = uniqueNonEmpty([input.sourceFactoryId, input.factoryRegistrationNoNew]);
@@ -104,12 +115,16 @@ export async function resolveEligibleFactoryAddressForStorage(
     }
 
     if (containsLegacyCodes && storedAddress) {
-      return storedAddress
+      const resolvedAddress = storedAddress
         .replace(/ตำบล\s*\d+(?=\s|$)/u, `ตำบล${names.subdistrictName}`)
         .replace(/อำเภอ\s*\d+(?=\s|$)/u, `อำเภอ${names.districtName}`);
+      return withProvinceInFactoryAddress(resolvedAddress, input.provinceName);
     }
 
-    return formatFacImportAddress(sourceRow, names) ?? storedAddress;
+    return withProvinceInFactoryAddress(
+      formatFacImportAddress(sourceRow, names) ?? storedAddress,
+      input.provinceName,
+    );
   } catch (error) {
     logger.warn('[eligible-factories] Failed to resolve address for storage', { error });
     return containsLegacyCodes ? undefined : storedAddress;
@@ -230,17 +245,28 @@ function hydrateFactoryRow(
     sourceRow.AMP,
     sourceRow.TUMBOL,
   );
-  const resolvedAddress = formatFacImportAddress(
-    sourceRow,
-    administrativeAreaKey ? administrativeAreaNamesByCode.get(administrativeAreaKey) : undefined,
-  );
+  const resolvedAddress =
+    withProvinceInFactoryAddress(
+      formatFacImportAddress(
+        sourceRow,
+        administrativeAreaKey
+          ? administrativeAreaNamesByCode.get(administrativeAreaKey)
+          : undefined,
+      ),
+      row.provinceName,
+    ) ?? null;
 
   return {
     ...row,
     machineryHorsepower:
       row.machineryHorsepower ?? firstNullableNumber(sourceRow.HP2, sourceRow.HP),
     address:
-      shouldHydrateAddress(row.address) && resolvedAddress !== null ? resolvedAddress : row.address,
+      withProvinceInFactoryAddress(
+        shouldHydrateAddress(row.address) && resolvedAddress !== null
+          ? resolvedAddress
+          : row.address,
+        row.provinceName,
+      ) ?? null,
   };
 }
 

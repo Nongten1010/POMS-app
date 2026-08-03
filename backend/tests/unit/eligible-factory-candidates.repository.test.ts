@@ -241,7 +241,7 @@ describe('eligibleFactoryCandidatesRepository', () => {
 
     const result = await eligibleFactoryCandidatesRepository.list({ page: 1, perPage: 50 });
 
-    expect(result.data[0]?.address).toBe('197 หมู่ 5 ตำบลหาดอาษา อำเภอสรรพยา 17150');
+    expect(result.data[0]?.address).toBe('197 หมู่ 5 ตำบลหาดอาษา อำเภอสรรพยา จังหวัดชัยนาท 17150');
     expect(administrativeAreaQuery.select).toHaveBeenCalledWith(
       'PROV',
       'AMP',
