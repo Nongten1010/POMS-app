@@ -12,10 +12,27 @@ import {
   buildFactoriesForAccessQueryForTests,
   buildRequestNoPrefix,
   shouldIssueWaitingConnectionSideEffectsForTests,
+  toRequestRowForTests,
 } from '../../src/modules/connection-requests/connection-requests.repository';
 import { CONNECTION_REQUEST_STATUS } from '../../src/modules/connection-requests/connection-requests.types';
 
 describe('connectionRequestsRepository query helpers', () => {
+  it('stores province in the request address while retaining the province snapshot input', () => {
+    const row = toRequestRowForTests({
+      factoryId: '72120200125358',
+      factoryName: 'โรงงานตัวอย่าง',
+      factoryRegistrationNo: '72120200125358',
+      address: '89 หมู่ 1 ตำบลบ้านเลน อำเภอบางปะอิน 13160',
+      provinceName: 'พระนครศรีอยุธยา',
+      systemType: 'CEMS',
+      contactName: 'ผู้ประสานงาน',
+      contactPhone: '0812345678',
+      measurementPoints: [],
+    });
+
+    expect(row.address).toBe('89 หมู่ 1 ตำบลบ้านเลน อำเภอบางปะอิน จังหวัดพระนครศรีอยุธยา 13160');
+  });
+
   it('sources connected dashboard factories from active POMS points without requiring a factory master row', () => {
     const sql = buildConnectedFactoriesForAccessQueryForTests({
       actorUserId: 42,

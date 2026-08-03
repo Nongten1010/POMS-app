@@ -139,7 +139,7 @@ describe('eligibleFactoriesRepository.list', () => {
     const result = await eligibleFactoriesRepository.list({});
 
     expect(result.rows).toHaveLength(1);
-    expect(result.rows[0]?.address).toBe('197 หมู่ 5 ตำบลหาดอาษา อำเภอสรรพยา 17150');
+    expect(result.rows[0]?.address).toBe('197 หมู่ 5 ตำบลหาดอาษา อำเภอสรรพยา จังหวัดชัยนาท 17150');
   });
 
   it('returns the synchronized EIA assessment and project name from eligible factory data', async () => {
@@ -169,7 +169,9 @@ describe('eligibleFactoriesRepository.list', () => {
 
     const result = await eligibleFactoriesRepository.list({});
 
-    expect(result.rows[0]?.address).toBe('197 หมู่ 5 ตำบลหาดอาษา อำเภอสรรพยา 17150 (ประตู 2)');
+    expect(result.rows[0]?.address).toBe(
+      '197 หมู่ 5 ตำบลหาดอาษา อำเภอสรรพยา จังหวัดชัยนาท 17150 (ประตู 2)',
+    );
   });
 
   it('omits numeric area codes when the TUMBOL master lookup is unavailable', async () => {
@@ -210,7 +212,7 @@ describe('eligibleFactoriesRepository.list', () => {
 
     const result = await eligibleFactoriesRepository.list({});
 
-    expect(result.rows[0]?.address).toBe('197 หมู่ 5 17150');
+    expect(result.rows[0]?.address).toBe('197 หมู่ 5 จังหวัดชัยนาท 17150');
     expect(result.rows[0]?.address).not.toContain('ตำบล7');
     expect(result.rows[0]?.address).not.toContain('อำเภอ4');
   });
@@ -222,7 +224,7 @@ describe('eligibleFactoriesRepository.list', () => {
 
     const result = await eligibleFactoriesRepository.list({});
 
-    expect(result.rows[0]?.address).toBe('197 หมู่ 5 ตำบล7 อำเภอ4 17150');
+    expect(result.rows[0]?.address).toBe('197 หมู่ 5 ตำบล7 อำเภอ4 จังหวัดชัยนาท 17150');
   });
 
   it('resolves legacy numeric labels before persisting a form address', async () => {

@@ -1,4 +1,5 @@
 import type { BoilerLookupValue, EligibleFactoryCandidateDTO } from './eligible-factories.types';
+import { withProvinceInFactoryAddress } from './factory-address';
 
 const FACTORY_TYPE_CODE_LENGTH = 5;
 
@@ -178,7 +179,11 @@ export function toEligibleFactoryCandidate(
     factoryRegistrationNo: registrationNoNew,
     factoryClass,
     factorySubclass,
-    address: formatFacImportAddress(row, administrativeAreaNames),
+    address:
+      withProvinceInFactoryAddress(
+        formatFacImportAddress(row, administrativeAreaNames),
+        provinceName,
+      ) ?? null,
     provinceName,
     industrialEstateName: industrialEstateName(row.COLONY_INDUST_CODE, options),
     longitude: coordinates?.longitude ?? null,

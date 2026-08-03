@@ -18,6 +18,10 @@
 - [เจ้าหน้าที่เชื่อมต่อโรงงานเข้าข่ายโดยตรง](./connection-requests/officer-direct-eligible-lookup.tdd.md)
 - [ชื่อโรงงานในตารางรายการคำขอใช้ current/live POMS](./connection-requests/request-table-current-factory-name.tdd.md)
 
+## Eligible factories
+
+- [จังหวัดในที่อยู่ตั้งแต่ Candidate ถึง connected POMS](./eligible-factories/factory-address-province.tdd.md)
+
 ## Home
 
 - [โรงงานที่เจ้าหน้าที่เชื่อมต่อแสดงบนหน้าหลัก](./home/officer-direct-connected-dashboard.tdd.md)

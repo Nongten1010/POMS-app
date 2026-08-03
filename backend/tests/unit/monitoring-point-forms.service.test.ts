@@ -156,6 +156,39 @@ describe('monitoringPointFormsService', () => {
     expect(result.id).toBe(1);
   });
 
+  it('stores the province in the monitoring-form address while keeping provinceName', async () => {
+    const addressInput: SaveMonitoringPointFormInput = {
+      ...input,
+      factory: {
+        ...input.factory,
+        address: '99 หมู่ 1 ตำบลสบตุ๋ย อำเภอเมืองลำปาง 52100',
+      },
+    };
+    mockedRepository.list.mockResolvedValue([]);
+    mockedRepository.create.mockResolvedValue({
+      id: 1,
+      factory: toFactoryDTO(addressInput.factory),
+      points: [],
+      createdAt: '2026-06-22T00:00:00.000Z',
+      updatedAt: '2026-06-22T00:00:00.000Z',
+    });
+    mockedEligibleRepository.findByMonitoringPointFormId.mockResolvedValue(null);
+    mockedEligibleRepository.findByRegistrationNoNew.mockResolvedValue(null);
+    mockedEligibleRepository.create.mockResolvedValue(createEligibleFactoryDTO());
+
+    await monitoringPointFormsService.create(addressInput, 42);
+
+    expect(mockedRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        factory: expect.objectContaining({
+          address: '99 หมู่ 1 ตำบลสบตุ๋ย อำเภอเมืองลำปาง จังหวัดลำปาง 52100',
+          provinceName: 'ลำปาง',
+        }),
+      }),
+      42,
+    );
+  });
+
   it('synchronizes explicit project and Other EIA fields to the eligible factory', async () => {
     const projectInput: SaveMonitoringPointFormInput = {
       ...input,
@@ -321,6 +354,7 @@ describe('monitoringPointFormsService', () => {
       sourceFactoryId: '10520000225172',
       factoryRegistrationNoNew: '10520000225172',
       address: numericAddress,
+      provinceName: 'ลำปาง',
     });
     expect(mockedEligibleRepository.updateFromMonitoringPointForm).toHaveBeenCalledWith(
       88,

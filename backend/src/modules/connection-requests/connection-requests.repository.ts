@@ -12,6 +12,7 @@ import {
   parseAnnualPointCodeSequence,
 } from '../../shared/utils/monitoring-point-code';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
+import { withProvinceInFactoryAddress } from '../eligible-factories/factory-address';
 import {
   deriveHasEiaFromAssessment,
   resolveStoredConnectionRequestEia,
@@ -944,7 +945,7 @@ export const connectionRequestsRepository = {
           factory_id: input.factoryId,
           factory_name: input.factoryName,
           factory_registration_no: input.factoryRegistrationNo,
-          factory_address: input.address ?? null,
+          factory_address: withProvinceInFactoryAddress(input.address, input.provinceName) ?? null,
           ...factoryProfile,
           system_type: input.systemType,
           point_name: point.pointName,
@@ -1262,7 +1263,7 @@ async function syncConnectedMeasurementPointsInTransaction(
       factory_id: request.factoryId,
       factory_name: request.factoryName,
       factory_registration_no: request.factoryRegistrationNo,
-      factory_address: request.address,
+      factory_address: withProvinceInFactoryAddress(request.address, request.provinceName) ?? null,
       ...factoryProfile,
       system_type: request.systemType,
       point_name: point.pointName,
@@ -2288,7 +2289,7 @@ function toRequestRow(input: CreateConnectionRequestInput): Record<string, unkno
     eia_other: input.eia === 'อื่นๆ' ? (input.eiaOther ?? null) : null,
     has_eia: hasEia,
     project_name: input.projectName ?? null,
-    address: input.address ?? null,
+    address: withProvinceInFactoryAddress(input.address, input.provinceName) ?? null,
     latitude: input.latitude ?? null,
     longitude: input.longitude ?? null,
     system_type: input.systemType,
