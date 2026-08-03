@@ -9,6 +9,16 @@ import { CONNECTION_REQUEST_STATUS, CONNECTION_REQUEST_TYPE } from './connection
 
 const trimmedString = (max: number) => z.string().trim().min(1).max(max);
 const optionalTrimmedString = (max: number) => z.string().trim().min(1).max(max).optional();
+const INVISIBLE_EMAIL_FORMATTING_CHARACTERS = /[\u200B-\u200D\u2060\uFEFF]/g;
+const normalizeRequestEmail = (value: unknown): unknown =>
+  typeof value === 'string'
+    ? value.replace(INVISIBLE_EMAIL_FORMATTING_CHARACTERS, '').trim()
+    : value;
+const requestEmailSchema = z.preprocess(normalizeRequestEmail, z.string().email().max(255));
+const optionalNullableRequestEmailSchema = z.preprocess(
+  normalizeRequestEmail,
+  z.string().email().max(255).nullable().optional(),
+);
 const httpUrl = (max: number) =>
   z.string().trim().url().max(max).refine(isHttpUrl, { message: 'URL must use http or https' });
 const optionalNullableTrimmedString = (max: number) =>
@@ -102,7 +112,7 @@ const contactPersonSchema = z
   .object({
     name: trimmedString(255),
     phone: trimmedString(64),
-    email: z.string().trim().email().max(255).nullable().optional(),
+    email: optionalNullableRequestEmailSchema,
     position: optionalNullableTrimmedString(255),
   })
   .strict()
@@ -616,10 +626,10 @@ const connectionRequestFormObjectSchema = z
     type: z.enum(['CEMS', 'WPMS']).optional(),
     contactName: optionalTrimmedString(255),
     contactPhone: optionalTrimmedString(64),
-    contactEmail: z.string().trim().email().max(255).nullable().optional(),
+    contactEmail: optionalNullableRequestEmailSchema,
     contactPersons: z.array(contactPersonSchema).min(1).max(20).optional(),
-    notificationEmails: z.array(z.string().trim().email().max(255)).max(20).optional(),
-    officerNotificationEmails: z.array(z.string().trim().email().max(255)).max(20).optional(),
+    notificationEmails: z.array(requestEmailSchema).max(20).optional(),
+    officerNotificationEmails: z.array(requestEmailSchema).max(20).optional(),
     informationProviderName: optionalNullableTrimmedString(255),
     informationProviderPosition: optionalNullableTrimmedString(255),
     measurementPoints: z.array(measurementPointSchema).min(1).max(100),

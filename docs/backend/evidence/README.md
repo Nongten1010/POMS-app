@@ -18,6 +18,7 @@
 - [รหัสจุดตรวจวัดแบบลำดับรายปี](./connection-requests/annual-point-code-format.tdd.md)
 - [Direct Connection รับ optional fields เป็น null](./connection-requests/direct-connection-nullable-fields.tdd.md)
 - [เลขคำขอเจ้าหน้าที่ใช้ลำดับร่วมกับผู้ประกอบการ](./connection-requests/officer-direct-shared-request-numbering.tdd.md)
+- [Normalize อักขระซ่อนในอีเมลคำขอเชื่อมต่อ](./connection-requests/email-invisible-character-normalization.tdd.md)
 - [เจ้าหน้าที่เชื่อมต่อโรงงานเข้าข่ายโดยตรง](./connection-requests/officer-direct-eligible-lookup.tdd.md)
 - [ชื่อโรงงานในตารางรายการคำขอใช้ current/live POMS](./connection-requests/request-table-current-factory-name.tdd.md)
 

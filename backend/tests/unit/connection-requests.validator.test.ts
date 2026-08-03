@@ -109,6 +109,55 @@ describe('connection request validators', () => {
     }
   });
 
+  it('removes invisible formatting characters from request email fields', () => {
+    const result = createConnectionRequestSchema.safeParse({
+      ...validPayload,
+      contactPersons: [
+        {
+          ...validPayload.contactPersons[0],
+          email: '\u200Bops@example.com\u200D',
+        },
+      ],
+      notificationEmails: ['\u2060jaruwan.ju@egat.co.th\uFEFF'],
+      officerNotificationEmails: ['\u200Cofficer@example.com\u200B'],
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.contactPersons[0].email).toBe('ops@example.com');
+    expect(result.data.notificationEmails).toEqual(['jaruwan.ju@egat.co.th']);
+    expect(result.data.officerNotificationEmails).toEqual(['officer@example.com']);
+  });
+
+  it('normalizes invisible formatting characters in legacy contact email fields', () => {
+    const { contactPersons, notificationEmails, ...legacyPayload } = validPayload;
+    const result = createConnectionRequestSchema.safeParse({
+      ...legacyPayload,
+      contactName: 'สมชาย ใจดี',
+      contactPhone: '0812345678',
+      contactEmail: '\u200Bops@example.com\u2060',
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.contactPersons[0].email).toBe('ops@example.com');
+    expect(result.data.notificationEmails).toEqual(['ops@example.com']);
+  });
+
+  it('preserves valid plus characters in request email fields', () => {
+    const result = createConnectionRequestSchema.safeParse({
+      ...validPayload,
+      notificationEmails: ['+jaruwan.ju@egat.co.th', 'jaruwan.ju+alerts@egat.co.th'],
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.notificationEmails).toEqual([
+      '+jaruwan.ju@egat.co.th',
+      'jaruwan.ju+alerts@egat.co.th',
+    ]);
+  });
+
   it('normalizes empty optional factory snapshot fields from frontend forms', () => {
     const result = addMeasurementPointRequestSchema.safeParse({
       ...validPayload,
