@@ -91,6 +91,68 @@ describe('fac_import mapper', () => {
     expect(result.provinceName).toBe('ชัยนาท');
   });
 
+  it('keeps five-digit land-title numbers before the district and province', () => {
+    const result = toEligibleFactoryCandidate(
+      {
+        ...row,
+        FADDR: 'โฉนดที่ดินเลขที่ 45907 45906 46388',
+        FMOO: '1',
+        SOI: null,
+        ROAD: null,
+        TUMBOL: 4,
+        AMP: 15,
+        PROV: 34,
+        ZIPCODE: '34190',
+      },
+      {
+        administrativeAreaNamesByCode: new Map([
+          [
+            '34:15:4',
+            {
+              subdistrictName: 'หนองกินเพล',
+              districtName: 'วารินชำราบ',
+            },
+          ],
+        ]),
+      },
+    );
+
+    expect(result.address).toBe(
+      'โฉนดที่ดินเลขที่ 45907 45906 46388 หมู่ 1 ตำบลหนองกินเพล อำเภอวารินชำราบ จังหวัดอุบลราชธานี 34190',
+    );
+  });
+
+  it('places the province after a multi-area district display name', () => {
+    const result = toEligibleFactoryCandidate(
+      {
+        ...row,
+        FADDR: 'โฉนดที่ดินเลขที่ 17692,17693,18365,17694',
+        FMOO: '4',
+        SOI: null,
+        ROAD: 'กรุงเทพ-สุพรรณ',
+        TUMBOL: 1,
+        AMP: 16,
+        PROV: 14,
+        ZIPCODE: '13110',
+      },
+      {
+        administrativeAreaNamesByCode: new Map([
+          [
+            '14:16:1',
+            {
+              subdistrictName: 'ดอนทอง, หลักชัย',
+              districtName: 'เสนา, ลาดบัวหลวง',
+            },
+          ],
+        ]),
+      },
+    );
+
+    expect(result.address).toBe(
+      'โฉนดที่ดินเลขที่ 17692,17693,18365,17694 หมู่ 4 ถนนกรุงเทพ-สุพรรณ ตำบลดอนทอง, หลักชัย อำเภอเสนา, ลาดบัวหลวง จังหวัดพระนครศรีอยุธยา 13110',
+    );
+  });
+
   it('omits unresolved administrative codes instead of presenting them as names', () => {
     const result = toEligibleFactoryCandidate({
       ...row,
