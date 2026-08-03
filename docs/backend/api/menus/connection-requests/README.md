@@ -87,6 +87,37 @@ curl --request POST \
 
 ## Contracts
 
+### Email normalization
+
+ทุก endpoint ที่รับแบบฟอร์มคำขอเชื่อมต่อใช้กติกาเดียวกันกับฟิลด์อีเมลต่อไปนี้:
+
+| Field | Type | Normalization ก่อน validation |
+| --- | --- | --- |
+| `contactEmail` | string \| null | ลบ `U+200B`, `U+200C`, `U+200D`, `U+2060`, `U+FEFF` แล้ว trim |
+| `contactPersons[].email` | string \| null | กติกาเดียวกับ `contactEmail` |
+| `notificationEmails[]` | string[] | กติกาเดียวกับ `contactEmail` |
+| `officerNotificationEmails[]` | string[] | กติกาเดียวกับ `contactEmail` |
+
+- Backend ลบเฉพาะอักขระ formatting แบบมองไม่เห็นข้างต้นเพื่อรองรับค่าที่ติดมาจากการ copy/paste; อักขระอื่นยังผ่าน email validation ตามปกติ.
+- เครื่องหมาย `+` เป็นส่วนที่ใช้ได้ในอีเมลและต้องไม่ถูกลบ เช่น `name+alerts@example.com` หรือ `+name@example.com`.
+- หลัง normalization ถ้าค่ายังไม่ใช่อีเมลที่ถูกต้อง endpoint ตอบ `400 Bad Request` พร้อม issue path ของฟิลด์เดิม เช่น `notificationEmails.0`.
+
+ตัวอย่าง request fragment:
+
+```json
+{
+  "contactPersons": [
+    {
+      "name": "ผู้ประสานงาน",
+      "phone": "0812345678",
+      "email": "ops@example.com"
+    }
+  ],
+  "notificationEmails": ["name+alerts@example.com"],
+  "officerNotificationEmails": ["officer@example.com"]
+}
+```
+
 ### Request table location source
 
 `GET /api/v1/cems-wpms-requests/table-rows` คืน `data[].province` จาก factory snapshot ของคำขอ โดย snapshot ต้องรับจังหวัดจาก active row ใน `eligible_factories` ที่เชื่อมด้วย `eligibleFactoryId`. โรงงานที่ไม่มี row ใน `factories` ต้องยังคงจังหวัดเดิมหลังส่งคำขอ และ backend ต้องไม่ใช้การมีอยู่ของ factory master เป็นเงื่อนไขในการคืนจังหวัด.
