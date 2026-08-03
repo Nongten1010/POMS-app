@@ -183,6 +183,7 @@ export function toEligibleFactoryCandidate(
       withProvinceInFactoryAddress(
         formatFacImportAddress(row, administrativeAreaNames),
         provinceName,
+        { postalCode: firstText(row.ZIPCODE) },
       ) ?? null,
     provinceName,
     industrialEstateName: industrialEstateName(row.COLONY_INDUST_CODE, options),
