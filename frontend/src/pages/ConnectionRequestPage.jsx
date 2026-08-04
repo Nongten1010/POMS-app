@@ -278,7 +278,8 @@ const tableActionStackSx = {
   },
 }
 
-const connectionTypeOptions = ['Modbus RTU', 'Modbus TCP', 'Microsoft SQL', 'MySQL']
+const pomsBoxConnectionType = 'POMS Box'
+const connectionTypeOptions = ['Modbus RTU', 'Modbus TCP', 'Microsoft SQL', 'MySQL', pomsBoxConnectionType]
 
 const baudRateOptions = ['2400', '4800', '9600', '14400', '19200', '38400']
 const parityOptions = ['Even', 'Odd', 'None']
@@ -292,6 +293,7 @@ const connectionParameterStatusOptions = [
   'Maintenance',
   'Start up',
   'Shut Down',
+  'No Discharge',
   'Turnaround',
   'Etc.',
 ]
@@ -466,6 +468,9 @@ function createCriteriaRowsFromStandardValue(standardValue) {
 }
 
 function getDefaultConnectionForm(type) {
+  if (type === pomsBoxConnectionType) {
+    return {}
+  }
   if (type === 'Modbus RTU') {
     return {
       comPort: '',
@@ -2963,7 +2968,7 @@ function OptionSelectField({ label, value, options, onChange, defaultOption }) {
 function ConnectionFormFields({ connectionType, value, onChange }) {
   const updateField = (field, nextValue) => onChange({ ...value, [field]: nextValue })
 
-  if (!connectionType) {
+  if (!connectionType || connectionType === pomsBoxConnectionType) {
     return null
   }
 
@@ -3311,25 +3316,83 @@ function ConnectionParameterTable({ deviceCodeOptions, rows, setRows }) {
 
 function StatusManagementSection({ parameterOptions, statusManagement, onChange }) {
   const allOption = 'ทั้งหมด'
+  const statusManagementStatusOptions = connectionParameterStatusOptions.filter((option) => option !== 'Normal')
   const initialSelectedParameters = Array.isArray(statusManagement?.selectedParameters)
     ? statusManagement.selectedParameters
     : []
+  const initialSchedules = Array.isArray(statusManagement?.schedules) ? statusManagement.schedules : []
   const [selectedParameters, setSelectedParameters] = useState(initialSelectedParameters)
   const [status, setStatus] = useState(statusManagement?.status ?? '')
   const [startAt, setStartAt] = useState(statusManagement?.startAt ?? '')
   const [endAt, setEndAt] = useState(statusManagement?.endAt ?? '')
+  const [schedules, setSchedules] = useState(initialSchedules)
+  const [deleteScheduleTarget, setDeleteScheduleTarget] = useState(null)
   const updateStatusManagement = (nextValue) => {
     onChange?.({
       selectedParameters,
       startAt,
       endAt,
       status,
-      schedules: statusManagement?.schedules ?? [],
+      schedules,
       ...nextValue,
     })
   }
+  const formatScheduleDateTime = (value) => {
+    if (!value) return '-'
+    const date = new Date(value)
+
+    if (Number.isNaN(date.getTime())) return String(value)
+
+    const day = String(date.getDate()).padStart(2, '0')
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const year = date.getFullYear() + 543
+    const hours = String(date.getHours()).padStart(2, '0')
+    const minutes = String(date.getMinutes()).padStart(2, '0')
+
+    return `${day}/${month}/${year} ${hours}.${minutes}`
+  }
+  const getScheduleParametersLabel = (parameters) => {
+    if (!Array.isArray(parameters) || parameters.length === 0 || parameters.includes(allOption)) {
+      return allOption
+    }
+
+    return parameters.join(', ')
+  }
+  const addSchedule = () => {
+    if (!startAt || !endAt || !status) return
+
+    const nextSchedules = [
+      ...schedules,
+      {
+        id: Date.now(),
+        selectedParameters: selectedParameters.length ? selectedParameters : [allOption],
+        startAt,
+        endAt,
+        status,
+      },
+    ]
+
+    setSchedules(nextSchedules)
+    updateStatusManagement({ schedules: nextSchedules })
+  }
+  const removeSchedule = (scheduleId) => {
+    const nextSchedules = schedules.filter((item, index) => (item.id ?? index) !== scheduleId)
+
+    setSchedules(nextSchedules)
+    updateStatusManagement({ schedules: nextSchedules })
+  }
+  const closeDeleteScheduleConfirm = () => {
+    setDeleteScheduleTarget(null)
+  }
+  const confirmDeleteSchedule = () => {
+    if (!deleteScheduleTarget) return
+
+    removeSchedule(deleteScheduleTarget.id)
+    setDeleteScheduleTarget(null)
+  }
 
   return (
+    <>
     <Stack spacing={2}>
       <Stack spacing={0.5}>
         <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
@@ -3339,8 +3402,36 @@ function StatusManagementSection({ parameterOptions, statusManagement, onChange 
           ตั้งเวลาสำหรับเปลี่ยนสถานะชั่วคราว รายพารามิเตอร์ โดยสามารถเลือกทั้งหมดได้
         </Typography>
       </Stack>
-      <Grid container spacing={2}>
-        <Grid size={{ xs: 12, md: 6 }}>
+      <Grid container spacing={2} alignItems="flex-start">
+        <Grid size={{ xs: 12, md: 3 }}>
+          <TextField
+            label="วันเวลาเริ่มต้น"
+            type="datetime-local"
+            size="small"
+            value={startAt ?? ''}
+            onChange={(event) => {
+              setStartAt(event.target.value)
+              updateStatusManagement({ startAt: event.target.value || null })
+            }}
+            fullWidth
+            slotProps={{ inputLabel: { shrink: true } }}
+          />
+        </Grid>
+        <Grid size={{ xs: 12, md: 3 }}>
+          <TextField
+            label="วันเวลาสิ้นสุด"
+            type="datetime-local"
+            size="small"
+            value={endAt ?? ''}
+            onChange={(event) => {
+              setEndAt(event.target.value)
+              updateStatusManagement({ endAt: event.target.value || null })
+            }}
+            fullWidth
+            slotProps={{ inputLabel: { shrink: true } }}
+          />
+        </Grid>
+        <Grid size={{ xs: 12, md: 3 }}>
           <FormControl size="small" fullWidth>
             <InputLabel>เลือกพารามิเตอร์</InputLabel>
             <Select
@@ -3376,34 +3467,6 @@ function StatusManagementSection({ parameterOptions, statusManagement, onChange 
         </Grid>
         <Grid size={{ xs: 12, md: 2 }}>
           <TextField
-            label="วันเวลาเริ่มต้น"
-            type="datetime-local"
-            size="small"
-            value={startAt ?? ''}
-            onChange={(event) => {
-              setStartAt(event.target.value)
-              updateStatusManagement({ startAt: event.target.value || null })
-            }}
-            fullWidth
-            slotProps={{ inputLabel: { shrink: true } }}
-          />
-        </Grid>
-        <Grid size={{ xs: 12, md: 2 }}>
-          <TextField
-            label="วันเวลาสิ้นสุด"
-            type="datetime-local"
-            size="small"
-            value={endAt ?? ''}
-            onChange={(event) => {
-              setEndAt(event.target.value)
-              updateStatusManagement({ endAt: event.target.value || null })
-            }}
-            fullWidth
-            slotProps={{ inputLabel: { shrink: true } }}
-          />
-        </Grid>
-        <Grid size={{ xs: 12, md: 2 }}>
-          <TextField
             select
             label="สถานะ"
             size="small"
@@ -3417,19 +3480,114 @@ function StatusManagementSection({ parameterOptions, statusManagement, onChange 
             <MenuItem value="">
               <em>ไม่ระบุ</em>
             </MenuItem>
-            {connectionParameterStatusOptions.map((option) => (
+            {statusManagementStatusOptions.map((option) => (
               <MenuItem key={option} value={option}>
                 {option}
               </MenuItem>
             ))}
           </TextField>
         </Grid>
+        <Grid size={{ xs: 12, md: 1 }}>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={addSchedule}
+            disabled={!startAt || !endAt || !status}
+            fullWidth
+            sx={{ minHeight: 40 }}
+          >
+            เพิ่ม
+          </Button>
+        </Grid>
       </Grid>
+      <TableContainer sx={{ border: 1, borderColor: 'divider', overflowX: 'auto' }}>
+        <Table size="small" sx={{ minWidth: 720, ...borderedTableSx }}>
+          <TableHead>
+            <TableRow>
+              <TableCell sx={{ fontWeight: 700, bgcolor: 'neutral.50', width: '24%' }}>
+                วันเวลาเริ่มต้น
+              </TableCell>
+              <TableCell sx={{ fontWeight: 700, bgcolor: 'neutral.50', width: '24%' }}>
+                วันเวลาสิ้นสุด
+              </TableCell>
+              <TableCell sx={{ fontWeight: 700, bgcolor: 'neutral.50', width: '24%' }}>
+                พารามิเตอร์
+              </TableCell>
+              <TableCell sx={{ fontWeight: 700, bgcolor: 'neutral.50', width: '16%' }}>
+                สถานะ
+              </TableCell>
+              <TableCell sx={{ fontWeight: 700, bgcolor: 'neutral.50', width: '12%' }} align="center">
+                จัดการ
+              </TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {schedules.length ? (
+              schedules.map((item, index) => {
+                const scheduleId = item.id ?? index
+
+                return (
+                  <TableRow key={scheduleId}>
+                    <TableCell>{formatScheduleDateTime(item.startAt)}</TableCell>
+                    <TableCell>{formatScheduleDateTime(item.endAt)}</TableCell>
+                    <TableCell>{getScheduleParametersLabel(item.selectedParameters)}</TableCell>
+                    <TableCell>
+                      <Chip
+                        label={item.status || '-'}
+                        size="small"
+                        color={item.status === 'Shut Down' ? 'error' : 'default'}
+                        variant={item.status === 'Shut Down' ? 'filled' : 'outlined'}
+                        sx={{ fontWeight: 700 }}
+                      />
+                    </TableCell>
+                    <TableCell align="center">
+                      <Button
+                        size="small"
+                        color="error"
+                        variant="contained"
+                        onClick={() => setDeleteScheduleTarget({ id: scheduleId })}
+                      >
+                        ลบ
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                )
+              })
+            ) : (
+              <TableRow>
+                <TableCell colSpan={5} align="center">
+                  <Typography variant="body2" color="text.secondary">
+                    ยังไม่มีรายการสถานะที่ตั้งไว้
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </TableContainer>
     </Stack>
+    <Dialog open={Boolean(deleteScheduleTarget)} onClose={closeDeleteScheduleConfirm} fullWidth maxWidth="xs">
+      <DialogTitle>ยืนยันการลบรายการสถานะ</DialogTitle>
+      <DialogContent>
+        <Typography>
+          ยืนยันลบรายการสถานะนี้ออกจากการตั้งค่า
+        </Typography>
+      </DialogContent>
+      <DialogActions sx={{ justifyContent: 'center' }}>
+        <Button color="inherit" onClick={closeDeleteScheduleConfirm}>
+          ยกเลิก
+        </Button>
+        <Button color="error" variant="contained" onClick={confirmDeleteSchedule}>
+          ยืนยัน
+        </Button>
+      </DialogActions>
+    </Dialog>
+    </>
   )
 }
 
 const protocolCodeMap = {
+  [pomsBoxConnectionType]: 'POMS_BOX',
   'Modbus RTU': 'MODBUS_RTU',
   'Modbus TCP': 'MODBUS_TCP',
   'Microsoft SQL': 'MSSQL',
@@ -3437,6 +3595,7 @@ const protocolCodeMap = {
 }
 
 const protocolLabelMap = {
+  POMS_BOX: pomsBoxConnectionType,
   MODBUS_RTU: 'Modbus RTU',
   MODBUS_TCP: 'Modbus TCP',
   MSSQL: 'Microsoft SQL',
@@ -3444,7 +3603,7 @@ const protocolLabelMap = {
   MYSQL: 'MySQL',
 }
 
-const allowedProtocolCodes = new Set(['MODBUS_RTU', 'MODBUS_TCP', 'MSSQL', 'MYSQL'])
+const allowedProtocolCodes = new Set(['POMS_BOX', 'MODBUS_RTU', 'MODBUS_TCP', 'MSSQL', 'MYSQL'])
 
 function normalizeConnectionType(type) {
   return protocolLabelMap[type] ?? type ?? ''
@@ -3659,6 +3818,10 @@ function buildConnectionSettings(form) {
   const values = form?.values ?? {}
   const type = normalizeConnectionType(form?.type)
 
+  if (type === pomsBoxConnectionType) {
+    return null
+  }
+
   if (type === 'Modbus RTU') {
     return {
       comPort: toNumberOrStringOrNull(getComPortValue(values)),
@@ -3773,6 +3936,7 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose, onSaved
   const [deviceConfigTesting, setDeviceConfigTesting] = useState(false)
   const [deviceConfigSaving, setDeviceConfigSaving] = useState(false)
   const [deviceConfigConfirming, setDeviceConfigConfirming] = useState(false)
+  const [deleteConnectionFormTarget, setDeleteConnectionFormTarget] = useState(null)
   const useConnectedPointDeviceConfigs = isConnectedMeasurementPointDeviceConfigContext(context)
   const parameterOptions = getDeviceConfigParameterOptions(deviceConfig, getConnectionParameterOptions(context))
   const generatedDeviceCodeOptions = connectionForms
@@ -3812,6 +3976,7 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose, onSaved
       setTestResultRows([])
       setDeviceConfigTesting(false)
       setDeviceConfigConfirming(false)
+      setDeleteConnectionFormTarget(null)
       setDeviceConfigError('')
     })
 
@@ -3882,6 +4047,17 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose, onSaved
 
   const updateConnectionForm = (id, nextValue) => {
     setConnectionForms((current) => current.map((form) => (form.id === id ? nextValue : form)))
+  }
+  const closeDeleteConnectionFormConfirm = () => {
+    setDeleteConnectionFormTarget(null)
+  }
+  const confirmDeleteConnectionForm = () => {
+    if (!deleteConnectionFormTarget) {
+      return
+    }
+
+    setConnectionForms((current) => current.filter((item) => item.id !== deleteConnectionFormTarget.id))
+    setDeleteConnectionFormTarget(null)
   }
   const handleTestConnection = () => {
     const stationId = getMonitoringPointCode(context)
@@ -4092,6 +4268,7 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose, onSaved
   }
 
   return (
+    <>
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg">
       <DialogTitle
         sx={{
@@ -4143,7 +4320,7 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose, onSaved
                       color="error"
                       variant="outlined"
                       disabled={connectionForms.length === 1}
-                      onClick={() => setConnectionForms((current) => current.filter((item) => item.id !== form.id))}
+                      onClick={() => setDeleteConnectionFormTarget({ id: form.id, index })}
                     >
                       ลบอุปกรณ์
                     </Button>
@@ -4257,6 +4434,23 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose, onSaved
         ) : null}
       </DialogActions>
     </Dialog>
+    <Dialog open={Boolean(deleteConnectionFormTarget)} onClose={closeDeleteConnectionFormConfirm} fullWidth maxWidth="xs">
+      <DialogTitle>ยืนยันการลบอุปกรณ์</DialogTitle>
+      <DialogContent>
+        <Typography>
+          ยืนยันลบอุปกรณ์นี้ออกจากการตั้งค่า
+        </Typography>
+      </DialogContent>
+      <DialogActions sx={{ justifyContent: 'center' }}>
+        <Button color="inherit" onClick={closeDeleteConnectionFormConfirm}>
+          ยกเลิก
+        </Button>
+        <Button color="error" variant="contained" onClick={confirmDeleteConnectionForm}>
+          ยืนยัน
+        </Button>
+      </DialogActions>
+    </Dialog>
+    </>
   )
 }
 
