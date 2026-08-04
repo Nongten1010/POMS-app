@@ -5,6 +5,17 @@ export const DEVICE_CONNECTION_PROTOCOL = {
   MYSQL: 'MYSQL',
 } as const;
 
+export const DEVICE_CONNECTION_PARAMETER_STATUSES = [
+  'Normal',
+  'Calibration',
+  'Defective',
+  'Maintenance',
+  'Start up',
+  'Shut Down',
+  'Turnaround',
+  'Etc.',
+] as const;
+
 export type DeviceConnectionProtocol =
   (typeof DEVICE_CONNECTION_PROTOCOL)[keyof typeof DEVICE_CONNECTION_PROTOCOL];
 

@@ -2,6 +2,14 @@
 
 ไฟล์นี้บันทึกเฉพาะการเปลี่ยน API ที่ทำให้ client ต้องแก้ตาม การเปลี่ยนทั่วไปและประวัติรายละเอียดดูจาก Git history
 
+## 2026-08-04 — Device status schedules รองรับหลายช่วงแบบ validated contract
+
+- **Affected menu:** [ตั้งค่าอุปกรณ์ของจุดตรวจวัด](./menus/connection-requests/device-configs.md) และ [Integration Device Config](./integrations/device-configs/README.md)
+- **Impact:** `statusManagement.schedules[]` บังคับ parameter, ISO datetime พร้อม timezone, status enum และไม่อนุญาตช่วงทับกันของพารามิเตอร์เดียวกัน; Integration API จะขยาย `ทั้งหมด` เป็นชื่อพารามิเตอร์จริงแทนการคืนคำว่า `ทั้งหมด`
+- **Migration:** frontend ต้องเก็บทุกรายการที่กดเพิ่มไว้ใน `schedules`, จำกัดไม่เกิน 100 ช่วง และส่งเวลาเช่น `2026-08-05T08:00:00+07:00`; Worker ต้องอ่านรายการที่เรียงตาม `startAt` และไม่พึ่ง `parameter === "ทั้งหมด"`
+- **Old contract:** schedule fields รับ string/null แบบไม่ตรวจ business rule, top-level fields จำเป็นแม้มี `schedules`, และ Integration API อาจคืน `parameter: "ทั้งหมด"`
+- **New contract:** `schedules` ที่มีรายการเป็น source of truth และ legacy top-level fields จะถูกละเว้น; payload เดิมที่ไม่ส่ง `schedules` ยังถูก normalize เป็นหนึ่งรายการพร้อมตีความ local datetime เป็น timezone `+07:00`, validation ผิดตอบ `400`, และ Integration API คืนหนึ่งรายการต่อ configured parameter
+
 ## 2026-08-02 — Integration Alert Events รับเวลาเริ่มชั่วโมงเพียงค่าเดียว
 
 - **Affected integration:** [Integration Alert Events](./integrations/alert-events/README.md)

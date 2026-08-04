@@ -1586,7 +1586,20 @@ describe('connectionRequestsService', () => {
           startAt: '2026-05-30T10:00',
           endAt: '2026-05-30T11:00',
           status: 'Maintenance',
-          schedules: [],
+          schedules: [
+            {
+              selectedParameters: ['NOx (ppm)'],
+              startAt: '2026-05-30T10:00:00+07:00',
+              endAt: '2026-05-30T11:00:00+07:00',
+              status: 'Maintenance',
+            },
+            {
+              selectedParameters: ['NOx (ppm)'],
+              startAt: '2026-05-30T13:00:00+07:00',
+              endAt: '2026-05-30T14:00:00+07:00',
+              status: 'Calibration',
+            },
+          ],
         },
         createdBy: actorUserId,
         createdAt: now.toISOString(),
@@ -1644,6 +1657,21 @@ describe('connectionRequestsService', () => {
       'channels',
       'statusManagement',
     ]);
+    expect(result.statusManagement.schedules).toEqual([
+      {
+        selectedParameters: ['NOx (ppm)'],
+        startAt: '2026-05-30T10:00:00+07:00',
+        endAt: '2026-05-30T11:00:00+07:00',
+        status: 'Maintenance',
+      },
+      {
+        selectedParameters: ['NOx (ppm)'],
+        startAt: '2026-05-30T13:00:00+07:00',
+        endAt: '2026-05-30T14:00:00+07:00',
+        status: 'Calibration',
+      },
+    ]);
+    expect(result.rawConfigs.statusManagement).toEqual(result.statusManagement);
     expect(result.rawConfigs.device[0]).toMatchObject({
       deviceCode: 'STACK-A/RTU-01',
       protocol: 'MODBUS_RTU',
@@ -2945,6 +2973,138 @@ describe('connectionRequestsService', () => {
         },
       ],
     });
+  });
+
+  it('rejects status schedules that target parameters outside the selected measurement point', async () => {
+    const schedule = {
+      selectedParameters: ['SO2 (ppm)'],
+      startAt: '2026-08-05T08:00:00+07:00',
+      endAt: '2026-08-05T10:00:00+07:00',
+      status: 'Maintenance',
+    };
+    const deviceConfig = {
+      stationId: 'STACK-A',
+      protocol: 'MODBUS_TCP' as const,
+      settings: {},
+      channels: [],
+      statusManagement: { ...schedule, schedules: [schedule] },
+    };
+    mockedRepository.findById.mockResolvedValue(
+      requestDto({
+        status: CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+        createdBy: actorUserId,
+        measurementPoints: [
+          {
+            id: 1,
+            pointName: 'ปล่องระบาย A',
+            pointCode: 'STACK-A',
+            pointType: 'STACK',
+            latitude: null,
+            longitude: null,
+            parameters: ['NOx (ppm)'],
+            description: null,
+          },
+        ],
+      }),
+    );
+
+    await expect(
+      connectionRequestsService.createDeviceConfig(1, deviceConfig, actorUserId),
+    ).rejects.toMatchObject({
+      statusCode: 400,
+      code: 'BAD_REQUEST',
+    });
+    expect(mockedDeviceConnectionsService.createForRequest).not.toHaveBeenCalled();
+  });
+
+  it('accepts status schedule labels exposed by the submitted channel configuration', async () => {
+    const schedule = {
+      selectedParameters: ['NOx (ppm)'],
+      startAt: '2026-08-05T08:00:00+07:00',
+      endAt: '2026-08-05T10:00:00+07:00',
+      status: 'Maintenance',
+    };
+    const deviceConfig = {
+      stationId: 'STACK-A',
+      protocol: 'MODBUS_TCP' as const,
+      settings: {},
+      channels: [{ addressId: 40001, dataType: 'NOx (ppm)', offset: 0 }],
+      statusManagement: { ...schedule, schedules: [schedule] },
+    };
+    mockedRepository.findById.mockResolvedValue(
+      requestDto({
+        status: CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+        createdBy: actorUserId,
+        measurementPoints: [
+          {
+            id: 1,
+            pointName: 'ปล่องระบาย A',
+            pointCode: 'STACK-A',
+            pointType: 'STACK',
+            latitude: null,
+            longitude: null,
+            parameters: ['NOx'],
+            description: null,
+          },
+        ],
+      }),
+    );
+    mockedDeviceConnectionsService.createForRequest.mockResolvedValue({
+      id: 10,
+      requestId: 1,
+      ...deviceConfig,
+      createdBy: actorUserId,
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+    });
+
+    await expect(
+      connectionRequestsService.createDeviceConfig(1, deviceConfig, actorUserId),
+    ).resolves.toBeDefined();
+    expect(mockedDeviceConnectionsService.createForRequest).toHaveBeenCalledWith(
+      deviceConfig,
+      actorUserId,
+      1,
+    );
+  });
+
+  it('rejects invented channel labels as status schedule parameters', async () => {
+    const schedule = {
+      selectedParameters: ['FAKE (ppm)'],
+      startAt: '2026-08-05T08:00:00+07:00',
+      endAt: '2026-08-05T10:00:00+07:00',
+      status: 'Maintenance',
+    };
+    const deviceConfig = {
+      stationId: 'STACK-A',
+      protocol: 'MODBUS_TCP' as const,
+      settings: {},
+      channels: [{ addressId: 40001, dataType: 'FAKE (ppm)', offset: 0 }],
+      statusManagement: { ...schedule, schedules: [schedule] },
+    };
+    mockedRepository.findById.mockResolvedValue(
+      requestDto({
+        status: CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+        createdBy: actorUserId,
+        measurementPoints: [
+          {
+            id: 1,
+            pointName: 'ปล่องระบาย A',
+            pointCode: 'STACK-A',
+            pointType: 'STACK',
+            latitude: null,
+            longitude: null,
+            parameters: ['NOx'],
+            description: null,
+          },
+        ],
+      }),
+    );
+
+    await expect(
+      connectionRequestsService.createDeviceConfig(1, deviceConfig, actorUserId),
+    ).rejects.toMatchObject({ statusCode: 400, code: 'BAD_REQUEST' });
+    expect(mockedDeviceConnectionsService.createForRequest).not.toHaveBeenCalled();
   });
 
   it('stores multiple device configs in one request when every station belongs to the owner request', async () => {

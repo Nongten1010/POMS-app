@@ -191,6 +191,9 @@ function toParameterConfig(
 function toStatusSchedules(configs: DeviceConnectionConfigDTO[]): IntegrationStatusScheduleDTO[] {
   const schedules: IntegrationStatusScheduleDTO[] = [];
   const seen = new Set<string>();
+  const configuredParameters = [
+    ...new Set(configs.flatMap((config) => config.channels.map((channel) => channel.dataType))),
+  ];
 
   for (const config of configs) {
     const statusManagement = config.statusManagement;
@@ -209,7 +212,11 @@ function toStatusSchedules(configs: DeviceConnectionConfigDTO[]): IntegrationSta
           ];
 
     for (const entry of entries) {
-      for (const parameter of entry.selectedParameters) {
+      const targetParameters = entry.selectedParameters.includes('ทั้งหมด')
+        ? configuredParameters
+        : entry.selectedParameters;
+
+      for (const parameter of targetParameters) {
         const schedule = {
           parameter,
           startAt: entry.startAt,
@@ -226,7 +233,24 @@ function toStatusSchedules(configs: DeviceConnectionConfigDTO[]): IntegrationSta
     }
   }
 
-  return schedules;
+  return [...schedules].sort((left, right) => {
+    const startComparison = compareScheduleTime(left.startAt, right.startAt);
+    if (startComparison !== 0) return startComparison;
+
+    const parameterComparison = left.parameter.localeCompare(right.parameter);
+    if (parameterComparison !== 0) return parameterComparison;
+
+    const endComparison = compareScheduleTime(left.endAt, right.endAt);
+    if (endComparison !== 0) return endComparison;
+
+    return left.status.localeCompare(right.status);
+  });
+}
+
+function compareScheduleTime(left: string | null, right: string | null): number {
+  const leftTime = left === null ? Number.MAX_SAFE_INTEGER : Date.parse(left);
+  const rightTime = right === null ? Number.MAX_SAFE_INTEGER : Date.parse(right);
+  return leftTime - rightTime;
 }
 
 function buildParameterMetadataLookup(

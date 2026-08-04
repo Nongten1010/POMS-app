@@ -153,7 +153,7 @@ X-API-Key: <DEVICE_CONFIG_API_KEY>
 
 | Field | Type | Nullable | Description |
 | --- | --- | --- | --- |
-| `parameter` | string | No | พารามิเตอร์ที่ได้รับผล; อาจเป็น `ทั้งหมด` |
+| `parameter` | string | No | display label พร้อมหน่วยของพารามิเตอร์ที่ได้รับผล; backend ขยาย `ทั้งหมด` เป็น parameter ที่ configure ไว้แล้ว |
 | `startAt` | string | Yes | วันเวลาเริ่มใช้สถานะ |
 | `endAt` | string | Yes | วันเวลาสิ้นสุดสถานะ |
 | `status` | string | No | สถานะที่ใช้ในช่วงเวลา |
@@ -240,6 +240,8 @@ X-API-Key: <DEVICE_CONFIG_API_KEY>
 - `standardCriteria`, `eiaCriteria`, `standardCondition`, `dryBasis` และ `oxygenOrExcessAir` จับคู่กับเครื่องมือของ connected point ด้วยชื่อพารามิเตอร์พร้อมหน่วยก่อน หากต้อง fallback แบบไม่รวมหน่วยจะใช้เฉพาะกรณีที่ตรงเพียงรายการเดียว
 - ค่าในกลุ่มการรายงานค่าเป็น `null` เมื่อข้อมูลต้นทางไม่ได้บันทึกค่า หรือไม่พบพารามิเตอร์ต้นทางที่จับคู่ได้; ค่า `false` จะคงเป็น `false` และไม่ถูกแปลงเป็น `null`
 - `statusSchedules` ตัดรายการซ้ำที่มี `parameter`, `startAt`, `endAt` และ `status` เหมือนกัน
+- `statusSchedules` ขยาย schedule ที่เลือก `ทั้งหมด` เป็นหนึ่งรายการต่อ parameter ใน active device channels และไม่คืนคำว่า `ทั้งหมด` เป็น machine value
+- `statusSchedules` เรียงตามเวลา `startAt`, parameter, `endAt` และ status อย่างแน่นอน; schedule legacy ที่ไม่มีเวลาเรียงไว้ท้ายรายการ
 
 ### Errors
 
@@ -259,6 +261,6 @@ X-API-Key: <DEVICE_CONFIG_API_KEY>
 - Validator: [`integration-device-configs.validator.ts`](../../../../../backend/src/modules/integrations/integration-device-configs.validator.ts)
 - Types: [`integration-device-configs.types.ts`](../../../../../backend/src/modules/integrations/integration-device-configs.types.ts)
 - Service and repository: [`integration-device-configs.service.ts`](../../../../../backend/src/modules/integrations/integration-device-configs.service.ts), [`integration-device-configs.repository.ts`](../../../../../backend/src/modules/integrations/integration-device-configs.repository.ts)
-- Device config storage: [`device-connections.repository.ts`](../../../../../backend/src/modules/device-connections/device-connections.repository.ts), [`0083_relax_device_config_form_constraints.ts`](../../../../../backend/src/db/migrations/0083_relax_device_config_form_constraints.ts)
+- Device config storage: [`device-connections.repository.ts`](../../../../../backend/src/modules/device-connections/device-connections.repository.ts), [`0083_relax_device_config_form_constraints.ts`](../../../../../backend/src/db/migrations/0083_relax_device_config_form_constraints.ts), [`0086_validate_device_status_management_json.ts`](../../../../../backend/src/db/migrations/0086_validate_device_status_management_json.ts)
 - Tests: [`integration-device-configs.route.test.ts`](../../../../../backend/tests/unit/integration-device-configs.route.test.ts), [`integration-device-configs.service.test.ts`](../../../../../backend/tests/unit/integration-device-configs.service.test.ts)
 - Evidence: [การรายงานค่าต่อพารามิเตอร์](../../../evidence/integrations/device-config-parameter-reporting.tdd.md), [ประเภทจุดตรวจวัด](../../../evidence/integrations/device-config-point-types.tdd.md)

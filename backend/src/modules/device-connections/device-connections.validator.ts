@@ -1,5 +1,8 @@
 import { z } from 'zod';
-import { DEVICE_CONNECTION_PROTOCOL } from './device-connections.types';
+import {
+  DEVICE_CONNECTION_PARAMETER_STATUSES,
+  DEVICE_CONNECTION_PROTOCOL,
+} from './device-connections.types';
 
 const trimmedString = (max: number) => z.string().trim().min(1).max(max);
 const measurementRangeSchema = z
@@ -26,6 +29,11 @@ const modbusEncodingAliases = {
 
 const nullableNumber = z.number().nullable().optional().default(null);
 const nullableString = z.string().nullable().optional().default(null);
+const nullableParameterStatus = z
+  .enum(DEVICE_CONNECTION_PARAMETER_STATUSES)
+  .nullable()
+  .optional()
+  .default(null);
 
 const modbusRtuSettingsSchema = defaultNullishObject(
   z
@@ -80,7 +88,7 @@ const configChannelSchema = z
     valueFormat: nullableString,
     offset: nullableNumber,
     encoding: nullableString,
-    status: nullableString,
+    status: nullableParameterStatus,
   })
   .passthrough()
   .transform(({ unit, ...channel }) => ({
@@ -93,26 +101,94 @@ const configChannelsSchema = z.preprocess(
   z.array(configChannelSchema).max(200),
 );
 
+const statusDateTimeSchema = z.string().datetime({ offset: true });
+const legacyStatusDateTimeSchema = z.preprocess(
+  normalizeLegacyLocalStatusDateTime,
+  statusDateTimeSchema,
+);
+const legacyStatusManagementFieldNames = new Set([
+  'selectedParameters',
+  'startAt',
+  'endAt',
+  'status',
+]);
+
 const statusScheduleSchema = z
   .object({
-    selectedParameters: z.array(z.string()).nullable().optional(),
-    startAt: z.string().nullable().optional(),
-    endAt: z.string().nullable().optional(),
-    status: z.string().nullable().optional(),
-  })
-  .passthrough();
-
-const statusManagementSchema = z
-  .object({
-    selectedParameters: z.array(z.string()).nullable().optional(),
-    startAt: z.string().nullable().optional(),
-    endAt: z.string().nullable().optional(),
-    status: z.string().nullable().optional(),
-    schedules: z.array(statusScheduleSchema).nullable().optional(),
+    selectedParameters: z.array(trimmedString(128)).min(1).max(200),
+    startAt: statusDateTimeSchema,
+    endAt: statusDateTimeSchema,
+    status: z.enum(DEVICE_CONNECTION_PARAMETER_STATUSES),
   })
   .passthrough()
+  .superRefine((schedule, ctx) => {
+    if (
+      schedule.startAt &&
+      schedule.endAt &&
+      Date.parse(schedule.endAt) <= Date.parse(schedule.startAt)
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['endAt'],
+        message: 'endAt must be after startAt',
+      });
+    }
+  });
+
+const statusManagementValueSchema = z
+  .object({
+    selectedParameters: z.array(trimmedString(128)).min(1).max(200).nullable().optional(),
+    startAt: legacyStatusDateTimeSchema.nullable().optional(),
+    endAt: legacyStatusDateTimeSchema.nullable().optional(),
+    status: z.enum(DEVICE_CONNECTION_PARAMETER_STATUSES).nullable().optional(),
+    schedules: z.array(statusScheduleSchema).max(100).nullable().optional(),
+  })
+  .passthrough()
+  .superRefine((management, ctx) => {
+    if (Boolean(management.startAt) !== Boolean(management.endAt)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: [management.startAt ? 'endAt' : 'startAt'],
+        message: 'startAt and endAt must be provided together',
+      });
+    }
+    if (
+      management.startAt &&
+      management.endAt &&
+      Date.parse(management.endAt) <= Date.parse(management.startAt)
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['endAt'],
+        message: 'endAt must be after startAt',
+      });
+    }
+
+    const schedules = management.schedules ?? [];
+
+    for (let currentIndex = 0; currentIndex < schedules.length; currentIndex += 1) {
+      const current = schedules[currentIndex];
+      for (let previousIndex = 0; previousIndex < currentIndex; previousIndex += 1) {
+        const previous = schedules[previousIndex];
+        const overlapsInTime =
+          Date.parse(current.startAt) < Date.parse(previous.endAt) &&
+          Date.parse(previous.startAt) < Date.parse(current.endAt);
+
+        if (overlapsInTime && scheduleTargetsOverlap(current, previous)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['schedules', currentIndex, 'startAt'],
+            message: `Schedule overlaps schedules[${previousIndex}] for the same parameter`,
+          });
+        }
+      }
+    }
+  })
   .nullable()
-  .optional()
+  .optional();
+
+const statusManagementSchema = z
+  .preprocess(preferExplicitStatusSchedules, statusManagementValueSchema)
   .transform(normalizeStatusManagement);
 
 const baseDeviceConnectionSchema = z.object({
@@ -283,10 +359,6 @@ function normalizeStatusManagement(value: unknown): {
 } | null {
   if (!isRecord(value)) return null;
 
-  const selectedParameters = readStringArray(value.selectedParameters);
-  const status = typeof value.status === 'string' ? value.status : null;
-  if (selectedParameters === null || status === null) return null;
-
   const schedules = Array.isArray(value.schedules)
     ? value.schedules.flatMap((schedule) => {
         if (!isRecord(schedule)) return [];
@@ -304,12 +376,27 @@ function normalizeStatusManagement(value: unknown): {
       })
     : [];
 
-  return {
+  if (schedules.length > 0) {
+    return {
+      ...schedules[0],
+      schedules,
+    };
+  }
+
+  const selectedParameters = readStringArray(value.selectedParameters);
+  const status = typeof value.status === 'string' ? value.status : null;
+  if (selectedParameters === null || status === null) return null;
+
+  const legacySchedule = {
     selectedParameters,
     startAt: readNullableString(value.startAt),
     endAt: readNullableString(value.endAt),
     status,
-    schedules,
+  };
+
+  return {
+    ...legacySchedule,
+    schedules: value.schedules == null ? [legacySchedule] : schedules,
   };
 }
 
@@ -320,6 +407,38 @@ function readStringArray(value: unknown): string[] | null {
 
 function readNullableString(value: unknown): string | null {
   return typeof value === 'string' ? value : null;
+}
+
+function normalizeLegacyLocalStatusDateTime(value: unknown): unknown {
+  if (typeof value !== 'string') return value;
+
+  const trimmed = value.trim();
+  const match = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})(:\d{2}(?:\.\d{1,3})?)?$/.exec(trimmed);
+  if (!match) return value;
+
+  return `${match[1]}${match[2] ?? ':00'}+07:00`;
+}
+
+function preferExplicitStatusSchedules(value: unknown): unknown {
+  if (!isRecord(value) || !Array.isArray(value.schedules) || value.schedules.length === 0) {
+    return value;
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).filter(([key]) => !legacyStatusManagementFieldNames.has(key)),
+  );
+}
+
+function scheduleTargetsOverlap(
+  left: { selectedParameters: string[] },
+  right: { selectedParameters: string[] },
+): boolean {
+  if (left.selectedParameters.includes('ทั้งหมด') || right.selectedParameters.includes('ทั้งหมด')) {
+    return true;
+  }
+
+  const rightParameters = new Set(right.selectedParameters);
+  return left.selectedParameters.some((parameter) => rightParameters.has(parameter));
 }
 
 function toChannelDataType(dataType: string, unit?: string | null): string {
