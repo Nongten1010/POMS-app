@@ -152,6 +152,10 @@ function ensureBatchDeviceKeysAreUnique(inputs: CreateDeviceConnectionConfigInpu
 }
 
 function describeEndpoint(input: TestDeviceConnectionInput): string {
+  if (input.protocol === DEVICE_CONNECTION_PROTOCOL.POMS_BOX) {
+    return `POMS_BOX:${settingToText(input.deviceCode ?? input.stationId)}`;
+  }
+
   if (input.protocol === DEVICE_CONNECTION_PROTOCOL.MODBUS_RTU) {
     const settings = input.settings;
     return `COM${settingToText(settings.comPort)}:slave-${settingToText(settings.slaveId)}`;

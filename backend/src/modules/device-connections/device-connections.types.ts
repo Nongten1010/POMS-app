@@ -1,4 +1,5 @@
 export const DEVICE_CONNECTION_PROTOCOL = {
+  POMS_BOX: 'POMS_BOX',
   MODBUS_RTU: 'MODBUS_RTU',
   MODBUS_TCP: 'MODBUS_TCP',
   MSSQL: 'MSSQL',
@@ -12,6 +13,7 @@ export const DEVICE_CONNECTION_PARAMETER_STATUSES = [
   'Maintenance',
   'Start up',
   'Shut Down',
+  'No Discharge',
   'Turnaround',
   'Etc.',
 ] as const;
@@ -112,6 +114,11 @@ export interface CreateModbusRtuConnectionConfigInput extends BaseDeviceConnecti
   settings: DeviceConnectionSettingsInput;
 }
 
+export interface CreatePomsBoxConnectionConfigInput extends BaseDeviceConnectionConfigInput {
+  protocol: typeof DEVICE_CONNECTION_PROTOCOL.POMS_BOX;
+  settings: DeviceConnectionSettingsInput;
+}
+
 export interface CreateModbusTcpConnectionConfigInput extends BaseDeviceConnectionConfigInput {
   protocol: typeof DEVICE_CONNECTION_PROTOCOL.MODBUS_TCP;
   settings: DeviceConnectionSettingsInput;
@@ -128,6 +135,7 @@ export interface CreateMysqlConnectionConfigInput extends BaseDeviceConnectionCo
 }
 
 export type CreateDeviceConnectionConfigInput =
+  | CreatePomsBoxConnectionConfigInput
   | CreateModbusRtuConnectionConfigInput
   | CreateModbusTcpConnectionConfigInput
   | CreateMssqlConnectionConfigInput

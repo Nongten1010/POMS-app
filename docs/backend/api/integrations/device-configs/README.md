@@ -106,7 +106,7 @@ X-API-Key: <DEVICE_CONFIG_API_KEY>
 | Field | Type | Nullable | Description |
 | --- | --- | --- | --- |
 | `deviceCode` | string | No | รหัสอุปกรณ์; backend สร้าง display code จาก station และลำดับเมื่อ config ไม่มีค่า |
-| `protocol` | `MODBUS_RTU` \| `MODBUS_TCP` \| `MSSQL` \| `MYSQL` | No | protocol ของอุปกรณ์ |
+| `protocol` | `POMS_BOX` \| `MODBUS_RTU` \| `MODBUS_TCP` \| `MSSQL` \| `MYSQL` | No | protocol ของอุปกรณ์ |
 | `hostIp` | string | Yes | host สำหรับ TCP/database |
 | `port` | number | Yes | port สำหรับ TCP/database |
 | `slaveId` | number | Yes | Slave ID สำหรับ Modbus |
@@ -154,9 +154,9 @@ X-API-Key: <DEVICE_CONFIG_API_KEY>
 | Field | Type | Nullable | Description |
 | --- | --- | --- | --- |
 | `parameter` | string | No | display label พร้อมหน่วยของพารามิเตอร์ที่ได้รับผล; backend ขยาย `ทั้งหมด` เป็น parameter ที่ configure ไว้แล้ว |
-| `startAt` | string | Yes | วันเวลาเริ่มใช้สถานะ |
-| `endAt` | string | Yes | วันเวลาสิ้นสุดสถานะ |
-| `status` | string | No | สถานะที่ใช้ในช่วงเวลา |
+| `startAt` | string | Yes | วันเวลาเริ่มใช้สถานะรูปแบบ `YYYY-MM-DD HH:mm:ss` โดยไม่มี timezone; เป็น `null` ได้เฉพาะข้อมูล legacy |
+| `endAt` | string | Yes | วันเวลาสิ้นสุดสถานะรูปแบบ `YYYY-MM-DD HH:mm:ss` โดยไม่มี timezone; เป็น `null` ได้เฉพาะข้อมูล legacy |
+| `status` | `Normal` \| `Calibration` \| `Defective` \| `Maintenance` \| `Start up` \| `Shut Down` \| `No Discharge` \| `Turnaround` \| `Etc.` | No | สถานะที่ใช้ในช่วงเวลา |
 
 ### Success Response Example
 
@@ -216,7 +216,20 @@ X-API-Key: <DEVICE_CONFIG_API_KEY>
         "status": "Normal"
       }
     ],
-    "statusSchedules": []
+    "statusSchedules": [
+      {
+        "parameter": "NOx (ppm)",
+        "startAt": "2026-08-05 08:00:00",
+        "endAt": "2026-08-05 10:00:00",
+        "status": "Maintenance"
+      },
+      {
+        "parameter": "NOx (ppm)",
+        "startAt": "2026-08-05 10:00:00",
+        "endAt": "2026-08-05 11:00:00",
+        "status": "Calibration"
+      }
+    ]
   }
 }
 ```
@@ -242,6 +255,8 @@ X-API-Key: <DEVICE_CONFIG_API_KEY>
 - `statusSchedules` ตัดรายการซ้ำที่มี `parameter`, `startAt`, `endAt` และ `status` เหมือนกัน
 - `statusSchedules` ขยาย schedule ที่เลือก `ทั้งหมด` เป็นหนึ่งรายการต่อ parameter ใน active device channels และไม่คืนคำว่า `ทั้งหมด` เป็น machine value
 - `statusSchedules` เรียงตามเวลา `startAt`, parameter, `endAt` และ status อย่างแน่นอน; schedule legacy ที่ไม่มีเวลาเรียงไว้ท้ายรายการ
+- จุดตรวจวัดหนึ่งจุดตั้งเวลาได้หลายช่วง และพารามิเตอร์เดียวกันมีช่วงต่อเนื่องกันได้ โดยช่วงเวลาที่ backend รับเข้าใช้ขอบเขตแบบ `[startAt, endAt)`
+- ข้อมูลใหม่ใช้ `startAt` และ `endAt` รูปแบบ `YYYY-MM-DD HH:mm:ss` โดยไม่มี timezone และ `endAt` ต้องมากกว่า `startAt`; ค่า `null` ใน response มีไว้รองรับข้อมูล legacy เท่านั้น
 
 ### Errors
 
@@ -261,6 +276,6 @@ X-API-Key: <DEVICE_CONFIG_API_KEY>
 - Validator: [`integration-device-configs.validator.ts`](../../../../../backend/src/modules/integrations/integration-device-configs.validator.ts)
 - Types: [`integration-device-configs.types.ts`](../../../../../backend/src/modules/integrations/integration-device-configs.types.ts)
 - Service and repository: [`integration-device-configs.service.ts`](../../../../../backend/src/modules/integrations/integration-device-configs.service.ts), [`integration-device-configs.repository.ts`](../../../../../backend/src/modules/integrations/integration-device-configs.repository.ts)
-- Device config storage: [`device-connections.repository.ts`](../../../../../backend/src/modules/device-connections/device-connections.repository.ts), [`0083_relax_device_config_form_constraints.ts`](../../../../../backend/src/db/migrations/0083_relax_device_config_form_constraints.ts), [`0086_validate_device_status_management_json.ts`](../../../../../backend/src/db/migrations/0086_validate_device_status_management_json.ts)
+- Device config storage: [`device-connections.repository.ts`](../../../../../backend/src/modules/device-connections/device-connections.repository.ts), [`0083_relax_device_config_form_constraints.ts`](../../../../../backend/src/db/migrations/0083_relax_device_config_form_constraints.ts), [`0086_validate_device_status_management_json.ts`](../../../../../backend/src/db/migrations/0086_validate_device_status_management_json.ts), [`0087_allow_poms_box_device_protocol.ts`](../../../../../backend/src/db/migrations/0087_allow_poms_box_device_protocol.ts)
 - Tests: [`integration-device-configs.route.test.ts`](../../../../../backend/tests/unit/integration-device-configs.route.test.ts), [`integration-device-configs.service.test.ts`](../../../../../backend/tests/unit/integration-device-configs.service.test.ts)
 - Evidence: [การรายงานค่าต่อพารามิเตอร์](../../../evidence/integrations/device-config-parameter-reporting.tdd.md), [ประเภทจุดตรวจวัด](../../../evidence/integrations/device-config-point-types.tdd.md)

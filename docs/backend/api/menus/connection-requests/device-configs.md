@@ -31,7 +31,7 @@ POST ทั้งสอง endpoint รับ body ได้สามรูป�
 | --- | --- | --- | --- | --- |
 | `stationId` | string | Yes | No | รหัสหรือชื่อจุดตรวจวัด ต้องตรงกับจุดใน request หรือ `:stationId` ใน path |
 | `deviceCode` | string | No | Yes | รหัสอุปกรณ์; ใช้จับคู่ `device` กับ `channels` เมื่อส่ง form payload |
-| `protocol` | `MODBUS_RTU` \| `MODBUS_TCP` \| `MSSQL` \| `MYSQL` | Yes | No | discriminator ของ config แต่ละอุปกรณ์ |
+| `protocol` | `POMS_BOX` \| `MODBUS_RTU` \| `MODBUS_TCP` \| `MSSQL` \| `MYSQL` | Yes | No | discriminator ของ config แต่ละอุปกรณ์ |
 | `settings` | object | No | Yes | ถ้าไม่ส่งหรือส่ง `null` backend normalize เป็น `{}`; field ภายในเป็น optional และส่ง `null` ได้ |
 | `channels` | array | No | Yes | ถ้าไม่ส่งหรือส่ง `null` backend normalize เป็น `[]` |
 | `statusManagement` | object | No | Yes | ถ้าไม่ส่ง, ส่ง `null` หรือส่งข้อมูลไม่ครบ backend เก็บเป็น `null` |
@@ -61,6 +61,10 @@ POST ทั้งสอง endpoint รับ body ได้สามรูป�
 | `MODBUS_RTU` | `comPort`, `slaveId`, `baudRate`, `parity`, `stopBits`, `dataBits`, `quantity`, `valueRange` |
 | `MODBUS_TCP` | `hostIp`, `slaveId`, `port`, `valueRange` |
 
+### POMS Box Settings
+
+`POMS_BOX` เป็นการเชื่อมต่อแบบ logical connection ที่อ้างอิง `deviceCode` ของ POMS Box จึงไม่ต้องมีค่า transport/database ใน `settings`; หากไม่ส่งหรือส่ง `null` backend จะ normalize เป็น `{}` และยังบันทึก `channels`/`statusManagement` ได้ตามปกติ
+
 ### Channel Fields
 
 `channels` ว่างได้ หากส่งสมาชิกใน array สมาชิกนั้นต้องมี `dataType` เพื่อเป็น structural identifier ของพารามิเตอร์
@@ -79,7 +83,7 @@ POST ทั้งสอง endpoint รับ body ได้สามรูป�
 | `valueFormat` | string | No | Yes | รูปแบบค่า เช่น `MEASUREMENT_VALUE`, `CURRENT`, `VOLTAGE`; backend ไม่ตรวจ enum เชิง business |
 | `offset` | number | No | Yes | offset ของค่าที่อ่าน |
 | `encoding` | string | No | Yes | รูปแบบ encoding; backend ไม่ตรวจ enum เชิง business |
-| `status` | enum string | No | Yes | `Normal`, `Calibration`, `Defective`, `Maintenance`, `Start up`, `Shut Down`, `Turnaround` หรือ `Etc.` |
+| `status` | enum string | No | Yes | `Normal`, `Calibration`, `Defective`, `Maintenance`, `Start up`, `Shut Down`, `No Discharge`, `Turnaround` หรือ `Etc.` |
 
 ### Status-management Fields
 
@@ -87,17 +91,17 @@ POST ทั้งสอง endpoint รับ body ได้สามรูป�
 | --- | --- | --- | --- | --- |
 | `schedules` | object[] | No | Yes | source of truth ของหน้าจอใหม่ สูงสุด 100 ช่วง; ส่ง `[]` โดยไม่ส่ง legacy fields เพื่อล้างรายการทั้งหมด |
 | `schedules[].selectedParameters` | string[] | Yes | No | 1-200 ค่าจาก `parameterOptions` หรือ `ทั้งหมด`; ใช้ display label พร้อมหน่วย |
-| `schedules[].startAt` | ISO 8601 datetime | Yes | No | เวลาเริ่มพร้อม timezone เช่น `2026-08-05T08:00:00+07:00` |
-| `schedules[].endAt` | ISO 8601 datetime | Yes | No | เวลาสิ้นสุดพร้อม timezone และต้องอยู่หลัง `startAt` |
-| `schedules[].status` | enum string | Yes | No | `Normal`, `Calibration`, `Defective`, `Maintenance`, `Start up`, `Shut Down`, `Turnaround` หรือ `Etc.` |
+| `schedules[].startAt` | local datetime string | Yes | No | เวลาเริ่มรูปแบบ `YYYY-MM-DD HH:mm:ss` เช่น `2026-08-05 08:00:00`; ไม่ส่ง timezone |
+| `schedules[].endAt` | local datetime string | Yes | No | เวลาสิ้นสุดรูปแบบ `YYYY-MM-DD HH:mm:ss`; ไม่ส่ง timezone และต้องอยู่หลัง `startAt` |
+| `schedules[].status` | enum string | Yes | No | `Normal`, `Calibration`, `Defective`, `Maintenance`, `Start up`, `Shut Down`, `No Discharge`, `Turnaround` หรือ `Etc.` |
 | `selectedParameters` | string[] | Legacy | Yes | compatibility field ของช่วงเดี่ยว; เมื่อ `schedules` มีรายการ backend ใช้รายการแรกเติม field นี้ใน response |
-| `startAt` | ISO 8601 datetime | Legacy | Yes | compatibility field ของช่วงเดี่ยว ต้องส่งพร้อม `endAt`; ค่าเดิมแบบ local datetime จะถูกตีความเป็น `+07:00` |
-| `endAt` | ISO 8601 datetime | Legacy | Yes | compatibility field ของช่วงเดี่ยวและต้องอยู่หลัง `startAt`; ค่าเดิมแบบ local datetime จะถูกตีความเป็น `+07:00` |
+| `startAt` | local datetime string | Legacy | Yes | compatibility field ของช่วงเดี่ยว ต้องส่งพร้อม `endAt`; response ใช้ `YYYY-MM-DD HH:mm:ss` |
+| `endAt` | local datetime string | Legacy | Yes | compatibility field ของช่วงเดี่ยวและต้องอยู่หลัง `startAt`; response ใช้ `YYYY-MM-DD HH:mm:ss` |
 | `status` | enum string | Legacy | Yes | compatibility field ของช่วงเดี่ยว |
 
 ช่วงเวลาใช้ขอบเขตแบบ `[startAt, endAt)` จึงวางช่วงถัดไปให้เริ่มตรง `endAt` ของช่วงก่อนหน้าได้ แต่ช่วงของพารามิเตอร์เดียวกันห้ามทับกัน หากรายการใดเลือก `ทั้งหมด` ช่วงนั้นถือว่าทับกับทุกพารามิเตอร์
 
-Frontend ใหม่ต้องส่งรายการที่กดเพิ่มแล้วทั้งหมดใน `schedules` ไม่แยกรายการแรกไว้ที่ legacy fields เมื่อ `schedules` มีรายการ backend จะไม่พิจารณา legacy top-level fields และใช้ schedule แรกเติม compatibility fields ใน response หาก client เดิมไม่ส่ง `schedules` หรือส่ง `null` backend จะ normalize legacy fields เป็น schedule หนึ่งรายการ โดย local datetime เดิม เช่น `2026-08-05T08:00` จะถูกอัปเกรดเป็น `2026-08-05T08:00:00+07:00`
+Frontend ใหม่ต้องส่งรายการที่กดเพิ่มแล้วทั้งหมดใน `schedules` ไม่แยกรายการแรกไว้ที่ legacy fields เมื่อ `schedules` มีรายการ backend จะไม่พิจารณา legacy top-level fields และใช้ schedule แรกเติม compatibility fields ใน response ค่าเวลา request/response มาตรฐานคือ `YYYY-MM-DD HH:mm:ss` โดยไม่มี timezone เพื่อให้ตรงกับ local datetime ที่ผู้ใช้เลือก Backend ยังรับค่าเดิม เช่น `2026-08-05T08:00` หรือ `2026-08-05T08:00:00+07:00` เพื่อ compatibility แต่จะ normalize เป็น `2026-08-05 08:00:00` ก่อนบันทึกและตอบกลับ
 
 ### Server-managed Identity And Relations
 
@@ -291,14 +295,14 @@ GET /api/v1/cems-wpms-requests/101/device-configs?stationId=CEMS-0001%2F2569
     "schedules": [
       {
         "selectedParameters": ["CO (ppm)", "NOx (ppm)"],
-        "startAt": "2026-08-05T08:00:00+07:00",
-        "endAt": "2026-08-05T10:00:00+07:00",
+        "startAt": "2026-08-05 08:00:00",
+        "endAt": "2026-08-05 10:00:00",
         "status": "Maintenance"
       },
       {
         "selectedParameters": ["CO (ppm)"],
-        "startAt": "2026-08-05T13:00:00+07:00",
-        "endAt": "2026-08-05T15:00:00+07:00",
+        "startAt": "2026-08-05 13:00:00",
+        "endAt": "2026-08-05 15:00:00",
         "status": "Calibration"
       }
     ]
@@ -358,7 +362,7 @@ GET /api/v1/cems-wpms-requests/101/device-configs?stationId=CEMS-0001%2F2569
 - `stationId` ต้องตรงกับ `pointCode` หรือ `pointName` ของ measurement point ใน request
 - ผู้เรียกต้องเป็นเจ้าของ request และ request ต้องอยู่สถานะ `WAITING_CONNECTION`
 - backend ไม่ตรวจ required, format, IP, port range, Address ID range, min/max order, alert order, encoding/value-format enum หรือ Address ID ซ้ำของ connection/channel fields
-- status-management ตรวจ enum, ISO datetime พร้อม timezone, ลำดับเวลา, จำนวนรายการ, parameter ของจุดตรวจวัด และช่วงทับกันที่ backend
+- status-management ตรวจ enum, local datetime รูปแบบ `YYYY-MM-DD HH:mm:ss`, ลำดับเวลา, จำนวนรายการ, parameter ของจุดตรวจวัด และช่วงทับกันที่ backend
 - backend ยังตรวจโครงสร้าง JSON, `stationId`, `protocol`, ความสัมพันธ์ request-station และขนาด batch/channel เพื่อป้องกัน payload ผิดรูปแบบหรือใหญ่เกินกำหนด
 
 ### Errors
@@ -612,6 +616,7 @@ Response ใช้ schema เดียวกับ [POST ของ request](#suc
 - Controller and form mapper: [`connection-requests.controller.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.controller.ts), [`connection-requests.service.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.service.ts)
 - Device validator and types: [`device-connections.validator.ts`](../../../../../backend/src/modules/device-connections/device-connections.validator.ts), [`device-connections.types.ts`](../../../../../backend/src/modules/device-connections/device-connections.types.ts)
 - Persistence: [`device-connections.service.ts`](../../../../../backend/src/modules/device-connections/device-connections.service.ts), [`device-connections.repository.ts`](../../../../../backend/src/modules/device-connections/device-connections.repository.ts)
-- Migrations: [`0083_relax_device_config_form_constraints.ts`](../../../../../backend/src/db/migrations/0083_relax_device_config_form_constraints.ts), [`0086_validate_device_status_management_json.ts`](../../../../../backend/src/db/migrations/0086_validate_device_status_management_json.ts)
+- Migrations: [`0083_relax_device_config_form_constraints.ts`](../../../../../backend/src/db/migrations/0083_relax_device_config_form_constraints.ts), [`0086_validate_device_status_management_json.ts`](../../../../../backend/src/db/migrations/0086_validate_device_status_management_json.ts), [`0087_allow_poms_box_device_protocol.ts`](../../../../../backend/src/db/migrations/0087_allow_poms_box_device_protocol.ts)
 - Validator/service tests: [`device-connections.validator.test.ts`](../../../../../backend/tests/unit/device-connections.validator.test.ts), [`device-connections.service.test.ts`](../../../../../backend/tests/unit/device-connections.service.test.ts), [`connection-requests.service.test.ts`](../../../../../backend/tests/unit/connection-requests.service.test.ts)
+- Migration test: [`device-connection-protocol-migration.test.ts`](../../../../../backend/tests/unit/device-connection-protocol-migration.test.ts)
 - Route tests: [`connected-measurement-points.route.test.ts`](../../../../../backend/tests/unit/connected-measurement-points.route.test.ts), [`connection-requests.create.route.test.ts`](../../../../../backend/tests/unit/connection-requests.create.route.test.ts)

@@ -69,7 +69,9 @@ describe('POST /api/v1/cems-wpms-requests/direct-connections integration', () =>
         factoryRegistrationNo: '10120000325542',
         latitude: 13.923456,
         longitude: 100.456789,
-        measurementPoints: [expect.objectContaining({ pointCode: 'S1125' })],
+        measurementPoints: [
+          expect.objectContaining({ pointCode: 'S1125', documentsAndImages: [] }),
+        ],
       }),
       42,
     );
@@ -123,12 +125,6 @@ function validPayload() {
           stackDiameter: 1.2,
           connectionDevice: 'D-POMS Client (ใหม่)',
         },
-        documentsAndImages: [
-          {
-            title: 'ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน',
-            fileUrl: 'https://example.com/factory-front.jpg',
-          },
-        ],
         measurementInstruments: {
           converterBrand: null,
           converterModel: null,

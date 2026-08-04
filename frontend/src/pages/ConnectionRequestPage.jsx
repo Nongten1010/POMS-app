@@ -91,8 +91,14 @@ const wpmsTreatmentSystemOptions = wpmsTreatmentSystemOptionItems.map((option) =
   value: getOptionValue(option),
 }))
 const legalAnnexNoOptions = Array.from({ length: 13 }, (_, index) => String(index + 1))
-const isOtherOption = (value = '') => value === 'อื่นๆ' || value.includes('อื่นๆ')
-const isBiomassOption = (value = '') => value.includes('ชีวมวล') || value.toLowerCase().includes('biomass')
+const isOtherOption = (value = '') => {
+  const normalizedValue = String(value ?? '')
+  return normalizedValue === 'อื่นๆ' || normalizedValue.includes('อื่นๆ')
+}
+const isBiomassOption = (value = '') => {
+  const normalizedValue = String(value ?? '')
+  return normalizedValue.includes('ชีวมวล') || normalizedValue.toLowerCase().includes('biomass')
+}
 const eiaAssessmentOptions = ['ไม่มี', 'มี IEE', 'มี EIA', 'มี EHIA', 'อื่นๆ']
 const eiaProjectOptions = ['มี IEE', 'มี EIA', 'มี EHIA']
 const combustionControlSystemOptions = ['ระบบปิด', 'ระบบเปิด']
@@ -174,40 +180,6 @@ function buildInstrumentDialogForm(value = {}) {
   }
 }
 
-const mockCemsEligibleParameters = [
-  'NOx (ppm)',
-  'SO2 (ppm)',
-  'CO (ppm)',
-  'Temp. (C°)',
-  'O2 (%)',
-  'Opacity (%)',
-  'Flow Rate (m3/hr)',
-  'Particulate (mg/m3)',
-]
-
-const mockCemsExemptedParameters = [
-  'As (mg/m3)',
-  'Cl (mg/m3)',
-  'Cl (ppm)',
-  'CO2 (%)',
-  'Cresol (ppm)',
-  'Cu (mg/m3)',
-  'Dioxins/Furans (µg/m3)',
-  'H2S (ppm)',
-  'H2SO4 (ppm)',
-  'HCl (mg/m3)',
-  'HCl (ppm)',
-  'HF (ppm)',
-  'Hg (mg/m3)',
-  'Moisture (%)',
-  'Opacity (mg/m3)',
-  'Pb (mg/m3)',
-  'Pressure (mmHg)',
-  'Sb (mg/m3)',
-  'TRS (ppm)',
-  'Xylene (ppm)',
-]
-
 function getInitialInstrumentRows(initialInstruments = {}) {
   if (Array.isArray(initialInstruments.parameters) && initialInstruments.parameters.length) {
     return initialInstruments.parameters
@@ -216,60 +188,62 @@ function getInitialInstrumentRows(initialInstruments = {}) {
   return []
 }
 
-const mockCemsMonitoringPointDetails = {
-  pointCode: 'CEMS-STACK-001',
-  pointName: 'ปล่องระบาย A',
-  productionUnitType: 'หม้อไอน้ำ',
-  productionCapacity: '10 ตันไอน้ำ/ชั่วโมง',
-  cemsInstallationRequiredBy: cemsInstallationRequiredOptions[0]?.value ?? '',
-  legalAnnexNo: ['1'],
-  eligibleParameters: mockCemsEligibleParameters,
-  exemptedParameters: mockCemsExemptedParameters,
+const emptyCemsMonitoringPointDetails = {
+  pointCode: '',
+  pointName: '',
+  productionUnitType: '',
+  productionCapacity: '',
+  cemsInstallationRequiredBy: '',
+  legalAnnexNo: [],
+  eligibleParameters: [],
+  exemptedParameters: [],
   connectedParameters: [],
-  pendingParameters: mockCemsEligibleParameters,
+  pendingParameters: [],
   timeSharingParameters: [],
   sharedStackCode: '',
-  stackShape: 'วงกลม',
-  stackDiameter: '1.2',
-  stackHeight: '30',
-  monitoringHeight: '20',
-  averageFlowRate: '1200',
-  minFlowRate: '1000',
-  maxFlowRate: '1500',
-  primaryFuel: 'ก๊าซธรรมชาติ (NG)',
-  primaryFuelPercent: '80',
-  secondaryFuel: 'ไม่มี',
-  combustionControlSystem: 'ควบคุมอัตโนมัติ',
-  hasTreatmentSystem: 'มี',
-  treatmentSystem: 'สครับเบอร์แบบเปียก (ไม่มี media) (Wet Scrubber)',
-  stackLatitude: '13.7563',
-  stackLongitude: '100.5018',
-  connectionDevice: 'POMS Box (กรอ.)',
+  stackShape: '',
+  stackDiameter: '',
+  stackHeight: '',
+  monitoringHeight: '',
+  averageFlowRate: '',
+  minFlowRate: '',
+  maxFlowRate: '',
+  primaryFuel: '',
+  primaryFuelPercent: '',
+  secondaryFuel: '',
+  combustionControlSystem: '',
+  hasTreatmentSystem: '',
+  treatmentSystem: [],
+  stackLatitude: '',
+  stackLongitude: '',
+  connectionDevice: '',
 }
 
-const mockWpmsMonitoringPointDetails = {
-  pointCode: 'WPMS-WW-001',
-  pointName: 'จุดระบายน้ำทิ้ง A',
-  eligibleParameters: ['BOD (mg/l)', 'COD (mg/l)', 'Flow rate (m3/hr)'],
+const emptyWpmsMonitoringPointDetails = {
+  pointCode: '',
+  pointName: '',
+  eligibleParameters: [],
   connectedParameters: [],
-  pendingParameters: ['BOD (mg/l)', 'COD (mg/l)', 'Flow rate (m3/hr)'],
-  averageWastewaterDischarge: '500',
-  minWastewaterDischarge: '300',
-  maxWastewaterDischarge: '800',
-  hasTreatmentSystem: 'มี',
-  treatmentSystem: 'อื่นๆ',
-  treatmentSystemOther: 'ระบบบำบัดชีวภาพ',
-  maxTreatmentCapacity: '1000',
-  instrumentLatitude: '13.7563',
-  instrumentLongitude: '100.5018',
-  wastewaterSource: 'กระบวนการผลิต',
-  dischargeReceivingSource: 'คลองสาธารณะ',
-  connectionDevice: 'POMS Box (กรอ.)',
+  pendingParameters: [],
+  averageWastewaterDischarge: '',
+  minWastewaterDischarge: '',
+  maxWastewaterDischarge: '',
+  hasTreatmentSystem: '',
+  treatmentSystem: [],
+  treatmentSystemOther: '',
+  maxTreatmentCapacity: '',
+  instrumentLatitude: '',
+  instrumentLongitude: '',
+  dischargeLatitude: '',
+  dischargeLongitude: '',
+  wastewaterSource: '',
+  dischargeReceivingSource: '',
+  connectionDevice: '',
 }
 
-const mockMeasurementInstrumentDetails = {
-  converterBrand: 'Converter Brand',
-  converterModel: 'CV-100',
+const emptyMeasurementInstrumentDetails = {
+  converterBrand: '',
+  converterModel: '',
 }
 
 const waitingConnectionSx = {
@@ -304,7 +278,8 @@ const tableActionStackSx = {
   },
 }
 
-const connectionTypeOptions = ['Modbus RTU', 'Modbus TCP', 'Microsoft SQL', 'MySQL']
+const pomsBoxConnectionType = 'POMS Box'
+const connectionTypeOptions = ['Modbus RTU', 'Modbus TCP', 'Microsoft SQL', 'MySQL', pomsBoxConnectionType]
 
 const baudRateOptions = ['2400', '4800', '9600', '14400', '19200', '38400']
 const parityOptions = ['Even', 'Odd', 'None']
@@ -318,6 +293,7 @@ const connectionParameterStatusOptions = [
   'Maintenance',
   'Start up',
   'Shut Down',
+  'No Discharge',
   'Turnaround',
   'Etc.',
 ]
@@ -492,6 +468,9 @@ function createCriteriaRowsFromStandardValue(standardValue) {
 }
 
 function getDefaultConnectionForm(type) {
+  if (type === pomsBoxConnectionType) {
+    return {}
+  }
   if (type === 'Modbus RTU') {
     return {
       comPort: '',
@@ -519,6 +498,9 @@ function getDefaultConnectionForm(type) {
       dbUser: '',
       dbPass: '',
       dbName: '',
+      minuteTableName: '',
+      fiveMinuteTableName: '',
+      hourlyTableName: '',
     }
   }
   return {
@@ -527,6 +509,9 @@ function getDefaultConnectionForm(type) {
     dbUser: '',
     dbPass: '',
     dbName: '',
+    minuteTableName: '',
+    fiveMinuteTableName: '',
+    hourlyTableName: '',
   }
 }
 
@@ -2983,7 +2968,7 @@ function OptionSelectField({ label, value, options, onChange, defaultOption }) {
 function ConnectionFormFields({ connectionType, value, onChange }) {
   const updateField = (field, nextValue) => onChange({ ...value, [field]: nextValue })
 
-  if (!connectionType) {
+  if (!connectionType || connectionType === pomsBoxConnectionType) {
     return null
   }
 
@@ -3053,6 +3038,33 @@ function ConnectionFormFields({ connectionType, value, onChange }) {
       </Grid>
       <Grid size={{ xs: 12, md: 3 }}>
         <TextField label="dbName" size="small" value={value.dbName} onChange={(event) => updateField('dbName', event.target.value)} fullWidth />
+      </Grid>
+      <Grid size={{ xs: 12, md: 3 }}>
+        <TextField
+          label="ชื่อ Table ข้อมูลแบบรายนาที"
+          size="small"
+          value={value.minuteTableName ?? ''}
+          onChange={(event) => updateField('minuteTableName', event.target.value)}
+          fullWidth
+        />
+      </Grid>
+      <Grid size={{ xs: 12, md: 3 }}>
+        <TextField
+          label="ชื่อ Table ข้อมูลแบบราย 5 นาที"
+          size="small"
+          value={value.fiveMinuteTableName ?? ''}
+          onChange={(event) => updateField('fiveMinuteTableName', event.target.value)}
+          fullWidth
+        />
+      </Grid>
+      <Grid size={{ xs: 12, md: 3 }}>
+        <TextField
+          label="ชื่อ Table ข้อมูลแบบรายชั่วโมง"
+          size="small"
+          value={value.hourlyTableName ?? ''}
+          onChange={(event) => updateField('hourlyTableName', event.target.value)}
+          fullWidth
+        />
       </Grid>
     </Grid>
   )
@@ -3176,7 +3188,7 @@ function ConnectionParameterTable({ deviceCodeOptions, rows, setRows }) {
                   <TableCell sx={{ minWidth: 124 }}>
                     <PositiveNumberField
                       label=""
-                      min={40001}
+                      min={1}
                       value={row.addressId}
                       onChange={(nextValue) => updateRow(index, 'addressId', nextValue)}
                     />
@@ -3304,22 +3316,83 @@ function ConnectionParameterTable({ deviceCodeOptions, rows, setRows }) {
 
 function StatusManagementSection({ parameterOptions, statusManagement, onChange }) {
   const allOption = 'ทั้งหมด'
-  const [selectedParameters, setSelectedParameters] = useState(statusManagement?.selectedParameters ?? [])
+  const statusManagementStatusOptions = connectionParameterStatusOptions.filter((option) => option !== 'Normal')
+  const initialSelectedParameters = Array.isArray(statusManagement?.selectedParameters)
+    ? statusManagement.selectedParameters
+    : []
+  const initialSchedules = Array.isArray(statusManagement?.schedules) ? statusManagement.schedules : []
+  const [selectedParameters, setSelectedParameters] = useState(initialSelectedParameters)
   const [status, setStatus] = useState(statusManagement?.status ?? '')
   const [startAt, setStartAt] = useState(statusManagement?.startAt ?? '')
   const [endAt, setEndAt] = useState(statusManagement?.endAt ?? '')
+  const [schedules, setSchedules] = useState(initialSchedules)
+  const [deleteScheduleTarget, setDeleteScheduleTarget] = useState(null)
   const updateStatusManagement = (nextValue) => {
     onChange?.({
       selectedParameters,
       startAt,
       endAt,
       status,
-      schedules: statusManagement?.schedules ?? [],
+      schedules,
       ...nextValue,
     })
   }
+  const formatScheduleDateTime = (value) => {
+    if (!value) return '-'
+    const date = new Date(value)
+
+    if (Number.isNaN(date.getTime())) return String(value)
+
+    const day = String(date.getDate()).padStart(2, '0')
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const year = date.getFullYear() + 543
+    const hours = String(date.getHours()).padStart(2, '0')
+    const minutes = String(date.getMinutes()).padStart(2, '0')
+
+    return `${day}/${month}/${year} ${hours}.${minutes}`
+  }
+  const getScheduleParametersLabel = (parameters) => {
+    if (!Array.isArray(parameters) || parameters.length === 0 || parameters.includes(allOption)) {
+      return allOption
+    }
+
+    return parameters.join(', ')
+  }
+  const addSchedule = () => {
+    if (!startAt || !endAt || !status) return
+
+    const nextSchedules = [
+      ...schedules,
+      {
+        id: Date.now(),
+        selectedParameters: selectedParameters.length ? selectedParameters : [allOption],
+        startAt,
+        endAt,
+        status,
+      },
+    ]
+
+    setSchedules(nextSchedules)
+    updateStatusManagement({ schedules: nextSchedules })
+  }
+  const removeSchedule = (scheduleId) => {
+    const nextSchedules = schedules.filter((item, index) => (item.id ?? index) !== scheduleId)
+
+    setSchedules(nextSchedules)
+    updateStatusManagement({ schedules: nextSchedules })
+  }
+  const closeDeleteScheduleConfirm = () => {
+    setDeleteScheduleTarget(null)
+  }
+  const confirmDeleteSchedule = () => {
+    if (!deleteScheduleTarget) return
+
+    removeSchedule(deleteScheduleTarget.id)
+    setDeleteScheduleTarget(null)
+  }
 
   return (
+    <>
     <Stack spacing={2}>
       <Stack spacing={0.5}>
         <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
@@ -3329,40 +3402,8 @@ function StatusManagementSection({ parameterOptions, statusManagement, onChange 
           ตั้งเวลาสำหรับเปลี่ยนสถานะชั่วคราว รายพารามิเตอร์ โดยสามารถเลือกทั้งหมดได้
         </Typography>
       </Stack>
-      <Grid container spacing={2}>
-        <Grid size={{ xs: 12, md: 6 }}>
-          <FormControl size="small" fullWidth>
-            <InputLabel>เลือกพารามิเตอร์</InputLabel>
-            <Select
-              multiple
-              value={selectedParameters}
-              label="เลือกพารามิเตอร์"
-              input={<OutlinedInput label="เลือกพารามิเตอร์" />}
-              onChange={(event) => {
-                const selectedValue = event.target.value
-                const nextValue = typeof selectedValue === 'string' ? selectedValue.split(',') : selectedValue
-                const nextSelectedParameters = nextValue.includes(allOption) ? [allOption] : nextValue
-                setSelectedParameters(nextSelectedParameters)
-                updateStatusManagement({ selectedParameters: nextSelectedParameters })
-              }}
-              renderValue={(selected) => (
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                  {selected.map((item) => (
-                    <Chip key={item} label={item} size="small" />
-                  ))}
-                </Box>
-              )}
-            >
-              {[allOption, ...parameterOptions].map((option) => (
-                <MenuItem key={option} value={option}>
-                  <Checkbox checked={selectedParameters.includes(option)} />
-                  {option}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </Grid>
-        <Grid size={{ xs: 12, md: 2 }}>
+      <Grid container spacing={2} alignItems="flex-start">
+        <Grid size={{ xs: 12, md: 3 }}>
           <TextField
             label="วันเวลาเริ่มต้น"
             type="datetime-local"
@@ -3376,7 +3417,7 @@ function StatusManagementSection({ parameterOptions, statusManagement, onChange 
             slotProps={{ inputLabel: { shrink: true } }}
           />
         </Grid>
-        <Grid size={{ xs: 12, md: 2 }}>
+        <Grid size={{ xs: 12, md: 3 }}>
           <TextField
             label="วันเวลาสิ้นสุด"
             type="datetime-local"
@@ -3389,6 +3430,40 @@ function StatusManagementSection({ parameterOptions, statusManagement, onChange 
             fullWidth
             slotProps={{ inputLabel: { shrink: true } }}
           />
+        </Grid>
+        <Grid size={{ xs: 12, md: 3 }}>
+          <FormControl size="small" fullWidth>
+            <InputLabel>เลือกพารามิเตอร์</InputLabel>
+            <Select
+              multiple
+              value={selectedParameters}
+              label="เลือกพารามิเตอร์"
+              input={<OutlinedInput label="เลือกพารามิเตอร์" />}
+              onChange={(event) => {
+                const selectedValue = event.target.value
+                const nextValue = typeof selectedValue === 'string' ? selectedValue.split(',') : selectedValue
+                const nextSelectedParameters = Array.isArray(nextValue)
+                  ? (nextValue.includes(allOption) ? [allOption] : nextValue)
+                  : []
+                setSelectedParameters(nextSelectedParameters)
+                updateStatusManagement({ selectedParameters: nextSelectedParameters })
+              }}
+              renderValue={(selected) => (
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                  {(Array.isArray(selected) ? selected : []).map((item) => (
+                    <Chip key={item} label={item} size="small" />
+                  ))}
+                </Box>
+              )}
+            >
+              {[allOption, ...parameterOptions].map((option) => (
+                <MenuItem key={option} value={option}>
+                  <Checkbox checked={(Array.isArray(selectedParameters) ? selectedParameters : []).includes(option)} />
+                  {option}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
         </Grid>
         <Grid size={{ xs: 12, md: 2 }}>
           <TextField
@@ -3405,19 +3480,114 @@ function StatusManagementSection({ parameterOptions, statusManagement, onChange 
             <MenuItem value="">
               <em>ไม่ระบุ</em>
             </MenuItem>
-            {connectionParameterStatusOptions.map((option) => (
+            {statusManagementStatusOptions.map((option) => (
               <MenuItem key={option} value={option}>
                 {option}
               </MenuItem>
             ))}
           </TextField>
         </Grid>
+        <Grid size={{ xs: 12, md: 1 }}>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={addSchedule}
+            disabled={!startAt || !endAt || !status}
+            fullWidth
+            sx={{ minHeight: 40 }}
+          >
+            เพิ่ม
+          </Button>
+        </Grid>
       </Grid>
+      <TableContainer sx={{ border: 1, borderColor: 'divider', overflowX: 'auto' }}>
+        <Table size="small" sx={{ minWidth: 720, ...borderedTableSx }}>
+          <TableHead>
+            <TableRow>
+              <TableCell sx={{ fontWeight: 700, bgcolor: 'neutral.50', width: '24%' }}>
+                วันเวลาเริ่มต้น
+              </TableCell>
+              <TableCell sx={{ fontWeight: 700, bgcolor: 'neutral.50', width: '24%' }}>
+                วันเวลาสิ้นสุด
+              </TableCell>
+              <TableCell sx={{ fontWeight: 700, bgcolor: 'neutral.50', width: '24%' }}>
+                พารามิเตอร์
+              </TableCell>
+              <TableCell sx={{ fontWeight: 700, bgcolor: 'neutral.50', width: '16%' }}>
+                สถานะ
+              </TableCell>
+              <TableCell sx={{ fontWeight: 700, bgcolor: 'neutral.50', width: '12%' }} align="center">
+                จัดการ
+              </TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {schedules.length ? (
+              schedules.map((item, index) => {
+                const scheduleId = item.id ?? index
+
+                return (
+                  <TableRow key={scheduleId}>
+                    <TableCell>{formatScheduleDateTime(item.startAt)}</TableCell>
+                    <TableCell>{formatScheduleDateTime(item.endAt)}</TableCell>
+                    <TableCell>{getScheduleParametersLabel(item.selectedParameters)}</TableCell>
+                    <TableCell>
+                      <Chip
+                        label={item.status || '-'}
+                        size="small"
+                        color={item.status === 'Shut Down' ? 'error' : 'default'}
+                        variant={item.status === 'Shut Down' ? 'filled' : 'outlined'}
+                        sx={{ fontWeight: 700 }}
+                      />
+                    </TableCell>
+                    <TableCell align="center">
+                      <Button
+                        size="small"
+                        color="error"
+                        variant="contained"
+                        onClick={() => setDeleteScheduleTarget({ id: scheduleId })}
+                      >
+                        ลบ
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                )
+              })
+            ) : (
+              <TableRow>
+                <TableCell colSpan={5} align="center">
+                  <Typography variant="body2" color="text.secondary">
+                    ยังไม่มีรายการสถานะที่ตั้งไว้
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </TableContainer>
     </Stack>
+    <Dialog open={Boolean(deleteScheduleTarget)} onClose={closeDeleteScheduleConfirm} fullWidth maxWidth="xs">
+      <DialogTitle>ยืนยันการลบรายการสถานะ</DialogTitle>
+      <DialogContent>
+        <Typography>
+          ยืนยันลบรายการสถานะนี้ออกจากการตั้งค่า
+        </Typography>
+      </DialogContent>
+      <DialogActions sx={{ justifyContent: 'center' }}>
+        <Button color="inherit" onClick={closeDeleteScheduleConfirm}>
+          ยกเลิก
+        </Button>
+        <Button color="error" variant="contained" onClick={confirmDeleteSchedule}>
+          ยืนยัน
+        </Button>
+      </DialogActions>
+    </Dialog>
+    </>
   )
 }
 
 const protocolCodeMap = {
+  [pomsBoxConnectionType]: 'POMS_BOX',
   'Modbus RTU': 'MODBUS_RTU',
   'Modbus TCP': 'MODBUS_TCP',
   'Microsoft SQL': 'MSSQL',
@@ -3425,6 +3595,7 @@ const protocolCodeMap = {
 }
 
 const protocolLabelMap = {
+  POMS_BOX: pomsBoxConnectionType,
   MODBUS_RTU: 'Modbus RTU',
   MODBUS_TCP: 'Modbus TCP',
   MSSQL: 'Microsoft SQL',
@@ -3432,7 +3603,7 @@ const protocolLabelMap = {
   MYSQL: 'MySQL',
 }
 
-const allowedProtocolCodes = new Set(['MODBUS_RTU', 'MODBUS_TCP', 'MSSQL', 'MYSQL'])
+const allowedProtocolCodes = new Set(['POMS_BOX', 'MODBUS_RTU', 'MODBUS_TCP', 'MSSQL', 'MYSQL'])
 
 function normalizeConnectionType(type) {
   return protocolLabelMap[type] ?? type ?? ''
@@ -3465,6 +3636,9 @@ function mapConnectionForms(forms = []) {
         comPort: getComPortValue(values),
         measureMin: values.measureMin ?? valueRange.min ?? '',
         measureMax: values.measureMax ?? valueRange.max ?? '',
+        minuteTableName: values.minuteTableName ?? values.minute_table_name ?? values.minuteDataTableName ?? '',
+        fiveMinuteTableName: values.fiveMinuteTableName ?? values.five_minute_table_name ?? values.fiveMinuteDataTableName ?? '',
+        hourlyTableName: values.hourlyTableName ?? values.hourly_table_name ?? values.hourlyDataTableName ?? '',
       },
     }
   })
@@ -3623,10 +3797,8 @@ function getComPortValue(values) {
     ?? ''
 }
 
-function compactObject(value) {
-  return Object.fromEntries(
-    Object.entries(value).filter(([, item]) => item !== '' && item !== null && item !== undefined),
-  )
+function nullIfBlank(value) {
+  return value === '' || value === null || value === undefined ? null : value
 }
 
 function buildValueRange(min, max) {
@@ -3646,69 +3818,51 @@ function buildConnectionSettings(form) {
   const values = form?.values ?? {}
   const type = normalizeConnectionType(form?.type)
 
+  if (type === pomsBoxConnectionType) {
+    return null
+  }
+
   if (type === 'Modbus RTU') {
-    return compactObject({
+    return {
       comPort: toNumberOrStringOrNull(getComPortValue(values)),
       slaveId: toNumberOrNull(values.slaveId),
       baudRate: toNumberOrNull(values.baudRate),
-      parity: parityCodeMap[values.parity] ?? values.parity,
+      parity: nullIfBlank(parityCodeMap[values.parity] ?? values.parity),
       stopBits: toNumberOrNull(values.stopBits),
       dataBits: toNumberOrNull(values.dataBits),
       quantity: toNumberOrNull(values.quantity),
-      valueRange: buildValueRange(values.measureMin, values.measureMax),
-    })
+      valueRange: buildValueRange(values.measureMin, values.measureMax) ?? null,
+    }
   }
 
   if (type === 'Modbus TCP') {
-    return compactObject({
-      hostIp: values.hostIp,
+    return {
+      hostIp: nullIfBlank(values.hostIp),
       slaveId: toNumberOrNull(values.slaveId),
       port: toNumberOrNull(values.port),
-      valueRange: buildValueRange(values.measureMin, values.measureMax),
-    })
+      valueRange: buildValueRange(values.measureMin, values.measureMax) ?? null,
+    }
   }
 
-  return compactObject({
-    hostIp: values.hostIp,
+  return {
+    hostIp: nullIfBlank(values.hostIp),
     port: toNumberOrNull(values.port),
-    dbUser: values.dbUser,
-    dbPass: values.dbPass,
-    dbName: values.dbName,
-    valueRange: buildValueRange(values.measureMin, values.measureMax),
-  })
+    dbUser: nullIfBlank(values.dbUser),
+    dbPass: nullIfBlank(values.dbPass),
+    dbName: nullIfBlank(values.dbName),
+    minuteTableName: nullIfBlank(values.minuteTableName),
+    fiveMinuteTableName: nullIfBlank(values.fiveMinuteTableName),
+    hourlyTableName: nullIfBlank(values.hourlyTableName),
+    valueRange: buildValueRange(values.measureMin, values.measureMax) ?? null,
+  }
 }
 
 function validateDeviceConfigForm(form) {
-  const values = form?.values ?? {}
   const type = normalizeConnectionType(form?.type)
   const protocol = getConnectionProtocolCode(form?.type)
 
-  if (!type) {
-    return 'กรุณาเลือกอุปกรณ์ (Connection)'
-  }
-
-  if (!protocol) {
+  if (type && !protocol) {
     return 'กรุณาเลือกอุปกรณ์ (Connection) ให้ถูกต้อง'
-  }
-
-  if (type === 'Modbus RTU' && !getComPortValue(values)) {
-    return 'กรุณากรอก COMPORT'
-  }
-
-  if (type === 'Modbus TCP' && !values.hostIp) {
-    return 'กรุณากรอก Host IP'
-  }
-
-  if (type === 'Modbus TCP' && !values.port) {
-    return 'กรุณากรอก Port'
-  }
-
-  if (['Microsoft SQL', 'MySQL'].includes(type) && !values.hostIp) {
-    return 'กรุณากรอก Host IP'
-  }
-
-  if (['Microsoft SQL', 'MySQL'].includes(type) && !values.port) {
-    return 'กรุณากรอก Port'
   }
 
   return ''
@@ -3717,26 +3871,26 @@ function validateDeviceConfigForm(form) {
 function buildDeviceConfigChannels(rows, deviceCode) {
   return rows
     .filter((row) => row.parameter)
-    .map((row) => compactObject({
-      deviceCode,
+    .map((row) => ({
+      deviceCode: nullIfBlank(deviceCode),
       addressId: toNumberOrNull(row.addressId),
       dataType: row.parameter,
-      valueRange: buildValueRange(row.min, row.max),
+      valueRange: buildValueRange(row.min, row.max) ?? null,
       alertLow: toNumberOrNull(row.alertLow),
       alertHigh: toNumberOrNull(row.alertHigh),
-      valueFormat: (valueFormatCodeMap[row.valueFormat] ?? row.valueFormat) || 'MEASUREMENT_VALUE',
+      valueFormat: nullIfBlank(valueFormatCodeMap[row.valueFormat] ?? row.valueFormat),
       offset: toNumberOrNull(row.offset),
-      encoding: (encodingCodeMap[row.encodingData] ?? row.encodingData) || 'UNSIGNED16_BIG_ENDIAN',
-      status: row.status || 'Normal',
+      encoding: nullIfBlank(encodingCodeMap[row.encodingData] ?? row.encodingData),
+      status: nullIfBlank(row.status),
     }))
 }
 
 function buildDeviceConfigStatusManagement(statusManagement) {
   return {
-    selectedParameters: statusManagement?.selectedParameters?.length ? statusManagement.selectedParameters : ['ทั้งหมด'],
+    selectedParameters: statusManagement?.selectedParameters?.length ? statusManagement.selectedParameters : null,
     startAt: statusManagement?.startAt || null,
     endAt: statusManagement?.endAt || null,
-    status: statusManagement?.status || 'Normal',
+    status: statusManagement?.status || null,
     schedules: statusManagement?.schedules ?? [],
   }
 }
@@ -3744,8 +3898,8 @@ function buildDeviceConfigStatusManagement(statusManagement) {
 function buildDeviceConfigPayloadItem({ form, stationId, deviceCode, channels, statusManagement }) {
   return {
     stationId,
-    deviceCode,
-    protocol: getConnectionProtocolCode(form.type),
+    deviceCode: nullIfBlank(deviceCode),
+    protocol: nullIfBlank(getConnectionProtocolCode(form.type)),
     settings: buildConnectionSettings(form),
     channels,
     statusManagement: buildDeviceConfigStatusManagement(statusManagement),
@@ -3765,8 +3919,8 @@ function buildStructuredDeviceConfigPayload({ stationId, deviceItems, channelGro
 
 function buildDeviceConfigDeviceItem(form, deviceCode) {
   return {
-    deviceCode,
-    protocol: getConnectionProtocolCode(form.type),
+    deviceCode: nullIfBlank(deviceCode),
+    protocol: nullIfBlank(getConnectionProtocolCode(form.type)),
     settings: buildConnectionSettings(form),
   }
 }
@@ -3782,6 +3936,7 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose, onSaved
   const [deviceConfigTesting, setDeviceConfigTesting] = useState(false)
   const [deviceConfigSaving, setDeviceConfigSaving] = useState(false)
   const [deviceConfigConfirming, setDeviceConfigConfirming] = useState(false)
+  const [deleteConnectionFormTarget, setDeleteConnectionFormTarget] = useState(null)
   const useConnectedPointDeviceConfigs = isConnectedMeasurementPointDeviceConfigContext(context)
   const parameterOptions = getDeviceConfigParameterOptions(deviceConfig, getConnectionParameterOptions(context))
   const generatedDeviceCodeOptions = connectionForms
@@ -3821,6 +3976,7 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose, onSaved
       setTestResultRows([])
       setDeviceConfigTesting(false)
       setDeviceConfigConfirming(false)
+      setDeleteConnectionFormTarget(null)
       setDeviceConfigError('')
     })
 
@@ -3892,6 +4048,17 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose, onSaved
   const updateConnectionForm = (id, nextValue) => {
     setConnectionForms((current) => current.map((form) => (form.id === id ? nextValue : form)))
   }
+  const closeDeleteConnectionFormConfirm = () => {
+    setDeleteConnectionFormTarget(null)
+  }
+  const confirmDeleteConnectionForm = () => {
+    if (!deleteConnectionFormTarget) {
+      return
+    }
+
+    setConnectionForms((current) => current.filter((item) => item.id !== deleteConnectionFormTarget.id))
+    setDeleteConnectionFormTarget(null)
+  }
   const handleTestConnection = () => {
     const stationId = getMonitoringPointCode(context)
 
@@ -3961,10 +4128,6 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose, onSaved
       throw new Error(validationMessage)
     }
 
-    if (forms.length > 1 && parameterMappingRows.some((row) => !row.deviceCode)) {
-      throw new Error('กรุณาเลือกรหัสอุปกรณ์ในตารางการเชื่อมต่อพารามิเตอร์ให้ครบ')
-    }
-
     const deviceItems = forms.map((form, index) => {
       const deviceCode = form.deviceCode || deviceCodeOptions[index] || getConnectionDeviceCode(context, index)
 
@@ -3979,14 +4142,6 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose, onSaved
 
       return buildDeviceConfigChannels(configRows, useConnectedPointDeviceConfigs || forms.length > 1 ? deviceCode : undefined)
     })
-
-    if (channelGroups.some((channels) => channels.length === 0)) {
-      throw new Error('กรุณาเพิ่ม mapping ค่าพารามิเตอร์อย่างน้อย 1 รายการ')
-    }
-
-    if (channelGroups.some((channels) => channels.some((channel) => channel.addressId === null || channel.addressId === undefined))) {
-      throw new Error('กรุณากรอก Address ID ในตารางการเชื่อมต่อพารามิเตอร์ให้ครบ')
-    }
 
     const requestBody = useConnectedPointDeviceConfigs || forms.length > 1
       ? buildStructuredDeviceConfigPayload({
@@ -4113,6 +4268,7 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose, onSaved
   }
 
   return (
+    <>
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg">
       <DialogTitle
         sx={{
@@ -4164,7 +4320,7 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose, onSaved
                       color="error"
                       variant="outlined"
                       disabled={connectionForms.length === 1}
-                      onClick={() => setConnectionForms((current) => current.filter((item) => item.id !== form.id))}
+                      onClick={() => setDeleteConnectionFormTarget({ id: form.id, index })}
                     >
                       ลบอุปกรณ์
                     </Button>
@@ -4278,6 +4434,23 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose, onSaved
         ) : null}
       </DialogActions>
     </Dialog>
+    <Dialog open={Boolean(deleteConnectionFormTarget)} onClose={closeDeleteConnectionFormConfirm} fullWidth maxWidth="xs">
+      <DialogTitle>ยืนยันการลบอุปกรณ์</DialogTitle>
+      <DialogContent>
+        <Typography>
+          ยืนยันลบอุปกรณ์นี้ออกจากการตั้งค่า
+        </Typography>
+      </DialogContent>
+      <DialogActions sx={{ justifyContent: 'center' }}>
+        <Button color="inherit" onClick={closeDeleteConnectionFormConfirm}>
+          ยกเลิก
+        </Button>
+        <Button color="error" variant="contained" onClick={confirmDeleteConnectionForm}>
+          ยืนยัน
+        </Button>
+      </DialogActions>
+    </Dialog>
+    </>
   )
 }
 
@@ -4663,7 +4836,7 @@ function TagInputField({ label, name, value: controlledValue, defaultValue = [],
 }
 
 function CemsMonitoringPointDetails({ initialPoint = {}, requestedParameters = [], onRequestedParametersChange, isOperator = false, isDirectConnectionMode = false }) {
-  const initialDetails = { ...mockCemsMonitoringPointDetails, ...(initialPoint.details ?? {}) }
+  const initialDetails = { ...emptyCemsMonitoringPointDetails, ...compactDefinedObject(initialPoint.details ?? {}) }
   const pointCodeValue = initialPoint.pointCode ?? initialPoint.code ?? (isOperator || isDirectConnectionMode ? '' : initialDetails.pointCode)
   const initialProductionCapacity = splitProductionCapacity(initialDetails)
   const [stackShape, setStackShape] = useState(initialDetails.stackShape)
@@ -5342,7 +5515,7 @@ function MeasurementInstrumentSection({ parameterOptions, rows, setRows, initial
                 name="converterBrand"
                 label="อุปกรณ์แปลงสัญญาณ (Converter) ยี่ห้อ"
                 size="small"
-                defaultValue={initialInstruments.converterBrand ?? mockMeasurementInstrumentDetails.converterBrand}
+                defaultValue={initialInstruments.converterBrand ?? emptyMeasurementInstrumentDetails.converterBrand}
                 fullWidth
               />
             </Grid>
@@ -5351,7 +5524,7 @@ function MeasurementInstrumentSection({ parameterOptions, rows, setRows, initial
                 name="converterModel"
                 label="อุปกรณ์แปลงสัญญาณ (Converter) รุ่น"
                 size="small"
-                defaultValue={initialInstruments.converterModel ?? mockMeasurementInstrumentDetails.converterModel}
+                defaultValue={initialInstruments.converterModel ?? emptyMeasurementInstrumentDetails.converterModel}
                 fullWidth
               />
             </Grid>
@@ -5489,7 +5662,7 @@ function InformationProviderSection({ currentUser, initialProvider = {}, useLogi
 }
 
 function WpmsMonitoringPointDetails({ initialPoint = {}, requestedParameters = [], onRequestedParametersChange, isOperator = false, isDirectConnectionMode = false }) {
-  const initialDetails = { ...mockWpmsMonitoringPointDetails, ...(initialPoint.details ?? {}) }
+  const initialDetails = { ...emptyWpmsMonitoringPointDetails, ...compactDefinedObject(initialPoint.details ?? {}) }
   const pointCodeValue = initialPoint.pointCode ?? initialPoint.code ?? (isOperator || isDirectConnectionMode ? '' : initialDetails.pointCode)
   const [treatmentSystem, setTreatmentSystem] = useState(normalizeArrayValue(initialDetails.treatmentSystem))
   const [connectionDevice, setConnectionDevice] = useState(initialDetails.connectionDevice)

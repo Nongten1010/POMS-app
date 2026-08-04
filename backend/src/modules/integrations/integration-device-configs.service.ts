@@ -1,4 +1,5 @@
 import { NotFoundError } from '../../shared/errors/AppError';
+import { toCanonicalStatusDateTime } from '../device-connections/device-connection-status-datetime';
 import { deviceConnectionsService } from '../device-connections/device-connections.service';
 import type {
   DeviceConnectionConfigDTO,
@@ -218,8 +219,8 @@ function toStatusSchedules(configs: DeviceConnectionConfigDTO[]): IntegrationSta
       for (const parameter of targetParameters) {
         const schedule = {
           parameter,
-          startAt: entry.startAt,
-          endAt: entry.endAt,
+          startAt: toCanonicalStatusDateTime(entry.startAt),
+          endAt: toCanonicalStatusDateTime(entry.endAt),
           status: entry.status,
         };
         const key = `${schedule.parameter}\u0000${schedule.startAt ?? ''}\u0000${
@@ -247,9 +248,10 @@ function toStatusSchedules(configs: DeviceConnectionConfigDTO[]): IntegrationSta
 }
 
 function compareScheduleTime(left: string | null, right: string | null): number {
-  const leftTime = left === null ? Number.MAX_SAFE_INTEGER : Date.parse(left);
-  const rightTime = right === null ? Number.MAX_SAFE_INTEGER : Date.parse(right);
-  return leftTime - rightTime;
+  if (left === right) return 0;
+  if (left === null) return 1;
+  if (right === null) return -1;
+  return left < right ? -1 : 1;
 }
 
 function buildParameterMetadataLookup(

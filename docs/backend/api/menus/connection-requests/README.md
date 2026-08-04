@@ -188,13 +188,20 @@ Relevant request fields:
 | --- | --- | --- | --- |
 | `factoryId` | string | yes | ต้อง resolve ไปยัง `eligible_factories.source_factory_id`, `factory_registration_no_new` หรือ `factory_registration_no_old` ที่ active |
 | `factoryRegistrationNo` | string | yes | ใช้เป็น alias สำรองกับ identifier ทั้งสามแบบข้างต้น |
+| `measurementPoints[0].documentsAndImages` | array | no | Direct Connection ไม่บังคับทั้ง `CEMS` และ `WPMS`; ถ้าไม่ส่ง backend normalize เป็น `[]` |
 
 Minimal relevant request fragment:
 
 ```json
 {
   "factoryId": "F000123",
-  "factoryRegistrationNo": "3-106-33/50สบ"
+  "factoryRegistrationNo": "3-106-33/50สบ",
+  "systemType": "CEMS",
+  "measurementPoints": [
+    {
+      "pointCode": "S1125"
+    }
+  ]
 }
 ```
 

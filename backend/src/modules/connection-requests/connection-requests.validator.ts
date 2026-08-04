@@ -1389,7 +1389,9 @@ export const directConnectionRequestSchema = connectionRequestFormObjectSchema
       });
     });
 
-    validateMeasurementPointFormSections(payload, ctx);
+    validateMeasurementPointFormSections(payload, ctx, {
+      requireCemsDocuments: false,
+    });
   })
   .transform((payload) => ({
     ...normalizeContacts(normalizeFactorySnapshot(stripFrontendSystemTypeAlias(payload))),

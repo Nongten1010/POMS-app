@@ -1,5 +1,6 @@
 import type { Knex } from 'knex';
 import { db } from '../../config/database';
+import { toCanonicalStatusDateTime } from './device-connection-status-datetime';
 import {
   type CreateDeviceConnectionConfigInput,
   type DeviceConnectionConfigDTO,
@@ -473,8 +474,8 @@ function parseStatusManagement(
     selectedParameters: parsed.selectedParameters.filter((item): item is string => {
       return typeof item === 'string';
     }),
-    startAt: typeof parsed.startAt === 'string' ? parsed.startAt : null,
-    endAt: typeof parsed.endAt === 'string' ? parsed.endAt : null,
+    startAt: toCanonicalStatusDateTime(parsed.startAt),
+    endAt: toCanonicalStatusDateTime(parsed.endAt),
     status: parsed.status,
     schedules: Array.isArray(parsed.schedules)
       ? parsed.schedules
@@ -487,8 +488,8 @@ function parseStatusManagement(
                   (item): item is string => typeof item === 'string',
                 )
               : [],
-            startAt: typeof schedule.startAt === 'string' ? schedule.startAt : null,
-            endAt: typeof schedule.endAt === 'string' ? schedule.endAt : null,
+            startAt: toCanonicalStatusDateTime(schedule.startAt),
+            endAt: toCanonicalStatusDateTime(schedule.endAt),
             status: typeof schedule.status === 'string' ? schedule.status : 'Normal',
           }))
       : [],

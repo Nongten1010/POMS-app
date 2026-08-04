@@ -1646,8 +1646,8 @@ describe('connectionRequestsService', () => {
       ],
       statusManagement: {
         selectedParameters: ['NOx'],
-        startAt: '2026-05-30T10:00',
-        endAt: '2026-05-30T11:00',
+        startAt: '2026-05-30 10:00:00',
+        endAt: '2026-05-30 11:00:00',
         status: 'Maintenance',
       },
     });
@@ -1660,14 +1660,14 @@ describe('connectionRequestsService', () => {
     expect(result.statusManagement.schedules).toEqual([
       {
         selectedParameters: ['NOx (ppm)'],
-        startAt: '2026-05-30T10:00:00+07:00',
-        endAt: '2026-05-30T11:00:00+07:00',
+        startAt: '2026-05-30 10:00:00',
+        endAt: '2026-05-30 11:00:00',
         status: 'Maintenance',
       },
       {
         selectedParameters: ['NOx (ppm)'],
-        startAt: '2026-05-30T13:00:00+07:00',
-        endAt: '2026-05-30T14:00:00+07:00',
+        startAt: '2026-05-30 13:00:00',
+        endAt: '2026-05-30 14:00:00',
         status: 'Calibration',
       },
     ]);
@@ -1781,6 +1781,52 @@ describe('connectionRequestsService', () => {
       offset: null,
       encoding: null,
       status: null,
+    });
+  });
+
+  it('maps POMS_BOX configs back to the POMS Box form option', async () => {
+    const request = requestDto({
+      createdBy: actorUserId,
+      measurementPoints: [
+        {
+          id: 1,
+          pointName: 'ปล่องระบาย A',
+          pointCode: 'S1128',
+          pointType: 'STACK',
+          latitude: null,
+          longitude: null,
+          parameters: ['CO (ppm)'],
+          description: null,
+        },
+      ],
+    });
+    mockedRepository.findById.mockResolvedValue(request);
+    mockedDeviceConnectionsService.listByRequestId.mockResolvedValue([
+      deviceConnectionConfig({
+        stationId: 'S1128',
+        deviceCode: 'S1128/01',
+        protocol: 'POMS_BOX',
+        settings: {},
+        channels: [],
+      }),
+    ]);
+
+    const result = await connectionRequestsService.getDeviceConfigFormDetail(
+      1,
+      'S1128',
+      actorUserId,
+      'OWN_FACTORY',
+    );
+
+    expect(result.connectionForms[0]).toMatchObject({
+      type: 'POMS Box',
+      protocol: 'POMS_BOX',
+      deviceCode: 'S1128/01',
+      values: {},
+    });
+    expect(result.rawConfigs.device[0]).toMatchObject({
+      protocol: 'POMS_BOX',
+      settings: {},
     });
   });
 

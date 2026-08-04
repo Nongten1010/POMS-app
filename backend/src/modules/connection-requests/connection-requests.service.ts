@@ -6,6 +6,7 @@ import {
 } from '../../shared/errors/AppError';
 import { logger } from '../../config/logger';
 import { isAnnualMonitoringPointCode } from '../../shared/utils/monitoring-point-code';
+import { toCanonicalStatusDateTime } from '../device-connections/device-connection-status-datetime';
 import { deviceConnectionsService } from '../device-connections/device-connections.service';
 import type {
   CreateDeviceConnectionConfigInput,
@@ -1435,13 +1436,15 @@ function toDeviceConfigFormDetail(
   const savedStatusManagement = stationConfigs.find(
     (config) => config.statusManagement,
   )?.statusManagement;
-  const statusManagement = savedStatusManagement ?? {
-    selectedParameters: ['ทั้งหมด'],
-    startAt: null,
-    endAt: null,
-    status: 'Normal',
-    schedules: [],
-  };
+  const statusManagement = normalizeStatusManagementDateTimes(
+    savedStatusManagement ?? {
+      selectedParameters: ['ทั้งหมด'],
+      startAt: null,
+      endAt: null,
+      status: 'Normal',
+      schedules: [],
+    },
+  );
 
   return {
     requestId: request.id,
@@ -1583,15 +1586,30 @@ function toDeviceConfigPayloadResponse(
 function toStatusManagement(
   configs: DeviceConnectionConfigDTO[],
 ): DeviceConfigFormDetailDTO['statusManagement'] {
-  return (
+  return normalizeStatusManagementDateTimes(
     configs.find((config) => config.statusManagement)?.statusManagement ?? {
       selectedParameters: ['ทั้งหมด'],
       startAt: null,
       endAt: null,
       status: 'Normal',
       schedules: [],
-    }
+    },
   );
+}
+
+function normalizeStatusManagementDateTimes(
+  statusManagement: DeviceConfigFormDetailDTO['statusManagement'],
+): DeviceConfigFormDetailDTO['statusManagement'] {
+  return {
+    ...statusManagement,
+    startAt: toCanonicalStatusDateTime(statusManagement.startAt),
+    endAt: toCanonicalStatusDateTime(statusManagement.endAt),
+    schedules: statusManagement.schedules.map((schedule) => ({
+      ...schedule,
+      startAt: toCanonicalStatusDateTime(schedule.startAt),
+      endAt: toCanonicalStatusDateTime(schedule.endAt),
+    })),
+  };
 }
 
 function getDeviceCode(
@@ -1603,6 +1621,7 @@ function getDeviceCode(
 }
 
 function protocolToConnectionType(protocol: string): DeviceConfigFormConnectionDTO['type'] {
+  if (protocol === 'POMS_BOX') return 'POMS Box';
   if (protocol === 'MODBUS_RTU') return 'Modbus RTU';
   if (protocol === 'MODBUS_TCP') return 'Modbus TCP';
   if (protocol === 'MSSQL') return 'Microsoft SQL';
@@ -1613,6 +1632,8 @@ function settingsToFormValues(
   protocol: string,
   settings: Record<string, unknown>,
 ): Record<string, string> {
+  if (protocol === 'POMS_BOX') return {};
+
   if (protocol === 'MODBUS_RTU') {
     const range = readRange(settings.valueRange);
     return {

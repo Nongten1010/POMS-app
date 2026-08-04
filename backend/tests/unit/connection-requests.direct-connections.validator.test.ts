@@ -18,6 +18,34 @@ describe('directConnectionRequestSchema', () => {
     });
   });
 
+  it('accepts a CEMS point without documents and images', () => {
+    const payload = validPayload();
+    const { documentsAndImages: _documentsAndImages, ...pointWithoutDocuments } =
+      payload.measurementPoints[0];
+
+    const result = directConnectionRequestSchema.safeParse({
+      ...payload,
+      systemType: 'CEMS',
+      measurementPoints: [
+        {
+          ...pointWithoutDocuments,
+          pointType: 'STACK',
+          details: {
+            stackShape: 'วงกลม',
+            stackDiameter: 1.2,
+            connectionDevice: 'D-POMS Client (ใหม่)',
+          },
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data).toMatchObject({
+      measurementPoints: [{ documentsAndImages: [] }],
+    });
+  });
+
   it('rejects anything other than exactly one point', () => {
     const payload = validPayload();
     const result = directConnectionRequestSchema.safeParse({

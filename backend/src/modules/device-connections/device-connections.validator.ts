@@ -3,6 +3,11 @@ import {
   DEVICE_CONNECTION_PARAMETER_STATUSES,
   DEVICE_CONNECTION_PROTOCOL,
 } from './device-connections.types';
+import {
+  isCanonicalStatusDateTime,
+  normalizeStatusDateTimeInput,
+  STATUS_DATETIME_FORMAT,
+} from './device-connection-status-datetime';
 
 const trimmedString = (max: number) => z.string().trim().min(1).max(max);
 const measurementRangeSchema = z
@@ -77,6 +82,8 @@ const databaseSettingsSchema = defaultNullishObject(
     .passthrough(),
 );
 
+const pomsBoxSettingsSchema = defaultNullishObject(z.object({}).passthrough());
+
 const configChannelSchema = z
   .object({
     addressId: nullableNumber,
@@ -101,11 +108,13 @@ const configChannelsSchema = z.preprocess(
   z.array(configChannelSchema).max(200),
 );
 
-const statusDateTimeSchema = z.string().datetime({ offset: true });
-const legacyStatusDateTimeSchema = z.preprocess(
-  normalizeLegacyLocalStatusDateTime,
-  statusDateTimeSchema,
+const statusDateTimeSchema = z.preprocess(
+  normalizeStatusDateTimeInput,
+  z.string().refine(isCanonicalStatusDateTime, {
+    message: `Expected a valid datetime in ${STATUS_DATETIME_FORMAT} format`,
+  }),
 );
+const legacyStatusDateTimeSchema = statusDateTimeSchema;
 const legacyStatusManagementFieldNames = new Set([
   'selectedParameters',
   'startAt',
@@ -122,11 +131,7 @@ const statusScheduleSchema = z
   })
   .passthrough()
   .superRefine((schedule, ctx) => {
-    if (
-      schedule.startAt &&
-      schedule.endAt &&
-      Date.parse(schedule.endAt) <= Date.parse(schedule.startAt)
-    ) {
+    if (schedule.startAt && schedule.endAt && schedule.endAt <= schedule.startAt) {
       ctx.addIssue({
         code: 'custom',
         path: ['endAt'],
@@ -152,11 +157,7 @@ const statusManagementValueSchema = z
         message: 'startAt and endAt must be provided together',
       });
     }
-    if (
-      management.startAt &&
-      management.endAt &&
-      Date.parse(management.endAt) <= Date.parse(management.startAt)
-    ) {
+    if (management.startAt && management.endAt && management.endAt <= management.startAt) {
       ctx.addIssue({
         code: 'custom',
         path: ['endAt'],
@@ -170,9 +171,7 @@ const statusManagementValueSchema = z
       const current = schedules[currentIndex];
       for (let previousIndex = 0; previousIndex < currentIndex; previousIndex += 1) {
         const previous = schedules[previousIndex];
-        const overlapsInTime =
-          Date.parse(current.startAt) < Date.parse(previous.endAt) &&
-          Date.parse(previous.startAt) < Date.parse(current.endAt);
+        const overlapsInTime = current.startAt < previous.endAt && previous.startAt < current.endAt;
 
         if (overlapsInTime && scheduleTargetsOverlap(current, previous)) {
           ctx.addIssue({
@@ -198,6 +197,13 @@ const baseDeviceConnectionSchema = z.object({
 });
 
 const deviceConnectionConfigSchema = z.discriminatedUnion('protocol', [
+  baseDeviceConnectionSchema
+    .extend({
+      protocol: z.literal(DEVICE_CONNECTION_PROTOCOL.POMS_BOX),
+      settings: pomsBoxSettingsSchema,
+      channels: configChannelsSchema,
+    })
+    .strict(),
   baseDeviceConnectionSchema
     .extend({
       protocol: z.literal(DEVICE_CONNECTION_PROTOCOL.MODBUS_RTU),
@@ -407,16 +413,6 @@ function readStringArray(value: unknown): string[] | null {
 
 function readNullableString(value: unknown): string | null {
   return typeof value === 'string' ? value : null;
-}
-
-function normalizeLegacyLocalStatusDateTime(value: unknown): unknown {
-  if (typeof value !== 'string') return value;
-
-  const trimmed = value.trim();
-  const match = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})(:\d{2}(?:\.\d{1,3})?)?$/.exec(trimmed);
-  if (!match) return value;
-
-  return `${match[1]}${match[2] ?? ':00'}+07:00`;
 }
 
 function preferExplicitStatusSchedules(value: unknown): unknown {

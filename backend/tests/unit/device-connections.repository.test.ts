@@ -89,6 +89,66 @@ describe('deviceConnectionsRepository', () => {
     ]);
   });
 
+  it('normalizes stored status schedule timestamps to local datetime strings', async () => {
+    mockedDb.mockImplementation((tableName: unknown) => {
+      if (tableName === 'device_connection_configs') {
+        return rowsQuery([
+          {
+            id: '12',
+            request_id: null,
+            station_id: 'S0003',
+            device_code: 'S0003/01',
+            protocol: 'MODBUS_TCP',
+            settings_json: JSON.stringify({}),
+            status_management_json: JSON.stringify({
+              selectedParameters: ['NOx (ppm)'],
+              startAt: '2026-08-05T08:00:00+07:00',
+              endAt: '2026-08-05T10:00:00+07:00',
+              status: 'Maintenance',
+              schedules: [
+                {
+                  selectedParameters: ['NOx (ppm)'],
+                  startAt: '2026-08-05T08:00:00+07:00',
+                  endAt: '2026-08-05T10:00:00+07:00',
+                  status: 'Maintenance',
+                },
+              ],
+            }),
+            created_by: '42',
+            created_at: '2026-07-31T00:00:00.000Z',
+            updated_at: '2026-07-31T00:00:00.000Z',
+          },
+        ]);
+      }
+
+      if (tableName === 'device_measurement_channels') {
+        return rowsQuery([]);
+      }
+
+      throw new Error(`Unexpected table: ${String(tableName)}`);
+    });
+
+    const [result] = await deviceConnectionsRepository.list({
+      stationId: 'S0003',
+      protocol: 'MODBUS_TCP',
+    });
+
+    expect(result.statusManagement).toEqual({
+      selectedParameters: ['NOx (ppm)'],
+      startAt: '2026-08-05 08:00:00',
+      endAt: '2026-08-05 10:00:00',
+      status: 'Maintenance',
+      schedules: [
+        {
+          selectedParameters: ['NOx (ppm)'],
+          startAt: '2026-08-05 08:00:00',
+          endAt: '2026-08-05 10:00:00',
+          status: 'Maintenance',
+        },
+      ],
+    });
+  });
+
   it('returns the stored database password only for the integration-specific reader', async () => {
     mockedDb.mockImplementation((tableName: unknown) => {
       if (tableName === 'device_connection_configs') {

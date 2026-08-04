@@ -579,7 +579,7 @@ export interface ConnectedMeasurementPointModalDetailDTO {
 export interface DeviceConfigFormConnectionDTO {
   id: number;
   configId: number;
-  type: 'Modbus RTU' | 'Modbus TCP' | 'Microsoft SQL' | 'MySQL';
+  type: 'POMS Box' | 'Modbus RTU' | 'Modbus TCP' | 'Microsoft SQL' | 'MySQL';
   protocol: string;
   deviceCode: string;
   values: Record<string, string>;

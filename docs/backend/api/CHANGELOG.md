@@ -5,10 +5,10 @@
 ## 2026-08-04 — Device status schedules รองรับหลายช่วงแบบ validated contract
 
 - **Affected menu:** [ตั้งค่าอุปกรณ์ของจุดตรวจวัด](./menus/connection-requests/device-configs.md) และ [Integration Device Config](./integrations/device-configs/README.md)
-- **Impact:** `statusManagement.schedules[]` บังคับ parameter, ISO datetime พร้อม timezone, status enum และไม่อนุญาตช่วงทับกันของพารามิเตอร์เดียวกัน; Integration API จะขยาย `ทั้งหมด` เป็นชื่อพารามิเตอร์จริงแทนการคืนคำว่า `ทั้งหมด`
-- **Migration:** frontend ต้องเก็บทุกรายการที่กดเพิ่มไว้ใน `schedules`, จำกัดไม่เกิน 100 ช่วง และส่งเวลาเช่น `2026-08-05T08:00:00+07:00`; Worker ต้องอ่านรายการที่เรียงตาม `startAt` และไม่พึ่ง `parameter === "ทั้งหมด"`
+- **Impact:** `statusManagement.schedules[]` บังคับ parameter, local datetime รูปแบบ `YYYY-MM-DD HH:mm:ss` โดยไม่มี timezone, status enum และไม่อนุญาตช่วงทับกันของพารามิเตอร์เดียวกัน; Integration API จะขยาย `ทั้งหมด` เป็นชื่อพารามิเตอร์จริงแทนการคืนคำว่า `ทั้งหมด`
+- **Migration:** frontend ต้องเก็บทุกรายการที่กดเพิ่มไว้ใน `schedules`, จำกัดไม่เกิน 100 ช่วง และส่งเวลาเช่น `2026-08-05 08:00:00`; Worker ต้องอ่านเวลาแบบ local datetime ไม่มี timezone, อ่านรายการที่เรียงตาม `startAt` และไม่พึ่ง `parameter === "ทั้งหมด"`
 - **Old contract:** schedule fields รับ string/null แบบไม่ตรวจ business rule, top-level fields จำเป็นแม้มี `schedules`, และ Integration API อาจคืน `parameter: "ทั้งหมด"`
-- **New contract:** `schedules` ที่มีรายการเป็น source of truth และ legacy top-level fields จะถูกละเว้น; payload เดิมที่ไม่ส่ง `schedules` ยังถูก normalize เป็นหนึ่งรายการพร้อมตีความ local datetime เป็น timezone `+07:00`, validation ผิดตอบ `400`, และ Integration API คืนหนึ่งรายการต่อ configured parameter
+- **New contract:** `schedules` ที่มีรายการเป็น source of truth และ legacy top-level fields จะถูกละเว้น; payload เดิมที่ใช้ `T`, `Z` หรือ timezone offset ยังรับได้เพื่อ compatibility แต่ backend normalize request, stored legacy data และทุก response เป็น `YYYY-MM-DD HH:mm:ss`; validation ผิดตอบ `400` และ Integration API คืนหนึ่งรายการต่อ configured parameter
 
 ## 2026-08-02 — Integration Alert Events รับเวลาเริ่มชั่วโมงเพียงค่าเดียว
 

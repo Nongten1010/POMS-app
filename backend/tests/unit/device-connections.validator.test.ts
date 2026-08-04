@@ -5,6 +5,57 @@ import {
 } from '../../src/modules/device-connections/device-connections.validator';
 
 describe('device connection validators', () => {
+  it('accepts a POMS Box config with nullable settings and No Discharge status', () => {
+    const result = createDeviceConnectionConfigSchema.safeParse({
+      stationId: 'S1128',
+      deviceCode: 'S1128/01',
+      protocol: 'POMS_BOX',
+      settings: null,
+      channels: [
+        {
+          addressId: null,
+          dataType: 'Flow rate (m3/hr)',
+          offset: null,
+          status: 'No Discharge',
+        },
+      ],
+      statusManagement: {
+        selectedParameters: ['Flow rate (m3/hr)'],
+        startAt: null,
+        endAt: null,
+        status: null,
+        schedules: [
+          {
+            selectedParameters: ['Flow rate (m3/hr)'],
+            startAt: '2026-08-05T08:00:00+07:00',
+            endAt: '2026-08-05T10:00:00+07:00',
+            status: 'No Discharge',
+          },
+        ],
+      },
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toMatchObject({
+        stationId: 'S1128',
+        deviceCode: 'S1128/01',
+        protocol: 'POMS_BOX',
+        settings: {},
+        channels: [{ status: 'No Discharge' }],
+        statusManagement: {
+          schedules: [
+            {
+              startAt: '2026-08-05 08:00:00',
+              endAt: '2026-08-05 10:00:00',
+              status: 'No Discharge',
+            },
+          ],
+        },
+      });
+    }
+  });
+
   it('accepts a valid Modbus RTU mock config', () => {
     const result = createDeviceConnectionConfigSchema.safeParse({
       stationId: 'STATION_001',
@@ -38,6 +89,33 @@ describe('device connection validators', () => {
         dataType: 'CO2 (ppm)',
       });
       expect(result.data.channels[0]).not.toHaveProperty('unit');
+    }
+  });
+
+  it('normalizes legacy UTC schedule timestamps to Bangkok local datetime strings', () => {
+    const result = createDeviceConnectionConfigSchema.safeParse({
+      stationId: 'STATION_UTC',
+      protocol: 'MODBUS_TCP',
+      settings: {},
+      channels: [],
+      statusManagement: {
+        schedules: [
+          {
+            selectedParameters: ['CO (ppm)'],
+            startAt: '2026-08-05T01:00:00Z',
+            endAt: '2026-08-05T03:00:00Z',
+            status: 'Maintenance',
+          },
+        ],
+      },
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.statusManagement?.schedules[0]).toMatchObject({
+        startAt: '2026-08-05 08:00:00',
+        endAt: '2026-08-05 10:00:00',
+      });
     }
   });
 
@@ -507,7 +585,7 @@ describe('device connection validators', () => {
     });
   });
 
-  it.each(['MODBUS_RTU', 'MODBUS_TCP', 'MSSQL', 'MYSQL'] as const)(
+  it.each(['POMS_BOX', 'MODBUS_RTU', 'MODBUS_TCP', 'MSSQL', 'MYSQL'] as const)(
     'accepts empty settings and channels for %s',
     (protocol) => {
       const result = createDeviceConnectionConfigSchema.safeParse({

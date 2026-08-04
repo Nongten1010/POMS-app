@@ -217,14 +217,14 @@ describe('integrationDeviceConfigsService', () => {
       statusSchedules: [
         {
           parameter: 'NOx (ppm)',
-          startAt: '2026-06-13T00:00:00+07:00',
-          endAt: '2026-06-13T06:00:00+07:00',
+          startAt: '2026-06-13 00:00:00',
+          endAt: '2026-06-13 06:00:00',
           status: 'Calibration',
         },
         {
           parameter: 'SO2 (ppm)',
-          startAt: '2026-06-13T00:00:00+07:00',
-          endAt: '2026-06-13T06:00:00+07:00',
+          startAt: '2026-06-13 00:00:00',
+          endAt: '2026-06-13 06:00:00',
           status: 'Calibration',
         },
       ],
@@ -268,15 +268,64 @@ describe('integrationDeviceConfigsService', () => {
     expect(result.statusSchedules).toEqual([
       {
         parameter: 'NOx (ppm)',
-        startAt: earlierSchedule.startAt,
-        endAt: earlierSchedule.endAt,
+        startAt: '2026-08-05 08:00:00',
+        endAt: '2026-08-05 10:00:00',
         status: earlierSchedule.status,
       },
       {
         parameter: 'NOx (ppm)',
-        startAt: laterSchedule.startAt,
-        endAt: laterSchedule.endAt,
+        startAt: '2026-08-05 13:00:00',
+        endAt: '2026-08-05 15:00:00',
         status: laterSchedule.status,
+      },
+    ]);
+  });
+
+  it('exposes POMS Box configs with empty transport fields and No Discharge schedules', async () => {
+    mockedDeviceConnectionsService.listActiveSettingsForIntegration.mockResolvedValue([
+      {
+        id: 5,
+        requestId: null,
+        stationId: 'S0002',
+        deviceCode: 'S0002/01',
+        protocol: 'POMS_BOX',
+        settings: {},
+        channels: [],
+        statusManagement: {
+          selectedParameters: ['ทั้งหมด'],
+          startAt: null,
+          endAt: null,
+          status: 'No Discharge',
+          schedules: [
+            {
+              selectedParameters: ['NOx (ppm)'],
+              startAt: '2026-08-05T08:00:00+07:00',
+              endAt: '2026-08-05T10:00:00+07:00',
+              status: 'No Discharge',
+            },
+          ],
+        },
+        createdBy: 42,
+        createdAt: '2026-06-12T00:00:00.000Z',
+        updatedAt: '2026-06-12T00:00:00.000Z',
+      },
+    ]);
+
+    const result = await integrationDeviceConfigsService.getByStationId('S0002');
+
+    expect(result.deviceConfigs[0]).toMatchObject({
+      deviceCode: 'S0002/01',
+      protocol: 'POMS_BOX',
+      hostIp: null,
+      port: null,
+      dbName: null,
+    });
+    expect(result.statusSchedules).toEqual([
+      {
+        parameter: 'NOx (ppm)',
+        startAt: '2026-08-05 08:00:00',
+        endAt: '2026-08-05 10:00:00',
+        status: 'No Discharge',
       },
     ]);
   });
@@ -312,14 +361,14 @@ describe('integrationDeviceConfigsService', () => {
     expect(result.statusSchedules).toEqual([
       {
         parameter: 'NOx (ppm)',
-        startAt: schedule.startAt,
-        endAt: schedule.endAt,
+        startAt: '2026-08-05 08:00:00',
+        endAt: '2026-08-05 10:00:00',
         status: schedule.status,
       },
       {
         parameter: 'SO2 (ppm)',
-        startAt: schedule.startAt,
-        endAt: schedule.endAt,
+        startAt: '2026-08-05 08:00:00',
+        endAt: '2026-08-05 10:00:00',
         status: schedule.status,
       },
     ]);

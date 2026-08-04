@@ -75,6 +75,27 @@ describe('deviceConnectionsService', () => {
     });
   });
 
+  it('returns a successful mock connection result for POMS Box', async () => {
+    const result = await deviceConnectionsService.testConnection({
+      stationId: 'S1128',
+      deviceCode: 'S1128/01',
+      protocol: DEVICE_CONNECTION_PROTOCOL.POMS_BOX,
+      settings: {},
+      channels: [],
+    });
+
+    expect(result).toMatchObject({
+      success: true,
+      mode: 'MOCK',
+      protocol: DEVICE_CONNECTION_PROTOCOL.POMS_BOX,
+      stationId: 'S1128',
+      details: {
+        endpoint: 'POMS_BOX:S1128/01',
+        channelCount: 0,
+      },
+    });
+  });
+
   it('supports one Modbus RTU connection point with multiple measurement devices in mock mode', async () => {
     const result = await deviceConnectionsService.testConnection({
       stationId: 'STATION_001',

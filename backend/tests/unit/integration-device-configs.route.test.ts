@@ -71,8 +71,8 @@ describe('integration device configs route', () => {
       statusSchedules: [
         {
           parameter: 'NOx (ppm)',
-          startAt: '2026-06-13T00:00:00+07:00',
-          endAt: '2026-06-13T06:00:00+07:00',
+          startAt: '2026-06-13 00:00:00',
+          endAt: '2026-06-13 06:00:00',
           status: 'Calibration',
         },
       ],

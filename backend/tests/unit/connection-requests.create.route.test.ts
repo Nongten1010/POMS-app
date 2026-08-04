@@ -185,14 +185,14 @@ describe('create measurement-point request route', () => {
     const schedules = [
       {
         selectedParameters: ['CO (ppm)'],
-        startAt: '2026-08-05T08:00:00+07:00',
-        endAt: '2026-08-05T10:00:00+07:00',
+        startAt: '2026-08-05 08:00:00',
+        endAt: '2026-08-05 10:00:00',
         status: 'Maintenance',
       },
       {
         selectedParameters: ['NOx (ppm)'],
-        startAt: '2026-08-05T13:00:00+07:00',
-        endAt: '2026-08-05T15:00:00+07:00',
+        startAt: '2026-08-05 13:00:00',
+        endAt: '2026-08-05 15:00:00',
         status: 'Calibration',
       },
     ];
@@ -234,11 +234,16 @@ describe('create measurement-point request route', () => {
   });
 
   it('uses schedules as the source of truth when stale legacy fields are also submitted', async () => {
-    const schedule = {
+    const legacySchedule = {
       selectedParameters: ['CO (ppm)'],
       startAt: '2026-08-05T08:00:00+07:00',
       endAt: '2026-08-05T10:00:00+07:00',
       status: 'Maintenance',
+    };
+    const normalizedSchedule = {
+      ...legacySchedule,
+      startAt: '2026-08-05 08:00:00',
+      endAt: '2026-08-05 10:00:00',
     };
 
     const response = await request(createApp())
@@ -260,7 +265,7 @@ describe('create measurement-point request route', () => {
             startAt: 'not-a-date',
             endAt: 'also-not-a-date',
             status: 'Legacy status',
-            schedules: [schedule],
+            schedules: [legacySchedule],
           },
         },
       });
@@ -271,7 +276,10 @@ describe('create measurement-point request route', () => {
       {
         configs: [
           expect.objectContaining({
-            statusManagement: { ...schedule, schedules: [schedule] },
+            statusManagement: {
+              ...normalizedSchedule,
+              schedules: [normalizedSchedule],
+            },
           }),
         ],
       },
@@ -285,6 +293,11 @@ describe('create measurement-point request route', () => {
       startAt: '2026-08-05T08:00:00+07:00',
       endAt: '2026-08-05T10:00:00+07:00',
       status: 'Maintenance',
+    };
+    const normalizedSchedule = {
+      ...legacySchedule,
+      startAt: '2026-08-05 08:00:00',
+      endAt: '2026-08-05 10:00:00',
     };
 
     const response = await request(createApp())
@@ -312,8 +325,8 @@ describe('create measurement-point request route', () => {
         configs: [
           expect.objectContaining({
             statusManagement: {
-              ...legacySchedule,
-              schedules: [legacySchedule],
+              ...normalizedSchedule,
+              schedules: [normalizedSchedule],
             },
           }),
         ],
@@ -322,7 +335,7 @@ describe('create measurement-point request route', () => {
     );
   });
 
-  it('upgrades legacy local status timestamps to the Bangkok offset', async () => {
+  it('normalizes legacy datetime-local timestamps to the canonical local format', async () => {
     const response = await request(createApp())
       .post('/api/v1/cems-wpms-requests/17/device-configs')
       .set('Authorization', `Bearer ${accessToken()}`)
@@ -346,10 +359,10 @@ describe('create measurement-point request route', () => {
         },
       });
 
-    const upgradedSchedule = {
+    const normalizedSchedule = {
       selectedParameters: ['CO (ppm)'],
-      startAt: '2026-08-05T08:00:00+07:00',
-      endAt: '2026-08-05T10:00:00+07:00',
+      startAt: '2026-08-05 08:00:00',
+      endAt: '2026-08-05 10:00:00',
       status: 'Maintenance',
     };
 
@@ -360,8 +373,8 @@ describe('create measurement-point request route', () => {
         configs: [
           expect.objectContaining({
             statusManagement: {
-              ...upgradedSchedule,
-              schedules: [upgradedSchedule],
+              ...normalizedSchedule,
+              schedules: [normalizedSchedule],
             },
           }),
         ],
@@ -432,7 +445,7 @@ describe('create measurement-point request route', () => {
     expect(mockedService.createDeviceConfigs).not.toHaveBeenCalled();
   });
 
-  it('rejects status schedules whose timestamps omit an explicit timezone', async () => {
+  it('normalizes legacy schedule timestamps that omit an explicit timezone', async () => {
     const response = await request(createApp())
       .post('/api/v1/cems-wpms-requests/17/device-configs')
       .set('Authorization', `Bearer ${accessToken()}`)
@@ -460,9 +473,31 @@ describe('create measurement-point request route', () => {
         },
       });
 
-    expect(response.status).toBe(400);
-    expect(response.body.error).toMatchObject({ code: 'VALIDATION_ERROR' });
-    expect(mockedService.createDeviceConfigs).not.toHaveBeenCalled();
+    expect(response.status).toBe(201);
+    expect(mockedService.createDeviceConfigs).toHaveBeenCalledWith(
+      17,
+      {
+        configs: [
+          expect.objectContaining({
+            statusManagement: {
+              selectedParameters: ['CO (ppm)'],
+              startAt: '2026-08-05 08:00:00',
+              endAt: '2026-08-05 10:00:00',
+              status: 'Maintenance',
+              schedules: [
+                {
+                  selectedParameters: ['CO (ppm)'],
+                  startAt: '2026-08-05 08:00:00',
+                  endAt: '2026-08-05 10:00:00',
+                  status: 'Maintenance',
+                },
+              ],
+            },
+          }),
+        ],
+      },
+      42,
+    );
   });
 
   it('rejects status schedules whose end time is not after the start time', async () => {

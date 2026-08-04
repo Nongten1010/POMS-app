@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Device Status Schedule Section Mockup</title>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --surface: #ffffff;
+      --surface-soft: #f8fafc;
+      --text: #172033;
+      --muted: #64748b;
+      --line: #dbe3ef;
+      --primary: #2563eb;
+      --red: #b91c1c;
+      --red-soft: #fee2e2;
+      --shadow: 0 18px 45px rgba(15, 23, 42, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans Thai", sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .page {
+      max-width: 1080px;
+      margin: 32px auto;
+      padding: 0 20px;
+    }
+
+    .dialog {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .dialog-header,
+    .dialog-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px 22px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .dialog-footer {
+      justify-content: center;
+      border-top: 1px solid var(--line);
+      border-bottom: 0;
+      background: var(--surface-soft);
+    }
+
+    h1,
+    h2 {
+      margin: 0;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+
+    h1 {
+      font-size: 20px;
+    }
+
+    h2 {
+      font-size: 16px;
+    }
+
+    .subtitle {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .content {
+      padding: 22px;
+    }
+
+    .section {
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--surface);
+    }
+
+    .section + .section {
+      margin-top: 18px;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 14px;
+      align-items: end;
+    }
+
+    .col-2 { grid-column: span 2; }
+    .col-3 { grid-column: span 3; }
+    .col-4 { grid-column: span 4; }
+    .col-12 { grid-column: span 12; }
+
+    label {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    input,
+    select {
+      width: 100%;
+      min-height: 38px;
+      padding: 8px 10px;
+      border: 1px solid #c9d4e5;
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--text);
+      font: inherit;
+    }
+
+    .btn {
+      min-height: 36px;
+      padding: 8px 14px;
+      border: 1px solid #a7b8d8;
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--primary);
+      font: inherit;
+      font-weight: 700;
+      cursor: default;
+      white-space: nowrap;
+    }
+
+    .btn.primary {
+      border-color: var(--primary);
+      background: var(--primary);
+      color: #ffffff;
+    }
+
+    .btn.ghost {
+      color: var(--muted);
+    }
+
+    .hint {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 26px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .pill.shutdown {
+      background: var(--red-soft);
+      color: var(--red);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1px solid var(--line);
+    }
+
+    th,
+    td {
+      padding: 10px;
+      border: 1px solid var(--line);
+      vertical-align: middle;
+      text-align: left;
+    }
+
+    th {
+      background: #eef4ff;
+      color: #15213a;
+      font-weight: 700;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    @media (max-width: 860px) {
+      .col-2,
+      .col-3,
+      .col-4 {
+        grid-column: span 12;
+      }
+
+      .dialog-header,
+      .section-header {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      table {
+        min-width: 760px;
+      }
+
+      .table-wrap {
+        overflow-x: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="dialog">
+      <div class="dialog-header">
+        <div>
+          <h1>ตั้งค่าอุปกรณ์</h1>
+          <div class="subtitle">ตัวอย่าง section เสริมสำหรับตั้งสถานะอุปกรณ์เป็นช่วงเวลา</div>
+        </div>
+        <button class="btn ghost" type="button">ปิด</button>
+      </div>
+
+      <div class="content">
+        <section class="section">
+          <div class="section-header">
+            <div>
+              <h2>จัดการสถานะตามช่วงเวลา</h2>
+              <div class="subtitle">เหมาะกับการตั้งค่าสัปดาห์นี้ แล้วสัปดาห์หน้าเข้ามาตั้งค่าใหม่</div>
+            </div>
+            <button class="btn" type="button">เพิ่มช่วงเวลา</button>
+          </div>
+
+          <div class="grid">
+            <div class="col-3">
+              <label for="start-date">วัน/เวลาเริ่มต้น</label>
+              <input id="start-date" type="datetime-local" value="2026-08-05T17:01">
+            </div>
+            <div class="col-3">
+              <label for="end-date">วัน/เวลาสิ้นสุด</label>
+              <input id="end-date" type="datetime-local" value="2026-08-06T08:59">
+            </div>
+            <div class="col-3">
+              <label for="parameter">พารามิเตอร์</label>
+              <select id="parameter">
+                <option>ทั้งหมด</option>
+                <option>NOx (ppm)</option>
+                <option>SO2 (ppm)</option>
+                <option>CO (ppm)</option>
+                <option>O2 (%)</option>
+              </select>
+            </div>
+            <div class="col-2">
+              <label for="status">สถานะ</label>
+              <select id="status">
+                <option>Shut Down</option>
+                <option>Maintenance</option>
+                <option>Calibration</option>
+                <option>Defective</option>
+                <option>Etc.</option>
+              </select>
+            </div>
+            <div class="col-1">
+              <button class="btn primary" type="button">เพิ่ม</button>
+            </div>
+          </div>
+          <div class="hint">ตัวอย่างนี้ตั้งเป็นช่วงวันที่จริง ไม่มีการตั้งซ้ำรายสัปดาห์</div>
+        </section>
+
+        <section class="section">
+          <div class="section-header">
+            <div>
+              <h2>รายการสถานะที่ตั้งไว้</h2>
+              <div class="subtitle">ระบบส่งเป็น array ของช่วงเวลา ตามรายการที่ผู้ควบคุมเพิ่มไว้</div>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 70px;">ลำดับ</th>
+                  <th>วัน/เวลาเริ่มต้น</th>
+                  <th>วัน/เวลาสิ้นสุด</th>
+                  <th style="width: 160px;">พารามิเตอร์</th>
+                  <th style="width: 150px;">สถานะ</th>
+                  <th style="width: 150px;">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>1</td>
+                  <td>05/08/2569 17:01</td>
+                  <td>06/08/2569 08:59</td>
+                  <td>ทั้งหมด</td>
+                  <td><span class="pill shutdown">Shut Down</span></td>
+                  <td>
+                    <div class="actions">
+                      <button class="btn" type="button">แก้ไข</button>
+                      <button class="btn ghost" type="button">ลบ</button>
+                    </div>
+                  </td>
+                </tr>
+                <tr>
+                  <td>2</td>
+                  <td>06/08/2569 17:01</td>
+                  <td>07/08/2569 08:59</td>
+                  <td>ทั้งหมด</td>
+                  <td><span class="pill shutdown">Shut Down</span></td>
+                  <td>
+                    <div class="actions">
+                      <button class="btn" type="button">แก้ไข</button>
+                      <button class="btn ghost" type="button">ลบ</button>
+                    </div>
+                  </td>
+                </tr>
+                <tr>
+                  <td>3</td>
+                  <td>07/08/2569 17:01</td>
+                  <td>10/08/2569 08:59</td>
+                  <td>ทั้งหมด</td>
+                  <td><span class="pill shutdown">Shut Down</span></td>
+                  <td>
+                    <div class="actions">
+                      <button class="btn" type="button">แก้ไข</button>
+                      <button class="btn ghost" type="button">ลบ</button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <div class="dialog-footer">
+        <button class="btn ghost" type="button">ยกเลิก</button>
+        <button class="btn primary" type="button">บันทึก</button>
+      </div>
+    </div>
+  </main>
+</body>
+</html>
