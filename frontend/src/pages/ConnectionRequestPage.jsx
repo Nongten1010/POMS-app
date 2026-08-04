@@ -3326,30 +3326,13 @@ function StatusManagementSection({ parameterOptions, statusManagement, onChange 
   const [startAt, setStartAt] = useState(statusManagement?.startAt ?? '')
   const [endAt, setEndAt] = useState(statusManagement?.endAt ?? '')
   const [schedules, setSchedules] = useState(initialSchedules)
+  const [scheduleError, setScheduleError] = useState('')
   const [deleteScheduleTarget, setDeleteScheduleTarget] = useState(null)
   const updateStatusManagement = (nextValue) => {
     onChange?.({
-      selectedParameters,
-      startAt,
-      endAt,
-      status,
       schedules,
       ...nextValue,
     })
-  }
-  const formatScheduleDateTime = (value) => {
-    if (!value) return '-'
-    const date = new Date(value)
-
-    if (Number.isNaN(date.getTime())) return String(value)
-
-    const day = String(date.getDate()).padStart(2, '0')
-    const month = String(date.getMonth() + 1).padStart(2, '0')
-    const year = date.getFullYear() + 543
-    const hours = String(date.getHours()).padStart(2, '0')
-    const minutes = String(date.getMinutes()).padStart(2, '0')
-
-    return `${day}/${month}/${year} ${hours}.${minutes}`
   }
   const getScheduleParametersLabel = (parameters) => {
     if (!Array.isArray(parameters) || parameters.length === 0 || parameters.includes(allOption)) {
@@ -3359,19 +3342,22 @@ function StatusManagementSection({ parameterOptions, statusManagement, onChange 
     return parameters.join(', ')
   }
   const addSchedule = () => {
-    if (!startAt || !endAt || !status) return
+    const nextSchedule = {
+      id: Date.now(),
+      selectedParameters: selectedParameters.length ? selectedParameters : [allOption],
+      startAt,
+      endAt,
+      status,
+    }
+    const nextSchedules = [...schedules, nextSchedule]
+    const validationMessage = validateStatusManagementSchedules(nextSchedules)
 
-    const nextSchedules = [
-      ...schedules,
-      {
-        id: Date.now(),
-        selectedParameters: selectedParameters.length ? selectedParameters : [allOption],
-        startAt,
-        endAt,
-        status,
-      },
-    ]
+    if (validationMessage) {
+      setScheduleError(validationMessage)
+      return
+    }
 
+    setScheduleError('')
     setSchedules(nextSchedules)
     updateStatusManagement({ schedules: nextSchedules })
   }
@@ -3379,6 +3365,7 @@ function StatusManagementSection({ parameterOptions, statusManagement, onChange 
     const nextSchedules = schedules.filter((item, index) => (item.id ?? index) !== scheduleId)
 
     setSchedules(nextSchedules)
+    setScheduleError('')
     updateStatusManagement({ schedules: nextSchedules })
   }
   const closeDeleteScheduleConfirm = () => {
@@ -3411,7 +3398,7 @@ function StatusManagementSection({ parameterOptions, statusManagement, onChange 
             value={startAt ?? ''}
             onChange={(event) => {
               setStartAt(event.target.value)
-              updateStatusManagement({ startAt: event.target.value || null })
+              setScheduleError('')
             }}
             fullWidth
             slotProps={{ inputLabel: { shrink: true } }}
@@ -3425,7 +3412,7 @@ function StatusManagementSection({ parameterOptions, statusManagement, onChange 
             value={endAt ?? ''}
             onChange={(event) => {
               setEndAt(event.target.value)
-              updateStatusManagement({ endAt: event.target.value || null })
+              setScheduleError('')
             }}
             fullWidth
             slotProps={{ inputLabel: { shrink: true } }}
@@ -3446,7 +3433,7 @@ function StatusManagementSection({ parameterOptions, statusManagement, onChange 
                   ? (nextValue.includes(allOption) ? [allOption] : nextValue)
                   : []
                 setSelectedParameters(nextSelectedParameters)
-                updateStatusManagement({ selectedParameters: nextSelectedParameters })
+                setScheduleError('')
               }}
               renderValue={(selected) => (
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
@@ -3473,7 +3460,7 @@ function StatusManagementSection({ parameterOptions, statusManagement, onChange 
             value={status}
             onChange={(event) => {
               setStatus(event.target.value)
-              updateStatusManagement({ status: event.target.value })
+              setScheduleError('')
             }}
             fullWidth
           >
@@ -3500,6 +3487,11 @@ function StatusManagementSection({ parameterOptions, statusManagement, onChange 
           </Button>
         </Grid>
       </Grid>
+      {scheduleError ? (
+        <Alert severity="error">
+          {scheduleError}
+        </Alert>
+      ) : null}
       <TableContainer sx={{ border: 1, borderColor: 'divider', overflowX: 'auto' }}>
         <Table size="small" sx={{ minWidth: 720, ...borderedTableSx }}>
           <TableHead>
@@ -3528,8 +3520,8 @@ function StatusManagementSection({ parameterOptions, statusManagement, onChange 
 
                 return (
                   <TableRow key={scheduleId}>
-                    <TableCell>{formatScheduleDateTime(item.startAt)}</TableCell>
-                    <TableCell>{formatScheduleDateTime(item.endAt)}</TableCell>
+                    <TableCell>{getDateTimeLocalDisplay(item.startAt)}</TableCell>
+                    <TableCell>{getDateTimeLocalDisplay(item.endAt)}</TableCell>
                     <TableCell>{getScheduleParametersLabel(item.selectedParameters)}</TableCell>
                     <TableCell>
                       <Chip
@@ -3716,7 +3708,8 @@ function getDeviceConfigParameterOptions(data, fallback = []) {
 }
 
 function getDeviceConfigStatusManagement(data) {
-  return data?.statusManagement ?? getRawDeviceConfig(data).statusManagement ?? null
+  const statusManagement = data?.statusManagement ?? getRawDeviceConfig(data).statusManagement ?? null
+  return statusManagement ? normalizeStatusManagementForUi(statusManagement) : null
 }
 
 function getTestResultParameterStatus(row, parameter) {
@@ -3799,6 +3792,138 @@ function getComPortValue(values) {
 
 function nullIfBlank(value) {
   return value === '' || value === null || value === undefined ? null : value
+}
+
+function toApiLocalDateTime(value) {
+  if (!value) return null
+
+  const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(?::(\d{2}))?$/.exec(String(value))
+  if (!match) return null
+
+  const [, datePart, timePart, secondPart = '00'] = match
+  const [year, month, day] = datePart.split('-').map(Number)
+  const [hour, minute] = timePart.split(':').map(Number)
+  const second = Number(secondPart)
+  const localDate = new Date(year, month - 1, day, hour, minute, second)
+
+  if (
+    localDate.getFullYear() !== year
+    || localDate.getMonth() !== month - 1
+    || localDate.getDate() !== day
+    || localDate.getHours() !== hour
+    || localDate.getMinutes() !== minute
+    || localDate.getSeconds() !== second
+  ) {
+    return null
+  }
+
+  return `${datePart} ${timePart}:${secondPart}`
+}
+
+function toDateTimeLocal(value) {
+  if (!value) return ''
+
+  const localDateTimeValue = String(value)
+  const apiMatch = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}):\d{2}$/.exec(localDateTimeValue)
+  if (apiMatch) {
+    return `${apiMatch[1]}T${apiMatch[2]}`
+  }
+
+  const inputMatch = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(?::\d{2})?$/.exec(localDateTimeValue)
+  return inputMatch ? `${inputMatch[1]}T${inputMatch[2]}` : ''
+}
+
+function getDateTimeLocalDisplay(value) {
+  const localValue = toDateTimeLocal(value)
+  if (!localValue) return '-'
+
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(localValue)
+  if (!match) return String(value)
+
+  return `${match[3]}/${match[2]}/${Number(match[1]) + 543} ${match[4]}.${match[5]}`
+}
+
+function normalizeScheduleParameters(parameters) {
+  return Array.isArray(parameters) && parameters.length ? parameters : ['ทั้งหมด']
+}
+
+function scheduleTargetsOverlap(firstParameters, secondParameters) {
+  const first = normalizeScheduleParameters(firstParameters)
+  const second = normalizeScheduleParameters(secondParameters)
+
+  return first.includes('ทั้งหมด')
+    || second.includes('ทั้งหมด')
+    || first.some((parameter) => second.includes(parameter))
+}
+
+function normalizeStatusManagementForUi(statusManagement) {
+  const sourceSchedules = Array.isArray(statusManagement?.schedules) && statusManagement.schedules.length
+    ? statusManagement.schedules
+    : (
+        statusManagement?.startAt && statusManagement?.endAt && statusManagement?.status
+          ? [{
+              selectedParameters: statusManagement.selectedParameters,
+              startAt: statusManagement.startAt,
+              endAt: statusManagement.endAt,
+              status: statusManagement.status,
+            }]
+          : []
+      )
+  const schedules = sourceSchedules.map((schedule, index) => ({
+        id: schedule.id ?? `schedule-${index}`,
+        selectedParameters: normalizeScheduleParameters(schedule.selectedParameters),
+        startAt: toDateTimeLocal(schedule.startAt),
+        endAt: toDateTimeLocal(schedule.endAt),
+        status: schedule.status ?? '',
+      }))
+
+  return {
+    schedules,
+  }
+}
+
+function buildStatusManagementSchedules(schedules = []) {
+  return schedules.map((schedule) => ({
+    selectedParameters: normalizeScheduleParameters(schedule.selectedParameters),
+    startAt: toApiLocalDateTime(schedule.startAt),
+    endAt: toApiLocalDateTime(schedule.endAt),
+    status: schedule.status,
+  }))
+}
+
+function validateStatusManagementSchedules(schedules = [], validStatuses = connectionParameterStatusOptions) {
+  if (schedules.length > 100) {
+    return 'เพิ่มรายการสถานะได้ไม่เกิน 100 รายการ'
+  }
+
+  const normalizedSchedules = buildStatusManagementSchedules(schedules)
+
+  for (let index = 0; index < normalizedSchedules.length; index += 1) {
+    const schedule = normalizedSchedules[index]
+
+    if (!schedule.selectedParameters.length || !schedule.startAt || !schedule.endAt || !schedule.status) {
+      return `กรุณากรอกข้อมูลรายการสถานะลำดับที่ ${index + 1} ให้ครบ`
+    }
+
+    if (!validStatuses.includes(schedule.status)) {
+      return `สถานะของรายการลำดับที่ ${index + 1} ไม่ถูกต้อง`
+    }
+
+    if (schedule.endAt <= schedule.startAt) {
+      return `วันเวลาสิ้นสุดของรายการลำดับที่ ${index + 1} ต้องมากกว่าวันเวลาเริ่มต้น`
+    }
+
+    for (let previousIndex = 0; previousIndex < index; previousIndex += 1) {
+      const previousSchedule = normalizedSchedules[previousIndex]
+      const overlapsInTime = schedule.startAt < previousSchedule.endAt && previousSchedule.startAt < schedule.endAt
+
+      if (overlapsInTime && scheduleTargetsOverlap(schedule.selectedParameters, previousSchedule.selectedParameters)) {
+        return `รายการสถานะลำดับที่ ${index + 1} มีช่วงเวลาทับกับรายการลำดับที่ ${previousIndex + 1}`
+      }
+    }
+  }
+
+  return ''
 }
 
 function buildValueRange(min, max) {
@@ -3887,11 +4012,7 @@ function buildDeviceConfigChannels(rows, deviceCode) {
 
 function buildDeviceConfigStatusManagement(statusManagement) {
   return {
-    selectedParameters: statusManagement?.selectedParameters?.length ? statusManagement.selectedParameters : null,
-    startAt: statusManagement?.startAt || null,
-    endAt: statusManagement?.endAt || null,
-    status: statusManagement?.status || null,
-    schedules: statusManagement?.schedules ?? [],
+    schedules: buildStatusManagementSchedules(statusManagement?.schedules ?? []),
   }
 }
 
@@ -4128,6 +4249,12 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose, onSaved
       throw new Error(validationMessage)
     }
 
+    const statusManagementValidationMessage = validateStatusManagementSchedules(statusManagement?.schedules ?? [])
+
+    if (statusManagementValidationMessage) {
+      throw new Error(statusManagementValidationMessage)
+    }
+
     const deviceItems = forms.map((form, index) => {
       const deviceCode = form.deviceCode || deviceCodeOptions[index] || getConnectionDeviceCode(context, index)
 
@@ -4194,7 +4321,7 @@ function ConnectionSettingsDialog({ open, context, accessToken, onClose, onSaved
     const savePayload = await saveResult.json().catch(() => null)
 
     if (!saveResult.ok) {
-      throw new Error(savePayload?.error?.message || savePayload?.message || `บันทึกการตั้งค่าอุปกรณ์ไม่สำเร็จ (${saveResult.status} ${saveResult.statusText})`)
+      throw new Error(formatApiErrorMessage(savePayload, `บันทึกการตั้งค่าอุปกรณ์ไม่สำเร็จ (${saveResult.status} ${saveResult.statusText})`))
     }
 
     const refreshResult = await fetch(refreshApiUrl, {
