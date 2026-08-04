@@ -1048,6 +1048,7 @@ export const connectionRequestsService = {
     ensureOwner(request, actorUserId);
     ensureStatus(request, [CONNECTION_REQUEST_STATUS.WAITING_CONNECTION]);
     ensureStationBelongsToRequest(request, input.stationId);
+    ensureStatusScheduleParametersBelongToRequest(request, input);
 
     const created = await deviceConnectionsService.createForRequest(input, actorUserId, id);
     return toDeviceConfigPayloadResponse([created]);
@@ -1063,6 +1064,7 @@ export const connectionRequestsService = {
     ensureStatus(request, [CONNECTION_REQUEST_STATUS.WAITING_CONNECTION]);
     for (const config of input.configs) {
       ensureStationBelongsToRequest(request, config.stationId);
+      ensureStatusScheduleParametersBelongToRequest(request, config);
     }
 
     const created = await deviceConnectionsService.createManyForRequest(
@@ -1080,8 +1082,14 @@ export const connectionRequestsService = {
     editScope: string | null | undefined,
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<DeviceConfigPayloadResponseDTO> {
-    await loadLatestConnectedRequestForStation(stationId, actorUserId, editScope, regionalAccess);
+    const { request } = await loadLatestConnectedRequestForStation(
+      stationId,
+      actorUserId,
+      editScope,
+      regionalAccess,
+    );
     ensureConfigStationMatchesRoute(stationId, input.stationId);
+    ensureStatusScheduleParametersBelongToRequest(request, input);
 
     const [saved] = await deviceConnectionsService.replaceCurrentStation(
       stationId,
@@ -1098,9 +1106,15 @@ export const connectionRequestsService = {
     editScope: string | null | undefined,
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<DeviceConfigPayloadResponseDTO> {
-    await loadLatestConnectedRequestForStation(stationId, actorUserId, editScope, regionalAccess);
+    const { request } = await loadLatestConnectedRequestForStation(
+      stationId,
+      actorUserId,
+      editScope,
+      regionalAccess,
+    );
     for (const config of input.configs) {
       ensureConfigStationMatchesRoute(stationId, config.stationId);
+      ensureStatusScheduleParametersBelongToRequest(request, config);
     }
 
     const saved = await deviceConnectionsService.replaceCurrentStation(
@@ -2636,6 +2650,55 @@ function ensureStationBelongsToRequest(request: ConnectionRequestDTO, stationId:
       })),
     });
   }
+}
+
+function ensureStatusScheduleParametersBelongToRequest(
+  request: ConnectionRequestDTO,
+  config: CreateDeviceConnectionConfigInput,
+): void {
+  const schedules = config.statusManagement?.schedules ?? [];
+  if (schedules.length === 0) return;
+
+  const monitoringPoint = findMonitoringPoint(request, config.stationId);
+  const monitoringPointParameters = getDeviceConfigParameterOptions(monitoringPoint);
+  const allowedParameters = new Set([
+    ...monitoringPointParameters,
+    ...config.channels
+      .map((channel) => channel.dataType)
+      .filter((label) => isDerivedParameterLabel(label, monitoringPointParameters)),
+  ]);
+  const invalidParameters = [
+    ...new Set(
+      schedules.flatMap((schedule) =>
+        schedule.selectedParameters.filter(
+          (parameter) => parameter !== 'ทั้งหมด' && !allowedParameters.has(parameter),
+        ),
+      ),
+    ),
+  ];
+
+  if (invalidParameters.length > 0) {
+    throw new BadRequestError(
+      'Status schedule parameters must match the selected measurement point',
+      {
+        stationId: config.stationId,
+        invalidParameters,
+        allowedParameters: [...allowedParameters],
+      },
+    );
+  }
+}
+
+function isDerivedParameterLabel(label: string, parameterOptions: string[]): boolean {
+  const normalizedLabel = normalizeParameterName(label);
+  const labelWithoutUnit = normalizeParameterName(label.replace(/\s*\([^)]*\)\s*$/, ''));
+
+  return parameterOptions.some((option) => {
+    const normalizedOption = normalizeParameterName(option);
+    if (normalizedOption === normalizedLabel) return true;
+    if (/\([^)]*\)\s*$/.test(option)) return false;
+    return normalizedOption === labelWithoutUnit;
+  });
 }
 
 function ensureConfigStationMatchesRoute(routeStationId: string, payloadStationId: string): void {

@@ -181,6 +181,426 @@ describe('create measurement-point request route', () => {
     );
   });
 
+  it('accepts multiple status schedules without requiring legacy top-level status fields', async () => {
+    const schedules = [
+      {
+        selectedParameters: ['CO (ppm)'],
+        startAt: '2026-08-05T08:00:00+07:00',
+        endAt: '2026-08-05T10:00:00+07:00',
+        status: 'Maintenance',
+      },
+      {
+        selectedParameters: ['NOx (ppm)'],
+        startAt: '2026-08-05T13:00:00+07:00',
+        endAt: '2026-08-05T15:00:00+07:00',
+        status: 'Calibration',
+      },
+    ];
+
+    const response = await request(createApp())
+      .post('/api/v1/cems-wpms-requests/17/device-configs')
+      .set('Authorization', `Bearer ${accessToken()}`)
+      .send({
+        config: {
+          stationId: 'S0001',
+          device: [
+            {
+              deviceCode: 'S0001/01',
+              protocol: 'MODBUS_TCP',
+              settings: {},
+            },
+          ],
+          channels: [],
+          statusManagement: { schedules },
+        },
+      });
+
+    expect(response.status).toBe(201);
+    expect(mockedService.createDeviceConfigs).toHaveBeenCalledWith(
+      17,
+      {
+        configs: [
+          expect.objectContaining({
+            stationId: 'S0001',
+            statusManagement: {
+              ...schedules[0],
+              schedules,
+            },
+          }),
+        ],
+      },
+      42,
+    );
+  });
+
+  it('uses schedules as the source of truth when stale legacy fields are also submitted', async () => {
+    const schedule = {
+      selectedParameters: ['CO (ppm)'],
+      startAt: '2026-08-05T08:00:00+07:00',
+      endAt: '2026-08-05T10:00:00+07:00',
+      status: 'Maintenance',
+    };
+
+    const response = await request(createApp())
+      .post('/api/v1/cems-wpms-requests/17/device-configs')
+      .set('Authorization', `Bearer ${accessToken()}`)
+      .send({
+        config: {
+          stationId: 'S0001',
+          device: [
+            {
+              deviceCode: 'S0001/01',
+              protocol: 'MODBUS_TCP',
+              settings: {},
+            },
+          ],
+          channels: [],
+          statusManagement: {
+            selectedParameters: ['stale'],
+            startAt: 'not-a-date',
+            endAt: 'also-not-a-date',
+            status: 'Legacy status',
+            schedules: [schedule],
+          },
+        },
+      });
+
+    expect(response.status).toBe(201);
+    expect(mockedService.createDeviceConfigs).toHaveBeenCalledWith(
+      17,
+      {
+        configs: [
+          expect.objectContaining({
+            statusManagement: { ...schedule, schedules: [schedule] },
+          }),
+        ],
+      },
+      42,
+    );
+  });
+
+  it('normalizes a legacy top-level status window into one schedule', async () => {
+    const legacySchedule = {
+      selectedParameters: ['CO (ppm)'],
+      startAt: '2026-08-05T08:00:00+07:00',
+      endAt: '2026-08-05T10:00:00+07:00',
+      status: 'Maintenance',
+    };
+
+    const response = await request(createApp())
+      .post('/api/v1/cems-wpms-requests/17/device-configs')
+      .set('Authorization', `Bearer ${accessToken()}`)
+      .send({
+        config: {
+          stationId: 'S0001',
+          device: [
+            {
+              deviceCode: 'S0001/01',
+              protocol: 'MODBUS_TCP',
+              settings: {},
+            },
+          ],
+          channels: [],
+          statusManagement: legacySchedule,
+        },
+      });
+
+    expect(response.status).toBe(201);
+    expect(mockedService.createDeviceConfigs).toHaveBeenCalledWith(
+      17,
+      {
+        configs: [
+          expect.objectContaining({
+            statusManagement: {
+              ...legacySchedule,
+              schedules: [legacySchedule],
+            },
+          }),
+        ],
+      },
+      42,
+    );
+  });
+
+  it('upgrades legacy local status timestamps to the Bangkok offset', async () => {
+    const response = await request(createApp())
+      .post('/api/v1/cems-wpms-requests/17/device-configs')
+      .set('Authorization', `Bearer ${accessToken()}`)
+      .send({
+        config: {
+          stationId: 'S0001',
+          device: [
+            {
+              deviceCode: 'S0001/01',
+              protocol: 'MODBUS_TCP',
+              settings: {},
+            },
+          ],
+          channels: [],
+          statusManagement: {
+            selectedParameters: ['CO (ppm)'],
+            startAt: '2026-08-05T08:00',
+            endAt: '2026-08-05T10:00',
+            status: 'Maintenance',
+          },
+        },
+      });
+
+    const upgradedSchedule = {
+      selectedParameters: ['CO (ppm)'],
+      startAt: '2026-08-05T08:00:00+07:00',
+      endAt: '2026-08-05T10:00:00+07:00',
+      status: 'Maintenance',
+    };
+
+    expect(response.status).toBe(201);
+    expect(mockedService.createDeviceConfigs).toHaveBeenCalledWith(
+      17,
+      {
+        configs: [
+          expect.objectContaining({
+            statusManagement: {
+              ...upgradedSchedule,
+              schedules: [upgradedSchedule],
+            },
+          }),
+        ],
+      },
+      42,
+    );
+  });
+
+  it('rejects an invalid legacy top-level status time window', async () => {
+    const response = await request(createApp())
+      .post('/api/v1/cems-wpms-requests/17/device-configs')
+      .set('Authorization', `Bearer ${accessToken()}`)
+      .send({
+        config: {
+          stationId: 'S0001',
+          device: [
+            {
+              deviceCode: 'S0001/01',
+              protocol: 'MODBUS_TCP',
+              settings: {},
+            },
+          ],
+          channels: [],
+          statusManagement: {
+            selectedParameters: ['CO (ppm)'],
+            startAt: '2026-08-05T10:00:00+07:00',
+            endAt: '2026-08-05T08:00:00+07:00',
+            status: 'Maintenance',
+          },
+        },
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(mockedService.createDeviceConfigs).not.toHaveBeenCalled();
+  });
+
+  it('rejects status schedules whose status is outside the supported whitelist', async () => {
+    const response = await request(createApp())
+      .post('/api/v1/cems-wpms-requests/17/device-configs')
+      .set('Authorization', `Bearer ${accessToken()}`)
+      .send({
+        config: {
+          stationId: 'S0001',
+          device: [
+            {
+              deviceCode: 'S0001/01',
+              protocol: 'MODBUS_TCP',
+              settings: {},
+            },
+          ],
+          channels: [],
+          statusManagement: {
+            schedules: [
+              {
+                selectedParameters: ['CO (ppm)'],
+                startAt: '2026-08-05T08:00:00+07:00',
+                endAt: '2026-08-05T10:00:00+07:00',
+                status: 'Unknown status',
+              },
+            ],
+          },
+        },
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(mockedService.createDeviceConfigs).not.toHaveBeenCalled();
+  });
+
+  it('rejects status schedules whose timestamps omit an explicit timezone', async () => {
+    const response = await request(createApp())
+      .post('/api/v1/cems-wpms-requests/17/device-configs')
+      .set('Authorization', `Bearer ${accessToken()}`)
+      .send({
+        config: {
+          stationId: 'S0001',
+          device: [
+            {
+              deviceCode: 'S0001/01',
+              protocol: 'MODBUS_TCP',
+              settings: {},
+            },
+          ],
+          channels: [],
+          statusManagement: {
+            schedules: [
+              {
+                selectedParameters: ['CO (ppm)'],
+                startAt: '2026-08-05T08:00:00',
+                endAt: '2026-08-05T10:00:00+07:00',
+                status: 'Maintenance',
+              },
+            ],
+          },
+        },
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(mockedService.createDeviceConfigs).not.toHaveBeenCalled();
+  });
+
+  it('rejects status schedules whose end time is not after the start time', async () => {
+    const response = await request(createApp())
+      .post('/api/v1/cems-wpms-requests/17/device-configs')
+      .set('Authorization', `Bearer ${accessToken()}`)
+      .send({
+        config: {
+          stationId: 'S0001',
+          device: [
+            {
+              deviceCode: 'S0001/01',
+              protocol: 'MODBUS_TCP',
+              settings: {},
+            },
+          ],
+          channels: [],
+          statusManagement: {
+            schedules: [
+              {
+                selectedParameters: ['CO (ppm)'],
+                startAt: '2026-08-05T10:00:00+07:00',
+                endAt: '2026-08-05T08:00:00+07:00',
+                status: 'Maintenance',
+              },
+            ],
+          },
+        },
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(mockedService.createDeviceConfigs).not.toHaveBeenCalled();
+  });
+
+  it('rejects status schedules that do not target any parameters', async () => {
+    const response = await request(createApp())
+      .post('/api/v1/cems-wpms-requests/17/device-configs')
+      .set('Authorization', `Bearer ${accessToken()}`)
+      .send({
+        config: {
+          stationId: 'S0001',
+          device: [
+            {
+              deviceCode: 'S0001/01',
+              protocol: 'MODBUS_TCP',
+              settings: {},
+            },
+          ],
+          channels: [],
+          statusManagement: {
+            schedules: [
+              {
+                selectedParameters: [],
+                startAt: '2026-08-05T08:00:00+07:00',
+                endAt: '2026-08-05T10:00:00+07:00',
+                status: 'Maintenance',
+              },
+            ],
+          },
+        },
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(mockedService.createDeviceConfigs).not.toHaveBeenCalled();
+  });
+
+  it('limits the number of status schedules in one device config payload', async () => {
+    const schedules = Array.from({ length: 101 }, (_, index) => ({
+      selectedParameters: ['CO (ppm)'],
+      startAt: new Date(Date.UTC(2026, 7, 5, index * 2)).toISOString(),
+      endAt: new Date(Date.UTC(2026, 7, 5, index * 2 + 1)).toISOString(),
+      status: 'Maintenance',
+    }));
+
+    const response = await request(createApp())
+      .post('/api/v1/cems-wpms-requests/17/device-configs')
+      .set('Authorization', `Bearer ${accessToken()}`)
+      .send({
+        config: {
+          stationId: 'S0001',
+          device: [
+            {
+              deviceCode: 'S0001/01',
+              protocol: 'MODBUS_TCP',
+              settings: {},
+            },
+          ],
+          channels: [],
+          statusManagement: { schedules },
+        },
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(mockedService.createDeviceConfigs).not.toHaveBeenCalled();
+  });
+
+  it('rejects overlapping status schedules for the same parameter', async () => {
+    const response = await request(createApp())
+      .post('/api/v1/cems-wpms-requests/17/device-configs')
+      .set('Authorization', `Bearer ${accessToken()}`)
+      .send({
+        config: {
+          stationId: 'S0001',
+          device: [
+            {
+              deviceCode: 'S0001/01',
+              protocol: 'MODBUS_TCP',
+              settings: {},
+            },
+          ],
+          channels: [],
+          statusManagement: {
+            schedules: [
+              {
+                selectedParameters: ['CO (ppm)'],
+                startAt: '2026-08-05T08:00:00+07:00',
+                endAt: '2026-08-05T10:00:00+07:00',
+                status: 'Maintenance',
+              },
+              {
+                selectedParameters: ['CO (ppm)'],
+                startAt: '2026-08-05T09:30:00+07:00',
+                endAt: '2026-08-05T11:00:00+07:00',
+                status: 'Calibration',
+              },
+            ],
+          },
+        },
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(mockedService.createDeviceConfigs).not.toHaveBeenCalled();
+  });
+
   it('returns field and full-path issues without calling the service for invalid EIA Other', async () => {
     const response = await request(createApp())
       .post('/api/v1/cems-wpms-requests/measurement-points')

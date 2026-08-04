@@ -79,17 +79,25 @@ POST ทั้งสอง endpoint รับ body ได้สามรูป�
 | `valueFormat` | string | No | Yes | รูปแบบค่า เช่น `MEASUREMENT_VALUE`, `CURRENT`, `VOLTAGE`; backend ไม่ตรวจ enum เชิง business |
 | `offset` | number | No | Yes | offset ของค่าที่อ่าน |
 | `encoding` | string | No | Yes | รูปแบบ encoding; backend ไม่ตรวจ enum เชิง business |
-| `status` | string | No | Yes | สถานะพารามิเตอร์ |
+| `status` | enum string | No | Yes | `Normal`, `Calibration`, `Defective`, `Maintenance`, `Start up`, `Shut Down`, `Turnaround` หรือ `Etc.` |
 
 ### Status-management Fields
 
 | Field | Type | Required | Nullable | Description |
 | --- | --- | --- | --- | --- |
-| `selectedParameters` | string[] | No | Yes | รายการพารามิเตอร์ที่ใช้สถานะ |
-| `startAt` | string | No | Yes | เวลาเริ่ม |
-| `endAt` | string | No | Yes | เวลาสิ้นสุด |
-| `status` | string | No | Yes | สถานะที่เลือก |
-| `schedules` | array | No | Yes | ตารางสถานะเพิ่มเติม |
+| `schedules` | object[] | No | Yes | source of truth ของหน้าจอใหม่ สูงสุด 100 ช่วง; ส่ง `[]` โดยไม่ส่ง legacy fields เพื่อล้างรายการทั้งหมด |
+| `schedules[].selectedParameters` | string[] | Yes | No | 1-200 ค่าจาก `parameterOptions` หรือ `ทั้งหมด`; ใช้ display label พร้อมหน่วย |
+| `schedules[].startAt` | ISO 8601 datetime | Yes | No | เวลาเริ่มพร้อม timezone เช่น `2026-08-05T08:00:00+07:00` |
+| `schedules[].endAt` | ISO 8601 datetime | Yes | No | เวลาสิ้นสุดพร้อม timezone และต้องอยู่หลัง `startAt` |
+| `schedules[].status` | enum string | Yes | No | `Normal`, `Calibration`, `Defective`, `Maintenance`, `Start up`, `Shut Down`, `Turnaround` หรือ `Etc.` |
+| `selectedParameters` | string[] | Legacy | Yes | compatibility field ของช่วงเดี่ยว; เมื่อ `schedules` มีรายการ backend ใช้รายการแรกเติม field นี้ใน response |
+| `startAt` | ISO 8601 datetime | Legacy | Yes | compatibility field ของช่วงเดี่ยว ต้องส่งพร้อม `endAt`; ค่าเดิมแบบ local datetime จะถูกตีความเป็น `+07:00` |
+| `endAt` | ISO 8601 datetime | Legacy | Yes | compatibility field ของช่วงเดี่ยวและต้องอยู่หลัง `startAt`; ค่าเดิมแบบ local datetime จะถูกตีความเป็น `+07:00` |
+| `status` | enum string | Legacy | Yes | compatibility field ของช่วงเดี่ยว |
+
+ช่วงเวลาใช้ขอบเขตแบบ `[startAt, endAt)` จึงวางช่วงถัดไปให้เริ่มตรง `endAt` ของช่วงก่อนหน้าได้ แต่ช่วงของพารามิเตอร์เดียวกันห้ามทับกัน หากรายการใดเลือก `ทั้งหมด` ช่วงนั้นถือว่าทับกับทุกพารามิเตอร์
+
+Frontend ใหม่ต้องส่งรายการที่กดเพิ่มแล้วทั้งหมดใน `schedules` ไม่แยกรายการแรกไว้ที่ legacy fields เมื่อ `schedules` มีรายการ backend จะไม่พิจารณา legacy top-level fields และใช้ schedule แรกเติม compatibility fields ใน response หาก client เดิมไม่ส่ง `schedules` หรือส่ง `null` backend จะ normalize legacy fields เป็น schedule หนึ่งรายการ โดย local datetime เดิม เช่น `2026-08-05T08:00` จะถูกอัปเกรดเป็น `2026-08-05T08:00:00+07:00`
 
 ### Server-managed Identity And Relations
 
@@ -278,7 +286,23 @@ GET /api/v1/cems-wpms-requests/101/device-configs?stationId=CEMS-0001%2F2569
     "hourlyTableName": "measurements_1h",
     "valueRange": null
   },
-  "channels": []
+  "channels": [],
+  "statusManagement": {
+    "schedules": [
+      {
+        "selectedParameters": ["CO (ppm)", "NOx (ppm)"],
+        "startAt": "2026-08-05T08:00:00+07:00",
+        "endAt": "2026-08-05T10:00:00+07:00",
+        "status": "Maintenance"
+      },
+      {
+        "selectedParameters": ["CO (ppm)"],
+        "startAt": "2026-08-05T13:00:00+07:00",
+        "endAt": "2026-08-05T15:00:00+07:00",
+        "status": "Calibration"
+      }
+    ]
+  }
 }
 ```
 
@@ -333,7 +357,8 @@ GET /api/v1/cems-wpms-requests/101/device-configs?stationId=CEMS-0001%2F2569
 
 - `stationId` ต้องตรงกับ `pointCode` หรือ `pointName` ของ measurement point ใน request
 - ผู้เรียกต้องเป็นเจ้าของ request และ request ต้องอยู่สถานะ `WAITING_CONNECTION`
-- backend ไม่ตรวจ required, format, IP, port range, Address ID range, min/max order, alert order, encoding/value-format enum หรือ Address ID ซ้ำของค่าที่ผู้ใช้กรอกใน config
+- backend ไม่ตรวจ required, format, IP, port range, Address ID range, min/max order, alert order, encoding/value-format enum หรือ Address ID ซ้ำของ connection/channel fields
+- status-management ตรวจ enum, ISO datetime พร้อม timezone, ลำดับเวลา, จำนวนรายการ, parameter ของจุดตรวจวัด และช่วงทับกันที่ backend
 - backend ยังตรวจโครงสร้าง JSON, `stationId`, `protocol`, ความสัมพันธ์ request-station และขนาด batch/channel เพื่อป้องกัน payload ผิดรูปแบบหรือใหญ่เกินกำหนด
 
 ### Errors
@@ -342,8 +367,8 @@ GET /api/v1/cems-wpms-requests/101/device-configs?stationId=CEMS-0001%2F2569
 
 | HTTP status | Code | Condition | Client action |
 | --- | --- | --- | --- |
-| `400` | `VALIDATION_ERROR` | body ไม่มี `stationId`/`protocol` หรือโครงสร้างผิด | แก้โครงสร้าง payload |
-| `400` | `BAD_REQUEST` | station ไม่อยู่ใน request หรือ request ไม่ได้อยู่สถานะ `WAITING_CONNECTION` | refresh request และเลือก station ใหม่ |
+| `400` | `VALIDATION_ERROR` | body ไม่มี `stationId`/`protocol`, status/time ผิดรูปแบบ, เกิน 100 ช่วง หรือช่วงทับกัน | แก้ payload ตาม field issues |
+| `400` | `BAD_REQUEST` | station ไม่อยู่ใน request, parameter ไม่อยู่ในจุด หรือ request ไม่ได้อยู่สถานะ `WAITING_CONNECTION` | refresh request และเลือก station/parameter ใหม่ |
 | `401` | `UNAUTHORIZED` | token ไม่ถูกต้องหรือหมดอายุ | login ใหม่ |
 | `403` | `FORBIDDEN` | ไม่มี permission หรือไม่ใช่เจ้าของ request | ซ่อน action หรือแจ้งสิทธิ์ไม่เพียงพอ |
 | `404` | `NOT_FOUND` | ไม่พบ request | refresh รายการ |
@@ -565,7 +590,7 @@ Response ใช้ schema เดียวกับ [POST ของ request](#suc
 - `stationId` ใน body ทุก config ต้องตรงกับ `:stationId` ใน path
 - backend ตรวจว่ามี connected request ล่าสุดของจุดและผู้เรียกมี edit scope
 - endpoint นี้ใช้ replace semantics: config ปัจจุบันของ station ถูกแทนที่ด้วยชุดที่ส่งมา
-- business validation ของ form fields ถูกถอดเหมือน POST ของ request; frontend เป็นผู้ตรวจ required/format/range/duplicate ก่อนเรียก API
+- connection/channel fields ใช้ validation แบบเดียวกับ POST ของ request ส่วน status-management ตรวจทั้ง enum, เวลา, parameter และช่วงทับกันที่ backend
 - primary key และ foreign key เช่น config ID, channel ID, request/config relation เป็น server-managed และ client ไม่ต้องส่ง
 
 ### Errors
@@ -574,8 +599,8 @@ Response ใช้ schema เดียวกับ [POST ของ request](#suc
 
 | HTTP status | Code | Condition | Client action |
 | --- | --- | --- | --- |
-| `400` | `VALIDATION_ERROR` | body ไม่มี `stationId`/`protocol` หรือโครงสร้างผิด | แก้โครงสร้าง payload |
-| `400` | `BAD_REQUEST` | `stationId` ใน body ไม่ตรงกับ path | ใช้ station เดียวกับจุดที่เลือก |
+| `400` | `VALIDATION_ERROR` | body ไม่มี `stationId`/`protocol`, status/time ผิดรูปแบบ, เกิน 100 ช่วง หรือช่วงทับกัน | แก้ payload ตาม field issues |
+| `400` | `BAD_REQUEST` | `stationId` ใน body ไม่ตรงกับ path หรือ parameter ไม่อยู่ในจุด | ใช้ station และ parameter ของจุดที่เลือก |
 | `401` | `UNAUTHORIZED` | token ไม่ถูกต้องหรือหมดอายุ | login ใหม่ |
 | `403` | `FORBIDDEN` | ไม่มี permission หรือจุดอยู่นอก edit scope | ซ่อน action หรือแจ้งสิทธิ์ไม่เพียงพอ |
 | `404` | `NOT_FOUND` | ไม่พบ connected point ใน scope | refresh รายการจุด |
@@ -587,6 +612,6 @@ Response ใช้ schema เดียวกับ [POST ของ request](#suc
 - Controller and form mapper: [`connection-requests.controller.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.controller.ts), [`connection-requests.service.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.service.ts)
 - Device validator and types: [`device-connections.validator.ts`](../../../../../backend/src/modules/device-connections/device-connections.validator.ts), [`device-connections.types.ts`](../../../../../backend/src/modules/device-connections/device-connections.types.ts)
 - Persistence: [`device-connections.service.ts`](../../../../../backend/src/modules/device-connections/device-connections.service.ts), [`device-connections.repository.ts`](../../../../../backend/src/modules/device-connections/device-connections.repository.ts)
-- Migration: [`0083_relax_device_config_form_constraints.ts`](../../../../../backend/src/db/migrations/0083_relax_device_config_form_constraints.ts)
+- Migrations: [`0083_relax_device_config_form_constraints.ts`](../../../../../backend/src/db/migrations/0083_relax_device_config_form_constraints.ts), [`0086_validate_device_status_management_json.ts`](../../../../../backend/src/db/migrations/0086_validate_device_status_management_json.ts)
 - Validator/service tests: [`device-connections.validator.test.ts`](../../../../../backend/tests/unit/device-connections.validator.test.ts), [`device-connections.service.test.ts`](../../../../../backend/tests/unit/device-connections.service.test.ts), [`connection-requests.service.test.ts`](../../../../../backend/tests/unit/connection-requests.service.test.ts)
 - Route tests: [`connected-measurement-points.route.test.ts`](../../../../../backend/tests/unit/connected-measurement-points.route.test.ts), [`connection-requests.create.route.test.ts`](../../../../../backend/tests/unit/connection-requests.create.route.test.ts)

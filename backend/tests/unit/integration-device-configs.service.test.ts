@@ -231,6 +231,100 @@ describe('integrationDeviceConfigsService', () => {
     });
   });
 
+  it('returns multiple status schedules in deterministic start-time order', async () => {
+    const laterSchedule = {
+      selectedParameters: ['NOx (ppm)'],
+      startAt: '2026-08-05T13:00:00+07:00',
+      endAt: '2026-08-05T15:00:00+07:00',
+      status: 'Calibration',
+    };
+    const earlierSchedule = {
+      selectedParameters: ['NOx (ppm)'],
+      startAt: '2026-08-05T08:00:00+07:00',
+      endAt: '2026-08-05T10:00:00+07:00',
+      status: 'Maintenance',
+    };
+    mockedDeviceConnectionsService.listActiveSettingsForIntegration.mockResolvedValue([
+      {
+        id: 3,
+        requestId: null,
+        stationId: 'S0002',
+        deviceCode: 'S0002/01',
+        protocol: 'MODBUS_TCP',
+        settings: {},
+        channels: [],
+        statusManagement: {
+          ...laterSchedule,
+          schedules: [laterSchedule, earlierSchedule],
+        },
+        createdBy: 42,
+        createdAt: '2026-06-12T00:00:00.000Z',
+        updatedAt: '2026-06-12T00:00:00.000Z',
+      },
+    ]);
+
+    const result = await integrationDeviceConfigsService.getByStationId('S0002');
+
+    expect(result.statusSchedules).toEqual([
+      {
+        parameter: 'NOx (ppm)',
+        startAt: earlierSchedule.startAt,
+        endAt: earlierSchedule.endAt,
+        status: earlierSchedule.status,
+      },
+      {
+        parameter: 'NOx (ppm)',
+        startAt: laterSchedule.startAt,
+        endAt: laterSchedule.endAt,
+        status: laterSchedule.status,
+      },
+    ]);
+  });
+
+  it('expands the all-parameters target into configured parameter labels', async () => {
+    const schedule = {
+      selectedParameters: ['ทั้งหมด'],
+      startAt: '2026-08-05T08:00:00+07:00',
+      endAt: '2026-08-05T10:00:00+07:00',
+      status: 'Maintenance',
+    };
+    mockedDeviceConnectionsService.listActiveSettingsForIntegration.mockResolvedValue([
+      {
+        id: 4,
+        requestId: null,
+        stationId: 'S0002',
+        deviceCode: 'S0002/01',
+        protocol: 'MODBUS_TCP',
+        settings: {},
+        channels: [
+          { addressId: 40001, dataType: 'NOx (ppm)', offset: 0 },
+          { addressId: 40002, dataType: 'SO2 (ppm)', offset: 0 },
+        ],
+        statusManagement: { ...schedule, schedules: [schedule] },
+        createdBy: 42,
+        createdAt: '2026-06-12T00:00:00.000Z',
+        updatedAt: '2026-06-12T00:00:00.000Z',
+      },
+    ]);
+
+    const result = await integrationDeviceConfigsService.getByStationId('S0002');
+
+    expect(result.statusSchedules).toEqual([
+      {
+        parameter: 'NOx (ppm)',
+        startAt: schedule.startAt,
+        endAt: schedule.endAt,
+        status: schedule.status,
+      },
+      {
+        parameter: 'SO2 (ppm)',
+        startAt: schedule.startAt,
+        endAt: schedule.endAt,
+        status: schedule.status,
+      },
+    ]);
+  });
+
   it('returns database table names and preserves nullable channel config values', async () => {
     mockedRepository.findConnectedPointByStationId.mockResolvedValue({
       stationId: 'S0002',
