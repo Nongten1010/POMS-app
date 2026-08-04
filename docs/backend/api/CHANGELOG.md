@@ -18,6 +18,14 @@
 - **Old contract:** แต่ละ event ต้องส่ง `eventDate`, `startTime` รูปแบบ `HH:mm` และ `endTime` รูปแบบ `HH:mm`
 - **New contract:** แต่ละ event ต้องส่ง `eventDate` และ `time` รูปแบบต้นชั่วโมง `HH:00`; response ยังคงมี `startedAt`, `endedAt` และ `timeRange`
 
+## 2026-07-31 — รักษารหัสฐานข้อมูลจริงเมื่อบันทึก Device Config จากค่า masked
+
+- **Affected menu:** [ตั้งค่าอุปกรณ์ในเมนูขอเชื่อมต่อ](./menus/connection-requests/device-configs.md)
+- **Impact:** POST Device Config จะไม่บันทึก `settings.dbPass = "********"` ทับรหัสจริงอีกต่อไป โดยรักษารหัสเดิมที่มี device key เดียวกัน หรือคืน `400 BAD_REQUEST` เมื่อไม่มีรหัสจริงให้รักษา
+- **Migration:** client ใช้ `********` เป็น placeholder สำหรับ “ไม่เปลี่ยนรหัส” ได้ แต่ต้องให้ผู้ใช้กรอกรหัสจริงใหม่เมื่อได้รับ `400 BAD_REQUEST` จากข้อมูลเดิมที่เคยถูกเขียนทับ
+- **Old contract:** backend ยอมรับ `********` เป็น password ใหม่และบันทึกลง `settings_json`
+- **New contract:** backend รักษารหัสจริงเดิมเมื่อรับ `********`; password ค่าอื่นรวมถึงค่าที่ผู้ใช้กรอกใหม่จะถูกบันทึกตาม request
+
 ## 2026-07-31 — Integration Device Config ส่ง database password จริงให้ Worker
 
 - **Affected integration:** [Integration Device Config](./integrations/device-configs/README.md)
@@ -25,6 +33,30 @@
 - **Migration:** จำกัด `DEVICE_CONFIG_API_KEYS` เฉพาะ Worker ที่จำเป็น เรียกผ่าน HTTPS ตรวจว่า client ไม่ log header/response และใช้ค่าจาก `dbPass` เป็น credential จริง; response มี `Cache-Control: no-store`
 - **Old contract:** `dbPass` เป็น `********` เมื่อมีค่า และเป็น `null` เมื่อไม่ได้ตั้ง
 - **New contract:** `dbPass` เป็น password จริงเมื่อมีค่า และเป็น `null` เมื่อไม่ได้ตั้ง โดย endpoint อื่นยังคง mask password
+
+## 2026-07-24 — คืนรหัสจุดตรวจวัดที่ออกหลังอนุมัติเป็น S/W เริ่มที่ 2001
+
+- **Affected menu:** [ขอเชื่อมต่อ](./menus/connection-requests/README.md)
+- **Impact:** `measurementPoints[].pointCode` ที่ backend ออกใหม่หลังอนุมัติแบบผู้ประกอบการเปลี่ยนกลับเป็น `S...`/`W...`; Direct Connection ยังคงใช้รหัสที่เจ้าหน้าที่กรอกเอง.
+- **Migration:** client ต้องรับรหัสจุดเป็น opaque string และรองรับ `S2001`, `S2002`, ... สำหรับ CEMS กับ `W2001`, `W2002`, ... สำหรับ WPMS; การรองรับรหัสที่มี `/` เดิมยังคงไว้เพื่อ backward compatibility.
+- **Old contract:** CEMS ออก `CEMS-NNNN/YYYY` และ WPMS ออก `WEMS-NNNN/YYYY` โดยเริ่ม sequence ใหม่ทุกปี พ.ศ.
+- **New contract:** CEMS ออก `S2001`, `S2002`, ... และ WPMS ออก `W2001`, `W2002`, ... โดยแยก sequence ตามระบบและไม่เริ่มใหม่เมื่อเปลี่ยนปี.
+
+## 2026-07-24 — เปลี่ยนรูปแบบเลขที่คำขอเชื่อมต่อเป็นลำดับ 4 หลักและปี พ.ศ. เต็ม
+
+- **Affected menu:** [ขอเชื่อมต่อ](./menus/connection-requests/README.md)
+- **Impact:** `requestNo` ของคำขอ CEMS/WPMS ที่สร้างใหม่เปลี่ยนรูปแบบทั้งคำขอผู้ประกอบการและ Direct Connection; ฟิลด์และกติกาของรหัสจุดตรวจวัดไม่เปลี่ยน.
+- **Migration:** client ต้องรองรับ `/` ใน `requestNo`, แสดงค่าเป็น opaque string และไม่แยกปีหรือลำดับจากรูปแบบเดิม.
+- **Old contract:** คำขอใหม่ใช้ `CEMS-YY-NNNNN` หรือ `WPMS-YY-NNNNN`.
+- **New contract:** คำขอใหม่ใช้ `CEMS-NNNN/YYYY` หรือ `WEMS-NNNN/YYYY` เช่น `CEMS-0001/2569` และ `WEMS-0001/2569`; ลำดับแยกตามระบบและเริ่มใหม่ตามปี พ.ศ. โดยผู้ประกอบการกับเจ้าหน้าที่ใช้ลำดับร่วมกัน.
+
+## 2026-07-24 — ใช้เลขที่คำขอชุดเดียวกันสำหรับ Direct Connection
+
+- **Affected menu:** [ขอเชื่อมต่อ](./menus/connection-requests/README.md)
+- **Impact:** `requestNo` ใน response ของ `POST /api/v1/cems-wpms-requests/direct-connections` เปลี่ยน prefix สำหรับรายการใหม่; สถานะ `CONNECTED`, `submissionSource=OFFICER_DIRECT_API` และรหัสจุดที่เจ้าหน้าที่กรอกเองไม่เปลี่ยน.
+- **Migration:** client ต้องแยก Direct Connection ด้วย `submissionSource` แทนการตรวจ prefix `OLDC`/`OLDW` และต้องรองรับเลขชุดเดียวกับคำขอผู้ประกอบการ.
+- **Old contract:** Direct Connection ใช้ `OLDC-YY-NNNNN` สำหรับ CEMS และ `OLDW-YY-NNNNN` สำหรับ WPMS โดยมี sequence แยก.
+- **New contract ณ เวลาที่เปลี่ยน:** Direct Connection ใช้ลำดับร่วมกับคำขอผู้ประกอบการของระบบและปีเดียวกัน; รูปแบบ `CEMS-YY-NNNNN`/`WPMS-YY-NNNNN` ถูกแทนที่ภายหลังด้วยรายการ breaking change ด้านบน.
 
 ## 2026-07-24 — เปลี่ยนรูปแบบเลขรายงานความคลาดเคลื่อน BOD/COD และแยก running ตามภาคกับปี
 
@@ -48,7 +80,7 @@
 - **Impact:** `measurementPoints[].pointCode` ที่ backend ออกใหม่หลังอนุมัติแบบเปลี่ยนรูปแบบ และมี `/` อยู่ใน identifier; client ที่ส่งรหัสผ่าน path parameter ต้อง URL-encode path segment.
 - **Migration:** รองรับ `CEMS-NNNN/YYYY` และ `WEMS-NNNN/YYYY`, ใช้ `encodeURIComponent(pointCode)` เมื่อนำไปวางใน path และยังคงรับรหัสเดิมเป็น opaque identifier โดยไม่แปลงค่า.
 - **Old contract:** CEMS ออก `S2001`, `S2002`, ... และ WPMS ออก `W2001`, `W2002`, ... โดยใช้ลำดับต่อเนื่องแยกตามระบบแต่ไม่แยกปี.
-- **New contract:** CEMS ออก `CEMS-0001/2569`, `CEMS-0002/2569`, ... และ WPMS ออก `WEMS-0001/2569`, `WEMS-0002/2569`, ... โดยแยกลำดับตามระบบและปี พ.ศ. และเริ่มใหม่ที่ `0001` เมื่อขึ้นปีใหม่.
+- **New contract ณ เวลาที่เปลี่ยน:** CEMS ออก `CEMS-0001/2569`, `CEMS-0002/2569`, ... และ WPMS ออก `WEMS-0001/2569`, `WEMS-0002/2569`, ...; contract นี้ถูกแทนที่ภายหลังด้วยรายการคืนรหัสเป็น `S2001`/`W2001` ด้านบน.
 
 ## 2026-07-22 — จำกัดรายชื่อโรงงานของผู้ประกอบการไว้ที่โรงงานเข้าข่าย
 

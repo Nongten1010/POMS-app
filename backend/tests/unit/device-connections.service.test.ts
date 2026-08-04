@@ -341,6 +341,114 @@ describe('deviceConnectionsService', () => {
     expect(mockedRepository.replaceManyActive).not.toHaveBeenCalled();
   });
 
+  it('preserves the stored database password when the masked placeholder is submitted', async () => {
+    const maskedInput: CreateDeviceConnectionConfigInput = {
+      stationId: 'STATION_001',
+      deviceCode: 'STATION_001/DB-01',
+      protocol: DEVICE_CONNECTION_PROTOCOL.MSSQL,
+      settings: {
+        hostIp: '192.168.1.254',
+        port: 1433,
+        dbUser: 'sensor_user',
+        dbPass: '********',
+        dbName: 'sensor_db',
+      },
+      channels: [],
+    };
+    mockedRepository.listActiveForIntegration.mockResolvedValue([
+      configDto({
+        deviceCode: maskedInput.deviceCode,
+        protocol: DEVICE_CONNECTION_PROTOCOL.MSSQL,
+        settings: {
+          hostIp: '192.168.1.254',
+          port: 1433,
+          dbUser: 'sensor_user',
+          dbPass: 'stored-secret',
+          dbName: 'sensor_db',
+        },
+      }),
+    ]);
+    mockedRepository.replaceManyActiveForStation.mockResolvedValue([
+      configDto({
+        deviceCode: maskedInput.deviceCode,
+        protocol: DEVICE_CONNECTION_PROTOCOL.MSSQL,
+      }),
+    ]);
+
+    await deviceConnectionsService.replaceCurrentStation(
+      'STATION_001',
+      [maskedInput],
+      actorUserId,
+    );
+
+    expect(mockedRepository.listActiveForIntegration).toHaveBeenCalledWith({
+      stationId: 'STATION_001',
+    });
+    expect(mockedRepository.replaceManyActiveForStation).toHaveBeenCalledWith(
+      'STATION_001',
+      [
+        expect.objectContaining({
+          settings: expect.objectContaining({ dbPass: 'stored-secret' }),
+        }),
+      ],
+      actorUserId,
+    );
+    expect(maskedInput.settings.dbPass).toBe('********');
+  });
+
+  it('rejects a masked database password when no real stored password can be preserved', async () => {
+    const maskedInput: CreateDeviceConnectionConfigInput = {
+      stationId: 'STATION_001',
+      deviceCode: 'STATION_001/DB-01',
+      protocol: DEVICE_CONNECTION_PROTOCOL.MSSQL,
+      settings: {
+        dbPass: '********',
+      },
+      channels: [],
+    };
+    mockedRepository.listActiveForIntegration.mockResolvedValue([]);
+
+    await expect(
+      deviceConnectionsService.replaceCurrentStation(
+        'STATION_001',
+        [maskedInput],
+        actorUserId,
+      ),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(mockedRepository.replaceManyActiveForStation).not.toHaveBeenCalled();
+  });
+
+  it('stores a newly entered database password without replacing it', async () => {
+    const passwordInput: CreateDeviceConnectionConfigInput = {
+      stationId: 'STATION_001',
+      deviceCode: 'STATION_001/DB-01',
+      protocol: DEVICE_CONNECTION_PROTOCOL.MSSQL,
+      settings: {
+        dbPass: 'new-secret',
+      },
+      channels: [],
+    };
+    mockedRepository.replaceManyActiveForStation.mockResolvedValue([
+      configDto({
+        deviceCode: passwordInput.deviceCode,
+        protocol: DEVICE_CONNECTION_PROTOCOL.MSSQL,
+      }),
+    ]);
+
+    await deviceConnectionsService.replaceCurrentStation(
+      'STATION_001',
+      [passwordInput],
+      actorUserId,
+    );
+
+    expect(mockedRepository.listActiveForIntegration).not.toHaveBeenCalled();
+    expect(mockedRepository.replaceManyActiveForStation).toHaveBeenCalledWith(
+      'STATION_001',
+      [passwordInput],
+      actorUserId,
+    );
+  });
+
   it('allows the same station and protocol to store a different deviceCode', async () => {
     const input: CreateDeviceConnectionConfigInput = {
       ...modbusTcpPayload,

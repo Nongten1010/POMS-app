@@ -46,6 +46,78 @@ describe('directConnectionRequestSchema', () => {
     });
   });
 
+  it('accepts the documented minimal payload with omitted optional fields', () => {
+    const result = directConnectionRequestSchema.safeParse({
+      factoryId: 'factory-001',
+      systemType: 'CEMS',
+      measurementPoints: [{ pointCode: 'S1125' }],
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data).toMatchObject({
+      measurementPoints: [{ documentsAndImages: [] }],
+    });
+  });
+
+  it('accepts null for every optional direct-connection field and derives database-required point fields', () => {
+    const result = directConnectionRequestSchema.safeParse(nullablePayload());
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data).toMatchObject({
+      factoryId: 'factory-001',
+      factoryName: '',
+      factoryRegistrationNo: 'factory-001',
+      systemType: 'WPMS',
+      contactName: '',
+      contactPhone: '',
+      measurementPoints: [
+        {
+          pointName: 'custom value/ก-01',
+          pointCode: 'custom value/ก-01',
+          pointType: 'WASTEWATER',
+          latitude: null,
+          longitude: null,
+          parameters: [],
+          description: null,
+          details: null,
+          documentsAndImages: [],
+          measurementInstruments: null,
+        },
+      ],
+    });
+  });
+
+  it('accepts factoryRegistrationNo as the only eligible-factory identifier', () => {
+    const result = directConnectionRequestSchema.safeParse({
+      ...nullablePayload(),
+      factoryId: null,
+      factoryRegistrationNo: 'REG-001',
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data).toMatchObject({
+      factoryId: 'REG-001',
+      factoryRegistrationNo: 'REG-001',
+    });
+  });
+
+  it('requires at least one eligible-factory identifier', () => {
+    const result = directConnectionRequestSchema.safeParse({
+      ...nullablePayload(),
+      factoryId: null,
+      factoryRegistrationNo: null,
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error.issues).toEqual(
+      expect.arrayContaining([expect.objectContaining({ path: ['factoryId'] })]),
+    );
+  });
+
   it('rejects anything other than exactly one point', () => {
     const payload = validPayload();
     const result = directConnectionRequestSchema.safeParse({
@@ -80,7 +152,7 @@ describe('directConnectionRequestSchema', () => {
     expect(
       directConnectionRequestSchema.safeParse({
         ...validPayload(),
-        requestNo: 'OLDW-69-99999',
+        requestNo: 'WEMS-9999/2569',
         status: 'CONNECTED',
         submissionSource: 'OPERATOR_FORM',
       }).success,
@@ -122,5 +194,59 @@ function validPayload() {
         },
       },
     ],
+  };
+}
+
+function nullablePayload() {
+  return {
+    factoryId: 'factory-001',
+    factoryName: null,
+    factoryRegistrationNo: null,
+    industryMainOrder: null,
+    industryMainOrderLabel: null,
+    industrySubOrder: null,
+    businessActivity: null,
+    eia: null,
+    eiaOther: null,
+    hasEia: null,
+    projectName: null,
+    address: null,
+    regionCode: null,
+    regionName: null,
+    provinceCode: null,
+    provinceName: null,
+    districtCode: null,
+    districtName: null,
+    subdistrictCode: null,
+    subdistrictName: null,
+    industrialEstateCode: null,
+    industrialEstateName: null,
+    latitude: null,
+    longitude: null,
+    systemType: 'WPMS',
+    type: null,
+    contactName: null,
+    contactPhone: null,
+    contactEmail: null,
+    contactPersons: null,
+    notificationEmails: null,
+    officerNotificationEmails: null,
+    informationProviderName: null,
+    informationProviderPosition: null,
+    measurementPoints: [
+      {
+        pointName: null,
+        pointCode: '  custom value/ก-01  ',
+        pointType: null,
+        latitude: null,
+        longitude: null,
+        parameters: null,
+        description: null,
+        details: null,
+        documentsAndImages: null,
+        measurementInstruments: null,
+      },
+    ],
+    remarks: null,
   };
 }

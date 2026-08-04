@@ -45,7 +45,7 @@ POST ทั้งสอง endpoint รับ body ได้สามรูป�
 | `settings.hostIp` | string | No | Yes | host ของฐานข้อมูล |
 | `settings.port` | number | No | Yes | port ของฐานข้อมูล |
 | `settings.dbUser` | string | No | Yes | username |
-| `settings.dbPass` | string | No | Yes | password; response จะไม่ echo secret เดิมเป็น plain text |
+| `settings.dbPass` | string | No | Yes | password จริงที่ต้องบันทึก; response สำหรับ UI ใช้ `********` แทน secret เดิม และเมื่อ client ส่ง placeholder นี้กลับมา backend จะรักษารหัสจริงเดิมไว้ |
 | `settings.dbName` | string | No | Yes | ชื่อฐานข้อมูล |
 | `settings.minuteTableName` | string | No | Yes | ชื่อ Table ข้อมูลแบบรายนาที |
 | `settings.fiveMinuteTableName` | string | No | Yes | ชื่อ Table ข้อมูลแบบราย 5 นาที |
@@ -361,6 +361,7 @@ GET /api/v1/cems-wpms-requests/101/device-configs?stationId=CEMS-0001%2F2569
 
 - `stationId` ต้องตรงกับ `pointCode` หรือ `pointName` ของ measurement point ใน request
 - ผู้เรียกต้องเป็นเจ้าของ request และ request ต้องอยู่สถานะ `WAITING_CONNECTION`
+- เมื่อ `settings.dbPass` เป็น `********` backend จะใช้รหัสจริงของ active config ที่มี `stationId + protocol + deviceCode` เดียวกัน; หากไม่มีรหัสจริงให้รักษา ต้องตอบ `400 BAD_REQUEST` และ client ต้องให้ผู้ใช้กรอกรหัสใหม่
 - backend ไม่ตรวจ required, format, IP, port range, Address ID range, min/max order, alert order, encoding/value-format enum หรือ Address ID ซ้ำของ connection/channel fields
 - status-management ตรวจ enum, local datetime รูปแบบ `YYYY-MM-DD HH:mm:ss`, ลำดับเวลา, จำนวนรายการ, parameter ของจุดตรวจวัด และช่วงทับกันที่ backend
 - backend ยังตรวจโครงสร้าง JSON, `stationId`, `protocol`, ความสัมพันธ์ request-station และขนาด batch/channel เพื่อป้องกัน payload ผิดรูปแบบหรือใหญ่เกินกำหนด
@@ -373,6 +374,7 @@ GET /api/v1/cems-wpms-requests/101/device-configs?stationId=CEMS-0001%2F2569
 | --- | --- | --- | --- |
 | `400` | `VALIDATION_ERROR` | body ไม่มี `stationId`/`protocol`, status/time ผิดรูปแบบ, เกิน 100 ช่วง หรือช่วงทับกัน | แก้ payload ตาม field issues |
 | `400` | `BAD_REQUEST` | station ไม่อยู่ใน request, parameter ไม่อยู่ในจุด หรือ request ไม่ได้อยู่สถานะ `WAITING_CONNECTION` | refresh request และเลือก station/parameter ใหม่ |
+| `400` | `BAD_REQUEST` | ส่ง `settings.dbPass = "********"` แต่ไม่มีรหัสจริงเดิมให้รักษา | ให้ผู้ใช้กรอกรหัสฐานข้อมูลจริงใหม่ |
 | `401` | `UNAUTHORIZED` | token ไม่ถูกต้องหรือหมดอายุ | login ใหม่ |
 | `403` | `FORBIDDEN` | ไม่มี permission หรือไม่ใช่เจ้าของ request | ซ่อน action หรือแจ้งสิทธิ์ไม่เพียงพอ |
 | `404` | `NOT_FOUND` | ไม่พบ request | refresh รายการ |
@@ -594,6 +596,7 @@ Response ใช้ schema เดียวกับ [POST ของ request](#suc
 - `stationId` ใน body ทุก config ต้องตรงกับ `:stationId` ใน path
 - backend ตรวจว่ามี connected request ล่าสุดของจุดและผู้เรียกมี edit scope
 - endpoint นี้ใช้ replace semantics: config ปัจจุบันของ station ถูกแทนที่ด้วยชุดที่ส่งมา
+- เมื่อ `settings.dbPass` เป็น `********` backend จะรักษารหัสจริงของ config เดิมที่มี device key เดียวกัน; หากข้อมูลเดิมเป็น placeholder หรือไม่มีรหัสจริง ต้องกรอกรหัสใหม่
 - connection/channel fields ใช้ validation แบบเดียวกับ POST ของ request ส่วน status-management ตรวจทั้ง enum, เวลา, parameter และช่วงทับกันที่ backend
 - primary key และ foreign key เช่น config ID, channel ID, request/config relation เป็น server-managed และ client ไม่ต้องส่ง
 
@@ -605,6 +608,7 @@ Response ใช้ schema เดียวกับ [POST ของ request](#suc
 | --- | --- | --- | --- |
 | `400` | `VALIDATION_ERROR` | body ไม่มี `stationId`/`protocol`, status/time ผิดรูปแบบ, เกิน 100 ช่วง หรือช่วงทับกัน | แก้ payload ตาม field issues |
 | `400` | `BAD_REQUEST` | `stationId` ใน body ไม่ตรงกับ path หรือ parameter ไม่อยู่ในจุด | ใช้ station และ parameter ของจุดที่เลือก |
+| `400` | `BAD_REQUEST` | ส่ง `settings.dbPass = "********"` แต่ไม่มีรหัสจริงเดิมให้รักษา | ให้ผู้ใช้กรอกรหัสฐานข้อมูลจริงใหม่ |
 | `401` | `UNAUTHORIZED` | token ไม่ถูกต้องหรือหมดอายุ | login ใหม่ |
 | `403` | `FORBIDDEN` | ไม่มี permission หรือจุดอยู่นอก edit scope | ซ่อน action หรือแจ้งสิทธิ์ไม่เพียงพอ |
 | `404` | `NOT_FOUND` | ไม่พบ connected point ใน scope | refresh รายการจุด |

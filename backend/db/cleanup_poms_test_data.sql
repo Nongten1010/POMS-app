@@ -57,6 +57,8 @@ VALUES
   (N'dbo.alert_events'),
   (N'dbo.alert_notifications'),
   (N'dbo.kwp_form_submissions'),
+  (N'dbo.kwp_form_status_history'),
+  (N'dbo.kwp_emission_measurement_items'),
   (N'dbo.kwp_form_attachments'),
   (N'dbo.bod_cod_deviation_reports'),
   (N'dbo.bod_cod_deviation_measurements'),
@@ -277,6 +279,14 @@ BEGIN TRY
   INNER JOIN #TargetDeviceConfigIds AS target ON target.id = channel.config_id
   UNION ALL
   SELECT 80, N'KWP submissions (children cascade)', COUNT_BIG(*) FROM #TargetKwpSubmissionIds
+  UNION ALL
+  SELECT 81, N'KWP status history (database rows cascade)', COUNT_BIG(*)
+  FROM dbo.kwp_form_status_history AS history
+  INNER JOIN #TargetKwpSubmissionIds AS target ON target.id = history.submission_id
+  UNION ALL
+  SELECT 82, N'KWP emission measurement items (database rows cascade)', COUNT_BIG(*)
+  FROM dbo.kwp_emission_measurement_items AS item
+  INNER JOIN #TargetKwpSubmissionIds AS target ON target.id = item.submission_id
   UNION ALL
   SELECT 90, N'KWP attachments (database rows cascade)', COUNT_BIG(*)
   FROM dbo.kwp_form_attachments AS attachment

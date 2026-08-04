@@ -13,8 +13,12 @@
 
 ## Connection requests
 
+- [เลขที่คำขอใช้ลำดับ 4 หลักและปี พ.ศ. เต็ม](./connection-requests/request-number-full-year-format.tdd.md)
+- [คืนรหัสจุดตรวจวัดเป็น S/W เริ่มที่ 2001](./connection-requests/legacy-point-code-format-restored.tdd.md)
 - [รหัสจุดตรวจวัดแบบลำดับรายปี](./connection-requests/annual-point-code-format.tdd.md)
 - [Direct Connection ไม่บังคับเอกสารหรือรูปภาพ](./connection-requests/direct-connection-optional-documents.tdd.md)
+- [Direct Connection รับ optional fields เป็น null](./connection-requests/direct-connection-nullable-fields.tdd.md)
+- [เลขคำขอเจ้าหน้าที่ใช้ลำดับร่วมกับผู้ประกอบการ](./connection-requests/officer-direct-shared-request-numbering.tdd.md)
 - [Normalize อักขระซ่อนในอีเมลคำขอเชื่อมต่อ](./connection-requests/email-invisible-character-normalization.tdd.md)
 - [เจ้าหน้าที่เชื่อมต่อโรงงานเข้าข่ายโดยตรง](./connection-requests/officer-direct-eligible-lookup.tdd.md)
 - [ชื่อโรงงานในตารางรายการคำขอใช้ current/live POMS](./connection-requests/request-table-current-factory-name.tdd.md)
@@ -22,6 +26,10 @@
 ## Eligible factories
 
 - [จังหวัดในที่อยู่ตั้งแต่ Candidate ถึง connected POMS](./eligible-factories/factory-address-province.tdd.md)
+
+## Shared operations
+
+- [ล้างข้อมูลทดสอบด้วย SQL](./shared/test-data-cleanup.tdd.md)
 
 ## Home
 

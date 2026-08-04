@@ -18,7 +18,7 @@ describe('POST /api/v1/cems-wpms-requests/:id/cancel', () => {
     jest.clearAllMocks();
     mockedConnectionRequestsService.cancel.mockResolvedValue({
       id: 1,
-      requestNo: 'CEMS-69-00001',
+      requestNo: 'CEMS-0001/2569',
       status: CONNECTION_REQUEST_STATUS.CANCELED,
       statusLabel: 'ยกเลิก',
       revisionReason: null,

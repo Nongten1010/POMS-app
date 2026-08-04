@@ -30,6 +30,7 @@ export const integrationDeviceConfigsService = {
 
     return {
       stationId: point.stationId,
+      // Keep point classification at the response root so every device shares one source of truth.
       ...measurementPointMetadata,
       deviceConfigs: configs.map((config, index) => toDeviceConfig(config, point.stationId, index)),
       parameterConfigs: configs.flatMap((config, configIndex) =>

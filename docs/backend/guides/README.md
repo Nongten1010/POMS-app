@@ -10,6 +10,10 @@
 
 - [ตั้งค่าอุปกรณ์: งานที่ frontend ต้องแก้และ test checklist](./frontend-handoffs/device-config/README.md)
 
+## Database operations
+
+- [ล้างข้อมูลทดสอบด้วย SQL](./test-data-cleanup.md)
+
 ## Integrations
 
 - [คู่มือการเชื่อมโยง Integration Device Config API (PDF)](./integrations/integration-device-config-api-user-guide.pdf)

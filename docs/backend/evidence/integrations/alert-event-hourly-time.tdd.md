@@ -25,7 +25,7 @@ Result:
 - `1` suite failed
 - `5` tests failed และ `10` tests passed
 - happy-path requests ตอบ `400` เพราะ validator ยังบังคับ `startTime` และ `endTime`
-- RED checkpoint: `985e3f3 test: define hourly alert event time contract`
+- RED checkpoint: `f61f53d test: define hourly alert event time contract`
 
 ## GREEN
 
@@ -40,7 +40,7 @@ Result:
 
 - `1` suite passed
 - `15` tests passed
-- GREEN checkpoint: `462c2d1 fix: accept hourly alert event time`
+- GREEN checkpoint: `44fcc0b fix: accept hourly alert event time`
 
 หลัง GREEN เพิ่ม edge cases สำหรับ `EIA`, `pointCode=null` และ inverted list date range แล้ว rerun targeted coverage:
 
@@ -96,6 +96,6 @@ Result:
 
 ## Merge Evidence
 
-- RED: `985e3f3`
-- GREEN: `462c2d1`
+- RED: `f61f53d`
+- GREEN: `44fcc0b`
 - หาก squash commits ให้คัดลอก RED/GREEN และ coverage summary จากเอกสารนี้ไปยัง PR body หรือ squash commit body

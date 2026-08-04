@@ -19,7 +19,7 @@ const mockedService = connectionRequestsService as unknown as {
 describe('POST /api/v1/cems-wpms-requests/direct-connections', () => {
   const serviceResponse = {
     id: 91,
-    requestNo: 'OLDW-69-00001',
+    requestNo: 'WEMS-0001/2569',
     requestType: 'ADD_MEASUREMENT_POINT',
     status: 'CONNECTED',
     statusLabel: 'เชื่อมต่อแล้ว',
@@ -52,6 +52,133 @@ describe('POST /api/v1/cems-wpms-requests/direct-connections', () => {
         scope: { scope: 'ALL' },
       }),
     );
+  });
+
+  it('accepts the minimal direct-connection contract with nullable optional fields', async () => {
+    const response = await request(createApp())
+      .post('/api/v1/cems-wpms-requests/direct-connections')
+      .set('Authorization', `Bearer ${officerToken()}`)
+      .send({
+        factoryId: 'factory-001',
+        factoryName: null,
+        factoryRegistrationNo: null,
+        systemType: 'CEMS',
+        contactName: null,
+        contactPhone: null,
+        contactEmail: null,
+        contactPersons: null,
+        measurementPoints: [
+          {
+            pointName: null,
+            pointCode: ' CEMS/manual-01 ',
+            pointType: null,
+            parameters: null,
+            details: null,
+            documentsAndImages: null,
+            measurementInstruments: null,
+          },
+        ],
+        remarks: null,
+      });
+
+    expect(response.status).toBe(201);
+    expect(mockedService.createDirectConnection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        factoryId: 'factory-001',
+        factoryRegistrationNo: 'factory-001',
+        systemType: 'CEMS',
+        contactName: '',
+        contactPhone: '',
+        measurementPoints: [
+          expect.objectContaining({
+            pointName: 'CEMS/manual-01',
+            pointCode: 'CEMS/manual-01',
+            pointType: 'STACK',
+          }),
+        ],
+      }),
+      expect.anything(),
+    );
+  });
+
+  it('ignores empty document placeholders while preserving an uploaded company logo', async () => {
+    const logo = {
+      title: 'สัญลักษณ์ของโรงงานหรือโลโก้บริษัท',
+      fileName: 'logo.png',
+      fileUrl: 'https://example.com/uploads/logo.png',
+      fileType: 'image/png',
+      fileSize: 1024,
+    };
+    const response = await request(createApp())
+      .post('/api/v1/cems-wpms-requests/direct-connections')
+      .set('Authorization', `Bearer ${officerToken()}`)
+      .send({
+        factoryId: 'factory-001',
+        systemType: 'CEMS',
+        measurementPoints: [
+          {
+            pointCode: 'S1128',
+            documentsAndImages: [
+              {
+                title: 'ข้อมูลรายละเอียดการรายงานค่าที่สภาวะมาตรฐาน',
+                description: 'ข้อความแนะนำคงที่จาก frontend',
+                link: null,
+                fileName: null,
+                fileUrl: null,
+                fileType: null,
+                fileSize: null,
+              },
+              logo,
+            ],
+          },
+        ],
+      });
+
+    expect(response.status).toBe(201);
+    expect(mockedService.createDirectConnection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        measurementPoints: [
+          expect.objectContaining({ documentsAndImages: [expect.objectContaining(logo)] }),
+        ],
+      }),
+      expect.anything(),
+    );
+  });
+
+  it('rejects document metadata that claims a file without an uploaded URL', async () => {
+    const response = await request(createApp())
+      .post('/api/v1/cems-wpms-requests/direct-connections')
+      .set('Authorization', `Bearer ${officerToken()}`)
+      .send({
+        factoryId: 'factory-001',
+        systemType: 'CEMS',
+        measurementPoints: [
+          {
+            pointCode: 'S1128',
+            documentsAndImages: [
+              {
+                title: 'เอกสารที่อัปโหลดไม่สำเร็จ',
+                fileName: 'incomplete-upload.pdf',
+                fileUrl: null,
+              },
+            ],
+          },
+        ],
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toMatchObject({
+      success: false,
+      error: {
+        code: 'VALIDATION_ERROR',
+        issues: [
+          expect.objectContaining({
+            pathString: 'measurementPoints.0.documentsAndImages.0.fileUrl',
+          }),
+        ],
+      },
+    });
+    expect(mockedService.createDirectConnection).not.toHaveBeenCalled();
   });
 
   it('allows an admin with the dedicated direct-connection permission', async () => {

@@ -11,7 +11,6 @@ jest.mock(
       list: jest.fn(),
     },
   }),
-  { virtual: true },
 );
 
 import { createApp } from '../../src/app';

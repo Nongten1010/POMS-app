@@ -59,25 +59,37 @@ curl --request POST \
 | อ่าน/แทนที่ config ของจุดที่เชื่อมต่อแล้ว | `GET`, `POST` | `/api/v1/connected-measurement-points/:stationId/device-configs` | Bearer | `cems_wpms_requests:view`, `cems_wpms_requests:edit` | [Device configs](./device-configs.md) |
 | ผู้ประกอบการยกเลิกคำขอ | `POST` | `/api/v1/cems-wpms-requests/:id/cancel` | Bearer | `cems_wpms_requests:edit` + owner | [Cancel request](./operator-cancel-request.md) |
 
+## Request-number Contract
+
+คำขอที่สร้างใหม่ใช้เลขชุดเดียวกันตาม `systemType` และปี พ.ศ. ไม่ว่าผู้ส่งจะเป็นผู้ประกอบการหรือเจ้าหน้าที่เชื่อมต่อโดยตรง:
+
+| `systemType` | รูปแบบ | ตัวอย่างแรกของปี 2569 |
+| --- | --- | --- |
+| `CEMS` | `CEMS-` + ลำดับอย่างน้อย 4 หลัก + `/` + ปี พ.ศ. 4 หลัก | `CEMS-0001/2569` |
+| `WPMS` | `WEMS-` + ลำดับอย่างน้อย 4 หลัก + `/` + ปี พ.ศ. 4 หลัก | `WEMS-0001/2569` |
+
+- `POST /api/v1/cems-wpms-requests/direct-connections` ใช้ลำดับเดียวกับคำขอของผู้ประกอบการ ไม่ใช้ prefix `OLDC` หรือ `OLDW` สำหรับคำขอใหม่.
+- ค่า `submissionSource` ยังคงแยกแหล่งที่มา: ผู้ประกอบการเป็น `OPERATOR_FORM` และเจ้าหน้าที่เชื่อมต่อโดยตรงเป็น `OFFICER_DIRECT_API`.
+- Direct Connection ยังคงสถานะ `CONNECTED` ทันทีและเก็บ `measurementPoints[0].pointCode` ที่เจ้าหน้าที่กรอกเอง; การเปลี่ยนนี้มีผลเฉพาะ `requestNo`.
+- คำขอเดิมที่มี `OLDC-*` หรือ `OLDW-*` ไม่ถูกแก้ย้อนหลัง.
+
 ## Point-code Contract
 
 กติกานี้ใช้เฉพาะ flow ปกติของผู้ประกอบการ:
 
 | `systemType` | รูปแบบรหัสใหม่ | รหัสแรกขั้นต่ำ | ตัวอย่างลำดับ |
 | --- | --- | --- | --- |
-| `CEMS` | `CEMS-` + ลำดับอย่างน้อย 4 หลัก + `/` + ปี พ.ศ. 4 หลัก | `CEMS-0001/2569` | `CEMS-0001/2569`, `CEMS-0002/2569`, ... |
-| `WPMS` | `WEMS-` + ลำดับอย่างน้อย 4 หลัก + `/` + ปี พ.ศ. 4 หลัก | `WEMS-0001/2569` | `WEMS-0001/2569`, `WEMS-0002/2569`, ... |
+| `CEMS` | `S` + ลำดับอย่างน้อย 4 หลัก | `S2001` | `S2001`, `S2002`, ... |
+| `WPMS` | `W` + ลำดับอย่างน้อย 4 หลัก | `W2001` | `W2001`, `W2002`, ... |
 
-- CEMS และ WPMS ใช้ลำดับแยกกัน และแต่ละระบบเริ่มลำดับใหม่ที่ `0001` เมื่อเปลี่ยนปี พ.ศ. ตามเขตเวลา `Asia/Bangkok`.
-- ถ้ามีรหัสรูปแบบใหม่ของระบบและปีเดียวกันอยู่แล้ว ระบบออกเลขต่อจาก sequence สูงสุดของปีนั้น.
-- ตัวอย่างปีถัดไป: `CEMS-0001/2570`, `WEMS-0001/2570`; WPMS ลำดับที่ 3 ในปี 2571 คือ `WEMS-0003/2571`.
-- รหัสเดิมทุกรูปแบบ เช่น `Sxxxx`, `Pxxxx` และ `Wxxxx` ไม่ถูก migrate; client ต้องยังอ่านและส่งรหัสเดิมเหล่านั้นเป็น opaque identifier ได้.
-- รหัสเดิมและรหัสของปีอื่นไม่ถูกนำมาคำนวณลำดับของปีปัจจุบัน.
+- CEMS และ WPMS ใช้ลำดับแยกกัน เริ่มขั้นต่ำที่ `2001` และไม่เริ่มใหม่เมื่อเปลี่ยนปี.
+- ระบบออกเลขต่อจากค่าที่มากกว่าระหว่าง sequence ที่บันทึกไว้กับรหัส `S...`/`W...` สูงสุดที่ยังใช้งานอยู่.
+- รหัสเดิมรูปแบบอื่น เช่น `Pxxxx`, `CEMS-NNNN/YYYY` และ `WEMS-NNNN/YYYY` ยังอ่านเป็น opaque identifier ได้ แต่ไม่ถูกนำมาคำนวณเลขใหม่.
 - คำขอ `ADD_PARAMETER` ใช้รหัสจุดเดิมและไม่ออกรหัสใหม่.
-- `POST /api/v1/cems-wpms-requests/direct-connections` ไม่ใช้ลำดับนี้ และเก็บรหัสที่เจ้าหน้าที่ส่งใน `measurementPoints[0].pointCode`.
+- `POST /api/v1/cems-wpms-requests/direct-connections` ไม่ใช้ลำดับรหัสจุดนี้ และเก็บรหัสที่เจ้าหน้าที่ส่งใน `measurementPoints[0].pointCode`.
 - การจองเลขและการเปลี่ยนสถานะทำใน transaction เดียวกันเพื่อไม่ให้คำขอพร้อมกันได้รหัสซ้ำ.
 
-เมื่อใช้รหัสรูปแบบใหม่เป็น `stationId`:
+เพื่อรองรับข้อมูลที่เคยมี `/` อยู่ในรหัสจุด:
 
 - ใน query string หรือ JSON body ให้ส่งค่ารหัสตามปกติ เช่น `stationId=CEMS-0001/2569`.
 - ใน path parameter ต้อง URL-encode อักขระ `/` เป็น `%2F` เช่น
@@ -86,6 +98,74 @@ curl --request POST \
 - Backend รองรับทั้ง `%2F` ที่ส่งถึง Express โดยตรง และ path สอง segment ที่ reverse proxy ถอด `%2F` เป็น `/` ก่อนส่งต่อ โดยประกอบกลับเป็น point code เดิมก่อน validation.
 
 ## Contracts
+
+### เชื่อมต่อโดยเจ้าหน้าที่โดยตรง
+
+`POST /api/v1/cems-wpms-requests/direct-connections` ใช้ request schema แยกจากฟอร์มคำขอปกติ โดย client ต้องส่งเฉพาะข้อมูลที่ใช้เลือกโรงงาน ระบบ และรหัสจุดตรวจวัด ส่วน field อื่นไม่ส่งหรือส่ง `null` ได้.
+
+Request fields ที่ต้องมีจริง:
+
+| Field | Type | Required | Rules |
+| --- | --- | --- | --- |
+| `factoryId` | string \| null | conditional | ต้องมี `factoryId` หรือ `factoryRegistrationNo` อย่างน้อยหนึ่งค่า เพื่อ resolve active `eligible_factories` และตรวจ scope |
+| `factoryRegistrationNo` | string \| null | conditional | เป็น identifier สำรอง; ส่ง `null` ได้เมื่อมี `factoryId` |
+| `systemType` | `CEMS` \| `WPMS` | yes | ห้ามเป็น `null` |
+| `measurementPoints` | array | yes | ต้องมีหนึ่งรายการเท่านั้น |
+| `measurementPoints[0].pointCode` | string | yes | trim แล้วต้องไม่ว่าง, ยาวไม่เกิน 64 ตัวอักษร และห้ามซ้ำกับ active point ใน `cems_wpms_connected_measurement_points` |
+
+Minimal request:
+
+```json
+{
+  "factoryId": "F000123",
+  "factoryRegistrationNo": null,
+  "systemType": "CEMS",
+  "measurementPoints": [
+    {
+      "pointCode": "S1125"
+    }
+  ]
+}
+```
+
+Minimal response (`201 Created`):
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 91,
+    "eligibleFactoryId": 17,
+    "requestNo": "OLDC-69-00001",
+    "requestType": "ADD_MEASUREMENT_POINT",
+    "submissionSource": "OFFICER_DIRECT_API",
+    "systemType": "CEMS",
+    "status": "CONNECTED",
+    "measurementPoints": [
+      {
+        "pointName": "S1125",
+        "pointCode": "S1125",
+        "pointType": "STACK"
+      }
+    ]
+  }
+}
+```
+
+Field อื่นของ Direct Connection เช่น `factoryName`, ข้อมูล EIA, ที่อยู่, พิกัด, ผู้ติดต่อ, `remarks`, `pointName`, `pointType`, parameters, details, เอกสาร และเครื่องมือวัด เป็น optional และรับ `null`. เมื่อไม่ส่งหรือส่ง `null`:
+
+- backend ใช้ชื่อและเลขทะเบียน canonical จาก `eligible_factories`;
+- `pointName` ใช้ค่า `pointCode`;
+- `pointType` ใช้ `STACK` สำหรับ `CEMS` และ `WASTEWATER` สำหรับ `WPMS`;
+- PK, request number, `eligibleFactoryId`, request/measurement-point FK และ audit fields เป็น server-owned;
+- ถ้า `pointCode` ซ้ำ ระบบตอบ `409 Conflict` ที่ path `measurementPoints.0.pointCode`.
+
+สำหรับ `measurementPoints[0].documentsAndImages`:
+
+- client ไม่ต้องส่งรายการของช่องแนบไฟล์ที่ยังว่าง;
+- เพื่อรองรับฟอร์มที่สร้างช่องเอกสารไว้ล่วงหน้า backend จะละทิ้งรายการที่มีเพียง `title`/`description` และมี `link`, `fileName`, `fileUrl`, `fileType`, `fileSize` เป็น `null`, ค่าว่าง หรือไม่ได้ส่ง;
+- เอกสารที่แนบจริงแต่ละรายการต้องมี `link` หรือ `fileUrl` แบบ `http`/`https`;
+- object ที่มี metadata ของไฟล์ เช่น `fileName`, `fileType` หรือ `fileSize` แต่ไม่มี `link`/`fileUrl` ไม่ถือเป็นช่องว่างและระบบตอบ `400 VALIDATION_ERROR`.
 
 ### Email normalization
 
@@ -182,26 +262,19 @@ Minimal response:
 
 Direct Connection resolve และตรวจ scope จาก `eligible_factories` โดยตรง โรงงานจึงยังไม่ต้องมี row ใน `factories` หรือ `cems_wpms_connected_measurement_points` มาก่อน ชื่อและเลขทะเบียน canonical ที่บันทึกมาจาก active eligible row; backend ไม่ใช้ `factoryName` จาก client เป็นแหล่งยืนยันตัวตน.
 
-Relevant request fields:
+Field requirements ของ Direct Connection อยู่ที่ [เชื่อมต่อโดยเจ้าหน้าที่โดยตรง](#เชื่อมต่อโดยเจ้าหน้าที่โดยตรง). ตารางต่อไปนี้ใช้กับ endpoint ฟอร์มคำขอปกติ:
 
 | Field | Type | Required | Rules |
 | --- | --- | --- | --- |
-| `factoryId` | string | yes | ต้อง resolve ไปยัง `eligible_factories.source_factory_id`, `factory_registration_no_new` หรือ `factory_registration_no_old` ที่ active |
-| `factoryRegistrationNo` | string | yes | ใช้เป็น alias สำรองกับ identifier ทั้งสามแบบข้างต้น |
-| `measurementPoints[0].documentsAndImages` | array | no | Direct Connection ไม่บังคับทั้ง `CEMS` และ `WPMS`; ถ้าไม่ส่ง backend normalize เป็น `[]` |
+| `factoryId` | string | yes | ต้อง resolve เป็น active eligible factory |
+| `factoryRegistrationNo` | string | yes | ใช้เป็น alias กับ identifier ทั้งสามแบบข้างต้น |
 
 Minimal relevant request fragment:
 
 ```json
 {
   "factoryId": "F000123",
-  "factoryRegistrationNo": "3-106-33/50สบ",
-  "systemType": "CEMS",
-  "measurementPoints": [
-    {
-      "pointCode": "S1125"
-    }
-  ]
+  "factoryRegistrationNo": "3-106-33/50สบ"
 }
 ```
 
@@ -308,7 +381,7 @@ Minimal response:
       {
         "id": 201,
         "pointName": "จุดระบายน้ำทิ้ง 1",
-        "pointCode": "WEMS-0001/2569"
+        "pointCode": "W2001"
       }
     ]
   }
@@ -336,7 +409,7 @@ Minimal response:
     "measurementPoints": [
       {
         "id": 201,
-        "pointCode": "CEMS-0001/2569"
+        "pointCode": "S2001"
       }
     ]
   }
@@ -369,7 +442,7 @@ Minimal response:
     {
       "type": "WPMS",
       "point": {
-        "pointCode": "WEMS-0001/2569"
+        "pointCode": "W2001"
       }
     }
   ],
@@ -404,9 +477,9 @@ Minimal response:
 | Routes | [`connection-requests.routes.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.routes.ts), [`connected-measurement-points.routes.ts`](../../../../../backend/src/modules/connection-requests/connected-measurement-points.routes.ts) |
 | Validators | [`connection-requests.validator.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.validator.ts), [`parameter-values.validator.ts`](../../../../../backend/src/modules/parameter-values/parameter-values.validator.ts), [`alert-events.validator.ts`](../../../../../backend/src/modules/alert-events/alert-events.validator.ts), [`integration-device-configs.validator.ts`](../../../../../backend/src/modules/integrations/integration-device-configs.validator.ts) |
 | Public types | [`connection-requests.types.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.types.ts) |
-| Sequence implementation | [`connection-requests.repository.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.repository.ts), [`monitoring-point-code.ts`](../../../../../backend/src/shared/utils/monitoring-point-code.ts) |
+| Sequence implementation | [`connection-requests.repository.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.repository.ts) |
 | Reverse-proxy path normalization | [`annual-point-code-path.ts`](../../../../../backend/src/shared/middlewares/annual-point-code-path.ts), [`connected-measurement-points.routes.ts`](../../../../../backend/src/modules/connection-requests/connected-measurement-points.routes.ts), [`integrations.routes.ts`](../../../../../backend/src/modules/integrations/integrations.routes.ts) |
 | Factory-profile patch rules | [`connected-factory-profile.ts`](../../../../../backend/src/modules/connection-requests/connected-factory-profile.ts) |
-| Migrations | [`0080_create_annual_point_code_sequences.ts`](../../../../../backend/src/db/migrations/0080_create_annual_point_code_sequences.ts), [`0076_sync_connected_factory_profiles_with_eligible_factories.ts`](../../../../../backend/src/db/migrations/0076_sync_connected_factory_profiles_with_eligible_factories.ts) |
-| Tests | [`connection-requests.point-code-sequence.repository.test.ts`](../../../../../backend/tests/unit/connection-requests.point-code-sequence.repository.test.ts), [`annual-point-code-sequence-migration.test.ts`](../../../../../backend/tests/unit/annual-point-code-sequence-migration.test.ts), [`parameter-values.validator.test.ts`](../../../../../backend/tests/unit/parameter-values.validator.test.ts), [`alert-events.route.test.ts`](../../../../../backend/tests/unit/alert-events.route.test.ts), [`connected-measurement-points.route.test.ts`](../../../../../backend/tests/unit/connected-measurement-points.route.test.ts), [`integration-device-configs.route.test.ts`](../../../../../backend/tests/unit/integration-device-configs.route.test.ts) |
-| Evidence | [Annual point-code format TDD](../../../evidence/connection-requests/annual-point-code-format.tdd.md), [Request table current/live POMS factory name TDD](../../../evidence/connection-requests/request-table-current-factory-name.tdd.md) |
+| Migrations | [`0075_start_operator_point_codes_at_2001.ts`](../../../../../backend/src/db/migrations/0075_start_operator_point_codes_at_2001.ts), [`0076_sync_connected_factory_profiles_with_eligible_factories.ts`](../../../../../backend/src/db/migrations/0076_sync_connected_factory_profiles_with_eligible_factories.ts) |
+| Tests | [`connection-requests.point-code-sequence.repository.test.ts`](../../../../../backend/tests/unit/connection-requests.point-code-sequence.repository.test.ts), [`parameter-values.validator.test.ts`](../../../../../backend/tests/unit/parameter-values.validator.test.ts), [`alert-events.route.test.ts`](../../../../../backend/tests/unit/alert-events.route.test.ts), [`connected-measurement-points.route.test.ts`](../../../../../backend/tests/unit/connected-measurement-points.route.test.ts), [`integration-device-configs.route.test.ts`](../../../../../backend/tests/unit/integration-device-configs.route.test.ts) |
+| Evidence | [Restore S/W point-code format TDD](../../../evidence/connection-requests/legacy-point-code-format-restored.tdd.md), [Request table current/live POMS factory name TDD](../../../evidence/connection-requests/request-table-current-factory-name.tdd.md) |
