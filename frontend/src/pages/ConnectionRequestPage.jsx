@@ -1,6 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Autocomplete,
   Badge,
   Box,
   Button,
@@ -104,6 +103,7 @@ const eiaProjectOptions = ['มี IEE', 'มี EIA', 'มี EHIA']
 const combustionControlSystemOptions = ['ระบบปิด', 'ระบบเปิด']
 const cemsLegalAnnexRequiredOptions = cemsInstallationRequiredOptions.slice(0, 2).map((option) => option.value)
 const connectionDeviceOptions = ['POMS Box (กรอ.)', 'POMS Box (กนอ.)', 'POMS Client (เดิม)', 'D-POMS Client (ใหม่)', 'อื่นๆ']
+const exemptedRegulationClauseOptions = ['ไม่มี', '4(1)', '4(2)', '11(3)', 'อื่นๆ']
 
 const measurementInstrumentColumns = [
   'พารามิเตอร์ที่ขอเชื่อมต่อ',
@@ -188,6 +188,32 @@ function getInitialInstrumentRows(initialInstruments = {}) {
   return []
 }
 
+function getInitialExemptedRegulationClause(details = {}) {
+  const rawValue = Array.isArray(details.exemptedParameterRegulationClauses)
+    ? details.exemptedParameterRegulationClauses[0]
+    : details.exemptedParameterRegulationClauses
+  const value = String(rawValue ?? '').trim()
+
+  if (!value) {
+    return ''
+  }
+
+  return exemptedRegulationClauseOptions.includes(value) ? value : 'อื่นๆ'
+}
+
+function getInitialExemptedRegulationClauseOther(details = {}) {
+  if (details.exemptedParameterRegulationClauseOther) {
+    return details.exemptedParameterRegulationClauseOther
+  }
+
+  const rawValue = Array.isArray(details.exemptedParameterRegulationClauses)
+    ? details.exemptedParameterRegulationClauses[0]
+    : details.exemptedParameterRegulationClauses
+  const value = String(rawValue ?? '').trim()
+
+  return value && !exemptedRegulationClauseOptions.includes(value) ? value : ''
+}
+
 const emptyCemsMonitoringPointDetails = {
   pointCode: '',
   pointName: '',
@@ -195,6 +221,8 @@ const emptyCemsMonitoringPointDetails = {
   productionCapacity: '',
   cemsInstallationRequiredBy: '',
   legalAnnexNo: [],
+  exemptedParameterRegulationClauses: '',
+  exemptedParameterRegulationClauseOther: '',
   eligibleParameters: [],
   exemptedParameters: [],
   connectedParameters: [],
@@ -1623,7 +1651,8 @@ function buildMeasurementPointRequestBody(
               connectedParameters: getFormValues(formData, 'connectedParameters'),
               pendingParameters: getFormValues(formData, 'pendingParameters'),
               requestedParameters: getFormValues(formData, 'requestedParameters'),
-              exemptedParameterRegulationClauses: getFormValues(formData, 'exemptedParameterRegulationClauses'),
+              exemptedParameterRegulationClauses: getOptionalFormValue(formData, 'exemptedParameterRegulationClauses'),
+              exemptedParameterRegulationClauseOther: getOptionalFormValue(formData, 'exemptedParameterRegulationClauseOther'),
               timeSharingParameters: getFormValues(formData, 'timeSharingParameters'),
               sharedStackCode: getOptionalFormValue(formData, 'sharedStackCode'),
               stackShape: getOptionalFormValue(formData, 'stackShape'),
@@ -4914,54 +4943,6 @@ function OptionMultiSelect({
   )
 }
 
-function TagInputField({ label, name, value: controlledValue, defaultValue = [], onChange, placeholder = 'พิมพ์แล้วกด Enter' }) {
-  const [internalValue, setInternalValue] = useState(normalizeArrayValue(defaultValue))
-  const value = controlledValue ?? internalValue
-
-  return (
-    <>
-      {name ? <input type="hidden" name={name} value={JSON.stringify(value)} /> : null}
-      <Autocomplete
-        multiple
-        freeSolo
-        options={[]}
-        value={value}
-        onChange={(_, nextValue) => {
-          const normalizedValue = nextValue.map((item) => String(item).trim()).filter(Boolean)
-          if (onChange) {
-            onChange(normalizedValue)
-          } else {
-            setInternalValue(normalizedValue)
-          }
-        }}
-        renderTags={(tagValue, getTagProps) =>
-          tagValue.map((option, index) => {
-            const { key, ...tagProps } = getTagProps({ index })
-
-            return (
-              <Chip
-                key={key}
-                label={option}
-                size="small"
-                {...tagProps}
-              />
-            )
-          })
-        }
-        renderInput={(params) => (
-          <TextField
-            {...params}
-            label={label}
-            size="small"
-            placeholder={placeholder}
-            fullWidth
-          />
-        )}
-      />
-    </>
-  )
-}
-
 function CemsMonitoringPointDetails({ initialPoint = {}, requestedParameters = [], onRequestedParametersChange, isOperator = false, isDirectConnectionMode = false }) {
   const initialDetails = { ...emptyCemsMonitoringPointDetails, ...compactDefinedObject(initialPoint.details ?? {}) }
   const pointCodeValue = initialPoint.pointCode ?? initialPoint.code ?? (isOperator || isDirectConnectionMode ? '' : initialDetails.pointCode)
@@ -4969,11 +4950,13 @@ function CemsMonitoringPointDetails({ initialPoint = {}, requestedParameters = [
   const [stackShape, setStackShape] = useState(initialDetails.stackShape)
   const [primaryFuel, setPrimaryFuel] = useState(initialDetails.primaryFuel)
   const [secondaryFuel, setSecondaryFuel] = useState(initialDetails.secondaryFuel)
+  const [exemptedRegulationClause, setExemptedRegulationClause] = useState(getInitialExemptedRegulationClause(initialDetails))
   const [treatmentSystem, setTreatmentSystem] = useState(normalizeArrayValue(initialDetails.treatmentSystem))
   const [connectionDevice, setConnectionDevice] = useState(initialDetails.connectionDevice)
   const [cemsInstallationRequiredBy, setCemsInstallationRequiredBy] = useState(initialDetails.cemsInstallationRequiredBy)
   const [timeSharingParameters, setTimeSharingParameters] = useState(normalizeArrayValue(initialDetails.timeSharingParameters))
   const showLegalAnnexNo = cemsLegalAnnexRequiredOptions.includes(cemsInstallationRequiredBy)
+  const showExemptedRegulationClauseOther = exemptedRegulationClause === 'อื่นๆ'
   const showPrimaryFuelOther = isOtherOption(primaryFuel) || isBiomassOption(primaryFuel)
   const showSecondaryFuelOther = isOtherOption(secondaryFuel) || isBiomassOption(secondaryFuel)
   const hasTreatmentSystem = treatmentSystem.length > 0 && !treatmentSystem.includes('ไม่มี') ? 'มี' : 'ไม่มี'
@@ -5042,6 +5025,35 @@ function CemsMonitoringPointDetails({ initialPoint = {}, requestedParameters = [
             />
           </Grid>
         ) : null}
+        <Grid size={{ xs: 12, md: 3 }}>
+          <TextField
+            name="exemptedParameterRegulationClauses"
+            select
+            label="พารามิเตอร์ที่ได้รับการยกเว้นตามประกาศฯ ข้อ"
+            size="small"
+            fullWidth
+            value={exemptedRegulationClause}
+            onChange={(event) => setExemptedRegulationClause(event.target.value)}
+          >
+            <MenuItem value="">-</MenuItem>
+            {exemptedRegulationClauseOptions.map((option) => (
+              <MenuItem key={option} value={option}>
+                {option}
+              </MenuItem>
+            ))}
+          </TextField>
+        </Grid>
+        {showExemptedRegulationClauseOther ? (
+          <Grid size={{ xs: 12, md: 3 }}>
+            <TextField
+              name="exemptedParameterRegulationClauseOther"
+              label="ระบุ ข้อตามประกาศ"
+              size="small"
+              defaultValue={getInitialExemptedRegulationClauseOther(initialDetails)}
+              fullWidth
+            />
+          </Grid>
+        ) : null}
       </Grid>
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 3 }}>
@@ -5068,13 +5080,6 @@ function CemsMonitoringPointDetails({ initialPoint = {}, requestedParameters = [
           />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TagInputField
-            name="exemptedParameterRegulationClauses"
-            label="พารามิเตอร์ที่ได้รับการยกเว้นตามประกาศฯ ข้อ"
-            defaultValue={normalizeStringArray(initialDetails.exemptedParameterRegulationClauses)}
-          />
-        </Grid>
-        <Grid size={{ xs: 12, md: 3 }}>
           <ParameterMultiSelect
             name="timeSharingParameters"
             label="พารามิเตอร์ที่ติดตั้งแบบ Time sharing"
@@ -5087,7 +5092,7 @@ function CemsMonitoringPointDetails({ initialPoint = {}, requestedParameters = [
           <Grid size={{ xs: 12, md: 3 }}>
             <TextField
               name="sharedStackCode"
-              label="ร่วมกับปล่อง"
+              label="ร่วมกับปล่อง (รหัสจุดตรวจวัด)"
               size="small"
               defaultValue={initialDetails.sharedStackCode ?? initialDetails.sharedStack}
               fullWidth
@@ -5175,7 +5180,7 @@ function CemsMonitoringPointDetails({ initialPoint = {}, requestedParameters = [
           <TextField name="primaryFuelOther" label="ระบุเชื้อเพลิงหลัก" size="small" defaultValue={initialDetails.primaryFuelOther} fullWidth disabled={!showPrimaryFuelOther} />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField name="primaryFuelPercent" label="ร้อยละโดยประมาณ" size="small" defaultValue={initialDetails.primaryFuelPercent} fullWidth />
+          <TextField name="primaryFuelPercent" label="ร้อยละโดยประมาณ" size="small" defaultValue={initialDetails.primaryFuelPercent} fullWidth disabled={!primaryFuel} />
         </Grid>
       </Grid>
       <Grid container spacing={2}>
@@ -5201,7 +5206,7 @@ function CemsMonitoringPointDetails({ initialPoint = {}, requestedParameters = [
           <TextField name="secondaryFuelOther" label="ระบุเชื้อเพลิงรอง" size="small" defaultValue={initialDetails.secondaryFuelOther} fullWidth disabled={!showSecondaryFuelOther} />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <TextField name="secondaryFuelPercent" label="ร้อยละโดยประมาณ" size="small" defaultValue={initialDetails.secondaryFuelPercent} fullWidth />
+          <TextField name="secondaryFuelPercent" label="ร้อยละโดยประมาณ" size="small" defaultValue={initialDetails.secondaryFuelPercent} fullWidth disabled={!secondaryFuel} />
         </Grid>
       </Grid>
       <Grid container spacing={2}>

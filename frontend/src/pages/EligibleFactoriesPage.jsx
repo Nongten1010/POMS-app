@@ -6,6 +6,10 @@ import {
   Button,
   Chip,
   Divider,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Drawer,
   Fade,
   FormControl,
@@ -63,9 +67,20 @@ const subMenus = [
 const cemsParameterOptions = cemsParameterOptionItems.map((option) => option.label)
 const wpmsParameterOptions = wpmsParameterOptionItems.map((option) => option.label)
 const legalAnnexOptions = Array.from({ length: 12 }, (_, index) => String(index + 1))
+const parameterNoneOption = 'ไม่มี'
+const withNoneOption = (options = []) => [parameterNoneOption, ...options.filter((option) => option !== parameterNoneOption)]
 const fuelOtherTriggerValues = ['เชื้อเพลิงชีวมวล (Biomass)', 'เชื้อเพลิงอื่นๆ']
 const eiaAssessmentOptions = ['ไม่มี', 'มี IEE', 'มี EIA', 'มี EHIA', 'อื่นๆ']
 const eiaProjectOptions = ['มี IEE', 'มี EIA', 'มี EHIA']
+const monitoringPointStatusOptions = [
+  { value: 'เชื่อมต่อครบแล้ว', label: 'เชื่อมต่อครบแล้ว', color: '#15803d', bgcolor: '#dcfce7' },
+  { value: 'ได้รับการยกเว้นทั้งหมด', label: 'ได้รับการยกเว้นทั้งหมด', color: '#15803d', bgcolor: '#dcfce7' },
+  { value: 'เชื่อมต่อแล้วแต่ยังไม่ครบ', label: 'เชื่อมต่อแล้วแต่ยังไม่ครบ', color: '#c2410c', bgcolor: '#ffedd5' },
+  { value: 'อยู่ระหว่างขยายเวลา', label: 'อยู่ระหว่างขยายเวลา', color: '#92400e', bgcolor: '#fef3c7' },
+  { value: 'ยังไม่ได้ดำเนินการเชื่อมต่อ', label: 'ยังไม่ได้ดำเนินการเชื่อมต่อ', color: '#b91c1c', bgcolor: '#fee2e2' },
+  { value: 'อยู่ระหว่างการตรวจสอบของจังหวัด', label: 'อยู่ระหว่างการตรวจสอบของจังหวัด', color: '#c2410c', bgcolor: '#ffedd5' },
+  { value: 'อยู่ระหว่างเชื่อมต่อ', label: 'อยู่ระหว่างเชื่อมต่อ', color: '#1d4ed8', bgcolor: '#dbeafe' },
+]
 
 const baseColumns = [
   { field: 'factoryName', headerName: 'ชื่อโรงงาน', width: 240 },
@@ -96,6 +111,19 @@ const eligibleMonitoringColumns = [
     align: 'center',
     headerAlign: 'center',
     headerClassName: 'eligible-cems-header',
+    cellClassName: 'eligible-cems-cell',
+  },
+  {
+    field: 'cemsConnectionStatusSummary',
+    headerName: 'สถานะ CEMS',
+    width: 170,
+    align: 'center',
+    headerAlign: 'center',
+    headerClassName: 'eligible-cems-header',
+    cellClassName: 'eligible-cems-cell',
+    sortable: false,
+    filterable: false,
+    renderCell: () => emptyValue,
   },
   {
     field: 'wpmsPointCount',
@@ -104,6 +132,19 @@ const eligibleMonitoringColumns = [
     align: 'center',
     headerAlign: 'center',
     headerClassName: 'eligible-wpms-header',
+    cellClassName: 'eligible-wpms-cell',
+  },
+  {
+    field: 'wpmsConnectionStatusSummary',
+    headerName: 'สถานะ WPMS',
+    width: 170,
+    align: 'center',
+    headerAlign: 'center',
+    headerClassName: 'eligible-wpms-header',
+    cellClassName: 'eligible-wpms-cell',
+    sortable: false,
+    filterable: false,
+    renderCell: () => emptyValue,
   },
 ]
 
@@ -309,6 +350,9 @@ function createDefaultMonitoringPoint(type = 'CEMS', order = 1) {
     exemptedParameters: [],
     connectedParameters: [],
     pendingParameters: [],
+    timeSharingParameters: [],
+    sharedStackCode: '',
+    monitoringPointStatus: '',
   }
 }
 
@@ -336,6 +380,9 @@ function mapMonitoringPointToForm(point = {}, index = 0) {
     exemptedParameters: point.exemptedParameters ?? details.exemptedParameters ?? [],
     connectedParameters: point.connectedParameters ?? details.connectedParameters ?? [],
     pendingParameters: point.pendingParameters ?? details.pendingParameters ?? [],
+    timeSharingParameters: point.timeSharingParameters ?? details.timeSharingParameters ?? [],
+    sharedStackCode: point.sharedStackCode ?? details.sharedStackCode ?? details.sharedStack ?? '',
+    monitoringPointStatus: point.monitoringPointStatus ?? point.status ?? details.monitoringPointStatus ?? details.status ?? '',
   }
 }
 
@@ -353,6 +400,9 @@ function mapMonitoringPointForEligibleState(point) {
           eligibleParameters: point.eligibleParameters ?? [],
           connectedParameters: point.connectedParameters ?? [],
           pendingParameters: point.pendingParameters ?? [],
+          timeSharingParameters: point.timeSharingParameters ?? [],
+          sharedStackCode: point.sharedStackCode || null,
+          monitoringPointStatus: point.monitoringPointStatus || null,
         }
       : {
           monitoringPointKind: 'CEMS',
@@ -369,6 +419,9 @@ function mapMonitoringPointForEligibleState(point) {
           exemptedParameters: point.exemptedParameters ?? [],
           connectedParameters: point.connectedParameters ?? [],
           pendingParameters: point.pendingParameters ?? [],
+          timeSharingParameters: point.timeSharingParameters ?? [],
+          sharedStackCode: point.sharedStackCode || null,
+          monitoringPointStatus: point.monitoringPointStatus || null,
         },
   }
 }
@@ -388,6 +441,9 @@ function mapMonitoringPointFormPayload(point) {
     exemptedParameters: point.type === 'CEMS' ? point.exemptedParameters ?? [] : [],
     connectedParameters: point.connectedParameters ?? [],
     pendingParameters: point.pendingParameters ?? [],
+    timeSharingParameters: point.timeSharingParameters ?? [],
+    sharedStackCode: normalizeDisplayValue(point.sharedStackCode) || null,
+    monitoringPointStatus: normalizeDisplayValue(point.monitoringPointStatus) || null,
     primaryFuel: point.type === 'CEMS' ? normalizeDisplayValue(point.primaryFuel) || null : null,
     primaryFuelOther: point.type === 'CEMS' ? normalizeDisplayValue(point.primaryFuelOther) || null : null,
     secondaryFuel: point.type === 'CEMS' ? normalizeDisplayValue(point.secondaryFuel) || null : null,
@@ -1006,6 +1062,7 @@ function EligibleFactoryBottomSheet({
   const [eiaAssessment, setEiaAssessment] = useState(() => getEiaAssessmentValue(factory))
   const [eiaOther, setEiaOther] = useState('')
   const [eiaProjectName, setEiaProjectName] = useState('')
+  const [removePointConfirmOpen, setRemovePointConfirmOpen] = useState(false)
   const activePoint = monitoringPoints.find((point) => point.id === activeMonitoringPointId) ?? monitoringPoints[0]
   const activePointIndex = Math.max(0, monitoringPoints.findIndex((point) => point.id === activePoint?.id))
 
@@ -1050,6 +1107,7 @@ function EligibleFactoryBottomSheet({
     const nextPoints = monitoringPoints.filter((point) => point.id !== activePoint.id)
     onMonitoringPointsChange(nextPoints)
     onActiveMonitoringPointChange(nextPoints[0]?.id ?? '')
+    setRemovePointConfirmOpen(false)
   }, [activePoint, monitoringPoints, onActiveMonitoringPointChange, onMonitoringPointsChange])
 
   const handleSubmit = useCallback(() => {
@@ -1202,7 +1260,7 @@ function EligibleFactoryBottomSheet({
               color="error"
               startIcon={<DeleteOutlineIcon />}
               disabled={!activePoint}
-              onClick={handleRemovePoint}
+              onClick={() => setRemovePointConfirmOpen(true)}
             >
               ลบจุดนี้
             </Button>
@@ -1254,6 +1312,27 @@ function EligibleFactoryBottomSheet({
           </Button>
         </Stack>
       </Stack>
+      <Dialog
+        open={removePointConfirmOpen}
+        onClose={() => setRemovePointConfirmOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>ยืนยันการลบจุดตรวจวัด</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            เมื่อลบจุดนี้แล้ว ข้อมูลที่กรอกไว้ในจุดตรวจวัดนี้จะถูกนำออกจากแบบฟอร์ม
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: 'center', px: 3, pb: 2 }}>
+          <Button color="inherit" onClick={() => setRemovePointConfirmOpen(false)}>
+            ยกเลิก
+          </Button>
+          <Button variant="contained" color="error" onClick={handleRemovePoint}>
+            ยืนยัน
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Drawer>
   )
 }
@@ -1477,6 +1556,33 @@ function MonitoringPointForm({ point, onChange, onTypeChange }) {
             ) : null}
           </Grid>
         ) : null}
+        <Grid container spacing={2}>
+          <Grid size={{ xs: 12, md: 3 }}>
+            <ParameterMultiSelect
+              label="พารามิเตอร์ที่ติดตั้งแบบ Time sharing"
+              options={withNoneOption(parameterOptions)}
+              value={point.timeSharingParameters}
+              onChange={(value) => onChange({ timeSharingParameters: value })}
+            />
+          </Grid>
+          {!normalizeArrayValue(point.timeSharingParameters).includes(parameterNoneOption) ? (
+            <Grid size={{ xs: 12, md: 3 }}>
+              <TextField
+                label="ร่วมกับปล่อง (รหัสจุดตรวจวัด)"
+                size="small"
+                fullWidth
+                value={point.sharedStackCode}
+                onChange={(event) => onChange({ sharedStackCode: event.target.value })}
+              />
+            </Grid>
+          ) : null}
+          <Grid size={{ xs: 12, md: 3 }}>
+            <MonitoringPointStatusSelect
+              value={point.monitoringPointStatus}
+              onChange={(value) => onChange({ monitoringPointStatus: value })}
+            />
+          </Grid>
+        </Grid>
       </Stack>
     </Stack>
   )
@@ -1506,6 +1612,47 @@ function ParameterMultiSelect({ label, options, value = [], onChange }) {
         {options.map((option) => (
           <MenuItem key={option} value={option}>
             {option}
+          </MenuItem>
+        ))}
+      </Select>
+    </FormControl>
+  )
+}
+
+function MonitoringPointStatusChip({ value }) {
+  const option = monitoringPointStatusOptions.find((item) => item.value === value)
+
+  if (!option) {
+    return null
+  }
+
+  return (
+    <Chip
+      label={option.label}
+      size="small"
+      sx={{
+        bgcolor: option.bgcolor,
+        color: option.color,
+        fontWeight: 600,
+      }}
+    />
+  )
+}
+
+function MonitoringPointStatusSelect({ value, onChange }) {
+  return (
+    <FormControl size="small" fullWidth>
+      <InputLabel>สถานะ</InputLabel>
+      <Select
+        value={value}
+        label="สถานะ"
+        onChange={(event) => onChange(event.target.value)}
+        renderValue={(selected) => selected ? <MonitoringPointStatusChip value={selected} /> : '-'}
+      >
+        <MenuItem value="">-</MenuItem>
+        {monitoringPointStatusOptions.map((option) => (
+          <MenuItem key={option.value} value={option.value}>
+            <MonitoringPointStatusChip value={option.value} />
           </MenuItem>
         ))}
       </Select>
@@ -1599,9 +1746,15 @@ function FactoryDataGrid({ title, rows, columns, loading = false, error = '' }) 
               bgcolor: '#ffedd5',
               color: '#9a3412',
             },
+            '& .MuiDataGrid-cell.eligible-cems-cell': {
+              bgcolor: '#fff7ed',
+            },
             '& .MuiDataGrid-columnHeader.eligible-wpms-header': {
               bgcolor: '#dbeafe',
               color: '#1e40af',
+            },
+            '& .MuiDataGrid-cell.eligible-wpms-cell': {
+              bgcolor: '#eff6ff',
             },
             '& .MuiDataGrid-row--lastVisible .MuiDataGrid-cell': {
               borderBottom: 1,
