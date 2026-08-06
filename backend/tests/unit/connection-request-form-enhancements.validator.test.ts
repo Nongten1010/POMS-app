@@ -1019,6 +1019,63 @@ describe('CEMS/WPMS monitoring-point form enhancements', () => {
     }
   });
 
+  it('rejects an oversized free-text regulation clause when the selection is อื่นๆ', () => {
+    const payload = createCemsPayload();
+    const point = payload.measurementPoints[0];
+
+    const result = addMeasurementPointRequestSchema.safeParse({
+      ...payload,
+      measurementPoints: [
+        {
+          ...point,
+          details: {
+            ...point.details,
+            exemptedParameterRegulationClauses: 'อื่นๆ',
+            exemptedParameterRegulationClauseOther: 'ก'.repeat(501),
+          },
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: ['measurementPoints', 0, 'details', 'exemptedParameterRegulationClauseOther'],
+          }),
+        ]),
+      );
+    }
+  });
+
+  it('normalizes a legacy single-item regulation-clause array when resubmitted', () => {
+    const payload = createCemsPayload();
+    const point = payload.measurementPoints[0];
+
+    const result = resubmitConnectionRequestSchema.safeParse({
+      ...payload,
+      requestType: 'ADD_MEASUREMENT_POINT',
+      measurementPoints: [
+        {
+          ...point,
+          details: {
+            ...point.details,
+            exemptedParameterRegulationClauses: ['4(1)'],
+          },
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.measurementPoints[0].details).toMatchObject({
+        exemptedParameterRegulationClauses: '4(1)',
+        exemptedParameterRegulationClauseOther: null,
+      });
+    }
+  });
+
   it('normalizes a stale Other detail to null for a named regulation clause', () => {
     const payload = createCemsPayload();
     const point = payload.measurementPoints[0];
@@ -1047,7 +1104,7 @@ describe('CEMS/WPMS monitoring-point form enhancements', () => {
   });
 
   it.each([
-    [['4(1)']],
+    [['4(1)', '4(2)']],
     ['ข้อที่ไม่รองรับ'],
     [7],
   ])('rejects an invalid CEMS regulation-clause selection: %p', (selection) => {
