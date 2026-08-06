@@ -374,6 +374,9 @@ const IGNORED_PARAMETER_TOKENS = new Set([
   'unit',
   'units',
 ]);
+const PARAMETER_COLUMN_PREFIX_ALIASES: Readonly<Record<string, readonly string[]>> = {
+  flowrate: ['flow'],
+};
 
 function buildParameterDefinitions(
   registeredParameters: string[],
@@ -1070,6 +1073,9 @@ function toParameterColumnPrefixes(parameter: string): string[] {
   }
 
   addParameterCandidate(candidates, baseCandidate);
+  for (const alias of PARAMETER_COLUMN_PREFIX_ALIASES[baseCandidate] ?? []) {
+    addParameterCandidate(candidates, alias);
+  }
 
   if (!trimmed.includes('(')) {
     addParameterCandidate(candidates, trimmed);
@@ -1091,7 +1097,10 @@ function addParameterCandidate(candidates: Set<string>, value: string | undefine
 }
 
 function normalizeParameterName(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, '');
+  return value
+    .normalize('NFKD')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '');
 }
 
 function buildConnectionTestData(
