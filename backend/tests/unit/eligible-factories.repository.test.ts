@@ -26,7 +26,7 @@ describe('eligibleFactoriesRepository.list', () => {
     id: 795,
     source_system: 'monitoring_point_forms',
     source_factory_id: '10180000125417',
-    monitoring_point_form_id: null,
+    monitoring_point_form_id: null as number | string | null,
     factory_registration_no_new: '10180000125417',
     factory_registration_no_old: null,
     factory_name: 'โรงงานทดสอบ',
@@ -56,10 +56,12 @@ describe('eligibleFactoriesRepository.list', () => {
     updated_at: '2026-07-13T00:00:00.000Z',
   };
   let selectedRowForTest = { ...selectedFactoryRow };
+  let monitoringPointRowsForTest: Array<Record<string, unknown>> = [];
 
   beforeEach(() => {
     jest.clearAllMocks();
     selectedRowForTest = { ...selectedFactoryRow };
+    monitoringPointRowsForTest = [];
 
     const countQuery = {
       clearSelect: jest.fn().mockReturnThis(),
@@ -81,6 +83,16 @@ describe('eligibleFactoriesRepository.list', () => {
 
     mockDb.mockImplementation((tableName: unknown) => {
       if (tableName === 'eligible_factories') return baseQuery;
+      if (tableName === 'factory_monitoring_points') {
+        return {
+          whereIn: jest.fn().mockReturnThis(),
+          whereNull: jest.fn().mockReturnThis(),
+          orderBy: jest.fn().mockReturnThis(),
+          then: jest.fn((resolve: (rows: Array<Record<string, unknown>>) => unknown) =>
+            Promise.resolve(resolve(monitoringPointRowsForTest)),
+          ),
+        };
+      }
       throw new Error(`Unexpected local table: ${String(tableName)}`);
     });
 
@@ -158,6 +170,48 @@ describe('eligibleFactoriesRepository.list', () => {
       eiaOther: null,
       hasEia: true,
       projectName: 'โครงการขยายกำลังผลิต',
+    });
+  });
+
+  it('hydrates the frontend monitoring-point fields from details JSON', async () => {
+    selectedRowForTest = {
+      ...selectedFactoryRow,
+      monitoring_point_form_id: 12,
+    };
+    monitoringPointRowsForTest = [
+      {
+        form_id: 12,
+        system_type: 'CEMS',
+        point_code: 'S0001',
+        point_name: 'ปล่องหลัก',
+        production_unit_type: null,
+        production_capacity: null,
+        cems_installation_required_by: null,
+        cems_installation_required_other: null,
+        legal_annex_no: null,
+        accounting_connection_status: null,
+        eligible_parameters_json: '[]',
+        exempted_parameters_json: '[]',
+        connected_parameters_json: '[]',
+        pending_parameters_json: '[]',
+        primary_fuel: null,
+        primary_fuel_other: null,
+        secondary_fuel: null,
+        secondary_fuel_other: null,
+        details_json: JSON.stringify({
+          timeSharingParameters: ['NOx (ppm)'],
+          sharedStackCode: 'S0002',
+          monitoringPointStatus: 'เชื่อมต่อครบแล้ว',
+        }),
+      },
+    ];
+
+    const result = await eligibleFactoriesRepository.list({});
+
+    expect(result.rows[0]?.measurementPoints?.[0]).toMatchObject({
+      timeSharingParameters: ['NOx (ppm)'],
+      sharedStackCode: 'S0002',
+      monitoringPointStatus: 'เชื่อมต่อครบแล้ว',
     });
   });
 

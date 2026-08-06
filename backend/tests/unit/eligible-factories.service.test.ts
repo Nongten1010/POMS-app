@@ -245,6 +245,8 @@ describe('eligibleFactoriesService', () => {
           hasEia: null,
           projectName: null,
           monitoringPointFormId: null,
+          cemsConnectionStatusSummary: 'ยังไม่แล้วเสร็จ',
+          wpmsConnectionStatusSummary: 'ยังไม่แล้วเสร็จ',
           measurementPoints: [
             expect.objectContaining({ systemType: 'CEMS', pointCode: 'CEMS-1' }),
             expect.objectContaining({ systemType: 'WPMS', pointCode: 'WPMS-1' }),
@@ -253,7 +255,7 @@ describe('eligibleFactoriesService', () => {
       ],
       meta: { total: 1 },
     });
-    expect(Object.keys(result.data[0] ?? {})).toHaveLength(26);
+    expect(Object.keys(result.data[0] ?? {})).toHaveLength(28);
   });
 
   it('throws not found when removing an unknown eligible factory selection', async () => {

@@ -71,6 +71,55 @@ describe('create measurement-point request route', () => {
     );
   });
 
+  it('passes the frontend CEMS clause and nullable fuel-percent contract to the service', async () => {
+    const payload = validCemsAddParameterPayload();
+    const point = payload.measurementPoints[0];
+    const response = await request(createApp())
+      .post('/api/v1/cems-wpms-requests/measurement-points')
+      .set('Authorization', `Bearer ${accessToken()}`)
+      .send({
+        ...payload,
+        measurementPoints: [
+          {
+            ...point,
+            pointCode: null,
+            details: {
+              ...point.details,
+              primaryFuel: null,
+              primaryFuelPercent: null,
+              secondaryFuel: null,
+              secondaryFuelPercent: null,
+              exemptedParameterRegulationClauses: 'อื่นๆ',
+              exemptedParameterRegulationClauseOther: 'ข้อ 15 ตามประกาศเฉพาะ',
+            },
+            documentsAndImages: [
+              {
+                title: 'ภาพถ่ายปล่อง',
+                fileUrl: 'https://example.com/stack.jpg',
+              },
+            ],
+          },
+        ],
+      });
+
+    expect(response.status).toBe(201);
+    expect(mockedService.createMeasurementPointRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        measurementPoints: [
+          expect.objectContaining({
+            details: expect.objectContaining({
+              primaryFuelPercent: null,
+              secondaryFuelPercent: null,
+              exemptedParameterRegulationClauses: 'อื่นๆ',
+              exemptedParameterRegulationClauseOther: 'ข้อ 15 ตามประกาศเฉพาะ',
+            }),
+          }),
+        ],
+      }),
+      42,
+    );
+  });
+
   it('accepts a dedicated CEMS add-parameter request without documents', async () => {
     const parameterResponse = {
       ...serviceResponse,

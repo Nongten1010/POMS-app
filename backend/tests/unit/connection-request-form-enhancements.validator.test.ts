@@ -929,7 +929,7 @@ describe('CEMS/WPMS monitoring-point form enhancements', () => {
     }
   });
 
-  it('accepts CEMS regulation-clause tags as a string array', () => {
+  it('accepts the CEMS regulation clause as one supported string and nullable fuel percentages', () => {
     const payload = createCemsPayload();
     const point = payload.measurementPoints[0];
 
@@ -940,7 +940,12 @@ describe('CEMS/WPMS monitoring-point form enhancements', () => {
           ...point,
           details: {
             ...point.details,
-            exemptedParameterRegulationClauses: ['ข้อ 5 (1)', 'ข้อ 7'],
+            primaryFuel: null,
+            primaryFuelPercent: null,
+            secondaryFuel: null,
+            secondaryFuelPercent: null,
+            exemptedParameterRegulationClauses: '4(1)',
+            exemptedParameterRegulationClauseOther: null,
           },
         },
       ],
@@ -949,12 +954,15 @@ describe('CEMS/WPMS monitoring-point form enhancements', () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.measurementPoints[0].details).toMatchObject({
-        exemptedParameterRegulationClauses: ['ข้อ 5 (1)', 'ข้อ 7'],
+        primaryFuelPercent: null,
+        secondaryFuelPercent: null,
+        exemptedParameterRegulationClauses: '4(1)',
+        exemptedParameterRegulationClauseOther: null,
       });
     }
   });
 
-  it('rejects a non-string CEMS regulation-clause tag list', () => {
+  it('requires the free-text regulation clause when the selection is อื่นๆ', () => {
     const payload = createCemsPayload();
     const point = payload.measurementPoints[0];
 
@@ -965,7 +973,95 @@ describe('CEMS/WPMS monitoring-point form enhancements', () => {
           ...point,
           details: {
             ...point.details,
-            exemptedParameterRegulationClauses: 7,
+            exemptedParameterRegulationClauses: 'อื่นๆ',
+            exemptedParameterRegulationClauseOther: null,
+          },
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: ['measurementPoints', 0, 'details', 'exemptedParameterRegulationClauseOther'],
+          }),
+        ]),
+      );
+    }
+  });
+
+  it('preserves a free-text regulation clause when the selection is อื่นๆ', () => {
+    const payload = createCemsPayload();
+    const point = payload.measurementPoints[0];
+
+    const result = addMeasurementPointRequestSchema.safeParse({
+      ...payload,
+      measurementPoints: [
+        {
+          ...point,
+          details: {
+            ...point.details,
+            exemptedParameterRegulationClauses: 'อื่นๆ',
+            exemptedParameterRegulationClauseOther: 'ข้อ 15 ตามประกาศเฉพาะ',
+          },
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.measurementPoints[0].details).toMatchObject({
+        exemptedParameterRegulationClauses: 'อื่นๆ',
+        exemptedParameterRegulationClauseOther: 'ข้อ 15 ตามประกาศเฉพาะ',
+      });
+    }
+  });
+
+  it('normalizes a stale Other detail to null for a named regulation clause', () => {
+    const payload = createCemsPayload();
+    const point = payload.measurementPoints[0];
+
+    const result = addMeasurementPointRequestSchema.safeParse({
+      ...payload,
+      measurementPoints: [
+        {
+          ...point,
+          details: {
+            ...point.details,
+            exemptedParameterRegulationClauses: '11(3)',
+            exemptedParameterRegulationClauseOther: 'ค่าค้างจากการเลือกก่อนหน้า',
+          },
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.measurementPoints[0].details).toMatchObject({
+        exemptedParameterRegulationClauses: '11(3)',
+        exemptedParameterRegulationClauseOther: null,
+      });
+    }
+  });
+
+  it.each([
+    [['4(1)']],
+    ['ข้อที่ไม่รองรับ'],
+    [7],
+  ])('rejects an invalid CEMS regulation-clause selection: %p', (selection) => {
+    const payload = createCemsPayload();
+    const point = payload.measurementPoints[0];
+
+    const result = addMeasurementPointRequestSchema.safeParse({
+      ...payload,
+      measurementPoints: [
+        {
+          ...point,
+          details: {
+            ...point.details,
+            exemptedParameterRegulationClauses: selection,
           },
         },
       ],
