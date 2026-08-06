@@ -36,6 +36,11 @@ const optionalStringList = (maxItemLength: number, maxItems: number) =>
     .default([]);
 const parameterListSchema = optionalStringList(255, 100);
 const legalAnnexListSchema = optionalStringList(32, 12);
+const typedMonitoringPointFields = [
+  'timeSharingParameters',
+  'sharedStackCode',
+  'monitoringPointStatus',
+] as const;
 const cemsLegalAnnexRequiredBy = [
   'ประกาศกระทรวงอุตสาหกรรม เรื่อง กำหนดให้โรงงานต้องติดตั้งเครื่องมือหรือเครื่องอุปกรณ์พิเศษเพื่อรายงานมลพิษอากาศจากปล่องโรงงาน พ.ศ. 2565',
   'ประกาศกระทรวงอุตสาหกรรม เรื่อง กำหนดให้โรงงานในท้องที่กรุงเทพมหานครต้องติดตั้งเครื่องมือหรือเครื่องอุปกรณ์พิเศษเพื่อรายงานมลพิษอากาศจากปล่องโรงงาน พ.ศ. 2569',
@@ -123,6 +128,17 @@ export const saveMonitoringPointFormSchema = z
           })
           .strict()
           .superRefine((point, context) => {
+            typedMonitoringPointFields.forEach((field) => {
+              if (!point.details || !Object.prototype.hasOwnProperty.call(point.details, field)) {
+                return;
+              }
+              context.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ['details', field],
+                message: `${field} must be provided at the point level`,
+              });
+            });
+
             const supportsLegalAnnexNo =
               point.systemType === 'CEMS' &&
               cemsLegalAnnexRequiredBy.includes(
