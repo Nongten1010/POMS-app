@@ -123,7 +123,7 @@ const eligibleMonitoringColumns = [
     cellClassName: 'eligible-cems-cell',
     sortable: false,
     filterable: false,
-    renderCell: () => emptyValue,
+    renderCell: (params) => <ConnectionStatusSummaryChip value={params.value} />,
   },
   {
     field: 'wpmsPointCount',
@@ -144,7 +144,7 @@ const eligibleMonitoringColumns = [
     cellClassName: 'eligible-wpms-cell',
     sortable: false,
     filterable: false,
-    renderCell: () => emptyValue,
+    renderCell: (params) => <ConnectionStatusSummaryChip value={params.value} />,
   },
 ]
 
@@ -249,6 +249,27 @@ function normalizeArrayValue(value) {
     .filter(Boolean)
 }
 
+function normalizeTimeSharingParameters(value) {
+  const items = normalizeArrayValue(value)
+  return items.includes(parameterNoneOption) ? [parameterNoneOption] : items
+}
+
+function normalizeTimeSharingSelection(nextValue, currentValue) {
+  const nextItems = normalizeArrayValue(nextValue)
+  const currentItems = normalizeArrayValue(currentValue)
+  const hasNone = nextItems.includes(parameterNoneOption)
+
+  if (!hasNone) {
+    return nextItems
+  }
+
+  if (currentItems.includes(parameterNoneOption) && nextItems.length > 1) {
+    return nextItems.filter((item) => item !== parameterNoneOption)
+  }
+
+  return [parameterNoneOption]
+}
+
 function shouldShowFuelOther(value) {
   return fuelOtherTriggerValues.includes(value)
 }
@@ -302,9 +323,13 @@ function mapFactoryRow(row, index, idPrefix = 'factory') {
     boilerSizeEach: row.boilerSizeEach ?? emptyValue,
     fuel: row.fuelUsed ?? emptyValue,
     eia: row.eia ?? (row.hasEia === true ? 'มี' : row.hasEia === false ? 'ไม่มี' : emptyValue),
+    eiaOther: row.eiaOther ?? '',
+    projectName: row.projectName ?? '',
     measurementPoints,
     cemsPointCount: countMonitoringPointsByType(measurementPoints, 'CEMS'),
     wpmsPointCount: countMonitoringPointsByType(measurementPoints, 'WPMS'),
+    cemsConnectionStatusSummary: row.cemsConnectionStatusSummary ?? emptyValue,
+    wpmsConnectionStatusSummary: row.wpmsConnectionStatusSummary ?? emptyValue,
   }
 }
 
@@ -380,7 +405,7 @@ function mapMonitoringPointToForm(point = {}, index = 0) {
     exemptedParameters: point.exemptedParameters ?? details.exemptedParameters ?? [],
     connectedParameters: point.connectedParameters ?? details.connectedParameters ?? [],
     pendingParameters: point.pendingParameters ?? details.pendingParameters ?? [],
-    timeSharingParameters: point.timeSharingParameters ?? details.timeSharingParameters ?? [],
+    timeSharingParameters: normalizeTimeSharingParameters(point.timeSharingParameters ?? details.timeSharingParameters),
     sharedStackCode: point.sharedStackCode ?? details.sharedStackCode ?? details.sharedStack ?? '',
     monitoringPointStatus: point.monitoringPointStatus ?? point.status ?? details.monitoringPointStatus ?? details.status ?? '',
   }
@@ -400,7 +425,7 @@ function mapMonitoringPointForEligibleState(point) {
           eligibleParameters: point.eligibleParameters ?? [],
           connectedParameters: point.connectedParameters ?? [],
           pendingParameters: point.pendingParameters ?? [],
-          timeSharingParameters: point.timeSharingParameters ?? [],
+          timeSharingParameters: normalizeTimeSharingParameters(point.timeSharingParameters),
           sharedStackCode: point.sharedStackCode || null,
           monitoringPointStatus: point.monitoringPointStatus || null,
         }
@@ -419,7 +444,7 @@ function mapMonitoringPointForEligibleState(point) {
           exemptedParameters: point.exemptedParameters ?? [],
           connectedParameters: point.connectedParameters ?? [],
           pendingParameters: point.pendingParameters ?? [],
-          timeSharingParameters: point.timeSharingParameters ?? [],
+          timeSharingParameters: normalizeTimeSharingParameters(point.timeSharingParameters),
           sharedStackCode: point.sharedStackCode || null,
           monitoringPointStatus: point.monitoringPointStatus || null,
         },
@@ -441,7 +466,7 @@ function mapMonitoringPointFormPayload(point) {
     exemptedParameters: point.type === 'CEMS' ? point.exemptedParameters ?? [] : [],
     connectedParameters: point.connectedParameters ?? [],
     pendingParameters: point.pendingParameters ?? [],
-    timeSharingParameters: point.timeSharingParameters ?? [],
+    timeSharingParameters: normalizeTimeSharingParameters(point.timeSharingParameters),
     sharedStackCode: normalizeDisplayValue(point.sharedStackCode) || null,
     monitoringPointStatus: normalizeDisplayValue(point.monitoringPointStatus) || null,
     primaryFuel: point.type === 'CEMS' ? normalizeDisplayValue(point.primaryFuel) || null : null,
@@ -463,6 +488,8 @@ function createMonitoringPointFormPayload(row, monitoringPoints = []) {
       factoryTypeSub: normalizeDisplayValue(row.factorySubclass) || null,
       operationStatus: normalizeDisplayValue(row.operationStatus) || null,
       eiaInfo: normalizeDisplayValue(row.eia) || null,
+      eiaOther: normalizeDisplayValue(row.eiaOther) || null,
+      projectName: normalizeDisplayValue(row.projectName) || null,
       address: normalizeDisplayValue(row.location) || null,
       businessActivity: normalizeDisplayValue(row.operation) || null,
       latitude: normalizeDisplayValue(row.latitude) || null,
@@ -707,6 +734,9 @@ function EligibleFactoriesPage({ accessToken = '' }) {
           ? {
               ...current,
               monitoringPointFormId: detail.id ?? existingForm.id,
+              eia: detail.factory?.eiaInfo ?? current.eia,
+              eiaOther: detail.factory?.eiaOther ?? current.eiaOther,
+              projectName: detail.factory?.projectName ?? current.projectName,
               measurementPoints: detail.points ?? current.measurementPoints,
             }
           : current,
@@ -1025,7 +1055,10 @@ function EligibleFactoriesPage({ accessToken = '' }) {
       )}
 
       <EligibleFactoryBottomSheet
-        key={selectedFactoryForSheet?.id ?? 'eligible-factory-sheet'}
+        key={[
+          selectedFactoryForSheet?.id ?? 'eligible-factory-sheet',
+          selectedFactoryForSheet?.monitoringPointFormId ?? 'draft',
+        ].join('-')}
         open={Boolean(selectedFactoryForSheet)}
         factory={selectedFactoryForSheet}
         monitoringPoints={monitoringPoints}
@@ -1060,8 +1093,8 @@ function EligibleFactoryBottomSheet({
     longitude: factory?.longitude ?? '',
   }))
   const [eiaAssessment, setEiaAssessment] = useState(() => getEiaAssessmentValue(factory))
-  const [eiaOther, setEiaOther] = useState('')
-  const [eiaProjectName, setEiaProjectName] = useState('')
+  const [eiaOther, setEiaOther] = useState(() => factory?.eiaOther ?? '')
+  const [eiaProjectName, setEiaProjectName] = useState(() => factory?.projectName ?? '')
   const [removePointConfirmOpen, setRemovePointConfirmOpen] = useState(false)
   const activePoint = monitoringPoints.find((point) => point.id === activeMonitoringPointId) ?? monitoringPoints[0]
   const activePointIndex = Math.max(0, monitoringPoints.findIndex((point) => point.id === activePoint?.id))
@@ -1118,10 +1151,12 @@ function EligibleFactoryBottomSheet({
     onSubmit({
       ...factory,
       eia: eiaAssessment,
+      eiaOther: eiaAssessment === 'อื่นๆ' ? eiaOther : null,
+      projectName: eiaProjectOptions.includes(eiaAssessment) ? eiaProjectName : null,
       latitude: factoryCoordinates.latitude,
       longitude: factoryCoordinates.longitude,
     })
-  }, [eiaAssessment, factory, factoryCoordinates, onSubmit])
+  }, [eiaAssessment, eiaOther, eiaProjectName, factory, factoryCoordinates, onSubmit])
 
   return (
     <Drawer
@@ -1561,11 +1596,15 @@ function MonitoringPointForm({ point, onChange, onTypeChange }) {
             <ParameterMultiSelect
               label="พารามิเตอร์ที่ติดตั้งแบบ Time sharing"
               options={withNoneOption(parameterOptions)}
-              value={point.timeSharingParameters}
-              onChange={(value) => onChange({ timeSharingParameters: value })}
+              value={normalizeTimeSharingParameters(point.timeSharingParameters)}
+              onChange={(value) =>
+                onChange({
+                  timeSharingParameters: normalizeTimeSharingSelection(value, point.timeSharingParameters),
+                })
+              }
             />
           </Grid>
-          {!normalizeArrayValue(point.timeSharingParameters).includes(parameterNoneOption) ? (
+          {!normalizeTimeSharingParameters(point.timeSharingParameters).includes(parameterNoneOption) ? (
             <Grid size={{ xs: 12, md: 3 }}>
               <TextField
                 label="ร่วมกับปล่อง (รหัสจุดตรวจวัด)"
@@ -1657,6 +1696,46 @@ function MonitoringPointStatusSelect({ value, onChange }) {
         ))}
       </Select>
     </FormControl>
+  )
+}
+
+function ConnectionStatusSummaryChip({ value }) {
+  const colorByStatus = {
+    เชื่อมต่อครบถ้วน: {
+      bgcolor: '#dcfce7',
+      color: '#166534',
+    },
+    ได้รับยกเว้นทั้งหมด: {
+      bgcolor: '#dcfce7',
+      color: '#166534',
+    },
+    ยังไม่แล้วเสร็จ: {
+      bgcolor: '#ffedd5',
+      color: '#c2410c',
+    },
+  }
+  const label = normalizeDisplayValue(value) || emptyValue
+
+  if (label === emptyValue) {
+    return (
+      <Typography variant="body2" color="text.secondary">
+        {emptyValue}
+      </Typography>
+    )
+  }
+
+  return (
+    <Chip
+      label={label}
+      size="small"
+      sx={{
+        fontWeight: 600,
+        ...(colorByStatus[label] ?? {
+          bgcolor: '#f1f5f9',
+          color: '#334155',
+        }),
+      }}
+    />
   )
 }
 
