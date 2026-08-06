@@ -10,6 +10,7 @@ import type {
 } from './eligible-factories.types';
 import { eligibleFactoryCandidatesRepository } from './eligible-factory-candidates.repository';
 import { resolveEligibleFactoryAddressForStorage } from './eligible-factory-source-hydration';
+import { deriveConnectionStatusSummary } from './eligible-factory-status-summary';
 import { splitFactoryTypeSequence } from './factory-type-sequence';
 
 export const eligibleFactoriesService = {
@@ -59,6 +60,7 @@ export const eligibleFactoriesService = {
 
 function toSelectedEligibleFactory(factory: EligibleFactoryDTO): SelectedEligibleFactoryDTO {
   const { factoryClass, factorySubclass } = splitFactoryTypeSequence(factory.factoryTypeSequence);
+  const measurementPoints = factory.measurementPoints ?? [];
 
   return {
     id: factory.id,
@@ -86,6 +88,8 @@ function toSelectedEligibleFactory(factory: EligibleFactoryDTO): SelectedEligibl
     eiaOther: factory.eiaOther ?? null,
     hasEia: factory.hasEia,
     projectName: factory.projectName ?? null,
-    measurementPoints: factory.measurementPoints ?? [],
+    cemsConnectionStatusSummary: deriveConnectionStatusSummary(measurementPoints, 'CEMS'),
+    wpmsConnectionStatusSummary: deriveConnectionStatusSummary(measurementPoints, 'WPMS'),
+    measurementPoints,
   };
 }

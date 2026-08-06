@@ -245,6 +245,8 @@ describe('eligibleFactoriesService', () => {
           hasEia: null,
           projectName: null,
           monitoringPointFormId: null,
+          cemsConnectionStatusSummary: 'ยังไม่แล้วเสร็จ',
+          wpmsConnectionStatusSummary: 'ยังไม่แล้วเสร็จ',
           measurementPoints: [
             expect.objectContaining({ systemType: 'CEMS', pointCode: 'CEMS-1' }),
             expect.objectContaining({ systemType: 'WPMS', pointCode: 'WPMS-1' }),
@@ -253,7 +255,36 @@ describe('eligibleFactoriesService', () => {
       ],
       meta: { total: 1 },
     });
-    expect(Object.keys(result.data[0] ?? {})).toHaveLength(26);
+    expect(Object.keys(result.data[0] ?? {})).toHaveLength(28);
+  });
+
+  it('returns incomplete summaries and an empty point list when stored points are absent', async () => {
+    mockedRepository.list.mockResolvedValue({
+      rows: [
+        {
+          id: 2,
+          monitoringPointFormId: null,
+          factoryName: 'โรงงานไม่มีจุดตรวจวัด',
+          factoryRegistrationNoNew: 'factory-without-points',
+          factoryRegistrationNoOld: null,
+          factoryTypeSequence: null,
+          coordinates: null,
+          eia: null,
+          eiaOther: null,
+          hasEia: null,
+          projectName: null,
+        } as never,
+      ],
+      total: 1,
+    });
+
+    const result = await eligibleFactoriesService.list({});
+
+    expect(result.data[0]).toMatchObject({
+      cemsConnectionStatusSummary: 'ยังไม่แล้วเสร็จ',
+      wpmsConnectionStatusSummary: 'ยังไม่แล้วเสร็จ',
+      measurementPoints: [],
+    });
   });
 
   it('throws not found when removing an unknown eligible factory selection', async () => {

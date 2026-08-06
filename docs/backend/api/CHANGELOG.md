@@ -2,6 +2,14 @@
 
 ไฟล์นี้บันทึกเฉพาะการเปลี่ยน API ที่ทำให้ client ต้องแก้ตาม การเปลี่ยนทั่วไปและประวัติรายละเอียดดูจาก Git history
 
+## 2026-08-06 — เปลี่ยนข้อกฎหมายยกเว้นพารามิเตอร์จาก array เป็นค่าเดียว
+
+- **Affected menu:** [ขอเชื่อมต่อ](./menus/connection-requests/README.md)
+- **Impact:** `POST /api/v1/cems-wpms-requests/measurement-points`, `POST /api/v1/cems-wpms-requests/direct-connections` และ `PUT /api/v1/cems-wpms-requests/:id/form` รับข้อกฎหมายยกเว้นเป็นค่าเดียว; legacy single-item array ยังรับได้ชั่วคราวและ normalize เป็น string แต่ array หลายค่าถูกปฏิเสธด้วย `400 VALIDATION_ERROR`
+- **Migration:** เปลี่ยน form state เป็น single selection และส่ง `null` หรือ string ค่าเดียวใน `ไม่มี`, `4(1)`, `4(2)`, `11(3)`, `อื่นๆ` โดยไม่พึ่ง compatibility ของ single-item array; เมื่อเลือก `อื่นๆ` ต้องส่ง `exemptedParameterRegulationClauseOther` ที่ไม่ว่างและยาวไม่เกิน 500 ตัวอักษร และเมื่อเลือกค่าอื่น client ควรส่ง `null`
+- **Old contract:** client เดิมอาจส่ง array หนึ่งหรือหลายค่า เช่น `exemptedParameterRegulationClauses: ["4(1)"]`
+- **New contract:** canonical write ของ `exemptedParameterRegulationClauses` เป็น `string | null` แม้ชื่อ field เป็นพหูพจน์; backend รับ supported legacy single-item array แล้วเก็บเป็น string, ปฏิเสธ multi-item array และ normalize `exemptedParameterRegulationClauseOther` เป็น `null` เมื่อไม่ได้เลือก `อื่นๆ`; detail ของรายการที่สร้างหรือ resubmit แล้วคืน string ส่วน historical row ที่ยังไม่ถูกบันทึกซ้ำอาจยังคืน legacy array
+
 ## 2026-08-04 — Device status schedules รองรับหลายช่วงแบบ validated contract
 
 - **Affected menu:** [ตั้งค่าอุปกรณ์ของจุดตรวจวัด](./menus/connection-requests/device-configs.md) และ [Integration Device Config](./integrations/device-configs/README.md)

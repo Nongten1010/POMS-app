@@ -34,7 +34,7 @@ Backend เติมจังหวัดแบบ idempotent จึงไม่
 
 ## ฟอร์มเพิ่ม/แก้ไขข้อมูลจุดตรวจวัด
 
-`POST /api/v1/monitoring-point-forms` และ `PUT /api/v1/monitoring-point-forms/:id` ใช้ request body shape เดียวกัน โดยข้อมูลโครงการและ EIA เป็นข้อมูลระดับโรงงานภายใต้ `factory` ไม่ใช่ข้อมูลของแต่ละ `points[]`.
+`POST /api/v1/monitoring-point-forms` และ `PUT /api/v1/monitoring-point-forms/:id` ใช้ request body shape เดียวกัน โดยข้อมูลโครงการและ EIA เป็นข้อมูลระดับโรงงานภายใต้ `factory` ไม่ใช่ข้อมูลของแต่ละ `points[]`. Field สำหรับการใช้ปล่องร่วมกันและสถานะอยู่ใต้ `points[]` โดยตรง ไม่อยู่ใน `points[].details`.
 
 Relevant request fields:
 
@@ -44,6 +44,19 @@ Relevant request fields:
 | `factory.eiaOther` | string \| null | conditional | ช่อง “ระบุ”; trim แล้วสูงสุด 500 ตัวอักษร และต้องไม่ว่างเมื่อ `factory.eiaInfo` เป็น `อื่นๆ`; ค่าอื่นจะ normalize เป็น `null` |
 | `factory.projectName` | string \| null | no | ชื่อโครงการ; trim แล้วสูงสุด 500 ตัวอักษร; ค่าว่าง normalize เป็น `null` |
 | `points` | array | no | รายการจุดตรวจวัด; ว่างได้ และ validation รายจุดยังใช้ contract เดิม |
+| `points[].timeSharingParameters` | string[] | no | รายการพารามิเตอร์ที่ใช้ปล่องร่วมกัน; `ไม่มี` ต้องเป็นรายการเดียวและห้ามอยู่ร่วมกับค่าอื่น |
+| `points[].sharedStackCode` | string \| null | no | trim แล้วสูงสุด 64 ตัวอักษร; backend normalize เป็น `null` เมื่อ `timeSharingParameters` มี `ไม่มี` |
+| `points[].monitoringPointStatus` | string \| null | no | ส่ง `null` ได้; ถ้ามีค่าต้องตรงหนึ่งใน 7 สถานะที่กำหนดด้านล่าง |
+
+ค่า `points[].monitoringPointStatus` ที่รองรับมีดังนี้:
+
+- `เชื่อมต่อครบแล้ว`
+- `ได้รับการยกเว้นทั้งหมด`
+- `เชื่อมต่อแล้วแต่ยังไม่ครบ`
+- `อยู่ระหว่างขยายเวลา`
+- `ยังไม่ได้ดำเนินการเชื่อมต่อ`
+- `อยู่ระหว่างการตรวจสอบของจังหวัด`
+- `อยู่ระหว่างเชื่อมต่อ`
 
 Minimal create request:
 
@@ -54,7 +67,15 @@ Minimal create request:
     "eiaOther": "รายงานสิ่งแวดล้อมประเภทเฉพาะ",
     "projectName": "โครงการปรับปรุงระบบตรวจวัด"
   },
-  "points": []
+  "points": [
+    {
+      "systemType": "CEMS",
+      "pointCode": "S2001",
+      "timeSharingParameters": ["NOx (ppm)"],
+      "sharedStackCode": "S2002",
+      "monitoringPointStatus": "อยู่ระหว่างเชื่อมต่อ"
+    }
+  ]
 }
 ```
 
@@ -82,14 +103,23 @@ Minimal create response (`201 Created`; `PUT` สำเร็จตอบ `200 O
       "latitude": null,
       "longitude": null
     },
-    "points": [],
+    "points": [
+      {
+        "id": 31,
+        "systemType": "CEMS",
+        "pointCode": "S2001",
+        "timeSharingParameters": ["NOx (ppm)"],
+        "sharedStackCode": "S2002",
+        "monitoringPointStatus": "อยู่ระหว่างเชื่อมต่อ"
+      }
+    ],
     "createdAt": "2026-07-22T00:00:00.000Z",
     "updatedAt": "2026-07-22T00:00:00.000Z"
   }
 }
 ```
 
-`GET /api/v1/monitoring-point-forms` คืน fields ทั้งสามใต้ `data[].factory`; `GET /api/v1/monitoring-point-forms/:id` คืนใต้ `data.factory` เพื่อให้หน้าแก้ไข prefill ค่าเดิมได้. รายการที่สร้างก่อน migration คืน `eiaOther: null` และ `projectName: null`.
+`GET /api/v1/monitoring-point-forms` คืน fields ระดับโรงงานทั้งสามใต้ `data[].factory`; `GET /api/v1/monitoring-point-forms/:id` คืน fields ระดับโรงงานใต้ `data.factory` และคืน `timeSharingParameters`, `sharedStackCode`, `monitoringPointStatus` ใต้ `data.points[]` เพื่อให้หน้าแก้ไข prefill ค่าเดิมได้. Response ของ `POST` และ `PUT` ใช้ point shape เดียวกับ detail. รายการที่สร้างก่อน migration คืน `eiaOther: null` และ `projectName: null`; field จุดตรวจวัดที่ไม่มีค่า normalize เป็น `timeSharingParameters: []`, `sharedStackCode: null` และ `monitoringPointStatus: null`.
 
 เมื่อฟอร์มผูกกับโรงงานเข้าข่าย ระบบ sync แบบ patch:
 
@@ -116,6 +146,15 @@ Relevant response fields:
 | `data[].eiaOther` | string \| null | รายละเอียดเมื่อ `eia` เป็น `อื่นๆ` |
 | `data[].hasEia` | boolean \| null | ค่าที่ derive จาก `eia` |
 | `data[].projectName` | string \| null | ชื่อโครงการล่าสุดที่ซิงก์เมื่อเชื่อมต่อ |
+| `data[].cemsConnectionStatusSummary` | string | สรุป CEMS เป็น `เชื่อมต่อครบถ้วน`, `ได้รับยกเว้นทั้งหมด` หรือ `ยังไม่แล้วเสร็จ` |
+| `data[].wpmsConnectionStatusSummary` | string | สรุป WPMS ด้วยกติกาเดียวกับ CEMS |
+| `data[].measurementPoints[]` | array | จุดตรวจวัดจากฟอร์มที่ผูกอยู่ รวม `timeSharingParameters`, `sharedStackCode` และ `monitoringPointStatus` |
+
+`GET /api/v1/eligible-factories` คืน summary ทั้งสอง field เสมอ โดยคำนวณแยกตาม `systemType` จาก `monitoringPointStatus` ระดับจุดที่ผู้ใช้ประกาศใน monitoring form และบันทึกไว้ใน `factory_monitoring_points.details_json`; summary นี้ไม่ได้ derive จากสถานะคำขอเชื่อมต่อหรือสถานะ live ของอุปกรณ์:
+
+- ถ้ามีจุดของระบบนั้นอย่างน้อยหนึ่งจุดและทุกจุดมี `monitoringPointStatus` เป็น `เชื่อมต่อครบแล้ว` ให้ summary เป็น `เชื่อมต่อครบถ้วน`.
+- ถ้ามีจุดของระบบนั้นอย่างน้อยหนึ่งจุดและทุกจุดมี `monitoringPointStatus` เป็น `ได้รับการยกเว้นทั้งหมด` ให้ summary เป็น `ได้รับยกเว้นทั้งหมด`.
+- กรณีอื่นทั้งหมด รวมถึงไม่มีจุด, สถานะผสม, สถานะอื่น หรือ `null` ให้ summary เป็น `ยังไม่แล้วเสร็จ`.
 
 Minimal response (`200 OK`):
 
@@ -131,7 +170,18 @@ Minimal response (`200 OK`):
       "eia": "มี EIA",
       "eiaOther": null,
       "hasEia": true,
-      "projectName": "โครงการปรับปรุงโรงงาน"
+      "projectName": "โครงการปรับปรุงโรงงาน",
+      "cemsConnectionStatusSummary": "เชื่อมต่อครบถ้วน",
+      "wpmsConnectionStatusSummary": "ยังไม่แล้วเสร็จ",
+      "measurementPoints": [
+        {
+          "systemType": "CEMS",
+          "pointCode": "S2001",
+          "timeSharingParameters": ["ไม่มี"],
+          "sharedStackCode": null,
+          "monitoringPointStatus": "เชื่อมต่อครบแล้ว"
+        }
+      ]
     }
   ],
   "meta": { "total": 1 }
@@ -139,6 +189,8 @@ Minimal response (`200 OK`):
 ```
 
 รูปหน้าโรงงานและโลโก้เป็นข้อมูล POMS current/live จึงไม่เพิ่มใน response ของโรงงานเข้าข่าย.
+
+`GET /api/v1/eligible-factories/candidates` ไม่มีการเปลี่ยน response contract และไม่เพิ่ม `cemsConnectionStatusSummary` หรือ `wpmsConnectionStatusSummary`.
 
 ## การถอดโรงงานออกจากเข้าข่าย
 

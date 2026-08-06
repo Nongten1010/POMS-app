@@ -1,6 +1,17 @@
 export const MONITORING_POINT_SYSTEM_TYPES = ['CEMS', 'WPMS'] as const;
 
+export const MONITORING_POINT_STATUSES = [
+  'เชื่อมต่อครบแล้ว',
+  'ได้รับการยกเว้นทั้งหมด',
+  'เชื่อมต่อแล้วแต่ยังไม่ครบ',
+  'อยู่ระหว่างขยายเวลา',
+  'ยังไม่ได้ดำเนินการเชื่อมต่อ',
+  'อยู่ระหว่างการตรวจสอบของจังหวัด',
+  'อยู่ระหว่างเชื่อมต่อ',
+] as const;
+
 export type MonitoringPointSystemType = (typeof MONITORING_POINT_SYSTEM_TYPES)[number];
+export type MonitoringPointStatus = (typeof MONITORING_POINT_STATUSES)[number];
 
 export interface MonitoringPointFormFactoryInput {
   factoryName?: string | null;
@@ -35,6 +46,9 @@ export interface MonitoringPointInput {
   exemptedParameters?: string[];
   connectedParameters?: string[];
   pendingParameters?: string[];
+  timeSharingParameters?: string[];
+  sharedStackCode?: string | null;
+  monitoringPointStatus?: MonitoringPointStatus | null;
   primaryFuel?: string | null;
   primaryFuelOther?: string | null;
   secondaryFuel?: string | null;
@@ -47,9 +61,17 @@ export interface SaveMonitoringPointFormInput {
   points: MonitoringPointInput[];
 }
 
-export interface MonitoringPointDTO extends Required<Omit<MonitoringPointInput, 'id' | 'details'>> {
+export interface MonitoringPointDTO extends Required<
+  Omit<
+    MonitoringPointInput,
+    'id' | 'details' | 'timeSharingParameters' | 'sharedStackCode' | 'monitoringPointStatus'
+  >
+> {
   id: number;
   formId: number;
+  timeSharingParameters?: string[];
+  sharedStackCode?: string | null;
+  monitoringPointStatus?: MonitoringPointStatus | null;
   details: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;

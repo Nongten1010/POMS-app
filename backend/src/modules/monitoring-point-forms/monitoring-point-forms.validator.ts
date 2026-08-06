@@ -1,5 +1,8 @@
 import { z } from 'zod';
-import { MONITORING_POINT_SYSTEM_TYPES } from './monitoring-point-forms.types';
+import {
+  MONITORING_POINT_STATUSES,
+  MONITORING_POINT_SYSTEM_TYPES,
+} from './monitoring-point-forms.types';
 
 const requiredText = (max: number) => z.string().trim().min(1).max(max);
 const optionalText = (max: number) =>
@@ -33,6 +36,11 @@ const optionalStringList = (maxItemLength: number, maxItems: number) =>
     .default([]);
 const parameterListSchema = optionalStringList(255, 100);
 const legalAnnexListSchema = optionalStringList(32, 12);
+const typedMonitoringPointFields = [
+  'timeSharingParameters',
+  'sharedStackCode',
+  'monitoringPointStatus',
+] as const;
 const cemsLegalAnnexRequiredBy = [
   'ประกาศกระทรวงอุตสาหกรรม เรื่อง กำหนดให้โรงงานต้องติดตั้งเครื่องมือหรือเครื่องอุปกรณ์พิเศษเพื่อรายงานมลพิษอากาศจากปล่องโรงงาน พ.ศ. 2565',
   'ประกาศกระทรวงอุตสาหกรรม เรื่อง กำหนดให้โรงงานในท้องที่กรุงเทพมหานครต้องติดตั้งเครื่องมือหรือเครื่องอุปกรณ์พิเศษเพื่อรายงานมลพิษอากาศจากปล่องโรงงาน พ.ศ. 2569',
@@ -105,6 +113,13 @@ export const saveMonitoringPointFormSchema = z
             exemptedParameters: parameterListSchema,
             connectedParameters: parameterListSchema,
             pendingParameters: parameterListSchema,
+            timeSharingParameters: parameterListSchema,
+            sharedStackCode: optionalText(64),
+            monitoringPointStatus: z
+              .enum(MONITORING_POINT_STATUSES)
+              .optional()
+              .nullable()
+              .default(null),
             primaryFuel: optionalText(255),
             primaryFuelOther: optionalText(255),
             secondaryFuel: optionalText(255),
@@ -113,6 +128,17 @@ export const saveMonitoringPointFormSchema = z
           })
           .strict()
           .superRefine((point, context) => {
+            typedMonitoringPointFields.forEach((field) => {
+              if (!point.details || !Object.prototype.hasOwnProperty.call(point.details, field)) {
+                return;
+              }
+              context.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ['details', field],
+                message: `${field} must be provided at the point level`,
+              });
+            });
+
             const supportsLegalAnnexNo =
               point.systemType === 'CEMS' &&
               cemsLegalAnnexRequiredBy.includes(
@@ -127,7 +153,24 @@ export const saveMonitoringPointFormSchema = z
                   'Legal annex numbers are only allowed for CEMS points under the 2022 ministerial notification or the 2026 Bangkok ministerial notification',
               });
             }
-          }),
+
+            if (
+              point.timeSharingParameters.includes('ไม่มี') &&
+              point.timeSharingParameters.length > 1
+            ) {
+              context.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ['timeSharingParameters'],
+                message: 'ไม่มี cannot be combined with another time-sharing parameter',
+              });
+            }
+          })
+          .transform((point) => ({
+            ...point,
+            sharedStackCode: point.timeSharingParameters.includes('ไม่มี')
+              ? null
+              : point.sharedStackCode,
+          })),
       )
       .max(100)
       .default([]),

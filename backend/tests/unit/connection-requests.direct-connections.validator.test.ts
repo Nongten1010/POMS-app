@@ -46,6 +46,54 @@ describe('directConnectionRequestSchema', () => {
     });
   });
 
+  it('accepts the frontend CEMS clause shape and nullable fuel percentages', () => {
+    const result = directConnectionRequestSchema.safeParse({
+      factoryId: 'factory-001',
+      systemType: 'CEMS',
+      measurementPoints: [
+        {
+          pointCode: 'S1125',
+          details: {
+            primaryFuel: null,
+            primaryFuelPercent: null,
+            secondaryFuel: null,
+            secondaryFuelPercent: null,
+            exemptedParameterRegulationClauses: 'อื่นๆ',
+            exemptedParameterRegulationClauseOther: 'ข้อ 15 ตามประกาศเฉพาะ',
+          },
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects a direct CEMS point whose Other regulation clause has no detail', () => {
+    const result = directConnectionRequestSchema.safeParse({
+      factoryId: 'factory-001',
+      systemType: 'CEMS',
+      measurementPoints: [
+        {
+          pointCode: 'S1125',
+          details: {
+            exemptedParameterRegulationClauses: 'อื่นๆ',
+            exemptedParameterRegulationClauseOther: null,
+          },
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: ['measurementPoints', 0, 'details', 'exemptedParameterRegulationClauseOther'],
+        }),
+      ]),
+    );
+  });
+
   it('accepts the documented minimal payload with omitted optional fields', () => {
     const result = directConnectionRequestSchema.safeParse({
       factoryId: 'factory-001',

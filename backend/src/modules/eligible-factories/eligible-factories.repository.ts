@@ -1,6 +1,10 @@
 import type { Knex } from 'knex';
 import { db } from '../../config/database';
 import { ConflictError } from '../../shared/errors/AppError';
+import {
+  MONITORING_POINT_STATUSES,
+  type MonitoringPointStatus,
+} from '../monitoring-point-forms/monitoring-point-forms.types';
 import type {
   CreateEligibleFactoryInput,
   EligibleFactoryDTO,
@@ -439,6 +443,9 @@ async function hydrateMeasurementPoints(rows: EligibleFactoryDTO[]): Promise<Eli
 function toMeasurementPointDTO(
   row: EligibleFactoryMonitoringPointRow,
 ): EligibleFactoryMeasurementPointDTO {
+  const details = parseObject(row.details_json);
+  const timeSharingParameters = parseStoredStringList(details?.timeSharingParameters);
+
   return {
     systemType: row.system_type,
     pointCode: row.point_code,
@@ -457,8 +464,31 @@ function toMeasurementPointDTO(
     primaryFuelOther: row.primary_fuel_other,
     secondaryFuel: row.secondary_fuel,
     secondaryFuelOther: row.secondary_fuel_other,
-    details: parseObject(row.details_json),
+    timeSharingParameters,
+    sharedStackCode: timeSharingParameters.includes('ไม่มี')
+      ? null
+      : parseNullableString(details?.sharedStackCode),
+    monitoringPointStatus: parseMonitoringPointStatus(details?.monitoringPointStatus),
+    details,
   };
+}
+
+function parseStoredStringList(value: unknown): string[] {
+  const items = Array.isArray(value) ? value : typeof value === 'string' ? value.split(',') : [];
+
+  return items
+    .filter((item): item is string => typeof item === 'string')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function parseNullableString(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  return value.trim() || null;
+}
+
+function parseMonitoringPointStatus(value: unknown): MonitoringPointStatus | null {
+  return MONITORING_POINT_STATUSES.find((status) => status === value) ?? null;
 }
 
 function parseStringList(value: string): string[] {

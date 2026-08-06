@@ -7,8 +7,10 @@ import type {
   MonitoringPointFormFactoryInput,
   MonitoringPointFormSummaryDTO,
   MonitoringPointInput,
+  MonitoringPointStatus,
   SaveMonitoringPointFormInput,
 } from './monitoring-point-forms.types';
+import { MONITORING_POINT_STATUSES } from './monitoring-point-forms.types';
 
 interface MonitoringPointFormRow {
   id: number | string;
@@ -241,6 +243,15 @@ function toPointInsertRow(
   point: MonitoringPointInput,
   actorUserId: number,
 ): Record<string, unknown> {
+  const details = {
+    ...(point.details ?? {}),
+    timeSharingParameters: point.timeSharingParameters ?? [],
+    sharedStackCode: point.timeSharingParameters?.includes('ไม่มี')
+      ? null
+      : (point.sharedStackCode ?? null),
+    monitoringPointStatus: point.monitoringPointStatus ?? null,
+  };
+
   return {
     form_id: formId,
     system_type: point.systemType,
@@ -260,7 +271,7 @@ function toPointInsertRow(
     primary_fuel_other: point.primaryFuelOther ?? null,
     secondary_fuel: point.secondaryFuel ?? null,
     secondary_fuel_other: point.secondaryFuelOther ?? null,
-    details_json: point.details ? JSON.stringify(point.details) : null,
+    details_json: JSON.stringify(details),
     created_by: actorUserId,
     updated_by: actorUserId,
   };
@@ -305,6 +316,9 @@ function toFactoryDTO(row: MonitoringPointFormRow): Required<MonitoringPointForm
 }
 
 function toPointDTO(row: MonitoringPointRow): MonitoringPointDTO {
+  const details = parseObject(row.details_json);
+  const timeSharingParameters = parseStoredStringList(details?.timeSharingParameters);
+
   return {
     id: Number(row.id),
     formId: Number(row.form_id),
@@ -321,11 +335,16 @@ function toPointDTO(row: MonitoringPointRow): MonitoringPointDTO {
     exemptedParameters: parseStringList(row.exempted_parameters_json),
     connectedParameters: parseStringList(row.connected_parameters_json),
     pendingParameters: parseStringList(row.pending_parameters_json),
+    timeSharingParameters,
+    sharedStackCode: timeSharingParameters.includes('ไม่มี')
+      ? null
+      : parseNullableString(details?.sharedStackCode),
+    monitoringPointStatus: parseMonitoringPointStatus(details?.monitoringPointStatus),
     primaryFuel: row.primary_fuel,
     primaryFuelOther: row.primary_fuel_other,
     secondaryFuel: row.secondary_fuel,
     secondaryFuelOther: row.secondary_fuel_other,
-    details: parseObject(row.details_json),
+    details,
     createdAt: toIsoString(row.created_at),
     updatedAt: toIsoString(row.updated_at),
   };
@@ -340,6 +359,24 @@ function parseStringList(value: string): string[] {
   } catch {
     return [];
   }
+}
+
+function parseStoredStringList(value: unknown): string[] {
+  const items = Array.isArray(value) ? value : typeof value === 'string' ? value.split(',') : [];
+
+  return items
+    .filter((item): item is string => typeof item === 'string')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function parseNullableString(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  return value.trim() || null;
+}
+
+function parseMonitoringPointStatus(value: unknown): MonitoringPointStatus | null {
+  return MONITORING_POINT_STATUSES.find((status) => status === value) ?? null;
 }
 
 function parseDelimitedStringList(value: string | null): string[] {

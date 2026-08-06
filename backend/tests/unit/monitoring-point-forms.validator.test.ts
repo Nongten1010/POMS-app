@@ -97,6 +97,113 @@ describe('monitoring point form validator', () => {
     expect(result.points[1]?.legalAnnexNo).toEqual([]);
   });
 
+  it('accepts and normalizes the frontend time-sharing and point-status fields', () => {
+    const result = saveMonitoringPointFormSchema.parse({
+      factory: {},
+      points: [
+        {
+          systemType: 'CEMS',
+          timeSharingParameters: ['NOx (ppm)', 'SO2 (ppm)'],
+          sharedStackCode: '  S0002  ',
+          monitoringPointStatus: 'เชื่อมต่อแล้วแต่ยังไม่ครบ',
+        },
+      ],
+    });
+
+    expect(result.points[0]).toMatchObject({
+      timeSharingParameters: ['NOx (ppm)', 'SO2 (ppm)'],
+      sharedStackCode: 'S0002',
+      monitoringPointStatus: 'เชื่อมต่อแล้วแต่ยังไม่ครบ',
+    });
+  });
+
+  it('normalizes sharedStackCode to null when time sharing is ไม่มี', () => {
+    const result = saveMonitoringPointFormSchema.parse({
+      factory: {},
+      points: [
+        {
+          systemType: 'WPMS',
+          timeSharingParameters: ['ไม่มี'],
+          sharedStackCode: 'W0002',
+          monitoringPointStatus: null,
+        },
+      ],
+    });
+
+    expect(result.points[0]).toMatchObject({
+      timeSharingParameters: ['ไม่มี'],
+      sharedStackCode: null,
+      monitoringPointStatus: null,
+    });
+  });
+
+  it('rejects ไม่มี combined with another time-sharing parameter', () => {
+    const result = saveMonitoringPointFormSchema.safeParse({
+      factory: {},
+      points: [
+        {
+          systemType: 'CEMS',
+          timeSharingParameters: ['ไม่มี', 'NOx (ppm)'],
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ path: ['points', 0, 'timeSharingParameters'] }),
+        ]),
+      );
+    }
+  });
+
+  it('rejects an unsupported monitoring-point status', () => {
+    const result = saveMonitoringPointFormSchema.safeParse({
+      factory: {},
+      points: [
+        {
+          systemType: 'CEMS',
+          monitoringPointStatus: 'ปิดถาวร',
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ path: ['points', 0, 'monitoringPointStatus'] }),
+        ]),
+      );
+    }
+  });
+
+  it.each([
+    ['timeSharingParameters', ['NOx (ppm)']],
+    ['sharedStackCode', 'S0002'],
+    ['monitoringPointStatus', 'เชื่อมต่อครบแล้ว'],
+  ])('rejects typed field %s when it is nested under details', (field, value) => {
+    const result = saveMonitoringPointFormSchema.safeParse({
+      factory: {},
+      points: [
+        {
+          systemType: 'CEMS',
+          details: { [field]: value },
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ path: ['points', 0, 'details', field] }),
+        ]),
+      );
+    }
+  });
+
   it('accepts forms without monitoring points', () => {
     const result = saveMonitoringPointFormSchema.parse({
       factory: {

@@ -63,6 +63,40 @@ describe('monitoring point form routes', () => {
     );
   });
 
+  it('passes the frontend monitoring-point fields through the create endpoint', async () => {
+    mockedService.create.mockResolvedValue({ id: 13 } as never);
+
+    const response = await request(createApp())
+      .post('/api/v1/monitoring-point-forms')
+      .set('Authorization', `Bearer ${accessToken()}`)
+      .send({
+        factory: {},
+        points: [
+          {
+            systemType: 'CEMS',
+            pointCode: 'S0001',
+            timeSharingParameters: ['NOx (ppm)'],
+            sharedStackCode: 'S0002',
+            monitoringPointStatus: 'อยู่ระหว่างเชื่อมต่อ',
+          },
+        ],
+      });
+
+    expect(response.status).toBe(201);
+    expect(mockedService.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        points: [
+          expect.objectContaining({
+            timeSharingParameters: ['NOx (ppm)'],
+            sharedStackCode: 'S0002',
+            monitoringPointStatus: 'อยู่ระหว่างเชื่อมต่อ',
+          }),
+        ],
+      }),
+      42,
+    );
+  });
+
   it('returns the field path when Other EIA detail is missing', async () => {
     const response = await request(createApp())
       .post('/api/v1/monitoring-point-forms')

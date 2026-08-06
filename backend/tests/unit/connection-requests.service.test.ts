@@ -561,6 +561,8 @@ describe('connectionRequestsService', () => {
           boilerSizeEach: null,
           fuelUsed: null,
           hasEia: false,
+          cemsConnectionStatusSummary: 'ยังไม่แล้วเสร็จ',
+          wpmsConnectionStatusSummary: 'ยังไม่แล้วเสร็จ',
           measurementPoints: [
             {
               systemType: 'CEMS',
@@ -3765,6 +3767,8 @@ function selectedEligibleFactory(
     boilerSizeEach: null,
     fuelUsed: null,
     hasEia: false,
+    cemsConnectionStatusSummary: 'ยังไม่แล้วเสร็จ',
+    wpmsConnectionStatusSummary: 'ยังไม่แล้วเสร็จ',
     measurementPoints: [],
     ...overrides,
   };
