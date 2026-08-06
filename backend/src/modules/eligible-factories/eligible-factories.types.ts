@@ -1,4 +1,8 @@
 import type { ConnectionRequestEiaAssessment } from '../connection-requests/connection-request-eia';
+import type {
+  MonitoringPointStatus,
+  MonitoringPointSystemType,
+} from '../monitoring-point-forms/monitoring-point-forms.types';
 
 export interface CoordinatesInput {
   latitude: number;
@@ -74,11 +78,18 @@ export interface BoilerLookupValue {
 export interface SelectedEligibleFactoryDTO extends EligibleFactoryCandidateDTO {
   id: number;
   monitoringPointFormId?: number | null;
+  cemsConnectionStatusSummary: EligibleFactoryConnectionStatusSummary;
+  wpmsConnectionStatusSummary: EligibleFactoryConnectionStatusSummary;
   measurementPoints?: EligibleFactoryMeasurementPointDTO[];
 }
 
+export type EligibleFactoryConnectionStatusSummary =
+  | 'เชื่อมต่อครบถ้วน'
+  | 'ได้รับยกเว้นทั้งหมด'
+  | 'ยังไม่แล้วเสร็จ';
+
 export interface EligibleFactoryMeasurementPointDTO {
-  systemType: 'CEMS' | 'WPMS';
+  systemType: MonitoringPointSystemType;
   pointCode: string | null;
   pointName: string | null;
   productionUnitType: string | null;
@@ -95,6 +106,9 @@ export interface EligibleFactoryMeasurementPointDTO {
   primaryFuelOther: string | null;
   secondaryFuel: string | null;
   secondaryFuelOther: string | null;
+  timeSharingParameters?: string[];
+  sharedStackCode?: string | null;
+  monitoringPointStatus?: MonitoringPointStatus | null;
   details: Record<string, unknown> | null;
 }
 

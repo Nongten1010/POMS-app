@@ -1,5 +1,8 @@
 import { z } from 'zod';
-import { MONITORING_POINT_SYSTEM_TYPES } from './monitoring-point-forms.types';
+import {
+  MONITORING_POINT_STATUSES,
+  MONITORING_POINT_SYSTEM_TYPES,
+} from './monitoring-point-forms.types';
 
 const requiredText = (max: number) => z.string().trim().min(1).max(max);
 const optionalText = (max: number) =>
@@ -105,6 +108,13 @@ export const saveMonitoringPointFormSchema = z
             exemptedParameters: parameterListSchema,
             connectedParameters: parameterListSchema,
             pendingParameters: parameterListSchema,
+            timeSharingParameters: parameterListSchema,
+            sharedStackCode: optionalText(64),
+            monitoringPointStatus: z
+              .enum(MONITORING_POINT_STATUSES)
+              .optional()
+              .nullable()
+              .default(null),
             primaryFuel: optionalText(255),
             primaryFuelOther: optionalText(255),
             secondaryFuel: optionalText(255),
@@ -127,7 +137,24 @@ export const saveMonitoringPointFormSchema = z
                   'Legal annex numbers are only allowed for CEMS points under the 2022 ministerial notification or the 2026 Bangkok ministerial notification',
               });
             }
-          }),
+
+            if (
+              point.timeSharingParameters.includes('ไม่มี') &&
+              point.timeSharingParameters.length > 1
+            ) {
+              context.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ['timeSharingParameters'],
+                message: 'ไม่มี cannot be combined with another time-sharing parameter',
+              });
+            }
+          })
+          .transform((point) => ({
+            ...point,
+            sharedStackCode: point.timeSharingParameters.includes('ไม่มี')
+              ? null
+              : point.sharedStackCode,
+          })),
       )
       .max(100)
       .default([]),

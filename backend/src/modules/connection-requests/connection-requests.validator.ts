@@ -49,6 +49,18 @@ const jsonValueSchema: z.ZodType<unknown> = z.lazy(() =>
 const measurementPointDetailsSchema = z.record(z.string().min(1).max(128), jsonValueSchema);
 const PARAMETER_NONE_OPTION = 'ไม่มี';
 const TREATMENT_SYSTEM_OTHER_OPTION = 'อื่นๆ';
+const EXEMPTED_PARAMETER_REGULATION_CLAUSE_OTHER_OPTION = 'อื่นๆ';
+const EXEMPTED_PARAMETER_REGULATION_CLAUSE_VALUES = new Set([
+  'ไม่มี',
+  '4(1)',
+  '4(2)',
+  '11(3)',
+  EXEMPTED_PARAMETER_REGULATION_CLAUSE_OTHER_OPTION,
+]);
+const EXEMPTED_PARAMETER_REGULATION_CLAUSE_DETAIL_FIELDS = new Set([
+  'exemptedParameterRegulationClauses',
+  'exemptedParameterRegulationClauseOther',
+]);
 const FACTORY_LOGO_DOCUMENT_TITLE = 'สัญลักษณ์ของโรงงานหรือโลโก้บริษัท';
 const LEGAL_ANNEX_NUMBERS = new Set(Array.from({ length: 13 }, (_, index) => String(index + 1)));
 const COMBUSTION_CONTROL_SYSTEM_VALUES = new Set(['ระบบปิด', 'ระบบเปิด', 'ควบคุมอัตโนมัติ']);
@@ -75,7 +87,7 @@ const cemsOnlyDetailFields = new Set([
   'cemsInstallationRequiredBy',
   'cemsInstallationRequiredOther',
   'legalAnnexNo',
-  'exemptedParameterRegulationClauses',
+  ...EXEMPTED_PARAMETER_REGULATION_CLAUSE_DETAIL_FIELDS,
   'sharedStackCode',
   'stackShape',
   'stackDiameter',
@@ -561,6 +573,32 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function normalizeRegulationClauseDetails(
+  details: Record<string, unknown> | null | undefined,
+): Record<string, unknown> | null | undefined {
+  if (!details) return details;
+  if (
+    !Object.prototype.hasOwnProperty.call(details, 'exemptedParameterRegulationClauses') &&
+    !Object.prototype.hasOwnProperty.call(details, 'exemptedParameterRegulationClauseOther')
+  ) {
+    return details;
+  }
+
+  const selection = details.exemptedParameterRegulationClauses;
+  if (selection !== EXEMPTED_PARAMETER_REGULATION_CLAUSE_OTHER_OPTION) {
+    return {
+      ...details,
+      exemptedParameterRegulationClauseOther: null,
+    };
+  }
+
+  const other = details.exemptedParameterRegulationClauseOther;
+  return {
+    ...details,
+    exemptedParameterRegulationClauseOther: typeof other === 'string' ? other.trim() : other,
+  };
+}
+
 const measurementPointSchema = z
   .preprocess(
     normalizeMeasurementPointInput,
@@ -587,7 +625,7 @@ const measurementPointSchema = z
     pointCode: point.pointCode ?? null,
     parameters: selectMeasurementPointParameters(point),
     description: point.description ?? null,
-    details: point.details ?? null,
+    details: normalizeRegulationClauseDetails(point.details) ?? null,
     documentsAndImages: point.documentsAndImages ?? [],
     measurementInstruments: point.measurementInstruments ?? null,
   }));
@@ -876,13 +914,18 @@ function validateRegulationClauseTags(
 ): void {
   const clauses = details.exemptedParameterRegulationClauses;
   if (clauses === undefined || clauses === null) return;
-  if (!isStringArray(clauses) || clauses.some((clause) => clause.trim().length === 0)) {
+  if (typeof clauses !== 'string' || !EXEMPTED_PARAMETER_REGULATION_CLAUSE_VALUES.has(clauses)) {
     addDetailIssue(
       ctx,
       index,
       'exemptedParameterRegulationClauses',
-      'exemptedParameterRegulationClauses must be string[]',
+      'exemptedParameterRegulationClauses must be one of ไม่มี, 4(1), 4(2), 11(3), or อื่นๆ',
     );
+    return;
+  }
+
+  if (clauses === EXEMPTED_PARAMETER_REGULATION_CLAUSE_OTHER_OPTION) {
+    requireStringDetail(details, index, ctx, 'exemptedParameterRegulationClauseOther');
   }
 }
 
@@ -1382,7 +1425,11 @@ const directConnectionMeasurementPointSchema = z
     ),
     measurementInstruments: measurementInstrumentsSchema.nullable().optional(),
   })
-  .strict();
+  .strict()
+  .transform((point) => ({
+    ...point,
+    details: normalizeRegulationClauseDetails(point.details),
+  }));
 
 const directConnectionEmailListSchema = z
   .array(z.string().trim().email().max(255))
@@ -1424,6 +1471,18 @@ export const directConnectionRequestSchema = directConnectionRequestObjectSchema
       });
     }
 
+    const details = payload.measurementPoints[0]?.details;
+    if (details && payload.systemType === 'CEMS') {
+      validateRegulationClauseTags(details, 0, ctx);
+    } else if (details) {
+      validateExcludedFields(
+        details,
+        EXEMPTED_PARAMETER_REGULATION_CLAUSE_DETAIL_FIELDS,
+        0,
+        ctx,
+        'CEMS-only detail field',
+      );
+    }
   })
   .transform((payload) => {
     const { type: _type, ...directPayload } = payload;
