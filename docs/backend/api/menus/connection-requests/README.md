@@ -45,13 +45,16 @@ curl --request POST \
 | --- | --- | --- | --- | --- | --- |
 | อ่านรายการคำขอสำหรับตาราง | `GET` | `/api/v1/cems-wpms-requests/table-rows` | Bearer | `cems_wpms_requests:view` | [Request table location source](#request-table-location-source) |
 | อ่านรายชื่อโรงงานเข้าข่ายของผู้ประกอบการ | `GET` | `/api/v1/cems-wpms-requests/operator-factories` | Bearer | `factories:view` | [Operator factory list source](#operator-factory-list-source) |
+| อ่านข้อมูลทั่วไปของโรงงานสำหรับ prefill | `GET` | `/api/v1/cems-wpms-requests/factories/:factoryId/general` | Bearer | `factories:view` | [Frontend measurement-point handoff](#frontend-measurement-point-handoff) |
 | สร้างคำขอเชื่อมต่อใหม่ | `POST` | `/api/v1/cems-wpms-requests` | Bearer | `cems_wpms_requests:edit` | [Eligibility gate](#eligibility-gate) |
-| สร้างคำขอเพิ่มจุดตรวจวัด | `POST` | `/api/v1/cems-wpms-requests/measurement-points` | Bearer | `cems_wpms_requests:edit` | [Eligibility gate](#eligibility-gate) |
+| สร้างคำขอเพิ่มจุดตรวจวัด | `POST` | `/api/v1/cems-wpms-requests/measurement-points` | Bearer | `cems_wpms_requests:edit` | [Eligibility gate](#eligibility-gate), [Frontend measurement-point handoff](#frontend-measurement-point-handoff) |
 | สร้างคำขอเพิ่มพารามิเตอร์ | `POST` | `/api/v1/cems-wpms-requests/parameters` | Bearer | `cems_wpms_requests:edit` | [Eligibility gate](#eligibility-gate) |
-| เชื่อมต่อโดยเจ้าหน้าที่โดยตรง | `POST` | `/api/v1/cems-wpms-requests/direct-connections` | Bearer | `cems_wpms_requests:direct_connect` | [Eligibility gate](#eligibility-gate) |
+| เชื่อมต่อโดยเจ้าหน้าที่โดยตรง | `POST` | `/api/v1/cems-wpms-requests/direct-connections` | Bearer | `cems_wpms_requests:direct_connect` | [Eligibility gate](#eligibility-gate), [Frontend measurement-point handoff](#frontend-measurement-point-handoff) |
 | ตรวจสอบและเปลี่ยนคำขอเป็นเชื่อมต่อแล้ว | `POST` | `/api/v1/cems-wpms-requests/:id/verify-connection` | Bearer | `cems_wpms_requests:approve` | [Connected factory profile sync](#connected-factory-profile-sync) |
 | อนุมัติแบบและออกรหัสจุดตรวจวัด | `POST` | `/api/v1/cems-wpms-requests/:id/review` | Bearer | `cems_wpms_requests:approve` | [Approve design](#approve-design) |
 | อ่านรายละเอียดคำขอและรหัสจุด | `GET` | `/api/v1/cems-wpms-requests/:id` | Bearer | `cems_wpms_requests:view` | [Read request](#read-request) |
+| อ่านรายละเอียดเต็มสำหรับ prefill | `GET` | `/api/v1/cems-wpms-requests/:id/detail` | Bearer | `cems_wpms_requests:view` | [Frontend measurement-point handoff](#frontend-measurement-point-handoff) |
+| แก้ไขและส่งแบบคำขออีกครั้ง | `PUT` | `/api/v1/cems-wpms-requests/:id/form` | Bearer | `cems_wpms_requests:edit` | [Frontend measurement-point handoff](#frontend-measurement-point-handoff) |
 | อ่านแบบตั้งค่าอุปกรณ์ของจุดในคำขอ | `GET` | `/api/v1/cems-wpms-requests/:id/device-configs?stationId=:stationId` | Bearer | `cems_wpms_requests:view` | [Device configs](./device-configs.md) |
 | บันทึกการตั้งค่าอุปกรณ์ของจุดในคำขอ | `POST` | `/api/v1/cems-wpms-requests/:id/device-configs` | Bearer | `cems_wpms_requests:edit` | [Device configs](./device-configs.md) |
 | อ่านจุดตรวจวัดที่เชื่อมต่อแล้ว | `GET` | `/api/v1/connected-measurement-points` | Bearer | `cems_wpms_requests:view` | [Connected points](#connected-points) |
@@ -99,6 +102,70 @@ curl --request POST \
 
 ## Contracts
 
+### Frontend measurement-point handoff
+
+Contract นี้ใช้กับ `POST /api/v1/cems-wpms-requests/measurement-points`, `POST /api/v1/cems-wpms-requests/direct-connections` และ `PUT /api/v1/cems-wpms-requests/:id/form`. Field ต่อไปนี้อยู่ใต้ `measurementPoints[].details` และใช้ชื่อ key เดิมทุก endpoint:
+
+| Field | Type | Required | Rules |
+| --- | --- | --- | --- |
+| `measurementPoints[].details.primaryFuelPercent` | number \| null | no | เมื่อไม่มี `primaryFuel` ไม่บังคับ field นี้; ไม่ส่งหรือส่ง `null` ได้ |
+| `measurementPoints[].details.secondaryFuelPercent` | number \| null | no | เมื่อไม่มี `secondaryFuel` ไม่บังคับ field นี้; ไม่ส่งหรือส่ง `null` ได้ |
+| `measurementPoints[].details.sharedStackCode` | string \| null | no | ชื่อ key ยังคงเป็น `sharedStackCode`; client ไม่ต้องเปลี่ยนเป็น key ใหม่ |
+| `measurementPoints[].details.exemptedParameterRegulationClauses` | string \| null | no | canonical write เป็นค่าเดียวใน `ไม่มี`, `4(1)`, `4(2)`, `11(3)`, `อื่นๆ`; แม้ชื่อ field เป็นพหูพจน์ โดย historical detail ที่ยังไม่ถูกบันทึกซ้ำอาจยังเป็น legacy array |
+| `measurementPoints[].details.exemptedParameterRegulationClauseOther` | string \| null | conditional | เมื่อเลือก `อื่นๆ` ต้องเป็นข้อความที่ trim แล้วไม่ว่างและยาวไม่เกิน 500 ตัวอักษร; เมื่อเลือกค่าอื่น backend normalize เป็น `null` |
+
+เพื่อ compatibility backend ยังรับ legacy array ที่มี supported value เพียงหนึ่งค่า เช่น `["4(1)"]` แล้ว normalize และบันทึกเป็น string `"4(1)"`. Array ที่มีหลายค่าถูกปฏิเสธด้วย `400 VALIDATION_ERROR` ที่ path `measurementPoints.0.details.exemptedParameterRegulationClauses`; client ใหม่ต้องส่ง string ค่าเดียวหรือ `null` และไม่ควรพึ่ง compatibility ของ single-item array.
+
+Minimal relevant request fragment:
+
+```json
+{
+  "systemType": "CEMS",
+  "measurementPoints": [
+    {
+      "pointName": "ปล่องหลัก",
+      "pointType": "STACK",
+      "details": {
+        "primaryFuel": null,
+        "primaryFuelPercent": null,
+        "secondaryFuel": "ก๊าซธรรมชาติ",
+        "secondaryFuelPercent": 25,
+        "sharedStackCode": "S2002",
+        "exemptedParameterRegulationClauses": "อื่นๆ",
+        "exemptedParameterRegulationClauseOther": "ข้อ 15 ตามประกาศเฉพาะ"
+      }
+    }
+  ]
+}
+```
+
+`GET /api/v1/cems-wpms-requests/:id/detail` คืนค่าที่บันทึกใน `data.measurementPoints[].details`; รายการที่สร้างหรือ resubmit ผ่าน contract ใหม่นี้จะเป็น string ที่ normalize แล้ว. Historical row ที่ยังไม่ถูกบันทึกซ้ำอาจยังคืน legacy array ดังนั้น client ควรรองรับ single-item array ในช่วงเปลี่ยนผ่าน. `POST` ทั้งสอง endpoint ตอบ `201 Created`; `PUT /:id/form` ตอบ `200 OK` และใช้ validation/normalization เดียวกัน.
+
+Minimal detail response (`200 OK`):
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 101,
+    "measurementPoints": [
+      {
+        "id": 201,
+        "details": {
+          "primaryFuelPercent": null,
+          "secondaryFuelPercent": 25,
+          "sharedStackCode": "S2002",
+          "exemptedParameterRegulationClauses": "อื่นๆ",
+          "exemptedParameterRegulationClauseOther": "ข้อ 15 ตามประกาศเฉพาะ"
+        }
+      }
+    ]
+  }
+}
+```
+
+`GET /api/v1/cems-wpms-requests/factories/:factoryId/general` ยังคง contract ข้อมูลทั่วไประดับโรงงานเดิม การเปลี่ยนนี้ไม่เพิ่มหรือย้าย field ของจุดตรวจวัดไปไว้ใน `data.formDefaults`.
+
 ### เชื่อมต่อโดยเจ้าหน้าที่โดยตรง
 
 `POST /api/v1/cems-wpms-requests/direct-connections` ใช้ request schema แยกจากฟอร์มคำขอปกติ โดย client ต้องส่งเฉพาะข้อมูลที่ใช้เลือกโรงงาน ระบบ และรหัสจุดตรวจวัด ส่วน field อื่นไม่ส่งหรือส่ง `null` ได้.
@@ -136,7 +203,7 @@ Minimal response (`201 Created`):
   "data": {
     "id": 91,
     "eligibleFactoryId": 17,
-    "requestNo": "OLDC-69-00001",
+    "requestNo": "CEMS-0001/2569",
     "requestType": "ADD_MEASUREMENT_POINT",
     "submissionSource": "OFFICER_DIRECT_API",
     "systemType": "CEMS",
