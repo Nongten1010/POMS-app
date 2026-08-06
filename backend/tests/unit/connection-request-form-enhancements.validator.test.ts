@@ -1103,36 +1103,35 @@ describe('CEMS/WPMS monitoring-point form enhancements', () => {
     }
   });
 
-  it.each([
-    [['4(1)', '4(2)']],
-    ['ข้อที่ไม่รองรับ'],
-    [7],
-  ])('rejects an invalid CEMS regulation-clause selection: %p', (selection) => {
-    const payload = createCemsPayload();
-    const point = payload.measurementPoints[0];
+  it.each([[['4(1)', '4(2)']], ['ข้อที่ไม่รองรับ'], [7]])(
+    'rejects an invalid CEMS regulation-clause selection: %p',
+    (selection) => {
+      const payload = createCemsPayload();
+      const point = payload.measurementPoints[0];
 
-    const result = addMeasurementPointRequestSchema.safeParse({
-      ...payload,
-      measurementPoints: [
-        {
-          ...point,
-          details: {
-            ...point.details,
-            exemptedParameterRegulationClauses: selection,
+      const result = addMeasurementPointRequestSchema.safeParse({
+        ...payload,
+        measurementPoints: [
+          {
+            ...point,
+            details: {
+              ...point.details,
+              exemptedParameterRegulationClauses: selection,
+            },
           },
-        },
-      ],
-    });
+        ],
+      });
 
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            path: ['measurementPoints', 0, 'details', 'exemptedParameterRegulationClauses'],
-          }),
-        ]),
-      );
-    }
-  });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              path: ['measurementPoints', 0, 'details', 'exemptedParameterRegulationClauses'],
+            }),
+          ]),
+        );
+      }
+    },
+  );
 });

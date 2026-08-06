@@ -117,6 +117,34 @@ describe('monitoringPointFormsRepository', () => {
           created_at: '2026-08-06T00:00:00.000Z',
           updated_at: '2026-08-06T00:00:00.000Z',
         },
+        {
+          id: 100,
+          form_id: 12,
+          system_type: 'CEMS',
+          point_code: 'S0002',
+          point_name: 'ปล่องร่วม',
+          production_unit_type: null,
+          production_capacity: null,
+          cems_installation_required_by: null,
+          cems_installation_required_other: null,
+          legal_annex_no: null,
+          accounting_connection_status: null,
+          eligible_parameters_json: '[]',
+          exempted_parameters_json: '[]',
+          connected_parameters_json: '[]',
+          pending_parameters_json: '[]',
+          primary_fuel: null,
+          primary_fuel_other: null,
+          secondary_fuel: null,
+          secondary_fuel_other: null,
+          details_json: JSON.stringify({
+            timeSharingParameters: ' SO2 (ppm), ไม่มี ',
+            sharedStackCode: ' S0001 ',
+            monitoringPointStatus: 'สถานะที่ไม่รองรับ',
+          }),
+          created_at: '2026-08-06T00:00:00.000Z',
+          updated_at: '2026-08-06T00:00:00.000Z',
+        },
       ]),
     };
 
@@ -133,6 +161,11 @@ describe('monitoringPointFormsRepository', () => {
       sharedStackCode: 'S0002',
       monitoringPointStatus: 'อยู่ระหว่างเชื่อมต่อ',
       details: expect.objectContaining({ legacyField: 'kept' }),
+    });
+    expect(result?.points[1]).toMatchObject({
+      timeSharingParameters: ['SO2 (ppm)', 'ไม่มี'],
+      sharedStackCode: null,
+      monitoringPointStatus: null,
     });
   });
 
@@ -272,6 +305,16 @@ describe('monitoringPointFormsRepository', () => {
             monitoringPointStatus: 'อยู่ระหว่างเชื่อมต่อ',
             details: { legacyField: 'kept' },
           },
+          {
+            systemType: 'CEMS',
+            pointCode: 'S0002',
+            timeSharingParameters: ['ไม่มี'],
+            sharedStackCode: 'S0001',
+          },
+          {
+            systemType: 'WPMS',
+            pointCode: 'W0001',
+          },
         ],
       } as never,
       7,
@@ -284,6 +327,16 @@ describe('monitoringPointFormsRepository', () => {
       timeSharingParameters: ['NOx (ppm)'],
       sharedStackCode: 'S0002',
       monitoringPointStatus: 'อยู่ระหว่างเชื่อมต่อ',
+    });
+    expect(JSON.parse(String(insertedRows[1]?.details_json))).toEqual({
+      timeSharingParameters: ['ไม่มี'],
+      sharedStackCode: null,
+      monitoringPointStatus: null,
+    });
+    expect(JSON.parse(String(insertedRows[2]?.details_json))).toEqual({
+      timeSharingParameters: [],
+      sharedStackCode: null,
+      monitoringPointStatus: null,
     });
   });
 

@@ -204,6 +204,31 @@ describe('eligibleFactoriesRepository.list', () => {
           monitoringPointStatus: 'เชื่อมต่อครบแล้ว',
         }),
       },
+      {
+        form_id: 12,
+        system_type: 'CEMS',
+        point_code: 'S0002',
+        point_name: 'ปล่องร่วม',
+        production_unit_type: null,
+        production_capacity: null,
+        cems_installation_required_by: null,
+        cems_installation_required_other: null,
+        legal_annex_no: null,
+        accounting_connection_status: null,
+        eligible_parameters_json: '[]',
+        exempted_parameters_json: '[]',
+        connected_parameters_json: '[]',
+        pending_parameters_json: '[]',
+        primary_fuel: null,
+        primary_fuel_other: null,
+        secondary_fuel: null,
+        secondary_fuel_other: null,
+        details_json: JSON.stringify({
+          timeSharingParameters: ' SO2 (ppm), ไม่มี ',
+          sharedStackCode: ' S0001 ',
+          monitoringPointStatus: 'สถานะที่ไม่รองรับ',
+        }),
+      },
     ];
 
     const result = await eligibleFactoriesRepository.list({});
@@ -212,6 +237,11 @@ describe('eligibleFactoriesRepository.list', () => {
       timeSharingParameters: ['NOx (ppm)'],
       sharedStackCode: 'S0002',
       monitoringPointStatus: 'เชื่อมต่อครบแล้ว',
+    });
+    expect(result.rows[0]?.measurementPoints?.[1]).toMatchObject({
+      timeSharingParameters: ['SO2 (ppm)', 'ไม่มี'],
+      sharedStackCode: null,
+      monitoringPointStatus: null,
     });
   });
 
