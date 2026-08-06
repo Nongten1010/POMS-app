@@ -57,6 +57,7 @@ const EXEMPTED_PARAMETER_REGULATION_CLAUSE_VALUES = new Set([
   '11(3)',
   EXEMPTED_PARAMETER_REGULATION_CLAUSE_OTHER_OPTION,
 ]);
+const EXEMPTED_PARAMETER_REGULATION_CLAUSE_OTHER_MAX_LENGTH = 500;
 const EXEMPTED_PARAMETER_REGULATION_CLAUSE_DETAIL_FIELDS = new Set([
   'exemptedParameterRegulationClauses',
   'exemptedParameterRegulationClauseOther',
@@ -584,17 +585,27 @@ function normalizeRegulationClauseDetails(
     return details;
   }
 
-  const selection = details.exemptedParameterRegulationClauses;
+  const rawSelection = details.exemptedParameterRegulationClauses;
+  const selection =
+    Array.isArray(rawSelection) && rawSelection.length === 1 ? rawSelection[0] : rawSelection;
+  const normalizedDetails =
+    selection === rawSelection
+      ? details
+      : {
+          ...details,
+          exemptedParameterRegulationClauses: selection,
+        };
+
   if (selection !== EXEMPTED_PARAMETER_REGULATION_CLAUSE_OTHER_OPTION) {
     return {
-      ...details,
+      ...normalizedDetails,
       exemptedParameterRegulationClauseOther: null,
     };
   }
 
   const other = details.exemptedParameterRegulationClauseOther;
   return {
-    ...details,
+    ...normalizedDetails,
     exemptedParameterRegulationClauseOther: typeof other === 'string' ? other.trim() : other,
   };
 }
@@ -926,6 +937,18 @@ function validateRegulationClauseTags(
 
   if (clauses === EXEMPTED_PARAMETER_REGULATION_CLAUSE_OTHER_OPTION) {
     requireStringDetail(details, index, ctx, 'exemptedParameterRegulationClauseOther');
+    const other = details.exemptedParameterRegulationClauseOther;
+    if (
+      typeof other === 'string' &&
+      other.length > EXEMPTED_PARAMETER_REGULATION_CLAUSE_OTHER_MAX_LENGTH
+    ) {
+      addDetailIssue(
+        ctx,
+        index,
+        'exemptedParameterRegulationClauseOther',
+        `exemptedParameterRegulationClauseOther must be at most ${EXEMPTED_PARAMETER_REGULATION_CLAUSE_OTHER_MAX_LENGTH} characters`,
+      );
+    }
   }
 }
 
