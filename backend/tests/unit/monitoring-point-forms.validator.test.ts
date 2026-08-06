@@ -179,6 +179,31 @@ describe('monitoring point form validator', () => {
     }
   });
 
+  it.each([
+    ['timeSharingParameters', ['NOx (ppm)']],
+    ['sharedStackCode', 'S0002'],
+    ['monitoringPointStatus', 'เชื่อมต่อครบแล้ว'],
+  ])('rejects typed field %s when it is nested under details', (field, value) => {
+    const result = saveMonitoringPointFormSchema.safeParse({
+      factory: {},
+      points: [
+        {
+          systemType: 'CEMS',
+          details: { [field]: value },
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ path: ['points', 0, 'details', field] }),
+        ]),
+      );
+    }
+  });
+
   it('accepts forms without monitoring points', () => {
     const result = saveMonitoringPointFormSchema.parse({
       factory: {
