@@ -3,6 +3,7 @@ import {
   Box,
   Button,
   Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -522,6 +523,7 @@ function HomePage({ accessToken = '', permissions }) {
   const [latestInspectionResultFilter, setLatestInspectionResultFilter] = useState('all')
   const [monitoringFilter, setMonitoringFilter] = useState('all')
   const [factories, setFactories] = useState([])
+  const [factoriesLoading, setFactoriesLoading] = useState(false)
   const [factoriesError, setFactoriesError] = useState('')
   const [favoriteUpdatingFactoryId, setFavoriteUpdatingFactoryId] = useState('')
   const [favoriteError, setFavoriteError] = useState('')
@@ -541,26 +543,40 @@ function HomePage({ accessToken = '', permissions }) {
         }
       : undefined
 
-    fetch(requestUrl, requestOptions)
-      .then(async (result) => {
-        const payload = await result.json().catch(() => null)
+    queueMicrotask(() => {
+      if (!isActive) {
+        return
+      }
 
-        if (!result.ok) {
-          throw new Error(payload?.message || `โหลดรายชื่อโรงงานไม่สำเร็จ (${result.status} ${result.statusText})`)
-        }
+      setFactoriesLoading(true)
+      setFactoriesError('')
 
-        if (isActive) {
-          const rows = Array.isArray(payload?.data) ? payload.data.map(mapOperatorFactory) : []
-          setFactories(rows)
-          setFactoriesError('')
-        }
-      })
-      .catch((error) => {
-        if (isActive) {
-          setFactories([])
-          setFactoriesError(error instanceof Error ? error.message : 'โหลดรายชื่อโรงงานไม่สำเร็จ')
-        }
-      })
+      fetch(requestUrl, requestOptions)
+        .then(async (result) => {
+          const payload = await result.json().catch(() => null)
+
+          if (!result.ok) {
+            throw new Error(payload?.message || `โหลดรายชื่อโรงงานไม่สำเร็จ (${result.status} ${result.statusText})`)
+          }
+
+          if (isActive) {
+            const rows = Array.isArray(payload?.data) ? payload.data.map(mapOperatorFactory) : []
+            setFactories(rows)
+            setFactoriesError('')
+          }
+        })
+        .catch((error) => {
+          if (isActive) {
+            setFactories([])
+            setFactoriesError(error instanceof Error ? error.message : 'โหลดรายชื่อโรงงานไม่สำเร็จ')
+          }
+        })
+        .finally(() => {
+          if (isActive) {
+            setFactoriesLoading(false)
+          }
+        })
+    })
 
     return () => {
       isActive = false
@@ -721,7 +737,7 @@ function HomePage({ accessToken = '', permissions }) {
       >
         <FactoryList
           factories={filteredFactories}
-          loading={false}
+          loading={factoriesLoading}
           error={favoriteError || effectiveFactoriesError}
           isMobileExpanded={isMobileListExpanded}
           canUseFavorite={canUseFavorite}
@@ -948,9 +964,12 @@ function FactoryList({
               borderColor: 'divider',
             }}
           >
-            <Typography variant="body2" color="text.secondary">
-              กำลังโหลดรายชื่อโรงงาน...
-            </Typography>
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'center' }}>
+              <CircularProgress size={18} />
+              <Typography variant="body2" color="text.secondary">
+                กำลังโหลดรายชื่อโรงงาน...
+              </Typography>
+            </Stack>
           </Paper>
         ) : null}
 
