@@ -523,10 +523,12 @@ function HomePage({ accessToken = '', permissions }) {
   const [searchValue, setSearchValue] = useState('')
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [selectedFactory, setSelectedFactory] = useState(null)
-  const [isMobileListExpanded, setIsMobileListExpanded] = useState(true)
+  const [isMobileListExpanded, setIsMobileListExpanded] = useState(false)
   const [factoryOrderFilter, setFactoryOrderFilter] = useState('')
   const [industrialEstateFilter, setIndustrialEstateFilter] = useState('all')
   const canUseFavorite = permissions?.dashboard?.favorite === true
+  const canUseSearch = permissions?.dashboard?.search === true
+  const canUseAdvancedSearch = permissions?.dashboard?.advanced_search === true
   const [industrialEstateNameFilter, setIndustrialEstateNameFilter] = useState('')
   const [regionFilter, setRegionFilter] = useState('all')
   const [provinceFilter, setProvinceFilter] = useState('all')
@@ -634,7 +636,7 @@ function HomePage({ accessToken = '', permissions }) {
   }, [accessToken, apiSystemType])
 
   const filteredFactories = useMemo(() => {
-    const keyword = searchValue.trim().toLowerCase()
+    const keyword = canUseSearch ? searchValue.trim().toLowerCase() : ''
     const filtered = effectiveFactories.filter((factory) => {
       const matchesType =
         factoryType === 'all' || factory.systems.some((system) => system.toLowerCase() === factoryType)
@@ -707,6 +709,7 @@ function HomePage({ accessToken = '', permissions }) {
     searchValue,
     sortBy,
     accessToken,
+    canUseSearch,
   ])
   const handleFavoriteToggle = async (factory) => {
     const favoriteIdentifiers = [
@@ -783,6 +786,8 @@ function HomePage({ accessToken = '', permissions }) {
         factoryType={factoryType}
         sortBy={sortBy}
         searchValue={searchValue}
+        canUseSearch={canUseSearch}
+        canUseAdvancedSearch={canUseAdvancedSearch}
         onFactoryTypeChange={setFactoryType}
         onSortByChange={setSortBy}
         onSearchValueChange={setSearchValue}
@@ -865,6 +870,8 @@ function HomeFilters({
   factoryType,
   sortBy,
   searchValue,
+  canUseSearch = false,
+  canUseAdvancedSearch = false,
   onFactoryTypeChange,
   onSortByChange,
   onSearchValueChange,
@@ -919,46 +926,52 @@ function HomeFilters({
           </FormControl>
         </Stack>
 
-        <Stack
-          direction="row"
-          spacing={1}
-          sx={{
-            flex: 1,
-            justifyContent: { md: 'flex-end' },
-          }}
-        >
-          <TextField
-            size="small"
-            value={searchValue}
-            placeholder="ค้นหาชื่อโรงงาน"
-            onChange={(event) => onSearchValueChange(event.target.value)}
+        {canUseSearch || canUseAdvancedSearch ? (
+          <Stack
+            direction="row"
+            spacing={1}
             sx={{
               flex: 1,
-              maxWidth: { md: 360 },
-              '& .MuiInputBase-root': {
-                bgcolor: 'background.paper',
-              },
-            }}
-            slotProps={{
-              input: {
-                startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary', fontSize: 20 }} />,
-              },
-            }}
-          />
-          <Button
-            variant="contained"
-            onClick={onAdvancedOpen}
-            sx={{
-              minWidth: { xs: 140, sm: 170 },
-              background: 'linear-gradient(90deg, #1f6feb 0%, #7c3aed 100%)',
-              '&:hover': {
-                background: 'linear-gradient(90deg, #185abc 0%, #6d28d9 100%)',
-              },
+              justifyContent: { md: 'flex-end' },
             }}
           >
-            ค้นหาขั้นสูง
-          </Button>
-        </Stack>
+            {canUseSearch ? (
+              <TextField
+                size="small"
+                value={searchValue}
+                placeholder="ค้นหาชื่อโรงงาน"
+                onChange={(event) => onSearchValueChange(event.target.value)}
+                sx={{
+                  flex: 1,
+                  maxWidth: { md: 360 },
+                  '& .MuiInputBase-root': {
+                    bgcolor: 'background.paper',
+                  },
+                }}
+                slotProps={{
+                  input: {
+                    startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary', fontSize: 20 }} />,
+                  },
+                }}
+              />
+            ) : null}
+            {canUseAdvancedSearch ? (
+              <Button
+                variant="contained"
+                onClick={onAdvancedOpen}
+                sx={{
+                  minWidth: { xs: 140, sm: 170 },
+                  background: 'linear-gradient(90deg, #1f6feb 0%, #7c3aed 100%)',
+                  '&:hover': {
+                    background: 'linear-gradient(90deg, #185abc 0%, #6d28d9 100%)',
+                  },
+                }}
+              >
+                ค้นหาขั้นสูง
+              </Button>
+            ) : null}
+          </Stack>
+        ) : null}
       </Stack>
     </Paper>
   )
@@ -2717,7 +2730,7 @@ function AdvancedSearchDialog({
             size="small"
             label="ลำดับประเภทโรงงาน"
             value={factoryOrderFilter}
-            placeholder="พิมพ์เพื่อค้นหา"
+            placeholder="ลำดับประเภทโรงงาน (5 หลัก)"
             onChange={(event) => onFactoryOrderFilterChange(event.target.value)}
             fullWidth
             sx={{ gridColumn: '1 / -1' }}
