@@ -614,8 +614,9 @@ describe('parameterValuesService', () => {
     });
   });
 
-  it('maps Flow Rate labels to flow_value regardless of cubic-meter notation', async () => {
+  it('returns one canonical Flow Rate label for equivalent registered Flow labels', async () => {
     mockedRepository.listRegisteredParameters.mockResolvedValue([
+      'Flow (m3/hr)',
       'Flow Rate (m3/hr)',
       'Flow Rate (m³/hr)',
     ]);
@@ -639,18 +640,52 @@ describe('parameterValuesService', () => {
     );
 
     const values = result.data.measurementPoints[0]?.rows[0]?.values;
-    expect(values).toMatchObject({
+    expect(values).toEqual({
       'Flow Rate (m3/hr)': {
         value: 80778.038394,
         displayValue: '80,778.04',
         status: 'exceeded',
       },
-      'Flow Rate (m³/hr)': {
-        value: 80778.038394,
-        displayValue: '80,778.04',
-        status: 'exceeded',
+    });
+    expect(result.data.thresholds).toHaveLength(1);
+    expect(result.data.thresholds[0]).toMatchObject({
+      parameterCode: 'FLOWRATE',
+      parameterLabel: 'Flow Rate (m3/hr)',
+      unit: 'm3/hr',
+    });
+    expect(result.meta.registeredParameters).toEqual(['Flow Rate (m3/hr)']);
+  });
+
+  it('keeps Flow labels with a distinct unit separate from Flow Rate', async () => {
+    mockedRepository.listRegisteredParameters.mockResolvedValue(['Flow (l/s)']);
+    mockedRepository.tableExists.mockResolvedValue(true);
+    mockedRepository.listRows.mockResolvedValue({
+      tableName: 'SI107_data_60m',
+      rows: [
+        {
+          station_id: 'SI107',
+          flow_value: 90,
+          flow_units: 'l/s',
+          cdate: '2026-08-06',
+          ctime: '00:00:00',
+        },
+      ],
+    });
+
+    const result = await parameterValuesService.measurementStatistics(
+      { stationId: 'SI107', date: '2026-08-06' },
+      operatorAccess,
+    );
+
+    const values = result.data.measurementPoints[0]?.rows[0]?.values;
+    expect(values).toEqual({
+      'Flow (l/s)': {
+        value: 90,
+        displayValue: '90.00',
+        status: 'normal',
       },
     });
+    expect(result.meta.registeredParameters).toEqual(['Flow (l/s)']);
   });
 
   it('uses form criteria for measurement thresholds without copying them across units', async () => {

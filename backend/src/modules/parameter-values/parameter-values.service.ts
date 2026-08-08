@@ -246,7 +246,7 @@ export const parameterValuesService = {
         tableName: result.tableName,
         date: query.date,
         count: result.rows.length,
-        registeredParameters,
+        registeredParameters: canonicalizeRegisteredParameterLabels(registeredParameters),
       },
     };
   },
@@ -377,23 +377,29 @@ const IGNORED_PARAMETER_TOKENS = new Set([
 const PARAMETER_COLUMN_PREFIX_ALIASES: Readonly<Record<string, readonly string[]>> = {
   flowrate: ['flow'],
 };
+const CANONICAL_FLOW_RATE_PARAMETER = {
+  name: 'Flow Rate',
+  unit: 'm3/hr',
+} as const;
 
 function buildParameterDefinitions(
   registeredParameters: string[],
   rows: Record<string, unknown>[],
   evaluations: ParameterEvaluationInput[] | undefined = undefined,
 ): ParameterDefinition[] {
-  return registeredParameters.map((parameter) => {
+  const definitionsByLabel = new Map<string, ParameterDefinition>();
+
+  for (const parameter of registeredParameters) {
     const parsed = parseParameterLabel(parameter);
     const prefixes = toParameterColumnPrefixes(parameter);
-    const code = normalizeParameterName(parsed.name || parameter).toUpperCase();
-    const unit = parsed.unit || findUnitForPrefixes(rows, prefixes);
+    const presentation = canonicalParameterPresentation(parsed, parameter);
+    const code = normalizeParameterName(presentation.name || parameter).toUpperCase();
+    const unit = presentation.unit || findUnitForPrefixes(rows, prefixes);
     const evaluation = findParameterEvaluation(parameter, prefixes, evaluations);
-
-    return {
+    const definition = {
       code,
-      label: toParameterLabel(parsed.name, unit),
-      name: parsed.name,
+      label: toParameterLabel(presentation.name, unit),
+      name: presentation.name,
       unit,
       prefixes,
       normalMax: DEFAULT_NORMAL_MAX,
@@ -402,7 +408,13 @@ function buildParameterDefinitions(
       channelStatus: evaluation?.channelStatus ?? null,
       useConfiguredEvaluation: Boolean(evaluations),
     };
-  });
+
+    if (!definitionsByLabel.has(definition.label)) {
+      definitionsByLabel.set(definition.label, definition);
+    }
+  }
+
+  return [...definitionsByLabel.values()];
 }
 
 function parseParameterLabel(parameter: string): { label: string; name: string; unit: string } {
@@ -421,6 +433,39 @@ function parseParameterLabel(parameter: string): { label: string; name: string; 
     name: match[1].trim(),
     unit: match[2].trim(),
   };
+}
+
+function canonicalParameterPresentation(
+  parsed: { name: string; unit: string },
+  parameter: string,
+): { name: string; unit: string } {
+  if (isFlowRateParameter(parsed, parameter)) {
+    return CANONICAL_FLOW_RATE_PARAMETER;
+  }
+
+  return parsed;
+}
+
+function canonicalizeRegisteredParameterLabels(parameters: string[]): string[] {
+  const labels = new Map<string, string>();
+
+  for (const parameter of parameters) {
+    const parsed = parseParameterLabel(parameter);
+    const label = isFlowRateParameter(parsed, parameter)
+      ? toParameterLabel(CANONICAL_FLOW_RATE_PARAMETER.name, CANONICAL_FLOW_RATE_PARAMETER.unit)
+      : parameter.trim();
+    const normalizedLabel = label.toLowerCase();
+    if (label && !labels.has(normalizedLabel)) labels.set(normalizedLabel, label);
+  }
+
+  return [...labels.values()];
+}
+
+function isFlowRateParameter(parsed: { name: string; unit: string }, parameter: string): boolean {
+  const normalizedName = normalizeParameterName(parsed.name || parameter);
+  const isFlowName = normalizedName === 'flow' || normalizedName === 'flowrate';
+  const normalizedUnit = normalizeUnit(parsed.unit);
+  return isFlowName && (!normalizedUnit || normalizedUnit === 'm3hr');
 }
 
 function toParameterLabel(name: string, unit: string): string {

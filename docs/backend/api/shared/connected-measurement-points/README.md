@@ -26,6 +26,7 @@ curl --request GET \
 | อ่านจุดตรวจวัดของโรงงานและข้อมูล prefill | `GET` | `/api/v1/connected-measurement-points/factories/:factoryId` | Bearer | `cems_wpms_requests:view` | [Factory connected points](#get-apiv1connected-measurement-pointsfactoriesfactoryid) |
 | อ่านแบบตั้งค่าอุปกรณ์ปัจจุบัน | `GET` | `/api/v1/connected-measurement-points/:stationId/device-configs` | Bearer | `cems_wpms_requests:view` | [Device config contract](../../menus/connection-requests/device-configs.md) |
 | แทนที่การตั้งค่าอุปกรณ์ปัจจุบัน | `POST` | `/api/v1/connected-measurement-points/:stationId/device-configs` | Bearer | `cems_wpms_requests:edit` | [Device config contract](../../menus/connection-requests/device-configs.md) |
+| อ่านสถิติรายชั่วโมง | `GET` | `/api/v1/connected-measurement-points/:stationId/measurement-statistics?date=YYYY-MM-DD` | Bearer | `dashboard.stats:view` | [Measurement statistics](#get-apiv1connected-measurement-pointsstationidmeasurement-statistics) |
 
 ## Contracts
 
@@ -141,6 +142,89 @@ curl --request GET \
 | `400 Bad Request` | `factoryId` ไม่ผ่าน validation | ตรวจรหัสโรงงานที่ส่ง |
 | `401 Unauthorized` | ไม่มี bearer token ที่ถูกต้อง | login ใหม่ |
 | `403 Forbidden` | ไม่มี permission หรือโรงงานอยู่นอก data scope | ซ่อน action หรือแจ้งสิทธิ์ไม่เพียงพอ |
+
+### `GET /api/v1/connected-measurement-points/:stationId/measurement-statistics`
+
+คืนข้อมูลรายชั่วโมง 24 ช่วงเวลา สำหรับตารางสถิติและกราฟแนวโน้มของจุดตรวจวัด
+
+#### Authentication And Permission
+
+- Authentication: required
+- Permission: `dashboard.stats:view`
+- Data scope: `ALL`, `IN_REGION`, `IN_PROVINCE` หรือ `OWN_FACTORY`
+
+#### Request Fields
+
+| Field | Location | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `stationId` | path | string | Yes | รหัสจุดตรวจวัด |
+| `date` | query | `YYYY-MM-DD` | Yes | วันที่ตามคริสต์ศักราชที่ต้องการอ่านสถิติ |
+
+#### Request Example
+
+```bash
+curl --request GET \
+  --url '<BASE_URL>/api/v1/connected-measurement-points/SI107/measurement-statistics?date=2026-08-06' \
+  --header 'Authorization: Bearer <ACCESS_TOKEN>' \
+  --header 'Accept: application/json'
+```
+
+#### Success Response Fields
+
+| Field | Type | Nullable | Description |
+| --- | --- | --- | --- |
+| `success` | boolean | No | `true` เมื่อสำเร็จ |
+| `meta.registeredParameters` | string[] | No | พารามิเตอร์ที่ลงทะเบียน โดยชื่อ Flow จะถูก normalize เป็น `Flow Rate (m3/hr)` และไม่ซ้ำ |
+| `data.measurementPoints[].rows[].time` | string | No | ชั่วโมงของข้อมูล เช่น `00:00` |
+| `data.measurementPoints[].rows[].dataCompletenessPercent` | number | No | ร้อยละความครบถ้วนของข้อมูลในชั่วโมงนั้น |
+| `data.measurementPoints[].rows[].values` | object | No | ค่าที่วัดได้ โดย key เป็นชื่อพารามิเตอร์พร้อมหน่วย |
+| `data.measurementPoints[].rows[].values["Flow Rate (m3/hr)"]` | object | No | ค่าอัตราการไหล; เป็นชื่อ Flow เพียงชื่อเดียวใน response |
+| `data.measurementPoints[].rows[].values["Flow Rate (m3/hr)"].value` | number \| null | Yes | ค่าจาก source `flow_value` หน่วย `m3/hr` |
+| `data.measurementPoints[].rows[].values["Flow Rate (m3/hr)"].displayValue` | string | No | ค่าที่ format สำหรับแสดงผล หรือ `-` เมื่อข้อมูลไม่เพียงพอ |
+| `data.measurementPoints[].rows[].values["Flow Rate (m3/hr)"].status` | string | No | `normal`, `warning`, `exceeded`, `insufficient` หรือ `noData` |
+
+#### Success Response Example
+
+```json
+{
+  "success": true,
+  "data": {
+    "measurementPoints": [
+      {
+        "stationId": "SI107",
+        "date": "2026-08-06",
+        "rows": [
+          {
+            "time": "00:00",
+            "dataCompletenessPercent": 100,
+            "values": {
+              "Flow Rate (m3/hr)": {
+                "value": 80778.038394,
+                "displayValue": "80,778.04",
+                "status": "exceeded"
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+#### Validation And Business Rules
+
+- ชื่อที่ลงทะเบียนเป็น `Flow`, `Flow Rate (m3/hr)` หรือ `Flow Rate (m³/hr)` จะอ่านจาก source `flow_value` เดียวกัน และคืนเป็น key มาตรฐาน `Flow Rate (m3/hr)` เพียงหนึ่ง key
+- เมื่อข้อมูลไม่ครบถ้วนต่ำกว่า 80% จะคืน `value: null`, `displayValue: "-"` และ `status: "insufficient"`
+
+#### Errors
+
+| HTTP status | Condition | Client action |
+| --- | --- | --- |
+| `400 Bad Request` | `stationId` หรือ `date` ไม่ผ่าน validation | ตรวจรูปแบบ path และ query string |
+| `401 Unauthorized` | ไม่มี bearer token ที่ถูกต้อง | login ใหม่ |
+| `403 Forbidden` | ไม่มี permission หรือจุดตรวจวัดอยู่นอก data scope | ซ่อนข้อมูลหรือแจ้งสิทธิ์ไม่เพียงพอ |
+| `404 Not Found` | ไม่พบจุดตรวจวัดหรือตารางข้อมูลของจุดนั้น | ตรวจรหัสจุดตรวจวัด |
 
 ## Business Flow And Explanations
 
