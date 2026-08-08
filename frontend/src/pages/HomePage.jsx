@@ -73,7 +73,10 @@ const connectedMeasurementPointsApiBaseUrl = import.meta.env.DEV
   : 'https://d-poms.diw.go.th/api/v1/connected-measurement-points'
 const logoBackgrounds = ['#dbeafe', '#fef3c7', '#fee2e2', '#dcfce7', '#e0f2fe', '#ffedd5', '#ecfdf3']
 const allLocationOption = { label: 'ทั้งหมด', value: 'all' }
-const regionOptions = locationOptions.regions
+const regionOptions = [
+  allLocationOption,
+  ...locationOptions.regions.filter((region) => region.value !== 'ทั้งหมด' && region.label !== 'ทั้งหมด'),
+]
 const locationProvinceItems = locationOptions.provinces
 const provinceRegionMap = Object.fromEntries(locationProvinceItems.map((province) => [province.value, province.region]))
 const datePickerStatusStyles = {
@@ -348,9 +351,17 @@ function getProvinceOptionsByRegion(region) {
 }
 
 function getDistrictOptionsByProvince(province) {
+  if (province === 'all') {
+    return [allLocationOption]
+  }
+
   const selectedProvince = locationProvinceItems.find((item) => item.value === province)
 
-  return selectedProvince?.districts ?? [allLocationOption]
+  return selectedProvince?.districts
+    ? [allLocationOption, ...selectedProvince.districts
+        .filter((district) => district.value !== 'ทั้งหมด' && district.label !== 'ทั้งหมด')
+        .map(({ label, value }) => ({ label, value }))]
+    : [allLocationOption]
 }
 
 function getDistanceFromReference(lon, lat) {
@@ -522,6 +533,15 @@ function HomePage({ accessToken = '', permissions }) {
   const [districtFilter, setDistrictFilter] = useState('all')
   const [latestInspectionResultFilter, setLatestInspectionResultFilter] = useState('all')
   const [monitoringFilter, setMonitoringFilter] = useState('all')
+  const [draftFactoryOrderFilter, setDraftFactoryOrderFilter] = useState('')
+  const [draftIndustrialEstateFilter, setDraftIndustrialEstateFilter] = useState('all')
+  const [draftIndustrialEstateNameFilter, setDraftIndustrialEstateNameFilter] = useState('')
+  const [draftRegionFilter, setDraftRegionFilter] = useState('all')
+  const [draftProvinceFilter, setDraftProvinceFilter] = useState('all')
+  const [draftDistrictFilter, setDraftDistrictFilter] = useState('all')
+  const [draftLatestInspectionResultFilter, setDraftLatestInspectionResultFilter] = useState('all')
+  const [draftMonitoringFilter, setDraftMonitoringFilter] = useState('all')
+  const [filtersApplying, setFiltersApplying] = useState(false)
   const [factories, setFactories] = useState([])
   const [factoriesLoading, setFactoriesLoading] = useState(false)
   const [factoriesError, setFactoriesError] = useState('')
@@ -530,6 +550,36 @@ function HomePage({ accessToken = '', permissions }) {
   const apiSystemType = factoryType === 'cems' ? 'CEMS' : factoryType === 'wpms' ? 'WPMS' : ''
   const effectiveFactories = factories
   const effectiveFactoriesError = factoriesError
+  const handleAdvancedOpen = () => {
+    setDraftFactoryOrderFilter(factoryOrderFilter)
+    setDraftIndustrialEstateFilter(industrialEstateFilter)
+    setDraftIndustrialEstateNameFilter(industrialEstateNameFilter)
+    setDraftRegionFilter(regionFilter)
+    setDraftProvinceFilter(provinceFilter)
+    setDraftDistrictFilter(districtFilter)
+    setDraftLatestInspectionResultFilter(latestInspectionResultFilter)
+    setDraftMonitoringFilter(monitoringFilter)
+    setAdvancedOpen(true)
+  }
+  const handleAdvancedSearch = () => {
+    setFiltersApplying(true)
+    requestAnimationFrame(() => {
+      setFactoryOrderFilter(draftFactoryOrderFilter)
+      setIndustrialEstateFilter(draftIndustrialEstateFilter)
+      setIndustrialEstateNameFilter(
+        draftIndustrialEstateFilter === 'industrial-estate' ? draftIndustrialEstateNameFilter : '',
+      )
+      setRegionFilter(draftRegionFilter)
+      setProvinceFilter(draftProvinceFilter)
+      setDistrictFilter(draftDistrictFilter)
+      setLatestInspectionResultFilter(draftLatestInspectionResultFilter)
+      setMonitoringFilter(draftMonitoringFilter)
+      setAdvancedOpen(false)
+      window.setTimeout(() => {
+        setFiltersApplying(false)
+      }, 160)
+    })
+  }
   useEffect(() => {
     let isActive = true
     const requestUrl = accessToken
@@ -601,6 +651,16 @@ function HomePage({ accessToken = '', permissions }) {
       const matchesProvince = provinceFilter === 'all' || factory.province === provinceFilter
       const matchesDistrict =
         districtFilter === 'all' || factory.address.toLowerCase().includes(districtFilter.toLowerCase())
+      const matchesLatestInspectionResult =
+        latestInspectionResultFilter === 'all' ||
+        (latestInspectionResultFilter === 'has-result' && factory.hasLatestHourlyMeasurement === true) ||
+        (latestInspectionResultFilter === 'no-result' && factory.hasLatestHourlyMeasurement === false)
+      const monitoringStatus = getFactoryMonitoringStatus(factory)
+      const matchesMonitoring =
+        monitoringFilter === 'all' ||
+        (monitoringFilter === 'normal' && monitoringStatus === 'normal') ||
+        (monitoringFilter === 'watch' && monitoringStatus === 'warning') ||
+        (monitoringFilter === 'exceeded' && monitoringStatus === 'critical')
       const matchesKeyword =
         !keyword ||
         [factory.name, factory.newRegistrationNo, factory.oldRegistrationNo, factory.address, factory.province]
@@ -616,6 +676,8 @@ function HomePage({ accessToken = '', permissions }) {
         matchesRegion &&
         matchesProvince &&
         matchesDistrict &&
+        matchesLatestInspectionResult &&
+        matchesMonitoring &&
         matchesKeyword
       )
     })
@@ -638,6 +700,8 @@ function HomePage({ accessToken = '', permissions }) {
     factoryType,
     industrialEstateNameFilter,
     industrialEstateFilter,
+    latestInspectionResultFilter,
+    monitoringFilter,
     provinceFilter,
     regionFilter,
     searchValue,
@@ -722,7 +786,7 @@ function HomePage({ accessToken = '', permissions }) {
         onFactoryTypeChange={setFactoryType}
         onSortByChange={setSortBy}
         onSearchValueChange={setSearchValue}
-        onAdvancedOpen={() => setAdvancedOpen(true)}
+        onAdvancedOpen={handleAdvancedOpen}
       />
 
       <Box
@@ -737,7 +801,8 @@ function HomePage({ accessToken = '', permissions }) {
       >
         <FactoryList
           factories={filteredFactories}
-          loading={factoriesLoading}
+          loading={factoriesLoading || filtersApplying}
+          loadingLabel={filtersApplying ? 'กำลังกรองข้อมูลโรงงาน...' : 'กำลังโหลดรายชื่อโรงงาน...'}
           error={favoriteError || effectiveFactoriesError}
           isMobileExpanded={isMobileListExpanded}
           canUseFavorite={canUseFavorite}
@@ -752,37 +817,39 @@ function HomePage({ accessToken = '', permissions }) {
 
       <AdvancedSearchDialog
         open={advancedOpen}
-        factoryOrderFilter={factoryOrderFilter}
-        industrialEstateFilter={industrialEstateFilter}
-        industrialEstateNameFilter={industrialEstateNameFilter}
-        regionFilter={regionFilter}
-        provinceFilter={provinceFilter}
-        districtFilter={districtFilter}
-        provinceOptions={getProvinceOptionsByRegion(regionFilter)}
-        districtOptions={getDistrictOptionsByProvince(provinceFilter)}
-        latestInspectionResultFilter={latestInspectionResultFilter}
-        monitoringFilter={monitoringFilter}
-        onFactoryOrderFilterChange={setFactoryOrderFilter}
+        factoryOrderFilter={draftFactoryOrderFilter}
+        industrialEstateFilter={draftIndustrialEstateFilter}
+        industrialEstateNameFilter={draftIndustrialEstateNameFilter}
+        regionFilter={draftRegionFilter}
+        provinceFilter={draftProvinceFilter}
+        districtFilter={draftDistrictFilter}
+        provinceOptions={getProvinceOptionsByRegion(draftRegionFilter)}
+        districtOptions={getDistrictOptionsByProvince(draftProvinceFilter)}
+        latestInspectionResultFilter={draftLatestInspectionResultFilter}
+        monitoringFilter={draftMonitoringFilter}
+        onFactoryOrderFilterChange={setDraftFactoryOrderFilter}
         onIndustrialEstateFilterChange={(nextValue) => {
-          setIndustrialEstateFilter(nextValue)
+          setDraftIndustrialEstateFilter(nextValue)
           if (nextValue !== 'industrial-estate') {
-            setIndustrialEstateNameFilter('')
+            setDraftIndustrialEstateNameFilter('')
           }
         }}
-        onIndustrialEstateNameFilterChange={setIndustrialEstateNameFilter}
+        onIndustrialEstateNameFilterChange={setDraftIndustrialEstateNameFilter}
         onRegionFilterChange={(nextValue) => {
-          setRegionFilter(nextValue)
-          setProvinceFilter('all')
-          setDistrictFilter('all')
+          setDraftRegionFilter(nextValue)
+          setDraftProvinceFilter('all')
+          setDraftDistrictFilter('all')
         }}
         onProvinceFilterChange={(nextValue) => {
-          setProvinceFilter(nextValue)
-          setDistrictFilter('all')
+          setDraftProvinceFilter(nextValue)
+          setDraftDistrictFilter('all')
         }}
-        onDistrictFilterChange={setDistrictFilter}
-        onLatestInspectionResultFilterChange={setLatestInspectionResultFilter}
-        onMonitoringFilterChange={setMonitoringFilter}
+        onDistrictFilterChange={setDraftDistrictFilter}
+        onLatestInspectionResultFilterChange={setDraftLatestInspectionResultFilter}
+        onMonitoringFilterChange={setDraftMonitoringFilter}
         onClose={() => setAdvancedOpen(false)}
+        onSearch={handleAdvancedSearch}
+        searching={filtersApplying}
       />
       <FactoryBottomSheet
         factory={selectedFactory}
@@ -900,6 +967,7 @@ function HomeFilters({
 function FactoryList({
   factories,
   loading,
+  loadingLabel = 'กำลังโหลดรายชื่อโรงงาน...',
   error,
   isMobileExpanded,
   canUseFavorite = false,
@@ -967,7 +1035,7 @@ function FactoryList({
             <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'center' }}>
               <CircularProgress size={18} />
               <Typography variant="body2" color="text.secondary">
-                กำลังโหลดรายชื่อโรงงาน...
+                {loadingLabel}
               </Typography>
             </Stack>
           </Paper>
@@ -1228,6 +1296,22 @@ function getFactorySystemChipStatus(factory, systemType) {
 
   if (statuses.length > 0 && statuses.every((status) => status === 'normal')) {
     return 'normal'
+  }
+
+  return 'normal'
+}
+
+function getFactoryMonitoringStatus(factory) {
+  const statuses = Array.isArray(factory?.systems)
+    ? factory.systems.map((system) => getFactorySystemChipStatus(factory, system))
+    : []
+
+  if (statuses.includes('critical')) {
+    return 'critical'
+  }
+
+  if (statuses.includes('warning')) {
+    return 'warning'
   }
 
   return 'normal'
@@ -2582,6 +2666,8 @@ function AdvancedSearchDialog({
   onLatestInspectionResultFilterChange,
   onMonitoringFilterChange,
   onClose,
+  onSearch,
+  searching = false,
 }) {
   return (
     <Dialog
@@ -2745,8 +2831,15 @@ function AdvancedSearchDialog({
         <Button variant="outlined" color="inherit" size="small" onClick={onClose} sx={{ minWidth: 40, height: 34 }}>
           ปิด
         </Button>
-        <Button variant="contained" size="small" onClick={onClose} sx={{ minWidth: 58, height: 34, fontWeight: 700 }}>
-          ค้นหา
+        <Button
+          variant="contained"
+          size="small"
+          onClick={onSearch}
+          disabled={searching}
+          startIcon={searching ? <CircularProgress size={16} color="inherit" /> : null}
+          sx={{ minWidth: 74, height: 34, fontWeight: 700 }}
+        >
+          {searching ? 'กำลังค้นหา' : 'ค้นหา'}
         </Button>
       </DialogActions>
     </Dialog>
