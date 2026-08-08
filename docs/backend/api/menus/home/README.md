@@ -51,6 +51,7 @@ Response fields ที่ใช้ระบุตัวโรงงานแล�
 | `data[].isFavorite` | boolean | favorite ของผู้ใช้ปัจจุบัน |
 | `data[].monitoringPointCountBySystem` | array | จำนวน active point แยก `CEMS` และ `WPMS` |
 | `data[].measurementPoints` | array | active connected points และค่ารายชั่วโมงที่อ่านได้ตาม scope |
+| `data[].measurementPoints[].data[].<parameter label>` | number \| string \| null | ใช้ค่าตรวจวัดเมื่อ StatusCode เป็น `1`; StatusCode อื่นใช้ชื่อสถานะ เช่น `Shut Down` หรือ `No Discharge` |
 | `data[].status` | `แสดง` | display status ของ row |
 | `meta.total` | integer | จำนวนโรงงานหลังใช้ query filters |
 
@@ -129,7 +130,7 @@ Response ใช้ identity, location, `monitoringPointCountBySystem`, `status` 
           "data": [
             {
               "station_id": "S4010",
-              "CO (ppm)": "42.15",
+              "CO (ppm)": "Shut Down",
               "cdate": "2026-08-07",
               "ctime": "21:00:00"
             }
@@ -141,6 +142,8 @@ Response ใช้ identity, location, `monitoringPointCountBySystem`, `status` 
   "meta": { "total": 1 }
 }
 ```
+
+การแสดงค่าตรวจวัดใน `measurementPoints[].data` ใช้ [StatusCode contract](../connection-requests/parameter-values.md#statuscode-contract) เดียวกับ connection test. Backend ไม่คืน `*_status` ใน row สำหรับแสดงผล แต่ใช้ status ของพารามิเตอร์ตัดสินว่าจะคืนค่าตรวจวัดหรือชื่อสถานะ.
 
 ### `GET /api/v1/cems-wpms-requests/factories/:factoryId/general`
 

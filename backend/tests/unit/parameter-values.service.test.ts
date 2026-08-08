@@ -329,7 +329,7 @@ describe('parameterValuesService', () => {
           values: {
             'CO2 (%)': '123.4',
             'CO2 (ppm)': '123.4',
-            'NOx (ppm)': '8.5',
+            'NOx (ppm)': 'Maintenance',
           },
           statuses: {
             'CO2 (%)': 'Normal',
@@ -364,6 +364,101 @@ describe('parameterValuesService', () => {
     expect(result.data[0]).not.toHaveProperty('results');
     expect(result.data[0]).not.toHaveProperty('stationId');
     expect(result.meta).not.toHaveProperty('returnedColumns');
+  });
+
+  it('uses the measurement value only for Ok status codes in connection-test responses', async () => {
+    mockedRepository.listRegisteredParametersForConnectionTest.mockResolvedValue([
+      'CO (ppm)',
+      'NOx (ppm)',
+    ]);
+    mockedRepository.tableExists.mockResolvedValue(true);
+    mockedRepository.latestRows.mockResolvedValue({
+      tableName: 'S0001_data_test',
+      rows: [
+        {
+          station_id: 'S0001',
+          co_value: '12.5',
+          co_status: 1,
+          nox_value: '88.2',
+          nox_status: 6,
+          cdate: '2026-08-08',
+          ctime: '10:15:00',
+        },
+      ],
+    });
+
+    const result = await parameterValuesService.connectionTest(
+      { stationId: 'S0001' },
+      operatorAccess,
+    );
+
+    expect(result.data[0]).toEqual({
+      timestamp: '2026-08-08 10:15:00',
+      values: {
+        'CO (ppm)': '12.5',
+        'NOx (ppm)': 'Shut Down',
+      },
+      statuses: {
+        'CO (ppm)': 'Ok',
+        'NOx (ppm)': 'Shut Down',
+      },
+    });
+  });
+
+  it('maps every non-Ok POMS client status code to its display label', async () => {
+    mockedRepository.listRegisteredParametersForConnectionTest.mockResolvedValue([
+      'SO2 (ppm)',
+      'NO2 (ppm)',
+      'O2 (%)',
+      'Temp. (°C)',
+      'Flow (m3/hr)',
+      'BOD (mg/l)',
+      'COD (mg/l)',
+      'TSS (mg/l)',
+    ]);
+    mockedRepository.tableExists.mockResolvedValue(true);
+    mockedRepository.latestRows.mockResolvedValue({
+      tableName: 'S0001_data_test',
+      rows: [
+        {
+          so2_value: 10,
+          so2_status: 0,
+          no2_value: 20,
+          no2_status: 2,
+          o2_value: 30,
+          o2_status: 3,
+          temp_value: 40,
+          temp_status: 4,
+          flow_value: 50,
+          flow_status: 5,
+          bod_value: 60,
+          bod_status: '7',
+          cod_value: 70,
+          cod_status: 8,
+          tss_value: 80,
+          tss_status: 9,
+          cdate: '2026-08-08',
+          ctime: '11:15:00',
+        },
+      ],
+    });
+
+    const result = await parameterValuesService.connectionTest(
+      { stationId: 'S0001' },
+      operatorAccess,
+    );
+
+    expect(result.data[0]?.values).toEqual({
+      'SO2 (ppm)': 'NoData',
+      'NO2 (ppm)': 'Calibration',
+      'O2 (%)': 'Defective',
+      'Temp. (°C)': 'Maintenance',
+      'Flow (m3/hr)': 'Start up',
+      'BOD (mg/l)': 'Turnaround',
+      'COD (mg/l)': 'Etc.',
+      'TSS (mg/l)': 'No Discharge',
+    });
+    expect(result.data[0]?.statuses).toEqual(result.data[0]?.values);
   });
 
   it('allows connection test when the station is accessible through a waiting connection request', async () => {
@@ -614,6 +709,38 @@ describe('parameterValuesService', () => {
     });
   });
 
+  it('uses POMS client status labels instead of numeric values in measurement statistics', async () => {
+    mockedRepository.listRegisteredParameters.mockResolvedValue(['CO (ppm)', 'NOx (ppm)']);
+    mockedRepository.tableExists.mockResolvedValue(true);
+    mockedRepository.listRows.mockResolvedValue({
+      tableName: 'S0001_data_60m',
+      rows: [
+        {
+          station_id: 'S0001',
+          co_value: 191,
+          co_units: 'ppm',
+          co_status: 6,
+          nox_value: 150,
+          nox_units: 'ppm',
+          nox_status: 9,
+          cdate: '2026-08-08',
+          ctime: '03:00:00',
+        },
+      ],
+    });
+
+    const result = await parameterValuesService.measurementStatistics(
+      { stationId: 'S0001', date: '2026-08-08' },
+      operatorAccess,
+    );
+    const hour = result.data.measurementPoints[0]?.rows.find((row) => row.chartTime === '03:00');
+
+    expect(hour?.values).toEqual({
+      'CO (ppm)': { value: null, displayValue: 'Shut Down', status: 'invalid' },
+      'NOx (ppm)': { value: null, displayValue: 'No Discharge', status: 'invalid' },
+    });
+  });
+
   it('returns one canonical Flow Rate label for equivalent registered Flow labels', async () => {
     mockedRepository.listRegisteredParameters.mockResolvedValue([
       'Flow (m3/hr)',
@@ -689,7 +816,11 @@ describe('parameterValuesService', () => {
   });
 
   it('uses form criteria for measurement thresholds without copying them across units', async () => {
-    mockedRepository.listRegisteredParameters.mockResolvedValue(['CO2 (%)', 'CO2 (ppm)', 'SO2 (ppm)']);
+    mockedRepository.listRegisteredParameters.mockResolvedValue([
+      'CO2 (%)',
+      'CO2 (ppm)',
+      'SO2 (ppm)',
+    ]);
     mockedRepository.tableExists.mockResolvedValue(true);
     mockedRepository.listRows.mockResolvedValue({
       tableName: 'S0001_data_60m',

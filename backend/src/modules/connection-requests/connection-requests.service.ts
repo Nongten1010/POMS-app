@@ -13,6 +13,7 @@ import type {
   CreateDeviceConnectionConfigsInput,
   DeviceConnectionConfigDTO,
 } from '../device-connections/device-connections.types';
+import { measurementDisplayValue } from '../parameter-values/parameter-status';
 import { parameterValuesService } from '../parameter-values/parameter-values.service';
 import type { PermissionScopeDetails } from '../auth/permissions';
 import type { RegionalAccessDTO } from '../auth/regional-access';
@@ -2218,7 +2219,9 @@ function toDashboardMeasurementRow(
       row[`${columnPrefix}_units`],
       columnPrefix,
     );
-    if (displayName) result[displayName] = value;
+    if (displayName) {
+      result[displayName] = measurementDisplayValue(value, row[`${columnPrefix}_status`]);
+    }
   });
 
   return result;

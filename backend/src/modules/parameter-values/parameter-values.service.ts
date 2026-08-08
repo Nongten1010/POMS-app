@@ -2,6 +2,11 @@ import { env } from '../../config/env';
 import { ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
 import { parameterValuesRepository } from './parameter-values.repository';
 import {
+  measurementDisplayValue,
+  measurementStatusValue,
+  resolvePomsClientParameterStatus,
+} from './parameter-status';
+import {
   type CalendarStatusEvaluationOptions,
   type CalendarStatusQuery,
   type CalendarStatusResultDTO,
@@ -172,10 +177,11 @@ export const parameterValuesService = {
       },
       5,
     );
-    const registeredParameters = await parameterValuesRepository.listRegisteredParametersForConnectionTest(
-      query.stationId,
-      access,
-    );
+    const registeredParameters =
+      await parameterValuesRepository.listRegisteredParametersForConnectionTest(
+        query.stationId,
+        access,
+      );
     const filtered = filterRowsByRegisteredParameters(result.rows, registeredParameters);
 
     return {
@@ -579,6 +585,15 @@ function buildStatisticValue(
     };
   }
 
+  const sourceStatus = readPomsClientStatus(row, definition);
+  if (sourceStatus && !sourceStatus.usesMeasurementValue) {
+    return {
+      value: null,
+      displayValue: sourceStatus.label,
+      status: sourceStatus.code === 0 ? ('noData' as const) : ('invalid' as const),
+    };
+  }
+
   const value = readParameterNumber(row, definition);
   if (value === null || dataCompletenessPercent < 80) {
     return {
@@ -822,6 +837,17 @@ function readParameterStatus(
   if (value <= definition.normalMax) return 'normal';
   if (value <= definition.warningMax) return 'warning';
   return 'exceeded';
+}
+
+function readPomsClientStatus(row: Record<string, unknown>, definition: ParameterDefinition) {
+  for (const prefix of definition.prefixes) {
+    if (!sourceUnitMatchesDefinition(row, prefix, definition)) continue;
+
+    const sourceStatus = resolvePomsClientParameterStatus(row[`${prefix}_status`]);
+    if (sourceStatus) return sourceStatus;
+  }
+
+  return null;
 }
 
 function sourceUnitMatchesDefinition(
@@ -1162,14 +1188,19 @@ function buildConnectionTestData(
     values: Object.fromEntries(
       entries.map(({ parameter, columns }) => [
         parameter,
-        columns.valueColumn ? row[columns.valueColumn] : null,
+        columns.valueColumn
+          ? measurementDisplayValue(
+              row[columns.valueColumn],
+              columns.statusColumn ? row[columns.statusColumn] : null,
+            )
+          : null,
       ]),
     ),
     statuses: Object.fromEntries(
-      entries.map(({ parameter, columns }) => [
-        parameter,
-        columns.statusColumn ? row[columns.statusColumn] : null,
-      ]),
+      entries.map(({ parameter, columns }) => {
+        const sourceStatus = columns.statusColumn ? row[columns.statusColumn] : null;
+        return [parameter, measurementStatusValue(sourceStatus)];
+      }),
     ),
   };
 }

@@ -60,6 +60,8 @@ curl --request POST \
 | อ่านจุดตรวจวัดที่เชื่อมต่อแล้ว | `GET` | `/api/v1/connected-measurement-points` | Bearer | `cems_wpms_requests:view` | [Connected points](#connected-points) |
 | อ่านจุดตรวจวัดของโรงงานและข้อมูล prefill | `GET` | `/api/v1/connected-measurement-points/factories/:factoryId` | Bearer | `cems_wpms_requests:view` | [Shared connected-point contract](../../shared/connected-measurement-points/README.md) |
 | อ่าน/แทนที่ config ของจุดที่เชื่อมต่อแล้ว | `GET`, `POST` | `/api/v1/connected-measurement-points/:stationId/device-configs` | Bearer | `cems_wpms_requests:view`, `cems_wpms_requests:edit` | [Device configs](./device-configs.md) |
+| อ่าน raw parameter values | `GET` | `/api/v1/parameter-values`, `/api/v1/parameter-values/latest` | Bearer | `cems_wpms_requests:view` | [Parameter values](./parameter-values.md) |
+| ทดสอบข้อมูลเชื่อมต่อและแปลง StatusCode | `GET` | `/api/v1/parameter-values/connection-test` | Bearer | `cems_wpms_requests:view` | [Parameter values](./parameter-values.md) |
 | ผู้ประกอบการยกเลิกคำขอ | `POST` | `/api/v1/cems-wpms-requests/:id/cancel` | Bearer | `cems_wpms_requests:edit` + owner | [Cancel request](./operator-cancel-request.md) |
 
 ## Request-number Contract
