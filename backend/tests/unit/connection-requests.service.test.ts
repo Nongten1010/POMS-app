@@ -61,6 +61,7 @@ jest.mock('../../src/config/logger', () => ({
 import { deviceConnectionsService } from '../../src/modules/device-connections/device-connections.service';
 import type { DeviceConnectionConfigDTO } from '../../src/modules/device-connections/device-connections.types';
 import { parameterValuesService } from '../../src/modules/parameter-values/parameter-values.service';
+import type { LatestHourlyParameterValuesResultDTO } from '../../src/modules/parameter-values/parameter-values.types';
 import { eligibleFactoriesService } from '../../src/modules/eligible-factories/eligible-factories.service';
 import type { SelectedEligibleFactoryDTO } from '../../src/modules/eligible-factories/eligible-factories.types';
 import { logger } from '../../src/config/logger';
@@ -792,6 +793,8 @@ describe('connectionRequestsService', () => {
   });
 
   it('returns only visible operator factories in the dashboard response shape', async () => {
+    connectionRequestsService.setClockForTests(() => new Date('2026-02-25T15:50:00.000Z'));
+
     mockedRepository.listFactoriesForAccess.mockResolvedValue([
       factorySummary({
         oldRegistrationNo: 'รง.4-เก่า-001',
@@ -1039,6 +1042,168 @@ describe('connectionRequestsService', () => {
       },
       eiaCriteria: { enabled: true, standardValue: 0.4, rows: [] },
     });
+  });
+
+  it('marks latest hourly measurements available when every point is in the current Bangkok hour', async () => {
+    connectionRequestsService.setClockForTests(() => new Date('2026-08-08T15:50:00.000Z'));
+    mockedRepository.listFactoriesForAccess.mockResolvedValue([factorySummary()]);
+    mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
+      currentFactoryMeasurementPoint({ stationId: 'S0001', pointCode: 'S0001' }),
+      currentFactoryMeasurementPoint({
+        stationId: 'S0002',
+        pointCode: 'S0002',
+        pointName: 'ปล่องระบาย B',
+      }),
+    ]);
+    mockedParameterValuesService.latestHourly
+      .mockResolvedValueOnce(
+        latestHourlyResult('S0001', [
+          { station_id: 'S0001', cdate: '2026-08-08', ctime: '22:00:00' },
+        ]),
+      )
+      .mockResolvedValueOnce(
+        latestHourlyResult('S0002', [
+          { station_id: 'S0002', cdate: '2026-08-08', ctime: '22.00-22.59 น.' },
+        ]),
+      );
+
+    const result = await connectionRequestsService.listOperatorFactoryDashboard(
+      actorUserId,
+      'OWN_FACTORY',
+    );
+
+    expect(result.data[0]?.hasLatestHourlyMeasurement).toBe(true);
+  });
+
+  it('uses the Bangkok calendar date when the current hour crosses midnight', async () => {
+    connectionRequestsService.setClockForTests(() => new Date('2026-08-08T17:05:00.000Z'));
+    mockedRepository.listFactoriesForAccess.mockResolvedValue([factorySummary()]);
+    mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
+      currentFactoryMeasurementPoint({ stationId: 'S0001', pointCode: 'S0001' }),
+    ]);
+    mockedParameterValuesService.latestHourly.mockResolvedValueOnce(
+      latestHourlyResult('S0001', [
+        { station_id: 'S0001', cdate: '2026-08-09', ctime: '00:00:00' },
+      ]),
+    );
+
+    const result = await connectionRequestsService.listOperatorFactoryDashboard(
+      actorUserId,
+      'OWN_FACTORY',
+    );
+
+    expect(result.data[0]?.hasLatestHourlyMeasurement).toBe(true);
+  });
+
+  it('uses one current-hour snapshot when measurement loading crosses an hour boundary', async () => {
+    let currentTime = new Date('2026-08-08T15:59:59.000Z');
+    connectionRequestsService.setClockForTests(() => currentTime);
+    mockedRepository.listFactoriesForAccess.mockResolvedValue([factorySummary()]);
+    mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
+      currentFactoryMeasurementPoint({ stationId: 'S0001', pointCode: 'S0001' }),
+    ]);
+    mockedParameterValuesService.latestHourly.mockImplementationOnce(async () => {
+      currentTime = new Date('2026-08-08T16:00:00.000Z');
+      return latestHourlyResult('S0001', [
+        { station_id: 'S0001', cdate: '2026-08-08', ctime: '22:00:00' },
+      ]);
+    });
+
+    const result = await connectionRequestsService.listOperatorFactoryDashboard(
+      actorUserId,
+      'OWN_FACTORY',
+    );
+
+    expect(result.data[0]?.hasLatestHourlyMeasurement).toBe(true);
+  });
+
+  it('marks latest hourly measurements unavailable when any point is from an earlier hour', async () => {
+    connectionRequestsService.setClockForTests(() => new Date('2026-08-08T15:50:00.000Z'));
+    mockedRepository.listFactoriesForAccess.mockResolvedValue([factorySummary()]);
+    mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
+      currentFactoryMeasurementPoint({ stationId: 'S0001', pointCode: 'S0001' }),
+      currentFactoryMeasurementPoint({
+        stationId: 'S0002',
+        pointCode: 'S0002',
+        pointName: 'ปล่องระบาย B',
+      }),
+    ]);
+    mockedParameterValuesService.latestHourly
+      .mockResolvedValueOnce(
+        latestHourlyResult('S0001', [
+          { station_id: 'S0001', cdate: '2026-08-08', ctime: '22:00:00' },
+        ]),
+      )
+      .mockResolvedValueOnce(
+        latestHourlyResult('S0002', [
+          { station_id: 'S0002', cdate: '2026-08-08', ctime: '21:00:00' },
+        ]),
+      );
+
+    const result = await connectionRequestsService.listOperatorFactoryDashboard(
+      actorUserId,
+      'OWN_FACTORY',
+    );
+
+    expect(result.data[0]?.hasLatestHourlyMeasurement).toBe(false);
+  });
+
+  it('marks latest hourly measurements unavailable when a point has the same hour on an earlier date', async () => {
+    connectionRequestsService.setClockForTests(() => new Date('2026-08-08T15:50:00.000Z'));
+    mockedRepository.listFactoriesForAccess.mockResolvedValue([factorySummary()]);
+    mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
+      currentFactoryMeasurementPoint({ stationId: 'S0001', pointCode: 'S0001' }),
+      currentFactoryMeasurementPoint({
+        stationId: 'S0002',
+        pointCode: 'S0002',
+        pointName: 'ปล่องระบาย B',
+      }),
+    ]);
+    mockedParameterValuesService.latestHourly
+      .mockResolvedValueOnce(
+        latestHourlyResult('S0001', [
+          { station_id: 'S0001', cdate: '2026-08-08', ctime: '22:00:00' },
+        ]),
+      )
+      .mockResolvedValueOnce(
+        latestHourlyResult('S0002', [
+          { station_id: 'S0002', cdate: '2026-08-07', ctime: '22:00:00' },
+        ]),
+      );
+
+    const result = await connectionRequestsService.listOperatorFactoryDashboard(
+      actorUserId,
+      'OWN_FACTORY',
+    );
+
+    expect(result.data[0]?.hasLatestHourlyMeasurement).toBe(false);
+  });
+
+  it('marks latest hourly measurements unavailable when any point has no data', async () => {
+    connectionRequestsService.setClockForTests(() => new Date('2026-08-08T15:50:00.000Z'));
+    mockedRepository.listFactoriesForAccess.mockResolvedValue([factorySummary()]);
+    mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
+      currentFactoryMeasurementPoint({ stationId: 'S0001', pointCode: 'S0001' }),
+      currentFactoryMeasurementPoint({
+        stationId: 'S0002',
+        pointCode: 'S0002',
+        pointName: 'ปล่องระบาย B',
+      }),
+    ]);
+    mockedParameterValuesService.latestHourly
+      .mockResolvedValueOnce(
+        latestHourlyResult('S0001', [
+          { station_id: 'S0001', cdate: '2026-08-08', ctime: '22:00:00' },
+        ]),
+      )
+      .mockResolvedValueOnce(latestHourlyResult('S0002', []));
+
+    const result = await connectionRequestsService.listOperatorFactoryDashboard(
+      actorUserId,
+      'OWN_FACTORY',
+    );
+
+    expect(result.data[0]?.hasLatestHourlyMeasurement).toBe(false);
   });
 
   it('loads hourly measurements when the station id uses the annual point-code format', async () => {
@@ -3928,6 +4093,24 @@ function currentFactoryMeasurementPoint(
     documentsAndImages: [],
     data: [],
     ...overrides,
+  };
+}
+
+function latestHourlyResult(
+  stationId: string,
+  data: Record<string, unknown>[],
+): LatestHourlyParameterValuesResultDTO {
+  return {
+    data,
+    meta: {
+      stationId,
+      interval: '60m',
+      schemaName: 'ingest',
+      tableName: `${stationId}_data_60m`,
+      count: data.length,
+      registeredParameters: ['NOx (ppm)'],
+      returnedColumns: ['station_id', 'cdate', 'ctime'],
+    },
   };
 }
 

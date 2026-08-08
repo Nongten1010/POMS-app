@@ -87,6 +87,17 @@ const CONNECTION_TIMEOUT_AUTO_CANCEL_NOTE =
 
 const FACTORY_LOGO_DOCUMENT_TITLE = 'สัญลักษณ์ของโรงงานหรือโลโก้บริษัท';
 const FACTORY_LOGO_DOCUMENT_INDEX = 3;
+const BANGKOK_TIME_ZONE = 'Asia/Bangkok';
+const bangkokDateHourFormatter = new Intl.DateTimeFormat('en-GB', {
+  timeZone: BANGKOK_TIME_ZONE,
+  calendar: 'gregory',
+  numberingSystem: 'latn',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  hourCycle: 'h23',
+});
 
 export interface DirectConnectionActorContext {
   actorUserId: number;
@@ -2242,7 +2253,10 @@ async function populateLatestHourlyMeasurements<
   factoryViewScope: AccessScope,
   includeLatestHourlyMeasurementFlag = true,
 ): Promise<TFactory[]> {
-  return Promise.all(
+  const currentBangkokHour = includeLatestHourlyMeasurementFlag
+    ? toBangkokDateHour(nowProvider())
+    : null;
+  const factoriesWithLatestMeasurements = await Promise.all(
     factories.map(async (factory) => {
       const measurementPoints = await Promise.all(
         factory.measurementPoints.map(async (point) => ({
@@ -2259,14 +2273,58 @@ async function populateLatestHourlyMeasurements<
         ...factory,
         measurementPoints,
       };
-      if (!includeLatestHourlyMeasurementFlag) return factoryWithLatestMeasurements;
-
-      return {
-        ...factoryWithLatestMeasurements,
-        hasLatestHourlyMeasurement: measurementPoints.some((point) => point.data.length > 0),
-      };
+      return factoryWithLatestMeasurements;
     }),
   );
+
+  if (!includeLatestHourlyMeasurementFlag) return factoriesWithLatestMeasurements;
+
+  return factoriesWithLatestMeasurements.map((factory) => ({
+    ...factory,
+    hasLatestHourlyMeasurement: hasCurrentHourlyMeasurementsForAllPoints(
+      factory.measurementPoints,
+      currentBangkokHour,
+    ),
+  }));
+}
+
+interface DateHour {
+  date: string;
+  hour: number;
+}
+
+function toBangkokDateHour(date: Date): DateHour | null {
+  const parts = bangkokDateHourFormatter.formatToParts(date);
+  const valueByType = new Map(parts.map((part) => [part.type, part.value]));
+  const year = valueByType.get('year');
+  const month = valueByType.get('month');
+  const day = valueByType.get('day');
+  const hour = Number(valueByType.get('hour'));
+  if (!year || !month || !day || !Number.isInteger(hour) || hour < 0 || hour > 23) return null;
+
+  return { date: `${year}-${month}-${day}`, hour };
+}
+
+function hasCurrentHourlyMeasurementsForAllPoints(
+  measurementPoints: OperatorFactoryMeasurementPointDTO[],
+  currentHour: DateHour | null,
+): boolean {
+  if (!currentHour || measurementPoints.length === 0) return false;
+
+  return measurementPoints.every(
+    (point) =>
+      point.data.length > 0 && point.data.every((row) => isMeasurementRowInHour(row, currentHour)),
+  );
+}
+
+function isMeasurementRowInHour(row: Record<string, unknown>, currentHour: DateHour): boolean {
+  if (typeof row.cdate !== 'string' || row.cdate.trim() !== currentHour.date) return false;
+  if (typeof row.ctime !== 'string') return false;
+
+  const hourMatch = row.ctime.trim().match(/^(\d{1,2})(?::|\.)/);
+  if (!hourMatch) return false;
+
+  return Number(hourMatch[1]) === currentHour.hour;
 }
 
 async function listFactoryMainTypeLabelsForDashboard(

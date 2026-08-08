@@ -10,7 +10,7 @@
 
 1. อ่านโรงงานจาก active `cems_wpms_connected_measurement_points` ที่ผูก active `eligible_factories`; `factoryName` ใช้ชื่อจาก current/live point ที่อัปเดตล่าสุด.
 2. ถ้า current/live point ไม่มีชื่อจึง fallback ไป `eligible_factories.factory_name` และ `factories.name` ตามลำดับ; `factories` ยังเป็นข้อมูลเสริมและ ownership gate สำหรับ `OWN_FACTORY`.
-3. แนบจุดตรวจวัด, favorite และค่ารายชั่วโมงล่าสุดตามสิทธิ์ของผู้เรียก.
+3. แนบจุดตรวจวัด, favorite, ค่ารายชั่วโมงล่าสุด และ flag ว่าทุกจุดมีข้อมูลของชั่วโมงปัจจุบันตามสิทธิ์ของผู้เรียก.
 
 ```bash
 curl --request GET \
@@ -49,6 +49,7 @@ Response fields ที่ใช้ระบุตัวโรงงานแล�
 | `data[].factoryName` | string | ชื่อโรงงานจาก current/live POMS point ล่าสุด; fallback เป็นโรงงานเข้าข่าย แล้วจึง factory master |
 | `data[].newRegistrationNo` | string | เลขทะเบียนโรงงานใหม่ |
 | `data[].isFavorite` | boolean | favorite ของผู้ใช้ปัจจุบัน |
+| `data[].hasLatestHourlyMeasurement` | boolean | `true` เมื่อทุก active connected point มี `measurementPoints[].data` อย่างน้อย 1 แถว และ `cdate` + ชั่วโมงของ `ctime` ตรงกับชั่วโมงปัจจุบันตาม `Asia/Bangkok`; ถ้าจุดใดไม่มีข้อมูลหรือเป็นคนละชั่วโมงจะเป็น `false` |
 | `data[].monitoringPointCountBySystem` | array | จำนวน active point แยก `CEMS` และ `WPMS` |
 | `data[].measurementPoints` | array | active connected points และค่ารายชั่วโมงที่อ่านได้ตาม scope |
 | `data[].measurementPoints[].parameters` | string[] | ชื่อพารามิเตอร์พร้อมหน่วย; `Flow` หน่วย `m3/hr` ใช้ชื่อมาตรฐาน `Flow Rate (m3/hr)` เพียงชื่อเดียว |
@@ -72,6 +73,7 @@ Minimal response (`200 OK`) สำหรับโรงงานที่เจ�
       "factoryName": "บริษัท ตัวอย่าง จำกัด",
       "newRegistrationNo": "40100007125560",
       "isFavorite": false,
+      "hasLatestHourlyMeasurement": true,
       "monitoringPointCountBySystem": [
         { "systemType": "CEMS", "count": 1 },
         { "systemType": "WPMS", "count": 0 }
@@ -94,6 +96,14 @@ Minimal response (`200 OK`) สำหรับโรงงานที่เจ�
               },
               "eiaCriteria": null
             }
+          ],
+          "data": [
+            {
+              "station_id": "S4010",
+              "CO (ppm)": 0.1,
+              "cdate": "2026-08-08",
+              "ctime": "22:00:00"
+            }
           ]
         }
       ]
@@ -111,6 +121,7 @@ Visibility and authorization:
 - โรงงานที่มีหลาย active points แสดงเป็นหนึ่ง factory row และรวม points ใน `measurementPoints`.
 - ชื่อที่ลงทะเบียนเป็น `Flow`, `Flow (m3/hr)`, `Flow Rate (m3/hr)` หรือ `Flow Rate (m³/hr)` จะถูกรวมเป็น `Flow Rate (m3/hr)` และค่าใน `measurementPoints[].data` อ่านจาก source `flow_value`.
 - `parameterStandards` มีเพียง `parameter`, `standardCriteria` และ `eiaCriteria`; เมื่อไม่มีเกณฑ์ที่บันทึกไว้ field เกณฑ์จะเป็น `null` และจะไม่ส่ง device/channel config อื่นใน array นี้.
+- Frontend ใช้ `hasLatestHourlyMeasurement` ได้โดยตรงและไม่ต้องวนเช็ค `measurementPoints[].data` ซ้ำ. ตัวอย่างเวลาปัจจุบัน `22:50` แถวที่ถือว่าปัจจุบันต้องมีวันปัจจุบันและ `ctime` ขึ้นต้นด้วย `22:` หรือ `22.` (ช่วง `22.00-22.59 น.`).
 
 ### `GET /api/v1/public/factory-map-points`
 
