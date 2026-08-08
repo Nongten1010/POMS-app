@@ -40,11 +40,13 @@ import { AdapterDayjsBuddhist } from '@mui/x-date-pickers/AdapterDayjsBuddhist'
 import { LineChart } from '@mui/x-charts/LineChart'
 import dayjs from 'dayjs'
 import 'dayjs/locale/th'
+import diwLogo from '../assets/diwLogo.png'
 import locationOptions from '../option/locationOptions.json'
 import measurementValueAbbreviationOptions from '../option/measurementValueAbbreviationOptions.json'
 
 const longdoMapKey = import.meta.env.VITE_LONGDO_MAP_KEY ?? ''
 const longdoMapScriptId = 'longdo-map-script'
+const fallbackFactoryLogoBg = '#f3f4f6'
 
 const factoryTypes = [
   { value: 'all', label: 'ทั้งหมด' },
@@ -1035,7 +1037,7 @@ function FactoryCard({
             border: 1,
             borderColor: 'divider',
             borderRadius: 1.25,
-            bgcolor: factory.logoBg,
+            bgcolor: factory.logoUrl ? factory.logoBg : fallbackFactoryLogoBg,
             color: 'primary.900',
             fontWeight: 600,
             fontSize: 20,
@@ -1050,7 +1052,12 @@ function FactoryCard({
               sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
             />
           ) : (
-            factory.logoText
+            <Box
+              component="img"
+              src={diwLogo}
+              alt="Department of Industrial Works logo"
+              sx={{ width: '86%', height: '86%', objectFit: 'contain', display: 'block' }}
+            />
           )}
         </Box>
 
@@ -1448,41 +1455,12 @@ function MeasurementTable({ table, sx }) {
   )
 }
 
-function escapeHtml(value) {
-  return String(value ?? '').replace(/[&<>"']/g, (character) => {
-    const replacements = {
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&#39;',
-    }
-    return replacements[character]
-  })
-}
-
-function encodeSvgDataUrl(svg) {
-  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`
-}
-
 function getFactoryMapMarkerIcon(factory) {
   if (factory.logoUrl) {
     return getAbsoluteAssetUrl(factory.logoUrl)
   }
 
-  const label = escapeHtml(factory.logoText || getFactoryLogoText(factory.name, factory.factoryId))
-  const fill = escapeHtml(factory.logoBg || '#dbeafe')
-
-  return encodeSvgDataUrl(`
-    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
-      <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
-        <feDropShadow dx="0" dy="5" stdDeviation="4" flood-color="#0f172a" flood-opacity="0.25" />
-      </filter>
-      <circle cx="24" cy="24" r="22" fill="#ffffff" filter="url(#shadow)" />
-      <circle cx="24" cy="24" r="19" fill="${fill}" />
-      <text x="24" y="28" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="800" fill="#0f172a">${label}</text>
-    </svg>
-  `)
+  return getAbsoluteAssetUrl(diwLogo)
 }
 
 function FactoryMap({ factories }) {
@@ -1767,13 +1745,27 @@ function FactoryBottomSheet({ factory, accessToken = '', open, onClose }) {
                 border: 1,
                 borderColor: 'divider',
                 borderRadius: 1.5,
-                bgcolor: factory.logoBg,
+                bgcolor: factory.logoUrl ? factory.logoBg : fallbackFactoryLogoBg,
                 color: 'primary.900',
                 fontSize: { xs: 20, md: 28 },
                 fontWeight: 600,
               }}
             >
-              {factory.logoText}
+              {factory.logoUrl ? (
+                <Box
+                  component="img"
+                  src={factory.logoUrl}
+                  alt={factory.name || 'factory logo'}
+                  sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                />
+              ) : (
+                <Box
+                  component="img"
+                  src={diwLogo}
+                  alt="Department of Industrial Works logo"
+                  sx={{ width: '86%', height: '86%', objectFit: 'contain', display: 'block' }}
+                />
+              )}
             </Box>
 
             <Box sx={{ minWidth: 0, flex: 1 }}>
