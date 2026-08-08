@@ -119,6 +119,13 @@ describe('operator factory dashboard routes', () => {
               pointCode: 'P0001',
               systemType: 'WPMS',
               parameters: ['BOD (mg/L)'],
+              parameterStandards: [
+                {
+                  parameter: 'BOD (mg/L)',
+                  standardCriteria: null,
+                  eiaCriteria: null,
+                },
+              ],
               data: [
                 {
                   station_id: 'NB-C21',
@@ -174,6 +181,13 @@ describe('operator factory dashboard routes', () => {
               pointCode: 'S0001',
               systemType: 'CEMS',
               parameters: ['CO (ppm)'],
+              parameterStandards: [
+                {
+                  parameter: 'CO (ppm)',
+                  standardCriteria: null,
+                  eiaCriteria: null,
+                },
+              ],
               data: [
                 {
                   station_id: 'S0001',
@@ -422,6 +436,13 @@ describe('operator factory dashboard routes', () => {
               pointCode: 'S0001',
               systemType: 'CEMS',
               parameters: ['CO (ppm)'],
+              parameterStandards: [
+                {
+                  parameter: 'CO (ppm)',
+                  standardCriteria: null,
+                  eiaCriteria: null,
+                },
+              ],
               data: [
                 {
                   station_id: 'S0001',

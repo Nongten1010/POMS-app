@@ -860,6 +860,40 @@ describe('connectionRequestsService', () => {
         pointCode: 'S0001',
         systemType: 'CEMS',
         parameters: ['CO', 'NOx', 'Temp', 'O2', 'Flow Rate (m3/hr)', 'Flow (m3/hr)', 'Flow (L/s)'],
+        measurementInstruments: {
+          parameters: [
+            {
+              parameter: 'CO (ppm)',
+              standardCriteria: {
+                enabled: true,
+                standardValue: 0.5,
+                rows: [{ level: 'normal', min: 0, max: 0.4, internalNote: 'do not expose' }],
+                internalSecret: 'do not expose',
+              },
+              eiaCriteria: {
+                enabled: true,
+                standardValue: 0.4,
+                rows: [],
+                deviceConfig: { dbPass: 'do not expose' },
+              },
+            },
+            {
+              parameter: 'Temperature (°C)',
+              standardCriteria: { enabled: true, standardValue: 180, rows: [] },
+              eiaCriteria: null,
+            },
+            {
+              parameter: 'Flow (m3/hr)',
+              standardCriteria: { enabled: true, standardValue: 2_000_000, rows: [] },
+              eiaCriteria: null,
+            },
+            {
+              parameter: 'Flow Rate (m3/hr)',
+              standardCriteria: null,
+              eiaCriteria: { enabled: true, standardValue: 1_800_000, rows: [] },
+            },
+          ],
+        },
         factoryLogo: {
           title: 'สัญลักษณ์ของโรงงานหรือโลโก้บริษัท',
           fileUrl: 'https://example.com/files/current-profile-logo.png',
@@ -947,6 +981,30 @@ describe('connectionRequestsService', () => {
             'Flow Rate (m3/hr)',
             'Flow (L/s)',
           ],
+          parameterStandards: [
+            {
+              parameter: 'CO (ppm)',
+              standardCriteria: {
+                enabled: true,
+                standardValue: 0.5,
+                rows: [{ level: 'normal', min: 0, max: 0.4 }],
+              },
+              eiaCriteria: { enabled: true, standardValue: 0.4, rows: [] },
+            },
+            { parameter: 'NOx (ppm)', standardCriteria: null, eiaCriteria: null },
+            {
+              parameter: 'Temp. (°C)',
+              standardCriteria: { enabled: true, standardValue: 180, rows: [] },
+              eiaCriteria: null,
+            },
+            { parameter: 'O2 (%)', standardCriteria: null, eiaCriteria: null },
+            {
+              parameter: 'Flow Rate (m3/hr)',
+              standardCriteria: null,
+              eiaCriteria: { enabled: true, standardValue: 1_800_000, rows: [] },
+            },
+            { parameter: 'Flow (L/s)', standardCriteria: null, eiaCriteria: null },
+          ],
           data: [
             {
               station_id: 'NB-C21',
@@ -972,6 +1030,15 @@ describe('connectionRequestsService', () => {
     expect(result.data[0]).not.toHaveProperty('systemTypes');
     expect(result.data[0].measurementPoints[0]).not.toHaveProperty('requestId');
     expect(result.data[0].measurementPoints[0]).not.toHaveProperty('latestHourlyMeasurement');
+    expect(result.data[0].measurementPoints[0]?.parameterStandards[0]).toEqual({
+      parameter: 'CO (ppm)',
+      standardCriteria: {
+        enabled: true,
+        standardValue: 0.5,
+        rows: [{ level: 'normal', min: 0, max: 0.4 }],
+      },
+      eiaCriteria: { enabled: true, standardValue: 0.4, rows: [] },
+    });
   });
 
   it('loads hourly measurements when the station id uses the annual point-code format', async () => {
@@ -1347,6 +1414,25 @@ describe('connectionRequestsService', () => {
         pointCode: 'S0001',
         systemType: 'CEMS',
         parameters: ['NOx', 'Flow Rate (m3/hr)', 'Flow (m3/hr)'],
+        measurementInstruments: {
+          parameters: [
+            {
+              parameter: 'NOx (ppm)',
+              standardCriteria: {
+                enabled: true,
+                standardValue: 120,
+                rows: [],
+                internalSecret: 'do not expose',
+              },
+              eiaCriteria: null,
+            },
+            {
+              parameter: 'Flow Rate (m3/hr)',
+              standardCriteria: null,
+              eiaCriteria: { enabled: true, standardValue: 1500, rows: [] },
+            },
+          ],
+        },
         documentsAndImages: [
           {
             title: 'สัญลักษณ์ของโรงงานหรือโลโก้บริษัท',
@@ -1419,6 +1505,18 @@ describe('connectionRequestsService', () => {
           pointCode: 'S0001',
           systemType: 'CEMS',
           parameters: ['NOx (ppm)', 'Flow Rate (m3/hr)'],
+          parameterStandards: [
+            {
+              parameter: 'NOx (ppm)',
+              standardCriteria: { enabled: true, standardValue: 120, rows: [] },
+              eiaCriteria: null,
+            },
+            {
+              parameter: 'Flow Rate (m3/hr)',
+              standardCriteria: null,
+              eiaCriteria: { enabled: true, standardValue: 1500, rows: [] },
+            },
+          ],
           data: [
             {
               station_id: 'S0001',
@@ -1433,6 +1531,11 @@ describe('connectionRequestsService', () => {
     });
     expect(result.data[0]).not.toHaveProperty('isFavorite');
     expect(result.data[0]).not.toHaveProperty('hasLatestHourlyMeasurement');
+    expect(result.data[0].measurementPoints[0]?.parameterStandards[0]).toEqual({
+      parameter: 'NOx (ppm)',
+      standardCriteria: { enabled: true, standardValue: 120, rows: [] },
+      eiaCriteria: null,
+    });
   });
 
   it('excludes factories that are not selected as eligible before displaying operator factories', async () => {

@@ -59,10 +59,12 @@ import {
   type ListConnectionRequestsQuery,
   type ListOperatorFactoriesQuery,
   type ListPublicFactoryMapPointsQuery,
+  type MeasurementInstrumentsInput,
   type MeasurementPointDTO,
   type MeasurementPointInput,
   type OperatorFactoryDashboardRowDTO,
   type OperatorFactoryMeasurementPointDTO,
+  type OperatorFactoryParameterStandardDTO,
   type OperatorFactoryTableRowDTO,
   type PaginatedConnectionRequestsDTO,
   type PaginatedTableRowsDTO,
@@ -1880,12 +1882,15 @@ function clearPendingPointCodes(input: CreateConnectionRequestInput): CreateConn
 function toOperatorFactoryMeasurementPoint(
   point: CurrentFactoryMeasurementPointDTO,
 ): OperatorFactoryMeasurementPointDTO {
+  const parameters = uniqueParameterDisplayNames(point.parameters);
+
   return {
     stationId: point.stationId,
     pointName: point.pointName,
     pointCode: point.pointCode,
     systemType: point.systemType,
-    parameters: uniqueParameterDisplayNames(point.parameters),
+    parameters,
+    parameterStandards: toParameterStandards(parameters, point.measurementInstruments),
     data: [],
   };
 }
@@ -1968,6 +1973,121 @@ function uniqueParameterDisplayNames(parameters: string[]): string[] {
   }
 
   return [...displayNames.values()];
+}
+
+function toParameterStandards(
+  parameters: string[],
+  measurementInstruments: MeasurementInstrumentsInput | null | undefined,
+): OperatorFactoryParameterStandardDTO[] {
+  const candidates = (measurementInstruments?.parameters ?? []).flatMap((instrument) => {
+    const rawParameter = instrument.parameter?.trim();
+    if (!rawParameter) return [];
+
+    const displayParameter = toParameterDisplayName(rawParameter);
+    return [
+      {
+        rawExactKey: normalizeParameterDisplayKey(rawParameter),
+        displayExactKey: normalizeParameterDisplayKey(displayParameter),
+        identityKey: toParameterIdentityKey(displayParameter),
+        looseKey: toCanonicalParameterNameKey(displayParameter),
+        unit: normalizeParameterUnit(extractParameterUnit(displayParameter)),
+        standardCriteria: toOperatorFactoryMeasurementCriteria(instrument.standardCriteria),
+        eiaCriteria: toOperatorFactoryMeasurementCriteria(instrument.eiaCriteria),
+      },
+    ];
+  });
+
+  return parameters.map((parameter) => {
+    const exactKey = normalizeParameterDisplayKey(parameter);
+    const identityKey = toParameterIdentityKey(parameter);
+    const looseKey = toCanonicalParameterNameKey(parameter);
+    const unit = normalizeParameterUnit(extractParameterUnit(parameter));
+    const looseMatches = candidates.filter(
+      (candidate) => candidate.looseKey === looseKey && (!unit || !candidate.unit),
+    );
+    const standards =
+      candidates.find((candidate) => candidate.rawExactKey === exactKey) ??
+      candidates.find((candidate) => candidate.displayExactKey === exactKey) ??
+      candidates.find((candidate) => candidate.identityKey === identityKey) ??
+      (looseMatches.length === 1 ? looseMatches[0] : undefined);
+
+    return {
+      parameter,
+      standardCriteria: standards?.standardCriteria ?? null,
+      eiaCriteria: standards?.eiaCriteria ?? null,
+    };
+  });
+}
+
+function toOperatorFactoryMeasurementCriteria(
+  value: unknown,
+): OperatorFactoryParameterStandardDTO['standardCriteria'] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+
+  const criteria = value as Record<string, unknown>;
+  if (typeof criteria.enabled !== 'boolean') return null;
+
+  const standardValue = toOperatorFactoryStandardValue(criteria.standardValue);
+  if (standardValue === undefined) return null;
+
+  if (!Array.isArray(criteria.rows) || criteria.rows.length > 3) return null;
+  const rows = criteria.rows.map(toOperatorFactoryMeasurementCriteriaRow);
+  if (rows.some((row) => row === null)) return null;
+
+  return {
+    enabled: criteria.enabled,
+    standardValue,
+    rows: rows.filter((row): row is NonNullable<typeof row> => row !== null),
+  };
+}
+
+function toOperatorFactoryStandardValue(value: unknown): string | number | null | undefined {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
+  if (typeof value !== 'string') return undefined;
+
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  return trimmed.length <= 255 ? trimmed : undefined;
+}
+
+function toOperatorFactoryMeasurementCriteriaRow(value: unknown): {
+  level: 'normal' | 'warning' | 'critical';
+  min: number | null;
+  max: number | null;
+} | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+
+  const row = value as Record<string, unknown>;
+  if (row.level !== 'normal' && row.level !== 'warning' && row.level !== 'critical') return null;
+  if (!isNullableFiniteNumber(row.min) || !isNullableFiniteNumber(row.max)) return null;
+
+  return { level: row.level, min: row.min, max: row.max };
+}
+
+function isNullableFiniteNumber(value: unknown): value is number | null {
+  return value === null || (typeof value === 'number' && Number.isFinite(value));
+}
+
+function toParameterIdentityKey(parameter: string): string {
+  return `${toCanonicalParameterNameKey(parameter)}:${normalizeParameterUnit(
+    extractParameterUnit(parameter),
+  )}`;
+}
+
+function toCanonicalParameterNameKey(parameter: string): string {
+  const key = toParameterColumnPrefix(parameter);
+  if (key === 'temperature') return 'temp';
+  if (key === 'flowrate') return 'flow';
+  return key;
+}
+
+function normalizeParameterDisplayKey(parameter: string): string {
+  return parameter
+    .normalize('NFKD')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9%]+/g, '');
 }
 
 function isCubicMetersPerHourFlowParameter(parameter: string): boolean {
@@ -2303,7 +2423,7 @@ function isSafeStationId(stationId: string): boolean {
 }
 
 function countMeasurementPointsBySystem(
-  points: OperatorFactoryMeasurementPointDTO[],
+  points: Array<{ systemType: ConnectionSystemType }>,
 ): OperatorFactoryDashboardRowDTO['monitoringPointCountBySystem'] {
   return [
     { systemType: 'CEMS', count: points.filter((point) => point.systemType === 'CEMS').length },

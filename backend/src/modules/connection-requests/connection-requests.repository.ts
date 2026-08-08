@@ -144,6 +144,7 @@ interface CurrentFactoryMeasurementPointRow {
   point_code: string | null;
   system_type: 'CEMS' | 'WPMS';
   parameters_json: string;
+  instruments_json: string | null;
   factory_logo_json: string | null;
   documents_json: string | null;
 }
@@ -789,6 +790,7 @@ export const connectionRequestsRepository = {
         'point_code',
         'system_type',
         'parameters_json',
+        'instruments_json',
         'factory_logo_json',
         'documents_json',
       )
@@ -806,6 +808,7 @@ export const connectionRequestsRepository = {
       pointCode: row.point_code,
       systemType: row.system_type,
       parameters: parseParameters(row.parameters_json),
+      measurementInstruments: parseJsonObject<MeasurementInstrumentsInput>(row.instruments_json),
       factoryLogo: parseJsonObject<RequestDocumentImageInput>(row.factory_logo_json),
       documentsAndImages: parseJsonArray<RequestDocumentImageInput>(row.documents_json),
       data: [],
@@ -829,6 +832,7 @@ export const connectionRequestsRepository = {
         'point_code',
         'system_type',
         'parameters_json',
+        'instruments_json',
         'factory_logo_json',
         'documents_json',
       )
@@ -844,6 +848,7 @@ export const connectionRequestsRepository = {
       pointCode: row.point_code,
       systemType: row.system_type,
       parameters: parseParameters(row.parameters_json),
+      measurementInstruments: parseJsonObject<MeasurementInstrumentsInput>(row.instruments_json),
       factoryLogo: parseJsonObject<RequestDocumentImageInput>(row.factory_logo_json),
       documentsAndImages: parseJsonArray<RequestDocumentImageInput>(row.documents_json),
       data: [],

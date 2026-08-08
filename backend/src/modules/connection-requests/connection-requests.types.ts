@@ -465,7 +465,26 @@ export interface OperatorFactoryMeasurementPointDTO {
   pointCode: string | null;
   systemType: ConnectionSystemType;
   parameters: string[];
+  parameterStandards: OperatorFactoryParameterStandardDTO[];
   data: Record<string, unknown>[];
+}
+
+export interface OperatorFactoryParameterStandardDTO {
+  parameter: string;
+  standardCriteria: OperatorFactoryMeasurementCriteriaDTO | null;
+  eiaCriteria: OperatorFactoryMeasurementCriteriaDTO | null;
+}
+
+export interface OperatorFactoryMeasurementCriteriaDTO {
+  enabled: boolean;
+  standardValue: string | number | null;
+  rows: OperatorFactoryMeasurementCriteriaRowDTO[];
+}
+
+export interface OperatorFactoryMeasurementCriteriaRowDTO {
+  level: 'normal' | 'warning' | 'critical';
+  min: number | null;
+  max: number | null;
 }
 
 export type PublicFactoryMapPointDTO = Omit<
@@ -473,13 +492,17 @@ export type PublicFactoryMapPointDTO = Omit<
   'isFavorite' | 'hasLatestHourlyMeasurement'
 >;
 
-export interface CurrentFactoryMeasurementPointDTO extends OperatorFactoryMeasurementPointDTO {
+export interface CurrentFactoryMeasurementPointDTO extends Omit<
+  OperatorFactoryMeasurementPointDTO,
+  'parameterStandards'
+> {
   connectedPointId?: number;
   sourceMeasurementPointId?: number;
   factoryId: string;
   eligibleFactoryId?: number | null;
   factoryLogo?: RequestDocumentImageInput | null;
   documentsAndImages?: RequestDocumentImageInput[];
+  measurementInstruments?: MeasurementInstrumentsInput | null;
 }
 
 export interface FactoryFavoriteDTO {

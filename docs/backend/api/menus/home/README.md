@@ -52,6 +52,10 @@ Response fields ที่ใช้ระบุตัวโรงงานแล�
 | `data[].monitoringPointCountBySystem` | array | จำนวน active point แยก `CEMS` และ `WPMS` |
 | `data[].measurementPoints` | array | active connected points และค่ารายชั่วโมงที่อ่านได้ตาม scope |
 | `data[].measurementPoints[].parameters` | string[] | ชื่อพารามิเตอร์พร้อมหน่วย; `Flow` หน่วย `m3/hr` ใช้ชื่อมาตรฐาน `Flow Rate (m3/hr)` เพียงชื่อเดียว |
+| `data[].measurementPoints[].parameterStandards` | object[] | เกณฑ์มาตรฐานหนึ่งรายการต่อสมาชิกใน `parameters` และเรียงลำดับเดียวกัน |
+| `data[].measurementPoints[].parameterStandards[].parameter` | string | ชื่อพารามิเตอร์พร้อมหน่วย |
+| `data[].measurementPoints[].parameterStandards[].standardCriteria` | object \| null | เกณฑ์ตามประกาศ อก. จาก connected-point instrument snapshot |
+| `data[].measurementPoints[].parameterStandards[].eiaCriteria` | object \| null | เกณฑ์ตาม EIA จาก connected-point instrument snapshot |
 | `data[].measurementPoints[].data[].<parameter label>` | number \| string \| null | ใช้ค่าตรวจวัดเมื่อ StatusCode เป็น `1`; StatusCode อื่นใช้ชื่อสถานะ เช่น `Shut Down` หรือ `No Discharge` |
 | `data[].status` | `แสดง` | display status ของ row |
 | `meta.total` | integer | จำนวนโรงงานหลังใช้ query filters |
@@ -79,7 +83,18 @@ Minimal response (`200 OK`) สำหรับโรงงานที่เจ�
           "pointName": "ปล่องหลัก",
           "pointCode": "S4010",
           "systemType": "CEMS",
-          "parameters": ["CO (ppm)"]
+          "parameters": ["CO (ppm)"],
+          "parameterStandards": [
+            {
+              "parameter": "CO (ppm)",
+              "standardCriteria": {
+                "enabled": true,
+                "standardValue": 0.5,
+                "rows": []
+              },
+              "eiaCriteria": null
+            }
+          ]
         }
       ]
     }
@@ -95,6 +110,7 @@ Visibility and authorization:
 - row ที่ `eligible_factories.deleted_at` หรือ connected point `deleted_at` ไม่เป็น `null` จะไม่แสดง.
 - โรงงานที่มีหลาย active points แสดงเป็นหนึ่ง factory row และรวม points ใน `measurementPoints`.
 - ชื่อที่ลงทะเบียนเป็น `Flow`, `Flow (m3/hr)`, `Flow Rate (m3/hr)` หรือ `Flow Rate (m³/hr)` จะถูกรวมเป็น `Flow Rate (m3/hr)` และค่าใน `measurementPoints[].data` อ่านจาก source `flow_value`.
+- `parameterStandards` มีเพียง `parameter`, `standardCriteria` และ `eiaCriteria`; เมื่อไม่มีเกณฑ์ที่บันทึกไว้ field เกณฑ์จะเป็น `null` และจะไม่ส่ง device/channel config อื่นใน array นี้.
 
 ### `GET /api/v1/public/factory-map-points`
 
@@ -129,6 +145,17 @@ Response ใช้ identity, location, `monitoringPointCountBySystem`, `status` 
           "pointCode": "S4010",
           "systemType": "CEMS",
           "parameters": ["CO (ppm)"],
+          "parameterStandards": [
+            {
+              "parameter": "CO (ppm)",
+              "standardCriteria": {
+                "enabled": true,
+                "standardValue": 0.5,
+                "rows": []
+              },
+              "eiaCriteria": null
+            }
+          ],
           "data": [
             {
               "station_id": "S4010",
