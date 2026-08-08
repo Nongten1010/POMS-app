@@ -460,6 +460,21 @@ function mapOperatorFactory(row, index) {
   }
 }
 
+function isSameFactory(firstFactory, secondFactory) {
+  if (!firstFactory || !secondFactory) {
+    return false
+  }
+
+  const identityPairs = [
+    [firstFactory.factoryId, secondFactory.factoryId],
+    [firstFactory.newRegistrationNo, secondFactory.newRegistrationNo],
+    [firstFactory.id, secondFactory.id],
+    [firstFactory.sourceId, secondFactory.sourceId],
+  ]
+
+  return identityPairs.some(([firstValue, secondValue]) => Boolean(firstValue) && Boolean(secondValue) && firstValue === secondValue)
+}
+
 function loadLongdoMapScript() {
   if (!longdoMapKey) {
     return Promise.reject(new Error('missing-map-key'))
@@ -588,6 +603,10 @@ function HomePage({ accessToken = '', permissions }) {
     })
 
     return filtered.toSorted((first, second) => {
+      if (accessToken && first.isFavorite !== second.isFavorite) {
+        return first.isFavorite ? -1 : 1
+      }
+
       if (sortBy === 'name') {
         return first.name.localeCompare(second.name, 'th')
       }
@@ -605,6 +624,7 @@ function HomePage({ accessToken = '', permissions }) {
     regionFilter,
     searchValue,
     sortBy,
+    accessToken,
   ])
   const handleFavoriteToggle = async (factory) => {
     const favoriteIdentifiers = [
@@ -654,9 +674,7 @@ function HomePage({ accessToken = '', permissions }) {
 
       const updatedFavorite = favoritePayload?.data?.isFavorite ?? nextFavorite
       const updateFactoryFavorite = (currentFactory) =>
-        currentFactory.factoryId === factory.factoryId ||
-        currentFactory.id === factory.id ||
-        currentFactory.sourceId === factory.sourceId
+        isSameFactory(currentFactory, factory)
           ? { ...currentFactory, isFavorite: updatedFavorite }
           : currentFactory
 
