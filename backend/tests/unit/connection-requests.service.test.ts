@@ -935,10 +935,12 @@ describe('connectionRequestsService', () => {
     });
     expect(mockedRepository.listConnectedMeasurementPointsForFactories).toHaveBeenCalledWith(
       expect.arrayContaining(['factory-001', '3-106-33/50สบ']),
+      [17],
     );
     expect(mockedRepository.listRequestsForFactories).not.toHaveBeenCalled();
     expect(result.data[0]).toMatchObject({
       id: 1,
+      eligibleFactoryId: 17,
       factoryId: 'factory-001',
       factoryName: 'บริษัท ทดสอบ จำกัด',
       newRegistrationNo: '3-106-33/50สบ',
@@ -1360,11 +1362,10 @@ describe('connectionRequestsService', () => {
       'OWN_FACTORY',
     );
 
-    expect(mockedRepository.listConnectedMeasurementPointsForFactories).toHaveBeenCalledWith([
-      'factory-001',
-      'REG-001',
-      'OLD-001',
-    ]);
+    expect(mockedRepository.listConnectedMeasurementPointsForFactories).toHaveBeenCalledWith(
+      ['factory-001', 'REG-001', 'OLD-001'],
+      [17],
+    );
     expect(result.data).toHaveLength(1);
     expect(result.data[0]).toMatchObject({
       factoryId: 'factory-001',
@@ -1416,6 +1417,7 @@ describe('connectionRequestsService', () => {
     expect(result.data).toEqual([
       expect.objectContaining({
         id: null,
+        eligibleFactoryId: 17,
         factoryId: '40100007125560',
         newRegistrationNo: '40100007125560',
         measurementPoints: [expect.objectContaining({ stationId: 'S4010' })],
@@ -1520,6 +1522,8 @@ describe('connectionRequestsService', () => {
 
     expect(result.data).toHaveLength(2);
     expect(result.data[0]).toMatchObject({
+      id: 1,
+      eligibleFactoryId: 17,
       factoryId: 'factory-connected',
       measurementPoints: [{ stationId: 'S0001' }],
     });
@@ -1557,6 +1561,37 @@ describe('connectionRequestsService', () => {
       factoryId: 'factory-connected',
       measurementPoints: [{ stationId: 'S0001' }],
     });
+  });
+
+  it('returns an eligible factory identity on the public map without a factory master row', async () => {
+    mockedRepository.listFactoriesForAccess.mockResolvedValue([
+      factorySummary({
+        id: null,
+        eligibleFactoryId: 29,
+        factoryId: '10740000125491',
+        factoryName: 'โรงงานแผนที่สาธารณะ',
+        newRegistrationNo: '10740000125491',
+      }),
+    ]);
+    mockedRepository.listPublicConnectedMeasurementPointsForFactories.mockResolvedValue([
+      currentFactoryMeasurementPoint({
+        eligibleFactoryId: 29,
+        factoryId: 'LEGACY-PUBLIC-ID',
+        stationId: 'S1074',
+        pointCode: 'S1074',
+      }),
+    ]);
+
+    const result = await connectionRequestsService.listPublicFactoryMapPoints();
+
+    expect(result.data).toEqual([
+      expect.objectContaining({
+        id: null,
+        eligibleFactoryId: 29,
+        factoryId: '10740000125491',
+        measurementPoints: [expect.objectContaining({ stationId: 'S1074' })],
+      }),
+    ]);
   });
 
   it('returns the latest hourly measurement data for each public factory map point', async () => {
@@ -1648,6 +1683,7 @@ describe('connectionRequestsService', () => {
     });
     expect(mockedRepository.listPublicConnectedMeasurementPointsForFactories).toHaveBeenCalledWith(
       expect.arrayContaining(['factory-connected', '3-106-33/50สบ']),
+      [17],
     );
     expect(mockedRepository.listConnectedMeasurementPointsForFactories).not.toHaveBeenCalled();
     expect(mockedRepository.listFavoriteFactoryIds).not.toHaveBeenCalled();
@@ -1657,6 +1693,8 @@ describe('connectionRequestsService', () => {
     });
     expect(result.data).toHaveLength(1);
     expect(result.data[0]).toMatchObject({
+      id: 1,
+      eligibleFactoryId: 17,
       factoryId: 'factory-connected',
       factoryLogoUrl: 'https://example.com/files/public-logo.png',
       monitoringPointCountBySystem: [
@@ -1732,6 +1770,7 @@ describe('connectionRequestsService', () => {
 
     expect(mockedRepository.listConnectedMeasurementPointsForFactories).toHaveBeenCalledWith(
       expect.arrayContaining(['factory-eligible', '3-106-33/50สบ']),
+      [17],
     );
     expect(result.data).toHaveLength(1);
     expect(result.data[0]).toMatchObject({
@@ -4027,6 +4066,7 @@ function requestDto(overrides: Partial<ConnectionRequestDTO> = {}): ConnectionRe
 function factorySummary(overrides: Partial<FactorySummaryDTO> = {}): FactorySummaryDTO {
   return {
     id: 1,
+    eligibleFactoryId: 17,
     factoryId: 'factory-001',
     factoryName: 'บริษัท ทดสอบ จำกัด',
     newRegistrationNo: '3-106-33/50สบ',

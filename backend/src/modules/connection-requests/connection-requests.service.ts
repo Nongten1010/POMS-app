@@ -342,70 +342,25 @@ export const connectionRequestsService = {
       connectionRequestsRepository.listFavoriteFactoryIds(actorUserId),
     ]);
     const favoriteFactoryIdSet = new Set(favoriteFactoryIds);
-    const measurementPointsByFactory = new Map<string, CurrentFactoryMeasurementPointDTO[]>();
     const factoryMainTypeLabels = await listFactoryMainTypeLabelsForDashboard(eligibleFactories);
-
-    connectedPoints.forEach((point) => {
-      const factoryId =
-        (point.eligibleFactoryId === null || point.eligibleFactoryId === undefined
-          ? undefined
-          : factoryIdByEligibleFactoryId.get(point.eligibleFactoryId)) ??
-        factoryIdByLookupKey.get(point.factoryId) ??
-        point.factoryId;
-      const currentPoints = measurementPointsByFactory.get(factoryId) ?? [];
-      measurementPointsByFactory.set(factoryId, [...currentPoints, { ...point, factoryId }]);
-    });
+    const measurementPointsByFactory = mapConnectedMeasurementPointsToDashboardFactories(
+      connectedPoints,
+      factoryIdByLookupKey,
+      factoryIdByEligibleFactoryId,
+    );
 
     const data = eligibleFactories
       .map<OperatorFactoryDashboardRowDTO>((factory) => {
         const currentMeasurementPoints = measurementPointsByFactory.get(factory.factoryId) ?? [];
-        const measurementPoints = currentMeasurementPoints.map(toOperatorFactoryMeasurementPoint);
-        const monitoringPointCountBySystem =
-          countMeasurementPointsBySystem(currentMeasurementPoints);
+        const baseRow = toFactoryDashboardBaseRow(
+          factory,
+          currentMeasurementPoints,
+          factoryMainTypeLabels,
+        );
         return {
-          id: factory.id,
-          factoryId: factory.factoryId,
-          factoryName: factory.factoryName,
-          newRegistrationNo: factory.newRegistrationNo,
-          oldRegistrationNo: factory.oldRegistrationNo,
-          factoryLogoUrl: getFactoryLogoUrl(currentMeasurementPoints),
-          industryMainOrder: factory.industryMainOrder,
-          industryMainOrderLabel:
-            (factory.industryMainOrder
-              ? factoryMainTypeLabels.get(factory.industryMainOrder)
-              : undefined) ??
-            factory.industryMainOrderLabel ??
-            null,
-          industrySubOrder: factory.industrySubOrder,
-          eia: factory.eia,
-          hasEia: factory.hasEia ?? null,
-          regionCode: factory.regionCode ?? factory.regionName ?? null,
-          regionName: factory.regionName ?? factory.regionCode ?? null,
-          provinceCode: factory.provinceCode ?? null,
-          provinceName: factory.provinceName ?? factory.province,
-          province: factory.province,
-          address: factory.address,
-          latitude: factory.latitude,
-          longitude: factory.longitude,
-          districtCode: factory.districtCode ?? null,
-          districtName: factory.districtName ?? null,
-          industrialAreaType:
-            factory.industrialAreaType ??
-            (factory.industrialEstateCode || factory.industrialEstateName
-              ? 'INDUSTRIAL_ESTATE'
-              : 'OUTSIDE_INDUSTRIAL_ESTATE'),
-          industrialAreaTypeLabel:
-            factory.industrialAreaTypeLabel ??
-            (factory.industrialEstateCode || factory.industrialEstateName
-              ? 'ในนิคมอุตสาหกรรม'
-              : 'นอกนิคมอุตสาหกรรม'),
-          industrialEstateCode: factory.industrialEstateCode ?? null,
-          industrialEstateName: factory.industrialEstateName ?? null,
+          ...baseRow,
           isFavorite: favoriteFactoryIdSet.has(factory.factoryId),
           hasLatestHourlyMeasurement: false,
-          monitoringPointCountBySystem,
-          status: 'แสดง',
-          measurementPoints,
         };
       })
       .filter((factory) => matchesOperatorFactoryDashboardQuery(factory, query));
@@ -445,70 +400,20 @@ export const connectionRequestsService = {
           ]),
       listFactoryMainTypeLabelsForDashboard(eligibleFactories),
     ]);
-    const measurementPointsByFactory = new Map<string, CurrentFactoryMeasurementPointDTO[]>();
-
-    connectedPoints.forEach((point) => {
-      const factoryId =
-        (point.eligibleFactoryId === null || point.eligibleFactoryId === undefined
-          ? undefined
-          : factoryIdByEligibleFactoryId.get(point.eligibleFactoryId)) ??
-        factoryIdByLookupKey.get(point.factoryId) ??
-        point.factoryId;
-      const currentPoints = measurementPointsByFactory.get(factoryId) ?? [];
-      measurementPointsByFactory.set(factoryId, [...currentPoints, { ...point, factoryId }]);
-    });
+    const measurementPointsByFactory = mapConnectedMeasurementPointsToDashboardFactories(
+      connectedPoints,
+      factoryIdByLookupKey,
+      factoryIdByEligibleFactoryId,
+    );
 
     const data = eligibleFactories
-      .map<PublicFactoryMapPointDTO>((factory) => {
-        const currentMeasurementPoints = measurementPointsByFactory.get(factory.factoryId) ?? [];
-        const measurementPoints = currentMeasurementPoints.map(toOperatorFactoryMeasurementPoint);
-        const monitoringPointCountBySystem =
-          countMeasurementPointsBySystem(currentMeasurementPoints);
-
-        return {
-          id: factory.id,
-          factoryId: factory.factoryId,
-          factoryName: factory.factoryName,
-          newRegistrationNo: factory.newRegistrationNo,
-          oldRegistrationNo: factory.oldRegistrationNo,
-          factoryLogoUrl: getFactoryLogoUrl(currentMeasurementPoints),
-          industryMainOrder: factory.industryMainOrder,
-          industryMainOrderLabel:
-            (factory.industryMainOrder
-              ? factoryMainTypeLabels.get(factory.industryMainOrder)
-              : undefined) ??
-            factory.industryMainOrderLabel ??
-            null,
-          industrySubOrder: factory.industrySubOrder,
-          eia: factory.eia,
-          hasEia: factory.hasEia ?? null,
-          regionCode: factory.regionCode ?? factory.regionName ?? null,
-          regionName: factory.regionName ?? factory.regionCode ?? null,
-          provinceCode: factory.provinceCode ?? null,
-          provinceName: factory.provinceName ?? factory.province,
-          province: factory.province,
-          address: factory.address,
-          latitude: factory.latitude,
-          longitude: factory.longitude,
-          districtCode: factory.districtCode ?? null,
-          districtName: factory.districtName ?? null,
-          industrialAreaType:
-            factory.industrialAreaType ??
-            (factory.industrialEstateCode || factory.industrialEstateName
-              ? 'INDUSTRIAL_ESTATE'
-              : 'OUTSIDE_INDUSTRIAL_ESTATE'),
-          industrialAreaTypeLabel:
-            factory.industrialAreaTypeLabel ??
-            (factory.industrialEstateCode || factory.industrialEstateName
-              ? 'ในนิคมอุตสาหกรรม'
-              : 'นอกนิคมอุตสาหกรรม'),
-          industrialEstateCode: factory.industrialEstateCode ?? null,
-          industrialEstateName: factory.industrialEstateName ?? null,
-          monitoringPointCountBySystem,
-          status: 'แสดง',
-          measurementPoints,
-        };
-      })
+      .map<PublicFactoryMapPointDTO>((factory) =>
+        toFactoryDashboardBaseRow(
+          factory,
+          measurementPointsByFactory.get(factory.factoryId) ?? [],
+          factoryMainTypeLabels,
+        ),
+      )
       .filter((factory) => matchesPublicFactoryMapPointsQuery(factory, query));
 
     const dataWithLatestHourlyMeasurements = await populateLatestHourlyMeasurements(
@@ -2151,6 +2056,86 @@ function mapConnectedMeasurementPointsToEligibleFactories(
   });
 
   return measurementPointsByFactory;
+}
+
+function mapConnectedMeasurementPointsToDashboardFactories(
+  connectedPoints: CurrentFactoryMeasurementPointDTO[],
+  factoryIdByLookupKey: Map<string, string>,
+  factoryIdByEligibleFactoryId: Map<number, string>,
+): Map<string, CurrentFactoryMeasurementPointDTO[]> {
+  const measurementPointsByFactory = new Map<string, CurrentFactoryMeasurementPointDTO[]>();
+
+  connectedPoints.forEach((point) => {
+    const factoryId =
+      (point.eligibleFactoryId === null || point.eligibleFactoryId === undefined
+        ? undefined
+        : factoryIdByEligibleFactoryId.get(point.eligibleFactoryId)) ??
+      factoryIdByLookupKey.get(point.factoryId) ??
+      point.factoryId;
+    const currentPoints = measurementPointsByFactory.get(factoryId) ?? [];
+    measurementPointsByFactory.set(factoryId, [...currentPoints, { ...point, factoryId }]);
+  });
+
+  return measurementPointsByFactory;
+}
+
+function toFactoryDashboardBaseRow(
+  factory: FactorySummaryDTO,
+  currentMeasurementPoints: CurrentFactoryMeasurementPointDTO[],
+  factoryMainTypeLabels: Map<string, string>,
+): PublicFactoryMapPointDTO {
+  const isInIndustrialEstate = Boolean(
+    factory.industrialEstateCode || factory.industrialEstateName,
+  );
+
+  return {
+    id: factory.id,
+    eligibleFactoryId: requireConnectedEligibleFactoryId(factory),
+    factoryId: factory.factoryId,
+    factoryName: factory.factoryName,
+    newRegistrationNo: factory.newRegistrationNo,
+    oldRegistrationNo: factory.oldRegistrationNo,
+    factoryLogoUrl: getFactoryLogoUrl(currentMeasurementPoints),
+    industryMainOrder: factory.industryMainOrder,
+    industryMainOrderLabel:
+      (factory.industryMainOrder
+        ? factoryMainTypeLabels.get(factory.industryMainOrder)
+        : undefined) ??
+      factory.industryMainOrderLabel ??
+      null,
+    industrySubOrder: factory.industrySubOrder,
+    eia: factory.eia,
+    hasEia: factory.hasEia ?? null,
+    regionCode: factory.regionCode ?? factory.regionName ?? null,
+    regionName: factory.regionName ?? factory.regionCode ?? null,
+    provinceCode: factory.provinceCode ?? null,
+    provinceName: factory.provinceName ?? factory.province,
+    province: factory.province,
+    address: factory.address,
+    latitude: factory.latitude,
+    longitude: factory.longitude,
+    districtCode: factory.districtCode ?? null,
+    districtName: factory.districtName ?? null,
+    industrialAreaType:
+      factory.industrialAreaType ??
+      (isInIndustrialEstate ? 'INDUSTRIAL_ESTATE' : 'OUTSIDE_INDUSTRIAL_ESTATE'),
+    industrialAreaTypeLabel:
+      factory.industrialAreaTypeLabel ??
+      (isInIndustrialEstate ? 'ในนิคมอุตสาหกรรม' : 'นอกนิคมอุตสาหกรรม'),
+    industrialEstateCode: factory.industrialEstateCode ?? null,
+    industrialEstateName: factory.industrialEstateName ?? null,
+    monitoringPointCountBySystem: countMeasurementPointsBySystem(currentMeasurementPoints),
+    status: 'แสดง',
+    measurementPoints: currentMeasurementPoints.map(toOperatorFactoryMeasurementPoint),
+  };
+}
+
+function requireConnectedEligibleFactoryId(factory: FactorySummaryDTO): number {
+  if (factory.eligibleFactoryId === null || factory.eligibleFactoryId === undefined) {
+    throw new Error(`Connected POMS factory ${factory.factoryId} is missing eligibleFactoryId`);
+  }
+
+  return factory.eligibleFactoryId;
 }
 
 function toOfficerEligibleFactoryTableRow(

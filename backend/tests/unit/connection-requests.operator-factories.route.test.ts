@@ -80,6 +80,7 @@ describe('operator factory dashboard routes', () => {
       data: [
         {
           id: 1,
+          eligibleFactoryId: 17,
           factoryId: 'factory-001',
           factoryName: 'บริษัท ทดสอบ จำกัด',
           newRegistrationNo: '3-106-33/50สบ',
@@ -144,6 +145,7 @@ describe('operator factory dashboard routes', () => {
       data: [
         {
           id: 1,
+          eligibleFactoryId: 17,
           factoryId: 'factory-001',
           factoryName: 'บริษัท ทดสอบ จำกัด',
           newRegistrationNo: '3-106-33/50สบ',
@@ -315,6 +317,8 @@ describe('operator factory dashboard routes', () => {
       { systemType: 'WPMS', favoriteOnly: false, connectedOnly: true },
     );
     expect(response.body.data[0]).toMatchObject({
+      id: 1,
+      eligibleFactoryId: 17,
       industryMainOrder: '8802',
       industryMainOrderLabel: 'ประเภทโรงงานลำดับที่ 88(2): การผลิตพลังงานไฟฟ้าจากพลังงานความร้อน',
       regionName: 'ภาคตะวันออก',
@@ -399,6 +403,7 @@ describe('operator factory dashboard routes', () => {
       data: [
         {
           id: 1,
+          eligibleFactoryId: 17,
           factoryId: 'factory-001',
           factoryName: 'บริษัท ทดสอบ จำกัด',
           newRegistrationNo: '3-106-33/50สบ',

@@ -423,6 +423,7 @@ export interface OperatorFactoryTableRowDTO {
 
 export interface OperatorFactoryDashboardRowDTO {
   id: number | null;
+  eligibleFactoryId: number;
   factoryId: string;
   factoryName: string;
   newRegistrationNo: string;

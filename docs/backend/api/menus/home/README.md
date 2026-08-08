@@ -44,7 +44,8 @@ Response fields ที่ใช้ระบุตัวโรงงานแล�
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `data[].id` | integer \| null | `factories.id`; เป็น `null` ได้เมื่อเจ้าหน้าที่เชื่อมโรงงานเข้าข่ายก่อนมี factory master |
+| `data[].id` | integer \| null | ฟิลด์เดิมสำหรับ compatibility ซึ่งมีค่าเป็น `factories.id`; เป็น `null` ได้เมื่อยังไม่มี factory master และห้าม fallback ไปใช้ ID จากตารางอื่น |
+| `data[].eligibleFactoryId` | integer | `eligible_factories.id` ของโรงงานที่ active connected point ผูกอยู่; ต้องมีค่าเสมอในสอง API หน้าหลัก |
 | `data[].factoryId` | string | identifier หลักสำหรับหน้าและจุดตรวจวัด; eligible-only row ใช้เลขทะเบียนใหม่ |
 | `data[].factoryName` | string | ชื่อโรงงานจาก current/live POMS point ล่าสุด; fallback เป็นโรงงานเข้าข่าย แล้วจึง factory master |
 | `data[].newRegistrationNo` | string | เลขทะเบียนโรงงานใหม่ |
@@ -69,6 +70,7 @@ Minimal response (`200 OK`) สำหรับโรงงานที่เจ�
   "data": [
     {
       "id": null,
+      "eligibleFactoryId": 17,
       "factoryId": "40100007125560",
       "factoryName": "บริษัท ตัวอย่าง จำกัด",
       "newRegistrationNo": "40100007125560",
@@ -116,6 +118,7 @@ Minimal response (`200 OK`) สำหรับโรงงานที่เจ�
 Visibility and authorization:
 
 - `ALL`, `IN_REGION` และ `IN_PROVINCE` ใช้ active POMS point และพื้นที่จาก `eligible_factories`; ไม่ต้องมี `factories` row.
+- ใช้ `eligibleFactoryId` เมื่อต้องอ้างอิง row ใน `eligible_factories`; อย่านำไปแทน `id` เพราะเป็น ID จากคนละตาราง. ใช้ `factoryId` สำหรับ path/query ที่รับ identifier ของโรงงาน.
 - `OWN_FACTORY` ยังต้องผ่าน `user_juristics` หรือ `user_factory_access` ที่อ้างถึง `factories`; ระบบไม่อนุมาน ownership จากเลขทะเบียน.
 - row ที่ `eligible_factories.deleted_at` หรือ connected point `deleted_at` ไม่เป็น `null` จะไม่แสดง.
 - โรงงานที่มีหลาย active points แสดงเป็นหนึ่ง factory row และรวม points ใน `measurementPoints`.
@@ -141,6 +144,7 @@ Response ใช้ identity, location, `monitoringPointCountBySystem`, `status` 
   "data": [
     {
       "id": null,
+      "eligibleFactoryId": 17,
       "factoryId": "40100007125560",
       "factoryName": "บริษัท ตัวอย่าง จำกัด",
       "newRegistrationNo": "40100007125560",
