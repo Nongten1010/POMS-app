@@ -1310,7 +1310,7 @@ describe('connectionRequestsService', () => {
     });
   });
 
-  it('returns only connected public factory map points without loading user-specific or raw measurement data', async () => {
+  it('returns the latest hourly measurement data for each public factory map point', async () => {
     mockedRepository.listFactoriesForAccess.mockResolvedValue([
       factorySummary({
         factoryId: 'factory-connected',
@@ -1373,7 +1373,10 @@ describe('connectionRequestsService', () => {
     );
     expect(mockedRepository.listConnectedMeasurementPointsForFactories).not.toHaveBeenCalled();
     expect(mockedRepository.listFavoriteFactoryIds).not.toHaveBeenCalled();
-    expect(mockedParameterValuesService.latestHourly).not.toHaveBeenCalled();
+    expect(mockedParameterValuesService.latestHourly).toHaveBeenCalledWith('S0001', {
+      actorUserId: 0,
+      scope: 'ALL',
+    });
     expect(result.data).toHaveLength(1);
     expect(result.data[0]).toMatchObject({
       factoryId: 'factory-connected',
@@ -1389,12 +1392,19 @@ describe('connectionRequestsService', () => {
           pointCode: 'S0001',
           systemType: 'CEMS',
           parameters: ['NOx (ppm)'],
+          data: [
+            {
+              station_id: 'S0001',
+              'NOx (ppm)': '10.5',
+              cdate: '2026-06-10',
+              ctime: '23:00:00',
+            },
+          ],
         },
       ],
     });
     expect(result.data[0]).not.toHaveProperty('isFavorite');
     expect(result.data[0]).not.toHaveProperty('hasLatestHourlyMeasurement');
-    expect(result.data[0].measurementPoints[0]).not.toHaveProperty('data');
   });
 
   it('excludes factories that are not selected as eligible before displaying operator factories', async () => {

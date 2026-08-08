@@ -468,14 +468,10 @@ export interface OperatorFactoryMeasurementPointDTO {
   data: Record<string, unknown>[];
 }
 
-export interface PublicFactoryMapPointDTO extends Omit<
+export type PublicFactoryMapPointDTO = Omit<
   OperatorFactoryDashboardRowDTO,
-  'isFavorite' | 'hasLatestHourlyMeasurement' | 'measurementPoints'
-> {
-  measurementPoints: PublicFactoryMapMeasurementPointDTO[];
-}
-
-export type PublicFactoryMapMeasurementPointDTO = Omit<OperatorFactoryMeasurementPointDTO, 'data'>;
+  'isFavorite' | 'hasLatestHourlyMeasurement'
+>;
 
 export interface CurrentFactoryMeasurementPointDTO extends OperatorFactoryMeasurementPointDTO {
   connectedPointId?: number;

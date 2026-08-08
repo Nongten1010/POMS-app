@@ -174,6 +174,14 @@ describe('operator factory dashboard routes', () => {
               pointCode: 'S0001',
               systemType: 'CEMS',
               parameters: ['CO (ppm)'],
+              data: [
+                {
+                  station_id: 'S0001',
+                  'CO (ppm)': 47.91,
+                  cdate: '2026-08-07',
+                  ctime: '21:00:00',
+                },
+              ],
             },
           ],
         },
@@ -363,7 +371,7 @@ describe('operator factory dashboard routes', () => {
     );
   });
 
-  it('lists public factory map points without authentication and omits user-specific fields', async () => {
+  it('lists public factory map points with latest measurement data without authentication', async () => {
     const app = createApp();
 
     const response = await request(app).get('/api/v1/public/factory-map-points?systemType=CEMS');
@@ -414,6 +422,14 @@ describe('operator factory dashboard routes', () => {
               pointCode: 'S0001',
               systemType: 'CEMS',
               parameters: ['CO (ppm)'],
+              data: [
+                {
+                  station_id: 'S0001',
+                  'CO (ppm)': 47.91,
+                  cdate: '2026-08-07',
+                  ctime: '21:00:00',
+                },
+              ],
             },
           ],
         },
@@ -422,7 +438,6 @@ describe('operator factory dashboard routes', () => {
     });
     expect(response.body.data[0]).not.toHaveProperty('isFavorite');
     expect(response.body.data[0]).not.toHaveProperty('hasLatestHourlyMeasurement');
-    expect(response.body.data[0].measurementPoints[0]).not.toHaveProperty('data');
   });
 
   it('does not expose the operator dashboard under cems-wpms requests', async () => {

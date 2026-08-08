@@ -103,7 +103,7 @@ Query fields:
 
 Request body: ไม่มี
 
-Response ใช้ identity, location, `monitoringPointCountBySystem`, `status` และ `measurementPoints` รูปแบบเดียวกับ dashboard แต่ไม่คืน `isFavorite`, `hasLatestHourlyMeasurement` หรือ raw measurement `data`.
+Response ใช้ identity, location, `monitoringPointCountBySystem`, `status` และ `measurementPoints` รูปแบบเดียวกับ dashboard รวมถึง `measurementPoints[].data` สำหรับข้อมูลล่าสุดรายชั่วโมงของแต่ละจุดวัด โดยไม่คืน field เฉพาะผู้ใช้คือ `isFavorite` และ `hasLatestHourlyMeasurement`. `data` เป็น array ว่างได้เมื่อยังไม่มีข้อมูลรายชั่วโมงล่าสุด.
 
 ```json
 {
@@ -125,7 +125,15 @@ Response ใช้ identity, location, `monitoringPointCountBySystem`, `status` 
           "pointName": "ปล่องหลัก",
           "pointCode": "S4010",
           "systemType": "CEMS",
-          "parameters": ["CO (ppm)"]
+          "parameters": ["CO (ppm)"],
+          "data": [
+            {
+              "station_id": "S4010",
+              "CO (ppm)": "42.15",
+              "cdate": "2026-08-07",
+              "ctime": "21:00:00"
+            }
+          ]
         }
       ]
     }

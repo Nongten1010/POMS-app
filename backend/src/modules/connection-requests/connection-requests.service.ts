@@ -447,9 +447,7 @@ export const connectionRequestsService = {
     const data = eligibleFactories
       .map<PublicFactoryMapPointDTO>((factory) => {
         const currentMeasurementPoints = measurementPointsByFactory.get(factory.factoryId) ?? [];
-        const measurementPoints = currentMeasurementPoints
-          .map(toOperatorFactoryMeasurementPoint)
-          .map(toPublicFactoryMapMeasurementPoint);
+        const measurementPoints = currentMeasurementPoints.map(toOperatorFactoryMeasurementPoint);
         const monitoringPointCountBySystem =
           countMeasurementPointsBySystem(currentMeasurementPoints);
 
@@ -499,7 +497,14 @@ export const connectionRequestsService = {
       })
       .filter((factory) => matchesPublicFactoryMapPointsQuery(factory, query));
 
-    return { data, meta: { total: data.length } };
+    const dataWithLatestHourlyMeasurements = await populateLatestHourlyMeasurements(
+      data,
+      0,
+      'ALL',
+      false,
+    );
+
+    return { data: dataWithLatestHourlyMeasurements, meta: { total: data.length } };
   },
 
   async setOperatorFactoryFavorite(
@@ -1884,13 +1889,6 @@ function toOperatorFactoryMeasurementPoint(
   };
 }
 
-function toPublicFactoryMapMeasurementPoint(
-  point: OperatorFactoryMeasurementPointDTO,
-): PublicFactoryMapPointDTO['measurementPoints'][number] {
-  const { data: _data, ...publicPoint } = point;
-  return publicPoint;
-}
-
 function getFactoryLogoUrl(points: CurrentFactoryMeasurementPointDTO[]): string | null {
   for (const point of points) {
     if (point.factoryLogo?.fileUrl) return point.factoryLogo.fileUrl;
@@ -2094,11 +2092,14 @@ function toStringOrNull(value: string | number | null | undefined): string | nul
   return String(value);
 }
 
-async function populateLatestHourlyMeasurements(
-  factories: OperatorFactoryDashboardRowDTO[],
+async function populateLatestHourlyMeasurements<
+  TFactory extends { measurementPoints: OperatorFactoryMeasurementPointDTO[] },
+>(
+  factories: TFactory[],
   actorUserId: number,
   factoryViewScope: AccessScope,
-): Promise<OperatorFactoryDashboardRowDTO[]> {
+  includeLatestHourlyMeasurementFlag = true,
+): Promise<TFactory[]> {
   return Promise.all(
     factories.map(async (factory) => {
       const measurementPoints = await Promise.all(
@@ -2112,10 +2113,15 @@ async function populateLatestHourlyMeasurements(
           ),
         })),
       );
-      return {
+      const factoryWithLatestMeasurements = {
         ...factory,
-        hasLatestHourlyMeasurement: measurementPoints.some((point) => point.data.length > 0),
         measurementPoints,
+      };
+      if (!includeLatestHourlyMeasurementFlag) return factoryWithLatestMeasurements;
+
+      return {
+        ...factoryWithLatestMeasurements,
+        hasLatestHourlyMeasurement: measurementPoints.some((point) => point.data.length > 0),
       };
     }),
   );
