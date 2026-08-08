@@ -407,21 +407,17 @@ export const connectionRequestsService = {
     );
 
     const data = eligibleFactories
-      .map<PublicFactoryMapPointDTO>((factory) =>
-        toFactoryDashboardBaseRow(
+      .map<PublicFactoryMapPointDTO>((factory) => ({
+        ...toFactoryDashboardBaseRow(
           factory,
           measurementPointsByFactory.get(factory.factoryId) ?? [],
           factoryMainTypeLabels,
         ),
-      )
+        hasLatestHourlyMeasurement: false,
+      }))
       .filter((factory) => matchesPublicFactoryMapPointsQuery(factory, query));
 
-    const dataWithLatestHourlyMeasurements = await populateLatestHourlyMeasurements(
-      data,
-      0,
-      'ALL',
-      false,
-    );
+    const dataWithLatestHourlyMeasurements = await populateLatestHourlyMeasurements(data, 0, 'ALL');
 
     return { data: dataWithLatestHourlyMeasurements, meta: { total: data.length } };
   },
@@ -2083,7 +2079,7 @@ function toFactoryDashboardBaseRow(
   factory: FactorySummaryDTO,
   currentMeasurementPoints: CurrentFactoryMeasurementPointDTO[],
   factoryMainTypeLabels: Map<string, string>,
-): PublicFactoryMapPointDTO {
+): Omit<PublicFactoryMapPointDTO, 'hasLatestHourlyMeasurement'> {
   const isInIndustrialEstate = Boolean(
     factory.industrialEstateCode || factory.industrialEstateName,
   );
@@ -2232,15 +2228,8 @@ function toStringOrNull(value: string | number | null | undefined): string | nul
 
 async function populateLatestHourlyMeasurements<
   TFactory extends { measurementPoints: OperatorFactoryMeasurementPointDTO[] },
->(
-  factories: TFactory[],
-  actorUserId: number,
-  factoryViewScope: AccessScope,
-  includeLatestHourlyMeasurementFlag = true,
-): Promise<TFactory[]> {
-  const currentBangkokHour = includeLatestHourlyMeasurementFlag
-    ? toBangkokDateHour(nowProvider())
-    : null;
+>(factories: TFactory[], actorUserId: number, factoryViewScope: AccessScope): Promise<TFactory[]> {
+  const currentBangkokHour = toBangkokDateHour(nowProvider());
   const factoriesWithLatestMeasurements = await Promise.all(
     factories.map(async (factory) => {
       const measurementPoints = await Promise.all(
@@ -2261,8 +2250,6 @@ async function populateLatestHourlyMeasurements<
       return factoryWithLatestMeasurements;
     }),
   );
-
-  if (!includeLatestHourlyMeasurementFlag) return factoriesWithLatestMeasurements;
 
   return factoriesWithLatestMeasurements.map((factory) => ({
     ...factory,

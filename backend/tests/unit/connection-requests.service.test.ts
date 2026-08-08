@@ -1592,9 +1592,11 @@ describe('connectionRequestsService', () => {
         measurementPoints: [expect.objectContaining({ stationId: 'S1074' })],
       }),
     ]);
+    expect(result.data[0]).toHaveProperty('hasLatestHourlyMeasurement', false);
   });
 
   it('returns the latest hourly measurement data for each public factory map point', async () => {
+    connectionRequestsService.setClockForTests(() => new Date('2026-06-10T16:50:00.000Z'));
     mockedRepository.listFactoriesForAccess.mockResolvedValue([
       factorySummary({
         factoryId: 'factory-connected',
@@ -1733,7 +1735,7 @@ describe('connectionRequestsService', () => {
       ],
     });
     expect(result.data[0]).not.toHaveProperty('isFavorite');
-    expect(result.data[0]).not.toHaveProperty('hasLatestHourlyMeasurement');
+    expect(result.data[0]).toHaveProperty('hasLatestHourlyMeasurement', true);
     expect(result.data[0].measurementPoints[0]?.parameterStandards[0]).toEqual({
       parameter: 'NOx (ppm)',
       standardCriteria: { enabled: true, standardValue: 120, rows: [] },

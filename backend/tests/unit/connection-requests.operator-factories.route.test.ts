@@ -171,6 +171,7 @@ describe('operator factory dashboard routes', () => {
           industrialAreaTypeLabel: 'ในนิคมอุตสาหกรรม',
           industrialEstateCode: 'MTP',
           industrialEstateName: 'นิคมอุตสาหกรรมมาบตาพุด',
+          hasLatestHourlyMeasurement: false,
           monitoringPointCountBySystem: [
             { systemType: 'CEMS', count: 1 },
             { systemType: 'WPMS', count: 0 },
@@ -429,6 +430,7 @@ describe('operator factory dashboard routes', () => {
           industrialAreaTypeLabel: 'ในนิคมอุตสาหกรรม',
           industrialEstateCode: 'MTP',
           industrialEstateName: 'นิคมอุตสาหกรรมมาบตาพุด',
+          hasLatestHourlyMeasurement: false,
           monitoringPointCountBySystem: [
             { systemType: 'CEMS', count: 1 },
             { systemType: 'WPMS', count: 0 },
@@ -463,7 +465,7 @@ describe('operator factory dashboard routes', () => {
       meta: { total: 1 },
     });
     expect(response.body.data[0]).not.toHaveProperty('isFavorite');
-    expect(response.body.data[0]).not.toHaveProperty('hasLatestHourlyMeasurement');
+    expect(response.body.data[0].hasLatestHourlyMeasurement).toBe(false);
   });
 
   it('does not expose the operator dashboard under cems-wpms requests', async () => {

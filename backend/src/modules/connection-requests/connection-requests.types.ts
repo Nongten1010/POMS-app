@@ -488,10 +488,7 @@ export interface OperatorFactoryMeasurementCriteriaRowDTO {
   max: number | null;
 }
 
-export type PublicFactoryMapPointDTO = Omit<
-  OperatorFactoryDashboardRowDTO,
-  'isFavorite' | 'hasLatestHourlyMeasurement'
->;
+export type PublicFactoryMapPointDTO = Omit<OperatorFactoryDashboardRowDTO, 'isFavorite'>;
 
 export interface CurrentFactoryMeasurementPointDTO extends Omit<
   OperatorFactoryMeasurementPointDTO,

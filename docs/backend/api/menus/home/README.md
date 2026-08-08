@@ -136,7 +136,9 @@ Query fields:
 
 Request body: ไม่มี
 
-Response ใช้ identity, location, `monitoringPointCountBySystem`, `status` และ `measurementPoints` รูปแบบเดียวกับ dashboard รวมถึง `measurementPoints[].data` สำหรับข้อมูลล่าสุดรายชั่วโมงของแต่ละจุดวัด โดยไม่คืน field เฉพาะผู้ใช้คือ `isFavorite` และ `hasLatestHourlyMeasurement`. `data` เป็น array ว่างได้เมื่อยังไม่มีข้อมูลรายชั่วโมงล่าสุด.
+Response ใช้ identity, location, `monitoringPointCountBySystem`, `status` และ `measurementPoints` รูปแบบเดียวกับ dashboard รวมถึง `measurementPoints[].data` สำหรับข้อมูลล่าสุดรายชั่วโมงของแต่ละจุดวัด และคืน `hasLatestHourlyMeasurement` ตามกติกาเดียวกับ authenticated dashboard. Public API ไม่คืน field เฉพาะผู้ใช้คือ `isFavorite`. `data` เป็น array ว่างได้เมื่อยังไม่มีข้อมูลรายชั่วโมงล่าสุด.
+
+ตัวอย่างต่อไปนี้สมมติว่าเรียก API วันที่ `2026-08-07` ในช่วงเวลา `21:00-21:59` ตาม `Asia/Bangkok` จึงได้ `hasLatestHourlyMeasurement: true`.
 
 ```json
 {
@@ -148,6 +150,7 @@ Response ใช้ identity, location, `monitoringPointCountBySystem`, `status` 
       "factoryId": "40100007125560",
       "factoryName": "บริษัท ตัวอย่าง จำกัด",
       "newRegistrationNo": "40100007125560",
+      "hasLatestHourlyMeasurement": true,
       "monitoringPointCountBySystem": [
         { "systemType": "CEMS", "count": 1 },
         { "systemType": "WPMS", "count": 0 }

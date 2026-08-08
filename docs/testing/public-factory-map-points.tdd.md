@@ -1,5 +1,7 @@
 # หลักฐาน TDD สำหรับ Public Factory Map Points
 
+> เอกสารนี้เป็นหลักฐานย้อนหลังของ contract ตอนเพิ่ม public route ใน commit `1b370c6` และไม่ใช่ contract ปัจจุบัน โปรดอ้างอิง [เอกสาร API หน้าหลัก](../backend/api/menus/home/README.md#get-apiv1publicfactory-map-points) ซึ่งปัจจุบันคืน `hasLatestHourlyMeasurement` และข้อมูลล่าสุดรายชั่วโมงแล้ว
+
 ## แผนตั้งต้น
 
 ไม่มีไฟล์ `*.plan.md` แยกต่างหาก จึงสรุป user journeys จากคำขอให้สร้าง public API สำหรับแสดงจุดโรงงานทั้งหมดบนแผนที่ก่อน login
