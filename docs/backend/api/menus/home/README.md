@@ -51,6 +51,7 @@ Response fields ที่ใช้ระบุตัวโรงงานแล�
 | `data[].isFavorite` | boolean | favorite ของผู้ใช้ปัจจุบัน |
 | `data[].monitoringPointCountBySystem` | array | จำนวน active point แยก `CEMS` และ `WPMS` |
 | `data[].measurementPoints` | array | active connected points และค่ารายชั่วโมงที่อ่านได้ตาม scope |
+| `data[].measurementPoints[].parameters` | string[] | ชื่อพารามิเตอร์พร้อมหน่วย; `Flow` หน่วย `m3/hr` ใช้ชื่อมาตรฐาน `Flow Rate (m3/hr)` เพียงชื่อเดียว |
 | `data[].measurementPoints[].data[].<parameter label>` | number \| string \| null | ใช้ค่าตรวจวัดเมื่อ StatusCode เป็น `1`; StatusCode อื่นใช้ชื่อสถานะ เช่น `Shut Down` หรือ `No Discharge` |
 | `data[].status` | `แสดง` | display status ของ row |
 | `meta.total` | integer | จำนวนโรงงานหลังใช้ query filters |
@@ -93,6 +94,7 @@ Visibility and authorization:
 - `OWN_FACTORY` ยังต้องผ่าน `user_juristics` หรือ `user_factory_access` ที่อ้างถึง `factories`; ระบบไม่อนุมาน ownership จากเลขทะเบียน.
 - row ที่ `eligible_factories.deleted_at` หรือ connected point `deleted_at` ไม่เป็น `null` จะไม่แสดง.
 - โรงงานที่มีหลาย active points แสดงเป็นหนึ่ง factory row และรวม points ใน `measurementPoints`.
+- ชื่อที่ลงทะเบียนเป็น `Flow`, `Flow (m3/hr)`, `Flow Rate (m3/hr)` หรือ `Flow Rate (m³/hr)` จะถูกรวมเป็น `Flow Rate (m3/hr)` และค่าใน `measurementPoints[].data` อ่านจาก source `flow_value`.
 
 ### `GET /api/v1/public/factory-map-points`
 

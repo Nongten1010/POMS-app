@@ -825,6 +825,7 @@ describe('connectionRequestsService', () => {
           temp_status: 9,
           o2_value: 12.58,
           flow_value: 1981710,
+          flow_units: 'm3/hr',
           flow_status: 'Maintenance',
         },
       ],
@@ -858,7 +859,7 @@ describe('connectionRequestsService', () => {
         pointName: 'ปล่องระบาย A',
         pointCode: 'S0001',
         systemType: 'CEMS',
-        parameters: ['CO', 'NOx', 'Temp', 'O2', 'Flow'],
+        parameters: ['CO', 'NOx', 'Temp', 'O2', 'Flow Rate (m3/hr)', 'Flow (m3/hr)', 'Flow (L/s)'],
         factoryLogo: {
           title: 'สัญลักษณ์ของโรงงานหรือโลโก้บริษัท',
           fileUrl: 'https://example.com/files/current-profile-logo.png',
@@ -938,7 +939,14 @@ describe('connectionRequestsService', () => {
           pointName: 'ปล่องระบาย A',
           pointCode: 'S0001',
           systemType: 'CEMS',
-          parameters: ['CO (ppm)', 'NOx (ppm)', 'Temp. (°C)', 'O2 (%)', 'Flow (m3/hr)'],
+          parameters: [
+            'CO (ppm)',
+            'NOx (ppm)',
+            'Temp. (°C)',
+            'O2 (%)',
+            'Flow Rate (m3/hr)',
+            'Flow (L/s)',
+          ],
           data: [
             {
               station_id: 'NB-C21',
@@ -948,7 +956,8 @@ describe('connectionRequestsService', () => {
               'NOx (ppm)': 'Shut Down',
               'Temp. (°C)': 'No Discharge',
               'O2 (%)': 12.58,
-              'Flow (m3/hr)': 'Maintenance',
+              'Flow Rate (m3/hr)': 'Maintenance',
+              'Flow (L/s)': null,
             },
           ],
         },
@@ -1337,7 +1346,7 @@ describe('connectionRequestsService', () => {
         pointName: 'ปล่อง A',
         pointCode: 'S0001',
         systemType: 'CEMS',
-        parameters: ['NOx'],
+        parameters: ['NOx', 'Flow Rate (m3/hr)', 'Flow (m3/hr)'],
         documentsAndImages: [
           {
             title: 'สัญลักษณ์ของโรงงานหรือโลโก้บริษัท',
@@ -1353,6 +1362,8 @@ describe('connectionRequestsService', () => {
           station_id: 'S0001',
           nox_value: '10.5',
           nox_units: 'ppm',
+          flow_value: '1234.5',
+          flow_units: 'm3/hr',
           cdate: '2026-06-10',
           ctime: '23:00:00',
         },
@@ -1363,8 +1374,16 @@ describe('connectionRequestsService', () => {
         schemaName: 'ingest',
         tableName: 'S0001_data_60m',
         count: 1,
-        registeredParameters: ['NOx (ppm)'],
-        returnedColumns: ['station_id', 'nox_value', 'nox_units', 'cdate', 'ctime'],
+        registeredParameters: ['NOx (ppm)', 'Flow Rate (m3/hr)', 'Flow (m3/hr)'],
+        returnedColumns: [
+          'station_id',
+          'nox_value',
+          'nox_units',
+          'flow_value',
+          'flow_units',
+          'cdate',
+          'ctime',
+        ],
       },
     });
 
@@ -1399,11 +1418,12 @@ describe('connectionRequestsService', () => {
           pointName: 'ปล่อง A',
           pointCode: 'S0001',
           systemType: 'CEMS',
-          parameters: ['NOx (ppm)'],
+          parameters: ['NOx (ppm)', 'Flow Rate (m3/hr)'],
           data: [
             {
               station_id: 'S0001',
               'NOx (ppm)': '10.5',
+              'Flow Rate (m3/hr)': '1234.5',
               cdate: '2026-06-10',
               ctime: '23:00:00',
             },

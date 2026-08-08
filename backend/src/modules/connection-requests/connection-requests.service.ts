@@ -1885,7 +1885,7 @@ function toOperatorFactoryMeasurementPoint(
     pointName: point.pointName,
     pointCode: point.pointCode,
     systemType: point.systemType,
-    parameters: point.parameters.map(toParameterDisplayName),
+    parameters: uniqueParameterDisplayNames(point.parameters),
     data: [],
   };
 }
@@ -1941,19 +1941,40 @@ const parameterUnitLabels: Record<string, string> = {
   temp: 'Temp. (°C)',
   temperature: 'Temp. (°C)',
   o2: 'O2 (%)',
-  flow: 'Flow (m3/hr)',
+  flow: 'Flow Rate (m3/hr)',
   bod: 'BOD (mg/L)',
   cod: 'COD (mg/L)',
   tss: 'TSS (mg/L)',
 };
+const canonicalFlowRateLabel = parameterUnitLabels.flow;
 
 function toParameterDisplayName(parameter: string): string {
   const trimmed = parameter.trim();
   if (!trimmed) return trimmed;
+  if (isCubicMetersPerHourFlowParameter(trimmed)) return canonicalFlowRateLabel;
   if (/\([^)]*\)/.test(trimmed)) return trimmed;
 
   const normalized = trimmed.toLowerCase().replace(/[^a-z0-9]+/g, '');
   return parameterUnitLabels[normalized] ?? trimmed;
+}
+
+function uniqueParameterDisplayNames(parameters: string[]): string[] {
+  const displayNames = new Map<string, string>();
+
+  for (const parameter of parameters) {
+    const displayName = toParameterDisplayName(parameter);
+    const key = displayName.toLowerCase();
+    if (displayName && !displayNames.has(key)) displayNames.set(key, displayName);
+  }
+
+  return [...displayNames.values()];
+}
+
+function isCubicMetersPerHourFlowParameter(parameter: string): boolean {
+  const normalizedName = toParameterColumnPrefix(parameter);
+  const normalizedUnit = normalizeParameterUnit(extractParameterUnit(parameter));
+  const isFlowName = normalizedName === 'flow' || normalizedName === 'flowrate';
+  return isFlowName && (!normalizedUnit || normalizedUnit === 'm3hr');
 }
 
 function filterEligibleFactoryRowsByQuery(
@@ -2230,7 +2251,8 @@ function toDashboardMeasurementRow(
 function groupParametersByColumnPrefix(parameters: string[]): Map<string, string[]> {
   const grouped = new Map<string, string[]>();
   for (const parameter of parameters) {
-    const prefix = toParameterColumnPrefix(parameter);
+    const prefix =
+      parameter === canonicalFlowRateLabel ? 'flow' : toParameterColumnPrefix(parameter);
     grouped.set(prefix, [...(grouped.get(prefix) ?? []), parameter]);
   }
   return grouped;
@@ -2262,6 +2284,7 @@ function extractParameterUnit(parameter: string): string {
 
 function normalizeParameterUnit(unit: string): string {
   return unit
+    .normalize('NFKD')
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9%]+/g, '');
