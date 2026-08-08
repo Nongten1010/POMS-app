@@ -1545,8 +1545,8 @@ function FactoryMap({ factories }) {
     })
 
     if (factoriesWithCoordinates.length > 0) {
-      const center = getMapCenter(factoriesWithCoordinates)
-      map.location(center, true)
+      const firstFactory = factoriesWithCoordinates[0]
+      map.location({ lon: firstFactory.lon, lat: firstFactory.lat }, true)
       map.zoom(factoriesWithCoordinates.length === 1 ? 13 : 10, true)
     }
   }, [factories])
@@ -2751,21 +2751,6 @@ function AdvancedSearchDialog({
       </DialogActions>
     </Dialog>
   )
-}
-
-function getMapCenter(factoryList) {
-  const sum = factoryList.reduce(
-    (current, factory) => ({
-      lon: current.lon + factory.lon,
-      lat: current.lat + factory.lat,
-    }),
-    { lon: 0, lat: 0 },
-  )
-
-  return {
-    lon: sum.lon / factoryList.length,
-    lat: sum.lat / factoryList.length,
-  }
 }
 
 export default HomePage
