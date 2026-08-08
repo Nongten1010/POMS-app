@@ -1,0 +1,11 @@
+{
+  "NoData": "NODATA",
+  "Calibration": "CAL",
+  "Defective": "DEF",
+  "Maintenance": "MA",
+  "Start Up": "STARTUP",
+  "Shut Down": "SHTDWN",
+  "Turnaround": "TRNARND",
+  ".etc": "ETC",
+  "No Discharge": "NODSCH"
+}

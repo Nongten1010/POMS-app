@@ -41,6 +41,7 @@ import { LineChart } from '@mui/x-charts/LineChart'
 import dayjs from 'dayjs'
 import 'dayjs/locale/th'
 import locationOptions from '../option/locationOptions.json'
+import measurementValueAbbreviationOptions from '../option/measurementValueAbbreviationOptions.json'
 
 const longdoMapKey = import.meta.env.VITE_LONGDO_MAP_KEY ?? ''
 const longdoMapScriptId = 'longdo-map-script'
@@ -88,6 +89,34 @@ const statisticStatusColors = {
   insufficient: '#9ca3af',
   noData: '#9ca3af',
   invalid: '#9ca3af',
+}
+const measurementValueStatusColors = {
+  normal: '#46b529',
+  warning: '#f59e0b',
+  critical: '#ef4444',
+  invalid: '#ef4444',
+}
+const factorySystemChipStatusColors = {
+  normal: {
+    bgcolor: '#16a34a',
+    hoverBgcolor: '#15803d',
+    color: '#ffffff',
+  },
+  warning: {
+    bgcolor: '#f97316',
+    hoverBgcolor: '#ea580c',
+    color: '#ffffff',
+  },
+  critical: {
+    bgcolor: '#dc2626',
+    hoverBgcolor: '#b91c1c',
+    color: '#ffffff',
+  },
+  unavailable: {
+    bgcolor: '#9ca3af',
+    hoverBgcolor: '#6b7280',
+    color: '#ffffff',
+  },
 }
 const pollutionTrendLegendItems = [
   { label: 'ปกติ ค่ามลพิษ ≤ 180', color: statisticStatusColors.normal },
@@ -426,6 +455,7 @@ function mapOperatorFactory(row, index) {
     logoBg: logoBackgrounds[index % logoBackgrounds.length],
     logoUrl: normalizeUploadUrl(row.factoryLogoUrl ?? row.logoUrl),
     isFavorite: row.isFavorite === true,
+    hasLatestHourlyMeasurement: row.hasLatestHourlyMeasurement,
     measurementPoints: Array.isArray(row.measurementPoints) ? row.measurementPoints : [],
   }
 }
@@ -1035,23 +1065,12 @@ function FactoryCard({
           </Typography>
           <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', mt: 0.5 }}>
             {factory.systems.map((system) => (
-              <Chip
+              <FactorySystemChip
                 key={system}
-                size="small"
-                label={system}
-                clickable
-                aria-expanded={activeSystem === system}
+                factory={factory}
+                system={system}
+                active={activeSystem === system}
                 onClick={() => setActiveSystem((current) => (current === system ? null : system))}
-                sx={{
-                  height: 22,
-                  bgcolor: activeSystem === system ? 'primary.700' : 'secondary.600',
-                  color: activeSystem === system ? 'primary.contrastText' : 'secondary.contrastText',
-                  fontWeight: 600,
-                  '& .MuiChip-label': { px: 1 },
-                  '&:hover': {
-                    bgcolor: activeSystem === system ? 'primary.800' : 'secondary.700',
-                  },
-                }}
               />
             ))}
             <Typography
@@ -1110,36 +1129,220 @@ function FactoryCard({
   )
 }
 
+function FactorySystemChip({ factory, system, active, onClick }) {
+  const status = getFactorySystemChipStatus(factory, system)
+  const colors = factorySystemChipStatusColors[status] ?? factorySystemChipStatusColors.normal
+
+  return (
+    <Chip
+      size="small"
+      label={system}
+      clickable
+      aria-expanded={active}
+      onClick={onClick}
+      sx={{
+        height: 22,
+        bgcolor: colors.bgcolor,
+        color: colors.color,
+        fontWeight: 600,
+        outline: active ? '2px solid' : 'none',
+        outlineColor: active ? 'primary.200' : 'transparent',
+        outlineOffset: 1,
+        '& .MuiChip-label': { px: 1 },
+        '&:hover': {
+          bgcolor: colors.hoverBgcolor,
+        },
+      }}
+    />
+  )
+}
+
+function getFactorySystemChipStatus(factory, systemType) {
+  if (factory?.hasLatestHourlyMeasurement === false) {
+    return 'unavailable'
+  }
+
+  const measurementPoints = Array.isArray(factory?.measurementPoints)
+    ? factory.measurementPoints.filter((point) => point?.systemType === systemType)
+    : []
+  const statuses = measurementPoints.flatMap((point) => {
+    const parameters = getMeasurementPointParameters(point)
+    const dataRows = Array.isArray(point?.data) ? point.data : []
+
+    return dataRows.flatMap((row) =>
+      parameters.map((parameter) => getNumericMeasurementStatus(row?.[parameter], point, parameter)).filter(Boolean),
+    )
+  })
+
+  if (statuses.includes('critical')) {
+    return 'critical'
+  }
+
+  if (statuses.includes('warning')) {
+    return 'warning'
+  }
+
+  if (statuses.length > 0 && statuses.every((status) => status === 'normal')) {
+    return 'normal'
+  }
+
+  return 'normal'
+}
+
+function getMeasurementPointParameters(point) {
+  if (Array.isArray(point?.parameters) && point.parameters.length > 0) {
+    return point.parameters
+  }
+
+  const dataRows = Array.isArray(point?.data) ? point.data : []
+  return Array.from(
+    new Set(
+      dataRows.flatMap((row) =>
+        Object.keys(row ?? {}).filter((key) => !['station_id', 'cdate', 'ctime'].includes(key)),
+      ),
+    ),
+  )
+}
+
 function getMeasurementTable(factory, systemType) {
   const measurementPoints = factory.measurementPoints.filter((point) => point?.systemType === systemType)
   const parameters = Array.from(
     new Set(
       measurementPoints.flatMap((point) => {
-        if (Array.isArray(point?.parameters) && point.parameters.length > 0) {
-          return point.parameters
-        }
-
-        const dataRows = Array.isArray(point?.data) ? point.data : []
-        return dataRows.flatMap((row) =>
-          Object.keys(row).filter((key) => !['station_id', 'cdate', 'ctime'].includes(key)),
-        )
+        return getMeasurementPointParameters(point)
       }),
     ),
   )
   const rows = measurementPoints.flatMap((point) => {
     const dataRows = Array.isArray(point?.data) ? point.data : []
-    return dataRows.map((row) => [
-      row.station_id ?? point.pointCode ?? point.stationId ?? '',
-      row.cdate ?? '',
-      row.ctime ?? '',
-      ...parameters.map((parameter) => formatMeasurementValue(row[parameter])),
-    ])
+    return dataRows.map((row, dataRowIndex) => ({
+      key: `${point.stationId ?? point.pointCode ?? 'point'}-${row.cdate ?? ''}-${row.ctime ?? ''}-${dataRowIndex}`,
+      cells: [
+        createMeasurementCell(point.pointName ?? row.station_id ?? point.pointCode ?? point.stationId ?? ''),
+        createMeasurementCell(row.cdate ?? ''),
+        createMeasurementCell(row.ctime ?? ''),
+        ...parameters.map((parameter) => createMeasurementValueCell(row[parameter], point, parameter)),
+      ],
+    }))
   })
 
   return {
     columns: ['จุดตรวจวัด', 'วันที่', 'เวลา', ...parameters],
     rows,
   }
+}
+
+function createMeasurementCell(value) {
+  return {
+    displayValue: value,
+    color: 'text.primary',
+  }
+}
+
+function createMeasurementValueCell(value, point, parameter) {
+  const numericValue = toFiniteNumber(value)
+  const hasNumericValue = numericValue !== null
+
+  if (!hasNumericValue) {
+    return {
+      displayValue: formatMeasurementValue(value),
+      color: measurementValueStatusColors.invalid,
+    }
+  }
+
+  const criteriaStatus = getNumericMeasurementStatus(value, point, parameter)
+
+  return {
+    displayValue: formatMeasurementValue(value),
+    color: criteriaStatus ? measurementValueStatusColors[criteriaStatus] : measurementValueStatusColors.normal,
+  }
+}
+
+function getNumericMeasurementStatus(value, point, parameter) {
+  const numericValue = toFiniteNumber(value)
+
+  if (numericValue === null) {
+    return null
+  }
+
+  if (numericValue === 0) {
+    return 'critical'
+  }
+
+  return getMeasurementValueCriteriaStatus(numericValue, point, parameter) ?? 'normal'
+}
+
+function getMeasurementValueCriteriaStatus(value, point, parameter) {
+  const parameterStandard = Array.isArray(point?.parameterStandards)
+    ? point.parameterStandards.find((item) => item?.parameter === parameter)
+    : null
+  const activeCriteria = [parameterStandard?.standardCriteria, parameterStandard?.eiaCriteria]
+    .map((criteria) => getSingleCriteriaStatus(value, criteria))
+    .filter(Boolean)
+
+  if (activeCriteria.length === 0) {
+    return null
+  }
+
+  if (activeCriteria.includes('critical')) {
+    return 'critical'
+  }
+
+  if (activeCriteria.includes('warning')) {
+    return 'warning'
+  }
+
+  if (activeCriteria.every((status) => status === 'normal')) {
+    return 'normal'
+  }
+
+  return null
+}
+
+function getSingleCriteriaStatus(value, criteria) {
+  if (criteria?.enabled !== true || !Array.isArray(criteria.rows) || criteria.rows.length === 0) {
+    return null
+  }
+
+  const normalRow = criteria.rows.find((row) => row?.level === 'normal')
+  const warningRow = criteria.rows.find((row) => row?.level === 'warning')
+  const criticalRow = criteria.rows.find((row) => row?.level === 'critical')
+  const normalMax = toFiniteNumber(normalRow?.max)
+  const warningMin = toFiniteNumber(warningRow?.min)
+  const warningMax = toFiniteNumber(warningRow?.max)
+  const criticalMin = toFiniteNumber(criticalRow?.min)
+
+  if (criticalMin !== null && value > criticalMin) {
+    return 'critical'
+  }
+
+  if (warningMin !== null && warningMax !== null && value > warningMin && value <= warningMax) {
+    return 'warning'
+  }
+
+  if (normalMax !== null && value <= normalMax) {
+    return 'normal'
+  }
+
+  return 'critical'
+}
+
+function getMeasurementValueAbbreviation(value) {
+  const text = String(value ?? '').trim()
+
+  if (!text) {
+    return ''
+  }
+
+  if (measurementValueAbbreviationOptions[text]) {
+    return measurementValueAbbreviationOptions[text]
+  }
+
+  const matchedKey = Object.keys(measurementValueAbbreviationOptions).find(
+    (key) => key.toLowerCase() === text.toLowerCase(),
+  )
+
+  return matchedKey ? measurementValueAbbreviationOptions[matchedKey] : text
 }
 
 function formatMeasurementValue(value) {
@@ -1162,7 +1365,7 @@ function formatMeasurementValue(value) {
     })
   }
 
-  return String(value)
+  return getMeasurementValueAbbreviation(value)
 }
 
 function MeasurementTable({ table, sx }) {
@@ -1197,17 +1400,17 @@ function MeasurementTable({ table, sx }) {
         <TableBody>
           {table.rows.length > 0 ? (
             table.rows.map((row, rowIndex) => (
-              <TableRow key={`${row.join('|')}-${rowIndex}`}>
-                {row.map((value, index) => (
+              <TableRow key={row.key || rowIndex}>
+                {row.cells.map((cell, index) => (
                   <TableCell
-                    key={`${value}-${index}`}
+                    key={`${cell.displayValue}-${index}`}
                     sx={{
                       fontWeight: 300,
-                      color: index < valueStartIndex ? 'text.primary' : '#46b529',
+                      color: index < valueStartIndex ? 'text.primary' : cell.color,
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    {value}
+                    {cell.displayValue}
                   </TableCell>
                 ))}
               </TableRow>
