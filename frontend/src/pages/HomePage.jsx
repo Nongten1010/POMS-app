@@ -39,6 +39,7 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker'
 import { PickerDay } from '@mui/x-date-pickers/PickerDay'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import { AdapterDayjsBuddhist } from '@mui/x-date-pickers/AdapterDayjsBuddhist'
+import { ChartsReferenceLine } from '@mui/x-charts/ChartsReferenceLine'
 import { LineChart } from '@mui/x-charts/LineChart'
 import dayjs from 'dayjs'
 import 'dayjs/locale/th'
@@ -125,12 +126,26 @@ const factorySystemChipStatusColors = {
     color: '#ffffff',
   },
 }
-const pollutionTrendLegendItems = [
-  { label: 'ปกติ ค่ามลพิษ ≤ 180', color: statisticStatusColors.normal },
-  { label: 'เฝ้าระวัง ค่ามลพิษ ≤ 190', color: statisticStatusColors.warning },
-  { label: 'เกินมาตรฐาน ค่ามลพิษ > 190', color: statisticStatusColors.exceeded },
-  { label: 'ข้อมูลไม่เพียงพอ', color: statisticStatusColors.unavailable },
-]
+function getPollutionTrendLegendItems(threshold) {
+  const normalMax = toFiniteNumber(threshold?.normalMax)
+  const warningMax = toFiniteNumber(threshold?.warningMax)
+
+  return [
+    {
+      label: normalMax === null ? 'ปกติ' : `ปกติ ค่ามลพิษ ≤ ${normalMax.toLocaleString('th-TH')}`,
+      color: statisticStatusColors.normal,
+    },
+    {
+      label: warningMax === null ? 'เฝ้าระวัง' : `เฝ้าระวัง ค่ามลพิษ ≤ ${warningMax.toLocaleString('th-TH')}`,
+      color: statisticStatusColors.warning,
+    },
+    {
+      label: warningMax === null ? 'เกินมาตรฐาน' : `เกินมาตรฐาน ค่ามลพิษ > ${warningMax.toLocaleString('th-TH')}`,
+      color: statisticStatusColors.exceeded,
+    },
+    { label: 'ข้อมูลไม่เพียงพอ', color: statisticStatusColors.unavailable },
+  ]
+}
 
 const borderedTableSx = {
   '& th, & td': {
@@ -287,8 +302,13 @@ function mapMeasurementStatistics(payload, selectedPoint) {
     .map((threshold) => ({
       code: threshold?.parameterCode,
       label: getParameterLabelFromThreshold(threshold),
+      threshold,
     }))
     .filter((parameter) => parameter.code && parameter.label)
+  const thresholdsByParameter = parameterMap.reduce((result, parameter) => {
+    result[parameter.label] = parameter.threshold
+    return result
+  }, {})
   const fallbackParameters = Array.isArray(payload?.meta?.registeredParameters) ? payload.meta.registeredParameters : []
   const parameters = parameterMap.length > 0 ? parameterMap.map((parameter) => parameter.label) : fallbackParameters
   const pointRows = Array.isArray(data.measurementPoints) ? data.measurementPoints : []
@@ -298,6 +318,7 @@ function mapMeasurementStatistics(payload, selectedPoint) {
 
   return {
     parameters: parameters.length > 0 ? parameters : statisticParameters,
+    thresholdsByParameter,
     rows: rows.map((row) => {
       const values = {}
       const chartValues = {}
@@ -1805,6 +1826,7 @@ function FactoryBottomSheet({ factory, accessToken = '', open, onClose }) {
   const [calendarSummary, setCalendarSummary] = useState([])
   const [calendarError, setCalendarError] = useState('')
   const [measurementStatisticParameters, setMeasurementStatisticParameters] = useState(statisticParameters)
+  const [measurementStatisticThresholds, setMeasurementStatisticThresholds] = useState({})
   const [measurementStatisticRows, setMeasurementStatisticRows] = useState([])
   const [measurementStatisticError, setMeasurementStatisticError] = useState('')
   const statisticSystemOptions = useMemo(() => getStatisticSystemOptions(factory), [factory])
@@ -1897,6 +1919,7 @@ function FactoryBottomSheet({ factory, accessToken = '', open, onClose }) {
         if (isActive) {
           const mapped = mapMeasurementStatistics(payload, activeStatisticPoint)
           setMeasurementStatisticParameters(mapped.parameters)
+          setMeasurementStatisticThresholds(mapped.thresholdsByParameter)
           setMeasurementStatisticRows(mapped.rows)
           setMeasurementStatisticError('')
         }
@@ -1904,6 +1927,7 @@ function FactoryBottomSheet({ factory, accessToken = '', open, onClose }) {
       .catch((error) => {
         if (isActive) {
           setMeasurementStatisticParameters(statisticParameters)
+          setMeasurementStatisticThresholds({})
           setMeasurementStatisticRows([])
           setMeasurementStatisticError(error instanceof Error ? error.message : 'โหลดสถิติข้อมูลไม่สำเร็จ')
         }
@@ -2063,6 +2087,7 @@ function FactoryBottomSheet({ factory, accessToken = '', open, onClose }) {
                 selectedDate={selectedDate}
                 selectedPointLabel={activeStatisticPointLabel}
                 selectedParameter={activeTrendParameter}
+                thresholdsByParameter={measurementStatisticThresholds}
                 onParameterChange={setSelectedTrendParameter}
               />
               <CalendarSummaryPanel rows={activeCalendarSummaryRows} error={calendarError} />
@@ -2211,8 +2236,20 @@ function CalendarSummaryPanel({ rows, error = '' }) {
   )
 }
 
-function PollutionTrendPanel({ rows, parameters, selectedDate, selectedPointLabel, selectedParameter, onParameterChange }) {
+function PollutionTrendPanel({
+  rows,
+  parameters,
+  selectedDate,
+  selectedPointLabel,
+  selectedParameter,
+  thresholdsByParameter = {},
+  onParameterChange,
+}) {
   const selectedDateLabel = selectedDate?.format?.('D MMMM BBBB') ?? ''
+  const selectedThreshold = thresholdsByParameter[selectedParameter]
+  const normalMax = toFiniteNumber(selectedThreshold?.normalMax)
+  const warningMax = toFiniteNumber(selectedThreshold?.warningMax)
+  const legendItems = getPollutionTrendLegendItems(selectedThreshold)
   const chartData = useMemo(
     () =>
       rows.map((row, index) => ({
@@ -2223,6 +2260,16 @@ function PollutionTrendPanel({ rows, parameters, selectedDate, selectedPointLabe
       })),
     [rows, selectedParameter],
   )
+  const chartMaxValue = useMemo(() => {
+    const maxValue = Math.max(
+      0,
+      ...chartData.map((item) => item.value).filter((value) => Number.isFinite(value)),
+      normalMax ?? 0,
+      warningMax ?? 0,
+    )
+
+    return maxValue > 0 ? Math.ceil(maxValue * 1.1) : undefined
+  }, [chartData, normalMax, warningMax])
   const ColoredChartMark = useMemo(
     () =>
       function ColoredChartMark({ dataIndex, hidden, x, y }) {
@@ -2300,6 +2347,7 @@ function PollutionTrendPanel({ rows, parameters, selectedDate, selectedPointLabe
           yAxis={[
             {
               min: 0,
+              max: chartMaxValue,
               label: `ระดับค่ามลพิษ ${selectedParameter}`,
             },
           ]}
@@ -2316,7 +2364,26 @@ function PollutionTrendPanel({ rows, parameters, selectedDate, selectedPointLabe
           margin={{ top: 20, right: 10, bottom: 10, left: 10 }}
           height={320}
           sx={{ width: '100%' }}
-        />
+        >
+          {normalMax !== null ? (
+            <ChartsReferenceLine
+              y={normalMax}
+              label="ค่าเฝ้าระวัง"
+              labelAlign="end"
+              lineStyle={{ stroke: statisticStatusColors.warning, strokeDasharray: '6 4', strokeWidth: 1.5 }}
+              labelStyle={{ fill: statisticStatusColors.warning, fontSize: 11, fontWeight: 700 }}
+            />
+          ) : null}
+          {warningMax !== null ? (
+            <ChartsReferenceLine
+              y={warningMax}
+              label="ค่าเกินมาตรฐาน"
+              labelAlign="end"
+              lineStyle={{ stroke: statisticStatusColors.exceeded, strokeDasharray: '6 4', strokeWidth: 1.5 }}
+              labelStyle={{ fill: statisticStatusColors.exceeded, fontSize: 11, fontWeight: 700 }}
+            />
+          ) : null}
+        </LineChart>
       </Box>
     <Stack
       direction="row"
@@ -2324,7 +2391,7 @@ function PollutionTrendPanel({ rows, parameters, selectedDate, selectedPointLabe
       useFlexGap
       sx={{ px: 1.25, pb: 1.25, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center' }}
     >
-      {pollutionTrendLegendItems.map((item) => (
+      {legendItems.map((item) => (
         <Stack key={item.label} direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
           <Box
             sx={{
