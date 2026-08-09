@@ -39,6 +39,7 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker'
 import { PickerDay } from '@mui/x-date-pickers/PickerDay'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import { AdapterDayjsBuddhist } from '@mui/x-date-pickers/AdapterDayjsBuddhist'
+import { PickersLayoutContentWrapper, PickersLayoutRoot, usePickerLayout } from '@mui/x-date-pickers/PickersLayout'
 import { ChartsReferenceLine } from '@mui/x-charts/ChartsReferenceLine'
 import { LineChart } from '@mui/x-charts/LineChart'
 import dayjs from 'dayjs'
@@ -338,6 +339,10 @@ function calculateTodayCompletenessPercent(rows, parameter) {
 
   const submittedRows = rows.filter((row) => hasSubmittedMeasurementValue(row.values?.[parameter])).length
   return `${Math.round((submittedRows / rows.length) * 100).toLocaleString('th-TH')}%`
+}
+
+function isFullCompletenessPercent(value) {
+  return String(value).trim() === '100%'
 }
 
 function mergeCalendarSummaryWithTodayCompleteness(summaryRows, statisticRows, parameters) {
@@ -2243,6 +2248,57 @@ function getStatisticPointsBySystem(factory, selectedSystem = '') {
 }
 
 function CalendarSummaryPanel({ rows, error = '' }) {
+  const [detailDialog, setDetailDialog] = useState({
+    open: false,
+    title: '',
+    parameter: '',
+    metricLabel: '',
+  })
+  const openDetailDialog = (row, type) => {
+    setDetailDialog({
+      open: true,
+      title: type === 'exceeded' ? 'เกินมาตรฐาน' : 'ข้อมูลไม่ถึงร้อยละ 80 ต่อวัน',
+      parameter: row.parameter,
+      metricLabel: type === 'exceeded' ? 'ค่าตรวจวัด' : 'การส่งข้อมูล (%)',
+    })
+  }
+  const closeDetailDialog = () => {
+    setDetailDialog((current) => ({ ...current, open: false }))
+  }
+  const renderSummaryDetailButton = (row, type) => {
+    const value = type === 'exceeded' ? row.exceededDays : row.lowDataDays
+    const isZeroDays = String(value).trim() === '0 วัน'
+
+    if (isZeroDays) {
+      return '-'
+    }
+
+    return (
+      <Button
+        type="button"
+        size="small"
+        variant="text"
+        onClick={() => openDetailDialog(row, type)}
+        sx={{
+          minWidth: 0,
+          p: 0,
+          color: 'text.primary',
+          fontSize: 'inherit',
+          fontWeight: 400,
+          textDecoration: 'none',
+          textUnderlineOffset: 3,
+          '&:hover': {
+            bgcolor: 'transparent',
+            color: 'text.primary',
+            textDecoration: 'underline',
+          },
+        }}
+      >
+        {value}
+      </Button>
+    )
+  }
+
   return (
     <Box
       sx={{
@@ -2313,13 +2369,18 @@ function CalendarSummaryPanel({ rows, error = '' }) {
               <TableRow key={row.parameter}>
                 <TableCell sx={{ fontWeight: 700 }}>{row.parameter}</TableCell>
                 <TableCell align="center" sx={{ fontWeight: 400 }}>
-                  {row.exceededDays}
+                  {renderSummaryDetailButton(row, 'exceeded')}
                 </TableCell>
                 <TableCell align="center" sx={{ fontWeight: 400 }}>
-                  {row.lowDataDays}
+                  {renderSummaryDetailButton(row, 'lowData')}
                 </TableCell>
                 <TableCell align="center" sx={{ fontWeight: 700 }}>
-                  {row.todayPercent}
+                  <Box
+                    component="span"
+                    sx={{ color: isFullCompletenessPercent(row.todayPercent) ? statisticStatusColors.normal : 'inherit' }}
+                  >
+                    {row.todayPercent}
+                  </Box>
                 </TableCell>
               </TableRow>
             ))}
@@ -2333,6 +2394,50 @@ function CalendarSummaryPanel({ rows, error = '' }) {
           </TableBody>
         </Table>
       </TableContainer>
+      <Dialog open={detailDialog.open} onClose={closeDetailDialog} fullWidth maxWidth="xs">
+        <DialogTitle
+          sx={{
+            fontWeight: 700,
+            borderBottom: 1,
+            borderColor: 'divider',
+            pr: 6,
+          }}
+        >
+          {detailDialog.title}
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            {detailDialog.parameter}
+          </Typography>
+          <IconButton
+            aria-label="ปิด"
+            onClick={closeDetailDialog}
+            sx={{ position: 'absolute', right: 12, top: 12, color: 'text.secondary' }}
+          >
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ pt: '16px !important' }}>
+          <TableContainer sx={{ border: 1, borderColor: 'divider', maxHeight: 420 }}>
+            <Table size="small" stickyHeader sx={{ tableLayout: 'fixed', ...borderedTableSx }}>
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ width: 120, bgcolor: 'neutral.50', fontWeight: 700 }}>วันที่</TableCell>
+                  <TableCell sx={{ width: 132, bgcolor: 'neutral.50', fontWeight: 700 }}>เวลา</TableCell>
+                  <TableCell align="right" sx={{ bgcolor: 'neutral.50', fontWeight: 700 }}>
+                    {detailDialog.metricLabel}
+                  </TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                <TableRow>
+                  <TableCell colSpan={3} align="center" sx={{ color: 'text.secondary', fontWeight: 400 }}>
+                    ไม่มีข้อมูลรายละเอียด
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </DialogContent>
+      </Dialog>
     </Box>
   )
 }
@@ -2558,6 +2663,60 @@ function DatePickerStatusDay({ day, outsideCurrentMonth, statusByDay = {}, sx, .
   )
 }
 
+function CalendarStatusLegendItem({ label, color, variant = 'box' }) {
+  return (
+    <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', minWidth: 0 }}>
+      <Box
+        sx={{
+          width: variant === 'line' ? 16 : 14,
+          height: variant === 'line' ? 3 : 14,
+          borderRadius: variant === 'line' ? 999 : 0.75,
+          bgcolor: color,
+          flex: '0 0 auto',
+        }}
+      />
+      <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500, whiteSpace: 'nowrap' }}>
+        {label}
+      </Typography>
+    </Stack>
+  )
+}
+
+function CalendarStatusPickerLayout(props) {
+  const { toolbar, content, tabs, actionBar, shortcuts, ownerState } = usePickerLayout(props)
+
+  return (
+    <PickersLayoutRoot ownerState={ownerState} sx={props.sx}>
+      {toolbar}
+      {shortcuts}
+      <PickersLayoutContentWrapper ownerState={ownerState}>
+        {tabs}
+        {content}
+        <Stack
+          direction="row"
+          spacing={1.5}
+          useFlexGap
+          sx={{
+            px: 2,
+            pb: 1.5,
+            pt: 0.25,
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            maxWidth: 320,
+          }}
+        >
+          <CalendarStatusLegendItem label="ส่งข้อมูลน้อยกว่า 80%" color={datePickerStatusStyles.lowData.backgroundColor} />
+          <CalendarStatusLegendItem label="ส่งข้อมูลมากกว่า 80%" color={datePickerStatusStyles.highData.backgroundColor} />
+          <CalendarStatusLegendItem label="ปกติทั้งวัน" color={datePickerStatusStyles.normal.borderColor} variant="line" />
+          <CalendarStatusLegendItem label="เฝ้าระวัง" color={datePickerStatusStyles.warning.borderColor} variant="line" />
+          <CalendarStatusLegendItem label="เกินมาตรฐาน" color={datePickerStatusStyles.exceeded.borderColor} variant="line" />
+        </Stack>
+      </PickersLayoutContentWrapper>
+      {actionBar}
+    </PickersLayoutRoot>
+  )
+}
+
 function FactoryStatisticPanel({
   selectedDate,
   onDateChange,
@@ -2639,7 +2798,7 @@ function FactoryStatisticPanel({
                   sx: { width: 154 },
                 },
               }}
-              slots={{ day: DatePickerStatusDay }}
+              slots={{ day: DatePickerStatusDay, layout: CalendarStatusPickerLayout }}
             />
           </LocalizationProvider>
         </Stack>
