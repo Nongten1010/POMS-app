@@ -6,6 +6,7 @@ jest.mock('../../src/modules/connection-requests/connection-requests.service', (
   connectionRequestsService: {
     getAddParameterFormDetail: jest.fn(),
     getCalendarStatus: jest.fn(),
+    getCalendarStatusDetails: jest.fn(),
     getConnectedMeasurementPointDetailsByFactory: jest.fn(),
     getCurrentDeviceConfigFormDetail: jest.fn(),
     getMeasurementStatistics: jest.fn(),
@@ -319,6 +320,71 @@ describe('connected measurement points route', () => {
         month: '2026-06',
         count: 0,
         registeredParameters: [],
+      },
+    });
+    mockedConnectionRequestsService.getCalendarStatusDetails.mockResolvedValue({
+      data: {
+        metadata: {
+          description: 'รายละเอียดที่ใช้คำนวณตารางสรุปสถานะรายเดือน',
+          month: '2025-08',
+          summaryType: 'exceeded',
+          valueDefinitions: {},
+        },
+        factory: {
+          factoryId: 'factory-001',
+          factoryName: 'บริษัท ทดสอบ จำกัด',
+          systemType: 'CEMS',
+        },
+        parameter: {
+          parameterCode: 'CO',
+          parameterName: 'CO',
+          parameterLabel: 'CO (ppm)',
+          unit: 'ppm',
+          exceededStandard: {
+            value: 100,
+            displayValue: '100.00',
+            operator: '>=',
+          },
+        },
+        summary: {
+          affectedDays: 1,
+          totalExceededOccurrences: 1,
+          totalMissingHours: 0,
+        },
+        days: [
+          {
+            date: '2025-08-09',
+            dataCompletenessPercent: 83,
+            dataCompletenessStatus: 'highData',
+            pollutionStatus: 'exceeded',
+            parameterDataCompletenessPercent: 83,
+            expectedHours: 24,
+            receivedHours: 20,
+            missingTimes: [],
+            lowDataCauses: [],
+            exceededOccurrences: [
+              {
+                time: '00:00:00',
+                displayTime: '00.00-00.59 น.',
+                value: 101,
+                displayValue: '101.00',
+                standardValue: 100,
+                displayStandardValue: '100.00',
+                exceededBy: 1,
+                displayExceededBy: '1.00',
+              },
+            ],
+          },
+        ],
+      },
+      meta: {
+        stationId: 'S0001',
+        interval: '60m',
+        schemaName: 'ingest',
+        tableName: 'S0001_data_60m',
+        month: '2025-08',
+        count: 20,
+        registeredParameters: ['CO (ppm)'],
       },
     });
   });
@@ -774,6 +840,89 @@ describe('connected measurement points route', () => {
         month: '2026-06',
       },
     });
+  });
+
+  it('exposes monthly calendar summary details for a frontend drill-down', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .get(
+        '/api/v1/connected-measurement-points/S0001/calendar-status/details?month=2025-08&summaryType=exceeded&parameterCode=CO&unit=ppm',
+      )
+      .set('Authorization', `Bearer ${accessToken()}`);
+
+    expect(response.status).toBe(200);
+    expect(mockedConnectionRequestsService.getCalendarStatusDetails).toHaveBeenCalledWith(
+      'S0001',
+      {
+        month: '2025-08',
+        summaryType: 'exceeded',
+        parameterCode: 'CO',
+        unit: 'ppm',
+      },
+      42,
+      { scope: 'ALL' },
+    );
+    expect(response.body).toMatchObject({
+      success: true,
+      data: {
+        factory: {
+          factoryId: 'factory-001',
+        },
+        metadata: {
+          month: '2025-08',
+          summaryType: 'exceeded',
+        },
+        parameter: {
+          parameterLabel: 'CO (ppm)',
+        },
+        summary: {
+          affectedDays: 1,
+        },
+        days: [
+          {
+            date: '2025-08-09',
+            exceededOccurrences: [
+              expect.objectContaining({
+                time: '00:00:00',
+                value: 101,
+                standardValue: 100,
+              }),
+            ],
+          },
+        ],
+      },
+      meta: {
+        stationId: 'S0001',
+        month: '2025-08',
+      },
+    });
+  });
+
+  it('rejects invalid calendar summary detail queries before calling the service', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .get(
+        '/api/v1/connected-measurement-points/S0001/calendar-status/details?month=2025-08&summaryType=exceeded',
+      )
+      .set('Authorization', `Bearer ${accessToken()}`);
+
+    expect(response.status).toBe(400);
+    expect(mockedConnectionRequestsService.getCalendarStatusDetails).not.toHaveBeenCalled();
+  });
+
+  it('rejects calendar summary details without dashboard statistics permission', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .get(
+        '/api/v1/connected-measurement-points/S0001/calendar-status/details?month=2025-08&summaryType=lowData&parameterCode=CO&unit=ppm',
+      )
+      .set('Authorization', `Bearer ${requestViewOnlyAccessToken()}`);
+
+    expect(response.status).toBe(403);
+    expect(mockedConnectionRequestsService.getCalendarStatusDetails).not.toHaveBeenCalled();
   });
 
   it('rejects measurement statistics when the user only has request-view permission', async () => {

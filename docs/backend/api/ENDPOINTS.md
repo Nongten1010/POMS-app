@@ -11,7 +11,7 @@
 - ไม่รวม `express.static`, 404 fallback และ middleware-only surfaces
 - Registry นี้ไม่เก็บ request/response body เพื่อไม่ให้เกิด contract ซ้ำ
 
-จำนวน explicit endpoints: **107**
+จำนวน explicit endpoints: **108**
 
 | Method | Full path | Canonical owner | Guard | Route source |
 | --- | --- | --- | --- | --- |
@@ -38,6 +38,7 @@
 | `GET` | `/api/v1/connected-measurement-points/:stationId/device-configs` | `docs/backend/api/shared/connected-measurement-points/` | `authenticate + authorize(cems_wpms_requests:view)` | `backend/src/modules/connection-requests/connected-measurement-points.routes.ts` |
 | `GET` | `/api/v1/connected-measurement-points/:stationId/measurement-statistics` | `docs/backend/api/shared/connected-measurement-points/` | `authenticate + authorize(dashboard.stats:view)` | `backend/src/modules/connection-requests/connected-measurement-points.routes.ts` |
 | `GET` | `/api/v1/connected-measurement-points/:stationId/measurement-export.csv` | `docs/backend/api/shared/connected-measurement-points/` | `authenticate + authorize(dashboard.stats:export)` | `backend/src/modules/connection-requests/connected-measurement-points.routes.ts` |
+| `GET` | `/api/v1/connected-measurement-points/:stationId/calendar-status/details` | `docs/backend/api/shared/connected-measurement-points/` | `authenticate + authorize(dashboard.stats:view)` | `backend/src/modules/connection-requests/connected-measurement-points.routes.ts` |
 | `GET` | `/api/v1/connected-measurement-points/:stationId/calendar-status` | `docs/backend/api/shared/connected-measurement-points/` | `authenticate + authorize(dashboard.stats:view)` | `backend/src/modules/connection-requests/connected-measurement-points.routes.ts` |
 | `POST` | `/api/v1/connected-measurement-points/:stationId/device-configs` | `docs/backend/api/shared/connected-measurement-points/` | `authenticate + authorize(cems_wpms_requests:edit)` | `backend/src/modules/connection-requests/connected-measurement-points.routes.ts` |
 | `GET` | `/api/v1/public/factory-map-points` | `docs/backend/api/menus/home/` | `public` | `backend/src/modules/connection-requests/connection-requests.routes.ts` |

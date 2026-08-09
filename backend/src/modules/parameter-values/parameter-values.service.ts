@@ -1,6 +1,11 @@
 import { env } from '../../config/env';
 import { StatusCodes } from 'http-status-codes';
-import { AppError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
+import {
+  AppError,
+  BadRequestError,
+  ForbiddenError,
+  NotFoundError,
+} from '../../shared/errors/AppError';
 import { createMeasurementCsvExport } from './measurement-csv-export';
 import { parameterValuesRepository } from './parameter-values.repository';
 import {
@@ -10,6 +15,12 @@ import {
 } from './parameter-status';
 import {
   type CalendarStatusEvaluationOptions,
+  type CalendarStatusDetailDayDTO,
+  type CalendarStatusDetailsQuery,
+  type CalendarStatusDetailsResultDTO,
+  type CalendarStatusExceededOccurrenceDTO,
+  type CalendarStatusExceededStandardDTO,
+  type CalendarStatusLowDataCauseDTO,
   type CalendarStatusQuery,
   type CalendarStatusResultDTO,
   type ConnectionTestQuery,
@@ -316,8 +327,110 @@ export const parameterValuesService = {
           })),
         },
         monthlySummary: definitions.map((definition) =>
-          buildMonthlyParameterSummary(definition, dailySummaries),
+          buildMonthlyParameterSummary(definition, dailySummaries, startDate, endDate),
         ),
+      },
+      meta: {
+        stationId: query.stationId,
+        interval,
+        schemaName: env.PARAMETER_DB_SCHEMA,
+        tableName: result.tableName,
+        month: query.month,
+        count: result.rows.length,
+        registeredParameters,
+      },
+    };
+  },
+
+  async calendarStatusDetails(
+    query: CalendarStatusDetailsQuery,
+    access: ParameterValueAccessContext,
+    options?: CalendarStatusEvaluationOptions,
+  ): Promise<CalendarStatusDetailsResultDTO> {
+    await ensureStationAccess(query.stationId, access);
+
+    const interval = '60m';
+    const tableName = parameterValuesRepository.tableName(query.stationId, interval);
+    const exists = await parameterValuesRepository.tableExists(tableName);
+    if (!exists) {
+      throw new NotFoundError(
+        `Parameter value table ${env.PARAMETER_DB_SCHEMA}.${tableName} not found`,
+      );
+    }
+
+    const { startDate, endDate } = monthRange(query.month);
+    const [result, registeredParameters] = await Promise.all([
+      parameterValuesRepository.listRows({
+        stationId: query.stationId,
+        interval,
+        startDate,
+        endDate,
+      }),
+      parameterValuesRepository.listRegisteredParameters(query.stationId, access),
+    ]);
+    const definitions = buildParameterDefinitions(
+      registeredParameters,
+      result.rows,
+      options?.parameterEvaluations,
+    );
+    const definition = resolveCalendarStatusDetailParameter(
+      definitions,
+      query.parameterCode,
+      query.unit,
+    );
+    const useConfiguredEvaluation = Boolean(options?.parameterEvaluations);
+    const dailySummaries = buildDailySummaries(result.rows, definitions, useConfiguredEvaluation);
+    const exceededStandard = resolveExceededStandard(definition);
+    const rowsByDate = groupRowsByDate(result.rows);
+    const days = dailySummaries
+      .filter((summary) => summary.date >= startDate && summary.date <= endDate)
+      .flatMap((summary) =>
+        buildCalendarStatusDetailDay(
+          query.summaryType,
+          summary,
+          rowsByDate.get(summary.date) ?? [],
+          definition,
+          definitions,
+          exceededStandard,
+          useConfiguredEvaluation,
+        ),
+      );
+
+    return {
+      data: {
+        metadata: {
+          description: 'รายละเอียดที่ใช้คำนวณตารางสรุปสถานะรายเดือน',
+          month: query.month,
+          summaryType: query.summaryType,
+          valueDefinitions: calendarStatusDetailsValueDefinitions(),
+        },
+        parameter: {
+          parameterCode: definition.code,
+          parameterName: definition.name,
+          parameterLabel: definition.label,
+          unit: definition.unit,
+          exceededStandard,
+        },
+        summary: {
+          affectedDays: days.length,
+          totalExceededOccurrences: days.reduce(
+            (total, day) => total + day.exceededOccurrences.length,
+            0,
+          ),
+          totalMissingHours:
+            query.summaryType === 'lowData'
+              ? days.reduce(
+                  (total, day) =>
+                    total +
+                    day.lowDataCauses.reduce(
+                      (dayTotal, cause) => dayTotal + cause.missingTimes.length,
+                      0,
+                    ),
+                  0,
+                )
+              : 0,
+        },
+        days,
       },
       meta: {
         stationId: query.stationId,
@@ -769,20 +882,236 @@ function calculateDailyParameterCompleteness(
 function buildMonthlyParameterSummary(
   definition: ParameterDefinition,
   dailySummaries: DailySummary[],
+  startDate: string,
+  endDate: string,
 ) {
   const latestSummary = dailySummaries.at(-1);
+  const requestedMonthSummaries = dailySummaries.filter(
+    (summary) => summary.date >= startDate && summary.date <= endDate,
+  );
 
   return {
     parameterCode: definition.code,
     parameterName: definition.name,
     unit: definition.unit,
-    exceededDays: dailySummaries.filter((summary) =>
+    exceededDays: requestedMonthSummaries.filter((summary) =>
       (summary.parameterStatuses.get(definition.code) ?? []).includes('exceeded'),
     ).length,
-    lowDataDays: dailySummaries.filter((summary) => summary.dataCompletenessStatus === 'lowData')
-      .length,
+    lowDataDays: requestedMonthSummaries.filter(
+      (summary) => summary.dataCompletenessStatus === 'lowData',
+    ).length,
     todayDataCompletenessPercent: latestSummary?.dataCompletenessPercent ?? null,
   };
+}
+
+function resolveCalendarStatusDetailParameter(
+  definitions: ParameterDefinition[],
+  parameterCode: string,
+  unit: string | undefined,
+): ParameterDefinition {
+  const normalizedCode = normalizeParameterName(parameterCode);
+  const codeMatches = definitions.filter(
+    (definition) => normalizeParameterName(definition.code) === normalizedCode,
+  );
+  const matches = unit
+    ? codeMatches.filter((definition) => normalizeUnit(definition.unit) === normalizeUnit(unit))
+    : codeMatches;
+
+  if (matches.length === 0) {
+    const parameterDescription = unit ? `${parameterCode} (${unit})` : parameterCode;
+    throw new NotFoundError(`Parameter ${parameterDescription} not found for this station`);
+  }
+  if (matches.length > 1) {
+    throw new BadRequestError(`unit is required to identify parameter ${parameterCode}`);
+  }
+
+  return matches[0];
+}
+
+function resolveExceededStandard(
+  definition: ParameterDefinition,
+): CalendarStatusExceededStandardDTO {
+  const criticalMin = findCriteriaMin(definition.criteriaRows, 'critical');
+  const value = criticalMin ?? definition.warningMax;
+
+  return {
+    value,
+    displayValue: formatMeasurementValue(value),
+    operator: criticalMin === null ? '>' : '>=',
+  };
+}
+
+function groupRowsByDate(rows: Record<string, unknown>[]): Map<string, Record<string, unknown>[]> {
+  const rowsByDate = new Map<string, Record<string, unknown>[]>();
+
+  for (const row of rows) {
+    const date = stringValue(row.cdate);
+    if (!date) continue;
+    rowsByDate.set(date, [...(rowsByDate.get(date) ?? []), row]);
+  }
+
+  return rowsByDate;
+}
+
+function buildCalendarStatusDetailDay(
+  summaryType: CalendarStatusDetailsQuery['summaryType'],
+  summary: DailySummary,
+  rows: Record<string, unknown>[],
+  definition: ParameterDefinition,
+  definitions: ParameterDefinition[],
+  exceededStandard: CalendarStatusExceededStandardDTO,
+  useParameterCompleteness: boolean,
+): CalendarStatusDetailDayDTO[] {
+  const parameterDataCompletenessPercent = calculateDailyParameterCompleteness(rows, definition);
+  const receivedHours = countReceivedParameterHours(rows, definition);
+
+  if (summaryType === 'lowData') {
+    if (summary.dataCompletenessStatus !== 'lowData') return [];
+
+    return [
+      {
+        date: summary.date,
+        dataCompletenessPercent: summary.dataCompletenessPercent,
+        dataCompletenessStatus: summary.dataCompletenessStatus,
+        pollutionStatus: summary.pollutionStatus,
+        parameterDataCompletenessPercent,
+        expectedHours: HOURS_PER_DAY,
+        receivedHours,
+        missingTimes: buildMissingParameterTimes(rows, definition),
+        exceededOccurrences: [],
+        lowDataCauses: buildLowDataCauses(rows, definitions),
+      },
+    ];
+  }
+
+  const exceededOccurrences = buildExceededOccurrences(
+    rows,
+    definition,
+    exceededStandard,
+    useParameterCompleteness,
+    parameterDataCompletenessPercent,
+  );
+  if (exceededOccurrences.length === 0) return [];
+
+  return [
+    {
+      date: summary.date,
+      dataCompletenessPercent: summary.dataCompletenessPercent,
+      dataCompletenessStatus: summary.dataCompletenessStatus,
+      pollutionStatus: summary.pollutionStatus,
+      parameterDataCompletenessPercent,
+      expectedHours: HOURS_PER_DAY,
+      receivedHours,
+      missingTimes: [],
+      exceededOccurrences,
+      lowDataCauses: [],
+    },
+  ];
+}
+
+function buildExceededOccurrences(
+  rows: Record<string, unknown>[],
+  definition: ParameterDefinition,
+  exceededStandard: CalendarStatusExceededStandardDTO,
+  useParameterCompleteness: boolean,
+  parameterDataCompletenessPercent: number,
+): CalendarStatusExceededOccurrenceDTO[] {
+  const rowsByHour = new Map<number, Record<string, unknown>>();
+  for (const row of rows) {
+    const hour = parseHour(row.ctime);
+    if (hour !== null && !rowsByHour.has(hour)) rowsByHour.set(hour, row);
+  }
+
+  return [...rowsByHour.entries()]
+    .sort(([leftHour], [rightHour]) => leftHour - rightHour)
+    .flatMap(([hour, row]) => {
+      const value = readParameterNumber(row, definition);
+      if (value === null) return [];
+
+      const completeness = useParameterCompleteness
+        ? parameterDataCompletenessPercent
+        : (readCompletenessPercent(row) ?? 100);
+      if (completeness < 80 || readParameterStatus(row, definition, value) !== 'exceeded') {
+        return [];
+      }
+
+      const exceededBy = Number(Math.max(0, value - exceededStandard.value).toFixed(10));
+      return [
+        {
+          time: normalizeOccurrenceTime(row.ctime, hour),
+          displayTime: hourLabel(hour),
+          value,
+          displayValue: formatMeasurementValue(value),
+          standardValue: exceededStandard.value,
+          displayStandardValue: exceededStandard.displayValue,
+          exceededBy,
+          displayExceededBy: formatMeasurementValue(exceededBy),
+        },
+      ];
+    });
+}
+
+function countReceivedParameterHours(
+  rows: Record<string, unknown>[],
+  definition: ParameterDefinition,
+): number {
+  const receivedHours = new Set<number>();
+  for (const row of rows) {
+    const hour = parseHour(row.ctime);
+    if (hour !== null && readParameterNumber(row, definition) !== null) receivedHours.add(hour);
+  }
+  return receivedHours.size;
+}
+
+function buildMissingParameterTimes(
+  rows: Record<string, unknown>[],
+  definition: ParameterDefinition,
+): string[] {
+  const receivedHours = new Set<number>();
+  for (const row of rows) {
+    const hour = parseHour(row.ctime);
+    if (hour !== null && readParameterNumber(row, definition) !== null) receivedHours.add(hour);
+  }
+
+  return Array.from({ length: HOURS_PER_DAY }, (_, hour) => hour)
+    .filter((hour) => !receivedHours.has(hour))
+    .map(chartHour);
+}
+
+function buildLowDataCauses(
+  rows: Record<string, unknown>[],
+  definitions: ParameterDefinition[],
+): CalendarStatusLowDataCauseDTO[] {
+  return definitions
+    .map((definition) => ({
+      definition,
+      dataCompletenessPercent: calculateDailyParameterCompleteness(rows, definition),
+    }))
+    .filter(({ dataCompletenessPercent }) => dataCompletenessPercent < 80)
+    .map(({ definition, dataCompletenessPercent }) => ({
+      parameterCode: definition.code,
+      parameterName: definition.name,
+      parameterLabel: definition.label,
+      unit: definition.unit,
+      dataCompletenessPercent,
+      receivedHours: countReceivedParameterHours(rows, definition),
+      missingTimes: buildMissingParameterTimes(rows, definition),
+    }));
+}
+
+function normalizeOccurrenceTime(value: unknown, fallbackHour: number): string {
+  const rawTime = stringValue(value);
+  const match = rawTime?.match(/^(\d{1,2})[.:](\d{2})(?:[.:](\d{2}))?/);
+  if (!match) return `${chartHour(fallbackHour)}:00`;
+
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  const second = Number(match[3] ?? 0);
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59) {
+    return `${chartHour(fallbackHour)}:00`;
+  }
+
+  return [hour, minute, second].map((part) => String(part).padStart(2, '0')).join(':');
 }
 
 function calculateDailyCompleteness(
@@ -1133,6 +1462,19 @@ function calendarStatusValueDefinitions(): Record<string, unknown> {
       exceeded: 'เกินมาตรฐาน ใช้เส้นขอบสีแดง',
       insufficient: 'ข้อมูลไม่เพียงพอเมื่อ dataCompletenessStatus เป็น lowData',
     },
+  };
+}
+
+function calendarStatusDetailsValueDefinitions(): Record<string, unknown> {
+  return {
+    summaryType: {
+      exceeded: 'คืนเฉพาะวันที่และช่วงเวลาที่พารามิเตอร์มีสถานะเกินมาตรฐาน',
+      lowData: 'คืนเฉพาะวันที่มีความครบถ้วนของข้อมูลรายวันต่ำกว่า 80%',
+    },
+    exceededOccurrences: 'รายการค่าที่เกินมาตรฐานพร้อมเวลา ค่าที่วัด ค่าเกณฑ์ และผลต่างจากเกณฑ์',
+    missingTimes: 'รายการชั่วโมงที่ไม่พบค่าของพารามิเตอร์ที่เลือก ใช้ประกอบรายละเอียดข้อมูลไม่ถึง',
+    dataCompletenessPercent: 'ร้อยละความครบถ้วนรายวันที่ใช้ตัดสิน lowData ของ monthly summary',
+    parameterDataCompletenessPercent: 'ร้อยละความครบถ้วนรายวันของพารามิเตอร์ที่เลือก',
   };
 }
 

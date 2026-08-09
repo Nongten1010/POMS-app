@@ -1031,6 +1031,353 @@ describe('parameterValuesService', () => {
     ]);
   });
 
+  it('counts monthly summary days only from the requested month while preserving completeness', async () => {
+    mockedRepository.listRegisteredParameters.mockResolvedValue(['CO (ppm)']);
+    mockedRepository.tableExists.mockResolvedValue(true);
+    mockedRepository.listRows.mockResolvedValue({
+      tableName: 'S1125_data_60m',
+      rows: [
+        ...Array.from({ length: 20 }, (_, hour) => ({
+          station_id: 'S1125',
+          co_value: hour === 0 ? 191 : 100,
+          cdate: '2024-08-09',
+          ctime: `${String(hour).padStart(2, '0')}:00:00`,
+        })),
+        ...Array.from({ length: 10 }, (_, hour) => ({
+          station_id: 'S1125',
+          co_value: 100,
+          cdate: '2024-08-10',
+          ctime: `${String(hour).padStart(2, '0')}:00:00`,
+        })),
+        ...Array.from({ length: 20 }, (_, hour) => ({
+          station_id: 'S1125',
+          co_value: hour === 0 ? 191 : 100,
+          cdate: '2025-08-09',
+          ctime: `${String(hour).padStart(2, '0')}:00:00`,
+        })),
+        ...Array.from({ length: 10 }, (_, hour) => ({
+          station_id: 'S1125',
+          co_value: 100,
+          cdate: '2025-08-10',
+          ctime: `${String(hour).padStart(2, '0')}:00:00`,
+        })),
+        ...Array.from({ length: 20 }, (_, hour) => ({
+          station_id: 'S1125',
+          co_value: hour === 0 ? 191 : 100,
+          cdate: '2026-08-11',
+          ctime: `${String(hour).padStart(2, '0')}:00:00`,
+        })),
+      ],
+    });
+
+    const result = await parameterValuesService.calendarStatus(
+      { stationId: 'S1125', month: '2025-08' },
+      operatorAccess,
+    );
+
+    expect(result.data.monthlySummary).toEqual([
+      {
+        parameterCode: 'CO',
+        parameterName: 'CO',
+        unit: 'ppm',
+        exceededDays: 1,
+        lowDataDays: 1,
+        todayDataCompletenessPercent: 83,
+      },
+    ]);
+  });
+
+  it('returns exceeded occurrences and low-data hours for a monthly summary drill-down', async () => {
+    mockedRepository.listRegisteredParameters.mockResolvedValue(['CO (ppm)']);
+    mockedRepository.tableExists.mockResolvedValue(true);
+    mockedRepository.listRows.mockResolvedValue({
+      tableName: 'S1125_data_60m',
+      rows: [
+        ...Array.from({ length: 20 }, (_, hour) => ({
+          station_id: 'S1125',
+          co_value: hour === 0 ? 101 : hour === 5 ? 125 : 60,
+          co_units: 'ppm',
+          cdate: '2025-08-09',
+          ctime: hour === 5 ? '05:30:00' : `${String(hour).padStart(2, '0')}:00:00`,
+        })),
+        ...Array.from({ length: 10 }, (_, hour) => ({
+          station_id: 'S1125',
+          co_value: 60,
+          co_units: 'ppm',
+          cdate: '2025-08-10',
+          ctime: `${String(hour).padStart(2, '0')}:00:00`,
+        })),
+        {
+          station_id: 'S1125',
+          co_value: 150,
+          co_units: 'ppm',
+          cdate: '2024-08-09',
+          ctime: '01:00:00',
+        },
+      ],
+    });
+    const options = {
+      parameterEvaluations: [
+        {
+          parameter: 'CO (ppm)',
+          standardCriteria: {
+            enabled: true,
+            standardValue: 100,
+            rows: [
+              { level: 'normal', min: 0, max: 79.99 },
+              { level: 'warning', min: 80, max: 99.99 },
+              { level: 'critical', min: 100, max: null },
+            ],
+          },
+        },
+      ],
+    };
+
+    const exceeded = await parameterValuesService.calendarStatusDetails(
+      {
+        stationId: 'S1125',
+        month: '2025-08',
+        summaryType: 'exceeded',
+        parameterCode: 'CO',
+        unit: 'ppm',
+      },
+      operatorAccess,
+      options,
+    );
+
+    expect(mockedRepository.listRows).toHaveBeenCalledWith({
+      stationId: 'S1125',
+      interval: '60m',
+      startDate: '2025-08-01',
+      endDate: '2025-08-31',
+    });
+    expect(exceeded.data).toMatchObject({
+      metadata: {
+        month: '2025-08',
+        summaryType: 'exceeded',
+      },
+      parameter: {
+        parameterCode: 'CO',
+        parameterName: 'CO',
+        parameterLabel: 'CO (ppm)',
+        unit: 'ppm',
+        exceededStandard: {
+          value: 100,
+          displayValue: '100.00',
+          operator: '>=',
+        },
+      },
+      summary: {
+        affectedDays: 1,
+        totalExceededOccurrences: 2,
+        totalMissingHours: 0,
+      },
+      days: [
+        {
+          date: '2025-08-09',
+          dataCompletenessPercent: 83,
+          parameterDataCompletenessPercent: 83,
+          expectedHours: 24,
+          receivedHours: 20,
+          missingTimes: [],
+          exceededOccurrences: [
+            {
+              time: '00:00:00',
+              displayTime: '00.00-00.59 น.',
+              value: 101,
+              displayValue: '101.00',
+              standardValue: 100,
+              displayStandardValue: '100.00',
+              exceededBy: 1,
+              displayExceededBy: '1.00',
+            },
+            {
+              time: '05:30:00',
+              displayTime: '05.00-05.59 น.',
+              value: 125,
+              displayValue: '125.00',
+              standardValue: 100,
+              displayStandardValue: '100.00',
+              exceededBy: 25,
+              displayExceededBy: '25.00',
+            },
+          ],
+        },
+      ],
+    });
+    expect(exceeded.data.days).toHaveLength(1);
+
+    const lowData = await parameterValuesService.calendarStatusDetails(
+      {
+        stationId: 'S1125',
+        month: '2025-08',
+        summaryType: 'lowData',
+        parameterCode: 'CO',
+        unit: 'ppm',
+      },
+      operatorAccess,
+      options,
+    );
+
+    expect(lowData.data).toMatchObject({
+      metadata: {
+        month: '2025-08',
+        summaryType: 'lowData',
+      },
+      summary: {
+        affectedDays: 1,
+        totalExceededOccurrences: 0,
+        totalMissingHours: 14,
+      },
+      days: [
+        {
+          date: '2025-08-10',
+          dataCompletenessPercent: 42,
+          parameterDataCompletenessPercent: 42,
+          expectedHours: 24,
+          receivedHours: 10,
+          missingTimes: [
+            '10:00',
+            '11:00',
+            '12:00',
+            '13:00',
+            '14:00',
+            '15:00',
+            '16:00',
+            '17:00',
+            '18:00',
+            '19:00',
+            '20:00',
+            '21:00',
+            '22:00',
+            '23:00',
+          ],
+          exceededOccurrences: [],
+        },
+      ],
+    });
+    expect(lowData.data.days).toHaveLength(1);
+  });
+
+  it('rejects an unknown calendar summary drill-down parameter', async () => {
+    mockedRepository.listRegisteredParameters.mockResolvedValue(['CO (ppm)']);
+    mockedRepository.tableExists.mockResolvedValue(true);
+    mockedRepository.listRows.mockResolvedValue({
+      tableName: 'S1125_data_60m',
+      rows: [],
+    });
+
+    await expect(
+      parameterValuesService.calendarStatusDetails(
+        {
+          stationId: 'S1125',
+          month: '2025-08',
+          summaryType: 'exceeded',
+          parameterCode: 'SO2',
+          unit: 'ppm',
+        },
+        operatorAccess,
+      ),
+    ).rejects.toMatchObject({
+      statusCode: 404,
+      code: 'NOT_FOUND',
+    });
+  });
+
+  it('requires a unit when a calendar summary parameter code has multiple units', async () => {
+    mockedRepository.listRegisteredParameters.mockResolvedValue(['CO2 (%)', 'CO2 (ppm)']);
+    mockedRepository.tableExists.mockResolvedValue(true);
+    mockedRepository.listRows.mockResolvedValue({
+      tableName: 'S1125_data_60m',
+      rows: [],
+    });
+
+    await expect(
+      parameterValuesService.calendarStatusDetails(
+        {
+          stationId: 'S1125',
+          month: '2025-08',
+          summaryType: 'exceeded',
+          parameterCode: 'CO2',
+        },
+        operatorAccess,
+      ),
+    ).rejects.toMatchObject({
+      statusCode: 400,
+      code: 'BAD_REQUEST',
+    });
+  });
+
+  it('identifies which parameter caused a low-data day when another parameter row is clicked', async () => {
+    mockedRepository.listRegisteredParameters.mockResolvedValue(['CO (ppm)', 'NOx (ppm)']);
+    mockedRepository.tableExists.mockResolvedValue(true);
+    mockedRepository.listRows.mockResolvedValue({
+      tableName: 'S1125_data_60m',
+      rows: Array.from({ length: 24 }, (_, hour) => ({
+        station_id: 'S1125',
+        co_value: 60,
+        co_units: 'ppm',
+        nox_value: hour < 10 ? 40 : null,
+        nox_units: 'ppm',
+        cdate: '2025-08-10',
+        ctime: `${String(hour).padStart(2, '0')}:00:00`,
+      })),
+    });
+
+    const result = await parameterValuesService.calendarStatusDetails(
+      {
+        stationId: 'S1125',
+        month: '2025-08',
+        summaryType: 'lowData',
+        parameterCode: 'CO',
+        unit: 'ppm',
+      },
+      operatorAccess,
+      {
+        parameterEvaluations: [{ parameter: 'CO (ppm)' }, { parameter: 'NOx (ppm)' }],
+      },
+    );
+
+    expect(result.data.days).toHaveLength(1);
+    expect(result.data.summary).toMatchObject({
+      affectedDays: 1,
+      totalMissingHours: 14,
+    });
+    expect(result.data.days[0]).toMatchObject({
+      date: '2025-08-10',
+      dataCompletenessPercent: 42,
+      parameterDataCompletenessPercent: 100,
+      receivedHours: 24,
+      missingTimes: [],
+      lowDataCauses: [
+        {
+          parameterCode: 'NOX',
+          parameterName: 'NOx',
+          parameterLabel: 'NOx (ppm)',
+          unit: 'ppm',
+          dataCompletenessPercent: 42,
+          receivedHours: 10,
+          missingTimes: [
+            '10:00',
+            '11:00',
+            '12:00',
+            '13:00',
+            '14:00',
+            '15:00',
+            '16:00',
+            '17:00',
+            '18:00',
+            '19:00',
+            '20:00',
+            '21:00',
+            '22:00',
+            '23:00',
+          ],
+        },
+      ],
+    });
+  });
+
   it('can evaluate connected-point calendar status from per-parameter completeness and criteria min thresholds', async () => {
     mockedRepository.listRegisteredParameters.mockResolvedValue(['CO (ppm)', 'NOx (ppm)']);
     mockedRepository.tableExists.mockResolvedValue(true);

@@ -73,6 +73,15 @@ export const calendarStatusQuerySchema = z
   })
   .strict();
 
+export const calendarStatusDetailsQuerySchema = z
+  .object({
+    month: monthSchema,
+    summaryType: z.enum(['exceeded', 'lowData']),
+    parameterCode: z.string().trim().min(1).max(64),
+    unit: z.string().trim().min(1).max(64).optional(),
+  })
+  .strict();
+
 const exactExportDateSchema = dateSchema.refine(
   (value) => new Date(`${value}T00:00:00.000Z`).toISOString().slice(0, 10) === value,
   'date must exist in the Gregorian calendar',
@@ -128,4 +137,7 @@ export type MeasurementStatisticsQuerySchemaInput = z.infer<
   typeof measurementStatisticsQuerySchema
 >;
 export type CalendarStatusQuerySchemaInput = z.infer<typeof calendarStatusQuerySchema>;
+export type CalendarStatusDetailsQuerySchemaInput = z.infer<
+  typeof calendarStatusDetailsQuerySchema
+>;
 export type MeasurementCsvExportQuerySchemaInput = z.infer<typeof measurementCsvExportQuerySchema>;

@@ -41,6 +41,7 @@ jest.mock('../../src/modules/device-connections/device-connections.service', () 
 jest.mock('../../src/modules/parameter-values/parameter-values.service', () => ({
   parameterValuesService: {
     calendarStatus: jest.fn(),
+    calendarStatusDetails: jest.fn(),
     latestHourly: jest.fn(),
     measurementStatistics: jest.fn(),
   },
@@ -235,6 +236,42 @@ describe('connectionRequestsService', () => {
         month: '2026-06',
         count: 0,
         registeredParameters: [],
+      },
+    });
+    mockedParameterValuesService.calendarStatusDetails.mockResolvedValue({
+      data: {
+        metadata: {
+          description: 'รายละเอียดที่ใช้คำนวณตารางสรุปสถานะรายเดือน',
+          month: '2026-06',
+          summaryType: 'exceeded',
+          valueDefinitions: {},
+        },
+        parameter: {
+          parameterCode: 'CO',
+          parameterName: 'CO',
+          parameterLabel: 'CO (ppm)',
+          unit: 'ppm',
+          exceededStandard: {
+            value: 100,
+            displayValue: '100.00',
+            operator: '>=',
+          },
+        },
+        summary: {
+          affectedDays: 0,
+          totalExceededOccurrences: 0,
+          totalMissingHours: 0,
+        },
+        days: [],
+      },
+      meta: {
+        stationId: 'STACK-A',
+        interval: '60m',
+        schemaName: 'ingest',
+        tableName: 'STACK-A_data_60m',
+        month: '2026-06',
+        count: 0,
+        registeredParameters: ['CO (ppm)'],
       },
     });
     connectionRequestsService.setClockForTests(() => now);
@@ -2834,7 +2871,7 @@ describe('connectionRequestsService', () => {
     });
   });
 
-  it('passes measurement criteria and device channel health to connected calendar status', async () => {
+  it('passes measurement criteria and device channel health to connected calendar APIs', async () => {
     const standardCriteria = {
       enabled: false,
       standardValue: null,
@@ -2951,6 +2988,50 @@ describe('connectionRequestsService', () => {
       },
     );
     expect(result.data.factory).toEqual({
+      factoryId: 'factory-001',
+      factoryName: 'บริษัท ทดสอบ จำกัด',
+      systemType: 'CEMS',
+    });
+
+    const detailsResult = await connectionRequestsService.getCalendarStatusDetails(
+      'STACK-A',
+      {
+        month: '2026-06',
+        summaryType: 'exceeded',
+        parameterCode: 'CO',
+        unit: 'ppm',
+      },
+      actorUserId,
+      'ALL',
+    );
+
+    expect(mockedParameterValuesService.calendarStatusDetails).toHaveBeenCalledWith(
+      {
+        stationId: 'STACK-A',
+        month: '2026-06',
+        summaryType: 'exceeded',
+        parameterCode: 'CO',
+        unit: 'ppm',
+      },
+      { actorUserId, scope: 'ALL' },
+      {
+        parameterEvaluations: [
+          {
+            parameter: 'CO (ppm)',
+            standardCriteria,
+            eiaCriteria: null,
+            channelStatus: 'Normal',
+          },
+          {
+            parameter: 'NOx (ppm)',
+            standardCriteria: null,
+            eiaCriteria: null,
+            channelStatus: 'Maintenance',
+          },
+        ],
+      },
+    );
+    expect(detailsResult.data.factory).toEqual({
       factoryId: 'factory-001',
       factoryName: 'บริษัท ทดสอบ จำกัด',
       systemType: 'CEMS',

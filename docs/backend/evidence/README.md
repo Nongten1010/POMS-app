@@ -31,6 +31,8 @@
 
 - [ล้างข้อมูลทดสอบด้วย SQL](./shared/test-data-cleanup.tdd.md)
 - [Frontend monitoring contract 05082026](./shared/frontend-monitoring-contract-05082026.tdd.md)
+- [สรุป Calendar Status ใช้เฉพาะเดือนที่ร้องขอ](./shared/calendar-summary-requested-month-isolation.tdd.md)
+- [รายละเอียดสำหรับคลิกสรุป Calendar Status](./shared/calendar-status-details.tdd.md)
 
 ## Home
 

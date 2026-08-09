@@ -27,6 +27,8 @@ curl --request GET \
 | อ่านแบบตั้งค่าอุปกรณ์ปัจจุบัน | `GET` | `/api/v1/connected-measurement-points/:stationId/device-configs` | Bearer | `cems_wpms_requests:view` | [Device config contract](../../menus/connection-requests/device-configs.md) |
 | แทนที่การตั้งค่าอุปกรณ์ปัจจุบัน | `POST` | `/api/v1/connected-measurement-points/:stationId/device-configs` | Bearer | `cems_wpms_requests:edit` | [Device config contract](../../menus/connection-requests/device-configs.md) |
 | อ่านสถิติรายชั่วโมง | `GET` | `/api/v1/connected-measurement-points/:stationId/measurement-statistics?date=YYYY-MM-DD` | Bearer | `dashboard.stats:view` | [Measurement statistics](#get-apiv1connected-measurement-pointsstationidmeasurement-statistics) |
+| อ่านปฏิทินและสรุปสถานะรายเดือน | `GET` | `/api/v1/connected-measurement-points/:stationId/calendar-status?month=YYYY-MM` | Bearer | `dashboard.stats:view` | [Calendar status](#get-apiv1connected-measurement-pointsstationidcalendar-status) |
+| อ่านรายละเอียดเมื่อคลิกจำนวนวันในสรุปรายเดือน | `GET` | `/api/v1/connected-measurement-points/:stationId/calendar-status/details` | Bearer | `dashboard.stats:view` | [Calendar status details](#get-apiv1connected-measurement-pointsstationidcalendar-statusdetails) |
 | ส่งออกข้อมูลตรวจวัดเป็น CSV | `GET` | `/api/v1/connected-measurement-points/:stationId/measurement-export.csv` | Bearer | `dashboard.stats:export` | [Measurement CSV export](#get-apiv1connected-measurement-pointsstationidmeasurement-exportcsv) |
 
 ## Contracts
@@ -228,6 +230,459 @@ curl --request GET \
 | `403 Forbidden` | ไม่มี permission หรือจุดตรวจวัดอยู่นอก data scope | ซ่อนข้อมูลหรือแจ้งสิทธิ์ไม่เพียงพอ |
 | `404 Not Found` | ไม่พบจุดตรวจวัดหรือตารางข้อมูลของจุดนั้น | ตรวจรหัสจุดตรวจวัด |
 
+### `GET /api/v1/connected-measurement-points/:stationId/calendar-status`
+
+คืนสถานะรายวันของปฏิทินและตารางสรุปของแต่ละพารามิเตอร์สำหรับเดือนคริสต์ศักราชที่เลือก
+
+#### Authentication And Permission
+
+- Authentication: required
+- Permission: `dashboard.stats:view`
+- Data scope: `ALL`, `IN_REGION`, `IN_PROVINCE` หรือ `OWN_FACTORY`
+
+#### Request Fields
+
+| Field | Location | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `stationId` | path | string | Yes | รหัส connected measurement point ที่อยู่ใน data scope ของผู้เรียก |
+| `month` | query | `YYYY-MM` | Yes | เดือนตามคริสต์ศักราช เช่น `2025-08`; เดือนต้องอยู่ระหว่าง `01` ถึง `12` |
+
+#### Request Example
+
+```bash
+curl --request GET \
+  --url '<BASE_URL>/api/v1/connected-measurement-points/S1125/calendar-status?month=2025-08' \
+  --header 'Authorization: Bearer <ACCESS_TOKEN>' \
+  --header 'Accept: application/json'
+```
+
+#### Success Response Fields
+
+| Field | Type | Nullable | Description |
+| --- | --- | --- | --- |
+| `success` | boolean | No | `true` เมื่อสำเร็จ |
+| `data.metadata.description` | string | No | คำอธิบายชุดข้อมูล calendar status |
+| `data.metadata.month` | string | No | เดือนเดียวกับ query ในรูปแบบ `YYYY-MM` |
+| `data.metadata.valueDefinitions` | object | No | คำอธิบายความหมายของ calendar statuses |
+| `data.factory` | object | No | โรงงาน current/live ของจุดตรวจวัดที่เลือก |
+| `data.factory.factoryId` | string | No | รหัสโรงงาน current/live |
+| `data.factory.factoryName` | string | No | ชื่อโรงงาน current/live |
+| `data.factory.systemType` | string | No | ประเภทระบบของจุด เช่น `CEMS` หรือ `WPMS` |
+| `data.calendar.year` | number | No | ปีคริสต์ศักราชจาก `month` |
+| `data.calendar.month` | number | No | เลขเดือน `1` ถึง `12` จาก `month` |
+| `data.calendar.days` | object[] | No | สถานะของวันที่มี source rows ในเดือนที่เลือก เรียงวันที่จากเก่าไปใหม่ |
+| `data.calendar.days[].date` | string | No | วันที่ในรูปแบบ `YYYY-MM-DD` |
+| `data.calendar.days[].dataCompletenessPercent` | number | No | ร้อยละความครบถ้วนของข้อมูลรายวัน |
+| `data.calendar.days[].dataCompletenessStatus` | `lowData` \| `highData` | No | `lowData` เมื่อต่ำกว่า 80%; มิฉะนั้นเป็น `highData` |
+| `data.calendar.days[].pollutionStatus` | `normal` \| `warning` \| `exceeded` \| `insufficient` | No | สถานะมลพิษรายวันสำหรับเส้นขอบปฏิทิน |
+| `data.calendar.days[].display.backgroundStatus` | `lowData` \| `highData` | No | สถานะพื้นหลังเดียวกับ `dataCompletenessStatus` |
+| `data.calendar.days[].display.borderStatus` | `normal` \| `warning` \| `exceeded` \| `insufficient` | No | สถานะเส้นขอบเดียวกับ `pollutionStatus` |
+| `data.monthlySummary` | object[] | No | สรุปของพารามิเตอร์ที่ลงทะเบียน |
+| `data.monthlySummary[].parameterCode` | string | No | รหัสพารามิเตอร์แบบ machine-stable |
+| `data.monthlySummary[].parameterName` | string | No | ชื่อพารามิเตอร์ |
+| `data.monthlySummary[].unit` | string | No | หน่วยของพารามิเตอร์ เช่น `ppm` |
+| `data.monthlySummary[].exceededDays` | number | No | จำนวนวันของพารามิเตอร์นั้นที่มีสถานะ `exceeded` เฉพาะในเดือนที่ร้องขอ |
+| `data.monthlySummary[].lowDataDays` | number | No | จำนวนวันที่มีความครบถ้วนต่ำกว่า 80% เฉพาะในเดือนที่ร้องขอ |
+| `data.monthlySummary[].todayDataCompletenessPercent` | number | Yes | ร้อยละความครบถ้วนของ daily summary ล่าสุดในชุดข้อมูลที่ endpoint ได้รับ; เป็น `null` เมื่อไม่มีข้อมูล |
+| `meta.stationId` | string | No | รหัสจุดตรวจวัดที่อ่านข้อมูล |
+| `meta.interval` | `60m` | No | ตารางข้อมูลรายชั่วโมงที่ใช้ |
+| `meta.schemaName` | string | No | schema ของ parameter source database |
+| `meta.tableName` | string | No | ตาราง `{stationId}_data_60m` ที่ใช้ |
+| `meta.month` | string | No | เดือนเดียวกับ query ในรูปแบบ `YYYY-MM` |
+| `meta.count` | number | No | จำนวน source rows ที่ repository คืนสำหรับ request นี้ |
+| `meta.registeredParameters` | string[] | No | พารามิเตอร์ที่ลงทะเบียน โดยชื่อที่อ่านได้ต้องมีหน่วยเมื่อ source ระบุได้ |
+
+#### Success Response Example
+
+```json
+{
+  "success": true,
+  "data": {
+    "metadata": {
+      "description": "DateCalendar และตารางสรุปสถานะรายเดือนของโรงงาน",
+      "month": "2025-08",
+      "valueDefinitions": {
+        "dataCompletenessStatus": {
+          "lowData": "ส่งข้อมูลน้อยกว่า 80% ใช้พื้นหลังสีเทา",
+          "highData": "ส่งข้อมูลมากกว่าหรือเท่ากับ 80% ใช้พื้นหลังสีฟ้า"
+        },
+        "pollutionStatus": {
+          "normal": "ปกติทั้งวัน ใช้เส้นขอบสีเขียว",
+          "warning": "เฝ้าระวัง ใช้เส้นขอบสีส้ม",
+          "exceeded": "เกินมาตรฐาน ใช้เส้นขอบสีแดง",
+          "insufficient": "ข้อมูลไม่เพียงพอเมื่อ dataCompletenessStatus เป็น lowData"
+        }
+      }
+    },
+    "factory": {
+      "factoryId": "10120000325542",
+      "factoryName": "บริษัท ตัวอย่าง จำกัด",
+      "systemType": "CEMS"
+    },
+    "calendar": {
+      "year": 2025,
+      "month": 8,
+      "days": [
+        {
+          "date": "2025-08-09",
+          "dataCompletenessPercent": 83,
+          "dataCompletenessStatus": "highData",
+          "pollutionStatus": "exceeded",
+          "display": {
+            "backgroundStatus": "highData",
+            "borderStatus": "exceeded"
+          }
+        },
+        {
+          "date": "2025-08-10",
+          "dataCompletenessPercent": 42,
+          "dataCompletenessStatus": "lowData",
+          "pollutionStatus": "insufficient",
+          "display": {
+            "backgroundStatus": "lowData",
+            "borderStatus": "insufficient"
+          }
+        }
+      ]
+    },
+    "monthlySummary": [
+      {
+        "parameterCode": "CO",
+        "parameterName": "CO",
+        "unit": "ppm",
+        "exceededDays": 1,
+        "lowDataDays": 1,
+        "todayDataCompletenessPercent": 42
+      }
+    ]
+  },
+  "meta": {
+    "stationId": "S1125",
+    "interval": "60m",
+    "schemaName": "ingest",
+    "tableName": "S1125_data_60m",
+    "month": "2025-08",
+    "count": 30,
+    "registeredParameters": ["CO (ppm)"]
+  }
+}
+```
+
+#### Validation And Business Rules
+
+- `month=2025-08` กำหนดช่วงแบบ inclusive ตั้งแต่ `2025-08-01` ถึง `2025-08-31`
+- `monthlySummary[].exceededDays` และ `monthlySummary[].lowDataDays` นับเฉพาะ daily summaries ที่ `date` อยู่ในช่วงเดือนที่ร้องขอ แม้ adapter ต้นทางจะคืน row นอกช่วงเข้ามา
+- `exceededDays` แยกตามพารามิเตอร์และใช้เกณฑ์ของ connected point; วันเดียวกันนับได้สูงสุดหนึ่งวันต่อพารามิเตอร์
+- `lowDataDays` ใช้สถานะความครบถ้วนระดับวันและจึงอาจมีค่าเดียวกันในหลายพารามิเตอร์
+- `todayDataCompletenessPercent` คงพฤติกรรมเดิมและไม่ใช้ตัวกรอง defensive ของสอง counter: ใช้ daily summary ล่าสุดในชุดข้อมูลที่ endpoint ได้รับ และไม่ได้หมายความว่าต้องเป็นวันปัจจุบันตามนาฬิกา
+- ชื่อพารามิเตอร์ที่อ่านได้ต้องคืนพร้อม `unit`; client ใช้ `parameterCode` เมื่อต้องการ key ที่คงที่
+- หลักฐาน TDD: [Calendar summary requested-month isolation](../../../evidence/shared/calendar-summary-requested-month-isolation.tdd.md)
+
+#### Errors
+
+| HTTP status | Code | Condition | Client action |
+| --- | --- | --- | --- |
+| `400 Bad Request` | `VALIDATION_ERROR` | `stationId` หรือ `month` ไม่ผ่าน validation | ตรวจรูปแบบ path และ `YYYY-MM` |
+| `401 Unauthorized` | `UNAUTHORIZED` | ไม่มี bearer token ที่ถูกต้อง | login ใหม่ |
+| `403 Forbidden` | `FORBIDDEN` | ไม่มี `dashboard.stats:view` หรือจุดตรวจวัดอยู่นอก data scope | ซ่อนข้อมูลหรือแจ้งสิทธิ์ไม่เพียงพอ |
+| `404 Not Found` | `NOT_FOUND` | ไม่พบจุดตรวจวัดหรือตาราง `{stationId}_data_60m` | ตรวจรหัสจุดตรวจวัดและสถานะการเชื่อมต่อ |
+
+### `GET /api/v1/connected-measurement-points/:stationId/calendar-status/details`
+
+คืนรายละเอียดสำหรับ modal/list เมื่อ frontend คลิกจำนวนวัน `exceededDays` หรือ `lowDataDays` ใน `monthlySummary` โดยอ่านข้อมูลทั้งเดือนครั้งเดียวและคืนเฉพาะวันที่ตรงกับประเภทที่เลือก
+
+#### Authentication And Permission
+
+- Authentication: required
+- Permission: `dashboard.stats:view`
+- Data scope: `ALL`, `IN_REGION`, `IN_PROVINCE` หรือ `OWN_FACTORY`
+
+#### Request Fields
+
+| Field | Location | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `stationId` | path | string | Yes | รหัส connected measurement point ที่อยู่ใน data scope ของผู้เรียก |
+| `month` | query | `YYYY-MM` | Yes | เดือนตามคริสต์ศักราช เช่น `2025-08` |
+| `summaryType` | query | `exceeded` \| `lowData` | Yes | `exceeded` สำหรับรายละเอียดค่าที่เกินมาตรฐาน หรือ `lowData` สำหรับรายละเอียดวันที่ข้อมูลต่ำกว่า 80% |
+| `parameterCode` | query | string | Yes | รหัสจาก `calendar-status.data.monthlySummary[].parameterCode` |
+| `unit` | query | string | No | หน่วยจาก `monthlySummary[].unit`; ควรส่งทุกครั้งและต้องส่งเมื่อ `parameterCode` เดียวกันมีหลายหน่วย |
+
+#### Request Examples
+
+รายละเอียดค่าที่เกินมาตรฐาน:
+
+```bash
+curl --get \
+  --url '<BASE_URL>/api/v1/connected-measurement-points/S1125/calendar-status/details' \
+  --header 'Authorization: Bearer <ACCESS_TOKEN>' \
+  --header 'Accept: application/json' \
+  --data-urlencode 'month=2025-08' \
+  --data-urlencode 'summaryType=exceeded' \
+  --data-urlencode 'parameterCode=CO' \
+  --data-urlencode 'unit=ppm'
+```
+
+รายละเอียดข้อมูลไม่ถึง:
+
+```bash
+curl --get \
+  --url '<BASE_URL>/api/v1/connected-measurement-points/S1125/calendar-status/details' \
+  --header 'Authorization: Bearer <ACCESS_TOKEN>' \
+  --header 'Accept: application/json' \
+  --data-urlencode 'month=2025-08' \
+  --data-urlencode 'summaryType=lowData' \
+  --data-urlencode 'parameterCode=CO' \
+  --data-urlencode 'unit=ppm'
+```
+
+#### Success Response Fields
+
+| Field | Type | Nullable | Description |
+| --- | --- | --- | --- |
+| `success` | boolean | No | `true` เมื่อสำเร็จ |
+| `data.metadata.description` | string | No | คำอธิบายชุดข้อมูล detail |
+| `data.metadata.month` | string | No | เดือนเดียวกับ query ในรูปแบบ `YYYY-MM` |
+| `data.metadata.summaryType` | `exceeded` \| `lowData` | No | ประเภท drill-down ที่ร้องขอ |
+| `data.metadata.valueDefinitions` | object | No | คำอธิบาย semantics ของ detail fields |
+| `data.factory` | object | No | โรงงาน current/live ของจุดตรวจวัดที่เลือก |
+| `data.factory.factoryId` | string | No | รหัสโรงงาน current/live; เป็น string ว่างเมื่อ source ไม่มีค่า |
+| `data.factory.factoryName` | string | No | ชื่อโรงงาน current/live; เป็น string ว่างเมื่อ source ไม่มีค่า |
+| `data.factory.systemType` | string | No | ประเภทระบบของจุดตรวจวัด เช่น `CEMS` หรือ `WPMS` |
+| `data.parameter.parameterCode` | string | No | รหัสพารามิเตอร์ที่เลือก |
+| `data.parameter.parameterName` | string | No | ชื่อพารามิเตอร์ |
+| `data.parameter.parameterLabel` | string | No | ชื่อสำหรับแสดงผลพร้อมหน่วย เช่น `CO (ppm)` |
+| `data.parameter.unit` | string | No | หน่วยของค่าที่วัดและค่าเกณฑ์ |
+| `data.parameter.exceededStandard.value` | number | No | ค่าเกณฑ์ที่ใช้ตัดสิน `exceeded` |
+| `data.parameter.exceededStandard.displayValue` | string | No | ค่าเกณฑ์ที่ format แล้ว |
+| `data.parameter.exceededStandard.operator` | `>` \| `>=` | No | ตัวดำเนินการของเกณฑ์; criteria ระดับ critical ใช้ `>=` |
+| `data.summary.affectedDays` | number | No | จำนวนสมาชิกใน `data.days`; ตรงกับประเภท summary และเดือนที่ร้องขอ |
+| `data.summary.totalExceededOccurrences` | number | No | จำนวนเหตุการณ์เกินทั้งหมด; เป็น `0` สำหรับ `lowData` |
+| `data.summary.totalMissingHours` | number | No | จำนวน parameter-hour slots ที่ขาดรวมจาก `lowDataCauses`; เป็น `0` สำหรับ `exceeded` |
+| `data.days` | object[] | No | วันที่ตรงกับ `summaryType` เรียงจากเก่าไปใหม่ |
+| `data.days[].date` | `YYYY-MM-DD` | No | วันที่เกิดเหตุ |
+| `data.days[].dataCompletenessPercent` | number | No | ความครบถ้วนระดับวันที่ใช้ตัดสิน `lowDataDays` |
+| `data.days[].dataCompletenessStatus` | `lowData` \| `highData` | No | สถานะความครบถ้วนระดับวัน |
+| `data.days[].pollutionStatus` | `normal` \| `warning` \| `exceeded` \| `insufficient` | No | สถานะมลพิษระดับวัน |
+| `data.days[].parameterDataCompletenessPercent` | number | No | ความครบถ้วนของพารามิเตอร์ที่เลือก |
+| `data.days[].expectedHours` | `24` | No | จำนวน hourly slots ที่คาดหวังต่อวัน |
+| `data.days[].receivedHours` | number | No | จำนวนชั่วโมงที่มีค่าของพารามิเตอร์ที่เลือก |
+| `data.days[].missingTimes` | string[] | No | ชั่วโมงที่ไม่มีค่าของพารามิเตอร์ที่เลือก เช่น `10:00`; ใช้ใน `lowData` |
+| `data.days[].exceededOccurrences` | object[] | No | รายการเหตุการณ์เกินของพารามิเตอร์ที่เลือก; เป็น `[]` สำหรับ `lowData` |
+| `data.days[].exceededOccurrences[].time` | `HH:mm:ss` | No | เวลาจริงจาก source ที่ normalize แล้ว |
+| `data.days[].exceededOccurrences[].displayTime` | string | No | ช่วงเวลาสำหรับแสดงผลภาษาไทย |
+| `data.days[].exceededOccurrences[].value` | number | No | ค่าที่วัดได้ซึ่งมีสถานะเกินมาตรฐาน หน่วยเดียวกับ `data.parameter.unit` |
+| `data.days[].exceededOccurrences[].displayValue` | string | No | ค่าที่วัดได้ซึ่ง format แล้ว |
+| `data.days[].exceededOccurrences[].standardValue` | number | No | ค่าเกณฑ์ที่ใช้เปรียบเทียบ |
+| `data.days[].exceededOccurrences[].displayStandardValue` | string | No | ค่าเกณฑ์ซึ่ง format แล้ว |
+| `data.days[].exceededOccurrences[].exceededBy` | number | No | ผลต่าง `value - standardValue`; ต่ำสุดเป็น `0` สำหรับเกณฑ์ `>=` |
+| `data.days[].exceededOccurrences[].displayExceededBy` | string | No | ผลต่างจากเกณฑ์ซึ่ง format แล้ว |
+| `data.days[].lowDataCauses` | object[] | No | พารามิเตอร์ทั้งหมดที่มีความครบถ้วนต่ำกว่า 80% และเป็นสาเหตุของวัน `lowData`; เป็น `[]` สำหรับ `exceeded` |
+| `data.days[].lowDataCauses[].parameterCode` | string | No | รหัสพารามิเตอร์ต้นเหตุ |
+| `data.days[].lowDataCauses[].parameterName` | string | No | ชื่อพารามิเตอร์ต้นเหตุ |
+| `data.days[].lowDataCauses[].parameterLabel` | string | No | ชื่อพารามิเตอร์ต้นเหตุพร้อมหน่วย |
+| `data.days[].lowDataCauses[].unit` | string | No | หน่วยของพารามิเตอร์ต้นเหตุ |
+| `data.days[].lowDataCauses[].dataCompletenessPercent` | number | No | ความครบถ้วนของพารามิเตอร์ต้นเหตุ |
+| `data.days[].lowDataCauses[].receivedHours` | number | No | จำนวนชั่วโมงที่มีค่าของพารามิเตอร์ต้นเหตุ |
+| `data.days[].lowDataCauses[].missingTimes` | string[] | No | ชั่วโมงที่ไม่มีค่าของพารามิเตอร์ต้นเหตุ |
+| `meta.stationId` | string | No | รหัสจุดตรวจวัด |
+| `meta.interval` | `60m` | No | ตารางรายชั่วโมงที่ใช้ |
+| `meta.schemaName` | string | No | schema ของ parameter source database |
+| `meta.tableName` | string | No | ตาราง `{stationId}_data_60m` ที่ใช้ |
+| `meta.month` | string | No | เดือนเดียวกับ query |
+| `meta.count` | number | No | จำนวน source rows ในช่วงเดือน |
+| `meta.registeredParameters` | string[] | No | พารามิเตอร์ที่ลงทะเบียนพร้อมหน่วยเมื่อมี |
+
+#### Success Response Example: `summaryType=exceeded`
+
+```json
+{
+  "success": true,
+  "data": {
+    "metadata": {
+      "description": "รายละเอียดที่ใช้คำนวณตารางสรุปสถานะรายเดือน",
+      "month": "2025-08",
+      "summaryType": "exceeded",
+      "valueDefinitions": {
+        "summaryType": {
+          "exceeded": "คืนเฉพาะวันที่และช่วงเวลาที่พารามิเตอร์มีสถานะเกินมาตรฐาน",
+          "lowData": "คืนเฉพาะวันที่มีความครบถ้วนของข้อมูลรายวันต่ำกว่า 80%"
+        },
+        "exceededOccurrences": "รายการค่าที่เกินมาตรฐานพร้อมเวลา ค่าที่วัด ค่าเกณฑ์ และผลต่างจากเกณฑ์",
+        "missingTimes": "รายการชั่วโมงที่ไม่พบค่าของพารามิเตอร์ที่เลือก ใช้ประกอบรายละเอียดข้อมูลไม่ถึง",
+        "dataCompletenessPercent": "ร้อยละความครบถ้วนรายวันที่ใช้ตัดสิน lowData ของ monthly summary",
+        "parameterDataCompletenessPercent": "ร้อยละความครบถ้วนรายวันของพารามิเตอร์ที่เลือก"
+      }
+    },
+    "factory": {
+      "factoryId": "10120000325542",
+      "factoryName": "บริษัท ตัวอย่าง จำกัด",
+      "systemType": "CEMS"
+    },
+    "parameter": {
+      "parameterCode": "CO",
+      "parameterName": "CO",
+      "parameterLabel": "CO (ppm)",
+      "unit": "ppm",
+      "exceededStandard": {
+        "value": 100,
+        "displayValue": "100.00",
+        "operator": ">="
+      }
+    },
+    "summary": {
+      "affectedDays": 1,
+      "totalExceededOccurrences": 2,
+      "totalMissingHours": 0
+    },
+    "days": [
+      {
+        "date": "2025-08-09",
+        "dataCompletenessPercent": 83,
+        "dataCompletenessStatus": "highData",
+        "pollutionStatus": "exceeded",
+        "parameterDataCompletenessPercent": 83,
+        "expectedHours": 24,
+        "receivedHours": 20,
+        "missingTimes": [],
+        "exceededOccurrences": [
+          {
+            "time": "00:00:00",
+            "displayTime": "00.00-00.59 น.",
+            "value": 101,
+            "displayValue": "101.00",
+            "standardValue": 100,
+            "displayStandardValue": "100.00",
+            "exceededBy": 1,
+            "displayExceededBy": "1.00"
+          },
+          {
+            "time": "05:30:00",
+            "displayTime": "05.00-05.59 น.",
+            "value": 125,
+            "displayValue": "125.00",
+            "standardValue": 100,
+            "displayStandardValue": "100.00",
+            "exceededBy": 25,
+            "displayExceededBy": "25.00"
+          }
+        ],
+        "lowDataCauses": []
+      }
+    ]
+  },
+  "meta": {
+    "stationId": "S1125",
+    "interval": "60m",
+    "schemaName": "ingest",
+    "tableName": "S1125_data_60m",
+    "month": "2025-08",
+    "count": 20,
+    "registeredParameters": ["CO (ppm)"]
+  }
+}
+```
+
+#### Success Response Example: `summaryType=lowData`
+
+```json
+{
+  "success": true,
+  "data": {
+    "metadata": {
+      "description": "รายละเอียดที่ใช้คำนวณตารางสรุปสถานะรายเดือน",
+      "month": "2025-08",
+      "summaryType": "lowData",
+      "valueDefinitions": {
+        "summaryType": {
+          "exceeded": "คืนเฉพาะวันที่และช่วงเวลาที่พารามิเตอร์มีสถานะเกินมาตรฐาน",
+          "lowData": "คืนเฉพาะวันที่มีความครบถ้วนของข้อมูลรายวันต่ำกว่า 80%"
+        },
+        "exceededOccurrences": "รายการค่าที่เกินมาตรฐานพร้อมเวลา ค่าที่วัด ค่าเกณฑ์ และผลต่างจากเกณฑ์",
+        "missingTimes": "รายการชั่วโมงที่ไม่พบค่าของพารามิเตอร์ที่เลือก ใช้ประกอบรายละเอียดข้อมูลไม่ถึง",
+        "dataCompletenessPercent": "ร้อยละความครบถ้วนรายวันที่ใช้ตัดสิน lowData ของ monthly summary",
+        "parameterDataCompletenessPercent": "ร้อยละความครบถ้วนรายวันของพารามิเตอร์ที่เลือก"
+      }
+    },
+    "factory": {
+      "factoryId": "10120000325542",
+      "factoryName": "บริษัท ตัวอย่าง จำกัด",
+      "systemType": "CEMS"
+    },
+    "parameter": {
+      "parameterCode": "CO",
+      "parameterName": "CO",
+      "parameterLabel": "CO (ppm)",
+      "unit": "ppm",
+      "exceededStandard": {
+        "value": 100,
+        "displayValue": "100.00",
+        "operator": ">="
+      }
+    },
+    "summary": {
+      "affectedDays": 1,
+      "totalExceededOccurrences": 0,
+      "totalMissingHours": 5
+    },
+    "days": [
+      {
+        "date": "2025-08-10",
+        "dataCompletenessPercent": 79,
+        "dataCompletenessStatus": "lowData",
+        "pollutionStatus": "insufficient",
+        "parameterDataCompletenessPercent": 79,
+        "expectedHours": 24,
+        "receivedHours": 19,
+        "missingTimes": ["19:00", "20:00", "21:00", "22:00", "23:00"],
+        "exceededOccurrences": [],
+        "lowDataCauses": [
+          {
+            "parameterCode": "CO",
+            "parameterName": "CO",
+            "parameterLabel": "CO (ppm)",
+            "unit": "ppm",
+            "dataCompletenessPercent": 79,
+            "receivedHours": 19,
+            "missingTimes": ["19:00", "20:00", "21:00", "22:00", "23:00"]
+          }
+        ]
+      }
+    ]
+  },
+  "meta": {
+    "stationId": "S1125",
+    "interval": "60m",
+    "schemaName": "ingest",
+    "tableName": "S1125_data_60m",
+    "month": "2025-08",
+    "count": 19,
+    "registeredParameters": ["CO (ppm)"]
+  }
+}
+```
+
+#### Validation And Business Rules
+
+- API อ่านข้อมูลรายชั่วโมงครั้งเดียวในช่วงวันแรกถึงวันสุดท้ายของ `month` และกรองซ้ำแบบ defensive ก่อนสร้าง `days`
+- `summaryType=exceeded` คืนเฉพาะวันที่มีอย่างน้อยหนึ่ง `exceededOccurrences`; เวลาในแต่ละเหตุการณ์มาจาก `ctime` จริงและ normalize เป็น `HH:mm:ss`
+- ค่าเกณฑ์ใช้ `critical.min` และ operator `>=` เมื่อ connected point มี criteria; ถ้าไม่มี critical threshold จะ fallback ไป `warningMax` และ operator `>` ตาม status logic เดิม
+- `summaryType=lowData` คืนวันที่ `dataCompletenessPercent < 80` ตามกฎเดียวกับ `monthlySummary[].lowDataDays`
+- `lowDataDays` เป็นสถานะระดับวันและอาจซ้ำทุกแถวพารามิเตอร์ จึงต้องใช้ `lowDataCauses[]` เพื่อดูว่าพารามิเตอร์ใดต่ำกว่า 80%; `missingTimes` ระดับวันเป็นของพารามิเตอร์ที่ query เลือก
+- `totalMissingHours` รวมจำนวนสมาชิก `missingTimes` ของทุก `lowDataCauses` จึงเป็นจำนวน parameter-hour slots ไม่ใช่จำนวนชั่วโมงที่ไม่ซ้ำกันของวัน
+- ถ้า `parameterCode` ตรงกับหลายพารามิเตอร์ต่างหน่วย ต้องส่ง `unit`; client ควรส่ง `parameterCode` และ `unit` จาก monthly summary เดียวกันเสมอ
+- response ถูกจำกัดโดยธรรมชาติที่หนึ่งเดือนและ 24 hourly slots ต่อวัน จึงไม่มี pagination
+- หลักฐาน TDD: [Calendar status details](../../../evidence/shared/calendar-status-details.tdd.md)
+
+#### Errors
+
+| HTTP status | Code | Condition | Client action |
+| --- | --- | --- | --- |
+| `400 Bad Request` | `VALIDATION_ERROR` | query ขาด field, `month` ผิดรูปแบบ หรือ `summaryType` ไม่ใช่ค่าที่รองรับ | ใช้ contract ของ query fields |
+| `400 Bad Request` | `BAD_REQUEST` | `parameterCode` ตรงหลายหน่วยแต่ไม่ส่ง `unit` | ส่ง `unit` จาก monthly summary แถวที่คลิก |
+| `401 Unauthorized` | `UNAUTHORIZED` | ไม่มี bearer token ที่ถูกต้อง | login ใหม่ |
+| `403 Forbidden` | `FORBIDDEN` | ไม่มี `dashboard.stats:view` หรือจุดตรวจวัดอยู่นอก data scope | ซ่อนข้อมูลหรือแจ้งสิทธิ์ไม่เพียงพอ |
+| `404 Not Found` | `NOT_FOUND` | ไม่พบจุดตรวจวัด, ตารางรายชั่วโมง หรือพารามิเตอร์ที่ระบุ | ตรวจ `stationId`, `parameterCode` และ `unit` |
+
 ### `GET /api/v1/connected-measurement-points/:stationId/measurement-export.csv`
 
 อ่านข้อมูลจริงของจุดตรวจวัดตามช่วงวันที่ แล้ว stream เป็นไฟล์ CSV โดย backend resolve ชื่อโรงงาน current/live, registered parameters, permission และ data scope จาก `stationId`; client ไม่ต้องส่ง `factoryId`, `factoryName` หรือ `reportType` กลับมาเป็น source of truth
@@ -344,4 +799,4 @@ CSV ใช้ identity columns `date_time`, `factory_name`, `meas_code` ก่�
 | CSV formatter | [`measurement-csv-export.ts`](../../../../../backend/src/modules/parameter-values/measurement-csv-export.ts) |
 | Validators | [`connection-requests.validator.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.validator.ts), [`parameter-values.validator.ts`](../../../../../backend/src/modules/parameter-values/parameter-values.validator.ts) |
 | Public types | [`connection-requests.types.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.types.ts) |
-| Tests | [`connection-requests.service.test.ts`](../../../../../backend/tests/unit/connection-requests.service.test.ts), [`connected-measurement-points.route.test.ts`](../../../../../backend/tests/unit/connected-measurement-points.route.test.ts), [`measurement-csv-export.route.test.ts`](../../../../../backend/tests/unit/measurement-csv-export.route.test.ts), [`measurement-csv-export.test.ts`](../../../../../backend/tests/unit/measurement-csv-export.test.ts) |
+| Tests | [`connection-requests.service.test.ts`](../../../../../backend/tests/unit/connection-requests.service.test.ts), [`connected-measurement-points.route.test.ts`](../../../../../backend/tests/unit/connected-measurement-points.route.test.ts), [`parameter-values.service.test.ts`](../../../../../backend/tests/unit/parameter-values.service.test.ts), [`measurement-csv-export.route.test.ts`](../../../../../backend/tests/unit/measurement-csv-export.route.test.ts), [`measurement-csv-export.test.ts`](../../../../../backend/tests/unit/measurement-csv-export.test.ts) |

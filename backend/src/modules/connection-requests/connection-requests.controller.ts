@@ -9,6 +9,7 @@ import type { RegionalAccessDTO } from '../auth/regional-access';
 import { createConnectionRequestDocumentImageService } from './connection-request-document-image.service';
 import { connectionRequestsService } from './connection-requests.service';
 import {
+  calendarStatusDetailsQuerySchema,
   calendarStatusQuerySchema,
   connectedMeasurementPointDetailParamsSchema,
   measurementCsvExportQuerySchema,
@@ -318,6 +319,24 @@ export const connectionRequestsController = {
       const { stationId } = connectedMeasurementPointDetailParamsSchema.parse(req.params);
       const query = calendarStatusQuerySchema.parse(req.query);
       const result = await connectionRequestsService.getCalendarStatus(
+        stationId,
+        query,
+        actorUserId,
+        getScopeDetails(req, 'dashboard.stats:view'),
+        ...getRegionalAccessArg(req),
+      );
+      res.status(StatusCodes.OK).json({ success: true, ...result });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async getCalendarStatusDetails(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const actorUserId = requireActorUserId(req);
+      const { stationId } = connectedMeasurementPointDetailParamsSchema.parse(req.params);
+      const query = calendarStatusDetailsQuerySchema.parse(req.query);
+      const result = await connectionRequestsService.getCalendarStatusDetails(
         stationId,
         query,
         actorUserId,

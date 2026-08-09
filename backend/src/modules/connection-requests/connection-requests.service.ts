@@ -20,6 +20,7 @@ import type { RegionalAccessDTO } from '../auth/regional-access';
 import { eligibleFactoriesService } from '../eligible-factories/eligible-factories.service';
 import type { SelectedEligibleFactoryDTO } from '../eligible-factories/eligible-factories.types';
 import type {
+  CalendarStatusDetailsQuerySchemaInput,
   CalendarStatusQuerySchemaInput,
   MeasurementCsvExportQuerySchemaInput,
   MeasurementStatisticsQuerySchemaInput,
@@ -674,6 +675,34 @@ export const connectionRequestsService = {
       regionalAccess,
     );
     const result = await parameterValuesService.calendarStatus(
+      { stationId, ...query },
+      { actorUserId, scope: viewScope },
+      toParameterEvaluationOptions(point),
+    );
+
+    return {
+      ...result,
+      data: {
+        ...result.data,
+        factory: toMeasurementDetailFactory(point),
+      },
+    };
+  },
+
+  async getCalendarStatusDetails(
+    stationId: string,
+    query: CalendarStatusDetailsQuerySchemaInput,
+    actorUserId: number,
+    viewScope: AccessScope,
+    regionalAccess?: RegionalAccessDTO | null,
+  ) {
+    const point = await loadConnectedMeasurementPointDetail(
+      stationId,
+      actorUserId,
+      viewScope,
+      regionalAccess,
+    );
+    const result = await parameterValuesService.calendarStatusDetails(
       { stationId, ...query },
       { actorUserId, scope: viewScope },
       toParameterEvaluationOptions(point),
