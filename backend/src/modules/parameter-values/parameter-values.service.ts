@@ -316,7 +316,7 @@ export const parameterValuesService = {
           })),
         },
         monthlySummary: definitions.map((definition) =>
-          buildMonthlyParameterSummary(definition, dailySummaries),
+          buildMonthlyParameterSummary(definition, dailySummaries, startDate, endDate),
         ),
       },
       meta: {
@@ -769,18 +769,24 @@ function calculateDailyParameterCompleteness(
 function buildMonthlyParameterSummary(
   definition: ParameterDefinition,
   dailySummaries: DailySummary[],
+  startDate: string,
+  endDate: string,
 ) {
   const latestSummary = dailySummaries.at(-1);
+  const requestedMonthSummaries = dailySummaries.filter(
+    (summary) => summary.date >= startDate && summary.date <= endDate,
+  );
 
   return {
     parameterCode: definition.code,
     parameterName: definition.name,
     unit: definition.unit,
-    exceededDays: dailySummaries.filter((summary) =>
+    exceededDays: requestedMonthSummaries.filter((summary) =>
       (summary.parameterStatuses.get(definition.code) ?? []).includes('exceeded'),
     ).length,
-    lowDataDays: dailySummaries.filter((summary) => summary.dataCompletenessStatus === 'lowData')
-      .length,
+    lowDataDays: requestedMonthSummaries.filter(
+      (summary) => summary.dataCompletenessStatus === 'lowData',
+    ).length,
     todayDataCompletenessPercent: latestSummary?.dataCompletenessPercent ?? null,
   };
 }
