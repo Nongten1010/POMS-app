@@ -2097,7 +2097,7 @@ function getStatisticPointsBySystem(factory, selectedSystem = '') {
   const points = Array.isArray(factory?.measurementPoints) ? factory.measurementPoints : []
   const filteredPoints = selectedSystem ? points.filter((point) => point?.systemType === selectedSystem) : points
   const mappedPoints = filteredPoints.map((point, index) => {
-    const label = point.pointCode ?? point.stationId ?? point.pointName ?? `จุดที่ ${index + 1}`
+    const label = point.pointName ?? point.pointCode ?? point.stationId ?? `จุดที่ ${index + 1}`
     return {
       value: point.stationId ?? point.pointCode ?? label,
       label,
@@ -2576,16 +2576,38 @@ function ExportReportDialog({
   const defaultPoint = points[0]?.value ?? ''
   const [reportType, setReportType] = useState(() => selectedSystem)
   const [measurementPoint, setMeasurementPoint] = useState(defaultPoint)
-  const [parameter, setParameter] = useState('all')
+  const [selectedParameters, setSelectedParameters] = useState(['all'])
   const [frequency, setFrequency] = useState('')
   const [startDate, setStartDate] = useState(selectedDate)
   const [endDate, setEndDate] = useState(selectedDate)
+  const handleParameterChange = (event) => {
+    const nextValue = typeof event.target.value === 'string' ? event.target.value.split(',') : event.target.value
+    const currentValues = Array.isArray(nextValue) ? nextValue : []
+    const previousIncludesAll = selectedParameters.includes('all')
+    const nextIncludesAll = currentValues.includes('all')
+
+    if (nextIncludesAll && !previousIncludesAll) {
+      setSelectedParameters(['all'])
+      return
+    }
+
+    const explicitParameters = currentValues.filter((item) => item !== 'all')
+    setSelectedParameters(explicitParameters.length > 0 ? explicitParameters : ['all'])
+  }
+  const resetExportForm = () => {
+    setReportType(selectedSystem)
+    setMeasurementPoint(defaultPoint)
+    setSelectedParameters(['all'])
+    setFrequency('')
+    setStartDate(selectedDate)
+    setEndDate(selectedDate)
+  }
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
       <DialogTitle
         sx={{
-          color: '#16a34a',
+          color: 'text.primary',
           fontWeight: 700,
           borderBottom: 1,
           borderColor: 'divider',
@@ -2665,10 +2687,17 @@ function ExportReportDialog({
             <InputLabel id="export-parameter-label">พารามิเตอร์</InputLabel>
             <Select
               labelId="export-parameter-label"
-              value={parameter}
+              value={selectedParameters}
               label="พารามิเตอร์"
-              onChange={(event) => setParameter(event.target.value)}
-              displayEmpty
+              onChange={handleParameterChange}
+              multiple
+              renderValue={(selected) => (
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                  {(selected.includes('all') ? ['ทั้งหมด'] : selected).map((item) => (
+                    <Chip key={item} label={item} size="small" />
+                  ))}
+                </Box>
+              )}
             >
               <MenuItem value="all">ทั้งหมด</MenuItem>
               {parameters.map((item) => (
@@ -2728,8 +2757,8 @@ function ExportReportDialog({
         </Box>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
-        <Button variant="outlined" color="inherit" onClick={onClose}>
-          ปิด
+        <Button variant="outlined" color="inherit" onClick={resetExportForm}>
+          ค่าเริ่มต้น
         </Button>
         <Button variant="contained" onClick={onClose} sx={{ fontWeight: 700 }}>
           ส่งออก CSV
@@ -2813,11 +2842,8 @@ function AdvancedSearchDialog({
       <DialogTitle
         sx={{
           pr: 6,
-          py: 1.25,
-          px: 1.5,
           color: 'primary.main',
-          fontSize: 15,
-          fontWeight: 800,
+          fontWeight: 700,
           borderBottom: 1,
           borderColor: 'divider',
         }}
@@ -2826,7 +2852,7 @@ function AdvancedSearchDialog({
         <IconButton
           aria-label="ปิด"
           onClick={onClose}
-          sx={{ position: 'absolute', right: 10, top: 6, color: 'primary.900' }}
+          sx={{ position: 'absolute', right: 12, top: 12, color: 'text.secondary' }}
         >
           <CloseIcon />
         </IconButton>
@@ -2969,18 +2995,8 @@ function AdvancedSearchDialog({
         </Box>
       </DialogContent>
       <DialogActions sx={{ px: 2, pb: 1.75, pt: 1, gap: 0.75 }}>
-        <Button
-          variant="text"
-          color="primary"
-          size="small"
-          onClick={onReset}
-          disabled={searching}
-          sx={{ mr: 'auto', minWidth: 78, height: 34, fontWeight: 700 }}
-        >
+        <Button variant="outlined" color="inherit" size="small" onClick={onReset} disabled={searching} sx={{ minWidth: 78, height: 34 }}>
           ค่าเริ่มต้น
-        </Button>
-        <Button variant="outlined" color="inherit" size="small" onClick={onClose} sx={{ minWidth: 40, height: 34 }}>
-          ปิด
         </Button>
         <Button
           variant="contained"
