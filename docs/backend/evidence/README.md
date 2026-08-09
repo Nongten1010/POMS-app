@@ -33,6 +33,7 @@
 - [Frontend monitoring contract 05082026](./shared/frontend-monitoring-contract-05082026.tdd.md)
 - [ปฏิทินรายเดือนและจำนวนวันสรุปทั้งปี](./shared/calendar-summary-requested-year-counts.tdd.md)
 - [รายละเอียดรายวันทั้งปีสำหรับคลิกสรุป Calendar Status](./shared/calendar-status-details.tdd.md)
+- [กรอง Source Status ก่อนประเมิน Calendar](./shared/calendar-normal-status-filter.tdd.md)
 
 ## Home
 

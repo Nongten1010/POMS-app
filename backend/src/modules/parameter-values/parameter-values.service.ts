@@ -1191,11 +1191,7 @@ function hasNormalMeasurementStatus(
 
 function isNormalMeasurementStatusValue(value: unknown): boolean {
   const sourceStatus = resolvePomsClientParameterStatus(value);
-  if (sourceStatus) return sourceStatus.usesMeasurementValue;
-  if (typeof value !== 'string') return false;
-
-  const normalized = value.trim().toLowerCase();
-  return normalized === 'ปกติ' || normalized === 'pass';
+  return sourceStatus?.usesMeasurementValue ?? false;
 }
 
 function sourceUnitMatchesDefinition(
