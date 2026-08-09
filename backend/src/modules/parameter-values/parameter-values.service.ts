@@ -408,7 +408,6 @@ export const parameterValuesService = {
         rowsByDate.get(summary.date) ?? [],
         definition,
         exceededStandard,
-        useConfiguredEvaluation,
       ),
     );
 
@@ -804,37 +803,20 @@ function buildDailySummary(
   const parameterStatuses = new Map<string, ParameterValueStatus[]>(
     definitions.map((definition) => [definition.code, []]),
   );
-  const parameterCompletenessByCode = useParameterCompleteness
-    ? new Map(
-        definitions.map((definition) => [
-          definition.code,
-          calculateDailyParameterCompleteness(rows, definition),
-        ]),
-      )
-    : new Map<string, number>();
 
   for (const row of rows) {
     for (const definition of definitions) {
       const value = readParameterNumber(row, definition);
       if (value === null || !hasNormalMeasurementStatus(row, definition)) continue;
-      const completeness = useParameterCompleteness
-        ? (parameterCompletenessByCode.get(definition.code) ?? 0)
-        : (readCompletenessPercent(row) ?? 100);
+      const completeness = readParameterCompletenessPercent(row, definition) ?? 100;
       const statuses = parameterStatuses.get(definition.code) ?? [];
-      statuses.push(
-        completeness < 80 ? 'insufficient' : evaluateParameterPollutionStatus(definition, value),
-      );
-      parameterStatuses.set(definition.code, statuses);
+      const status =
+        completeness < 80 ? 'insufficient' : evaluateParameterPollutionStatus(definition, value);
+      parameterStatuses.set(definition.code, [...statuses, status]);
     }
   }
 
-  const pollutionStatus =
-    dataCompletenessPercent < 80
-      ? 'insufficient'
-      : worstPollutionStatus(
-          [...parameterStatuses.values()].flat(),
-          definitions.some((definition) => definition.useConfiguredEvaluation),
-        );
+  const pollutionStatus = worstPollutionStatus([...parameterStatuses.values()].flat());
 
   return {
     date,
@@ -960,7 +942,6 @@ function buildCalendarStatusDetailRow(
   rows: Record<string, unknown>[],
   definition: ParameterDefinition,
   exceededStandard: CalendarStatusExceededStandardDTO,
-  useParameterCompleteness: boolean,
 ): CalendarStatusDetailRowDTO[] {
   if (summaryType === 'lowData') {
     if (summary.dataCompletenessStatus !== 'lowData') return [];
@@ -973,13 +954,7 @@ function buildCalendarStatusDetailRow(
     ];
   }
 
-  const firstExceededOccurrence = buildFirstExceededOccurrence(
-    rows,
-    definition,
-    exceededStandard,
-    useParameterCompleteness,
-    calculateDailyParameterCompleteness(rows, definition),
-  );
+  const firstExceededOccurrence = buildFirstExceededOccurrence(rows, definition, exceededStandard);
   if (!firstExceededOccurrence) return [];
 
   return [
@@ -994,8 +969,6 @@ function buildFirstExceededOccurrence(
   rows: Record<string, unknown>[],
   definition: ParameterDefinition,
   exceededStandard: CalendarStatusExceededStandardDTO,
-  useParameterCompleteness: boolean,
-  parameterDataCompletenessPercent: number,
 ): CalendarStatusExceededOccurrenceDTO | null {
   const chronologicalRows = rows
     .flatMap((row) => {
@@ -1016,9 +989,7 @@ function buildFirstExceededOccurrence(
     const value = readParameterNumber(row, definition);
     if (value === null || !hasNormalMeasurementStatus(row, definition)) continue;
 
-    const completeness = useParameterCompleteness
-      ? parameterDataCompletenessPercent
-      : (readCompletenessPercent(row) ?? 100);
+    const completeness = readParameterCompletenessPercent(row, definition) ?? 100;
     if (completeness < 80 || evaluateParameterPollutionStatus(definition, value) !== 'exceeded') {
       continue;
     }
@@ -1229,9 +1200,7 @@ function normalizeSourceStatus(value: unknown): ParameterValueStatus | null {
 
 function worstPollutionStatus(
   statuses: ParameterValueStatus[],
-  insufficientIsHighest = false,
 ): 'normal' | 'warning' | 'exceeded' | 'insufficient' {
-  if (insufficientIsHighest && statuses.includes('insufficient')) return 'insufficient';
   if (statuses.includes('exceeded')) return 'exceeded';
   if (statuses.includes('warning')) return 'warning';
   if (statuses.includes('normal')) return 'normal';

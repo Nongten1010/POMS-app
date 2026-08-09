@@ -1007,10 +1007,10 @@ describe('parameterValuesService', () => {
           date: '2026-06-10',
           dataCompletenessPercent: 42,
           dataCompletenessStatus: 'lowData',
-          pollutionStatus: 'insufficient',
+          pollutionStatus: 'normal',
           display: {
             backgroundStatus: 'lowData',
-            borderStatus: 'insufficient',
+            borderStatus: 'normal',
           },
         },
       ],
@@ -1524,6 +1524,169 @@ describe('parameterValuesService', () => {
         date: '2026-06-11',
         dataCompletenessPercent: 75,
         dataCompletenessStatus: 'lowData',
+        pollutionStatus: 'normal',
+        display: {
+          backgroundStatus: 'lowData',
+          borderStatus: 'normal',
+        },
+      },
+    ]);
+  });
+
+  it('keeps low-data completeness independent from Normal-source exceeded status', async () => {
+    mockedRepository.listRegisteredParameters.mockResolvedValue(['CO (ppm)']);
+    mockedRepository.tableExists.mockResolvedValue(true);
+    const submittedHours = [12, ...Array.from({ length: 10 }, (_, index) => index + 14)];
+    mockedRepository.listRows.mockResolvedValue({
+      tableName: 'S0001_data_60m',
+      rows: submittedHours.map((hour, index) => ({
+        station_id: 'S0001',
+        co_value: index === 0 ? 2078.41 : 100,
+        co_status: 'Normal',
+        co_units: 'ppm',
+        cdate: '2026-08-05',
+        ctime: `${String(hour).padStart(2, '0')}:00:00`,
+      })),
+    });
+    const options = {
+      parameterEvaluations: [
+        {
+          parameter: 'CO (ppm)',
+          channelStatus: 'Normal',
+          standardCriteria: {
+            enabled: false,
+            standardValue: null,
+            rows: [
+              { level: 'normal', min: 0, max: 180 },
+              { level: 'warning', min: 181, max: 190 },
+              { level: 'critical', min: 191, max: null },
+            ],
+          },
+        },
+      ],
+    };
+
+    const calendar = await parameterValuesService.calendarStatus(
+      { stationId: 'S0001', month: '2026-08' },
+      operatorAccess,
+      options,
+    );
+
+    expect(calendar.data.calendar.days).toEqual([
+      {
+        date: '2026-08-05',
+        dataCompletenessPercent: 46,
+        dataCompletenessStatus: 'lowData',
+        pollutionStatus: 'exceeded',
+        display: {
+          backgroundStatus: 'lowData',
+          borderStatus: 'exceeded',
+        },
+      },
+    ]);
+    expect(calendar.data.monthlySummary).toEqual([
+      {
+        parameterCode: 'CO',
+        parameterName: 'CO',
+        unit: 'ppm',
+        exceededDays: 1,
+        lowDataDays: 1,
+        todayDataCompletenessPercent: 46,
+      },
+    ]);
+
+    const details = await parameterValuesService.calendarStatusDetails(
+      {
+        stationId: 'S0001',
+        year: '2026',
+        summaryType: 'exceeded',
+        parameterCode: 'CO',
+        unit: 'ppm',
+      },
+      operatorAccess,
+      options,
+    );
+
+    expect(details.data.summary).toEqual({ affectedDays: 1 });
+    expect(details.data.rows).toEqual([
+      {
+        date: '2026-08-05',
+        time: '12:00:00',
+        displayTime: '12.00-12.59 น.',
+        value: 2078.41,
+        displayValue: '2,078.41',
+        standardValue: 191,
+        displayStandardValue: '191.00',
+        exceededBy: 1887.41,
+        displayExceededBy: '1,887.41',
+      },
+    ]);
+
+    const lowDataDetails = await parameterValuesService.calendarStatusDetails(
+      {
+        stationId: 'S0001',
+        year: '2026',
+        summaryType: 'lowData',
+        parameterCode: 'CO',
+        unit: 'ppm',
+      },
+      operatorAccess,
+      options,
+    );
+
+    expect(lowDataDetails.data.summary).toEqual({ affectedDays: 1 });
+    expect(lowDataDetails.data.rows).toEqual([
+      {
+        date: '2026-08-05',
+        dataCompletenessPercent: 46,
+      },
+    ]);
+  });
+
+  it('does not evaluate rows whose explicit parameter completeness is below 80%', async () => {
+    mockedRepository.listRegisteredParameters.mockResolvedValue(['CO (ppm)']);
+    mockedRepository.tableExists.mockResolvedValue(true);
+    mockedRepository.listRows.mockResolvedValue({
+      tableName: 'S0001_data_60m',
+      rows: Array.from({ length: 20 }, (_, hour) => ({
+        station_id: 'S0001',
+        co_value: hour === 0 ? 2078.41 : 100,
+        co_status: 'Normal',
+        co_units: 'ppm',
+        co_data_completeness_percent: 50,
+        cdate: '2026-08-05',
+        ctime: `${String(hour).padStart(2, '0')}:00:00`,
+      })),
+    });
+    const options = {
+      parameterEvaluations: [
+        {
+          parameter: 'CO (ppm)',
+          channelStatus: 'Normal',
+          standardCriteria: {
+            enabled: false,
+            standardValue: null,
+            rows: [
+              { level: 'normal', min: 0, max: 180 },
+              { level: 'warning', min: 181, max: 190 },
+              { level: 'critical', min: 191, max: null },
+            ],
+          },
+        },
+      ],
+    };
+
+    const calendar = await parameterValuesService.calendarStatus(
+      { stationId: 'S0001', month: '2026-08' },
+      operatorAccess,
+      options,
+    );
+
+    expect(calendar.data.calendar.days).toEqual([
+      {
+        date: '2026-08-05',
+        dataCompletenessPercent: 50,
+        dataCompletenessStatus: 'lowData',
         pollutionStatus: 'insufficient',
         display: {
           backgroundStatus: 'lowData',
@@ -1531,6 +1694,31 @@ describe('parameterValuesService', () => {
         },
       },
     ]);
+    expect(calendar.data.monthlySummary).toEqual([
+      {
+        parameterCode: 'CO',
+        parameterName: 'CO',
+        unit: 'ppm',
+        exceededDays: 0,
+        lowDataDays: 1,
+        todayDataCompletenessPercent: 50,
+      },
+    ]);
+
+    const details = await parameterValuesService.calendarStatusDetails(
+      {
+        stationId: 'S0001',
+        year: '2026',
+        summaryType: 'exceeded',
+        parameterCode: 'CO',
+        unit: 'ppm',
+      },
+      operatorAccess,
+      options,
+    );
+
+    expect(details.data.summary).toEqual({ affectedDays: 0 });
+    expect(details.data.rows).toEqual([]);
   });
 
   it('uses only Normal source statuses for calendar pollution and annual exceeded-day counts', async () => {
