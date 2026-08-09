@@ -314,6 +314,9 @@ function mapCalendarSummaryRows(rows) {
 
   return rows.map((row) => ({
     parameter: getParameterLabelFromSummary(row),
+    parameterCode: row?.parameterCode ?? '',
+    parameterName: row?.parameterName ?? '',
+    unit: row?.unit ?? '',
     exceededDays: `${Number(row.exceededDays ?? 0).toLocaleString('th-TH')} วัน`,
     lowDataDays: `${Number(row.lowDataDays ?? 0).toLocaleString('th-TH')} วัน`,
     todayPercent:
@@ -360,11 +363,39 @@ function mergeCalendarSummaryWithTodayCompleteness(summaryRows, statisticRows, p
 
     return {
       parameter,
+      parameterCode: summary?.parameterCode ?? '',
+      parameterName: summary?.parameterName ?? '',
+      unit: summary?.unit ?? '',
       exceededDays: summary?.exceededDays ?? '0 วัน',
       lowDataDays: summary?.lowDataDays ?? '0 วัน',
       todayPercent: calculateTodayCompletenessPercent(statisticRows, parameter),
     }
   })
+}
+
+function formatBuddhistDate(value) {
+  const parsedDate = dayjs(value)
+
+  if (!parsedDate.isValid()) {
+    return value || '-'
+  }
+
+  return `${parsedDate.format('DD/MM')}/${parsedDate.year() + 543}`
+}
+
+function mapCalendarStatusDetailRows(rows, summaryType) {
+  if (!Array.isArray(rows)) {
+    return []
+  }
+
+  return rows.map((row) => ({
+    date: formatBuddhistDate(row.date),
+    time: summaryType === 'lowData' ? '-' : row.displayTime || '-',
+    metric:
+      summaryType === 'lowData'
+        ? `${Number(row.dataCompletenessPercent ?? 0).toLocaleString('th-TH')}%`
+        : row.displayValue || '-',
+  }))
 }
 
 function mapDatePickerStatusByDay(days) {
@@ -2195,7 +2226,13 @@ function FactoryBottomSheet({ factory, accessToken = '', permissions, open, onCl
                 thresholdsByParameter={measurementStatisticThresholds}
                 onParameterChange={setSelectedTrendParameter}
               />
-              <CalendarSummaryPanel rows={activeCalendarSummaryRows} error={calendarError} />
+              <CalendarSummaryPanel
+                rows={activeCalendarSummaryRows}
+                error={calendarError}
+                stationId={activeStatisticPoint}
+                selectedYear={selectedCalendarMonth.format('YYYY')}
+                accessToken={accessToken}
+              />
             </Stack>
           </Box>
           <ExportReportDialog
@@ -2247,20 +2284,64 @@ function getStatisticPointsBySystem(factory, selectedSystem = '') {
       ]
 }
 
-function CalendarSummaryPanel({ rows, error = '' }) {
+function CalendarSummaryPanel({ rows, error = '', stationId = '', selectedYear = '', accessToken = '' }) {
   const [detailDialog, setDetailDialog] = useState({
     open: false,
     title: '',
     parameter: '',
     metricLabel: '',
+    summaryType: '',
   })
-  const openDetailDialog = (row, type) => {
+  const [detailRows, setDetailRows] = useState([])
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [detailError, setDetailError] = useState('')
+  const openDetailDialog = async (row, type) => {
+    const summaryType = type === 'exceeded' ? 'exceeded' : 'lowData'
+    const metricLabel = summaryType === 'exceeded' ? 'ค่าตรวจวัด' : 'การส่งข้อมูล (%)'
+
     setDetailDialog({
       open: true,
-      title: type === 'exceeded' ? 'เกินมาตรฐาน' : 'ข้อมูลไม่ถึงร้อยละ 80 ต่อวัน',
+      title: summaryType === 'exceeded' ? 'เกินมาตรฐาน' : 'ข้อมูลไม่ถึงร้อยละ 80 ต่อวัน',
       parameter: row.parameter,
-      metricLabel: type === 'exceeded' ? 'ค่าตรวจวัด' : 'การส่งข้อมูล (%)',
+      metricLabel,
+      summaryType,
     })
+    setDetailRows([])
+    setDetailError('')
+
+    if (!stationId || !selectedYear || !accessToken) {
+      setDetailError('ไม่สามารถโหลดข้อมูลรายละเอียดได้')
+      return
+    }
+
+    setDetailLoading(true)
+
+    try {
+      const detailsUrl = getConnectedMeasurementPointApiUrl(stationId, 'calendar-status/details', {
+        year: selectedYear,
+        summaryType,
+        parameterCode: row.parameterCode || row.parameterName || row.parameter,
+        unit: row.unit,
+      })
+      const result = await fetch(detailsUrl, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/json',
+        },
+      })
+      const payload = await result.json().catch(() => null)
+
+      if (!result.ok) {
+        throw new Error(getApiErrorMessage(payload, `โหลดข้อมูลรายละเอียดไม่สำเร็จ (${result.status} ${result.statusText})`))
+      }
+
+      setDetailRows(mapCalendarStatusDetailRows(payload?.data?.rows, summaryType))
+    } catch (fetchError) {
+      setDetailRows([])
+      setDetailError(fetchError instanceof Error ? fetchError.message : 'โหลดข้อมูลรายละเอียดไม่สำเร็จ')
+    } finally {
+      setDetailLoading(false)
+    }
   }
   const closeDetailDialog = () => {
     setDetailDialog((current) => ({ ...current, open: false }))
@@ -2428,11 +2509,39 @@ function CalendarSummaryPanel({ rows, error = '' }) {
                 </TableRow>
               </TableHead>
               <TableBody>
-                <TableRow>
-                  <TableCell colSpan={3} align="center" sx={{ color: 'text.secondary', fontWeight: 400 }}>
-                    ไม่มีข้อมูลรายละเอียด
-                  </TableCell>
-                </TableRow>
+                {detailLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={3} align="center" sx={{ color: 'text.secondary', fontWeight: 400 }}>
+                      <CircularProgress size={18} sx={{ mr: 1, verticalAlign: 'middle' }} />
+                      กำลังโหลดข้อมูล
+                    </TableCell>
+                  </TableRow>
+                ) : null}
+                {!detailLoading && detailError ? (
+                  <TableRow>
+                    <TableCell colSpan={3} align="center" sx={{ color: 'error.main', fontWeight: 400 }}>
+                      {detailError}
+                    </TableCell>
+                  </TableRow>
+                ) : null}
+                {!detailLoading && !detailError && detailRows.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={3} align="center" sx={{ color: 'text.secondary', fontWeight: 400 }}>
+                      ไม่มีข้อมูลรายละเอียด
+                    </TableCell>
+                  </TableRow>
+                ) : null}
+                {!detailLoading && !detailError
+                  ? detailRows.map((detailRow, index) => (
+                      <TableRow key={`${detailRow.date}-${detailRow.time}-${index}`}>
+                        <TableCell>{detailRow.date}</TableCell>
+                        <TableCell>{detailRow.time}</TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 700 }}>
+                          {detailRow.metric}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  : null}
               </TableBody>
             </Table>
           </TableContainer>
