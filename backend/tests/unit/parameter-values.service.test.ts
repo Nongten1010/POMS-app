@@ -1284,6 +1284,30 @@ describe('parameterValuesService', () => {
     });
   });
 
+  it('requires a unit when a calendar summary parameter code has multiple units', async () => {
+    mockedRepository.listRegisteredParameters.mockResolvedValue(['CO2 (%)', 'CO2 (ppm)']);
+    mockedRepository.tableExists.mockResolvedValue(true);
+    mockedRepository.listRows.mockResolvedValue({
+      tableName: 'S1125_data_60m',
+      rows: [],
+    });
+
+    await expect(
+      parameterValuesService.calendarStatusDetails(
+        {
+          stationId: 'S1125',
+          month: '2025-08',
+          summaryType: 'exceeded',
+          parameterCode: 'CO2',
+        },
+        operatorAccess,
+      ),
+    ).rejects.toMatchObject({
+      statusCode: 400,
+      code: 'BAD_REQUEST',
+    });
+  });
+
   it('identifies which parameter caused a low-data day when another parameter row is clicked', async () => {
     mockedRepository.listRegisteredParameters.mockResolvedValue(['CO (ppm)', 'NOx (ppm)']);
     mockedRepository.tableExists.mockResolvedValue(true);
