@@ -1061,6 +1061,12 @@ describe('parameterValuesService', () => {
           cdate: '2025-08-10',
           ctime: `${String(hour).padStart(2, '0')}:00:00`,
         })),
+        ...Array.from({ length: 20 }, (_, hour) => ({
+          station_id: 'S1125',
+          co_value: hour === 0 ? 191 : 100,
+          cdate: '2026-08-11',
+          ctime: `${String(hour).padStart(2, '0')}:00:00`,
+        })),
       ],
     });
 
@@ -1076,7 +1082,7 @@ describe('parameterValuesService', () => {
         unit: 'ppm',
         exceededDays: 1,
         lowDataDays: 1,
-        todayDataCompletenessPercent: 42,
+        todayDataCompletenessPercent: 83,
       },
     ]);
   });
