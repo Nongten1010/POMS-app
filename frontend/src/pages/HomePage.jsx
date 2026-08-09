@@ -322,6 +322,46 @@ function mapCalendarSummaryRows(rows) {
   }))
 }
 
+function hasSubmittedMeasurementValue(value) {
+  if (value === null || value === undefined) {
+    return false
+  }
+
+  const displayValue = String(value).trim()
+  return displayValue !== '' && displayValue !== '-'
+}
+
+function calculateTodayCompletenessPercent(rows, parameter) {
+  if (!Array.isArray(rows) || rows.length === 0 || !parameter) {
+    return '-'
+  }
+
+  const submittedRows = rows.filter((row) => hasSubmittedMeasurementValue(row.values?.[parameter])).length
+  return `${Math.round((submittedRows / rows.length) * 100).toLocaleString('th-TH')}%`
+}
+
+function mergeCalendarSummaryWithTodayCompleteness(summaryRows, statisticRows, parameters) {
+  const orderedParameters =
+    Array.isArray(parameters) && parameters.length > 0
+      ? parameters
+      : Array.from(new Set(summaryRows.map((row) => row.parameter).filter(Boolean)))
+  const summaryByParameter = summaryRows.reduce((result, row) => {
+    result[row.parameter] = row
+    return result
+  }, {})
+
+  return orderedParameters.map((parameter) => {
+    const summary = summaryByParameter[parameter]
+
+    return {
+      parameter,
+      exceededDays: summary?.exceededDays ?? '0 วัน',
+      lowDataDays: summary?.lowDataDays ?? '0 วัน',
+      todayPercent: calculateTodayCompletenessPercent(statisticRows, parameter),
+    }
+  })
+}
+
 function mapDatePickerStatusByDay(days) {
   if (!Array.isArray(days)) {
     return {}
@@ -1899,9 +1939,12 @@ function FactoryBottomSheet({ factory, accessToken = '', permissions, open, onCl
   const activeStatisticPointLabel =
     statisticPoints.find((point) => point.value === activeStatisticPoint)?.label ?? activeStatisticPoint ?? '-'
   const statisticRows = measurementStatisticRows
-  const activeCalendarSummaryRows = calendarSummary.length > 0 ? calendarSummary : []
   const activeStatisticParameters =
     measurementStatisticParameters.length > 0 ? measurementStatisticParameters : statisticParameters
+  const activeCalendarSummaryRows = useMemo(
+    () => mergeCalendarSummaryWithTodayCompleteness(calendarSummary, statisticRows, activeStatisticParameters),
+    [activeStatisticParameters, calendarSummary, statisticRows],
+  )
   const activeTrendParameter = activeStatisticParameters.includes(selectedTrendParameter)
     ? selectedTrendParameter
     : activeStatisticParameters[0] ?? statisticParameters[0]
