@@ -816,13 +816,13 @@ function buildDailySummary(
   for (const row of rows) {
     for (const definition of definitions) {
       const value = readParameterNumber(row, definition);
-      if (value === null) continue;
+      if (value === null || !hasNormalMeasurementStatus(row, definition)) continue;
       const completeness = useParameterCompleteness
         ? (parameterCompletenessByCode.get(definition.code) ?? 0)
         : (readCompletenessPercent(row) ?? 100);
       const statuses = parameterStatuses.get(definition.code) ?? [];
       statuses.push(
-        completeness < 80 ? 'insufficient' : readParameterStatus(row, definition, value),
+        completeness < 80 ? 'insufficient' : evaluateParameterPollutionStatus(definition, value),
       );
       parameterStatuses.set(definition.code, statuses);
     }
@@ -1014,12 +1014,12 @@ function buildFirstExceededOccurrence(
 
   for (const { hour, time, row } of chronologicalRows) {
     const value = readParameterNumber(row, definition);
-    if (value === null) continue;
+    if (value === null || !hasNormalMeasurementStatus(row, definition)) continue;
 
     const completeness = useParameterCompleteness
       ? parameterDataCompletenessPercent
       : (readCompletenessPercent(row) ?? 100);
-    if (completeness < 80 || readParameterStatus(row, definition, value) !== 'exceeded') {
+    if (completeness < 80 || evaluateParameterPollutionStatus(definition, value) !== 'exceeded') {
       continue;
     }
 
@@ -1136,20 +1136,26 @@ function readParameterStatus(
   definition: ParameterDefinition,
   value: number,
 ): ParameterValueStatus {
-  if (definition.useConfiguredEvaluation) {
-    const criteriaStatus = readCriteriaStatus(definition.criteriaRows, value);
-    if (criteriaStatus) return criteriaStatus;
-
-    if (value <= definition.normalMax) return 'normal';
-    if (value <= definition.warningMax) return 'warning';
-    return 'exceeded';
-  }
+  if (definition.useConfiguredEvaluation)
+    return evaluateParameterPollutionStatus(definition, value);
 
   for (const prefix of definition.prefixes) {
     if (!sourceUnitMatchesDefinition(row, prefix, definition)) continue;
 
     const sourceStatus = normalizeSourceStatus(row[`${prefix}_status`]);
     if (sourceStatus) return sourceStatus;
+  }
+
+  return evaluateParameterPollutionStatus(definition, value);
+}
+
+function evaluateParameterPollutionStatus(
+  definition: ParameterDefinition,
+  value: number,
+): ParameterValueStatus {
+  if (definition.useConfiguredEvaluation) {
+    const criteriaStatus = readCriteriaStatus(definition.criteriaRows, value);
+    if (criteriaStatus) return criteriaStatus;
   }
 
   if (value <= definition.normalMax) return 'normal';
@@ -1166,6 +1172,30 @@ function readPomsClientStatus(row: Record<string, unknown>, definition: Paramete
   }
 
   return null;
+}
+
+function hasNormalMeasurementStatus(
+  row: Record<string, unknown>,
+  definition: ParameterDefinition,
+): boolean {
+  for (const prefix of definition.prefixes) {
+    if (!sourceUnitMatchesDefinition(row, prefix, definition)) continue;
+    if (toNumber(row[`${prefix}_value`]) === null) continue;
+
+    const rawStatus = row[`${prefix}_status`];
+    return isNormalMeasurementStatusValue(rawStatus);
+  }
+
+  return false;
+}
+
+function isNormalMeasurementStatusValue(value: unknown): boolean {
+  const sourceStatus = resolvePomsClientParameterStatus(value);
+  if (sourceStatus) return sourceStatus.usesMeasurementValue;
+  if (typeof value !== 'string') return false;
+
+  const normalized = value.trim().toLowerCase();
+  return normalized === 'ปกติ' || normalized === 'pass';
 }
 
 function sourceUnitMatchesDefinition(
@@ -1411,10 +1441,11 @@ function calendarStatusValueDefinitions(): Record<string, unknown> {
       highData: 'ส่งข้อมูลมากกว่าหรือเท่ากับ 80% ใช้พื้นหลังสีฟ้า',
     },
     pollutionStatus: {
-      normal: 'ปกติทั้งวัน ใช้เส้นขอบสีเขียว',
-      warning: 'เฝ้าระวัง ใช้เส้นขอบสีส้ม',
-      exceeded: 'เกินมาตรฐาน ใช้เส้นขอบสีแดง',
-      insufficient: 'ข้อมูลไม่เพียงพอเมื่อ dataCompletenessStatus เป็น lowData',
+      normal: 'ข้อมูลที่ source status เป็น Normal อยู่ในเกณฑ์ปกติ ใช้เส้นขอบสีเขียว',
+      warning: 'ข้อมูลที่ source status เป็น Normal อยู่ในเกณฑ์เฝ้าระวัง ใช้เส้นขอบสีส้ม',
+      exceeded: 'ข้อมูลที่ source status เป็น Normal เกินมาตรฐาน ใช้เส้นขอบสีแดง',
+      insufficient:
+        'ข้อมูลไม่เพียงพอเมื่อ dataCompletenessStatus เป็น lowData หรือไม่มีข้อมูล source status Normal ให้ประเมิน',
     },
   };
 }
@@ -1422,12 +1453,13 @@ function calendarStatusValueDefinitions(): Record<string, unknown> {
 function calendarStatusDetailsValueDefinitions(): Record<string, unknown> {
   return {
     summaryType: {
-      exceeded: 'คืนหนึ่งแถวต่อวันที่เกินมาตรฐาน โดยเลือกค่าที่เกินมาตรฐานรายการแรกตามเวลา',
+      exceeded:
+        'คืนหนึ่งแถวต่อวันที่เกินมาตรฐาน โดยเลือกข้อมูล source status Normal รายการแรกที่เกินตามเวลา',
       lowData: 'คืนหนึ่งแถวต่อวันที่มีความครบถ้วนของข้อมูลรายวันต่ำกว่า 80% โดยไม่คืนเวลา',
     },
     rows: 'เรียงวันที่จากเก่าไปใหม่และมีได้สูงสุดหนึ่งแถวต่อวันของปีที่ขอ',
     displayTime: 'ช่วงชั่วโมงของค่าที่เกินมาตรฐานรายการแรก เช่น 01.00-01.59 น.',
-    value: 'ค่าตรวจวัดรายการแรกของวันที่มีสถานะเกินมาตรฐาน',
+    value: 'ค่าตรวจวัด source status Normal รายการแรกของวันที่เกินมาตรฐาน',
     dataCompletenessPercent: 'ร้อยละความครบถ้วนรายวันที่ใช้ตัดสิน lowData',
   };
 }

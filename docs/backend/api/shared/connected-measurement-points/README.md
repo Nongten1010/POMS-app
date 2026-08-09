@@ -274,14 +274,14 @@ curl --request GET \
 | `data.calendar.days[].date` | string | No | วันที่ในรูปแบบ `YYYY-MM-DD` |
 | `data.calendar.days[].dataCompletenessPercent` | number | No | ร้อยละความครบถ้วนของข้อมูลรายวัน |
 | `data.calendar.days[].dataCompletenessStatus` | `lowData` \| `highData` | No | `lowData` เมื่อต่ำกว่า 80%; มิฉะนั้นเป็น `highData` |
-| `data.calendar.days[].pollutionStatus` | `normal` \| `warning` \| `exceeded` \| `insufficient` | No | สถานะมลพิษรายวันสำหรับเส้นขอบปฏิทิน |
+| `data.calendar.days[].pollutionStatus` | `normal` \| `warning` \| `exceeded` \| `insufficient` | No | สถานะมลพิษรายวันสำหรับเส้นขอบปฏิทิน คำนวณเฉพาะค่าที่ source status เป็น `Normal`, `Ok` หรือ code `1` |
 | `data.calendar.days[].display.backgroundStatus` | `lowData` \| `highData` | No | สถานะพื้นหลังเดียวกับ `dataCompletenessStatus` |
 | `data.calendar.days[].display.borderStatus` | `normal` \| `warning` \| `exceeded` \| `insufficient` | No | สถานะเส้นขอบเดียวกับ `pollutionStatus` |
 | `data.monthlySummary` | object[] | No | สรุปทั้งปีของพารามิเตอร์ที่ลงทะเบียน; ชื่อ field คงเดิมเพื่อ compatibility |
 | `data.monthlySummary[].parameterCode` | string | No | รหัสพารามิเตอร์แบบ machine-stable |
 | `data.monthlySummary[].parameterName` | string | No | ชื่อพารามิเตอร์ |
 | `data.monthlySummary[].unit` | string | No | หน่วยของพารามิเตอร์ เช่น `ppm` |
-| `data.monthlySummary[].exceededDays` | number | No | จำนวนวันของพารามิเตอร์นั้นที่มีสถานะ `exceeded` ทั้งปีของ `month` ที่ร้องขอ; วันเดียวกันนับสูงสุดหนึ่งครั้ง |
+| `data.monthlySummary[].exceededDays` | number | No | จำนวนวันของพารามิเตอร์นั้นที่มีค่า source status ปกติและประเมินเป็น `exceeded` ทั้งปีของ `month` ที่ร้องขอ; วันเดียวกันนับสูงสุดหนึ่งครั้ง |
 | `data.monthlySummary[].lowDataDays` | number | No | จำนวนวันที่มีความครบถ้วนต่ำกว่า 80% ทั้งปีของ `month` ที่ร้องขอ; วันเดียวกันนับสูงสุดหนึ่งครั้ง |
 | `data.monthlySummary[].todayDataCompletenessPercent` | number | Yes | ร้อยละความครบถ้วนของ daily summary ล่าสุดในเดือนที่ร้องขอ; เป็น `null` เมื่อเดือนนั้นไม่มีข้อมูล |
 | `meta.stationId` | string | No | รหัสจุดตรวจวัดที่อ่านข้อมูล |
@@ -308,10 +308,10 @@ curl --request GET \
           "highData": "ส่งข้อมูลมากกว่าหรือเท่ากับ 80% ใช้พื้นหลังสีฟ้า"
         },
         "pollutionStatus": {
-          "normal": "ปกติทั้งวัน ใช้เส้นขอบสีเขียว",
-          "warning": "เฝ้าระวัง ใช้เส้นขอบสีส้ม",
-          "exceeded": "เกินมาตรฐาน ใช้เส้นขอบสีแดง",
-          "insufficient": "ข้อมูลไม่เพียงพอเมื่อ dataCompletenessStatus เป็น lowData"
+          "normal": "ข้อมูลที่ source status เป็น Normal อยู่ในเกณฑ์ปกติ ใช้เส้นขอบสีเขียว",
+          "warning": "ข้อมูลที่ source status เป็น Normal อยู่ในเกณฑ์เฝ้าระวัง ใช้เส้นขอบสีส้ม",
+          "exceeded": "ข้อมูลที่ source status เป็น Normal เกินมาตรฐาน ใช้เส้นขอบสีแดง",
+          "insufficient": "ข้อมูลไม่เพียงพอเมื่อ dataCompletenessStatus เป็น lowData หรือไม่มีข้อมูล source status Normal ให้ประเมิน"
         }
       }
     },
@@ -374,7 +374,10 @@ curl --request GET \
 - `month=2025-08` ทำให้ backend อ่าน source แบบ inclusive ตั้งแต่ `2025-01-01` ถึง `2025-12-31`
 - `data.calendar.days` กรองเฉพาะวันที่อยู่ใน `2025-08` เพื่อวาดปฏิทินของเดือนที่เลือก
 - `monthlySummary[].exceededDays` และ `monthlySummary[].lowDataDays` นับเฉพาะ daily summaries ที่อยู่ในปี `2025` ทั้งปี
-- `exceededDays` แยกตามพารามิเตอร์และใช้เกณฑ์ของ connected point; วันเดียวกันนับได้สูงสุดหนึ่งวันต่อพารามิเตอร์
+- `data.calendar.days[].pollutionStatus` และ `monthlySummary[].exceededDays` ประเมินเฉพาะค่าของพารามิเตอร์ที่ source row มี `<parameter>_status` เป็น `Normal`, `Ok`, code `1` หรือรูปแบบปกติที่ระบบรองรับ; `null`, ค่าว่าง, `Calibration`, `Defective`, `Maintenance`, `Start up`, `Shut Down`, `Turnaround`, `Etc.` และ `No Discharge` ไม่ถูกนำไปเทียบเกณฑ์
+- กฎ source status ข้างต้นใช้สถานะของค่าตรวจวัดแต่ละ row ไม่ใช่ `channelStatus` จาก device config
+- `exceededDays` แยกตามพารามิเตอร์และใช้เกณฑ์ของ connected point หลังกรอง source status; วันเดียวกันนับได้สูงสุดหนึ่งวันต่อพารามิเตอร์
+- การกรอง source status ไม่เปลี่ยน `monthlySummary[].lowDataDays` หรือ `todayDataCompletenessPercent`
 - `lowDataDays` ใช้สถานะความครบถ้วนระดับวันและจึงอาจมีค่าเดียวกันในหลายพารามิเตอร์
 - `todayDataCompletenessPercent` คงพฤติกรรมเดิมโดยใช้ daily summary ล่าสุดในเดือนที่ร้องขอ ไม่ใช้วันล่าสุดของทั้งปี และไม่ได้หมายความว่าต้องเป็นวันปัจจุบันตามนาฬิกา
 - ชื่อพารามิเตอร์ที่อ่านได้ต้องคืนพร้อม `unit`; client ใช้ `parameterCode` เมื่อต้องการ key ที่คงที่
@@ -462,7 +465,7 @@ curl --get \
 | `data.rows[].date` | `YYYY-MM-DD` | No | วันที่เกิดเหตุ; มีในทั้งสอง `summaryType` |
 | `data.rows[].time` | `HH:mm:ss` | Omitted for `lowData` | เวลาจริงของค่าแรกที่เกินมาตรฐานในวันนั้น หลัง normalize แล้ว |
 | `data.rows[].displayTime` | string | Omitted for `lowData` | ช่วงชั่วโมงสำหรับแสดงผล เช่น `01.00-01.59 น.` |
-| `data.rows[].value` | number | Omitted for `lowData` | ค่าตรวจวัดแรกของวันที่มีสถานะเกินมาตรฐาน หน่วยเดียวกับ `data.parameter.unit` |
+| `data.rows[].value` | number | Omitted for `lowData` | ค่าตรวจวัด source status ปกติรายการแรกของวันที่เกินมาตรฐาน หน่วยเดียวกับ `data.parameter.unit` |
 | `data.rows[].displayValue` | string | Omitted for `lowData` | ค่าตรวจวัดซึ่ง format แล้ว |
 | `data.rows[].standardValue` | number | Omitted for `lowData` | ค่าเกณฑ์ที่ใช้เปรียบเทียบ |
 | `data.rows[].displayStandardValue` | string | Omitted for `lowData` | ค่าเกณฑ์ซึ่ง format แล้ว |
@@ -489,12 +492,12 @@ curl --get \
       "summaryType": "exceeded",
       "valueDefinitions": {
         "summaryType": {
-          "exceeded": "คืนหนึ่งแถวต่อวันที่เกินมาตรฐาน โดยเลือกค่าที่เกินมาตรฐานรายการแรกตามเวลา",
+          "exceeded": "คืนหนึ่งแถวต่อวันที่เกินมาตรฐาน โดยเลือกข้อมูล source status Normal รายการแรกที่เกินตามเวลา",
           "lowData": "คืนหนึ่งแถวต่อวันที่มีความครบถ้วนของข้อมูลรายวันต่ำกว่า 80% โดยไม่คืนเวลา"
         },
         "rows": "เรียงวันที่จากเก่าไปใหม่และมีได้สูงสุดหนึ่งแถวต่อวันของปีที่ขอ",
         "displayTime": "ช่วงชั่วโมงของค่าที่เกินมาตรฐานรายการแรก เช่น 01.00-01.59 น.",
-        "value": "ค่าตรวจวัดรายการแรกของวันที่มีสถานะเกินมาตรฐาน",
+        "value": "ค่าตรวจวัด source status Normal รายการแรกของวันที่เกินมาตรฐาน",
         "dataCompletenessPercent": "ร้อยละความครบถ้วนรายวันที่ใช้ตัดสิน lowData"
       }
     },
@@ -566,12 +569,12 @@ curl --get \
       "summaryType": "lowData",
       "valueDefinitions": {
         "summaryType": {
-          "exceeded": "คืนหนึ่งแถวต่อวันที่เกินมาตรฐาน โดยเลือกค่าที่เกินมาตรฐานรายการแรกตามเวลา",
+          "exceeded": "คืนหนึ่งแถวต่อวันที่เกินมาตรฐาน โดยเลือกข้อมูล source status Normal รายการแรกที่เกินตามเวลา",
           "lowData": "คืนหนึ่งแถวต่อวันที่มีความครบถ้วนของข้อมูลรายวันต่ำกว่า 80% โดยไม่คืนเวลา"
         },
         "rows": "เรียงวันที่จากเก่าไปใหม่และมีได้สูงสุดหนึ่งแถวต่อวันของปีที่ขอ",
         "displayTime": "ช่วงชั่วโมงของค่าที่เกินมาตรฐานรายการแรก เช่น 01.00-01.59 น.",
-        "value": "ค่าตรวจวัดรายการแรกของวันที่มีสถานะเกินมาตรฐาน",
+        "value": "ค่าตรวจวัด source status Normal รายการแรกของวันที่เกินมาตรฐาน",
         "dataCompletenessPercent": "ร้อยละความครบถ้วนรายวันที่ใช้ตัดสิน lowData"
       }
     },
@@ -617,7 +620,7 @@ curl --get \
 
 - API อ่านข้อมูลรายชั่วโมงตั้งแต่ `YYYY-01-01` ถึง `YYYY-12-31` และกรองซ้ำแบบ defensive ก่อนสร้าง `rows`
 - `rows` เรียงวันที่จากเก่าไปใหม่และมีได้สูงสุดหนึ่งแถวต่อวันที่มี source rows; ปีปกติมีได้ไม่เกิน 365 แถว และปีอธิกสุรทินมีได้ไม่เกิน 366 แถว
-- `summaryType=exceeded` เลือกเฉพาะค่าที่มีสถานะ `exceeded` รายการแรกตาม `ctime` ของแต่ละวัน เวลา normalize เป็น `HH:mm:ss` และ `displayTime` เป็นช่วง `HH.00-HH.59 น.`
+- `summaryType=exceeded` ใช้กฎ source status เดียวกับ `monthlySummary[].exceededDays` และเลือกเฉพาะค่าที่ source status ปกติซึ่งประเมินเป็น `exceeded` รายการแรกตาม `ctime` ของแต่ละวัน เวลา normalize เป็น `HH:mm:ss` และ `displayTime` เป็นช่วง `HH.00-HH.59 น.`
 - ค่าเกณฑ์ใช้ `critical.min` และ operator `>=` เมื่อ connected point มี criteria; ถ้าไม่มี critical threshold จะ fallback ไป `warningMax` และ operator `>` ตาม status logic เดิม
 - `summaryType=lowData` คืนเฉพาะ `date` และ `dataCompletenessPercent` ของวันที่ค่าต่ำกว่า 80 ตามกฎเดียวกับ `monthlySummary[].lowDataDays`; object จะไม่มี `time` หรือ `displayTime`
 - ถ้า `parameterCode` ตรงกับหลายพารามิเตอร์ต่างหน่วย ต้องส่ง `unit`; client ควรส่ง `parameterCode` และ `unit` จาก monthly summary เดียวกันเสมอ
