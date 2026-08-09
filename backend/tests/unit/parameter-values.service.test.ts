@@ -1284,6 +1284,72 @@ describe('parameterValuesService', () => {
     });
   });
 
+  it('identifies which parameter caused a low-data day when another parameter row is clicked', async () => {
+    mockedRepository.listRegisteredParameters.mockResolvedValue(['CO (ppm)', 'NOx (ppm)']);
+    mockedRepository.tableExists.mockResolvedValue(true);
+    mockedRepository.listRows.mockResolvedValue({
+      tableName: 'S1125_data_60m',
+      rows: Array.from({ length: 24 }, (_, hour) => ({
+        station_id: 'S1125',
+        co_value: 60,
+        co_units: 'ppm',
+        nox_value: hour < 10 ? 40 : null,
+        nox_units: 'ppm',
+        cdate: '2025-08-10',
+        ctime: `${String(hour).padStart(2, '0')}:00:00`,
+      })),
+    });
+
+    const result = await parameterValuesService.calendarStatusDetails(
+      {
+        stationId: 'S1125',
+        month: '2025-08',
+        summaryType: 'lowData',
+        parameterCode: 'CO',
+        unit: 'ppm',
+      },
+      operatorAccess,
+      {
+        parameterEvaluations: [{ parameter: 'CO (ppm)' }, { parameter: 'NOx (ppm)' }],
+      },
+    );
+
+    expect(result.data.days).toHaveLength(1);
+    expect(result.data.days[0]).toMatchObject({
+      date: '2025-08-10',
+      dataCompletenessPercent: 42,
+      parameterDataCompletenessPercent: 100,
+      receivedHours: 24,
+      missingTimes: [],
+      lowDataCauses: [
+        {
+          parameterCode: 'NOX',
+          parameterName: 'NOx',
+          parameterLabel: 'NOx (ppm)',
+          unit: 'ppm',
+          dataCompletenessPercent: 42,
+          receivedHours: 10,
+          missingTimes: [
+            '10:00',
+            '11:00',
+            '12:00',
+            '13:00',
+            '14:00',
+            '15:00',
+            '16:00',
+            '17:00',
+            '18:00',
+            '19:00',
+            '20:00',
+            '21:00',
+            '22:00',
+            '23:00',
+          ],
+        },
+      ],
+    });
+  });
+
   it('can evaluate connected-point calendar status from per-parameter completeness and criteria min thresholds', async () => {
     mockedRepository.listRegisteredParameters.mockResolvedValue(['CO (ppm)', 'NOx (ppm)']);
     mockedRepository.tableExists.mockResolvedValue(true);
