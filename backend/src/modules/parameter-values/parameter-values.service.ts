@@ -335,7 +335,13 @@ export const parameterValuesService = {
           })),
         },
         monthlySummary: definitions.map((definition) =>
-          buildYearlyParameterSummary(definition, dailySummaries, startDate, endDate),
+          buildYearlyParameterSummary(
+            definition,
+            dailySummaries,
+            requestedMonthSummaries,
+            startDate,
+            endDate,
+          ),
         ),
       },
       meta: {
@@ -874,12 +880,13 @@ function calculateDailyParameterCompleteness(
 
 function buildYearlyParameterSummary(
   definition: ParameterDefinition,
-  dailySummaries: DailySummary[],
+  yearlySummaries: DailySummary[],
+  requestedMonthSummaries: DailySummary[],
   startDate: string,
   endDate: string,
 ) {
-  const latestSummary = dailySummaries.at(-1);
-  const requestedYearSummaries = dailySummaries.filter(
+  const latestSummary = requestedMonthSummaries.at(-1);
+  const requestedYearSummaries = yearlySummaries.filter(
     (summary) => summary.date >= startDate && summary.date <= endDate,
   );
 
