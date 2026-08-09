@@ -29,6 +29,12 @@ export const monthSchema = z
     return month >= 1 && month <= 12;
   }, 'month must be valid');
 
+export const yearSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{4}$/, 'year must use YYYY format')
+  .refine((value) => Number(value) > 0, 'year must be valid');
+
 export const listParameterValuesQuerySchema = z
   .object({
     stationId: stationIdSchema,
@@ -75,7 +81,7 @@ export const calendarStatusQuerySchema = z
 
 export const calendarStatusDetailsQuerySchema = z
   .object({
-    month: monthSchema,
+    year: yearSchema,
     summaryType: z.enum(['exceeded', 'lowData']),
     parameterCode: z.string().trim().min(1).max(64),
     unit: z.string().trim().min(1).max(64).optional(),

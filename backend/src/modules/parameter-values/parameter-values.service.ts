@@ -15,12 +15,11 @@ import {
 } from './parameter-status';
 import {
   type CalendarStatusEvaluationOptions,
-  type CalendarStatusDetailDayDTO,
+  type CalendarStatusDetailRowDTO,
   type CalendarStatusDetailsQuery,
   type CalendarStatusDetailsResultDTO,
   type CalendarStatusExceededOccurrenceDTO,
   type CalendarStatusExceededStandardDTO,
-  type CalendarStatusLowDataCauseDTO,
   type CalendarStatusQuery,
   type CalendarStatusResultDTO,
   type ConnectionTestQuery,
@@ -287,7 +286,13 @@ export const parameterValuesService = {
       );
     }
 
-    const { year, month, startDate, endDate } = monthRange(query.month);
+    const {
+      year,
+      month,
+      startDate: monthStartDate,
+      endDate: monthEndDate,
+    } = monthRange(query.month);
+    const { startDate, endDate } = yearRange(String(year));
     const [result, registeredParameters] = await Promise.all([
       parameterValuesRepository.listRows({
         stationId: query.stationId,
@@ -304,18 +309,21 @@ export const parameterValuesService = {
     );
     const useConfiguredEvaluation = Boolean(options?.parameterEvaluations);
     const dailySummaries = buildDailySummaries(result.rows, definitions, useConfiguredEvaluation);
+    const requestedMonthSummaries = dailySummaries.filter(
+      (summary) => summary.date >= monthStartDate && summary.date <= monthEndDate,
+    );
 
     return {
       data: {
         metadata: {
-          description: 'DateCalendar และตารางสรุปสถานะรายเดือนของโรงงาน',
+          description: 'DateCalendar รายเดือนและตารางสรุปสถานะของปีที่เลือก',
           month: query.month,
           valueDefinitions: calendarStatusValueDefinitions(),
         },
         calendar: {
           year,
           month,
-          days: dailySummaries.map((summary) => ({
+          days: requestedMonthSummaries.map((summary) => ({
             date: summary.date,
             dataCompletenessPercent: summary.dataCompletenessPercent,
             dataCompletenessStatus: summary.dataCompletenessStatus,
@@ -327,7 +335,7 @@ export const parameterValuesService = {
           })),
         },
         monthlySummary: definitions.map((definition) =>
-          buildMonthlyParameterSummary(definition, dailySummaries, startDate, endDate),
+          buildYearlyParameterSummary(definition, dailySummaries, startDate, endDate),
         ),
       },
       meta: {
@@ -358,7 +366,7 @@ export const parameterValuesService = {
       );
     }
 
-    const { startDate, endDate } = monthRange(query.month);
+    const { year, startDate, endDate } = yearRange(query.year);
     const [result, registeredParameters] = await Promise.all([
       parameterValuesRepository.listRows({
         stationId: query.stationId,
@@ -368,9 +376,13 @@ export const parameterValuesService = {
       }),
       parameterValuesRepository.listRegisteredParameters(query.stationId, access),
     ]);
+    const annualRows = result.rows.filter((row) => {
+      const date = stringValue(row.cdate);
+      return date !== null && date >= startDate && date <= endDate;
+    });
     const definitions = buildParameterDefinitions(
       registeredParameters,
-      result.rows,
+      annualRows,
       options?.parameterEvaluations,
     );
     const definition = resolveCalendarStatusDetailParameter(
@@ -379,28 +391,25 @@ export const parameterValuesService = {
       query.unit,
     );
     const useConfiguredEvaluation = Boolean(options?.parameterEvaluations);
-    const dailySummaries = buildDailySummaries(result.rows, definitions, useConfiguredEvaluation);
+    const dailySummaries = buildDailySummaries(annualRows, definitions, useConfiguredEvaluation);
     const exceededStandard = resolveExceededStandard(definition);
-    const rowsByDate = groupRowsByDate(result.rows);
-    const days = dailySummaries
-      .filter((summary) => summary.date >= startDate && summary.date <= endDate)
-      .flatMap((summary) =>
-        buildCalendarStatusDetailDay(
-          query.summaryType,
-          summary,
-          rowsByDate.get(summary.date) ?? [],
-          definition,
-          definitions,
-          exceededStandard,
-          useConfiguredEvaluation,
-        ),
-      );
+    const rowsByDate = groupRowsByDate(annualRows);
+    const rows = dailySummaries.flatMap((summary) =>
+      buildCalendarStatusDetailRow(
+        query.summaryType,
+        summary,
+        rowsByDate.get(summary.date) ?? [],
+        definition,
+        exceededStandard,
+        useConfiguredEvaluation,
+      ),
+    );
 
     return {
       data: {
         metadata: {
-          description: 'รายละเอียดที่ใช้คำนวณตารางสรุปสถานะรายเดือน',
-          month: query.month,
+          description: 'รายละเอียดรายวันที่ใช้คำนวณตารางสรุปสถานะของปีที่เลือก',
+          year,
           summaryType: query.summaryType,
           valueDefinitions: calendarStatusDetailsValueDefinitions(),
         },
@@ -412,33 +421,17 @@ export const parameterValuesService = {
           exceededStandard,
         },
         summary: {
-          affectedDays: days.length,
-          totalExceededOccurrences: days.reduce(
-            (total, day) => total + day.exceededOccurrences.length,
-            0,
-          ),
-          totalMissingHours:
-            query.summaryType === 'lowData'
-              ? days.reduce(
-                  (total, day) =>
-                    total +
-                    day.lowDataCauses.reduce(
-                      (dayTotal, cause) => dayTotal + cause.missingTimes.length,
-                      0,
-                    ),
-                  0,
-                )
-              : 0,
+          affectedDays: rows.length,
         },
-        days,
+        rows,
       },
       meta: {
         stationId: query.stationId,
         interval,
         schemaName: env.PARAMETER_DB_SCHEMA,
         tableName: result.tableName,
-        month: query.month,
-        count: result.rows.length,
+        year: query.year,
+        count: annualRows.length,
         registeredParameters,
       },
     };
@@ -879,14 +872,14 @@ function calculateDailyParameterCompleteness(
   return Math.round((completeHours.size / HOURS_PER_DAY) * 100);
 }
 
-function buildMonthlyParameterSummary(
+function buildYearlyParameterSummary(
   definition: ParameterDefinition,
   dailySummaries: DailySummary[],
   startDate: string,
   endDate: string,
 ) {
   const latestSummary = dailySummaries.at(-1);
-  const requestedMonthSummaries = dailySummaries.filter(
+  const requestedYearSummaries = dailySummaries.filter(
     (summary) => summary.date >= startDate && summary.date <= endDate,
   );
 
@@ -894,10 +887,10 @@ function buildMonthlyParameterSummary(
     parameterCode: definition.code,
     parameterName: definition.name,
     unit: definition.unit,
-    exceededDays: requestedMonthSummaries.filter((summary) =>
+    exceededDays: requestedYearSummaries.filter((summary) =>
       (summary.parameterStatuses.get(definition.code) ?? []).includes('exceeded'),
     ).length,
-    lowDataDays: requestedMonthSummaries.filter(
+    lowDataDays: requestedYearSummaries.filter(
       (summary) => summary.dataCompletenessStatus === 'lowData',
     ).length,
     todayDataCompletenessPercent: latestSummary?.dataCompletenessPercent ?? null,
@@ -953,18 +946,14 @@ function groupRowsByDate(rows: Record<string, unknown>[]): Map<string, Record<st
   return rowsByDate;
 }
 
-function buildCalendarStatusDetailDay(
+function buildCalendarStatusDetailRow(
   summaryType: CalendarStatusDetailsQuery['summaryType'],
   summary: DailySummary,
   rows: Record<string, unknown>[],
   definition: ParameterDefinition,
-  definitions: ParameterDefinition[],
   exceededStandard: CalendarStatusExceededStandardDTO,
   useParameterCompleteness: boolean,
-): CalendarStatusDetailDayDTO[] {
-  const parameterDataCompletenessPercent = calculateDailyParameterCompleteness(rows, definition);
-  const receivedHours = countReceivedParameterHours(rows, definition);
-
+): CalendarStatusDetailRowDTO[] {
   if (summaryType === 'lowData') {
     if (summary.dataCompletenessStatus !== 'lowData') return [];
 
@@ -972,131 +961,74 @@ function buildCalendarStatusDetailDay(
       {
         date: summary.date,
         dataCompletenessPercent: summary.dataCompletenessPercent,
-        dataCompletenessStatus: summary.dataCompletenessStatus,
-        pollutionStatus: summary.pollutionStatus,
-        parameterDataCompletenessPercent,
-        expectedHours: HOURS_PER_DAY,
-        receivedHours,
-        missingTimes: buildMissingParameterTimes(rows, definition),
-        exceededOccurrences: [],
-        lowDataCauses: buildLowDataCauses(rows, definitions),
       },
     ];
   }
 
-  const exceededOccurrences = buildExceededOccurrences(
+  const firstExceededOccurrence = buildFirstExceededOccurrence(
     rows,
     definition,
     exceededStandard,
     useParameterCompleteness,
-    parameterDataCompletenessPercent,
+    calculateDailyParameterCompleteness(rows, definition),
   );
-  if (exceededOccurrences.length === 0) return [];
+  if (!firstExceededOccurrence) return [];
 
   return [
     {
       date: summary.date,
-      dataCompletenessPercent: summary.dataCompletenessPercent,
-      dataCompletenessStatus: summary.dataCompletenessStatus,
-      pollutionStatus: summary.pollutionStatus,
-      parameterDataCompletenessPercent,
-      expectedHours: HOURS_PER_DAY,
-      receivedHours,
-      missingTimes: [],
-      exceededOccurrences,
-      lowDataCauses: [],
+      ...firstExceededOccurrence,
     },
   ];
 }
 
-function buildExceededOccurrences(
+function buildFirstExceededOccurrence(
   rows: Record<string, unknown>[],
   definition: ParameterDefinition,
   exceededStandard: CalendarStatusExceededStandardDTO,
   useParameterCompleteness: boolean,
   parameterDataCompletenessPercent: number,
-): CalendarStatusExceededOccurrenceDTO[] {
-  const rowsByHour = new Map<number, Record<string, unknown>>();
-  for (const row of rows) {
-    const hour = parseHour(row.ctime);
-    if (hour !== null && !rowsByHour.has(hour)) rowsByHour.set(hour, row);
-  }
+): CalendarStatusExceededOccurrenceDTO | null {
+  const chronologicalRows = rows
+    .flatMap((row) => {
+      const hour = parseHour(row.ctime);
+      if (hour === null) return [];
 
-  return [...rowsByHour.entries()]
-    .sort(([leftHour], [rightHour]) => leftHour - rightHour)
-    .flatMap(([hour, row]) => {
-      const value = readParameterNumber(row, definition);
-      if (value === null) return [];
-
-      const completeness = useParameterCompleteness
-        ? parameterDataCompletenessPercent
-        : (readCompletenessPercent(row) ?? 100);
-      if (completeness < 80 || readParameterStatus(row, definition, value) !== 'exceeded') {
-        return [];
-      }
-
-      const exceededBy = Number(Math.max(0, value - exceededStandard.value).toFixed(10));
       return [
         {
+          hour,
           time: normalizeOccurrenceTime(row.ctime, hour),
-          displayTime: hourLabel(hour),
-          value,
-          displayValue: formatMeasurementValue(value),
-          standardValue: exceededStandard.value,
-          displayStandardValue: exceededStandard.displayValue,
-          exceededBy,
-          displayExceededBy: formatMeasurementValue(exceededBy),
+          row,
         },
       ];
-    });
-}
+    })
+    .sort((left, right) => left.time.localeCompare(right.time));
 
-function countReceivedParameterHours(
-  rows: Record<string, unknown>[],
-  definition: ParameterDefinition,
-): number {
-  const receivedHours = new Set<number>();
-  for (const row of rows) {
-    const hour = parseHour(row.ctime);
-    if (hour !== null && readParameterNumber(row, definition) !== null) receivedHours.add(hour);
+  for (const { hour, time, row } of chronologicalRows) {
+    const value = readParameterNumber(row, definition);
+    if (value === null) continue;
+
+    const completeness = useParameterCompleteness
+      ? parameterDataCompletenessPercent
+      : (readCompletenessPercent(row) ?? 100);
+    if (completeness < 80 || readParameterStatus(row, definition, value) !== 'exceeded') {
+      continue;
+    }
+
+    const exceededBy = Number(Math.max(0, value - exceededStandard.value).toFixed(10));
+    return {
+      time,
+      displayTime: hourLabel(hour),
+      value,
+      displayValue: formatMeasurementValue(value),
+      standardValue: exceededStandard.value,
+      displayStandardValue: exceededStandard.displayValue,
+      exceededBy,
+      displayExceededBy: formatMeasurementValue(exceededBy),
+    };
   }
-  return receivedHours.size;
-}
 
-function buildMissingParameterTimes(
-  rows: Record<string, unknown>[],
-  definition: ParameterDefinition,
-): string[] {
-  const receivedHours = new Set<number>();
-  for (const row of rows) {
-    const hour = parseHour(row.ctime);
-    if (hour !== null && readParameterNumber(row, definition) !== null) receivedHours.add(hour);
-  }
-
-  return Array.from({ length: HOURS_PER_DAY }, (_, hour) => hour)
-    .filter((hour) => !receivedHours.has(hour))
-    .map(chartHour);
-}
-
-function buildLowDataCauses(
-  rows: Record<string, unknown>[],
-  definitions: ParameterDefinition[],
-): CalendarStatusLowDataCauseDTO[] {
-  return definitions
-    .map((definition) => ({
-      definition,
-      dataCompletenessPercent: calculateDailyParameterCompleteness(rows, definition),
-    }))
-    .filter(({ dataCompletenessPercent }) => dataCompletenessPercent < 80)
-    .map(({ definition, dataCompletenessPercent }) => ({
-      parameterCode: definition.code,
-      parameterName: definition.name,
-      parameterLabel: definition.label,
-      unit: definition.unit,
-      dataCompletenessPercent,
-      receivedHours: countReceivedParameterHours(rows, definition),
-      missingTimes: buildMissingParameterTimes(rows, definition),
-    }));
+  return null;
 }
 
 function normalizeOccurrenceTime(value: unknown, fallbackHour: number): string {
@@ -1435,6 +1367,18 @@ function monthRange(monthValue: string): {
   };
 }
 
+function yearRange(yearValue: string): {
+  year: number;
+  startDate: string;
+  endDate: string;
+} {
+  return {
+    year: Number(yearValue),
+    startDate: `${yearValue}-01-01`,
+    endDate: `${yearValue}-12-31`,
+  };
+}
+
 function measurementStatisticsValueDefinitions(): Record<string, unknown> {
   return {
     status: {
@@ -1452,6 +1396,8 @@ function measurementStatisticsValueDefinitions(): Record<string, unknown> {
 
 function calendarStatusValueDefinitions(): Record<string, unknown> {
   return {
+    summaryPeriod:
+      'calendar.days แสดงเฉพาะเดือนที่ขอ ส่วน monthlySummary.exceededDays และ lowDataDays นับทั้งปีของเดือนที่ขอ',
     dataCompletenessStatus: {
       lowData: 'ส่งข้อมูลน้อยกว่า 80% ใช้พื้นหลังสีเทา',
       highData: 'ส่งข้อมูลมากกว่าหรือเท่ากับ 80% ใช้พื้นหลังสีฟ้า',
@@ -1468,13 +1414,13 @@ function calendarStatusValueDefinitions(): Record<string, unknown> {
 function calendarStatusDetailsValueDefinitions(): Record<string, unknown> {
   return {
     summaryType: {
-      exceeded: 'คืนเฉพาะวันที่และช่วงเวลาที่พารามิเตอร์มีสถานะเกินมาตรฐาน',
-      lowData: 'คืนเฉพาะวันที่มีความครบถ้วนของข้อมูลรายวันต่ำกว่า 80%',
+      exceeded: 'คืนหนึ่งแถวต่อวันที่เกินมาตรฐาน โดยเลือกค่าที่เกินมาตรฐานรายการแรกตามเวลา',
+      lowData: 'คืนหนึ่งแถวต่อวันที่มีความครบถ้วนของข้อมูลรายวันต่ำกว่า 80% โดยไม่คืนเวลา',
     },
-    exceededOccurrences: 'รายการค่าที่เกินมาตรฐานพร้อมเวลา ค่าที่วัด ค่าเกณฑ์ และผลต่างจากเกณฑ์',
-    missingTimes: 'รายการชั่วโมงที่ไม่พบค่าของพารามิเตอร์ที่เลือก ใช้ประกอบรายละเอียดข้อมูลไม่ถึง',
-    dataCompletenessPercent: 'ร้อยละความครบถ้วนรายวันที่ใช้ตัดสิน lowData ของ monthly summary',
-    parameterDataCompletenessPercent: 'ร้อยละความครบถ้วนรายวันของพารามิเตอร์ที่เลือก',
+    rows: 'เรียงวันที่จากเก่าไปใหม่และมีได้สูงสุดหนึ่งแถวต่อวันของปีที่ขอ',
+    displayTime: 'ช่วงชั่วโมงของค่าที่เกินมาตรฐานรายการแรก เช่น 01.00-01.59 น.',
+    value: 'ค่าตรวจวัดรายการแรกของวันที่มีสถานะเกินมาตรฐาน',
+    dataCompletenessPercent: 'ร้อยละความครบถ้วนรายวันที่ใช้ตัดสิน lowData',
   };
 }
 

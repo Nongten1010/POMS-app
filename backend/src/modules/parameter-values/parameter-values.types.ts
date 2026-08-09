@@ -32,7 +32,9 @@ export interface CalendarStatusQuery {
 
 export type CalendarStatusSummaryType = 'exceeded' | 'lowData';
 
-export interface CalendarStatusDetailsQuery extends CalendarStatusQuery {
+export interface CalendarStatusDetailsQuery {
+  stationId: string;
+  year: string;
   summaryType: CalendarStatusSummaryType;
   parameterCode: string;
   unit?: string;
@@ -256,33 +258,23 @@ export interface CalendarStatusExceededOccurrenceDTO {
   displayExceededBy: string;
 }
 
-export interface CalendarStatusLowDataCauseDTO {
-  parameterCode: string;
-  parameterName: string;
-  parameterLabel: string;
-  unit: string;
-  dataCompletenessPercent: number;
-  receivedHours: number;
-  missingTimes: string[];
+export interface CalendarStatusExceededDetailRowDTO extends CalendarStatusExceededOccurrenceDTO {
+  date: string;
 }
 
-export interface CalendarStatusDetailDayDTO {
+export interface CalendarStatusLowDataDetailRowDTO {
   date: string;
   dataCompletenessPercent: number;
-  dataCompletenessStatus: 'lowData' | 'highData';
-  pollutionStatus: 'normal' | 'warning' | 'exceeded' | 'insufficient';
-  parameterDataCompletenessPercent: number;
-  expectedHours: 24;
-  receivedHours: number;
-  missingTimes: string[];
-  exceededOccurrences: CalendarStatusExceededOccurrenceDTO[];
-  lowDataCauses: CalendarStatusLowDataCauseDTO[];
 }
+
+export type CalendarStatusDetailRowDTO =
+  | CalendarStatusExceededDetailRowDTO
+  | CalendarStatusLowDataDetailRowDTO;
 
 export interface CalendarStatusDetailsDTO {
   metadata: {
     description: string;
-    month: string;
+    year: number;
     summaryType: CalendarStatusSummaryType;
     valueDefinitions: Record<string, unknown>;
   };
@@ -295,10 +287,8 @@ export interface CalendarStatusDetailsDTO {
   };
   summary: {
     affectedDays: number;
-    totalExceededOccurrences: number;
-    totalMissingHours: number;
   };
-  days: CalendarStatusDetailDayDTO[];
+  rows: CalendarStatusDetailRowDTO[];
 }
 
 export interface CalendarStatusDetailsResultDTO {
@@ -308,7 +298,7 @@ export interface CalendarStatusDetailsResultDTO {
     interval: '60m';
     schemaName: string;
     tableName: string;
-    month: string;
+    year: string;
     count: number;
     registeredParameters: string[];
   };

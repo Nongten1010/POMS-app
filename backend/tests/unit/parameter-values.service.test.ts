@@ -1093,10 +1093,7 @@ describe('parameterValuesService', () => {
       startDate: '2025-01-01',
       endDate: '2025-12-31',
     });
-    expect(result.data.calendar.days.map((day) => day.date)).toEqual([
-      '2025-08-09',
-      '2025-08-10',
-    ]);
+    expect(result.data.calendar.days.map((day) => day.date)).toEqual(['2025-08-09', '2025-08-10']);
     expect(result.data.monthlySummary).toEqual([
       {
         parameterCode: 'CO',
