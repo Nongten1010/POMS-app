@@ -1022,7 +1022,7 @@ function buildExceededOccurrences(
       const exceededBy = Number(Math.max(0, value - exceededStandard.value).toFixed(10));
       return [
         {
-          time: `${chartHour(hour)}:00`,
+          time: normalizeOccurrenceTime(row.ctime, hour),
           displayTime: hourLabel(hour),
           value,
           displayValue: formatMeasurementValue(value),
@@ -1060,6 +1060,21 @@ function buildMissingParameterTimes(
   return Array.from({ length: HOURS_PER_DAY }, (_, hour) => hour)
     .filter((hour) => !receivedHours.has(hour))
     .map(chartHour);
+}
+
+function normalizeOccurrenceTime(value: unknown, fallbackHour: number): string {
+  const rawTime = stringValue(value);
+  const match = rawTime?.match(/^(\d{1,2})[.:](\d{2})(?:[.:](\d{2}))?/);
+  if (!match) return `${chartHour(fallbackHour)}:00`;
+
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  const second = Number(match[3] ?? 0);
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59) {
+    return `${chartHour(fallbackHour)}:00`;
+  }
+
+  return [hour, minute, second].map((part) => String(part).padStart(2, '0')).join(':');
 }
 
 function calculateDailyCompleteness(
