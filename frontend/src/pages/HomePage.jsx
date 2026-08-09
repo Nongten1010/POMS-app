@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
+  Autocomplete,
   Box,
   Button,
   Chip,
@@ -395,6 +396,23 @@ function getFactorySystems(row) {
   return Array.from(new Set([...systemsFromCounts, ...systemsFromPoints]))
 }
 
+function getUniqueOptions(rows, getValue, getLabel = getValue) {
+  const optionMap = new Map()
+
+  rows.forEach((row) => {
+    const value = String(getValue(row) ?? '').trim()
+
+    if (!value || optionMap.has(value)) {
+      return
+    }
+
+    const label = String(getLabel(row) ?? '').trim() || value
+    optionMap.set(value, { value, label })
+  })
+
+  return [allLocationOption, ...Array.from(optionMap.values()).sort((first, second) => first.label.localeCompare(second.label, 'th'))]
+}
+
 function getFactoryLogoText(factoryName, registrationNo) {
   const source = String(factoryName || registrationNo || '').trim()
   return source.slice(0, 2).toUpperCase() || 'DP'
@@ -461,6 +479,9 @@ function mapOperatorFactory(row, index) {
     address: row.address ?? '',
     province: row.province ?? '',
     industrialEstateCode: row.industrialEstateCode ?? '',
+    industrialEstateName: row.industrialEstateName ?? '',
+    industryMainOrder: row.industryMainOrder ?? '',
+    industryMainOrderLabel: row.industryMainOrderLabel ?? '',
     systems,
     distance: getDistanceFromReference(lon, lat),
     lon,
@@ -523,21 +544,22 @@ function HomePage({ accessToken = '', permissions }) {
   const [searchValue, setSearchValue] = useState('')
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [selectedFactory, setSelectedFactory] = useState(null)
+  const [focusedFactory, setFocusedFactory] = useState(null)
   const [isMobileListExpanded, setIsMobileListExpanded] = useState(false)
-  const [factoryOrderFilter, setFactoryOrderFilter] = useState('')
+  const [factoryOrderFilter, setFactoryOrderFilter] = useState('all')
   const [industrialEstateFilter, setIndustrialEstateFilter] = useState('all')
   const canUseFavorite = permissions?.dashboard?.favorite === true
   const canUseSearch = permissions?.dashboard?.search === true
   const canUseAdvancedSearch = permissions?.dashboard?.advanced_search === true
-  const [industrialEstateNameFilter, setIndustrialEstateNameFilter] = useState('')
+  const [industrialEstateNameFilter, setIndustrialEstateNameFilter] = useState('all')
   const [regionFilter, setRegionFilter] = useState('all')
   const [provinceFilter, setProvinceFilter] = useState('all')
   const [districtFilter, setDistrictFilter] = useState('all')
   const [latestInspectionResultFilter, setLatestInspectionResultFilter] = useState('all')
   const [monitoringFilter, setMonitoringFilter] = useState('all')
-  const [draftFactoryOrderFilter, setDraftFactoryOrderFilter] = useState('')
+  const [draftFactoryOrderFilter, setDraftFactoryOrderFilter] = useState('all')
   const [draftIndustrialEstateFilter, setDraftIndustrialEstateFilter] = useState('all')
-  const [draftIndustrialEstateNameFilter, setDraftIndustrialEstateNameFilter] = useState('')
+  const [draftIndustrialEstateNameFilter, setDraftIndustrialEstateNameFilter] = useState('all')
   const [draftRegionFilter, setDraftRegionFilter] = useState('all')
   const [draftProvinceFilter, setDraftProvinceFilter] = useState('all')
   const [draftDistrictFilter, setDraftDistrictFilter] = useState('all')
@@ -552,6 +574,18 @@ function HomePage({ accessToken = '', permissions }) {
   const apiSystemType = factoryType === 'cems' ? 'CEMS' : factoryType === 'wpms' ? 'WPMS' : ''
   const effectiveFactories = factories
   const effectiveFactoriesError = factoriesError
+  const industryMainOrderOptions = useMemo(
+    () => getUniqueOptions(
+      effectiveFactories,
+      (factory) => factory.industryMainOrder,
+      (factory) => [factory.industryMainOrder, factory.industryMainOrderLabel].filter(Boolean).join(' '),
+    ),
+    [effectiveFactories],
+  )
+  const industrialEstateNameOptions = useMemo(
+    () => getUniqueOptions(effectiveFactories, (factory) => factory.industrialEstateName),
+    [effectiveFactories],
+  )
   const handleAdvancedOpen = () => {
     setDraftFactoryOrderFilter(factoryOrderFilter)
     setDraftIndustrialEstateFilter(industrialEstateFilter)
@@ -569,7 +603,7 @@ function HomePage({ accessToken = '', permissions }) {
       setFactoryOrderFilter(draftFactoryOrderFilter)
       setIndustrialEstateFilter(draftIndustrialEstateFilter)
       setIndustrialEstateNameFilter(
-        draftIndustrialEstateFilter === 'industrial-estate' ? draftIndustrialEstateNameFilter : '',
+        draftIndustrialEstateFilter === 'industrial-estate' ? draftIndustrialEstateNameFilter : 'all',
       )
       setRegionFilter(draftRegionFilter)
       setProvinceFilter(draftProvinceFilter)
@@ -581,6 +615,16 @@ function HomePage({ accessToken = '', permissions }) {
         setFiltersApplying(false)
       }, 160)
     })
+  }
+  const handleAdvancedReset = () => {
+    setDraftFactoryOrderFilter('all')
+    setDraftIndustrialEstateFilter('all')
+    setDraftIndustrialEstateNameFilter('all')
+    setDraftRegionFilter('all')
+    setDraftProvinceFilter('all')
+    setDraftDistrictFilter('all')
+    setDraftLatestInspectionResultFilter('all')
+    setDraftMonitoringFilter('all')
   }
   useEffect(() => {
     let isActive = true
@@ -641,14 +685,13 @@ function HomePage({ accessToken = '', permissions }) {
       const matchesType =
         factoryType === 'all' || factory.systems.some((system) => system.toLowerCase() === factoryType)
       const matchesFactoryOrder =
-        !factoryOrderFilter.trim() || factory.newRegistrationNo.toLowerCase().includes(factoryOrderFilter.trim().toLowerCase())
+        factoryOrderFilter === 'all' || factory.industryMainOrder === factoryOrderFilter
       const matchesIndustrialEstate =
         industrialEstateFilter === 'all' ||
         (industrialEstateFilter === 'industrial-estate' && Boolean(factory.industrialEstateCode)) ||
         (industrialEstateFilter === 'outside-industrial-estate' && !factory.industrialEstateCode)
       const matchesIndustrialEstateName =
-        !industrialEstateNameFilter.trim() ||
-        factory.industrialEstateCode.toLowerCase().includes(industrialEstateNameFilter.trim().toLowerCase())
+        industrialEstateNameFilter === 'all' || factory.industrialEstateName === industrialEstateNameFilter
       const matchesRegion = regionFilter === 'all' || getRegionByProvince(factory.province) === regionFilter
       const matchesProvince = provinceFilter === 'all' || factory.province === provinceFilter
       const matchesDistrict =
@@ -658,11 +701,12 @@ function HomePage({ accessToken = '', permissions }) {
         (latestInspectionResultFilter === 'has-result' && factory.hasLatestHourlyMeasurement === true) ||
         (latestInspectionResultFilter === 'no-result' && factory.hasLatestHourlyMeasurement === false)
       const monitoringStatus = getFactoryMonitoringStatus(factory)
+      const measurementStatuses = getFactoryMeasurementStatuses(factory)
       const matchesMonitoring =
         monitoringFilter === 'all' ||
         (monitoringFilter === 'normal' && monitoringStatus === 'normal') ||
-        (monitoringFilter === 'watch' && monitoringStatus === 'warning') ||
-        (monitoringFilter === 'exceeded' && monitoringStatus === 'critical')
+        (monitoringFilter === 'watch' && measurementStatuses.includes('warning')) ||
+        (monitoringFilter === 'exceeded' && measurementStatuses.includes('critical'))
       const matchesKeyword =
         !keyword ||
         [factory.name, factory.newRegistrationNo, factory.oldRegistrationNo, factory.address, factory.province]
@@ -815,16 +859,19 @@ function HomePage({ accessToken = '', permissions }) {
           favoriteUpdatingFactoryId={favoriteUpdatingFactoryId}
           onMobileToggle={() => setIsMobileListExpanded((current) => !current)}
           onFactorySelect={setSelectedFactory}
+          onFactoryFocus={setFocusedFactory}
           onFavoriteToggle={handleFavoriteToggle}
         />
-        <FactoryMap factories={filteredFactories} />
+        <FactoryMap factories={filteredFactories} focusedFactory={focusedFactory} />
       </Box>
 
       <AdvancedSearchDialog
         open={advancedOpen}
         factoryOrderFilter={draftFactoryOrderFilter}
+        factoryOrderOptions={industryMainOrderOptions}
         industrialEstateFilter={draftIndustrialEstateFilter}
         industrialEstateNameFilter={draftIndustrialEstateNameFilter}
+        industrialEstateNameOptions={industrialEstateNameOptions}
         regionFilter={draftRegionFilter}
         provinceFilter={draftProvinceFilter}
         districtFilter={draftDistrictFilter}
@@ -836,7 +883,7 @@ function HomePage({ accessToken = '', permissions }) {
         onIndustrialEstateFilterChange={(nextValue) => {
           setDraftIndustrialEstateFilter(nextValue)
           if (nextValue !== 'industrial-estate') {
-            setDraftIndustrialEstateNameFilter('')
+            setDraftIndustrialEstateNameFilter('all')
           }
         }}
         onIndustrialEstateNameFilterChange={setDraftIndustrialEstateNameFilter}
@@ -853,6 +900,7 @@ function HomePage({ accessToken = '', permissions }) {
         onLatestInspectionResultFilterChange={setDraftLatestInspectionResultFilter}
         onMonitoringFilterChange={setDraftMonitoringFilter}
         onClose={() => setAdvancedOpen(false)}
+        onReset={handleAdvancedReset}
         onSearch={handleAdvancedSearch}
         searching={filtersApplying}
       />
@@ -988,6 +1036,7 @@ function FactoryList({
   favoriteUpdatingFactoryId = '',
   onMobileToggle,
   onFactorySelect,
+  onFactoryFocus,
   onFavoriteToggle,
 }) {
   return (
@@ -1078,6 +1127,7 @@ function FactoryList({
             canViewDetails={canViewDetails}
             favoriteUpdating={favoriteUpdatingFactoryId === factory.factoryId}
             onSelect={() => onFactorySelect(factory)}
+            onFocus={() => onFactoryFocus?.(factory)}
             onFavoriteToggle={() => onFavoriteToggle?.(factory)}
           />
         ))}
@@ -1108,10 +1158,12 @@ function FactoryCard({
   canViewDetails = false,
   favoriteUpdating = false,
   onSelect,
+  onFocus,
   onFavoriteToggle,
 }) {
   const [activeSystem, setActiveSystem] = useState(null)
   const activeMeasurementTable = activeSystem ? getMeasurementTable(factory, activeSystem) : null
+  const canFocusFactory = hasFactoryCoordinate(factory)
 
   return (
     <Paper
@@ -1128,6 +1180,14 @@ function FactoryCard({
     >
       <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', minWidth: 0 }}>
         <Box
+          component="button"
+          type="button"
+          disabled={!canFocusFactory}
+          onClick={() => {
+            if (canFocusFactory) {
+              onFocus?.()
+            }
+          }}
           sx={{
             width: { xs: 64, sm: 72 },
             height: { xs: 64, sm: 72 },
@@ -1142,6 +1202,12 @@ function FactoryCard({
             fontWeight: 600,
             fontSize: 20,
             overflow: 'hidden',
+            p: 0,
+            cursor: canFocusFactory ? 'pointer' : 'default',
+            appearance: 'none',
+            '&:disabled': {
+              cursor: 'default',
+            },
           }}
         >
           {factory.logoUrl ? (
@@ -1162,18 +1228,41 @@ function FactoryCard({
         </Box>
 
         <Box sx={{ minWidth: 0, flex: 1 }}>
-          <Typography
-            variant="subtitle2"
-            sx={{
-              fontWeight: 600,
-              color: 'primary.900',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {factory.name}
-          </Typography>
+          <Tooltip title={canFocusFactory ? 'โฟกัสบนแผนที่' : 'ไม่มีพิกัดโรงงาน'}>
+            <Typography
+              component="button"
+              type="button"
+              disabled={!canFocusFactory}
+              variant="subtitle2"
+              onClick={() => {
+                if (canFocusFactory) {
+                  onFocus?.()
+                }
+              }}
+              sx={{
+                width: '100%',
+                p: 0,
+                border: 0,
+                bgcolor: 'transparent',
+                font: 'inherit',
+                textAlign: 'left',
+                fontWeight: 600,
+                color: 'primary.900',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                cursor: canFocusFactory ? 'pointer' : 'default',
+                '&:hover': {
+                  textDecoration: canFocusFactory ? 'underline' : 'none',
+                },
+                '&:disabled': {
+                  cursor: 'default',
+                },
+              }}
+            >
+              {factory.name}
+            </Typography>
+          </Tooltip>
           <Typography
             variant="body2"
             color="text.secondary"
@@ -1287,17 +1376,7 @@ function getFactorySystemChipStatus(factory, systemType) {
     return 'unavailable'
   }
 
-  const measurementPoints = Array.isArray(factory?.measurementPoints)
-    ? factory.measurementPoints.filter((point) => point?.systemType === systemType)
-    : []
-  const statuses = measurementPoints.flatMap((point) => {
-    const parameters = getMeasurementPointParameters(point)
-    const dataRows = Array.isArray(point?.data) ? point.data : []
-
-    return dataRows.flatMap((row) =>
-      parameters.map((parameter) => getNumericMeasurementStatus(row?.[parameter], point, parameter)).filter(Boolean),
-    )
-  })
+  const statuses = getFactoryMeasurementStatuses(factory, systemType)
 
   if (statuses.includes('critical')) {
     return 'critical'
@@ -1312,6 +1391,21 @@ function getFactorySystemChipStatus(factory, systemType) {
   }
 
   return 'normal'
+}
+
+function getFactoryMeasurementStatuses(factory, systemType = '') {
+  const measurementPoints = Array.isArray(factory?.measurementPoints)
+    ? factory.measurementPoints.filter((point) => !systemType || point?.systemType === systemType)
+    : []
+
+  return measurementPoints.flatMap((point) => {
+    const parameters = getMeasurementPointParameters(point)
+    const dataRows = Array.isArray(point?.data) ? point.data : []
+
+    return dataRows.flatMap((row) =>
+      parameters.map((parameter) => getNumericMeasurementStatus(row?.[parameter], point, parameter)).filter(Boolean),
+    )
+  })
 }
 
 function getFactoryMonitoringStatus(factory) {
@@ -1488,7 +1582,7 @@ function getMeasurementValueAbbreviation(value) {
 
 function formatMeasurementValue(value) {
   if (value === null || value === undefined || value === '') {
-    return ''
+    return '-'
   }
 
   if (typeof value === 'number') {
@@ -1579,7 +1673,7 @@ function getFactoryMapMarkerIcon(factory) {
   return getAbsoluteAssetUrl(diwLogo)
 }
 
-function FactoryMap({ factories }) {
+function FactoryMap({ factories, focusedFactory = null }) {
   const placeholderRef = useRef(null)
   const mapRef = useRef(null)
   const [mapError, setMapError] = useState('')
@@ -1647,6 +1741,17 @@ function FactoryMap({ factories }) {
       map.zoom(factoriesWithCoordinates.length === 1 ? 13 : 10, true)
     }
   }, [factories])
+
+  useEffect(() => {
+    const map = mapRef.current
+
+    if (!map || !hasFactoryCoordinate(focusedFactory)) {
+      return
+    }
+
+    map.location({ lon: focusedFactory.lon, lat: focusedFactory.lat }, true)
+    map.zoom(13, true)
+  }, [focusedFactory])
 
   return (
     <Box
@@ -2661,8 +2766,10 @@ function FactoryMeta({ label, value, sx, valueSx, hideLabel = false }) {
 function AdvancedSearchDialog({
   open,
   factoryOrderFilter,
+  factoryOrderOptions,
   industrialEstateFilter,
   industrialEstateNameFilter,
+  industrialEstateNameOptions,
   regionFilter,
   provinceFilter,
   districtFilter,
@@ -2679,9 +2786,15 @@ function AdvancedSearchDialog({
   onLatestInspectionResultFilterChange,
   onMonitoringFilterChange,
   onClose,
+  onReset,
   onSearch,
   searching = false,
 }) {
+  const selectedFactoryOrderOption =
+    factoryOrderOptions.find((option) => option.value === factoryOrderFilter) ?? allLocationOption
+  const selectedIndustrialEstateNameOption =
+    industrialEstateNameOptions.find((option) => option.value === industrialEstateNameFilter) ?? allLocationOption
+
   return (
     <Dialog
       open={open}
@@ -2726,13 +2839,25 @@ function AdvancedSearchDialog({
             gap: 2,
           }}
         >
-          <TextField
+          <Autocomplete
             size="small"
-            label="ลำดับประเภทโรงงาน"
-            value={factoryOrderFilter}
-            placeholder="ลำดับประเภทโรงงาน (5 หลัก)"
-            onChange={(event) => onFactoryOrderFilterChange(event.target.value)}
-            fullWidth
+            options={factoryOrderOptions}
+            value={selectedFactoryOrderOption}
+            getOptionLabel={(option) => option?.label ?? ''}
+            isOptionEqualToValue={(option, value) => option.value === value.value}
+            filterOptions={(options, state) => {
+              const keyword = state.inputValue.trim().toLowerCase()
+
+              if (!keyword) {
+                return options
+              }
+
+              return options.filter((option) => option.value === 'all' || option.value.toLowerCase().includes(keyword))
+            }}
+            onChange={(_, option) => onFactoryOrderFilterChange(option?.value ?? 'all')}
+            renderInput={(params) => (
+              <TextField {...params} label="ลำดับประเภทโรงงาน" placeholder="ค้นหาลำดับประเภทโรงงาน" />
+            )}
             sx={{ gridColumn: '1 / -1' }}
           />
 
@@ -2751,13 +2876,16 @@ function AdvancedSearchDialog({
           </FormControl>
 
           {industrialEstateFilter === 'industrial-estate' ? (
-            <TextField
+            <Autocomplete
               size="small"
-              label="นิคมอุตสาหกรรม"
-              value={industrialEstateNameFilter}
-              placeholder="พิมพ์เพื่อค้นหา"
-              onChange={(event) => onIndustrialEstateNameFilterChange(event.target.value)}
-              fullWidth
+              options={industrialEstateNameOptions}
+              value={selectedIndustrialEstateNameOption}
+              getOptionLabel={(option) => option?.label ?? ''}
+              isOptionEqualToValue={(option, value) => option.value === value.value}
+              onChange={(_, option) => onIndustrialEstateNameFilterChange(option?.value ?? 'all')}
+              renderInput={(params) => (
+                <TextField {...params} label="นิคมอุตสาหกรรม" placeholder="ค้นหานิคมอุตสาหกรรม" />
+              )}
               sx={{ gridColumn: { xs: '1 / -1', sm: 'span 2' } }}
             />
           ) : null}
@@ -2841,6 +2969,16 @@ function AdvancedSearchDialog({
         </Box>
       </DialogContent>
       <DialogActions sx={{ px: 2, pb: 1.75, pt: 1, gap: 0.75 }}>
+        <Button
+          variant="text"
+          color="primary"
+          size="small"
+          onClick={onReset}
+          disabled={searching}
+          sx={{ mr: 'auto', minWidth: 78, height: 34, fontWeight: 700 }}
+        >
+          ค่าเริ่มต้น
+        </Button>
         <Button variant="outlined" color="inherit" size="small" onClick={onClose} sx={{ minWidth: 40, height: 34 }}>
           ปิด
         </Button>
