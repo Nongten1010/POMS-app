@@ -20,6 +20,7 @@ import {
   type CalendarStatusDetailsResultDTO,
   type CalendarStatusExceededOccurrenceDTO,
   type CalendarStatusExceededStandardDTO,
+  type CalendarStatusLowDataCauseDTO,
   type CalendarStatusQuery,
   type CalendarStatusResultDTO,
   type ConnectionTestQuery,
@@ -389,6 +390,7 @@ export const parameterValuesService = {
           summary,
           rowsByDate.get(summary.date) ?? [],
           definition,
+          definitions,
           exceededStandard,
           useConfiguredEvaluation,
         ),
@@ -415,7 +417,18 @@ export const parameterValuesService = {
             (total, day) => total + day.exceededOccurrences.length,
             0,
           ),
-          totalMissingHours: days.reduce((total, day) => total + day.missingTimes.length, 0),
+          totalMissingHours:
+            query.summaryType === 'lowData'
+              ? days.reduce(
+                  (total, day) =>
+                    total +
+                    day.lowDataCauses.reduce(
+                      (dayTotal, cause) => dayTotal + cause.missingTimes.length,
+                      0,
+                    ),
+                  0,
+                )
+              : 0,
         },
         days,
       },
@@ -945,6 +958,7 @@ function buildCalendarStatusDetailDay(
   summary: DailySummary,
   rows: Record<string, unknown>[],
   definition: ParameterDefinition,
+  definitions: ParameterDefinition[],
   exceededStandard: CalendarStatusExceededStandardDTO,
   useParameterCompleteness: boolean,
 ): CalendarStatusDetailDayDTO[] {
@@ -965,6 +979,7 @@ function buildCalendarStatusDetailDay(
         receivedHours,
         missingTimes: buildMissingParameterTimes(rows, definition),
         exceededOccurrences: [],
+        lowDataCauses: buildLowDataCauses(rows, definitions),
       },
     ];
   }
@@ -989,6 +1004,7 @@ function buildCalendarStatusDetailDay(
       receivedHours,
       missingTimes: [],
       exceededOccurrences,
+      lowDataCauses: [],
     },
   ];
 }
@@ -1060,6 +1076,27 @@ function buildMissingParameterTimes(
   return Array.from({ length: HOURS_PER_DAY }, (_, hour) => hour)
     .filter((hour) => !receivedHours.has(hour))
     .map(chartHour);
+}
+
+function buildLowDataCauses(
+  rows: Record<string, unknown>[],
+  definitions: ParameterDefinition[],
+): CalendarStatusLowDataCauseDTO[] {
+  return definitions
+    .map((definition) => ({
+      definition,
+      dataCompletenessPercent: calculateDailyParameterCompleteness(rows, definition),
+    }))
+    .filter(({ dataCompletenessPercent }) => dataCompletenessPercent < 80)
+    .map(({ definition, dataCompletenessPercent }) => ({
+      parameterCode: definition.code,
+      parameterName: definition.name,
+      parameterLabel: definition.label,
+      unit: definition.unit,
+      dataCompletenessPercent,
+      receivedHours: countReceivedParameterHours(rows, definition),
+      missingTimes: buildMissingParameterTimes(rows, definition),
+    }));
 }
 
 function normalizeOccurrenceTime(value: unknown, fallbackHour: number): string {

@@ -1315,6 +1315,10 @@ describe('parameterValuesService', () => {
     );
 
     expect(result.data.days).toHaveLength(1);
+    expect(result.data.summary).toMatchObject({
+      affectedDays: 1,
+      totalMissingHours: 14,
+    });
     expect(result.data.days[0]).toMatchObject({
       date: '2025-08-10',
       dataCompletenessPercent: 42,

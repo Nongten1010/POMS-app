@@ -256,6 +256,16 @@ export interface CalendarStatusExceededOccurrenceDTO {
   displayExceededBy: string;
 }
 
+export interface CalendarStatusLowDataCauseDTO {
+  parameterCode: string;
+  parameterName: string;
+  parameterLabel: string;
+  unit: string;
+  dataCompletenessPercent: number;
+  receivedHours: number;
+  missingTimes: string[];
+}
+
 export interface CalendarStatusDetailDayDTO {
   date: string;
   dataCompletenessPercent: number;
@@ -266,6 +276,7 @@ export interface CalendarStatusDetailDayDTO {
   receivedHours: number;
   missingTimes: string[];
   exceededOccurrences: CalendarStatusExceededOccurrenceDTO[];
+  lowDataCauses: CalendarStatusLowDataCauseDTO[];
 }
 
 export interface CalendarStatusDetailsDTO {

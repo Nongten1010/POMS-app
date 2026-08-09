@@ -361,6 +361,7 @@ describe('connected measurement points route', () => {
             expectedHours: 24,
             receivedHours: 20,
             missingTimes: [],
+            lowDataCauses: [],
             exceededOccurrences: [
               {
                 time: '00:00:00',
