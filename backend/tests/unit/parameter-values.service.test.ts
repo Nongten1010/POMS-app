@@ -1098,7 +1098,7 @@ describe('parameterValuesService', () => {
           co_value: hour === 0 ? 101 : hour === 5 ? 125 : 60,
           co_units: 'ppm',
           cdate: '2025-08-09',
-          ctime: `${String(hour).padStart(2, '0')}:00:00`,
+          ctime: hour === 5 ? '05:30:00' : `${String(hour).padStart(2, '0')}:00:00`,
         })),
         ...Array.from({ length: 10 }, (_, hour) => ({
           station_id: 'S1125',
@@ -1192,7 +1192,7 @@ describe('parameterValuesService', () => {
               displayExceededBy: '1.00',
             },
             {
-              time: '05:00:00',
+              time: '05:30:00',
               displayTime: '05.00-05.59 น.',
               value: 125,
               displayValue: '125.00',
