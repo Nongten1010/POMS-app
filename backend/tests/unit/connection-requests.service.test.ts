@@ -241,8 +241,8 @@ describe('connectionRequestsService', () => {
     mockedParameterValuesService.calendarStatusDetails.mockResolvedValue({
       data: {
         metadata: {
-          description: 'รายละเอียดที่ใช้คำนวณตารางสรุปสถานะรายเดือน',
-          month: '2026-06',
+          description: 'รายละเอียดรายวันที่ใช้คำนวณตารางสรุปสถานะของปีที่เลือก',
+          year: 2026,
           summaryType: 'exceeded',
           valueDefinitions: {},
         },
@@ -259,17 +259,15 @@ describe('connectionRequestsService', () => {
         },
         summary: {
           affectedDays: 0,
-          totalExceededOccurrences: 0,
-          totalMissingHours: 0,
         },
-        days: [],
+        rows: [],
       },
       meta: {
         stationId: 'STACK-A',
         interval: '60m',
         schemaName: 'ingest',
         tableName: 'STACK-A_data_60m',
-        month: '2026-06',
+        year: '2026',
         count: 0,
         registeredParameters: ['CO (ppm)'],
       },
