@@ -216,6 +216,51 @@ function getConnectedMeasurementPointApiUrl(stationId, resource, params = {}) {
   return searchParams.toString() ? `${path}?${searchParams.toString()}` : path
 }
 
+function getConnectedMeasurementExportApiUrl(stationId, { frequency, startDate, endDate, parameters }) {
+  const baseUrl =
+    typeof window !== 'undefined' && window.location.hostname === 'd-poms.diw.go.th'
+      ? '/api/v1/connected-measurement-points'
+      : connectedMeasurementPointsApiBaseUrl
+  const searchParams = new URLSearchParams()
+
+  searchParams.set('frequency', frequency)
+  searchParams.set('startDate', startDate)
+  searchParams.set('endDate', endDate)
+  parameters.forEach((parameter) => {
+    searchParams.append('parameters', parameter)
+  })
+
+  return `${baseUrl}/${encodeURIComponent(stationId)}/measurement-export.csv?${searchParams.toString()}`
+}
+
+function getFilenameFromContentDisposition(contentDisposition, fallback) {
+  const utf8Match = contentDisposition?.match(/filename\*=UTF-8''([^;]+)/i)
+  const filenameMatch = contentDisposition?.match(/filename="?([^";]+)"?/i)
+  const rawFilename = utf8Match?.[1] ?? filenameMatch?.[1]
+
+  if (!rawFilename) {
+    return fallback
+  }
+
+  try {
+    return decodeURIComponent(rawFilename)
+  } catch {
+    return rawFilename
+  }
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
 function toFiniteNumber(value) {
   if (value === null || value === undefined || value === '') {
     return null
@@ -353,7 +398,16 @@ function mapMeasurementStatistics(payload, selectedPoint) {
 }
 
 function getApiErrorMessage(payload, fallback) {
-  return payload?.message || payload?.error || fallback
+  return payload?.message || payload?.error?.message || payload?.error || fallback
+}
+
+function canExportDashboardStatistics(permissions) {
+  return (
+    permissions?.dashboard?.stats?.export === true ||
+    permissions?.dashboard?.export === true ||
+    permissions?.['dashboard.stats']?.export === true ||
+    permissions?.['dashboard.stats:export'] === true
+  )
 }
 
 function hasFactoryCoordinate(factory) {
@@ -928,6 +982,7 @@ function HomePage({ accessToken = '', permissions }) {
       <FactoryBottomSheet
         factory={selectedFactory}
         accessToken={accessToken}
+        permissions={permissions}
         open={Boolean(selectedFactory)}
         onClose={() => setSelectedFactory(null)}
       />
@@ -1815,7 +1870,7 @@ function FactoryMap({ factories, focusedFactory = null }) {
   )
 }
 
-function FactoryBottomSheet({ factory, accessToken = '', open, onClose }) {
+function FactoryBottomSheet({ factory, accessToken = '', permissions, open, onClose }) {
   const [selectedDate, setSelectedDate] = useState(() => dayjs())
   const [selectedCalendarMonth, setSelectedCalendarMonth] = useState(() => dayjs())
   const [selectedStatisticSystem, setSelectedStatisticSystem] = useState('')
@@ -1829,6 +1884,7 @@ function FactoryBottomSheet({ factory, accessToken = '', open, onClose }) {
   const [measurementStatisticThresholds, setMeasurementStatisticThresholds] = useState({})
   const [measurementStatisticRows, setMeasurementStatisticRows] = useState([])
   const [measurementStatisticError, setMeasurementStatisticError] = useState('')
+  const canExportStatistics = canExportDashboardStatistics(permissions)
   const statisticSystemOptions = useMemo(() => getStatisticSystemOptions(factory), [factory])
   const activeStatisticSystem = statisticSystemOptions.includes(selectedStatisticSystem)
     ? selectedStatisticSystem
@@ -2078,6 +2134,7 @@ function FactoryBottomSheet({ factory, accessToken = '', open, onClose }) {
               rows={statisticRows}
               parameters={activeStatisticParameters}
               error={measurementStatisticError}
+              canExport={canExportStatistics}
               onExport={() => setExportDialogOpen(true)}
             />
             <Stack spacing={2} sx={{ minWidth: 0 }}>
@@ -2102,6 +2159,7 @@ function FactoryBottomSheet({ factory, accessToken = '', open, onClose }) {
             points={statisticPoints}
             parameters={activeStatisticParameters}
             selectedDate={selectedDate}
+            accessToken={accessToken}
             onClose={() => setExportDialogOpen(false)}
           />
         </Box>
@@ -2471,6 +2529,7 @@ function FactoryStatisticPanel({
   rows,
   parameters,
   error,
+  canExport = false,
   onExport,
 }) {
   return (
@@ -2497,15 +2556,17 @@ function FactoryStatisticPanel({
           spacing={1}
           sx={{ justifyContent: { xs: 'flex-start', sm: 'flex-end' }, flexWrap: 'wrap', rowGap: 1 }}
         >
-          <Button
-            size="small"
-            variant="contained"
-            startIcon={<FileDownloadIcon fontSize="small" />}
-            onClick={onExport}
-            sx={{ minWidth: 92, fontWeight: 700 }}
-          >
-            Export
-          </Button>
+          {canExport ? (
+            <Button
+              size="small"
+              variant="contained"
+              startIcon={<FileDownloadIcon fontSize="small" />}
+              onClick={onExport}
+              sx={{ minWidth: 92, fontWeight: 700 }}
+            >
+              Export
+            </Button>
+          ) : null}
           <FormControl size="small" sx={{ width: 150 }}>
             <Select value={selectedSystem ?? ''} onChange={(event) => onSystemChange(event.target.value)} displayEmpty>
               {systemOptions.length === 0 ? <MenuItem value="">--เลือก--</MenuItem> : null}
@@ -2638,15 +2699,18 @@ function ExportReportDialog({
   points,
   parameters,
   selectedDate,
+  accessToken = '',
   onClose,
 }) {
   const defaultPoint = points[0]?.value ?? ''
   const [reportType, setReportType] = useState(() => selectedSystem)
   const [measurementPoint, setMeasurementPoint] = useState(defaultPoint)
   const [selectedParameters, setSelectedParameters] = useState(['all'])
-  const [frequency, setFrequency] = useState('')
+  const [frequency, setFrequency] = useState('hourly')
   const [startDate, setStartDate] = useState(selectedDate)
   const [endDate, setEndDate] = useState(selectedDate)
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState('')
   const handleParameterChange = (event) => {
     const nextValue = typeof event.target.value === 'string' ? event.target.value.split(',') : event.target.value
     const currentValues = Array.isArray(nextValue) ? nextValue : []
@@ -2665,9 +2729,85 @@ function ExportReportDialog({
     setReportType(selectedSystem)
     setMeasurementPoint(defaultPoint)
     setSelectedParameters(['all'])
-    setFrequency('')
+    setFrequency('hourly')
     setStartDate(selectedDate)
     setEndDate(selectedDate)
+    setExportError('')
+  }
+  const handleExport = async () => {
+    if (!accessToken) {
+      setExportError('กรุณาเข้าสู่ระบบอีกครั้ง')
+      return
+    }
+
+    if (!measurementPoint) {
+      setExportError('กรุณาเลือกจุดตรวจวัด')
+      return
+    }
+
+    if (!frequency) {
+      setExportError('กรุณาเลือกความถี่')
+      return
+    }
+
+    if (!startDate || !endDate) {
+      setExportError('กรุณาเลือกช่วงวันที่')
+      return
+    }
+
+    const normalizedStartDate = startDate.format('YYYY-MM-DD')
+    const normalizedEndDate = endDate.format('YYYY-MM-DD')
+
+    if (dayjs(normalizedEndDate).isBefore(dayjs(normalizedStartDate), 'day')) {
+      setExportError('วันที่สิ้นสุดต้องไม่น้อยกว่าวันที่เริ่ม')
+      return
+    }
+
+    const exportParameters = selectedParameters.includes('all') ? ['all'] : selectedParameters
+    const exportUrl = getConnectedMeasurementExportApiUrl(measurementPoint, {
+      frequency,
+      startDate: normalizedStartDate,
+      endDate: normalizedEndDate,
+      parameters: exportParameters,
+    })
+
+    setExporting(true)
+    setExportError('')
+
+    try {
+      const response = await fetch(exportUrl, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'text/csv, application/json',
+        },
+      })
+      const contentType = response.headers.get('content-type') ?? ''
+
+      if (!response.ok) {
+        const payload = contentType.includes('application/json') ? await response.json().catch(() => null) : null
+        if (payload?.error?.code === 'NO_EXPORT_DATA') {
+          throw new Error('ไม่มีข้อมูลในช่วงวันที่ที่เลือก')
+        }
+
+        throw new Error(getApiErrorMessage(payload, response.status === 404 ? 'ไม่มีข้อมูลในช่วงวันที่ที่เลือก' : 'ส่งออก CSV ไม่สำเร็จ'))
+      }
+
+      if (contentType.includes('application/json')) {
+        const payload = await response.json().catch(() => null)
+        throw new Error(getApiErrorMessage(payload, 'ส่งออก CSV ไม่สำเร็จ'))
+      }
+
+      const blob = await response.blob()
+      const fallbackFilename = `measurement-${measurementPoint}-${frequency}-${normalizedStartDate}-${normalizedEndDate}.csv`
+      const filename = getFilenameFromContentDisposition(response.headers.get('content-disposition'), fallbackFilename)
+
+      downloadBlob(blob, filename)
+      onClose()
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : 'ส่งออก CSV ไม่สำเร็จ')
+    } finally {
+      setExporting(false)
+    }
   }
 
   return (
@@ -2790,8 +2930,6 @@ function ExportReportDialog({
               <MenuItem value="">--เลือก--</MenuItem>
               <MenuItem value="hourly">รายชั่วโมง</MenuItem>
               <MenuItem value="daily">รายวัน</MenuItem>
-              <MenuItem value="monthly">รายเดือน</MenuItem>
-              <MenuItem value="yearly">รายปี</MenuItem>
             </Select>
           </FormControl>
 
@@ -2822,13 +2960,24 @@ function ExportReportDialog({
             />
           </LocalizationProvider>
         </Box>
+        {exportError ? (
+          <Typography variant="body2" color="error" sx={{ mt: 2 }}>
+            {exportError}
+          </Typography>
+        ) : null}
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
-        <Button variant="outlined" color="inherit" onClick={resetExportForm}>
+        <Button variant="outlined" color="inherit" onClick={resetExportForm} disabled={exporting}>
           ค่าเริ่มต้น
         </Button>
-        <Button variant="contained" onClick={onClose} sx={{ fontWeight: 700 }}>
-          ส่งออก CSV
+        <Button
+          variant="contained"
+          onClick={handleExport}
+          disabled={exporting}
+          startIcon={exporting ? <CircularProgress size={16} color="inherit" /> : null}
+          sx={{ fontWeight: 700 }}
+        >
+          {exporting ? 'กำลังส่งออก' : 'ส่งออก CSV'}
         </Button>
       </DialogActions>
     </Dialog>
