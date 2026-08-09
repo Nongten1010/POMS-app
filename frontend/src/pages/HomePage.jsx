@@ -39,6 +39,7 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker'
 import { PickerDay } from '@mui/x-date-pickers/PickerDay'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import { AdapterDayjsBuddhist } from '@mui/x-date-pickers/AdapterDayjsBuddhist'
+import { PickersLayoutContentWrapper, PickersLayoutRoot, usePickerLayout } from '@mui/x-date-pickers/PickersLayout'
 import { ChartsReferenceLine } from '@mui/x-charts/ChartsReferenceLine'
 import { LineChart } from '@mui/x-charts/LineChart'
 import dayjs from 'dayjs'
@@ -338,6 +339,10 @@ function calculateTodayCompletenessPercent(rows, parameter) {
 
   const submittedRows = rows.filter((row) => hasSubmittedMeasurementValue(row.values?.[parameter])).length
   return `${Math.round((submittedRows / rows.length) * 100).toLocaleString('th-TH')}%`
+}
+
+function isFullCompletenessPercent(value) {
+  return String(value).trim() === '100%'
 }
 
 function mergeCalendarSummaryWithTodayCompleteness(summaryRows, statisticRows, parameters) {
@@ -2370,7 +2375,12 @@ function CalendarSummaryPanel({ rows, error = '' }) {
                   {renderSummaryDetailButton(row, 'lowData')}
                 </TableCell>
                 <TableCell align="center" sx={{ fontWeight: 700 }}>
-                  {row.todayPercent}
+                  <Box
+                    component="span"
+                    sx={{ color: isFullCompletenessPercent(row.todayPercent) ? statisticStatusColors.normal : 'inherit' }}
+                  >
+                    {row.todayPercent}
+                  </Box>
                 </TableCell>
               </TableRow>
             ))}
@@ -2653,6 +2663,60 @@ function DatePickerStatusDay({ day, outsideCurrentMonth, statusByDay = {}, sx, .
   )
 }
 
+function CalendarStatusLegendItem({ label, color, variant = 'box' }) {
+  return (
+    <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', minWidth: 0 }}>
+      <Box
+        sx={{
+          width: variant === 'line' ? 16 : 14,
+          height: variant === 'line' ? 3 : 14,
+          borderRadius: variant === 'line' ? 999 : 0.75,
+          bgcolor: color,
+          flex: '0 0 auto',
+        }}
+      />
+      <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500, whiteSpace: 'nowrap' }}>
+        {label}
+      </Typography>
+    </Stack>
+  )
+}
+
+function CalendarStatusPickerLayout(props) {
+  const { toolbar, content, tabs, actionBar, shortcuts, ownerState } = usePickerLayout(props)
+
+  return (
+    <PickersLayoutRoot ownerState={ownerState} sx={props.sx}>
+      {toolbar}
+      {shortcuts}
+      <PickersLayoutContentWrapper ownerState={ownerState}>
+        {tabs}
+        {content}
+        <Stack
+          direction="row"
+          spacing={1.5}
+          useFlexGap
+          sx={{
+            px: 2,
+            pb: 1.5,
+            pt: 0.25,
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            maxWidth: 320,
+          }}
+        >
+          <CalendarStatusLegendItem label="ส่งข้อมูลน้อยกว่า 80%" color={datePickerStatusStyles.lowData.backgroundColor} />
+          <CalendarStatusLegendItem label="ส่งข้อมูลมากกว่า 80%" color={datePickerStatusStyles.highData.backgroundColor} />
+          <CalendarStatusLegendItem label="ปกติทั้งวัน" color={datePickerStatusStyles.normal.borderColor} variant="line" />
+          <CalendarStatusLegendItem label="เฝ้าระวัง" color={datePickerStatusStyles.warning.borderColor} variant="line" />
+          <CalendarStatusLegendItem label="เกินมาตรฐาน" color={datePickerStatusStyles.exceeded.borderColor} variant="line" />
+        </Stack>
+      </PickersLayoutContentWrapper>
+      {actionBar}
+    </PickersLayoutRoot>
+  )
+}
+
 function FactoryStatisticPanel({
   selectedDate,
   onDateChange,
@@ -2734,7 +2798,7 @@ function FactoryStatisticPanel({
                   sx: { width: 154 },
                 },
               }}
-              slots={{ day: DatePickerStatusDay }}
+              slots={{ day: DatePickerStatusDay, layout: CalendarStatusPickerLayout }}
             />
           </LocalizationProvider>
         </Stack>
