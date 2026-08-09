@@ -2,6 +2,14 @@
 
 ไฟล์นี้บันทึกเฉพาะการเปลี่ยน API ที่ทำให้ client ต้องแก้ตาม การเปลี่ยนทั่วไปและประวัติรายละเอียดดูจาก Git history
 
+## 2026-08-09 — CSV export รวม operational status ไว้ในคอลัมน์พารามิเตอร์
+
+- **Affected API:** [Measurement CSV export](./shared/connected-measurement-points/README.md#get-apiv1connected-measurement-pointsstationidmeasurement-exportcsv)
+- **Impact:** `GET /api/v1/connected-measurement-points/:stationId/measurement-export.csv` ตัดคอลัมน์ `<Parameter> Status` ทุกคอลัมน์ออก และ parameter cell เปลี่ยนเป็น mixed value ระหว่าง decimal string กับ operational-status string
+- **Migration:** frontend หรือผู้ใช้งานไฟล์ต้องอ่านหนึ่งคอลัมน์ต่อพารามิเตอร์; เมื่อ cell เป็นตัวเลขหมายถึงสถานะปกติ และเมื่อเป็นข้อความให้แสดงเป็น operational status โดยตรง เช่น `Calibration`, `NoData` หรือ `No Discharge`
+- **Old contract:** แต่ละพารามิเตอร์มีสองคอลัมน์ `<Parameter>` และ `<Parameter> Status`; สถานะปกติส่ง `value,Normal`, `NoData` เป็นช่องว่าง และ `No Discharge` ถูก map เป็น `Etc.`
+- **New contract:** แต่ละพารามิเตอร์มีหนึ่งคอลัมน์; `Normal`, `Ok`, StatusCode `1` หรือสถานะว่างพร้อม numeric value ส่งตัวเลขสองตำแหน่ง ส่วนสถานะอื่นส่งชื่อ operational status แทนตัวเลข; completeness ต่ำกว่า 80% ยังคงเป็นช่องว่าง
+
 ## 2026-08-06 — เปลี่ยนข้อกฎหมายยกเว้นพารามิเตอร์จาก array เป็นค่าเดียว
 
 - **Affected menu:** [ขอเชื่อมต่อ](./menus/connection-requests/README.md)

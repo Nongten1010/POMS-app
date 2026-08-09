@@ -52,23 +52,23 @@
 - Backend ใช้ route `GET /api/v1/connected-measurement-points/:stationId/measurement-export.csv`, permission `dashboard.stats:export` และ data scope ของ permission นี้.
 - Backend ใช้ source interval `60m` และ `1day`; รุ่นแรกไม่รองรับ `monthly` และ `yearly` เพราะยังไม่มี aggregation contract.
 - CSV ตัวอย่าง `export-measurement_20260809201732.csv` เป็น UTF-8 พร้อม BOM มี 8 คอลัมน์และ 19 data rows ของวันที่ `2026-08-09` เวลา `00:00:00` ถึง `18:00:00`.
-- Header ตัวอย่างเดิมคือ `date_time`, `factory_name`, `meas_code`, `_co_`, `_flow_`, `_nox_`, `_o2_`, `_temp__`; canonical contract เปลี่ยน parameter headers เป็นชื่อพร้อมหน่วยและเพิ่ม status column.
+- Header ตัวอย่างเดิมคือ `date_time`, `factory_name`, `meas_code`, `_co_`, `_flow_`, `_nox_`, `_o2_`, `_temp__`; canonical contract ใช้ parameter headers เป็นชื่อพร้อมหน่วยและไม่มี status column แยก.
 - ยืนยันให้ backend export จาก `stationId` โดย derive โรงงานและประเภทเอง; frontend ไม่ต้องส่ง `factoryId`, ชื่อโรงงาน หรือ `reportType` กลับมาเป็น source of truth.
 - CSV คง `date_time`, `factory_name`, `meas_code` และใช้ชื่อพารามิเตอร์พร้อมหน่วยแทน header แบบ `_co_`/`_flow_`.
 - รุ่นแรกให้รองรับเฉพาะ `hourly` จาก `60m` และ `daily` จาก `1day`; ไม่สร้างสูตรรวม `monthly`/`yearly` โดยไม่มีข้อกำหนดทางธุรกิจ.
-- ค่า export ต้องใช้กติกา status/completeness เดียวกับหน้าสถิติ; ค่าที่ใช้เป็นค่าตรวจวัดไม่ได้ให้เว้นว่างและคืน status แยก.
+- ค่า export ต้องใช้กติกา operational status/completeness เดียวกับหน้าสถิติ; status ที่ไม่ปกติแทนค่าตัวเลขใน parameter cell เดียวกัน.
 - Endpoint export ต้องใช้ `dashboard.stats:export` และ data scope ของ permission นี้โดยตรง.
 - Backend stream `text/csv` พร้อม UTF-8 BOM โดยไม่เก็บไฟล์ถาวรและไม่สร้างประวัติ export.
 - Parameter query ใช้ `parameters=all` หรือส่งชื่อพร้อมหน่วยแบบ repeated query key; ลำดับคอลัมน์ตามลำดับที่ request ส่ง และ `all` ใช้ลำดับ registered parameters.
 - จำกัดช่วง `hourly` ไม่เกิน 366 วัน และ `daily` ไม่เกิน 10 ปีต่อ request.
 - หากช่วงที่เลือกไม่มีข้อมูล ให้ตอบ `404` code `NO_EXPORT_DATA` แทน CSV ว่าง.
-- Status column ใช้ `<Parameter> Status`; `NoData` เป็นค่าว่าง และ `No Discharge` map เป็น `Etc.`.
+- ไม่มี `<Parameter> Status`; `NoData` และ `No Discharge` แทนค่าตัวเลขด้วยชื่อสถานะนั้นโดยตรง.
 - CSV ใช้วันคริสต์ศักราชและเวลา Asia/Bangkok รูปแบบ `YYYY-MM-DD HH:mm:ss`, ตัวเลขทศนิยมสองตำแหน่ง ไม่มี thousands separator, ใช้ RFC 4180 escaping และป้องกัน formula injection.
 - ชื่อไฟล์ใช้ `measurement-{stationId}-{frequency}-{startDate}-{endDate}.csv`.
 - Validation/frequency/range/parameter errors ใช้ `400`, permission/scope ใช้ `403`, และไม่พบจุด ตาราง หรือข้อมูลใช้ `404`.
 - CSV เรียง row จากวัน/เวลาเก่าไปใหม่และรักษาทุก source row เมื่อ timestamp ซ้ำ.
 - Daily row ที่ไม่มี `ctime` ใช้ `00:00:00`.
-- Status ใน CSV คือ operational status ไม่ใช่ threshold classification; valid numeric row ใช้ `Normal` และ daily row ที่ไม่มี completeness field ให้ถือว่า 100% เมื่อมีค่าตรวจวัด.
+- ข้อความใน parameter cell คือ operational status ไม่ใช่ threshold classification; status ปกติส่งเฉพาะ numeric value และ daily row ที่ไม่มี completeness field ให้ถือว่า 100% เมื่อมีค่าตรวจวัด.
 - Parameter matching trim และไม่สนตัวพิมพ์ แต่หน่วยต้องตรง; parameter ซ้ำเก็บตัวแรกและ unknown parameter ตอบ `400`.
 - ยืนยัน TDD seams เป็น HTTP route ผ่าน Express/Supertest และ CSV export module interface; mock ได้เฉพาะ database adapters.
 - ไม่แก้ default role grants ของ `dashboard.stats:export`; `admin` ได้จาก seed อัตโนมัติ ส่วน role/user อื่นให้ผู้ดูแลมอบผ่าน permission management.

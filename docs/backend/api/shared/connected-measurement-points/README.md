@@ -273,11 +273,12 @@ curl --get \
 | Encoding | UTF-8 with BOM | byte-order mark อยู่หน้าคอลัมน์แรกเพื่อรองรับ Excel |
 | Line ending | CRLF | field ใช้ RFC 4180 quoting/escaping |
 
-CSV ใช้ identity columns `date_time`, `factory_name`, `meas_code` ก่อน แล้วแต่ละพารามิเตอร์ใช้สองคอลัมน์ `<Parameter with unit>` และ `<Parameter with unit> Status`
+CSV ใช้ identity columns `date_time`, `factory_name`, `meas_code` ก่อน แล้วแต่ละพารามิเตอร์ใช้หนึ่งคอลัมน์ `<Parameter with unit>`. ไม่มีคอลัมน์ `<Parameter> Status`; cell ของพารามิเตอร์เป็นค่าตัวเลขเมื่อสถานะปกติ หรือเป็นชื่อ operational status เมื่อสถานะไม่ปกติ
 
 ```csv
-﻿date_time,factory_name,meas_code,CO (ppm),CO (ppm) Status,Flow Rate (m3/hr),Flow Rate (m3/hr) Status
-2026-08-09 00:00:00,โรงไฟฟ้าพระนครเหนือ ชุดที่ 2,S0199,76.74,Normal,94.20,Normal
+﻿date_time,factory_name,meas_code,CO (ppm),Flow Rate (m3/hr)
+2026-08-09 00:00:00,โรงไฟฟ้าพระนครเหนือ ชุดที่ 2,S0199,76.74,94.20
+2026-08-09 01:00:00,โรงไฟฟ้าพระนครเหนือ ชุดที่ 2,S0199,Calibration,No Discharge
 ```
 
 #### Validation And Business Rules
@@ -289,10 +290,11 @@ CSV ใช้ identity columns `date_time`, `factory_name`, `meas_code` ก่�
 - ชื่อ parameter ใน header ต้องมีหน่วยเมื่อ source ระบุได้ เช่น `BOD (mg/l)`, `CO2 (ppm)` หรือ `Flow Rate (m3/hr)`
 - ส่งออกเฉพาะ source rows ที่มีอยู่ เรียง `cdate`, `ctime` จากเก่าไปใหม่ และรักษาทุก row ที่ timestamp ซ้ำ; daily row ที่ไม่มี `ctime` ใช้ `00:00:00`
 - `date_time` ใช้ `YYYY-MM-DD HH:mm:ss` ตามเวลา source ซึ่งเป็น `Asia/Bangkok`; measurement value ใช้ทศนิยมสองตำแหน่งและไม่มี thousands separator
-- Status column เป็น operational status เท่านั้น: `Normal`, `Calibration`, `Defective`, `Maintenance`, `Start up`, `Shut Down`, `Turnaround`, `Etc.` หรือค่าว่าง; ไม่ใช้ threshold status `warning`/`exceeded`
-- Numeric value ที่ใช้ได้ส่ง status `Normal`; operational status อื่นทำให้ value ว่าง โดย `NoData` ทำให้ทั้ง value/status ว่าง และ `No Discharge` ส่ง status `Etc.`
-- เมื่อ source status เป็น `null`/ค่าว่างและมี numeric value ให้ถือเป็น `Normal`; status ที่ไม่รู้จักและไม่ว่างทำให้ value ว่างและส่ง `Etc.`
-- ถ้ามี completeness field ต่ำกว่า 80% ให้ value/status ว่าง; ถ้าไม่มี completeness field และมี numeric value ให้ถือว่า completeness 100%
+- ไม่มี status column แยก; แต่ละ parameter cell จึงเป็นได้ทั้งตัวเลขและข้อความ operational status
+- StatusCode `1`, `Normal` หรือ `Ok` ส่งค่าตรวจวัดเป็นตัวเลขสองตำแหน่ง โดยไม่ส่งคำว่า `Normal`
+- Operational status อื่นส่งชื่อสถานะแทนค่าตัวเลขใน cell เดียวกัน ได้แก่ `NoData`, `Calibration`, `Defective`, `Maintenance`, `Start up`, `Shut Down`, `Turnaround`, `Etc.` และ `No Discharge`; ไม่ใช้ threshold status `warning`/`exceeded`
+- เมื่อ source status เป็น `null`/ค่าว่างและมี numeric value ให้ถือเป็น `Normal`; status ที่ไม่รู้จักและไม่ว่างส่ง `Etc.` แทนค่าตัวเลข
+- ถ้ามี completeness field ต่ำกว่า 80% ให้ parameter cell ว่าง แม้ source จะมี operational status; ถ้าไม่มี completeness field และมี numeric value ให้ถือว่า completeness 100%
 - String cells ใช้ RFC 4180 escaping และป้องกัน CSV formula injection
 - Backend stream response โดยไม่สร้างไฟล์ถาวร, signed URL, export history หรือ background job
 
@@ -322,6 +324,7 @@ CSV ใช้ identity columns `date_time`, `factory_name`, `meas_code` ก่�
 
 - ใช้ `stationId`, `frequency`, `startDate`, `endDate` และ repeated `parameters` ตาม contract นี้; ไม่ส่งค่าชื่อโรงงานหรือประเภทระบบเพื่อให้ backend เชื่อถือ
 - ดาวน์โหลด response เป็น Blob และใช้ filename จาก `Content-Disposition`; เมื่อ response เป็น JSON error ห้ามสร้างไฟล์ว่าง
+- อย่าคาดหวังคอลัมน์ `<Parameter> Status`; parser ต้องรองรับ parameter cell แบบ mixed value ซึ่งเป็น decimal string เมื่อปกติ หรือ operational-status string เมื่อไม่ปกติ
 - หน้า dialog ปัจจุบันต้องซ่อนหรือ disable `monthly`/`yearly`; รุ่นแรกเปิดเฉพาะ `hourly` และ `daily`
 - เมื่อ backend ตอบ `NO_EXPORT_DATA` ให้แจ้งผู้ใช้ว่าไม่มีข้อมูลในช่วงวันที่ที่เลือก และคงค่าฟอร์มเดิมไว้
 

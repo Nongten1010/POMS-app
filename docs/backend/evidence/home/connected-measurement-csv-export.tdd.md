@@ -21,6 +21,8 @@
 | GREEN: validator seam | คำสั่งเดิม | PASS | repeated parameters, exact Gregorian dates, hourly 366 วัน และ daily 10 ปีผ่าน |
 | RED: HTTP seam | `npm test -- --runInBand tests/unit/measurement-csv-export.route.test.ts` | FAIL | route ยังตอบ `404` |
 | GREEN: focused vertical slice | `npm test -- --runInBand tests/unit/measurement-csv-export.test.ts tests/unit/measurement-csv-export.route.test.ts tests/unit/parameter-values.validator.test.ts` | PASS | 3 suites, 34 tests |
+| RED: single-cell status contract | `npm test -- --runInBand tests/unit/measurement-csv-export.test.ts -t "streams an authorized hourly export"` | FAIL | CSV ยังมี `<Parameter> Status` และส่ง `Normal` แยกคอลัมน์ |
+| GREEN: replace non-normal values | `npm test -- --runInBand tests/unit/measurement-csv-export.test.ts -t "exports normal measurements"` | PASS | parameter ละหนึ่งคอลัมน์; ปกติเป็นตัวเลข และสถานะอื่นแทนค่าด้วย `NoData`, `Maintenance`, `No Discharge` หรือ `Etc.` |
 
 ## Test Specification
 
@@ -31,15 +33,15 @@
 | 3 | Missing station/table/data ใช้ `404`; no-data ใช้ `NO_EXPORT_DATA` และไม่เริ่ม CSV | `measurement-csv-export.route.test.ts` | Error contract | PASS |
 | 4 | `hourly` ใช้ `60m`, `daily` ใช้ `1day`; monthly/range/date ที่ไม่รองรับตอบ `400` | `measurement-csv-export.route.test.ts`, `parameter-values.validator.test.ts` | HTTP + validation | PASS |
 | 5 | Parameter matching ไม่สน case แต่สนหน่วย, รักษาลำดับ request และตัดค่าซ้ำ | `measurement-csv-export.test.ts` | Module contract | PASS |
-| 6 | Operational status/completeness ตัดค่าที่ใช้ไม่ได้ตามกติกา | `measurement-csv-export.test.ts` | Golden CSV | PASS |
+| 6 | ไม่มี status column; operational status ที่ไม่ปกติแทนค่าตัวเลขใน parameter cell และ completeness ต่ำกว่า 80% ทำให้ cell ว่าง | `measurement-csv-export.test.ts` | Golden CSV | PASS |
 | 7 | Daily midnight, ascending rows และ duplicate timestamps ถูกเก็บครบ | `measurement-csv-export.test.ts` | Golden CSV | PASS |
 | 8 | RFC 4180, formula-injection protection, two decimals และ sanitized filename ทำงาน | `measurement-csv-export.test.ts` | Security/formatting | PASS |
 
 ## Verification
 
-- Focused tests: 3 suites, 34 tests ผ่าน
-- Full backend regression: 108 suites, 983 tests ผ่าน
-- CSV module coverage: statements 96.72%, branches 84.61%, functions 100%, lines 97.08%
+- Focused tests: 3 suites, 35 tests ผ่าน
+- Full backend regression: 108 suites, 984 tests ผ่าน
+- CSV module coverage after single-cell status contract: statements 96.66%, branches 84%, functions 100%, lines 97.05%
 - `npm run typecheck`: ผ่าน
 - ESLint และ Prettier check เฉพาะ source/tests ที่เปลี่ยน: ผ่าน
 - `git diff --check`: ผ่าน

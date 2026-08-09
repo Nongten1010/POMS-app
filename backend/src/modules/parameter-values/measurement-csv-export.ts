@@ -33,7 +33,7 @@ export function createMeasurementCsvExport(
     'date_time',
     'factory_name',
     'meas_code',
-    ...parameters.flatMap(({ label }) => [label, `${label} Status`]),
+    ...parameters.map(({ label }) => label),
   ];
 
   function* csvChunks(): Generator<string> {
@@ -43,11 +43,11 @@ export function createMeasurementCsvExport(
         (cell) => csvCell(cell, true),
       );
       const measurementCells = parameters
-        .flatMap(({ prefixes, unit }) => {
+        .map(({ prefixes, unit }) => {
           const prefix = prefixes.find(
             (candidate) => `${candidate}_value` in row && sourceUnitMatches(row, candidate, unit),
           );
-          return prefix ? formatMeasurementCells(row, prefix) : ['', ''];
+          return prefix ? formatMeasurementCell(row, prefix) : '';
         })
         .map((cell) => csvCell(cell, false));
       yield `${[...identityCells, ...measurementCells].join(',')}\r\n`;
@@ -231,15 +231,15 @@ function normalizeUnitColumnToken(value: string | undefined): string {
   return normalizeColumnToken(value ?? '');
 }
 
-function formatMeasurementCells(row: Record<string, unknown>, prefix: string): [string, string] {
+function formatMeasurementCell(row: Record<string, unknown>, prefix: string): string {
   const completeness = readCompleteness(row, prefix);
-  if (completeness !== null && completeness < 80) return ['', ''];
+  if (completeness !== null && completeness < 80) return '';
 
   const operationalStatus = resolveOperationalStatus(row[`${prefix}_status`]);
-  if (!operationalStatus.usesMeasurementValue) return ['', operationalStatus.label];
+  if (!operationalStatus.usesMeasurementValue) return operationalStatus.label;
 
   const value = toFiniteNumber(row[`${prefix}_value`]);
-  return value === null ? ['', ''] : [value.toFixed(2), 'Normal'];
+  return value === null ? '' : value.toFixed(2);
 }
 
 interface OperationalStatus {
@@ -258,8 +258,7 @@ function resolveOperationalStatus(value: unknown): OperationalStatus {
   }
 
   const status = resolvePomsClientParameterStatus(value);
-  if (!status || status.code === 9) return { label: 'Etc.', usesMeasurementValue: false };
-  if (status.code === 0) return { label: '', usesMeasurementValue: false };
+  if (!status) return { label: 'Etc.', usesMeasurementValue: false };
   if (status.code === 1) return NORMAL_OPERATIONAL_STATUS;
   return { label: status.label, usesMeasurementValue: false };
 }

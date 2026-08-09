@@ -62,12 +62,11 @@ Response:
 - Encoding เป็น UTF-8 with BOM เพื่อรองรับภาษาไทยใน Excel.
 - คง identity columns `date_time`, `factory_name`, และ `meas_code`.
 - Parameter columns ใช้ human-readable label พร้อมหน่วย เช่น `CO (ppm)` และ `Flow Rate (m3/hr)`; ไม่ใช้ `_co_` หรือ `_flow_` จาก sample เป็น canonical header.
-- เพิ่ม status column แยกสำหรับแต่ละพารามิเตอร์.
-- ค่า measurement ที่ source status หรือ completeness rules ระบุว่าใช้ไม่ได้ต้องเป็นช่องว่าง ไม่ส่ง raw numeric value ที่อาจทำให้เข้าใจผิด.
+- ใช้หนึ่งคอลัมน์ต่อพารามิเตอร์และไม่เพิ่ม status column แยก.
+- ค่า measurement ที่ source status ไม่ปกติต้องถูกแทนด้วยชื่อ operational status ใน cell เดียวกัน ไม่ส่ง raw numeric value ที่อาจทำให้เข้าใจผิด.
 - Export เฉพาะ source rows ที่มีอยู่ ไม่เติมช่วงเวลาที่ไม่มี row.
-- แต่ละพารามิเตอร์เรียงเป็น `<Parameter>` แล้วตามด้วย `<Parameter> Status`.
-- Status ใช้ `Normal`, `Calibration`, `Defective`, `Maintenance`, `Start up`, `Shut Down`, `Turnaround`, `Etc.` หรือค่าว่างเท่านั้น.
-- Source `NoData` ให้ value และ status ว่าง; source `No Discharge` ให้ value ว่างและ status `Etc.`.
+- แต่ละพารามิเตอร์มีเพียง `<Parameter>`; cell เป็นตัวเลขเมื่อ status คือ `Normal`, `Ok` หรือ StatusCode `1`.
+- Status ที่ไม่ปกติแทนค่าตัวเลขด้วย `NoData`, `Calibration`, `Defective`, `Maintenance`, `Start up`, `Shut Down`, `Turnaround`, `Etc.` หรือ `No Discharge`.
 - `date_time` ใช้ปีคริสต์ศักราชและเวลา Asia/Bangkok รูปแบบ `YYYY-MM-DD HH:mm:ss`.
 - Measurement value ใช้เลขทศนิยมสองตำแหน่ง ไม่มี thousands separator.
 - ใช้ RFC 4180 quoting/escaping และป้องกัน CSV formula injection ใน string cells.
@@ -75,11 +74,11 @@ Response:
 - เรียง rows ตาม `cdate`, `ctime` จากเก่าไปใหม่.
 - หาก source มีหลาย rows ที่ timestamp เดียวกัน ให้รักษาและส่งออกทุก row; ห้าม deduplicate โดยไม่มีกฎทางธุรกิจ.
 - Daily row ที่ไม่มี `ctime` ใช้ `00:00:00`.
-- Status column คือ operational status ไม่ใช่ pollution threshold classification (`warning`/`exceeded`).
-- Numeric value ที่ใช้ได้มี status `Normal`; source status `Calibration` ถึง `Etc.` ทำให้ value ว่างและคง operational status.
-- ถ้ามี completeness field และค่าต่ำกว่า 80% ให้ value/status ว่าง.
+- ข้อความที่แทนค่าเป็น operational status ไม่ใช่ pollution threshold classification (`warning`/`exceeded`).
+- Numeric value ที่ใช้ได้ไม่ส่งคำว่า `Normal`; source status ที่ไม่ปกติส่งชื่อสถานะแทน numeric value.
+- ถ้ามี completeness field และค่าต่ำกว่า 80% ให้ parameter cell ว่าง แม้มี operational status.
 - หากไม่มี completeness field ให้ถือว่า 100% เมื่อ row มี numeric value ทั้ง `hourly` และ `daily`.
-- Source status เป็น `null`/ค่าว่างและมี numeric value ให้ถือเป็น `Normal`; source status ที่ไม่รู้จักและไม่ว่างให้ value ว่างและ status `Etc.`.
+- Source status เป็น `null`/ค่าว่างและมี numeric value ให้ถือเป็น `Normal`; source status ที่ไม่รู้จักและไม่ว่างให้ส่ง `Etc.` แทน numeric value.
 - Parameter matching ต้อง trim และเทียบแบบ case-insensitive แต่ unit ในวงเล็บต้องตรงกับ registered parameter.
 - Parameter ที่ซ้ำหลัง normalize ให้เก็บตำแหน่งแรก; parameter ที่ไม่ตรง registered parameters ตอบ `400 Bad Request`.
 
