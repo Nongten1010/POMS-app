@@ -2243,6 +2243,57 @@ function getStatisticPointsBySystem(factory, selectedSystem = '') {
 }
 
 function CalendarSummaryPanel({ rows, error = '' }) {
+  const [detailDialog, setDetailDialog] = useState({
+    open: false,
+    title: '',
+    parameter: '',
+    metricLabel: '',
+  })
+  const openDetailDialog = (row, type) => {
+    setDetailDialog({
+      open: true,
+      title: type === 'exceeded' ? 'เกินมาตรฐาน' : 'ข้อมูลไม่ถึงร้อยละ 80 ต่อวัน',
+      parameter: row.parameter,
+      metricLabel: type === 'exceeded' ? 'ค่าตรวจวัด' : 'การส่งข้อมูล (%)',
+    })
+  }
+  const closeDetailDialog = () => {
+    setDetailDialog((current) => ({ ...current, open: false }))
+  }
+  const renderSummaryDetailButton = (row, type) => {
+    const value = type === 'exceeded' ? row.exceededDays : row.lowDataDays
+    const isZeroDays = String(value).trim() === '0 วัน'
+
+    if (isZeroDays) {
+      return '-'
+    }
+
+    return (
+      <Button
+        type="button"
+        size="small"
+        variant="text"
+        onClick={() => openDetailDialog(row, type)}
+        sx={{
+          minWidth: 0,
+          p: 0,
+          color: 'text.primary',
+          fontSize: 'inherit',
+          fontWeight: 400,
+          textDecoration: 'none',
+          textUnderlineOffset: 3,
+          '&:hover': {
+            bgcolor: 'transparent',
+            color: 'text.primary',
+            textDecoration: 'underline',
+          },
+        }}
+      >
+        {value}
+      </Button>
+    )
+  }
+
   return (
     <Box
       sx={{
@@ -2313,10 +2364,10 @@ function CalendarSummaryPanel({ rows, error = '' }) {
               <TableRow key={row.parameter}>
                 <TableCell sx={{ fontWeight: 700 }}>{row.parameter}</TableCell>
                 <TableCell align="center" sx={{ fontWeight: 400 }}>
-                  {row.exceededDays}
+                  {renderSummaryDetailButton(row, 'exceeded')}
                 </TableCell>
                 <TableCell align="center" sx={{ fontWeight: 400 }}>
-                  {row.lowDataDays}
+                  {renderSummaryDetailButton(row, 'lowData')}
                 </TableCell>
                 <TableCell align="center" sx={{ fontWeight: 700 }}>
                   {row.todayPercent}
@@ -2333,6 +2384,50 @@ function CalendarSummaryPanel({ rows, error = '' }) {
           </TableBody>
         </Table>
       </TableContainer>
+      <Dialog open={detailDialog.open} onClose={closeDetailDialog} fullWidth maxWidth="xs">
+        <DialogTitle
+          sx={{
+            fontWeight: 700,
+            borderBottom: 1,
+            borderColor: 'divider',
+            pr: 6,
+          }}
+        >
+          {detailDialog.title}
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            {detailDialog.parameter}
+          </Typography>
+          <IconButton
+            aria-label="ปิด"
+            onClick={closeDetailDialog}
+            sx={{ position: 'absolute', right: 12, top: 12, color: 'text.secondary' }}
+          >
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ pt: '16px !important' }}>
+          <TableContainer sx={{ border: 1, borderColor: 'divider', maxHeight: 420 }}>
+            <Table size="small" stickyHeader sx={{ tableLayout: 'fixed', ...borderedTableSx }}>
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ width: 120, bgcolor: 'neutral.50', fontWeight: 700 }}>วันที่</TableCell>
+                  <TableCell sx={{ width: 132, bgcolor: 'neutral.50', fontWeight: 700 }}>เวลา</TableCell>
+                  <TableCell align="right" sx={{ bgcolor: 'neutral.50', fontWeight: 700 }}>
+                    {detailDialog.metricLabel}
+                  </TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                <TableRow>
+                  <TableCell colSpan={3} align="center" sx={{ color: 'text.secondary', fontWeight: 400 }}>
+                    ไม่มีข้อมูลรายละเอียด
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </DialogContent>
+      </Dialog>
     </Box>
   )
 }
