@@ -1402,15 +1402,17 @@ function calendarStatusValueDefinitions(): Record<string, unknown> {
     summaryPeriod:
       'calendar.days แสดงเฉพาะเดือนที่ขอ ส่วน monthlySummary.exceededDays และ lowDataDays นับทั้งปีของเดือนที่ขอ',
     dataCompletenessStatus: {
-      lowData: 'ส่งข้อมูลน้อยกว่า 80% ใช้พื้นหลังสีเทา',
+      lowData: 'ส่งข้อมูลน้อยกว่า 80% ใช้พื้นหลังสีเทาโดยไม่บังคับสถานะเส้นขอบ',
       highData: 'ส่งข้อมูลมากกว่าหรือเท่ากับ 80% ใช้พื้นหลังสีฟ้า',
     },
     pollutionStatus: {
-      normal: 'ข้อมูลที่ source status เป็น Normal อยู่ในเกณฑ์ปกติ ใช้เส้นขอบสีเขียว',
-      warning: 'ข้อมูลที่ source status เป็น Normal อยู่ในเกณฑ์เฝ้าระวัง ใช้เส้นขอบสีส้ม',
-      exceeded: 'ข้อมูลที่ source status เป็น Normal เกินมาตรฐาน ใช้เส้นขอบสีแดง',
+      normal:
+        'ข้อมูลที่ source status เป็น Normal, Ok หรือ code 1 อยู่ในเกณฑ์ปกติ ใช้เส้นขอบสีเขียว',
+      warning:
+        'ข้อมูลที่ source status เป็น Normal, Ok หรือ code 1 อยู่ในเกณฑ์เฝ้าระวัง ใช้เส้นขอบสีส้ม',
+      exceeded: 'ข้อมูลที่ source status เป็น Normal, Ok หรือ code 1 เกินมาตรฐาน ใช้เส้นขอบสีแดง',
       insufficient:
-        'ข้อมูลไม่เพียงพอเมื่อ dataCompletenessStatus เป็น lowData หรือไม่มีข้อมูล source status Normal ให้ประเมิน',
+        'ไม่มีค่าจาก source status Normal, Ok หรือ code 1 ที่ใช้ประเมินได้ หรือมีเฉพาะค่าราย row ที่ความครบถ้วนต่ำกว่า 80%',
     },
   };
 }
@@ -1419,12 +1421,12 @@ function calendarStatusDetailsValueDefinitions(): Record<string, unknown> {
   return {
     summaryType: {
       exceeded:
-        'คืนหนึ่งแถวต่อวันที่เกินมาตรฐาน โดยเลือกข้อมูล source status Normal รายการแรกที่เกินตามเวลา',
+        'คืนหนึ่งแถวต่อวันที่เกินมาตรฐาน โดยเลือกข้อมูล source status Normal, Ok หรือ code 1 รายการแรกที่เกินตามเวลา รวมวันที่มีความครบถ้วนรายวันต่ำกว่า 80%',
       lowData: 'คืนหนึ่งแถวต่อวันที่มีความครบถ้วนของข้อมูลรายวันต่ำกว่า 80% โดยไม่คืนเวลา',
     },
     rows: 'เรียงวันที่จากเก่าไปใหม่และมีได้สูงสุดหนึ่งแถวต่อวันของปีที่ขอ',
     displayTime: 'ช่วงชั่วโมงของค่าที่เกินมาตรฐานรายการแรก เช่น 01.00-01.59 น.',
-    value: 'ค่าตรวจวัด source status Normal รายการแรกของวันที่เกินมาตรฐาน',
+    value: 'ค่าตรวจวัด source status Normal, Ok หรือ code 1 รายการแรกของวันที่เกินมาตรฐาน',
     dataCompletenessPercent: 'ร้อยละความครบถ้วนรายวันที่ใช้ตัดสิน lowData',
   };
 }

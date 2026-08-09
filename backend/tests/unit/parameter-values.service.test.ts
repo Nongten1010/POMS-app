@@ -1572,6 +1572,23 @@ describe('parameterValuesService', () => {
       options,
     );
 
+    expect(calendar.data.metadata.valueDefinitions).toEqual({
+      summaryPeriod:
+        'calendar.days แสดงเฉพาะเดือนที่ขอ ส่วน monthlySummary.exceededDays และ lowDataDays นับทั้งปีของเดือนที่ขอ',
+      dataCompletenessStatus: {
+        lowData: 'ส่งข้อมูลน้อยกว่า 80% ใช้พื้นหลังสีเทาโดยไม่บังคับสถานะเส้นขอบ',
+        highData: 'ส่งข้อมูลมากกว่าหรือเท่ากับ 80% ใช้พื้นหลังสีฟ้า',
+      },
+      pollutionStatus: {
+        normal:
+          'ข้อมูลที่ source status เป็น Normal, Ok หรือ code 1 อยู่ในเกณฑ์ปกติ ใช้เส้นขอบสีเขียว',
+        warning:
+          'ข้อมูลที่ source status เป็น Normal, Ok หรือ code 1 อยู่ในเกณฑ์เฝ้าระวัง ใช้เส้นขอบสีส้ม',
+        exceeded: 'ข้อมูลที่ source status เป็น Normal, Ok หรือ code 1 เกินมาตรฐาน ใช้เส้นขอบสีแดง',
+        insufficient:
+          'ไม่มีค่าจาก source status Normal, Ok หรือ code 1 ที่ใช้ประเมินได้ หรือมีเฉพาะค่าราย row ที่ความครบถ้วนต่ำกว่า 80%',
+      },
+    });
     expect(calendar.data.calendar.days).toEqual([
       {
         date: '2026-08-05',
@@ -1607,6 +1624,17 @@ describe('parameterValuesService', () => {
       options,
     );
 
+    expect(details.data.metadata.valueDefinitions).toEqual({
+      summaryType: {
+        exceeded:
+          'คืนหนึ่งแถวต่อวันที่เกินมาตรฐาน โดยเลือกข้อมูล source status Normal, Ok หรือ code 1 รายการแรกที่เกินตามเวลา รวมวันที่มีความครบถ้วนรายวันต่ำกว่า 80%',
+        lowData: 'คืนหนึ่งแถวต่อวันที่มีความครบถ้วนของข้อมูลรายวันต่ำกว่า 80% โดยไม่คืนเวลา',
+      },
+      rows: 'เรียงวันที่จากเก่าไปใหม่และมีได้สูงสุดหนึ่งแถวต่อวันของปีที่ขอ',
+      displayTime: 'ช่วงชั่วโมงของค่าที่เกินมาตรฐานรายการแรก เช่น 01.00-01.59 น.',
+      value: 'ค่าตรวจวัด source status Normal, Ok หรือ code 1 รายการแรกของวันที่เกินมาตรฐาน',
+      dataCompletenessPercent: 'ร้อยละความครบถ้วนรายวันที่ใช้ตัดสิน lowData',
+    });
     expect(details.data.summary).toEqual({ affectedDays: 1 });
     expect(details.data.rows).toEqual([
       {
@@ -1721,7 +1749,7 @@ describe('parameterValuesService', () => {
     expect(details.data.rows).toEqual([]);
   });
 
-  it('uses only Normal source statuses for calendar pollution and annual exceeded-day counts', async () => {
+  it('uses only Normal, Ok, and code 1 source statuses for calendar pollution and annual exceeded-day counts', async () => {
     mockedRepository.listRegisteredParameters.mockResolvedValue(['CO (ppm)']);
     mockedRepository.tableExists.mockResolvedValue(true);
     mockedRepository.listRows.mockResolvedValue({
@@ -1749,6 +1777,22 @@ describe('parameterValuesService', () => {
           co_status: 'Normal',
           co_units: 'ppm',
           cdate: '2026-08-10',
+          ctime: `${String(hour).padStart(2, '0')}:00:00`,
+        })),
+        ...Array.from({ length: 24 }, (_, hour) => ({
+          station_id: 'S1125',
+          co_value: hour === 0 ? 240 : 60,
+          co_status: 'Ok',
+          co_units: 'ppm',
+          cdate: '2026-08-11',
+          ctime: `${String(hour).padStart(2, '0')}:00:00`,
+        })),
+        ...Array.from({ length: 24 }, (_, hour) => ({
+          station_id: 'S1125',
+          co_value: hour === 0 ? 250 : 60,
+          co_status: 1,
+          co_units: 'ppm',
+          cdate: '2026-08-12',
           ctime: `${String(hour).padStart(2, '0')}:00:00`,
         })),
       ],
@@ -1787,13 +1831,23 @@ describe('parameterValuesService', () => {
         pollutionStatus: 'exceeded',
         display: { borderStatus: 'exceeded' },
       },
+      {
+        date: '2026-08-11',
+        pollutionStatus: 'exceeded',
+        display: { borderStatus: 'exceeded' },
+      },
+      {
+        date: '2026-08-12',
+        pollutionStatus: 'exceeded',
+        display: { borderStatus: 'exceeded' },
+      },
     ]);
     expect(result.data.monthlySummary).toEqual([
       {
         parameterCode: 'CO',
         parameterName: 'CO',
         unit: 'ppm',
-        exceededDays: 1,
+        exceededDays: 3,
         lowDataDays: 0,
         todayDataCompletenessPercent: 100,
       },

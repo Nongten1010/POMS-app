@@ -23,8 +23,8 @@
 
 | Stage | Command | Result | Evidence |
 | --- | --- | --- | --- |
-| RED: non-normal source status | `npm test -- --runInBand tests/unit/parameter-values.service.test.ts -t "uses only Normal source statuses"` | FAIL | วันที่ `2026-08-09` มีค่า `220` แต่ `co_status=Maintenance`; implementation เดิมยังคืน `pollutionStatus=exceeded` แทน `normal` |
-| GREEN: Normal-only calendar evaluation | `npm test -- --runInBand tests/unit/parameter-values.service.test.ts` | PASS | 1 suite, 33 tests; `Calibration`, `Maintenance`, `pass` และ status ที่ไม่รู้จักไม่ถูกประเมิน ขณะที่ค่า status `Normal` ยังทำให้วันนั้นเป็น `exceeded` และถูกนับหนึ่งวัน |
+| RED: non-normal source status | `npm test -- --runInBand tests/unit/parameter-values.service.test.ts -t "uses only Normal, Ok, and code 1 source statuses"` | FAIL | วันที่ `2026-08-09` มีค่า `220` แต่ `co_status=Maintenance`; implementation เดิมยังคืน `pollutionStatus=exceeded` แทน `normal` |
+| GREEN: measurement-usable source statuses | `npm test -- --runInBand tests/unit/parameter-values.service.test.ts` | PASS | 1 suite, 33 tests; `Calibration`, `Maintenance`, `pass` และ status ที่ไม่รู้จักไม่ถูกประเมิน ขณะที่ `Normal`, `Ok` และ code `1` ยังใช้ประเมิน `exceeded` ได้ |
 | RED: low-data coupling | `npm test -- --runInBand tests/unit/parameter-values.service.test.ts -t "keeps low-data completeness independent"` | FAIL ก่อนแก้ | วันที่มีความครบถ้วนรายวัน 46% และค่าปกติที่เกินมาตรฐานถูกบังคับเป็น `pollutionStatus=insufficient`, ไม่ถูกนับใน `exceededDays` และไม่ปรากฏใน `summaryType=exceeded` |
 | GREEN: independent completeness and pollution | คำสั่ง RED เดียวกัน | PASS | วันเดียวกันคืนพื้นหลัง `lowData` กับเส้นขอบ `exceeded`, นับ `lowDataDays=1` และ `exceededDays=1` และอยู่ใน details ของทั้งสอง `summaryType` |
 | RED: parameter completeness guard | `npm test -- --runInBand tests/unit/parameter-values.service.test.ts -t "does not evaluate rows whose explicit parameter completeness"` | FAIL ก่อนแก้ | ค่า `co_data_completeness_percent=50` ถูกประเมินเป็น `exceeded` เพราะ implementation อ่านเฉพาะ completeness ระดับ row ส่วนกลาง |
