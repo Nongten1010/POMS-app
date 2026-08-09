@@ -1,4 +1,4 @@
-# หลักฐาน TDD: รายละเอียดสำหรับคลิกสรุป Calendar Status
+# หลักฐาน TDD: รายละเอียดรายวันทั้งปีของ Calendar Status
 
 ## Canonical Contract
 
@@ -7,58 +7,53 @@
 
 ## Source And User Journey
 
-Frontend ต้องเรียกรายละเอียดจากแถว `monthlySummary` เมื่อผู้ใช้คลิกจำนวนวัน `exceededDays` หรือ `lowDataDays` โดยส่ง `month`, `summaryType`, `parameterCode` และ `unit` ของแถวที่คลิก
+Frontend เรียก endpoint details เมื่อผู้ใช้คลิก `exceededDays` หรือ `lowDataDays` โดยส่ง `year`, `summaryType`, `parameterCode` และ `unit` ของแถวที่คลิก
 
-- `summaryType=exceeded` คืนวันที่ เวลา source จริง ค่าที่วัด ค่าเกณฑ์ และผลต่างจากเกณฑ์
-- `summaryType=lowData` คืนวันที่ ชั่วโมงที่ขาดของพารามิเตอร์ที่เลือก และ `lowDataCauses` ซึ่งอธิบายว่าพารามิเตอร์ใดทำให้วันนั้นมีข้อมูลต่ำกว่า 80%
-- ข้อมูลถูกจำกัดไว้ใน `month=YYYY-MM` ที่ร้องขอ และใช้ permission/data scope เดียวกับ Calendar Status เดิม
+- `summaryType=exceeded` คืนสูงสุดหนึ่งแถวต่อวัน โดยใช้ค่าที่มีสถานะเกินมาตรฐานรายการแรกตามเวลาจริง พร้อมช่วงเวลา ค่าตรวจวัด ค่าเกณฑ์ และผลต่าง
+- `summaryType=lowData` คืนสูงสุดหนึ่งแถวต่อวัน มีเฉพาะวันที่และร้อยละการส่งข้อมูล และไม่มี field เวลา
+- response เรียงวันที่จากเก่าไปใหม่ ไม่มี pagination และครอบคลุมทั้งปีที่เลือก
 
 ## RED / GREEN Report
 
 | Stage | Command | Result | Evidence |
 | --- | --- | --- | --- |
-| RED: endpoint contract | `npm test -- --runInBand tests/unit/parameter-values.service.test.ts tests/unit/connection-requests.service.test.ts tests/unit/connected-measurement-points.route.test.ts` | FAIL | TypeScript compile ไม่ผ่านเพราะยังไม่มี `calendarStatusDetails` และ `getCalendarStatusDetails` ใน service/controller contract |
-| GREEN: endpoint contract | คำสั่งเดิม | PASS | 3 suites, 119 tests; route, connection wrapper และ detail aggregation ทำงานครบ |
-| RED: exact occurrence time | `npm test -- --runInBand tests/unit/parameter-values.service.test.ts -t "returns exceeded occurrences"` | FAIL | fixture เวลา `05:30:00` ถูกลดเหลือ `05:00:00` |
-| GREEN: exact occurrence time | คำสั่งเดิม | PASS | `time` คงเวลาจริงจาก `ctime` เป็น `05:30:00`; `displayTime` ยังแสดงช่วงชั่วโมงได้ |
-| RED: low-data cause | `npm test -- --runInBand tests/unit/parameter-values.service.test.ts -t "identifies which parameter caused"` | FAIL | วันที่ low data จาก NOx ยังไม่มีข้อมูลอธิบายเมื่อผู้ใช้คลิกแถว CO |
-| GREEN: low-data cause | คำสั่งเดิม | PASS | `lowDataCauses` คืนทุกพารามิเตอร์ที่ต่ำกว่า 80% พร้อมชั่วโมงที่ขาด |
-| Final focused regression | คำสั่ง endpoint contract ด้านบน | PASS | 3 suites, 121 tests |
+| RED: annual row contract | `npm test -- --runInBand tests/unit/parameter-values.service.test.ts tests/unit/connection-requests.service.test.ts tests/unit/connected-measurement-points.route.test.ts` | FAIL | type เดิมไม่มี `year`/`rows` และยังบังคับ `month`/`days` |
+| GREEN: annual row contract | คำสั่งเดิม | PASS | 3 suites, 122 tests; route, wrapper และ service ใช้ contract รายปีตรงกัน |
+| First-exceedance regression | คำสั่งเดิม | PASS | fixture ที่มีค่าเกิน `01:15`, `01:45` และ `05:30` คืนเฉพาะ `01:15` ของวันนั้น |
+| Maximum daily-row regression | คำสั่งเดิม | PASS | fixture ปี 2025 จำนวน 365 วันคืน 365 low-data rows โดยไม่คืน `time` |
 
 ## Test Specification
 
 | # | What is guaranteed | Test file | Test type | Result |
 | --- | --- | --- | --- | --- |
-| 1 | `exceeded` คืนเฉพาะวันที่ในเดือนที่เลือก พร้อมค่าที่วัด ค่าเกณฑ์ ผลต่าง และ source time จริง | `backend/tests/unit/parameter-values.service.test.ts` | Service contract | PASS |
-| 2 | `lowData` ใช้กฎรายวันเดียวกับ `monthlySummary[].lowDataDays` และอธิบายพารามิเตอร์ต้นเหตุ | `backend/tests/unit/parameter-values.service.test.ts` | Service contract/regression | PASS |
-| 3 | wrapper เติมข้อมูลโรงงาน current/live โดยไม่เปลี่ยน parameter-detail payload | `backend/tests/unit/connection-requests.service.test.ts` | Module integration contract | PASS |
-| 4 | route validate query และตอบ `400` เมื่อขาด field ที่จำเป็น | `backend/tests/unit/connected-measurement-points.route.test.ts` | HTTP contract | PASS |
-| 5 | route บังคับ `dashboard.stats:view` และตอบ `403` เมื่อไม่มีสิทธิ์ | `backend/tests/unit/connected-measurement-points.route.test.ts` | Authorization regression | PASS |
-| 6 | พารามิเตอร์ที่ไม่พบตอบ `404` และ code ที่ซ้ำหลายหน่วยต้องระบุ `unit` | `backend/tests/unit/parameter-values.service.test.ts` | Boundary contract | PASS |
+| 1 | details รับ `year=YYYY`; query แบบเดิมที่ส่ง `month` ถูกปฏิเสธด้วย `400` | `backend/tests/unit/connected-measurement-points.route.test.ts` | HTTP validation contract | PASS |
+| 2 | service query source ตั้งแต่วันที่ 1 มกราคมถึง 31 ธันวาคมของปีที่เลือก | `backend/tests/unit/parameter-values.service.test.ts` | Database-boundary contract | PASS |
+| 3 | `exceeded` คืนหนึ่ง row ต่อวันและเลือกค่าที่เกินรายการแรกตาม exact `ctime` | `backend/tests/unit/parameter-values.service.test.ts` | Service contract | PASS |
+| 4 | `lowData` คืนเฉพาะ `date` กับ `dataCompletenessPercent` และไม่มีเวลา | `backend/tests/unit/parameter-values.service.test.ts` | Service contract | PASS |
+| 5 | wrapper เติมโรงงาน current/live โดยไม่เปลี่ยน detail payload | `backend/tests/unit/connection-requests.service.test.ts` | Module integration contract | PASS |
+| 6 | route ยังบังคับ `dashboard.stats:view`; พารามิเตอร์ไม่พบตอบ `404` และ code หลายหน่วยต้องระบุ `unit` | `backend/tests/unit/connected-measurement-points.route.test.ts`, `backend/tests/unit/parameter-values.service.test.ts` | Authorization/boundary regression | PASS |
 
 ## Verification
 
+- Focused regression: 3 suites, 122 tests ผ่าน
+- Full backend regression: 108 suites, 993 tests ผ่าน
 - `npm run build`: ผ่าน
 - `npm run typecheck`: ผ่าน
-- `npm run lint`: ผ่านด้วย 0 errors; พบ 145 warnings เดิมในไฟล์นอกขอบเขตงาน
-- Full backend regression และ coverage: 108 suites, 991 tests ผ่าน
-- Full coverage ของ `src/modules/parameter-values`: statements 81.28%, branches 73.6%, functions 82.77%, lines 84.08%
-- Full coverage ของ `parameter-values.service.ts`: statements 85.48%, branches 70.67%, functions 91.85%, lines 88.88%
-- Repository-wide coverage: statements 60.38%, branches 59.85%, functions 64.54%, lines 61.67%; ยังต่ำกว่าเป้าหมาย 80% จาก coverage debt เดิมและไม่มี global threshold บังคับใน Jest config
-- `npm audit --omit=dev`: พบ 0 vulnerabilities
+- `npm run lint`: ผ่านด้วย 0 errors; มี 145 warnings เดิมในไฟล์นอกขอบเขตงาน
+- Coverage ของ `src/modules/parameter-values`: statements 80.86%, branches 73.03%, functions 82.17%, lines 83.84%
+- Coverage ของ `parameter-values.service.ts`: statements 84.89%, branches 70%, functions 91.26%, lines 88.58%
+- Repository-wide coverage: statements 60.31%, branches 59.78%, functions 64.43%, lines 61.62%; ต่ำกว่าเป้าหมาย 80% จาก coverage debt เดิมและไม่มี global threshold บังคับ
+- `npm audit --omit=dev`: 0 vulnerabilities
+- `npm run format:check`: ยัง fail จาก 32 ไฟล์เดิมนอกขอบเขต; ไฟล์ TypeScript ที่เปลี่ยนในงานนี้ผ่าน Prettier
 - Secret/credential และ debug-log scan ในไฟล์ที่เปลี่ยน: ไม่พบ
+- ลิงก์ local ในเอกสารที่เปลี่ยนและ JSON examples 6 blocks: ผ่าน
 - `git diff --check`: ผ่าน
-- Repository ยังไม่มี executable docs guard; ตรวจ canonical link, endpoint registry และ evidence index ใน diff นี้แทน
 
 ## Merge Evidence
 
-- RED endpoint checkpoint: `f59a0ef test: add calendar summary detail API contract`
-- GREEN endpoint checkpoint: `88647c3 feat: add calendar summary detail API`
-- RED exact-time checkpoint: `a56e445 test: preserve exact exceeded occurrence time`
-- GREEN exact-time checkpoint: `3ad7b3c fix: retain exact calendar detail event times`
-- RED low-data-cause checkpoint: `1af5d83 test: expose low-data parameter causes`
-- GREEN low-data-cause checkpoint: `a26bbce fix: explain low-data parameter causes`
-- Parameter-unit regression checkpoint: `d8f79b8 test: cover ambiguous calendar detail parameters`
+- RED contract checkpoint: `987f939 test: define annual calendar detail contract`
+- RED fixture checkpoint: `7f714dc test: align annual calendar detail fixture`
+- GREEN implementation checkpoint: `aaa89df fix: return annual calendar detail rows`
 
 ## Scope
 
@@ -66,6 +61,6 @@ Frontend ต้องเรียกรายละเอียดจากแ�
 - ไม่แก้ `frontend/`
 - Docs impact: updated
 - Canonical docs: `docs/backend/api/shared/connected-measurement-points/README.md`
-- Reason: เพิ่ม client-visible endpoint และ response contract สำหรับ drill-down จาก Calendar Status summary
-- Client impact: frontend สามารถแสดงวัน เวลา ค่าที่เกิน เกณฑ์ ผลต่าง และชั่วโมงข้อมูลขาดได้จาก endpoint เดียว
-- Breaking change: no
+- Reason: dialog ต้องแสดงข้อมูลทั้งปีแบบหนึ่งแถวต่อวันและไม่ต้องมี pagination
+- Client impact: frontend เปลี่ยน query จาก `month` เป็น `year` และอ่าน `data.rows` ตาม `summaryType`
+- Breaking change: yes; ดู `docs/backend/api/CHANGELOG.md`

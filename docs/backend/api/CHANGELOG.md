@@ -2,6 +2,14 @@
 
 ไฟล์นี้บันทึกเฉพาะการเปลี่ยน API ที่ทำให้ client ต้องแก้ตาม การเปลี่ยนทั่วไปและประวัติรายละเอียดดูจาก Git history
 
+## 2026-08-09 — Calendar Status ใช้สรุปและรายละเอียดทั้งปีแบบหนึ่งแถวต่อวัน
+
+- **Affected API:** [Calendar Status และ Calendar Status details](./shared/connected-measurement-points/README.md#get-apiv1connected-measurement-pointsstationidcalendar-status)
+- **Impact:** `calendar-status.data.monthlySummary[].exceededDays` และ `lowDataDays` เปลี่ยนจากจำนวนของเดือนเป็นจำนวนของทั้งปีที่ระบุใน `month`; endpoint `/calendar-status/details` เปลี่ยน query จาก `month=YYYY-MM` เป็น `year=YYYY` และเปลี่ยน response จาก `data.days[]` แบบหลายเหตุการณ์ต่อวันเป็น `data.rows[]` สูงสุดหนึ่งแถวต่อวัน
+- **Migration:** เมื่อผู้ใช้คลิก counter ให้ frontend ส่งปีจาก `calendar.year` เป็น `year`, ใช้ `data.rows` โดยตรง, แสดง `date`/`displayTime`/`value` สำหรับ `summaryType=exceeded` และแสดง `date`/`dataCompletenessPercent` สำหรับ `summaryType=lowData`; อย่าอ่าน `time` ใน low-data row และไม่ต้องส่ง pagination params
+- **Old contract:** counters นับเฉพาะเดือน; details รับ `month`, คืน `data.metadata.month`, `meta.month`, `data.days[].exceededOccurrences[]`, `missingTimes`, `lowDataCauses`, `totalExceededOccurrences` และ `totalMissingHours`
+- **New contract:** counters นับทั้งปีโดย `calendar.days` ยังเป็นเดือนที่ขอและ `todayDataCompletenessPercent` ยังคงใช้ daily summary ล่าสุดของเดือนที่ขอ; details รับ `year`, คืน `data.metadata.year`, `meta.year`, `summary.affectedDays` และ `data.rows[]` เรียงวันที่ โดย `exceeded` เลือกค่าแรกที่เกินตามเวลาและ `lowData` ไม่มี field เวลา
+
 ## 2026-08-09 — CSV export รวม operational status ไว้ในคอลัมน์พารามิเตอร์
 
 - **Affected API:** [Measurement CSV export](./shared/connected-measurement-points/README.md#get-apiv1connected-measurement-pointsstationidmeasurement-exportcsv)
