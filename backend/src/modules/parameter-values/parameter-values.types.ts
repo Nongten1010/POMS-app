@@ -30,6 +30,14 @@ export interface CalendarStatusQuery {
   month: string;
 }
 
+export type CalendarStatusSummaryType = 'exceeded' | 'lowData';
+
+export interface CalendarStatusDetailsQuery extends CalendarStatusQuery {
+  summaryType: CalendarStatusSummaryType;
+  parameterCode: string;
+  unit?: string;
+}
+
 export interface MeasurementCsvExportQuery {
   stationId: string;
   frequency: 'hourly' | 'daily';
@@ -220,6 +228,70 @@ export interface CalendarStatusDTO {
 
 export interface CalendarStatusResultDTO {
   data: CalendarStatusDTO;
+  meta: {
+    stationId: string;
+    interval: '60m';
+    schemaName: string;
+    tableName: string;
+    month: string;
+    count: number;
+    registeredParameters: string[];
+  };
+}
+
+export interface CalendarStatusExceededStandardDTO {
+  value: number;
+  displayValue: string;
+  operator: '>' | '>=';
+}
+
+export interface CalendarStatusExceededOccurrenceDTO {
+  time: string;
+  displayTime: string;
+  value: number;
+  displayValue: string;
+  standardValue: number;
+  displayStandardValue: string;
+  exceededBy: number;
+  displayExceededBy: string;
+}
+
+export interface CalendarStatusDetailDayDTO {
+  date: string;
+  dataCompletenessPercent: number;
+  dataCompletenessStatus: 'lowData' | 'highData';
+  pollutionStatus: 'normal' | 'warning' | 'exceeded' | 'insufficient';
+  parameterDataCompletenessPercent: number;
+  expectedHours: 24;
+  receivedHours: number;
+  missingTimes: string[];
+  exceededOccurrences: CalendarStatusExceededOccurrenceDTO[];
+}
+
+export interface CalendarStatusDetailsDTO {
+  metadata: {
+    description: string;
+    month: string;
+    summaryType: CalendarStatusSummaryType;
+    valueDefinitions: Record<string, unknown>;
+  };
+  parameter: {
+    parameterCode: string;
+    parameterName: string;
+    parameterLabel: string;
+    unit: string;
+    exceededStandard: CalendarStatusExceededStandardDTO;
+  };
+  summary: {
+    affectedDays: number;
+    totalExceededOccurrences: number;
+    totalMissingHours: number;
+  };
+  days: CalendarStatusDetailDayDTO[];
+}
+
+export interface CalendarStatusDetailsResultDTO {
+  data: CalendarStatusDetailsDTO;
   meta: {
     stationId: string;
     interval: '60m';

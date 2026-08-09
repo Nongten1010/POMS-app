@@ -50,6 +50,12 @@ connectedMeasurementPointsRoutes.get(
   connectionRequestsController.getMeasurementCsvExport,
 );
 connectedMeasurementPointsRoutes.get(
+  `${stationPath}/calendar-status/details`,
+  normalizeAnnualPointCodePath,
+  authorize('dashboard.stats:view'),
+  connectionRequestsController.getCalendarStatusDetails,
+);
+connectedMeasurementPointsRoutes.get(
   `${stationPath}/calendar-status`,
   normalizeAnnualPointCodePath,
   authorize('dashboard.stats:view'),

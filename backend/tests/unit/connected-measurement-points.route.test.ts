@@ -355,6 +355,8 @@ describe('connected measurement points route', () => {
           {
             date: '2025-08-09',
             dataCompletenessPercent: 83,
+            dataCompletenessStatus: 'highData',
+            pollutionStatus: 'exceeded',
             parameterDataCompletenessPercent: 83,
             expectedHours: 24,
             receivedHours: 20,
