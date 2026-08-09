@@ -2996,7 +2996,7 @@ describe('connectionRequestsService', () => {
     const detailsResult = await connectionRequestsService.getCalendarStatusDetails(
       'STACK-A',
       {
-        month: '2026-06',
+        year: '2026',
         summaryType: 'exceeded',
         parameterCode: 'CO',
         unit: 'ppm',
@@ -3008,7 +3008,7 @@ describe('connectionRequestsService', () => {
     expect(mockedParameterValuesService.calendarStatusDetails).toHaveBeenCalledWith(
       {
         stationId: 'STACK-A',
-        month: '2026-06',
+        year: '2026',
         summaryType: 'exceeded',
         parameterCode: 'CO',
         unit: 'ppm',

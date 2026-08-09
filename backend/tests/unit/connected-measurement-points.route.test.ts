@@ -325,8 +325,8 @@ describe('connected measurement points route', () => {
     mockedConnectionRequestsService.getCalendarStatusDetails.mockResolvedValue({
       data: {
         metadata: {
-          description: 'รายละเอียดที่ใช้คำนวณตารางสรุปสถานะรายเดือน',
-          month: '2025-08',
+          description: 'รายละเอียดรายวันที่ใช้คำนวณตารางสรุปสถานะของปีที่เลือก',
+          year: 2025,
           summaryType: 'exceeded',
           valueDefinitions: {},
         },
@@ -348,32 +348,18 @@ describe('connected measurement points route', () => {
         },
         summary: {
           affectedDays: 1,
-          totalExceededOccurrences: 1,
-          totalMissingHours: 0,
         },
-        days: [
+        rows: [
           {
             date: '2025-08-09',
-            dataCompletenessPercent: 83,
-            dataCompletenessStatus: 'highData',
-            pollutionStatus: 'exceeded',
-            parameterDataCompletenessPercent: 83,
-            expectedHours: 24,
-            receivedHours: 20,
-            missingTimes: [],
-            lowDataCauses: [],
-            exceededOccurrences: [
-              {
-                time: '00:00:00',
-                displayTime: '00.00-00.59 น.',
-                value: 101,
-                displayValue: '101.00',
-                standardValue: 100,
-                displayStandardValue: '100.00',
-                exceededBy: 1,
-                displayExceededBy: '1.00',
-              },
-            ],
+            time: '00:00:00',
+            displayTime: '00.00-00.59 น.',
+            value: 101,
+            displayValue: '101.00',
+            standardValue: 100,
+            displayStandardValue: '100.00',
+            exceededBy: 1,
+            displayExceededBy: '1.00',
           },
         ],
       },
@@ -382,7 +368,7 @@ describe('connected measurement points route', () => {
         interval: '60m',
         schemaName: 'ingest',
         tableName: 'S0001_data_60m',
-        month: '2025-08',
+        year: '2025',
         count: 20,
         registeredParameters: ['CO (ppm)'],
       },
@@ -842,12 +828,12 @@ describe('connected measurement points route', () => {
     });
   });
 
-  it('exposes monthly calendar summary details for a frontend drill-down', async () => {
+  it('exposes annual calendar summary details for a frontend drill-down', async () => {
     const app = createApp();
 
     const response = await request(app)
       .get(
-        '/api/v1/connected-measurement-points/S0001/calendar-status/details?month=2025-08&summaryType=exceeded&parameterCode=CO&unit=ppm',
+        '/api/v1/connected-measurement-points/S0001/calendar-status/details?year=2025&summaryType=exceeded&parameterCode=CO&unit=ppm',
       )
       .set('Authorization', `Bearer ${accessToken()}`);
 
@@ -855,7 +841,7 @@ describe('connected measurement points route', () => {
     expect(mockedConnectionRequestsService.getCalendarStatusDetails).toHaveBeenCalledWith(
       'S0001',
       {
-        month: '2025-08',
+        year: '2025',
         summaryType: 'exceeded',
         parameterCode: 'CO',
         unit: 'ppm',
@@ -870,7 +856,7 @@ describe('connected measurement points route', () => {
           factoryId: 'factory-001',
         },
         metadata: {
-          month: '2025-08',
+          year: 2025,
           summaryType: 'exceeded',
         },
         parameter: {
@@ -879,22 +865,18 @@ describe('connected measurement points route', () => {
         summary: {
           affectedDays: 1,
         },
-        days: [
+        rows: [
           {
             date: '2025-08-09',
-            exceededOccurrences: [
-              expect.objectContaining({
-                time: '00:00:00',
-                value: 101,
-                standardValue: 100,
-              }),
-            ],
+            time: '00:00:00',
+            value: 101,
+            standardValue: 100,
           },
         ],
       },
       meta: {
         stationId: 'S0001',
-        month: '2025-08',
+        year: '2025',
       },
     });
   });
@@ -904,7 +886,7 @@ describe('connected measurement points route', () => {
 
     const response = await request(app)
       .get(
-        '/api/v1/connected-measurement-points/S0001/calendar-status/details?month=2025-08&summaryType=exceeded',
+        '/api/v1/connected-measurement-points/S0001/calendar-status/details?month=2025-08&summaryType=exceeded&parameterCode=CO&unit=ppm',
       )
       .set('Authorization', `Bearer ${accessToken()}`);
 
@@ -917,7 +899,7 @@ describe('connected measurement points route', () => {
 
     const response = await request(app)
       .get(
-        '/api/v1/connected-measurement-points/S0001/calendar-status/details?month=2025-08&summaryType=lowData&parameterCode=CO&unit=ppm',
+        '/api/v1/connected-measurement-points/S0001/calendar-status/details?year=2025&summaryType=lowData&parameterCode=CO&unit=ppm',
       )
       .set('Authorization', `Bearer ${requestViewOnlyAccessToken()}`);
 
