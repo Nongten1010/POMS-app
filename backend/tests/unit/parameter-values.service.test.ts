@@ -1031,6 +1031,56 @@ describe('parameterValuesService', () => {
     ]);
   });
 
+  it('counts monthly summary days only from the requested month while preserving completeness', async () => {
+    mockedRepository.listRegisteredParameters.mockResolvedValue(['CO (ppm)']);
+    mockedRepository.tableExists.mockResolvedValue(true);
+    mockedRepository.listRows.mockResolvedValue({
+      tableName: 'S1125_data_60m',
+      rows: [
+        ...Array.from({ length: 20 }, (_, hour) => ({
+          station_id: 'S1125',
+          co_value: hour === 0 ? 191 : 100,
+          cdate: '2024-08-09',
+          ctime: `${String(hour).padStart(2, '0')}:00:00`,
+        })),
+        ...Array.from({ length: 10 }, (_, hour) => ({
+          station_id: 'S1125',
+          co_value: 100,
+          cdate: '2024-08-10',
+          ctime: `${String(hour).padStart(2, '0')}:00:00`,
+        })),
+        ...Array.from({ length: 20 }, (_, hour) => ({
+          station_id: 'S1125',
+          co_value: hour === 0 ? 191 : 100,
+          cdate: '2025-08-09',
+          ctime: `${String(hour).padStart(2, '0')}:00:00`,
+        })),
+        ...Array.from({ length: 10 }, (_, hour) => ({
+          station_id: 'S1125',
+          co_value: 100,
+          cdate: '2025-08-10',
+          ctime: `${String(hour).padStart(2, '0')}:00:00`,
+        })),
+      ],
+    });
+
+    const result = await parameterValuesService.calendarStatus(
+      { stationId: 'S1125', month: '2025-08' },
+      operatorAccess,
+    );
+
+    expect(result.data.monthlySummary).toEqual([
+      {
+        parameterCode: 'CO',
+        parameterName: 'CO',
+        unit: 'ppm',
+        exceededDays: 1,
+        lowDataDays: 1,
+        todayDataCompletenessPercent: 42,
+      },
+    ]);
+  });
+
   it('can evaluate connected-point calendar status from per-parameter completeness and criteria min thresholds', async () => {
     mockedRepository.listRegisteredParameters.mockResolvedValue(['CO (ppm)', 'NOx (ppm)']);
     mockedRepository.tableExists.mockResolvedValue(true);
