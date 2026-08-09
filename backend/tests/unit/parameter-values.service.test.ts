@@ -1500,6 +1500,85 @@ describe('parameterValuesService', () => {
     ]);
   });
 
+  it('uses only Normal source statuses for calendar pollution and annual exceeded-day counts', async () => {
+    mockedRepository.listRegisteredParameters.mockResolvedValue(['CO (ppm)']);
+    mockedRepository.tableExists.mockResolvedValue(true);
+    mockedRepository.listRows.mockResolvedValue({
+      tableName: 'S1125_data_60m',
+      rows: [
+        ...Array.from({ length: 24 }, (_, hour) => ({
+          station_id: 'S1125',
+          co_value: hour === 0 ? 210 : 60,
+          co_status: hour === 0 ? 'Calibration' : 'Normal',
+          co_units: 'ppm',
+          cdate: '2026-01-09',
+          ctime: `${String(hour).padStart(2, '0')}:00:00`,
+        })),
+        ...Array.from({ length: 24 }, (_, hour) => ({
+          station_id: 'S1125',
+          co_value: hour === 0 ? 220 : 60,
+          co_status: hour === 0 ? 'Maintenance' : 'Normal',
+          co_units: 'ppm',
+          cdate: '2026-08-09',
+          ctime: `${String(hour).padStart(2, '0')}:00:00`,
+        })),
+        ...Array.from({ length: 24 }, (_, hour) => ({
+          station_id: 'S1125',
+          co_value: hour === 0 ? 230 : 60,
+          co_status: 'Normal',
+          co_units: 'ppm',
+          cdate: '2026-08-10',
+          ctime: `${String(hour).padStart(2, '0')}:00:00`,
+        })),
+      ],
+    });
+
+    const result = await parameterValuesService.calendarStatus(
+      { stationId: 'S1125', month: '2026-08' },
+      operatorAccess,
+      {
+        parameterEvaluations: [
+          {
+            parameter: 'CO (ppm)',
+            channelStatus: 'Normal',
+            standardCriteria: {
+              enabled: false,
+              standardValue: null,
+              rows: [
+                { level: 'normal', min: 0, max: null },
+                { level: 'warning', min: 180, max: null },
+                { level: 'critical', min: 200, max: null },
+              ],
+            },
+          },
+        ],
+      },
+    );
+
+    expect(result.data.calendar.days).toMatchObject([
+      {
+        date: '2026-08-09',
+        pollutionStatus: 'normal',
+        display: { borderStatus: 'normal' },
+      },
+      {
+        date: '2026-08-10',
+        pollutionStatus: 'exceeded',
+        display: { borderStatus: 'exceeded' },
+      },
+    ]);
+    expect(result.data.monthlySummary).toEqual([
+      {
+        parameterCode: 'CO',
+        parameterName: 'CO',
+        unit: 'ppm',
+        exceededDays: 1,
+        lowDataDays: 0,
+        todayDataCompletenessPercent: 100,
+      },
+    ]);
+  });
+
   it('does not mark calendar pollution status insufficient for localized normal channel statuses', async () => {
     mockedRepository.listRegisteredParameters.mockResolvedValue(['CO (ppm)']);
     mockedRepository.tableExists.mockResolvedValue(true);
