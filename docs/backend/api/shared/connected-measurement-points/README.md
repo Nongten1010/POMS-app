@@ -27,6 +27,7 @@ curl --request GET \
 | อ่านแบบตั้งค่าอุปกรณ์ปัจจุบัน | `GET` | `/api/v1/connected-measurement-points/:stationId/device-configs` | Bearer | `cems_wpms_requests:view` | [Device config contract](../../menus/connection-requests/device-configs.md) |
 | แทนที่การตั้งค่าอุปกรณ์ปัจจุบัน | `POST` | `/api/v1/connected-measurement-points/:stationId/device-configs` | Bearer | `cems_wpms_requests:edit` | [Device config contract](../../menus/connection-requests/device-configs.md) |
 | อ่านสถิติรายชั่วโมง | `GET` | `/api/v1/connected-measurement-points/:stationId/measurement-statistics?date=YYYY-MM-DD` | Bearer | `dashboard.stats:view` | [Measurement statistics](#get-apiv1connected-measurement-pointsstationidmeasurement-statistics) |
+| ส่งออกข้อมูลตรวจวัดเป็น CSV | `GET` | `/api/v1/connected-measurement-points/:stationId/measurement-export.csv` | Bearer | `dashboard.stats:export` | [Measurement CSV export](#get-apiv1connected-measurement-pointsstationidmeasurement-exportcsv) |
 
 ## Contracts
 
@@ -227,6 +228,103 @@ curl --request GET \
 | `403 Forbidden` | ไม่มี permission หรือจุดตรวจวัดอยู่นอก data scope | ซ่อนข้อมูลหรือแจ้งสิทธิ์ไม่เพียงพอ |
 | `404 Not Found` | ไม่พบจุดตรวจวัดหรือตารางข้อมูลของจุดนั้น | ตรวจรหัสจุดตรวจวัด |
 
+### `GET /api/v1/connected-measurement-points/:stationId/measurement-export.csv`
+
+อ่านข้อมูลจริงของจุดตรวจวัดตามช่วงวันที่ แล้ว stream เป็นไฟล์ CSV โดย backend resolve ชื่อโรงงาน current/live, registered parameters, permission และ data scope จาก `stationId`; client ไม่ต้องส่ง `factoryId`, `factoryName` หรือ `reportType` กลับมาเป็น source of truth
+
+#### Authentication And Permission
+
+- Authentication: required
+- Permission: `dashboard.stats:export`
+- Data scope: `ALL`, `IN_REGION`, `IN_PROVINCE` หรือ `OWN_FACTORY` จาก permission นี้โดยตรง
+- งานนี้ไม่เพิ่ม default role grant; `admin` ได้ permission ทั้งหมดตาม seed ส่วน role/user อื่นต้องได้รับสิทธิ์ผ่าน permission management
+
+#### Request Fields
+
+| Field | Location | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `stationId` | path | string | Yes | รหัส connected measurement point ที่อยู่ใน data scope ของผู้เรียก |
+| `frequency` | query | `hourly` \| `daily` | Yes | `hourly` อ่าน interval `60m`; `daily` อ่าน interval `1day` |
+| `startDate` | query | `YYYY-MM-DD` | Yes | วันเริ่มตามคริสต์ศักราช รวมวันนี้ในผลลัพธ์ |
+| `endDate` | query | `YYYY-MM-DD` | Yes | วันสิ้นสุดตามคริสต์ศักราช รวมวันนี้ในผลลัพธ์ |
+| `parameters` | query | string หรือ repeated string | Yes | ใช้ `all` เพียงค่าเดียว หรือชื่อพารามิเตอร์พร้อมหน่วย เช่น `CO (ppm)`; ส่ง key ซ้ำเมื่อต้องการหลายพารามิเตอร์ |
+
+#### Request Example
+
+```bash
+curl --get \
+  --url '<BASE_URL>/api/v1/connected-measurement-points/S0199/measurement-export.csv' \
+  --header 'Authorization: Bearer <ACCESS_TOKEN>' \
+  --data-urlencode 'frequency=hourly' \
+  --data-urlencode 'startDate=2026-08-09' \
+  --data-urlencode 'endDate=2026-08-09' \
+  --data-urlencode 'parameters=CO (ppm)' \
+  --data-urlencode 'parameters=Flow Rate (m3/hr)' \
+  --output measurement.csv
+```
+
+#### Success Response
+
+| Item | Value | Description |
+| --- | --- | --- |
+| HTTP status | `200 OK` | เริ่มดาวน์โหลดเมื่อ request ผ่าน validation และมี source rows |
+| `Content-Type` | `text/csv; charset=utf-8` | CSV ภาษาไทยแบบ UTF-8 |
+| `Content-Disposition` | `attachment; filename="measurement-{stationId}-{frequency}-{startDate}-{endDate}.csv"` | `stationId` ในชื่อไฟล์ถูก sanitize |
+| Encoding | UTF-8 with BOM | byte-order mark อยู่หน้าคอลัมน์แรกเพื่อรองรับ Excel |
+| Line ending | CRLF | field ใช้ RFC 4180 quoting/escaping |
+
+CSV ใช้ identity columns `date_time`, `factory_name`, `meas_code` ก่อน แล้วแต่ละพารามิเตอร์ใช้สองคอลัมน์ `<Parameter with unit>` และ `<Parameter with unit> Status`
+
+```csv
+﻿date_time,factory_name,meas_code,CO (ppm),CO (ppm) Status,Flow Rate (m3/hr),Flow Rate (m3/hr) Status
+2026-08-09 00:00:00,โรงไฟฟ้าพระนครเหนือ ชุดที่ 2,S0199,76.74,Normal,94.20,Normal
+```
+
+#### Validation And Business Rules
+
+- `hourly` จำกัดช่วงไม่เกิน 366 วันแบบ inclusive และ `daily` จำกัดไม่เกิน 10 ปีปฏิทินแบบ inclusive
+- `monthly` และ `yearly` ยังไม่รองรับและตอบ `400`; frontend ต้องซ่อนหรือ disable สองตัวเลือกนี้จนกว่าจะมี aggregation contract
+- เมื่อส่ง `parameters=all` ระบบเรียงคอลัมน์ตาม registered parameters; เมื่อส่ง key ซ้ำ ระบบเรียงตาม request และตัดค่าซ้ำหลัง normalize โดยเก็บค่าตัวแรก
+- Parameter matching trim และไม่สนตัวพิมพ์เล็ก-ใหญ่ แต่หน่วยในวงเล็บต้องตรงกับ registered parameter; parameter ที่ไม่ลงทะเบียนตอบ `400`
+- ชื่อ parameter ใน header ต้องมีหน่วยเมื่อ source ระบุได้ เช่น `BOD (mg/l)`, `CO2 (ppm)` หรือ `Flow Rate (m3/hr)`
+- ส่งออกเฉพาะ source rows ที่มีอยู่ เรียง `cdate`, `ctime` จากเก่าไปใหม่ และรักษาทุก row ที่ timestamp ซ้ำ; daily row ที่ไม่มี `ctime` ใช้ `00:00:00`
+- `date_time` ใช้ `YYYY-MM-DD HH:mm:ss` ตามเวลา source ซึ่งเป็น `Asia/Bangkok`; measurement value ใช้ทศนิยมสองตำแหน่งและไม่มี thousands separator
+- Status column เป็น operational status เท่านั้น: `Normal`, `Calibration`, `Defective`, `Maintenance`, `Start up`, `Shut Down`, `Turnaround`, `Etc.` หรือค่าว่าง; ไม่ใช้ threshold status `warning`/`exceeded`
+- Numeric value ที่ใช้ได้ส่ง status `Normal`; operational status อื่นทำให้ value ว่าง โดย `NoData` ทำให้ทั้ง value/status ว่าง และ `No Discharge` ส่ง status `Etc.`
+- เมื่อ source status เป็น `null`/ค่าว่างและมี numeric value ให้ถือเป็น `Normal`; status ที่ไม่รู้จักและไม่ว่างทำให้ value ว่างและส่ง `Etc.`
+- ถ้ามี completeness field ต่ำกว่า 80% ให้ value/status ว่าง; ถ้าไม่มี completeness field และมี numeric value ให้ถือว่า completeness 100%
+- String cells ใช้ RFC 4180 escaping และป้องกัน CSV formula injection
+- Backend stream response โดยไม่สร้างไฟล์ถาวร, signed URL, export history หรือ background job
+
+#### Errors
+
+| HTTP status | Error code | Condition | Client action |
+| --- | --- | --- | --- |
+| `400 Bad Request` | `VALIDATION_ERROR` หรือ `BAD_REQUEST` | query/date/frequency/range ไม่ถูกต้อง หรือ parameter ไม่ได้ลงทะเบียน | แสดง validation error และคง dialog ไว้ให้แก้ไข |
+| `401 Unauthorized` | `UNAUTHORIZED` | ไม่มี bearer token ที่ถูกต้อง | login ใหม่ |
+| `403 Forbidden` | `FORBIDDEN` | ไม่มี `dashboard.stats:export` หรือ station อยู่นอก data scope | ซ่อน/disable export หรือแจ้งสิทธิ์ไม่เพียงพอ |
+| `404 Not Found` | `NOT_FOUND` | ไม่พบ connected station หรือตาราง source | รีเฟรชรายการจุดตรวจวัดหรือแจ้งว่าไม่พบข้อมูลต้นทาง |
+| `404 Not Found` | `NO_EXPORT_DATA` | ไม่มี source row ในช่วงวันที่ | ไม่เริ่มดาวน์โหลดและแจ้งว่าไม่มีข้อมูลในช่วงที่เลือก |
+
+ตัวอย่างกรณีไม่มีข้อมูล:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "NO_EXPORT_DATA",
+    "message": "No measurement data found for the selected export range"
+  }
+}
+```
+
+#### Frontend Handoff
+
+- ใช้ `stationId`, `frequency`, `startDate`, `endDate` และ repeated `parameters` ตาม contract นี้; ไม่ส่งค่าชื่อโรงงานหรือประเภทระบบเพื่อให้ backend เชื่อถือ
+- ดาวน์โหลด response เป็น Blob และใช้ filename จาก `Content-Disposition`; เมื่อ response เป็น JSON error ห้ามสร้างไฟล์ว่าง
+- หน้า dialog ปัจจุบันต้องซ่อนหรือ disable `monthly`/`yearly`; รุ่นแรกเปิดเฉพาะ `hourly` และ `daily`
+- เมื่อ backend ตอบ `NO_EXPORT_DATA` ให้แจ้งผู้ใช้ว่าไม่มีข้อมูลในช่วงวันที่ที่เลือก และคงค่าฟอร์มเดิมไว้
+
 ## Business Flow And Explanations
 
 - [เมนูแจ้งแบบ กวภ.01-กวภ.05](../../menus/kwp-forms/README.md)
@@ -239,6 +337,8 @@ curl --request GET \
 | Routes | [`connected-measurement-points.routes.ts`](../../../../../backend/src/modules/connection-requests/connected-measurement-points.routes.ts) |
 | Controller | [`connection-requests.controller.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.controller.ts) |
 | Mapper/service | [`connection-requests.service.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.service.ts) |
-| Validators | [`connection-requests.validator.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.validator.ts) |
+| Parameter query/service | [`parameter-values.service.ts`](../../../../../backend/src/modules/parameter-values/parameter-values.service.ts), [`parameter-values.repository.ts`](../../../../../backend/src/modules/parameter-values/parameter-values.repository.ts) |
+| CSV formatter | [`measurement-csv-export.ts`](../../../../../backend/src/modules/parameter-values/measurement-csv-export.ts) |
+| Validators | [`connection-requests.validator.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.validator.ts), [`parameter-values.validator.ts`](../../../../../backend/src/modules/parameter-values/parameter-values.validator.ts) |
 | Public types | [`connection-requests.types.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.types.ts) |
-| Tests | [`connection-requests.service.test.ts`](../../../../../backend/tests/unit/connection-requests.service.test.ts), [`connected-measurement-points.route.test.ts`](../../../../../backend/tests/unit/connected-measurement-points.route.test.ts) |
+| Tests | [`connection-requests.service.test.ts`](../../../../../backend/tests/unit/connection-requests.service.test.ts), [`connected-measurement-points.route.test.ts`](../../../../../backend/tests/unit/connected-measurement-points.route.test.ts), [`measurement-csv-export.route.test.ts`](../../../../../backend/tests/unit/measurement-csv-export.route.test.ts), [`measurement-csv-export.test.ts`](../../../../../backend/tests/unit/measurement-csv-export.test.ts) |

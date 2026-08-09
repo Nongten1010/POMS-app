@@ -108,6 +108,18 @@ export const parameterValuesRepository = {
     return Boolean(row);
   },
 
+  async stationExists(stationId: string): Promise<boolean> {
+    const row = await db('cems_wpms_connected_measurement_points as p')
+      .whereNull('p.deleted_at')
+      .where((builder) => {
+        builder.where('p.point_code', stationId).orWhere('p.point_name', stationId);
+      })
+      .select('p.id')
+      .first();
+
+    return Boolean(row);
+  },
+
   async canAccessStationForConnectionTest(
     stationId: string,
     access: ParameterValueAccessContext,

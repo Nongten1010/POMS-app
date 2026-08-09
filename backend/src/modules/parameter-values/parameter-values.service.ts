@@ -1,5 +1,7 @@
 import { env } from '../../config/env';
-import { ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
+import { StatusCodes } from 'http-status-codes';
+import { AppError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
+import { createMeasurementCsvExport } from './measurement-csv-export';
 import { parameterValuesRepository } from './parameter-values.repository';
 import {
   measurementDisplayValue,
@@ -20,6 +22,7 @@ import {
   type MeasurementStatisticsEvaluationOptions,
   type MeasurementStatisticsQuery,
   type MeasurementStatisticsResultDTO,
+  type MeasurementCsvExportQuery,
   type ParameterValueStatus,
   PARAMETER_VALUE_INTERVALS,
   type ParameterValueAccessContext,
@@ -326,6 +329,52 @@ export const parameterValuesService = {
         registeredParameters,
       },
     };
+  },
+
+  async measurementCsvExport(
+    query: MeasurementCsvExportQuery,
+    access: ParameterValueAccessContext,
+    loadFactoryName: () => Promise<string>,
+  ) {
+    await ensureStationExportAccess(query.stationId, access);
+
+    const interval = query.frequency === 'hourly' ? '60m' : '1day';
+    const tableName = parameterValuesRepository.tableName(query.stationId, interval);
+    const exists = await parameterValuesRepository.tableExists(tableName);
+    if (!exists) {
+      throw new NotFoundError(
+        `Parameter value table ${env.PARAMETER_DB_SCHEMA}.${tableName} not found`,
+      );
+    }
+
+    const [result, registeredParameters] = await Promise.all([
+      parameterValuesRepository.listRows({
+        stationId: query.stationId,
+        interval,
+        startDate: query.startDate,
+        endDate: query.endDate,
+      }),
+      parameterValuesRepository.listRegisteredParameters(query.stationId, access),
+    ]);
+    if (result.rows.length === 0) {
+      throw new AppError(
+        'No measurement data found for the selected export range',
+        StatusCodes.NOT_FOUND,
+        'NO_EXPORT_DATA',
+      );
+    }
+    const factoryName = await loadFactoryName();
+
+    return createMeasurementCsvExport({
+      stationId: query.stationId,
+      factoryName,
+      frequency: query.frequency,
+      startDate: query.startDate,
+      endDate: query.endDate,
+      registeredParameters,
+      requestedParameters: query.parameters,
+      rows: result.rows,
+    });
   },
 };
 
@@ -1253,6 +1302,18 @@ async function ensureStationAccess(
   if (!hasAccess) {
     throw new ForbiddenError(`Station ${stationId} is not available for this user`);
   }
+}
+
+async function ensureStationExportAccess(
+  stationId: string,
+  access: ParameterValueAccessContext,
+): Promise<void> {
+  const hasAccess = await parameterValuesRepository.canAccessStation(stationId, access);
+  if (hasAccess) return;
+
+  const exists = await parameterValuesRepository.stationExists(stationId);
+  if (!exists) throw new NotFoundError(`Connected measurement point ${stationId} not found`);
+  throw new ForbiddenError(`Station ${stationId} is not available for this user`);
 }
 
 async function ensureConnectionTestStationAccess(

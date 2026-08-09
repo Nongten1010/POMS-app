@@ -1,5 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
+import { pipeline } from 'node:stream/promises';
 import { env } from '../../config/env';
 import { ForbiddenError } from '../../shared/errors/AppError';
 import { getScope, getScopeDetails } from '../../shared/middlewares/authorize';
@@ -10,6 +11,7 @@ import { connectionRequestsService } from './connection-requests.service';
 import {
   calendarStatusQuerySchema,
   connectedMeasurementPointDetailParamsSchema,
+  measurementCsvExportQuerySchema,
   measurementStatisticsQuerySchema,
 } from '../parameter-values/parameter-values.validator';
 import {
@@ -323,6 +325,28 @@ export const connectionRequestsController = {
         ...getRegionalAccessArg(req),
       );
       res.status(StatusCodes.OK).json({ success: true, ...result });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async getMeasurementCsvExport(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const actorUserId = requireActorUserId(req);
+      const { stationId } = connectedMeasurementPointDetailParamsSchema.parse(req.params);
+      const query = measurementCsvExportQuerySchema.parse(req.query);
+      const result = await connectionRequestsService.getMeasurementCsvExport(
+        stationId,
+        query,
+        actorUserId,
+        getScopeDetails(req, 'dashboard.stats:export'),
+        ...getRegionalAccessArg(req),
+      );
+
+      res.status(StatusCodes.OK);
+      res.setHeader('Content-Type', result.contentType);
+      res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
+      await pipeline(result.stream, res);
     } catch (err) {
       next(err);
     }

@@ -11,6 +11,7 @@
 1. อ่านโรงงานจาก active `cems_wpms_connected_measurement_points` ที่ผูก active `eligible_factories`; `factoryName` ใช้ชื่อจาก current/live point ที่อัปเดตล่าสุด.
 2. ถ้า current/live point ไม่มีชื่อจึง fallback ไป `eligible_factories.factory_name` และ `factories.name` ตามลำดับ; `factories` ยังเป็นข้อมูลเสริมและ ownership gate สำหรับ `OWN_FACTORY`.
 3. แนบจุดตรวจวัด, favorite, ค่ารายชั่วโมงล่าสุด และ flag ว่าทุกจุดมีข้อมูลของชั่วโมงปัจจุบันตามสิทธิ์ของผู้เรียก.
+4. เมื่อผู้ใช้ส่งออกรายงาน ให้เรียก CSV endpoint ด้วย `stationId`; backend resolve โรงงาน สิทธิ์ และข้อมูลจริงให้เอง.
 
 ```bash
 curl --request GET \
@@ -26,6 +27,7 @@ curl --request GET \
 | จุดโรงงานสำหรับแผนที่สาธารณะ | `GET` | `/api/v1/public/factory-map-points` | No | - | [Public map](#get-apiv1publicfactory-map-points) |
 | ข้อมูลทั่วไปของโรงงาน | `GET` | `/api/v1/cems-wpms-requests/factories/:factoryId/general` | Bearer | `factories:view` | [Factory general](#get-apiv1cems-wpms-requestsfactoriesfactoryidgeneral) |
 | ตั้งค่า favorite | `PUT` | `/api/v1/operator-factories/:factoryId/favorite` | Bearer | `factories:view` และ `dashboard.alerts:view` | [Favorite](#put-apiv1operator-factoriesfactoryidfavorite) |
+| ส่งออกข้อมูลตรวจวัด CSV | `GET` | `/api/v1/connected-measurement-points/:stationId/measurement-export.csv` | Bearer | `dashboard.stats:export` | [Measurement CSV export](../../shared/connected-measurement-points/README.md#get-apiv1connected-measurement-pointsstationidmeasurement-exportcsv) |
 
 ## Contracts
 

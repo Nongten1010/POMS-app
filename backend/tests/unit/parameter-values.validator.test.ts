@@ -3,6 +3,7 @@ import {
   connectionTestQuerySchema,
   latestParameterValueQuerySchema,
   listParameterValuesQuerySchema,
+  measurementCsvExportQuerySchema,
 } from '../../src/modules/parameter-values/parameter-values.validator';
 
 describe('parameter value validators', () => {
@@ -102,6 +103,56 @@ describe('parameter value validators', () => {
   it('rejects unsafe station ids for connection test table names', () => {
     const result = connectionTestQuerySchema.safeParse({
       stationId: 'S0001;DROP',
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts an hourly CSV export query with repeated parameter labels', () => {
+    const result = measurementCsvExportQuerySchema.parse({
+      frequency: 'hourly',
+      startDate: '2026-01-01',
+      endDate: '2026-12-31',
+      parameters: ['CO (ppm)', 'Flow Rate (m3/hr)'],
+    });
+
+    expect(result).toEqual({
+      frequency: 'hourly',
+      startDate: '2026-01-01',
+      endDate: '2026-12-31',
+      parameters: ['CO (ppm)', 'Flow Rate (m3/hr)'],
+    });
+  });
+
+  it('rejects hourly CSV export ranges longer than 366 inclusive days', () => {
+    const result = measurementCsvExportQuerySchema.safeParse({
+      frequency: 'hourly',
+      startDate: '2026-01-01',
+      endDate: '2027-01-02',
+      parameters: 'all',
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('allows at most ten calendar years for daily CSV exports', () => {
+    const parse = (endDate: string) =>
+      measurementCsvExportQuerySchema.safeParse({
+        frequency: 'daily',
+        startDate: '2026-01-01',
+        endDate,
+        parameters: 'all',
+      }).success;
+
+    expect([parse('2035-12-31'), parse('2036-01-01')]).toEqual([true, false]);
+  });
+
+  it('rejects calendar dates that match the shape but do not exist', () => {
+    const result = measurementCsvExportQuerySchema.safeParse({
+      frequency: 'hourly',
+      startDate: '2026-02-31',
+      endDate: '2026-02-31',
+      parameters: 'all',
     });
 
     expect(result.success).toBe(false);

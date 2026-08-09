@@ -44,6 +44,12 @@ connectedMeasurementPointsRoutes.get(
   connectionRequestsController.getMeasurementStatistics,
 );
 connectedMeasurementPointsRoutes.get(
+  `${stationPath}/measurement-export.csv`,
+  normalizeAnnualPointCodePath,
+  authorize('dashboard.stats:export'),
+  connectionRequestsController.getMeasurementCsvExport,
+);
+connectedMeasurementPointsRoutes.get(
   `${stationPath}/calendar-status`,
   normalizeAnnualPointCodePath,
   authorize('dashboard.stats:view'),

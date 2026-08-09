@@ -21,6 +21,7 @@ import { eligibleFactoriesService } from '../eligible-factories/eligible-factori
 import type { SelectedEligibleFactoryDTO } from '../eligible-factories/eligible-factories.types';
 import type {
   CalendarStatusQuerySchemaInput,
+  MeasurementCsvExportQuerySchemaInput,
   MeasurementStatisticsQuerySchemaInput,
 } from '../parameter-values/parameter-values.validator';
 import type { ParameterEvaluationOptions } from '../parameter-values/parameter-values.types';
@@ -685,6 +686,28 @@ export const connectionRequestsService = {
         factory: toMeasurementDetailFactory(point),
       },
     };
+  },
+
+  async getMeasurementCsvExport(
+    stationId: string,
+    query: MeasurementCsvExportQuerySchemaInput,
+    actorUserId: number,
+    exportScope: AccessScope,
+    regionalAccess?: RegionalAccessDTO | null,
+  ) {
+    return parameterValuesService.measurementCsvExport(
+      { stationId, ...query },
+      { actorUserId, scope: exportScope },
+      async () =>
+        (
+          await loadConnectedMeasurementPointExportContext(
+            stationId,
+            actorUserId,
+            exportScope,
+            regionalAccess,
+          )
+        ).factoryName,
+    );
   },
 
   async create(
@@ -2505,6 +2528,37 @@ async function loadConnectedMeasurementPointDetail(
   const point = result.data[0];
   if (!point) throw new NotFoundError(`Connected measurement point ${stationId} not found`);
   return point;
+}
+
+async function loadConnectedMeasurementPointExportContext(
+  stationId: string,
+  actorUserId: number,
+  exportScope: AccessScope,
+  regionalAccess?: RegionalAccessDTO | null,
+): Promise<{ factoryName: string }> {
+  const { rows } = await connectionRequestsRepository.list(
+    { stationId, status: CONNECTION_REQUEST_STATUS.CONNECTED },
+    {
+      actorUserId,
+      scope: exportScope,
+      regionalAccess,
+      useAssignedFactoryAccess: true,
+    },
+  );
+  const request = rows.find((row) =>
+    row.measurementPoints.some((point) => stationMatchesMeasurementPoint(point, stationId)),
+  );
+  if (!request) throw new NotFoundError(`Connected measurement point ${stationId} not found`);
+
+  const currentNames = await connectionRequestsRepository.findCurrentPomsFactoryNamesForRequests([
+    request,
+  ]);
+  return {
+    factoryName:
+      currentNames.get(request.factoryId) ??
+      currentNames.get(request.factoryRegistrationNo) ??
+      request.factoryName,
+  };
 }
 
 function toConnectedMeasurementPointModalDetail(

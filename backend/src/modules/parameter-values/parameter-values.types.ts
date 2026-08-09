@@ -30,6 +30,14 @@ export interface CalendarStatusQuery {
   month: string;
 }
 
+export interface MeasurementCsvExportQuery {
+  stationId: string;
+  frequency: 'hourly' | 'daily';
+  startDate: string;
+  endDate: string;
+  parameters: string[];
+}
+
 export interface ParameterEvaluation {
   parameter: string;
   standardCriteria?: unknown;
