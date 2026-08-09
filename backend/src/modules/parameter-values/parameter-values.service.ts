@@ -309,6 +309,7 @@ export const parameterValuesService = {
     );
     const useConfiguredEvaluation = Boolean(options?.parameterEvaluations);
     const dailySummaries = buildDailySummaries(result.rows, definitions, useConfiguredEvaluation);
+    // Calendar days and today's completeness stay month-scoped; the two counters use the full year.
     const requestedMonthSummaries = dailySummaries.filter(
       (summary) => summary.date >= monthStartDate && summary.date <= monthEndDate,
     );
