@@ -51,6 +51,7 @@ jest.mock('../../src/modules/auth/auth.repository', () => ({
     getOperatorFactories: jest.fn(),
     getRolesAndPermissions: jest.fn(),
     upsertExternalOfficerUser: jest.fn(),
+    upsertExternalOperatorUser: jest.fn(),
     syncExternalOfficerProfile: jest.fn(),
     syncExternalOperatorProfile: jest.fn(),
   },
@@ -924,6 +925,129 @@ describe('authService login completion', () => {
     });
   });
 
+  it('provisions an i-Industry operator before issuing a token', async () => {
+    const operatorProfile = externalOperatorProfile();
+    mockedAuthRepository.upsertExternalOperatorUser.mockResolvedValue(externalOperatorUser());
+    mockedAuthRepository.getOperatorProfile.mockResolvedValue({
+      user_id: 91,
+      user_code: operatorProfile.user_code,
+      regis_date: operatorProfile.regis_date,
+    });
+    mockedAuthRepository.getOperatorFactories.mockResolvedValue([
+      operatorFactoryRow(operatorProfile.juristics[0].juristic_id, '10100000000001'),
+    ]);
+    mockedAuthRepository.getRolesAndPermissions.mockResolvedValue({
+      roles: ['factory_operator'],
+      scopes: {
+        'factories:view': 'OWN_FACTORY',
+      },
+    });
+
+    const result = await authService.completeLoginAsOperator(operatorProfile);
+
+    expect(mockedAuthRepository.upsertExternalOperatorUser).toHaveBeenCalledWith(
+      operatorProfile,
+      'factory_operator',
+    );
+    expect(mockedAuthRepository.findUserByProviderAndExternalId).not.toHaveBeenCalled();
+    expect(mockedAuthRepository.syncExternalOperatorProfile).not.toHaveBeenCalled();
+    expect(mockedAuthRepository.updateLastLogin).toHaveBeenCalledWith(91);
+    expect(result.user).toMatchObject({
+      accountType: 'api',
+      userType: 'operator',
+      username: operatorProfile.external_id,
+      roles: 'factory_operator',
+      ownedFactoryIds: ['10100000000001'],
+    });
+  });
+
+  it('uses the same idempotent provisioning path on repeat i-Industry operator logins', async () => {
+    const operatorProfile = externalOperatorProfile();
+    const user = externalOperatorUser();
+    mockedAuthRepository.upsertExternalOperatorUser.mockResolvedValue(user);
+    mockedAuthRepository.getOperatorProfile.mockResolvedValue({
+      user_id: user.id,
+      user_code: operatorProfile.user_code,
+      regis_date: operatorProfile.regis_date,
+    });
+    mockedAuthRepository.getOperatorFactories.mockResolvedValue([]);
+    mockedAuthRepository.getRolesAndPermissions.mockResolvedValue({
+      roles: ['factory_operator'],
+      scopes: {},
+    });
+
+    const first = await authService.completeLoginAsOperator(operatorProfile);
+    const second = await authService.completeLoginAsOperator(operatorProfile);
+
+    expect(mockedAuthRepository.upsertExternalOperatorUser).toHaveBeenCalledTimes(2);
+    expect(mockedAuthRepository.upsertExternalOperatorUser).toHaveBeenNthCalledWith(
+      1,
+      operatorProfile,
+      'factory_operator',
+    );
+    expect(mockedAuthRepository.upsertExternalOperatorUser).toHaveBeenNthCalledWith(
+      2,
+      operatorProfile,
+      'factory_operator',
+    );
+    expect(mockedAuthRepository.updateLastLogin).toHaveBeenNthCalledWith(1, user.id);
+    expect(mockedAuthRepository.updateLastLogin).toHaveBeenNthCalledWith(2, user.id);
+    expect(first.user.username).toBe(operatorProfile.external_id);
+    expect(second.user.username).toBe(operatorProfile.external_id);
+  });
+
+  it('rejects an inactive i-Industry operator returned by provisioning', async () => {
+    const operatorProfile = externalOperatorProfile();
+    mockedAuthRepository.upsertExternalOperatorUser.mockResolvedValue({
+      ...externalOperatorUser(),
+      is_active: false,
+    });
+
+    await expect(authService.completeLoginAsOperator(operatorProfile)).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+      message: 'Invalid credentials',
+    });
+
+    expect(mockedAuthRepository.upsertExternalOperatorUser).toHaveBeenCalledWith(
+      operatorProfile,
+      'factory_operator',
+    );
+    expect(mockedAuthRepository.updateLastLogin).not.toHaveBeenCalled();
+    expect(mockedAuthRepository.getOperatorProfile).not.toHaveBeenCalled();
+    expect(mockedSignAccessToken).not.toHaveBeenCalled();
+  });
+
+  it('rejects a soft-deleted i-Industry operator returned by provisioning', async () => {
+    const operatorProfile = externalOperatorProfile();
+    mockedAuthRepository.upsertExternalOperatorUser.mockResolvedValue({
+      ...externalOperatorUser(),
+      deleted_at: '2026-08-01T00:00:00.000Z',
+    });
+
+    await expect(authService.completeLoginAsOperator(operatorProfile)).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+      message: 'Invalid credentials',
+    });
+
+    expect(mockedAuthRepository.updateLastLogin).not.toHaveBeenCalled();
+    expect(mockedAuthRepository.getOperatorProfile).not.toHaveBeenCalled();
+    expect(mockedSignAccessToken).not.toHaveBeenCalled();
+  });
+
+  it('returns the generic unauthorized error when i-Industry identity cannot be provisioned', async () => {
+    const operatorProfile = externalOperatorProfile();
+    mockedAuthRepository.upsertExternalOperatorUser.mockResolvedValue(undefined);
+
+    await expect(authService.completeLoginAsOperator(operatorProfile)).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+      message: 'Invalid credentials',
+    });
+
+    expect(mockedAuthRepository.updateLastLogin).not.toHaveBeenCalled();
+    expect(mockedAuthRepository.getOperatorProfile).not.toHaveBeenCalled();
+    expect(mockedSignAccessToken).not.toHaveBeenCalled();
+  });
+
   it('returns owned factory ids from /me for an operator', async () => {
     mockedAuthRepository.findUserById.mockResolvedValue({
       id: 77,
@@ -977,5 +1101,57 @@ function operatorFactoryRow(juristicId: string, fid: string) {
     verify_status: 1,
     authorize_start: '2024-09-02',
     authorize_end: '2024-09-30',
+  };
+}
+
+function externalOperatorProfile() {
+  return {
+    identity_provider: 'i_industry' as const,
+    external_id: '1111111111111',
+    citizen_id: '1111111111111',
+    user_code: 'OP-001',
+    first_name: 'ผู้ประกอบการ',
+    last_name: 'ทดสอบ',
+    email: 'operator@example.test',
+    phone: null,
+    regis_date: '2026-08-10',
+    juristics: [
+      {
+        juristic_id: '0100000000001',
+        name_th: 'บริษัท ทดสอบ จำกัด',
+        name_en: 'TEST COMPANY LIMITED',
+        factories: [
+          {
+            fid: '10100000000001',
+            code: 'TEST-001',
+            name: 'โรงงานทดสอบ',
+            province_id: '1000',
+            system_id: null,
+            verify_status: 0,
+            authorize_start: null,
+            authorize_end: null,
+            juristic_start: null,
+            verify_date: null,
+          },
+        ],
+      },
+    ],
+  };
+}
+
+function externalOperatorUser() {
+  return {
+    id: 91,
+    external_id: '1111111111111',
+    identity_provider: 'i_industry',
+    user_type: 'operator' as const,
+    username: '1111111111111',
+    email: 'operator@example.test',
+    phone: null,
+    prename_th: null,
+    first_name: 'ผู้ประกอบการ',
+    last_name: 'ทดสอบ',
+    is_active: true,
+    password_hash: null,
   };
 }

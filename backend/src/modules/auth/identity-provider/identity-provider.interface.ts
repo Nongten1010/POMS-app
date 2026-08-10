@@ -42,6 +42,8 @@ export interface ExternalOfficerProfile {
 }
 
 export interface ExternalOperatorProfile {
+  identity_provider?: 'mock' | 'i_industry';
+  external_id: string;
   citizen_id: string;
   user_code: string;
   first_name: string;

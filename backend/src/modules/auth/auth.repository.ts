@@ -21,6 +21,7 @@ export interface UserRow {
   last_name: string;
   is_active: boolean;
   password_hash: Buffer | null;
+  deleted_at?: string | Date | null;
 }
 
 export interface OfficerProfileRow {
@@ -171,6 +172,82 @@ export const authRepository = {
     });
   },
 
+  async upsertExternalOperatorUser(
+    profile: ExternalOperatorProfile,
+    roleCode: string,
+  ): Promise<UserRow | undefined> {
+    return db.transaction(async (trx) => {
+      const provider = profile.identity_provider;
+      if (!provider || provider === 'mock') {
+        throw new Error('External operator profile is missing an API identity provider');
+      }
+
+      const existingUser = await trx<UserRow>('users')
+        .where({ identity_provider: provider, external_id: profile.external_id })
+        .first();
+      if (existingUser?.deleted_at) {
+        return undefined;
+      }
+      if (existingUser && existingUser.user_type !== 'operator') {
+        return undefined;
+      }
+      if (existingUser && !Boolean(existingUser.is_active)) {
+        return existingUser;
+      }
+      const userPayload = {
+        user_type: 'operator',
+        username: profile.external_id,
+        email: profile.email,
+        phone: profile.phone,
+        prename_th: null,
+        first_name: profile.first_name,
+        last_name: profile.last_name,
+        last_synced_at: trx.raw('SYSDATETIME()'),
+        updated_at: trx.raw('SYSDATETIME()'),
+      };
+
+      let userId: number;
+      if (existingUser) {
+        await trx('users').where({ id: existingUser.id }).update(userPayload);
+        userId = Number(existingUser.id);
+      } else {
+        try {
+          await trx('users').insert({
+            external_id: profile.external_id,
+            identity_provider: provider,
+            ...userPayload,
+            is_active: true,
+          });
+          const insertedUser = await trx<UserRow>('users')
+            .where({ identity_provider: provider, external_id: profile.external_id })
+            .first();
+          if (!insertedUser) throw new Error('Synced operator user could not be loaded');
+          userId = Number(insertedUser.id);
+        } catch (error) {
+          if (!isSqlServerUniqueKeyViolation(error)) throw error;
+
+          const concurrentlyInsertedUser = await trx<UserRow>('users')
+            .where({ identity_provider: provider, external_id: profile.external_id })
+            .first();
+          if (!concurrentlyInsertedUser) throw error;
+          if (concurrentlyInsertedUser.deleted_at) return undefined;
+          if (concurrentlyInsertedUser.user_type !== 'operator') return undefined;
+          if (!Boolean(concurrentlyInsertedUser.is_active)) return concurrentlyInsertedUser;
+
+          await trx('users').where({ id: concurrentlyInsertedUser.id }).update(userPayload);
+          userId = Number(concurrentlyInsertedUser.id);
+        }
+      }
+
+      await syncExternalOperatorProfileWithTrx(trx, userId, profile);
+      await syncAssignedRole(trx, userId, roleCode);
+
+      const user = await trx<UserRow>('users').where({ id: userId }).first();
+      if (!user) throw new Error('Synced operator user could not be loaded');
+      return user;
+    });
+  },
+
   async syncExternalOfficerProfile(userId: number, profile: ExternalOfficerProfile): Promise<void> {
     await syncExternalOfficerProfileWithTrx(db, userId, profile);
   },
@@ -179,34 +256,7 @@ export const authRepository = {
     userId: number,
     profile: ExternalOperatorProfile,
   ): Promise<void> {
-    await db.transaction(async (trx) => {
-      const existingProfile = await trx('operator_profiles').where({ user_id: userId }).first();
-      const operatorProfilePayload = {
-        user_code: profile.user_code,
-        regis_date: profile.regis_date,
-        synced_at: trx.raw('SYSDATETIME()'),
-      };
-
-      if (existingProfile) {
-        await trx('operator_profiles').where({ user_id: userId }).update(operatorProfilePayload);
-      } else {
-        await trx('operator_profiles').insert({
-          user_id: userId,
-          ...operatorProfilePayload,
-        });
-      }
-
-      for (const juristic of profile.juristics) {
-        const juristicId = await upsertExternalJuristic(trx, juristic);
-        await upsertUserJuristicAccess(trx, userId, juristicId);
-
-        for (const factory of juristic.factories) {
-          await upsertExternalFactory(trx, juristicId, factory);
-        }
-      }
-
-      await syncManualOperatorFactoryAccess(trx, userId, profile.citizen_id);
-    });
+    await db.transaction(async (trx) => syncExternalOperatorProfileWithTrx(trx, userId, profile));
   },
 
   async getRolesAndPermissions(userId: number): Promise<{
@@ -410,6 +460,37 @@ export async function syncIdentityProviderBaseRole(
   }
 }
 
+async function syncAssignedRole(
+  trx: Knex.Transaction,
+  userId: number,
+  roleCode: string,
+): Promise<void> {
+  const role = await trx('roles').where({ code: roleCode }).whereNull('deleted_at').first('id');
+  if (!role) throw new Error(`Role ${roleCode} is not provisioned`);
+
+  const existing = await trx('user_roles')
+    .where({ user_id: userId, role_id: role.id })
+    .first('user_id');
+  if (existing) return;
+
+  try {
+    await trx('user_roles').insert({ user_id: userId, role_id: role.id, assigned_by: null });
+  } catch (error) {
+    if (!isSqlServerUniqueKeyViolation(error)) throw error;
+  }
+}
+
+function isSqlServerUniqueKeyViolation(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+
+  const candidate = error as {
+    number?: unknown;
+    originalError?: { info?: { number?: unknown } };
+  };
+  const errorNumber = candidate.number ?? candidate.originalError?.info?.number;
+  return errorNumber === 2601 || errorNumber === 2627;
+}
+
 async function upsertExternalJuristic(
   trx: Knex.Transaction,
   juristic: ExternalOperatorJuristic,
@@ -427,14 +508,63 @@ async function upsertExternalJuristic(
     return Number(existing.id);
   }
 
-  await trx('juristics').insert({
-    juristic_id: juristic.juristic_id,
-    ...payload,
-  });
+  try {
+    await trx('juristics').insert({
+      juristic_id: juristic.juristic_id,
+      ...payload,
+    });
+  } catch (error) {
+    if (!isSqlServerUniqueKeyViolation(error)) throw error;
+
+    const concurrentlyInserted = await trx('juristics')
+      .where({ juristic_id: juristic.juristic_id })
+      .first('id');
+    if (!concurrentlyInserted) throw error;
+    await trx('juristics').where({ id: concurrentlyInserted.id }).update(payload);
+    return Number(concurrentlyInserted.id);
+  }
+
   const inserted = await trx('juristics').where({ juristic_id: juristic.juristic_id }).first('id');
   if (!inserted) throw new Error('Synced juristic could not be loaded');
-
   return Number(inserted.id);
+}
+
+async function syncExternalOperatorProfileWithTrx(
+  trx: Knex.Transaction,
+  userId: number,
+  profile: ExternalOperatorProfile,
+): Promise<void> {
+  const existingProfile = await trx('operator_profiles').where({ user_id: userId }).first();
+  const operatorProfilePayload = {
+    user_code: profile.user_code,
+    regis_date: profile.regis_date,
+    synced_at: trx.raw('SYSDATETIME()'),
+  };
+
+  if (existingProfile) {
+    await trx('operator_profiles').where({ user_id: userId }).update(operatorProfilePayload);
+  } else {
+    try {
+      await trx('operator_profiles').insert({
+        user_id: userId,
+        ...operatorProfilePayload,
+      });
+    } catch (error) {
+      if (!isSqlServerUniqueKeyViolation(error)) throw error;
+      await trx('operator_profiles').where({ user_id: userId }).update(operatorProfilePayload);
+    }
+  }
+
+  for (const juristic of profile.juristics) {
+    const juristicId = await upsertExternalJuristic(trx, juristic);
+    await upsertUserJuristicAccess(trx, userId, juristicId);
+
+    for (const factory of juristic.factories) {
+      await upsertExternalFactory(trx, juristicId, factory);
+    }
+  }
+
+  await syncManualOperatorFactoryAccess(trx, userId, profile.citizen_id);
 }
 
 async function upsertUserJuristicAccess(
@@ -450,7 +580,11 @@ async function upsertUserJuristicAccess(
     return;
   }
 
-  await trx('user_juristics').insert({ user_id: userId, juristic_id: juristicId });
+  try {
+    await trx('user_juristics').insert({ user_id: userId, juristic_id: juristicId });
+  } catch (error) {
+    if (!isSqlServerUniqueKeyViolation(error)) throw error;
+  }
 }
 
 export function shouldInsertUserJuristicAccess(existing: unknown): boolean {
@@ -475,7 +609,11 @@ export async function syncManualOperatorFactoryAccess(
       .first('revoked_at');
     if (existing) continue;
 
-    await trx('user_factory_access').insert({ user_id: userId, factory_id: factory.id });
+    try {
+      await trx('user_factory_access').insert({ user_id: userId, factory_id: factory.id });
+    } catch (error) {
+      if (!isSqlServerUniqueKeyViolation(error)) throw error;
+    }
   }
 }
 
@@ -506,8 +644,16 @@ async function upsertExternalFactory(
     return;
   }
 
-  await trx('factories').insert({
-    fid: factory.fid,
-    ...payload,
-  });
+  try {
+    await trx('factories').insert({
+      fid: factory.fid,
+      ...payload,
+    });
+  } catch (error) {
+    if (!isSqlServerUniqueKeyViolation(error)) throw error;
+
+    const concurrentlyInserted = await trx('factories').where({ fid: factory.fid }).first('id');
+    if (!concurrentlyInserted) throw error;
+    await trx('factories').where({ id: concurrentlyInserted.id }).update(payload);
+  }
 }

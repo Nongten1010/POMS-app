@@ -36,6 +36,8 @@ export class MockIdentityProvider implements IdentityProvider {
     const op = MOCK_OPERATORS.find((o) => o.username === username);
     if (!op || op.password !== password) return null;
     return {
+      identity_provider: 'mock',
+      external_id: op.citizen_id,
       citizen_id: op.citizen_id,
       user_code: op.user_code,
       first_name: op.first_name,

@@ -27,6 +27,7 @@ interface DiwUserLoginResponse {
   userEmail?: unknown;
   userRegisDate?: unknown;
   juristic?: unknown;
+  JuristicList?: unknown;
 }
 
 interface DiwOfficerLoginResponse {
@@ -75,14 +76,25 @@ interface DiwJuristic {
 
 interface DiwFactory {
   FID?: unknown;
+  fid?: unknown;
   CODE?: unknown;
+  code?: unknown;
   FNAME?: unknown;
+  fname?: unknown;
   PROVINCE_ID?: unknown;
   province_id?: unknown;
   SYSTEM_ID?: unknown;
   system_id?: unknown;
   VERIFY_STATUS?: unknown;
   verify_status?: unknown;
+  AUTHORIZE_START?: unknown;
+  authorize_start?: unknown;
+  AUTHORIZE_END?: unknown;
+  authorize_end?: unknown;
+  JURISTIC_START?: unknown;
+  juristic_start?: unknown;
+  VERIFY_DATE?: unknown;
+  verify_date?: unknown;
 }
 
 export class DiwUserLoginIdentityProvider implements IdentityProvider {
@@ -111,13 +123,16 @@ export class DiwUserLoginIdentityProvider implements IdentityProvider {
     username: string,
     password: string,
   ): Promise<ExternalOperatorProfile | null> {
+    const externalId = username.trim();
+    if (!isOperatorIdentity(externalId)) return null;
+
     const data = await this.postUserLogin(this.options.operatorUrl, {
       clientId: this.options.clientId,
-      username,
+      username: externalId,
       password,
     });
     if (!data) return null;
-    return parseDiwOperatorLoginResponse(data, this.options.defaultProvinceId);
+    return parseDiwOperatorLoginResponse(data, this.options.defaultProvinceId, externalId);
   }
 
   async authenticateCitizen(
@@ -225,6 +240,7 @@ function classifyOfficerAccountIdentity(
 export function parseDiwOperatorLoginResponse(
   data: unknown,
   defaultProvinceId: string,
+  submittedUsername: string,
 ): ExternalOperatorProfile | null {
   const first = Array.isArray(data) ? data[0] : data;
   if (!isRecord(first)) return null;
@@ -232,21 +248,26 @@ export function parseDiwOperatorLoginResponse(
   const payload = first as DiwUserLoginResponse;
   if (!isSuccessStatus(payload.status)) return null;
 
+  const accountKey = submittedUsername.trim();
+  if (!isOperatorIdentity(accountKey)) return null;
+
   const citizenId = toStringValue(payload.citizen_id);
-  if (!citizenId) return null;
+  if (!citizenId || citizenId !== accountKey) return null;
 
   const firstName = toStringValue(payload.userFirstName) ?? '';
   const lastName = toStringValue(payload.userLastName) ?? '';
 
   return {
+    identity_provider: 'i_industry',
+    external_id: accountKey,
     citizen_id: citizenId,
     user_code: toStringValue(payload.userCode) ?? citizenId,
     first_name: firstName,
     last_name: lastName,
     email: toStringValue(payload.userEmail),
     phone: toStringValue(payload.userPhone),
-    regis_date: toStringValue(payload.userRegisDate),
-    juristics: parseJuristics(payload.juristic, defaultProvinceId),
+    regis_date: normalizeDiwDateTime(payload.userRegisDate),
+    juristics: parseJuristics(payload.juristic ?? payload.JuristicList, defaultProvinceId),
   };
 }
 
@@ -285,9 +306,9 @@ function parseFactories(
   return rawFactories.flatMap((raw): ExternalOperatorProfile['juristics'][number]['factories'] => {
     if (!isRecord(raw)) return [];
     const factory = raw as DiwFactory;
-    const fid = toStringValue(factory.FID);
-    const code = toStringValue(factory.CODE);
-    const name = toStringValue(factory.FNAME);
+    const fid = toStringValue(factory.FID ?? factory.fid);
+    const code = toStringValue(factory.CODE ?? factory.code);
+    const name = toStringValue(factory.FNAME ?? factory.fname);
     if (!fid || !code || !name) return [];
 
     return [
@@ -301,10 +322,10 @@ function parseFactories(
           defaultProvinceId,
         system_id: toNumberValue(factory.SYSTEM_ID ?? factory.system_id),
         verify_status: toNumberValue(factory.VERIFY_STATUS ?? factory.verify_status) ?? 0,
-        authorize_start: null,
-        authorize_end: null,
-        juristic_start: null,
-        verify_date: null,
+        authorize_start: normalizeDiwDate(factory.AUTHORIZE_START ?? factory.authorize_start),
+        authorize_end: normalizeDiwDate(factory.AUTHORIZE_END ?? factory.authorize_end),
+        juristic_start: normalizeDiwDate(factory.JURISTIC_START ?? factory.juristic_start),
+        verify_date: normalizeDiwDate(factory.VERIFY_DATE ?? factory.verify_date),
       },
     ];
   });
@@ -347,6 +368,75 @@ function toNumberValue(value: unknown): number | null {
     return Number.isFinite(parsed) ? parsed : null;
   }
   return null;
+}
+
+function isOperatorIdentity(value: string): boolean {
+  return /^\d{13}$/.test(value);
+}
+
+function normalizeDiwDate(value: unknown): string | null {
+  const normalized = normalizeDiwDateTime(value);
+  return normalized?.slice(0, 10) ?? null;
+}
+
+function normalizeDiwDateTime(value: unknown): string | null {
+  const raw = toStringValue(value);
+  if (!raw) return null;
+
+  const dayFirst =
+    /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ T](\d{2}):(\d{2}):(\d{2})(\.\d{1,7})?)?$/.exec(raw);
+  if (dayFirst) {
+    return buildSqlDateTime({
+      year: Number(dayFirst[3]),
+      month: Number(dayFirst[2]),
+      day: Number(dayFirst[1]),
+      hour: dayFirst[4] === undefined ? undefined : Number(dayFirst[4]),
+      minute: dayFirst[5] === undefined ? undefined : Number(dayFirst[5]),
+      second: dayFirst[6] === undefined ? undefined : Number(dayFirst[6]),
+      fraction: dayFirst[7],
+    });
+  }
+
+  const yearFirst = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}):(\d{2})(\.\d{1,7})?)?$/.exec(
+    raw,
+  );
+  if (!yearFirst) return null;
+
+  return buildSqlDateTime({
+    year: Number(yearFirst[1]),
+    month: Number(yearFirst[2]),
+    day: Number(yearFirst[3]),
+    hour: yearFirst[4] === undefined ? undefined : Number(yearFirst[4]),
+    minute: yearFirst[5] === undefined ? undefined : Number(yearFirst[5]),
+    second: yearFirst[6] === undefined ? undefined : Number(yearFirst[6]),
+    fraction: yearFirst[7],
+  });
+}
+
+function buildSqlDateTime(parts: {
+  year: number;
+  month: number;
+  day: number;
+  hour?: number;
+  minute?: number;
+  second?: number;
+  fraction?: string;
+}): string | null {
+  const { year, month, day, hour, minute, second, fraction } = parts;
+  const calendarDate = new Date(Date.UTC(year, month - 1, day));
+  const validDate =
+    year >= 1900 &&
+    year <= 9999 &&
+    calendarDate.getUTCFullYear() === year &&
+    calendarDate.getUTCMonth() === month - 1 &&
+    calendarDate.getUTCDate() === day;
+  if (!validDate) return null;
+
+  const date = `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  if (hour === undefined || minute === undefined || second === undefined) return date;
+  if (hour > 23 || minute > 59 || second > 59) return null;
+
+  return `${date}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${String(second).padStart(2, '0')}${fraction ?? ''}`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

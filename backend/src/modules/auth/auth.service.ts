@@ -120,10 +120,16 @@ export const authService = {
     profile: Awaited<ReturnType<ReturnType<typeof getIdentityProvider>['authenticateOperator']>>,
   ): Promise<LoginResponse> {
     if (!profile) throw new UnauthorizedError('Invalid credentials');
-    const user = await authRepository.findUserByProviderAndExternalId('mock', profile.citizen_id);
+    const isApiOperator =
+      profile.identity_provider !== undefined && profile.identity_provider !== 'mock';
+    const user = isApiOperator
+      ? await authRepository.upsertExternalOperatorUser(profile, 'factory_operator')
+      : await authRepository.findUserByProviderAndExternalId('mock', profile.external_id);
     ensureLoginUserAvailable(user, 'operator');
     await authRepository.updateLastLogin(user.id);
-    await authRepository.syncExternalOperatorProfile(user.id, profile);
+    if (!isApiOperator) {
+      await authRepository.syncExternalOperatorProfile(user.id, profile);
+    }
 
     const operatorProfile = await buildOperatorProfile(user.id);
     const { roles, scopes } = await authRepository.getRolesAndPermissions(user.id);
@@ -205,6 +211,7 @@ function ensureLoginUserAvailable(
     | {
         id: number;
         is_active: boolean;
+        deleted_at?: string | Date | null;
       }
     | undefined,
   userType: LoginRequest['userType'],
@@ -212,6 +219,14 @@ function ensureLoginUserAvailable(
   if (!user) {
     logger.warn(`[auth] ${userType} login rejected: external identity is not provisioned`, {
       userType,
+    });
+    throw new UnauthorizedError('Invalid credentials');
+  }
+
+  if (user.deleted_at) {
+    logger.warn(`[auth] ${userType} login rejected: deleted account`, {
+      userType,
+      userId: user.id,
     });
     throw new UnauthorizedError('Invalid credentials');
   }
