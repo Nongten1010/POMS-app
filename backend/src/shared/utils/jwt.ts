@@ -4,8 +4,6 @@ import { env } from '../../config/env';
 import type { PermissionScopeDetails } from '../../modules/auth/permissions';
 import type { RegionalAccessDTO } from '../../modules/auth/regional-access';
 
-const MAX_PRODUCTION_ACCESS_TOKEN_LIFETIME_SECONDS = 15 * 60;
-
 export interface AccessTokenPayload {
   sub: string; // user id (as string)
   userType: 'citizen' | 'operator' | 'officer' | 'admin';
@@ -19,12 +17,7 @@ export interface AccessTokenPayload {
 }
 
 export function signAccessToken(payload: AccessTokenPayload): string {
-  const configuredLifetime = parseDurationToSeconds(env.JWT_EXPIRES_IN);
-  const expiresIn =
-    env.NODE_ENV === 'production'
-      ? Math.min(configuredLifetime, MAX_PRODUCTION_ACCESS_TOKEN_LIFETIME_SECONDS)
-      : configuredLifetime;
-  const opts: SignOptions = { expiresIn };
+  const opts: SignOptions = { expiresIn: parseDurationToSeconds(env.JWT_EXPIRES_IN) };
   return jwt.sign(payload, env.JWT_SECRET, opts);
 }
 
@@ -32,13 +25,6 @@ export function verifyAccessToken(token: string): AccessTokenPayload {
   const decoded = jwt.verify(token, env.JWT_SECRET);
   if (typeof decoded === 'string') {
     throw new Error('Invalid token payload');
-  }
-  if (
-    env.NODE_ENV === 'production' &&
-    (typeof decoded.iat !== 'number' ||
-      Math.floor(Date.now() / 1000) - decoded.iat > MAX_PRODUCTION_ACCESS_TOKEN_LIFETIME_SECONDS)
-  ) {
-    throw new Error('Access token lifetime exceeded');
   }
   return decoded as AccessTokenPayload;
 }

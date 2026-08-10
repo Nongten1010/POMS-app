@@ -46,7 +46,7 @@ curl --request POST 'https://d-poms.diw.go.th/api/v1/auth/login' \
 | `user.ownedFactoryIds` | `string[]`    | มีเฉพาะ operator persona และคำนวณจากสิทธิ์โรงงานปัจจุบัน                           |
 | `permissions`          | `object`      | Permission groups ของ persona เดียว พร้อม data scope                               |
 
-ใน `NODE_ENV=production` access token มีอายุใช้งานสูงสุด `15` นาที แม้ `JWT_EXPIRES_IN` จะถูกตั้งไว้นานกว่านั้น และ backend ปฏิเสธ legacy token ที่ `iat` เก่ากว่า `15` นาทีด้วย เพื่อไม่ให้ operator permission เดิมคงอยู่เป็นเวลานานหลัง ownership เปลี่ยน
+อายุ access token เป็นไปตาม `JWT_EXPIRES_IN` ของ environment ที่ออก token โดยไม่มี production-only cap เพิ่มเติม และ backend ยอมรับ token ที่ลายเซ็นถูกต้องจนถึงค่า `exp` ของ token นั้น การเปลี่ยน `JWT_EXPIRES_IN` มีผลกับ token ที่ออกใหม่เท่านั้น
 
 ### พฤติกรรมบัญชี i-Industry แบบหลาย persona
 
