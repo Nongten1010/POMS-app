@@ -99,6 +99,7 @@ const statisticStatusColors = {
   noData: '#9ca3af',
   invalid: '#9ca3af',
 }
+const measurementTableNote = '* = ไม่มีการติดตั้ง, - = มีการติดตั้ง แต่ไม่ส่งข้อมูล, ERR = ค่าติดลบ'
 const measurementValueStatusColors = {
   normal: '#46b529',
   warning: '#f59e0b',
@@ -344,11 +345,52 @@ function calculateTodayCompletenessPercent(rows, parameter) {
   return `${Math.round((submittedRows / rows.length) * 100).toLocaleString('th-TH')}%`
 }
 
-function isFullCompletenessPercent(value) {
-  return String(value).trim() === '100%'
+function getStatisticRowHour(row) {
+  const rawTime = row?.chartTime || row?.time || ''
+  const hourText = String(rawTime).match(/\d{1,2}/)?.[0]
+  const hour = Number(hourText)
+
+  return Number.isInteger(hour) && hour >= 0 && hour <= 23 ? hour : null
 }
 
-function mergeCalendarSummaryWithTodayCompleteness(summaryRows, statisticRows, parameters) {
+function getCompletenessRowsBySelectedDate(rows, selectedDate) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return []
+  }
+
+  if (!selectedDate || !dayjs(selectedDate).isSame(dayjs(), 'day')) {
+    return rows
+  }
+
+  const currentHour = dayjs().hour()
+  const availableRows = rows.filter((row) => {
+    const hour = getStatisticRowHour(row)
+    return hour === null ? true : hour <= currentHour
+  })
+
+  return availableRows.length > 0 ? availableRows : rows
+}
+
+function getCompletenessPercentColor(value) {
+  const percent = toFiniteNumber(String(value).replace('%', '').replace(/,/g, ''))
+
+  if (percent === null) {
+    return 'inherit'
+  }
+
+  if (percent < 80) {
+    return statisticStatusColors.exceeded
+  }
+
+  if (percent === 100) {
+    return statisticStatusColors.normal
+  }
+
+  return 'inherit'
+}
+
+function mergeCalendarSummaryWithTodayCompleteness(summaryRows, statisticRows, parameters, selectedDate) {
+  const rowsForTodayCompleteness = getCompletenessRowsBySelectedDate(statisticRows, selectedDate)
   const orderedParameters =
     Array.isArray(parameters) && parameters.length > 0
       ? parameters
@@ -368,7 +410,7 @@ function mergeCalendarSummaryWithTodayCompleteness(summaryRows, statisticRows, p
       unit: summary?.unit ?? '',
       exceededDays: summary?.exceededDays ?? '0 วัน',
       lowDataDays: summary?.lowDataDays ?? '0 วัน',
-      todayPercent: calculateTodayCompletenessPercent(statisticRows, parameter),
+      todayPercent: calculateTodayCompletenessPercent(rowsForTodayCompleteness, parameter),
     }
   })
 }
@@ -1633,7 +1675,7 @@ function createMeasurementValueCell(value, point, parameter) {
   if (!hasNumericValue) {
     return {
       displayValue: formatMeasurementValue(value),
-      color: measurementValueStatusColors.invalid,
+      color: statisticStatusColors.unavailable,
     }
   }
 
@@ -1759,61 +1801,65 @@ function MeasurementTable({ table, sx }) {
   const valueStartIndex = 3
 
   return (
-    <TableContainer
-      sx={{
-        border: 1,
-        borderColor: 'divider',
-        overflowX: 'auto',
-        ...sx,
-      }}
-    >
-      <Table size="small" sx={{ minWidth: 620, ...borderedTableSx }}>
-        <TableHead>
-          <TableRow>
-            {table.columns.map((column) => (
-              <TableCell
-                key={column}
-                sx={{
-                  fontWeight: 700,
-                  bgcolor: 'neutral.50',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {column}
-              </TableCell>
-            ))}
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {table.rows.length > 0 ? (
-            table.rows.map((row, rowIndex) => (
-              <TableRow key={row.key || rowIndex}>
-                {row.cells.map((cell, index) => (
-                  <TableCell
-                    key={`${cell.displayValue}-${index}`}
-                    sx={{
-                      fontWeight: 300,
-                      color: index < valueStartIndex ? 'text.primary' : cell.color,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {cell.displayValue}
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))
-          ) : (
+    <Box sx={sx}>
+      <TableContainer
+        sx={{
+          border: 1,
+          borderColor: 'divider',
+          overflowX: 'auto',
+        }}
+      >
+        <Table size="small" sx={{ minWidth: 620, ...borderedTableSx }}>
+          <TableHead>
             <TableRow>
-              <TableCell colSpan={table.columns.length} align="center" sx={{ fontWeight: 300 }}>
-                <Typography variant="body2" color="text.secondary">
-                  ไม่มีข้อมูลค่าการตรวจวัด
-                </Typography>
-              </TableCell>
+              {table.columns.map((column) => (
+                <TableCell
+                  key={column}
+                  sx={{
+                    fontWeight: 700,
+                    bgcolor: 'neutral.50',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {column}
+                </TableCell>
+              ))}
             </TableRow>
-          )}
-        </TableBody>
-      </Table>
-    </TableContainer>
+          </TableHead>
+          <TableBody>
+            {table.rows.length > 0 ? (
+              table.rows.map((row, rowIndex) => (
+                <TableRow key={row.key || rowIndex}>
+                  {row.cells.map((cell, index) => (
+                    <TableCell
+                      key={`${cell.displayValue}-${index}`}
+                      sx={{
+                        fontWeight: 300,
+                        color: index < valueStartIndex ? 'text.primary' : cell.color,
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {cell.displayValue}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={table.columns.length} align="center" sx={{ fontWeight: 300 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    ไม่มีข้อมูลค่าการตรวจวัด
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </TableContainer>
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+        {measurementTableNote}
+      </Typography>
+    </Box>
   )
 }
 
@@ -1978,8 +2024,8 @@ function FactoryBottomSheet({ factory, accessToken = '', permissions, open, onCl
   const activeStatisticParameters =
     measurementStatisticParameters.length > 0 ? measurementStatisticParameters : statisticParameters
   const activeCalendarSummaryRows = useMemo(
-    () => mergeCalendarSummaryWithTodayCompleteness(calendarSummary, statisticRows, activeStatisticParameters),
-    [activeStatisticParameters, calendarSummary, statisticRows],
+    () => mergeCalendarSummaryWithTodayCompleteness(calendarSummary, statisticRows, activeStatisticParameters, selectedDate),
+    [activeStatisticParameters, calendarSummary, selectedDate, statisticRows],
   )
   const activeTrendParameter = activeStatisticParameters.includes(selectedTrendParameter)
     ? selectedTrendParameter
@@ -2456,10 +2502,7 @@ function CalendarSummaryPanel({ rows, error = '', stationId = '', selectedYear =
                   {renderSummaryDetailButton(row, 'lowData')}
                 </TableCell>
                 <TableCell align="center" sx={{ fontWeight: 700 }}>
-                  <Box
-                    component="span"
-                    sx={{ color: isFullCompletenessPercent(row.todayPercent) ? statisticStatusColors.normal : 'inherit' }}
-                  >
+                  <Box component="span" sx={{ color: getCompletenessPercentColor(row.todayPercent) }}>
                     {row.todayPercent}
                   </Box>
                 </TableCell>
@@ -2998,6 +3041,9 @@ function FactoryStatisticPanel({
           </TableBody>
         </Table>
       </TableContainer>
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', px: 1.5, pt: 0.5, pb: 1 }}>
+        {measurementTableNote}
+      </Typography>
     </Box>
   )
 }
