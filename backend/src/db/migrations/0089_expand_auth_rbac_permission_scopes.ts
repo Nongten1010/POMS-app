@@ -21,60 +21,7 @@ const NEW_PERMISSION_CODES = new Set([
 ]);
 
 export async function up(knex: Knex): Promise<void> {
-  const hasEstateCode = await knex.schema.hasColumn('user_permissions', 'estate_code');
-  if (!hasEstateCode) {
-    await knex.schema.alterTable('user_permissions', (table) => {
-      table.specificType('estate_code', 'VARCHAR(16) NULL');
-    });
-  }
-  const hasOfficerEstateCode = await knex.schema.hasColumn('officer_profiles', 'estate_code');
-  if (!hasOfficerEstateCode) {
-    await knex.schema.alterTable('officer_profiles', (table) => {
-      table.specificType('estate_code', 'VARCHAR(16) NULL');
-    });
-  }
-
-  await knex.schema.raw(`
-    IF NOT EXISTS (
-      SELECT 1
-      FROM sys.foreign_keys
-      WHERE name = 'fk_user_permissions_estate_code'
-    )
-    ALTER TABLE user_permissions
-    ADD CONSTRAINT fk_user_permissions_estate_code
-    FOREIGN KEY (estate_code) REFERENCES industrial_estates(code);
-  `);
-
-  await knex.schema.raw(`
-    IF NOT EXISTS (
-      SELECT 1
-      FROM sys.indexes
-      WHERE name = 'ix_user_permissions_estate_code'
-        AND object_id = OBJECT_ID('user_permissions')
-    )
-    CREATE INDEX ix_user_permissions_estate_code
-    ON user_permissions(scope, estate_code);
-  `);
-  await knex.schema.raw(`
-    IF NOT EXISTS (
-      SELECT 1
-      FROM sys.foreign_keys
-      WHERE name = 'fk_officer_profiles_estate_code'
-    )
-    ALTER TABLE officer_profiles
-    ADD CONSTRAINT fk_officer_profiles_estate_code
-    FOREIGN KEY (estate_code) REFERENCES industrial_estates(code);
-  `);
-  await knex.schema.raw(`
-    IF NOT EXISTS (
-      SELECT 1
-      FROM sys.indexes
-      WHERE name = 'ix_officer_profiles_estate_code'
-        AND object_id = OBJECT_ID('officer_profiles')
-    )
-    CREATE INDEX ix_officer_profiles_estate_code
-    ON officer_profiles(estate_code);
-  `);
+  await ensureEstateCodeSchema(knex);
 
   for (const permission of RBAC_MATRIX_V20260810_PERMISSIONS.filter((item) =>
     NEW_PERMISSION_CODES.has(item.code),
@@ -118,6 +65,77 @@ export async function up(knex: Knex): Promise<void> {
   if (grantRows.length > 0) {
     await knex('role_permissions').insert(grantRows);
   }
+}
+
+export async function ensureEstateCodeSchema(knex: Knex): Promise<void> {
+  const hasEstateCode = await knex.schema.hasColumn('user_permissions', 'estate_code');
+  if (!hasEstateCode) {
+    await knex.schema.alterTable('user_permissions', (table) => {
+      table.specificType('estate_code', 'VARCHAR(16) NULL');
+    });
+  }
+  const hasOfficerEstateCode = await knex.schema.hasColumn('officer_profiles', 'estate_code');
+  if (!hasOfficerEstateCode) {
+    await knex.schema.alterTable('officer_profiles', (table) => {
+      table.specificType('estate_code', 'VARCHAR(16) NULL');
+    });
+  }
+
+  // Knex creates the original code uniqueness as a filtered SQL Server index.
+  // Foreign keys cannot reference filtered unique indexes, so provide an
+  // equivalent unfiltered unique index before adding the estate-code FKs.
+  await knex.schema.raw(`
+    IF NOT EXISTS (
+      SELECT 1
+      FROM sys.indexes
+      WHERE name = 'ux_industrial_estates_code_for_fk'
+        AND object_id = OBJECT_ID('industrial_estates')
+    )
+    CREATE UNIQUE INDEX ux_industrial_estates_code_for_fk
+    ON industrial_estates(code);
+  `);
+
+  await knex.schema.raw(`
+    IF NOT EXISTS (
+      SELECT 1
+      FROM sys.foreign_keys
+      WHERE name = 'fk_user_permissions_estate_code'
+    )
+    ALTER TABLE user_permissions
+    ADD CONSTRAINT fk_user_permissions_estate_code
+    FOREIGN KEY (estate_code) REFERENCES industrial_estates(code);
+  `);
+
+  await knex.schema.raw(`
+    IF NOT EXISTS (
+      SELECT 1
+      FROM sys.indexes
+      WHERE name = 'ix_user_permissions_estate_code'
+        AND object_id = OBJECT_ID('user_permissions')
+    )
+    CREATE INDEX ix_user_permissions_estate_code
+    ON user_permissions(scope, estate_code);
+  `);
+  await knex.schema.raw(`
+    IF NOT EXISTS (
+      SELECT 1
+      FROM sys.foreign_keys
+      WHERE name = 'fk_officer_profiles_estate_code'
+    )
+    ALTER TABLE officer_profiles
+    ADD CONSTRAINT fk_officer_profiles_estate_code
+    FOREIGN KEY (estate_code) REFERENCES industrial_estates(code);
+  `);
+  await knex.schema.raw(`
+    IF NOT EXISTS (
+      SELECT 1
+      FROM sys.indexes
+      WHERE name = 'ix_officer_profiles_estate_code'
+        AND object_id = OBJECT_ID('officer_profiles')
+    )
+    CREATE INDEX ix_officer_profiles_estate_code
+    ON officer_profiles(estate_code);
+  `);
 }
 
 export async function down(knex: Knex): Promise<void> {
@@ -198,6 +216,15 @@ export async function down(knex: Knex): Promise<void> {
     )
     ALTER TABLE officer_profiles
     DROP CONSTRAINT fk_officer_profiles_estate_code;
+  `);
+  await knex.schema.raw(`
+    IF EXISTS (
+      SELECT 1
+      FROM sys.indexes
+      WHERE name = 'ux_industrial_estates_code_for_fk'
+        AND object_id = OBJECT_ID('industrial_estates')
+    )
+    DROP INDEX ux_industrial_estates_code_for_fk ON industrial_estates;
   `);
 
   const hasEstateCode = await knex.schema.hasColumn('user_permissions', 'estate_code');

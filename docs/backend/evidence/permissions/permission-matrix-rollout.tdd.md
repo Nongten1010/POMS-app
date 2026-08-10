@@ -4,7 +4,7 @@
 
 ## Status
 
-- Current state: verified after one-role and assignment-ceiling hardening. Backend full regression passed 120 suites / 1,201 tests. Backend typecheck, build, and lint also passed. This rollout does not modify `frontend/`.
+- Current state: verified after one-role and assignment-ceiling hardening. Backend full regression passed 120 suites / 1,202 tests. Backend typecheck, build, and lint also passed. This rollout does not modify `frontend/`.
 
 ## Planned checks
 
@@ -12,6 +12,7 @@
 | --- | --- | --- | --- |
 | Role matrix, aliases and override narrowing | auth/users unit tests | ไม่เพิ่มสิทธิ์หรือขยาย scope; alias/grouped response ถูกต้อง | passed |
 | Migration up/down mapping | migration unit test | role grants ใช้ snapshot ที่ versioned และ rollback คืนชุดเดิม | passed |
+| SQL Server estate-code foreign keys | migration unit test + production schema metadata | สร้าง unfiltered unique index บน `industrial_estates(code)` ก่อนเพิ่ม foreign keys | passed |
 | Regional, province, estate and own-factory access | eligible, connection, KWP/BOD, CEMS repository/route tests | scope ขัดกันหรือ qualifier หายต้อง fail closed | passed |
 | Permission groups and aliases | auth permission unit tests | grouped response และ permission aliases ตรงกับ matrix ที่ backend บังคับใช้ | passed |
 | Alert status redaction | alert-events unit/route tests | ผู้ไม่มี `notifications:view_status` ได้ `null` | passed |
@@ -58,7 +59,7 @@ cd backend && npm run lint -- --quiet
 # Scope guard
 git diff --name-only origin/main..HEAD -- frontend
 
-# Result: backend 120 suites / 1,201 tests passed; typecheck/build/lint passed;
+# Result: backend 120 suites / 1,202 tests passed; typecheck/build/lint passed;
 # no frontend files are included in the rollout (2026-08-11)
 ```
 
