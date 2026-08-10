@@ -1055,6 +1055,132 @@ describe('parameterValuesService', () => {
     ]);
   });
 
+  it('calculates current Bangkok day completeness only through the current hourly bucket', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-08-10T03:25:00.000Z'));
+
+    try {
+      mockedRepository.listRegisteredParameters.mockResolvedValue(['CO (ppm)']);
+      mockedRepository.tableExists.mockResolvedValue(true);
+      mockedRepository.listRows.mockResolvedValue({
+        tableName: 'S1125_data_60m',
+        rows: [
+          ...Array.from({ length: 11 }, (_, hour) => ({
+            station_id: 'S1125',
+            co_value: 100,
+            co_status: 'Normal',
+            cdate: '2026-08-09',
+            ctime: `${String(hour).padStart(2, '0')}:00:00`,
+          })),
+          ...Array.from({ length: 11 }, (_, hour) => ({
+            station_id: 'S1125',
+            co_value: 100,
+            co_status: 'Normal',
+            cdate: '2026-08-10',
+            ctime: `${String(hour).padStart(2, '0')}:00:00`,
+          })),
+          {
+            station_id: 'S1125',
+            co_value: 100,
+            co_status: 'Normal',
+            cdate: '2026-08-10',
+            ctime: '23:00:00',
+          },
+        ],
+      });
+      const options = { parameterEvaluations: [{ parameter: 'CO (ppm)' }] };
+
+      const calendar = await parameterValuesService.calendarStatus(
+        { stationId: 'S1125', month: '2026-08' },
+        operatorAccess,
+        options,
+      );
+
+      expect(calendar.data.calendar.days).toMatchObject([
+        {
+          date: '2026-08-09',
+          dataCompletenessPercent: 46,
+          dataCompletenessStatus: 'lowData',
+        },
+        {
+          date: '2026-08-10',
+          dataCompletenessPercent: 100,
+          dataCompletenessStatus: 'highData',
+        },
+      ]);
+      expect(calendar.data.monthlySummary[0]).toMatchObject({
+        lowDataDays: 1,
+        todayDataCompletenessPercent: 100,
+      });
+
+      const details = await parameterValuesService.calendarStatusDetails(
+        {
+          stationId: 'S1125',
+          year: '2026',
+          summaryType: 'lowData',
+          parameterCode: 'CO',
+          unit: 'ppm',
+        },
+        operatorAccess,
+        options,
+      );
+
+      expect(details.data.rows).toEqual([
+        {
+          date: '2026-08-09',
+          dataCompletenessPercent: 46,
+        },
+      ]);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('excludes future-hour rows from explicit current-day completeness', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-08-10T03:25:00.000Z'));
+
+    try {
+      mockedRepository.listRegisteredParameters.mockResolvedValue(['CO (ppm)']);
+      mockedRepository.tableExists.mockResolvedValue(true);
+      mockedRepository.listRows.mockResolvedValue({
+        tableName: 'S1125_data_60m',
+        rows: [
+          ...Array.from({ length: 11 }, (_, hour) => ({
+            station_id: 'S1125',
+            co_value: 100,
+            co_status: 'Normal',
+            co_data_completeness_percent: 100,
+            cdate: '2026-08-10',
+            ctime: `${String(hour).padStart(2, '0')}:00:00`,
+          })),
+          {
+            station_id: 'S1125',
+            co_value: 100,
+            co_status: 'Normal',
+            co_data_completeness_percent: 0,
+            cdate: '2026-08-10',
+            ctime: '23:00:00',
+          },
+        ],
+      });
+
+      const result = await parameterValuesService.calendarStatus(
+        { stationId: 'S1125', month: '2026-08' },
+        operatorAccess,
+        { parameterEvaluations: [{ parameter: 'CO (ppm)' }] },
+      );
+
+      expect(result.data.calendar.days[0]).toMatchObject({
+        date: '2026-08-10',
+        dataCompletenessPercent: 100,
+        dataCompletenessStatus: 'highData',
+      });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('counts summary days across the requested year while keeping calendar days month-scoped', async () => {
     mockedRepository.listRegisteredParameters.mockResolvedValue(['CO (ppm)']);
     mockedRepository.tableExists.mockResolvedValue(true);

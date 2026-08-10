@@ -22,6 +22,7 @@ Backend เป็นเจ้าของและดูแลเอกสาร
 - [Operator cancel connection request workflow](../../workflows/operator-cancel-connection-request.md)
 - [Connected factory profile sync workflow](../../workflows/connected-factory-profile-sync.md)
 - [Connected measurement CSV export workflow](../../workflows/export-connected-measurement-csv.md)
+- [Calendar current-day completeness workflow](../../workflows/calendar-current-day-completeness.md)
 
 ## ข้อตกลงที่ยืนยันแล้ว
 

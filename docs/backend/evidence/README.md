@@ -34,6 +34,7 @@
 - [ปฏิทินรายเดือนและจำนวนวันสรุปทั้งปี](./shared/calendar-summary-requested-year-counts.tdd.md)
 - [รายละเอียดรายวันทั้งปีสำหรับคลิกสรุป Calendar Status](./shared/calendar-status-details.tdd.md)
 - [กรอง Source Status ก่อนประเมิน Calendar](./shared/calendar-normal-status-filter.tdd.md)
+- [คำนวณ Calendar completeness ของวันปัจจุบันถึงชั่วโมงปัจจุบัน](./shared/calendar-current-day-completeness.tdd.md)
 
 ## Home
 

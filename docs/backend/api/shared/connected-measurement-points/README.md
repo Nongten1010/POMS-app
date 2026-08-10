@@ -272,7 +272,7 @@ curl --request GET \
 | `data.calendar.month` | number | No | เลขเดือน `1` ถึง `12` จาก `month` |
 | `data.calendar.days` | object[] | No | สถานะของวันที่มี source rows ในเดือนที่เลือก เรียงวันที่จากเก่าไปใหม่ |
 | `data.calendar.days[].date` | string | No | วันที่ในรูปแบบ `YYYY-MM-DD` |
-| `data.calendar.days[].dataCompletenessPercent` | number | No | ร้อยละความครบถ้วนของข้อมูลรายวัน |
+| `data.calendar.days[].dataCompletenessPercent` | number | No | ร้อยละความครบถ้วนของข้อมูลรายวัน; วันปัจจุบันคำนวณถึง bucket ชั่วโมงปัจจุบันตามเวลา `Asia/Bangkok` โดยไม่รวมชั่วโมงอนาคต |
 | `data.calendar.days[].dataCompletenessStatus` | `lowData` \| `highData` | No | `lowData` เมื่อต่ำกว่า 80%; มิฉะนั้นเป็น `highData` |
 | `data.calendar.days[].pollutionStatus` | `normal` \| `warning` \| `exceeded` \| `insufficient` | No | สถานะมลพิษรายวันสำหรับเส้นขอบปฏิทิน คำนวณเฉพาะค่าที่ source status เป็น `Normal`, `Ok` หรือ code `1` และเป็นอิสระจาก `dataCompletenessStatus` |
 | `data.calendar.days[].display.backgroundStatus` | `lowData` \| `highData` | No | สถานะพื้นหลังเดียวกับ `dataCompletenessStatus`; ใช้แสดงความครบถ้วนของข้อมูลเท่านั้น |
@@ -381,10 +381,14 @@ curl --request GET \
 - `exceededDays` แยกตามพารามิเตอร์และใช้เกณฑ์ของ connected point หลังกรอง source status; วันเดียวกันนับได้สูงสุดหนึ่งวันต่อพารามิเตอร์ และยังนับเมื่อวันนั้นเป็น `lowData`
 - การกรอง source status ไม่เปลี่ยน `monthlySummary[].lowDataDays` หรือ `todayDataCompletenessPercent`
 - `lowDataDays` ใช้สถานะความครบถ้วนระดับวันและจึงอาจมีค่าเดียวกันในหลายพารามิเตอร์; วันเดียวกันอาจถูกนับทั้ง `lowDataDays` และ `exceededDays`
+- วันปัจจุบันอ้างอิง `Asia/Bangkok` และคำนวณ completeness เฉพาะ bucket ตั้งแต่ชั่วโมง `00` ถึงชั่วโมงปัจจุบันแบบ inclusive; เช่นเวลา `10:25` ถ้ามีข้อมูลครบตั้งแต่ `00:00-00:59` ถึง `10:00-10:59` จะได้ `100%` และไม่นับชั่วโมง `11` ถึง `23`
+- fallback ที่นับชั่วโมงจริงใช้ denominator `currentHour + 1` สำหรับวันปัจจุบัน ส่วนวันย้อนหลังยังใช้ 24 ชั่วโมง; source row ของวันปัจจุบันที่อยู่หลัง bucket ปัจจุบันไม่นำมาคำนวณ completeness
+- หาก source มี explicit row-level หรือ parameter-level completeness ระบบยังใช้ค่า explicit ตาม precedence เดิมเพื่อ compatibility โดยตัด row ของชั่วโมงอนาคตออกก่อน
 - `todayDataCompletenessPercent` คงพฤติกรรมเดิมโดยใช้ daily summary ล่าสุดในเดือนที่ร้องขอ ไม่ใช้วันล่าสุดของทั้งปี และไม่ได้หมายความว่าต้องเป็นวันปัจจุบันตามนาฬิกา
 - ชื่อพารามิเตอร์ที่อ่านได้ต้องคืนพร้อม `unit`; client ใช้ `parameterCode` เมื่อต้องการ key ที่คงที่
 - หลักฐาน TDD: [Calendar summary requested-year counts](../../../evidence/shared/calendar-summary-requested-year-counts.tdd.md)
 - หลักฐาน TDD: [Calendar Normal-status filter](../../../evidence/shared/calendar-normal-status-filter.tdd.md)
+- หลักฐาน TDD: [Calendar current-day completeness](../../../evidence/shared/calendar-current-day-completeness.tdd.md)
 
 #### Errors
 

@@ -310,7 +310,12 @@ export const parameterValuesService = {
       options?.parameterEvaluations,
     );
     const useConfiguredEvaluation = Boolean(options?.parameterEvaluations);
-    const dailySummaries = buildDailySummaries(result.rows, definitions, useConfiguredEvaluation);
+    const dailySummaries = buildDailySummaries(
+      result.rows,
+      definitions,
+      useConfiguredEvaluation,
+      toBangkokDateHour(new Date()),
+    );
     // Calendar days and today's completeness stay month-scoped; the two counters use the full year.
     const requestedMonthSummaries = dailySummaries.filter(
       (summary) => summary.date >= monthStartDate && summary.date <= monthEndDate,
@@ -400,7 +405,12 @@ export const parameterValuesService = {
       query.unit,
     );
     const useConfiguredEvaluation = Boolean(options?.parameterEvaluations);
-    const dailySummaries = buildDailySummaries(annualRows, definitions, useConfiguredEvaluation);
+    const dailySummaries = buildDailySummaries(
+      annualRows,
+      definitions,
+      useConfiguredEvaluation,
+      toBangkokDateHour(new Date()),
+    );
     const exceededStandard = resolveExceededStandard(definition);
     const rowsByDate = groupRowsByDate(annualRows);
     const rows = dailySummaries.flatMap((summary) =>
@@ -495,6 +505,22 @@ export const parameterValuesService = {
 const DEFAULT_NORMAL_MAX = 180;
 const DEFAULT_WARNING_MAX = 190;
 const HOURS_PER_DAY = 24;
+const BANGKOK_TIME_ZONE = 'Asia/Bangkok';
+const bangkokDateHourFormatter = new Intl.DateTimeFormat('en-GB', {
+  timeZone: BANGKOK_TIME_ZONE,
+  calendar: 'gregory',
+  numberingSystem: 'latn',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  hourCycle: 'h23',
+});
+
+interface DateHour {
+  date: string;
+  hour: number;
+}
 
 interface ParameterDefinition {
   code: string;
@@ -776,7 +802,8 @@ function buildStatisticValue(
 function buildDailySummaries(
   rows: Record<string, unknown>[],
   definitions: ParameterDefinition[],
-  useParameterCompleteness = false,
+  useParameterCompleteness: boolean,
+  currentBangkokDateHour: DateHour | null,
 ): DailySummary[] {
   const rowsByDate = new Map<string, Record<string, unknown>[]>();
   for (const row of rows) {
@@ -788,7 +815,13 @@ function buildDailySummaries(
   return [...rowsByDate.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, dayRows]) =>
-      buildDailySummary(date, dayRows, definitions, useParameterCompleteness),
+      buildDailySummary(
+        date,
+        dayRows,
+        definitions,
+        useParameterCompleteness,
+        currentBangkokDateHour,
+      ),
     );
 }
 
@@ -796,11 +829,17 @@ function buildDailySummary(
   date: string,
   rows: Record<string, unknown>[],
   definitions: ParameterDefinition[],
-  useParameterCompleteness = false,
+  useParameterCompleteness: boolean,
+  currentBangkokDateHour: DateHour | null,
 ): DailySummary {
+  const expectedHours = expectedHoursForDate(date, currentBangkokDateHour);
+  const completenessRows = rows.filter((row) => {
+    const hour = parseHour(row.ctime);
+    return hour === null || hour < expectedHours;
+  });
   const dataCompletenessPercent = useParameterCompleteness
-    ? calculateLowestDailyParameterCompleteness(rows, definitions)
-    : calculateDailyCompleteness(rows, definitions);
+    ? calculateLowestDailyParameterCompleteness(completenessRows, definitions, expectedHours)
+    : calculateDailyCompleteness(completenessRows, definitions, expectedHours);
   const dataCompletenessStatus = dataCompletenessPercent < 80 ? 'lowData' : 'highData';
   const parameterStatuses = new Map<string, ParameterValueStatus[]>(
     definitions.map((definition) => [definition.code, []]),
@@ -832,17 +871,23 @@ function buildDailySummary(
 function calculateLowestDailyParameterCompleteness(
   rows: Record<string, unknown>[],
   definitions: ParameterDefinition[],
+  expectedHours: number,
 ): number {
-  if (definitions.length === 0) return calculateDailyCompleteness(rows, definitions);
+  if (definitions.length === 0) {
+    return calculateDailyCompleteness(rows, definitions, expectedHours);
+  }
 
   return Math.min(
-    ...definitions.map((definition) => calculateDailyParameterCompleteness(rows, definition)),
+    ...definitions.map((definition) =>
+      calculateDailyParameterCompleteness(rows, definition, expectedHours),
+    ),
   );
 }
 
 function calculateDailyParameterCompleteness(
   rows: Record<string, unknown>[],
   definition: ParameterDefinition,
+  expectedHours: number,
 ): number {
   const explicitCompleteness = rows
     .map((row) => readParameterCompletenessPercent(row, definition))
@@ -860,7 +905,7 @@ function calculateDailyParameterCompleteness(
     if (hour !== null && readParameterNumber(row, definition) !== null) completeHours.add(hour);
   }
 
-  return Math.round((completeHours.size / HOURS_PER_DAY) * 100);
+  return clampPercent(Math.round((completeHours.size / expectedHours) * 100));
 }
 
 function buildYearlyParameterSummary(
@@ -1030,6 +1075,7 @@ function normalizeOccurrenceTime(value: unknown, fallbackHour: number): string {
 function calculateDailyCompleteness(
   rows: Record<string, unknown>[],
   definitions: ParameterDefinition[],
+  expectedHours: number,
 ): number {
   const explicitCompleteness = rows
     .map(readCompletenessPercent)
@@ -1047,7 +1093,24 @@ function calculateDailyCompleteness(
     if (hour !== null && hasAnyParameterValue(row, definitions)) completeHours.add(hour);
   }
 
-  return Math.round((completeHours.size / HOURS_PER_DAY) * 100);
+  return clampPercent(Math.round((completeHours.size / expectedHours) * 100));
+}
+
+function expectedHoursForDate(date: string, currentBangkokDateHour: DateHour | null): number {
+  if (!currentBangkokDateHour || date !== currentBangkokDateHour.date) return HOURS_PER_DAY;
+  return currentBangkokDateHour.hour + 1;
+}
+
+function toBangkokDateHour(date: Date): DateHour | null {
+  const parts = bangkokDateHourFormatter.formatToParts(date);
+  const valueByType = new Map(parts.map((part) => [part.type, part.value]));
+  const year = valueByType.get('year');
+  const month = valueByType.get('month');
+  const day = valueByType.get('day');
+  const hour = Number(valueByType.get('hour'));
+  if (!year || !month || !day || !Number.isInteger(hour) || hour < 0 || hour > 23) return null;
+
+  return { date: `${year}-${month}-${day}`, hour };
 }
 
 function hasAnyParameterValue(
