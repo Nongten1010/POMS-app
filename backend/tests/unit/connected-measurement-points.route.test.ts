@@ -1,5 +1,8 @@
+import express from 'express';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { connectedMeasurementPointsRoutes } from '../../src/modules/connection-requests/connected-measurement-points.routes';
+import { errorHandler, notFoundHandler } from '../../src/shared/middlewares/errorHandler';
 import { signAccessToken } from '../../src/shared/utils/jwt';
 
 jest.mock('../../src/modules/connection-requests/connection-requests.service', () => ({
@@ -18,7 +21,6 @@ jest.mock('../../src/modules/connection-requests/connection-requests.service', (
   },
 }));
 
-import { createApp } from '../../src/app';
 import { connectionRequestsService } from '../../src/modules/connection-requests/connection-requests.service';
 
 const mockedConnectionRequestsService = jest.mocked(connectionRequestsService);
@@ -615,7 +617,7 @@ describe('connected measurement points route', () => {
         configs: [expect.objectContaining({ stationId: 'S0001' })],
       }),
       42,
-      'ALL',
+      { scope: 'ALL' },
     );
   });
 
@@ -684,7 +686,7 @@ describe('connected measurement points route', () => {
         ],
       }),
       42,
-      'ALL',
+      { scope: 'ALL' },
     );
   });
 
@@ -758,7 +760,7 @@ describe('connected measurement points route', () => {
         ],
       },
       42,
-      'ALL',
+      { scope: 'ALL' },
     );
   });
 
@@ -931,6 +933,15 @@ describe('connected measurement points route', () => {
     expect(mockedConnectionRequestsService.getMeasurementStatistics).not.toHaveBeenCalled();
   });
 });
+
+function createApp() {
+  const app = express();
+  app.use(express.json());
+  app.use('/api/v1/connected-measurement-points', connectedMeasurementPointsRoutes);
+  app.use(notFoundHandler);
+  app.use(errorHandler);
+  return app;
+}
 
 function accessToken(): string {
   return signAccessToken({

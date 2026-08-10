@@ -2,6 +2,8 @@ import type { Knex } from 'knex';
 import { db } from '../../config/database';
 import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
+import type { PermissionScopeDetails } from '../auth/permissions';
+import { resolveAssignedRegions } from '../auth/regional-access';
 import { buildPublicFileUrl } from '../kwp-form-submissions/kwp-form-attachments.service';
 import {
   buildBodCodNumberingFactoryQueryForTests,
@@ -361,7 +363,12 @@ export const bodCodDeviationReportsRepository = {
         approvalTrack,
         currentStep,
         steps: savedSteps,
-        allowedActions: allowedActionsFor('SUBMITTED', currentStep, access.scope),
+        allowedActions: allowedActionsFor(
+          'SUBMITTED',
+          currentStep,
+          access.scope,
+          access.roles ?? [],
+        ),
       };
     });
   },
@@ -422,7 +429,12 @@ export const bodCodDeviationReportsRepository = {
         approvalTrack,
         currentStep,
         steps: savedSteps,
-        allowedActions: allowedActionsFor('REVISED_PENDING_REVIEW', currentStep, access.scope),
+        allowedActions: allowedActionsFor(
+          'REVISED_PENDING_REVIEW',
+          currentStep,
+          access.scope,
+          access.roles ?? [],
+        ),
       };
     });
   },
@@ -482,7 +494,12 @@ export const bodCodDeviationReportsRepository = {
         approvalTrack: report.approval_track,
         currentStep,
         steps: savedSteps,
-        allowedActions: allowedActionsFor(nextState.reportStatus, currentStep, access.scope),
+        allowedActions: allowedActionsFor(
+          nextState.reportStatus,
+          currentStep,
+          access.scope,
+          access.roles ?? [],
+        ),
       };
     });
   },
@@ -506,7 +523,12 @@ export const bodCodDeviationReportsRepository = {
         approvalTrack: report.approval_track,
         currentStep,
         steps: savedSteps,
-        allowedActions: allowedActionsFor(report.status, currentStep, access.scope),
+        allowedActions: allowedActionsFor(
+          report.status,
+          currentStep,
+          access.scope,
+          access.roles ?? [],
+        ),
         resultNotice,
       };
     });
@@ -534,6 +556,7 @@ export const bodCodDeviationReportsRepository = {
       historyByReportId.get(Number(report.id)) ?? [],
       resultNotice,
       access.scope,
+      access.roles ?? [],
     );
   },
 };
@@ -594,7 +617,7 @@ export function buildBodCodResultNoticeAccessQueryForTests(
 
 export function buildBodCodReportStatusLabelForTests(
   status: BodCodDeviationReportStatus,
-  scope?: string | null,
+  scope?: BodCodDeviationAccess['scope'],
 ) {
   return reportStatusLabel(status, scope);
 }
@@ -602,7 +625,7 @@ export function buildBodCodReportStatusLabelForTests(
 export function buildBodCodStatusHistoryForTests(
   reportRows: StatusHistoryReportRow[],
   eventRows: ApprovalEventRow[],
-  scope?: string | null,
+  scope?: BodCodDeviationAccess['scope'],
 ) {
   return buildStatusHistoryByReportId(reportRows, eventRows, scope);
 }
@@ -610,9 +633,10 @@ export function buildBodCodStatusHistoryForTests(
 export function buildBodCodAllowedActionsForTests(
   status: BodCodDeviationReportStatus,
   currentStep: BodCodWorkflowStepDTO | null,
-  scope?: string | null,
+  scope?: BodCodDeviationAccess['scope'],
+  roles: string[] = [],
 ) {
-  return allowedActionsFor(status, currentStep, scope);
+  return allowedActionsFor(status, currentStep, scope, roles);
 }
 
 export function buildBodCodNextWorkflowStateForTests(
@@ -683,7 +707,8 @@ function buildFactoryQuery(
     .orderBy('cp.point_name', 'asc');
 
   applyFactoryAccessFilter(builder, access);
-  applyRegionalAccessFilter(builder, access.regionalAccess);
+  applyLocationScopeFilter(builder, access.scope);
+  applyRegionalAccessFilter(builder, access.scope, access.regionalAccess);
 
   return builder as unknown as Knex.QueryBuilder<FactoryTableRow, FactoryTableRow[]>;
 }
@@ -708,6 +733,7 @@ function buildReportQuery(
         .orOn('f.code', '=', 'r.factory_registration_no');
     })
     .leftJoin('provinces as p', 'p.name_th', 'r.province_name')
+    .leftJoin('industrial_estates as ie', 'ie.id', 'f.industrial_estate_id')
     .leftJoin('users as cu', 'cu.id', 'r.created_by')
     .leftJoin(measurementCounts, 'm.report_id', 'r.id')
     .whereNull('r.deleted_at')
@@ -752,7 +778,8 @@ function buildReportQuery(
   }
 
   applyReportAccessFilter(builder, access);
-  applyRegionalAccessFilter(builder, access.regionalAccess);
+  applyLocationScopeFilter(builder, access.scope);
+  applyRegionalAccessFilter(builder, access.scope, access.regionalAccess);
 
   return builder as unknown as Knex.QueryBuilder<ReportTableRow, ReportTableRow[]>;
 }
@@ -789,7 +816,7 @@ async function assertCanResubmitReport(
   access: CreateBodCodDeviationReportAccess,
   trx: Knex.Transaction,
 ): Promise<EditableReportRow> {
-  if (access.scope !== 'OWN_FACTORY') {
+  if (scopeValue(access.scope) !== 'OWN_FACTORY') {
     throw new ForbiddenError('Only own-factory operators can resubmit BOD/COD reports');
   }
 
@@ -821,7 +848,7 @@ async function assertCanChangeWorkflowStatus(
   if (!row) throw new NotFoundError('BOD/COD deviation report not found');
 
   const currentStep = editableCurrentStep(row);
-  const allowedActions = allowedActionsFor(row.status, currentStep, access.scope);
+  const allowedActions = allowedActionsFor(row.status, currentStep, access.scope, access.roles ?? []);
   if (!allowedActions.includes(input.action)) {
     throw new ConflictError('BOD/COD workflow action is not allowed for current status', {
       currentStatus: row.status,
@@ -845,7 +872,7 @@ async function assertCanUpsertResultNotice(
   access: BodCodDeviationAccess,
   trx: Knex.Transaction,
 ): Promise<EditableReportRow> {
-  if (access.scope === 'OWN_FACTORY') {
+  if (scopeValue(access.scope) === 'OWN_FACTORY') {
     throw new ForbiddenError('Only officers can save BOD/COD result notices');
   }
 
@@ -900,6 +927,7 @@ function buildEditableReportQuery(
         .orOn('f.code', '=', 'r.factory_registration_no');
     })
     .leftJoin('provinces as p', 'p.name_th', 'r.province_name')
+    .leftJoin('industrial_estates as ie', 'ie.id', 'f.industrial_estate_id')
     .leftJoin('bod_cod_approval_steps as s', function joinCurrentStep() {
       this.on('s.report_id', '=', 'r.id')
         .andOn('s.is_current', '=', db.raw('?', [true]))
@@ -947,7 +975,8 @@ function buildEditableReportQuery(
     );
 
   applyReportAccessFilter(builder, access);
-  applyRegionalAccessFilter(builder, access.regionalAccess);
+  applyLocationScopeFilter(builder, access.scope);
+  applyRegionalAccessFilter(builder, access.scope, access.regionalAccess);
 
   return builder as unknown as Knex.QueryBuilder<EditableReportRow, EditableReportRow[]>;
 }
@@ -1226,24 +1255,81 @@ async function insertApprovalEvent(
 }
 
 function applyFactoryAccessFilter(builder: Knex.QueryBuilder, access: BodCodDeviationAccess): void {
-  if (access.scope !== 'OWN_FACTORY') return;
+  if (scopeValue(access.scope) !== 'OWN_FACTORY') return;
   applyAssignedFactoryAccessFilter(builder, access.actorUserId);
 }
 
 function applyReportAccessFilter(builder: Knex.QueryBuilder, access: BodCodDeviationAccess): void {
-  if (access.scope !== 'OWN_FACTORY') return;
+  if (scopeValue(access.scope) !== 'OWN_FACTORY') return;
   applyAssignedFactoryAccessFilter(builder, access.actorUserId);
+}
+
+function applyLocationScopeFilter(
+  builder: Knex.QueryBuilder,
+  scope: BodCodDeviationAccess['scope'],
+): void {
+  const details = scopeDetails(scope);
+  if (!details) return;
+
+  if (details.scope === 'IN_PROVINCE') {
+    if (!details.province) {
+      builder.whereRaw('1 = ?', [0]);
+      return;
+    }
+    builder.where('p.name_th', details.province);
+    return;
+  }
+
+  if (details.scope === 'IN_ESTATE') {
+    const estateCode = toEstateCode(scope);
+    if (estateCode) {
+      builder.where('ie.code', estateCode);
+      return;
+    }
+    const estateId = toEstateId(scope);
+    if (estateId) {
+      builder.where('ie.id', estateId);
+      return;
+    }
+    builder.whereRaw('1 = ?', [0]);
+  }
 }
 
 function applyRegionalAccessFilter(
   builder: Knex.QueryBuilder,
+  scope: BodCodDeviationAccess['scope'],
   regionalAccess: BodCodDeviationAccess['regionalAccess'],
 ): void {
-  const regions = [
-    ...new Set((regionalAccess?.regions ?? []).map((region) => region.trim())),
-  ].filter(Boolean);
-  if (regions.length === 0) return;
+  if (scopeValue(scope) !== 'IN_REGION') return;
+  const details = scopeDetails(scope);
+  const regions = resolveAssignedRegions(details?.region, regionalAccess);
+  if (regions.length === 0) {
+    builder.whereRaw('1 = ?', [0]);
+    return;
+  }
   builder.whereIn('p.region', regions);
+}
+
+function scopeValue(scope: BodCodDeviationAccess['scope']): string | null | undefined {
+  return typeof scope === 'object' && scope !== null ? scope.scope : scope;
+}
+
+function scopeDetails(scope: BodCodDeviationAccess['scope']): PermissionScopeDetails | null {
+  return typeof scope === 'object' && scope !== null ? scope : null;
+}
+
+function toEstateId(scope: BodCodDeviationAccess['scope']): string | number | null {
+  if (typeof scope !== 'object' || scope === null) return null;
+  const value = (scope as PermissionScopeDetails & { estateId?: string | number | null }).estateId;
+  return value ?? null;
+}
+
+function toEstateCode(scope: BodCodDeviationAccess['scope']): string | null {
+  if (typeof scope !== 'object' || scope === null) return null;
+  const value =
+    (scope as PermissionScopeDetails & { estateCode?: string | null }).estateCode ??
+    (scope as PermissionScopeDetails & { estate?: string | null }).estate;
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
 async function listCurrentYearReportsForConnectedPoints(
@@ -1284,7 +1370,7 @@ function toConnectedFactoryDTOs(
   rows: FactoryTableRow[],
   reportBySlotKey: Map<string, LatestReportRow>,
   year: number,
-  scope: string | null | undefined,
+  scope: BodCodDeviationAccess['scope'],
 ): BodCodDeviationFactoryTableRowDTO[] {
   const factories = new Map<
     string,
@@ -1327,7 +1413,7 @@ function buildReportSlots(
   row: FactoryTableRow,
   reportBySlotKey: Map<string, LatestReportRow>,
   year: number,
-  scope: string | null | undefined,
+  scope: BodCodDeviationAccess['scope'],
 ): BodCodReportSlotDTO[] {
   return ([1, 2] as const).map((roundNo) => {
     const report =
@@ -1527,7 +1613,7 @@ async function listApprovalSteps(
 
 async function listStatusHistoryForReports(
   reportRows: StatusHistoryReportRow[],
-  scope?: string | null,
+  scope?: BodCodDeviationAccess['scope'],
 ): Promise<Map<number, BodCodStatusHistoryDTO[]>> {
   if (reportRows.length === 0) return new Map();
 
@@ -1591,7 +1677,7 @@ function toFactoryDTO(
 
 function toReportDTO(
   row: ReportTableRow,
-  scope: string | null | undefined,
+  scope: BodCodDeviationAccess['scope'],
   statusHistory: BodCodStatusHistoryDTO[],
 ): BodCodDeviationReportTableRowDTO {
   const reportRoundNo = Number(row.report_round);
@@ -1635,7 +1721,8 @@ function toReportDetailDTO(
   steps: BodCodWorkflowStepDTO[],
   statusHistory: BodCodStatusHistoryDTO[],
   resultNotice: BodCodResultNoticeDTO | null,
-  scope: string | null | undefined,
+  scope: BodCodDeviationAccess['scope'],
+  roles: string[] = [],
 ): BodCodDeviationReportDetailDTO {
   const base = toReportDTO(row, scope, statusHistory);
   const currentStep = currentWorkflowStep(steps);
@@ -1658,7 +1745,7 @@ function toReportDetailDTO(
     approvalTrack: row.approval_track,
     currentStep,
     steps,
-    allowedActions: allowedActionsFor(row.status, currentStep, scope),
+    allowedActions: allowedActionsFor(row.status, currentStep, scope, roles),
     measurements,
     attachments,
     resultNotice,
@@ -1738,11 +1825,27 @@ function currentWorkflowStep(steps: BodCodWorkflowStepDTO[]): BodCodWorkflowStep
 function allowedActionsFor(
   status: BodCodDeviationReportStatus,
   currentStep: BodCodWorkflowStepDTO | null,
-  scope: string | null | undefined,
+  scope: BodCodDeviationAccess['scope'],
+  roles: string[] = [],
 ): BodCodAllowedAction[] {
   if (status === 'APPROVED' || status === 'REJECTED' || status === 'CANCELLED') return [];
-  if (scope === 'OWN_FACTORY') return ['CANCEL'];
-  return currentStep?.status === 'PENDING' ? ['APPROVE', 'REQUEST_REVISION', 'REJECT'] : [];
+  if (scopeValue(scope) === 'OWN_FACTORY') return ['CANCEL'];
+  if (currentStep?.status !== 'PENDING') return [];
+  return canActOnCurrentStep(currentStep, roles) ? ['APPROVE', 'REQUEST_REVISION', 'REJECT'] : [];
+}
+
+function canActOnCurrentStep(currentStep: BodCodWorkflowStepDTO, roles: string[]): boolean {
+  if (roles.includes('admin')) return true;
+  if (currentStep.roleCode === 'INSPECTOR' || currentStep.roleCode === 'RESULT_NOTICE') {
+    return roles.some((role) => ['monitoring_kpm', 'monitoring_5_centers'].includes(role));
+  }
+  if (currentStep.roleCode === 'REVIEWER') {
+    return roles.includes('kpm_director');
+  }
+  if (currentStep.roleCode === 'APPROVER') {
+    return roles.some((role) => ['center_director', 'kwp_director'].includes(role));
+  }
+  return false;
 }
 
 function connectedFactoryId(row: FactoryTableRow): string {
@@ -1789,9 +1892,12 @@ function reportRoundLabel(roundNo: number): string {
   return `ครั้งที่ ${roundNo}`;
 }
 
-function reportStatusLabel(status: BodCodDeviationReportStatus, scope?: string | null): string {
+function reportStatusLabel(
+  status: BodCodDeviationReportStatus,
+  scope?: BodCodDeviationAccess['scope'],
+): string {
   if (
-    scope === 'OWN_FACTORY' &&
+    scopeValue(scope) === 'OWN_FACTORY' &&
     (status === 'SUBMITTED' ||
       status === 'REVISED_PENDING_REVIEW' ||
       status === 'WAITING_RESULT_NOTICE' ||
@@ -1819,7 +1925,7 @@ function reportStatusLabel(status: BodCodDeviationReportStatus, scope?: string |
 function buildStatusHistoryByReportId(
   reportRows: StatusHistoryReportRow[],
   eventRows: ApprovalEventRow[],
-  scope?: string | null,
+  scope?: BodCodDeviationAccess['scope'],
 ): Map<number, BodCodStatusHistoryDTO[]> {
   const eventsByReportId = eventRows.reduce((map, row) => {
     const reportId = Number(row.report_id);
@@ -1842,7 +1948,7 @@ function buildStatusHistoryByReportId(
 
 function toSubmittedStatusHistoryDTO(
   row: StatusHistoryReportRow,
-  scope?: string | null,
+  scope?: BodCodDeviationAccess['scope'],
 ): BodCodStatusHistoryDTO {
   const changedAt = row.submitted_at ?? row.created_at ?? new Date(0);
   return {
@@ -1865,7 +1971,7 @@ function toSubmittedStatusHistoryDTO(
 function toEventStatusHistoryDTO(
   row: ApprovalEventRow,
   status: BodCodDeviationReportStatus,
-  scope?: string | null,
+  scope?: BodCodDeviationAccess['scope'],
 ): BodCodStatusHistoryDTO {
   return {
     id: Number(row.id),

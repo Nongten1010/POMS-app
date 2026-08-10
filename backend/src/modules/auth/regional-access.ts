@@ -4,6 +4,7 @@ export interface RegionalAccessDTO {
 
 const centralRegionTextValues: Record<string, string> = {
   'กวภ.': 'ภาคกลาง',
+  'กฝม.': 'ภาคกลาง',
   กองวิจัยและเตือนภัยมลพิษโรงงาน: 'ภาคกลาง',
 };
 
@@ -49,6 +50,27 @@ export function serializeRegionalAccess(
 ): string | null {
   const normalized = normalizeRegionalAccess(input);
   return normalized ? JSON.stringify(normalized) : null;
+}
+
+/**
+ * Resolves an IN_REGION permission against the profile assignment.
+ * The profile assignment is the security boundary: an explicit per-permission
+ * region may narrow it, but can never replace or widen it.
+ */
+export function resolveAssignedRegions(
+  explicitRegion: string | null | undefined,
+  regionalAccess: RegionalAccessDTO | null | undefined,
+): string[] {
+  const assignedRegions = uniqueTrimmed(regionalAccess?.regions ?? []);
+  if (assignedRegions.length === 0) return [];
+
+  const explicit = explicitRegion?.trim();
+  if (!explicit || explicit.toLowerCase() === 'all') return assignedRegions;
+
+  const matched = assignedRegions.find(
+    (assignedRegion) => assignedRegion.toLowerCase() === explicit.toLowerCase(),
+  );
+  return matched ? [matched] : [];
 }
 
 export function inferRegionalAccessFromText(

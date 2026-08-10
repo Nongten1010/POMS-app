@@ -1,5 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
+import { getScopeDetails } from '../../shared/middlewares/authorize';
 import { alertEventsService } from './alert-events.service';
 import {
   alertEventIdParamsSchema,
@@ -25,7 +26,13 @@ export const alertEventsController = {
   async list(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const query = listAlertEventsQuerySchema.parse(req.query);
-      const result = await alertEventsService.list(query);
+      const result = await alertEventsService.list(
+        query,
+        requireActorUserId(req),
+        getScopeDetails(req, 'notifications:view'),
+        req.user?.regionalAccess ?? null,
+        canViewNotificationStatus(req),
+      );
       res.status(StatusCodes.OK).json({
         success: true,
         data: result.data,
@@ -39,7 +46,13 @@ export const alertEventsController = {
   async getById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { id } = alertEventIdParamsSchema.parse(req.params);
-      const data = await alertEventsService.getById(id);
+      const data = await alertEventsService.getById(
+        id,
+        requireActorUserId(req),
+        getScopeDetails(req, 'notifications:view'),
+        req.user?.regionalAccess ?? null,
+        canViewNotificationStatus(req),
+      );
       res.status(StatusCodes.OK).json({ success: true, data });
     } catch (err) {
       next(err);
@@ -50,10 +63,26 @@ export const alertEventsController = {
     try {
       const { id } = alertEventIdParamsSchema.parse(req.params);
       const input = updateAlertEventStatusSchema.parse(req.body);
-      const data = await alertEventsService.updateStatus(id, input, req.user?.id ?? 0);
+      const data = await alertEventsService.updateStatus(
+        id,
+        input,
+        requireActorUserId(req),
+        getScopeDetails(req, 'notifications:edit'),
+        req.user?.regionalAccess ?? null,
+      );
       res.status(StatusCodes.OK).json({ success: true, data });
     } catch (err) {
       next(err);
     }
   },
 };
+
+function requireActorUserId(req: Request): number {
+  const actorUserId = req.user?.id;
+  if (!actorUserId) throw new Error('Authenticated user missing from request');
+  return actorUserId;
+}
+
+function canViewNotificationStatus(req: Request): boolean {
+  return req.user?.scopes['notifications:view_status'] !== undefined;
+}

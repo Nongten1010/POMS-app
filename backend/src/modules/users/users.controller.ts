@@ -118,16 +118,20 @@ function ensureCanManageRegionalAccess(
   req: Request,
   payload: { profile?: unknown },
 ): void {
-  if (!hasRegionalAccessPatch(payload.profile)) return;
+  if (!hasAccessAssignmentPatch(payload.profile)) return;
   if (req.user?.scopes['permissions:manage'] !== undefined) return;
   throw new ForbiddenError('Missing required permission: permissions:manage');
 }
 
-function hasRegionalAccessPatch(profile: unknown): boolean {
+function hasAccessAssignmentPatch(profile: unknown): boolean {
   return (
     typeof profile === 'object' &&
     profile !== null &&
-    'regionalAccess' in profile &&
-    (profile as { regionalAccess?: unknown }).regionalAccess !== undefined
+    [
+      (profile as { regionalAccess?: unknown }).regionalAccess,
+      (profile as { provinceId?: unknown }).provinceId,
+      (profile as { provinceName?: unknown }).provinceName,
+      (profile as { estateCode?: unknown }).estateCode,
+    ].some((value) => value !== undefined)
   );
 }

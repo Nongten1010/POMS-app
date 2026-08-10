@@ -54,6 +54,7 @@ export interface AuthUserDTO {
   division: string | null;
   provinceId?: string | null;
   provinceName?: string | null;
+  estateCode?: string | null;
   roles: string;
   roleCodes: string[];
   isActive: boolean;
@@ -83,6 +84,8 @@ export interface OfficerProfileDTO {
   departmentNameTh: string | null;
   ministryId: string | null;
   provinceId: string | null;
+  provinceName?: string | null;
+  estateCode?: string | null;
   perStatusName: string | null;
   regionalAccess: RegionalAccessDTO | null;
 }

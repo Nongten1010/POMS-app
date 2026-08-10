@@ -9,17 +9,21 @@ export interface PermissionScopeDetails {
   scope: PermissionDataScope;
   region?: string | null;
   province?: string | null;
+  estateCode?: string | null;
+  estate?: string | null;
 }
 export interface PersonaPermissionOverride {
   code: string;
   effect: 'allow' | 'deny';
   scope: PermissionDataScope;
-  region: string | null;
-  province: string | null;
+  region?: string | null;
+  province?: string | null;
+  estateCode?: string | null;
+  estate?: string | null;
 }
 export type PermissionGroup = { data: PermissionDataScope } & Record<
   string,
-  true | PermissionDataScope | string | null | undefined
+  boolean | PermissionDataScope | string | null | undefined
 >;
 export type PermissionGroups = Record<string, PermissionGroup>;
 
@@ -29,14 +33,8 @@ const permissionAliases: Record<string, PermissionAlias | PermissionAlias[]> = {
   'dashboard:view': { module: 'dashboard', action: 'view' },
   'dashboard.alerts:view': { module: 'dashboard', action: 'favorite' },
   'dashboard.search:basic': { module: 'dashboard', action: 'search' },
-  'dashboard.search:advanced': [
-    { module: 'dashboard', action: 'advanced_search' },
-    { module: 'conditional_search', action: 'view' },
-  ],
-  'dashboard.stats:view': [
-    { module: 'dashboard', action: 'statistics' },
-    { module: 'statistics', action: 'view' },
-  ],
+  'dashboard.search:advanced': { module: 'dashboard', action: 'advanced_search' },
+  'dashboard.stats:view': { module: 'dashboard', action: 'statistics' },
   'dashboard.stats:export': { module: 'dashboard', action: 'export' },
   'bod_cod_errors:view': { module: 'bod_cod_errors', action: 'view' },
   'bod_cod_errors:edit': { module: 'bod_cod_errors', action: 'edit' },
@@ -45,12 +43,14 @@ const permissionAliases: Record<string, PermissionAlias | PermissionAlias[]> = {
   'cems_wpms_requests:edit': { module: 'connection', action: 'edit' },
   'cems_wpms_requests:approve': { module: 'connection', action: 'approve' },
   'cems_wpms_requests:direct_connect': { module: 'connection', action: 'direct_connect' },
+  'chat:view': { module: 'chat', action: 'view' },
+  'chat:ask': { module: 'chat', action: 'ask' },
+  'chat:answer': { module: 'chat', action: 'answer' },
   'helpdesk:submit': { module: 'helpdesk', action: 'view' },
   'feedback:submit': { module: 'feedback', action: 'view' },
-  'chat:ask': { module: 'chat', action: 'view' },
-  'chat:answer': { module: 'chat', action: 'edit' },
-  'permissions:manage': { module: 'permissions', action: 'view' },
-  'eligible_factories:manage': { module: 'eligible_factories', action: 'view' },
+  'eligible_factories:view': { module: 'eligible_factories', action: 'view' },
+  'eligible_factories:edit': { module: 'eligible_factories', action: 'edit' },
+  'eligible_factories:manage': { module: 'eligible_factories', action: 'manage' },
 };
 
 const responseModules = new Set([
@@ -72,9 +72,21 @@ const responseModules = new Set([
   'api_documentation',
 ]);
 
+const locationScopedPermissionModules = new Set([
+  'dashboard',
+  'factories',
+  'connection',
+  'kwp_forms',
+  'bod_cod_errors',
+  'notifications',
+  'statistics',
+  'conditional_search',
+  'eligible_factories',
+]);
+
 const scopePriority: Record<string, number> = {
-  ALL: 4,
-  IN_REGION: 3,
+  ALL: 5,
+  IN_REGION: 4,
   IN_PROVINCE: 3,
   IN_ESTATE: 2,
   OWN_FACTORY: 1,
@@ -126,7 +138,14 @@ export function permissionGroupsToPermissionOverrides(
 
   for (const [module, group] of Object.entries(groups)) {
     for (const [action, enabled] of Object.entries(group)) {
-      if (action === 'data' || action === 'region' || action === 'province' || enabled !== true) {
+      if (
+        action === 'data' ||
+        action === 'region' ||
+        action === 'province' ||
+        action === 'estate' ||
+        action === 'estateCode' ||
+        enabled !== true
+      ) {
         continue;
       }
       for (const code of permissionCodesFromAlias(module, action)) {
@@ -138,12 +157,58 @@ export function permissionGroupsToPermissionOverrides(
           scope: group.data,
           region: normalizeLocationValue(group.region),
           province: normalizeLocationValue(group.province),
+          estateCode: normalizeLocationValue(group.estateCode ?? group.estate),
+          estate: normalizeLocationValue(group.estate ?? group.estateCode),
         };
       }
     }
   }
 
   return overrides;
+}
+
+/** Converts an editable permission matrix into explicit allow/deny overrides. */
+export function permissionGroupsToUserPermissionOverrides(
+  groups: PermissionGroups,
+): PersonaPermissionOverride[] {
+  const overrides = new Map<string, PersonaPermissionOverride>();
+
+  for (const [module, group] of Object.entries(groups)) {
+    for (const [action, enabled] of Object.entries(group)) {
+      if (
+        action === 'data' ||
+        action === 'region' ||
+        action === 'province' ||
+        action === 'estate' ||
+        action === 'estateCode' ||
+        typeof enabled !== 'boolean'
+      ) {
+        continue;
+      }
+
+      for (const code of permissionCodesFromAlias(module, action)) {
+        if (overrides.has(code) && !isPrimaryPermissionAlias(code, module, action)) continue;
+        const isDenied =
+          enabled === false ||
+          (group.data === null && locationScopedPermissionModules.has(module));
+        const region = !isDenied ? normalizeLocationValue(group.region) : undefined;
+        const province = !isDenied ? normalizeLocationValue(group.province) : undefined;
+        const estateCode = !isDenied
+          ? normalizeLocationValue(group.estateCode ?? group.estate)
+          : undefined;
+        overrides.set(code, {
+          code,
+          effect: isDenied ? 'deny' : 'allow',
+          scope: isDenied ? null : group.data,
+          ...(region !== undefined ? { region } : {}),
+          ...(province !== undefined ? { province } : {}),
+          ...(estateCode !== undefined ? { estateCode, estate: estateCode } : {}),
+        });
+      }
+    }
+  }
+
+  return [...overrides.values()];
 }
 
 export function flattenPermissionScopes(
@@ -158,30 +223,53 @@ export function applyPersonaPermissionOverrides(
   roleScopes: Readonly<Record<string, PermissionDataScope>>,
   overrides: readonly PersonaPermissionOverride[],
 ): Record<string, PermissionDataScope | PermissionScopeDetails> {
-  const scopes: Record<string, PermissionDataScope | PermissionScopeDetails> = {
-    ...roleScopes,
-  };
+  return mergePermissionScopesWithOverrides(
+    Object.entries(roleScopes).map(([code, scope]) => ({ code, scope })),
+    overrides,
+  );
+}
+
+export function mergePermissionScopesWithOverrides(
+  rolePermissions: ReadonlyArray<{ code: string; scope: PermissionDataScope }>,
+  overrides: readonly PersonaPermissionOverride[],
+): Record<string, PermissionDataScope | PermissionScopeDetails> {
+  const scopes: Record<string, PermissionDataScope | PermissionScopeDetails> = {};
+
+  for (const permission of rolePermissions) {
+    const current = scopes[permission.code];
+    const currentScope = current && typeof current === 'object' ? current.scope : current;
+    scopes[permission.code] = widestScope(currentScope, permission.scope);
+  }
+
+  const baseScopes = Object.fromEntries(
+    Object.entries(scopes).map(([code, details]) => [
+      code,
+      (details && typeof details === 'object' ? details.scope : details) as PermissionDataScope,
+    ]),
+  );
 
   for (const override of overrides) {
-    if (!(override.code in roleScopes)) continue;
+    if (!(override.code in baseScopes)) continue;
     if (override.effect === 'deny') {
       delete scopes[override.code];
       continue;
     }
 
-    const roleScope = roleScopes[override.code];
-    if (!isSameOrNarrowerScope(override.scope, roleScope)) continue;
+    const roleScope = baseScopes[override.code];
+    if (!isSameOrNarrowerPermissionScope(override.scope, roleScope)) continue;
+    const estateCode = normalizeLocationValue(override.estateCode ?? override.estate);
     scopes[override.code] = {
       scope: override.scope,
       region: override.region,
       province: override.province,
+      ...(estateCode !== undefined ? { estateCode, estate: estateCode } : {}),
     };
   }
 
   return scopes;
 }
 
-function isSameOrNarrowerScope(
+export function isSameOrNarrowerPermissionScope(
   candidate: PermissionDataScope,
   roleScope: PermissionDataScope | undefined,
 ): boolean {
@@ -252,12 +340,18 @@ function toScopeDetails(value: string | null | PermissionScopeDetails): Permissi
 
 function toGroupLocation(
   details: PermissionScopeDetails,
-): Partial<Pick<PermissionGroup, 'region' | 'province'>> {
-  const location: Partial<Pick<PermissionGroup, 'region' | 'province'>> = {};
+): Partial<Pick<PermissionGroup, 'region' | 'province' | 'estate' | 'estateCode'>> {
+  const location: Partial<Pick<PermissionGroup, 'region' | 'province' | 'estate' | 'estateCode'>> =
+    {};
   const region = normalizeLocationValue(details.region);
   const province = normalizeLocationValue(details.province);
+  const estateCode = normalizeLocationValue(details.estateCode ?? details.estate);
   if (region !== undefined) location.region = region;
   if (province !== undefined) location.province = province;
+  if (estateCode !== undefined) {
+    location.estateCode = estateCode;
+    location.estate = estateCode;
+  }
   return location;
 }
 

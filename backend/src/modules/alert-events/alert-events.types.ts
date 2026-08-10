@@ -119,8 +119,8 @@ export interface AlertEventDTO {
   abnormalStreakCount: number | null;
   firstAbnormalAt: string | null;
   confirmedAbnormalAt: string | null;
-  notificationStatus: AlertEventNotificationStatus;
-  notificationStatusLabel: string;
+  notificationStatus: AlertEventNotificationStatus | null;
+  notificationStatusLabel: string | null;
   sourcePayload: Record<string, unknown> | null;
   detectedAt: string;
 }

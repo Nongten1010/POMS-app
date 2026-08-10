@@ -271,6 +271,7 @@ describe('operator factory dashboard routes', () => {
 
     expect(response.status).toBe(200);
     expect(mockedConnectionRequestsService.listOfficerEligibleFactories).toHaveBeenCalledWith(
+      42,
       { scope: 'ALL' },
       {
         systemType: 'WPMS',
@@ -504,6 +505,31 @@ describe('operator factory dashboard routes', () => {
       success: true,
       data: { factoryId: 'factory-001', isFavorite: true },
     });
+  });
+
+  it('allows a logged-in citizen to favorite a factory using dashboard scope', async () => {
+    const app = createApp();
+    const citizenToken = accessToken({
+      userType: 'citizen',
+      roles: ['public_user'],
+      scopes: {
+        'dashboard:view': 'ALL',
+        'dashboard.alerts:view': null,
+      },
+    });
+
+    const response = await request(app)
+      .put('/api/v1/operator-factories/factory-001/favorite')
+      .set('Authorization', `Bearer ${citizenToken}`)
+      .send({ isFavorite: true });
+
+    expect(response.status).toBe(200);
+    expect(mockedConnectionRequestsService.setOperatorFactoryFavorite).toHaveBeenCalledWith(
+      'factory-001',
+      true,
+      42,
+      { scope: 'ALL' },
+    );
   });
 
   it('does not expose favorite updates under cems-wpms requests', async () => {

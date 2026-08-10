@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
 import { env } from '../../config/env';
-import { getScope } from '../../shared/middlewares/authorize';
+import { getScopeDetails } from '../../shared/middlewares/authorize';
 import { BadRequestError } from '../../shared/errors/AppError';
 import { createKwpAttachmentStorage } from './kwp-form-attachments.service';
 import { kwpFormSubmissionsService } from './kwp-form-submissions.service';
@@ -23,7 +23,8 @@ export const kwpFormSubmissionsController = {
       const id = requireSubmissionId(req);
       const result = await kwpFormSubmissionsService.getWorkflow(id, {
         actorUserId,
-        scope: getScope(req, 'kwp_forms:view'),
+        scope: getScopeDetails(req, 'kwp_forms:view'),
+        roles: req.user?.roles ?? [],
         regionalAccess: req.user?.regionalAccess ?? undefined,
       });
       res.status(StatusCodes.OK).json({ success: true, data: result });
@@ -39,7 +40,8 @@ export const kwpFormSubmissionsController = {
       const payload = changeKwpWorkflowStatusSchema.parse(req.body);
       const result = await kwpFormSubmissionsService.changeWorkflowStatus(id, payload, {
         actorUserId,
-        scope: getScope(req, 'kwp_forms:approve'),
+        scope: getScopeDetails(req, 'kwp_forms:approve'),
+        roles: req.user?.roles ?? [],
         regionalAccess: req.user?.regionalAccess ?? undefined,
       });
       res.status(StatusCodes.OK).json({ success: true, data: result });
@@ -140,7 +142,9 @@ export const kwpFormSubmissionsController = {
       const payload = createKwp01SubmissionSchema.parse(req.body);
       const result = await kwpFormSubmissionsService.createKwp01(payload, {
         actorUserId,
-        scope: getScope(req, 'kwp_forms:edit'),
+        scope: getKwpWriteScope(req),
+        roles: req.user?.roles ?? [],
+        regionalAccess: req.user?.regionalAccess ?? undefined,
       });
       res
         .status(StatusCodes.CREATED)
@@ -157,7 +161,9 @@ export const kwpFormSubmissionsController = {
       const payload = createKwp02SubmissionSchema.parse(req.body);
       const result = await kwpFormSubmissionsService.createKwp02(payload, {
         actorUserId,
-        scope: getScope(req, 'kwp_forms:edit'),
+        scope: getKwpWriteScope(req),
+        roles: req.user?.roles ?? [],
+        regionalAccess: req.user?.regionalAccess ?? undefined,
       });
       res
         .status(StatusCodes.CREATED)
@@ -174,7 +180,9 @@ export const kwpFormSubmissionsController = {
       const payload = createKwp03SubmissionSchema.parse(req.body);
       const result = await kwpFormSubmissionsService.createKwp03(payload, {
         actorUserId,
-        scope: getScope(req, 'kwp_forms:edit'),
+        scope: getKwpWriteScope(req),
+        roles: req.user?.roles ?? [],
+        regionalAccess: req.user?.regionalAccess ?? undefined,
       });
       res
         .status(StatusCodes.CREATED)
@@ -191,7 +199,9 @@ export const kwpFormSubmissionsController = {
       const payload = createKwp04SubmissionSchema.parse(req.body);
       const result = await kwpFormSubmissionsService.createKwp04(payload, {
         actorUserId,
-        scope: getScope(req, 'kwp_forms:edit'),
+        scope: getKwpWriteScope(req),
+        roles: req.user?.roles ?? [],
+        regionalAccess: req.user?.regionalAccess ?? undefined,
       });
       res
         .status(StatusCodes.CREATED)
@@ -208,7 +218,9 @@ export const kwpFormSubmissionsController = {
       const payload = createKwp05SubmissionSchema.parse(req.body);
       const result = await kwpFormSubmissionsService.createKwp05(payload, {
         actorUserId,
-        scope: getScope(req, 'kwp_forms:edit'),
+        scope: getKwpWriteScope(req),
+        roles: req.user?.roles ?? [],
+        regionalAccess: req.user?.regionalAccess ?? undefined,
       });
       res
         .status(StatusCodes.CREATED)
@@ -233,7 +245,8 @@ async function getById(
     const result = await kwpFormSubmissionsService.getById(id, {
       actorUserId,
       formType,
-      scope: getScope(req, 'kwp_forms:view'),
+      scope: getScopeDetails(req, 'kwp_forms:view'),
+      roles: req.user?.roles ?? [],
       regionalAccess: req.user?.regionalAccess ?? undefined,
       publicBaseUrl: getPublicBaseUrl(req),
       publicPath: env.UPLOAD_PUBLIC_PATH,
@@ -255,7 +268,8 @@ async function updateById(
     const id = requireSubmissionId(req);
     const access = {
       actorUserId,
-      scope: getScope(req, 'kwp_forms:edit'),
+      scope: getKwpWriteScope(req),
+      roles: req.user?.roles ?? [],
       regionalAccess: req.user?.regionalAccess ?? undefined,
       publicBaseUrl: getPublicBaseUrl(req),
       publicPath: env.UPLOAD_PUBLIC_PATH,
@@ -309,7 +323,8 @@ async function resubmitById(
     const payload = resubmitKwpFormSubmissionSchema.parse(req.body ?? {});
     const access = {
       actorUserId,
-      scope: getScope(req, 'kwp_forms:edit'),
+      scope: getKwpWriteScope(req),
+      roles: req.user?.roles ?? [],
       regionalAccess: req.user?.regionalAccess ?? undefined,
     };
     const result =
@@ -341,6 +356,10 @@ function requireActorUserId(req: Request): number {
   const actorUserId = req.user?.id;
   if (!actorUserId) throw new Error('Authenticated user id is required');
   return actorUserId;
+}
+
+function getKwpWriteScope(req: Request) {
+  return getScopeDetails(req, 'kwp_forms:edit');
 }
 
 function getPublicBaseUrl(req: Request): string {

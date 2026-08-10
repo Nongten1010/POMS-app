@@ -146,6 +146,39 @@ describe('authService login completion', () => {
     });
   });
 
+  it('fails closed when a legacy local account has more than one system role', async () => {
+    mockedAuthRepository.findUserByProviderAndExternalId.mockResolvedValue({
+      id: 42,
+      external_id: 'ambiguous_officer',
+      identity_provider: 'local',
+      user_type: 'officer',
+      username: 'ambiguous_officer',
+      email: null,
+      phone: null,
+      prename_th: null,
+      first_name: 'สิทธิ์',
+      last_name: 'ซ้ำ',
+      is_active: true,
+      password_hash: Buffer.from('hashed-password'),
+    });
+    mockedAuthRepository.getOfficerProfile.mockResolvedValue(undefined);
+    mockedAuthRepository.getRolesAndPermissions.mockResolvedValue({
+      roles: ['diw_central', 'monitoring_kpm'],
+      scopes: { 'dashboard:view': 'ALL' },
+    });
+
+    await expect(
+      authService.login({
+        accountType: 'poms',
+        userType: 'officer',
+        username: 'ambiguous_officer',
+        [passwordField]: validTestPassword,
+      } as never),
+    ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+
+    expect(mockedSignAccessToken).not.toHaveBeenCalled();
+  });
+
   it('never falls back to a local account for an explicit API login', async () => {
     await expect(
       authService.login({
@@ -622,6 +655,7 @@ describe('authService login completion', () => {
         organize: 'กลุ่มทดสอบ',
         division: 'กองทดสอบ',
         provinceId: '1',
+        estateCode: null,
         roles: 'diw_central',
         roleCodes: ['diw_central'],
         isActive: true,
@@ -645,15 +679,7 @@ describe('authService login completion', () => {
         },
         permissions: {
           data: 'ALL',
-          view: true,
-        },
-        statistics: {
-          data: 'ALL',
-          view: true,
-        },
-        conditional_search: {
-          data: 'ALL',
-          view: true,
+          manage: true,
         },
       },
     });
@@ -727,6 +753,8 @@ describe('authService login completion', () => {
       department_name_th: 'การนิคมอุตสาหกรรมแห่งประเทศไทย',
       ministry_id: '',
       province_id: '',
+      province_name_th: null,
+      estate_code: 'IE01',
       per_status: '1',
       per_status_name: 'ทำงาน',
     });
@@ -755,9 +783,301 @@ describe('authService login completion', () => {
       mposition: 'วิศวกร',
       organize: 'ฝ่ายบริการผู้ประกอบกิจการ',
       division: 'กองอนุญาตผู้ประกอบกิจการ',
+      estateCode: 'IE01',
       roles: 'industrial_estate',
       isActive: true,
     });
+    expect(mockedSignAccessToken).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scopeDetails: expect.objectContaining({
+          'dashboard:view': expect.objectContaining({
+            scope: 'IN_ESTATE',
+            estateCode: 'IE01',
+          }),
+        }),
+      }),
+    );
+  });
+
+  it('enriches province-scoped officer permissions from the officer profile before issuing a token', async () => {
+    mockedAuthRepository.findUserByProviderAndExternalId.mockResolvedValue({
+      id: 92,
+      external_id: 'provincial_user',
+      identity_provider: 'local',
+      user_type: 'officer',
+      username: 'provincial_user',
+      email: null,
+      phone: null,
+      prename_th: null,
+      first_name: 'จังหวัด',
+      last_name: 'ทดสอบ',
+      is_active: true,
+      password_hash: Buffer.from('hashed-password'),
+    });
+    mockedAuthRepository.getOfficerProfile.mockResolvedValue({
+      user_id: 92,
+      pos_no: null,
+      pertype_id: null,
+      pertype: null,
+      position_type_id: null,
+      position_type_th: null,
+      line_id: null,
+      line_name_th: 'สอจ.',
+      level_id: null,
+      level_name_th: null,
+      organize_id: null,
+      department_id: '4019000',
+      department_name_th: 'สำนักงานอุตสาหกรรมจังหวัดระยอง',
+      ministry_id: null,
+      province_id: '21',
+      province_name_th: 'ระยอง',
+      estate_code: null,
+      per_status: null,
+      per_status_name: null,
+      regional_access_json: null,
+    });
+    mockedAuthRepository.getRolesAndPermissions.mockResolvedValue({
+      roles: ['provincial_office'],
+      scopes: {
+        'factories:view': 'IN_PROVINCE',
+      },
+    });
+
+    const result = await authService.login({
+      userType: 'officer',
+      username: 'provincial_user',
+      [passwordField]: validTestPassword,
+    });
+
+    expect(result.permissions.factories).toEqual({
+      data: 'IN_PROVINCE',
+      region: null,
+      province: 'ระยอง',
+      view: true,
+    });
+    expect(mockedSignAccessToken).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scopeDetails: expect.objectContaining({
+          'factories:view': expect.objectContaining({
+            scope: 'IN_PROVINCE',
+            province: 'ระยอง',
+          }),
+        }),
+      }),
+    );
+  });
+
+  it('defaults central monitoring region-scoped permissions to ภาคกลาง when no regionalAccess is stored', async () => {
+    mockedAuthRepository.findUserByProviderAndExternalId.mockResolvedValue({
+      id: 93,
+      external_id: 'central_monitor',
+      identity_provider: 'local',
+      user_type: 'officer',
+      username: 'central_monitor',
+      email: null,
+      phone: null,
+      prename_th: null,
+      first_name: 'กลาง',
+      last_name: 'ศูนย์เฝ้า',
+      is_active: true,
+      password_hash: Buffer.from('hashed-password'),
+    });
+    mockedAuthRepository.getOfficerProfile.mockResolvedValue({
+      user_id: 93,
+      pos_no: null,
+      pertype_id: null,
+      pertype: null,
+      position_type_id: null,
+      position_type_th: null,
+      line_id: null,
+      line_name_th: 'เจ้าหน้าที่ กฝม.',
+      level_id: null,
+      level_name_th: null,
+      organize_id: null,
+      department_id: '3010000',
+      department_name_th: 'กรมโรงงานอุตสาหกรรม',
+      ministry_id: null,
+      province_id: null,
+      province_name_th: null,
+      estate_code: null,
+      per_status: null,
+      per_status_name: null,
+      regional_access_json: null,
+    });
+    mockedAuthRepository.getRolesAndPermissions.mockResolvedValue({
+      roles: ['monitoring_kpm'],
+      scopes: {
+        'dashboard:view': 'IN_REGION',
+      },
+    });
+
+    const result = await authService.login({
+      userType: 'officer',
+      username: 'central_monitor',
+      [passwordField]: validTestPassword,
+    });
+
+    expect(result.permissions.dashboard).toEqual({
+      data: 'IN_REGION',
+      region: 'ภาคกลาง',
+      province: null,
+      view: true,
+    });
+    expect(mockedSignAccessToken).toHaveBeenCalledWith(
+      expect.objectContaining({
+        regionalAccess: { regions: ['ภาคกลาง'] },
+        scopeDetails: expect.objectContaining({
+          'dashboard:view': expect.objectContaining({
+            scope: 'IN_REGION',
+            region: 'ภาคกลาง',
+          }),
+        }),
+      }),
+    );
+  });
+
+  it('forces monitoring_kpm to ภาคกลาง even when the officer profile carries another region', async () => {
+    mockedAuthRepository.findUserByProviderAndExternalId.mockResolvedValue({
+      id: 94,
+      external_id: 'central_monitor_conflict',
+      identity_provider: 'local',
+      user_type: 'officer',
+      username: 'central_monitor_conflict',
+      email: null,
+      phone: null,
+      prename_th: null,
+      first_name: 'กลาง',
+      last_name: 'ขัดแย้ง',
+      is_active: true,
+      password_hash: Buffer.from('hashed-password'),
+    });
+    mockedAuthRepository.getOfficerProfile.mockResolvedValue({
+      user_id: 94,
+      pos_no: null,
+      pertype_id: null,
+      pertype: null,
+      position_type_id: null,
+      position_type_th: null,
+      line_id: null,
+      line_name_th: 'เจ้าหน้าที่ กฝม.',
+      level_id: null,
+      level_name_th: null,
+      organize_id: null,
+      department_id: '3010000',
+      department_name_th: 'กรมโรงงานอุตสาหกรรม',
+      ministry_id: null,
+      province_id: null,
+      province_name_th: null,
+      estate_code: null,
+      per_status: null,
+      per_status_name: null,
+      regional_access_json: JSON.stringify({ regions: ['ภาคตะวันออก'] }),
+    });
+    mockedAuthRepository.getRolesAndPermissions.mockResolvedValue({
+      roles: ['monitoring_kpm'],
+      scopes: {
+        'dashboard:view': 'IN_REGION',
+      },
+    });
+
+    const result = await authService.login({
+      userType: 'officer',
+      username: 'central_monitor_conflict',
+      [passwordField]: validTestPassword,
+    });
+
+    expect(result.user).toMatchObject({
+      regionalAccess: { regions: ['ภาคกลาง'] },
+    });
+    expect(result.permissions.dashboard).toEqual({
+      data: 'IN_REGION',
+      region: 'ภาคกลาง',
+      province: null,
+      view: true,
+    });
+    expect(mockedSignAccessToken).toHaveBeenCalledWith(
+      expect.objectContaining({
+        regionalAccess: { regions: ['ภาคกลาง'] },
+        scopeDetails: expect.objectContaining({
+          'dashboard:view': expect.objectContaining({
+            scope: 'IN_REGION',
+            region: 'ภาคกลาง',
+          }),
+        }),
+      }),
+    );
+  });
+
+  it('keeps assigned profile regions for monitoring_5_centers instead of forcing ภาคกลาง', async () => {
+    mockedAuthRepository.findUserByProviderAndExternalId.mockResolvedValue({
+      id: 95,
+      external_id: 'regional_monitor',
+      identity_provider: 'local',
+      user_type: 'officer',
+      username: 'regional_monitor',
+      email: null,
+      phone: null,
+      prename_th: null,
+      first_name: 'ภูมิภาค',
+      last_name: 'ศูนย์',
+      is_active: true,
+      password_hash: Buffer.from('hashed-password'),
+    });
+    mockedAuthRepository.getOfficerProfile.mockResolvedValue({
+      user_id: 95,
+      pos_no: null,
+      pertype_id: null,
+      pertype: null,
+      position_type_id: null,
+      position_type_th: null,
+      line_id: null,
+      line_name_th: 'เจ้าหน้าที่ศูนย์เฝ้า',
+      level_id: null,
+      level_name_th: null,
+      organize_id: null,
+      department_id: '3010000',
+      department_name_th: 'กรมโรงงานอุตสาหกรรม',
+      ministry_id: null,
+      province_id: null,
+      province_name_th: null,
+      estate_code: null,
+      per_status: null,
+      per_status_name: null,
+      regional_access_json: JSON.stringify({ regions: ['ภาคตะวันออก'] }),
+    });
+    mockedAuthRepository.getRolesAndPermissions.mockResolvedValue({
+      roles: ['monitoring_5_centers'],
+      scopes: {
+        'dashboard:view': 'IN_REGION',
+      },
+    });
+
+    const result = await authService.login({
+      userType: 'officer',
+      username: 'regional_monitor',
+      [passwordField]: validTestPassword,
+    });
+
+    expect(result.user).toMatchObject({
+      regionalAccess: { regions: ['ภาคตะวันออก'] },
+    });
+    expect(result.permissions.dashboard).toEqual({
+      data: 'IN_REGION',
+      region: 'ภาคตะวันออก',
+      province: null,
+      view: true,
+    });
+    expect(mockedSignAccessToken).toHaveBeenCalledWith(
+      expect.objectContaining({
+        regionalAccess: { regions: ['ภาคตะวันออก'] },
+        scopeDetails: expect.objectContaining({
+          'dashboard:view': expect.objectContaining({
+            scope: 'IN_REGION',
+            region: 'ภาคตะวันออก',
+          }),
+        }),
+      }),
+    );
   });
 
   it('provisions the second DIW V2 officer variant with display fields', async () => {

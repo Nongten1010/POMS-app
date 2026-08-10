@@ -468,7 +468,11 @@ describe('BOD/COD deviation report routes', () => {
       .set('Authorization', `Bearer ${operatorToken()}`);
 
     expect(response.status).toBe(200);
-    expect(mockedService.listFactories).toHaveBeenCalledWith(42, 'OWN_FACTORY', undefined);
+    expect(mockedService.listFactories).toHaveBeenCalledWith(
+      42,
+      { scope: 'OWN_FACTORY' },
+      undefined,
+    );
     expect(response.body).toEqual({
       success: true,
       data: expect.any(Array),
@@ -510,7 +514,7 @@ describe('BOD/COD deviation report routes', () => {
     expect(mockedService.listReports).toHaveBeenCalledWith(
       { status: 'SUBMITTED', parameterCode: 'BOD' },
       77,
-      'ALL',
+      { scope: 'ALL' },
       { regions: ['ภาคเหนือ'] },
     );
     expect(response.body.data[0]).toMatchObject({
@@ -567,7 +571,9 @@ describe('BOD/COD deviation report routes', () => {
     expect(response.headers.location).toBe('/api/v1/bod-cod-deviation-reports/9');
     expect(mockedService.createReport).toHaveBeenCalledWith(createReportPayload(), {
       actorUserId: 42,
-      scope: 'OWN_FACTORY',
+      scope: { scope: 'OWN_FACTORY' },
+      roles: ['factory_operator'],
+      regionalAccess: undefined,
     });
     expect(response.body).toEqual({
       success: true,
@@ -595,10 +601,11 @@ describe('BOD/COD deviation report routes', () => {
     expect(response.status).toBe(200);
     expect(mockedService.getReportById).toHaveBeenCalledWith(9, {
       actorUserId: 42,
-      scope: 'OWN_FACTORY',
+      scope: { scope: 'OWN_FACTORY' },
       regionalAccess: undefined,
       publicBaseUrl: expectedPublicBaseUrl,
       publicPath: '/uploads',
+      roles: ['factory_operator'],
     });
     expect(response.body.data).toMatchObject({
       id: 9,
@@ -640,7 +647,9 @@ describe('BOD/COD deviation report routes', () => {
     expect(response.status).toBe(200);
     expect(mockedService.resubmitReport).toHaveBeenCalledWith(9, payload, {
       actorUserId: 42,
-      scope: 'OWN_FACTORY',
+      scope: { scope: 'OWN_FACTORY' },
+      roles: ['factory_operator'],
+      regionalAccess: undefined,
     });
     expect(response.body.data).toMatchObject({
       id: 9,
@@ -687,10 +696,12 @@ describe('BOD/COD deviation report routes', () => {
       .set('Authorization', `Bearer ${operatorBinaryEditToken()}`)
       .send(payload);
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(403);
     expect(mockedService.resubmitReport).toHaveBeenCalledWith(9, payload, {
       actorUserId: 42,
-      scope: 'OWN_FACTORY',
+      scope: { scope: null },
+      roles: ['factory_operator'],
+      regionalAccess: undefined,
     });
   });
 
@@ -714,8 +725,9 @@ describe('BOD/COD deviation report routes', () => {
       },
       {
         actorUserId: 77,
-        scope: 'ALL',
+        scope: { scope: 'ALL' },
         regionalAccess: { regions: ['ภาคเหนือ'] },
+        roles: ['monitoring_kpm'],
       },
     );
     expect(response.body.data).toMatchObject({
@@ -742,8 +754,9 @@ describe('BOD/COD deviation report routes', () => {
     expect(response.status).toBe(200);
     expect(mockedService.upsertResultNotice).toHaveBeenCalledWith(9, payload, {
       actorUserId: 77,
-      scope: 'ALL',
+      scope: { scope: 'ALL' },
       regionalAccess: { regions: ['ภาคเหนือ'] },
+      roles: ['monitoring_kpm'],
     });
     expect(response.body.data).toMatchObject({
       id: 9,
@@ -776,8 +789,9 @@ describe('BOD/COD deviation report routes', () => {
     expect(response.status).toBe(200);
     expect(mockedService.upsertResultNotice).toHaveBeenCalledWith(9, payload, {
       actorUserId: 77,
-      scope: 'ALL',
+      scope: { scope: 'ALL' },
       regionalAccess: { regions: ['ภาคเหนือ'] },
+      roles: ['monitoring_kpm'],
     });
     expect(response.body.data.resultNotice).toMatchObject({
       reportCorrectness: 'ถูกต้องครบถ้วน',
@@ -804,9 +818,72 @@ describe('BOD/COD deviation report routes', () => {
     expect(response.status).toBe(200);
     expect(mockedService.upsertResultNotice).toHaveBeenCalledWith(9, payload, {
       actorUserId: 77,
-      scope: 'ALL',
+      scope: { scope: 'ALL' },
+      regionalAccess: { regions: ['ภาคเหนือ'] },
+      roles: ['monitoring_kpm'],
+    });
+  });
+
+  it('preserves bare province scope details on BOD/COD reads so downstream fail-closed filters can run', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .get('/api/v1/bod-cod-deviation-reports/9')
+      .set('Authorization', `Bearer ${provinceScopedBodViewerWithoutProvince()}`);
+
+    expect(response.status).toBe(200);
+    expect(mockedService.getReportById).toHaveBeenCalledWith(9, {
+      actorUserId: 77,
+      scope: { scope: 'IN_PROVINCE' },
+      regionalAccess: undefined,
+      publicBaseUrl: expectedPublicBaseUrl,
+      publicPath: '/uploads',
+      roles: ['provincial_industry'],
+    });
+  });
+
+  it('passes profile regionalAccess into BOD/COD create access for base IN_REGION edit scope', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .post('/api/v1/bod-cod-deviation-reports')
+      .set('Authorization', `Bearer ${regionalBodEditorTokenWithoutExplicitRegion()}`)
+      .send(createReportPayload());
+
+    expect(response.status).toBe(201);
+    expect(mockedService.createReport).toHaveBeenCalledWith(createReportPayload(), {
+      actorUserId: 77,
+      scope: { scope: 'IN_REGION' },
+      roles: ['monitoring_5_centers'],
       regionalAccess: { regions: ['ภาคเหนือ'] },
     });
+  });
+
+  it('preserves explicit IN_REGION approval scope details over broader profile regions', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .post('/api/v1/bod-cod-deviation-reports/9/workflow-actions')
+      .set('Authorization', `Bearer ${regionalBodApproverTokenWithExplicitRegion()}`)
+      .send({
+        action: 'APPROVE',
+        officerNote: 'ข้อมูลถูกต้อง ส่งต่อผู้อนุมัติ',
+      });
+
+    expect(response.status).toBe(200);
+    expect(mockedService.changeWorkflowStatus).toHaveBeenCalledWith(
+      9,
+      {
+        action: 'APPROVE',
+        officerNote: 'ข้อมูลถูกต้อง ส่งต่อผู้อนุมัติ',
+      },
+      {
+        actorUserId: 77,
+        scope: { scope: 'IN_REGION', region: 'ภาคตะวันออกเฉียงเหนือ' },
+        regionalAccess: { regions: ['ภาคเหนือ'] },
+        roles: ['monitoring_5_centers'],
+      },
+    );
   });
 
   it('rejects invalid BOD/COD result notice payloads before calling service', async () => {
@@ -914,6 +991,52 @@ function officerToken(): string {
     scopes: {
       'bod_cod_errors:view': 'ALL',
       'bod_cod_errors:approve': 'ALL',
+    },
+    regionalAccess: { regions: ['ภาคเหนือ'] },
+  });
+}
+
+function provinceScopedBodViewerWithoutProvince(): string {
+  return signAccessToken({
+    sub: '77',
+    userType: 'officer',
+    roles: ['provincial_industry'],
+    scopes: {
+      'bod_cod_errors:view': 'IN_PROVINCE',
+    },
+    scopeDetails: {
+      'bod_cod_errors:view': { scope: 'IN_PROVINCE' },
+    },
+  });
+}
+
+function regionalBodApproverTokenWithExplicitRegion(): string {
+  return signAccessToken({
+    sub: '77',
+    userType: 'officer',
+    roles: ['monitoring_5_centers'],
+    scopes: {
+      'bod_cod_errors:view': 'IN_REGION',
+      'bod_cod_errors:approve': 'IN_REGION',
+    },
+    scopeDetails: {
+      'bod_cod_errors:view': { scope: 'IN_REGION', region: 'ภาคตะวันออกเฉียงเหนือ' },
+      'bod_cod_errors:approve': { scope: 'IN_REGION', region: 'ภาคตะวันออกเฉียงเหนือ' },
+    },
+    regionalAccess: { regions: ['ภาคเหนือ'] },
+  });
+}
+
+function regionalBodEditorTokenWithoutExplicitRegion(): string {
+  return signAccessToken({
+    sub: '77',
+    userType: 'officer',
+    roles: ['monitoring_5_centers'],
+    scopes: {
+      'bod_cod_errors:edit': 'IN_REGION',
+    },
+    scopeDetails: {
+      'bod_cod_errors:edit': { scope: 'IN_REGION' },
     },
     regionalAccess: { regions: ['ภาคเหนือ'] },
   });

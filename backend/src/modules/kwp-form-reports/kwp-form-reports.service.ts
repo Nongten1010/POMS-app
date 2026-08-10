@@ -1,6 +1,7 @@
 import type { RegionalAccessDTO } from '../auth/regional-access';
 import { kwpFormReportsRepository } from './kwp-form-reports.repository';
 import type {
+  KwpFormReportAccess,
   KwpFormFactoryTableRowDTO,
   KwpFormRequestTableRowDTO,
   ListKwpFormRequestsQuery,
@@ -10,7 +11,7 @@ import type {
 export const kwpFormReportsService = {
   listFactories(
     actorUserId: number,
-    scope: string | null | undefined,
+    scope: KwpFormReportAccess['scope'],
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<PaginatedKwpFormTableRowsDTO<KwpFormFactoryTableRowDTO>> {
     return kwpFormReportsRepository
@@ -21,7 +22,7 @@ export const kwpFormReportsService = {
   listRequests(
     query: ListKwpFormRequestsQuery,
     actorUserId: number,
-    scope: string | null | undefined,
+    scope: KwpFormReportAccess['scope'],
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<PaginatedKwpFormTableRowsDTO<KwpFormRequestTableRowDTO>> {
     return kwpFormReportsRepository

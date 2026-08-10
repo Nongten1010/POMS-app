@@ -15,18 +15,49 @@ import type {
 import { monitoringPointFormsRepository } from './monitoring-point-forms.repository';
 import type {
   ListMonitoringPointFormsQuery,
+  MonitoringPointFormAccessContext,
   MonitoringPointFormDTO,
   MonitoringPointFormSummaryDTO,
   SaveMonitoringPointFormInput,
 } from './monitoring-point-forms.types';
 
-export const monitoringPointFormsService = {
-  async list(query: ListMonitoringPointFormsQuery): Promise<MonitoringPointFormSummaryDTO[]> {
-    return monitoringPointFormsRepository.list(query);
+interface MonitoringPointFormsService {
+  list(
+    query: ListMonitoringPointFormsQuery,
+    access?: MonitoringPointFormAccessContext,
+  ): Promise<MonitoringPointFormSummaryDTO[]>;
+  getById(id: number, access?: MonitoringPointFormAccessContext): Promise<MonitoringPointFormDTO>;
+  create(
+    input: SaveMonitoringPointFormInput,
+    actorUserId: number,
+    access?: MonitoringPointFormAccessContext,
+  ): Promise<MonitoringPointFormDTO>;
+  update(
+    id: number,
+    input: SaveMonitoringPointFormInput,
+    actorUserId: number,
+    access?: MonitoringPointFormAccessContext,
+  ): Promise<MonitoringPointFormDTO>;
+  selectEligible(
+    id: number,
+    actorUserId: number,
+    access?: MonitoringPointFormAccessContext,
+  ): Promise<EligibleFactoryDTO>;
+}
+
+export const monitoringPointFormsService: MonitoringPointFormsService = {
+  async list(
+    query: ListMonitoringPointFormsQuery,
+    access?: MonitoringPointFormAccessContext,
+  ): Promise<MonitoringPointFormSummaryDTO[]> {
+    return monitoringPointFormsRepository.list(query, access);
   },
 
-  async getById(id: number): Promise<MonitoringPointFormDTO> {
-    const form = await monitoringPointFormsRepository.findById(id);
+  async getById(
+    id: number,
+    access?: MonitoringPointFormAccessContext,
+  ): Promise<MonitoringPointFormDTO> {
+    const form = await monitoringPointFormsRepository.findById(id, access);
     if (!form) throw new NotFoundError('Monitoring point form not found');
     return form;
   },
@@ -34,12 +65,24 @@ export const monitoringPointFormsService = {
   async create(
     input: SaveMonitoringPointFormInput,
     actorUserId: number,
+    access?: MonitoringPointFormAccessContext,
   ): Promise<MonitoringPointFormDTO> {
     const normalizedInput = normalizeMonitoringPointFormAddress(input);
+    if (
+      access &&
+      !(await monitoringPointFormsRepository.canAccessFactory(normalizedInput.factory, access))
+    ) {
+      throw new NotFoundError('Monitoring point form not found');
+    }
     if (normalizedInput.factory.factoryRegistrationNoNew) {
-      const existingForms = await monitoringPointFormsRepository.list({
-        factoryRegistrationNoNew: normalizedInput.factory.factoryRegistrationNoNew,
-      });
+      const existingForms = await (access
+        ? monitoringPointFormsRepository.list(
+            { factoryRegistrationNoNew: normalizedInput.factory.factoryRegistrationNoNew },
+            access,
+          )
+        : monitoringPointFormsRepository.list({
+            factoryRegistrationNoNew: normalizedInput.factory.factoryRegistrationNoNew,
+          }));
       if (existingForms.length > 0) {
         throw new ConflictError('Monitoring point form already exists for this factory', {
           id: existingForms[0]?.id,
@@ -57,16 +100,35 @@ export const monitoringPointFormsService = {
     id: number,
     input: SaveMonitoringPointFormInput,
     actorUserId: number,
+    access?: MonitoringPointFormAccessContext,
   ): Promise<MonitoringPointFormDTO> {
     const normalizedInput = normalizeMonitoringPointFormAddress(input);
-    const updated = await monitoringPointFormsRepository.update(id, normalizedInput, actorUserId);
+    if (access && !(await monitoringPointFormsRepository.findById(id, access))) {
+      throw new NotFoundError('Monitoring point form not found');
+    }
+    if (
+      access &&
+      !(await monitoringPointFormsRepository.canAccessFactory(normalizedInput.factory, access))
+    ) {
+      throw new NotFoundError('Monitoring point form not found');
+    }
+    const updated = await monitoringPointFormsRepository.update(
+      id,
+      normalizedInput,
+      actorUserId,
+      access,
+    );
     if (!updated) throw new NotFoundError('Monitoring point form not found');
     await syncEligibleFactoryFromForm(updated, actorUserId, { requireRegistration: false });
     return updated;
   },
 
-  async selectEligible(id: number, actorUserId: number): Promise<EligibleFactoryDTO> {
-    const form = await monitoringPointFormsRepository.findById(id);
+  async selectEligible(
+    id: number,
+    actorUserId: number,
+    access?: MonitoringPointFormAccessContext,
+  ): Promise<EligibleFactoryDTO> {
+    const form = await monitoringPointFormsRepository.findById(id, access);
     if (!form) throw new NotFoundError('Monitoring point form not found');
 
     const selected = await syncEligibleFactoryFromForm(form, actorUserId, {

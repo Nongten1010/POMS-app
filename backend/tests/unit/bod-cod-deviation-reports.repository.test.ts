@@ -44,7 +44,29 @@ describe('bodCodDeviationReportsRepository access filters', () => {
     expect(sql).not.toContain('join [user_juristics] as [uj]');
   });
 
-  it('filters officer report requests by assigned regions', () => {
+  it('filters province-scoped connected factory rows to the selected province', () => {
+    const compiled = buildBodCodDeviationFactoryQueryForTests({
+      actorUserId: 77,
+      scope: { scope: 'IN_PROVINCE', province: 'สระบุรี' },
+    }).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('[p].[name_th] = ?');
+    expect(compiled.bindings).toContain('สระบุรี');
+  });
+
+  it('fails closed for industrial-estate-scoped connected factory rows without estate details in the auth payload', () => {
+    const compiled = buildBodCodDeviationFactoryQueryForTests({
+      actorUserId: 77,
+      scope: { scope: 'IN_ESTATE' },
+    }).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('1 = ?');
+    expect(compiled.bindings).toContain(0);
+  });
+
+  it('keeps officer report requests broad when scope is ALL', () => {
     const compiled = buildBodCodDeviationReportQueryForTests(
       {},
       {
@@ -57,8 +79,55 @@ describe('bodCodDeviationReportsRepository access filters', () => {
 
     expect(sql).toContain('from [bod_cod_deviation_reports] as [r]');
     expect(sql).toContain('[f].[code] = [r].[factory_registration_no]');
-    expect(sql).toContain('[p].[region]');
+    expect(sql).not.toContain('[p].[region] in (?)');
+    expect(compiled.bindings).not.toContain('ภาคเหนือ');
+  });
+
+  it('filters officer report requests by assigned regions only for IN_REGION scope', () => {
+    const compiled = buildBodCodDeviationReportQueryForTests(
+      {},
+      {
+        actorUserId: 77,
+        scope: { scope: 'IN_REGION', region: 'ภาคเหนือ' },
+        regionalAccess: { regions: ['ภาคเหนือ'] },
+      },
+    ).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('[p].[region] in (?)');
     expect(compiled.bindings).toContain('ภาคเหนือ');
+  });
+
+  it('fails closed when the explicit BOD/COD region is outside assigned profile regions', () => {
+    const compiled = buildBodCodDeviationReportQueryForTests(
+      {},
+      {
+        actorUserId: 77,
+        scope: { scope: 'IN_REGION', region: 'ภาคตะวันออกเฉียงเหนือ' },
+        regionalAccess: { regions: ['ภาคเหนือ', 'ภาคกลาง'] },
+      },
+    ).toSQL();
+
+    expect(compiled.sql.toLowerCase()).toContain('1 = ?');
+    expect(compiled.bindings).toContain(0);
+    expect(compiled.bindings).not.toContain('ภาคตะวันออกเฉียงเหนือ');
+    expect(compiled.bindings).not.toContain('ภาคเหนือ');
+    expect(compiled.bindings).not.toContain('ภาคกลาง');
+  });
+
+  it('fails closed when BOD/COD IN_REGION has no assigned profile region', () => {
+    const compiled = buildBodCodDeviationReportQueryForTests(
+      {},
+      {
+        actorUserId: 77,
+        scope: { scope: 'IN_REGION', region: 'ภาคกลาง' },
+        regionalAccess: null,
+      },
+    ).toSQL();
+
+    expect(compiled.sql.toLowerCase()).toContain('1 = ?');
+    expect(compiled.bindings).toContain(0);
+    expect(compiled.bindings).not.toContain('ภาคกลาง');
   });
 
   it('filters report requests by status and parameter code', () => {
@@ -132,7 +201,18 @@ describe('bodCodDeviationReportsRepository access filters', () => {
     expect(compiled.bindings).toContain(9);
   });
 
-  it('loads result notice updates through the current-step and regional access filters', () => {
+  it('filters province-scoped report detail reads to the selected province', () => {
+    const compiled = buildBodCodDeviationReportDetailQueryForTests(9, {
+      actorUserId: 77,
+      scope: { scope: 'IN_PROVINCE', province: 'สระบุรี' },
+    }).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('[p].[name_th] = ?');
+    expect(compiled.bindings).toEqual(expect.arrayContaining([9, 'สระบุรี']));
+  });
+
+  it('loads result notice updates without narrowing ALL by regional access', () => {
     const compiled = buildBodCodResultNoticeAccessQueryForTests(9, {
       actorUserId: 77,
       scope: 'ALL',
@@ -143,8 +223,35 @@ describe('bodCodDeviationReportsRepository access filters', () => {
     expect(sql).toContain('from [bod_cod_deviation_reports] as [r]');
     expect(sql).toContain('left join [bod_cod_approval_steps] as [s]');
     expect(sql).toContain('[s].[role_code] as [current_step_role_code]');
-    expect(sql).toContain('[p].[region]');
-    expect(compiled.bindings).toEqual(expect.arrayContaining([9, 'ภาคเหนือ']));
+    expect(sql).not.toContain('[p].[region] in (?)');
+    expect(compiled.bindings).toEqual(expect.arrayContaining([true, 9]));
+  });
+
+  it('loads result notice updates through assigned regions for IN_REGION scope', () => {
+    const compiled = buildBodCodResultNoticeAccessQueryForTests(9, {
+      actorUserId: 77,
+      scope: { scope: 'IN_REGION', region: 'ภาคเหนือ' },
+      regionalAccess: { regions: ['ภาคเหนือ'] },
+    }).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('[p].[region] in (?)');
+    expect(compiled.bindings).toEqual(expect.arrayContaining([true, 9, 'ภาคเหนือ']));
+  });
+
+  it('uses estateCode before legacy estate keys for BOD/COD detail reads', () => {
+    const compiled = buildBodCodDeviationReportDetailQueryForTests(9, {
+      actorUserId: 77,
+      scope: {
+        scope: 'IN_ESTATE',
+        estate: 'LEGACY-ESTATE',
+        estateCode: 'ESTATE-01',
+      } as never,
+    }).toSQL();
+
+    expect(compiled.sql.toLowerCase()).toContain('[ie].[code] = ?');
+    expect(compiled.bindings).toContain('ESTATE-01');
+    expect(compiled.bindings).not.toContain('LEGACY-ESTATE');
   });
 
   it('builds the documented central and regional workflow with result-notice editing before approval', () => {
@@ -336,13 +443,49 @@ describe('bodCodDeviationReportsRepository access filters', () => {
       isCurrent: true,
     };
 
-    expect(buildBodCodAllowedActionsForTests('SUBMITTED', currentStep, 'ALL')).toEqual([
+    expect(buildBodCodAllowedActionsForTests('SUBMITTED', currentStep, 'ALL', ['monitoring_kpm'])).toEqual([
       'APPROVE',
       'REQUEST_REVISION',
       'REJECT',
     ]);
-    expect(buildBodCodAllowedActionsForTests('APPROVED', currentStep, 'ALL')).toEqual([]);
-    expect(buildBodCodAllowedActionsForTests('REJECTED', currentStep, 'ALL')).toEqual([]);
+    expect(buildBodCodAllowedActionsForTests('SUBMITTED', currentStep, 'ALL', ['center_director'])).toEqual([]);
+    expect(buildBodCodAllowedActionsForTests('APPROVED', currentStep, 'ALL', ['monitoring_kpm'])).toEqual([]);
+    expect(buildBodCodAllowedActionsForTests('REJECTED', currentStep, 'ALL', ['monitoring_kpm'])).toEqual([]);
+  });
+
+  it('allows BOD/COD director approvals only on their assigned workflow steps', () => {
+    const reviewerStep = {
+      stepNo: 3,
+      roleCode: 'REVIEWER' as const,
+      roleLabel: 'ผอ.กฝม.',
+      status: 'PENDING' as const,
+      isCurrent: true,
+    };
+    const approverStep = {
+      stepNo: 4,
+      roleCode: 'APPROVER' as const,
+      roleLabel: 'ผอ.กวภ.',
+      status: 'PENDING' as const,
+      isCurrent: true,
+    };
+
+    expect(buildBodCodAllowedActionsForTests('WAITING_REVIEW', reviewerStep, 'ALL', ['kpm_director'])).toEqual([
+      'APPROVE',
+      'REQUEST_REVISION',
+      'REJECT',
+    ]);
+    expect(buildBodCodAllowedActionsForTests('WAITING_REVIEW', reviewerStep, 'ALL', ['center_director'])).toEqual([]);
+    expect(buildBodCodAllowedActionsForTests('WAITING_APPROVAL', approverStep, 'ALL', ['kwp_director'])).toEqual([
+      'APPROVE',
+      'REQUEST_REVISION',
+      'REJECT',
+    ]);
+    expect(buildBodCodAllowedActionsForTests('WAITING_APPROVAL', approverStep, 'ALL', ['center_director'])).toEqual([
+      'APPROVE',
+      'REQUEST_REVISION',
+      'REJECT',
+    ]);
+    expect(buildBodCodAllowedActionsForTests('WAITING_APPROVAL', approverStep, 'ALL', ['monitoring_kpm'])).toEqual([]);
   });
 
   it('maps BOD/COD workflow actions to the next report and step state', () => {

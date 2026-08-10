@@ -9,21 +9,21 @@ eligibleFactoriesRoutes.use(authenticate);
 
 eligibleFactoriesRoutes.get(
   '/candidates',
-  authorize('eligible_factories:manage'),
+  authorize('eligible_factories:view'),
   eligibleFactoriesController.listCandidates,
 );
 eligibleFactoriesRoutes.get(
   '/',
-  authorize('eligible_factories:manage'),
+  authorize('eligible_factories:view'),
   eligibleFactoriesController.list,
 );
 eligibleFactoriesRoutes.post(
   '/',
-  authorize('eligible_factories:manage'),
+  authorize('eligible_factories:edit'),
   eligibleFactoriesController.create,
 );
 eligibleFactoriesRoutes.delete(
   '/:id',
-  authorize('eligible_factories:manage'),
+  authorize('eligible_factories:edit'),
   eligibleFactoriesController.remove,
 );

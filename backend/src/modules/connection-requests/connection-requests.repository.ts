@@ -4,6 +4,7 @@ import { env } from '../../config/env';
 import { factorySourceDb } from '../../config/factory-source-database';
 import type { PermissionScopeDetails } from '../auth/permissions';
 import type { RegionalAccessDTO } from '../auth/regional-access';
+import { resolveAssignedRegions } from '../auth/regional-access';
 import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
 import { buddhistCalendarYear } from '../../shared/utils/monitoring-point-code';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
@@ -504,11 +505,11 @@ export const connectionRequestsRepository = {
         'ef.id as eligible_factory_id',
       );
 
-    if (requiresAssignedFactoryAccess(access.scope)) {
+    if (requiresAssignedFactoryAccess(access.scope, access.regionalAccess)) {
       applyAssignedFactoryAccessFilter(builder, access.actorUserId);
     }
-    applyFactoryPermissionLocationFilter(builder, access.scope);
-    applyFactoryRegionalAccessFilter(builder, access.regionalAccess);
+    applyFactoryPermissionLocationFilter(builder, access.scope, access.regionalAccess);
+    applyFactoryRegionalAccessFilter(builder, access.scope, access.regionalAccess);
 
     const row = await builder.first();
     if (row) return toFactoryGeneralDTO(row);
@@ -1510,11 +1511,11 @@ function buildFactoriesForAccessQuery(
     .orderByRaw('COALESCE(ef.factory_name, f.name) asc')
     .orderBy('f.id', 'asc');
 
-  if (requiresAssignedFactoryAccess(access.scope)) {
+  if (requiresAssignedFactoryAccess(access.scope, access.regionalAccess)) {
     applyAssignedFactoryAccessFilter(builder, access.actorUserId);
   }
-  applyFactoryPermissionLocationFilter(builder, access.scope);
-  applyFactoryRegionalAccessFilter(builder, access.regionalAccess);
+  applyFactoryPermissionLocationFilter(builder, access.scope, access.regionalAccess);
+  applyFactoryRegionalAccessFilter(builder, access.scope, access.regionalAccess);
 
   return builder as unknown as Knex.QueryBuilder<FactoryRow, FactoryRow[]>;
 }
@@ -1611,11 +1612,11 @@ function buildConnectedFactoriesForAccessQuery(
     .orderBy('ef.factory_name', 'asc')
     .orderBy('ef.id', 'asc');
 
-  if (requiresAssignedFactoryAccess(access.scope)) {
+  if (requiresAssignedFactoryAccess(access.scope, access.regionalAccess)) {
     applyAssignedFactoryAccessFilter(builder, access.actorUserId);
   }
-  applyFactoryPermissionLocationFilter(builder, access.scope);
-  applyFactoryRegionalAccessFilter(builder, access.regionalAccess);
+  applyFactoryPermissionLocationFilter(builder, access.scope, access.regionalAccess);
+  applyFactoryRegionalAccessFilter(builder, access.scope, access.regionalAccess);
 
   return builder as unknown as Knex.QueryBuilder<FactoryRow, FactoryRow[]>;
 }
@@ -1643,6 +1644,7 @@ function buildDirectConnectionFactoryQuery(
     .filter(Boolean);
   const builder = db<DirectConnectionFactoryRow>('eligible_factories as ef')
     .leftJoin('provinces as p', 'p.name_th', 'ef.province_name')
+    .leftJoin('industrial_estates as ie', 'ie.name_th', 'ef.industrial_estate_name')
     .whereNull('ef.deleted_at')
     .where((identifierBuilder) => {
       identifierBuilder
@@ -1652,8 +1654,8 @@ function buildDirectConnectionFactoryQuery(
     })
     .select('ef.id as eligible_factory_id', 'ef.factory_registration_no_new', 'ef.factory_name');
 
-  applyDirectConnectionFactoryAccessFilter(builder, access.scope);
-  applyFactoryRegionalAccessFilter(builder, access.regionalAccess);
+  applyDirectConnectionFactoryAccessFilter(builder, access.scope, access.regionalAccess);
+  applyFactoryRegionalAccessFilter(builder, access.scope, access.regionalAccess);
   return builder as unknown as Knex.QueryBuilder<
     DirectConnectionFactoryRow,
     DirectConnectionFactoryRow[]
@@ -1663,6 +1665,7 @@ function buildDirectConnectionFactoryQuery(
 function applyDirectConnectionFactoryAccessFilter(
   builder: Knex.QueryBuilder,
   scope: AccessScope,
+  regionalAccess?: RegionalAccessDTO | null,
 ): void {
   const scopeValue = getAccessScopeValue(scope);
   if (scopeValue === 'ALL') return;
@@ -1671,14 +1674,27 @@ function applyDirectConnectionFactoryAccessFilter(
     return;
   }
 
-  const region = normalizeLocationValue(scope.region);
+  const regionValues = resolveEffectiveRegionValues(scope, regionalAccess);
   const province = normalizeLocationValue(scope.province);
-  if (scope.scope === 'IN_REGION' && region) {
-    builder.where('p.region', region);
+  const estateCode = getScopeEstateCode(scope);
+  if (scope.scope === 'IN_REGION') {
+    if (regionValues.length === 0) {
+      builder.whereRaw('1 = 0');
+      return;
+    }
+    builder.whereIn('p.region', regionValues);
     return;
   }
   if (scope.scope === 'IN_PROVINCE' && province) {
     builder.where('ef.province_name', province);
+    return;
+  }
+  if (scope.scope === 'IN_ESTATE' && estateCode) {
+    builder.where((estateBuilder) => {
+      estateBuilder.where('ie.code', estateCode).orWhereRaw('CAST(ie.id as varchar(32)) = ?', [
+        estateCode,
+      ]);
+    });
     return;
   }
   builder.whereRaw('1 = 0');
@@ -1727,11 +1743,11 @@ function buildBaseQuery(
   const scopeValue = getAccessScopeValue(access.scope);
   if (scopeValue === 'OWN_FACTORY' && access.useAssignedFactoryAccess) {
     applyAssignedRequestFactoryAccessFilter(builder, access.actorUserId);
-  } else if (requiresAssignedRequestAccess(access.scope)) {
+  } else if (requiresAssignedRequestAccess(access.scope, access.regionalAccess)) {
     builder.where('created_by', access.actorUserId);
   }
-  applyRequestPermissionLocationFilter(builder, access.scope);
-  applyRequestRegionalAccessFilter(builder, access.regionalAccess);
+  applyRequestPermissionLocationFilter(builder, access.scope, access.regionalAccess);
+  applyRequestRegionalAccessFilter(builder, access.scope, access.regionalAccess);
 
   return builder.select(
     'id',
@@ -1776,8 +1792,10 @@ function buildBaseQuery(
 
 function applyRequestRegionalAccessFilter(
   builder: Knex.QueryBuilder,
+  scope: AccessScope,
   regionalAccess: RegionalAccessDTO | null | undefined,
 ): void {
+  if (getAccessScopeValue(scope) === 'ALL') return;
   const regionValues = getRegionalFilterValues(regionalAccess);
   if (regionValues.length === 0) return;
 
@@ -1798,16 +1816,24 @@ function getAccessScopeValue(scope: AccessScope): string | null | undefined {
   return scope && typeof scope === 'object' ? scope.scope : scope;
 }
 
-function requiresAssignedFactoryAccess(scope: AccessScope): boolean {
+function requiresAssignedFactoryAccess(
+  scope: AccessScope,
+  _regionalAccess?: RegionalAccessDTO | null,
+): boolean {
   const scopeValue = getAccessScopeValue(scope);
   if (scopeValue === 'ALL') return false;
-  return !hasPermissionLocationFilter(scope);
+  if (scopeValue === 'OWN_FACTORY') return true;
+  return !['IN_REGION', 'IN_PROVINCE', 'IN_ESTATE'].includes(scopeValue ?? '');
 }
 
-function requiresAssignedRequestAccess(scope: AccessScope): boolean {
+function requiresAssignedRequestAccess(
+  scope: AccessScope,
+  _regionalAccess?: RegionalAccessDTO | null,
+): boolean {
   const scopeValue = getAccessScopeValue(scope);
   if (scopeValue === 'ALL') return false;
-  return !hasPermissionLocationFilter(scope);
+  if (scopeValue === 'OWN_FACTORY') return true;
+  return !['IN_REGION', 'IN_PROVINCE', 'IN_ESTATE'].includes(scopeValue ?? '');
 }
 
 function applyAssignedRequestFactoryAccessFilter(
@@ -1838,17 +1864,12 @@ function applyAssignedRequestFactoryAccessFilter(
   });
 }
 
-function hasPermissionLocationFilter(scope: AccessScope): boolean {
-  if (!scope || typeof scope !== 'object') return false;
-  if (scope.scope === 'IN_REGION') return Boolean(normalizeLocationValue(scope.region));
-  if (scope.scope === 'IN_PROVINCE') return Boolean(normalizeLocationValue(scope.province));
-  return false;
-}
-
 function applyFactoryRegionalAccessFilter(
   builder: Knex.QueryBuilder,
+  scope: AccessScope,
   regionalAccess: RegionalAccessDTO | null | undefined,
 ): void {
+  if (getAccessScopeValue(scope) === 'ALL') return;
   const regionValues = getRegionalFilterValues(regionalAccess);
   if (regionValues.length === 0) return;
   builder.whereIn('p.region', regionValues);
@@ -1857,30 +1878,78 @@ function applyFactoryRegionalAccessFilter(
 function applyFactoryPermissionLocationFilter(
   builder: Knex.QueryBuilder,
   scope: AccessScope,
+  regionalAccess?: RegionalAccessDTO | null,
 ): void {
-  if (!scope || typeof scope !== 'object') return;
-  const region = normalizeLocationValue(scope.region);
+  const scopeValue = getAccessScopeValue(scope);
+  if (!scope || typeof scope !== 'object') {
+    if (scopeValue === 'IN_REGION' || scopeValue === 'IN_PROVINCE' || scopeValue === 'IN_ESTATE') {
+      builder.whereRaw('1 = 0');
+    }
+    return;
+  }
+  const regionValues = resolveEffectiveRegionValues(scope, regionalAccess);
   const province = normalizeLocationValue(scope.province);
+  const estateCode = getScopeEstateCode(scope);
 
-  if (scope.scope === 'IN_REGION' && region) {
-    builder.where('p.region', region);
+  if (scope.scope === 'IN_REGION') {
+    if (regionValues.length === 0) {
+      builder.whereRaw('1 = 0');
+      return;
+    }
+    builder.whereIn('p.region', regionValues);
   }
 
-  if (scope.scope === 'IN_PROVINCE' && province) {
+  if (scope.scope === 'IN_PROVINCE') {
+    if (!province) {
+      builder.whereRaw('1 = 0');
+      return;
+    }
     builder.where('p.name_th', province);
+  }
+
+  if (scope.scope === 'IN_ESTATE') {
+    if (!estateCode) {
+      builder.whereRaw('1 = 0');
+      return;
+    }
+    builder.where((estateBuilder) => {
+      estateBuilder.where('ie.code', estateCode).orWhereRaw('CAST(ie.id as varchar(32)) = ?', [
+        estateCode,
+      ]);
+    });
   }
 }
 
 function applyRequestPermissionLocationFilter(
   builder: Knex.QueryBuilder,
   scope: AccessScope,
+  regionalAccess?: RegionalAccessDTO | null,
 ): void {
-  if (!scope || typeof scope !== 'object') return;
-  const region = normalizeLocationValue(scope.region);
+  const scopeValue = getAccessScopeValue(scope);
+  if (!scope || typeof scope !== 'object') {
+    if (scopeValue === 'IN_REGION' || scopeValue === 'IN_PROVINCE' || scopeValue === 'IN_ESTATE') {
+      builder.whereRaw('1 = 0');
+    }
+    return;
+  }
+  const regionValues = resolveEffectiveRegionValues(scope, regionalAccess);
   const province = normalizeLocationValue(scope.province);
-  if (scope.scope !== 'IN_REGION' && scope.scope !== 'IN_PROVINCE') return;
-  if (scope.scope === 'IN_REGION' && !region) return;
-  if (scope.scope === 'IN_PROVINCE' && !province) return;
+  const estateCode = getScopeEstateCode(scope);
+  if (scope.scope !== 'IN_REGION' && scope.scope !== 'IN_PROVINCE' && scope.scope !== 'IN_ESTATE') {
+    return;
+  }
+  if (scope.scope === 'IN_REGION' && regionValues.length === 0) {
+    builder.whereRaw('1 = 0');
+    return;
+  }
+  if (scope.scope === 'IN_PROVINCE' && !province) {
+    builder.whereRaw('1 = 0');
+    return;
+  }
+  if (scope.scope === 'IN_ESTATE' && !estateCode) {
+    builder.whereRaw('1 = 0');
+    return;
+  }
 
   builder.whereExists(function permissionLocationFilter() {
     this.select(db.raw('1'))
@@ -1888,9 +1957,11 @@ function applyRequestPermissionLocationFilter(
       .whereRaw('fs.request_id = cems_wpms_connection_requests.id')
       .whereNull('fs.deleted_at');
 
-    if (scope.scope === 'IN_REGION' && region) {
+    if (scope.scope === 'IN_REGION' && regionValues.length > 0) {
       this.where((regionBuilder) => {
-        regionBuilder.where('fs.region_name', region).orWhere('fs.region_code', region);
+        regionBuilder
+          .whereIn('fs.region_name', regionValues)
+          .orWhereIn('fs.region_code', regionValues);
       });
     }
 
@@ -1898,6 +1969,10 @@ function applyRequestPermissionLocationFilter(
       this.where((provinceBuilder) => {
         provinceBuilder.where('fs.province_name', province).orWhere('fs.province_code', province);
       });
+    }
+
+    if (scope.scope === 'IN_ESTATE' && estateCode) {
+      this.where('fs.industrial_estate_code', estateCode);
     }
   });
 }
@@ -1911,6 +1986,42 @@ function normalizeLocationValue(value: string | null | undefined): string | null
   if (value === null || value === undefined) return null;
   const trimmed = value.trim();
   return trimmed && trimmed.toLowerCase() !== 'all' ? trimmed : null;
+}
+
+function resolveEffectiveRegionValues(
+  scope: AccessScope,
+  regionalAccess?: RegionalAccessDTO | null,
+): string[] {
+  if (!scope || typeof scope !== 'object' || scope.scope !== 'IN_REGION') return [];
+  return resolveAssignedRegions(scope.region, regionalAccess);
+}
+
+function getScopeEstateCode(scope: PermissionScopeDetails): string | null {
+  const estateCode = Reflect.get(scope as unknown as Record<string, unknown>, 'estateCode');
+  if (typeof estateCode === 'string') return normalizeLocationValue(estateCode);
+
+  const legacyEstateCode = Reflect.get(
+    scope as unknown as Record<string, unknown>,
+    'industrialEstateCode',
+  );
+  if (typeof legacyEstateCode === 'string') return normalizeLocationValue(legacyEstateCode);
+
+  const estate = Reflect.get(scope as unknown as Record<string, unknown>, 'estate');
+  if (typeof estate === 'string') return normalizeLocationValue(estate);
+
+  const estateId = Reflect.get(scope as unknown as Record<string, unknown>, 'estateId');
+  if (typeof estateId === 'string') return normalizeLocationValue(estateId);
+  if (typeof estateId === 'number' && Number.isFinite(estateId)) return String(estateId);
+
+  const legacyEstateId = Reflect.get(
+    scope as unknown as Record<string, unknown>,
+    'industrialEstateId',
+  );
+  if (typeof legacyEstateId === 'string') return normalizeLocationValue(legacyEstateId);
+  if (typeof legacyEstateId === 'number' && Number.isFinite(legacyEstateId)) {
+    return String(legacyEstateId);
+  }
+  return null;
 }
 
 function applyFactorySnapshotFilters(

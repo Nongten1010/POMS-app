@@ -59,7 +59,7 @@ export async function resolveBodCodCreateNumberingContext(
     | undefined;
 
   if (!factory) {
-    if (access.scope === 'OWN_FACTORY') {
+    if (scopeValue(access.scope) === 'OWN_FACTORY') {
       throw new ForbiddenError('Factory is not available for this user');
     }
     throw new BadRequestError('Factory is unavailable for BOD/COD report numbering', {
@@ -134,7 +134,7 @@ function buildNumberingFactoryQuery(
     .leftJoin('provinces as p', 'p.id', 'f.province_id')
     .select('f.id as factory_internal_id', 'p.name_th as province_name', 'p.region as region_name')
     .first();
-  if (access.scope === 'OWN_FACTORY') {
+  if (scopeValue(access.scope) === 'OWN_FACTORY') {
     applyAssignedFactoryAccessFilter(builder, access.actorUserId);
   }
   builder.where((factoryBuilder) => {
@@ -188,6 +188,10 @@ function requireRegionCode(
     });
   }
   return regionCode;
+}
+
+function scopeValue(scope: CreateBodCodDeviationReportAccess['scope']): string | null | undefined {
+  return typeof scope === 'object' && scope !== null ? scope.scope : scope;
 }
 
 function numericIdOrNull(value: string | number | null): number | null {

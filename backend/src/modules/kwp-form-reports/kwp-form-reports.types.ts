@@ -1,4 +1,5 @@
 import type { RegionalAccessDTO } from '../auth/regional-access';
+import type { PermissionScopeDetails } from '../auth/permissions';
 
 export const KWP_FORM_TYPES = ['KWP01', 'KWP02', 'KWP03', 'KWP04', 'KWP05'] as const;
 export type KwpFormType = (typeof KWP_FORM_TYPES)[number];
@@ -16,7 +17,7 @@ export type KwpFormStatus = (typeof KWP_FORM_STATUSES)[number];
 
 export interface KwpFormReportAccess {
   actorUserId: number;
-  scope: string | null | undefined;
+  scope: string | PermissionScopeDetails | null | undefined;
   regionalAccess?: RegionalAccessDTO | null;
 }
 

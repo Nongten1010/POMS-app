@@ -60,6 +60,11 @@ describe('monitoring point form routes', () => {
         }),
       }),
       42,
+      {
+        actorUserId: 42,
+        scope: { scope: 'OWN_FACTORY' },
+        regionalAccess: null,
+      },
     );
   });
 
@@ -94,6 +99,11 @@ describe('monitoring point form routes', () => {
         ],
       }),
       42,
+      {
+        actorUserId: 42,
+        scope: { scope: 'OWN_FACTORY' },
+        regionalAccess: null,
+      },
     );
   });
 
@@ -152,11 +162,87 @@ describe('monitoring point form routes', () => {
         }),
       }),
       42,
+      {
+        actorUserId: 42,
+        scope: { scope: 'OWN_FACTORY' },
+        regionalAccess: null,
+      },
     );
+  });
+
+  it('requires authentication and view permission for list reads', async () => {
+    const anonymousResponse = await request(createApp()).get('/api/v1/monitoring-point-forms');
+    expect(anonymousResponse.status).toBe(401);
+
+    const forbiddenResponse = await request(createApp())
+      .get('/api/v1/monitoring-point-forms')
+      .set('Authorization', `Bearer ${accessToken()}`);
+    expect(forbiddenResponse.status).toBe(403);
+    expect(mockedService.list).not.toHaveBeenCalled();
+  });
+
+  it('forwards explicit regional read scope and regional access to the service', async () => {
+    mockedService.list.mockResolvedValue([]);
+
+    const response = await request(createApp())
+      .get('/api/v1/monitoring-point-forms')
+      .set(
+        'Authorization',
+        `Bearer ${accessToken({
+          scopes: { 'cems_wpms_requests:view': 'IN_REGION' },
+          scopeDetails: {
+            'cems_wpms_requests:view': { scope: 'IN_REGION', region: 'ภาคตะวันออก' },
+          },
+          regionalAccess: { regions: ['ภาคตะวันออก'] },
+        })}`,
+      );
+
+    expect(response.status).toBe(200);
+    expect(mockedService.list).toHaveBeenCalledWith(
+      {},
+      {
+        actorUserId: 42,
+        scope: { scope: 'IN_REGION', region: 'ภาคตะวันออก' },
+        regionalAccess: { regions: ['ภาคตะวันออก'] },
+      },
+    );
+  });
+
+  it('uses eligible_factories:edit, not deprecated manage, when selecting a form', async () => {
+    mockedService.selectEligible.mockResolvedValue({ id: 99 } as never);
+
+    const deprecatedResponse = await request(createApp())
+      .post('/api/v1/monitoring-point-forms/12/select-eligible')
+      .set(
+        'Authorization',
+        `Bearer ${accessToken({ scopes: { 'eligible_factories:manage': 'ALL' } })}`,
+      );
+    expect(deprecatedResponse.status).toBe(403);
+
+    const response = await request(createApp())
+      .post('/api/v1/monitoring-point-forms/12/select-eligible')
+      .set(
+        'Authorization',
+        `Bearer ${accessToken({
+          scopes: { 'eligible_factories:edit': 'IN_PROVINCE' },
+          scopeDetails: {
+            'eligible_factories:edit': { scope: 'IN_PROVINCE', province: 'ระยอง' },
+          },
+        })}`,
+      );
+
+    expect(response.status).toBe(201);
+    expect(mockedService.selectEligible).toHaveBeenCalledWith(12, 42, {
+      actorUserId: 42,
+      scope: { scope: 'IN_PROVINCE', province: 'ระยอง' },
+      regionalAccess: null,
+    });
   });
 });
 
-function accessToken(): string {
+function accessToken(
+  overrides: Partial<Parameters<typeof signAccessToken>[0]> = {},
+): string {
   return signAccessToken({
     sub: '42',
     userType: 'operator',
@@ -164,5 +250,6 @@ function accessToken(): string {
     scopes: {
       'cems_wpms_requests:edit': 'OWN_FACTORY',
     },
+    ...overrides,
   });
 }

@@ -7,6 +7,8 @@ import {
 } from '../../shared/errors/AppError';
 import { db } from '../../config/database';
 import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
+import type { PermissionScopeDetails } from '../auth/permissions';
+import { resolveAssignedRegions } from '../auth/regional-access';
 import { buildPublicFileUrl } from './kwp-form-attachments.service';
 import { isHourlyKwpFormDateTime, toKwpFormDateOnly } from './kwp-form-duration';
 import {
@@ -277,7 +279,7 @@ export const kwpFormSubmissionsRepository = {
     }
 
     const historyRows = await listWorkflowHistory(Number(submission.id));
-    return toWorkflowDTO(submission, historyRows, access.scope);
+    return toWorkflowDTO(submission, historyRows, access.scope, access.roles);
   },
 
   async changeWorkflowStatus(
@@ -317,7 +319,7 @@ export const kwpFormSubmissionsRepository = {
         throw new NotFoundError('KWP form submission not found');
       }
       const historyRows = await listWorkflowHistory(Number(updated.id), trx);
-      return toWorkflowDTO(updated, historyRows, access.scope);
+      return toWorkflowDTO(updated, historyRows, access.scope, access.roles);
     });
   },
 
@@ -529,7 +531,7 @@ export const kwpFormSubmissionsRepository = {
         throw new NotFoundError('KWP form submission not found');
       }
       const historyRows = await listWorkflowHistory(Number(updated.id), trx);
-      return toWorkflowDTO(updated, historyRows, access.scope);
+      return toWorkflowDTO(updated, historyRows, access.scope, access.roles);
     });
   },
 
@@ -901,19 +903,16 @@ function buildEditableSubmissionQuery(
         .orOn('f.code', '=', 's.factory_registration_no');
     })
     .leftJoin('provinces as p', 'p.id', 'f.province_id')
+    .leftJoin('industrial_estates as ie', 'ie.id', 'f.industrial_estate_id')
     .where('s.id', id)
     .where('s.form_type', access.formType)
     .whereNull('s.deleted_at')
     .select('s.id', 's.form_type', 's.status');
 
-  if (access.scope === 'OWN_FACTORY') {
+  if (scopeValue(access.scope) === 'OWN_FACTORY') {
     applyAssignedFactoryAccessFilter(builder, access.actorUserId);
   }
-
-  const regions = [
-    ...new Set((access.regionalAccess?.regions ?? []).map((region) => region.trim())),
-  ].filter(Boolean);
-  applySubmissionRegionFilter(builder, regions);
+  applySubmissionLocationFilters(builder, access);
 
   return builder as unknown as Knex.QueryBuilder<EditableSubmissionRow, EditableSubmissionRow[]>;
 }
@@ -1040,9 +1039,10 @@ export function toKwp05InsertRecordsForTests(input: Kwp05InsertInput): Kwp05Inse
 export function toKwpWorkflowDTOForTests(
   row: SubmissionWorkflowRow,
   historyRows: WorkflowHistoryRow[] = [],
-  scope?: string | null,
+  scope?: KwpFormSubmissionAccess['scope'],
+  roles: string[] = [],
 ): KwpFormWorkflowDTO {
-  return toWorkflowDTO(row, historyRows, scope);
+  return toWorkflowDTO(row, historyRows, scope, roles);
 }
 
 export function nextKwpWorkflowStatusForTests(
@@ -1057,7 +1057,7 @@ async function assertCanCreateForFactory(
   payload: KwpSubmissionFactoryReference,
   access: KwpFormSubmissionAccess,
 ): Promise<void> {
-  if (access.scope === 'OWN_FACTORY') {
+  if (scopeValue(access.scope) === 'OWN_FACTORY') {
     const row = await buildFactoryAccessQuery(trx, payload.factoryId, access).first();
     if (!row) {
       throw new ForbiddenError('User cannot submit KWP form for this factory');
@@ -1107,9 +1107,11 @@ function buildFactoryAccessQuery(
     })
     .select('f.id');
 
-  if (access.scope === 'OWN_FACTORY') {
+  if (scopeValue(access.scope) === 'OWN_FACTORY') {
     applyAssignedFactoryAccessFilter(builder, access.actorUserId);
   }
+
+  applyFactoryLocationFilters(builder, access.scope);
 
   return builder;
 }
@@ -1157,6 +1159,7 @@ function buildSubmissionDetailQuery(
         .orOn('f.code', '=', 's.factory_registration_no');
     })
     .leftJoin('provinces as p', 'p.id', 'f.province_id')
+    .leftJoin('industrial_estates as ie', 'ie.id', 'f.industrial_estate_id')
     .where('s.id', id)
     .whereNull('s.deleted_at')
     .where('s.form_type', access.formType)
@@ -1207,6 +1210,7 @@ function buildWorkflowQuery(
         .orOn('f.code', '=', 's.factory_registration_no');
     })
     .leftJoin('provinces as p', 'p.id', 'f.province_id')
+    .leftJoin('industrial_estates as ie', 'ie.id', 'f.industrial_estate_id')
     .where('s.id', id)
     .whereNull('s.deleted_at')
     .select(
@@ -1221,14 +1225,10 @@ function buildWorkflowQuery(
       submissionRegionSelect(knexOrTrx),
     );
 
-  if (access.scope === 'OWN_FACTORY') {
+  if (scopeValue(access.scope) === 'OWN_FACTORY') {
     applyAssignedFactoryAccessFilter(builder, access.actorUserId);
   }
-
-  const regions = [
-    ...new Set((access.regionalAccess?.regions ?? []).map((region) => region.trim())),
-  ].filter(Boolean);
-  applySubmissionRegionFilter(builder, regions);
+  applySubmissionLocationFilters(builder, access);
 
   return builder as unknown as Knex.QueryBuilder<SubmissionWorkflowRow, SubmissionWorkflowRow[]>;
 }
@@ -1237,14 +1237,10 @@ function applySubmissionReadAccessFilter(
   builder: Knex.QueryBuilder,
   access: KwpFormSubmissionReadAccess,
 ): void {
-  if (access.scope === 'OWN_FACTORY') {
+  if (scopeValue(access.scope) === 'OWN_FACTORY') {
     applyAssignedFactoryAccessFilter(builder, access.actorUserId);
   }
-
-  const regions = [
-    ...new Set((access.regionalAccess?.regions ?? []).map((region) => region.trim())),
-  ].filter(Boolean);
-  applySubmissionRegionFilter(builder, regions);
+  applySubmissionLocationFilters(builder, access);
 }
 
 function submissionRegionSelect(knexOrTrx: Knex | Knex.Transaction): Knex.Raw {
@@ -1256,13 +1252,124 @@ function submissionRegionSelect(knexOrTrx: Knex | Knex.Transaction): Knex.Raw {
 }
 
 function applySubmissionRegionFilter(builder: Knex.QueryBuilder, regions: string[]): void {
-  if (regions.length === 0) return;
+  if (regions.length === 0) {
+    builder.whereRaw('1 = ?', [0]);
+    return;
+  }
   const placeholders = regions.map(() => '?').join(', ');
   builder.whereRaw(`COALESCE(??, ??) IN (${placeholders})`, [
     's.submission_region_name',
     'p.region',
     ...regions,
   ]);
+}
+
+function applySubmissionLocationFilters(
+  builder: Knex.QueryBuilder,
+  access:
+    | KwpFormWorkflowAccess
+    | KwpFormSubmissionReadAccess
+    | (KwpFormSubmissionAccess & { regionalAccess?: { regions: string[] } | null }),
+): void {
+  applyLocationScopeFilter(builder, access.scope);
+  if (scopeValue(access.scope) !== 'IN_REGION') return;
+  const details = scopeDetails(access.scope);
+  const regions = resolveAssignedRegions(details?.region, access.regionalAccess);
+  applySubmissionRegionFilter(builder, regions);
+}
+
+function applyFactoryLocationFilters(
+  builder: Knex.QueryBuilder,
+  scope: KwpFormSubmissionAccess['scope'],
+): void {
+  const details = scopeDetails(scope);
+  if (!details) return;
+
+  if (details.scope === 'IN_PROVINCE') {
+    if (!details.province) {
+      builder.whereRaw('1 = ?', [0]);
+      return;
+    }
+    builder.whereExists(function provinceFilter() {
+      this.select(db.raw('1'))
+        .from('provinces as p')
+        .whereRaw('p.id = f.province_id')
+        .where('p.name_th', details.province);
+    });
+    return;
+  }
+
+  if (details.scope === 'IN_ESTATE') {
+    const estateCode = toEstateCode(scope);
+    const estateId = toEstateId(scope);
+    if (estateCode || estateId) {
+      builder.whereExists(function estateFilter() {
+        this.select(db.raw('1'))
+          .from('industrial_estates as ie')
+          .whereRaw('ie.id = f.industrial_estate_id');
+        if (estateCode) {
+          this.where('ie.code', estateCode);
+        } else if (estateId) {
+          this.where('ie.id', estateId);
+        }
+      });
+      return;
+    }
+    builder.whereRaw('1 = ?', [0]);
+  }
+}
+
+function applyLocationScopeFilter(
+  builder: Knex.QueryBuilder,
+  scope: KwpFormSubmissionAccess['scope'],
+): void {
+  const details = scopeDetails(scope);
+  if (!details) return;
+
+  if (details.scope === 'IN_PROVINCE') {
+    if (!details.province) {
+      builder.whereRaw('1 = ?', [0]);
+      return;
+    }
+    builder.where('p.name_th', details.province);
+    return;
+  }
+
+  if (details.scope === 'IN_ESTATE') {
+    const estateCode = toEstateCode(scope);
+    if (estateCode) {
+      builder.where('ie.code', estateCode);
+      return;
+    }
+    const estateId = toEstateId(scope);
+    if (estateId) {
+      builder.where('ie.id', estateId);
+      return;
+    }
+    builder.whereRaw('1 = ?', [0]);
+  }
+}
+
+function scopeValue(scope: KwpFormSubmissionAccess['scope']): string | null | undefined {
+  return typeof scope === 'object' && scope !== null ? scope.scope : scope;
+}
+
+function scopeDetails(scope: KwpFormSubmissionAccess['scope']): PermissionScopeDetails | null {
+  return typeof scope === 'object' && scope !== null ? scope : null;
+}
+
+function toEstateId(scope: KwpFormSubmissionAccess['scope']): string | number | null {
+  if (typeof scope !== 'object' || scope === null) return null;
+  const value = (scope as PermissionScopeDetails & { estateId?: string | number | null }).estateId;
+  return value ?? null;
+}
+
+function toEstateCode(scope: KwpFormSubmissionAccess['scope']): string | null {
+  if (typeof scope !== 'object' || scope === null) return null;
+  const value =
+    (scope as PermissionScopeDetails & { estateCode?: string | null }).estateCode ??
+    (scope as PermissionScopeDetails & { estate?: string | null }).estate;
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
 async function getKwp01IssueReport(submissionId: number) {
@@ -1594,7 +1701,8 @@ function toSubmissionDetailDTO(row: SubmissionDetailRow): KwpFormSubmissionDetai
 function toWorkflowDTO(
   row: SubmissionWorkflowRow,
   historyRows: WorkflowHistoryRow[],
-  scope: string | null | undefined,
+  scope: KwpFormSubmissionAccess['scope'],
+  roles: string[] = [],
 ): KwpFormWorkflowDTO {
   const hasRevisionRequest = historyRows.some((history) => history.status === 'REVISION_REQUESTED');
   const revisionReason = latestRevisionReason(historyRows);
@@ -1617,7 +1725,7 @@ function toWorkflowDTO(
     reviewedAt: toIsoString(row.reviewed_at),
     currentStep,
     steps,
-    allowedActions: allowedWorkflowActions(row.status, scope),
+    allowedActions: allowedWorkflowActions(row.status, scope, roles),
   };
 }
 
@@ -1643,10 +1751,14 @@ function workflowSteps(
 
 function allowedWorkflowActions(
   status: KwpFormSubmissionStatus,
-  scope: string | null | undefined,
+  scope: KwpFormSubmissionAccess['scope'],
+  roles: string[] = [],
 ): KwpFormAllowedAction[] {
-  if (scope === 'OWN_FACTORY') {
+  if (scopeValue(scope) === 'OWN_FACTORY') {
     if (status === 'REVISION_REQUESTED') return ['RESUBMIT'];
+    return [];
+  }
+  if (!roles.some((role) => ['monitoring_kpm', 'monitoring_5_centers', 'admin'].includes(role))) {
     return [];
   }
   return allowedWorkflowStatusActions(status);

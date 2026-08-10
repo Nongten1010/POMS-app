@@ -51,6 +51,17 @@ describe('managed users validators', () => {
     }
   });
 
+  it('rejects assigning more than one system role to a managed user', () => {
+    const result = createManagedUserSchema.safeParse({
+      username: 'officer-multi-role',
+      firstName: 'ทดสอบ',
+      lastName: 'หลายสิทธิ์',
+      roleCodes: ['monitoring_5_centers', 'center_director'],
+    });
+
+    expect(result.success).toBe(false);
+  });
+
   it('rejects deprecated divisionId profile input', () => {
     const result = createManagedUserSchema.safeParse({
       username: 'officer9002',
@@ -212,6 +223,7 @@ describe('managed users validators', () => {
       permissionOverrides: expect.arrayContaining([
         { code: 'dashboard:view', effect: 'allow', scope: 'ALL' },
         { code: 'dashboard.search:advanced', effect: 'allow', scope: 'ALL' },
+        { code: 'conditional_search:view', effect: 'deny', scope: null },
       ]),
     });
   });
@@ -238,26 +250,76 @@ describe('managed users validators', () => {
     });
   });
 
-  it('rejects user-level location fields from the permission form payload', () => {
-    expect(() =>
-      updateManagedUserSchema.parse({
-        user: {
-          fullName: 'สมชาย ทดสอบ',
-          username: 'local_officer',
-          password: '',
-          provinceName: 'ระยอง',
-          regionName: 'ภาคตะวันออก',
-          roles: 'monitoring_5_centers',
-          isActive: true,
+  it('keeps authorization-area fields when editing an API-managed officer', () => {
+    const result = updateManagedUserSchema.parse({
+      user: {
+        accountType: 'api',
+        source: 'api',
+        fullName: 'เจ้าหน้าที่ ศูนย์',
+        username: 'U101',
+        regionName: 'ภาคตะวันออก',
+        roleCodes: ['monitoring_5_centers'],
+        isActive: true,
+      },
+    });
+
+    expect(result).toMatchObject({
+      roleCodes: ['monitoring_5_centers'],
+      profile: {
+        regionalAccess: { regions: ['ภาคตะวันออก'] },
+      },
+    });
+  });
+
+  it('preserves explicit nulls so changing roles clears stale area assignments', () => {
+    const result = updateManagedUserSchema.parse({
+      user: {
+        fullName: 'เจ้าหน้าที่ ส่วนกลาง',
+        username: 'central_officer',
+        regionName: null,
+        provinceName: null,
+        estateCode: null,
+        roleCodes: ['diw_central'],
+        isActive: true,
+      },
+    });
+
+    expect(result.profile).toEqual({
+      departmentNameTh: undefined,
+      lineNameTh: undefined,
+      levelNameTh: undefined,
+      provinceName: null,
+      estateCode: null,
+      regionalAccess: null,
+    });
+  });
+
+  it('accepts user-level profile assignment fields from the permission form payload', () => {
+    const result = updateManagedUserSchema.parse({
+      user: {
+        fullName: 'สมชาย ทดสอบ',
+        username: 'local_officer',
+        password: '',
+        provinceName: 'ระยอง',
+        regionName: 'ภาคตะวันออก',
+        roles: 'monitoring_5_centers',
+        isActive: true,
+      },
+      permissions: {
+        dashboard: {
+          data: 'IN_PROVINCE',
+          view: true,
         },
-        permissions: {
-          dashboard: {
-            data: 'IN_PROVINCE',
-            view: true,
-          },
-        },
-      }),
-    ).toThrow();
+      },
+    });
+
+    expect(result).toMatchObject({
+      roleCodes: ['monitoring_5_centers'],
+      profile: {
+        provinceName: 'ระยอง',
+        regionalAccess: { regions: ['ภาคตะวันออก'] },
+      },
+    });
   });
 
   it('accepts edit response-shaped permissions as the only location source', () => {
@@ -289,6 +351,54 @@ describe('managed users validators', () => {
           province: 'ระยอง',
         },
       ]),
+    });
+  });
+
+  it('turns unchecked role actions into explicit deny overrides', () => {
+    const result = updateManagedUserSchema.parse({
+      user: {
+        fullName: 'สมชาย ทดสอบ',
+        username: 'local_officer',
+        password: '',
+        roles: 'monitoring_5_centers',
+        isActive: true,
+      },
+      permissions: {
+        factories: {
+          data: 'IN_REGION',
+          region: 'ภาคตะวันออก',
+          view: true,
+          edit: false,
+          approve: false,
+        },
+      },
+    });
+
+    expect((result as { permissionOverrides?: unknown }).permissionOverrides).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'factories:view', effect: 'allow' }),
+        expect.objectContaining({ code: 'factories:edit', effect: 'deny' }),
+        expect.objectContaining({ code: 'factories:approve', effect: 'deny' }),
+      ]),
+    );
+  });
+
+  it('accepts one profile estate assignment in an edit response payload', () => {
+    const result = updateManagedUserSchema.parse({
+      user: {
+        fullName: 'เจ้าหน้าที่ กนอ.',
+        username: 'ieat_officer',
+        password: '',
+        roles: 'industrial_estate',
+        estateCode: 'MTP',
+        isActive: true,
+      },
+      permissions: {},
+    });
+
+    expect(result).toMatchObject({
+      roleCodes: ['industrial_estate'],
+      profile: { estateCode: 'MTP' },
     });
   });
 

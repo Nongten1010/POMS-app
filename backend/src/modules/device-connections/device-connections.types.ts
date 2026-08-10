@@ -1,3 +1,6 @@
+import type { PermissionScopeDetails } from '../auth/permissions';
+import type { RegionalAccessDTO } from '../auth/regional-access';
+
 export const DEVICE_CONNECTION_PROTOCOL = {
   POMS_BOX: 'POMS_BOX',
   MODBUS_RTU: 'MODBUS_RTU',
@@ -20,6 +23,12 @@ export const DEVICE_CONNECTION_PARAMETER_STATUSES = [
 
 export type DeviceConnectionProtocol =
   (typeof DEVICE_CONNECTION_PROTOCOL)[keyof typeof DEVICE_CONNECTION_PROTOCOL];
+
+export interface DeviceConnectionAccessContext {
+  actorUserId: number;
+  scope: string | null | undefined | PermissionScopeDetails;
+  regionalAccess?: RegionalAccessDTO | null;
+}
 
 export type DataValueFormat = 'MEASUREMENT_VALUE' | 'CURRENT' | 'VOLTAGE';
 export type ModbusParity = 'EVEN' | 'ODD' | 'NONE';

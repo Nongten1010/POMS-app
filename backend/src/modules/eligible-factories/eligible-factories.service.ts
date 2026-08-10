@@ -1,5 +1,6 @@
-import { ConflictError, NotFoundError } from '../../shared/errors/AppError';
+import { ConflictError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
 import { eligibleFactoriesRepository } from './eligible-factories.repository';
+import type { EligibleFactoryAccessContext } from './eligible-factories.access';
 import type {
   CreateEligibleFactoryInput,
   EligibleFactoryDTO,
@@ -14,19 +15,33 @@ import { deriveConnectionStatusSummary } from './eligible-factory-status-summary
 import { splitFactoryTypeSequence } from './factory-type-sequence';
 
 export const eligibleFactoriesService = {
-  listCandidates(query: ListEligibleFactoryCandidatesQuery) {
-    return eligibleFactoryCandidatesRepository.list(query);
+  listCandidates(
+    query: ListEligibleFactoryCandidatesQuery,
+    access?: EligibleFactoryAccessContext,
+  ) {
+    return eligibleFactoryCandidatesRepository.list(query, access);
   },
 
-  async list(query: ListEligibleFactoriesQuery): Promise<PaginatedEligibleFactoriesDTO> {
-    const { rows, total } = await eligibleFactoriesRepository.list(query);
+  async list(
+    query: ListEligibleFactoriesQuery,
+    access?: EligibleFactoryAccessContext,
+  ): Promise<PaginatedEligibleFactoriesDTO> {
+    const { rows, total } = await eligibleFactoriesRepository.list(query, access);
     return { data: rows.map(toSelectedEligibleFactory), meta: { total } };
   },
 
   async create(
     input: CreateEligibleFactoryInput,
     actorUserId: number,
+    access?: EligibleFactoryAccessContext,
   ): Promise<EligibleFactoryDTO> {
+    if (access) {
+      const canAccessInput = await eligibleFactoriesRepository.canAccessInput(input, access);
+      if (!canAccessInput) {
+        throw new ForbiddenError('Eligible factory is outside the actor access scope');
+      }
+    }
+
     const existing = await eligibleFactoriesRepository.findByRegistrationNoNew(
       input.factoryRegistrationNoNew,
     );
@@ -50,8 +65,14 @@ export const eligibleFactoriesService = {
     return eligibleFactoriesRepository.create(normalizedInput, actorUserId);
   },
 
-  async remove(id: number, actorUserId: number): Promise<void> {
-    const removed = await eligibleFactoriesRepository.softDelete(id, actorUserId);
+  async remove(
+    id: number,
+    actorUserId: number,
+    access?: EligibleFactoryAccessContext,
+  ): Promise<void> {
+    const removed = access
+      ? await eligibleFactoriesRepository.softDeleteAccessible(id, actorUserId, access)
+      : await eligibleFactoriesRepository.softDelete(id, actorUserId);
     if (!removed) {
       throw new NotFoundError('Eligible factory selection not found');
     }

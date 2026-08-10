@@ -7,7 +7,11 @@ import {
 } from '../../shared/errors/AppError';
 import { hashPassword } from '../../shared/utils/password';
 import { usersRepository } from './users.repository';
-import { groupPermissions } from '../auth/permissions';
+import {
+  groupPermissions,
+  isSameOrNarrowerPermissionScope,
+  mergePermissionScopesWithOverrides,
+} from '../auth/permissions';
 import type {
   CreateManagedUserInput,
   CreateLocalAccountInput,
@@ -55,6 +59,7 @@ export const usersService = {
       usersRepository.getUserPermissionOverrides(userId),
     ]);
     const effectivePermissionDetails = buildEffectivePermissionDetails(rolePermissions, overrides);
+    const roleCodes = [...(user.roleCodes ?? [user.roles])];
 
     return {
       user: {
@@ -68,12 +73,19 @@ export const usersService = {
         department: user.department,
         lineNameTh: user.lineNameTh,
         levelNameTh: user.levelNameTh,
+        provinceName: user.profile?.provinceName ?? null,
+        estateCode: user.profile?.estateCode ?? null,
+        regionalAccess: user.profile?.regionalAccess ?? null,
         roles: user.roles,
-        roleCodes: [...(user.roleCodes ?? [user.roles])],
+        roleCodes,
         isActive: user.isActive,
         source: toManagedUserSource(user.identityProvider),
       },
-      permissions: groupPermissions(effectivePermissionDetails),
+      permissions: projectManagedPermissionAssignments(
+        groupPermissions(effectivePermissionDetails),
+        roleCodes,
+        user.profile,
+      ),
     };
   },
 
@@ -83,7 +95,9 @@ export const usersService = {
     }
     await ensureUniqueIdentity(input.externalId ?? input.username);
     await ensureRolesExist(input.roleCodes);
-    return usersRepository.create(await withResolvedOfficerProfile(input), actorUserId);
+    const resolvedInput = await withResolvedOfficerProfile(input);
+    ensureRequiredRoleAssignment(resolvedInput.roleCodes[0], resolvedInput.profile);
+    return usersRepository.create(resolvedInput, actorUserId);
   },
 
   async createLocalAccount(
@@ -93,16 +107,25 @@ export const usersService = {
     await ensureUniqueIdentity(input.username);
     await ensureRolesExist(input.roleCodes);
     const resolvedInput = await withResolvedUserInput(input);
+    ensureRequiredRoleAssignment(resolvedInput.roleCodes[0], resolvedInput.profile);
     if (resolvedInput.permissionOverrides) {
       await ensurePermissionsExist(
         resolvedInput.permissionOverrides.map((permission) => permission.code),
       );
     }
+    const permissionOverrides = resolvedInput.permissionOverrides
+      ? await validatePermissionOverridesForRoleCodes(
+          resolvedInput.permissionOverrides,
+          resolvedInput.roleCodes,
+          resolvedInput.profile,
+        )
+      : undefined;
 
     const passwordHash = await hashPassword(input.password);
     return usersRepository.createLocalAccount(
       {
         ...resolvedInput,
+        permissionOverrides,
         passwordHash,
       },
       actorUserId,
@@ -132,17 +155,32 @@ export const usersService = {
       await ensureRolesExist(identitySafeInput.roleCodes);
     }
     const resolvedInput = await withResolvedUserInput(identitySafeInput);
+    ensureRequiredRoleAssignment(
+      resolvedInput.roleCodes?.[0] ?? existing.roleCodes[0],
+      resolvedInput.profile,
+      existing.profile,
+    );
     if (resolvedInput.permissionOverrides !== undefined) {
       await ensurePermissionsExist(
         resolvedInput.permissionOverrides.map((permission) => permission.code),
       );
     }
 
+    const permissionOverrides =
+      resolvedInput.permissionOverrides === undefined
+        ? undefined
+        : await validatePermissionOverridesForRoleCodes(
+            resolvedInput.permissionOverrides,
+            resolvedInput.roleCodes ?? existing.roleCodes,
+            resolvedInput.profile ?? existing.profile,
+          );
+
     const { password, ...repositoryInput } = resolvedInput;
     return usersRepository.update(
       userId,
       await withResolvedOfficerProfile({
         ...repositoryInput,
+        ...(permissionOverrides !== undefined ? { permissionOverrides } : {}),
         ...(password ? { passwordHash: await hashPassword(password) } : {}),
       }),
       actorUserId,
@@ -185,8 +223,15 @@ export const usersService = {
   ): Promise<UserPermissionsDTO> {
     const existing = await usersRepository.findById(userId);
     if (!existing) throw new NotFoundError('User not found');
-    const permissions = await resolvePermissionOverrides(input.permissions);
-    await ensurePermissionsExist(permissions.map((permission) => permission.code));
+    const resolvedPermissions = await resolvePermissionOverrides(input.permissions);
+    await ensurePermissionsExist(resolvedPermissions.map((permission) => permission.code));
+    const rolePermissions = await usersRepository.getRolePermissions(userId);
+    const permissions = validatePermissionOverridesAgainstRole(
+      resolvedPermissions,
+      rolePermissions,
+      existing.roleCodes,
+      existing.profile,
+    );
     await usersRepository.replaceUserPermissionOverrides(userId, permissions, actorUserId);
     return this.getPermissions(userId);
   },
@@ -212,48 +257,88 @@ function buildEffectivePermissionDetails(
     scope: PermissionScope;
     region?: string | null;
     province?: string | null;
+    estateCode?: string | null;
+    estate?: string | null;
   }
 > {
-  const priority: Record<string, number> = {
-    ALL: 4,
-    IN_REGION: 3,
-    IN_PROVINCE: 3,
-    IN_ESTATE: 2,
-    OWN_FACTORY: 1,
-  };
-  const scopes: Record<
-    string,
-    {
-      scope: PermissionScope;
-      region?: string | null;
-      province?: string | null;
-    }
-  > = {};
-
-  for (const permission of rolePermissions) {
-    const current = scopes[permission.code];
-    const currentRank = current === undefined ? -1 : (priority[current.scope ?? 'NULL'] ?? 0);
-    const newRank = priority[permission.scope ?? 'NULL'] ?? 0;
-    if (newRank >= currentRank) {
-      scopes[permission.code] = {
-        scope: permission.scope,
-      };
-    }
-  }
-
-  for (const override of overrides) {
-    if (override.effect === 'deny') {
-      delete scopes[override.code];
-      continue;
-    }
-    scopes[override.code] = {
+  const merged = mergePermissionScopesWithOverrides(
+    rolePermissions.map((permission) => ({
+      code: permission.code,
+      scope: permission.scope,
+    })),
+    overrides.map((override) => ({
+      code: override.code,
+      effect: override.effect,
       scope: override.scope,
       region: override.region,
       province: override.provinceName ?? override.provinceId,
-    };
-  }
+      estateCode: override.estateCode ?? override.estate,
+      estate: override.estate,
+    })),
+  );
 
-  return scopes;
+  return Object.fromEntries(
+    Object.entries(merged).map(([code, details]) => [
+      code,
+      typeof details === 'object' && details !== null ? details : { scope: details },
+    ]),
+  );
+}
+
+function projectManagedPermissionAssignments(
+  groups: ReturnType<typeof groupPermissions>,
+  roleCodes: readonly string[],
+  profile: OfficerProfileInput | undefined,
+): ReturnType<typeof groupPermissions> {
+  const assignedRegion =
+    roleCodes.includes('monitoring_kpm') || roleCodes.includes('kpm_director')
+      ? 'ภาคกลาง'
+      : profile?.regionalAccess?.regions.length === 1
+        ? profile.regionalAccess.regions[0]
+        : null;
+  const assignedProvince = normalizeLocationValue(profile?.provinceName ?? profile?.provinceId);
+  const assignedEstate = normalizeLocationValue(profile?.estateCode);
+
+  return Object.fromEntries(
+    Object.entries(groups).map(([module, group]) => {
+      if (group.data === 'IN_REGION') {
+        return [
+          module,
+          {
+            ...group,
+            region: intersectAssignedLocation(group.region, assignedRegion),
+          },
+        ];
+      }
+      if (group.data === 'IN_PROVINCE') {
+        return [
+          module,
+          {
+            ...group,
+            province: intersectAssignedLocation(group.province, assignedProvince),
+          },
+        ];
+      }
+      if (group.data === 'IN_ESTATE') {
+        const estateCode = intersectAssignedLocation(
+          group.estateCode ?? group.estate,
+          assignedEstate,
+        );
+        return [module, { ...group, estateCode, estate: estateCode }];
+      }
+      return [module, group];
+    }),
+  );
+}
+
+function intersectAssignedLocation(
+  requested: string | PermissionScope | boolean | undefined,
+  assigned: string | null,
+): string | null {
+  const requestedLocation = typeof requested === 'string' ? normalizeLocationValue(requested) : null;
+  if (!assigned) return null;
+  if (!requestedLocation) return assigned;
+  return sameLocation(requestedLocation, assigned) ? assigned : null;
 }
 
 function joinNamePrefix(prenameTh: string | null, firstName: string): string {
@@ -309,24 +394,50 @@ function sanitizeIdentityUpdate(
     input.lastName !== undefined ||
     input.email !== undefined ||
     input.phone !== undefined ||
-    input.profile !== undefined ||
     input.password !== undefined ||
     input.passwordHash !== undefined
   ) {
     throw new BadRequestError('API account profile is managed by its identity provider');
   }
 
+  const authorizationProfile = sanitizeApiAuthorizationProfile(input.profile);
+
   const {
     username: _username,
     externalId: _externalId,
     password: _password,
     passwordHash: _passwordHash,
+    profile: _profile,
     ...safeInput
   } = input;
-  return safeInput;
+  return {
+    ...safeInput,
+    ...(authorizationProfile !== undefined ? { profile: authorizationProfile } : {}),
+  };
+}
+
+function sanitizeApiAuthorizationProfile(
+  profile: OfficerProfileInput | undefined,
+): OfficerProfileInput | undefined {
+  if (profile === undefined) return undefined;
+
+  const { regionalAccess, provinceId, provinceName, estateCode, ...providerOwnedFields } = profile;
+  if (Object.values(providerOwnedFields).some((value) => value !== undefined)) {
+    throw new BadRequestError('API account profile is managed by its identity provider');
+  }
+
+  return {
+    ...(regionalAccess !== undefined ? { regionalAccess } : {}),
+    ...(provinceId !== undefined ? { provinceId } : {}),
+    ...(provinceName !== undefined ? { provinceName } : {}),
+    ...(estateCode !== undefined ? { estateCode } : {}),
+  };
 }
 
 async function ensureRolesExist(roleCodes: string[]): Promise<void> {
+  if (roleCodes.length !== 1) {
+    throw new BadRequestError('Exactly one system role is required');
+  }
   const uniqueRoleCodes = Array.from(new Set(roleCodes));
   if (uniqueRoleCodes.length !== roleCodes.length) {
     throw new BadRequestError('roleCodes must not contain duplicates');
@@ -341,6 +452,113 @@ async function ensureRolesExist(roleCodes: string[]): Promise<void> {
       status: StatusCodes.BAD_REQUEST,
     });
   }
+}
+
+async function validatePermissionOverridesForRoleCodes(
+  permissions: PermissionOverrideInput[],
+  roleCodes: string[],
+  profile?: OfficerProfileInput,
+): Promise<PermissionOverrideInput[]> {
+  const rolePermissions = await usersRepository.getRolePermissionsByRoleCodes(roleCodes);
+  return validatePermissionOverridesAgainstRole(permissions, rolePermissions, roleCodes, profile);
+}
+
+function validatePermissionOverridesAgainstRole(
+  permissions: PermissionOverrideInput[],
+  rolePermissions: PermissionGrantDTO[],
+  roleCodes: string[] = [],
+  profile?: OfficerProfileInput,
+): PermissionOverrideInput[] {
+  const roleScopes = new Map<string, PermissionScope>();
+  for (const permission of rolePermissions) {
+    roleScopes.set(permission.code, permission.scope);
+  }
+
+  const validated: PermissionOverrideInput[] = [];
+  for (const permission of permissions) {
+    if (!roleScopes.has(permission.code)) {
+      if (permission.effect === 'deny') continue;
+      throw new BadRequestError('Permission override cannot grant an action outside the assigned role', {
+        permission: permission.code,
+        status: StatusCodes.BAD_REQUEST,
+      });
+    }
+
+    const roleScope = roleScopes.get(permission.code) as PermissionScope;
+    if (permission.effect === 'deny') {
+      validated.push(permission);
+      continue;
+    }
+
+    const scope = permission.scope === undefined ? roleScope : permission.scope;
+    if (!isSameOrNarrowerPermissionScope(scope, roleScope)) {
+      throw new BadRequestError('Permission override cannot widen the assigned role scope', {
+        permission: permission.code,
+        roleScope,
+        requestedScope: scope,
+        status: StatusCodes.BAD_REQUEST,
+      });
+    }
+    ensurePermissionLocationWithinProfile(permission, scope, roleCodes, profile);
+    validated.push({ ...permission, scope });
+  }
+
+  return validated;
+}
+
+function ensurePermissionLocationWithinProfile(
+  permission: PermissionOverrideInput,
+  scope: PermissionScope,
+  roleCodes: string[],
+  profile?: OfficerProfileInput,
+): void {
+  if (scope === 'IN_REGION') {
+    const requestedRegion = normalizeLocationValue(permission.region);
+    if (!requestedRegion) return;
+    const assignedRegions =
+      roleCodes.includes('monitoring_kpm') || roleCodes.includes('kpm_director')
+        ? ['ภาคกลาง']
+        : (profile?.regionalAccess?.regions ?? []);
+    if (!assignedRegions.some((region) => sameLocation(region, requestedRegion))) {
+      throw new BadRequestError('Permission region must be inside the user profile assignment', {
+        permission: permission.code,
+        requestedRegion,
+        status: StatusCodes.BAD_REQUEST,
+      });
+    }
+    return;
+  }
+
+  if (scope === 'IN_PROVINCE') {
+    const requestedProvince = normalizeLocationValue(permission.province);
+    if (!requestedProvince) return;
+    const assignedProvince = normalizeLocationValue(profile?.provinceId ?? profile?.provinceName);
+    if (!assignedProvince || !sameLocation(assignedProvince, requestedProvince)) {
+      throw new BadRequestError('Permission province must match the user profile assignment', {
+        permission: permission.code,
+        requestedProvince,
+        status: StatusCodes.BAD_REQUEST,
+      });
+    }
+    return;
+  }
+
+  if (scope === 'IN_ESTATE') {
+    const requestedEstate = normalizeLocationValue(permission.estateCode ?? permission.estate);
+    if (!requestedEstate) return;
+    const assignedEstate = normalizeLocationValue(profile?.estateCode);
+    if (!assignedEstate || !sameLocation(assignedEstate, requestedEstate)) {
+      throw new BadRequestError('Permission estate must match the user profile assignment', {
+        permission: permission.code,
+        requestedEstate,
+        status: StatusCodes.BAD_REQUEST,
+      });
+    }
+  }
+}
+
+function sameLocation(left: string, right: string): boolean {
+  return left.trim().toLowerCase() === right.trim().toLowerCase();
 }
 
 async function ensurePermissionsExist(permissionCodes: string[]): Promise<void> {
@@ -378,24 +596,39 @@ async function withResolvedUserInput<
 }
 
 async function resolveOfficerProfile(profile: OfficerProfileInput): Promise<OfficerProfileInput> {
-  const { provinceName, ...persistentProfile } = profile;
+  const { provinceName, estateCode, ...persistentProfile } = profile;
   const provinceInput = profile.provinceId !== undefined ? profile.provinceId : provinceName;
+  const estateInput = estateCode;
 
-  if (provinceInput === undefined) return persistentProfile;
-  if (provinceInput === null) return { ...persistentProfile, provinceId: null };
+  const resolvedProfile: OfficerProfileInput = { ...persistentProfile };
 
-  const province = await usersRepository.findProvinceByIdOrName(provinceInput);
-  if (!province) {
-    throw new BadRequestError('Unknown province', {
-      province: provinceInput,
-      status: StatusCodes.BAD_REQUEST,
-    });
+  if (provinceInput === null) {
+    resolvedProfile.provinceId = null;
+  } else if (provinceInput !== undefined) {
+    const province = await usersRepository.findProvinceByIdOrName(provinceInput);
+    if (!province) {
+      throw new BadRequestError('Unknown province', {
+        province: provinceInput,
+        status: StatusCodes.BAD_REQUEST,
+      });
+    }
+    resolvedProfile.provinceId = province.id;
   }
 
-  return {
-    ...persistentProfile,
-    provinceId: province.id,
-  };
+  if (estateInput === null) {
+    resolvedProfile.estateCode = null;
+  } else if (estateInput !== undefined) {
+    const estate = await usersRepository.findIndustrialEstateByCodeOrName(estateInput);
+    if (!estate) {
+      throw new BadRequestError('Unknown industrial estate', {
+        estate: estateInput,
+        status: StatusCodes.BAD_REQUEST,
+      });
+    }
+    resolvedProfile.estateCode = estate.code;
+  }
+
+  return resolvedProfile;
 }
 
 async function resolvePermissionOverrides(
@@ -411,6 +644,10 @@ async function resolvePermissionOverride(
     permission.scope === 'IN_REGION' ? normalizeLocationValue(permission.region) : null;
   const province =
     permission.scope === 'IN_PROVINCE' ? normalizeLocationValue(permission.province) : null;
+  const estateInput =
+    permission.scope === 'IN_ESTATE'
+      ? normalizeLocationValue(permission.estateCode ?? permission.estate)
+      : null;
 
   if (permission.effect === 'deny') {
     return {
@@ -418,6 +655,27 @@ async function resolvePermissionOverride(
       scope: undefined,
       region: null,
       province: null,
+      estateCode: null,
+      estate: null,
+    };
+  }
+
+  if (estateInput) {
+    const estate = await usersRepository.findIndustrialEstateByCodeOrName(estateInput);
+    if (!estate) {
+      throw new BadRequestError('Unknown permission industrial estate', {
+        permission: permission.code,
+        estate: estateInput,
+        status: StatusCodes.BAD_REQUEST,
+      });
+    }
+
+    return {
+      ...permission,
+      region: null,
+      province: null,
+      estateCode: estate.code,
+      estate: estate.code,
     };
   }
 
@@ -426,6 +684,8 @@ async function resolvePermissionOverride(
       ...permission,
       region,
       province: null,
+      estateCode: null,
+      estate: null,
     };
   }
 
@@ -442,6 +702,8 @@ async function resolvePermissionOverride(
     ...permission,
     region,
     province: provinceRow.id,
+    estateCode: null,
+    estate: null,
   };
 }
 
@@ -449,4 +711,33 @@ function normalizeLocationValue(value: string | null | undefined): string | null
   if (value === null || value === undefined) return null;
   const trimmed = value.trim();
   return trimmed && trimmed.toLowerCase() !== 'all' ? trimmed : null;
+}
+
+function ensureRequiredRoleAssignment(
+  roleCode: string | undefined,
+  profile?: OfficerProfileInput,
+  existingProfile?: OfficerProfileInput,
+): void {
+  if (!roleCode) throw new BadRequestError('Exactly one system role is required');
+  const effectiveProfile = { ...(existingProfile ?? {}), ...(profile ?? {}) };
+
+  if (roleCode === 'monitoring_5_centers' || roleCode === 'center_director') {
+    if (effectiveProfile.regionalAccess?.regions.length !== 1) {
+      throw new BadRequestError('This role requires exactly one assigned region');
+    }
+    return;
+  }
+
+  if (roleCode === 'provincial_office') {
+    if (!normalizeLocationValue(effectiveProfile.provinceId ?? effectiveProfile.provinceName)) {
+      throw new BadRequestError('Provincial office role requires an assigned province');
+    }
+    return;
+  }
+
+  if (roleCode === 'industrial_estate') {
+    if (!normalizeLocationValue(effectiveProfile.estateCode)) {
+      throw new BadRequestError('Industrial estate role requires one assigned estate');
+    }
+  }
 }

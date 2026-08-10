@@ -123,6 +123,7 @@ CI ต้อง freeze เฉพาะ known backend-contract copies ใต้ `
 ## Workflow การดูแลเอกสาร
 
 - [API Documentation by Menu](./api/README.md)
+- [สิทธิ์การใช้งาน](./api/menus/permissions/README.md)
 - [Backend Guides](./guides/README.md)
 - [Backend Evidence](./evidence/README.md)
 - [Backend Documentation Maintenance Workflow](./explanations/documentation-maintenance-workflow.md)

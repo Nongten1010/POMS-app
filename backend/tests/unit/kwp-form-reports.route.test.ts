@@ -71,7 +71,11 @@ describe('KWP form report routes', () => {
       .set('Authorization', `Bearer ${operatorToken()}`);
 
     expect(response.status).toBe(200);
-    expect(mockedService.listFactories).toHaveBeenCalledWith(42, 'OWN_FACTORY', undefined);
+    expect(mockedService.listFactories).toHaveBeenCalledWith(
+      42,
+      { scope: 'OWN_FACTORY' },
+      undefined,
+    );
     expect(response.body.data[0]).toMatchObject({
       factoryName: 'บริษัท ทดสอบ จำกัด',
       newRegistrationNo: '10190000225448',
@@ -93,7 +97,7 @@ describe('KWP form report routes', () => {
     expect(mockedService.listRequests).toHaveBeenCalledWith(
       { formType: 'KWP01', status: 'SUBMITTED' },
       77,
-      'ALL',
+      { scope: 'ALL' },
       { regions: ['ภาคกลาง'] },
     );
     expect(response.body.data[0]).toMatchObject({
@@ -102,6 +106,37 @@ describe('KWP form report routes', () => {
       submittedDate: '15/06/2569',
       status: 'รอพิจารณา',
     });
+  });
+
+  it('preserves bare province scope details so downstream fail-closed filters can run', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .get('/api/v1/kwp-form-reports/factories')
+      .set('Authorization', `Bearer ${provinceScopedOfficerTokenWithoutProvince()}`);
+
+    expect(response.status).toBe(200);
+    expect(mockedService.listFactories).toHaveBeenCalledWith(
+      77,
+      { scope: 'IN_PROVINCE' },
+      undefined,
+    );
+  });
+
+  it('preserves explicit IN_REGION scope details over broader profile regions', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .get('/api/v1/kwp-form-reports/requests')
+      .set('Authorization', `Bearer ${regionalOfficerTokenWithExplicitScope()}`);
+
+    expect(response.status).toBe(200);
+    expect(mockedService.listRequests).toHaveBeenCalledWith(
+      {},
+      77,
+      { scope: 'IN_REGION', region: 'ภาคใต้' },
+      { regions: ['ภาคกลาง'] },
+    );
   });
 
   it('rejects users without KWP form permission', async () => {
@@ -134,6 +169,35 @@ function officerToken(): string {
     roles: ['monitoring_kpm'],
     scopes: {
       'kwp_forms:view': 'ALL',
+    },
+    regionalAccess: { regions: ['ภาคกลาง'] },
+  });
+}
+
+function provinceScopedOfficerTokenWithoutProvince(): string {
+  return signAccessToken({
+    sub: '77',
+    userType: 'officer',
+    roles: ['provincial_industry'],
+    scopes: {
+      'kwp_forms:view': 'IN_PROVINCE',
+    },
+    scopeDetails: {
+      'kwp_forms:view': { scope: 'IN_PROVINCE' },
+    },
+  });
+}
+
+function regionalOfficerTokenWithExplicitScope(): string {
+  return signAccessToken({
+    sub: '77',
+    userType: 'officer',
+    roles: ['monitoring_kpm'],
+    scopes: {
+      'kwp_forms:view': 'IN_REGION',
+    },
+    scopeDetails: {
+      'kwp_forms:view': { scope: 'IN_REGION', region: 'ภาคใต้' },
     },
     regionalAccess: { regions: ['ภาคกลาง'] },
   });

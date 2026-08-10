@@ -51,6 +51,7 @@ interface ManagedUserJoinedRow {
   ministry_id: string | null;
   province_id: string | null;
   province_name_th: string | null;
+  estate_code: string | null;
   per_status: string | null;
   per_status_name: string | null;
   relocation_type: string | null;
@@ -88,12 +89,18 @@ interface PermissionGrantRow {
   region_name: string | null;
   province_id: string | null;
   province_name_th: string | null;
+  estate_code: string | null;
 }
 
 interface ProvinceRow {
   id: string;
   name_th: string;
   region: string | null;
+}
+
+interface IndustrialEstateRow {
+  code: string;
+  name_th: string | null;
 }
 
 interface UserPermissionOverrideRow extends PermissionGrantRow {
@@ -187,6 +194,17 @@ export const usersRepository = {
       .first();
   },
 
+  async findIndustrialEstateByCodeOrName(
+    value: string,
+    trx?: Knex.Transaction,
+  ): Promise<IndustrialEstateRow | undefined> {
+    return (trx ?? db)<IndustrialEstateRow>('industrial_estates')
+      .where('code', value)
+      .orWhere('name_th', value)
+      .select('code', 'name_th')
+      .first();
+  },
+
   async getRolePermissions(userId: number): Promise<PermissionGrantDTO[]> {
     const rows: PermissionGrantRow[] = await db('user_roles')
       .join('role_permissions', 'user_roles.role_id', 'role_permissions.role_id')
@@ -201,8 +219,34 @@ export const usersRepository = {
         db.raw('CAST(NULL AS NVARCHAR(128)) as region_name'),
         db.raw('CAST(NULL AS VARCHAR(8)) as province_id'),
         db.raw('CAST(NULL AS NVARCHAR(64)) as province_name_th'),
+        db.raw('CAST(NULL AS VARCHAR(16)) as estate_code'),
       );
 
+    return rows.map(toPermissionGrantDTO);
+  },
+
+  async getRolePermissionsByRoleCodes(
+    roleCodes: string[],
+    trx?: Knex.Transaction,
+  ): Promise<PermissionGrantDTO[]> {
+    if (roleCodes.length === 0) return [];
+    const executor = trx ?? db;
+    const rows: PermissionGrantRow[] = await executor('roles')
+      .join('role_permissions', 'roles.id', 'role_permissions.role_id')
+      .join('permissions', 'role_permissions.permission_id', 'permissions.id')
+      .whereIn('roles.code', roleCodes)
+      .whereNull('roles.deleted_at')
+      .select(
+        'permissions.code as code',
+        'permissions.resource as resource',
+        'permissions.action as action',
+        'permissions.description as description',
+        'role_permissions.scope as scope',
+        executor.raw('CAST(NULL AS NVARCHAR(128)) as region_name'),
+        executor.raw('CAST(NULL AS VARCHAR(8)) as province_id'),
+        executor.raw('CAST(NULL AS NVARCHAR(64)) as province_name_th'),
+        executor.raw('CAST(NULL AS VARCHAR(16)) as estate_code'),
+      );
     return rows.map(toPermissionGrantDTO);
   },
 
@@ -220,6 +264,7 @@ export const usersRepository = {
         'user_permissions.region_name as region_name',
         'user_permissions.province_id as province_id',
         'provinces.name_th as province_name_th',
+        'user_permissions.estate_code as estate_code',
         'user_permissions.effect as effect',
       );
 
@@ -538,6 +583,7 @@ function toDetailDTO(rows: ManagedUserJoinedRow[]): ManagedUserDetailDTO {
       ministryId: first.ministry_id,
       provinceId: first.province_id,
       provinceName: first.province_name_th,
+      estateCode: first.estate_code,
       perStatus: first.per_status,
       perStatusName: first.per_status_name,
       relocationType: first.relocation_type,
@@ -570,6 +616,8 @@ function toPermissionGrantDTO(row: PermissionGrantRow): PermissionGrantDTO {
     region: row.region_name,
     provinceId: row.province_id,
     provinceName: row.province_name_th,
+    estateCode: row.estate_code,
+    estate: row.estate_code,
   };
 }
 
@@ -645,6 +693,10 @@ async function replaceUserPermissionOverridesInTransaction(
           permission.effect === 'allow' ? normalizePermissionLocation(permission.region) : null,
         province_id:
           permission.effect === 'allow' ? normalizePermissionLocation(permission.province) : null,
+        estate_code:
+          permission.effect === 'allow'
+            ? normalizePermissionLocation(permission.estateCode ?? permission.estate)
+            : null,
         granted_by: actorUserId,
       };
     }),
@@ -674,6 +726,7 @@ function toOfficerProfileRow(profile: OfficerProfileInput): Record<string, strin
     ['departmentNameTh', 'department_name_th'],
     ['ministryId', 'ministry_id'],
     ['provinceId', 'province_id'],
+    ['estateCode', 'estate_code'],
     ['perStatus', 'per_status'],
     ['perStatusName', 'per_status_name'],
     ['relocationType', 'relocation_type'],

@@ -16,6 +16,7 @@ import { alertEventsService } from '../../src/modules/alert-events/alert-events.
 import type {
   AlertEventDTO,
   CreateIntegrationAlertEventInput,
+  ListAlertEventsQuery,
 } from '../../src/modules/alert-events/alert-events.types';
 
 const mockedRepository = jest.mocked(alertEventsRepository);
@@ -147,6 +148,130 @@ describe('alertEventsService', () => {
           },
         },
       ],
+    });
+  });
+
+  it('passes notification scope and actor context into alert event listing', async () => {
+    mockedRepository.list.mockResolvedValue({
+      rows: [alertEventFixture()],
+      total: 1,
+    });
+
+    const result = await alertEventsService.list(
+      { page: 1, pageSize: 20 } as ListAlertEventsQuery,
+      42,
+      { scope: 'IN_REGION', region: 'ภาคตะวันออก', province: null },
+      { regions: ['ภาคตะวันออก'] },
+      false,
+    );
+
+    expect(mockedRepository.list).toHaveBeenCalledWith(
+      { page: 1, pageSize: 20 },
+      {
+        actorUserId: 42,
+        scope: { scope: 'IN_REGION', region: 'ภาคตะวันออก', province: null },
+        regionalAccess: { regions: ['ภาคตะวันออก'] },
+      },
+    );
+    expect(result.pagination.total).toBe(1);
+  });
+
+  it('redacts notification status fields in list results without notifications:view_status', async () => {
+    mockedRepository.list.mockResolvedValue({
+      rows: [alertEventFixture()],
+      total: 1,
+    });
+
+    const result = await alertEventsService.list(
+      { page: 1, pageSize: 20 } as ListAlertEventsQuery,
+      42,
+      { scope: 'ALL' },
+      undefined,
+      false,
+    );
+
+    expect(result.data[0]).toMatchObject({
+      id: 1001,
+      notificationStatus: null,
+      notificationStatusLabel: null,
+    });
+  });
+
+  it('keeps notification status fields visible in list results for notifications:view_status', async () => {
+    mockedRepository.list.mockResolvedValue({
+      rows: [alertEventFixture()],
+      total: 1,
+    });
+
+    const result = await alertEventsService.list(
+      { page: 1, pageSize: 20 } as ListAlertEventsQuery,
+      42,
+      { scope: 'ALL' },
+      undefined,
+      true,
+    );
+
+    expect(result.data[0]).toMatchObject({
+      id: 1001,
+      notificationStatus: 'AUTO',
+      notificationStatusLabel: 'อัตโนมัติ',
+    });
+  });
+
+  it('does not leak out-of-scope alert event lookups', async () => {
+    mockedRepository.findById.mockResolvedValue(null);
+
+    await expect(
+      alertEventsService.getById(
+        1001,
+        42,
+        { scope: 'IN_REGION', region: 'ภาคตะวันออก', province: null },
+        { regions: ['ภาคตะวันออก'] },
+      ),
+    ).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+      message: 'Alert event not found',
+    });
+  });
+
+  it('redacts notification status fields in detail results without notifications:view_status', async () => {
+    mockedRepository.findById.mockResolvedValue(alertEventFixture());
+
+    const result = await alertEventsService.getById(1001, 42, { scope: 'ALL' }, undefined, false);
+
+    expect(result).toMatchObject({
+      id: 1001,
+      notificationStatus: null,
+      notificationStatusLabel: null,
+    });
+  });
+
+  it('keeps notification status fields visible in detail results for notifications:view_status', async () => {
+    mockedRepository.findById.mockResolvedValue(alertEventFixture());
+
+    const result = await alertEventsService.getById(1001, 42, { scope: 'ALL' }, undefined, true);
+
+    expect(result).toMatchObject({
+      id: 1001,
+      notificationStatus: 'AUTO',
+      notificationStatusLabel: 'อัตโนมัติ',
+    });
+  });
+
+  it('does not leak out-of-scope alert event status updates', async () => {
+    mockedRepository.updateStatus.mockResolvedValue(null);
+
+    await expect(
+      alertEventsService.updateStatus(
+        1001,
+        { notificationStatus: 'ACKNOWLEDGED' },
+        42,
+        { scope: 'IN_REGION', region: 'ภาคตะวันออก', province: null },
+        { regions: ['ภาคตะวันออก'] },
+      ),
+    ).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+      message: 'Alert event not found',
     });
   });
 });

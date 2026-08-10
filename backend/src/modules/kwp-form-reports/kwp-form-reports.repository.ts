@@ -2,6 +2,8 @@ import type { Knex } from 'knex';
 import { db } from '../../config/database';
 import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
 import { splitFactoryTypeSequence } from '../eligible-factories/factory-type-sequence';
+import type { PermissionScopeDetails } from '../auth/permissions';
+import { resolveAssignedRegions } from '../auth/regional-access';
 import type {
   KwpFormFactoryTableRowDTO,
   KwpFormReportAccess,
@@ -121,6 +123,7 @@ function buildFactoryQuery(
 ): Knex.QueryBuilder<FactoryTableRow, FactoryTableRow[]> {
   const builder = db<FactoryTableRow>('factories as f')
     .leftJoin('provinces as p', 'p.id', 'f.province_id')
+    .leftJoin('industrial_estates as ie', 'ie.id', 'f.industrial_estate_id')
     .leftJoin('eligible_factories as ef', function joinEligibleFactory() {
       this.on(function joinFactoryKeys() {
         this.on('ef.factory_registration_no_new', '=', 'f.code')
@@ -185,7 +188,8 @@ function buildFactoryQuery(
     .orderBy('f.id', 'asc');
 
   applyFactoryAccessFilter(builder, access);
-  applyRegionalAccessFilter(builder, access.regionalAccess);
+  applyLocationScopeFilter(builder, access.scope);
+  applyRegionalAccessFilter(builder, access.scope, access.regionalAccess);
 
   return builder as unknown as Knex.QueryBuilder<FactoryTableRow, FactoryTableRow[]>;
 }
@@ -201,6 +205,7 @@ function buildRequestQuery(
         .orOn('f.code', '=', 's.factory_registration_no');
     })
     .leftJoin('provinces as p', 'p.id', 'f.province_id')
+    .leftJoin('industrial_estates as ie', 'ie.id', 'f.industrial_estate_id')
     .leftJoin('cems_wpms_connected_measurement_points as cp', 'cp.id', 's.connected_point_id')
     .whereNull('s.deleted_at')
     .select(
@@ -241,30 +246,85 @@ function buildRequestQuery(
   }
 
   applyFactoryAccessFilter(builder, access);
-  applyRegionalAccessFilter(builder, access.regionalAccess);
+  applyLocationScopeFilter(builder, access.scope);
+  applyRegionalAccessFilter(builder, access.scope, access.regionalAccess);
 
   return builder as unknown as Knex.QueryBuilder<SubmissionRow, SubmissionRow[]>;
 }
 
 function applyFactoryAccessFilter(builder: Knex.QueryBuilder, access: KwpFormReportAccess): void {
-  if (access.scope !== 'OWN_FACTORY') return;
+  if (scopeValue(access.scope) !== 'OWN_FACTORY') return;
   applyAssignedFactoryAccessFilter(builder, access.actorUserId);
+}
+
+function applyLocationScopeFilter(
+  builder: Knex.QueryBuilder,
+  scope: KwpFormReportAccess['scope'],
+): void {
+  const details = scopeDetails(scope);
+  if (!details) return;
+
+  if (details.scope === 'IN_PROVINCE') {
+    if (!details.province) {
+      builder.whereRaw('1 = ?', [0]);
+      return;
+    }
+    builder.where('p.name_th', details.province);
+    return;
+  }
+
+  if (details.scope === 'IN_ESTATE') {
+    const estateCode = toEstateCode(scope);
+    if (estateCode) {
+      builder.where('ie.code', estateCode);
+      return;
+    }
+    const estateId = toEstateId(scope);
+    if (estateId) {
+      builder.where('ie.id', estateId);
+      return;
+    }
+    builder.whereRaw('1 = ?', [0]);
+  }
 }
 
 function applyRegionalAccessFilter(
   builder: Knex.QueryBuilder,
+  scope: KwpFormReportAccess['scope'],
   regionalAccess: KwpFormReportAccess['regionalAccess'],
 ): void {
-  const regions = [
-    ...new Set((regionalAccess?.regions ?? []).map((region) => region.trim())),
-  ].filter(Boolean);
-  if (regions.length === 0) return;
-  const placeholders = regions.map(() => '?').join(', ');
-  builder.whereRaw(`COALESCE(??, ??) IN (${placeholders})`, [
-    's.submission_region_name',
-    'p.region',
-    ...regions,
-  ]);
+  if (scopeValue(scope) !== 'IN_REGION') return;
+  const details = scopeDetails(scope);
+  const regions = resolveAssignedRegions(details?.region, regionalAccess);
+  if (regions.length === 0) {
+    builder.whereRaw('1 = ?', [0]);
+    return;
+  }
+  builder.whereIn('p.region', regions);
+}
+
+function scopeValue(scope: KwpFormReportAccess['scope']): string | null | undefined {
+  return typeof scope === 'object' && scope !== null ? scope.scope : scope;
+}
+
+function scopeDetails(
+  scope: KwpFormReportAccess['scope'],
+): PermissionScopeDetails | null {
+  return typeof scope === 'object' && scope !== null ? scope : null;
+}
+
+function toEstateId(scope: KwpFormReportAccess['scope']): string | number | null {
+  if (typeof scope !== 'object' || scope === null) return null;
+  const value = (scope as PermissionScopeDetails & { estateId?: string | number | null }).estateId;
+  return value ?? null;
+}
+
+function toEstateCode(scope: KwpFormReportAccess['scope']): string | null {
+  if (typeof scope !== 'object' || scope === null) return null;
+  const value =
+    (scope as PermissionScopeDetails & { estateCode?: string | null }).estateCode ??
+    (scope as PermissionScopeDetails & { estate?: string | null }).estate;
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
 function submissionRegionSelect(): Knex.Raw {

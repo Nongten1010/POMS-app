@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { permissionGroupsToPermissionOverrides } from '../auth/permissions';
+import { permissionGroupsToUserPermissionOverrides } from '../auth/permissions';
 import { normalizeRegionalAccess } from '../auth/regional-access';
 import type { PermissionGroups } from '../auth/permissions';
 
@@ -22,19 +22,28 @@ const optionalFormScopeValue = (max: number) =>
     const trimmed = value.trim();
     return trimmed === '' || trimmed.toLowerCase() === 'all' ? null : trimmed;
   }, z.string().trim().min(1).max(max).nullable().optional());
+const clearableFormScopeValue = (max: number) =>
+  z.preprocess((value) => {
+    if (value === undefined) return undefined;
+    if (value === null) return null;
+    if (typeof value !== 'string') return value;
+    const trimmed = value.trim();
+    return trimmed === '' || trimmed.toLowerCase() === 'all' ? null : trimmed;
+  }, z.string().trim().min(1).max(max).nullable().optional());
 const optionalPasswordString = z.preprocess(
   (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
   z.string().min(8).max(128).optional(),
 );
 const regionalAccessSchema = z
   .object({
-    regions: z.array(z.string().trim().min(1).max(128)).min(1).max(10),
+    regions: z.array(z.string().trim().min(1).max(128)).length(1),
   })
   .strict()
   .transform((value) => normalizeRegionalAccess(value) ?? value);
 const formRegionsSchema = z.preprocess(
   (value) => {
-    if (value === null || value === undefined) return undefined;
+    if (value === undefined) return undefined;
+    if (value === null) return null;
     const values = Array.isArray(value) ? value : [value];
     const regions = values
       .filter((item): item is string => typeof item === 'string')
@@ -42,7 +51,7 @@ const formRegionsSchema = z.preprocess(
       .filter((item) => item && item.toLowerCase() !== 'all');
     return regions.length > 0 ? regions : null;
   },
-  z.array(z.string().trim().min(1).max(128)).max(10).nullable().optional(),
+  z.array(z.string().trim().min(1).max(128)).max(1).nullable().optional(),
 );
 
 export const userIdParamSchema = z.object({
@@ -85,7 +94,8 @@ export const officerProfileSchema = z
     departmentId: optionalNullableTrimmedString,
     ministryId: optionalNullableTrimmedString,
     provinceId: optionalNullableTrimmedString,
-    provinceName: optionalFormScopeValue(128),
+    provinceName: clearableFormScopeValue(128),
+    estateCode: clearableFormScopeValue(32),
     perStatus: optionalNullableTrimmedString,
     perStatusName: optionalNullableTrimmedString,
     relocationType: optionalNullableTrimmedString,
@@ -104,7 +114,7 @@ const managedUserPayloadShape = {
   email: z.string().trim().email().max(255).nullable().optional(),
   phone: z.string().trim().min(1).max(32).nullable().optional(),
   isActive: z.boolean(),
-  roleCodes: z.array(z.string().trim().min(1).max(32)).min(1).max(20),
+  roleCodes: z.array(z.string().trim().min(1).max(32)).length(1),
   profile: officerProfileSchema.optional(),
 };
 
@@ -118,6 +128,7 @@ export const createLocalAccountSchema = z
     levelNameTh: optionalTrimmedNonEmptyString(64),
     provinceId: optionalFormScopeValue(32),
     provinceName: optionalFormScopeValue(128),
+    estateCode: optionalFormScopeValue(32),
     regionName: optionalFormScopeValue(128),
     regions: formRegionsSchema,
     regionalAccess: regionalAccessSchema.nullable().optional(),
@@ -133,6 +144,8 @@ export const createLocalAccountSchema = z
             scope: permissionScopeSchema.optional(),
             region: optionalFormScopeValue(128),
             province: optionalFormScopeValue(128),
+            estateCode: optionalFormScopeValue(32),
+            estate: optionalFormScopeValue(32),
           })
           .strict(),
       )
@@ -157,6 +170,7 @@ export const createLocalAccountSchema = z
       levelNameTh,
       provinceId,
       provinceName,
+      estateCode,
       regionName,
       regions,
       regionalAccess,
@@ -181,6 +195,7 @@ export const createLocalAccountSchema = z
           levelNameTh !== undefined ||
           provinceId !== undefined ||
           provinceName !== undefined ||
+          estateCode !== undefined ||
           formRegionalAccess !== undefined
             ? {
                 departmentNameTh: department,
@@ -188,6 +203,7 @@ export const createLocalAccountSchema = z
                 levelNameTh,
                 provinceId,
                 provinceName,
+                estateCode,
                 regionalAccess: formRegionalAccess,
               }
             : undefined,
@@ -206,7 +222,7 @@ export const createManagedUserSchema = z
 const legacyUpdateManagedUserSchema = z
   .object({
     ...managedUserPayloadShape,
-    roleCodes: z.array(z.string().trim().min(1).max(32)).min(1).max(20).optional(),
+    roleCodes: z.array(z.string().trim().min(1).max(32)).length(1).optional(),
     password: optionalPasswordString,
   })
   .partial()
@@ -220,6 +236,8 @@ const permissionGroupSchema = z
     data: permissionScopeSchema.optional(),
     region: optionalFormScopeValue(128),
     province: optionalFormScopeValue(128),
+    estateCode: optionalFormScopeValue(32),
+    estate: optionalFormScopeValue(32),
   })
   .catchall(z.union([z.boolean(), permissionScopeSchema]));
 
@@ -235,8 +253,13 @@ const editResponseUpdateSchema = z
         department: optionalTrimmedNonEmptyString(255),
         lineNameTh: optionalTrimmedNonEmptyString(128),
         levelNameTh: optionalTrimmedNonEmptyString(64),
+        provinceName: clearableFormScopeValue(128),
+        estateCode: clearableFormScopeValue(32),
+        regionName: clearableFormScopeValue(128),
+        regions: formRegionsSchema,
+        regionalAccess: regionalAccessSchema.nullable().optional(),
         roles: z.string().trim().min(1).max(32).optional(),
-        roleCodes: z.array(z.string().trim().min(1).max(32)).min(1).max(20).optional(),
+        roleCodes: z.array(z.string().trim().min(1).max(32)).length(1).optional(),
         isActive: z.boolean(),
         source: z.enum(['api', 'created']).optional(),
       })
@@ -251,16 +274,33 @@ const editResponseUpdateSchema = z
   .transform(({ user, permissions }) => {
     const isApiAccount = user.source === 'api' || user.accountType === 'api';
     const permissionOverrides = permissions
-      ? permissionGroupsToPermissionOverrides(permissions as PermissionGroups)
+      ? permissionGroupsToUserPermissionOverrides(permissions as PermissionGroups)
       : undefined;
+    const hasRegionInput =
+      user.regionalAccess !== undefined ||
+      user.regions !== undefined ||
+      user.regionName !== undefined;
+    const regionalAccess =
+      user.regionalAccess ??
+      (hasRegionInput
+        ? normalizeRegionalAccess({
+            regions: [...(user.regions ?? []), ...(user.regionName ? [user.regionName] : [])],
+          })
+        : undefined);
     const profilePatch =
       user.department !== undefined ||
       user.lineNameTh !== undefined ||
-      user.levelNameTh !== undefined
+      user.levelNameTh !== undefined ||
+      user.provinceName !== undefined ||
+      user.estateCode !== undefined ||
+      regionalAccess !== undefined
         ? {
             departmentNameTh: user.department,
             lineNameTh: user.lineNameTh,
             levelNameTh: user.levelNameTh,
+            provinceName: user.provinceName,
+            estateCode: user.estateCode,
+            regionalAccess,
           }
         : undefined;
     return {
@@ -271,16 +311,8 @@ const editResponseUpdateSchema = z
       password: user.password,
       isActive: user.isActive,
       roleCodes: user.roleCodes ?? (user.roles ? [user.roles] : undefined),
-      profile: isApiAccount ? undefined : profilePatch,
-      permissionOverrides: permissionOverrides
-        ? Object.entries(permissionOverrides).map(([code, details]) => ({
-            code,
-            effect: 'allow' as const,
-            scope: details.scope,
-            region: details.region,
-            province: details.province,
-          }))
-        : undefined,
+      profile: profilePatch,
+      permissionOverrides,
     };
   });
 
@@ -308,6 +340,8 @@ export const replaceUserPermissionsSchema = z
             scope: permissionScopeSchema.optional(),
             region: optionalFormScopeValue(128),
             province: optionalFormScopeValue(128),
+            estateCode: optionalFormScopeValue(32),
+            estate: optionalFormScopeValue(32),
           })
           .strict(),
       )

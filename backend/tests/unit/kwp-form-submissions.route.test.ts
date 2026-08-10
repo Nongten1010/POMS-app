@@ -253,7 +253,9 @@ describe('KWP form submission routes', () => {
       }),
       {
         actorUserId: 42,
-        scope: 'OWN_FACTORY',
+        scope: { scope: 'OWN_FACTORY' },
+        roles: ['factory_operator'],
+        regionalAccess: undefined,
       },
     );
     expect(response.body).toEqual({
@@ -292,7 +294,9 @@ describe('KWP form submission routes', () => {
       }),
       {
         actorUserId: 42,
-        scope: 'OWN_FACTORY',
+        scope: { scope: 'OWN_FACTORY' },
+        roles: ['factory_operator'],
+        regionalAccess: undefined,
       },
     );
   });
@@ -343,6 +347,38 @@ describe('KWP form submission routes', () => {
     expect(mockedService.createKwp01).not.toHaveBeenCalled();
   });
 
+  it('does not fall back to view scope for KWP writes when edit permission is missing', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .post('/api/v1/kwp-form-submissions/kwp01')
+      .set('Authorization', `Bearer ${operatorViewToken()}`)
+      .send(validKwp01Payload());
+
+    expect(response.status).toBe(403);
+    expect(mockedService.createKwp01).not.toHaveBeenCalled();
+  });
+
+  it('passes profile regionalAccess into KWP create access for base IN_REGION edit scope', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .post('/api/v1/kwp-form-submissions/kwp01')
+      .set('Authorization', `Bearer ${regionalKwpEditorTokenWithoutExplicitRegion()}`)
+      .send(validKwp01Payload());
+
+    expect(response.status).toBe(201);
+    expect(mockedService.createKwp01).toHaveBeenCalledWith(
+      expect.any(Object),
+      {
+        actorUserId: 77,
+        scope: { scope: 'IN_REGION' },
+        roles: ['monitoring_kpm'],
+        regionalAccess: { regions: ['ภาคกลาง'] },
+      },
+    );
+  });
+
   it('gets submitted KWP01 detail with issue report and unreported parameters', async () => {
     mockedService.getById.mockResolvedValueOnce(kwp01DetailResponse());
     const app = createApp();
@@ -354,7 +390,8 @@ describe('KWP form submission routes', () => {
     expect(response.status).toBe(200);
     expect(mockedService.getById).toHaveBeenCalledWith(12, {
       actorUserId: 42,
-      scope: 'OWN_FACTORY',
+      scope: { scope: 'OWN_FACTORY' },
+      roles: ['factory_operator'],
       regionalAccess: undefined,
       publicBaseUrl: expectedPublicBaseUrl,
       publicPath: '/uploads',
@@ -404,7 +441,8 @@ describe('KWP form submission routes', () => {
     expect(response.status).toBe(200);
     expect(mockedService.getById).toHaveBeenCalledWith(16, {
       actorUserId: 42,
-      scope: 'OWN_FACTORY',
+      scope: { scope: 'OWN_FACTORY' },
+      roles: ['factory_operator'],
       regionalAccess: undefined,
       publicBaseUrl: expectedPublicBaseUrl,
       publicPath: '/uploads',
@@ -474,7 +512,8 @@ describe('KWP form submission routes', () => {
     expect(response.status).toBe(200);
     expect(mockedService.getById).toHaveBeenCalledWith(15, {
       actorUserId: 42,
-      scope: 'OWN_FACTORY',
+      scope: { scope: 'OWN_FACTORY' },
+      roles: ['factory_operator'],
       regionalAccess: undefined,
       publicBaseUrl: expectedPublicBaseUrl,
       publicPath: '/uploads',
@@ -558,7 +597,8 @@ describe('KWP form submission routes', () => {
     expect(response.status).toBe(200);
     expect(mockedService.getWorkflow).toHaveBeenCalledWith(12, {
       actorUserId: 42,
-      scope: 'OWN_FACTORY',
+      scope: { scope: 'OWN_FACTORY' },
+      roles: ['factory_operator'],
       regionalAccess: undefined,
     });
     expect(response.body).toMatchObject({
@@ -571,6 +611,22 @@ describe('KWP form submission routes', () => {
         },
         allowedActions: [],
       },
+    });
+  });
+
+  it('preserves bare estate scope details on KWP workflow reads so downstream fail-closed filters can run', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .get('/api/v1/kwp-form-submissions/12/workflow')
+      .set('Authorization', `Bearer ${estateScopedKwpViewTokenWithoutEstateCode()}`);
+
+    expect(response.status).toBe(200);
+    expect(mockedService.getWorkflow).toHaveBeenCalledWith(12, {
+      actorUserId: 42,
+      scope: { scope: 'IN_ESTATE' },
+      roles: ['factory_operator'],
+      regionalAccess: undefined,
     });
   });
 
@@ -609,7 +665,8 @@ describe('KWP form submission routes', () => {
       },
       {
         actorUserId: 77,
-        scope: 'ALL',
+        scope: { scope: 'ALL' },
+        roles: ['monitoring_kpm'],
         regionalAccess: { regions: ['ภาคกลาง'] },
       },
     );
@@ -621,6 +678,35 @@ describe('KWP form submission routes', () => {
       },
       allowedActions: ['APPROVE'],
     });
+  });
+
+  it('preserves explicit IN_REGION approval scope details over broader profile regions', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .post('/api/v1/kwp-form-submissions/12/workflow-actions')
+      .set('Authorization', `Bearer ${regionalKwpApproverTokenWithExplicitRegion()}`)
+      .send({
+        action: 'REQUEST_REVISION',
+        revisionReason: 'เพิ่มเอกสารแนบผลตรวจวัด',
+        officerNote: 'ตรวจพบเอกสารแนบยังไม่ครบ',
+      });
+
+    expect(response.status).toBe(200);
+    expect(mockedService.changeWorkflowStatus).toHaveBeenCalledWith(
+      12,
+      {
+        action: 'REQUEST_REVISION',
+        revisionReason: 'เพิ่มเอกสารแนบผลตรวจวัด',
+        officerNote: 'ตรวจพบเอกสารแนบยังไม่ครบ',
+      },
+      {
+        actorUserId: 77,
+        scope: { scope: 'IN_REGION', region: 'ภาคใต้' },
+        roles: ['monitoring_kpm'],
+        regionalAccess: { regions: ['ภาคกลาง'] },
+      },
+    );
   });
 
   it('updates a returned KWP01 form through the form-specific edit endpoint', async () => {
@@ -642,7 +728,8 @@ describe('KWP form submission routes', () => {
       }),
       {
         actorUserId: 42,
-        scope: 'OWN_FACTORY',
+        scope: { scope: 'OWN_FACTORY' },
+        roles: ['factory_operator'],
         publicBaseUrl: expectedPublicBaseUrl,
         publicPath: '/uploads',
         regionalAccess: undefined,
@@ -691,7 +778,8 @@ describe('KWP form submission routes', () => {
       { note: 'ปรับข้อมูลและแนบเอกสารครบแล้ว' },
       {
         actorUserId: 42,
-        scope: 'OWN_FACTORY',
+        scope: { scope: 'OWN_FACTORY' },
+        roles: ['factory_operator'],
         regionalAccess: undefined,
       },
     );
@@ -757,7 +845,8 @@ describe('KWP form submission routes', () => {
       }),
       {
         actorUserId: 42,
-        scope: 'OWN_FACTORY',
+        scope: { scope: 'OWN_FACTORY' },
+        roles: ['factory_operator'],
       },
     );
     expect(response.body).toEqual({
@@ -808,7 +897,8 @@ describe('KWP form submission routes', () => {
       }),
       {
         actorUserId: 42,
-        scope: 'OWN_FACTORY',
+        scope: { scope: 'OWN_FACTORY' },
+        roles: ['factory_operator'],
       },
     );
     expect(response.body).toEqual({
@@ -841,7 +931,8 @@ describe('KWP form submission routes', () => {
       }),
       {
         actorUserId: 42,
-        scope: 'OWN_FACTORY',
+        scope: { scope: 'OWN_FACTORY' },
+        roles: ['factory_operator'],
       },
     );
   });
@@ -869,7 +960,8 @@ describe('KWP form submission routes', () => {
       }),
       {
         actorUserId: 42,
-        scope: 'OWN_FACTORY',
+        scope: { scope: 'OWN_FACTORY' },
+        roles: ['factory_operator'],
       },
     );
   });
@@ -942,7 +1034,8 @@ describe('KWP form submission routes', () => {
       }),
       {
         actorUserId: 42,
-        scope: 'OWN_FACTORY',
+        scope: { scope: 'OWN_FACTORY' },
+        roles: ['factory_operator'],
       },
     );
     expect(response.body).toEqual({
@@ -1015,7 +1108,8 @@ describe('KWP form submission routes', () => {
       }),
       {
         actorUserId: 42,
-        scope: 'OWN_FACTORY',
+        scope: { scope: 'OWN_FACTORY' },
+        roles: ['factory_operator'],
       },
     );
     expect(response.body).toEqual({
@@ -1346,6 +1440,20 @@ function operatorViewToken(): string {
   });
 }
 
+function estateScopedKwpViewTokenWithoutEstateCode(): string {
+  return signAccessToken({
+    sub: '42',
+    userType: 'operator',
+    roles: ['factory_operator'],
+    scopes: {
+      'kwp_forms:view': 'IN_ESTATE',
+    },
+    scopeDetails: {
+      'kwp_forms:view': { scope: 'IN_ESTATE' },
+    },
+  });
+}
+
 function officerApproveToken(): string {
   return signAccessToken({
     sub: '77',
@@ -1354,6 +1462,38 @@ function officerApproveToken(): string {
     scopes: {
       'kwp_forms:view': 'ALL',
       'kwp_forms:approve': 'ALL',
+    },
+    regionalAccess: { regions: ['ภาคกลาง'] },
+  });
+}
+
+function regionalKwpApproverTokenWithExplicitRegion(): string {
+  return signAccessToken({
+    sub: '77',
+    userType: 'officer',
+    roles: ['monitoring_kpm'],
+    scopes: {
+      'kwp_forms:view': 'IN_REGION',
+      'kwp_forms:approve': 'IN_REGION',
+    },
+    scopeDetails: {
+      'kwp_forms:view': { scope: 'IN_REGION', region: 'ภาคใต้' },
+      'kwp_forms:approve': { scope: 'IN_REGION', region: 'ภาคใต้' },
+    },
+    regionalAccess: { regions: ['ภาคกลาง'] },
+  });
+}
+
+function regionalKwpEditorTokenWithoutExplicitRegion(): string {
+  return signAccessToken({
+    sub: '77',
+    userType: 'officer',
+    roles: ['monitoring_kpm'],
+    scopes: {
+      'kwp_forms:edit': 'IN_REGION',
+    },
+    scopeDetails: {
+      'kwp_forms:edit': { scope: 'IN_REGION' },
     },
     regionalAccess: { regions: ['ภาคกลาง'] },
   });

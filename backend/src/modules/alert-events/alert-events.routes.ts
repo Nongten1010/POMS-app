@@ -7,10 +7,10 @@ export const alertEventsRoutes = Router();
 
 alertEventsRoutes.use(authenticate);
 
-alertEventsRoutes.get('/', authorize('cems_wpms_requests:view'), alertEventsController.list);
-alertEventsRoutes.get('/:id', authorize('cems_wpms_requests:view'), alertEventsController.getById);
+alertEventsRoutes.get('/', authorize('notifications:view'), alertEventsController.list);
+alertEventsRoutes.get('/:id', authorize('notifications:view'), alertEventsController.getById);
 alertEventsRoutes.patch(
   '/:id/status',
-  authorize('cems_wpms_requests:edit'),
+  authorize('notifications:edit'),
   alertEventsController.updateStatus,
 );

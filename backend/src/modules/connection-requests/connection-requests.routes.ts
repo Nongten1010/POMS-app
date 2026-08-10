@@ -47,7 +47,6 @@ publicFactoryMapPointRoutes.get('/', connectionRequestsController.listPublicFact
 
 operatorFactoryRoutes.put(
   '/:factoryId/favorite',
-  authorize('factories:view'),
   authorize('dashboard.alerts:view'),
   connectionRequestsController.setOperatorFactoryFavorite,
 );

@@ -1,4 +1,6 @@
 import { AppError, BadRequestError, NotFoundError } from '../../shared/errors/AppError';
+import type { PermissionScopeDetails } from '../auth/permissions';
+import type { RegionalAccessDTO } from '../auth/regional-access';
 import { alertEventsRepository } from './alert-events.repository';
 import type {
   AlertEventDTO,
@@ -92,10 +94,20 @@ export const alertEventsService = {
     };
   },
 
-  async list(query: ListAlertEventsQuery): Promise<ListAlertEventsResult> {
-    const result = await alertEventsRepository.list(query);
+  async list(
+    query: ListAlertEventsQuery,
+    actorUserId: number,
+    viewScope: AccessScope,
+    regionalAccess?: RegionalAccessDTO | null,
+    canViewNotificationStatus = false,
+  ): Promise<ListAlertEventsResult> {
+    const result = await alertEventsRepository.list(query, {
+      actorUserId,
+      scope: viewScope,
+      regionalAccess,
+    });
     return {
-      data: result.rows,
+      data: result.rows.map((row) => redactNotificationStatus(row, canViewNotificationStatus)),
       pagination: {
         page: query.page,
         pageSize: query.pageSize,
@@ -104,22 +116,52 @@ export const alertEventsService = {
     };
   },
 
-  async getById(id: number): Promise<AlertEventDTO> {
-    const event = await alertEventsRepository.findById(id);
+  async getById(
+    id: number,
+    actorUserId: number,
+    viewScope: AccessScope,
+    regionalAccess?: RegionalAccessDTO | null,
+    canViewNotificationStatus = false,
+  ): Promise<AlertEventDTO> {
+    const event = await alertEventsRepository.findById(id, {
+      actorUserId,
+      scope: viewScope,
+      regionalAccess,
+    });
     if (!event) throw new NotFoundError('Alert event not found');
-    return event;
+    return redactNotificationStatus(event, canViewNotificationStatus);
   },
 
   async updateStatus(
     id: number,
     input: UpdateAlertEventStatusInput,
     actorUserId: number,
+    editScope: AccessScope,
+    regionalAccess?: RegionalAccessDTO | null,
   ): Promise<AlertEventDTO> {
-    const event = await alertEventsRepository.updateStatus(id, input, actorUserId);
+    const event = await alertEventsRepository.updateStatus(id, input, actorUserId, {
+      actorUserId,
+      scope: editScope,
+      regionalAccess,
+    });
     if (!event) throw new NotFoundError('Alert event not found');
     return event;
   },
 };
+
+type AccessScope = string | null | undefined | PermissionScopeDetails;
+
+function redactNotificationStatus(
+  event: AlertEventDTO,
+  canViewNotificationStatus: boolean,
+): AlertEventDTO {
+  if (canViewNotificationStatus) return event;
+  return {
+    ...event,
+    notificationStatus: null,
+    notificationStatusLabel: null,
+  };
+}
 
 function toBatchError(error: unknown): { code: string; message: string; details?: unknown } {
   if (error instanceof AppError) {

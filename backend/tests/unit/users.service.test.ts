@@ -18,11 +18,15 @@ jest.mock('../../src/modules/users/users.repository', () => ({
     findById: jest.fn(),
     findByExternalId: jest.fn(),
     findRolesByCodes: jest.fn(),
+    getRolePermissionsByRoleCodes: jest.fn(),
     findPermissionsByCodes: jest.fn(),
     findProvinceByIdOrName: jest.fn(),
+    findIndustrialEstateByCodeOrName: jest.fn(),
     replaceUserPermissionOverrides: jest.fn(),
     getRolePermissions: jest.fn(),
     getUserPermissionOverrides: jest.fn(),
+    create: jest.fn(),
+    createLocalAccount: jest.fn(),
     update: jest.fn(),
     softDelete: jest.fn(),
   },
@@ -36,7 +40,18 @@ const mockedUsersRepository = jest.mocked(usersRepository);
 describe('usersService permissions', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockedUsersRepository.findById.mockResolvedValue({ id: 44 } as never);
+    mockedUsersRepository.findById.mockResolvedValue({
+      id: 44,
+      roleCodes: ['monitoring_5_centers'],
+      roles: 'monitoring_5_centers',
+      identityProvider: 'local',
+      profile: {
+        provinceId: '21',
+        provinceName: 'ระยอง',
+        estateCode: 'IE01',
+        regionalAccess: { regions: ['ภาคตะวันออก'] },
+      },
+    } as never);
     mockedUsersRepository.findPermissionsByCodes.mockImplementation(async (codes) =>
       codes.map((code, index) => ({
         id: index + 1,
@@ -46,8 +61,31 @@ describe('usersService permissions', () => {
         description: null,
       })),
     );
-    mockedUsersRepository.getRolePermissions.mockResolvedValue([]);
+    mockedUsersRepository.getRolePermissions.mockResolvedValue([
+      {
+        code: 'dashboard:view',
+        resource: 'dashboard',
+        action: 'view',
+        description: null,
+        scope: 'ALL',
+      },
+      {
+        code: 'factories:view',
+        resource: 'factories',
+        action: 'view',
+        description: null,
+        scope: 'ALL',
+      },
+      {
+        code: 'eligible_factories:view',
+        resource: 'eligible_factories',
+        action: 'view',
+        description: null,
+        scope: 'ALL',
+      },
+    ] as never);
     mockedUsersRepository.getUserPermissionOverrides.mockResolvedValue([]);
+    mockedUsersRepository.findIndustrialEstateByCodeOrName.mockResolvedValue(undefined);
   });
 
   it('returns managed-user pagination metadata', async () => {
@@ -66,6 +104,25 @@ describe('usersService permissions', () => {
     mockedUsersRepository.findById.mockResolvedValue(existing);
 
     await expect(usersService.getById(44)).resolves.toBe(existing);
+  });
+
+  it('rejects managed users with more than one system role', async () => {
+    await expect(
+      usersService.create(
+        {
+          username: 'multi-role',
+          userType: 'officer',
+          firstName: 'หลาย',
+          lastName: 'บทบาท',
+          isActive: true,
+          roleCodes: ['monitoring_5_centers', 'center_director'],
+        },
+        7,
+      ),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
+    expect(mockedUsersRepository.findRolesByCodes).not.toHaveBeenCalled();
+    expect(mockedUsersRepository.create).not.toHaveBeenCalled();
   });
 
   it('prevents a user from deleting their own account', async () => {
@@ -112,6 +169,8 @@ describe('usersService permissions', () => {
           scope: 'IN_REGION',
           region: null,
           province: null,
+          estateCode: null,
+          estate: null,
         },
         {
           code: 'factories:view',
@@ -119,13 +178,106 @@ describe('usersService permissions', () => {
           scope: 'IN_PROVINCE',
           region: null,
           province: null,
+          estateCode: null,
+          estate: null,
         },
       ],
       7,
     );
   });
 
-  it('keeps province and region out of the permission-management user payload', async () => {
+  it('canonicalizes estate-scoped permission overrides to estateCode', async () => {
+    mockedUsersRepository.findIndustrialEstateByCodeOrName.mockResolvedValue({
+      code: 'IE01',
+      name_th: 'มาบตาพุด',
+    } as never);
+
+    await usersService.replacePermissions(
+      44,
+      {
+        permissions: [
+          {
+            code: 'eligible_factories:view',
+            effect: 'allow',
+            scope: 'IN_ESTATE',
+            region: 'ภาคตะวันออก',
+            province: 'ระยอง',
+            estateCode: 'มาบตาพุด',
+          },
+        ],
+      },
+      7,
+    );
+
+    expect(mockedUsersRepository.replaceUserPermissionOverrides).toHaveBeenCalledWith(
+      44,
+      [
+        {
+          code: 'eligible_factories:view',
+          effect: 'allow',
+          scope: 'IN_ESTATE',
+          region: null,
+          province: null,
+          estateCode: 'IE01',
+          estate: 'IE01',
+        },
+      ],
+      7,
+    );
+  });
+
+  it('rejects unknown estate-scoped permission overrides with a 400 instead of a DB FK error', async () => {
+    await expect(
+      usersService.replacePermissions(
+        44,
+        {
+          permissions: [
+            {
+              code: 'eligible_factories:view',
+              effect: 'allow',
+              scope: 'IN_ESTATE',
+              estateCode: 'UNKNOWN',
+            },
+          ],
+        },
+        7,
+      ),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
+    expect(mockedUsersRepository.replaceUserPermissionOverrides).not.toHaveBeenCalled();
+  });
+
+  it('rejects permission overrides that widen or invent role permissions', async () => {
+    mockedUsersRepository.getRolePermissions.mockResolvedValue([
+      {
+        code: 'factories:view',
+        resource: 'factories',
+        action: 'view',
+        description: null,
+        scope: 'OWN_FACTORY',
+      },
+    ] as never);
+
+    await expect(
+      usersService.replacePermissions(
+        44,
+        { permissions: [{ code: 'factories:view', effect: 'allow', scope: 'ALL' }] },
+        7,
+      ),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
+    await expect(
+      usersService.replacePermissions(
+        44,
+        { permissions: [{ code: 'chat:answer', effect: 'allow', scope: null }] },
+        7,
+      ),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
+    expect(mockedUsersRepository.replaceUserPermissionOverrides).not.toHaveBeenCalled();
+  });
+
+  it('returns profile region, province, and estate assignments in the permission-management payload', async () => {
     mockedUsersRepository.findById.mockResolvedValue({
       id: 44,
       userType: 'officer',
@@ -146,6 +298,7 @@ describe('usersService permissions', () => {
       profile: {
         provinceId: '1021',
         provinceName: 'ระยอง',
+        estateCode: 'MTP',
         regionalAccess: { regions: ['ภาคตะวันออก'] },
       },
     } as never);
@@ -162,6 +315,20 @@ describe('usersService permissions', () => {
         effect: 'allow',
       },
     ]);
+    mockedUsersRepository.getRolePermissions.mockResolvedValue([
+      {
+        code: 'dashboard:view',
+        resource: 'dashboard',
+        action: 'view',
+        description: null,
+        scope: 'IN_REGION',
+        region: null,
+        provinceId: null,
+        provinceName: null,
+        estateCode: null,
+        estate: null,
+      },
+    ] as never);
 
     const result = await usersService.getAuthDetailById(44);
 
@@ -174,6 +341,9 @@ describe('usersService permissions', () => {
       department: 'สำนักงานปลัดกระทรวงอุตสาหกรรม',
       lineNameTh: 'นักวิชาการอุตสาหกรรม',
       levelNameTh: 'ชำนาญการ',
+      provinceName: 'ระยอง',
+      estateCode: 'MTP',
+      regionalAccess: { regions: ['ภาคตะวันออก'] },
       roles: 'monitoring_5_centers',
       roleCodes: ['monitoring_5_centers'],
       isActive: true,
@@ -185,6 +355,127 @@ describe('usersService permissions', () => {
       province: null,
       view: true,
     });
+  });
+
+  it('projects profile assignments into role-scoped permission groups for editing', async () => {
+    mockedUsersRepository.getUserPermissionOverrides.mockResolvedValue([]);
+    mockedUsersRepository.getRolePermissions.mockResolvedValue([
+      {
+        code: 'dashboard:view',
+        resource: 'dashboard',
+        action: 'view',
+        description: null,
+        scope: 'IN_REGION',
+      },
+      {
+        code: 'factories:view',
+        resource: 'factories',
+        action: 'view',
+        description: null,
+        scope: 'IN_PROVINCE',
+      },
+      {
+        code: 'eligible_factories:view',
+        resource: 'eligible_factories',
+        action: 'view',
+        description: null,
+        scope: 'IN_ESTATE',
+      },
+    ] as never);
+
+    const result = await usersService.getAuthDetailById(44);
+
+    expect(result.permissions.dashboard).toMatchObject({
+      data: 'IN_REGION',
+      region: 'ภาคตะวันออก',
+    });
+    expect(result.permissions.factories).toMatchObject({
+      data: 'IN_PROVINCE',
+      province: 'ระยอง',
+    });
+    expect(result.permissions.eligible_factories).toMatchObject({
+      data: 'IN_ESTATE',
+      estateCode: 'IE01',
+      estate: 'IE01',
+    });
+  });
+
+  it('keeps users permission output aligned with auth merge safety for widening, invented allow, and deny', async () => {
+    mockedUsersRepository.getRolePermissions.mockResolvedValue([
+      {
+        code: 'factories:view',
+        resource: 'factories',
+        action: 'view',
+        description: null,
+        scope: 'OWN_FACTORY',
+        region: null,
+        provinceId: null,
+        provinceName: null,
+        estateCode: null,
+        estate: null,
+      },
+      {
+        code: 'dashboard:view',
+        resource: 'dashboard',
+        action: 'view',
+        description: null,
+        scope: 'ALL',
+        region: null,
+        provinceId: null,
+        provinceName: null,
+        estateCode: null,
+        estate: null,
+      },
+    ] as never);
+    mockedUsersRepository.getUserPermissionOverrides.mockResolvedValue([
+      {
+        code: 'factories:view',
+        resource: 'factories',
+        action: 'view',
+        description: null,
+        scope: 'ALL',
+        region: null,
+        provinceId: null,
+        provinceName: null,
+        estateCode: null,
+        estate: null,
+        effect: 'allow',
+      },
+      {
+        code: 'chat:answer',
+        resource: 'chat',
+        action: 'answer',
+        description: null,
+        scope: null,
+        region: null,
+        provinceId: null,
+        provinceName: null,
+        estateCode: null,
+        estate: null,
+        effect: 'allow',
+      },
+      {
+        code: 'dashboard:view',
+        resource: 'dashboard',
+        action: 'view',
+        description: null,
+        scope: null,
+        region: null,
+        provinceId: null,
+        provinceName: null,
+        estateCode: null,
+        estate: null,
+        effect: 'deny',
+      },
+    ] as never);
+
+    const result = await usersService.getPermissions(44);
+
+    expect(result.effectiveScopes).toEqual({
+      'factories:view': 'OWN_FACTORY',
+    });
+    expect(result.permissions.dashboard).toBeUndefined();
+    expect(result.permissions.chat).toBeUndefined();
   });
 
   it('returns the stored login username instead of a divergent legacy external id', async () => {
@@ -246,6 +537,48 @@ describe('usersService permissions', () => {
       usersService.update(45, { profile: { departmentId: 'changed' } }, 7),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
     expect(mockedUsersRepository.update).not.toHaveBeenCalled();
+  });
+
+  it('allows authorization-area assignments on an API-managed officer profile', async () => {
+    const existing = {
+      id: 45,
+      userType: 'officer',
+      externalId: 'U100',
+      username: 'U100',
+      identityProvider: 'diw_dpis',
+      roles: 'diw_central',
+      roleCodes: ['diw_central'],
+      isActive: true,
+      profile: {
+        provinceId: null,
+        provinceName: null,
+        estateCode: null,
+        regionalAccess: null,
+      },
+    } as never;
+    mockedUsersRepository.findById.mockResolvedValue(existing);
+    mockedUsersRepository.findRolesByCodes.mockResolvedValue([
+      { id: 8, code: 'monitoring_5_centers', name_th: 'เจ้าหน้าที่ 5 ศูนย์', name_en: 'Center' },
+    ]);
+    mockedUsersRepository.update.mockResolvedValue(existing);
+
+    await usersService.update(
+      45,
+      {
+        roleCodes: ['monitoring_5_centers'],
+        profile: { regionalAccess: { regions: ['ภาคตะวันออก'] } },
+      },
+      7,
+    );
+
+    expect(mockedUsersRepository.update).toHaveBeenCalledWith(
+      45,
+      expect.objectContaining({
+        roleCodes: ['monitoring_5_centers'],
+        profile: { regionalAccess: { regions: ['ภาคตะวันออก'] } },
+      }),
+      7,
+    );
   });
 
   it('strips unchanged API identity fields from a legacy edit payload', async () => {

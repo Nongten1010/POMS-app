@@ -18,8 +18,15 @@ jest.mock('../../src/modules/device-connections/device-connections.repository', 
   },
 }));
 
+jest.mock('../../src/modules/parameter-values/parameter-values.repository', () => ({
+  parameterValuesRepository: {
+    canAccessStationForConnectionTest: jest.fn(),
+  },
+}));
+
 import { deviceConnectionsRepository } from '../../src/modules/device-connections/device-connections.repository';
 import { deviceConnectionsService } from '../../src/modules/device-connections/device-connections.service';
+import { parameterValuesRepository } from '../../src/modules/parameter-values/parameter-values.repository';
 import {
   DEVICE_CONNECTION_PROTOCOL,
   type CreateDeviceConnectionConfigInput,
@@ -27,6 +34,7 @@ import {
 } from '../../src/modules/device-connections/device-connections.types';
 
 const mockedRepository = jest.mocked(deviceConnectionsRepository);
+const mockedParameterValuesRepository = jest.mocked(parameterValuesRepository);
 
 describe('deviceConnectionsService', () => {
   const now = new Date('2026-05-27T10:00:00.000Z');
@@ -56,7 +64,46 @@ describe('deviceConnectionsService', () => {
     jest.clearAllMocks();
     mockedRepository.existsByStationIdProtocolAndDeviceCode.mockResolvedValue(false);
     mockedRepository.findActiveByStationIdProtocolAndDeviceCode.mockResolvedValue(null);
+    mockedParameterValuesRepository.canAccessStationForConnectionTest.mockResolvedValue(true);
     deviceConnectionsService.setClockForTests(() => now);
+  });
+
+  it('rejects an active-setting write when the station is outside the actor scope', async () => {
+    mockedParameterValuesRepository.canAccessStationForConnectionTest.mockResolvedValue(false);
+    const access = {
+      actorUserId,
+      scope: { scope: 'IN_REGION' as const, region: 'ภาคกลาง' },
+      regionalAccess: { regions: ['ภาคกลาง'] },
+    };
+
+    await expect(
+      deviceConnectionsService.create(modbusTcpPayload, actorUserId, access),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN', statusCode: 403 });
+
+    expect(mockedParameterValuesRepository.canAccessStationForConnectionTest).toHaveBeenCalledWith(
+      modbusTcpPayload.stationId,
+      access,
+    );
+    expect(mockedRepository.replaceActive).not.toHaveBeenCalled();
+  });
+
+  it('rejects a connection test when the station is outside the actor scope', async () => {
+    mockedParameterValuesRepository.canAccessStationForConnectionTest.mockResolvedValue(false);
+    const access = {
+      actorUserId,
+      scope: { scope: 'OWN_FACTORY' as const },
+      regionalAccess: null,
+    };
+
+    await expect(deviceConnectionsService.testConnection(modbusTcpPayload, access)).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      statusCode: 403,
+    });
+
+    expect(mockedParameterValuesRepository.canAccessStationForConnectionTest).toHaveBeenCalledWith(
+      modbusTcpPayload.stationId,
+      access,
+    );
   });
 
   it('returns a successful mock connection result', async () => {

@@ -6,6 +6,8 @@
 
 เมนูนี้ใช้สำหรับผู้ประกอบการส่งผลเปรียบเทียบเครื่องตรวจวัดกับห้องปฏิบัติการ และใช้สำหรับเจ้าหน้าที่ตรวจสอบ บันทึกแบบแจ้งผล และอนุมัติรายงาน ทุก endpoint ต้องส่ง Bearer token และถูกจำกัดด้วย permission กับ data scope ของผู้ใช้
 
+permission code, alias ที่ frontend ใช้, และ scope keyword ที่อ้างในหน้านี้ใช้ canonical definition เดียวกับ [สิทธิ์การใช้งาน](../permissions/README.md)
+
 ### Main Flow
 
 1. เรียก `GET /api/v1/bod-cod-deviation-reports/factories` เพื่อเลือกโรงงาน จุดตรวจวัด ปี และรอบที่ยังยื่นได้

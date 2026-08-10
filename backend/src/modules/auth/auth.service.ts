@@ -6,7 +6,7 @@ import { verifyPassword, bufferToHashString } from '../../shared/utils/password'
 import { getIdentityProvider } from './identity-provider';
 import { authRepository } from './auth.repository';
 import { flattenPermissionScopes, groupPermissions } from './permissions';
-import type { PermissionScopeDetails } from './permissions';
+import type { PermissionDataScope, PermissionScopeDetails } from './permissions';
 import { inferRegionalAccessFromText, parseRegionalAccessJson } from './regional-access';
 import type { UserRow } from './auth.repository';
 import type { RegionalAccessDTO } from './regional-access';
@@ -112,13 +112,14 @@ export const authService = {
     }
 
     const officerProfile = await authRepository.getOfficerProfile(user.id);
+    const profileDto = officerProfile ? toOfficerDTO(officerProfile) : null;
     const { roles, scopes } = await authRepository.getRolesAndPermissions(user.id);
 
     return buildLoginResponse({
       user: toUserSummary(user),
-      profile: officerProfile ? toOfficerDTO(officerProfile) : null,
+      profile: profileDto,
       roles,
-      scopes,
+      scopes: enrichRoleScopeDetails(scopes, profileDto, roles),
     });
   },
 
@@ -144,7 +145,7 @@ export const authService = {
       user: toUserSummary(user),
       profile: operatorProfile,
       roles,
-      scopes,
+      scopes: enrichRoleScopeDetails(scopes, operatorProfile, roles),
     });
   },
 
@@ -160,7 +161,7 @@ export const authService = {
       user: toUserSummary(user),
       profile: null,
       roles,
-      scopes,
+      scopes: enrichRoleScopeDetails(scopes, null, roles),
     });
   },
 
@@ -181,7 +182,7 @@ export const authService = {
       user: { ...toUserSummary(user), userType: 'citizen' },
       profile: null,
       roles,
-      scopes,
+      scopes: enrichRoleScopeDetails(scopes, null, roles),
     });
   },
 
@@ -210,7 +211,7 @@ export const authService = {
       user: { ...toUserSummary(user), userType: effectiveUserType },
       profile,
       roles,
-      scopes,
+      scopes: enrichRoleScopeDetails(scopes, profile, roles),
     });
   },
 };
@@ -298,7 +299,7 @@ async function completeLocalLogin(payload: LoginRequest, user: UserRow): Promise
     user: toUserSummary(user),
     profile,
     roles,
-    scopes,
+    scopes: enrichRoleScopeDetails(scopes, profile, roles),
   });
 }
 
@@ -350,6 +351,8 @@ function toOfficerDTO(
     departmentNameTh: row.department_name_th,
     ministryId: row.ministry_id,
     provinceId: row.province_id,
+    provinceName: row.province_name_th ?? null,
+    estateCode: row.estate_code ?? null,
     perStatusName: row.per_status_name,
     regionalAccess:
       parseRegionalAccessJson(row.regional_access_json) ??
@@ -420,19 +423,21 @@ function buildLoginResponse(args: {
   roles: string[];
   scopes: Record<string, string | null | PermissionScopeDetails>;
 }): LoginResponse {
-  const regionalAccess = getRegionalAccessFromProfile(args.profile);
+  ensureSingleSystemRole(args.roles);
+  const regionalAccess = getRegionalAccessFromProfile(args.profile, args.roles);
+  const effectiveScopes = enrichRoleScopeDetails(args.scopes, args.profile, args.roles);
   const accessToken = signAccessToken({
     sub: String(args.user.id),
     userType: args.user.userType,
     roles: args.roles,
-    scopes: flattenPermissionScopes(args.scopes),
-    scopeDetails: normalizePermissionScopeDetails(args.scopes),
+    scopes: flattenPermissionScopes(effectiveScopes),
+    scopeDetails: normalizePermissionScopeDetails(effectiveScopes),
     regionalAccess,
   });
   return {
     accessToken,
     user: toAuthUserDTO(args.user, args.profile, args.roles),
-    permissions: groupPermissions(args.scopes),
+    permissions: groupPermissions(effectiveScopes),
   };
 }
 
@@ -442,10 +447,18 @@ function buildMeResponse(args: {
   roles: string[];
   scopes: Record<string, string | null | PermissionScopeDetails>;
 }): MeResponse {
+  ensureSingleSystemRole(args.roles);
+  const effectiveScopes = enrichRoleScopeDetails(args.scopes, args.profile, args.roles);
   return {
     user: toAuthUserDTO(args.user, args.profile, args.roles),
-    permissions: groupPermissions(args.scopes),
+    permissions: groupPermissions(effectiveScopes),
   };
+}
+
+function ensureSingleSystemRole(roles: readonly string[]): void {
+  if (roles.length !== 1 || !roles[0]?.trim()) {
+    throw new UnauthorizedError('Account must have exactly one system role');
+  }
 }
 
 function toAuthUserDTO(
@@ -455,6 +468,7 @@ function toAuthUserDTO(
 ): AuthUserDTO {
   const officerProfile = isOfficerProfile(profile) ? profile : null;
   const operatorProfile = isOperatorProfile(profile) ? profile : null;
+  const effectiveRegionalAccess = getRegionalAccessFromProfile(officerProfile, roles);
   const fullName = [joinNamePrefix(user.prenameTh, user.firstName), user.lastName]
     .filter(Boolean)
     .join(' ');
@@ -487,6 +501,7 @@ function toAuthUserDTO(
     organize: normalizeOptionalText(officerProfile?.organizeNameTh),
     division: normalizeOptionalText(officerProfile?.divisionNameTh),
     provinceId: normalizeOptionalText(officerProfile?.provinceId),
+    estateCode: normalizeOptionalText(officerProfile?.estateCode),
     roles: roles[0] ?? user.userType,
     roleCodes: [...roles],
     isActive: user.isActive,
@@ -506,7 +521,7 @@ function toAuthUserDTO(
           },
         }
       : null,
-    ...(officerProfile?.regionalAccess ? { regionalAccess: officerProfile.regionalAccess } : {}),
+    ...(effectiveRegionalAccess ? { regionalAccess: effectiveRegionalAccess } : {}),
     ...operatorFields,
   };
 }
@@ -518,8 +533,13 @@ function normalizeOptionalText(value: string | null | undefined): string | null 
 
 function getRegionalAccessFromProfile(
   profile: OfficerProfileDTO | OperatorProfileDTO | null,
+  roles: readonly string[],
 ): RegionalAccessDTO | null {
-  return isOfficerProfile(profile) ? profile.regionalAccess : null;
+  if (!isOfficerProfile(profile)) return null;
+  if (roles.includes('monitoring_kpm') || roles.includes('kpm_director')) {
+    return { regions: ['ภาคกลาง'] };
+  }
+  return profile.regionalAccess ?? null;
 }
 
 function normalizePermissionScopeDetails(
@@ -532,6 +552,66 @@ function normalizePermissionScopeDetails(
         ? details
         : { scope: details as PermissionScopeDetails['scope'] },
     ]),
+  );
+}
+
+function enrichRoleScopeDetails(
+  scopes: Record<string, string | null | PermissionScopeDetails>,
+  profile: OfficerProfileDTO | OperatorProfileDTO | null,
+  roles: readonly string[],
+): Record<string, string | null | PermissionScopeDetails> {
+  if (!isOfficerProfile(profile)) return scopes;
+
+  const effectiveRegionalAccess = getRegionalAccessFromProfile(profile, roles);
+  const region =
+    effectiveRegionalAccess?.regions.length === 1 ? effectiveRegionalAccess.regions[0] : null;
+  const province = normalizeOptionalText(profile.provinceName);
+  const estateCode = normalizeOptionalText(profile.estateCode);
+
+  return Object.fromEntries(
+    Object.entries(scopes).map(([code, value]) => {
+      const details =
+        typeof value === 'object' && value !== null
+          ? value
+          : { scope: value as PermissionDataScope };
+
+      if (details.scope === 'IN_REGION' && (details.region ?? null) === null && region) {
+        return [code, { ...details, region, province: details.province ?? null }];
+      }
+      if (details.scope === 'IN_PROVINCE') {
+        const requestedProvince = normalizeOptionalText(details.province);
+        const effectiveProvince =
+          requestedProvince && province && requestedProvince.toLowerCase() === province.toLowerCase()
+            ? province
+            : requestedProvince === null
+              ? province
+              : null;
+        return [
+          code,
+          { ...details, region: details.region ?? null, province: effectiveProvince ?? null },
+        ];
+      }
+      if (details.scope === 'IN_ESTATE') {
+        const requestedEstate = normalizeOptionalText(details.estateCode ?? details.estate);
+        const effectiveEstate =
+          requestedEstate && estateCode && requestedEstate.toLowerCase() === estateCode.toLowerCase()
+            ? estateCode
+            : requestedEstate === null
+              ? estateCode
+              : null;
+        return [
+          code,
+          {
+            ...details,
+            region: details.region ?? null,
+            province: details.province ?? null,
+            estateCode: effectiveEstate ?? null,
+            estate: effectiveEstate ?? null,
+          },
+        ];
+      }
+      return [code, details];
+    }),
   );
 }
 

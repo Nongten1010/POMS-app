@@ -137,6 +137,22 @@ describe('connectionRequestsRepository query helpers', () => {
     expect(compiled.bindings.filter((binding: unknown) => binding === 'ภาคกลาง')).toHaveLength(2);
   });
 
+  it('uses regional access for IN_REGION direct connections when the scope omits region details', () => {
+    const compiled = buildDirectConnectionFactoryQueryForTests(
+      { factoryId: '10120000325542', factoryRegistrationNo: '10120000325542' },
+      {
+        actorUserId: 42,
+        scope: { scope: 'IN_REGION', region: null, province: null },
+        regionalAccess: { regions: ['ภาคกลาง'] },
+      },
+    ).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('[p].[region]');
+    expect(sql).not.toContain('1 = 0');
+    expect(compiled.bindings).toContain('ภาคกลาง');
+  });
+
   it('denies a direct connection scope that cannot be evaluated against eligible factories', () => {
     const sql = buildDirectConnectionFactoryQueryForTests(
       { factoryId: '10120000325542', factoryRegistrationNo: '10120000325542' },
@@ -233,7 +249,7 @@ describe('connectionRequestsRepository query helpers', () => {
     expect(sql).toContain('[fs].[factory_main_type_code]');
   });
 
-  it('limits request list to assigned officer regions when regional access is present', () => {
+  it('does not let regional access narrow an ALL-scoped request list', () => {
     const compiled = buildBaseQueryForTests(
       {},
       {
@@ -244,9 +260,41 @@ describe('connectionRequestsRepository query helpers', () => {
     ).toSQL();
     const sql = compiled.sql.toLowerCase();
 
+    expect(sql).not.toContain('cems_wpms_request_factory_snapshots');
+    expect(sql).not.toContain('[fs].[region_name]');
+    expect(compiled.bindings).not.toContain('ภาคตะวันออก');
+  });
+
+  it('uses regional access for IN_REGION request lists when the scope omits region details', () => {
+    const compiled = buildBaseQueryForTests(
+      {},
+      {
+        actorUserId: 42,
+        scope: { scope: 'IN_REGION', region: null, province: null },
+        regionalAccess: { regions: ['ภาคตะวันออก'] },
+      },
+    ).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
     expect(sql).toContain('cems_wpms_request_factory_snapshots');
     expect(sql).toContain('[fs].[region_name]');
+    expect(sql).not.toContain('[created_by] = ?');
     expect(compiled.bindings).toContain('ภาคตะวันออก');
+  });
+
+  it('fails closed when explicit request region conflicts with the assigned regional access', () => {
+    const compiled = buildBaseQueryForTests(
+      {},
+      {
+        actorUserId: 42,
+        scope: { scope: 'IN_REGION', region: 'ภาคเหนือ', province: null },
+        regionalAccess: { regions: ['ภาคตะวันออก'] },
+      },
+    ).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('1 = 0');
+    expect(sql).not.toContain('[created_by] = ?');
   });
 
   it('limits request list to selected permission province without requiring request ownership', () => {
@@ -296,7 +344,7 @@ describe('connectionRequestsRepository query helpers', () => {
     expect(compiled.bindings).toContain(42);
   });
 
-  it('keeps request list owner-scoped when a province scope has no selected province', () => {
+  it('fails closed when a request province scope has no assigned province', () => {
     const compiled = buildBaseQueryForTests(
       { stationId: 'S0001' },
       {
@@ -310,8 +358,7 @@ describe('connectionRequestsRepository query helpers', () => {
     ).toSQL();
     const sql = compiled.sql.toLowerCase();
 
-    expect(sql).toContain('[created_by] = ?');
-    expect(compiled.bindings).toContain(42);
+    expect(sql).toContain('1 = 0');
   });
 
   it('preserves operator factory master rows when no eligible-factory row exists', () => {
@@ -401,7 +448,7 @@ describe('connectionRequestsRepository query helpers', () => {
     );
   });
 
-  it('limits factory access to assigned officer regions when regional access is present', () => {
+  it('does not let regional access narrow ALL-scoped factory access', () => {
     const compiled = buildFactoriesForAccessQueryForTests({
       actorUserId: 42,
       scope: 'ALL',
@@ -409,8 +456,53 @@ describe('connectionRequestsRepository query helpers', () => {
     }).toSQL();
     const sql = compiled.sql.toLowerCase();
 
+    expect(sql).not.toContain('[p].[region] in (?)');
+    expect(compiled.bindings).not.toContain('ภาคตะวันออก');
+  });
+
+  it('uses regional access for IN_REGION factory access when the scope omits region details', () => {
+    const compiled = buildFactoriesForAccessQueryForTests({
+      actorUserId: 42,
+      scope: { scope: 'IN_REGION', region: null, province: null },
+      regionalAccess: { regions: ['ภาคตะวันออก'] },
+    }).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
     expect(sql).toContain('[p].[region]');
+    expect(sql).not.toContain('user_juristics');
     expect(compiled.bindings).toContain('ภาคตะวันออก');
+  });
+
+  it('fails closed when explicit factory region conflicts with the assigned regional access', () => {
+    const compiled = buildFactoriesForAccessQueryForTests({
+      actorUserId: 42,
+      scope: { scope: 'IN_REGION', region: 'ภาคเหนือ', province: null },
+      regionalAccess: { regions: ['ภาคตะวันออก'] },
+    }).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('1 = 0');
+    expect(sql).not.toContain('user_juristics');
+  });
+
+  it('uses the canonical or legacy estate scope fields for request filtering', () => {
+    const canonical = buildBaseQueryForTests(
+      {},
+      {
+        actorUserId: 42,
+        scope: { scope: 'IN_ESTATE', estateCode: 'IEAT-01' } as never,
+      },
+    ).toSQL();
+    const legacy = buildBaseQueryForTests(
+      {},
+      {
+        actorUserId: 42,
+        scope: { scope: 'IN_ESTATE', estate: 'IEAT-02' } as never,
+      },
+    ).toSQL();
+
+    expect(canonical.bindings).toContain('IEAT-01');
+    expect(legacy.bindings).toContain('IEAT-02');
   });
 
   it('limits dashboard factory access to a selected permission province', () => {
@@ -429,7 +521,7 @@ describe('connectionRequestsRepository query helpers', () => {
     expect(compiled.bindings).toContain('ฉะเชิงเทรา');
   });
 
-  it('keeps factory access assigned when a province scope has no selected province', () => {
+  it('fails closed when a factory province scope has no assigned province', () => {
     const compiled = buildFactoriesForAccessQueryForTests({
       actorUserId: 42,
       scope: {
@@ -440,10 +532,9 @@ describe('connectionRequestsRepository query helpers', () => {
     }).toSQL();
     const sql = compiled.sql.toLowerCase();
 
-    expect(sql).toContain('user_juristics');
-    expect(sql).toContain('user_factory_access');
-    expect(sql).toContain('exists');
-    expect(compiled.bindings).toContain(42);
+    expect(sql).toContain('1 = 0');
+    expect(sql).not.toContain('user_juristics');
+    expect(sql).not.toContain('user_factory_access');
   });
 
   it('allows an OWN_FACTORY operator through either juristic or direct factory access', () => {
@@ -468,6 +559,7 @@ describe('connectionRequestsRepository query helpers', () => {
         region: 'ภาคตะวันออก',
         province: null,
       },
+      regionalAccess: { regions: ['ภาคตะวันออก'] },
     }).toSQL();
     const sql = compiled.sql.toLowerCase();
 

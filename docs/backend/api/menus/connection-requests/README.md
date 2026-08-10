@@ -6,6 +6,8 @@
 
 เมนูนี้รองรับคำขอเชื่อมต่อ CEMS/WPMS ของผู้ประกอบการ หลังเจ้าหน้าที่อนุมัติแบบ backend จะออกรหัสให้ทุกจุดตรวจวัดที่ยังไม่มีรหัสโดยอัตโนมัติ และคืนรหัสผ่าน `measurementPoints[].pointCode`.
 
+permission code, grouped response alias และ scope keyword ที่อ้างในหน้านี้ใช้ canonical contract จาก [สิทธิ์การใช้งาน](../permissions/README.md)
+
 ### Main Flow
 
 1. ผู้ประกอบการสร้างคำขอปกติ; client ไม่กำหนด `pointCode` สำหรับจุดใหม่.
@@ -44,6 +46,7 @@ curl --request POST \
 | งาน | Method | Path | Auth | Permission | Contract |
 | --- | --- | --- | --- | --- | --- |
 | อ่านรายการคำขอสำหรับตาราง | `GET` | `/api/v1/cems-wpms-requests/table-rows` | Bearer | `cems_wpms_requests:view` | [Request table location source](#request-table-location-source) |
+| อ่านโรงงานเข้าข่ายสำหรับฟอร์มเจ้าหน้าที่ | `GET` | `/api/v1/cems-wpms-requests/eligible-factories` | Bearer | `cems_wpms_requests:view` | ใช้ scope เดียวกับคำขอและส่ง region/province/estate ลง eligible-factory repository |
 | อ่านรายชื่อโรงงานทั้งหมดที่ผู้ประกอบการเข้าถึงได้ พร้อมสถานะเข้าข่าย | `GET` | `/api/v1/cems-wpms-requests/operator-factories` | Bearer | `factories:view` | [Operator factory list source](#operator-factory-list-source) |
 | อ่านข้อมูลทั่วไปของโรงงานสำหรับ prefill | `GET` | `/api/v1/cems-wpms-requests/factories/:factoryId/general` | Bearer | `factories:view` | [Frontend measurement-point handoff](#frontend-measurement-point-handoff) |
 | สร้างคำขอเชื่อมต่อใหม่ | `POST` | `/api/v1/cems-wpms-requests` | Bearer | `cems_wpms_requests:edit` | [Eligibility gate](#eligibility-gate) |
@@ -63,6 +66,8 @@ curl --request POST \
 | อ่าน raw parameter values | `GET` | `/api/v1/parameter-values`, `/api/v1/parameter-values/latest` | Bearer | `cems_wpms_requests:view` | [Parameter values](./parameter-values.md) |
 | ทดสอบข้อมูลเชื่อมต่อและแปลง StatusCode | `GET` | `/api/v1/parameter-values/connection-test` | Bearer | `cems_wpms_requests:view` | [Parameter values](./parameter-values.md) |
 | ผู้ประกอบการยกเลิกคำขอ | `POST` | `/api/v1/cems-wpms-requests/:id/cancel` | Bearer | `cems_wpms_requests:edit` + owner | [Cancel request](./operator-cancel-request.md) |
+
+Location enforcement ของทุก endpoint ในตารางใช้จุดตัดกับ profile assignment. `IN_REGION`, `IN_PROVINCE` หรือ `IN_ESTATE` ที่ไม่มี qualifier ที่ resolve ได้ หรือขัดกับพื้นที่ประจำตัว ต้องคืนศูนย์รายการ/`404` และห้าม fallback ไปใช้ request ownership หรือโรงงานที่เคยผูกไว้. สำหรับ กนอ. `IN_ESTATE` หมายถึงโรงงานทุกแห่งในนิคม `estateCode` ที่มอบหมาย
 
 ## Request-number Contract
 

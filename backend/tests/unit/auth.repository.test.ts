@@ -659,11 +659,12 @@ describe('authRepository i-Industry shared identity provisioning', () => {
 });
 
 describe('authRepository officer base-role sync', () => {
-  it('replaces every prior organization base role while preserving unrelated roles', async () => {
+  it('replaces prior organization base roles when no specialized role is assigned', async () => {
     const selectedRoleBuilder = chainableBuilder({ first: async () => ({ id: 6 }) });
     const baseRolesBuilder = chainableBuilder({
       select: async () => [{ id: 4 }, { id: 5 }, { id: 6 }],
     });
+    const specializedRolesBuilder = chainableBuilder({ select: async () => [] });
     const deleteBaseRolesBuilder = chainableBuilder({ del: async () => 2 });
     const existingRoleBuilder = chainableBuilder({ first: async () => undefined });
     const insertRoleBuilder = chainableBuilder({ insert: async () => [1] });
@@ -671,6 +672,7 @@ describe('authRepository officer base-role sync', () => {
     const userRoleBuilders = [deleteBaseRolesBuilder, existingRoleBuilder, insertRoleBuilder];
     const trx = jest.fn((table: string) => {
       if (table === 'roles') return roleBuilders.shift();
+      if (table === 'user_roles as assigned_roles') return specializedRolesBuilder;
       if (table === 'user_roles') return userRoleBuilders.shift();
       throw new Error(`Unexpected table ${table}`);
     }) as unknown as Knex.Transaction;
@@ -686,12 +688,61 @@ describe('authRepository officer base-role sync', () => {
       assigned_by: null,
     });
   });
+
+  it('preserves one administrator-assigned specialized role without adding a base role', async () => {
+    const selectedRoleBuilder = chainableBuilder({ first: async () => ({ id: 4 }) });
+    const baseRolesBuilder = chainableBuilder({
+      select: async () => [{ id: 4 }, { id: 5 }, { id: 6 }],
+    });
+    const specializedRolesBuilder = chainableBuilder({
+      select: async () => [{ id: 8, code: 'monitoring_5_centers' }],
+    });
+    const deleteBaseRolesBuilder = chainableBuilder({ del: async () => 1 });
+    const roleBuilders = [selectedRoleBuilder, baseRolesBuilder];
+    const userRoleBuilders = [deleteBaseRolesBuilder];
+    const trx = jest.fn((table: string) => {
+      if (table === 'roles') return roleBuilders.shift();
+      if (table === 'user_roles as assigned_roles') return specializedRolesBuilder;
+      if (table === 'user_roles') return userRoleBuilders.shift();
+      throw new Error(`Unexpected table ${table}`);
+    }) as unknown as Knex.Transaction;
+
+    await syncIdentityProviderBaseRole(trx, 88, 'diw_central');
+
+    expect(deleteBaseRolesBuilder.del).toHaveBeenCalledTimes(1);
+    expect(trx).toHaveBeenCalledTimes(4);
+  });
+
+  it('fails closed when a legacy officer has multiple specialized roles', async () => {
+    const selectedRoleBuilder = chainableBuilder({ first: async () => ({ id: 4 }) });
+    const baseRolesBuilder = chainableBuilder({
+      select: async () => [{ id: 4 }, { id: 5 }, { id: 6 }],
+    });
+    const specializedRolesBuilder = chainableBuilder({
+      select: async () => [
+        { id: 8, code: 'monitoring_5_centers' },
+        { id: 9, code: 'center_director' },
+      ],
+    });
+    const roleBuilders = [selectedRoleBuilder, baseRolesBuilder];
+    const trx = jest.fn((table: string) => {
+      if (table === 'roles') return roleBuilders.shift();
+      if (table === 'user_roles as assigned_roles') return specializedRolesBuilder;
+      throw new Error(`Unexpected table ${table}`);
+    }) as unknown as Knex.Transaction;
+
+    await expect(syncIdentityProviderBaseRole(trx, 88, 'diw_central')).rejects.toThrow(
+      'Exactly one specialized officer role is required',
+    );
+  });
 });
 
 function chainableBuilder(terminalMethods: Record<string, (...args: unknown[]) => unknown>) {
   const builder = {
+    join: jest.fn(),
     where: jest.fn(),
     whereIn: jest.fn(),
+    whereNotIn: jest.fn(),
     whereNull: jest.fn(),
     first: jest.fn(),
     select: jest.fn(),
@@ -699,8 +750,10 @@ function chainableBuilder(terminalMethods: Record<string, (...args: unknown[]) =
     insert: jest.fn(),
     update: jest.fn(),
   };
+  builder.join.mockReturnValue(builder);
   builder.where.mockReturnValue(builder);
   builder.whereIn.mockReturnValue(builder);
+  builder.whereNotIn.mockReturnValue(builder);
   builder.whereNull.mockReturnValue(builder);
   for (const [method, implementation] of Object.entries(terminalMethods)) {
     builder[method as keyof typeof builder].mockImplementation(implementation);

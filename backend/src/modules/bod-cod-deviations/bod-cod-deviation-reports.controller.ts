@@ -2,7 +2,7 @@ import { NextFunction, Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
 import { env } from '../../config/env';
 import { BadRequestError } from '../../shared/errors/AppError';
-import { getScope } from '../../shared/middlewares/authorize';
+import { getScopeDetails } from '../../shared/middlewares/authorize';
 import { createBodCodAttachmentStorage } from './bod-cod-deviation-attachments.service';
 import { bodCodDeviationReportsService } from './bod-cod-deviation-reports.service';
 import {
@@ -45,7 +45,7 @@ export const bodCodDeviationReportsController = {
       const actorUserId = requireActorUserId(req);
       const result = await bodCodDeviationReportsService.listFactories(
         actorUserId,
-        getScope(req, 'bod_cod_errors:view'),
+        getScopeDetails(req, 'bod_cod_errors:view'),
         req.user?.regionalAccess ?? undefined,
       );
       res.status(StatusCodes.OK).json({ success: true, ...result });
@@ -61,7 +61,7 @@ export const bodCodDeviationReportsController = {
       const result = await bodCodDeviationReportsService.listReports(
         query,
         actorUserId,
-        getScope(req, 'bod_cod_errors:view'),
+        getScopeDetails(req, 'bod_cod_errors:view'),
         req.user?.regionalAccess ?? undefined,
       );
       res.status(StatusCodes.OK).json({ success: true, ...result });
@@ -76,10 +76,11 @@ export const bodCodDeviationReportsController = {
       const { id } = bodCodDeviationReportIdParamsSchema.parse(req.params);
       const data = await bodCodDeviationReportsService.getReportById(id, {
         actorUserId,
-        scope: getScope(req, 'bod_cod_errors:view'),
+        scope: getScopeDetails(req, 'bod_cod_errors:view'),
         regionalAccess: req.user?.regionalAccess ?? undefined,
         publicBaseUrl: getPublicBaseUrl(req),
         publicPath: env.UPLOAD_PUBLIC_PATH,
+        roles: req.user?.roles ?? [],
       });
       res.status(StatusCodes.OK).json({ success: true, data });
     } catch (err) {
@@ -94,6 +95,8 @@ export const bodCodDeviationReportsController = {
       const data = await bodCodDeviationReportsService.createReport(payload, {
         actorUserId,
         scope: getBodCodWriteDataScope(req),
+        roles: req.user?.roles ?? [],
+        regionalAccess: req.user?.regionalAccess ?? undefined,
       });
       res
         .status(StatusCodes.CREATED)
@@ -112,6 +115,8 @@ export const bodCodDeviationReportsController = {
       const data = await bodCodDeviationReportsService.resubmitReport(id, payload, {
         actorUserId,
         scope: getBodCodWriteDataScope(req),
+        roles: req.user?.roles ?? [],
+        regionalAccess: req.user?.regionalAccess ?? undefined,
       });
       res.status(StatusCodes.OK).json({ success: true, data });
     } catch (err) {
@@ -126,8 +131,9 @@ export const bodCodDeviationReportsController = {
       const payload = changeBodCodWorkflowStatusSchema.parse(req.body);
       const data = await bodCodDeviationReportsService.changeWorkflowStatus(id, payload, {
         actorUserId,
-        scope: getScope(req, 'bod_cod_errors:approve'),
+        scope: getScopeDetails(req, 'bod_cod_errors:approve'),
         regionalAccess: req.user?.regionalAccess ?? undefined,
+        roles: req.user?.roles ?? [],
       });
       res.status(StatusCodes.OK).json({ success: true, data });
     } catch (err) {
@@ -142,8 +148,9 @@ export const bodCodDeviationReportsController = {
       const payload = upsertBodCodResultNoticeSchema.parse(req.body);
       const data = await bodCodDeviationReportsService.upsertResultNotice(id, payload, {
         actorUserId,
-        scope: getScope(req, 'bod_cod_errors:approve'),
+        scope: getScopeDetails(req, 'bod_cod_errors:approve'),
         regionalAccess: req.user?.regionalAccess ?? undefined,
+        roles: req.user?.roles ?? [],
       });
       res.status(StatusCodes.OK).json({ success: true, data });
     } catch (err) {
@@ -158,8 +165,8 @@ function requireActorUserId(req: Request): number {
   return actorUserId;
 }
 
-function getBodCodWriteDataScope(req: Request): string | null | undefined {
-  return getScope(req, 'bod_cod_errors:edit') ?? getScope(req, 'bod_cod_errors:view');
+function getBodCodWriteDataScope(req: Request) {
+  return getScopeDetails(req, 'bod_cod_errors:edit');
 }
 
 function getPublicBaseUrl(req: Request): string {

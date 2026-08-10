@@ -2,6 +2,14 @@
 
 ไฟล์นี้บันทึกเฉพาะการเปลี่ยน API ที่ทำให้ client ต้องแก้ตาม การเปลี่ยนทั่วไปและประวัติรายละเอียดดูจาก Git history
 
+## 2026-08-11 — บังคับหนึ่งบทบาทและจำกัดข้อมูลด้วยพื้นที่ประจำตัว
+
+- **Affected menus:** [สิทธิ์การใช้งาน](./menus/permissions/README.md), [โรงงานที่เข้าข่าย](./menus/eligible-factories/README.md), [ขอเชื่อมต่อ](./menus/connection-requests/README.md), [แจ้งแบบ กวภ. 01 - กวภ. 05](./menus/kwp-forms/README.md) และ [รายงานค่าความคลาดเคลื่อน BOD/COD Online](./menus/bod-cod-deviation-reports/README.md)
+- **Impact:** บัญชีเจ้าหน้าที่หรือ Admin ที่มี role มากกว่าหนึ่งรายการจะเข้าใช้งานไม่ได้จนกว่าจะแก้ให้เหลือหนึ่ง role; endpoint ที่อ่านหรือแก้ข้อมูลโรงงานจะจำกัดผลลัพธ์ด้วยทั้ง scope ของ permission และพื้นที่ประจำตัว และจะไม่ fallback ไปยังข้อมูลที่ผู้ใช้สร้างหรือโรงงานของตนเมื่อข้อมูลพื้นที่หายหรือขัดกัน. เจ้าหน้าที่ กนอ. ที่ผูกหนึ่งนิคมเห็นโรงงานทั้งหมดในนิคมนั้น.
+- **Migration:** deploy migration `0089_expand_auth_rbac_permission_scopes`; ตรวจและลด `user_roles` ของบัญชีเจ้าหน้าที่/Admin ให้เหลือหนึ่ง role; กำหนด region, province หรือ estate ให้ตรงกับ role ก่อนให้ผู้ใช้ login ใหม่. Frontend ต้องใช้ permission/action ที่ API ส่งกลับและรองรับผลลัพธ์ว่างหรือ `403` เมื่อไม่มีพื้นที่ที่ถูกต้อง.
+- **Old contract:** บัญชีหนึ่งบัญชีอาจมีหลาย role, บาง endpoint ใช้ scope จาก permission โดยไม่ตัดกับพื้นที่ประจำตัว และบาง flow fallback ไปยัง factory ownership หรือ creator เมื่อ qualifier ของพื้นที่ไม่มีค่า.
+- **New contract:** บัญชีเจ้าหน้าที่/Admin มีหนึ่ง system role; effective access เท่ากับ permission scope ตัดกับพื้นที่ประจำตัว และต้อง fail closed เมื่อ assignment หายหรือขัดกัน. Role แบบจังหวัดผูกหนึ่งจังหวัด, กนอ. ผูกหนึ่งนิคม, เจ้าหน้าที่ 5 ศูนย์/ผอ.ศูนย์ผูกหนึ่งภาค และ กฝม./ผอ.กฝม. ใช้ภาคกลาง.
+
 ## 2026-08-10 — Dashboard ใช้ค่ารายชั่วโมงที่คำนวณเสร็จแล้ว
 
 - **Affected menu:** [หน้าหลัก](./menus/home/README.md#get-apiv1operator-factory-dashboard)

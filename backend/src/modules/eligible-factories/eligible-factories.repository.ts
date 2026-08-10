@@ -1,6 +1,12 @@
 import type { Knex } from 'knex';
 import { db } from '../../config/database';
 import { ConflictError } from '../../shared/errors/AppError';
+import type { EligibleFactoryAccessContext } from './eligible-factories.access';
+import {
+  applySelectedFactoryAccessFilters,
+  canAccessEligibleFactoryInput,
+  resolveSelectedFactoryAccessFilters,
+} from './eligible-factories.access';
 import {
   MONITORING_POINT_STATUSES,
   type MonitoringPointStatus,
@@ -72,13 +78,15 @@ interface EligibleFactoryMonitoringPointRow {
 export const eligibleFactoriesRepository = {
   async list(
     _query: ListEligibleFactoriesQuery,
+    access?: EligibleFactoryAccessContext,
   ): Promise<{ rows: EligibleFactoryDTO[]; total: number }> {
-    const baseQuery = buildEligibleFactoriesBaseQuery();
+    const filters = await resolveSelectedFactoryAccessFilters(access);
+    const baseQuery = buildEligibleFactoriesBaseQuery(filters, access?.actorUserId);
     const totalRow = await baseQuery
       .clone()
       .clearSelect()
       .clearOrder()
-      .count<{ total: number | string }>('id as total')
+      .count<{ total: number | string }>('ef.id as total')
       .first();
     const total = Number(totalRow?.total ?? 0);
 
@@ -145,78 +153,51 @@ export const eligibleFactoriesRepository = {
     return row ? toDTO(row) : null;
   },
 
-  async listActiveRegistrationNumbers(): Promise<string[]> {
-    const rows = await db('eligible_factories')
-      .whereNull('deleted_at')
-      .select<{ factory_registration_no_new: string }[]>('factory_registration_no_new');
+  async findAccessibleById(
+    id: number,
+    access: EligibleFactoryAccessContext,
+    trx?: Knex.Transaction,
+  ): Promise<EligibleFactoryDTO | null> {
+    const filters = await resolveSelectedFactoryAccessFilters(access);
+    const row = await buildEligibleFactoriesBaseQuery(filters, access.actorUserId, trx)
+      .where('ef.id', id)
+      .first();
+    return row ? toDTO(row) : null;
+  },
+
+  async listActiveRegistrationNumbers(access?: EligibleFactoryAccessContext): Promise<string[]> {
+    const filters = await resolveSelectedFactoryAccessFilters(access);
+    const query = buildEligibleFactoriesBaseQuery(filters, access?.actorUserId)
+      .clearSelect()
+      .clearOrder()
+      .select<{ factory_registration_no_new: string }[]>('ef.factory_registration_no_new');
+
+    const rows = await query;
 
     return rows.map((row) => row.factory_registration_no_new);
   },
 
   async softDelete(id: number, actorUserId: number): Promise<boolean> {
+    return db.transaction((trx) => performSoftDelete(trx, id, actorUserId));
+  },
+
+  async softDeleteAccessible(
+    id: number,
+    actorUserId: number,
+    access: EligibleFactoryAccessContext,
+  ): Promise<boolean> {
     return db.transaction(async (trx) => {
-      const eligibleFactory = await trx('eligible_factories')
-        .where('id', id)
-        .whereNull('deleted_at')
-        .forUpdate()
-        .first('id', 'monitoring_point_form_id');
-      if (!eligibleFactory) return false;
-
-      const monitoringPointFormId =
-        eligibleFactory.monitoring_point_form_id === null ||
-        eligibleFactory.monitoring_point_form_id === undefined
-          ? null
-          : Number(eligibleFactory.monitoring_point_form_id);
-      const connectedPointQuery = trx('cems_wpms_connected_measurement_points');
-
-      if (monitoringPointFormId === null) {
-        connectedPointQuery.where('cems_wpms_connected_measurement_points.eligible_factory_id', id);
-      } else {
-        connectedPointQuery
-          .innerJoin(
-            'eligible_factories as linked_eligible',
-            'linked_eligible.id',
-            'cems_wpms_connected_measurement_points.eligible_factory_id',
-          )
-          .where('linked_eligible.monitoring_point_form_id', monitoringPointFormId);
-      }
-
-      const connectedPoint = await connectedPointQuery
-        .whereNull('cems_wpms_connected_measurement_points.deleted_at')
-        .forUpdate()
-        .first('cems_wpms_connected_measurement_points.id');
-      if (connectedPoint) {
-        throw new ConflictError(
-          'Connected POMS factory cannot be removed from eligible factories',
-          { eligibleFactoryId: id },
-        );
-      }
-
-      const deletedAt = trx.fn.now();
-      const softDeleteAudit = {
-        deleted_at: deletedAt,
-        updated_at: deletedAt,
-        updated_by: actorUserId,
-      };
-
-      if (monitoringPointFormId !== null) {
-        await trx('factory_monitoring_point_forms')
-          .where('id', monitoringPointFormId)
-          .whereNull('deleted_at')
-          .update(softDeleteAudit);
-        await trx('factory_monitoring_points')
-          .where('form_id', monitoringPointFormId)
-          .whereNull('deleted_at')
-          .update(softDeleteAudit);
-      }
-
-      const affected = await trx('eligible_factories')
-        .where('id', id)
-        .whereNull('deleted_at')
-        .update(softDeleteAudit);
-
-      return affected > 0;
+      const visible = await this.findAccessibleById(id, access, trx);
+      if (!visible) return false;
+      return performSoftDelete(trx, id, actorUserId);
     });
+  },
+
+  async canAccessInput(
+    input: CreateEligibleFactoryInput,
+    access: EligibleFactoryAccessContext,
+  ): Promise<boolean> {
+    return canAccessEligibleFactoryInput(input, access);
   },
 
   async attachMonitoringPointForm(
@@ -254,45 +235,118 @@ export const eligibleFactoriesRepository = {
   },
 };
 
-function buildEligibleFactoriesBaseQuery(): Knex.QueryBuilder<
-  EligibleFactoryRow,
-  EligibleFactoryRow[]
-> {
-  const builder = db<EligibleFactoryRow>('eligible_factories').whereNull('deleted_at');
+function buildEligibleFactoriesBaseQuery(
+  filters: Awaited<ReturnType<typeof resolveSelectedFactoryAccessFilters>>,
+  actorUserId: number | undefined,
+  trx?: Knex.Transaction,
+): Knex.QueryBuilder<EligibleFactoryRow, EligibleFactoryRow[]> {
+  const builder = (trx ?? db)<EligibleFactoryRow>('eligible_factories as ef')
+    .leftJoin('provinces as p', 'p.name_th', 'ef.province_name')
+    .leftJoin('industrial_estates as ie', 'ie.name_th', 'ef.industrial_estate_name')
+    .whereNull('ef.deleted_at');
+
+  applySelectedFactoryAccessFilters(builder, filters, actorUserId);
 
   return builder.select(
-    'id',
-    'source_system',
-    'source_factory_id',
-    'monitoring_point_form_id',
-    'factory_registration_no_new',
-    'factory_registration_no_old',
-    'factory_name',
-    'factory_type_sequence',
-    'address',
-    'province_name',
-    'industrial_estate_name',
-    'latitude',
-    'longitude',
-    'business_activity',
-    'operation_status',
-    'capital_amount',
-    'machinery_horsepower',
-    'production_capacity',
-    'wastewater_discharge_info',
-    'boiler_count',
-    'boiler_size_each',
-    'fuel_used',
-    'eia_assessment',
-    'eia_other',
-    'has_eia',
-    'project_name',
-    'selected_reason',
-    'selected_by',
-    'selected_at',
-    'created_at',
-    'updated_at',
+    'ef.id as id',
+    'ef.source_system as source_system',
+    'ef.source_factory_id as source_factory_id',
+    'ef.monitoring_point_form_id as monitoring_point_form_id',
+    'ef.factory_registration_no_new as factory_registration_no_new',
+    'ef.factory_registration_no_old as factory_registration_no_old',
+    'ef.factory_name as factory_name',
+    'ef.factory_type_sequence as factory_type_sequence',
+    'ef.address as address',
+    'ef.province_name as province_name',
+    'ef.industrial_estate_name as industrial_estate_name',
+    'ef.latitude as latitude',
+    'ef.longitude as longitude',
+    'ef.business_activity as business_activity',
+    'ef.operation_status as operation_status',
+    'ef.capital_amount as capital_amount',
+    'ef.machinery_horsepower as machinery_horsepower',
+    'ef.production_capacity as production_capacity',
+    'ef.wastewater_discharge_info as wastewater_discharge_info',
+    'ef.boiler_count as boiler_count',
+    'ef.boiler_size_each as boiler_size_each',
+    'ef.fuel_used as fuel_used',
+    'ef.eia_assessment as eia_assessment',
+    'ef.eia_other as eia_other',
+    'ef.has_eia as has_eia',
+    'ef.project_name as project_name',
+    'ef.selected_reason as selected_reason',
+    'ef.selected_by as selected_by',
+    'ef.selected_at as selected_at',
+    'ef.created_at as created_at',
+    'ef.updated_at as updated_at',
   );
+}
+
+async function performSoftDelete(
+  trx: Knex.Transaction,
+  id: number,
+  actorUserId: number,
+): Promise<boolean> {
+  const eligibleFactory = await trx('eligible_factories')
+    .where('id', id)
+    .whereNull('deleted_at')
+    .forUpdate()
+    .first('id', 'monitoring_point_form_id');
+  if (!eligibleFactory) return false;
+
+  const monitoringPointFormId =
+    eligibleFactory.monitoring_point_form_id === null ||
+    eligibleFactory.monitoring_point_form_id === undefined
+      ? null
+      : Number(eligibleFactory.monitoring_point_form_id);
+  const connectedPointQuery = trx('cems_wpms_connected_measurement_points');
+
+  if (monitoringPointFormId === null) {
+    connectedPointQuery.where('cems_wpms_connected_measurement_points.eligible_factory_id', id);
+  } else {
+    connectedPointQuery
+      .innerJoin(
+        'eligible_factories as linked_eligible',
+        'linked_eligible.id',
+        'cems_wpms_connected_measurement_points.eligible_factory_id',
+      )
+      .where('linked_eligible.monitoring_point_form_id', monitoringPointFormId);
+  }
+
+  const connectedPoint = await connectedPointQuery
+    .whereNull('cems_wpms_connected_measurement_points.deleted_at')
+    .forUpdate()
+    .first('cems_wpms_connected_measurement_points.id');
+  if (connectedPoint) {
+    throw new ConflictError('Connected POMS factory cannot be removed from eligible factories', {
+      eligibleFactoryId: id,
+    });
+  }
+
+  const deletedAt = trx.fn.now();
+  const softDeleteAudit = {
+    deleted_at: deletedAt,
+    updated_at: deletedAt,
+    updated_by: actorUserId,
+  };
+
+  if (monitoringPointFormId !== null) {
+    await trx('factory_monitoring_point_forms')
+      .where('id', monitoringPointFormId)
+      .whereNull('deleted_at')
+      .update(softDeleteAudit);
+    await trx('factory_monitoring_points')
+      .where('form_id', monitoringPointFormId)
+      .whereNull('deleted_at')
+      .update(softDeleteAudit);
+  }
+
+  const affected = await trx('eligible_factories')
+    .where('id', id)
+    .whereNull('deleted_at')
+    .update(softDeleteAudit);
+
+  return affected > 0;
 }
 
 async function restoreDeletedFactory(

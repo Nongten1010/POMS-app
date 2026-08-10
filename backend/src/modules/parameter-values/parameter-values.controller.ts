@@ -57,5 +57,6 @@ function requireAccess(req: Request): ParameterValueAccessContext {
   return {
     actorUserId,
     scope: getScopeDetails(req, 'cems_wpms_requests:view'),
+    regionalAccess: req.user?.regionalAccess ?? null,
   };
 }

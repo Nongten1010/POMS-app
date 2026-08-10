@@ -1,4 +1,5 @@
 import type { RegionalAccessDTO } from '../auth/regional-access';
+import type { PermissionScopeDetails } from '../auth/permissions';
 
 export const BOD_COD_DEVIATION_REPORT_STATUSES = [
   'DRAFT',
@@ -31,10 +32,11 @@ export type BodCodResultNoticeReviewResult = 'เห็นควรแจ้ง�
 
 export interface BodCodDeviationAccess {
   actorUserId: number;
-  scope: string | null | undefined;
+  scope: string | PermissionScopeDetails | null | undefined;
   regionalAccess?: RegionalAccessDTO | null;
   publicBaseUrl?: string;
   publicPath?: string;
+  roles?: string[];
 }
 
 export interface ListBodCodDeviationReportsQuery {
@@ -109,7 +111,7 @@ export interface UpsertBodCodResultNoticeDTO {
 }
 
 export interface CreateBodCodDeviationReportAccess extends BodCodDeviationAccess {
-  scope: string | null | undefined;
+  scope: BodCodDeviationAccess['scope'];
 }
 
 export interface BodCodDeviationFactoryTableRowDTO {

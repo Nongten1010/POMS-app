@@ -24,7 +24,7 @@ interface DirectActor {
   actorUserId: number;
   userType: 'citizen' | 'operator' | 'officer' | 'admin';
   roles: string[];
-  scope: { scope: 'ALL' };
+  scope: { scope: 'ALL' | 'IN_REGION'; region?: string | null; province?: string | null };
   regionalAccess?: { regions?: string[] };
 }
 
@@ -169,6 +169,25 @@ describe('connectionRequestsService.createDirectConnection', () => {
     });
 
     expect(mockedRepository.createDirectConnection).not.toHaveBeenCalled();
+  });
+
+  it('allows central monitoring_kpm direct connection when base IN_REGION relies on regional access', async () => {
+    await expect(
+      directService.createDirectConnection(validInput(), {
+        ...actor,
+        scope: { scope: 'IN_REGION', region: null, province: null },
+        regionalAccess: { regions: ['ภาคกลาง'] },
+      }),
+    ).resolves.toBe(created);
+
+    expect(mockedRepository.findDirectConnectionFactory).toHaveBeenCalledWith(
+      { factoryId: 'factory-input', factoryRegistrationNo: 'REG-INPUT' },
+      {
+        actorUserId: 42,
+        scope: { scope: 'IN_REGION', region: null, province: null },
+        regionalAccess: { regions: ['ภาคกลาง'] },
+      },
+    );
   });
 });
 

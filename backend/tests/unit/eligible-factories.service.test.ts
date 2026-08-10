@@ -5,9 +5,12 @@ jest.mock('../../src/modules/eligible-factories/eligible-factories.repository', 
     findByRegistrationNoNew: jest.fn(),
     findByMonitoringPointFormId: jest.fn(),
     attachMonitoringPointForm: jest.fn(),
+    canAccessInput: jest.fn(),
     create: jest.fn(),
+    findAccessibleById: jest.fn(),
     list: jest.fn(),
     softDelete: jest.fn(),
+    softDeleteAccessible: jest.fn(),
   },
 }));
 
@@ -50,6 +53,7 @@ describe('eligibleFactoriesService', () => {
 
   it('creates an eligible factory selection with the actor user id', async () => {
     mockedRepository.findByRegistrationNoNew.mockResolvedValue(null);
+    mockedRepository.canAccessInput.mockResolvedValue(true);
     mockedRepository.create.mockResolvedValue({
       id: 1,
       sourceSystem: 'external_factory_db',
@@ -96,6 +100,7 @@ describe('eligibleFactoriesService', () => {
       address: numericAddress,
     };
     mockedRepository.findByRegistrationNoNew.mockResolvedValue(null);
+    mockedRepository.canAccessInput.mockResolvedValue(true);
     mockedResolveAddress.mockResolvedValueOnce(resolvedAddress);
     mockedRepository.create.mockResolvedValue({ address: resolvedAddress } as never);
 
@@ -115,6 +120,7 @@ describe('eligibleFactoriesService', () => {
       address: '4 หมู่ 6 ตำบล10 อำเภอ4 24130',
     };
     mockedRepository.findByRegistrationNoNew.mockResolvedValue(null);
+    mockedRepository.canAccessInput.mockResolvedValue(true);
     mockedResolveAddress.mockResolvedValueOnce(undefined);
     mockedRepository.create.mockResolvedValue({ address: null } as never);
 
@@ -327,13 +333,86 @@ describe('eligibleFactoriesService', () => {
 
     const result = await eligibleFactoriesService.listCandidates({});
 
-    expect(mockedCandidatesRepository.list).toHaveBeenCalledWith({});
+    expect(mockedCandidatesRepository.list).toHaveBeenCalledWith({}, undefined);
     expect(result.meta).toEqual({
       total: 60000,
       source: 'external',
     });
     expect(result.data).toHaveLength(60000);
     expect(Object.keys(result.data[0] ?? {})).toHaveLength(20);
+  });
+
+  it('forwards read access context to the selected eligible factory list', async () => {
+    mockedRepository.list.mockResolvedValue({ rows: [], total: 0 });
+
+    await eligibleFactoriesService.list(
+      {},
+      {
+        actorUserId: 42,
+        scope: { scope: 'IN_PROVINCE', province: 'ระยอง', region: null },
+        regionalAccess: { regions: ['ภาคตะวันออก'] },
+      },
+    );
+
+    expect(mockedRepository.list).toHaveBeenCalledWith({}, {
+      actorUserId: 42,
+      scope: { scope: 'IN_PROVINCE', province: 'ระยอง', region: null },
+      regionalAccess: { regions: ['ภาคตะวันออก'] },
+    });
+  });
+
+  it('forwards read access context to the external candidate list', async () => {
+    mockedCandidatesRepository.list.mockResolvedValue({
+      data: [],
+      meta: { total: 0, source: 'external' },
+    });
+
+    await eligibleFactoriesService.listCandidates(
+      {},
+      {
+        actorUserId: 42,
+        scope: { scope: 'IN_ESTATE', estateCode: 'MTP' } as never,
+        regionalAccess: { regions: ['ภาคตะวันออก'] },
+      },
+    );
+
+    expect(mockedCandidatesRepository.list).toHaveBeenCalledWith({}, {
+      actorUserId: 42,
+      scope: expect.objectContaining({ scope: 'IN_ESTATE', estateCode: 'MTP' }),
+      regionalAccess: { regions: ['ภาคตะวันออก'] },
+    });
+  });
+
+  it('rejects create when the target factory is outside the actor access scope', async () => {
+    mockedRepository.findByRegistrationNoNew.mockResolvedValue(null);
+    mockedRepository.canAccessInput.mockResolvedValue(false);
+
+    await expect(
+      eligibleFactoriesService.create(payload, 42, {
+        actorUserId: 42,
+        scope: { scope: 'IN_PROVINCE', province: 'ชลบุรี' },
+      }),
+    ).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+
+    expect(mockedRepository.create).not.toHaveBeenCalled();
+  });
+
+  it('passes mutation access context when removing a selected eligible factory', async () => {
+    mockedRepository.softDeleteAccessible.mockResolvedValue(true);
+
+    await eligibleFactoriesService.remove(12, 42, {
+      actorUserId: 42,
+      scope: { scope: 'IN_ESTATE', estateCode: 'MTP' } as never,
+      regionalAccess: { regions: ['ภาคตะวันออก'] },
+    });
+
+    expect(mockedRepository.softDeleteAccessible).toHaveBeenCalledWith(12, 42, {
+      actorUserId: 42,
+      scope: expect.objectContaining({ scope: 'IN_ESTATE', estateCode: 'MTP' }),
+      regionalAccess: { regions: ['ภาคตะวันออก'] },
+    });
   });
 
   it('rejects duplicate active selections by new factory registration number', async () => {

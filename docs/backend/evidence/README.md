@@ -51,6 +51,10 @@
 
 - [เลขรายงาน BOD/COD แยกตามภาคและปี](./bod-cod-deviation-reports/request-numbering.tdd.md)
 
+## Permissions
+
+- [Permission matrix rollout evidence](./permissions/permission-matrix-rollout.tdd.md)
+
 ## Integrations
 
 - [การรายงานค่าต่อพารามิเตอร์ใน Device Config](./integrations/device-config-parameter-reporting.tdd.md)

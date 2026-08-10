@@ -2,6 +2,8 @@ import { env } from '../../config/env';
 import { db } from '../../config/database';
 import { parameterSourceDb } from '../../config/parameter-source-database';
 import type { Knex } from 'knex';
+import type { PermissionScopeDetails } from '../auth/permissions';
+import { resolveAssignedRegions } from '../auth/regional-access';
 import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
 import {
   type HourlyMeasurementCutoff,
@@ -374,15 +376,15 @@ function buildStationAccessQuery(access: ParameterValueAccessContext) {
           .orOn('f.code', '=', 'ef.source_factory_id');
       }).andOnNull('f.deleted_at');
     })
-    .leftJoin('provinces as pr', 'pr.name_th', 'ef.province_name');
-
-  if (applyStationLocationFilter(scopedQuery, access.scope)) return scopedQuery;
-
-  return scopedQuery.where((builder) => {
-    builder.where('p.created_by', access.actorUserId).orWhere((factoryAccessBuilder) => {
-      applyAssignedFactoryAccessFilter(factoryAccessBuilder, access.actorUserId);
+    .leftJoin('provinces as pr', function joinProvince() {
+      this.on('pr.id', '=', 'f.province_id').orOn('pr.name_th', '=', 'ef.province_name');
+    })
+    .leftJoin('industrial_estates as ie', function joinEstate() {
+      this.on('ie.id', '=', 'f.industrial_estate_id').andOnNull('ie.deleted_at');
     });
-  });
+
+  applyStationAccessFilter(scopedQuery, access, 'p');
+  return scopedQuery;
 }
 
 function buildWaitingConnectionStationAccessQuery(access: ParameterValueAccessContext) {
@@ -399,15 +401,13 @@ function buildWaitingConnectionStationAccessQuery(access: ParameterValueAccessCo
     .leftJoin('factories as f', function joinFactory() {
       this.on('f.fid', '=', 'r.factory_id').andOnNull('f.deleted_at');
     })
-    .leftJoin('provinces as pr', 'pr.id', 'f.province_id');
-
-  if (applyStationLocationFilter(scopedQuery, access.scope)) return scopedQuery;
-
-  return scopedQuery.where((builder) => {
-    builder.where('r.created_by', access.actorUserId).orWhere((factoryAccessBuilder) => {
-      applyAssignedFactoryAccessFilter(factoryAccessBuilder, access.actorUserId);
+    .leftJoin('provinces as pr', 'pr.id', 'f.province_id')
+    .leftJoin('industrial_estates as ie', function joinEstate() {
+      this.on('ie.id', '=', 'f.industrial_estate_id').andOnNull('ie.deleted_at');
     });
-  });
+
+  applyStationAccessFilter(scopedQuery, access, 'r');
+  return scopedQuery;
 }
 
 export function buildStationAccessQueryForTests(access: ParameterValueAccessContext) {
@@ -436,25 +436,55 @@ function getAccessScopeValue(
   return scope && typeof scope === 'object' ? scope.scope : scope;
 }
 
-function applyStationLocationFilter(
-  query: Knex.QueryBuilder,
+function toScopeDetails(
   scope: ParameterValueAccessContext['scope'],
-): boolean {
-  if (!scope || typeof scope !== 'object') return false;
-  const region = normalizeLocationValue(scope.region);
-  const province = normalizeLocationValue(scope.province);
+): PermissionScopeDetails {
+  return scope && typeof scope === 'object'
+    ? scope
+    : { scope: (scope ?? null) as PermissionScopeDetails['scope'] };
+}
 
-  if (scope.scope === 'IN_REGION' && region) {
-    query.where('pr.region', region);
-    return true;
+function applyStationAccessFilter(
+  query: Knex.QueryBuilder,
+  access: ParameterValueAccessContext,
+  ownerAlias: 'p' | 'r',
+): void {
+  const scope = toScopeDetails(access.scope);
+
+  switch (scope.scope) {
+    case 'IN_REGION': {
+      const regions = resolveAssignedRegions(scope.region, access.regionalAccess);
+      if (regions.length === 0) query.whereRaw('1 = 0');
+      else query.whereIn('pr.region', regions);
+      return;
+    }
+    case 'IN_PROVINCE': {
+      const province = normalizeLocationValue(scope.province);
+      if (!province) query.whereRaw('1 = 0');
+      else query.where('pr.name_th', province);
+      return;
+    }
+    case 'IN_ESTATE': {
+      const estate = normalizeLocationValue(scope.estateCode ?? scope.estate);
+      if (!estate) {
+        query.whereRaw('1 = 0');
+      } else {
+        query.where((builder) => {
+          builder.where('ie.code', estate).orWhere('ie.name_th', estate);
+        });
+      }
+      return;
+    }
+    case 'OWN_FACTORY':
+      query.where((builder) => {
+        builder.where(`${ownerAlias}.created_by`, access.actorUserId).orWhere((factoryBuilder) => {
+          applyAssignedFactoryAccessFilter(factoryBuilder, access.actorUserId);
+        });
+      });
+      return;
+    default:
+      query.whereRaw('1 = 0');
   }
-
-  if (scope.scope === 'IN_PROVINCE' && province) {
-    query.where('pr.name_th', province);
-    return true;
-  }
-
-  return false;
 }
 
 function normalizeLocationValue(value: string | null | undefined): string | null {

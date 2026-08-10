@@ -6,6 +6,8 @@
 
 หน้าหลักแสดงเฉพาะโรงงาน current/live ใน POMS ที่มี active point ใน `cems_wpms_connected_measurement_points` สำหรับทุก permission scope รวมถึง `OWN_FACTORY`. ผู้ใช้ที่ login ต้องมี `dashboard:view`; ผลลัพธ์ถูกกรองตาม scope ของ permission, ownership และพื้นที่ของเจ้าหน้าที่ตามสิทธิ์ของผู้เรียก
 
+การตีความ role, permission code, grouped permission alias และ scope keyword ใช้ canonical contract เดียวกับ [สิทธิ์การใช้งาน](../permissions/README.md)
+
 ### Main Flow
 
 1. อ่าน active point จาก `cems_wpms_connected_measurement_points` และรวมเป็นหนึ่ง row ต่อโรงงานที่เชื่อมต่ออยู่ใน POMS.
@@ -27,7 +29,7 @@ curl --request GET \
 | รายการโรงงานบนหน้าหลัก | `GET` | `/api/v1/operator-factory-dashboard` | Bearer | `dashboard:view` | [Authenticated dashboard](#get-apiv1operator-factory-dashboard) |
 | จุดโรงงานสำหรับแผนที่สาธารณะ | `GET` | `/api/v1/public/factory-map-points` | No | - | [Public map](#get-apiv1publicfactory-map-points) |
 | ข้อมูลทั่วไปของโรงงาน | `GET` | `/api/v1/cems-wpms-requests/factories/:factoryId/general` | Bearer | `factories:view` | [Factory general](#get-apiv1cems-wpms-requestsfactoriesfactoryidgeneral) |
-| ตั้งค่า favorite | `PUT` | `/api/v1/operator-factories/:factoryId/favorite` | Bearer | `factories:view` และ `dashboard.alerts:view` | [Favorite](#put-apiv1operator-factoriesfactoryidfavorite) |
+| ตั้งค่า favorite | `PUT` | `/api/v1/operator-factories/:factoryId/favorite` | Bearer | `dashboard.alerts:view` | [Favorite](#put-apiv1operator-factoriesfactoryidfavorite) |
 | ส่งออกข้อมูลตรวจวัด CSV | `GET` | `/api/v1/connected-measurement-points/:stationId/measurement-export.csv` | Bearer | `dashboard.stats:export` | [Measurement CSV export](../../shared/connected-measurement-points/README.md#get-apiv1connected-measurement-pointsstationidmeasurement-exportcsv) |
 
 ## Contracts
@@ -254,6 +256,8 @@ Minimal response (`200 OK`):
 ```
 
 Error responses ใช้ shared error envelope. Validation ผิดตอบ `400`; ไม่ผ่าน authentication ตอบ `401`; ไม่ผ่าน permission/scope ตอบ `403` หรือ `404` ตาม access check ของ endpoint.
+
+`public_user` ใช้ endpoint นี้ได้เมื่อมี `dashboard.alerts:view`; backend ยังคงตรวจว่า `factoryId` อยู่ใน dashboard scope ของผู้ใช้ จึงไม่ต้องเพิ่ม `factories:view` เพียงเพื่อกด favorite
 
 ## Business Flow And Explanations
 

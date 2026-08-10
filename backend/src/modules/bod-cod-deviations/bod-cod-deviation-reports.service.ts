@@ -19,7 +19,7 @@ import type {
 export const bodCodDeviationReportsService = {
   listFactories(
     actorUserId: number,
-    scope: string | null | undefined,
+    scope: BodCodDeviationAccess['scope'],
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<PaginatedBodCodDeviationTableRowsDTO<BodCodDeviationFactoryTableRowDTO>> {
     return bodCodDeviationReportsRepository
@@ -30,7 +30,7 @@ export const bodCodDeviationReportsService = {
   listReports(
     query: ListBodCodDeviationReportsQuery,
     actorUserId: number,
-    scope: string | null | undefined,
+    scope: BodCodDeviationAccess['scope'],
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<PaginatedBodCodDeviationTableRowsDTO<BodCodDeviationReportTableRowDTO>> {
     return bodCodDeviationReportsRepository
@@ -58,8 +58,9 @@ export const bodCodDeviationReportsService = {
     input: ChangeBodCodWorkflowStatusDTO,
     access: {
       actorUserId: number;
-      scope: string | null | undefined;
+      scope: BodCodDeviationAccess['scope'];
       regionalAccess?: RegionalAccessDTO | null;
+      roles?: string[];
     },
   ): Promise<CreatedBodCodDeviationReportDTO> {
     return bodCodDeviationReportsRepository.changeWorkflowStatus(id, input, access);
@@ -70,8 +71,9 @@ export const bodCodDeviationReportsService = {
     input: UpsertBodCodResultNoticeDTO,
     access: {
       actorUserId: number;
-      scope: string | null | undefined;
+      scope: BodCodDeviationAccess['scope'];
       regionalAccess?: RegionalAccessDTO | null;
+      roles?: string[];
     },
   ): Promise<UpsertedBodCodResultNoticeResponseDTO> {
     return bodCodDeviationReportsRepository.upsertResultNotice(id, input, access);

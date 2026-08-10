@@ -1,8 +1,10 @@
+import express from 'express';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { createApp } from '../../src/app';
 import { CONNECTION_REQUEST_STATUS } from '../../src/modules/connection-requests/connection-requests.types';
+import { connectionRequestsRoutes } from '../../src/modules/connection-requests/connection-requests.routes';
 import { connectionRequestsService } from '../../src/modules/connection-requests/connection-requests.service';
+import { errorHandler, notFoundHandler } from '../../src/shared/middlewares/errorHandler';
 import { signAccessToken } from '../../src/shared/utils/jwt';
 
 jest.mock('../../src/modules/connection-requests/connection-requests.service', () => ({
@@ -48,6 +50,7 @@ describe('connection request status route', () => {
         officerNote: 'แก้ mapping channel แล้วส่งยืนยันอีกครั้ง',
       },
       7,
+      { scope: null },
     );
     expect(response.body).toMatchObject({
       success: true,
@@ -108,4 +111,13 @@ function operatorAccessToken(): string {
       'cems_wpms_requests:edit': 'OWN_FACTORY',
     },
   });
+}
+
+function createApp() {
+  const app = express();
+  app.use(express.json());
+  app.use('/api/v1/cems-wpms-requests', connectionRequestsRoutes);
+  app.use(notFoundHandler);
+  app.use(errorHandler);
+  return app;
 }

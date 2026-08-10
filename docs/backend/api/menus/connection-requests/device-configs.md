@@ -476,6 +476,7 @@ Response ใช้ schema เดียวกับ [GET ของ request](#succ
 - Authentication: required
 - Permission: `cems_wpms_requests:edit`
 - Data scope: scope ของ permission และ region/province/owner ของ connected request ล่าสุด
+- Backend ตรวจ station access ก่อนทั้งการสร้าง/แทนที่ config และการทดสอบ connection; มี permission action อย่างเดียวแต่ station อยู่นอก profile assignment จะตอบ `403`
 
 ### Request Fields
 

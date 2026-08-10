@@ -50,7 +50,40 @@ describe('kwpFormReportsRepository access filters', () => {
     expect(sql).not.toContain('join [user_juristics] as [uj]');
   });
 
-  it('builds request rows from KWP submissions and filters officers by assigned regions', () => {
+  it('filters province-scoped factory rows to the selected province', () => {
+    const compiled = buildKwpFormFactoryQueryForTests({
+      actorUserId: 77,
+      scope: { scope: 'IN_PROVINCE', province: 'สระบุรี' },
+    }).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('[p].[name_th] = ?');
+    expect(compiled.bindings).toContain('สระบุรี');
+  });
+
+  it('fails closed for province-scoped factory rows when the selected province is missing', () => {
+    const compiled = buildKwpFormFactoryQueryForTests({
+      actorUserId: 77,
+      scope: { scope: 'IN_PROVINCE', province: null },
+    }).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('1 = ?');
+    expect(compiled.bindings).toContain(0);
+  });
+
+  it('fails closed for industrial-estate-scoped factory rows without estate details in the auth payload', () => {
+    const compiled = buildKwpFormFactoryQueryForTests({
+      actorUserId: 77,
+      scope: { scope: 'IN_ESTATE' },
+    }).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('1 = ?');
+    expect(compiled.bindings).toContain(0);
+  });
+
+  it('keeps request rows broad when scope is ALL even if regional access exists', () => {
     const compiled = buildKwpFormRequestQueryForTests(
       { formType: 'KWP03', status: 'UNDER_REVIEW' },
       {
@@ -66,8 +99,75 @@ describe('kwpFormReportsRepository access filters', () => {
     expect(sql).toContain(
       'coalesce([s].[submission_region_name], [p].[region]) as [province_region]',
     );
-    expect(sql).toContain('coalesce([s].[submission_region_name], [p].[region]) in (?)');
+    expect(sql).not.toContain('coalesce([s].[submission_region_name], [p].[region]) in (?)');
+    expect(compiled.bindings).toEqual(expect.arrayContaining(['KWP03', 'UNDER_REVIEW']));
+  });
+
+  it('filters request rows by assigned regions only for IN_REGION scope', () => {
+    const compiled = buildKwpFormRequestQueryForTests(
+      { formType: 'KWP03', status: 'UNDER_REVIEW' },
+      {
+        actorUserId: 77,
+        scope: { scope: 'IN_REGION', region: 'ภาคกลาง' },
+        regionalAccess: { regions: ['ภาคกลาง'] },
+      },
+    ).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('where [s].[deleted_at] is null');
+    expect(sql).toContain('[p].[region] in (?)');
     expect(compiled.bindings).toEqual(expect.arrayContaining(['KWP03', 'UNDER_REVIEW', 'ภาคกลาง']));
+  });
+
+  it('fails closed when the explicit scope region is outside assigned profile regions', () => {
+    const compiled = buildKwpFormRequestQueryForTests(
+      {},
+      {
+        actorUserId: 77,
+        scope: { scope: 'IN_REGION', region: 'ภาคใต้' },
+        regionalAccess: { regions: ['ภาคกลาง', 'ภาคเหนือ'] },
+      },
+    ).toSQL();
+
+    expect(compiled.sql.toLowerCase()).toContain('1 = ?');
+    expect(compiled.bindings).toContain(0);
+    expect(compiled.bindings).not.toContain('ภาคใต้');
+    expect(compiled.bindings).not.toContain('ภาคกลาง');
+    expect(compiled.bindings).not.toContain('ภาคเหนือ');
+  });
+
+  it('fails closed when IN_REGION has no assigned profile region', () => {
+    const compiled = buildKwpFormRequestQueryForTests(
+      {},
+      {
+        actorUserId: 77,
+        scope: { scope: 'IN_REGION', region: 'ภาคกลาง' },
+        regionalAccess: null,
+      },
+    ).toSQL();
+
+    expect(compiled.sql.toLowerCase()).toContain('1 = ?');
+    expect(compiled.bindings).toContain(0);
+    expect(compiled.bindings).not.toContain('ภาคกลาง');
+  });
+
+  it('filters industrial-estate-scoped request rows by estateCode before legacy estate keys', () => {
+    const compiled = buildKwpFormRequestQueryForTests(
+      {},
+      {
+        actorUserId: 77,
+        scope: {
+          scope: 'IN_ESTATE',
+          estate: 'LEGACY-ESTATE',
+          estateCode: 'ESTATE-01',
+        } as never,
+      },
+    ).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('[ie].[code] = ?');
+    expect(compiled.bindings).toContain('ESTATE-01');
+    expect(compiled.bindings).not.toContain('LEGACY-ESTATE');
   });
 
   it('limits operator request rows to assigned juristics', () => {
@@ -79,6 +179,34 @@ describe('kwpFormReportsRepository access filters', () => {
     expect(sql).toContain('user_juristics');
     expect(sql).toContain('user_factory_access');
     expect(sql).toContain('[uj].[user_id]');
+  });
+
+  it('filters province-scoped request rows to the selected province', () => {
+    const compiled = buildKwpFormRequestQueryForTests(
+      {},
+      {
+        actorUserId: 77,
+        scope: { scope: 'IN_PROVINCE', province: 'สระบุรี' },
+      },
+    ).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('[p].[name_th] = ?');
+    expect(compiled.bindings).toContain('สระบุรี');
+  });
+
+  it('fails closed for industrial-estate-scoped request rows without estate details in the auth payload', () => {
+    const compiled = buildKwpFormRequestQueryForTests(
+      {},
+      {
+        actorUserId: 77,
+        scope: { scope: 'IN_ESTATE' },
+      },
+    ).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('1 = ?');
+    expect(compiled.bindings).toContain(0);
   });
 
   it('labels resubmitted returned requests as edited and waiting for review', () => {

@@ -6,6 +6,8 @@
 
 เมนูนี้ครอบคลุมการอัปโหลดเอกสารแนบ, การส่งแบบ กวภ.01-กวภ.05, การอ่านรายละเอียดแบบ, workflow review และตารางรายงานคำขอ กรณีวันที่ของ กวภ.01 และ กวภ.03 backend รองรับทั้งรูปแบบ legacy `YYYY-MM-DD` และรูปแบบรายชั่วโมง `YYYY-MM-DDTHH:00:00` แบบ local civil time ของ `Asia/Bangkok` โดย backend จะคำนวณ `totalDays` และ `totalHours` เอง
 
+permission code และ scope ที่อ้างในหน้านี้ใช้ canonical definition เดียวกับ [สิทธิ์การใช้งาน](../permissions/README.md)
+
 ### Main Flow
 
 1. อ่านจุดตรวจวัดและข้อมูล prefill ด้วย `GET /api/v1/connected-measurement-points/factories/:factoryId`; สำหรับ กวภ.05 ใช้ `parameterInstrumentDetails[].cemsModel` ตามพารามิเตอร์ที่เลือก

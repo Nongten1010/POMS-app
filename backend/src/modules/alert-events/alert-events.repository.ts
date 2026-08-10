@@ -1,4 +1,8 @@
 import { db } from '../../config/database';
+import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
+import type { PermissionScopeDetails } from '../auth/permissions';
+import type { RegionalAccessDTO } from '../auth/regional-access';
+import { resolveAssignedRegions } from '../auth/regional-access';
 import type {
   AlertEventDTO,
   AlertEventRow,
@@ -18,6 +22,14 @@ interface ConnectedMeasurementPointRow {
   point_type: string;
 }
 
+interface AlertEventAccess {
+  actorUserId: number;
+  scope: AccessScope;
+  regionalAccess?: RegionalAccessDTO | null;
+}
+
+type AccessScope = string | null | undefined | PermissionScopeDetails;
+
 export const alertEventsRepository = {
   async findByIdempotencyKey(idempotencyKey: string): Promise<AlertEventDTO | null> {
     const row = await db<AlertEventRow>('alert_events')
@@ -28,11 +40,8 @@ export const alertEventsRepository = {
     return row ? toAlertEventDTO(row) : null;
   },
 
-  async findById(id: number): Promise<AlertEventDTO | null> {
-    const row = await db<AlertEventRow>('alert_events')
-      .where({ id })
-      .whereNull('deleted_at')
-      .first();
+  async findById(id: number, access: AlertEventAccess): Promise<AlertEventDTO | null> {
+    const row = await buildAccessQuery(access).where('alert_events.id', id).first();
 
     return row ? toAlertEventDTO(row) : null;
   },
@@ -84,11 +93,16 @@ export const alertEventsRepository = {
     return created;
   },
 
-  async list(query: ListAlertEventsQuery): Promise<{ rows: AlertEventDTO[]; total: number }> {
-    const baseQuery = buildListQuery(query);
-    const [{ total }] = await baseQuery.clone().clearSelect().clearOrder().count<{ total: number }[]>({
-      total: '*',
-    });
+  async list(
+    query: ListAlertEventsQuery,
+    access: AlertEventAccess,
+  ): Promise<{ rows: AlertEventDTO[]; total: number }> {
+    const baseQuery = buildListQuery(query, access);
+    const [{ total }] = await baseQuery
+      .clone()
+      .clearSelect()
+      .clearOrder()
+      .countDistinct<{ total: number }[]>({ total: 'alert_events.id' });
 
     const rows = await baseQuery
       .clone()
@@ -96,8 +110,7 @@ export const alertEventsRepository = {
       .orderBy('started_at', 'desc')
       .orderBy('id', 'desc')
       .limit(query.pageSize)
-      .offset((query.page - 1) * query.pageSize)
-      .select<AlertEventRow[]>('*');
+      .offset((query.page - 1) * query.pageSize);
 
     return {
       rows: rows.map(toAlertEventDTO),
@@ -109,34 +122,177 @@ export const alertEventsRepository = {
     id: number,
     input: UpdateAlertEventStatusInput,
     actorUserId: number,
+    access: AlertEventAccess,
   ): Promise<AlertEventDTO | null> {
-    await db<AlertEventRow>('alert_events')
-      .where({ id })
-      .whereNull('deleted_at')
+    await buildAccessQuery(access)
+      .where('alert_events.id', id)
       .update({
         notification_status: input.notificationStatus,
         updated_by: actorUserId,
         updated_at: db.fn.now(),
       });
 
-    return this.findById(id);
+    return this.findById(id, access);
   },
 };
 
-function buildListQuery(query: ListAlertEventsQuery) {
-  const builder = db<AlertEventRow>('alert_events').whereNull('deleted_at');
+function buildListQuery(query: ListAlertEventsQuery, access: AlertEventAccess) {
+  const builder = buildAccessQuery(access).distinct<AlertEventRow[]>('alert_events.*');
 
-  if (query.systemType) builder.where('system_type', query.systemType);
-  if (query.displaySystemType) builder.where('display_system_type', query.displaySystemType);
-  if (query.alertType) builder.where('alert_type', query.alertType);
-  if (query.thresholdType) builder.where('threshold_type', query.thresholdType);
-  if (query.factoryId) builder.where('factory_id', query.factoryId);
-  if (query.stationId) builder.where('station_id', query.stationId);
-  if (query.parameterCode) builder.where('parameter_code', query.parameterCode);
-  if (query.dateFrom) builder.where('event_date', '>=', query.dateFrom);
-  if (query.dateTo) builder.where('event_date', '<=', query.dateTo);
+  if (query.systemType) builder.where('alert_events.system_type', query.systemType);
+  if (query.displaySystemType) builder.where('alert_events.display_system_type', query.displaySystemType);
+  if (query.alertType) builder.where('alert_events.alert_type', query.alertType);
+  if (query.thresholdType) builder.where('alert_events.threshold_type', query.thresholdType);
+  if (query.factoryId) builder.where('alert_events.factory_id', query.factoryId);
+  if (query.stationId) builder.where('alert_events.station_id', query.stationId);
+  if (query.parameterCode) builder.where('alert_events.parameter_code', query.parameterCode);
+  if (query.dateFrom) builder.where('alert_events.event_date', '>=', query.dateFrom);
+  if (query.dateTo) builder.where('alert_events.event_date', '<=', query.dateTo);
 
   return builder;
+}
+
+function buildAccessQuery(access: AlertEventAccess) {
+  const builder = db<AlertEventRow>('alert_events')
+    .leftJoin('factories as f', function joinFactoryMaster() {
+      this.on(function joinFactoryKeys() {
+        this.on('f.fid', '=', 'alert_events.factory_id').orOn(
+          'f.code',
+          '=',
+          'alert_events.factory_id',
+        );
+      }).andOnNull('f.deleted_at');
+    })
+    .leftJoin('eligible_factories as ef', function joinEligibleFactory() {
+      this.on(function joinFactoryIdentifiers() {
+        this.on('ef.factory_registration_no_new', '=', 'alert_events.factory_id')
+          .orOn('ef.source_factory_id', '=', 'alert_events.factory_id')
+          .orOn('ef.factory_registration_no_old', '=', 'alert_events.factory_id');
+      }).andOnNull('ef.deleted_at');
+    })
+    .leftJoin('provinces as p', function joinProvince() {
+      this.on('p.id', '=', 'f.province_id').orOn('p.name_th', '=', 'ef.province_name');
+    })
+    .leftJoin('industrial_estates as ie', function joinIndustrialEstate() {
+      this.on('ie.id', '=', 'f.industrial_estate_id').orOn('ie.name_th', '=', 'ef.industrial_estate_name');
+    })
+    .whereNull('alert_events.deleted_at');
+
+  const scopeValue = getAccessScopeValue(access.scope);
+  if (scopeValue === 'OWN_FACTORY') {
+    applyAssignedFactoryAccessFilter(builder, access.actorUserId);
+  } else if (
+    scopeValue !== 'ALL' &&
+    !hasPermissionLocationFilter(access.scope, access.regionalAccess)
+  ) {
+    builder.whereRaw('1 = 0');
+  }
+
+  applyPermissionLocationFilter(builder, access.scope, access.regionalAccess);
+  applyRegionalAccessFilter(builder, access.scope, access.regionalAccess);
+
+  return builder.select<AlertEventRow[]>('alert_events.*');
+}
+
+function getAccessScopeValue(scope: AccessScope): string | null | undefined {
+  return scope && typeof scope === 'object' ? scope.scope : scope;
+}
+
+function hasPermissionLocationFilter(
+  scope: AccessScope,
+  regionalAccess?: RegionalAccessDTO | null,
+): boolean {
+  if (!scope || typeof scope !== 'object') return false;
+  if (scope.scope === 'IN_REGION') {
+    return resolveAssignedRegions(scope.region, regionalAccess).length > 0;
+  }
+  if (scope.scope === 'IN_PROVINCE') return Boolean(normalizeLocationValue(scope.province));
+  if (scope.scope === 'IN_ESTATE') return Boolean(getScopeEstateCode(scope));
+  return false;
+}
+
+function applyPermissionLocationFilter(
+  builder: ReturnType<typeof db>,
+  scope: AccessScope,
+  regionalAccess?: RegionalAccessDTO | null,
+): void {
+  if (!scope || typeof scope !== 'object') return;
+  const regionValues =
+    scope.scope === 'IN_REGION' ? resolveAssignedRegions(scope.region, regionalAccess) : [];
+  const province = normalizeLocationValue(scope.province);
+  const estateCode = getScopeEstateCode(scope);
+
+  if (scope.scope === 'IN_REGION' && regionValues.length > 0) {
+    builder.whereIn('p.region', regionValues);
+  }
+
+  if (scope.scope === 'IN_PROVINCE' && province) {
+    builder.where('p.name_th', province);
+  }
+
+  if (scope.scope === 'IN_ESTATE' && estateCode) {
+    builder.where((estateBuilder) => {
+      estateBuilder.where('ie.code', estateCode).orWhereRaw('CAST(ie.id as varchar(32)) = ?', [
+        estateCode,
+      ]);
+    });
+  }
+}
+
+function applyRegionalAccessFilter(
+  builder: ReturnType<typeof db>,
+  scope: AccessScope,
+  regionalAccess: RegionalAccessDTO | null | undefined,
+): void {
+  if (getAccessScopeValue(scope) === 'ALL') return;
+  const regionValues = [...new Set((regionalAccess?.regions ?? []).map((value) => value.trim()).filter(Boolean))];
+  if (regionValues.length === 0) return;
+  builder.whereIn('p.region', regionValues);
+}
+
+function normalizeLocationValue(value: string | null | undefined): string | null {
+  if (value === null || value === undefined) return null;
+  const trimmed = value.trim();
+  return trimmed && trimmed.toLowerCase() !== 'all' ? trimmed : null;
+}
+
+function getScopeEstateCode(scope: PermissionScopeDetails): string | null {
+  const estateCode = Reflect.get(scope as unknown as Record<string, unknown>, 'estateCode');
+  if (typeof estateCode === 'string') return normalizeLocationValue(estateCode);
+
+  const legacyEstateCode = Reflect.get(
+    scope as unknown as Record<string, unknown>,
+    'industrialEstateCode',
+  );
+  if (typeof legacyEstateCode === 'string') return normalizeLocationValue(legacyEstateCode);
+
+  const estate = Reflect.get(scope as unknown as Record<string, unknown>, 'estate');
+  if (typeof estate === 'string') return normalizeLocationValue(estate);
+
+  const estateId = Reflect.get(scope as unknown as Record<string, unknown>, 'estateId');
+  if (typeof estateId === 'string') return normalizeLocationValue(estateId);
+  if (typeof estateId === 'number' && Number.isFinite(estateId)) return String(estateId);
+
+  const legacyEstateId = Reflect.get(
+    scope as unknown as Record<string, unknown>,
+    'industrialEstateId',
+  );
+  if (typeof legacyEstateId === 'string') return normalizeLocationValue(legacyEstateId);
+  if (typeof legacyEstateId === 'number' && Number.isFinite(legacyEstateId)) {
+    return String(legacyEstateId);
+  }
+  return null;
+}
+
+export function buildAlertEventsAccessQueryForTests(access: AlertEventAccess) {
+  return buildAccessQuery(access);
+}
+
+export function buildAlertEventsListQueryForTests(
+  query: ListAlertEventsQuery,
+  access: AlertEventAccess,
+) {
+  return buildListQuery(query, access);
 }
 
 function toInsertPayload(input: CreateIntegrationAlertEventInput) {

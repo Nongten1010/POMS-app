@@ -1,5 +1,9 @@
+import express from 'express';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { alertEventsRoutes } from '../../src/modules/alert-events/alert-events.routes';
+import { integrationsRoutes } from '../../src/modules/integrations/integrations.routes';
+import { errorHandler, notFoundHandler } from '../../src/shared/middlewares/errorHandler';
 import { signAccessToken } from '../../src/shared/utils/jwt';
 
 jest.mock('../../src/modules/alert-events/alert-events.service', () => ({
@@ -12,7 +16,6 @@ jest.mock('../../src/modules/alert-events/alert-events.service', () => ({
   },
 }));
 
-import { createApp } from '../../src/app';
 import { alertEventsService } from '../../src/modules/alert-events/alert-events.service';
 import type { AlertEventDTO } from '../../src/modules/alert-events/alert-events.types';
 
@@ -418,7 +421,9 @@ describe('alert events routes', () => {
       .set('Authorization', `Bearer ${accessToken()}`);
 
     expect(response.status).toBe(200);
-    expect(mockedAlertEventsService.list).toHaveBeenCalledWith(
+    const [query, actorUserId, viewScope, regionalAccess, canViewStatus] =
+      mockedAlertEventsService.list.mock.calls.at(-1) ?? [];
+    expect(query).toEqual(
       expect.objectContaining({
         systemType: 'CEMS',
         alertType: 'STANDARD_EXCEEDED',
@@ -427,6 +432,10 @@ describe('alert events routes', () => {
         pageSize: 20,
       }),
     );
+    expect(actorUserId).toBe(42);
+    expect(viewScope).toEqual({ scope: 'ALL' });
+    expect(regionalAccess).toBeNull();
+    expect(canViewStatus).toBe(false);
     expect(response.body).toMatchObject({
       success: true,
       data: [{ id: 1001, parameterLabel: 'SO2 (ppm)' }],
@@ -450,6 +459,58 @@ describe('alert events routes', () => {
 
     expect(response.status).toBe(400);
     expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    expect(mockedAlertEventsService.list).not.toHaveBeenCalled();
+  });
+
+  it('uses notification permissions for the frontend alert list route', async () => {
+    mockedAlertEventsService.list.mockResolvedValue({
+      data: [alertEventFixture()],
+      pagination: { page: 1, pageSize: 20, total: 1 },
+    });
+
+    const app = createApp();
+    const response = await request(app)
+      .get('/api/v1/alert-events')
+      .set('Authorization', `Bearer ${notificationAccessToken()}`);
+
+    expect(response.status).toBe(200);
+    const [query, actorUserId, viewScope, regionalAccess, canViewStatus] =
+      mockedAlertEventsService.list.mock.calls.at(-1) ?? [];
+    expect(query).toEqual(expect.objectContaining({ page: 1, pageSize: 20 }));
+    expect(actorUserId).toBe(42);
+    expect(viewScope).toEqual({ scope: 'ALL' });
+    expect(regionalAccess).toBeNull();
+    expect(canViewStatus).toBe(false);
+  });
+
+  it('passes notification status visibility to the service for admin-capable viewers', async () => {
+    mockedAlertEventsService.list.mockResolvedValue({
+      data: [alertEventFixture()],
+      pagination: { page: 1, pageSize: 20, total: 1 },
+    });
+
+    const app = createApp();
+    const response = await request(app)
+      .get('/api/v1/alert-events')
+      .set('Authorization', `Bearer ${notificationStatusAccessToken()}`);
+
+    expect(response.status).toBe(200);
+    const [query, actorUserId, viewScope, regionalAccess, canViewStatus] =
+      mockedAlertEventsService.list.mock.calls.at(-1) ?? [];
+    expect(query).toEqual(expect.objectContaining({ page: 1, pageSize: 20 }));
+    expect(actorUserId).toBe(42);
+    expect(viewScope).toEqual({ scope: 'ALL' });
+    expect(regionalAccess).toBeNull();
+    expect(canViewStatus).toBe(true);
+  });
+
+  it('rejects the frontend alert list route without notifications:view', async () => {
+    const app = createApp();
+    const response = await request(app)
+      .get('/api/v1/alert-events')
+      .set('Authorization', `Bearer ${connectionOnlyAccessToken()}`);
+
+    expect(response.status).toBe(403);
     expect(mockedAlertEventsService.list).not.toHaveBeenCalled();
   });
 });
@@ -519,6 +580,33 @@ function alertEventFixture(overrides: Partial<AlertEventDTO> = {}): AlertEventDT
 }
 
 function accessToken(): string {
+  return notificationAccessToken();
+}
+
+function notificationAccessToken(): string {
+  return signAccessToken({
+    sub: '42',
+    userType: 'officer',
+    roles: ['officer'],
+    scopes: {
+      'notifications:view': 'ALL',
+    },
+  });
+}
+
+function notificationStatusAccessToken(): string {
+  return signAccessToken({
+    sub: '42',
+    userType: 'admin',
+    roles: ['admin'],
+    scopes: {
+      'notifications:view': 'ALL',
+      'notifications:view_status': 'ALL',
+    },
+  });
+}
+
+function connectionOnlyAccessToken(): string {
   return signAccessToken({
     sub: '42',
     userType: 'officer',
@@ -527,4 +615,14 @@ function accessToken(): string {
       'cems_wpms_requests:view': 'ALL',
     },
   });
+}
+
+function createApp() {
+  const app = express();
+  app.use(express.json());
+  app.use('/api/v1/alert-events', alertEventsRoutes);
+  app.use('/api/v1/integrations', integrationsRoutes);
+  app.use(notFoundHandler);
+  app.use(errorHandler);
+  return app;
 }

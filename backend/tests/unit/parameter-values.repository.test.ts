@@ -190,7 +190,7 @@ describe('parameterValuesRepository', () => {
     expect(compiled.bindings).toContain('ฉะเชิงเทรา');
   });
 
-  it('falls back to owner or juristic access when province scope has no selected province', () => {
+  it('fails closed when province scope has no selected province', () => {
     const compiled = buildStationAccessQueryForTests({
       actorUserId: 42,
       scope: {
@@ -201,10 +201,42 @@ describe('parameterValuesRepository', () => {
     }).toSQL();
     const sql = compiled.sql.toLowerCase();
 
-    expect(sql).toContain('user_juristics');
-    expect(sql).toContain('user_factory_access');
-    expect(sql).toContain('[p].[created_by]');
-    expect(compiled.bindings).toContain(42);
+    expect(sql).toContain('1 = 0');
+    expect(sql).not.toContain('user_juristics');
+  });
+
+  it('uses regionalAccess as the fallback qualifier for IN_REGION', () => {
+    const compiled = buildStationAccessQueryForTests({
+      actorUserId: 42,
+      scope: { scope: 'IN_REGION' },
+      regionalAccess: { regions: ['ภาคเหนือ'] },
+    }).toSQL();
+
+    expect(compiled.sql.toLowerCase()).toContain('[pr].[region]');
+    expect(compiled.bindings).toContain('ภาคเหนือ');
+    expect(compiled.sql.toLowerCase()).not.toContain('user_juristics');
+  });
+
+  it('fails closed when explicit region conflicts with regionalAccess', () => {
+    const compiled = buildStationAccessQueryForTests({
+      actorUserId: 42,
+      scope: { scope: 'IN_REGION', region: 'ภาคเหนือ' },
+      regionalAccess: { regions: ['ภาคใต้'] },
+    }).toSQL();
+
+    expect(compiled.sql.toLowerCase()).toContain('1 = 0');
+  });
+
+  it('filters IN_ESTATE station access by canonical estateCode', () => {
+    const compiled = buildStationAccessQueryForTests({
+      actorUserId: 42,
+      scope: { scope: 'IN_ESTATE', estateCode: 'MTP' },
+    }).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('left join [industrial_estates] as [ie]');
+    expect(sql).toContain('[ie].[code]');
+    expect(compiled.bindings).toContain('MTP');
   });
 
   it('uses waiting connection requests for connection-test station access', () => {
@@ -238,6 +270,17 @@ describe('parameterValuesRepository', () => {
     expect(sql).toContain('[pr].[name_th]');
     expect(sql).not.toContain('user_juristics');
     expect(compiled.bindings).toContain('ฉะเชิงเทรา');
+  });
+
+  it('uses regionalAccess fallback for waiting connection-test station access', () => {
+    const compiled = buildWaitingConnectionStationAccessQueryForTests({
+      actorUserId: 42,
+      scope: { scope: 'IN_REGION' },
+      regionalAccess: { regions: ['ภาคกลาง'] },
+    }).toSQL();
+
+    expect(compiled.sql.toLowerCase()).toContain('[pr].[region]');
+    expect(compiled.bindings).toContain('ภาคกลาง');
   });
 
   it('prefers instrument parameters over all eligible registered parameters', () => {

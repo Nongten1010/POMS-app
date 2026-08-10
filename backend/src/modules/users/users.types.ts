@@ -25,6 +25,8 @@ export interface PermissionOverrideInput {
   scope?: PermissionScope;
   region?: string | null;
   province?: string | null;
+  estateCode?: string | null;
+  estate?: string | null;
 }
 
 export interface PermissionGrantDTO {
@@ -36,6 +38,8 @@ export interface PermissionGrantDTO {
   region: string | null;
   provinceId: string | null;
   provinceName: string | null;
+  estateCode?: string | null;
+  estate?: string | null;
 }
 
 export interface UserPermissionOverrideDTO extends PermissionGrantDTO {
@@ -70,6 +74,7 @@ export interface OfficerProfileInput {
   provinceId?: string | null;
   /** Form-only input; resolved to provinceId before persistence. */
   provinceName?: string | null;
+  estateCode?: string | null;
   perStatus?: string | null;
   perStatusName?: string | null;
   relocationType?: string | null;
@@ -115,6 +120,9 @@ export interface ManagedUserEditUserDTO {
   department: string | null;
   lineNameTh: string | null;
   levelNameTh: string | null;
+  provinceName: string | null;
+  estateCode: string | null;
+  regionalAccess: RegionalAccessDTO | null;
   roles: string;
   roleCodes: string[];
   isActive: boolean;

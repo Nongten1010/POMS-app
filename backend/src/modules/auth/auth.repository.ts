@@ -1,5 +1,5 @@
 import { db } from '../../config/database';
-import { applyPersonaPermissionOverrides } from './permissions';
+import { applyPersonaPermissionOverrides, mergePermissionScopesWithOverrides } from './permissions';
 import type {
   PermissionDataScope,
   PermissionScopeDetails,
@@ -48,6 +48,8 @@ export interface OfficerProfileRow {
   department_name_th: string | null;
   ministry_id: string | null;
   province_id: string | null;
+  province_name_th?: string | null;
+  estate_code?: string | null;
   per_status: string | null;
   per_status_name: string | null;
   regional_access_json?: string | null;
@@ -87,6 +89,7 @@ export const authRepository = {
           'department',
         );
       })
+      .leftJoin('provinces', 'provinces.id', 'officer_profiles.province_id')
       .where({ user_id: userId })
       .first(
         'officer_profiles.user_id',
@@ -110,6 +113,8 @@ export const authRepository = {
         ),
         'officer_profiles.ministry_id',
         'officer_profiles.province_id',
+        'provinces.name_th as province_name_th',
+        'officer_profiles.estate_code',
         'officer_profiles.per_status',
         'officer_profiles.per_status_name',
         'officer_profiles.regional_access_json',
@@ -368,6 +373,7 @@ export const authRepository = {
       effect: 'allow' | 'deny';
       region_name: string | null;
       province_name: string | null;
+      estate_code: string | null;
     }> = await db('user_permissions')
       .join('permissions', 'user_permissions.permission_id', 'permissions.id')
       .leftJoin('provinces', 'provinces.id', 'user_permissions.province_id')
@@ -378,44 +384,25 @@ export const authRepository = {
         'user_permissions.effect as effect',
         'user_permissions.region_name as region_name',
         'provinces.name_th as province_name',
+        'user_permissions.estate_code as estate_code',
       );
-
-    // ถ้า user มี permission เดียวกันแต่หลาย scope จาก หลาย role → เอา scope กว้างที่สุด
-    // priority: ALL > IN_PROVINCE > IN_ESTATE > OWN_FACTORY > null
-    const priority: Record<string, number> = {
-      ALL: 4,
-      IN_REGION: 3,
-      IN_PROVINCE: 3,
-      IN_ESTATE: 2,
-      OWN_FACTORY: 1,
-    };
-    const scopes: Record<string, string | null | PermissionScopeDetails> = {};
-    for (const p of perms) {
-      const current = scopes[p.code];
-      const currentScope = current && typeof current === 'object' ? current.scope : current;
-      const currentRank = current === undefined ? -1 : (priority[currentScope ?? 'NULL'] ?? 0);
-      const newRank = priority[p.scope ?? 'NULL'] ?? 0;
-      if (newRank >= currentRank) scopes[p.code] = p.scope;
-    }
-
-    // user_permissions เป็น per-user override:
-    // deny = ตัดสิทธิ์นี้ออกจาก effective permissions
-    // allow = set scope ตาม override โดยตรง แม้ role จะมี scope อื่นอยู่
-    for (const p of userPerms) {
-      if (p.effect === 'deny') {
-        delete scopes[p.code];
-        continue;
-      }
-      scopes[p.code] = {
-        scope: p.scope as PermissionScopeDetails['scope'],
-        region: p.region_name,
-        province: p.province_name,
-      };
-    }
 
     return {
       roles: roles.map((r) => r.code),
-      scopes,
+      scopes: mergePermissionScopesWithOverrides(
+        perms.map((permission) => ({
+          code: permission.code,
+          scope: permission.scope as PermissionDataScope,
+        })),
+        userPerms.map((override) => ({
+          code: override.code,
+          effect: override.effect,
+          scope: override.scope as PermissionDataScope,
+          region: override.region_name,
+          province: override.province_name,
+          estate: override.estate_code,
+        })),
+      ),
     };
   },
 
@@ -442,6 +429,7 @@ export const authRepository = {
       effect: PersonaPermissionOverride['effect'];
       region_name: string | null;
       province_name: string | null;
+      estate_code: string | null;
     }> = await db('user_permissions')
       .join('permissions', 'user_permissions.permission_id', 'permissions.id')
       .leftJoin('provinces', 'provinces.id', 'user_permissions.province_id')
@@ -452,6 +440,7 @@ export const authRepository = {
         'user_permissions.effect as effect',
         'user_permissions.region_name as region_name',
         'provinces.name_th as province_name',
+        'user_permissions.estate_code as estate_code',
       );
 
     const roleScopes = Object.fromEntries(
@@ -468,6 +457,7 @@ export const authRepository = {
           scope: override.scope,
           region: override.region_name,
           province: override.province_name,
+          estate: override.estate_code,
         })),
       ),
     };
@@ -589,9 +579,25 @@ export async function syncIdentityProviderBaseRole(
     .whereNull('deleted_at')
     .select('id');
   const identityRoleIds = identityRoleRows.map((item) => item.id);
+
+  const specializedRoles: Array<{ id: number; code: string }> = await trx(
+    'user_roles as assigned_roles',
+  )
+    .join('roles as assigned_role', 'assigned_role.id', 'assigned_roles.role_id')
+    .where('assigned_roles.user_id', userId)
+    .whereNull('assigned_role.deleted_at')
+    .whereNotIn('assigned_role.code', [...IDENTITY_PROVIDER_BASE_ROLE_CODES])
+    .select('assigned_role.id', 'assigned_role.code');
+
+  if (specializedRoles.length > 1) {
+    throw new Error('Exactly one specialized officer role is required');
+  }
+
   if (identityRoleIds.length > 0) {
     await trx('user_roles').where({ user_id: userId }).whereIn('role_id', identityRoleIds).del();
   }
+
+  if (specializedRoles.length === 1) return;
 
   const existing = await trx('user_roles')
     .where({ user_id: userId, role_id: role.id })

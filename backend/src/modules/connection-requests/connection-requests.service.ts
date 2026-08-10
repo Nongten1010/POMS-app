@@ -17,6 +17,7 @@ import { measurementDisplayValue } from '../parameter-values/parameter-status';
 import { parameterValuesService } from '../parameter-values/parameter-values.service';
 import type { PermissionScopeDetails } from '../auth/permissions';
 import type { RegionalAccessDTO } from '../auth/regional-access';
+import { resolveAssignedRegions } from '../auth/regional-access';
 import { eligibleFactoriesService } from '../eligible-factories/eligible-factories.service';
 import type { SelectedEligibleFactoryDTO } from '../eligible-factories/eligible-factories.types';
 import type {
@@ -267,20 +268,16 @@ export const connectionRequestsService = {
   },
 
   async listOfficerEligibleFactories(
+    actorUserId: number,
     viewScope: AccessScope,
     query: ListOperatorFactoriesQuery = {},
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<PaginatedTableRowsDTO<OperatorFactoryTableRowDTO>> {
-    const result = await eligibleFactoriesService.list({});
-    const provinceRegionsByName = await loadProvinceRegionsByName(result.data);
-    const accessibleFactories = result.data.filter((factory) =>
-      eligibleFactoryMatchesOfficerAccess(
-        factory,
-        viewScope,
-        regionalAccess,
-        provinceRegionsByName,
-      ),
+    const result = await eligibleFactoriesService.list(
+      {},
+      { actorUserId, scope: viewScope, regionalAccess },
     );
+    const accessibleFactories = result.data;
     const factoryIdByLookupKey = buildEligibleFactoryLookupKeyMap(accessibleFactories);
     const connectedPoints =
       await connectionRequestsRepository.listConnectedMeasurementPointsForFactories([
@@ -896,8 +893,11 @@ export const connectionRequestsService = {
     id: number,
     input: ReviewConnectionRequestInput,
     actorUserId: number,
+    approveScope: AccessScope = 'ALL',
+    regionalAccess?: RegionalAccessDTO | null,
   ): Promise<ConnectionRequestDTO> {
     const request = await loadRequest(id);
+    ensureCanApprove(request, approveScope, regionalAccess);
     ensureStatus(request, DESIGN_REVIEW_STATUSES);
 
     if (input.decision === 'REQUEST_REVISION') {
@@ -928,9 +928,11 @@ export const connectionRequestsService = {
     id: number,
     input: ChangeConnectionRequestStatusInput,
     actorUserId: number,
+    approveScope: AccessScope = 'ALL',
+    regionalAccess?: RegionalAccessDTO | null,
   ): Promise<ConnectionRequestDTO> {
     if (input.action === 'RETURN_TO_WAITING_CONNECTION') {
-      return this.returnToWaitingConnection(id, input, actorUserId);
+      return this.returnToWaitingConnection(id, input, actorUserId, approveScope, regionalAccess);
     }
 
     if (input.action === 'REQUEST_REVISION') {
@@ -942,6 +944,8 @@ export const connectionRequestsService = {
           officerNote: input.officerNote,
         },
         actorUserId,
+        approveScope,
+        regionalAccess,
       );
     }
 
@@ -952,6 +956,8 @@ export const connectionRequestsService = {
         officerNote: input.officerNote,
       },
       actorUserId,
+      approveScope,
+      regionalAccess,
     );
   },
 
@@ -988,8 +994,11 @@ export const connectionRequestsService = {
     id: number,
     input: ChangeConnectionRequestStatusInput,
     actorUserId: number,
+    approveScope: AccessScope = 'ALL',
+    regionalAccess?: RegionalAccessDTO | null,
   ): Promise<ConnectionRequestDTO> {
     const request = await loadRequest(id);
+    ensureCanApprove(request, approveScope, regionalAccess);
     ensureStatus(request, [CONNECTION_REQUEST_STATUS.CONNECTION_CONFIRMED]);
     const nextStatus = isPastConnectionDueDate(request.connectionDueAt, nowProvider())
       ? CONNECTION_REQUEST_STATUS.CANCELED
@@ -1059,7 +1068,7 @@ export const connectionRequestsService = {
     stationId: string,
     input: CreateDeviceConnectionConfigInput,
     actorUserId: number,
-    editScope: string | null | undefined,
+    editScope: AccessScope,
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<DeviceConfigPayloadResponseDTO> {
     const { request } = await loadLatestConnectedRequestForStation(
@@ -1083,7 +1092,7 @@ export const connectionRequestsService = {
     stationId: string,
     input: CreateDeviceConnectionConfigsInput,
     actorUserId: number,
-    editScope: string | null | undefined,
+    editScope: AccessScope,
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<DeviceConfigPayloadResponseDTO> {
     const { request } = await loadLatestConnectedRequestForStation(
@@ -1149,8 +1158,11 @@ export const connectionRequestsService = {
     id: number,
     input: VerifyConnectionInput,
     actorUserId: number,
+    approveScope: AccessScope = 'ALL',
+    regionalAccess?: RegionalAccessDTO | null,
   ): Promise<ConnectionRequestDTO> {
     const request = await loadRequest(id);
+    ensureCanApprove(request, approveScope, regionalAccess);
     ensureStatus(request, [CONNECTION_REQUEST_STATUS.CONNECTION_CONFIRMED]);
 
     return connectionRequestsRepository.connect(id, actorUserId, {
@@ -2278,53 +2290,6 @@ function toOfficerEligibleFactoryTableRow(
   };
 }
 
-async function loadProvinceRegionsByName(
-  factories: SelectedEligibleFactoryDTO[],
-): Promise<Map<string, string>> {
-  return connectionRequestsRepository.listProvinceRegions(
-    factories.map((factory) => factory.provinceName),
-  );
-}
-
-function eligibleFactoryMatchesOfficerAccess(
-  factory: SelectedEligibleFactoryDTO,
-  viewScope: AccessScope,
-  regionalAccess: RegionalAccessDTO | null | undefined,
-  provinceRegionsByName: Map<string, string>,
-): boolean {
-  const regionName = provinceRegionsByName.get(factory.provinceName) ?? null;
-
-  if (!eligibleFactoryMatchesPermissionScope(factory, regionName, viewScope)) return false;
-  return eligibleFactoryMatchesRegionalAccess(regionName, regionalAccess);
-}
-
-function eligibleFactoryMatchesPermissionScope(
-  factory: SelectedEligibleFactoryDTO,
-  regionName: string | null,
-  scope: AccessScope,
-): boolean {
-  const scopeValue = getAccessScopeValue(scope);
-  if (scopeValue === 'ALL') return true;
-  if (!scope || typeof scope !== 'object') return false;
-
-  const region = normalizeLocationValue(scope.region);
-  const province = normalizeLocationValue(scope.province);
-  if (scope.scope === 'IN_REGION' && region) return regionName === region;
-  if (scope.scope === 'IN_PROVINCE' && province) return factory.provinceName === province;
-  return false;
-}
-
-function eligibleFactoryMatchesRegionalAccess(
-  regionName: string | null,
-  regionalAccess: RegionalAccessDTO | null | undefined,
-): boolean {
-  const allowedRegions = new Set(
-    (regionalAccess?.regions ?? []).map((value) => value.trim()).filter(Boolean),
-  );
-  if (allowedRegions.size === 0) return true;
-  return Boolean(regionName && allowedRegions.has(regionName));
-}
-
 function filterMeasurementPointsBySystem<T extends { systemType: ConnectionSystemType }>(
   measurementPoints: T[],
   systemType: ConnectionSystemType | undefined,
@@ -2470,9 +2435,30 @@ type AccessScope = string | null | undefined | PermissionScopeDetails;
 
 function ensureDirectConnectionActor(actor: DirectConnectionActorContext): void {
   const isOfficerUser = actor.userType === 'officer' || actor.userType === 'admin';
-  const hasDirectRole = actor.roles.some((role) => role === 'monitoring_kpm' || role === 'admin');
-  if (!isOfficerUser || !hasDirectRole) {
+  const isAdmin = actor.roles.includes('admin');
+  const hasKpmRole = actor.roles.includes('monitoring_kpm');
+  if (!isOfficerUser || (!hasKpmRole && !isAdmin)) {
     throw new ForbiddenError('Officer direct connection is limited to monitoring_kpm and admin');
+  }
+
+  if (isAdmin) return;
+
+  const scopeValue = getAccessScopeValue(actor.scope);
+  const effectiveRegions = resolveEffectiveRegionValues(actor.scope, actor.regionalAccess);
+  if (
+    !(
+      scopeValue === 'ALL' ||
+      (scopeValue === 'IN_REGION' &&
+        effectiveRegions.length > 0 &&
+        effectiveRegions.every((value) => value === 'ภาคกลาง'))
+    )
+  ) {
+    throw new ForbiddenError('Officer direct connection is limited to central monitoring_kpm');
+  }
+
+  const regionalValues = normalizedRegionalValues(actor.regionalAccess);
+  if (regionalValues.length > 0 && regionalValues.some((value) => value !== 'ภาคกลาง')) {
+    throw new ForbiddenError('Officer direct connection is limited to central monitoring_kpm');
   }
 }
 
@@ -2484,6 +2470,20 @@ function normalizeLocationValue(value: string | null | undefined): string | null
   if (value === null || value === undefined) return null;
   const trimmed = value.trim();
   return trimmed && trimmed.toLowerCase() !== 'all' ? trimmed : null;
+}
+
+function getScopeRegion(scope: AccessScope): string | null {
+  if (!scope || typeof scope !== 'object') return null;
+  const region = Reflect.get(scope as unknown as Record<string, unknown>, 'region');
+  return typeof region === 'string' ? normalizeLocationValue(region) : null;
+}
+
+function resolveEffectiveRegionValues(
+  scope: AccessScope,
+  regionalAccess?: RegionalAccessDTO | null,
+): string[] {
+  if (!scope || typeof scope !== 'object' || scope.scope !== 'IN_REGION') return [];
+  return resolveAssignedRegions(getScopeRegion(scope), regionalAccess);
 }
 
 function toDashboardMeasurementRow(
@@ -2934,43 +2934,97 @@ function ensureCanRead(
   regionalAccess?: RegionalAccessDTO | null,
 ): void {
   if (
-    requestMatchesPermissionScope(request, viewScope) &&
-    requestMatchesRegionalAccess(request, regionalAccess)
+    requestMatchesPermissionScope(request, viewScope, regionalAccess) &&
+    requestMatchesRegionalAccess(request, viewScope, regionalAccess)
   ) {
     return;
   }
-  if (request.createdBy === actorUserId) return;
-  throw new ForbiddenError('Cannot access another operator connection request');
+  if (getAccessScopeValue(viewScope) === 'OWN_FACTORY' && request.createdBy === actorUserId) return;
+  throw new NotFoundError('Connection request not found');
 }
 
-function requestMatchesPermissionScope(request: ConnectionRequestDTO, scope: AccessScope): boolean {
+function ensureCanApprove(
+  request: ConnectionRequestDTO,
+  approveScope: AccessScope,
+  regionalAccess?: RegionalAccessDTO | null,
+): void {
+  if (
+    requestMatchesPermissionScope(request, approveScope, regionalAccess) &&
+    requestMatchesRegionalAccess(request, approveScope, regionalAccess)
+  ) {
+    return;
+  }
+  throw new NotFoundError('Connection request not found');
+}
+
+function requestMatchesPermissionScope(
+  request: ConnectionRequestDTO,
+  scope: AccessScope,
+  regionalAccess?: RegionalAccessDTO | null,
+): boolean {
   const scopeValue = getAccessScopeValue(scope);
   if (scopeValue === 'ALL') return true;
   if (!scope || typeof scope !== 'object') return false;
 
-  const region = normalizeLocationValue(scope.region);
+  const regionValues = resolveEffectiveRegionValues(scope, regionalAccess);
   const province = normalizeLocationValue(scope.province);
-  if (scope.scope === 'IN_REGION' && region) {
-    return request.regionName === region || request.regionCode === region;
+  if (scope.scope === 'IN_REGION' && regionValues.length > 0) {
+    return regionValues.includes(request.regionName ?? '') || regionValues.includes(request.regionCode ?? '');
   }
   if (scope.scope === 'IN_PROVINCE' && province) {
     return request.provinceName === province || request.provinceCode === province;
+  }
+  if (scope.scope === 'IN_ESTATE') {
+    const estateCode = getScopeEstateCode(scope);
+    return Boolean(estateCode && request.industrialEstateCode === estateCode);
   }
   return false;
 }
 
 function requestMatchesRegionalAccess(
   request: ConnectionRequestDTO,
+  scope: AccessScope,
   regionalAccess: RegionalAccessDTO | null | undefined,
 ): boolean {
-  const allowedRegions = new Set(
-    (regionalAccess?.regions ?? []).map((value) => value.trim()).filter(Boolean),
-  );
+  if (getAccessScopeValue(scope) === 'ALL') return true;
+  const allowedRegions = new Set(normalizedRegionalValues(regionalAccess));
   if (allowedRegions.size === 0) return true;
   return Boolean(
     (request.regionName && allowedRegions.has(request.regionName)) ||
     (request.regionCode && allowedRegions.has(request.regionCode)),
   );
+}
+
+function normalizedRegionalValues(regionalAccess: RegionalAccessDTO | null | undefined): string[] {
+  return (regionalAccess?.regions ?? []).map((value) => value.trim()).filter(Boolean);
+}
+
+function getScopeEstateCode(scope: PermissionScopeDetails): string | null {
+  const estateCode = Reflect.get(scope as unknown as Record<string, unknown>, 'estateCode');
+  if (typeof estateCode === 'string') return normalizeLocationValue(estateCode);
+
+  const legacyEstateCode = Reflect.get(
+    scope as unknown as Record<string, unknown>,
+    'industrialEstateCode',
+  );
+  if (typeof legacyEstateCode === 'string') return normalizeLocationValue(legacyEstateCode);
+
+  const estate = Reflect.get(scope as unknown as Record<string, unknown>, 'estate');
+  if (typeof estate === 'string') return normalizeLocationValue(estate);
+
+  const estateId = Reflect.get(scope as unknown as Record<string, unknown>, 'estateId');
+  if (typeof estateId === 'string') return normalizeLocationValue(estateId);
+  if (typeof estateId === 'number' && Number.isFinite(estateId)) return String(estateId);
+
+  const legacyEstateId = Reflect.get(
+    scope as unknown as Record<string, unknown>,
+    'industrialEstateId',
+  );
+  if (typeof legacyEstateId === 'string') return normalizeLocationValue(legacyEstateId);
+  if (typeof legacyEstateId === 'number' && Number.isFinite(legacyEstateId)) {
+    return String(legacyEstateId);
+  }
+  return null;
 }
 
 function ensureOwner(request: ConnectionRequestDTO, actorUserId: number): void {

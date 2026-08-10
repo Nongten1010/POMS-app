@@ -12,19 +12,23 @@ curl --request GET \
   --header 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
+ความหมายของ `eligible_factories:view`, `eligible_factories:edit`, `cems_wpms_requests:view`, `cems_wpms_requests:edit` และ data scope ที่เกี่ยวข้องอ้างตาม [สิทธิ์การใช้งาน](../permissions/README.md)
+
 ## Endpoint Summary
 
 | งาน | Method | Path | Auth | Permission |
 | --- | --- | --- | --- | --- |
-| รายการ candidate | `GET` | `/api/v1/eligible-factories/candidates` | Bearer | `eligible_factories:manage` |
-| รายการโรงงานที่เข้าข่าย | `GET` | `/api/v1/eligible-factories` | Bearer | `eligible_factories:manage` |
-| เลือกโรงงานเข้าข่าย | `POST` | `/api/v1/eligible-factories` | Bearer | `eligible_factories:manage` |
-| ถอดโรงงานออกจากเข้าข่าย | `DELETE` | `/api/v1/eligible-factories/:id` | Bearer | `eligible_factories:manage` |
+| รายการ candidate | `GET` | `/api/v1/eligible-factories/candidates` | Bearer | `eligible_factories:view` |
+| รายการโรงงานที่เข้าข่าย | `GET` | `/api/v1/eligible-factories` | Bearer | `eligible_factories:view` |
+| เลือกโรงงานเข้าข่าย | `POST` | `/api/v1/eligible-factories` | Bearer | `eligible_factories:edit` |
+| ถอดโรงงานออกจากเข้าข่าย | `DELETE` | `/api/v1/eligible-factories/:id` | Bearer | `eligible_factories:edit` |
 | รายการฟอร์มข้อมูลจุดตรวจวัด | `GET` | `/api/v1/monitoring-point-forms` | Bearer | `cems_wpms_requests:view` |
 | รายละเอียดฟอร์มข้อมูลจุดตรวจวัด | `GET` | `/api/v1/monitoring-point-forms/:id` | Bearer | `cems_wpms_requests:view` |
 | เพิ่มข้อมูลจุดตรวจวัด | `POST` | `/api/v1/monitoring-point-forms` | Bearer | `cems_wpms_requests:edit` |
 | แก้ไขข้อมูลจุดตรวจวัด | `PUT` | `/api/v1/monitoring-point-forms/:id` | Bearer | `cems_wpms_requests:edit` |
-| เลือกฟอร์มเป็นโรงงานเข้าข่าย | `POST` | `/api/v1/monitoring-point-forms/:id/select-eligible` | Bearer | `eligible_factories:manage` |
+| เลือกฟอร์มเป็นโรงงานเข้าข่าย | `POST` | `/api/v1/monitoring-point-forms/:id/select-eligible` | Bearer | `eligible_factories:edit` |
+
+รายการและ candidate ถูกกรองตาม data scope ของผู้เรียก: `ALL`, `IN_REGION`, `IN_PROVINCE`, `IN_ESTATE` หรือ `OWN_FACTORY` โดย `IN_REGION` หา region จาก province master และ intersect กับ `regionalAccess`; ถ้าไม่มี qualifier ที่ต้องใช้หรือ qualifier ขัดกัน ระบบคืนผลลัพธ์ว่าง/`404` แบบ fail closed. การเพิ่มและลบตรวจ scope เดียวกันก่อนเปลี่ยนข้อมูล.
 
 ## กติกาที่อยู่และจังหวัด
 

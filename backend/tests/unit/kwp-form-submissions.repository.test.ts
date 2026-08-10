@@ -110,10 +110,9 @@ describe('kwpFormSubmissionsRepository', () => {
     expect(sql).toContain('user_juristics');
     expect(sql).toContain('user_factory_access');
     expect(sql).toContain('[uj].[user_id]');
-    expect(sql).toContain('coalesce([s].[submission_region_name], [p].[region]) in (?)');
   });
 
-  it('limits KWP workflow reads to requested submission id, operator factories, and regional access', () => {
+  it('limits KWP workflow reads to requested submission id and operator factories', () => {
     const sql = buildKwpFormSubmissionWorkflowQueryForTests(12, {
       actorUserId: 42,
       scope: 'OWN_FACTORY',
@@ -127,10 +126,65 @@ describe('kwpFormSubmissionsRepository', () => {
     expect(sql).toContain('user_juristics');
     expect(sql).toContain('user_factory_access');
     expect(sql).toContain('[uj].[user_id]');
-    expect(sql).toContain('coalesce([s].[submission_region_name], [p].[region]) in (?)');
     expect(sql).toContain(
       'coalesce([s].[submission_region_name], [p].[region]) as [province_region]',
     );
+  });
+
+  it('limits KWP workflow reads to assigned regions only for IN_REGION scope', () => {
+    const sql = buildKwpFormSubmissionWorkflowQueryForTests(12, {
+      actorUserId: 42,
+      scope: { scope: 'IN_REGION', region: 'ภาคกลาง' },
+      regionalAccess: { regions: ['ภาคกลาง'] },
+    })
+      .toSQL()
+      .sql.toLowerCase();
+
+    expect(sql).toContain('coalesce([s].[submission_region_name], [p].[region]) in (?)');
+  });
+
+  it('fails closed when the KWP workflow region is outside assigned profile regions', () => {
+    const compiled = buildKwpFormSubmissionWorkflowQueryForTests(12, {
+      actorUserId: 42,
+      scope: { scope: 'IN_REGION', region: 'ภาคใต้' },
+      regionalAccess: { regions: ['ภาคกลาง', 'ภาคเหนือ'] },
+    }).toSQL();
+
+    expect(compiled.sql.toLowerCase()).toContain('1 = ?');
+    expect(compiled.bindings).toContain(0);
+    expect(compiled.bindings).not.toContain('ภาคใต้');
+    expect(compiled.bindings).not.toContain('ภาคกลาง');
+    expect(compiled.bindings).not.toContain('ภาคเหนือ');
+  });
+
+  it('fails closed when a KWP workflow IN_REGION scope has no assigned profile region', () => {
+    const compiled = buildKwpFormSubmissionWorkflowQueryForTests(12, {
+      actorUserId: 42,
+      scope: { scope: 'IN_REGION', region: 'ภาคกลาง' },
+      regionalAccess: null,
+    }).toSQL();
+
+    expect(compiled.sql.toLowerCase()).toContain('1 = ?');
+    expect(compiled.bindings).toContain(0);
+    expect(compiled.bindings).not.toContain('ภาคกลาง');
+  });
+
+  it('uses estateCode before legacy estate keys for KWP detail reads', () => {
+    const compiled = buildKwpFormSubmissionDetailQueryForTests(13, {
+      actorUserId: 77,
+      scope: {
+        scope: 'IN_ESTATE',
+        estate: 'LEGACY-ESTATE',
+        estateCode: 'ESTATE-01',
+      } as never,
+      publicBaseUrl: 'http://d-poms.diw.go.th',
+      publicPath: '/uploads',
+      formType: 'KWP02',
+    }).toSQL();
+
+    expect(compiled.sql.toLowerCase()).toContain('[ie].[code] = ?');
+    expect(compiled.bindings).toContain('ESTATE-01');
+    expect(compiled.bindings).not.toContain('LEGACY-ESTATE');
   });
 
   it('limits returned-form edits to the requested id, form type, and operator factories', () => {
@@ -148,6 +202,34 @@ describe('kwpFormSubmissionsRepository', () => {
     expect(sql).toContain('user_juristics');
     expect(sql).toContain('user_factory_access');
     expect(sql).toContain('[uj].[user_id]');
+  });
+
+  it('filters KWP detail reads to the selected province for province-scoped officers', () => {
+    const compiled = buildKwpFormSubmissionDetailQueryForTests(13, {
+      actorUserId: 77,
+      scope: { scope: 'IN_PROVINCE', province: 'สระบุรี' },
+      publicBaseUrl: 'http://d-poms.diw.go.th',
+      publicPath: '/uploads',
+      formType: 'KWP02',
+    }).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('[p].[name_th] = ?');
+    expect(compiled.bindings).toEqual(expect.arrayContaining([13, 'KWP02', 'สระบุรี']));
+  });
+
+  it('fails closed for estate-scoped KWP detail reads without estate details in the auth payload', () => {
+    const compiled = buildKwpFormSubmissionDetailQueryForTests(13, {
+      actorUserId: 77,
+      scope: { scope: 'IN_ESTATE' },
+      publicBaseUrl: 'http://d-poms.diw.go.th',
+      publicPath: '/uploads',
+      formType: 'KWP02',
+    }).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('1 = ?');
+    expect(compiled.bindings).toContain(0);
   });
 
   it('maps KWP workflow state for submitted, revision, and review transitions', () => {
@@ -215,16 +297,54 @@ describe('kwpFormSubmissionsRepository', () => {
     );
     expect(submitted.currentStep).toMatchObject({ key: 'SUBMITTED', status: 'CURRENT' });
     expect(submitted.steps.map((step) => step.key)).toEqual(['SUBMITTED', 'REVISION_REQUESTED']);
-    expect(submitted.allowedActions).toEqual(['REQUEST_REVISION', 'APPROVE']);
+    expect(submitted.allowedActions).toEqual([]);
     expect(nextKwpWorkflowStatusForTests('SUBMITTED', 'REQUEST_REVISION')).toBe(
       'REVISION_REQUESTED',
     );
     expect(nextKwpWorkflowStatusForTests('SUBMITTED', 'APPROVE')).toBe('APPROVED');
     expect(revision.currentStep).toMatchObject({ key: 'REVISION_REQUESTED', status: 'CURRENT' });
     expect(revision.revisionReason).toBe('เพิ่มเอกสารแนบผลตรวจวัด');
-    expect(revision.allowedActions).toEqual(['APPROVE']);
+    expect(revision.allowedActions).toEqual([]);
     expect(nextKwpWorkflowStatusForTests('REVISION_REQUESTED', 'APPROVE')).toBe('APPROVED');
     expect(operatorRevision.allowedActions).toEqual(['RESUBMIT']);
+  });
+
+  it('allows KWP officer workflow actions only for monitoring approvers and admin', () => {
+    const monitoring = toKwpWorkflowDTOForTests(
+      {
+        id: 12,
+        submission_no: 'KWP-69-00012',
+        form_type: 'KWP01',
+        status: 'SUBMITTED',
+        officer_note: null,
+        reviewed_at: null,
+        created_at: '2026-07-04T08:00:00.000Z',
+        updated_at: '2026-07-04T08:00:00.000Z',
+        province_region: 'ภาคกลาง',
+      },
+      [],
+      'ALL',
+      ['monitoring_kpm'],
+    );
+    const director = toKwpWorkflowDTOForTests(
+      {
+        id: 12,
+        submission_no: 'KWP-69-00012',
+        form_type: 'KWP01',
+        status: 'SUBMITTED',
+        officer_note: null,
+        reviewed_at: null,
+        created_at: '2026-07-04T08:00:00.000Z',
+        updated_at: '2026-07-04T08:00:00.000Z',
+        province_region: 'ภาคกลาง',
+      },
+      [],
+      'ALL',
+      ['center_director'],
+    );
+
+    expect(monitoring.allowedActions).toEqual(['REQUEST_REVISION', 'APPROVE']);
+    expect(director.allowedActions).toEqual([]);
   });
 
   it('maps a returned form that the operator resubmitted back to the submitted workflow state', () => {

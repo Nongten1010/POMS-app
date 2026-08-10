@@ -1,7 +1,10 @@
 import type { Knex } from 'knex';
 import { db } from '../../config/database';
+import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
+import { resolveAssignedRegions } from '../auth/regional-access';
 import type {
   ListMonitoringPointFormsQuery,
+  MonitoringPointFormAccessContext,
   MonitoringPointDTO,
   MonitoringPointFormDTO,
   MonitoringPointFormFactoryInput,
@@ -65,8 +68,11 @@ interface MonitoringPointFormSummaryRow extends MonitoringPointFormRow {
 }
 
 export const monitoringPointFormsRepository = {
-  async list(query: ListMonitoringPointFormsQuery): Promise<MonitoringPointFormSummaryDTO[]> {
-    const rows = await buildFormsQuery(query)
+  async list(
+    query: ListMonitoringPointFormsQuery,
+    access?: MonitoringPointFormAccessContext,
+  ): Promise<MonitoringPointFormSummaryDTO[]> {
+    const rows = await buildFormsQuery(query, access)
       .leftJoin('factory_monitoring_points as p', function joinPoints() {
         this.on('p.form_id', '=', 'f.id').andOnNull('p.deleted_at');
       })
@@ -119,11 +125,20 @@ export const monitoringPointFormsRepository = {
     return rows.map(toSummaryDTO);
   },
 
-  async findById(id: number, trx?: Knex.Transaction): Promise<MonitoringPointFormDTO | null> {
-    const form = await (trx ?? db)<MonitoringPointFormRow>('factory_monitoring_point_forms')
-      .where('id', id)
-      .whereNull('deleted_at')
-      .first();
+  async findById(
+    id: number,
+    access?: MonitoringPointFormAccessContext,
+    trx?: Knex.Transaction,
+  ): Promise<MonitoringPointFormDTO | null> {
+    const form = access
+      ? await buildFormsQuery({}, access, trx ?? db)
+          .where('f.id', id)
+          .select<MonitoringPointFormRow[]>('f.*')
+          .first()
+      : await (trx ?? db)<MonitoringPointFormRow>('factory_monitoring_point_forms')
+          .where('id', id)
+          .whereNull('deleted_at')
+          .first();
     if (!form) return null;
 
     const points = await (trx ?? db)<MonitoringPointRow>('factory_monitoring_points')
@@ -146,7 +161,7 @@ export const monitoringPointFormsRepository = {
         .insert(toFormInsertRow(input.factory, actorUserId))
         .returning('id');
       await insertPoints(trx, Number(id), input.points, actorUserId);
-      const created = await this.findById(Number(id), trx);
+      const created = await this.findById(Number(id), undefined, trx);
       if (!created) throw new Error('Created monitoring point form could not be loaded');
       return created;
     });
@@ -156,7 +171,9 @@ export const monitoringPointFormsRepository = {
     id: number,
     input: SaveMonitoringPointFormInput,
     actorUserId: number,
+    access?: MonitoringPointFormAccessContext,
   ): Promise<MonitoringPointFormDTO | null> {
+    if (access && !(await this.findById(id, access))) return null;
     return db.transaction(async (trx) => {
       const affected = await trx('factory_monitoring_point_forms')
         .where('id', id)
@@ -175,13 +192,59 @@ export const monitoringPointFormsRepository = {
       });
       await insertPoints(trx, id, input.points, actorUserId);
 
-      return this.findById(id, trx);
+      return this.findById(id, undefined, trx);
     });
+  },
+
+  async canAccessFactory(
+    factory: MonitoringPointFormFactoryInput,
+    access: MonitoringPointFormAccessContext,
+  ): Promise<boolean> {
+    const scope = toScopeDetails(access.scope);
+    if (scope.scope === 'ALL') return true;
+
+    const registration = normalizeLocationValue(factory.factoryRegistrationNoNew);
+    if (scope.scope === 'IN_PROVINCE') {
+      const selectedProvince = normalizeLocationValue(scope.province);
+      const inputProvince = normalizeLocationValue(factory.provinceName);
+      return Boolean(selectedProvince && inputProvince && sameLocation(selectedProvince, inputProvince));
+    }
+    if (scope.scope === 'IN_REGION') {
+      const regions = resolveAssignedRegions(scope.region, access.regionalAccess);
+      const province = normalizeLocationValue(factory.provinceName);
+      if (regions.length === 0 || !province) return false;
+      const row = await db('provinces').where('name_th', province).whereIn('region', regions).first();
+      return Boolean(row);
+    }
+    if (!registration) return false;
+
+    const query = db('factories as f')
+      .whereNull('f.deleted_at')
+      .where((builder) => {
+        builder.where('f.fid', registration).orWhere('f.code', registration);
+      });
+    if (scope.scope === 'IN_ESTATE') {
+      const estate = normalizeLocationValue(scope.estateCode ?? scope.estate);
+      if (!estate) return false;
+      query
+        .join('industrial_estates as ie', 'ie.id', 'f.industrial_estate_id')
+        .whereNull('ie.deleted_at')
+        .where((builder) => builder.where('ie.code', estate).orWhere('ie.name_th', estate));
+    } else if (scope.scope === 'OWN_FACTORY') {
+      applyAssignedFactoryAccessFilter(query, access.actorUserId);
+    } else {
+      return false;
+    }
+    return Boolean(await query.select('f.id').first());
   },
 };
 
-function buildFormsQuery(query: ListMonitoringPointFormsQuery) {
-  const builder = db('factory_monitoring_point_forms as f').whereNull('f.deleted_at');
+function buildFormsQuery(
+  query: ListMonitoringPointFormsQuery,
+  access?: MonitoringPointFormAccessContext,
+  executor: Knex | Knex.Transaction = db,
+) {
+  const builder = executor('factory_monitoring_point_forms as f').whereNull('f.deleted_at');
 
   if (query.factoryRegistrationNoNew) {
     builder.where('f.factory_registration_no_new', query.factoryRegistrationNoNew);
@@ -197,7 +260,101 @@ function buildFormsQuery(query: ListMonitoringPointFormsQuery) {
     });
   }
 
+  if (access) applyFormAccessFilter(builder, access);
+
   return builder;
+}
+
+export function buildFormsQueryForTests(
+  query: ListMonitoringPointFormsQuery,
+  access: MonitoringPointFormAccessContext,
+) {
+  return buildFormsQuery(query, access);
+}
+
+function applyFormAccessFilter(
+  builder: Knex.QueryBuilder,
+  access: MonitoringPointFormAccessContext,
+): void {
+  const scope = toScopeDetails(access.scope);
+  switch (scope.scope) {
+    case 'ALL':
+      return;
+    case 'IN_REGION': {
+      const regions = resolveAssignedRegions(scope.region, access.regionalAccess);
+      if (regions.length === 0) {
+        builder.whereRaw('1 = 0');
+        return;
+      }
+      builder.whereExists(function formRegionAccess() {
+        this.select(db.raw('1'))
+          .from('provinces as pr')
+          .whereRaw('pr.name_th = f.province_name')
+          .whereIn('pr.region', regions);
+      });
+      return;
+    }
+    case 'IN_PROVINCE': {
+      const province = normalizeLocationValue(scope.province);
+      if (!province) builder.whereRaw('1 = 0');
+      else builder.where('f.province_name', province);
+      return;
+    }
+    case 'IN_ESTATE': {
+      const estate = normalizeLocationValue(scope.estateCode ?? scope.estate);
+      if (!estate) {
+        builder.whereRaw('1 = 0');
+        return;
+      }
+      builder.whereExists(function formEstateAccess() {
+        this.select(db.raw('1'))
+          .from('factories as af')
+          .join('industrial_estates as ie', 'ie.id', 'af.industrial_estate_id')
+          .whereNull('af.deleted_at')
+          .whereNull('ie.deleted_at')
+          .where(function formFactoryIdentifier() {
+            this.whereRaw('af.fid = f.factory_registration_no_new').orWhereRaw(
+              'af.code = f.factory_registration_no_new',
+            );
+          })
+          .where((estateBuilder) => {
+            estateBuilder.where('ie.code', estate).orWhere('ie.name_th', estate);
+          });
+      });
+      return;
+    }
+    case 'OWN_FACTORY':
+      builder.whereExists(function formOwnerAccess() {
+        this.select(db.raw('1'))
+          .from('factories')
+          .whereNull('factories.deleted_at')
+          .where(function formFactoryIdentifier() {
+            this.whereRaw('factories.fid = f.factory_registration_no_new').orWhereRaw(
+              'factories.code = f.factory_registration_no_new',
+            );
+          });
+        applyAssignedFactoryAccessFilter(this, access.actorUserId, 'factories');
+      });
+      return;
+    default:
+      builder.whereRaw('1 = 0');
+  }
+}
+
+function toScopeDetails(
+  scope: MonitoringPointFormAccessContext['scope'],
+): { scope: string | null | undefined; region?: string | null; province?: string | null; estateCode?: string | null; estate?: string | null } {
+  return scope && typeof scope === 'object' ? scope : { scope };
+}
+
+function normalizeLocationValue(value: string | null | undefined): string | null {
+  if (value == null) return null;
+  const normalized = value.trim();
+  return normalized && normalized.toLowerCase() !== 'all' ? normalized : null;
+}
+
+function sameLocation(left: string, right: string): boolean {
+  return left.trim().toLowerCase() === right.trim().toLowerCase();
 }
 
 async function insertPoints(

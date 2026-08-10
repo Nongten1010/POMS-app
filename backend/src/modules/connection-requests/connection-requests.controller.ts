@@ -3,7 +3,7 @@ import { StatusCodes } from 'http-status-codes';
 import { pipeline } from 'node:stream/promises';
 import { env } from '../../config/env';
 import { ForbiddenError } from '../../shared/errors/AppError';
-import { getScope, getScopeDetails } from '../../shared/middlewares/authorize';
+import { getScopeDetails } from '../../shared/middlewares/authorize';
 import { createDeviceConnectionConfigRequestSchema } from '../device-connections/device-connections.validator';
 import type { RegionalAccessDTO } from '../auth/regional-access';
 import { createConnectionRequestDocumentImageService } from './connection-request-document-image.service';
@@ -95,9 +95,10 @@ export const connectionRequestsController = {
     next: NextFunction,
   ): Promise<void> {
     try {
-      requireActorUserId(req);
+      const actorUserId = requireActorUserId(req);
       const query = listOperatorFactoriesQuerySchema.parse(req.query);
       const result = await connectionRequestsService.listOfficerEligibleFactories(
+        actorUserId,
         getScopeDetails(req, 'cems_wpms_requests:view'),
         query,
         ...getRegionalAccessArg(req),
@@ -148,7 +149,7 @@ export const connectionRequestsController = {
         factoryId,
         isFavorite,
         actorUserId,
-        getScopeDetails(req, 'factories:view'),
+        getScopeDetails(req, 'dashboard:view'),
         ...getRegionalAccessArg(req),
       );
       res.status(StatusCodes.OK).json({ success: true, data });
@@ -280,14 +281,14 @@ export const connectionRequestsController = {
               stationId,
               payload,
               actorUserId,
-              getScope(req, 'cems_wpms_requests:edit'),
+              getScopeDetails(req, 'cems_wpms_requests:edit'),
               ...getRegionalAccessArg(req),
             )
           : await connectionRequestsService.saveCurrentDeviceConfig(
               stationId,
               payload,
               actorUserId,
-              getScope(req, 'cems_wpms_requests:edit'),
+              getScopeDetails(req, 'cems_wpms_requests:edit'),
               ...getRegionalAccessArg(req),
             );
       res.status(StatusCodes.CREATED).json({ success: true, data });
@@ -570,7 +571,13 @@ export const connectionRequestsController = {
       const actorUserId = requireActorUserId(req);
       const { id } = connectionRequestIdParamsSchema.parse(req.params);
       const payload = changeConnectionRequestStatusSchema.parse(req.body);
-      const data = await connectionRequestsService.changeStatus(id, payload, actorUserId);
+      const data = await connectionRequestsService.changeStatus(
+        id,
+        payload,
+        actorUserId,
+        getScopeDetails(req, 'cems_wpms_requests:approve'),
+        ...getRegionalAccessArg(req),
+      );
       res.status(StatusCodes.OK).json({ success: true, data });
     } catch (err) {
       next(err);
@@ -630,7 +637,13 @@ export const connectionRequestsController = {
       const actorUserId = requireActorUserId(req);
       const { id } = connectionRequestIdParamsSchema.parse(req.params);
       const payload = verifyConnectionSchema.parse(req.body);
-      const data = await connectionRequestsService.verifyConnection(id, payload, actorUserId);
+      const data = await connectionRequestsService.verifyConnection(
+        id,
+        payload,
+        actorUserId,
+        getScopeDetails(req, 'cems_wpms_requests:approve'),
+        ...getRegionalAccessArg(req),
+      );
       res.status(StatusCodes.OK).json({ success: true, data });
     } catch (err) {
       next(err);

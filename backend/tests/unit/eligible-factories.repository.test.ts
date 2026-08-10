@@ -77,12 +77,15 @@ describe('eligibleFactoriesRepository.list', () => {
     };
     const baseQuery = {
       whereNull: jest.fn().mockReturnThis(),
+      leftJoin: jest.fn().mockReturnThis(),
       select: jest.fn().mockReturnThis(),
       clone: jest.fn().mockReturnValueOnce(countQuery).mockReturnValueOnce(rowsQuery),
     };
 
     mockDb.mockImplementation((tableName: unknown) => {
-      if (tableName === 'eligible_factories') return baseQuery;
+      if (tableName === 'eligible_factories' || tableName === 'eligible_factories as ef') {
+        return baseQuery;
+      }
       if (tableName === 'factory_monitoring_points') {
         return {
           whereIn: jest.fn().mockReturnThis(),

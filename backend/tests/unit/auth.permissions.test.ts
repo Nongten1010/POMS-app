@@ -1,5 +1,9 @@
 import { describe, expect, it } from '@jest/globals';
-import { groupPermissions, permissionGroupsToScopes } from '../../src/modules/auth/permissions';
+import {
+  groupPermissions,
+  mergePermissionScopesWithOverrides,
+  permissionGroupsToScopes,
+} from '../../src/modules/auth/permissions';
 
 describe('groupPermissions', () => {
   it('maps database permission codes to frontend permission keys with data scopes', () => {
@@ -11,10 +15,18 @@ describe('groupPermissions', () => {
         'dashboard.search:advanced': 'ALL',
         'dashboard.stats:view': 'ALL',
         'dashboard.stats:export': 'ALL',
+        'statistics:view': 'ALL',
+        'statistics:export': 'ALL',
+        'conditional_search:view': 'ALL',
         'cems_wpms_requests:approve': 'IN_PROVINCE',
         'helpdesk:submit': null,
+        'chat:view': null,
         'chat:ask': null,
         'chat:answer': null,
+        'permissions:view': 'ALL',
+        'permissions:manage': 'ALL',
+        'eligible_factories:view': 'ALL',
+        'eligible_factories:edit': null,
       }),
     ).toEqual({
       dashboard: {
@@ -33,6 +45,7 @@ describe('groupPermissions', () => {
       statistics: {
         data: 'ALL',
         view: true,
+        export: true,
       },
       conditional_search: {
         data: 'ALL',
@@ -44,6 +57,17 @@ describe('groupPermissions', () => {
       },
       chat: {
         data: null,
+        view: true,
+        ask: true,
+        answer: true,
+      },
+      permissions: {
+        data: 'ALL',
+        view: true,
+        manage: true,
+      },
+      eligible_factories: {
+        data: 'ALL',
         view: true,
         edit: true,
       },
@@ -60,12 +84,29 @@ describe('groupPermissions', () => {
           search: true,
           advanced_search: true,
           statistics: true,
+          export: true,
         },
         conditional_search: {
-          data: null,
+          data: 'ALL',
           view: true,
         },
+        statistics: {
+          data: 'ALL',
+          view: true,
+          export: true,
+        },
         chat: {
+          data: null,
+          view: true,
+          ask: true,
+          answer: true,
+        },
+        permissions: {
+          data: 'ALL',
+          view: true,
+          manage: true,
+        },
+        eligible_factories: {
           data: null,
           view: true,
           edit: true,
@@ -77,8 +118,17 @@ describe('groupPermissions', () => {
       'dashboard.search:basic': 'ALL',
       'dashboard.search:advanced': 'ALL',
       'dashboard.stats:view': 'ALL',
+      'dashboard.stats:export': 'ALL',
+      'conditional_search:view': 'ALL',
+      'statistics:view': 'ALL',
+      'statistics:export': 'ALL',
+      'chat:view': null,
       'chat:ask': null,
       'chat:answer': null,
+      'permissions:view': 'ALL',
+      'permissions:manage': 'ALL',
+      'eligible_factories:view': null,
+      'eligible_factories:edit': null,
     });
   });
 
@@ -93,6 +143,13 @@ describe('groupPermissions', () => {
         scope: 'IN_PROVINCE',
         region: null,
         province: 'ระยอง',
+      },
+      'kwp_forms:view': {
+        scope: 'IN_ESTATE',
+        region: null,
+        province: null,
+        estateCode: 'IE01',
+        estate: 'IE01',
       },
     });
 
@@ -109,11 +166,19 @@ describe('groupPermissions', () => {
         province: 'ระยอง',
         view: true,
       },
+      kwp_forms: {
+        data: 'IN_ESTATE',
+        region: null,
+        province: null,
+        estate: 'IE01',
+        view: true,
+      },
     });
 
     expect(permissionGroupsToScopes(grouped)).toEqual({
       'dashboard:view': 'IN_REGION',
       'factories:view': 'IN_PROVINCE',
+      'kwp_forms:view': 'IN_ESTATE',
     });
   });
 
@@ -132,9 +197,10 @@ describe('groupPermissions', () => {
         statistics: {
           data: 'ALL',
           view: true,
+          export: true,
         },
         conditional_search: {
-          data: null,
+          data: 'ALL',
           view: true,
         },
       }),
@@ -143,6 +209,150 @@ describe('groupPermissions', () => {
       'dashboard.search:advanced': 'IN_PROVINCE',
       'dashboard.stats:view': 'IN_PROVINCE',
       'dashboard.stats:export': 'IN_PROVINCE',
+      'statistics:view': 'ALL',
+      'statistics:export': 'ALL',
+      'conditional_search:view': 'ALL',
     });
+  });
+
+  it('keeps dashboard, statistics, and conditional search permissions decoupled', () => {
+    expect(
+      groupPermissions({
+        'dashboard.search:advanced': 'ALL',
+        'dashboard.stats:view': 'ALL',
+        'dashboard.stats:export': 'ALL',
+      }),
+    ).toEqual({
+      dashboard: {
+        data: 'ALL',
+        advanced_search: true,
+        statistics: true,
+        export: true,
+      },
+    });
+  });
+
+  it('preserves explicit chat and eligible edit actions instead of coercing them to manage', () => {
+    expect(
+      groupPermissions({
+        'chat:view': null,
+        'chat:ask': null,
+        'chat:answer': null,
+        'permissions:manage': 'ALL',
+        'eligible_factories:edit': null,
+      }),
+    ).toEqual({
+      chat: {
+        data: null,
+        view: true,
+        ask: true,
+        answer: true,
+      },
+      permissions: {
+        data: 'ALL',
+        manage: true,
+      },
+      eligible_factories: {
+        data: null,
+        edit: true,
+      },
+    });
+  });
+});
+
+describe('mergePermissionScopesWithOverrides', () => {
+  it('keeps the widest role scope and ignores overrides that would widen or invent permissions', () => {
+    expect(
+      mergePermissionScopesWithOverrides(
+        [
+          { code: 'dashboard:view', scope: 'OWN_FACTORY' },
+          { code: 'dashboard:view', scope: 'ALL' },
+          { code: 'factories:view', scope: 'OWN_FACTORY' },
+          { code: 'kwp_forms:view', scope: 'IN_ESTATE' },
+        ],
+        [
+          {
+            code: 'dashboard:view',
+            effect: 'allow',
+            scope: 'IN_PROVINCE',
+            region: null,
+            province: 'ระยอง',
+          },
+          {
+            code: 'kwp_forms:view',
+            effect: 'allow',
+            scope: 'IN_ESTATE',
+            region: null,
+            province: null,
+            estate: 'IE01',
+          },
+          {
+            code: 'factories:view',
+            effect: 'allow',
+            scope: 'ALL',
+            region: null,
+            province: null,
+          },
+          {
+            code: 'chat:answer',
+            effect: 'allow',
+            scope: null,
+            region: null,
+            province: null,
+          },
+        ],
+      ),
+    ).toEqual({
+      'dashboard:view': {
+        scope: 'IN_PROVINCE',
+        region: null,
+        province: 'ระยอง',
+      },
+      'kwp_forms:view': {
+        scope: 'IN_ESTATE',
+        region: null,
+        province: null,
+        estateCode: 'IE01',
+        estate: 'IE01',
+      },
+      'factories:view': 'OWN_FACTORY',
+    });
+  });
+
+  it('uses a deterministic role-scope lattice regardless of role row order', () => {
+    const first = mergePermissionScopesWithOverrides(
+      [
+        { code: 'dashboard:view', scope: 'IN_PROVINCE' },
+        { code: 'dashboard:view', scope: 'IN_REGION' },
+      ],
+      [],
+    );
+    const second = mergePermissionScopesWithOverrides(
+      [
+        { code: 'dashboard:view', scope: 'IN_REGION' },
+        { code: 'dashboard:view', scope: 'IN_PROVINCE' },
+      ],
+      [],
+    );
+
+    expect(first).toEqual({ 'dashboard:view': 'IN_REGION' });
+    expect(second).toEqual({ 'dashboard:view': 'IN_REGION' });
+  });
+
+  it('removes permissions when a deny override targets an existing role grant', () => {
+    expect(
+      mergePermissionScopesWithOverrides(
+        [{ code: 'dashboard:view', scope: 'ALL' }],
+        [
+          {
+            code: 'dashboard:view',
+            effect: 'deny',
+            scope: null,
+            region: null,
+            province: null,
+          },
+        ],
+      ),
+    ).toEqual({});
   });
 });

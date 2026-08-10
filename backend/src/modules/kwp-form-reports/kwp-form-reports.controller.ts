@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
-import { getScope } from '../../shared/middlewares/authorize';
+import { getScopeDetails } from '../../shared/middlewares/authorize';
 import { kwpFormReportsService } from './kwp-form-reports.service';
 import { listKwpFormRequestsQuerySchema } from './kwp-form-reports.validator';
 
@@ -10,7 +10,7 @@ export const kwpFormReportsController = {
       const actorUserId = requireActorUserId(req);
       const result = await kwpFormReportsService.listFactories(
         actorUserId,
-        getScope(req, 'kwp_forms:view'),
+        getScopeDetails(req, 'kwp_forms:view'),
         req.user?.regionalAccess ?? undefined,
       );
       res.status(StatusCodes.OK).json({ success: true, ...result });
@@ -26,7 +26,7 @@ export const kwpFormReportsController = {
       const result = await kwpFormReportsService.listRequests(
         query,
         actorUserId,
-        getScope(req, 'kwp_forms:view'),
+        getScopeDetails(req, 'kwp_forms:view'),
         req.user?.regionalAccess ?? undefined,
       );
       res.status(StatusCodes.OK).json({ success: true, ...result });

@@ -24,7 +24,7 @@ monitoringPointFormsRoutes.post(
 );
 monitoringPointFormsRoutes.post(
   '/:id/select-eligible',
-  authorize('eligible_factories:manage'),
+  authorize('eligible_factories:edit'),
   monitoringPointFormsController.selectEligible,
 );
 monitoringPointFormsRoutes.put(

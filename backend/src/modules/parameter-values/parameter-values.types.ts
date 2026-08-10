@@ -1,4 +1,5 @@
 import type { PermissionScopeDetails } from '../auth/permissions';
+import type { RegionalAccessDTO } from '../auth/regional-access';
 
 export const PARAMETER_VALUE_INTERVALS = ['real', '1m', '5m', '60m', '1day', 'test'] as const;
 
@@ -71,6 +72,7 @@ export type MeasurementStatisticsEvaluationOptions = ParameterEvaluationOptions;
 export interface ParameterValueAccessContext {
   actorUserId: number;
   scope: string | null | undefined | PermissionScopeDetails;
+  regionalAccess?: RegionalAccessDTO | null;
 }
 
 export interface ParameterValuesTableDTO {

@@ -1,7 +1,11 @@
 import type { Knex } from 'knex';
 import { db } from '../../config/database';
+import type { PermissionScopeDetails } from '../auth/permissions';
+import { resolveAssignedRegions } from '../auth/regional-access';
+import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
 import { toCanonicalStatusDateTime } from './device-connection-status-datetime';
 import {
+  type DeviceConnectionAccessContext,
   type CreateDeviceConnectionConfigInput,
   type DeviceConnectionConfigDTO,
   type DeviceConnectionProtocol,
@@ -36,8 +40,11 @@ interface DeviceMeasurementChannelRow {
 }
 
 export const deviceConnectionsRepository = {
-  async list(query: ListDeviceConnectionConfigsQuery): Promise<DeviceConnectionConfigDTO[]> {
-    return listActiveConfigs(query, 'masked');
+  async list(
+    query: ListDeviceConnectionConfigsQuery,
+    access?: DeviceConnectionAccessContext,
+  ): Promise<DeviceConnectionConfigDTO[]> {
+    return listActiveConfigs(query, 'masked', access);
   },
 
   async listActiveForIntegration(
@@ -46,10 +53,12 @@ export const deviceConnectionsRepository = {
     return listActiveConfigs(query, 'plaintext');
   },
 
-  async findById(id: number): Promise<DeviceConnectionConfigDTO | null> {
-    const row = await db<DeviceConnectionConfigRow>('device_connection_configs')
+  async findById(
+    id: number,
+    access?: DeviceConnectionAccessContext,
+  ): Promise<DeviceConnectionConfigDTO | null> {
+    const row = await buildDeviceConnectionAccessQuery(access)
       .where('id', id)
-      .whereNull('deleted_at')
       .first();
     return row ? hydrate(row) : null;
   },
@@ -193,9 +202,9 @@ type SensitiveSettingsMode = 'masked' | 'plaintext';
 async function listActiveConfigs(
   query: ListDeviceConnectionConfigsQuery,
   sensitiveSettingsMode: SensitiveSettingsMode,
+  access?: DeviceConnectionAccessContext,
 ): Promise<DeviceConnectionConfigDTO[]> {
-  const rows = await db<DeviceConnectionConfigRow>('device_connection_configs')
-    .whereNull('deleted_at')
+  const rows = await buildDeviceConnectionAccessQuery(access)
     .whereNull('request_id')
     .modify((builder) => {
       if (query.stationId) builder.where('station_id', query.stationId);
@@ -209,6 +218,110 @@ async function listActiveConfigs(
       hydrate(row, undefined, sensitiveSettingsMode),
     ),
   );
+}
+
+function buildDeviceConnectionAccessQuery(access?: DeviceConnectionAccessContext) {
+  const query = db<DeviceConnectionConfigRow>('device_connection_configs')
+    .whereNull('deleted_at');
+  const scopeValue = getAccessScopeValue(access?.scope);
+  if (!access || scopeValue === 'ALL') return query;
+
+  return query.whereExists(function deviceConnectionAccessExists() {
+    this.select(db.raw('1'))
+      .from('cems_wpms_connected_measurement_points as cp')
+      .leftJoin('factories as f', function joinFactory() {
+        this.on('f.fid', '=', 'cp.factory_id').orOn('f.code', '=', 'cp.factory_id').andOnNull('f.deleted_at');
+      })
+      .leftJoin('provinces as pr', 'pr.id', 'f.province_id')
+      .leftJoin('industrial_estates as ie', function joinEstate() {
+        this.on('ie.id', '=', 'f.industrial_estate_id').andOnNull('ie.deleted_at');
+      })
+      .leftJoin('cems_wpms_request_factory_snapshots as fs', function joinSnapshot() {
+        this.on('fs.request_id', '=', 'cp.source_request_id').andOnNull('fs.deleted_at');
+      })
+      .whereRaw('cp.point_code = device_connection_configs.station_id')
+      .whereNull('cp.deleted_at');
+
+    applyDeviceConnectionLocationFilter(this, access);
+  });
+}
+
+function applyDeviceConnectionLocationFilter(
+  builder: Knex.QueryBuilder,
+  access: DeviceConnectionAccessContext,
+): void {
+  const scope = toScopeDetails(access.scope);
+  switch (scope.scope) {
+    case 'IN_REGION': {
+      const regions = resolveAssignedRegions(scope.region, access.regionalAccess);
+      if (regions.length === 0) {
+        builder.whereRaw('1 = 0');
+        return;
+      }
+      builder.where((regionBuilder) => {
+        regionBuilder.whereIn('pr.region', regions).orWhereIn('fs.region_name', regions);
+      });
+      return;
+    }
+    case 'IN_PROVINCE': {
+      const province = normalizeLocationValue(scope.province);
+      if (!province) {
+        builder.whereRaw('1 = 0');
+        return;
+      }
+      builder.where((provinceBuilder) => {
+        provinceBuilder.where('pr.name_th', province).orWhere('fs.province_name', province);
+      });
+      return;
+    }
+    case 'IN_ESTATE': {
+      const estate = getScopeEstateCode(scope);
+      if (!estate) {
+        builder.whereRaw('1 = 0');
+        return;
+      }
+      builder.where((estateBuilder) => {
+        estateBuilder.where('ie.code', estate).orWhere('fs.industrial_estate_code', estate);
+      });
+      return;
+    }
+    case 'OWN_FACTORY':
+      builder.where((ownBuilder) => {
+        ownBuilder.whereExists(function assignedFactory() {
+          this.select(db.raw('1')).from('factories as f').whereRaw('f.fid = cp.factory_id OR f.code = cp.factory_id');
+          applyAssignedFactoryAccessFilter(this, access.actorUserId);
+        });
+      });
+      return;
+    default:
+      builder.whereRaw('1 = 0');
+  }
+}
+
+function getAccessScopeValue(
+  scope: DeviceConnectionAccessContext['scope'] | undefined,
+): string | null | undefined {
+  return scope && typeof scope === 'object' ? scope.scope : scope;
+}
+
+function toScopeDetails(scope: DeviceConnectionAccessContext['scope']): PermissionScopeDetails {
+  return scope && typeof scope === 'object'
+    ? scope
+    : { scope: (scope ?? null) as PermissionScopeDetails['scope'] };
+}
+
+function normalizeLocationValue(value: string | null | undefined): string | null {
+  if (value == null) return null;
+  const trimmed = value.trim();
+  return trimmed && trimmed.toLowerCase() !== 'all' ? trimmed : null;
+}
+
+function getScopeEstateCode(scope: PermissionScopeDetails): string | null {
+  return normalizeLocationValue(scope.estateCode ?? scope.estate ?? null);
+}
+
+export function buildDeviceConnectionAccessQueryForTests(access: DeviceConnectionAccessContext) {
+  return buildDeviceConnectionAccessQuery(access);
 }
 
 async function insertConfigs(

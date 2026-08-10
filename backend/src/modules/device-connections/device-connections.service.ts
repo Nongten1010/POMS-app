@@ -1,4 +1,5 @@
-import { BadRequestError, NotFoundError } from '../../shared/errors/AppError';
+import { BadRequestError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
+import { parameterValuesRepository } from '../parameter-values/parameter-values.repository';
 import {
   findMockDeviceConnectionConfig,
   getMockDeviceConnectionConfigs,
@@ -6,6 +7,7 @@ import {
 import { deviceConnectionsRepository } from './device-connections.repository';
 import {
   DEVICE_CONNECTION_PROTOCOL,
+  type DeviceConnectionAccessContext,
   type CreateDeviceConnectionConfigInput,
   type DeviceConnectionConfigDTO,
   type DeviceConnectionTestResultDTO,
@@ -21,9 +23,16 @@ export const deviceConnectionsService = {
     nowProvider = provider;
   },
 
-  async list(query: ListDeviceConnectionConfigsQuery): Promise<DeviceConnectionConfigDTO[]> {
-    const configs = await deviceConnectionsRepository.list(query);
+  async list(
+    query: ListDeviceConnectionConfigsQuery,
+    access?: DeviceConnectionAccessContext,
+  ): Promise<DeviceConnectionConfigDTO[]> {
+    const configs = await deviceConnectionsRepository.list(query, access);
     if (configs.length > 0) return configs;
+
+    // Mock configs are for internal/demo callers only. A scoped API request must
+    // never fall back to a fixture after its database query found no visible row.
+    if (access) return [];
 
     const mockConfigs = getMockDeviceConnectionConfigs(query.stationId ?? '');
     return query.protocol
@@ -43,9 +52,11 @@ export const deviceConnectionsService = {
     return deviceConnectionsRepository.listActiveForIntegration(query);
   },
 
-  async getById(id: number): Promise<DeviceConnectionConfigDTO> {
-    const config = await deviceConnectionsRepository.findById(id);
+  async getById(id: number, access?: DeviceConnectionAccessContext): Promise<DeviceConnectionConfigDTO> {
+    const config = await deviceConnectionsRepository.findById(id, access);
     if (config) return config;
+
+    if (access) throw new NotFoundError('Device connection config not found');
 
     const mockConfig = findMockDeviceConnectionConfig(id);
     if (mockConfig) return mockConfig;
@@ -60,7 +71,12 @@ export const deviceConnectionsService = {
   async create(
     input: CreateDeviceConnectionConfigInput,
     actorUserId: number,
+    access?: DeviceConnectionAccessContext,
   ): Promise<DeviceConnectionConfigDTO> {
+    if (access && access.actorUserId !== actorUserId) {
+      throw new ForbiddenError('Device connection actor does not match the access context');
+    }
+    await ensureDeviceConnectionStationAccess(input.stationId, access);
     const [preparedInput] = await preserveStoredDatabasePasswords([input]);
     return deviceConnectionsRepository.replaceActive(preparedInput, actorUserId);
   },
@@ -116,7 +132,11 @@ export const deviceConnectionsService = {
     );
   },
 
-  async testConnection(input: TestDeviceConnectionInput): Promise<DeviceConnectionTestResultDTO> {
+  async testConnection(
+    input: TestDeviceConnectionInput,
+    access?: DeviceConnectionAccessContext,
+  ): Promise<DeviceConnectionTestResultDTO> {
+    await ensureDeviceConnectionStationAccess(input.stationId, access);
     return {
       success: true,
       mode: 'MOCK',
@@ -131,6 +151,20 @@ export const deviceConnectionsService = {
     };
   },
 };
+
+async function ensureDeviceConnectionStationAccess(
+  stationId: string,
+  access?: DeviceConnectionAccessContext,
+): Promise<void> {
+  if (!access) return;
+  const canAccess = await parameterValuesRepository.canAccessStationForConnectionTest(
+    stationId,
+    access,
+  );
+  if (!canAccess) {
+    throw new ForbiddenError(`Station ${stationId} is not available for this user`);
+  }
+}
 
 async function preserveStoredDatabasePasswords(
   inputs: CreateDeviceConnectionConfigInput[],

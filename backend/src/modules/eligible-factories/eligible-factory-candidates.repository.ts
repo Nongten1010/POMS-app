@@ -1,6 +1,8 @@
 import type { Knex } from 'knex';
 import { logger } from '../../config/logger';
 import { env } from '../../config/env';
+import type { EligibleFactoryAccessContext } from './eligible-factories.access';
+import { applyCandidateAccessFilters, resolveCandidateAccessFilters } from './eligible-factories.access';
 import { factorySourceDb, factorySourceTableName } from '../../config/factory-source-database';
 import {
   type AdministrativeAreaNames,
@@ -19,14 +21,32 @@ const EXTERNAL_QUERY_TIMEOUT_MS = 300000;
 const BULK_LOOKUP_THRESHOLD = 5000;
 
 export const eligibleFactoryCandidatesRepository = {
-  async list(query: ListEligibleFactoryCandidatesQuery): Promise<EligibleFactoryCandidatesDTO> {
-    return listExternalCandidates(query);
+  async list(
+    query: ListEligibleFactoryCandidatesQuery,
+    access?: EligibleFactoryAccessContext,
+  ): Promise<EligibleFactoryCandidatesDTO> {
+    return listExternalCandidates(query, access);
   },
 };
 
 async function listExternalCandidates(
   query: ListEligibleFactoryCandidatesQuery,
+  access?: EligibleFactoryAccessContext,
 ): Promise<EligibleFactoryCandidatesDTO> {
+  const accessFilters = await resolveCandidateAccessFilters(access);
+  if (accessFilters.denyAll) {
+    return {
+      data: [],
+      meta: {
+        total: 0,
+        source: 'external',
+        ...(query.page !== undefined && query.perPage !== undefined
+          ? { page: query.page, perPage: query.perPage, totalPages: 0 }
+          : {}),
+      },
+    };
+  }
+
   const selectedRegistrationNumbers = await selectedFactoryRegistrationNumbers();
   const columns = await availableFacImportColumns();
   const baseQuery = buildFacImportBaseQuery();
@@ -36,10 +56,12 @@ async function listExternalCandidates(
 
   const countQuery = baseQuery.clone();
   applyCandidateFilters(countQuery, columns, selectedRegistrationNumbers);
+  applyCandidateAccessFilters(countQuery, accessFilters);
   const total = await countCandidates(countQuery);
 
   const rowsQuery = baseQuery.clone();
   applyCandidateFilters(rowsQuery, columns, selectedRegistrationNumbers);
+  applyCandidateAccessFilters(rowsQuery, accessFilters);
   rowsQuery.select(columns);
   const orderByColumn = firstAvailableColumn(columns, ['FACREG', 'FID', 'DISPFACREG']);
   if (orderByColumn) {

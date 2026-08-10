@@ -1,3 +1,6 @@
+import type { PermissionScopeDetails } from '../auth/permissions';
+import type { RegionalAccessDTO } from '../auth/regional-access';
+
 export const MONITORING_POINT_SYSTEM_TYPES = ['CEMS', 'WPMS'] as const;
 
 export const MONITORING_POINT_STATUSES = [
@@ -12,6 +15,12 @@ export const MONITORING_POINT_STATUSES = [
 
 export type MonitoringPointSystemType = (typeof MONITORING_POINT_SYSTEM_TYPES)[number];
 export type MonitoringPointStatus = (typeof MONITORING_POINT_STATUSES)[number];
+
+export interface MonitoringPointFormAccessContext {
+  actorUserId: number;
+  scope: string | null | undefined | PermissionScopeDetails;
+  regionalAccess?: RegionalAccessDTO | null;
+}
 
 export interface MonitoringPointFormFactoryInput {
   factoryName?: string | null;

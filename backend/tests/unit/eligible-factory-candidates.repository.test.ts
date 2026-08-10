@@ -1,4 +1,6 @@
-import { describe, expect, it, jest } from '@jest/globals';
+import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+
+const mockDb = jest.fn();
 
 jest.mock('../../src/config/env', () => ({
   env: {
@@ -12,6 +14,10 @@ jest.mock('../../src/config/env', () => ({
 jest.mock('../../src/config/factory-source-database', () => ({
   factorySourceDb: jest.fn(),
   factorySourceTableName: jest.fn(() => 'dbo.fac_import'),
+}));
+
+jest.mock('../../src/config/database', () => ({
+  db: mockDb,
 }));
 
 jest.mock('../../src/config/boiler-source-database', () => ({
@@ -59,6 +65,10 @@ describe('eligibleFactoryCandidatesRepository', () => {
       COLONY_INDUST_CODE: '000022',
     },
   ];
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
 
   function mockExternalCandidates(candidateRows: Array<Record<string, unknown>> = externalRows) {
     const informationSchemaQuery = {
@@ -212,6 +222,20 @@ describe('eligibleFactoryCandidatesRepository', () => {
           { FID: 'real-2', CLASS: '00100' },
         ]),
     };
+    const provinceRowsByRegion = new Map<string, Array<{ id: string; name_th: string; region: string }>>([
+      ['ภาคกลาง', [{ id: '18', name_th: 'ชัยนาท', region: 'ภาคกลาง' }]],
+      ['ภาคตะวันออก', [{ id: '21', name_th: 'ระยอง', region: 'ภาคตะวันออก' }]],
+    ]);
+    const provinceQuery = {
+      whereIn: jest.fn((_column: string, regions: string[]) => {
+        const matchingRows = regions.flatMap((region) => provinceRowsByRegion.get(region) ?? []);
+        provinceQuery.select.mockResolvedValueOnce(matchingRows);
+        return provinceQuery;
+      }),
+      select: jest
+        .fn<() => Promise<Array<{ id: string; name_th: string; region: string }>>>()
+        .mockResolvedValue([{ id: '18', name_th: 'ชัยนาท', region: 'ภาคกลาง' }]),
+    };
     mockedFactorySourceDb.mockImplementation(((tableName: unknown) => {
       if (tableName === 'INFORMATION_SCHEMA.COLUMNS') return informationSchemaQuery as never;
       if (tableName === 'dbo.check_eia') return checkEiaQuery as never;
@@ -222,6 +246,32 @@ describe('eligibleFactoryCandidatesRepository', () => {
       if (tableName === 'dbo.FACCLASS as fc') return activeFacClassQuery as never;
       return baseQuery as never;
     }) as never);
+    mockDb.mockImplementation((tableName: unknown) => {
+      if (tableName === 'industrial_estates') {
+        return {
+          modify: jest.fn((callback: (builder: unknown) => void) => {
+            callback({
+              where: jest.fn(),
+              orWhere: jest.fn(),
+              whereRaw: jest.fn(),
+            });
+            return {
+              select: jest
+                .fn<() => Promise<Array<{ id: number; code: string; name_th: string }>>>()
+                .mockResolvedValue([{ id: 1, code: 'MTP', name_th: 'แหลมฉบัง' }]),
+            };
+          }),
+          whereIn: jest.fn().mockReturnThis(),
+          select: jest
+            .fn<() => Promise<Array<{ id: string; name_th: string; region: string }>>>()
+            .mockResolvedValue([{ id: '18', name_th: 'ชัยนาท', region: 'ภาคกลาง' }]),
+        };
+      }
+      if (tableName === 'provinces') {
+        return provinceQuery;
+      }
+      throw new Error(`Unexpected local table: ${String(tableName)}`);
+    });
     return {
       baseQuery,
       countQuery,
@@ -232,6 +282,7 @@ describe('eligibleFactoryCandidatesRepository', () => {
       activeFacClassQuery,
       industrialEstateQuery,
       administrativeAreaQuery,
+      provinceQuery,
     };
   }
 
@@ -328,6 +379,180 @@ describe('eligibleFactoryCandidatesRepository', () => {
     expect(result.data).toHaveLength(2);
     expect(facImportQuery.offset).not.toHaveBeenCalled();
     expect(facImportQuery.limit).not.toHaveBeenCalled();
+  });
+
+  it('filters external candidates by province scope before count and row queries', async () => {
+    const { countQuery, facImportQuery } = mockExternalCandidates();
+    mockedEligibleFactoriesRepository.listActiveRegistrationNumbers.mockResolvedValue([]);
+
+    await eligibleFactoryCandidatesRepository.list(
+      { page: 1, perPage: 50 },
+      {
+        actorUserId: 42,
+        scope: { scope: 'IN_PROVINCE', province: 'ชัยนาท', region: null },
+      },
+    );
+
+    expect(countQuery.whereIn).toHaveBeenCalledWith('PROV', ['18']);
+    expect(facImportQuery.whereIn).toHaveBeenCalledWith('PROV', ['18']);
+  });
+
+  it('fails closed for province-scoped candidates without a province detail', async () => {
+    mockedEligibleFactoriesRepository.listActiveRegistrationNumbers.mockResolvedValue([]);
+
+    const result = await eligibleFactoryCandidatesRepository.list(
+      {},
+      {
+        actorUserId: 42,
+        scope: { scope: 'IN_PROVINCE', province: null, region: null },
+      },
+    );
+
+    expect(result).toEqual({
+      data: [],
+      meta: {
+        total: 0,
+        source: 'external',
+      },
+    });
+  });
+
+  it('fails closed when candidate scope.region conflicts with regionalAccess', async () => {
+    const { countQuery, facImportQuery, provinceQuery } = mockExternalCandidates();
+    mockedEligibleFactoriesRepository.listActiveRegistrationNumbers.mockResolvedValue([]);
+
+    const result = await eligibleFactoryCandidatesRepository.list(
+      {},
+      {
+        actorUserId: 42,
+        scope: { scope: 'IN_REGION', region: 'ภาคกลาง' },
+        regionalAccess: { regions: ['ภาคตะวันออก'] },
+      },
+    );
+
+    expect(result).toEqual({ data: [], meta: { total: 0, source: 'external' } });
+    expect(provinceQuery.whereIn).not.toHaveBeenCalled();
+    expect(countQuery.whereIn).not.toHaveBeenCalledWith('PROV', expect.anything());
+    expect(facImportQuery.whereIn).not.toHaveBeenCalledWith('PROV', expect.anything());
+  });
+
+  it('fails closed when candidate IN_REGION scope has no assigned profile region', async () => {
+    const { countQuery, facImportQuery, provinceQuery } = mockExternalCandidates();
+    mockedEligibleFactoriesRepository.listActiveRegistrationNumbers.mockResolvedValue([]);
+
+    const result = await eligibleFactoryCandidatesRepository.list(
+      {},
+      {
+        actorUserId: 42,
+        scope: { scope: 'IN_REGION', region: 'ภาคกลาง' },
+        regionalAccess: null,
+      },
+    );
+
+    expect(result).toEqual({ data: [], meta: { total: 0, source: 'external' } });
+    expect(provinceQuery.whereIn).not.toHaveBeenCalled();
+    expect(countQuery.whereIn).not.toHaveBeenCalledWith('PROV', expect.anything());
+    expect(facImportQuery.whereIn).not.toHaveBeenCalledWith('PROV', expect.anything());
+  });
+
+  it('filters external candidates by authoritative estate code when provided', async () => {
+    const rows = [
+      {
+        FNAME: 'โรงงานในนิคม',
+        FID: 'estate-1',
+        DISPFACREG: 'estate-reg-1',
+        CLASS: '00100',
+        PROV: 21,
+        FFLAG: 1,
+        COLONY_INDUST_CODE: 'MTP',
+      },
+    ];
+    const { countQuery, facImportQuery } = mockExternalCandidates(rows);
+    mockedEligibleFactoriesRepository.listActiveRegistrationNumbers.mockResolvedValue([]);
+
+    await eligibleFactoryCandidatesRepository.list(
+      {},
+      {
+        actorUserId: 42,
+        scope: { scope: 'IN_ESTATE', estateCode: 'MTP' } as never,
+      },
+    );
+
+    expect(countQuery.whereIn).toHaveBeenCalledWith('COLONY_INDUST_CODE', ['MTP']);
+    expect(facImportQuery.whereIn).toHaveBeenCalledWith('COLONY_INDUST_CODE', ['MTP']);
+  });
+
+  it('accepts the legacy estate qualifier as a fallback for candidate filtering', async () => {
+    const { countQuery, facImportQuery } = mockExternalCandidates();
+    mockedEligibleFactoriesRepository.listActiveRegistrationNumbers.mockResolvedValue([]);
+
+    await eligibleFactoryCandidatesRepository.list(
+      {},
+      {
+        actorUserId: 42,
+        scope: { scope: 'IN_ESTATE', estate: 'MTP' } as never,
+      },
+    );
+
+    expect(countQuery.whereIn).toHaveBeenCalledWith('COLONY_INDUST_CODE', ['MTP']);
+    expect(facImportQuery.whereIn).toHaveBeenCalledWith('COLONY_INDUST_CODE', ['MTP']);
+  });
+
+  it('fails closed for estate-scoped candidates without an authoritative assignment', async () => {
+    mockedEligibleFactoriesRepository.listActiveRegistrationNumbers.mockResolvedValue([]);
+    mockDb.mockImplementation((tableName: unknown) => {
+      if (tableName === 'industrial_estates') {
+        return {
+          modify: jest.fn().mockReturnValue({
+            select: jest
+              .fn<() => Promise<Array<{ id: number; code: string; name_th: string }>>>()
+              .mockResolvedValue([]),
+          }),
+        };
+      }
+      if (tableName === 'provinces') {
+        return {
+          whereIn: jest.fn().mockReturnThis(),
+          select: jest
+            .fn<() => Promise<Array<{ id: string; name_th: string; region: string }>>>()
+            .mockResolvedValue([]),
+        };
+      }
+      throw new Error(`Unexpected local table: ${String(tableName)}`);
+    });
+
+    const result = await eligibleFactoryCandidatesRepository.list(
+      {},
+      {
+        actorUserId: 42,
+        scope: { scope: 'IN_ESTATE' } as never,
+      },
+    );
+
+    expect(result).toEqual({
+      data: [],
+      meta: {
+        total: 0,
+        source: 'external',
+      },
+    });
+    expect(mockedFactorySourceDb).not.toHaveBeenCalledWith('dbo.fac_import');
+  });
+
+  it('does not narrow ALL candidate reads with regionalAccess', async () => {
+    const { countQuery } = mockExternalCandidates();
+    mockedEligibleFactoriesRepository.listActiveRegistrationNumbers.mockResolvedValue([]);
+
+    await eligibleFactoryCandidatesRepository.list(
+      {},
+      {
+        actorUserId: 42,
+        scope: { scope: 'ALL' },
+        regionalAccess: { regions: ['ภาคตะวันออก'] },
+      },
+    );
+
+    expect(countQuery.whereIn).not.toHaveBeenCalledWith('PROV', expect.any(Array));
   });
 
   it('returns candidates when selected factory exclusion cannot be loaded', async () => {
