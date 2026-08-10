@@ -2,6 +2,14 @@
 
 ไฟล์นี้บันทึกเฉพาะการเปลี่ยน API ที่ทำให้ client ต้องแก้ตาม การเปลี่ยนทั่วไปและประวัติรายละเอียดดูจาก Git history
 
+## 2026-08-10 — Dashboard ใช้ค่ารายชั่วโมงที่คำนวณเสร็จแล้ว
+
+- **Affected menu:** [หน้าหลัก](./menus/home/README.md#get-apiv1operator-factory-dashboard)
+- **Impact:** `GET /api/v1/operator-factory-dashboard` และ `GET /api/v1/public/factory-map-points` เปลี่ยน `measurementPoints[].data` จาก timestamp ล่าสุดในตาราง `60m` เป็น timestamp ล่าสุดที่ไม่เกินชั่วโมงก่อนหน้าตาม `Asia/Bangkok`; `hasLatestHourlyMeasurement` เป็น `true` เมื่อทุก active point มีข้อมูลตรงกับชั่วโมงก่อนหน้า.
+- **Migration:** Frontend ใช้ `measurementPoints[].data` และ `hasLatestHourlyMeasurement` ได้ตามเดิม แต่ต้องคาดหวังว่าเมื่อเรียกเวลา `21:00-21:59` จะแสดงรอบ `20:00` เพราะรอบ `21:00` ยังถือว่าคำนวณไม่เสร็จ; ช่วง `00:00-00:59` จะแสดงรอบ `23:00` ของวันก่อนหน้า.
+- **Old contract:** API เลือก timestamp ล่าสุดโดยไม่จำกัด cutoff และตรวจ flag เทียบกับชั่วโมงปัจจุบัน ทำให้ข้อมูลของรอบที่ยังคำนวณไม่เสร็จอาจถูกแสดง.
+- **New contract:** API เลือก timestamp ล่าสุดไม่เกินปลายชั่วโมงก่อนหน้า และตรวจ flag เทียบกับวันและชั่วโมงเดียวกันของรอบที่คำนวณเสร็จแล้วล่าสุด.
+
 ## 2026-08-10 — ลบฟอร์มข้อมูลจุดตรวจวัดพร้อมโรงงานที่ถูกถอดออกจากเข้าข่าย
 
 - **Affected menu:** [โรงงานที่เข้าข่าย](./menus/eligible-factories/README.md#การถอดโรงงานออกจากเข้าข่าย)

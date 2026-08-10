@@ -2346,7 +2346,8 @@ function toStringOrNull(value: string | number | null | undefined): string | nul
 async function populateLatestHourlyMeasurements<
   TFactory extends { measurementPoints: OperatorFactoryMeasurementPointDTO[] },
 >(factories: TFactory[], actorUserId: number, factoryViewScope: AccessScope): Promise<TFactory[]> {
-  const currentBangkokHour = toBangkokDateHour(nowProvider());
+  const now = nowProvider();
+  const latestCompletedBangkokHour = toBangkokDateHour(new Date(now.getTime() - 60 * 60 * 1000));
   const factoriesWithLatestMeasurements = await Promise.all(
     factories.map(async (factory) => {
       const measurementPoints = await Promise.all(
@@ -2357,6 +2358,7 @@ async function populateLatestHourlyMeasurements<
             actorUserId,
             factoryViewScope,
             point.parameters,
+            latestCompletedBangkokHour,
           ),
         })),
       );
@@ -2370,9 +2372,9 @@ async function populateLatestHourlyMeasurements<
 
   return factoriesWithLatestMeasurements.map((factory) => ({
     ...factory,
-    hasLatestHourlyMeasurement: hasCurrentHourlyMeasurementsForAllPoints(
+    hasLatestHourlyMeasurement: hasMeasurementsForHour(
       factory.measurementPoints,
-      currentBangkokHour,
+      latestCompletedBangkokHour,
     ),
   }));
 }
@@ -2394,7 +2396,7 @@ function toBangkokDateHour(date: Date): DateHour | null {
   return { date: `${year}-${month}-${day}`, hour };
 }
 
-function hasCurrentHourlyMeasurementsForAllPoints(
+function hasMeasurementsForHour(
   measurementPoints: OperatorFactoryMeasurementPointDTO[],
   currentHour: DateHour | null,
 ): boolean {
@@ -2443,14 +2445,15 @@ async function loadLatestHourlyMeasurementData(
   actorUserId: number,
   factoryViewScope: AccessScope,
   parameterDisplayNames: string[],
+  cutoff: DateHour | null,
 ): Promise<Record<string, unknown>[]> {
-  if (!stationId || !isSafeStationId(stationId)) return [];
+  if (!stationId || !isSafeStationId(stationId) || !cutoff) return [];
 
   try {
     const result = await parameterValuesService.latestHourly(stationId, {
       actorUserId,
       scope: factoryViewScope,
-    });
+    }, cutoff);
     return result.data.map((row) => toDashboardMeasurementRow(row, parameterDisplayNames));
   } catch (error) {
     if (error instanceof NotFoundError || error instanceof ForbiddenError) return [];

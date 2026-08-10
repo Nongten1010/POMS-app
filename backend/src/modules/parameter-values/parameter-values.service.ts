@@ -24,6 +24,7 @@ import {
   type CalendarStatusResultDTO,
   type ConnectionTestQuery,
   type ConnectionTestResultDTO,
+  type HourlyMeasurementCutoff,
   type LatestHourlyParameterValuesResultDTO,
   type LatestParameterValueQuery,
   type LatestParameterValueResultDTO,
@@ -132,6 +133,7 @@ export const parameterValuesService = {
   async latestHourly(
     stationId: string,
     access: ParameterValueAccessContext,
+    cutoff?: HourlyMeasurementCutoff,
   ): Promise<LatestHourlyParameterValuesResultDTO> {
     await ensureStationAccess(stationId, access);
 
@@ -144,10 +146,10 @@ export const parameterValuesService = {
       );
     }
 
-    const result = await parameterValuesRepository.latestRowsAtLatestTimestamp({
-      stationId,
-      interval,
-    });
+    const query = { stationId, interval } as const;
+    const result = cutoff
+      ? await parameterValuesRepository.latestRowsAtOrBeforeHour(query, cutoff)
+      : await parameterValuesRepository.latestRowsAtLatestTimestamp(query);
     const registeredParameters = await parameterValuesRepository.listRegisteredParameters(
       stationId,
       access,

@@ -869,7 +869,7 @@ describe('connectionRequestsService', () => {
         {
           station_id: 'NB-C21',
           cdate: '2026-02-25',
-          ctime: '22.00-22.59 น.',
+          ctime: '21.00-21.59 น.',
           co_value: 0.05,
           co_status: 1,
           nox_value: 10.54,
@@ -1064,7 +1064,7 @@ describe('connectionRequestsService', () => {
             {
               station_id: 'NB-C21',
               cdate: '2026-02-25',
-              ctime: '22.00-22.59 น.',
+              ctime: '21.00-21.59 น.',
               'CO (ppm)': 0.05,
               'NOx (ppm)': 'Shut Down',
               'Temp. (°C)': 'No Discharge',
@@ -1076,10 +1076,11 @@ describe('connectionRequestsService', () => {
         },
       ],
     });
-    expect(mockedParameterValuesService.latestHourly).toHaveBeenCalledWith('S0001', {
-      actorUserId,
-      scope: 'OWN_FACTORY',
-    });
+    expect(mockedParameterValuesService.latestHourly).toHaveBeenCalledWith(
+      'S0001',
+      { actorUserId, scope: 'OWN_FACTORY' },
+      { date: '2026-02-25', hour: 21 },
+    );
     expect(result.data[0]).not.toHaveProperty('requestStatus');
     expect(result.data[0]).not.toHaveProperty('requestStatusCode');
     expect(result.data[0]).not.toHaveProperty('systemTypes');
@@ -1096,7 +1097,7 @@ describe('connectionRequestsService', () => {
     });
   });
 
-  it('marks latest hourly measurements available when every point is in the current Bangkok hour', async () => {
+  it('marks latest hourly measurements available when every point is in the latest completed Bangkok hour', async () => {
     connectionRequestsService.setClockForTests(() => new Date('2026-08-08T15:50:00.000Z'));
     mockedRepository.listFactoriesForAccess.mockResolvedValue([factorySummary()]);
     mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
@@ -1110,12 +1111,12 @@ describe('connectionRequestsService', () => {
     mockedParameterValuesService.latestHourly
       .mockResolvedValueOnce(
         latestHourlyResult('S0001', [
-          { station_id: 'S0001', cdate: '2026-08-08', ctime: '22:00:00' },
+          { station_id: 'S0001', cdate: '2026-08-08', ctime: '21:00:00' },
         ]),
       )
       .mockResolvedValueOnce(
         latestHourlyResult('S0002', [
-          { station_id: 'S0002', cdate: '2026-08-08', ctime: '22.00-22.59 น.' },
+          { station_id: 'S0002', cdate: '2026-08-08', ctime: '21.00-21.59 น.' },
         ]),
       );
 
@@ -1127,15 +1128,15 @@ describe('connectionRequestsService', () => {
     expect(result.data[0]?.hasLatestHourlyMeasurement).toBe(true);
   });
 
-  it('uses the Bangkok calendar date when the current hour crosses midnight', async () => {
-    connectionRequestsService.setClockForTests(() => new Date('2026-08-08T17:05:00.000Z'));
+  it('uses the previous Bangkok hour while the current hourly calculation is incomplete', async () => {
+    connectionRequestsService.setClockForTests(() => new Date('2026-08-08T14:25:00.000Z'));
     mockedRepository.listFactoriesForAccess.mockResolvedValue([factorySummary()]);
     mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
       currentFactoryMeasurementPoint({ stationId: 'S0001', pointCode: 'S0001' }),
     ]);
     mockedParameterValuesService.latestHourly.mockResolvedValueOnce(
       latestHourlyResult('S0001', [
-        { station_id: 'S0001', cdate: '2026-08-09', ctime: '00:00:00' },
+        { station_id: 'S0001', cdate: '2026-08-08', ctime: '20:00:00' },
       ]),
     );
 
@@ -1144,10 +1145,41 @@ describe('connectionRequestsService', () => {
       'OWN_FACTORY',
     );
 
+    expect(mockedParameterValuesService.latestHourly).toHaveBeenCalledWith(
+      'S0001',
+      { actorUserId, scope: 'OWN_FACTORY' },
+      { date: '2026-08-08', hour: 20 },
+    );
+    expect(result.data[0]?.measurementPoints[0]?.data[0]?.ctime).toBe('20:00:00');
     expect(result.data[0]?.hasLatestHourlyMeasurement).toBe(true);
   });
 
-  it('uses one current-hour snapshot when measurement loading crosses an hour boundary', async () => {
+  it('uses the previous Bangkok calendar date before the first hourly calculation finishes', async () => {
+    connectionRequestsService.setClockForTests(() => new Date('2026-08-08T17:05:00.000Z'));
+    mockedRepository.listFactoriesForAccess.mockResolvedValue([factorySummary()]);
+    mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
+      currentFactoryMeasurementPoint({ stationId: 'S0001', pointCode: 'S0001' }),
+    ]);
+    mockedParameterValuesService.latestHourly.mockResolvedValueOnce(
+      latestHourlyResult('S0001', [
+        { station_id: 'S0001', cdate: '2026-08-08', ctime: '23:00:00' },
+      ]),
+    );
+
+    const result = await connectionRequestsService.listOperatorFactoryDashboard(
+      actorUserId,
+      'OWN_FACTORY',
+    );
+
+    expect(mockedParameterValuesService.latestHourly).toHaveBeenCalledWith(
+      'S0001',
+      { actorUserId, scope: 'OWN_FACTORY' },
+      { date: '2026-08-08', hour: 23 },
+    );
+    expect(result.data[0]?.hasLatestHourlyMeasurement).toBe(true);
+  });
+
+  it('uses one completed-hour snapshot when measurement loading crosses an hour boundary', async () => {
     let currentTime = new Date('2026-08-08T15:59:59.000Z');
     connectionRequestsService.setClockForTests(() => currentTime);
     mockedRepository.listFactoriesForAccess.mockResolvedValue([factorySummary()]);
@@ -1157,7 +1189,7 @@ describe('connectionRequestsService', () => {
     mockedParameterValuesService.latestHourly.mockImplementationOnce(async () => {
       currentTime = new Date('2026-08-08T16:00:00.000Z');
       return latestHourlyResult('S0001', [
-        { station_id: 'S0001', cdate: '2026-08-08', ctime: '22:00:00' },
+        { station_id: 'S0001', cdate: '2026-08-08', ctime: '21:00:00' },
       ]);
     });
 
@@ -1183,12 +1215,12 @@ describe('connectionRequestsService', () => {
     mockedParameterValuesService.latestHourly
       .mockResolvedValueOnce(
         latestHourlyResult('S0001', [
-          { station_id: 'S0001', cdate: '2026-08-08', ctime: '22:00:00' },
+          { station_id: 'S0001', cdate: '2026-08-08', ctime: '21:00:00' },
         ]),
       )
       .mockResolvedValueOnce(
         latestHourlyResult('S0002', [
-          { station_id: 'S0002', cdate: '2026-08-08', ctime: '21:00:00' },
+          { station_id: 'S0002', cdate: '2026-08-08', ctime: '20:00:00' },
         ]),
       );
 
@@ -1214,12 +1246,12 @@ describe('connectionRequestsService', () => {
     mockedParameterValuesService.latestHourly
       .mockResolvedValueOnce(
         latestHourlyResult('S0001', [
-          { station_id: 'S0001', cdate: '2026-08-08', ctime: '22:00:00' },
+          { station_id: 'S0001', cdate: '2026-08-08', ctime: '21:00:00' },
         ]),
       )
       .mockResolvedValueOnce(
         latestHourlyResult('S0002', [
-          { station_id: 'S0002', cdate: '2026-08-07', ctime: '22:00:00' },
+          { station_id: 'S0002', cdate: '2026-08-07', ctime: '21:00:00' },
         ]),
       );
 
@@ -1289,10 +1321,11 @@ describe('connectionRequestsService', () => {
 
     await connectionRequestsService.listOperatorFactoryDashboard(actorUserId, 'OWN_FACTORY');
 
-    expect(mockedParameterValuesService.latestHourly).toHaveBeenCalledWith(stationId, {
-      actorUserId,
-      scope: 'OWN_FACTORY',
-    });
+    expect(mockedParameterValuesService.latestHourly).toHaveBeenCalledWith(
+      stationId,
+      { actorUserId, scope: 'OWN_FACTORY' },
+      { date: '2026-05-27', hour: 16 },
+    );
   });
 
   it('keeps dashboard measurement values for registered parameters that share a base code', async () => {
@@ -1703,7 +1736,7 @@ describe('connectionRequestsService', () => {
           flow_value: '1234.5',
           flow_units: 'm3/hr',
           cdate: '2026-06-10',
-          ctime: '23:00:00',
+          ctime: '22:00:00',
         },
       ],
       meta: {
@@ -1739,10 +1772,11 @@ describe('connectionRequestsService', () => {
     );
     expect(mockedRepository.listConnectedMeasurementPointsForFactories).not.toHaveBeenCalled();
     expect(mockedRepository.listFavoriteFactoryIds).not.toHaveBeenCalled();
-    expect(mockedParameterValuesService.latestHourly).toHaveBeenCalledWith('S0001', {
-      actorUserId: 0,
-      scope: 'ALL',
-    });
+    expect(mockedParameterValuesService.latestHourly).toHaveBeenCalledWith(
+      'S0001',
+      { actorUserId: 0, scope: 'ALL' },
+      { date: '2026-06-10', hour: 22 },
+    );
     expect(result.data).toHaveLength(1);
     expect(result.data[0]).toMatchObject({
       id: 1,
@@ -1778,7 +1812,7 @@ describe('connectionRequestsService', () => {
               'NOx (ppm)': '10.5',
               'Flow Rate (m3/hr)': '1234.5',
               cdate: '2026-06-10',
-              ctime: '23:00:00',
+              ctime: '22:00:00',
             },
           ],
         },

@@ -5,6 +5,7 @@ jest.mock('../../src/modules/parameter-values/parameter-values.repository', () =
     canAccessStation: jest.fn(),
     canAccessStationForConnectionTest: jest.fn(),
     latestRow: jest.fn(),
+    latestRowsAtOrBeforeHour: jest.fn(),
     latestRowsAtLatestTimestamp: jest.fn(),
     latestRows: jest.fn(),
     listAccessibleStationIds: jest.fn(),
@@ -267,6 +268,25 @@ describe('parameterValuesService', () => {
       'ctime',
     ]);
     expect(result.data[0]).not.toHaveProperty('bod_value');
+  });
+
+  it('returns the latest hourly rows at or before a completed-hour cutoff', async () => {
+    mockedRepository.listRegisteredParameters.mockResolvedValue(['CO']);
+    mockedRepository.tableExists.mockResolvedValue(true);
+    mockedRepository.latestRowsAtOrBeforeHour.mockResolvedValue({
+      tableName: 'S0001_data_60m',
+      rows: [{ station_id: 'S0001', co_value: 1, cdate: '2026-08-08', ctime: '20:00:00' }],
+    });
+
+    const cutoff = { date: '2026-08-08', hour: 20 };
+    const result = await parameterValuesService.latestHourly('S0001', operatorAccess, cutoff);
+
+    expect(mockedRepository.latestRowsAtOrBeforeHour).toHaveBeenCalledWith(
+      { stationId: 'S0001', interval: '60m' },
+      cutoff,
+    );
+    expect(mockedRepository.latestRowsAtLatestTimestamp).not.toHaveBeenCalled();
+    expect(result.data[0]).toMatchObject({ cdate: '2026-08-08', ctime: '20:00:00' });
   });
 
   it('returns formatted connection test values from the latest five station test rows', async () => {

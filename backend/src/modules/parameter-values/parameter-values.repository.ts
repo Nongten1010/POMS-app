@@ -4,6 +4,7 @@ import { parameterSourceDb } from '../../config/parameter-source-database';
 import type { Knex } from 'knex';
 import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
 import {
+  type HourlyMeasurementCutoff,
   type LatestParameterValueQuery,
   type ListParameterValuesQuery,
   type ParameterValueAccessContext,
@@ -235,6 +236,42 @@ export const parameterValuesRepository = {
       .withSchema(env.PARAMETER_DB_SCHEMA)
       .from<LatestTimestampRow>(tableName)
       .select('cdate', 'ctime')
+      .orderBy('cdate', 'desc')
+      .orderBy('ctime', 'desc')
+      .first();
+
+    if (!latestTimestamp) return { tableName, rows: [] };
+
+    const timestampPredicate = serializeLatestTimestamp(latestTimestamp);
+    const rows = await parameterSourceDb
+      .withSchema(env.PARAMETER_DB_SCHEMA)
+      .from<Record<string, unknown>>(tableName)
+      .select('*')
+      .where('cdate', timestampPredicate.cdate)
+      .where('ctime', timestampPredicate.ctime)
+      .orderBy('station_id', 'asc');
+
+    return {
+      tableName,
+      rows: rows.map(serializeRow),
+    };
+  },
+
+  async latestRowsAtOrBeforeHour(
+    query: LatestParameterValueQuery,
+    cutoff: HourlyMeasurementCutoff,
+  ): Promise<{ rows: Record<string, unknown>[]; tableName: string }> {
+    const tableName = this.tableName(query.stationId, query.interval);
+    const endOfHour = `${String(cutoff.hour).padStart(2, '0')}:59:59.9999999`;
+    const latestTimestamp = await parameterSourceDb
+      .withSchema(env.PARAMETER_DB_SCHEMA)
+      .from<LatestTimestampRow>(tableName)
+      .select('cdate', 'ctime')
+      .where((builder) => {
+        builder.where('cdate', '<', cutoff.date).orWhere((sameDate) => {
+          sameDate.where('cdate', cutoff.date).andWhere('ctime', '<=', endOfHour);
+        });
+      })
       .orderBy('cdate', 'desc')
       .orderBy('ctime', 'desc')
       .first();

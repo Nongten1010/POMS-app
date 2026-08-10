@@ -11,7 +11,7 @@
 1. อ่าน active point จาก `cems_wpms_connected_measurement_points` และรวมเป็นหนึ่ง row ต่อโรงงานที่เชื่อมต่ออยู่ใน POMS.
 2. จับคู่ active `eligible_factories` เพื่อคืน identity, พิกัด และสถานะ `isEligible: true` / `eligibilityStatus: "เข้าข่าย"`; row ที่ไม่มี active connected point จะไม่อยู่ใน response.
 3. กรองตาม permission scope ของผู้เรียก; `OWN_FACTORY` ต้องผ่าน `user_juristics` หรือ `user_factory_access`, ส่วน scope เจ้าหน้าที่ใช้พื้นที่ตามสิทธิ์.
-4. แนบ favorite, ค่ารายชั่วโมงล่าสุด และ flag ว่าทุกจุดมีข้อมูลของชั่วโมงปัจจุบันตามสิทธิ์ของผู้เรียก.
+4. แนบ favorite, ค่ารายชั่วโมงล่าสุดที่คำนวณเสร็จแล้ว และ flag ว่าทุกจุดมีข้อมูลของชั่วโมงก่อนหน้าตามสิทธิ์ของผู้เรียก.
 5. เมื่อผู้ใช้ส่งออกรายงาน ให้เรียก CSV endpoint ด้วย `stationId`; backend resolve โรงงาน สิทธิ์ และข้อมูลจริงให้เอง.
 
 ```bash
@@ -55,7 +55,7 @@ Response fields ที่ใช้ระบุตัวโรงงานแล�
 | `data[].isEligible` | `true` | ทุก row บนหน้าหลักเป็นโรงงานเข้าข่ายที่มี active connected point |
 | `data[].eligibilityStatus` | `เข้าข่าย` | label สำหรับ UI ซึ่งสอดคล้องกับ `isEligible: true` |
 | `data[].isFavorite` | boolean | favorite ของผู้ใช้ปัจจุบัน |
-| `data[].hasLatestHourlyMeasurement` | boolean | `true` เมื่อทุก active connected point มี `measurementPoints[].data` อย่างน้อย 1 แถว และ `cdate` + ชั่วโมงของ `ctime` ตรงกับชั่วโมงปัจจุบันตาม `Asia/Bangkok`; ถ้าจุดใดไม่มีข้อมูลหรือเป็นคนละชั่วโมงจะเป็น `false` |
+| `data[].hasLatestHourlyMeasurement` | boolean | `true` เมื่อทุก active connected point มี `measurementPoints[].data` อย่างน้อย 1 แถว และ `cdate` + ชั่วโมงของ `ctime` ตรงกับชั่วโมงที่คำนวณเสร็จแล้วล่าสุด ซึ่งคือชั่วโมงก่อนหน้าตาม `Asia/Bangkok`; ถ้าจุดใดไม่มีข้อมูลหรือเป็นคนละชั่วโมงจะเป็น `false` |
 | `data[].monitoringPointCountBySystem` | array | จำนวน active point แยก `CEMS` และ `WPMS` |
 | `data[].measurementPoints` | array | active connected points และค่ารายชั่วโมงที่อ่านได้ตาม scope |
 | `data[].measurementPoints[].parameters` | string[] | ชื่อพารามิเตอร์พร้อมหน่วย; `Flow` หน่วย `m3/hr` ใช้ชื่อมาตรฐาน `Flow Rate (m3/hr)` เพียงชื่อเดียว |
@@ -111,7 +111,7 @@ Minimal response (`200 OK`) สำหรับโรงงานที่เจ�
               "station_id": "S4010",
               "CO (ppm)": 0.1,
               "cdate": "2026-08-08",
-              "ctime": "22:00:00"
+              "ctime": "21:00:00"
             }
           ]
         }
@@ -132,7 +132,7 @@ Visibility and authorization:
 - โรงงานที่มีหลาย active points แสดงเป็นหนึ่ง factory row และรวม points ใน `measurementPoints`.
 - ชื่อที่ลงทะเบียนเป็น `Flow`, `Flow (m3/hr)`, `Flow Rate (m3/hr)` หรือ `Flow Rate (m³/hr)` จะถูกรวมเป็น `Flow Rate (m3/hr)` และค่าใน `measurementPoints[].data` อ่านจาก source `flow_value`.
 - `parameterStandards` มีเพียง `parameter`, `standardCriteria` และ `eiaCriteria`; เมื่อไม่มีเกณฑ์ที่บันทึกไว้ field เกณฑ์จะเป็น `null` และจะไม่ส่ง device/channel config อื่นใน array นี้.
-- Frontend ใช้ `hasLatestHourlyMeasurement` ได้โดยตรงและไม่ต้องวนเช็ค `measurementPoints[].data` ซ้ำ. ตัวอย่างเวลาปัจจุบัน `22:50` แถวที่ถือว่าปัจจุบันต้องมีวันปัจจุบันและ `ctime` ขึ้นต้นด้วย `22:` หรือ `22.` (ช่วง `22.00-22.59 น.`).
+- Frontend ใช้ `hasLatestHourlyMeasurement` ได้โดยตรงและไม่ต้องวนเช็ค `measurementPoints[].data` ซ้ำ. ตัวอย่างเวลาปัจจุบัน `22:50` API จะเลือกข้อมูลรอบ `21:00` เพราะรอบ `22:00` ยังถือว่าคำนวณไม่เสร็จ และแถวที่ทำให้ flag เป็น `true` ต้องมีวันปัจจุบันพร้อม `ctime` ขึ้นต้นด้วย `21:` หรือ `21.` (ช่วง `21.00-21.59 น.`). หากเวลาปัจจุบันอยู่ในช่วง `00:00-00:59` จะเลือกข้อมูลรอบ `23:00` ของวันก่อนหน้า.
 
 ### `GET /api/v1/public/factory-map-points`
 
@@ -146,7 +146,7 @@ Request body: ไม่มี
 
 Response ใช้ identity, location, `monitoringPointCountBySystem`, `status` และ `measurementPoints` รูปแบบเดียวกับ dashboard รวมถึง `measurementPoints[].data` สำหรับข้อมูลล่าสุดรายชั่วโมงของแต่ละจุดวัด และคืน `hasLatestHourlyMeasurement` ตามกติกาเดียวกับ authenticated dashboard. Public API ไม่คืน field เฉพาะผู้ใช้คือ `isFavorite`. `data` เป็น array ว่างได้เมื่อยังไม่มีข้อมูลรายชั่วโมงล่าสุด.
 
-ตัวอย่างต่อไปนี้สมมติว่าเรียก API วันที่ `2026-08-07` ในช่วงเวลา `21:00-21:59` ตาม `Asia/Bangkok` จึงได้ `hasLatestHourlyMeasurement: true`.
+ตัวอย่างต่อไปนี้สมมติว่าเรียก API วันที่ `2026-08-07` ในช่วงเวลา `22:00-22:59` ตาม `Asia/Bangkok` และได้ข้อมูลรอบ `21:00` ซึ่งคำนวณเสร็จแล้ว จึงได้ `hasLatestHourlyMeasurement: true`.
 
 ```json
 {

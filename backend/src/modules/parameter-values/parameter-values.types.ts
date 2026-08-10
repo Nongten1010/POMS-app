@@ -16,6 +16,11 @@ export interface LatestParameterValueQuery {
   interval: ParameterValueInterval;
 }
 
+export interface HourlyMeasurementCutoff {
+  date: string;
+  hour: number;
+}
+
 export interface ConnectionTestQuery {
   stationId: string;
 }

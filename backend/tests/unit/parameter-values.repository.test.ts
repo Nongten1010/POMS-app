@@ -5,6 +5,7 @@ type TimestampQueryMock = {
   first: () => Promise<unknown>;
   orderBy: (...args: unknown[]) => TimestampQueryMock;
   select: (...args: unknown[]) => TimestampQueryMock;
+  where: (...args: unknown[]) => TimestampQueryMock;
 };
 
 type RowsQueryMock = {
@@ -14,12 +15,57 @@ type RowsQueryMock = {
   where: (...args: unknown[]) => RowsQueryMock;
 };
 
+type CutoffPredicateQueryMock = {
+  andWhere: (...args: unknown[]) => CutoffPredicateQueryMock;
+  orWhere: (callback: (builder: CutoffPredicateQueryMock) => void) => CutoffPredicateQueryMock;
+  where: (...args: unknown[]) => CutoffPredicateQueryMock;
+};
+
+let mockSameDatePredicateQuery: CutoffPredicateQueryMock;
+const mockSameDateWhere = jest.fn<(...args: unknown[]) => CutoffPredicateQueryMock>(
+  () => mockSameDatePredicateQuery,
+);
+const mockSameDateAndWhere = jest.fn<(...args: unknown[]) => CutoffPredicateQueryMock>(
+  () => mockSameDatePredicateQuery,
+);
+mockSameDatePredicateQuery = {
+  andWhere: mockSameDateAndWhere,
+  orWhere: jest.fn(() => mockSameDatePredicateQuery),
+  where: mockSameDateWhere,
+};
+
+let mockCutoffPredicateQuery: CutoffPredicateQueryMock;
+const mockCutoffDateWhere = jest.fn<(...args: unknown[]) => CutoffPredicateQueryMock>(
+  () => mockCutoffPredicateQuery,
+);
+const mockCutoffDateOrWhere = jest.fn<
+  (callback: (builder: CutoffPredicateQueryMock) => void) => CutoffPredicateQueryMock
+>((callback) => {
+  callback(mockSameDatePredicateQuery);
+  return mockCutoffPredicateQuery;
+});
+mockCutoffPredicateQuery = {
+  andWhere: jest.fn(() => mockCutoffPredicateQuery),
+  orWhere: mockCutoffDateOrWhere,
+  where: mockCutoffDateWhere,
+};
+
 const mockTimestampFirst = jest.fn<() => Promise<unknown>>();
+const mockTimestampWhere = jest.fn<(...args: unknown[]) => TimestampQueryMock>(
+  (...args) => {
+    const predicate = args[0];
+    if (typeof predicate === 'function') {
+      (predicate as (builder: CutoffPredicateQueryMock) => void)(mockCutoffPredicateQuery);
+    }
+    return mockTimestampQuery;
+  },
+);
 const mockTimestampQuery: TimestampQueryMock = {
   from: jest.fn(() => mockTimestampQuery),
   first: mockTimestampFirst,
   orderBy: jest.fn(() => mockTimestampQuery),
   select: jest.fn(() => mockTimestampQuery),
+  where: mockTimestampWhere,
 };
 
 let mockRowsQuery: RowsQueryMock;
@@ -87,6 +133,25 @@ describe('parameterValuesRepository', () => {
         },
       ],
     });
+  });
+
+  it('limits the latest hourly timestamp to the completed-hour cutoff', async () => {
+    mockTimestampFirst.mockResolvedValue({ cdate: '2026-08-08', ctime: '20:00:00' });
+    mockRowsOrderBy.mockResolvedValue([
+      { station_id: 'S0001', cdate: '2026-08-08', ctime: '20:00:00' },
+    ]);
+
+    const result = await parameterValuesRepository.latestRowsAtOrBeforeHour(
+      { stationId: 'S0001', interval: '60m' },
+      { date: '2026-08-08', hour: 20 },
+    );
+
+    expect(mockTimestampWhere).toHaveBeenCalledWith(expect.any(Function));
+    expect(mockCutoffDateWhere).toHaveBeenCalledWith('cdate', '<', '2026-08-08');
+    expect(mockCutoffDateOrWhere).toHaveBeenCalledWith(expect.any(Function));
+    expect(mockSameDateWhere).toHaveBeenCalledWith('cdate', '2026-08-08');
+    expect(mockSameDateAndWhere).toHaveBeenCalledWith('ctime', '<=', '20:59:59.9999999');
+    expect(result.rows[0]).toMatchObject({ cdate: '2026-08-08', ctime: '20:00:00' });
   });
 
   it('uses current connected measurement points for station access and registered parameters', () => {
