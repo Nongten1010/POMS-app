@@ -288,7 +288,7 @@ Field อื่นของ Direct Connection เช่น `factoryName`, ข้
 - `eligibilityStatus = "เข้าข่าย"` เมื่อ `isEligible = true`
 - `eligibilityStatus = "ไม่เข้าข่าย"` เมื่อ `isEligible = false`
 
-จำนวนจุดตรวจวัดและสถานะคำขอคำนวณเฉพาะโรงงานที่เข้าข่าย. Public map ยังคงเป็น connected/current-live only ส่วน authenticated dashboard สำหรับ `OWN_FACTORY` คืนทุกโรงงานของ owner และเสริมข้อมูล current/live เฉพาะโรงงานที่เข้าข่ายและเชื่อมต่อแล้ว; ห้ามสรุปว่า `GET /api/v1/cems-wpms-requests/operator-factories` เป็นรายการ connected-only.
+จำนวนจุดตรวจวัดและสถานะคำขอคำนวณเฉพาะโรงงานที่เข้าข่าย. Public map และ authenticated `GET /api/v1/operator-factory-dashboard` ยังคงเป็น connected/current-live only สำหรับทุก scope รวม `OWN_FACTORY`; รายการโรงงานทั้งหมดของ owner พร้อมแถวข้อมูลขั้นต่ำสำหรับโรงงานไม่เข้าข่ายใช้เฉพาะ `GET /api/v1/cems-wpms-requests/operator-factories` ในหน้าขอเชื่อมต่อ.
 
 | Response field | Type | Source/Meaning |
 | --- | --- | --- |

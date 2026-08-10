@@ -1793,7 +1793,7 @@ describe('connectionRequestsService', () => {
     });
   });
 
-  it('returns all seven owned factories with two eligible and five non-eligible rows', async () => {
+  it('keeps all seven owned factories on the connection-request picker', async () => {
     const ownedFactories = Array.from({ length: 7 }, (_, index) => {
       const isEligible = index < 2;
       return factorySummary({
@@ -1819,14 +1819,13 @@ describe('connectionRequestsService', () => {
       },
     ]);
 
-    const result = await connectionRequestsService.listOperatorFactoryDashboard(
+    const result = await connectionRequestsService.listOperatorFactories(
       actorUserId,
       'OWN_FACTORY',
     );
 
     expect(mockedRepository.listConnectedMeasurementPointsForFactories).toHaveBeenCalledWith(
       expect.arrayContaining(['factory-1', 'REG-1', 'factory-2', 'REG-2']),
-      [17, 18],
     );
     const connectedFactoryLookupKeys = mockedRepository.listConnectedMeasurementPointsForFactories
       .mock.calls[0]?.[0] as string[];
@@ -1844,40 +1843,25 @@ describe('connectionRequestsService', () => {
     });
     expect(result.data[2]).toMatchObject({
       id: 3,
-      eligibleFactoryId: null,
       factoryId: 'factory-3',
       factoryName: 'โรงงานไม่เข้าข่าย 3',
       newRegistrationNo: null,
       oldRegistrationNo: null,
-      factoryLogoUrl: null,
+      industryType: null,
       industryMainOrder: null,
-      industryMainOrderLabel: null,
       industrySubOrder: null,
+      businessActivity: null,
       eia: null,
-      hasEia: null,
-      regionCode: null,
-      regionName: null,
-      provinceCode: null,
-      provinceName: null,
+      projectName: null,
       province: null,
       address: null,
       latitude: null,
       longitude: null,
-      districtCode: null,
-      districtName: null,
-      industrialAreaType: null,
-      industrialAreaTypeLabel: null,
-      industrialEstateCode: null,
-      industrialEstateName: null,
+      officerNotificationEmails: [],
       isEligible: false,
       eligibilityStatus: 'ไม่เข้าข่าย',
-      isFavorite: false,
-      hasLatestHourlyMeasurement: false,
-      measurementPoints: [],
-      monitoringPointCountBySystem: [
-        { systemType: 'CEMS', count: 0 },
-        { systemType: 'WPMS', count: 0 },
-      ],
+      monitoringPointCount: 0,
+      requestStatusCode: null,
       status: 'แสดง',
     });
   });

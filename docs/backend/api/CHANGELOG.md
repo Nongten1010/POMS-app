@@ -10,13 +10,21 @@
 - **Old contract:** external citizen path ใช้ i-Industry account เดียวกับ operator ไม่ได้; operator request ได้ operator persona ตาม request และ `/auth/me` rebuild persona จาก stored `users.user_type`.
 - **New contract:** citizen request ได้ `public_user`; operator request ได้ `factory_operator` เมื่อ `juristics.length > 0`; operator request ที่ไม่มีนิติบุคคลได้ `public_user` fallback. Persona permission ไม่รวม role อื่น, ยังเคารพ per-user deny/การจำกัด scope และ citizen/operator token ของ account เดียวกันทำงานพร้อมกันได้.
 
-## 2026-08-10 — คืนโรงงานทั้งหมดของ owner พร้อมแถวข้อมูลขั้นต่ำสำหรับโรงงานไม่เข้าข่าย
+## 2026-08-10 — จำกัดรายการโรงงานทั้งหมดไว้เฉพาะหน้าขอเชื่อมต่อ
 
-- **Affected menus:** [ขอเชื่อมต่อ](./menus/connection-requests/README.md) และ [หน้าหลัก](./menus/home/README.md)
-- **Impact:** `GET /api/v1/cems-wpms-requests/operator-factories` และ `GET /api/v1/operator-factory-dashboard` สำหรับ scope `OWN_FACTORY` คืนทุก active factory ที่ owner เข้าถึงได้ ไม่ตัดโรงงานที่ไม่มี active `eligible_factories`; โรงงานไม่เข้าข่ายส่ง `factoryId`, `factoryName`, `isEligible: false`, `eligibilityStatus: "ไม่เข้าข่าย"` และค่าโครงสร้างที่ปลอดภัย ส่วน descriptive fields เป็น `null`.
-- **Migration:** frontend ต้องใช้ `isEligible`/`eligibilityStatus` แยก action เข้าข่ายกับไม่เข้าข่าย, รองรับ descriptive fields เป็น `null`, ใช้ `factoryId` เป็นเลขที่โรงงาน และรองรับ `measurementPoints: []` กับ count `0`.
-- **Old contract:** owner endpoints อาจตัดโรงงานไม่เข้าข่ายออก จึงเห็นเพียง 2 โรงงานที่จับคู่ active `eligible_factories` ในกรณีตัวอย่าง 7 โรงงาน.
-- **New contract:** owner เห็นครบ 7 โรงงาน; 2 โรงงานเข้าข่ายได้รายละเอียดและข้อมูล current/live ตามเดิม ส่วน 5 โรงงานไม่เข้าข่ายได้แถวข้อมูลขั้นต่ำโดยไม่ผูก request, จุดตรวจวัด หรือสถานะ favorite เข้ากับ response.
+- **Affected menus:** [หน้าหลัก](./menus/home/README.md) และ [ขอเชื่อมต่อ](./menus/connection-requests/README.md)
+- **Impact:** `GET /api/v1/operator-factory-dashboard` กลับมาคืนเฉพาะโรงงาน current/live ที่มี active `cems_wpms_connected_measurement_points` สำหรับทุก scope รวม `OWN_FACTORY`; `GET /api/v1/cems-wpms-requests/operator-factories` ยังคืนทุกโรงงานที่ owner เข้าถึงได้ พร้อมแถวข้อมูลขั้นต่ำสำหรับโรงงานไม่เข้าข่าย.
+- **Migration:** หน้าแรกต้องใช้ `/api/v1/operator-factory-dashboard` และไม่คาดหวัง factory master ที่ยังไม่เชื่อมต่อ; หน้าขอเชื่อมต่อใช้ `/api/v1/cems-wpms-requests/operator-factories` เมื่อต้องแสดงโรงงานของ owner ครบทั้งหมดและแยก action ด้วย `isEligible`/`eligibilityStatus`.
+- **Old contract ชั่วคราว:** `/api/v1/operator-factory-dashboard` scope `OWN_FACTORY` ถูกขยายให้คืน active factory master ทุกแห่งของ owner รวมโรงงานไม่เข้าข่ายหรือยังไม่มี connected point.
+- **New contract:** dashboard เป็น connected/current-live only ทุก scope และทุก row มี `isEligible: true` กับ `eligibilityStatus: "เข้าข่าย"`; การคืน noneligible minimal row จำกัดอยู่ที่ endpoint หน้าขอเชื่อมต่อเท่านั้น.
+
+## 2026-08-10 — คืนโรงงานทั้งหมดของ owner ในหน้าขอเชื่อมต่อ พร้อมแถวข้อมูลขั้นต่ำสำหรับโรงงานไม่เข้าข่าย
+
+- **Affected menu:** [ขอเชื่อมต่อ](./menus/connection-requests/README.md)
+- **Impact:** `GET /api/v1/cems-wpms-requests/operator-factories` คืนทุก active factory ที่ owner เข้าถึงได้ ไม่ตัดโรงงานที่ไม่มี active `eligible_factories`; โรงงานไม่เข้าข่ายส่ง `factoryId`, `factoryName`, `isEligible: false`, `eligibilityStatus: "ไม่เข้าข่าย"` และค่าโครงสร้างที่ปลอดภัย ส่วน descriptive fields เป็น `null`.
+- **Migration:** frontend หน้าขอเชื่อมต่อต้องใช้ `isEligible`/`eligibilityStatus` แยก action เข้าข่ายกับไม่เข้าข่าย, รองรับ descriptive fields เป็น `null`, ใช้ `factoryId` เป็นเลขที่โรงงาน และรองรับ array ว่างกับ count `0`.
+- **Old contract:** endpoint รายชื่อโรงงานหน้าขอเชื่อมต่ออาจตัดโรงงานไม่เข้าข่ายออก จึงเห็นเพียง 2 โรงงานที่จับคู่ active `eligible_factories` ในกรณีตัวอย่าง 7 โรงงาน.
+- **New contract:** owner เห็นครบ 7 โรงงานในหน้าขอเชื่อมต่อ; 2 โรงงานเข้าข่ายได้รายละเอียดและข้อมูล current/live ตามเดิม ส่วน 5 โรงงานไม่เข้าข่ายได้แถวข้อมูลขั้นต่ำโดยไม่ผูก request หรือจุดตรวจวัดเข้ากับ response.
 
 ## 2026-08-09 — Calendar Status ใช้สรุปและรายละเอียดทั้งปีแบบหนึ่งแถวต่อวัน
 

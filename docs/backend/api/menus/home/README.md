@@ -4,14 +4,14 @@
 
 ## Frontend Quick Start
 
-หน้าหลักสำหรับผู้ประกอบการแสดงโรงงาน active ทั้งหมดที่ owner เข้าถึงได้ พร้อมสถานะเข้าข่าย แม้โรงงานยังไม่มีจุดตรวจวัด current/live ใน POMS. ผู้ใช้ที่ login ต้องมี `dashboard:view`; ผลลัพธ์ถูกกรองตาม scope ของ permission และพื้นที่ของเจ้าหน้าที่ ส่วนเจ้าหน้าที่และ public map ยังคงเห็นเฉพาะโรงงาน current/live ที่เชื่อมต่อแล้ว
+หน้าหลักแสดงเฉพาะโรงงาน current/live ใน POMS ที่มี active point ใน `cems_wpms_connected_measurement_points` สำหรับทุก permission scope รวมถึง `OWN_FACTORY`. ผู้ใช้ที่ login ต้องมี `dashboard:view`; ผลลัพธ์ถูกกรองตาม scope ของ permission, ownership และพื้นที่ของเจ้าหน้าที่ตามสิทธิ์ของผู้เรียก
 
 ### Main Flow
 
-1. เมื่อ scope เป็น `OWN_FACTORY` อ่าน active factory master ทุกแห่งที่ผ่าน `user_juristics` หรือ `user_factory_access` แล้ว left join active `eligible_factories` เพื่อกำหนด `isEligible` และ `eligibilityStatus`.
-2. โรงงานที่เข้าข่ายและเชื่อมต่อแล้วได้รับข้อมูล current/live จาก `cems_wpms_connected_measurement_points`; โรงงานไม่เข้าข่ายยังคงมี row โดยส่งเพียงเลขที่โรงงาน ชื่อ และสถานะเข้าข่าย ส่วนรายละเอียดอื่นเป็น `null`.
-3. แนบ favorite, ค่ารายชั่วโมงล่าสุด และ flag ว่าทุกจุดมีข้อมูลของชั่วโมงปัจจุบันตามสิทธิ์ของผู้เรียก.
-4. Scope สำหรับเจ้าหน้าที่และ public map ใช้ connected/current-live only เพื่อไม่ขยายผลลัพธ์นอกหน้าที่ของ dashboard สาธารณะ/เจ้าหน้าที่.
+1. อ่าน active point จาก `cems_wpms_connected_measurement_points` และรวมเป็นหนึ่ง row ต่อโรงงานที่เชื่อมต่ออยู่ใน POMS.
+2. จับคู่ active `eligible_factories` เพื่อคืน identity, พิกัด และสถานะ `isEligible: true` / `eligibilityStatus: "เข้าข่าย"`; row ที่ไม่มี active connected point จะไม่อยู่ใน response.
+3. กรองตาม permission scope ของผู้เรียก; `OWN_FACTORY` ต้องผ่าน `user_juristics` หรือ `user_factory_access`, ส่วน scope เจ้าหน้าที่ใช้พื้นที่ตามสิทธิ์.
+4. แนบ favorite, ค่ารายชั่วโมงล่าสุด และ flag ว่าทุกจุดมีข้อมูลของชั่วโมงปัจจุบันตามสิทธิ์ของผู้เรียก.
 5. เมื่อผู้ใช้ส่งออกรายงาน ให้เรียก CSV endpoint ด้วย `stationId`; backend resolve โรงงาน สิทธิ์ และข้อมูลจริงให้เอง.
 
 ```bash
@@ -48,12 +48,12 @@ Response fields ที่ใช้ระบุตัวโรงงานแล�
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `data[].id` | integer \| null | ฟิลด์เดิมสำหรับ compatibility ซึ่งมีค่าเป็น `factories.id`; เป็น `null` ได้เมื่อยังไม่มี factory master และห้าม fallback ไปใช้ ID จากตารางอื่น |
-| `data[].eligibleFactoryId` | integer \| null | `eligible_factories.id` เมื่อโรงงานเข้าข่าย; เป็น `null` สำหรับ owner factory ที่ยังไม่เข้าข่าย |
+| `data[].eligibleFactoryId` | integer | `eligible_factories.id` ของโรงงาน current/live ที่เชื่อมต่ออยู่ใน POMS |
 | `data[].factoryId` | string | identifier หลักสำหรับหน้าและจุดตรวจวัด; eligible-only row ใช้เลขทะเบียนใหม่ |
-| `data[].factoryName` | string | ชื่อโรงงานจาก current/live POMS point ล่าสุด; fallback เป็นโรงงานเข้าข่าย แล้วจึง factory master |
-| `data[].newRegistrationNo` | string \| null | เลขทะเบียนโรงงานใหม่เมื่อเข้าข่าย; เป็น `null` เมื่อไม่เข้าข่าย |
-| `data[].isEligible` | boolean | `true` เมื่อจับคู่ active `eligible_factories` ได้ |
-| `data[].eligibilityStatus` | `เข้าข่าย` \| `ไม่เข้าข่าย` | label สำหรับ UI ซึ่งสอดคล้องกับ `isEligible` |
+| `data[].factoryName` | string | ชื่อโรงงานจาก current/live POMS point ล่าสุด; fallback เป็น active `eligible_factories` แล้วจึง factory master |
+| `data[].newRegistrationNo` | string | เลขทะเบียนโรงงานใหม่จาก active `eligible_factories` |
+| `data[].isEligible` | `true` | ทุก row บนหน้าหลักเป็นโรงงานเข้าข่ายที่มี active connected point |
+| `data[].eligibilityStatus` | `เข้าข่าย` | label สำหรับ UI ซึ่งสอดคล้องกับ `isEligible: true` |
 | `data[].isFavorite` | boolean | favorite ของผู้ใช้ปัจจุบัน |
 | `data[].hasLatestHourlyMeasurement` | boolean | `true` เมื่อทุก active connected point มี `measurementPoints[].data` อย่างน้อย 1 แถว และ `cdate` + ชั่วโมงของ `ctime` ตรงกับชั่วโมงปัจจุบันตาม `Asia/Bangkok`; ถ้าจุดใดไม่มีข้อมูลหรือเป็นคนละชั่วโมงจะเป็น `false` |
 | `data[].monitoringPointCountBySystem` | array | จำนวน active point แยก `CEMS` และ `WPMS` |
@@ -122,55 +122,12 @@ Minimal response (`200 OK`) สำหรับโรงงานที่เจ�
 }
 ```
 
-ตัวอย่าง row สำหรับโรงงานไม่เข้าข่ายใน `OWN_FACTORY`:
-
-```json
-{
-  "id": 8,
-  "eligibleFactoryId": null,
-  "factoryId": "91090000325549",
-  "factoryName": "บริษัท โรงงานตัวอย่าง จำกัด",
-  "newRegistrationNo": null,
-  "oldRegistrationNo": null,
-  "factoryLogoUrl": null,
-  "industryMainOrder": null,
-  "industryMainOrderLabel": null,
-  "industrySubOrder": null,
-  "eia": null,
-  "hasEia": null,
-  "regionCode": null,
-  "regionName": null,
-  "provinceCode": null,
-  "provinceName": null,
-  "province": null,
-  "address": null,
-  "latitude": null,
-  "longitude": null,
-  "districtCode": null,
-  "districtName": null,
-  "industrialAreaType": null,
-  "industrialAreaTypeLabel": null,
-  "industrialEstateCode": null,
-  "industrialEstateName": null,
-  "isEligible": false,
-  "eligibilityStatus": "ไม่เข้าข่าย",
-  "isFavorite": false,
-  "hasLatestHourlyMeasurement": false,
-  "monitoringPointCountBySystem": [
-    { "systemType": "CEMS", "count": 0 },
-    { "systemType": "WPMS", "count": 0 }
-  ],
-  "status": "แสดง",
-  "measurementPoints": []
-}
-```
-
 Visibility and authorization:
 
-- `OWN_FACTORY` คืน active factory master ทุกแห่งที่ user มีสิทธิ์ แม้ยังไม่เข้าข่ายหรือยังไม่มี connected point. โรงงานไม่เข้าข่ายคง `id`, `factoryId`, `factoryName`, eligibility fields และฟิลด์โครงสร้างสำหรับ frontend; descriptive fields เป็น `null`, array เป็น `[]`, count เป็น `0` และ boolean สถานะข้อมูลเป็น `false`.
-- `ALL`, `IN_REGION` และ `IN_PROVINCE` ใช้ active POMS point และพื้นที่จาก `eligible_factories`; ไม่ต้องมี `factories` row.
+- ทุก scope รวม `OWN_FACTORY`, `ALL`, `IN_REGION` และ `IN_PROVINCE` คืนเฉพาะโรงงานที่มี active POMS point ใน `cems_wpms_connected_measurement_points`; โรงงานที่มีเพียง factory master หรือยังไม่เชื่อมต่อจะไม่แสดงบนหน้าหลัก.
+- `ALL`, `IN_REGION` และ `IN_PROVINCE` ใช้พื้นที่จาก active `eligible_factories`; ไม่ต้องมี `factories` row.
 - ใช้ `eligibleFactoryId` เมื่อต้องอ้างอิง row ใน `eligible_factories`; อย่านำไปแทน `id` เพราะเป็น ID จากคนละตาราง. ใช้ `factoryId` สำหรับ path/query ที่รับ identifier ของโรงงาน.
-- `OWN_FACTORY` ยังต้องผ่าน `user_juristics` หรือ `user_factory_access` ที่อ้างถึง `factories`; ระบบไม่อนุมาน ownership จากเลขทะเบียน.
+- `OWN_FACTORY` ต้องมีทั้ง active connected point และสิทธิ์ ownership ที่ผ่าน `user_juristics` หรือ `user_factory_access` ซึ่งอ้างถึง `factories`; ระบบไม่อนุมาน ownership จากเลขทะเบียน.
 - row ที่ `eligible_factories.deleted_at` หรือ connected point `deleted_at` ไม่เป็น `null` จะไม่แสดง.
 - โรงงานที่มีหลาย active points แสดงเป็นหนึ่ง factory row และรวม points ใน `measurementPoints`.
 - ชื่อที่ลงทะเบียนเป็น `Flow`, `Flow (m3/hr)`, `Flow Rate (m3/hr)` หรือ `Flow Rate (m³/hr)` จะถูกรวมเป็น `Flow Rate (m3/hr)` และค่าใน `measurementPoints[].data` อ่านจาก source `flow_value`.

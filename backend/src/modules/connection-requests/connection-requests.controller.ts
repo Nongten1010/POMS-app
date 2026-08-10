@@ -120,7 +120,7 @@ export const connectionRequestsController = {
       const result = await connectionRequestsService.listOperatorFactoryDashboard(
         actorUserId,
         dashboardScope,
-        { ...query, connectedOnly: dashboardScope?.scope !== 'OWN_FACTORY' },
+        { ...query, connectedOnly: true },
         ...getRegionalAccessArg(req),
       );
       res.status(StatusCodes.OK).json({ success: true, ...result });

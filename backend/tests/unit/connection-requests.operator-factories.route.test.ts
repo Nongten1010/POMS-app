@@ -308,7 +308,7 @@ describe('operator factory dashboard routes', () => {
     });
   });
 
-  it('includes all owned factories on the authenticated operator dashboard', async () => {
+  it('keeps the authenticated operator dashboard limited to connected POMS factories', async () => {
     const app = createApp();
 
     const response = await request(app)
@@ -319,7 +319,7 @@ describe('operator factory dashboard routes', () => {
     expect(mockedConnectionRequestsService.listOperatorFactoryDashboard).toHaveBeenCalledWith(
       42,
       { scope: 'OWN_FACTORY' },
-      { systemType: 'WPMS', favoriteOnly: false, connectedOnly: false },
+      { systemType: 'WPMS', favoriteOnly: false, connectedOnly: true },
     );
     expect(response.body.data[0]).toMatchObject({
       id: 1,
