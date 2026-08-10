@@ -2,6 +2,14 @@
 
 ไฟล์นี้บันทึกเฉพาะการเปลี่ยน API ที่ทำให้ client ต้องแก้ตาม การเปลี่ยนทั่วไปและประวัติรายละเอียดดูจาก Git history
 
+## 2026-08-10 — ลบฟอร์มข้อมูลจุดตรวจวัดพร้อมโรงงานที่ถูกถอดออกจากเข้าข่าย
+
+- **Affected menu:** [โรงงานที่เข้าข่าย](./menus/eligible-factories/README.md#การถอดโรงงานออกจากเข้าข่าย)
+- **Impact:** เมื่อ `DELETE /api/v1/eligible-factories/:id` สำเร็จด้วย `204 No Content`, linked monitoring-point form และ active monitoring points ของฟอร์มนั้นจะถูก soft-delete ไปพร้อมกับ eligible row; client จะใช้ form id เดิมต่อไม่ได้ แต่สามารถสร้างฟอร์มใหม่ของโรงงานเดิมด้วย `POST /api/v1/monitoring-point-forms` โดยไม่พบ duplicate conflict จากฟอร์มเดิม. เมื่อ deploy migration ฟอร์มตกค้างที่ผูกกับ eligible row ซึ่งถูกลบก่อนการเปลี่ยนนี้อาจถูก cleanup ด้วย แม้ไม่มี DELETE ใหม่.
+- **Migration:** หลัง DELETE สำเร็จ ให้ล้าง form id และข้อมูลจุดตรวจวัดเดิมออกจาก client state; หากเลือกโรงงานกลับเป็นโรงงานเข้าข่ายอีกครั้ง ให้สร้างฟอร์มใหม่ด้วย `POST` แทนการแก้ form id เดิม. Deploy `0088_soft_delete_forms_for_removed_eligible_factories` เพื่อ soft-delete active orphaned forms/points ที่มีเฉพาะลิงก์จาก deleted eligible rows; migration จะข้ามฟอร์มที่มี active eligible link หรือ active POMS connected point และมี intentionally irreversible `down` ซึ่งไม่ restore ข้อมูลที่ cleanup แล้ว. Client ควร reload ข้อมูลหลัง deploy และยังต้องรองรับ `409 Conflict` ซึ่งไม่ลบ eligible row, form หรือ point ใด ๆ.
+- **Old contract:** DELETE soft-delete เฉพาะ `eligible_factories`; linked `factory_monitoring_point_forms` และ `factory_monitoring_points` ยังคง active ทำให้การสร้างฟอร์มใหม่ของโรงงานเดิมอาจตอบ duplicate `409 Conflict`, และข้อมูล orphan ที่เกิดก่อน deploy ยังคงตกค้าง.
+- **New contract:** DELETE ทำงานแบบ atomic; เมื่อไม่มี active connected point บน eligible row ปัจจุบันหรือ eligible row เดิมที่อ้าง form เดียวกัน และมี `monitoring_point_form_id` ระบบ soft-delete active points ของฟอร์ม, linked form และ eligible row ใน transaction เดียว. หากไม่มี linked form จะลบเฉพาะ eligible row; หากมี active connected point ตามเงื่อนไขดังกล่าวจะตอบ `409 Conflict` และไม่ลบข้อมูลใด ๆ. Migration `0088` ใช้ safety rules เดียวกันกับ orphan เดิม พร้อม skip ข้อมูลที่ยังมี active eligible link หรือ active connected point.
+
 ## 2026-08-10 — แยก citizen/operator persona สำหรับบัญชี i-Industry เดียวกัน
 
 - **Affected API:** [Authentication](./shared/authentication/README.md)

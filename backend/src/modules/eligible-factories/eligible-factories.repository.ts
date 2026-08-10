@@ -159,13 +159,32 @@ export const eligibleFactoriesRepository = {
         .where('id', id)
         .whereNull('deleted_at')
         .forUpdate()
-        .first('id');
+        .first('id', 'monitoring_point_form_id');
       if (!eligibleFactory) return false;
 
-      const connectedPoint = await trx('cems_wpms_connected_measurement_points')
-        .where('eligible_factory_id', id)
-        .whereNull('deleted_at')
-        .first('id');
+      const monitoringPointFormId =
+        eligibleFactory.monitoring_point_form_id === null ||
+        eligibleFactory.monitoring_point_form_id === undefined
+          ? null
+          : Number(eligibleFactory.monitoring_point_form_id);
+      const connectedPointQuery = trx('cems_wpms_connected_measurement_points');
+
+      if (monitoringPointFormId === null) {
+        connectedPointQuery.where('cems_wpms_connected_measurement_points.eligible_factory_id', id);
+      } else {
+        connectedPointQuery
+          .innerJoin(
+            'eligible_factories as linked_eligible',
+            'linked_eligible.id',
+            'cems_wpms_connected_measurement_points.eligible_factory_id',
+          )
+          .where('linked_eligible.monitoring_point_form_id', monitoringPointFormId);
+      }
+
+      const connectedPoint = await connectedPointQuery
+        .whereNull('cems_wpms_connected_measurement_points.deleted_at')
+        .forUpdate()
+        .first('cems_wpms_connected_measurement_points.id');
       if (connectedPoint) {
         throw new ConflictError(
           'Connected POMS factory cannot be removed from eligible factories',
@@ -173,14 +192,28 @@ export const eligibleFactoriesRepository = {
         );
       }
 
+      const deletedAt = trx.fn.now();
+      const softDeleteAudit = {
+        deleted_at: deletedAt,
+        updated_at: deletedAt,
+        updated_by: actorUserId,
+      };
+
+      if (monitoringPointFormId !== null) {
+        await trx('factory_monitoring_point_forms')
+          .where('id', monitoringPointFormId)
+          .whereNull('deleted_at')
+          .update(softDeleteAudit);
+        await trx('factory_monitoring_points')
+          .where('form_id', monitoringPointFormId)
+          .whereNull('deleted_at')
+          .update(softDeleteAudit);
+      }
+
       const affected = await trx('eligible_factories')
         .where('id', id)
         .whereNull('deleted_at')
-        .update({
-          deleted_at: trx.fn.now(),
-          updated_at: trx.fn.now(),
-          updated_by: actorUserId,
-        });
+        .update(softDeleteAudit);
 
       return affected > 0;
     });

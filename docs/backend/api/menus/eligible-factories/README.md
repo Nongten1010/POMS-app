@@ -202,9 +202,13 @@ Path fields:
 
 Minimal request: ไม่มี request body.
 
-- สำเร็จตอบ `204 No Content`.
+- สำเร็จตอบ `204 No Content` และทำรายการทั้งหมดใน transaction เดียว.
+- หาก `eligible_factories.monitoring_point_form_id` ผูกกับฟอร์ม ระบบจะ soft-delete active `factory_monitoring_points` ทั้งหมดที่มี `form_id` เดียวกัน, soft-delete `factory_monitoring_point_forms` ที่ผูกอยู่ และ soft-delete eligible row แบบ atomic. หลังจากนั้น `POST /api/v1/monitoring-point-forms` สามารถสร้างฟอร์มใหม่ของโรงงานเดิมได้โดยไม่ชน duplicate conflict จากฟอร์มที่ถูกลบ.
+- หาก eligible row ไม่มี `monitoring_point_form_id` ระบบจะ soft-delete เฉพาะ eligible row.
 - ไม่พบ active row ตอบ `404 Not Found`.
-- หากโรงงานยังมี active POMS connected point ตอบ `409 Conflict` และไม่ soft-delete eligible row เพื่อคง invariant ว่าโรงงานใน POMS ต้องเป็นโรงงานที่เข้าข่าย.
+- หาก eligible row ปัจจุบัน หรือ eligible row เดิมที่อ้าง `monitoring_point_form_id` เดียวกัน ยังมี active POMS connected point ระบบจะตอบ `409 Conflict` และ transaction จะไม่ soft-delete eligible row, linked monitoring-point form หรือ monitoring points เพื่อคง invariant ว่าโรงงานใน POMS ต้องเป็นโรงงานที่เข้าข่าย.
+
+สำหรับ eligible row ที่ถูก soft-delete ก่อนเริ่มใช้ contract นี้ migration `0088_soft_delete_forms_for_removed_eligible_factories` จะ backfill โดย soft-delete active linked form และ active points ที่ยังตกค้าง. Migration จะข้ามฟอร์มที่ยังมี active eligible row ผูกอยู่ หรือมี active POMS connected point เพื่อไม่กระทบข้อมูลที่ยังใช้งาน. การ cleanup นี้ intentionally irreversible; `down` จะไม่ restore ฟอร์มหรือจุดที่ถูก soft-delete เพื่อป้องกัน stale operational data กลับมา active.
 
 ## Business Flow And Explanations
 
