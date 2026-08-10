@@ -50,8 +50,10 @@ jest.mock('../../src/modules/auth/auth.repository', () => ({
     getOperatorProfile: jest.fn(),
     getOperatorFactories: jest.fn(),
     getRolesAndPermissions: jest.fn(),
+    getRolePermissions: jest.fn(),
     upsertExternalOfficerUser: jest.fn(),
     upsertExternalOperatorUser: jest.fn(),
+    upsertExternalCitizenUser: jest.fn(),
     syncExternalOfficerProfile: jest.fn(),
     syncExternalOperatorProfile: jest.fn(),
   },
@@ -887,7 +889,7 @@ describe('authService login completion', () => {
       operatorFactoryRow('0107536001346', '10190000325446'),
       operatorFactoryRow('0107536001346', '10120000325542'),
     ]);
-    mockedAuthRepository.getRolesAndPermissions.mockResolvedValue({
+    mockedAuthRepository.getRolePermissions.mockResolvedValue({
       roles: ['factory_operator'],
       scopes: {
         'factories:view': 'OWN_FACTORY',
@@ -936,7 +938,7 @@ describe('authService login completion', () => {
     mockedAuthRepository.getOperatorFactories.mockResolvedValue([
       operatorFactoryRow(operatorProfile.juristics[0].juristic_id, '10100000000001'),
     ]);
-    mockedAuthRepository.getRolesAndPermissions.mockResolvedValue({
+    mockedAuthRepository.getRolePermissions.mockResolvedValue({
       roles: ['factory_operator'],
       scopes: {
         'factories:view': 'OWN_FACTORY',
@@ -971,7 +973,7 @@ describe('authService login completion', () => {
       regis_date: operatorProfile.regis_date,
     });
     mockedAuthRepository.getOperatorFactories.mockResolvedValue([]);
-    mockedAuthRepository.getRolesAndPermissions.mockResolvedValue({
+    mockedAuthRepository.getRolePermissions.mockResolvedValue({
       roles: ['factory_operator'],
       scopes: {},
     });

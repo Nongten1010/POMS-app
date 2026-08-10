@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { StatusCodes } from 'http-status-codes';
 import { loginSchema } from './auth.validator';
 import { authService } from './auth.service';
+import { UnauthorizedError } from '../../shared/errors/AppError';
 
 export const authController = {
   async login(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -17,7 +18,14 @@ export const authController = {
   /** ดู profile + permissions ของตัวเอง */
   async me(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const result = await authService.me(req.user!.id);
+      const sessionUser = req.user;
+      if (!sessionUser) throw new UnauthorizedError('Authentication required');
+      const result = await authService.me(sessionUser.id, {
+        userType: sessionUser.userType,
+        roles: sessionUser.roles,
+        scopes: sessionUser.scopes,
+        scopeDetails: sessionUser.scopeDetails,
+      });
       res.status(StatusCodes.OK).json(result);
     } catch (err) {
       next(err);

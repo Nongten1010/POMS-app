@@ -48,13 +48,19 @@ export const authService = {
     if (payload.userType === 'operator') {
       const profile = await provider.authenticateOperator(payload.username, payload.password);
       if (!profile) throw new UnauthorizedError('Invalid credentials');
+      if (profile.juristics.length === 0) {
+        return await this.completeLoginAsCitizenFromOperatorProfile(profile);
+      }
       return await this.completeLoginAsOperator(profile);
     }
 
     // citizen
-    const profile = await provider.authenticateCitizen(payload.username, payload.password);
-    if (!profile) throw new UnauthorizedError('Invalid credentials');
-    return await this.completeLoginAsCitizen(profile);
+    const citizenProfile = await provider.authenticateCitizen(payload.username, payload.password);
+    if (citizenProfile) return await this.completeLoginAsCitizen(citizenProfile);
+
+    const sharedProfile = await provider.authenticateOperator(payload.username, payload.password);
+    if (!sharedProfile) throw new UnauthorizedError('Invalid credentials');
+    return await this.completeLoginAsCitizenFromOperatorProfile(sharedProfile);
   },
 
   /**
@@ -132,7 +138,7 @@ export const authService = {
     }
 
     const operatorProfile = await buildOperatorProfile(user.id);
-    const { roles, scopes } = await authRepository.getRolesAndPermissions(user.id);
+    const { roles, scopes } = await authRepository.getRolePermissions(user.id, 'factory_operator');
 
     return buildLoginResponse({
       user: toUserSummary(user),
@@ -158,15 +164,50 @@ export const authService = {
     });
   },
 
-  async me(userId: number): Promise<MeResponse> {
+  async completeLoginAsCitizenFromOperatorProfile(
+    profile: Awaited<ReturnType<ReturnType<typeof getIdentityProvider>['authenticateOperator']>>,
+  ): Promise<LoginResponse> {
+    if (!profile) throw new UnauthorizedError('Invalid credentials');
+    const isApiIdentity =
+      profile.identity_provider !== undefined && profile.identity_provider !== 'mock';
+    const user = isApiIdentity
+      ? await authRepository.upsertExternalCitizenUser(profile)
+      : await authRepository.findUserByProviderAndExternalId('mock', profile.external_id);
+    ensureLoginUserAvailable(user, 'citizen');
+    await authRepository.updateLastLogin(user.id);
+    const { roles, scopes } = await authRepository.getRolePermissions(user.id, 'public_user');
+
+    return buildLoginResponse({
+      user: { ...toUserSummary(user), userType: 'citizen' },
+      profile: null,
+      roles,
+      scopes,
+    });
+  },
+
+  async me(
+    userId: number,
+    session?: {
+      userType: UserSummary['userType'];
+      roles: string[];
+      scopes: Record<string, string | null>;
+      scopeDetails?: Record<string, PermissionScopeDetails>;
+    },
+  ): Promise<MeResponse> {
     const user = await authRepository.findUserById(userId);
     ensureLoginUserAvailable(user, 'citizen');
 
-    const profile = await buildProfileForUser(user);
-    const { roles, scopes } = await authRepository.getRolesAndPermissions(user.id);
+    const effectiveUserType = session?.userType ?? user.user_type;
+    const profile = await buildProfileForUser(user, effectiveUserType);
+    const { roles, scopes } = session
+      ? {
+          roles: [...session.roles],
+          scopes: restoreSessionPermissionScopeDetails(session.scopes, session.scopeDetails),
+        }
+      : await authRepository.getRolesAndPermissions(user.id);
 
     return buildMeResponse({
-      user: toUserSummary(user),
+      user: { ...toUserSummary(user), userType: effectiveUserType },
       profile,
       roles,
       scopes,
@@ -318,13 +359,14 @@ function toOfficerDTO(
 
 async function buildProfileForUser(
   user: Pick<UserRow, 'id' | 'user_type'>,
+  effectiveUserType: UserSummary['userType'] = user.user_type,
 ): Promise<OfficerProfileDTO | OperatorProfileDTO | null> {
-  if (user.user_type === 'officer' || user.user_type === 'admin') {
+  if (effectiveUserType === 'officer' || effectiveUserType === 'admin') {
     const officerProfile = await authRepository.getOfficerProfile(user.id);
     return officerProfile ? toOfficerDTO(officerProfile) : null;
   }
 
-  if (user.user_type === 'operator') {
+  if (effectiveUserType === 'operator') {
     return buildOperatorProfile(user.id);
   }
 
@@ -490,6 +532,15 @@ function normalizePermissionScopeDetails(
         ? details
         : { scope: details as PermissionScopeDetails['scope'] },
     ]),
+  );
+}
+
+function restoreSessionPermissionScopeDetails(
+  scopes: Record<string, string | null>,
+  scopeDetails: Record<string, PermissionScopeDetails> | undefined,
+): Record<string, string | null | PermissionScopeDetails> {
+  return Object.fromEntries(
+    Object.entries(scopes).map(([code, scope]) => [code, scopeDetails?.[code] ?? scope]),
   );
 }
 

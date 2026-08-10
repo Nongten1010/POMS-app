@@ -806,7 +806,6 @@ describe('connectionRequestsService', () => {
     expect(mockedRepository.listRequestsForFactories).toHaveBeenCalledWith([
       'factory-eligible',
       'factory-inactive',
-      'factory-ineligible',
     ]);
     expect(result.data.map((factory) => factory.factoryId)).toEqual([
       'factory-eligible',
@@ -816,11 +815,27 @@ describe('connectionRequestsService', () => {
     expect(result.data).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
+          id: 1,
           factoryId: 'factory-ineligible',
+          factoryName: 'โรงงานไม่เข้าข่าย',
+          newRegistrationNo: null,
+          oldRegistrationNo: null,
+          industryType: null,
+          industryMainOrder: null,
+          industrySubOrder: null,
+          businessActivity: null,
+          eia: null,
+          projectName: null,
+          address: null,
+          latitude: null,
+          longitude: null,
+          province: null,
+          officerNotificationEmails: [],
           isEligible: false,
           eligibilityStatus: 'ไม่เข้าข่าย',
           monitoringPointCount: 0,
           requestStatusCode: null,
+          status: 'แสดง',
         }),
       ]),
     );
@@ -966,7 +981,7 @@ describe('connectionRequestsService', () => {
     expect(mockedRepository.listFactoriesForAccess).toHaveBeenCalledWith({
       actorUserId,
       scope: 'OWN_FACTORY',
-      connectedPomsOnly: true,
+      connectedPomsOnly: false,
     });
     expect(mockedRepository.listConnectedMeasurementPointsForFactories).toHaveBeenCalledWith(
       expect.arrayContaining(['factory-001', '3-106-33/50สบ']),
@@ -1778,19 +1793,23 @@ describe('connectionRequestsService', () => {
     });
   });
 
-  it('excludes factories that are not selected as eligible before displaying operator factories', async () => {
-    mockedRepository.listFactoriesForAccess.mockResolvedValue([
-      factorySummary({ factoryId: 'factory-eligible', factoryName: 'โรงงานเข้าข่าย' }),
-      factorySummary({
-        factoryId: 'factory-ineligible',
-        factoryName: 'โรงงานไม่เข้าข่าย',
-        isEligible: false,
-        eligibilityStatus: 'ไม่เข้าข่าย',
-      }),
-    ]);
+  it('returns all seven owned factories with two eligible and five non-eligible rows', async () => {
+    const ownedFactories = Array.from({ length: 7 }, (_, index) => {
+      const isEligible = index < 2;
+      return factorySummary({
+        id: index + 1,
+        eligibleFactoryId: isEligible ? 17 + index : undefined,
+        factoryId: `factory-${index + 1}`,
+        factoryName: isEligible ? `โรงงานเข้าข่าย ${index + 1}` : `โรงงานไม่เข้าข่าย ${index + 1}`,
+        isEligible,
+        eligibilityStatus: isEligible ? 'เข้าข่าย' : 'ไม่เข้าข่าย',
+        newRegistrationNo: `REG-${index + 1}`,
+      });
+    });
+    mockedRepository.listFactoriesForAccess.mockResolvedValue(ownedFactories);
     mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
       {
-        factoryId: 'factory-eligible',
+        factoryId: 'factory-1',
         stationId: 'S0001',
         pointName: 'ปล่อง A',
         pointCode: 'S0001',
@@ -1806,12 +1825,59 @@ describe('connectionRequestsService', () => {
     );
 
     expect(mockedRepository.listConnectedMeasurementPointsForFactories).toHaveBeenCalledWith(
-      expect.arrayContaining(['factory-eligible', '3-106-33/50สบ']),
-      [17],
+      expect.arrayContaining(['factory-1', 'REG-1', 'factory-2', 'REG-2']),
+      [17, 18],
     );
-    expect(result.data).toHaveLength(1);
+    const connectedFactoryLookupKeys = mockedRepository.listConnectedMeasurementPointsForFactories
+      .mock.calls[0]?.[0] as string[];
+    expect(connectedFactoryLookupKeys).not.toEqual(
+      expect.arrayContaining(['factory-3', 'REG-3', 'factory-7', 'REG-7']),
+    );
+    expect(result.data).toHaveLength(7);
+    expect(result.data.filter((factory) => factory.isEligible)).toHaveLength(2);
+    expect(result.data.filter((factory) => !factory.isEligible)).toHaveLength(5);
     expect(result.data[0]).toMatchObject({
-      factoryId: 'factory-eligible',
+      factoryId: 'factory-1',
+      isEligible: true,
+      eligibilityStatus: 'เข้าข่าย',
+      status: 'แสดง',
+    });
+    expect(result.data[2]).toMatchObject({
+      id: 3,
+      eligibleFactoryId: null,
+      factoryId: 'factory-3',
+      factoryName: 'โรงงานไม่เข้าข่าย 3',
+      newRegistrationNo: null,
+      oldRegistrationNo: null,
+      factoryLogoUrl: null,
+      industryMainOrder: null,
+      industryMainOrderLabel: null,
+      industrySubOrder: null,
+      eia: null,
+      hasEia: null,
+      regionCode: null,
+      regionName: null,
+      provinceCode: null,
+      provinceName: null,
+      province: null,
+      address: null,
+      latitude: null,
+      longitude: null,
+      districtCode: null,
+      districtName: null,
+      industrialAreaType: null,
+      industrialAreaTypeLabel: null,
+      industrialEstateCode: null,
+      industrialEstateName: null,
+      isEligible: false,
+      eligibilityStatus: 'ไม่เข้าข่าย',
+      isFavorite: false,
+      hasLatestHourlyMeasurement: false,
+      measurementPoints: [],
+      monitoringPointCountBySystem: [
+        { systemType: 'CEMS', count: 0 },
+        { systemType: 'WPMS', count: 0 },
+      ],
       status: 'แสดง',
     });
   });

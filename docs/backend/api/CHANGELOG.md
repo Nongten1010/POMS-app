@@ -2,6 +2,22 @@
 
 ไฟล์นี้บันทึกเฉพาะการเปลี่ยน API ที่ทำให้ client ต้องแก้ตาม การเปลี่ยนทั่วไปและประวัติรายละเอียดดูจาก Git history
 
+## 2026-08-10 — แยก citizen/operator persona สำหรับบัญชี i-Industry เดียวกัน
+
+- **Affected API:** [Authentication](./shared/authentication/README.md)
+- **Impact:** `POST /api/v1/auth/login` ใช้ credential i-Industry ชุดเดียวกันกับ `userType: "citizen"` หรือ `"operator"`; response และ JWT ใช้ role/permission ของ persona ที่เลือก. Operator request ที่ DIW ส่ง `juristics: []` เปลี่ยนเป็น `200 OK` citizen fallback แทน operator session หรือ `401`. `GET /api/v1/auth/me` รักษา persona จาก signed token แม้ stored user row เดียวกันรองรับทั้งสอง persona. Production access token ถูกจำกัดอายุสูงสุด `15` นาทีและ legacy token ที่ออกเกิน `15` นาทีแล้วจะถูกปฏิเสธหลัง deploy.
+- **Migration:** frontend ต้องอ่าน effective `user.userType` และ `user.roleCodes` จาก response หลัง login ทุกครั้ง; เมื่อขอ operator แต่ได้ `userType: "citizen"` ให้พาเข้าหน้า/เมนูประชาชน และห้ามอนุมาน persona จากประเภทที่ผู้ใช้กดก่อนส่ง request. Operator UI ต้องรองรับ `ownedFactoryIds: []` เมื่อมีนิติบุคคลแต่ไม่มี factory ใน payload. เมื่อ API คืน `401` เพราะ access token หมดอายุ ให้ล้าง session และพากลับหน้า login; ผู้ใช้ที่ถือ legacy token อาจต้อง login ใหม่ทันทีหลัง deploy.
+- **Old contract:** external citizen path ใช้ i-Industry account เดียวกับ operator ไม่ได้; operator request ได้ operator persona ตาม request และ `/auth/me` rebuild persona จาก stored `users.user_type`.
+- **New contract:** citizen request ได้ `public_user`; operator request ได้ `factory_operator` เมื่อ `juristics.length > 0`; operator request ที่ไม่มีนิติบุคคลได้ `public_user` fallback. Persona permission ไม่รวม role อื่น, ยังเคารพ per-user deny/การจำกัด scope และ citizen/operator token ของ account เดียวกันทำงานพร้อมกันได้.
+
+## 2026-08-10 — คืนโรงงานทั้งหมดของ owner พร้อมแถวข้อมูลขั้นต่ำสำหรับโรงงานไม่เข้าข่าย
+
+- **Affected menus:** [ขอเชื่อมต่อ](./menus/connection-requests/README.md) และ [หน้าหลัก](./menus/home/README.md)
+- **Impact:** `GET /api/v1/cems-wpms-requests/operator-factories` และ `GET /api/v1/operator-factory-dashboard` สำหรับ scope `OWN_FACTORY` คืนทุก active factory ที่ owner เข้าถึงได้ ไม่ตัดโรงงานที่ไม่มี active `eligible_factories`; โรงงานไม่เข้าข่ายส่ง `factoryId`, `factoryName`, `isEligible: false`, `eligibilityStatus: "ไม่เข้าข่าย"` และค่าโครงสร้างที่ปลอดภัย ส่วน descriptive fields เป็น `null`.
+- **Migration:** frontend ต้องใช้ `isEligible`/`eligibilityStatus` แยก action เข้าข่ายกับไม่เข้าข่าย, รองรับ descriptive fields เป็น `null`, ใช้ `factoryId` เป็นเลขที่โรงงาน และรองรับ `measurementPoints: []` กับ count `0`.
+- **Old contract:** owner endpoints อาจตัดโรงงานไม่เข้าข่ายออก จึงเห็นเพียง 2 โรงงานที่จับคู่ active `eligible_factories` ในกรณีตัวอย่าง 7 โรงงาน.
+- **New contract:** owner เห็นครบ 7 โรงงาน; 2 โรงงานเข้าข่ายได้รายละเอียดและข้อมูล current/live ตามเดิม ส่วน 5 โรงงานไม่เข้าข่ายได้แถวข้อมูลขั้นต่ำโดยไม่ผูก request, จุดตรวจวัด หรือสถานะ favorite เข้ากับ response.
+
 ## 2026-08-09 — Calendar Status ใช้สรุปและรายละเอียดทั้งปีแบบหนึ่งแถวต่อวัน
 
 - **Affected API:** [Calendar Status และ Calendar Status details](./shared/connected-measurement-points/README.md#get-apiv1connected-measurement-pointsstationidcalendar-status)
@@ -106,13 +122,13 @@
 - **Old contract:** CEMS ออก `S2001`, `S2002`, ... และ WPMS ออก `W2001`, `W2002`, ... โดยใช้ลำดับต่อเนื่องแยกตามระบบแต่ไม่แยกปี.
 - **New contract ณ เวลาที่เปลี่ยน:** CEMS ออก `CEMS-0001/2569`, `CEMS-0002/2569`, ... และ WPMS ออก `WEMS-0001/2569`, `WEMS-0002/2569`, ...; contract นี้ถูกแทนที่ภายหลังด้วยรายการคืนรหัสเป็น `S2001`/`W2001` ด้านบน.
 
-## 2026-07-22 — จำกัดรายชื่อโรงงานของผู้ประกอบการไว้ที่โรงงานเข้าข่าย
+## 2026-07-22 — จำกัดรายชื่อโรงงานของผู้ประกอบการไว้ที่โรงงานเข้าข่าย (ยกเลิกแล้ว 2026-08-10)
 
 - **Affected menu:** [ขอเชื่อมต่อ](./menus/connection-requests/README.md)
-- **Impact:** `GET /api/v1/cems-wpms-requests/operator-factories` จะไม่ส่งโรงงานที่ user เข้าถึงได้แต่ไม่มี active `eligible_factories` อีกต่อไป และค่า descriptive fields อาจเปลี่ยนเป็นค่าล่าสุดจากโรงงานเข้าข่าย
-- **Migration:** client ต้องไม่ใช้ endpoint นี้เป็นรายการโรงงานทั้งหมดของ user หรือคาดหวัง action สำหรับโรงงานไม่เข้าข่าย; หากต้องมี workflow แจ้งความประสงค์สำหรับโรงงานไม่เข้าข่าย ให้ใช้ contract แยกต่างหาก
-- **Old contract:** ใช้ `factories` เป็นฐานข้อมูลโรงงานและ left join `eligible_factories` เพื่อเสริมข้อมูล จึงอาจส่งโรงงานไม่เข้าข่ายและใช้ชื่อจาก `factories.name`
-- **New contract:** ใช้ `factories` เฉพาะตรวจสิทธิ์/ความสัมพันธ์ของ user รับเฉพาะ active `eligible_factories` และส่งชื่อ เลขทะเบียน ประเภทโรงงาน การประกอบกิจการ ที่อยู่ จังหวัด พิกัด EIA และชื่อโครงการจาก `eligible_factories`
+- **Impact ณ เวลาที่เปลี่ยน:** `GET /api/v1/cems-wpms-requests/operator-factories` หยุดส่งโรงงานที่ user เข้าถึงได้แต่ไม่มี active `eligible_factories`.
+- **Migration ณ เวลาที่เปลี่ยน:** client ถูกกำหนดไม่ให้ใช้ endpoint นี้เป็นรายการโรงงานทั้งหมดของ user.
+- **Old contract:** ใช้ `factories` เป็นฐานข้อมูลโรงงานและ left join `eligible_factories` เพื่อเสริมข้อมูล จึงส่งได้ทั้งโรงงานเข้าข่ายและไม่เข้าข่าย.
+- **New contract ณ เวลาที่เปลี่ยน:** รับเฉพาะ active `eligible_factories`; contract นี้ถูกยกเลิกเมื่อ 2026-08-10 และ contract ปัจจุบันกลับมาคืนทุกโรงงานที่ owner เข้าถึงได้ พร้อม `isEligible` และ `eligibilityStatus`.
 
 ## 2026-07-21 — เปลี่ยน prefix รหัสจุดตรวจวัด WPMS ที่ออกใหม่
 

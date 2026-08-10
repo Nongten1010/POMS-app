@@ -423,10 +423,10 @@ export interface OperatorFactoryTableRowDTO {
 
 export interface OperatorFactoryDashboardRowDTO {
   id: number | null;
-  eligibleFactoryId: number;
+  eligibleFactoryId: number | null;
   factoryId: string;
   factoryName: string;
-  newRegistrationNo: string;
+  newRegistrationNo: string | null;
   oldRegistrationNo: string | null;
   factoryLogoUrl: string | null;
   industryMainOrder: string | null;
@@ -444,10 +444,12 @@ export interface OperatorFactoryDashboardRowDTO {
   longitude: string | null;
   districtCode: string | null;
   districtName: string | null;
-  industrialAreaType: 'INDUSTRIAL_ESTATE' | 'OUTSIDE_INDUSTRIAL_ESTATE';
-  industrialAreaTypeLabel: 'ในนิคมอุตสาหกรรม' | 'นอกนิคมอุตสาหกรรม';
+  industrialAreaType: 'INDUSTRIAL_ESTATE' | 'OUTSIDE_INDUSTRIAL_ESTATE' | null;
+  industrialAreaTypeLabel: 'ในนิคมอุตสาหกรรม' | 'นอกนิคมอุตสาหกรรม' | null;
   industrialEstateCode: string | null;
   industrialEstateName: string | null;
+  isEligible: boolean;
+  eligibilityStatus: 'เข้าข่าย' | 'ไม่เข้าข่าย';
   isFavorite: boolean;
   hasLatestHourlyMeasurement: boolean;
   monitoringPointCountBySystem: OperatorFactorySystemPointCountDTO[];

@@ -1427,29 +1427,74 @@ function buildFactoriesForAccessQuery(
   access: FactoryAccess,
 ): Knex.QueryBuilder<FactoryRow, FactoryRow[]> {
   const builder = db<FactoryRow>('factories as f')
-    .innerJoin('eligible_factories as ef', function joinEligibleFactory() {
-      this.on(function joinFactoryKeys() {
-        this.on('ef.factory_registration_no_new', '=', 'f.code')
-          .orOn('ef.factory_registration_no_new', '=', 'f.fid')
-          .orOn('ef.source_factory_id', '=', 'f.fid')
-          .orOn('ef.source_factory_id', '=', 'f.code');
-      }).andOnNull('ef.deleted_at');
-    })
-    .leftJoin('provinces as p', 'p.name_th', 'ef.province_name')
-    .leftJoin('industrial_estates as ie', 'ie.name_th', 'ef.industrial_estate_name')
+    .joinRaw(
+      `
+      OUTER APPLY (
+        SELECT TOP (1) ef_source.*
+        FROM eligible_factories AS ef_source
+        WHERE ef_source.deleted_at IS NULL
+          AND (
+            ef_source.factory_registration_no_new = f.code
+            OR ef_source.factory_registration_no_new = f.fid
+            OR ef_source.source_factory_id = f.fid
+            OR ef_source.source_factory_id = f.code
+          )
+        ORDER BY CASE
+          WHEN ef_source.factory_registration_no_new = f.code THEN 0
+          WHEN ef_source.source_factory_id = f.fid THEN 1
+          WHEN ef_source.factory_registration_no_new = f.fid THEN 2
+          ELSE 3
+        END, ef_source.id DESC
+      ) AS ef
+    `,
+    )
+    .joinRaw(
+      `
+      OUTER APPLY (
+        SELECT TOP (1) p_source.*
+        FROM provinces AS p_source
+        WHERE p_source.name_th = ef.province_name
+          OR (ef.id IS NULL AND p_source.id = f.province_id)
+        ORDER BY p_source.id
+      ) AS p
+    `,
+    )
+    .joinRaw(
+      `
+      OUTER APPLY (
+        SELECT TOP (1) ie_source.*
+        FROM industrial_estates AS ie_source
+        WHERE ie_source.name_th = ef.industrial_estate_name
+          OR (ef.id IS NULL AND ie_source.id = f.industrial_estate_id)
+        ORDER BY ie_source.id
+      ) AS ie
+    `,
+    )
     .whereNull('f.deleted_at')
     .select(
       'f.id',
-      db.raw('COALESCE(ef.source_factory_id, ef.factory_registration_no_new) as fid'),
-      'ef.factory_registration_no_new as code',
-      'ef.factory_name as name',
-      db.raw('CAST(NULL AS NVARCHAR(500)) as system_detail'),
-      db.raw('CAST(1 AS BIT) as is_active'),
+      db.raw('COALESCE(ef.source_factory_id, ef.factory_registration_no_new, f.fid) as fid'),
+      db.raw('COALESCE(ef.factory_registration_no_new, f.code) as code'),
+      db.raw(`
+        COALESCE(
+          (
+            SELECT TOP (1) cp_name.factory_name
+            FROM cems_wpms_connected_measurement_points AS cp_name
+            WHERE cp_name.eligible_factory_id = ef.id
+              AND cp_name.deleted_at IS NULL
+            ORDER BY cp_name.updated_at DESC, cp_name.id DESC
+          ),
+          ef.factory_name,
+          f.name
+        ) as name
+      `),
+      'f.system_detail',
+      db.raw('COALESCE(CAST(f.is_active AS INT), 1) as is_active'),
       'p.id as province_id',
       'p.region as province_region',
-      'ef.province_name as province_name',
+      db.raw('COALESCE(ef.province_name, p.name_th) as province_name'),
       'ie.code as industrial_estate_code',
-      'ef.industrial_estate_name as industrial_estate_name',
+      db.raw('COALESCE(ef.industrial_estate_name, ie.name_th) as industrial_estate_name'),
       'ef.factory_registration_no_old',
       'ef.factory_type_sequence',
       'ef.address',
@@ -1462,7 +1507,7 @@ function buildFactoriesForAccessQuery(
       'ef.project_name',
       'ef.id as eligible_factory_id',
     )
-    .orderBy('ef.factory_name', 'asc')
+    .orderByRaw('COALESCE(ef.factory_name, f.name) asc')
     .orderBy('f.id', 'asc');
 
   if (requiresAssignedFactoryAccess(access.scope)) {

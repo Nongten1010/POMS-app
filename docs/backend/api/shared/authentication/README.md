@@ -19,7 +19,7 @@ curl --request POST 'https://d-poms.diw.go.th/api/v1/auth/login' \
   }'
 ```
 
-เมื่อสำเร็จ backend คืน `200 OK` พร้อม `accessToken`, `user` และ `permissions` โดยการ login ครั้งแรกของ external operator ไม่เปลี่ยน response shape
+เมื่อสำเร็จ backend คืน `200 OK` พร้อม `accessToken`, `user` และ `permissions`. สำหรับบัญชี i-Industry ค่า `userType`, `roleCodes` และ `permissions` เป็น persona ของ session ที่ผู้ใช้เลือก ไม่ใช่การรวมทุก role ที่ผูกกับ user row
 
 ## POST `/api/v1/auth/login`
 
@@ -40,19 +40,33 @@ curl --request POST 'https://d-poms.diw.go.th/api/v1/auth/login' \
 | ---------------------- | ------------- | ------------------------------------------------------ |
 | `accessToken`          | `string`      | JWT สำหรับส่งเป็น Bearer token                         |
 | `user`                 | `object`      | ข้อมูลผู้ใช้, role และ factory IDs ที่เข้าถึงได้       |
-| `user.accountType`     | `poms \| api` | External operator คืน `api`                            |
-| `user.roleCodes`       | `string[]`    | External operator มี `factory_operator` เป็น base role |
-| `user.ownedFactoryIds` | `string[]`    | มีเฉพาะ operator และคำนวณจากสิทธิ์โรงงานปัจจุบัน       |
-| `permissions`          | `object`      | Permission groups และ data scope                       |
+| `user.accountType`     | `poms \| api` | External i-Industry account คืน `api`                                             |
+| `user.userType`        | `string`      | Effective persona ของ session; operator request อาจคืน `citizen` ตาม fallback rule |
+| `user.roleCodes`       | `string[]`    | `public_user` สำหรับ citizen หรือ `factory_operator` สำหรับ operator persona       |
+| `user.ownedFactoryIds` | `string[]`    | มีเฉพาะ operator persona และคำนวณจากสิทธิ์โรงงานปัจจุบัน                           |
+| `permissions`          | `object`      | Permission groups ของ persona เดียว พร้อม data scope                               |
 
-### พฤติกรรม external operator
+ใน `NODE_ENV=production` access token มีอายุใช้งานสูงสุด `15` นาที แม้ `JWT_EXPIRES_IN` จะถูกตั้งไว้นานกว่านั้น และ backend ปฏิเสธ legacy token ที่ `iat` เก่ากว่า `15` นาทีด้วย เพื่อไม่ให้ operator permission เดิมคงอยู่เป็นเวลานานหลัง ownership เปลี่ยน
+
+### พฤติกรรมบัญชี i-Industry แบบหลาย persona
+
+บัญชีประชาชนและผู้ประกอบการใช้ credential ชุดเดียวกัน แต่ permission ของแต่ละ session แยกตาม `userType` ที่เลือก:
+
+1. เลือก `userType: "citizen"` จะได้ `user.userType: "citizen"`, `roleCodes: ["public_user"]`, ไม่มี `ownedFactoryIds` และไม่รับ permission จาก operator role แม้บัญชีนั้นเป็นเจ้าของนิติบุคคล
+2. เลือก `userType: "operator"` และ DIW ส่ง `juristics` อย่างน้อย 1 รายการ จะได้ `user.userType: "operator"` กับ `roleCodes: ["factory_operator"]`; นิติบุคคลที่มี `FactoryList: []` ยังนับว่าเป็นผู้ประกอบการ จึงอาจได้ `ownedFactoryIds: []`
+3. เลือก `userType: "operator"` แต่ DIW ส่ง `juristics: []` จะ fallback เป็น citizen persona และคืน `200 OK` พร้อม `public_user`; กรณีนี้ไม่คืน `401`
+4. Backend ใช้ provider identity แถวเดียวต่อ `identity_provider = i_industry` และเลขประชาชนเดียวกัน. Login แบบ citizen ไม่ downgrade หรือลบ operator profile/access เดิม; เมื่อภายหลังพบนิติบุคคล operator login สามารถ promote stored `user_type` เดิมได้โดยไม่สร้าง user ซ้ำ
+5. Token เก็บ effective persona, role และ scope ของ session นั้น. `GET /auth/me` ใช้ persona ที่เซ็นไว้ใน token จึงรองรับ citizen session และ operator session ของ account เดียวกันพร้อมกัน
+6. Permission ถูกจำกัดให้อยู่ใน base role ของ persona ที่เลือกเท่านั้น. Per-user `deny` และ allow ที่จำกัด scope ให้แคบลงยังมีผล แต่ allow จาก permission นอก role หรือ scope ที่กว้างกว่า role จะไม่ถูกนำเข้า session
+
+### การยืนยันตัวตนและ provisioning
 
 1. ถ้า request ระบุ `accountType: "poms"` หรือ `provider: "local"` backend จะตรวจเฉพาะ local POMS account
 2. ถ้าไม่ระบุ route hint backend จะลอง local account ก่อน แล้วจึง fallback ไป external identity provider
-3. External operator ต้องใช้ submitted username 13 หลัก และ `citizen_id` ที่ DIW ส่งกลับต้องตรงกันทุกหลัก มิฉะนั้นคืน generic `401`
-4. เมื่อ DIW ยืนยันสำเร็จครั้งแรก backend จะสร้าง provider-scoped identity ด้วย `identity_provider = i_industry`, assign role `factory_operator` และ sync `operator_profiles`, `juristics`, `user_juristics` และ `factories` ใน transaction เดียว
+3. External citizen/operator ต้องใช้ submitted username 13 หลัก และ `citizen_id` ที่ DIW ส่งกลับต้องตรงกันทุกหลัก มิฉะนั้นคืน generic `401`
+4. เมื่อ DIW ยืนยันสำเร็จครั้งแรก backend จะสร้าง provider-scoped identity ด้วย `identity_provider = i_industry`; operator persona จะ assign role `factory_operator` และ sync `operator_profiles`, `juristics`, `user_juristics` และ `factories` ใน transaction เดียว ส่วน citizen persona สร้าง/reuse เฉพาะ shared identity
 5. Login ซ้ำจะ update ข้อมูลเดิมแบบ idempotent ไม่สร้าง identity, role หรือ access row ซ้ำ
-6. บัญชี inactive, soft-deleted หรือ identity เดียวกันที่เป็น `user_type` อื่นจะไม่ถูกเปิดใช้งานหรือเขียนทับ และคืน generic `401`
+6. บัญชี inactive, soft-deleted หรือ identity เดียวกันที่เป็น user type อื่นนอกเหนือจาก `citizen`/`operator` จะไม่ถูกเปิดใช้งานหรือเขียนทับ และคืน generic `401`
 7. วันที่ DIW แบบ `DD/MM/YYYY HH:mm:ss` จะถูก normalize เป็น SQL-safe ISO datetime ก่อนบันทึก
 
 ### Success response (`200 OK`)
@@ -151,10 +165,12 @@ Backend ตั้งใจเก็บ `401` เป็นข้อความ�
 
 ถ้า token ไม่ถูกต้องหรือหมดอายุ endpoint คืน `401 UNAUTHORIZED` ด้วย shared error envelope เดียวกัน
 
+สำหรับ i-Industry account endpoint นี้ตรวจว่า user row ยัง active และไม่ถูกลบ แล้วคืน persona, role และ permission จาก JWT ที่ผ่านการตรวจลายเซ็น ไม่เปลี่ยนกลับไปใช้ stored `users.user_type`. ดังนั้น token ของ citizen และ operator สำหรับ `sub` เดียวกันยังคงให้ผลแยกกันตลอดอายุ token
+
 ## Maintainer links
 
 - [Routes](../../../../../backend/src/modules/auth/auth.routes.ts) และ [controller](../../../../../backend/src/modules/auth/auth.controller.ts)
 - [Service](../../../../../backend/src/modules/auth/auth.service.ts)
 - [Repository provisioning](../../../../../backend/src/modules/auth/auth.repository.ts)
 - [DIW identity mapping](../../../../../backend/src/modules/auth/identity-provider/diw-user-login.identity-provider.ts)
-- Tests: [service](../../../../../backend/tests/unit/auth.service.test.ts), [repository](../../../../../backend/tests/unit/auth.repository.test.ts), [provider](../../../../../backend/tests/unit/diw-user-login.identity-provider.test.ts)
+- Tests: [route persona](../../../../../backend/tests/unit/auth.login-personas.route.test.ts), [service](../../../../../backend/tests/unit/auth.service.test.ts), [repository](../../../../../backend/tests/unit/auth.repository.test.ts), [provider](../../../../../backend/tests/unit/diw-user-login.identity-provider.test.ts)

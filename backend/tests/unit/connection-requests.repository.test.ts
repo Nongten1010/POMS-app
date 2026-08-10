@@ -314,7 +314,7 @@ describe('connectionRequestsRepository query helpers', () => {
     expect(compiled.bindings).toContain(42);
   });
 
-  it('uses factory master only for operator access and sources displayed factory data from eligible factories', () => {
+  it('preserves operator factory master rows when no eligible-factory row exists', () => {
     const sql = buildFactoriesForAccessQueryForTests({
       actorUserId: 42,
       scope: 'ALL',
@@ -322,18 +322,36 @@ describe('connectionRequestsRepository query helpers', () => {
       .toSQL()
       .sql.toLowerCase();
 
-    expect(sql).toContain('inner join [eligible_factories] as [ef]');
-    expect(sql).not.toContain('left join [eligible_factories] as [ef]');
-    expect(sql).toContain('[ef].[factory_registration_no_new] = [f].[code]');
-    expect(sql).toContain('[ef].[source_factory_id] = [f].[fid]');
-    expect(sql).toContain('[ef].[deleted_at] is null');
-    expect(sql).toContain('[ef].[factory_name] as [name]');
-    expect(sql).toContain('[ef].[factory_registration_no_new] as [code]');
-    expect(sql).toContain('[ef].[province_name] as [province_name]');
-    expect(sql).toContain('[ef].[industrial_estate_name] as [industrial_estate_name]');
-    expect(sql).toContain('[ef].[project_name]');
-    expect(sql).not.toContain('[f].[name]');
-    expect(sql).not.toContain('[f].[system_detail]');
+    expect(sql).toContain('from [factories] as [f]');
+    expect(sql).toMatch(/outer apply\s*\(\s*select top \(1\)/);
+    expect(sql).toContain('from eligible_factories as ef_source');
+    expect(sql).toContain('ef_source.factory_registration_no_new = f.code');
+    expect(sql).toContain('ef_source.source_factory_id = f.fid');
+    expect(sql).toContain('ef_source.deleted_at is null');
+    expect(sql).toContain('order by case');
+    expect(sql).not.toContain('join [eligible_factories] as [ef]');
+    expect(sql).toContain('from provinces as p_source');
+    expect(sql).toContain('p_source.name_th = ef.province_name');
+    expect(sql).toContain('(ef.id is null and p_source.id = f.province_id)');
+    expect(sql).toContain('from industrial_estates as ie_source');
+    expect(sql).toContain('ie_source.name_th = ef.industrial_estate_name');
+    expect(sql).toContain('(ef.id is null and ie_source.id = f.industrial_estate_id)');
+    expect(sql).toContain(
+      'coalesce(ef.source_factory_id, ef.factory_registration_no_new, f.fid) as fid',
+    );
+    expect(sql).toContain('coalesce(ef.factory_registration_no_new, f.code) as code');
+    expect(sql).toContain('select top (1) cp_name.factory_name');
+    expect(sql).toContain('cp_name.eligible_factory_id = ef.id');
+    expect(sql).toContain('order by cp_name.updated_at desc, cp_name.id desc');
+    expect(sql).toContain('ef.factory_name,');
+    expect(sql).toContain('f.name');
+    expect(sql).toContain('coalesce(ef.province_name, p.name_th) as province_name');
+    expect(sql).toContain('[ie].[code] as [industrial_estate_code]');
+    expect(sql).toContain(
+      'coalesce(ef.industrial_estate_name, ie.name_th) as industrial_estate_name',
+    );
+    expect(sql).toContain('coalesce(cast(f.is_active as int), 1) as is_active');
+    expect(sql).toContain('[f].[system_detail]');
   });
 
   it('prefers the latest current POMS factory name in the connected dashboard', () => {
@@ -372,12 +390,15 @@ describe('connectionRequestsRepository query helpers', () => {
       .toSQL()
       .sql.toLowerCase();
 
-    expect(sql).toContain('left join [industrial_estates] as [ie]');
+    expect(sql).toContain('from industrial_estates as ie_source');
+    expect(sql).toContain(') as ie');
     expect(sql).toContain('[p].[id] as [province_id]');
     expect(sql).toContain('[p].[region] as [province_region]');
     expect(sql).toContain('[ie].[code] as [industrial_estate_code]');
-    expect(sql).toContain('[ef].[province_name] as [province_name]');
-    expect(sql).toContain('[ef].[industrial_estate_name] as [industrial_estate_name]');
+    expect(sql).toContain('coalesce(ef.province_name, p.name_th) as province_name');
+    expect(sql).toContain(
+      'coalesce(ef.industrial_estate_name, ie.name_th) as industrial_estate_name',
+    );
   });
 
   it('limits factory access to assigned officer regions when regional access is present', () => {

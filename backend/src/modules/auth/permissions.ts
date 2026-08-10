@@ -10,6 +10,13 @@ export interface PermissionScopeDetails {
   region?: string | null;
   province?: string | null;
 }
+export interface PersonaPermissionOverride {
+  code: string;
+  effect: 'allow' | 'deny';
+  scope: PermissionDataScope;
+  region: string | null;
+  province: string | null;
+}
 export type PermissionGroup = { data: PermissionDataScope } & Record<
   string,
   true | PermissionDataScope | string | null | undefined
@@ -145,6 +152,50 @@ export function flattenPermissionScopes(
   return Object.fromEntries(
     Object.entries(scopes).map(([code, details]) => [code, toScopeDetails(details).scope]),
   );
+}
+
+export function applyPersonaPermissionOverrides(
+  roleScopes: Readonly<Record<string, PermissionDataScope>>,
+  overrides: readonly PersonaPermissionOverride[],
+): Record<string, PermissionDataScope | PermissionScopeDetails> {
+  const scopes: Record<string, PermissionDataScope | PermissionScopeDetails> = {
+    ...roleScopes,
+  };
+
+  for (const override of overrides) {
+    if (!(override.code in roleScopes)) continue;
+    if (override.effect === 'deny') {
+      delete scopes[override.code];
+      continue;
+    }
+
+    const roleScope = roleScopes[override.code];
+    if (!isSameOrNarrowerScope(override.scope, roleScope)) continue;
+    scopes[override.code] = {
+      scope: override.scope,
+      region: override.region,
+      province: override.province,
+    };
+  }
+
+  return scopes;
+}
+
+function isSameOrNarrowerScope(
+  candidate: PermissionDataScope,
+  roleScope: PermissionDataScope | undefined,
+): boolean {
+  if (roleScope === null || roleScope === undefined) return candidate === roleScope;
+  if (candidate === null) return false;
+
+  const allowedScopes: Record<Exclude<PermissionDataScope, null>, PermissionDataScope[]> = {
+    ALL: ['ALL', 'IN_REGION', 'IN_PROVINCE', 'IN_ESTATE', 'OWN_FACTORY'],
+    IN_REGION: ['IN_REGION', 'IN_PROVINCE', 'IN_ESTATE', 'OWN_FACTORY'],
+    IN_PROVINCE: ['IN_PROVINCE', 'IN_ESTATE', 'OWN_FACTORY'],
+    IN_ESTATE: ['IN_ESTATE', 'OWN_FACTORY'],
+    OWN_FACTORY: ['OWN_FACTORY'],
+  };
+  return allowedScopes[roleScope].includes(candidate);
 }
 
 function permissionCodesFromAlias(module: string, action: string): string[] {

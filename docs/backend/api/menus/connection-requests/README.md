@@ -13,7 +13,7 @@
 3. Backend เปลี่ยนสถานะเป็น `WAITING_CONNECTION` และออกรหัสเรียงตามลำดับจุดในคำขอ.
 4. Client ใช้ `measurementPoints[].pointCode` จาก response สำหรับตั้งค่าอุปกรณ์และเรียก API ที่ใช้ `stationId` ต่อไป.
 
-ผู้ประกอบการอ่านรายชื่อโรงงานเข้าข่ายที่ตนมีสิทธิ์:
+ผู้ประกอบการอ่านรายชื่อโรงงานทั้งหมดที่ตนมีสิทธิ์ พร้อมสถานะว่าโรงงานเข้าข่ายหรือไม่:
 
 ```bash
 curl --request GET \
@@ -44,7 +44,7 @@ curl --request POST \
 | งาน | Method | Path | Auth | Permission | Contract |
 | --- | --- | --- | --- | --- | --- |
 | อ่านรายการคำขอสำหรับตาราง | `GET` | `/api/v1/cems-wpms-requests/table-rows` | Bearer | `cems_wpms_requests:view` | [Request table location source](#request-table-location-source) |
-| อ่านรายชื่อโรงงานเข้าข่ายของผู้ประกอบการ | `GET` | `/api/v1/cems-wpms-requests/operator-factories` | Bearer | `factories:view` | [Operator factory list source](#operator-factory-list-source) |
+| อ่านรายชื่อโรงงานทั้งหมดที่ผู้ประกอบการเข้าถึงได้ พร้อมสถานะเข้าข่าย | `GET` | `/api/v1/cems-wpms-requests/operator-factories` | Bearer | `factories:view` | [Operator factory list source](#operator-factory-list-source) |
 | อ่านข้อมูลทั่วไปของโรงงานสำหรับ prefill | `GET` | `/api/v1/cems-wpms-requests/factories/:factoryId/general` | Bearer | `factories:view` | [Frontend measurement-point handoff](#frontend-measurement-point-handoff) |
 | สร้างคำขอเชื่อมต่อใหม่ | `POST` | `/api/v1/cems-wpms-requests` | Bearer | `cems_wpms_requests:edit` | [Eligibility gate](#eligibility-gate) |
 | สร้างคำขอเพิ่มจุดตรวจวัด | `POST` | `/api/v1/cems-wpms-requests/measurement-points` | Bearer | `cems_wpms_requests:edit` | [Eligibility gate](#eligibility-gate), [Frontend measurement-point handoff](#frontend-measurement-point-handoff) |
@@ -280,23 +280,36 @@ Field อื่นของ Direct Connection เช่น `factoryName`, ข้
 
 ### Operator factory list source
 
-`GET /api/v1/cems-wpms-requests/operator-factories` ใช้ `factories` เฉพาะตรวจความสัมพันธ์และสิทธิ์ว่า user เข้าถึงโรงงานใดได้ จากนั้นรับเฉพาะโรงงานที่จับคู่กับ active row ใน `eligible_factories` ได้ ข้อมูลโรงงานที่ส่งกลับ เช่น ชื่อโรงงาน เลขทะเบียน ประเภทโรงงาน การประกอบกิจการ ที่อยู่ จังหวัด พิกัด EIA และชื่อโครงการ ต้องอ่านจาก `eligible_factories`; ห้ามใช้ descriptive fields จาก `factories` เป็น fallback.
+`GET /api/v1/cems-wpms-requests/operator-factories` คืนทุกโรงงานที่ user เข้าถึงได้จากความสัมพันธ์ใน `factories` และสิทธิ์ `factories:view` แม้โรงงานนั้นจะยังไม่มี active row ใน `eligible_factories`. Endpoint นี้ใช้เป็น owner/request list ไม่ใช่ connected-only dashboard list.
 
-จำนวนจุดตรวจวัดยังคำนวณจาก active rows ใน `cems_wpms_connected_measurement_points` และสถานะคำขออ่านจากคำขอล่าสุดของโรงงานตามเดิม.
+โรงงานที่เข้าข่ายได้รับรายละเอียดจาก active `eligible_factories` และข้อมูล current/live ที่จับคู่ได้. โรงงานที่ไม่เข้าข่ายส่งข้อมูลที่มีความหมายเฉพาะ `factoryId`, `factoryName`, `isEligible: false` และ `eligibilityStatus: "ไม่เข้าข่าย"`; descriptive fields อื่นเป็น `null`. ฟิลด์โครงสร้างที่ frontend ใช้วนแสดงยังคง type เดิม ได้แก่ `officerNotificationEmails: []`, `monitoringPointCount: 0`, `requestStatusCode: null` และ `status: "แสดง"`. Eligibility ใช้ field แยกใน response แทนการกรองรายการออก:
+
+- `isEligible = true` เมื่อจับคู่ active `eligible_factories` ได้
+- `eligibilityStatus = "เข้าข่าย"` เมื่อ `isEligible = true`
+- `eligibilityStatus = "ไม่เข้าข่าย"` เมื่อ `isEligible = false`
+
+จำนวนจุดตรวจวัดและสถานะคำขอคำนวณเฉพาะโรงงานที่เข้าข่าย. Public map ยังคงเป็น connected/current-live only ส่วน authenticated dashboard สำหรับ `OWN_FACTORY` คืนทุกโรงงานของ owner และเสริมข้อมูล current/live เฉพาะโรงงานที่เข้าข่ายและเชื่อมต่อแล้ว; ห้ามสรุปว่า `GET /api/v1/cems-wpms-requests/operator-factories` เป็นรายการ connected-only.
 
 | Response field | Type | Source/Meaning |
 | --- | --- | --- |
-| `data[].factoryId` | string | `eligible_factories.source_factory_id`; fallback เป็น `factory_registration_no_new` เมื่อ source id ไม่มีค่า |
-| `data[].factoryName` | string | `eligible_factories.factory_name` |
-| `data[].newRegistrationNo` | string | `eligible_factories.factory_registration_no_new` |
-| `data[].oldRegistrationNo` | string \| null | `eligible_factories.factory_registration_no_old` |
-| `data[].industryMainOrder`, `industrySubOrder` | string \| null | แยกจาก `eligible_factories.factory_type_sequence` |
-| `data[].businessActivity` | string \| null | `eligible_factories.business_activity` |
-| `data[].address`, `province` | string \| null | `eligible_factories.address`, `province_name`; `address` มีจังหวัดก่อนรหัสไปรษณีย์และ `province` ยังคงเป็น field แยกสำหรับ filter/scope |
-| `data[].latitude`, `longitude` | string \| null | พิกัดโรงงานจาก `eligible_factories` |
-| `data[].eia`, `projectName` | string \| null | `eligible_factories.eia_assessment`, `project_name` |
-| `data[].monitoringPointCount` | number | จำนวน active POMS points ที่จับคู่กับโรงงาน |
-| `data[].requestStatusCode` | string \| null | สถานะคำขอล่าสุดของโรงงาน |
+| `data[].id` | number \| null | row id ของ factory master; อาจเป็น `null` กับบางแหล่งข้อมูลที่ไม่มี row id แบบเดียวกัน |
+| `data[].factoryId` | string | factory identifier ที่ใช้เป็น owner scope key |
+| `data[].factoryName` | string | ชื่อโรงงานที่ owner เข้าถึงได้; ใช้ factory master เป็นฐานและอาจถูกเสริมด้วยข้อมูลที่ sync แล้ว |
+| `data[].newRegistrationNo` | string \| null | เลขทะเบียนโรงงานใหม่เมื่อเข้าข่าย; เป็น `null` เมื่อไม่เข้าข่าย |
+| `data[].oldRegistrationNo` | string \| null | เลขทะเบียนเก่าเมื่อเข้าข่าย; เป็น `null` เมื่อไม่เข้าข่าย |
+| `data[].industryType` | string \| null | คำอธิบายประเภทกิจการเมื่อเข้าข่าย; เป็น `null` เมื่อไม่เข้าข่าย |
+| `data[].industryMainOrder`, `data[].industrySubOrder` | string \| null | ลำดับหลัก/ย่อยจาก active `eligible_factories`; เป็น `null` เมื่อไม่เข้าข่าย |
+| `data[].businessActivity` | string \| null | การประกอบกิจการจาก active `eligible_factories`; เป็น `null` เมื่อไม่เข้าข่าย |
+| `data[].eia`, `data[].projectName` | string \| null | ข้อมูล EIA/ชื่อโครงการจาก active `eligible_factories`; เป็น `null` เมื่อไม่เข้าข่าย |
+| `data[].address` | string \| null | ที่อยู่จาก active `eligible_factories`; เป็น `null` เมื่อไม่เข้าข่าย |
+| `data[].province` | string \| null | จังหวัดจาก eligible data; เป็น `null` เมื่อไม่เข้าข่าย |
+| `data[].latitude`, `data[].longitude` | string \| null | พิกัดจาก active `eligible_factories`; เป็น `null` เมื่อไม่เข้าข่าย |
+| `data[].officerNotificationEmails` | string[] | รายชื่ออีเมลเจ้าหน้าที่สำหรับโรงงานเข้าข่าย; เป็น `[]` เมื่อไม่เข้าข่าย |
+| `data[].isEligible` | boolean | true เมื่อจับคู่ active `eligible_factories` ได้; false เมื่อ owner เข้าถึงโรงงานได้แต่โรงงานยังไม่เข้าข่าย |
+| `data[].eligibilityStatus` | `"เข้าข่าย"` \| `"ไม่เข้าข่าย"` | สถานะที่อ่านง่ายสำหรับ UI; derive จาก `isEligible` |
+| `data[].monitoringPointCount` | number | จำนวน active POMS points ของโรงงานเข้าข่าย; เป็น `0` เมื่อไม่เข้าข่าย |
+| `data[].requestStatusCode` | string \| null | สถานะคำขอล่าสุดของโรงงานเข้าข่าย; เป็น `null` เมื่อไม่เข้าข่าย |
+| `data[].status` | `"แสดง"` | สถานะการแสดงผลของ owner list ปัจจุบัน |
 
 Minimal response:
 
@@ -305,22 +318,56 @@ Minimal response:
   "success": true,
   "data": [
     {
+      "id": 7,
       "factoryId": "F000123",
       "factoryName": "บริษัท โรงงานตัวอย่าง จำกัด",
       "newRegistrationNo": "10120000325542",
       "oldRegistrationNo": "3-34(3)-3/54นบ",
+      "industryType": "ผลิตผลิตภัณฑ์ตัวอย่าง",
+      "industryMainOrder": "0343",
+      "industrySubOrder": "0003",
       "businessActivity": "ผลิตผลิตภัณฑ์ตัวอย่าง",
+      "address": "88 หมู่ 2 ตำบลตัวอย่าง อำเภอตัวอย่าง จังหวัดนนทบุรี 11120",
       "province": "นนทบุรี",
       "latitude": "13.8621",
       "longitude": "100.5144",
       "eia": "มี EIA",
       "projectName": "โครงการโรงงานตัวอย่าง",
+      "officerNotificationEmails": [
+        "saraban_nonthaburi@industry.go.th"
+      ],
+      "isEligible": true,
+      "eligibilityStatus": "เข้าข่าย",
       "monitoringPointCount": 1,
-      "requestStatusCode": "CONNECTED"
+      "requestStatusCode": "CONNECTED",
+      "status": "แสดง"
+    },
+    {
+      "id": 8,
+      "factoryId": "F000456",
+      "factoryName": "บริษัท โรงงานที่ยังไม่เข้าข่าย จำกัด",
+      "newRegistrationNo": null,
+      "oldRegistrationNo": null,
+      "industryType": null,
+      "industryMainOrder": null,
+      "industrySubOrder": null,
+      "businessActivity": null,
+      "address": null,
+      "province": null,
+      "latitude": null,
+      "longitude": null,
+      "eia": null,
+      "projectName": null,
+      "officerNotificationEmails": [],
+      "isEligible": false,
+      "eligibilityStatus": "ไม่เข้าข่าย",
+      "monitoringPointCount": 0,
+      "requestStatusCode": null,
+      "status": "แสดง"
     }
   ],
   "meta": {
-    "total": 1
+    "total": 2
   }
 }
 ```

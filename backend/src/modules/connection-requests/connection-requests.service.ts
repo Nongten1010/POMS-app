@@ -195,17 +195,18 @@ export const connectionRequestsService = {
       scope: factoryViewScope,
       regionalAccess,
     });
-    const factoryIdByLookupKey = buildFactoryLookupKeyMap(factories);
+    const eligibleFactories = factories.filter((factory) => factory.isEligible === true);
+    const factoryIdByLookupKey = buildFactoryLookupKeyMap(eligibleFactories);
     const factoryLookupKeys = [...factoryIdByLookupKey.keys()];
     const [requests, connectedPoints] = await Promise.all([
       connectionRequestsRepository.listRequestsForFactories(
-        factories.map((factory) => factory.factoryId),
+        eligibleFactories.map((factory) => factory.factoryId),
       ),
       connectionRequestsRepository.listConnectedMeasurementPointsForFactories(factoryLookupKeys),
     ]);
     const officerNotificationEmailsByFactory =
       await connectionRequestsRepository.listOfficerNotificationEmailsForFactories(
-        factories.map((factory) => ({
+        eligibleFactories.map((factory) => ({
           factoryId: factory.factoryId,
           provinceName: factory.provinceName ?? factory.province,
           industrialAreaType: factory.industrialAreaType ?? 'OUTSIDE_INDUSTRIAL_ESTATE',
@@ -230,6 +231,10 @@ export const connectionRequestsService = {
 
     const data = factories
       .map<OperatorFactoryTableRowDTO>((factory) => {
+        if (factory.isEligible !== true) {
+          return toNonEligibleOperatorFactoryTableRow(factory);
+        }
+
         const latestRequest = latestRequestByFactory.get(factory.factoryId);
         return {
           id: factory.id,
@@ -323,13 +328,14 @@ export const connectionRequestsService = {
       actorUserId,
       scope: factoryViewScope,
       regionalAccess,
-      connectedPomsOnly: true,
+      connectedPomsOnly: query.connectedOnly === true,
     });
-    const eligibleFactories = factories.filter(
-      (factory) => factory.isEligible !== false && factory.isActive !== false,
+    const visibleFactories = factories.filter((factory) => factory.isActive !== false);
+    const eligibleVisibleFactories = visibleFactories.filter(
+      (factory) => factory.isEligible === true,
     );
-    const factoryIdByLookupKey = buildFactoryLookupKeyMap(eligibleFactories);
-    const factoryIdByEligibleFactoryId = buildEligibleFactoryIdMap(eligibleFactories);
+    const factoryIdByLookupKey = buildFactoryLookupKeyMap(eligibleVisibleFactories);
+    const factoryIdByEligibleFactoryId = buildEligibleFactoryIdMap(eligibleVisibleFactories);
     const factoryLookupKeys = [...factoryIdByLookupKey.keys()];
     const eligibleFactoryIds = [...factoryIdByEligibleFactoryId.keys()];
     const [connectedPoints, favoriteFactoryIds] = await Promise.all([
@@ -344,14 +350,15 @@ export const connectionRequestsService = {
       connectionRequestsRepository.listFavoriteFactoryIds(actorUserId),
     ]);
     const favoriteFactoryIdSet = new Set(favoriteFactoryIds);
-    const factoryMainTypeLabels = await listFactoryMainTypeLabelsForDashboard(eligibleFactories);
+    const factoryMainTypeLabels =
+      await listFactoryMainTypeLabelsForDashboard(eligibleVisibleFactories);
     const measurementPointsByFactory = mapConnectedMeasurementPointsToDashboardFactories(
       connectedPoints,
       factoryIdByLookupKey,
       factoryIdByEligibleFactoryId,
     );
 
-    const data = eligibleFactories
+    const data = visibleFactories
       .map<OperatorFactoryDashboardRowDTO>((factory) => {
         const currentMeasurementPoints = measurementPointsByFactory.get(factory.factoryId) ?? [];
         const baseRow = toFactoryDashboardBaseRow(
@@ -361,7 +368,7 @@ export const connectionRequestsService = {
         );
         return {
           ...baseRow,
-          isFavorite: favoriteFactoryIdSet.has(factory.factoryId),
+          isFavorite: factory.isEligible === true && favoriteFactoryIdSet.has(factory.factoryId),
           hasLatestHourlyMeasurement: false,
         };
       })
@@ -2132,13 +2139,49 @@ function toFactoryDashboardBaseRow(
   currentMeasurementPoints: CurrentFactoryMeasurementPointDTO[],
   factoryMainTypeLabels: Map<string, string>,
 ): Omit<PublicFactoryMapPointDTO, 'hasLatestHourlyMeasurement'> {
+  if (factory.isEligible !== true) {
+    return {
+      id: factory.id,
+      eligibleFactoryId: null,
+      factoryId: factory.factoryId,
+      factoryName: factory.factoryName,
+      newRegistrationNo: null,
+      oldRegistrationNo: null,
+      factoryLogoUrl: null,
+      industryMainOrder: null,
+      industryMainOrderLabel: null,
+      industrySubOrder: null,
+      eia: null,
+      hasEia: null,
+      regionCode: null,
+      regionName: null,
+      provinceCode: null,
+      provinceName: null,
+      province: null,
+      address: null,
+      latitude: null,
+      longitude: null,
+      districtCode: null,
+      districtName: null,
+      industrialAreaType: null,
+      industrialAreaTypeLabel: null,
+      industrialEstateCode: null,
+      industrialEstateName: null,
+      isEligible: false,
+      eligibilityStatus: 'ไม่เข้าข่าย',
+      monitoringPointCountBySystem: countMeasurementPointsBySystem([]),
+      status: 'แสดง',
+      measurementPoints: [],
+    };
+  }
+
   const isInIndustrialEstate = Boolean(
     factory.industrialEstateCode || factory.industrialEstateName,
   );
 
   return {
     id: factory.id,
-    eligibleFactoryId: requireConnectedEligibleFactoryId(factory),
+    eligibleFactoryId: factory.eligibleFactoryId ?? null,
     factoryId: factory.factoryId,
     factoryName: factory.factoryName,
     newRegistrationNo: factory.newRegistrationNo,
@@ -2172,18 +2215,40 @@ function toFactoryDashboardBaseRow(
       (isInIndustrialEstate ? 'ในนิคมอุตสาหกรรม' : 'นอกนิคมอุตสาหกรรม'),
     industrialEstateCode: factory.industrialEstateCode ?? null,
     industrialEstateName: factory.industrialEstateName ?? null,
+    isEligible: factory.isEligible ?? false,
+    eligibilityStatus: factory.eligibilityStatus ?? 'ไม่เข้าข่าย',
     monitoringPointCountBySystem: countMeasurementPointsBySystem(currentMeasurementPoints),
     status: 'แสดง',
     measurementPoints: currentMeasurementPoints.map(toOperatorFactoryMeasurementPoint),
   };
 }
 
-function requireConnectedEligibleFactoryId(factory: FactorySummaryDTO): number {
-  if (factory.eligibleFactoryId === null || factory.eligibleFactoryId === undefined) {
-    throw new Error(`Connected POMS factory ${factory.factoryId} is missing eligibleFactoryId`);
-  }
-
-  return factory.eligibleFactoryId;
+function toNonEligibleOperatorFactoryTableRow(
+  factory: FactorySummaryDTO,
+): OperatorFactoryTableRowDTO {
+  return {
+    id: factory.id,
+    factoryId: factory.factoryId,
+    factoryName: factory.factoryName,
+    newRegistrationNo: null,
+    oldRegistrationNo: null,
+    industryType: null,
+    industryMainOrder: null,
+    industrySubOrder: null,
+    businessActivity: null,
+    eia: null,
+    projectName: null,
+    address: null,
+    latitude: null,
+    longitude: null,
+    province: null,
+    officerNotificationEmails: [],
+    isEligible: false,
+    eligibilityStatus: 'ไม่เข้าข่าย',
+    monitoringPointCount: 0,
+    requestStatusCode: null,
+    status: 'แสดง',
+  };
 }
 
 function toOfficerEligibleFactoryTableRow(

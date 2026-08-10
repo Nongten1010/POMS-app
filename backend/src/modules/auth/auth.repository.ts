@@ -1,5 +1,10 @@
 import { db } from '../../config/database';
-import type { PermissionScopeDetails } from './permissions';
+import { applyPersonaPermissionOverrides } from './permissions';
+import type {
+  PermissionDataScope,
+  PermissionScopeDetails,
+  PersonaPermissionOverride,
+} from './permissions';
 import type { Knex } from 'knex';
 import type {
   ExternalOfficerProfile,
@@ -7,7 +12,6 @@ import type {
 } from './identity-provider/identity-provider.interface';
 import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
 import { grantTargetOperatorFactoryAccess } from '../../db/migrations/0073_grant_operator_demo_factory_access';
-
 export interface UserRow {
   id: number;
   external_id: string;
@@ -188,7 +192,11 @@ export const authRepository = {
       if (existingUser?.deleted_at) {
         return undefined;
       }
-      if (existingUser && existingUser.user_type !== 'operator') {
+      if (
+        existingUser &&
+        existingUser.user_type !== 'operator' &&
+        existingUser.user_type !== 'citizen'
+      ) {
         return undefined;
       }
       if (existingUser && !Boolean(existingUser.is_active)) {
@@ -231,7 +239,12 @@ export const authRepository = {
             .first();
           if (!concurrentlyInsertedUser) throw error;
           if (concurrentlyInsertedUser.deleted_at) return undefined;
-          if (concurrentlyInsertedUser.user_type !== 'operator') return undefined;
+          if (
+            concurrentlyInsertedUser.user_type !== 'operator' &&
+            concurrentlyInsertedUser.user_type !== 'citizen'
+          ) {
+            return undefined;
+          }
           if (!Boolean(concurrentlyInsertedUser.is_active)) return concurrentlyInsertedUser;
 
           await trx('users').where({ id: concurrentlyInsertedUser.id }).update(userPayload);
@@ -245,6 +258,80 @@ export const authRepository = {
       const user = await trx<UserRow>('users').where({ id: userId }).first();
       if (!user) throw new Error('Synced operator user could not be loaded');
       return user;
+    });
+  },
+
+  async upsertExternalCitizenUser(profile: ExternalOperatorProfile): Promise<UserRow | undefined> {
+    return db.transaction(async (trx) => {
+      const provider = profile.identity_provider;
+      if (!provider || provider === 'mock') {
+        throw new Error('External citizen profile is missing an API identity provider');
+      }
+
+      const existingUser = await trx<UserRow>('users')
+        .where({ identity_provider: provider, external_id: profile.external_id })
+        .first();
+      if (existingUser?.deleted_at) return undefined;
+      if (
+        existingUser &&
+        existingUser.user_type !== 'citizen' &&
+        existingUser.user_type !== 'operator'
+      ) {
+        return undefined;
+      }
+      if (existingUser && !Boolean(existingUser.is_active)) return existingUser;
+
+      const userPayload = {
+        username: profile.external_id,
+        email: profile.email,
+        phone: profile.phone,
+        prename_th: null,
+        first_name: profile.first_name,
+        last_name: profile.last_name,
+        last_synced_at: trx.raw('SYSDATETIME()'),
+        updated_at: trx.raw('SYSDATETIME()'),
+      };
+
+      let userId: number;
+      if (existingUser) {
+        await trx('users').where({ id: existingUser.id }).update(userPayload);
+        userId = Number(existingUser.id);
+      } else {
+        try {
+          await trx('users').insert({
+            external_id: profile.external_id,
+            identity_provider: provider,
+            user_type: 'citizen',
+            ...userPayload,
+            is_active: true,
+          });
+          const insertedUser = await trx<UserRow>('users')
+            .where({ identity_provider: provider, external_id: profile.external_id })
+            .first();
+          if (!insertedUser) throw new Error('Synced citizen user could not be loaded');
+          userId = Number(insertedUser.id);
+        } catch (error) {
+          if (!isSqlServerUniqueKeyViolation(error)) throw error;
+
+          const concurrentlyInsertedUser = await trx<UserRow>('users')
+            .where({ identity_provider: provider, external_id: profile.external_id })
+            .first();
+          if (!concurrentlyInsertedUser) throw error;
+          if (concurrentlyInsertedUser.deleted_at) return undefined;
+          if (
+            concurrentlyInsertedUser.user_type !== 'citizen' &&
+            concurrentlyInsertedUser.user_type !== 'operator'
+          ) {
+            return undefined;
+          }
+          if (!Boolean(concurrentlyInsertedUser.is_active)) return concurrentlyInsertedUser;
+
+          await trx('users').where({ id: concurrentlyInsertedUser.id }).update(userPayload);
+          userId = Number(concurrentlyInsertedUser.id);
+        }
+      }
+
+      return trx<UserRow>('users').where({ id: userId }).first();
     });
   },
 
@@ -329,6 +416,60 @@ export const authRepository = {
     return {
       roles: roles.map((r) => r.code),
       scopes,
+    };
+  },
+
+  async getRolePermissions(
+    userId: number,
+    roleCode: string,
+  ): Promise<{
+    roles: string[];
+    scopes: Record<string, string | null | PermissionScopeDetails>;
+  }> {
+    const role = await db('roles').where({ code: roleCode }).whereNull('deleted_at').first('id');
+    if (!role) throw new Error(`Role ${roleCode} is not provisioned`);
+
+    const permissions: Array<{ code: string; scope: PermissionDataScope }> = await db(
+      'role_permissions',
+    )
+      .join('permissions', 'role_permissions.permission_id', 'permissions.id')
+      .where('role_permissions.role_id', role.id)
+      .select('permissions.code as code', 'role_permissions.scope as scope');
+
+    const overrides: Array<{
+      code: string;
+      scope: PermissionDataScope;
+      effect: PersonaPermissionOverride['effect'];
+      region_name: string | null;
+      province_name: string | null;
+    }> = await db('user_permissions')
+      .join('permissions', 'user_permissions.permission_id', 'permissions.id')
+      .leftJoin('provinces', 'provinces.id', 'user_permissions.province_id')
+      .where('user_permissions.user_id', userId)
+      .select(
+        'permissions.code as code',
+        'user_permissions.scope as scope',
+        'user_permissions.effect as effect',
+        'user_permissions.region_name as region_name',
+        'provinces.name_th as province_name',
+      );
+
+    const roleScopes = Object.fromEntries(
+      permissions.map((permission) => [permission.code, permission.scope]),
+    );
+
+    return {
+      roles: [roleCode],
+      scopes: applyPersonaPermissionOverrides(
+        roleScopes,
+        overrides.map((override) => ({
+          code: override.code,
+          effect: override.effect,
+          scope: override.scope,
+          region: override.region_name,
+          province: override.province_name,
+        })),
+      ),
     };
   },
 

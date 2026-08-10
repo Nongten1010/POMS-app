@@ -4,6 +4,8 @@ import { env } from '../../config/env';
 import type { PermissionScopeDetails } from '../../modules/auth/permissions';
 import type { RegionalAccessDTO } from '../../modules/auth/regional-access';
 
+const MAX_PRODUCTION_ACCESS_TOKEN_LIFETIME_SECONDS = 15 * 60;
+
 export interface AccessTokenPayload {
   sub: string; // user id (as string)
   userType: 'citizen' | 'operator' | 'officer' | 'admin';
@@ -17,7 +19,12 @@ export interface AccessTokenPayload {
 }
 
 export function signAccessToken(payload: AccessTokenPayload): string {
-  const opts: SignOptions = { expiresIn: env.JWT_EXPIRES_IN as SignOptions['expiresIn'] };
+  const configuredLifetime = parseDurationToSeconds(env.JWT_EXPIRES_IN);
+  const expiresIn =
+    env.NODE_ENV === 'production'
+      ? Math.min(configuredLifetime, MAX_PRODUCTION_ACCESS_TOKEN_LIFETIME_SECONDS)
+      : configuredLifetime;
+  const opts: SignOptions = { expiresIn };
   return jwt.sign(payload, env.JWT_SECRET, opts);
 }
 
@@ -25,6 +32,13 @@ export function verifyAccessToken(token: string): AccessTokenPayload {
   const decoded = jwt.verify(token, env.JWT_SECRET);
   if (typeof decoded === 'string') {
     throw new Error('Invalid token payload');
+  }
+  if (
+    env.NODE_ENV === 'production' &&
+    (typeof decoded.iat !== 'number' ||
+      Math.floor(Date.now() / 1000) - decoded.iat > MAX_PRODUCTION_ACCESS_TOKEN_LIFETIME_SECONDS)
+  ) {
+    throw new Error('Access token lifetime exceeded');
   }
   return decoded as AccessTokenPayload;
 }
@@ -55,8 +69,11 @@ export function parseDurationToSeconds(input: string): number {
     if (!Number.isNaN(n)) return n;
     throw new Error(`Invalid duration: ${input}`);
   }
-  const n = Number(match[1]);
-  const unit = match[2]!.toLowerCase();
-  const mult = { s: 1, m: 60, h: 3600, d: 86400 }[unit]!;
-  return n * mult;
+  const rawNumber = match[1];
+  const rawUnit = match[2]?.toLowerCase();
+  const multipliers = { s: 1, m: 60, h: 3600, d: 86400 } as const;
+  if (!rawNumber || !rawUnit || !(rawUnit in multipliers)) {
+    throw new Error(`Invalid duration: ${input}`);
+  }
+  return Number(rawNumber) * multipliers[rawUnit as keyof typeof multipliers];
 }

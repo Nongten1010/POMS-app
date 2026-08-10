@@ -116,10 +116,11 @@ export const connectionRequestsController = {
     try {
       const actorUserId = requireActorUserId(req);
       const query = listOperatorFactoriesQuerySchema.parse(req.query);
+      const dashboardScope = getScopeDetails(req, 'dashboard:view');
       const result = await connectionRequestsService.listOperatorFactoryDashboard(
         actorUserId,
-        getScopeDetails(req, 'dashboard:view'),
-        { ...query, connectedOnly: true },
+        dashboardScope,
+        { ...query, connectedOnly: dashboardScope?.scope !== 'OWN_FACTORY' },
         ...getRegionalAccessArg(req),
       );
       res.status(StatusCodes.OK).json({ success: true, ...result });

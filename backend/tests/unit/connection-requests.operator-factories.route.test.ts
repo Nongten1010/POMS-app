@@ -106,6 +106,8 @@ describe('operator factory dashboard routes', () => {
           industrialAreaTypeLabel: 'ในนิคมอุตสาหกรรม',
           industrialEstateCode: 'MTP',
           industrialEstateName: 'นิคมอุตสาหกรรมมาบตาพุด',
+          isEligible: true,
+          eligibilityStatus: 'เข้าข่าย',
           isFavorite: true,
           hasLatestHourlyMeasurement: true,
           monitoringPointCountBySystem: [
@@ -171,6 +173,8 @@ describe('operator factory dashboard routes', () => {
           industrialAreaTypeLabel: 'ในนิคมอุตสาหกรรม',
           industrialEstateCode: 'MTP',
           industrialEstateName: 'นิคมอุตสาหกรรมมาบตาพุด',
+          isEligible: true,
+          eligibilityStatus: 'เข้าข่าย',
           hasLatestHourlyMeasurement: false,
           monitoringPointCountBySystem: [
             { systemType: 'CEMS', count: 1 },
@@ -304,7 +308,7 @@ describe('operator factory dashboard routes', () => {
     });
   });
 
-  it('uses a separate connected-only route for the operator dashboard', async () => {
+  it('includes all owned factories on the authenticated operator dashboard', async () => {
     const app = createApp();
 
     const response = await request(app)
@@ -315,7 +319,7 @@ describe('operator factory dashboard routes', () => {
     expect(mockedConnectionRequestsService.listOperatorFactoryDashboard).toHaveBeenCalledWith(
       42,
       { scope: 'OWN_FACTORY' },
-      { systemType: 'WPMS', favoriteOnly: false, connectedOnly: true },
+      { systemType: 'WPMS', favoriteOnly: false, connectedOnly: false },
     );
     expect(response.body.data[0]).toMatchObject({
       id: 1,
@@ -430,6 +434,8 @@ describe('operator factory dashboard routes', () => {
           industrialAreaTypeLabel: 'ในนิคมอุตสาหกรรม',
           industrialEstateCode: 'MTP',
           industrialEstateName: 'นิคมอุตสาหกรรมมาบตาพุด',
+          isEligible: true,
+          eligibilityStatus: 'เข้าข่าย',
           hasLatestHourlyMeasurement: false,
           monitoringPointCountBySystem: [
             { systemType: 'CEMS', count: 1 },

@@ -13,9 +13,77 @@ import {
   syncManualOperatorFactoryAccess,
   syncIdentityProviderBaseRole,
 } from '../../src/modules/auth/auth.repository';
+import { applyPersonaPermissionOverrides } from '../../src/modules/auth/permissions';
 import { db } from '../../src/config/database';
 
 const originalDbTransaction = db.transaction;
+
+describe('persona permission isolation', () => {
+  it('honors user denies without importing permissions from another persona', () => {
+    const basePermissions = {
+      'dashboard:view': 'OWN_FACTORY',
+      'factories:view': 'OWN_FACTORY',
+      'cems_wpms_requests:view': 'OWN_FACTORY',
+    } as const;
+
+    const result = applyPersonaPermissionOverrides(basePermissions, [
+      {
+        code: 'factories:view',
+        effect: 'deny',
+        scope: null,
+        region: null,
+        province: null,
+      },
+      {
+        code: 'chat:answer',
+        effect: 'allow',
+        scope: null,
+        region: null,
+        province: null,
+      },
+    ]);
+
+    expect(result).toEqual({
+      'dashboard:view': 'OWN_FACTORY',
+      'cems_wpms_requests:view': 'OWN_FACTORY',
+    });
+    expect(basePermissions).toHaveProperty('factories:view', 'OWN_FACTORY');
+  });
+
+  it('accepts a narrower user scope but never widens the selected persona role', () => {
+    const result = applyPersonaPermissionOverrides(
+      {
+        'dashboard:view': 'ALL',
+        'factories:view': 'OWN_FACTORY',
+      },
+      [
+        {
+          code: 'dashboard:view',
+          effect: 'allow',
+          scope: 'IN_PROVINCE',
+          region: null,
+          province: 'ระยอง',
+        },
+        {
+          code: 'factories:view',
+          effect: 'allow',
+          scope: 'ALL',
+          region: null,
+          province: null,
+        },
+      ],
+    );
+
+    expect(result).toEqual({
+      'dashboard:view': {
+        scope: 'IN_PROVINCE',
+        region: null,
+        province: 'ระยอง',
+      },
+      'factories:view': 'OWN_FACTORY',
+    });
+  });
+});
 
 describe('authRepository operator juristic sync', () => {
   beforeEach(() => {
@@ -125,7 +193,7 @@ describe('authRepository operator juristic sync', () => {
   });
 });
 
-describe('authRepository i-Industry operator provisioning', () => {
+describe('authRepository i-Industry shared identity provisioning', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -209,6 +277,44 @@ describe('authRepository i-Industry operator provisioning', () => {
       assigned_by: null,
     });
     expect(result).toEqual(user);
+  });
+
+  it('promotes an existing i-Industry citizen identity when the same account gains operator ownership', async () => {
+    const profile = { ...externalOperatorProfile(), juristics: [] };
+    const existingCitizen = {
+      ...externalOperatorUser(),
+      user_type: 'citizen' as const,
+    };
+    const promotedOperator = externalOperatorUser();
+    const existingUserLookup = chainableBuilder({ first: async () => existingCitizen });
+    const userUpdate = chainableBuilder({ update: async () => 1 });
+    const finalUserLookup = chainableBuilder({ first: async () => promotedOperator });
+    const existingProfileLookup = chainableBuilder({ first: async () => undefined });
+    const profileInsert = chainableBuilder({ insert: async () => [1] });
+    const roleLookup = chainableBuilder({ first: async () => ({ id: 7 }) });
+    const existingRoleLookup = chainableBuilder({ first: async () => undefined });
+    const roleInsert = chainableBuilder({ insert: async () => [1] });
+    const queues = new Map<string, Array<ReturnType<typeof chainableBuilder>>>([
+      ['users', [existingUserLookup, userUpdate, finalUserLookup]],
+      ['operator_profiles', [existingProfileLookup, profileInsert]],
+      ['roles', [roleLookup]],
+      ['user_roles', [existingRoleLookup, roleInsert]],
+    ]);
+    mockNextTransaction(queues);
+
+    const result = await authRepository.upsertExternalOperatorUser(profile, 'factory_operator');
+
+    expect(userUpdate.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        user_type: 'operator',
+        username: profile.external_id,
+      }),
+    );
+    expect(profileInsert.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ user_id: promotedOperator.id }),
+    );
+    expect(roleInsert.insert).toHaveBeenCalled();
+    expect(result).toEqual(promotedOperator);
   });
 
   it('reuses a concurrently inserted operator after a SQL Server unique-key race', async () => {
@@ -451,6 +557,105 @@ describe('authRepository i-Industry operator provisioning', () => {
     expect(result).toBeUndefined();
     expect(trx).toHaveBeenCalledTimes(1);
   });
+
+  it('creates a citizen identity without creating operator artifacts', async () => {
+    const profile = externalOperatorProfile();
+    const citizenUser = { ...externalOperatorUser(), user_type: 'citizen' as const };
+    const existingUserLookup = chainableBuilder({ first: async () => undefined });
+    const userInsert = chainableBuilder({ insert: async () => [1] });
+    const insertedUserLookup = chainableBuilder({ first: async () => citizenUser });
+    const finalUserLookup = chainableBuilder({ first: async () => citizenUser });
+    const queues = new Map<string, Array<ReturnType<typeof chainableBuilder>>>([
+      ['users', [existingUserLookup, userInsert, insertedUserLookup, finalUserLookup]],
+    ]);
+    const trx = mockNextTransaction(queues);
+
+    const result = await authRepository.upsertExternalCitizenUser(profile);
+
+    expect(userInsert.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        identity_provider: 'i_industry',
+        external_id: profile.external_id,
+        user_type: 'citizen',
+        is_active: true,
+      }),
+    );
+    expect(trx).toHaveBeenCalledTimes(4);
+    expect(result).toEqual(citizenUser);
+  });
+
+  it('reuses an existing operator identity for citizen sessions without downgrading it', async () => {
+    const operatorUser = externalOperatorUser();
+    const existingUserLookup = chainableBuilder({ first: async () => operatorUser });
+    const userUpdate = chainableBuilder({ update: async () => 1 });
+    const finalUserLookup = chainableBuilder({ first: async () => operatorUser });
+    const queues = new Map<string, Array<ReturnType<typeof chainableBuilder>>>([
+      ['users', [existingUserLookup, userUpdate, finalUserLookup]],
+    ]);
+    mockNextTransaction(queues);
+
+    const result = await authRepository.upsertExternalCitizenUser(externalOperatorProfile());
+
+    const payload = userUpdate.update.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(payload).not.toHaveProperty('user_type');
+    expect(payload).not.toHaveProperty('is_active');
+    expect(result).toEqual(operatorUser);
+  });
+
+  it('reuses a concurrently inserted operator identity for a citizen session', async () => {
+    const operatorUser = externalOperatorUser();
+    const duplicateKeyError = Object.assign(new Error('duplicate provider identity'), {
+      number: 2627,
+    });
+    const initialUserLookup = chainableBuilder({ first: async () => undefined });
+    const racingInsert = chainableBuilder({
+      insert: async () => {
+        throw duplicateKeyError;
+      },
+    });
+    const concurrentUserLookup = chainableBuilder({ first: async () => operatorUser });
+    const concurrentUserUpdate = chainableBuilder({ update: async () => 1 });
+    const finalUserLookup = chainableBuilder({ first: async () => operatorUser });
+    const queues = new Map<string, Array<ReturnType<typeof chainableBuilder>>>([
+      [
+        'users',
+        [
+          initialUserLookup,
+          racingInsert,
+          concurrentUserLookup,
+          concurrentUserUpdate,
+          finalUserLookup,
+        ],
+      ],
+    ]);
+    mockNextTransaction(queues);
+
+    const result = await authRepository.upsertExternalCitizenUser(externalOperatorProfile());
+
+    expect(racingInsert.insert).toHaveBeenCalledTimes(1);
+    expect(concurrentUserUpdate.update).toHaveBeenCalled();
+    expect(result).toEqual(operatorUser);
+  });
+
+  it.each([
+    ['inactive', { ...externalOperatorUser(), is_active: false }, true],
+    ['soft-deleted', { ...externalOperatorUser(), deleted_at: '2026-08-01T00:00:00.000Z' }, false],
+    ['different user type', { ...externalOperatorUser(), user_type: 'officer' as const }, false],
+  ])(
+    'does not modify an %s identity during citizen login',
+    async (_label, existing, returnsExisting) => {
+      const existingUserLookup = chainableBuilder({ first: async () => existing });
+      const queues = new Map<string, Array<ReturnType<typeof chainableBuilder>>>([
+        ['users', [existingUserLookup]],
+      ]);
+      const trx = mockNextTransaction(queues);
+
+      const result = await authRepository.upsertExternalCitizenUser(externalOperatorProfile());
+
+      expect(trx).toHaveBeenCalledTimes(1);
+      expect(result).toEqual(returnsExisting ? existing : undefined);
+    },
+  );
 });
 
 describe('authRepository officer base-role sync', () => {
