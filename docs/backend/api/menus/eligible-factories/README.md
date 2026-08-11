@@ -4,6 +4,8 @@
 
 ## Frontend Quick Start
 
+คู่มือสำหรับต่อ UI เอกสารแนบโดยตรง: [Frontend attachment integration](./frontend-attachment-integration.md)
+
 อ่านรายการโรงงานที่ถูกเลือกเป็นโรงงานเข้าข่าย:
 
 ```bash
