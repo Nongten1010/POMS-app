@@ -373,7 +373,7 @@ additive, non-breaking change และไม่บังคับให้ clie
 | `calibrationItems[].cemsModel` | body | string | No | human-readable snapshot/summary ระดับ logical calibration item; `null`, empty string หรือ omit ได้ ไม่เกิน 500 ตัวอักษร และ prefill ได้จาก `parameterInstrumentDetails` ของ connected-point response |
 | `calibrationItems[].startDate` | body | `YYYY-MM-DD` | No | วันที่เริ่มสอบเทียบ |
 | `calibrationItems[].endDate` | body | `YYYY-MM-DD` | No | วันที่สิ้นสุด ต้องไม่ก่อน `startDate` |
-| `calibrationItems[].result` | body | string | No | ผลการสอบเทียบ; trim แล้วไม่เกิน 32 ตัวอักษร |
+| `calibrationItems[].result` | body | string | No | ผลการสอบเทียบ; trim แล้วไม่เกิน 32 ตัวอักษร และจัดเก็บแบบ Unicode เพื่อคงข้อความภาษาไทย เช่น `ผ่าน` หรือ `ไม่ผ่าน` |
 | `calibrationItems[].verifierCompany` | body | string | No | legacy field; `null`, empty string หรือ omit ได้ในแต่ละรายการ และไม่เกิน 500 ตัวอักษร |
 | `calibrationItems[].rataReportLink` | body | string | No | ลิงก์รายงาน RATA; `null`, empty string หรือ omit ได้ และข้อความหลัง trim ยาวไม่เกิน 1,000 ตัวอักษร |
 | `calibrationItems[].calibrationPhotoLink` | body | string | No | ลิงก์รูปการสอบเทียบ; `null`, empty string หรือ omit ได้ และข้อความหลัง trim ยาวไม่เกิน 1,000 ตัวอักษร |
@@ -433,6 +433,7 @@ Attachment request เป็น strict object และรับเฉพาะ 
 | `data.calibrationReport.cemsBrand` | string | Yes | ยังคงอ่านกลับได้ถ้ามีข้อมูลเดิม |
 | `data.calibrationItems[].parameters` | string[] | No | canonical list หลัง trim และตัดค่าซ้ำโดยรักษาลำดับแรก; ข้อมูล legacy จะ fallback เป็น `[parameter]` |
 | `data.calibrationItems[].parameter` | string | No | legacy compatibility field ซึ่งเท่ากับสมาชิกแรกของ `parameters` |
+| `data.calibrationItems[].result` | string | Yes | ผลการสอบเทียบที่จัดเก็บไว้ คืนข้อความ Unicode ตามค่าที่รับหลัง trim เช่น `ผ่าน` หรือ `ไม่ผ่าน` |
 | `data.calibrationItems[].verifierCompany` | string | Yes | ยังคงอ่านกลับได้ถ้ามีข้อมูลเดิม |
 | `data.calibrationItems[].rataReportLink` | string | Yes | ลิงก์รายงาน RATA ที่บันทึกไว้ |
 | `data.calibrationItems[].calibrationPhotoLink` | string | Yes | ลิงก์รูปการสอบเทียบที่บันทึกไว้ |
@@ -705,7 +706,8 @@ Minimal response:
 - Migration เพิ่มคอลัมน์ datetime/hour แบบ nullable และยังคงคอลัมน์ date/day เดิมไว้ ข้อมูลเก่าจึงยังอ่านด้วย date-only fallback โดยไม่มีการ backfill เวลาเที่ยงคืนเทียม
 - Migration `0081` เพิ่ม sequence แยกตามแบบ/ภาค/ปีและ snapshot ข้อมูลที่ใช้ออกเลข โดยไม่แก้ `submission_no` เดิม
 - Migration `0092` เพิ่ม `parameters_json` แบบ nullable ให้ calibration item โดยไม่ backfill; ค่า `parameter_name` เดิมยังเป็น fallback และเก็บสมาชิกแรกของ canonical list เพื่อรองรับ client legacy
-- Deployment ต้องรัน migrations ถึง `0092` ก่อนเปิดใช้ application version นี้; rollback ต้องย้อน application ก่อนจึงค่อยรัน migration down
+- Migration `0093` เปลี่ยน `kwp05_calibration_items.result` เป็น `NVARCHAR(32)` เพื่อให้ค่าใหม่ round-trip ภาษาไทยได้ครบ โดยไม่เดาหรือเขียนทับค่า legacy ที่สูญหายเป็น `?` ไปแล้ว
+- Deployment ต้องรัน migrations ถึง `0093` ก่อนเปิดใช้ application version นี้; rollback ต้องย้อน application ก่อนจึงค่อยรัน migration down และ migration `0093` จะปฏิเสธ rollback หากการแปลงกลับเป็น `VARCHAR` ทำให้ข้อมูล Unicode สูญหาย
 - [Endpoint registry owner map](../../ENDPOINTS.md)
 - [ขอเชื่อมต่อ](../connection-requests/README.md)
 
