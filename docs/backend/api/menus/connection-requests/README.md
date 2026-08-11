@@ -62,6 +62,7 @@ curl --request POST \
 | บันทึกการตั้งค่าอุปกรณ์ของจุดในคำขอ | `POST` | `/api/v1/cems-wpms-requests/:id/device-configs` | Bearer | `cems_wpms_requests:edit` | [Device configs](./device-configs.md) |
 | อ่านจุดตรวจวัดที่เชื่อมต่อแล้ว | `GET` | `/api/v1/connected-measurement-points` | Bearer | `cems_wpms_requests:view` | [Connected points](#connected-points) |
 | อ่านจุดตรวจวัดของโรงงานและข้อมูล prefill | `GET` | `/api/v1/connected-measurement-points/factories/:factoryId` | Bearer | `cems_wpms_requests:view` | [Shared connected-point contract](../../shared/connected-measurement-points/README.md) |
+| อ่านข้อมูลปัจจุบันสำหรับฟอร์มเพิ่มพารามิเตอร์ | `GET` | `/api/v1/connected-measurement-points/:stationId/parameter-form` | Bearer | `cems_wpms_requests:view` | [Add-parameter prefill](#add-parameter-prefill) |
 | อ่าน/แทนที่ config ของจุดที่เชื่อมต่อแล้ว | `GET`, `POST` | `/api/v1/connected-measurement-points/:stationId/device-configs` | Bearer | `cems_wpms_requests:view`, `cems_wpms_requests:edit` | [Device configs](./device-configs.md) |
 | อ่าน raw parameter values | `GET` | `/api/v1/parameter-values`, `/api/v1/parameter-values/latest` | Bearer | `cems_wpms_requests:view` | [Parameter values](./parameter-values.md) |
 | ทดสอบข้อมูลเชื่อมต่อและแปลง StatusCode | `GET` | `/api/v1/parameter-values/connection-test` | Bearer | `cems_wpms_requests:view` | [Parameter values](./parameter-values.md) |
@@ -574,6 +575,55 @@ Minimal response:
   }
 }
 ```
+
+### Add-parameter prefill
+
+`GET /api/v1/connected-measurement-points/:stationId/parameter-form` ใช้ข้อมูลคำขอที่เชื่อมต่อแล้วเป็นฐานสำหรับรายละเอียดโรงงานและจุดตรวจวัด แต่ประกอบสถานะพารามิเตอร์ปัจจุบันจาก active device config ของ `stationId` ทุกครั้ง จึงไม่ใช้ `connectedParameters` และ `pendingParameters` จาก request snapshot โดยตรง.
+
+Response fields ที่เพิ่มเติมสำหรับเลขทะเบียนโรงงาน:
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `data.formDefaults.newRegistrationNo` | string | yes | เลขทะเบียนโรงงานใหม่จาก active `eligible_factories` |
+| `data.formDefaults.oldRegistrationNo` | string \| null | yes | เลขทะเบียนโรงงานเดิมจาก active `eligible_factories` |
+| `data.formDefaults.factoryRegistrationNo` | string | yes | compatibility alias สำหรับ client เดิม; ใช้เลขทะเบียนเดิมเมื่อมี มิฉะนั้นใช้เลขทะเบียนใหม่ |
+| `data.formDefaults.measurementPoints[0].details.connectedParameters` | string[] | yes | พารามิเตอร์ที่มี active channel ใน device config ปัจจุบัน โดยตัดค่าซ้ำ |
+| `data.formDefaults.measurementPoints[0].details.pendingParameters` | string[] | yes | พารามิเตอร์ที่เข้าข่ายซึ่งยังไม่มี active channel และไม่ได้รับการยกเว้น |
+
+Minimal request: ไม่มี request body.
+
+Minimal response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "requestType": "ADD_PARAMETER",
+    "sourceRequestId": 12,
+    "sourceRequestNo": "CEMS-0001/2569",
+    "stationId": "S1125",
+    "formDefaults": {
+      "factoryId": "10120000325542",
+      "factoryRegistrationNo": "3-34(3)-3/54นบ",
+      "newRegistrationNo": "10120000325542",
+      "oldRegistrationNo": "3-34(3)-3/54นบ",
+      "measurementPoints": [
+        {
+          "pointCode": "S1125",
+          "details": {
+            "eligibleParameters": ["CO (ppm)", "NOx (ppm)"],
+            "exemptedParameters": [],
+            "connectedParameters": ["CO (ppm)", "NOx (ppm)"],
+            "pendingParameters": []
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+`GET /api/v1/connected-measurement-points/:stationId/requests` ยังคงเป็นประวัติคำขอและอาจคืนค่าพารามิเตอร์ตาม snapshot ณ เวลายื่นคำขอ; client ที่ต้องการ prefill ฟอร์มเพิ่มพารามิเตอร์ต้องใช้ endpoint `parameter-form` นี้.
 
 ## Errors
 

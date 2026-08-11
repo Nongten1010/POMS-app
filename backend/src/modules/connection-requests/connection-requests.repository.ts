@@ -308,6 +308,7 @@ interface EligibleFactoryReferenceRow {
   id: number | string;
   source_factory_id: string | null;
   factory_registration_no_new: string;
+  factory_registration_no_old: string | null;
 }
 
 interface DirectConnectionFactoryRow {
@@ -340,6 +341,7 @@ export const connectionRequestsRepository = {
     id: number;
     sourceFactoryId: string | null;
     factoryRegistrationNoNew: string;
+    factoryRegistrationNoOld: string | null;
   } | null> {
     const row = await db<EligibleFactoryReferenceRow>('eligible_factories')
       .whereNull('deleted_at')
@@ -347,9 +349,15 @@ export const connectionRequestsRepository = {
         builder
           .where('source_factory_id', input.factoryId)
           .orWhere('factory_registration_no_new', input.factoryId)
-          .orWhere('factory_registration_no_new', input.factoryRegistrationNo);
+          .orWhere('factory_registration_no_new', input.factoryRegistrationNo)
+          .orWhere('factory_registration_no_old', input.factoryRegistrationNo);
       })
-      .select('id', 'source_factory_id', 'factory_registration_no_new')
+      .select(
+        'id',
+        'source_factory_id',
+        'factory_registration_no_new',
+        'factory_registration_no_old',
+      )
       .first();
 
     return row
@@ -357,6 +365,7 @@ export const connectionRequestsRepository = {
           id: Number(row.id),
           sourceFactoryId: row.source_factory_id,
           factoryRegistrationNoNew: row.factory_registration_no_new,
+          factoryRegistrationNoOld: row.factory_registration_no_old,
         }
       : null;
   },

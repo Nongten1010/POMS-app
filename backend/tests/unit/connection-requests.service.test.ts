@@ -166,6 +166,7 @@ describe('connectionRequestsService', () => {
       id: 9,
       sourceFactoryId: 'factory-001',
       factoryRegistrationNoNew: '3-106-33/50สบ',
+      factoryRegistrationNoOld: null,
     });
     mockedEligibleFactoriesService.list.mockResolvedValue({ data: [], meta: { total: 0 } });
     mockedDeviceConnectionsService.listActiveSettings.mockResolvedValue([]);
@@ -2471,6 +2472,9 @@ describe('connectionRequestsService', () => {
 
   it('returns add parameter form defaults from latest connected request for selected station', async () => {
     const request = requestDto({
+      eligibleFactoryId: 17,
+      factoryId: '10120000325542',
+      factoryRegistrationNo: '10120000325542',
       status: CONNECTION_REQUEST_STATUS.CONNECTED,
       statusLabel: 'เชื่อมต่อแล้ว',
       createdBy: 7,
@@ -2482,19 +2486,41 @@ describe('connectionRequestsService', () => {
           pointType: 'STACK',
           latitude: 13.7563,
           longitude: 100.5018,
-          parameters: ['NOx', 'SO2'],
+          parameters: ['NOx (ppm)', 'SO2 (ppm)'],
           description: 'จุดเดิม',
-          details: { stackShape: 'วงกลม' },
+          details: {
+            stackShape: 'วงกลม',
+            eligibleParameters: ['NOx (ppm)', 'SO2 (ppm)', 'CO (ppm)'],
+            exemptedParameters: ['CO (ppm)'],
+            connectedParameters: [],
+            pendingParameters: ['NOx (ppm)', 'SO2 (ppm)', 'CO (ppm)'],
+          },
           documentsAndImages: [{ title: 'ภาพปล่อง' }],
           measurementInstruments: {
             converterBrand: 'ACME',
             converterModel: 'CEMS-1',
-            parameters: [{ parameter: 'NOx' }],
+            parameters: [{ parameter: 'NOx (ppm)' }],
           },
         },
       ],
     });
     mockedRepository.list.mockResolvedValue({ rows: [request], total: 1 });
+    mockedRepository.findActiveEligibleFactoryReference.mockResolvedValueOnce({
+      id: 17,
+      sourceFactoryId: '10120000325542',
+      factoryRegistrationNoNew: '10120000325542',
+      factoryRegistrationNoOld: '3-34(3)-3/54นบ',
+    });
+    mockedDeviceConnectionsService.listActiveSettings.mockResolvedValueOnce([
+      deviceConnectionConfig({
+        stationId: 'STACK-A',
+        channels: [
+          { addressId: 1, dataType: 'NOx (ppm)', offset: 0 },
+          { addressId: 2, dataType: 'SO2 (ppm)', offset: 0 },
+          { addressId: 3, dataType: 'NOx (ppm)', offset: 0 },
+        ],
+      }),
+    ]);
 
     const result = await connectionRequestsService.getAddParameterFormDetail(
       'STACK-A',
@@ -2511,6 +2537,13 @@ describe('connectionRequestsService', () => {
         useAssignedFactoryAccess: true,
       },
     );
+    expect(mockedRepository.findActiveEligibleFactoryReference).toHaveBeenCalledWith({
+      factoryId: '10120000325542',
+      factoryRegistrationNo: '10120000325542',
+    });
+    expect(mockedDeviceConnectionsService.listActiveSettings).toHaveBeenCalledWith({
+      stationId: 'STACK-A',
+    });
     expect(result).toMatchObject({
       requestType: CONNECTION_REQUEST_TYPE.ADD_PARAMETER,
       sourceRequestId: 1,
@@ -2518,7 +2551,10 @@ describe('connectionRequestsService', () => {
       stationId: 'STACK-A',
       formDefaults: {
         requestType: CONNECTION_REQUEST_TYPE.ADD_PARAMETER,
-        factoryId: 'factory-001',
+        factoryId: '10120000325542',
+        factoryRegistrationNo: '3-34(3)-3/54นบ',
+        newRegistrationNo: '10120000325542',
+        oldRegistrationNo: '3-34(3)-3/54นบ',
         systemType: 'CEMS',
         eia: 'มี',
         eiaOther: null,
@@ -2529,8 +2565,14 @@ describe('connectionRequestsService', () => {
           {
             pointCode: 'STACK-A',
             pointName: 'ปล่องระบาย A',
-            parameters: ['NOx', 'SO2'],
-            details: { stackShape: 'วงกลม' },
+            parameters: ['NOx (ppm)', 'SO2 (ppm)'],
+            details: {
+              stackShape: 'วงกลม',
+              eligibleParameters: ['NOx (ppm)', 'SO2 (ppm)', 'CO (ppm)'],
+              exemptedParameters: ['CO (ppm)'],
+              connectedParameters: ['NOx (ppm)', 'SO2 (ppm)'],
+              pendingParameters: [],
+            },
             measurementInstruments: {
               converterBrand: 'ACME',
             },

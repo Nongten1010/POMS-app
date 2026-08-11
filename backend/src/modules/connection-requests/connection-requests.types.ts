@@ -638,7 +638,10 @@ export interface AddParameterFormDetailDTO {
   sourceRequestId: number;
   sourceRequestNo: string;
   stationId: string;
-  formDefaults: AddParameterRequestInput;
+  formDefaults: AddParameterRequestInput & {
+    newRegistrationNo: string;
+    oldRegistrationNo: string | null;
+  };
 }
 
 export interface PaginatedTableRowsDTO<T> {

@@ -206,6 +206,8 @@ describe('connected measurement points route', () => {
         factoryId: 'factory-001',
         factoryName: 'บริษัท ทดสอบ จำกัด',
         factoryRegistrationNo: '3-106-33/50สบ',
+        newRegistrationNo: '1010600033050',
+        oldRegistrationNo: '3-106-33/50สบ',
         systemType: 'CEMS',
         contactName: 'สมชาย ใจดี',
         contactPhone: '0812345678',

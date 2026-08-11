@@ -63,6 +63,7 @@ import {
   type ListOperatorFactoriesQuery,
   type ListPublicFactoryMapPointsQuery,
   type MeasurementInstrumentsInput,
+  type MeasurementPointDetailsInput,
   type MeasurementPointDTO,
   type MeasurementPointInput,
   type OperatorFactoryDashboardRowDTO,
@@ -536,7 +537,22 @@ export const connectionRequestsService = {
       regionalAccess,
     );
 
-    return toAddParameterFormDetail(request, point, stationId);
+    const [factoryReference, activeDeviceConfigs] = await Promise.all([
+      connectionRequestsRepository.findActiveEligibleFactoryReference({
+        factoryId: request.factoryId,
+        factoryRegistrationNo: request.factoryRegistrationNo,
+      }),
+      deviceConnectionsService.listActiveSettings({ stationId }),
+    ]);
+
+    const inferredOldRegistrationNo =
+      request.factoryRegistrationNo !== request.factoryId ? request.factoryRegistrationNo : null;
+
+    return toAddParameterFormDetail(request, point, stationId, {
+      newRegistrationNo: factoryReference?.factoryRegistrationNoNew ?? request.factoryId,
+      oldRegistrationNo: factoryReference?.factoryRegistrationNoOld ?? inferredOldRegistrationNo,
+      activeDeviceConfigs,
+    });
   },
 
   async getCurrentDeviceConfigFormDetail(
@@ -1223,7 +1239,14 @@ function toAddParameterFormDetail(
   request: ConnectionRequestDTO,
   point: MeasurementPointDTO,
   stationId: string,
+  currentState: {
+    newRegistrationNo: string;
+    oldRegistrationNo: string | null;
+    activeDeviceConfigs: DeviceConnectionConfigDTO[];
+  },
 ): AddParameterFormDetailDTO {
+  const currentDetails = deriveCurrentParameterDetails(point, currentState.activeDeviceConfigs);
+
   return {
     requestType: CONNECTION_REQUEST_TYPE.ADD_PARAMETER,
     sourceRequestId: request.id,
@@ -1233,7 +1256,11 @@ function toAddParameterFormDetail(
       requestType: CONNECTION_REQUEST_TYPE.ADD_PARAMETER,
       factoryId: request.factoryId,
       factoryName: request.factoryName,
-      factoryRegistrationNo: request.factoryRegistrationNo,
+      // Keep the legacy field as the old registration number because the current
+      // request-form client uses it as the old-registration fallback.
+      factoryRegistrationNo: currentState.oldRegistrationNo ?? currentState.newRegistrationNo,
+      newRegistrationNo: currentState.newRegistrationNo,
+      oldRegistrationNo: currentState.oldRegistrationNo,
       industryMainOrder: request.industryMainOrder,
       industrySubOrder: request.industrySubOrder,
       businessActivity: request.businessActivity,
@@ -1253,13 +1280,16 @@ function toAddParameterFormDetail(
       officerNotificationEmails: request.officerNotificationEmails,
       informationProviderName: request.informationProviderName,
       informationProviderPosition: request.informationProviderPosition,
-      measurementPoints: [toMeasurementPointInput(point)],
+      measurementPoints: [toMeasurementPointInput(point, currentDetails)],
       remarks: null,
     },
   };
 }
 
-function toMeasurementPointInput(point: MeasurementPointDTO): MeasurementPointInput {
+function toMeasurementPointInput(
+  point: MeasurementPointDTO,
+  details: MeasurementPointDetailsInput | null | undefined = point.details,
+): MeasurementPointInput {
   return {
     pointName: point.pointName,
     pointCode: point.pointCode,
@@ -1268,10 +1298,63 @@ function toMeasurementPointInput(point: MeasurementPointDTO): MeasurementPointIn
     longitude: point.longitude,
     parameters: point.parameters,
     description: point.description,
-    details: point.details,
+    details,
     documentsAndImages: point.documentsAndImages,
     measurementInstruments: point.measurementInstruments,
   };
+}
+
+function deriveCurrentParameterDetails(
+  point: MeasurementPointDTO,
+  activeDeviceConfigs: DeviceConnectionConfigDTO[],
+): MeasurementPointDetailsInput {
+  const details = point.details ?? {};
+  const eligibleParameters = stringListDetail(details, 'eligibleParameters');
+  const parametersInScope = eligibleParameters.length > 0 ? eligibleParameters : point.parameters;
+  const exemptedParameterKeys = new Set(
+    stringListDetail(details, 'exemptedParameters').map(normalizeParameterName),
+  );
+  const connectedParameters = uniqueParameterNames(
+    activeDeviceConfigs.flatMap((config) => config.channels.map((channel) => channel.dataType)),
+  );
+  const connectedParameterKeys = new Set(connectedParameters.map(normalizeParameterName));
+  const pendingParameters = parametersInScope.filter((parameter) => {
+    const key = normalizeParameterName(parameter);
+    return (
+      key !== normalizeParameterName('ไม่มี') &&
+      !connectedParameterKeys.has(key) &&
+      !exemptedParameterKeys.has(key)
+    );
+  });
+
+  return {
+    ...details,
+    connectedParameters,
+    pendingParameters,
+  };
+}
+
+function uniqueParameterNames(parameters: string[]): string[] {
+  const uniqueParameters = new Map<string, string>();
+
+  for (const parameter of parameters) {
+    const trimmed = parameter.trim();
+    const key = normalizeParameterName(trimmed);
+    if (trimmed && key !== normalizeParameterName('ไม่มี') && !uniqueParameters.has(key)) {
+      uniqueParameters.set(key, trimmed);
+    }
+  }
+
+  return [...uniqueParameters.values()];
+}
+
+function stringListDetail(details: MeasurementPointDTO['details'], key: string): string[] {
+  if (!details || typeof details !== 'object' || Array.isArray(details)) return [];
+
+  const value = details[key];
+  if (!Array.isArray(value)) return [];
+
+  return uniqueParameterNames(value.filter((item): item is string => typeof item === 'string'));
 }
 
 function measurementPointLatitude(point: MeasurementPointDTO): number | null {
