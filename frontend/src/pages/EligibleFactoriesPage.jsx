@@ -1,11 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   Badge,
   Box,
   Button,
   Chip,
-  Divider,
   Dialog,
   DialogActions,
   DialogContent,
@@ -20,6 +19,7 @@ import {
   MenuItem,
   OutlinedInput,
   Paper,
+  Popover,
   Radio,
   RadioGroup,
   Select,
@@ -35,9 +35,12 @@ import AddIcon from '@mui/icons-material/Add'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import CloseIcon from '@mui/icons-material/Close'
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlineOutlined'
+import DescriptionIcon from '@mui/icons-material/Description'
 import EditIcon from '@mui/icons-material/Edit'
 import HighlightOffIcon from '@mui/icons-material/HighlightOff'
+import LinkIcon from '@mui/icons-material/Link'
 import RefreshIcon from '@mui/icons-material/Refresh'
+import UploadFileIcon from '@mui/icons-material/UploadFile'
 import { DataGrid } from '@mui/x-data-grid'
 import cemsInstallationRequiredOptions from '../option/cemsInstallationRequiredOptions.json'
 import cemsParameterOptionItems from '../option/cemsParameterOptions.json'
@@ -61,13 +64,14 @@ const emptyValue = '-'
 const subMenus = [
   { value: 'all', label: 'โรงงานทั้งหมด' },
   { value: 'eligible', label: 'โรงงานที่เข้าข่าย' },
-  { value: 'requests', label: 'คำขอเชื่อมต่อ' },
+  { value: 'requests', label: 'ขอเพิ่มโรงงาน' },
 ]
 
 const cemsParameterOptions = cemsParameterOptionItems.map((option) => option.label)
 const wpmsParameterOptions = wpmsParameterOptionItems.map((option) => option.label)
 const legalAnnexOptions = Array.from({ length: 12 }, (_, index) => String(index + 1))
 const parameterNoneOption = 'ไม่มี'
+const maxUploadFileSizeBytes = 10 * 1024 * 1024
 const withNoneOption = (options = []) => [parameterNoneOption, ...options.filter((option) => option !== parameterNoneOption)]
 const fuelOtherTriggerValues = ['เชื้อเพลิงชีวมวล (Biomass)', 'เชื้อเพลิงอื่นๆ']
 const eiaAssessmentOptions = ['ไม่มี', 'มี IEE', 'มี EIA', 'มี EHIA', 'อื่นๆ']
@@ -112,6 +116,7 @@ const eligibleMonitoringColumns = [
     headerAlign: 'center',
     headerClassName: 'eligible-cems-header',
     cellClassName: 'eligible-cems-cell',
+    sortComparator: compareMonitoringPointCounts,
   },
   {
     field: 'cemsConnectionStatusSummary',
@@ -123,7 +128,9 @@ const eligibleMonitoringColumns = [
     cellClassName: 'eligible-cems-cell',
     sortable: false,
     filterable: false,
-    renderCell: (params) => <ConnectionStatusSummaryChip value={params.value} />,
+    renderCell: (params) => (
+      <ConnectionStatusSummaryChip value={getConnectionStatusSummaryCellValue(params.row, 'CEMS')} />
+    ),
   },
   {
     field: 'wpmsPointCount',
@@ -133,6 +140,7 @@ const eligibleMonitoringColumns = [
     headerAlign: 'center',
     headerClassName: 'eligible-wpms-header',
     cellClassName: 'eligible-wpms-cell',
+    sortComparator: compareMonitoringPointCounts,
   },
   {
     field: 'wpmsConnectionStatusSummary',
@@ -144,7 +152,19 @@ const eligibleMonitoringColumns = [
     cellClassName: 'eligible-wpms-cell',
     sortable: false,
     filterable: false,
-    renderCell: (params) => <ConnectionStatusSummaryChip value={params.value} />,
+    renderCell: (params) => (
+      <ConnectionStatusSummaryChip value={getConnectionStatusSummaryCellValue(params.row, 'WPMS')} />
+    ),
+  },
+  {
+    field: 'monitoringPointAttachments',
+    headerName: 'เอกสารแนบ',
+    width: 170,
+    align: 'center',
+    headerAlign: 'center',
+    sortable: false,
+    filterable: false,
+    renderCell: (params) => <MonitoringPointAttachmentsCell row={params.row} />,
   },
 ]
 
@@ -228,6 +248,123 @@ function getMonitoringPointType(point = {}) {
 function countMonitoringPointsByType(points = [], type) {
   const count = points.filter((point) => getMonitoringPointType(point) === type).length
   return count || emptyValue
+}
+
+function getMonitoringPointCountNumber(value) {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : 0
+  }
+
+  const numericValue = Number(String(value ?? '').trim())
+  return Number.isFinite(numericValue) ? numericValue : 0
+}
+
+function compareMonitoringPointCounts(firstValue, secondValue) {
+  return getMonitoringPointCountNumber(firstValue) - getMonitoringPointCountNumber(secondValue)
+}
+
+function getConnectionStatusSummaryCellValue(row = {}, type) {
+  const countValue = type === 'WPMS' ? row.wpmsPointCount : row.cemsPointCount
+
+  if (getMonitoringPointCountNumber(countValue) <= 0) {
+    return emptyValue
+  }
+
+  return type === 'WPMS' ? row.wpmsConnectionStatusSummary : row.cemsConnectionStatusSummary
+}
+
+function normalizeAttachmentUrl(value) {
+  const rawValue = normalizeDisplayValue(value).trim()
+
+  if (!rawValue) {
+    return ''
+  }
+
+  if (/^(https?:|blob:|data:)/i.test(rawValue)) {
+    return rawValue
+  }
+
+  if (rawValue.startsWith('//')) {
+    return `https:${rawValue}`
+  }
+
+  return `https://${rawValue}`
+}
+
+function getAttachmentFileName(value, fallback = 'เอกสารแนบ') {
+  if (value?.file instanceof File) {
+    return value.file.name
+  }
+
+  const name =
+    value?.fileName ??
+    value?.name ??
+    value?.originalName ??
+    value?.title ??
+    (typeof value === 'string' ? value.split('/').pop() : '')
+
+  return normalizeDisplayValue(name) || fallback
+}
+
+function getAttachmentFileUrl(value) {
+  if (value?.fileUrl) {
+    return value.fileUrl
+  }
+
+  if (value?.previewUrl) {
+    return value.previewUrl
+  }
+
+  return value?.url ?? value?.fileUrl ?? value?.documentUrl ?? value?.downloadUrl ?? (typeof value === 'string' ? value : '')
+}
+
+function normalizeAttachmentFiles(value) {
+  if (Array.isArray(value)) {
+    return value
+  }
+
+  return value ? [value] : []
+}
+
+function getMonitoringPointAttachmentGroups(row = {}) {
+  const measurementPoints = Array.isArray(row.measurementPoints) ? row.measurementPoints : []
+
+  return measurementPoints
+    .map((point, pointIndex) => {
+      const details = point?.details ?? {}
+      const type = getMonitoringPointType(point) || 'จุดตรวจวัด'
+      const pointCode = normalizeDisplayValue(point?.pointCode ?? point?.code)
+      const pointName = normalizeDisplayValue(point?.pointName ?? point?.name)
+      const titleParts = [type, pointCode, pointName].filter(Boolean)
+      const title = titleParts.length ? titleParts.join(' ') : `จุดตรวจวัด ${pointIndex + 1}`
+      const link = normalizeDisplayValue(point?.attachmentLink ?? point?.link ?? details.attachmentLink ?? details.link)
+      const files = normalizeAttachmentFiles(point?.attachmentFiles ?? point?.attachments ?? point?.documents ?? details.attachmentFiles ?? details.attachments ?? details.documents)
+      const items = []
+
+      if (link) {
+        items.push({
+          id: `${title}-link`,
+          type: 'link',
+          label: link,
+          url: normalizeAttachmentUrl(link),
+        })
+      }
+
+      files.forEach((fileItem, fileIndex) => {
+        const fileName = getAttachmentFileName(fileItem, `เอกสารแนบ ${fileIndex + 1}`)
+        const fileUrl = normalizeDisplayValue(getAttachmentFileUrl(fileItem))
+
+        items.push({
+          id: `${title}-file-${fileIndex}-${fileName}`,
+          type: 'file',
+          label: fileName,
+          url: normalizeAttachmentUrl(fileUrl),
+        })
+      })
+
+      return { id: `${title}-${pointIndex}`, title, items }
+    })
+    .filter((group) => group.items.length > 0)
 }
 
 function normalizeDisplayValue(value) {
@@ -377,6 +514,8 @@ function createDefaultMonitoringPoint(type = 'CEMS', order = 1) {
     pendingParameters: [],
     timeSharingParameters: [],
     sharedStackCode: '',
+    attachmentFiles: [],
+    attachmentLink: '',
     monitoringPointStatus: '',
   }
 }
@@ -407,6 +546,8 @@ function mapMonitoringPointToForm(point = {}, index = 0) {
     pendingParameters: point.pendingParameters ?? details.pendingParameters ?? [],
     timeSharingParameters: normalizeTimeSharingParameters(point.timeSharingParameters ?? details.timeSharingParameters),
     sharedStackCode: point.sharedStackCode ?? details.sharedStackCode ?? details.sharedStack ?? '',
+    attachmentFiles: point.attachmentFiles ?? details.attachmentFiles ?? [],
+    attachmentLink: point.attachmentLink ?? point.link ?? details.attachmentLink ?? details.link ?? '',
     monitoringPointStatus: point.monitoringPointStatus ?? point.status ?? details.monitoringPointStatus ?? details.status ?? '',
   }
 }
@@ -419,6 +560,8 @@ function mapMonitoringPointForEligibleState(point) {
     pointName: point.pointName || null,
     pointType: isWpms ? 'WASTEWATER' : 'STACK',
     systemType: point.type,
+    attachmentFiles: point.attachmentFiles ?? [],
+    attachmentLink: point.attachmentLink || null,
     details: isWpms
       ? {
           monitoringPointKind: 'WPMS',
@@ -427,6 +570,8 @@ function mapMonitoringPointForEligibleState(point) {
           pendingParameters: point.pendingParameters ?? [],
           timeSharingParameters: normalizeTimeSharingParameters(point.timeSharingParameters),
           sharedStackCode: point.sharedStackCode || null,
+          attachmentFiles: point.attachmentFiles ?? [],
+          attachmentLink: point.attachmentLink || null,
           monitoringPointStatus: point.monitoringPointStatus || null,
         }
       : {
@@ -446,6 +591,8 @@ function mapMonitoringPointForEligibleState(point) {
           pendingParameters: point.pendingParameters ?? [],
           timeSharingParameters: normalizeTimeSharingParameters(point.timeSharingParameters),
           sharedStackCode: point.sharedStackCode || null,
+          attachmentFiles: point.attachmentFiles ?? [],
+          attachmentLink: point.attachmentLink || null,
           monitoringPointStatus: point.monitoringPointStatus || null,
         },
   }
@@ -510,6 +657,7 @@ function EligibleFactoriesPage({ accessToken = '' }) {
   const [eligibleActionError, setEligibleActionError] = useState('')
   const [savingEligibleFactoryIds, setSavingEligibleFactoryIds] = useState([])
   const [deletingEligibleFactoryIds, setDeletingEligibleFactoryIds] = useState([])
+  const [removeEligibleConfirmRow, setRemoveEligibleConfirmRow] = useState(null)
   const [selectedFactoryForSheet, setSelectedFactoryForSheet] = useState(null)
   const [monitoringPoints, setMonitoringPoints] = useState([])
   const [activeMonitoringPointId, setActiveMonitoringPointId] = useState('')
@@ -933,7 +1081,7 @@ function EligibleFactoriesPage({ accessToken = '' }) {
                 color="error"
                 startIcon={<HighlightOffIcon />}
                 disabled={isDeleting}
-                onClick={() => handleRemoveEligible(params.row)}
+                onClick={() => setRemoveEligibleConfirmRow(params.row)}
               >
                 {isDeleting ? 'กำลังนำออก' : 'นำออก'}
               </Button>
@@ -945,7 +1093,7 @@ function EligibleFactoriesPage({ accessToken = '' }) {
       ...eligibleMonitoringColumns,
       ...baseColumns.slice(3),
     ],
-    [deletingEligibleFactoryIdSet, handleOpenEligibleSheet, handleRemoveEligible],
+    [deletingEligibleFactoryIdSet, handleOpenEligibleSheet],
   )
 
   return (
@@ -1034,6 +1182,46 @@ function EligibleFactoriesPage({ accessToken = '' }) {
 
       {eligibleActionError ? <Alert severity="error">{eligibleActionError}</Alert> : null}
 
+      <Dialog
+        open={Boolean(removeEligibleConfirmRow)}
+        onClose={() => setRemoveEligibleConfirmRow(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>ยืนยันการนำโรงงานออก</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            เมื่อนำโรงงานนี้ออกจากรายการเข้าข่าย ข้อมูลจุดตรวจวัดที่ผูกกับรายการนี้จะถูกนำออกด้วย
+          </Typography>
+          {removeEligibleConfirmRow?.factoryName ? (
+            <Typography variant="body2" sx={{ mt: 1.5, fontWeight: 700 }}>
+              {removeEligibleConfirmRow.factoryName}
+            </Typography>
+          ) : null}
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: 'center', px: 3, pb: 2 }}>
+          <Button color="inherit" onClick={() => setRemoveEligibleConfirmRow(null)}>
+            ยกเลิก
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            disabled={removeEligibleConfirmRow ? deletingEligibleFactoryIdSet.has(removeEligibleConfirmRow.id) : false}
+            onClick={async () => {
+              const row = removeEligibleConfirmRow
+              if (!row) {
+                return
+              }
+
+              await handleRemoveEligible(row)
+              setRemoveEligibleConfirmRow(null)
+            }}
+          >
+            ยืนยัน
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {activeTab === 'all' ? (
         <FactoryDataGrid
           title="โรงงานทั้งหมด (กรอ.)"
@@ -1055,10 +1243,6 @@ function EligibleFactoriesPage({ accessToken = '' }) {
       )}
 
       <EligibleFactoryBottomSheet
-        key={[
-          selectedFactoryForSheet?.id ?? 'eligible-factory-sheet',
-          selectedFactoryForSheet?.monitoringPointFormId ?? 'draft',
-        ].join('-')}
         open={Boolean(selectedFactoryForSheet)}
         factory={selectedFactoryForSheet}
         monitoringPoints={monitoringPoints}
@@ -1095,9 +1279,51 @@ function EligibleFactoryBottomSheet({
   const [eiaAssessment, setEiaAssessment] = useState(() => getEiaAssessmentValue(factory))
   const [eiaOther, setEiaOther] = useState(() => factory?.eiaOther ?? '')
   const [eiaProjectName, setEiaProjectName] = useState(() => factory?.projectName ?? '')
-  const [removePointConfirmOpen, setRemovePointConfirmOpen] = useState(false)
+  const [monitoringPointTypeFilter, setMonitoringPointTypeFilter] = useState('ทั้งหมด')
+  const [removePointId, setRemovePointId] = useState('')
   const activePoint = monitoringPoints.find((point) => point.id === activeMonitoringPointId) ?? monitoringPoints[0]
   const activePointIndex = Math.max(0, monitoringPoints.findIndex((point) => point.id === activePoint?.id))
+  const filteredMonitoringPoints = useMemo(
+    () =>
+      monitoringPoints
+        .map((point, index) => ({ point, index }))
+        .filter(({ point }) => monitoringPointTypeFilter === 'ทั้งหมด' || point.type === monitoringPointTypeFilter),
+    [monitoringPointTypeFilter, monitoringPoints],
+  )
+
+  useEffect(() => {
+    let cancelled = false
+
+    queueMicrotask(() => {
+      if (cancelled) {
+        return
+      }
+
+      setFactoryCoordinates({
+        latitude: factory?.latitude ?? '',
+        longitude: factory?.longitude ?? '',
+      })
+      setEiaAssessment(getEiaAssessmentValue(factory))
+      setEiaOther(factory?.eiaOther ?? '')
+      setEiaProjectName(factory?.projectName ?? '')
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [factory])
+
+  useEffect(() => {
+    if (monitoringPointTypeFilter === 'ทั้งหมด' || !activePoint) {
+      return
+    }
+
+    if (activePoint.type === monitoringPointTypeFilter) {
+      return
+    }
+
+    onActiveMonitoringPointChange(filteredMonitoringPoints[0]?.point.id ?? '')
+  }, [activePoint, filteredMonitoringPoints, monitoringPointTypeFilter, onActiveMonitoringPointChange])
 
   const updateActivePoint = useCallback(
     (patch) => {
@@ -1133,15 +1359,18 @@ function EligibleFactoryBottomSheet({
   }, [monitoringPoints.length, onActiveMonitoringPointChange, onMonitoringPointsChange])
 
   const handleRemovePoint = useCallback(() => {
-    if (!activePoint) {
+    if (!removePointId) {
       return
     }
 
-    const nextPoints = monitoringPoints.filter((point) => point.id !== activePoint.id)
+    const nextPoints = monitoringPoints.filter((point) => point.id !== removePointId)
+    const nextActivePointId =
+      activePoint?.id === removePointId ? nextPoints[0]?.id ?? '' : activePoint?.id ?? nextPoints[0]?.id ?? ''
+
     onMonitoringPointsChange(nextPoints)
-    onActiveMonitoringPointChange(nextPoints[0]?.id ?? '')
-    setRemovePointConfirmOpen(false)
-  }, [activePoint, monitoringPoints, onActiveMonitoringPointChange, onMonitoringPointsChange])
+    onActiveMonitoringPointChange(nextActivePointId)
+    setRemovePointId('')
+  }, [activePoint?.id, monitoringPoints, onActiveMonitoringPointChange, onMonitoringPointsChange, removePointId])
 
   const handleSubmit = useCallback(() => {
     if (!factory) {
@@ -1163,16 +1392,20 @@ function EligibleFactoryBottomSheet({
       anchor="bottom"
       open={open}
       onClose={onClose}
-      PaperProps={{
-        sx: {
-          maxHeight: '92vh',
-          borderTopLeftRadius: 8,
-          borderTopRightRadius: 8,
+      ModalProps={{ keepMounted: true }}
+      transitionDuration={{ enter: 280, exit: 220 }}
+      sx={{
+        '& .MuiDrawer-paper': {
+          height: { xs: 'calc(100dvh - 64px)', md: 'calc(100dvh - 72px)' },
+          maxHeight: { xs: 'calc(100dvh - 64px)', md: 'calc(100dvh - 72px)' },
+          borderTopLeftRadius: 16,
+          borderTopRightRadius: 16,
+          overflow: 'hidden',
         },
       }}
     >
-      <Stack spacing={2} sx={{ p: { xs: 2, md: 3 }, overflow: 'auto' }}>
-        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+      <Stack spacing={2} sx={{ height: '100%', minHeight: 0, p: { xs: 2, md: 3 }, overflow: 'hidden' }}>
+        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexShrink: 0 }}>
           <Box sx={{ minWidth: 0, flex: 1 }}>
             <Typography variant="h6">เพิ่ม/แก้ไข ข้อมูลจุดตรวจวัด</Typography>
             <Typography variant="body2" color="text.secondary">
@@ -1184,7 +1417,7 @@ function EligibleFactoryBottomSheet({
           </IconButton>
         </Stack>
 
-        <Paper elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider' }}>
+        <Paper elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider', flexShrink: 0 }}>
           <Typography sx={{ mb: 1.5, fontWeight: 700 }}>ข้อมูลทั่วไปของโรงงาน</Typography>
           <Grid container spacing={2}>
             <Grid size={{ xs: 12, md: 3 }}>
@@ -1279,7 +1512,19 @@ function EligibleFactoryBottomSheet({
           </Grid>
         </Paper>
 
-        <Paper elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider' }}>
+        <Paper
+          elevation={0}
+          sx={{
+            p: 2,
+            border: 1,
+            borderColor: 'divider',
+            flex: 1,
+            minHeight: { xs: 420, md: 0 },
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', md: 'center' }, mb: 2 }}>
             <Box sx={{ minWidth: 0, flex: 1 }}>
               <Typography sx={{ fontWeight: 700 }}>ข้อมูลจุดตรวจวัด</Typography>
@@ -1287,58 +1532,192 @@ function EligibleFactoryBottomSheet({
                 เลือกจุดเพื่อแก้ไข หรือเพิ่มจุดตรวจวัดใหม่
               </Typography>
             </Box>
-            <Button variant="outlined" startIcon={<AddIcon />} onClick={handleAddPoint}>
-              เพิ่มจุดตรวจวัด
-            </Button>
-            <Button
-              variant="outlined"
-              color="error"
-              startIcon={<DeleteOutlineIcon />}
-              disabled={!activePoint}
-              onClick={() => setRemovePointConfirmOpen(true)}
-            >
-              ลบจุดนี้
-            </Button>
           </Stack>
 
-          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1, mb: 2 }}>
-            {monitoringPoints.map((point, index) => (
-              <Chip
-                key={point.id}
-                label={`${point.type} จุดที่ ${index + 1}`}
-                color={point.id === activePoint?.id ? 'primary' : 'default'}
-                variant={point.id === activePoint?.id ? 'filled' : 'outlined'}
-                onClick={() => onActiveMonitoringPointChange(point.id)}
-              />
-            ))}
-          </Stack>
+          <Box
+            sx={{
+              flex: 1,
+              minHeight: 0,
+              height: '100%',
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', md: '320px minmax(0, 1fr)' },
+              gap: 2,
+              overflow: 'hidden',
+            }}
+          >
+            <Box sx={{ minHeight: 0, display: 'flex', overflow: 'hidden' }}>
+              <Box
+                sx={{
+                  width: '100%',
+                  height: '100%',
+                  minHeight: 0,
+                  border: 1,
+                  borderColor: 'divider',
+                  borderRadius: 1,
+                  overflow: 'hidden',
+                  bgcolor: 'background.default',
+                  display: 'flex',
+                  flexDirection: 'column',
+                }}
+              >
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  sx={{ p: 1.25, borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper' }}
+                >
+                  <TextField
+                    select
+                    label="ดูจุดตรวจวัด"
+                    size="small"
+                    value={monitoringPointTypeFilter}
+                    onChange={(event) => setMonitoringPointTypeFilter(event.target.value)}
+                    sx={{ flex: 1, minWidth: 0 }}
+                  >
+                    {['ทั้งหมด', 'CEMS', 'WPMS'].map((option) => (
+                      <MenuItem key={option} value={option}>
+                        {option}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                  <Button
+                    variant="contained"
+                    startIcon={<AddIcon />}
+                    onClick={handleAddPoint}
+                    sx={{ minWidth: 128, flexShrink: 0 }}
+                  >
+                    เพิ่มจุดตรวจวัด
+                  </Button>
+                </Stack>
+                <Stack
+                  spacing={0.75}
+                  sx={{
+                    p: 1.25,
+                    flex: 1,
+                    height: 0,
+                    minHeight: 0,
+                    overflowY: 'auto',
+                    overflowX: 'hidden',
+                  }}
+                >
+                  {filteredMonitoringPoints.length ? (
+                    filteredMonitoringPoints.map(({ point, index }) => {
+                      const selected = point.id === activePoint?.id
+                      const pointTitle = point.pointCode ? `${point.type} ${point.pointCode}` : `${point.type} จุดที่ ${index + 1}`
 
-          {monitoringPoints.length ? (
-            <Divider sx={{ mb: 2 }} />
-          ) : null}
-
-          {activePoint ? (
-            <MonitoringPointForm point={activePoint} onChange={updateActivePoint} onTypeChange={handleTypeChange} />
-          ) : (
-            <Paper
-              elevation={0}
-              sx={{
-                p: 3,
-                border: 1,
-                borderStyle: 'dashed',
-                borderColor: 'divider',
-                bgcolor: 'background.default',
-                textAlign: 'center',
-              }}
-            >
-              <Typography color="text.secondary">
-                ยังไม่มีข้อมูลจุดตรวจวัด
-              </Typography>
-            </Paper>
-          )}
+                      return (
+                        <Box
+                          key={point.id}
+                          sx={{
+                            display: 'flex',
+                            alignItems: 'stretch',
+                            gap: 0.75,
+                            border: 1,
+                            borderColor: selected ? 'primary.main' : 'divider',
+                            borderRadius: 1,
+                            bgcolor: selected ? 'primary.50' : 'background.paper',
+                            p: 0.5,
+                            boxShadow: selected ? '0 0 0 1px rgba(37, 99, 235, 0.12)' : 'none',
+                          }}
+                        >
+                          <Button
+                            color="inherit"
+                            onClick={() => onActiveMonitoringPointChange(point.id)}
+                            sx={{
+                              justifyContent: 'flex-start',
+                              flex: 1,
+                              minHeight: 44,
+                              minWidth: 0,
+                              px: 1,
+                              textAlign: 'left',
+                              borderRadius: 0.75,
+                              color: 'text.primary',
+                              '&:hover': {
+                                bgcolor: selected ? 'primary.100' : 'action.hover',
+                              },
+                            }}
+                          >
+                            <Box sx={{ minWidth: 0, width: '100%' }}>
+                              <Stack
+                                direction="row"
+                                spacing={1}
+                                sx={{ alignItems: 'center', justifyContent: 'space-between', minWidth: 0 }}
+                              >
+                                <Typography
+                                  component="span"
+                                  variant="body2"
+                                  sx={{
+                                    minWidth: 0,
+                                    fontWeight: selected ? 700 : 500,
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  {pointTitle}
+                                </Typography>
+                                {point.pointCode && point.pointName ? (
+                                  <Typography
+                                    component="span"
+                                    variant="body2"
+                                    sx={{
+                                      flexShrink: 0,
+                                      maxWidth: '45%',
+                                      fontWeight: selected ? 700 : 500,
+                                      overflow: 'hidden',
+                                      textAlign: 'right',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap',
+                                    }}
+                                  >
+                                    {point.pointName}
+                                  </Typography>
+                                ) : null}
+                              </Stack>
+                              <MonitoringPointStatusChip value={point.monitoringPointStatus} />
+                            </Box>
+                          </Button>
+                          <IconButton
+                            aria-label={`ลบ ${point.type} จุดที่ ${index + 1}`}
+                            size="small"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              setRemovePointId(point.id)
+                            }}
+                            sx={{
+                              alignSelf: 'center',
+                              width: 26,
+                              height: 26,
+                              color: 'text.secondary',
+                              '&:hover': {
+                                color: 'error.main',
+                                bgcolor: 'error.50',
+                              },
+                            }}
+                          >
+                            <DeleteOutlineIcon sx={{ fontSize: 16 }} />
+                          </IconButton>
+                        </Box>
+                      )
+                    })
+                  ) : (
+                    <Typography variant="body2" color="text.secondary" sx={{ px: 1, py: 2, textAlign: 'center' }}>
+                      ไม่พบจุดตรวจวัดตามตัวกรอง
+                    </Typography>
+                  )}
+                </Stack>
+              </Box>
+            </Box>
+            <Box sx={{ minHeight: 0, display: 'flex', overflow: 'hidden' }}>
+              {activePoint ? (
+                <Box sx={{ width: '100%', height: '100%', minHeight: 0, overflow: 'auto', pr: { md: 0.5 } }}>
+                  <MonitoringPointForm point={activePoint} onChange={updateActivePoint} onTypeChange={handleTypeChange} />
+                </Box>
+              ) : null}
+            </Box>
+          </Box>
         </Paper>
 
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'center' }}>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'center', flexShrink: 0 }}>
           <Button variant="outlined" color="inherit" onClick={onClose}>
             ยกเลิก
           </Button>
@@ -1348,8 +1727,8 @@ function EligibleFactoryBottomSheet({
         </Stack>
       </Stack>
       <Dialog
-        open={removePointConfirmOpen}
-        onClose={() => setRemovePointConfirmOpen(false)}
+        open={Boolean(removePointId)}
+        onClose={() => setRemovePointId('')}
         maxWidth="xs"
         fullWidth
       >
@@ -1360,7 +1739,7 @@ function EligibleFactoryBottomSheet({
           </Typography>
         </DialogContent>
         <DialogActions sx={{ justifyContent: 'center', px: 3, pb: 2 }}>
-          <Button color="inherit" onClick={() => setRemovePointConfirmOpen(false)}>
+          <Button color="inherit" onClick={() => setRemovePointId('')}>
             ยกเลิก
           </Button>
           <Button variant="contained" color="error" onClick={handleRemovePoint}>
@@ -1369,6 +1748,32 @@ function EligibleFactoryBottomSheet({
         </DialogActions>
       </Dialog>
     </Drawer>
+  )
+}
+
+function MonitoringPointStatusChip({ value }) {
+  const option = monitoringPointStatusOptions.find((item) => item.value === value)
+  const label = option?.label ?? 'ยังไม่ระบุสถานะ'
+
+  return (
+    <Chip
+      label={label}
+      size="small"
+      sx={{
+        mt: 0.5,
+        maxWidth: '100%',
+        height: 22,
+        fontSize: 11,
+        fontWeight: 600,
+        bgcolor: option?.bgcolor ?? '#f1f5f9',
+        color: option?.color ?? '#64748b',
+        '& .MuiChip-label': {
+          px: 0.75,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        },
+      }}
+    />
   )
 }
 
@@ -1616,6 +2021,24 @@ function MonitoringPointForm({ point, onChange, onTypeChange }) {
             </Grid>
           ) : null}
           <Grid size={{ xs: 12, md: 3 }}>
+            <EligibleUploadFileField
+              label="เอกสารแนบ"
+              name={`monitoring-point-attachments-${point.id}`}
+              accept="image/*,.pdf"
+              value={point.attachmentFiles ?? []}
+              onChange={(value) => onChange({ attachmentFiles: value })}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, md: 3 }}>
+            <TextField
+              label="Link"
+              size="small"
+              fullWidth
+              value={point.attachmentLink ?? ''}
+              onChange={(event) => onChange({ attachmentLink: event.target.value })}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, md: 3 }}>
             <MonitoringPointStatusSelect
               value={point.monitoringPointStatus}
               onChange={(value) => onChange({ monitoringPointStatus: value })}
@@ -1623,6 +2046,194 @@ function MonitoringPointForm({ point, onChange, onTypeChange }) {
           </Grid>
         </Grid>
       </Stack>
+    </Stack>
+  )
+}
+
+function EligibleUploadFileField({
+  label,
+  accept,
+  name,
+  value = [],
+  onChange,
+  multiple = true,
+  helperText = 'ขนาดไม่เกิน 10 Mb',
+}) {
+  const inputRef = useRef(null)
+  const [fileError, setFileError] = useState('')
+  const selectedFiles = Array.isArray(value) ? value : []
+  const fileNames = selectedFiles.map((item) => item.file?.name).filter(Boolean).join(', ')
+  const buttonLabel = fileNames || label
+
+  const syncInputFiles = (items) => {
+    if (!inputRef.current) {
+      return
+    }
+
+    const dataTransfer = new DataTransfer()
+    items.forEach((item) => {
+      if (item.file instanceof File) {
+        dataTransfer.items.add(item.file)
+      }
+    })
+    inputRef.current.files = dataTransfer.files
+  }
+
+  const updateFiles = (items) => {
+    onChange?.(items)
+    syncInputFiles(items)
+  }
+
+  const handleFilesChange = (event) => {
+    const selectedInputFiles = Array.from(event.target.files ?? [])
+    const oversizedFiles = selectedInputFiles.filter((file) => file.size > maxUploadFileSizeBytes)
+    const acceptedFiles = selectedInputFiles.filter((file) => file.size <= maxUploadFileSizeBytes)
+    const incomingFiles = acceptedFiles.map((file) => ({
+      id: `${file.name}-${file.lastModified}-${file.size}`,
+      file,
+      fileUrl: URL.createObjectURL(file),
+      previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : '',
+    }))
+    const filesById = new Map(selectedFiles.map((item) => [item.id, item]))
+    setFileError(oversizedFiles.length
+      ? `ไฟล์ ${oversizedFiles.map((file) => file.name).join(', ')} มีขนาดเกิน 10 MB`
+      : '')
+
+    incomingFiles.forEach((item) => {
+      if (filesById.has(item.id)) {
+        if (item.fileUrl) {
+          URL.revokeObjectURL(item.fileUrl)
+        }
+        if (item.previewUrl) {
+          URL.revokeObjectURL(item.previewUrl)
+        }
+        return
+      }
+      filesById.set(item.id, item)
+    })
+
+    updateFiles(multiple ? Array.from(filesById.values()) : incomingFiles.slice(0, 1))
+  }
+
+  const removeSelectedFile = (targetIndex) => {
+    const removedFile = selectedFiles[targetIndex]
+    if (removedFile?.fileUrl) {
+      URL.revokeObjectURL(removedFile.fileUrl)
+    }
+    if (removedFile?.previewUrl) {
+      URL.revokeObjectURL(removedFile.previewUrl)
+    }
+
+    updateFiles(selectedFiles.filter((_, index) => index !== targetIndex))
+    setFileError('')
+  }
+
+  return (
+    <Stack spacing={0.75}>
+      <Button
+        component="label"
+        variant="outlined"
+        size="small"
+        fullWidth
+        startIcon={<UploadFileIcon />}
+        sx={{
+          minHeight: 40,
+          justifyContent: 'flex-start',
+          borderStyle: 'dashed',
+          color: fileNames ? 'text.primary' : 'text.secondary',
+          bgcolor: 'background.paper',
+          '&:hover': {
+            borderStyle: 'dashed',
+            bgcolor: 'primary.50',
+          },
+        }}
+      >
+        {buttonLabel}
+        <Box
+          component="input"
+          ref={inputRef}
+          type="file"
+          name={name}
+          accept={accept}
+          multiple={multiple}
+          hidden
+          onChange={handleFilesChange}
+        />
+      </Button>
+      <Typography variant="caption" color="text.secondary">
+        {helperText}
+      </Typography>
+      {fileError ? (
+        <Typography variant="caption" color="error">
+          {fileError}
+        </Typography>
+      ) : null}
+      {selectedFiles.length ? (
+        <Stack spacing={1}>
+          {selectedFiles.map((item, index) => (
+            <Box
+              key={item.id}
+              sx={{
+                display: 'flex',
+                gap: 1,
+                alignItems: 'center',
+                p: 1,
+                border: 1,
+                borderColor: 'divider',
+                borderRadius: 1,
+                bgcolor: 'background.paper',
+              }}
+            >
+              {item.previewUrl ? (
+                <Box
+                  component="img"
+                  src={item.previewUrl}
+                  alt={item.file.name}
+                  sx={{
+                    width: 48,
+                    height: 48,
+                    objectFit: 'cover',
+                    borderRadius: 1,
+                    border: 1,
+                    borderColor: 'divider',
+                    flex: '0 0 auto',
+                  }}
+                />
+              ) : (
+                <Box
+                  sx={{
+                    width: 48,
+                    height: 48,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    border: 1,
+                    borderColor: 'divider',
+                    borderRadius: 1,
+                    bgcolor: 'neutral.50',
+                    flex: '0 0 auto',
+                  }}
+                >
+                  <Typography variant="caption" sx={{ fontWeight: 700 }}>
+                    FILE
+                  </Typography>
+                </Box>
+              )}
+              <Box sx={{ minWidth: 0, flex: 1 }}>
+                <Typography variant="body2" noWrap title={item.file.name}>
+                  {item.file.name}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {(item.file.size / 1024 / 1024).toFixed(2)} MB
+                </Typography>
+              </Box>
+              <IconButton size="small" aria-label={`ลบไฟล์ ${item.file.name}`} onClick={() => removeSelectedFile(index)}>
+                <CloseIcon fontSize="small" />
+              </IconButton>
+            </Box>
+          ))}
+        </Stack>
+      ) : null}
     </Stack>
   )
 }
@@ -1658,26 +2269,6 @@ function ParameterMultiSelect({ label, options, value = [], onChange }) {
   )
 }
 
-function MonitoringPointStatusChip({ value }) {
-  const option = monitoringPointStatusOptions.find((item) => item.value === value)
-
-  if (!option) {
-    return null
-  }
-
-  return (
-    <Chip
-      label={option.label}
-      size="small"
-      sx={{
-        bgcolor: option.bgcolor,
-        color: option.color,
-        fontWeight: 600,
-      }}
-    />
-  )
-}
-
 function MonitoringPointStatusSelect({ value, onChange }) {
   return (
     <FormControl size="small" fullWidth>
@@ -1696,6 +2287,107 @@ function MonitoringPointStatusSelect({ value, onChange }) {
         ))}
       </Select>
     </FormControl>
+  )
+}
+
+function MonitoringPointAttachmentsCell({ row }) {
+  const [anchorEl, setAnchorEl] = useState(null)
+  const attachmentGroups = useMemo(() => getMonitoringPointAttachmentGroups(row), [row])
+  const attachmentCount = attachmentGroups.reduce((total, group) => total + group.items.length, 0)
+  const isOpen = Boolean(anchorEl)
+
+  if (!attachmentCount) {
+    return (
+      <Box sx={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Typography variant="body2" color="text.secondary">
+          {emptyValue}
+        </Typography>
+      </Box>
+    )
+  }
+
+  const handleOpenAttachment = (url) => {
+    if (!url) {
+      return
+    }
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
+
+  return (
+    <Box sx={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <Button
+        size="small"
+        variant="outlined"
+        startIcon={<DescriptionIcon fontSize="small" />}
+        onClick={(event) => setAnchorEl(event.currentTarget)}
+      >
+        เอกสารแนบ ({attachmentCount})
+      </Button>
+      <Popover
+        open={isOpen}
+        anchorEl={anchorEl}
+        onClose={() => setAnchorEl(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'center' }}
+        PaperProps={{
+          sx: {
+            mt: 1,
+            width: 360,
+            maxWidth: 'calc(100vw - 32px)',
+            maxHeight: 420,
+            overflow: 'auto',
+            borderRadius: 2,
+            boxShadow: '0 18px 45px rgba(15, 23, 42, 0.18)',
+          },
+        }}
+      >
+        <Stack spacing={1.5} sx={{ p: 2 }}>
+          {attachmentGroups.map((group) => (
+            <Stack key={group.id} spacing={0.75}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                {group.title}
+              </Typography>
+              {group.items.map((item) => (
+                <Button
+                  key={item.id}
+                  fullWidth
+                  variant="text"
+                  disabled={!item.url}
+                  startIcon={item.type === 'link' ? <LinkIcon fontSize="small" /> : <DescriptionIcon fontSize="small" />}
+                  onClick={() => handleOpenAttachment(item.url)}
+                  sx={{
+                    justifyContent: 'flex-start',
+                    minHeight: 40,
+                    px: 1,
+                    color: 'text.primary',
+                    textTransform: 'none',
+                    '& .MuiButton-startIcon': {
+                      width: 28,
+                      height: 28,
+                      borderRadius: 1,
+                      bgcolor: item.type === 'link' ? '#eff6ff' : '#f8fafc',
+                      color: item.type === 'link' ? '#2563eb' : '#475569',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    },
+                  }}
+                >
+                  <Box sx={{ minWidth: 0, textAlign: 'left' }}>
+                    <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
+                      {item.label}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {item.type === 'link' ? 'Link' : 'ไฟล์'}
+                    </Typography>
+                  </Box>
+                </Button>
+              ))}
+            </Stack>
+          ))}
+        </Stack>
+      </Popover>
+    </Box>
   )
 }
 
@@ -1718,24 +2410,28 @@ function ConnectionStatusSummaryChip({ value }) {
 
   if (label === emptyValue) {
     return (
-      <Typography variant="body2" color="text.secondary">
-        {emptyValue}
-      </Typography>
+      <Box sx={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Typography variant="body2" color="text.secondary">
+          {emptyValue}
+        </Typography>
+      </Box>
     )
   }
 
   return (
-    <Chip
-      label={label}
-      size="small"
-      sx={{
-        fontWeight: 600,
-        ...(colorByStatus[label] ?? {
-          bgcolor: '#f1f5f9',
-          color: '#334155',
-        }),
-      }}
-    />
+    <Box sx={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <Chip
+        label={label}
+        size="small"
+        sx={{
+          fontWeight: 600,
+          ...(colorByStatus[label] ?? {
+            bgcolor: '#f1f5f9',
+            color: '#334155',
+          }),
+        }}
+      />
+    </Box>
   )
 }
 
@@ -1884,7 +2580,7 @@ function StatusChip({ value }) {
 function ConnectionRequestsPanel() {
   return (
     <FactoryDataGrid
-      title="คำขอเชื่อมต่อ"
+      title="ขอเพิ่มโรงงาน"
       rows={connectionRequestRows}
       columns={connectionRequestColumns}
     />
