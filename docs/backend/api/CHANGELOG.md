@@ -2,6 +2,14 @@
 
 ไฟล์นี้บันทึกเฉพาะการเปลี่ยน API ที่ทำให้ client ต้องแก้ตาม การเปลี่ยนทั่วไปและประวัติรายละเอียดดูจาก Git history
 
+## 2026-08-11 — CSV export เพิ่มเลขทะเบียนโรงงาน
+
+- **Affected API:** [Measurement CSV export](./shared/connected-measurement-points/README.md#get-apiv1connected-measurement-pointsstationidmeasurement-exportcsv)
+- **Impact:** `GET /api/v1/connected-measurement-points/:stationId/measurement-export.csv` เพิ่มคอลัมน์ `factory_registration_number` ต่อจาก `factory_name` ทำให้ตำแหน่ง `meas_code` และคอลัมน์พารามิเตอร์ทั้งหมดเลื่อนไปหนึ่งตำแหน่ง
+- **Migration:** client ที่อ่าน CSV ด้วย index ต้องเพิ่มคอลัมน์ที่ตำแหน่ง 3; client ที่อ่านด้วยชื่อ header ให้ใช้ `factory_registration_number` ซึ่งตั้งใจไม่ใช้ชื่อ DB `factory_registration_no`
+- **Old contract:** identity columns คือ `date_time`, `factory_name`, `meas_code`
+- **New contract:** identity columns คือ `date_time`, `factory_name`, `factory_registration_number`, `meas_code`; ทุก data row มีเลขทะเบียนโรงงานจาก connected request
+
 ## 2026-08-11 — บังคับหนึ่งบทบาทและจำกัดข้อมูลด้วยพื้นที่ประจำตัว
 
 - **Affected menus:** [สิทธิ์การใช้งาน](./menus/permissions/README.md), [โรงงานที่เข้าข่าย](./menus/eligible-factories/README.md), [ขอเชื่อมต่อ](./menus/connection-requests/README.md), [แจ้งแบบ กวภ. 01 - กวภ. 05](./menus/kwp-forms/README.md) และ [รายงานค่าความคลาดเคลื่อน BOD/COD Online](./menus/bod-cod-deviation-reports/README.md)

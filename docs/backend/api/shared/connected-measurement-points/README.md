@@ -648,7 +648,7 @@ curl --get \
 
 ### `GET /api/v1/connected-measurement-points/:stationId/measurement-export.csv`
 
-อ่านข้อมูลจริงของจุดตรวจวัดตามช่วงวันที่ แล้ว stream เป็นไฟล์ CSV โดย backend resolve ชื่อโรงงาน current/live, registered parameters, permission และ data scope จาก `stationId`; client ไม่ต้องส่ง `factoryId`, `factoryName` หรือ `reportType` กลับมาเป็น source of truth
+อ่านข้อมูลจริงของจุดตรวจวัดตามช่วงวันที่ แล้ว stream เป็นไฟล์ CSV โดย backend resolve ชื่อโรงงาน current/live, เลขทะเบียนโรงงาน, registered parameters, permission และ data scope จาก `stationId`; client ไม่ต้องส่ง `factoryId`, `factoryName` หรือ `reportType` กลับมาเป็น source of truth
 
 #### Authentication And Permission
 
@@ -691,12 +691,19 @@ curl --get \
 | Encoding | UTF-8 with BOM | byte-order mark อยู่หน้าคอลัมน์แรกเพื่อรองรับ Excel |
 | Line ending | CRLF | field ใช้ RFC 4180 quoting/escaping |
 
-CSV ใช้ identity columns `date_time`, `factory_name`, `meas_code` ก่อน แล้วแต่ละพารามิเตอร์ใช้หนึ่งคอลัมน์ `<Parameter with unit>`. ไม่มีคอลัมน์ `<Parameter> Status`; cell ของพารามิเตอร์เป็นค่าตัวเลขเมื่อสถานะปกติ หรือเป็นชื่อ operational status เมื่อสถานะไม่ปกติ
+CSV ใช้ identity columns `date_time`, `factory_name`, `factory_registration_number`, `meas_code` ก่อน แล้วแต่ละพารามิเตอร์ใช้หนึ่งคอลัมน์ `<Parameter with unit>`. ชื่อ `factory_registration_number` เป็น public CSV contract ที่ตั้งใจไม่ใช้ชื่อ DB `factory_registration_no` เพื่อไม่ผูก client กับ schema ภายใน. ไม่มีคอลัมน์ `<Parameter> Status`; cell ของพารามิเตอร์เป็นค่าตัวเลขเมื่อสถานะปกติ หรือเป็นชื่อ operational status เมื่อสถานะไม่ปกติ
+
+| CSV column | Description |
+| --- | --- |
+| `date_time` | วันและเวลาของข้อมูล source รูปแบบ `YYYY-MM-DD HH:mm:ss` |
+| `factory_name` | ชื่อโรงงาน current/live |
+| `factory_registration_number` | เลขทะเบียนโรงงาน; อยู่ถัดจาก `factory_name` และไม่ใช่ชื่อ field ใน DB |
+| `meas_code` | รหัสจุดตรวจวัดจาก `stationId` |
 
 ```csv
-﻿date_time,factory_name,meas_code,CO (ppm),Flow Rate (m3/hr)
-2026-08-09 00:00:00,โรงไฟฟ้าพระนครเหนือ ชุดที่ 2,S0199,76.74,94.20
-2026-08-09 01:00:00,โรงไฟฟ้าพระนครเหนือ ชุดที่ 2,S0199,Calibration,No Discharge
+﻿date_time,factory_name,factory_registration_number,meas_code,CO (ppm),Flow Rate (m3/hr)
+2026-08-09 00:00:00,โรงไฟฟ้าพระนครเหนือ ชุดที่ 2,10120000325542,S0199,76.74,94.20
+2026-08-09 01:00:00,โรงไฟฟ้าพระนครเหนือ ชุดที่ 2,10120000325542,S0199,Calibration,No Discharge
 ```
 
 #### Validation And Business Rules
@@ -708,6 +715,7 @@ CSV ใช้ identity columns `date_time`, `factory_name`, `meas_code` ก่�
 - ชื่อ parameter ใน header ต้องมีหน่วยเมื่อ source ระบุได้ เช่น `BOD (mg/l)`, `CO2 (ppm)` หรือ `Flow Rate (m3/hr)`
 - ส่งออกเฉพาะ source rows ที่มีอยู่ เรียง `cdate`, `ctime` จากเก่าไปใหม่ และรักษาทุก row ที่ timestamp ซ้ำ; daily row ที่ไม่มี `ctime` ใช้ `00:00:00`
 - `date_time` ใช้ `YYYY-MM-DD HH:mm:ss` ตามเวลา source ซึ่งเป็น `Asia/Bangkok`; measurement value ใช้ทศนิยมสองตำแหน่งและไม่มี thousands separator
+- `factory_registration_number` map จากเลขทะเบียนของ connected request ใน service layer; formatter ไม่ใช้ชื่อ field DB เป็น header โดยอัตโนมัติ
 - ไม่มี status column แยก; แต่ละ parameter cell จึงเป็นได้ทั้งตัวเลขและข้อความ operational status
 - StatusCode `1`, `Normal` หรือ `Ok` ส่งค่าตรวจวัดเป็นตัวเลขสองตำแหน่ง โดยไม่ส่งคำว่า `Normal`
 - Operational status อื่นส่งชื่อสถานะแทนค่าตัวเลขใน cell เดียวกัน ได้แก่ `NoData`, `Calibration`, `Defective`, `Maintenance`, `Start up`, `Shut Down`, `Turnaround`, `Etc.` และ `No Discharge`; ไม่ใช้ threshold status `warning`/`exceeded`

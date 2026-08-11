@@ -7,6 +7,7 @@ describe('createMeasurementCsvExport', () => {
     const result = createMeasurementCsvExport({
       stationId: 'S0199',
       factoryName: 'โรงไฟฟ้าพระนครเหนือ ชุดที่ 2',
+      factoryRegistrationNumber: '10120000325542',
       frequency: 'hourly',
       startDate: '2026-08-09',
       endDate: '2026-08-09',
@@ -27,8 +28,8 @@ describe('createMeasurementCsvExport', () => {
     expect(result.filename).toBe('measurement-S0199-hourly-2026-08-09-2026-08-09.csv');
     expect(result.contentType).toBe('text/csv; charset=utf-8');
     await expect(readStream(result.stream)).resolves.toBe(
-      '\uFEFFdate_time,factory_name,meas_code,CO (ppm),Flow Rate (m3/hr)\r\n' +
-        '2026-08-09 00:00:00,โรงไฟฟ้าพระนครเหนือ ชุดที่ 2,S0199,76.74,94.20\r\n',
+      '\uFEFFdate_time,factory_name,factory_registration_number,meas_code,CO (ppm),Flow Rate (m3/hr)\r\n' +
+        '2026-08-09 00:00:00,โรงไฟฟ้าพระนครเหนือ ชุดที่ 2,10120000325542,S0199,76.74,94.20\r\n',
     );
   });
 
@@ -36,6 +37,7 @@ describe('createMeasurementCsvExport', () => {
     const result = createMeasurementCsvExport({
       stationId: 'S0199',
       factoryName: 'โรงงานทดสอบ',
+      factoryRegistrationNumber: '10120000325542',
       frequency: 'hourly',
       startDate: '2026-08-09',
       endDate: '2026-08-09',
@@ -54,8 +56,8 @@ describe('createMeasurementCsvExport', () => {
     });
 
     await expect(readStream(result.stream)).resolves.toBe(
-      '\uFEFFdate_time,factory_name,meas_code,CO2 (ppm),CO2 (%)\r\n' +
-        '2026-08-09 01:00:00,โรงงานทดสอบ,S0199,530.00,10.40\r\n',
+      '\uFEFFdate_time,factory_name,factory_registration_number,meas_code,CO2 (ppm),CO2 (%)\r\n' +
+        '2026-08-09 01:00:00,โรงงานทดสอบ,10120000325542,S0199,530.00,10.40\r\n',
     );
   });
 
@@ -63,6 +65,7 @@ describe('createMeasurementCsvExport', () => {
     const result = createMeasurementCsvExport({
       stationId: 'S0199',
       factoryName: 'โรงงานทดสอบ',
+      factoryRegistrationNumber: '10120000325542',
       frequency: 'hourly',
       startDate: '2026-08-09',
       endDate: '2026-08-09',
@@ -105,9 +108,9 @@ describe('createMeasurementCsvExport', () => {
     });
 
     await expect(readStream(result.stream)).resolves.toBe(
-      '\uFEFFdate_time,factory_name,meas_code,CO (ppm),NOx (ppm),SO2 (ppm),Flow Rate (m3/hr),Temp. (°C),O2 (%)\r\n' +
-        '2026-08-09 02:00:00,โรงงานทดสอบ,S0199,12.35,Maintenance,NoData,No Discharge,Etc.,10.20\r\n' +
-        '2026-08-09 03:00:00,โรงงานทดสอบ,S0199,,,,,,\r\n',
+      '\uFEFFdate_time,factory_name,factory_registration_number,meas_code,CO (ppm),NOx (ppm),SO2 (ppm),Flow Rate (m3/hr),Temp. (°C),O2 (%)\r\n' +
+        '2026-08-09 02:00:00,โรงงานทดสอบ,10120000325542,S0199,12.35,Maintenance,NoData,No Discharge,Etc.,10.20\r\n' +
+        '2026-08-09 03:00:00,โรงงานทดสอบ,10120000325542,S0199,,,,,,\r\n',
     );
   });
 
@@ -115,6 +118,7 @@ describe('createMeasurementCsvExport', () => {
     const result = createMeasurementCsvExport({
       stationId: 'S0199',
       factoryName: 'โรงงานทดสอบ',
+      factoryRegistrationNumber: '10120000325542',
       frequency: 'hourly',
       startDate: '2026-08-09',
       endDate: '2026-08-09',
@@ -131,7 +135,7 @@ describe('createMeasurementCsvExport', () => {
     });
 
     await expect(readStream(result.stream)).resolves.toContain(
-      '2026-08-09 04:00:00,โรงงานทดสอบ,S0199,33.30\r\n',
+      '2026-08-09 04:00:00,โรงงานทดสอบ,10120000325542,S0199,33.30\r\n',
     );
   });
 
@@ -139,6 +143,7 @@ describe('createMeasurementCsvExport', () => {
     const result = createMeasurementCsvExport({
       stationId: 'W2001',
       factoryName: 'โรงงานทดสอบ',
+      factoryRegistrationNumber: '10120000325542',
       frequency: 'daily',
       startDate: '2026-08-09',
       endDate: '2026-08-10',
@@ -152,10 +157,10 @@ describe('createMeasurementCsvExport', () => {
     });
 
     await expect(readStream(result.stream)).resolves.toBe(
-      '\uFEFFdate_time,factory_name,meas_code,BOD (mg/l)\r\n' +
-        '2026-08-09 12:00:00,โรงงานทดสอบ,W2001,2.00\r\n' +
-        '2026-08-09 12:00:00,โรงงานทดสอบ,W2001,3.00\r\n' +
-        '2026-08-10 00:00:00,โรงงานทดสอบ,W2001,4.00\r\n',
+      '\uFEFFdate_time,factory_name,factory_registration_number,meas_code,BOD (mg/l)\r\n' +
+        '2026-08-09 12:00:00,โรงงานทดสอบ,10120000325542,W2001,2.00\r\n' +
+        '2026-08-09 12:00:00,โรงงานทดสอบ,10120000325542,W2001,3.00\r\n' +
+        '2026-08-10 00:00:00,โรงงานทดสอบ,10120000325542,W2001,4.00\r\n',
     );
   });
 
@@ -163,6 +168,7 @@ describe('createMeasurementCsvExport', () => {
     const result = createMeasurementCsvExport({
       stationId: 'S0199',
       factoryName: '=SUM(1,2) "ทดสอบ"',
+      factoryRegistrationNumber: '=10120000325542',
       frequency: 'hourly',
       startDate: '2026-08-09',
       endDate: '2026-08-09',
@@ -172,7 +178,7 @@ describe('createMeasurementCsvExport', () => {
     });
 
     await expect(readStream(result.stream)).resolves.toContain(
-      '2026-08-09 00:00:00,"\'=SUM(1,2) ""ทดสอบ""",S0199,1.00\r\n',
+      '2026-08-09 00:00:00,"\'=SUM(1,2) ""ทดสอบ""",\'=10120000325542,S0199,1.00\r\n',
     );
   });
 
@@ -180,6 +186,7 @@ describe('createMeasurementCsvExport', () => {
     const result = createMeasurementCsvExport({
       stationId: 'CEMS-0001/2569',
       factoryName: 'โรงงานทดสอบ',
+      factoryRegistrationNumber: '10120000325542',
       frequency: 'daily',
       startDate: '2026-08-09',
       endDate: '2026-08-09',
@@ -195,6 +202,7 @@ describe('createMeasurementCsvExport', () => {
     const result = createMeasurementCsvExport({
       stationId: 'S0199',
       factoryName: 'โรงงานทดสอบ',
+      factoryRegistrationNumber: '10120000325542',
       frequency: 'hourly',
       startDate: '2026-08-09',
       endDate: '2026-08-09',
@@ -215,7 +223,7 @@ describe('createMeasurementCsvExport', () => {
     });
 
     await expect(readStream(result.stream)).resolves.toContain(
-      'date_time,factory_name,meas_code,CO (ppm),Flow Rate (m3/hr)\r\n',
+      'date_time,factory_name,factory_registration_number,meas_code,CO (ppm),Flow Rate (m3/hr)\r\n',
     );
   });
 
@@ -223,6 +231,7 @@ describe('createMeasurementCsvExport', () => {
     const result = createMeasurementCsvExport({
       stationId: 'S0199',
       factoryName: 'โรงงานทดสอบ',
+      factoryRegistrationNumber: '10120000325542',
       frequency: 'hourly',
       startDate: '2026-08-09',
       endDate: '2026-08-09',
@@ -240,7 +249,7 @@ describe('createMeasurementCsvExport', () => {
     });
 
     await expect(readStream(result.stream)).resolves.toContain(
-      '2026-08-09 00:00:00,โรงงานทดสอบ,S0199,\r\n',
+      '2026-08-09 00:00:00,โรงงานทดสอบ,10120000325542,S0199,\r\n',
     );
   });
 
@@ -248,6 +257,7 @@ describe('createMeasurementCsvExport', () => {
     const result = createMeasurementCsvExport({
       stationId: 'S0199',
       factoryName: 'โรงงานทดสอบ',
+      factoryRegistrationNumber: '10120000325542',
       frequency: 'hourly',
       startDate: '2026-08-09',
       endDate: '2026-08-09',
@@ -264,7 +274,7 @@ describe('createMeasurementCsvExport', () => {
     });
 
     await expect(readStream(result.stream)).resolves.toContain(
-      '2026-08-09 00:00:00,โรงงานทดสอบ,S0199,1.00\r\n',
+      '2026-08-09 00:00:00,โรงงานทดสอบ,10120000325542,S0199,1.00\r\n',
     );
   });
 });

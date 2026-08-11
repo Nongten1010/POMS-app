@@ -7,6 +7,7 @@ export type MeasurementCsvExportFrequency = 'hourly' | 'daily';
 export interface CreateMeasurementCsvExportInput {
   stationId: string;
   factoryName: string;
+  factoryRegistrationNumber: string;
   frequency: MeasurementCsvExportFrequency;
   startDate: string;
   endDate: string;
@@ -32,6 +33,7 @@ export function createMeasurementCsvExport(
   const header = [
     'date_time',
     'factory_name',
+    'factory_registration_number',
     'meas_code',
     ...parameters.map(({ label }) => label),
   ];
@@ -39,9 +41,12 @@ export function createMeasurementCsvExport(
   function* csvChunks(): Generator<string> {
     yield `\uFEFF${header.map((cell) => csvCell(cell, true)).join(',')}\r\n`;
     for (const row of [...input.rows].sort(compareMeasurementRows)) {
-      const identityCells = [measurementDateTime(row), input.factoryName, input.stationId].map(
-        (cell) => csvCell(cell, true),
-      );
+      const identityCells = [
+        measurementDateTime(row),
+        input.factoryName,
+        input.factoryRegistrationNumber,
+        input.stationId,
+      ].map((cell) => csvCell(cell, true));
       const measurementCells = parameters
         .map(({ prefixes, unit }) => {
           const prefix = prefixes.find(

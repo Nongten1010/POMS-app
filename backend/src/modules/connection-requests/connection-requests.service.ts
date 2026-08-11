@@ -731,15 +731,13 @@ export const connectionRequestsService = {
     return parameterValuesService.measurementCsvExport(
       { stationId, ...query },
       { actorUserId, scope: exportScope },
-      async () =>
-        (
-          await loadConnectedMeasurementPointExportContext(
-            stationId,
-            actorUserId,
-            exportScope,
-            regionalAccess,
-          )
-        ).factoryName,
+      () =>
+        loadConnectedMeasurementPointExportContext(
+          stationId,
+          actorUserId,
+          exportScope,
+          regionalAccess,
+        ),
     );
   },
 
@@ -2644,7 +2642,7 @@ async function loadConnectedMeasurementPointExportContext(
   actorUserId: number,
   exportScope: AccessScope,
   regionalAccess?: RegionalAccessDTO | null,
-): Promise<{ factoryName: string }> {
+): Promise<{ factoryName: string; factoryRegistrationNumber: string }> {
   const { rows } = await connectionRequestsRepository.list(
     { stationId, status: CONNECTION_REQUEST_STATUS.CONNECTED },
     {
@@ -2667,6 +2665,7 @@ async function loadConnectedMeasurementPointExportContext(
       currentNames.get(request.factoryId) ??
       currentNames.get(request.factoryRegistrationNo) ??
       request.factoryName,
+    factoryRegistrationNumber: request.factoryRegistrationNo,
   };
 }
 

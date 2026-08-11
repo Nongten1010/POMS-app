@@ -119,9 +119,9 @@ describe('measurement CSV export HTTP seam', () => {
       'attachment; filename="measurement-S0199-hourly-2026-08-09-2026-08-09.csv"',
     );
     expect(response.text).toBe(
-      '\uFEFFdate_time,factory_name,meas_code,CO (ppm),Flow Rate (m3/hr)\r\n' +
-        '2026-08-09 00:00:00,โรงไฟฟ้าพระนครเหนือ ชุดที่ 2,S0199,76.74,94.20\r\n' +
-        '2026-08-09 01:00:00,โรงไฟฟ้าพระนครเหนือ ชุดที่ 2,S0199,NoData,No Discharge\r\n',
+      '\uFEFFdate_time,factory_name,factory_registration_number,meas_code,CO (ppm),Flow Rate (m3/hr)\r\n' +
+        '2026-08-09 00:00:00,โรงไฟฟ้าพระนครเหนือ ชุดที่ 2,10120000325542,S0199,76.74,94.20\r\n' +
+        '2026-08-09 01:00:00,โรงไฟฟ้าพระนครเหนือ ชุดที่ 2,10120000325542,S0199,NoData,No Discharge\r\n',
     );
   });
 
@@ -275,7 +275,7 @@ describe('measurement CSV export HTTP seam', () => {
 
     expect(response.status).toBe(200);
     expect(response.text).toContain(
-      '2026-08-09 00:00:00,โรงไฟฟ้าพระนครเหนือ ชุดที่ 2,S0199,18.50\r\n',
+      '2026-08-09 00:00:00,โรงไฟฟ้าพระนครเหนือ ชุดที่ 2,10120000325542,S0199,18.50\r\n',
     );
   });
 

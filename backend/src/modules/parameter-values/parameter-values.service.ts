@@ -458,7 +458,10 @@ export const parameterValuesService = {
   async measurementCsvExport(
     query: MeasurementCsvExportQuery,
     access: ParameterValueAccessContext,
-    loadFactoryName: () => Promise<string>,
+    loadFactoryContext: () => Promise<{
+      factoryName: string;
+      factoryRegistrationNumber: string;
+    }>,
   ) {
     await ensureStationExportAccess(query.stationId, access);
 
@@ -487,11 +490,11 @@ export const parameterValuesService = {
         'NO_EXPORT_DATA',
       );
     }
-    const factoryName = await loadFactoryName();
+    const factoryContext = await loadFactoryContext();
 
     return createMeasurementCsvExport({
       stationId: query.stationId,
-      factoryName,
+      ...factoryContext,
       frequency: query.frequency,
       startDate: query.startDate,
       endDate: query.endDate,
