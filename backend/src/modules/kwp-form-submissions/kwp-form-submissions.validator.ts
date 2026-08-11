@@ -90,9 +90,18 @@ const decimalLike = z
   .nullable()
   .optional();
 
+const normalizeKwp05Parameters = (value: {
+  parameter?: string;
+  parameters?: string[];
+}): string[] => {
+  if (value.parameters) return [...new Set(value.parameters)];
+  return value.parameter ? [value.parameter] : [];
+};
+
 const kwp05CalibrationItemSchema = z
   .object({
-    parameter: requiredText(255),
+    parameter: requiredText(255).optional(),
+    parameters: z.array(requiredText(255)).min(1).max(100).optional(),
     startDate: z.preprocess(emptyStringToNull, isoDate.nullable().optional()),
     endDate: z.preprocess(emptyStringToNull, isoDate.nullable().optional()),
     result: nullableText(32),
@@ -103,6 +112,26 @@ const kwp05CalibrationItemSchema = z
     attachments: z.array(kwpAttachmentSchema).max(20).optional().default([]),
   })
   .strict()
+  .superRefine((value, context) => {
+    const parameters = normalizeKwp05Parameters(value);
+
+    if (parameters.length === 0) {
+      context.addIssue({
+        code: 'custom',
+        path: ['parameters'],
+        message: 'At least one of parameter or parameters is required',
+      });
+      return;
+    }
+
+    if (value.parameter && value.parameters && value.parameter !== parameters[0]) {
+      context.addIssue({
+        code: 'custom',
+        path: ['parameter'],
+        message: 'parameter must match the first normalized parameters value',
+      });
+    }
+  })
   .refine(
     (value) => {
       if (!value.startDate || !value.endDate) return true;
@@ -112,7 +141,15 @@ const kwp05CalibrationItemSchema = z
       path: ['endDate'],
       message: 'Calibration end date must be on or after start date',
     },
-  );
+  )
+  .transform((value) => {
+    const parameters = normalizeKwp05Parameters(value);
+    return {
+      ...value,
+      parameter: parameters[0] ?? '',
+      parameters,
+    };
+  });
 
 export const createKwp01SubmissionSchema = z
   .object({

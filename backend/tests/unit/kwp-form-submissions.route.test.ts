@@ -531,6 +531,7 @@ describe('KWP form submission routes', () => {
       calibrationItems: [
         {
           parameter: 'NOx (ppm)',
+          parameters: ['NOx (ppm)'],
           result: 'ผ่าน',
           rataReportLink: 'https://example.com/rata-nox',
           attachments: [
@@ -1088,6 +1089,7 @@ describe('KWP form submission routes', () => {
         calibrationItems: [
           expect.objectContaining({
             parameter: 'NOx (ppm)',
+            parameters: ['NOx (ppm)'],
             result: 'ผ่าน',
             attachments: [
               expect.objectContaining({
@@ -1102,6 +1104,7 @@ describe('KWP form submission routes', () => {
           }),
           expect.objectContaining({
             parameter: 'SO2 (ppm)',
+            parameters: ['SO2 (ppm)'],
             result: 'ไม่ผ่าน',
           }),
         ],
@@ -1143,6 +1146,188 @@ describe('KWP form submission routes', () => {
     const submittedPayload = mockedService.createKwp05.mock.calls[0]?.[0];
     expect(submittedPayload).not.toHaveProperty('cemsBrand');
     expect(submittedPayload?.calibrationItems[0]).not.toHaveProperty('verifierCompany');
+  });
+
+  it('normalizes a legacy KWP05 parameter into both service fields', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .post('/api/v1/kwp-form-submissions/kwp05')
+      .set('Authorization', `Bearer ${operatorToken()}`)
+      .send({
+        ...validKwp05Payload(),
+        calibrationItems: [
+          {
+            ...validKwp05Payload().calibrationItems[0],
+            parameter: '  NOx (ppm)  ',
+          },
+        ],
+      });
+
+    expect(response.status).toBe(201);
+    expect(mockedService.createKwp05.mock.calls[0]?.[0].calibrationItems[0]).toMatchObject({
+      parameter: 'NOx (ppm)',
+      parameters: ['NOx (ppm)'],
+    });
+  });
+
+  it('accepts an array-only KWP05 parameter contract', async () => {
+    const app = createApp();
+    const { parameter: _legacyParameter, ...calibrationItem } =
+      validKwp05Payload().calibrationItems[0];
+
+    const response = await request(app)
+      .post('/api/v1/kwp-form-submissions/kwp05')
+      .set('Authorization', `Bearer ${operatorToken()}`)
+      .send({
+        ...validKwp05Payload(),
+        calibrationItems: [
+          {
+            ...calibrationItem,
+            parameters: ['NOx (ppm)', 'SO2 (ppm)'],
+          },
+        ],
+      });
+
+    expect(response.status).toBe(201);
+    expect(mockedService.createKwp05.mock.calls[0]?.[0].calibrationItems[0]).toMatchObject({
+      parameter: 'NOx (ppm)',
+      parameters: ['NOx (ppm)', 'SO2 (ppm)'],
+    });
+  });
+
+  it('updates KWP05 with the canonical parameters array', async () => {
+    const app = createApp();
+    const { parameter: _legacyParameter, ...calibrationItem } =
+      validKwp05Payload().calibrationItems[0];
+
+    const response = await request(app)
+      .patch('/api/v1/kwp-form-submissions/kwp05/15')
+      .set('Authorization', `Bearer ${operatorToken()}`)
+      .send({
+        ...validKwp05Payload(),
+        calibrationItems: [
+          {
+            ...calibrationItem,
+            parameters: ['NOx (ppm)', 'SO2 (ppm)'],
+          },
+        ],
+      });
+
+    expect(response.status).toBe(200);
+    expect(mockedService.updateKwp05).toHaveBeenCalledWith(
+      15,
+      expect.objectContaining({
+        calibrationItems: [
+          expect.objectContaining({
+            parameter: 'NOx (ppm)',
+            parameters: ['NOx (ppm)', 'SO2 (ppm)'],
+          }),
+        ],
+      }),
+      expect.objectContaining({
+        actorUserId: 42,
+        scope: { scope: 'OWN_FACTORY' },
+        roles: ['factory_operator'],
+      }),
+    );
+  });
+
+  it('trims and deduplicates KWP05 parameters while preserving order', async () => {
+    const app = createApp();
+    const { parameter: _legacyParameter, ...calibrationItem } =
+      validKwp05Payload().calibrationItems[0];
+
+    const response = await request(app)
+      .post('/api/v1/kwp-form-submissions/kwp05')
+      .set('Authorization', `Bearer ${operatorToken()}`)
+      .send({
+        ...validKwp05Payload(),
+        calibrationItems: [
+          {
+            ...calibrationItem,
+            parameters: [' NOx (ppm) ', 'SO2 (ppm)', 'NOx (ppm)', ' SO2 (ppm) ', 'CO (%)'],
+          },
+        ],
+      });
+
+    expect(response.status).toBe(201);
+    expect(mockedService.createKwp05.mock.calls[0]?.[0].calibrationItems[0]).toMatchObject({
+      parameter: 'NOx (ppm)',
+      parameters: ['NOx (ppm)', 'SO2 (ppm)', 'CO (%)'],
+    });
+  });
+
+  it('rejects conflicting legacy and array KWP05 parameters', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .post('/api/v1/kwp-form-submissions/kwp05')
+      .set('Authorization', `Bearer ${operatorToken()}`)
+      .send({
+        ...validKwp05Payload(),
+        calibrationItems: [
+          {
+            ...validKwp05Payload().calibrationItems[0],
+            parameter: 'SO2 (ppm)',
+            parameters: ['NOx (ppm)', 'SO2 (ppm)'],
+          },
+        ],
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    expect(response.body.error.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          pathString: 'calibrationItems.0.parameter',
+        }),
+      ]),
+    );
+    expect(mockedService.createKwp05).not.toHaveBeenCalled();
+  });
+
+  it('rejects an empty KWP05 parameters array without a legacy parameter', async () => {
+    const app = createApp();
+    const { parameter: _legacyParameter, ...calibrationItem } =
+      validKwp05Payload().calibrationItems[0];
+
+    const response = await request(app)
+      .post('/api/v1/kwp-form-submissions/kwp05')
+      .set('Authorization', `Bearer ${operatorToken()}`)
+      .send({
+        ...validKwp05Payload(),
+        calibrationItems: [{ ...calibrationItem, parameters: [] }],
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    expect(mockedService.createKwp05).not.toHaveBeenCalled();
+  });
+
+  it('rejects a KWP05 calibration item missing both parameter fields', async () => {
+    const app = createApp();
+    const { parameter: _legacyParameter, ...calibrationItem } =
+      validKwp05Payload().calibrationItems[0];
+
+    const response = await request(app)
+      .post('/api/v1/kwp-form-submissions/kwp05')
+      .set('Authorization', `Bearer ${operatorToken()}`)
+      .send({
+        ...validKwp05Payload(),
+        calibrationItems: [calibrationItem],
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    expect(response.body.error.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          pathString: 'calibrationItems.0.parameters',
+        }),
+      ]),
+    );
+    expect(mockedService.createKwp05).not.toHaveBeenCalled();
   });
 
   it('rejects KWP05 calibration rows whose end date is before start date', async () => {
@@ -1669,6 +1854,7 @@ function kwp05DetailResponse() {
       {
         id: 61,
         parameter: 'NOx (ppm)',
+        parameters: ['NOx (ppm)'],
         startDate: '2026-07-01',
         endDate: '2026-07-02',
         result: 'ผ่าน',

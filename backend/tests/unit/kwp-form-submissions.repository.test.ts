@@ -10,6 +10,7 @@ import {
   buildKwpFormSubmissionFactoryAccessQueryForTests,
   buildKwpFormSubmissionWorkflowQueryForTests,
   nextKwpWorkflowStatusForTests,
+  parseKwp05CalibrationItemParametersForTests,
   toKwp01InsertRecordsForTests,
   toKwp02InsertRecordsForTests,
   toKwp03InsertRecordsForTests,
@@ -831,6 +832,7 @@ describe('kwpFormSubmissionsRepository', () => {
         calibrationItems: [
           {
             parameter: 'NOx (ppm)',
+            parameters: ['NOx (ppm)', 'SO2 (ppm)'],
             startDate: '2026-07-01',
             endDate: '2026-07-02',
             result: 'ผ่าน',
@@ -850,7 +852,8 @@ describe('kwpFormSubmissionsRepository', () => {
             ],
           },
           {
-            parameter: 'SO2 (ppm)',
+            parameter: 'CO (ppm)',
+            parameters: ['CO (ppm)'],
             startDate: '2026-07-03',
             endDate: '2026-07-04',
             result: 'ไม่ผ่าน',
@@ -894,6 +897,7 @@ describe('kwpFormSubmissionsRepository', () => {
     expect(records.calibrationItems).toEqual([
       {
         parameter_name: 'NOx (ppm)',
+        parameters_json: JSON.stringify(['NOx (ppm)', 'SO2 (ppm)']),
         start_date: '2026-07-01',
         end_date: '2026-07-02',
         result: 'ผ่าน',
@@ -904,7 +908,8 @@ describe('kwpFormSubmissionsRepository', () => {
         sort_order: 1,
       },
       {
-        parameter_name: 'SO2 (ppm)',
+        parameter_name: 'CO (ppm)',
+        parameters_json: JSON.stringify(['CO (ppm)']),
         start_date: '2026-07-03',
         end_date: '2026-07-04',
         result: 'ไม่ผ่าน',
@@ -931,6 +936,26 @@ describe('kwpFormSubmissionsRepository', () => {
       status: 'SUBMITTED',
       changed_by: 42,
     });
+  });
+
+  it('normalizes valid KWP05 parameter JSON by trimming and deduplicating strings', () => {
+    expect(
+      parseKwp05CalibrationItemParametersForTests(
+        JSON.stringify([' NOx (ppm) ', 'SO2 (ppm)', 'NOx (ppm)', '', 123, null]),
+        'Legacy parameter',
+      ),
+    ).toEqual(['NOx (ppm)', 'SO2 (ppm)']);
+  });
+
+  it.each([
+    ['legacy null JSON', null],
+    ['malformed JSON', '["NOx (ppm)"'],
+    ['empty JSON array', '[]'],
+    ['JSON without valid strings', JSON.stringify(['', 123, null])],
+  ])('falls back to parameter_name for %s', (_caseName, parametersJson) => {
+    expect(parseKwp05CalibrationItemParametersForTests(parametersJson, 'NOx (ppm)')).toEqual([
+      'NOx (ppm)',
+    ]);
   });
 });
 

@@ -196,6 +196,7 @@ export interface CreateKwp03SubmissionDTO {
 
 export interface Kwp05CalibrationItemInput {
   parameter: string;
+  parameters: string[];
   startDate?: string | null;
   endDate?: string | null;
   result?: string | null;
@@ -303,6 +304,7 @@ export interface Kwp05CalibrationReportDTO {
 export interface Kwp05CalibrationItemDTO {
   id: number;
   parameter: string;
+  parameters: string[];
   startDate: string | null;
   endDate: string | null;
   result: string | null;

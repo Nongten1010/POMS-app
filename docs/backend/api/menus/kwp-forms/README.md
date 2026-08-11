@@ -42,8 +42,8 @@ curl --request POST \
 | แก้ไขแบบ กวภ.01 | `PATCH` | `/api/v1/kwp-form-submissions/kwp01/:id` | Bearer | `kwp_forms:edit` | [KWP01 submit/update](#postpatch-kwp01-hourly-duration-contract) |
 | ส่งแบบ กวภ.03 | `POST` | `/api/v1/kwp-form-submissions/kwp03` | Bearer | `kwp_forms:edit` | [KWP03 submit/update](#postpatch-kwp03-hourly-duration-contract) |
 | แก้ไขแบบ กวภ.03 | `PATCH` | `/api/v1/kwp-form-submissions/kwp03/:id` | Bearer | `kwp_forms:edit` | [KWP03 submit/update](#postpatch-kwp03-hourly-duration-contract) |
-| ส่งแบบ กวภ.05 | `POST` | `/api/v1/kwp-form-submissions/kwp05` | Bearer | `kwp_forms:edit` | [KWP05 optional legacy fields](#postpatch-kwp05-optional-legacy-fields) |
-| แก้ไขแบบ กวภ.05 | `PATCH` | `/api/v1/kwp-form-submissions/kwp05/:id` | Bearer | `kwp_forms:edit` | [KWP05 optional legacy fields](#postpatch-kwp05-optional-legacy-fields) |
+| ส่งแบบ กวภ.05 | `POST` | `/api/v1/kwp-form-submissions/kwp05` | Bearer | `kwp_forms:edit` | [KWP05 calibration parameters](#postpatch-kwp05-calibration-parameters-contract) |
+| แก้ไขแบบ กวภ.05 | `PATCH` | `/api/v1/kwp-form-submissions/kwp05/:id` | Bearer | `kwp_forms:edit` | [KWP05 calibration parameters](#postpatch-kwp05-calibration-parameters-contract) |
 | ส่งแบบ กวภ.02 | `POST` | `/api/v1/kwp-form-submissions/kwp02` | Bearer | `kwp_forms:edit` | [KWP02/KWP04 summary](#kwp02kwp04-summary) |
 | แก้ไขแบบ กวภ.02 | `PATCH` | `/api/v1/kwp-form-submissions/kwp02/:id` | Bearer | `kwp_forms:edit` | [KWP02/KWP04 summary](#kwp02kwp04-summary) |
 | ส่งแบบ กวภ.04 | `POST` | `/api/v1/kwp-form-submissions/kwp04` | Bearer | `kwp_forms:edit` | [KWP02/KWP04 summary](#kwp02kwp04-summary) |
@@ -345,9 +345,14 @@ curl --request POST \
 | --- | --- | --- | --- |
 | `400` | `VALIDATION_ERROR` | format วันที่ไม่ตรง, เวลาไม่ใช่ต้นชั่วโมง, หรือ `expectedDoneDate` ก่อน `problemDate` | แก้ payload แล้วส่งใหม่ |
 
-### `POST/PATCH` KWP05 optional legacy fields
+### `POST/PATCH` KWP05 calibration parameters contract
 
 ใช้กับ `POST /api/v1/kwp-form-submissions/kwp05` และ `PATCH /api/v1/kwp-form-submissions/kwp05/:id`
+
+`calibrationItems[].parameters` เป็น canonical field สำหรับ client ใหม่ ส่วน
+`calibrationItems[].parameter` เป็น legacy compatibility field ทั้งสอง endpoint
+ยังรับ payload เดิมได้ และ detail response จะคืนทั้งสอง field เสมอ การเพิ่มนี้เป็น
+additive, non-breaking change และไม่บังคับให้ client เดิมย้ายทันที
 
 ### Authentication And Permission
 
@@ -361,13 +366,33 @@ curl --request POST \
 | --- | --- | --- | --- | --- |
 | `factoryId` | body | string | Yes | รหัสโรงงานที่ backend ใช้ตรวจ scope |
 | `factoryName` | body | string | Yes | ชื่อโรงงาน snapshot |
-| `cemsBrand` | body | string | No | legacy field; omit ได้ |
-| `calibrationItems[].verifierCompany` | body | string | No | legacy field; omit ได้ในแต่ละรายการ |
-| `calibrationItems` | body | array | Yes | รายการผล calibration อย่างน้อย 1 รายการ |
-| `calibrationItems[].parameter` | body | string | Yes | พารามิเตอร์ที่สอบเทียบ ควรมีหน่วยใน label |
-| `calibrationItems[].cemsModel` | body | string | No | brand/model ของเครื่องมือตรวจวัดสำหรับพารามิเตอร์รายการนี้; prefill จาก `parameterInstrumentDetails` ของ connected-point response |
+| `cemsBrand` | body | string | No | legacy field; `null`, empty string หรือ omit ได้ และไม่เกิน 255 ตัวอักษร |
+| `calibrationItems` | body | array | Yes | รายการผล calibration 1-100 รายการ; ต้องคงเป็น array แม้ UI ปัจจุบันรับข้อมูลเพียง 1 รายการ |
+| `calibrationItems[].parameters` | body | string[] | Conditional | canonical field; ต้องมี 1-100 ค่าเมื่อส่ง แต่ละ label ยาวไม่เกิน 255 ตัวอักษรหลัง trim และต้องระบุหน่วย เช่น `NOx (ppm)` |
+| `calibrationItems[].parameter` | body | string | Conditional | legacy field สำหรับ single opaque label เดียว ยาวไม่เกิน 255 ตัวอักษรหลัง trim; ต้องส่ง `parameter` หรือ `parameters` อย่างน้อยหนึ่ง field และเมื่อส่งทั้งคู่ค่านี้ต้องเท่ากับสมาชิกแรกของ `parameters` หลัง normalize |
+| `calibrationItems[].cemsModel` | body | string | No | human-readable snapshot/summary ระดับ logical calibration item; `null`, empty string หรือ omit ได้ ไม่เกิน 500 ตัวอักษร และ prefill ได้จาก `parameterInstrumentDetails` ของ connected-point response |
 | `calibrationItems[].startDate` | body | `YYYY-MM-DD` | No | วันที่เริ่มสอบเทียบ |
 | `calibrationItems[].endDate` | body | `YYYY-MM-DD` | No | วันที่สิ้นสุด ต้องไม่ก่อน `startDate` |
+| `calibrationItems[].result` | body | string | No | ผลการสอบเทียบ; trim แล้วไม่เกิน 32 ตัวอักษร |
+| `calibrationItems[].verifierCompany` | body | string | No | legacy field; `null`, empty string หรือ omit ได้ในแต่ละรายการ และไม่เกิน 500 ตัวอักษร |
+| `calibrationItems[].rataReportLink` | body | string | No | ลิงก์รายงาน RATA; `null`, empty string หรือ omit ได้ และข้อความหลัง trim ยาวไม่เกิน 1,000 ตัวอักษร |
+| `calibrationItems[].calibrationPhotoLink` | body | string | No | ลิงก์รูปการสอบเทียบ; `null`, empty string หรือ omit ได้ และข้อความหลัง trim ยาวไม่เกิน 1,000 ตัวอักษร |
+| `calibrationItems[].attachments` | body | array | No | metadata ไฟล์แนบ 0-20 รายการ; omit แล้ว normalize เป็น `[]` |
+
+Attachment metadata ใน `calibrationItems[].attachments[]`:
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `attachmentType` | string | Yes | ประเภทไฟล์; trim แล้ว 1-64 ตัวอักษร เช่น `RATA_REPORT` หรือ `CALIBRATION_PHOTO` |
+| `originalFileName` | string | Yes | ชื่อไฟล์เดิมจาก upload response; trim แล้ว 1-500 ตัวอักษร |
+| `storedFileName` | string | No | ชื่อไฟล์ที่ backend เก็บ; `null` หรือ omit ได้ และไม่เกิน 500 ตัวอักษร |
+| `mimeType` | string | No | MIME type จาก upload response; `null` หรือ omit ได้ และไม่เกิน 128 ตัวอักษร |
+| `fileSize` | integer | No | ขนาดไฟล์เป็น bytes; ต้องไม่น้อยกว่า 0 และส่ง `null` หรือ omit ได้ |
+| `storagePath` | string | No | path จาก upload response; `null` หรือ omit ได้ และไม่เกิน 1,000 ตัวอักษร |
+
+Attachment request เป็น strict object และรับเฉพาะ 6 field ในตารางนี้ ส่วน `id`,
+`fileUrl`, `uploadedAt` และ `uploadedBy` เป็น response-only fields; client ต้องตัดออกก่อน
+ส่งข้อมูลจาก detail response กลับเข้า `POST` หรือ `PATCH`
 
 ### Request Example
 
@@ -377,11 +402,23 @@ curl --request POST \
   "factoryName": "บริษัท โรงงานตัวอย่าง จำกัด",
   "calibrationItems": [
     {
-      "parameter": "SO2 (ppm)",
-      "cemsModel": "SO2 Analyzer A",
+      "parameters": ["NOx (ppm)", "SO2 (ppm)"],
+      "cemsModel": "CEMS Analyzer A",
       "startDate": "2026-07-01",
       "endDate": "2026-07-02",
-      "result": "ผ่าน"
+      "result": "ผ่าน",
+      "rataReportLink": "https://example.com/reports/rata-2026",
+      "calibrationPhotoLink": "https://example.com/photos/calibration-2026",
+      "attachments": [
+        {
+          "attachmentType": "RATA_REPORT",
+          "originalFileName": "rata-report.pdf",
+          "storedFileName": "8ddfb2e2-5f37-4398-b032-f9db1972df70.pdf",
+          "mimeType": "application/pdf",
+          "fileSize": 6291456,
+          "storagePath": "kwp/form-attachments/2026/07/8ddfb2e2-5f37-4398-b032-f9db1972df70.pdf"
+        }
+      ]
     }
   ]
 }
@@ -394,7 +431,12 @@ curl --request POST \
 | Field | Type | Nullable | Description |
 | --- | --- | --- | --- |
 | `data.calibrationReport.cemsBrand` | string | Yes | ยังคงอ่านกลับได้ถ้ามีข้อมูลเดิม |
+| `data.calibrationItems[].parameters` | string[] | No | canonical list หลัง trim และตัดค่าซ้ำโดยรักษาลำดับแรก; ข้อมูล legacy จะ fallback เป็น `[parameter]` |
+| `data.calibrationItems[].parameter` | string | No | legacy compatibility field ซึ่งเท่ากับสมาชิกแรกของ `parameters` |
 | `data.calibrationItems[].verifierCompany` | string | Yes | ยังคงอ่านกลับได้ถ้ามีข้อมูลเดิม |
+| `data.calibrationItems[].rataReportLink` | string | Yes | ลิงก์รายงาน RATA ที่บันทึกไว้ |
+| `data.calibrationItems[].calibrationPhotoLink` | string | Yes | ลิงก์รูปการสอบเทียบที่บันทึกไว้ |
+| `data.calibrationItems[].attachments` | array | No | attachment DTO; คืน `[]` เมื่อไม่มีไฟล์ และแต่ละรายการมี `id`, request metadata ข้างต้น, `fileUrl`, `uploadedAt`, `uploadedBy` |
 
 ### Success Response Example
 
@@ -409,8 +451,30 @@ curl --request POST \
     },
     "calibrationItems": [
       {
-        "parameter": "SO2 (ppm)",
-        "verifierCompany": null
+        "id": 61,
+        "parameters": ["NOx (ppm)", "SO2 (ppm)"],
+        "parameter": "NOx (ppm)",
+        "startDate": "2026-07-01",
+        "endDate": "2026-07-02",
+        "result": "ผ่าน",
+        "verifierCompany": null,
+        "cemsModel": "CEMS Analyzer A",
+        "rataReportLink": "https://example.com/reports/rata-2026",
+        "calibrationPhotoLink": "https://example.com/photos/calibration-2026",
+        "attachments": [
+          {
+            "id": 71,
+            "attachmentType": "RATA_REPORT",
+            "originalFileName": "rata-report.pdf",
+            "storedFileName": "8ddfb2e2-5f37-4398-b032-f9db1972df70.pdf",
+            "mimeType": "application/pdf",
+            "fileSize": 6291456,
+            "storagePath": "kwp/form-attachments/2026/07/8ddfb2e2-5f37-4398-b032-f9db1972df70.pdf",
+            "fileUrl": "https://example.com/uploads/kwp/form-attachments/2026/07/8ddfb2e2-5f37-4398-b032-f9db1972df70.pdf",
+            "uploadedAt": "2026-07-02T08:30:00.000Z",
+            "uploadedBy": 42
+          }
+        ]
       }
     ]
   }
@@ -420,8 +484,14 @@ curl --request POST \
 ### Validation And Business Rules
 
 - `cemsBrand` และ `verifierCompany` เป็น optional/nullable compatibility fields; client ใหม่ไม่จำเป็นต้องส่ง
-- Client ใหม่ควรจับคู่ `calibrationItems[].parameter` กับ `parameterInstrumentDetails[].parameter` แล้วใช้ `parameterInstrumentDetails[].cemsModel`; ไม่ควรใช้ `cemsModel` ระดับจุดตรวจวัดเมื่อแต่ละพารามิเตอร์ใช้คนละเครื่องมือ
-- attachment metadata ของแต่ละ calibration item ยังคงใช้ contract เดิม
+- Backend trim สมาชิกของ `parameters`, ตัดค่าซ้ำโดยรักษาลำดับการปรากฏครั้งแรก และใช้สมาชิกแรกเป็น `parameter`
+- ส่งเฉพาะ `parameters` ได้สำหรับ client ใหม่ หรือส่งเฉพาะ `parameter` ได้สำหรับ client legacy; ถ้าส่งทั้งคู่ `parameter` ต้องเท่ากับ `parameters[0]` หลัง normalize
+- `parameter` หมายถึง single opaque label เสมอ backend จะไม่ split ข้อความตาม comma; การส่งหลายค่าต้องใช้ `parameters`
+- Backend เก็บ canonical `parameters` สำหรับข้อมูลใหม่หรือข้อมูลที่แก้ไข พร้อมเก็บค่าแรกสำหรับ legacy compatibility; เมื่ออ่านข้อมูลเดิมที่ยังไม่มี canonical list จะคืน `parameters: [parameter]`
+- Parameter label ทุกค่าต้องมีหน่วยกำกับ เช่น `NOx (ppm)`, `SO2 (ppm)`, `CO2 (ppm)` หรือ `CO (%)`
+- `cemsModel` เป็น optional human-readable snapshot/summary ระดับ logical item ไม่ใช่ machine-readable mapping ต่อ parameter และ backend ไม่ derive ความสัมพันธ์นี้; ถ้า parameter หลายค่าใช้ model ต่างกัน client อาจ trim/dedupe ชื่อ model ที่ตรงกันโดยรักษาลำดับแรก แล้ว join เป็น display string เดียวภายในเพดาน 500 ตัวอักษร
+- `calibrationItems` ยังคงเป็น array ใน request/response แม้หน้าจอปัจจุบันสร้างเพียงหนึ่งรายการ เพื่อรองรับ client เดิมและการเพิ่มหลายรายการในอนาคต
+- การเพิ่ม `parameters` มีผลกับ request ของ `POST`/`PATCH` และ detail response ของ `PATCH`/`GET`; `POST` ยังคงตอบ submission summary และ client อ่านรายการที่ normalize แล้วผ่าน detail endpoint
 
 ### Errors
 
@@ -429,7 +499,7 @@ curl --request POST \
 
 | HTTP status | Code | Condition | Client action |
 | --- | --- | --- | --- |
-| `400` | `VALIDATION_ERROR` | payload ไม่ผ่าน validation อื่นของ KWP05 | แก้ payload แล้วส่งใหม่ |
+| `400` | `VALIDATION_ERROR` | ไม่ส่งทั้ง `parameter` และ `parameters`, จำนวนสมาชิกไม่อยู่ในช่วง 1-100, มีข้อความว่าง, ส่งทั้งสอง field แต่ค่าแรกไม่ตรงกัน, หรือ payload ไม่ผ่าน validation อื่นของ KWP05 | แก้ payload แล้วส่งใหม่ |
 
 ### KWP02/KWP04 summary
 
@@ -461,6 +531,7 @@ Minimal response:
 - อ่าน detail ของแต่ละ form type ด้วย permission `kwp_forms:view`
 - response shape ใช้ `formType` แยก subtype เช่น `issueReport`, `wpmsIssueReport`, `measurementItems`, `calibrationReport`, `calibrationItems`
 - KWP01 และ KWP03 จะคืน `totalHours` ได้เมื่อเคยบันทึกแบบ hourly
+- KWP05 คืนทั้ง `calibrationItems[].parameters` และ legacy alias `calibrationItems[].parameter`; ข้อมูลเดิมที่มีเฉพาะค่า legacy จะคืน `parameters: [parameter]`
 
 Minimal response:
 
@@ -489,6 +560,11 @@ Request fields:
 | Field | Location | Type | Required | Description |
 | --- | --- | --- | --- | --- |
 | `note` | body | string | No | หมายเหตุจากผู้ส่งแบบหลังแก้ไข |
+
+การเพิ่ม `calibrationItems[].parameters` ไม่เปลี่ยน resubmit contract: endpoint นี้รับเฉพาะ
+`note` เท่านั้น หากต้องแก้ parameter หรือข้อมูลแบบ ต้องเรียก `PATCH` ของ form type
+ก่อน แล้วจึงเรียก resubmit; ห้ามแนบ `calibrationItems`, `parameters` หรือ `parameter`
+มากับ resubmit payload
 
 Request example:
 
@@ -623,10 +699,13 @@ Minimal response:
   - serialize `problemDate` และ `expectedDoneDate` ของ กวภ.01/03 เป็น `YYYY-MM-DDTHH:00:00` เมื่อต้องเก็บชั่วโมง
   - ใช้ `totalHours` จาก detail response สำหรับแสดง duration และ fallback `totalDays` สำหรับข้อมูลเดิม
   - กวภ.03 สามารถละ `measurementTimes` ได้
+  - กวภ.05 ให้ client ใหม่ส่ง `calibrationItems[].parameters`; อ่าน `parameters` เป็นหลักและใช้ `parameter` เป็น legacy alias เท่านั้น
+  - คง `calibrationItems` เป็น array แม้ UI สร้างหนึ่งรายการ และให้ทุก parameter label ระบุหน่วย
   - ส่ง multipart `attachmentType` พร้อม `file` ตอน upload; ใส่ type เฉพาะใน metadata หลัง upload ไม่เพียงพอสำหรับเพดาน 10 MB
 - Migration เพิ่มคอลัมน์ datetime/hour แบบ nullable และยังคงคอลัมน์ date/day เดิมไว้ ข้อมูลเก่าจึงยังอ่านด้วย date-only fallback โดยไม่มีการ backfill เวลาเที่ยงคืนเทียม
 - Migration `0081` เพิ่ม sequence แยกตามแบบ/ภาค/ปีและ snapshot ข้อมูลที่ใช้ออกเลข โดยไม่แก้ `submission_no` เดิม
-- Deployment ต้องรัน migrations ถึง `0081` ก่อนเปิดใช้ application version นี้; rollback ต้องย้อน application ก่อนจึงค่อยรัน migration down
+- Migration `0092` เพิ่ม `parameters_json` แบบ nullable ให้ calibration item โดยไม่ backfill; ค่า `parameter_name` เดิมยังเป็น fallback และเก็บสมาชิกแรกของ canonical list เพื่อรองรับ client legacy
+- Deployment ต้องรัน migrations ถึง `0092` ก่อนเปิดใช้ application version นี้; rollback ต้องย้อน application ก่อนจึงค่อยรัน migration down
 - [Endpoint registry owner map](../../ENDPOINTS.md)
 - [ขอเชื่อมต่อ](../connection-requests/README.md)
 
@@ -639,5 +718,5 @@ Minimal response:
 | Validators | [`kwp-form-submissions.validator.ts`](../../../../../backend/src/modules/kwp-form-submissions/kwp-form-submissions.validator.ts), [`kwp-form-reports.validator.ts`](../../../../../backend/src/modules/kwp-form-reports/kwp-form-reports.validator.ts) |
 | Public types | [`kwp-form-submissions.types.ts`](../../../../../backend/src/modules/kwp-form-submissions/kwp-form-submissions.types.ts), [`kwp-form-reports.types.ts`](../../../../../backend/src/modules/kwp-form-reports/kwp-form-reports.types.ts) |
 | Repository | [`kwp-form-submissions.repository.ts`](../../../../../backend/src/modules/kwp-form-submissions/kwp-form-submissions.repository.ts), [`kwp-form-submission-number.ts`](../../../../../backend/src/modules/kwp-form-submissions/kwp-form-submission-number.ts), [`kwp-form-reports.repository.ts`](../../../../../backend/src/modules/kwp-form-reports/kwp-form-reports.repository.ts) |
-| Tests | [`kwp-form-submissions.route.test.ts`](../../../../../backend/tests/unit/kwp-form-submissions.route.test.ts), [`kwp-form-submissions.repository.test.ts`](../../../../../backend/tests/unit/kwp-form-submissions.repository.test.ts), [`kwp-form-submission-number.test.ts`](../../../../../backend/tests/unit/kwp-form-submission-number.test.ts), [`kwp-form-submission-sequence.repository.test.ts`](../../../../../backend/tests/unit/kwp-form-submission-sequence.repository.test.ts), [`kwp-form-submission-create-numbering.repository.test.ts`](../../../../../backend/tests/unit/kwp-form-submission-create-numbering.repository.test.ts), [`kwp-form-duration.test.ts`](../../../../../backend/tests/unit/kwp-form-duration.test.ts), [`kwp-form-attachments.service.test.ts`](../../../../../backend/tests/unit/kwp-form-attachments.service.test.ts), [`kwp-hourly-duration-migration.test.ts`](../../../../../backend/tests/unit/kwp-hourly-duration-migration.test.ts), [`kwp-form-reports.route.test.ts`](../../../../../backend/tests/unit/kwp-form-reports.route.test.ts) |
-| Migration | [`0079_add_kwp_hourly_duration_fields.ts`](../../../../../backend/src/db/migrations/0079_add_kwp_hourly_duration_fields.ts), [`0081_create_kwp_form_submission_sequences.ts`](../../../../../backend/src/db/migrations/0081_create_kwp_form_submission_sequences.ts) |
+| Tests | [`kwp-form-submissions.route.test.ts`](../../../../../backend/tests/unit/kwp-form-submissions.route.test.ts), [`kwp-form-submissions.repository.test.ts`](../../../../../backend/tests/unit/kwp-form-submissions.repository.test.ts), [`kwp-form-submission-number.test.ts`](../../../../../backend/tests/unit/kwp-form-submission-number.test.ts), [`kwp-form-submission-sequence.repository.test.ts`](../../../../../backend/tests/unit/kwp-form-submission-sequence.repository.test.ts), [`kwp-form-submission-create-numbering.repository.test.ts`](../../../../../backend/tests/unit/kwp-form-submission-create-numbering.repository.test.ts), [`kwp-form-duration.test.ts`](../../../../../backend/tests/unit/kwp-form-duration.test.ts), [`kwp-form-attachments.service.test.ts`](../../../../../backend/tests/unit/kwp-form-attachments.service.test.ts), [`kwp-hourly-duration-migration.test.ts`](../../../../../backend/tests/unit/kwp-hourly-duration-migration.test.ts), [`kwp05-calibration-item-parameters-migration.test.ts`](../../../../../backend/tests/unit/kwp05-calibration-item-parameters-migration.test.ts), [`kwp-form-reports.route.test.ts`](../../../../../backend/tests/unit/kwp-form-reports.route.test.ts) |
+| Migration | [`0079_add_kwp_hourly_duration_fields.ts`](../../../../../backend/src/db/migrations/0079_add_kwp_hourly_duration_fields.ts), [`0081_create_kwp_form_submission_sequences.ts`](../../../../../backend/src/db/migrations/0081_create_kwp_form_submission_sequences.ts), [`0092_add_kwp05_calibration_item_parameters.ts`](../../../../../backend/src/db/migrations/0092_add_kwp05_calibration_item_parameters.ts) |

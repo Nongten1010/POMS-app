@@ -262,6 +262,7 @@ interface Kwp05CalibrationReportRow {
 interface Kwp05CalibrationItemRow {
   id: number | string;
   parameter_name: string;
+  parameters_json: string | null;
   start_date: Date | string | null;
   end_date: Date | string | null;
   result: string | null;
@@ -1036,6 +1037,13 @@ export function toKwp05InsertRecordsForTests(input: Kwp05InsertInput): Kwp05Inse
   return toKwp05InsertRecords(input);
 }
 
+export function parseKwp05CalibrationItemParametersForTests(
+  parametersJson: string | null | undefined,
+  parameterName: string,
+): string[] {
+  return parseKwp05CalibrationItemParameters(parametersJson, parameterName);
+}
+
 export function toKwpWorkflowDTOForTests(
   row: SubmissionWorkflowRow,
   historyRows: WorkflowHistoryRow[] = [],
@@ -1570,6 +1578,7 @@ async function listKwp05CalibrationItems(
     .select(
       'id',
       'parameter_name',
+      'parameters_json',
       'start_date',
       'end_date',
       'result',
@@ -1585,18 +1594,57 @@ async function listKwp05CalibrationItems(
     access,
   );
 
-  return itemRows.map((row) => ({
-    id: Number(row.id),
-    parameter: row.parameter_name,
-    startDate: toDateOnly(row.start_date),
-    endDate: toDateOnly(row.end_date),
-    result: row.result,
-    verifierCompany: row.verifier_company,
-    cemsModel: row.cems_model,
-    rataReportLink: row.link_qr1,
-    calibrationPhotoLink: row.link_qr2,
-    attachments: attachmentsByItemId.get(Number(row.id)) ?? [],
-  }));
+  return itemRows.map((row) => {
+    const parameters = parseKwp05CalibrationItemParameters(row.parameters_json, row.parameter_name);
+
+    return {
+      id: Number(row.id),
+      parameter: parameters[0] ?? row.parameter_name,
+      parameters,
+      startDate: toDateOnly(row.start_date),
+      endDate: toDateOnly(row.end_date),
+      result: row.result,
+      verifierCompany: row.verifier_company,
+      cemsModel: row.cems_model,
+      rataReportLink: row.link_qr1,
+      calibrationPhotoLink: row.link_qr2,
+      attachments: attachmentsByItemId.get(Number(row.id)) ?? [],
+    };
+  });
+}
+
+function parseKwp05CalibrationItemParameters(
+  parametersJson: string | null | undefined,
+  parameterName: string,
+): string[] {
+  if (parametersJson !== null && parametersJson !== undefined) {
+    try {
+      const parsed: unknown = JSON.parse(parametersJson);
+      if (Array.isArray(parsed)) {
+        const parameters = normalizeKwp05CalibrationItemParameters(parsed);
+        if (parameters.length > 0) return parameters;
+      }
+    } catch {
+      // Legacy or corrupted JSON falls back to the non-null legacy projection below.
+    }
+  }
+
+  return [parameterName];
+}
+
+function normalizeKwp05CalibrationItemParameters(values: unknown[]): string[] {
+  const seen = new Set<string>();
+  const parameters: string[] = [];
+
+  for (const value of values) {
+    if (typeof value !== 'string') continue;
+    const parameter = value.trim();
+    if (parameter.length === 0 || seen.has(parameter)) continue;
+    seen.add(parameter);
+    parameters.push(parameter);
+  }
+
+  return parameters;
 }
 
 async function listAttachmentsByItemId(
@@ -2098,7 +2146,8 @@ function toKwp05InsertRecords(input: Kwp05InsertInput): Kwp05InsertRecords {
     }
 
     return {
-      parameter_name: item.parameter,
+      parameter_name: item.parameters[0],
+      parameters_json: JSON.stringify(item.parameters),
       start_date: item.startDate ?? null,
       end_date: item.endDate ?? null,
       result: item.result ?? null,
