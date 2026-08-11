@@ -278,6 +278,7 @@ describe('connectionRequestsService', () => {
   it('returns request table rows formatted for officer/operator grids', async () => {
     connectionRequestsService.setClockForTests(() => new Date('2026-06-08T10:00:00.000Z'));
     const request = requestDto({
+      createdBy: 7,
       status: CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
       statusLabel: 'รอโรงงานตั้งค่าอุปกรณ์',
       requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT,
@@ -313,6 +314,7 @@ describe('connectionRequestsService', () => {
     });
     const connectedRequest = requestDto({
       id: 2,
+      createdBy: 7,
       status: CONNECTION_REQUEST_STATUS.CONNECTED,
       statusLabel: 'เชื่อมต่อแล้ว',
       connectionDueAt: dueAt,
@@ -322,9 +324,17 @@ describe('connectionRequestsService', () => {
       new Map([[request.factoryId, factorySummary()]]),
     );
 
-    const result = await connectionRequestsService.listTableRows({}, actorUserId, 'ALL');
+    const result = await connectionRequestsService.listTableRows({}, actorUserId, 'OWN_FACTORY');
 
-    expect(mockedRepository.list).toHaveBeenCalledWith({}, { actorUserId, scope: 'ALL' });
+    expect(mockedRepository.list).toHaveBeenCalledWith(
+      {},
+      {
+        actorUserId,
+        scope: 'OWN_FACTORY',
+        regionalAccess: undefined,
+        useAssignedFactoryAccess: true,
+      },
+    );
     expect(result.data[0]).toMatchObject({
       factoryName: 'บริษัท ทดสอบ จำกัด',
       industryType: 'ผลิตเคมีภัณฑ์',
@@ -386,13 +396,18 @@ describe('connectionRequestsService', () => {
 
     expect(mockedRepository.list).toHaveBeenCalledWith(
       { stationId: 'STACK-A' },
-      { actorUserId, scope: 'ALL' },
+      {
+        actorUserId,
+        scope: 'ALL',
+        regionalAccess: undefined,
+        useAssignedFactoryAccess: true,
+      },
     );
   });
 
   it('returns request details for selected monitoring point history', async () => {
     const request = requestDto({
-      createdBy: actorUserId,
+      createdBy: 7,
       measurementPoints: [
         {
           id: 1,
@@ -421,12 +436,17 @@ describe('connectionRequestsService', () => {
     const result = await connectionRequestsService.listDetails(
       { stationId: 'STACK-A' },
       actorUserId,
-      'ALL',
+      'OWN_FACTORY',
     );
 
     expect(mockedRepository.list).toHaveBeenCalledWith(
       { stationId: 'STACK-A' },
-      { actorUserId, scope: 'ALL' },
+      {
+        actorUserId,
+        scope: 'OWN_FACTORY',
+        regionalAccess: undefined,
+        useAssignedFactoryAccess: true,
+      },
     );
     expect(result.data[0]).toMatchObject({
       id: 1,
@@ -2453,7 +2473,7 @@ describe('connectionRequestsService', () => {
     const request = requestDto({
       status: CONNECTION_REQUEST_STATUS.CONNECTED,
       statusLabel: 'เชื่อมต่อแล้ว',
-      createdBy: actorUserId,
+      createdBy: 7,
       measurementPoints: [
         {
           id: 1,
@@ -2484,7 +2504,12 @@ describe('connectionRequestsService', () => {
 
     expect(mockedRepository.list).toHaveBeenCalledWith(
       { stationId: 'STACK-A', status: CONNECTION_REQUEST_STATUS.CONNECTED },
-      { actorUserId, scope: 'OWN_FACTORY' },
+      {
+        actorUserId,
+        scope: 'OWN_FACTORY',
+        regionalAccess: undefined,
+        useAssignedFactoryAccess: true,
+      },
     );
     expect(result).toMatchObject({
       requestType: CONNECTION_REQUEST_TYPE.ADD_PARAMETER,
@@ -2517,7 +2542,7 @@ describe('connectionRequestsService', () => {
 
   it('returns current device config form detail from active settings for selected station', async () => {
     const request = requestDto({
-      createdBy: actorUserId,
+      createdBy: 7,
       status: CONNECTION_REQUEST_STATUS.CONNECTED,
       measurementPoints: [
         {
@@ -2545,9 +2570,18 @@ describe('connectionRequestsService', () => {
     const result = await connectionRequestsService.getCurrentDeviceConfigFormDetail(
       'STACK-A',
       actorUserId,
-      'ALL',
+      'OWN_FACTORY',
     );
 
+    expect(mockedRepository.list).toHaveBeenCalledWith(
+      { stationId: 'STACK-A', status: CONNECTION_REQUEST_STATUS.CONNECTED },
+      {
+        actorUserId,
+        scope: 'OWN_FACTORY',
+        regionalAccess: undefined,
+        useAssignedFactoryAccess: true,
+      },
+    );
     expect(mockedDeviceConnectionsService.listActiveSettings).toHaveBeenCalledWith({
       stationId: 'STACK-A',
     });
@@ -3967,7 +4001,12 @@ describe('connectionRequestsService', () => {
 
     expect(mockedRepository.list).toHaveBeenCalledWith(
       { stationId: 'STACK-A', status: CONNECTION_REQUEST_STATUS.CONNECTED },
-      { actorUserId, scope: 'OWN_FACTORY' },
+      {
+        actorUserId,
+        scope: 'OWN_FACTORY',
+        regionalAccess: undefined,
+        useAssignedFactoryAccess: false,
+      },
     );
     expect(mockedDeviceConnectionsService.replaceCurrentStation).toHaveBeenCalledWith(
       'STACK-A',
@@ -3979,6 +4018,53 @@ describe('connectionRequestsService', () => {
       stationId: 'STACK-A',
       device: [{ deviceCode: 'STACK-A/01', protocol: 'MODBUS_TCP' }],
     });
+  });
+
+  it('does not let an assigned non-owner replace current device configs', async () => {
+    const staffCreatedRequest = requestDto({
+      status: CONNECTION_REQUEST_STATUS.CONNECTED,
+      createdBy: 7,
+      measurementPoints: [
+        {
+          id: 1,
+          pointName: 'ปล่องระบาย A',
+          pointCode: 'STACK-A',
+          pointType: 'STACK',
+          latitude: null,
+          longitude: null,
+          parameters: ['NOx'],
+          description: null,
+        },
+      ],
+    });
+    mockedRepository.list.mockImplementation(async (_query, access) =>
+      access.scope === 'OWN_FACTORY' &&
+      access.actorUserId !== staffCreatedRequest.createdBy &&
+      !access.useAssignedFactoryAccess
+        ? { rows: [], total: 0 }
+        : { rows: [staffCreatedRequest], total: 1 },
+    );
+    mockedDeviceConnectionsService.replaceCurrentStation.mockResolvedValue([]);
+
+    await expect(
+      connectionRequestsService.saveCurrentDeviceConfigs(
+        'STACK-A',
+        {
+          configs: [
+            {
+              stationId: 'STACK-A',
+              deviceCode: 'STACK-A/01',
+              protocol: 'MODBUS_TCP',
+              settings: { hostIp: '192.168.1.10', slaveId: 1, port: 502 },
+              channels: [{ addressId: 40001, dataType: 'NOx', offset: 0 }],
+            },
+          ],
+        },
+        actorUserId,
+        'OWN_FACTORY',
+      ),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(mockedDeviceConnectionsService.replaceCurrentStation).not.toHaveBeenCalled();
   });
 
   it('rejects current device config saves when payload stationId does not match route stationId', async () => {
@@ -4019,6 +4105,15 @@ describe('connectionRequestsService', () => {
     ).rejects.toMatchObject({
       code: 'BAD_REQUEST',
     });
+    expect(mockedRepository.list).toHaveBeenCalledWith(
+      { stationId: 'STACK-A', status: CONNECTION_REQUEST_STATUS.CONNECTED },
+      {
+        actorUserId,
+        scope: 'OWN_FACTORY',
+        regionalAccess: undefined,
+        useAssignedFactoryAccess: false,
+      },
+    );
     expect(mockedDeviceConnectionsService.create).not.toHaveBeenCalled();
     expect(mockedDeviceConnectionsService.replaceCurrentStation).not.toHaveBeenCalled();
   });

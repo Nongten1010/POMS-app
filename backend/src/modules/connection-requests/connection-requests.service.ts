@@ -139,6 +139,7 @@ export const connectionRequestsService = {
       actorUserId,
       scope: viewScope,
       regionalAccess,
+      useAssignedFactoryAccess: true,
     });
     const [factoryMap, currentPomsFactoryNames] = await Promise.all([
       connectionRequestsRepository.findFactorySummariesForRequests(rows),
@@ -168,6 +169,7 @@ export const connectionRequestsService = {
       actorUserId,
       scope: viewScope,
       regionalAccess,
+      useAssignedFactoryAccess: true,
     });
     const factoryMap = await connectionRequestsRepository.findFactorySummariesForRequests(rows);
     const data = await Promise.all(
@@ -530,6 +532,7 @@ export const connectionRequestsService = {
       stationId,
       actorUserId,
       viewScope,
+      true,
       regionalAccess,
     );
 
@@ -546,6 +549,7 @@ export const connectionRequestsService = {
       stationId,
       actorUserId,
       viewScope,
+      true,
       regionalAccess,
     );
     const configs = await deviceConnectionsService.listActiveSettings({ stationId });
@@ -1073,6 +1077,7 @@ export const connectionRequestsService = {
       stationId,
       actorUserId,
       editScope,
+      false,
       regionalAccess,
     );
     ensureConfigStationMatchesRoute(stationId, input.stationId);
@@ -1097,6 +1102,7 @@ export const connectionRequestsService = {
       stationId,
       actorUserId,
       editScope,
+      false,
       regionalAccess,
     );
     for (const config of input.configs) {
@@ -1189,6 +1195,7 @@ async function loadLatestConnectedRequestForStation(
   stationId: string,
   actorUserId: number,
   scope: AccessScope,
+  useAssignedFactoryAccess: boolean,
   regionalAccess?: RegionalAccessDTO | null,
 ): Promise<{ request: ConnectionRequestDTO; point: MeasurementPointDTO }> {
   const { rows } = await connectionRequestsRepository.list(
@@ -1200,6 +1207,7 @@ async function loadLatestConnectedRequestForStation(
       actorUserId,
       scope,
       regionalAccess,
+      useAssignedFactoryAccess,
     },
   );
 

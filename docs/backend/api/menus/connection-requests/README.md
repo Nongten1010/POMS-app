@@ -276,6 +276,8 @@ Field อื่นของ Direct Connection เช่น `factoryName`, ข้
 
 `GET /api/v1/cems-wpms-requests/table-rows` คืน `data[].province` จาก factory snapshot ของคำขอ โดย snapshot ต้องรับจังหวัดจาก active row ใน `eligible_factories` ที่เชื่อมด้วย `eligibleFactoryId`. โรงงานที่ไม่มี row ใน `factories` ต้องยังคงจังหวัดเดิมหลังส่งคำขอ และ backend ต้องไม่ใช้การมีอยู่ของ factory master เป็นเงื่อนไขในการคืนจังหวัด.
 
+สำหรับ scope `OWN_FACTORY` ตารางนี้คืนคำขอของทุกโรงงานที่ผู้ประกอบการได้รับมอบหมายผ่าน `user_juristics` หรือ `user_factory_access` แม้เจ้าหน้าที่หรือผู้ใช้อื่นจะเป็นผู้สร้างคำขอ; endpoint ที่ระบุ owner โดยตรง เช่นการยกเลิกคำขอ ยังคงตรวจ `createdBy` ตาม contract ของ endpoint นั้น.
+
 `data[].factoryName` ใช้ชื่อจาก active current/live POMS point ใน `cems_wpms_connected_measurement_points` ที่อัปเดตล่าสุดและจับคู่ด้วย `eligibleFactoryId`, `factoryId` หรือเลขทะเบียนโรงงาน โดยไม่บังคับว่าต้องมี factory master. ถ้ายังไม่มี current/live point ให้ fallback ไป `factories.name` และชื่อ snapshot ในคำขอตามลำดับ. กติกานี้ใช้เหมือนกันทั้งผู้ประกอบการและเจ้าหน้าที่; role มีผลเฉพาะ permission/scope ของรายการที่มองเห็น.
 
 | Response field | Type | Source/Meaning |
@@ -550,7 +552,7 @@ Authorization:
 
 - scope `ALL`, `IN_REGION` และ `IN_PROVINCE` ใช้กฎการกรองตาม permission และพื้นที่.
 - scope `OWN_FACTORY` ตรวจ factory assignment จาก `user_juristics` หรือ `user_factory_access`; ไม่บังคับว่าผู้เรียกต้องเป็น `createdBy` ของคำขอเชื่อมต่อ จึงอ่านจุดที่เจ้าหน้าที่เชื่อมต่อให้โรงงานนั้นได้.
-- กฎ factory assignment นี้ใช้กับ connected-points flow; สิทธิ์ที่ผูกกับผู้สร้างคำขอ เช่นการยกเลิก ยังตรวจ `createdBy` ตาม contract ของ endpoint นั้น.
+- กฎ factory assignment นี้ใช้กับ `GET /api/v1/connected-measurement-points`, `GET /api/v1/connected-measurement-points/:stationId/requests`, `GET /api/v1/connected-measurement-points/:stationId/device-configs` และ `GET /api/v1/cems-wpms-requests/table-rows`; สิทธิ์ที่ผูกกับผู้สร้างคำขอ เช่นการยกเลิก ยังตรวจ `createdBy` ตาม contract ของ endpoint นั้น.
 
 Minimal request: ไม่มี request body.
 

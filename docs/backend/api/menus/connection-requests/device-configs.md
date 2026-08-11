@@ -388,6 +388,7 @@ GET /api/v1/cems-wpms-requests/101/device-configs?stationId=CEMS-0001%2F2569
 - Authentication: required
 - Permission: `cems_wpms_requests:view`
 - Data scope: scope ของ permission และ region/province/owner ของ connected request ล่าสุด
+- สำหรับ `OWN_FACTORY` ระบบตรวจ factory assignment ของ connected point ไม่ตรวจ `createdBy` ของ request จึงอ่าน config ที่เจ้าหน้าที่สร้างให้โรงงานที่ผู้ประกอบการได้รับมอบหมายได้
 
 ### Request Fields
 
@@ -476,7 +477,8 @@ Response ใช้ schema เดียวกับ [GET ของ request](#succ
 - Authentication: required
 - Permission: `cems_wpms_requests:edit`
 - Data scope: scope ของ permission และ region/province/owner ของ connected request ล่าสุด
-- Backend ตรวจ station access ก่อนทั้งการสร้าง/แทนที่ config และการทดสอบ connection; มี permission action อย่างเดียวแต่ station อยู่นอก profile assignment จะตอบ `403`
+- Backend ตรวจ connected request ของ `stationId` ภายใน edit scope ก่อนแทนที่ config
+- สำหรับ `OWN_FACTORY` สิทธิ์เขียนยังคงตรวจผู้สร้าง request (`createdBy`) ไม่ใช่ factory assignment; ผู้ใช้ที่ถูกมอบหมายโรงงานแต่ไม่ใช่ผู้สร้างจะอ่านได้แต่แทนที่ config ไม่ได้
 
 ### Request Fields
 

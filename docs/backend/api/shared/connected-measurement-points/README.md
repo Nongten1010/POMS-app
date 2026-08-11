@@ -24,6 +24,7 @@ curl --request GET \
 | งาน | Method | Path | Auth | Permission | Contract |
 | --- | --- | --- | --- | --- | --- |
 | อ่านจุดตรวจวัดของโรงงานและข้อมูล prefill | `GET` | `/api/v1/connected-measurement-points/factories/:factoryId` | Bearer | `cems_wpms_requests:view` | [Factory connected points](#get-apiv1connected-measurement-pointsfactoriesfactoryid) |
+| อ่านประวัติคำขอของจุดตรวจวัด | `GET` | `/api/v1/connected-measurement-points/:stationId/requests` | Bearer | `cems_wpms_requests:view` | [Connected-point requests](#get-apiv1connected-measurement-pointsstationidrequests) |
 | อ่านแบบตั้งค่าอุปกรณ์ปัจจุบัน | `GET` | `/api/v1/connected-measurement-points/:stationId/device-configs` | Bearer | `cems_wpms_requests:view` | [Device config contract](../../menus/connection-requests/device-configs.md) |
 | แทนที่การตั้งค่าอุปกรณ์ปัจจุบัน | `POST` | `/api/v1/connected-measurement-points/:stationId/device-configs` | Bearer | `cems_wpms_requests:edit` | [Device config contract](../../menus/connection-requests/device-configs.md) |
 | อ่านสถิติรายชั่วโมง | `GET` | `/api/v1/connected-measurement-points/:stationId/measurement-statistics?date=YYYY-MM-DD` | Bearer | `dashboard.stats:view` | [Measurement statistics](#get-apiv1connected-measurement-pointsstationidmeasurement-statistics) |
@@ -145,6 +146,76 @@ curl --request GET \
 | `400 Bad Request` | `factoryId` ไม่ผ่าน validation | ตรวจรหัสโรงงานที่ส่ง |
 | `401 Unauthorized` | ไม่มี bearer token ที่ถูกต้อง | login ใหม่ |
 | `403 Forbidden` | ไม่มี permission หรือโรงงานอยู่นอก data scope | ซ่อน action หรือแจ้งสิทธิ์ไม่เพียงพอ |
+
+### `GET /api/v1/connected-measurement-points/:stationId/requests`
+
+คืนรายการคำขอทั้งหมดที่เชื่อมโยงกับจุดตรวจวัดตาม `stationId` และอยู่ใน data scope ของผู้เรียก หากไม่มีรายการที่มองเห็นได้ให้ตอบ `200 OK` พร้อม `data: []`.
+
+#### Authentication And Permission
+
+- Authentication: required
+- Permission: `cems_wpms_requests:view`
+- Data scope: `ALL`, `IN_REGION`, `IN_PROVINCE` หรือ `OWN_FACTORY`
+- สำหรับ `OWN_FACTORY` ระบบตรวจ factory assignment จาก `user_juristics` หรือ `user_factory_access` ไม่ตรวจว่า request ถูกสร้างโดยผู้เรียก จึงอ่านคำขอที่เจ้าหน้าที่สร้างให้โรงงานที่ผู้ประกอบการได้รับมอบหมายได้
+
+#### Request Fields
+
+| Field | Location | Type | Required | Description |
+| --- | --- | --- | --- | --- |
+| `stationId` | path | string | Yes | รหัสจุดตรวจวัด; encode `/` เป็น `%2F` เมื่อสร้าง URL |
+
+#### Request Example
+
+ไม่มี request body:
+
+```text
+GET /api/v1/connected-measurement-points/S1125/requests
+```
+
+#### Success Response Fields
+
+| Field | Type | Nullable | Description |
+| --- | --- | --- | --- |
+| `success` | boolean | No | `true` เมื่อสำเร็จ |
+| `data` | object[] | No | รายการคำขอที่ผู้เรียกมีสิทธิ์อ่าน |
+| `data[].id` | number | No | request ID |
+| `data[].requestNo` | string | No | เลขที่คำขอ |
+| `data[].status` | string | No | status code ของคำขอ |
+| `data[].measurementPoints` | object[] | No | จุดตรวจวัดในคำขอ |
+| `data[].deviceConfigs` | object[] | No | device config ของคำขอนั้น |
+| `meta.total` | number | No | จำนวนรายการใน `data` |
+
+#### Success Response Example
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 12,
+      "requestNo": "CEMS-0001/2569",
+      "status": "CONNECTED",
+      "measurementPoints": [
+        {
+          "pointCode": "S1125"
+        }
+      ],
+      "deviceConfigs": []
+    }
+  ],
+  "meta": {
+    "total": 1
+  }
+}
+```
+
+#### Errors
+
+| HTTP status | Condition | Client action |
+| --- | --- | --- |
+| `400 Bad Request` | `stationId` ไม่ผ่าน validation | ตรวจรหัสจุดตรวจวัดที่ส่ง |
+| `401 Unauthorized` | ไม่มี bearer token ที่ถูกต้อง | login ใหม่ |
+| `403 Forbidden` | ไม่มี permission | ซ่อนข้อมูลหรือแจ้งสิทธิ์ไม่เพียงพอ |
 
 ### `GET /api/v1/connected-measurement-points/:stationId/measurement-statistics`
 
