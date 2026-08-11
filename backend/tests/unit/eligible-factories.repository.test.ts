@@ -10,6 +10,8 @@ jest.mock('../../src/config/database', () => ({
 jest.mock('../../src/config/env', () => ({
   env: {
     FACTORY_DB_SCHEMA: 'dbo',
+    API_PREFIX: '/api/v1',
+    JWT_SECRET: 'eligible-factory-repository-test-secret',
   },
 }));
 
@@ -60,11 +62,13 @@ describe('eligibleFactoriesRepository.list', () => {
   };
   let selectedRowForTest = { ...selectedFactoryRow };
   let monitoringPointRowsForTest: Array<Record<string, unknown>> = [];
+  let monitoringPointAttachmentRowsForTest: Array<Record<string, unknown>> = [];
 
   beforeEach(() => {
     jest.clearAllMocks();
     selectedRowForTest = { ...selectedFactoryRow };
     monitoringPointRowsForTest = [];
+    monitoringPointAttachmentRowsForTest = [];
 
     const countQuery = {
       clearSelect: jest.fn().mockReturnThis(),
@@ -96,6 +100,16 @@ describe('eligibleFactoriesRepository.list', () => {
           orderBy: jest.fn().mockReturnThis(),
           then: jest.fn((resolve: (rows: Array<Record<string, unknown>>) => unknown) =>
             Promise.resolve(resolve(monitoringPointRowsForTest)),
+          ),
+        };
+      }
+      if (tableName === 'factory_monitoring_point_attachments') {
+        return {
+          whereIn: jest.fn().mockReturnThis(),
+          whereNotNull: jest.fn().mockReturnThis(),
+          whereNull: jest.fn().mockReturnThis(),
+          then: jest.fn((resolve: (rows: Array<Record<string, unknown>>) => unknown) =>
+            Promise.resolve(resolve(monitoringPointAttachmentRowsForTest)),
           ),
         };
       }
@@ -200,6 +214,7 @@ describe('eligibleFactoriesRepository.list', () => {
     };
     monitoringPointRowsForTest = [
       {
+        id: 91,
         form_id: 12,
         system_type: 'CEMS',
         point_code: 'S0001',
@@ -218,13 +233,20 @@ describe('eligibleFactoriesRepository.list', () => {
         primary_fuel_other: null,
         secondary_fuel: null,
         secondary_fuel_other: null,
+        attachment_links_json: JSON.stringify([
+          { label: 'เอกสารอ้างอิง', url: 'https://example.com/reference' },
+          { label: 'invalid', url: 'ftp://example.com/reference' },
+        ]),
         details_json: JSON.stringify({
           timeSharingParameters: ['NOx (ppm)'],
           sharedStackCode: 'S0002',
           monitoringPointStatus: 'เชื่อมต่อครบแล้ว',
+          attachmentLinks: 'legacy duplicate must be stripped',
+          attachments: { legacy: true },
         }),
       },
       {
+        id: 92,
         form_id: 12,
         system_type: 'CEMS',
         point_code: 'S0002',
@@ -243,26 +265,70 @@ describe('eligibleFactoriesRepository.list', () => {
         primary_fuel_other: null,
         secondary_fuel: null,
         secondary_fuel_other: null,
+        attachment_links_json: 'malformed legacy value',
         details_json: JSON.stringify({
           timeSharingParameters: ' SO2 (ppm), ไม่มี ',
           sharedStackCode: ' S0001 ',
           monitoringPointStatus: 'สถานะที่ไม่รองรับ',
+          attachmentLinks: 'https://legacy.example.com/reference',
+          attachments: { fileName: 'legacy.pdf' },
         }),
+      },
+    ];
+    monitoringPointAttachmentRowsForTest = [
+      {
+        id: 501,
+        public_id: 'f338ba40-a4ea-4cb8-87e4-fbe225394cb3',
+        claim_token_hash: Buffer.alloc(32, 1),
+        monitoring_point_id: 91,
+        original_file_name: 'document.png',
+        mime_type: 'image/png',
+        file_size: 1024,
+        storage_path: '.private/monitoring-point-forms/attachments/2026/08/document.png',
+        sort_order: 1,
+        expires_at: '2026-08-12T00:00:00.000Z',
+        claimed_at: '2026-08-11T00:00:00.000Z',
+        created_at: '2026-08-11T00:00:00.000Z',
+        updated_at: '2026-08-11T00:00:00.000Z',
+        created_by: 1,
+        updated_by: 1,
+        deleted_at: null,
       },
     ];
 
     const result = await eligibleFactoriesRepository.list({});
 
     expect(result.rows[0]?.measurementPoints?.[0]).toMatchObject({
+      id: 91,
       timeSharingParameters: ['NOx (ppm)'],
       sharedStackCode: 'S0002',
       monitoringPointStatus: 'เชื่อมต่อครบแล้ว',
+      attachmentLinks: [{ label: 'เอกสารอ้างอิง', url: 'https://example.com/reference' }],
+      attachments: [
+        {
+          id: 501,
+          fileName: 'document.png',
+          fileType: 'image/png',
+          fileSize: 1024,
+          fileUrlExpiresAt: expect.any(String),
+        },
+      ],
     });
+    expect(result.rows[0]?.measurementPoints?.[0]?.attachments[0]?.fileUrl).toMatch(
+      /^\/api\/v1\/monitoring-point-forms\/attachments\/f338ba40-a4ea-4cb8-87e4-fbe225394cb3\/content\?expires=\d+&signature=/,
+    );
+    expect(result.rows[0]?.measurementPoints?.[0]?.details).not.toHaveProperty('attachmentLinks');
+    expect(result.rows[0]?.measurementPoints?.[0]?.details).not.toHaveProperty('attachments');
     expect(result.rows[0]?.measurementPoints?.[1]).toMatchObject({
+      id: 92,
       timeSharingParameters: ['SO2 (ppm)', 'ไม่มี'],
       sharedStackCode: null,
       monitoringPointStatus: null,
+      attachmentLinks: [],
+      attachments: [],
     });
+    expect(result.rows[0]?.measurementPoints?.[1]?.details).not.toHaveProperty('attachmentLinks');
+    expect(result.rows[0]?.measurementPoints?.[1]?.details).not.toHaveProperty('attachments');
   });
 
   it('preserves a readable address entered in the monitoring-point form', async () => {

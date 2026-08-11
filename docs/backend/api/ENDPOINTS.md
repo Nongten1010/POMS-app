@@ -11,7 +11,7 @@
 - ไม่รวม `express.static`, 404 fallback และ middleware-only surfaces
 - Registry นี้ไม่เก็บ request/response body เพื่อไม่ให้เกิด contract ซ้ำ
 
-จำนวน explicit endpoints: **108**
+จำนวน explicit endpoints: **110**
 
 | Method | Full path | Canonical owner | Guard | Route source |
 | --- | --- | --- | --- | --- |
@@ -77,6 +77,8 @@
 | `GET` | `/api/v1/parameter-values` | `docs/backend/api/menus/connection-requests/parameter-values.md` | `authenticate + authorize(cems_wpms_requests:view)` | `backend/src/modules/parameter-values/parameter-values.routes.ts` |
 | `GET` | `/api/v1/monitoring-point-forms` | `docs/backend/api/menus/eligible-factories/` | `authenticate + authorize(cems_wpms_requests:view)` | `backend/src/modules/monitoring-point-forms/monitoring-point-forms.routes.ts` |
 | `GET` | `/api/v1/monitoring-point-forms/:id` | `docs/backend/api/menus/eligible-factories/` | `authenticate + authorize(cems_wpms_requests:view)` | `backend/src/modules/monitoring-point-forms/monitoring-point-forms.routes.ts` |
+| `GET` | `/api/v1/monitoring-point-forms/attachments/:publicId/content` | `docs/backend/api/menus/eligible-factories/` | `public signed URL` | `backend/src/modules/monitoring-point-forms/monitoring-point-forms.routes.ts` |
+| `POST` | `/api/v1/monitoring-point-forms/attachments` | `docs/backend/api/menus/eligible-factories/` | `authenticate + authorize(cems_wpms_requests:edit)` | `backend/src/modules/monitoring-point-forms/monitoring-point-forms.routes.ts` |
 | `POST` | `/api/v1/monitoring-point-forms` | `docs/backend/api/menus/eligible-factories/` | `authenticate + authorize(cems_wpms_requests:edit)` | `backend/src/modules/monitoring-point-forms/monitoring-point-forms.routes.ts` |
 | `POST` | `/api/v1/monitoring-point-forms/:id/select-eligible` | `docs/backend/api/menus/eligible-factories/` | `authenticate + authorize(eligible_factories:manage)` | `backend/src/modules/monitoring-point-forms/monitoring-point-forms.routes.ts` |
 | `PUT` | `/api/v1/monitoring-point-forms/:id` | `docs/backend/api/menus/eligible-factories/` | `authenticate + authorize(cems_wpms_requests:edit)` | `backend/src/modules/monitoring-point-forms/monitoring-point-forms.routes.ts` |

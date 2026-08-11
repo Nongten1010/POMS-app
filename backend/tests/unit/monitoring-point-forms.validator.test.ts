@@ -183,6 +183,8 @@ describe('monitoring point form validator', () => {
     ['timeSharingParameters', ['NOx (ppm)']],
     ['sharedStackCode', 'S0002'],
     ['monitoringPointStatus', 'เชื่อมต่อครบแล้ว'],
+    ['attachmentLinks', [{ label: null, url: 'https://example.com/reference' }]],
+    ['attachments', [{ id: 91 }]],
   ])('rejects typed field %s when it is nested under details', (field, value) => {
     const result = saveMonitoringPointFormSchema.safeParse({
       factory: {},
@@ -216,6 +218,116 @@ describe('monitoring point form validator', () => {
     expect(result.factory.factoryName).toBeNull();
     expect(result.factory.factoryRegistrationNoNew).toBeNull();
     expect(result.points).toEqual([]);
+  });
+
+  it('accepts attachment references without defaulting omitted collections', () => {
+    const result = saveMonitoringPointFormSchema.parse({
+      factory: {},
+      points: [
+        {
+          id: 99,
+          systemType: 'CEMS',
+          attachmentLinks: [
+            { url: 'https://example.com/reference' },
+            { label: ' เอกสารอ้างอิง ', url: 'http://example.com/reference-2' },
+          ],
+          attachments: [{ id: 91 }, { uploadToken: 'a'.repeat(43) }],
+        },
+        {
+          id: 100,
+          systemType: 'WPMS',
+        },
+      ],
+    });
+
+    expect(result.points[0]).toMatchObject({
+      attachmentLinks: [
+        { label: null, url: 'https://example.com/reference' },
+        { label: 'เอกสารอ้างอิง', url: 'http://example.com/reference-2' },
+      ],
+      attachments: [{ id: 91 }, { uploadToken: 'a'.repeat(43) }],
+    });
+    expect(result.points[1]).not.toHaveProperty('attachmentLinks');
+    expect(result.points[1]).not.toHaveProperty('attachments');
+  });
+
+  it.each([
+    [
+      'non-http link URL',
+      {
+        attachmentLinks: [{ label: null, url: 'ftp://example.com/reference' }],
+      },
+      ['points', 0, 'attachmentLinks', 0, 'url'],
+    ],
+    [
+      'link URL longer than 2048 characters',
+      {
+        attachmentLinks: [{ label: null, url: `https://example.com/${'a'.repeat(2048)}` }],
+      },
+      ['points', 0, 'attachmentLinks', 0, 'url'],
+    ],
+    [
+      'client-supplied attachment metadata',
+      {
+        attachments: [
+          {
+            fileName: 'document.pdf',
+            fileUrl: 'https://example.com/document.pdf',
+            fileType: 'application/pdf',
+            fileSize: 1024,
+          },
+        ],
+      },
+      ['points', 0, 'attachments', 0],
+    ],
+    [
+      'an attachment reference with both id and uploadToken',
+      {
+        attachments: [{ id: 91, uploadToken: 'a'.repeat(43) }],
+      },
+      ['points', 0, 'attachments', 0],
+    ],
+    [
+      'a malformed upload token',
+      {
+        attachments: [{ uploadToken: 'not-a-valid-token' }],
+      },
+      ['points', 0, 'attachments', 0, 'uploadToken'],
+    ],
+  ])('rejects %s', (_caseName, attachmentFields, expectedPath) => {
+    const result = saveMonitoringPointFormSchema.safeParse({
+      factory: {},
+      points: [
+        {
+          systemType: 'CEMS',
+          ...attachmentFields,
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([expect.objectContaining({ path: expectedPath })]),
+      );
+    }
+  });
+
+  it('rejects duplicate monitoring point ids', () => {
+    const result = saveMonitoringPointFormSchema.safeParse({
+      factory: {},
+      points: [
+        { id: 99, systemType: 'CEMS' },
+        { id: 99, systemType: 'WPMS' },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([expect.objectContaining({ path: ['points', 1, 'id'] })]),
+      );
+    }
   });
 
   it('accepts factory coordinates within valid latitude and longitude ranges', () => {

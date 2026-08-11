@@ -1,9 +1,11 @@
 import type { Knex } from 'knex';
 import { db } from '../../config/database';
+import { BadRequestError, ConflictError } from '../../shared/errors/AppError';
 import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
 import { resolveAssignedRegions } from '../auth/regional-access';
 import type {
   ListMonitoringPointFormsQuery,
+  MonitoringPointAttachmentDTO,
   MonitoringPointFormAccessContext,
   MonitoringPointDTO,
   MonitoringPointFormDTO,
@@ -14,6 +16,16 @@ import type {
   SaveMonitoringPointFormInput,
 } from './monitoring-point-forms.types';
 import { MONITORING_POINT_STATUSES } from './monitoring-point-forms.types';
+import {
+  parseMonitoringPointAttachmentLinks,
+  type MonitoringPointAttachmentLink,
+} from './monitoring-point-attachments';
+import {
+  MONITORING_POINT_ATTACHMENTS_TABLE,
+  buildMonitoringPointAttachmentFileAccess,
+  hashMonitoringPointAttachmentUploadToken,
+  type MonitoringPointAttachmentRow,
+} from './monitoring-point-form-attachments.service';
 
 interface MonitoringPointFormRow {
   id: number | string;
@@ -56,9 +68,23 @@ interface MonitoringPointRow {
   primary_fuel_other: string | null;
   secondary_fuel: string | null;
   secondary_fuel_other: string | null;
+  attachment_links_json: string;
   details_json: string | null;
   created_at: Date | string;
   updated_at: Date | string;
+}
+
+interface ExistingMonitoringPoint {
+  row: MonitoringPointRow;
+  attachmentLinks: MonitoringPointAttachmentLink[];
+  hasAttachments: boolean;
+}
+
+interface MonitoringPointWritePlan {
+  input: MonitoringPointInput;
+  inputIndex: number;
+  existing: ExistingMonitoringPoint | null;
+  pointId?: number;
 }
 
 interface MonitoringPointFormSummaryRow extends MonitoringPointFormRow {
@@ -145,10 +171,16 @@ export const monitoringPointFormsRepository = {
       .where('form_id', id)
       .whereNull('deleted_at')
       .orderBy('id', 'asc');
+    const attachmentsByPointId = await loadMonitoringPointAttachmentDTOs(
+      trx ?? db,
+      points.map((point) => Number(point.id)),
+    );
 
     return {
       ...toFormDTO(form),
-      points: points.map(toPointDTO),
+      points: points.map((point) =>
+        toPointDTO(point, attachmentsByPointId.get(Number(point.id)) ?? []),
+      ),
     };
   },
 
@@ -160,7 +192,13 @@ export const monitoringPointFormsRepository = {
       const [{ id }] = await trx('factory_monitoring_point_forms')
         .insert(toFormInsertRow(input.factory, actorUserId))
         .returning('id');
-      await insertPoints(trx, Number(id), input.points, actorUserId);
+      const pointPlans: MonitoringPointWritePlan[] = input.points.map((point, inputIndex) => ({
+        input: point,
+        inputIndex,
+        existing: null,
+      }));
+      await persistMonitoringPointPlans(trx, Number(id), pointPlans, [], actorUserId);
+      await synchronizeMonitoringPointAttachments(trx, pointPlans, actorUserId);
       const created = await this.findById(Number(id), undefined, trx);
       if (!created) throw new Error('Created monitoring point form could not be loaded');
       return created;
@@ -175,7 +213,33 @@ export const monitoringPointFormsRepository = {
   ): Promise<MonitoringPointFormDTO | null> {
     if (access && !(await this.findById(id, access))) return null;
     return db.transaction(async (trx) => {
-      const affected = await trx('factory_monitoring_point_forms')
+      const form = await trx('factory_monitoring_point_forms')
+        .where('id', id)
+        .whereNull('deleted_at')
+        .forUpdate()
+        .first('id');
+      if (!form) return null;
+
+      const existingPointRows = await trx<MonitoringPointRow>('factory_monitoring_points')
+        .where('form_id', id)
+        .whereNull('deleted_at')
+        .orderBy('id', 'asc')
+        .forUpdate();
+      const activeAttachmentPointIds = await listPointIdsWithActiveAttachments(
+        trx,
+        existingPointRows.map((point) => Number(point.id)),
+      );
+      const existingPoints = existingPointRows.map(toExistingMonitoringPoint);
+      existingPoints.forEach((point) => {
+        point.hasAttachments = activeAttachmentPointIds.has(Number(point.row.id));
+      });
+      const { plans, unmatchedExisting } = reconcileMonitoringPointInputs(
+        existingPoints,
+        input.points,
+      );
+      assertUnmatchedResourcesCanBeRemoved(unmatchedExisting, plans);
+
+      await trx('factory_monitoring_point_forms')
         .where('id', id)
         .whereNull('deleted_at')
         .update({
@@ -183,14 +247,9 @@ export const monitoringPointFormsRepository = {
           updated_at: trx.fn.now(),
           updated_by: actorUserId,
         });
-      if (affected === 0) return null;
 
-      await trx('factory_monitoring_points').where('form_id', id).whereNull('deleted_at').update({
-        deleted_at: trx.fn.now(),
-        updated_at: trx.fn.now(),
-        updated_by: actorUserId,
-      });
-      await insertPoints(trx, id, input.points, actorUserId);
+      await persistMonitoringPointPlans(trx, id, plans, unmatchedExisting, actorUserId);
+      await synchronizeMonitoringPointAttachments(trx, plans, actorUserId);
 
       return this.findById(id, undefined, trx);
     });
@@ -207,13 +266,18 @@ export const monitoringPointFormsRepository = {
     if (scope.scope === 'IN_PROVINCE') {
       const selectedProvince = normalizeLocationValue(scope.province);
       const inputProvince = normalizeLocationValue(factory.provinceName);
-      return Boolean(selectedProvince && inputProvince && sameLocation(selectedProvince, inputProvince));
+      return Boolean(
+        selectedProvince && inputProvince && sameLocation(selectedProvince, inputProvince),
+      );
     }
     if (scope.scope === 'IN_REGION') {
       const regions = resolveAssignedRegions(scope.region, access.regionalAccess);
       const province = normalizeLocationValue(factory.provinceName);
       if (regions.length === 0 || !province) return false;
-      const row = await db('provinces').where('name_th', province).whereIn('region', regions).first();
+      const row = await db('provinces')
+        .where('name_th', province)
+        .whereIn('region', regions)
+        .first();
       return Boolean(row);
     }
     if (!registration) return false;
@@ -341,9 +405,13 @@ function applyFormAccessFilter(
   }
 }
 
-function toScopeDetails(
-  scope: MonitoringPointFormAccessContext['scope'],
-): { scope: string | null | undefined; region?: string | null; province?: string | null; estateCode?: string | null; estate?: string | null } {
+function toScopeDetails(scope: MonitoringPointFormAccessContext['scope']): {
+  scope: string | null | undefined;
+  region?: string | null;
+  province?: string | null;
+  estateCode?: string | null;
+  estate?: string | null;
+} {
   return scope && typeof scope === 'object' ? scope : { scope };
 }
 
@@ -357,17 +425,533 @@ function sameLocation(left: string, right: string): boolean {
   return left.trim().toLowerCase() === right.trim().toLowerCase();
 }
 
-async function insertPoints(
+function toExistingMonitoringPoint(row: MonitoringPointRow): ExistingMonitoringPoint {
+  return {
+    row,
+    attachmentLinks: parseMonitoringPointAttachmentLinks(row.attachment_links_json),
+    hasAttachments: false,
+  };
+}
+
+function reconcileMonitoringPointInputs(
+  existingPoints: ExistingMonitoringPoint[],
+  inputs: MonitoringPointInput[],
+): { plans: MonitoringPointWritePlan[]; unmatchedExisting: ExistingMonitoringPoint[] } {
+  const plans: Array<MonitoringPointWritePlan | undefined> = inputs.map(() => undefined);
+  const existingById = new Map(
+    existingPoints.map((point) => [Number(point.row.id), point] as const),
+  );
+  const matchedExistingIds = new Set<number>();
+  const explicitPointIds = new Set<number>();
+
+  inputs.forEach((input, inputIndex) => {
+    if (input.id === undefined) return;
+    if (explicitPointIds.has(input.id)) {
+      throw new BadRequestError('Duplicate monitoring point id in request', {
+        pointId: input.id,
+        inputIndex,
+      });
+    }
+    explicitPointIds.add(input.id);
+
+    const existing = existingById.get(input.id);
+    if (!existing) {
+      throw new ConflictError('Monitoring point id does not belong to the active form', {
+        pointId: input.id,
+        inputIndex,
+      });
+    }
+    matchedExistingIds.add(input.id);
+    plans[inputIndex] = { input, inputIndex, existing };
+  });
+
+  const unmatchedInputIndexes = () =>
+    inputs.flatMap((_input, index) => (plans[index] ? [] : [index]));
+  const unmatchedExistingPoints = () =>
+    existingPoints.filter((point) => !matchedExistingIds.has(Number(point.row.id)));
+
+  const inputIndexesByKey = groupIndexesByIdentityKey(inputs, unmatchedInputIndexes());
+  const existingByKey = groupExistingByIdentityKey(unmatchedExistingPoints());
+  for (const [key, inputIndexes] of inputIndexesByKey) {
+    const matchingExisting = existingByKey.get(key) ?? [];
+    if (inputIndexes.length !== 1 || matchingExisting.length !== 1) continue;
+
+    const inputIndex = inputIndexes[0];
+    const existing = matchingExisting[0];
+    if (inputIndex === undefined || !existing) continue;
+    plans[inputIndex] = {
+      input: requireMonitoringPointInput(inputs, inputIndex),
+      inputIndex,
+      existing,
+    };
+    matchedExistingIds.add(Number(existing.row.id));
+  }
+
+  const remainingInputIndexes = unmatchedInputIndexes();
+  const remainingExisting = unmatchedExistingPoints();
+  if (canUseGuardedPositionalFallback(inputs, remainingInputIndexes, remainingExisting)) {
+    remainingInputIndexes.forEach((inputIndex, position) => {
+      const existing = remainingExisting[position];
+      if (!existing) return;
+      plans[inputIndex] = {
+        input: requireMonitoringPointInput(inputs, inputIndex),
+        inputIndex,
+        existing,
+      };
+      matchedExistingIds.add(Number(existing.row.id));
+    });
+  }
+
+  return {
+    plans: plans.map(
+      (plan, inputIndex): MonitoringPointWritePlan =>
+        plan ?? {
+          input: requireMonitoringPointInput(inputs, inputIndex),
+          inputIndex,
+          existing: null,
+        },
+    ),
+    unmatchedExisting: unmatchedExistingPoints(),
+  };
+}
+
+function groupIndexesByIdentityKey(
+  inputs: MonitoringPointInput[],
+  indexes: number[],
+): Map<string, number[]> {
+  const groups = new Map<string, number[]>();
+  for (const index of indexes) {
+    const input = inputs[index];
+    if (!input) continue;
+    const key = monitoringPointIdentityKey(input.systemType, input.pointCode);
+    if (!key) continue;
+    groups.set(key, [...(groups.get(key) ?? []), index]);
+  }
+  return groups;
+}
+
+function groupExistingByIdentityKey(
+  points: ExistingMonitoringPoint[],
+): Map<string, ExistingMonitoringPoint[]> {
+  const groups = new Map<string, ExistingMonitoringPoint[]>();
+  for (const point of points) {
+    const key = monitoringPointIdentityKey(point.row.system_type, point.row.point_code);
+    if (!key) continue;
+    groups.set(key, [...(groups.get(key) ?? []), point]);
+  }
+  return groups;
+}
+
+function monitoringPointIdentityKey(
+  systemType: MonitoringPointInput['systemType'],
+  pointCode: string | null | undefined,
+): string | null {
+  const normalizedCode = normalizeIdentityText(pointCode);
+  return normalizedCode ? `${systemType}:${normalizedCode}` : null;
+}
+
+function canUseGuardedPositionalFallback(
+  inputs: MonitoringPointInput[],
+  inputIndexes: number[],
+  existingPoints: ExistingMonitoringPoint[],
+): boolean {
+  if (inputIndexes.length === 0 || inputIndexes.length !== existingPoints.length) return false;
+  if (
+    inputIndexes.some((index) => {
+      const input = inputs[index];
+      return !input || input.attachments !== undefined || input.attachmentLinks !== undefined;
+    })
+  ) {
+    return false;
+  }
+
+  const inputSignatures = inputIndexes.map((index) =>
+    monitoringPointLegacySignatureFromInput(requireMonitoringPointInput(inputs, index)),
+  );
+  const existingSignatures = existingPoints.map(monitoringPointLegacySignatureFromRow);
+  if (new Set(inputSignatures).size !== inputSignatures.length) return false;
+  if (new Set(existingSignatures).size !== existingSignatures.length) return false;
+
+  return inputSignatures.every((signature, index) => signature === existingSignatures[index]);
+}
+
+function requireMonitoringPointInput(
+  inputs: MonitoringPointInput[],
+  index: number,
+): MonitoringPointInput {
+  const input = inputs[index];
+  if (!input) throw new Error(`Monitoring point input ${index} is unavailable`);
+  return input;
+}
+
+function monitoringPointLegacySignatureFromInput(point: MonitoringPointInput): string {
+  return monitoringPointLegacySignature(point.systemType, point.pointCode, point.pointName);
+}
+
+function monitoringPointLegacySignatureFromRow(point: ExistingMonitoringPoint): string {
+  return monitoringPointLegacySignature(
+    point.row.system_type,
+    point.row.point_code,
+    point.row.point_name,
+  );
+}
+
+function monitoringPointLegacySignature(
+  systemType: MonitoringPointInput['systemType'],
+  pointCode: string | null | undefined,
+  pointName: string | null | undefined,
+): string {
+  return `${systemType}:${normalizeIdentityText(pointCode) ?? ''}:${normalizeIdentityText(pointName) ?? ''}`;
+}
+
+function normalizeIdentityText(value: string | null | undefined): string | null {
+  const normalized = value?.trim().toLocaleLowerCase('th-TH') ?? '';
+  return normalized || null;
+}
+
+function assertUnmatchedResourcesCanBeRemoved(
+  unmatchedExisting: ExistingMonitoringPoint[],
+  plans: MonitoringPointWritePlan[],
+): void {
+  if (unmatchedExisting.length === 0) return;
+  if (plans.length === 0) return;
+  const matchedExistingPlans = plans.filter((plan) => plan.existing !== null);
+  if (
+    matchedExistingPlans.length > 0 &&
+    matchedExistingPlans.every((plan) => plan.input.id !== undefined)
+  ) {
+    return;
+  }
+  const protectedPointIds = unmatchedExisting.flatMap((point) => {
+    return point.hasAttachments || point.attachmentLinks.length > 0 ? [Number(point.row.id)] : [];
+  });
+  if (protectedPointIds.length === 0) return;
+
+  throw new ConflictError(
+    'Monitoring point identity is ambiguous; include point ids before changing resource-bearing points',
+    { pointIds: protectedPointIds },
+  );
+}
+
+async function persistMonitoringPointPlans(
   trx: Knex.Transaction,
   formId: number,
-  points: MonitoringPointInput[],
+  plans: MonitoringPointWritePlan[],
+  unmatchedExisting: ExistingMonitoringPoint[],
   actorUserId: number,
-) {
-  if (points.length === 0) return;
+): Promise<void> {
+  for (const plan of plans) {
+    const attachmentLinks = plan.input.attachmentLinks ?? plan.existing?.attachmentLinks ?? [];
+    const row = toPointPersistenceRow(plan.input, attachmentLinks);
 
-  await trx('factory_monitoring_points').insert(
-    points.map((point) => toPointInsertRow(formId, point, actorUserId)),
+    if (plan.existing) {
+      const pointId = Number(plan.existing.row.id);
+      const affected = await trx('factory_monitoring_points')
+        .where('id', pointId)
+        .where('form_id', formId)
+        .whereNull('deleted_at')
+        .update({
+          ...row,
+          updated_at: trx.fn.now(),
+          updated_by: actorUserId,
+        });
+      if (affected !== 1) {
+        throw new ConflictError('Monitoring point changed during update', { pointId });
+      }
+      plan.pointId = pointId;
+      continue;
+    }
+
+    const [{ id }] = await trx('factory_monitoring_points')
+      .insert({
+        form_id: formId,
+        ...row,
+        created_by: actorUserId,
+        updated_by: actorUserId,
+      })
+      .returning('id');
+    plan.pointId = Number(id);
+  }
+
+  const removedPointIds = unmatchedExisting.map((point) => Number(point.row.id));
+  if (removedPointIds.length === 0) return;
+  const deletedAt = trx.fn.now();
+  await trx('factory_monitoring_point_attachments')
+    .whereIn('monitoring_point_id', removedPointIds)
+    .whereNull('deleted_at')
+    .update({ deleted_at: deletedAt, updated_at: deletedAt, updated_by: actorUserId });
+  await trx('factory_monitoring_points')
+    .where('form_id', formId)
+    .whereIn('id', removedPointIds)
+    .whereNull('deleted_at')
+    .update({ deleted_at: deletedAt, updated_at: deletedAt, updated_by: actorUserId });
+}
+
+interface AttachmentReferenceTarget {
+  plan: MonitoringPointWritePlan;
+  reference: NonNullable<MonitoringPointInput['attachments']>[number];
+  sortOrder: number;
+}
+
+async function synchronizeMonitoringPointAttachments(
+  trx: Knex.Transaction,
+  plans: MonitoringPointWritePlan[],
+  actorUserId: number,
+): Promise<void> {
+  const explicitPlans = plans.filter((plan) => plan.input.attachments !== undefined);
+  if (explicitPlans.length === 0) return;
+
+  const targets: AttachmentReferenceTarget[] = explicitPlans.flatMap((plan) =>
+    (plan.input.attachments ?? []).map((reference, index) => ({
+      plan,
+      reference,
+      sortOrder: index + 1,
+    })),
   );
+  assertUniqueAttachmentReferences(targets);
+
+  const pointIds = explicitPlans.map(requirePlanPointId);
+  const activeRows = await loadActiveAttachmentRowsForPointIds(trx, pointIds, true);
+  const activeRowsById = new Map(activeRows.map((row) => [Number(row.id), row] as const));
+  const tokenTargets = targets.filter(
+    (target): target is AttachmentReferenceTarget & { reference: { uploadToken: string } } =>
+      target.reference.uploadToken !== undefined,
+  );
+  const tokenRowsByHash = await loadAttachmentRowsByTokenHashes(
+    trx,
+    tokenTargets.map((target) =>
+      hashMonitoringPointAttachmentUploadToken(target.reference.uploadToken),
+    ),
+  );
+  const now = new Date();
+
+  for (const target of targets) {
+    const pointId = requirePlanPointId(target.plan);
+    if (target.reference.id !== undefined) {
+      const row = activeRowsById.get(target.reference.id);
+      if (
+        !row ||
+        row.monitoring_point_id === null ||
+        Number(row.monitoring_point_id) !== pointId ||
+        row.claimed_at === null
+      ) {
+        throw new ConflictError('Attachment id does not belong to the monitoring point', {
+          attachmentId: target.reference.id,
+          pointId,
+        });
+      }
+      continue;
+    }
+
+    const tokenHash = hashMonitoringPointAttachmentUploadToken(target.reference.uploadToken);
+    const row = tokenRowsByHash.get(bufferKey(tokenHash));
+    if (
+      !row ||
+      row.monitoring_point_id !== null ||
+      row.claimed_at !== null ||
+      Number(row.created_by) !== actorUserId ||
+      new Date(row.expires_at).getTime() <= now.getTime()
+    ) {
+      throw new ConflictError('Attachment upload token is invalid or unavailable');
+    }
+  }
+
+  const activeRowsByPointId = groupAttachmentRowsByPointId(activeRows);
+  for (const plan of explicitPlans) {
+    const pointId = requirePlanPointId(plan);
+    const planTargets = targets.filter((target) => target.plan === plan);
+    const retainedIds = new Set(
+      planTargets.flatMap((target) =>
+        target.reference.id === undefined ? [] : [target.reference.id],
+      ),
+    );
+    const removedIds = (activeRowsByPointId.get(pointId) ?? []).flatMap((row) =>
+      retainedIds.has(Number(row.id)) ? [] : [Number(row.id)],
+    );
+    if (removedIds.length > 0) {
+      await trx(MONITORING_POINT_ATTACHMENTS_TABLE)
+        .whereIn('id', removedIds)
+        .where('monitoring_point_id', pointId)
+        .whereNull('deleted_at')
+        .update({
+          deleted_at: trx.fn.now(),
+          updated_at: trx.fn.now(),
+          updated_by: actorUserId,
+        });
+    }
+
+    for (const target of planTargets) {
+      if (target.reference.id !== undefined) {
+        const affected = await trx(MONITORING_POINT_ATTACHMENTS_TABLE)
+          .where('id', target.reference.id)
+          .where('monitoring_point_id', pointId)
+          .whereNotNull('claimed_at')
+          .whereNull('deleted_at')
+          .update({
+            sort_order: target.sortOrder,
+            updated_at: trx.fn.now(),
+            updated_by: actorUserId,
+          });
+        if (affected !== 1) {
+          throw new ConflictError('Attachment changed during monitoring point update', {
+            attachmentId: target.reference.id,
+            pointId,
+          });
+        }
+        continue;
+      }
+
+      const tokenHash = hashMonitoringPointAttachmentUploadToken(target.reference.uploadToken);
+      const tokenRow = tokenRowsByHash.get(bufferKey(tokenHash));
+      if (!tokenRow) {
+        throw new ConflictError('Attachment upload token is invalid or unavailable');
+      }
+      const affected = await trx(MONITORING_POINT_ATTACHMENTS_TABLE)
+        .where('id', tokenRow.id)
+        .where('claim_token_hash', tokenHash)
+        .where('created_by', actorUserId)
+        .whereNull('monitoring_point_id')
+        .whereNull('claimed_at')
+        .whereNull('deleted_at')
+        .where('expires_at', '>', now)
+        .update({
+          monitoring_point_id: pointId,
+          sort_order: target.sortOrder,
+          claimed_at: trx.fn.now(),
+          updated_at: trx.fn.now(),
+          updated_by: actorUserId,
+        });
+      if (affected !== 1) {
+        throw new ConflictError('Attachment upload token is invalid or unavailable');
+      }
+    }
+  }
+}
+
+function assertUniqueAttachmentReferences(targets: AttachmentReferenceTarget[]): void {
+  const seen = new Set<string>();
+  for (const target of targets) {
+    const key =
+      target.reference.id !== undefined
+        ? `id:${target.reference.id}`
+        : `token:${target.reference.uploadToken}`;
+    if (seen.has(key)) {
+      throw new BadRequestError('Duplicate attachment reference in request', { reference: key });
+    }
+    seen.add(key);
+  }
+}
+
+function requirePlanPointId(plan: MonitoringPointWritePlan): number {
+  if (plan.pointId === undefined) {
+    throw new Error(`Monitoring point ${plan.inputIndex} was not persisted`);
+  }
+  return plan.pointId;
+}
+
+function groupAttachmentRowsByPointId(
+  rows: MonitoringPointAttachmentRow[],
+): Map<number, MonitoringPointAttachmentRow[]> {
+  const result = new Map<number, MonitoringPointAttachmentRow[]>();
+  for (const row of rows) {
+    if (row.monitoring_point_id === null) continue;
+    const pointId = Number(row.monitoring_point_id);
+    result.set(pointId, [...(result.get(pointId) ?? []), row]);
+  }
+  return result;
+}
+
+async function loadAttachmentRowsByTokenHashes(
+  trx: Knex.Transaction,
+  tokenHashes: Buffer[],
+): Promise<Map<string, MonitoringPointAttachmentRow>> {
+  const rows: MonitoringPointAttachmentRow[] = [];
+  for (const hashChunk of chunkValues(tokenHashes)) {
+    rows.push(
+      ...(await trx<MonitoringPointAttachmentRow>(MONITORING_POINT_ATTACHMENTS_TABLE)
+        .whereIn('claim_token_hash', hashChunk)
+        .whereNull('deleted_at')
+        .forUpdate()),
+    );
+  }
+  return new Map(rows.map((row) => [bufferKey(row.claim_token_hash), row] as const));
+}
+
+function bufferKey(value: Buffer): string {
+  return value.toString('hex');
+}
+
+async function listPointIdsWithActiveAttachments(
+  executor: Knex | Knex.Transaction,
+  pointIds: number[],
+): Promise<Set<number>> {
+  const rows = await loadActiveAttachmentRowsForPointIds(executor, pointIds, true);
+  return new Set(
+    rows.flatMap((row) =>
+      row.monitoring_point_id === null ? [] : [Number(row.monitoring_point_id)],
+    ),
+  );
+}
+
+async function loadActiveAttachmentRowsForPointIds(
+  executor: Knex | Knex.Transaction,
+  pointIds: number[],
+  lockRows: boolean,
+): Promise<MonitoringPointAttachmentRow[]> {
+  const rows: MonitoringPointAttachmentRow[] = [];
+  for (const pointIdChunk of chunkValues(Array.from(new Set(pointIds)))) {
+    let query = executor<MonitoringPointAttachmentRow>(MONITORING_POINT_ATTACHMENTS_TABLE)
+      .whereIn('monitoring_point_id', pointIdChunk)
+      .whereNotNull('claimed_at')
+      .whereNull('deleted_at');
+    if (lockRows) query = query.forUpdate();
+    rows.push(...(await query));
+  }
+  return rows;
+}
+
+export async function loadMonitoringPointAttachmentDTOs(
+  executor: Knex | Knex.Transaction,
+  pointIds: number[],
+): Promise<Map<number, MonitoringPointAttachmentDTO[]>> {
+  const rows = await loadActiveAttachmentRowsForPointIds(executor, pointIds, false);
+  rows.sort((left, right) => {
+    const pointDifference = Number(left.monitoring_point_id) - Number(right.monitoring_point_id);
+    if (pointDifference !== 0) return pointDifference;
+    const orderDifference = Number(left.sort_order ?? 0) - Number(right.sort_order ?? 0);
+    return orderDifference !== 0 ? orderDifference : Number(left.id) - Number(right.id);
+  });
+
+  const result = new Map<number, MonitoringPointAttachmentDTO[]>();
+  const now = new Date();
+  for (const row of rows) {
+    if (row.monitoring_point_id === null) continue;
+    const pointId = Number(row.monitoring_point_id);
+    const attachment = toMonitoringPointAttachmentDTO(row, now);
+    result.set(pointId, [...(result.get(pointId) ?? []), attachment]);
+  }
+  return result;
+}
+
+function toMonitoringPointAttachmentDTO(
+  row: MonitoringPointAttachmentRow,
+  now: Date,
+): MonitoringPointAttachmentDTO {
+  return {
+    id: Number(row.id),
+    fileName: row.original_file_name,
+    ...buildMonitoringPointAttachmentFileAccess(row.public_id, now),
+    fileType: row.mime_type,
+    fileSize: Number(row.file_size),
+  };
+}
+
+function chunkValues<T>(values: T[], size = 500): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < values.length; index += size) {
+    chunks.push(values.slice(index, index + size));
+  }
+  return chunks;
 }
 
 function toFormInsertRow(
@@ -395,13 +979,12 @@ function toFormInsertRow(
   };
 }
 
-function toPointInsertRow(
-  formId: number,
+function toPointPersistenceRow(
   point: MonitoringPointInput,
-  actorUserId: number,
+  attachmentLinks: MonitoringPointAttachmentLink[],
 ): Record<string, unknown> {
   const details = {
-    ...(point.details ?? {}),
+    ...(stripAttachmentFields(point.details) ?? {}),
     timeSharingParameters: point.timeSharingParameters ?? [],
     sharedStackCode: point.timeSharingParameters?.includes('ไม่มี')
       ? null
@@ -410,7 +993,6 @@ function toPointInsertRow(
   };
 
   return {
-    form_id: formId,
     system_type: point.systemType,
     point_code: point.pointCode ?? null,
     point_name: point.pointName ?? null,
@@ -428,9 +1010,8 @@ function toPointInsertRow(
     primary_fuel_other: point.primaryFuelOther ?? null,
     secondary_fuel: point.secondaryFuel ?? null,
     secondary_fuel_other: point.secondaryFuelOther ?? null,
+    attachment_links_json: JSON.stringify(attachmentLinks),
     details_json: JSON.stringify(details),
-    created_by: actorUserId,
-    updated_by: actorUserId,
   };
 }
 
@@ -472,9 +1053,13 @@ function toFactoryDTO(row: MonitoringPointFormRow): Required<MonitoringPointForm
   };
 }
 
-function toPointDTO(row: MonitoringPointRow): MonitoringPointDTO {
-  const details = parseObject(row.details_json);
-  const timeSharingParameters = parseStoredStringList(details?.timeSharingParameters);
+function toPointDTO(
+  row: MonitoringPointRow,
+  attachments: MonitoringPointAttachmentDTO[],
+): MonitoringPointDTO {
+  const storedDetails = parseObject(row.details_json);
+  const details = stripAttachmentFields(storedDetails);
+  const timeSharingParameters = parseStoredStringList(storedDetails?.timeSharingParameters);
 
   return {
     id: Number(row.id),
@@ -495,8 +1080,10 @@ function toPointDTO(row: MonitoringPointRow): MonitoringPointDTO {
     timeSharingParameters,
     sharedStackCode: timeSharingParameters.includes('ไม่มี')
       ? null
-      : parseNullableString(details?.sharedStackCode),
-    monitoringPointStatus: parseMonitoringPointStatus(details?.monitoringPointStatus),
+      : parseNullableString(storedDetails?.sharedStackCode),
+    monitoringPointStatus: parseMonitoringPointStatus(storedDetails?.monitoringPointStatus),
+    attachmentLinks: parseMonitoringPointAttachmentLinks(row.attachment_links_json),
+    attachments,
     primaryFuel: row.primary_fuel,
     primaryFuelOther: row.primary_fuel_other,
     secondaryFuel: row.secondary_fuel,
@@ -505,6 +1092,16 @@ function toPointDTO(row: MonitoringPointRow): MonitoringPointDTO {
     createdAt: toIsoString(row.created_at),
     updatedAt: toIsoString(row.updated_at),
   };
+}
+
+function stripAttachmentFields(
+  details: Record<string, unknown> | null | undefined,
+): Record<string, unknown> | null {
+  if (!details) return null;
+  const sanitized = { ...details };
+  delete sanitized.attachmentLinks;
+  delete sanitized.attachments;
+  return sanitized;
 }
 
 function parseStringList(value: string): string[] {

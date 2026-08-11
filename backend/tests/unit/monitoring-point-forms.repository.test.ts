@@ -108,11 +108,17 @@ describe('monitoringPointFormsRepository', () => {
           primary_fuel_other: null,
           secondary_fuel: null,
           secondary_fuel_other: null,
+          attachment_links_json: JSON.stringify([
+            { label: 'เอกสารอ้างอิง', url: 'https://example.com/reference' },
+            { label: 'ใช้ไม่ได้', url: 'ftp://example.com/reference' },
+          ]),
           details_json: JSON.stringify({
             legacyField: 'kept',
             timeSharingParameters: ['NOx (ppm)'],
             sharedStackCode: 'S0002',
             monitoringPointStatus: 'อยู่ระหว่างเชื่อมต่อ',
+            attachmentLinks: 'legacy duplicate must be stripped',
+            attachments: { legacy: true },
           }),
           created_at: '2026-08-06T00:00:00.000Z',
           updated_at: '2026-08-06T00:00:00.000Z',
@@ -137,10 +143,13 @@ describe('monitoringPointFormsRepository', () => {
           primary_fuel_other: null,
           secondary_fuel: null,
           secondary_fuel_other: null,
+          attachment_links_json: 'malformed legacy value',
           details_json: JSON.stringify({
             timeSharingParameters: ' SO2 (ppm), ไม่มี ',
             sharedStackCode: ' S0001 ',
             monitoringPointStatus: 'สถานะที่ไม่รองรับ',
+            attachmentLinks: 'https://legacy.example.com/reference',
+            attachments: { fileName: 'legacy.pdf' },
           }),
           created_at: '2026-08-06T00:00:00.000Z',
           updated_at: '2026-08-06T00:00:00.000Z',
@@ -151,6 +160,37 @@ describe('monitoringPointFormsRepository', () => {
     mockDb.mockImplementation((tableName: unknown) => {
       if (tableName === 'factory_monitoring_point_forms') return formQuery;
       if (tableName === 'factory_monitoring_points') return pointsQuery;
+      if (tableName === 'factory_monitoring_point_attachments') {
+        return {
+          whereIn: jest.fn().mockReturnThis(),
+          whereNotNull: jest.fn().mockReturnThis(),
+          whereNull: jest.fn().mockReturnThis(),
+          then: jest.fn((resolve: (rows: Array<Record<string, unknown>>) => unknown) =>
+            Promise.resolve(
+              resolve([
+                {
+                  id: 501,
+                  public_id: 'f338ba40-a4ea-4cb8-87e4-fbe225394cb3',
+                  claim_token_hash: Buffer.alloc(32, 1),
+                  monitoring_point_id: 99,
+                  original_file_name: 'document.pdf',
+                  mime_type: 'application/pdf',
+                  file_size: 1024,
+                  storage_path: '.private/monitoring-point-forms/attachments/2026/08/document.pdf',
+                  sort_order: 1,
+                  expires_at: '2026-08-12T00:00:00.000Z',
+                  claimed_at: '2026-08-11T00:00:00.000Z',
+                  created_at: '2026-08-11T00:00:00.000Z',
+                  updated_at: '2026-08-11T00:00:00.000Z',
+                  created_by: 1,
+                  updated_by: 1,
+                  deleted_at: null,
+                },
+              ]),
+            ),
+          ),
+        };
+      }
       throw new Error(`Unexpected table: ${String(tableName)}`);
     });
 
@@ -160,13 +200,30 @@ describe('monitoringPointFormsRepository', () => {
       timeSharingParameters: ['NOx (ppm)'],
       sharedStackCode: 'S0002',
       monitoringPointStatus: 'อยู่ระหว่างเชื่อมต่อ',
+      attachmentLinks: [{ label: 'เอกสารอ้างอิง', url: 'https://example.com/reference' }],
+      attachments: [
+        {
+          id: 501,
+          fileName: 'document.pdf',
+          fileType: 'application/pdf',
+          fileSize: 1024,
+          fileUrl: expect.any(String),
+          fileUrlExpiresAt: expect.any(String),
+        },
+      ],
       details: expect.objectContaining({ legacyField: 'kept' }),
     });
     expect(result?.points[1]).toMatchObject({
       timeSharingParameters: ['SO2 (ppm)', 'ไม่มี'],
       sharedStackCode: null,
       monitoringPointStatus: null,
+      attachmentLinks: [],
+      attachments: [],
     });
+    expect(result?.points[0]?.details).not.toHaveProperty('attachmentLinks');
+    expect(result?.points[0]?.details).not.toHaveProperty('attachments');
+    expect(result?.points[1]?.details).not.toHaveProperty('attachmentLinks');
+    expect(result?.points[1]?.details).not.toHaveProperty('attachments');
   });
 
   it('persists project fields when creating a monitoring point form', async () => {
@@ -238,11 +295,12 @@ describe('monitoringPointFormsRepository', () => {
     );
   });
 
-  it('merges the frontend monitoring-point fields into details JSON when creating a form', async () => {
-    const pointInsert = jest
-      .fn<(rows: Array<Record<string, unknown>>) => Promise<void>>()
-      .mockResolvedValue(undefined);
-    const pointInsertQuery = { insert: pointInsert };
+  it('stores typed point fields and attachment links outside details JSON when creating a form', async () => {
+    const pointInsert = jest.fn().mockReturnThis();
+    const pointInsertQuery = {
+      insert: pointInsert,
+      returning: jest.fn<() => Promise<Array<{ id: number }>>>().mockResolvedValue([{ id: 99 }]),
+    };
     const formInsertQuery = {
       insert: jest.fn().mockReturnThis(),
       returning: jest.fn<() => Promise<Array<{ id: number }>>>().mockResolvedValue([{ id: 12 }]),
@@ -303,41 +361,29 @@ describe('monitoringPointFormsRepository', () => {
             timeSharingParameters: ['NOx (ppm)'],
             sharedStackCode: 'S0002',
             monitoringPointStatus: 'อยู่ระหว่างเชื่อมต่อ',
-            details: { legacyField: 'kept' },
-          },
-          {
-            systemType: 'CEMS',
-            pointCode: 'S0002',
-            timeSharingParameters: ['ไม่มี'],
-            sharedStackCode: 'S0001',
-          },
-          {
-            systemType: 'WPMS',
-            pointCode: 'W0001',
+            attachmentLinks: [{ label: 'เอกสารอ้างอิง', url: 'https://example.com/reference' }],
+            details: {
+              legacyField: 'kept',
+              attachmentLinks: 'must not persist here',
+              attachments: { mustNotPersist: true },
+            },
           },
         ],
-      } as never,
+      },
       7,
     );
 
     expect(pointInsert).toHaveBeenCalledTimes(1);
-    const insertedRows = pointInsert.mock.calls[0]?.[0] as Array<Record<string, unknown>>;
-    expect(JSON.parse(String(insertedRows[0]?.details_json))).toEqual({
+    const insertedRow = pointInsert.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(JSON.parse(String(insertedRow.details_json))).toEqual({
       legacyField: 'kept',
       timeSharingParameters: ['NOx (ppm)'],
       sharedStackCode: 'S0002',
       monitoringPointStatus: 'อยู่ระหว่างเชื่อมต่อ',
     });
-    expect(JSON.parse(String(insertedRows[1]?.details_json))).toEqual({
-      timeSharingParameters: ['ไม่มี'],
-      sharedStackCode: null,
-      monitoringPointStatus: null,
-    });
-    expect(JSON.parse(String(insertedRows[2]?.details_json))).toEqual({
-      timeSharingParameters: [],
-      sharedStackCode: null,
-      monitoringPointStatus: null,
-    });
+    expect(JSON.parse(String(insertedRow.attachment_links_json))).toEqual([
+      { label: 'เอกสารอ้างอิง', url: 'https://example.com/reference' },
+    ]);
   });
 
   it('selects project fields for monitoring point form summaries', async () => {

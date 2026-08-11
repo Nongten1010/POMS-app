@@ -2,7 +2,9 @@ import type { ConnectionRequestEiaAssessment } from '../connection-requests/conn
 import type {
   MonitoringPointStatus,
   MonitoringPointSystemType,
+  MonitoringPointAttachmentDTO,
 } from '../monitoring-point-forms/monitoring-point-forms.types';
+import type { MonitoringPointAttachmentLink } from '../monitoring-point-forms/monitoring-point-attachments';
 
 export interface CoordinatesInput {
   latitude: number;
@@ -89,6 +91,7 @@ export type EligibleFactoryConnectionStatusSummary =
   | 'ยังไม่แล้วเสร็จ';
 
 export interface EligibleFactoryMeasurementPointDTO {
+  id: number;
   systemType: MonitoringPointSystemType;
   pointCode: string | null;
   pointName: string | null;
@@ -109,6 +112,8 @@ export interface EligibleFactoryMeasurementPointDTO {
   timeSharingParameters?: string[];
   sharedStackCode?: string | null;
   monitoringPointStatus?: MonitoringPointStatus | null;
+  attachmentLinks: MonitoringPointAttachmentLink[];
+  attachments: MonitoringPointAttachmentDTO[];
   details: Record<string, unknown> | null;
 }
 

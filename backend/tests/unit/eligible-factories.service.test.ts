@@ -176,6 +176,7 @@ describe('eligibleFactoriesService', () => {
           updatedAt: '2026-05-26T20:18:00.143Z',
           measurementPoints: [
             {
+              id: 11,
               systemType: 'CEMS',
               pointCode: 'CEMS-1',
               pointName: 'ปล่องหลัก',
@@ -193,9 +194,12 @@ describe('eligibleFactoriesService', () => {
               primaryFuelOther: null,
               secondaryFuel: null,
               secondaryFuelOther: null,
+              attachmentLinks: [],
+              attachments: [],
               details: null,
             },
             {
+              id: 12,
               systemType: 'WPMS',
               pointCode: 'WPMS-1',
               pointName: 'น้ำทิ้ง',
@@ -213,6 +217,8 @@ describe('eligibleFactoriesService', () => {
               primaryFuelOther: null,
               secondaryFuel: null,
               secondaryFuelOther: null,
+              attachmentLinks: [],
+              attachments: [],
               details: null,
             },
           ],

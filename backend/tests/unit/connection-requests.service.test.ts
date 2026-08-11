@@ -601,6 +601,7 @@ describe('connectionRequestsService', () => {
           wpmsConnectionStatusSummary: 'ยังไม่แล้วเสร็จ',
           measurementPoints: [
             {
+              id: 31,
               systemType: 'CEMS',
               pointCode: 'S001',
               pointName: 'ปล่อง A',
@@ -618,9 +619,12 @@ describe('connectionRequestsService', () => {
               primaryFuelOther: null,
               secondaryFuel: null,
               secondaryFuelOther: null,
+              attachmentLinks: [],
+              attachments: [],
               details: null,
             },
             {
+              id: 32,
               systemType: 'WPMS',
               pointCode: 'W001',
               pointName: 'น้ำทิ้ง A',
@@ -638,6 +642,8 @@ describe('connectionRequestsService', () => {
               primaryFuelOther: null,
               secondaryFuel: null,
               secondaryFuelOther: null,
+              attachmentLinks: [],
+              attachments: [],
               details: null,
             },
           ],

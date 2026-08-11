@@ -463,6 +463,8 @@ describe('monitoringPointFormsService', () => {
           primaryFuelOther: null,
           secondaryFuel: null,
           secondaryFuelOther: null,
+          attachmentLinks: [],
+          attachments: [],
           details: null,
           createdAt: '2026-06-22T00:00:00.000Z',
           updatedAt: '2026-06-22T00:00:00.000Z',

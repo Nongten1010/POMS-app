@@ -11,6 +11,8 @@ import {
   MONITORING_POINT_STATUSES,
   type MonitoringPointStatus,
 } from '../monitoring-point-forms/monitoring-point-forms.types';
+import { parseMonitoringPointAttachmentLinks } from '../monitoring-point-forms/monitoring-point-attachments';
+import { loadMonitoringPointAttachmentDTOs } from '../monitoring-point-forms/monitoring-point-forms.repository';
 import type {
   CreateEligibleFactoryInput,
   EligibleFactoryDTO,
@@ -54,6 +56,7 @@ interface EligibleFactoryRow {
 }
 
 interface EligibleFactoryMonitoringPointRow {
+  id: number | string;
   form_id: number | string;
   system_type: 'CEMS' | 'WPMS';
   point_code: string | null;
@@ -72,6 +75,7 @@ interface EligibleFactoryMonitoringPointRow {
   primary_fuel_other: string | null;
   secondary_fuel: string | null;
   secondary_fuel_other: string | null;
+  attachment_links_json: string;
   details_json: string | null;
 }
 
@@ -97,9 +101,7 @@ export const eligibleFactoriesRepository = {
     return { rows: await hydrateMeasurementPoints(factories), total };
   },
 
-  async findByRegistrationNoNew(
-    registrationNoNew: string,
-  ): Promise<{
+  async findByRegistrationNoNew(registrationNoNew: string): Promise<{
     id: number;
     factoryRegistrationNoNew: string;
     monitoringPointFormId: number | null;
@@ -205,14 +207,11 @@ export const eligibleFactoriesRepository = {
     formId: number,
     actorUserId: number,
   ): Promise<EligibleFactoryDTO | null> {
-    await db('eligible_factories')
-      .where('id', eligibleFactoryId)
-      .whereNull('deleted_at')
-      .update({
-        monitoring_point_form_id: formId,
-        updated_at: db.fn.now(),
-        updated_by: actorUserId,
-      });
+    await db('eligible_factories').where('id', eligibleFactoryId).whereNull('deleted_at').update({
+      monitoring_point_form_id: formId,
+      updated_at: db.fn.now(),
+      updated_by: actorUserId,
+    });
 
     return this.findById(eligibleFactoryId);
   },
@@ -412,7 +411,9 @@ function toInsertRow(
   };
 }
 
-function toMonitoringPointFormUpdateRow(input: CreateEligibleFactoryInput): Record<string, unknown> {
+function toMonitoringPointFormUpdateRow(
+  input: CreateEligibleFactoryInput,
+): Record<string, unknown> {
   return {
     source_system: input.sourceSystem ?? 'monitoring_point_forms',
     source_factory_id: input.sourceFactoryId ?? null,
@@ -514,12 +515,19 @@ async function hydrateMeasurementPoints(rows: EligibleFactoryDTO[]): Promise<Eli
     .whereNull('deleted_at')
     .orderBy('form_id', 'asc')
     .orderBy('id', 'asc');
+  const attachmentsByPointId = await loadMonitoringPointAttachmentDTOs(
+    db,
+    pointRows.map((point) => Number(point.id)),
+  );
 
   const pointsByFormId = new Map<number, EligibleFactoryMeasurementPointDTO[]>();
   for (const pointRow of pointRows) {
     const formId = Number(pointRow.form_id);
     const currentPoints = pointsByFormId.get(formId) ?? [];
-    pointsByFormId.set(formId, [...currentPoints, toMeasurementPointDTO(pointRow)]);
+    pointsByFormId.set(formId, [
+      ...currentPoints,
+      toMeasurementPointDTO(pointRow, attachmentsByPointId.get(Number(pointRow.id)) ?? []),
+    ]);
   }
 
   return rows.map((row) => ({
@@ -527,17 +535,19 @@ async function hydrateMeasurementPoints(rows: EligibleFactoryDTO[]): Promise<Eli
     measurementPoints:
       row.monitoringPointFormId === null
         ? []
-        : pointsByFormId.get(row.monitoringPointFormId) ?? [],
+        : (pointsByFormId.get(row.monitoringPointFormId) ?? []),
   }));
 }
 
 function toMeasurementPointDTO(
   row: EligibleFactoryMonitoringPointRow,
+  attachments: EligibleFactoryMeasurementPointDTO['attachments'],
 ): EligibleFactoryMeasurementPointDTO {
   const details = parseObject(row.details_json);
   const timeSharingParameters = parseStoredStringList(details?.timeSharingParameters);
 
   return {
+    id: Number(row.id),
     systemType: row.system_type,
     pointCode: row.point_code,
     pointName: row.point_name,
@@ -560,7 +570,9 @@ function toMeasurementPointDTO(
       ? null
       : parseNullableString(details?.sharedStackCode),
     monitoringPointStatus: parseMonitoringPointStatus(details?.monitoringPointStatus),
-    details,
+    attachmentLinks: parseMonitoringPointAttachmentLinks(row.attachment_links_json),
+    attachments,
+    details: stripAttachmentFields(details),
   };
 }
 
@@ -571,6 +583,16 @@ function parseStoredStringList(value: unknown): string[] {
     .filter((item): item is string => typeof item === 'string')
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function stripAttachmentFields(
+  details: Record<string, unknown> | null,
+): Record<string, unknown> | null {
+  if (!details) return null;
+  const sanitized = { ...details };
+  delete sanitized.attachmentLinks;
+  delete sanitized.attachments;
+  return sanitized;
 }
 
 function parseNullableString(value: unknown): string | null {
@@ -585,7 +607,9 @@ function parseMonitoringPointStatus(value: unknown): MonitoringPointStatus | nul
 function parseStringList(value: string): string[] {
   try {
     const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [];
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is string => typeof item === 'string')
+      : [];
   } catch {
     return [];
   }
@@ -596,7 +620,9 @@ function parseDelimitedStringList(value: string | null): string[] {
   try {
     const parsed = JSON.parse(value);
     if (Array.isArray(parsed)) {
-      return parsed.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+      return parsed.filter(
+        (item): item is string => typeof item === 'string' && item.trim().length > 0,
+      );
     }
   } catch {
     // Fall back to the comma-separated format below.

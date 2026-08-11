@@ -6,6 +6,7 @@ import { closeFactorySourceDatabase } from './config/factory-source-database';
 import { closeParameterSourceDatabase } from './config/parameter-source-database';
 import { closeBoilerSourceDatabase } from './config/boiler-source-database';
 import { startConnectionRequestAutoCancelWorker } from './modules/connection-requests/connection-request-auto-cancel.worker';
+import { startMonitoringPointAttachmentCleanupWorker } from './modules/monitoring-point-forms/monitoring-point-attachment-cleanup.worker';
 
 const REQUEST_TIMEOUT_MS = 300000;
 
@@ -25,10 +26,12 @@ async function bootstrap(): Promise<void> {
   server.headersTimeout = REQUEST_TIMEOUT_MS + 60000;
   server.setTimeout(REQUEST_TIMEOUT_MS);
   const autoCancelWorker = startConnectionRequestAutoCancelWorker();
+  const attachmentCleanupWorker = startMonitoringPointAttachmentCleanupWorker();
 
   const shutdown = async (signal: string): Promise<void> => {
     logger.info(`[boot] ${signal} received — shutting down gracefully`);
     clearInterval(autoCancelWorker);
+    clearInterval(attachmentCleanupWorker);
     server.close(async () => {
       await closeDatabase();
       await closeFactorySourceDatabase();

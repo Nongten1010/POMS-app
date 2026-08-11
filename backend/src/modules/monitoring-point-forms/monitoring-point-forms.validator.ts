@@ -3,6 +3,7 @@ import {
   MONITORING_POINT_STATUSES,
   MONITORING_POINT_SYSTEM_TYPES,
 } from './monitoring-point-forms.types';
+import { monitoringPointAttachmentLinksSchema } from './monitoring-point-attachments';
 
 const requiredText = (max: number) => z.string().trim().min(1).max(max);
 const optionalText = (max: number) =>
@@ -40,6 +41,8 @@ const typedMonitoringPointFields = [
   'timeSharingParameters',
   'sharedStackCode',
   'monitoringPointStatus',
+  'attachmentLinks',
+  'attachments',
 ] as const;
 const cemsLegalAnnexRequiredBy = [
   'ประกาศกระทรวงอุตสาหกรรม เรื่อง กำหนดให้โรงงานต้องติดตั้งเครื่องมือหรือเครื่องอุปกรณ์พิเศษเพื่อรายงานมลพิษอากาศจากปล่องโรงงาน พ.ศ. 2565',
@@ -60,6 +63,10 @@ const optionalCoordinate = (min: number, max: number) =>
     }, z.coerce.number().finite().min(min).max(max).nullable())
     .optional()
     .default(null);
+const monitoringPointAttachmentReferenceSchema = z.union([
+  z.object({ id: z.coerce.number().int().positive() }).strict(),
+  z.object({ uploadToken: z.string().regex(/^[A-Za-z0-9_-]{43}$/) }).strict(),
+]);
 
 export const saveMonitoringPointFormSchema = z
   .object({
@@ -120,6 +127,8 @@ export const saveMonitoringPointFormSchema = z
               .optional()
               .nullable()
               .default(null),
+            attachmentLinks: monitoringPointAttachmentLinksSchema.optional(),
+            attachments: z.array(monitoringPointAttachmentReferenceSchema).optional(),
             primaryFuel: optionalText(255),
             primaryFuelOther: optionalText(255),
             secondaryFuel: optionalText(255),
@@ -173,6 +182,22 @@ export const saveMonitoringPointFormSchema = z
           })),
       )
       .max(100)
+      .superRefine((points, context) => {
+        const pointIdIndexes = new Map<number, number>();
+        points.forEach((point, index) => {
+          if (point.id === undefined) return;
+          const previousIndex = pointIdIndexes.get(point.id);
+          if (previousIndex === undefined) {
+            pointIdIndexes.set(point.id, index);
+            return;
+          }
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [index, 'id'],
+            message: `Duplicate monitoring point id ${point.id}; first used at points.${previousIndex}.id`,
+          });
+        });
+      })
       .default([]),
   })
   .strict();

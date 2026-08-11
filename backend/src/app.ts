@@ -45,6 +45,13 @@ export function createApp(): Application {
   app.use(cookieParser());
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: true }));
+  const privateUploadPublicPath = `${env.UPLOAD_PUBLIC_PATH.replace(/\/+$/, '')}/.private`;
+  app.use(privateUploadPublicPath, (_req: Request, res: Response) => {
+    res.status(404).json({
+      success: false,
+      error: { code: 'NOT_FOUND', message: 'File not found' },
+    });
+  });
   app.use(
     env.UPLOAD_PUBLIC_PATH,
     express.static(path.resolve(env.UPLOAD_DIR), {

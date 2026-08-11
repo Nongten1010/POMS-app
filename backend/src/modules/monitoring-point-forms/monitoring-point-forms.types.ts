@@ -1,5 +1,9 @@
 import type { PermissionScopeDetails } from '../auth/permissions';
 import type { RegionalAccessDTO } from '../auth/regional-access';
+import type {
+  MonitoringPointAttachmentLink,
+  MonitoringPointAttachmentFileType,
+} from './monitoring-point-attachments';
 
 export const MONITORING_POINT_SYSTEM_TYPES = ['CEMS', 'WPMS'] as const;
 
@@ -15,6 +19,19 @@ export const MONITORING_POINT_STATUSES = [
 
 export type MonitoringPointSystemType = (typeof MONITORING_POINT_SYSTEM_TYPES)[number];
 export type MonitoringPointStatus = (typeof MONITORING_POINT_STATUSES)[number];
+
+export type MonitoringPointAttachmentReference =
+  | { id: number; uploadToken?: never }
+  | { id?: never; uploadToken: string };
+
+export interface MonitoringPointAttachmentDTO {
+  id: number;
+  fileName: string;
+  fileUrl: string;
+  fileUrlExpiresAt: string;
+  fileType: MonitoringPointAttachmentFileType;
+  fileSize: number;
+}
 
 export interface MonitoringPointFormAccessContext {
   actorUserId: number;
@@ -58,6 +75,8 @@ export interface MonitoringPointInput {
   timeSharingParameters?: string[];
   sharedStackCode?: string | null;
   monitoringPointStatus?: MonitoringPointStatus | null;
+  attachmentLinks?: MonitoringPointAttachmentLink[];
+  attachments?: MonitoringPointAttachmentReference[];
   primaryFuel?: string | null;
   primaryFuelOther?: string | null;
   secondaryFuel?: string | null;
@@ -73,7 +92,12 @@ export interface SaveMonitoringPointFormInput {
 export interface MonitoringPointDTO extends Required<
   Omit<
     MonitoringPointInput,
-    'id' | 'details' | 'timeSharingParameters' | 'sharedStackCode' | 'monitoringPointStatus'
+    | 'id'
+    | 'details'
+    | 'timeSharingParameters'
+    | 'sharedStackCode'
+    | 'monitoringPointStatus'
+    | 'attachments'
   >
 > {
   id: number;
@@ -81,6 +105,7 @@ export interface MonitoringPointDTO extends Required<
   timeSharingParameters?: string[];
   sharedStackCode?: string | null;
   monitoringPointStatus?: MonitoringPointStatus | null;
+  attachments: MonitoringPointAttachmentDTO[];
   details: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
