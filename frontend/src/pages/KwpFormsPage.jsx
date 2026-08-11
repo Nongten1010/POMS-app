@@ -2672,7 +2672,7 @@ function Kwp05PaperDocument({ data }) {
                   <TableCell>{formatThaiDateValue(row.startDate)}</TableCell>
                   <TableCell>{formatThaiDateValue(row.endDate)}</TableCell>
                   <TableCell>{row.result}</TableCell>
-                  <TableCell>{row.verifierCompany}</TableCell>
+                  <TableCell>{row.verifierCompany || data.laboratoryName}</TableCell>
                   <TableCell>{row.cemsModel}</TableCell>
                   <TableCell>
                     <Kwp05AttachmentText items={formatKwp05AttachmentItems(row.rataReportFiles, row.rataReportLink)} />

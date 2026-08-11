@@ -5,6 +5,7 @@ import {
   Box,
   Button,
   Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -59,6 +60,8 @@ const monitoringPointFormsApiUrl = import.meta.env.DEV
   ? '/api-proxy/v1/monitoring-point-forms'
   : 'https://d-poms.diw.go.th/api/v1/monitoring-point-forms'
 
+const monitoringPointFormAttachmentsApiUrl = `${monitoringPointFormsApiUrl}/attachments`
+
 const emptyValue = '-'
 
 const subMenus = [
@@ -72,6 +75,7 @@ const wpmsParameterOptions = wpmsParameterOptionItems.map((option) => option.lab
 const legalAnnexOptions = Array.from({ length: 12 }, (_, index) => String(index + 1))
 const parameterNoneOption = 'ไม่มี'
 const maxUploadFileSizeBytes = 10 * 1024 * 1024
+const allowedAttachmentMimeTypes = ['image/jpeg', 'image/png', 'application/pdf']
 const withNoneOption = (options = []) => [parameterNoneOption, ...options.filter((option) => option !== parameterNoneOption)]
 const fuelOtherTriggerValues = ['เชื้อเพลิงชีวมวล (Biomass)', 'เชื้อเพลิงอื่นๆ']
 const eiaAssessmentOptions = ['ไม่มี', 'มี IEE', 'มี EIA', 'มี EHIA', 'อื่นๆ']
@@ -273,6 +277,15 @@ function getConnectionStatusSummaryCellValue(row = {}, type) {
   return type === 'WPMS' ? row.wpmsConnectionStatusSummary : row.cemsConnectionStatusSummary
 }
 
+function isPositiveIntegerId(value) {
+  const numericValue = Number(value)
+  return Number.isInteger(numericValue) && numericValue > 0
+}
+
+function normalizePointPayloadId(value) {
+  return isPositiveIntegerId(value) ? Number(value) : null
+}
+
 function normalizeAttachmentUrl(value) {
   const rawValue = normalizeDisplayValue(value).trim()
 
@@ -289,6 +302,24 @@ function normalizeAttachmentUrl(value) {
   }
 
   return `https://${rawValue}`
+}
+
+function resolveAttachmentOpenUrl(value) {
+  const rawValue = normalizeDisplayValue(value).trim()
+
+  if (!rawValue) {
+    return ''
+  }
+
+  if (/^(https?:|blob:|data:)/i.test(rawValue)) {
+    return rawValue
+  }
+
+  if (import.meta.env.DEV && rawValue.startsWith('/api/v1/')) {
+    return rawValue.replace(/^\/api\/v1/, '/api-proxy/v1')
+  }
+
+  return rawValue
 }
 
 function getAttachmentFileName(value, fallback = 'เอกสารแนบ') {
@@ -326,6 +357,70 @@ function normalizeAttachmentFiles(value) {
   return value ? [value] : []
 }
 
+function normalizeMonitoringPointAttachments(value) {
+  return normalizeAttachmentFiles(value)
+    .map((item, index) => {
+      if (item?.file instanceof File) {
+        return item
+      }
+
+      const id = item?.id
+      const uploadToken = item?.uploadToken
+      const rawFileName = item?.fileName ?? item?.name ?? item?.originalName
+      const fileName = rawFileName ?? `เอกสารแนบ ${index + 1}`
+      const fileUrl = item?.fileUrl ?? item?.url ?? ''
+
+      if (!isPositiveIntegerId(id) && !uploadToken && !rawFileName && !fileUrl) {
+        return null
+      }
+
+      return {
+        id: isPositiveIntegerId(id) ? Number(id) : id,
+        uploadToken,
+        fileName,
+        fileUrl,
+        fileUrlExpiresAt: item?.fileUrlExpiresAt ?? '',
+        fileType: item?.fileType ?? item?.mimeType ?? item?.type ?? '',
+        fileSize: item?.fileSize ?? item?.size ?? null,
+        expiresAt: item?.expiresAt ?? '',
+      }
+    })
+    .filter(Boolean)
+}
+
+function normalizeMonitoringPointAttachmentLinks(value) {
+  const source = Array.isArray(value)
+    ? value
+    : normalizeDisplayValue(value)
+      ? [{ label: null, url: value }]
+      : []
+
+  return source
+    .map((item) => {
+      const url = normalizeAttachmentUrl(typeof item === 'string' ? item : item?.url)
+      const label = typeof item === 'string' ? null : normalizeDisplayValue(item?.label).trim() || null
+
+      return url ? { label, url } : null
+    })
+    .filter(Boolean)
+}
+
+function buildAttachmentPayloadItems(value) {
+  return normalizeMonitoringPointAttachments(value)
+    .map((item) => {
+      if (isPositiveIntegerId(item.id)) {
+        return { id: Number(item.id) }
+      }
+
+      if (item.uploadToken) {
+        return { uploadToken: item.uploadToken }
+      }
+
+      return null
+    })
+    .filter(Boolean)
+}
+
 function getMonitoringPointAttachmentGroups(row = {}) {
   const measurementPoints = Array.isArray(row.measurementPoints) ? row.measurementPoints : []
 
@@ -337,18 +432,18 @@ function getMonitoringPointAttachmentGroups(row = {}) {
       const pointName = normalizeDisplayValue(point?.pointName ?? point?.name)
       const titleParts = [type, pointCode, pointName].filter(Boolean)
       const title = titleParts.length ? titleParts.join(' ') : `จุดตรวจวัด ${pointIndex + 1}`
-      const link = normalizeDisplayValue(point?.attachmentLink ?? point?.link ?? details.attachmentLink ?? details.link)
-      const files = normalizeAttachmentFiles(point?.attachmentFiles ?? point?.attachments ?? point?.documents ?? details.attachmentFiles ?? details.attachments ?? details.documents)
+      const links = normalizeMonitoringPointAttachmentLinks(point?.attachmentLinks ?? details.attachmentLinks ?? point?.attachmentLink ?? point?.link ?? details.attachmentLink ?? details.link)
+      const files = normalizeMonitoringPointAttachments(point?.attachments ?? details.attachments ?? point?.attachmentFiles ?? point?.documents ?? details.attachmentFiles ?? details.documents)
       const items = []
 
-      if (link) {
+      links.forEach((link, linkIndex) => {
         items.push({
-          id: `${title}-link`,
+          id: `${title}-link-${linkIndex}`,
           type: 'link',
-          label: link,
-          url: normalizeAttachmentUrl(link),
+          label: link.label || link.url,
+          url: link.url,
         })
-      }
+      })
 
       files.forEach((fileItem, fileIndex) => {
         const fileName = getAttachmentFileName(fileItem, `เอกสารแนบ ${fileIndex + 1}`)
@@ -358,7 +453,7 @@ function getMonitoringPointAttachmentGroups(row = {}) {
           id: `${title}-file-${fileIndex}-${fileName}`,
           type: 'file',
           label: fileName,
-          url: normalizeAttachmentUrl(fileUrl),
+          url: resolveAttachmentOpenUrl(fileUrl),
         })
       })
 
@@ -514,8 +609,8 @@ function createDefaultMonitoringPoint(type = 'CEMS', order = 1) {
     pendingParameters: [],
     timeSharingParameters: [],
     sharedStackCode: '',
-    attachmentFiles: [],
-    attachmentLink: '',
+    attachments: [],
+    attachmentLinks: [],
     monitoringPointStatus: '',
   }
 }
@@ -546,8 +641,8 @@ function mapMonitoringPointToForm(point = {}, index = 0) {
     pendingParameters: point.pendingParameters ?? details.pendingParameters ?? [],
     timeSharingParameters: normalizeTimeSharingParameters(point.timeSharingParameters ?? details.timeSharingParameters),
     sharedStackCode: point.sharedStackCode ?? details.sharedStackCode ?? details.sharedStack ?? '',
-    attachmentFiles: point.attachmentFiles ?? details.attachmentFiles ?? [],
-    attachmentLink: point.attachmentLink ?? point.link ?? details.attachmentLink ?? details.link ?? '',
+    attachments: normalizeMonitoringPointAttachments(point.attachments ?? details.attachments ?? point.attachmentFiles ?? details.attachmentFiles),
+    attachmentLinks: normalizeMonitoringPointAttachmentLinks(point.attachmentLinks ?? details.attachmentLinks ?? point.attachmentLink ?? point.link ?? details.attachmentLink ?? details.link),
     monitoringPointStatus: point.monitoringPointStatus ?? point.status ?? details.monitoringPointStatus ?? details.status ?? '',
   }
 }
@@ -560,8 +655,8 @@ function mapMonitoringPointForEligibleState(point) {
     pointName: point.pointName || null,
     pointType: isWpms ? 'WASTEWATER' : 'STACK',
     systemType: point.type,
-    attachmentFiles: point.attachmentFiles ?? [],
-    attachmentLink: point.attachmentLink || null,
+    attachments: normalizeMonitoringPointAttachments(point.attachments),
+    attachmentLinks: normalizeMonitoringPointAttachmentLinks(point.attachmentLinks),
     details: isWpms
       ? {
           monitoringPointKind: 'WPMS',
@@ -570,8 +665,8 @@ function mapMonitoringPointForEligibleState(point) {
           pendingParameters: point.pendingParameters ?? [],
           timeSharingParameters: normalizeTimeSharingParameters(point.timeSharingParameters),
           sharedStackCode: point.sharedStackCode || null,
-          attachmentFiles: point.attachmentFiles ?? [],
-          attachmentLink: point.attachmentLink || null,
+          attachments: normalizeMonitoringPointAttachments(point.attachments),
+          attachmentLinks: normalizeMonitoringPointAttachmentLinks(point.attachmentLinks),
           monitoringPointStatus: point.monitoringPointStatus || null,
         }
       : {
@@ -591,8 +686,8 @@ function mapMonitoringPointForEligibleState(point) {
           pendingParameters: point.pendingParameters ?? [],
           timeSharingParameters: normalizeTimeSharingParameters(point.timeSharingParameters),
           sharedStackCode: point.sharedStackCode || null,
-          attachmentFiles: point.attachmentFiles ?? [],
-          attachmentLink: point.attachmentLink || null,
+          attachments: normalizeMonitoringPointAttachments(point.attachments),
+          attachmentLinks: normalizeMonitoringPointAttachmentLinks(point.attachmentLinks),
           monitoringPointStatus: point.monitoringPointStatus || null,
         },
   }
@@ -600,6 +695,7 @@ function mapMonitoringPointForEligibleState(point) {
 
 function mapMonitoringPointFormPayload(point) {
   return {
+    ...(normalizePointPayloadId(point.id) ? { id: normalizePointPayloadId(point.id) } : {}),
     systemType: point.type,
     pointCode: normalizeDisplayValue(point.pointCode) || null,
     pointName: normalizeDisplayValue(point.pointName),
@@ -620,6 +716,8 @@ function mapMonitoringPointFormPayload(point) {
     primaryFuelOther: point.type === 'CEMS' ? normalizeDisplayValue(point.primaryFuelOther) || null : null,
     secondaryFuel: point.type === 'CEMS' ? normalizeDisplayValue(point.secondaryFuel) || null : null,
     secondaryFuelOther: point.type === 'CEMS' ? normalizeDisplayValue(point.secondaryFuelOther) || null : null,
+    attachments: buildAttachmentPayloadItems(point.attachments),
+    attachmentLinks: normalizeMonitoringPointAttachmentLinks(point.attachmentLinks),
     details: null,
   }
 }
@@ -937,16 +1035,21 @@ function EligibleFactoriesPage({ accessToken = '' }) {
             body: JSON.stringify(createMonitoringPointFormPayload(row, nextMonitoringPoints)),
           },
         )
-        await readJsonResponse(result, 'บันทึกข้อมูลจุดตรวจวัดไม่สำเร็จ')
-        const savedPoints = nextMonitoringPoints.map(mapMonitoringPointForEligibleState)
+        const response = await readJsonResponse(result, 'บันทึกข้อมูลจุดตรวจวัดไม่สำเร็จ')
+        const responseData = response?.data ?? {}
+        const responsePoints = Array.isArray(responseData.points) ? responseData.points : []
+        const savedPoints = responsePoints.length
+          ? responsePoints.map(mapMonitoringPointForEligibleState)
+          : nextMonitoringPoints.map(mapMonitoringPointForEligibleState)
         const updateRows = (current) =>
           current.map((factoryRow) =>
             factoryRow.id === row.id || factoryRow.factoryKey === row.factoryKey
               ? {
                   ...factoryRow,
+                  monitoringPointFormId: responseData.id ?? row.monitoringPointFormId ?? row.formId ?? null,
                   measurementPoints: savedPoints,
-                  cemsPointCount: countMonitoringPointsByType(nextMonitoringPoints, 'CEMS'),
-                  wpmsPointCount: countMonitoringPointsByType(nextMonitoringPoints, 'WPMS'),
+                  cemsPointCount: countMonitoringPointsByType(savedPoints, 'CEMS'),
+                  wpmsPointCount: countMonitoringPointsByType(savedPoints, 'WPMS'),
                 }
               : factoryRow,
           )
@@ -1247,6 +1350,7 @@ function EligibleFactoriesPage({ accessToken = '' }) {
         factory={selectedFactoryForSheet}
         monitoringPoints={monitoringPoints}
         activeMonitoringPointId={activeMonitoringPointId}
+        accessToken={accessToken}
         saving={selectedFactoryForSheet ? savingEligibleFactoryIdSet.has(selectedFactoryForSheet.id) : false}
         onClose={handleCloseEligibleSheet}
         onActiveMonitoringPointChange={setActiveMonitoringPointId}
@@ -1266,6 +1370,7 @@ function EligibleFactoryBottomSheet({
   factory,
   monitoringPoints,
   activeMonitoringPointId,
+  accessToken,
   saving,
   onClose,
   onActiveMonitoringPointChange,
@@ -1710,7 +1815,12 @@ function EligibleFactoryBottomSheet({
             <Box sx={{ minHeight: 0, display: 'flex', overflow: 'hidden' }}>
               {activePoint ? (
                 <Box sx={{ width: '100%', height: '100%', minHeight: 0, overflow: 'auto', pr: { md: 0.5 } }}>
-                  <MonitoringPointForm point={activePoint} onChange={updateActivePoint} onTypeChange={handleTypeChange} />
+                  <MonitoringPointForm
+                    point={activePoint}
+                    accessToken={accessToken}
+                    onChange={updateActivePoint}
+                    onTypeChange={handleTypeChange}
+                  />
                 </Box>
               ) : null}
             </Box>
@@ -1789,7 +1899,7 @@ function ReadOnlyField({ label, value }) {
   )
 }
 
-function MonitoringPointForm({ point, onChange, onTypeChange }) {
+function MonitoringPointForm({ point, accessToken, onChange, onTypeChange }) {
   const isWpms = point.type === 'WPMS'
   const parameterOptions = isWpms ? wpmsParameterOptions : cemsParameterOptions
 
@@ -2025,17 +2135,15 @@ function MonitoringPointForm({ point, onChange, onTypeChange }) {
               label="เอกสารแนบ"
               name={`monitoring-point-attachments-${point.id}`}
               accept="image/*,.pdf"
-              value={point.attachmentFiles ?? []}
-              onChange={(value) => onChange({ attachmentFiles: value })}
+              accessToken={accessToken}
+              value={point.attachments ?? []}
+              onChange={(value) => onChange({ attachments: value })}
             />
           </Grid>
-          <Grid size={{ xs: 12, md: 3 }}>
-            <TextField
-              label="Link"
-              size="small"
-              fullWidth
-              value={point.attachmentLink ?? ''}
-              onChange={(event) => onChange({ attachmentLink: event.target.value })}
+          <Grid size={{ xs: 12, md: 6 }}>
+            <AttachmentLinksField
+              value={point.attachmentLinks ?? []}
+              onChange={(value) => onChange({ attachmentLinks: value })}
             />
           </Grid>
           <Grid size={{ xs: 12, md: 3 }}>
@@ -2050,10 +2158,80 @@ function MonitoringPointForm({ point, onChange, onTypeChange }) {
   )
 }
 
+function AttachmentLinksField({ value = [], onChange }) {
+  const links = Array.isArray(value) ? value : []
+  const visibleLinks = links.length ? links : [{ label: '', url: '' }]
+
+  const commitLinks = (nextLinks) => {
+    onChange?.(
+      nextLinks.filter(
+        (link) => normalizeDisplayValue(link?.label).trim() || normalizeDisplayValue(link?.url).trim(),
+      ),
+    )
+  }
+
+  const updateLink = (targetIndex, patch) => {
+    commitLinks(
+      visibleLinks.map((link, index) => (index === targetIndex ? { ...link, ...patch } : link)),
+    )
+  }
+
+  const addLink = () => {
+    onChange?.([...links, { label: '', url: '' }])
+  }
+
+  const removeLink = (targetIndex) => {
+    commitLinks(visibleLinks.filter((_, index) => index !== targetIndex))
+  }
+
+  return (
+    <Stack spacing={1}>
+      {visibleLinks.map((link, index) => (
+        <Grid container spacing={1} key={`attachment-link-${index}`} sx={{ alignItems: 'center' }}>
+          <Grid size={{ xs: 12, md: 4 }}>
+            <TextField
+              label="ชื่อ Link"
+              size="small"
+              fullWidth
+              value={link?.label ?? ''}
+              onChange={(event) => updateLink(index, { label: event.target.value })}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, md: 7 }}>
+            <TextField
+              label="Link"
+              size="small"
+              fullWidth
+              value={link?.url ?? ''}
+              onChange={(event) => updateLink(index, { url: event.target.value })}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, md: 1 }}>
+            <IconButton
+              size="small"
+              aria-label="ลบ Link"
+              onClick={() => removeLink(index)}
+              disabled={!links.length}
+            >
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </Grid>
+        </Grid>
+      ))}
+      <Box>
+        <Button size="small" variant="text" startIcon={<LinkIcon />} onClick={addLink}>
+          เพิ่ม Link
+        </Button>
+      </Box>
+    </Stack>
+  )
+}
+
 function EligibleUploadFileField({
   label,
   accept,
   name,
+  accessToken,
   value = [],
   onChange,
   multiple = true,
@@ -2061,8 +2239,9 @@ function EligibleUploadFileField({
 }) {
   const inputRef = useRef(null)
   const [fileError, setFileError] = useState('')
-  const selectedFiles = Array.isArray(value) ? value : []
-  const fileNames = selectedFiles.map((item) => item.file?.name).filter(Boolean).join(', ')
+  const [uploading, setUploading] = useState(false)
+  const selectedFiles = normalizeMonitoringPointAttachments(value)
+  const fileNames = selectedFiles.map((item) => getAttachmentFileName(item)).filter(Boolean).join(', ')
   const buttonLabel = fileNames || label
 
   const syncInputFiles = (items) => {
@@ -2084,42 +2263,84 @@ function EligibleUploadFileField({
     syncInputFiles(items)
   }
 
-  const handleFilesChange = (event) => {
-    const selectedInputFiles = Array.from(event.target.files ?? [])
-    const oversizedFiles = selectedInputFiles.filter((file) => file.size > maxUploadFileSizeBytes)
-    const acceptedFiles = selectedInputFiles.filter((file) => file.size <= maxUploadFileSizeBytes)
-    const incomingFiles = acceptedFiles.map((file) => ({
-      id: `${file.name}-${file.lastModified}-${file.size}`,
-      file,
-      fileUrl: URL.createObjectURL(file),
-      previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : '',
-    }))
-    const filesById = new Map(selectedFiles.map((item) => [item.id, item]))
-    setFileError(oversizedFiles.length
-      ? `ไฟล์ ${oversizedFiles.map((file) => file.name).join(', ')} มีขนาดเกิน 10 MB`
-      : '')
+  const uploadAttachmentFile = async (file) => {
+    const uploadBody = new FormData()
+    uploadBody.append('file', file)
 
-    incomingFiles.forEach((item) => {
-      if (filesById.has(item.id)) {
-        if (item.fileUrl) {
-          URL.revokeObjectURL(item.fileUrl)
-        }
-        if (item.previewUrl) {
-          URL.revokeObjectURL(item.previewUrl)
-        }
-        return
-      }
-      filesById.set(item.id, item)
+    const result = await fetch(monitoringPointFormAttachmentsApiUrl, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: uploadBody,
     })
+    const response = await readJsonResponse(result, 'อัปโหลดเอกสารแนบไม่สำเร็จ')
+    const attachment = response?.data ?? {}
 
-    updateFiles(multiple ? Array.from(filesById.values()) : incomingFiles.slice(0, 1))
+    return {
+      uploadToken: attachment.uploadToken,
+      fileName: attachment.fileName ?? file.name,
+      fileType: attachment.fileType ?? file.type,
+      fileSize: attachment.fileSize ?? file.size,
+      expiresAt: attachment.expiresAt ?? '',
+      previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : '',
+    }
+  }
+
+  const handleFilesChange = async (event) => {
+    const selectedInputFiles = Array.from(event.target.files ?? [])
+    event.target.value = ''
+
+    if (!selectedInputFiles.length) {
+      return
+    }
+
+    if (!accessToken) {
+      setFileError('กรุณาเข้าสู่ระบบก่อนอัปโหลดเอกสารแนบ')
+      return
+    }
+
+    const oversizedFiles = selectedInputFiles.filter((file) => file.size > maxUploadFileSizeBytes)
+    const unsupportedFiles = selectedInputFiles.filter((file) => !allowedAttachmentMimeTypes.includes(file.type))
+    const acceptedFiles = selectedInputFiles.filter((file) =>
+      file.size <= maxUploadFileSizeBytes && allowedAttachmentMimeTypes.includes(file.type)
+    )
+    const errorMessages = []
+
+    if (oversizedFiles.length) {
+      errorMessages.push(`ไฟล์ ${oversizedFiles.map((file) => file.name).join(', ')} มีขนาดเกิน 10 MB`)
+    }
+
+    if (unsupportedFiles.length) {
+      errorMessages.push(`ไฟล์ ${unsupportedFiles.map((file) => file.name).join(', ')} ต้องเป็น JPG, PNG หรือ PDF`)
+    }
+
+    setFileError(errorMessages.join(' • '))
+
+    if (!acceptedFiles.length) {
+      return
+    }
+
+    setUploading(true)
+    try {
+      const uploadedFiles = []
+
+      for (const file of acceptedFiles) {
+        uploadedFiles.push(await uploadAttachmentFile(file))
+      }
+
+      const nextFiles = multiple ? [...selectedFiles, ...uploadedFiles] : uploadedFiles.slice(0, 1)
+      updateFiles(nextFiles)
+    } catch (error) {
+      setFileError(error instanceof Error ? error.message : 'อัปโหลดเอกสารแนบไม่สำเร็จ')
+    } finally {
+      setUploading(false)
+    }
   }
 
   const removeSelectedFile = (targetIndex) => {
     const removedFile = selectedFiles[targetIndex]
-    if (removedFile?.fileUrl) {
-      URL.revokeObjectURL(removedFile.fileUrl)
-    }
     if (removedFile?.previewUrl) {
       URL.revokeObjectURL(removedFile.previewUrl)
     }
@@ -2135,7 +2356,8 @@ function EligibleUploadFileField({
         variant="outlined"
         size="small"
         fullWidth
-        startIcon={<UploadFileIcon />}
+        startIcon={uploading ? <CircularProgress size={16} /> : <UploadFileIcon />}
+        disabled={uploading}
         sx={{
           minHeight: 40,
           justifyContent: 'flex-start',
@@ -2148,7 +2370,7 @@ function EligibleUploadFileField({
           },
         }}
       >
-        {buttonLabel}
+        {uploading ? 'กำลังอัปโหลด' : buttonLabel}
         <Box
           component="input"
           ref={inputRef}
@@ -2172,7 +2394,7 @@ function EligibleUploadFileField({
         <Stack spacing={1}>
           {selectedFiles.map((item, index) => (
             <Box
-              key={item.id}
+              key={item.id ?? item.uploadToken ?? `${getAttachmentFileName(item)}-${index}`}
               sx={{
                 display: 'flex',
                 gap: 1,
@@ -2188,7 +2410,7 @@ function EligibleUploadFileField({
                 <Box
                   component="img"
                   src={item.previewUrl}
-                  alt={item.file.name}
+                  alt={getAttachmentFileName(item)}
                   sx={{
                     width: 48,
                     height: 48,
@@ -2220,14 +2442,15 @@ function EligibleUploadFileField({
                 </Box>
               )}
               <Box sx={{ minWidth: 0, flex: 1 }}>
-                <Typography variant="body2" noWrap title={item.file.name}>
-                  {item.file.name}
+                <Typography variant="body2" noWrap title={getAttachmentFileName(item)}>
+                  {getAttachmentFileName(item)}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  {(item.file.size / 1024 / 1024).toFixed(2)} MB
+                  {item.uploadToken ? 'รอบันทึก' : 'บันทึกแล้ว'}
+                  {item.fileSize ? ` • ${(item.fileSize / 1024 / 1024).toFixed(2)} MB` : ''}
                 </Typography>
               </Box>
-              <IconButton size="small" aria-label={`ลบไฟล์ ${item.file.name}`} onClick={() => removeSelectedFile(index)}>
+              <IconButton size="small" aria-label={`ลบไฟล์ ${getAttachmentFileName(item)}`} onClick={() => removeSelectedFile(index)}>
                 <CloseIcon fontSize="small" />
               </IconButton>
             </Box>
