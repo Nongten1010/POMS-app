@@ -2140,7 +2140,7 @@ function MonitoringPointForm({ point, accessToken, onChange, onTypeChange }) {
               onChange={(value) => onChange({ attachments: value })}
             />
           </Grid>
-          <Grid size={{ xs: 12, md: 6 }}>
+          <Grid size={{ xs: 12, md: 3 }}>
             <AttachmentLinksField
               value={point.attachmentLinks ?? []}
               onChange={(value) => onChange({ attachmentLinks: value })}
