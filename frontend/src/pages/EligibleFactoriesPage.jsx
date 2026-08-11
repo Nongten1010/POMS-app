@@ -2159,71 +2159,19 @@ function MonitoringPointForm({ point, accessToken, onChange, onTypeChange }) {
 }
 
 function AttachmentLinksField({ value = [], onChange }) {
-  const links = Array.isArray(value) ? value : []
-  const visibleLinks = links.length ? links : [{ label: '', url: '' }]
-
-  const commitLinks = (nextLinks) => {
-    onChange?.(
-      nextLinks.filter(
-        (link) => normalizeDisplayValue(link?.label).trim() || normalizeDisplayValue(link?.url).trim(),
-      ),
-    )
-  }
-
-  const updateLink = (targetIndex, patch) => {
-    commitLinks(
-      visibleLinks.map((link, index) => (index === targetIndex ? { ...link, ...patch } : link)),
-    )
-  }
-
-  const addLink = () => {
-    onChange?.([...links, { label: '', url: '' }])
-  }
-
-  const removeLink = (targetIndex) => {
-    commitLinks(visibleLinks.filter((_, index) => index !== targetIndex))
-  }
+  const firstLink = Array.isArray(value) ? value[0] : null
 
   return (
-    <Stack spacing={1}>
-      {visibleLinks.map((link, index) => (
-        <Grid container spacing={1} key={`attachment-link-${index}`} sx={{ alignItems: 'center' }}>
-          <Grid size={{ xs: 12, md: 4 }}>
-            <TextField
-              label="ชื่อ Link"
-              size="small"
-              fullWidth
-              value={link?.label ?? ''}
-              onChange={(event) => updateLink(index, { label: event.target.value })}
-            />
-          </Grid>
-          <Grid size={{ xs: 12, md: 7 }}>
-            <TextField
-              label="Link"
-              size="small"
-              fullWidth
-              value={link?.url ?? ''}
-              onChange={(event) => updateLink(index, { url: event.target.value })}
-            />
-          </Grid>
-          <Grid size={{ xs: 12, md: 1 }}>
-            <IconButton
-              size="small"
-              aria-label="ลบ Link"
-              onClick={() => removeLink(index)}
-              disabled={!links.length}
-            >
-              <CloseIcon fontSize="small" />
-            </IconButton>
-          </Grid>
-        </Grid>
-      ))}
-      <Box>
-        <Button size="small" variant="text" startIcon={<LinkIcon />} onClick={addLink}>
-          เพิ่ม Link
-        </Button>
-      </Box>
-    </Stack>
+    <TextField
+      label="Link"
+      size="small"
+      fullWidth
+      value={firstLink?.url ?? ''}
+      onChange={(event) => {
+        const url = event.target.value
+        onChange?.(normalizeDisplayValue(url).trim() ? [{ label: null, url }] : [])
+      }}
+    />
   )
 }
 
