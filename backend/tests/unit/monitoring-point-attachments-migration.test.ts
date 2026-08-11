@@ -13,6 +13,15 @@ describe('monitoring point attachments migration', () => {
     await up(harness.knex);
 
     expect(config).toEqual({ transaction: true });
+    expect(harness.raw.mock.calls[0]?.[0]).toContain(
+      'attachment_links_json NVARCHAR(MAX) NOT NULL',
+    );
+    expect(harness.raw.mock.calls[0]?.[0]).not.toContain(
+      'ck_factory_monitoring_points_attachment_links_json',
+    );
+    expect(harness.raw.mock.calls[1]?.[0]).toContain(
+      'ck_factory_monitoring_points_attachment_links_json',
+    );
     expect(harness.createTable).toHaveBeenCalledWith(
       'factory_monitoring_point_attachments',
       expect.any(Function),

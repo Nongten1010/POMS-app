@@ -12,7 +12,9 @@ export async function up(knex: Knex): Promise<void> {
     ALTER TABLE ${POINTS_TABLE}
     ADD attachment_links_json NVARCHAR(MAX) NOT NULL
       CONSTRAINT ${LINKS_DEFAULT_CONSTRAINT} DEFAULT N'[]' WITH VALUES;
+  `);
 
+  await knex.schema.raw(`
     ALTER TABLE ${POINTS_TABLE} WITH CHECK
     ADD CONSTRAINT ${LINKS_CHECK_CONSTRAINT}
     CHECK (
