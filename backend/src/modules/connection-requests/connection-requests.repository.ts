@@ -176,6 +176,7 @@ interface ListAccess {
   scope: AccessScope;
   regionalAccess?: RegionalAccessDTO | null;
   useAssignedFactoryAccess?: boolean;
+  includeRequestOwnerAccess?: boolean;
 }
 
 interface FactoryRow {
@@ -998,6 +999,30 @@ export const connectionRequestsRepository = {
     return row ? hydrate(row) : null;
   },
 
+  async findByIdForReadAccess(
+    id: number,
+    access: Pick<ListAccess, 'actorUserId' | 'scope' | 'regionalAccess'>,
+  ): Promise<ConnectionRequestDTO | null> {
+    const scopeValue = getAccessScopeValue(access.scope);
+    if (
+      !['ALL', 'OWN_FACTORY', 'IN_REGION', 'IN_PROVINCE', 'IN_ESTATE'].includes(scopeValue ?? '')
+    ) {
+      return null;
+    }
+
+    const row = await buildBaseQuery(
+      {},
+      {
+        ...access,
+        useAssignedFactoryAccess: true,
+        includeRequestOwnerAccess: true,
+      },
+    )
+      .where('id', id)
+      .first();
+    return row ? hydrate(row) : null;
+  },
+
   async replaceForm(
     id: number,
     input: CreateConnectionRequestInput,
@@ -1751,7 +1776,15 @@ function buildBaseQuery(
   }
   const scopeValue = getAccessScopeValue(access.scope);
   if (scopeValue === 'OWN_FACTORY' && access.useAssignedFactoryAccess) {
-    applyAssignedRequestFactoryAccessFilter(builder, access.actorUserId);
+    if (access.includeRequestOwnerAccess) {
+      builder.where(function requestOwnerOrAssignedFactoryAccess() {
+        this.where('created_by', access.actorUserId).orWhere(function assignedFactoryAccess() {
+          applyAssignedRequestFactoryAccessFilter(this, access.actorUserId);
+        });
+      });
+    } else {
+      applyAssignedRequestFactoryAccessFilter(builder, access.actorUserId);
+    }
   } else if (requiresAssignedRequestAccess(access.scope, access.regionalAccess)) {
     builder.where('created_by', access.actorUserId);
   }

@@ -331,6 +331,27 @@ describe('connectionRequestsRepository query helpers', () => {
     expect(compiled.bindings.filter((binding: unknown) => binding === 42)).toHaveLength(2);
   });
 
+  it('authorizes request reads through either request ownership or assigned factory access', () => {
+    const compiled = buildBaseQueryForTests(
+      {},
+      {
+        actorUserId: 42,
+        scope: 'OWN_FACTORY',
+        useAssignedFactoryAccess: true,
+        includeRequestOwnerAccess: true,
+      },
+    )
+      .where('id', 12)
+      .toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('[created_by] = ?');
+    expect(sql).toContain('user_juristics');
+    expect(sql).toContain('user_factory_access');
+    expect(compiled.bindings.filter((binding: unknown) => binding === 42)).toHaveLength(3);
+    expect(compiled.bindings).toContain(12);
+  });
+
   it('keeps ordinary OWN_FACTORY request lists scoped to the request creator', () => {
     const compiled = buildBaseQueryForTests(
       { factoryId: '10120000325542' },

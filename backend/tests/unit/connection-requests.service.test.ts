@@ -4,6 +4,7 @@ jest.mock('../../src/modules/connection-requests/connection-requests.repository'
   connectionRequestsRepository: {
     create: jest.fn(),
     findById: jest.fn(),
+    findByIdForReadAccess: jest.fn(),
     findFactorySummariesForRequests: jest.fn(),
     findCurrentPomsFactoryNamesForRequests: jest.fn(),
     replaceForm: jest.fn(),
@@ -155,6 +156,9 @@ describe('connectionRequestsService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockedRepository.findByIdForReadAccess.mockImplementation((id) =>
+      mockedRepository.findById(id),
+    );
     mockedRepository.listFavoriteFactoryIds.mockResolvedValue([]);
     mockedRepository.listFactoryMainTypeLabels.mockResolvedValue(new Map());
     mockedRepository.listProvinceRegions.mockResolvedValue(new Map());
@@ -2020,14 +2024,68 @@ describe('connectionRequestsService', () => {
     });
   });
 
-  it('blocks regional officers from reading request detail outside their permission region scope', async () => {
-    mockedRepository.findById.mockResolvedValue(
-      requestDto({
-        createdBy: 99,
-        regionName: 'ภาคเหนือ',
-        regionCode: 'ภาคเหนือ',
-      }),
+  it('allows an assigned factory operator to read a request created by an officer', async () => {
+    const request = requestDto({ createdBy: 99 });
+    mockedRepository.findByIdForReadAccess.mockResolvedValue(request);
+
+    await expect(connectionRequestsService.getById(1, actorUserId, 'OWN_FACTORY')).resolves.toEqual(
+      request,
     );
+    expect(mockedRepository.findByIdForReadAccess).toHaveBeenCalledWith(1, {
+      actorUserId,
+      scope: 'OWN_FACTORY',
+      regionalAccess: undefined,
+    });
+  });
+
+  it('uses the same scoped request read for detail and device-config GETs', async () => {
+    const request = requestDto({
+      createdBy: 99,
+      measurementPoints: [
+        {
+          id: 1,
+          pointName: 'ปล่องระบาย A',
+          pointCode: 'STACK-A',
+          pointType: 'STACK',
+          latitude: null,
+          longitude: null,
+          parameters: ['NOx'],
+          description: null,
+        },
+      ],
+    });
+    mockedRepository.findByIdForReadAccess.mockResolvedValue(request);
+    mockedRepository.findFactorySummariesForRequests.mockResolvedValue(new Map());
+    mockedDeviceConnectionsService.listByRequestId.mockResolvedValue([
+      deviceConnectionConfig({ requestId: 1 }),
+    ]);
+
+    await expect(
+      connectionRequestsService.getDetail(1, actorUserId, 'OWN_FACTORY'),
+    ).resolves.toBeDefined();
+    await expect(
+      connectionRequestsService.getDeviceConfigFormDetail(1, 'STACK-A', actorUserId, 'OWN_FACTORY'),
+    ).resolves.toBeDefined();
+    await expect(
+      connectionRequestsService.getSingleDeviceConfigFormDetail(1, 10, actorUserId, 'OWN_FACTORY'),
+    ).resolves.toBeDefined();
+
+    expect(mockedRepository.findByIdForReadAccess).toHaveBeenCalledTimes(3);
+  });
+
+  it('hides a request from an unassigned non-owner factory operator', async () => {
+    mockedRepository.findByIdForReadAccess.mockResolvedValue(null);
+
+    await expect(
+      connectionRequestsService.getById(1, actorUserId, 'OWN_FACTORY'),
+    ).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+      message: 'Connection request not found',
+    });
+  });
+
+  it('blocks regional officers from reading request detail outside their permission region scope', async () => {
+    mockedRepository.findByIdForReadAccess.mockResolvedValue(null);
 
     await expect(
       connectionRequestsService.getById(
@@ -2086,13 +2144,7 @@ describe('connectionRequestsService', () => {
   });
 
   it('fails closed for explicit IN_REGION request reads without a profile assignment', async () => {
-    mockedRepository.findById.mockResolvedValue(
-      requestDto({
-        createdBy: 99,
-        regionName: 'ภาคตะวันออก',
-        regionCode: 'ภาคตะวันออก',
-      }),
-    );
+    mockedRepository.findByIdForReadAccess.mockResolvedValue(null);
 
     await expect(
       connectionRequestsService.getById(
@@ -2108,13 +2160,7 @@ describe('connectionRequestsService', () => {
   });
 
   it('does not let request ownership bypass a non-owner regional scope', async () => {
-    mockedRepository.findById.mockResolvedValue(
-      requestDto({
-        createdBy: actorUserId,
-        regionName: 'ภาคเหนือ',
-        regionCode: 'ภาคเหนือ',
-      }),
-    );
+    mockedRepository.findByIdForReadAccess.mockResolvedValue(null);
 
     await expect(
       connectionRequestsService.getById(

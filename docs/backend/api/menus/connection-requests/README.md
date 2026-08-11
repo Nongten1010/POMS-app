@@ -56,9 +56,10 @@ curl --request POST \
 | ตรวจสอบและเปลี่ยนคำขอเป็นเชื่อมต่อแล้ว | `POST` | `/api/v1/cems-wpms-requests/:id/verify-connection` | Bearer | `cems_wpms_requests:approve` | [Connected factory profile sync](#connected-factory-profile-sync) |
 | อนุมัติแบบและออกรหัสจุดตรวจวัด | `POST` | `/api/v1/cems-wpms-requests/:id/review` | Bearer | `cems_wpms_requests:approve` | [Approve design](#approve-design) |
 | อ่านรายละเอียดคำขอและรหัสจุด | `GET` | `/api/v1/cems-wpms-requests/:id` | Bearer | `cems_wpms_requests:view` | [Read request](#read-request) |
-| อ่านรายละเอียดเต็มสำหรับ prefill | `GET` | `/api/v1/cems-wpms-requests/:id/detail` | Bearer | `cems_wpms_requests:view` | [Frontend measurement-point handoff](#frontend-measurement-point-handoff) |
+| อ่านรายละเอียดเต็มสำหรับ prefill | `GET` | `/api/v1/cems-wpms-requests/:id/detail` | Bearer | `cems_wpms_requests:view` | [Read request](#read-request), [Frontend measurement-point handoff](#frontend-measurement-point-handoff) |
 | แก้ไขและส่งแบบคำขออีกครั้ง | `PUT` | `/api/v1/cems-wpms-requests/:id/form` | Bearer | `cems_wpms_requests:edit` | [Frontend measurement-point handoff](#frontend-measurement-point-handoff) |
 | อ่านแบบตั้งค่าอุปกรณ์ของจุดในคำขอ | `GET` | `/api/v1/cems-wpms-requests/:id/device-configs?stationId=:stationId` | Bearer | `cems_wpms_requests:view` | [Device configs](./device-configs.md) |
+| อ่านแบบตั้งค่าอุปกรณ์รายการเดียวในคำขอ | `GET` | `/api/v1/cems-wpms-requests/:id/device-configs/:configId` | Bearer | `cems_wpms_requests:view` | [Device configs](./device-configs.md) |
 | บันทึกการตั้งค่าอุปกรณ์ของจุดในคำขอ | `POST` | `/api/v1/cems-wpms-requests/:id/device-configs` | Bearer | `cems_wpms_requests:edit` | [Device configs](./device-configs.md) |
 | อ่านจุดตรวจวัดที่เชื่อมต่อแล้ว | `GET` | `/api/v1/connected-measurement-points` | Bearer | `cems_wpms_requests:view` | [Connected points](#connected-points) |
 | อ่านจุดตรวจวัดของโรงงานและข้อมูล prefill | `GET` | `/api/v1/connected-measurement-points/factories/:factoryId` | Bearer | `cems_wpms_requests:view` | [Shared connected-point contract](../../shared/connected-measurement-points/README.md) |
@@ -522,6 +523,13 @@ Path fields:
 
 Minimal request: ไม่มี request body.
 
+Authorization:
+
+- scope `ALL`, `IN_REGION`, `IN_PROVINCE` และ `IN_ESTATE` ใช้ permission และพื้นที่ของผู้เรียกตามปกติ.
+- scope `OWN_FACTORY` อ่านได้เมื่อผู้เรียกเป็น `createdBy` ของคำขอ หรือได้รับมอบหมายโรงงานของคำขอผ่าน `user_juristics` หรือ `user_factory_access`.
+- กฎเดียวกันใช้กับ `GET /api/v1/cems-wpms-requests/:id`, `GET /api/v1/cems-wpms-requests/:id/detail`, `GET /api/v1/cems-wpms-requests/:id/device-configs` และ `GET /api/v1/cems-wpms-requests/:id/device-configs/:configId`.
+- คำขอที่ไม่อยู่ใน scope ตอบ `404 NOT_FOUND` เพื่อไม่เปิดเผยว่ามี resource อยู่; สิทธิ์เขียนที่ระบุ owner ยังคงตรวจ `createdBy` และไม่ได้ขยายตาม factory assignment.
+
 Minimal response:
 
 ```json
@@ -630,8 +638,8 @@ Minimal response:
 ใช้ error envelope กลางของระบบ:
 
 - `401 Unauthorized` เมื่อไม่มี bearer token ที่ถูกต้อง.
-- `403 Forbidden` เมื่อไม่มี permission หรืออ่านคำขอนอก scope.
-- `404 Not Found` เมื่อไม่พบคำขอหรือจุดตรวจวัดใน scope.
+- `403 Forbidden` เมื่อไม่มี permission.
+- `404 Not Found` เมื่อไม่พบคำขอหรือจุดตรวจวัด หรือ resource อยู่นอก data scope.
 - `404 Not Found` เมื่อ endpoint สร้างคำขอ resolve active eligible factory ไม่สำเร็จ.
 - `409 Conflict` เมื่อคำขอเคยผูก eligible factory ไว้ แต่ eligible row ไม่ active แล้วในเวลาที่เชื่อมต่อ.
 - `400 Bad Request` เมื่อ payload หรือสถานะปัจจุบันไม่อนุญาตให้ทำ action.
@@ -650,9 +658,10 @@ Minimal response:
 | Routes | [`connection-requests.routes.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.routes.ts), [`connected-measurement-points.routes.ts`](../../../../../backend/src/modules/connection-requests/connected-measurement-points.routes.ts) |
 | Validators | [`connection-requests.validator.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.validator.ts), [`parameter-values.validator.ts`](../../../../../backend/src/modules/parameter-values/parameter-values.validator.ts), [`alert-events.validator.ts`](../../../../../backend/src/modules/alert-events/alert-events.validator.ts), [`integration-device-configs.validator.ts`](../../../../../backend/src/modules/integrations/integration-device-configs.validator.ts) |
 | Public types | [`connection-requests.types.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.types.ts) |
+| Request read authorization | [`connection-requests.service.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.service.ts), [`connection-requests.repository.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.repository.ts) |
 | Sequence implementation | [`connection-requests.repository.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.repository.ts) |
 | Reverse-proxy path normalization | [`annual-point-code-path.ts`](../../../../../backend/src/shared/middlewares/annual-point-code-path.ts), [`connected-measurement-points.routes.ts`](../../../../../backend/src/modules/connection-requests/connected-measurement-points.routes.ts), [`integrations.routes.ts`](../../../../../backend/src/modules/integrations/integrations.routes.ts) |
 | Factory-profile patch rules | [`connected-factory-profile.ts`](../../../../../backend/src/modules/connection-requests/connected-factory-profile.ts) |
 | Migrations | [`0075_start_operator_point_codes_at_2001.ts`](../../../../../backend/src/db/migrations/0075_start_operator_point_codes_at_2001.ts), [`0076_sync_connected_factory_profiles_with_eligible_factories.ts`](../../../../../backend/src/db/migrations/0076_sync_connected_factory_profiles_with_eligible_factories.ts) |
-| Tests | [`connection-requests.point-code-sequence.repository.test.ts`](../../../../../backend/tests/unit/connection-requests.point-code-sequence.repository.test.ts), [`parameter-values.validator.test.ts`](../../../../../backend/tests/unit/parameter-values.validator.test.ts), [`alert-events.route.test.ts`](../../../../../backend/tests/unit/alert-events.route.test.ts), [`connected-measurement-points.route.test.ts`](../../../../../backend/tests/unit/connected-measurement-points.route.test.ts), [`integration-device-configs.route.test.ts`](../../../../../backend/tests/unit/integration-device-configs.route.test.ts) |
+| Tests | [`connection-requests.service.test.ts`](../../../../../backend/tests/unit/connection-requests.service.test.ts), [`connection-requests.repository.test.ts`](../../../../../backend/tests/unit/connection-requests.repository.test.ts), [`connection-requests.point-code-sequence.repository.test.ts`](../../../../../backend/tests/unit/connection-requests.point-code-sequence.repository.test.ts), [`parameter-values.validator.test.ts`](../../../../../backend/tests/unit/parameter-values.validator.test.ts), [`alert-events.route.test.ts`](../../../../../backend/tests/unit/alert-events.route.test.ts), [`connected-measurement-points.route.test.ts`](../../../../../backend/tests/unit/connected-measurement-points.route.test.ts), [`integration-device-configs.route.test.ts`](../../../../../backend/tests/unit/integration-device-configs.route.test.ts) |
 | Evidence | [Restore S/W point-code format TDD](../../../evidence/connection-requests/legacy-point-code-format-restored.tdd.md), [Request table current/live POMS factory name TDD](../../../evidence/connection-requests/request-table-current-factory-name.tdd.md) |

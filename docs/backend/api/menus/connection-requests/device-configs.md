@@ -124,7 +124,8 @@ Client ไม่ส่ง primary key/foreign key ของตารางโด
 
 - Authentication: required
 - Permission: `cems_wpms_requests:view`
-- Data scope: scope ของ permission และ region/province/owner ที่ผูกกับ request
+- Data scope: scope ของ permission และพื้นที่ที่ผูกกับ request; สำหรับ `OWN_FACTORY` ผู้เรียกอ่านได้เมื่อเป็นผู้สร้างคำขอหรือได้รับมอบหมายโรงงานผ่าน `user_juristics` หรือ `user_factory_access`
+- กฎเดียวกันใช้กับ `GET /api/v1/cems-wpms-requests/:id/device-configs/:configId`
 
 ### Request Fields
 
@@ -252,8 +253,8 @@ GET /api/v1/cems-wpms-requests/101/device-configs?stationId=CEMS-0001%2F2569
 | --- | --- | --- | --- |
 | `400` | `VALIDATION_ERROR` | `id` หรือ `stationId` ผิดชนิด/โครงสร้าง | ตรวจ identifier |
 | `401` | `UNAUTHORIZED` | token ไม่ถูกต้องหรือหมดอายุ | login ใหม่ |
-| `403` | `FORBIDDEN` | ไม่มี permission หรือ request อยู่นอก data scope | ซ่อน action หรือแจ้งสิทธิ์ไม่เพียงพอ |
-| `404` | `NOT_FOUND` | ไม่พบ request | refresh รายการ |
+| `403` | `FORBIDDEN` | ไม่มี permission | ซ่อน action หรือแจ้งสิทธิ์ไม่เพียงพอ |
+| `404` | `NOT_FOUND` | ไม่พบ request/config หรือ request อยู่นอก data scope | refresh รายการ |
 
 ## `POST /api/v1/cems-wpms-requests/:id/device-configs`
 

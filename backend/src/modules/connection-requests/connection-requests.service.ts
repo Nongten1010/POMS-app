@@ -473,8 +473,12 @@ export const connectionRequestsService = {
     viewScope: AccessScope,
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<ConnectionRequestDTO> {
-    const request = await loadRequest(id);
-    ensureCanRead(request, actorUserId, viewScope, regionalAccess);
+    const request = await connectionRequestsRepository.findByIdForReadAccess(id, {
+      actorUserId,
+      scope: viewScope,
+      regionalAccess,
+    });
+    if (!request) throw new NotFoundError('Connection request not found');
     return request;
   },
 
@@ -3027,22 +3031,6 @@ async function loadRequest(id: number): Promise<ConnectionRequestDTO> {
   const request = await connectionRequestsRepository.findById(id);
   if (!request) throw new NotFoundError('Connection request not found');
   return request;
-}
-
-function ensureCanRead(
-  request: ConnectionRequestDTO,
-  actorUserId: number,
-  viewScope: AccessScope,
-  regionalAccess?: RegionalAccessDTO | null,
-): void {
-  if (
-    requestMatchesPermissionScope(request, viewScope, regionalAccess) &&
-    requestMatchesRegionalAccess(request, viewScope, regionalAccess)
-  ) {
-    return;
-  }
-  if (getAccessScopeValue(viewScope) === 'OWN_FACTORY' && request.createdBy === actorUserId) return;
-  throw new NotFoundError('Connection request not found');
 }
 
 function ensureCanApprove(
