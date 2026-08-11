@@ -1643,6 +1643,8 @@ function getMeasurementTable(factory, systemType) {
     ),
   )
   const rows = measurementPoints.flatMap((point) => {
+    const pointParameters = getMeasurementPointParameters(point)
+    const shouldUsePointParameterMembership = Array.isArray(point?.parameters)
     const dataRows = Array.isArray(point?.data) ? point.data : []
     return dataRows.map((row, dataRowIndex) => ({
       key: `${point.stationId ?? point.pointCode ?? 'point'}-${row.cdate ?? ''}-${row.ctime ?? ''}-${dataRowIndex}`,
@@ -1650,7 +1652,9 @@ function getMeasurementTable(factory, systemType) {
         createMeasurementCell(point.pointName ?? row.station_id ?? point.pointCode ?? point.stationId ?? ''),
         createMeasurementCell(row.cdate ?? ''),
         createMeasurementCell(row.ctime ?? ''),
-        ...parameters.map((parameter) => createMeasurementValueCell(row[parameter], point, parameter)),
+        ...parameters.map((parameter) =>
+          createMeasurementValueCell(row[parameter], point, parameter, pointParameters, shouldUsePointParameterMembership),
+        ),
       ],
     }))
   })
@@ -1668,7 +1672,14 @@ function createMeasurementCell(value) {
   }
 }
 
-function createMeasurementValueCell(value, point, parameter) {
+function createMeasurementValueCell(value, point, parameter, pointParameters = [], shouldUsePointParameterMembership = false) {
+  if (shouldUsePointParameterMembership && !pointParameters.includes(parameter)) {
+    return {
+      displayValue: '*',
+      color: statisticStatusColors.unavailable,
+    }
+  }
+
   const numericValue = toFiniteNumber(value)
   const hasNumericValue = numericValue !== null
 
@@ -1692,10 +1703,6 @@ function getNumericMeasurementStatus(value, point, parameter) {
 
   if (numericValue === null) {
     return null
-  }
-
-  if (numericValue === 0) {
-    return 'critical'
   }
 
   return getMeasurementValueCriteriaStatus(numericValue, point, parameter) ?? 'normal'

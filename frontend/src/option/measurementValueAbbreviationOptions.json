@@ -7,5 +7,6 @@
   "Shut Down": "SHTDWN",
   "Turnaround": "TRNARND",
   ".etc": "ETC",
-  "No Discharge": "NODSCH"
+  "No Discharge": "NODSCH",
+  "ERROR": "ERR"
 }
