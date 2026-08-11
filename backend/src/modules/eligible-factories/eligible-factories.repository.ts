@@ -387,7 +387,9 @@ function toInsertRow(
     factory_type_sequence: input.factoryTypeSequence ?? null,
     address: input.address ?? null,
     province_name: input.provinceName,
-    industrial_estate_name: input.industrialEstateName ?? null,
+    ...(input.industrialEstateName !== undefined
+      ? { industrial_estate_name: input.industrialEstateName }
+      : {}),
     latitude: input.coordinates?.latitude ?? null,
     longitude: input.coordinates?.longitude ?? null,
     business_activity: input.businessActivity ?? null,
@@ -421,7 +423,9 @@ function toMonitoringPointFormUpdateRow(input: CreateEligibleFactoryInput): Reco
     factory_type_sequence: input.factoryTypeSequence ?? null,
     ...(input.address !== undefined ? { address: input.address } : {}),
     province_name: input.provinceName,
-    industrial_estate_name: input.industrialEstateName ?? null,
+    ...(input.industrialEstateName !== undefined
+      ? { industrial_estate_name: input.industrialEstateName }
+      : {}),
     latitude: input.coordinates?.latitude ?? null,
     longitude: input.coordinates?.longitude ?? null,
     business_activity: input.businessActivity ?? null,

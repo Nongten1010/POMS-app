@@ -46,6 +46,7 @@ describe('eligibleFactoriesRepository monitoring-point-form synchronization', ()
     expect(updatePayload).not.toHaveProperty('eia_other');
     expect(updatePayload).not.toHaveProperty('has_eia');
     expect(updatePayload).not.toHaveProperty('project_name');
+    expect(updatePayload).not.toHaveProperty('industrial_estate_name');
   });
 
   it('updates explicit project and EIA fields as one consistent patch', async () => {

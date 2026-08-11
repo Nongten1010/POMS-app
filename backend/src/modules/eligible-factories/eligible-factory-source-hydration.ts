@@ -23,6 +23,12 @@ interface FactorySourceHydrationRow {
   ZIPCODE: string | number | null;
   HP: number | string | null;
   HP2: number | string | null;
+  COLONY_INDUST_CODE: string | null;
+}
+
+interface IndustrialEstateRow {
+  COLONY_INDUST_CODE: string | null;
+  COLONY_INDUST_DESC: string | null;
 }
 
 interface AdministrativeAreaRow {
@@ -42,6 +48,11 @@ interface EligibleFactoryAddressStorageInput {
   factoryRegistrationNoNew: string;
   address?: string | null;
   provinceName?: string | null;
+}
+
+interface EligibleFactoryIndustrialEstateStorageInput {
+  sourceFactoryId: string | null;
+  factoryRegistrationNoNew: string;
 }
 
 export async function hydrateEligibleFactoriesFromSource(
@@ -131,6 +142,36 @@ export async function resolveEligibleFactoryAddressForStorage(
   }
 }
 
+export async function resolveEligibleFactoryIndustrialEstateForStorage(
+  input: EligibleFactoryIndustrialEstateStorageInput,
+): Promise<string | undefined> {
+  const keys = uniqueNonEmpty([input.sourceFactoryId, input.factoryRegistrationNoNew]);
+  if (keys.length === 0) return undefined;
+
+  try {
+    const sourceRows = await loadFactorySourceRows(keys);
+    const sourceRow = findSourceRowForFactory(
+      sourceRows,
+      input.sourceFactoryId,
+      input.factoryRegistrationNoNew,
+    );
+    const industrialEstateCode = normalizeText(sourceRow?.COLONY_INDUST_CODE);
+    if (!industrialEstateCode) return undefined;
+
+    const estateRows = await factorySourceDb<IndustrialEstateRow>(
+      `${env.FACTORY_DB_SCHEMA}.FAC_COLONY_INDUST`,
+    )
+      .where('COLONY_INDUST_CODE', industrialEstateCode)
+      .timeout(EXTERNAL_LOOKUP_TIMEOUT_MS)
+      .select('COLONY_INDUST_CODE', 'COLONY_INDUST_DESC');
+
+    return normalizeText(estateRows[0]?.COLONY_INDUST_DESC) ?? industrialEstateCode;
+  } catch (error) {
+    logger.warn('[eligible-factories] Failed to resolve industrial estate for storage', { error });
+    return undefined;
+  }
+}
+
 async function loadFactorySourceRows(keys: string[]): Promise<FactorySourceHydrationRow[]> {
   const rows: FactorySourceHydrationRow[] = [];
   for (const keyChunk of chunks(keys, FACTORY_SOURCE_LOOKUP_CHUNK_SIZE)) {
@@ -156,6 +197,7 @@ async function loadFactorySourceRows(keys: string[]): Promise<FactorySourceHydra
         'ZIPCODE',
         'HP',
         'HP2',
+        'COLONY_INDUST_CODE',
       );
     rows.push(...chunkRows);
   }

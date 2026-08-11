@@ -1,6 +1,9 @@
 import { BadRequestError, ConflictError, NotFoundError } from '../../shared/errors/AppError';
 import { eligibleFactoriesRepository } from '../eligible-factories/eligible-factories.repository';
-import { resolveEligibleFactoryAddressForStorage } from '../eligible-factories/eligible-factory-source-hydration';
+import {
+  resolveEligibleFactoryAddressForStorage,
+  resolveEligibleFactoryIndustrialEstateForStorage,
+} from '../eligible-factories/eligible-factory-source-hydration';
 import { withProvinceInFactoryAddress } from '../eligible-factories/factory-address';
 import { joinFactoryTypeSequence } from '../eligible-factories/factory-type-sequence';
 import {
@@ -164,9 +167,16 @@ async function syncEligibleFactoryFromForm(
     address: rawInput.address,
     provinceName: rawInput.provinceName,
   });
+  const resolvedIndustrialEstate = await resolveEligibleFactoryIndustrialEstateForStorage({
+    sourceFactoryId: rawInput.sourceFactoryId ?? null,
+    factoryRegistrationNoNew: rawInput.factoryRegistrationNoNew,
+  });
   const input: CreateEligibleFactoryInput = {
     ...rawInput,
     address: resolvedAddress,
+    ...(resolvedIndustrialEstate !== undefined
+      ? { industrialEstateName: resolvedIndustrialEstate }
+      : {}),
   };
 
   const existingByForm = await eligibleFactoriesRepository.findByMonitoringPointFormId(form.id);
@@ -237,7 +247,6 @@ function buildEligibleFactoryInput(
     ),
     address: form.factory.address ?? null,
     provinceName: form.factory.provinceName?.trim() || '-',
-    industrialEstateName: null,
     coordinates: buildCoordinates(form.factory.latitude, form.factory.longitude),
     businessActivity: form.factory.businessActivity ?? null,
     operationStatus: form.factory.operationStatus?.trim() || '-',

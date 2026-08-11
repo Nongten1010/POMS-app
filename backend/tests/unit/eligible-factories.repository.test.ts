@@ -19,7 +19,10 @@ jest.mock('../../src/config/factory-source-database', () => ({
 }));
 
 import { eligibleFactoriesRepository } from '../../src/modules/eligible-factories/eligible-factories.repository';
-import { resolveEligibleFactoryAddressForStorage } from '../../src/modules/eligible-factories/eligible-factory-source-hydration';
+import {
+  resolveEligibleFactoryAddressForStorage,
+  resolveEligibleFactoryIndustrialEstateForStorage,
+} from '../../src/modules/eligible-factories/eligible-factory-source-hydration';
 
 describe('eligibleFactoriesRepository.list', () => {
   const selectedFactoryRow = {
@@ -124,6 +127,7 @@ describe('eligibleFactoriesRepository.list', () => {
             AMP: 4,
             TUMBOL: 7,
             ZIPCODE: '17150',
+            COLONY_INDUST_CODE: 'IE-01',
           },
         ]),
     };
@@ -142,10 +146,23 @@ describe('eligibleFactoriesRepository.list', () => {
           },
         ]),
     };
+    const industrialEstateQuery = {
+      where: jest.fn().mockReturnThis(),
+      timeout: jest.fn().mockReturnThis(),
+      select: jest
+        .fn<(...columns: string[]) => Promise<Array<Record<string, unknown>>>>()
+        .mockResolvedValue([
+          {
+            COLONY_INDUST_CODE: 'IE-01',
+            COLONY_INDUST_DESC: 'นิคมอุตสาหกรรมมาบตาพุด',
+          },
+        ]),
+    };
 
     mockFactorySourceDb.mockImplementation((tableName: unknown) => {
       if (tableName === 'dbo.fac_import') return facImportQuery;
       if (tableName === 'dbo.TUMBOL') return administrativeAreaQuery;
+      if (tableName === 'dbo.FAC_COLONY_INDUST') return industrialEstateQuery;
       throw new Error(`Unexpected factory-source table: ${String(tableName)}`);
     });
   });
@@ -322,6 +339,15 @@ describe('eligibleFactoriesRepository.list', () => {
         address: '197 หมู่ 5 ตำบล7 อำเภอ4 17150 (ประตู 2)',
       }),
     ).resolves.toBe('197 หมู่ 5 ตำบลหาดอาษา อำเภอสรรพยา 17150 (ประตู 2)');
+  });
+
+  it('resolves the industrial estate description before persisting a selected factory', async () => {
+    await expect(
+      resolveEligibleFactoryIndustrialEstateForStorage({
+        sourceFactoryId: '10180000125417',
+        factoryRegistrationNoNew: '10180000125417',
+      }),
+    ).resolves.toBe('นิคมอุตสาหกรรมมาบตาพุด');
   });
 
   it('returns undefined instead of persisting numeric labels when names cannot be resolved', async () => {

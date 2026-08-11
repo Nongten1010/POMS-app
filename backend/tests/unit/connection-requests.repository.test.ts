@@ -417,6 +417,21 @@ describe('connectionRequestsRepository query helpers', () => {
     expect(normalizedSql).toContain('), ef.factory_name, f.name ) as name');
   });
 
+  it('reads the synchronized eligible-factory industrial estate for connected POMS factories', () => {
+    const sql = buildConnectedFactoriesForAccessQueryForTests({
+      actorUserId: 42,
+      scope: 'ALL',
+    })
+      .toSQL()
+      .sql.toLowerCase();
+
+    expect(sql).toContain('from [eligible_factories] as [ef]');
+    expect(sql).toContain('cp.eligible_factory_id = ef.id');
+    expect(sql).toContain(
+      'coalesce(ie.name_th, ef.industrial_estate_name) as industrial_estate_name',
+    );
+  });
+
   it('loads current POMS factory names without requiring a factory master', () => {
     const compiled = buildCurrentPomsFactoryNamesQueryForTests(['10120000325542'], [225]).toSQL();
     const sql = compiled.sql.toLowerCase();

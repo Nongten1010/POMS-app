@@ -21,10 +21,14 @@ jest.mock('../../src/modules/eligible-factories/eligible-factory-source-hydratio
   resolveEligibleFactoryAddressForStorage: jest.fn(
     async (input: { address?: string | null }) => input.address,
   ),
+  resolveEligibleFactoryIndustrialEstateForStorage: jest.fn(),
 }));
 
 import { eligibleFactoriesRepository } from '../../src/modules/eligible-factories/eligible-factories.repository';
-import { resolveEligibleFactoryAddressForStorage } from '../../src/modules/eligible-factories/eligible-factory-source-hydration';
+import {
+  resolveEligibleFactoryAddressForStorage,
+  resolveEligibleFactoryIndustrialEstateForStorage,
+} from '../../src/modules/eligible-factories/eligible-factory-source-hydration';
 import { monitoringPointFormsRepository } from '../../src/modules/monitoring-point-forms/monitoring-point-forms.repository';
 import { monitoringPointFormsService } from '../../src/modules/monitoring-point-forms/monitoring-point-forms.service';
 import type {
@@ -35,6 +39,7 @@ import type {
 const mockedRepository = jest.mocked(monitoringPointFormsRepository);
 const mockedEligibleRepository = jest.mocked(eligibleFactoriesRepository);
 const mockedResolveAddress = jest.mocked(resolveEligibleFactoryAddressForStorage);
+const mockedResolveIndustrialEstate = jest.mocked(resolveEligibleFactoryIndustrialEstateForStorage);
 
 function toFactoryDTO(factory: MonitoringPointFormFactoryInput) {
   return {
@@ -154,6 +159,44 @@ describe('monitoringPointFormsService', () => {
       42,
     );
     expect(result.id).toBe(1);
+  });
+
+  it('persists the source industrial estate when selecting a connected POMS factory', async () => {
+    mockedRepository.list.mockResolvedValue([]);
+    mockedRepository.create.mockResolvedValue({
+      id: 1,
+      factory: toFactoryDTO(input.factory),
+      points: [],
+      createdAt: '2026-06-22T00:00:00.000Z',
+      updatedAt: '2026-06-22T00:00:00.000Z',
+    });
+    mockedResolveIndustrialEstate.mockResolvedValue('นิคมอุตสาหกรรมมาบตาพุด');
+    mockedEligibleRepository.findByMonitoringPointFormId.mockResolvedValue(null);
+    mockedEligibleRepository.findByRegistrationNoNew.mockResolvedValue({
+      id: 88,
+      factoryRegistrationNoNew: '10520000225172',
+      monitoringPointFormId: null,
+    });
+    mockedEligibleRepository.updateFromMonitoringPointForm.mockResolvedValue(
+      createEligibleFactoryDTO({
+        id: 88,
+        industrialEstateName: 'นิคมอุตสาหกรรมมาบตาพุด',
+      }),
+    );
+
+    await monitoringPointFormsService.create(input, 42);
+
+    expect(mockedResolveIndustrialEstate).toHaveBeenCalledWith({
+      sourceFactoryId: '10520000225172',
+      factoryRegistrationNoNew: '10520000225172',
+    });
+    expect(mockedEligibleRepository.updateFromMonitoringPointForm).toHaveBeenCalledWith(
+      88,
+      expect.objectContaining({
+        industrialEstateName: 'นิคมอุตสาหกรรมมาบตาพุด',
+      }),
+      42,
+    );
   });
 
   it('stores the province in the monitoring-form address while keeping provinceName', async () => {
