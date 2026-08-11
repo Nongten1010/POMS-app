@@ -1036,6 +1036,18 @@ function mapOperatorFactoryRow(row) {
   }
 }
 
+function sortOperatorFactoryRows(rows = []) {
+  return rows
+    .map((row, index) => ({ row, index }))
+    .sort((first, second) => {
+      const firstRank = first.row.isEligible === true ? 0 : 1
+      const secondRank = second.row.isEligible === true ? 0 : 1
+
+      return firstRank - secondRank || first.index - second.index
+    })
+    .map(({ row }) => row)
+}
+
 function formatDatePartAsThaiDate(value) {
   if (typeof value !== 'string') return ''
 
@@ -7429,12 +7441,16 @@ function ConnectionRequestPage({
     () => (!isOperator ? sortOfficerRequestRows(requestTableRows) : requestTableRows),
     [isOperator, requestTableRows],
   )
+  const sortedOperatorFactoryRows = useMemo(
+    () => (isOperator ? sortOperatorFactoryRows(operatorFactoryRows) : operatorFactoryRows),
+    [isOperator, operatorFactoryRows],
+  )
   const table = useMemo(
     () =>
       effectiveSubMenu === 'factories'
         ? {
             title: 'รายชื่อโรงงาน',
-            rows: accessToken ? operatorFactoryRows : [],
+            rows: accessToken ? sortedOperatorFactoryRows : [],
             columns: factoryColumns,
             loading: operatorFactoriesLoading,
           }
@@ -7449,10 +7465,10 @@ function ConnectionRequestPage({
       effectiveSubMenu,
       factoryColumns,
       operatorFactoriesLoading,
-      operatorFactoryRows,
       requestColumns,
       requestTableLoading,
       sortedRequestTableRows,
+      sortedOperatorFactoryRows,
     ],
   )
   const isStatisticsSubMenu = effectiveSubMenu === 'statistics'

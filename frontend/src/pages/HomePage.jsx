@@ -430,7 +430,18 @@ function mapCalendarStatusDetailRows(rows, summaryType) {
     return []
   }
 
-  return rows.map((row) => ({
+  return [...rows].sort((first, second) => {
+    const firstDate = dayjs(first?.date)
+    const secondDate = dayjs(second?.date)
+    const firstDateValue = firstDate.isValid() ? firstDate.valueOf() : 0
+    const secondDateValue = secondDate.isValid() ? secondDate.valueOf() : 0
+
+    if (secondDateValue !== firstDateValue) {
+      return secondDateValue - firstDateValue
+    }
+
+    return String(second?.displayTime ?? '').localeCompare(String(first?.displayTime ?? ''))
+  }).map((row) => ({
     date: formatBuddhistDate(row.date),
     time: summaryType === 'lowData' ? '-' : row.displayTime || '-',
     metric:
