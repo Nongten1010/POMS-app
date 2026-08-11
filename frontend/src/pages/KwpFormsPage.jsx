@@ -243,6 +243,7 @@ const kwpEmissionMeasurementMethodOptions = kwpEmissionMeasurementMethodOptionIt
   parameterNames: Array.isArray(option.parameterNames) ? option.parameterNames : [],
   parameterLabels: Array.isArray(option.parameterLabels) ? option.parameterLabels : [],
 }))
+const emissionMeasurementMethodOtherOption = 'อื่นๆ'
 const calibrationResultOptions = ['ผ่าน', 'ไม่ผ่าน']
 
 function firstDefinedValue(...values) {
@@ -252,6 +253,19 @@ function firstDefinedValue(...values) {
 function uniqueTextValues(values) {
   const source = Array.isArray(values) ? values : [values]
   return [...new Set(source.map((value) => String(value ?? '').trim()).filter(Boolean))]
+}
+
+function normalizeOptionArray(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item ?? '').trim()).filter(Boolean)
+  }
+
+  const normalizedValue = String(value ?? '').trim()
+  return normalizedValue ? [normalizedValue] : []
+}
+
+function formatOptionList(value) {
+  return normalizeOptionArray(value).join(', ')
 }
 
 function normalizeParameterKey(value) {
@@ -269,12 +283,44 @@ function getEmissionMeasurementMethodOptions(pollutant) {
     return []
   }
 
-  return kwpEmissionMeasurementMethodOptions.filter((option) => {
+  const matchedOptions = kwpEmissionMeasurementMethodOptions.filter((option) => {
     const labels = option.parameterLabels.map(normalizeParameterKey)
     const names = option.parameterNames.map(normalizeParameterKey)
 
     return labels.includes(selectedName) || names.includes(selectedName)
   })
+
+  return [
+    ...matchedOptions.filter((option) => option.value !== emissionMeasurementMethodOtherOption),
+    {
+      label: emissionMeasurementMethodOtherOption,
+      value: emissionMeasurementMethodOtherOption,
+      parameterNames: [],
+      parameterLabels: [],
+    },
+  ]
+}
+
+function getEmissionMeasurementMethodDisplay(row = {}) {
+  const method = row.method ?? ''
+  const methodOther = row.methodOther ?? ''
+
+  if (method === emissionMeasurementMethodOtherOption && methodOther) {
+    return `${method} (${methodOther})`
+  }
+
+  return method
+}
+
+function getEmissionMeasurementMethodPayloadValue(row = {}) {
+  const method = row.method ?? ''
+  const methodOther = String(row.methodOther ?? '').trim()
+
+  if (method === emissionMeasurementMethodOtherOption) {
+    return methodOther || method
+  }
+
+  return method || null
 }
 
 function getPointDetailsValue(point, ...fieldNames) {
@@ -1256,7 +1302,7 @@ function buildKwpEmissionMeasurementItem(row, attachments = []) {
     unit: row.unit ?? null,
     laboratoryNo: row.laboratoryNo ?? null,
     reportNo: row.reportNo ?? null,
-    method: row.method ?? null,
+    method: getEmissionMeasurementMethodPayloadValue(row),
     attachments,
   }
 }
@@ -1307,7 +1353,7 @@ function buildKwp05SubmissionPayload(form, formElement, calibrationRows) {
     reportRound: getFormText(formData, 'reportRound') || null,
     reportYear: getFormText(formData, 'reportYear') || null,
     calibrationItems: calibrationRows.map((row) => ({
-      parameter: row.parameter ?? '',
+      parameter: formatOptionList(row.parameter),
       startDate: formatApiDateValue(row.startDate),
       endDate: formatApiDateValue(row.endDate),
       result: row.result || null,
@@ -1659,6 +1705,7 @@ function buildKwpEditFormFromDetail(detail = {}, row = {}) {
         laboratoryNo: item.laboratoryNo ?? '',
         reportNo: item.reportNo ?? '',
         method: item.method ?? '',
+        methodOther: item.methodOther ?? '',
       })),
       samplingPhotoFiles: measurementItems.flatMap((item) => getAttachmentsByType(item.attachments, 'SAMPLING_PHOTO')),
       labReportFiles: measurementItems.flatMap((item) => getAttachmentsByType(item.attachments, 'LAB_REPORT')),
@@ -1768,6 +1815,7 @@ function buildKwpRequestPreviewDataFromDetail(detail, row = {}) {
           laboratoryNo: item.laboratoryNo ?? '',
           reportNo: item.reportNo ?? '',
           method: item.method ?? '',
+          methodOther: item.methodOther ?? '',
         }))
       : []
     const allAttachments = Array.isArray(detail.measurementItems)
@@ -2301,7 +2349,7 @@ function Kwp02PaperDocument({ data }) {
                     <TableCell>{row.unit}</TableCell>
                     <TableCell>{row.laboratoryNo}</TableCell>
                     <TableCell>{row.reportNo}</TableCell>
-                    <TableCell>{row.method}</TableCell>
+                    <TableCell>{getEmissionMeasurementMethodDisplay(row)}</TableCell>
                   </TableRow>
                 ))}
                 <TableRow>
@@ -2620,7 +2668,7 @@ function Kwp05PaperDocument({ data }) {
             <TableBody>
               {rowsForPaper.map((row) => (
                 <TableRow key={row.id} sx={{ height: 88 }}>
-                  <TableCell>{row.parameter}</TableCell>
+                  <TableCell>{formatOptionList(row.parameter)}</TableCell>
                   <TableCell>{formatThaiDateValue(row.startDate)}</TableCell>
                   <TableCell>{formatThaiDateValue(row.endDate)}</TableCell>
                   <TableCell>{row.result}</TableCell>
@@ -3043,6 +3091,7 @@ const emptyEmissionMeasurement = {
   laboratoryNo: '',
   reportNo: '',
   method: '',
+  methodOther: '',
   samplingPhotoFile: null,
   samplingPhotoFileName: '',
   samplingPhotoFileUrl: '',
@@ -3146,6 +3195,11 @@ function EmissionMeasurementDialogContent({ value, parameterOptions, onClose, on
 
       if (field === 'pollutant') {
         nextForm.method = ''
+        nextForm.methodOther = ''
+      }
+
+      if (field === 'method' && nextValue !== emissionMeasurementMethodOtherOption) {
+        nextForm.methodOther = ''
       }
 
       return nextForm
@@ -3219,7 +3273,7 @@ function EmissionMeasurementDialogContent({ value, parameterOptions, onClose, on
                 fullWidth
               />
             </Grid>
-            <Grid size={{ xs: 12 }}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <TextField
                 select
                 label="วิธีการตรวจวัดวิเคราะห์"
@@ -3241,6 +3295,17 @@ function EmissionMeasurementDialogContent({ value, parameterOptions, onClose, on
                 ))}
               </TextField>
             </Grid>
+            {form.method === emissionMeasurementMethodOtherOption ? (
+              <Grid size={{ xs: 12, md: 6 }}>
+                <TextField
+                  label="ระบุวิธีตรวจวัดวิเคราะห์"
+                  size="small"
+                  value={form.methodOther ?? ''}
+                  onChange={(event) => updateForm('methodOther', event.target.value)}
+                  fullWidth
+                />
+              </Grid>
+            ) : null}
           </Grid>
         </LocalizationProvider>
       </DialogContent>
@@ -3396,7 +3461,7 @@ function Kwp02Form({
                         <TableCell>{row.unit}</TableCell>
                         <TableCell>{row.laboratoryNo}</TableCell>
                         <TableCell>{row.reportNo}</TableCell>
-                        <TableCell>{row.method}</TableCell>
+                        <TableCell>{getEmissionMeasurementMethodDisplay(row)}</TableCell>
                         <TableCell>
                           <Stack direction="row" spacing={1} sx={tableActionStackSx}>
                             <Button size="small" variant="outlined" onClick={() => setEditingMeasurement(row)}>
@@ -3708,205 +3773,36 @@ function Kwp05AttachmentText({ items }) {
   )
 }
 
-const kwp05ResultTableColumns = [
-  { id: 'parameter', label: 'พารามิเตอร์' },
-  { id: 'startDate', label: 'วันที่เริ่มดำเนินการ' },
-  { id: 'endDate', label: 'วันที่สิ้นสุดดำเนินการ' },
-  { id: 'result', label: 'ผลการตรวจสอบ' },
-  { id: 'verifierCompany', label: 'บริษัทที่ทำการทวนสอบ / สอบเทียบ' },
-  { id: 'cemsModel', label: 'ยี่ห้อ/รุ่นของ CEMS' },
-  { id: 'rataReportLink', label: 'Link / QR CODE' },
-  { id: 'calibrationPhotoLink', label: 'Link / QR CODE' },
-  { id: 'actions', label: 'จัดการ' },
-]
-
-function CalibrationResultDialog({ open, value, parameterOptions = [], parameterInstrumentDetails = [], onClose, onSave }) {
-  if (!open) {
-    return null
-  }
-
-  return (
-    <CalibrationResultDialogContent
-      key={value?.id ?? 'new'}
-      value={value}
-      parameterOptions={parameterOptions}
-      parameterInstrumentDetails={parameterInstrumentDetails}
-      onClose={onClose}
-      onSave={onSave}
-    />
-  )
-}
-
-function CalibrationResultDialogContent({ value, parameterOptions = [], parameterInstrumentDetails = [], onClose, onSave }) {
-  const getCemsModelByParameter = (parameter) => {
-    const normalizedParameter = String(parameter ?? '').trim()
-    const instrumentDetail = parameterInstrumentDetails.find((item) =>
-      String(item?.parameter ?? '').trim() === normalizedParameter
-    )
-
-    return instrumentDetail?.cemsModel ?? ''
-  }
-  const [form, setForm] = useState(() => (
-    value
-      ? { ...emptyCalibrationResult, ...value }
-      : emptyCalibrationResult
-  ))
-  const [rataReportFiles, setRataReportFiles] = useState(value?.rataReportFiles ?? [])
-  const [calibrationPhotoFiles, setCalibrationPhotoFiles] = useState(value?.calibrationPhotoFiles ?? [])
-
-  const updateForm = (field, nextValue) => {
-    setForm((current) => ({ ...current, [field]: nextValue }))
-  }
-
-  return (
-    <Dialog open onClose={onClose} fullWidth maxWidth="md">
-      <DialogTitle>{value ? 'แก้ไขรายการผลการสอบเทียบหรือทวนสอบ CEMS' : 'เพิ่มรายการผลการสอบเทียบหรือทวนสอบ CEMS'}</DialogTitle>
-      <DialogContent dividers>
-        <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="th">
-          <Grid container spacing={2}>
-            <Grid size={{ xs: 12, md: 3 }}>
-              <TextField
-                select
-                label="พารามิเตอร์"
-                size="small"
-                value={form.parameter}
-                onChange={(event) => {
-                  const nextParameter = event.target.value
-                  setForm((current) => ({
-                    ...current,
-                    parameter: nextParameter,
-                    cemsModel: getCemsModelByParameter(nextParameter),
-                  }))
-                }}
-                fullWidth
-              >
-                {parameterOptions.map((option) => (
-                  <MenuItem key={option} value={option}>
-                    {option}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, md: 3 }}>
-              <DatePicker
-                label="วันที่เริ่มดำเนินการ"
-                value={form.startDate}
-                onChange={(nextValue) => updateForm('startDate', nextValue)}
-                format="DD/MM/YYYY"
-                slotProps={{ textField: { size: 'small', fullWidth: true } }}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 3 }}>
-              <DatePicker
-                label="วันที่สิ้นสุดดำเนินการ"
-                value={form.endDate}
-                onChange={(nextValue) => updateForm('endDate', nextValue)}
-                format="DD/MM/YYYY"
-                slotProps={{ textField: { size: 'small', fullWidth: true } }}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 3 }}>
-              <TextField
-                select
-                label="ผลการตรวจสอบ"
-                size="small"
-                value={form.result}
-                onChange={(event) => updateForm('result', event.target.value)}
-                fullWidth
-              >
-                {calibrationResultOptions.map((option) => (
-                  <MenuItem key={option} value={option}>
-                    {option}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, md: 3 }}>
-              <TextField
-                label="ยี่ห้อ/รุ่นของ CEMS"
-                size="small"
-                value={form.cemsModel}
-                onChange={(event) => updateForm('cemsModel', event.target.value)}
-                fullWidth
-              />
-            </Grid>
-            <Grid size={{ xs: 12 }}>
-              <Divider />
-            </Grid>
-            <Grid size={{ xs: 12 }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                เอกสารแนบ
-              </Typography>
-            </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <MultiFileInputButton
-                label="รายงานผล RATA (JPG/PNG/PDF ไม่เกิน 10 MB)"
-                files={rataReportFiles}
-                onChange={setRataReportFiles}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <MultiFileInputButton
-                label="ภาพขณะสอบเทียบ (JPG/PNG/PDF ไม่เกิน 10 MB)"
-                files={calibrationPhotoFiles}
-                onChange={setCalibrationPhotoFiles}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <TextField
-                label="Link รายงานผล RATA"
-                size="small"
-                value={form.rataReportLink}
-                onChange={(event) => updateForm('rataReportLink', event.target.value)}
-                fullWidth
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <TextField
-                label="Link ภาพขณะสอบเทียบ"
-                size="small"
-                value={form.calibrationPhotoLink}
-                onChange={(event) => updateForm('calibrationPhotoLink', event.target.value)}
-                fullWidth
-              />
-            </Grid>
-          </Grid>
-        </LocalizationProvider>
-      </DialogContent>
-      <DialogActions>
-        <Button color="inherit" onClick={onClose}>
-          ยกเลิก
-        </Button>
-        <Button
-          variant="contained"
-          onClick={() => onSave({
-            ...form,
-            rataReportFiles,
-            calibrationPhotoFiles,
-          })}
-        >
-          บันทึก
-        </Button>
-      </DialogActions>
-    </Dialog>
-  )
-}
-
 function Kwp05Form({ factory, point, defaults = {}, calibrationRows, setCalibrationRows }) {
-  const [editingCalibration, setEditingCalibration] = useState(null)
   const parameterOptions = getKwp05ParameterOptions(point)
   const parameterInstrumentDetails = getKwp05ParameterInstrumentDetails(point)
   const businessActivityDefault = firstDefinedValue(defaults.businessActivity, factory?.businessActivity)
+  const calibrationRow = calibrationRows[0] ?? emptyCalibrationResult
+  const selectedParameters = normalizeOptionArray(calibrationRow.parameter)
 
-  const saveCalibration = (row) => {
+  const getCemsModelByParameters = (parameters) => {
+    const normalizedParameters = normalizeOptionArray(parameters).map((parameter) => String(parameter).trim())
+    const matchedModels = parameterInstrumentDetails
+      .filter((item) => normalizedParameters.includes(String(item?.parameter ?? '').trim()))
+      .map((item) => item?.cemsModel)
+      .filter(Boolean)
+
+    return uniqueTextValues(matchedModels).join(', ')
+  }
+
+  const updateCalibrationRow = (patch) => {
     setCalibrationRows((current) => {
-      if (editingCalibration?.id) {
-        return current.map((item) => (item.id === editingCalibration.id ? { ...row, id: editingCalibration.id } : item))
-      }
+      const currentRow = current[0] ?? { ...emptyCalibrationResult, id: Date.now() }
 
-      return [...current, { ...row, id: Date.now() }]
+      return [
+        {
+          ...emptyCalibrationResult,
+          ...currentRow,
+          ...patch,
+          id: currentRow.id ?? Date.now(),
+        },
+      ]
     })
-    setEditingCalibration(null)
   }
 
   return (
@@ -3973,84 +3869,101 @@ function Kwp05Form({ factory, point, defaults = {}, calibrationRows, setCalibrat
         </SectionPaper>
 
         <SectionPaper title="รายการผลการสอบเทียบหรือทวนสอบ CEMS">
-          <Stack spacing={1.5}>
-            <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
-              <Button variant="outlined" onClick={() => setEditingCalibration({})}>
-                เพิ่มข้อมูล
-              </Button>
-            </Stack>
-            <TableContainer sx={{ border: 1, borderColor: 'divider', overflowX: 'auto' }}>
-              <Table
+          <Grid container spacing={2}>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <OptionMultiSelect
+                label="พารามิเตอร์"
+                value={selectedParameters}
+                options={parameterOptions}
+                onChange={(nextParameters) =>
+                  updateCalibrationRow({
+                    parameter: nextParameters,
+                    cemsModel: getCemsModelByParameters(nextParameters),
+                  })
+                }
+              />
+            </Grid>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <DatePicker
+                label="วันที่เริ่มดำเนินการ"
+                value={calibrationRow.startDate}
+                onChange={(nextValue) => updateCalibrationRow({ startDate: nextValue })}
+                format="DD/MM/YYYY"
+                slotProps={{ textField: { size: 'small', fullWidth: true } }}
+              />
+            </Grid>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <DatePicker
+                label="วันที่สิ้นสุดดำเนินการ"
+                value={calibrationRow.endDate}
+                onChange={(nextValue) => updateCalibrationRow({ endDate: nextValue })}
+                format="DD/MM/YYYY"
+                slotProps={{ textField: { size: 'small', fullWidth: true } }}
+              />
+            </Grid>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <TextField
+                select
+                label="ผลการตรวจสอบ"
                 size="small"
-                sx={{
-                  minWidth: 1280,
-                  tableLayout: 'fixed',
-                  ...borderedTableSx,
-                  '& .MuiTableBody-root .MuiTableCell-root': {
-                    verticalAlign: 'top',
-                  },
-                }}
+                value={calibrationRow.result ?? ''}
+                onChange={(event) => updateCalibrationRow({ result: event.target.value })}
+                fullWidth
               >
-                <TableHead>
-                  <TableRow>
-                    {kwp05ResultTableColumns.map((column) => (
-                      <TableCell
-                        key={column.id}
-                        sx={{ width: `${100 / kwp05ResultTableColumns.length}%`, fontWeight: 700, bgcolor: '#f8fafc' }}
-                      >
-                        {column.label}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {calibrationRows.length > 0 ? (
-                    calibrationRows.map((row) => (
-                      <TableRow key={row.id}>
-                        <TableCell>{row.parameter}</TableCell>
-                        <TableCell>{formatThaiDateValue(row.startDate)}</TableCell>
-                        <TableCell>{formatThaiDateValue(row.endDate)}</TableCell>
-                        <TableCell>{row.result}</TableCell>
-                        <TableCell>{row.verifierCompany}</TableCell>
-                        <TableCell>{row.cemsModel}</TableCell>
-                        <TableCell sx={{ overflowWrap: 'anywhere' }}>
-                          <Kwp05AttachmentText items={formatKwp05AttachmentItems(row.rataReportFiles, row.rataReportLink)} />
-                        </TableCell>
-                        <TableCell sx={{ overflowWrap: 'anywhere' }}>
-                          <Kwp05AttachmentText
-                            items={formatKwp05AttachmentItems(row.calibrationPhotoFiles, row.calibrationPhotoLink)}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Stack direction="row" spacing={1} sx={tableActionStackSx}>
-                            <Button size="small" variant="outlined" onClick={() => setEditingCalibration(row)}>
-                              แก้ไข
-                            </Button>
-                            <Button
-                              size="small"
-                              color="error"
-                              variant="outlined"
-                              onClick={() => setCalibrationRows((current) => current.filter((item) => item.id !== row.id))}
-                            >
-                              ลบ
-                            </Button>
-                          </Stack>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={9} align="center">
-                        <Typography variant="body2" color="text.secondary">
-                          ไม่มีข้อมูลรายการผลการสอบเทียบหรือทวนสอบ CEMS
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </Stack>
+                {calibrationResultOptions.map((option) => (
+                  <MenuItem key={option} value={option}>
+                    {option}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <TextField
+                label="ยี่ห้อ/รุ่นของ CEMS"
+                size="small"
+                value={calibrationRow.cemsModel ?? ''}
+                onChange={(event) => updateCalibrationRow({ cemsModel: event.target.value })}
+                fullWidth
+              />
+            </Grid>
+            <Grid size={{ xs: 12 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                เอกสารแนบ
+              </Typography>
+            </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <MultiFileInputButton
+                label="รายงานผล RATA (JPG/PNG/PDF ไม่เกิน 10 MB)"
+                files={calibrationRow.rataReportFiles ?? []}
+                onChange={(nextFiles) => updateCalibrationRow({ rataReportFiles: nextFiles })}
+              />
+            </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <MultiFileInputButton
+                label="ภาพขณะสอบเทียบ (JPG/PNG/PDF ไม่เกิน 10 MB)"
+                files={calibrationRow.calibrationPhotoFiles ?? []}
+                onChange={(nextFiles) => updateCalibrationRow({ calibrationPhotoFiles: nextFiles })}
+              />
+            </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <TextField
+                label="Link รายงานผล RATA"
+                size="small"
+                value={calibrationRow.rataReportLink ?? ''}
+                onChange={(event) => updateCalibrationRow({ rataReportLink: event.target.value })}
+                fullWidth
+              />
+            </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <TextField
+                label="Link ภาพขณะสอบเทียบ"
+                size="small"
+                value={calibrationRow.calibrationPhotoLink ?? ''}
+                onChange={(event) => updateCalibrationRow({ calibrationPhotoLink: event.target.value })}
+                fullWidth
+              />
+            </Grid>
+          </Grid>
         </SectionPaper>
 
         <SectionPaper title="ผู้รายงานผลการทดสอบ">
@@ -4064,14 +3977,6 @@ function Kwp05Form({ factory, point, defaults = {}, calibrationRows, setCalibrat
           </Grid>
         </SectionPaper>
       </Stack>
-      <CalibrationResultDialog
-        open={Boolean(editingCalibration)}
-        value={editingCalibration?.id ? editingCalibration : null}
-        parameterOptions={parameterOptions}
-        parameterInstrumentDetails={parameterInstrumentDetails}
-        onClose={() => setEditingCalibration(null)}
-        onSave={saveCalibration}
-      />
     </LocalizationProvider>
   )
 }
@@ -4112,7 +4017,6 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
         mimeType: file.mimeType ?? file.type ?? null,
         fileSize: file.fileSize ?? file.size ?? null,
         storagePath: file.storagePath ?? null,
-        fileUrl: file.fileUrl ?? file.url ?? null,
       }
     }
 
@@ -4144,7 +4048,6 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
       mimeType: file?.mimeType ?? null,
       fileSize: file?.fileSize ?? null,
       storagePath: file?.storagePath ?? null,
-      fileUrl: file?.fileUrl ?? null,
     }))
   }
 
