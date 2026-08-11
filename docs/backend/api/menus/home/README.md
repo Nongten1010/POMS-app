@@ -65,7 +65,7 @@ Response fields ที่ใช้ระบุตัวโรงงานแล�
 | `data[].measurementPoints[].parameterStandards[].parameter` | string | ชื่อพารามิเตอร์พร้อมหน่วย |
 | `data[].measurementPoints[].parameterStandards[].standardCriteria` | object \| null | เกณฑ์ตามประกาศ อก. จาก connected-point instrument snapshot |
 | `data[].measurementPoints[].parameterStandards[].eiaCriteria` | object \| null | เกณฑ์ตาม EIA จาก connected-point instrument snapshot |
-| `data[].measurementPoints[].data[].<parameter label>` | number \| string \| null | ใช้ค่าตรวจวัดเมื่อ StatusCode เป็น `1`; StatusCode อื่นใช้ชื่อสถานะ เช่น `Shut Down` หรือ `No Discharge` |
+| `data[].measurementPoints[].data[].<parameter label>` | number \| string \| null | ใช้ค่าตรวจวัดเมื่อ StatusCode เป็น `1`; ค่าตรวจวัดที่เป็นตัวเลขติดลบ (รวม numeric string) คืน `"ERROR"`; StatusCode อื่นใช้ชื่อสถานะ เช่น `Shut Down` หรือ `No Discharge` และมีลำดับความสำคัญเหนือการตรวจค่าติดลบ |
 | `data[].status` | `แสดง` | display status ของ row |
 | `meta.total` | integer | จำนวนโรงงานหลังใช้ query filters |
 
@@ -134,6 +134,7 @@ Visibility and authorization:
 - โรงงานที่มีหลาย active points แสดงเป็นหนึ่ง factory row และรวม points ใน `measurementPoints`.
 - ชื่อที่ลงทะเบียนเป็น `Flow`, `Flow (m3/hr)`, `Flow Rate (m3/hr)` หรือ `Flow Rate (m³/hr)` จะถูกรวมเป็น `Flow Rate (m3/hr)` และค่าใน `measurementPoints[].data` อ่านจาก source `flow_value`.
 - `parameterStandards` มีเพียง `parameter`, `standardCriteria` และ `eiaCriteria`; เมื่อไม่มีเกณฑ์ที่บันทึกไว้ field เกณฑ์จะเป็น `null` และจะไม่ส่ง device/channel config อื่นใน array นี้.
+- ค่าพารามิเตอร์ใน `measurementPoints[].data` ที่เป็นตัวเลขติดลบ ทั้งชนิด number และ numeric string จะถูกแทนด้วย `"ERROR"`. การแปลงนี้ไม่ใช้กับ `station_id`, `cdate`, `ctime`, พิกัด หรือค่าเกณฑ์ และหาก StatusCode ระบุ operational status เช่น `Maintenance` หรือ `Shut Down` ระบบจะคืนชื่อสถานะนั้นตามเดิม.
 - Frontend ใช้ `hasLatestHourlyMeasurement` ได้โดยตรงและไม่ต้องวนเช็ค `measurementPoints[].data` ซ้ำ. ตัวอย่างเวลาปัจจุบัน `22:50` API จะเลือกข้อมูลรอบ `21:00` เพราะรอบ `22:00` ยังถือว่าคำนวณไม่เสร็จ และแถวที่ทำให้ flag เป็น `true` ต้องมีวันปัจจุบันพร้อม `ctime` ขึ้นต้นด้วย `21:` หรือ `21.` (ช่วง `21.00-21.59 น.`). หากเวลาปัจจุบันอยู่ในช่วง `00:00-00:59` จะเลือกข้อมูลรอบ `23:00` ของวันก่อนหน้า.
 
 ### `GET /api/v1/public/factory-map-points`
@@ -200,7 +201,7 @@ Response ใช้ identity, location, `monitoringPointCountBySystem`, `status` 
 }
 ```
 
-การแสดงค่าตรวจวัดใน `measurementPoints[].data` ใช้ [StatusCode contract](../connection-requests/parameter-values.md#statuscode-contract) เดียวกับ connection test. Backend ไม่คืน `*_status` ใน row สำหรับแสดงผล แต่ใช้ status ของพารามิเตอร์ตัดสินว่าจะคืนค่าตรวจวัดหรือชื่อสถานะ.
+การแสดงค่าตรวจวัดใน `measurementPoints[].data` ใช้ [StatusCode contract](../connection-requests/parameter-values.md#statuscode-contract) เดียวกับ connection test. Backend ไม่คืน `*_status` ใน row สำหรับแสดงผล แต่ใช้ status ของพารามิเตอร์ตัดสินว่าจะคืนค่าตรวจวัดหรือชื่อสถานะ. เมื่อ status อนุญาตให้ใช้ค่าตรวจวัด แต่ค่าเป็นตัวเลขติดลบทั้งชนิด number หรือ numeric string ระบบจะคืน `"ERROR"` เช่นเดียวกับ authenticated dashboard.
 
 ### `GET /api/v1/cems-wpms-requests/factories/:factoryId/general`
 

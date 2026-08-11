@@ -850,7 +850,7 @@ describe('connectionRequestsService', () => {
     expect(result.meta.total).toBe(3);
   });
 
-  it('returns only visible operator factories in the dashboard response shape', async () => {
+  it('returns dashboard rows with negative measurement values normalized to ERROR', async () => {
     connectionRequestsService.setClockForTests(() => new Date('2026-02-25T15:50:00.000Z'));
 
     mockedRepository.listFactoriesForAccess.mockResolvedValue([
@@ -878,13 +878,13 @@ describe('connectionRequestsService', () => {
           station_id: 'NB-C21',
           cdate: '2026-02-25',
           ctime: '21.00-21.59 น.',
-          co_value: 0.05,
+          co_value: -0.05,
           co_status: 1,
-          nox_value: 10.54,
+          nox_value: -10.54,
           nox_status: 6,
           temp_value: 93.35,
           temp_status: 9,
-          o2_value: 12.58,
+          o2_value: '-12.58',
           flow_value: 1981710,
           flow_units: 'm3/hr',
           flow_status: 'Maintenance',
@@ -1073,10 +1073,10 @@ describe('connectionRequestsService', () => {
               station_id: 'NB-C21',
               cdate: '2026-02-25',
               ctime: '21.00-21.59 น.',
-              'CO (ppm)': 0.05,
+              'CO (ppm)': 'ERROR',
               'NOx (ppm)': 'Shut Down',
               'Temp. (°C)': 'No Discharge',
-              'O2 (%)': 12.58,
+              'O2 (%)': 'ERROR',
               'Flow Rate (m3/hr)': 'Maintenance',
               'Flow (L/s)': null,
             },
@@ -1686,7 +1686,7 @@ describe('connectionRequestsService', () => {
     expect(result.data[0]).toHaveProperty('hasLatestHourlyMeasurement', false);
   });
 
-  it('returns the latest hourly measurement data for each public factory map point', async () => {
+  it('returns public map measurements with negative values normalized to ERROR', async () => {
     connectionRequestsService.setClockForTests(() => new Date('2026-06-10T16:50:00.000Z'));
     mockedRepository.listFactoriesForAccess.mockResolvedValue([
       factorySummary({
@@ -1739,7 +1739,7 @@ describe('connectionRequestsService', () => {
       data: [
         {
           station_id: 'S0001',
-          nox_value: '10.5',
+          nox_value: '-10.5',
           nox_units: 'ppm',
           flow_value: '1234.5',
           flow_units: 'm3/hr',
@@ -1817,7 +1817,7 @@ describe('connectionRequestsService', () => {
           data: [
             {
               station_id: 'S0001',
-              'NOx (ppm)': '10.5',
+              'NOx (ppm)': 'ERROR',
               'Flow Rate (m3/hr)': '1234.5',
               cdate: '2026-06-10',
               ctime: '22:00:00',

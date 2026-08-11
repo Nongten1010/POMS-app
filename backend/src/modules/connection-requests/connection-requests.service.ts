@@ -2511,11 +2511,23 @@ function toDashboardMeasurementRow(
       columnPrefix,
     );
     if (displayName) {
-      result[displayName] = measurementDisplayValue(value, row[`${columnPrefix}_status`]);
+      result[displayName] = toDashboardMeasurementDisplayValue(
+        value,
+        row[`${columnPrefix}_status`],
+      );
     }
   });
 
   return result;
+}
+
+function toDashboardMeasurementDisplayValue(value: unknown, status: unknown): unknown {
+  const displayValue = measurementDisplayValue(value, status);
+  if (typeof displayValue === 'number') return displayValue < 0 ? 'ERROR' : displayValue;
+  if (typeof displayValue !== 'string' || displayValue.trim() === '') return displayValue;
+
+  const numericValue = Number(displayValue.trim());
+  return Number.isFinite(numericValue) && numericValue < 0 ? 'ERROR' : displayValue;
 }
 
 function groupParametersByColumnPrefix(parameters: string[]): Map<string, string[]> {
