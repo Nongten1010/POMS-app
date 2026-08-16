@@ -55,6 +55,21 @@ describe('WPMS connection-request number migration', () => {
     expect(updateIndex).toBeGreaterThan(throwIndex);
   });
 
+  it('blocks legacy writers from recreating annual WEMS request numbers after backfill', async () => {
+    const { knex, raw } = migrationKnex();
+
+    await up(knex);
+
+    const sql = joinedSql(raw);
+    const updateIndex = sql.indexOf('UPDATE request_row');
+    const guardIndex = sql.indexOf('ADD CONSTRAINT ck_wpms_request_no_prefix_0094');
+
+    expect(guardIndex).toBeGreaterThan(updateIndex);
+    expect(sql).toContain('CHECK (NOT (');
+    expect(sql).toContain("system_type = 'WPMS'");
+    expect(sql).toContain("LEFT(request_no, 5) = 'WEMS-'");
+  });
+
   it('rolls back only tracked unchanged rows and refuses unsafe restoration', async () => {
     const { knex, hasTable, dropTable, raw } = migrationKnex(true);
 
@@ -62,6 +77,7 @@ describe('WPMS connection-request number migration', () => {
 
     expect(hasTable).toHaveBeenCalledWith('wpms_request_no_prefix_backfill_0094');
     const sql = joinedSql(raw);
+    const dropGuardIndex = sql.indexOf('DROP CONSTRAINT ck_wpms_request_no_prefix_0094');
     const stateGuardIndex = sql.indexOf('WPMS_REQUEST_NO_ROLLBACK_STATE_CHANGED');
     const collisionGuardIndex = sql.indexOf('WPMS_REQUEST_NO_ROLLBACK_COLLISION');
     const updateIndex = sql.indexOf('UPDATE request_row');
@@ -69,7 +85,8 @@ describe('WPMS connection-request number migration', () => {
     expect(sql).toContain('request_row.request_no <> backup.normalized_request_no');
     expect(sql).toContain("request_row.system_type <> 'WPMS'");
     expect(sql).toContain('occupied_request.request_no = backup.original_request_no');
-    expect(stateGuardIndex).toBeGreaterThanOrEqual(0);
+    expect(dropGuardIndex).toBeGreaterThanOrEqual(0);
+    expect(stateGuardIndex).toBeGreaterThan(dropGuardIndex);
     expect(collisionGuardIndex).toBeGreaterThan(stateGuardIndex);
     expect(updateIndex).toBeGreaterThan(collisionGuardIndex);
     expect(sql).toContain('SET request_row.request_no = backup.original_request_no');
