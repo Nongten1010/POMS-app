@@ -6,6 +6,18 @@
 
 Backend เป็นเจ้าของ contract เหล่านี้ หน้า API ต้องอ่านได้โดยไม่ต้องเปิด source code และต้องมี maintainer links ไปยัง implementation, tests และคำอธิบายเชิงลึกโดยไม่คัดลอกเนื้อหาเหล่านั้นเข้ามาปนกับ contract
 
+## หน้าเว็บดูและทดสอบ API ทั้งระบบ
+
+เมื่อเปิด backend ให้เข้า `<BASE_URL>/api/v1/docs` เพื่อดู payload, data type, required/nullable, validation, auth และตัวอย่าง แล้วกด `Try it out` ทดสอบกับ backend ได้ ส่วนไฟล์ OpenAPI สำหรับเครื่องมืออื่นอยู่ที่ `<BASE_URL>/api/v1/openapi.json`
+
+- ทะเบียน route จริง: **113 endpoints**
+- รายการที่กดทดสอบได้: **122 operations** เนื่องจาก route จุดตรวจวัดแบบระบุปี พ.ศ. ถูกขยายเพิ่ม 9 รูปแบบ
+- กลุ่มงานในหน้า Swagger: **11 เมนู**
+- Endpoint ที่ต้อง login ให้กด `Authorize` แล้วใส่ access token ใน `bearerAuth`
+- Integration ใช้ `X-API-Key` ผ่าน scheme ที่ระบุในแต่ละ endpoint
+
+`Try it out` เรียก backend environment ที่กำลังเปิดอยู่จริงและอาจสร้างหรือแก้ข้อมูลจริง ยกเว้น `POST /api/v1/device-connections/test-connection` ซึ่งปัจจุบันเป็นโหมด `MOCK` หน้าเอกสารเปิดเป็นค่าเริ่มต้นทุก environment รวม production และปิดได้ด้วย `API_DOCS_ENABLED=false`
+
 ## Navigation Rules
 
 - หนึ่งหน้าเอกสารอธิบาย API ทั้งหมดที่รองรับเมนูงานเดียวกัน
@@ -44,12 +56,16 @@ Backend เป็นเจ้าของ contract เหล่านี้ ห�
 
 ## Confirmed Menu Names
 
+- `ระบบทั่วไปและการเข้าสู่ระบบ`
 - `หน้าหลัก`
+- `ข้อมูลพื้นฐาน`
 - `ขอเชื่อมต่อ`
-- `โรงงานที่เข้าข่าย`
 - `แจ้งแบบ กวภ. 01 - กวภ. 05`
 - `รายงานค่าความคลาดเคลื่อน BOD/COD Online`
 - `การแจ้งเตือน`
+- `สถิติข้อมูล`
 - `สิทธิ์การใช้งาน`
+- `โรงงานที่เข้าข่าย`
+- `ระบบเชื่อมต่อภายนอก`
 
 รายการหน้า canonical จะเพิ่มใน index ของแต่ละกลุ่มระหว่างการย้ายเอกสาร

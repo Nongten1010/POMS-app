@@ -27,6 +27,7 @@ import { monitoringPointFormsRoutes } from './modules/monitoring-point-forms/mon
 import { bodCodDeviationReportsRoutes } from './modules/bod-cod-deviations/bod-cod-deviation-reports.routes';
 import { kwpFormReportsRoutes } from './modules/kwp-form-reports/kwp-form-reports.routes';
 import { kwpFormSubmissionsRoutes } from './modules/kwp-form-submissions/kwp-form-submissions.routes';
+import { apiDocsRoutes } from './modules/api-docs/api-docs.routes';
 
 export function createApp(): Application {
   const app = express();
@@ -79,6 +80,9 @@ export function createApp(): Application {
     res.json({ success: true, message: 'POMS API', version: '0.1.0' });
   });
 
+  if (env.API_DOCS_ENABLED) {
+    app.use(env.API_PREFIX, apiDocsRoutes);
+  }
   app.use(`${env.API_PREFIX}/auth`, authRoutes);
   app.use(`${env.API_PREFIX}/users`, usersRoutes);
   app.use(`${env.API_PREFIX}/eligible-factories`, eligibleFactoriesRoutes);
