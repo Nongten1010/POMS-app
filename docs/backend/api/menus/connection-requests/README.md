@@ -84,8 +84,7 @@ Location enforcement ของทุก endpoint ในตารางใช้�
 - ค่า `submissionSource` ยังคงแยกแหล่งที่มา: ผู้ประกอบการเป็น `OPERATOR_FORM` และเจ้าหน้าที่เชื่อมต่อโดยตรงเป็น `OFFICER_DIRECT_API`.
 - Direct Connection ยังคงสถานะ `CONNECTED` ทันทีและเก็บ `measurementPoints[0].pointCode` ที่เจ้าหน้าที่กรอกเอง; การเปลี่ยนนี้มีผลเฉพาะ `requestNo`.
 - ระหว่าง rollout ตัวจัดสรรลำดับของ WPMS นับทั้ง `WPMS-NNNN/YYYY` และ `WEMS-NNNN/YYYY` เพื่อไม่ให้เริ่มลำดับซ้ำก่อน migration ทำงานครบ.
-- Migration `0094_backfill_wpms_request_number_prefix` แปลง `requestNo` เดิมของ `systemType = WPMS` จาก `WEMS-NNNN/YYYY` เป็น `WPMS-NNNN/YYYY`; หากพบเลข `WPMS-...` ปลายทางซ้ำ migration จะหยุดก่อนแก้ข้อมูล.
-- หากมีแถว `WEMS-...` ของ WPMS หลุดเข้ามาระหว่างหน้าต่าง deploy ที่ service เก่ายังรันอยู่ allocator ของ backend จะ normalize แถวนั้นก่อนนับลำดับและออกเลขใหม่ครั้งถัดไป.
+- Migration `0094_backfill_wpms_request_number_prefix` แปลง `requestNo` เดิมของ `systemType = WPMS` จาก `WEMS-NNNN/YYYY` เป็น `WPMS-NNNN/YYYY`; หากพบเลข `WPMS-...` ปลายทางซ้ำ migration จะหยุดก่อนแก้ข้อมูล และหลัง backfill จะปฏิเสธการเขียนเลข annual `WEMS-...` ใหม่จาก backend รุ่นเก่าระหว่างสลับเวอร์ชัน.
 - การแปลงข้อมูลเดิมมีผลเฉพาะ `cems_wpms_connection_requests.request_no`; ไม่เปลี่ยน `measurementPoints[].pointCode` หรือ `stationId` เดิมที่อาจใช้ `WEMS-...`.
 - คำขอเดิมที่มี `OLDC-*` หรือ `OLDW-*` ไม่ถูกแก้ย้อนหลัง.
 

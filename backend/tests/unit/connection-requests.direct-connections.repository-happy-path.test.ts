@@ -115,10 +115,7 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
         if (!builder) throw new Error(`Unexpected query for ${tableName}`);
         return builder;
       }),
-      {
-        fn: { now: jest.fn(() => 'db-now') },
-        raw: jest.fn().mockResolvedValue(undefined as never),
-      },
+      { fn: { now: jest.fn(() => 'db-now') } },
     );
     mockedDb.transaction.mockImplementationOnce(async (...args: unknown[]) => {
       const callback = args[0] as (transaction: typeof trx) => Promise<unknown>;
@@ -207,13 +204,6 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
     expect(scopedWhere.where).toHaveBeenCalledWith('request_no', 'like', 'WPMS-%/2569');
     expect(scopedWhere.orWhere).toHaveBeenCalledWith('request_no', 'like', 'WEMS-%/2569');
     expect(requestNumberLookup.count).toHaveBeenCalledWith('id as total');
-    expect(trx.raw).toHaveBeenCalledTimes(1);
-    expect(trx.raw).toHaveBeenCalledWith(
-      expect.stringContaining('WPMS_REQUEST_NO_PREFIX_COLLISION'),
-    );
-    expect(trx.raw).toHaveBeenCalledWith(
-      expect.stringContaining("LEFT(request_row.request_no, 5) = 'WEMS-'"),
-    );
   });
 
   it('preserves OFFICER_DIRECT_API when rows are read back through list()', async () => {

@@ -6,7 +6,7 @@
 
 - **Affected menu:** [ขอเชื่อมต่อ](./menus/connection-requests/README.md#request-number-contract)
 - **Impact:** `requestNo` ของคำขอ `systemType = WPMS` ทั้งคำขอใหม่และข้อมูลเดิมเปลี่ยน prefix จาก `WEMS-` เป็น `WPMS-`; รหัสจุดตรวจวัด `measurementPoints[].pointCode` และ `stationId` ไม่เปลี่ยน.
-- **Migration:** deploy `0094_backfill_wpms_request_number_prefix`; migration แปลงเฉพาะ `cems_wpms_connection_requests.request_no` รูปแบบ `WEMS-NNNN/YYYY` ของแถว WPMS และหยุดก่อนแก้ข้อมูลหากเลข `WPMS-...` ปลายทางซ้ำ. ระหว่าง rollout ตัวจัดสรรลำดับนับทั้ง prefix เก่าและใหม่เพื่อไม่ให้สร้างเลขซ้ำ และ allocator ของ backend จะ normalize แถว `WEMS-...` ของ WPMS ที่ยังหลุดค้างอยู่ก่อนออกเลขใหม่. Client ต้องถือ `requestNo` เป็น opaque string และ refresh cache/reference ที่เก็บเลขคำขอเดิม.
+- **Migration:** deploy `0094_backfill_wpms_request_number_prefix`; migration แปลงเฉพาะ `cems_wpms_connection_requests.request_no` รูปแบบ `WEMS-NNNN/YYYY` ของแถว WPMS และหยุดก่อนแก้ข้อมูลหากเลข `WPMS-...` ปลายทางซ้ำ. Migration เพิ่ม check constraint เพื่อไม่ให้ backend รุ่นเก่าสร้างเลข annual `WEMS-...` แทรกหลัง backfill ระหว่างสลับเวอร์ชัน และตัวจัดสรรลำดับรุ่นใหม่นับทั้ง prefix เก่าและใหม่เพื่อไม่ให้สร้างเลขซ้ำ. Client ต้องถือ `requestNo` เป็น opaque string และ refresh cache/reference ที่เก็บเลขคำขอเดิม.
 - **Old contract:** คำขอ WPMS ใช้ `WEMS-NNNN/YYYY` เช่น `WEMS-0001/2569`.
 - **New contract:** คำขอ WPMS ใช้ `WPMS-NNNN/YYYY` เช่น `WPMS-0001/2569`; CEMS ยังคงใช้ `CEMS-NNNN/YYYY`.
 

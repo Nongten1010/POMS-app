@@ -2925,7 +2925,6 @@ function isActivePointCodeUniqueViolation(error: unknown): boolean {
 async function nextRequestNo(trx: Knex.Transaction, systemType: 'CEMS' | 'WPMS'): Promise<string> {
   const date = new Date();
   const buddhistYear = buddhistCalendarYear(date);
-  await normalizeLegacyWpmsRequestNos(trx, systemType);
   const requestNoPatterns = requestNoPrefixes(systemType).map(
     (prefix) => `${prefix}-%/${buddhistYear}`,
   );
@@ -2960,49 +2959,6 @@ function requestNoPrefixes(systemType: 'CEMS' | 'WPMS'): readonly ('CEMS' | 'WPM
   return systemType === 'WPMS' ? ['WPMS', 'WEMS'] : ['CEMS'];
 }
 
-async function normalizeLegacyWpmsRequestNos(
-  trx: Knex.Transaction,
-  systemType: 'CEMS' | 'WPMS',
-): Promise<void> {
-  if (systemType !== 'WPMS') return;
-
-  await trx.raw(buildLegacyWpmsRequestNumberNormalizationSql());
-}
-
-function buildLegacyWpmsRequestNumberNormalizationSql(): string {
-  return `
-    IF EXISTS (
-      SELECT 1
-      FROM cems_wpms_connection_requests AS request_row WITH (UPDLOCK, HOLDLOCK)
-      INNER JOIN cems_wpms_connection_requests AS existing_request WITH (UPDLOCK, HOLDLOCK)
-        ON existing_request.request_no = STUFF(request_row.request_no, 1, 5, 'WPMS-')
-      WHERE ${legacyWpmsAnnualRequestFilterSql('request_row')}
-    )
-    BEGIN
-      THROW 51094, N'WPMS_REQUEST_NO_PREFIX_COLLISION', 1;
-    END;
-
-    UPDATE request_row
-    SET request_row.request_no = STUFF(request_row.request_no, 1, 5, 'WPMS-')
-    FROM cems_wpms_connection_requests AS request_row
-    WHERE ${legacyWpmsAnnualRequestFilterSql('request_row')};
-  `;
-}
-
-function legacyWpmsAnnualRequestFilterSql(alias: string): string {
-  return `${alias}.system_type = 'WPMS'
-        AND LEFT(${alias}.request_no, 5) = 'WEMS-'
-        AND CHARINDEX('/', ${alias}.request_no) >= 10
-        AND CHARINDEX('/', ${alias}.request_no) = DATALENGTH(${alias}.request_no) - 4
-        AND SUBSTRING(
-          ${alias}.request_no,
-          6,
-          CHARINDEX('/', ${alias}.request_no) - 6
-        ) COLLATE Latin1_General_100_BIN2 NOT LIKE '%[^0-9]%'
-        AND RIGHT(${alias}.request_no, 4)
-          COLLATE Latin1_General_100_BIN2 NOT LIKE '%[^0-9]%'`;
-}
-
 export function buildRequestNoForTests(
   systemType: 'CEMS' | 'WPMS',
   sequence: number,
@@ -3017,10 +2973,6 @@ export function buildRequestNoLikePatternsForTests(
 ): string[] {
   const buddhistYear = buddhistCalendarYear(date);
   return requestNoPrefixes(systemType).map((prefix) => `${prefix}-%/${buddhistYear}`);
-}
-
-export function buildLegacyWpmsRequestNumberNormalizationSqlForTests(): string {
-  return buildLegacyWpmsRequestNumberNormalizationSql();
 }
 
 function toMeasurementPointDTO(row: MeasurementPointRow): MeasurementPointDTO {
