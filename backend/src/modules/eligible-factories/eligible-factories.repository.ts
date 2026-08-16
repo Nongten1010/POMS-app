@@ -298,24 +298,7 @@ async function performSoftDelete(
     eligibleFactory.monitoring_point_form_id === undefined
       ? null
       : Number(eligibleFactory.monitoring_point_form_id);
-  const connectedPointQuery = trx('cems_wpms_connected_measurement_points');
-
-  if (monitoringPointFormId === null) {
-    connectedPointQuery.where('cems_wpms_connected_measurement_points.eligible_factory_id', id);
-  } else {
-    connectedPointQuery
-      .innerJoin(
-        'eligible_factories as linked_eligible',
-        'linked_eligible.id',
-        'cems_wpms_connected_measurement_points.eligible_factory_id',
-      )
-      .where('linked_eligible.monitoring_point_form_id', monitoringPointFormId);
-  }
-
-  const connectedPoint = await connectedPointQuery
-    .whereNull('cems_wpms_connected_measurement_points.deleted_at')
-    .forUpdate()
-    .first('cems_wpms_connected_measurement_points.id');
+  const connectedPoint = await buildConnectedPointLookupQuery(trx, id, monitoringPointFormId);
   if (connectedPoint) {
     throw new ConflictError('Connected POMS factory cannot be removed from eligible factories', {
       eligibleFactoryId: id,
@@ -346,6 +329,39 @@ async function performSoftDelete(
     .update(softDeleteAudit);
 
   return affected > 0;
+}
+
+function buildConnectedPointLookupQuery(
+  querySource: Knex,
+  eligibleFactoryId: number,
+  monitoringPointFormId: number | null,
+) {
+  const query = querySource('cems_wpms_connected_measurement_points');
+
+  if (monitoringPointFormId === null) {
+    query.where('cems_wpms_connected_measurement_points.eligible_factory_id', eligibleFactoryId);
+  } else {
+    const linkedEligibleFactoryIds = querySource('eligible_factories')
+      .select('id')
+      .where('monitoring_point_form_id', monitoringPointFormId);
+    query.whereIn(
+      'cems_wpms_connected_measurement_points.eligible_factory_id',
+      linkedEligibleFactoryIds,
+    );
+  }
+
+  return query
+    .whereNull('cems_wpms_connected_measurement_points.deleted_at')
+    .forUpdate()
+    .first('cems_wpms_connected_measurement_points.id');
+}
+
+export function buildConnectedPointLookupQueryForTests(
+  querySource: Knex,
+  eligibleFactoryId: number,
+  monitoringPointFormId: number | null,
+) {
+  return buildConnectedPointLookupQuery(querySource, eligibleFactoryId, monitoringPointFormId);
 }
 
 async function restoreDeletedFactory(

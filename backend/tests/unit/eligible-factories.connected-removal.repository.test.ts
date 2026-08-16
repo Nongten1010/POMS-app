@@ -1,15 +1,32 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import knex from 'knex';
 
 jest.mock('../../src/config/database', () => ({
   db: Object.assign(jest.fn(), { transaction: jest.fn() }),
 }));
 
 import { db } from '../../src/config/database';
-import { eligibleFactoriesRepository } from '../../src/modules/eligible-factories/eligible-factories.repository';
+import {
+  buildConnectedPointLookupQueryForTests,
+  eligibleFactoriesRepository,
+} from '../../src/modules/eligible-factories/eligible-factories.repository';
 
 const mockedDb = db as unknown as {
   transaction: jest.Mock<(...args: unknown[]) => Promise<unknown>>;
 };
+
+describe('eligibleFactoriesRepository connected-point query', () => {
+  it('keeps the MSSQL update lock on the connected-point table for form-linked lookups', () => {
+    const mssql = knex({ client: 'mssql' });
+    const sql = buildConnectedPointLookupQueryForTests(mssql, 17, 278).toSQL().sql.toLowerCase();
+
+    expect(sql).toContain('from [cems_wpms_connected_measurement_points] with (updlock)');
+    expect(sql).toContain(
+      '[cems_wpms_connected_measurement_points].[eligible_factory_id] in (select [id] from [eligible_factories] where [monitoring_point_form_id] = ?)',
+    );
+    expect(sql).not.toContain('inner join');
+  });
+});
 
 describe('eligibleFactoriesRepository.softDelete', () => {
   beforeEach(() => {
@@ -18,9 +35,10 @@ describe('eligibleFactoriesRepository.softDelete', () => {
 
   it('returns 409 and keeps eligibility active while the factory has active POMS rows', async () => {
     const eligibleLookup = makeChain(async () => ({ id: 17, monitoring_point_form_id: 278 }));
+    const linkedEligibleIds = makeChain(async () => undefined);
     const connectedLookup = makeChain(async () => ({ id: 55 }));
     const queues = new Map<string, unknown[]>([
-      ['eligible_factories', [eligibleLookup]],
+      ['eligible_factories', [eligibleLookup, linkedEligibleIds]],
       ['cems_wpms_connected_measurement_points', [connectedLookup]],
     ]);
     const trx = Object.assign(
@@ -40,15 +58,16 @@ describe('eligibleFactoriesRepository.softDelete', () => {
       statusCode: 409,
       details: { eligibleFactoryId: 17 },
     });
-    expect(trx).toHaveBeenCalledTimes(2);
+    expect(trx).toHaveBeenCalledTimes(3);
   });
 
   it('returns 409 when a historical eligible row sharing the form has an active POMS row', async () => {
     const eligibleLookup = makeChain(async () => ({ id: 17, monitoring_point_form_id: 278 }));
-    const connectedLookup = makeFormLinkedConnectedChain(278);
+    const linkedEligibleIds = makeChain(async () => undefined);
+    const connectedLookup = makeChain(async () => ({ id: 55 }));
     const queues = new Map<string, unknown[]>([
-      ['eligible_factories', [eligibleLookup]],
-      ['cems_wpms_connected_measurement_points', [connectedLookup.chain]],
+      ['eligible_factories', [eligibleLookup, linkedEligibleIds]],
+      ['cems_wpms_connected_measurement_points', [connectedLookup]],
     ]);
     const trx = Object.assign(
       jest.fn((tableName: string) => {
@@ -67,26 +86,24 @@ describe('eligibleFactoriesRepository.softDelete', () => {
       statusCode: 409,
       details: { eligibleFactoryId: 17 },
     });
-    expect(connectedLookup.innerJoin).toHaveBeenCalledWith(
-      'eligible_factories as linked_eligible',
-      'linked_eligible.id',
+    expect(linkedEligibleIds.select).toHaveBeenCalledWith('id');
+    expect(linkedEligibleIds.where).toHaveBeenCalledWith('monitoring_point_form_id', 278);
+    expect(connectedLookup.whereIn).toHaveBeenCalledWith(
       'cems_wpms_connected_measurement_points.eligible_factory_id',
+      linkedEligibleIds,
     );
-    expect(connectedLookup.where).toHaveBeenCalledWith(
-      'linked_eligible.monitoring_point_form_id',
-      278,
-    );
-    expect(trx).toHaveBeenCalledTimes(2);
+    expect(trx).toHaveBeenCalledTimes(3);
   });
 
   it('soft-deletes the linked monitoring form and its points with the eligible factory', async () => {
     const eligibleLookup = makeChain(async () => ({ id: 17, monitoring_point_form_id: 278 }));
+    const linkedEligibleIds = makeChain(async () => undefined);
     const connectedLookup = makeChain(async () => undefined);
     const eligibleUpdate = makeUpdateChain(1);
     const formUpdate = makeUpdateChain(1);
     const pointsUpdate = makeUpdateChain(2);
     const queues = new Map<string, unknown[]>([
-      ['eligible_factories', [eligibleLookup, eligibleUpdate.chain]],
+      ['eligible_factories', [eligibleLookup, linkedEligibleIds, eligibleUpdate.chain]],
       ['cems_wpms_connected_measurement_points', [connectedLookup]],
       ['factory_monitoring_points', [pointsUpdate.chain]],
       ['factory_monitoring_point_forms', [formUpdate.chain]],
@@ -166,7 +183,9 @@ function makeChain(first: () => Promise<unknown>) {
   const returnChain = jest.fn(() => chain);
   Object.assign(chain, {
     innerJoin: returnChain,
+    select: returnChain,
     where: returnChain,
+    whereIn: returnChain,
     whereNull: returnChain,
     forUpdate: returnChain,
     first: jest.fn(first),
@@ -181,25 +200,4 @@ function makeUpdateChain(result: number) {
   const update = jest.fn(async (..._args: unknown[]) => result);
   Object.assign(chain, { where, whereNull, update });
   return { chain, where, whereNull, update };
-}
-
-function makeFormLinkedConnectedChain(formId: number) {
-  const chain: Record<string, unknown> = {};
-  const where = jest.fn((..._args: unknown[]) => chain);
-  const innerJoin = jest.fn((..._args: unknown[]) => chain);
-  const returnChain = jest.fn(() => chain);
-  const first = jest.fn(async () => {
-    const queriedByForm = where.mock.calls.some(
-      ([column, value]) => column === 'linked_eligible.monitoring_point_form_id' && value === formId,
-    );
-    return queriedByForm ? { id: 55 } : undefined;
-  });
-  Object.assign(chain, {
-    innerJoin,
-    where,
-    whereNull: returnChain,
-    forUpdate: returnChain,
-    first,
-  });
-  return { chain, innerJoin, where };
 }
