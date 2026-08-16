@@ -200,7 +200,7 @@ describe('directConnectionRequestSchema', () => {
     expect(
       directConnectionRequestSchema.safeParse({
         ...validPayload(),
-        requestNo: 'WEMS-9999/2569',
+        requestNo: 'WPMS-9999/2569',
         status: 'CONNECTED',
         submissionSource: 'OPERATOR_FORM',
       }).success,

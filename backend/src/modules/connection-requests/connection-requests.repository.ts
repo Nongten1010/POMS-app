@@ -1725,9 +1725,9 @@ function applyDirectConnectionFactoryAccessFilter(
   }
   if (scope.scope === 'IN_ESTATE' && estateCode) {
     builder.where((estateBuilder) => {
-      estateBuilder.where('ie.code', estateCode).orWhereRaw('CAST(ie.id as varchar(32)) = ?', [
-        estateCode,
-      ]);
+      estateBuilder
+        .where('ie.code', estateCode)
+        .orWhereRaw('CAST(ie.id as varchar(32)) = ?', [estateCode]);
     });
     return;
   }
@@ -1955,9 +1955,9 @@ function applyFactoryPermissionLocationFilter(
       return;
     }
     builder.where((estateBuilder) => {
-      estateBuilder.where('ie.code', estateCode).orWhereRaw('CAST(ie.id as varchar(32)) = ?', [
-        estateCode,
-      ]);
+      estateBuilder
+        .where('ie.code', estateCode)
+        .orWhereRaw('CAST(ie.id as varchar(32)) = ?', [estateCode]);
     });
   }
 }
@@ -2925,9 +2925,20 @@ function isActivePointCodeUniqueViolation(error: unknown): boolean {
 async function nextRequestNo(trx: Knex.Transaction, systemType: 'CEMS' | 'WPMS'): Promise<string> {
   const date = new Date();
   const buddhistYear = buddhistCalendarYear(date);
-  const prefix = requestNoPrefix(systemType);
+  await normalizeLegacyWpmsRequestNos(trx, systemType);
+  const requestNoPatterns = requestNoPrefixes(systemType).map(
+    (prefix) => `${prefix}-%/${buddhistYear}`,
+  );
   const totalRow = await trx('cems_wpms_connection_requests')
-    .where('request_no', 'like', `${prefix}-%/${buddhistYear}`)
+    .where((query) => {
+      requestNoPatterns.forEach((pattern, index) => {
+        if (index === 0) {
+          query.where('request_no', 'like', pattern);
+          return;
+        }
+        query.orWhere('request_no', 'like', pattern);
+      });
+    })
     .count<{ total: number | string }>('id as total')
     .first();
   const sequence = Number(totalRow?.total ?? 0) + 1;
@@ -2941,8 +2952,55 @@ function buildRequestNo(systemType: 'CEMS' | 'WPMS', sequence: number, date = ne
   return `${requestNoPrefix(systemType)}-${String(sequence).padStart(4, '0')}/${buddhistCalendarYear(date)}`;
 }
 
-function requestNoPrefix(systemType: 'CEMS' | 'WPMS'): 'CEMS' | 'WEMS' {
-  return systemType === 'CEMS' ? 'CEMS' : 'WEMS';
+function requestNoPrefix(systemType: 'CEMS' | 'WPMS'): 'CEMS' | 'WPMS' {
+  return systemType;
+}
+
+function requestNoPrefixes(systemType: 'CEMS' | 'WPMS'): readonly ('CEMS' | 'WPMS' | 'WEMS')[] {
+  return systemType === 'WPMS' ? ['WPMS', 'WEMS'] : ['CEMS'];
+}
+
+async function normalizeLegacyWpmsRequestNos(
+  trx: Knex.Transaction,
+  systemType: 'CEMS' | 'WPMS',
+): Promise<void> {
+  if (systemType !== 'WPMS') return;
+
+  await trx.raw(buildLegacyWpmsRequestNumberNormalizationSql());
+}
+
+function buildLegacyWpmsRequestNumberNormalizationSql(): string {
+  return `
+    IF EXISTS (
+      SELECT 1
+      FROM cems_wpms_connection_requests AS request_row WITH (UPDLOCK, HOLDLOCK)
+      INNER JOIN cems_wpms_connection_requests AS existing_request WITH (UPDLOCK, HOLDLOCK)
+        ON existing_request.request_no = STUFF(request_row.request_no, 1, 5, 'WPMS-')
+      WHERE ${legacyWpmsAnnualRequestFilterSql('request_row')}
+    )
+    BEGIN
+      THROW 51094, N'WPMS_REQUEST_NO_PREFIX_COLLISION', 1;
+    END;
+
+    UPDATE request_row
+    SET request_row.request_no = STUFF(request_row.request_no, 1, 5, 'WPMS-')
+    FROM cems_wpms_connection_requests AS request_row
+    WHERE ${legacyWpmsAnnualRequestFilterSql('request_row')};
+  `;
+}
+
+function legacyWpmsAnnualRequestFilterSql(alias: string): string {
+  return `${alias}.system_type = 'WPMS'
+        AND LEFT(${alias}.request_no, 5) = 'WEMS-'
+        AND CHARINDEX('/', ${alias}.request_no) >= 10
+        AND CHARINDEX('/', ${alias}.request_no) = DATALENGTH(${alias}.request_no) - 4
+        AND SUBSTRING(
+          ${alias}.request_no,
+          6,
+          CHARINDEX('/', ${alias}.request_no) - 6
+        ) COLLATE Latin1_General_100_BIN2 NOT LIKE '%[^0-9]%'
+        AND RIGHT(${alias}.request_no, 4)
+          COLLATE Latin1_General_100_BIN2 NOT LIKE '%[^0-9]%'`;
 }
 
 export function buildRequestNoForTests(
@@ -2951,6 +3009,18 @@ export function buildRequestNoForTests(
   date = new Date(),
 ): string {
   return buildRequestNo(systemType, sequence, date);
+}
+
+export function buildRequestNoLikePatternsForTests(
+  systemType: 'CEMS' | 'WPMS',
+  date = new Date(),
+): string[] {
+  const buddhistYear = buddhistCalendarYear(date);
+  return requestNoPrefixes(systemType).map((prefix) => `${prefix}-%/${buddhistYear}`);
+}
+
+export function buildLegacyWpmsRequestNumberNormalizationSqlForTests(): string {
+  return buildLegacyWpmsRequestNumberNormalizationSql();
 }
 
 function toMeasurementPointDTO(row: MeasurementPointRow): MeasurementPointDTO {

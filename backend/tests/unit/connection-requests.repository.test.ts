@@ -10,6 +10,8 @@ import {
   buildConnectedMeasurementPointsQueryForTests,
   buildCurrentPomsFactoryNamesQueryForTests,
   buildFactoriesForAccessQueryForTests,
+  buildLegacyWpmsRequestNumberNormalizationSqlForTests,
+  buildRequestNoLikePatternsForTests,
   buildRequestNoForTests,
   shouldIssueWaitingConnectionSideEffectsForTests,
   toRequestRowForTests,
@@ -195,7 +197,37 @@ describe('connectionRequestsRepository query helpers', () => {
     const date = new Date('2026-05-30T12:00:00.000+07:00');
 
     expect(buildRequestNoForTests('CEMS', 1, date)).toBe('CEMS-0001/2569');
-    expect(buildRequestNoForTests('WPMS', 3, date)).toBe('WEMS-0003/2569');
+    expect(buildRequestNoForTests('WPMS', 3, date)).toBe('WPMS-0003/2569');
+  });
+
+  it('keeps WPMS request sequencing aware of legacy WEMS prefixes during backfill rollout', () => {
+    const date = new Date('2026-05-30T12:00:00.000+07:00');
+
+    expect(buildRequestNoLikePatternsForTests('CEMS', date)).toEqual(['CEMS-%/2569']);
+    expect(buildRequestNoLikePatternsForTests('WPMS', date)).toEqual([
+      'WPMS-%/2569',
+      'WEMS-%/2569',
+    ]);
+  });
+
+  it('normalizes legacy WPMS WEMS request numbers before the next sequence is allocated', () => {
+    const sql = buildLegacyWpmsRequestNumberNormalizationSqlForTests();
+    const collisionIndex = sql.indexOf('WPMS_REQUEST_NO_PREFIX_COLLISION');
+    const throwIndex = sql.indexOf('THROW 51094');
+    const updateIndex = sql.indexOf('UPDATE request_row');
+
+    expect(sql).toContain("request_row.system_type = 'WPMS'");
+    expect(sql).toContain("LEFT(request_row.request_no, 5) = 'WEMS-'");
+    expect(sql).toContain(
+      "existing_request.request_no = STUFF(request_row.request_no, 1, 5, 'WPMS-')",
+    );
+    expect(sql).toContain(
+      "SET request_row.request_no = STUFF(request_row.request_no, 1, 5, 'WPMS-')",
+    );
+    expect(sql).toContain("COLLATE Latin1_General_100_BIN2 NOT LIKE '%[^0-9]%'");
+    expect(collisionIndex).toBeGreaterThanOrEqual(0);
+    expect(throwIndex).toBeGreaterThanOrEqual(0);
+    expect(updateIndex).toBeGreaterThan(throwIndex);
   });
 
   it('filters request history by selected station aliases from connected measurement points', () => {

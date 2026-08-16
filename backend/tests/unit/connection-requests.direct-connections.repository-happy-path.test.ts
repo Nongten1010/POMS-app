@@ -83,7 +83,7 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
       }),
     });
     const snapshotSoftDelete = makeChain({ update: async () => 1 });
-    const requestRead = makeChain({ first: async () => requestRow(fixedNow) });
+    const requestRead = makeChain({ first: async () => requestRow(fixedNow, 'WPMS') });
     const pointRead = makeChain({ terminalOrderBy: async () => [measurementPointRow()] });
     const historyRead = makeChain({
       terminalOrderBy: async () => [statusHistoryRow(fixedNow)],
@@ -115,7 +115,10 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
         if (!builder) throw new Error(`Unexpected query for ${tableName}`);
         return builder;
       }),
-      { fn: { now: jest.fn(() => 'db-now') } },
+      {
+        fn: { now: jest.fn(() => 'db-now') },
+        raw: jest.fn().mockResolvedValue(undefined as never),
+      },
     );
     mockedDb.transaction.mockImplementationOnce(async (...args: unknown[]) => {
       const callback = args[0] as (transaction: typeof trx) => Promise<unknown>;
@@ -123,14 +126,14 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
     });
 
     const created = await connectionRequestsRepository.createDirectConnection(
-      directInput() as never,
+      directInput('WPMS') as never,
       42,
     );
 
     expect(mockedDb.transaction).toHaveBeenCalledTimes(1);
     expect(requestInsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        request_no: 'CEMS-0001/2569',
+        request_no: 'WPMS-0001/2569',
         eligible_factory_id: 17,
         request_type: 'ADD_MEASUREMENT_POINT',
         submission_source: 'OFFICER_DIRECT_API',
@@ -173,7 +176,7 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
         eligible_factory_id: 17,
         factory_id: 'factory-001',
         factory_address: '99 หมู่ 1 แขวงลำปลาทิว เขตลาดกระบัง กรุงเทพมหานคร 10520',
-        system_type: 'CEMS',
+        system_type: 'WPMS',
         point_code: 'free form / จุด-01',
         connected_at: fixedNow,
         created_by: 42,
@@ -181,7 +184,7 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
     );
     expect(created).toMatchObject({
       id: 101,
-      requestNo: 'CEMS-0001/2569',
+      requestNo: 'WPMS-0001/2569',
       requestType: 'ADD_MEASUREMENT_POINT',
       submissionSource: 'OFFICER_DIRECT_API',
       status: 'CONNECTED',
@@ -191,8 +194,26 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
       statusHistory: [expect.objectContaining({ status: 'CONNECTED', changedById: 42 })],
     });
     expect([...queues.values()].every((queue) => queue.length === 0)).toBe(true);
-    expect(requestNumberLookup.where).toHaveBeenCalledWith('request_no', 'like', 'CEMS-%/2569');
+    const scopedWhere = {
+      where: jest.fn().mockReturnThis(),
+      orWhere: jest.fn().mockReturnThis(),
+    };
+    const requestNumberWhere = requestNumberLookup.where as jest.Mock;
+    const requestNoScope = requestNumberWhere.mock.calls[0]?.[0] as
+      | ((query: typeof scopedWhere) => void)
+      | undefined;
+    expect(requestNoScope).toEqual(expect.any(Function));
+    requestNoScope?.(scopedWhere);
+    expect(scopedWhere.where).toHaveBeenCalledWith('request_no', 'like', 'WPMS-%/2569');
+    expect(scopedWhere.orWhere).toHaveBeenCalledWith('request_no', 'like', 'WEMS-%/2569');
     expect(requestNumberLookup.count).toHaveBeenCalledWith('id as total');
+    expect(trx.raw).toHaveBeenCalledTimes(1);
+    expect(trx.raw).toHaveBeenCalledWith(
+      expect.stringContaining('WPMS_REQUEST_NO_PREFIX_COLLISION'),
+    );
+    expect(trx.raw).toHaveBeenCalledWith(
+      expect.stringContaining("LEFT(request_row.request_no, 5) = 'WEMS-'"),
+    );
   });
 
   it('preserves OFFICER_DIRECT_API when rows are read back through list()', async () => {
@@ -296,7 +317,7 @@ function makeChain(options: {
   return chain;
 }
 
-function directInput() {
+function directInput(systemType: 'CEMS' | 'WPMS' = 'CEMS') {
   return {
     eligibleFactoryId: 17,
     requestType: 'ADD_MEASUREMENT_POINT',
@@ -305,7 +326,7 @@ function directInput() {
     factoryRegistrationNo: 'REG-001',
     address: '99 หมู่ 1 แขวงลำปลาทิว เขตลาดกระบัง 10520',
     provinceName: 'กรุงเทพมหานคร',
-    systemType: 'CEMS',
+    systemType,
     contactName: 'ผู้ประสานงาน',
     contactPhone: '0812345678',
     measurementPoints: [
@@ -319,11 +340,11 @@ function directInput() {
   };
 }
 
-function requestRow(now: Date) {
+function requestRow(now: Date, systemType: 'CEMS' | 'WPMS' = 'CEMS') {
   return {
     id: 101,
     eligible_factory_id: 17,
-    request_no: 'CEMS-0001/2569',
+    request_no: `${systemType}-0001/2569`,
     submission_source: 'OFFICER_DIRECT_API',
     request_type: 'ADD_MEASUREMENT_POINT',
     factory_id: 'factory-001',
@@ -339,7 +360,7 @@ function requestRow(now: Date) {
     address: null,
     latitude: null,
     longitude: null,
-    system_type: 'CEMS',
+    system_type: systemType,
     status: 'CONNECTED',
     contact_name: 'ผู้ประสานงาน',
     contact_phone: '0812345678',

@@ -2942,7 +2942,7 @@ describe('connectionRequestsService', () => {
     });
     const wpmsRequest = requestDto({
       id: 2,
-      requestNo: 'WEMS-0001/2569',
+      requestNo: 'WPMS-0001/2569',
       systemType: 'WPMS',
       status: CONNECTION_REQUEST_STATUS.CONNECTED,
       statusLabel: 'เชื่อมต่อแล้ว',
@@ -3558,13 +3558,9 @@ describe('connectionRequestsService', () => {
       }),
     );
 
-    await connectionRequestsService.changeStatus(
-      1,
-      { action: 'APPROVE_FORM' },
-      7,
-      'ALL',
-      { regions: ['ภาคตะวันออก'] },
-    );
+    await connectionRequestsService.changeStatus(1, { action: 'APPROVE_FORM' }, 7, 'ALL', {
+      regions: ['ภาคตะวันออก'],
+    });
 
     expect(mockedRepository.updateStatus).toHaveBeenCalledWith(
       1,

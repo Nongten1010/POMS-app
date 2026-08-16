@@ -284,7 +284,7 @@ function historyRowsBuilder() {
 function requestRow(systemType: 'CEMS' | 'WPMS') {
   return {
     id: 101,
-    request_no: `${systemType === 'CEMS' ? 'CEMS' : 'WEMS'}-0001/2569`,
+    request_no: `${systemType}-0001/2569`,
     submission_source: 'OPERATOR_FORM',
     request_type: 'NEW_CONNECTION',
     factory_id: 'factory-001',

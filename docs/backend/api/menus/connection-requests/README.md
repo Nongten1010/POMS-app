@@ -43,31 +43,31 @@ curl --request POST \
 
 ## Endpoint Summary
 
-| งาน | Method | Path | Auth | Permission | Contract |
-| --- | --- | --- | --- | --- | --- |
-| อ่านรายการคำขอสำหรับตาราง | `GET` | `/api/v1/cems-wpms-requests/table-rows` | Bearer | `cems_wpms_requests:view` | [Request table location source](#request-table-location-source) |
-| อ่านโรงงานเข้าข่ายสำหรับฟอร์มเจ้าหน้าที่ | `GET` | `/api/v1/cems-wpms-requests/eligible-factories` | Bearer | `cems_wpms_requests:view` | ใช้ scope เดียวกับคำขอและส่ง region/province/estate ลง eligible-factory repository |
-| อ่านรายชื่อโรงงานทั้งหมดที่ผู้ประกอบการเข้าถึงได้ พร้อมสถานะเข้าข่าย | `GET` | `/api/v1/cems-wpms-requests/operator-factories` | Bearer | `factories:view` | [Operator factory list source](#operator-factory-list-source) |
-| อ่านข้อมูลทั่วไปของโรงงานสำหรับ prefill | `GET` | `/api/v1/cems-wpms-requests/factories/:factoryId/general` | Bearer | `factories:view` | [Frontend measurement-point handoff](#frontend-measurement-point-handoff) |
-| สร้างคำขอเชื่อมต่อใหม่ | `POST` | `/api/v1/cems-wpms-requests` | Bearer | `cems_wpms_requests:edit` | [Eligibility gate](#eligibility-gate) |
-| สร้างคำขอเพิ่มจุดตรวจวัด | `POST` | `/api/v1/cems-wpms-requests/measurement-points` | Bearer | `cems_wpms_requests:edit` | [Eligibility gate](#eligibility-gate), [Frontend measurement-point handoff](#frontend-measurement-point-handoff) |
-| สร้างคำขอเพิ่มพารามิเตอร์ | `POST` | `/api/v1/cems-wpms-requests/parameters` | Bearer | `cems_wpms_requests:edit` | [Eligibility gate](#eligibility-gate) |
-| เชื่อมต่อโดยเจ้าหน้าที่โดยตรง | `POST` | `/api/v1/cems-wpms-requests/direct-connections` | Bearer | `cems_wpms_requests:direct_connect` | [Eligibility gate](#eligibility-gate), [Frontend measurement-point handoff](#frontend-measurement-point-handoff) |
-| ตรวจสอบและเปลี่ยนคำขอเป็นเชื่อมต่อแล้ว | `POST` | `/api/v1/cems-wpms-requests/:id/verify-connection` | Bearer | `cems_wpms_requests:approve` | [Connected factory profile sync](#connected-factory-profile-sync) |
-| อนุมัติแบบและออกรหัสจุดตรวจวัด | `POST` | `/api/v1/cems-wpms-requests/:id/review` | Bearer | `cems_wpms_requests:approve` | [Approve design](#approve-design) |
-| อ่านรายละเอียดคำขอและรหัสจุด | `GET` | `/api/v1/cems-wpms-requests/:id` | Bearer | `cems_wpms_requests:view` | [Read request](#read-request) |
-| อ่านรายละเอียดเต็มสำหรับ prefill | `GET` | `/api/v1/cems-wpms-requests/:id/detail` | Bearer | `cems_wpms_requests:view` | [Read request](#read-request), [Frontend measurement-point handoff](#frontend-measurement-point-handoff) |
-| แก้ไขและส่งแบบคำขออีกครั้ง | `PUT` | `/api/v1/cems-wpms-requests/:id/form` | Bearer | `cems_wpms_requests:edit` | [Frontend measurement-point handoff](#frontend-measurement-point-handoff) |
-| อ่านแบบตั้งค่าอุปกรณ์ของจุดในคำขอ | `GET` | `/api/v1/cems-wpms-requests/:id/device-configs?stationId=:stationId` | Bearer | `cems_wpms_requests:view` | [Device configs](./device-configs.md) |
-| อ่านแบบตั้งค่าอุปกรณ์รายการเดียวในคำขอ | `GET` | `/api/v1/cems-wpms-requests/:id/device-configs/:configId` | Bearer | `cems_wpms_requests:view` | [Device configs](./device-configs.md) |
-| บันทึกการตั้งค่าอุปกรณ์ของจุดในคำขอ | `POST` | `/api/v1/cems-wpms-requests/:id/device-configs` | Bearer | `cems_wpms_requests:edit` | [Device configs](./device-configs.md) |
-| อ่านจุดตรวจวัดที่เชื่อมต่อแล้ว | `GET` | `/api/v1/connected-measurement-points` | Bearer | `cems_wpms_requests:view` | [Connected points](#connected-points) |
-| อ่านจุดตรวจวัดของโรงงานและข้อมูล prefill | `GET` | `/api/v1/connected-measurement-points/factories/:factoryId` | Bearer | `cems_wpms_requests:view` | [Shared connected-point contract](../../shared/connected-measurement-points/README.md) |
-| อ่านข้อมูลปัจจุบันสำหรับฟอร์มเพิ่มพารามิเตอร์ | `GET` | `/api/v1/connected-measurement-points/:stationId/parameter-form` | Bearer | `cems_wpms_requests:view` | [Add-parameter prefill](#add-parameter-prefill) |
-| อ่าน/แทนที่ config ของจุดที่เชื่อมต่อแล้ว | `GET`, `POST` | `/api/v1/connected-measurement-points/:stationId/device-configs` | Bearer | `cems_wpms_requests:view`, `cems_wpms_requests:edit` | [Device configs](./device-configs.md) |
-| อ่าน raw parameter values | `GET` | `/api/v1/parameter-values`, `/api/v1/parameter-values/latest` | Bearer | `cems_wpms_requests:view` | [Parameter values](./parameter-values.md) |
-| ทดสอบข้อมูลเชื่อมต่อและแปลง StatusCode | `GET` | `/api/v1/parameter-values/connection-test` | Bearer | `cems_wpms_requests:view` | [Parameter values](./parameter-values.md) |
-| ผู้ประกอบการยกเลิกคำขอ | `POST` | `/api/v1/cems-wpms-requests/:id/cancel` | Bearer | `cems_wpms_requests:edit` + owner | [Cancel request](./operator-cancel-request.md) |
+| งาน                                                                  | Method        | Path                                                                 | Auth   | Permission                                           | Contract                                                                                                         |
+| -------------------------------------------------------------------- | ------------- | -------------------------------------------------------------------- | ------ | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| อ่านรายการคำขอสำหรับตาราง                                            | `GET`         | `/api/v1/cems-wpms-requests/table-rows`                              | Bearer | `cems_wpms_requests:view`                            | [Request table location source](#request-table-location-source)                                                  |
+| อ่านโรงงานเข้าข่ายสำหรับฟอร์มเจ้าหน้าที่                             | `GET`         | `/api/v1/cems-wpms-requests/eligible-factories`                      | Bearer | `cems_wpms_requests:view`                            | ใช้ scope เดียวกับคำขอและส่ง region/province/estate ลง eligible-factory repository                               |
+| อ่านรายชื่อโรงงานทั้งหมดที่ผู้ประกอบการเข้าถึงได้ พร้อมสถานะเข้าข่าย | `GET`         | `/api/v1/cems-wpms-requests/operator-factories`                      | Bearer | `factories:view`                                     | [Operator factory list source](#operator-factory-list-source)                                                    |
+| อ่านข้อมูลทั่วไปของโรงงานสำหรับ prefill                              | `GET`         | `/api/v1/cems-wpms-requests/factories/:factoryId/general`            | Bearer | `factories:view`                                     | [Frontend measurement-point handoff](#frontend-measurement-point-handoff)                                        |
+| สร้างคำขอเชื่อมต่อใหม่                                               | `POST`        | `/api/v1/cems-wpms-requests`                                         | Bearer | `cems_wpms_requests:edit`                            | [Eligibility gate](#eligibility-gate)                                                                            |
+| สร้างคำขอเพิ่มจุดตรวจวัด                                             | `POST`        | `/api/v1/cems-wpms-requests/measurement-points`                      | Bearer | `cems_wpms_requests:edit`                            | [Eligibility gate](#eligibility-gate), [Frontend measurement-point handoff](#frontend-measurement-point-handoff) |
+| สร้างคำขอเพิ่มพารามิเตอร์                                            | `POST`        | `/api/v1/cems-wpms-requests/parameters`                              | Bearer | `cems_wpms_requests:edit`                            | [Eligibility gate](#eligibility-gate)                                                                            |
+| เชื่อมต่อโดยเจ้าหน้าที่โดยตรง                                        | `POST`        | `/api/v1/cems-wpms-requests/direct-connections`                      | Bearer | `cems_wpms_requests:direct_connect`                  | [Eligibility gate](#eligibility-gate), [Frontend measurement-point handoff](#frontend-measurement-point-handoff) |
+| ตรวจสอบและเปลี่ยนคำขอเป็นเชื่อมต่อแล้ว                               | `POST`        | `/api/v1/cems-wpms-requests/:id/verify-connection`                   | Bearer | `cems_wpms_requests:approve`                         | [Connected factory profile sync](#connected-factory-profile-sync)                                                |
+| อนุมัติแบบและออกรหัสจุดตรวจวัด                                       | `POST`        | `/api/v1/cems-wpms-requests/:id/review`                              | Bearer | `cems_wpms_requests:approve`                         | [Approve design](#approve-design)                                                                                |
+| อ่านรายละเอียดคำขอและรหัสจุด                                         | `GET`         | `/api/v1/cems-wpms-requests/:id`                                     | Bearer | `cems_wpms_requests:view`                            | [Read request](#read-request)                                                                                    |
+| อ่านรายละเอียดเต็มสำหรับ prefill                                     | `GET`         | `/api/v1/cems-wpms-requests/:id/detail`                              | Bearer | `cems_wpms_requests:view`                            | [Read request](#read-request), [Frontend measurement-point handoff](#frontend-measurement-point-handoff)         |
+| แก้ไขและส่งแบบคำขออีกครั้ง                                           | `PUT`         | `/api/v1/cems-wpms-requests/:id/form`                                | Bearer | `cems_wpms_requests:edit`                            | [Frontend measurement-point handoff](#frontend-measurement-point-handoff)                                        |
+| อ่านแบบตั้งค่าอุปกรณ์ของจุดในคำขอ                                    | `GET`         | `/api/v1/cems-wpms-requests/:id/device-configs?stationId=:stationId` | Bearer | `cems_wpms_requests:view`                            | [Device configs](./device-configs.md)                                                                            |
+| อ่านแบบตั้งค่าอุปกรณ์รายการเดียวในคำขอ                               | `GET`         | `/api/v1/cems-wpms-requests/:id/device-configs/:configId`            | Bearer | `cems_wpms_requests:view`                            | [Device configs](./device-configs.md)                                                                            |
+| บันทึกการตั้งค่าอุปกรณ์ของจุดในคำขอ                                  | `POST`        | `/api/v1/cems-wpms-requests/:id/device-configs`                      | Bearer | `cems_wpms_requests:edit`                            | [Device configs](./device-configs.md)                                                                            |
+| อ่านจุดตรวจวัดที่เชื่อมต่อแล้ว                                       | `GET`         | `/api/v1/connected-measurement-points`                               | Bearer | `cems_wpms_requests:view`                            | [Connected points](#connected-points)                                                                            |
+| อ่านจุดตรวจวัดของโรงงานและข้อมูล prefill                             | `GET`         | `/api/v1/connected-measurement-points/factories/:factoryId`          | Bearer | `cems_wpms_requests:view`                            | [Shared connected-point contract](../../shared/connected-measurement-points/README.md)                           |
+| อ่านข้อมูลปัจจุบันสำหรับฟอร์มเพิ่มพารามิเตอร์                        | `GET`         | `/api/v1/connected-measurement-points/:stationId/parameter-form`     | Bearer | `cems_wpms_requests:view`                            | [Add-parameter prefill](#add-parameter-prefill)                                                                  |
+| อ่าน/แทนที่ config ของจุดที่เชื่อมต่อแล้ว                            | `GET`, `POST` | `/api/v1/connected-measurement-points/:stationId/device-configs`     | Bearer | `cems_wpms_requests:view`, `cems_wpms_requests:edit` | [Device configs](./device-configs.md)                                                                            |
+| อ่าน raw parameter values                                            | `GET`         | `/api/v1/parameter-values`, `/api/v1/parameter-values/latest`        | Bearer | `cems_wpms_requests:view`                            | [Parameter values](./parameter-values.md)                                                                        |
+| ทดสอบข้อมูลเชื่อมต่อและแปลง StatusCode                               | `GET`         | `/api/v1/parameter-values/connection-test`                           | Bearer | `cems_wpms_requests:view`                            | [Parameter values](./parameter-values.md)                                                                        |
+| ผู้ประกอบการยกเลิกคำขอ                                               | `POST`        | `/api/v1/cems-wpms-requests/:id/cancel`                              | Bearer | `cems_wpms_requests:edit` + owner                    | [Cancel request](./operator-cancel-request.md)                                                                   |
 
 Location enforcement ของทุก endpoint ในตารางใช้จุดตัดกับ profile assignment. `IN_REGION`, `IN_PROVINCE` หรือ `IN_ESTATE` ที่ไม่มี qualifier ที่ resolve ได้ หรือขัดกับพื้นที่ประจำตัว ต้องคืนศูนย์รายการ/`404` และห้าม fallback ไปใช้ request ownership หรือโรงงานที่เคยผูกไว้. สำหรับ กนอ. `IN_ESTATE` หมายถึงโรงงานทุกแห่งในนิคม `estateCode` ที่มอบหมาย
 
@@ -75,24 +75,28 @@ Location enforcement ของทุก endpoint ในตารางใช้�
 
 คำขอที่สร้างใหม่ใช้เลขชุดเดียวกันตาม `systemType` และปี พ.ศ. ไม่ว่าผู้ส่งจะเป็นผู้ประกอบการหรือเจ้าหน้าที่เชื่อมต่อโดยตรง:
 
-| `systemType` | รูปแบบ | ตัวอย่างแรกของปี 2569 |
-| --- | --- | --- |
-| `CEMS` | `CEMS-` + ลำดับอย่างน้อย 4 หลัก + `/` + ปี พ.ศ. 4 หลัก | `CEMS-0001/2569` |
-| `WPMS` | `WEMS-` + ลำดับอย่างน้อย 4 หลัก + `/` + ปี พ.ศ. 4 หลัก | `WEMS-0001/2569` |
+| `systemType` | รูปแบบ                                                 | ตัวอย่างแรกของปี 2569 |
+| ------------ | ------------------------------------------------------ | --------------------- |
+| `CEMS`       | `CEMS-` + ลำดับอย่างน้อย 4 หลัก + `/` + ปี พ.ศ. 4 หลัก | `CEMS-0001/2569`      |
+| `WPMS`       | `WPMS-` + ลำดับอย่างน้อย 4 หลัก + `/` + ปี พ.ศ. 4 หลัก | `WPMS-0001/2569`      |
 
 - `POST /api/v1/cems-wpms-requests/direct-connections` ใช้ลำดับเดียวกับคำขอของผู้ประกอบการ ไม่ใช้ prefix `OLDC` หรือ `OLDW` สำหรับคำขอใหม่.
 - ค่า `submissionSource` ยังคงแยกแหล่งที่มา: ผู้ประกอบการเป็น `OPERATOR_FORM` และเจ้าหน้าที่เชื่อมต่อโดยตรงเป็น `OFFICER_DIRECT_API`.
 - Direct Connection ยังคงสถานะ `CONNECTED` ทันทีและเก็บ `measurementPoints[0].pointCode` ที่เจ้าหน้าที่กรอกเอง; การเปลี่ยนนี้มีผลเฉพาะ `requestNo`.
+- ระหว่าง rollout ตัวจัดสรรลำดับของ WPMS นับทั้ง `WPMS-NNNN/YYYY` และ `WEMS-NNNN/YYYY` เพื่อไม่ให้เริ่มลำดับซ้ำก่อน migration ทำงานครบ.
+- Migration `0094_backfill_wpms_request_number_prefix` แปลง `requestNo` เดิมของ `systemType = WPMS` จาก `WEMS-NNNN/YYYY` เป็น `WPMS-NNNN/YYYY`; หากพบเลข `WPMS-...` ปลายทางซ้ำ migration จะหยุดก่อนแก้ข้อมูล.
+- หากมีแถว `WEMS-...` ของ WPMS หลุดเข้ามาระหว่างหน้าต่าง deploy ที่ service เก่ายังรันอยู่ allocator ของ backend จะ normalize แถวนั้นก่อนนับลำดับและออกเลขใหม่ครั้งถัดไป.
+- การแปลงข้อมูลเดิมมีผลเฉพาะ `cems_wpms_connection_requests.request_no`; ไม่เปลี่ยน `measurementPoints[].pointCode` หรือ `stationId` เดิมที่อาจใช้ `WEMS-...`.
 - คำขอเดิมที่มี `OLDC-*` หรือ `OLDW-*` ไม่ถูกแก้ย้อนหลัง.
 
 ## Point-code Contract
 
 กติกานี้ใช้เฉพาะ flow ปกติของผู้ประกอบการ:
 
-| `systemType` | รูปแบบรหัสใหม่ | รหัสแรกขั้นต่ำ | ตัวอย่างลำดับ |
-| --- | --- | --- | --- |
-| `CEMS` | `S` + ลำดับอย่างน้อย 4 หลัก | `S2001` | `S2001`, `S2002`, ... |
-| `WPMS` | `W` + ลำดับอย่างน้อย 4 หลัก | `W2001` | `W2001`, `W2002`, ... |
+| `systemType` | รูปแบบรหัสใหม่              | รหัสแรกขั้นต่ำ | ตัวอย่างลำดับ         |
+| ------------ | --------------------------- | -------------- | --------------------- |
+| `CEMS`       | `S` + ลำดับอย่างน้อย 4 หลัก | `S2001`        | `S2001`, `S2002`, ... |
+| `WPMS`       | `W` + ลำดับอย่างน้อย 4 หลัก | `W2001`        | `W2001`, `W2002`, ... |
 
 - CEMS และ WPMS ใช้ลำดับแยกกัน เริ่มขั้นต่ำที่ `2001` และไม่เริ่มใหม่เมื่อเปลี่ยนปี.
 - ระบบออกเลขต่อจากค่าที่มากกว่าระหว่าง sequence ที่บันทึกไว้กับรหัส `S...`/`W...` สูงสุดที่ยังใช้งานอยู่.
@@ -115,13 +119,13 @@ Location enforcement ของทุก endpoint ในตารางใช้�
 
 Contract นี้ใช้กับ `POST /api/v1/cems-wpms-requests/measurement-points`, `POST /api/v1/cems-wpms-requests/direct-connections` และ `PUT /api/v1/cems-wpms-requests/:id/form`. Field ต่อไปนี้อยู่ใต้ `measurementPoints[].details` และใช้ชื่อ key เดิมทุก endpoint:
 
-| Field | Type | Required | Rules |
-| --- | --- | --- | --- |
-| `measurementPoints[].details.primaryFuelPercent` | number \| null | no | เมื่อไม่มี `primaryFuel` ไม่บังคับ field นี้; ไม่ส่งหรือส่ง `null` ได้ |
-| `measurementPoints[].details.secondaryFuelPercent` | number \| null | no | เมื่อไม่มี `secondaryFuel` ไม่บังคับ field นี้; ไม่ส่งหรือส่ง `null` ได้ |
-| `measurementPoints[].details.sharedStackCode` | string \| null | no | ชื่อ key ยังคงเป็น `sharedStackCode`; client ไม่ต้องเปลี่ยนเป็น key ใหม่ |
-| `measurementPoints[].details.exemptedParameterRegulationClauses` | string \| null | no | canonical write เป็นค่าเดียวใน `ไม่มี`, `4(1)`, `4(2)`, `11(3)`, `อื่นๆ`; แม้ชื่อ field เป็นพหูพจน์ โดย historical detail ที่ยังไม่ถูกบันทึกซ้ำอาจยังเป็น legacy array |
-| `measurementPoints[].details.exemptedParameterRegulationClauseOther` | string \| null | conditional | เมื่อเลือก `อื่นๆ` ต้องเป็นข้อความที่ trim แล้วไม่ว่างและยาวไม่เกิน 500 ตัวอักษร; เมื่อเลือกค่าอื่น backend normalize เป็น `null` |
+| Field                                                                | Type           | Required    | Rules                                                                                                                                                                  |
+| -------------------------------------------------------------------- | -------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `measurementPoints[].details.primaryFuelPercent`                     | number \| null | no          | เมื่อไม่มี `primaryFuel` ไม่บังคับ field นี้; ไม่ส่งหรือส่ง `null` ได้                                                                                                 |
+| `measurementPoints[].details.secondaryFuelPercent`                   | number \| null | no          | เมื่อไม่มี `secondaryFuel` ไม่บังคับ field นี้; ไม่ส่งหรือส่ง `null` ได้                                                                                               |
+| `measurementPoints[].details.sharedStackCode`                        | string \| null | no          | ชื่อ key ยังคงเป็น `sharedStackCode`; client ไม่ต้องเปลี่ยนเป็น key ใหม่                                                                                               |
+| `measurementPoints[].details.exemptedParameterRegulationClauses`     | string \| null | no          | canonical write เป็นค่าเดียวใน `ไม่มี`, `4(1)`, `4(2)`, `11(3)`, `อื่นๆ`; แม้ชื่อ field เป็นพหูพจน์ โดย historical detail ที่ยังไม่ถูกบันทึกซ้ำอาจยังเป็น legacy array |
+| `measurementPoints[].details.exemptedParameterRegulationClauseOther` | string \| null | conditional | เมื่อเลือก `อื่นๆ` ต้องเป็นข้อความที่ trim แล้วไม่ว่างและยาวไม่เกิน 500 ตัวอักษร; เมื่อเลือกค่าอื่น backend normalize เป็น `null`                                      |
 
 เพื่อ compatibility backend ยังรับ legacy array ที่มี supported value เพียงหนึ่งค่า เช่น `["4(1)"]` แล้ว normalize และบันทึกเป็น string `"4(1)"`. Array ที่มีหลายค่าถูกปฏิเสธด้วย `400 VALIDATION_ERROR` ที่ path `measurementPoints.0.details.exemptedParameterRegulationClauses`; client ใหม่ต้องส่ง string ค่าเดียวหรือ `null` และไม่ควรพึ่ง compatibility ของ single-item array.
 
@@ -181,13 +185,13 @@ Minimal detail response (`200 OK`):
 
 Request fields ที่ต้องมีจริง:
 
-| Field | Type | Required | Rules |
-| --- | --- | --- | --- |
-| `factoryId` | string \| null | conditional | ต้องมี `factoryId` หรือ `factoryRegistrationNo` อย่างน้อยหนึ่งค่า เพื่อ resolve active `eligible_factories` และตรวจ scope |
-| `factoryRegistrationNo` | string \| null | conditional | เป็น identifier สำรอง; ส่ง `null` ได้เมื่อมี `factoryId` |
-| `systemType` | `CEMS` \| `WPMS` | yes | ห้ามเป็น `null` |
-| `measurementPoints` | array | yes | ต้องมีหนึ่งรายการเท่านั้น |
-| `measurementPoints[0].pointCode` | string | yes | trim แล้วต้องไม่ว่าง, ยาวไม่เกิน 64 ตัวอักษร และห้ามซ้ำกับ active point ใน `cems_wpms_connected_measurement_points` |
+| Field                            | Type             | Required    | Rules                                                                                                                     |
+| -------------------------------- | ---------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `factoryId`                      | string \| null   | conditional | ต้องมี `factoryId` หรือ `factoryRegistrationNo` อย่างน้อยหนึ่งค่า เพื่อ resolve active `eligible_factories` และตรวจ scope |
+| `factoryRegistrationNo`          | string \| null   | conditional | เป็น identifier สำรอง; ส่ง `null` ได้เมื่อมี `factoryId`                                                                  |
+| `systemType`                     | `CEMS` \| `WPMS` | yes         | ห้ามเป็น `null`                                                                                                           |
+| `measurementPoints`              | array            | yes         | ต้องมีหนึ่งรายการเท่านั้น                                                                                                 |
+| `measurementPoints[0].pointCode` | string           | yes         | trim แล้วต้องไม่ว่าง, ยาวไม่เกิน 64 ตัวอักษร และห้ามซ้ำกับ active point ใน `cems_wpms_connected_measurement_points`       |
 
 Minimal request:
 
@@ -247,12 +251,12 @@ Field อื่นของ Direct Connection เช่น `factoryName`, ข้
 
 ทุก endpoint ที่รับแบบฟอร์มคำขอเชื่อมต่อใช้กติกาเดียวกันกับฟิลด์อีเมลต่อไปนี้:
 
-| Field | Type | Normalization ก่อน validation |
-| --- | --- | --- |
-| `contactEmail` | string \| null | ลบ `U+200B`, `U+200C`, `U+200D`, `U+2060`, `U+FEFF` แล้ว trim |
-| `contactPersons[].email` | string \| null | กติกาเดียวกับ `contactEmail` |
-| `notificationEmails[]` | string[] | กติกาเดียวกับ `contactEmail` |
-| `officerNotificationEmails[]` | string[] | กติกาเดียวกับ `contactEmail` |
+| Field                         | Type           | Normalization ก่อน validation                                 |
+| ----------------------------- | -------------- | ------------------------------------------------------------- |
+| `contactEmail`                | string \| null | ลบ `U+200B`, `U+200C`, `U+200D`, `U+2060`, `U+FEFF` แล้ว trim |
+| `contactPersons[].email`      | string \| null | กติกาเดียวกับ `contactEmail`                                  |
+| `notificationEmails[]`        | string[]       | กติกาเดียวกับ `contactEmail`                                  |
+| `officerNotificationEmails[]` | string[]       | กติกาเดียวกับ `contactEmail`                                  |
 
 - Backend ลบเฉพาะอักขระ formatting แบบมองไม่เห็นข้างต้นเพื่อรองรับค่าที่ติดมาจากการ copy/paste; อักขระอื่นยังผ่าน email validation ตามปกติ.
 - เครื่องหมาย `+` เป็นส่วนที่ใช้ได้ในอีเมลและต้องไม่ถูกลบ เช่น `name+alerts@example.com` หรือ `+name@example.com`.
@@ -282,10 +286,10 @@ Field อื่นของ Direct Connection เช่น `factoryName`, ข้
 
 `data[].factoryName` ใช้ชื่อจาก active current/live POMS point ใน `cems_wpms_connected_measurement_points` ที่อัปเดตล่าสุดและจับคู่ด้วย `eligibleFactoryId`, `factoryId` หรือเลขทะเบียนโรงงาน โดยไม่บังคับว่าต้องมี factory master. ถ้ายังไม่มี current/live point ให้ fallback ไป `factories.name` และชื่อ snapshot ในคำขอตามลำดับ. กติกานี้ใช้เหมือนกันทั้งผู้ประกอบการและเจ้าหน้าที่; role มีผลเฉพาะ permission/scope ของรายการที่มองเห็น.
 
-| Response field | Type | Source/Meaning |
-| --- | --- | --- |
-| `data[].factoryName` | string | active current/live POMS point ล่าสุด; fallback เป็น factory master แล้วจึง request snapshot |
-| `data[].province` | string \| null | factory snapshot ของคำขอที่มาจาก active eligible factory |
+| Response field       | Type           | Source/Meaning                                                                               |
+| -------------------- | -------------- | -------------------------------------------------------------------------------------------- |
+| `data[].factoryName` | string         | active current/live POMS point ล่าสุด; fallback เป็น factory master แล้วจึง request snapshot |
+| `data[].province`    | string \| null | factory snapshot ของคำขอที่มาจาก active eligible factory                                     |
 
 ### Operator factory list source
 
@@ -299,26 +303,26 @@ Field อื่นของ Direct Connection เช่น `factoryName`, ข้
 
 จำนวนจุดตรวจวัดและสถานะคำขอคำนวณเฉพาะโรงงานที่เข้าข่าย. Public map และ authenticated `GET /api/v1/operator-factory-dashboard` ยังคงเป็น connected/current-live only สำหรับทุก scope รวม `OWN_FACTORY`; รายการโรงงานทั้งหมดของ owner พร้อมแถวข้อมูลขั้นต่ำสำหรับโรงงานไม่เข้าข่ายใช้เฉพาะ `GET /api/v1/cems-wpms-requests/operator-factories` ในหน้าขอเชื่อมต่อ.
 
-| Response field | Type | Source/Meaning |
-| --- | --- | --- |
-| `data[].id` | number \| null | row id ของ factory master; อาจเป็น `null` กับบางแหล่งข้อมูลที่ไม่มี row id แบบเดียวกัน |
-| `data[].factoryId` | string | factory identifier ที่ใช้เป็น owner scope key |
-| `data[].factoryName` | string | ชื่อโรงงานที่ owner เข้าถึงได้; ใช้ factory master เป็นฐานและอาจถูกเสริมด้วยข้อมูลที่ sync แล้ว |
-| `data[].newRegistrationNo` | string \| null | เลขทะเบียนโรงงานใหม่เมื่อเข้าข่าย; เป็น `null` เมื่อไม่เข้าข่าย |
-| `data[].oldRegistrationNo` | string \| null | เลขทะเบียนเก่าเมื่อเข้าข่าย; เป็น `null` เมื่อไม่เข้าข่าย |
-| `data[].industryType` | string \| null | คำอธิบายประเภทกิจการเมื่อเข้าข่าย; เป็น `null` เมื่อไม่เข้าข่าย |
-| `data[].industryMainOrder`, `data[].industrySubOrder` | string \| null | ลำดับหลัก/ย่อยจาก active `eligible_factories`; เป็น `null` เมื่อไม่เข้าข่าย |
-| `data[].businessActivity` | string \| null | การประกอบกิจการจาก active `eligible_factories`; เป็น `null` เมื่อไม่เข้าข่าย |
-| `data[].eia`, `data[].projectName` | string \| null | ข้อมูล EIA/ชื่อโครงการจาก active `eligible_factories`; เป็น `null` เมื่อไม่เข้าข่าย |
-| `data[].address` | string \| null | ที่อยู่จาก active `eligible_factories`; เป็น `null` เมื่อไม่เข้าข่าย |
-| `data[].province` | string \| null | จังหวัดจาก eligible data; เป็น `null` เมื่อไม่เข้าข่าย |
-| `data[].latitude`, `data[].longitude` | string \| null | พิกัดจาก active `eligible_factories`; เป็น `null` เมื่อไม่เข้าข่าย |
-| `data[].officerNotificationEmails` | string[] | รายชื่ออีเมลเจ้าหน้าที่สำหรับโรงงานเข้าข่าย; เป็น `[]` เมื่อไม่เข้าข่าย |
-| `data[].isEligible` | boolean | true เมื่อจับคู่ active `eligible_factories` ได้; false เมื่อ owner เข้าถึงโรงงานได้แต่โรงงานยังไม่เข้าข่าย |
-| `data[].eligibilityStatus` | `"เข้าข่าย"` \| `"ไม่เข้าข่าย"` | สถานะที่อ่านง่ายสำหรับ UI; derive จาก `isEligible` |
-| `data[].monitoringPointCount` | number | จำนวน active POMS points ของโรงงานเข้าข่าย; เป็น `0` เมื่อไม่เข้าข่าย |
-| `data[].requestStatusCode` | string \| null | สถานะคำขอล่าสุดของโรงงานเข้าข่าย; เป็น `null` เมื่อไม่เข้าข่าย |
-| `data[].status` | `"แสดง"` | สถานะการแสดงผลของ owner list ปัจจุบัน |
+| Response field                                        | Type                            | Source/Meaning                                                                                              |
+| ----------------------------------------------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `data[].id`                                           | number \| null                  | row id ของ factory master; อาจเป็น `null` กับบางแหล่งข้อมูลที่ไม่มี row id แบบเดียวกัน                      |
+| `data[].factoryId`                                    | string                          | factory identifier ที่ใช้เป็น owner scope key                                                               |
+| `data[].factoryName`                                  | string                          | ชื่อโรงงานที่ owner เข้าถึงได้; ใช้ factory master เป็นฐานและอาจถูกเสริมด้วยข้อมูลที่ sync แล้ว             |
+| `data[].newRegistrationNo`                            | string \| null                  | เลขทะเบียนโรงงานใหม่เมื่อเข้าข่าย; เป็น `null` เมื่อไม่เข้าข่าย                                             |
+| `data[].oldRegistrationNo`                            | string \| null                  | เลขทะเบียนเก่าเมื่อเข้าข่าย; เป็น `null` เมื่อไม่เข้าข่าย                                                   |
+| `data[].industryType`                                 | string \| null                  | คำอธิบายประเภทกิจการเมื่อเข้าข่าย; เป็น `null` เมื่อไม่เข้าข่าย                                             |
+| `data[].industryMainOrder`, `data[].industrySubOrder` | string \| null                  | ลำดับหลัก/ย่อยจาก active `eligible_factories`; เป็น `null` เมื่อไม่เข้าข่าย                                 |
+| `data[].businessActivity`                             | string \| null                  | การประกอบกิจการจาก active `eligible_factories`; เป็น `null` เมื่อไม่เข้าข่าย                                |
+| `data[].eia`, `data[].projectName`                    | string \| null                  | ข้อมูล EIA/ชื่อโครงการจาก active `eligible_factories`; เป็น `null` เมื่อไม่เข้าข่าย                         |
+| `data[].address`                                      | string \| null                  | ที่อยู่จาก active `eligible_factories`; เป็น `null` เมื่อไม่เข้าข่าย                                        |
+| `data[].province`                                     | string \| null                  | จังหวัดจาก eligible data; เป็น `null` เมื่อไม่เข้าข่าย                                                      |
+| `data[].latitude`, `data[].longitude`                 | string \| null                  | พิกัดจาก active `eligible_factories`; เป็น `null` เมื่อไม่เข้าข่าย                                          |
+| `data[].officerNotificationEmails`                    | string[]                        | รายชื่ออีเมลเจ้าหน้าที่สำหรับโรงงานเข้าข่าย; เป็น `[]` เมื่อไม่เข้าข่าย                                     |
+| `data[].isEligible`                                   | boolean                         | true เมื่อจับคู่ active `eligible_factories` ได้; false เมื่อ owner เข้าถึงโรงงานได้แต่โรงงานยังไม่เข้าข่าย |
+| `data[].eligibilityStatus`                            | `"เข้าข่าย"` \| `"ไม่เข้าข่าย"` | สถานะที่อ่านง่ายสำหรับ UI; derive จาก `isEligible`                                                          |
+| `data[].monitoringPointCount`                         | number                          | จำนวน active POMS points ของโรงงานเข้าข่าย; เป็น `0` เมื่อไม่เข้าข่าย                                       |
+| `data[].requestStatusCode`                            | string \| null                  | สถานะคำขอล่าสุดของโรงงานเข้าข่าย; เป็น `null` เมื่อไม่เข้าข่าย                                              |
+| `data[].status`                                       | `"แสดง"`                        | สถานะการแสดงผลของ owner list ปัจจุบัน                                                                       |
 
 Minimal response:
 
@@ -342,9 +346,7 @@ Minimal response:
       "longitude": "100.5144",
       "eia": "มี EIA",
       "projectName": "โครงการโรงงานตัวอย่าง",
-      "officerNotificationEmails": [
-        "saraban_nonthaburi@industry.go.th"
-      ],
+      "officerNotificationEmails": ["saraban_nonthaburi@industry.go.th"],
       "isEligible": true,
       "eligibilityStatus": "เข้าข่าย",
       "monitoringPointCount": 1,
@@ -389,10 +391,10 @@ Direct Connection resolve และตรวจ scope จาก `eligible_factor
 
 Field requirements ของ Direct Connection อยู่ที่ [เชื่อมต่อโดยเจ้าหน้าที่โดยตรง](#เชื่อมต่อโดยเจ้าหน้าที่โดยตรง). ตารางต่อไปนี้ใช้กับ endpoint ฟอร์มคำขอปกติ:
 
-| Field | Type | Required | Rules |
-| --- | --- | --- | --- |
-| `factoryId` | string | yes | ต้อง resolve เป็น active eligible factory |
-| `factoryRegistrationNo` | string | yes | ใช้เป็น alias กับ identifier ทั้งสามแบบข้างต้น |
+| Field                   | Type   | Required | Rules                                          |
+| ----------------------- | ------ | -------- | ---------------------------------------------- |
+| `factoryId`             | string | yes      | ต้อง resolve เป็น active eligible factory      |
+| `factoryRegistrationNo` | string | yes      | ใช้เป็น alias กับ identifier ทั้งสามแบบข้างต้น |
 
 Minimal relevant request fragment:
 
@@ -423,13 +425,13 @@ Minimal relevant request fragment:
 
 เมื่อ Direct Connection สำเร็จ หรือ `POST /api/v1/cems-wpms-requests/:id/verify-connection` เปลี่ยนคำขอจาก `CONNECTION_CONFIRMED` เป็น `CONNECTED` ระบบทำงานต่อไปนี้ใน transaction เดียว:
 
-| ข้อมูลจาก request snapshot | POMS current/live (`cems_wpms_connected_measurement_points`) | `eligible_factories` |
-| --- | --- | --- |
-| `latitude` + `longitude` | `factory_latitude` + `factory_longitude` | `latitude` + `longitude` |
-| `eia`, `eiaOther`, derived `hasEia` | factory-profile fields | `eia_assessment`, `eia_other`, `has_eia` |
-| `projectName` | `factory_project_name` | `project_name` |
-| เอกสาร title `ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน` | `factory_front_photos_json` | ไม่เขียน |
-| เอกสาร title `สัญลักษณ์ของโรงงานหรือโลโก้บริษัท` | `factory_logo_json` | ไม่เขียน |
+| ข้อมูลจาก request snapshot                       | POMS current/live (`cems_wpms_connected_measurement_points`) | `eligible_factories`                     |
+| ------------------------------------------------ | ------------------------------------------------------------ | ---------------------------------------- |
+| `latitude` + `longitude`                         | `factory_latitude` + `factory_longitude`                     | `latitude` + `longitude`                 |
+| `eia`, `eiaOther`, derived `hasEia`              | factory-profile fields                                       | `eia_assessment`, `eia_other`, `has_eia` |
+| `projectName`                                    | `factory_project_name`                                       | `project_name`                           |
+| เอกสาร title `ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน`   | `factory_front_photos_json`                                  | ไม่เขียน                                 |
+| เอกสาร title `สัญลักษณ์ของโรงงานหรือโลโก้บริษัท` | `factory_logo_json`                                          | ไม่เขียน                                 |
 
 พิกัดข้างต้นเป็นพิกัดโรงงานเท่านั้น ระบบไม่เปลี่ยน `cems_wpms_measurement_points.latitude` / `longitude` ซึ่งเป็นพิกัดจุดตรวจวัด และไม่เขียนทับ `documents_json` ของจุดตรวจวัดเดิม.
 
@@ -470,10 +472,10 @@ Minimal response (`200 OK`):
 
 Request fields:
 
-| Field | Type | Required | Rules |
-| --- | --- | --- | --- |
-| `decision` | string | yes | ต้องเป็น `APPROVE_DESIGN` สำหรับ flow นี้ |
-| `officerNote` | string \| null | no | ข้อความที่ trim แล้ว สูงสุด 1000 ตัวอักษร |
+| Field         | Type           | Required | Rules                                     |
+| ------------- | -------------- | -------- | ----------------------------------------- |
+| `decision`    | string         | yes      | ต้องเป็น `APPROVE_DESIGN` สำหรับ flow นี้ |
+| `officerNote` | string \| null | no       | ข้อความที่ trim แล้ว สูงสุด 1000 ตัวอักษร |
 
 Minimal request:
 
@@ -486,12 +488,12 @@ Minimal request:
 
 Relevant response fields (`200 OK`):
 
-| Field | Type | Meaning |
-| --- | --- | --- |
-| `success` | boolean | สำเร็จเป็น `true` |
-| `data.status` | string | เป็น `WAITING_CONNECTION` หลังอนุมัติแบบ |
-| `data.systemType` | string | `CEMS` หรือ `WPMS` |
-| `data.measurementPoints[].pointCode` | string | รหัสที่ backend ออกตาม Point-code Contract |
+| Field                                | Type    | Meaning                                    |
+| ------------------------------------ | ------- | ------------------------------------------ |
+| `success`                            | boolean | สำเร็จเป็น `true`                          |
+| `data.status`                        | string  | เป็น `WAITING_CONNECTION` หลังอนุมัติแบบ   |
+| `data.systemType`                    | string  | `CEMS` หรือ `WPMS`                         |
+| `data.measurementPoints[].pointCode` | string  | รหัสที่ backend ออกตาม Point-code Contract |
 
 Minimal response:
 
@@ -517,9 +519,9 @@ Minimal response:
 
 Path fields:
 
-| Field | Type | Required | Rules |
-| --- | --- | --- | --- |
-| `id` | integer | yes | รหัสคำขอที่ผู้ใช้มีสิทธิ์อ่าน |
+| Field | Type    | Required | Rules                         |
+| ----- | ------- | -------- | ----------------------------- |
+| `id`  | integer | yes      | รหัสคำขอที่ผู้ใช้มีสิทธิ์อ่าน |
 
 Minimal request: ไม่มี request body.
 
@@ -552,10 +554,10 @@ Minimal response:
 
 Query fields ที่เกี่ยวกับรหัสจุด:
 
-| Field | Type | Required | Rules |
-| --- | --- | --- | --- |
-| `stationId` | string | no | กรองด้วยรหัสจุดตรวจวัดแบบ exact identifier |
-| `factoryId` | string | no | กรองจุดตรวจวัดที่เชื่อมต่อแล้วของโรงงาน |
+| Field       | Type   | Required | Rules                                      |
+| ----------- | ------ | -------- | ------------------------------------------ |
+| `stationId` | string | no       | กรองด้วยรหัสจุดตรวจวัดแบบ exact identifier |
+| `factoryId` | string | no       | กรองจุดตรวจวัดที่เชื่อมต่อแล้วของโรงงาน    |
 
 Authorization:
 
@@ -590,13 +592,13 @@ Minimal response:
 
 Response fields ที่เพิ่มเติมสำหรับเลขทะเบียนโรงงาน:
 
-| Field | Type | Required | Description |
-| --- | --- | --- | --- |
-| `data.formDefaults.newRegistrationNo` | string | yes | เลขทะเบียนโรงงานใหม่จาก active `eligible_factories` |
-| `data.formDefaults.oldRegistrationNo` | string \| null | yes | เลขทะเบียนโรงงานเดิมจาก active `eligible_factories` |
-| `data.formDefaults.factoryRegistrationNo` | string | yes | compatibility alias สำหรับ client เดิม; ใช้เลขทะเบียนเดิมเมื่อมี มิฉะนั้นใช้เลขทะเบียนใหม่ |
-| `data.formDefaults.measurementPoints[0].details.connectedParameters` | string[] | yes | พารามิเตอร์ที่มี active channel ใน device config ปัจจุบัน โดยตัดค่าซ้ำ |
-| `data.formDefaults.measurementPoints[0].details.pendingParameters` | string[] | yes | พารามิเตอร์ที่เข้าข่ายซึ่งยังไม่มี active channel และไม่ได้รับการยกเว้น |
+| Field                                                                | Type           | Required | Description                                                                                |
+| -------------------------------------------------------------------- | -------------- | -------- | ------------------------------------------------------------------------------------------ |
+| `data.formDefaults.newRegistrationNo`                                | string         | yes      | เลขทะเบียนโรงงานใหม่จาก active `eligible_factories`                                        |
+| `data.formDefaults.oldRegistrationNo`                                | string \| null | yes      | เลขทะเบียนโรงงานเดิมจาก active `eligible_factories`                                        |
+| `data.formDefaults.factoryRegistrationNo`                            | string         | yes      | compatibility alias สำหรับ client เดิม; ใช้เลขทะเบียนเดิมเมื่อมี มิฉะนั้นใช้เลขทะเบียนใหม่ |
+| `data.formDefaults.measurementPoints[0].details.connectedParameters` | string[]       | yes      | พารามิเตอร์ที่มี active channel ใน device config ปัจจุบัน โดยตัดค่าซ้ำ                     |
+| `data.formDefaults.measurementPoints[0].details.pendingParameters`   | string[]       | yes      | พารามิเตอร์ที่เข้าข่ายซึ่งยังไม่มี active channel และไม่ได้รับการยกเว้น                    |
 
 Minimal request: ไม่มี request body.
 
@@ -653,15 +655,15 @@ Minimal response:
 
 ## Backend Maintainer Map
 
-| Concern | Canonical source |
-| --- | --- |
-| Routes | [`connection-requests.routes.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.routes.ts), [`connected-measurement-points.routes.ts`](../../../../../backend/src/modules/connection-requests/connected-measurement-points.routes.ts) |
-| Validators | [`connection-requests.validator.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.validator.ts), [`parameter-values.validator.ts`](../../../../../backend/src/modules/parameter-values/parameter-values.validator.ts), [`alert-events.validator.ts`](../../../../../backend/src/modules/alert-events/alert-events.validator.ts), [`integration-device-configs.validator.ts`](../../../../../backend/src/modules/integrations/integration-device-configs.validator.ts) |
-| Public types | [`connection-requests.types.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.types.ts) |
-| Request read authorization | [`connection-requests.service.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.service.ts), [`connection-requests.repository.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.repository.ts) |
-| Sequence implementation | [`connection-requests.repository.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.repository.ts) |
-| Reverse-proxy path normalization | [`annual-point-code-path.ts`](../../../../../backend/src/shared/middlewares/annual-point-code-path.ts), [`connected-measurement-points.routes.ts`](../../../../../backend/src/modules/connection-requests/connected-measurement-points.routes.ts), [`integrations.routes.ts`](../../../../../backend/src/modules/integrations/integrations.routes.ts) |
-| Factory-profile patch rules | [`connected-factory-profile.ts`](../../../../../backend/src/modules/connection-requests/connected-factory-profile.ts) |
-| Migrations | [`0075_start_operator_point_codes_at_2001.ts`](../../../../../backend/src/db/migrations/0075_start_operator_point_codes_at_2001.ts), [`0076_sync_connected_factory_profiles_with_eligible_factories.ts`](../../../../../backend/src/db/migrations/0076_sync_connected_factory_profiles_with_eligible_factories.ts) |
-| Tests | [`connection-requests.service.test.ts`](../../../../../backend/tests/unit/connection-requests.service.test.ts), [`connection-requests.repository.test.ts`](../../../../../backend/tests/unit/connection-requests.repository.test.ts), [`connection-requests.point-code-sequence.repository.test.ts`](../../../../../backend/tests/unit/connection-requests.point-code-sequence.repository.test.ts), [`parameter-values.validator.test.ts`](../../../../../backend/tests/unit/parameter-values.validator.test.ts), [`alert-events.route.test.ts`](../../../../../backend/tests/unit/alert-events.route.test.ts), [`connected-measurement-points.route.test.ts`](../../../../../backend/tests/unit/connected-measurement-points.route.test.ts), [`integration-device-configs.route.test.ts`](../../../../../backend/tests/unit/integration-device-configs.route.test.ts) |
-| Evidence | [Restore S/W point-code format TDD](../../../evidence/connection-requests/legacy-point-code-format-restored.tdd.md), [Request table current/live POMS factory name TDD](../../../evidence/connection-requests/request-table-current-factory-name.tdd.md) |
+| Concern                          | Canonical source                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Routes                           | [`connection-requests.routes.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.routes.ts), [`connected-measurement-points.routes.ts`](../../../../../backend/src/modules/connection-requests/connected-measurement-points.routes.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Validators                       | [`connection-requests.validator.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.validator.ts), [`parameter-values.validator.ts`](../../../../../backend/src/modules/parameter-values/parameter-values.validator.ts), [`alert-events.validator.ts`](../../../../../backend/src/modules/alert-events/alert-events.validator.ts), [`integration-device-configs.validator.ts`](../../../../../backend/src/modules/integrations/integration-device-configs.validator.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Public types                     | [`connection-requests.types.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.types.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Request read authorization       | [`connection-requests.service.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.service.ts), [`connection-requests.repository.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.repository.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Sequence implementation          | [`connection-requests.repository.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.repository.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Reverse-proxy path normalization | [`annual-point-code-path.ts`](../../../../../backend/src/shared/middlewares/annual-point-code-path.ts), [`connected-measurement-points.routes.ts`](../../../../../backend/src/modules/connection-requests/connected-measurement-points.routes.ts), [`integrations.routes.ts`](../../../../../backend/src/modules/integrations/integrations.routes.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Factory-profile patch rules      | [`connected-factory-profile.ts`](../../../../../backend/src/modules/connection-requests/connected-factory-profile.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Migrations                       | [`0075_start_operator_point_codes_at_2001.ts`](../../../../../backend/src/db/migrations/0075_start_operator_point_codes_at_2001.ts), [`0076_sync_connected_factory_profiles_with_eligible_factories.ts`](../../../../../backend/src/db/migrations/0076_sync_connected_factory_profiles_with_eligible_factories.ts), [`0094_backfill_wpms_request_number_prefix.ts`](../../../../../backend/src/db/migrations/0094_backfill_wpms_request_number_prefix.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Tests                            | [`connection-requests.service.test.ts`](../../../../../backend/tests/unit/connection-requests.service.test.ts), [`connection-requests.repository.test.ts`](../../../../../backend/tests/unit/connection-requests.repository.test.ts), [`connection-requests.point-code-sequence.repository.test.ts`](../../../../../backend/tests/unit/connection-requests.point-code-sequence.repository.test.ts), [`wpms-request-number-migration.test.ts`](../../../../../backend/tests/unit/wpms-request-number-migration.test.ts), [`parameter-values.validator.test.ts`](../../../../../backend/tests/unit/parameter-values.validator.test.ts), [`alert-events.route.test.ts`](../../../../../backend/tests/unit/alert-events.route.test.ts), [`connected-measurement-points.route.test.ts`](../../../../../backend/tests/unit/connected-measurement-points.route.test.ts), [`integration-device-configs.route.test.ts`](../../../../../backend/tests/unit/integration-device-configs.route.test.ts) |
+| Evidence                         | [Request-number full-year and WPMS-prefix TDD](../../../evidence/connection-requests/request-number-full-year-format.tdd.md), [Restore S/W point-code format TDD](../../../evidence/connection-requests/legacy-point-code-format-restored.tdd.md), [Request table current/live POMS factory name TDD](../../../evidence/connection-requests/request-table-current-factory-name.tdd.md)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |

@@ -2,6 +2,14 @@
 
 ไฟล์นี้บันทึกเฉพาะการเปลี่ยน API ที่ทำให้ client ต้องแก้ตาม การเปลี่ยนทั่วไปและประวัติรายละเอียดดูจาก Git history
 
+## 2026-08-16 — เปลี่ยน prefix เลขที่คำขอ WPMS จาก WEMS เป็น WPMS
+
+- **Affected menu:** [ขอเชื่อมต่อ](./menus/connection-requests/README.md#request-number-contract)
+- **Impact:** `requestNo` ของคำขอ `systemType = WPMS` ทั้งคำขอใหม่และข้อมูลเดิมเปลี่ยน prefix จาก `WEMS-` เป็น `WPMS-`; รหัสจุดตรวจวัด `measurementPoints[].pointCode` และ `stationId` ไม่เปลี่ยน.
+- **Migration:** deploy `0094_backfill_wpms_request_number_prefix`; migration แปลงเฉพาะ `cems_wpms_connection_requests.request_no` รูปแบบ `WEMS-NNNN/YYYY` ของแถว WPMS และหยุดก่อนแก้ข้อมูลหากเลข `WPMS-...` ปลายทางซ้ำ. ระหว่าง rollout ตัวจัดสรรลำดับนับทั้ง prefix เก่าและใหม่เพื่อไม่ให้สร้างเลขซ้ำ และ allocator ของ backend จะ normalize แถว `WEMS-...` ของ WPMS ที่ยังหลุดค้างอยู่ก่อนออกเลขใหม่. Client ต้องถือ `requestNo` เป็น opaque string และ refresh cache/reference ที่เก็บเลขคำขอเดิม.
+- **Old contract:** คำขอ WPMS ใช้ `WEMS-NNNN/YYYY` เช่น `WEMS-0001/2569`.
+- **New contract:** คำขอ WPMS ใช้ `WPMS-NNNN/YYYY` เช่น `WPMS-0001/2569`; CEMS ยังคงใช้ `CEMS-NNNN/YYYY`.
+
 ## 2026-08-11 — CSV export เพิ่มเลขทะเบียนโรงงาน
 
 - **Affected API:** [Measurement CSV export](./shared/connected-measurement-points/README.md#get-apiv1connected-measurement-pointsstationidmeasurement-exportcsv)
