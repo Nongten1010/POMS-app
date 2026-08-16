@@ -1478,7 +1478,7 @@ function EligibleFactoryBottomSheet({
   }, [activePoint?.id, monitoringPoints, onActiveMonitoringPointChange, onMonitoringPointsChange, removePointId])
 
   const handleSubmit = useCallback(() => {
-    if (!factory) {
+    if (!factory || saving) {
       return
     }
 
@@ -1490,13 +1490,13 @@ function EligibleFactoryBottomSheet({
       latitude: factoryCoordinates.latitude,
       longitude: factoryCoordinates.longitude,
     })
-  }, [eiaAssessment, eiaOther, eiaProjectName, factory, factoryCoordinates, onSubmit])
+  }, [eiaAssessment, eiaOther, eiaProjectName, factory, factoryCoordinates, onSubmit, saving])
 
   return (
     <Drawer
       anchor="bottom"
       open={open}
-      onClose={onClose}
+      onClose={saving ? undefined : onClose}
       ModalProps={{ keepMounted: true }}
       transitionDuration={{ enter: 280, exit: 220 }}
       sx={{
@@ -1517,7 +1517,7 @@ function EligibleFactoryBottomSheet({
               เลือกโรงงานเข้าข่ายและกำหนดข้อมูลจุดตรวจวัดได้หลายจุด
             </Typography>
           </Box>
-          <IconButton aria-label="ปิด" onClick={onClose}>
+          <IconButton aria-label="ปิด" disabled={saving} onClick={onClose}>
             <CloseIcon />
           </IconButton>
         </Stack>
@@ -1828,10 +1828,16 @@ function EligibleFactoryBottomSheet({
         </Paper>
 
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'center', flexShrink: 0 }}>
-          <Button variant="outlined" color="inherit" onClick={onClose}>
+          <Button variant="outlined" color="inherit" disabled={saving} onClick={onClose}>
             ยกเลิก
           </Button>
-          <Button variant="contained" color="secondary" disabled={saving} startIcon={<AddTaskIcon />} onClick={handleSubmit}>
+          <Button
+            variant="contained"
+            color="secondary"
+            disabled={saving}
+            startIcon={saving ? <CircularProgress size={18} color="inherit" /> : <AddTaskIcon />}
+            onClick={handleSubmit}
+          >
             {saving ? 'กำลังบันทึก' : 'บันทึก'}
           </Button>
         </Stack>
