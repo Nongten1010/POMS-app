@@ -122,6 +122,28 @@ const officerPostSubmitStatusOptions = [
 ]
 const defaultOfficerRevisionReason = 'กรุณากรอกข้อมูลเพิ่มเติม'
 const defaultOfficerNote = 'กรุณากรอกข้อมูลเพิ่มเติม'
+const approvePointCodeModeOptions = [
+  {
+    value: 'AUTO',
+    label: 'ระบบออกรหัสจุดตรวจวัดใหม่อัตโนมัติ',
+    description: 'รหัสจุดตรวจวัดใหม่จะเริ่มตั้งแต่ S2001 หรือ W2001 เป็นต้นไป',
+    color: 'primary',
+  },
+  {
+    value: 'EXISTING',
+    label: 'ใช้รหัสจุดตรวจวัดเดิม',
+    description: 'รหัสจุดตรวจวัดเดิมกรอกได้ในช่วง S0001-S1999 หรือ W0001-W1999',
+    color: 'success',
+  },
+]
+const isExistingPointCodeInAllowedRange = (value) => {
+  const normalizedValue = String(value ?? '').trim().toUpperCase()
+  const match = normalizedValue.match(/^([SW])(\d{4})$/)
+  if (!match) return false
+
+  const sequence = Number(match[2])
+  return Number.isInteger(sequence) && sequence >= 1 && sequence <= 1999
+}
 
 const measurementInstrumentColumns = [
   'พารามิเตอร์ที่ขอเชื่อมต่อ',
@@ -599,6 +621,10 @@ const documentImageItems = [
     uploadLabel: 'ภาพ/ไฟล์/QR Code',
   },
   {
+    title: 'ภาพถ่ายจุดระบายน้ำทิ้งออกนอกโรงงาน',
+    uploadLabel: 'ภาพ/ไฟล์/QR Code',
+  },
+  {
     title: 'ภาพถ่ายเครื่องมือตรวจวัดที่ติดตั้ง (WPMS)',
     uploadLabel: 'ภาพ/ไฟล์/QR Code',
   },
@@ -606,7 +632,7 @@ const documentImageItems = [
 
 const factoryGeneralDocumentImageTitles = ['ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน', 'สัญลักษณ์ของโรงงานหรือโลโก้บริษัท']
 const cemsDocumentImageTitles = ['ข้อมูลรายละเอียดการรายงานค่าที่สภาวะมาตรฐาน', 'รายงานผลการทำ RATA หรือ อื่นๆ ที่เทียบเท่า ของระบบ CEMS ครั้งล่าสุด', 'ภาพถ่ายปล่อง', 'ภาพถ่ายเครื่องมือตรวจวัดที่ติดตั้ง (CEMS)']
-const wpmsDocumentImageTitles = ['ภาพถ่ายระบบบำบัด', 'ภาพถ่ายเครื่องมือตรวจวัดที่ติดตั้ง (WPMS)']
+const wpmsDocumentImageTitles = ['ภาพถ่ายระบบบำบัด', 'ภาพถ่ายจุดระบายน้ำทิ้งออกนอกโรงงาน', 'ภาพถ่ายเครื่องมือตรวจวัดที่ติดตั้ง (WPMS)']
 
 function documentTitleMatchesItem(document, item) {
   return [item.title, ...(item.legacyTitles ?? [])].includes(document?.title)
@@ -7541,6 +7567,9 @@ function ConnectionRequestPage({
   const [requestDocumentPdfLoading, setRequestDocumentPdfLoading] = useState(false)
   const [requestDocumentPdfError, setRequestDocumentPdfError] = useState('')
   const [approveConfirmOpen, setApproveConfirmOpen] = useState(false)
+  const [approvePointCodeMode, setApprovePointCodeMode] = useState(approvePointCodeModeOptions[0].value)
+  const [approveExistingPointCode, setApproveExistingPointCode] = useState('')
+  const [approvePointCodeError, setApprovePointCodeError] = useState('')
   const [verifyConnectionConfirmOpen, setVerifyConnectionConfirmOpen] = useState(false)
   const [revisionDialogOpen, setRevisionDialogOpen] = useState(false)
   const [revisionOfficerNote, setRevisionOfficerNote] = useState('')
@@ -7853,6 +7882,23 @@ function ConnectionRequestPage({
   const closeRequestDocumentDialog = useCallback(() => {
     setRequestDocumentOpen(false)
   }, [])
+  const resetApprovePointCodeForm = useCallback(() => {
+    setApprovePointCodeMode(approvePointCodeModeOptions[0].value)
+    setApproveExistingPointCode('')
+    setApprovePointCodeError('')
+  }, [])
+  const openApproveConfirmDialog = useCallback(() => {
+    resetApprovePointCodeForm()
+    setApproveConfirmOpen(true)
+  }, [resetApprovePointCodeForm])
+  const closeApproveConfirmDialog = useCallback(() => {
+    if (requestDocumentApproving) {
+      return
+    }
+
+    setApproveConfirmOpen(false)
+    setApprovePointCodeError('')
+  }, [requestDocumentApproving])
   const handleRequestDocumentExited = useCallback(() => {
     setRequestDocument(null)
     setRequestDocumentMode('view')
@@ -7860,12 +7906,15 @@ function ConnectionRequestPage({
     setRequestDocumentLoading(false)
     setRequestDocumentApproving(false)
     setApproveConfirmOpen(false)
+    resetApprovePointCodeForm()
     setVerifyConnectionConfirmOpen(false)
     setRevisionDialogOpen(false)
     setRevisionOfficerNote('')
     clearRequestDocumentPdf()
-  }, [clearRequestDocumentPdf])
+  }, [clearRequestDocumentPdf, resetApprovePointCodeForm])
   const approveRequestDocument = useCallback(() => {
+    const normalizedExistingPointCode = approveExistingPointCode.trim().toUpperCase()
+
     if (!requestDocument?.id) {
       setRequestDocumentError('ไม่พบรหัสคำขอสำหรับอนุมัติ')
       return
@@ -7876,8 +7925,14 @@ function ConnectionRequestPage({
       return
     }
 
+    if (approvePointCodeMode === 'EXISTING' && !isExistingPointCodeInAllowedRange(normalizedExistingPointCode)) {
+      setApprovePointCodeError('กรุณากรอกรหัสจุดตรวจวัดเดิมในช่วง S0001-S1999 หรือ W0001-W1999')
+      return
+    }
+
     setRequestDocumentApproving(true)
     setRequestDocumentError('')
+    setApprovePointCodeError('')
 
     fetch(getRequestStatusApiUrl(requestDocument.id), {
       method: 'POST',
@@ -7907,7 +7962,7 @@ function ConnectionRequestPage({
       .finally(() => {
         setRequestDocumentApproving(false)
       })
-  }, [accessToken, loadRequestTableRows, requestDocument])
+  }, [accessToken, approveExistingPointCode, approvePointCodeMode, loadRequestTableRows, requestDocument])
   const closeVerifyConnectionConfirmDialog = useCallback(() => {
     if (requestDocumentApproving) {
       return
@@ -8471,26 +8526,128 @@ function ConnectionRequestPage({
         pdfPreviewError={requestDocumentPdfError}
         onExited={handleRequestDocumentExited}
         approving={requestDocumentApproving}
-        onApprove={() => setApproveConfirmOpen(true)}
+        onApprove={openApproveConfirmDialog}
         onVerifyConnection={() => setVerifyConnectionConfirmOpen(true)}
         onRequestRevision={openRevisionDialog}
       />
       <Dialog
         open={approveConfirmOpen}
-        onClose={() => {
-          if (!requestDocumentApproving) {
-            setApproveConfirmOpen(false)
-          }
-        }}
+        onClose={closeApproveConfirmDialog}
         fullWidth
-        maxWidth="sm"
+        maxWidth="md"
       >
         <DialogTitle>ยืนยันการอนุมัติ</DialogTitle>
         <DialogContent dividers>
-          <Typography>อนุมัติแบบฟอร์มนี้และออกรหัสจุดตรวจวัด</Typography>
+          <Stack spacing={2}>
+            <Stack
+              direction={{ xs: 'column', md: 'row' }}
+              spacing={1}
+              sx={{ justifyContent: 'space-between', alignItems: { xs: 'flex-start', md: 'flex-start' } }}
+            >
+              <Box>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                  เลือกรูปแบบรหัสจุดตรวจวัด
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  เลือกวิธีออกรหัสจุดตรวจวัดก่อนอนุมัติแบบฟอร์ม
+                </Typography>
+              </Box>
+              <Typography variant="caption" sx={{ color: 'warning.dark', fontWeight: 700 }}>
+                จำเป็นต้องเลือกก่อนส่ง
+              </Typography>
+            </Stack>
+
+            <RadioGroup
+              row
+              value={approvePointCodeMode}
+              onChange={(event) => {
+                setApprovePointCodeMode(event.target.value)
+                setApprovePointCodeError('')
+              }}
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' },
+                gap: 2,
+              }}
+            >
+              {approvePointCodeModeOptions.map((option) => {
+                const selected = option.value === approvePointCodeMode
+                const selectedColor = option.color === 'success' ? 'success.main' : 'primary.main'
+                const selectedBg = option.color === 'success' ? '#f0fdf4' : '#eff6ff'
+
+                return (
+                  <Box
+                    key={option.value}
+                    component="label"
+                    sx={{
+                      cursor: 'pointer',
+                      p: 2,
+                      minHeight: 138,
+                      border: 1,
+                      borderColor: selected ? selectedColor : 'divider',
+                      borderRadius: 1.5,
+                      bgcolor: selected ? selectedBg : 'background.paper',
+                      boxShadow: selected ? '0 10px 26px rgba(15, 23, 42, 0.08)' : 'none',
+                      transition: 'border-color 120ms ease, background-color 120ms ease, box-shadow 120ms ease',
+                      '&:hover': {
+                        borderColor: selectedColor,
+                      },
+                    }}
+                  >
+                    <Stack spacing={1}>
+                      <Stack direction="row" spacing={1.25} sx={{ alignItems: 'flex-start' }}>
+                        <Radio
+                          value={option.value}
+                          checked={selected}
+                          sx={{
+                            p: 0.25,
+                            color: selectedColor,
+                            '&.Mui-checked': {
+                              color: selectedColor,
+                            },
+                          }}
+                        />
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography
+                            variant="subtitle1"
+                            sx={{
+                              fontWeight: 700,
+                              color: selected ? selectedColor : 'text.primary',
+                            }}
+                          >
+                            {option.label}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            {option.description}
+                          </Typography>
+                        </Box>
+                      </Stack>
+                      {option.value === 'EXISTING' && selected ? (
+                        <TextField
+                          label="รหัสจุดตรวจวัดเดิม"
+                          value={approveExistingPointCode}
+                          onChange={(event) => {
+                            setApproveExistingPointCode(event.target.value.toUpperCase())
+                            setApprovePointCodeError('')
+                          }}
+                          placeholder="เช่น S0001 หรือ W0001"
+                          error={Boolean(approvePointCodeError)}
+                          helperText={approvePointCodeError || 'กรอกได้เฉพาะช่วง S0001-S1999 หรือ W0001-W1999'}
+                          disabled={requestDocumentApproving}
+                          fullWidth
+                          size="small"
+                          onClick={(event) => event.stopPropagation()}
+                        />
+                      ) : null}
+                    </Stack>
+                  </Box>
+                )
+              })}
+            </RadioGroup>
+          </Stack>
         </DialogContent>
         <DialogActions sx={{ justifyContent: 'center' }}>
-          <Button color="inherit" disabled={requestDocumentApproving} onClick={() => setApproveConfirmOpen(false)}>
+          <Button color="inherit" disabled={requestDocumentApproving} onClick={closeApproveConfirmDialog}>
             ยกเลิก
           </Button>
           <Button
