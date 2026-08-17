@@ -144,6 +144,12 @@ const isExistingPointCodeInAllowedRange = (value) => {
   const sequence = Number(match[2])
   return Number.isInteger(sequence) && sequence >= 1 && sequence <= 1999
 }
+const getLegacyPointCodePrefix = (systemType) => (systemType === 'WPMS' ? 'W' : 'S')
+const getPointAssignmentId = (point = {}) => point.id ?? point.measurementPointId ?? point.measurement_point_id ?? null
+const getUnassignedMeasurementPoints = (request = {}) => {
+  const points = Array.isArray(request?.measurementPoints) ? request.measurementPoints : []
+  return points.filter((point) => !String(point?.pointCode ?? '').trim())
+}
 
 const measurementInstrumentColumns = [
   'พารามิเตอร์ที่ขอเชื่อมต่อ',
@@ -7914,6 +7920,9 @@ function ConnectionRequestPage({
   }, [clearRequestDocumentPdf, resetApprovePointCodeForm])
   const approveRequestDocument = useCallback(() => {
     const normalizedExistingPointCode = approveExistingPointCode.trim().toUpperCase()
+    const unassignedMeasurementPoints = getUnassignedMeasurementPoints(requestDocument)
+    const requestSystemType = getRequestSystemType(requestDocument)
+    const expectedPointCodePrefix = getLegacyPointCodePrefix(requestSystemType)
 
     if (!requestDocument?.id) {
       setRequestDocumentError('ไม่พบรหัสคำขอสำหรับอนุมัติ')
@@ -7930,6 +7939,41 @@ function ConnectionRequestPage({
       return
     }
 
+    if (approvePointCodeMode === 'EXISTING' && normalizedExistingPointCode[0] !== expectedPointCodePrefix) {
+      setApprovePointCodeError(`รหัสจุดตรวจวัดเดิมของ ${requestSystemType} ต้องขึ้นต้นด้วย ${expectedPointCodePrefix}`)
+      return
+    }
+
+    if (approvePointCodeMode === 'EXISTING' && unassignedMeasurementPoints.length !== 1) {
+      setApprovePointCodeError('การใช้รหัสจุดตรวจวัดเดิมรองรับเมื่อมีจุดที่รอออกรหัส 1 จุด')
+      return
+    }
+
+    const legacyPointAssignmentId = approvePointCodeMode === 'EXISTING'
+      ? getPointAssignmentId(unassignedMeasurementPoints[0])
+      : null
+
+    if (approvePointCodeMode === 'EXISTING' && !legacyPointAssignmentId) {
+      setApprovePointCodeError('ไม่พบรหัสอ้างอิงของจุดตรวจวัดในคำขอนี้ กรุณาโหลดข้อมูลใหม่')
+      return
+    }
+
+    const approvePayload = {
+      action: 'APPROVE_FORM',
+      officerNote: 'แบบถูกต้อง',
+    }
+
+    if (approvePointCodeMode === 'EXISTING') {
+      approvePayload.pointCodeAssignments = [
+        {
+          measurementPointId: legacyPointAssignmentId,
+          assignmentMode: 'MANUAL_LEGACY',
+          pointCode: normalizedExistingPointCode,
+          reason: 'ใช้รหัสเดิมของจุดตรวจวัดเก่า',
+        },
+      ]
+    }
+
     setRequestDocumentApproving(true)
     setRequestDocumentError('')
     setApprovePointCodeError('')
@@ -7940,10 +7984,7 @@ function ConnectionRequestPage({
         Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        action: 'APPROVE_FORM',
-        officerNote: 'แบบถูกต้อง',
-      }),
+      body: JSON.stringify(approvePayload),
     })
       .then(async (result) => {
         const payload = await result.json().catch(() => null)
