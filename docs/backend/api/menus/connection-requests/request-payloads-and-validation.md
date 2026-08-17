@@ -197,7 +197,8 @@ criteria normalization สำคัญ
 - parameter-group fields `eligibleParameters`, `exemptedParameters`, `connectedParameters`, `pendingParameters`, `requestedParameters`, `timeSharingParameters` ถ้าส่งต้องเป็น `string[]`
 - ค่า `ไม่มี` ใช้ได้เฉพาะกรณีเป็นตัวเดียวใน array
 - `requestedParameters` ห้ามมีค่า `ไม่มี`
-- ถ้าส่ง `requestedParameters` ต้องส่ง `pendingParameters` ด้วย และทุกค่าต้องเป็น subset ของ `pendingParameters`
+- ส่ง `requestedParameters` ได้โดยไม่ต้องส่ง `pendingParameters`
+- ถ้าส่งทั้ง `requestedParameters` และ `pendingParameters` ทุกค่าต้องเป็น subset ของ `pendingParameters`
 - ถ้าส่ง `requestedParameters` แล้ว `measurementInstruments.parameters` ต้องมีชุดค่าเดียวกันกับ `requestedParameters`
 - `hasTreatmentSystem` ถ้าส่งต้องเป็น `มี` หรือ `ไม่มี`
 - ถ้า `hasTreatmentSystem = "มี"` ต้องมี `treatmentSystem` และห้ามเป็น `ไม่มี`

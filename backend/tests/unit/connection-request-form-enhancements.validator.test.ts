@@ -203,6 +203,32 @@ describe('CEMS/WPMS monitoring-point form enhancements', () => {
     }
   });
 
+  it('accepts requestedParameters without pendingParameters for operator flows', () => {
+    const payload = createCemsPayload();
+    const point = payload.measurementPoints[0];
+    const { pendingParameters, ...detailsWithoutPending } = point.details;
+    const requestBody = {
+      ...payload,
+      measurementPoints: [
+        {
+          ...point,
+          pointCode: 'S0001',
+          details: detailsWithoutPending,
+        },
+      ],
+    };
+
+    expect(pendingParameters).toBeDefined();
+    for (const [flow, schema] of [
+      ['add measurement point', addMeasurementPointRequestSchema],
+      ['add parameter', addParameterRequestSchema],
+    ] as const) {
+      const result = schema.safeParse(requestBody);
+
+      expect({ flow, success: result.success }).toEqual({ flow, success: true });
+    }
+  });
+
   it('accepts multiple WPMS treatment systems and multiple document rows per non-logo title', () => {
     const result = addMeasurementPointRequestSchema.safeParse(createWpmsPayload());
 

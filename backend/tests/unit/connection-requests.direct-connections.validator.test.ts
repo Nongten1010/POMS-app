@@ -108,6 +108,20 @@ describe('directConnectionRequestSchema', () => {
     });
   });
 
+  it('accepts requestedParameters without pendingParameters for officer direct connections', () => {
+    const payload = validPayload();
+    const point = payload.measurementPoints[0];
+    const { pendingParameters, ...detailsWithoutPending } = point.details;
+
+    expect(pendingParameters).toBeDefined();
+    expect(
+      directConnectionRequestSchema.safeParse({
+        ...payload,
+        measurementPoints: [{ ...point, details: detailsWithoutPending }],
+      }).success,
+    ).toBe(true);
+  });
+
   it('accepts null for every optional direct-connection field and derives database-required point fields', () => {
     const result = directConnectionRequestSchema.safeParse(nullablePayload());
 

@@ -1091,31 +1091,21 @@ function validateRequestedParameters(
     return;
   }
 
-  if (!isStringArray(details.pendingParameters)) {
-    if (requestedParameters.length > 0) {
+  if (isStringArray(details.pendingParameters)) {
+    const pendingParameters = new Set(
+      details.pendingParameters.filter((parameter) => parameter !== PARAMETER_NONE_OPTION),
+    );
+    const unavailableParameters = requestedParameters.filter(
+      (parameter) => !pendingParameters.has(parameter),
+    );
+    if (unavailableParameters.length > 0) {
       addDetailIssue(
         ctx,
         index,
         'requestedParameters',
-        'requestedParameters requires pendingParameters',
+        `requestedParameters must be selected from pendingParameters: ${unavailableParameters.join(', ')}`,
       );
     }
-    return;
-  }
-
-  const pendingParameters = new Set(
-    details.pendingParameters.filter((parameter) => parameter !== PARAMETER_NONE_OPTION),
-  );
-  const unavailableParameters = requestedParameters.filter(
-    (parameter) => !pendingParameters.has(parameter),
-  );
-  if (unavailableParameters.length > 0) {
-    addDetailIssue(
-      ctx,
-      index,
-      'requestedParameters',
-      `requestedParameters must be selected from pendingParameters: ${unavailableParameters.join(', ')}`,
-    );
   }
 
   const instrumentParameters =
