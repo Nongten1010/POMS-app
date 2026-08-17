@@ -106,20 +106,22 @@ const connectionDeviceOptions = ['POMS Box (กรอ.)', 'POMS Box (กนอ.)
 const exemptedRegulationClauseOptions = ['ไม่มี', '4(1)', '4(2)', '11(3)', 'อื่นๆ']
 const officerPostSubmitStatusOptions = [
   {
-    value: 'WAITING_FACTORY_REVISION',
+    value: 'REQUEST_FACTORY_REVISION',
     label: 'รอโรงงานแก้ไข',
     description: 'ใช้เมื่อข้อมูล เอกสาร หรือการตั้งค่าอุปกรณ์ยังไม่ครบถ้วน',
     note: 'โรงงานจะได้รับแจ้ง พร้อมรายละเอียดที่ต้องแก้ไข',
     color: 'warning',
   },
   {
-    value: 'CONNECTED',
+    value: 'CONNECT',
     label: 'เชื่อมต่อแล้ว',
     description: 'ใช้เมื่อทดสอบการเชื่อมต่อและตรวจสอบข้อมูลครบถ้วนแล้ว',
     note: 'จุดตรวจวัดจะแสดงในข้อมูลโรงงานระบบ POMS',
     color: 'success',
   },
 ]
+const defaultOfficerRevisionReason = 'กรุณากรอกข้อมูลเพิ่มเติม'
+const defaultOfficerNote = 'กรุณากรอกข้อมูลเพิ่มเติม'
 
 const measurementInstrumentColumns = [
   'พารามิเตอร์ที่ขอเชื่อมต่อ',
@@ -6566,9 +6568,9 @@ function StationMonitoringPointDetails() {
   )
 }
 
-function OfficerPostSubmitStatusSection({ value, onChange }) {
-  const selectedOption = officerPostSubmitStatusOptions.find((option) => option.value === value)
-    ?? officerPostSubmitStatusOptions[0]
+function OfficerPostSubmitStatusSection({ value, onChange, canConnect = false }) {
+  const options = officerPostSubmitStatusOptions.filter((option) => canConnect || option.value !== 'CONNECT')
+  const selectedOption = options.find((option) => option.value === value) ?? options[0]
 
   return (
     <Paper elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider' }}>
@@ -6601,7 +6603,7 @@ function OfficerPostSubmitStatusSection({ value, onChange }) {
             gap: 2,
           }}
         >
-          {officerPostSubmitStatusOptions.map((option) => {
+          {options.map((option) => {
             const selected = option.value === selectedOption.value
             const isWarning = option.color === 'warning'
             const selectedColor = isWarning ? 'warning.main' : 'success.main'
@@ -6721,6 +6723,7 @@ function RequestFormBottomSheet({
   currentUser,
   isOperator = false,
   isDirectConnectionMode = false,
+  canDirectConnect = false,
   mode = 'create',
   requestId,
   initialRequest,
@@ -6733,6 +6736,7 @@ function RequestFormBottomSheet({
   const submitPreviewPdfUrlRef = useRef('')
   const isEditMode = mode === 'edit'
   const isAddParameterMode = mode === 'add-parameter'
+  const isOfficerAddMeasurementPointMode = !isOperator && formType === 'เพิ่มจุดตรวจวัด' && !isEditMode && !isAddParameterMode
   const shouldUseDirectConnection = isDirectConnectionMode && !isEditMode && !isAddParameterMode
   const useInitialRequestValues = isEditMode || isAddParameterMode
   const initialPoint = getInitialRequestPoint(initialRequest)
@@ -6778,7 +6782,7 @@ function RequestFormBottomSheet({
   const [eiaAssessment, setEiaAssessment] = useState(getEiaAssessmentValue(formFactory))
   const officerEmails = initialOfficerNotificationEmails.length ? initialOfficerNotificationEmails : ['']
   const showMonitoringPointSection = formType === 'เพิ่มจุดตรวจวัด' || isAddParameterMode
-  const showOfficerPostSubmitStatusSection = !isOperator && formType === 'เพิ่มจุดตรวจวัด' && !isEditMode
+  const showOfficerPostSubmitStatusSection = isOfficerAddMeasurementPointMode
   const selectedMonitoringPoint = monitoringPoints.find((point) => point.id === selectedMonitoringPointId)
     ?? monitoringPoints[0]
   const updateRequestedParameters = (nextValue) => {
@@ -6789,6 +6793,34 @@ function RequestFormBottomSheet({
     const message = error instanceof Error ? error.message : 'ข้อมูลในแบบฟอร์มไม่ถูกต้อง'
     setSubmitError(message)
     setSubmitValidationSnackbarOpen(true)
+  }
+  const applyOfficerSubmissionAction = (requestBody) => {
+    if (!showOfficerPostSubmitStatusSection) {
+      return
+    }
+
+    requestBody.submissionAction = officerPostSubmitStatus
+    requestBody.officerNote = defaultOfficerNote
+
+    if (officerPostSubmitStatus === 'REQUEST_FACTORY_REVISION') {
+      requestBody.revisionReason = defaultOfficerRevisionReason
+      return
+    }
+
+    if (officerPostSubmitStatus === 'CONNECT') {
+      const measurementPoints = Array.isArray(requestBody.measurementPoints) ? requestBody.measurementPoints : []
+      const pointCode = String(measurementPoints[0]?.pointCode ?? '').trim()
+
+      if (!canDirectConnect) {
+        throw new Error('คุณไม่มีสิทธิ์เลือกสถานะเชื่อมต่อแล้ว')
+      }
+
+      if (measurementPoints.length !== 1 || !pointCode) {
+        throw new Error('กรุณาระบุรหัสจุดตรวจวัดก่อนเลือกสถานะเชื่อมต่อแล้ว')
+      }
+
+      requestBody.measurementPoints[0].pointCode = pointCode
+    }
   }
   const buildCurrentRequestBody = () => {
     const formData = formRef.current ? new FormData(formRef.current) : null
@@ -6806,6 +6838,8 @@ function RequestFormBottomSheet({
     } else if (isAddParameterMode) {
       requestBody.remarks = 'ขอเพิ่มพารามิเตอร์'
     }
+
+    applyOfficerSubmissionAction(requestBody)
 
     return requestBody
   }
@@ -6927,6 +6961,8 @@ function RequestFormBottomSheet({
       } else if (isAddParameterMode) {
         requestBody.remarks = 'ขอเพิ่มพารามิเตอร์'
       }
+
+      applyOfficerSubmissionAction(requestBody)
 
       validateDirectConnectionRequest(requestBody)
       validateConnectionRequestPayload(requestBody, {
@@ -7339,6 +7375,7 @@ function RequestFormBottomSheet({
               <OfficerPostSubmitStatusSection
                 value={officerPostSubmitStatus}
                 onChange={setOfficerPostSubmitStatus}
+                canConnect={canDirectConnect}
               />
             ) : null}
           </Stack>
@@ -7524,6 +7561,10 @@ function ConnectionRequestPage({
   const isOperator = userType === 'operator'
   const isAdmin = roleCode === 'admin'
   const canApproveConnectionRequests = userType === 'officer' && permissions?.connection?.approve === true
+  const canDirectConnect = isAdmin
+    || permissions?.connection?.direct_connect === true
+    || permissions?.connection?.directConnect === true
+    || permissions?.connection?.direct_connection === true
   const canUseEligibleFactoryRows = isAdmin || canApproveConnectionRequests
   const canViewFactoryTable = isOperator || canUseEligibleFactoryRows
   const availableSubMenus = useMemo(
@@ -8397,6 +8438,7 @@ function ConnectionRequestPage({
         currentUser={currentUser}
         isOperator={isOperator}
         isDirectConnectionMode={requestForm?.isDirectConnectionMode === true}
+        canDirectConnect={canDirectConnect}
         mode={requestForm?.mode ?? 'create'}
         requestId={requestForm?.requestId}
         initialRequest={requestForm?.initialRequest}
