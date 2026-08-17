@@ -739,7 +739,7 @@ function PermissionManagementPage({ accessToken = '' }) {
           autoHideDuration={3000}
           onClose={() => setSnackbarOpen(false)}
           TransitionComponent={Fade}
-          anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
           message={
             <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
               <CheckCircleIcon fontSize="small" />

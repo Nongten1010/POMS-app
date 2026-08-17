@@ -378,7 +378,7 @@ function SupportRequestPage() {
         open={snackbarOpen}
         autoHideDuration={4000}
         onClose={() => setSnackbarOpen(false)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
       >
         <Alert severity="success" variant="filled" onClose={() => setSnackbarOpen(false)}>
           เปิดอีเมลสำหรับส่งคำขอแล้ว

@@ -102,8 +102,24 @@ const eiaAssessmentOptions = ['ไม่มี', 'มี IEE', 'มี EIA', '�
 const eiaProjectOptions = ['มี IEE', 'มี EIA', 'มี EHIA']
 const combustionControlSystemOptions = ['ระบบปิด', 'ระบบเปิด']
 const cemsLegalAnnexRequiredOptions = cemsInstallationRequiredOptions.slice(0, 2).map((option) => option.value)
-const connectionDeviceOptions = ['POMS Box (กรอ.)', 'POMS Box (กนอ.)', 'POMS Client (เดิม)', 'D-POMS Client (ใหม่)', 'อื่นๆ']
+const connectionDeviceOptions = ['POMS Box (กรอ.)', 'POMS Box (กนอ.)', 'D-POMS Client (ใหม่)', 'อื่นๆ']
 const exemptedRegulationClauseOptions = ['ไม่มี', '4(1)', '4(2)', '11(3)', 'อื่นๆ']
+const officerPostSubmitStatusOptions = [
+  {
+    value: 'WAITING_FACTORY_REVISION',
+    label: 'รอโรงงานแก้ไข',
+    description: 'ใช้เมื่อข้อมูล เอกสาร หรือการตั้งค่าอุปกรณ์ยังไม่ครบถ้วน',
+    note: 'โรงงานจะได้รับแจ้ง พร้อมรายละเอียดที่ต้องแก้ไข',
+    color: 'warning',
+  },
+  {
+    value: 'CONNECTED',
+    label: 'เชื่อมต่อแล้ว',
+    description: 'ใช้เมื่อทดสอบการเชื่อมต่อและตรวจสอบข้อมูลครบถ้วนแล้ว',
+    note: 'จุดตรวจวัดจะแสดงในข้อมูลโรงงานระบบ POMS',
+    color: 'success',
+  },
+]
 
 const measurementInstrumentColumns = [
   'พารามิเตอร์ที่ขอเชื่อมต่อ',
@@ -606,7 +622,7 @@ function normalizeDocumentFile(file = {}) {
   return {
     ...file,
     fileName: file.fileName ?? file.originalFileName ?? file.name ?? file.storedFileName ?? '',
-    fileUrl: file.fileUrl ?? file.url ?? file.storageUrl ?? file.path ?? '',
+    fileUrl: file.fileUrl ?? file.url ?? file.storageUrl ?? file.storagePath ?? file.path ?? '',
     fileType: file.fileType ?? file.mimeType ?? file.type ?? '',
     fileSize: file.fileSize ?? file.size ?? null,
   }
@@ -626,7 +642,7 @@ function normalizeDocumentItem(document = {}) {
     title: document.title ?? document.documentTitle ?? document.documentType ?? document.category ?? '',
     link: document.link ?? document.urlLink ?? document.documentLink ?? '',
     fileName: document.fileName ?? document.originalFileName ?? document.name ?? document.storedFileName ?? '',
-    fileUrl: document.fileUrl ?? document.url ?? document.storageUrl ?? document.path ?? '',
+    fileUrl: document.fileUrl ?? document.url ?? document.storageUrl ?? document.storagePath ?? document.path ?? '',
     fileType: document.fileType ?? document.mimeType ?? document.type ?? '',
     fileSize: document.fileSize ?? document.size ?? null,
     ...(Array.isArray(files) ? { files } : {}),
@@ -682,6 +698,14 @@ function getAttachmentFileName(document = {}) {
 
 function getAttachmentFileUrl(document = {}) {
   return normalizeAttachmentUrl(document.filePreviewUrl ?? document.fileUrl ?? document.url ?? document.storageUrl ?? document.path)
+}
+
+function getDocumentRemovalKey(document = {}) {
+  return [
+    document.title ?? '',
+    getAttachmentFileName(document),
+    getAttachmentFileUrl(document),
+  ].join('|')
 }
 
 function isImageAttachment(document = {}) {
@@ -1848,10 +1872,38 @@ function getDocumentImageFiles(formData, index) {
   return formData.getAll(`documentImageFile-${index}`).filter((file) => file instanceof File && file.name)
 }
 
+function getExistingDocumentItemsForFormItem(existingDocuments = [], item = {}, removedKeys = new Set()) {
+  return existingDocuments
+    .filter((document) => documentTitleMatchesItem(document, item))
+    .map((document) => {
+      if (Array.isArray(document.files) && document.files.length) {
+        const files = document.files.filter((file) => !removedKeys.has(getDocumentRemovalKey({
+          ...file,
+          title: item.title,
+        })))
+
+        if (!files.length) {
+          return null
+        }
+
+        return { ...document, files }
+      }
+
+      return removedKeys.has(getDocumentRemovalKey({
+        ...document,
+        title: item.title,
+      }))
+        ? null
+        : document
+    })
+    .filter(Boolean)
+}
+
 function buildDocumentsAndImages(formData, uploadedDocuments = [], { includePreviewUrls = false, existingDocuments = [] } = {}) {
   return documentImageItems.flatMap((item, index) => {
     const uploadedItems = uploadedDocuments.filter((document) => documentTitleMatchesItem(document, item))
-    const existingItems = existingDocuments.filter((document) => documentTitleMatchesItem(document, item))
+    const removedKeys = new Set(formData.getAll(`documentImageRemovedFile-${index}`).map(String))
+    const existingItems = getExistingDocumentItemsForFormItem(existingDocuments, item, removedKeys)
     const files = getDocumentImageFiles(formData, index)
     const documentPayload = {
       title: item.title,
@@ -5068,13 +5120,121 @@ function ReadOnlyField({ label, value, sx }) {
 
 const maxUploadFileSizeBytes = 5 * 1024 * 1024
 
-function UploadFileField({ label, accept, name, currentFileName = '', multiple = true, helperText = 'ขนาดไม่เกิน 5 Mb', maxFiles = multiple ? 3 : 1 }) {
+function formatUploadFileSize(fileSize) {
+  const numericSize = Number(fileSize)
+  if (!Number.isFinite(numericSize) || numericSize <= 0) {
+    return ''
+  }
+
+  return `${(numericSize / 1024 / 1024).toFixed(2)} MB`
+}
+
+function getUploadPreviewFilesForItem(initialDocuments = [], item = {}) {
+  return initialDocuments
+    .filter((document) => documentTitleMatchesItem(document, item))
+    .flatMap((document) => (Array.isArray(document.files) && document.files.length
+      ? document.files.map((file) => ({
+          ...file,
+          title: document.title,
+          fileName: file.fileName ?? file.originalFileName ?? file.name ?? file.storedFileName ?? '',
+          fileUrl: file.fileUrl ?? file.url ?? file.storageUrl ?? file.storagePath ?? file.path ?? '',
+          fileType: file.fileType ?? file.mimeType ?? file.type ?? '',
+          fileSize: file.fileSize ?? file.size ?? null,
+        }))
+      : [document]))
+    .map((document) => ({
+      ...document,
+      removalKey: getDocumentRemovalKey(document),
+    }))
+    .filter((document) => getAttachmentFileName(document) || getAttachmentFileUrl(document))
+}
+
+function UploadPreviewCard({ fileName, fileSize, previewUrl = '', onRemove }) {
+  const displaySize = formatUploadFileSize(fileSize)
+
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        gap: 1,
+        alignItems: 'center',
+        p: 1,
+        border: 1,
+        borderColor: 'divider',
+        borderRadius: 1,
+        bgcolor: 'background.paper',
+      }}
+    >
+      {previewUrl ? (
+        <Box
+          component="img"
+          src={previewUrl}
+          alt={fileName}
+          sx={{
+            width: 48,
+            height: 48,
+            objectFit: 'cover',
+            borderRadius: 1,
+            border: 1,
+            borderColor: 'divider',
+            flex: '0 0 auto',
+          }}
+        />
+      ) : (
+        <Box
+          sx={{
+            width: 48,
+            height: 48,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            border: 1,
+            borderColor: 'divider',
+            borderRadius: 1,
+            bgcolor: 'neutral.50',
+            flex: '0 0 auto',
+          }}
+        >
+          <Typography variant="caption" sx={{ fontWeight: 700 }}>
+            FILE
+          </Typography>
+        </Box>
+      )}
+      <Box sx={{ minWidth: 0, flex: 1 }}>
+        <Typography variant="body2" noWrap title={fileName}>
+          {fileName}
+        </Typography>
+        {displaySize ? (
+          <Typography variant="caption" color="text.secondary">
+            {displaySize}
+          </Typography>
+        ) : null}
+      </Box>
+      {onRemove ? (
+        <IconButton size="small" aria-label={`ลบไฟล์ ${fileName}`} onClick={onRemove}>
+          <CloseIcon fontSize="small" />
+        </IconButton>
+      ) : null}
+    </Box>
+  )
+}
+
+function UploadFileField({ label, accept, name, currentFileName = '', currentFiles = [], multiple = true, helperText = 'ขนาดไม่เกิน 5 Mb', maxFiles = multiple ? 3 : 1 }) {
   const inputRef = useRef(null)
   const [selectedFiles, setSelectedFiles] = useState([])
   const [fileError, setFileError] = useState('')
   const selectedFilesRef = useRef([])
   const fileNames = selectedFiles.map((item) => item.file.name).join(', ')
-  const buttonLabel = fileNames || currentFileName || label
+  const currentFileItems = currentFiles.length
+    ? currentFiles
+    : (currentFileName ? [{ fileName: currentFileName }] : [])
+  const [removedCurrentFileKeys, setRemovedCurrentFileKeys] = useState([])
+  const visibleCurrentFileItems = currentFileItems.filter((item) => {
+    const removalKey = item.removalKey ?? getDocumentRemovalKey(item)
+    return !removedCurrentFileKeys.includes(removalKey)
+  })
+  const currentFileNames = visibleCurrentFileItems.map((item) => getAttachmentFileName(item)).filter(Boolean).join(', ')
+  const buttonLabel = fileNames || currentFileNames || label
 
   useEffect(() => {
     selectedFilesRef.current = selectedFiles
@@ -5142,6 +5302,14 @@ function UploadFileField({ label, accept, name, currentFileName = '', multiple =
 
   return (
     <Stack spacing={0.75}>
+      {removedCurrentFileKeys.map((removalKey) => (
+        <input
+          key={removalKey}
+          type="hidden"
+          name={name.replace('documentImageFile-', 'documentImageRemovedFile-')}
+          value={removalKey}
+        />
+      ))}
       <Button
         component="label"
         variant="outlined"
@@ -5152,7 +5320,7 @@ function UploadFileField({ label, accept, name, currentFileName = '', multiple =
           minHeight: 40,
           justifyContent: 'flex-start',
           borderStyle: 'dashed',
-          color: fileNames || currentFileName ? 'text.primary' : 'text.secondary',
+          color: fileNames || currentFileNames ? 'text.primary' : 'text.secondary',
           bgcolor: 'background.paper',
           '&:hover': {
             borderStyle: 'dashed',
@@ -5173,76 +5341,43 @@ function UploadFileField({ label, accept, name, currentFileName = '', multiple =
         />
       </Button>
       <Typography variant="caption" color="text.secondary">
-        {currentFileName && !fileNames ? `ไฟล์เดิม: ${currentFileName} • ${helperText}` : `${helperText}${multiple ? ` • อัปโหลดได้ไม่เกิน ${maxFiles} ไฟล์` : ''}`}
+        {`${helperText}${multiple ? ` • อัปโหลดได้ไม่เกิน ${maxFiles} ไฟล์` : ''}`}
       </Typography>
       {fileError ? (
         <Typography variant="caption" color="error">
           {fileError}
         </Typography>
       ) : null}
+      {!selectedFiles.length && visibleCurrentFileItems.length ? (
+        <Stack spacing={1}>
+          {visibleCurrentFileItems.map((item, index) => {
+            const fileName = getAttachmentFileName(item) || `ไฟล์แนบ ${index + 1}`
+            const fileUrl = getAttachmentFileUrl(item)
+            const removalKey = item.removalKey ?? getDocumentRemovalKey(item)
+            return (
+              <UploadPreviewCard
+                key={`${fileName}-${fileUrl || index}`}
+                fileName={fileName}
+                fileSize={item.fileSize}
+                previewUrl={isImageAttachment(item) ? fileUrl : ''}
+                onRemove={() => setRemovedCurrentFileKeys((currentKeys) => (
+                  currentKeys.includes(removalKey) ? currentKeys : [...currentKeys, removalKey]
+                ))}
+              />
+            )
+          })}
+        </Stack>
+      ) : null}
       {selectedFiles.length ? (
         <Stack spacing={1}>
           {selectedFiles.map((item, index) => (
-            <Box
+            <UploadPreviewCard
               key={item.id}
-              sx={{
-                display: 'flex',
-                gap: 1,
-                alignItems: 'center',
-                p: 1,
-                border: 1,
-                borderColor: 'divider',
-                borderRadius: 1,
-                bgcolor: 'background.paper',
-              }}
-            >
-              {item.previewUrl ? (
-                <Box
-                  component="img"
-                  src={item.previewUrl}
-                  alt={item.file.name}
-                  sx={{
-                    width: 48,
-                    height: 48,
-                    objectFit: 'cover',
-                    borderRadius: 1,
-                    border: 1,
-                    borderColor: 'divider',
-                    flex: '0 0 auto',
-                  }}
-                />
-              ) : (
-                <Box
-                  sx={{
-                    width: 48,
-                    height: 48,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    border: 1,
-                    borderColor: 'divider',
-                    borderRadius: 1,
-                    bgcolor: 'neutral.50',
-                    flex: '0 0 auto',
-                  }}
-                >
-                  <Typography variant="caption" sx={{ fontWeight: 700 }}>
-                    FILE
-                  </Typography>
-                </Box>
-              )}
-              <Box sx={{ minWidth: 0, flex: 1 }}>
-                <Typography variant="body2" noWrap title={item.file.name}>
-                  {item.file.name}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {(item.file.size / 1024 / 1024).toFixed(2)} MB
-                </Typography>
-              </Box>
-              <IconButton size="small" aria-label={`ลบไฟล์ ${item.file.name}`} onClick={() => removeSelectedFile(index)}>
-                <CloseIcon fontSize="small" />
-              </IconButton>
-            </Box>
+              fileName={item.file.name}
+              fileSize={item.file.size}
+              previewUrl={item.previewUrl}
+              onRemove={() => removeSelectedFile(index)}
+            />
           ))}
         </Stack>
       ) : null}
@@ -5344,7 +5479,15 @@ function OptionMultiSelect({
   )
 }
 
-function CemsMonitoringPointDetails({ initialPoint = {}, requestedParameters = [], onRequestedParametersChange, isOperator = false, isDirectConnectionMode = false }) {
+function CemsMonitoringPointDetails({
+  initialPoint = {},
+  connectedParameters = [],
+  onConnectedParametersChange,
+  requestedParameters = [],
+  onRequestedParametersChange,
+  isOperator = false,
+  isDirectConnectionMode = false,
+}) {
   const initialDetails = { ...emptyCemsMonitoringPointDetails, ...compactDefinedObject(initialPoint.details ?? {}) }
   const pointCodeValue = initialPoint.pointCode ?? initialPoint.code ?? (isOperator || isDirectConnectionMode ? '' : initialDetails.pointCode)
   const initialProductionCapacity = splitProductionCapacity(initialDetails)
@@ -5464,7 +5607,13 @@ function CemsMonitoringPointDetails({ initialPoint = {}, requestedParameters = [
           <ParameterMultiSelect name="exemptedParameters" label="พารามิเตอร์ที่ได้รับการยกเว้น" options={withNoneOption(cemsParameterOptions)} defaultValue={initialDetails.exemptedParameters ?? []} />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <ParameterMultiSelect name="connectedParameters" label="พารามิเตอร์ที่เชื่อมต่อแล้ว" options={withNoneOption(cemsParameterOptions)} defaultValue={initialDetails.connectedParameters ?? []} />
+          <ParameterMultiSelect
+            name="connectedParameters"
+            label="พารามิเตอร์ที่เชื่อมต่อแล้ว"
+            options={withNoneOption(cemsParameterOptions)}
+            value={connectedParameters}
+            onChange={onConnectedParametersChange}
+          />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
           <ParameterMultiSelect name="pendingParameters" label="พารามิเตอร์ที่ยังไม่เชื่อมต่อ" options={withNoneOption(cemsParameterOptions)} defaultValue={initialDetails.pendingParameters ?? []} />
@@ -5705,7 +5854,7 @@ function DocumentsAndImagesSection({ initialDocuments = [], systemType = 'CEMS' 
                   name={`documentImageFile-${item.index}`}
                   label={item.uploadLabel}
                   accept={item.accept}
-                  currentFileName={initialDocuments.find((document) => documentTitleMatchesItem(document, item))?.fileName ?? ''}
+                  currentFiles={getUploadPreviewFilesForItem(initialDocuments, item)}
                   multiple={!item.singleFile}
                   helperText={item.helperText ?? 'ขนาดไม่เกิน 5 Mb'}
                 />
@@ -6145,7 +6294,7 @@ function MeasurementInstrumentSection({ parameterOptions, rows, setRows, initial
         open={saveSuccessOpen}
         autoHideDuration={3000}
         onClose={() => setSaveSuccessOpen(false)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
       >
         <Alert severity="success" variant="filled" onClose={() => setSaveSuccessOpen(false)}>
           บันทึกข้อมูลเครื่องมือตรวจวัดสำเร็จ
@@ -6194,7 +6343,15 @@ function InformationProviderSection({ currentUser, initialProvider = {}, useLogi
   )
 }
 
-function WpmsMonitoringPointDetails({ initialPoint = {}, requestedParameters = [], onRequestedParametersChange, isOperator = false, isDirectConnectionMode = false }) {
+function WpmsMonitoringPointDetails({
+  initialPoint = {},
+  connectedParameters = [],
+  onConnectedParametersChange,
+  requestedParameters = [],
+  onRequestedParametersChange,
+  isOperator = false,
+  isDirectConnectionMode = false,
+}) {
   const initialDetails = { ...emptyWpmsMonitoringPointDetails, ...compactDefinedObject(initialPoint.details ?? {}) }
   const pointCodeValue = initialPoint.pointCode ?? initialPoint.code ?? (isOperator || isDirectConnectionMode ? '' : initialDetails.pointCode)
   const [treatmentSystem, setTreatmentSystem] = useState(normalizeArrayValue(initialDetails.treatmentSystem))
@@ -6237,7 +6394,8 @@ function WpmsMonitoringPointDetails({ initialPoint = {}, requestedParameters = [
             name="connectedParameters"
             label="พารามิเตอร์ที่เชื่อมต่อแล้ว"
             options={withNoneOption(wpmsInstrumentParameters)}
-            defaultValue={initialDetails.connectedParameters ?? []}
+            value={connectedParameters}
+            onChange={onConnectedParametersChange}
           />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
@@ -6408,11 +6566,124 @@ function StationMonitoringPointDetails() {
   )
 }
 
-function MonitoringPointDetails({ point, initialPoint = {}, requestedParameters = [], onRequestedParametersChange, isOperator = false, isDirectConnectionMode = false }) {
+function OfficerPostSubmitStatusSection({ value, onChange }) {
+  const selectedOption = officerPostSubmitStatusOptions.find((option) => option.value === value)
+    ?? officerPostSubmitStatusOptions[0]
+
+  return (
+    <Paper elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider' }}>
+      <Stack spacing={1.75}>
+        <Stack
+          direction={{ xs: 'column', md: 'row' }}
+          spacing={1}
+          sx={{ justifyContent: 'space-between', alignItems: { xs: 'flex-start', md: 'flex-start' } }}
+        >
+          <Box>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+              เลือกสถานะหลังส่งแบบฟอร์ม
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              เลือก 1 สถานะให้ตรงกับผลการตรวจสอบล่าสุดของเจ้าหน้าที่
+            </Typography>
+          </Box>
+          <Typography variant="caption" sx={{ color: 'warning.dark', fontWeight: 700 }}>
+            จำเป็นต้องเลือกก่อนส่ง
+          </Typography>
+        </Stack>
+
+        <RadioGroup
+          row
+          value={selectedOption.value}
+          onChange={(event) => onChange(event.target.value)}
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' },
+            gap: 2,
+          }}
+        >
+          {officerPostSubmitStatusOptions.map((option) => {
+            const selected = option.value === selectedOption.value
+            const isWarning = option.color === 'warning'
+            const selectedColor = isWarning ? 'warning.main' : 'success.main'
+            const selectedBg = isWarning ? '#fff7ed' : '#f0fdf4'
+
+            return (
+              <Box
+                key={option.value}
+                component="label"
+                sx={{
+                  cursor: 'pointer',
+                  p: 2,
+                  minHeight: 150,
+                  border: 1,
+                  borderColor: selected ? selectedColor : 'divider',
+                  borderRadius: 1.5,
+                  bgcolor: selected ? selectedBg : 'background.paper',
+                  boxShadow: selected ? '0 10px 26px rgba(15, 23, 42, 0.08)' : 'none',
+                  transition: 'border-color 120ms ease, background-color 120ms ease, box-shadow 120ms ease',
+                  '&:hover': {
+                    borderColor: selectedColor,
+                  },
+                }}
+              >
+                <Stack spacing={1}>
+                  <Stack direction="row" spacing={1.25} sx={{ alignItems: 'flex-start' }}>
+                    <Radio
+                      value={option.value}
+                      checked={selected}
+                      sx={{
+                        p: 0.25,
+                        color: selectedColor,
+                        '&.Mui-checked': {
+                          color: selectedColor,
+                        },
+                      }}
+                    />
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography
+                        variant="subtitle1"
+                        sx={{
+                          fontWeight: 700,
+                          color: selected ? (isWarning ? 'warning.dark' : 'success.dark') : 'text.primary',
+                        }}
+                      >
+                        {option.label}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
+                        {option.description}
+                      </Typography>
+                    </Box>
+                  </Stack>
+                  <Divider sx={{ borderStyle: 'dashed' }} />
+                  <Typography variant="body2" color="text.secondary" sx={{ pl: 4 }}>
+                    {option.note}
+                  </Typography>
+                </Stack>
+              </Box>
+            )
+          })}
+        </RadioGroup>
+      </Stack>
+    </Paper>
+  )
+}
+
+function MonitoringPointDetails({
+  point,
+  initialPoint = {},
+  connectedParameters = [],
+  onConnectedParametersChange,
+  requestedParameters = [],
+  onRequestedParametersChange,
+  isOperator = false,
+  isDirectConnectionMode = false,
+}) {
   if (point.type === 'CEMS') {
     return (
       <CemsMonitoringPointDetails
         initialPoint={initialPoint}
+        connectedParameters={connectedParameters}
+        onConnectedParametersChange={onConnectedParametersChange}
         requestedParameters={requestedParameters}
         onRequestedParametersChange={onRequestedParametersChange}
         isOperator={isOperator}
@@ -6424,6 +6695,8 @@ function MonitoringPointDetails({ point, initialPoint = {}, requestedParameters 
     return (
       <WpmsMonitoringPointDetails
         initialPoint={initialPoint}
+        connectedParameters={connectedParameters}
+        onConnectedParametersChange={onConnectedParametersChange}
         requestedParameters={requestedParameters}
         onRequestedParametersChange={onRequestedParametersChange}
         isOperator={isOperator}
@@ -6481,18 +6754,17 @@ function RequestFormBottomSheet({
   )
   const initialMonitoringPointType = useInitialRequestValues && initialRequest ? getRequestSystemType(initialRequest) : ''
   const initialMonitoringPoints = [{ id: 1, type: initialMonitoringPointType }]
-  const initialRequestedParameters = normalizeArrayValue(
-    initialPoint.details?.requestedParameters?.length
-      ? initialPoint.details.requestedParameters
-      : (initialInstruments.parameters ?? []).map((parameter) => parameter.parameter),
-  )
+  const initialConnectedParameters = normalizeArrayValue(initialPoint.details?.connectedParameters ?? [])
+  const initialRequestedParameters = []
   const [contacts, setContacts] = useState(initialContactPersons)
   const [factoryEmails, setFactoryEmails] = useState(initialNotificationEmails)
   const [monitoringPoints, setMonitoringPoints] = useState(initialMonitoringPoints)
   const [measurementInstrumentRows, setMeasurementInstrumentRows] = useState(
     getInitialInstrumentRows(initialInstruments),
   )
+  const [connectedParameters, setConnectedParameters] = useState(initialConnectedParameters)
   const [requestedParameters, setRequestedParameters] = useState(initialRequestedParameters)
+  const [officerPostSubmitStatus, setOfficerPostSubmitStatus] = useState(officerPostSubmitStatusOptions[0].value)
   const [selectedMonitoringPointId, setSelectedMonitoringPointId] = useState(1)
   const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false)
   const [submitPreviewRequest, setSubmitPreviewRequest] = useState(null)
@@ -6506,6 +6778,7 @@ function RequestFormBottomSheet({
   const [eiaAssessment, setEiaAssessment] = useState(getEiaAssessmentValue(formFactory))
   const officerEmails = initialOfficerNotificationEmails.length ? initialOfficerNotificationEmails : ['']
   const showMonitoringPointSection = formType === 'เพิ่มจุดตรวจวัด' || isAddParameterMode
+  const showOfficerPostSubmitStatusSection = !isOperator && formType === 'เพิ่มจุดตรวจวัด' && !isEditMode
   const selectedMonitoringPoint = monitoringPoints.find((point) => point.id === selectedMonitoringPointId)
     ?? monitoringPoints[0]
   const updateRequestedParameters = (nextValue) => {
@@ -6864,7 +7137,7 @@ function RequestFormBottomSheet({
                             name={`documentImageFile-${item.index}`}
                             label={item.uploadLabel}
                             accept={item.accept}
-                            currentFileName={initialDocuments.find((document) => documentTitleMatchesItem(document, item))?.fileName ?? ''}
+                            currentFiles={getUploadPreviewFilesForItem(initialDocuments, item)}
                             multiple={!item.singleFile}
                             helperText={item.helperText ?? 'ขนาดไม่เกิน 5 Mb'}
                           />
@@ -7016,6 +7289,8 @@ function RequestFormBottomSheet({
                       <MonitoringPointDetails
                         point={point}
                         initialPoint={point.type === initialMonitoringPointType ? initialPoint : {}}
+                        connectedParameters={connectedParameters}
+                        onConnectedParametersChange={setConnectedParameters}
                         requestedParameters={requestedParameters}
                         onRequestedParametersChange={updateRequestedParameters}
                         isOperator={isOperator}
@@ -7060,6 +7335,12 @@ function RequestFormBottomSheet({
                   ) : null,
                 )
               : null}
+            {showOfficerPostSubmitStatusSection ? (
+              <OfficerPostSubmitStatusSection
+                value={officerPostSubmitStatus}
+                onChange={setOfficerPostSubmitStatus}
+              />
+            ) : null}
           </Stack>
         </Box>
         <Divider />
@@ -7122,7 +7403,7 @@ function RequestFormBottomSheet({
         open={submitValidationSnackbarOpen}
         autoHideDuration={6000}
         onClose={() => setSubmitValidationSnackbarOpen(false)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
       >
         <Alert
           severity="error"
@@ -8281,7 +8562,7 @@ function ConnectionRequestPage({
         open={Boolean(requestFormSuccessMessage)}
         autoHideDuration={3000}
         onClose={() => setRequestFormSuccessMessage('')}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
       >
         <Alert severity="success" variant="filled" onClose={() => setRequestFormSuccessMessage('')}>
           {requestFormSuccessMessage}
