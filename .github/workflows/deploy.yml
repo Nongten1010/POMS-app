@@ -4,6 +4,15 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      deploy_target:
+        description: Deployment target
+        required: true
+        default: frontend
+        type: choice
+        options:
+          - frontend
 
 permissions:
   contents: read
@@ -15,6 +24,7 @@ concurrency:
 jobs:
   deploy:
     name: Deploy changed app parts
+    if: github.ref == 'refs/heads/main'
     runs-on: [self-hosted, poms, windows, prod]
     timeout-minutes: 45
 
@@ -53,8 +63,12 @@ jobs:
         run: |
           $before = "${{ github.event.before }}"
           $after = "${{ github.sha }}"
+          $manualFrontendDeploy = "${{ github.event_name }}" -eq 'workflow_dispatch' -and "${{ inputs.deploy_target }}" -eq 'frontend'
 
-          if ([string]::IsNullOrWhiteSpace($before) -or $before -match '^0+$') {
+          if ($manualFrontendDeploy) {
+            Write-Host "Manual frontend deployment requested; forcing frontend build and deploy."
+            $files = @()
+          } elseif ([string]::IsNullOrWhiteSpace($before) -or $before -match '^0+$') {
             $files = git ls-tree -r --name-only $after
           } elseif (git cat-file -e "$before^{commit}" 2>$null) {
             $files = git diff --name-only $before $after
@@ -77,7 +91,7 @@ jobs:
             $_ -eq 'backend/package.json' -or $_ -eq 'backend/package-lock.json'
           }
 
-          $frontend = if ($frontendChanged) { 'true' } else { 'false' }
+          $frontend = if ($frontendChanged -or $manualFrontendDeploy) { 'true' } else { 'false' }
           $backend = if ($backendChanged) { 'true' } else { 'false' }
           $frontendDeps = if ($frontendDepsChanged) { 'true' } else { 'false' }
           $backendDeps = if ($backendDepsChanged) { 'true' } else { 'false' }
