@@ -1402,6 +1402,395 @@ function isBlankValue(value) {
   return value === null || value === undefined || value === '' || value === 'undefined'
 }
 
+function isPresentValue(value) {
+  if (value === null || value === undefined) {
+    return false
+  }
+
+  return String(value).trim() !== ''
+}
+
+function isValidEmail(value) {
+  if (!isPresentValue(value)) {
+    return false
+  }
+
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value).trim())
+}
+
+function formatValidationErrors(errors = []) {
+  if (!errors.length) {
+    return ''
+  }
+
+  return `กรุณาตรวจสอบข้อมูลต่อไปนี้\n${errors.map((error, index) => `${index + 1}. ${error}`).join('\n')}`
+}
+
+function documentHasFile(document = {}) {
+  return Boolean(
+    document.filePreviewUrl
+      || document.fileUrl
+      || document.url
+      || document.storageUrl
+      || document.storagePath
+      || document.path
+      || document.fileName
+      || document.originalFileName
+      || document.storedFileName
+      || document.name,
+  )
+}
+
+function documentHasRealAttachment(document = {}) {
+  return Boolean(documentHasFile(document) || document.link)
+}
+
+function isCompanyLogoDocument(document = {}) {
+  return document?.title === 'สัญลักษณ์ของโรงงานหรือโลโก้บริษัท'
+}
+
+function validateContactPersons(contactPersons = []) {
+  const errors = []
+  const filledContacts = contactPersons.filter((contact) =>
+    isPresentValue(contact?.name)
+      || isPresentValue(contact?.phone)
+      || isPresentValue(contact?.email)
+      || isPresentValue(contact?.position),
+  )
+
+  if (!filledContacts.length) {
+    errors.push('กรุณาเพิ่มผู้ติดต่อประสานงานอย่างน้อย 1 รายการ')
+    return errors
+  }
+
+  filledContacts.forEach((contact, index) => {
+    const rowLabel = `ผู้ติดต่อประสานงานรายการที่ ${index + 1}`
+    if (!isPresentValue(contact.name)) {
+      errors.push(`กรุณากรอกชื่อ-นามสกุลของ${rowLabel}`)
+    }
+    if (isPresentValue(contact.name) && !isPresentValue(contact.phone)) {
+      errors.push(`กรุณากรอกเบอร์โทรของ${rowLabel}`)
+    }
+    if (!isPresentValue(contact.name) && isPresentValue(contact.phone)) {
+      errors.push(`กรุณากรอกชื่อ-นามสกุลของ${rowLabel}`)
+    }
+    if (isPresentValue(contact.email) && !isValidEmail(contact.email)) {
+      errors.push(`อีเมลของ${rowLabel}ไม่ถูกต้อง`)
+    }
+  })
+
+  return errors
+}
+
+function validateDocumentRows(documentsAndImages = []) {
+  const errors = []
+  const realDocuments = documentsAndImages.filter(documentHasRealAttachment)
+
+  realDocuments.forEach((document) => {
+    if (document.link && !/^https?:\/\//i.test(document.link)) {
+      errors.push(`Link ของ "${document.title || 'เอกสารแนบ'}" ต้องขึ้นต้นด้วย http:// หรือ https://`)
+    }
+    const fileUrl = document.fileUrl ?? document.url ?? document.storageUrl ?? document.path
+    if (fileUrl && !/^(blob:|data:|https?:\/\/)/i.test(fileUrl)) {
+      errors.push(`ไฟล์ของ "${document.title || 'เอกสารแนบ'}" ต้องเป็น URL ที่ถูกต้อง`)
+    }
+    if (document.fileSize !== null && document.fileSize !== undefined) {
+      const fileSize = Number(document.fileSize)
+      if (!Number.isFinite(fileSize) || fileSize < 1 || fileSize > maxUploadFileSizeBytes) {
+        errors.push(`ไฟล์ของ "${document.title || 'เอกสารแนบ'}" ต้องมีขนาดไม่เกิน 5 MB`)
+      }
+    }
+  })
+
+  const logoDocuments = realDocuments.filter(isCompanyLogoDocument)
+  if (!logoDocuments.length) {
+    errors.push('กรุณาแนบสัญลักษณ์ของโรงงานหรือโลโก้บริษัท')
+  } else if (logoDocuments.length > 1) {
+    errors.push('สัญลักษณ์ของโรงงานหรือโลโก้บริษัทแนบได้เพียง 1 ไฟล์')
+  } else {
+    const logoDocument = logoDocuments[0]
+    if (!documentHasFile(logoDocument)) {
+      errors.push('สัญลักษณ์ของโรงงานหรือโลโก้บริษัทต้องแนบเป็นไฟล์รูปภาพเท่านั้น')
+    } else if (!isImageAttachment(logoDocument)) {
+      errors.push('สัญลักษณ์ของโรงงานหรือโลโก้บริษัทต้องเป็นไฟล์รูปภาพ JPG หรือ PNG')
+    }
+  }
+
+  return errors
+}
+
+function validateParameterGroups(details = {}, instrumentParameters = []) {
+  const errors = []
+  const parameterGroupKeys = [
+    ['eligibleParameters', 'พารามิเตอร์ที่เข้าข่าย'],
+    ['exemptedParameters', 'พารามิเตอร์ที่ได้รับการยกเว้น'],
+    ['connectedParameters', 'พารามิเตอร์ที่เชื่อมต่อแล้ว'],
+    ['pendingParameters', 'พารามิเตอร์ที่ยังไม่เชื่อมต่อ'],
+    ['requestedParameters', 'พารามิเตอร์ที่ขอเชื่อมต่อ'],
+    ['timeSharingParameters', 'พารามิเตอร์ที่ติดตั้งแบบ Time sharing'],
+  ]
+
+  parameterGroupKeys.forEach(([key, label]) => {
+    const values = details[key]
+    if (values === undefined || values === null) {
+      return
+    }
+    if (!Array.isArray(values)) {
+      errors.push(`${label} ต้องเป็นรายการตัวเลือก`)
+      return
+    }
+    if (values.includes(parameterNoneOption) && values.length > 1) {
+      errors.push(`${label} ถ้าเลือก "ไม่มี" ต้องเลือก "ไม่มี" เพียงตัวเดียว`)
+    }
+  })
+
+  const requestedParameters = Array.isArray(details.requestedParameters) ? details.requestedParameters : []
+  const pendingParameters = Array.isArray(details.pendingParameters) ? details.pendingParameters : []
+  if (requestedParameters.includes(parameterNoneOption)) {
+    errors.push('พารามิเตอร์ที่ขอเชื่อมต่อห้ามเลือก "ไม่มี"')
+  }
+  if (requestedParameters.length && pendingParameters.length) {
+    const invalidRequestedParameters = requestedParameters.filter((parameter) => !pendingParameters.includes(parameter))
+    if (invalidRequestedParameters.length) {
+      errors.push(`พารามิเตอร์ที่ขอเชื่อมต่อต้องเลือกจากพารามิเตอร์ที่ยังไม่เชื่อมต่อเท่านั้น (${invalidRequestedParameters.join(', ')})`)
+    }
+  }
+
+  if (requestedParameters.length) {
+    const instrumentParameterNames = instrumentParameters.map((parameter) => parameter.parameter).filter(Boolean)
+    const missingInstrumentRows = requestedParameters.filter((parameter) => !instrumentParameterNames.includes(parameter))
+    const extraInstrumentRows = instrumentParameterNames.filter((parameter) => !requestedParameters.includes(parameter))
+    if (missingInstrumentRows.length || extraInstrumentRows.length) {
+      errors.push('ตารางรายละเอียดเครื่องมือตรวจวัดต้องมีพารามิเตอร์ตรงกับพารามิเตอร์ที่ขอเชื่อมต่อ')
+    }
+  }
+
+  return errors
+}
+
+function validateInstrumentCriteria(criteria, label) {
+  const errors = []
+  if (!criteria || criteria.enabled === false) {
+    return errors
+  }
+
+  if (isPresentValue(criteria.standardValue)) {
+    const standardValue = Number(criteria.standardValue)
+    if (!Number.isFinite(standardValue) || standardValue <= 0) {
+      errors.push(`${label} ต้องเป็นตัวเลขมากกว่า 0`)
+    }
+  }
+
+  const rows = Array.isArray(criteria.rows) ? criteria.rows : []
+  if (rows.length && rows.length !== 3) {
+    errors.push(`${label} ต้องมีเกณฑ์ปกติ เฝ้าระวัง และแจ้งเตือนครบ`)
+  }
+
+  return errors
+}
+
+function validateMeasurementInstruments(measurementInstruments = {}) {
+  const errors = []
+  const parameters = Array.isArray(measurementInstruments?.parameters) ? measurementInstruments.parameters : []
+
+  parameters.forEach((parameter, index) => {
+    const rowLabel = `รายละเอียดเครื่องมือตรวจวัดรายการที่ ${index + 1}`
+    if (!isPresentValue(parameter.parameter)) {
+      errors.push(`กรุณาเลือกพารามิเตอร์ของ${rowLabel}`)
+    }
+    ;[
+      ['technique', 'เทคนิคการตรวจวัด'],
+      ['range', 'ช่วงการตรวจวัด'],
+      ['brand', 'ยี่ห้อเครื่องมือ'],
+      ['supplier', 'ผู้จำหน่ายเครื่องมือ'],
+      ['eiaStandard', 'มาตรฐาน EIA'],
+    ].forEach(([key, label]) => {
+      if (isPresentValue(parameter[key]) && String(parameter[key]).trim().length > 255) {
+        errors.push(`${label}ของ${rowLabel}ต้องไม่เกิน 255 ตัวอักษร`)
+      }
+    })
+    errors.push(...validateInstrumentCriteria(parameter.standardCriteria, `ค่ามาตรฐานตามประกาศ อก. ของ${rowLabel}`))
+    errors.push(...validateInstrumentCriteria(parameter.eiaCriteria, `ค่ามาตรฐานตาม EIA ของ${rowLabel}`))
+  })
+
+  return errors
+}
+
+function validateTreatmentSystem(details = {}) {
+  const errors = []
+  const treatmentSystem = Array.isArray(details.treatmentSystem)
+    ? details.treatmentSystem
+    : isPresentValue(details.treatmentSystem)
+      ? [details.treatmentSystem]
+      : []
+  const hasTreatmentSystem = details.hasTreatmentSystem
+
+  if (hasTreatmentSystem && !['มี', 'ไม่มี'].includes(hasTreatmentSystem)) {
+    errors.push('สถานะระบบบำบัดต้องเป็น "มี" หรือ "ไม่มี"')
+  }
+  if (hasTreatmentSystem === 'มี') {
+    if (!treatmentSystem.length || treatmentSystem.includes(parameterNoneOption)) {
+      errors.push('กรุณาเลือกระบบบำบัด')
+    }
+  }
+  if (hasTreatmentSystem === 'ไม่มี' && treatmentSystem.length && !treatmentSystem.includes(parameterNoneOption)) {
+    errors.push('ถ้าไม่มีระบบบำบัด ระบบบำบัดต้องว่างหรือเลือก "ไม่มี" เท่านั้น')
+  }
+  if (treatmentSystem.includes('อื่นๆ') && !isPresentValue(details.treatmentSystemOther)) {
+    errors.push('กรุณาระบุระบบบำบัดอื่นๆ')
+  }
+
+  return errors
+}
+
+function validateConnectionRequestPayload(requestBody = {}, { isAddParameterMode = false, skipFullValidation = false } = {}) {
+  if (skipFullValidation) {
+    return
+  }
+
+  const errors = []
+  const measurementPoints = Array.isArray(requestBody.measurementPoints) ? requestBody.measurementPoints : []
+
+  if (!isPresentValue(requestBody.factoryId)) {
+    errors.push('ไม่พบรหัสโรงงาน')
+  }
+  if (!isPresentValue(requestBody.factoryName)) {
+    errors.push('ไม่พบชื่อโรงงาน')
+  }
+  if (requestBody.eia === 'อื่นๆ' && !isPresentValue(requestBody.eiaOther)) {
+    errors.push('กรุณาระบุการประเมินผลกระทบสิ่งแวดล้อมอื่นๆ')
+  }
+  if (!Number.isFinite(requestBody.latitude)) {
+    errors.push('กรุณากรอกละติจูดของโรงงาน')
+  }
+  if (!Number.isFinite(requestBody.longitude)) {
+    errors.push('กรุณากรอกลองติจูดของโรงงาน')
+  }
+  if (!['CEMS', 'WPMS'].includes(requestBody.systemType)) {
+    errors.push('กรุณาเลือกประเภทจุดตรวจวัด CEMS หรือ WPMS')
+  }
+  errors.push(...validateContactPersons(requestBody.contactPersons))
+  if (!Array.isArray(requestBody.notificationEmails) || requestBody.notificationEmails.length === 0) {
+    errors.push('กรุณากรอกอีเมลสำหรับแจ้งเตือนโรงงานอย่างน้อย 1 รายการ')
+  } else {
+    requestBody.notificationEmails.forEach((email, index) => {
+      if (!isValidEmail(email)) {
+        errors.push(`อีเมลสำหรับแจ้งเตือนโรงงานรายการที่ ${index + 1} ไม่ถูกต้อง`)
+      }
+    })
+  }
+  if (Array.isArray(requestBody.officerNotificationEmails)) {
+    requestBody.officerNotificationEmails.forEach((email, index) => {
+      if (isPresentValue(email) && !isValidEmail(email)) {
+        errors.push(`อีเมลสำหรับแจ้งเตือนเจ้าหน้าที่รายการที่ ${index + 1} ไม่ถูกต้อง`)
+      }
+    })
+  }
+  if (!isPresentValue(requestBody.informationProviderName)) {
+    errors.push('กรุณากรอกชื่อผู้ให้ข้อมูล')
+  }
+  if (!isPresentValue(requestBody.informationProviderPosition)) {
+    errors.push('กรุณากรอกตำแหน่งผู้ให้ข้อมูล')
+  }
+
+  const pointCountMessage = isAddParameterMode
+    ? measurementPoints.length !== 1
+    : measurementPoints.length < 1 || measurementPoints.length > 100
+  if (pointCountMessage) {
+    errors.push(isAddParameterMode ? 'แบบฟอร์มเพิ่มพารามิเตอร์ต้องมีจุดตรวจวัด 1 จุดเท่านั้น' : 'กรุณาเพิ่มจุดตรวจวัดอย่างน้อย 1 จุด')
+  }
+
+  measurementPoints.forEach((point, index) => {
+    const pointLabel = `จุดตรวจวัดรายการที่ ${index + 1}`
+    const details = point.details ?? {}
+    const instrumentParameters = Array.isArray(point.measurementInstruments?.parameters) ? point.measurementInstruments.parameters : []
+    const isWpmsPoint = requestBody.systemType === 'WPMS'
+
+    if (!isPresentValue(point.pointName)) {
+      errors.push(`กรุณากรอกชื่อ${pointLabel}`)
+    }
+    if (isAddParameterMode && !isPresentValue(point.pointCode)) {
+      errors.push(`กรุณาระบุรหัสจุดตรวจวัดของ${pointLabel}`)
+    }
+    if (isAddParameterMode && isPresentValue(point.pointCode) && String(point.pointCode).trim().length > 64) {
+      errors.push(`รหัสจุดตรวจวัดของ${pointLabel}ต้องไม่เกิน 64 ตัวอักษร`)
+    }
+    if (requestBody.systemType === 'CEMS' && point.pointType !== 'STACK') {
+      errors.push(`${pointLabel} ของ CEMS ต้องเป็นปล่องระบายอากาศ`)
+    }
+    if (requestBody.systemType === 'WPMS' && point.pointType !== 'WASTEWATER') {
+      errors.push(`${pointLabel} ของ WPMS ต้องเป็นจุดระบายน้ำทิ้ง`)
+    }
+    if (!details || !Object.keys(details).length) {
+      errors.push(`กรุณากรอกรายละเอียดของ${pointLabel}`)
+    }
+    if (!point.measurementInstruments) {
+      errors.push(`กรุณากรอกรายละเอียดเครื่องมือตรวจวัดของ${pointLabel}`)
+    }
+    errors.push(...validateDocumentRows(point.documentsAndImages ?? []))
+    errors.push(...validateParameterGroups(details, instrumentParameters))
+    errors.push(...validateMeasurementInstruments(point.measurementInstruments))
+    errors.push(...validateTreatmentSystem(details))
+
+    if (details.connectionDevice === 'อื่นๆ' && !isPresentValue(details.connectionDeviceOther)) {
+      errors.push(`กรุณาระบุอุปกรณ์/โปรแกรมที่ใช้เชื่อมต่อของ${pointLabel}`)
+    }
+
+    if (isWpmsPoint) {
+      if (details.monitoringPointKind && details.monitoringPointKind !== 'WPMS') {
+        errors.push(`${pointLabel} ของ WPMS ต้องมีชนิดจุดตรวจวัดเป็น WPMS`)
+      }
+      if (details.hasTreatmentSystem === 'มี' && !Number.isFinite(details.maxTreatmentCapacity)) {
+        errors.push(`กรุณากรอกความสามารถในการรองรับน้ำเสียสูงสุดของ${pointLabel}`)
+      }
+    } else {
+      if (details.monitoringPointKind && details.monitoringPointKind !== 'CEMS') {
+        errors.push(`${pointLabel} ของ CEMS ต้องมีชนิดจุดตรวจวัดเป็น CEMS`)
+      }
+      if (!isPresentValue(details.stackShape)) {
+        errors.push(`กรุณาเลือกลักษณะปล่องของ${pointLabel}`)
+      }
+      if (details.stackShape === 'วงกลม' && !Number.isFinite(details.stackDiameter)) {
+        errors.push(`กรุณากรอกเส้นผ่านศูนย์กลางปล่องของ${pointLabel}`)
+      }
+      if (details.stackShape === 'สี่เหลี่ยม') {
+        if (!Number.isFinite(details.stackWidth)) {
+          errors.push(`กรุณากรอกความกว้างปล่องของ${pointLabel}`)
+        }
+        if (!Number.isFinite(details.stackLength)) {
+          errors.push(`กรุณากรอกความยาวปล่องของ${pointLabel}`)
+        }
+      }
+      if (details.stackShape === 'อื่นๆ' && !isPresentValue(details.stackShapeOther)) {
+        errors.push(`กรุณาระบุลักษณะปล่องอื่นๆ ของ${pointLabel}`)
+      }
+      if (Array.isArray(details.legalAnnexNo)) {
+        const invalidAnnex = details.legalAnnexNo.filter((item) => !legalAnnexNoOptions.includes(String(item)))
+        if (invalidAnnex.length) {
+          errors.push(`เข้าข่ายตามบัญชีแนบท้ายลำดับที่ต้องอยู่ระหว่าง 1-13`)
+        }
+      }
+      if (details.exemptedParameterRegulationClauses === 'อื่นๆ' && !isPresentValue(details.exemptedParameterRegulationClauseOther)) {
+        errors.push(`กรุณาระบุข้อตามประกาศของ${pointLabel}`)
+      }
+      if (isPresentValue(details.primaryFuel) && (isOtherOption(details.primaryFuel) || isBiomassOption(details.primaryFuel)) && !isPresentValue(details.primaryFuelOther)) {
+        errors.push(`กรุณาระบุเชื้อเพลิงหลักของ${pointLabel}`)
+      }
+      if (isPresentValue(details.secondaryFuel) && (isOtherOption(details.secondaryFuel) || isBiomassOption(details.secondaryFuel)) && !isPresentValue(details.secondaryFuelOther)) {
+        errors.push(`กรุณาระบุเชื้อเพลิงรองของ${pointLabel}`)
+      }
+      if (isPresentValue(details.combustionControlSystem) && !combustionControlSystemOptions.includes(details.combustionControlSystem)) {
+        errors.push('ระบบควบคุมต้องเป็น ระบบปิด, ระบบเปิด หรือควบคุมอัตโนมัติ')
+      }
+    }
+  })
+
+  const validationMessage = formatValidationErrors([...new Set(errors)])
+  if (validationMessage) {
+    throw new Error(validationMessage)
+  }
+}
+
 function compactDefinedObject(object = {}) {
   return Object.fromEntries(
     Object.entries(object).filter(([, value]) => !isBlankValue(value)),
@@ -6112,6 +6501,7 @@ function RequestFormBottomSheet({
   const [submitPreviewPdfError, setSubmitPreviewPdfError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
+  const [submitValidationSnackbarOpen, setSubmitValidationSnackbarOpen] = useState(false)
   const submitPreviewSessionRef = useRef(0)
   const [eiaAssessment, setEiaAssessment] = useState(getEiaAssessmentValue(formFactory))
   const officerEmails = initialOfficerNotificationEmails.length ? initialOfficerNotificationEmails : ['']
@@ -6121,6 +6511,11 @@ function RequestFormBottomSheet({
   const updateRequestedParameters = (nextValue) => {
     setRequestedParameters(nextValue)
     setMeasurementInstrumentRows((current) => syncInstrumentRowsWithRequestedParameters(current, nextValue))
+  }
+  const handleSubmitValidationError = (error) => {
+    const message = error instanceof Error ? error.message : 'ข้อมูลในแบบฟอร์มไม่ถูกต้อง'
+    setSubmitError(message)
+    setSubmitValidationSnackbarOpen(true)
   }
   const buildCurrentRequestBody = () => {
     const formData = formRef.current ? new FormData(formRef.current) : null
@@ -6195,8 +6590,12 @@ function RequestFormBottomSheet({
     try {
       requestBody = buildCurrentRequestBody()
       validateDirectConnectionRequest(requestBody)
+      validateConnectionRequestPayload(requestBody, {
+        isAddParameterMode,
+        skipFullValidation: shouldUseDirectConnection,
+      })
     } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : 'ข้อมูลไม่ถูกต้อง')
+      handleSubmitValidationError(error)
       return
     }
 
@@ -6257,6 +6656,10 @@ function RequestFormBottomSheet({
       }
 
       validateDirectConnectionRequest(requestBody)
+      validateConnectionRequestPayload(requestBody, {
+        isAddParameterMode,
+        skipFullValidation: shouldUseDirectConnection,
+      })
 
       const submitApiUrl = isEditMode
         ? getRequestFormApiUrl(requestId)
@@ -6715,6 +7118,21 @@ function RequestFormBottomSheet({
           </Stack>
         }
       />
+      <Snackbar
+        open={submitValidationSnackbarOpen}
+        autoHideDuration={6000}
+        onClose={() => setSubmitValidationSnackbarOpen(false)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          severity="error"
+          variant="filled"
+          onClose={() => setSubmitValidationSnackbarOpen(false)}
+          sx={{ whiteSpace: 'pre-line', alignItems: 'flex-start' }}
+        >
+          {submitError}
+        </Alert>
+      </Snackbar>
     </Drawer>
   )
 }
