@@ -2,9 +2,42 @@
 
 [กลับไปหน้าเมนู](./README.md) · [ดู payload และ validation ฉบับเต็ม](./request-payloads-and-validation.md#post-apiv1cems-wpms-requestsmeasurement-points)
 
-## `POST /api/v1/cems-wpms-requests/measurement-points`
+เจ้าหน้าที่เลือกสถานะโดยส่ง `submissionAction` ไปพร้อม request body เดิมใน request เดียว ทั้งฟอร์มเพิ่มจุดเต็มรูปแบบและ flow เชื่อมต่อโดยตรงรองรับ field นี้
 
-หน้าเพิ่มจุดตรวจวัดของเจ้าหน้าที่ส่งสถานะที่เลือกไปพร้อม request body เดิมผ่าน `submissionAction` โดยไม่ต้องเรียก API เปลี่ยนสถานะซ้ำ
+## เลือก endpoint ตาม mode ของหน้า
+
+| Mode ใน frontend | Endpoint ที่ต้องเรียก | รูปแบบ payload | Permission หลัก |
+| --- | --- | --- | --- |
+| `isDirectConnectionMode = false` | `POST /api/v1/cems-wpms-requests/measurement-points` | ฟอร์มเพิ่มจุดเต็มรูปแบบ | `cems_wpms_requests:edit`; เมื่อเลือก `CONNECT` ต้องมี `cems_wpms_requests:direct_connect` เพิ่ม |
+| `isDirectConnectionMode = true` | `POST /api/v1/cems-wpms-requests/direct-connections` | direct-connection payload แบบย่อที่มีจุดเดียว | `cems_wpms_requests:direct_connect` |
+
+ห้ามเปลี่ยน `isDirectConnectionMode` หรือย้าย direct-connection payload ไปเรียก `/measurement-points` เพียงเพื่อใช้ `submissionAction`; ทั้งสอง endpoint รองรับ field นี้แล้ว
+
+สำหรับ frontend ใหม่ ให้ส่ง `submissionAction` เท่านั้น ไม่ส่ง `status` คู่กัน โดย `status` เป็น legacy field ที่ยังรองรับเฉพาะ `/direct-connections` เพื่อ compatibility ของ client เก่า
+
+## Flow เชื่อมต่อโดยตรง: `POST /api/v1/cems-wpms-requests/direct-connections`
+
+เมื่อ `isDirectConnectionMode = true` ให้คง endpoint นี้ไว้ แล้วส่ง `submissionAction` ค่าเดียวกับตารางข้างต้น:
+
+| ตัวเลือกบนหน้าจอ | `submissionAction` | Field เพิ่มเติม |
+| --- | --- | --- |
+| รอโรงงานแก้ไข | `REQUEST_FACTORY_REVISION` | `revisionReason` ต้องมีข้อความ |
+| เชื่อมต่อแล้ว | `CONNECT` | `measurementPoints` ต้องมี exactly 1 รายการและมี `pointCode` |
+
+Direct flow ใช้ schema แบบย่อ จึงไม่ควรนำ payload นี้ไปส่งที่ `/measurement-points` ซึ่งตรวจ field ของฟอร์มเต็มรูปแบบ
+
+ตัวอย่าง field ที่เพิ่มจาก direct payload เดิม:
+
+```json
+{
+  "submissionAction": "REQUEST_FACTORY_REVISION",
+  "revisionReason": "กรุณาแก้ไขรายละเอียดจุดตรวจวัด"
+}
+```
+
+`status` ยังส่งได้เฉพาะ client เก่าของ `/direct-connections`; ถ้าส่งพร้อม `submissionAction` ค่าที่ map แล้วต้องตรงกัน มิฉะนั้น backend ตอบ `400 VALIDATION_ERROR`
+
+## Flow ฟอร์มเต็ม: `POST /api/v1/cems-wpms-requests/measurement-points`
 
 ### ค่าที่ frontend ต้องส่ง
 
@@ -30,7 +63,7 @@
 | `revisionReason` | body | string | เมื่อเลือก `REQUEST_FACTORY_REVISION` | trim แล้วต้องไม่ว่างและยาวไม่เกิน 1000 ตัวอักษร |
 | `officerNote` | body | string \| null | No | หมายเหตุภายในของเจ้าหน้าที่; trim แล้วไม่เกิน 1000 ตัวอักษร |
 
-Field อื่นใช้ request body ของฟอร์มเพิ่มจุดเดิมทั้งหมด ห้ามส่ง `status` มากับ endpoint นี้; `status` เป็น legacy field ของ `/direct-connections` เท่านั้น
+Field อื่นใช้ request body ของฟอร์มเพิ่มจุดเดิมทั้งหมด ห้ามส่ง `status` มากับ endpoint นี้
 
 ### Request Example: รอโรงงานแก้ไข
 
@@ -73,9 +106,9 @@ Field อื่นใช้ request body ของฟอร์มเพิ่ม
 | `data.statusLabel` | string | No | `รอโรงงานแก้ไข` หรือ `เชื่อมต่อแล้ว` |
 | `data.revisionReason` | string | Yes | เหตุผลที่ต้องแก้ไข หรือ `null` |
 | `data.officerNote` | string | Yes | หมายเหตุเจ้าหน้าที่ หรือ `null` |
-| `data.measurementPoints[].pointCode` | string | Yes | `CONNECT` คืนรหัสที่ส่งมา; `REQUEST_FACTORY_REVISION` อาจคืน `null` ระหว่างรอแก้ไข |
+| `data.measurementPoints[].pointCode` | string | Yes | direct flow คืนรหัสที่ส่งมาเสมอ; ฟอร์มเต็มแบบ `REQUEST_FACTORY_REVISION` อาจคืน `null` ระหว่างรอแก้ไข |
 
-### Success Response Example
+### Success Response Example: ฟอร์มเต็มแบบรอโรงงานแก้ไข
 
 ```json
 {
@@ -102,7 +135,7 @@ Field อื่นใช้ request body ของฟอร์มเพิ่ม
 1. เปิด dialog ยืนยันส่งและให้เจ้าหน้าที่เลือกสถานะหลังส่ง
 2. ถ้าเลือก “รอโรงงานแก้ไข” ให้แสดงและบังคับช่องเหตุผลก่อนเรียก API
 3. ถ้าเลือก “เชื่อมต่อแล้ว” ให้ตรวจว่ามีจุดเดียวและมี `pointCode`; ซ่อนตัวเลือกนี้หากผู้ใช้ไม่มี direct-connect permission
-4. ส่ง `submissionAction`, `revisionReason` และ `officerNote` ไปพร้อม payload ฟอร์มเดิมใน request เดียว
+4. เลือก endpoint ตาม `isDirectConnectionMode` แล้วส่ง `submissionAction`, `revisionReason` และ `officerNote` ไปพร้อม payload ของ endpoint นั้นใน request เดียว
 5. หลังได้ `201` ให้อัปเดต UI จาก `data.status` ใน response ไม่ใช้ค่าที่เลือกบนหน้าจอเป็น source of truth
 6. เมื่อได้ validation error ให้ map `details.issues[].pathString` กลับไปยัง field ที่เกี่ยวข้อง
 

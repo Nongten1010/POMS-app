@@ -18,8 +18,8 @@
 1. เพิ่มจุดตรวจวัดใหม่ ใช้ `POST /measurement-points`
 2. เพิ่มพารามิเตอร์ให้จุดเดิม ใช้ `POST /parameters`
 3. ส่งแบบแก้ไขหลังเจ้าหน้าที่แจ้งแก้ ใช้ `PUT /:id/form`
-4. เจ้าหน้าที่ใช้ `POST /measurement-points` และส่ง `submissionAction` ไปพร้อมแบบเพื่อเลือก `REQUEST_FACTORY_REVISION` (รอโรงงานแก้ไข) หรือ `CONNECT` (เชื่อมต่อแล้ว)
-5. ถ้าต้องการ payload แบบย่อที่มีจุดเดียว ใช้ `POST /direct-connections`; endpoint นี้รับ `submissionAction` แบบเดียวกันและยังรับ legacy `status`
+4. เมื่อ `isDirectConnectionMode = false` เจ้าหน้าที่ใช้ `POST /measurement-points` และส่ง `submissionAction` ไปพร้อมฟอร์มเต็มเพื่อเลือก `REQUEST_FACTORY_REVISION` (รอโรงงานแก้ไข) หรือ `CONNECT` (เชื่อมต่อแล้ว)
+5. เมื่อ `isDirectConnectionMode = true` ให้ใช้ `POST /direct-connections` ต่อไป; endpoint นี้รับ `submissionAction` แบบเดียวกันและยังรับ legacy `status` สำหรับ client เก่า ห้ามย้าย direct-connection payload ไป `POST /measurement-points`
 
 ตัวอย่าง quick check สำหรับ operator add-point:
 
