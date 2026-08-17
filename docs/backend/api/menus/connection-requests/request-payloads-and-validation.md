@@ -18,7 +18,8 @@
 1. เพิ่มจุดตรวจวัดใหม่ ใช้ `POST /measurement-points`
 2. เพิ่มพารามิเตอร์ให้จุดเดิม ใช้ `POST /parameters`
 3. ส่งแบบแก้ไขหลังเจ้าหน้าที่แจ้งแก้ ใช้ `PUT /:id/form`
-4. เจ้าหน้าที่เพิ่มจุดและเชื่อมต่อทันที ใช้ `POST /direct-connections`
+4. เจ้าหน้าที่ใช้ `POST /measurement-points` และส่ง `submissionAction` ไปพร้อมแบบเพื่อเลือก `REQUEST_FACTORY_REVISION` (รอโรงงานแก้ไข) หรือ `CONNECT` (เชื่อมต่อแล้ว)
+5. ถ้าต้องการ payload แบบย่อที่มีจุดเดียว ใช้ `POST /direct-connections`; endpoint นี้รับ `submissionAction` แบบเดียวกันและยังรับ legacy `status`
 
 ตัวอย่าง quick check สำหรับ operator add-point:
 
@@ -37,13 +38,13 @@ curl --request POST \
 | ขอเพิ่มจุดตรวจวัด                              | `POST` | `/api/v1/cems-wpms-requests/measurement-points` | Bearer | `cems_wpms_requests:edit`           | หน้านี้  |
 | ขอเพิ่มพารามิเตอร์                             | `POST` | `/api/v1/cems-wpms-requests/parameters`         | Bearer | `cems_wpms_requests:edit`           | หน้านี้  |
 | ส่งแบบเมื่อถูกตีกลับให้แก้ไข                   | `PUT`  | `/api/v1/cems-wpms-requests/:id/form`           | Bearer | `cems_wpms_requests:edit`           | หน้านี้  |
-| เพิ่มจุดตรวจวัดโดยเจ้าหน้าที่และเชื่อมต่อทันที | `POST` | `/api/v1/cems-wpms-requests/direct-connections` | Bearer | `cems_wpms_requests:direct_connect` | หน้านี้  |
+| เพิ่มจุดตรวจวัดโดยเจ้าหน้าที่                  | `POST` | `/api/v1/cems-wpms-requests/direct-connections` | Bearer | `cems_wpms_requests:direct_connect` | หน้านี้  |
 
 ## Shared Authentication And Permission
 
 | Endpoint                   | Authentication | Permission                          | Data scope                                                                                |
 | -------------------------- | -------------- | ----------------------------------- | ----------------------------------------------------------------------------------------- |
-| `POST /measurement-points` | required       | `cems_wpms_requests:edit`           | ต้อง resolve เป็น active eligible factory; service ปัจจุบันไม่ได้ตัด location scope เพิ่ม |
+| `POST /measurement-points` | required       | `cems_wpms_requests:edit`; `CONNECT` ต้องมี `cems_wpms_requests:direct_connect` เพิ่ม | ต้อง resolve เป็น active eligible factory; เมื่อเจ้าหน้าที่ส่ง `submissionAction` จะตรวจ scope ของ permission ที่เกี่ยวข้องเพิ่ม |
 | `POST /parameters`         | required       | `cems_wpms_requests:edit`           | ต้อง resolve เป็น active eligible factory; service ปัจจุบันไม่ได้ตัด location scope เพิ่ม |
 | `PUT /:id/form`            | required       | `cems_wpms_requests:edit`           | owner ของคำขอเดิม                                                                         |
 | `POST /direct-connections` | required       | `cems_wpms_requests:direct_connect` | actor restriction + permission scope + active eligible factory ตามหัวข้อ endpoint         |
@@ -232,7 +233,7 @@ criteria normalization สำคัญ
 
 ## `POST /api/v1/cems-wpms-requests/measurement-points`
 
-สร้างคำขอ `ADD_MEASUREMENT_POINT` สำหรับผู้ประกอบการ
+สร้างคำขอ `ADD_MEASUREMENT_POINT` สำหรับผู้ประกอบการในสถานะ `PENDING_DESIGN_REVIEW` ตามค่าเริ่มต้น และให้เจ้าหน้าที่เลือกผลการส่งผ่าน `submissionAction` ได้
 
 ### Authentication And Permission
 
@@ -245,10 +246,13 @@ criteria normalization สำคัญ
 | Field                                        | Location | Required    | Nullable | Type   | Additional rule                                                                                         |
 | -------------------------------------------- | -------- | ----------- | -------- | ------ | ------------------------------------------------------------------------------------------------------- |
 | `requestType`                                | body     | No          | No       | -      | backend ไม่รับ user intent ผ่าน field นี้ใน dedicated endpoint และจะ stamp เป็น `ADD_MEASUREMENT_POINT` |
+| `submissionAction`                           | body     | No          | No       | enum   | officer/admin ใช้ `REQUEST_FACTORY_REVISION` หรือ `CONNECT`; ถ้าไม่ส่งจะใช้ flow เดิม                    |
+| `revisionReason`                             | body     | Conditional | Yes      | string | required เมื่อ `submissionAction = "REQUEST_FACTORY_REVISION"`; trim 1-1000                              |
+| `officerNote`                                | body     | No          | Yes      | string | optional note จากเจ้าหน้าที่; trim <=1000                                                                |
 | `measurementPoints[].details`                | body     | Yes         | No       | object | ต้องมีและต้องไม่เป็น object ว่าง                                                                        |
 | `measurementPoints[].measurementInstruments` | body     | Yes         | No       | object | ห้ามเป็น `null`                                                                                         |
 | `measurementPoints[].documentsAndImages`     | body     | Conditional | No       | array  | required เมื่อ `systemType = "CEMS"`; WPMS ส่งว่างได้                                                   |
-| `measurementPoints[].pointCode`              | body     | No          | Yes      | string | จุดใหม่ปกติ backend จะ clear ค่า pending code ก่อนบันทึก                                                |
+| `measurementPoints[].pointCode`              | body     | Conditional | Yes      | string | flow ปกติ backend clear ก่อนบันทึก; `CONNECT` ต้องมี exactly 1 point และ `pointCode`                      |
 
 ### Minimal Valid Request
 
@@ -303,6 +307,30 @@ criteria normalization สำคัญ
 }
 ```
 
+สำหรับเจ้าหน้าที่ ให้รวม field ตาม action ที่เลือกเข้าไปใน payload ข้างต้น:
+
+```json
+{
+  "submissionAction": "REQUEST_FACTORY_REVISION",
+  "revisionReason": "กรุณาแก้ไขข้อมูลเครื่องมือวัด",
+  "officerNote": "ตรวจแบบครั้งแรกแล้ว"
+}
+```
+
+หรือเลือกเชื่อมต่อทันที โดย payload ต้องมีจุดเดียวและจุดนั้นต้องมี `pointCode`:
+
+```json
+{
+  "submissionAction": "CONNECT",
+  "officerNote": "ข้อมูลครบและพร้อมเชื่อมต่อ",
+  "measurementPoints": [
+    {
+      "pointCode": "S2201"
+    }
+  ]
+}
+```
+
 ### Minimal Success Response
 
 ```json
@@ -327,9 +355,13 @@ criteria normalization สำคัญ
 ### Validation And Business Rules
 
 - ต้อง resolve โรงงานไปยัง active `eligible_factories` ได้ มิฉะนั้นตอบ `404 NOT_FOUND`
-- backend clear `pointCode` ของจุดใหม่ก่อนบันทึก แม้ client ส่งค่ามา
+- ถ้าไม่ส่ง `submissionAction` backend clear `pointCode` ของจุดใหม่และสร้างสถานะ `PENDING_DESIGN_REVIEW` ตาม flow เดิม
+- `submissionAction = "REQUEST_FACTORY_REVISION"` ใช้ได้เฉพาะ officer/admin ที่มี role `monitoring_kpm` หรือ `admin`; ต้องส่ง `revisionReason`, backend ตรวจ eligible-factory scope ของ `cems_wpms_requests:edit` และสร้างสถานะ `WAITING_FACTORY_REVISION`
+- `submissionAction = "CONNECT"` ใช้ได้เฉพาะ officer/admin ที่มี role `monitoring_kpm` หรือ `admin`, ต้องมี permission `cems_wpms_requests:direct_connect`, exactly 1 measurement point และ `measurementPoints[0].pointCode`; backend ตรวจ eligible-factory scope แล้วสร้างสถานะ `CONNECTED`
 - duplicate `pointName` และ duplicate `pointCode` ภายใน request เดียวถูก reject
 - `CEMS` ต้องมีเอกสารแนบอย่างน้อย 1 รายการต่อ point; `WPMS` ไม่บังคับ
+
+ข้อจำกัดปัจจุบัน: การเพิ่ม action นี้กำหนดสถานะเริ่มต้นเท่านั้น และยังไม่เปลี่ยน authorization ของ `PUT /:id/form` ซึ่งรับเฉพาะ owner ของคำขอ ดังนั้นคำขอ `WAITING_FACTORY_REVISION` ที่เจ้าหน้าที่เป็นผู้สร้างยังไม่ได้ให้สิทธิ์ผู้ใช้ของโรงงานแก้และ resubmit โดยอัตโนมัติ
 
 ### Errors
 
@@ -339,7 +371,7 @@ criteria normalization สำคัญ
 | ----------- | ------------------ | ------------------------------------------------------ | ----------------------------------- |
 | `400`       | `VALIDATION_ERROR` | body ไม่ผ่าน zod validation หรือ detail business rules | แก้ field ตาม `issues[].pathString` |
 | `401`       | `UNAUTHORIZED`     | ไม่มี token หรือ token ใช้ไม่ได้                       | login ใหม่                          |
-| `403`       | `FORBIDDEN`        | ไม่มี `cems_wpms_requests:edit`                        | ซ่อนปุ่มส่งคำขอ                     |
+| `403`       | `FORBIDDEN`        | ไม่มี permission, ผู้ส่ง action ไม่ใช่ officer/admin ที่รองรับ หรือ `CONNECT` ไม่มี direct-connect permission | ซ่อน action ที่ผู้ใช้ไม่มีสิทธิ์ |
 | `404`       | `NOT_FOUND`        | ไม่พบ active eligible factory                          | refresh ข้อมูลโรงงานก่อนส่งใหม่     |
 
 ## `POST /api/v1/cems-wpms-requests/parameters`
@@ -558,7 +590,7 @@ criteria normalization สำคัญ
 
 ## `POST /api/v1/cems-wpms-requests/direct-connections`
 
-เจ้าหน้าที่เพิ่มจุดตรวจวัดและเชื่อมต่อทันที โดยไม่ผ่านสถานะรอพิจารณาแบบ
+เจ้าหน้าที่เพิ่มจุดตรวจวัดโดยไม่ผ่านสถานะรอพิจารณาแบบ และเลือกผลการส่งฟอร์มใน request เดียวกันได้ผ่าน `submissionAction`: `REQUEST_FACTORY_REVISION` สำหรับ “รอโรงงานแก้ไข” หรือ `CONNECT` สำหรับ “เชื่อมต่อแล้ว”
 
 ### Authentication And Permission
 
@@ -590,6 +622,10 @@ endpoint นี้ใช้ schema แยกและยืดหยุ่นก
 | `longitude`                 | body     | No          | Yes      | number   | `-180..180`                                                                            |
 | `systemType`                | body     | Yes         | No       | enum     | `CEMS` หรือ `WPMS`                                                                     |
 | `type`                      | body     | No          | Yes      | enum     | alias จาก frontend; nullable ได้และถูก strip; validator ไม่เปรียบเทียบกับ `systemType` |
+| `submissionAction`          | body     | No          | No       | enum     | field ที่แนะนำสำหรับ client: `REQUEST_FACTORY_REVISION` หรือ `CONNECT`; default `CONNECT` |
+| `status`                    | body     | No          | Yes      | enum     | legacy alias: `WAITING_FACTORY_REVISION` หรือ `CONNECTED`; `null` ใช้ค่า default และ client ใหม่ควรใช้ `submissionAction` |
+| `revisionReason`            | body     | Conditional | Yes      | string   | trim 1-1000 และ required เมื่อผลลัพธ์เป็น `WAITING_FACTORY_REVISION`                    |
+| `officerNote`               | body     | No          | Yes      | string   | trim <=1000                                                                            |
 | `contactName`               | body     | No          | Yes      | string   | ถ้าไม่ส่ง backend ใส่ `""`                                                             |
 | `contactPhone`              | body     | No          | Yes      | string   | ถ้าไม่ส่ง backend ใส่ `""`                                                             |
 | `contactEmail`              | body     | No          | Yes      | string   | email <=255                                                                            |
@@ -621,6 +657,7 @@ endpoint นี้ใช้ schema แยกและยืดหยุ่นก
   "factoryId": "F000123",
   "factoryRegistrationNo": null,
   "systemType": "CEMS",
+  "submissionAction": "CONNECT",
   "contactName": null,
   "contactPhone": null,
   "contactEmail": null,
@@ -637,6 +674,15 @@ endpoint นี้ใช้ schema แยกและยืดหยุ่นก
     }
   ],
   "remarks": null
+}
+```
+
+ถ้าต้องการ “รอโรงงานแก้ไข” ให้ส่ง field ต่างจากตัวอย่างข้างต้นดังนี้:
+
+```json
+{
+  "submissionAction": "REQUEST_FACTORY_REVISION",
+  "revisionReason": "กรุณาแก้ไขรหัสจุดตรวจวัดและข้อมูลเครื่องมือวัด"
 }
 ```
 
@@ -670,8 +716,13 @@ endpoint นี้ใช้ schema แยกและยืดหยุ่นก
 - ต้อง resolve active eligible factory ภายใน officer scope ได้ มิฉะนั้นตอบ `404`
 - `measurementPoints` ต้องมี exactly 1 row
 - `pointCode` ต้องไม่ว่าง, ยาวไม่เกิน 64, และต้องไม่ชนกับ active connected point
-- repository บันทึกคำขอด้วย `requestType = ADD_MEASUREMENT_POINT`, `submissionSource = OFFICER_DIRECT_API`, `status = CONNECTED`
-- status history จะถูกบันทึกทันทีด้วยข้อความ direct-connect note
+- `submissionAction = CONNECT` map เป็น `status = CONNECTED`; `submissionAction = REQUEST_FACTORY_REVISION` map เป็น `status = WAITING_FACTORY_REVISION`
+- ถ้าไม่ส่งทั้ง `submissionAction` และ `status` backend ใช้ `CONNECTED` เพื่อคงพฤติกรรมเดิม
+- ถ้าส่ง `submissionAction` และ legacy `status` พร้อมกัน ค่าต้อง map ตรงกัน มิฉะนั้นตอบ `400 VALIDATION_ERROR` ที่ `submissionAction`
+- `revisionReason` ต้องเป็นข้อความที่ trim แล้วไม่ว่างเมื่อสถานะเป็น `WAITING_FACTORY_REVISION`
+- repository บันทึกคำขอด้วย `requestType = ADD_MEASUREMENT_POINT`, `submissionSource = OFFICER_DIRECT_API` และสถานะที่เลือก
+- เฉพาะสถานะ `CONNECTED` เท่านั้นที่ backend บันทึก `verifiedAt` และสร้าง active row ใน `cems_wpms_connected_measurement_points`; สถานะ `WAITING_FACTORY_REVISION` ยังไม่เปิด active point
+- status history จะถูกบันทึกทันทีด้วย note ตามสถานะเริ่มต้น
 
 ### Errors
 
@@ -679,7 +730,7 @@ endpoint นี้ใช้ schema แยกและยืดหยุ่นก
 
 | HTTP status | Code               | Condition                                                                                                         | Client action                    |
 | ----------- | ------------------ | ----------------------------------------------------------------------------------------------------------------- | -------------------------------- |
-| `400`       | `VALIDATION_ERROR` | ไม่มี `factoryId/factoryRegistrationNo`, มีหลาย measurement points, document row ไม่ครบ, หรือ body ไม่ผ่าน schema | แก้ payload และส่งใหม่           |
+| `400`       | `VALIDATION_ERROR` | ไม่มี `factoryId/factoryRegistrationNo`, action/status ขัดกัน, ขาด `revisionReason`, มีหลาย measurement points, document row ไม่ครบ, หรือ body ไม่ผ่าน schema | แก้ payload และส่งใหม่           |
 | `401`       | `UNAUTHORIZED`     | ไม่มี token หรือ token ใช้ไม่ได้                                                                                  | login ใหม่                       |
 | `403`       | `FORBIDDEN`        | ไม่มี `cems_wpms_requests:direct_connect`                                                                         | ซ่อน action สำหรับ user นี้      |
 | `404`       | `NOT_FOUND`        | ไม่พบ active eligible factory ภายใน scope                                                                         | ตรวจ identifier และสิทธิ์พื้นที่ |

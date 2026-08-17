@@ -135,6 +135,8 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
         request_type: 'ADD_MEASUREMENT_POINT',
         submission_source: 'OFFICER_DIRECT_API',
         status: 'CONNECTED',
+        revision_reason: null,
+        officer_note: null,
         verified_at: fixedNow,
         created_by: 42,
         updated_by: 42,
@@ -204,6 +206,109 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
     expect(scopedWhere.where).toHaveBeenCalledWith('request_no', 'like', 'WPMS-%/2569');
     expect(scopedWhere.orWhere).toHaveBeenCalledWith('request_no', 'like', 'WEMS-%/2569');
     expect(requestNumberLookup.count).toHaveBeenCalledWith('id as total');
+  });
+
+  it('stores WAITING_FACTORY_REVISION without creating an active connected point', async () => {
+    const fixedNow = new Date('2026-07-21T03:04:05.000Z');
+    const requestInsert = jest.fn((_: unknown) => ({
+      returning: jest.fn(async () => [{ id: 101 }]),
+    }));
+    const snapshotInsert = jest.fn(async (_: unknown) => 1);
+    const pointInsert = jest.fn((_: unknown) => ({
+      returning: jest.fn(async () => [{ id: 202 }]),
+    }));
+    const historyInsert = jest.fn(async (_: unknown) => 1);
+
+    const eligibleLookup = makeChain({ first: async () => ({ id: 17 }) });
+    const duplicateLookup = makeChain({ first: async () => undefined });
+    const requestNumberLookup = makeChain({ first: async () => ({ total: 0 }) });
+    const eligibleFactorySource = makeChain({
+      first: async () => ({
+        province_id: '10',
+        province_name: 'กรุงเทพมหานคร',
+        province_region: 'ภาคกลาง',
+        industrial_estate_code: 'IE-01',
+        industrial_estate_name: 'นิคมทดสอบ',
+      }),
+    });
+    const snapshotSoftDelete = makeChain({ update: async () => 1 });
+    const requestRead = makeChain({
+      first: async () =>
+        requestRow(fixedNow, 'CEMS', {
+          status: 'WAITING_FACTORY_REVISION',
+          revision_reason: 'แก้ไขเอกสารก่อนเปิดใช้งาน',
+          officer_note: 'รอเอกสารชุดใหม่',
+          verified_at: null,
+        }),
+    });
+    const pointRead = makeChain({ terminalOrderBy: async () => [measurementPointRow()] });
+    const historyRead = makeChain({
+      terminalOrderBy: async () => [
+        statusHistoryRow(fixedNow, { status: 'WAITING_FACTORY_REVISION' }),
+      ],
+      terminalOrderByAfter: 2,
+    });
+    const snapshotRead = makeChain({ first: async () => factorySnapshotRow() });
+
+    const queues = new Map<string, unknown[]>([
+      ['eligible_factories', [eligibleLookup]],
+      ['cems_wpms_connected_measurement_points', [duplicateLookup]],
+      [
+        'cems_wpms_connection_requests',
+        [requestNumberLookup, { insert: requestInsert }, requestRead],
+      ],
+      ['eligible_factories as ef', [eligibleFactorySource]],
+      [
+        'cems_wpms_request_factory_snapshots',
+        [snapshotSoftDelete, { insert: snapshotInsert }, snapshotRead],
+      ],
+      ['cems_wpms_measurement_points', [{ insert: pointInsert }, pointRead]],
+      ['cems_wpms_request_status_history', [{ insert: historyInsert }, historyRead]],
+    ]);
+    const trx = Object.assign(
+      jest.fn((tableName: string) => {
+        const builder = queues.get(tableName)?.shift();
+        if (!builder) throw new Error(`Unexpected query for ${tableName}`);
+        return builder;
+      }),
+      { fn: { now: jest.fn(() => 'db-now') } },
+    );
+    mockedDb.transaction.mockImplementationOnce(async (...args: unknown[]) => {
+      const callback = args[0] as (transaction: typeof trx) => Promise<unknown>;
+      return callback(trx);
+    });
+
+    const created = await connectionRequestsRepository.createDirectConnection(
+      {
+        ...directInput(),
+        status: 'WAITING_FACTORY_REVISION',
+        revisionReason: 'แก้ไขเอกสารก่อนเปิดใช้งาน',
+        officerNote: 'รอเอกสารชุดใหม่',
+      } as never,
+      42,
+    );
+
+    expect(requestInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'WAITING_FACTORY_REVISION',
+        revision_reason: 'แก้ไขเอกสารก่อนเปิดใช้งาน',
+        officer_note: 'รอเอกสารชุดใหม่',
+        verified_at: null,
+      }),
+    );
+    expect(historyInsert).toHaveBeenCalledWith({
+      request_id: 101,
+      status: 'WAITING_FACTORY_REVISION',
+      note: 'เจ้าหน้าที่เพิ่มจุดตรวจวัดและส่งกลับให้โรงงานแก้ไขผ่าน API',
+      changed_by: 42,
+    });
+    expect(created).toMatchObject({
+      status: 'WAITING_FACTORY_REVISION',
+      revisionReason: 'แก้ไขเอกสารก่อนเปิดใช้งาน',
+      officerNote: 'รอเอกสารชุดใหม่',
+      verifiedAt: null,
+    });
+    expect([...queues.values()].every((queue) => queue.length === 0)).toBe(true);
   });
 
   it('preserves OFFICER_DIRECT_API when rows are read back through list()', async () => {
@@ -330,7 +435,11 @@ function directInput(systemType: 'CEMS' | 'WPMS' = 'CEMS') {
   };
 }
 
-function requestRow(now: Date, systemType: 'CEMS' | 'WPMS' = 'CEMS') {
+function requestRow(
+  now: Date,
+  systemType: 'CEMS' | 'WPMS' = 'CEMS',
+  overrides: Record<string, unknown> = {},
+) {
   return {
     id: 101,
     eligible_factory_id: 17,
@@ -370,6 +479,7 @@ function requestRow(now: Date, systemType: 'CEMS' | 'WPMS' = 'CEMS') {
     updated_by: 42,
     created_at: now,
     updated_at: now,
+    ...overrides,
   };
 }
 
@@ -390,7 +500,7 @@ function measurementPointRow() {
   };
 }
 
-function statusHistoryRow(now: Date) {
+function statusHistoryRow(now: Date, overrides: Record<string, unknown> = {}) {
   return {
     id: 303,
     request_id: 101,
@@ -402,6 +512,7 @@ function statusHistoryRow(now: Date) {
     changed_by_first_name: 'เจ้าหน้าที่',
     changed_by_last_name: 'ทดสอบ',
     changed_at: now,
+    ...overrides,
   };
 }
 

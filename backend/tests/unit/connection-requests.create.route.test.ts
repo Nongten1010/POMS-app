@@ -67,7 +67,13 @@ describe('create measurement-point request route', () => {
           }),
         ],
       }),
-      42,
+      expect.objectContaining({
+        actorUserId: 42,
+        userType: 'operator',
+        roles: ['factory_operator'],
+        editScope: { scope: 'OWN_FACTORY' },
+        directConnectScope: undefined,
+      }),
     );
   });
 
@@ -116,7 +122,46 @@ describe('create measurement-point request route', () => {
           }),
         ],
       }),
-      42,
+      expect.objectContaining({
+        actorUserId: 42,
+        userType: 'operator',
+        roles: ['factory_operator'],
+        editScope: { scope: 'OWN_FACTORY' },
+        directConnectScope: undefined,
+      }),
+    );
+  });
+
+  it('passes officer workflow context and submissionAction when the form asks to connect immediately', async () => {
+    const response = await request(createApp())
+      .post('/api/v1/cems-wpms-requests/measurement-points')
+      .set('Authorization', `Bearer ${officerMeasurementPointToken()}`)
+      .send({
+        ...validWpmsPayload(),
+        submissionAction: 'CONNECT',
+        officerNote: 'เชื่อมต่อแล้วจากหน้าฟอร์ม',
+        measurementPoints: [
+          {
+            ...validWpmsPayload().measurementPoints[0],
+            pointCode: ' S2201 ',
+          },
+        ],
+      });
+
+    expect(response.status).toBe(201);
+    expect(mockedService.createMeasurementPointRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        submissionAction: 'CONNECT',
+        officerNote: 'เชื่อมต่อแล้วจากหน้าฟอร์ม',
+        measurementPoints: [expect.objectContaining({ pointCode: 'S2201' })],
+      }),
+      expect.objectContaining({
+        actorUserId: 52,
+        userType: 'officer',
+        roles: ['monitoring_kpm'],
+        editScope: { scope: 'ALL' },
+        directConnectScope: { scope: 'ALL' },
+      }),
     );
   });
 
@@ -839,6 +884,22 @@ function accessToken(): string {
     roles: ['factory_operator'],
     scopes: {
       'cems_wpms_requests:edit': 'OWN_FACTORY',
+    },
+  });
+}
+
+function officerMeasurementPointToken(): string {
+  return signAccessToken({
+    sub: '52',
+    userType: 'officer',
+    roles: ['monitoring_kpm'],
+    scopes: {
+      'cems_wpms_requests:edit': 'ALL',
+      'cems_wpms_requests:direct_connect': 'ALL',
+    },
+    scopeDetails: {
+      'cems_wpms_requests:edit': { scope: 'ALL' },
+      'cems_wpms_requests:direct_connect': { scope: 'ALL' },
     },
   });
 }

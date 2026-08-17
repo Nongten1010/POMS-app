@@ -153,9 +153,17 @@ export type ResubmitConnectionRequestInput = CreateConnectionRequestInput;
 
 export interface AddMeasurementPointRequestInput extends CreateConnectionRequestInput {
   requestType: typeof CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT;
+  submissionAction?: 'REQUEST_FACTORY_REVISION' | 'CONNECT';
+  revisionReason?: string | null;
+  officerNote?: string | null;
 }
 
 export interface DirectConnectionRequestInput extends AddMeasurementPointRequestInput {
+  status?:
+    | typeof CONNECTION_REQUEST_STATUS.CONNECTED
+    | typeof CONNECTION_REQUEST_STATUS.WAITING_FACTORY_REVISION;
+  revisionReason?: string | null;
+  officerNote?: string | null;
   measurementPoints: MeasurementPointInput[];
 }
 

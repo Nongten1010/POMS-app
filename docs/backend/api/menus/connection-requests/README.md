@@ -78,6 +78,8 @@ API ทั้ง 34 route signatures ต้องใช้ Bearer token; แต�
 
 สัญญา payload และ validation ระดับ field ของ 4 flow หลักอยู่ที่ [Payload และ validation ของคำขอ](./request-payloads-and-validation.md)
 
+สำหรับการต่อหน้าฟอร์มเจ้าหน้าที่โดยตรง ให้ใช้ [Frontend handoff: ส่งฟอร์มเพิ่มจุดตรวจวัดพร้อมสถานะ](./officer-add-point-submission.md) ซึ่งสรุป field ที่เพิ่ม, payload ตัวอย่าง, permission, response และการ map error สำหรับ UI
+
 ### คำขอเชื่อมต่อ: 22 API ใช้งาน + 1 compatibility API
 
 | งาน                                           | Method | Path                                                      | Input                          | Permission                          | Contract                                                                                                  |
@@ -130,9 +132,10 @@ API ทั้ง 34 route signatures ต้องใช้ Bearer token; แต�
 การบังคับ data scope แตกต่างกันตาม endpoint และห้ามเหมารวมว่าใช้ location intersection ทุก route:
 
 - route อ่านรายการ/รายละเอียดและ route ของเจ้าหน้าที่ใช้ permission scope ตาม implementation; เมื่อเป็น location scope จะตัดกับ profile assignment และอาจคืนรายการว่างหรือ `404`
-- `POST /measurement-points` และ `POST /parameters` ตรวจว่า identifier resolve เป็น active row ใน `eligible_factories` แต่ service ปัจจุบันไม่ได้ตัด location scope เพิ่ม
+- `POST /measurement-points` และ `POST /parameters` ตรวจว่า identifier resolve เป็น active row ใน `eligible_factories`; เมื่อเจ้าหน้าที่ส่ง `submissionAction` ใน `POST /measurement-points` backend จะตัด edit scope/region ของเจ้าหน้าที่ด้วย
+- เฉพาะเจ้าหน้าที่ใน `POST /measurement-points` สามารถส่ง `submissionAction=REQUEST_FACTORY_REVISION|CONNECT`; ค่า `CONNECT` ต้องมี direct-connect permission และผ่าน eligible-factory scope ของ permission นั้น
 - `PUT /:id/form`, cancel และ confirm ฝั่งผู้ประกอบการใช้ owner/status rules ของคำขอเดิม
-- Direct Connection ตรวจทั้งข้อจำกัด actor, scope ของ permission และ active eligible factory ตามรายละเอียดใน [Payload และ validation ของคำขอ](./request-payloads-and-validation.md#post-apiv1cems-wpms-requestsdirect-connections)
+- Direct Connection รับ `submissionAction=REQUEST_FACTORY_REVISION|CONNECT` ไปพร้อมแบบ ตรวจทั้งข้อจำกัด actor, scope ของ permission และ active eligible factory ตามรายละเอียดใน [Payload และ validation ของคำขอ](./request-payloads-and-validation.md#post-apiv1cems-wpms-requestsdirect-connections)
 
 สำหรับ route ที่ใช้ scope ของ กนอ. ค่า `IN_ESTATE` หมายถึงโรงงานในนิคม `estateCode` ที่มอบหมาย
 
@@ -147,7 +150,7 @@ API ทั้ง 34 route signatures ต้องใช้ Bearer token; แต�
 
 - `POST /api/v1/cems-wpms-requests/direct-connections` ใช้ลำดับเดียวกับคำขอของผู้ประกอบการ ไม่ใช้ prefix `OLDC` หรือ `OLDW` สำหรับคำขอใหม่.
 - ค่า `submissionSource` ยังคงแยกแหล่งที่มา: ผู้ประกอบการเป็น `OPERATOR_FORM` และเจ้าหน้าที่เชื่อมต่อโดยตรงเป็น `OFFICER_DIRECT_API`.
-- Direct Connection ยังคงสถานะ `CONNECTED` ทันทีและเก็บ `measurementPoints[0].pointCode` ที่เจ้าหน้าที่กรอกเอง; การเปลี่ยนนี้มีผลเฉพาะ `requestNo`.
+- Direct Connection ใช้ `measurementPoints[0].pointCode` ที่เจ้าหน้าที่กรอกเอง แนะนำให้ client ส่ง `submissionAction`: `CONNECT` map เป็น `CONNECTED` และ `REQUEST_FACTORY_REVISION` map เป็น `WAITING_FACTORY_REVISION` พร้อม `revisionReason`. ถ้าไม่ส่งทั้ง action และ legacy `status` backend จะใช้ `CONNECTED`.
 - ระหว่าง rollout ตัวจัดสรรลำดับของ WPMS นับทั้ง `WPMS-NNNN/YYYY` และ `WEMS-NNNN/YYYY` เพื่อไม่ให้เริ่มลำดับซ้ำก่อน migration ทำงานครบ.
 - Migration `0094_backfill_wpms_request_number_prefix` แปลง `requestNo` เดิมของ `systemType = WPMS` จาก `WEMS-NNNN/YYYY` เป็น `WPMS-NNNN/YYYY`; หากพบเลข `WPMS-...` ปลายทางซ้ำ migration จะหยุดก่อนแก้ข้อมูล.
 - การแปลงข้อมูลเดิมมีผลเฉพาะ `cems_wpms_connection_requests.request_no`; ไม่เปลี่ยน `measurementPoints[].pointCode` หรือ `stationId` เดิมที่อาจใช้ `WEMS-...`.
@@ -254,6 +257,8 @@ Request fields ที่ต้องมีจริง:
 | `factoryId`                      | string \| null   | conditional | ต้องมี `factoryId` หรือ `factoryRegistrationNo` อย่างน้อยหนึ่งค่า เพื่อ resolve active `eligible_factories` และตรวจ scope |
 | `factoryRegistrationNo`          | string \| null   | conditional | เป็น identifier สำรอง; ส่ง `null` ได้เมื่อมี `factoryId`                                                                  |
 | `systemType`                     | `CEMS` \| `WPMS` | yes         | ห้ามเป็น `null`                                                                                                           |
+| `submissionAction`               | enum             | no          | แนะนำให้ส่ง `CONNECT` หรือ `REQUEST_FACTORY_REVISION`; ถ้าไม่ส่ง action/status จะ default เป็น `CONNECT`                  |
+| `revisionReason`                 | string \| null   | conditional | ต้องมีข้อความเมื่อ `submissionAction = REQUEST_FACTORY_REVISION`                                                           |
 | `measurementPoints`              | array            | yes         | ต้องมีหนึ่งรายการเท่านั้น                                                                                                 |
 | `measurementPoints[0].pointCode` | string           | yes         | trim แล้วต้องไม่ว่าง, ยาวไม่เกิน 64 ตัวอักษร และห้ามซ้ำกับ active point ใน `cems_wpms_connected_measurement_points`       |
 
@@ -264,6 +269,7 @@ Minimal request:
   "factoryId": "F000123",
   "factoryRegistrationNo": null,
   "systemType": "CEMS",
+  "submissionAction": "CONNECT",
   "measurementPoints": [
     {
       "pointCode": "S1125"
@@ -729,4 +735,4 @@ Minimal response:
 | Factory-profile patch rules      | [`connected-factory-profile.ts`](../../../../../backend/src/modules/connection-requests/connected-factory-profile.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | Migrations                       | [`0075_start_operator_point_codes_at_2001.ts`](../../../../../backend/src/db/migrations/0075_start_operator_point_codes_at_2001.ts), [`0076_sync_connected_factory_profiles_with_eligible_factories.ts`](../../../../../backend/src/db/migrations/0076_sync_connected_factory_profiles_with_eligible_factories.ts), [`0094_backfill_wpms_request_number_prefix.ts`](../../../../../backend/src/db/migrations/0094_backfill_wpms_request_number_prefix.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | Tests                            | [`connection-requests.service.test.ts`](../../../../../backend/tests/unit/connection-requests.service.test.ts), [`connection-requests.repository.test.ts`](../../../../../backend/tests/unit/connection-requests.repository.test.ts), [`connection-requests.point-code-sequence.repository.test.ts`](../../../../../backend/tests/unit/connection-requests.point-code-sequence.repository.test.ts), [`wpms-request-number-migration.test.ts`](../../../../../backend/tests/unit/wpms-request-number-migration.test.ts), [`parameter-values.validator.test.ts`](../../../../../backend/tests/unit/parameter-values.validator.test.ts), [`alert-events.route.test.ts`](../../../../../backend/tests/unit/alert-events.route.test.ts), [`connected-measurement-points.route.test.ts`](../../../../../backend/tests/unit/connected-measurement-points.route.test.ts), [`integration-device-configs.route.test.ts`](../../../../../backend/tests/unit/integration-device-configs.route.test.ts) |
-| Evidence                         | [Request-number format TDD](../../../evidence/connection-requests/request-number-full-year-format.tdd.md), [Restore S/W point-code format TDD](../../../evidence/connection-requests/legacy-point-code-format-restored.tdd.md), [Request table current/live POMS factory name TDD](../../../evidence/connection-requests/request-table-current-factory-name.tdd.md)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Evidence                         | [Add-measurement-point submission action TDD](../../../evidence/connection-requests/add-measurement-point-submission-action.tdd.md), [Request-number format TDD](../../../evidence/connection-requests/request-number-full-year-format.tdd.md), [Restore S/W point-code format TDD](../../../evidence/connection-requests/legacy-point-code-format-restored.tdd.md), [Request table current/live POMS factory name TDD](../../../evidence/connection-requests/request-table-current-factory-name.tdd.md)                                                                                                                                                                                                                                                                                                                                                                                                                               |

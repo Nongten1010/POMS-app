@@ -24,6 +24,8 @@ jest.mock('../../src/modules/connection-requests/connection-requests.repository'
     listFavoriteFactoryIds: jest.fn(),
     listRequestsForFactories: jest.fn(),
     setFactoryFavorite: jest.fn(),
+    findDirectConnectionFactory: jest.fn(),
+    createDirectConnection: jest.fn(),
   },
 }));
 
@@ -166,6 +168,20 @@ describe('connectionRequestsService', () => {
     mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([]);
     mockedRepository.listPublicConnectedMeasurementPointsForFactories.mockResolvedValue([]);
     mockedRepository.findCurrentPomsFactoryNamesForRequests.mockResolvedValue(new Map());
+    mockedRepository.findDirectConnectionFactory.mockResolvedValue({
+      factoryId: 'factory-001',
+      factoryName: 'บริษัท ทดสอบ จำกัด',
+      newRegistrationNo: '3-106-33/50สบ',
+      isEligible: true,
+      eligibleFactoryId: 9,
+    } as never);
+    mockedRepository.createDirectConnection.mockResolvedValue(
+      requestDto({
+        requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT,
+        status: CONNECTION_REQUEST_STATUS.CONNECTED,
+        createdBy: actorUserId,
+      }) as never,
+    );
     mockedRepository.findActiveEligibleFactoryReference.mockResolvedValue({
       id: 9,
       sourceFactoryId: 'factory-001',
@@ -3399,6 +3415,215 @@ describe('connectionRequestsService', () => {
       },
       actorUserId,
       CONNECTION_REQUEST_STATUS.PENDING_DESIGN_REVIEW,
+    );
+  });
+
+  it('lets an officer create an add-point request directly in waiting factory revision', async () => {
+    mockedRepository.findDirectConnectionFactory.mockResolvedValueOnce({
+      factoryId: 'canonical-factory-id',
+      factoryName: 'โรงงานจากฐานข้อมูล',
+      newRegistrationNo: 'REG-CANONICAL',
+      isEligible: true,
+      eligibleFactoryId: 17,
+    } as never);
+    mockedRepository.create.mockResolvedValue(
+      requestDto({
+        requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT,
+        requestTypeLabel: 'เพิ่มจุดตรวจวัด',
+        status: CONNECTION_REQUEST_STATUS.WAITING_FACTORY_REVISION,
+        revisionReason: 'เอกสารปล่องยังไม่ครบ',
+        officerNote: 'ส่งกลับจากฟอร์มเจ้าหน้าที่',
+        createdBy: actorUserId,
+      }),
+    );
+
+    await connectionRequestsService.createMeasurementPointRequest(
+      {
+        ...payload,
+        requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT,
+        submissionAction: 'REQUEST_FACTORY_REVISION',
+        revisionReason: 'เอกสารปล่องยังไม่ครบ',
+        officerNote: 'ส่งกลับจากฟอร์มเจ้าหน้าที่',
+      },
+      {
+        actorUserId,
+        userType: 'officer',
+        roles: ['monitoring_kpm'],
+        editScope: { scope: 'ALL' },
+      },
+    );
+
+    expect(mockedRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ...payloadWithoutPointCodes,
+        factoryId: 'canonical-factory-id',
+        factoryName: 'โรงงานจากฐานข้อมูล',
+        factoryRegistrationNo: 'REG-CANONICAL',
+        requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT,
+        submissionAction: 'REQUEST_FACTORY_REVISION',
+        revisionReason: 'เอกสารปล่องยังไม่ครบ',
+        officerNote: 'ส่งกลับจากฟอร์มเจ้าหน้าที่',
+        eligibleFactoryId: 17,
+      }),
+      actorUserId,
+      CONNECTION_REQUEST_STATUS.WAITING_FACTORY_REVISION,
+      expect.objectContaining({
+        revisionReason: 'เอกสารปล่องยังไม่ครบ',
+        officerNote: 'ส่งกลับจากฟอร์มเจ้าหน้าที่',
+      }),
+    );
+    expect(mockedRepository.findDirectConnectionFactory).toHaveBeenCalledWith(
+      {
+        factoryId: 'factory-001',
+        factoryRegistrationNo: '3-106-33/50สบ',
+      },
+      {
+        actorUserId,
+        scope: { scope: 'ALL' },
+        regionalAccess: undefined,
+      },
+    );
+  });
+
+  it('rejects an operator submission action before looking up an eligible factory', async () => {
+    await expect(
+      connectionRequestsService.createMeasurementPointRequest(
+        {
+          ...payload,
+          requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT,
+          submissionAction: 'REQUEST_FACTORY_REVISION',
+          revisionReason: 'กรุณาแก้ไขข้อมูล',
+        },
+        {
+          actorUserId,
+          userType: 'operator',
+          roles: ['factory_operator'],
+          editScope: { scope: 'OWN_FACTORY' },
+        },
+      ),
+    ).rejects.toMatchObject({ statusCode: 403, code: 'FORBIDDEN' });
+
+    expect(mockedRepository.findActiveEligibleFactoryReference).not.toHaveBeenCalled();
+    expect(mockedRepository.create).not.toHaveBeenCalled();
+    expect(mockedRepository.createDirectConnection).not.toHaveBeenCalled();
+  });
+
+  it('rejects an officer revision action when the factory is outside edit scope', async () => {
+    mockedRepository.findDirectConnectionFactory.mockResolvedValueOnce(null);
+
+    await expect(
+      connectionRequestsService.createMeasurementPointRequest(
+        {
+          ...payload,
+          requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT,
+          submissionAction: 'REQUEST_FACTORY_REVISION',
+          revisionReason: 'กรุณาแก้ไขข้อมูล',
+        },
+        {
+          actorUserId,
+          userType: 'officer',
+          roles: ['monitoring_kpm'],
+          editScope: { scope: 'IN_PROVINCE', province: 'ระยอง' },
+        },
+      ),
+    ).rejects.toMatchObject({ statusCode: 404, code: 'NOT_FOUND' });
+
+    expect(mockedRepository.findDirectConnectionFactory).toHaveBeenCalledWith(
+      {
+        factoryId: 'factory-001',
+        factoryRegistrationNo: '3-106-33/50สบ',
+      },
+      {
+        actorUserId,
+        scope: { scope: 'IN_PROVINCE', province: 'ระยอง' },
+        regionalAccess: undefined,
+      },
+    );
+    expect(mockedRepository.findActiveEligibleFactoryReference).not.toHaveBeenCalled();
+    expect(mockedRepository.create).not.toHaveBeenCalled();
+  });
+
+  it('checks direct-connect permission before looking up a factory for CONNECT', async () => {
+    await expect(
+      connectionRequestsService.createMeasurementPointRequest(
+        {
+          ...payload,
+          requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT,
+          submissionAction: 'CONNECT',
+          measurementPoints: [
+            {
+              ...payload.measurementPoints[0],
+              pointCode: 'S2201',
+            },
+          ],
+        },
+        {
+          actorUserId,
+          userType: 'officer',
+          roles: ['monitoring_kpm'],
+          editScope: { scope: 'ALL' },
+        },
+      ),
+    ).rejects.toMatchObject({ statusCode: 403, code: 'FORBIDDEN' });
+
+    expect(mockedRepository.findActiveEligibleFactoryReference).not.toHaveBeenCalled();
+    expect(mockedRepository.findDirectConnectionFactory).not.toHaveBeenCalled();
+    expect(mockedRepository.createDirectConnection).not.toHaveBeenCalled();
+  });
+
+  it('uses the direct-connection path when an officer chooses CONNECT', async () => {
+    mockedRepository.findDirectConnectionFactory.mockResolvedValueOnce({
+      factoryId: 'canonical-factory-id',
+      factoryName: 'โรงงานจากฐานข้อมูล',
+      newRegistrationNo: 'REG-CANONICAL',
+      isEligible: true,
+      eligibleFactoryId: 17,
+    } as never);
+
+    await connectionRequestsService.createMeasurementPointRequest(
+      {
+        ...payload,
+        requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT,
+        submissionAction: 'CONNECT',
+        officerNote: 'เชื่อมต่อแล้วจากฟอร์ม',
+        measurementPoints: [
+          {
+            ...payload.measurementPoints[0],
+            pointCode: ' S2201 ',
+          },
+        ],
+      },
+      {
+        actorUserId,
+        userType: 'officer',
+        roles: ['monitoring_kpm'],
+        editScope: { scope: 'ALL' },
+        directConnectScope: { scope: 'ALL' },
+      },
+    );
+
+    expect(mockedRepository.findDirectConnectionFactory).toHaveBeenCalledWith(
+      {
+        factoryId: 'factory-001',
+        factoryRegistrationNo: '3-106-33/50สบ',
+      },
+      {
+        actorUserId,
+        scope: { scope: 'ALL' },
+        regionalAccess: undefined,
+      },
+    );
+    expect(mockedRepository.createDirectConnection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT,
+        factoryId: 'canonical-factory-id',
+        factoryName: 'โรงงานจากฐานข้อมูล',
+        factoryRegistrationNo: 'REG-CANONICAL',
+        eligibleFactoryId: 17,
+        officerNote: 'เชื่อมต่อแล้วจากฟอร์ม',
+        measurementPoints: [expect.objectContaining({ pointCode: 'S2201' })],
+      }),
+      actorUserId,
     );
   });
 

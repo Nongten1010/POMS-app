@@ -111,6 +111,15 @@ export interface DirectConnectionActorContext {
   regionalAccess?: RegionalAccessDTO | null;
 }
 
+export interface MeasurementPointSubmissionActorContext {
+  actorUserId: number;
+  userType: 'citizen' | 'operator' | 'officer' | 'admin';
+  roles: string[];
+  editScope?: AccessScope;
+  directConnectScope?: AccessScope;
+  regionalAccess?: RegionalAccessDTO | null;
+}
+
 export const connectionRequestsService = {
   setClockForTests(provider: () => Date): void {
     nowProvider = provider;
@@ -780,8 +789,106 @@ export const connectionRequestsService = {
 
   async createMeasurementPointRequest(
     input: AddMeasurementPointRequestInput,
-    actorUserId: number,
+    actor: number | MeasurementPointSubmissionActorContext,
   ): Promise<ConnectionRequestDTO> {
+    const actorContext = typeof actor === 'number' ? null : actor;
+    const actorUserId = typeof actor === 'number' ? actor : actor.actorUserId;
+
+    if (input.submissionAction === 'REQUEST_FACTORY_REVISION') {
+      ensureMeasurementPointWorkflowActor(actorContext);
+      const editScope = actorContext.editScope;
+      if (!editScope) {
+        throw new ForbiddenError(
+          'Revision workflow from the add measurement point form requires edit permission',
+        );
+      }
+
+      const factory = await connectionRequestsRepository.findDirectConnectionFactory(
+        {
+          factoryId: input.factoryId ?? '',
+          factoryRegistrationNo: input.factoryRegistrationNo ?? '',
+        },
+        {
+          actorUserId,
+          scope: editScope,
+          regionalAccess: actorContext.regionalAccess,
+        },
+      );
+      if (!factory) {
+        throw new NotFoundError('Active eligible factory not found within officer access scope');
+      }
+
+      return connectionRequestsRepository.create(
+        clearPendingPointCodes({
+          ...input,
+          eligibleFactoryId: factory.eligibleFactoryId,
+          factoryId: factory.factoryId,
+          factoryName: factory.factoryName,
+          factoryRegistrationNo: factory.newRegistrationNo,
+          requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT,
+        }),
+        actorUserId,
+        CONNECTION_REQUEST_STATUS.WAITING_FACTORY_REVISION,
+        {
+          revisionReason: input.revisionReason,
+          officerNote: input.officerNote,
+          historyNote: 'เจ้าหน้าที่บันทึกคำขอเพิ่มจุดและส่งกลับให้โรงงานแก้ไข',
+        },
+      );
+    }
+
+    if (input.submissionAction === 'CONNECT') {
+      ensureMeasurementPointWorkflowActor(actorContext);
+      const directConnectScope = actorContext.directConnectScope;
+      if (!directConnectScope) {
+        throw new ForbiddenError(
+          'Immediate connect from the add measurement point form requires direct-connect permission',
+        );
+      }
+
+      if (input.measurementPoints.length !== 1) {
+        throw new BadRequestError('CONNECT requires exactly one measurement point', {
+          path: 'measurementPoints',
+        });
+      }
+
+      const point = input.measurementPoints[0];
+      const pointCode = point?.pointCode?.trim();
+      if (!pointCode) {
+        throw new BadRequestError('CONNECT requires measurementPoints[0].pointCode', {
+          path: 'measurementPoints.0.pointCode',
+        });
+      }
+
+      const factory = await connectionRequestsRepository.findDirectConnectionFactory(
+        {
+          factoryId: input.factoryId,
+          factoryRegistrationNo: input.factoryRegistrationNo,
+        },
+        {
+          actorUserId,
+          scope: directConnectScope,
+          regionalAccess: actorContext.regionalAccess,
+        },
+      );
+      if (!factory) {
+        throw new NotFoundError('Active eligible factory not found within officer access scope');
+      }
+
+      return connectionRequestsRepository.createDirectConnection(
+        {
+          ...input,
+          eligibleFactoryId: factory.eligibleFactoryId,
+          requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT,
+          factoryId: factory.factoryId,
+          factoryName: factory.factoryName,
+          factoryRegistrationNo: factory.newRegistrationNo,
+          measurementPoints: [{ ...point, pointCode }],
+        },
+        actorUserId,
+      );
+    }
+
     const eligibleFactory = await requireActiveEligibleFactory(input);
 
     return connectionRequestsRepository.create(
@@ -800,6 +907,27 @@ export const connectionRequestsService = {
     actor: DirectConnectionActorContext,
   ): Promise<ConnectionRequestDTO> {
     ensureDirectConnectionActor(actor);
+    const initialStatus = input.status ?? CONNECTION_REQUEST_STATUS.CONNECTED;
+    if (
+      initialStatus !== CONNECTION_REQUEST_STATUS.CONNECTED &&
+      initialStatus !== CONNECTION_REQUEST_STATUS.WAITING_FACTORY_REVISION
+    ) {
+      throw new BadRequestError('Unsupported direct connection status', {
+        path: 'status',
+        received: initialStatus,
+      });
+    }
+    if (
+      initialStatus === CONNECTION_REQUEST_STATUS.WAITING_FACTORY_REVISION &&
+      !input.revisionReason?.trim()
+    ) {
+      throw new BadRequestError(
+        'revisionReason is required when status is WAITING_FACTORY_REVISION',
+        {
+          path: 'revisionReason',
+        },
+      );
+    }
 
     if (input.measurementPoints.length !== 1) {
       throw new BadRequestError(
@@ -849,6 +977,12 @@ export const connectionRequestsService = {
       factoryId: factory.factoryId,
       factoryName: factory.factoryName,
       factoryRegistrationNo: factory.newRegistrationNo,
+      status: initialStatus,
+      revisionReason:
+        initialStatus === CONNECTION_REQUEST_STATUS.WAITING_FACTORY_REVISION
+          ? input.revisionReason?.trim() ?? null
+          : null,
+      officerNote: input.officerNote ?? null,
       measurementPoints: [{ ...point, pointCode }],
     };
 
@@ -2525,6 +2659,23 @@ async function loadLatestHourlyMeasurementData(
 
 const dashboardBaseMeasurementColumns = new Set(['station_id', 'cdate', 'ctime']);
 type AccessScope = string | null | undefined | PermissionScopeDetails;
+
+function ensureMeasurementPointWorkflowActor(
+  actor: MeasurementPointSubmissionActorContext | null,
+): asserts actor is MeasurementPointSubmissionActorContext {
+  if (!actor) {
+    throw new ForbiddenError('Submission action requires an authenticated workflow actor');
+  }
+
+  const isOfficerUser = actor.userType === 'officer' || actor.userType === 'admin';
+  const isAdmin = actor.roles.includes('admin');
+  const hasKpmRole = actor.roles.includes('monitoring_kpm');
+  if (!isOfficerUser || (!hasKpmRole && !isAdmin)) {
+    throw new ForbiddenError(
+      'Officer workflow submission is limited to monitoring_kpm and admin users',
+    );
+  }
+}
 
 function ensureDirectConnectionActor(actor: DirectConnectionActorContext): void {
   const isOfficerUser = actor.userType === 'officer' || actor.userType === 'admin';

@@ -43,6 +43,7 @@ describe('POST /api/v1/cems-wpms-requests/direct-connections', () => {
     expect(mockedService.createDirectConnection).toHaveBeenCalledWith(
       expect.objectContaining({
         requestType: 'ADD_MEASUREMENT_POINT',
+        status: 'CONNECTED',
         measurementPoints: [expect.objectContaining({ pointCode: 'manual/code-01' })],
       }),
       expect.objectContaining({
@@ -253,6 +254,70 @@ describe('POST /api/v1/cems-wpms-requests/direct-connections', () => {
       error: { code: 'VALIDATION_ERROR' },
     });
     expect(mockedService.createDirectConnection).not.toHaveBeenCalled();
+  });
+
+  it('passes WAITING_FACTORY_REVISION with revisionReason to the service', async () => {
+    const response = await request(createApp())
+      .post('/api/v1/cems-wpms-requests/direct-connections')
+      .set('Authorization', `Bearer ${officerToken()}`)
+      .send({
+        ...validPayload(),
+        status: 'WAITING_FACTORY_REVISION',
+        revisionReason: 'ปรับแบบการติดตั้งก่อนเชื่อมต่อ',
+        officerNote: 'ส่งกลับให้โรงงานแก้ไข',
+      });
+
+    expect(response.status).toBe(201);
+    expect(mockedService.createDirectConnection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'WAITING_FACTORY_REVISION',
+        revisionReason: 'ปรับแบบการติดตั้งก่อนเชื่อมต่อ',
+        officerNote: 'ส่งกลับให้โรงงานแก้ไข',
+      }),
+      expect.anything(),
+    );
+  });
+
+  it('requires revisionReason when status is WAITING_FACTORY_REVISION', async () => {
+    const response = await request(createApp())
+      .post('/api/v1/cems-wpms-requests/direct-connections')
+      .set('Authorization', `Bearer ${officerToken()}`)
+      .send({
+        ...validPayload(),
+        status: 'WAITING_FACTORY_REVISION',
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toMatchObject({
+      success: false,
+      error: {
+        code: 'VALIDATION_ERROR',
+        issues: [expect.objectContaining({ pathString: 'revisionReason' })],
+      },
+    });
+    expect(mockedService.createDirectConnection).not.toHaveBeenCalled();
+  });
+
+  it('accepts submissionAction and passes only the mapped server status to the service', async () => {
+    const response = await request(createApp())
+      .post('/api/v1/cems-wpms-requests/direct-connections')
+      .set('Authorization', `Bearer ${officerToken()}`)
+      .send({
+        ...validPayload(),
+        submissionAction: 'REQUEST_FACTORY_REVISION',
+        revisionReason: 'กรุณาแนบผลการทดสอบใหม่',
+      });
+
+    expect(response.status).toBe(201);
+    expect(mockedService.createDirectConnection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'WAITING_FACTORY_REVISION',
+        revisionReason: 'กรุณาแนบผลการทดสอบใหม่',
+      }),
+      expect.anything(),
+    );
+    const servicePayload = mockedService.createDirectConnection.mock.calls[0]?.[0];
+    expect(servicePayload).not.toHaveProperty('submissionAction');
   });
 
   it('requires the dedicated direct-connection permission', async () => {

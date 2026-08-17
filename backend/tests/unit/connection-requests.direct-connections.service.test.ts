@@ -74,6 +74,9 @@ describe('connectionRequestsService.createDirectConnection', () => {
         factoryName: 'โรงงานจากฐานข้อมูล',
         factoryRegistrationNo: 'REG-CANONICAL',
         eligibleFactoryId: 17,
+        status: 'CONNECTED',
+        revisionReason: null,
+        officerNote: null,
         measurementPoints: [expect.objectContaining({ pointCode: 'free-form/ก-01' })],
       }),
       42,
@@ -93,6 +96,45 @@ describe('connectionRequestsService.createDirectConnection', () => {
     expect(mockedRepository.findFactoryGeneral).not.toHaveBeenCalled();
     expect(mockedRepository.findDirectConnectionFactory).not.toHaveBeenCalled();
     expect(mockedRepository.createDirectConnection).not.toHaveBeenCalled();
+  });
+
+  it('passes WAITING_FACTORY_REVISION through to the repository when reason is provided', async () => {
+    await expect(
+      directService.createDirectConnection(
+        {
+          ...validInput(),
+          status: 'WAITING_FACTORY_REVISION',
+          revisionReason: 'แก้ไขเอกสารก่อนเปิดใช้งาน',
+          officerNote: 'รอเอกสารชุดใหม่',
+        },
+        actor,
+      ),
+    ).resolves.toBe(created);
+
+    expect(mockedRepository.createDirectConnection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'WAITING_FACTORY_REVISION',
+        revisionReason: 'แก้ไขเอกสารก่อนเปิดใช้งาน',
+        officerNote: 'รอเอกสารชุดใหม่',
+      }),
+      42,
+    );
+  });
+
+  it('rejects WAITING_FACTORY_REVISION without a revisionReason when called outside HTTP validation', async () => {
+    await expect(
+      directService.createDirectConnection(
+        {
+          ...validInput(),
+          status: 'WAITING_FACTORY_REVISION',
+          revisionReason: '   ',
+        },
+        actor,
+      ),
+    ).rejects.toMatchObject({ statusCode: 400, code: 'BAD_REQUEST' });
+
+    expect(mockedRepository.findFactoryGeneral).not.toHaveBeenCalled();
+    expect(mockedRepository.findDirectConnectionFactory).not.toHaveBeenCalled();
   });
 
   it('rejects more than one point when the service is called without HTTP validation', async () => {

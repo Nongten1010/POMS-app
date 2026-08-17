@@ -495,6 +495,62 @@ describe('POMS OpenAPI contract', () => {
     }
   });
 
+  it('documents officer submission actions and examples on both add-point endpoints', () => {
+    const document = asObject(pomsOpenApiDocument, 'OpenAPI document');
+    const components = asObject(document.components, 'components');
+    const schemas = asObject(components.schemas, 'components.schemas');
+
+    const addPoint = asObject(schemas.AddMeasurementPointRequest, 'AddMeasurementPointRequest');
+    const addPointProperties = asObject(
+      addPoint.properties,
+      'AddMeasurementPointRequest.properties',
+    );
+    expect(asObject(addPointProperties.submissionAction, 'submissionAction')).toEqual(
+      expect.objectContaining({
+        type: 'string',
+        enum: ['REQUEST_FACTORY_REVISION', 'CONNECT'],
+      }),
+    );
+    expect(asObject(addPointProperties.revisionReason, 'revisionReason')).toEqual(
+      expect.objectContaining({ type: 'string', maxLength: 1000, nullable: true }),
+    );
+    expect(asObject(addPointProperties.officerNote, 'officerNote')).toEqual(
+      expect.objectContaining({ type: 'string', maxLength: 1000, nullable: true }),
+    );
+    expect(asObject(addPoint.example, 'AddMeasurementPointRequest.example')).toEqual(
+      expect.objectContaining({
+        submissionAction: 'REQUEST_FACTORY_REVISION',
+        revisionReason: expect.any(String),
+        officerNote: expect.any(String),
+      }),
+    );
+
+    const direct = asObject(schemas.DirectConnectionRequest, 'DirectConnectionRequest');
+    const directProperties = asObject(direct.properties, 'DirectConnectionRequest.properties');
+    expect(asObject(directProperties.submissionAction, 'submissionAction')).toEqual(
+      expect.objectContaining({
+        type: 'string',
+        enum: ['REQUEST_FACTORY_REVISION', 'CONNECT'],
+      }),
+    );
+    expect(asObject(directProperties.status, 'status')).toEqual(
+      expect.objectContaining({
+        type: 'string',
+        enum: ['WAITING_FACTORY_REVISION', 'CONNECTED'],
+        nullable: true,
+      }),
+    );
+    expect(asObject(directProperties.revisionReason, 'revisionReason')).toEqual(
+      expect.objectContaining({ type: 'string', maxLength: 1000, nullable: true }),
+    );
+    expect(asObject(directProperties.officerNote, 'officerNote')).toEqual(
+      expect.objectContaining({ type: 'string', maxLength: 1000, nullable: true }),
+    );
+    expect(asObject(direct.example, 'DirectConnectionRequest.example')).toEqual(
+      expect.objectContaining({ submissionAction: 'CONNECT' }),
+    );
+  });
+
   it('keeps resubmission and upload schemas aligned with runtime constraints', () => {
     const document = asObject(pomsOpenApiDocument, 'OpenAPI document');
     const components = asObject(document.components, 'components');

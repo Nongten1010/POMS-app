@@ -493,12 +493,16 @@ export const connectionRequestsController = {
     next: NextFunction,
   ): Promise<void> {
     try {
-      const actorUserId = requireActorUserId(req);
+      const actor = requireAuthenticatedActor(req);
       const payload = addMeasurementPointRequestSchema.parse(req.body);
-      const data = await connectionRequestsService.createMeasurementPointRequest(
-        payload,
-        actorUserId,
-      );
+      const data = await connectionRequestsService.createMeasurementPointRequest(payload, {
+        actorUserId: actor.id,
+        userType: actor.userType,
+        roles: actor.roles,
+        editScope: getScopeDetails(req, 'cems_wpms_requests:edit'),
+        directConnectScope: getScopeDetails(req, 'cems_wpms_requests:direct_connect'),
+        regionalAccess: actor.regionalAccess,
+      });
       res.status(StatusCodes.CREATED).location(`${req.baseUrl}/${data.id}`).json({
         success: true,
         data,
@@ -652,14 +656,17 @@ export const connectionRequestsController = {
 };
 
 function requireActorUserId(req: Request): number {
-  const actorUserId = req.user?.id;
-  if (!actorUserId) throw new Error('Authenticated user missing from request');
-  return actorUserId;
+  return requireAuthenticatedActor(req).id;
+}
+
+function requireAuthenticatedActor(req: Request): NonNullable<Request['user']> {
+  const actor = req.user;
+  if (!actor) throw new Error('Authenticated user missing from request');
+  return actor;
 }
 
 function requireDirectConnectionActor(req: Request): NonNullable<Request['user']> {
-  const actor = req.user;
-  if (!actor) throw new Error('Authenticated user missing from request');
+  const actor = requireAuthenticatedActor(req);
 
   const isOfficerUser = actor.userType === 'officer' || actor.userType === 'admin';
   const hasDirectRole = actor.roles.some((role) => role === 'monitoring_kpm' || role === 'admin');

@@ -567,6 +567,73 @@ describe('connection request validators', () => {
     }
   });
 
+  it('accepts an officer connect submission with exactly one point and a point code', () => {
+    const result = addMeasurementPointRequestSchema.safeParse({
+      ...validPayload,
+      submissionAction: 'CONNECT',
+      officerNote: 'เจ้าหน้าที่ตรวจครบและเชื่อมต่อทันที',
+      measurementPoints: [
+        {
+          ...validPayload.measurementPoints[0],
+          pointCode: ' S2201 ',
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toMatchObject({
+        requestType: 'ADD_MEASUREMENT_POINT',
+        submissionAction: 'CONNECT',
+        officerNote: 'เจ้าหน้าที่ตรวจครบและเชื่อมต่อทันที',
+        measurementPoints: [expect.objectContaining({ pointCode: 'S2201' })],
+      });
+    }
+  });
+
+  it('requires revisionReason when an officer submits directly to waiting factory revision', () => {
+    const result = addMeasurementPointRequestSchema.safeParse({
+      ...validPayload,
+      submissionAction: 'REQUEST_FACTORY_REVISION',
+      revisionReason: ' ',
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([expect.objectContaining({ path: ['revisionReason'] })]),
+      );
+    }
+  });
+
+  it('requires a single coded point when an officer submits directly to connected', () => {
+    const result = addMeasurementPointRequestSchema.safeParse({
+      ...validPayload,
+      submissionAction: 'CONNECT',
+      measurementPoints: [
+        {
+          ...validPayload.measurementPoints[0],
+          pointCode: null,
+        },
+        {
+          ...validPayload.measurementPoints[0],
+          pointName: 'ปล่องระบาย B',
+          pointCode: 'S2202',
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ path: ['measurementPoints'] }),
+          expect.objectContaining({ path: ['measurementPoints', 0, 'pointCode'] }),
+        ]),
+      );
+    }
+  });
+
   it('accepts CEMS conditional detail fields and multi-value parameter groups', () => {
     const result = addMeasurementPointRequestSchema.safeParse({
       ...validPayload,

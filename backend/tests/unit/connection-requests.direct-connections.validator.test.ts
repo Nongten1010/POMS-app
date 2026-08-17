@@ -215,10 +215,108 @@ describe('directConnectionRequestSchema', () => {
       directConnectionRequestSchema.safeParse({
         ...validPayload(),
         requestNo: 'WPMS-9999/2569',
-        status: 'CONNECTED',
         submissionSource: 'OPERATOR_FORM',
       }).success,
     ).toBe(false);
+  });
+
+  it('defaults status to CONNECTED when omitted', () => {
+    const result = directConnectionRequestSchema.safeParse(validPayload());
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data).toMatchObject({
+      status: 'CONNECTED',
+      revisionReason: null,
+      officerNote: null,
+    });
+  });
+
+  it('accepts WAITING_FACTORY_REVISION when revisionReason is provided', () => {
+    const result = directConnectionRequestSchema.safeParse({
+      ...validPayload(),
+      status: 'WAITING_FACTORY_REVISION',
+      revisionReason: 'แนบแผนผังการติดตั้งใหม่',
+      officerNote: 'ตรวจซ้ำหลังโรงงานแก้ไข',
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data).toMatchObject({
+      status: 'WAITING_FACTORY_REVISION',
+      revisionReason: 'แนบแผนผังการติดตั้งใหม่',
+      officerNote: 'ตรวจซ้ำหลังโรงงานแก้ไข',
+    });
+  });
+
+  it('requires revisionReason when status is WAITING_FACTORY_REVISION', () => {
+    const result = directConnectionRequestSchema.safeParse({
+      ...validPayload(),
+      status: 'WAITING_FACTORY_REVISION',
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error.issues).toEqual(
+      expect.arrayContaining([expect.objectContaining({ path: ['revisionReason'] })]),
+    );
+  });
+
+  it('maps submissionAction CONNECT to the server status CONNECTED', () => {
+    const result = directConnectionRequestSchema.safeParse({
+      ...validPayload(),
+      submissionAction: 'CONNECT',
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data).toMatchObject({
+      status: 'CONNECTED',
+      revisionReason: null,
+    });
+    expect(result.data).not.toHaveProperty('submissionAction');
+  });
+
+  it('maps submissionAction REQUEST_FACTORY_REVISION and requires a reason', () => {
+    const validResult = directConnectionRequestSchema.safeParse({
+      ...validPayload(),
+      submissionAction: 'REQUEST_FACTORY_REVISION',
+      revisionReason: '  กรุณาแนบผลการทดสอบใหม่  ',
+    });
+    const invalidResult = directConnectionRequestSchema.safeParse({
+      ...validPayload(),
+      submissionAction: 'REQUEST_FACTORY_REVISION',
+    });
+
+    expect(validResult.success).toBe(true);
+    if (validResult.success) {
+      expect(validResult.data).toMatchObject({
+        status: 'WAITING_FACTORY_REVISION',
+        revisionReason: 'กรุณาแนบผลการทดสอบใหม่',
+      });
+      expect(validResult.data).not.toHaveProperty('submissionAction');
+    }
+    expect(invalidResult.success).toBe(false);
+    if (!invalidResult.success) {
+      expect(invalidResult.error.issues).toEqual(
+        expect.arrayContaining([expect.objectContaining({ path: ['revisionReason'] })]),
+      );
+    }
+  });
+
+  it('rejects conflicting submissionAction and legacy status values', () => {
+    const result = directConnectionRequestSchema.safeParse({
+      ...validPayload(),
+      submissionAction: 'CONNECT',
+      status: 'WAITING_FACTORY_REVISION',
+      revisionReason: 'ข้อมูลเดิมที่ไม่ควรถูกใช้',
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error.issues).toEqual(
+      expect.arrayContaining([expect.objectContaining({ path: ['submissionAction'] })]),
+    );
   });
 });
 

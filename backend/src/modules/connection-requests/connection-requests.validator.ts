@@ -1412,14 +1412,45 @@ export const resubmitConnectionRequestWithTypeSchema = connectionRequestFormObje
 
 export const addMeasurementPointRequestSchema = connectionRequestFormObjectSchema
   .omit({ requestType: true })
+  .extend({
+    submissionAction: z.enum(['REQUEST_FACTORY_REVISION', 'CONNECT']).optional(),
+    revisionReason: optionalNullableTrimmedString(1000),
+    officerNote: optionalNullableTrimmedString(1000),
+  })
   .superRefine((payload, ctx) => {
     validateContactSection(payload, ctx);
     validateEnvironmentalAssessment(payload, ctx);
     validateMeasurementPointFormSections(payload, ctx);
+    if (payload.submissionAction === 'REQUEST_FACTORY_REVISION' && !payload.revisionReason) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['revisionReason'],
+        message: 'revisionReason is required when submissionAction is REQUEST_FACTORY_REVISION',
+      });
+    }
+    if (payload.submissionAction === 'CONNECT') {
+      if (payload.measurementPoints.length !== 1) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['measurementPoints'],
+          message: 'CONNECT requires exactly one measurement point',
+        });
+      }
+      const pointCode = payload.measurementPoints[0]?.pointCode?.trim();
+      if (!pointCode) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['measurementPoints', 0, 'pointCode'],
+          message: 'CONNECT requires measurementPoints[0].pointCode',
+        });
+      }
+    }
   })
   .transform((payload) => ({
     ...normalizeContacts(normalizeFactorySnapshot(stripFrontendSystemTypeAlias(payload))),
     requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT,
+    revisionReason: payload.revisionReason ?? null,
+    officerNote: payload.officerNote ?? null,
   }));
 
 const directConnectionMeasurementPointSchema = z
@@ -1449,6 +1480,29 @@ const directConnectionEmailListSchema = z
   .max(20)
   .nullable()
   .optional();
+const directConnectionStatusSchema = z
+  .enum([CONNECTION_REQUEST_STATUS.WAITING_FACTORY_REVISION, CONNECTION_REQUEST_STATUS.CONNECTED])
+  .nullable()
+  .optional();
+const directConnectionSubmissionActionSchema = z
+  .enum(['CONNECT', 'REQUEST_FACTORY_REVISION'])
+  .optional();
+
+function resolveDirectConnectionStatus(payload: {
+  submissionAction?: 'CONNECT' | 'REQUEST_FACTORY_REVISION';
+  status?:
+    | typeof CONNECTION_REQUEST_STATUS.CONNECTED
+    | typeof CONNECTION_REQUEST_STATUS.WAITING_FACTORY_REVISION
+    | null;
+}) {
+  if (payload.submissionAction === 'REQUEST_FACTORY_REVISION') {
+    return CONNECTION_REQUEST_STATUS.WAITING_FACTORY_REVISION;
+  }
+  if (payload.submissionAction === 'CONNECT') {
+    return CONNECTION_REQUEST_STATUS.CONNECTED;
+  }
+  return payload.status ?? CONNECTION_REQUEST_STATUS.CONNECTED;
+}
 
 const directConnectionRequestObjectSchema = connectionRequestFormObjectSchema
   .omit({ requestType: true })
@@ -1463,6 +1517,10 @@ const directConnectionRequestObjectSchema = connectionRequestFormObjectSchema
     contactPersons: z.array(contactPersonSchema).max(20).nullable().optional(),
     notificationEmails: directConnectionEmailListSchema,
     officerNotificationEmails: directConnectionEmailListSchema,
+    submissionAction: directConnectionSubmissionActionSchema,
+    status: directConnectionStatusSchema,
+    revisionReason: optionalNullableTrimmedString(1000),
+    officerNote: optionalNullableTrimmedString(1000),
     measurementPoints: z.array(directConnectionMeasurementPointSchema).length(1),
   })
   .strict();
@@ -1483,6 +1541,24 @@ export const directConnectionRequestSchema = directConnectionRequestObjectSchema
         message: 'eiaOther is required when eia is อื่นๆ',
       });
     }
+    const resolvedStatus = resolveDirectConnectionStatus(payload);
+    if (payload.submissionAction && payload.status && payload.status !== resolvedStatus) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['submissionAction'],
+        message: 'submissionAction conflicts with status',
+      });
+    }
+    if (
+      resolvedStatus === CONNECTION_REQUEST_STATUS.WAITING_FACTORY_REVISION &&
+      !payload.revisionReason
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['revisionReason'],
+        message: 'revisionReason is required when status is WAITING_FACTORY_REVISION',
+      });
+    }
 
     const details = payload.measurementPoints[0]?.details;
     if (details && payload.systemType === 'CEMS') {
@@ -1498,7 +1574,7 @@ export const directConnectionRequestSchema = directConnectionRequestObjectSchema
     }
   })
   .transform((payload) => {
-    const { type: _type, ...directPayload } = payload;
+    const { type: _type, submissionAction: _submissionAction, ...directPayload } = payload;
     const factoryIdentifier = payload.factoryId ?? payload.factoryRegistrationNo ?? '';
     const point = payload.measurementPoints[0];
     const pointType = point.pointType ?? (payload.systemType === 'CEMS' ? 'STACK' : 'WASTEWATER');
@@ -1510,6 +1586,7 @@ export const directConnectionRequestSchema = directConnectionRequestObjectSchema
       measurementInstruments,
     });
     const eia = payload.eia ?? null;
+    const status = resolveDirectConnectionStatus(payload);
 
     return {
       ...directPayload,
@@ -1526,6 +1603,12 @@ export const directConnectionRequestSchema = directConnectionRequestObjectSchema
       contactPersons: payload.contactPersons ?? [],
       notificationEmails: payload.notificationEmails ?? [],
       officerNotificationEmails: payload.officerNotificationEmails ?? [],
+      status,
+      revisionReason:
+        status === CONNECTION_REQUEST_STATUS.WAITING_FACTORY_REVISION
+          ? (payload.revisionReason ?? null)
+          : null,
+      officerNote: payload.officerNote ?? null,
       measurementPoints: [
         {
           pointName: point.pointName ?? point.pointCode,

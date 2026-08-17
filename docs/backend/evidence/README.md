@@ -16,6 +16,7 @@
 - [เลขที่คำขอใช้ลำดับ 4 หลักและปี พ.ศ. เต็ม](./connection-requests/request-number-full-year-format.tdd.md)
 - [คืนรหัสจุดตรวจวัดเป็น S/W เริ่มที่ 2001](./connection-requests/legacy-point-code-format-restored.tdd.md)
 - [รหัสจุดตรวจวัดแบบลำดับรายปี](./connection-requests/annual-point-code-format.tdd.md)
+- [ฟอร์มเพิ่มจุดส่งสถานะไปพร้อม `POST /measurement-points`](./connection-requests/add-measurement-point-submission-action.tdd.md)
 - [Direct Connection ไม่บังคับเอกสารหรือรูปภาพ](./connection-requests/direct-connection-optional-documents.tdd.md)
 - [Direct Connection รับ optional fields เป็น null](./connection-requests/direct-connection-nullable-fields.tdd.md)
 - [เลขคำขอเจ้าหน้าที่ใช้ลำดับร่วมกับผู้ประกอบการ](./connection-requests/officer-direct-shared-request-numbering.tdd.md)

@@ -276,6 +276,12 @@ interface StatusUpdateOptions {
   issueWaitingConnectionSideEffects?: boolean;
 }
 
+interface CreateRequestOptions {
+  revisionReason?: string | null;
+  officerNote?: string | null;
+  historyNote?: string;
+}
+
 interface PointCodeSequenceRow {
   system_type: 'CEMS' | 'WPMS';
   prefix: 'S' | 'W';
@@ -870,6 +876,7 @@ export const connectionRequestsRepository = {
     input: CreateConnectionRequestInput,
     actorUserId: number,
     initialStatus: ConnectionRequestStatus,
+    options?: CreateRequestOptions,
   ): Promise<ConnectionRequestDTO> {
     return db.transaction(async (trx) => {
       await requireActiveEligibleFactoryInTransaction(trx, input.eligibleFactoryId);
@@ -880,6 +887,8 @@ export const connectionRequestsRepository = {
           request_type: input.requestType ?? CONNECTION_REQUEST_TYPE.NEW_CONNECTION,
           ...toRequestRow(input),
           status: initialStatus,
+          revision_reason: options?.revisionReason ?? null,
+          officer_note: options?.officerNote ?? null,
           created_by: actorUserId,
           updated_by: actorUserId,
         })
@@ -888,7 +897,13 @@ export const connectionRequestsRepository = {
       const requestId = Number(id);
       await upsertFactorySnapshot(trx, requestId, input, actorUserId);
       await insertMeasurementPoints(trx, requestId, input.measurementPoints, actorUserId);
-      await insertHistory(trx, requestId, initialStatus, actorUserId, 'ผู้ประกอบการส่งฟอร์ม');
+      await insertHistory(
+        trx,
+        requestId,
+        initialStatus,
+        actorUserId,
+        options?.historyNote ?? 'ผู้ประกอบการส่งฟอร์ม',
+      );
 
       const created = await findByIdInTransaction(trx, requestId);
       if (!created) throw new Error('Created connection request could not be loaded');
@@ -915,6 +930,8 @@ export const connectionRequestsRepository = {
           input.eligibleFactoryId,
         );
         await ensureDirectPointCodeAvailable(trx, pointCode);
+        const initialStatus = input.status ?? CONNECTION_REQUEST_STATUS.CONNECTED;
+        const connectedImmediately = initialStatus === CONNECTION_REQUEST_STATUS.CONNECTED;
         const connectedAt = new Date();
         // Officer-direct connections share the operator request-number series.
         const requestNo = await nextRequestNo(trx, input.systemType);
@@ -924,8 +941,10 @@ export const connectionRequestsRepository = {
             request_type: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT,
             submission_source: CONNECTION_REQUEST_SUBMISSION_SOURCE.OFFICER_DIRECT_API,
             ...toRequestRow(input),
-            status: CONNECTION_REQUEST_STATUS.CONNECTED,
-            verified_at: connectedAt,
+            status: initialStatus,
+            revision_reason: input.revisionReason ?? null,
+            officer_note: input.officerNote ?? null,
+            verified_at: connectedImmediately ? connectedAt : null,
             created_by: actorUserId,
             updated_by: actorUserId,
           })
@@ -943,42 +962,47 @@ export const connectionRequestsRepository = {
         await insertHistory(
           trx,
           requestId,
-          CONNECTION_REQUEST_STATUS.CONNECTED,
+          initialStatus,
           actorUserId,
-          'เจ้าหน้าที่เพิ่มจุดตรวจวัดและเชื่อมต่อโดยตรงผ่าน API',
+          connectedImmediately
+            ? 'เจ้าหน้าที่เพิ่มจุดตรวจวัดและเชื่อมต่อโดยตรงผ่าน API'
+            : 'เจ้าหน้าที่เพิ่มจุดตรวจวัดและส่งกลับให้โรงงานแก้ไขผ่าน API',
         );
-        const factoryProfile = await syncFactoryProfileInTransaction(
-          trx,
-          activeEligibleFactory,
-          input,
-          actorUserId,
-        );
-        await trx('cems_wpms_connected_measurement_points').insert({
-          source_request_id: requestId,
-          source_measurement_point_id: pointId,
-          eligible_factory_id: Number(activeEligibleFactory.id),
-          factory_id: input.factoryId,
-          factory_name: input.factoryName,
-          factory_registration_no: input.factoryRegistrationNo,
-          factory_address: withProvinceInFactoryAddress(input.address, input.provinceName) ?? null,
-          ...factoryProfile,
-          system_type: input.systemType,
-          point_name: point.pointName,
-          point_code: pointCode,
-          point_type: point.pointType,
-          parameters_json: JSON.stringify(point.parameters ?? []),
-          details_json: point.details ? JSON.stringify(point.details) : null,
-          documents_json:
-            point.documentsAndImages && point.documentsAndImages.length > 0
-              ? JSON.stringify(point.documentsAndImages)
+        if (connectedImmediately) {
+          const factoryProfile = await syncFactoryProfileInTransaction(
+            trx,
+            activeEligibleFactory,
+            input,
+            actorUserId,
+          );
+          await trx('cems_wpms_connected_measurement_points').insert({
+            source_request_id: requestId,
+            source_measurement_point_id: pointId,
+            eligible_factory_id: Number(activeEligibleFactory.id),
+            factory_id: input.factoryId,
+            factory_name: input.factoryName,
+            factory_registration_no: input.factoryRegistrationNo,
+            factory_address:
+              withProvinceInFactoryAddress(input.address, input.provinceName) ?? null,
+            ...factoryProfile,
+            system_type: input.systemType,
+            point_name: point.pointName,
+            point_code: pointCode,
+            point_type: point.pointType,
+            parameters_json: JSON.stringify(point.parameters ?? []),
+            details_json: point.details ? JSON.stringify(point.details) : null,
+            documents_json:
+              point.documentsAndImages && point.documentsAndImages.length > 0
+                ? JSON.stringify(point.documentsAndImages)
+                : null,
+            instruments_json: point.measurementInstruments
+              ? JSON.stringify(point.measurementInstruments)
               : null,
-          instruments_json: point.measurementInstruments
-            ? JSON.stringify(point.measurementInstruments)
-            : null,
-          connected_at: connectedAt,
-          created_by: actorUserId,
-          updated_by: actorUserId,
-        });
+            connected_at: connectedAt,
+            created_by: actorUserId,
+            updated_by: actorUserId,
+          });
+        }
 
         const created = await findByIdInTransaction(trx, requestId);
         if (!created) throw new Error('Created direct connection request could not be loaded');

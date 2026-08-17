@@ -470,6 +470,12 @@ const addPointExample = {
   ],
   remarks: 'ขอเพิ่มจุดตรวจวัดปล่องใหม่',
 };
+const officerAddPointExample = {
+  ...addPointExample,
+  submissionAction: 'REQUEST_FACTORY_REVISION',
+  revisionReason: 'กรุณาตรวจสอบและแก้ไขรายละเอียดจุดตรวจวัด',
+  officerNote: 'ตรวจสอบแบบฟอร์มโดยเจ้าหน้าที่แล้ว',
+};
 const addParameterExample = {
   factoryId: 'F000123',
   factoryName: 'โรงงานตัวอย่าง',
@@ -511,6 +517,7 @@ const directConnectionExample = {
   factoryId: 'F000123',
   factoryRegistrationNo: null,
   systemType: 'CEMS',
+  submissionAction: 'CONNECT',
   contactName: null,
   contactPhone: null,
   contactEmail: null,
@@ -958,6 +965,19 @@ const componentSchemas: Record<string, OpenApiObject> = {
     required: ['factoryId', 'factoryName', 'systemType', 'measurementPoints'],
     properties: {
       ...dedicatedOperatorFormProperties,
+      submissionAction: {
+        ...enumSchema(['REQUEST_FACTORY_REVISION', 'CONNECT'], {
+          REQUEST_FACTORY_REVISION: 'รอโรงงานแก้ไข',
+          CONNECT: 'เชื่อมต่อแล้ว',
+        }),
+        description:
+          'Optional; ใช้เฉพาะ officer/admin flow. หากไม่ส่งจะสร้าง PENDING_DESIGN_REVIEW ตาม flow เดิม',
+      },
+      revisionReason: nullableString(
+        1000,
+        'Required เมื่อ submissionAction = REQUEST_FACTORY_REVISION',
+      ),
+      officerNote: nullableString(1000, 'Optional note จากเจ้าหน้าที่'),
       measurementPoints: {
         type: 'array',
         minItems: 1,
@@ -966,8 +986,8 @@ const componentSchemas: Record<string, OpenApiObject> = {
       },
     },
     description:
-      'ห้ามส่ง requestType; backend stamp ADD_MEASUREMENT_POINT. ต้องมี contactPersons หรือคู่ contactName/contactPhone',
-    example: addPointExample,
+      'ห้ามส่ง requestType; backend stamp ADD_MEASUREMENT_POINT. หากไม่ส่ง submissionAction จะสร้าง PENDING_DESIGN_REVIEW; officer/admin เลือก REQUEST_FACTORY_REVISION หรือ CONNECT ได้ โดย CONNECT ต้องมี direct-connect permission, exactly 1 point และ pointCode',
+    example: officerAddPointExample,
   },
   AddParameterRequest: {
     type: 'object',
@@ -1045,7 +1065,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
       },
     ],
     description:
-      'ต้องมี factoryId หรือ factoryRegistrationNo อย่างน้อยหนึ่งค่า; actor ต้องเป็น officer/admin ที่มี role และ scope ตาม contract',
+      'ต้องมี factoryId หรือ factoryRegistrationNo อย่างน้อยหนึ่งค่า; actor ต้องเป็น officer/admin ที่มี role และ scope ตาม contract. แนะนำให้ client ส่ง submissionAction; หากไม่ส่งทั้ง submissionAction และ status จะใช้ CONNECTED',
     properties: {
       factoryId: nullableString(
         64,
@@ -1087,6 +1107,25 @@ const componentSchemas: Record<string, OpenApiObject> = {
         nullable: true,
         description: 'Legacy alias; stripped และไม่เทียบกับ systemType',
       },
+      submissionAction: {
+        ...enumSchema(['REQUEST_FACTORY_REVISION', 'CONNECT'], {
+          REQUEST_FACTORY_REVISION: 'รอโรงงานแก้ไข',
+          CONNECT: 'เชื่อมต่อแล้ว',
+        }),
+        description:
+          'Optional และเป็น field ที่แนะนำสำหรับ client; REQUEST_FACTORY_REVISION map เป็น WAITING_FACTORY_REVISION, CONNECT map เป็น CONNECTED. ถ้าส่งพร้อม status ค่าต้องสอดคล้องกัน',
+      },
+      status: {
+        ...enumSchema(['WAITING_FACTORY_REVISION', 'CONNECTED'], {
+          WAITING_FACTORY_REVISION: 'รอโรงงานแก้ไข',
+          CONNECTED: 'เชื่อมต่อแล้ว',
+        }),
+        nullable: true,
+        description:
+          'Optional legacy field สำหรับ backward compatibility; client ใหม่ควรใช้ submissionAction',
+      },
+      revisionReason: nullableString(1000, 'Required เมื่อผลลัพธ์เป็น WAITING_FACTORY_REVISION'),
+      officerNote: nullableString(1000, 'Optional'),
       contactName: nullableString(255, 'Optional; default empty string'),
       contactPhone: nullableString(64, 'Optional; default empty string'),
       contactEmail: { type: 'string', format: 'email', maxLength: 255, nullable: true },
@@ -1529,8 +1568,8 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       summary: 'ขอเพิ่มจุดตรวจวัด',
       operationId: 'createMeasurementPointRequest',
       description:
-        'Permission: cems_wpms_requests:edit. ห้ามส่ง requestType; backend stamp ADD_MEASUREMENT_POINT. CEMS ต้องมีเอกสารอย่างน้อย 1 รายการต่อจุด',
-      requestBody: jsonRequestBody(schemaRef('AddMeasurementPointRequest'), addPointExample),
+        'Permission: cems_wpms_requests:edit. ห้ามส่ง requestType; backend stamp ADD_MEASUREMENT_POINT. default เป็น PENDING_DESIGN_REVIEW; officer/admin ส่ง submissionAction=REQUEST_FACTORY_REVISION หรือ CONNECT ได้ โดย CONNECT ต้องมี direct-connect permission เพิ่ม',
+      requestBody: jsonRequestBody(schemaRef('AddMeasurementPointRequest'), officerAddPointExample),
       successStatus: '201',
       successDescription: 'สร้างคำขอเพิ่มจุดตรวจวัดแล้ว',
       successSchema: schemaRef('ConnectionRequestResponse'),
@@ -1540,13 +1579,13 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
   '/cems-wpms-requests/direct-connections': {
     post: securedOperation({
       tag: 'Flow หลัก',
-      summary: 'เพิ่มจุดตรวจวัดโดยเจ้าหน้าที่และเชื่อมต่อทันที',
+      summary: 'เพิ่มจุดตรวจวัดโดยเจ้าหน้าที่',
       operationId: 'createDirectConnection',
       description:
-        'Permission: cems_wpms_requests:direct_connect. ต้องเป็น officer/admin ที่มี role monitoring_kpm/admin และ active eligible factory อยู่ใน scope; สร้างสถานะ CONNECTED ทันที',
+        'Permission: cems_wpms_requests:direct_connect. ต้องเป็น officer/admin ที่มี role monitoring_kpm/admin และ active eligible factory อยู่ใน scope; submissionAction=REQUEST_FACTORY_REVISION สร้างสถานะ WAITING_FACTORY_REVISION และ CONNECT สร้างสถานะ CONNECTED. หากไม่ส่ง action/status จะใช้ CONNECTED',
       requestBody: jsonRequestBody(schemaRef('DirectConnectionRequest'), directConnectionExample),
       successStatus: '201',
-      successDescription: 'เพิ่มจุดและเชื่อมต่อแล้ว',
+      successDescription: 'เพิ่มจุดตรวจวัดและบันทึกสถานะที่เลือกแล้ว',
       successSchema: schemaRef('ConnectionRequestResponse'),
       extraResponses: {
         '409': { $ref: '#/components/responses/Conflict' },
