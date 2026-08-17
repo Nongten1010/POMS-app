@@ -783,7 +783,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
         items: { type: 'string' },
         maxItems: 100,
         description:
-          'ต้องเป็น subset ของ pendingParameters และชุดเดียวกับ measurementInstruments.parameters',
+          'ไม่บังคับให้ส่ง pendingParameters; ถ้าส่ง pendingParameters ด้วย ต้องเป็น subset และต้องเป็นชุดเดียวกับ measurementInstruments.parameters',
       },
       timeSharingParameters: {
         type: 'array',
