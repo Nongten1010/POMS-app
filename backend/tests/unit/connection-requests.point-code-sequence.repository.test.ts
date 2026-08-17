@@ -109,6 +109,214 @@ describe('normal operator connection point-code sequence', () => {
     expect(updated.measurementPoints.map((point) => point.pointCode)).toEqual(['S2003']);
   });
 
+  it('preserves imported legacy codes and assigns new codes only to missing points', async () => {
+    const harness = pointCodeHarness('CEMS', {
+      initialSequence: 2000,
+      pointRows: [
+        { id: 201, pointCode: 'S0001', assignmentMode: 'LEGACY_IMPORTED' },
+        { id: 202, pointCode: null },
+        { id: 203, pointCode: 'S0100', assignmentMode: 'LEGACY_IMPORTED' },
+      ],
+    });
+    mockedDb.transaction.mockImplementationOnce(harness.runTransaction);
+
+    const updated = await connectionRequestsRepository.updateStatus(
+      101,
+      CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+      42,
+      { connectionDueAt: '2026-08-20T00:00:00.000Z' },
+    );
+
+    expect(updated.measurementPoints.map((point) => point.pointCode)).toEqual([
+      'S0001',
+      'S2001',
+      'S0100',
+    ]);
+    expect(harness.sequenceUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ last_sequence: 2001 }),
+    );
+  });
+
+  it('applies a MANUAL_LEGACY code and an AUTO code in the same approval', async () => {
+    const harness = pointCodeHarness('CEMS', {
+      pointIds: [201, 202],
+      pointCodeAssignments: [
+        {
+          measurementPointId: 201,
+          assignmentMode: 'MANUAL_LEGACY',
+          pointCode: ' s1000 ',
+          reason: 'ใช้รหัสเดิมของจุดตรวจวัดเก่า',
+        },
+        { measurementPointId: 202, assignmentMode: 'AUTO' },
+      ],
+    });
+    mockedDb.transaction.mockImplementationOnce(harness.runTransaction);
+
+    const updated = await connectionRequestsRepository.updateStatus(
+      101,
+      CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+      42,
+      { connectionDueAt: '2026-08-20T00:00:00.000Z' },
+      { pointCodeAssignments: harness.pointCodeAssignments },
+    );
+
+    expect(updated.measurementPoints).toEqual([
+      expect.objectContaining({
+        id: 201,
+        pointCode: 'S1000',
+        pointCodeAssignmentMode: 'MANUAL_LEGACY',
+      }),
+      expect.objectContaining({
+        id: 202,
+        pointCode: 'S2001',
+        pointCodeAssignmentMode: 'AUTO',
+      }),
+    ]);
+    expect(harness.registryInsert).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        normalized_point_code: 'S1000',
+        assignment_mode: 'MANUAL_LEGACY',
+        reason: 'ใช้รหัสเดิมของจุดตรวจวัดเก่า',
+      }),
+    );
+    expect(harness.registryInsert).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        normalized_point_code: 'S2001',
+        assignment_mode: 'AUTO',
+        reason: null,
+      }),
+    );
+  });
+
+  it('rejects a manual code whose prefix does not match the request system', async () => {
+    const harness = pointCodeHarness('CEMS', {
+      pointIds: [201],
+      pointCodeAssignments: [
+        {
+          measurementPointId: 201,
+          assignmentMode: 'MANUAL_LEGACY',
+          pointCode: 'W1000',
+          reason: 'ใช้รหัสเดิมของจุดตรวจวัดเก่า',
+        },
+      ],
+    });
+    mockedDb.transaction.mockImplementationOnce(harness.runTransaction);
+
+    await expect(
+      connectionRequestsRepository.updateStatus(
+        101,
+        CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+        42,
+        { connectionDueAt: '2026-08-20T00:00:00.000Z' },
+        { pointCodeAssignments: harness.pointCodeAssignments },
+      ),
+    ).rejects.toMatchObject({
+      statusCode: 400,
+      code: 'BAD_REQUEST',
+      details: {
+        path: 'pointCodeAssignments.0.pointCode',
+        reason: 'INVALID_MANUAL_LEGACY_POINT_CODE',
+        pointCode: 'W1000',
+        systemType: 'CEMS',
+      },
+    });
+    expect(harness.registryInsert).not.toHaveBeenCalled();
+  });
+
+  it('requires assignments to cover every unassigned point exactly once', async () => {
+    const harness = pointCodeHarness('WPMS', {
+      pointIds: [201, 202],
+      pointCodeAssignments: [{ measurementPointId: 201, assignmentMode: 'AUTO' }],
+    });
+    mockedDb.transaction.mockImplementationOnce(harness.runTransaction);
+
+    await expect(
+      connectionRequestsRepository.updateStatus(
+        101,
+        CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+        42,
+        { connectionDueAt: '2026-08-20T00:00:00.000Z' },
+        { pointCodeAssignments: harness.pointCodeAssignments },
+      ),
+    ).rejects.toMatchObject({
+      statusCode: 400,
+      code: 'BAD_REQUEST',
+      details: {
+        path: 'pointCodeAssignments',
+        reason: 'POINT_CODE_ASSIGNMENTS_MISMATCH',
+        expectedMeasurementPointIds: [201, 202],
+        receivedMeasurementPointIds: [201],
+      },
+    });
+  });
+
+  it('maps a registry uniqueness failure to the conflicting manual assignment', async () => {
+    const harness = pointCodeHarness('WPMS', {
+      pointIds: [201],
+      pointCodeAssignments: [
+        {
+          measurementPointId: 201,
+          assignmentMode: 'MANUAL_LEGACY',
+          pointCode: 'W1000',
+          reason: 'ใช้รหัสเดิมของจุดตรวจวัดเก่า',
+        },
+      ],
+      registryConflictPointCode: 'W1000',
+    });
+    mockedDb.transaction.mockImplementationOnce(harness.runTransaction);
+
+    await expect(
+      connectionRequestsRepository.updateStatus(
+        101,
+        CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+        42,
+        { connectionDueAt: '2026-08-20T00:00:00.000Z' },
+        { pointCodeAssignments: harness.pointCodeAssignments },
+      ),
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      code: 'CONFLICT',
+      details: {
+        path: 'pointCodeAssignments.0.pointCode',
+        reason: 'POINT_CODE_ALREADY_ASSIGNED',
+        pointCode: 'W1000',
+      },
+    });
+  });
+
+  it('accepts the same finalized assignments again without reserving codes twice', async () => {
+    const harness = pointCodeHarness('CEMS', {
+      pointRows: [
+        { id: 201, pointCode: 'S1000', assignmentMode: 'MANUAL_LEGACY' },
+        { id: 202, pointCode: 'S2001', assignmentMode: 'AUTO' },
+      ],
+      pointCodeAssignments: [
+        {
+          measurementPointId: 201,
+          assignmentMode: 'MANUAL_LEGACY',
+          pointCode: 'S1000',
+          reason: 'ใช้รหัสเดิมของจุดตรวจวัดเก่า',
+        },
+        { measurementPointId: 202, assignmentMode: 'AUTO' },
+      ],
+    });
+    mockedDb.transaction.mockImplementationOnce(harness.runTransaction);
+
+    const updated = await connectionRequestsRepository.updateStatus(
+      101,
+      CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+      42,
+      { connectionDueAt: '2026-08-20T00:00:00.000Z' },
+      { pointCodeAssignments: harness.pointCodeAssignments },
+    );
+
+    expect(updated.measurementPoints.map((point) => point.pointCode)).toEqual(['S1000', 'S2001']);
+    expect(harness.registryInsert).not.toHaveBeenCalled();
+    expect(harness.sequenceUpdate).not.toHaveBeenCalled();
+  });
+
   it('uses the highest W point code and ignores other point-code shapes', async () => {
     const harness = pointCodeHarness('WPMS', {
       existingPointCodes: ['P9999', 'W2005', 'WEMS-0099/2568'],
@@ -125,7 +333,7 @@ describe('normal operator connection point-code sequence', () => {
     expect(updated.measurementPoints.map((point) => point.pointCode)).toEqual(['W2006', 'W2007']);
   });
 
-  it('issues point codes only once when the same request is approved concurrently', async () => {
+  it('issues automatic codes only once when the same request is approved concurrently', async () => {
     const harness = concurrentApprovalHarness('CEMS');
     mockedDb.transaction.mockImplementation(harness.runTransaction);
 
@@ -141,8 +349,29 @@ describe('normal operator connection point-code sequence', () => {
     expect(first.measurementPoints.map((point) => point.pointCode)).toEqual(['S2001', 'S2002']);
     expect(second.measurementPoints.map((point) => point.pointCode)).toEqual(['S2001', 'S2002']);
     expect(harness.lastSequence()).toBe(2002);
+    expect(harness.registryInsert).toHaveBeenCalledTimes(2);
   });
 });
+
+type PointCodeAssignmentMode = 'AUTO' | 'MANUAL_LEGACY' | 'LEGACY_IMPORTED';
+
+type ManualPointCodeAssignment = {
+  measurementPointId: number;
+  assignmentMode: 'MANUAL_LEGACY';
+  pointCode: string;
+  reason: string;
+};
+
+type PointCodeAssignment =
+  | ManualPointCodeAssignment
+  | { measurementPointId: number; assignmentMode: 'AUTO' };
+
+type PointCodeState = {
+  id: number;
+  pointCode: string | null;
+  assignmentMode: PointCodeAssignmentMode | null;
+  assignmentReason: string | null;
+};
 
 function pointCodeHarness(
   systemType: 'CEMS' | 'WPMS',
@@ -150,20 +379,121 @@ function pointCodeHarness(
     existingPointCodes?: string[];
     initialSequence?: number;
     pointIds?: number[];
+    pointRows?: Array<{
+      id: number;
+      pointCode: string | null;
+      assignmentMode?: PointCodeAssignmentMode;
+    }>;
+    pointCodeAssignments?: PointCodeAssignment[];
+    registryConflictPointCode?: string;
   } = {},
 ) {
-  const pointIds = options.pointIds ?? [201, 202];
-  const assignedCodes = new Map<number, string>();
+  const pointRows: PointCodeState[] = (
+    options.pointRows ?? (options.pointIds ?? [201, 202]).map((id) => ({ id, pointCode: null }))
+  ).map((point) => ({
+    ...point,
+    assignmentMode: 'assignmentMode' in point ? (point.assignmentMode ?? null) : null,
+    assignmentReason: null,
+  }));
+  const pointState = new Map<number, PointCodeState>(pointRows.map((point) => [point.id, point]));
+  const pointCodeAssignments = options.pointCodeAssignments;
+  const initiallyUnassignedIds = pointRows
+    .filter((point) => !point.pointCode?.trim())
+    .map((point) => point.id);
+  const assignmentCoverageMatches =
+    pointCodeAssignments !== undefined &&
+    pointCodeAssignments.length === initiallyUnassignedIds.length &&
+    new Set(pointCodeAssignments.map((assignment) => assignment.measurementPointId)).size ===
+      pointCodeAssignments.length &&
+    initiallyUnassignedIds.every((id) =>
+      pointCodeAssignments.some((assignment) => assignment.measurementPointId === id),
+    );
+  const manualAssignments =
+    initiallyUnassignedIds.length > 0 && assignmentCoverageMatches
+      ? (pointCodeAssignments ?? []).filter(
+          (assignment): assignment is ManualPointCodeAssignment =>
+            assignment.assignmentMode === 'MANUAL_LEGACY',
+        )
+      : [];
+  const autoPointIds = pointCodeAssignments
+    ? assignmentCoverageMatches
+      ? pointCodeAssignments
+          .filter((assignment) => assignment.assignmentMode === 'AUTO')
+          .map((assignment) => assignment.measurementPointId)
+      : []
+    : initiallyUnassignedIds;
   const sequenceUpdate = jest.fn(async (_values: Record<string, unknown>) => 1);
   const pointUpdate = (pointId: number) =>
     makeChain({
       update: async (values: Record<string, unknown>) => {
-        assignedCodes.set(pointId, String(values.point_code));
+        const current = pointState.get(pointId);
+        if (!current) throw new Error(`Unknown measurement point ${pointId}`);
+        current.pointCode = String(values.point_code);
+        current.assignmentMode = (values.point_code_assignment_mode ??
+          null) as PointCodeAssignmentMode | null;
+        current.assignmentReason = (values.point_code_assignment_reason ?? null) as string | null;
         return 1;
       },
     });
+  const registryRows = (options.existingPointCodes ?? []).map((pointCode) => ({
+    point_code: pointCode,
+    normalized_point_code: pointCode.trim().toUpperCase(),
+  }));
+  const registryInsert = jest.fn(async (values: Record<string, unknown>) => {
+    const normalizedPointCode = String(values.normalized_point_code);
+    if (normalizedPointCode === options.registryConflictPointCode?.trim().toUpperCase()) {
+      throw {
+        number: 2627,
+        message: "Violation of UNIQUE KEY constraint 'uq_cems_wpms_point_code_registry_normalized'",
+      };
+    }
+    registryRows.push({
+      point_code: String(values.point_code),
+      normalized_point_code: normalizedPointCode,
+    });
+    return 1;
+  });
   const requestStatusUpdate = makeChain({ update: async () => 1 });
   const historyInsert = jest.fn(async () => 1);
+
+  const measurementPointBuilders: unknown[] = [];
+  if (pointCodeAssignments) {
+    measurementPointBuilders.push(
+      makeChain({
+        select: async () =>
+          [...pointState.values()].map((point) => ({
+            id: point.id,
+            point_code: point.pointCode,
+            point_code_assignment_mode: point.assignmentMode,
+          })),
+      }),
+    );
+    measurementPointBuilders.push(
+      ...manualAssignments.map((item) => pointUpdate(item.measurementPointId)),
+    );
+  }
+  measurementPointBuilders.push(
+    makeChain({
+      select: async () =>
+        [...pointState.values()]
+          .filter((point) => !point.pointCode?.trim())
+          .map((point) => ({ id: point.id })),
+    }),
+    ...autoPointIds.map((pointId) => pointUpdate(pointId)),
+    makeChain({
+      terminalOrderBy: async () =>
+        [...pointState.values()].map((point) => measurementPointRow(point)),
+    }),
+  );
+
+  const registryBuilders: unknown[] = [];
+  registryBuilders.push(...manualAssignments.map(() => makeChain({ insert: registryInsert })));
+  if (autoPointIds.length > 0) {
+    registryBuilders.push(
+      makeChain({ select: async () => registryRows.map(({ point_code }) => ({ point_code })) }),
+      ...autoPointIds.map(() => makeChain({ insert: registryInsert })),
+    );
+  }
 
   const queues = new Map<string, unknown[]>([
     [
@@ -176,34 +506,23 @@ function pointCodeHarness(
         makeChain({ first: async () => requestRow(systemType) }),
       ],
     ],
-    [
-      'cems_wpms_measurement_points',
-      [
-        makeChain({ select: async () => pointIds.map((id) => ({ id })) }),
-        makeChain({
-          select: async () =>
-            (options.existingPointCodes ?? []).map((pointCode) => ({ point_code: pointCode })),
-        }),
-        ...pointIds.map(pointUpdate),
-        makeChain({
-          terminalOrderBy: async () =>
-            pointIds.map((id) => measurementPointRow(id, assignedCodes.get(id) ?? null)),
-        }),
-      ],
-    ],
+    ['cems_wpms_measurement_points', measurementPointBuilders],
     [
       'cems_wpms_point_code_sequences',
-      [
-        makeChain({
-          first: async () => ({
-            system_type: systemType,
-            prefix: systemType === 'CEMS' ? 'S' : 'W',
-            last_sequence: options.initialSequence ?? 2000,
-          }),
-        }),
-        makeChain({ update: sequenceUpdate }),
-      ],
+      autoPointIds.length > 0
+        ? [
+            makeChain({
+              first: async () => ({
+                system_type: systemType,
+                prefix: systemType === 'CEMS' ? 'S' : 'W',
+                last_sequence: options.initialSequence ?? 2000,
+              }),
+            }),
+            makeChain({ update: sequenceUpdate }),
+          ]
+        : [],
     ],
+    ['cems_wpms_point_code_registry', registryBuilders],
     ['cems_wpms_request_status_history', [{ insert: historyInsert }, historyRowsBuilder()]],
     ['cems_wpms_request_factory_snapshots', [makeChain({ first: async () => undefined })]],
   ]);
@@ -221,6 +540,8 @@ function pointCodeHarness(
   );
 
   return {
+    pointCodeAssignments,
+    registryInsert,
     sequenceUpdate,
     runTransaction: async (...args: unknown[]) => {
       const callback = args[0] as (transaction: typeof trx) => Promise<unknown>;
@@ -233,6 +554,7 @@ function pointCodeHarness(
 
 function makeChain(options: {
   first?: () => Promise<unknown>;
+  insert?: (values: Record<string, unknown>) => Promise<unknown>;
   select?: () => Promise<unknown>;
   update?: (values: Record<string, unknown>) => Promise<unknown>;
   terminalOrderBy?: () => Promise<unknown>;
@@ -248,6 +570,7 @@ function makeChain(options: {
     forUpdate: returnChain,
     leftJoin: returnChain,
     first: jest.fn(options.first ?? (async () => undefined)),
+    insert: jest.fn(options.insert ?? (async () => 1)),
     select: jest.fn(options.select ?? returnChain),
     update: jest.fn(options.update ?? (async () => 1)),
     orderBy: jest.fn(() => {
@@ -323,12 +646,16 @@ function requestRow(systemType: 'CEMS' | 'WPMS') {
   };
 }
 
-function measurementPointRow(id: number, pointCode: string | null) {
+function measurementPointRow(point: PointCodeState) {
   return {
-    id,
+    id: point.id,
     request_id: 101,
-    point_name: `จุดตรวจวัด ${id}`,
-    point_code: pointCode,
+    point_name: `จุดตรวจวัด ${point.id}`,
+    point_code: point.pointCode,
+    point_code_assignment_mode: point.assignmentMode,
+    point_code_assignment_reason: point.assignmentReason,
+    point_code_assigned_by: point.assignmentMode ? 42 : null,
+    point_code_assigned_at: point.assignmentMode ? '2026-07-24T00:00:00.000Z' : null,
     point_type: 'STACK',
     latitude: null,
     longitude: null,
@@ -342,13 +669,17 @@ function measurementPointRow(id: number, pointCode: string | null) {
 
 function concurrentApprovalHarness(systemType: 'CEMS' | 'WPMS') {
   const prefix = systemType === 'CEMS' ? 'S' : 'W';
-  const assignedCodes = new Map<number, string | null>([
-    [201, null],
-    [202, null],
+  const pointState = new Map<number, PointCodeState>([
+    [201, { id: 201, pointCode: null, assignmentMode: null, assignmentReason: null }],
+    [202, { id: 202, pointCode: null, assignmentMode: null, assignmentReason: null }],
   ]);
+  const registryRows: Array<{ point_code: string }> = [];
+  const registryInsert = jest.fn(async (values: Record<string, unknown>) => {
+    registryRows.push({ point_code: String(values.point_code) });
+    return 1;
+  });
   const requestLock = new AsyncMutex();
   const sequenceLock = new AsyncMutex();
-  const unlockedRequestReads = new AsyncBarrier(2);
   let lastSequence = 2000;
 
   const runTransaction = async (...args: unknown[]) => {
@@ -356,18 +687,18 @@ function concurrentApprovalHarness(systemType: 'CEMS' | 'WPMS') {
     const state = {
       requestCalls: 0,
       pointCalls: 0,
+      registryCalls: 0,
       sequenceCalls: 0,
       historyCalls: 0,
-      missingIds: [] as Array<{ id: number }>,
+      missingIds: [] as number[],
     };
     const trx = Object.assign(
       jest.fn((tableName: string) => {
         if (tableName === 'cems_wpms_connection_requests') {
           state.requestCalls += 1;
           if (state.requestCalls === 1) {
-            return lockingFirstBuilder(async (locked) => {
-              if (locked) releases.push(await requestLock.acquire());
-              else await unlockedRequestReads.wait();
+            return lockingFirstBuilder(async () => {
+              releases.push(await requestLock.acquire());
               return { system_type: systemType, request_type: 'NEW_CONNECTION' };
             });
           }
@@ -380,28 +711,23 @@ function concurrentApprovalHarness(systemType: 'CEMS' | 'WPMS') {
           if (state.pointCalls === 1) {
             return makeChain({
               select: async () => {
-                state.missingIds = [...assignedCodes.entries()]
-                  .filter(([, code]) => code === null)
-                  .map(([id]) => ({ id }));
-                return state.missingIds;
+                state.missingIds = [...pointState.values()]
+                  .filter((point) => !point.pointCode)
+                  .map((point) => point.id);
+                return state.missingIds.map((id) => ({ id }));
               },
             });
           }
-          if (state.pointCalls === 2 && state.missingIds.length > 0) {
-            return makeChain({
-              select: async () =>
-                [...assignedCodes.values()]
-                  .filter((code): code is string => code !== null)
-                  .map((pointCode) => ({ point_code: pointCode })),
-            });
-          }
 
-          const pointUpdateIndex = state.pointCalls - 3;
-          if (pointUpdateIndex >= 0 && pointUpdateIndex < state.missingIds.length) {
-            const pointId = state.missingIds[pointUpdateIndex].id;
+          const updateIndex = state.pointCalls - 2;
+          if (updateIndex < state.missingIds.length) {
+            const pointId = state.missingIds[updateIndex];
             return makeChain({
               update: async (values) => {
-                assignedCodes.set(pointId, String(values.point_code));
+                const point = pointState.get(pointId);
+                if (!point) throw new Error(`Unknown measurement point ${pointId}`);
+                point.pointCode = String(values.point_code);
+                point.assignmentMode = 'AUTO';
                 return 1;
               },
             });
@@ -409,20 +735,22 @@ function concurrentApprovalHarness(systemType: 'CEMS' | 'WPMS') {
 
           return makeChain({
             terminalOrderBy: async () =>
-              [...assignedCodes.entries()].map(([id, code]) => measurementPointRow(id, code)),
+              [...pointState.values()].map((point) => measurementPointRow(point)),
           });
         }
 
-        if (tableName === 'cems_wpms_point_code_sequences') {
-          if (state.missingIds.length === 0) {
-            throw new Error(
-              'Sequence must not be reserved when all request points already have codes',
-            );
+        if (tableName === 'cems_wpms_point_code_registry') {
+          state.registryCalls += 1;
+          if (state.registryCalls === 1) {
+            return makeChain({ select: async () => [...registryRows] });
           }
+          return makeChain({ insert: registryInsert });
+        }
+
+        if (tableName === 'cems_wpms_point_code_sequences') {
           state.sequenceCalls += 1;
           if (state.sequenceCalls === 1) {
-            return lockingFirstBuilder(async (locked) => {
-              if (!locked) throw new Error('Sequence row was not locked');
+            return lockingFirstBuilder(async () => {
               releases.push(await sequenceLock.acquire());
               return { system_type: systemType, prefix, last_sequence: lastSequence };
             });
@@ -461,21 +789,17 @@ function concurrentApprovalHarness(systemType: 'CEMS' | 'WPMS') {
     }
   };
 
-  return { runTransaction, lastSequence: () => lastSequence };
+  return { runTransaction, lastSequence: () => lastSequence, registryInsert };
 }
 
-function lockingFirstBuilder(load: (locked: boolean) => Promise<unknown>) {
-  let locked = false;
+function lockingFirstBuilder(load: () => Promise<unknown>) {
   const chain: Record<string, unknown> = {};
   const returnChain = jest.fn(() => chain);
   Object.assign(chain, {
     where: returnChain,
     whereNull: returnChain,
-    forUpdate: jest.fn(() => {
-      locked = true;
-      return chain;
-    }),
-    first: jest.fn(() => load(locked)),
+    forUpdate: returnChain,
+    first: jest.fn(load),
   });
   return chain;
 }
@@ -492,23 +816,5 @@ class AsyncMutex {
     this.tail = previous.then(() => current);
     await previous;
     return release;
-  }
-}
-
-class AsyncBarrier {
-  private arrivals = 0;
-  private readonly ready: Promise<void>;
-  private release: () => void = () => {};
-
-  constructor(private readonly target: number) {
-    this.ready = new Promise<void>((resolve) => {
-      this.release = resolve;
-    });
-  }
-
-  async wait(): Promise<void> {
-    this.arrivals += 1;
-    if (this.arrivals >= this.target) this.release();
-    await this.ready;
   }
 }

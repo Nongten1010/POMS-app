@@ -14,6 +14,7 @@
 ## Connection requests
 
 - [เลขที่คำขอใช้ลำดับ 4 หลักและปี พ.ศ. เต็ม](./connection-requests/request-number-full-year-format.tdd.md)
+- [เจ้าหน้าที่เลือกใช้รหัสจุดตรวจวัดเดิมหรือให้ระบบออกรหัสอัตโนมัติ](./connection-requests/point-code-assignment-options.tdd.md)
 - [คืนรหัสจุดตรวจวัดเป็น S/W เริ่มที่ 2001](./connection-requests/legacy-point-code-format-restored.tdd.md)
 - [รหัสจุดตรวจวัดแบบลำดับรายปี](./connection-requests/annual-point-code-format.tdd.md)
 - [ฟอร์มเพิ่มจุดส่งสถานะไปพร้อม `POST /measurement-points`](./connection-requests/add-measurement-point-submission-action.tdd.md)

@@ -57,6 +57,28 @@ export const CONNECTION_REQUEST_STATUS_LABELS: Record<ConnectionRequestStatus, s
 export type ConnectionSystemType = 'CEMS' | 'WPMS';
 export type MeasurementPointType = 'STACK' | 'WASTEWATER' | 'OTHER';
 
+export const POINT_CODE_ASSIGNMENT_MODE = {
+  AUTO: 'AUTO',
+  MANUAL_LEGACY: 'MANUAL_LEGACY',
+  OFFICER_DIRECT: 'OFFICER_DIRECT',
+  LEGACY_IMPORTED: 'LEGACY_IMPORTED',
+} as const;
+
+export type PointCodeAssignmentMode =
+  (typeof POINT_CODE_ASSIGNMENT_MODE)[keyof typeof POINT_CODE_ASSIGNMENT_MODE];
+
+export type PointCodeAssignmentInput =
+  | {
+      measurementPointId: number;
+      assignmentMode: typeof POINT_CODE_ASSIGNMENT_MODE.AUTO;
+    }
+  | {
+      measurementPointId: number;
+      assignmentMode: typeof POINT_CODE_ASSIGNMENT_MODE.MANUAL_LEGACY;
+      pointCode: string;
+      reason: string;
+    };
+
 export type MeasurementPointDetailsInput = Record<string, unknown>;
 
 export interface RequestDocumentImageInput {
@@ -203,12 +225,14 @@ export interface ReviewConnectionRequestInput {
   decision: 'APPROVE_DESIGN' | 'REQUEST_REVISION';
   revisionReason?: string | null;
   officerNote?: string | null;
+  pointCodeAssignments?: PointCodeAssignmentInput[];
 }
 
 export interface ChangeConnectionRequestStatusInput {
   action: 'APPROVE_FORM' | 'REQUEST_REVISION' | 'RETURN_TO_WAITING_CONNECTION';
   revisionReason?: string | null;
   officerNote?: string | null;
+  pointCodeAssignments?: PointCodeAssignmentInput[];
 }
 
 export interface CancelConnectionRequestInput {
@@ -229,6 +253,7 @@ export interface VerifyConnectionInput {
 export interface MeasurementPointDTO extends Omit<MeasurementPointInput, 'parameters'> {
   id: number;
   parameters: string[];
+  pointCodeAssignmentMode?: PointCodeAssignmentMode | null;
 }
 
 export interface StatusHistoryDTO {

@@ -7,7 +7,12 @@ import type { RegionalAccessDTO } from '../auth/regional-access';
 import { resolveAssignedRegions } from '../auth/regional-access';
 import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
 import { buddhistCalendarYear } from '../../shared/utils/monitoring-point-code';
-import { ConflictError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
+import {
+  BadRequestError,
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+} from '../../shared/errors/AppError';
 import { withProvinceInFactoryAddress } from '../eligible-factories/factory-address';
 import {
   deriveHasEiaFromAssessment,
@@ -25,6 +30,7 @@ import {
   CONNECTION_REQUEST_TYPE,
   CONNECTION_REQUEST_TYPE_LABELS,
   CONNECTION_REQUEST_STATUS_LABELS,
+  POINT_CODE_ASSIGNMENT_MODE,
   type ContactPersonInput,
   type ConnectionRequestDTO,
   type ConnectionRequestStatus,
@@ -40,6 +46,8 @@ import {
   type ListConnectionRequestsQuery,
   type MeasurementPointDTO,
   type MeasurementPointInput,
+  type PointCodeAssignmentInput,
+  type PointCodeAssignmentMode,
   type RequestDocumentImageInput,
   type StatusDurationSummaryDTO,
   type StatusHistoryDTO,
@@ -47,6 +55,7 @@ import {
 
 const FACTORY_TYPE_CODE_LENGTH = 5;
 const POINT_CODE_INITIAL_SEQUENCE = 2000;
+const POINT_CODE_MAX_SEQUENCE = 9999;
 
 interface ConnectionRequestRow {
   id: number | string;
@@ -118,6 +127,10 @@ interface MeasurementPointRow {
   details_json: string | null;
   documents_json: string | null;
   instruments_json: string | null;
+  point_code_assignment_mode?: PointCodeAssignmentMode | null;
+  point_code_assignment_reason?: string | null;
+  point_code_assigned_by?: number | string | null;
+  point_code_assigned_at?: Date | string | null;
 }
 
 interface ConnectedMeasurementPointRow {
@@ -274,6 +287,13 @@ interface StatusUpdate {
 
 interface StatusUpdateOptions {
   issueWaitingConnectionSideEffects?: boolean;
+  pointCodeAssignments?: PointCodeAssignmentInput[];
+}
+
+interface CreateRequestOptions {
+  revisionReason?: string | null;
+  officerNote?: string | null;
+  historyNote?: string;
 }
 
 interface CreateRequestOptions {
@@ -286,6 +306,12 @@ interface PointCodeSequenceRow {
   system_type: 'CEMS' | 'WPMS';
   prefix: 'S' | 'W';
   last_sequence: number | string;
+}
+
+interface PointCodeRegistryRow {
+  point_code: string;
+  normalized_point_code: string;
+  numeric_sequence: number | string | null;
 }
 
 interface FactoryFavoriteRow {
@@ -958,6 +984,16 @@ export const connectionRequestsRepository = {
           { ...point, pointCode },
           actorUserId,
         );
+        await reservePointCodeRegistryEntry(trx, {
+          pointCode,
+          systemType: input.systemType,
+          assignmentMode: POINT_CODE_ASSIGNMENT_MODE.OFFICER_DIRECT,
+          requestId,
+          measurementPointId: pointId,
+          reason: null,
+          actorUserId,
+          errorPath: 'measurementPoints.0.pointCode',
+        });
 
         await insertHistory(
           trx,
@@ -1097,7 +1133,7 @@ export const connectionRequestsRepository = {
     return db.transaction(async (trx) => {
       if (shouldIssueWaitingConnectionSideEffects(status, options)) {
         await softDeleteDuplicateActiveMeasurementPoints(trx, id, actorUserId);
-        await issuePointCodesForRequest(trx, id, actorUserId);
+        await issuePointCodesForRequest(trx, id, actorUserId, options.pointCodeAssignments);
       }
 
       await trx('cems_wpms_connection_requests')
@@ -2640,7 +2676,13 @@ async function insertDirectMeasurementPoint(
   actorUserId: number,
 ): Promise<number> {
   const [{ id }] = await trx('cems_wpms_measurement_points')
-    .insert(toMeasurementPointInsertRow(requestId, point, actorUserId))
+    .insert({
+      ...toMeasurementPointInsertRow(requestId, point, actorUserId),
+      point_code_assignment_mode: POINT_CODE_ASSIGNMENT_MODE.OFFICER_DIRECT,
+      point_code_assignment_reason: null,
+      point_code_assigned_by: actorUserId,
+      point_code_assigned_at: trx.fn.now(),
+    })
     .returning('id');
 
   return Number(id);
@@ -2774,14 +2816,27 @@ async function issuePointCodesForRequest(
   trx: Knex.Transaction,
   requestId: number,
   actorUserId: number,
+  assignments?: PointCodeAssignmentInput[],
 ): Promise<void> {
   const request = await trx<ConnectionRequestRow>('cems_wpms_connection_requests')
     .where('id', requestId)
     .whereNull('deleted_at')
     .forUpdate()
-    .first('system_type', 'request_type');
-  if (!request) return;
-  if (request.request_type === CONNECTION_REQUEST_TYPE.ADD_PARAMETER) return;
+    .first('system_type', 'request_type', 'status');
+  if (!request) throw new NotFoundError('Connection request not found');
+  if (request.request_type === CONNECTION_REQUEST_TYPE.ADD_PARAMETER) {
+    if (assignments?.length) {
+      throw new BadRequestError('ADD_PARAMETER requests reuse an existing point code', {
+        path: 'pointCodeAssignments',
+        reason: 'POINT_CODE_ASSIGNMENT_NOT_ALLOWED',
+      });
+    }
+    return;
+  }
+
+  const autoAssignmentIndexes = assignments?.length
+    ? await applyPointCodeAssignments(trx, requestId, request.system_type, actorUserId, assignments)
+    : new Map<number, number>();
 
   const points = await trx<MeasurementPointRow>('cems_wpms_measurement_points')
     .where('request_id', requestId)
@@ -2792,15 +2847,217 @@ async function issuePointCodesForRequest(
   if (points.length === 0) return;
 
   const pointCodes = await reservePointCodes(trx, request.system_type, points.length);
-  await Promise.all(
-    points.map((point, index) =>
-      trx('cems_wpms_measurement_points').where('id', point.id).whereNull('deleted_at').update({
+  for (const [index, point] of points.entries()) {
+    const pointCode = pointCodes[index];
+    if (!pointCode) throw new Error('Reserved point code could not be resolved');
+    const measurementPointId = Number(point.id);
+    const assignmentInputIndex = autoAssignmentIndexes.get(measurementPointId) ?? index;
+
+    await reservePointCodeRegistryEntry(trx, {
+      pointCode,
+      systemType: request.system_type,
+      assignmentMode: POINT_CODE_ASSIGNMENT_MODE.AUTO,
+      requestId,
+      measurementPointId,
+      reason: null,
+      actorUserId,
+      errorPath: `pointCodeAssignments.${assignmentInputIndex}.pointCode`,
+    });
+    await trx('cems_wpms_measurement_points')
+      .where('id', measurementPointId)
+      .whereNull('deleted_at')
+      .update({
         point_code: pointCodes[index],
+        point_code_assignment_mode: POINT_CODE_ASSIGNMENT_MODE.AUTO,
+        point_code_assignment_reason: null,
+        point_code_assigned_by: actorUserId,
+        point_code_assigned_at: trx.fn.now(),
         updated_by: actorUserId,
         updated_at: trx.fn.now(),
-      }),
-    ),
-  );
+      });
+  }
+}
+
+async function applyPointCodeAssignments(
+  trx: Knex.Transaction,
+  requestId: number,
+  systemType: 'CEMS' | 'WPMS',
+  actorUserId: number,
+  assignments: PointCodeAssignmentInput[],
+): Promise<Map<number, number>> {
+  const points = await trx<MeasurementPointRow>('cems_wpms_measurement_points')
+    .where('request_id', requestId)
+    .whereNull('deleted_at')
+    .orderBy('id', 'asc')
+    .select('id', 'point_code', 'point_code_assignment_mode');
+  const pointById = new Map(points.map((point) => [Number(point.id), point]));
+  const unassignedPointIds = points
+    .filter((point) => !point.point_code?.trim())
+    .map((point) => Number(point.id));
+  const receivedPointIds = assignments.map((assignment) => Number(assignment.measurementPointId));
+  const receivedPointIdSet = new Set(receivedPointIds);
+  const assignmentsCoverUnassignedPoints =
+    assignments.length === unassignedPointIds.length &&
+    receivedPointIdSet.size === receivedPointIds.length &&
+    unassignedPointIds.every((pointId) => receivedPointIdSet.has(pointId));
+
+  if (unassignedPointIds.length === 0) {
+    ensureRepeatedPointCodeAssignmentsMatch(pointById, assignments);
+    return new Map();
+  }
+  if (!assignmentsCoverUnassignedPoints) {
+    throw new BadRequestError(
+      'pointCodeAssignments must cover every unassigned point exactly once',
+      {
+        path: 'pointCodeAssignments',
+        reason: 'POINT_CODE_ASSIGNMENTS_MISMATCH',
+        expectedMeasurementPointIds: unassignedPointIds,
+        receivedMeasurementPointIds: receivedPointIds,
+      },
+    );
+  }
+
+  const seenManualCodes = new Set<string>();
+  const autoAssignmentIndexes = new Map<number, number>();
+
+  for (const [index, assignment] of assignments.entries()) {
+    const pointId = Number(assignment.measurementPointId);
+    if (!pointById.has(pointId)) {
+      throw new BadRequestError('Measurement point does not belong to this request', {
+        path: `pointCodeAssignments.${index}.measurementPointId`,
+        reason: 'POINT_CODE_ASSIGNMENT_POINT_NOT_FOUND',
+        measurementPointId: pointId,
+      });
+    }
+
+    if (assignment.assignmentMode === POINT_CODE_ASSIGNMENT_MODE.AUTO) {
+      autoAssignmentIndexes.set(pointId, index);
+      continue;
+    }
+
+    const pointCode = normalizeManualLegacyPointCode(assignment.pointCode, systemType, index);
+    const normalizedPointCode = normalizePointCode(pointCode);
+    if (seenManualCodes.has(normalizedPointCode)) {
+      throw new BadRequestError('Manual legacy point code is duplicated in this approval payload', {
+        path: `pointCodeAssignments.${index}.pointCode`,
+        reason: 'DUPLICATE_POINT_CODE_ASSIGNMENT',
+        pointCode,
+      });
+    }
+    seenManualCodes.add(normalizedPointCode);
+
+    await reservePointCodeRegistryEntry(trx, {
+      pointCode,
+      systemType,
+      assignmentMode: POINT_CODE_ASSIGNMENT_MODE.MANUAL_LEGACY,
+      requestId,
+      measurementPointId: pointId,
+      reason: assignment.reason,
+      actorUserId,
+      errorPath: `pointCodeAssignments.${index}.pointCode`,
+    });
+    await trx('cems_wpms_measurement_points').where('id', pointId).whereNull('deleted_at').update({
+      point_code: pointCode,
+      point_code_assignment_mode: POINT_CODE_ASSIGNMENT_MODE.MANUAL_LEGACY,
+      point_code_assignment_reason: assignment.reason,
+      point_code_assigned_by: actorUserId,
+      point_code_assigned_at: trx.fn.now(),
+      updated_by: actorUserId,
+      updated_at: trx.fn.now(),
+    });
+  }
+
+  return autoAssignmentIndexes;
+}
+
+function normalizeManualLegacyPointCode(
+  value: string,
+  systemType: 'CEMS' | 'WPMS',
+  assignmentIndex: number,
+): string {
+  const pointCode = normalizePointCode(value);
+  const expectedPrefix = systemType === 'CEMS' ? 'S' : 'W';
+  const match = pointCode.match(/^([SW])(\d{4})$/);
+  const sequence = match ? Number(match[2]) : Number.NaN;
+  if (!match || match[1] !== expectedPrefix || sequence < 1 || sequence > 1999) {
+    throw new BadRequestError(
+      `Manual legacy point code must use ${expectedPrefix}0001-${expectedPrefix}1999`,
+      {
+        path: `pointCodeAssignments.${assignmentIndex}.pointCode`,
+        reason: 'INVALID_MANUAL_LEGACY_POINT_CODE',
+        pointCode,
+        systemType,
+      },
+    );
+  }
+  return pointCode;
+}
+
+function ensureRepeatedPointCodeAssignmentsMatch(
+  pointById: Map<
+    number,
+    Pick<MeasurementPointRow, 'id' | 'point_code' | 'point_code_assignment_mode'>
+  >,
+  assignments: PointCodeAssignmentInput[],
+): void {
+  const assignmentsMatch = assignments.every((assignment) => {
+    const point = pointById.get(Number(assignment.measurementPointId));
+    if (!point || point.point_code_assignment_mode !== assignment.assignmentMode) return false;
+    if (assignment.assignmentMode === POINT_CODE_ASSIGNMENT_MODE.AUTO) {
+      return Boolean(point.point_code?.trim());
+    }
+    return normalizePointCode(point.point_code ?? '') === normalizePointCode(assignment.pointCode);
+  });
+  if (!assignmentsMatch) {
+    throw new ConflictError('Connection request already has different point-code assignments', {
+      path: 'pointCodeAssignments',
+      reason: 'POINT_CODE_ASSIGNMENTS_ALREADY_FINALIZED',
+    });
+  }
+}
+
+function normalizePointCode(pointCode: string): string {
+  return pointCode.trim().toUpperCase();
+}
+
+async function reservePointCodeRegistryEntry(
+  trx: Knex.Transaction,
+  input: {
+    pointCode: string;
+    systemType: 'CEMS' | 'WPMS';
+    assignmentMode: PointCodeAssignmentMode;
+    requestId: number;
+    measurementPointId: number;
+    reason: string | null;
+    actorUserId: number;
+    errorPath: string;
+  },
+): Promise<void> {
+  const normalizedPointCode = normalizePointCode(input.pointCode);
+  const numericMatch = normalizedPointCode.match(/^([SW])(\d{4})$/);
+
+  try {
+    await trx('cems_wpms_point_code_registry').insert({
+      point_code: input.pointCode.trim(),
+      normalized_point_code: normalizedPointCode,
+      system_type: input.systemType,
+      prefix: numericMatch?.[1] ?? null,
+      numeric_sequence: numericMatch ? Number(numericMatch[2]) : null,
+      assignment_mode: input.assignmentMode,
+      source_request_id: input.requestId,
+      source_measurement_point_id: input.measurementPointId,
+      reason: input.reason,
+      assigned_by: input.actorUserId,
+      assigned_at: trx.fn.now(),
+    });
+  } catch (error) {
+    if (!isPointCodeRegistryUniqueViolation(error)) throw error;
+    throw new ConflictError('Measurement point code is already assigned', {
+      path: input.errorPath,
+      reason: 'POINT_CODE_ALREADY_ASSIGNED',
+      pointCode: input.pointCode,
+    });
+  }
 }
 
 async function reservePointCodes(
@@ -2808,6 +3065,7 @@ async function reservePointCodes(
   systemType: 'CEMS' | 'WPMS',
   quantity: number,
 ): Promise<string[]> {
+  if (quantity === 0) return [];
   const prefix = systemType === 'CEMS' ? 'S' : 'W';
   let sequence = await trx<PointCodeSequenceRow>('cems_wpms_point_code_sequences')
     .where('system_type', systemType)
@@ -2834,6 +3092,15 @@ async function reservePointCodes(
   const firstSequence = Math.max(currentSequence, existingMaxSequence) + 1;
   const lastSequence = firstSequence + quantity - 1;
 
+  if (lastSequence > POINT_CODE_MAX_SEQUENCE) {
+    throw new ConflictError('No four-digit automatic measurement point codes remain', {
+      reason: 'POINT_CODE_SEQUENCE_EXHAUSTED',
+      systemType,
+      maximumSequence: POINT_CODE_MAX_SEQUENCE,
+      requestedQuantity: quantity,
+    });
+  }
+
   await trx('cems_wpms_point_code_sequences').where('system_type', systemType).update({
     last_sequence: lastSequence,
     updated_at: trx.fn.now(),
@@ -2849,13 +3116,12 @@ async function findMaxExistingPointCodeSequence(
   trx: Knex.Transaction,
   prefix: 'S' | 'W',
 ): Promise<number> {
-  const rows = await trx<MeasurementPointRow>('cems_wpms_measurement_points')
-    .whereNull('deleted_at')
-    .where('point_code', 'like', `${prefix}%`)
+  const rows = await trx<PointCodeRegistryRow>('cems_wpms_point_code_registry')
+    .where('normalized_point_code', 'like', `${prefix}%`)
     .select('point_code');
 
   return rows.reduce((maxSequence, row) => {
-    const match = row.point_code?.match(new RegExp(`^${prefix}(\\d+)$`));
+    const match = normalizePointCode(row.point_code).match(new RegExp(`^${prefix}(\\d{4})$`));
     if (!match) return maxSequence;
     return Math.max(maxSequence, Number(match[1]));
   }, 0);
@@ -2909,16 +3175,28 @@ async function ensureDirectPointCodeAvailable(
   trx: Knex.Transaction,
   pointCode: string,
 ): Promise<void> {
+  await ensurePointCodeAvailableForAssignment(trx, pointCode, 'measurementPoints.0.pointCode');
+}
+
+async function ensurePointCodeAvailableForAssignment(
+  trx: Knex.Transaction,
+  pointCode: string,
+  path: string,
+): Promise<void> {
   const existing = await trx('cems_wpms_connected_measurement_points')
     .whereNull('deleted_at')
     .whereRaw('LOWER(LTRIM(RTRIM(point_code))) = LOWER(LTRIM(RTRIM(?)))', [pointCode])
     .first('id');
-  if (existing) throw directPointCodeConflict(pointCode);
+  if (existing) throw pointCodeConflict(pointCode, path);
 }
 
 function directPointCodeConflict(pointCode: string): ConflictError {
+  return pointCodeConflict(pointCode, 'measurementPoints.0.pointCode');
+}
+
+function pointCodeConflict(pointCode: string, path: string): ConflictError {
   return new ConflictError('Measurement point code is already connected', {
-    path: 'measurementPoints.0.pointCode',
+    path,
     pointCode,
   });
 }
@@ -2944,6 +3222,29 @@ function isActivePointCodeUniqueViolation(error: unknown): boolean {
     .join(' ')
     .toLowerCase();
   return message.includes('uq_connected_points_point_code');
+}
+
+function isPointCodeRegistryUniqueViolation(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const candidate = error as {
+    number?: number;
+    code?: number | string;
+    message?: string;
+    originalError?: { info?: { number?: number; message?: string }; message?: string };
+  };
+  const number = Number(
+    candidate.number ?? candidate.code ?? candidate.originalError?.info?.number,
+  );
+  if (number !== 2601 && number !== 2627) return false;
+  const message = [
+    candidate.message,
+    candidate.originalError?.message,
+    candidate.originalError?.info?.message,
+  ]
+    .filter((value): value is string => Boolean(value))
+    .join(' ')
+    .toLowerCase();
+  return message.includes('uq_cems_wpms_point_code_registry_normalized');
 }
 
 async function nextRequestNo(trx: Knex.Transaction, systemType: 'CEMS' | 'WPMS'): Promise<string> {
@@ -3012,6 +3313,7 @@ function toMeasurementPointDTO(row: MeasurementPointRow): MeasurementPointDTO {
     details: parseJsonObject(row.details_json),
     documentsAndImages: parseJsonArray<RequestDocumentImageInput>(row.documents_json),
     measurementInstruments: parseJsonObject<MeasurementInstrumentsInput>(row.instruments_json),
+    pointCodeAssignmentMode: row.point_code_assignment_mode ?? null,
   };
 }
 

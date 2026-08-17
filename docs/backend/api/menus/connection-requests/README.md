@@ -102,7 +102,7 @@ API ทั้ง 34 route signatures ต้องใช้ Bearer token; แต�
 | สร้างคำขอเชื่อมต่อใหม่                        | `POST` | `/api/v1/cems-wpms-requests`                              | JSON body                      | `cems_wpms_requests:edit`           | [Eligibility gate](#eligibility-gate)                                                                     |
 | ส่งแบบใหม่หลังถูกแจ้งแก้ไข                    | `PUT`  | `/api/v1/cems-wpms-requests/:id/form`                     | `id` path + JSON body          | `cems_wpms_requests:edit` + owner   | [Payload/validation](./request-payloads-and-validation.md#put-apiv1cems-wpms-requestsidform)              |
 | อนุมัติแบบ/แจ้งแก้ไข                          | `POST` | `/api/v1/cems-wpms-requests/:id/review`                   | `id` path + JSON body          | `cems_wpms_requests:approve`        | [Approve design](#approve-design)                                                                         |
-| เปลี่ยนสถานะ/แจ้งแก้ไข                        | `POST` | `/api/v1/cems-wpms-requests/:id/status`                   | `id` path + JSON body          | `cems_wpms_requests:approve`        | `action` discriminated payload                                                                            |
+| เปลี่ยนสถานะ/แจ้งแก้ไข                        | `POST` | `/api/v1/cems-wpms-requests/:id/status`                   | `id` path + JSON body          | `cems_wpms_requests:approve`        | [Approve form status](#approve-form-status)                                                               |
 | ผู้ประกอบการยกเลิกคำขอ                        | `POST` | `/api/v1/cems-wpms-requests/:id/cancel`                   | `id` path + `{ reason? }`      | `cems_wpms_requests:edit` + owner   | [Cancel request](./operator-cancel-request.md)                                                            |
 | บันทึก config อุปกรณ์ในคำขอ                   | `POST` | `/api/v1/cems-wpms-requests/:id/device-configs`           | `id` path + JSON body          | `cems_wpms_requests:edit`           | [Device configs](./device-configs.md)                                                                     |
 | บันทึก/ยืนยันการเชื่อมต่อ                     | `POST` | `/api/v1/cems-wpms-requests/:id/confirm-connection`       | `id` path + JSON body          | `cems_wpms_requests:edit`           | `action`, `confirmedAt?`, `note?`                                                                         |
@@ -158,18 +158,18 @@ API ทั้ง 34 route signatures ต้องใช้ Bearer token; แต�
 
 ## Point-code Contract
 
-กติกานี้ใช้เฉพาะ flow ปกติของผู้ประกอบการ:
+กติกานี้ใช้กับการออกรหัสใน flow ปกติของผู้ประกอบการ:
 
-| `systemType` | รูปแบบรหัสใหม่              | รหัสแรกขั้นต่ำ | ตัวอย่างลำดับ         |
-| ------------ | --------------------------- | -------------- | --------------------- |
-| `CEMS`       | `S` + ลำดับอย่างน้อย 4 หลัก | `S2001`        | `S2001`, `S2002`, ... |
-| `WPMS`       | `W` + ลำดับอย่างน้อย 4 หลัก | `W2001`        | `W2001`, `W2002`, ... |
+| `systemType` | รูปแบบรหัสใหม่       | ช่วงอัตโนมัติ     | ตัวอย่างลำดับ         |
+| ------------ | -------------------- | ----------------- | --------------------- |
+| `CEMS`       | `S` + ตัวเลข 4 หลัก | `S2001`–`S9999` | `S2001`, `S2002`, ... |
+| `WPMS`       | `W` + ตัวเลข 4 หลัก | `W2001`–`W9999` | `W2001`, `W2002`, ... |
 
-- CEMS และ WPMS ใช้ลำดับแยกกัน เริ่มขั้นต่ำที่ `2001` และไม่เริ่มใหม่เมื่อเปลี่ยนปี.
-- ระบบออกเลขต่อจากค่าที่มากกว่าระหว่าง sequence ที่บันทึกไว้กับรหัส `S...`/`W...` สูงสุดที่ยังใช้งานอยู่.
+- CEMS และ WPMS ใช้ลำดับแยกกัน เริ่มที่ `2001`, สิ้นสุดที่ `9999` และไม่เริ่มใหม่เมื่อเปลี่ยนปี.
+- ระบบออกเลขต่อจากค่าที่มากกว่าระหว่าง sequence ที่บันทึกไว้กับรหัส `S...`/`W...` สูงสุดที่เคยจองไว้ในทะเบียนรหัสกลาง.
 - รหัสเดิมรูปแบบอื่น เช่น `Pxxxx`, `CEMS-NNNN/YYYY` และ `WEMS-NNNN/YYYY` ยังอ่านเป็น opaque identifier ได้ แต่ไม่ถูกนำมาคำนวณเลขใหม่.
 - คำขอ `ADD_PARAMETER` ใช้รหัสจุดเดิมและไม่ออกรหัสใหม่.
-- `POST /api/v1/cems-wpms-requests/direct-connections` ไม่ใช้ลำดับรหัสจุดนี้ และเก็บรหัสที่เจ้าหน้าที่ส่งใน `measurementPoints[0].pointCode`.
+- `POST /api/v1/cems-wpms-requests/direct-connections` ไม่ใช้ลำดับรหัสจุดนี้ และเก็บรหัสที่เจ้าหน้าที่ส่งใน `measurementPoints[0].pointCode`; รหัสดังกล่าวยังถูกจองในทะเบียนกลางและห้ามนำกลับมาใช้ซ้ำ.
 - การจองเลขและการเปลี่ยนสถานะทำใน transaction เดียวกันเพื่อไม่ให้คำขอพร้อมกันได้รหัสซ้ำ.
 
 เพื่อรองรับข้อมูลที่เคยมี `/` อยู่ในรหัสจุด:
@@ -260,7 +260,7 @@ Request fields ที่ต้องมีจริง:
 | `submissionAction`               | enum             | no          | แนะนำให้ส่ง `CONNECT` หรือ `REQUEST_FACTORY_REVISION`; ถ้าไม่ส่ง action/status จะ default เป็น `CONNECT`                  |
 | `revisionReason`                 | string \| null   | conditional | ต้องมีข้อความเมื่อ `submissionAction = REQUEST_FACTORY_REVISION`                                                           |
 | `measurementPoints`              | array            | yes         | ต้องมีหนึ่งรายการเท่านั้น                                                                                                 |
-| `measurementPoints[0].pointCode` | string           | yes         | trim แล้วต้องไม่ว่าง, ยาวไม่เกิน 64 ตัวอักษร และห้ามซ้ำกับ active point ใน `cems_wpms_connected_measurement_points`       |
+| `measurementPoints[0].pointCode` | string           | yes         | trim แล้วต้องไม่ว่าง, ยาวไม่เกิน 64 ตัวอักษร และห้ามซ้ำกับรหัสที่เคยจองไว้ในทะเบียนรหัสกลาง                              |
 
 Minimal request:
 
@@ -541,10 +541,11 @@ Minimal response (`200 OK`):
 
 Request fields:
 
-| Field         | Type           | Required | Rules                                     |
-| ------------- | -------------- | -------- | ----------------------------------------- |
-| `decision`    | string         | yes      | ต้องเป็น `APPROVE_DESIGN` สำหรับ flow นี้ |
-| `officerNote` | string \| null | no       | ข้อความที่ trim แล้ว สูงสุด 1000 ตัวอักษร |
+| Field                  | Type           | Required | Rules                                                                                                                               |
+| ---------------------- | -------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `decision`             | string         | yes      | ต้องเป็น `APPROVE_DESIGN` สำหรับ flow นี้                                                                                           |
+| `officerNote`          | string \| null | no       | ข้อความที่ trim แล้ว สูงสุด 1000 ตัวอักษร                                                                                           |
+| `pointCodeAssignments` | array          | no       | ถ้าไม่ส่ง backend ถือว่าทุกจุดเป็น `AUTO`; ถ้าส่งแต่ละรายการต้องอ้าง `measurementPointId` ของจุดในคำขอและเลือก `AUTO` หรือ `MANUAL_LEGACY` |
 
 Minimal request:
 
@@ -555,14 +556,45 @@ Minimal request:
 }
 ```
 
+ตัวอย่าง request เมื่อมีจุดตรวจวัดเก่าที่ต้องใช้รหัสเดิม:
+
+```json
+{
+  "decision": "APPROVE_DESIGN",
+  "officerNote": "ตรวจข้อมูลครบแล้ว",
+  "pointCodeAssignments": [
+    {
+      "measurementPointId": 201,
+      "assignmentMode": "MANUAL_LEGACY",
+      "pointCode": "S1054",
+      "reason": "ใช้รหัสเดิมของจุดตรวจวัดเก่าตามทะเบียนโรงงาน"
+    },
+    {
+      "measurementPointId": 202,
+      "assignmentMode": "AUTO"
+    }
+  ]
+}
+```
+
+กติกา `pointCodeAssignments`
+
+- omission หรือไม่ส่ง field นี้ หมายถึง `AUTO` ทุกจุดและยัง backward compatible กับ client เดิม
+- ถ้าส่ง array ต้องระบุทุกจุดที่ยังไม่มีรหัสให้ครบและไม่ซ้ำกัน; ไม่รับ array บางส่วน
+- `assignmentMode = "AUTO"` ให้ระบบออกรหัสใหม่ตาม Point-code Contract ช่วง `S/W2001-9999`
+- `assignmentMode = "MANUAL_LEGACY"` ใช้ได้เฉพาะรหัสเดิมรูปแบบ `^[SW]\\d{4}$`, ค่าตัวเลขช่วง `0001-1999` และ prefix ต้องตรงกับ `systemType` (`CEMS = S`, `WPMS = W`)
+- เมื่อเป็น `MANUAL_LEGACY` ต้องส่งทั้ง `pointCode` และ `reason` โดย `reason` ต้องยาวไม่เกิน 500 ตัวอักษร
+- รหัสที่ถูกจองแล้วห้ามนำกลับมาใช้ซ้ำ ทั้งจุดที่รอเชื่อมต่อ เชื่อมต่ออยู่ หรือเลิกใช้งานแล้ว; ถ้าชนกันระบบตอบ `409 CONFLICT`
+
 Relevant response fields (`200 OK`):
 
-| Field                                | Type    | Meaning                                    |
-| ------------------------------------ | ------- | ------------------------------------------ |
-| `success`                            | boolean | สำเร็จเป็น `true`                          |
-| `data.status`                        | string  | เป็น `WAITING_CONNECTION` หลังอนุมัติแบบ   |
-| `data.systemType`                    | string  | `CEMS` หรือ `WPMS`                         |
-| `data.measurementPoints[].pointCode` | string  | รหัสที่ backend ออกตาม Point-code Contract |
+| Field                                              | Type           | Meaning                                                                 |
+| -------------------------------------------------- | -------------- | ----------------------------------------------------------------------- |
+| `success`                                          | boolean        | สำเร็จเป็น `true`                                                       |
+| `data.status`                                      | string         | เป็น `WAITING_CONNECTION` หลังอนุมัติแบบ                                |
+| `data.systemType`                                  | string         | `CEMS` หรือ `WPMS`                                                      |
+| `data.measurementPoints[].pointCode`               | string         | รหัสที่ backend ออกให้หรือ reuse ตาม assignment ของแต่ละจุด             |
+| `data.measurementPoints[].pointCodeAssignmentMode` | string \| null | `AUTO`, `MANUAL_LEGACY`, `OFFICER_DIRECT` หรือ `LEGACY_IMPORTED` ตามที่มา |
 
 Minimal response:
 
@@ -577,12 +609,57 @@ Minimal response:
       {
         "id": 201,
         "pointName": "จุดระบายน้ำทิ้ง 1",
-        "pointCode": "W2001"
+        "pointCode": "W2001",
+        "pointCodeAssignmentMode": "AUTO"
       }
     ]
   }
 }
 ```
+
+### Approve form status
+
+เมื่อเรียก `POST /api/v1/cems-wpms-requests/:id/status` พร้อม `action = "APPROVE_FORM"` request สามารถส่ง `pointCodeAssignments` ได้ด้วยกติกาเดียวกับ `Approve design`
+
+Request fields สำหรับ approve branch:
+
+| Field                  | Type           | Required | Rules                                                                                                                              |
+| ---------------------- | -------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `action`               | string         | yes      | ต้องเป็น `APPROVE_FORM`                                                                                                            |
+| `officerNote`          | string \| null | no       | ข้อความที่ trim แล้ว สูงสุด 1000 ตัวอักษร                                                                                          |
+| `pointCodeAssignments` | array          | no       | omission = `AUTO` ทุกจุด; ถ้าส่ง `MANUAL_LEGACY` ต้องมี `pointCode` กับ `reason` และรหัสต้องอยู่ช่วง legacy `S/W0001-1999` |
+
+Minimal request:
+
+```json
+{
+  "action": "APPROVE_FORM",
+  "officerNote": "ตรวจข้อมูลครบแล้ว"
+}
+```
+
+ตัวอย่าง request แบบใช้รหัสเดิม:
+
+```json
+{
+  "action": "APPROVE_FORM",
+  "officerNote": "ตรวจข้อมูลครบแล้ว",
+  "pointCodeAssignments": [
+    {
+      "measurementPointId": 201,
+      "assignmentMode": "MANUAL_LEGACY",
+      "pointCode": "W0188",
+      "reason": "ใช้รหัสเดิมของจุดตรวจวัดเก่า"
+    }
+  ]
+}
+```
+
+Errors ที่เพิ่มจาก flow เดิม:
+
+- `409 CONFLICT` เมื่อ `pointCode` ถูกจองแล้ว หรือเลขอัตโนมัติ 4 หลักหมดช่วงที่รองรับ
+- `400 VALIDATION_ERROR` เมื่อ `MANUAL_LEGACY` ไม่ส่ง `pointCode` หรือ `reason`, `reason` ยาวเกิน 500 ตัวอักษร, รูปแบบรหัสไม่เป็น `^[SW]\d{4}$`, หรือค่าตัวเลขอยู่นอกช่วง legacy `0001-1999`
+- `400 BAD_REQUEST` เมื่อ prefix ไม่ตรงกับ `systemType`, ส่งรายการไม่ครบทุกจุดที่ยังไม่มีรหัส, อ้างจุดนอกคำขอ หรือพยายามกำหนดรหัสใหม่ให้คำขอ `ADD_PARAMETER`
 
 ### Read request
 
@@ -733,6 +810,6 @@ Minimal response:
 | Sequence implementation          | [`connection-requests.repository.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.repository.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | Reverse-proxy path normalization | [`annual-point-code-path.ts`](../../../../../backend/src/shared/middlewares/annual-point-code-path.ts), [`connected-measurement-points.routes.ts`](../../../../../backend/src/modules/connection-requests/connected-measurement-points.routes.ts), [`integrations.routes.ts`](../../../../../backend/src/modules/integrations/integrations.routes.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | Factory-profile patch rules      | [`connected-factory-profile.ts`](../../../../../backend/src/modules/connection-requests/connected-factory-profile.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| Migrations                       | [`0075_start_operator_point_codes_at_2001.ts`](../../../../../backend/src/db/migrations/0075_start_operator_point_codes_at_2001.ts), [`0076_sync_connected_factory_profiles_with_eligible_factories.ts`](../../../../../backend/src/db/migrations/0076_sync_connected_factory_profiles_with_eligible_factories.ts), [`0094_backfill_wpms_request_number_prefix.ts`](../../../../../backend/src/db/migrations/0094_backfill_wpms_request_number_prefix.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Migrations                       | [`0075_start_operator_point_codes_at_2001.ts`](../../../../../backend/src/db/migrations/0075_start_operator_point_codes_at_2001.ts), [`0076_sync_connected_factory_profiles_with_eligible_factories.ts`](../../../../../backend/src/db/migrations/0076_sync_connected_factory_profiles_with_eligible_factories.ts), [`0094_backfill_wpms_request_number_prefix.ts`](../../../../../backend/src/db/migrations/0094_backfill_wpms_request_number_prefix.ts), [`0095_create_point_code_registry.ts`](../../../../../backend/src/db/migrations/0095_create_point_code_registry.ts)                                                                                                                                                                                                                                                                                            |
 | Tests                            | [`connection-requests.service.test.ts`](../../../../../backend/tests/unit/connection-requests.service.test.ts), [`connection-requests.repository.test.ts`](../../../../../backend/tests/unit/connection-requests.repository.test.ts), [`connection-requests.point-code-sequence.repository.test.ts`](../../../../../backend/tests/unit/connection-requests.point-code-sequence.repository.test.ts), [`wpms-request-number-migration.test.ts`](../../../../../backend/tests/unit/wpms-request-number-migration.test.ts), [`parameter-values.validator.test.ts`](../../../../../backend/tests/unit/parameter-values.validator.test.ts), [`alert-events.route.test.ts`](../../../../../backend/tests/unit/alert-events.route.test.ts), [`connected-measurement-points.route.test.ts`](../../../../../backend/tests/unit/connected-measurement-points.route.test.ts), [`integration-device-configs.route.test.ts`](../../../../../backend/tests/unit/integration-device-configs.route.test.ts) |
 | Evidence                         | [Add-measurement-point submission action TDD](../../../evidence/connection-requests/add-measurement-point-submission-action.tdd.md), [Request-number format TDD](../../../evidence/connection-requests/request-number-full-year-format.tdd.md), [Restore S/W point-code format TDD](../../../evidence/connection-requests/legacy-point-code-format-restored.tdd.md), [Request table current/live POMS factory name TDD](../../../evidence/connection-requests/request-table-current-factory-name.tdd.md)                                                                                                                                                                                                                                                                                                                                                                                                                               |

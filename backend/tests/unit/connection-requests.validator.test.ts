@@ -599,10 +599,10 @@ describe('connection request validators', () => {
     });
 
     expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues).toEqual(
-        expect.arrayContaining([expect.objectContaining({ path: ['revisionReason'] })]),
-      );
+      if (!result.success) {
+        expect(result.error.issues).toEqual(
+          expect.arrayContaining([expect.objectContaining({ path: ['revisionReason'] })]),
+        );
     }
   });
 
@@ -1268,6 +1268,135 @@ describe('connection request validators', () => {
     expect(result.success).toBe(false);
   });
 
+  it('accepts APPROVE_DESIGN with per-point AUTO assignment ids', () => {
+    const result = reviewConnectionRequestSchema.safeParse({
+      decision: 'APPROVE_DESIGN',
+      officerNote: 'อนุมัติให้ดำเนินการเชื่อมต่อ',
+      pointCodeAssignments: [
+        {
+          measurementPointId: 11,
+          assignmentMode: 'AUTO',
+        },
+        {
+          measurementPointId: 12,
+          assignmentMode: 'AUTO',
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data).toMatchObject({
+      decision: 'APPROVE_DESIGN',
+      pointCodeAssignments: [
+        { measurementPointId: 11, assignmentMode: 'AUTO' },
+        { measurementPointId: 12, assignmentMode: 'AUTO' },
+      ],
+    });
+  });
+
+  it('accepts APPROVE_DESIGN with MANUAL_LEGACY assignments in the valid S/W 0001-1999 range', () => {
+    const result = reviewConnectionRequestSchema.safeParse({
+      decision: 'APPROVE_DESIGN',
+      pointCodeAssignments: [
+        {
+          measurementPointId: 21,
+          assignmentMode: 'MANUAL_LEGACY',
+          pointCode: 'W0001',
+          reason: 'ใช้รหัสจุดเดิมจากระบบเก่า',
+        },
+        {
+          measurementPointId: 22,
+          assignmentMode: 'MANUAL_LEGACY',
+          pointCode: 'W1999',
+          reason: 'ใช้รหัสจุดเดิมอีกจุด',
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data).toMatchObject({
+      pointCodeAssignments: [
+        {
+          measurementPointId: 21,
+          assignmentMode: 'MANUAL_LEGACY',
+          pointCode: 'W0001',
+          reason: 'ใช้รหัสจุดเดิมจากระบบเก่า',
+        },
+        {
+          measurementPointId: 22,
+          assignmentMode: 'MANUAL_LEGACY',
+          pointCode: 'W1999',
+          reason: 'ใช้รหัสจุดเดิมอีกจุด',
+        },
+      ],
+    });
+  });
+
+  it('requires a legacy reason for MANUAL_LEGACY approval assignments', () => {
+    const result = reviewConnectionRequestSchema.safeParse({
+      decision: 'APPROVE_DESIGN',
+      pointCodeAssignments: [
+        {
+          measurementPointId: 31,
+          assignmentMode: 'MANUAL_LEGACY',
+          pointCode: 'S0100',
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: ['pointCodeAssignments', 0, 'reason'],
+        }),
+      ]),
+    );
+  });
+
+  it('rejects MANUAL_LEGACY codes outside the 0001-1999 range', () => {
+    const invalidPayloads = [
+      {
+        decision: 'APPROVE_DESIGN',
+        pointCodeAssignments: [
+          {
+            measurementPointId: 41,
+            assignmentMode: 'MANUAL_LEGACY',
+            pointCode: 'S0000',
+            reason: 'เลขลำดับศูนย์',
+          },
+        ],
+      },
+      {
+        decision: 'APPROVE_DESIGN',
+        pointCodeAssignments: [
+          {
+            measurementPointId: 42,
+            assignmentMode: 'MANUAL_LEGACY',
+            pointCode: 'S2000',
+            reason: 'เลขลำดับเกินช่วง',
+          },
+        ],
+      },
+    ];
+
+    invalidPayloads.forEach((payload) => {
+      const result = reviewConnectionRequestSchema.safeParse(payload);
+      expect(result.success).toBe(false);
+      if (result.success) return;
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: ['pointCodeAssignments', 0, 'pointCode'],
+          }),
+        ]),
+      );
+    });
+  });
+
   it('accepts status changes for approval and revision actions', () => {
     expect(
       changeConnectionRequestStatusSchema.safeParse({
@@ -1288,6 +1417,39 @@ describe('connection request validators', () => {
         officerNote: 'ส่งกลับให้แก้ config',
       }).success,
     ).toBe(true);
+  });
+
+  it('accepts APPROVE_FORM with mixed AUTO and MANUAL_LEGACY point-code assignments keyed by point id', () => {
+    const result = changeConnectionRequestStatusSchema.safeParse({
+      action: 'APPROVE_FORM',
+      pointCodeAssignments: [
+        {
+          measurementPointId: 51,
+          assignmentMode: 'AUTO',
+        },
+        {
+          measurementPointId: 52,
+          assignmentMode: 'MANUAL_LEGACY',
+          pointCode: 'S1999',
+          reason: 'ยึดรหัสจุดเดิมตามข้อมูลโรงงาน',
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data).toMatchObject({
+      action: 'APPROVE_FORM',
+      pointCodeAssignments: [
+        { measurementPointId: 51, assignmentMode: 'AUTO' },
+        {
+          measurementPointId: 52,
+          assignmentMode: 'MANUAL_LEGACY',
+          pointCode: 'S1999',
+          reason: 'ยึดรหัสจุดเดิมตามข้อมูลโรงงาน',
+        },
+      ],
+    });
   });
 
   it('accepts connection confirmation and final verification payloads', () => {

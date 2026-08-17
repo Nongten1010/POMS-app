@@ -5,7 +5,11 @@ import {
   deriveHasEiaFromAssessment,
   type ConnectionRequestEiaAssessment,
 } from './connection-request-eia';
-import { CONNECTION_REQUEST_STATUS, CONNECTION_REQUEST_TYPE } from './connection-requests.types';
+import {
+  CONNECTION_REQUEST_STATUS,
+  CONNECTION_REQUEST_TYPE,
+  POINT_CODE_ASSIGNMENT_MODE,
+} from './connection-requests.types';
 
 const trimmedString = (max: number) => z.string().trim().min(1).max(max);
 const optionalTrimmedString = (max: number) => z.string().trim().min(1).max(max).optional();
@@ -1735,12 +1739,59 @@ export const deviceConfigFormQuerySchema = z
   })
   .strict();
 
+const manualLegacyPointCodeSchema = z.preprocess(
+  (value) => (typeof value === 'string' ? value.trim().toUpperCase() : value),
+  z
+    .string()
+    .regex(/^[SW]\d{4}$/, 'pointCode must use S/W followed by exactly 4 digits')
+    .refine((value) => {
+      const sequence = Number(value.slice(1));
+      return sequence >= 1 && sequence <= 1999;
+    }, 'manual legacy pointCode sequence must be between 0001 and 1999'),
+);
+
+const pointCodeAssignmentSchema = z.discriminatedUnion('assignmentMode', [
+  z
+    .object({
+      measurementPointId: z.coerce.number().int().min(1),
+      assignmentMode: z.literal(POINT_CODE_ASSIGNMENT_MODE.AUTO),
+    })
+    .strict(),
+  z
+    .object({
+      measurementPointId: z.coerce.number().int().min(1),
+      assignmentMode: z.literal(POINT_CODE_ASSIGNMENT_MODE.MANUAL_LEGACY),
+      pointCode: manualLegacyPointCodeSchema,
+      reason: trimmedString(500),
+    })
+    .strict(),
+]);
+
+const pointCodeAssignmentsSchema = z
+  .array(pointCodeAssignmentSchema)
+  .min(1)
+  .max(100)
+  .superRefine((assignments, ctx) => {
+    const seen = new Set<number>();
+    assignments.forEach((assignment, index) => {
+      if (seen.has(assignment.measurementPointId)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [index, 'measurementPointId'],
+          message: 'measurementPointId must not be duplicated',
+        });
+      }
+      seen.add(assignment.measurementPointId);
+    });
+  });
+
 export const reviewConnectionRequestSchema = z
   .discriminatedUnion('decision', [
     z
       .object({
         decision: z.literal('APPROVE_DESIGN'),
         officerNote: optionalNullableTrimmedString(1000),
+        pointCodeAssignments: pointCodeAssignmentsSchema.optional(),
       })
       .strict(),
     z
@@ -1762,6 +1813,7 @@ export const changeConnectionRequestStatusSchema = z
       .object({
         action: z.literal('APPROVE_FORM'),
         officerNote: optionalNullableTrimmedString(1000),
+        pointCodeAssignments: pointCodeAssignmentsSchema.optional(),
       })
       .strict(),
     z

@@ -129,6 +129,32 @@ const annualTestingVariants = [
   'GET /integrations/device-configs/{stationId}/{buddhistYear}',
 ].sort();
 
+function writeValidationDocumentation(pathKey: string, method: 'post' | 'put'): JsonObject {
+  const document = asObject(pomsOpenApiDocument, 'OpenAPI document');
+  const paths = asObject(document.paths, 'paths');
+  const operation = asObject(
+    asObject(paths[pathKey], pathKey)[method],
+    `${method.toUpperCase()} ${pathKey}`,
+  );
+  const container = isRequestBody(operation.requestBody)
+    ? asObject(operation.requestBody, `${pathKey}.requestBody`)
+    : operation;
+
+  return asObject(
+    container['x-poms-request-validation'],
+    `${method.toUpperCase()} ${pathKey}.x-poms-request-validation`,
+  );
+}
+
+function isRequestBody(value: unknown): value is JsonObject {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function validationFields(documentation: JsonObject): JsonObject[] {
+  const mediaTypes = documentation.mediaTypes as JsonObject[];
+  return mediaTypes.flatMap((mediaType) => mediaType.fields as JsonObject[]);
+}
+
 describe('POMS OpenAPI contract', () => {
   it.each<[string, string, RuntimeSchema]>([
     ['/auth/login', 'post', loginSchema],
@@ -259,10 +285,23 @@ describe('POMS OpenAPI contract', () => {
       asObject((reviewSchema.oneOf as JsonObject[])[0], 'review.oneOf[0]').properties as unknown,
       'review.oneOf[0].properties',
     ).decision as JsonObject;
+    const approveBranchProperties = asObject(
+      asObject((reviewSchema.oneOf as JsonObject[])[0], 'review.oneOf[0]').properties as unknown,
+      'review.oneOf[0].properties',
+    );
 
     expect(approveDecision['x-enum-labels']).toMatchObject({
       APPROVE_DESIGN: 'อนุมัติแบบ',
     });
+    expect(
+      asObject(approveBranchProperties.pointCodeAssignments, 'review.pointCodeAssignments'),
+    ).toMatchObject(
+      expect.objectContaining({
+        type: 'array',
+        items: expect.objectContaining({ $ref: '#/components/schemas/PointCodeAssignment' }),
+      }),
+    );
+    expect(asObject(reviewOperation.responses, 'review.responses')).toHaveProperty('409');
 
     const changeStatusSchema = asObject(
       asObject(
@@ -276,10 +315,54 @@ describe('POMS OpenAPI contract', () => {
         .properties as unknown,
       'status.oneOf[2].properties',
     ).action as JsonObject;
+    const approveFormBranchProperties = asObject(
+      asObject((changeStatusSchema.oneOf as JsonObject[])[0], 'status.oneOf[0]')
+        .properties as unknown,
+      'status.oneOf[0].properties',
+    );
 
     expect(returnAction['x-enum-labels']).toMatchObject({
       RETURN_TO_WAITING_CONNECTION: 'ย้อนกลับไปรอเชื่อมต่อ',
     });
+    expect(
+      asObject(approveFormBranchProperties.pointCodeAssignments, 'status.pointCodeAssignments'),
+    ).toMatchObject(
+      expect.objectContaining({
+        type: 'array',
+        items: expect.objectContaining({ $ref: '#/components/schemas/PointCodeAssignment' }),
+      }),
+    );
+    expect(asObject(statusOperation.responses, 'status.responses')).toHaveProperty('409');
+
+    const connectionRequestResponse = asObject(
+      asObject(asObject(document.components, 'components').schemas, 'schemas')
+        .ConnectionRequestResponse as unknown,
+      'ConnectionRequestResponse',
+    );
+    const responseMeasurementPointProperties = asObject(
+      asObject(
+        asObject(
+          asObject(connectionRequestResponse.properties, 'ConnectionRequestResponse.properties')
+            .data as unknown,
+          'ConnectionRequestResponse.data',
+        ).properties as unknown,
+        'ConnectionRequestResponse.data.properties',
+      ).measurementPoints as unknown,
+      'ConnectionRequestResponse.measurementPoints',
+    );
+    const responseMeasurementPointItemProperties = asObject(
+      asObject(responseMeasurementPointProperties.items as unknown, 'measurementPoints.items')
+        .properties as unknown,
+      'measurementPoints.items.properties',
+    );
+    const assignmentMode = asObject(
+      responseMeasurementPointItemProperties.pointCodeAssignmentMode,
+      'measurementPoints.items.properties.pointCodeAssignmentMode',
+    );
+    expect(assignmentMode.nullable).toBe(true);
+    expect(assignmentMode.enum).toEqual(
+      expect.arrayContaining(['AUTO', 'MANUAL_LEGACY', 'OFFICER_DIRECT', 'LEGACY_IMPORTED']),
+    );
   });
 
   it('uses unique operation IDs and complete path parameters', () => {
@@ -339,6 +422,192 @@ describe('POMS OpenAPI contract', () => {
       operationCount: 122,
       tagCount: 11,
     });
+  });
+
+  it('documents request-body validation for every POST and PUT operation', () => {
+    const document = asObject(pomsOpenApiDocument, 'OpenAPI document');
+    const paths = asObject(document.paths, 'paths');
+    const writeOperations: Array<[string, 'post' | 'put', JsonObject]> = [];
+
+    for (const [pathKey, rawPathItem] of Object.entries(paths)) {
+      const pathItem = asObject(rawPathItem, pathKey);
+      for (const method of ['post', 'put'] as const) {
+        if (!(method in pathItem)) continue;
+        writeOperations.push([
+          pathKey,
+          method,
+          asObject(pathItem[method], `${method.toUpperCase()} ${pathKey}`),
+        ]);
+      }
+    }
+
+    expect(writeOperations).toHaveLength(48);
+    expect(
+      writeOperations.filter(([, , operation]) => isRequestBody(operation.requestBody)),
+    ).toHaveLength(47);
+
+    for (const [pathKey, method, operation] of writeOperations) {
+      const hasRequestBody = isRequestBody(operation.requestBody);
+      const container = hasRequestBody
+        ? asObject(operation.requestBody, `${pathKey}.requestBody`)
+        : operation;
+      const documentation = asObject(
+        container['x-poms-request-validation'],
+        `${method.toUpperCase()} ${pathKey}.x-poms-request-validation`,
+      );
+      const description = String(hasRequestBody ? container.description : operation.description);
+
+      expect(description).toContain('Validation ของ Request body');
+      expect(documentation.bodyRequired).toBe(hasRequestBody);
+      expect(Array.isArray(documentation.mediaTypes)).toBe(true);
+
+      if (hasRequestBody) {
+        expect(description).toContain('| Field | การส่งค่า | รับ `null` | Data type |');
+        expect((documentation.mediaTypes as JsonObject[]).length).toBeGreaterThan(0);
+      } else {
+        expect(description).toContain('Operation นี้ไม่รับ request body');
+        expect(documentation.mediaTypes).toEqual([]);
+      }
+    }
+  });
+
+  it('publishes required, nullable, type, range and cross-field rules for key write APIs', () => {
+    const addPoint = writeValidationDocumentation('/cems-wpms-requests/measurement-points', 'post');
+    const addPointFields = validationFields(addPoint);
+    expect(addPointFields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: 'measurementPoints',
+          requirement: 'required',
+          nullable: false,
+          type: 'array<object>',
+          rules: expect.arrayContaining(['จำนวน 1–100 รายการ']),
+        }),
+        expect.objectContaining({
+          field: 'measurementPoints[].pointName',
+          requirement: 'required',
+          nullable: false,
+          type: 'string',
+          rules: expect.arrayContaining(['ความยาว 1–255 ตัวอักษร']),
+        }),
+      ]),
+    );
+
+    const directConnection = writeValidationDocumentation(
+      '/cems-wpms-requests/direct-connections',
+      'post',
+    );
+    const directFields = validationFields(directConnection);
+    for (const field of ['factoryId', 'factoryRegistrationNo']) {
+      expect(directFields).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            field,
+            requirement: 'conditional',
+            nullable: true,
+            type: 'string',
+            condition: expect.stringContaining('factoryId หรือ factoryRegistrationNo'),
+          }),
+        ]),
+      );
+    }
+    expect(
+      (directConnection.mediaTypes as JsonObject[]).flatMap(
+        (mediaType) => mediaType.rules as string[],
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('ต้องมี factoryId หรือ factoryRegistrationNo อย่างน้อยหนึ่งค่า'),
+      ]),
+    );
+    expect(
+      (directConnection.mediaTypes as JsonObject[]).flatMap(
+        (mediaType) => mediaType.rules as string[],
+      ),
+    ).not.toEqual(expect.arrayContaining([expect.stringContaining('รูปแบบ 1 หรือ รูปแบบ 2')]));
+
+    const eligibleFactoryFields = validationFields(
+      writeValidationDocumentation('/eligible-factories', 'post'),
+    );
+    expect(eligibleFactoryFields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: 'factoryClass',
+          requirement: 'required',
+          nullable: true,
+          type: 'string',
+        }),
+      ]),
+    );
+
+    expect(addPointFields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field:
+            'measurementPoints[].measurementInstruments.parameters[].standardCriteria.standardValue',
+          type: 'string หรือ number',
+        }),
+        expect.objectContaining({
+          field:
+            'measurementPoints[].measurementInstruments.parameters[].eiaCriteria.standardValue',
+          type: 'string หรือ number',
+        }),
+      ]),
+    );
+  });
+
+  it('explains one-of workflow branches and multipart file-or-link validation', () => {
+    const statusDocumentation = writeValidationDocumentation(
+      '/cems-wpms-requests/{id}/status',
+      'post',
+    );
+    expect(validationFields(statusDocumentation)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: 'revisionReason',
+          requirement: 'conditional',
+          condition: 'action=REQUEST_REVISION',
+          nullable: false,
+        }),
+      ]),
+    );
+
+    const uploadDocumentation = writeValidationDocumentation(
+      '/cems-wpms-requests/document-images',
+      'post',
+    );
+    expect((uploadDocumentation.mediaTypes as JsonObject[])[0]).toEqual(
+      expect.objectContaining({ mediaType: 'multipart/form-data' }),
+    );
+    expect(validationFields(uploadDocumentation)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: 'file',
+          requirement: 'conditional',
+          nullable: false,
+          type: 'file',
+        }),
+        expect.objectContaining({
+          field: 'link',
+          requirement: 'conditional',
+          nullable: false,
+          type: 'string',
+          rules: expect.arrayContaining(['URL/URI ที่ถูกต้อง']),
+        }),
+      ]),
+    );
+
+    const document = asObject(pomsOpenApiDocument, 'OpenAPI document');
+    const paths = asObject(document.paths, 'paths');
+    const addPointOperation = asObject(
+      asObject(
+        paths['/cems-wpms-requests/measurement-points'],
+        '/cems-wpms-requests/measurement-points',
+      ).post,
+      'POST /cems-wpms-requests/measurement-points',
+    );
+    const addPointBody = asObject(addPointOperation.requestBody, 'add point requestBody');
+    expect(addPointBody.description).toContain('`string หรือ number`');
   });
 
   it('groups every operation under exactly one declared user-menu tag', () => {

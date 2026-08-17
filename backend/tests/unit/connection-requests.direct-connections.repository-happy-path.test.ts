@@ -66,6 +66,7 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
     const pointInsert = jest.fn((_: unknown) => ({
       returning: jest.fn(async () => [{ id: 202 }]),
     }));
+    const registryInsert = jest.fn(async (_: unknown) => 1);
     const historyInsert = jest.fn(async (_: unknown) => 1);
     const connectedPointInsert = jest.fn(async (_: unknown) => 1);
 
@@ -107,6 +108,7 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
         [snapshotSoftDelete, { insert: snapshotInsert }, snapshotRead],
       ],
       ['cems_wpms_measurement_points', [{ insert: pointInsert }, pointRead]],
+      ['cems_wpms_point_code_registry', [{ insert: registryInsert }]],
       ['cems_wpms_request_status_history', [{ insert: historyInsert }, historyRead]],
     ]);
     const trx = Object.assign(
@@ -159,9 +161,26 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
         request_id: 101,
         point_code: 'free form / จุด-01',
         point_name: 'ปล่องทดสอบ 1',
+        point_code_assignment_mode: 'OFFICER_DIRECT',
+        point_code_assignment_reason: null,
+        point_code_assigned_by: 42,
+        point_code_assigned_at: 'db-now',
         created_by: 42,
       }),
     );
+    expect(registryInsert).toHaveBeenCalledWith({
+      point_code: 'free form / จุด-01',
+      normalized_point_code: 'FREE FORM / จุด-01',
+      system_type: 'WPMS',
+      prefix: null,
+      numeric_sequence: null,
+      assignment_mode: 'OFFICER_DIRECT',
+      source_request_id: 101,
+      source_measurement_point_id: 202,
+      reason: null,
+      assigned_by: 42,
+      assigned_at: 'db-now',
+    });
     expect(historyInsert).toHaveBeenCalledWith({
       request_id: 101,
       status: 'CONNECTED',
@@ -208,6 +227,77 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
     expect(requestNumberLookup.count).toHaveBeenCalledWith('id as total');
   });
 
+  it('returns a field conflict when the direct point code is already reserved', async () => {
+    const requestInsert = jest.fn((_: unknown) => ({
+      returning: jest.fn(async () => [{ id: 101 }]),
+    }));
+    const snapshotInsert = jest.fn(async (_: unknown) => 1);
+    const pointInsert = jest.fn((_: unknown) => ({
+      returning: jest.fn(async () => [{ id: 202 }]),
+    }));
+    const registryInsert = jest.fn(async (_: unknown) => {
+      throw {
+        number: 2627,
+        message: "Violation of UNIQUE KEY constraint 'uq_cems_wpms_point_code_registry_normalized'",
+      };
+    });
+
+    const eligibleLookup = makeChain({ first: async () => ({ id: 17 }) });
+    const activePointLookup = makeChain({ first: async () => undefined });
+    const requestNumberLookup = makeChain({ first: async () => ({ total: 0 }) });
+    const eligibleFactorySource = makeChain({
+      first: async () => ({
+        province_id: '10',
+        province_name: 'กรุงเทพมหานคร',
+        province_region: 'ภาคกลาง',
+        industrial_estate_code: 'IE-01',
+        industrial_estate_name: 'นิคมทดสอบ',
+      }),
+    });
+    const snapshotSoftDelete = makeChain({ update: async () => 1 });
+
+    const queues = new Map<string, unknown[]>([
+      ['eligible_factories', [eligibleLookup]],
+      ['cems_wpms_connected_measurement_points', [activePointLookup]],
+      ['cems_wpms_connection_requests', [requestNumberLookup, { insert: requestInsert }]],
+      ['eligible_factories as ef', [eligibleFactorySource]],
+      ['cems_wpms_request_factory_snapshots', [snapshotSoftDelete, { insert: snapshotInsert }]],
+      ['cems_wpms_measurement_points', [{ insert: pointInsert }]],
+      ['cems_wpms_point_code_registry', [{ insert: registryInsert }]],
+    ]);
+    const trx = Object.assign(
+      jest.fn((tableName: string) => {
+        const builder = queues.get(tableName)?.shift();
+        if (!builder) throw new Error(`Unexpected query for ${tableName}`);
+        return builder;
+      }),
+      { fn: { now: jest.fn(() => 'db-now') } },
+    );
+    mockedDb.transaction.mockImplementationOnce(async (...args: unknown[]) => {
+      const callback = args[0] as (transaction: typeof trx) => Promise<unknown>;
+      return callback(trx);
+    });
+
+    await expect(
+      connectionRequestsRepository.createDirectConnection(directInput() as never, 42),
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      details: {
+        path: 'measurementPoints.0.pointCode',
+        reason: 'POINT_CODE_ALREADY_ASSIGNED',
+        pointCode: 'free form / จุด-01',
+      },
+    });
+
+    expect(registryInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        normalized_point_code: 'FREE FORM / จุด-01',
+        assignment_mode: 'OFFICER_DIRECT',
+      }),
+    );
+    expect([...queues.values()].every((queue) => queue.length === 0)).toBe(true);
+  });
+
   it('stores WAITING_FACTORY_REVISION without creating an active connected point', async () => {
     const fixedNow = new Date('2026-07-21T03:04:05.000Z');
     const requestInsert = jest.fn((_: unknown) => ({
@@ -217,6 +307,7 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
     const pointInsert = jest.fn((_: unknown) => ({
       returning: jest.fn(async () => [{ id: 202 }]),
     }));
+    const registryInsert = jest.fn(async (_: unknown) => 1);
     const historyInsert = jest.fn(async (_: unknown) => 1);
 
     const eligibleLookup = makeChain({ first: async () => ({ id: 17 }) });
@@ -263,6 +354,7 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
         [snapshotSoftDelete, { insert: snapshotInsert }, snapshotRead],
       ],
       ['cems_wpms_measurement_points', [{ insert: pointInsert }, pointRead]],
+      ['cems_wpms_point_code_registry', [{ insert: registryInsert }]],
       ['cems_wpms_request_status_history', [{ insert: historyInsert }, historyRead]],
     ]);
     const trx = Object.assign(
@@ -302,6 +394,14 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
       note: 'เจ้าหน้าที่เพิ่มจุดตรวจวัดและส่งกลับให้โรงงานแก้ไขผ่าน API',
       changed_by: 42,
     });
+    expect(registryInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        normalized_point_code: 'FREE FORM / จุด-01',
+        assignment_mode: 'OFFICER_DIRECT',
+        source_request_id: 101,
+        source_measurement_point_id: 202,
+      }),
+    );
     expect(created).toMatchObject({
       status: 'WAITING_FACTORY_REVISION',
       revisionReason: 'แก้ไขเอกสารก่อนเปิดใช้งาน',

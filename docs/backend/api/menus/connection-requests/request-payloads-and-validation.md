@@ -11,6 +11,10 @@
 
 ค่าที่ระบุในหน้านี้อ้างอิงพฤติกรรมจริงจาก route, controller, validator, service, migration และ unit tests ปัจจุบันของ backend
 
+หน้า Swagger แสดงตาราง `บังคับ/ไม่บังคับ/ตามเงื่อนไข`, `รับ null`, `Data type` และ validation ของ field ชุดเดียวกันใต้ `Request body` ของทั้ง 4 endpoint โดยอัตโนมัติ เอกสารหน้านี้ยังเป็น canonical contract สำหรับอ่านรายละเอียด normalization และ business rule เชิงลึกที่ทำงานร่วมกันหลาย field
+
+นอกเหนือจาก 4 endpoint ข้างต้น approval endpoints `POST /api/v1/cems-wpms-requests/:id/review` และ `POST /api/v1/cems-wpms-requests/:id/status` ยังรองรับ field `pointCodeAssignments` ใน approve branch เพื่อให้เจ้าหน้าที่เลือกได้ว่าจะใช้รหัส legacy เดิมบางจุดหรือปล่อยให้ระบบออกรหัสใหม่อัตโนมัติ
+
 ## Frontend Quick Start
 
 ใช้ shared payload ชุดเดียวสำหรับข้อมูลโรงงาน, ผู้ติดต่อ, จุดตรวจวัด, เอกสาร และเครื่องมือวัด แล้วเลือก endpoint ตาม intent:
@@ -374,6 +378,72 @@ criteria normalization สำคัญ
 | `403`       | `FORBIDDEN`        | ไม่มี permission, ผู้ส่ง action ไม่ใช่ officer/admin ที่รองรับ หรือ `CONNECT` ไม่มี direct-connect permission | ซ่อน action ที่ผู้ใช้ไม่มีสิทธิ์ |
 | `404`       | `NOT_FOUND`        | ไม่พบ active eligible factory                          | refresh ข้อมูลโรงงานก่อนส่งใหม่     |
 
+## Approval point-code assignments
+
+กติกานี้ใช้กับ approve branch ของ:
+
+- `POST /api/v1/cems-wpms-requests/:id/review` เมื่อ `decision = "APPROVE_DESIGN"`
+- `POST /api/v1/cems-wpms-requests/:id/status` เมื่อ `action = "APPROVE_FORM"`
+
+### Request fields
+
+| Field                                      | Location | Required | Type   | Validation และ behavior                                                                                                                                      |
+| ------------------------------------------ | -------- | -------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pointCodeAssignments`                     | body     | No       | array  | omission = `AUTO` ทุกจุด; ถ้าส่งได้ 1-100 รายการ                                                                                                            |
+| `pointCodeAssignments[].measurementPointId` | body     | Yes      | number | ต้องเป็น id ของ measurement point ภายในคำขอที่กำลังอนุมัติ                                                                                                |
+| `pointCodeAssignments[].assignmentMode`    | body     | Yes      | enum   | `AUTO` หรือ `MANUAL_LEGACY`                                                                                                                                  |
+| `pointCodeAssignments[].pointCode`         | body     | Conditional | string | required เมื่อ `assignmentMode = "MANUAL_LEGACY"`; ต้อง match `^[SW]\\d{4}$` และค่าตัวเลขต้องอยู่ช่วง `0001-1999`                                       |
+| `pointCodeAssignments[].reason`            | body     | Conditional | string | required เมื่อ `assignmentMode = "MANUAL_LEGACY"`; trim แล้วต้องไม่ว่างและยาวไม่เกิน 500                                                                  |
+
+### Business rules
+
+- ถ้าไม่ส่ง `pointCodeAssignments` backend ใช้ behavior เดิมและถือว่าทุกจุดเป็น `AUTO`
+- ถ้าส่ง array ต้องระบุทุก measurement point ที่ยังไม่มีรหัสให้ครบและไม่ซ้ำกัน
+- `AUTO` ใช้ Point-code Contract เดิม คือออกเลขใหม่ช่วง `S/W2001-9999`
+- `MANUAL_LEGACY` ใช้เฉพาะกรณีจุดตรวจวัดเก่าที่ต้อง reuse รหัสเดิม
+- `MANUAL_LEGACY` ต้องส่งทั้ง `pointCode` และ `reason`; prefix ต้องตรงกับ `systemType` (`CEMS = S`, `WPMS = W`)
+- ถ้าส่ง `measurementPointId` ที่ไม่อยู่ในคำขอ ระบบตอบ `400 BAD_REQUEST`
+- ถ้ารหัสถูกจองแล้วในคำขอที่รอเชื่อมต่อ จุดที่เชื่อมต่ออยู่ หรือประวัติที่เลิกใช้งานแล้ว ระบบตอบ `409 CONFLICT` และไม่ reuse รหัสนั้น
+
+หมายเหตุ: schema/รูปแบบข้อมูลที่ไม่ถูกต้องตอบ `400 VALIDATION_ERROR`; business validation ที่ต้องตรวจจากข้อมูลคำขอ เช่น prefix ไม่ตรงระบบ, รายการไม่ครบ หรือ id ไม่อยู่ในคำขอ ตอบ `400 BAD_REQUEST`.
+
+### Request example: all AUTO
+
+```json
+{
+  "decision": "APPROVE_DESIGN",
+  "officerNote": null
+}
+```
+
+### Request example: mixed AUTO + MANUAL_LEGACY
+
+```json
+{
+  "decision": "APPROVE_DESIGN",
+  "officerNote": "ตรวจข้อมูลครบแล้ว",
+  "pointCodeAssignments": [
+    {
+      "measurementPointId": 201,
+      "assignmentMode": "MANUAL_LEGACY",
+      "pointCode": "S1054",
+      "reason": "ใช้รหัสเดิมของจุดตรวจวัดเก่าตามทะเบียนโรงงาน"
+    },
+    {
+      "measurementPointId": 202,
+      "assignmentMode": "AUTO"
+    }
+  ]
+}
+```
+
+### Response fields ที่เกี่ยวข้อง
+
+| Field                                              | Type           | Meaning                                                                 |
+| -------------------------------------------------- | -------------- | ----------------------------------------------------------------------- |
+| `data.measurementPoints[].pointCode`               | string \| null | รหัสที่ระบบออกใหม่หรือ reuse ตาม assignment ของจุดนั้น                  |
+| `data.measurementPoints[].pointCodeAssignmentMode` | string \| null | `AUTO`, `MANUAL_LEGACY`, `OFFICER_DIRECT` หรือ `LEGACY_IMPORTED` ตามแหล่งที่มาของรหัส |
+
 ## `POST /api/v1/cems-wpms-requests/parameters`
 
 สร้างคำขอ `ADD_PARAMETER` ให้จุดตรวจวัดเดิม
@@ -715,7 +785,7 @@ endpoint นี้ใช้ schema แยกและยืดหยุ่นก
 - actor ต้องผ่านข้อจำกัด role/scope ข้างต้น มิฉะนั้นตอบ `403`
 - ต้อง resolve active eligible factory ภายใน officer scope ได้ มิฉะนั้นตอบ `404`
 - `measurementPoints` ต้องมี exactly 1 row
-- `pointCode` ต้องไม่ว่าง, ยาวไม่เกิน 64, และต้องไม่ชนกับ active connected point
+- `pointCode` ต้องไม่ว่าง, ยาวไม่เกิน 64, และต้องไม่ชนกับรหัสที่เคยจองไว้ในทะเบียนรหัสกลาง
 - `submissionAction = CONNECT` map เป็น `status = CONNECTED`; `submissionAction = REQUEST_FACTORY_REVISION` map เป็น `status = WAITING_FACTORY_REVISION`
 - ถ้าไม่ส่งทั้ง `submissionAction` และ `status` backend ใช้ `CONNECTED` เพื่อคงพฤติกรรมเดิม
 - ถ้าส่ง `submissionAction` และ legacy `status` พร้อมกัน ค่าต้อง map ตรงกัน มิฉะนั้นตอบ `400 VALIDATION_ERROR` ที่ `submissionAction`
@@ -734,7 +804,7 @@ endpoint นี้ใช้ schema แยกและยืดหยุ่นก
 | `401`       | `UNAUTHORIZED`     | ไม่มี token หรือ token ใช้ไม่ได้                                                                                  | login ใหม่                       |
 | `403`       | `FORBIDDEN`        | ไม่มี `cems_wpms_requests:direct_connect`                                                                         | ซ่อน action สำหรับ user นี้      |
 | `404`       | `NOT_FOUND`        | ไม่พบ active eligible factory ภายใน scope                                                                         | ตรวจ identifier และสิทธิ์พื้นที่ |
-| `409`       | `CONFLICT`         | `pointCode` ซ้ำกับ active point                                                                                   | เปลี่ยนรหัสจุดตรวจวัด            |
+| `409`       | `CONFLICT`         | `pointCode` ซ้ำกับรหัสที่เคยจองไว้ ไม่ว่าจะรอเชื่อมต่อ เชื่อมต่ออยู่ หรือเลิกใช้งานแล้ว                         | เปลี่ยนรหัสจุดตรวจวัด            |
 
 ## Review Payloads ที่เกี่ยวข้องกับการส่งแบบแก้ไข
 

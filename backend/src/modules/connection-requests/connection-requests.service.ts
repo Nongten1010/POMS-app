@@ -1068,15 +1068,26 @@ export const connectionRequestsService = {
       );
     }
 
+    const update = {
+      officerNote: input.officerNote ?? null,
+      revisionReason: null,
+      connectionDueAt: addDays(nowProvider(), 30).toISOString(),
+    };
+    if (input.pointCodeAssignments) {
+      return connectionRequestsRepository.updateStatus(
+        id,
+        CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+        actorUserId,
+        update,
+        { pointCodeAssignments: input.pointCodeAssignments },
+      );
+    }
+
     return connectionRequestsRepository.updateStatus(
       id,
       CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
       actorUserId,
-      {
-        officerNote: input.officerNote ?? null,
-        revisionReason: null,
-        connectionDueAt: addDays(nowProvider(), 30).toISOString(),
-      },
+      update,
     );
   },
 
@@ -1110,6 +1121,7 @@ export const connectionRequestsService = {
       {
         decision: 'APPROVE_DESIGN',
         officerNote: input.officerNote,
+        pointCodeAssignments: input.pointCodeAssignments,
       },
       actorUserId,
       approveScope,

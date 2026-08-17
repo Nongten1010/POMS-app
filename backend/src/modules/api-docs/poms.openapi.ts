@@ -10,6 +10,7 @@ import { BOD_COD_DEVIATION_REPORT_STATUSES } from '../bod-cod-deviations/bod-cod
 import { KWP_FORM_STATUSES, KWP_FORM_TYPES } from '../kwp-form-reports/kwp-form-reports.types';
 import { connectionRequestsOpenApiDocument } from './connection-requests.openapi';
 import { MENU_TAGS } from './openapi.shared';
+import { decorateWriteRequestValidationDocs } from './request-validation-docs';
 
 type OpenApiObject = Record<string, unknown>;
 
@@ -3148,8 +3149,11 @@ const components: OpenApiObject = {
   },
 };
 
-const paths = decorateOperations(
-  mergePathMaps((baseDocument.paths as Record<string, OpenApiObject>) ?? {}, extraPaths),
+const paths = decorateWriteRequestValidationDocs(
+  decorateOperations(
+    mergePathMaps((baseDocument.paths as Record<string, OpenApiObject>) ?? {}, extraPaths),
+  ),
+  components,
 );
 
 export const pomsOpenApiDocument: OpenApiObject = {

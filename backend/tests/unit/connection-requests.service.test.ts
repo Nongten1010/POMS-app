@@ -3404,7 +3404,12 @@ describe('connectionRequestsService', () => {
 
     await connectionRequestsService.createMeasurementPointRequest(
       { ...payload, requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT },
-      actorUserId,
+      {
+        actorUserId,
+        userType: 'operator',
+        roles: ['factory_operator'],
+        editScope: { scope: 'OWN_FACTORY' },
+      },
     );
 
     expect(mockedRepository.create).toHaveBeenCalledWith(
@@ -3855,6 +3860,55 @@ describe('connectionRequestsService', () => {
         officerNote: null,
         revisionReason: null,
         connectionDueAt: dueAt,
+      },
+    );
+  });
+
+  it('passes point-code assignments through approval actions', async () => {
+    mockedRepository.findById.mockResolvedValue(
+      requestDto({
+        status: CONNECTION_REQUEST_STATUS.PENDING_DESIGN_REVIEW,
+        createdBy: actorUserId,
+      }),
+    );
+    mockedRepository.updateStatus.mockResolvedValue(
+      requestDto({
+        status: CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+        connectionDueAt: dueAt,
+        createdBy: actorUserId,
+      }),
+    );
+
+    const pointCodeAssignments = [
+      {
+        measurementPointId: 51,
+        assignmentMode: 'MANUAL_LEGACY' as const,
+        pointCode: 'S1000',
+        reason: 'ใช้รหัสเดิมของจุดตรวจวัดเก่า',
+      },
+      {
+        measurementPointId: 52,
+        assignmentMode: 'AUTO' as const,
+      },
+    ];
+
+    await connectionRequestsService.changeStatus(
+      1,
+      { action: 'APPROVE_FORM', pointCodeAssignments },
+      7,
+    );
+
+    expect(mockedRepository.updateStatus).toHaveBeenCalledWith(
+      1,
+      CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+      7,
+      {
+        officerNote: null,
+        revisionReason: null,
+        connectionDueAt: dueAt,
+      },
+      {
+        pointCodeAssignments,
       },
     );
   });

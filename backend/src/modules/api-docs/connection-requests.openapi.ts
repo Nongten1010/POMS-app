@@ -158,6 +158,13 @@ const statusActionLabels: EnumLabelMap = {
   RETURN_TO_WAITING_CONNECTION: 'ย้อนกลับไปรอเชื่อมต่อ',
 };
 
+const pointCodeAssignmentModeLabels: EnumLabelMap = {
+  AUTO: 'ให้ระบบออกรหัสอัตโนมัติ',
+  MANUAL_LEGACY: 'ใช้รหัส legacy ที่เจ้าหน้าที่กำหนด',
+  OFFICER_DIRECT: 'รหัสจากการเชื่อมต่อโดยเจ้าหน้าที่โดยตรง',
+  LEGACY_IMPORTED: 'รหัส legacy ที่มาจากข้อมูลเดิม',
+};
+
 const confirmActionLabels: EnumLabelMap = {
   SAVE: 'บันทึกแบบยังไม่ยืนยัน',
   CONFIRM: 'ยืนยันการเชื่อมต่อ',
@@ -648,6 +655,15 @@ const componentSchemas: Record<string, OpenApiObject> = {
               properties: {
                 pointName: { type: 'string' },
                 pointCode: { type: 'string', nullable: true },
+                pointCodeAssignmentMode: {
+                  ...enumSchema(
+                    ['AUTO', 'MANUAL_LEGACY', 'OFFICER_DIRECT', 'LEGACY_IMPORTED'],
+                    pointCodeAssignmentModeLabels,
+                  ),
+                  nullable: true,
+                  description:
+                    'Optional; บอกแหล่งที่มาของ pointCode. `AUTO` คือระบบออกรหัส S/W2001-9999, `MANUAL_LEGACY` คือเจ้าหน้าที่ reuse รหัสเดิมช่วง S/W0001-1999, `OFFICER_DIRECT` คือ direct connection, `LEGACY_IMPORTED` คือข้อมูลเดิมที่ import มา',
+                },
                 pointType: {
                   ...enumSchema(['STACK', 'WASTEWATER', 'OTHER'], measurementPointTypeLabels),
                 },
@@ -1005,6 +1021,43 @@ const componentSchemas: Record<string, OpenApiObject> = {
     description:
       'ห้ามส่ง requestType; backend stamp ADD_PARAMETER. ต้องอ้าง point เดิม exactly 1 point',
     example: addParameterExample,
+  },
+  PointCodeAssignment: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['measurementPointId', 'assignmentMode'],
+    properties: {
+      measurementPointId: {
+        type: 'integer',
+        minimum: 1,
+        example: 201,
+        description: 'รหัส measurement point ภายในคำขอที่กำลังอนุมัติ',
+      },
+      assignmentMode: {
+        ...enumSchema(['AUTO', 'MANUAL_LEGACY'], {
+          AUTO: pointCodeAssignmentModeLabels.AUTO,
+          MANUAL_LEGACY: pointCodeAssignmentModeLabels.MANUAL_LEGACY,
+        }),
+        description:
+          'ถ้าเป็น `AUTO` หรือไม่ส่งทั้ง array ระบบจะออกรหัสใหม่ตามลำดับ S/W2001-9999; ถ้าเป็น `MANUAL_LEGACY` ต้องส่ง pointCode และ reason',
+      },
+      pointCode: {
+        type: 'string',
+        nullable: true,
+        pattern: '^[SW]\\d{4}$',
+        example: 'S1054',
+        description:
+          'Required เมื่อ assignmentMode = MANUAL_LEGACY; ต้องเป็นรหัส legacy รูปแบบ S/W ตามด้วย 4 หลัก, ค่าตัวเลขช่วง 0001-1999 และ prefix ต้องตรงกับ systemType (CEMS = S, WPMS = W)',
+      },
+      reason: {
+        type: 'string',
+        maxLength: 500,
+        nullable: true,
+        example: 'ใช้รหัสเดิมของจุดตรวจวัดเก่าตามทะเบียนโรงงาน',
+        description:
+          'Required เมื่อ assignmentMode = MANUAL_LEGACY; อธิบายเหตุผลที่ต้อง reuse รหัส legacy',
+      },
+    },
   },
   ResubmitConnectionRequest: {
     type: 'object',
@@ -1736,6 +1789,14 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
               properties: {
                 decision: { ...enumSchema(['APPROVE_DESIGN'], reviewDecisionLabels) },
                 officerNote: { type: 'string', maxLength: 1000, nullable: true },
+                pointCodeAssignments: {
+                  type: 'array',
+                  minItems: 1,
+                  maxItems: 100,
+                  items: schemaRef('PointCodeAssignment'),
+                  description:
+                    'Optional; omission = AUTO ทุกจุด. ถ้าส่ง ต้องระบุทุกจุดที่ยังไม่มีรหัสให้ครบและไม่ซ้ำกัน โดยเลือก AUTO หรือ MANUAL_LEGACY ตอน APPROVE_DESIGN',
+                },
               },
             },
             {
@@ -1751,8 +1812,26 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
           ],
           discriminator: { propertyName: 'decision' },
         },
-        { decision: 'APPROVE_DESIGN', officerNote: null },
+        {
+          decision: 'APPROVE_DESIGN',
+          officerNote: null,
+          pointCodeAssignments: [
+            {
+              measurementPointId: 201,
+              assignmentMode: 'MANUAL_LEGACY',
+              pointCode: 'S1054',
+              reason: 'ใช้รหัสเดิมของจุดตรวจวัดเก่าตามทะเบียนโรงงาน',
+            },
+            {
+              measurementPointId: 202,
+              assignmentMode: 'AUTO',
+            },
+          ],
+        },
       ),
+      extraResponses: {
+        '409': { $ref: '#/components/responses/Conflict' },
+      },
     }),
   },
   '/cems-wpms-requests/{id}/status': {
@@ -1772,6 +1851,14 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
               properties: {
                 action: { ...enumSchema(['APPROVE_FORM'], statusActionLabels) },
                 officerNote: { type: 'string', maxLength: 1000, nullable: true },
+                pointCodeAssignments: {
+                  type: 'array',
+                  minItems: 1,
+                  maxItems: 100,
+                  items: schemaRef('PointCodeAssignment'),
+                  description:
+                    'Optional; omission = AUTO ทุกจุด. ถ้าส่ง ต้องระบุทุกจุดที่ยังไม่มีรหัสให้ครบและไม่ซ้ำกัน โดยเลือก AUTO หรือ MANUAL_LEGACY ตอน APPROVE_FORM',
+                },
               },
             },
             {
@@ -1797,8 +1884,22 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
           ],
           discriminator: { propertyName: 'action' },
         },
-        { action: 'REQUEST_REVISION', revisionReason: 'กรุณาแนบรูปปล่องเพิ่ม', officerNote: null },
+        {
+          action: 'APPROVE_FORM',
+          officerNote: 'ตรวจข้อมูลครบแล้ว',
+          pointCodeAssignments: [
+            {
+              measurementPointId: 201,
+              assignmentMode: 'MANUAL_LEGACY',
+              pointCode: 'W0188',
+              reason: 'ใช้รหัสเดิมของจุดตรวจวัดเก่า',
+            },
+          ],
+        },
       ),
+      extraResponses: {
+        '409': { $ref: '#/components/responses/Conflict' },
+      },
     }),
   },
   '/cems-wpms-requests/{id}/cancel': {
