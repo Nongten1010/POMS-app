@@ -64,6 +64,8 @@ jobs:
           $before = "${{ github.event.before }}"
           $after = "${{ github.sha }}"
           $manualFrontendDeploy = "${{ github.event_name }}" -eq 'workflow_dispatch' -and "${{ inputs.deploy_target }}" -eq 'frontend'
+          $pushFrontendDeploy = "${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[deploy-frontend]') }}" -eq 'true'
+          $forceFrontendDeploy = $manualFrontendDeploy -or $pushFrontendDeploy
 
           if ($manualFrontendDeploy) {
             Write-Host "Manual frontend deployment requested; forcing frontend build and deploy."
@@ -80,6 +82,10 @@ jobs:
             $files = git ls-tree -r --name-only $after
           }
 
+          if ($pushFrontendDeploy) {
+            Write-Host "Commit message requested a frontend deployment."
+          }
+
           $files | ForEach-Object { "Changed: $_" }
 
           $frontendChanged = $files | Where-Object { $_ -like 'frontend/*' }
@@ -91,7 +97,7 @@ jobs:
             $_ -eq 'backend/package.json' -or $_ -eq 'backend/package-lock.json'
           }
 
-          $frontend = if ($frontendChanged -or $manualFrontendDeploy) { 'true' } else { 'false' }
+          $frontend = if ($frontendChanged -or $forceFrontendDeploy) { 'true' } else { 'false' }
           $backend = if ($backendChanged) { 'true' } else { 'false' }
           $frontendDeps = if ($frontendDepsChanged) { 'true' } else { 'false' }
           $backendDeps = if ($backendDepsChanged) { 'true' } else { 'false' }
