@@ -118,6 +118,13 @@ function createWpmsPayload() {
             fileSize: 2048,
           },
           {
+            title: 'ภาพถ่ายจุดระบายน้ำทิ้งออกนอกโรงงาน',
+            fileName: 'outside-factory-discharge-point.jpg',
+            fileUrl: 'https://example.com/files/outside-factory-discharge-point.jpg',
+            fileType: 'image/jpeg',
+            fileSize: 3072,
+          },
+          {
             title: 'ภาพถ่ายเครื่องมือตรวจวัดที่ติดตั้ง (WPMS)',
             fileName: 'instrument.png',
             fileUrl: 'https://example.com/files/instrument.png',
@@ -235,11 +242,53 @@ describe('CEMS/WPMS monitoring-point form enhancements', () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.measurementPoints[0].parameters).toEqual(['COD (mg/l)']);
-      expect(result.data.measurementPoints[0].documentsAndImages).toHaveLength(3);
+      expect(result.data.measurementPoints[0].documentsAndImages).toHaveLength(4);
+      expect(result.data.measurementPoints[0].documentsAndImages).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            title: 'ภาพถ่ายจุดระบายน้ำทิ้งออกนอกโรงงาน',
+            fileName: 'outside-factory-discharge-point.jpg',
+          }),
+        ]),
+      );
       expect(result.data.measurementPoints[0].details).toMatchObject({
         treatmentSystem: ['Activated Sludge', 'อื่นๆ'],
         treatmentSystemOther: 'ระบบเฉพาะของโรงงาน',
       });
+    }
+  });
+
+  it('limits WPMS outside-factory discharge point photos to three files', () => {
+    const payload = createWpmsPayload();
+    const point = payload.measurementPoints[0];
+    const dischargePointPhoto = point.documentsAndImages.find(
+      (document) => document.title === 'ภาพถ่ายจุดระบายน้ำทิ้งออกนอกโรงงาน',
+    );
+    if (!dischargePointPhoto) throw new Error('WPMS discharge point photo fixture is missing');
+
+    point.documentsAndImages.push(
+      { ...dischargePointPhoto, fileName: 'outside-discharge-2.jpg' },
+      { ...dischargePointPhoto, fileName: 'outside-discharge-3.jpg' },
+    );
+    expect(addMeasurementPointRequestSchema.safeParse(payload).success).toBe(true);
+
+    point.documentsAndImages.push({
+      ...dischargePointPhoto,
+      fileName: 'outside-discharge-4.jpg',
+    });
+
+    const result = addMeasurementPointRequestSchema.safeParse(payload);
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: ['measurementPoints', 0, 'documentsAndImages'],
+            message: 'WPMS outside-factory discharge point photos accept at most 3 files',
+          }),
+        ]),
+      );
     }
   });
 

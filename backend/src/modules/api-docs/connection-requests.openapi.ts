@@ -1,7 +1,9 @@
 import { env } from '../../config/env';
 import {
+  CONNECTION_REQUEST_DOCUMENT_TITLE,
   CONNECTION_REQUEST_STATUS_LABELS,
   CONNECTION_REQUEST_TYPE_LABELS,
+  MAX_WPMS_OUTSIDE_FACTORY_DISCHARGE_POINT_PHOTOS,
 } from '../connection-requests/connection-requests.types';
 
 type OpenApiObject = Record<string, unknown>;
@@ -692,8 +694,21 @@ const componentSchemas: Record<string, OpenApiObject> = {
     required: ['title'],
     description:
       'แต่ละ row ต้องมี link หรือ fileUrl อย่างน้อยหนึ่งค่า; placeholder ที่ยังไม่มีไฟล์จะถูกละทิ้ง',
+    example: {
+      title: CONNECTION_REQUEST_DOCUMENT_TITLE.WPMS_OUTSIDE_FACTORY_DISCHARGE_POINT_PHOTO,
+      fileName: 'outside-factory-discharge-point.jpg',
+      fileUrl: 'https://example.com/uploads/outside-factory-discharge-point.jpg',
+      fileType: 'image/jpeg',
+      fileSize: 3072,
+    },
     properties: {
-      title: { type: 'string', minLength: 1, maxLength: 255 },
+      title: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 255,
+        example: CONNECTION_REQUEST_DOCUMENT_TITLE.WPMS_OUTSIDE_FACTORY_DISCHARGE_POINT_PHOTO,
+        description: `ใช้ ${CONNECTION_REQUEST_DOCUMENT_TITLE.WPMS_OUTSIDE_FACTORY_DISCHARGE_POINT_PHOTO} สำหรับช่องภาพถ่ายจุดระบายน้ำทิ้งของ WPMS; ส่งได้ไม่เกิน ${MAX_WPMS_OUTSIDE_FACTORY_DISCHARGE_POINT_PHOTOS} rows ต่อจุดตรวจวัด โดย title อื่นยังรองรับตามเดิม`,
+      },
       description: { type: 'string', maxLength: 1000, nullable: true },
       link: {
         type: 'string',
@@ -1670,7 +1685,9 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
                 },
                 title: {
                   type: 'string',
-                  description: 'Optional; trim แล้วถ้าว่าง/ไม่ส่ง backend ใช้ เอกสารและรูปภาพ',
+                  example:
+                    CONNECTION_REQUEST_DOCUMENT_TITLE.WPMS_OUTSIDE_FACTORY_DISCHARGE_POINT_PHOTO,
+                  description: `Optional; ใช้ ${CONNECTION_REQUEST_DOCUMENT_TITLE.WPMS_OUTSIDE_FACTORY_DISCHARGE_POINT_PHOTO} สำหรับช่องรูปจุดระบายน้ำทิ้ง WPMS; trim แล้วถ้าว่าง/ไม่ส่ง backend ใช้ เอกสารและรูปภาพ`,
                 },
                 description: { type: 'string', nullable: true },
                 link: {

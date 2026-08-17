@@ -134,7 +134,7 @@ curl --request POST \
 
 | Field         | Location | Required    | Nullable | Type    | Validation                                 |
 | ------------- | -------- | ----------- | -------- | ------- | ------------------------------------------ |
-| `title`       | body     | Yes         | No       | string  | trim 1-255                                 |
+| `title`       | body     | Yes         | No       | string  | trim 1-255; ช่องรูปจุดระบายน้ำทิ้ง WPMS ใช้ `ภาพถ่ายจุดระบายน้ำทิ้งออกนอกโรงงาน` |
 | `description` | body     | No          | Yes      | string  | trim <=1000                                |
 | `link`        | body     | Conditional | Yes      | string  | URL <=2048 และต้องเป็น `http` หรือ `https` |
 | `fileName`    | body     | No          | Yes      | string  | trim <=255                                 |
@@ -147,6 +147,24 @@ curl --request POST \
 - แต่ละ row ต้องมีอย่างน้อย `link` หรือ `fileUrl`
 - row placeholder ที่มีเพียง `title`/`description` และ metadata อื่นว่างทั้งหมด จะถูกลบทิ้งก่อน validation หลัก
 - ถ้าส่ง metadata ของไฟล์ เช่น `fileName` แต่ไม่มี `link` หรือ `fileUrl` จะถูก reject
+- ช่อง `ภาพถ่ายจุดระบายน้ำทิ้งออกนอกโรงงาน` เป็น optional สำหรับ WPMS และส่งไฟล์จริงได้ไม่เกิน 3 rows ต่อจุดตรวจวัด; placeholder ที่ถูกลบทิ้งไม่นับรวม
+- `title` อื่นยังรองรับตาม contract เดิมและไม่ได้ถูกจำกัดเป็น enum
+
+ตัวอย่างรูปจุดระบายน้ำทิ้ง WPMS หลังอัปโหลดสำเร็จ:
+
+```json
+{
+  "documentsAndImages": [
+    {
+      "title": "ภาพถ่ายจุดระบายน้ำทิ้งออกนอกโรงงาน",
+      "fileName": "outside-factory-discharge-point.jpg",
+      "fileUrl": "https://example.com/uploads/outside-factory-discharge-point.jpg",
+      "fileType": "image/jpeg",
+      "fileSize": 3072
+    }
+  ]
+}
+```
 
 ### `measurementPoints[].measurementInstruments`
 
@@ -232,6 +250,7 @@ criteria normalization สำคัญ
 - `details.monitoringPointKind` ถ้าส่งต้องเป็น `WPMS`
 - ห้ามส่ง CEMS-only fields เช่น `timeSharingParameters`, `sharedStackCode`, `stackShape`, `legalAnnexNo`
 - ถ้า `hasTreatmentSystem = "มี"` ต้องมี `maxTreatmentCapacity`
+- รูปจุดระบายน้ำทิ้งออกนอกโรงงานส่งใน `documentsAndImages[]` ด้วย `title = "ภาพถ่ายจุดระบายน้ำทิ้งออกนอกโรงงาน"`; ไม่บังคับส่งและรับได้ไม่เกิน 3 ไฟล์ต่อจุด
 
 ## Flow-specific Contracts
 

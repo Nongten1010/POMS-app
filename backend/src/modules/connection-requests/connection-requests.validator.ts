@@ -6,8 +6,10 @@ import {
   type ConnectionRequestEiaAssessment,
 } from './connection-request-eia';
 import {
+  CONNECTION_REQUEST_DOCUMENT_TITLE,
   CONNECTION_REQUEST_STATUS,
   CONNECTION_REQUEST_TYPE,
+  MAX_WPMS_OUTSIDE_FACTORY_DISCHARGE_POINT_PHOTOS,
   POINT_CODE_ASSIGNMENT_MODE,
 } from './connection-requests.types';
 
@@ -66,7 +68,6 @@ const EXEMPTED_PARAMETER_REGULATION_CLAUSE_DETAIL_FIELDS = new Set([
   'exemptedParameterRegulationClauses',
   'exemptedParameterRegulationClauseOther',
 ]);
-const FACTORY_LOGO_DOCUMENT_TITLE = 'สัญลักษณ์ของโรงงานหรือโลโก้บริษัท';
 const LEGAL_ANNEX_NUMBERS = new Set(Array.from({ length: 13 }, (_, index) => String(index + 1)));
 const COMBUSTION_CONTROL_SYSTEM_VALUES = new Set(['ระบบปิด', 'ระบบเปิด', 'ควบคุมอัตโนมัติ']);
 
@@ -1155,19 +1156,34 @@ function validateLegalAnnexNumbers(
 }
 
 function validateMeasurementPointDocuments(
-  point: { documentsAndImages?: z.infer<typeof requestDocumentImageSchema>[] },
+  point: { documentsAndImages?: z.infer<typeof requestDocumentImageSchema>[] | null },
   ctx: z.RefinementCtx,
 ): void {
   const logoCount =
-    point.documentsAndImages?.filter((document) => document.title === FACTORY_LOGO_DOCUMENT_TITLE)
-      .length ?? 0;
-  if (logoCount <= 1) return;
+    point.documentsAndImages?.filter(
+      (document) => document.title === CONNECTION_REQUEST_DOCUMENT_TITLE.FACTORY_LOGO,
+    ).length ?? 0;
+  if (logoCount > 1) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['documentsAndImages'],
+      message: 'Company logo accepts only one file',
+    });
+  }
 
-  ctx.addIssue({
-    code: 'custom',
-    path: ['documentsAndImages'],
-    message: 'Company logo accepts only one file',
-  });
+  const outsideFactoryDischargePointPhotoCount =
+    point.documentsAndImages?.filter(
+      (document) =>
+        document.title ===
+        CONNECTION_REQUEST_DOCUMENT_TITLE.WPMS_OUTSIDE_FACTORY_DISCHARGE_POINT_PHOTO,
+    ).length ?? 0;
+  if (outsideFactoryDischargePointPhotoCount > MAX_WPMS_OUTSIDE_FACTORY_DISCHARGE_POINT_PHOTOS) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['documentsAndImages'],
+      message: `WPMS outside-factory discharge point photos accept at most ${MAX_WPMS_OUTSIDE_FACTORY_DISCHARGE_POINT_PHOTOS} files`,
+    });
+  }
 }
 
 function validateSingleFactoryLogo(
@@ -1178,7 +1194,7 @@ function validateSingleFactoryLogo(
 
   points.forEach((point, pointIndex) => {
     point.documentsAndImages.forEach((document) => {
-      if (document.title !== FACTORY_LOGO_DOCUMENT_TITLE) return;
+      if (document.title !== CONNECTION_REQUEST_DOCUMENT_TITLE.FACTORY_LOGO) return;
       if (!foundLogo) {
         foundLogo = true;
         return;
@@ -1474,6 +1490,7 @@ const directConnectionMeasurementPointSchema = z
     measurementInstruments: measurementInstrumentsSchema.nullable().optional(),
   })
   .strict()
+  .superRefine(validateMeasurementPointDocuments)
   .transform((point) => ({
     ...point,
     details: normalizeRegulationClauseDetails(point.details),

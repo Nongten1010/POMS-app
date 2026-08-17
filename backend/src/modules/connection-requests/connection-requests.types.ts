@@ -81,6 +81,13 @@ export type PointCodeAssignmentInput =
 
 export type MeasurementPointDetailsInput = Record<string, unknown>;
 
+export const CONNECTION_REQUEST_DOCUMENT_TITLE = {
+  FACTORY_LOGO: 'สัญลักษณ์ของโรงงานหรือโลโก้บริษัท',
+  WPMS_OUTSIDE_FACTORY_DISCHARGE_POINT_PHOTO: 'ภาพถ่ายจุดระบายน้ำทิ้งออกนอกโรงงาน',
+} as const;
+
+export const MAX_WPMS_OUTSIDE_FACTORY_DISCHARGE_POINT_PHOTOS = 3;
+
 export interface RequestDocumentImageInput {
   title: string;
   description?: string | null;

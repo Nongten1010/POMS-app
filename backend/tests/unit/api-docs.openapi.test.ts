@@ -820,6 +820,47 @@ describe('POMS OpenAPI contract', () => {
     );
   });
 
+  it('publishes the WPMS outside-factory discharge point photo contract', () => {
+    const document = asObject(pomsOpenApiDocument, 'OpenAPI document');
+    const components = asObject(document.components, 'components');
+    const schemas = asObject(components.schemas, 'components.schemas');
+    const requestDocumentImage = asObject(schemas.RequestDocumentImage, 'RequestDocumentImage');
+    const properties = asObject(requestDocumentImage.properties, 'RequestDocumentImage.properties');
+    const title = asObject(properties.title, 'RequestDocumentImage.title');
+
+    expect(title).toEqual(
+      expect.objectContaining({
+        type: 'string',
+        example: 'ภาพถ่ายจุดระบายน้ำทิ้งออกนอกโรงงาน',
+        description: expect.stringContaining('ไม่เกิน 3 rows ต่อจุดตรวจวัด'),
+      }),
+    );
+    expect(asObject(requestDocumentImage.example, 'RequestDocumentImage.example')).toEqual(
+      expect.objectContaining({
+        title: 'ภาพถ่ายจุดระบายน้ำทิ้งออกนอกโรงงาน',
+        fileType: 'image/jpeg',
+      }),
+    );
+
+    const paths = asObject(document.paths, 'paths');
+    const uploadPath = asObject(
+      paths['/cems-wpms-requests/document-images'],
+      '/cems-wpms-requests/document-images',
+    );
+    const uploadOperation = asObject(uploadPath.post, 'POST /cems-wpms-requests/document-images');
+    const uploadRequestBody = asObject(uploadOperation.requestBody, 'upload.requestBody');
+    const uploadContent = asObject(uploadRequestBody.content, 'upload.requestBody.content');
+    const multipart = asObject(uploadContent['multipart/form-data'], 'multipart/form-data');
+    const uploadSchema = asObject(multipart.schema, 'multipart.schema');
+    const uploadProperties = asObject(uploadSchema.properties, 'multipart.schema.properties');
+    expect(asObject(uploadProperties.title, 'multipart.title')).toEqual(
+      expect.objectContaining({
+        example: 'ภาพถ่ายจุดระบายน้ำทิ้งออกนอกโรงงาน',
+        description: expect.stringContaining('ช่องรูปจุดระบายน้ำทิ้ง WPMS'),
+      }),
+    );
+  });
+
   it('keeps resubmission and upload schemas aligned with runtime constraints', () => {
     const document = asObject(pomsOpenApiDocument, 'OpenAPI document');
     const components = asObject(document.components, 'components');
