@@ -66,8 +66,8 @@ const sortOptions = [
 
 const referencePoint = { lon: 100.574, lat: 13.91 }
 const operatorFactoriesApiUrl = import.meta.env.DEV
-  ? '/api-proxy/v1/operator-factory-dashboard'
-  : 'https://d-poms.diw.go.th/api/v1/operator-factory-dashboard'
+  ? '/api-proxy/v1/operator-factories'
+  : 'https://d-poms.diw.go.th/api/v1/operator-factories'
 const publicFactoryMapPointsApiUrl = import.meta.env.DEV
   ? '/api-proxy/v1/public/factory-map-points'
   : 'https://d-poms.diw.go.th/api/v1/public/factory-map-points'
@@ -166,7 +166,7 @@ const borderedTableSx = {
 function getOperatorFactoriesApiUrl(systemType) {
   const baseUrl =
     typeof window !== 'undefined' && window.location.hostname === 'd-poms.diw.go.th'
-      ? '/api/v1/operator-factory-dashboard'
+      ? '/api/v1/operator-factories'
       : operatorFactoriesApiUrl
   const params = new URLSearchParams()
 
@@ -687,12 +687,17 @@ function mapOperatorFactory(row, index) {
     industryMainOrder: row.industryMainOrder ?? '',
     industryMainOrderLabel: row.industryMainOrderLabel ?? '',
     systems,
+    isEligible: row.isEligible === true,
+    eligibilityStatus: row.eligibilityStatus ?? '',
+    pomsMembershipStatus: row.pomsMembershipStatus ?? '',
+    pomsMembershipStatusLabel: row.pomsMembershipStatusLabel ?? '',
+    latestConnectionRequest: row.latestConnectionRequest ?? null,
     distance: getDistanceFromReference(lon, lat),
     lon,
     lat,
     logoText: getFactoryLogoText(row.factoryName, row.newRegistrationNo),
     logoBg: logoBackgrounds[index % logoBackgrounds.length],
-    logoUrl: normalizeUploadUrl(row.factoryLogoUrl ?? row.logoUrl),
+    logoUrl: row.pomsMembershipStatus === 'NOT_IN_POMS' ? '' : normalizeUploadUrl(row.factoryLogoUrl ?? row.logoUrl),
     isFavorite: row.isFavorite === true,
     hasLatestHourlyMeasurement: row.hasLatestHourlyMeasurement,
     measurementPoints: Array.isArray(row.measurementPoints) ? row.measurementPoints : [],
@@ -712,6 +717,10 @@ function isSameFactory(firstFactory, secondFactory) {
   ]
 
   return identityPairs.some(([firstValue, secondValue]) => Boolean(firstValue) && Boolean(secondValue) && firstValue === secondValue)
+}
+
+function isNotInPomsFactory(factory) {
+  return factory?.pomsMembershipStatus === 'NOT_IN_POMS'
 }
 
 function loadLongdoMapScript() {
@@ -933,6 +942,13 @@ function HomePage({ accessToken = '', permissions }) {
     })
 
     return filtered.toSorted((first, second) => {
+      const firstNotInPoms = isNotInPomsFactory(first)
+      const secondNotInPoms = isNotInPomsFactory(second)
+
+      if (firstNotInPoms !== secondNotInPoms) {
+        return firstNotInPoms ? 1 : -1
+      }
+
       if (accessToken && first.isFavorite !== second.isFavorite) {
         return first.isFavorite ? -1 : 1
       }
@@ -1367,8 +1383,10 @@ function FactoryCard({
   onFavoriteToggle,
 }) {
   const [activeSystem, setActiveSystem] = useState(null)
+  const isNotInPoms = isNotInPomsFactory(factory)
   const activeMeasurementTable = activeSystem ? getMeasurementTable(factory, activeSystem) : null
   const canFocusFactory = hasFactoryCoordinate(factory)
+  const cardTextColor = isNotInPoms ? 'rgba(0, 0, 0, 0.5)' : 'text.secondary'
 
   return (
     <Paper
@@ -1452,7 +1470,7 @@ function FactoryCard({
                 font: 'inherit',
                 textAlign: 'left',
                 fontWeight: 600,
-                color: 'primary.900',
+                color: isNotInPoms ? cardTextColor : 'primary.900',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
@@ -1470,31 +1488,47 @@ function FactoryCard({
           </Tooltip>
           <Typography
             variant="body2"
-            color="text.secondary"
+            color={cardTextColor}
             sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
           >
             {[factory.factoryId, factory.oldRegistrationNo ? `(${factory.oldRegistrationNo})` : ''].filter(Boolean).join(' ')}
           </Typography>
           <Typography
             variant="body2"
-            color="text.secondary"
+            color={cardTextColor}
             sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
           >
             {factory.address}
           </Typography>
           <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', mt: 0.5 }}>
-            {factory.systems.map((system) => (
-              <FactorySystemChip
-                key={system}
-                factory={factory}
-                system={system}
-                active={activeSystem === system}
-                onClick={() => setActiveSystem((current) => (current === system ? null : system))}
+            {isNotInPoms ? (
+              <Chip
+                size="small"
+                label="ไม่มีจุดตรวจวัด"
+                sx={{
+                  height: 22,
+                  bgcolor: '#ffffff',
+                  color: cardTextColor,
+                  border: 1,
+                  borderColor: 'divider',
+                  fontWeight: 600,
+                  '& .MuiChip-label': { px: 1 },
+                }}
               />
-            ))}
+            ) : (
+              factory.systems.map((system) => (
+                <FactorySystemChip
+                  key={system}
+                  factory={factory}
+                  system={system}
+                  active={activeSystem === system}
+                  onClick={() => setActiveSystem((current) => (current === system ? null : system))}
+                />
+              ))
+            )}
             <Typography
               variant="caption"
-              color="text.secondary"
+              color={cardTextColor}
               sx={{ flex: 1, textAlign: 'right', minWidth: 54 }}
             >
               {factory.distance === null ? '-' : `${factory.distance.toFixed(1)} กม.`}
@@ -1503,7 +1537,7 @@ function FactoryCard({
         </Box>
 
         <Stack spacing={0.75} sx={{ flex: '0 0 auto', alignItems: 'center' }}>
-          {canUseFavorite ? (
+          {canUseFavorite && !isNotInPoms ? (
             <Tooltip title={factory.isFavorite ? 'ยกเลิกติดตาม' : 'ติดตาม'}>
               <IconButton
                 size="small"
@@ -1526,7 +1560,7 @@ function FactoryCard({
               </IconButton>
             </Tooltip>
           ) : null}
-          {canViewDetails ? (
+          {canViewDetails && !isNotInPoms ? (
             <Tooltip title="ดูรายละเอียด">
               <IconButton
                 size="small"

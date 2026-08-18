@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>คู่มือการใช้งานสำหรับผู้ประกอบการ - เมนูหน้าหลัก</title>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --paper: #ffffff;
+      --ink: #14213d;
+      --muted: #5f6f89;
+      --line: #d8e1ee;
+      --blue: #1d4ed8;
+      --blue-soft: #eff6ff;
+      --green: #15803d;
+      --orange: #f97316;
+      --red: #dc2626;
+      --gray: #6b7280;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "TH Sarabun New", "Noto Sans Thai", "Sarabun", "Tahoma", sans-serif;
+      font-size: 18px;
+      line-height: 1.65;
+    }
+
+    .page {
+      max-width: 1040px;
+      margin: 28px auto;
+      padding: 0 20px 48px;
+    }
+
+    .document {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      box-shadow: 0 16px 44px rgba(15, 23, 42, 0.08);
+    }
+
+    .cover {
+      padding: 44px 56px 28px;
+      border-bottom: 4px solid var(--blue);
+      text-align: center;
+    }
+
+    .department {
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-size: 18px;
+    }
+
+    h1,
+    h2,
+    h3 {
+      margin: 0;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+
+    h1 {
+      font-size: 34px;
+      line-height: 1.35;
+    }
+
+    .subtitle {
+      margin-top: 12px;
+      font-size: 22px;
+      font-weight: 700;
+    }
+
+    .meta {
+      margin-top: 18px;
+      color: var(--muted);
+      font-size: 17px;
+    }
+
+    .content {
+      padding: 30px 56px 48px;
+    }
+
+    section + section {
+      margin-top: 28px;
+    }
+
+    h2 {
+      display: flex;
+      gap: 10px;
+      align-items: baseline;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--line);
+      font-size: 25px;
+    }
+
+    h2 .no {
+      color: var(--blue);
+      min-width: 34px;
+    }
+
+    h3 {
+      margin: 18px 0 8px;
+      font-size: 21px;
+    }
+
+    p {
+      margin: 8px 0;
+    }
+
+    ol,
+    ul {
+      margin: 8px 0 0 28px;
+      padding: 0;
+    }
+
+    li + li {
+      margin-top: 4px;
+    }
+
+    table {
+      width: 100%;
+      margin-top: 12px;
+      border-collapse: collapse;
+      font-size: 17px;
+    }
+
+    th,
+    td {
+      padding: 9px 12px;
+      border: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--blue-soft);
+      color: #0f3f9d;
+      font-weight: 700;
+    }
+
+    .note {
+      margin-top: 12px;
+      padding: 12px 14px;
+      border-left: 4px solid var(--blue);
+      background: var(--blue-soft);
+      color: #1e3a8a;
+    }
+
+    .warning {
+      border-left-color: var(--orange);
+      background: #fff7ed;
+      color: #9a3412;
+    }
+
+    .status-list {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .status-item {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+    }
+
+    .dot {
+      width: 11px;
+      height: 11px;
+      margin-top: 9px;
+      border-radius: 999px;
+      flex: 0 0 auto;
+    }
+
+    .green { background: var(--green); }
+    .orange { background: var(--orange); }
+    .red { background: var(--red); }
+    .gray { background: var(--gray); }
+
+    .toc {
+      padding: 16px 18px;
+      border: 1px solid var(--line);
+      background: #fbfdff;
+    }
+
+    .toc a {
+      color: var(--blue);
+      text-decoration: none;
+    }
+
+    .footer {
+      padding-top: 22px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 16px;
+      text-align: center;
+    }
+
+    @media print {
+      body {
+        background: #ffffff;
+      }
+
+      .page {
+        max-width: none;
+        margin: 0;
+        padding: 0;
+      }
+
+      .document {
+        border: 0;
+        box-shadow: none;
+      }
+
+      section {
+        break-inside: avoid;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .cover,
+      .content {
+        padding-left: 22px;
+        padding-right: 22px;
+      }
+
+      .status-list {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <article class="document">
+      <header class="cover">
+        <p class="department">ระบบเฝ้าระวังและเตือนภัยมลพิษระยะไกล (D-POMS)</p>
+        <h1>คู่มือการใช้งานสำหรับผู้ประกอบการ</h1>
+        <div class="subtitle">ตัวอย่างคู่มือเมนู “หน้าหลัก”</div>
+        <div class="meta">จัดทำเพื่ออธิบายขั้นตอนการตรวจสอบข้อมูลโรงงานและข้อมูลตรวจวัดในหน้าหลักของระบบ</div>
+      </header>
+
+      <div class="content">
+        <section id="scope">
+          <h2><span class="no">1.</span><span>วัตถุประสงค์</span></h2>
+          <p>
+            คู่มือฉบับนี้จัดทำขึ้นเพื่อให้ผู้ประกอบการสามารถใช้งานเมนูหน้าหลักของระบบ D-POMS ได้อย่างถูกต้อง
+            โดยครอบคลุมการดูตำแหน่งโรงงานบนแผนที่ การตรวจสอบรายชื่อโรงงาน การค้นหาข้อมูล การเปิดดูรายละเอียดจุดตรวจวัด
+            และการตรวจสอบค่าสถิติข้อมูลตรวจวัดเบื้องต้น
+          </p>
+        </section>
+
+        <section id="toc">
+          <h2><span class="no">2.</span><span>หัวข้อการใช้งาน</span></h2>
+          <div class="toc">
+            <ol>
+              <li><a href="#overview">องค์ประกอบของหน้าหลัก</a></li>
+              <li><a href="#factory-list">การใช้งานรายการโรงงาน</a></li>
+              <li><a href="#search">การค้นหาและการค้นหาขั้นสูง</a></li>
+              <li><a href="#measurement">การดูข้อมูลตรวจวัดล่าสุด</a></li>
+              <li><a href="#detail">การดูรายละเอียดโรงงานและสถิติข้อมูล</a></li>
+              <li><a href="#symbols">คำอธิบายสัญลักษณ์และสี</a></li>
+            </ol>
+          </div>
+        </section>
+
+        <section id="overview">
+          <h2><span class="no">3.</span><span>องค์ประกอบของหน้าหลัก</span></h2>
+          <p>เมื่อเข้าสู่ระบบและเลือกเมนู “หน้าหลัก” ระบบจะแสดงองค์ประกอบสำคัญ ดังนี้</p>
+          <table>
+            <thead>
+              <tr>
+                <th>ส่วนแสดงผล</th>
+                <th>รายละเอียดการใช้งาน</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>แผนที่</td>
+                <td>แสดงตำแหน่งโรงงานที่อยู่ในระบบ โดยสามารถใช้เพื่อดูภาพรวมตำแหน่งโรงงานและเลือกโรงงานที่ต้องการตรวจสอบได้</td>
+              </tr>
+              <tr>
+                <td>รายการโรงงาน</td>
+                <td>แสดงรายชื่อโรงงาน เลขทะเบียน ที่ตั้ง ระบบตรวจวัด และข้อมูลตรวจวัดล่าสุดของโรงงานแต่ละแห่ง</td>
+              </tr>
+              <tr>
+                <td>ช่องค้นหา</td>
+                <td>ใช้ค้นหารายชื่อโรงงานหรือข้อมูลที่เกี่ยวข้องตามสิทธิ์การใช้งานของผู้ใช้งาน</td>
+              </tr>
+              <tr>
+                <td>ค้นหาขั้นสูง</td>
+                <td>ใช้กำหนดเงื่อนไขเพิ่มเติม เช่น ประเภทโรงงาน พื้นที่ประกอบกิจการ ภาค จังหวัด หรือระดับการเฝ้าระวัง</td>
+              </tr>
+              <tr>
+                <td>แถบระบบ CEMS/WPMS</td>
+                <td>ใช้เลือกดูข้อมูลตามประเภทระบบตรวจวัดของโรงงาน</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section id="factory-list">
+          <h2><span class="no">4.</span><span>การใช้งานรายการโรงงาน</span></h2>
+          <ol>
+            <li>ตรวจสอบรายชื่อโรงงานจากแถบรายการด้านซ้ายหรือส่วนรายการโรงงานของหน้าจอ</li>
+            <li>กดที่ชื่อโรงงานหรือโลโก้โรงงาน เพื่อให้แผนที่เลื่อนไปยังตำแหน่งของโรงงานที่เลือก</li>
+            <li>กดปุ่มลูกศรหรือส่วนเปิดรายละเอียด เพื่อดูข้อมูลเพิ่มเติมของโรงงาน</li>
+            <li>หากต้องการติดตามโรงงานเป็นพิเศษ ให้กดสัญลักษณ์รูปดาวของโรงงานนั้น</li>
+          </ol>
+          <div class="note">
+            โรงงานที่ถูกกำหนดเป็นรายการโปรดจะแสดงในลำดับต้นของรายการ เพื่อให้ผู้ประกอบการตรวจสอบข้อมูลได้สะดวกยิ่งขึ้น
+          </div>
+        </section>
+
+        <section id="search">
+          <h2><span class="no">5.</span><span>การค้นหาและการค้นหาขั้นสูง</span></h2>
+          <h3>5.1 การค้นหาจากชื่อโรงงาน</h3>
+          <ol>
+            <li>กรอกชื่อโรงงานหรือข้อความที่ต้องการค้นหาในช่องค้นหา</li>
+            <li>ระบบจะแสดงรายการโรงงานที่สอดคล้องกับคำค้นหาตามเงื่อนไขที่กำหนด</li>
+            <li>เลือกโรงงานจากรายการเพื่อดูตำแหน่งบนแผนที่หรือเปิดดูรายละเอียด</li>
+          </ol>
+
+          <h3>5.2 การค้นหาขั้นสูง</h3>
+          <ol>
+            <li>กดปุ่ม “ค้นหาขั้นสูง”</li>
+            <li>เลือกเงื่อนไขที่ต้องการ เช่น ลำดับประเภทโรงงาน นิคมอุตสาหกรรม ภาค จังหวัด เขต/อำเภอ หรือการเฝ้าระวัง</li>
+            <li>กดปุ่ม “ค้นหา” เพื่อให้ระบบแสดงโรงงานที่ตรงกับเงื่อนไข</li>
+            <li>หากต้องการยกเลิกเงื่อนไขทั้งหมด ให้กดปุ่ม “ค่าเริ่มต้น”</li>
+          </ol>
+          <div class="note warning">
+            กรณีเลือกตัวเลือก “ทั้งหมด” ระบบจะไม่นำเงื่อนไขในช่องนั้นไปจำกัดผลการค้นหา
+          </div>
+        </section>
+
+        <section id="measurement">
+          <h2><span class="no">6.</span><span>การดูข้อมูลตรวจวัดล่าสุด</span></h2>
+          <p>
+            ในการ์ดรายชื่อโรงงาน ระบบจะแสดง Chip ของระบบตรวจวัด เช่น CEMS หรือ WPMS เมื่อกด Chip ดังกล่าว
+            ระบบจะแสดงตารางค่าตรวจวัดล่าสุดของจุดตรวจวัดภายในโรงงานนั้น
+          </p>
+          <table>
+            <thead>
+              <tr>
+                <th>ข้อมูลในตาราง</th>
+                <th>คำอธิบาย</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>จุดตรวจวัด</td>
+                <td>แสดงชื่อจุดตรวจวัดของโรงงาน</td>
+              </tr>
+              <tr>
+                <td>วันที่และเวลา</td>
+                <td>แสดงวันและเวลาของข้อมูลตรวจวัดล่าสุดที่ระบบได้รับ</td>
+              </tr>
+              <tr>
+                <td>ค่าพารามิเตอร์</td>
+                <td>แสดงค่าตรวจวัดของแต่ละพารามิเตอร์ พร้อมสีเพื่อบ่งชี้สถานะของข้อมูล</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section id="detail">
+          <h2><span class="no">7.</span><span>การดูรายละเอียดโรงงานและสถิติข้อมูล</span></h2>
+          <ol>
+            <li>กดปุ่มเปิดรายละเอียดของโรงงานจากรายการโรงงาน</li>
+            <li>ระบบจะแสดงหน้าต่างรายละเอียดด้านล่างของหน้าจอ</li>
+            <li>เลือกประเภทระบบ เช่น CEMS หรือ WPMS ตามข้อมูลที่ต้องการตรวจสอบ</li>
+            <li>เลือกวันที่ที่ต้องการดูข้อมูลจากช่องวันที่</li>
+            <li>ตรวจสอบตารางสถิติข้อมูล กราฟแนวโน้มสถานการณ์มลพิษ และตารางสรุปผลการตรวจวัด</li>
+            <li>หากต้องการส่งออกข้อมูล ให้กดปุ่ม “Export” แล้วเลือกเงื่อนไขการส่งออกตามที่ระบบกำหนด</li>
+          </ol>
+          <div class="note">
+            ตารางสถิติข้อมูลรายชั่วโมงใช้สำหรับตรวจสอบค่าตรวจวัดในแต่ละช่วงเวลา ส่วนกราฟแนวโน้มใช้สำหรับพิจารณาภาพรวมการเปลี่ยนแปลงของค่ามลพิษตามวันที่เลือก
+          </div>
+        </section>
+
+        <section id="symbols">
+          <h2><span class="no">8.</span><span>คำอธิบายสัญลักษณ์และสี</span></h2>
+          <div class="status-list">
+            <div class="status-item">
+              <span class="dot green"></span>
+              <div><strong>สีเขียว</strong><br>ค่าตรวจวัดอยู่ในระดับปกติ หรือการส่งข้อมูลครบถ้วนตามเกณฑ์</div>
+            </div>
+            <div class="status-item">
+              <span class="dot orange"></span>
+              <div><strong>สีส้ม</strong><br>ค่าตรวจวัดอยู่ในระดับเฝ้าระวัง หรือมีข้อมูลบางส่วนที่ควรตรวจสอบเพิ่มเติม</div>
+            </div>
+            <div class="status-item">
+              <span class="dot red"></span>
+              <div><strong>สีแดง</strong><br>ค่าตรวจวัดเกินมาตรฐาน หรือข้อมูลมีลักษณะที่ระบบจัดเป็นความผิดปกติ</div>
+            </div>
+            <div class="status-item">
+              <span class="dot gray"></span>
+              <div><strong>สีเทา</strong><br>ไม่มีข้อมูลล่าสุด ข้อมูลไม่เพียงพอ หรือเป็นสถานะการทำงานของอุปกรณ์</div>
+            </div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>สัญลักษณ์</th>
+                <th>ความหมาย</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>*</td>
+                <td>ไม่มีการติดตั้งพารามิเตอร์ดังกล่าว</td>
+              </tr>
+              <tr>
+                <td>-</td>
+                <td>มีการติดตั้ง แต่ไม่ส่งข้อมูลในช่วงเวลานั้น</td>
+              </tr>
+              <tr>
+                <td>ERR</td>
+                <td>ค่าตรวจวัดติดลบ หรือข้อมูลมีรูปแบบผิดปกติ</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section id="caution">
+          <h2><span class="no">9.</span><span>ข้อควรปฏิบัติ</span></h2>
+          <ul>
+            <li>ควรตรวจสอบข้อมูลโรงงานและตำแหน่งบนแผนที่ให้ถูกต้องก่อนนำข้อมูลไปใช้อ้างอิง</li>
+            <li>หากพบข้อมูลตรวจวัดเป็นสีแดงหรือสีส้มต่อเนื่อง ควรตรวจสอบสถานะอุปกรณ์และการส่งข้อมูลของโรงงาน</li>
+            <li>หากข้อมูลไม่แสดงหรือไม่เป็นปัจจุบัน ควรตรวจสอบการเชื่อมต่ออินเทอร์เน็ตและลองโหลดข้อมูลใหม่อีกครั้ง</li>
+            <li>กรณีพบข้อมูลคลาดเคลื่อน ควรติดต่อเจ้าหน้าที่ผู้ดูแลระบบเพื่อดำเนินการตรวจสอบ</li>
+          </ul>
+        </section>
+
+        <div class="footer">
+          เอกสารฉบับนี้เป็นตัวอย่างคู่มือสำหรับเมนูหน้าหลัก และอาจปรับปรุงเพิ่มเติมให้สอดคล้องกับหน้าจอระบบจริงในแต่ละช่วงเวลา
+        </div>
+      </div>
+    </article>
+  </main>
+</body>
+</html>
