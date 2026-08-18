@@ -34,6 +34,7 @@ import {
   CONNECTION_REQUEST_STATUS_LABELS,
   CONNECTION_REQUEST_SUBMISSION_SOURCE,
   CONNECTION_REQUEST_TYPE,
+  POMS_MEMBERSHIP_STATUS,
   type AddParameterFormDetailDTO,
   type AddMeasurementPointRequestInput,
   type AddParameterRequestInput,
@@ -61,13 +62,17 @@ import {
   type ListConnectedMeasurementPointsQuery,
   type ListConnectionRequestsQuery,
   type ListOperatorFactoriesQuery,
+  type ListOperatorFactoryOverviewQuery,
   type ListPublicFactoryMapPointsQuery,
   type MeasurementInstrumentsInput,
   type MeasurementPointDetailsInput,
   type MeasurementPointDTO,
   type MeasurementPointInput,
   type OperatorFactoryDashboardRowDTO,
+  type OperatorFactoryLatestConnectionRequestDTO,
   type OperatorFactoryMeasurementPointDTO,
+  type OperatorFactoryOverviewResultDTO,
+  type OperatorFactoryOverviewRowDTO,
   type OperatorFactoryParameterStandardDTO,
   type OperatorFactoryTableRowDTO,
   type PaginatedConnectionRequestsDTO,
@@ -390,6 +395,85 @@ export const connectionRequestsService = {
     );
 
     return { data: dataWithLatestHourlyMeasurements, meta: { total: data.length } };
+  },
+
+  async listOperatorFactoryOverview(
+    actorUserId: number,
+    query: ListOperatorFactoryOverviewQuery = {},
+  ): Promise<OperatorFactoryOverviewResultDTO> {
+    const factories = await connectionRequestsRepository.listFactoriesForAccess({
+      actorUserId,
+      scope: 'OWN_FACTORY',
+    });
+    const visibleFactories = factories.filter((factory) => factory.isActive !== false);
+    const factoryIdByLookupKey = buildFactoryLookupKeyMap(visibleFactories);
+    const factoryIdByEligibleFactoryId = buildEligibleFactoryIdMap(visibleFactories);
+    const factoryLookupKeys = [...factoryIdByLookupKey.keys()];
+    const eligibleFactoryIds = [...factoryIdByEligibleFactoryId.keys()];
+    const [connectedPoints, favoriteFactoryIds, requests, factoryMainTypeLabels] =
+      await Promise.all([
+        eligibleFactoryIds.length > 0
+          ? connectionRequestsRepository.listConnectedMeasurementPointsForFactories(
+              factoryLookupKeys,
+              eligibleFactoryIds,
+            )
+          : connectionRequestsRepository.listConnectedMeasurementPointsForFactories(
+              factoryLookupKeys,
+            ),
+        connectionRequestsRepository.listFavoriteFactoryIds(actorUserId),
+        connectionRequestsRepository.listRequestsForFactories(factoryLookupKeys),
+        listFactoryMainTypeLabelsForDashboard(visibleFactories),
+      ]);
+    const measurementPointsByFactory = mapConnectedMeasurementPointsToDashboardFactories(
+      connectedPoints,
+      factoryIdByLookupKey,
+      factoryIdByEligibleFactoryId,
+    );
+    const latestNewConnectionRequestByFactory = mapLatestNewConnectionRequestsToFactories(
+      requests,
+      factoryIdByLookupKey,
+      factoryIdByEligibleFactoryId,
+    );
+    const favoriteFactoryIdSet = new Set(favoriteFactoryIds);
+
+    const filteredRows = visibleFactories
+      .map<OperatorFactoryOverviewRowDTO>((factory) => {
+        const currentMeasurementPoints = measurementPointsByFactory.get(factory.factoryId) ?? [];
+        const pomsMembershipStatus =
+          currentMeasurementPoints.length > 0
+            ? POMS_MEMBERSHIP_STATUS.IN_POMS
+            : POMS_MEMBERSHIP_STATUS.NOT_IN_POMS;
+        const latestRequest = latestNewConnectionRequestByFactory.get(factory.factoryId);
+
+        return {
+          ...toOperatorFactoryOverviewBaseRow(
+            factory,
+            currentMeasurementPoints,
+            factoryMainTypeLabels,
+          ),
+          isFavorite: favoriteFactoryIdSet.has(factory.factoryId),
+          hasLatestHourlyMeasurement: false,
+          pomsMembershipStatus,
+          pomsMembershipStatusLabel:
+            pomsMembershipStatus === POMS_MEMBERSHIP_STATUS.IN_POMS
+              ? 'อยู่ในระบบ POMS'
+              : 'ยังไม่อยู่ในระบบ POMS',
+          latestConnectionRequest: latestRequest
+            ? toOperatorFactoryLatestConnectionRequest(latestRequest)
+            : null,
+        };
+      })
+      .filter((factory) => matchesOperatorFactoryOverviewQuery(factory, query));
+
+    const data = await populateLatestHourlyMeasurements(filteredRows, actorUserId, 'OWN_FACTORY');
+
+    return {
+      data,
+      meta: {
+        total: data.length,
+        summary: summarizeOperatorFactoryOverview(data),
+      },
+    };
   },
 
   async listPublicFactoryMapPoints(
@@ -980,7 +1064,7 @@ export const connectionRequestsService = {
       status: initialStatus,
       revisionReason:
         initialStatus === CONNECTION_REQUEST_STATUS.WAITING_FACTORY_REVISION
-          ? input.revisionReason?.trim() ?? null
+          ? (input.revisionReason?.trim() ?? null)
           : null,
       officerNote: input.officerNote ?? null,
       measurementPoints: [{ ...point, pointCode }],
@@ -2416,6 +2500,124 @@ function mapConnectedMeasurementPointsToDashboardFactories(
   return measurementPointsByFactory;
 }
 
+function mapLatestNewConnectionRequestsToFactories(
+  requests: ConnectionRequestDTO[],
+  factoryIdByLookupKey: Map<string, string>,
+  factoryIdByEligibleFactoryId: Map<number, string>,
+): Map<string, ConnectionRequestDTO> {
+  const latestRequestByFactory = new Map<string, ConnectionRequestDTO>();
+
+  requests.forEach((request) => {
+    if (request.requestType !== CONNECTION_REQUEST_TYPE.NEW_CONNECTION) return;
+
+    const factoryId =
+      (request.eligibleFactoryId === null || request.eligibleFactoryId === undefined
+        ? undefined
+        : factoryIdByEligibleFactoryId.get(request.eligibleFactoryId)) ??
+      factoryIdByLookupKey.get(request.factoryId) ??
+      factoryIdByLookupKey.get(request.factoryRegistrationNo);
+    if (!factoryId) return;
+
+    const currentLatest = latestRequestByFactory.get(factoryId);
+    if (!currentLatest || isRequestNewer(request, currentLatest)) {
+      latestRequestByFactory.set(factoryId, request);
+    }
+  });
+
+  return latestRequestByFactory;
+}
+
+function isRequestNewer(candidate: ConnectionRequestDTO, current: ConnectionRequestDTO): boolean {
+  const candidateUpdatedAt = Date.parse(candidate.updatedAt);
+  const currentUpdatedAt = Date.parse(current.updatedAt);
+  if (
+    Number.isFinite(candidateUpdatedAt) &&
+    Number.isFinite(currentUpdatedAt) &&
+    candidateUpdatedAt !== currentUpdatedAt
+  ) {
+    return candidateUpdatedAt > currentUpdatedAt;
+  }
+  return candidate.id > current.id;
+}
+
+function toOperatorFactoryLatestConnectionRequest(
+  request: ConnectionRequestDTO,
+): OperatorFactoryLatestConnectionRequestDTO {
+  return {
+    id: request.id,
+    requestNo: request.requestNo,
+    requestType: CONNECTION_REQUEST_TYPE.NEW_CONNECTION,
+    systemType: request.systemType,
+    statusCode: request.status,
+    statusLabel: CONNECTION_REQUEST_STATUS_LABELS[request.status],
+    isInProgress:
+      request.status !== CONNECTION_REQUEST_STATUS.CONNECTED &&
+      request.status !== CONNECTION_REQUEST_STATUS.CANCELED,
+    updatedAt: request.updatedAt,
+  };
+}
+
+function toOperatorFactoryOverviewBaseRow(
+  factory: FactorySummaryDTO,
+  currentMeasurementPoints: CurrentFactoryMeasurementPointDTO[],
+  factoryMainTypeLabels: Map<string, string>,
+): Omit<
+  OperatorFactoryOverviewRowDTO,
+  | 'isFavorite'
+  | 'hasLatestHourlyMeasurement'
+  | 'pomsMembershipStatus'
+  | 'pomsMembershipStatusLabel'
+  | 'latestConnectionRequest'
+> {
+  const isInIndustrialEstate = Boolean(
+    factory.industrialEstateCode || factory.industrialEstateName,
+  );
+
+  return {
+    id: factory.id,
+    eligibleFactoryId: factory.eligibleFactoryId ?? null,
+    factoryId: factory.factoryId,
+    factoryName: factory.factoryName,
+    newRegistrationNo: factory.newRegistrationNo,
+    oldRegistrationNo: factory.oldRegistrationNo,
+    factoryLogoUrl: getFactoryLogoUrl(currentMeasurementPoints),
+    industryMainOrder: factory.industryMainOrder,
+    industryMainOrderLabel:
+      (factory.industryMainOrder
+        ? factoryMainTypeLabels.get(factory.industryMainOrder)
+        : undefined) ??
+      factory.industryMainOrderLabel ??
+      null,
+    industrySubOrder: factory.industrySubOrder,
+    eia: factory.eia,
+    hasEia: factory.hasEia ?? null,
+    regionCode: factory.regionCode ?? factory.regionName ?? null,
+    regionName: factory.regionName ?? factory.regionCode ?? null,
+    provinceCode: factory.provinceCode ?? null,
+    provinceName: factory.provinceName ?? factory.province,
+    province: factory.province,
+    address: factory.address,
+    latitude: factory.latitude,
+    longitude: factory.longitude,
+    districtCode: factory.districtCode ?? null,
+    districtName: factory.districtName ?? null,
+    industrialAreaType:
+      factory.industrialAreaType ??
+      (isInIndustrialEstate ? 'INDUSTRIAL_ESTATE' : 'OUTSIDE_INDUSTRIAL_ESTATE'),
+    industrialAreaTypeLabel:
+      factory.industrialAreaTypeLabel ??
+      (isInIndustrialEstate ? 'ในนิคมอุตสาหกรรม' : 'นอกนิคมอุตสาหกรรม'),
+    industrialEstateCode: factory.industrialEstateCode ?? null,
+    industrialEstateName: factory.industrialEstateName ?? null,
+    isEligible: factory.isEligible === true,
+    eligibilityStatus:
+      factory.eligibilityStatus ?? (factory.isEligible === true ? 'เข้าข่าย' : 'ไม่เข้าข่าย'),
+    monitoringPointCountBySystem: countMeasurementPointsBySystem(currentMeasurementPoints),
+    status: 'แสดง',
+    measurementPoints: currentMeasurementPoints.map(toOperatorFactoryMeasurementPoint),
+  };
+}
+
 function toFactoryDashboardBaseRow(
   factory: FactorySummaryDTO,
   currentMeasurementPoints: CurrentFactoryMeasurementPointDTO[],
@@ -2685,10 +2887,14 @@ async function loadLatestHourlyMeasurementData(
   if (!stationId || !isSafeStationId(stationId) || !cutoff) return [];
 
   try {
-    const result = await parameterValuesService.latestHourly(stationId, {
-      actorUserId,
-      scope: factoryViewScope,
-    }, cutoff);
+    const result = await parameterValuesService.latestHourly(
+      stationId,
+      {
+        actorUserId,
+        scope: factoryViewScope,
+      },
+      cutoff,
+    );
     return result.data.map((row) => toDashboardMeasurementRow(row, parameterDisplayNames));
   } catch (error) {
     if (error instanceof NotFoundError || error instanceof ForbiddenError) return [];
@@ -2893,6 +3099,42 @@ function matchesOperatorFactoryDashboardQuery(
   }
   if (query.favoriteOnly && !factory.isFavorite) return false;
   return true;
+}
+
+function matchesOperatorFactoryOverviewQuery(
+  factory: OperatorFactoryOverviewRowDTO,
+  query: ListOperatorFactoryOverviewQuery,
+): boolean {
+  if (
+    query.systemType &&
+    !factory.measurementPoints.some((point) => point.systemType === query.systemType)
+  ) {
+    return false;
+  }
+  if (query.favoriteOnly && !factory.isFavorite) return false;
+  if (query.pomsMembershipStatus && factory.pomsMembershipStatus !== query.pomsMembershipStatus) {
+    return false;
+  }
+  return true;
+}
+
+function summarizeOperatorFactoryOverview(
+  factories: OperatorFactoryOverviewRowDTO[],
+): OperatorFactoryOverviewResultDTO['meta']['summary'] {
+  return factories.reduce<OperatorFactoryOverviewResultDTO['meta']['summary']>(
+    (summary, factory) => {
+      summary.all += 1;
+      if (factory.pomsMembershipStatus === POMS_MEMBERSHIP_STATUS.IN_POMS) {
+        summary.inPoms += 1;
+      } else if (factory.latestConnectionRequest?.isInProgress === true) {
+        summary.connectionInProgress += 1;
+      } else {
+        summary.notConnected += 1;
+      }
+      return summary;
+    },
+    { all: 0, inPoms: 0, connectionInProgress: 0, notConnected: 0 },
+  );
 }
 
 function matchesPublicFactoryMapPointsQuery(
@@ -3253,7 +3495,10 @@ function requestMatchesPermissionScope(
   const regionValues = resolveEffectiveRegionValues(scope, regionalAccess);
   const province = normalizeLocationValue(scope.province);
   if (scope.scope === 'IN_REGION' && regionValues.length > 0) {
-    return regionValues.includes(request.regionName ?? '') || regionValues.includes(request.regionCode ?? '');
+    return (
+      regionValues.includes(request.regionName ?? '') ||
+      regionValues.includes(request.regionCode ?? '')
+    );
   }
   if (scope.scope === 'IN_PROVINCE' && province) {
     return request.provinceName === province || request.provinceCode === province;

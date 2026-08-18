@@ -7,6 +7,11 @@ import {
   ALERT_EVENT_THRESHOLD_TYPES,
 } from '../alert-events/alert-events.types';
 import { BOD_COD_DEVIATION_REPORT_STATUSES } from '../bod-cod-deviations/bod-cod-deviation-reports.types';
+import { CONNECTION_REQUEST_EIA_ASSESSMENTS } from '../connection-requests/connection-request-eia';
+import {
+  CONNECTION_REQUEST_STATUS,
+  CONNECTION_REQUEST_STATUS_LABELS,
+} from '../connection-requests/connection-requests.types';
 import { KWP_FORM_STATUSES, KWP_FORM_TYPES } from '../kwp-form-reports/kwp-form-reports.types';
 import { connectionRequestsOpenApiDocument } from './connection-requests.openapi';
 import { MENU_TAGS } from './openapi.shared';
@@ -307,6 +312,8 @@ const signatureParameter = {
 };
 
 const systemTypeValues = [...ALERT_EVENT_SYSTEM_TYPES];
+const connectionRequestStatusValues = Object.values(CONNECTION_REQUEST_STATUS);
+const pomsMembershipStatusValues = ['IN_POMS', 'NOT_IN_POMS'];
 const isoDatePattern = '^\\d{4}-\\d{2}-\\d{2}$';
 const yearMonthPattern = '^\\d{4}-(?:0[1-9]|1[0-2])$';
 const fourDigitYearPattern = '^(?!0000)\\d{4}$';
@@ -428,6 +435,71 @@ const createEligibleFactoryExample = {
 };
 
 const favoriteExample = { isFavorite: true };
+
+const operatorFactoryOverviewExample = {
+  success: true,
+  data: [
+    {
+      id: 7,
+      eligibleFactoryId: null,
+      factoryId: 'F000123',
+      factoryName: 'บริษัท โรงงานตัวอย่าง จำกัด',
+      newRegistrationNo: '10120000325542',
+      oldRegistrationNo: '3-34(3)-3/54นบ',
+      factoryLogoUrl: null,
+      industryMainOrder: '106',
+      industryMainOrderLabel: 'ประเภทโรงงานลำดับที่ 106',
+      industrySubOrder: '33',
+      eia: null,
+      hasEia: null,
+      regionCode: null,
+      regionName: null,
+      provinceCode: '12',
+      provinceName: 'นนทบุรี',
+      province: 'นนทบุรี',
+      address: '39/5 หมู่ 4 ตำบลไทรใหญ่ อำเภอไทรน้อย จังหวัดนนทบุรี 11150',
+      latitude: '13.9975',
+      longitude: '100.3125',
+      districtCode: null,
+      districtName: 'ไทรน้อย',
+      industrialAreaType: 'OUTSIDE_INDUSTRIAL_ESTATE',
+      industrialAreaTypeLabel: 'นอกนิคมอุตสาหกรรม',
+      industrialEstateCode: null,
+      industrialEstateName: null,
+      isEligible: false,
+      eligibilityStatus: 'ไม่เข้าข่าย',
+      isFavorite: false,
+      hasLatestHourlyMeasurement: false,
+      monitoringPointCountBySystem: [
+        { systemType: 'CEMS', count: 0 },
+        { systemType: 'WPMS', count: 0 },
+      ],
+      status: 'แสดง',
+      measurementPoints: [],
+      pomsMembershipStatus: 'NOT_IN_POMS',
+      pomsMembershipStatusLabel: 'ยังไม่อยู่ในระบบ POMS',
+      latestConnectionRequest: {
+        id: 145,
+        requestNo: 'CEMS-0145/2569',
+        requestType: 'NEW_CONNECTION',
+        systemType: 'CEMS',
+        statusCode: 'PENDING_DESIGN_REVIEW',
+        statusLabel: 'รอพิจารณาแบบ',
+        isInProgress: true,
+        updatedAt: '2026-08-18T10:15:00.000Z',
+      },
+    },
+  ],
+  meta: {
+    total: 1,
+    summary: {
+      all: 1,
+      inPoms: 0,
+      connectionInProgress: 1,
+      notConnected: 0,
+    },
+  },
+};
 
 const monitoringPointFormExample = {
   factory: {
@@ -854,6 +926,269 @@ const componentSchemas: Record<string, OpenApiObject> = {
       fuelUsed: { type: 'string', minLength: 1, maxLength: 500, nullable: true },
       hasEia: { type: 'boolean', nullable: true },
     },
+  },
+  OperatorFactoryMeasurementCriteriaRow: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['level', 'min', 'max'],
+    properties: {
+      level: { type: 'string', enum: ['normal', 'warning', 'critical'] },
+      min: { type: 'number', nullable: true },
+      max: { type: 'number', nullable: true },
+    },
+  },
+  OperatorFactoryMeasurementCriteria: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['enabled', 'standardValue', 'rows'],
+    properties: {
+      enabled: { type: 'boolean' },
+      standardValue: {
+        oneOf: [{ type: 'string' }, { type: 'number' }],
+        nullable: true,
+      },
+      rows: {
+        type: 'array',
+        items: schemaRef('OperatorFactoryMeasurementCriteriaRow'),
+      },
+    },
+  },
+  OperatorFactoryParameterStandard: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['parameter', 'standardCriteria', 'eiaCriteria'],
+    properties: {
+      parameter: {
+        type: 'string',
+        description: 'ชื่อพารามิเตอร์พร้อมหน่วย เช่น CO (ppm) หรือ BOD (mg/l)',
+      },
+      standardCriteria: {
+        allOf: [schemaRef('OperatorFactoryMeasurementCriteria')],
+        nullable: true,
+      },
+      eiaCriteria: {
+        allOf: [schemaRef('OperatorFactoryMeasurementCriteria')],
+        nullable: true,
+      },
+    },
+  },
+  OperatorFactoryMeasurementPoint: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'stationId',
+      'pointName',
+      'pointCode',
+      'systemType',
+      'parameters',
+      'parameterStandards',
+      'data',
+    ],
+    properties: {
+      stationId: { type: 'string', nullable: true },
+      pointName: { type: 'string' },
+      pointCode: { type: 'string', nullable: true },
+      systemType: { type: 'string', enum: systemTypeValues },
+      parameters: {
+        type: 'array',
+        items: {
+          type: 'string',
+          description: 'ชื่อพารามิเตอร์พร้อมหน่วย',
+        },
+      },
+      monitoringPointStatus: { type: 'string', nullable: true },
+      parameterStandards: {
+        type: 'array',
+        items: schemaRef('OperatorFactoryParameterStandard'),
+      },
+      data: {
+        type: 'array',
+        items: { type: 'object', additionalProperties: true },
+      },
+    },
+  },
+  OperatorFactorySystemPointCount: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['systemType', 'count'],
+    properties: {
+      systemType: { type: 'string', enum: systemTypeValues },
+      count: { type: 'integer', minimum: 0 },
+    },
+  },
+  OperatorFactoryLatestConnectionRequest: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'id',
+      'requestNo',
+      'requestType',
+      'systemType',
+      'statusCode',
+      'statusLabel',
+      'isInProgress',
+      'updatedAt',
+    ],
+    properties: {
+      id: { type: 'integer', minimum: 1 },
+      requestNo: { type: 'string' },
+      requestType: { type: 'string', enum: ['NEW_CONNECTION'] },
+      systemType: { type: 'string', enum: systemTypeValues },
+      statusCode: {
+        type: 'string',
+        enum: connectionRequestStatusValues,
+        'x-enum-labels': CONNECTION_REQUEST_STATUS_LABELS,
+      },
+      statusLabel: { type: 'string' },
+      isInProgress: {
+        type: 'boolean',
+        description: 'true สำหรับสถานะที่ยังไม่จบ; CONNECTED และ CANCELED เป็น false',
+      },
+      updatedAt: { type: 'string', format: 'date-time' },
+    },
+  },
+  OperatorFactoryOverviewRow: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'id',
+      'eligibleFactoryId',
+      'factoryId',
+      'factoryName',
+      'newRegistrationNo',
+      'oldRegistrationNo',
+      'factoryLogoUrl',
+      'industryMainOrder',
+      'industryMainOrderLabel',
+      'industrySubOrder',
+      'eia',
+      'hasEia',
+      'regionCode',
+      'regionName',
+      'provinceCode',
+      'provinceName',
+      'province',
+      'address',
+      'latitude',
+      'longitude',
+      'districtCode',
+      'districtName',
+      'industrialAreaType',
+      'industrialAreaTypeLabel',
+      'industrialEstateCode',
+      'industrialEstateName',
+      'isEligible',
+      'eligibilityStatus',
+      'isFavorite',
+      'hasLatestHourlyMeasurement',
+      'monitoringPointCountBySystem',
+      'status',
+      'measurementPoints',
+      'pomsMembershipStatus',
+      'pomsMembershipStatusLabel',
+      'latestConnectionRequest',
+    ],
+    properties: {
+      id: { type: 'integer', minimum: 1, nullable: true },
+      eligibleFactoryId: { type: 'integer', minimum: 1, nullable: true },
+      factoryId: { type: 'string' },
+      factoryName: { type: 'string' },
+      newRegistrationNo: { type: 'string', nullable: true },
+      oldRegistrationNo: { type: 'string', nullable: true },
+      factoryLogoUrl: { type: 'string', format: 'uri', nullable: true },
+      industryMainOrder: { type: 'string', nullable: true },
+      industryMainOrderLabel: { type: 'string', nullable: true },
+      industrySubOrder: { type: 'string', nullable: true },
+      eia: {
+        type: 'string',
+        enum: CONNECTION_REQUEST_EIA_ASSESSMENTS,
+        nullable: true,
+      },
+      hasEia: { type: 'boolean', nullable: true },
+      regionCode: { type: 'string', nullable: true },
+      regionName: { type: 'string', nullable: true },
+      provinceCode: { type: 'string', nullable: true },
+      provinceName: { type: 'string', nullable: true },
+      province: { type: 'string', nullable: true },
+      address: { type: 'string', nullable: true },
+      latitude: { type: 'string', nullable: true },
+      longitude: { type: 'string', nullable: true },
+      districtCode: { type: 'string', nullable: true },
+      districtName: { type: 'string', nullable: true },
+      industrialAreaType: {
+        type: 'string',
+        enum: ['INDUSTRIAL_ESTATE', 'OUTSIDE_INDUSTRIAL_ESTATE'],
+        nullable: true,
+      },
+      industrialAreaTypeLabel: {
+        type: 'string',
+        enum: ['ในนิคมอุตสาหกรรม', 'นอกนิคมอุตสาหกรรม'],
+        nullable: true,
+      },
+      industrialEstateCode: { type: 'string', nullable: true },
+      industrialEstateName: { type: 'string', nullable: true },
+      isEligible: { type: 'boolean' },
+      eligibilityStatus: { type: 'string', enum: ['เข้าข่าย', 'ไม่เข้าข่าย'] },
+      isFavorite: { type: 'boolean' },
+      hasLatestHourlyMeasurement: { type: 'boolean' },
+      monitoringPointCountBySystem: {
+        type: 'array',
+        items: schemaRef('OperatorFactorySystemPointCount'),
+      },
+      status: { type: 'string', enum: ['แสดง'] },
+      measurementPoints: {
+        type: 'array',
+        items: schemaRef('OperatorFactoryMeasurementPoint'),
+      },
+      pomsMembershipStatus: {
+        type: 'string',
+        enum: pomsMembershipStatusValues,
+        'x-enum-labels': {
+          IN_POMS: 'อยู่ในระบบ POMS',
+          NOT_IN_POMS: 'ยังไม่อยู่ในระบบ POMS',
+        },
+      },
+      pomsMembershipStatusLabel: {
+        type: 'string',
+        enum: ['อยู่ในระบบ POMS', 'ยังไม่อยู่ในระบบ POMS'],
+      },
+      latestConnectionRequest: {
+        allOf: [schemaRef('OperatorFactoryLatestConnectionRequest')],
+        nullable: true,
+      },
+    },
+  },
+  OperatorFactoryOverviewResponse: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['success', 'data', 'meta'],
+    properties: {
+      success: { type: 'boolean', enum: [true] },
+      data: {
+        type: 'array',
+        items: schemaRef('OperatorFactoryOverviewRow'),
+      },
+      meta: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['total', 'summary'],
+        properties: {
+          total: { type: 'integer', minimum: 0 },
+          summary: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['all', 'inPoms', 'connectionInProgress', 'notConnected'],
+            properties: {
+              all: { type: 'integer', minimum: 0 },
+              inPoms: { type: 'integer', minimum: 0 },
+              connectionInProgress: { type: 'integer', minimum: 0 },
+              notConnected: { type: 'integer', minimum: 0 },
+            },
+          },
+        },
+      },
+    },
+    example: operatorFactoryOverviewExample,
   },
   FavoriteRequest: {
     type: 'object',
@@ -2080,12 +2415,41 @@ const extraPaths: Record<string, OpenApiObject> = {
   '/operator-factory-dashboard': {
     get: securedOperation({
       tag: 'Home',
-      summary: 'Operator factory dashboard',
+      summary: 'Connected-only factory dashboard',
       operationId: 'listOperatorFactoryDashboard',
+      description:
+        'Compatibility dashboard เดิมที่คืนเฉพาะโรงงานซึ่งมี active POMS point; หน้าแรกของผู้ประกอบการที่ต้องเห็นโรงงานของตนเองทั้งหมดให้ใช้ GET /operator-factories',
       parameters: [
         queryEnum('systemType', systemTypeValues, 'กรองระบบตรวจวัด'),
         queryBoolean('favoriteOnly', 'คืนเฉพาะโรงงานโปรด'),
       ],
+    }),
+  },
+  '/operator-factories': {
+    get: securedOperation({
+      tag: 'Home',
+      summary: 'Operator-owned factories with POMS membership',
+      operationId: 'listOperatorFactoryOverview',
+      description:
+        'สำหรับ userType=operator เท่านั้น คืนโรงงานของผู้ประกอบการจาก ownership ที่ sync ตอน login ทั้งหมด โดยบังคับ effective data scope เป็น OWN_FACTORY แล้วแยกสถานะจาก active POMS point; eligibility และสถานะคำขอเป็นข้อมูลคนละส่วน',
+      parameters: [
+        queryEnum(
+          'systemType',
+          systemTypeValues,
+          'คืนเฉพาะโรงงานที่มี active POMS point ของระบบนี้; โรงงานที่ยังไม่อยู่ใน POMS จะไม่ตรง filter นี้',
+        ),
+        queryBoolean(
+          'favoriteOnly',
+          'คืนเฉพาะโรงงานโปรด; runtime รองรับ true/false, 1/0 และ yes/no',
+        ),
+        queryEnum(
+          'pomsMembershipStatus',
+          pomsMembershipStatusValues,
+          'กรองสถานะสมาชิก POMS: IN_POMS = มี active connected point, NOT_IN_POMS = ไม่มี active connected point',
+        ),
+      ],
+      successDescription: 'คืนโรงงานของผู้ประกอบการพร้อมสถานะ POMS และคำขอเชื่อมต่อล่าสุด',
+      successSchema: schemaRef('OperatorFactoryOverviewResponse'),
     }),
   },
   '/operator-factories/{factoryId}/favorite': {
@@ -2829,7 +3193,11 @@ const tags: OpenApiObject[] = [
     name: MENU_TAGS.SYSTEM,
     description: 'Health check, API root, หน้าเอกสาร, login, current user และเครื่องมือทดสอบภายใน',
   },
-  { name: MENU_TAGS.HOME, description: 'Dashboard โรงงาน, public map และ favorite' },
+  {
+    name: MENU_TAGS.HOME,
+    description:
+      'โรงงานของผู้ประกอบการ, POMS membership, connected dashboard, public map และ favorite',
+  },
   {
     name: MENU_TAGS.MASTER_DATA,
     description: 'ข้อมูลจุดตรวจวัดที่เชื่อมต่อแล้ว ประวัติคำขอ และ device config ปัจจุบัน',
@@ -2893,6 +3261,7 @@ function menuTagForPath(path: string): string {
   if (
     path.startsWith('/public/factory-map-points') ||
     path.startsWith('/operator-factory-dashboard') ||
+    path === '/operator-factories' ||
     path.startsWith('/operator-factories/')
   ) {
     return MENU_TAGS.HOME;
@@ -2961,6 +3330,9 @@ function authorizationRequirementFor(path: string, method: string): Authorizatio
   }
 
   if (path === '/operator-factory-dashboard') {
+    return { permissions: ['dashboard:view'], mode: 'any' };
+  }
+  if (path === '/operator-factories') {
     return { permissions: ['dashboard:view'], mode: 'any' };
   }
   if (path.startsWith('/operator-factories/')) {
@@ -3160,15 +3532,15 @@ export const pomsOpenApiDocument: OpenApiObject = {
   openapi: '3.0.3',
   info: {
     title: 'POMS API',
-    version: '0.2.0',
+    version: '0.3.0',
     description:
-      'Interactive contract สำหรับ HTTP endpoint ทั้ง 113 รายการใน POMS แยกตามเมนูงานจริง พร้อม payload, validation, auth และตัวอย่างทดสอบ\n\nSwagger แสดง 122 operations เพราะขยาย optional buddhistYear path อีก 9 รูปแบบเพื่อรองรับทั้ง annual point code ที่ URL-encode และ path ที่ proxy ถอดรหัสแล้ว',
+      'Interactive contract สำหรับ HTTP endpoint ทั้ง 114 รายการใน POMS แยกตามเมนูงานจริง พร้อม payload, validation, auth และตัวอย่างทดสอบ\n\nSwagger แสดง 123 operations เพราะขยาย optional buddhistYear path อีก 9 รูปแบบเพื่อรองรับทั้ง annual point code ที่ URL-encode และ path ที่ proxy ถอดรหัสแล้ว',
   },
   servers: [{ url: env.API_PREFIX }],
   tags,
   paths,
   components,
-  'x-poms-canonical-operation-count': 113,
+  'x-poms-canonical-operation-count': 114,
 };
 
 export function countOpenApiOperations(document: OpenApiObject): number {

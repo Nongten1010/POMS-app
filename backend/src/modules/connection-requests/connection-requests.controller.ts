@@ -31,6 +31,7 @@ import {
   listConnectedMeasurementPointsQuerySchema,
   listConnectionRequestTableRowsQuerySchema,
   listConnectionRequestsQuerySchema,
+  listOperatorFactoryOverviewQuerySchema,
   listOperatorFactoriesQuerySchema,
   listPublicFactoryMapPointsQuerySchema,
   operatorFactoryFavoriteParamsSchema,
@@ -124,6 +125,21 @@ export const connectionRequestsController = {
         { ...query, connectedOnly: true },
         ...getRegionalAccessArg(req),
       );
+      res.status(StatusCodes.OK).json({ success: true, ...result });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async listOperatorFactoryOverview(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const actor = requireOperatorActor(req);
+      const query = listOperatorFactoryOverviewQuerySchema.parse(req.query);
+      const result = await connectionRequestsService.listOperatorFactoryOverview(actor.id, query);
       res.status(StatusCodes.OK).json({ success: true, ...result });
     } catch (err) {
       next(err);
@@ -672,6 +688,15 @@ function requireDirectConnectionActor(req: Request): NonNullable<Request['user']
   const hasDirectRole = actor.roles.some((role) => role === 'monitoring_kpm' || role === 'admin');
   if (!isOfficerUser || !hasDirectRole) {
     throw new ForbiddenError('Officer direct connection is limited to monitoring_kpm and admin');
+  }
+
+  return actor;
+}
+
+function requireOperatorActor(req: Request): NonNullable<Request['user']> {
+  const actor = requireAuthenticatedActor(req);
+  if (actor.userType !== 'operator') {
+    throw new ForbiddenError('Operator factory overview is limited to operators');
   }
 
   return actor;

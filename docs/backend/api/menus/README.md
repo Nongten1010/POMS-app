@@ -6,12 +6,12 @@ Index นี้แสดงเฉพาะเมนูหรือ business capa
 
 ## ศูนย์ทดสอบ API
 
-เปิด `<BASE_URL>/api/v1/docs` เพื่อใช้ Swagger UI ที่รวม API ทั้งระบบ ตัวเลขในตารางนี้นับ `Method + Path` โดย **API ในทะเบียน** คือ route canonical 113 รายการ ส่วน **Operations ใน Swagger** มี 122 รายการ เพราะเพิ่ม path แบบแยก `stationId/{buddhistYear}` อีก 9 รายการให้กรอกและทดสอบ annual point code ได้สะดวก
+เปิด `<BASE_URL>/api/v1/docs` เพื่อใช้ Swagger UI ที่รวม API ทั้งระบบ ตัวเลขในตารางนี้นับ `Method + Path` โดย **API ในทะเบียน** คือ route canonical 114 รายการ ส่วน **Operations ใน Swagger** มี 123 รายการ เพราะเพิ่ม path แบบแยก `stationId/{buddhistYear}` อีก 9 รายการให้กรอกและทดสอบ annual point code ได้สะดวก
 
 | กลุ่มใน Swagger                         | API ในทะเบียน | Operations ใน Swagger | Canonical contract                                                                                                                                       |
 | --------------------------------------- | ------------: | --------------------: | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | ระบบทั่วไปและการเข้าสู่ระบบ             |             8 |                     8 | [Common API](../shared/common-api/README.md), [Authentication](../shared/authentication/README.md), [Internal tools](../shared/internal-tools/README.md) |
-| หน้าหลัก                                |             3 |                     3 | [หน้าหลัก](./home/README.md)                                                                                                                             |
+| หน้าหลัก                                |             4 |                     4 | [หน้าหลัก](./home/README.md)                                                                                                                             |
 | ข้อมูลพื้นฐาน                           |             6 |                    10 | [ข้อมูลพื้นฐาน](./master-data/README.md)                                                                                                                 |
 | ขอเชื่อมต่อ                             |            31 |                    31 | [ขอเชื่อมต่อ](./connection-requests/README.md)                                                                                                           |
 | แจ้งแบบ กวภ. 01 - กวภ. 05               |            25 |                    25 | [แจ้งแบบ กวภ.](./kwp-forms/README.md)                                                                                                                    |
@@ -21,7 +21,7 @@ Index นี้แสดงเฉพาะเมนูหรือ business capa
 | สิทธิ์การใช้งาน                         |             8 |                     8 | [สิทธิ์การใช้งาน](./permissions/README.md)                                                                                                               |
 | โรงงานที่เข้าข่าย                       |            11 |                    11 | [โรงงานที่เข้าข่าย](./eligible-factories/README.md)                                                                                                      |
 | ระบบเชื่อมต่อภายนอก                     |             2 |                     3 | [Integrations](../integrations/README.md)                                                                                                                |
-| **รวม**                                 |       **113** |               **122** | [Endpoint registry](../ENDPOINTS.md)                                                                                                                     |
+| **รวม**                                 |       **114** |               **123** | [Endpoint registry](../ENDPOINTS.md)                                                                                                                     |
 
 ```text
 menus/
@@ -56,7 +56,7 @@ menus/
 
 ## Canonical Menu Pages
 
-- [หน้าหลัก](./home/README.md) — dashboard โรงงาน current/live, public map และ favorite
+- [หน้าหลัก](./home/README.md) — โรงงานของผู้ประกอบการพร้อมสถานะ POMS, dashboard current/live, public map และ favorite
 - [ข้อมูลพื้นฐาน](./master-data/README.md) — ข้อมูลจุดตรวจวัดที่เชื่อมต่อแล้ว ประวัติ และ device config ปัจจุบัน
 - [ขอเชื่อมต่อ](./connection-requests/README.md) — contract คำขอ CEMS/WPMS และการออกรหัสจุดตรวจวัด
 - [โรงงานที่เข้าข่าย](./eligible-factories/README.md) — contract รายการโรงงานเข้าข่าย ข้อมูลที่ซิงก์ และเงื่อนไขการถอดออก

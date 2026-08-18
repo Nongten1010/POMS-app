@@ -45,6 +45,12 @@ operatorFactoryDashboardRoutes.get(
 
 publicFactoryMapPointRoutes.get('/', connectionRequestsController.listPublicFactoryMapPoints);
 
+operatorFactoryRoutes.get(
+  '/',
+  authorize('dashboard:view'),
+  connectionRequestsController.listOperatorFactoryOverview,
+);
+
 operatorFactoryRoutes.put(
   '/:factoryId/favorite',
   authorize('dashboard.alerts:view'),

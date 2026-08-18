@@ -5,6 +5,7 @@ import { signAccessToken } from '../../src/shared/utils/jwt';
 jest.mock('../../src/modules/connection-requests/connection-requests.service', () => ({
   connectionRequestsService: {
     listOperatorFactories: jest.fn(),
+    listOperatorFactoryOverview: jest.fn(),
     listOfficerEligibleFactories: jest.fn(),
     listOperatorFactoryDashboard: jest.fn(),
     listPublicFactoryMapPoints: jest.fn(),
@@ -20,6 +21,18 @@ const mockedConnectionRequestsService = jest.mocked(connectionRequestsService);
 describe('operator factory dashboard routes', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockedConnectionRequestsService.listOperatorFactoryOverview.mockResolvedValue({
+      data: [],
+      meta: {
+        total: 0,
+        summary: {
+          all: 0,
+          inPoms: 0,
+          connectionInProgress: 0,
+          notConnected: 0,
+        },
+      },
+    });
     mockedConnectionRequestsService.listOperatorFactories.mockResolvedValue({
       data: [
         {
@@ -253,6 +266,73 @@ describe('operator factory dashboard routes', () => {
     });
     expect(response.body.data[0]).not.toHaveProperty('measurementPoints');
     expect(response.body.data[0]).not.toHaveProperty('monitoringPointCountBySystem');
+  });
+
+  it('lists every owned factory with its POMS membership status for the operator home page', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .get(
+        '/api/v1/operator-factories?systemType=CEMS&favoriteOnly=yes&pomsMembershipStatus=NOT_IN_POMS',
+      )
+      .set('Authorization', `Bearer ${accessToken()}`);
+
+    expect(response.status).toBe(200);
+    expect(mockedConnectionRequestsService.listOperatorFactoryOverview).toHaveBeenCalledWith(42, {
+      systemType: 'CEMS',
+      favoriteOnly: true,
+      pomsMembershipStatus: 'NOT_IN_POMS',
+    });
+    expect(response.body).toEqual({
+      success: true,
+      data: [],
+      meta: {
+        total: 0,
+        summary: {
+          all: 0,
+          inPoms: 0,
+          connectionInProgress: 0,
+          notConnected: 0,
+        },
+      },
+    });
+  });
+
+  it('requires authentication for the owned factory overview', async () => {
+    const app = createApp();
+
+    const response = await request(app).get('/api/v1/operator-factories');
+
+    expect(response.status).toBe(401);
+    expect(mockedConnectionRequestsService.listOperatorFactoryOverview).not.toHaveBeenCalled();
+  });
+
+  it('rejects non-operator users from the owned factory overview', async () => {
+    const app = createApp();
+    const citizenToken = accessToken({
+      userType: 'citizen',
+      roles: ['public_user'],
+      scopes: { 'dashboard:view': 'ALL' },
+    });
+
+    const response = await request(app)
+      .get('/api/v1/operator-factories')
+      .set('Authorization', `Bearer ${citizenToken}`);
+
+    expect(response.status).toBe(403);
+    expect(mockedConnectionRequestsService.listOperatorFactoryOverview).not.toHaveBeenCalled();
+  });
+
+  it('validates the POMS membership filter for the owned factory overview', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .get('/api/v1/operator-factories?pomsMembershipStatus=CONNECTED')
+      .set('Authorization', `Bearer ${accessToken()}`);
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    expect(mockedConnectionRequestsService.listOperatorFactoryOverview).not.toHaveBeenCalled();
   });
 
   it('lists all eligible factories for officer connection request forms in the operator table shape', async () => {

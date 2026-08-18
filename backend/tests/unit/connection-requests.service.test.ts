@@ -162,6 +162,7 @@ describe('connectionRequestsService', () => {
       mockedRepository.findById(id),
     );
     mockedRepository.listFavoriteFactoryIds.mockResolvedValue([]);
+    mockedRepository.listRequestsForFactories.mockResolvedValue([]);
     mockedRepository.listFactoryMainTypeLabels.mockResolvedValue(new Map());
     mockedRepository.listProvinceRegions.mockResolvedValue(new Map());
     mockedRepository.listOfficerNotificationEmailsForFactories.mockResolvedValue(new Map());
@@ -895,6 +896,182 @@ describe('connectionRequestsService', () => {
       ]),
     );
     expect(result.meta.total).toBe(3);
+  });
+
+  it('annotates every owned factory from active POMS points independently of eligibility', async () => {
+    mockedRepository.listFactoriesForAccess.mockResolvedValue([
+      factorySummary({
+        id: 1,
+        factoryId: 'factory-connected',
+        newRegistrationNo: 'REG-CONNECTED',
+      }),
+      factorySummary({
+        id: 2,
+        eligibleFactoryId: null,
+        factoryId: 'factory-pending',
+        factoryName: 'โรงงานรอเชื่อมต่อ',
+        newRegistrationNo: 'REG-PENDING',
+        isEligible: false,
+        eligibilityStatus: 'ไม่เข้าข่าย',
+      }),
+      factorySummary({
+        id: 3,
+        eligibleFactoryId: null,
+        factoryId: 'factory-connected-ineligible',
+        factoryName: 'โรงงานไม่เข้าข่ายแต่เชื่อมแล้ว',
+        newRegistrationNo: 'REG-CONNECTED-INELIGIBLE',
+        isEligible: false,
+        eligibilityStatus: 'ไม่เข้าข่าย',
+      }),
+    ]);
+    mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
+      currentFactoryMeasurementPoint({ factoryId: 'REG-CONNECTED' }),
+      currentFactoryMeasurementPoint({
+        factoryId: 'factory-connected-ineligible',
+        stationId: 'S0002',
+        pointCode: 'S0002',
+      }),
+    ]);
+    mockedRepository.listFavoriteFactoryIds.mockResolvedValue(['factory-connected-ineligible']);
+    mockedRepository.listRequestsForFactories.mockResolvedValue([
+      requestDto({
+        id: 145,
+        requestNo: 'CEMS-0145/2569',
+        factoryId: 'factory-pending',
+        factoryRegistrationNo: 'REG-PENDING',
+        status: CONNECTION_REQUEST_STATUS.PENDING_DESIGN_REVIEW,
+        statusLabel: 'รอพิจารณาแบบ',
+        updatedAt: '2026-08-18T03:15:00.000Z',
+      }),
+    ]);
+
+    const result = await connectionRequestsService.listOperatorFactoryOverview(actorUserId);
+
+    expect(mockedRepository.listFactoriesForAccess).toHaveBeenCalledWith({
+      actorUserId,
+      scope: 'OWN_FACTORY',
+    });
+    expect(mockedRepository.listConnectedMeasurementPointsForFactories).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        'factory-connected',
+        'REG-CONNECTED',
+        'factory-pending',
+        'REG-PENDING',
+        'factory-connected-ineligible',
+        'REG-CONNECTED-INELIGIBLE',
+      ]),
+      [17],
+    );
+    expect(mockedRepository.listRequestsForFactories).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        'factory-connected',
+        'REG-CONNECTED',
+        'factory-pending',
+        'REG-PENDING',
+        'factory-connected-ineligible',
+        'REG-CONNECTED-INELIGIBLE',
+      ]),
+    );
+    expect(result.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          factoryId: 'factory-connected',
+          pomsMembershipStatus: 'IN_POMS',
+          pomsMembershipStatusLabel: 'อยู่ในระบบ POMS',
+          latestConnectionRequest: null,
+        }),
+        expect.objectContaining({
+          factoryId: 'factory-pending',
+          newRegistrationNo: 'REG-PENDING',
+          isEligible: false,
+          pomsMembershipStatus: 'NOT_IN_POMS',
+          pomsMembershipStatusLabel: 'ยังไม่อยู่ในระบบ POMS',
+          latestConnectionRequest: {
+            id: 145,
+            requestNo: 'CEMS-0145/2569',
+            requestType: CONNECTION_REQUEST_TYPE.NEW_CONNECTION,
+            systemType: 'CEMS',
+            statusCode: CONNECTION_REQUEST_STATUS.PENDING_DESIGN_REVIEW,
+            statusLabel: 'รอพิจารณาแบบ',
+            isInProgress: true,
+            updatedAt: '2026-08-18T03:15:00.000Z',
+          },
+          measurementPoints: [],
+        }),
+        expect.objectContaining({
+          factoryId: 'factory-connected-ineligible',
+          newRegistrationNo: 'REG-CONNECTED-INELIGIBLE',
+          isEligible: false,
+          isFavorite: true,
+          pomsMembershipStatus: 'IN_POMS',
+          measurementPoints: [expect.objectContaining({ stationId: 'S0002' })],
+        }),
+      ]),
+    );
+    expect(result.meta).toEqual({
+      total: 3,
+      summary: {
+        all: 3,
+        inPoms: 2,
+        connectionInProgress: 1,
+        notConnected: 0,
+      },
+    });
+  });
+
+  it('does not treat a completed request as active POMS membership without a current point', async () => {
+    mockedRepository.listFactoriesForAccess.mockResolvedValue([
+      factorySummary({ factoryId: 'factory-disconnected' }),
+    ]);
+    mockedRepository.listRequestsForFactories.mockResolvedValue([
+      requestDto({
+        factoryId: 'factory-disconnected',
+        status: CONNECTION_REQUEST_STATUS.CONNECTED,
+        statusLabel: 'เชื่อมต่อแล้ว',
+      }),
+    ]);
+
+    const result = await connectionRequestsService.listOperatorFactoryOverview(actorUserId);
+
+    expect(result.data[0]).toEqual(
+      expect.objectContaining({
+        factoryId: 'factory-disconnected',
+        pomsMembershipStatus: 'NOT_IN_POMS',
+        latestConnectionRequest: expect.objectContaining({
+          statusCode: CONNECTION_REQUEST_STATUS.CONNECTED,
+          isInProgress: false,
+        }),
+      }),
+    );
+    expect(result.meta.summary).toEqual({
+      all: 1,
+      inPoms: 0,
+      connectionInProgress: 0,
+      notConnected: 1,
+    });
+  });
+
+  it('filters the owned factory overview by current POMS system and membership', async () => {
+    mockedRepository.listFactoriesForAccess.mockResolvedValue([
+      factorySummary({ factoryId: 'factory-connected' }),
+      factorySummary({ id: 2, eligibleFactoryId: null, factoryId: 'factory-not-connected' }),
+    ]);
+    mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
+      currentFactoryMeasurementPoint({ factoryId: 'factory-connected', systemType: 'CEMS' }),
+    ]);
+
+    const connected = await connectionRequestsService.listOperatorFactoryOverview(actorUserId, {
+      systemType: 'CEMS',
+      pomsMembershipStatus: 'IN_POMS',
+    });
+    const notConnected = await connectionRequestsService.listOperatorFactoryOverview(actorUserId, {
+      pomsMembershipStatus: 'NOT_IN_POMS',
+    });
+
+    expect(connected.data.map((factory) => factory.factoryId)).toEqual(['factory-connected']);
+    expect(notConnected.data.map((factory) => factory.factoryId)).toEqual([
+      'factory-not-connected',
+    ]);
   });
 
   it('returns dashboard rows with negative measurement values normalized to ERROR', async () => {
