@@ -399,7 +399,7 @@ describe('POMS OpenAPI contract', () => {
     }
   });
 
-  it('covers all 113 canonical registry endpoints plus 9 annual testing variants', () => {
+  it('covers all 114 canonical registry endpoints plus 9 annual testing variants', () => {
     const document = asObject(pomsOpenApiDocument, 'OpenAPI document');
     const paths = asObject(document.paths, 'paths');
     const documentedOperations: string[] = [];
@@ -413,13 +413,13 @@ describe('POMS OpenAPI contract', () => {
     }
 
     const registryOperations = readEndpointRegistryOperations();
-    expect(registryOperations).toHaveLength(113);
+    expect(registryOperations).toHaveLength(114);
     expect(documentedOperations.sort()).toEqual(
       [...registryOperations, ...annualTestingVariants].sort(),
     );
     expect(pomsOpenApiStats).toEqual({
-      canonicalOperationCount: 113,
-      operationCount: 122,
+      canonicalOperationCount: 114,
+      operationCount: 123,
       tagCount: 11,
     });
   });
@@ -647,6 +647,112 @@ describe('POMS OpenAPI contract', () => {
     expect(
       asObject(asObject(paths['/cems-wpms-requests'], 'requests').get, 'requests.get').security,
     ).toEqual([{ bearerAuth: [] }]);
+  });
+
+  it('documents the operator-owned factory overview and POMS membership contract', () => {
+    const document = asObject(pomsOpenApiDocument, 'OpenAPI document');
+    const paths = asObject(document.paths, 'paths');
+    const operation = asObject(
+      asObject(paths['/operator-factories'], '/operator-factories').get,
+      'GET /operator-factories',
+    );
+    const parameters = operation.parameters as JsonObject[];
+
+    expect(operation).toMatchObject({
+      operationId: 'listOperatorFactoryOverview',
+      security: [{ bearerAuth: [] }],
+      'x-poms-permissions': ['dashboard:view'],
+      'x-poms-permission-mode': 'any',
+    });
+    expect(operation.description).toContain('operator');
+    expect(operation.description).toContain('OWN_FACTORY');
+
+    expect(
+      asObject(
+        asObject(
+          parameters.find((parameter) => parameter.name === 'systemType'),
+          'systemType parameter',
+        ).schema,
+        'systemType schema',
+      ).enum,
+    ).toEqual(['CEMS', 'WPMS']);
+    expect(
+      asObject(
+        asObject(
+          parameters.find((parameter) => parameter.name === 'favoriteOnly'),
+          'favoriteOnly parameter',
+        ).schema,
+        'favoriteOnly schema',
+      ).type,
+    ).toBe('boolean');
+    expect(
+      asObject(
+        asObject(
+          parameters.find((parameter) => parameter.name === 'pomsMembershipStatus'),
+          'pomsMembershipStatus parameter',
+        ).schema,
+        'pomsMembershipStatus schema',
+      ).enum,
+    ).toEqual(['IN_POMS', 'NOT_IN_POMS']);
+
+    const responses = asObject(operation.responses, 'operator factory overview responses');
+    const responseSchema = asObject(
+      asObject(
+        asObject(asObject(responses['200'], '200 response').content, '200 response content')[
+          'application/json'
+        ],
+        'application/json response',
+      ).schema,
+      'operator factory overview response schema',
+    );
+    expect(responseSchema.$ref).toBe('#/components/schemas/OperatorFactoryOverviewResponse');
+
+    const schemas = asObject(asObject(document.components, 'components').schemas, 'schemas');
+    const rowProperties = asObject(
+      asObject(schemas.OperatorFactoryOverviewRow, 'OperatorFactoryOverviewRow').properties,
+      'OperatorFactoryOverviewRow.properties',
+    );
+    expect(asObject(rowProperties.pomsMembershipStatus, 'pomsMembershipStatus').enum).toEqual([
+      'IN_POMS',
+      'NOT_IN_POMS',
+    ]);
+    expect(
+      asObject(rowProperties.latestConnectionRequest, 'latestConnectionRequest'),
+    ).toMatchObject({
+      nullable: true,
+      allOf: [{ $ref: '#/components/schemas/OperatorFactoryLatestConnectionRequest' }],
+    });
+
+    const latestRequest = asObject(
+      schemas.OperatorFactoryLatestConnectionRequest,
+      'OperatorFactoryLatestConnectionRequest',
+    );
+    expect(latestRequest.required).toEqual(
+      expect.arrayContaining([
+        'id',
+        'requestNo',
+        'requestType',
+        'systemType',
+        'statusCode',
+        'statusLabel',
+        'isInProgress',
+        'updatedAt',
+      ]),
+    );
+
+    const response = asObject(schemas.OperatorFactoryOverviewResponse, 'overview response');
+    const responseProperties = asObject(response.properties, 'overview response properties');
+    const metaProperties = asObject(
+      asObject(responseProperties.meta, 'overview meta').properties,
+      'overview meta properties',
+    );
+    const summaryProperties = asObject(
+      asObject(metaProperties.summary, 'overview summary').properties,
+      'overview summary properties',
+    );
+    expect(Object.keys(summaryProperties).sort()).toEqual(
+      ['all', 'connectionInProgress', 'inPoms', 'notConnected'].sort(),
+    );
   });
 
   it('documents every bearer operation with its runtime permission requirement', () => {

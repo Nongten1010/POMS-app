@@ -1714,6 +1714,14 @@ export const listOperatorFactoriesQuerySchema = z
   })
   .strict();
 
+export const listOperatorFactoryOverviewQuerySchema = z
+  .object({
+    systemType: z.enum(['CEMS', 'WPMS']).optional(),
+    favoriteOnly: booleanQuerySchema,
+    pomsMembershipStatus: z.enum(['IN_POMS', 'NOT_IN_POMS']).optional(),
+  })
+  .strict();
+
 export const listPublicFactoryMapPointsQuerySchema = z
   .object({
     systemType: z.enum(['CEMS', 'WPMS']).optional(),

@@ -226,6 +226,20 @@ export interface ListOperatorFactoriesQuery {
   connectedOnly?: boolean;
 }
 
+export const POMS_MEMBERSHIP_STATUS = {
+  IN_POMS: 'IN_POMS',
+  NOT_IN_POMS: 'NOT_IN_POMS',
+} as const;
+
+export type PomsMembershipStatus =
+  (typeof POMS_MEMBERSHIP_STATUS)[keyof typeof POMS_MEMBERSHIP_STATUS];
+
+export interface ListOperatorFactoryOverviewQuery {
+  systemType?: ConnectionSystemType;
+  favoriteOnly?: boolean;
+  pomsMembershipStatus?: PomsMembershipStatus;
+}
+
 export interface ListPublicFactoryMapPointsQuery {
   systemType?: ConnectionSystemType;
 }
@@ -497,6 +511,36 @@ export interface OperatorFactoryDashboardRowDTO {
   monitoringPointCountBySystem: OperatorFactorySystemPointCountDTO[];
   status: 'แสดง';
   measurementPoints: OperatorFactoryMeasurementPointDTO[];
+}
+
+export interface OperatorFactoryLatestConnectionRequestDTO {
+  id: number;
+  requestNo: string;
+  requestType: typeof CONNECTION_REQUEST_TYPE.NEW_CONNECTION;
+  systemType: ConnectionSystemType;
+  statusCode: ConnectionRequestStatus;
+  statusLabel: string;
+  isInProgress: boolean;
+  updatedAt: string;
+}
+
+export interface OperatorFactoryOverviewRowDTO extends OperatorFactoryDashboardRowDTO {
+  pomsMembershipStatus: PomsMembershipStatus;
+  pomsMembershipStatusLabel: 'อยู่ในระบบ POMS' | 'ยังไม่อยู่ในระบบ POMS';
+  latestConnectionRequest: OperatorFactoryLatestConnectionRequestDTO | null;
+}
+
+export interface OperatorFactoryOverviewResultDTO {
+  data: OperatorFactoryOverviewRowDTO[];
+  meta: {
+    total: number;
+    summary: {
+      all: number;
+      inPoms: number;
+      connectionInProgress: number;
+      notConnected: number;
+    };
+  };
 }
 
 export interface OperatorFactorySystemPointCountDTO {
