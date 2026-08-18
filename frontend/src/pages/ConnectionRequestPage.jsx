@@ -6045,7 +6045,7 @@ function StandardCriteriaSection({ label, value, onChange }) {
   )
 }
 
-function InstrumentDataDialog({ open, parameterOptions, value, onClose, onSave, isWpms = false }) {
+function InstrumentDataDialog({ open, value, onClose, onSave, isWpms = false }) {
   const [form, setForm] = useState(() => buildInstrumentDialogForm(value))
   const [saveConfirmOpen, setSaveConfirmOpen] = useState(false)
 
@@ -6066,22 +6066,16 @@ function InstrumentDataDialog({ open, parameterOptions, value, onClose, onSave, 
           <Grid container spacing={2}>
             <Grid size={{ xs: 12, md: 6 }}>
               <TextField
-                select
                 label="พารามิเตอร์ที่ขอเชื่อมต่อ"
                 size="small"
                 value={form.parameter}
-                onChange={(event) => updateForm('parameter', event.target.value)}
+                slotProps={{
+                  input: {
+                    readOnly: true,
+                  },
+                }}
                 fullWidth
-              >
-                <MenuItem value="">
-                  <em>ไม่ระบุ</em>
-                </MenuItem>
-                {parameterOptions.map((parameter) => (
-                  <MenuItem key={parameter} value={parameter}>
-                    {parameter}
-                  </MenuItem>
-                ))}
-              </TextField>
+              />
             </Grid>
             <Grid size={{ xs: 12, md: 6 }}>
               <TextField
@@ -6208,7 +6202,7 @@ function InstrumentDataDialog({ open, parameterOptions, value, onClose, onSave, 
   )
 }
 
-function MeasurementInstrumentSection({ parameterOptions, rows, setRows, initialInstruments = {}, isWpms = false }) {
+function MeasurementInstrumentSection({ rows, setRows, initialInstruments = {}, isWpms = false }) {
   const instrumentRows = rows
   const [editingRowIndex, setEditingRowIndex] = useState(null)
   const [instrumentDialogOpen, setInstrumentDialogOpen] = useState(false)
@@ -6309,7 +6303,6 @@ function MeasurementInstrumentSection({ parameterOptions, rows, setRows, initial
         <InstrumentDataDialog
           key={editingRowIndex === null ? 'new' : `edit-${editingRowIndex}`}
           open
-          parameterOptions={parameterOptions}
           value={editingValue}
           onClose={() => setInstrumentDialogOpen(false)}
           isWpms={isWpms}
@@ -7380,7 +7373,6 @@ function RequestFormBottomSheet({
                           initialDocuments={point.type === initialMonitoringPointType ? initialDocuments : []}
                         />
                         <MeasurementInstrumentSection
-                          parameterOptions={requestedParameters}
                           rows={measurementInstrumentRows}
                           setRows={setMeasurementInstrumentRows}
                           initialInstruments={point.type === initialMonitoringPointType ? initialInstruments : {}}
