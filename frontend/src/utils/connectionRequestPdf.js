@@ -19,6 +19,8 @@ const specialCriteriaRows = [
   { key: 'critical', label: 'แจ้งเตือน', leftSign: 'lt', rightSign: 'lt', aliases: ['alert'] },
 ]
 
+const requestedParametersExemptAllOption = 'ได้รับการยกเว้นทั้งหมด'
+
 const pdfTextSizes = {
   body: 16,
   section: 17,
@@ -79,6 +81,28 @@ function joinList(values, fallback = '-') {
   const normalizedValues = Array.isArray(values) ? values.filter((value) => !isBlankValue(value)) : []
 
   return normalizedValues.length ? normalizedValues.join(', ') : fallback
+}
+
+function removeRequestedParameterSpecialOptions(values) {
+  return normalizeArrayValue(values).filter((value) => value !== requestedParametersExemptAllOption)
+}
+
+function getRequestedParametersDisplay(point = {}, details = {}) {
+  const requestedParameters = normalizeArrayValue(details.requestedParameters)
+
+  if (
+    isFullyExemptedMonitoringPoint(point, details)
+    || requestedParameters.includes(requestedParametersExemptAllOption)
+  ) {
+    return requestedParametersExemptAllOption
+  }
+
+  return joinList(removeRequestedParameterSpecialOptions(requestedParameters))
+}
+
+function isFullyExemptedMonitoringPoint(point = {}, details = {}) {
+  return point.monitoringPointStatus === requestedParametersExemptAllOption
+    || normalizeArrayValue(details.requestedParameters).includes(requestedParametersExemptAllOption)
 }
 
 function firstDefinedValue(...values) {
@@ -1427,6 +1451,7 @@ function getRequestContext(request) {
   const details = point.details ?? {}
   const instruments = point.measurementInstruments ?? {}
   const instrumentParameters = Array.isArray(instruments.parameters) ? instruments.parameters : []
+  const isFullyExempted = isFullyExemptedMonitoringPoint(point, details)
   const documentsAndImages = mergeDocumentItems(
     getDocumentItemsFromSource(point),
     getDocumentItemsFromSource(request),
@@ -1436,12 +1461,14 @@ function getRequestContext(request) {
     ...normalizeArrayValue(details.eligibleParameters),
     ...normalizeArrayValue(details.connectedParameters),
     ...normalizeArrayValue(details.pendingParameters),
-    ...normalizeArrayValue(details.requestedParameters),
+    ...removeRequestedParameterSpecialOptions(details.requestedParameters),
     ...normalizeArrayValue(point.parameters),
   ]
-  const documentParameters = instrumentParameters.length
-    ? instrumentParameters
-    : Array.from(new Set(fallbackParameterLabels.filter(Boolean))).map((parameter) => ({ parameter }))
+  const documentParameters = isFullyExempted
+    ? []
+    : instrumentParameters.length
+      ? instrumentParameters
+      : Array.from(new Set(fallbackParameterLabels.filter(Boolean))).map((parameter) => ({ parameter }))
 
   return {
     isWpms,
@@ -1449,6 +1476,7 @@ function getRequestContext(request) {
     point,
     details,
     instruments,
+    isFullyExempted,
     documentsAndImages,
     documentParameters,
     contactPersons: Array.isArray(request?.contactPersons) ? request.contactPersons : [],
@@ -1826,7 +1854,7 @@ async function renderWpmsDocumentSections(layout, documentsAndImages) {
 }
 
 async function renderWpms(layout, request, context) {
-  const { details, point, instruments, documentParameters, signatureDate } = context
+  const { details, point, instruments, isFullyExempted, documentParameters, signatureDate } = context
   const treatmentSystemLabel = joinList(normalizeArrayValue(details.treatmentSystem))
   const wpmsTreatmentSystem = firstDefinedValue(details.treatmentSystemOther, treatmentSystemLabel)
 
@@ -1857,26 +1885,28 @@ async function renderWpms(layout, request, context) {
   layout.labelValue('4.5 แหล่งกำเนิดน้ำเสีย : ', firstDefinedValue(details.wastewaterSource, details.wastewaterOrigin))
   layout.labelValue('4.6 แหล่งรองรับน้ำทิ้ง : ', firstDefinedValue(details.dischargeReceivingSource, details.receivingSource))
   layout.labelValue('4.7 อุปกรณ์/โปรแกรมที่ใช้เชื่อมต่อ : ', firstDefinedValue(details.connectionDeviceOther, details.connectionDevice))
-  layout.addPage()
-  layout.sectionTitle('5. รายละเอียดเครื่องมือตรวจวัด')
-  layout.labelValueRow([
-    { label: 'อุปกรณ์แปลงสัญญาณ (Converter) ยี่ห้อ : ', value: instruments.converterBrand, width: 300 },
-    { label: 'รุ่น : ', value: instruments.converterModel },
-  ])
-  layout.space(8)
-  renderInstrumentTable(layout, documentParameters, true)
-  layout.cemsInstrumentSignature(
-    request?.informationProviderName ?? details.informationProviderName,
-    request?.informationProviderPosition ?? details.informationProviderPosition,
-    signatureDate,
-  )
-  renderStandardCriteriaAttachment(layout, documentParameters)
+  if (!isFullyExempted) {
+    layout.addPage()
+    layout.sectionTitle('5. รายละเอียดเครื่องมือตรวจวัด')
+    layout.labelValueRow([
+      { label: 'อุปกรณ์แปลงสัญญาณ (Converter) ยี่ห้อ : ', value: instruments.converterBrand, width: 300 },
+      { label: 'รุ่น : ', value: instruments.converterModel },
+    ])
+    layout.space(8)
+    renderInstrumentTable(layout, documentParameters, true)
+    layout.cemsInstrumentSignature(
+      request?.informationProviderName ?? details.informationProviderName,
+      request?.informationProviderPosition ?? details.informationProviderPosition,
+      signatureDate,
+    )
+    renderStandardCriteriaAttachment(layout, documentParameters)
+  }
   renderDeviceConfigPages(layout, request)
   await renderWpmsDocumentSections(layout, context.documentsAndImages)
 }
 
 async function renderCems(layout, request, context) {
-  const { details, point, instruments, documentParameters, signatureDate } = context
+  const { details, point, instruments, isFullyExempted, documentParameters, signatureDate } = context
   const systemName = 'ระบบตรวจวัดคุณภาพอากาศจากปล่องแบบอัตโนมัติอย่างต่อเนื่อง'
   const systemCode = 'Continuous Emission Monitoring Systems : CEMS'
 
@@ -1904,7 +1934,8 @@ async function renderCems(layout, request, context) {
   layout.labelValue('พารามิเตอร์ : ', joinList(details.exemptedParameters), { indent: 30 })
   layout.labelValue('4.2.5 พารามิเตอร์ที่เชื่อมต่อแล้ว : ', joinList(details.connectedParameters), { indent: 30 })
   layout.labelValue('4.2.6 พารามิเตอร์ที่ยังไม่เชื่อมต่อ : ', joinList(details.pendingParameters ?? point.parameters), { indent: 30 })
-  layout.labelValue('4.2.7 พารามิเตอร์ที่ติดตั้งแบบ Time sharing : ', joinList(details.timeSharingParameters), { indent: 30 })
+  layout.labelValue('4.2.7 พารามิเตอร์ที่ขอเชื่อมต่อ : ', getRequestedParametersDisplay(point, details), { indent: 30 })
+  layout.labelValue('4.2.8 พารามิเตอร์ที่ติดตั้งแบบ Time sharing : ', joinList(details.timeSharingParameters), { indent: 30 })
   layout.labelValue('ร่วมกับปล่อง : ', details.sharedStackCode ?? details.sharedStack, { indent: 30 })
   layout.paragraph('4.3 รายละเอียดปล่อง', { indent: 18, bold: true })
   layout.checkboxOptionRows('4.3.1 ลักษณะปล่อง :', [
@@ -1947,20 +1978,22 @@ async function renderCems(layout, request, context) {
   ], { indent: 30 })
   layout.paragraph('4.4 รายละเอียดคอมพิวเตอร์หรืออุปกรณ์ติดตั้งโปรแกรม', { indent: 18, bold: true })
   layout.labelValue('อุปกรณ์/โปรแกรมที่ใช้เชื่อมต่อ : ', details.connectionDeviceOther ?? details.connectionDevice, { indent: 30 })
-  layout.addPage()
-  layout.sectionTitle('5. รายละเอียดเครื่องมือตรวจวัด')
-  layout.labelValueRow([
-    { label: 'อุปกรณ์แปลงสัญญาณ (Converter) ยี่ห้อ : ', value: instruments.converterBrand, width: 300 },
-    { label: 'รุ่น : ', value: instruments.converterModel },
-  ])
-  layout.space(8)
-  renderInstrumentTable(layout, documentParameters, false)
-  layout.cemsInstrumentSignature(
-    request?.informationProviderName ?? details.informationProviderName,
-    request?.informationProviderPosition ?? details.informationProviderPosition,
-    signatureDate,
-  )
-  renderStandardCriteriaAttachment(layout, documentParameters)
+  if (!isFullyExempted) {
+    layout.addPage()
+    layout.sectionTitle('5. รายละเอียดเครื่องมือตรวจวัด')
+    layout.labelValueRow([
+      { label: 'อุปกรณ์แปลงสัญญาณ (Converter) ยี่ห้อ : ', value: instruments.converterBrand, width: 300 },
+      { label: 'รุ่น : ', value: instruments.converterModel },
+    ])
+    layout.space(8)
+    renderInstrumentTable(layout, documentParameters, false)
+    layout.cemsInstrumentSignature(
+      request?.informationProviderName ?? details.informationProviderName,
+      request?.informationProviderPosition ?? details.informationProviderPosition,
+      signatureDate,
+    )
+    renderStandardCriteriaAttachment(layout, documentParameters)
+  }
   renderDeviceConfigPages(layout, request)
   await renderCemsDocumentSections(layout, context.documentsAndImages)
 }

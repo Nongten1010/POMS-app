@@ -68,7 +68,23 @@ const getOptionLabel = (option) => (typeof option === 'string' ? option : option
 
 const cemsParameterOptions = cemsParameterOptionItems.map((option) => option.label)
 const parameterNoneOption = 'ไม่มี'
+const requestedParametersExemptAllOption = 'ได้รับการยกเว้นทั้งหมด'
 const withNoneOption = (options = []) => [parameterNoneOption, ...options.filter((option) => option !== parameterNoneOption)]
+const withRequestedParameterOptions = (options = []) => [
+  requestedParametersExemptAllOption,
+  ...options.filter((option) => option !== requestedParametersExemptAllOption),
+]
+const isRequestedParameterSpecialOption = (parameter) => parameter === requestedParametersExemptAllOption
+const getRequestedParameterState = (parameters = []) => {
+  const values = normalizeArrayValue(parameters)
+  const isFullyExempted = values.includes(requestedParametersExemptAllOption)
+
+  return {
+    values,
+    isFullyExempted,
+    actualValues: values.filter((parameter) => !isRequestedParameterSpecialOption(parameter)),
+  }
+}
 
 const monitoringPointTypeOptions = ['CEMS', 'WPMS']
 
@@ -499,7 +515,9 @@ function createInstrumentRowForParameter(parameter) {
 }
 
 function syncInstrumentRowsWithRequestedParameters(currentRows = [], requestedParameters = []) {
-  const parameters = requestedParameters.filter((parameter) => parameter && parameter !== parameterNoneOption)
+  const parameters = requestedParameters.filter((parameter) => (
+    parameter && parameter !== parameterNoneOption && !isRequestedParameterSpecialOption(parameter)
+  ))
   return parameters.map((parameter) => {
     const existingRow = currentRows.find((row) => row.parameter === parameter)
     return existingRow ?? createInstrumentRowForParameter(parameter)
@@ -1577,7 +1595,7 @@ function validateDocumentRows(documentsAndImages = []) {
   return errors
 }
 
-function validateParameterGroups(details = {}, instrumentParameters = []) {
+function validateParameterGroups(details = {}, instrumentParameters = [], point = {}) {
   const errors = []
   const parameterGroupKeys = [
     ['eligibleParameters', 'พารามิเตอร์ที่เข้าข่าย'],
@@ -1602,22 +1620,39 @@ function validateParameterGroups(details = {}, instrumentParameters = []) {
     }
   })
 
+  const requiredParameterGroupKeys = parameterGroupKeys.filter(([key]) => (
+    key !== 'timeSharingParameters' && Object.prototype.hasOwnProperty.call(details, key)
+  ))
+  requiredParameterGroupKeys.forEach(([key, label]) => {
+    const values = Array.isArray(details[key]) ? details[key].filter(isPresentValue) : []
+    const isFullyExemptedRequest = key === 'requestedParameters'
+      && point.monitoringPointStatus === requestedParametersExemptAllOption
+
+    if (!values.length && !isFullyExemptedRequest) {
+      errors.push(`กรุณาเลือก${label}`)
+    }
+  })
+
   const requestedParameters = Array.isArray(details.requestedParameters) ? details.requestedParameters : []
+  const actualRequestedParameters = requestedParameters.filter((parameter) => !isRequestedParameterSpecialOption(parameter))
   const pendingParameters = Array.isArray(details.pendingParameters) ? details.pendingParameters : []
   if (requestedParameters.includes(parameterNoneOption)) {
     errors.push('พารามิเตอร์ที่ขอเชื่อมต่อห้ามเลือก "ไม่มี"')
   }
-  if (requestedParameters.length && pendingParameters.length) {
-    const invalidRequestedParameters = requestedParameters.filter((parameter) => !pendingParameters.includes(parameter))
+  if (requestedParameters.includes(requestedParametersExemptAllOption) && requestedParameters.length > 1) {
+    errors.push('พารามิเตอร์ที่ขอเชื่อมต่อถ้าเลือก "ได้รับการยกเว้นทั้งหมด" ต้องเลือกเพียงตัวเดียว')
+  }
+  if (actualRequestedParameters.length && pendingParameters.length) {
+    const invalidRequestedParameters = actualRequestedParameters.filter((parameter) => !pendingParameters.includes(parameter))
     if (invalidRequestedParameters.length) {
       errors.push(`พารามิเตอร์ที่ขอเชื่อมต่อต้องเลือกจากพารามิเตอร์ที่ยังไม่เชื่อมต่อเท่านั้น (${invalidRequestedParameters.join(', ')})`)
     }
   }
 
-  if (requestedParameters.length) {
+  if (actualRequestedParameters.length) {
     const instrumentParameterNames = instrumentParameters.map((parameter) => parameter.parameter).filter(Boolean)
-    const missingInstrumentRows = requestedParameters.filter((parameter) => !instrumentParameterNames.includes(parameter))
-    const extraInstrumentRows = instrumentParameterNames.filter((parameter) => !requestedParameters.includes(parameter))
+    const missingInstrumentRows = actualRequestedParameters.filter((parameter) => !instrumentParameterNames.includes(parameter))
+    const extraInstrumentRows = instrumentParameterNames.filter((parameter) => !actualRequestedParameters.includes(parameter))
     if (missingInstrumentRows.length || extraInstrumentRows.length) {
       errors.push('ตารางรายละเอียดเครื่องมือตรวจวัดต้องมีพารามิเตอร์ตรงกับพารามิเตอร์ที่ขอเชื่อมต่อ')
     }
@@ -1786,7 +1821,7 @@ function validateConnectionRequestPayload(requestBody = {}, { isAddParameterMode
       errors.push(`กรุณากรอกรายละเอียดเครื่องมือตรวจวัดของ${pointLabel}`)
     }
     errors.push(...validateDocumentRows(point.documentsAndImages ?? []))
-    errors.push(...validateParameterGroups(details, instrumentParameters))
+    errors.push(...validateParameterGroups(details, instrumentParameters, point))
     errors.push(...validateMeasurementInstruments(point.measurementInstruments))
     errors.push(...validateTreatmentSystem(details))
 
@@ -1804,6 +1839,15 @@ function validateConnectionRequestPayload(requestBody = {}, { isAddParameterMode
     } else {
       if (details.monitoringPointKind && details.monitoringPointKind !== 'CEMS') {
         errors.push(`${pointLabel} ของ CEMS ต้องมีชนิดจุดตรวจวัดเป็น CEMS`)
+      }
+      if (!isPresentValue(details.productionUnitType)) {
+        errors.push(`กรุณากรอกประเภทของหน่วยการผลิตของ${pointLabel}`)
+      }
+      if (!isPresentValue(details.productionCapacityValue)) {
+        errors.push(`กรุณากรอกกำลังการผลิตของ${pointLabel}`)
+      }
+      if (!isPresentValue(details.productionCapacityUnit)) {
+        errors.push(`กรุณากรอกหน่วยกำลังการผลิตของ${pointLabel}`)
       }
       if (!isPresentValue(details.stackShape)) {
         errors.push(`กรุณาเลือกลักษณะปล่องของ${pointLabel}`)
@@ -2061,6 +2105,7 @@ function buildMeasurementPointRequestBody(
   const instrumentParameters = buildMeasurementInstrumentParameters(instrumentRows)
   const documentsAndImages = buildDocumentsAndImages(formData, uploadedDocuments, options)
   const treatmentSystems = getFormValues(formData, 'treatmentSystem')
+  const requestedParameterState = getRequestedParameterState(getFormValues(formData, 'requestedParameters'))
 
   return {
     factoryId: factory.factoryId ?? factory.newRegistrationNo ?? '',
@@ -2088,6 +2133,7 @@ function buildMeasurementPointRequestBody(
             pointCode,
             pointName,
             pointType: 'WASTEWATER',
+            monitoringPointStatus: requestedParameterState.isFullyExempted ? requestedParametersExemptAllOption : null,
             details: {
               monitoringPointKind: 'WPMS',
               averageWastewaterDischarge: toNumberOrNull(getFormValue(formData, 'averageWastewaterDischarge')),
@@ -2096,7 +2142,7 @@ function buildMeasurementPointRequestBody(
               eligibleParameters: getFormValues(formData, 'eligibleParameters'),
               connectedParameters: getFormValues(formData, 'connectedParameters'),
               pendingParameters: getFormValues(formData, 'pendingParameters'),
-              requestedParameters: getFormValues(formData, 'requestedParameters'),
+              requestedParameters: requestedParameterState.actualValues,
               hasTreatmentSystem: getFormValue(formData, 'hasTreatmentSystem'),
               treatmentSystem: treatmentSystems,
               treatmentSystemOther: getOptionalFormValue(formData, 'treatmentSystemOther'),
@@ -2114,13 +2160,14 @@ function buildMeasurementPointRequestBody(
             measurementInstruments: {
               converterBrand: converterBrand || null,
               converterModel: converterModel || null,
-              parameters: instrumentParameters,
+              parameters: requestedParameterState.isFullyExempted ? [] : instrumentParameters,
             },
           }
         : {
             pointCode,
             pointName,
             pointType: 'STACK',
+            monitoringPointStatus: requestedParameterState.isFullyExempted ? requestedParametersExemptAllOption : null,
             details: {
               monitoringPointKind: 'CEMS',
               productionUnitType: getOptionalFormValue(formData, 'productionUnitType'),
@@ -2137,7 +2184,7 @@ function buildMeasurementPointRequestBody(
               exemptedParameters: getFormValues(formData, 'exemptedParameters'),
               connectedParameters: getFormValues(formData, 'connectedParameters'),
               pendingParameters: getFormValues(formData, 'pendingParameters'),
-              requestedParameters: getFormValues(formData, 'requestedParameters'),
+              requestedParameters: requestedParameterState.actualValues,
               exemptedParameterRegulationClauses: getOptionalFormValue(formData, 'exemptedParameterRegulationClauses'),
               exemptedParameterRegulationClauseOther: getOptionalFormValue(formData, 'exemptedParameterRegulationClauseOther'),
               timeSharingParameters: getFormValues(formData, 'timeSharingParameters'),
@@ -2171,7 +2218,7 @@ function buildMeasurementPointRequestBody(
             measurementInstruments: {
               converterBrand: converterBrand || null,
               converterModel: converterModel || null,
-              parameters: instrumentParameters,
+              parameters: requestedParameterState.isFullyExempted ? [] : instrumentParameters,
             },
           },
     ],
@@ -5423,6 +5470,7 @@ function ParameterMultiSelect({
   label,
   name,
   options = cemsParameterOptions,
+  exclusiveOptions = [],
   value: controlledValue,
   defaultValue = [],
   onChange,
@@ -5441,7 +5489,13 @@ function ParameterMultiSelect({
         input={<OutlinedInput label={label} />}
         onChange={(event) => {
           const selectedValue = event.target.value
-          const nextValue = typeof selectedValue === 'string' ? selectedValue.split(',') : selectedValue
+          const selectedItems = typeof selectedValue === 'string' ? selectedValue.split(',') : selectedValue
+          const exclusiveItem = exclusiveOptions.find((option) => selectedItems.includes(option))
+          const nextValue = exclusiveItem
+            ? (value.includes(exclusiveItem) && selectedItems.length > 1
+                ? selectedItems.filter((item) => item !== exclusiveItem)
+                : [exclusiveItem])
+            : selectedItems
           if (onChange) {
             onChange(nextValue)
           } else {
@@ -5635,22 +5689,41 @@ function CemsMonitoringPointDetails({
       </Grid>
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 3 }}>
-          <ParameterMultiSelect name="eligibleParameters" label="พารามิเตอร์ที่เข้าข่าย" options={withNoneOption(cemsParameterOptions)} defaultValue={initialDetails.eligibleParameters ?? []} />
+          <ParameterMultiSelect
+            name="eligibleParameters"
+            label="พารามิเตอร์ที่เข้าข่าย"
+            options={withNoneOption(cemsParameterOptions)}
+            exclusiveOptions={[parameterNoneOption]}
+            defaultValue={initialDetails.eligibleParameters ?? []}
+          />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <ParameterMultiSelect name="exemptedParameters" label="พารามิเตอร์ที่ได้รับการยกเว้น" options={withNoneOption(cemsParameterOptions)} defaultValue={initialDetails.exemptedParameters ?? []} />
+          <ParameterMultiSelect
+            name="exemptedParameters"
+            label="พารามิเตอร์ที่ได้รับการยกเว้น"
+            options={withNoneOption(cemsParameterOptions)}
+            exclusiveOptions={[parameterNoneOption]}
+            defaultValue={initialDetails.exemptedParameters ?? []}
+          />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
           <ParameterMultiSelect
             name="connectedParameters"
             label="พารามิเตอร์ที่เชื่อมต่อแล้ว"
             options={withNoneOption(cemsParameterOptions)}
+            exclusiveOptions={[parameterNoneOption]}
             value={connectedParameters}
             onChange={onConnectedParametersChange}
           />
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <ParameterMultiSelect name="pendingParameters" label="พารามิเตอร์ที่ยังไม่เชื่อมต่อ" options={withNoneOption(cemsParameterOptions)} defaultValue={initialDetails.pendingParameters ?? []} />
+          <ParameterMultiSelect
+            name="pendingParameters"
+            label="พารามิเตอร์ที่ยังไม่เชื่อมต่อ"
+            options={withNoneOption(cemsParameterOptions)}
+            exclusiveOptions={[parameterNoneOption]}
+            defaultValue={initialDetails.pendingParameters ?? []}
+          />
         </Grid>
       </Grid>
       <Grid container spacing={2}>
@@ -5658,7 +5731,8 @@ function CemsMonitoringPointDetails({
           <ParameterMultiSelect
             name="requestedParameters"
             label="พารามิเตอร์ที่ขอเชื่อมต่อ"
-            options={cemsParameterOptions}
+            options={withRequestedParameterOptions(cemsParameterOptions)}
+            exclusiveOptions={[requestedParametersExemptAllOption]}
             value={requestedParameters}
             onChange={onRequestedParametersChange}
           />
@@ -6413,6 +6487,7 @@ function WpmsMonitoringPointDetails({
             name="eligibleParameters"
             label="พารามิเตอร์ที่เข้าข่าย"
             options={withNoneOption(wpmsInstrumentParameters)}
+            exclusiveOptions={[parameterNoneOption]}
             defaultValue={initialDetails.eligibleParameters ?? []}
           />
         </Grid>
@@ -6421,6 +6496,7 @@ function WpmsMonitoringPointDetails({
             name="connectedParameters"
             label="พารามิเตอร์ที่เชื่อมต่อแล้ว"
             options={withNoneOption(wpmsInstrumentParameters)}
+            exclusiveOptions={[parameterNoneOption]}
             value={connectedParameters}
             onChange={onConnectedParametersChange}
           />
@@ -6430,6 +6506,7 @@ function WpmsMonitoringPointDetails({
             name="pendingParameters"
             label="พารามิเตอร์ที่ยังไม่เชื่อมต่อ"
             options={withNoneOption(wpmsInstrumentParameters)}
+            exclusiveOptions={[parameterNoneOption]}
             defaultValue={initialDetails.pendingParameters ?? []}
           />
         </Grid>
@@ -6437,7 +6514,8 @@ function WpmsMonitoringPointDetails({
           <ParameterMultiSelect
             name="requestedParameters"
             label="พารามิเตอร์ที่ขอเชื่อมต่อ"
-            options={wpmsInstrumentParameters}
+            options={withRequestedParameterOptions(wpmsInstrumentParameters)}
+            exclusiveOptions={[requestedParametersExemptAllOption]}
             value={requestedParameters}
             onChange={onRequestedParametersChange}
           />
