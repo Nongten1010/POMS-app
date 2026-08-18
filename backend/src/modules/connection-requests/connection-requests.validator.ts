@@ -12,6 +12,7 @@ import {
   MAX_WPMS_OUTSIDE_FACTORY_DISCHARGE_POINT_PHOTOS,
   POINT_CODE_ASSIGNMENT_MODE,
 } from './connection-requests.types';
+import { MONITORING_POINT_STATUSES } from '../monitoring-point-forms/monitoring-point-forms.types';
 
 const trimmedString = (max: number) => z.string().trim().min(1).max(max);
 const optionalTrimmedString = (max: number) => z.string().trim().min(1).max(max).optional();
@@ -627,6 +628,7 @@ const measurementPointSchema = z
         longitude: z.number().min(-180).max(180).nullable().optional(),
         parameters: z.array(trimmedString(64)).min(1).max(50).optional(),
         description: optionalNullableTrimmedString(1000),
+        monitoringPointStatus: z.enum(MONITORING_POINT_STATUSES).nullable().optional(),
         details: measurementPointDetailsSchema.nullable().optional(),
         documentsAndImages: z.array(requestDocumentImageSchema).max(50).optional(),
         measurementInstruments: measurementInstrumentsSchema.nullable().optional(),
@@ -641,6 +643,7 @@ const measurementPointSchema = z
     pointCode: point.pointCode ?? null,
     parameters: selectMeasurementPointParameters(point),
     description: point.description ?? null,
+    monitoringPointStatus: point.monitoringPointStatus ?? null,
     details: normalizeRegulationClauseDetails(point.details) ?? null,
     documentsAndImages: point.documentsAndImages ?? [],
     measurementInstruments: point.measurementInstruments ?? null,

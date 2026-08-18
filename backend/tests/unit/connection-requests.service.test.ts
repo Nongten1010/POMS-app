@@ -2550,6 +2550,7 @@ describe('connectionRequestsService', () => {
           longitude: 100.5018,
           parameters: ['NOx (ppm)', 'SO2 (ppm)'],
           description: 'จุดเดิม',
+          monitoringPointStatus: 'ได้รับการยกเว้นทั้งหมด',
           details: {
             stackShape: 'วงกลม',
             eligibleParameters: ['NOx (ppm)', 'SO2 (ppm)', 'CO (ppm)'],
@@ -2627,6 +2628,7 @@ describe('connectionRequestsService', () => {
           {
             pointCode: 'STACK-A',
             pointName: 'ปล่องระบาย A',
+            monitoringPointStatus: 'ได้รับการยกเว้นทั้งหมด',
             parameters: ['NOx (ppm)', 'SO2 (ppm)'],
             details: {
               stackShape: 'วงกลม',
@@ -3740,6 +3742,55 @@ describe('connectionRequestsService', () => {
         officerNote: null,
         revisionReason: null,
         connectionDueAt: dueAt,
+      },
+    );
+  });
+
+  it('approves a fully exempted add-point request directly as an active connected point', async () => {
+    mockedRepository.findById.mockResolvedValue(
+      requestDto({
+        requestType: CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT,
+        requestTypeLabel: 'เพิ่มจุดตรวจวัด',
+        status: CONNECTION_REQUEST_STATUS.PENDING_DESIGN_REVIEW,
+        createdBy: actorUserId,
+        measurementPoints: [
+          {
+            id: 51,
+            pointName: 'ปล่องระบาย A',
+            pointCode: null,
+            pointType: 'STACK',
+            latitude: null,
+            longitude: null,
+            parameters: [],
+            description: null,
+            monitoringPointStatus: 'ได้รับการยกเว้นทั้งหมด',
+            details: { requestedParameters: [], pendingParameters: [] },
+            documentsAndImages: [],
+            measurementInstruments: { parameters: [] },
+          },
+        ],
+      }),
+    );
+    mockedRepository.updateStatus.mockResolvedValue(
+      requestDto({
+        status: CONNECTION_REQUEST_STATUS.CONNECTED,
+        verifiedAt: now.toISOString(),
+      }),
+    );
+
+    await connectionRequestsService.review(1, { decision: 'APPROVE_DESIGN' }, 7);
+
+    expect(mockedRepository.updateStatus).toHaveBeenCalledWith(
+      1,
+      CONNECTION_REQUEST_STATUS.CONNECTED,
+      7,
+      {
+        officerNote: null,
+        revisionReason: null,
+        verifiedAt: now.toISOString(),
+      },
+      {
+        activateFullyExemptedPoints: true,
       },
     );
   });
@@ -4978,6 +5029,7 @@ function currentFactoryMeasurementPoint(
     pointCode: 'S0001',
     systemType: 'CEMS',
     parameters: ['NOx (ppm)'],
+    monitoringPointStatus: null,
     documentsAndImages: [],
     data: [],
     ...overrides,

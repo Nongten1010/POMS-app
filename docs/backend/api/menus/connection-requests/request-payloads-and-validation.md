@@ -37,21 +37,21 @@ curl --request POST \
 
 ## Endpoint Summary
 
-| งาน                                            | Method | Path                                            | Auth   | Permission                          | Contract |
-| ---------------------------------------------- | ------ | ----------------------------------------------- | ------ | ----------------------------------- | -------- |
-| ขอเพิ่มจุดตรวจวัด                              | `POST` | `/api/v1/cems-wpms-requests/measurement-points` | Bearer | `cems_wpms_requests:edit`           | หน้านี้  |
-| ขอเพิ่มพารามิเตอร์                             | `POST` | `/api/v1/cems-wpms-requests/parameters`         | Bearer | `cems_wpms_requests:edit`           | หน้านี้  |
-| ส่งแบบเมื่อถูกตีกลับให้แก้ไข                   | `PUT`  | `/api/v1/cems-wpms-requests/:id/form`           | Bearer | `cems_wpms_requests:edit`           | หน้านี้  |
-| เพิ่มจุดตรวจวัดโดยเจ้าหน้าที่                  | `POST` | `/api/v1/cems-wpms-requests/direct-connections` | Bearer | `cems_wpms_requests:direct_connect` | หน้านี้  |
+| งาน                           | Method | Path                                            | Auth   | Permission                          | Contract |
+| ----------------------------- | ------ | ----------------------------------------------- | ------ | ----------------------------------- | -------- |
+| ขอเพิ่มจุดตรวจวัด             | `POST` | `/api/v1/cems-wpms-requests/measurement-points` | Bearer | `cems_wpms_requests:edit`           | หน้านี้  |
+| ขอเพิ่มพารามิเตอร์            | `POST` | `/api/v1/cems-wpms-requests/parameters`         | Bearer | `cems_wpms_requests:edit`           | หน้านี้  |
+| ส่งแบบเมื่อถูกตีกลับให้แก้ไข  | `PUT`  | `/api/v1/cems-wpms-requests/:id/form`           | Bearer | `cems_wpms_requests:edit`           | หน้านี้  |
+| เพิ่มจุดตรวจวัดโดยเจ้าหน้าที่ | `POST` | `/api/v1/cems-wpms-requests/direct-connections` | Bearer | `cems_wpms_requests:direct_connect` | หน้านี้  |
 
 ## Shared Authentication And Permission
 
-| Endpoint                   | Authentication | Permission                          | Data scope                                                                                |
-| -------------------------- | -------------- | ----------------------------------- | ----------------------------------------------------------------------------------------- |
+| Endpoint                   | Authentication | Permission                                                                            | Data scope                                                                                                                       |
+| -------------------------- | -------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | `POST /measurement-points` | required       | `cems_wpms_requests:edit`; `CONNECT` ต้องมี `cems_wpms_requests:direct_connect` เพิ่ม | ต้อง resolve เป็น active eligible factory; เมื่อเจ้าหน้าที่ส่ง `submissionAction` จะตรวจ scope ของ permission ที่เกี่ยวข้องเพิ่ม |
-| `POST /parameters`         | required       | `cems_wpms_requests:edit`           | ต้อง resolve เป็น active eligible factory; service ปัจจุบันไม่ได้ตัด location scope เพิ่ม |
-| `PUT /:id/form`            | required       | `cems_wpms_requests:edit`           | owner ของคำขอเดิม                                                                         |
-| `POST /direct-connections` | required       | `cems_wpms_requests:direct_connect` | actor restriction + permission scope + active eligible factory ตามหัวข้อ endpoint         |
+| `POST /parameters`         | required       | `cems_wpms_requests:edit`                                                             | ต้อง resolve เป็น active eligible factory; service ปัจจุบันไม่ได้ตัด location scope เพิ่ม                                        |
+| `PUT /:id/form`            | required       | `cems_wpms_requests:edit`                                                             | owner ของคำขอเดิม                                                                                                                |
+| `POST /direct-connections` | required       | `cems_wpms_requests:direct_connect`                                                   | actor restriction + permission scope + active eligible factory ตามหัวข้อ endpoint                                                |
 
 ## Shared Top-level Request Fields
 
@@ -120,6 +120,7 @@ curl --request POST \
 | `longitude`              | body     | No            | Yes                | number   | `-180..180`                                                                                                           |
 | `parameters`             | body     | No            | No after normalize | string[] | 1-50 entries เมื่อส่ง; trim ต่อ item; backend split comma, dedupe, และตัดค่า `ไม่มี`                                  |
 | `description`            | body     | No            | Yes                | string   | trim <=1000                                                                                                           |
+| `monitoringPointStatus`  | body     | No            | Yes                | enum     | สถานะระดับจุด 1 ใน 7 ค่าที่รองรับ; `ได้รับการยกเว้นทั้งหมด` ใช้กับ active point ที่ยังไม่มีพารามิเตอร์ได้             |
 | `details`                | body     | Flow-specific | Yes                | object   | schema เป็น generic JSON record; business validation อยู่ใน service/validator                                         |
 | `documentsAndImages`     | body     | Flow-specific | No after normalize | array    | สูงสุด 50; backend ตัด placeholder ที่ยังไม่มีไฟล์จริง                                                                |
 | `measurementInstruments` | body     | Flow-specific | Yes                | object   | required ใน add-point/add-parameter; direct-connection อนุญาต null                                                    |
@@ -130,17 +131,27 @@ curl --request POST \
 - `pointCode` ถ้ามี ห้ามซ้ำกันใน request เดียวหลัง trim และ lowercase
 - โลโก้บริษัท (`title = "สัญลักษณ์ของโรงงานหรือโลโก้บริษัท"`) ได้เพียง 1 ไฟล์ต่อ request
 
+ค่า `measurementPoints[].monitoringPointStatus` ที่รองรับ:
+
+- `เชื่อมต่อครบแล้ว`
+- `ได้รับการยกเว้นทั้งหมด`
+- `เชื่อมต่อแล้วแต่ยังไม่ครบ`
+- `อยู่ระหว่างขยายเวลา`
+- `ยังไม่ได้ดำเนินการเชื่อมต่อ`
+- `อยู่ระหว่างการตรวจสอบของจังหวัด`
+- `อยู่ระหว่างเชื่อมต่อ`
+
 ### `measurementPoints[].documentsAndImages[]`
 
-| Field         | Location | Required    | Nullable | Type    | Validation                                 |
-| ------------- | -------- | ----------- | -------- | ------- | ------------------------------------------ |
+| Field         | Location | Required    | Nullable | Type    | Validation                                                                       |
+| ------------- | -------- | ----------- | -------- | ------- | -------------------------------------------------------------------------------- |
 | `title`       | body     | Yes         | No       | string  | trim 1-255; ช่องรูปจุดระบายน้ำทิ้ง WPMS ใช้ `ภาพถ่ายจุดระบายน้ำทิ้งออกนอกโรงงาน` |
-| `description` | body     | No          | Yes      | string  | trim <=1000                                |
-| `link`        | body     | Conditional | Yes      | string  | URL <=2048 และต้องเป็น `http` หรือ `https` |
-| `fileName`    | body     | No          | Yes      | string  | trim <=255                                 |
-| `fileUrl`     | body     | Conditional | Yes      | string  | URL <=2048 และต้องเป็น `http` หรือ `https` |
-| `fileType`    | body     | No          | Yes      | string  | trim <=128                                 |
-| `fileSize`    | body     | No          | Yes      | integer | `1..5,242,880` bytes (5 MiB)               |
+| `description` | body     | No          | Yes      | string  | trim <=1000                                                                      |
+| `link`        | body     | Conditional | Yes      | string  | URL <=2048 และต้องเป็น `http` หรือ `https`                                       |
+| `fileName`    | body     | No          | Yes      | string  | trim <=255                                                                       |
+| `fileUrl`     | body     | Conditional | Yes      | string  | URL <=2048 และต้องเป็น `http` หรือ `https`                                       |
+| `fileType`    | body     | No          | Yes      | string  | trim <=128                                                                       |
+| `fileSize`    | body     | No          | Yes      | integer | `1..5,242,880` bytes (5 MiB)                                                     |
 
 กฎร่วมของ document rows
 
@@ -269,13 +280,14 @@ criteria normalization สำคัญ
 | Field                                        | Location | Required    | Nullable | Type   | Additional rule                                                                                         |
 | -------------------------------------------- | -------- | ----------- | -------- | ------ | ------------------------------------------------------------------------------------------------------- |
 | `requestType`                                | body     | No          | No       | -      | backend ไม่รับ user intent ผ่าน field นี้ใน dedicated endpoint และจะ stamp เป็น `ADD_MEASUREMENT_POINT` |
-| `submissionAction`                           | body     | No          | No       | enum   | officer/admin ใช้ `REQUEST_FACTORY_REVISION` หรือ `CONNECT`; ถ้าไม่ส่งจะใช้ flow เดิม                    |
-| `revisionReason`                             | body     | Conditional | Yes      | string | required เมื่อ `submissionAction = "REQUEST_FACTORY_REVISION"`; trim 1-1000                              |
-| `officerNote`                                | body     | No          | Yes      | string | optional note จากเจ้าหน้าที่; trim <=1000                                                                |
+| `submissionAction`                           | body     | No          | No       | enum   | officer/admin ใช้ `REQUEST_FACTORY_REVISION` หรือ `CONNECT`; ถ้าไม่ส่งจะใช้ flow เดิม                   |
+| `revisionReason`                             | body     | Conditional | Yes      | string | required เมื่อ `submissionAction = "REQUEST_FACTORY_REVISION"`; trim 1-1000                             |
+| `officerNote`                                | body     | No          | Yes      | string | optional note จากเจ้าหน้าที่; trim <=1000                                                               |
 | `measurementPoints[].details`                | body     | Yes         | No       | object | ต้องมีและต้องไม่เป็น object ว่าง                                                                        |
 | `measurementPoints[].measurementInstruments` | body     | Yes         | No       | object | ห้ามเป็น `null`                                                                                         |
 | `measurementPoints[].documentsAndImages`     | body     | Conditional | No       | array  | required เมื่อ `systemType = "CEMS"`; WPMS ส่งว่างได้                                                   |
-| `measurementPoints[].pointCode`              | body     | Conditional | Yes      | string | flow ปกติ backend clear ก่อนบันทึก; `CONNECT` ต้องมี exactly 1 point และ `pointCode`                      |
+| `measurementPoints[].pointCode`              | body     | Conditional | Yes      | string | flow ปกติ backend clear ก่อนบันทึก; `CONNECT` ต้องมี exactly 1 point และ `pointCode`                    |
+| `measurementPoints[].monitoringPointStatus`  | body     | No          | Yes      | enum   | ถ้าเป็น `ได้รับการยกเว้นทั้งหมด` จุดยังถือเป็น active POMS point และส่งพารามิเตอร์ว่างได้               |
 
 ### Minimal Valid Request
 
@@ -383,6 +395,9 @@ criteria normalization สำคัญ
 - `submissionAction = "CONNECT"` ใช้ได้เฉพาะ officer/admin ที่มี role `monitoring_kpm` หรือ `admin`, ต้องมี permission `cems_wpms_requests:direct_connect`, exactly 1 measurement point และ `measurementPoints[0].pointCode`; backend ตรวจ eligible-factory scope แล้วสร้างสถานะ `CONNECTED`
 - duplicate `pointName` และ duplicate `pointCode` ภายใน request เดียวถูก reject
 - `CEMS` ต้องมีเอกสารแนบอย่างน้อย 1 รายการต่อ point; `WPMS` ไม่บังคับ
+- ไม่มี conditional validation เพิ่มสำหรับสถานะ `ได้รับการยกเว้นทั้งหมด`; ช่องกฎหมาย/ประกาศใช้กติกาเดิม และ client ส่ง `requestedParameters: []` กับ `measurementInstruments.parameters: []` ได้
+- เมื่อคำขอ `ADD_MEASUREMENT_POINT` ทุกจุดมี `monitoringPointStatus = "ได้รับการยกเว้นทั้งหมด"`, การอนุมัติด้วย `APPROVE_DESIGN` หรือ `APPROVE_FORM` จะออกรหัสจุด, เปลี่ยนคำขอเป็น `CONNECTED`, บันทึกเวลาอนุมัติเป็น `verifiedAt` และสร้าง active row ใน `cems_wpms_connected_measurement_points` ทันทีโดยไม่ผ่าน `WAITING_CONNECTION`, device config, confirm หรือ verify flow
+- active point ที่ได้รับการยกเว้นทั้งหมดเก็บ `parameters: []` และเก็บ `monitoringPointStatus` แยกต่างหากเพื่อรองรับการนับและการยื่น `ADD_PARAMETER` ด้วย `pointCode` เดิมในภายหลัง
 
 ข้อจำกัดปัจจุบัน: การเพิ่ม action นี้กำหนดสถานะเริ่มต้นเท่านั้น และยังไม่เปลี่ยน authorization ของ `PUT /:id/form` ซึ่งรับเฉพาะ owner ของคำขอ ดังนั้นคำขอ `WAITING_FACTORY_REVISION` ที่เจ้าหน้าที่เป็นผู้สร้างยังไม่ได้ให้สิทธิ์ผู้ใช้ของโรงงานแก้และ resubmit โดยอัตโนมัติ
 
@@ -390,12 +405,12 @@ criteria normalization สำคัญ
 
 ใช้ [shared error envelope](../../shared/README.md)
 
-| HTTP status | Code               | Condition                                              | Client action                       |
-| ----------- | ------------------ | ------------------------------------------------------ | ----------------------------------- |
-| `400`       | `VALIDATION_ERROR` | body ไม่ผ่าน zod validation หรือ detail business rules | แก้ field ตาม `issues[].pathString` |
-| `401`       | `UNAUTHORIZED`     | ไม่มี token หรือ token ใช้ไม่ได้                       | login ใหม่                          |
-| `403`       | `FORBIDDEN`        | ไม่มี permission, ผู้ส่ง action ไม่ใช่ officer/admin ที่รองรับ หรือ `CONNECT` ไม่มี direct-connect permission | ซ่อน action ที่ผู้ใช้ไม่มีสิทธิ์ |
-| `404`       | `NOT_FOUND`        | ไม่พบ active eligible factory                          | refresh ข้อมูลโรงงานก่อนส่งใหม่     |
+| HTTP status | Code               | Condition                                                                                                     | Client action                       |
+| ----------- | ------------------ | ------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `400`       | `VALIDATION_ERROR` | body ไม่ผ่าน zod validation หรือ detail business rules                                                        | แก้ field ตาม `issues[].pathString` |
+| `401`       | `UNAUTHORIZED`     | ไม่มี token หรือ token ใช้ไม่ได้                                                                              | login ใหม่                          |
+| `403`       | `FORBIDDEN`        | ไม่มี permission, ผู้ส่ง action ไม่ใช่ officer/admin ที่รองรับ หรือ `CONNECT` ไม่มี direct-connect permission | ซ่อน action ที่ผู้ใช้ไม่มีสิทธิ์    |
+| `404`       | `NOT_FOUND`        | ไม่พบ active eligible factory                                                                                 | refresh ข้อมูลโรงงานก่อนส่งใหม่     |
 
 ## Approval point-code assignments
 
@@ -406,13 +421,13 @@ criteria normalization สำคัญ
 
 ### Request fields
 
-| Field                                      | Location | Required | Type   | Validation และ behavior                                                                                                                                      |
-| ------------------------------------------ | -------- | -------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `pointCodeAssignments`                     | body     | No       | array  | omission = `AUTO` ทุกจุด; ถ้าส่งได้ 1-100 รายการ                                                                                                            |
-| `pointCodeAssignments[].measurementPointId` | body     | Yes      | number | ต้องเป็น id ของ measurement point ภายในคำขอที่กำลังอนุมัติ                                                                                                |
-| `pointCodeAssignments[].assignmentMode`    | body     | Yes      | enum   | `AUTO` หรือ `MANUAL_LEGACY`                                                                                                                                  |
-| `pointCodeAssignments[].pointCode`         | body     | Conditional | string | required เมื่อ `assignmentMode = "MANUAL_LEGACY"`; ต้อง match `^[SW]\\d{4}$` และค่าตัวเลขต้องอยู่ช่วง `0001-1999`                                       |
-| `pointCodeAssignments[].reason`            | body     | Conditional | string | required เมื่อ `assignmentMode = "MANUAL_LEGACY"`; trim แล้วต้องไม่ว่างและยาวไม่เกิน 500                                                                  |
+| Field                                       | Location | Required    | Type   | Validation และ behavior                                                                                           |
+| ------------------------------------------- | -------- | ----------- | ------ | ----------------------------------------------------------------------------------------------------------------- |
+| `pointCodeAssignments`                      | body     | No          | array  | omission = `AUTO` ทุกจุด; ถ้าส่งได้ 1-100 รายการ                                                                  |
+| `pointCodeAssignments[].measurementPointId` | body     | Yes         | number | ต้องเป็น id ของ measurement point ภายในคำขอที่กำลังอนุมัติ                                                        |
+| `pointCodeAssignments[].assignmentMode`     | body     | Yes         | enum   | `AUTO` หรือ `MANUAL_LEGACY`                                                                                       |
+| `pointCodeAssignments[].pointCode`          | body     | Conditional | string | required เมื่อ `assignmentMode = "MANUAL_LEGACY"`; ต้อง match `^[SW]\\d{4}$` และค่าตัวเลขต้องอยู่ช่วง `0001-1999` |
+| `pointCodeAssignments[].reason`             | body     | Conditional | string | required เมื่อ `assignmentMode = "MANUAL_LEGACY"`; trim แล้วต้องไม่ว่างและยาวไม่เกิน 500                          |
 
 ### Business rules
 
@@ -458,9 +473,9 @@ criteria normalization สำคัญ
 
 ### Response fields ที่เกี่ยวข้อง
 
-| Field                                              | Type           | Meaning                                                                 |
-| -------------------------------------------------- | -------------- | ----------------------------------------------------------------------- |
-| `data.measurementPoints[].pointCode`               | string \| null | รหัสที่ระบบออกใหม่หรือ reuse ตาม assignment ของจุดนั้น                  |
+| Field                                              | Type           | Meaning                                                                               |
+| -------------------------------------------------- | -------------- | ------------------------------------------------------------------------------------- |
+| `data.measurementPoints[].pointCode`               | string \| null | รหัสที่ระบบออกใหม่หรือ reuse ตาม assignment ของจุดนั้น                                |
 | `data.measurementPoints[].pointCodeAssignmentMode` | string \| null | `AUTO`, `MANUAL_LEGACY`, `OFFICER_DIRECT` หรือ `LEGACY_IMPORTED` ตามแหล่งที่มาของรหัส |
 
 ## `POST /api/v1/cems-wpms-requests/parameters`
@@ -693,36 +708,36 @@ criteria normalization สำคัญ
 
 endpoint นี้ใช้ schema แยกและยืดหยุ่นกว่า operator flows
 
-| Field                       | Location | Required    | Nullable | Type     | Validation และ behavior                                                                |
-| --------------------------- | -------- | ----------- | -------- | -------- | -------------------------------------------------------------------------------------- |
-| `factoryId`                 | body     | Conditional | Yes      | string   | ต้องมี `factoryId` หรือ `factoryRegistrationNo` อย่างน้อยหนึ่งค่า                      |
-| `factoryName`               | body     | No          | Yes      | string   | trim <=500; ถ้าไม่ส่ง backend จะใช้ชื่อ canonical จาก eligible factory                 |
-| `factoryRegistrationNo`     | body     | Conditional | Yes      | string   | ถ้าไม่ส่งและมี `factoryId`, backend fallback ใช้ `factoryId`                           |
-| `industryMainOrder`         | body     | No          | Yes      | string   | trim <=128                                                                             |
-| `industryMainOrderLabel`    | body     | No          | Yes      | string   | trim <=500                                                                             |
-| `industrySubOrder`          | body     | No          | Yes      | string   | trim <=128                                                                             |
-| `businessActivity`          | body     | No          | Yes      | string   | trim <=4000                                                                            |
-| `eia`                       | body     | No          | Yes      | enum     | same enum as operator flow                                                             |
-| `eiaOther`                  | body     | Conditional | Yes      | string   | required เมื่อ `eia = "อื่นๆ"`                                                         |
-| `hasEia`                    | body     | No          | Yes      | boolean  | normalize จาก `eia` เมื่อมี                                                            |
-| `projectName`               | body     | No          | Yes      | string   | trim <=500                                                                             |
-| `address`                   | body     | No          | Yes      | string   | trim <=1000                                                                            |
-| `latitude`                  | body     | No          | Yes      | number   | `-90..90`                                                                              |
-| `longitude`                 | body     | No          | Yes      | number   | `-180..180`                                                                            |
-| `systemType`                | body     | Yes         | No       | enum     | `CEMS` หรือ `WPMS`                                                                     |
-| `type`                      | body     | No          | Yes      | enum     | alias จาก frontend; nullable ได้และถูก strip; validator ไม่เปรียบเทียบกับ `systemType` |
-| `submissionAction`          | body     | No          | No       | enum     | field ที่แนะนำสำหรับ client: `REQUEST_FACTORY_REVISION` หรือ `CONNECT`; default `CONNECT` |
+| Field                       | Location | Required    | Nullable | Type     | Validation และ behavior                                                                                                   |
+| --------------------------- | -------- | ----------- | -------- | -------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `factoryId`                 | body     | Conditional | Yes      | string   | ต้องมี `factoryId` หรือ `factoryRegistrationNo` อย่างน้อยหนึ่งค่า                                                         |
+| `factoryName`               | body     | No          | Yes      | string   | trim <=500; ถ้าไม่ส่ง backend จะใช้ชื่อ canonical จาก eligible factory                                                    |
+| `factoryRegistrationNo`     | body     | Conditional | Yes      | string   | ถ้าไม่ส่งและมี `factoryId`, backend fallback ใช้ `factoryId`                                                              |
+| `industryMainOrder`         | body     | No          | Yes      | string   | trim <=128                                                                                                                |
+| `industryMainOrderLabel`    | body     | No          | Yes      | string   | trim <=500                                                                                                                |
+| `industrySubOrder`          | body     | No          | Yes      | string   | trim <=128                                                                                                                |
+| `businessActivity`          | body     | No          | Yes      | string   | trim <=4000                                                                                                               |
+| `eia`                       | body     | No          | Yes      | enum     | same enum as operator flow                                                                                                |
+| `eiaOther`                  | body     | Conditional | Yes      | string   | required เมื่อ `eia = "อื่นๆ"`                                                                                            |
+| `hasEia`                    | body     | No          | Yes      | boolean  | normalize จาก `eia` เมื่อมี                                                                                               |
+| `projectName`               | body     | No          | Yes      | string   | trim <=500                                                                                                                |
+| `address`                   | body     | No          | Yes      | string   | trim <=1000                                                                                                               |
+| `latitude`                  | body     | No          | Yes      | number   | `-90..90`                                                                                                                 |
+| `longitude`                 | body     | No          | Yes      | number   | `-180..180`                                                                                                               |
+| `systemType`                | body     | Yes         | No       | enum     | `CEMS` หรือ `WPMS`                                                                                                        |
+| `type`                      | body     | No          | Yes      | enum     | alias จาก frontend; nullable ได้และถูก strip; validator ไม่เปรียบเทียบกับ `systemType`                                    |
+| `submissionAction`          | body     | No          | No       | enum     | field ที่แนะนำสำหรับ client: `REQUEST_FACTORY_REVISION` หรือ `CONNECT`; default `CONNECT`                                 |
 | `status`                    | body     | No          | Yes      | enum     | legacy alias: `WAITING_FACTORY_REVISION` หรือ `CONNECTED`; `null` ใช้ค่า default และ client ใหม่ควรใช้ `submissionAction` |
-| `revisionReason`            | body     | Conditional | Yes      | string   | trim 1-1000 และ required เมื่อผลลัพธ์เป็น `WAITING_FACTORY_REVISION`                    |
-| `officerNote`               | body     | No          | Yes      | string   | trim <=1000                                                                            |
-| `contactName`               | body     | No          | Yes      | string   | ถ้าไม่ส่ง backend ใส่ `""`                                                             |
-| `contactPhone`              | body     | No          | Yes      | string   | ถ้าไม่ส่ง backend ใส่ `""`                                                             |
-| `contactEmail`              | body     | No          | Yes      | string   | email <=255                                                                            |
-| `contactPersons`            | body     | No          | Yes      | array    | max 20; nullable                                                                       |
-| `notificationEmails`        | body     | No          | Yes      | string[] | max 20; nullable                                                                       |
-| `officerNotificationEmails` | body     | No          | Yes      | string[] | max 20; nullable                                                                       |
-| `measurementPoints`         | body     | Yes         | No       | array    | ต้องมี exactly 1 row                                                                   |
-| `remarks`                   | body     | No          | Yes      | string   | trim <=1000                                                                            |
+| `revisionReason`            | body     | Conditional | Yes      | string   | trim 1-1000 และ required เมื่อผลลัพธ์เป็น `WAITING_FACTORY_REVISION`                                                      |
+| `officerNote`               | body     | No          | Yes      | string   | trim <=1000                                                                                                               |
+| `contactName`               | body     | No          | Yes      | string   | ถ้าไม่ส่ง backend ใส่ `""`                                                                                                |
+| `contactPhone`              | body     | No          | Yes      | string   | ถ้าไม่ส่ง backend ใส่ `""`                                                                                                |
+| `contactEmail`              | body     | No          | Yes      | string   | email <=255                                                                                                               |
+| `contactPersons`            | body     | No          | Yes      | array    | max 20; nullable                                                                                                          |
+| `notificationEmails`        | body     | No          | Yes      | string[] | max 20; nullable                                                                                                          |
+| `officerNotificationEmails` | body     | No          | Yes      | string[] | max 20; nullable                                                                                                          |
+| `measurementPoints`         | body     | Yes         | No       | array    | ต้องมี exactly 1 row                                                                                                      |
+| `remarks`                   | body     | No          | Yes      | string   | trim <=1000                                                                                                               |
 
 ### `measurementPoints[0]` ของ Direct Connection
 
@@ -817,13 +832,13 @@ endpoint นี้ใช้ schema แยกและยืดหยุ่นก
 
 ใช้ [shared error envelope](../../shared/README.md)
 
-| HTTP status | Code               | Condition                                                                                                         | Client action                    |
-| ----------- | ------------------ | ----------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| HTTP status | Code               | Condition                                                                                                                                                     | Client action                    |
+| ----------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
 | `400`       | `VALIDATION_ERROR` | ไม่มี `factoryId/factoryRegistrationNo`, action/status ขัดกัน, ขาด `revisionReason`, มีหลาย measurement points, document row ไม่ครบ, หรือ body ไม่ผ่าน schema | แก้ payload และส่งใหม่           |
-| `401`       | `UNAUTHORIZED`     | ไม่มี token หรือ token ใช้ไม่ได้                                                                                  | login ใหม่                       |
-| `403`       | `FORBIDDEN`        | ไม่มี `cems_wpms_requests:direct_connect`                                                                         | ซ่อน action สำหรับ user นี้      |
-| `404`       | `NOT_FOUND`        | ไม่พบ active eligible factory ภายใน scope                                                                         | ตรวจ identifier และสิทธิ์พื้นที่ |
-| `409`       | `CONFLICT`         | `pointCode` ซ้ำกับรหัสที่เคยจองไว้ ไม่ว่าจะรอเชื่อมต่อ เชื่อมต่ออยู่ หรือเลิกใช้งานแล้ว                         | เปลี่ยนรหัสจุดตรวจวัด            |
+| `401`       | `UNAUTHORIZED`     | ไม่มี token หรือ token ใช้ไม่ได้                                                                                                                              | login ใหม่                       |
+| `403`       | `FORBIDDEN`        | ไม่มี `cems_wpms_requests:direct_connect`                                                                                                                     | ซ่อน action สำหรับ user นี้      |
+| `404`       | `NOT_FOUND`        | ไม่พบ active eligible factory ภายใน scope                                                                                                                     | ตรวจ identifier และสิทธิ์พื้นที่ |
+| `409`       | `CONFLICT`         | `pointCode` ซ้ำกับรหัสที่เคยจองไว้ ไม่ว่าจะรอเชื่อมต่อ เชื่อมต่ออยู่ หรือเลิกใช้งานแล้ว                                                                       | เปลี่ยนรหัสจุดตรวจวัด            |
 
 ## Review Payloads ที่เกี่ยวข้องกับการส่งแบบแก้ไข
 

@@ -5,6 +5,7 @@ import {
   CONNECTION_REQUEST_TYPE_LABELS,
   MAX_WPMS_OUTSIDE_FACTORY_DISCHARGE_POINT_PHOTOS,
 } from '../connection-requests/connection-requests.types';
+import { MONITORING_POINT_STATUSES } from '../monitoring-point-forms/monitoring-point-forms.types';
 
 type OpenApiObject = Record<string, unknown>;
 type EnumLabelMap = Record<string, string>;
@@ -148,6 +149,16 @@ const measurementPointTypeLabels: EnumLabelMap = {
   WASTEWATER: 'จุดระบายน้ำทิ้ง',
   OTHER: 'อื่นๆ',
 };
+
+const monitoringPointStatusLabels: EnumLabelMap = Object.fromEntries(
+  MONITORING_POINT_STATUSES.map((status) => [status, status]),
+);
+
+const monitoringPointStatusSchema = (description: string): OpenApiObject => ({
+  ...enumSchema(MONITORING_POINT_STATUSES, monitoringPointStatusLabels),
+  nullable: true,
+  description,
+});
 
 const reviewDecisionLabels: EnumLabelMap = {
   APPROVE_DESIGN: 'อนุมัติแบบ',
@@ -670,6 +681,9 @@ const componentSchemas: Record<string, OpenApiObject> = {
                   ...enumSchema(['STACK', 'WASTEWATER', 'OTHER'], measurementPointTypeLabels),
                 },
                 parameters: { type: 'array', items: { type: 'string' } },
+                monitoringPointStatus: monitoringPointStatusSchema(
+                  'สถานะระดับจุด; จุดที่ได้รับการยกเว้นทั้งหมดยังเป็น active POMS point และมี parameters ว่างได้',
+                ),
               },
             },
           },
@@ -902,6 +916,9 @@ const componentSchemas: Record<string, OpenApiObject> = {
         description: 'Backend split comma, dedupe และตัดค่า ไม่มี',
       },
       description: nullableString(1000, 'Optional'),
+      monitoringPointStatus: monitoringPointStatusSchema(
+        'Optional สถานะระดับจุด; ค่าว่าง normalize เป็น null',
+      ),
       details: nullableRef('MeasurementPointDetails'),
       documentsAndImages: {
         type: 'array',
@@ -932,11 +949,15 @@ const componentSchemas: Record<string, OpenApiObject> = {
       longitude: nullableNumber(-180, 180, 'Optional'),
       parameters: {
         type: 'array',
-        minItems: 1,
+        minItems: 0,
         maxItems: 50,
         items: { type: 'string', minLength: 1, maxLength: 64 },
+        description: 'ส่ง [] ได้สำหรับจุดที่ monitoringPointStatus = ได้รับการยกเว้นทั้งหมด',
       },
       description: nullableString(1000, 'Optional'),
+      monitoringPointStatus: monitoringPointStatusSchema(
+        'เมื่อเป็น ได้รับการยกเว้นทั้งหมด เจ้าหน้าที่อนุมัติแล้วคำขอไป CONNECTED และสร้าง active point ที่ไม่มีพารามิเตอร์',
+      ),
       details: {
         allOf: [schemaRef('MeasurementPointDetails')],
         minProperties: 1,
@@ -968,6 +989,9 @@ const componentSchemas: Record<string, OpenApiObject> = {
         items: { type: 'string', minLength: 1, maxLength: 64 },
       },
       description: nullableString(1000, 'Optional'),
+      monitoringPointStatus: monitoringPointStatusSchema(
+        'สถานะระดับจุดเดิมหรือสถานะใหม่หลังเพิ่มพารามิเตอร์',
+      ),
       details: {
         allOf: [schemaRef('MeasurementPointDetails')],
         minProperties: 1,
@@ -1017,7 +1041,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
       },
     },
     description:
-      'ห้ามส่ง requestType; backend stamp ADD_MEASUREMENT_POINT. หากไม่ส่ง submissionAction จะสร้าง PENDING_DESIGN_REVIEW; officer/admin เลือก REQUEST_FACTORY_REVISION หรือ CONNECT ได้ โดย CONNECT ต้องมี direct-connect permission, exactly 1 point และ pointCode',
+      'ห้ามส่ง requestType; backend stamp ADD_MEASUREMENT_POINT. หากไม่ส่ง submissionAction จะสร้าง PENDING_DESIGN_REVIEW; officer/admin เลือก REQUEST_FACTORY_REVISION หรือ CONNECT ได้ โดย CONNECT ต้องมี direct-connect permission, exactly 1 point และ pointCode. คำขอปกติที่ทุกจุดมี monitoringPointStatus = ได้รับการยกเว้นทั้งหมด จะไป CONNECTED ทันทีเมื่อเจ้าหน้าที่ APPROVE_DESIGN/APPROVE_FORM พร้อมสร้าง active point parameters = []',
     example: officerAddPointExample,
   },
   AddParameterRequest: {
@@ -1104,6 +1128,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
         items: { type: 'string', minLength: 1, maxLength: 64 },
       },
       description: nullableString(1000, 'Optional'),
+      monitoringPointStatus: monitoringPointStatusSchema('Optional สถานะระดับจุด'),
       details: nullableRef('MeasurementPointDetails'),
       documentsAndImages: {
         type: 'array',

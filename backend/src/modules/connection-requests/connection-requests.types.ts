@@ -1,4 +1,5 @@
 import type { ConnectionRequestEiaAssessment } from './connection-request-eia';
+import type { MonitoringPointStatus } from '../monitoring-point-forms/monitoring-point-forms.types';
 
 export const CONNECTION_REQUEST_STATUS = {
   PENDING_DESIGN_REVIEW: 'PENDING_DESIGN_REVIEW',
@@ -133,6 +134,7 @@ export interface MeasurementPointInput {
   longitude?: number | null;
   parameters?: string[];
   description?: string | null;
+  monitoringPointStatus?: MonitoringPointStatus | null;
   details?: MeasurementPointDetailsInput | null;
   documentsAndImages?: RequestDocumentImageInput[];
   measurementInstruments?: MeasurementInstrumentsInput | null;
@@ -508,6 +510,7 @@ export interface OperatorFactoryMeasurementPointDTO {
   pointCode: string | null;
   systemType: ConnectionSystemType;
   parameters: string[];
+  monitoringPointStatus?: MonitoringPointStatus | null;
   parameterStandards: OperatorFactoryParameterStandardDTO[];
   data: Record<string, unknown>[];
 }

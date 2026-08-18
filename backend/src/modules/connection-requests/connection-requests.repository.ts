@@ -124,6 +124,7 @@ interface MeasurementPointRow {
   longitude: number | string | null;
   parameters_json: string;
   description: string | null;
+  monitoring_point_status: MeasurementPointInput['monitoringPointStatus'];
   details_json: string | null;
   documents_json: string | null;
   instruments_json: string | null;
@@ -158,6 +159,7 @@ interface CurrentFactoryMeasurementPointRow {
   point_code: string | null;
   system_type: 'CEMS' | 'WPMS';
   parameters_json: string;
+  monitoring_point_status: MeasurementPointInput['monitoringPointStatus'];
   instruments_json: string | null;
   factory_logo_json: string | null;
   documents_json: string | null;
@@ -287,6 +289,7 @@ interface StatusUpdate {
 
 interface StatusUpdateOptions {
   issueWaitingConnectionSideEffects?: boolean;
+  activateFullyExemptedPoints?: boolean;
   pointCodeAssignments?: PointCodeAssignmentInput[];
 }
 
@@ -833,6 +836,7 @@ export const connectionRequestsRepository = {
         'point_code',
         'system_type',
         'parameters_json',
+        'monitoring_point_status',
         'instruments_json',
         'factory_logo_json',
         'documents_json',
@@ -851,6 +855,7 @@ export const connectionRequestsRepository = {
       pointCode: row.point_code,
       systemType: row.system_type,
       parameters: parseParameters(row.parameters_json),
+      monitoringPointStatus: row.monitoring_point_status ?? null,
       measurementInstruments: parseJsonObject<MeasurementInstrumentsInput>(row.instruments_json),
       factoryLogo: parseJsonObject<RequestDocumentImageInput>(row.factory_logo_json),
       documentsAndImages: parseJsonArray<RequestDocumentImageInput>(row.documents_json),
@@ -875,6 +880,7 @@ export const connectionRequestsRepository = {
         'point_code',
         'system_type',
         'parameters_json',
+        'monitoring_point_status',
         'instruments_json',
         'factory_logo_json',
         'documents_json',
@@ -891,6 +897,7 @@ export const connectionRequestsRepository = {
       pointCode: row.point_code,
       systemType: row.system_type,
       parameters: parseParameters(row.parameters_json),
+      monitoringPointStatus: row.monitoring_point_status ?? null,
       measurementInstruments: parseJsonObject<MeasurementInstrumentsInput>(row.instruments_json),
       factoryLogo: parseJsonObject<RequestDocumentImageInput>(row.factory_logo_json),
       documentsAndImages: parseJsonArray<RequestDocumentImageInput>(row.documents_json),
@@ -1026,6 +1033,7 @@ export const connectionRequestsRepository = {
             point_code: pointCode,
             point_type: point.pointType,
             parameters_json: JSON.stringify(point.parameters ?? []),
+            monitoring_point_status: point.monitoringPointStatus ?? null,
             details_json: point.details ? JSON.stringify(point.details) : null,
             documents_json:
               point.documentsAndImages && point.documentsAndImages.length > 0
@@ -1131,7 +1139,10 @@ export const connectionRequestsRepository = {
     options: StatusUpdateOptions = {},
   ): Promise<ConnectionRequestDTO> {
     return db.transaction(async (trx) => {
-      if (shouldIssueWaitingConnectionSideEffects(status, options)) {
+      if (
+        shouldIssueWaitingConnectionSideEffects(status, options) ||
+        options.activateFullyExemptedPoints
+      ) {
         await softDeleteDuplicateActiveMeasurementPoints(trx, id, actorUserId);
         await issuePointCodesForRequest(trx, id, actorUserId, options.pointCodeAssignments);
       }
@@ -1156,6 +1167,18 @@ export const connectionRequestsRepository = {
 
       const updated = await findByIdInTransaction(trx, id);
       if (!updated) throw new Error('Updated connection request could not be loaded');
+      if (options.activateFullyExemptedPoints) {
+        const activeEligibleFactory = await requireActiveEligibleFactoryInTransaction(
+          trx,
+          updated.eligibleFactoryId ?? undefined,
+        );
+        await syncConnectedMeasurementPointsInTransaction(
+          trx,
+          updated,
+          actorUserId,
+          activeEligibleFactory,
+        );
+      }
       return updated;
     });
   },
@@ -1369,6 +1392,7 @@ async function syncConnectedMeasurementPointsInTransaction(
       point_code: point.pointCode,
       point_type: point.pointType,
       parameters_json: JSON.stringify(parameters),
+      monitoring_point_status: point.monitoringPointStatus ?? null,
       details_json: point.details ? JSON.stringify(point.details) : null,
       documents_json:
         point.documentsAndImages && point.documentsAndImages.length > 0
@@ -2702,6 +2726,7 @@ function toMeasurementPointInsertRow(
     longitude: point.longitude ?? null,
     parameters_json: JSON.stringify(point.parameters ?? []),
     description: point.description ?? null,
+    monitoring_point_status: point.monitoringPointStatus ?? null,
     details_json: point.details ? JSON.stringify(point.details) : null,
     documents_json:
       point.documentsAndImages && point.documentsAndImages.length > 0
@@ -3310,6 +3335,7 @@ function toMeasurementPointDTO(row: MeasurementPointRow): MeasurementPointDTO {
     longitude: toNullableNumber(row.longitude),
     parameters: parseParameters(row.parameters_json),
     description: row.description,
+    monitoringPointStatus: row.monitoring_point_status ?? null,
     details: parseJsonObject(row.details_json),
     documentsAndImages: parseJsonArray<RequestDocumentImageInput>(row.documents_json),
     measurementInstruments: parseJsonObject<MeasurementInstrumentsInput>(row.instruments_json),

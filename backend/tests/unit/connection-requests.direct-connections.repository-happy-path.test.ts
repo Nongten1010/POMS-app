@@ -161,6 +161,7 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
         request_id: 101,
         point_code: 'free form / จุด-01',
         point_name: 'ปล่องทดสอบ 1',
+        monitoring_point_status: 'เชื่อมต่อครบแล้ว',
         point_code_assignment_mode: 'OFFICER_DIRECT',
         point_code_assignment_reason: null,
         point_code_assigned_by: 42,
@@ -196,6 +197,7 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
         factory_address: '99 หมู่ 1 แขวงลำปลาทิว เขตลาดกระบัง กรุงเทพมหานคร 10520',
         system_type: 'WPMS',
         point_code: 'free form / จุด-01',
+        monitoring_point_status: 'เชื่อมต่อครบแล้ว',
         connected_at: fixedNow,
         created_by: 42,
       }),
@@ -208,7 +210,13 @@ describe('connectionRequestsRepository.createDirectConnection happy path', () =>
       status: 'CONNECTED',
       verifiedAt: fixedNow.toISOString(),
       regionName: 'ภาคกลาง',
-      measurementPoints: [expect.objectContaining({ id: 202, pointCode: 'free form / จุด-01' })],
+      measurementPoints: [
+        expect.objectContaining({
+          id: 202,
+          pointCode: 'free form / จุด-01',
+          monitoringPointStatus: 'เชื่อมต่อครบแล้ว',
+        }),
+      ],
       statusHistory: [expect.objectContaining({ status: 'CONNECTED', changedById: 42 })],
     });
     expect([...queues.values()].every((queue) => queue.length === 0)).toBe(true);
@@ -530,6 +538,7 @@ function directInput(systemType: 'CEMS' | 'WPMS' = 'CEMS') {
         pointCode: '  free form / จุด-01  ',
         pointType: 'STACK',
         parameters: ['CO2 (ppm)'],
+        monitoringPointStatus: 'เชื่อมต่อครบแล้ว',
       },
     ],
   };
@@ -594,6 +603,7 @@ function measurementPointRow() {
     longitude: null,
     parameters_json: JSON.stringify(['CO2 (ppm)']),
     description: null,
+    monitoring_point_status: 'เชื่อมต่อครบแล้ว',
     details_json: null,
     documents_json: null,
     instruments_json: null,

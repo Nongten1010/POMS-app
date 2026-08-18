@@ -1068,6 +1068,25 @@ export const connectionRequestsService = {
       );
     }
 
+    if (isFullyExemptedAddPointRequest(request)) {
+      return connectionRequestsRepository.updateStatus(
+        id,
+        CONNECTION_REQUEST_STATUS.CONNECTED,
+        actorUserId,
+        {
+          officerNote: input.officerNote ?? null,
+          revisionReason: null,
+          verifiedAt: nowProvider().toISOString(),
+        },
+        {
+          activateFullyExemptedPoints: true,
+          ...(input.pointCodeAssignments
+            ? { pointCodeAssignments: input.pointCodeAssignments }
+            : {}),
+        },
+      );
+    }
+
     const update = {
       officerNote: input.officerNote ?? null,
       revisionReason: null,
@@ -1448,6 +1467,7 @@ function toMeasurementPointInput(
     longitude: point.longitude,
     parameters: point.parameters,
     description: point.description,
+    monitoringPointStatus: point.monitoringPointStatus ?? null,
     details,
     documentsAndImages: point.documentsAndImages,
     measurementInstruments: point.measurementInstruments,
@@ -2015,6 +2035,16 @@ function findCodeIssuedAt(request: ConnectionRequestDTO): string | null {
   return history?.changedAt ?? request.connectionDueAt ?? null;
 }
 
+function isFullyExemptedAddPointRequest(request: ConnectionRequestDTO): boolean {
+  return (
+    request.requestType === CONNECTION_REQUEST_TYPE.ADD_MEASUREMENT_POINT &&
+    request.measurementPoints.length > 0 &&
+    request.measurementPoints.every(
+      (point) => point.monitoringPointStatus === 'ได้รับการยกเว้นทั้งหมด',
+    )
+  );
+}
+
 function isPastConnectionDueDate(connectionDueAt: string | null, now: Date): boolean {
   if (!connectionDueAt) return false;
   return new Date(connectionDueAt).getTime() < now.getTime();
@@ -2112,6 +2142,7 @@ function toOperatorFactoryMeasurementPoint(
     pointCode: point.pointCode,
     systemType: point.systemType,
     parameters,
+    monitoringPointStatus: point.monitoringPointStatus ?? null,
     parameterStandards: toParameterStandards(parameters, point.measurementInstruments),
     data: [],
   };

@@ -567,6 +567,36 @@ describe('connection request validators', () => {
     }
   });
 
+  it('accepts a fully exempted active point with no requested parameters', () => {
+    const result = addMeasurementPointRequestSchema.safeParse({
+      ...validPayload,
+      measurementPoints: [
+        {
+          ...validPayload.measurementPoints[0],
+          monitoringPointStatus: 'ได้รับการยกเว้นทั้งหมด',
+          details: {
+            ...pointDetails,
+            requestedParameters: [],
+            pendingParameters: [],
+          },
+          measurementInstruments: {
+            converterBrand: null,
+            converterModel: null,
+            parameters: [],
+          },
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.measurementPoints[0]).toMatchObject({
+      monitoringPointStatus: 'ได้รับการยกเว้นทั้งหมด',
+      parameters: [],
+      measurementInstruments: { parameters: [] },
+    });
+  });
+
   it('accepts an officer connect submission with exactly one point and a point code', () => {
     const result = addMeasurementPointRequestSchema.safeParse({
       ...validPayload,

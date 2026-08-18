@@ -24,13 +24,13 @@ curl --request GET \
 
 ## Endpoint Summary
 
-| งาน | Method | Path | Auth | Permission | Contract |
-| --- | --- | --- | --- | --- | --- |
-| รายการโรงงานบนหน้าหลัก | `GET` | `/api/v1/operator-factory-dashboard` | Bearer | `dashboard:view` | [Authenticated dashboard](#get-apiv1operator-factory-dashboard) |
-| จุดโรงงานสำหรับแผนที่สาธารณะ | `GET` | `/api/v1/public/factory-map-points` | No | - | [Public map](#get-apiv1publicfactory-map-points) |
-| ข้อมูลทั่วไปของโรงงาน | `GET` | `/api/v1/cems-wpms-requests/factories/:factoryId/general` | Bearer | `factories:view` | [Factory general](#get-apiv1cems-wpms-requestsfactoriesfactoryidgeneral) |
-| ตั้งค่า favorite | `PUT` | `/api/v1/operator-factories/:factoryId/favorite` | Bearer | `dashboard.alerts:view` | [Favorite](#put-apiv1operator-factoriesfactoryidfavorite) |
-| ส่งออกข้อมูลตรวจวัด CSV | `GET` | `/api/v1/connected-measurement-points/:stationId/measurement-export.csv` | Bearer | `dashboard.stats:export` | [Measurement CSV export](../../shared/connected-measurement-points/README.md#get-apiv1connected-measurement-pointsstationidmeasurement-exportcsv) |
+| งาน                          | Method | Path                                                                     | Auth   | Permission               | Contract                                                                                                                                          |
+| ---------------------------- | ------ | ------------------------------------------------------------------------ | ------ | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| รายการโรงงานบนหน้าหลัก       | `GET`  | `/api/v1/operator-factory-dashboard`                                     | Bearer | `dashboard:view`         | [Authenticated dashboard](#get-apiv1operator-factory-dashboard)                                                                                   |
+| จุดโรงงานสำหรับแผนที่สาธารณะ | `GET`  | `/api/v1/public/factory-map-points`                                      | No     | -                        | [Public map](#get-apiv1publicfactory-map-points)                                                                                                  |
+| ข้อมูลทั่วไปของโรงงาน        | `GET`  | `/api/v1/cems-wpms-requests/factories/:factoryId/general`                | Bearer | `factories:view`         | [Factory general](#get-apiv1cems-wpms-requestsfactoriesfactoryidgeneral)                                                                          |
+| ตั้งค่า favorite             | `PUT`  | `/api/v1/operator-factories/:factoryId/favorite`                         | Bearer | `dashboard.alerts:view`  | [Favorite](#put-apiv1operator-factoriesfactoryidfavorite)                                                                                         |
+| ส่งออกข้อมูลตรวจวัด CSV      | `GET`  | `/api/v1/connected-measurement-points/:stationId/measurement-export.csv` | Bearer | `dashboard.stats:export` | [Measurement CSV export](../../shared/connected-measurement-points/README.md#get-apiv1connected-measurement-pointsstationidmeasurement-exportcsv) |
 
 ## Contracts
 
@@ -38,36 +38,37 @@ curl --request GET \
 
 Query fields:
 
-| Field | Type | Required | Rules |
-| --- | --- | --- | --- |
-| `systemType` | `CEMS` \| `WPMS` | No | คืนเฉพาะโรงงานที่มี active point ของระบบนั้น |
-| `favoriteOnly` | boolean | No | รองรับ `true`, `false`, `1`, `0`, `yes`, `no`; default `false` |
+| Field          | Type             | Required | Rules                                                          |
+| -------------- | ---------------- | -------- | -------------------------------------------------------------- |
+| `systemType`   | `CEMS` \| `WPMS` | No       | คืนเฉพาะโรงงานที่มี active point ของระบบนั้น                   |
+| `favoriteOnly` | boolean          | No       | รองรับ `true`, `false`, `1`, `0`, `yes`, `no`; default `false` |
 
 Request body: ไม่มี
 
 Response fields ที่ใช้ระบุตัวโรงงานและการเชื่อมต่อ:
 
-| Field | Type | Meaning |
-| --- | --- | --- |
-| `data[].id` | integer \| null | ฟิลด์เดิมสำหรับ compatibility ซึ่งมีค่าเป็น `factories.id`; เป็น `null` ได้เมื่อยังไม่มี factory master และห้าม fallback ไปใช้ ID จากตารางอื่น |
-| `data[].eligibleFactoryId` | integer | `eligible_factories.id` ของโรงงาน current/live ที่เชื่อมต่ออยู่ใน POMS |
-| `data[].factoryId` | string | identifier หลักสำหรับหน้าและจุดตรวจวัด; eligible-only row ใช้เลขทะเบียนใหม่ |
-| `data[].factoryName` | string | ชื่อโรงงานจาก current/live POMS point ล่าสุด; fallback เป็น active `eligible_factories` แล้วจึง factory master |
-| `data[].newRegistrationNo` | string | เลขทะเบียนโรงงานใหม่จาก active `eligible_factories` |
-| `data[].isEligible` | `true` | ทุก row บนหน้าหลักเป็นโรงงานเข้าข่ายที่มี active connected point |
-| `data[].eligibilityStatus` | `เข้าข่าย` | label สำหรับ UI ซึ่งสอดคล้องกับ `isEligible: true` |
-| `data[].isFavorite` | boolean | favorite ของผู้ใช้ปัจจุบัน |
-| `data[].hasLatestHourlyMeasurement` | boolean | `true` เมื่อทุก active connected point มี `measurementPoints[].data` อย่างน้อย 1 แถว และ `cdate` + ชั่วโมงของ `ctime` ตรงกับชั่วโมงที่คำนวณเสร็จแล้วล่าสุด ซึ่งคือชั่วโมงก่อนหน้าตาม `Asia/Bangkok`; ถ้าจุดใดไม่มีข้อมูลหรือเป็นคนละชั่วโมงจะเป็น `false` |
-| `data[].monitoringPointCountBySystem` | array | จำนวน active point แยก `CEMS` และ `WPMS` |
-| `data[].measurementPoints` | array | active connected points และค่ารายชั่วโมงที่อ่านได้ตาม scope |
-| `data[].measurementPoints[].parameters` | string[] | ชื่อพารามิเตอร์พร้อมหน่วย; `Flow` หน่วย `m3/hr` ใช้ชื่อมาตรฐาน `Flow Rate (m3/hr)` เพียงชื่อเดียว |
-| `data[].measurementPoints[].parameterStandards` | object[] | เกณฑ์มาตรฐานหนึ่งรายการต่อสมาชิกใน `parameters` และเรียงลำดับเดียวกัน |
-| `data[].measurementPoints[].parameterStandards[].parameter` | string | ชื่อพารามิเตอร์พร้อมหน่วย |
-| `data[].measurementPoints[].parameterStandards[].standardCriteria` | object \| null | เกณฑ์ตามประกาศ อก. จาก connected-point instrument snapshot |
-| `data[].measurementPoints[].parameterStandards[].eiaCriteria` | object \| null | เกณฑ์ตาม EIA จาก connected-point instrument snapshot |
-| `data[].measurementPoints[].data[].<parameter label>` | number \| string \| null | ใช้ค่าตรวจวัดเมื่อ StatusCode เป็น `1`; ค่าตรวจวัดที่เป็นตัวเลขติดลบ (รวม numeric string) คืน `"ERROR"`; StatusCode อื่นใช้ชื่อสถานะ เช่น `Shut Down` หรือ `No Discharge` และมีลำดับความสำคัญเหนือการตรวจค่าติดลบ |
-| `data[].status` | `แสดง` | display status ของ row |
-| `meta.total` | integer | จำนวนโรงงานหลังใช้ query filters |
+| Field                                                              | Type                     | Meaning                                                                                                                                                                                                                                                   |
+| ------------------------------------------------------------------ | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `data[].id`                                                        | integer \| null          | ฟิลด์เดิมสำหรับ compatibility ซึ่งมีค่าเป็น `factories.id`; เป็น `null` ได้เมื่อยังไม่มี factory master และห้าม fallback ไปใช้ ID จากตารางอื่น                                                                                                            |
+| `data[].eligibleFactoryId`                                         | integer                  | `eligible_factories.id` ของโรงงาน current/live ที่เชื่อมต่ออยู่ใน POMS                                                                                                                                                                                    |
+| `data[].factoryId`                                                 | string                   | identifier หลักสำหรับหน้าและจุดตรวจวัด; eligible-only row ใช้เลขทะเบียนใหม่                                                                                                                                                                               |
+| `data[].factoryName`                                               | string                   | ชื่อโรงงานจาก current/live POMS point ล่าสุด; fallback เป็น active `eligible_factories` แล้วจึง factory master                                                                                                                                            |
+| `data[].newRegistrationNo`                                         | string                   | เลขทะเบียนโรงงานใหม่จาก active `eligible_factories`                                                                                                                                                                                                       |
+| `data[].isEligible`                                                | `true`                   | ทุก row บนหน้าหลักเป็นโรงงานเข้าข่ายที่มี active connected point                                                                                                                                                                                          |
+| `data[].eligibilityStatus`                                         | `เข้าข่าย`               | label สำหรับ UI ซึ่งสอดคล้องกับ `isEligible: true`                                                                                                                                                                                                        |
+| `data[].isFavorite`                                                | boolean                  | favorite ของผู้ใช้ปัจจุบัน                                                                                                                                                                                                                                |
+| `data[].hasLatestHourlyMeasurement`                                | boolean                  | `true` เมื่อทุก active connected point มี `measurementPoints[].data` อย่างน้อย 1 แถว และ `cdate` + ชั่วโมงของ `ctime` ตรงกับชั่วโมงที่คำนวณเสร็จแล้วล่าสุด ซึ่งคือชั่วโมงก่อนหน้าตาม `Asia/Bangkok`; ถ้าจุดใดไม่มีข้อมูลหรือเป็นคนละชั่วโมงจะเป็น `false` |
+| `data[].monitoringPointCountBySystem`                              | array                    | จำนวน active point แยก `CEMS` และ `WPMS`                                                                                                                                                                                                                  |
+| `data[].measurementPoints`                                         | array                    | active connected points และค่ารายชั่วโมงที่อ่านได้ตาม scope                                                                                                                                                                                               |
+| `data[].measurementPoints[].parameters`                            | string[]                 | ชื่อพารามิเตอร์พร้อมหน่วย; `Flow` หน่วย `m3/hr` ใช้ชื่อมาตรฐาน `Flow Rate (m3/hr)` เพียงชื่อเดียว                                                                                                                                                         |
+| `data[].measurementPoints[].monitoringPointStatus`                 | string \| null           | สถานะระดับจุด; active point ที่ `ได้รับการยกเว้นทั้งหมด` มี `parameters: []` และยังแสดงบน dashboard                                                                                                                                                       |
+| `data[].measurementPoints[].parameterStandards`                    | object[]                 | เกณฑ์มาตรฐานหนึ่งรายการต่อสมาชิกใน `parameters` และเรียงลำดับเดียวกัน                                                                                                                                                                                     |
+| `data[].measurementPoints[].parameterStandards[].parameter`        | string                   | ชื่อพารามิเตอร์พร้อมหน่วย                                                                                                                                                                                                                                 |
+| `data[].measurementPoints[].parameterStandards[].standardCriteria` | object \| null           | เกณฑ์ตามประกาศ อก. จาก connected-point instrument snapshot                                                                                                                                                                                                |
+| `data[].measurementPoints[].parameterStandards[].eiaCriteria`      | object \| null           | เกณฑ์ตาม EIA จาก connected-point instrument snapshot                                                                                                                                                                                                      |
+| `data[].measurementPoints[].data[].<parameter label>`              | number \| string \| null | ใช้ค่าตรวจวัดเมื่อ StatusCode เป็น `1`; ค่าตรวจวัดที่เป็นตัวเลขติดลบ (รวม numeric string) คืน `"ERROR"`; StatusCode อื่นใช้ชื่อสถานะ เช่น `Shut Down` หรือ `No Discharge` และมีลำดับความสำคัญเหนือการตรวจค่าติดลบ                                         |
+| `data[].status`                                                    | `แสดง`                   | display status ของ row                                                                                                                                                                                                                                    |
+| `meta.total`                                                       | integer                  | จำนวนโรงงานหลังใช้ query filters                                                                                                                                                                                                                          |
 
 Minimal response (`200 OK`) สำหรับโรงงานที่เจ้าหน้าที่เชื่อมโดยยังไม่มี `factories` row:
 
@@ -96,6 +97,7 @@ Minimal response (`200 OK`) สำหรับโรงงานที่เจ�
           "pointName": "ปล่องหลัก",
           "pointCode": "S4010",
           "systemType": "CEMS",
+          "monitoringPointStatus": "เชื่อมต่อครบแล้ว",
           "parameters": ["CO (ppm)"],
           "parameterStandards": [
             {
@@ -141,9 +143,9 @@ Visibility and authorization:
 
 Query fields:
 
-| Field | Type | Required | Rules |
-| --- | --- | --- | --- |
-| `systemType` | `CEMS` \| `WPMS` | No | กรอง active point ตามระบบ |
+| Field        | Type             | Required | Rules                     |
+| ------------ | ---------------- | -------- | ------------------------- |
+| `systemType` | `CEMS` \| `WPMS` | No       | กรอง active point ตามระบบ |
 
 Request body: ไม่มี
 
@@ -233,10 +235,10 @@ Request body: ไม่มี
 
 Path and body fields:
 
-| Field | Location | Type | Required | Rules |
-| --- | --- | --- | --- | --- |
-| `factoryId` | path | string | Yes | 1-64 characters และต้องอยู่ใน access scope ของผู้เรียก; รองรับ connected eligible factory ที่ยังไม่มี `factories` row สำหรับ scope ที่อนุญาต |
-| `isFavorite` | body | boolean | Yes | `true` เพื่อติดดาว, `false` เพื่อยกเลิก |
+| Field        | Location | Type    | Required | Rules                                                                                                                                        |
+| ------------ | -------- | ------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `factoryId`  | path     | string  | Yes      | 1-64 characters และต้องอยู่ใน access scope ของผู้เรียก; รองรับ connected eligible factory ที่ยังไม่มี `factories` row สำหรับ scope ที่อนุญาต |
+| `isFavorite` | body     | boolean | Yes      | `true` เพื่อติดดาว, `false` เพื่อยกเลิก                                                                                                      |
 
 ```json
 {
@@ -267,11 +269,11 @@ Error responses ใช้ shared error envelope. Validation ผิดตอบ `
 
 ## Backend Maintainer Map
 
-| Concern | Canonical source |
-| --- | --- |
-| Routes | [connection-requests.routes.ts](../../../../../backend/src/modules/connection-requests/connection-requests.routes.ts) |
-| Validators | [connection-requests.validator.ts](../../../../../backend/src/modules/connection-requests/connection-requests.validator.ts) |
-| Repository | [connection-requests.repository.ts](../../../../../backend/src/modules/connection-requests/connection-requests.repository.ts) |
-| Public types | [connection-requests.types.ts](../../../../../backend/src/modules/connection-requests/connection-requests.types.ts) |
-| Tests | [connection-requests.repository.test.ts](../../../../../backend/tests/unit/connection-requests.repository.test.ts), [connection-requests.service.test.ts](../../../../../backend/tests/unit/connection-requests.service.test.ts), [parameter-values.repository.test.ts](../../../../../backend/tests/unit/parameter-values.repository.test.ts) |
-| Evidence | [Officer-connected dashboard TDD](../../../evidence/home/officer-direct-connected-dashboard.tdd.md), [Current/live POMS factory name TDD](../../../evidence/home/operator-dashboard-current-factory-name.tdd.md) |
+| Concern      | Canonical source                                                                                                                                                                                                                                                                                                                               |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Routes       | [connection-requests.routes.ts](../../../../../backend/src/modules/connection-requests/connection-requests.routes.ts)                                                                                                                                                                                                                          |
+| Validators   | [connection-requests.validator.ts](../../../../../backend/src/modules/connection-requests/connection-requests.validator.ts)                                                                                                                                                                                                                    |
+| Repository   | [connection-requests.repository.ts](../../../../../backend/src/modules/connection-requests/connection-requests.repository.ts)                                                                                                                                                                                                                  |
+| Public types | [connection-requests.types.ts](../../../../../backend/src/modules/connection-requests/connection-requests.types.ts)                                                                                                                                                                                                                            |
+| Tests        | [connection-requests.repository.test.ts](../../../../../backend/tests/unit/connection-requests.repository.test.ts), [connection-requests.service.test.ts](../../../../../backend/tests/unit/connection-requests.service.test.ts), [parameter-values.repository.test.ts](../../../../../backend/tests/unit/parameter-values.repository.test.ts) |
+| Evidence     | [Officer-connected dashboard TDD](../../../evidence/home/officer-direct-connected-dashboard.tdd.md), [Current/live POMS factory name TDD](../../../evidence/home/operator-dashboard-current-factory-name.tdd.md)                                                                                                                               |

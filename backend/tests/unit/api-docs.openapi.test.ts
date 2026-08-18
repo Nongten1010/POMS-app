@@ -764,6 +764,34 @@ describe('POMS OpenAPI contract', () => {
     }
   });
 
+  it('documents the point-level monitoring status used by fully exempted active points', () => {
+    const document = asObject(pomsOpenApiDocument, 'OpenAPI document');
+    const schemas = asObject(
+      asObject(document.components, 'components').schemas,
+      'components.schemas',
+    );
+    const addPointProperties = asObject(
+      asObject(schemas.AddPointMeasurementPoint, 'AddPointMeasurementPoint').properties,
+      'AddPointMeasurementPoint.properties',
+    );
+    const monitoringStatus = asObject(
+      addPointProperties.monitoringPointStatus,
+      'monitoringPointStatus',
+    );
+
+    expect(monitoringStatus).toEqual(
+      expect.objectContaining({
+        type: 'string',
+        nullable: true,
+        enum: expect.arrayContaining(['ได้รับการยกเว้นทั้งหมด', 'เชื่อมต่อครบแล้ว']),
+      }),
+    );
+    expect(asObject(addPointProperties.parameters, 'parameters').minItems).toBe(0);
+    expect(String(asObject(schemas.AddMeasurementPointRequest, 'request').description)).toContain(
+      'parameters = []',
+    );
+  });
+
   it('documents officer submission actions and examples on both add-point endpoints', () => {
     const document = asObject(pomsOpenApiDocument, 'OpenAPI document');
     const components = asObject(document.components, 'components');
