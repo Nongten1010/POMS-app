@@ -3103,6 +3103,7 @@ const extraPaths: Record<string, OpenApiObject> = {
     post: securedOperation({
       tag: 'Internal Tools',
       summary: 'Send test email',
+      description: 'ส่งอีเมลทดสอบผ่าน SMTP โดย backend เพิ่ม diw.iemc@gmail.com เป็น CC อัตโนมัติ',
       operationId: 'sendEmailTest',
       requestBody: jsonRequestBody(schemaRef('EmailTestRequest'), emailTestExample),
     }),
@@ -3111,6 +3112,8 @@ const extraPaths: Record<string, OpenApiObject> = {
     get: securedOperation({
       tag: 'Notifications',
       summary: 'List officer notification email recipients',
+      description:
+        'คืนรายชื่อกลางตามพื้นที่ โดยกรุงเทพมหานครใช้ SARABAN@DIW.MAIL.GO.TH และนิคมอุตสาหกรรมใช้ warroom.emcc@ieat.go.th',
       operationId: 'listOfficerNotificationRecipients',
     }),
     post: securedOperation({

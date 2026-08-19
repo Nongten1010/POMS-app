@@ -1,6 +1,8 @@
 import nodemailer, { type SentMessageInfo, type Transporter } from 'nodemailer';
 import { buildSmtpTransportOptions, getDefaultMailFrom, isSmtpConfigured } from '@config/smtp';
 
+export const MANDATORY_EMAIL_CC = 'diw.iemc@gmail.com';
+
 export interface SendEmailInput {
   to: string | string[];
   cc?: string | string[];
@@ -37,7 +39,7 @@ class EmailService {
     return transporter.sendMail({
       from,
       to: input.to,
-      cc: input.cc,
+      cc: includeMandatoryEmailCc(input.cc),
       bcc: input.bcc,
       subject: input.subject,
       text: input.text,
@@ -60,6 +62,15 @@ class EmailService {
     this.transporter = nodemailer.createTransport(options);
     return this.transporter;
   }
+}
+
+export function includeMandatoryEmailCc(cc?: string | string[]): string[] {
+  const recipients = cc === undefined ? [] : Array.isArray(cc) ? cc : [cc];
+  const hasMandatoryCc = recipients.some(
+    (recipient) => recipient.trim().toLowerCase() === MANDATORY_EMAIL_CC,
+  );
+
+  return hasMandatoryCc ? recipients : [...recipients, MANDATORY_EMAIL_CC];
 }
 
 export const emailService = new EmailService();

@@ -29,6 +29,9 @@ Validation:
 - `message`: optional, string, trim แล้วต้องยาว 1-1000 ถ้าส่งมา
 - schema เป็น `.strict()` จึงไม่รับ field แปลกเพิ่ม
 
+ทุกอีเมลที่ backend ส่งผ่าน email service กลาง รวมถึงอีเมลทดสอบ จะเพิ่ม
+`diw.iemc@gmail.com` เป็น `CC` อัตโนมัติ โดยยังคงผู้รับ `CC` รายอื่นที่ caller ระบุไว้
+
 ## Maintainer Links
 
 - Routes: `backend/src/modules/email-test/email-test.routes.ts`

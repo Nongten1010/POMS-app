@@ -39,6 +39,14 @@ curl --request GET \
 - ถ้า `recipientType=INDUSTRIAL_ESTATE` ห้ามส่ง `provinceName`
 - ระบบ normalize email เป็น lowercase และตัดค่าซ้ำ
 
+## รายชื่อกลางที่ระบบกำหนด
+
+- โรงงานใน `กรุงเทพมหานคร` ใช้ `SARABAN@DIW.MAIL.GO.TH`
+- โรงงานในนิคมอุตสาหกรรมใช้ `warroom.emcc@ieat.go.th`
+- โรงงานนอกนิคมอุตสาหกรรมใช้รายชื่อสำนักงานอุตสาหกรรมจังหวัดตาม `provinceName`
+- Migration `0097_correct_officer_notification_email_recipients` แทนที่รายชื่อการนิคมฯ เดิม
+  เพิ่มรายชื่อกรุงเทพมหานคร และนำ `second@example.com` ซึ่งเป็นข้อมูลทดสอบออกจากรายชื่อ active
+
 ตัวอย่าง response เมื่อสร้างสำเร็จ:
 
 ```json
