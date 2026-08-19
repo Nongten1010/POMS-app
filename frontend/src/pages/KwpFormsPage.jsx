@@ -499,9 +499,9 @@ function RequestActions({ row, isOperator, onOpenDocument }) {
           variant="outlined"
           color="error"
           disabled={!canOperatorModify}
-          onClick={() => onOpenDocument?.(row, 'cancel')}
+          onClick={() => {}}
         >
-          ยกเลิก
+          ยกเลิกคำขอ
         </Button>
       </Stack>
     )
@@ -4359,7 +4359,7 @@ function KwpFormBottomSheet({ form, open, accessToken, onClose, onExited, onSubm
               ยกเลิก
             </Button>
             <Button variant="contained" onClick={openPreview}>
-              {isEditMode ? 'บันทึกการแก้ไข' : 'บันทึกแบบฟอร์ม'}
+              {isEditMode ? 'บันทึกการแก้ไข' : 'ส่งแบบฟอร์ม'}
             </Button>
           </Stack>
         </Stack>
