@@ -513,21 +513,9 @@ export interface OperatorFactoryDashboardRowDTO {
   measurementPoints: OperatorFactoryMeasurementPointDTO[];
 }
 
-export interface OperatorFactoryLatestConnectionRequestDTO {
-  id: number;
-  requestNo: string;
-  requestType: typeof CONNECTION_REQUEST_TYPE.NEW_CONNECTION;
-  systemType: ConnectionSystemType;
-  statusCode: ConnectionRequestStatus;
-  statusLabel: string;
-  isInProgress: boolean;
-  updatedAt: string;
-}
-
 export interface OperatorFactoryOverviewRowDTO extends OperatorFactoryDashboardRowDTO {
   pomsMembershipStatus: PomsMembershipStatus;
   pomsMembershipStatusLabel: 'อยู่ในระบบ POMS' | 'ยังไม่อยู่ในระบบ POMS';
-  latestConnectionRequest: OperatorFactoryLatestConnectionRequestDTO | null;
 }
 
 export interface OperatorFactoryOverviewResultDTO {

@@ -8,10 +8,6 @@ import {
 } from '../alert-events/alert-events.types';
 import { BOD_COD_DEVIATION_REPORT_STATUSES } from '../bod-cod-deviations/bod-cod-deviation-reports.types';
 import { CONNECTION_REQUEST_EIA_ASSESSMENTS } from '../connection-requests/connection-request-eia';
-import {
-  CONNECTION_REQUEST_STATUS,
-  CONNECTION_REQUEST_STATUS_LABELS,
-} from '../connection-requests/connection-requests.types';
 import { KWP_FORM_STATUSES, KWP_FORM_TYPES } from '../kwp-form-reports/kwp-form-reports.types';
 import { connectionRequestsOpenApiDocument } from './connection-requests.openapi';
 import { MENU_TAGS } from './openapi.shared';
@@ -312,7 +308,6 @@ const signatureParameter = {
 };
 
 const systemTypeValues = [...ALERT_EVENT_SYSTEM_TYPES];
-const connectionRequestStatusValues = Object.values(CONNECTION_REQUEST_STATUS);
 const pomsMembershipStatusValues = ['IN_POMS', 'NOT_IN_POMS'];
 const isoDatePattern = '^\\d{4}-\\d{2}-\\d{2}$';
 const yearMonthPattern = '^\\d{4}-(?:0[1-9]|1[0-2])$';
@@ -478,16 +473,6 @@ const operatorFactoryOverviewExample = {
       measurementPoints: [],
       pomsMembershipStatus: 'NOT_IN_POMS',
       pomsMembershipStatusLabel: 'ยังไม่อยู่ในระบบ POMS',
-      latestConnectionRequest: {
-        id: 145,
-        requestNo: 'CEMS-0145/2569',
-        requestType: 'NEW_CONNECTION',
-        systemType: 'CEMS',
-        statusCode: 'PENDING_DESIGN_REVIEW',
-        statusLabel: 'รอพิจารณาแบบ',
-        isInProgress: true,
-        updatedAt: '2026-08-18T10:15:00.000Z',
-      },
     },
   ],
   meta: {
@@ -1016,37 +1001,6 @@ const componentSchemas: Record<string, OpenApiObject> = {
       count: { type: 'integer', minimum: 0 },
     },
   },
-  OperatorFactoryLatestConnectionRequest: {
-    type: 'object',
-    additionalProperties: false,
-    required: [
-      'id',
-      'requestNo',
-      'requestType',
-      'systemType',
-      'statusCode',
-      'statusLabel',
-      'isInProgress',
-      'updatedAt',
-    ],
-    properties: {
-      id: { type: 'integer', minimum: 1 },
-      requestNo: { type: 'string' },
-      requestType: { type: 'string', enum: ['NEW_CONNECTION'] },
-      systemType: { type: 'string', enum: systemTypeValues },
-      statusCode: {
-        type: 'string',
-        enum: connectionRequestStatusValues,
-        'x-enum-labels': CONNECTION_REQUEST_STATUS_LABELS,
-      },
-      statusLabel: { type: 'string' },
-      isInProgress: {
-        type: 'boolean',
-        description: 'true สำหรับสถานะที่ยังไม่จบ; CONNECTED และ CANCELED เป็น false',
-      },
-      updatedAt: { type: 'string', format: 'date-time' },
-    },
-  },
   OperatorFactoryOverviewRow: {
     type: 'object',
     additionalProperties: false,
@@ -1086,7 +1040,6 @@ const componentSchemas: Record<string, OpenApiObject> = {
       'measurementPoints',
       'pomsMembershipStatus',
       'pomsMembershipStatusLabel',
-      'latestConnectionRequest',
     ],
     properties: {
       id: { type: 'integer', minimum: 1, nullable: true },
@@ -1151,10 +1104,6 @@ const componentSchemas: Record<string, OpenApiObject> = {
       pomsMembershipStatusLabel: {
         type: 'string',
         enum: ['อยู่ในระบบ POMS', 'ยังไม่อยู่ในระบบ POMS'],
-      },
-      latestConnectionRequest: {
-        allOf: [schemaRef('OperatorFactoryLatestConnectionRequest')],
-        nullable: true,
       },
     },
   },
@@ -2448,7 +2397,7 @@ const extraPaths: Record<string, OpenApiObject> = {
           'กรองสถานะสมาชิก POMS: IN_POMS = มี active connected point, NOT_IN_POMS = ไม่มี active connected point',
         ),
       ],
-      successDescription: 'คืนโรงงานของผู้ประกอบการพร้อมสถานะ POMS และคำขอเชื่อมต่อล่าสุด',
+      successDescription: 'คืนโรงงานของผู้ประกอบการพร้อมสถานะ POMS และสรุปจำนวนตามสถานะ',
       successSchema: schemaRef('OperatorFactoryOverviewResponse'),
     }),
   },

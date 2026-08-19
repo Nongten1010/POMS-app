@@ -4,7 +4,7 @@
 
 ## Frontend Quick Start
 
-หน้าแรกของผู้ประกอบการใช้ `GET /api/v1/operator-factories` เพื่อแสดงโรงงานของตนเองที่ sync มากับการ login ทุกแห่ง แล้วแยก `IN_POMS` กับ `NOT_IN_POMS` จาก active row ใน `cems_wpms_connected_measurement_points`. การเป็นโรงงานเข้าข่ายและสถานะคำขอเชื่อมต่อเป็นข้อมูลคนละส่วน จึงไม่ใช้แทนสถานะ POMS.
+หน้าแรกของผู้ประกอบการใช้ `GET /api/v1/operator-factories` เพื่อแสดงโรงงานของตนเองที่ sync มากับการ login ทุกแห่ง แล้วแยก `IN_POMS` กับ `NOT_IN_POMS` จาก active row ใน `cems_wpms_connected_measurement_points`. การเป็นโรงงานเข้าข่ายและสถานะคำขอเชื่อมต่อเป็นข้อมูลคนละส่วน จึงไม่ใช้แทนสถานะ POMS และ API ไม่ส่งรายละเอียดคำขอเชื่อมต่อในแต่ละ factory row.
 
 `GET /api/v1/operator-factory-dashboard` เดิมยังคง contract แบบ connected-only สำหรับหน้าที่ต้องการโรงงาน current/live ใน POMS เท่านั้น ไม่เปลี่ยนความหมายและไม่ใช้เป็น base list ของหน้าแรกผู้ประกอบการ.
 
@@ -14,7 +14,7 @@
 
 1. อ่านโรงงานที่ผู้ประกอบการเป็นเจ้าของจาก factory master และ access mapping ที่ sync ตอน login โดยบังคับ effective scope เป็น `OWN_FACTORY` แม้ token จะมี scope กว้างกว่า.
 2. จับคู่ active `cems_wpms_connected_measurement_points`: พบอย่างน้อยหนึ่งจุดเป็น `IN_POMS`; ไม่พบเป็น `NOT_IN_POMS`.
-3. แนบ `isEligible` จาก `eligible_factories` และ `latestConnectionRequest` จากคำขอ `NEW_CONNECTION` ล่าสุด โดยไม่ใช้สองค่านี้ตัดสิน POMS membership.
+3. แนบ `isEligible` จาก `eligible_factories`; backend ใช้คำขอ `NEW_CONNECTION` ล่าสุดเฉพาะคำนวณ `meta.summary.connectionInProgress` ภายในและไม่ส่งรายละเอียดคำขอใน factory row.
 4. แนบ favorite, จุดตรวจวัด และค่ารายชั่วโมงล่าสุดสำหรับโรงงานที่อยู่ใน POMS; โรงงานที่ยังไม่เชื่อมต่อยังคงแสดงด้วย `measurementPoints: []`.
 5. ใช้ `meta.summary` แสดงจำนวนโรงงานใน POMS, อยู่ระหว่างเชื่อมต่อ และยังไม่เชื่อมต่อบนหน้าแรก.
 
@@ -79,15 +79,6 @@ Response fields:
 | `data[].isFavorite`                           | boolean                                | favorite ของผู้ใช้ปัจจุบัน                                                                                                |
 | `data[].pomsMembershipStatus`                 | `IN_POMS` \| `NOT_IN_POMS`             | มีหรือไม่มี active connected point                                                                                        |
 | `data[].pomsMembershipStatusLabel`            | string                                 | `อยู่ในระบบ POMS` หรือ `ยังไม่อยู่ในระบบ POMS`                                                                            |
-| `data[].latestConnectionRequest`              | object \| null                         | คำขอประเภท `NEW_CONNECTION` ล่าสุด ไม่รวมคำขอเพิ่มจุดหรือเพิ่มพารามิเตอร์                                                |
-| `data[].latestConnectionRequest.id`           | integer                                | ID คำขอ                                                                                                                  |
-| `data[].latestConnectionRequest.requestNo`    | string                                 | เลขที่คำขอ                                                                                                               |
-| `data[].latestConnectionRequest.requestType`  | `NEW_CONNECTION`                       | ประเภทคำขอคงที่ของ field นี้                                                                                              |
-| `data[].latestConnectionRequest.systemType`   | `CEMS` \| `WPMS`                       | ระบบของคำขอ                                                                                                              |
-| `data[].latestConnectionRequest.statusCode`   | connection request status              | status code ปัจจุบัน                                                                                                      |
-| `data[].latestConnectionRequest.statusLabel`  | string                                 | label ภาษาไทย                                                                                                            |
-| `data[].latestConnectionRequest.isInProgress` | boolean                                | `false` เมื่อ `CONNECTED` หรือ `CANCELED`; สถานะอื่นเป็น `true`                                                           |
-| `data[].latestConnectionRequest.updatedAt`    | ISO 8601 date-time                     | เวลาที่คำขอล่าสุดเปลี่ยนแปลง                                                                                              |
 | `data[].hasLatestHourlyMeasurement`           | boolean                                | flag ข้อมูลรอบรายชั่วโมงล่าสุด ใช้กติกาเดียวกับ connected-only dashboard                                                |
 | `data[].monitoringPointCountBySystem`         | array                                  | จำนวน active point แยก `CEMS` และ `WPMS`                                                                                  |
 | `data[].measurementPoints`                    | array                                  | active POMS points; เป็น `[]` เมื่อ `NOT_IN_POMS`                                                                         |
@@ -136,16 +127,6 @@ Minimal response (`200 OK`) สำหรับโรงงานที่ sync �
       "isFavorite": false,
       "pomsMembershipStatus": "NOT_IN_POMS",
       "pomsMembershipStatusLabel": "ยังไม่อยู่ในระบบ POMS",
-      "latestConnectionRequest": {
-        "id": 145,
-        "requestNo": "CEMS-0145/2569",
-        "requestType": "NEW_CONNECTION",
-        "systemType": "CEMS",
-        "statusCode": "PENDING_DESIGN_REVIEW",
-        "statusLabel": "รอพิจารณาแบบ",
-        "isInProgress": true,
-        "updatedAt": "2026-08-18T10:15:00.000Z"
-      },
       "hasLatestHourlyMeasurement": false,
       "monitoringPointCountBySystem": [
         { "systemType": "CEMS", "count": 0 },
@@ -171,10 +152,10 @@ Business and filtering rules:
 
 - `IN_POMS` ใช้ active connected point เท่านั้น; คำขอสถานะ `CONNECTED` ที่ยังไม่มี active point ยังคงเป็น `NOT_IN_POMS`.
 - `isEligible` ไม่ทำให้โรงงานเป็น `IN_POMS` และโรงงานที่ `isEligible: false` ต้องยังแสดงข้อมูล factory master ของผู้ประกอบการ.
-- `latestConnectionRequest` เลือกคำขอ `NEW_CONNECTION` ล่าสุดตามเวลา; คำขอ `ADD_MEASUREMENT_POINT` และ `ADD_PARAMETER` ไม่กระทบ field นี้.
+- API ไม่คืน `latestConnectionRequest`; backend ใช้คำขอ `NEW_CONNECTION` ล่าสุดตามเวลาเฉพาะแบ่งยอด `connectionInProgress` กับ `notConnected` โดยคำขอ `ADD_MEASUREMENT_POINT` และ `ADD_PARAMETER` ไม่กระทบยอดนี้.
 - `systemType` ตรวจจาก active point เท่านั้นและไม่เดาจากคำขอล่าสุด ดังนั้นใช้ `systemType` พร้อม `pomsMembershipStatus=NOT_IN_POMS` จะได้รายการว่าง.
 - กลุ่ม summary แบ่งแบบไม่ซ้ำกันเป็น `inPoms`, `connectionInProgress` และ `notConnected`; ทุกค่าคำนวณหลังใช้ filters.
-- สีที่ frontend แนะนำ: `IN_POMS` สีเขียว, `NOT_IN_POMS` + `isInProgress: true` สีเหลือง/ส้ม, และ `NOT_IN_POMS` อื่นสีเทา.
+- สีที่ frontend แนะนำสำหรับแต่ละโรงงาน: `IN_POMS` สีเขียว และ `NOT_IN_POMS` สีเทา; `meta.summary.connectionInProgress` เป็นยอดรวมและไม่ใช้ระบุสีของ row รายโรงงาน.
 
 Validation ผิดตอบ `400`; ไม่มี/invalid token ตอบ `401`; ไม่ใช่ operator, ไม่มี `dashboard:view` หรือไม่ผ่าน authorization ตอบ `403`. Error body ใช้ [shared error envelope](../../shared/common-api/README.md).
 

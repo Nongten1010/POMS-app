@@ -978,7 +978,6 @@ describe('connectionRequestsService', () => {
           factoryId: 'factory-connected',
           pomsMembershipStatus: 'IN_POMS',
           pomsMembershipStatusLabel: 'อยู่ในระบบ POMS',
-          latestConnectionRequest: null,
         }),
         expect.objectContaining({
           factoryId: 'factory-pending',
@@ -986,16 +985,6 @@ describe('connectionRequestsService', () => {
           isEligible: false,
           pomsMembershipStatus: 'NOT_IN_POMS',
           pomsMembershipStatusLabel: 'ยังไม่อยู่ในระบบ POMS',
-          latestConnectionRequest: {
-            id: 145,
-            requestNo: 'CEMS-0145/2569',
-            requestType: CONNECTION_REQUEST_TYPE.NEW_CONNECTION,
-            systemType: 'CEMS',
-            statusCode: CONNECTION_REQUEST_STATUS.PENDING_DESIGN_REVIEW,
-            statusLabel: 'รอพิจารณาแบบ',
-            isInProgress: true,
-            updatedAt: '2026-08-18T03:15:00.000Z',
-          },
           measurementPoints: [],
         }),
         expect.objectContaining({
@@ -1008,6 +997,9 @@ describe('connectionRequestsService', () => {
         }),
       ]),
     );
+    result.data.forEach((factory) => {
+      expect(factory).not.toHaveProperty('latestConnectionRequest');
+    });
     expect(result.meta).toEqual({
       total: 3,
       summary: {
@@ -1037,12 +1029,9 @@ describe('connectionRequestsService', () => {
       expect.objectContaining({
         factoryId: 'factory-disconnected',
         pomsMembershipStatus: 'NOT_IN_POMS',
-        latestConnectionRequest: expect.objectContaining({
-          statusCode: CONNECTION_REQUEST_STATUS.CONNECTED,
-          isInProgress: false,
-        }),
       }),
     );
+    expect(result.data[0]).not.toHaveProperty('latestConnectionRequest');
     expect(result.meta.summary).toEqual({
       all: 1,
       inPoms: 0,

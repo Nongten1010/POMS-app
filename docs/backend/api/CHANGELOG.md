@@ -2,6 +2,14 @@
 
 ไฟล์นี้บันทึกเฉพาะการเปลี่ยน API ที่ทำให้ client ต้องแก้ตาม การเปลี่ยนทั่วไปและประวัติรายละเอียดดูจาก Git history
 
+## 2026-08-19 — ลบรายละเอียดคำขอเชื่อมต่อล่าสุดออกจากรายการโรงงานหน้าแรก
+
+- **Affected menu:** [หน้าหลัก](./menus/home/README.md#get-apiv1operator-factories)
+- **Impact:** `GET /api/v1/operator-factories` ไม่คืน `data[].latestConnectionRequest` อีกต่อไป; `pomsMembershipStatus`, `pomsMembershipStatusLabel` และ `meta.summary.connectionInProgress` ยังมีรูปแบบและความหมายเดิม.
+- **Migration:** frontend ต้องหยุดอ่านรายละเอียดคำขอจาก factory row, ใช้ `pomsMembershipStatus` เพื่อแสดงว่าโรงงานอยู่ใน POMS หรือไม่ และใช้ `meta.summary.connectionInProgress` เฉพาะยอดรวมกรณีต้องแสดงตัวนับ.
+- **Old contract:** ทุก factory row มี `latestConnectionRequest` เป็น object ของคำขอ `NEW_CONNECTION` ล่าสุดหรือ `null`.
+- **New contract:** factory row ไม่มี `latestConnectionRequest`; backend ยังคำนวณคำขอล่าสุดภายในเพื่อแบ่งยอด `connectionInProgress` กับ `notConnected` เท่านั้น.
+
 ## 2026-08-16 — เปลี่ยน prefix เลขที่คำขอ WPMS จาก WEMS เป็น WPMS
 
 - **Affected menu:** [ขอเชื่อมต่อ](./menus/connection-requests/README.md#request-number-contract)
