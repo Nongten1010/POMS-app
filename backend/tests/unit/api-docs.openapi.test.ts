@@ -716,29 +716,8 @@ describe('POMS OpenAPI contract', () => {
       'IN_POMS',
       'NOT_IN_POMS',
     ]);
-    expect(
-      asObject(rowProperties.latestConnectionRequest, 'latestConnectionRequest'),
-    ).toMatchObject({
-      nullable: true,
-      allOf: [{ $ref: '#/components/schemas/OperatorFactoryLatestConnectionRequest' }],
-    });
-
-    const latestRequest = asObject(
-      schemas.OperatorFactoryLatestConnectionRequest,
-      'OperatorFactoryLatestConnectionRequest',
-    );
-    expect(latestRequest.required).toEqual(
-      expect.arrayContaining([
-        'id',
-        'requestNo',
-        'requestType',
-        'systemType',
-        'statusCode',
-        'statusLabel',
-        'isInProgress',
-        'updatedAt',
-      ]),
-    );
+    expect(rowProperties).not.toHaveProperty('latestConnectionRequest');
+    expect(schemas).not.toHaveProperty('OperatorFactoryLatestConnectionRequest');
 
     const response = asObject(schemas.OperatorFactoryOverviewResponse, 'overview response');
     const responseProperties = asObject(response.properties, 'overview response properties');

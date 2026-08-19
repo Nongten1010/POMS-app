@@ -69,7 +69,6 @@ import {
   type MeasurementPointDTO,
   type MeasurementPointInput,
   type OperatorFactoryDashboardRowDTO,
-  type OperatorFactoryLatestConnectionRequestDTO,
   type OperatorFactoryMeasurementPointDTO,
   type OperatorFactoryOverviewResultDTO,
   type OperatorFactoryOverviewRowDTO,
@@ -443,8 +442,6 @@ export const connectionRequestsService = {
           currentMeasurementPoints.length > 0
             ? POMS_MEMBERSHIP_STATUS.IN_POMS
             : POMS_MEMBERSHIP_STATUS.NOT_IN_POMS;
-        const latestRequest = latestNewConnectionRequestByFactory.get(factory.factoryId);
-
         return {
           ...toOperatorFactoryOverviewBaseRow(
             factory,
@@ -458,9 +455,6 @@ export const connectionRequestsService = {
             pomsMembershipStatus === POMS_MEMBERSHIP_STATUS.IN_POMS
               ? 'อยู่ในระบบ POMS'
               : 'ยังไม่อยู่ในระบบ POMS',
-          latestConnectionRequest: latestRequest
-            ? toOperatorFactoryLatestConnectionRequest(latestRequest)
-            : null,
         };
       })
       .filter((factory) => matchesOperatorFactoryOverviewQuery(factory, query));
@@ -471,7 +465,7 @@ export const connectionRequestsService = {
       data,
       meta: {
         total: data.length,
-        summary: summarizeOperatorFactoryOverview(data),
+        summary: summarizeOperatorFactoryOverview(data, latestNewConnectionRequestByFactory),
       },
     };
   },
@@ -2540,34 +2534,13 @@ function isRequestNewer(candidate: ConnectionRequestDTO, current: ConnectionRequ
   return candidate.id > current.id;
 }
 
-function toOperatorFactoryLatestConnectionRequest(
-  request: ConnectionRequestDTO,
-): OperatorFactoryLatestConnectionRequestDTO {
-  return {
-    id: request.id,
-    requestNo: request.requestNo,
-    requestType: CONNECTION_REQUEST_TYPE.NEW_CONNECTION,
-    systemType: request.systemType,
-    statusCode: request.status,
-    statusLabel: CONNECTION_REQUEST_STATUS_LABELS[request.status],
-    isInProgress:
-      request.status !== CONNECTION_REQUEST_STATUS.CONNECTED &&
-      request.status !== CONNECTION_REQUEST_STATUS.CANCELED,
-    updatedAt: request.updatedAt,
-  };
-}
-
 function toOperatorFactoryOverviewBaseRow(
   factory: FactorySummaryDTO,
   currentMeasurementPoints: CurrentFactoryMeasurementPointDTO[],
   factoryMainTypeLabels: Map<string, string>,
 ): Omit<
   OperatorFactoryOverviewRowDTO,
-  | 'isFavorite'
-  | 'hasLatestHourlyMeasurement'
-  | 'pomsMembershipStatus'
-  | 'pomsMembershipStatusLabel'
-  | 'latestConnectionRequest'
+  'isFavorite' | 'hasLatestHourlyMeasurement' | 'pomsMembershipStatus' | 'pomsMembershipStatusLabel'
 > {
   const isInIndustrialEstate = Boolean(
     factory.industrialEstateCode || factory.industrialEstateName,
@@ -3120,13 +3093,16 @@ function matchesOperatorFactoryOverviewQuery(
 
 function summarizeOperatorFactoryOverview(
   factories: OperatorFactoryOverviewRowDTO[],
+  latestNewConnectionRequestByFactory: ReadonlyMap<string, ConnectionRequestDTO>,
 ): OperatorFactoryOverviewResultDTO['meta']['summary'] {
   return factories.reduce<OperatorFactoryOverviewResultDTO['meta']['summary']>(
     (summary, factory) => {
       summary.all += 1;
       if (factory.pomsMembershipStatus === POMS_MEMBERSHIP_STATUS.IN_POMS) {
         summary.inPoms += 1;
-      } else if (factory.latestConnectionRequest?.isInProgress === true) {
+      } else if (
+        isConnectionRequestInProgress(latestNewConnectionRequestByFactory.get(factory.factoryId))
+      ) {
         summary.connectionInProgress += 1;
       } else {
         summary.notConnected += 1;
@@ -3134,6 +3110,14 @@ function summarizeOperatorFactoryOverview(
       return summary;
     },
     { all: 0, inPoms: 0, connectionInProgress: 0, notConnected: 0 },
+  );
+}
+
+function isConnectionRequestInProgress(request: ConnectionRequestDTO | undefined): boolean {
+  return (
+    request !== undefined &&
+    request.status !== CONNECTION_REQUEST_STATUS.CONNECTED &&
+    request.status !== CONNECTION_REQUEST_STATUS.CANCELED
   );
 }
 
