@@ -1,6 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Badge,
   Box,
   Button,
   Checkbox,
@@ -59,7 +58,7 @@ import { deriveCriteriaRows, isCriteriaInputValid } from '../utils/instrumentCri
 
 const subMenus = [
   { value: 'factories', label: 'รายชื่อโรงงาน' },
-  { value: 'requests', label: 'รายการคำขอ', badgeContent: 1 },
+  { value: 'requests', label: 'รายการคำขอ' },
   { value: 'statistics', label: 'สถิติข้อมูล' },
 ]
 
@@ -8453,29 +8452,7 @@ function ConnectionRequestPage({
             }}
           >
             {availableSubMenus.map((menu) => (
-              <Tab
-                key={menu.value}
-                value={menu.value}
-                label={
-                  menu.badgeContent ? (
-                    <Badge
-                      badgeContent={menu.badgeContent}
-                      color="error"
-                      sx={{
-                        pr: 2,
-                        '& .MuiBadge-badge': {
-                          right: 2,
-                          top: 2,
-                        },
-                      }}
-                    >
-                      <Box component="span">{menu.label}</Box>
-                    </Badge>
-                  ) : (
-                    menu.label
-                  )
-                }
-              />
+              <Tab key={menu.value} value={menu.value} label={menu.label} />
             ))}
           </Tabs>
         </Stack>

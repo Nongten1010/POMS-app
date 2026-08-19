@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
-  Badge,
   Box,
   Button,
   Chip,
@@ -4898,29 +4897,7 @@ function KwpFormsPage({ userType = '', accessToken = '', currentUser = null }) {
               }}
             >
               {availableSubMenus.map((menu) => (
-                <Tab
-                  key={menu.value}
-                  value={menu.value}
-                  label={
-                    menu.badgeContent ? (
-                      <Badge
-                        badgeContent={menu.badgeContent}
-                        color="error"
-                        sx={{
-                          pr: 2,
-                          '& .MuiBadge-badge': {
-                            right: 2,
-                            top: 2,
-                          },
-                        }}
-                      >
-                        <Box component="span">{menu.label}</Box>
-                      </Badge>
-                    ) : (
-                      menu.label
-                    )
-                  }
-                />
+                <Tab key={menu.value} value={menu.value} label={menu.label} />
               ))}
             </Tabs>
           </Stack>
