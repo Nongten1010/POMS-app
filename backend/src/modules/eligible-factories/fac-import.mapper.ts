@@ -124,7 +124,9 @@ const PROVINCE_BY_DIW_CODE: Record<string, string> = {
   '96': 'นราธิวาส',
 };
 
+const NOT_STARTED_FACTORY_FLAG = '0';
 const ACTIVE_FACTORY_FLAG = '1';
+const DEREGISTERED_FACTORY_FLAG = '2';
 const TEMPORARY_STOPPED_FACTORY_FLAG = '3';
 
 export interface AdministrativeAreaNames {
@@ -209,7 +211,9 @@ export function diwProvinceCodeFromName(provinceName: string): string | null {
 }
 
 export function diwFactoryFlagFromOperationStatus(operationStatus: string): string | null {
+  if (operationStatus === 'ยังไม่แจ้งประกอบ') return NOT_STARTED_FACTORY_FLAG;
   if (operationStatus === 'แจ้งประกอบแล้ว') return ACTIVE_FACTORY_FLAG;
+  if (operationStatus === 'จำหน่ายทะเบียน') return DEREGISTERED_FACTORY_FLAG;
   if (operationStatus === 'หยุดชั่วคราว') return TEMPORARY_STOPPED_FACTORY_FLAG;
   return null;
 }
@@ -228,7 +232,9 @@ export function diwAdministrativeAreaKey(
 
 function operationStatusFromFlag(value: string | number | null): string {
   const flag = normalizeNumberCode(value);
+  if (flag === NOT_STARTED_FACTORY_FLAG) return 'ยังไม่แจ้งประกอบ';
   if (flag === ACTIVE_FACTORY_FLAG) return 'แจ้งประกอบแล้ว';
+  if (flag === DEREGISTERED_FACTORY_FLAG) return 'จำหน่ายทะเบียน';
   if (flag === TEMPORARY_STOPPED_FACTORY_FLAG) return 'หยุดชั่วคราว';
   if (!flag) return 'ไม่ระบุสถานะ';
   return `สถานะ ${flag}`;

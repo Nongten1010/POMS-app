@@ -398,7 +398,9 @@ describe('fac_import mapper', () => {
 
   it('maps supported province and operation status filters back to DIW codes', () => {
     expect(diwProvinceCodeFromName('ระยอง')).toBe('21');
+    expect(diwFactoryFlagFromOperationStatus('ยังไม่แจ้งประกอบ')).toBe('0');
     expect(diwFactoryFlagFromOperationStatus('แจ้งประกอบแล้ว')).toBe('1');
+    expect(diwFactoryFlagFromOperationStatus('จำหน่ายทะเบียน')).toBe('2');
     expect(diwFactoryFlagFromOperationStatus('หยุดชั่วคราว')).toBe('3');
     expect(diwFactoryFlagFromOperationStatus('ยกเลิก')).toBeNull();
   });
@@ -412,12 +414,21 @@ describe('fac_import mapper', () => {
     expect(result.operationStatus).toBe('หยุดชั่วคราว');
   });
 
-  it('keeps Fac60k FFLAG 0 identifiable in the operation status', () => {
+  it('maps not-started Fac60k status from FFLAG 0', () => {
     const result = toEligibleFactoryCandidate({
       ...row,
       FFLAG: 0,
     });
 
-    expect(result.operationStatus).toBe('สถานะ 0');
+    expect(result.operationStatus).toBe('ยังไม่แจ้งประกอบ');
+  });
+
+  it('maps deregistered Fac60k status from FFLAG 2', () => {
+    const result = toEligibleFactoryCandidate({
+      ...row,
+      FFLAG: 2,
+    });
+
+    expect(result.operationStatus).toBe('จำหน่ายทะเบียน');
   });
 });

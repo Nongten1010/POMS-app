@@ -2320,7 +2320,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'List eligible factory candidates',
       operationId: 'listEligibleFactoryCandidates',
       description:
-        'คืน candidate จาก Fac60k เฉพาะ FFLAG 0, 1 และ 3 โดยไม่รวม FFLAG 2; สถานะ 1 แสดงเป็น แจ้งประกอบแล้ว, สถานะ 3 แสดงเป็น หยุดชั่วคราว และสถานะ 0 แสดงเป็น สถานะ 0',
+        'คืน candidate จาก Fac60k เฉพาะ FFLAG 0, 1 และ 3 โดยไม่รวม FFLAG 2; mapping สถานะโรงงานคือ 0 = ยังไม่แจ้งประกอบ, 1 = แจ้งประกอบแล้ว, 2 = จำหน่ายทะเบียน และ 3 = หยุดชั่วคราว',
       parameters: [
         queryInteger('page', 'เลขหน้า; ต้องส่งคู่กับ perPage'),
         queryInteger('perPage', 'จำนวนรายการต่อหน้า; ต้องส่งคู่กับ page', false, 1, 200),
