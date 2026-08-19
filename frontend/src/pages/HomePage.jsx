@@ -1504,7 +1504,7 @@ function FactoryCard({
             {isNotInPoms ? (
               <Chip
                 size="small"
-                label="ไม่มีจุดตรวจวัด"
+                label="ยังไม่เชื่อมต่อ"
                 sx={{
                   height: 22,
                   bgcolor: '#ffffff',
