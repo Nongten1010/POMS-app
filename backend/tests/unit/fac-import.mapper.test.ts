@@ -411,4 +411,13 @@ describe('fac_import mapper', () => {
 
     expect(result.operationStatus).toBe('หยุดชั่วคราว');
   });
+
+  it('keeps Fac60k FFLAG 0 identifiable in the operation status', () => {
+    const result = toEligibleFactoryCandidate({
+      ...row,
+      FFLAG: 0,
+    });
+
+    expect(result.operationStatus).toBe('สถานะ 0');
+  });
 });

@@ -19,6 +19,7 @@ import type {
 
 const EXTERNAL_QUERY_TIMEOUT_MS = 300000;
 const BULK_LOOKUP_THRESHOLD = 5000;
+const CANDIDATE_FACTORY_FLAGS = ['0', '1', '3'];
 
 export const eligibleFactoryCandidatesRepository = {
   async list(
@@ -158,7 +159,7 @@ function applyCandidateFilters(
   selectedRegistrationNumbers: Set<string>,
 ): void {
   if (columns.includes('FFLAG')) {
-    query.whereIn('FFLAG', ['1', '3']);
+    query.whereIn('FFLAG', CANDIDATE_FACTORY_FLAGS);
   }
   if (columns.includes('DISPFACREG') && selectedRegistrationNumbers.size > 0) {
     query.whereNotIn('DISPFACREG', [...selectedRegistrationNumbers]);
@@ -281,7 +282,9 @@ async function loadActiveFactoryClassCodes(): Promise<FactoryClassRow[]> {
   return factorySourceDb<FactoryClassRow>(`${env.FACTORY_DB_SCHEMA}.FACCLASS as fc`)
     .whereIn(
       'fc.FID',
-      factorySourceDb(factorySourceTableName()).whereIn('FFLAG', ['1', '3']).select('FID'),
+      factorySourceDb(factorySourceTableName())
+        .whereIn('FFLAG', CANDIDATE_FACTORY_FLAGS)
+        .select('FID'),
     )
     .timeout(EXTERNAL_QUERY_TIMEOUT_MS)
     .select('fc.FID', 'fc.CLASS');
@@ -292,7 +295,9 @@ async function loadActiveFactoryProductionCapacities(): Promise<ProductionCapaci
     .leftJoin(`${env.FACTORY_DB_SCHEMA}.UNIT as u`, 'fp.UNIT', 'u.UNIT')
     .whereIn(
       'fp.FID',
-      factorySourceDb(factorySourceTableName()).whereIn('FFLAG', ['1', '3']).select('FID'),
+      factorySourceDb(factorySourceTableName())
+        .whereIn('FFLAG', CANDIDATE_FACTORY_FLAGS)
+        .select('FID'),
     )
     .timeout(EXTERNAL_QUERY_TIMEOUT_MS)
     .select('fp.FID', 'fp.PRODNAME', 'fp.PRODQUAN', 'u.UNT_ENAME');

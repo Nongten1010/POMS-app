@@ -328,7 +328,7 @@ describe('eligibleFactoryCandidatesRepository', () => {
     expect(countQuery.count).toHaveBeenCalledWith({ total: '*' });
     expect(facImportQuery.offset).toHaveBeenCalledWith(50);
     expect(facImportQuery.limit).toHaveBeenCalledWith(50);
-    expect(facImportQuery.whereIn).toHaveBeenCalledWith('FFLAG', ['1', '3']);
+    expect(facImportQuery.whereIn).toHaveBeenCalledWith('FFLAG', ['0', '1', '3']);
     expect(industrialEstateQuery.select).toHaveBeenCalledWith(
       'COLONY_INDUST_CODE',
       'COLONY_INDUST_DESC',
