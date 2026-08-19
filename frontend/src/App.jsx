@@ -297,7 +297,7 @@ function App() {
         ) : visibleSelectedMenu === 'chat' ? (
           <ChatPage isStaff={userType === 'officer' || roleCode === 'admin' || activePermissions?.chat?.edit === true} />
         ) : visibleSelectedMenu === 'eligible-factories' ? (
-          <EligibleFactoriesPage accessToken={accessToken} />
+          <EligibleFactoriesPage accessToken={accessToken} userType={userType} />
         ) : (
           <HomePage accessToken={accessToken} permissions={activePermissions} />
         )}

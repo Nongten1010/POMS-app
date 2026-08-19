@@ -1892,6 +1892,20 @@ function validateConnectionRequestPayload(requestBody = {}, { isAddParameterMode
   }
 }
 
+function sanitizeDirectConnectionRequestBody(requestBody = {}) {
+  if (!Array.isArray(requestBody.measurementPoints)) {
+    return requestBody
+  }
+
+  requestBody.measurementPoints = requestBody.measurementPoints.map((point) => {
+    const nextPoint = { ...(point ?? {}) }
+    delete nextPoint.monitoringPointStatus
+    return nextPoint
+  })
+
+  return requestBody
+}
+
 function compactDefinedObject(object = {}) {
   return Object.fromEntries(
     Object.entries(object).filter(([, value]) => !isBlankValue(value)),
@@ -7071,6 +7085,10 @@ function RequestFormBottomSheet({
         isAddParameterMode,
         skipFullValidation: shouldUseDirectConnection,
       })
+
+      if (shouldUseDirectConnection) {
+        sanitizeDirectConnectionRequestBody(requestBody)
+      }
 
       const submitApiUrl = isEditMode
         ? getRequestFormApiUrl(requestId)

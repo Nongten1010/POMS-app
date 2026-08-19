@@ -744,8 +744,9 @@ function createMonitoringPointFormPayload(row, monitoringPoints = []) {
   }
 }
 
-function EligibleFactoriesPage({ accessToken = '' }) {
-  const [activeTab, setActiveTab] = useState('all')
+function EligibleFactoriesPage({ accessToken = '', userType = '' }) {
+  const isOperator = userType === 'operator'
+  const [activeTab, setActiveTab] = useState(() => (isOperator ? 'eligible' : 'all'))
   const [factoryRows, setFactoryRows] = useState([])
   const [eligibleFactoryRows, setEligibleFactoryRows] = useState([])
   const [isLoadingFactories, setIsLoadingFactories] = useState(false)
@@ -757,6 +758,7 @@ function EligibleFactoriesPage({ accessToken = '' }) {
   const [deletingEligibleFactoryIds, setDeletingEligibleFactoryIds] = useState([])
   const [removeEligibleConfirmRow, setRemoveEligibleConfirmRow] = useState(null)
   const [selectedFactoryForSheet, setSelectedFactoryForSheet] = useState(null)
+  const [isEligibleSheetReadOnly, setIsEligibleSheetReadOnly] = useState(false)
   const [monitoringPoints, setMonitoringPoints] = useState([])
   const [activeMonitoringPointId, setActiveMonitoringPointId] = useState('')
   const [snackbarOpen, setSnackbarOpen] = useState(false)
@@ -776,6 +778,10 @@ function EligibleFactoriesPage({ accessToken = '' }) {
   const deletingEligibleFactoryIdSet = useMemo(
     () => new Set(deletingEligibleFactoryIds),
     [deletingEligibleFactoryIds],
+  )
+  const availableSubMenus = useMemo(
+    () => (isOperator ? subMenus.filter((menu) => menu.value === 'eligible') : subMenus),
+    [isOperator],
   )
 
   const loadFactoryCandidates = useCallback(
@@ -879,7 +885,7 @@ function EligibleFactoriesPage({ accessToken = '' }) {
   )
 
   useEffect(() => {
-    if (!accessToken) {
+    if (!accessToken || isOperator) {
       return
     }
 
@@ -894,7 +900,7 @@ function EligibleFactoriesPage({ accessToken = '' }) {
     return () => {
       controller.abort()
     }
-  }, [accessToken, loadFactoryCandidates])
+  }, [accessToken, isOperator, loadFactoryCandidates])
 
   useEffect(() => {
     if (!accessToken) {
@@ -931,8 +937,12 @@ function EligibleFactoriesPage({ accessToken = '' }) {
   const effectiveEligibleFactoriesError = accessToken
     ? eligibleFactoriesError
     : 'กรุณาเข้าสู่ระบบเพื่อดูข้อมูลโรงงานที่เข้าข่าย'
+  const effectiveActiveTab = availableSubMenus.some((menu) => menu.value === activeTab)
+    ? activeTab
+    : availableSubMenus[0]?.value ?? 'eligible'
 
   const handleOpenEligibleSheet = useCallback(async (row, options = {}) => {
+    setIsEligibleSheetReadOnly(Boolean(options.readOnly))
     const shouldStartEmpty = options.startEmpty === true
     const existingPoints = !shouldStartEmpty && Array.isArray(row.measurementPoints)
       ? row.measurementPoints.map(mapMonitoringPointToForm)
@@ -998,6 +1008,7 @@ function EligibleFactoriesPage({ accessToken = '' }) {
 
   const handleCloseEligibleSheet = useCallback(() => {
     setSelectedFactoryForSheet(null)
+    setIsEligibleSheetReadOnly(false)
     setMonitoringPoints([])
     setActiveMonitoringPointId('')
   }, [])
@@ -1158,11 +1169,23 @@ function EligibleFactoriesPage({ accessToken = '' }) {
       {
         field: 'option',
         headerName: 'Option',
-        width: 185,
+        width: isOperator ? 110 : 185,
         sortable: false,
         filterable: false,
         renderCell: (params) => {
           const isDeleting = deletingEligibleFactoryIdSet.has(params.row.id)
+
+          if (isOperator) {
+            return (
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() => handleOpenEligibleSheet(params.row, { readOnly: true })}
+              >
+                เปิดดู
+              </Button>
+            )
+          }
 
           return (
             <Stack
@@ -1196,7 +1219,7 @@ function EligibleFactoriesPage({ accessToken = '' }) {
       ...eligibleMonitoringColumns,
       ...baseColumns.slice(3),
     ],
-    [deletingEligibleFactoryIdSet, handleOpenEligibleSheet],
+    [deletingEligibleFactoryIdSet, handleOpenEligibleSheet, isOperator],
   )
 
   return (
@@ -1224,7 +1247,7 @@ function EligibleFactoriesPage({ accessToken = '' }) {
             </Typography>
           </Box>
 
-          {activeTab === 'all' ? (
+          {effectiveActiveTab === 'all' ? (
             <Button
               variant="outlined"
               startIcon={<RefreshIcon />}
@@ -1237,7 +1260,7 @@ function EligibleFactoriesPage({ accessToken = '' }) {
           ) : null}
 
           <Tabs
-            value={activeTab}
+            value={effectiveActiveTab}
             onChange={(_, value) => setActiveTab(value)}
             variant="scrollable"
             scrollButtons="auto"
@@ -1252,7 +1275,7 @@ function EligibleFactoriesPage({ accessToken = '' }) {
               },
             }}
           >
-            {subMenus.map((menu) => (
+            {availableSubMenus.map((menu) => (
               <Tab key={menu.value} value={menu.value} label={getSubMenuLabel(menu)} />
             ))}
           </Tabs>
@@ -1325,7 +1348,7 @@ function EligibleFactoriesPage({ accessToken = '' }) {
         </DialogActions>
       </Dialog>
 
-      {activeTab === 'all' ? (
+      {effectiveActiveTab === 'all' ? (
         <FactoryDataGrid
           title="โรงงานทั้งหมด (กรอ.)"
           rows={effectiveFactoryRows}
@@ -1333,7 +1356,7 @@ function EligibleFactoriesPage({ accessToken = '' }) {
           loading={isLoadingFactories}
           error={effectiveFactoriesError}
         />
-      ) : activeTab === 'eligible' ? (
+      ) : effectiveActiveTab === 'eligible' ? (
         <FactoryDataGrid
           title="โรงงานที่เข้าข่าย"
           rows={effectiveEligibleFactoryRows}
@@ -1352,6 +1375,7 @@ function EligibleFactoriesPage({ accessToken = '' }) {
         activeMonitoringPointId={activeMonitoringPointId}
         accessToken={accessToken}
         saving={selectedFactoryForSheet ? savingEligibleFactoryIdSet.has(selectedFactoryForSheet.id) : false}
+        readOnly={isEligibleSheetReadOnly}
         onClose={handleCloseEligibleSheet}
         onActiveMonitoringPointChange={setActiveMonitoringPointId}
         onMonitoringPointsChange={handleMonitoringPointsChange}
@@ -1372,6 +1396,7 @@ function EligibleFactoryBottomSheet({
   activeMonitoringPointId,
   accessToken,
   saving,
+  readOnly = false,
   onClose,
   onActiveMonitoringPointChange,
   onMonitoringPointsChange,
@@ -1432,7 +1457,7 @@ function EligibleFactoryBottomSheet({
 
   const updateActivePoint = useCallback(
     (patch) => {
-      if (!activePoint) {
+      if (!activePoint || readOnly) {
         return
       }
 
@@ -1440,12 +1465,12 @@ function EligibleFactoryBottomSheet({
         current.map((point) => (point.id === activePoint.id ? { ...point, ...patch } : point)),
       )
     },
-    [activePoint, onMonitoringPointsChange],
+    [activePoint, onMonitoringPointsChange, readOnly],
   )
 
   const handleTypeChange = useCallback(
     (nextType) => {
-      if (!activePoint) {
+      if (!activePoint || readOnly) {
         return
       }
 
@@ -1454,17 +1479,21 @@ function EligibleFactoryBottomSheet({
         current.map((point) => (point.id === activePoint.id ? { ...nextPoint, id: point.id } : point)),
       )
     },
-    [activePoint, activePointIndex, onMonitoringPointsChange],
+    [activePoint, activePointIndex, onMonitoringPointsChange, readOnly],
   )
 
   const handleAddPoint = useCallback(() => {
+    if (readOnly) {
+      return
+    }
+
     const nextPoint = createDefaultMonitoringPoint('CEMS', monitoringPoints.length + 1)
     onMonitoringPointsChange((current) => [...current, nextPoint])
     onActiveMonitoringPointChange(nextPoint.id)
-  }, [monitoringPoints.length, onActiveMonitoringPointChange, onMonitoringPointsChange])
+  }, [monitoringPoints.length, onActiveMonitoringPointChange, onMonitoringPointsChange, readOnly])
 
   const handleRemovePoint = useCallback(() => {
-    if (!removePointId) {
+    if (!removePointId || readOnly) {
       return
     }
 
@@ -1475,10 +1504,10 @@ function EligibleFactoryBottomSheet({
     onMonitoringPointsChange(nextPoints)
     onActiveMonitoringPointChange(nextActivePointId)
     setRemovePointId('')
-  }, [activePoint?.id, monitoringPoints, onActiveMonitoringPointChange, onMonitoringPointsChange, removePointId])
+  }, [activePoint?.id, monitoringPoints, onActiveMonitoringPointChange, onMonitoringPointsChange, readOnly, removePointId])
 
   const handleSubmit = useCallback(() => {
-    if (!factory || saving) {
+    if (!factory || saving || readOnly) {
       return
     }
 
@@ -1490,7 +1519,7 @@ function EligibleFactoryBottomSheet({
       latitude: factoryCoordinates.latitude,
       longitude: factoryCoordinates.longitude,
     })
-  }, [eiaAssessment, eiaOther, eiaProjectName, factory, factoryCoordinates, onSubmit, saving])
+  }, [eiaAssessment, eiaOther, eiaProjectName, factory, factoryCoordinates, onSubmit, readOnly, saving])
 
   return (
     <Drawer
@@ -1555,6 +1584,7 @@ function EligibleFactoryBottomSheet({
                 label="ข้อมูล EIA"
                 size="small"
                 value={eiaAssessment}
+                disabled={readOnly}
                 onChange={(event) => setEiaAssessment(event.target.value)}
                 fullWidth
               >
@@ -1571,6 +1601,7 @@ function EligibleFactoryBottomSheet({
                   label="ระบุ"
                   size="small"
                   value={eiaOther}
+                  disabled={readOnly}
                   onChange={(event) => setEiaOther(event.target.value)}
                   fullWidth
                 />
@@ -1582,6 +1613,7 @@ function EligibleFactoryBottomSheet({
                   label="ชื่อโครงการ"
                   size="small"
                   value={eiaProjectName}
+                  disabled={readOnly}
                   onChange={(event) => setEiaProjectName(event.target.value)}
                   fullWidth
                 />
@@ -1596,6 +1628,7 @@ function EligibleFactoryBottomSheet({
                 size="small"
                 fullWidth
                 value={factoryCoordinates.latitude}
+                disabled={readOnly}
                 onChange={(event) =>
                   setFactoryCoordinates((current) => ({ ...current, latitude: event.target.value }))
                 }
@@ -1608,6 +1641,7 @@ function EligibleFactoryBottomSheet({
                 size="small"
                 fullWidth
                 value={factoryCoordinates.longitude}
+                disabled={readOnly}
                 onChange={(event) =>
                   setFactoryCoordinates((current) => ({ ...current, longitude: event.target.value }))
                 }
@@ -1684,14 +1718,16 @@ function EligibleFactoryBottomSheet({
                       </MenuItem>
                     ))}
                   </TextField>
-                  <Button
-                    variant="contained"
-                    startIcon={<AddIcon />}
-                    onClick={handleAddPoint}
-                    sx={{ minWidth: 128, flexShrink: 0 }}
-                  >
-                    เพิ่มจุดตรวจวัด
-                  </Button>
+                  {!readOnly ? (
+                    <Button
+                      variant="contained"
+                      startIcon={<AddIcon />}
+                      onClick={handleAddPoint}
+                      sx={{ minWidth: 128, flexShrink: 0 }}
+                    >
+                      เพิ่มจุดตรวจวัด
+                    </Button>
+                  ) : null}
                 </Stack>
                 <Stack
                   spacing={0.75}
@@ -1781,26 +1817,28 @@ function EligibleFactoryBottomSheet({
                               <MonitoringPointStatusChip value={point.monitoringPointStatus} />
                             </Box>
                           </Button>
-                          <IconButton
-                            aria-label={`ลบ ${point.type} จุดที่ ${index + 1}`}
-                            size="small"
-                            onClick={(event) => {
-                              event.stopPropagation()
-                              setRemovePointId(point.id)
-                            }}
-                            sx={{
-                              alignSelf: 'center',
-                              width: 26,
-                              height: 26,
-                              color: 'text.secondary',
-                              '&:hover': {
-                                color: 'error.main',
-                                bgcolor: 'error.50',
-                              },
-                            }}
-                          >
-                            <DeleteOutlineIcon sx={{ fontSize: 16 }} />
-                          </IconButton>
+                          {!readOnly ? (
+                            <IconButton
+                              aria-label={`ลบ ${point.type} จุดที่ ${index + 1}`}
+                              size="small"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                setRemovePointId(point.id)
+                              }}
+                              sx={{
+                                alignSelf: 'center',
+                                width: 26,
+                                height: 26,
+                                color: 'text.secondary',
+                                '&:hover': {
+                                  color: 'error.main',
+                                  bgcolor: 'error.50',
+                                },
+                              }}
+                            >
+                              <DeleteOutlineIcon sx={{ fontSize: 16 }} />
+                            </IconButton>
+                          ) : null}
                         </Box>
                       )
                     })
@@ -1818,6 +1856,7 @@ function EligibleFactoryBottomSheet({
                   <MonitoringPointForm
                     point={activePoint}
                     accessToken={accessToken}
+                    readOnly={readOnly}
                     onChange={updateActivePoint}
                     onTypeChange={handleTypeChange}
                   />
@@ -1827,20 +1866,22 @@ function EligibleFactoryBottomSheet({
           </Box>
         </Paper>
 
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'center', flexShrink: 0 }}>
-          <Button variant="outlined" color="inherit" disabled={saving} onClick={onClose}>
-            ยกเลิก
-          </Button>
-          <Button
-            variant="contained"
-            color="secondary"
-            disabled={saving}
-            startIcon={saving ? <CircularProgress size={18} color="inherit" /> : <AddTaskIcon />}
-            onClick={handleSubmit}
-          >
-            {saving ? 'กำลังบันทึก' : 'บันทึก'}
-          </Button>
-        </Stack>
+        {!readOnly ? (
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'center', flexShrink: 0 }}>
+            <Button variant="outlined" color="inherit" disabled={saving} onClick={onClose}>
+              ยกเลิก
+            </Button>
+            <Button
+              variant="contained"
+              color="secondary"
+              disabled={saving}
+              startIcon={saving ? <CircularProgress size={18} color="inherit" /> : <AddTaskIcon />}
+              onClick={handleSubmit}
+            >
+              {saving ? 'กำลังบันทึก' : 'บันทึก'}
+            </Button>
+          </Stack>
+        ) : null}
       </Stack>
       <Dialog
         open={Boolean(removePointId)}
@@ -1905,12 +1946,13 @@ function ReadOnlyField({ label, value }) {
   )
 }
 
-function MonitoringPointForm({ point, accessToken, onChange, onTypeChange }) {
+function MonitoringPointForm({ point, accessToken, readOnly = false, onChange, onTypeChange }) {
   const isWpms = point.type === 'WPMS'
   const parameterOptions = isWpms ? wpmsParameterOptions : cemsParameterOptions
 
   return (
-    <Stack spacing={2}>
+    <Box component="fieldset" disabled={readOnly} sx={{ m: 0, p: 0, minWidth: 0, border: 0 }}>
+      <Stack spacing={2}>
       <Paper elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider', bgcolor: 'background.default' }}>
         <Typography sx={{ mb: 1, fontWeight: 700 }}>จุดตรวจวัด</Typography>
         <RadioGroup row value={point.type} onChange={(event) => onTypeChange(event.target.value)}>
@@ -2160,7 +2202,8 @@ function MonitoringPointForm({ point, accessToken, onChange, onTypeChange }) {
           </Grid>
         </Grid>
       </Stack>
-    </Stack>
+      </Stack>
+    </Box>
   )
 }
 
