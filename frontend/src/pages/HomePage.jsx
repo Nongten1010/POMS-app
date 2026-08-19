@@ -66,8 +66,8 @@ const sortOptions = [
 
 const referencePoint = { lon: 100.574, lat: 13.91 }
 const operatorFactoriesApiUrl = import.meta.env.DEV
-  ? '/api-proxy/v1/operator-factories'
-  : 'https://d-poms.diw.go.th/api/v1/operator-factories'
+  ? '/api-proxy/v1/operator-factory-dashboard'
+  : 'https://d-poms.diw.go.th/api/v1/operator-factory-dashboard'
 const publicFactoryMapPointsApiUrl = import.meta.env.DEV
   ? '/api-proxy/v1/public/factory-map-points'
   : 'https://d-poms.diw.go.th/api/v1/public/factory-map-points'
@@ -166,7 +166,7 @@ const borderedTableSx = {
 function getOperatorFactoriesApiUrl(systemType) {
   const baseUrl =
     typeof window !== 'undefined' && window.location.hostname === 'd-poms.diw.go.th'
-      ? '/api/v1/operator-factories'
+      ? '/api/v1/operator-factory-dashboard'
       : operatorFactoriesApiUrl
   const params = new URLSearchParams()
 
@@ -1364,7 +1364,7 @@ function FactoryList({
             }}
           >
             <Typography variant="body2" color="text.secondary">
-              ไม่พบข้อมูลโรงงานตามเงื่อนไข
+              ไม่มีโรงงานที่เชื่อมต่อกับระบบ กรุณาเพิ่มจุดตรวจวัดที่เมนูขอเชื่อมต่อ
             </Typography>
           </Paper>
         ) : null}
