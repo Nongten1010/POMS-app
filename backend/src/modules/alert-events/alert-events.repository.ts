@@ -104,13 +104,7 @@ export const alertEventsRepository = {
       .clearOrder()
       .countDistinct<{ total: number }[]>({ total: 'alert_events.id' });
 
-    const rows = await baseQuery
-      .clone()
-      .orderBy('event_date', 'desc')
-      .orderBy('started_at', 'desc')
-      .orderBy('id', 'desc')
-      .limit(query.pageSize)
-      .offset((query.page - 1) * query.pageSize);
+    const rows = await buildListRowsQuery(query, access);
 
     return {
       rows: rows.map(toAlertEventDTO),
@@ -137,7 +131,9 @@ export const alertEventsRepository = {
 };
 
 function buildListQuery(query: ListAlertEventsQuery, access: AlertEventAccess) {
-  const builder = buildAccessQuery(access).distinct<AlertEventRow[]>('alert_events.*');
+  const builder = buildAccessQuery(access)
+    .clearSelect()
+    .distinct<AlertEventRow[]>('alert_events.*');
 
   if (query.systemType) builder.where('alert_events.system_type', query.systemType);
   if (query.displaySystemType) builder.where('alert_events.display_system_type', query.displaySystemType);
@@ -150,6 +146,15 @@ function buildListQuery(query: ListAlertEventsQuery, access: AlertEventAccess) {
   if (query.dateTo) builder.where('alert_events.event_date', '<=', query.dateTo);
 
   return builder;
+}
+
+function buildListRowsQuery(query: ListAlertEventsQuery, access: AlertEventAccess) {
+  return buildListQuery(query, access)
+    .orderBy('alert_events.event_date', 'desc')
+    .orderBy('alert_events.started_at', 'desc')
+    .orderBy('alert_events.id', 'desc')
+    .limit(query.pageSize)
+    .offset((query.page - 1) * query.pageSize);
 }
 
 function buildAccessQuery(access: AlertEventAccess) {
@@ -292,7 +297,7 @@ export function buildAlertEventsListQueryForTests(
   query: ListAlertEventsQuery,
   access: AlertEventAccess,
 ) {
-  return buildListQuery(query, access);
+  return buildListRowsQuery(query, access);
 }
 
 function toInsertPayload(input: CreateIntegrationAlertEventInput) {

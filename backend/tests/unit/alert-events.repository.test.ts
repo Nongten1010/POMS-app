@@ -5,6 +5,28 @@ import {
 } from '../../src/modules/alert-events/alert-events.repository';
 
 describe('alertEventsRepository query helpers', () => {
+  it('builds the paginated list query with one alert projection and qualified ordering', () => {
+    const compiled = buildAlertEventsListQueryForTests(
+      {
+        systemType: 'CEMS',
+        alertType: 'STANDARD_EXCEEDED',
+        thresholdType: 'STANDARD',
+        page: 1,
+        pageSize: 100,
+      },
+      {
+        actorUserId: 42,
+        scope: { scope: 'ALL' },
+        regionalAccess: null,
+      } as never,
+    ).toSQL();
+
+    expect(compiled.sql.match(/\[alert_events\]\.\*/g)).toHaveLength(1);
+    expect(compiled.sql).toContain(
+      'order by [alert_events].[event_date] desc, [alert_events].[started_at] desc, [alert_events].[id] desc',
+    );
+  });
+
   it('uses regional access for base IN_REGION notification reads when scope details omit region', () => {
     const compiled = buildAlertEventsListQueryForTests(
       { page: 1, pageSize: 20 },
