@@ -1325,20 +1325,20 @@ describe('connection request validators', () => {
     });
   });
 
-  it('accepts APPROVE_DESIGN with MANUAL_LEGACY assignments in the valid S/W 0001-1999 range', () => {
+  it('accepts APPROVE_DESIGN with MANUAL_LEGACY assignments in the valid S/P 0001-1999 range', () => {
     const result = reviewConnectionRequestSchema.safeParse({
       decision: 'APPROVE_DESIGN',
       pointCodeAssignments: [
         {
           measurementPointId: 21,
           assignmentMode: 'MANUAL_LEGACY',
-          pointCode: 'W0001',
+          pointCode: 'P0001',
           reason: 'ใช้รหัสจุดเดิมจากระบบเก่า',
         },
         {
           measurementPointId: 22,
           assignmentMode: 'MANUAL_LEGACY',
-          pointCode: 'W1999',
+          pointCode: 'P1999',
           reason: 'ใช้รหัสจุดเดิมอีกจุด',
         },
       ],
@@ -1351,13 +1351,13 @@ describe('connection request validators', () => {
         {
           measurementPointId: 21,
           assignmentMode: 'MANUAL_LEGACY',
-          pointCode: 'W0001',
+          pointCode: 'P0001',
           reason: 'ใช้รหัสจุดเดิมจากระบบเก่า',
         },
         {
           measurementPointId: 22,
           assignmentMode: 'MANUAL_LEGACY',
-          pointCode: 'W1999',
+          pointCode: 'P1999',
           reason: 'ใช้รหัสจุดเดิมอีกจุด',
         },
       ],
@@ -1425,6 +1425,30 @@ describe('connection request validators', () => {
         ]),
       );
     });
+  });
+
+  it('rejects the retired W prefix for new MANUAL_LEGACY assignments', () => {
+    const result = reviewConnectionRequestSchema.safeParse({
+      decision: 'APPROVE_DESIGN',
+      pointCodeAssignments: [
+        {
+          measurementPointId: 43,
+          assignmentMode: 'MANUAL_LEGACY',
+          pointCode: 'W0001',
+          reason: 'รหัสรูปแบบเดิมก่อนเปลี่ยน contract',
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: ['pointCodeAssignments', 0, 'pointCode'],
+        }),
+      ]),
+    );
   });
 
   it('accepts status changes for approval and revision actions', () => {

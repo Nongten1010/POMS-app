@@ -426,16 +426,16 @@ criteria normalization สำคัญ
 | `pointCodeAssignments`                      | body     | No          | array  | omission = `AUTO` ทุกจุด; ถ้าส่งได้ 1-100 รายการ                                                                  |
 | `pointCodeAssignments[].measurementPointId` | body     | Yes         | number | ต้องเป็น id ของ measurement point ภายในคำขอที่กำลังอนุมัติ                                                        |
 | `pointCodeAssignments[].assignmentMode`     | body     | Yes         | enum   | `AUTO` หรือ `MANUAL_LEGACY`                                                                                       |
-| `pointCodeAssignments[].pointCode`          | body     | Conditional | string | required เมื่อ `assignmentMode = "MANUAL_LEGACY"`; ต้อง match `^[SW]\\d{4}$` และค่าตัวเลขต้องอยู่ช่วง `0001-1999` |
+| `pointCodeAssignments[].pointCode`          | body     | Conditional | string | required เมื่อ `assignmentMode = "MANUAL_LEGACY"`; ต้อง match `^[SP]\\d{4}$` และค่าตัวเลขต้องอยู่ช่วง `0001-1999` |
 | `pointCodeAssignments[].reason`             | body     | Conditional | string | required เมื่อ `assignmentMode = "MANUAL_LEGACY"`; trim แล้วต้องไม่ว่างและยาวไม่เกิน 500                          |
 
 ### Business rules
 
 - ถ้าไม่ส่ง `pointCodeAssignments` backend ใช้ behavior เดิมและถือว่าทุกจุดเป็น `AUTO`
 - ถ้าส่ง array ต้องระบุทุก measurement point ที่ยังไม่มีรหัสให้ครบและไม่ซ้ำกัน
-- `AUTO` ใช้ Point-code Contract เดิม คือออกเลขใหม่ช่วง `S/W2001-9999`
+- `AUTO` ออกเลขใหม่ช่วง `S/P2001-9999`
 - `MANUAL_LEGACY` ใช้เฉพาะกรณีจุดตรวจวัดเก่าที่ต้อง reuse รหัสเดิม
-- `MANUAL_LEGACY` ต้องส่งทั้ง `pointCode` และ `reason`; prefix ต้องตรงกับ `systemType` (`CEMS = S`, `WPMS = W`)
+- `MANUAL_LEGACY` ต้องส่งทั้ง `pointCode` และ `reason`; prefix ต้องตรงกับ `systemType` (`CEMS = S`, `WPMS = P`)
 - ถ้าส่ง `measurementPointId` ที่ไม่อยู่ในคำขอ ระบบตอบ `400 BAD_REQUEST`
 - ถ้ารหัสถูกจองแล้วในคำขอที่รอเชื่อมต่อ จุดที่เชื่อมต่ออยู่ หรือประวัติที่เลิกใช้งานแล้ว ระบบตอบ `409 CONFLICT` และไม่ reuse รหัสนั้น
 

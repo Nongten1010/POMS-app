@@ -2,6 +2,14 @@
 
 ไฟล์นี้บันทึกเฉพาะการเปลี่ยน API ที่ทำให้ client ต้องแก้ตาม การเปลี่ยนทั่วไปและประวัติรายละเอียดดูจาก Git history
 
+## 2026-08-20 — เปลี่ยน prefix รหัสจุดตรวจวัด WPMS จาก W เป็น P
+
+- **Affected canonical docs:** [เมนูขอเชื่อมต่อ](./menus/connection-requests/README.md), [Request payloads and validation](./menus/connection-requests/request-payloads-and-validation.md)
+- **Impact:** รหัสจุดตรวจวัด WPMS ที่ออกใหม่แบบ `AUTO` และรหัส `MANUAL_LEGACY` เปลี่ยน prefix จาก `W` เป็น `P`; CEMS ยังคงใช้ `S` และรหัส `W...` ที่ออกไปแล้วไม่ถูก rewrite
+- **Migration:** deploy `0098_change_wpms_point_code_prefix_to_p`; client และ integration ที่ตรวจรูปแบบรหัสต้องรองรับ `P2001`–`P9999` สำหรับรหัสใหม่ และยังต้องถือรหัส `W...` เดิมเป็น opaque identifier ที่ใช้งานได้
+- **Old contract:** WPMS แบบ `AUTO` ใช้ `W2001`–`W9999` และ `MANUAL_LEGACY` ใช้ `W0001`–`W1999`
+- **New contract:** WPMS แบบ `AUTO` ใช้ `P2001`–`P9999` และ `MANUAL_LEGACY` ใช้ `P0001`–`P1999`; CEMS คง `S2001`–`S9999` และ `S0001`–`S1999`
+
 ## 2026-08-19 — ลบรายละเอียดคำขอเชื่อมต่อล่าสุดออกจากรายการโรงงานหน้าแรก
 
 - **Affected menu:** [หน้าหลัก](./menus/home/README.md#get-apiv1operator-factories)

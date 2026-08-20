@@ -1771,7 +1771,7 @@ const manualLegacyPointCodeSchema = z.preprocess(
   (value) => (typeof value === 'string' ? value.trim().toUpperCase() : value),
   z
     .string()
-    .regex(/^[SW]\d{4}$/, 'pointCode must use S/W followed by exactly 4 digits')
+    .regex(/^[SP]\d{4}$/, 'pointCode must use S/P followed by exactly 4 digits')
     .refine((value) => {
       const sequence = Number(value.slice(1));
       return sequence >= 1 && sequence <= 1999;

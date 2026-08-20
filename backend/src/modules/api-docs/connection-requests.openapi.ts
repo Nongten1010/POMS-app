@@ -675,7 +675,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
                   ),
                   nullable: true,
                   description:
-                    'Optional; บอกแหล่งที่มาของ pointCode. `AUTO` คือระบบออกรหัส S/W2001-9999, `MANUAL_LEGACY` คือเจ้าหน้าที่ reuse รหัสเดิมช่วง S/W0001-1999, `OFFICER_DIRECT` คือ direct connection, `LEGACY_IMPORTED` คือข้อมูลเดิมที่ import มา',
+                    'Optional; บอกแหล่งที่มาของ pointCode. `AUTO` คือระบบออกรหัส S/P2001-9999, `MANUAL_LEGACY` คือเจ้าหน้าที่ reuse รหัสเดิมช่วง S/P0001-1999, `OFFICER_DIRECT` คือ direct connection, `LEGACY_IMPORTED` คือข้อมูลเดิมที่ import มา',
                 },
                 pointType: {
                   ...enumSchema(['STACK', 'WASTEWATER', 'OTHER'], measurementPointTypeLabels),
@@ -1078,15 +1078,15 @@ const componentSchemas: Record<string, OpenApiObject> = {
           MANUAL_LEGACY: pointCodeAssignmentModeLabels.MANUAL_LEGACY,
         }),
         description:
-          'ถ้าเป็น `AUTO` หรือไม่ส่งทั้ง array ระบบจะออกรหัสใหม่ตามลำดับ S/W2001-9999; ถ้าเป็น `MANUAL_LEGACY` ต้องส่ง pointCode และ reason',
+          'ถ้าเป็น `AUTO` หรือไม่ส่งทั้ง array ระบบจะออกรหัสใหม่ตามลำดับ S/P2001-9999; ถ้าเป็น `MANUAL_LEGACY` ต้องส่ง pointCode และ reason',
       },
       pointCode: {
         type: 'string',
         nullable: true,
-        pattern: '^[SW]\\d{4}$',
+        pattern: '^[SP]\\d{4}$',
         example: 'S1054',
         description:
-          'Required เมื่อ assignmentMode = MANUAL_LEGACY; ต้องเป็นรหัส legacy รูปแบบ S/W ตามด้วย 4 หลัก, ค่าตัวเลขช่วง 0001-1999 และ prefix ต้องตรงกับ systemType (CEMS = S, WPMS = W)',
+          'Required เมื่อ assignmentMode = MANUAL_LEGACY; ต้องเป็นรหัส legacy รูปแบบ S/P ตามด้วย 4 หลัก, ค่าตัวเลขช่วง 0001-1999 และ prefix ต้องตรงกับ systemType (CEMS = S, WPMS = P)',
       },
       reason: {
         type: 'string',
@@ -1933,7 +1933,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
             {
               measurementPointId: 201,
               assignmentMode: 'MANUAL_LEGACY',
-              pointCode: 'W0188',
+              pointCode: 'P0188',
               reason: 'ใช้รหัสเดิมของจุดตรวจวัดเก่า',
             },
           ],

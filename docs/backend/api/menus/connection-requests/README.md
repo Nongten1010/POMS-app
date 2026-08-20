@@ -165,11 +165,11 @@ API ทั้ง 34 route signatures ต้องใช้ Bearer token; แต�
 | `systemType` | รูปแบบรหัสใหม่      | ช่วงอัตโนมัติ   | ตัวอย่างลำดับ         |
 | ------------ | ------------------- | --------------- | --------------------- |
 | `CEMS`       | `S` + ตัวเลข 4 หลัก | `S2001`–`S9999` | `S2001`, `S2002`, ... |
-| `WPMS`       | `W` + ตัวเลข 4 หลัก | `W2001`–`W9999` | `W2001`, `W2002`, ... |
+| `WPMS`       | `P` + ตัวเลข 4 หลัก | `P2001`–`P9999` | `P2001`, `P2002`, ... |
 
 - CEMS และ WPMS ใช้ลำดับแยกกัน เริ่มที่ `2001`, สิ้นสุดที่ `9999` และไม่เริ่มใหม่เมื่อเปลี่ยนปี.
-- ระบบออกเลขต่อจากค่าที่มากกว่าระหว่าง sequence ที่บันทึกไว้กับรหัส `S...`/`W...` สูงสุดที่เคยจองไว้ในทะเบียนรหัสกลาง.
-- รหัสเดิมรูปแบบอื่น เช่น `Pxxxx`, `CEMS-NNNN/YYYY` และ `WEMS-NNNN/YYYY` ยังอ่านเป็น opaque identifier ได้ แต่ไม่ถูกนำมาคำนวณเลขใหม่.
+- ระบบออกเลขต่อจากค่าที่มากกว่าระหว่าง sequence ที่บันทึกไว้กับรหัส `S...`/`P...` สูงสุดที่เคยจองไว้ในทะเบียนรหัสกลาง.
+- รหัสเดิมรูปแบบอื่น เช่น `Wxxxx`, `CEMS-NNNN/YYYY` และ `WEMS-NNNN/YYYY` ยังอ่านเป็น opaque identifier ได้ แต่ไม่ถูกนำมาคำนวณเลขใหม่.
 - คำขอ `ADD_PARAMETER` ใช้รหัสจุดเดิมและไม่ออกรหัสใหม่.
 - `POST /api/v1/cems-wpms-requests/direct-connections` ไม่ใช้ลำดับรหัสจุดนี้ และเก็บรหัสที่เจ้าหน้าที่ส่งใน `measurementPoints[0].pointCode`; รหัสดังกล่าวยังถูกจองในทะเบียนกลางและห้ามนำกลับมาใช้ซ้ำ.
 - การจองเลขและการเปลี่ยนสถานะทำใน transaction เดียวกันเพื่อไม่ให้คำขอพร้อมกันได้รหัสซ้ำ.
@@ -583,8 +583,8 @@ Minimal request:
 
 - omission หรือไม่ส่ง field นี้ หมายถึง `AUTO` ทุกจุดและยัง backward compatible กับ client เดิม
 - ถ้าส่ง array ต้องระบุทุกจุดที่ยังไม่มีรหัสให้ครบและไม่ซ้ำกัน; ไม่รับ array บางส่วน
-- `assignmentMode = "AUTO"` ให้ระบบออกรหัสใหม่ตาม Point-code Contract ช่วง `S/W2001-9999`
-- `assignmentMode = "MANUAL_LEGACY"` ใช้ได้เฉพาะรหัสเดิมรูปแบบ `^[SW]\\d{4}$`, ค่าตัวเลขช่วง `0001-1999` และ prefix ต้องตรงกับ `systemType` (`CEMS = S`, `WPMS = W`)
+- `assignmentMode = "AUTO"` ให้ระบบออกรหัสใหม่ตาม Point-code Contract ช่วง `S/P2001-9999`
+- `assignmentMode = "MANUAL_LEGACY"` ใช้ได้เฉพาะรหัสเดิมรูปแบบ `^[SP]\\d{4}$`, ค่าตัวเลขช่วง `0001-1999` และ prefix ต้องตรงกับ `systemType` (`CEMS = S`, `WPMS = P`)
 - เมื่อเป็น `MANUAL_LEGACY` ต้องส่งทั้ง `pointCode` และ `reason` โดย `reason` ต้องยาวไม่เกิน 500 ตัวอักษร
 - รหัสที่ถูกจองแล้วห้ามนำกลับมาใช้ซ้ำ ทั้งจุดที่รอเชื่อมต่อ เชื่อมต่ออยู่ หรือเลิกใช้งานแล้ว; ถ้าชนกันระบบตอบ `409 CONFLICT`
 
@@ -611,7 +611,7 @@ Minimal response:
       {
         "id": 201,
         "pointName": "จุดระบายน้ำทิ้ง 1",
-        "pointCode": "W2001",
+        "pointCode": "P2001",
         "pointCodeAssignmentMode": "AUTO"
       }
     ]
@@ -631,7 +631,7 @@ Request fields สำหรับ approve branch:
 | ---------------------- | -------------- | -------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `action`               | string         | yes      | ต้องเป็น `APPROVE_FORM`                                                                                                    |
 | `officerNote`          | string \| null | no       | ข้อความที่ trim แล้ว สูงสุด 1000 ตัวอักษร                                                                                  |
-| `pointCodeAssignments` | array          | no       | omission = `AUTO` ทุกจุด; ถ้าส่ง `MANUAL_LEGACY` ต้องมี `pointCode` กับ `reason` และรหัสต้องอยู่ช่วง legacy `S/W0001-1999` |
+| `pointCodeAssignments` | array          | no       | omission = `AUTO` ทุกจุด; ถ้าส่ง `MANUAL_LEGACY` ต้องมี `pointCode` กับ `reason` และรหัสต้องอยู่ช่วง legacy `S/P0001-1999` |
 
 Minimal request:
 
@@ -652,7 +652,7 @@ Minimal request:
     {
       "measurementPointId": 201,
       "assignmentMode": "MANUAL_LEGACY",
-      "pointCode": "W0188",
+      "pointCode": "P0188",
       "reason": "ใช้รหัสเดิมของจุดตรวจวัดเก่า"
     }
   ]
@@ -662,7 +662,7 @@ Minimal request:
 Errors ที่เพิ่มจาก flow เดิม:
 
 - `409 CONFLICT` เมื่อ `pointCode` ถูกจองแล้ว หรือเลขอัตโนมัติ 4 หลักหมดช่วงที่รองรับ
-- `400 VALIDATION_ERROR` เมื่อ `MANUAL_LEGACY` ไม่ส่ง `pointCode` หรือ `reason`, `reason` ยาวเกิน 500 ตัวอักษร, รูปแบบรหัสไม่เป็น `^[SW]\d{4}$`, หรือค่าตัวเลขอยู่นอกช่วง legacy `0001-1999`
+- `400 VALIDATION_ERROR` เมื่อ `MANUAL_LEGACY` ไม่ส่ง `pointCode` หรือ `reason`, `reason` ยาวเกิน 500 ตัวอักษร, รูปแบบรหัสไม่เป็น `^[SP]\d{4}$`, หรือค่าตัวเลขอยู่นอกช่วง legacy `0001-1999`
 - `400 BAD_REQUEST` เมื่อ prefix ไม่ตรงกับ `systemType`, ส่งรายการไม่ครบทุกจุดที่ยังไม่มีรหัส, อ้างจุดนอกคำขอ หรือพยายามกำหนดรหัสใหม่ให้คำขอ `ADD_PARAMETER`
 
 ### Read request
@@ -726,7 +726,7 @@ Minimal response:
     {
       "type": "WPMS",
       "point": {
-        "pointCode": "W2001"
+        "pointCode": "P2001"
       }
     }
   ],
@@ -814,6 +814,6 @@ Minimal response:
 | Sequence implementation          | [`connection-requests.repository.ts`](../../../../../backend/src/modules/connection-requests/connection-requests.repository.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | Reverse-proxy path normalization | [`annual-point-code-path.ts`](../../../../../backend/src/shared/middlewares/annual-point-code-path.ts), [`connected-measurement-points.routes.ts`](../../../../../backend/src/modules/connection-requests/connected-measurement-points.routes.ts), [`integrations.routes.ts`](../../../../../backend/src/modules/integrations/integrations.routes.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | Factory-profile patch rules      | [`connected-factory-profile.ts`](../../../../../backend/src/modules/connection-requests/connected-factory-profile.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| Migrations                       | [`0075_start_operator_point_codes_at_2001.ts`](../../../../../backend/src/db/migrations/0075_start_operator_point_codes_at_2001.ts), [`0076_sync_connected_factory_profiles_with_eligible_factories.ts`](../../../../../backend/src/db/migrations/0076_sync_connected_factory_profiles_with_eligible_factories.ts), [`0094_backfill_wpms_request_number_prefix.ts`](../../../../../backend/src/db/migrations/0094_backfill_wpms_request_number_prefix.ts), [`0095_create_point_code_registry.ts`](../../../../../backend/src/db/migrations/0095_create_point_code_registry.ts), [`0096_add_monitoring_point_status_to_connection_points.ts`](../../../../../backend/src/db/migrations/0096_add_monitoring_point_status_to_connection_points.ts)                                                                                                                                                                                                                                                                                                                                                                                              |
+| Migrations                       | [`0075_start_operator_point_codes_at_2001.ts`](../../../../../backend/src/db/migrations/0075_start_operator_point_codes_at_2001.ts), [`0076_sync_connected_factory_profiles_with_eligible_factories.ts`](../../../../../backend/src/db/migrations/0076_sync_connected_factory_profiles_with_eligible_factories.ts), [`0094_backfill_wpms_request_number_prefix.ts`](../../../../../backend/src/db/migrations/0094_backfill_wpms_request_number_prefix.ts), [`0095_create_point_code_registry.ts`](../../../../../backend/src/db/migrations/0095_create_point_code_registry.ts), [`0096_add_monitoring_point_status_to_connection_points.ts`](../../../../../backend/src/db/migrations/0096_add_monitoring_point_status_to_connection_points.ts), [`0098_change_wpms_point_code_prefix_to_p.ts`](../../../../../backend/src/db/migrations/0098_change_wpms_point_code_prefix_to_p.ts)                                                                                                                                                                                                                                                                                |
 | Tests                            | [`connection-requests.service.test.ts`](../../../../../backend/tests/unit/connection-requests.service.test.ts), [`connection-requests.repository.test.ts`](../../../../../backend/tests/unit/connection-requests.repository.test.ts), [`connection-requests.point-code-sequence.repository.test.ts`](../../../../../backend/tests/unit/connection-requests.point-code-sequence.repository.test.ts), [`connection-point-monitoring-status-migration.test.ts`](../../../../../backend/tests/unit/connection-point-monitoring-status-migration.test.ts), [`wpms-request-number-migration.test.ts`](../../../../../backend/tests/unit/wpms-request-number-migration.test.ts), [`parameter-values.validator.test.ts`](../../../../../backend/tests/unit/parameter-values.validator.test.ts), [`alert-events.route.test.ts`](../../../../../backend/tests/unit/alert-events.route.test.ts), [`connected-measurement-points.route.test.ts`](../../../../../backend/tests/unit/connected-measurement-points.route.test.ts), [`integration-device-configs.route.test.ts`](../../../../../backend/tests/unit/integration-device-configs.route.test.ts) |
 | Evidence                         | [Fully exempted active point TDD](../../../evidence/connection-requests/fully-exempted-active-point.tdd.md), [Add-measurement-point submission action TDD](../../../evidence/connection-requests/add-measurement-point-submission-action.tdd.md), [Request-number format TDD](../../../evidence/connection-requests/request-number-full-year-format.tdd.md), [Restore S/W point-code format TDD](../../../evidence/connection-requests/legacy-point-code-format-restored.tdd.md), [Request table current/live POMS factory name TDD](../../../evidence/connection-requests/request-table-current-factory-name.tdd.md)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |

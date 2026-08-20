@@ -42,7 +42,7 @@ describe('normal operator connection point-code sequence', () => {
     );
   });
 
-  it('issues W2003 for the next WPMS point regardless of Buddhist year', async () => {
+  it('issues P2003 for the next WPMS point regardless of Buddhist year', async () => {
     jest.setSystemTime(new Date('2028-07-24T00:00:00.000Z'));
     const harness = pointCodeHarness('WPMS', { initialSequence: 2002, pointIds: [201] });
     mockedDb.transaction.mockImplementationOnce(harness.runTransaction);
@@ -54,7 +54,7 @@ describe('normal operator connection point-code sequence', () => {
       { connectionDueAt: '2026-08-20T00:00:00.000Z' },
     );
 
-    expect(updated.measurementPoints.map((point) => point.pointCode)).toEqual(['W2003']);
+    expect(updated.measurementPoints.map((point) => point.pointCode)).toEqual(['P2003']);
     expect(harness.sequenceUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ last_sequence: 2003 }),
     );
@@ -197,7 +197,7 @@ describe('normal operator connection point-code sequence', () => {
         {
           measurementPointId: 201,
           assignmentMode: 'MANUAL_LEGACY',
-          pointCode: 'W1000',
+          pointCode: 'P1000',
           reason: 'ใช้รหัสเดิมของจุดตรวจวัดเก่า',
         },
       ],
@@ -218,7 +218,7 @@ describe('normal operator connection point-code sequence', () => {
       details: {
         path: 'pointCodeAssignments.0.pointCode',
         reason: 'INVALID_MANUAL_LEGACY_POINT_CODE',
-        pointCode: 'W1000',
+        pointCode: 'P1000',
         systemType: 'CEMS',
       },
     });
@@ -259,11 +259,11 @@ describe('normal operator connection point-code sequence', () => {
         {
           measurementPointId: 201,
           assignmentMode: 'MANUAL_LEGACY',
-          pointCode: 'W1000',
+          pointCode: 'P1000',
           reason: 'ใช้รหัสเดิมของจุดตรวจวัดเก่า',
         },
       ],
-      registryConflictPointCode: 'W1000',
+      registryConflictPointCode: 'P1000',
     });
     mockedDb.transaction.mockImplementationOnce(harness.runTransaction);
 
@@ -281,7 +281,7 @@ describe('normal operator connection point-code sequence', () => {
       details: {
         path: 'pointCodeAssignments.0.pointCode',
         reason: 'POINT_CODE_ALREADY_ASSIGNED',
-        pointCode: 'W1000',
+        pointCode: 'P1000',
       },
     });
   });
@@ -317,9 +317,9 @@ describe('normal operator connection point-code sequence', () => {
     expect(harness.sequenceUpdate).not.toHaveBeenCalled();
   });
 
-  it('uses the highest W point code and ignores other point-code shapes', async () => {
+  it('uses the highest P point code and ignores historical or unrelated point-code shapes', async () => {
     const harness = pointCodeHarness('WPMS', {
-      existingPointCodes: ['P9999', 'W2005', 'WEMS-0099/2568'],
+      existingPointCodes: ['W9999', 'P2005', 'WEMS-0099/2568'],
     });
     mockedDb.transaction.mockImplementationOnce(harness.runTransaction);
 
@@ -330,7 +330,7 @@ describe('normal operator connection point-code sequence', () => {
       { connectionDueAt: '2026-08-20T00:00:00.000Z' },
     );
 
-    expect(updated.measurementPoints.map((point) => point.pointCode)).toEqual(['W2006', 'W2007']);
+    expect(updated.measurementPoints.map((point) => point.pointCode)).toEqual(['P2006', 'P2007']);
   });
 
   it('issues automatic codes only once when the same request is approved concurrently', async () => {
@@ -514,7 +514,7 @@ function pointCodeHarness(
             makeChain({
               first: async () => ({
                 system_type: systemType,
-                prefix: systemType === 'CEMS' ? 'S' : 'W',
+                prefix: systemType === 'CEMS' ? 'S' : 'P',
                 last_sequence: options.initialSequence ?? 2000,
               }),
             }),
@@ -668,7 +668,7 @@ function measurementPointRow(point: PointCodeState) {
 }
 
 function concurrentApprovalHarness(systemType: 'CEMS' | 'WPMS') {
-  const prefix = systemType === 'CEMS' ? 'S' : 'W';
+  const prefix = systemType === 'CEMS' ? 'S' : 'P';
   const pointState = new Map<number, PointCodeState>([
     [201, { id: 201, pointCode: null, assignmentMode: null, assignmentReason: null }],
     [202, { id: 202, pointCode: null, assignmentMode: null, assignmentReason: null }],

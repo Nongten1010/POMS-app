@@ -307,7 +307,7 @@ interface CreateRequestOptions {
 
 interface PointCodeSequenceRow {
   system_type: 'CEMS' | 'WPMS';
-  prefix: 'S' | 'W';
+  prefix: 'S' | 'P';
   last_sequence: number | string;
 }
 
@@ -3001,8 +3001,8 @@ function normalizeManualLegacyPointCode(
   assignmentIndex: number,
 ): string {
   const pointCode = normalizePointCode(value);
-  const expectedPrefix = systemType === 'CEMS' ? 'S' : 'W';
-  const match = pointCode.match(/^([SW])(\d{4})$/);
+  const expectedPrefix = systemType === 'CEMS' ? 'S' : 'P';
+  const match = pointCode.match(/^([SP])(\d{4})$/);
   const sequence = match ? Number(match[2]) : Number.NaN;
   if (!match || match[1] !== expectedPrefix || sequence < 1 || sequence > 1999) {
     throw new BadRequestError(
@@ -3059,7 +3059,7 @@ async function reservePointCodeRegistryEntry(
   },
 ): Promise<void> {
   const normalizedPointCode = normalizePointCode(input.pointCode);
-  const numericMatch = normalizedPointCode.match(/^([SW])(\d{4})$/);
+  const numericMatch = normalizedPointCode.match(/^([SP])(\d{4})$/);
 
   try {
     await trx('cems_wpms_point_code_registry').insert({
@@ -3091,7 +3091,7 @@ async function reservePointCodes(
   quantity: number,
 ): Promise<string[]> {
   if (quantity === 0) return [];
-  const prefix = systemType === 'CEMS' ? 'S' : 'W';
+  const prefix = systemType === 'CEMS' ? 'S' : 'P';
   let sequence = await trx<PointCodeSequenceRow>('cems_wpms_point_code_sequences')
     .where('system_type', systemType)
     .forUpdate()
@@ -3139,7 +3139,7 @@ async function reservePointCodes(
 
 async function findMaxExistingPointCodeSequence(
   trx: Knex.Transaction,
-  prefix: 'S' | 'W',
+  prefix: 'S' | 'P',
 ): Promise<number> {
   const rows = await trx<PointCodeRegistryRow>('cems_wpms_point_code_registry')
     .where('normalized_point_code', 'like', `${prefix}%`)

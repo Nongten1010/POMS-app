@@ -303,6 +303,19 @@ describe('POMS OpenAPI contract', () => {
     );
     expect(asObject(reviewOperation.responses, 'review.responses')).toHaveProperty('409');
 
+    const pointCodeAssignmentSchema = asObject(
+      asObject(asObject(document.components, 'components').schemas, 'schemas')
+        .PointCodeAssignment as unknown,
+      'PointCodeAssignment',
+    );
+    const manualAssignmentProperties = asObject(
+      pointCodeAssignmentSchema.properties as unknown,
+      'PointCodeAssignment.properties',
+    );
+    expect(asObject(manualAssignmentProperties.pointCode, 'manual.pointCode')).toMatchObject({
+      pattern: '^[SP]\\d{4}$',
+    });
+
     const changeStatusSchema = asObject(
       asObject(
         asObject(statusOperation.requestBody, 'status.requestBody').content,
