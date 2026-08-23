@@ -111,6 +111,13 @@ const baseColumns = [
   { field: 'machineryHorsepower', headerName: 'แรงม้าเครื่องจักร', width: 160, type: 'number' },
 ]
 
+const connectionStatusSortOrder = {
+  [emptyValue]: 0,
+  เชื่อมต่อครบถ้วน: 1,
+  ได้รับยกเว้นทั้งหมด: 2,
+  ยังไม่แล้วเสร็จ: 3,
+}
+
 const eligibleMonitoringColumns = [
   {
     field: 'cemsPointCount',
@@ -130,8 +137,9 @@ const eligibleMonitoringColumns = [
     headerAlign: 'center',
     headerClassName: 'eligible-cems-header',
     cellClassName: 'eligible-cems-cell',
-    sortable: false,
     filterable: false,
+    valueGetter: (_, row) => getConnectionStatusSummaryCellValue(row, 'CEMS'),
+    sortComparator: compareConnectionStatusSummary,
     renderCell: (params) => (
       <ConnectionStatusSummaryChip value={getConnectionStatusSummaryCellValue(params.row, 'CEMS')} />
     ),
@@ -154,8 +162,9 @@ const eligibleMonitoringColumns = [
     headerAlign: 'center',
     headerClassName: 'eligible-wpms-header',
     cellClassName: 'eligible-wpms-cell',
-    sortable: false,
     filterable: false,
+    valueGetter: (_, row) => getConnectionStatusSummaryCellValue(row, 'WPMS'),
+    sortComparator: compareConnectionStatusSummary,
     renderCell: (params) => (
       <ConnectionStatusSummaryChip value={getConnectionStatusSummaryCellValue(params.row, 'WPMS')} />
     ),
@@ -265,6 +274,19 @@ function getMonitoringPointCountNumber(value) {
 
 function compareMonitoringPointCounts(firstValue, secondValue) {
   return getMonitoringPointCountNumber(firstValue) - getMonitoringPointCountNumber(secondValue)
+}
+
+function compareConnectionStatusSummary(firstValue, secondValue) {
+  const firstLabel = firstValue || emptyValue
+  const secondLabel = secondValue || emptyValue
+  const firstOrder = connectionStatusSortOrder[firstLabel] ?? Number.MAX_SAFE_INTEGER
+  const secondOrder = connectionStatusSortOrder[secondLabel] ?? Number.MAX_SAFE_INTEGER
+
+  if (firstOrder !== secondOrder) {
+    return firstOrder - secondOrder
+  }
+
+  return String(firstLabel).localeCompare(String(secondLabel), 'th')
 }
 
 function getConnectionStatusSummaryCellValue(row = {}, type) {
