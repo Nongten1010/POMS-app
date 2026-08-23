@@ -4590,6 +4590,7 @@ function buildDeviceConfigChannels(rows, deviceCode) {
       valueRange: buildValueRange(row.min, row.max) ?? null,
       alertLow: toNumberOrNull(row.alertLow),
       alertHigh: toNumberOrNull(row.alertHigh),
+      testMode: Boolean(row.testMode),
       valueFormat: nullIfBlank(valueFormatCodeMap[row.valueFormat] ?? row.valueFormat),
       offset: toNumberOrNull(row.offset),
       encoding: nullIfBlank(encodingCodeMap[row.encodingData] ?? row.encodingData),
