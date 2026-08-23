@@ -26,6 +26,7 @@ import {
   Alert,
   Snackbar,
   Stack,
+  Switch,
   Tab,
   Table,
   TableBody,
@@ -3661,6 +3662,7 @@ function createEmptyParameterMappingRow(parameter, index) {
     offset: '',
     encodingData: '',
     status: '',
+    testMode: false,
   }
 }
 
@@ -3691,6 +3693,7 @@ function mapParameterMappingRows(parameterMappings = [], parameterOptions = []) 
       offset: mapping.offset ?? '',
       encodingData: encodingLabelMap[encodingData] ?? encodingData,
       status: mapping.status ?? '',
+      testMode: Boolean(mapping.testMode ?? mapping.test_mode),
     }
   })
 }
@@ -3714,6 +3717,7 @@ function ConnectionParameterTable({ deviceCodeOptions, rows, setRows }) {
     { label: 'Address ID', width: 124 },
     { label: 'พารามิเตอร์', width: 144 },
     { label: 'สถานะ', width: 170 },
+    { label: 'Test Mode', width: 112 },
     { label: 'Min', width: 108 },
     { label: 'Max', width: 108 },
     { label: 'Alert(Low)', width: 118 },
@@ -3729,7 +3733,7 @@ function ConnectionParameterTable({ deviceCodeOptions, rows, setRows }) {
         การเชื่อมต่อพารามิเตอร์
       </Typography>
       <TableContainer sx={{ border: 1, borderColor: 'divider', overflowX: 'auto' }}>
-        <Table size="small" sx={{ minWidth: 1538, ...borderedTableSx }}>
+        <Table size="small" sx={{ minWidth: 1650, ...borderedTableSx }}>
           <TableHead>
             <TableRow>
               {columns.map((column) => (
@@ -3794,6 +3798,13 @@ function ConnectionParameterTable({ deviceCodeOptions, rows, setRows }) {
                         </MenuItem>
                       ))}
                     </TextField>
+                  </TableCell>
+                  <TableCell sx={{ minWidth: 112, textAlign: 'center' }}>
+                    <Switch
+                      checked={Boolean(row.testMode)}
+                      onChange={(event) => updateRow(index, 'testMode', event.target.checked)}
+                      inputProps={{ 'aria-label': `Test Mode ${row.parameter || index + 1}` }}
+                    />
                   </TableCell>
                   <TableCell sx={{ minWidth: 108 }}>
                     <TextField
