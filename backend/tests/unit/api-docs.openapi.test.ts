@@ -847,6 +847,34 @@ describe('POMS OpenAPI contract', () => {
     );
     expect(pattern.test('1-LEGACY_POINT')).toBe(true);
     expect(pattern.test('CEMS-0001/2569')).toBe(true);
+
+    for (const schemaName of ['DeviceChannel', 'DeviceConnectionChannel']) {
+      const channelSchema = asObject(schemas[schemaName], schemaName);
+      const channelProperties = asObject(channelSchema.properties, `${schemaName}.properties`);
+      expect(channelProperties.testMode).toEqual(
+        expect.objectContaining({ type: 'boolean', nullable: true, default: false }),
+      );
+    }
+
+    const integrationResponses = asObject(
+      integrationOperation.responses,
+      'integration device config.responses',
+    );
+    const integrationSuccess = asObject(integrationResponses['200'], 'integration 200');
+    const integrationContent = asObject(integrationSuccess.content, 'integration 200.content');
+    expect(
+      asObject(integrationContent['application/json'], 'integration application/json').schema,
+    ).toEqual({ $ref: '#/components/schemas/IntegrationDeviceConfigsResponse' });
+
+    const integrationParameterConfig = asObject(
+      schemas.IntegrationParameterConfig,
+      'IntegrationParameterConfig',
+    );
+    expect(integrationParameterConfig.required).toEqual(expect.arrayContaining(['testMode']));
+    expect(
+      asObject(integrationParameterConfig.properties, 'IntegrationParameterConfig.properties')
+        .testMode,
+    ).toEqual(expect.objectContaining({ type: 'boolean', default: false }));
   });
 
   it('does not offer requestType on the two dedicated operator endpoints', () => {

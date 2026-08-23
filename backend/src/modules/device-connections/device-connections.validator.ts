@@ -34,6 +34,7 @@ const modbusEncodingAliases = {
 
 const nullableNumber = z.number().nullable().optional().default(null);
 const nullableString = z.string().nullable().optional().default(null);
+const defaultFalseBoolean = z.preprocess((value) => value ?? false, z.boolean());
 const nullableParameterStatus = z
   .enum(DEVICE_CONNECTION_PARAMETER_STATUSES)
   .nullable()
@@ -89,6 +90,7 @@ const configChannelSchema = z
     addressId: nullableNumber,
     dataType: z.string(),
     unit: z.string().nullable().optional().default(null),
+    testMode: defaultFalseBoolean,
     valueRange: measurementRangeSchema.nullable().optional().default(null),
     alertLow: nullableNumber,
     alertHigh: nullableNumber,

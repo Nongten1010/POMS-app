@@ -59,6 +59,7 @@ export interface DeviceMeasurementChannelInput {
   addressId: number | null;
   dataType: string;
   unit?: string | null;
+  testMode?: boolean | null;
   valueRange?: MeasurementRangeInput | null;
   alertLow?: number | null;
   alertHigh?: number | null;

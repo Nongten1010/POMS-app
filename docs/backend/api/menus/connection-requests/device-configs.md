@@ -80,6 +80,7 @@ POST ทั้งสอง endpoint รับ body ได้สามรูป�
 | `valueRange.max` | number | No | Yes | ค่าสูงสุด |
 | `alertLow` | number | No | Yes | ค่าแจ้งเตือนต่ำ |
 | `alertHigh` | number | No | Yes | ค่าแจ้งเตือนสูง |
+| `testMode` | boolean | No | Yes | ระบุว่า channel อยู่ในโหมดทดสอบ; รับ JSON boolean `true`/`false`; เมื่อไม่ส่งหรือส่ง `null` backend normalize เป็น `false` และ response คืน boolean เสมอ |
 | `valueFormat` | string | No | Yes | รูปแบบค่า เช่น `MEASUREMENT_VALUE`, `CURRENT`, `VOLTAGE`; backend ไม่ตรวจ enum เชิง business |
 | `offset` | number | No | Yes | offset ของค่าที่อ่าน |
 | `encoding` | string | No | Yes | รูปแบบ encoding; backend ไม่ตรวจ enum เชิง business |
@@ -156,8 +157,10 @@ GET /api/v1/cems-wpms-requests/101/device-configs?stationId=CEMS-0001%2F2569
 | `data.connectionForms` | object[] | No | ค่า prefill ของแต่ละอุปกรณ์ |
 | `data.connectionForms[].values` | object | No | ค่า `settings` ในรูปแบบ string สำหรับ form; ค่า `null` แสดงเป็น `""` |
 | `data.parameterMappings` | object[] | No | ค่า prefill ของ channel; ค่า nullable แสดงเป็น `""` |
+| `data.parameterMappings[].testMode` | boolean | No | สถานะโหมดทดสอบของ channel; คืน `false` สำหรับ config เดิมหรือ request ที่ไม่ได้ส่ง field |
 | `data.statusManagement` | object | No | ค่า prefill สถานะ; ใช้ default `Normal` เมื่อไม่มีค่าที่บันทึก |
 | `data.rawConfigs` | object | No | config รูปแบบ machine-readable ซึ่งรักษา `null` ไว้ |
+| `data.rawConfigs.channels[].testMode` | boolean | No | สถานะโหมดทดสอบของ channel ใน machine-readable config |
 | `data.testResults` | unknown[] | No | ผลทดสอบการเชื่อมต่อ; ปัจจุบันคืน array |
 
 ### Success Response Example
@@ -522,6 +525,7 @@ Response ใช้ schema เดียวกับ [GET ของ request](#succ
         },
         "alertLow": null,
         "alertHigh": null,
+        "testMode": true,
         "valueFormat": null,
         "offset": null,
         "encoding": null,
@@ -578,6 +582,7 @@ Response ใช้ schema เดียวกับ [POST ของ request](#suc
         },
         "alertLow": null,
         "alertHigh": null,
+        "testMode": true,
         "valueFormat": null,
         "offset": null,
         "encoding": null,

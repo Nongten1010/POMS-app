@@ -566,7 +566,7 @@ const deviceConnectionExample = {
     dbPass: 'test-only-placeholder',
     dbName: 'POMS',
   },
-  channels: [{ dataType: 'CO (ppm)', addressId: 1 }],
+  channels: [{ dataType: 'CO (ppm)', addressId: 1, testMode: true }],
   statusManagement: null,
 };
 const annualDeviceConnectionExample = {
@@ -1323,6 +1323,13 @@ const componentSchemas: Record<string, OpenApiObject> = {
       valueRange: nullableRef('DeviceConnectionRange'),
       alertLow: { type: 'number', nullable: true },
       alertHigh: { type: 'number', nullable: true },
+      testMode: {
+        type: 'boolean',
+        nullable: true,
+        default: false,
+        description:
+          'ระบุว่า channel อยู่ในโหมดทดสอบ; เมื่อไม่ส่งหรือส่ง null ระบบ normalize เป็น false',
+      },
       valueFormat: { type: 'string', nullable: true },
       offset: { type: 'number', nullable: true },
       encoding: { type: 'string', nullable: true },

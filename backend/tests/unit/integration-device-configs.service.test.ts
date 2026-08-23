@@ -63,6 +63,7 @@ describe('integrationDeviceConfigsService', () => {
           {
             addressId: 40001,
             dataType: 'NOx (ppm)',
+            testMode: true,
             valueRange: { min: 0, max: 200 },
             alertLow: 50,
             alertHigh: 180,
@@ -74,6 +75,7 @@ describe('integrationDeviceConfigsService', () => {
           {
             addressId: 40002,
             dataType: 'SO2 (ppm)',
+            testMode: false,
             valueRange: { min: 0, max: 500 },
             valueFormat: 'MEASUREMENT_VALUE',
             offset: 0,
@@ -184,6 +186,7 @@ describe('integrationDeviceConfigsService', () => {
           valueRange: { min: 0, max: 200 },
           alertLow: 50,
           alertHigh: 180,
+          testMode: true,
           valueFormat: 'MEASUREMENT_VALUE',
           offset: 0,
           encoding: 'UNSIGNED16_BIG_ENDIAN',
@@ -200,6 +203,7 @@ describe('integrationDeviceConfigsService', () => {
           parameter: 'SO2 (ppm)',
           parameterName: 'SO2',
           parameterUnit: 'ppm',
+          testMode: false,
           valueRange: { min: 0, max: 500 },
           alertLow: null,
           alertHigh: null,
@@ -279,6 +283,43 @@ describe('integrationDeviceConfigsService', () => {
         status: laterSchedule.status,
       },
     ]);
+  });
+
+  it('defaults integration parameter testMode to false when the stored channel omits it', async () => {
+    mockedDeviceConnectionsService.listActiveSettingsForIntegration.mockResolvedValue([
+      {
+        id: 4,
+        requestId: null,
+        stationId: 'S0002',
+        deviceCode: 'S0002/03',
+        protocol: 'MODBUS_TCP',
+        settings: {},
+        channels: [
+          {
+            addressId: 40003,
+            dataType: 'NOx (ppm)',
+            valueRange: null,
+            alertLow: null,
+            alertHigh: null,
+            valueFormat: null,
+            offset: 0,
+            encoding: null,
+            status: null,
+          },
+        ],
+        statusManagement: null,
+        createdBy: 42,
+        createdAt: '2026-06-12T00:00:00.000Z',
+        updatedAt: '2026-06-12T00:00:00.000Z',
+      },
+    ]);
+
+    const result = await integrationDeviceConfigsService.getByStationId('S0002');
+
+    expect(result.parameterConfigs[0]).toMatchObject({
+      parameter: 'NOx (ppm)',
+      testMode: false,
+    });
   });
 
   it('exposes POMS Box configs with empty transport fields and No Discharge schedules', async () => {
@@ -413,6 +454,7 @@ describe('integrationDeviceConfigsService', () => {
             valueRange: { min: null, max: 500 },
             alertLow: null,
             alertHigh: null,
+            testMode: null,
             valueFormat: null,
             offset: null,
             encoding: null,
@@ -439,6 +481,7 @@ describe('integrationDeviceConfigsService', () => {
     expect(result.parameterConfigs[0]).toMatchObject({
       addressId: null,
       valueRange: { min: null, max: 500 },
+      testMode: false,
       valueFormat: null,
       offset: null,
       encoding: null,

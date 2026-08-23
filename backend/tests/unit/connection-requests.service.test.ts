@@ -2395,6 +2395,7 @@ describe('connectionRequestsService', () => {
           {
             addressId: 40001,
             dataType: 'NOx (ppm)',
+            testMode: true,
             valueRange: { min: 0, max: 200 },
             valueFormat: 'MEASUREMENT_VALUE',
             offset: 0,
@@ -2460,6 +2461,7 @@ describe('connectionRequestsService', () => {
           deviceCode: 'STACK-A/RTU-01',
           addressId: '40001',
           parameter: 'NOx (ppm)',
+          testMode: true,
           valueFormat: 'ค่าข้อมูลตรวจวัด',
           encodingData: 'Unsigned16 - Big Endian',
           status: 'Maintenance',
@@ -2505,6 +2507,7 @@ describe('connectionRequestsService', () => {
       deviceCode: 'STACK-A/RTU-01',
       addressId: 40001,
       dataType: 'NOx (ppm)',
+      testMode: true,
     });
     expect(result.rawConfigs.channels[0]).not.toHaveProperty('unit');
   });
@@ -2548,6 +2551,7 @@ describe('connectionRequestsService', () => {
           {
             addressId: null,
             dataType: 'NOx (ppm)',
+            testMode: null,
             valueRange: { min: null, max: 500 },
             alertLow: null,
             alertHigh: null,
@@ -2583,6 +2587,7 @@ describe('connectionRequestsService', () => {
       addressId: '',
       min: '',
       max: '500',
+      testMode: false,
       alertLow: '',
       alertHigh: '',
       valueFormat: '',
@@ -2598,6 +2603,7 @@ describe('connectionRequestsService', () => {
     expect(result.rawConfigs.channels[0]).toMatchObject({
       addressId: null,
       valueRange: { min: null, max: 500 },
+      testMode: false,
       valueFormat: null,
       offset: null,
       encoding: null,
@@ -2903,11 +2909,11 @@ describe('connectionRequestsService', () => {
         stationId: 'STACK-A',
         deviceCode: 'STACK-A/TCP-01',
         channels: [
-          { addressId: 40001, dataType: 'CO (ppm)', offset: 0 },
-          { addressId: 40002, dataType: 'NOx (ppm)', offset: 0 },
-          { addressId: 40003, dataType: 'Temp. (°C)', offset: 0 },
-          { addressId: 40004, dataType: 'O2 (%)', offset: 0 },
-          { addressId: 40005, dataType: 'Flow (m3/hr)', offset: 0 },
+          { addressId: 40001, dataType: 'CO (ppm)', testMode: true, offset: 0 },
+          { addressId: 40002, dataType: 'NOx (ppm)', testMode: false, offset: 0 },
+          { addressId: 40003, dataType: 'Temp. (°C)', testMode: false, offset: 0 },
+          { addressId: 40004, dataType: 'O2 (%)', testMode: false, offset: 0 },
+          { addressId: 40005, dataType: 'Flow (m3/hr)', testMode: false, offset: 0 },
         ],
       }),
     ]);
@@ -2925,11 +2931,13 @@ describe('connectionRequestsService', () => {
       'NOx (ppm)',
       'Temp. (°C)',
     ]);
+    expect(result.parameterMappings[0]?.testMode).toBe(true);
     expect(result.rawConfigs.channels.map((channel) => channel.dataType)).toEqual([
       'CO (ppm)',
       'NOx (ppm)',
       'Temp. (°C)',
     ]);
+    expect(result.rawConfigs.channels[0]?.testMode).toBe(true);
   });
 
   it('returns one device config form detail by config id and rejects missing config', async () => {

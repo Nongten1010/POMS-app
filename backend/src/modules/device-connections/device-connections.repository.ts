@@ -30,6 +30,7 @@ interface DeviceConnectionConfigRow {
 interface DeviceMeasurementChannelRow {
   address_id: number | string | null;
   data_type: string;
+  test_mode: boolean | number | string | null;
   value_range_json: string | null;
   alert_low: number | string | null;
   alert_high: number | string | null;
@@ -519,6 +520,7 @@ async function insertChannels(
       config_id: configId,
       address_id: channel.addressId,
       data_type: toStoredChannelDataType(channel),
+      test_mode: channel.testMode ?? false,
       value_range_json: channel.valueRange ? JSON.stringify(channel.valueRange) : null,
       alert_low: channel.alertLow ?? null,
       alert_high: channel.alertHigh ?? null,
@@ -536,6 +538,7 @@ function toChannelDTO(row: DeviceMeasurementChannelRow): DeviceMeasurementChanne
   return {
     addressId: toNullableNumber(row.address_id),
     dataType: row.data_type,
+    testMode: toBoolean(row.test_mode),
     valueRange: row.value_range_json ? parseMeasurementRange(row.value_range_json) : null,
     alertLow: toNullableNumber(row.alert_low),
     alertHigh: toNullableNumber(row.alert_high),
@@ -626,4 +629,14 @@ function toNullableNumber(value: unknown): number | null {
   }
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function toBoolean(value: unknown): boolean {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    return normalized === '1' || normalized === 'true';
+  }
+  return false;
 }

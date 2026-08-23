@@ -61,6 +61,7 @@
 
 ## Integrations
 
+- [Test Mode ของ Device Config Channel](./integrations/device-config-test-mode.tdd.md)
 - [การรายงานค่าต่อพารามิเตอร์ใน Device Config](./integrations/device-config-parameter-reporting.tdd.md)
 - [ประเภทจุดตรวจวัดใน Device Config](./integrations/device-config-point-types.tdd.md)
 - [สัญญาเวลารายชั่วโมงของ Integration Alert Events](./integrations/alert-event-hourly-time.tdd.md)

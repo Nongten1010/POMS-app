@@ -50,6 +50,7 @@ export interface IntegrationParameterConfigDTO {
   valueRange: { min: number | null; max: number | null } | null;
   alertLow: number | null;
   alertHigh: number | null;
+  testMode: boolean;
   valueFormat: string | null;
   offset: number | null;
   encoding: string | null;

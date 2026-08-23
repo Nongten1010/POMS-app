@@ -75,6 +75,7 @@ describe('device connection validators', () => {
           addressId: 40001,
           dataType: 'CO2',
           unit: 'ppm',
+          testMode: true,
           valueRange: { min: 0, max: 200 },
           valueFormat: 'MEASUREMENT_VALUE',
           offset: 0,
@@ -87,8 +88,32 @@ describe('device connection validators', () => {
     if (result.success) {
       expect(result.data.channels[0]).toMatchObject({
         dataType: 'CO2 (ppm)',
+        testMode: true,
       });
       expect(result.data.channels[0]).not.toHaveProperty('unit');
+    }
+  });
+
+  it('defaults omitted channel testMode to false', () => {
+    const result = createDeviceConnectionConfigSchema.safeParse({
+      stationId: 'STATION_002',
+      protocol: 'MODBUS_TCP',
+      settings: {},
+      channels: [
+        {
+          addressId: 40001,
+          dataType: 'NOx (ppm)',
+          offset: 0,
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.channels[0]).toMatchObject({
+        dataType: 'NOx (ppm)',
+        testMode: false,
+      });
     }
   });
 
@@ -501,6 +526,24 @@ describe('device connection validators', () => {
     }
   });
 
+  it('rejects string testMode values instead of coercing them', () => {
+    const result = createDeviceConnectionConfigSchema.safeParse({
+      stationId: 'STATION_001',
+      protocol: 'MODBUS_TCP',
+      settings: {},
+      channels: [
+        {
+          addressId: 40001,
+          dataType: 'CO (ppm)',
+          testMode: 'true',
+          offset: 0,
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+  });
+
   it('does not validate alert threshold order in device config payloads', () => {
     const result = createDeviceConnectionConfigSchema.safeParse({
       stationId: 'STATION_001',
@@ -550,6 +593,7 @@ describe('device connection validators', () => {
           valueRange: null,
           alertLow: null,
           alertHigh: null,
+          testMode: null,
           valueFormat: null,
           offset: null,
           encoding: null,
@@ -576,6 +620,7 @@ describe('device connection validators', () => {
           valueRange: null,
           alertLow: null,
           alertHigh: null,
+          testMode: false,
           valueFormat: null,
           offset: null,
           encoding: null,
@@ -738,6 +783,7 @@ describe('device connection validators', () => {
           dataType: 'COD',
           unit: 'mg/L',
           valueRange: { min: 0, max: 200 },
+          testMode: true,
           valueFormat: 'MEASUREMENT_VALUE',
           offset: 0,
           encoding: 'UNSIGNED',
@@ -749,8 +795,35 @@ describe('device connection validators', () => {
     expect(result.data?.channels[0]).toMatchObject({
       dataType: 'COD (mg/L)',
       valueRange: { min: 0, max: 200 },
+      testMode: true,
       valueFormat: 'MEASUREMENT_VALUE',
       encoding: 'UNSIGNED',
+    });
+  });
+
+  it('defaults omitted testMode to false on channel rows', () => {
+    const result = createDeviceConnectionConfigSchema.safeParse({
+      stationId: 'STATION_001',
+      protocol: 'MODBUS_TCP',
+      settings: {
+        hostIp: '192.168.1.10',
+        port: 502,
+        slaveId: 1,
+      },
+      channels: [
+        {
+          addressId: 40001,
+          dataType: 'NOx',
+          unit: 'ppm',
+          offset: 0,
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.data?.channels[0]).toMatchObject({
+      dataType: 'NOx (ppm)',
+      testMode: false,
     });
   });
 

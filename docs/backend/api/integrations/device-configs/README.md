@@ -139,6 +139,7 @@ X-API-Key: <DEVICE_CONFIG_API_KEY>
 | `valueRange.max` | number | Yes | ค่าสูงสุด; เป็น `null` แยกจาก `min` ได้ |
 | `alertLow` | number | Yes | ค่า Alert(Low) |
 | `alertHigh` | number | Yes | ค่า Alert(High) |
+| `testMode` | boolean | No | `true` เมื่อ channel ถูกตั้งเป็นโหมดทดสอบ; config เดิมหรือ request ที่ไม่ส่งค่าให้คืน `false` |
 | `valueFormat` | string | Yes | รูปแบบค่าที่บันทึกใน channel |
 | `offset` | number | Yes | offset; storage รองรับ `null` |
 | `encoding` | string | Yes | encoding ของ channel |
@@ -205,6 +206,7 @@ X-API-Key: <DEVICE_CONFIG_API_KEY>
         },
         "alertLow": null,
         "alertHigh": null,
+        "testMode": true,
         "valueFormat": null,
         "offset": null,
         "encoding": null,
@@ -249,6 +251,7 @@ X-API-Key: <DEVICE_CONFIG_API_KEY>
 - `dbPass` คืนค่าจริงเฉพาะ endpoint integration นี้; device-config endpoint สำหรับ UI และระบบภายในอื่นยังคง mask เป็น `********`
 - success response กำหนด `Cache-Control: no-store`; client ต้องไม่ cache response และห้ามบันทึก `X-API-Key` หรือ response body ลง log
 - `parameterConfigs.addressId`, `offset`, `valueRange.min` และ `valueRange.max` รักษา `null` ตาม storage contract
+- `parameterConfigs.testMode` คืนเป็น boolean เสมอ เพื่อให้ Worker แยก channel ทดสอบออกจาก channel ปกติ; endpoint นี้ส่งต่อสถานะ แต่ไม่กำหนดนโยบายการเก็บค่าหรือสร้าง Alert ของ Worker
 - `parameterName` และ `parameterUnit` แยกจากวงเล็บท้าย `parameter`; client ควรใช้ `parameter` เป็น display label ที่มีชื่อพร้อมหน่วย
 - `standardCriteria`, `eiaCriteria`, `standardCondition`, `dryBasis` และ `oxygenOrExcessAir` จับคู่กับเครื่องมือของ connected point ด้วยชื่อพารามิเตอร์พร้อมหน่วยก่อน หากต้อง fallback แบบไม่รวมหน่วยจะใช้เฉพาะกรณีที่ตรงเพียงรายการเดียว
 - ค่าในกลุ่มการรายงานค่าเป็น `null` เมื่อข้อมูลต้นทางไม่ได้บันทึกค่า หรือไม่พบพารามิเตอร์ต้นทางที่จับคู่ได้; ค่า `false` จะคงเป็น `false` และไม่ถูกแปลงเป็น `null`

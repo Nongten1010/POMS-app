@@ -45,6 +45,7 @@ describe('deviceConnectionsRepository', () => {
             address_id: null,
             data_type: 'NOx (ppm)',
             value_range_json: JSON.stringify({ min: null, max: 500 }),
+            test_mode: true,
             alert_low: null,
             alert_high: null,
             value_format: null,
@@ -77,6 +78,7 @@ describe('deviceConnectionsRepository', () => {
             addressId: null,
             dataType: 'NOx (ppm)',
             valueRange: { min: null, max: 500 },
+            testMode: true,
             alertLow: null,
             alertHigh: null,
             valueFormat: null,
@@ -189,6 +191,139 @@ describe('deviceConnectionsRepository', () => {
       dbPass: 'secret-pass',
       dbName: 'measurements',
     });
+  });
+
+  it('hydrates missing or false test mode values as false', async () => {
+    mockedDb.mockImplementation((tableName: unknown) => {
+      if (tableName === 'device_connection_configs') {
+        return rowsQuery([
+          {
+            id: '13',
+            request_id: null,
+            station_id: 'S0004',
+            device_code: 'S0004/01',
+            protocol: 'MODBUS_TCP',
+            settings_json: JSON.stringify({}),
+            status_management_json: null,
+            created_by: '42',
+            created_at: '2026-08-01T00:00:00.000Z',
+            updated_at: '2026-08-01T00:00:00.000Z',
+          },
+        ]);
+      }
+
+      if (tableName === 'device_measurement_channels') {
+        return rowsQuery([
+          {
+            address_id: '40001',
+            data_type: 'CO (ppm)',
+            test_mode: 0,
+            value_range_json: null,
+            alert_low: null,
+            alert_high: null,
+            value_format: null,
+            offset_value: '0',
+            encoding: null,
+            parameter_status: null,
+          },
+        ]);
+      }
+
+      throw new Error(`Unexpected table: ${String(tableName)}`);
+    });
+
+    const [result] = await deviceConnectionsRepository.list({
+      stationId: 'S0004',
+      protocol: 'MODBUS_TCP',
+    });
+
+    expect(result.channels[0]).toMatchObject({
+      dataType: 'CO (ppm)',
+      testMode: false,
+    });
+  });
+
+  it('persists explicit and omitted testMode values for channel rows', async () => {
+    const insertedChannels: Array<Record<string, unknown>> = [];
+    let channelTableCall = 0;
+    const configRow = {
+      id: '99',
+      request_id: null,
+      station_id: 'S0099',
+      device_code: 'S0099/01',
+      protocol: 'MODBUS_TCP',
+      settings_json: JSON.stringify({}),
+      status_management_json: null,
+      created_by: '42',
+      created_at: '2026-08-23T00:00:00.000Z',
+      updated_at: '2026-08-23T00:00:00.000Z',
+    };
+    const trx = jest.fn((tableName: unknown) => {
+      if (tableName === 'device_connection_configs') {
+        return {
+          insert: jest.fn(() => ({
+            returning: jest.fn().mockResolvedValue([{ id: '99' }] as never),
+          })),
+          where: jest.fn().mockReturnThis(),
+          whereNull: jest.fn().mockReturnThis(),
+          first: jest.fn().mockResolvedValue(configRow as never),
+        };
+      }
+
+      if (tableName === 'device_measurement_channels') {
+        channelTableCall += 1;
+        if (channelTableCall === 1) {
+          return {
+            insert: jest.fn((rows: Array<Record<string, unknown>>) => {
+              insertedChannels.push(...rows);
+              return Promise.resolve();
+            }),
+          };
+        }
+
+        return rowsQuery(
+          insertedChannels.map((row) => ({
+            address_id: row.address_id,
+            data_type: row.data_type,
+            test_mode: row.test_mode,
+            value_range_json: row.value_range_json,
+            alert_low: row.alert_low,
+            alert_high: row.alert_high,
+            value_format: row.value_format,
+            offset_value: row.offset_value,
+            encoding: row.encoding,
+            parameter_status: row.parameter_status,
+          })),
+        );
+      }
+
+      throw new Error(`Unexpected table: ${String(tableName)}`);
+    });
+    const transaction = jest.fn(async (callback: (executor: typeof trx) => Promise<unknown>) =>
+      callback(trx),
+    );
+    Object.assign(mockedDb, { transaction });
+
+    const result = await deviceConnectionsRepository.create(
+      {
+        stationId: 'S0099',
+        deviceCode: 'S0099/01',
+        protocol: 'MODBUS_TCP',
+        settings: {},
+        channels: [
+          { addressId: 40001, dataType: 'CO (ppm)', testMode: true, offset: 0 },
+          { addressId: 40002, dataType: 'NOx (ppm)', offset: 0 },
+        ],
+        statusManagement: null,
+      },
+      42,
+    );
+
+    expect(insertedChannels).toEqual([
+      expect.objectContaining({ data_type: 'CO (ppm)', test_mode: true }),
+      expect.objectContaining({ data_type: 'NOx (ppm)', test_mode: false }),
+    ]);
+    expect(result.channels.map((channel) => channel.testMode)).toEqual([true, false]);
   });
 });
 
