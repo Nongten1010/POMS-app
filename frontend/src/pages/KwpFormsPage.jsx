@@ -33,7 +33,6 @@ import {
 } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import DeleteIcon from '@mui/icons-material/Delete'
-import FileDownloadIcon from '@mui/icons-material/FileDownload'
 import HistoryIcon from '@mui/icons-material/History'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import WarningAmberIcon from '@mui/icons-material/WarningAmber'
@@ -45,6 +44,7 @@ import buddhistEra from 'dayjs/plugin/buddhistEra'
 import 'dayjs/locale/th'
 import OfficerStatisticsPanel from '../components/OfficerStatisticsPanel'
 import kwpEmissionMeasurementMethodOptionItems from '../option/kwpEmissionMeasurementMethodOptions.json'
+import { createKwpFormPdf } from '../utils/kwpFormPdf'
 
 dayjs.extend(buddhistEra)
 dayjs.locale('th')
@@ -1162,6 +1162,8 @@ function buildKwp01PreviewData(form, formElement, dates, unreportedParameters) {
 
   return {
     title: form?.title ?? '',
+    requestNo: form?.requestNo ?? '',
+    requestId: form?.requestId ?? form?.id ?? '',
     factoryName: form?.factory?.factoryName ?? '',
     factoryRegistration: form?.factory?.newRegistrationNo ?? '',
     industryType: getFactoryIndustryMainOrder(form?.factory),
@@ -1193,6 +1195,8 @@ function buildCommonFormPreviewData(form, formElement) {
   const formData = formElement ? new FormData(formElement) : new FormData()
 
   return {
+    requestNo: form?.requestNo ?? '',
+    requestId: form?.requestId ?? form?.id ?? '',
     factoryName: form?.factory?.factoryName ?? '',
     factoryRegistration: form?.factory?.newRegistrationNo ?? '',
     industryType: getFactoryIndustryMainOrder(form?.factory),
@@ -1396,6 +1400,8 @@ function buildKwp05PreviewData(form, formElement, calibrationRows) {
   return {
     formType: 'kwp05',
     title: form?.title ?? '',
+    requestNo: form?.requestNo ?? '',
+    requestId: form?.requestId ?? form?.id ?? '',
     companyName: form?.factory?.factoryName ?? '',
     factoryRegistration: form?.factory?.newRegistrationNo ?? '',
     businessActivity: getFormText(formData, 'businessActivity'),
@@ -1747,6 +1753,8 @@ function normalizeKwpAttachmentFile(file, index = 0) {
 function getKwpDetailCommonData(detail, row = {}) {
   return {
     title: detail.form ?? row.form ?? '',
+    requestNo: detail.requestNo ?? detail.requestNumber ?? detail.requestCode ?? row.requestNo ?? row.requestNumber ?? row.requestCode ?? '',
+    requestId: detail.id ?? detail.requestId ?? row.id ?? row.requestId ?? '',
     factoryName: detail.factoryName ?? row.factoryName ?? '',
     factoryRegistration: detail.factoryRegistrationNo ?? row.factoryRegistration ?? '',
     industryType: detail.industryType ?? row.industryMainOrder ?? row.industryType ?? '',
@@ -1863,6 +1871,8 @@ function buildKwpRequestPreviewDataFromDetail(detail, row = {}) {
     return {
       formType: 'kwp05',
       title: detail.form ?? row.form ?? 'กวภ.05',
+      requestNo: detail.requestNo ?? detail.requestNumber ?? detail.requestCode ?? row.requestNo ?? row.requestNumber ?? row.requestCode ?? '',
+      requestId: detail.id ?? detail.requestId ?? row.id ?? row.requestId ?? '',
       companyName: detail.factoryName ?? row.factoryName ?? '',
       factoryRegistration: detail.factoryRegistrationNo ?? row.factoryRegistration ?? '',
       businessActivity: report.businessActivity ?? '',
@@ -2817,6 +2827,8 @@ function Kwp01PreviewDialog({
   const [revisionSubmitting, setRevisionSubmitting] = useState(false)
   const [approveSubmitting, setApproveSubmitting] = useState(false)
   const [revisionError, setRevisionError] = useState('')
+  const [pdfPreviewState, setPdfPreviewState] = useState({ key: '', url: '', error: '' })
+  const pdfPreviewUrlRef = useRef('')
   const latestRevisionMessage = mode === 'edit' ? data?.latestRevisionMessage : ''
   const canRequestRevision = mode === 'review' && hasKwpWorkflowStatus(data, [
     'SUBMITTED',
@@ -2844,17 +2856,70 @@ function Kwp01PreviewDialog({
             ? 'กวภ.02'
             : 'กวภ.01'
   const isReadonlyViewDialog = mode === 'view'
-  const handleDownload = () => {
-    if (!data) return
+  const previewKey = data
+    ? `${mode}-${data.formType ?? 'kwp01'}-${data.id ?? data.requestId ?? data.requestNo ?? JSON.stringify(data).length}`
+    : ''
+  const pdfPreviewUrl = pdfPreviewState.key === previewKey ? pdfPreviewState.url : ''
+  const pdfPreviewError = pdfPreviewState.key === previewKey ? pdfPreviewState.error : ''
+  const pdfPreviewLoading = Boolean(open && !loading && data && previewKey && pdfPreviewState.key !== previewKey)
+  const clearPdfPreview = useCallback(() => {
+    if (pdfPreviewUrlRef.current) {
+      URL.revokeObjectURL(pdfPreviewUrlRef.current)
+      pdfPreviewUrlRef.current = ''
+    }
+    setPdfPreviewState({ key: '', url: '', error: '' })
+  }, [])
 
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `${previewFormNo}-document.json`
-    link.click()
-    URL.revokeObjectURL(url)
-  }
+  useEffect(() => () => {
+    if (pdfPreviewUrlRef.current) {
+      URL.revokeObjectURL(pdfPreviewUrlRef.current)
+      pdfPreviewUrlRef.current = ''
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!open || loading || !data || !previewKey) {
+      return undefined
+    }
+
+    if (pdfPreviewState.key === previewKey) {
+      return undefined
+    }
+
+    let isActive = true
+    let nextUrl = ''
+
+    createKwpFormPdf(data)
+      .then((pdfBytes) => {
+        const blob = new Blob([pdfBytes], { type: 'application/pdf' })
+        nextUrl = URL.createObjectURL(blob)
+
+        if (!isActive) {
+          URL.revokeObjectURL(nextUrl)
+          return
+        }
+
+        if (pdfPreviewUrlRef.current) {
+          URL.revokeObjectURL(pdfPreviewUrlRef.current)
+        }
+        pdfPreviewUrlRef.current = nextUrl
+        setPdfPreviewState({ key: previewKey, url: nextUrl, error: '' })
+      })
+      .catch((error) => {
+        if (isActive) {
+          setPdfPreviewState({
+            key: previewKey,
+            url: '',
+            error: error instanceof Error ? error.message : 'สร้าง PDF preview ไม่สำเร็จ',
+          })
+        }
+      })
+
+    return () => {
+      isActive = false
+    }
+  }, [data, loading, open, pdfPreviewState.key, previewKey])
+
   const closeRevisionDialog = () => {
     if (revisionSubmitting) {
       return
@@ -2892,6 +2957,7 @@ function Kwp01PreviewDialog({
     }
 
     setStatusHistoryOpen(false)
+    clearPdfPreview()
     onClose?.()
   }
   const approveDocument = async () => {
@@ -2931,24 +2997,20 @@ function Kwp01PreviewDialog({
               ประวัติสถานะ
             </Button>
             {isReadonlyViewDialog ? (
-              <>
-                <Button
-                  variant="contained"
-                  size="small"
-                  startIcon={<FileDownloadIcon />}
-                  disabled={!data}
-                  onClick={handleDownload}
-                >
-                  ดาวน์โหลด
-                </Button>
-                <IconButton aria-label="ปิด" size="small" onClick={closePreviewDialog}>
-                  <CloseIcon />
-                </IconButton>
-              </>
+              <IconButton aria-label="ปิด" size="small" onClick={closePreviewDialog}>
+                <CloseIcon />
+              </IconButton>
             ) : null}
           </Stack>
         </DialogTitle>
-        <DialogContent dividers sx={{ bgcolor: 'neutral.100' }}>
+        <DialogContent
+          dividers
+          sx={{
+            bgcolor: 'neutral.100',
+            minHeight: { xs: '70vh', md: '78vh' },
+            overflow: 'hidden',
+          }}
+        >
           {loading ? (
             <Box sx={{ py: 8, textAlign: 'center' }}>
               <Typography variant="body1" color="text.secondary">
@@ -2979,10 +3041,38 @@ function Kwp01PreviewDialog({
               </Stack>
             </Paper>
           ) : null}
-          {!loading && (data?.formType === 'kwp02' || data?.formType === 'kwp04') ? <Kwp02PaperDocument data={data} /> : null}
-          {!loading && data?.formType === 'kwp03' ? <Kwp03PaperDocument data={data} /> : null}
-          {!loading && data?.formType === 'kwp05' ? <Kwp05PaperDocument data={data} /> : null}
-          {!loading && data && !['kwp02', 'kwp03', 'kwp04', 'kwp05'].includes(data.formType) ? <Kwp01PaperDocument data={data} /> : null}
+          {pdfPreviewLoading ? (
+            <Typography variant="body2" sx={{ mb: 2 }}>
+              กำลังสร้าง PDF preview...
+            </Typography>
+          ) : null}
+          {pdfPreviewError ? (
+            <Typography color="error" variant="body2" sx={{ mb: 2 }}>
+              {pdfPreviewError}
+            </Typography>
+          ) : null}
+          {pdfPreviewUrl ? (
+            <Box
+              component="iframe"
+              title="PDF preview"
+              src={pdfPreviewUrl}
+              sx={{
+                display: 'block',
+                width: '100%',
+                height: { xs: '70vh', md: '78vh' },
+                border: 0,
+                bgcolor: '#fff',
+              }}
+            />
+          ) : null}
+          {pdfPreviewError && data ? (
+            <Box sx={{ display: 'none' }}>
+              {(data.formType === 'kwp02' || data.formType === 'kwp04') ? <Kwp02PaperDocument data={data} /> : null}
+              {data.formType === 'kwp03' ? <Kwp03PaperDocument data={data} /> : null}
+              {data.formType === 'kwp05' ? <Kwp05PaperDocument data={data} /> : null}
+              {!['kwp02', 'kwp03', 'kwp04', 'kwp05'].includes(data.formType) ? <Kwp01PaperDocument data={data} /> : null}
+            </Box>
+          ) : null}
         </DialogContent>
         {submitError ? (
           <Alert severity="error" sx={{ borderRadius: 0 }}>
