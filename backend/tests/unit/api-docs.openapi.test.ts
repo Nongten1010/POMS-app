@@ -21,6 +21,10 @@ import {
   testDeviceConnectionSchema,
 } from '../../src/modules/device-connections/device-connections.validator';
 import { createEligibleFactorySchema } from '../../src/modules/eligible-factories/eligible-factories.validator';
+import {
+  createPomsFactoryEditRequestSchema,
+  reviewPomsFactoryEditRequestSchema,
+} from '../../src/modules/poms-factories/poms-factories.validator';
 import { saveMonitoringPointFormSchema } from '../../src/modules/monitoring-point-forms/monitoring-point-forms.validator';
 import {
   changeKwpWorkflowStatusSchema,
@@ -180,6 +184,8 @@ describe('POMS OpenAPI contract', () => {
     ['/users/{id}', 'patch', updateManagedUserSchema],
     ['/users/{id}/permissions', 'put', replaceUserPermissionsSchema],
     ['/eligible-factories', 'post', createEligibleFactorySchema],
+    ['/poms-factories/{factoryId}/edit-requests', 'post', createPomsFactoryEditRequestSchema],
+    ['/poms-factories/edit-requests/{id}/review', 'post', reviewPomsFactoryEditRequestSchema],
     ['/monitoring-point-forms', 'post', saveMonitoringPointFormSchema],
     ['/monitoring-point-forms/{id}', 'put', saveMonitoringPointFormSchema],
     ['/kwp-form-submissions/kwp01', 'post', createKwp01SubmissionSchema],
@@ -412,7 +418,7 @@ describe('POMS OpenAPI contract', () => {
     }
   });
 
-  it('covers all 114 canonical registry endpoints plus 9 annual testing variants', () => {
+  it('covers all 121 canonical registry endpoints plus 9 annual testing variants', () => {
     const document = asObject(pomsOpenApiDocument, 'OpenAPI document');
     const paths = asObject(document.paths, 'paths');
     const documentedOperations: string[] = [];
@@ -426,13 +432,13 @@ describe('POMS OpenAPI contract', () => {
     }
 
     const registryOperations = readEndpointRegistryOperations();
-    expect(registryOperations).toHaveLength(114);
+    expect(registryOperations).toHaveLength(121);
     expect(documentedOperations.sort()).toEqual(
       [...registryOperations, ...annualTestingVariants].sort(),
     );
     expect(pomsOpenApiStats).toEqual({
-      canonicalOperationCount: 114,
-      operationCount: 123,
+      canonicalOperationCount: 121,
+      operationCount: 130,
       tagCount: 11,
     });
   });
@@ -454,10 +460,10 @@ describe('POMS OpenAPI contract', () => {
       }
     }
 
-    expect(writeOperations).toHaveLength(48);
+    expect(writeOperations).toHaveLength(51);
     expect(
       writeOperations.filter(([, , operation]) => isRequestBody(operation.requestBody)),
-    ).toHaveLength(47);
+    ).toHaveLength(50);
 
     for (const [pathKey, method, operation] of writeOperations) {
       const hasRequestBody = isRequestBody(operation.requestBody);

@@ -1,0 +1,275 @@
+import { describe, expect, it } from '@jest/globals';
+import { pomsOpenApiDocument } from '../../src/modules/api-docs/poms.openapi';
+
+type JsonObject = Record<string, unknown>;
+
+function asObject(value: unknown, label: string): JsonObject {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`${label} must be an object`);
+  }
+  return value as JsonObject;
+}
+
+function operation(path: string, method: string): JsonObject {
+  const paths = asObject(pomsOpenApiDocument.paths, 'paths');
+  return asObject(asObject(paths[path], path)[method], `${method.toUpperCase()} ${path}`);
+}
+
+function schemas(): JsonObject {
+  const components = asObject(pomsOpenApiDocument.components, 'components');
+  return asObject(components.schemas, 'components.schemas');
+}
+
+function jsonRequestSchema(path: string, method: string): JsonObject {
+  const requestBody = asObject(operation(path, method).requestBody, 'requestBody');
+  const content = asObject(requestBody.content, 'requestBody.content');
+  return asObject(asObject(content['application/json'], 'application/json').schema, 'schema');
+}
+
+describe('POMS factory master-data OpenAPI contract', () => {
+  it('publishes all factory read and edit-request workflow operations', () => {
+    const operations = [
+      ['/poms-factories', 'get'],
+      ['/poms-factories/{factoryId}', 'get'],
+      ['/poms-factories/{factoryId}/edit-requests', 'post'],
+      ['/poms-factories/edit-requests', 'get'],
+      ['/poms-factories/edit-requests/{id}', 'get'],
+      ['/poms-factories/edit-requests/{id}/resubmission', 'put'],
+      ['/poms-factories/edit-requests/{id}/review', 'post'],
+    ];
+
+    for (const [path, method] of operations) {
+      expect(operation(path, method)).toEqual(
+        expect.objectContaining({
+          tags: ['ข้อมูลพื้นฐาน'],
+          security: [{ bearerAuth: [] }],
+        }),
+      );
+    }
+  });
+
+  it('limits create and resubmission payloads to the first-version profile allowlist', () => {
+    const schema = asObject(schemas().PomsFactoryEditableProfileRequest, 'edit profile request');
+    const properties = asObject(schema.properties, 'edit profile properties');
+
+    expect(Object.keys(properties).sort()).toEqual(
+      [
+        'factoryName',
+        'factoryAddress',
+        'latitude',
+        'longitude',
+        'eia',
+        'eiaOther',
+        'projectName',
+        'factoryFrontPhotos',
+        'factoryLogo',
+        'note',
+      ].sort(),
+    );
+    expect(schema.additionalProperties).toBe(false);
+    expect(schema.required).toEqual(['factoryName']);
+    expect(properties).not.toHaveProperty('measurementPoints');
+    expect(properties).not.toHaveProperty('businessActivity');
+    expect(asObject(properties.factoryName, 'factoryName')).toEqual(
+      expect.objectContaining({ minLength: 1, maxLength: 500 }),
+    );
+    expect(asObject(properties.factoryFrontPhotos, 'factoryFrontPhotos').maxItems).toBe(10);
+    expect(asObject(properties.factoryAddress, 'factoryAddress').nullable).toBe(true);
+    expect(asObject(properties.latitude, 'latitude')).toEqual(
+      expect.objectContaining({ minimum: -90, maximum: 90, nullable: true }),
+    );
+    expect(asObject(properties.longitude, 'longitude')).toEqual(
+      expect.objectContaining({ minimum: -180, maximum: 180, nullable: true }),
+    );
+
+    expect(jsonRequestSchema('/poms-factories/{factoryId}/edit-requests', 'post')).toEqual({
+      $ref: '#/components/schemas/PomsFactoryEditableProfileRequest',
+    });
+    expect(jsonRequestSchema('/poms-factories/edit-requests/{id}/resubmission', 'put')).toEqual({
+      $ref: '#/components/schemas/PomsFactoryEditableProfileRequest',
+    });
+
+    const createRequestBody = asObject(
+      operation('/poms-factories/{factoryId}/edit-requests', 'post').requestBody,
+      'create request body',
+    );
+    const createContent = asObject(createRequestBody.content, 'create request content');
+    const createExample = asObject(
+      asObject(createContent['application/json'], 'create JSON').example,
+      'create example',
+    );
+    expect(createExample).not.toHaveProperty('measurementPoints');
+    expect(createExample).not.toHaveProperty('businessActivity');
+    expect(createExample).toEqual(
+      expect.objectContaining({
+        factoryFrontPhotos: expect.any(Array),
+        factoryLogo: expect.any(Object),
+      }),
+    );
+  });
+
+  it('keeps factory summary and edit-request responses aligned with runtime DTOs', () => {
+    const allSchemas = schemas();
+    const profile = asObject(allSchemas.PomsFactoryProfile, 'factory profile');
+    const profileProperties = asObject(profile.properties, 'factory profile properties');
+    expect(asObject(profileProperties.factoryName, 'profile factoryName').maxLength).toBe(500);
+    expect(
+      asObject(profileProperties.factoryFrontPhotos, 'profile factoryFrontPhotos').maxItems,
+    ).toBe(10);
+    expect(profileProperties).not.toHaveProperty('measurementPointCount');
+
+    const summary = asObject(allSchemas.PomsFactorySummary, 'factory summary');
+    const summaryBranches = summary.allOf as unknown[];
+    expect(summaryBranches[0]).toEqual({ $ref: '#/components/schemas/PomsFactoryProfile' });
+    const summaryExtension = asObject(summaryBranches[1], 'factory summary extension');
+    expect(summaryExtension.required).toEqual([
+      'systemTypes',
+      'measurementPointCount',
+      'pendingEditRequestCount',
+    ]);
+    expect(asObject(summaryExtension.properties, 'factory summary properties')).toEqual(
+      expect.objectContaining({
+        systemTypes: expect.any(Object),
+        measurementPointCount: expect.any(Object),
+        pendingEditRequestCount: expect.any(Object),
+      }),
+    );
+
+    const factoriesResponse = asObject(allSchemas.PomsFactoriesResponse, 'factories response');
+    const factoriesData = asObject(
+      asObject(factoriesResponse.properties, 'factories response properties').data,
+      'factories data',
+    );
+    expect(factoriesData.items).toEqual({ $ref: '#/components/schemas/PomsFactorySummary' });
+
+    const detail = asObject(allSchemas.PomsFactoryDetail, 'factory detail');
+    expect((detail.allOf as unknown[])[0]).toEqual({
+      $ref: '#/components/schemas/PomsFactorySummary',
+    });
+
+    const editRequest = asObject(allSchemas.PomsFactoryEditRequest, 'edit request');
+    const editRequestProperties = asObject(editRequest.properties, 'edit request properties');
+    expect(editRequest.required).toEqual(
+      expect.arrayContaining(['factoryRegistrationNo', 'approvedAt']),
+    );
+    expect(editRequestProperties).toEqual(
+      expect.objectContaining({
+        requestNo: expect.objectContaining({ example: 'PFE-20260824-1A2B3C4D' }),
+        factoryRegistrationNo: expect.any(Object),
+        revisionNo: expect.objectContaining({ minimum: 0 }),
+        approvedAt: expect.objectContaining({ nullable: true, format: 'date-time' }),
+      }),
+    );
+
+    const listOperation = operation('/poms-factories/edit-requests', 'get');
+    const parameters = listOperation.parameters as JsonObject[];
+    expect(parameters).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'search',
+          in: 'query',
+          schema: expect.objectContaining({ type: 'string', maxLength: 255 }),
+        }),
+      ]),
+    );
+  });
+
+  it('documents the complete revision workflow, decisions, and event timeline', () => {
+    const allSchemas = schemas();
+    const status = asObject(allSchemas.PomsFactoryEditRequestStatus, 'status');
+    expect(status.enum).toEqual([
+      'PENDING_REVIEW',
+      'REVISION_REQUESTED',
+      'REVISED_PENDING_REVIEW',
+      'APPROVED',
+      'REJECTED',
+    ]);
+
+    const review = asObject(allSchemas.PomsFactoryEditReviewRequest, 'review request');
+    const reviewProperties = asObject(review.properties, 'review properties');
+    expect(asObject(reviewProperties.decision, 'decision').enum).toEqual([
+      'APPROVE',
+      'REQUEST_REVISION',
+      'REJECT',
+    ]);
+    expect(
+      String(asObject(reviewProperties.revisionReason, 'revisionReason').description),
+    ).toContain('REQUEST_REVISION');
+    expect(String(asObject(reviewProperties.officerNote, 'officerNote').description)).toContain(
+      'REJECT',
+    );
+
+    const request = asObject(allSchemas.PomsFactoryEditRequest, 'edit request response');
+    const requestProperties = asObject(request.properties, 'edit request properties');
+    expect(requestProperties).toEqual(
+      expect.objectContaining({
+        requestNo: expect.any(Object),
+        revisionNo: expect.any(Object),
+        isOpen: expect.any(Object),
+        requestNote: expect.any(Object),
+        revisionReason: expect.any(Object),
+        officerNote: expect.any(Object),
+        createdBy: expect.any(Object),
+        submittedBy: expect.any(Object),
+        events: expect.any(Object),
+      }),
+    );
+    expect(asObject(requestProperties.events, 'events').items).toEqual({
+      $ref: '#/components/schemas/PomsFactoryEditRequestEvent',
+    });
+
+    const event = asObject(allSchemas.PomsFactoryEditRequestEvent, 'event');
+    const eventProperties = asObject(event.properties, 'event properties');
+    expect(eventProperties).toEqual(
+      expect.objectContaining({
+        action: expect.any(Object),
+        fromStatus: expect.any(Object),
+        toStatus: expect.any(Object),
+        actorUserId: expect.any(Object),
+        createdAt: expect.any(Object),
+      }),
+    );
+  });
+
+  it('documents view data-scope plus the action permission for every write', () => {
+    const expectations: Array<[string, string, string[], string]> = [
+      ['/poms-factories', 'get', ['factories:view'], 'any'],
+      ['/poms-factories/{factoryId}', 'get', ['factories:view'], 'any'],
+      ['/poms-factories/edit-requests', 'get', ['factories:view'], 'any'],
+      ['/poms-factories/edit-requests/{id}', 'get', ['factories:view'], 'any'],
+      [
+        '/poms-factories/{factoryId}/edit-requests',
+        'post',
+        ['factories:view', 'factories:edit'],
+        'all',
+      ],
+      [
+        '/poms-factories/edit-requests/{id}/resubmission',
+        'put',
+        ['factories:view', 'factories:edit'],
+        'all',
+      ],
+      [
+        '/poms-factories/edit-requests/{id}/review',
+        'post',
+        ['factories:view', 'factories:approve'],
+        'all',
+      ],
+    ];
+
+    for (const [path, method, permissions, mode] of expectations) {
+      const documented = operation(path, method);
+      expect(documented['x-poms-permissions']).toEqual(permissions);
+      expect(documented['x-poms-permission-mode']).toBe(mode);
+      for (const permission of permissions) {
+        expect(String(documented.description)).toContain(permission);
+      }
+    }
+
+    const reviewDescription = String(
+      operation('/poms-factories/edit-requests/{id}/review', 'post').description,
+    );
+    expect(reviewDescription).toContain('createdBy');
+    expect(reviewDescription).toContain('submittedBy');
+  });
+});

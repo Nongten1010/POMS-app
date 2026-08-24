@@ -28,6 +28,7 @@ import { bodCodDeviationReportsRoutes } from './modules/bod-cod-deviations/bod-c
 import { kwpFormReportsRoutes } from './modules/kwp-form-reports/kwp-form-reports.routes';
 import { kwpFormSubmissionsRoutes } from './modules/kwp-form-submissions/kwp-form-submissions.routes';
 import { apiDocsRoutes } from './modules/api-docs/api-docs.routes';
+import { pomsFactoriesRoutes } from './modules/poms-factories/poms-factories.routes';
 
 export function createApp(): Application {
   const app = express();
@@ -86,6 +87,7 @@ export function createApp(): Application {
   app.use(`${env.API_PREFIX}/auth`, authRoutes);
   app.use(`${env.API_PREFIX}/users`, usersRoutes);
   app.use(`${env.API_PREFIX}/eligible-factories`, eligibleFactoriesRoutes);
+  app.use(`${env.API_PREFIX}/poms-factories`, pomsFactoriesRoutes);
   app.use(`${env.API_PREFIX}/connected-measurement-points`, connectedMeasurementPointsRoutes);
   app.use(`${env.API_PREFIX}/public/factory-map-points`, publicFactoryMapPointRoutes);
   app.use(`${env.API_PREFIX}/operator-factory-dashboard`, operatorFactoryDashboardRoutes);

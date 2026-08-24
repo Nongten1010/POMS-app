@@ -6,13 +6,13 @@ Index นี้แสดงเฉพาะเมนูหรือ business capa
 
 ## ศูนย์ทดสอบ API
 
-เปิด `<BASE_URL>/api/v1/docs` เพื่อใช้ Swagger UI ที่รวม API ทั้งระบบ ตัวเลขในตารางนี้นับ `Method + Path` โดย **API ในทะเบียน** คือ route canonical 114 รายการ ส่วน **Operations ใน Swagger** มี 123 รายการ เพราะเพิ่ม path แบบแยก `stationId/{buddhistYear}` อีก 9 รายการให้กรอกและทดสอบ annual point code ได้สะดวก
+เปิด `<BASE_URL>/api/v1/docs` เพื่อใช้ Swagger UI ที่รวม API ทั้งระบบ ตัวเลขในตารางนี้นับ `Method + Path` โดย **API ในทะเบียน** คือ route canonical 121 รายการ ส่วน **Operations ใน Swagger** มี 130 รายการ เพราะเพิ่ม path แบบแยก `stationId/{buddhistYear}` อีก 9 รายการให้กรอกและทดสอบ annual point code ได้สะดวก
 
 | กลุ่มใน Swagger                         | API ในทะเบียน | Operations ใน Swagger | Canonical contract                                                                                                                                       |
 | --------------------------------------- | ------------: | --------------------: | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | ระบบทั่วไปและการเข้าสู่ระบบ             |             8 |                     8 | [Common API](../shared/common-api/README.md), [Authentication](../shared/authentication/README.md), [Internal tools](../shared/internal-tools/README.md) |
 | หน้าหลัก                                |             4 |                     4 | [หน้าหลัก](./home/README.md)                                                                                                                             |
-| ข้อมูลพื้นฐาน                           |             6 |                    10 | [ข้อมูลพื้นฐาน](./master-data/README.md)                                                                                                                 |
+| ข้อมูลพื้นฐาน                           |            13 |                    17 | [ข้อมูลพื้นฐาน](./master-data/README.md)                                                                                                                 |
 | ขอเชื่อมต่อ                             |            31 |                    31 | [ขอเชื่อมต่อ](./connection-requests/README.md)                                                                                                           |
 | แจ้งแบบ กวภ. 01 - กวภ. 05               |            25 |                    25 | [แจ้งแบบ กวภ.](./kwp-forms/README.md)                                                                                                                    |
 | รายงานค่าความคลาดเคลื่อน BOD/COD Online |             9 |                     9 | [BOD/COD Online](./bod-cod-deviation-reports/README.md)                                                                                                  |
@@ -21,7 +21,7 @@ Index นี้แสดงเฉพาะเมนูหรือ business capa
 | สิทธิ์การใช้งาน                         |             8 |                     8 | [สิทธิ์การใช้งาน](./permissions/README.md)                                                                                                               |
 | โรงงานที่เข้าข่าย                       |            11 |                    11 | [โรงงานที่เข้าข่าย](./eligible-factories/README.md)                                                                                                      |
 | ระบบเชื่อมต่อภายนอก                     |             2 |                     3 | [Integrations](../integrations/README.md)                                                                                                                |
-| **รวม**                                 |       **114** |               **123** | [Endpoint registry](../ENDPOINTS.md)                                                                                                                     |
+| **รวม**                                 |       **121** |               **130** | [Endpoint registry](../ENDPOINTS.md)                                                                                                                     |
 
 ```text
 menus/
@@ -42,22 +42,22 @@ menus/
 
 ## Canonical Menu Map
 
-| Menu                                    | Directory                    | Backend API families                                                     |
-| --------------------------------------- | ---------------------------- | ------------------------------------------------------------------------ |
-| หน้าหลัก                                | `home/`                      | operator dashboard, public factory map, favorite และรายละเอียดจุดตรวจวัด |
-| ข้อมูลพื้นฐาน                           | `master-data/`               | จุดตรวจวัดที่เชื่อมต่อแล้ว ประวัติคำขอ และ device configuration          |
-| ขอเชื่อมต่อ                             | `connection-requests/`       | CEMS/WPMS requests, parameter values และ connection workflow             |
-| โรงงานที่เข้าข่าย                       | `eligible-factories/`        | eligible factories และ monitoring-point forms                            |
-| แจ้งแบบ กวภ. 01 - กวภ. 05               | `kwp-forms/`                 | KWP submissions, reports และ workflow                                    |
-| รายงานค่าความคลาดเคลื่อน BOD/COD Online | `bod-cod-deviation-reports/` | deviation reports และ result notices                                     |
-| การแจ้งเตือน                            | `notifications/`             | alert list, detail และ status                                            |
-| สถิติข้อมูล                             | `statistics/`                | measurement statistics, calendar status และ CSV export                   |
-| สิทธิ์การใช้งาน                         | `permissions/`               | users, roles และ permission overrides                                    |
+| Menu                                    | Directory                    | Backend API families                                                        |
+| --------------------------------------- | ---------------------------- | --------------------------------------------------------------------------- |
+| หน้าหลัก                                | `home/`                      | operator dashboard, public factory map, favorite และรายละเอียดจุดตรวจวัด    |
+| ข้อมูลพื้นฐาน                           | `master-data/`               | โรงงาน current/live, จุดตรวจวัด, คำขอแก้ไข profile และ device configuration |
+| ขอเชื่อมต่อ                             | `connection-requests/`       | CEMS/WPMS requests, parameter values และ connection workflow                |
+| โรงงานที่เข้าข่าย                       | `eligible-factories/`        | eligible factories และ monitoring-point forms                               |
+| แจ้งแบบ กวภ. 01 - กวภ. 05               | `kwp-forms/`                 | KWP submissions, reports และ workflow                                       |
+| รายงานค่าความคลาดเคลื่อน BOD/COD Online | `bod-cod-deviation-reports/` | deviation reports และ result notices                                        |
+| การแจ้งเตือน                            | `notifications/`             | alert list, detail และ status                                               |
+| สถิติข้อมูล                             | `statistics/`                | measurement statistics, calendar status และ CSV export                      |
+| สิทธิ์การใช้งาน                         | `permissions/`               | users, roles และ permission overrides                                       |
 
 ## Canonical Menu Pages
 
 - [หน้าหลัก](./home/README.md) — โรงงานของผู้ประกอบการพร้อมสถานะ POMS, dashboard current/live, public map และ favorite
-- [ข้อมูลพื้นฐาน](./master-data/README.md) — ข้อมูลจุดตรวจวัดที่เชื่อมต่อแล้ว ประวัติ และ device config ปัจจุบัน
+- [ข้อมูลพื้นฐาน](./master-data/README.md) — โรงงาน current/live, จุดตรวจวัด, workflow คำขอแก้ไข profile, ประวัติ และ device config
 - [ขอเชื่อมต่อ](./connection-requests/README.md) — contract คำขอ CEMS/WPMS และการออกรหัสจุดตรวจวัด
 - [โรงงานที่เข้าข่าย](./eligible-factories/README.md) — contract รายการโรงงานเข้าข่าย ข้อมูลที่ซิงก์ และเงื่อนไขการถอดออก
 - [แจ้งแบบ กวภ. 01 - กวภ. 05](./kwp-forms/README.md) — contract การส่งแบบ กวภ., upload เอกสาร, workflow และรายงานรายการคำขอ

@@ -324,6 +324,14 @@ const kwpDateOrHourSchema = {
   description: 'วันที่จริงรูปแบบ YYYY-MM-DD หรือ local hour YYYY-MM-DDTHH:00:00',
 };
 const protocolValues = ['POMS_BOX', 'MODBUS_RTU', 'MODBUS_TCP', 'MSSQL', 'MYSQL'];
+const pomsFactoryEditRequestStatusValues = [
+  'PENDING_REVIEW',
+  'REVISION_REQUESTED',
+  'REVISED_PENDING_REVIEW',
+  'APPROVED',
+  'REJECTED',
+];
+const pomsFactoryEditDecisionValues = ['APPROVE', 'REQUEST_REVISION', 'REJECT'];
 const parameterStatusValues = [
   'Normal',
   'Calibration',
@@ -430,6 +438,39 @@ const createEligibleFactoryExample = {
 };
 
 const favoriteExample = { isFavorite: true };
+
+const pomsFactoryEditRequestExample = {
+  factoryName: 'บริษัท ทดสอบ จำกัด (แก้ไข)',
+  factoryAddress: '100 หมู่ 2 ตำบลทดสอบ อำเภอเมือง จังหวัดสระบุรี',
+  latitude: 13.7563,
+  longitude: 100.5018,
+  eia: 'มี',
+  eiaOther: null,
+  projectName: 'โครงการปรับปรุงใหม่',
+  factoryFrontPhotos: [
+    {
+      title: 'ภาพถ่ายด้านหน้าโรงงาน',
+      fileName: 'factory-front.jpg',
+      fileUrl: 'https://example.com/uploads/factory-front.jpg',
+      fileType: 'image/jpeg',
+      fileSize: 204800,
+    },
+  ],
+  factoryLogo: {
+    title: 'ตราสัญลักษณ์โรงงาน',
+    fileName: 'factory-logo.png',
+    fileUrl: 'https://example.com/uploads/factory-logo.png',
+    fileType: 'image/png',
+    fileSize: 102400,
+  },
+  note: 'ขอแก้ไขข้อมูลพื้นฐานหลังเชื่อมต่อแล้ว',
+};
+
+const pomsFactoryEditReviewExample = {
+  decision: 'REQUEST_REVISION',
+  revisionReason: 'กรุณาตรวจสอบพิกัดและแนบภาพถ่ายด้านหน้าโรงงานใหม่',
+  officerNote: 'ตรวจสอบเอกสารเบื้องต้นแล้ว',
+};
 
 const operatorFactoryOverviewExample = {
   success: true,
@@ -1145,6 +1186,387 @@ const componentSchemas: Record<string, OpenApiObject> = {
     required: ['isFavorite'],
     properties: {
       isFavorite: { type: 'boolean' },
+    },
+  },
+  PomsFactoryEditableProfileRequest: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['factoryName'],
+    minProperties: 1,
+    description:
+      'ต้องส่ง factoryName ทุกครั้ง; field อื่นที่ไม่ส่งคงค่าเดิม ส่วน null ใช้ล้าง nullable field. latitude และ longitude ต้องส่งมาคู่กัน',
+    properties: {
+      factoryName: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 500,
+        description: 'Required และไม่รับ null',
+      },
+      factoryAddress: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 1000,
+        nullable: true,
+        description: 'Optional; omitted = คงค่าเดิม, null = ล้างค่า',
+      },
+      latitude: {
+        type: 'number',
+        minimum: -90,
+        maximum: 90,
+        nullable: true,
+        description:
+          'Optional; ต้องส่งคู่กับ longitude. omitted = คงค่าเดิม, ส่ง latitude/longitude เป็น null ทั้งคู่ = ล้างพิกัด',
+      },
+      longitude: {
+        type: 'number',
+        minimum: -180,
+        maximum: 180,
+        nullable: true,
+        description:
+          'Optional; ต้องส่งคู่กับ latitude. omitted = คงค่าเดิม, ส่ง latitude/longitude เป็น null ทั้งคู่ = ล้างพิกัด',
+      },
+      eia: {
+        type: 'string',
+        enum: ['มี', 'ไม่มี', 'มี IEE', 'มี EIA', 'มี EHIA', 'อื่นๆ'],
+        nullable: true,
+        description:
+          'Optional; eia = อื่นๆ ต้องส่ง eiaOther. omitted = คงค่าเดิม, null = ล้าง eia และ eiaOther',
+      },
+      eiaOther: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 500,
+        nullable: true,
+        description: 'Required เมื่อ eia = อื่นๆ; null ใช้ล้างค่า',
+      },
+      projectName: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 500,
+        nullable: true,
+        description: 'Optional; omitted = คงค่าเดิม, null = ล้างค่า',
+      },
+      factoryFrontPhotos: {
+        type: 'array',
+        maxItems: 10,
+        items: schemaRef('RequestDocumentImage'),
+        description: 'Optional; omitted = คงค่าเดิม, [] = ล้างภาพถ่ายด้านหน้าโรงงานทั้งหมด',
+      },
+      factoryLogo: {
+        allOf: [schemaRef('RequestDocumentImage')],
+        nullable: true,
+        description: 'Optional; omitted = คงค่าเดิม, null = ล้างตราสัญลักษณ์โรงงาน',
+      },
+      note: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 1000,
+        nullable: true,
+        description: 'ข้อความประกอบจากโรงงาน; response แสดงเป็น requestNote',
+      },
+    },
+    example: pomsFactoryEditRequestExample,
+  },
+  PomsFactoryEditReviewRequest: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['decision'],
+    properties: {
+      decision: { type: 'string', enum: pomsFactoryEditDecisionValues },
+      revisionReason: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 1000,
+        nullable: true,
+        description: 'Required เมื่อ decision = REQUEST_REVISION',
+      },
+      officerNote: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 1000,
+        nullable: true,
+        description:
+          'Required เมื่อ decision = REJECT; optional เมื่อ decision = APPROVE หรือ REQUEST_REVISION',
+      },
+    },
+    example: pomsFactoryEditReviewExample,
+  },
+  PomsFactoryProfile: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'eligibleFactoryId',
+      'factoryId',
+      'factoryRegistrationNo',
+      'factoryName',
+      'factoryAddress',
+      'provinceName',
+      'industrialEstateName',
+      'latitude',
+      'longitude',
+      'eia',
+      'eiaOther',
+      'projectName',
+      'factoryFrontPhotos',
+      'factoryLogo',
+      'updatedAt',
+    ],
+    properties: {
+      eligibleFactoryId: { type: 'integer', minimum: 1 },
+      factoryId: { type: 'string', minLength: 1, maxLength: 64 },
+      factoryRegistrationNo: { type: 'string', minLength: 1, maxLength: 80 },
+      factoryName: { type: 'string', minLength: 1, maxLength: 500 },
+      factoryAddress: nullableStringSchema(1000),
+      provinceName: nullableStringSchema(128),
+      industrialEstateName: nullableStringSchema(255),
+      latitude: { type: 'number', minimum: -90, maximum: 90, nullable: true },
+      longitude: { type: 'number', minimum: -180, maximum: 180, nullable: true },
+      eia: {
+        type: 'string',
+        enum: ['มี', 'ไม่มี', 'มี IEE', 'มี EIA', 'มี EHIA', 'อื่นๆ'],
+        nullable: true,
+      },
+      eiaOther: nullableStringSchema(500),
+      projectName: nullableStringSchema(500),
+      factoryFrontPhotos: {
+        type: 'array',
+        maxItems: 10,
+        items: schemaRef('RequestDocumentImage'),
+      },
+      factoryLogo: {
+        allOf: [schemaRef('RequestDocumentImage')],
+        nullable: true,
+      },
+      updatedAt: { type: 'string', format: 'date-time' },
+    },
+  },
+  PomsFactorySummary: {
+    allOf: [
+      schemaRef('PomsFactoryProfile'),
+      {
+        type: 'object',
+        required: ['systemTypes', 'measurementPointCount', 'pendingEditRequestCount'],
+        properties: {
+          systemTypes: {
+            type: 'array',
+            minItems: 1,
+            maxItems: 2,
+            uniqueItems: true,
+            items: { type: 'string', enum: systemTypeValues },
+          },
+          measurementPointCount: { type: 'integer', minimum: 0 },
+          pendingEditRequestCount: { type: 'integer', minimum: 0 },
+        },
+      },
+    ],
+  },
+  PomsMeasurementPoint: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'connectedPointId',
+      'sourceMeasurementPointId',
+      'eligibleFactoryId',
+      'factoryId',
+      'factoryName',
+      'systemType',
+      'pointName',
+      'pointCode',
+      'pointType',
+      'parameters',
+      'monitoringPointStatus',
+      'details',
+      'documentsAndImages',
+      'measurementInstruments',
+      'updatedAt',
+    ],
+    properties: {
+      connectedPointId: { type: 'integer', minimum: 1 },
+      sourceMeasurementPointId: { type: 'integer', minimum: 1 },
+      eligibleFactoryId: { type: 'integer', minimum: 1 },
+      factoryId: { type: 'string', minLength: 1, maxLength: 64 },
+      factoryName: { type: 'string', minLength: 1, maxLength: 500 },
+      systemType: { type: 'string', enum: systemTypeValues },
+      pointName: { type: 'string', minLength: 1, maxLength: 255 },
+      pointCode: nullableStringSchema(64),
+      pointType: { type: 'string', enum: ['STACK', 'WASTEWATER', 'OTHER'] },
+      parameters: {
+        type: 'array',
+        maxItems: 100,
+        items: {
+          type: 'string',
+          minLength: 1,
+          maxLength: 255,
+          description: 'ชื่อพารามิเตอร์สำหรับแสดงผลพร้อมหน่วย เช่น CO (ppm)',
+        },
+      },
+      monitoringPointStatus: { type: 'string', nullable: true },
+      details: { type: 'object', nullable: true, additionalProperties: true },
+      documentsAndImages: {
+        type: 'array',
+        maxItems: 50,
+        items: schemaRef('RequestDocumentImage'),
+      },
+      measurementInstruments: { type: 'object', nullable: true, additionalProperties: true },
+      updatedAt: { type: 'string', format: 'date-time' },
+    },
+  },
+  PomsFactoryDetail: {
+    allOf: [
+      schemaRef('PomsFactorySummary'),
+      {
+        type: 'object',
+        required: ['measurementPoints'],
+        properties: {
+          measurementPoints: {
+            type: 'array',
+            items: schemaRef('PomsMeasurementPoint'),
+            description:
+              'จุดตรวจวัด current/live สำหรับอ่านอย่างเดียว; รุ่นแรกไม่รับแก้ไขผ่าน factory edit request',
+          },
+        },
+      },
+    ],
+  },
+  PomsFactoryEditRequestStatus: {
+    type: 'string',
+    enum: pomsFactoryEditRequestStatusValues,
+  },
+  PomsFactoryEditRequestEvent: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['id', 'action', 'fromStatus', 'toStatus', 'note', 'actorUserId', 'createdAt'],
+    properties: {
+      id: { type: 'integer', minimum: 1 },
+      action: {
+        type: 'string',
+        enum: ['SUBMIT', 'REQUEST_REVISION', 'RESUBMIT', 'APPROVE', 'REJECT'],
+      },
+      fromStatus: {
+        allOf: [schemaRef('PomsFactoryEditRequestStatus')],
+        nullable: true,
+      },
+      toStatus: schemaRef('PomsFactoryEditRequestStatus'),
+      note: nullableStringSchema(1000),
+      actorUserId: { type: 'integer', minimum: 1 },
+      createdAt: { type: 'string', format: 'date-time' },
+    },
+  },
+  PomsFactoryEditRequest: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'id',
+      'requestNo',
+      'eligibleFactoryId',
+      'factoryId',
+      'factoryRegistrationNo',
+      'factoryName',
+      'status',
+      'statusLabel',
+      'revisionNo',
+      'isOpen',
+      'requestNote',
+      'revisionReason',
+      'officerNote',
+      'currentFactory',
+      'proposedFactory',
+      'createdBy',
+      'submittedBy',
+      'reviewedBy',
+      'submittedAt',
+      'reviewedAt',
+      'approvedAt',
+      'createdAt',
+      'updatedAt',
+      'events',
+    ],
+    properties: {
+      id: { type: 'integer', minimum: 1 },
+      requestNo: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 40,
+        example: 'PFE-20260824-1A2B3C4D',
+      },
+      eligibleFactoryId: { type: 'integer', minimum: 1 },
+      factoryId: { type: 'string', minLength: 1, maxLength: 64 },
+      factoryRegistrationNo: { type: 'string', minLength: 1, maxLength: 80 },
+      factoryName: { type: 'string', minLength: 1, maxLength: 500 },
+      status: schemaRef('PomsFactoryEditRequestStatus'),
+      statusLabel: { type: 'string', minLength: 1, maxLength: 128 },
+      revisionNo: {
+        type: 'integer',
+        minimum: 0,
+        description: 'เริ่มที่ 0 และเพิ่มเป็น 1 เมื่อ resubmit ครั้งแรก',
+      },
+      isOpen: { type: 'boolean' },
+      requestNote: nullableStringSchema(1000),
+      revisionReason: nullableStringSchema(1000),
+      officerNote: nullableStringSchema(1000),
+      currentFactory: schemaRef('PomsFactoryProfile'),
+      proposedFactory: schemaRef('PomsFactoryProfile'),
+      createdBy: { type: 'integer', minimum: 1 },
+      submittedBy: { type: 'integer', minimum: 1 },
+      reviewedBy: { type: 'integer', minimum: 1, nullable: true },
+      submittedAt: { type: 'string', format: 'date-time' },
+      reviewedAt: { type: 'string', format: 'date-time', nullable: true },
+      approvedAt: { type: 'string', format: 'date-time', nullable: true },
+      createdAt: { type: 'string', format: 'date-time' },
+      updatedAt: { type: 'string', format: 'date-time' },
+      events: {
+        type: 'array',
+        items: schemaRef('PomsFactoryEditRequestEvent'),
+        description: 'เรียงจากเหตุการณ์เก่าสุดไปใหม่สุด',
+      },
+    },
+  },
+  PomsFactoriesResponse: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['success', 'data', 'meta'],
+    properties: {
+      success: { type: 'boolean', enum: [true] },
+      data: { type: 'array', items: schemaRef('PomsFactorySummary') },
+      meta: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['total'],
+        properties: { total: { type: 'integer', minimum: 0 } },
+      },
+    },
+  },
+  PomsFactoryDetailResponse: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['success', 'data'],
+    properties: {
+      success: { type: 'boolean', enum: [true] },
+      data: schemaRef('PomsFactoryDetail'),
+    },
+  },
+  PomsFactoryEditRequestsResponse: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['success', 'data', 'meta'],
+    properties: {
+      success: { type: 'boolean', enum: [true] },
+      data: { type: 'array', items: schemaRef('PomsFactoryEditRequest') },
+      meta: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['total'],
+        properties: { total: { type: 'integer', minimum: 0 } },
+      },
+    },
+  },
+  PomsFactoryEditRequestResponse: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['success', 'data'],
+    properties: {
+      success: { type: 'boolean', enum: [true] },
+      data: schemaRef('PomsFactoryEditRequest'),
     },
   },
   DeviceConnectionChannel: {
@@ -2768,6 +3190,139 @@ const extraPaths: Record<string, OpenApiObject> = {
       ],
     }),
   },
+  '/poms-factories': {
+    get: securedOperation({
+      tag: 'Master Data',
+      summary: 'List current/live POMS factories',
+      operationId: 'listPomsFactories',
+      description:
+        'คืนโรงงานที่มี active row ใน cems_wpms_connected_measurement_points เท่านั้น และใช้ data scope ของ factories:view',
+      parameters: [
+        queryString(
+          'search',
+          'ค้นหาจากชื่อโรงงาน รหัสโรงงาน เลขทะเบียนโรงงาน หรือชื่อ/รหัสจุดตรวจวัด',
+          false,
+          255,
+        ),
+      ],
+      successSchema: schemaRef('PomsFactoriesResponse'),
+    }),
+  },
+  '/poms-factories/{factoryId}': {
+    get: securedOperation({
+      tag: 'Master Data',
+      summary: 'Get current/live POMS factory and measurement points',
+      operationId: 'getPomsFactoryDetail',
+      description:
+        'คืนข้อมูลโรงงานและ active measurement points. measurementPoints เป็นข้อมูลอ่านอย่างเดียวในรุ่นแรก และ resource นอก data scope ตอบ 404',
+      parameters: [factoryIdParameter],
+      successSchema: schemaRef('PomsFactoryDetailResponse'),
+    }),
+  },
+  '/poms-factories/edit-requests': {
+    get: securedOperation({
+      tag: 'Master Data',
+      summary: 'List POMS factory profile edit requests',
+      operationId: 'listPomsFactoryEditRequests',
+      description:
+        'คืนเฉพาะคำขอของโรงงานใน data scope ของ factories:view พร้อมสถานะ workflow และ event timeline',
+      parameters: [
+        queryEnum('status', pomsFactoryEditRequestStatusValues, 'กรองสถานะคำขอแก้ไขข้อมูล'),
+        queryString('factoryId', 'กรองด้วย factoryId หรือเลขทะเบียนโรงงาน', false, 64),
+        queryString(
+          'search',
+          'ค้นหาจากเลขคำขอ รหัสโรงงาน เลขทะเบียนโรงงาน หรือชื่อโรงงาน',
+          false,
+          255,
+        ),
+      ],
+      successSchema: schemaRef('PomsFactoryEditRequestsResponse'),
+    }),
+  },
+  '/poms-factories/{factoryId}/edit-requests': {
+    post: securedOperation({
+      tag: 'Master Data',
+      summary: 'Submit a POMS factory profile edit request',
+      operationId: 'createPomsFactoryEditRequest',
+      description:
+        'ต้องมี factories:view และ factories:edit โดยการคัดโรงงานสำหรับ mutation ยึด data scope ของ factories:edit. สร้างคำขอ PENDING_REVIEW จาก current/live profile; รุ่นแรกแก้ได้เฉพาะ allowlist ใน request schema และไม่รับ measurementPoints. โรงงานหนึ่งแห่งมีคำขอเปิดได้ครั้งละหนึ่งรายการ',
+      parameters: [factoryIdParameter],
+      requestBody: jsonRequestBody(
+        schemaRef('PomsFactoryEditableProfileRequest'),
+        pomsFactoryEditRequestExample,
+      ),
+      successStatus: '201',
+      successSchema: schemaRef('PomsFactoryEditRequestResponse'),
+      extraResponses: {
+        '409': {
+          description:
+            'มีคำขอเปิดของโรงงานนี้อยู่แล้ว หรือ current/live profile เปลี่ยนระหว่างทำรายการ',
+          content: {
+            'application/json': { schema: schemaRef('ErrorEnvelope') },
+          },
+        },
+      },
+    }),
+  },
+  '/poms-factories/edit-requests/{id}': {
+    get: securedOperation({
+      tag: 'Master Data',
+      summary: 'Get POMS factory profile edit request detail',
+      operationId: 'getPomsFactoryEditRequest',
+      description:
+        'คืน currentFactory, proposedFactory และ events เรียงตามเวลา; resource นอก data scope ตอบ 404',
+      parameters: [idParameter],
+      successSchema: schemaRef('PomsFactoryEditRequestResponse'),
+    }),
+  },
+  '/poms-factories/edit-requests/{id}/resubmission': {
+    put: securedOperation({
+      tag: 'Master Data',
+      summary: 'Resubmit a revised POMS factory profile',
+      operationId: 'resubmitPomsFactoryEditRequest',
+      description:
+        'ต้องมี factories:view และ factories:edit โดยการคัดคำขอสำหรับ mutation ยึด data scope ของ factories:edit. ทำได้เมื่อ status = REVISION_REQUESTED เท่านั้น; บันทึก event RESUBMIT, เพิ่ม revisionNo และเปลี่ยนเป็น REVISED_PENDING_REVIEW',
+      parameters: [idParameter],
+      requestBody: jsonRequestBody(schemaRef('PomsFactoryEditableProfileRequest'), {
+        ...pomsFactoryEditRequestExample,
+        note: 'แก้ไขพิกัดและภาพถ่ายตามคำขอของเจ้าหน้าที่แล้ว',
+      }),
+      successSchema: schemaRef('PomsFactoryEditRequestResponse'),
+      extraResponses: {
+        '409': {
+          description:
+            'สถานะไม่อนุญาตให้ resubmit หรือ current/live profile เปลี่ยนระหว่างทำรายการ',
+          content: {
+            'application/json': { schema: schemaRef('ErrorEnvelope') },
+          },
+        },
+      },
+    }),
+  },
+  '/poms-factories/edit-requests/{id}/review': {
+    post: securedOperation({
+      tag: 'Master Data',
+      summary: 'Review a POMS factory profile edit request',
+      operationId: 'reviewPomsFactoryEditRequest',
+      description:
+        'ต้องมี factories:view และ factories:approve โดยการคัดคำขอยึด data scope ของ factories:approve; ห้ามทั้ง original creator (createdBy) และ latest submitter (submittedBy) พิจารณาคำขอของตนเอง. APPROVE อัปเดต current/live rows ใน cems_wpms_connected_measurement_points และ eligible_factories ภายใน transaction เดียว; ไม่อัปเดต factories. REQUEST_REVISION เปลี่ยนเป็น REVISION_REQUESTED; REJECT ปิดคำขอ',
+      parameters: [idParameter],
+      requestBody: jsonRequestBody(
+        schemaRef('PomsFactoryEditReviewRequest'),
+        pomsFactoryEditReviewExample,
+      ),
+      successSchema: schemaRef('PomsFactoryEditRequestResponse'),
+      extraResponses: {
+        '409': {
+          description:
+            'สถานะไม่อนุญาต ผู้สร้างพยายามพิจารณาคำขอตนเอง หรือ current/live profile เปลี่ยนก่อนอนุมัติ',
+          content: {
+            'application/json': { schema: schemaRef('ErrorEnvelope') },
+          },
+        },
+      },
+    }),
+  },
   '/device-connections': {
     get: securedOperation({
       tag: 'Connection Requests',
@@ -3421,6 +3976,7 @@ function menuTagForPath(path: string): string {
     return MENU_TAGS.MASTER_DATA;
   }
   if (path === '/connected-measurement-points') return MENU_TAGS.MASTER_DATA;
+  if (path.startsWith('/poms-factories')) return MENU_TAGS.MASTER_DATA;
   if (
     path.startsWith('/cems-wpms-requests') ||
     path.startsWith('/device-connections') ||
@@ -3493,6 +4049,19 @@ function authorizationRequirementFor(path: string, method: string): Authorizatio
     return method === 'post'
       ? { permissions: ['cems_wpms_requests:edit'], mode: 'any' }
       : { permissions: ['cems_wpms_requests:view'], mode: 'any' };
+  }
+
+  if (path.startsWith('/poms-factories')) {
+    if (path.includes('/edit-requests/') && path.endsWith('/review')) {
+      return { permissions: ['factories:view', 'factories:approve'], mode: 'all' };
+    }
+    if (
+      (path.endsWith('/edit-requests') && method === 'post') ||
+      (path.endsWith('/resubmission') && method === 'put')
+    ) {
+      return { permissions: ['factories:view', 'factories:edit'], mode: 'all' };
+    }
+    return { permissions: ['factories:view'], mode: 'any' };
   }
 
   if (path.startsWith('/cems-wpms-requests')) {
@@ -3678,13 +4247,13 @@ export const pomsOpenApiDocument: OpenApiObject = {
     title: 'POMS API',
     version: '0.3.0',
     description:
-      'Interactive contract สำหรับ HTTP endpoint ทั้ง 114 รายการใน POMS แยกตามเมนูงานจริง พร้อม payload, validation, auth และตัวอย่างทดสอบ\n\nSwagger แสดง 123 operations เพราะขยาย optional buddhistYear path อีก 9 รูปแบบเพื่อรองรับทั้ง annual point code ที่ URL-encode และ path ที่ proxy ถอดรหัสแล้ว',
+      'Interactive contract สำหรับ HTTP endpoint ทั้ง 121 รายการใน POMS แยกตามเมนูงานจริง พร้อม payload, validation, auth และตัวอย่างทดสอบ\n\nSwagger แสดง 130 operations เพราะขยาย optional buddhistYear path อีก 9 รูปแบบเพื่อรองรับทั้ง annual point code ที่ URL-encode และ path ที่ proxy ถอดรหัสแล้ว',
   },
   servers: [{ url: env.API_PREFIX }],
   tags,
   paths,
   components,
-  'x-poms-canonical-operation-count': 114,
+  'x-poms-canonical-operation-count': 121,
 };
 
 export function countOpenApiOperations(document: OpenApiObject): number {
