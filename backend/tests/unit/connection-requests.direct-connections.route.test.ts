@@ -221,6 +221,35 @@ describe('POST /api/v1/cems-wpms-requests/direct-connections', () => {
     expect(mockedService.createDirectConnection).not.toHaveBeenCalled();
   });
 
+  it('rejects CONNECT when pending parameters exist but none are selected', async () => {
+    const payload = validPayload();
+    payload.measurementPoints[0].details.pendingParameters = [
+      'BOD (mg/l)',
+      'Flow rate (m3/hr)',
+      'Watt (kW/hr)',
+    ];
+    payload.measurementPoints[0].details.requestedParameters = [];
+
+    const response = await request(createApp())
+      .post('/api/v1/cems-wpms-requests/direct-connections')
+      .set('Authorization', `Bearer ${adminToken()}`)
+      .send(payload);
+
+    expect(response.status).toBe(400);
+    expect(response.body).toMatchObject({
+      success: false,
+      error: {
+        code: 'VALIDATION_ERROR',
+        issues: [
+          expect.objectContaining({
+            pathString: 'measurementPoints.0.details.requestedParameters',
+          }),
+        ],
+      },
+    });
+    expect(mockedService.createDirectConnection).not.toHaveBeenCalled();
+  });
+
   it('requires a non-empty officer-supplied point code', async () => {
     const payload = validPayload();
     const response = await request(createApp())

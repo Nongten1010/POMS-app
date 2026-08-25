@@ -835,7 +835,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
         items: { type: 'string' },
         maxItems: 100,
         description:
-          'ไม่บังคับให้ส่ง pendingParameters; ถ้าส่ง pendingParameters ด้วย ต้องเป็น subset และต้องเป็นชุดเดียวกับ measurementInstruments.parameters',
+          'ไม่บังคับให้ส่ง pendingParameters; ถ้าส่ง pendingParameters ด้วย ต้องเป็น subset และต้องเป็นชุดเดียวกับ measurementInstruments.parameters. Direct Connection ที่ CONNECT และมี pendingParameters จริงต้องมีพารามิเตอร์ที่เลือกอย่างน้อย 1 ค่า โดย requestedParameters เป็นค่าหลักเมื่อส่ง field นี้',
       },
       timeSharingParameters: {
         type: 'array',
@@ -1682,7 +1682,7 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       summary: 'เพิ่มจุดตรวจวัดโดยเจ้าหน้าที่',
       operationId: 'createDirectConnection',
       description:
-        'Permission: cems_wpms_requests:direct_connect. ต้องเป็น officer/admin ที่มี role monitoring_kpm/admin และ active eligible factory อยู่ใน scope; submissionAction=REQUEST_FACTORY_REVISION สร้างสถานะ WAITING_FACTORY_REVISION และ CONNECT สร้างสถานะ CONNECTED. หากไม่ส่ง action/status จะใช้ CONNECTED',
+        'Permission: cems_wpms_requests:direct_connect. ต้องเป็น officer/admin ที่มี role monitoring_kpm/admin และ active eligible factory อยู่ใน scope; submissionAction=REQUEST_FACTORY_REVISION สร้างสถานะ WAITING_FACTORY_REVISION และ CONNECT สร้างสถานะ CONNECTED. หากไม่ส่ง action/status จะใช้ CONNECTED. เมื่อ CONNECT และ point มี pendingParameters จริง ต้องมีพารามิเตอร์ที่เลือกอย่างน้อย 1 ค่า มิฉะนั้นตอบ 400 VALIDATION_ERROR',
       requestBody: jsonRequestBody(schemaRef('DirectConnectionRequest'), directConnectionExample),
       successStatus: '201',
       successDescription: 'เพิ่มจุดตรวจวัดและบันทึกสถานะที่เลือกแล้ว',

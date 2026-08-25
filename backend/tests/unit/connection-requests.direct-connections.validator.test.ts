@@ -277,6 +277,26 @@ describe('directConnectionRequestSchema', () => {
     expect(result.data).not.toHaveProperty('submissionAction');
   });
 
+  it('rejects CONNECT when pending parameters exist but no parameter selection can be resolved', () => {
+    const payload = validPayload();
+    payload.measurementPoints[0].details.requestedParameters = [];
+
+    const result = directConnectionRequestSchema.safeParse({
+      ...payload,
+      submissionAction: 'CONNECT',
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: ['measurementPoints', 0, 'details', 'requestedParameters'],
+        }),
+      ]),
+    );
+  });
+
   it('maps submissionAction REQUEST_FACTORY_REVISION and requires a reason', () => {
     const validResult = directConnectionRequestSchema.safeParse({
       ...validPayload(),
@@ -302,6 +322,31 @@ describe('directConnectionRequestSchema', () => {
         expect.arrayContaining([expect.objectContaining({ path: ['revisionReason'] })]),
       );
     }
+  });
+
+  it('accepts WAITING_FACTORY_REVISION even when pending parameters are not selected yet', () => {
+    const payload = validPayload();
+    payload.measurementPoints[0].details.requestedParameters = [];
+
+    const result = directConnectionRequestSchema.safeParse({
+      ...payload,
+      submissionAction: 'REQUEST_FACTORY_REVISION',
+      revisionReason: 'รอให้โรงงานยืนยันพารามิเตอร์ก่อน',
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data).toMatchObject({
+      status: 'WAITING_FACTORY_REVISION',
+      measurementPoints: [
+        {
+          details: {
+            pendingParameters: ['BOD (mg/l)'],
+            requestedParameters: [],
+          },
+        },
+      ],
+    });
   });
 
   it('rejects conflicting submissionAction and legacy status values', () => {

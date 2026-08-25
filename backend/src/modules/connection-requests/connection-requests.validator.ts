@@ -1584,7 +1584,25 @@ export const directConnectionRequestSchema = directConnectionRequestObjectSchema
       });
     }
 
-    const details = payload.measurementPoints[0]?.details;
+    const point = payload.measurementPoints[0];
+    const details = point?.details;
+    if (
+      resolvedStatus === CONNECTION_REQUEST_STATUS.CONNECTED &&
+      details &&
+      normalizeParameterNameList(details.pendingParameters).length > 0 &&
+      selectMeasurementPointParameters({
+        parameters: point.parameters ?? [],
+        details,
+        measurementInstruments: point.measurementInstruments ?? null,
+      }).length === 0
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['measurementPoints', 0, 'details', 'requestedParameters'],
+        message: 'At least one pending parameter must be selected before connecting the point',
+      });
+    }
+
     if (details && payload.systemType === 'CEMS') {
       validateRegulationClauseTags(details, 0, ctx);
     } else if (details) {
