@@ -18,6 +18,7 @@ import {
   MenuItem,
   OutlinedInput,
   Paper,
+  Popover,
   Select,
   Stack,
   Tab,
@@ -33,8 +34,10 @@ import {
 } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import DeleteIcon from '@mui/icons-material/Delete'
+import DescriptionIcon from '@mui/icons-material/Description'
 import HistoryIcon from '@mui/icons-material/History'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
+import LinkIcon from '@mui/icons-material/Link'
 import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import { DataGrid } from '@mui/x-data-grid'
 import { DatePicker, DateTimePicker, LocalizationProvider } from '@mui/x-date-pickers'
@@ -1222,9 +1225,103 @@ function buildKwpAttachmentPreviewFiles(files) {
     id: `${file.name}-${file.lastModified ?? index}-${index}`,
     name: file.name,
     type: file.type,
+    size: file.size ?? 0,
     url: '',
+    rawFile: file,
     isSubmitted: false,
   }))
+}
+
+function normalizeKwpAttachmentUrl(url) {
+  if (!url) {
+    return ''
+  }
+
+  if (/^(blob:|data:|https?:\/\/)/i.test(url)) {
+    return url
+  }
+
+  return `https://d-poms.diw.go.th${String(url).startsWith('/') ? url : `/${url}`}`
+}
+
+function getKwpAttachmentFileName(file = {}) {
+  return file.fileName ?? file.originalFileName ?? file.name ?? file.storedFileName ?? ''
+}
+
+function getKwpAttachmentFileUrl(file = {}) {
+  return normalizeKwpAttachmentUrl(file.filePreviewUrl ?? file.fileUrl ?? file.url ?? file.storageUrl ?? file.path)
+}
+
+function isKwpImageAttachment(file = {}) {
+  const fileType = file.fileType ?? file.mimeType ?? file.type ?? ''
+  const fileName = getKwpAttachmentFileName(file)
+  const fileUrl = getKwpAttachmentFileUrl(file)
+
+  return fileType.startsWith('image/') || /\.(png|jpe?g|webp)(\?.*)?$/i.test(`${fileName} ${fileUrl}`)
+}
+
+function addKwpAttachmentItem(groups, title, item) {
+  if (!item?.label) {
+    return
+  }
+
+  if (!groups.has(title)) {
+    groups.set(title, [])
+  }
+
+  groups.get(title).push(item)
+}
+
+function collectKwpAttachmentSectionGroups(groups, sections = []) {
+  sections.forEach((section) => {
+    const title = section?.title || 'เอกสารแนบ'
+    const linkUrl = normalizeKwpAttachmentUrl(section?.link)
+
+    if (linkUrl) {
+      addKwpAttachmentItem(groups, title, { type: 'link', label: linkUrl, url: linkUrl })
+    }
+
+    ;(section?.files ?? []).forEach((file) => {
+      const fileName = getKwpAttachmentFileName(file)
+      const fileUrl = getKwpAttachmentFileUrl(file)
+
+      if (fileName && !isKwpImageAttachment(file)) {
+        addKwpAttachmentItem(groups, title, { type: 'file', label: fileName, url: fileUrl })
+      }
+    })
+  })
+}
+
+function getKwpPreviewAttachmentGroups(data = {}) {
+  const previewData = data ?? {}
+  const groups = new Map()
+
+  collectKwpAttachmentSectionGroups(groups, previewData.attachmentSections ?? [])
+
+  if (previewData.formType === 'kwp05') {
+    const rataFiles = []
+    const calibrationPhotoFiles = []
+    let rataReportLink = ''
+    let calibrationPhotoLink = ''
+
+    ;(previewData.calibrationRows ?? []).forEach((row) => {
+      if (!rataReportLink && row.rataReportLink) {
+        rataReportLink = row.rataReportLink
+      }
+      if (!calibrationPhotoLink && row.calibrationPhotoLink) {
+        calibrationPhotoLink = row.calibrationPhotoLink
+      }
+      rataFiles.push(...(row.rataReportFiles ?? []))
+      calibrationPhotoFiles.push(...(row.calibrationPhotoFiles ?? []))
+    })
+
+    collectKwpAttachmentSectionGroups(groups, [
+      { title: 'รายงานผล RATA', link: rataReportLink, files: rataFiles },
+      { title: 'ภาพขณะสอบเทียบ', link: calibrationPhotoLink, files: calibrationPhotoFiles },
+    ])
+  }
+
+  return Array.from(groups.entries()).map(([title, items]) => ({ title, items }))
 }
 
 function buildKwp02PreviewData(form, formElement, measurementRows, attachmentFiles = {}) {
@@ -1551,7 +1648,7 @@ function buildSubmittedAttachmentFile(file, index = 0) {
     name: file?.originalFileName ?? file?.storedFileName ?? `ไฟล์แนบ ${index + 1}`,
     type: file?.mimeType ?? '',
     size: file?.fileSize ?? 0,
-    url: file?.fileUrl ?? '',
+    url: file?.fileUrl ?? file?.url ?? file?.storageUrl ?? file?.storagePath ?? '',
     isSubmitted: true,
     attachmentType: file?.attachmentType ?? '',
     originalFileName: file?.originalFileName ?? file?.storedFileName ?? `ไฟล์แนบ ${index + 1}`,
@@ -1745,7 +1842,7 @@ function normalizeKwpAttachmentFile(file, index = 0) {
     id: file?.id ?? `${file?.originalFileName ?? 'attachment'}-${index}`,
     name: file?.originalFileName ?? file?.storedFileName ?? `ไฟล์แนบ ${index + 1}`,
     type: file?.mimeType ?? '',
-    url: file?.fileUrl ?? '',
+    url: file?.fileUrl ?? file?.url ?? file?.storageUrl ?? file?.storagePath ?? '',
     isSubmitted: Boolean(file?.fileUrl),
   }
 }
@@ -2822,6 +2919,7 @@ function Kwp01PreviewDialog({
   onApprove,
 }) {
   const [statusHistoryOpen, setStatusHistoryOpen] = useState(false)
+  const [attachmentAnchorEl, setAttachmentAnchorEl] = useState(null)
   const [revisionDialogOpen, setRevisionDialogOpen] = useState(false)
   const [revisionOfficerNote, setRevisionOfficerNote] = useState('')
   const [revisionSubmitting, setRevisionSubmitting] = useState(false)
@@ -2862,6 +2960,9 @@ function Kwp01PreviewDialog({
   const pdfPreviewUrl = pdfPreviewState.key === previewKey ? pdfPreviewState.url : ''
   const pdfPreviewError = pdfPreviewState.key === previewKey ? pdfPreviewState.error : ''
   const pdfPreviewLoading = Boolean(open && !loading && data && previewKey && pdfPreviewState.key !== previewKey)
+  const attachmentGroups = useMemo(() => getKwpPreviewAttachmentGroups(data), [data])
+  const attachmentCount = attachmentGroups.reduce((sum, group) => sum + group.items.length, 0)
+  const attachmentPopoverOpen = Boolean(attachmentAnchorEl)
   const clearPdfPreview = useCallback(() => {
     if (pdfPreviewUrlRef.current) {
       URL.revokeObjectURL(pdfPreviewUrlRef.current)
@@ -2957,6 +3058,7 @@ function Kwp01PreviewDialog({
     }
 
     setStatusHistoryOpen(false)
+    setAttachmentAnchorEl(null)
     clearPdfPreview()
     onClose?.()
   }
@@ -2990,6 +3092,15 @@ function Kwp01PreviewDialog({
             <Button
               variant="outlined"
               size="small"
+              startIcon={<DescriptionIcon />}
+              disabled={!data || attachmentCount === 0}
+              onClick={(event) => setAttachmentAnchorEl(event.currentTarget)}
+            >
+              เอกสารแนบ{attachmentCount ? ` (${attachmentCount})` : ''}
+            </Button>
+            <Button
+              variant="outlined"
+              size="small"
               startIcon={<HistoryIcon />}
               disabled={!data}
               onClick={() => setStatusHistoryOpen(true)}
@@ -3003,6 +3114,99 @@ function Kwp01PreviewDialog({
             ) : null}
           </Stack>
         </DialogTitle>
+        <Popover
+          open={attachmentPopoverOpen}
+          anchorEl={attachmentAnchorEl}
+          onClose={() => setAttachmentAnchorEl(null)}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+          transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+          slotProps={{
+            paper: {
+              sx: {
+                width: 380,
+                maxWidth: 'calc(100vw - 32px)',
+                maxHeight: 520,
+                overflowY: 'auto',
+                p: 2,
+                borderRadius: 2,
+                boxShadow: '0 18px 48px rgba(15, 23, 42, 0.18)',
+              },
+            },
+          }}
+        >
+          <Stack spacing={1.5}>
+            {attachmentGroups.length ? (
+              attachmentGroups.map((group) => (
+                <Box key={group.title}>
+                  <Typography variant="subtitle2" sx={{ mb: 0.75, fontWeight: 700 }}>
+                    {group.title}
+                  </Typography>
+                  <Stack spacing={0.5}>
+                    {group.items.map((item, index) => (
+                      <Button
+                        key={`${group.title}-${item.type}-${item.label}-${index}`}
+                        variant="text"
+                        disabled={!item.url}
+                        onClick={() => {
+                          if (item.url) {
+                            window.open(item.url, '_blank', 'noopener,noreferrer')
+                            setAttachmentAnchorEl(null)
+                          }
+                        }}
+                        sx={{
+                          justifyContent: 'flex-start',
+                          minHeight: 44,
+                          px: 1,
+                          py: 0.75,
+                          color: 'text.primary',
+                          textAlign: 'left',
+                          textTransform: 'none',
+                          borderRadius: 1.5,
+                        }}
+                      >
+                        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 0 }}>
+                          <Box
+                            sx={{
+                              width: 32,
+                              height: 32,
+                              borderRadius: 1.25,
+                              bgcolor: item.type === 'link' ? '#eff6ff' : 'grey.100',
+                              border: '1px solid',
+                              borderColor: item.type === 'link' ? '#bfdbfe' : 'grey.200',
+                              color: item.type === 'link' ? 'primary.main' : 'text.secondary',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0,
+                            }}
+                          >
+                            {item.type === 'link' ? (
+                              <LinkIcon fontSize="small" />
+                            ) : (
+                              <DescriptionIcon fontSize="small" />
+                            )}
+                          </Box>
+                          <Box sx={{ minWidth: 0 }}>
+                            <Typography variant="body2" noWrap>
+                              {item.label}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {item.type === 'link' ? 'Link' : 'File'}
+                            </Typography>
+                          </Box>
+                        </Stack>
+                      </Button>
+                    ))}
+                  </Stack>
+                </Box>
+              ))
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                ไม่มีเอกสารแนบ
+              </Typography>
+            )}
+          </Stack>
+        </Popover>
         <DialogContent
           dividers
           sx={{

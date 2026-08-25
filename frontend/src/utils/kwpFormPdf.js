@@ -57,6 +57,77 @@ async function fetchFontBytes(url) {
   return response.arrayBuffer()
 }
 
+function normalizeKwpDocumentUrl(url) {
+  if (!url) {
+    return ''
+  }
+
+  if (/^(blob:|data:|https?:\/\/)/i.test(url)) {
+    return url
+  }
+
+  return `https://d-poms.diw.go.th${String(url).startsWith('/') ? url : `/${url}`}`
+}
+
+function getKwpDocumentFileName(document = {}) {
+  return document.fileName ?? document.originalFileName ?? document.name ?? document.storedFileName ?? ''
+}
+
+function getKwpDocumentFileUrl(document = {}) {
+  return normalizeKwpDocumentUrl(
+    document.filePreviewUrl ?? document.fileUrl ?? document.url ?? document.storageUrl ?? document.path,
+  )
+}
+
+function isKwpImageDocument(document = {}) {
+  const type = document.fileType ?? document.mimeType ?? document.type ?? ''
+  const name = getKwpDocumentFileName(document)
+  const url = getKwpDocumentFileUrl(document)
+
+  return type.startsWith('image/') || /\.(png|jpe?g)(\?.*)?$/i.test(`${name} ${url}`)
+}
+
+async function getKwpImageBytes(document = {}) {
+  if (typeof File !== 'undefined' && document.rawFile instanceof File) {
+    return document.rawFile.arrayBuffer()
+  }
+
+  const url = getKwpDocumentFileUrl(document)
+  if (!url) {
+    return null
+  }
+
+  const response = await fetch(url)
+  if (!response.ok) {
+    return null
+  }
+
+  return response.arrayBuffer()
+}
+
+async function embedKwpImage(layout, document = {}) {
+  if (!isKwpImageDocument(document)) {
+    return null
+  }
+
+  const bytes = await getKwpImageBytes(document)
+  if (!bytes) {
+    return null
+  }
+
+  const name = getKwpDocumentFileName(document)
+  const type = document.fileType ?? document.mimeType ?? document.type ?? ''
+
+  try {
+    if (type.includes('png') || /\.png(\?.*)?$/i.test(name)) {
+      return await layout.pdfDoc.embedPng(bytes)
+    }
+    return await layout.pdfDoc.embedJpg(bytes)
+  } catch {
+    return null
+  }
+}
+
 function splitTextToTokens(text) {
   return String(text ?? '').split(/(\s+)/).filter((token) => token.length > 0)
 }
@@ -666,11 +737,8 @@ function drawKwp01(layout, data) {
   layout.y = y
 }
 
-function drawKwp02(layout, data) {
-  const isKwp04 = data.formType === 'kwp04'
-  layout.header(isKwp04 ? 'กวภ.04' : 'กวภ.02', isKwp04
-    ? ['แบบรายงานผลการตรวจวัดมลพิษอากาศจากปล่องระบาย ตามประกาศฯ', 'ข้อ 4(1) (2) 11(3) และ 16']
-    : ['แบบรายงานผลการตรวจวัดมลพิษอากาศจากปล่องระบาย กรณีเครื่องมือหรือเครื่องอุปกรณ์พิเศษ', 'มีเหตุขัดข้องและไม่สามารถรายงานผลการตรวจวัดได้ตั้งแต่ 15 วันขึ้นไป'])
+function drawGenericKwp02(layout, data) {
+  layout.header('กวภ.04', ['แบบรายงานผลการตรวจวัดมลพิษอากาศจากปล่องระบาย ตามประกาศฯ', 'ข้อ 4(1) (2) 11(3) และ 16'])
   commonFactorySections(layout, data)
   layout.sectionTitle('3. รายการตรวจวัดมลพิษอากาศจากปล่องระบาย')
   const rows = (data.measurementRows?.length ? data.measurementRows : [{}]).map((row) => [
@@ -697,23 +765,368 @@ function drawKwp02(layout, data) {
   )
   layout.paragraph('หมายเหตุ : การเก็บและวิเคราะห์ตัวอย่างต้องดำเนินการโดยห้องปฏิบัติการวิเคราะห์ของหน่วยงานราชการ หรือห้องปฏิบัติการวิเคราะห์เอกชนที่ขึ้นทะเบียนกับกรมโรงงานอุตสาหกรรม', { size: textSizes.small })
   layout.signature('ผู้จัดทำรายงาน', data)
+}
 
-  if (data.attachmentSections?.length) {
-    layout.addPage()
-    layout.sectionTitle(`เอกสารแนบ แบบ ${isKwp04 ? 'กวภ.04' : 'กวภ.02'}`)
-    data.attachmentSections.forEach((section) => {
-      layout.paragraph(section.title, { bold: true })
-      const rowsForFiles = section.files?.length
-        ? section.files.map((file, index) => [String(index + 1), displayValue(file.name)])
-        : [['-', '-']]
-      layout.table(
-        [{ label: 'ลำดับ', width: 0.35 }, { label: section.title, width: 2.65 }],
-        rowsForFiles,
-        { headerHeight: 34, rowHeight: 30 },
-      )
-      layout.space(12)
+function getKwpPdfAttachmentSections(data = {}) {
+  const sections = [...(data.attachmentSections ?? [])]
+
+  if (data.formType === 'kwp05') {
+    const calibrationRows = data.calibrationRows ?? []
+
+    sections.push(
+      {
+        title: 'รายงานผล RATA',
+        links: calibrationRows.map((row) => row.rataReportLink).filter(Boolean),
+        files: calibrationRows.flatMap((row) => row.rataReportFiles ?? []),
+      },
+      {
+        title: 'ภาพขณะสอบเทียบ',
+        links: calibrationRows.map((row) => row.calibrationPhotoLink).filter(Boolean),
+        files: calibrationRows.flatMap((row) => row.calibrationPhotoFiles ?? []),
+      },
+    )
+  }
+
+  return sections
+    .map((section) => ({
+      title: section.title || 'เอกสารแนบ',
+      links: (section.links ?? (section.link ? [section.link] : [])).map(normalizeKwpDocumentUrl).filter(Boolean),
+      files: section.files ?? [],
+    }))
+    .filter((section) => section.links.length || section.files.length)
+}
+
+function drawKwpAttachmentListItem(layout, index, text) {
+  const size = textSizes.body
+  const x = layout.margin.left + 30
+  const label = `${index}) `
+  const labelWidth = layout.textWidth(label, size)
+  const valueX = x + labelWidth
+  const maxWidth = layout.contentWidth - 30 - labelWidth
+  const lines = layout.wrapText(text, maxWidth, size)
+  const lineHeight = size * 1.35
+
+  layout.ensureSpace(lines.length * lineHeight + 4)
+  layout.drawTextAt(label, x, layout.y, { size })
+  lines.forEach((line, lineIndex) => {
+    layout.drawTextAt(line, valueX, layout.y - (lineIndex * lineHeight), { size, maxWidth })
+  })
+  layout.y -= lines.length * lineHeight
+}
+
+function drawKwpEmbeddedImage(layout, image) {
+  const isLandscape = image.width >= image.height
+  const maxWidth = isLandscape ? layout.contentWidth - 30 : (layout.contentWidth - 30) / 2
+  let imageWidth = maxWidth
+  let imageHeight = image.height * (imageWidth / image.width)
+  const maxHeight = layout.pageSize[1] - layout.margin.top - layout.margin.bottom
+
+  if (imageHeight > maxHeight) {
+    const ratio = maxHeight / imageHeight
+    imageWidth *= ratio
+    imageHeight *= ratio
+  }
+
+  layout.ensureSpace(imageHeight + 16)
+  layout.page.drawImage(image, {
+    x: layout.margin.left + 30,
+    y: layout.y - imageHeight,
+    width: imageWidth,
+    height: imageHeight,
+  })
+  layout.y -= imageHeight + 14
+}
+
+async function drawKwpAttachmentPages(layout, data, title) {
+  const sections = getKwpPdfAttachmentSections(data)
+
+  if (!sections.length) {
+    return
+  }
+
+  layout.addPage()
+  layout.sectionTitle(title)
+
+  for (const section of sections) {
+    layout.paragraph(section.title, { bold: true })
+
+    const listItems = [
+      ...section.links.map((link) => `Link: ${link}`),
+      ...section.files
+        .filter((file) => getKwpDocumentFileName(file) && !isKwpImageDocument(file))
+        .map((file) => getKwpDocumentFileName(file)),
+    ]
+
+    listItems.forEach((item, index) => drawKwpAttachmentListItem(layout, index + 1, item))
+
+    const imageDocuments = section.files.filter(isKwpImageDocument)
+    for (const imageDocument of imageDocuments) {
+      const image = await embedKwpImage(layout, imageDocument)
+      if (image) {
+        drawKwpEmbeddedImage(layout, image)
+      }
+    }
+
+    layout.space(12)
+  }
+}
+
+async function drawKwp02(layout, data) {
+  const isKwp04 = data.formType === 'kwp04'
+  if (isKwp04) {
+    drawGenericKwp02(layout, data)
+    await drawKwpAttachmentPages(layout, data, 'เอกสารแนบ แบบ กวภ.04')
+    return
+  }
+
+  const x = layout.margin.left
+  const width = layout.contentWidth
+  const right = x + width
+  const labelSize = 13
+  const titleSize = 16
+  const rowLine = 0.35
+  const grey = rgb(0.74, 0.74, 0.74)
+  let y = layout.y
+
+  const drawLine = (x1, y1, x2, y2, thickness = rowLine) => {
+    layout.page.drawLine({
+      start: { x: x1, y: y1 },
+      end: { x: x2, y: y2 },
+      thickness,
+      color: colors.border,
     })
   }
+  const drawRow = (height, { fill = null, verticals = [] } = {}) => {
+    layout.page.drawRectangle({
+      x,
+      y: y - height,
+      width,
+      height,
+      ...(fill ? { color: fill } : {}),
+      borderColor: colors.border,
+      borderWidth: rowLine,
+    })
+    verticals.forEach((vx) => drawLine(vx, y, vx, y - height))
+    y -= height
+    return y + height
+  }
+  const drawCellText = (text, tx, ty, maxWidth, options = {}) => {
+    layout.drawTextAt(text, tx, ty, {
+      size: options.size ?? labelSize,
+      bold: options.bold ?? false,
+      maxWidth,
+      lineHeight: (options.size ?? labelSize) * 1.22,
+    })
+  }
+  const drawDottedValue = (label, value, tx, ty, endX, options = {}) => {
+    const labelText = `${label} : `
+    const size = options.size ?? labelSize
+    const labelWidth = layout.textWidth(labelText, size, options.boldLabel ?? false)
+    const valueX = tx + labelWidth + 2
+    drawCellText(labelText, tx, ty, Math.max(20, endX - tx), { size, bold: options.boldLabel })
+    drawCellText(displayValue(value, ''), valueX + 2, ty, Math.max(20, endX - valueX - 8), { size })
+  }
+  const drawBox = (tx, ty, checked) => {
+    layout.page.drawRectangle({
+      x: tx,
+      y: ty - 2,
+      width: 10,
+      height: 10,
+      borderColor: colors.border,
+      borderWidth: 0.8,
+    })
+    if (checked) {
+      const boxY = ty - 2
+      layout.page.drawLine({
+        start: { x: tx + 2, y: boxY + 4 },
+        end: { x: tx + 4, y: boxY + 1 },
+        thickness: 1,
+        color: colors.border,
+      })
+      layout.page.drawLine({
+        start: { x: tx + 4, y: boxY + 1 },
+        end: { x: tx + 8, y: boxY + 8 },
+        thickness: 1,
+        color: colors.border,
+      })
+    }
+  }
+  const drawCenteredCellText = (text, centerX, ty, maxWidth, options = {}) => {
+    const size = options.size ?? labelSize
+    const bold = options.bold ?? false
+    const textWidth = layout.textWidth(text, size, bold)
+    drawCellText(text, centerX - (textWidth / 2), ty, maxWidth, { size, bold })
+  }
+
+  const requestNo = getRequestNo(data)
+  if (requestNo) {
+    drawCellText(`เลขที่คำขอ ${requestNo}`, x, y, 220, { size: labelSize, bold: true })
+  }
+  const formNo = 'แบบ กวภ.02'
+  drawCellText(formNo, right - layout.textWidth(formNo, titleSize, true), y, 120, { size: titleSize, bold: true })
+  y -= 36
+  layout.drawCentered('แบบรายงานผลการตรวจวัดมลพิษอากาศจากปล่องระบาย กรณีเครื่องมือหรือเครื่องอุปกรณ์พิเศษ', {
+    y,
+    size: titleSize,
+    bold: true,
+  })
+  y -= 24
+  layout.drawCentered('มีเหตุขัดข้องและไม่สามารถรายงานผลการตรวจวัดได้ตั้งแต่ 15 วันขึ้นไป', { y, size: titleSize, bold: true })
+  y -= 24
+
+  drawRow(20, { fill: grey })
+  drawCellText('1.    รายละเอียดเกี่ยวกับโรงงาน  (1 แบบต่อ 1 ปล่องต่อ 1 ครั้ง)', x + 10, y + 8, width - 210, { bold: true })
+  drawDottedValue('รายงานครั้งที่', data.reportRound, right - 188, y + 8, right)
+  drawRow(20)
+  drawDottedValue('วันที่', '', right - 160, y + 8, right)
+  drawRow(20)
+  drawDottedValue('ชื่อโรงงาน', data.factoryName, x + 8, y + 8, right)
+  drawRow(20, { verticals: [x + width * 0.66] })
+  drawDottedValue('ทะเบียนโรงงานเลขที่', data.factoryRegistration, x + 8, y + 8, x + width * 0.66)
+  drawDottedValue('ลำดับประเภทโรงงาน', data.industryType, x + width * 0.66 + 8, y + 8, right)
+  drawRow(20)
+  drawDottedValue('สถานที่ตั้งโรงงาน', data.factoryAddress, x + 8, y + 8, right)
+  drawRow(20)
+  drawDottedValue('รายชื่อผู้ติดต่อ', data.contactName, x + 8, y + 8, right)
+  drawRow(20, { verticals: [x + width * 0.66] })
+  drawDottedValue('เบอร์โทรศัพท์', data.contactPhone, x + 8, y + 8, x + width * 0.66)
+  drawDottedValue('e-mail', data.contactEmail, x + width * 0.66 + 8, y + 8, right)
+
+  drawRow(20, { fill: grey })
+  drawCellText('2.    ข้อมูลปล่อง', x + 10, y + 8, width - 20, { bold: true })
+  drawRow(20, { verticals: [x + width * 0.66] })
+  drawDottedValue('รหัสจุดตรวจวัด', data.pointCode, x + 8, y + 8, x + width * 0.66)
+  drawDottedValue('ชื่อจุดตรวจวัด', data.pointName, x + width * 0.66 + 8, y + 8, right)
+  drawRow(20)
+  drawDottedValue('ปล่องจากกระบวนการผลิต', data.productionStack, x + 8, y + 8, right)
+  drawRow(20, { verticals: [x + width * 0.66] })
+  drawDottedValue('เชื้อเพลิงหลัก', data.primaryFuel, x + 8, y + 8, x + width * 0.66)
+  drawDottedValue('เชื้อเพลิงสำรอง', data.secondaryFuel, x + width * 0.66 + 8, y + 8, right)
+  drawRow(20)
+  drawCellText('ระบบการเผาไหม้เชื้อเพลิง :', x + 8, y + 8, 155)
+  drawBox(x + 132, y + 8, data.combustionSystem === 'ระบบปิด')
+  drawCellText('ระบบปิด', x + 146, y + 8, 60)
+  drawBox(x + 196, y + 8, data.combustionSystem === 'ระบบเปิด')
+  drawCellText('ระบบเปิด', x + 210, y + 8, 60)
+  drawRow(20, { verticals: [x + width * 0.66] })
+  drawDottedValue('กำลังการผลิตของหน่วยการผลิต', data.productionCapacity, x + 8, y + 8, x + width * 0.66)
+  drawDottedValue('หน่วยของกำลังการผลิต', data.productionCapacityUnit, x + width * 0.66 + 8, y + 8, right)
+
+  drawRow(20, { fill: grey })
+  drawCellText('3.    รายการตรวจวัดมลพิษอากาศจากปล่องระบาย', x + 10, y + 8, width - 20, { bold: true })
+
+  const tableTop = y
+  const headerHeight = 36
+  const rowHeight = 20
+  const rows = data.measurementRows?.length ? data.measurementRows : []
+  const tableColumns = [
+    { label: 'รายการ\nสารมลพิษ', width: 1.05 },
+    { label: 'วันที่เก็บ\nตัวอย่าง', width: 1 },
+    { label: 'ค่าที่\nตรวจวัดได้', width: 0.9 },
+    { label: 'หน่วยการ\nตรวจวัด', width: 0.85 },
+    { label: 'เลขที่\nห้องปฏิบัติการ', width: 1.05 },
+    { label: 'เลขที่รายงาน', width: 1.05 },
+    { label: 'วิธีการตรวจวัดวิเคราะห์', width: 1.9 },
+  ]
+  const totalColumnWeight = tableColumns.reduce((sum, column) => sum + column.width, 0)
+  const colWidths = tableColumns.map((column) => (column.width / totalColumnWeight) * width)
+  const tableHeight = headerHeight + (rows.length * rowHeight)
+
+  layout.page.drawRectangle({
+    x,
+    y: tableTop - tableHeight,
+    width,
+    height: tableHeight,
+    borderColor: colors.border,
+    borderWidth: rowLine,
+  })
+  drawLine(x, tableTop - headerHeight, right, tableTop - headerHeight)
+  let currentX = x
+  tableColumns.forEach((column, index) => {
+    const colWidth = colWidths[index]
+    if (index > 0) drawLine(currentX, tableTop, currentX, tableTop - tableHeight)
+    const headerLines = column.label.split('\n')
+    const lineHeight = 13
+    const firstY = tableTop - ((headerHeight - (headerLines.length * lineHeight)) / 2) - 9
+    headerLines.forEach((line, lineIndex) => {
+      drawCenteredCellText(line, currentX + (colWidth / 2), firstY - (lineIndex * lineHeight), colWidth - 6, { size: 13, bold: true })
+    })
+    currentX += colWidth
+  })
+  rows.forEach((row, rowIndex) => {
+    const rowTop = tableTop - headerHeight - (rowIndex * rowHeight)
+    if (rowIndex > 0) drawLine(x, rowTop, right, rowTop)
+    const cells = [
+      displayValue(row.pollutant, ''),
+      formatDate(row.sampleDate),
+      displayValue(row.measuredValue, ''),
+      displayValue(row.unit, ''),
+      displayValue(row.laboratoryNo, ''),
+      displayValue(row.reportNo, ''),
+      displayValue(row.methodOther || row.method, ''),
+    ]
+    let cellX = x
+    cells.forEach((cell, cellIndex) => {
+      const colWidth = colWidths[cellIndex]
+      const cellLines = layout.wrapText(cell, colWidth - 8, 11.4)
+      const lineHeight = 12
+      const firstY = rowTop - ((rowHeight - (cellLines.length * lineHeight)) / 2) - 8
+      cellLines.slice(0, 2).forEach((line, lineIndex) => {
+        drawCenteredCellText(line, cellX + (colWidth / 2), firstY - (lineIndex * lineHeight), colWidth - 8, { size: 11.4 })
+      })
+      cellX += colWidth
+    })
+  })
+  y = tableTop - tableHeight
+
+  drawRow(24)
+  drawCellText('หมายเหตุ : การเก็บและวิเคราะห์ตัวอย่างต้องดำเนินการโดยห้องปฏิบัติการวิเคราะห์ของหน่วยงานราชการ หรือห้องปฏิบัติการวิเคราะห์เอกชนที่ขึ้นทะเบียนกับกรมโรงงานอุตสาหกรรม', x + 8, y + 10, width - 16, { size: 9.8, bold: true })
+
+  const signatureBoxTop = y
+  const signatureBoxBottom = Math.max(28, layout.margin.bottom - 20)
+  const signatureBoxHeight = Math.max(90, signatureBoxTop - signatureBoxBottom)
+  drawRow(signatureBoxHeight)
+  const signatureBoxBottomY = signatureBoxTop - signatureBoxHeight
+  const signCenterX = x + width * 0.5
+  const signTopY = signatureBoxBottomY + 126
+  const signLineWidth = 144
+  const lineStartX = signCenterX - (signLineWidth / 2)
+  const lineEndX = signCenterX + (signLineWidth / 2)
+  const drawSignatureLine = (lineY, startX = lineStartX, endX = lineEndX) => {
+    layout.page.drawLine({
+      start: { x: startX, y: lineY },
+      end: { x: endX, y: lineY },
+      thickness: rowLine,
+      color: colors.border,
+      dashArray: [1.2, 2.1],
+    })
+  }
+
+  drawCenteredCellText('ข้าพเจ้าขอรับรองว่าข้อมูลข้างต้นเป็นจริงทุกประการ', signCenterX, signTopY, 280)
+  drawSignatureLine(signTopY - 29)
+  drawCellText('(ลงชื่อ)', lineEndX + 8, signTopY - 25, 60)
+  const parenthesisY = signTopY - 49
+  drawCellText('(', lineStartX - 18, parenthesisY, 10)
+  drawSignatureLine(parenthesisY - 4)
+  const reporterName = displayValue(data.reporterName, '')
+  if (reporterName) {
+    const nameWidth = layout.textWidth(reporterName, labelSize)
+    drawCellText(reporterName, signCenterX - (nameWidth / 2), parenthesisY, lineEndX - lineStartX)
+  }
+  drawCellText(')', lineEndX + 14, parenthesisY, 10)
+  const positionY = signTopY - 70
+  drawCellText('ตำแหน่ง', lineStartX - 42, positionY, 40)
+  drawSignatureLine(positionY - 4)
+  const reporterPosition = displayValue(data.reporterPosition, '')
+  if (reporterPosition) {
+    const positionWidth = layout.textWidth(reporterPosition, labelSize)
+    drawCellText(reporterPosition, lineStartX + ((lineEndX - lineStartX - positionWidth) / 2), positionY, lineEndX - lineStartX)
+  }
+  drawCenteredCellText('ผู้ประกอบกิจการโรงงานหรือผู้รับมอบอำนาจ', signCenterX, signTopY - 91, 240)
+  drawCenteredCellText('ผู้จัดทำรายงาน', signCenterX, signTopY - 108, 120)
+  layout.y = y
+
+  await drawKwpAttachmentPages(layout, data, 'เอกสารแนบ แบบ กวภ.02')
 }
 
 function drawKwp03(layout, data) {
@@ -823,13 +1236,16 @@ export async function createKwpFormPdf(data) {
   layout.data = data
 
   if (data.formType === 'kwp02' || data.formType === 'kwp04') {
-    drawKwp02(layout, data)
+    await drawKwp02(layout, data)
   } else if (data.formType === 'kwp03') {
     drawKwp03(layout, data)
+    await drawKwpAttachmentPages(layout, data, 'เอกสารแนบ แบบ กวภ.03')
   } else if (data.formType === 'kwp05') {
     drawKwp05(layout, data)
+    await drawKwpAttachmentPages(layout, data, 'เอกสารแนบ แบบ กวภ.05')
   } else {
     drawKwp01(layout, data)
+    await drawKwpAttachmentPages(layout, data, 'เอกสารแนบ แบบ กวภ.01')
   }
 
   return pdfDoc.save()
