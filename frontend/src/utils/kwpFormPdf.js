@@ -737,36 +737,6 @@ function drawKwp01(layout, data) {
   layout.y = y
 }
 
-function drawGenericKwp02(layout, data) {
-  layout.header('กวภ.04', ['แบบรายงานผลการตรวจวัดมลพิษอากาศจากปล่องระบาย ตามประกาศฯ', 'ข้อ 4(1) (2) 11(3) และ 16'])
-  commonFactorySections(layout, data)
-  layout.sectionTitle('3. รายการตรวจวัดมลพิษอากาศจากปล่องระบาย')
-  const rows = (data.measurementRows?.length ? data.measurementRows : [{}]).map((row) => [
-    displayValue(row.pollutant),
-    formatDate(row.sampleDate),
-    displayValue(row.measuredValue),
-    displayValue(row.unit),
-    displayValue(row.laboratoryNo),
-    displayValue(row.reportNo),
-    displayValue(row.methodOther || row.method),
-  ])
-  layout.table(
-    [
-      { label: 'สารมลพิษ', width: 1.2 },
-      { label: 'วันที่เก็บตัวอย่าง', width: 1 },
-      { label: 'ค่าที่ตรวจวัดได้', width: 1 },
-      { label: 'หน่วยการตรวจวัด', width: 1 },
-      { label: 'เลขที่ห้องปฏิบัติการ', width: 1.1 },
-      { label: 'เลขที่รายงาน', width: 1.1 },
-      { label: 'วิธีการตรวจวัดวิเคราะห์', width: 1.8 },
-    ],
-    rows,
-    { headerHeight: 48, rowHeight: 42 },
-  )
-  layout.paragraph('หมายเหตุ : การเก็บและวิเคราะห์ตัวอย่างต้องดำเนินการโดยห้องปฏิบัติการวิเคราะห์ของหน่วยงานราชการ หรือห้องปฏิบัติการวิเคราะห์เอกชนที่ขึ้นทะเบียนกับกรมโรงงานอุตสาหกรรม', { size: textSizes.small })
-  layout.signature('ผู้จัดทำรายงาน', data)
-}
-
 function getKwpPdfAttachmentSections(data = {}) {
   const sections = [...(data.attachmentSections ?? [])]
 
@@ -873,12 +843,6 @@ async function drawKwpAttachmentPages(layout, data, title) {
 
 async function drawKwp02(layout, data) {
   const isKwp04 = data.formType === 'kwp04'
-  if (isKwp04) {
-    drawGenericKwp02(layout, data)
-    await drawKwpAttachmentPages(layout, data, 'เอกสารแนบ แบบ กวภ.04')
-    return
-  }
-
   const x = layout.margin.left
   const width = layout.contentWidth
   const right = x + width
@@ -962,16 +926,20 @@ async function drawKwp02(layout, data) {
   if (requestNo) {
     drawCellText(`เลขที่คำขอ ${requestNo}`, x, y, 220, { size: labelSize, bold: true })
   }
-  const formNo = 'แบบ กวภ.02'
+  const formNo = isKwp04 ? 'แบบ กวภ.04' : 'แบบ กวภ.02'
   drawCellText(formNo, right - layout.textWidth(formNo, titleSize, true), y, 120, { size: titleSize, bold: true })
   y -= 36
-  layout.drawCentered('แบบรายงานผลการตรวจวัดมลพิษอากาศจากปล่องระบาย กรณีเครื่องมือหรือเครื่องอุปกรณ์พิเศษ', {
+  layout.drawCentered(isKwp04
+    ? 'แบบรายงานผลการตรวจวัดมลพิษอากาศจากปล่องระบาย ตามประกาศฯ'
+    : 'แบบรายงานผลการตรวจวัดมลพิษอากาศจากปล่องระบาย กรณีเครื่องมือหรือเครื่องอุปกรณ์พิเศษ', {
     y,
     size: titleSize,
     bold: true,
   })
   y -= 24
-  layout.drawCentered('มีเหตุขัดข้องและไม่สามารถรายงานผลการตรวจวัดได้ตั้งแต่ 15 วันขึ้นไป', { y, size: titleSize, bold: true })
+  layout.drawCentered(isKwp04
+    ? 'ข้อ 4(1) (2) 11(3) และ 16'
+    : 'มีเหตุขัดข้องและไม่สามารถรายงานผลการตรวจวัดได้ตั้งแต่ 15 วันขึ้นไป', { y, size: titleSize, bold: true })
   y -= 24
 
   drawRow(20, { fill: grey })
@@ -1126,7 +1094,7 @@ async function drawKwp02(layout, data) {
   drawCenteredCellText('ผู้จัดทำรายงาน', signCenterX, signTopY - 108, 120)
   layout.y = y
 
-  await drawKwpAttachmentPages(layout, data, 'เอกสารแนบ แบบ กวภ.02')
+  await drawKwpAttachmentPages(layout, data, `เอกสารแนบ แบบ ${isKwp04 ? 'กวภ.04' : 'กวภ.02'}`)
 }
 
 function drawKwp03(layout, data) {
