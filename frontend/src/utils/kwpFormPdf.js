@@ -1129,59 +1129,280 @@ function drawKwp03(layout, data) {
 }
 
 function drawKwp05(layout, data) {
-  layout.header('กวภ.05', [
-    'แบบรายงานผลการสอบเทียบหรือทวนสอบระบบตรวจวัดคุณภาพอากาศ',
-    'แบบอัตโนมัติอย่างต่อเนื่อง (CEMS)',
-  ])
-  layout.twoColumn(
-    { label: 'ครั้งที่', value: data.reportRound },
-    { label: 'ประจำปี พ.ศ.', value: data.reportYear },
-    { leftWidth: 220 },
-  )
-  layout.sectionTitle('1. รายละเอียดเกี่ยวกับโรงงาน')
-  layout.labelValue('ชื่อบริษัท', data.companyName)
-  layout.twoColumn(
-    { label: 'เลขทะเบียนโรงงาน', value: data.factoryRegistration },
-    { label: 'ประกอบกิจการ', value: data.businessActivity },
-  )
-  layout.labelValue('สถานที่ตั้ง', data.factoryAddress)
-  layout.twoColumn(
-    { label: 'ผู้เก็บตัวอย่าง', value: data.samplerName },
-    { label: 'ทะเบียนเจ้าหน้าที่', value: data.officerRegistration },
-  )
-  layout.labelValue('หน่วยงาน/ชื่อห้องปฏิบัติการ', data.laboratoryName)
-  layout.labelValue('ทะเบียนห้องปฏิบัติการ', data.laboratoryRegistration)
-  layout.twoColumn(
-    { label: 'รหัสจุดตรวจวัด', value: data.pointCode },
-    { label: 'ชื่อจุดตรวจวัด', value: data.pointName },
-  )
-  layout.labelValue('รายละเอียดของเครื่องมือหรือเครื่องอุปกรณ์พิเศษ ยี่ห้อ (Brand)', data.cemsBrand || data.cemsDetail)
-  layout.sectionTitle('2. รายการผลการสอบเทียบหรือทวนสอบ CEMS')
-  const rows = (data.calibrationRows?.length ? data.calibrationRows : [{}]).map((row) => [
-    joinList(row.parameter),
-    formatDate(row.startDate),
-    formatDate(row.endDate),
-    displayValue(row.result),
-    displayValue(row.verifierCompany || data.laboratoryName),
-    displayValue(row.cemsModel),
-    displayValue(row.rataReportLink || row.rataReportFiles?.[0]?.name),
-    displayValue(row.calibrationPhotoLink || row.calibrationPhotoFiles?.[0]?.name),
-  ])
-  layout.table(
-    [
-      { label: 'พารามิเตอร์', width: 1.1 },
-      { label: 'วันที่เริ่มดำเนินการ', width: 1 },
-      { label: 'วันที่สิ้นสุดดำเนินการ', width: 1 },
-      { label: 'ผลการตรวจสอบ', width: 1 },
-      { label: 'บริษัทที่ทำการทวนสอบ / สอบเทียบ', width: 1.2 },
-      { label: 'ยี่ห้อ/รุ่นของ CEMS', width: 1.1 },
-      { label: 'Link / QR CODE', width: 1 },
-      { label: 'Link / QR CODE', width: 1 },
-    ],
-    rows,
-    { headerHeight: 58, rowHeight: 70, fontSize: textSizes.small },
-  )
-  layout.signature('ผู้รายงานผลการทดสอบ', data)
+  const x = layout.margin.left
+  const width = layout.contentWidth
+  const right = x + width
+  const labelSize = 13
+  const titleSize = 16
+  const rowLine = 0.35
+  const grey = rgb(0.74, 0.74, 0.74)
+  let y = layout.y
+  const contentX = x
+  const contentRight = right
+  const contentWidth = contentRight - contentX
+
+  const drawLine = (x1, y1, x2, y2, thickness = rowLine) => {
+    layout.page.drawLine({
+      start: { x: x1, y: y1 },
+      end: { x: x2, y: y2 },
+      thickness,
+      color: colors.border,
+    })
+  }
+  const drawCellText = (text, tx, ty, maxWidth, options = {}) => {
+    layout.drawTextAt(text, tx, ty, {
+      size: options.size ?? labelSize,
+      bold: options.bold ?? false,
+      maxWidth,
+      lineHeight: (options.size ?? labelSize) * 1.22,
+    })
+  }
+  const drawCenteredCellText = (text, centerX, ty, maxWidth, options = {}) => {
+    const size = options.size ?? labelSize
+    const bold = options.bold ?? false
+    const textWidth = layout.textWidth(text, size, bold)
+    drawCellText(text, centerX - (textWidth / 2), ty, maxWidth, { size, bold })
+  }
+  const drawDottedValue = (label, value, tx, ty, endX, options = {}) => {
+    const labelText = `${label} : `
+    const size = options.size ?? labelSize
+    const labelWidth = layout.textWidth(labelText, size, options.boldLabel ?? false)
+    const valueX = tx + labelWidth + 2
+    const valueMaxWidth = Math.max(20, endX - valueX - 8)
+    const lineY = ty - 4
+
+    drawCellText(labelText, tx, ty, Math.max(20, endX - tx), { size, bold: options.boldLabel })
+    layout.drawDottedLine(valueX, endX, lineY)
+
+    if (options.fitSingleLine) {
+      let valueText = displayValue(value, '')
+      let valueSize = size
+      while (valueText && valueSize > 9 && layout.textWidth(valueText, valueSize) > valueMaxWidth) {
+        valueSize -= 0.25
+      }
+
+      while (valueText && layout.textWidth(valueText, valueSize) > valueMaxWidth) {
+        valueText = valueText.slice(0, -1)
+      }
+
+      layout.drawTextAt(valueText, valueX + 2, ty, { size: valueSize })
+      return
+    }
+
+    drawCellText(displayValue(value, ''), valueX + 2, ty, valueMaxWidth, { size })
+  }
+  const drawSignatureLine = (lineY, startX, endX) => {
+    layout.page.drawLine({
+      start: { x: startX, y: lineY },
+      end: { x: endX, y: lineY },
+      thickness: rowLine,
+      color: colors.border,
+      dashArray: [1.2, 2.1],
+    })
+  }
+  const normalizeParameters = (value) => {
+    if (Array.isArray(value)) {
+      return value.map((item) => displayValue(item, '')).filter(Boolean)
+    }
+
+    return String(displayValue(value, ''))
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean)
+  }
+  const drawTableText = (text, tx, ty, maxWidth, options = {}) => {
+    const size = options.size ?? 11.4
+    const bold = options.bold ?? false
+    const lines = String(text ?? '').split('\n').flatMap((line) => layout.wrapText(line, maxWidth, size, bold))
+    const lineHeight = size * 1.18
+
+    lines.slice(0, options.maxLines ?? lines.length).forEach((line, index) => {
+      if (options.align === 'center') {
+        const lineWidth = layout.textWidth(line, size, bold)
+        layout.drawTextAt(line, tx + Math.max(0, (maxWidth - lineWidth) / 2), ty - (index * lineHeight), { size, bold })
+      } else {
+        layout.drawTextAt(line, tx, ty - (index * lineHeight), { size, bold })
+      }
+    })
+  }
+
+  const requestNo = getRequestNo(data)
+  if (requestNo) {
+    drawCellText(`เลขที่คำขอ ${requestNo}`, x, y, 220, { size: labelSize, bold: true })
+  }
+  const formNo = 'แบบ กวภ.05'
+  drawCellText(formNo, right - layout.textWidth(formNo, titleSize, true), y, 120, { size: titleSize, bold: true })
+  y -= 36
+  layout.drawCentered('แบบรายงานผลการสอบเทียบหรือทวนสอบระบบตรวจวัดคุณภาพอากาศ', { y, size: titleSize, bold: true })
+  y -= 24
+  layout.drawCentered('แบบอัตโนมัติอย่างต่อเนื่อง (CEMS)', { y, size: titleSize, bold: true })
+  y -= 22
+
+  const roundLabel = 'ครั้งที่ '
+  const yearLabel = 'ประจำปี พ.ศ. '
+  const roundLabelWidth = layout.textWidth(roundLabel, labelSize, true)
+  const yearLabelWidth = layout.textWidth(yearLabel, labelSize, true)
+  const roundLineWidth = 58
+  const yearLineWidth = 64
+  const roundYearGap = 8
+  const roundYearWidth = roundLabelWidth + 4 + roundLineWidth + roundYearGap + yearLabelWidth + 4 + yearLineWidth
+  const roundStartX = (layout.width - roundYearWidth) / 2
+  const roundLineStartX = roundStartX + roundLabelWidth + 4
+  const roundLineEndX = roundLineStartX + 58
+  const yearStartX = roundLineEndX + 8
+  const yearLineStartX = yearStartX + yearLabelWidth + 4
+  const yearLineEndX = yearLineStartX + 64
+
+  drawCellText(roundLabel, roundStartX, y, 55, { bold: true })
+  drawSignatureLine(y - 4, roundLineStartX, roundLineEndX)
+  drawCenteredCellText(displayValue(data.reportRound, ''), (roundLineStartX + roundLineEndX) / 2, y, roundLineEndX - roundLineStartX)
+  drawCellText(yearLabel, yearStartX, y, 82, { bold: true })
+  drawSignatureLine(y - 4, yearLineStartX, yearLineEndX)
+  drawCenteredCellText(displayValue(data.reportYear, ''), (yearLineStartX + yearLineEndX) / 2, y, yearLineEndX - yearLineStartX)
+  y -= 32
+
+  const leftFieldEndX = contentX + 238
+  const rightFieldX = contentX + 254
+
+  drawDottedValue('ชื่อบริษัท', data.companyName, contentX, y, leftFieldEndX)
+  y -= 18
+  drawDottedValue('เลขทะเบียนโรงงาน', data.factoryRegistration, contentX, y, leftFieldEndX)
+  drawDottedValue('ประกอบกิจการ', data.businessActivity, rightFieldX, y, contentRight, { fitSingleLine: true })
+  y -= 18
+  drawDottedValue('สถานที่ตั้ง', data.factoryAddress, contentX, y, contentRight)
+  y -= 18
+  drawDottedValue('ผู้เก็บตัวอย่าง', data.samplerName, contentX, y, leftFieldEndX)
+  drawDottedValue('ทะเบียนเจ้าหน้าที่', data.officerRegistration, rightFieldX, y, contentRight, { fitSingleLine: true })
+  y -= 18
+  drawDottedValue('หน่วยงาน/ชื่อห้องปฏิบัติการ', data.laboratoryName, contentX, y, contentRight)
+  y -= 18
+  drawDottedValue('ทะเบียนห้องปฏิบัติการ', data.laboratoryRegistration, contentX, y, leftFieldEndX)
+  y -= 18
+  drawDottedValue('รหัสจุดตรวจวัด', data.pointCode, contentX, y, leftFieldEndX)
+  y -= 18
+  drawDottedValue('ชื่อจุดตรวจวัด', data.pointName, contentX, y, leftFieldEndX)
+  y -= 18
+  drawDottedValue('รายละเอียดของเครื่องมือหรือเครื่องอุปกรณ์พิเศษ ยี่ห้อ (Brand)', data.cemsBrand || data.cemsDetail, contentX, y, contentRight)
+  y -= 20
+
+  drawCellText('รายการผลการสอบเทียบหรือทวนสอบ CEMS', contentX, y, contentWidth, { bold: true })
+  y -= 28
+
+  const tableX = contentX
+  const tableWidth = contentWidth
+  const columns = [
+    { label: 'พารามิเตอร์', weight: 1.15 },
+    { label: 'วันที่เริ่ม\nดำเนินการ', weight: 1.05 },
+    { label: 'วันที่สิ้นสุด\nดำเนินการ', weight: 1.05 },
+    { label: 'ผลการตรวจ\nสอบ', weight: 1.05 },
+    { label: 'บริษัทที่ทำการ\nทวนสอบ /\nสอบเทียบ', weight: 1.12 },
+    { label: 'ยี่ห้อ/รุ่นของ\nCEMS', weight: 1.02 },
+    { label: 'Link / QR\nCODE', weight: 1 },
+    { label: 'Link / QR\nCODE', weight: 1 },
+  ]
+  const totalWeight = columns.reduce((sum, column) => sum + column.weight, 0)
+  const colWidths = columns.map((column) => (column.weight / totalWeight) * tableWidth)
+  const rows = data.calibrationRows?.length ? data.calibrationRows : [{}]
+  const headerHeight = 76
+  const tableBodySize = 12.8
+  const rowHeight = Math.max(78, ...rows.map((row) => Math.max(1, normalizeParameters(row.parameter).length) * 16 + 30))
+  const tableHeight = headerHeight + (rows.length * rowHeight)
+  let currentX = tableX
+
+  layout.page.drawRectangle({
+    x: tableX,
+    y: y - tableHeight,
+    width: tableWidth,
+    height: tableHeight,
+    borderColor: colors.border,
+    borderWidth: rowLine,
+  })
+  layout.page.drawRectangle({
+    x: tableX,
+    y: y - headerHeight,
+    width: tableWidth,
+    height: headerHeight,
+    color: grey,
+    borderColor: colors.border,
+    borderWidth: rowLine,
+  })
+  drawLine(tableX, y - headerHeight, tableX + tableWidth, y - headerHeight)
+  columns.forEach((column, index) => {
+    const colWidth = colWidths[index]
+    if (index > 0) {
+      drawLine(currentX, y, currentX, y - tableHeight)
+    }
+    const headerLines = column.label.split('\n')
+    const lineHeight = 15
+    const firstY = y - ((headerHeight - (headerLines.length * lineHeight)) / 2) - 8
+    headerLines.forEach((line, lineIndex) => {
+      drawCenteredCellText(line, currentX + (colWidth / 2), firstY - (lineIndex * lineHeight), colWidth - 6, {
+        size: labelSize,
+        bold: true,
+      })
+    })
+    currentX += colWidth
+  })
+  rows.forEach((row, rowIndex) => {
+    const rowTop = y - headerHeight - (rowIndex * rowHeight)
+    if (rowIndex > 0) {
+      drawLine(tableX, rowTop, tableX + tableWidth, rowTop)
+    }
+    const cells = [
+      normalizeParameters(row.parameter).join('\n'),
+      formatDate(row.startDate),
+      formatDate(row.endDate),
+      displayValue(row.result),
+      displayValue(row.verifierCompany || data.laboratoryName),
+      displayValue(row.cemsModel),
+      displayValue(row.rataReportLink || row.rataReportFiles?.[0]?.name),
+      displayValue(row.calibrationPhotoLink || row.calibrationPhotoFiles?.[0]?.name),
+    ]
+    let cellX = tableX
+    cells.forEach((cell, cellIndex) => {
+      const colWidth = colWidths[cellIndex]
+      drawTableText(cell, cellX + 6, rowTop - 17, colWidth - 12, {
+        size: tableBodySize,
+        maxLines: Math.max(4, Math.floor((rowHeight - 14) / (tableBodySize * 1.18))),
+      })
+      cellX += colWidth
+    })
+  })
+  y -= tableHeight
+
+  const signatureTopY = Math.max(layout.margin.bottom + 94, y - 46)
+  const lineEndX = contentRight
+  const lineStartX = contentRight - 132
+  const signCenterX = (lineStartX + lineEndX) / 2
+  const drawSignatureLabel = (label, ty) => {
+    const labelGap = 8
+    const labelWidth = layout.textWidth(label, labelSize)
+    drawCellText(label, lineStartX - labelWidth - labelGap, ty, labelWidth + 2)
+  }
+
+  drawSignatureLabel('ผู้รายงานผลการทดสอบ', signatureTopY)
+  drawSignatureLine(signatureTopY - 4, lineStartX, lineEndX)
+  const parenthesisY = signatureTopY - 23
+  drawCellText('(', lineStartX - 8, parenthesisY, 10)
+  drawSignatureLine(parenthesisY - 4, lineStartX, lineEndX)
+  const reporterName = displayValue(data.reporterName, '')
+  if (reporterName) {
+    const nameWidth = layout.textWidth(reporterName, labelSize)
+    drawCellText(reporterName, signCenterX - (nameWidth / 2), parenthesisY, lineEndX - lineStartX)
+  }
+  drawCellText(')', lineEndX + 2, parenthesisY, 10)
+  const positionY = signatureTopY - 45
+  drawSignatureLabel('ตำแหน่ง', positionY)
+  drawSignatureLine(positionY - 4, lineStartX, lineEndX)
+  const reporterPosition = displayValue(data.reporterPosition, '')
+  if (reporterPosition) {
+    const positionWidth = layout.textWidth(reporterPosition, labelSize)
+    drawCellText(reporterPosition, lineStartX + ((lineEndX - lineStartX - positionWidth) / 2), positionY, lineEndX - lineStartX)
+  }
+  const dateY = signatureTopY - 67
+  drawSignatureLabel('ลงวันที่', dateY)
+  drawSignatureLine(dateY - 4, lineStartX, lineEndX)
+  layout.y = dateY - 24
 }
 
 export async function createKwpFormPdf(data) {
