@@ -430,36 +430,6 @@ class KwpPdfLayout {
   }
 }
 
-function commonFactorySections(layout, data, pointLabel = 'ข้อมูลปล่อง') {
-  layout.sectionTitle('1. รายละเอียดเกี่ยวกับโรงงาน')
-  layout.labelValue('ชื่อโรงงาน', data.factoryName ?? data.companyName)
-  layout.twoColumn(
-    { label: 'เลขทะเบียนโรงงาน', value: data.factoryRegistration },
-    { label: 'ลำดับประเภทโรงงาน', value: data.industryType },
-  )
-  layout.labelValue('สถานที่ตั้งโรงงาน', data.factoryAddress)
-  layout.labelValue('รายชื่อผู้ติดต่อ', data.contactName)
-  layout.twoColumn(
-    { label: 'เบอร์โทรศัพท์', value: data.contactPhone },
-    { label: 'อีเมล', value: data.contactEmail },
-  )
-
-  layout.sectionTitle(`2. ${pointLabel}`)
-  layout.twoColumn(
-    { label: 'รหัสจุดตรวจวัด', value: data.pointCode },
-    { label: 'ชื่อจุดตรวจวัด', value: data.pointName },
-  )
-  layout.labelValue('ปล่องจากกระบวนการผลิต', data.productionStack)
-  layout.twoColumn(
-    { label: 'เชื้อเพลิงหลัก', value: data.primaryFuel },
-    { label: 'เชื้อเพลิงรอง', value: data.secondaryFuel },
-  )
-  layout.twoColumn(
-    { label: 'กำลังการผลิตของหน่วยการผลิต', value: data.productionCapacity },
-    { label: 'หน่วยของกำลังการผลิต', value: data.productionCapacityUnit },
-  )
-}
-
 function drawKwp01(layout, data) {
   const x = layout.margin.left
   const width = layout.contentWidth
@@ -1098,34 +1068,255 @@ async function drawKwp02(layout, data) {
 }
 
 function drawKwp03(layout, data) {
-  layout.header('กวภ.03', [
-    'แบบแจ้งเหตุขัดข้องหรือหยุดส่งข้อมูลการตรวจวัดมลพิษทางน้ำแบบอัตโนมัติอย่างต่อเนื่อง (WPMS)',
-  ])
-  commonFactorySections(layout, data, 'ข้อมูลจุดตรวจวัด')
-  layout.labelValue('เครื่องตรวจวัด', joinList(data.instruments))
-  layout.sectionTitle('3. ข้อมูลน้ำทิ้งระบายออกนอกโรงงาน')
-  layout.twoColumn(
-    { label: 'แหล่งกำเนิดน้ำเสีย', value: data.wastewaterSource },
-    { label: 'แหล่งรองรับน้ำทิ้ง', value: data.receivingSource },
-  )
-  layout.twoColumn(
-    { label: 'ประเภทระบบบำบัด', value: data.treatmentSystemType },
-    { label: 'พิกัดจุดระบายน้ำทิ้ง', value: data.dischargePoint },
-  )
-  layout.labelValue('ปริมาณน้ำทิ้งระบายออกวันที่ขัดข้อง เฉลี่ย', data.averageDischarge)
-  layout.twoColumn(
-    { label: 'ต่ำสุด', value: data.minimumDischarge },
-    { label: 'สูงสุด', value: data.maximumDischarge },
-  )
-  layout.sectionTitle('4. สาเหตุของการไม่สามารถรายงานผลการตรวจวัดได้')
-  layout.labelValue('สาเหตุ', joinList(data.issueReasons))
-  layout.labelValue('เนื่องจาก', data.reasonDetail)
-  layout.labelValue('วัน/เดือน/ปี ที่พบปัญหาหรือหยุดหน่วยการผลิต', data.problemDate)
-  layout.labelValue('วัน/เดือน/ปี ที่คาดว่าจะดำเนินการแล้วเสร็จ', data.expectedDoneDate)
-  layout.labelValue('รวมระยะเวลาปรับปรุงแก้ไขหรือระยะเวลาหยุดหน่วยการผลิต', data.totalDays)
-  layout.labelValue('รายการตรวจวัด (พารามิเตอร์) ที่ไม่สามารถรายงานผลได้', joinList(data.failedParameters))
-  layout.labelValue('แนวทางการปรับปรุงแก้ไข', data.correctiveAction)
-  layout.signature('ผู้จัดทำรายงาน/ผู้ดูแลระบบบำบัด', data)
+  const x = layout.margin.left
+  const width = layout.contentWidth
+  const right = x + width
+  const labelSize = 13
+  const titleSize = 16
+  const rowLine = 0.35
+  const grey = rgb(0.74, 0.74, 0.74)
+  let y = layout.y
+
+  const selectedInstruments = Array.isArray(data.instruments) ? data.instruments : []
+  const selectedReasons = Array.isArray(data.issueReasons) ? data.issueReasons : []
+  const failedParameters = Array.isArray(data.failedParameters) ? data.failedParameters : []
+
+  const drawLine = (x1, y1, x2, y2, thickness = rowLine) => {
+    layout.page.drawLine({
+      start: { x: x1, y: y1 },
+      end: { x: x2, y: y2 },
+      thickness,
+      color: colors.border,
+    })
+  }
+  const drawRow = (height, { fill = null, verticals = [] } = {}) => {
+    layout.page.drawRectangle({
+      x,
+      y: y - height,
+      width,
+      height,
+      ...(fill ? { color: fill } : {}),
+      borderColor: colors.border,
+      borderWidth: rowLine,
+    })
+    verticals.forEach((vx) => drawLine(vx, y, vx, y - height))
+    y -= height
+    return y + height
+  }
+  const drawCellText = (text, tx, ty, maxWidth, options = {}) => {
+    layout.drawTextAt(text, tx, ty, {
+      size: options.size ?? labelSize,
+      bold: options.bold ?? false,
+      maxWidth,
+      lineHeight: (options.size ?? labelSize) * 1.2,
+    })
+  }
+  const drawCenteredCellText = (text, centerX, ty, maxWidth, options = {}) => {
+    const size = options.size ?? labelSize
+    const bold = options.bold ?? false
+    const textWidth = layout.textWidth(text, size, bold)
+    drawCellText(text, centerX - (textWidth / 2), ty, maxWidth, { size, bold })
+  }
+  const drawDottedValue = (label, value, tx, ty, endX, options = {}) => {
+    const labelText = `${label} : `
+    const size = options.size ?? labelSize
+    const labelWidth = layout.textWidth(labelText, size, options.boldLabel ?? false)
+    const valueX = tx + labelWidth + 2
+    const lineY = ty - 4
+    const maxWidth = Math.max(20, endX - valueX - 8)
+
+    drawCellText(labelText, tx, ty, Math.max(20, endX - tx), { size, bold: options.boldLabel })
+    layout.drawDottedLine(valueX, endX, lineY)
+    drawCellText(displayValue(value, ''), valueX + 2, ty, maxWidth, { size })
+  }
+  const drawPlainValue = (label, value, tx, ty, maxWidth, options = {}) => {
+    const labelText = label ? `${label} : ` : ''
+    const size = options.size ?? labelSize
+    const labelWidth = layout.textWidth(labelText, size, options.boldLabel ?? false)
+
+    if (labelText) {
+      drawCellText(labelText, tx, ty, maxWidth, { size, bold: options.boldLabel })
+    }
+    drawCellText(displayValue(value, ''), tx + labelWidth + 2, ty, Math.max(20, maxWidth - labelWidth - 6), { size })
+  }
+  const drawBox = (tx, ty, checked = false) => {
+    layout.page.drawRectangle({
+      x: tx,
+      y: ty - 2,
+      width: 9,
+      height: 9,
+      borderColor: colors.border,
+      borderWidth: 0.7,
+    })
+    if (checked) {
+      const boxY = ty - 2
+      drawLine(tx + 2, boxY + 4, tx + 4, boxY + 1, 0.9)
+      drawLine(tx + 4, boxY + 1, tx + 8, boxY + 8, 0.9)
+    }
+  }
+  const includesOption = (values, option) => values.some((value) => String(value).toLowerCase().includes(String(option).toLowerCase()))
+  const drawOption = (tx, ty, label, checked = false, labelWidth = 80) => {
+    drawBox(tx, ty + 1, checked)
+    drawCellText(label, tx + 13, ty, labelWidth)
+  }
+  const drawInlineOptions = (startX, ty, options, selectedValues, gap = 14) => {
+    let optionX = startX
+    options.forEach((option) => {
+      const label = option.label ?? option
+      const checked = option.checked ?? includesOption(selectedValues, label)
+      const labelWidth = layout.textWidth(label, labelSize) + 2
+      drawOption(optionX, ty, label, checked, labelWidth)
+      optionX += 13 + labelWidth + gap
+    })
+  }
+  const drawSignatureLine = (lineY, startX, endX) => {
+    layout.page.drawLine({
+      start: { x: startX, y: lineY },
+      end: { x: endX, y: lineY },
+      thickness: rowLine,
+      color: colors.border,
+      dashArray: [1.2, 2.1],
+    })
+  }
+  const drawReasonOption = (rowTop, label, checked) => {
+    const optionY = rowTop - 13
+    const boxX = x + 28
+    const labelX = boxX + 18
+    const labelText = `${label} เนื่องจาก : `
+    const labelWidth = layout.textWidth(labelText, labelSize)
+    const lineStartX = labelX + labelWidth + 3
+    const lineEndX = right - 8
+    const value = checked ? data.reasonDetail : ''
+
+    drawBox(boxX, optionY + 1, checked)
+    drawCellText(labelText, labelX, optionY, labelWidth)
+    layout.drawDottedLine(lineStartX, lineEndX, optionY - 4)
+    layout.drawDottedLine(x + 8, lineEndX, optionY - 18)
+    drawCellText(displayValue(value, ''), lineStartX + 3, optionY, Math.max(20, lineEndX - lineStartX - 8))
+  }
+
+  const requestNo = getRequestNo(data)
+  if (requestNo) {
+    drawCellText(`เลขที่คำขอ ${requestNo}`, x, y, 220, { size: labelSize, bold: true })
+  }
+  const formNo = 'แบบ กวภ.03'
+  drawCellText(formNo, right - layout.textWidth(formNo, titleSize, true), y, 120, { size: titleSize, bold: true })
+  y -= 38
+  layout.drawCentered('แบบแจ้งเหตุขัดข้องหรือหยุดส่งข้อมูลการตรวจวัดมลพิษทางน้ำแบบอัตโนมัติอย่างต่อเนื่อง (WPMS)', {
+    y,
+    size: titleSize,
+    bold: true,
+  })
+  y -= 22
+
+  drawRow(20, { fill: grey })
+  drawCellText('1.รายละเอียดเกี่ยวกับโรงงาน  (1 แบบต่อ 1 จุดตรวจวัด)', x + 8, y + 8, width - 16, { bold: true })
+  drawRow(20)
+  drawPlainValue('วันที่', '', right - 210, y + 8, 200)
+  drawRow(20)
+  drawPlainValue('ชื่อโรงงาน', data.factoryName, x + 8, y + 8, width - 16)
+  drawRow(20, { verticals: [x + width * 0.5] })
+  drawPlainValue('ทะเบียนโรงงานเลขที่', data.factoryRegistration, x + 8, y + 8, (width * 0.5) - 16)
+  drawPlainValue('ลำดับประเภทโรงงาน', data.industryType, x + width * 0.5 + 8, y + 8, (width * 0.5) - 16)
+  drawRow(20)
+  drawPlainValue('สถานที่ตั้งโรงงาน', data.factoryAddress, x + 8, y + 8, width - 16)
+  drawRow(20)
+  drawPlainValue('รายชื่อผู้ติดต่อ', data.contactName, x + 8, y + 8, width - 16)
+  drawRow(20, { verticals: [x + width * 0.5] })
+  drawPlainValue('เบอร์โทรศัพท์', data.contactPhone, x + 8, y + 8, (width * 0.5) - 16)
+  drawPlainValue('E-mail', data.contactEmail, x + width * 0.5 + 8, y + 8, (width * 0.5) - 16)
+
+  drawRow(20, { fill: grey })
+  drawCellText('2.ข้อมูลจุดตรวจวัด', x + 8, y + 8, width - 16, { bold: true })
+  drawRow(20, { verticals: [x + width * 0.5] })
+  drawPlainValue('รหัสจุดตรวจวัด', data.pointCode, x + 8, y + 8, (width * 0.5) - 16)
+  drawPlainValue('ชื่อจุดตรวจวัด', data.pointName, x + width * 0.5 + 8, y + 8, (width * 0.5) - 16)
+  drawRow(20)
+  drawCellText('เครื่องตรวจวัด :', x + 8, y + 8, 86, { bold: true })
+  drawInlineOptions(x + 92, y + 8, [
+    { label: 'ค่าบีโอดี (BOD)', checked: includesOption(selectedInstruments, 'BOD') },
+    { label: 'ค่าซีโอดี (COD)', checked: includesOption(selectedInstruments, 'COD') },
+    { label: 'ค่าบีโอดี (BOD) และ ค่าซีโอดี (COD)', checked: selectedInstruments.length > 1 || includesOption(selectedInstruments, 'และ') },
+  ], selectedInstruments, 12)
+
+  drawRow(20, { fill: grey })
+  drawCellText('3.ข้อมูลน้ำทิ้งระบายออกนอกโรงงาน (กรอกเฉพาะเครื่องมือหรือเครื่องอุปกรณ์พิเศษขัดข้อง)', x + 8, y + 8, width - 16, { bold: true })
+  drawRow(20, { verticals: [x + width * 0.5] })
+  drawPlainValue('แหล่งกำเนิดน้ำเสีย', data.wastewaterSource, x + 8, y + 8, (width * 0.5) - 16)
+  drawPlainValue('แหล่งรองรับน้ำทิ้ง', data.receivingSource, x + width * 0.5 + 8, y + 8, (width * 0.5) - 16)
+  drawRow(20, { verticals: [x + width * 0.5] })
+  drawPlainValue('ประเภทระบบบำบัด', data.treatmentSystemType, x + 8, y + 8, (width * 0.5) - 16)
+  drawPlainValue('พิกัดจุดระบายน้ำทิ้ง', data.dischargePoint, x + width * 0.5 + 8, y + 8, (width * 0.5) - 16)
+  drawRow(20, { verticals: [x + width * 0.6, x + width * 0.8] })
+  drawPlainValue('ปริมาณน้ำทิ้งระบายออกวันที่ขัดข้อง (ลบ.ม./วัน) เฉลี่ย', data.averageDischarge, x + 8, y + 8, (width * 0.6) - 16)
+  drawPlainValue('ต่ำสุด', data.minimumDischarge, x + width * 0.6 + 8, y + 8, (width * 0.2) - 16)
+  drawPlainValue('สูงสุด', data.maximumDischarge, x + width * 0.8 + 8, y + 8, (width * 0.2) - 16)
+
+  drawRow(20, { fill: grey })
+  drawCellText('4.สาเหตุของการไม่สามารถรายงานผลการตรวจวัดได้', x + 8, y + 8, width - 16, { bold: true })
+  drawRow(20)
+  drawCellText('4.1 สาเหตุ', x + 8, y + 8, width - 16)
+  const reasonBlockHeight = 112
+  drawRow(reasonBlockHeight)
+  const reasonSectionTop = y + reasonBlockHeight
+  drawReasonOption(reasonSectionTop - 4, 'เครื่องมือหรือเครื่องอุปกรณ์พิเศษขัดข้อง', selectedReasons.includes('เครื่องมือหรือเครื่องอุปกรณ์พิเศษขัดข้อง'))
+  drawReasonOption(reasonSectionTop - 38, 'ไม่มีการระบายน้ำทิ้งออกนอกโรงงาน', selectedReasons.includes('ไม่มีการระบายน้ำทิ้งออกนอกโรงงาน'))
+  drawReasonOption(reasonSectionTop - 72, 'ระบบรับส่งข้อมูล ระบบไฟฟ้า อินเทอร์เน็ต ขัดข้อง', selectedReasons.includes('ระบบรับส่งข้อมูล ระบบไฟฟ้า อินเทอร์เน็ต ขัดข้อง'))
+  drawRow(20)
+  drawDottedValue('4.2 วัน/เดือน/ปี ที่พบปัญหาหรือหยุดหน่วยการผลิต', data.problemDate, x + 8, y + 8, right)
+  drawRow(44)
+  drawDottedValue('4.3 วัน/เดือน/ปี ที่คาดว่าจะดำเนินการแล้วเสร็จ', data.expectedDoneDate, x + 8, y + 31, right)
+  drawDottedValue('รวมระยะเวลาปรับปรุงแก้ไขหรือระยะเวลาหยุดหน่วยการผลิต (วัน)', data.totalDays, x + 36, y + 14, right - 8)
+  drawRow(20)
+  drawCellText('4.4 รายการตรวจวัด (พารามิเตอร์) ที่ไม่สามารถรายงานผลได้ :', x + 8, y + 8, 250)
+  const parameterOptions = ['BOD', 'COD', 'flow', 'watt']
+  let optionX = x + 260
+  parameterOptions.forEach((parameter) => {
+    drawOption(optionX, y + 8, parameter, includesOption(failedParameters, parameter), 42)
+    optionX += 55
+  })
+  const otherFailedParameters = failedParameters.filter((parameter) => !parameterOptions.some((option) => String(parameter).toLowerCase().includes(option.toLowerCase())))
+  if (otherFailedParameters.length) {
+    drawCellText(joinList(otherFailedParameters, ''), optionX, y + 8, right - optionX - 8)
+  }
+  drawRow(60)
+  drawDottedValue('4.5 แนวทางการปรับปรุงแก้ไข (เฉพาะเครื่องมือหรืออุปกรณ์พิเศษขัดข้อง)', data.correctiveAction, x + 8, y + 46, right)
+  layout.drawDottedLine(x + 8, right - 8, y + 25)
+  layout.drawDottedLine(x + 8, right - 8, y + 8)
+
+  const signatureBoxTop = y
+  const signatureBoxBottom = Math.max(28, layout.margin.bottom - 20)
+  const signatureBoxHeight = Math.max(150, signatureBoxTop - signatureBoxBottom)
+  drawRow(signatureBoxHeight)
+  const signatureBoxBottomY = signatureBoxTop - signatureBoxHeight
+  const signCenterX = x + width * 0.5
+  const signTopY = signatureBoxBottomY + 134
+  const signLineWidth = 144
+  const lineStartX = signCenterX - (signLineWidth / 2)
+  const lineEndX = signCenterX + (signLineWidth / 2)
+
+  drawCenteredCellText('ข้าพเจ้าขอรับรองว่าข้อมูลข้างต้นเป็นจริงทุกประการ', signCenterX, signTopY, 280)
+  drawSignatureLine(signTopY - 29, lineStartX, lineEndX)
+  drawCellText('(ลงชื่อ)', lineEndX + 8, signTopY - 25, 60)
+  const parenthesisY = signTopY - 49
+  drawCellText('(', lineStartX - 18, parenthesisY, 10)
+  drawSignatureLine(parenthesisY - 4, lineStartX, lineEndX)
+  const reporterName = displayValue(data.reporterName, '')
+  if (reporterName) {
+    const nameWidth = layout.textWidth(reporterName, labelSize)
+    drawCellText(reporterName, signCenterX - (nameWidth / 2), parenthesisY, lineEndX - lineStartX)
+  }
+  drawCellText(')', lineEndX + 14, parenthesisY, 10)
+  const positionY = signTopY - 70
+  drawCellText('ตำแหน่ง', lineStartX - 42, positionY, 40)
+  drawSignatureLine(positionY - 4, lineStartX, lineEndX)
+  const reporterPosition = displayValue(data.reporterPosition, '')
+  if (reporterPosition) {
+    const positionWidth = layout.textWidth(reporterPosition, labelSize)
+    drawCellText(reporterPosition, lineStartX + ((lineEndX - lineStartX - positionWidth) / 2), positionY, lineEndX - lineStartX)
+  }
+  drawCenteredCellText('ผู้จัดทำรายงาน/ผู้ดูแลระบบบำบัด', signCenterX, signTopY - 93, 220)
+  layout.y = y
 }
 
 function drawKwp05(layout, data) {
