@@ -23,15 +23,15 @@ describe('regional document numbers', () => {
   });
 
   it('formats a prefix, region, sequence, and Buddhist year', () => {
-    expect(formatRegionalDocumentNumber('Error', '02', 1, '2569')).toBe('Error-02-0001/2569');
+    expect(formatRegionalDocumentNumber('DOC', '02', 1, '2569')).toBe('DOC-02-0001/2569');
   });
 
   it.each([0, -1, 1.5, 10_000])('rejects out-of-range sequence %s', (sequence) => {
-    expect(() => formatRegionalDocumentNumber('Error', '02', sequence, '2569')).toThrow(RangeError);
+    expect(() => formatRegionalDocumentNumber('DOC', '02', sequence, '2569')).toThrow(RangeError);
   });
 
   it('rejects malformed prefixes and Buddhist years', () => {
     expect(() => formatRegionalDocumentNumber('Bad-Prefix', '02', 1, '2569')).toThrow(RangeError);
-    expect(() => formatRegionalDocumentNumber('Error', '02', 1, '69')).toThrow(RangeError);
+    expect(() => formatRegionalDocumentNumber('DOC', '02', 1, '69')).toThrow(RangeError);
   });
 });

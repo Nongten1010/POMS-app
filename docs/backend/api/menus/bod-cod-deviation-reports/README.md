@@ -63,10 +63,10 @@ curl --request POST \
 รายงานที่สร้างใหม่ใช้รูปแบบ:
 
 ```text
-Error-{รหัสภาค 2 หลัก}-{ลำดับ 4 หลัก}/{reportYear}
+E-{รหัสภาค 2 หลัก}-{ลำดับ 4 หลัก}/{reportYear}
 ```
 
-ตัวอย่าง `Error-02-0001/2569` หมายถึงรายงานลำดับที่ 1 ของภาคตะวันตกในปีรายงาน 2569
+ตัวอย่าง `E-02-0001/2569` หมายถึงรายงานลำดับที่ 1 ของภาคตะวันตกในปีรายงาน 2569
 
 | ภาคจากข้อมูลจังหวัด | รหัส |
 | --- | --- |
@@ -83,6 +83,7 @@ Error-{รหัสภาค 2 หลัก}-{ลำดับ 4 หลัก}/{r
 - Running แยกตาม `region + reportYear` และใช้ชุดเดียวกันระหว่าง BOD, COD และรอบรายงานที่ 1-2
 - ลำดับอยู่ระหว่าง `0001`-`9999` และเริ่มที่ `0001` ใหม่เมื่อเปลี่ยน region หรือ `reportYear`
 - การ resubmit ใช้ `reportNo` เดิม; เลขที่ถูกใช้แล้วจะไม่นำกลับมาออกซ้ำ
+- Migration `0102_change_bod_cod_report_number_prefix_to_e` แปลงเลข regional เดิมจาก `Error-RR-NNNN/YYYY` เป็น `E-RR-NNNN/YYYY`
 - รายงานเดิมอาจคืนเลขรูปแบบ `BODCOD-2569-0001` โดยไม่ถูก renumber
 - Client ต้องถือ `reportNo` เป็น opaque string: ห้ามสร้าง แก้ ตัด หรือ sort ด้วยส่วนประกอบภายใน และต้อง URL-encode หากนำไปใช้เป็น path/query value
 
@@ -183,7 +184,7 @@ Response เป็น `{ success, data[], meta: { total } }`; แต่ละร
   "data": [
     {
       "id": 9,
-      "reportNo": "Error-02-0001/2569",
+      "reportNo": "E-02-0001/2569",
       "reportRound": "ครั้งที่ 1",
       "reportRoundNo": 1,
       "reportYear": 2569,
@@ -262,7 +263,7 @@ Create สำเร็จตอบ `201 Created`, ส่ง `Location: /api/v1/b
   "success": true,
   "data": {
     "id": 9,
-    "reportNo": "Error-02-0001/2569",
+    "reportNo": "E-02-0001/2569",
     "statusCode": "SUBMITTED",
     "approvalTrack": "REGIONAL",
     "currentStep": {
@@ -291,7 +292,7 @@ Resubmit ทำได้เฉพาะผู้ประกอบการเ�
   "success": true,
   "data": {
     "id": 9,
-    "reportNo": "Error-02-0001/2569",
+    "reportNo": "E-02-0001/2569",
     "reportRoundNo": 1,
     "reportYear": 2569,
     "selectedParameterCode": "BOD",

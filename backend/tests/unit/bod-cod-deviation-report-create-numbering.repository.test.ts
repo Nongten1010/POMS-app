@@ -30,13 +30,13 @@ describe('BOD/COD deviation report create numbering', () => {
 
     expect(result).toMatchObject({
       id: 101,
-      reportNo: 'Error-02-0001/2569',
+      reportNo: 'E-02-0001/2569',
       statusCode: 'SUBMITTED',
       approvalTrack: 'REGIONAL',
     });
     expect(harness.reportInsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        report_no: 'Error-02-0001/2569',
+        report_no: 'E-02-0001/2569',
         report_year: 2569,
         numbering_region_code: '02',
         numbering_sequence: 1,
@@ -67,13 +67,13 @@ describe('BOD/COD deviation report create numbering', () => {
 
     expect(result).toMatchObject({
       id: 101,
-      reportNo: 'Error-07-0001/2569',
+      reportNo: 'E-07-0001/2569',
       statusCode: 'SUBMITTED',
       approvalTrack: 'CENTRAL',
     });
     expect(harness.reportInsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        report_no: 'Error-07-0001/2569',
+        report_no: 'E-07-0001/2569',
         numbering_region_code: '07',
         province_name: 'กรุงเทพมหานคร',
         approval_track: 'CENTRAL',

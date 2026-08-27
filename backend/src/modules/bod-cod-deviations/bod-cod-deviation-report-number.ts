@@ -3,7 +3,7 @@ import {
   type RegionalDocumentRegionCode,
 } from '../../shared/utils/regional-document-number';
 
-const BOD_COD_DEVIATION_REPORT_PREFIX = 'Error';
+const BOD_COD_DEVIATION_REPORT_PREFIX = 'E';
 
 export function formatBodCodDeviationReportNo(
   regionCode: RegionalDocumentRegionCode,

@@ -1265,6 +1265,39 @@ describe('POMS OpenAPI contract', () => {
     expect(issueReasons.uniqueItems).toBeUndefined();
   });
 
+  it('documents the current E- prefix for every BOD/COD report response', () => {
+    const document = asObject(pomsOpenApiDocument, 'OpenAPI document');
+    const components = asObject(document.components, 'components');
+    const schemas = asObject(components.schemas, 'components.schemas');
+    const reportNo = asObject(schemas.BodCodReportNo, 'BodCodReportNo');
+
+    expect(reportNo.example).toBe('E-02-0001/2569');
+    expect(reportNo.pattern).toContain('E-');
+    expect(reportNo.pattern).not.toContain('Error-');
+
+    const paths = asObject(document.paths, 'paths');
+    const responseCases: Array<[string, string, string]> = [
+      ['/bod-cod-deviation-reports/factories', 'get', 'BodCodFactoriesResponse'],
+      ['/bod-cod-deviation-reports', 'get', 'BodCodReportsResponse'],
+      ['/bod-cod-deviation-reports', 'post', 'BodCodReportResponse'],
+      ['/bod-cod-deviation-reports/{id}', 'get', 'BodCodReportResponse'],
+      ['/bod-cod-deviation-reports/{id}/resubmission', 'put', 'BodCodReportResponse'],
+      ['/bod-cod-deviation-reports/{id}/workflow-actions', 'post', 'BodCodReportResponse'],
+      ['/bod-cod-deviation-reports/{id}/result-notice', 'post', 'BodCodReportResponse'],
+      ['/bod-cod-deviation-reports/{id}/result-notice', 'put', 'BodCodReportResponse'],
+    ];
+
+    for (const [pathKey, method, expectedSchema] of responseCases) {
+      const operation = asObject(asObject(paths[pathKey], pathKey)[method], `${pathKey}.${method}`);
+      const responses = asObject(operation.responses, `${pathKey}.${method}.responses`);
+      const status = method === 'post' && pathKey === '/bod-cod-deviation-reports' ? '201' : '200';
+      const response = asObject(responses[status], `${pathKey}.${method}.${status}`);
+      const content = asObject(response.content, `${pathKey}.${method}.${status}.content`);
+      const mediaType = asObject(content['application/json'], 'application/json');
+      expect(mediaType.schema).toEqual({ $ref: `#/components/schemas/${expectedSchema}` });
+    }
+  });
+
   it('keeps edit-user, note and comment nullability aligned with runtime validators', () => {
     const document = asObject(pomsOpenApiDocument, 'OpenAPI document');
     const components = asObject(document.components, 'components');

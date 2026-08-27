@@ -4,7 +4,7 @@
 
 ## Acceptance Criteria
 
-- รูปแบบ `Error-{รหัสภาค 2 หลัก}-{ลำดับ 4 หลัก}/{ปีรายงาน พ.ศ. 4 หลัก}`
+- รูปแบบปัจจุบัน `E-{รหัสภาค 2 หลัก}-{ลำดับ 4 หลัก}/{ปีรายงาน พ.ศ. 4 หลัก}`
 - รหัสภาค `02` ตะวันตก, `03` ตะวันออก, `04` เหนือ, `05` ใต้, `06` ตะวันออกเฉียงเหนือ, `07` กลาง
 - Running แยกตาม `region + reportYear` แต่ใช้ร่วมกันระหว่าง BOD, COD และรอบรายงาน 1-2
 - Region มาจากจังหวัดของโรงงานฝั่ง server และจังหวัดใน payload ต้องตรงกับ authoritative factory data
@@ -33,10 +33,11 @@ RED เกิดจาก formatter, numbering repository และ migration �
 | สิ่งที่รับประกัน | Test |
 | --- | --- |
 | Shared region mapping ครบ `02`-`07`, validation ปี/ลำดับ และ formatter ที่ reuse ได้ | `regional-document-number.test.ts` |
-| BOD/COD wrapper ออก `Error-02-0001/2569` และ boundary `9999` | `bod-cod-deviation-report-number.test.ts` |
+| BOD/COD wrapper ออก `E-02-0001/2569` และ boundary `9999` | `bod-cod-deviation-report-number.test.ts` |
 | Factory query อ่าน province/region ฝั่ง server; sequence ใช้ `UPDLOCK, HOLDLOCK`, แยก region+ปี และ reject overflow | `bod-cod-deviation-report-numbering.repository.test.ts` |
 | Create flow ใช้ authoritative factory context และจอง sequence ก่อน insert ภายใน transaction เดียวกัน | `bod-cod-deviation-report-create-numbering.repository.test.ts` |
 | Migration เพิ่ม sequence table กับ snapshot สอง field, constraints และไม่ rewrite legacy rows | `bod-cod-deviation-report-sequence-migration.test.ts` |
+| Migration เปลี่ยน prefix ข้อมูล regional เดิมจาก `Error-` เป็น `E-`, ตรวจ collision และติดตั้ง constraint รูปแบบใหม่ | `bod-cod-deviation-report-prefix-migration.test.ts` |
 | Create flow บันทึกเลข/snapshot ใน transaction, legacy response และ resubmit คงเลขเดิม | `bod-cod-deviation-reports.repository.test.ts` |
 | Route คืน `reportNo` ใหม่เป็น string โดยไม่เปลี่ยน envelope และยังส่ง `Location` ด้วย report id | `bod-cod-deviation-reports.route.test.ts` |
 | KWP/F01 ยังออกเลขแบบเดิมหลังย้าย region mapping และ formatter มาใช้ร่วมกัน | `kwp-form-submission-number.test.ts`, `kwp-form-submission-sequence.repository.test.ts`, `kwp-form-submission-create-numbering.repository.test.ts` |
@@ -46,8 +47,8 @@ RED เกิดจาก formatter, numbering repository และ migration �
 Targeted suite หลัง implementation:
 
 ```text
-Test Suites: 10 passed, 10 total
-Tests:       88 passed, 88 total
+Test Suites: 8 passed, 8 total
+Tests:       113 passed, 113 total
 ```
 
 คำสั่งที่ใช้:
@@ -60,11 +61,9 @@ npm test -- --runInBand \
   tests/unit/bod-cod-deviation-report-numbering.repository.test.ts \
   tests/unit/bod-cod-deviation-report-create-numbering.repository.test.ts \
   tests/unit/bod-cod-deviation-report-sequence-migration.test.ts \
-  tests/unit/bod-cod-deviation-reports.repository.test.ts \
+  tests/unit/bod-cod-deviation-report-prefix-migration.test.ts \
   tests/unit/bod-cod-deviation-reports.route.test.ts \
-  tests/unit/kwp-form-submission-number.test.ts \
-  tests/unit/kwp-form-submission-sequence.repository.test.ts \
-  tests/unit/kwp-form-submission-create-numbering.repository.test.ts
+  tests/unit/api-docs.openapi.test.ts
 ```
 
 ## Verification Commands
@@ -72,21 +71,26 @@ npm test -- --runInBand \
 ```bash
 cd backend
 npm run typecheck
-npm test -- --runInBand
-npm run build
+npx prettier --check \
+  src/modules/api-docs/poms.openapi.ts \
+  src/modules/bod-cod-deviations/bod-cod-deviation-report-number.ts \
+  src/db/migrations/0102_change_bod_cod_report_number_prefix_to_e.ts \
+  tests/unit/api-docs.openapi.test.ts \
+  tests/unit/bod-cod-deviation-report-prefix-migration.test.ts
 ```
 
 ผลใน environment นี้:
 
-- `npm run typecheck`, `npm run build` และ `npm audit --omit=dev --offline` ผ่าน
-- Regression ที่ไม่รวม `officer-notification-email-recipients.route.test.ts` ผ่าน `96` suites / `834` tests
-- Full suite ผ่าน `96` suites แต่ suite `officer-notification-email-recipients.route.test.ts` ล้มเหลว `3` tests เพราะอ่านข้อมูล recipient/province จากฐานข้อมูลของ environment แทน test fixture; ความล้มเหลวไม่อยู่ใน flow BOD/COD
+- targeted tests ผ่าน `8` suites / `113` tests
+- `npm run typecheck` ผ่าน
+- Prettier check ของ source, migration และ tests ที่แก้ผ่าน
 
 เอกสารนี้ไม่กล่าวอ้างผลจากฐานข้อมูล production และ targeted tests ของ BOD/COD ไม่ต้องใช้ข้อมูลโรงงานจริง
 
 ## Migration And Rollout Checks
 
 - รัน migration ก่อน application version ที่ออกเลขใหม่
+- รัน `0102_change_bod_cod_report_number_prefix_to_e` เพื่อ backfill เลข regional เดิมและเปลี่ยน check constraint ให้รับเฉพาะ `E-...`
 - ตรวจว่า `bod_cod_deviation_report_sequences` มี primary key `(region_code, report_year)`
 - ตรวจว่า legacy row มี numbering snapshot เป็น `NULL` และ `report_no` เดิมไม่เปลี่ยน
 - ทดสอบสร้างรายงานใหม่อย่างน้อยสอง region และตรวจว่าแต่ละ region เริ่ม sequence ของตนเอง

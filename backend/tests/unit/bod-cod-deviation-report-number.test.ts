@@ -3,9 +3,9 @@ import { formatBodCodDeviationReportNo } from '../../src/modules/bod-cod-deviati
 
 describe('BOD/COD deviation report numbers', () => {
   it.each([
-    ['02', 1, 2569, 'Error-02-0001/2569'],
-    ['03', 8, 2569, 'Error-03-0008/2569'],
-    ['07', 9999, 2570, 'Error-07-9999/2570'],
+    ['02', 1, 2569, 'E-02-0001/2569'],
+    ['03', 8, 2569, 'E-03-0008/2569'],
+    ['07', 9999, 2570, 'E-07-9999/2570'],
   ] as const)('formats region %s sequence %s year %s', (regionCode, sequence, year, expected) => {
     expect(formatBodCodDeviationReportNo(regionCode, sequence, year)).toBe(expected);
   });

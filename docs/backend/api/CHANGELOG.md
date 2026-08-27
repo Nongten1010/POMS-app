@@ -2,6 +2,14 @@
 
 ไฟล์นี้บันทึกเฉพาะการเปลี่ยน API ที่ทำให้ client ต้องแก้ตาม การเปลี่ยนทั่วไปและประวัติรายละเอียดดูจาก Git history
 
+## 2026-08-27 — เปลี่ยน prefix เลขรายงาน BOD/COD จาก Error เป็น E
+
+- **Affected canonical docs:** [รายงานค่าความคลาดเคลื่อน BOD/COD Online](./menus/bod-cod-deviation-reports/README.md#เลขที่รายงาน-reportno)
+- **Impact:** `reportNo` ของรายงาน regional ทั้งรายการใหม่และข้อมูลเดิมเปลี่ยน prefix จาก `Error-` เป็น `E-`; ฟิลด์, running, รหัสภาค, ลำดับ และปีรายงานไม่เปลี่ยน
+- **Migration:** deploy `0102_change_bod_cod_report_number_prefix_to_e`; migration ตรวจเลขปลายทางซ้ำก่อนแปลงข้อมูล `bod_cod_deviation_reports.report_no` ที่มี numbering snapshot และเปลี่ยน check constraint เพื่อกัน backend รุ่นเก่าสร้าง `Error-...` ระหว่าง rollout. Client ต้องถือ `reportNo` เป็น opaque string และ refresh cache/reference ที่เก็บเลขเดิม
+- **Old contract:** เลข regional ใช้ `Error-RR-NNNN/YYYY` เช่น `Error-02-0001/2569`
+- **New contract:** เลข regional ใช้ `E-RR-NNNN/YYYY` เช่น `E-02-0001/2569`; เลข legacy `BODCOD-YYYY-NNNN` ยังคงอ่านได้และไม่ถูก rewrite
+
 ## 2026-08-20 — เปลี่ยน prefix รหัสจุดตรวจวัด WPMS จาก W เป็น P
 
 - **Affected canonical docs:** [เมนูขอเชื่อมต่อ](./menus/connection-requests/README.md), [Request payloads and validation](./menus/connection-requests/request-payloads-and-validation.md)

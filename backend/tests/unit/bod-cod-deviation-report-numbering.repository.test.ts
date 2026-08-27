@@ -28,7 +28,7 @@ describe('BOD/COD deviation report numbering repository', () => {
     const reserved = await reserveBodCodDeviationReportNumberForTests(harness.trx, '02', 2569);
 
     expect(reserved).toEqual({
-      reportNo: 'Error-02-0005/2569',
+      reportNo: 'E-02-0005/2569',
       regionCode: '02',
       reportYear: 2569,
       sequence: 5,

@@ -1735,6 +1735,97 @@ const componentSchemas: Record<string, OpenApiObject> = {
       },
     },
   },
+  BodCodReportNo: {
+    type: 'string',
+    maxLength: 40,
+    pattern: '^(?:E-(?:02|03|04|05|06|07)-[0-9]{4}/[0-9]{4}|BODCOD-[0-9]{4}-[0-9]{4})$',
+    description:
+      'เลขที่รายงานแบบ opaque string; รายงาน regional ปัจจุบันใช้ E-RR-NNNN/YYYY ส่วน BODCOD-YYYY-NNNN เป็นรูปแบบ legacy ที่ยังอ่านได้',
+    example: 'E-02-0001/2569',
+  },
+  BodCodNullableReportNo: {
+    type: 'string',
+    maxLength: 40,
+    nullable: true,
+    pattern: '^(?:E-(?:02|03|04|05|06|07)-[0-9]{4}/[0-9]{4}|BODCOD-[0-9]{4}-[0-9]{4})$',
+    example: 'E-02-0001/2569',
+  },
+  BodCodReportData: {
+    type: 'object',
+    additionalProperties: true,
+    required: ['id', 'reportNo'],
+    properties: {
+      id: { type: 'integer', minimum: 1 },
+      reportNo: schemaRef('BodCodReportNo'),
+    },
+  },
+  BodCodReportResponse: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['success', 'data'],
+    properties: {
+      success: { type: 'boolean', enum: [true] },
+      data: schemaRef('BodCodReportData'),
+    },
+  },
+  BodCodReportsResponse: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['success', 'data', 'meta'],
+    properties: {
+      success: { type: 'boolean', enum: [true] },
+      data: { type: 'array', items: schemaRef('BodCodReportData') },
+      meta: {
+        type: 'object',
+        additionalProperties: true,
+        required: ['total'],
+        properties: { total: { type: 'integer', minimum: 0 } },
+      },
+    },
+  },
+  BodCodFactoriesResponse: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['success', 'data', 'meta'],
+    properties: {
+      success: { type: 'boolean', enum: [true] },
+      data: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: true,
+          properties: {
+            latestReportNo: schemaRef('BodCodNullableReportNo'),
+            measurementPoints: {
+              type: 'array',
+              items: {
+                type: 'object',
+                additionalProperties: true,
+                properties: {
+                  reportSlots: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      additionalProperties: true,
+                      properties: {
+                        reportNo: schemaRef('BodCodNullableReportNo'),
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      meta: {
+        type: 'object',
+        additionalProperties: true,
+        required: ['total'],
+        properties: { total: { type: 'integer', minimum: 0 } },
+      },
+    },
+  },
   MonitoringPointFormRequest: {
     type: 'object',
     additionalProperties: false,
@@ -3667,6 +3758,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       tag: 'BOD/COD Deviation Reports',
       summary: 'List BOD/COD factories',
       operationId: 'listBodCodFactories',
+      successSchema: schemaRef('BodCodFactoriesResponse'),
     }),
   },
   '/bod-cod-deviation-reports': {
@@ -3679,6 +3771,7 @@ const extraPaths: Record<string, OpenApiObject> = {
         queryEnum('parameterCode', ['BOD', 'COD'], 'กรองพารามิเตอร์'),
         queryString('factoryId', 'กรองรหัสโรงงาน', false, 64),
       ],
+      successSchema: schemaRef('BodCodReportsResponse'),
     }),
     post: securedOperation({
       tag: 'BOD/COD Deviation Reports',
@@ -3686,6 +3779,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       operationId: 'createBodCodReport',
       requestBody: jsonRequestBody(schemaRef('BodCodReportRequest'), bodCodReportExample),
       successStatus: '201',
+      successSchema: schemaRef('BodCodReportResponse'),
     }),
   },
   '/bod-cod-deviation-reports/{id}': {
@@ -3694,6 +3788,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Get BOD/COD deviation report detail',
       operationId: 'getBodCodReportById',
       parameters: [idParameter],
+      successSchema: schemaRef('BodCodReportResponse'),
     }),
   },
   '/bod-cod-deviation-reports/{id}/resubmission': {
@@ -3706,6 +3801,7 @@ const extraPaths: Record<string, OpenApiObject> = {
         ...bodCodReportExample,
         revisionNote: 'แก้ไขตามคำขอ',
       }),
+      successSchema: schemaRef('BodCodReportResponse'),
     }),
   },
   '/bod-cod-deviation-reports/{id}/workflow-actions': {
@@ -3718,6 +3814,7 @@ const extraPaths: Record<string, OpenApiObject> = {
         action: 'REQUEST_REVISION',
         revisionReason: 'กรุณาแนบข้อมูลห้องปฏิบัติการให้ครบ',
       }),
+      successSchema: schemaRef('BodCodReportResponse'),
     }),
   },
   '/bod-cod-deviation-reports/{id}/result-notice': {
@@ -3733,6 +3830,7 @@ const extraPaths: Record<string, OpenApiObject> = {
         inspectorName: 'เจ้าหน้าที่ตรวจสอบ',
         inspectorPosition: 'นักวิชาการสิ่งแวดล้อม',
       }),
+      successSchema: schemaRef('BodCodReportResponse'),
     }),
     put: securedOperation({
       tag: 'BOD/COD Deviation Reports',
@@ -3747,6 +3845,7 @@ const extraPaths: Record<string, OpenApiObject> = {
         inspectorName: 'เจ้าหน้าที่ตรวจสอบ',
         inspectorPosition: 'นักวิชาการสิ่งแวดล้อม',
       }),
+      successSchema: schemaRef('BodCodReportResponse'),
     }),
   },
   '/kwp-form-reports/factories': {
