@@ -6,7 +6,7 @@ Index นี้แสดงเฉพาะเมนูหรือ business capa
 
 ## ศูนย์ทดสอบ API
 
-เปิด `<BASE_URL>/api/v1/docs` เพื่อใช้ Swagger UI ที่รวม API ทั้งระบบ ตัวเลขในตารางนี้นับ `Method + Path` โดย **API ในทะเบียน** คือ route canonical 121 รายการ ส่วน **Operations ใน Swagger** มี 130 รายการ เพราะเพิ่ม path แบบแยก `stationId/{buddhistYear}` อีก 9 รายการให้กรอกและทดสอบ annual point code ได้สะดวก
+เปิด `<BASE_URL>/api/v1/docs` เพื่อใช้ Swagger UI ที่รวม API ทั้งระบบ ตัวเลขในตารางนี้นับ `Method + Path` โดย **API ในทะเบียน** คือ route canonical 122 รายการ ส่วน **Operations ใน Swagger** มี 131 รายการ เพราะเพิ่ม path แบบแยก `stationId/{buddhistYear}` อีก 9 รายการให้กรอกและทดสอบ annual point code ได้สะดวก
 
 | กลุ่มใน Swagger                         | API ในทะเบียน | Operations ใน Swagger | Canonical contract                                                                                                                                       |
 | --------------------------------------- | ------------: | --------------------: | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -20,8 +20,8 @@ Index นี้แสดงเฉพาะเมนูหรือ business capa
 | สถิติข้อมูล                             |             4 |                     8 | [สถิติข้อมูล](./statistics/README.md)                                                                                                                    |
 | สิทธิ์การใช้งาน                         |             8 |                     8 | [สิทธิ์การใช้งาน](./permissions/README.md)                                                                                                               |
 | โรงงานที่เข้าข่าย                       |            11 |                    11 | [โรงงานที่เข้าข่าย](./eligible-factories/README.md)                                                                                                      |
-| ระบบเชื่อมต่อภายนอก                     |             2 |                     3 | [Integrations](../integrations/README.md)                                                                                                                |
-| **รวม**                                 |       **121** |               **130** | [Endpoint registry](../ENDPOINTS.md)                                                                                                                     |
+| ระบบเชื่อมต่อภายนอก                     |             3 |                     4 | [Integrations](../integrations/README.md)                                                                                                                |
+| **รวม**                                 |       **122** |               **131** | [Endpoint registry](../ENDPOINTS.md)                                                                                                                     |
 
 ```text
 menus/

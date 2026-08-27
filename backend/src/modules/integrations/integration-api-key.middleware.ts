@@ -7,11 +7,11 @@ const API_KEY_HEADER = 'x-api-key';
 type IntegrationApiKeyEnvName =
   | 'INTEGRATION_API_KEYS'
   | 'DEVICE_CONFIG_API_KEYS'
-  | 'ALERT_EVENT_API_KEYS';
+  | 'ALERT_EVENT_API_KEYS'
+  | 'FACTORY_DASHBOARD_API_KEYS';
 
-export const authenticateIntegrationApiKey = authenticateIntegrationApiKeyFor(
-  'INTEGRATION_API_KEYS',
-);
+export const authenticateIntegrationApiKey =
+  authenticateIntegrationApiKeyFor('INTEGRATION_API_KEYS');
 export const authenticateDeviceConfigApiKey = authenticateIntegrationApiKeyFor(
   'DEVICE_CONFIG_API_KEYS',
   'INTEGRATION_API_KEYS',
@@ -19,6 +19,9 @@ export const authenticateDeviceConfigApiKey = authenticateIntegrationApiKeyFor(
 export const authenticateAlertEventApiKey = authenticateIntegrationApiKeyFor(
   'ALERT_EVENT_API_KEYS',
   'INTEGRATION_API_KEYS',
+);
+export const authenticateFactoryDashboardApiKey = authenticateIntegrationApiKeyFor(
+  'FACTORY_DASHBOARD_API_KEYS',
 );
 
 function authenticateIntegrationApiKeyFor(

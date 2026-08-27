@@ -1899,6 +1899,45 @@ describe('connectionRequestsService', () => {
     expect(result.data[0]).toHaveProperty('hasLatestHourlyMeasurement', false);
   });
 
+  it('filters the public dashboard source by the requested new registration number', async () => {
+    const requestedRegistrationNo = '40100007125560';
+    const otherRegistrationNo = '10740000125491';
+    mockedRepository.listFactoriesForAccess.mockResolvedValue([
+      factorySummary({
+        eligibleFactoryId: 29,
+        factoryId: otherRegistrationNo,
+        newRegistrationNo: otherRegistrationNo,
+      }),
+      factorySummary({
+        eligibleFactoryId: 30,
+        factoryId: requestedRegistrationNo,
+        newRegistrationNo: requestedRegistrationNo,
+      }),
+    ]);
+    mockedRepository.listPublicConnectedMeasurementPointsForFactories.mockResolvedValue([
+      currentFactoryMeasurementPoint({
+        eligibleFactoryId: 30,
+        factoryId: 'LEGACY-REQUESTED-ID',
+        stationId: 'S4010',
+        pointCode: 'S4010',
+      }),
+    ]);
+
+    const result = await connectionRequestsService.listPublicFactoryMapPoints({
+      registrationNo: requestedRegistrationNo,
+    });
+
+    const [lookupKeys, eligibleFactoryIds] =
+      mockedRepository.listPublicConnectedMeasurementPointsForFactories.mock.calls[0];
+    expect(lookupKeys).toContain(requestedRegistrationNo);
+    expect(lookupKeys).not.toContain(otherRegistrationNo);
+    expect(eligibleFactoryIds).toEqual([30]);
+    expect(result).toMatchObject({
+      data: [{ factoryId: requestedRegistrationNo }],
+      meta: { total: 1 },
+    });
+  });
+
   it('returns public map measurements with negative values normalized to ERROR', async () => {
     connectionRequestsService.setClockForTests(() => new Date('2026-06-10T16:50:00.000Z'));
     mockedRepository.listFactoriesForAccess.mockResolvedValue([

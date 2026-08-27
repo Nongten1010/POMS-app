@@ -125,7 +125,7 @@ function publicOperation(options: OperationOptions): OpenApiObject {
 }
 
 function apiKeyOperation(
-  scheme: 'deviceConfigApiKey' | 'alertEventApiKey',
+  scheme: 'deviceConfigApiKey' | 'alertEventApiKey' | 'factoryDashboardApiKey',
   options: OperationOptions,
 ): OpenApiObject {
   return operation({ ...options, security: [{ [scheme]: [] }] });
@@ -283,6 +283,14 @@ const buddhistYearParameter = {
   description: 'ปี พ.ศ. 4 หลักที่ middleware นำไปประกอบกลับกับ stationId',
   schema: { type: 'string', pattern: '^\\d{4}$' },
   example: '2569',
+};
+const factoryRegistrationNoParameter = {
+  name: 'registrationNo',
+  in: 'path',
+  required: true,
+  description: 'เลขทะเบียนโรงงานใหม่ 14 หลักของโรงงาน current/live ที่เชื่อมต่อ POMS แล้ว',
+  schema: { type: 'string', pattern: '^\\d{14}$' },
+  example: '40100007125560',
 };
 const publicAttachmentIdParameter = {
   name: 'publicId',
@@ -2579,6 +2587,215 @@ const componentSchemas: Record<string, OpenApiObject> = {
       },
     },
   },
+  FactoryDashboardMeasurementCriteriaRow: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['level', 'min', 'max'],
+    properties: {
+      level: { type: 'string', enum: ['normal', 'warning', 'critical'] },
+      min: { type: 'number', nullable: true },
+      max: { type: 'number', nullable: true },
+    },
+  },
+  FactoryDashboardMeasurementCriteria: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['enabled', 'standardValue', 'rows'],
+    properties: {
+      enabled: { type: 'boolean' },
+      standardValue: {
+        oneOf: [{ type: 'number' }, { type: 'string' }],
+        nullable: true,
+      },
+      rows: {
+        type: 'array',
+        items: schemaRef('FactoryDashboardMeasurementCriteriaRow'),
+      },
+    },
+  },
+  FactoryDashboardParameterStandard: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['parameter', 'standardCriteria', 'eiaCriteria'],
+    properties: {
+      parameter: {
+        type: 'string',
+        minLength: 1,
+        description: 'ชื่อพารามิเตอร์สำหรับแสดงผลพร้อมหน่วย เช่น CO (ppm) หรือ BOD (mg/l)',
+      },
+      standardCriteria: {
+        allOf: [schemaRef('FactoryDashboardMeasurementCriteria')],
+        nullable: true,
+      },
+      eiaCriteria: {
+        allOf: [schemaRef('FactoryDashboardMeasurementCriteria')],
+        nullable: true,
+      },
+    },
+  },
+  FactoryDashboardMeasurementPoint: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'stationId',
+      'pointName',
+      'pointCode',
+      'systemType',
+      'parameters',
+      'parameterStandards',
+      'data',
+    ],
+    properties: {
+      stationId: { type: 'string', nullable: true },
+      pointName: { type: 'string', minLength: 1 },
+      pointCode: { type: 'string', nullable: true },
+      systemType: { type: 'string', enum: systemTypeValues },
+      monitoringPointStatus: { type: 'string', nullable: true },
+      parameters: {
+        type: 'array',
+        items: {
+          type: 'string',
+          minLength: 1,
+          description: 'ชื่อพารามิเตอร์พร้อมหน่วย เช่น CO2 (ppm), CO (%) หรือ Flow Rate (m3/hr)',
+        },
+      },
+      parameterStandards: {
+        type: 'array',
+        items: schemaRef('FactoryDashboardParameterStandard'),
+      },
+      data: {
+        type: 'array',
+        description:
+          'ข้อมูลชั่วโมงที่คำนวณเสร็จล่าสุด; key ของค่าตรวจวัดเป็นชื่อพารามิเตอร์พร้อมหน่วย และ operational status อาจเป็น string',
+        items: {
+          type: 'object',
+          additionalProperties: {
+            oneOf: [{ type: 'number' }, { type: 'string' }],
+            nullable: true,
+          },
+          properties: {
+            station_id: { type: 'string' },
+            cdate: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
+            ctime: { type: 'string', pattern: '^(?:[01]\\d|2[0-3])[:.]\\d{2}[:.]\\d{2}$' },
+          },
+        },
+      },
+    },
+  },
+  IntegrationFactoryDashboardRow: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'id',
+      'eligibleFactoryId',
+      'factoryId',
+      'factoryName',
+      'newRegistrationNo',
+      'oldRegistrationNo',
+      'factoryLogoUrl',
+      'industryMainOrder',
+      'industryMainOrderLabel',
+      'industrySubOrder',
+      'eia',
+      'hasEia',
+      'regionCode',
+      'regionName',
+      'provinceCode',
+      'provinceName',
+      'province',
+      'address',
+      'latitude',
+      'longitude',
+      'districtCode',
+      'districtName',
+      'industrialAreaType',
+      'industrialAreaTypeLabel',
+      'industrialEstateCode',
+      'industrialEstateName',
+      'isEligible',
+      'eligibilityStatus',
+      'hasLatestHourlyMeasurement',
+      'monitoringPointCountBySystem',
+      'status',
+      'measurementPoints',
+    ],
+    properties: {
+      id: { type: 'integer', nullable: true },
+      eligibleFactoryId: { type: 'integer', nullable: true },
+      factoryId: { type: 'string', minLength: 1, maxLength: 64 },
+      factoryName: { type: 'string', minLength: 1 },
+      newRegistrationNo: { type: 'string', pattern: '^\\d{14}$', nullable: true },
+      oldRegistrationNo: { type: 'string', nullable: true },
+      factoryLogoUrl: { type: 'string', format: 'uri', nullable: true },
+      industryMainOrder: { type: 'string', nullable: true },
+      industryMainOrderLabel: { type: 'string', nullable: true },
+      industrySubOrder: { type: 'string', nullable: true },
+      eia: { type: 'string', nullable: true },
+      hasEia: { type: 'boolean', nullable: true },
+      regionCode: { type: 'string', nullable: true },
+      regionName: { type: 'string', nullable: true },
+      provinceCode: { type: 'string', nullable: true },
+      provinceName: { type: 'string', nullable: true },
+      province: { type: 'string', nullable: true },
+      address: { type: 'string', nullable: true },
+      latitude: { type: 'string', nullable: true },
+      longitude: { type: 'string', nullable: true },
+      districtCode: { type: 'string', nullable: true },
+      districtName: { type: 'string', nullable: true },
+      industrialAreaType: {
+        type: 'string',
+        enum: ['INDUSTRIAL_ESTATE', 'OUTSIDE_INDUSTRIAL_ESTATE'],
+        nullable: true,
+      },
+      industrialAreaTypeLabel: {
+        type: 'string',
+        enum: ['ในนิคมอุตสาหกรรม', 'นอกนิคมอุตสาหกรรม'],
+        nullable: true,
+      },
+      industrialEstateCode: { type: 'string', nullable: true },
+      industrialEstateName: { type: 'string', nullable: true },
+      isEligible: { type: 'boolean', enum: [true] },
+      eligibilityStatus: { type: 'string', enum: ['เข้าข่าย'] },
+      hasLatestHourlyMeasurement: { type: 'boolean' },
+      monitoringPointCountBySystem: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['systemType', 'count'],
+          properties: {
+            systemType: { type: 'string', enum: systemTypeValues },
+            count: { type: 'integer', minimum: 0 },
+          },
+        },
+      },
+      status: { type: 'string', enum: ['แสดง'] },
+      measurementPoints: {
+        type: 'array',
+        items: schemaRef('FactoryDashboardMeasurementPoint'),
+      },
+    },
+  },
+  IntegrationFactoryDashboardResponse: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['success', 'data', 'meta'],
+    properties: {
+      success: { type: 'boolean', enum: [true] },
+      data: {
+        type: 'array',
+        minItems: 1,
+        maxItems: 1,
+        items: schemaRef('IntegrationFactoryDashboardRow'),
+      },
+      meta: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['total'],
+        properties: { total: { type: 'integer', minimum: 1, maximum: 1 } },
+      },
+    },
+  },
   IntegrationDeviceConfigsResponse: {
     type: 'object',
     additionalProperties: false,
@@ -2756,6 +2973,12 @@ const extraSecuritySchemes: Record<string, OpenApiObject> = {
     in: 'header',
     name: 'X-API-Key',
     description: 'API key สำหรับ integration ส่ง alert events',
+  },
+  factoryDashboardApiKey: {
+    type: 'apiKey',
+    in: 'header',
+    name: 'X-API-Key',
+    description: 'API key เฉพาะสำหรับ integration อ่าน dashboard โรงงานรายเดียว',
   },
 };
 
@@ -3764,6 +3987,30 @@ const extraPaths: Record<string, OpenApiObject> = {
       successSchema: schemaRef('IntegrationDeviceConfigsResponse'),
     }),
   },
+  '/integrations/factories/{registrationNo}/dashboard': {
+    get: apiKeyOperation('factoryDashboardApiKey', {
+      tag: 'Integrations',
+      summary: 'Get latest hourly dashboard for one connected factory',
+      operationId: 'getIntegrationFactoryDashboard',
+      description:
+        'คืนโรงงาน current/live หนึ่งแห่งและข้อมูลชั่วโมงที่คำนวณเสร็จล่าสุดตาม Asia/Bangkok; response ไม่คืน isFavorite และใช้ Cache-Control: no-store',
+      parameters: [factoryRegistrationNoParameter],
+      successSchema: schemaRef('IntegrationFactoryDashboardResponse'),
+      extraResponses: {
+        '429': {
+          description: 'เกิน global rate limit; ใช้ Retry-After และ RateLimit headers เพื่อ retry',
+          content: {
+            'text/html': {
+              schema: {
+                type: 'string',
+                example: 'Too many requests, please try again later.',
+              },
+            },
+          },
+        },
+      },
+    }),
+  },
   '/integrations/device-configs/{stationId}/{buddhistYear}': {
     get: apiKeyOperation('deviceConfigApiKey', {
       tag: 'Integrations',
@@ -4247,13 +4494,13 @@ export const pomsOpenApiDocument: OpenApiObject = {
     title: 'POMS API',
     version: '0.3.0',
     description:
-      'Interactive contract สำหรับ HTTP endpoint ทั้ง 121 รายการใน POMS แยกตามเมนูงานจริง พร้อม payload, validation, auth และตัวอย่างทดสอบ\n\nSwagger แสดง 130 operations เพราะขยาย optional buddhistYear path อีก 9 รูปแบบเพื่อรองรับทั้ง annual point code ที่ URL-encode และ path ที่ proxy ถอดรหัสแล้ว',
+      'Interactive contract สำหรับ HTTP endpoint ทั้ง 122 รายการใน POMS แยกตามเมนูงานจริง พร้อม payload, validation, auth และตัวอย่างทดสอบ\n\nSwagger แสดง 131 operations เพราะขยาย optional buddhistYear path อีก 9 รูปแบบเพื่อรองรับทั้ง annual point code ที่ URL-encode และ path ที่ proxy ถอดรหัสแล้ว',
   },
   servers: [{ url: env.API_PREFIX }],
   tags,
   paths,
   components,
-  'x-poms-canonical-operation-count': 121,
+  'x-poms-canonical-operation-count': 122,
 };
 
 export function countOpenApiOperations(document: OpenApiObject): number {

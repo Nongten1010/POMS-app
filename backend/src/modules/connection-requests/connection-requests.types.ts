@@ -242,6 +242,7 @@ export interface ListOperatorFactoryOverviewQuery {
 
 export interface ListPublicFactoryMapPointsQuery {
   systemType?: ConnectionSystemType;
+  registrationNo?: string;
 }
 
 export interface ReviewConnectionRequestInput {

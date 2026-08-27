@@ -121,6 +121,7 @@ const envSchema = z
     INTEGRATION_API_KEYS: z.string().optional(),
     DEVICE_CONFIG_API_KEYS: z.string().optional(),
     ALERT_EVENT_API_KEYS: z.string().optional(),
+    FACTORY_DASHBOARD_API_KEYS: z.string().optional(),
 
     SMTP_HOST: z.string().min(1).optional(),
     SMTP_PORT: z.coerce.number().int().positive().default(587),

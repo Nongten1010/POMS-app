@@ -480,7 +480,10 @@ export const connectionRequestsService = {
       connectedPomsOnly: true,
     });
     const eligibleFactories = factories.filter(
-      (factory) => factory.isEligible !== false && factory.isActive !== false,
+      (factory) =>
+        factory.isEligible !== false &&
+        factory.isActive !== false &&
+        (!query.registrationNo || factory.newRegistrationNo === query.registrationNo),
     );
     const factoryIdByLookupKey = buildFactoryLookupKeyMap(eligibleFactories);
     const factoryIdByEligibleFactoryId = buildEligibleFactoryIdMap(eligibleFactories);

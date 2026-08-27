@@ -10,6 +10,7 @@ Swagger UI ที่ `GET /api/v1/docs` จะแยกกลุ่มนี้�
 | ------------------------------------------------------- | ------------------------------------------------- |
 | [`device-configs/`](./device-configs/README.md)         | ระบบภายนอกดึง device, parameter และ status config |
 | [`alert-events/`](./alert-events/README.md)             | ระบบภายนอกส่ง alert events รายชั่วโมง             |
+| [`factory-dashboard/`](./factory-dashboard/README.md)   | ระบบภายนอกอ่าน dashboard รายชั่วโมงของหนึ่งโรงงาน |
 | [`device-connections/`](./device-connections/README.md) | Connection configuration และ connection test      |
 
 Canonical links จะเพิ่มเมื่อแต่ละ contract ตรวจเทียบกับ implementation และ tests แล้ว

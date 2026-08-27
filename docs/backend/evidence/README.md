@@ -61,6 +61,7 @@
 
 ## Integrations
 
+- [Dashboard ข้อมูลตรวจวัดรายโรงงานสำหรับระบบภายนอก](./integrations/factory-dashboard-api.tdd.md)
 - [Test Mode ของ Device Config Channel](./integrations/device-config-test-mode.tdd.md)
 - [การรายงานค่าต่อพารามิเตอร์ใน Device Config](./integrations/device-config-parameter-reporting.tdd.md)
 - [ประเภทจุดตรวจวัดใน Device Config](./integrations/device-config-point-types.tdd.md)
