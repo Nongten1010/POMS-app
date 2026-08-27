@@ -2626,7 +2626,7 @@ function ReportActions({ row, mode, roleCode = '', onOpenReport, onOpenResultNot
   const canOpenResultNotice = hasStatus(['ผ่านการพิจารณา', 'APPROVED'])
     || (mode === 'officer' && hasStatus(['รอทบทวน', 'รออนุมัติ', 'WAITING_REVIEW', 'WAITING_APPROVAL']))
   const canFillResultNotice = mode === 'officer'
-    && roleCode === 'monitoring_kpm'
+    && ['monitoring_kpm', 'admin'].includes(roleCode)
     && row.statusCode === 'WAITING_RESULT_NOTICE'
 
   return (
