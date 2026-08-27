@@ -4,6 +4,7 @@ import {
   Box,
   Button,
   Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -14,6 +15,7 @@ import {
   IconButton,
   MenuItem,
   Paper,
+  Popover,
   Stack,
   Tab,
   Table,
@@ -28,11 +30,20 @@ import {
 } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import DeleteIcon from '@mui/icons-material/Delete'
+import DescriptionIcon from '@mui/icons-material/Description'
 import FileDownloadIcon from '@mui/icons-material/FileDownload'
 import HistoryIcon from '@mui/icons-material/History'
+import LinkIcon from '@mui/icons-material/Link'
 import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import { DataGrid } from '@mui/x-data-grid'
+import { DatePicker, LocalizationProvider, TimePicker } from '@mui/x-date-pickers'
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
+import dayjs from 'dayjs'
+import 'dayjs/locale/th'
 import OfficerStatisticsPanel from '../components/OfficerStatisticsPanel'
+import { createBodCodReportPdf } from '../utils/bodCodReportPdf'
+
+dayjs.locale('th')
 
 const appBarHeight = {
   xs: 64,
@@ -326,6 +337,38 @@ function formatApiDateValue(value) {
   return `${year}-${month}-${day}`
 }
 
+function getBodCodDatePickerValue(value) {
+  if (!value) return null
+  if (dayjs.isDayjs(value)) return value.isValid() ? value : null
+
+  if (typeof value === 'string') {
+    const thaiDateMatch = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+    if (thaiDateMatch) {
+      const [, day, month, year] = thaiDateMatch
+      const christianYear = Number(year) > 2400 ? Number(year) - 543 : Number(year)
+      const parsedDate = dayjs(new Date(christianYear, Number(month) - 1, Number(day)))
+
+      return parsedDate.isValid() ? parsedDate : null
+    }
+  }
+
+  const parsedDate = dayjs(value)
+  return parsedDate.isValid() ? parsedDate : null
+}
+
+function getBodCodTimePickerValue(value) {
+  if (!value) return null
+  if (dayjs.isDayjs(value)) return value.isValid() ? value : null
+
+  const timeMatch = String(value).match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/)
+  if (!timeMatch) return null
+
+  const [, hour, minute] = timeMatch
+  const parsedTime = dayjs(new Date(2000, 0, 1, Number(hour), Number(minute)))
+
+  return parsedTime.isValid() ? parsedTime : null
+}
+
 function normalizeBodCodStatusHistory(detail = {}) {
   const history = detail.statusHistory ?? detail.history ?? detail.workflowHistory ?? detail.events
 
@@ -615,6 +658,65 @@ function buildBodCodPaperAttachmentFile(file = {}, index = 0) {
   }
 }
 
+const bodCodAttachmentGroupDefinitions = [
+  { key: 'samplePhotos', title: 'ภาพถ่ายขณะเก็บตัวอย่าง' },
+  { key: 'devicePhotos', title: 'ภาพหน้าเครื่องมือตรวจวัดที่แสดง ณ เวลาที่เก็บตัวอย่าง' },
+  { key: 'labReports', title: 'รายงานผลจากห้องปฏิบัติการ' },
+]
+
+function isBodCodImageAttachment(file = {}) {
+  const type = file.type ?? file.fileType ?? file.mimeType ?? ''
+  const name = getAttachmentFileName(file)
+  const url = getBodCodAttachmentUrl(file)
+
+  return type.startsWith('image/') || /\.(png|jpe?g|webp)(\?.*)?$/i.test(`${name} ${url}`)
+}
+
+function getBodCodAttachmentPanelGroups(report = {}) {
+  const attachmentFiles = getBodCodAttachmentFiles(report)
+
+  return bodCodAttachmentGroupDefinitions
+    .map((group) => ({
+      title: group.title,
+      items: (attachmentFiles[group.key] ?? [])
+        .filter((file) => !isBodCodImageAttachment(file))
+        .map((file, index) => {
+          const url = getBodCodAttachmentUrl(file)
+          const name = getAttachmentFileName(file)
+
+          return {
+            id: file.id ?? `${group.key}-${name || url || index}`,
+            label: name || url || '-',
+            url,
+            file,
+            type: url && !name ? 'link' : 'file',
+          }
+        })
+        .filter((item) => item.label && item.label !== '-'),
+    }))
+    .filter((group) => group.items.length)
+}
+
+function openBodCodAttachmentItem(item = {}) {
+  let url = item.url
+  let shouldRevoke = false
+
+  if (!url && typeof File !== 'undefined' && item.file instanceof File) {
+    url = URL.createObjectURL(item.file)
+    shouldRevoke = true
+  }
+
+  if (!url) {
+    return
+  }
+
+  window.open(url, '_blank', 'noopener,noreferrer')
+
+  if (shouldRevoke) {
+    window.setTimeout(() => URL.revokeObjectURL(url), 30000)
+  }
+}
+
 function BodCodPaperShell({ children }) {
   return (
     <Paper
@@ -800,100 +902,83 @@ function getLatestReportRevisionMessage(report = {}) {
   return revisionItem?.note ?? ''
 }
 
-function ReportStatusHistoryDialog({ open, history = [], onClose }) {
+function ReportStatusHistoryContent({ history = [] }) {
   const items = useMemo(() => getReportStatusHistoryItems(history), [history])
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 2,
-        }}
-      >
-        ประวัติสถานะ
-        <IconButton aria-label="ปิด" onClick={onClose} size="small">
-          <CloseIcon />
-        </IconButton>
-      </DialogTitle>
-      <DialogContent dividers>
-        {items.length ? (
-          <Stack spacing={0}>
-            {items.map((item, index) => {
-              const nextItem = items[index + 1]
-              const duration = formatReportHistoryDuration(
-                item.__date,
-                nextItem?.__date,
-                item.durationLabel ?? item.durationText ?? item.duration,
-              )
-              const note = item.revisionReason ?? item.officerNote ?? item.note ?? ''
-              const title = `${item.statusLabel ?? item.status ?? '-'}${duration ? ` (${duration})` : ''}`
+    items.length ? (
+      <Stack spacing={0}>
+        {items.map((item, index) => {
+          const nextItem = items[index + 1]
+          const duration = formatReportHistoryDuration(
+            item.__date,
+            nextItem?.__date,
+            item.durationLabel ?? item.durationText ?? item.duration,
+          )
+          const note = item.revisionReason ?? item.officerNote ?? item.note ?? ''
+          const title = `${item.statusLabel ?? item.status ?? '-'}${duration ? ` (${duration})` : ''}`
 
-              return (
+          return (
+            <Box
+              key={item.id ?? `${item.statusLabel ?? 'status'}-${index}`}
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: '24px minmax(0, 1fr)',
+                columnGap: 1.5,
+              }}
+            >
+              <Box sx={{ position: 'relative', display: 'flex', justifyContent: 'center' }}>
                 <Box
-                  key={item.id ?? `${item.statusLabel ?? 'status'}-${index}`}
                   sx={{
-                    display: 'grid',
-                    gridTemplateColumns: '24px minmax(0, 1fr)',
-                    columnGap: 1.5,
+                    width: 12,
+                    height: 12,
+                    mt: 0.75,
+                    borderRadius: '50%',
+                    bgcolor: 'primary.main',
+                    border: 2,
+                    borderColor: 'background.paper',
+                    boxShadow: '0 0 0 1px',
+                    color: 'primary.main',
+                    zIndex: 1,
                   }}
-                >
-                  <Box sx={{ position: 'relative', display: 'flex', justifyContent: 'center' }}>
-                    <Box
-                      sx={{
-                        width: 12,
-                        height: 12,
-                        mt: 0.75,
-                        borderRadius: '50%',
-                        bgcolor: 'primary.main',
-                        border: 2,
-                        borderColor: 'background.paper',
-                        boxShadow: '0 0 0 1px',
-                        color: 'primary.main',
-                        zIndex: 1,
-                      }}
-                    />
-                    {index < items.length - 1 ? (
-                      <Box
-                        sx={{
-                          position: 'absolute',
-                          top: 22,
-                          bottom: 0,
-                          width: 2,
-                          bgcolor: 'divider',
-                        }}
-                      />
-                    ) : null}
-                  </Box>
-                  <Box sx={{ pb: index < items.length - 1 ? 2.5 : 0 }}>
-                    <Typography sx={{ fontWeight: 600 }}>{title}</Typography>
-                    {note ? (
-                      <Typography variant="body2" sx={{ mt: 0.75, whiteSpace: 'pre-line' }}>
-                        หมายเหตุ: {note}
-                      </Typography>
-                    ) : null}
-                    <Stack spacing={0.25} sx={{ mt: note ? 1.5 : 0.75 }}>
-                      <Typography variant="body2" color="text.secondary">
-                        วันที่: {item.changedDate ?? formatReportHistoryDate(item.__date)}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        ผู้บันทึก: {item.changedByName ?? item.changedBy ?? item.recorderName ?? '-'}
-                      </Typography>
-                    </Stack>
-                  </Box>
-                </Box>
-              )
-            })}
-          </Stack>
-        ) : (
-          <Typography variant="body2" color="text.secondary">
-            ไม่มีประวัติสถานะ
-          </Typography>
-        )}
-      </DialogContent>
-    </Dialog>
+                />
+                {index < items.length - 1 ? (
+                  <Box
+                    sx={{
+                      position: 'absolute',
+                      top: 22,
+                      bottom: 0,
+                      width: 2,
+                      bgcolor: 'divider',
+                    }}
+                  />
+                ) : null}
+              </Box>
+              <Box sx={{ pb: index < items.length - 1 ? 2.5 : 0 }}>
+                <Typography sx={{ fontWeight: 600 }}>{title}</Typography>
+                {note ? (
+                  <Typography variant="body2" sx={{ mt: 0.75, whiteSpace: 'pre-line' }}>
+                    หมายเหตุ: {note}
+                  </Typography>
+                ) : null}
+                <Stack spacing={0.25} sx={{ mt: note ? 1.5 : 0.75 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    วันที่: {item.changedDate ?? formatReportHistoryDate(item.__date)}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    ผู้บันทึก: {item.changedByName ?? item.changedBy ?? item.recorderName ?? '-'}
+                  </Typography>
+                </Stack>
+              </Box>
+            </Box>
+          )
+        })}
+      </Stack>
+    ) : (
+      <Typography variant="body2" color="text.secondary">
+        ไม่มีประวัติสถานะ
+      </Typography>
+    )
   )
 }
 
@@ -1087,27 +1172,72 @@ function ReportPreviewDialog({
   onRequestRevision,
   onApprove,
 }) {
-  const [statusHistoryOpen, setStatusHistoryOpen] = useState(false)
+  const [statusHistoryAnchorEl, setStatusHistoryAnchorEl] = useState(null)
   const [revisionDialogOpen, setRevisionDialogOpen] = useState(false)
   const [revisionOfficerNote, setRevisionOfficerNote] = useState('')
   const [revisionSubmitting, setRevisionSubmitting] = useState(false)
   const [revisionError, setRevisionError] = useState('')
+  const [pdfUrl, setPdfUrl] = useState('')
+  const [pdfLoading, setPdfLoading] = useState(false)
+  const [pdfError, setPdfError] = useState('')
+  const [attachmentAnchorEl, setAttachmentAnchorEl] = useState(null)
   const statusHistory = report ? buildFallbackReportStatusHistory(report) : []
+  const attachmentGroups = report ? getBodCodAttachmentPanelGroups(report) : []
+  const attachmentCount = attachmentGroups.reduce((sum, group) => sum + group.items.length, 0)
+  const attachmentPopoverOpen = Boolean(attachmentAnchorEl)
+  const statusHistoryPopoverOpen = Boolean(statusHistoryAnchorEl)
   const reportStatusValues = [report?.status, report?.statusCode, report?.statusLabel].filter(Boolean)
   const isWaitingApproval = reportStatusValues.some((status) => ['WAITING_APPROVAL', 'รออนุมัติ'].includes(status))
-  const handleDownload = () => {
-    if (!report) return
+  const isReadonlyViewDialog = mode === 'view'
 
-    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `${report.reportNo || 'bod-cod-report'}.json`
-    link.click()
-    URL.revokeObjectURL(url)
-  }
+  useEffect(() => {
+    if (!open || !report) {
+      return undefined
+    }
+
+    let active = true
+    let nextUrl = ''
+
+    Promise.resolve()
+      .then(async () => {
+        if (!active) return
+        setPdfLoading(true)
+        setPdfError('')
+        const pdfBytes = await createBodCodReportPdf(report)
+        if (!active) return
+        nextUrl = URL.createObjectURL(new Blob([pdfBytes], { type: 'application/pdf' }))
+        setPdfUrl((currentUrl) => {
+          if (currentUrl) URL.revokeObjectURL(currentUrl)
+          return nextUrl
+        })
+      })
+      .catch((error) => {
+        if (!active) return
+        setPdfError(error instanceof Error ? error.message : 'สร้าง PDF ไม่สำเร็จ')
+        setPdfUrl((currentUrl) => {
+          if (currentUrl) URL.revokeObjectURL(currentUrl)
+          return ''
+        })
+      })
+      .finally(() => {
+        if (active) setPdfLoading(false)
+      })
+
+    return () => {
+      active = false
+      if (nextUrl) URL.revokeObjectURL(nextUrl)
+    }
+  }, [open, report])
+
   const closePreviewDialog = () => {
-    setStatusHistoryOpen(false)
+    setStatusHistoryAnchorEl(null)
+    setAttachmentAnchorEl(null)
+    setPdfLoading(false)
+    setPdfError('')
+    setPdfUrl((currentUrl) => {
+      if (currentUrl) URL.revokeObjectURL(currentUrl)
+      return ''
+    })
     onClose?.()
   }
   const closeRevisionDialog = () => {
@@ -1157,32 +1287,178 @@ function ReportPreviewDialog({
           <Typography component="span" variant="h6" sx={{ minWidth: 0 }}>
             แบบฟอร์มรายงานค่าความคลาดเคลื่อน BOD/COD
           </Typography>
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexShrink: 0 }}>
+          <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<DescriptionIcon />}
+              disabled={!report || attachmentCount === 0}
+              onClick={(event) => setAttachmentAnchorEl(event.currentTarget)}
+            >
+              เอกสารแนบ{attachmentCount ? ` (${attachmentCount})` : ''}
+            </Button>
             <Button
               variant="outlined"
               size="small"
               startIcon={<HistoryIcon />}
               disabled={!report}
-              onClick={() => setStatusHistoryOpen(true)}
+              onClick={(event) => setStatusHistoryAnchorEl(event.currentTarget)}
             >
               ประวัติสถานะ
             </Button>
-            <Button
-              variant="contained"
-              size="small"
-              startIcon={<FileDownloadIcon />}
-              disabled={!report}
-              onClick={handleDownload}
-            >
-              ดาวน์โหลด
-            </Button>
-            <IconButton aria-label="ปิด" onClick={closePreviewDialog} size="small">
-              <CloseIcon />
-            </IconButton>
+            {isReadonlyViewDialog ? (
+              <IconButton aria-label="ปิด" onClick={closePreviewDialog} size="small">
+                <CloseIcon />
+              </IconButton>
+            ) : null}
           </Stack>
         </DialogTitle>
-        <DialogContent dividers sx={{ bgcolor: 'neutral.100' }}>
-          {report ? <BodCodPaperDocument report={report} /> : null}
+        <Popover
+          open={attachmentPopoverOpen}
+          anchorEl={attachmentAnchorEl}
+          onClose={() => setAttachmentAnchorEl(null)}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+          transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+          slotProps={{
+            paper: {
+              sx: {
+                width: 380,
+                maxWidth: 'calc(100vw - 32px)',
+                maxHeight: 520,
+                overflowY: 'auto',
+                p: 2,
+                borderRadius: 2,
+                boxShadow: '0 18px 48px rgba(15, 23, 42, 0.18)',
+              },
+            },
+          }}
+        >
+          <Stack spacing={1.5}>
+            {attachmentGroups.length ? (
+              attachmentGroups.map((group) => (
+                <Box key={group.title}>
+                  <Typography variant="subtitle2" sx={{ mb: 0.75, fontWeight: 700 }}>
+                    {group.title}
+                  </Typography>
+                  <Stack spacing={0.5}>
+                    {group.items.map((item) => (
+                      <Button
+                        key={item.id}
+                        variant="text"
+                        disabled={!item.url && !(typeof File !== 'undefined' && item.file instanceof File)}
+                        onClick={() => {
+                          openBodCodAttachmentItem(item)
+                          setAttachmentAnchorEl(null)
+                        }}
+                        sx={{
+                          justifyContent: 'flex-start',
+                          minHeight: 44,
+                          px: 1,
+                          py: 0.75,
+                          color: 'text.primary',
+                          textAlign: 'left',
+                          textTransform: 'none',
+                          borderRadius: 1.5,
+                        }}
+                      >
+                        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 0 }}>
+                          <Box
+                            sx={{
+                              width: 32,
+                              height: 32,
+                              borderRadius: 1.25,
+                              bgcolor: item.type === 'link' ? '#eff6ff' : 'grey.100',
+                              border: '1px solid',
+                              borderColor: item.type === 'link' ? '#bfdbfe' : 'grey.200',
+                              color: item.type === 'link' ? 'primary.main' : 'text.secondary',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0,
+                            }}
+                          >
+                            {item.type === 'link' ? <LinkIcon fontSize="small" /> : <DescriptionIcon fontSize="small" />}
+                          </Box>
+                          <Box sx={{ minWidth: 0 }}>
+                            <Typography variant="body2" noWrap>
+                              {item.label}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {item.type === 'link' ? 'Link' : 'File'}
+                            </Typography>
+                          </Box>
+                        </Stack>
+                      </Button>
+                    ))}
+                  </Stack>
+                </Box>
+              ))
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                ไม่มีเอกสารแนบ
+              </Typography>
+            )}
+          </Stack>
+        </Popover>
+        <Popover
+          open={statusHistoryPopoverOpen}
+          anchorEl={statusHistoryAnchorEl}
+          onClose={() => setStatusHistoryAnchorEl(null)}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+          transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+          slotProps={{
+            paper: {
+              sx: {
+                width: 420,
+                maxWidth: 'calc(100vw - 32px)',
+                maxHeight: 520,
+                overflowY: 'auto',
+                p: 2,
+                borderRadius: 2,
+                boxShadow: '0 18px 48px rgba(15, 23, 42, 0.18)',
+              },
+            },
+          }}
+        >
+          <ReportStatusHistoryContent history={statusHistory} />
+        </Popover>
+        <DialogContent
+          dividers
+          sx={{
+            bgcolor: 'neutral.100',
+            display: 'flex',
+            minHeight: { xs: '70vh', md: '78vh' },
+            overflow: 'hidden',
+            p: 2,
+          }}
+        >
+          {pdfLoading ? (
+            <Stack spacing={2} sx={{ alignItems: 'center', justifyContent: 'center', flex: 1, minHeight: 360 }}>
+              <CircularProgress size={32} />
+              <Typography variant="body2" color="text.secondary">
+                กำลังสร้าง PDF
+              </Typography>
+            </Stack>
+          ) : pdfUrl ? (
+            <Box
+              component="iframe"
+              title="ตัวอย่างแบบรายงานผล BOD/COD"
+              src={pdfUrl}
+              sx={{
+                display: 'block',
+                width: '100%',
+                height: { xs: '70vh', md: '78vh' },
+                minHeight: 0,
+                border: 0,
+                bgcolor: '#fff',
+              }}
+            />
+          ) : pdfError ? (
+            <Stack spacing={2} sx={{ width: '100%' }}>
+              <Alert severity="error">{pdfError}</Alert>
+              {report ? <BodCodPaperDocument report={report} /> : null}
+            </Stack>
+          ) : null}
         </DialogContent>
         {submitError ? (
           <Alert severity="error" sx={{ borderRadius: 0 }}>
@@ -1240,11 +1516,6 @@ function ReportPreviewDialog({
           </DialogActions>
         )}
       </Dialog>
-      <ReportStatusHistoryDialog
-        open={statusHistoryOpen}
-        history={statusHistory}
-        onClose={() => setStatusHistoryOpen(false)}
-      />
       <Dialog open={revisionDialogOpen} onClose={closeRevisionDialog} fullWidth maxWidth="sm">
         <DialogTitle>แจ้งแก้ไขรายงาน</DialogTitle>
         <DialogContent dividers>
@@ -1503,12 +1774,13 @@ function getResultNoticeFormValues(report = {}) {
 
 function ResultNoticeDialog({ open, report, mode = 'view', submitting = false, submitError = '', onClose, onConfirm }) {
   const [noticeForm, setNoticeForm] = useState(() => getResultNoticeFormValues(report))
-  const [statusHistoryOpen, setStatusHistoryOpen] = useState(false)
+  const [statusHistoryAnchorEl, setStatusHistoryAnchorEl] = useState(null)
   const title = report && isBangkokProvince(report.province)
     ? 'แบบแจ้งผล (ส่วนกลาง)'
     : 'แบบแจ้งผล (ส่วนภูมิภาค)'
   const isEditMode = mode === 'edit'
   const statusHistory = report ? buildFallbackReportStatusHistory(report) : []
+  const statusHistoryPopoverOpen = Boolean(statusHistoryAnchorEl)
   const updateNoticeForm = (field, value) => {
     setNoticeForm((current) => ({ ...current, [field]: value }))
   }
@@ -1524,7 +1796,7 @@ function ResultNoticeDialog({ open, report, mode = 'view', submitting = false, s
     URL.revokeObjectURL(url)
   }
   const closeDialog = () => {
-    setStatusHistoryOpen(false)
+    setStatusHistoryAnchorEl(null)
     onClose?.()
   }
 
@@ -1549,7 +1821,7 @@ function ResultNoticeDialog({ open, report, mode = 'view', submitting = false, s
               size="small"
               startIcon={<HistoryIcon />}
               disabled={!report}
-              onClick={() => setStatusHistoryOpen(true)}
+              onClick={(event) => setStatusHistoryAnchorEl(event.currentTarget)}
             >
               ประวัติสถานะ
             </Button>
@@ -1567,6 +1839,28 @@ function ResultNoticeDialog({ open, report, mode = 'view', submitting = false, s
             </IconButton>
           </Stack>
         </DialogTitle>
+        <Popover
+          open={statusHistoryPopoverOpen}
+          anchorEl={statusHistoryAnchorEl}
+          onClose={() => setStatusHistoryAnchorEl(null)}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+          transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+          slotProps={{
+            paper: {
+              sx: {
+                width: 420,
+                maxWidth: 'calc(100vw - 32px)',
+                maxHeight: 520,
+                overflowY: 'auto',
+                p: 2,
+                borderRadius: 2,
+                boxShadow: '0 18px 48px rgba(15, 23, 42, 0.18)',
+              },
+            },
+          }}
+        >
+          <ReportStatusHistoryContent history={statusHistory} />
+        </Popover>
         <DialogContent dividers sx={{ bgcolor: isEditMode ? 'background.default' : 'neutral.100' }}>
           {report && isEditMode ? (
             <Stack spacing={2}>
@@ -1664,11 +1958,6 @@ function ResultNoticeDialog({ open, report, mode = 'view', submitting = false, s
           </DialogActions>
         ) : null}
       </Dialog>
-      <ReportStatusHistoryDialog
-        open={statusHistoryOpen}
-        history={statusHistory}
-        onClose={() => setStatusHistoryOpen(false)}
-      />
     </>
   )
 }
@@ -2047,25 +2336,26 @@ function BodCodReportFormSheet({ open, report, onClose, onPreview }) {
   }
 
   return (
-    <Drawer
-      anchor="bottom"
-      open={open}
-      onClose={onClose}
-      transitionDuration={{ enter: 280, exit: 220 }}
-      slotProps={{
-        paper: {
-          sx: {
-            height: {
-              xs: `calc(100dvh - ${appBarHeight.xs}px)`,
-              md: `calc(100dvh - ${appBarHeight.md}px)`,
+    <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="th">
+      <Drawer
+        anchor="bottom"
+        open={open}
+        onClose={onClose}
+        transitionDuration={{ enter: 280, exit: 220 }}
+        slotProps={{
+          paper: {
+            sx: {
+              height: {
+                xs: `calc(100dvh - ${appBarHeight.xs}px)`,
+                md: `calc(100dvh - ${appBarHeight.md}px)`,
+              },
+              bgcolor: 'background.default',
+              borderTopLeftRadius: 2,
+              borderTopRightRadius: 2,
             },
-            bgcolor: 'background.default',
-            borderTopLeftRadius: 2,
-            borderTopRightRadius: 2,
           },
-        },
-      }}
-    >
+        }}
+      >
       <Stack sx={{ height: '100%', minHeight: 0 }}>
         <Stack
           direction="row"
@@ -2190,23 +2480,36 @@ function BodCodReportFormSheet({ open, report, onClose, onPreview }) {
             <SectionPaper title="ผลการตรวจสอบความคลาดเคลื่อน">
               <Grid container spacing={2}>
                 <Grid size={{ xs: 12, md: 3 }}>
-                  <TextField
+                  <DatePicker
                     label="วันที่เก็บตัวอย่าง"
-                    size="small"
-                    value={measurementResult.sampleDate}
-                    onChange={(event) => updateMeasurementResult('sampleDate', event.target.value)}
-                    placeholder="DD/MM/BBBB"
-                    fullWidth
+                    value={getBodCodDatePickerValue(measurementResult.sampleDate)}
+                    onChange={(nextValue) => {
+                      updateMeasurementResult('sampleDate', nextValue?.isValid?.() ? formatThaiDateValue(nextValue.toDate()) : '')
+                    }}
+                    format="DD/MM/YYYY"
+                    slotProps={{
+                      textField: {
+                        size: 'small',
+                        fullWidth: true,
+                      },
+                    }}
                   />
                 </Grid>
                 <Grid size={{ xs: 12, md: 3 }}>
-                  <TextField
+                  <TimePicker
                     label="เวลาที่เก็บตัวอย่าง"
-                    size="small"
-                    value={measurementResult.sampleTime}
-                    onChange={(event) => updateMeasurementResult('sampleTime', event.target.value)}
-                    placeholder="HH:mm"
-                    fullWidth
+                    value={getBodCodTimePickerValue(measurementResult.sampleTime)}
+                    onChange={(nextValue) => {
+                      updateMeasurementResult('sampleTime', nextValue?.isValid?.() ? nextValue.format('HH:mm') : '')
+                    }}
+                    ampm={false}
+                    format="HH:mm"
+                    slotProps={{
+                      textField: {
+                        size: 'small',
+                        fullWidth: true,
+                      },
+                    }}
                   />
                 </Grid>
                 <Grid size={{ xs: 12 }} sx={{ display: { xs: 'none', md: 'block' } }} />
@@ -2292,7 +2595,8 @@ function BodCodReportFormSheet({ open, report, onClose, onPreview }) {
           </Button>
         </Stack>
       </Stack>
-    </Drawer>
+      </Drawer>
+    </LocalizationProvider>
   )
 }
 
