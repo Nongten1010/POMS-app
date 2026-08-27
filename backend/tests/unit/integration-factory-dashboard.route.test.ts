@@ -48,7 +48,7 @@ describe('integration factory dashboard route', () => {
 
   it('returns one factory dashboard with a dedicated API key', async () => {
     const response = await request(createApp())
-      .get(`/api/v1/integrations/factories/${registrationNo}/dashboard`)
+      .get(`/integrations/lasthour/factories/${registrationNo}`)
       .set('X-API-Key', 'factory-dashboard-test-key');
 
     expect(response.status).toBe(200);
@@ -69,7 +69,7 @@ describe('integration factory dashboard route', () => {
 
   it('rejects a missing API key', async () => {
     const response = await request(createApp()).get(
-      `/api/v1/integrations/factories/${registrationNo}/dashboard`,
+      `/integrations/lasthour/factories/${registrationNo}`,
     );
 
     expect(response.status).toBe(401);
@@ -79,7 +79,7 @@ describe('integration factory dashboard route', () => {
 
   it('does not accept the generic integration API key', async () => {
     const response = await request(createApp())
-      .get(`/api/v1/integrations/factories/${registrationNo}/dashboard`)
+      .get(`/integrations/lasthour/factories/${registrationNo}`)
       .set('X-API-Key', 'generic-integration-key');
 
     expect(response.status).toBe(401);
@@ -88,7 +88,7 @@ describe('integration factory dashboard route', () => {
 
   it('rejects an invalid factory registration number', async () => {
     const response = await request(createApp())
-      .get('/api/v1/integrations/factories/ABC123/dashboard')
+      .get('/integrations/lasthour/factories/ABC123')
       .set('X-API-Key', 'factory-dashboard-test-key');
 
     expect(response.status).toBe(400);
@@ -102,7 +102,7 @@ describe('integration factory dashboard route', () => {
     );
 
     const response = await request(createApp())
-      .get(`/api/v1/integrations/factories/${registrationNo}/dashboard`)
+      .get(`/integrations/lasthour/factories/${registrationNo}`)
       .set('X-API-Key', 'factory-dashboard-test-key');
 
     expect(response.status).toBe(404);
@@ -110,5 +110,16 @@ describe('integration factory dashboard route', () => {
       code: 'NOT_FOUND',
       message: 'Connected POMS factory not found',
     });
+  });
+
+  it('keeps the previous API-prefixed endpoint as a compatibility alias', async () => {
+    const response = await request(createApp())
+      .get(`/api/v1/integrations/factories/${registrationNo}/dashboard`)
+      .set('X-API-Key', 'factory-dashboard-test-key');
+
+    expect(response.status).toBe(200);
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(response.headers.deprecation).toBe('true');
+    expect(mockedService.getByRegistrationNo).toHaveBeenCalledWith(registrationNo);
   });
 });

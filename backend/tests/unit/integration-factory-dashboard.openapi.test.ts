@@ -15,14 +15,15 @@ describe('integration factory dashboard OpenAPI contract', () => {
     const document = asObject(pomsOpenApiDocument, 'document');
     const paths = asObject(document.paths, 'paths');
     const operation = asObject(
-      asObject(
-        paths['/integrations/factories/{registrationNo}/dashboard'],
-        'factory dashboard path',
-      ).get,
+      asObject(paths['/integrations/lasthour/factories/{registrationNo}'], 'factory dashboard path')
+        .get,
       'factory dashboard operation',
     );
 
     expect(operation.security).toEqual([{ factoryDashboardApiKey: [] }]);
+    expect(operation.servers).toEqual([
+      { url: '/', description: 'Application root; endpoint นี้อยู่นอก API prefix' },
+    ]);
     const registrationParameter = (operation.parameters as JsonObject[]).find(
       (parameter) => parameter.name === 'registrationNo',
     );
@@ -66,5 +67,14 @@ describe('integration factory dashboard OpenAPI contract', () => {
     expect(rowProperties.isFavorite).toBeUndefined();
     expect(rowProperties.hasLatestHourlyMeasurement).toEqual({ type: 'boolean' });
     expect(rowProperties.measurementPoints).toBeDefined();
+
+    const previousOperation = asObject(
+      asObject(
+        paths['/integrations/factories/{registrationNo}/dashboard'],
+        'previous factory dashboard path',
+      ).get,
+      'previous factory dashboard operation',
+    );
+    expect(previousOperation.deprecated).toBe(true);
   });
 });

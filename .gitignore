@@ -5,6 +5,7 @@
 node_modules/
 dist/
 coverage/
+output/
 logs/
 uploads/
 backend/uploads/

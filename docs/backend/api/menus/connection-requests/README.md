@@ -19,7 +19,7 @@ permission code, grouped response alias และ scope keyword ที่อ้�
 3. วาง access token ในช่อง `bearerAuth`; Swagger UI จะเติม `Authorization: Bearer` ให้
 4. เลือก endpoint, กด `Try it out`, แก้ path/query/body แล้วกด `Execute`
 
-หน้าเอกสารเปิดอ่านได้โดยไม่ต้อง login ทุก environment รวม production และรวมทั้งระบบ **122 endpoints / 131 operations / 11 กลุ่มงาน** ให้ใช้ช่อง Filter ค้นชื่อกลุ่ม `ขอเชื่อมต่อ` หรือ path ที่ต้องการ ขอบเขต contract ในเอกสารหน้านี้มี 34 route signatures และแสดงเป็น 38 operations เมื่อรวมรูปแบบ path ที่มี `buddhistYear` ทั้งนี้ API จริงยังตรวจ Bearer token, permission, owner และ data scope ตาม contract ตัวอย่างทั้งหมดเป็นข้อมูลสมมติและไม่มี credential จริง ส่วน `POST /api/v1/device-connections/test-connection` ยังตอบโหมด `MOCK` และไม่ได้เปิดการเชื่อมต่อ transport/database จริง
+หน้าเอกสารเปิดอ่านได้โดยไม่ต้อง login ทุก environment รวม production และรวมทั้งระบบ **123 endpoints / 132 operations / 11 กลุ่มงาน** ให้ใช้ช่อง Filter ค้นชื่อกลุ่ม `ขอเชื่อมต่อ` หรือ path ที่ต้องการ ขอบเขต contract ในเอกสารหน้านี้มี 34 route signatures และแสดงเป็น 38 operations เมื่อรวมรูปแบบ path ที่มี `buddhistYear` ทั้งนี้ API จริงยังตรวจ Bearer token, permission, owner และ data scope ตาม contract ตัวอย่างทั้งหมดเป็นข้อมูลสมมติและไม่มี credential จริง ส่วน `POST /api/v1/device-connections/test-connection` ยังตอบโหมด `MOCK` และไม่ได้เปิดการเชื่อมต่อ transport/database จริง
 
 หน้าเอกสารเปิดเป็นค่าเริ่มต้นและปิดได้ด้วย `API_DOCS_ENABLED=false`; หน้า Swagger ไม่เก็บ Bearer token ข้ามการ refresh/session
 

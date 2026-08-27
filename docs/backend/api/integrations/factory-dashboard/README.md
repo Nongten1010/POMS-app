@@ -8,7 +8,7 @@ API นี้ให้ระบบภายนอกที่ไม่ได้ 
 
 ```bash
 curl --request GET \
-  --url '<BASE_URL>/api/v1/integrations/factories/40100007125560/dashboard' \
+  --url 'https://d-poms.diw.go.th/integrations/lasthour/factories/10120000325542' \
   --header 'X-API-Key: <FACTORY_DASHBOARD_API_KEY>'
 ```
 
@@ -16,9 +16,15 @@ curl --request GET \
 
 API key ต้องเก็บและเรียกใช้จาก server ของระบบภายนอกเท่านั้น ห้ามฝังใน frontend, mobile application หรือ JavaScript ที่ผู้ใช้ดาวน์โหลดได้
 
-## `GET /api/v1/integrations/factories/:registrationNo/dashboard`
+## `GET /integrations/lasthour/factories/:registrationNo`
 
 คืนข้อมูลชั่วโมงที่คำนวณเสร็จล่าสุดของ active measurement points สำหรับโรงงานที่เลือก เวลารอบข้อมูลคำนวณตาม `Asia/Bangkok` ด้วยกติกาเดียวกับ `GET /api/v1/operator-factory-dashboard`
+
+URL production ตัวอย่าง: `https://d-poms.diw.go.th/integrations/lasthour/factories/10120000325542`
+
+### Compatibility Endpoint
+
+`GET /api/v1/integrations/factories/:registrationNo/dashboard` ยังใช้งานได้ชั่วคราวเพื่อไม่ให้ client เดิมหยุดทำงาน แต่ถูกประกาศ `deprecated` ใน OpenAPI และตอบ header `Deprecation: true` Client ใหม่และการแก้ไขครั้งถัดไปต้องใช้ `/integrations/lasthour/factories/:registrationNo`
 
 ### Authentication And Permission
 
@@ -169,6 +175,7 @@ Request body: ไม่มี
 - response ส่ง `Cache-Control: no-store`; client ไม่ควร cache response และห้าม log `X-API-Key`
 - key ใน `FACTORY_DASHBOARD_API_KEYS` แยกจาก integration endpoints อื่นโดยเด็ดขาด
 - key scope ปัจจุบันจำกัดที่ endpoint แต่ยังไม่ผูกสิทธิ์รายโรงงาน; key ที่ผ่านสามารถเลือก active connected factory ใดก็ได้ด้วยเลขทะเบียน
+- canonical endpoint อยู่นอก `/api/v1`; IIS proxy ส่งเฉพาะ path `/integrations/lasthour/*` ไป backend
 
 ### Errors
 

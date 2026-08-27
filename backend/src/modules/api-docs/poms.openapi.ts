@@ -3987,13 +3987,42 @@ const extraPaths: Record<string, OpenApiObject> = {
       successSchema: schemaRef('IntegrationDeviceConfigsResponse'),
     }),
   },
+  '/integrations/lasthour/factories/{registrationNo}': {
+    get: {
+      ...apiKeyOperation('factoryDashboardApiKey', {
+        tag: 'Integrations',
+        summary: 'Get latest hourly dashboard for one connected factory',
+        operationId: 'getIntegrationFactoryDashboard',
+        description:
+          'คืนโรงงาน current/live หนึ่งแห่งและข้อมูลชั่วโมงที่คำนวณเสร็จล่าสุดตาม Asia/Bangkok; response ไม่คืน isFavorite และใช้ Cache-Control: no-store',
+        parameters: [factoryRegistrationNoParameter],
+        successSchema: schemaRef('IntegrationFactoryDashboardResponse'),
+        extraResponses: {
+          '429': {
+            description:
+              'เกิน global rate limit; ใช้ Retry-After และ RateLimit headers เพื่อ retry',
+            content: {
+              'text/html': {
+                schema: {
+                  type: 'string',
+                  example: 'Too many requests, please try again later.',
+                },
+              },
+            },
+          },
+        },
+      }),
+      servers: [{ url: '/', description: 'Application root; endpoint นี้อยู่นอก API prefix' }],
+    },
+  },
   '/integrations/factories/{registrationNo}/dashboard': {
     get: apiKeyOperation('factoryDashboardApiKey', {
       tag: 'Integrations',
-      summary: 'Get latest hourly dashboard for one connected factory',
-      operationId: 'getIntegrationFactoryDashboard',
+      summary: 'Legacy factory dashboard endpoint',
+      operationId: 'getLegacyIntegrationFactoryDashboard',
       description:
-        'คืนโรงงาน current/live หนึ่งแห่งและข้อมูลชั่วโมงที่คำนวณเสร็จล่าสุดตาม Asia/Bangkok; response ไม่คืน isFavorite และใช้ Cache-Control: no-store',
+        'Compatibility alias ที่ deprecated แล้ว; client ใหม่ให้ใช้ GET /integrations/lasthour/factories/{registrationNo}',
+      deprecated: true,
       parameters: [factoryRegistrationNoParameter],
       successSchema: schemaRef('IntegrationFactoryDashboardResponse'),
       extraResponses: {
@@ -4494,13 +4523,13 @@ export const pomsOpenApiDocument: OpenApiObject = {
     title: 'POMS API',
     version: '0.3.0',
     description:
-      'Interactive contract สำหรับ HTTP endpoint ทั้ง 122 รายการใน POMS แยกตามเมนูงานจริง พร้อม payload, validation, auth และตัวอย่างทดสอบ\n\nSwagger แสดง 131 operations เพราะขยาย optional buddhistYear path อีก 9 รูปแบบเพื่อรองรับทั้ง annual point code ที่ URL-encode และ path ที่ proxy ถอดรหัสแล้ว',
+      'Interactive contract สำหรับ HTTP endpoint ทั้ง 123 รายการใน POMS แยกตามเมนูงานจริง พร้อม payload, validation, auth และตัวอย่างทดสอบ\n\nSwagger แสดง 132 operations เพราะขยาย optional buddhistYear path อีก 9 รูปแบบเพื่อรองรับทั้ง annual point code ที่ URL-encode และ path ที่ proxy ถอดรหัสแล้ว',
   },
   servers: [{ url: env.API_PREFIX }],
   tags,
   paths,
   components,
-  'x-poms-canonical-operation-count': 122,
+  'x-poms-canonical-operation-count': 123,
 };
 
 export function countOpenApiOperations(document: OpenApiObject): number {

@@ -110,11 +110,13 @@ function readEndpointRegistryOperations(): string[] {
     if (!match) continue;
 
     const [, method, fullPath] = match;
-    if (fullPath !== '/health' && !fullPath.startsWith('/api/v1')) continue;
+    const isRootEndpoint = fullPath === '/health' || fullPath.startsWith('/integrations/lasthour/');
+    if (!isRootEndpoint && !fullPath.startsWith('/api/v1')) continue;
 
-    const relativePath = (
-      fullPath === '/health' ? fullPath : fullPath.replace(/^\/api\/v1/, '')
-    ).replace(/:([A-Za-z0-9_]+)/g, '{$1}');
+    const relativePath = (isRootEndpoint ? fullPath : fullPath.replace(/^\/api\/v1/, '')).replace(
+      /:([A-Za-z0-9_]+)/g,
+      '{$1}',
+    );
     operations.push(`${method} ${relativePath || '/'}`);
   }
 
@@ -418,7 +420,7 @@ describe('POMS OpenAPI contract', () => {
     }
   });
 
-  it('covers all 122 canonical registry endpoints plus 9 annual testing variants', () => {
+  it('covers all 123 canonical registry endpoints plus 9 annual testing variants', () => {
     const document = asObject(pomsOpenApiDocument, 'OpenAPI document');
     const paths = asObject(document.paths, 'paths');
     const documentedOperations: string[] = [];
@@ -432,13 +434,13 @@ describe('POMS OpenAPI contract', () => {
     }
 
     const registryOperations = readEndpointRegistryOperations();
-    expect(registryOperations).toHaveLength(122);
+    expect(registryOperations).toHaveLength(123);
     expect(documentedOperations.sort()).toEqual(
       [...registryOperations, ...annualTestingVariants].sort(),
     );
     expect(pomsOpenApiStats).toEqual({
-      canonicalOperationCount: 122,
-      operationCount: 131,
+      canonicalOperationCount: 123,
+      operationCount: 132,
       tagCount: 11,
     });
   });

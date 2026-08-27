@@ -19,7 +19,10 @@ import {
 } from './modules/connection-requests/connection-requests.routes';
 import { deviceConnectionsRoutes } from './modules/device-connections/device-connections.routes';
 import { parameterValuesRoutes } from './modules/parameter-values/parameter-values.routes';
-import { integrationsRoutes } from './modules/integrations/integrations.routes';
+import {
+  factoryLastHourRoutes,
+  integrationsRoutes,
+} from './modules/integrations/integrations.routes';
 import { alertEventsRoutes } from './modules/alert-events/alert-events.routes';
 import { emailTestRoutes } from './modules/email-test/email-test.routes';
 import { officerNotificationEmailRecipientsRoutes } from './modules/officer-notification-email-recipients/officer-notification-email-recipients.routes';
@@ -80,6 +83,8 @@ export function createApp(): Application {
   app.get(env.API_PREFIX, (_req: Request, res: Response) => {
     res.json({ success: true, message: 'POMS API', version: '0.1.0' });
   });
+
+  app.use('/integrations/lasthour', factoryLastHourRoutes);
 
   if (env.API_DOCS_ENABLED) {
     app.use(env.API_PREFIX, apiDocsRoutes);

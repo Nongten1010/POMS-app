@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { NextFunction, Request, Response, Router } from 'express';
 import {
   authenticateAlertEventApiKey,
   authenticateDeviceConfigApiKey,
@@ -10,10 +10,21 @@ import { integrationDeviceConfigsController } from './integration-device-configs
 import { integrationFactoryDashboardController } from './integration-factory-dashboard.controller';
 
 export const integrationsRoutes = Router();
+export const factoryLastHourRoutes = Router();
+
+factoryLastHourRoutes.get(
+  '/factories/:registrationNo',
+  authenticateFactoryDashboardApiKey,
+  integrationFactoryDashboardController.getByRegistrationNo,
+);
 
 integrationsRoutes.get(
   '/factories/:registrationNo/dashboard',
   authenticateFactoryDashboardApiKey,
+  (_req: Request, res: Response, next: NextFunction) => {
+    res.set('Deprecation', 'true');
+    next();
+  },
   integrationFactoryDashboardController.getByRegistrationNo,
 );
 
