@@ -66,12 +66,15 @@ const roleNameThByCode = {
   kpm_director: 'ผอ.กฝม.',
   kwp_director: 'ผอ.กวภ.',
   admin: 'Admin',
+  erc_office: 'สำนักงานกำกับกิจการพลังงาน (กกพ.)',
 }
 
-const roleOptions = Object.entries(roleNameThByCode).map(([value, label]) => ({
-  label,
-  value,
-}))
+const roleOptions = Object.entries(roleNameThByCode)
+  .filter(([value]) => value !== 'public_anonymous')
+  .map(([value, label]) => ({
+    label,
+    value,
+  }))
 
 const statusOptions = [
   { label: 'ใช้งาน', value: 'active' },
@@ -91,6 +94,28 @@ const scopeOptions = [
   { label: 'โรงงานตนเอง', value: 'OWN_FACTORY' },
   { label: 'ไม่อนุญาต', value: 'NONE' },
 ]
+
+const scopeWithFactoryType88Options = [
+  ...scopeOptions,
+  { label: 'โรงงานประเภท 88', value: 'FACTORY_TYPE_88' },
+]
+
+const allowDenyScopeOptions = [
+  { label: 'อนุญาต', value: 'ALL' },
+  { label: 'ไม่อนุญาต', value: 'NONE' },
+]
+
+function getSectionScopeOptions(section) {
+  if (section.permissionKey === 'permissions') {
+    return allowDenyScopeOptions
+  }
+
+  if (section.permissionKey === 'factories') {
+    return scopeOptions
+  }
+
+  return scopeWithFactoryType88Options
+}
 
 function buildLocationOptions(options) {
   const allOption = options.find((option) => option.value === 'all')
@@ -215,9 +240,15 @@ const permissionSections = [
     permissions: [{ label: 'มีสิทธิ์ใช้งาน (Admin)', action: 'view' }],
   },
   {
-    title: 'จัดการโรงงานที่เข้าข่าย (Admin)',
+    title: 'โรงงานที่เข้าข่าย',
     permissionKey: 'eligible_factories',
-    permissions: [{ label: 'มีสิทธิ์ใช้งาน (Admin)', action: 'view' }],
+    scope: true,
+    locationScope: true,
+    permissions: [
+      { label: 'มีสิทธิ์ใช้งาน', action: 'view' },
+      { label: 'การแก้ไข', action: 'edit' },
+      { label: 'อนุมัติ/อนุญาต', action: 'approve' },
+    ],
   },
 ]
 
@@ -889,6 +920,7 @@ function UserPermissionDialog({ mode, open, user, isSaving = false, saveError = 
   const isAddMode = mode === 'add'
   const isApiAccount = !isAddMode && user?.accountType === 'api'
   const [permissionLocationErrors, setPermissionLocationErrors] = useState({})
+  const [permissionResetKey, setPermissionResetKey] = useState(0)
   const title = isAddMode ? 'เพิ่มผู้ใช้งาน' : 'แก้ไขสิทธิ์การใช้งาน'
   const selectedRoleValue =
     user?.roleCode ?? roleOptions.find((role) => role.label === user?.role)?.value ?? roleOptions[0].value
@@ -908,6 +940,11 @@ function UserPermissionDialog({ mode, open, user, isSaving = false, saveError = 
       delete nextErrors[`${permissionKey}.${field}`]
       return nextErrors
     })
+  }
+
+  const resetDefaultPermissions = () => {
+    setPermissionLocationErrors({})
+    setPermissionResetKey((currentKey) => currentKey + 1)
   }
 
   return (
@@ -1001,7 +1038,7 @@ function UserPermissionDialog({ mode, open, user, isSaving = false, saveError = 
       </DialogTitle>
 
       <DialogContent dividers sx={{ p: { xs: 2, md: 3 } }}>
-        <Stack key={`${mode}-${user?.id ?? 'new'}-${user?.detailVersion ?? 0}`} spacing={3}>
+        <Stack key={`${mode}-${user?.id ?? 'new'}-${user?.detailVersion ?? 0}-${permissionResetKey}`} spacing={3}>
           {user?.isLoadingDetail ? (
             <Alert
               severity="info"
@@ -1039,7 +1076,7 @@ function UserPermissionDialog({ mode, open, user, isSaving = false, saveError = 
                   name="username"
                   defaultValue={user?.username}
                   required
-                  InputProps={{ readOnly: isApiAccount }}
+                  disabled={isApiAccount}
                   fullWidth
                 />
                 <TextField
@@ -1062,28 +1099,28 @@ function UserPermissionDialog({ mode, open, user, isSaving = false, saveError = 
                   name="fullName"
                   defaultValue={user?.fullName}
                   required
-                  InputProps={{ readOnly: isApiAccount }}
+                  disabled={isApiAccount}
                   fullWidth
                 />
                 <TextField
                   label="สังกัด"
                   name="department"
                   defaultValue={user?.affiliation}
-                  InputProps={{ readOnly: isApiAccount }}
+                  disabled={isApiAccount}
                   fullWidth
                 />
                 <TextField
                   label="ตำแหน่ง"
                   name="lineNameTh"
                   defaultValue={user?.position}
-                  InputProps={{ readOnly: isApiAccount }}
+                  disabled={isApiAccount}
                   fullWidth
                 />
                 <TextField
                   label="ระดับ"
                   name="levelNameTh"
                   defaultValue={user?.level}
-                  InputProps={{ readOnly: isApiAccount }}
+                  disabled={isApiAccount}
                   fullWidth
                 />
                 <FormControl fullWidth required>
@@ -1134,10 +1171,15 @@ function UserPermissionDialog({ mode, open, user, isSaving = false, saveError = 
         </Stack>
       </DialogContent>
 
-      <DialogActions sx={{ px: 3, py: 2, gap: 1, flexWrap: 'wrap' }}>
-        <Button onClick={onClose} color="inherit">
+      <DialogActions sx={{ px: 3, py: 2, gap: 1, flexWrap: 'wrap', justifyContent: 'center' }}>
+        <Button onClick={onClose} color="inherit" variant="outlined">
           ยกเลิก
         </Button>
+        {!isAddMode ? (
+          <Button type="button" variant="outlined" onClick={resetDefaultPermissions} disabled={isSaving || user?.isLoadingDetail}>
+            สิทธิ์เริ่มต้น
+          </Button>
+        ) : null}
         <Button
           type="submit"
           variant="contained"
@@ -1207,13 +1249,17 @@ function isActionChecked(permission, action) {
 
 function PermissionSection({ section, permissions = {}, locationErrors = {}, onClearLocationError }) {
   const permission = permissions?.[section.permissionKey]
+  const sectionScopeOptions = getSectionScopeOptions(section)
   const initialScopeValue = getScopeValue(permission?.data)
-  const [scopeValue, setScopeValue] = useState(initialScopeValue)
+  const normalizedInitialScopeValue = sectionScopeOptions.some((scope) => scope.value === initialScopeValue)
+    ? initialScopeValue
+    : sectionScopeOptions[0]?.value ?? 'ALL'
+  const [scopeValue, setScopeValue] = useState(normalizedInitialScopeValue)
   const [regionValue, setRegionValue] = useState(
-    initialScopeValue === 'IN_REGION' ? getLocationScopeValue(permission?.region) : '',
+    normalizedInitialScopeValue === 'IN_REGION' ? getLocationScopeValue(permission?.region) : '',
   )
   const [provinceValue, setProvinceValue] = useState(
-    initialScopeValue === 'IN_PROVINCE' ? getLocationScopeValue(permission?.province) : '',
+    normalizedInitialScopeValue === 'IN_PROVINCE' ? getLocationScopeValue(permission?.province) : '',
   )
   const isRegionEnabled = scopeValue === 'IN_REGION'
   const isProvinceEnabled = scopeValue === 'IN_PROVINCE'
@@ -1268,7 +1314,7 @@ function PermissionSection({ section, permissions = {}, locationErrors = {}, onC
               value={scopeValue}
               onChange={handleScopeChange}
             >
-              {scopeOptions.map((scope) => (
+              {sectionScopeOptions.map((scope) => (
                 <MenuItem key={scope.value} value={scope.value}>
                   {scope.label}
                 </MenuItem>
