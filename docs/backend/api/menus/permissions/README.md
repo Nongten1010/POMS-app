@@ -39,14 +39,14 @@ curl --request PUT \
 
 | งาน | Method | Path | Auth | Permission | Contract |
 | --- | --- | --- | --- | --- | --- |
-| รายการผู้ใช้ | `GET` | `/api/v1/users` | Bearer | `users:view` หรือ `permissions:manage` | [Managed user list](#managed-user-list) |
-| รายละเอียดหน้าแก้ไขผู้ใช้ | `GET` | `/api/v1/users/:id` | Bearer | `users:view` หรือ `permissions:manage` | [Managed user detail](#managed-user-detail) |
-| role grants และ overrides | `GET` | `/api/v1/users/:id/permissions` | Bearer | `permissions:manage` | [Permission override API](#permission-override-api) |
-| แทนที่ overrides ทั้งชุด | `PUT` | `/api/v1/users/:id/permissions` | Bearer | `permissions:manage` | [Permission override API](#permission-override-api) |
-| สร้างบัญชี local ของ POMS | `POST` | `/api/v1/users/local-accounts` | Bearer | `users:edit` หรือ `permissions:manage` | [Create local account](#create-local-account) |
-| สร้างผู้ใช้ managed | `POST` | `/api/v1/users` | Bearer | `users:edit` หรือ `permissions:manage` | [Create managed user](#create-managed-user) |
-| แก้ผู้ใช้ managed | `PATCH` | `/api/v1/users/:id` | Bearer | `users:edit` หรือ `permissions:manage` | [Update managed user](#update-managed-user) |
-| ลบผู้ใช้แบบ soft delete | `DELETE` | `/api/v1/users/:id` | Bearer | `users:edit` หรือ `permissions:manage` | [Delete managed user](#delete-managed-user) |
+| รายการผู้ใช้ | `GET` | `/api/v1/users` | Bearer | `users:view` หรือ `permissions:manage` | [Managed user list](./user-management-api.md#managed-user-list) |
+| รายละเอียดหน้าแก้ไขผู้ใช้ | `GET` | `/api/v1/users/:id` | Bearer | `users:view` หรือ `permissions:manage` | [Managed user detail](./user-management-api.md#managed-user-detail) |
+| role grants และ overrides | `GET` | `/api/v1/users/:id/permissions` | Bearer | `permissions:manage` | [Permission override API](./user-management-api.md#permission-override-api) |
+| แทนที่ overrides ทั้งชุด | `PUT` | `/api/v1/users/:id/permissions` | Bearer | `permissions:manage` | [Permission override API](./user-management-api.md#permission-override-api) |
+| สร้างบัญชี local ของ POMS | `POST` | `/api/v1/users/local-accounts` | Bearer | `users:edit` หรือ `permissions:manage` | [Create local account](./user-management-api.md#create-local-account) |
+| สร้างผู้ใช้ managed | `POST` | `/api/v1/users` | Bearer | `users:edit` หรือ `permissions:manage` | [Create managed user](./user-management-api.md#create-managed-user) |
+| แก้ผู้ใช้ managed | `PATCH` | `/api/v1/users/:id` | Bearer | `users:edit` หรือ `permissions:manage` | [Update managed user](./user-management-api.md#update-managed-user) |
+| ลบผู้ใช้แบบ soft delete | `DELETE` | `/api/v1/users/:id` | Bearer | `users:edit` หรือ `permissions:manage` | [Delete managed user](./user-management-api.md#delete-managed-user) |
 
 ## Contracts
 
@@ -118,7 +118,7 @@ Approved target ใช้ 12 roles ต่อไปนี้:
 | `center_director` | `dashboard:view=IN_REGION (assigned region)`, `dashboard.alerts:view`, `dashboard.search:basic`, `dashboard.search:advanced`, `dashboard.stats:view=IN_REGION (assigned region)`, `dashboard.stats:export=IN_REGION (assigned region)`, `conditional_search:view=IN_REGION (assigned region)`, `statistics:view=IN_REGION (assigned region)`, `statistics:export=IN_REGION (assigned region)` | `factories:view=IN_REGION (assigned region)` | `eligible_factories:view=IN_REGION (assigned region)` | `cems_wpms_requests:view=IN_REGION (assigned region)` | `kwp_forms:view=IN_REGION (assigned region)` | `bod_cod_errors:view=IN_REGION (assigned region)`, `bod_cod_errors:approve=IN_REGION (assigned region)` | `notifications:view=IN_REGION (assigned region)` | `helpdesk:submit`, `feedback:submit`, `laws:view`, `faq:view` | - |
 | `kpm_director` | `dashboard:view=IN_REGION (ภาคกลาง)`, `dashboard.alerts:view`, `dashboard.search:basic`, `dashboard.search:advanced`, `dashboard.stats:view=IN_REGION (ภาคกลาง)`, `dashboard.stats:export=IN_REGION (ภาคกลาง)`, `conditional_search:view=IN_REGION (ภาคกลาง)`, `statistics:view=IN_REGION (ภาคกลาง)`, `statistics:export=IN_REGION (ภาคกลาง)` | `factories:view=IN_REGION (ภาคกลาง)` | `eligible_factories:view=IN_REGION (ภาคกลาง)` | `cems_wpms_requests:view=IN_REGION (ภาคกลาง)` | `kwp_forms:view=IN_REGION (ภาคกลาง)` | `bod_cod_errors:view=IN_REGION (ภาคกลาง)`, `bod_cod_errors:approve=IN_REGION (ภาคกลาง)` | `notifications:view=IN_REGION (ภาคกลาง)` | `helpdesk:submit`, `feedback:submit`, `laws:view`, `faq:view` | - |
 | `kwp_director` | `dashboard:view=ALL`, `dashboard.alerts:view`, `dashboard.search:basic`, `dashboard.search:advanced`, `dashboard.stats:view=ALL`, `dashboard.stats:export=ALL`, `conditional_search:view=ALL`, `statistics:view=ALL`, `statistics:export=ALL` | `factories:view=ALL` | `eligible_factories:view=ALL` | `cems_wpms_requests:view=ALL` | `kwp_forms:view=ALL` | `bod_cod_errors:view=ALL`, `bod_cod_errors:approve=ALL` | `notifications:view=ALL` | `helpdesk:submit`, `feedback:submit`, `laws:view`, `faq:view` | - |
-| `admin` | `dashboard:view=ALL`, `dashboard.alerts:view`, `dashboard.search:basic`, `dashboard.search:advanced`, `dashboard.stats:view=ALL`, `dashboard.stats:export=ALL`, `conditional_search:view=ALL`, `statistics:view=ALL`, `statistics:export=ALL` | `factories:view=ALL`, `factories:edit`, `factories:approve` | `eligible_factories:view=ALL`, `eligible_factories:edit=ALL` | `cems_wpms_requests:view=ALL`, `cems_wpms_requests:edit`, `cems_wpms_requests:approve`, `cems_wpms_requests:direct_connect=ALL` | `kwp_forms:view=ALL`, `kwp_forms:edit`, `kwp_forms:approve` | `bod_cod_errors:view=ALL`, `bod_cod_errors:edit`, `bod_cod_errors:approve=ALL` | `notifications:view=ALL`, `notifications:view_status=ALL`, `notifications:edit`, `notifications:approve` | `helpdesk:submit`, `feedback:submit`, `laws:view`, `laws:edit`, `faq:view`, `faq:edit`, `chat:view`, `chat:answer` | `permissions:view`, `permissions:manage`, `users:view`, `users:edit`, `roles:view`, `roles:edit`, `audit:view`, `api_documentation:view` |
+| `admin` | `dashboard:view=ALL`, `dashboard.alerts:view`, `dashboard.search:basic`, `dashboard.search:advanced`, `dashboard.stats:view=ALL`, `dashboard.stats:export=ALL`, `conditional_search:view=ALL`, `statistics:view=ALL`, `statistics:export=ALL` | `factories:view=ALL`, `factories:edit`, `factories:approve` | `eligible_factories:view=ALL`, `eligible_factories:edit=ALL`, `eligible_factories:manage` (deprecated) | `cems_wpms_requests:view=ALL`, `cems_wpms_requests:edit`, `cems_wpms_requests:approve`, `cems_wpms_requests:direct_connect=ALL` | `kwp_forms:view=ALL`, `kwp_forms:edit`, `kwp_forms:approve` | `bod_cod_errors:view=ALL`, `bod_cod_errors:edit`, `bod_cod_errors:approve=ALL` | `notifications:view=ALL`, `notifications:view_status=ALL`, `notifications:edit`, `notifications:approve` | `helpdesk:submit`, `feedback:submit`, `laws:view`, `laws:edit`, `faq:view`, `faq:edit`, `chat:view`, `chat:answer` | `permissions:view`, `permissions:manage`, `users:view`, `users:edit`, `roles:view`, `roles:edit`, `audit:view`, `api_documentation:view` |
 
 Admin target intentionally **does not include** `chat:ask`
 
@@ -128,9 +128,10 @@ Admin target intentionally **does not include** `chat:ask`
 
 | Action family | Scope rule |
 | --- | --- |
-| `dashboard:view`, `dashboard.search:basic`, `dashboard.search:advanced`, `dashboard.stats:view`, `dashboard.stats:export`, `statistics:view`, `conditional_search:view`, `factories:view`, `eligible_factories:view`, `eligible_factories:edit`, `cems_wpms_requests:view`, `kwp_forms:view`, `bod_cod_errors:view`, `bod_cod_errors:approve`, `notifications:view`, `notifications:view_status` | ใช้ data scope ตาม role matrix เมื่อแถวนั้นระบุ scope ไว้ |
+| `dashboard:view`, `dashboard.search:basic`, `dashboard.search:advanced`, `dashboard.stats:view`, `dashboard.stats:export`, `statistics:view`, `statistics:export`, `conditional_search:view`, `factories:view`, `eligible_factories:view`, `eligible_factories:edit`, `cems_wpms_requests:view`, `kwp_forms:view`, `bod_cod_errors:view`, `bod_cod_errors:approve`, `notifications:view`, `notifications:view_status` | ใช้ data scope ตาม role matrix เมื่อแถวนั้นระบุ scope ไว้ |
 | `dashboard.alerts:view` | เป็น binary action ไม่มี data scope |
-| `factories:*`, `eligible_factories:*`, `cems_wpms_requests:*`, `kwp_forms:*`, `bod_cod_errors:*`, `notifications:*` | ทุก action ที่ role ได้รับใช้ data scope เดียวกับ role ใน matrix; backend บังคับ scope ตอนอ่าน/แก้ไข/อนุมัติ |
+| `factories:*`, `eligible_factories:view`, `eligible_factories:edit`, `cems_wpms_requests:*`, `kwp_forms:*`, `bod_cod_errors:*`, `notifications:*` | ทุก action ที่ role ได้รับใช้ data scope เดียวกับ role ใน matrix; backend บังคับ scope ตอนอ่าน/แก้ไข/อนุมัติ |
+| `eligible_factories:manage` | deprecated compatibility permission; เป็น binary action และมีใน admin default เท่านั้น |
 | `chat:answer`, `laws:edit`, `faq:edit`, `users:view`, `users:edit`, `roles:view`, `roles:edit`, `permissions:*`, `audit:view`, `api_documentation:view` | เป็น binary action; contract ไม่เพิ่ม location field |
 | `chat:view`, `chat:ask`, `helpdesk:submit`, `feedback:submit`, `laws:view`, `faq:view` | เป็น binary action ใน approved target รอบนี้ |
 
@@ -144,9 +145,9 @@ Admin target intentionally **does not include** `chat:ask`
 | KWP forms | `kwp_forms:view`, `kwp_forms:edit`, `kwp_forms:approve` |
 | BOD/COD | `bod_cod_errors:view`, `bod_cod_errors:edit`, `bod_cod_errors:approve` |
 | Notifications | `notifications:view`, `notifications:view_status`, `notifications:edit`, `notifications:approve` |
-| Eligible factories | `eligible_factories:view`, `eligible_factories:edit` |
+| Eligible factories | `eligible_factories:view`, `eligible_factories:edit`, `eligible_factories:manage` (deprecated compatibility) |
 | Helpdesk / feedback / content | `helpdesk:submit`, `feedback:submit`, `laws:view`, `laws:edit`, `faq:view`, `faq:edit`, `chat:view`, `chat:ask`, `chat:answer` |
-| Permission and admin | `permissions:manage`, `api_documentation:view`, `users:view`, `users:edit`, `roles:view`, `roles:edit`, `audit:view` |
+| Permission and admin | `permissions:view`, `permissions:manage`, `api_documentation:view`, `users:view`, `users:edit`, `roles:view`, `roles:edit`, `audit:view` |
 
 ### Response permission aliases used by frontend
 
@@ -186,262 +187,9 @@ Client ต้องถือ permission code + approved grouped response นี�
 - effective location เป็นจุดตัดของ role scope, profile assignment และ per-menu qualifier; ค่าใดหายหรือขัดกันต้องไม่คืนข้อมูล
 - การแก้ region/province/estate assignment ต้องมี `permissions:manage` แม้ route จะ authorize ด้วย `users:edit` ได้อยู่แล้ว
 
-### Managed user list
+### Detailed API contract
 
-`GET /api/v1/users`
-
-Query fields:
-
-| Field | Type | Required | Rules |
-| --- | --- | --- | --- |
-| `page` | integer | no | ถ้าส่ง `page` หรือ `perPage` อย่างน้อยหนึ่งค่า ระบบเปิด pagination |
-| `perPage` | integer | no | `1-100`; default `25` เมื่อเปิด pagination |
-| `search` | string | no | trim แล้ว `1-128` ตัวอักษร |
-| `roleCode` | string | no | filter ตาม role code |
-| `status` | `active` \| `suspended` \| `all` | no | default `all` |
-
-Minimal response (`200 OK`):
-
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "id": 12,
-      "accountType": "poms",
-      "identityProvider": "local",
-      "username": "local_officer",
-      "fullName": "สมชาย ทดสอบ",
-      "department": "กองจัดการคุณภาพน้ำ",
-      "lineNameTh": "นักวิทยาศาสตร์",
-      "levelNameTh": "ชำนาญการ",
-      "roles": "diw_central",
-      "roleCodes": ["diw_central"],
-      "isActive": true
-    }
-  ],
-  "meta": {
-    "total": 1,
-    "page": 1,
-    "perPage": 25,
-    "totalPages": 1
-  }
-}
-```
-
-### Managed user detail
-
-`GET /api/v1/users/:id` คืนหน้าแก้ไขแบบ grouped permissions ที่สอดคล้องกับ `/auth/login` และ `/auth/me` เมื่อ implementation ตาม target ครบ
-
-Minimal response (`200 OK`):
-
-```json
-{
-  "user": {
-    "accountType": "poms",
-    "identityProvider": "local",
-    "userType": "officer",
-    "username": "local_officer",
-    "fullName": "สมชาย ทดสอบ",
-    "department": "กองจัดการคุณภาพน้ำ",
-    "lineNameTh": "นักวิทยาศาสตร์",
-    "levelNameTh": "ชำนาญการ",
-    "provinceName": null,
-    "estateCode": null,
-    "regionalAccess": { "regions": ["ภาคตะวันออก"] },
-    "roles": "diw_central",
-    "roleCodes": ["diw_central"],
-    "isActive": true,
-    "source": "created"
-  },
-  "permissions": {
-    "statistics": {
-      "data": "IN_REGION",
-      "region": "ภาคตะวันออก",
-      "province": null,
-      "view": true
-    }
-  }
-}
-```
-
-### Permission override API
-
-`GET /api/v1/users/:id/permissions` และ `PUT /api/v1/users/:id/permissions`
-
-Response fields:
-
-| Field | Type | Meaning |
-| --- | --- | --- |
-| `data.userId` | integer | user เป้าหมาย |
-| `data.rolePermissions[]` | array | grants ที่มาจาก role โดยตรง |
-| `data.overrides[]` | array | grants ใน `user_permissions` พร้อม `effect` |
-| `data.effectiveScopes` | object | `permissionCode -> scope` หลังรวม role และ overrides |
-| `data.permissions` | object | grouped permission response สำหรับ frontend |
-
-Minimal `PUT` request:
-
-```json
-{
-    "permissions": [
-      { "code": "dashboard.stats:export", "effect": "allow", "scope": "IN_REGION", "region": "ภาคตะวันออก" },
-      { "code": "factories:view", "effect": "allow", "scope": "IN_PROVINCE", "province": "ระยอง" },
-      { "code": "factories:edit", "effect": "deny" }
-    ]
-  }
-```
-
-Minimal `200 OK` response:
-
-```json
-{
-  "success": true,
-  "data": {
-    "userId": 12,
-    "rolePermissions": [
-      {
-        "code": "dashboard.stats:export",
-        "resource": "dashboard.stats",
-        "action": "export",
-        "description": "ส่งออกข้อมูล",
-        "scope": "ALL",
-        "region": null,
-        "provinceId": null,
-        "provinceName": null
-      }
-    ],
-    "overrides": [
-      {
-        "code": "dashboard.stats:export",
-        "resource": "dashboard.stats",
-        "action": "export",
-        "description": "ส่งออกข้อมูล",
-        "scope": "IN_REGION",
-        "region": "ภาคตะวันออก",
-        "provinceId": null,
-        "provinceName": null,
-        "effect": "allow"
-      }
-    ],
-    "effectiveScopes": {
-      "dashboard.stats:export": "IN_REGION"
-    },
-    "permissions": {
-      "dashboard": {
-        "data": "IN_REGION",
-        "region": "ภาคตะวันออก",
-        "province": null,
-        "export": true
-      }
-    }
-  }
-}
-```
-
-Validation and limitation notes:
-
-- `permissions` และ `permissionOverrides` ห้ามมี `code` ซ้ำใน request ชุดเดียว
-- `allow` ใช้ได้เฉพาะ code ที่ role มี และ scope ต้องเท่ากับหรือแคบกว่า role; การขยาย scope หรือสร้างสิทธิ์ใหม่ตอบ `400 BAD_REQUEST`
-- `scope` รับได้เฉพาะ `ALL`, `IN_REGION`, `IN_PROVINCE`, `IN_ESTATE`, `OWN_FACTORY`, หรือ `null`
-- `deny` ไม่ใช้ `scope`, `region`, `province`; backend ควรเก็บเป็น `null`
-- `province` รับได้ทั้งชื่อจังหวัดไทยหรือรหัสจังหวัด
-- location ที่ไม่ส่งใช้ profile assignment; ไม่ได้หมายถึงปลดล็อกพื้นที่ และถ้า profile assignment หาย repository ต้อง fail closed
-- `estateCode` และ compatibility field `estate` ต้องอ้างถึงนิคมที่มีอยู่จริง; ถ้าไม่พบตอบ `400 BAD_REQUEST`
-
-### Create local account
-
-`POST /api/v1/users/local-accounts`
-
-Minimal request:
-
-```json
-{
-  "fullName": "สมชาย ทดสอบ",
-  "username": "local_officer",
-  "password": "StrongerPass123",
-  "roles": "diw_central",
-  "userType": "officer",
-  "isActive": true,
-  "permissionOverrides": [
-    { "code": "chat:view", "effect": "allow" }
-  ]
-}
-```
-
-`roles` เป็น role code เดียว ไม่ใช่ array. สำหรับ `monitoring_5_centers`/`center_director` ส่ง `regionName`; สำหรับ `provincial_office` ส่ง `provinceName`; สำหรับ `industrial_estate` ส่ง `estateCode`. Backend resolve ค่า location กับ master data ก่อนบันทึก
-
-Minimal response (`201 Created`):
-
-```json
-{
-  "success": true,
-  "data": {
-    "id": 12,
-    "accountType": "poms",
-    "identityProvider": "local",
-    "username": "local_officer",
-    "fullName": "สมชาย ทดสอบ",
-    "department": null,
-    "lineNameTh": null,
-    "levelNameTh": null,
-    "roles": "diw_central",
-    "roleCodes": ["diw_central"],
-    "isActive": true
-  }
-}
-```
-
-### Create managed user
-
-`POST /api/v1/users` ใช้สำหรับสร้าง managed officer/admin account ที่ไม่ได้รับรหัสผ่านจาก payload
-
-Request highlights:
-
-- `username`, `firstName`, `lastName`, `roleCodes[]`, `isActive` เป็น field หลัก
-- `externalId` ถ้าส่งต้องตรงกับ `username`
-- `profile` ใช้รูปแบบ `OfficerProfileInput`
-
-### Update managed user
-
-`PATCH /api/v1/users/:id`
-
-รองรับทั้ง payload แบบ legacy flat และ payload แบบหน้าแก้ไขที่ห่อ `user` + `permissions`
-
-Compatibility behavior:
-
-- ถ้า payload มี `user`, validator จะอ่าน grouped `permissions` แล้ว map กลับเป็น `permissionOverrides`
-- สำหรับ account แบบ `api`, backend ไม่เปิดให้แก้ external identity ผ่าน payload นี้
-- account แบบ `api` แก้ข้อมูลบุคลากรจาก IdP ไม่ได้ แต่ Admin ที่มี `permissions:manage` กำหนด `regionName`, `provinceName`, `estateCode` หรือ `regionalAccess` เพื่อใช้เป็น authorization assignment ได้
-- สำหรับ account แบบ `poms/local`, ถ้าส่ง `password` backend จะ hash ใหม่
-- การเปลี่ยน role ต้องส่ง role เดียว; explicit `null` ใน region/province/estate ใช้ล้าง assignment เก่าที่ไม่เกี่ยวข้อง
-- response group ใช้ alias ตามตารางด้านบน รวม `statistics`, `conditional_search`, `permissions` และ `chat`
-
-### Delete managed user
-
-`DELETE /api/v1/users/:id`
-
-- สำเร็จตอบ `204 No Content`
-- user ลบตัวเองไม่ได้
-- backend ทำ soft delete และไม่คืน response body
-
-### Authentication, authorization, and error behavior
-
-ทุก endpoint ในเมนูนี้ใช้ `authenticate` ก่อน `authorize`
-
-| HTTP status | Code | เมื่อไรเกิด | Notes |
-| --- | --- | --- | --- |
-| `401` | `UNAUTHORIZED` | ไม่มี Bearer token, token หมดอายุ, token ตรวจไม่ผ่าน | client ควร login ใหม่ |
-| `403` | `FORBIDDEN` | token ผ่านแต่ไม่มี permission ตาม route guard | route บางตัวเปิดด้วย `users:view` หรือ `permissions:manage`; `GET/PUT /:id/permissions` ต้องมี `permissions:manage` เสมอ |
-| `404` | `NOT_FOUND` | ไม่พบ user ตาม `:id` หรือ resource ถูกลบแล้ว | ใช้กับ `GET`, `PATCH`, `DELETE`, `GET/PUT permissions` |
-| `400` | `BAD_REQUEST` / validation error | payload หรือ query ไม่ผ่าน schema | duplicate permission code และ scope/location ผิดรูปแบบอยู่ในกลุ่มนี้ |
-| `409` | `CONFLICT` | identity ซ้ำ เช่น `username` หรือ account key ซ้ำ | พบได้ตอนสร้าง/แก้บางกรณี |
-
-Route-specific notes:
-
-- `GET /api/v1/users/:id/permissions` และ `PUT /api/v1/users/:id/permissions` ไม่ fallback เป็น `users:view`; ถ้าไม่มี `permissions:manage` จะตอบ `403`
-- `PATCH /api/v1/users/:id` ถ้าพยายามแก้ region, province หรือ estate assignment โดยไม่มี `permissions:manage` จะตอบ `403`
-- `DELETE /api/v1/users/:id` ถ้า `:id` ตรงกับผู้ใช้ที่ login อยู่จะตอบ `403`
-
+รายละเอียด field, validation, curl และ response ของทั้ง 8 operations อยู่ที่ [API จัดการผู้ใช้และสิทธิ์รายบัญชี](./user-management-api.md) หน้าเมนูหลักนี้เก็บ role catalog, default permission matrix, scope rules และ maintainer map เพื่อไม่ทำ contract ซ้ำ
 ### Migration and client impact
 
 | Area | Client impact |
@@ -487,6 +235,7 @@ Migration guidance:
 
 | Concern | Canonical source |
 | --- | --- |
+| Detailed request/response contract | [API จัดการผู้ใช้และสิทธิ์รายบัญชี](./user-management-api.md) |
 | Routes | [backend/src/modules/users/users.routes.ts](/Users/yuthsuwannadech/Documents/POMS-app/backend/src/modules/users/users.routes.ts:1) |
 | Controllers | [backend/src/modules/users/users.controller.ts](/Users/yuthsuwannadech/Documents/POMS-app/backend/src/modules/users/users.controller.ts:1) |
 | Validators | [backend/src/modules/users/users.validator.ts](/Users/yuthsuwannadech/Documents/POMS-app/backend/src/modules/users/users.validator.ts:1) |
