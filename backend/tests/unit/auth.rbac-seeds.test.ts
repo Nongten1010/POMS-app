@@ -1,6 +1,7 @@
 import { describe, expect, it } from '@jest/globals';
 import { PERMISSIONS } from '../../src/db/seeds/05_permissions';
 import { GRANTS } from '../../src/db/seeds/06_role_permissions';
+import { ROLES } from '../../src/db/seeds/04_roles';
 
 const findGrant = (role: string, permission: string) =>
   GRANTS.find((grant) => grant.role === role && grant.permission === permission);
@@ -32,7 +33,49 @@ describe('RBAC seed catalog', () => {
           action: 'edit',
         }),
         expect.objectContaining({ code: 'chat:view', resource: 'chat', action: 'view' }),
+        expect.objectContaining({
+          code: 'eligible_factories:approve',
+          resource: 'eligible_factories',
+          action: 'approve',
+        }),
       ]),
+    );
+  });
+
+  it('defines the ERC office as a read-only factory-type-88 role', () => {
+    expect(ROLES).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'erc_office',
+          name_th: 'สำนักงานกำกับกิจการพลังงาน (กกพ.)',
+        }),
+      ]),
+    );
+
+    for (const permission of [
+      'dashboard:view',
+      'statistics:view',
+      'conditional_search:view',
+      'factories:view',
+      'cems_wpms_requests:view',
+      'kwp_forms:view',
+      'bod_cod_errors:view',
+      'notifications:view',
+      'eligible_factories:view',
+    ]) {
+      expect(findGrant('erc_office', permission)).toEqual(
+        expect.objectContaining({ role: 'erc_office', permission, scope: 'FACTORY_TYPE_88' }),
+      );
+    }
+
+    expect(findGrant('erc_office', 'factories:edit')).toBeUndefined();
+    expect(findGrant('erc_office', 'eligible_factories:approve')).toBeUndefined();
+    expect(findGrant('admin', 'eligible_factories:approve')).toEqual(
+      expect.objectContaining({
+        role: 'admin',
+        permission: 'eligible_factories:approve',
+        scope: 'ALL',
+      }),
     );
   });
 

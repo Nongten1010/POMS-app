@@ -7,6 +7,11 @@ export const ROLES = [
   { code: 'diw_central', name_th: 'กรอ.', name_en: 'DIW Central' },
   { code: 'provincial_office', name_th: 'สอจ.', name_en: 'Provincial Industrial Office' },
   { code: 'industrial_estate', name_th: 'กนอ.', name_en: 'Industrial Estate Authority' },
+  {
+    code: 'erc_office',
+    name_th: 'สำนักงานกำกับกิจการพลังงาน (กกพ.)',
+    name_en: 'Energy Regulatory Commission Office',
+  },
   { code: 'monitoring_kpm', name_th: 'เจ้าหน้าที่ศูนย์เฝ้า (กฝม.)', name_en: 'Pollution Monitoring (KPM)' },
   { code: 'monitoring_5_centers', name_th: 'เจ้าหน้าที่ศูนย์เฝ้า (5 ศูนย์)', name_en: 'Regional Centers (5)' },
   { code: 'center_director', name_th: 'ผอ.ศูนย์', name_en: 'Center Director' },

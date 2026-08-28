@@ -3,6 +3,7 @@ import { db } from '../../config/database';
 import type { PermissionScopeDetails } from '../auth/permissions';
 import { resolveAssignedRegions } from '../auth/regional-access';
 import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
+import { applyFactoryType88Filter } from '../../shared/utils/factory-type-scope';
 import { toCanonicalStatusDateTime } from './device-connection-status-datetime';
 import {
   type DeviceConnectionAccessContext,
@@ -230,6 +231,9 @@ function buildDeviceConnectionAccessQuery(access?: DeviceConnectionAccessContext
   return query.whereExists(function deviceConnectionAccessExists() {
     this.select(db.raw('1'))
       .from('cems_wpms_connected_measurement_points as cp')
+      .leftJoin('eligible_factories as ef', function joinEligibleFactory() {
+        this.on('ef.id', '=', 'cp.eligible_factory_id').andOnNull('ef.deleted_at');
+      })
       .leftJoin('factories as f', function joinFactory() {
         this.on('f.fid', '=', 'cp.factory_id').orOn('f.code', '=', 'cp.factory_id').andOnNull('f.deleted_at');
       })
@@ -293,6 +297,12 @@ function applyDeviceConnectionLocationFilter(
           applyAssignedFactoryAccessFilter(this, access.actorUserId);
         });
       });
+      return;
+    case 'FACTORY_TYPE_88':
+      applyFactoryType88Filter(builder, [
+        'ef.factory_type_sequence',
+        'fs.factory_main_type_code',
+      ]);
       return;
     default:
       builder.whereRaw('1 = 0');

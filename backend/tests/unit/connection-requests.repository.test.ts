@@ -80,6 +80,23 @@ describe('connectionRequestsRepository query helpers', () => {
     expect(compiled.bindings).toEqual(expect.arrayContaining(['นนทบุรี', 'ภาคกลาง']));
   });
 
+  it('filters ERC connected factories and request rows by factory type 88', () => {
+    const factories = buildConnectedFactoriesForAccessQueryForTests({
+      actorUserId: 88,
+      scope: { scope: 'FACTORY_TYPE_88' },
+    }).toSQL();
+    const requests = buildBaseQueryForTests({}, {
+      actorUserId: 88,
+      scope: { scope: 'FACTORY_TYPE_88' },
+    }).toSQL();
+
+    expect(factories.sql.toLowerCase()).toContain('[ef].[factory_type_sequence]');
+    expect(factories.bindings).toContain('00088');
+    expect(requests.sql.toLowerCase()).toContain('[fs].[factory_main_type_code]');
+    expect(requests.bindings).toContain('00088');
+    expect(requests.sql.toLowerCase()).not.toContain('[created_by] = ?');
+  });
+
   it('resolves connected factory detail from eligible data when no factory master row exists', () => {
     const compiled = buildConnectedFactoryGeneralForAccessQueryForTests('40100007125560', {
       actorUserId: 42,

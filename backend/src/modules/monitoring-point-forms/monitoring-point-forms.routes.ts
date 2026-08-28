@@ -83,7 +83,7 @@ monitoringPointFormsRoutes.post(
 );
 monitoringPointFormsRoutes.post(
   '/:id/select-eligible',
-  authorize('eligible_factories:edit'),
+  authorize('eligible_factories:approve'),
   monitoringPointFormsController.selectEligible,
 );
 monitoringPointFormsRoutes.put(

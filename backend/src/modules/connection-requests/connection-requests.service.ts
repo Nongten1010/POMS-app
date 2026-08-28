@@ -5,6 +5,7 @@ import {
   NotFoundError,
 } from '../../shared/errors/AppError';
 import { logger } from '../../config/logger';
+import { isFactoryType88 } from '../../shared/utils/factory-type-scope';
 import { isAnnualMonitoringPointCode } from '../../shared/utils/monitoring-point-code';
 import { toCanonicalStatusDateTime } from '../device-connections/device-connection-status-datetime';
 import { deviceConnectionsService } from '../device-connections/device-connections.service';
@@ -3479,6 +3480,9 @@ function requestMatchesPermissionScope(
 ): boolean {
   const scopeValue = getAccessScopeValue(scope);
   if (scopeValue === 'ALL') return true;
+  if (scopeValue === 'FACTORY_TYPE_88') {
+    return isFactoryType88(request.industryMainOrder);
+  }
   if (!scope || typeof scope !== 'object') return false;
 
   const regionValues = resolveEffectiveRegionValues(scope, regionalAccess);

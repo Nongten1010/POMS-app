@@ -4,6 +4,7 @@ export type RolePermissionScope =
   | 'IN_PROVINCE'
   | 'IN_ESTATE'
   | 'OWN_FACTORY'
+  | 'FACTORY_TYPE_88'
   | null;
 
 export interface PermissionSeedRow {
@@ -26,6 +27,7 @@ export const RBAC_MATRIX_V20260810_ROLE_CODES = [
   'diw_central',
   'provincial_office',
   'industrial_estate',
+  'erc_office',
   'monitoring_kpm',
   'monitoring_5_centers',
   'center_director',
@@ -39,6 +41,7 @@ const REG: RolePermissionScope = 'IN_REGION';
 const PROV: RolePermissionScope = 'IN_PROVINCE';
 const EST: RolePermissionScope = 'IN_ESTATE';
 const OWN: RolePermissionScope = 'OWN_FACTORY';
+const TYPE_88: RolePermissionScope = 'FACTORY_TYPE_88';
 const NONE: RolePermissionScope = null;
 
 const dataGrant = (
@@ -211,6 +214,12 @@ export const RBAC_MATRIX_V20260810_PERMISSIONS: PermissionSeedRow[] = [
     description: 'แก้ไขโรงงานที่เข้าข่าย',
   },
   {
+    code: 'eligible_factories:approve',
+    resource: 'eligible_factories',
+    action: 'approve',
+    description: 'อนุมัติการเลือกโรงงานที่เข้าข่ายจากแบบคำขอเชื่อมต่อ',
+  },
+  {
     code: 'eligible_factories:manage',
     resource: 'eligible_factories',
     action: 'manage',
@@ -312,6 +321,27 @@ export const RBAC_MATRIX_V20260810_GRANTS: RolePermissionGrant[] = [
     'eligible_factories:view',
   ]),
   ...binaryGrant('industrial_estate', [
+    'dashboard.alerts:view',
+    'helpdesk:submit',
+    'feedback:submit',
+    'chat:view',
+    'chat:ask',
+    ...commonReadOnlyBinaryPermissions,
+  ]),
+
+  ...dataGrant('erc_office', TYPE_88, [
+    ...dashboardScopedPermissions,
+    'statistics:view',
+    'statistics:export',
+    'conditional_search:view',
+    'factories:view',
+    'cems_wpms_requests:view',
+    'kwp_forms:view',
+    'bod_cod_errors:view',
+    'notifications:view',
+    'eligible_factories:view',
+  ]),
+  ...binaryGrant('erc_office', [
     'dashboard.alerts:view',
     'helpdesk:submit',
     'feedback:submit',
@@ -446,6 +476,7 @@ export const RBAC_MATRIX_V20260810_GRANTS: RolePermissionGrant[] = [
     'notifications:approve',
     'eligible_factories:view',
     'eligible_factories:edit',
+    'eligible_factories:approve',
   ]),
   ...binaryGrant('admin', [
     'dashboard.alerts:view',

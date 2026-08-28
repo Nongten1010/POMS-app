@@ -21,7 +21,7 @@ curl --request GET \
 3. สำหรับไฟล์ที่ผูกกับฟอร์มแล้ว ให้ส่ง `{ "id": <ATTACHMENT_ID> }` เมื่อต้องการคงไฟล์ไว้ในการแทนที่รายการ และใช้ `fileUrl` ที่ API คืนเป็น signed relative URL สำหรับเปิดไฟล์.
 4. ส่ง URL เอกสารภายนอกเพิ่มเติมแยกใน `points[].attachmentLinks[]`.
 
-ความหมายของ `eligible_factories:view`, `eligible_factories:edit`, `cems_wpms_requests:view`, `cems_wpms_requests:edit` และ data scope ที่เกี่ยวข้องอ้างตาม [สิทธิ์การใช้งาน](../permissions/README.md)
+ความหมายของ `eligible_factories:view`, `eligible_factories:edit`, `eligible_factories:approve`, `cems_wpms_requests:view`, `cems_wpms_requests:edit` และ data scope ที่เกี่ยวข้องอ้างตาม [สิทธิ์การใช้งาน](../permissions/README.md)
 
 ## Endpoint Summary
 
@@ -37,9 +37,9 @@ curl --request GET \
 | เปิดเนื้อหาเอกสารแนบ | `GET` | `/api/v1/monitoring-point-forms/attachments/:publicId/content` | Signed URL | - |
 | เพิ่มข้อมูลจุดตรวจวัด | `POST` | `/api/v1/monitoring-point-forms` | Bearer | `cems_wpms_requests:edit` |
 | แก้ไขข้อมูลจุดตรวจวัด | `PUT` | `/api/v1/monitoring-point-forms/:id` | Bearer | `cems_wpms_requests:edit` |
-| เลือกฟอร์มเป็นโรงงานเข้าข่าย | `POST` | `/api/v1/monitoring-point-forms/:id/select-eligible` | Bearer | `eligible_factories:edit` |
+| เลือกฟอร์มเป็นโรงงานเข้าข่าย | `POST` | `/api/v1/monitoring-point-forms/:id/select-eligible` | Bearer | `eligible_factories:approve` |
 
-รายการและ candidate ถูกกรองตาม data scope ของผู้เรียก: `ALL`, `IN_REGION`, `IN_PROVINCE`, `IN_ESTATE` หรือ `OWN_FACTORY` โดย `IN_REGION` หา region จาก province master และ intersect กับ `regionalAccess`; ถ้าไม่มี qualifier ที่ต้องใช้หรือ qualifier ขัดกัน ระบบคืนผลลัพธ์ว่าง/`404` แบบ fail closed. การเพิ่มและลบตรวจ scope เดียวกันก่อนเปลี่ยนข้อมูล.
+รายการและ candidate ถูกกรองตาม data scope ของผู้เรียก: `ALL`, `IN_REGION`, `IN_PROVINCE`, `IN_ESTATE`, `OWN_FACTORY` หรือ `FACTORY_TYPE_88` โดย `FACTORY_TYPE_88` เทียบรหัสประเภทโรงงานหลักที่ normalize เป็น `00088`; `IN_REGION` หา region จาก province master และ intersect กับ `regionalAccess`; ถ้าไม่มี qualifier ที่ต้องใช้หรือ qualifier ขัดกัน ระบบคืนผลลัพธ์ว่าง/`404` แบบ fail closed. การเพิ่มและลบตรวจ scope เดียวกันก่อนเปลี่ยนข้อมูล.
 
 Candidate จาก Fac60k รับเฉพาะแถวที่ `fac_import.FFLAG` เป็น `0`, `1` หรือ `3`; ไม่รวมสถานะ `2`. Mapping สถานะโรงงานคือ `0` = `ยังไม่แจ้งประกอบ`, `1` = `แจ้งประกอบแล้ว`, `2` = `จำหน่ายทะเบียน` และ `3` = `หยุดชั่วคราว`.
 

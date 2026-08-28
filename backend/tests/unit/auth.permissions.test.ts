@@ -1,8 +1,10 @@
 import { describe, expect, it } from '@jest/globals';
 import {
   groupPermissions,
+  isSameOrNarrowerPermissionScope,
   mergePermissionScopesWithOverrides,
   permissionGroupsToScopes,
+  permissionGroupsToUserPermissionOverrides,
 } from '../../src/modules/auth/permissions';
 
 describe('groupPermissions', () => {
@@ -59,6 +61,7 @@ describe('groupPermissions', () => {
         data: null,
         view: true,
         ask: true,
+        edit: true,
         answer: true,
       },
       permissions: {
@@ -114,7 +117,7 @@ describe('groupPermissions', () => {
       }),
     ).toEqual({
       'dashboard:view': 'ALL',
-      'dashboard.alerts:view': 'ALL',
+      'dashboard.alerts:view': null,
       'dashboard.search:basic': 'ALL',
       'dashboard.search:advanced': 'ALL',
       'dashboard.stats:view': 'ALL',
@@ -125,8 +128,8 @@ describe('groupPermissions', () => {
       'chat:view': null,
       'chat:ask': null,
       'chat:answer': null,
-      'permissions:view': 'ALL',
-      'permissions:manage': 'ALL',
+      'permissions:view': null,
+      'permissions:manage': null,
       'eligible_factories:view': null,
       'eligible_factories:edit': null,
     });
@@ -246,6 +249,7 @@ describe('groupPermissions', () => {
         data: null,
         view: true,
         ask: true,
+        edit: true,
         answer: true,
       },
       permissions: {
@@ -257,6 +261,74 @@ describe('groupPermissions', () => {
         edit: true,
       },
     });
+  });
+
+  it('uses frontend-compatible aliases for chat edit and eligible approval', () => {
+    expect(
+      groupPermissions({
+        'chat:answer': null,
+        'eligible_factories:approve': 'FACTORY_TYPE_88',
+      }),
+    ).toEqual({
+      chat: {
+        data: null,
+        edit: true,
+        answer: true,
+      },
+      eligible_factories: {
+        data: 'FACTORY_TYPE_88',
+        approve: true,
+      },
+    });
+
+    expect(
+      permissionGroupsToScopes({
+        chat: { data: 'FACTORY_TYPE_88', edit: true },
+        eligible_factories: { data: 'FACTORY_TYPE_88', approve: true },
+      }),
+    ).toEqual({
+      'chat:answer': null,
+      'eligible_factories:approve': 'FACTORY_TYPE_88',
+    });
+  });
+
+  it('ignores menu data scopes for binary permissions', () => {
+    expect(
+      permissionGroupsToUserPermissionOverrides({
+        dashboard: { data: 'ALL', favorite: true },
+        chat: { data: 'FACTORY_TYPE_88', edit: true },
+      }),
+    ).toEqual([
+      { code: 'dashboard.alerts:view', effect: 'allow', scope: null },
+      { code: 'chat:answer', effect: 'allow', scope: null },
+    ]);
+  });
+
+  it('projects permission administration as ALL/null while keeping its raw permission binary', () => {
+    const grouped = groupPermissions({ 'permissions:view': null });
+
+    expect(grouped).toEqual({ permissions: { data: 'ALL', view: true } });
+    expect(permissionGroupsToScopes(grouped)).toEqual({ 'permissions:view': null });
+  });
+
+  it('treats permissions.data null as deny even when the view checkbox remains checked', () => {
+    expect(
+      permissionGroupsToUserPermissionOverrides({
+        permissions: { data: null, view: true },
+      }),
+    ).toEqual([{ code: 'permissions:view', effect: 'deny', scope: null }]);
+    expect(
+      permissionGroupsToUserPermissionOverrides({
+        permissions: { data: 'ALL', view: true },
+      }),
+    ).toEqual([{ code: 'permissions:view', effect: 'allow', scope: null }]);
+  });
+
+  it('treats factory type 88 as a category scope that only ALL can narrow to', () => {
+    expect(isSameOrNarrowerPermissionScope('FACTORY_TYPE_88', 'ALL')).toBe(true);
+    expect(isSameOrNarrowerPermissionScope('FACTORY_TYPE_88', 'FACTORY_TYPE_88')).toBe(true);
+    expect(isSameOrNarrowerPermissionScope('IN_REGION', 'FACTORY_TYPE_88')).toBe(false);
+    expect(isSameOrNarrowerPermissionScope('FACTORY_TYPE_88', 'IN_REGION')).toBe(false);
   });
 });
 

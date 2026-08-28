@@ -3,6 +3,7 @@ import type { Knex } from 'knex';
 import { db } from '../../config/database';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
 import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
+import { applyFactoryType88Filter } from '../../shared/utils/factory-type-scope';
 import type { PermissionScopeDetails } from '../auth/permissions';
 import type { RegionalAccessDTO } from '../auth/regional-access';
 import { resolveAssignedRegions } from '../auth/regional-access';
@@ -607,6 +608,9 @@ function applyFactoryAccess(builder: Knex.QueryBuilder, access: FactoryAccess): 
   }
   applyFactoryPermissionLocationFilter(builder, access.scope, access.regionalAccess);
   applyFactoryRegionalAccessFilter(builder, access.scope, access.regionalAccess);
+  if (getAccessScopeValue(access.scope) === 'FACTORY_TYPE_88') {
+    applyFactoryType88Filter(builder, 'ef.factory_type_sequence');
+  }
 }
 
 function getAccessScopeValue(scope: AccessScope): string | null | undefined {
@@ -617,7 +621,7 @@ function requiresAssignedFactoryAccess(scope: AccessScope): boolean {
   const scopeValue = getAccessScopeValue(scope);
   if (scopeValue === 'ALL') return false;
   if (scopeValue === 'OWN_FACTORY') return true;
-  return !['IN_REGION', 'IN_PROVINCE', 'IN_ESTATE'].includes(scopeValue ?? '');
+  return !['IN_REGION', 'IN_PROVINCE', 'IN_ESTATE', 'FACTORY_TYPE_88'].includes(scopeValue ?? '');
 }
 
 function applyFactoryRegionalAccessFilter(
@@ -625,7 +629,7 @@ function applyFactoryRegionalAccessFilter(
   scope: AccessScope,
   regionalAccess?: RegionalAccessDTO | null,
 ): void {
-  if (getAccessScopeValue(scope) === 'ALL') return;
+  if (['ALL', 'FACTORY_TYPE_88'].includes(getAccessScopeValue(scope) ?? '')) return;
   const regions = regionalAccess?.regions?.map((value) => value.trim()).filter(Boolean) ?? [];
   if (regions.length > 0) builder.whereIn('p.region', [...new Set(regions)]);
 }

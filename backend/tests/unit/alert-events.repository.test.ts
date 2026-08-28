@@ -69,4 +69,15 @@ describe('alertEventsRepository query helpers', () => {
 
     expect(sql).toContain('left join [factories] as [f] on ([f].[fid] = [alert_events].[factory_id] or [f].[code] = [alert_events].[factory_id]) and [f].[deleted_at] is null');
   });
+
+  it('filters ERC notification reads by factory type 88', () => {
+    const compiled = buildAlertEventsAccessQueryForTests({
+      actorUserId: 88,
+      scope: { scope: 'FACTORY_TYPE_88' },
+    } as never).toSQL();
+
+    expect(compiled.sql.toLowerCase()).toContain('[ef].[factory_type_sequence]');
+    expect(compiled.bindings).toContain('00088');
+    expect(compiled.sql.toLowerCase()).not.toContain('1 = 0');
+  });
 });

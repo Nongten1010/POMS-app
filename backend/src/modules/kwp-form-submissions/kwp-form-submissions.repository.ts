@@ -7,6 +7,7 @@ import {
 } from '../../shared/errors/AppError';
 import { db } from '../../config/database';
 import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
+import { applyFactoryType88Filter } from '../../shared/utils/factory-type-scope';
 import type { PermissionScopeDetails } from '../auth/permissions';
 import { resolveAssignedRegions } from '../auth/regional-access';
 import { buildPublicFileUrl } from './kwp-form-attachments.service';
@@ -905,6 +906,13 @@ function buildEditableSubmissionQuery(
     })
     .leftJoin('provinces as p', 'p.id', 'f.province_id')
     .leftJoin('industrial_estates as ie', 'ie.id', 'f.industrial_estate_id')
+    .leftJoin('eligible_factories as ef', function joinEligibleFactory() {
+      this.on(function joinFactoryIdentifiers() {
+        this.on('ef.factory_registration_no_new', '=', 's.factory_registration_no')
+          .orOn('ef.factory_registration_no_new', '=', 's.factory_id')
+          .orOn('ef.source_factory_id', '=', 's.factory_id');
+      }).andOnNull('ef.deleted_at');
+    })
     .where('s.id', id)
     .where('s.form_type', access.formType)
     .whereNull('s.deleted_at')
@@ -1109,6 +1117,14 @@ function buildFactoryAccessQuery(
   access: KwpFormSubmissionAccess,
 ): Knex.QueryBuilder {
   const builder = knexOrTrx('factories as f')
+    .leftJoin('eligible_factories as ef', function joinEligibleFactory() {
+      this.on(function joinFactoryIdentifiers() {
+        this.on('ef.factory_registration_no_new', '=', 'f.code')
+          .orOn('ef.factory_registration_no_new', '=', 'f.fid')
+          .orOn('ef.source_factory_id', '=', 'f.fid')
+          .orOn('ef.source_factory_id', '=', 'f.code');
+      }).andOnNull('ef.deleted_at');
+    })
     .whereNull('f.deleted_at')
     .where((factoryBuilder) => {
       factoryBuilder.where('f.fid', factoryId).orWhere('f.code', factoryId);
@@ -1168,6 +1184,13 @@ function buildSubmissionDetailQuery(
     })
     .leftJoin('provinces as p', 'p.id', 'f.province_id')
     .leftJoin('industrial_estates as ie', 'ie.id', 'f.industrial_estate_id')
+    .leftJoin('eligible_factories as ef', function joinEligibleFactory() {
+      this.on(function joinFactoryIdentifiers() {
+        this.on('ef.factory_registration_no_new', '=', 's.factory_registration_no')
+          .orOn('ef.factory_registration_no_new', '=', 's.factory_id')
+          .orOn('ef.source_factory_id', '=', 's.factory_id');
+      }).andOnNull('ef.deleted_at');
+    })
     .where('s.id', id)
     .whereNull('s.deleted_at')
     .where('s.form_type', access.formType)
@@ -1219,6 +1242,13 @@ function buildWorkflowQuery(
     })
     .leftJoin('provinces as p', 'p.id', 'f.province_id')
     .leftJoin('industrial_estates as ie', 'ie.id', 'f.industrial_estate_id')
+    .leftJoin('eligible_factories as ef', function joinEligibleFactory() {
+      this.on(function joinFactoryIdentifiers() {
+        this.on('ef.factory_registration_no_new', '=', 's.factory_registration_no')
+          .orOn('ef.factory_registration_no_new', '=', 's.factory_id')
+          .orOn('ef.source_factory_id', '=', 's.factory_id');
+      }).andOnNull('ef.deleted_at');
+    })
     .where('s.id', id)
     .whereNull('s.deleted_at')
     .select(
@@ -1290,6 +1320,10 @@ function applyFactoryLocationFilters(
   builder: Knex.QueryBuilder,
   scope: KwpFormSubmissionAccess['scope'],
 ): void {
+  if (scopeValue(scope) === 'FACTORY_TYPE_88') {
+    applyFactoryType88Filter(builder, 'ef.factory_type_sequence');
+    return;
+  }
   const details = scopeDetails(scope);
   if (!details) return;
 
@@ -1331,6 +1365,10 @@ function applyLocationScopeFilter(
   builder: Knex.QueryBuilder,
   scope: KwpFormSubmissionAccess['scope'],
 ): void {
+  if (scopeValue(scope) === 'FACTORY_TYPE_88') {
+    applyFactoryType88Filter(builder, 'ef.factory_type_sequence');
+    return;
+  }
   const details = scopeDetails(scope);
   if (!details) return;
 

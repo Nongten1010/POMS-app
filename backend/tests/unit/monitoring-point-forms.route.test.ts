@@ -208,7 +208,7 @@ describe('monitoring point form routes', () => {
     );
   });
 
-  it('uses eligible_factories:edit, not deprecated manage, when selecting a form', async () => {
+  it('uses eligible_factories:approve when selecting a form', async () => {
     mockedService.selectEligible.mockResolvedValue({ id: 99 } as never);
 
     const deprecatedResponse = await request(createApp())
@@ -219,14 +219,22 @@ describe('monitoring point form routes', () => {
       );
     expect(deprecatedResponse.status).toBe(403);
 
+    const editOnlyResponse = await request(createApp())
+      .post('/api/v1/monitoring-point-forms/12/select-eligible')
+      .set(
+        'Authorization',
+        `Bearer ${accessToken({ scopes: { 'eligible_factories:edit': 'ALL' } })}`,
+      );
+    expect(editOnlyResponse.status).toBe(403);
+
     const response = await request(createApp())
       .post('/api/v1/monitoring-point-forms/12/select-eligible')
       .set(
         'Authorization',
         `Bearer ${accessToken({
-          scopes: { 'eligible_factories:edit': 'IN_PROVINCE' },
+          scopes: { 'eligible_factories:approve': 'IN_PROVINCE' },
           scopeDetails: {
-            'eligible_factories:edit': { scope: 'IN_PROVINCE', province: 'ระยอง' },
+            'eligible_factories:approve': { scope: 'IN_PROVINCE', province: 'ระยอง' },
           },
         })}`,
       );

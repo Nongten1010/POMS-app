@@ -1,6 +1,10 @@
 import type { Knex } from 'knex';
 import { db } from '../../config/database';
 import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
+import {
+  applyFactoryType88Filter,
+  isFactoryType88,
+} from '../../shared/utils/factory-type-scope';
 import type { PermissionScopeDetails } from '../auth/permissions';
 import type { RegionalAccessDTO } from '../auth/regional-access';
 import { resolveAssignedRegions } from '../auth/regional-access';
@@ -29,6 +33,7 @@ interface SelectedFactoryAccessFilters {
   estateCodes: string[];
   estateNames: string[];
   requireAssignedFactory: boolean;
+  requireFactoryType88: boolean;
 }
 
 interface CandidateAccessFilters {
@@ -36,6 +41,7 @@ interface CandidateAccessFilters {
   provinceCodes: string[];
   estateCodes: string[];
   assignedFactoryIdentifiers: string[];
+  requireFactoryType88: boolean;
 }
 
 interface IndustrialEstateRow {
@@ -61,6 +67,7 @@ export async function resolveSelectedFactoryAccessFilters(
       estateCodes: [],
       estateNames: [],
       requireAssignedFactory: false,
+      requireFactoryType88: false,
     };
   }
 
@@ -72,6 +79,7 @@ export async function resolveSelectedFactoryAccessFilters(
     estateCodes: [],
     estateNames: [],
     requireAssignedFactory: false,
+    requireFactoryType88: false,
   };
 
   switch (scope.scope) {
@@ -100,6 +108,8 @@ export async function resolveSelectedFactoryAccessFilters(
     }
     case 'OWN_FACTORY':
       return { ...filters, requireAssignedFactory: true };
+    case 'FACTORY_TYPE_88':
+      return { ...filters, requireFactoryType88: true };
     default:
       return { ...filters, denyAll: true };
   }
@@ -114,6 +124,7 @@ export async function resolveCandidateAccessFilters(
       provinceCodes: [],
       estateCodes: [],
       assignedFactoryIdentifiers: [],
+      requireFactoryType88: false,
     };
   }
 
@@ -144,6 +155,7 @@ export async function resolveCandidateAccessFilters(
         provinceCodes,
         estateCodes: assignment.codes,
         assignedFactoryIdentifiers: [],
+        requireFactoryType88: false,
       };
     }
     case 'OWN_FACTORY': {
@@ -154,8 +166,17 @@ export async function resolveCandidateAccessFilters(
         provinceCodes,
         estateCodes: [],
         assignedFactoryIdentifiers: ownFactoryIdentifiers,
+        requireFactoryType88: false,
       };
     }
+    case 'FACTORY_TYPE_88':
+      return {
+        denyAll: false,
+        provinceCodes,
+        estateCodes: [],
+        assignedFactoryIdentifiers: [],
+        requireFactoryType88: true,
+      };
     default:
       return denyAllCandidateAccess();
   }
@@ -165,6 +186,7 @@ export async function resolveCandidateAccessFilters(
     provinceCodes,
     estateCodes: [],
     assignedFactoryIdentifiers: [],
+    requireFactoryType88: false,
   };
 }
 
@@ -195,6 +217,10 @@ export function applySelectedFactoryAccessFilters(
         });
       applyAssignedFactoryAccessFilter(this, actorUserId, 'f');
     });
+  }
+
+  if (filters.requireFactoryType88) {
+    applyFactoryType88Filter(builder, 'ef.factory_type_sequence');
   }
 
   if (filters.regionNames.length > 0) {
@@ -246,6 +272,9 @@ export function applyCandidateAccessFilters(
         .orWhereIn('DISPFACREG', filters.assignedFactoryIdentifiers);
     });
   }
+  if (filters.requireFactoryType88) {
+    applyFactoryType88Filter(query, 'CLASS');
+  }
 }
 
 export async function canAccessEligibleFactoryInput(
@@ -285,6 +314,10 @@ export async function canAccessEligibleFactoryInput(
     if (identifiers.length === 0) return false;
     const allowedIdentifiers = new Set(await loadAssignedFactoryIdentifiers(access.actorUserId));
     return identifiers.some((identifier) => allowedIdentifiers.has(identifier));
+  }
+
+  if (filters.requireFactoryType88) {
+    return isFactoryType88(input.factoryTypeSequence);
   }
 
   return true;
@@ -408,6 +441,7 @@ function denyAllCandidateAccess(): CandidateAccessFilters {
     provinceCodes: [],
     estateCodes: [],
     assignedFactoryIdentifiers: [],
+    requireFactoryType88: false,
   };
 }
 

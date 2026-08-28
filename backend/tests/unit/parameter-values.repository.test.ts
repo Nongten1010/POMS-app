@@ -283,6 +283,22 @@ describe('parameterValuesRepository', () => {
     expect(compiled.bindings).toContain('ภาคกลาง');
   });
 
+  it('filters connected and waiting station access by factory type 88', () => {
+    const connected = buildStationAccessQueryForTests({
+      actorUserId: 88,
+      scope: { scope: 'FACTORY_TYPE_88' },
+    }).toSQL();
+    const waiting = buildWaitingConnectionStationAccessQueryForTests({
+      actorUserId: 88,
+      scope: { scope: 'FACTORY_TYPE_88' },
+    }).toSQL();
+
+    expect(connected.sql.toLowerCase()).toContain('[ef].[factory_type_sequence]');
+    expect(connected.bindings).toContain('00088');
+    expect(waiting.sql.toLowerCase()).toContain('[fs].[factory_main_type_code]');
+    expect(waiting.bindings).toContain('00088');
+  });
+
   it('prefers instrument parameters over all eligible registered parameters', () => {
     const result = parseRegisteredParametersFromRowForTests({
       parameters_json: JSON.stringify([

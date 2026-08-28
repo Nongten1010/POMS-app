@@ -2,6 +2,10 @@ import type { Knex } from 'knex';
 import { db } from '../../config/database';
 import { BadRequestError, ConflictError } from '../../shared/errors/AppError';
 import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
+import {
+  applyFactoryType88Filter,
+  isFactoryType88,
+} from '../../shared/utils/factory-type-scope';
 import { resolveAssignedRegions } from '../auth/regional-access';
 import type {
   ListMonitoringPointFormsQuery,
@@ -280,6 +284,9 @@ export const monitoringPointFormsRepository = {
         .first();
       return Boolean(row);
     }
+    if (scope.scope === 'FACTORY_TYPE_88') {
+      return isFactoryType88(factory.factoryTypeMain);
+    }
     if (!registration) return false;
 
     const query = db('factories as f')
@@ -399,6 +406,9 @@ function applyFormAccessFilter(
           });
         applyAssignedFactoryAccessFilter(this, access.actorUserId, 'factories');
       });
+      return;
+    case 'FACTORY_TYPE_88':
+      applyFactoryType88Filter(builder, 'f.factory_type_main');
       return;
     default:
       builder.whereRaw('1 = 0');

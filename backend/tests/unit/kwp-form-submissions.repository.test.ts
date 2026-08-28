@@ -113,6 +113,20 @@ describe('kwpFormSubmissionsRepository', () => {
     expect(sql).toContain('[uj].[user_id]');
   });
 
+  it('filters ERC KWP detail reads by factory type 88', () => {
+    const compiled = buildKwpFormSubmissionDetailQueryForTests(13, {
+      actorUserId: 88,
+      scope: { scope: 'FACTORY_TYPE_88' },
+      regionalAccess: null,
+      publicBaseUrl: 'http://d-poms.diw.go.th',
+      publicPath: '/uploads',
+      formType: 'KWP02',
+    }).toSQL();
+
+    expect(compiled.sql.toLowerCase()).toContain('[ef].[factory_type_sequence]');
+    expect(compiled.bindings).toContain('00088');
+  });
+
   it('limits KWP workflow reads to requested submission id and operator factories', () => {
     const sql = buildKwpFormSubmissionWorkflowQueryForTests(12, {
       actorUserId: 42,

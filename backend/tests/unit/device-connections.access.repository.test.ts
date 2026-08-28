@@ -62,4 +62,17 @@ describe('device connection repository access filters', () => {
 
     expect(compiled.sql.toLowerCase()).toContain('1 = 0');
   });
+
+  it('filters ERC device configuration reads by factory type 88', () => {
+    const compiled = buildDeviceConnectionAccessQueryForTests({
+      actorUserId: 88,
+      scope: { scope: 'FACTORY_TYPE_88' },
+    }).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('eligible_factories');
+    expect(sql).toContain('[ef].[factory_type_sequence]');
+    expect(sql).toContain('[fs].[factory_main_type_code]');
+    expect(compiled.bindings).toContain('00088');
+  });
 });

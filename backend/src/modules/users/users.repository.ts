@@ -85,7 +85,14 @@ interface PermissionGrantRow {
   resource: string;
   action: string;
   description: string | null;
-  scope: 'ALL' | 'IN_REGION' | 'IN_PROVINCE' | 'IN_ESTATE' | 'OWN_FACTORY' | null;
+  scope:
+    | 'ALL'
+    | 'IN_REGION'
+    | 'IN_PROVINCE'
+    | 'IN_ESTATE'
+    | 'OWN_FACTORY'
+    | 'FACTORY_TYPE_88'
+    | null;
   region_name: string | null;
   province_id: string | null;
   province_name_th: string | null;

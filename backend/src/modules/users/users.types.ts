@@ -16,6 +16,7 @@ export type PermissionScope =
   | 'IN_PROVINCE'
   | 'IN_ESTATE'
   | 'OWN_FACTORY'
+  | 'FACTORY_TYPE_88'
   | null;
 export type UserPermissionEffect = 'allow' | 'deny';
 

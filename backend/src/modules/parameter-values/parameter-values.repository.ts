@@ -5,6 +5,7 @@ import type { Knex } from 'knex';
 import type { PermissionScopeDetails } from '../auth/permissions';
 import { resolveAssignedRegions } from '../auth/regional-access';
 import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
+import { applyFactoryType88Filter } from '../../shared/utils/factory-type-scope';
 import {
   type HourlyMeasurementCutoff,
   type LatestParameterValueQuery,
@@ -404,6 +405,9 @@ function buildWaitingConnectionStationAccessQuery(access: ParameterValueAccessCo
     .leftJoin('provinces as pr', 'pr.id', 'f.province_id')
     .leftJoin('industrial_estates as ie', function joinEstate() {
       this.on('ie.id', '=', 'f.industrial_estate_id').andOnNull('ie.deleted_at');
+    })
+    .leftJoin('cems_wpms_request_factory_snapshots as fs', function joinFactorySnapshot() {
+      this.on('fs.request_id', '=', 'r.id').andOnNull('fs.deleted_at');
     });
 
   applyStationAccessFilter(scopedQuery, access, 'r');
@@ -481,6 +485,12 @@ function applyStationAccessFilter(
           applyAssignedFactoryAccessFilter(factoryBuilder, access.actorUserId);
         });
       });
+      return;
+    case 'FACTORY_TYPE_88':
+      applyFactoryType88Filter(
+        query,
+        ownerAlias === 'p' ? ['ef.factory_type_sequence'] : ['fs.factory_main_type_code'],
+      );
       return;
     default:
       query.whereRaw('1 = 0');

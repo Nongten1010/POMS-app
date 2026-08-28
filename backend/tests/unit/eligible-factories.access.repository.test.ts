@@ -184,4 +184,16 @@ describe('eligibleFactoriesRepository access filtering', () => {
 
     expect(baseQuery.whereIn).not.toHaveBeenCalledWith('p.region', ['ภาคตะวันออก']);
   });
+
+  it('applies the factory-type-88 category filter to selected eligible factories', async () => {
+    const { baseQuery } = mockEligibleFactoriesQueries();
+
+    await eligibleFactoriesRepository.list({}, {
+      actorUserId: 42,
+      scope: { scope: 'FACTORY_TYPE_88' },
+    });
+
+    expect(baseQuery.where).toHaveBeenCalledWith(expect.any(Function));
+    expect(baseQuery.whereExists).not.toHaveBeenCalled();
+  });
 });

@@ -6,6 +6,7 @@ import type { PermissionScopeDetails } from '../auth/permissions';
 import type { RegionalAccessDTO } from '../auth/regional-access';
 import { resolveAssignedRegions } from '../auth/regional-access';
 import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
+import { applyFactoryType88Filter } from '../../shared/utils/factory-type-scope';
 import { buddhistCalendarYear } from '../../shared/utils/monitoring-point-code';
 import {
   BadRequestError,
@@ -1073,7 +1074,14 @@ export const connectionRequestsRepository = {
   ): Promise<ConnectionRequestDTO | null> {
     const scopeValue = getAccessScopeValue(access.scope);
     if (
-      !['ALL', 'OWN_FACTORY', 'IN_REGION', 'IN_PROVINCE', 'IN_ESTATE'].includes(scopeValue ?? '')
+      ![
+        'ALL',
+        'OWN_FACTORY',
+        'IN_REGION',
+        'IN_PROVINCE',
+        'IN_ESTATE',
+        'FACTORY_TYPE_88',
+      ].includes(scopeValue ?? '')
     ) {
       return null;
     }
@@ -1787,6 +1795,10 @@ function applyDirectConnectionFactoryAccessFilter(
 ): void {
   const scopeValue = getAccessScopeValue(scope);
   if (scopeValue === 'ALL') return;
+  if (scopeValue === 'FACTORY_TYPE_88') {
+    applyFactoryType88Filter(builder, 'ef.factory_type_sequence');
+    return;
+  }
   if (!scope || typeof scope !== 'object') {
     builder.whereRaw('1 = 0');
     return;
@@ -1921,7 +1933,7 @@ function applyRequestRegionalAccessFilter(
   scope: AccessScope,
   regionalAccess: RegionalAccessDTO | null | undefined,
 ): void {
-  if (getAccessScopeValue(scope) === 'ALL') return;
+  if (['ALL', 'FACTORY_TYPE_88'].includes(getAccessScopeValue(scope) ?? '')) return;
   const regionValues = getRegionalFilterValues(regionalAccess);
   if (regionValues.length === 0) return;
 
@@ -1949,7 +1961,7 @@ function requiresAssignedFactoryAccess(
   const scopeValue = getAccessScopeValue(scope);
   if (scopeValue === 'ALL') return false;
   if (scopeValue === 'OWN_FACTORY') return true;
-  return !['IN_REGION', 'IN_PROVINCE', 'IN_ESTATE'].includes(scopeValue ?? '');
+  return !['IN_REGION', 'IN_PROVINCE', 'IN_ESTATE', 'FACTORY_TYPE_88'].includes(scopeValue ?? '');
 }
 
 function requiresAssignedRequestAccess(
@@ -1959,7 +1971,7 @@ function requiresAssignedRequestAccess(
   const scopeValue = getAccessScopeValue(scope);
   if (scopeValue === 'ALL') return false;
   if (scopeValue === 'OWN_FACTORY') return true;
-  return !['IN_REGION', 'IN_PROVINCE', 'IN_ESTATE'].includes(scopeValue ?? '');
+  return !['IN_REGION', 'IN_PROVINCE', 'IN_ESTATE', 'FACTORY_TYPE_88'].includes(scopeValue ?? '');
 }
 
 function applyAssignedRequestFactoryAccessFilter(
@@ -1995,7 +2007,7 @@ function applyFactoryRegionalAccessFilter(
   scope: AccessScope,
   regionalAccess: RegionalAccessDTO | null | undefined,
 ): void {
-  if (getAccessScopeValue(scope) === 'ALL') return;
+  if (['ALL', 'FACTORY_TYPE_88'].includes(getAccessScopeValue(scope) ?? '')) return;
   const regionValues = getRegionalFilterValues(regionalAccess);
   if (regionValues.length === 0) return;
   builder.whereIn('p.region', regionValues);
@@ -2007,6 +2019,10 @@ function applyFactoryPermissionLocationFilter(
   regionalAccess?: RegionalAccessDTO | null,
 ): void {
   const scopeValue = getAccessScopeValue(scope);
+  if (scopeValue === 'FACTORY_TYPE_88') {
+    applyFactoryType88Filter(builder, 'ef.factory_type_sequence');
+    return;
+  }
   if (!scope || typeof scope !== 'object') {
     if (scopeValue === 'IN_REGION' || scopeValue === 'IN_PROVINCE' || scopeValue === 'IN_ESTATE') {
       builder.whereRaw('1 = 0');
@@ -2052,6 +2068,16 @@ function applyRequestPermissionLocationFilter(
   regionalAccess?: RegionalAccessDTO | null,
 ): void {
   const scopeValue = getAccessScopeValue(scope);
+  if (scopeValue === 'FACTORY_TYPE_88') {
+    builder.whereExists(function factoryType88RequestScope() {
+      this.select(db.raw('1'))
+        .from('cems_wpms_request_factory_snapshots as fs')
+        .whereRaw('fs.request_id = cems_wpms_connection_requests.id')
+        .whereNull('fs.deleted_at');
+      applyFactoryType88Filter(this, 'fs.factory_main_type_code');
+    });
+    return;
+  }
   if (!scope || typeof scope !== 'object') {
     if (scopeValue === 'IN_REGION' || scopeValue === 'IN_PROVINCE' || scopeValue === 'IN_ESTATE') {
       builder.whereRaw('1 = 0');

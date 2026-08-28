@@ -6,7 +6,7 @@
 
 เมนูนี้ครอบคลุมการจัดการผู้ใช้, บทบาท, สิทธิ์รายเมนู, และ per-user permission override ที่ backend ใช้คำนวณ token ของ `POST /api/v1/auth/login` และ `GET /api/v1/auth/me` ด้วย ผู้เรียกทุก endpoint ในหน้านี้ต้องส่ง Bearer token และอย่างน้อยต้องมี `users:view`, `users:edit`, หรือ `permissions:manage` ตาม route ที่เรียก
 
-หน้านี้เป็น contract ที่ใช้งานจริงของ permission matrix ตั้งแต่ migration `0089_expand_auth_rbac_permission_scopes` เป็นต้นไป
+หน้านี้เป็น contract ที่ใช้งานจริงของ permission matrix ตั้งแต่ migration `0089_expand_auth_rbac_permission_scopes` และส่วนขยาย role กกพ. ใน migration `0103_add_erc_office_permissions` เป็นต้นไป
 
 ### Main Flow
 
@@ -80,11 +80,12 @@ Data scope keywords ที่ target รองรับ:
 | `IN_PROVINCE` | จำกัดตามจังหวัด |
 | `IN_ESTATE` | จำกัดตามนิคมอุตสาหกรรม |
 | `OWN_FACTORY` | จำกัดเฉพาะโรงงานของผู้ใช้ |
+| `FACTORY_TYPE_88` | จำกัดเฉพาะโรงงานที่รหัสประเภทหลัก normalize เป็น `00088`; เป็น category scope ไม่ใช่ location scope |
 | `null` | action แบบ binary ไม่มี data-scope dimension |
 
 ### Approved role catalog
 
-Approved target ใช้ 12 roles ต่อไปนี้:
+Approved target ใช้ 13 roles ต่อไปนี้:
 
 | Role code | Label | Primary intent |
 | --- | --- | --- |
@@ -94,6 +95,7 @@ Approved target ใช้ 12 roles ต่อไปนี้:
 | `diw_central` | กรอ. | อ่านและติดตามข้อมูลส่วนกลาง |
 | `provincial_office` | สอจ. | อ่านข้อมูลในจังหวัดของตน |
 | `industrial_estate` | กนอ. | อ่านข้อมูลในนิคมของตน |
+| `erc_office` | สำนักงานกำกับกิจการพลังงาน (กกพ.) | อ่านข้อมูลโรงงานประเภท 88 เท่านั้น |
 | `monitoring_kpm` | เจ้าหน้าที่ศูนย์เฝ้า (กฝม.) | ภาคกลาง + workflow หลัก |
 | `monitoring_5_centers` | เจ้าหน้าที่ศูนย์เฝ้า (5 ศูนย์) | ภาคที่ได้รับมอบหมาย + workflow ระดับศูนย์ |
 | `center_director` | ผอ.ศูนย์ | ภาคที่ได้รับมอบหมาย |
@@ -101,11 +103,41 @@ Approved target ใช้ 12 roles ต่อไปนี้:
 | `kwp_director` | ผอ.กวภ. | ทุกพื้นที่ |
 | `admin` | Admin | explicit matrix ระดับระบบ |
 
-### Exact approved role / action / scope matrix
+### Frontend connection permission contract
 
-ตารางนี้เป็น role defaults และ location scope ที่ seed/runtime ใช้จริง
+Frontend ต้องใช้ module `connection` สำหรับเมนูขอเชื่อมต่อ ห้ามสร้าง module หรือ object ชื่อ `cems_wpms_requests` เพิ่มใน state, permission hook หรือ UI guard
 
-| Role | Dashboard / Search / Stats | Factories | Eligible factories | Connection requests | KWP forms | BOD/COD | Notifications | Helpdesk / Feedback / Chat | Permission admin |
+| งาน | Frontend grouped key | Backend raw permission code |
+| --- | --- | --- |
+| อ่านคำขอ/ข้อมูลเชื่อมต่อ | `permissions.connection.view` | `cems_wpms_requests:view` |
+| สร้างหรือแก้ไขคำขอ | `permissions.connection.edit` | `cems_wpms_requests:edit` |
+| ตรวจสอบหรืออนุมัติ | `permissions.connection.approve` | `cems_wpms_requests:approve` |
+| เชื่อมต่อโดยเจ้าหน้าที่ทันที | `permissions.connection.direct_connect` | `cems_wpms_requests:direct_connect` |
+
+ตัวอย่าง grouped response ที่ Frontend ใช้:
+
+```json
+{
+  "permissions": {
+    "connection": {
+      "data": "IN_REGION",
+      "region": "ภาคตะวันออก",
+      "view": true,
+      "edit": true,
+      "approve": true,
+      "direct_connect": true
+    }
+  }
+}
+```
+
+Raw code `cems_wpms_requests:*` ใช้เฉพาะ backend route guard, JWT `scopes`, ตาราง permission/role และ field `permissions[].code` หรือ `permissionOverrides[].code` ที่ API รับเท่านั้น
+
+### Backend raw role / action / scope matrix
+
+ตารางนี้เป็น backend reference ของ role defaults และ location scope ที่ seed/runtime ใช้จริง ค่าในตารางเป็น **raw permission code** ไม่ใช่ JSON key ที่ Frontend ต้องสร้าง สำหรับเมนูขอเชื่อมต่อ Frontend ต้องอ่านผ่าน `permissions.connection.*` ตาม mapping ด้านบน
+
+| Role | Dashboard / Search / Stats | Factories | Eligible factories | Connection requests (raw backend code) | KWP forms | BOD/COD | Notifications | Helpdesk / Feedback / Chat | Permission admin |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `public_anonymous` | `dashboard:view=ALL` | - | - | - | - | - | - | `feedback:submit`, `laws:view`, `faq:view` | - |
 | `public_user` | `dashboard:view=ALL`, `dashboard.alerts:view` | - | - | - | - | - | - | `feedback:submit`, `laws:view`, `faq:view`, `chat:view`, `chat:ask` | - |
@@ -113,12 +145,13 @@ Approved target ใช้ 12 roles ต่อไปนี้:
 | `diw_central` | `dashboard:view=ALL`, `dashboard.alerts:view`, `dashboard.search:basic`, `dashboard.search:advanced`, `dashboard.stats:view=ALL`, `dashboard.stats:export=ALL`, `conditional_search:view=ALL`, `statistics:view=ALL`, `statistics:export=ALL` | `factories:view=ALL` | `eligible_factories:view=ALL` | - | `kwp_forms:view=ALL` | `bod_cod_errors:view=ALL` | `notifications:view=ALL` | `helpdesk:submit`, `feedback:submit`, `laws:view`, `faq:view`, `chat:view`, `chat:ask` | - |
 | `provincial_office` | `dashboard:view=IN_PROVINCE`, `dashboard.alerts:view`, `dashboard.search:basic`, `dashboard.search:advanced`, `dashboard.stats:view=IN_PROVINCE`, `dashboard.stats:export=IN_PROVINCE`, `conditional_search:view=IN_PROVINCE`, `statistics:view=IN_PROVINCE`, `statistics:export=IN_PROVINCE` | `factories:view=IN_PROVINCE` | `eligible_factories:view=IN_PROVINCE` | - | `kwp_forms:view=IN_PROVINCE` | `bod_cod_errors:view=IN_PROVINCE` | `notifications:view=IN_PROVINCE` | `helpdesk:submit`, `feedback:submit`, `laws:view`, `faq:view`, `chat:view`, `chat:ask` | - |
 | `industrial_estate` | `dashboard:view=IN_ESTATE`, `dashboard.alerts:view`, `dashboard.search:basic`, `dashboard.search:advanced`, `dashboard.stats:view=IN_ESTATE`, `dashboard.stats:export=IN_ESTATE`, `conditional_search:view=IN_ESTATE`, `statistics:view=IN_ESTATE`, `statistics:export=IN_ESTATE` | `factories:view=IN_ESTATE` | `eligible_factories:view=IN_ESTATE` | - | `kwp_forms:view=IN_ESTATE` | `bod_cod_errors:view=IN_ESTATE` | `notifications:view=IN_ESTATE` | `helpdesk:submit`, `feedback:submit`, `laws:view`, `faq:view`, `chat:view`, `chat:ask` | - |
+| `erc_office` | `dashboard:view=FACTORY_TYPE_88`, `dashboard.alerts:view`, `dashboard.search:basic=FACTORY_TYPE_88`, `dashboard.search:advanced=FACTORY_TYPE_88`, `dashboard.stats:view=FACTORY_TYPE_88`, `dashboard.stats:export=FACTORY_TYPE_88`, `conditional_search:view=FACTORY_TYPE_88`, `statistics:view=FACTORY_TYPE_88`, `statistics:export=FACTORY_TYPE_88` | `factories:view=FACTORY_TYPE_88` | `eligible_factories:view=FACTORY_TYPE_88` | `cems_wpms_requests:view=FACTORY_TYPE_88` | `kwp_forms:view=FACTORY_TYPE_88` | `bod_cod_errors:view=FACTORY_TYPE_88` | `notifications:view=FACTORY_TYPE_88` | `helpdesk:submit`, `feedback:submit`, `laws:view`, `faq:view`, `chat:view`, `chat:ask` | - |
 | `monitoring_kpm` | `dashboard:view=IN_REGION (ภาคกลาง)`, `dashboard.alerts:view`, `dashboard.search:basic`, `dashboard.search:advanced`, `dashboard.stats:view=IN_REGION (ภาคกลาง)`, `dashboard.stats:export=IN_REGION (ภาคกลาง)`, `conditional_search:view=IN_REGION (ภาคกลาง)`, `statistics:view=IN_REGION (ภาคกลาง)`, `statistics:export=IN_REGION (ภาคกลาง)` | `factories:view=IN_REGION (ภาคกลาง)`, `factories:edit`, `factories:approve` | `eligible_factories:view=IN_REGION (ภาคกลาง)` | `cems_wpms_requests:view=IN_REGION (ภาคกลาง)`, `cems_wpms_requests:edit`, `cems_wpms_requests:approve`, `cems_wpms_requests:direct_connect=IN_REGION (ภาคกลาง)` | `kwp_forms:view=IN_REGION (ภาคกลาง)`, `kwp_forms:edit`, `kwp_forms:approve` | `bod_cod_errors:view=IN_REGION (ภาคกลาง)`, `bod_cod_errors:edit`, `bod_cod_errors:approve=IN_REGION (ภาคกลาง)` | `notifications:view=IN_REGION (ภาคกลาง)` | `helpdesk:submit`, `feedback:submit`, `laws:view`, `faq:view`, `chat:view`, `chat:answer` | - |
 | `monitoring_5_centers` | `dashboard:view=IN_REGION (assigned region)`, `dashboard.alerts:view`, `dashboard.search:basic`, `dashboard.search:advanced`, `dashboard.stats:view=IN_REGION (assigned region)`, `dashboard.stats:export=IN_REGION (assigned region)`, `conditional_search:view=IN_REGION (assigned region)`, `statistics:view=IN_REGION (assigned region)`, `statistics:export=IN_REGION (assigned region)` | `factories:view=IN_REGION (assigned region)`, `factories:edit`, `factories:approve` | `eligible_factories:view=IN_REGION (assigned region)` | `cems_wpms_requests:view=IN_REGION (assigned region)` | `kwp_forms:view=IN_REGION (assigned region)`, `kwp_forms:edit`, `kwp_forms:approve` | `bod_cod_errors:view=IN_REGION (assigned region)`, `bod_cod_errors:edit`, `bod_cod_errors:approve=IN_REGION (assigned region)` | `notifications:view=IN_REGION (assigned region)` | `helpdesk:submit`, `feedback:submit`, `laws:view`, `faq:view`, `chat:view`, `chat:answer` | - |
 | `center_director` | `dashboard:view=IN_REGION (assigned region)`, `dashboard.alerts:view`, `dashboard.search:basic`, `dashboard.search:advanced`, `dashboard.stats:view=IN_REGION (assigned region)`, `dashboard.stats:export=IN_REGION (assigned region)`, `conditional_search:view=IN_REGION (assigned region)`, `statistics:view=IN_REGION (assigned region)`, `statistics:export=IN_REGION (assigned region)` | `factories:view=IN_REGION (assigned region)` | `eligible_factories:view=IN_REGION (assigned region)` | `cems_wpms_requests:view=IN_REGION (assigned region)` | `kwp_forms:view=IN_REGION (assigned region)` | `bod_cod_errors:view=IN_REGION (assigned region)`, `bod_cod_errors:approve=IN_REGION (assigned region)` | `notifications:view=IN_REGION (assigned region)` | `helpdesk:submit`, `feedback:submit`, `laws:view`, `faq:view` | - |
 | `kpm_director` | `dashboard:view=IN_REGION (ภาคกลาง)`, `dashboard.alerts:view`, `dashboard.search:basic`, `dashboard.search:advanced`, `dashboard.stats:view=IN_REGION (ภาคกลาง)`, `dashboard.stats:export=IN_REGION (ภาคกลาง)`, `conditional_search:view=IN_REGION (ภาคกลาง)`, `statistics:view=IN_REGION (ภาคกลาง)`, `statistics:export=IN_REGION (ภาคกลาง)` | `factories:view=IN_REGION (ภาคกลาง)` | `eligible_factories:view=IN_REGION (ภาคกลาง)` | `cems_wpms_requests:view=IN_REGION (ภาคกลาง)` | `kwp_forms:view=IN_REGION (ภาคกลาง)` | `bod_cod_errors:view=IN_REGION (ภาคกลาง)`, `bod_cod_errors:approve=IN_REGION (ภาคกลาง)` | `notifications:view=IN_REGION (ภาคกลาง)` | `helpdesk:submit`, `feedback:submit`, `laws:view`, `faq:view` | - |
 | `kwp_director` | `dashboard:view=ALL`, `dashboard.alerts:view`, `dashboard.search:basic`, `dashboard.search:advanced`, `dashboard.stats:view=ALL`, `dashboard.stats:export=ALL`, `conditional_search:view=ALL`, `statistics:view=ALL`, `statistics:export=ALL` | `factories:view=ALL` | `eligible_factories:view=ALL` | `cems_wpms_requests:view=ALL` | `kwp_forms:view=ALL` | `bod_cod_errors:view=ALL`, `bod_cod_errors:approve=ALL` | `notifications:view=ALL` | `helpdesk:submit`, `feedback:submit`, `laws:view`, `faq:view` | - |
-| `admin` | `dashboard:view=ALL`, `dashboard.alerts:view`, `dashboard.search:basic`, `dashboard.search:advanced`, `dashboard.stats:view=ALL`, `dashboard.stats:export=ALL`, `conditional_search:view=ALL`, `statistics:view=ALL`, `statistics:export=ALL` | `factories:view=ALL`, `factories:edit`, `factories:approve` | `eligible_factories:view=ALL`, `eligible_factories:edit=ALL`, `eligible_factories:manage` (deprecated) | `cems_wpms_requests:view=ALL`, `cems_wpms_requests:edit`, `cems_wpms_requests:approve`, `cems_wpms_requests:direct_connect=ALL` | `kwp_forms:view=ALL`, `kwp_forms:edit`, `kwp_forms:approve` | `bod_cod_errors:view=ALL`, `bod_cod_errors:edit`, `bod_cod_errors:approve=ALL` | `notifications:view=ALL`, `notifications:view_status=ALL`, `notifications:edit`, `notifications:approve` | `helpdesk:submit`, `feedback:submit`, `laws:view`, `laws:edit`, `faq:view`, `faq:edit`, `chat:view`, `chat:answer` | `permissions:view`, `permissions:manage`, `users:view`, `users:edit`, `roles:view`, `roles:edit`, `audit:view`, `api_documentation:view` |
+| `admin` | `dashboard:view=ALL`, `dashboard.alerts:view`, `dashboard.search:basic`, `dashboard.search:advanced`, `dashboard.stats:view=ALL`, `dashboard.stats:export=ALL`, `conditional_search:view=ALL`, `statistics:view=ALL`, `statistics:export=ALL` | `factories:view=ALL`, `factories:edit`, `factories:approve` | `eligible_factories:view=ALL`, `eligible_factories:edit=ALL`, `eligible_factories:approve=ALL`, `eligible_factories:manage` (deprecated) | `cems_wpms_requests:view=ALL`, `cems_wpms_requests:edit`, `cems_wpms_requests:approve`, `cems_wpms_requests:direct_connect=ALL` | `kwp_forms:view=ALL`, `kwp_forms:edit`, `kwp_forms:approve` | `bod_cod_errors:view=ALL`, `bod_cod_errors:edit`, `bod_cod_errors:approve=ALL` | `notifications:view=ALL`, `notifications:view_status=ALL`, `notifications:edit`, `notifications:approve` | `helpdesk:submit`, `feedback:submit`, `laws:view`, `laws:edit`, `faq:view`, `faq:edit`, `chat:view`, `chat:answer` | `permissions:view`, `permissions:manage`, `users:view`, `users:edit`, `roles:view`, `roles:edit`, `audit:view`, `api_documentation:view` |
 
 Admin target intentionally **does not include** `chat:ask`
 
@@ -130,12 +163,14 @@ Admin target intentionally **does not include** `chat:ask`
 | --- | --- |
 | `dashboard:view`, `dashboard.search:basic`, `dashboard.search:advanced`, `dashboard.stats:view`, `dashboard.stats:export`, `statistics:view`, `statistics:export`, `conditional_search:view`, `factories:view`, `eligible_factories:view`, `eligible_factories:edit`, `cems_wpms_requests:view`, `kwp_forms:view`, `bod_cod_errors:view`, `bod_cod_errors:approve`, `notifications:view`, `notifications:view_status` | ใช้ data scope ตาม role matrix เมื่อแถวนั้นระบุ scope ไว้ |
 | `dashboard.alerts:view` | เป็น binary action ไม่มี data scope |
-| `factories:*`, `eligible_factories:view`, `eligible_factories:edit`, `cems_wpms_requests:*`, `kwp_forms:*`, `bod_cod_errors:*`, `notifications:*` | ทุก action ที่ role ได้รับใช้ data scope เดียวกับ role ใน matrix; backend บังคับ scope ตอนอ่าน/แก้ไข/อนุมัติ |
+| `factories:*`, `eligible_factories:view`, `eligible_factories:edit`, `eligible_factories:approve`, `cems_wpms_requests:*`, `kwp_forms:*`, `bod_cod_errors:*`, `notifications:*` | ทุก action ที่ role ได้รับใช้ data scope เดียวกับ role ใน matrix; backend บังคับ scope ตอนอ่าน/แก้ไข/อนุมัติ |
 | `eligible_factories:manage` | deprecated compatibility permission; เป็น binary action และมีใน admin default เท่านั้น |
 | `chat:answer`, `laws:edit`, `faq:edit`, `users:view`, `users:edit`, `roles:view`, `roles:edit`, `permissions:*`, `audit:view`, `api_documentation:view` | เป็น binary action; contract ไม่เพิ่ม location field |
 | `chat:view`, `chat:ask`, `helpdesk:submit`, `feedback:submit`, `laws:view`, `faq:view` | เป็น binary action ใน approved target รอบนี้ |
 
-### Approved permission codes
+### Approved backend permission codes (raw)
+
+รายการนี้ใช้สำหรับ backend authorization, JWT `scopes` และ request body ที่รับ raw `code`; ไม่ใช่ชื่อ grouped module สำหรับ Frontend
 
 | Capability | Codes |
 | --- | --- |
@@ -145,11 +180,11 @@ Admin target intentionally **does not include** `chat:ask`
 | KWP forms | `kwp_forms:view`, `kwp_forms:edit`, `kwp_forms:approve` |
 | BOD/COD | `bod_cod_errors:view`, `bod_cod_errors:edit`, `bod_cod_errors:approve` |
 | Notifications | `notifications:view`, `notifications:view_status`, `notifications:edit`, `notifications:approve` |
-| Eligible factories | `eligible_factories:view`, `eligible_factories:edit`, `eligible_factories:manage` (deprecated compatibility) |
+| Eligible factories | `eligible_factories:view`, `eligible_factories:edit`, `eligible_factories:approve`, `eligible_factories:manage` (deprecated compatibility) |
 | Helpdesk / feedback / content | `helpdesk:submit`, `feedback:submit`, `laws:view`, `laws:edit`, `faq:view`, `faq:edit`, `chat:view`, `chat:ask`, `chat:answer` |
 | Permission and admin | `permissions:view`, `permissions:manage`, `api_documentation:view`, `users:view`, `users:edit`, `roles:view`, `roles:edit`, `audit:view` |
 
-### Response permission aliases used by frontend
+### Frontend grouped permission keys (canonical)
 
 `GET /api/v1/users/:id`, `POST /api/v1/auth/login`, และ `GET /api/v1/auth/me` คืน grouped `permissions` จาก permission code เดียวกับที่ backend ตรวจจริง
 
@@ -163,12 +198,15 @@ Admin target intentionally **does not include** `chat:ask`
 | `dashboard.stats:view` | `permissions.dashboard.statistics` |
 | `statistics:view` | `permissions.statistics.view` |
 | `dashboard.stats:export` | `permissions.dashboard.export` |
-| `cems_wpms_requests:*` | `permissions.connection.*` |
-| `eligible_factories:view`, `eligible_factories:edit` | `permissions.eligible_factories.view`, `permissions.eligible_factories.edit` |
-| `permissions:view`, `permissions:manage` | `permissions.permissions.view`, `permissions.permissions.manage` |
-| `chat:view`, `chat:ask`, `chat:answer` | `permissions.chat.view`, `permissions.chat.ask`, `permissions.chat.answer` |
+| `cems_wpms_requests:view` | `permissions.connection.view` |
+| `cems_wpms_requests:edit` | `permissions.connection.edit` |
+| `cems_wpms_requests:approve` | `permissions.connection.approve` |
+| `cems_wpms_requests:direct_connect` | `permissions.connection.direct_connect` |
+| `eligible_factories:view`, `eligible_factories:edit`, `eligible_factories:approve` | `permissions.eligible_factories.view`, `permissions.eligible_factories.edit`, `permissions.eligible_factories.approve` |
+| `permissions:view`, `permissions:manage` | `permissions.permissions.view`, `permissions.permissions.manage`; grouped `data` ใช้ `ALL`/`null` แต่ raw permission เป็น binary scope `null` |
+| `chat:view`, `chat:ask`, `chat:answer` | `permissions.chat.view`, `permissions.chat.ask`, `permissions.chat.edit`; response ยัง mirror `permissions.chat.answer` เพื่อ backward compatibility |
 
-Client ต้องถือ permission code + approved grouped response นี้เป็น canonical target และต้องไม่สรุปกลับจากชื่อ action อย่างเดียวโดยไม่อ้าง permission code ที่ backend ใช้ตรวจจริง
+Frontend ต้องใช้ grouped response เป็น canonical UI contract โดยเฉพาะ `permissions.connection.*`; raw permission code มีไว้สำหรับส่งกลับใน API ที่ระบุ field `code` และสำหรับ backend authorization เท่านั้น
 
 ### Region and location rules
 
@@ -178,6 +216,7 @@ Client ต้องถือ permission code + approved grouped response นี�
 | `IN_PROVINCE` | รับ `province` เป็นชื่อหรือรหัสจังหวัดและ resolve เป็น province id; ค่าต้องตรง assigned province | grouped permissions คืนชื่อจังหวัดไทย; qualifier หายหรือขัดกันทำให้ไม่มีข้อมูล |
 | `IN_ESTATE` | รับ `estateCode` หรือ compatibility field `estate`; resolve กับ industrial estate master และค่าต้องตรง profile assignment | grouped permissions คืน canonical `estateCode`/`estate`; qualifier หายหรือขัดกันทำให้ไม่มีข้อมูล |
 | `OWN_FACTORY` | ไม่มี field location เพิ่มเติม | client เห็นเพียง `data: "OWN_FACTORY"` |
+| `FACTORY_TYPE_88` | ไม่มี field location เพิ่มเติม; filter จาก factory type ที่เก็บใน eligible/snapshot/form | client เห็น `data: "FACTORY_TYPE_88"`; scope นี้แคบกว่า `ALL` แต่เทียบลำดับกับ region/province/estate ไม่ได้ |
 | profile-level regional access | `profile.regionalAccess` เป็นคนละชั้นกับ per-menu permission scope | ใช้กับการกำหนดพื้นที่เจ้าหน้าที่ ไม่ใช่รายการ `permissions.<module>.region` |
 
 `profile.regionalAccess` กับ `permissions.<module>.region` จึงไม่ใช่ field แทนกัน:
@@ -196,12 +235,12 @@ Client ต้องถือ permission code + approved grouped response นี�
 | --- | --- |
 | Canonical docs location | ใช้หน้านี้เป็น owner ของ `/api/v1/users*` แทนการอ้างเอกสาร legacy กระจัดกระจาย |
 | Approved matrix | seed, migration และ code ใช้ matrix นี้ |
-| Runtime role count | target ใช้ 12 roles; ถ้า client ยังอิง “13 roles” จากเอกสารเก่าถือว่าไม่ตรงกับ approved target |
+| Runtime role count | target ใช้ 13 roles รวม `erc_office`; `public_anonymous` ยังเป็น system role แต่ frontend ไม่ต้องแสดงใน dropdown สร้างผู้ใช้ |
 | Regional roles | `monitoring_kpm` และ `kpm_director` target เป็น `IN_REGION` ภาคกลาง; `monitoring_5_centers` และ `center_director` target เป็น assigned region |
 | One-role policy | managed account รับ role เดียว; IdP sync คง specialized role ที่ Admin มอบหมายและไม่เติม base role ซ้ำ |
 | Assignment ceiling | per-menu location ต้องอยู่ภายใน profile assignment; missing/conflict เป็น no data |
-| New codes | เพิ่ม `statistics:view`, `conditional_search:view`, `chat:view`, `eligible_factories:view`, `eligible_factories:edit` ใน target contract |
-| Grouped permission aliases | `dashboard.search`, `dashboard.advanced_search`, `dashboard.statistics`, `dashboard.export`, `statistics.*`, `conditional_search.view`, `permissions.*`, `chat.*` |
+| New codes | เพิ่ม `statistics:view`, `conditional_search:view`, `chat:view`, `eligible_factories:view`, `eligible_factories:edit`, `eligible_factories:approve` ใน target contract |
+| Grouped permission aliases | `dashboard.search`, `dashboard.advanced_search`, `dashboard.statistics`, `dashboard.export`, `statistics.*`, `conditional_search.view`, `permissions.*`, `chat.edit` |
 | Estate location detail | ใช้ `estateCode` (หรือ compatibility field `estate`) และตรวจสอบกับ master data |
 
 Migration guidance:
@@ -223,6 +262,7 @@ Migration guidance:
 | Province/estate assignment | สอจ. ใช้หนึ่งจังหวัด; กนอ. ใช้ canonical `estateCode` หนึ่งนิคมและเห็นทุกโรงงานในนิคมนั้น |
 | Fail-closed enforcement | request, dashboard, eligible factory, KWP/BOD, alert, monitoring point, device config และ parameter reads ใช้ profile intersection |
 | Grouped response aliases | implemented and covered by auth/user tests |
+| ERC factory-type scope | migration `0103`, RBAC seeds และ repository filters ใช้ `FACTORY_TYPE_88`/`00088` แบบ fail closed |
 | Tests proving matrix | see evidence page |
 
 ## Business Flow And Explanations

@@ -798,7 +798,7 @@ describe('POMS OpenAPI contract', () => {
       ).post,
       'select eligible monitoring point form.post',
     );
-    expect(selectEligible['x-poms-permissions']).toEqual(['eligible_factories:edit']);
+    expect(selectEligible['x-poms-permissions']).toEqual(['eligible_factories:approve']);
   });
 
   it('matches runtime delete statuses, alert filters and integration station IDs', () => {

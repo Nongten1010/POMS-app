@@ -50,6 +50,23 @@ describe('kwpFormReportsRepository access filters', () => {
     expect(sql).not.toContain('join [user_juristics] as [uj]');
   });
 
+  it('filters ERC factory and request tables by factory type 88', () => {
+    const factories = buildKwpFormFactoryQueryForTests({
+      actorUserId: 88,
+      scope: { scope: 'FACTORY_TYPE_88' },
+    }).toSQL();
+    const requests = buildKwpFormRequestQueryForTests({}, {
+      actorUserId: 88,
+      scope: { scope: 'FACTORY_TYPE_88' },
+    }).toSQL();
+
+    expect(factories.sql.toLowerCase()).toContain('[ef].[factory_type_sequence]');
+    expect(factories.bindings).toContain('00088');
+    expect(requests.sql.toLowerCase()).toContain('eligible_factories');
+    expect(requests.sql.toLowerCase()).toContain('[ef].[factory_type_sequence]');
+    expect(requests.bindings).toContain('00088');
+  });
+
   it('filters province-scoped factory rows to the selected province', () => {
     const compiled = buildKwpFormFactoryQueryForTests({
       actorUserId: 77,

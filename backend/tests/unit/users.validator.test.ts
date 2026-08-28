@@ -104,6 +104,33 @@ describe('managed users validators', () => {
     });
   });
 
+  it('accepts the nested local-account payload emitted by the permission page', () => {
+    const result = createLocalAccountSchema.parse({
+      user: {
+        fullName: 'เจ้าหน้าที่ กกพ.',
+        username: 'erc_officer',
+        password: validTestPassword,
+        department: '',
+        lineNameTh: '',
+        levelNameTh: '',
+        roleCodes: ['erc_office'],
+        userType: 'officer',
+        isActive: true,
+      },
+      permissions: {},
+    });
+
+    expect(result).toMatchObject({
+      fullName: 'เจ้าหน้าที่ กกพ.',
+      username: 'erc_officer',
+      roleCodes: ['erc_office'],
+      userType: 'officer',
+      isActive: true,
+      profile: undefined,
+      permissionOverrides: [],
+    });
+  });
+
   it('accepts local account location fields from the permission form', () => {
     const result = createLocalAccountSchema.parse({
       fullName: 'สมชาย ทดสอบ',
@@ -565,6 +592,49 @@ describe('managed users validators', () => {
     });
 
     expect(result.success).toBe(true);
+  });
+
+  it('accepts factory-type-88 scope and frontend action aliases in edit payloads', () => {
+    const result = updateManagedUserSchema.parse({
+      user: {
+        fullName: 'เจ้าหน้าที่ กกพ.',
+        username: 'erc_officer',
+        roleCodes: ['erc_office'],
+        isActive: true,
+      },
+      permissions: {
+        chat: {
+          data: null,
+          view: true,
+          edit: true,
+        },
+        permissions: {
+          data: 'ALL',
+          view: true,
+        },
+        eligible_factories: {
+          data: 'FACTORY_TYPE_88',
+          region: null,
+          province: null,
+          view: true,
+          edit: false,
+          approve: false,
+        },
+      },
+    });
+
+    expect((result as { permissionOverrides?: unknown }).permissionOverrides).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'chat:answer', effect: 'allow', scope: null }),
+        expect.objectContaining({ code: 'permissions:view', effect: 'allow', scope: null }),
+        expect.objectContaining({
+          code: 'eligible_factories:view',
+          effect: 'allow',
+          scope: 'FACTORY_TYPE_88',
+        }),
+        expect.objectContaining({ code: 'eligible_factories:approve', effect: 'deny', scope: null }),
+      ]),
+    );
   });
 
   it('does not update optional edit profile fields when omitted or blank', () => {

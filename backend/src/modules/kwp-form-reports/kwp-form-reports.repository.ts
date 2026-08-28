@@ -1,6 +1,7 @@
 import type { Knex } from 'knex';
 import { db } from '../../config/database';
 import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
+import { applyFactoryType88Filter } from '../../shared/utils/factory-type-scope';
 import { splitFactoryTypeSequence } from '../eligible-factories/factory-type-sequence';
 import type { PermissionScopeDetails } from '../auth/permissions';
 import { resolveAssignedRegions } from '../auth/regional-access';
@@ -207,6 +208,14 @@ function buildRequestQuery(
     .leftJoin('provinces as p', 'p.id', 'f.province_id')
     .leftJoin('industrial_estates as ie', 'ie.id', 'f.industrial_estate_id')
     .leftJoin('cems_wpms_connected_measurement_points as cp', 'cp.id', 's.connected_point_id')
+    .leftJoin('eligible_factories as ef', function joinEligibleFactory() {
+      this.on(function joinFactoryIdentifiers() {
+        this.on('ef.factory_registration_no_new', '=', 's.factory_registration_no')
+          .orOn('ef.factory_registration_no_new', '=', 's.factory_id')
+          .orOn('ef.source_factory_id', '=', 's.factory_id')
+          .orOn('ef.id', '=', 'cp.eligible_factory_id');
+      }).andOnNull('ef.deleted_at');
+    })
     .whereNull('s.deleted_at')
     .select(
       's.id',
@@ -262,6 +271,10 @@ function applyLocationScopeFilter(
   scope: KwpFormReportAccess['scope'],
 ): void {
   const details = scopeDetails(scope);
+  if (scopeValue(scope) === 'FACTORY_TYPE_88') {
+    applyFactoryType88Filter(builder, 'ef.factory_type_sequence');
+    return;
+  }
   if (!details) return;
 
   if (details.scope === 'IN_PROVINCE') {

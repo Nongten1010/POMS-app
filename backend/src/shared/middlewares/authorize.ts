@@ -22,7 +22,8 @@ export function authorize(...requiredPermissions: string[]) {
 
 /**
  * Helper: ดู scope ของ permission ที่ user มี — ใช้ใน service layer
- * Returns: 'ALL' | 'IN_PROVINCE' | 'IN_ESTATE' | 'OWN_FACTORY' | null
+ * Returns: 'ALL' | 'IN_REGION' | 'IN_PROVINCE' | 'IN_ESTATE' | 'OWN_FACTORY' |
+ *          'FACTORY_TYPE_88' | null
  *          null = มี permission แต่ไม่มี scope dimension (binary action)
  *          undefined = ไม่มี permission เลย
  */

@@ -1,6 +1,7 @@
 import type { Knex } from 'knex';
 import { db } from '../../config/database';
 import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
+import { applyFactoryType88Filter } from '../../shared/utils/factory-type-scope';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
 import type { PermissionScopeDetails } from '../auth/permissions';
 import { resolveAssignedRegions } from '../auth/regional-access';
@@ -734,6 +735,14 @@ function buildReportQuery(
     })
     .leftJoin('provinces as p', 'p.name_th', 'r.province_name')
     .leftJoin('industrial_estates as ie', 'ie.id', 'f.industrial_estate_id')
+    .leftJoin('eligible_factories as ef', function joinEligibleFactory() {
+      this.on(function joinFactoryIdentifiers() {
+        this.on('ef.factory_registration_no_new', '=', 'r.factory_registration_no')
+          .orOn('ef.factory_registration_no_new', '=', 'f.code')
+          .orOn('ef.source_factory_id', '=', 'f.fid')
+          .orOn('ef.source_factory_id', '=', 'f.code');
+      }).andOnNull('ef.deleted_at');
+    })
     .leftJoin('users as cu', 'cu.id', 'r.created_by')
     .leftJoin(measurementCounts, 'm.report_id', 'r.id')
     .whereNull('r.deleted_at')
@@ -928,6 +937,14 @@ function buildEditableReportQuery(
     })
     .leftJoin('provinces as p', 'p.name_th', 'r.province_name')
     .leftJoin('industrial_estates as ie', 'ie.id', 'f.industrial_estate_id')
+    .leftJoin('eligible_factories as ef', function joinEligibleFactory() {
+      this.on(function joinFactoryIdentifiers() {
+        this.on('ef.factory_registration_no_new', '=', 'r.factory_registration_no')
+          .orOn('ef.factory_registration_no_new', '=', 'f.code')
+          .orOn('ef.source_factory_id', '=', 'f.fid')
+          .orOn('ef.source_factory_id', '=', 'f.code');
+      }).andOnNull('ef.deleted_at');
+    })
     .leftJoin('bod_cod_approval_steps as s', function joinCurrentStep() {
       this.on('s.report_id', '=', 'r.id')
         .andOn('s.is_current', '=', db.raw('?', [true]))
@@ -1268,6 +1285,10 @@ function applyLocationScopeFilter(
   builder: Knex.QueryBuilder,
   scope: BodCodDeviationAccess['scope'],
 ): void {
+  if (scopeValue(scope) === 'FACTORY_TYPE_88') {
+    applyFactoryType88Filter(builder, 'ef.factory_type_sequence');
+    return;
+  }
   const details = scopeDetails(scope);
   if (!details) return;
 

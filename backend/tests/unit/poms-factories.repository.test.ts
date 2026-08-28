@@ -68,6 +68,18 @@ describe('pomsFactoriesRepository access and approved profile patches', () => {
     expect(compiled.bindings).not.toContain('ภาคเหนือ');
   });
 
+  it('limits ERC reads to eligible factories with factory type 88', () => {
+    const compiled = buildConnectedFactoryRowsQueryForTests({
+      actorUserId: 88,
+      scope: { scope: 'FACTORY_TYPE_88' },
+    }).toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('[ef].[factory_type_sequence]');
+    expect(compiled.bindings).toContain('00088');
+    expect(sql).not.toContain('user_juristics');
+  });
+
   it('builds separate connected-POMS and eligible-factory patches without touching factories', () => {
     const patches = buildApprovedPomsFactoryProfilePatchesForTests({
       eligibleFactoryId: 7,

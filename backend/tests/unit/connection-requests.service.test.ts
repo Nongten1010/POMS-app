@@ -4033,6 +4033,47 @@ describe('connectionRequestsService', () => {
     expect(mockedRepository.updateStatus).not.toHaveBeenCalled();
   });
 
+  it('limits status approvals with factory type 88 scope to matching requests', async () => {
+    mockedRepository.findById.mockResolvedValueOnce(
+      requestDto({
+        status: CONNECTION_REQUEST_STATUS.PENDING_DESIGN_REVIEW,
+        industryMainOrder: '88',
+      }),
+    );
+    mockedRepository.updateStatus.mockResolvedValueOnce(
+      requestDto({
+        status: CONNECTION_REQUEST_STATUS.WAITING_CONNECTION,
+        industryMainOrder: '88',
+        connectionDueAt: dueAt,
+      }),
+    );
+
+    await connectionRequestsService.changeStatus(
+      1,
+      { action: 'APPROVE_FORM' },
+      7,
+      'FACTORY_TYPE_88',
+    );
+
+    expect(mockedRepository.updateStatus).toHaveBeenCalled();
+
+    mockedRepository.findById.mockResolvedValueOnce(
+      requestDto({
+        status: CONNECTION_REQUEST_STATUS.PENDING_DESIGN_REVIEW,
+        industryMainOrder: '106',
+      }),
+    );
+
+    await expect(
+      connectionRequestsService.changeStatus(
+        1,
+        { action: 'APPROVE_FORM' },
+        7,
+        'FACTORY_TYPE_88',
+      ),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
   it('does not let regional access narrow ALL-scoped status approvals', async () => {
     mockedRepository.findById.mockResolvedValue(
       requestDto({

@@ -146,7 +146,7 @@ export const monitoringPointFormsController = {
       const data = await monitoringPointFormsService.selectEligible(
         id,
         actorUserId,
-        requireAccess(req, 'eligible_factories:edit'),
+        requireAccess(req, 'eligible_factories:approve'),
       );
       res.status(StatusCodes.CREATED).location(`/api/v1/eligible-factories/${data.id}`).json({
         success: true,

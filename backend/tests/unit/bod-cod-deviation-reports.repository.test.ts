@@ -44,6 +44,23 @@ describe('bodCodDeviationReportsRepository access filters', () => {
     expect(sql).not.toContain('join [user_juristics] as [uj]');
   });
 
+  it('filters ERC factory and report reads by factory type 88', () => {
+    const factories = buildBodCodDeviationFactoryQueryForTests({
+      actorUserId: 88,
+      scope: { scope: 'FACTORY_TYPE_88' },
+    }).toSQL();
+    const reports = buildBodCodDeviationReportQueryForTests({}, {
+      actorUserId: 88,
+      scope: { scope: 'FACTORY_TYPE_88' },
+    }).toSQL();
+
+    expect(factories.sql.toLowerCase()).toContain('[ef].[factory_type_sequence]');
+    expect(factories.bindings).toContain('00088');
+    expect(reports.sql.toLowerCase()).toContain('eligible_factories');
+    expect(reports.sql.toLowerCase()).toContain('[ef].[factory_type_sequence]');
+    expect(reports.bindings).toContain('00088');
+  });
+
   it('filters province-scoped connected factory rows to the selected province', () => {
     const compiled = buildBodCodDeviationFactoryQueryForTests({
       actorUserId: 77,

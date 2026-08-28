@@ -2,6 +2,14 @@
 
 ไฟล์นี้บันทึกเฉพาะการเปลี่ยน API ที่ทำให้ client ต้องแก้ตาม การเปลี่ยนทั่วไปและประวัติรายละเอียดดูจาก Git history
 
+## 2026-08-28 — แยกสิทธิ์อนุมัติโรงงานที่เข้าข่ายออกจากสิทธิ์แก้ไข
+
+- **Affected canonical docs:** [สิทธิ์การใช้งาน](./menus/permissions/README.md), [โรงงานที่เข้าข่าย](./menus/eligible-factories/README.md)
+- **Impact:** `POST /api/v1/monitoring-point-forms/:id/select-eligible` เปลี่ยน route guard จาก `eligible_factories:edit` เป็น `eligible_factories:approve`; grouped permissions เพิ่ม `eligible_factories.approve`. Endpoint เพิ่ม/ลบ eligible factory ยังคงใช้ `eligible_factories:edit`.
+- **Migration:** deploy `0103_add_erc_office_permissions`; ให้ role ที่ต้องเลือกฟอร์มเป็นโรงงานเข้าข่ายมี raw permission `eligible_factories:approve` และให้ client ตรวจ checkbox `permissions.eligible_factories.approve` แยกจาก `edit`.
+- **Old contract:** ผู้มี `eligible_factories:edit` สามารถเรียก select-eligible ได้โดยไม่มี approve action แยก.
+- **New contract:** select-eligible ต้องมี `eligible_factories:approve`; `edit` เพียงอย่างเดียวตอบ `403 FORBIDDEN`.
+
 ## 2026-08-27 — เปลี่ยน prefix เลขรายงาน BOD/COD จาก Error เป็น E
 
 - **Affected canonical docs:** [รายงานค่าความคลาดเคลื่อน BOD/COD Online](./menus/bod-cod-deviation-reports/README.md#เลขที่รายงาน-reportno)

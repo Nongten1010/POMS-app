@@ -359,16 +359,18 @@ const loginExample = {
 };
 
 const createLocalAccountExample = {
-  fullName: 'สมชาย ทดสอบ',
-  username: 'local_officer',
-  password: examplePasswordPlaceholder,
-  department: 'กองจัดการคุณภาพน้ำ',
-  lineNameTh: 'นักวิทยาศาสตร์',
-  levelNameTh: 'ชำนาญการ',
-  regionName: 'ภาคตะวันออก',
-  roles: 'monitoring_5_centers',
-  userType: 'officer',
-  isActive: true,
+  user: {
+    fullName: 'เจ้าหน้าที่ กกพ.',
+    username: 'erc_officer',
+    password: examplePasswordPlaceholder,
+    department: '',
+    lineNameTh: '',
+    levelNameTh: '',
+    roleCodes: ['erc_office'],
+    userType: 'officer',
+    isActive: true,
+  },
+  permissions: {},
 };
 
 const createManagedUserExample = {
@@ -681,7 +683,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
       permissions: { type: 'object', additionalProperties: true },
     },
   },
-  CreateLocalAccountRequest: {
+  LegacyCreateLocalAccountRequest: {
     type: 'object',
     additionalProperties: false,
     required: ['fullName', 'username', 'password', 'roles'],
@@ -726,6 +728,71 @@ const componentSchemas: Record<string, OpenApiObject> = {
         description: 'ห้ามมี code ซ้ำกัน',
       },
     },
+  },
+  NestedCreateLocalAccountRequest: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['user'],
+    properties: {
+      user: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['fullName', 'username', 'password', 'roleCodes'],
+        properties: {
+          fullName: { type: 'string', minLength: 1, maxLength: 255 },
+          username: { type: 'string', minLength: 3, maxLength: 64 },
+          password: { type: 'string', minLength: 8, maxLength: 128 },
+          department: { type: 'string', maxLength: 255 },
+          lineNameTh: { type: 'string', maxLength: 128 },
+          levelNameTh: { type: 'string', maxLength: 64 },
+          provinceId: { type: 'string', minLength: 1, maxLength: 32, nullable: true },
+          provinceName: { type: 'string', minLength: 1, maxLength: 128, nullable: true },
+          estateCode: { type: 'string', minLength: 1, maxLength: 32, nullable: true },
+          regionName: { type: 'string', minLength: 1, maxLength: 128, nullable: true },
+          regions: {
+            type: 'array',
+            maxItems: 1,
+            nullable: true,
+            items: { type: 'string', minLength: 1, maxLength: 128 },
+          },
+          regionalAccess: {
+            type: 'object',
+            nullable: true,
+            additionalProperties: false,
+            required: ['regions'],
+            properties: {
+              regions: {
+                type: 'array',
+                minItems: 1,
+                maxItems: 1,
+                items: { type: 'string', minLength: 1, maxLength: 128 },
+              },
+            },
+          },
+          roleCodes: {
+            type: 'array',
+            minItems: 1,
+            maxItems: 1,
+            items: { type: 'string', minLength: 1, maxLength: 32 },
+          },
+          userType: { type: 'string', enum: ['officer', 'admin'], default: 'officer' },
+          isActive: { type: 'boolean', default: true },
+        },
+      },
+      permissions: {
+        type: 'object',
+        default: {},
+        additionalProperties: schemaRef('PermissionGroup'),
+      },
+    },
+  },
+  CreateLocalAccountRequest: {
+    oneOf: [
+      schemaRef('NestedCreateLocalAccountRequest'),
+      schemaRef('LegacyCreateLocalAccountRequest'),
+    ],
+    description:
+      'แนะนำ nested user/permissions ตามหน้า Permission Management; legacy flat payload ยังรองรับเพื่อความเข้ากันได้',
   },
   OfficerProfile: {
     type: 'object',
@@ -846,10 +913,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
       },
       permissions: {
         type: 'object',
-        additionalProperties: {
-          type: 'object',
-          additionalProperties: true,
-        },
+        additionalProperties: schemaRef('PermissionGroup'),
       },
     },
   },
@@ -891,7 +955,14 @@ const componentSchemas: Record<string, OpenApiObject> = {
       effect: { type: 'string', enum: ['allow', 'deny'] },
       scope: {
         type: 'string',
-        enum: ['ALL', 'IN_REGION', 'IN_PROVINCE', 'IN_ESTATE', 'OWN_FACTORY'],
+        enum: [
+          'ALL',
+          'IN_REGION',
+          'IN_PROVINCE',
+          'IN_ESTATE',
+          'OWN_FACTORY',
+          'FACTORY_TYPE_88',
+        ],
         nullable: true,
       },
       region: { type: 'string', minLength: 1, maxLength: 128, nullable: true },
@@ -899,6 +970,32 @@ const componentSchemas: Record<string, OpenApiObject> = {
       estateCode: { type: 'string', minLength: 1, maxLength: 32, nullable: true },
       estate: { type: 'string', minLength: 1, maxLength: 32, nullable: true },
     },
+  },
+  PermissionGroup: {
+    type: 'object',
+    additionalProperties: {
+      oneOf: [{ type: 'boolean' }, { type: 'string', nullable: true }],
+    },
+    properties: {
+      data: {
+        type: 'string',
+        enum: [
+          'ALL',
+          'IN_REGION',
+          'IN_PROVINCE',
+          'IN_ESTATE',
+          'OWN_FACTORY',
+          'FACTORY_TYPE_88',
+        ],
+        nullable: true,
+      },
+      region: { type: 'string', maxLength: 128, nullable: true },
+      province: { type: 'string', maxLength: 128, nullable: true },
+      estateCode: { type: 'string', maxLength: 32, nullable: true },
+      estate: { type: 'string', maxLength: 32, nullable: true },
+    },
+    description:
+      'สิทธิ์แบบ grouped UI; chat.edit map ไป chat:answer และ permissions.data=ALL map เป็น binary scope null',
   },
   ReplaceUserPermissionsRequest: {
     type: 'object',
@@ -4469,7 +4566,7 @@ function authorizationRequirementFor(path: string, method: string): Authorizatio
 
   if (path.startsWith('/monitoring-point-forms')) {
     if (path.endsWith('/select-eligible')) {
-      return { permissions: ['eligible_factories:edit'], mode: 'any' };
+      return { permissions: ['eligible_factories:approve'], mode: 'any' };
     }
     return method === 'get'
       ? { permissions: ['cems_wpms_requests:view'], mode: 'any' }

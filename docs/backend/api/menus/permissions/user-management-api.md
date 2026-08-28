@@ -21,7 +21,7 @@
 
 การให้สิทธิ์ default ทำงานดังนี้:
 
-1. เมื่อสร้างหรือเปลี่ยน role ให้ส่ง role code เดียว ระบบอ่าน role grants จาก [Exact approved role / action / scope matrix](./README.md#exact-approved-role--action--scope-matrix) อัตโนมัติ ไม่ต้องส่ง default permission ซ้ำ
+1. เมื่อสร้างหรือเปลี่ยน role ให้ส่ง role code เดียว ระบบอ่าน role grants จาก [Backend raw role / action / scope matrix](./README.md#backend-raw-role--action--scope-matrix) อัตโนมัติ ไม่ต้องส่ง default permission ซ้ำ
 2. `permissionOverrides`/`permissions` เป็นส่วนต่างจาก role default เท่านั้น: `deny` ใช้ปิดสิทธิ์ และ `allow` ใช้คงสิทธิ์เดิมพร้อมลด scope ให้แคบลง
 3. override ห้ามเพิ่ม permission ที่ role ไม่มี และห้ามขยาย scope ให้กว้างกว่า role
 4. `PUT /users/:id/permissions` และ `permissions` ใน payload แบบหน้าแก้ไขของ `PATCH /users/:id` เป็นการ **แทนที่ override ทั้งชุด**; ถ้าส่ง `[]` จะล้าง override และกลับไปใช้ role default ล้วน
@@ -30,6 +30,8 @@
 Production ยังไม่มี `GET /roles`, `GET /permissions` หรือ endpoint สำหรับอ่าน role-default catalog โดยตรง ตาราง default ในหน้าเมนูหลักจึงอ้างอิง seed/runtime canonical และ response ของ user แต่ละคนต้องอ่านผ่าน `GET /users/:id` หรือ `GET /users/:id/permissions`
 
 สำหรับ 8 operations ในหมวดนี้ route guard ใช้จริงเพียง `users:view`, `users:edit` และ `permissions:manage`; code อื่นใน default matrix เป็นสิทธิ์ของเมนูอื่นหรือสิทธิ์ระดับ UI และไม่ได้หมายความว่ามี endpoint จัดการ role/permission catalog เพิ่ม
+
+สำหรับเมนูขอเชื่อมต่อ ให้ Frontend ใช้ [connection permission contract](./README.md#frontend-connection-permission-contract): grouped response และ grouped PATCH payload ใช้ `permissions.connection.*`; raw `cems_wpms_requests:*` ใช้เฉพาะ field `code` ของ override API
 
 ### Managed user list
 
@@ -177,9 +179,9 @@ Request fields:
 | Field | Type | Required | Nullable | Rules / Meaning |
 | --- | --- | --- | --- | --- |
 | `permissions` | array<object> | yes | no | `0-200` รายการ; ห้าม `code` ซ้ำ; `[]` = ล้าง overrides ทั้งหมด |
-| `permissions[].code` | string | yes | no | permission code ยาว `1-64` และต้องมีอยู่ในระบบ |
+| `permissions[].code` | string | yes | no | raw backend permission code ยาว `1-64` และต้องมีอยู่ในระบบ เช่น `cems_wpms_requests:view`; field นี้ไม่รับ `permissions.connection.view` |
 | `permissions[].effect` | `allow` \| `deny` | yes | no | `allow` ใช้ลด/คงสิทธิ์; `deny` ใช้ปิดสิทธิ์ |
-| `permissions[].scope` | scope | no | yes | `ALL`, `IN_REGION`, `IN_PROVINCE`, `IN_ESTATE`, `OWN_FACTORY`; ถ้า `allow` แล้วไม่ส่ง จะใช้ scope ของ role |
+| `permissions[].scope` | scope | no | yes | `ALL`, `IN_REGION`, `IN_PROVINCE`, `IN_ESTATE`, `OWN_FACTORY`, `FACTORY_TYPE_88`; ถ้า `allow` แล้วไม่ส่ง จะใช้ scope ของ role |
 | `permissions[].region` | string | conditional | yes | ใช้เมื่อ `scope=IN_REGION`; ยาว `1-128` และต้องอยู่ใน profile assignment |
 | `permissions[].province` | string | conditional | yes | ใช้เมื่อ `scope=IN_PROVINCE`; รับชื่อหรือรหัสจังหวัด ยาว `1-128` |
 | `permissions[].estateCode` | string | conditional | yes | ใช้เมื่อ `scope=IN_ESTATE`; รหัสหรือชื่อที่ resolve กับ master ได้ ยาว `1-32` |
@@ -282,7 +284,44 @@ Validation and limitation notes:
 
 - Permission: `users:edit` **หรือ** `permissions:manage`
 - ใช้สร้างบัญชี POMS local ที่ login ด้วย `username`/`password`
-- Request body: บังคับ; ไม่รับ field นอก schema
+- Request body: บังคับ; รับ nested shape ของหน้า Permission Management (แนะนำ) และ legacy flat shape; ห้ามผสมสอง shape และไม่รับ field นอก schema
+
+#### Shape A: nested page payload (แนะนำ)
+
+| Field | Type | Required | Rules / Meaning |
+| --- | --- | --- | --- |
+| `user` | object | yes | ข้อมูลบัญชี local |
+| `user.fullName` | string | yes | trim แล้ว `1-255` |
+| `user.username` | string | yes | trim แล้ว `3-64`; ต้องไม่ซ้ำ |
+| `user.password` | string | yes | `8-128`; backend hash ก่อนเก็บ |
+| `user.department`, `user.lineNameTh`, `user.levelNameTh` | string | no | ค่าว่างถูก normalize เป็นไม่ส่ง |
+| `user.roleCodes` | array<string> | yes | ต้องมี role code 1 ค่า |
+| `user.userType` | `officer` \| `admin` | no | default `officer` |
+| `user.isActive` | boolean | no | default `true` |
+| `permissions` | object | no | grouped permission matrix; default `{}` และแปลงเป็น per-user overrides |
+
+```bash
+curl --request POST \
+  --url '<BASE_URL>/api/v1/users/local-accounts' \
+  --header 'Authorization: Bearer <ACCESS_TOKEN>' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "user": {
+      "fullName": "เจ้าหน้าที่ กกพ.",
+      "username": "erc_officer",
+      "password": "<STRONG_PASSWORD>",
+      "department": "",
+      "lineNameTh": "",
+      "levelNameTh": "",
+      "roleCodes": ["erc_office"],
+      "userType": "officer",
+      "isActive": true
+    },
+    "permissions": {}
+  }'
+```
+
+#### Shape B: legacy flat payload
 
 Request fields:
 
@@ -313,9 +352,10 @@ Request fields:
 | `monitoring_kpm`, `kpm_director` | ไม่ต้องส่งภาค; effective assignment ถูกกำหนดเป็น `ภาคกลาง` |
 | `provincial_office` | ส่ง `provinceName` หรือ `provinceId` หนึ่งจังหวัด |
 | `industrial_estate` | ส่ง `estateCode` หนึ่งนิคม |
+| `erc_office` | ไม่ต้องส่ง location assignment; role default บังคับ `FACTORY_TYPE_88` |
 | role อื่น | ไม่บังคับ location assignment จาก role |
 
-Request example:
+Legacy request example:
 
 ```bash
 curl --request POST \
@@ -514,6 +554,8 @@ Top-level fields:
 
 แต่ละ module ใน `permissions` ใช้รูปแบบต่อไปนี้:
 
+ชื่อ module ต้องตรง grouped response เช่น เมนูขอเชื่อมต่อใช้ `connection` ไม่ใช้ `cems_wpms_requests`
+
 | Field | Type | Required | Meaning |
 | --- | --- | --- | --- |
 | `data` | scope \| `null` | no | data scope ของ module |
@@ -521,6 +563,8 @@ Top-level fields:
 | `province` | string | conditional | qualifier เมื่อ `data=IN_PROVINCE` |
 | `estateCode` | string | conditional | qualifier เมื่อ `data=IN_ESTATE` |
 | `<action>` | boolean | no | `true` = allow ภายใน role; `false` = deny เช่น `view`, `edit`, `approve`, `export` |
+
+`data` รองรับ `FACTORY_TYPE_88`. Module `permissions` ใช้ `data=ALL` เป็นอนุญาตและ `data=null` เป็นไม่อนุญาต แต่ backend เก็บ raw action เป็น binary scope `null`. Module `chat` รับ action `edit` และ map ไป raw code `chat:answer`. Module `eligible_factories` รับ `view`, `edit`, `approve`; `approve` ใช้กับการเลือก monitoring-point form เป็นโรงงานที่เข้าข่าย.
 
 ตัวอย่างนี้คงสิทธิ์ dashboard ภายในภาคตะวันออก แต่ปิด export:
 

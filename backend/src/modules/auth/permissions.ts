@@ -4,6 +4,7 @@ export type PermissionDataScope =
   | 'IN_PROVINCE'
   | 'IN_ESTATE'
   | 'OWN_FACTORY'
+  | 'FACTORY_TYPE_88'
   | null;
 export interface PermissionScopeDetails {
   scope: PermissionDataScope;
@@ -45,11 +46,15 @@ const permissionAliases: Record<string, PermissionAlias | PermissionAlias[]> = {
   'cems_wpms_requests:direct_connect': { module: 'connection', action: 'direct_connect' },
   'chat:view': { module: 'chat', action: 'view' },
   'chat:ask': { module: 'chat', action: 'ask' },
-  'chat:answer': { module: 'chat', action: 'answer' },
+  'chat:answer': [
+    { module: 'chat', action: 'edit' },
+    { module: 'chat', action: 'answer' },
+  ],
   'helpdesk:submit': { module: 'helpdesk', action: 'view' },
   'feedback:submit': { module: 'feedback', action: 'view' },
   'eligible_factories:view': { module: 'eligible_factories', action: 'view' },
   'eligible_factories:edit': { module: 'eligible_factories', action: 'edit' },
+  'eligible_factories:approve': { module: 'eligible_factories', action: 'approve' },
   'eligible_factories:manage': { module: 'eligible_factories', action: 'manage' },
 };
 
@@ -84,12 +89,35 @@ const locationScopedPermissionModules = new Set([
   'eligible_factories',
 ]);
 
+const binaryPermissionCodes = new Set([
+  'dashboard.alerts:view',
+  'helpdesk:submit',
+  'feedback:submit',
+  'laws:view',
+  'laws:edit',
+  'faq:view',
+  'faq:edit',
+  'chat:view',
+  'chat:ask',
+  'chat:answer',
+  'permissions:view',
+  'permissions:manage',
+  'eligible_factories:manage',
+  'api_documentation:view',
+  'users:view',
+  'users:edit',
+  'roles:view',
+  'roles:edit',
+  'audit:view',
+]);
+
 const scopePriority: Record<string, number> = {
   ALL: 5,
   IN_REGION: 4,
   IN_PROVINCE: 3,
   IN_ESTATE: 2,
   OWN_FACTORY: 1,
+  FACTORY_TYPE_88: 1,
 };
 
 export function groupPermissions(
@@ -105,7 +133,7 @@ export function groupPermissions(
 
       const current = groups[permission.module];
       const currentData = current?.data;
-      const nextData = scopeDetails.scope as PermissionDataScope;
+      const nextData = groupedDataScope(permission.module, scopeDetails.scope);
       const data = widestScope(currentData, nextData);
       groups[permission.module] = {
         ...(current ?? { data: nextData }),
@@ -152,9 +180,10 @@ export function permissionGroupsToPermissionOverrides(
         if (overrides[code] && !isPrimaryPermissionAlias(code, module, action)) {
           continue;
         }
-        scopes[code] = group.data;
+        const scope = rawPermissionScope(code, group.data);
+        scopes[code] = scope;
         overrides[code] = {
-          scope: group.data,
+          scope,
           region: normalizeLocationValue(group.region),
           province: normalizeLocationValue(group.province),
           estateCode: normalizeLocationValue(group.estateCode ?? group.estate),
@@ -188,9 +217,11 @@ export function permissionGroupsToUserPermissionOverrides(
 
       for (const code of permissionCodesFromAlias(module, action)) {
         if (overrides.has(code) && !isPrimaryPermissionAlias(code, module, action)) continue;
+        const scope = rawPermissionScope(code, group.data);
         const isDenied =
           enabled === false ||
-          (group.data === null && locationScopedPermissionModules.has(module));
+          (group.data === null &&
+            (locationScopedPermissionModules.has(module) || module === 'permissions'));
         const region = !isDenied ? normalizeLocationValue(group.region) : undefined;
         const province = !isDenied ? normalizeLocationValue(group.province) : undefined;
         const estateCode = !isDenied
@@ -199,7 +230,7 @@ export function permissionGroupsToUserPermissionOverrides(
         overrides.set(code, {
           code,
           effect: isDenied ? 'deny' : 'allow',
-          scope: isDenied ? null : group.data,
+          scope: isDenied ? null : scope,
           ...(region !== undefined ? { region } : {}),
           ...(province !== undefined ? { province } : {}),
           ...(estateCode !== undefined ? { estateCode, estate: estateCode } : {}),
@@ -277,11 +308,12 @@ export function isSameOrNarrowerPermissionScope(
   if (candidate === null) return false;
 
   const allowedScopes: Record<Exclude<PermissionDataScope, null>, PermissionDataScope[]> = {
-    ALL: ['ALL', 'IN_REGION', 'IN_PROVINCE', 'IN_ESTATE', 'OWN_FACTORY'],
+    ALL: ['ALL', 'IN_REGION', 'IN_PROVINCE', 'IN_ESTATE', 'OWN_FACTORY', 'FACTORY_TYPE_88'],
     IN_REGION: ['IN_REGION', 'IN_PROVINCE', 'IN_ESTATE', 'OWN_FACTORY'],
     IN_PROVINCE: ['IN_PROVINCE', 'IN_ESTATE', 'OWN_FACTORY'],
     IN_ESTATE: ['IN_ESTATE', 'OWN_FACTORY'],
     OWN_FACTORY: ['OWN_FACTORY'],
+    FACTORY_TYPE_88: ['FACTORY_TYPE_88'],
   };
   return allowedScopes[roleScope].includes(candidate);
 }
@@ -329,6 +361,14 @@ function widestScope(
   const currentRank = scopePriority[current ?? 'NULL'] ?? 0;
   const nextRank = scopePriority[next ?? 'NULL'] ?? 0;
   return nextRank > currentRank ? next : current;
+}
+
+function groupedDataScope(module: string, scope: PermissionDataScope): PermissionDataScope {
+  return module === 'permissions' ? 'ALL' : scope;
+}
+
+function rawPermissionScope(code: string, scope: PermissionDataScope): PermissionDataScope {
+  return binaryPermissionCodes.has(code) ? null : scope;
 }
 
 function toScopeDetails(value: string | null | PermissionScopeDetails): PermissionScopeDetails {

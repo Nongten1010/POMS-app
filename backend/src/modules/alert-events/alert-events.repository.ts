@@ -1,5 +1,6 @@
 import { db } from '../../config/database';
 import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
+import { applyFactoryType88Filter } from '../../shared/utils/factory-type-scope';
 import type { PermissionScopeDetails } from '../auth/permissions';
 import type { RegionalAccessDTO } from '../auth/regional-access';
 import { resolveAssignedRegions } from '../auth/regional-access';
@@ -213,6 +214,7 @@ function hasPermissionLocationFilter(
   }
   if (scope.scope === 'IN_PROVINCE') return Boolean(normalizeLocationValue(scope.province));
   if (scope.scope === 'IN_ESTATE') return Boolean(getScopeEstateCode(scope));
+  if (scope.scope === 'FACTORY_TYPE_88') return true;
   return false;
 }
 
@@ -242,6 +244,9 @@ function applyPermissionLocationFilter(
       ]);
     });
   }
+  if (scope.scope === 'FACTORY_TYPE_88') {
+    applyFactoryType88Filter(builder, 'ef.factory_type_sequence');
+  }
 }
 
 function applyRegionalAccessFilter(
@@ -249,7 +254,7 @@ function applyRegionalAccessFilter(
   scope: AccessScope,
   regionalAccess: RegionalAccessDTO | null | undefined,
 ): void {
-  if (getAccessScopeValue(scope) === 'ALL') return;
+  if (['ALL', 'FACTORY_TYPE_88'].includes(getAccessScopeValue(scope) ?? '')) return;
   const regionValues = [...new Set((regionalAccess?.regions ?? []).map((value) => value.trim()).filter(Boolean))];
   if (regionValues.length === 0) return;
   builder.whereIn('p.region', regionValues);

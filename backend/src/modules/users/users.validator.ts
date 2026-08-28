@@ -7,7 +7,7 @@ const idParam = z.coerce.number().int().positive();
 const nullableTrimmedString = z.string().trim().min(1).max(255).nullable();
 const optionalNullableTrimmedString = nullableTrimmedString.optional();
 const permissionScopeSchema = z
-  .enum(['ALL', 'IN_REGION', 'IN_PROVINCE', 'IN_ESTATE', 'OWN_FACTORY'])
+  .enum(['ALL', 'IN_REGION', 'IN_PROVINCE', 'IN_ESTATE', 'OWN_FACTORY', 'FACTORY_TYPE_88'])
   .nullable();
 const optionalTrimmedNonEmptyString = (max: number) =>
   z.preprocess(
@@ -118,7 +118,17 @@ const managedUserPayloadShape = {
   profile: officerProfileSchema.optional(),
 };
 
-export const createLocalAccountSchema = z
+const permissionGroupSchema = z
+  .object({
+    data: permissionScopeSchema.optional(),
+    region: optionalFormScopeValue(128),
+    province: optionalFormScopeValue(128),
+    estateCode: optionalFormScopeValue(32),
+    estate: optionalFormScopeValue(32),
+  })
+  .catchall(z.union([z.boolean(), permissionScopeSchema]));
+
+const legacyCreateLocalAccountSchema = z
   .object({
     fullName: z.string().trim().min(1).max(255),
     username: z.string().trim().min(3).max(64),
@@ -211,6 +221,61 @@ export const createLocalAccountSchema = z
     },
   );
 
+const nestedCreateLocalAccountSchema = z
+  .object({
+    user: z
+      .object({
+        fullName: z.string().trim().min(1).max(255),
+        username: z.string().trim().min(3).max(64),
+        password: z.string().min(8).max(128),
+        department: optionalTrimmedNonEmptyString(255),
+        lineNameTh: optionalTrimmedNonEmptyString(128),
+        levelNameTh: optionalTrimmedNonEmptyString(64),
+        provinceId: optionalFormScopeValue(32),
+        provinceName: optionalFormScopeValue(128),
+        estateCode: optionalFormScopeValue(32),
+        regionName: optionalFormScopeValue(128),
+        regions: formRegionsSchema,
+        regionalAccess: regionalAccessSchema.nullable().optional(),
+        roleCodes: z.array(z.string().trim().min(1).max(32)).length(1),
+        userType: z.enum(['officer', 'admin']).default('officer'),
+        isActive: z.boolean().default(true),
+      })
+      .strict(),
+    permissions: z.record(z.string(), permissionGroupSchema).default({}),
+  })
+  .strict()
+  .transform(({ user, permissions }) => {
+    const { roleCodes, ...localAccount } = user;
+    return {
+      ...localAccount,
+      roles: roleCodes[0],
+      permissionOverrides: permissionGroupsToUserPermissionOverrides(
+        permissions as PermissionGroups,
+      ),
+    };
+  });
+
+export const createLocalAccountSchema = z.any().transform((value, ctx) => {
+  let result;
+  if (value && typeof value === 'object' && 'user' in value) {
+    const nestedResult = nestedCreateLocalAccountSchema.safeParse(value);
+    if (!nestedResult.success) {
+      for (const issue of nestedResult.error.issues) ctx.addIssue(issue as never);
+      return z.NEVER;
+    }
+    result = legacyCreateLocalAccountSchema.safeParse(nestedResult.data);
+  } else {
+    result = legacyCreateLocalAccountSchema.safeParse(value);
+  }
+  if (result.success) return result.data;
+
+  for (const issue of result.error.issues) {
+    ctx.addIssue(issue as never);
+  }
+  return z.NEVER;
+});
+
 export const createManagedUserSchema = z
   .object({
     ...managedUserPayloadShape,
@@ -230,16 +295,6 @@ const legacyUpdateManagedUserSchema = z
   .refine((value) => Object.keys(value).length > 0, {
     message: 'At least one field is required',
   });
-
-const permissionGroupSchema = z
-  .object({
-    data: permissionScopeSchema.optional(),
-    region: optionalFormScopeValue(128),
-    province: optionalFormScopeValue(128),
-    estateCode: optionalFormScopeValue(32),
-    estate: optionalFormScopeValue(32),
-  })
-  .catchall(z.union([z.boolean(), permissionScopeSchema]));
 
 const editResponseUpdateSchema = z
   .object({

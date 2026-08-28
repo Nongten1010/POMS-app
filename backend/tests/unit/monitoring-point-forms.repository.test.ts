@@ -13,6 +13,23 @@ describe('monitoringPointFormsRepository', () => {
     jest.clearAllMocks();
   });
 
+  it('accepts only factory type 88 input for the ERC category scope', async () => {
+    const access = { actorUserId: 88, scope: { scope: 'FACTORY_TYPE_88' } } as never;
+
+    await expect(
+      monitoringPointFormsRepository.canAccessFactory(
+        { factoryTypeMain: '88', provinceName: 'ระยอง' } as never,
+        access,
+      ),
+    ).resolves.toBe(true);
+    await expect(
+      monitoringPointFormsRepository.canAccessFactory(
+        { factoryTypeMain: '89', provinceName: 'ระยอง' } as never,
+        access,
+      ),
+    ).resolves.toBe(false);
+  });
+
   it('returns stored project fields when loading a monitoring point form', async () => {
     const formQuery = {
       where: jest.fn().mockReturnThis(),
