@@ -196,6 +196,10 @@ class BodCodPdfLayout {
     return this.pageSize[0]
   }
 
+  get height() {
+    return this.pageSize[1]
+  }
+
   get contentWidth() {
     return this.width - this.margin.left - this.margin.right
   }
@@ -406,6 +410,238 @@ function drawCheck(layout, x, y, checked) {
 
   layout.drawLine(x + 2, y + 3, x + 4, y, 0.9)
   layout.drawLine(x + 4, y, x + 9, y + 8, 0.9)
+}
+
+function isCentralRegionReportValue(report = {}) {
+  return String(report.regionName ?? report.regionCode ?? report.region ?? '').trim() === 'ภาคกลาง'
+}
+
+function getResultNoticeValues(report = {}) {
+  const resultNotice = report.resultNotice ?? {}
+  const checkedParameters = Array.isArray(resultNotice.checkedParameters)
+    ? resultNotice.checkedParameters
+    : [resultNotice.checkedParameters ?? report.parameter].filter(Boolean)
+
+  return {
+    reportCorrectness: resultNotice.reportCorrectness ?? '',
+    checkedParameters,
+    reviewResult: resultNotice.reviewResult ?? '',
+    comment: resultNotice.comment ?? '',
+    inspectorName: resultNotice.inspectorName ?? '',
+    inspectorPosition: resultNotice.inspectorPosition ?? '',
+  }
+}
+
+function drawInlineDottedValue(layout, label, value, x, y, endX, options = {}) {
+  const size = options.size ?? textSizes.body
+  const labelWidth = layout.textWidth(label, size, options.boldLabel)
+  const valueX = x + labelWidth + 4
+
+  layout.drawText(label, x, y, { size, bold: options.boldLabel })
+  layout.drawDottedLine(valueX, endX, y - 2)
+  if (!isBlankValue(value)) {
+    layout.drawText(displayText(value), valueX + 2, y, {
+      size,
+      maxWidth: Math.max(20, endX - valueX - 4),
+      lineHeight: size * 1.18,
+    })
+  }
+}
+
+function drawNoticeCheckboxText(layout, x, y, checked, text, options = {}) {
+  drawCheck(layout, x, y - 1, checked)
+  const textX = x + 18
+  const size = options.size ?? textSizes.body
+  return layout.drawText(text, textX, y, {
+    size,
+    bold: options.bold,
+    maxWidth: options.maxWidth ?? layout.contentWidth - (textX - layout.margin.left),
+    lineHeight: options.lineHeight ?? size * 1.2,
+  })
+}
+
+function drawResultNoticeBody(layout, report = {}) {
+  const isCentral = isCentralRegionReportValue(report)
+  const notice = getResultNoticeValues(report)
+  const boxX = 32
+  const boxRight = layout.width - 32
+  const boxTop = layout.height - 34
+  const boxBottom = 40
+  const x = boxX + 12
+  const right = boxRight - 12
+  const midX = x + ((right - x) / 2)
+  const titleSize = textSizes.body
+  let y = boxTop - 26
+
+  layout.page.drawRectangle({
+    x: boxX,
+    y: boxBottom,
+    width: boxRight - boxX,
+    height: boxTop - boxBottom,
+    borderColor: colors.border,
+    borderWidth: lineWidth,
+  })
+
+  const noticeTitle = `แบบแจ้งผลการตรวจสอบ (${isCentral ? 'ส่วนกลาง' : 'ส่วนภูมิภาค'})`
+  const noticeTitleWidth = layout.textWidth(noticeTitle, textSizes.title, true)
+  layout.drawCentered(noticeTitle, y, { size: textSizes.title, bold: true })
+  layout.drawLine((layout.width - noticeTitleWidth) / 2, y - 3, (layout.width + noticeTitleWidth) / 2, y - 3, 0.4)
+  y -= 20
+  const subtitle = 'การรายงานค่าความคลาดเคลื่อนของเครื่องมือหรือเครื่องอุปกรณ์พิเศษและเครื่องมือหรือเครื่องอุปกรณ์เพิ่มเติม'
+  const subtitleWidth = layout.textWidth(subtitle, textSizes.body, true)
+  layout.drawCentered(subtitle, y, { size: textSizes.body, bold: true })
+  layout.drawLine((layout.width - subtitleWidth) / 2, y - 3, (layout.width + subtitleWidth) / 2, y - 3, 0.4)
+  if (isCentral) {
+    y -= 20
+    layout.drawCentered('สำหรับตรวจวัด', y, { size: textSizes.body, bold: true })
+  }
+  y -= isCentral ? 34 : 48
+
+  drawInlineDottedValue(layout, 'สำหรับโรงงาน :', report.factoryName, x, y, midX - 4, { boldLabel: true })
+  drawInlineDottedValue(layout, 'การรายงานครั้งที่', report.reportRound, midX + 4, y, right, { boldLabel: true })
+  y -= 18
+  drawInlineDottedValue(layout, 'ทะเบียนโรงงานเลขที่ :', report.factoryRegistration ?? report.factoryRegistrationNo, x, y, midX - 4, { boldLabel: true })
+  drawInlineDottedValue(layout, 'อ้างอิงรายงานวันที่ :', report.submittedDate, midX + 4, y, right, { boldLabel: true })
+  y -= 24
+
+  const checkedParameterText = notice.checkedParameters.join(', ')
+  const hasCheckedParameter = (parameter) => checkedParameterText.includes(parameter)
+  const isCorrectReport = notice.reportCorrectness === 'ถูกต้องครบถ้วน'
+  const isIncorrectReport = notice.reportCorrectness === 'ไม่ถูกต้องครบถ้วน'
+  const shouldNotifyResult = notice.reviewResult === 'เห็นควรแจ้งผลการตรวจสอบ'
+  const shouldRequestCorrection = notice.reviewResult === 'เห็นควรให้แก้ไขเพิ่มเติม'
+
+  layout.drawText('1. ความถูกต้องของแบบรายงาน', x, y, { size: titleSize, bold: true })
+  const bodX = x + layout.textWidth('1. ความถูกต้องของแบบรายงาน', titleSize, true) + 8
+  drawCheck(layout, bodX, y - 1, hasCheckedParameter('BOD'))
+  layout.drawText('BOD', bodX + 16, y, { size: titleSize, bold: true })
+  const codX = bodX + 46
+  drawCheck(layout, codX, y - 1, hasCheckedParameter('COD'))
+  layout.drawText('COD', codX + 16, y, { size: titleSize, bold: true })
+  y -= 19
+
+  let height = drawNoticeCheckboxText(
+    layout,
+    x + 22,
+    y,
+    isCorrectReport,
+    'แบบรายงานถูกต้องครบถ้วนตามประกาศกรมโรงงานอุตสาหกรรม เรื่อง หลักเกณฑ์การให้ความเห็นชอบให้โรงงานที่ต้องมีระบบบำบัดน้ำเสียต้องติดตั้งเครื่องมือหรือเครื่องอุปกรณ์พิเศษและเครื่องมือหรือเครื่องอุปกรณ์เพิ่มเติม (ฉบับที่ 2) พ.ศ. 2565',
+    { maxWidth: right - x - 40, bold: false },
+  )
+  y -= Math.max(38, height + 6)
+
+  const incorrectPrefix = 'แบบรายงานไม่ถูกต้องครบถ้วนตามประกาศกรมโรงงานอุตสาหกรรม เรื่อง หลักเกณฑ์การให้ความเห็นชอบให้โรงงานที่ต้องมีระบบบำบัดน้ำเสียต้องติดตั้งเครื่องมือหรือเครื่องอุปกรณ์พิเศษและเครื่องมือหรือเครื่องอุปกรณ์เพิ่มเติม (ฉบับที่ 2) พ.ศ. 2565 เนื่องจาก'
+  height = drawNoticeCheckboxText(layout, x + 22, y, isIncorrectReport, incorrectPrefix, {
+    maxWidth: right - x - 40,
+  })
+  y -= Math.max(30, height)
+  const reasonLines = layout.wrapText(isIncorrectReport ? notice.comment : '', right - (x + 56), titleSize)
+  const firstReason = reasonLines.shift() ?? ''
+  drawInlineDottedValue(layout, '', firstReason, x + 56, y, right)
+  y -= 18
+  layout.drawDottedLine(x, right, y - 2)
+  if (reasonLines[0]) layout.drawText(reasonLines[0], x + 2, y, { size: titleSize, maxWidth: right - x - 4 })
+  y -= 18
+  layout.drawDottedLine(x, right, y - 2)
+  if (reasonLines[1]) layout.drawText(reasonLines[1], x + 2, y, { size: titleSize, maxWidth: right - x - 4 })
+  y -= 24
+
+  layout.drawText('2.ค่าความคลาดเคลื่อน', x, y, { size: titleSize, bold: true })
+  const secondBodX = x + layout.textWidth('2.ค่าความคลาดเคลื่อน', titleSize, true) + 8
+  drawCheck(layout, secondBodX, y - 1, hasCheckedParameter('BOD'))
+  layout.drawText('BOD', secondBodX + 16, y, { size: titleSize, bold: true })
+  const secondCodX = secondBodX + 46
+  drawCheck(layout, secondCodX, y - 1, hasCheckedParameter('COD'))
+  layout.drawText('COD', secondCodX + 16, y, { size: titleSize, bold: true })
+  y -= 21
+
+  height = drawNoticeCheckboxText(
+    layout,
+    x + 22,
+    y,
+    shouldNotifyResult,
+    'เป็นไปตามประกาศกรมโรงงานอุตสาหกรรม เรื่อง หลักเกณฑ์การให้ความเห็นชอบให้โรงงานที่ต้องมีระบบบำบัดน้ำเสียต้องติดตั้งเครื่องมือหรือเครื่องอุปกรณ์พิเศษและเครื่องมือหรือเครื่องอุปกรณ์เพิ่มเติม พ.ศ. 2550',
+    { maxWidth: right - x - 40 },
+  )
+  y -= Math.max(38, height + 6)
+  height = drawNoticeCheckboxText(
+    layout,
+    x + 22,
+    y,
+    shouldRequestCorrection,
+    'ไม่เป็นตามประกาศกรมโรงงานอุตสาหกรรม เรื่อง หลักเกณฑ์การให้ความเห็นชอบให้โรงงานที่ต้องมีระบบบำบัดน้ำเสียต้องติดตั้งเครื่องมือหรือเครื่องอุปกรณ์พิเศษและเครื่องมือหรือเครื่องอุปกรณ์เพิ่มเติม พ.ศ. 2550',
+    { maxWidth: right - x - 40 },
+  )
+  y -= Math.max(48, height + 16)
+
+  layout.drawText('หมายเหตุ', x, y, { size: titleSize, bold: true })
+  layout.drawText(': ในกรณีที่การบันทึกข้อมูลในแบบรายงานไม่ถูกต้องและหรือค่าความคลาดเคลื่อนไม่เป็นไปตามประกาศฯ', x + 52, y, {
+    size: titleSize,
+    maxWidth: right - x - 52,
+    lineHeight: 17,
+  })
+  y -= 18
+  layout.drawText('กรมโรงงานอุตสาหกรรมจะดำเนินการแจ้งผลการตรวจสอบไปยังหน่วยงานกำกับ', x + 52, y, {
+    size: titleSize,
+  })
+
+  const signatureTop = isCentral ? 330 : 258
+  if (isCentral) {
+    drawResultNoticeSignature(layout, x + 72, signatureTop, 'ผู้ตรวจสอบ', notice.inspectorName, notice.inspectorPosition)
+    drawResultNoticeSignature(layout, x + 300, signatureTop, 'ผู้ทบทวน', '', 'ผอ.กฝม.')
+    drawResultNoticeSignature(layout, x + 186, signatureTop - 102, 'ผู้อนุมัติ', '', 'ผอ.กวภ.')
+  } else {
+    drawResultNoticeSignature(layout, x + 72, signatureTop, 'ผู้ตรวจสอบ', notice.inspectorName, notice.inspectorPosition)
+    drawResultNoticeSignature(layout, x + 300, signatureTop, 'ผู้อนุมัติ', '', 'ผอ.ศวภ.')
+  }
+
+  drawResultNoticeContact(layout, isCentral, x, right, 114)
+}
+
+function drawResultNoticeSignature(layout, x, y, role, name = '', position = '') {
+  const width = 160
+  const centerX = x + (width / 2)
+  const size = textSizes.body
+  layout.drawDottedLine(x, x + width, y)
+  layout.drawText('(ลงชื่อ)', x + width + 4, y + 2, { size })
+  layout.drawText('(', x - 6, y - 22, { size })
+  layout.drawDottedLine(x, x + width, y - 20)
+  layout.drawText(')', x + width + 4, y - 22, { size })
+  if (name) {
+    const nameWidth = layout.textWidth(name, size)
+    layout.drawText(name, centerX - (nameWidth / 2), y - 18, { size })
+  }
+  layout.drawText('ตำแหน่ง', x - 45, y - 43, { size })
+  layout.drawDottedLine(x, x + width, y - 42)
+  if (position) {
+    const positionWidth = layout.textWidth(position, size)
+    layout.drawText(position, centerX - (positionWidth / 2), y - 40, { size })
+  }
+  const roleWidth = layout.textWidth(role, size, true)
+  layout.drawText(role, centerX - (roleWidth / 2), y - 64, { size, bold: true })
+  const dateText = '......../........../..........'
+  const dateWidth = layout.textWidth(dateText, size)
+  layout.drawText(dateText, centerX - (dateWidth / 2), y - 84, { size })
+}
+
+function drawResultNoticeContact(layout, isCentral, x, right, y) {
+  const size = textSizes.body
+  layout.drawText('สอบถามข้อมูลเพิ่มเติมได้ที่', x, y, { size, bold: true })
+  const detailX = x + layout.textWidth('สอบถามข้อมูลเพิ่มเติมได้ที่ : ', size, true)
+  if (isCentral) {
+    layout.drawText(': ศูนย์เฝ้าระวังสิ่งแวดล้อมอุตสาหกรรม กลุ่มเฝ้าระวังและเตือนภัยมลพิษโรงงาน', detailX - 4, y, { size })
+    layout.drawText('โทรศัพท์ : 02-4306312 ต่อ 2109  Line : @iemcdiw', detailX + 48, y - 18, { size })
+    layout.drawText('ไปรษณีย์อิเล็กทรอนิกส์ : poms.support@diw.mail.go.th', detailX + 48, y - 36, { size })
+    return
+  }
+
+  layout.drawText(': ศูนย์วิจัยและเตือนภัยมลพิษโรงงานภาค', detailX - 4, y, { size })
+  layout.drawDottedLine(detailX + 176, right - 60, y - 2)
+  layout.drawText('โทรศัพท์ : 02-4306312 ต่อ', detailX + 48, y - 18, { size })
+  layout.drawDottedLine(detailX + 168, right - 120, y - 20)
+  layout.drawText('ไปรษณีย์อิเล็กทรอนิกส์ :', detailX + 48, y - 36, { size })
+  layout.drawDottedLine(detailX + 170, right - 126, y - 38)
+  layout.drawText('(ของแต่ละศูนย์)', right - 122, y - 36, { size })
 }
 
 function drawMainFormFields(layout, report = {}) {
@@ -676,6 +912,26 @@ export async function createBodCodReportPdf(report = {}) {
   drawNotes(layout)
   drawSignature(layout, report)
   await renderDocumentSections(layout, report)
+
+  return pdfDoc.save()
+}
+
+export async function createBodCodResultNoticePdf(report = {}) {
+  const pdfDoc = await PDFDocument.create()
+  pdfDoc.registerFontkit(fontkit)
+
+  const [regularBytes, boldBytes] = await Promise.all([
+    fetchFontBytes(sarabunRegularUrl),
+    fetchFontBytes(sarabunBoldUrl),
+  ])
+  const fonts = {
+    regular: await pdfDoc.embedFont(regularBytes),
+    bold: await pdfDoc.embedFont(boldBytes),
+  }
+
+  const layout = new BodCodPdfLayout(pdfDoc, fonts)
+
+  drawResultNoticeBody(layout, report)
 
   return pdfDoc.save()
 }

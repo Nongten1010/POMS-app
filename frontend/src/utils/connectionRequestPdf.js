@@ -1390,7 +1390,7 @@ class PdfLayout {
       }
     }
 
-    drawSignatureLine('ลงชื่อ ', '', yTop - size, signatureTrailingText)
+    drawSignatureLine('ลงชื่อ ', name, yTop - size, signatureTrailingText, { center: true })
     const openParenText = '( '
     const closeParenText = ' )'
     const openParenWidth = this.textWidth(openParenText, size)

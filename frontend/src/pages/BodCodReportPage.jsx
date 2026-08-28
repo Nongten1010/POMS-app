@@ -31,7 +31,6 @@ import {
 import CloseIcon from '@mui/icons-material/Close'
 import DeleteIcon from '@mui/icons-material/Delete'
 import DescriptionIcon from '@mui/icons-material/Description'
-import FileDownloadIcon from '@mui/icons-material/FileDownload'
 import HistoryIcon from '@mui/icons-material/History'
 import LinkIcon from '@mui/icons-material/Link'
 import WarningAmberIcon from '@mui/icons-material/WarningAmber'
@@ -41,7 +40,8 @@ import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
 import dayjs from 'dayjs'
 import 'dayjs/locale/th'
 import OfficerStatisticsPanel from '../components/OfficerStatisticsPanel'
-import { createBodCodReportPdf } from '../utils/bodCodReportPdf'
+import locationOptions from '../option/locationOptions.json'
+import { createBodCodReportPdf, createBodCodResultNoticePdf } from '../utils/bodCodReportPdf'
 
 dayjs.locale('th')
 
@@ -53,6 +53,12 @@ const appBarHeight = {
 const bodCodDeviationReportsApiBaseUrl = import.meta.env.DEV
   ? '/api-proxy/v1/bod-cod-deviation-reports'
   : 'https://d-poms.diw.go.th/api/v1/bod-cod-deviation-reports'
+const bodCodProvinceRegionMap = Object.fromEntries(
+  locationOptions.provinces.flatMap((province) => [
+    [province.value, province.region],
+    [province.label, province.region],
+  ]),
+)
 
 const operatorSubMenus = [
   { value: 'factories', label: 'รายชื่อโรงงาน' },
@@ -419,6 +425,9 @@ function mapBodCodFactoryRow(row = {}, index = 0) {
     oldRegistrationNo: row.oldRegistrationNo ?? '',
     industryType: row.industryType ?? '',
     province: row.province ?? row.provinceName ?? '',
+    provinceName: row.provinceName ?? row.province ?? '',
+    regionName: row.regionName ?? row.regionCode ?? row.region ?? '',
+    regionCode: row.regionCode ?? row.regionName ?? row.region ?? '',
     monitoringPointCount: Number(row.monitoringPointCount ?? measurementPoints.length),
     measurementPoints,
   }
@@ -450,6 +459,9 @@ function mapBodCodReportRow(row = {}, index = 0, options = {}) {
     factoryName: row.factoryName ?? '',
     factoryRegistration: row.factoryRegistration ?? row.factoryRegistrationNo ?? row.newRegistrationNo ?? '',
     province: row.province ?? row.provinceName ?? '',
+    provinceName: row.provinceName ?? row.province ?? '',
+    regionName: row.regionName ?? row.regionCode ?? row.region ?? '',
+    regionCode: row.regionCode ?? row.regionName ?? row.region ?? '',
     monitoringPointCode: row.monitoringPointCode ?? row.pointCode ?? '',
     monitoringPointName: row.monitoringPointName ?? row.pointName ?? '',
     reportRound: row.reportRound ?? (reportRoundNo ? `ครั้งที่ ${reportRoundNo}` : ''),
@@ -1555,8 +1567,27 @@ function ReportPreviewDialog({
   )
 }
 
-function isBangkokProvince(province = '') {
-  return province.includes('กรุงเทพ') || province.includes('กทม')
+function normalizeBodCodProvinceName(province = '') {
+  return String(province ?? '').trim().replace(/^จังหวัด/u, '')
+}
+
+function getBodCodRegionName(report = {}) {
+  const explicitRegion = report.regionName ?? report.regionCode ?? report.region
+  if (explicitRegion) return explicitRegion
+
+  const province = normalizeBodCodProvinceName(report.province ?? report.provinceName)
+  return bodCodProvinceRegionMap[province] ?? ''
+}
+
+function getBodCodReportWithRegion(report = {}) {
+  return {
+    ...report,
+    regionName: getBodCodRegionName(report),
+  }
+}
+
+function isCentralRegionReport(report = {}) {
+  return getBodCodRegionName(report) === 'ภาคกลาง'
 }
 
 function NoticeBoldText({ children }) {
@@ -1568,7 +1599,7 @@ function NoticeBoldText({ children }) {
 }
 
 function ResultNoticePaperDocument({ report }) {
-  const isCentral = isBangkokProvince(report.province)
+  const isCentral = isCentralRegionReport(report)
   const noticeForm = getResultNoticeFormValues(report)
   const checkedParameters = Array.isArray(report?.resultNotice?.checkedParameters)
     ? report.resultNotice.checkedParameters
@@ -1774,29 +1805,64 @@ function getResultNoticeFormValues(report = {}) {
 
 function ResultNoticeDialog({ open, report, mode = 'view', submitting = false, submitError = '', onClose, onConfirm }) {
   const [noticeForm, setNoticeForm] = useState(() => getResultNoticeFormValues(report))
-  const [statusHistoryAnchorEl, setStatusHistoryAnchorEl] = useState(null)
-  const title = report && isBangkokProvince(report.province)
+  const [pdfUrl, setPdfUrl] = useState('')
+  const [pdfLoading, setPdfLoading] = useState(false)
+  const [pdfError, setPdfError] = useState('')
+  const reportWithRegion = useMemo(() => (report ? getBodCodReportWithRegion(report) : null), [report])
+  const title = reportWithRegion && isCentralRegionReport(reportWithRegion)
     ? 'แบบแจ้งผล (ส่วนกลาง)'
     : 'แบบแจ้งผล (ส่วนภูมิภาค)'
   const isEditMode = mode === 'edit'
-  const statusHistory = report ? buildFallbackReportStatusHistory(report) : []
-  const statusHistoryPopoverOpen = Boolean(statusHistoryAnchorEl)
   const updateNoticeForm = (field, value) => {
     setNoticeForm((current) => ({ ...current, [field]: value }))
   }
-  const handleDownload = () => {
-    if (!report) return
 
-    const blob = new Blob([JSON.stringify(report.resultNotice ?? report, null, 2)], { type: 'application/json;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `${report.reportNo || 'bod-cod-result-notice'}.json`
-    link.click()
-    URL.revokeObjectURL(url)
-  }
+  useEffect(() => {
+    if (!open || !reportWithRegion || isEditMode) {
+      return undefined
+    }
+
+    let active = true
+    let nextUrl = ''
+
+    Promise.resolve()
+      .then(async () => {
+        if (!active) return
+        setPdfLoading(true)
+        setPdfError('')
+        const pdfBytes = await createBodCodResultNoticePdf(reportWithRegion)
+        if (!active) return
+        nextUrl = URL.createObjectURL(new Blob([pdfBytes], { type: 'application/pdf' }))
+        setPdfUrl((currentUrl) => {
+          if (currentUrl) URL.revokeObjectURL(currentUrl)
+          return nextUrl
+        })
+      })
+      .catch((error) => {
+        if (!active) return
+        setPdfError(error instanceof Error ? error.message : 'สร้าง PDF ไม่สำเร็จ')
+        setPdfUrl((currentUrl) => {
+          if (currentUrl) URL.revokeObjectURL(currentUrl)
+          return ''
+        })
+      })
+      .finally(() => {
+        if (active) setPdfLoading(false)
+      })
+
+    return () => {
+      active = false
+      if (nextUrl) URL.revokeObjectURL(nextUrl)
+    }
+  }, [open, reportWithRegion, isEditMode])
+
   const closeDialog = () => {
-    setStatusHistoryAnchorEl(null)
+    setPdfLoading(false)
+    setPdfError('')
+    setPdfUrl((currentUrl) => {
+      if (currentUrl) URL.revokeObjectURL(currentUrl)
+      return ''
+    })
     onClose?.()
   }
 
@@ -1816,52 +1882,21 @@ function ResultNoticeDialog({ open, report, mode = 'view', submitting = false, s
             {title}
           </Typography>
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexShrink: 0 }}>
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<HistoryIcon />}
-              disabled={!report}
-              onClick={(event) => setStatusHistoryAnchorEl(event.currentTarget)}
-            >
-              ประวัติสถานะ
-            </Button>
-            <Button
-              variant="contained"
-              size="small"
-              startIcon={<FileDownloadIcon />}
-              disabled={!report}
-              onClick={handleDownload}
-            >
-              ดาวน์โหลด
-            </Button>
             <IconButton aria-label="ปิด" onClick={closeDialog} size="small">
               <CloseIcon />
             </IconButton>
           </Stack>
         </DialogTitle>
-        <Popover
-          open={statusHistoryPopoverOpen}
-          anchorEl={statusHistoryAnchorEl}
-          onClose={() => setStatusHistoryAnchorEl(null)}
-          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-          transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-          slotProps={{
-            paper: {
-              sx: {
-                width: 420,
-                maxWidth: 'calc(100vw - 32px)',
-                maxHeight: 520,
-                overflowY: 'auto',
-                p: 2,
-                borderRadius: 2,
-                boxShadow: '0 18px 48px rgba(15, 23, 42, 0.18)',
-              },
-            },
+        <DialogContent
+          dividers
+          sx={{
+            bgcolor: isEditMode ? 'background.default' : 'neutral.100',
+            display: isEditMode ? 'block' : 'flex',
+            minHeight: isEditMode ? undefined : { xs: '70vh', md: '78vh' },
+            overflow: isEditMode ? undefined : 'hidden',
+            p: isEditMode ? undefined : 2,
           }}
         >
-          <ReportStatusHistoryContent history={statusHistory} />
-        </Popover>
-        <DialogContent dividers sx={{ bgcolor: isEditMode ? 'background.default' : 'neutral.100' }}>
           {report && isEditMode ? (
             <Stack spacing={2}>
               <SectionPaper title="ข้อมูลรายงาน">
@@ -1940,7 +1975,35 @@ function ResultNoticeDialog({ open, report, mode = 'view', submitting = false, s
               </SectionPaper>
             </Stack>
           ) : null}
-          {report && !isEditMode ? <ResultNoticePaperDocument report={report} /> : null}
+          {report && !isEditMode ? (
+            pdfLoading ? (
+              <Stack spacing={2} sx={{ alignItems: 'center', justifyContent: 'center', flex: 1, minHeight: 360 }}>
+                <CircularProgress size={32} />
+                <Typography variant="body2" color="text.secondary">
+                  กำลังสร้าง PDF
+                </Typography>
+              </Stack>
+            ) : pdfUrl ? (
+              <Box
+                component="iframe"
+                title="ตัวอย่างแบบแจ้งผล BOD/COD"
+                src={pdfUrl}
+                sx={{
+                  display: 'block',
+                  width: '100%',
+                  height: { xs: '70vh', md: '78vh' },
+                  minHeight: 0,
+                  border: 0,
+                  bgcolor: '#fff',
+                }}
+              />
+            ) : pdfError ? (
+              <Stack spacing={2} sx={{ width: '100%' }}>
+                <Alert severity="error">{pdfError}</Alert>
+                <ResultNoticePaperDocument report={reportWithRegion} />
+              </Stack>
+            ) : null
+          ) : null}
         </DialogContent>
         {submitError ? (
           <Alert severity="error" sx={{ borderRadius: 0 }}>
