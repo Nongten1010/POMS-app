@@ -136,7 +136,7 @@ curl --request POST \
 | Field | Location | Type | Required | Description |
 | --- | --- | --- | --- | --- |
 | `factoryId` | body | string | Yes | รหัสโรงงานที่ backend ใช้ตรวจ data scope |
-| `factoryRegistrationNo` | body | string | No | เลขทะเบียนโรงงาน ใช้เป็น identifier สำรอง |
+| `factoryRegistrationNo` | body | string | No | เลขทะเบียนโรงงานปัจจุบันจาก `newRegistrationNo`; เก็บเป็น submission snapshot และใช้เป็น identifier สำรอง |
 | `connectedPointId` | body | positive integer | No | ID จาก `GET /api/v1/connected-measurement-points/factories/:factoryId`; ส่ง `null` หรือ omit ได้เมื่อ endpoint คืน `null` |
 
 ถ้าส่ง `connectedPointId` backend จะตรวจว่าเป็น active row ใน `cems_wpms_connected_measurement_points` และต้องตรงกับ `factoryId` ที่ผ่าน data-scope access control แล้วเท่านั้น ระบบจะไม่ใช้ `factoryRegistrationNo` จาก payload เพื่อขยายสิทธิ์ เพื่อป้องกันการผูกแบบกับจุดตรวจวัดของโรงงานอื่น
@@ -641,7 +641,30 @@ Minimal response:
 
 ### `GET /api/v1/kwp-form-reports/factories`
 
-Response ใช้สำหรับรายชื่อโรงงานในเมนู กวภ. โดยแต่ละแถวมี `factoryId`, `factoryName`, `newRegistrationNo`, `province` และ `monitoringPointCount`
+Response ใช้สำหรับรายชื่อโรงงานในเมนู กวภ. และเป็น source สำหรับ prefill ข้อมูลโรงงานก่อนส่งแบบ
+
+### Authentication And Permission
+
+- Authentication: required
+- Permission: `kwp_forms:view`
+- Data scope: ตาม scope ของ permission และพื้นที่ประจำตัวผู้ใช้
+
+### Success Response Fields
+
+| Field | Type | Nullable | Description |
+| --- | --- | --- | --- |
+| `data[].id` | string | No | identifier เดียวกับ `factoryId` |
+| `data[].factoryId` | string | No | `factories.fid` ที่ใช้กับ data scope และใช้ส่งแบบ กวภ. |
+| `data[].factoryName` | string | No | ชื่อ current/live POMS จาก active connected point ล่าสุด; มี fallback ตามกฎด้านล่าง |
+| `data[].newRegistrationNo` | string | No | เลขทะเบียนปัจจุบันจาก `eligible_factories.factory_registration_no_new`; fallback เป็น `factories.fid` และไม่ใช้ `factories.code` ซึ่งเป็นเลขทะเบียนเดิม |
+| `data[].oldRegistrationNo` | string | Yes | เลขทะเบียนเดิมจาก `eligible_factories.factory_registration_no_old` |
+| `data[].industryType` | string | Yes | รายละเอียดประเภทอุตสาหกรรมจาก factory master |
+| `data[].industryMainOrder` | string | Yes | ลำดับหลักที่แยกจาก `factory_type_sequence` |
+| `data[].businessActivity` | string | Yes | ประกอบกิจการจากโรงงานที่เข้าข่าย |
+| `data[].province` | string | Yes | จังหวัดจาก eligible factory เดียวกับ `newRegistrationNo`; fallback ไป factory master เมื่อไม่มี eligible match |
+| `data[].address` | string | Yes | ที่อยู่จากโรงงานที่เข้าข่าย |
+| `data[].monitoringPointCount` | integer | No | จำนวน active connected measurement points ของโรงงาน |
+| `meta.total` | integer | No | จำนวนโรงงานที่มองเห็นทั้งหมด |
 
 `factoryName` ใช้ชื่อ current/live POMS จาก active row ล่าสุดใน
 `cems_wpms_connected_measurement_points` โดยเรียง `updated_at DESC, id DESC`
@@ -649,15 +672,23 @@ Response ใช้สำหรับรายชื่อโรงงานใ�
 โรงงานที่มองเห็นเท่านั้น หากไม่มีชื่อ current/live ให้ fallback ไปยัง
 `eligible_factories.factory_name` และ `factories.name` ตามลำดับ
 
+ระบบ resolve `eligible_factories` เพียงหนึ่งแถวแบบ deterministic ก่อนนับ connected points เพื่อไม่ให้โรงงานหรือจำนวนจุดซ้ำจาก identifier เก่า/ใหม่ที่ match พร้อมกัน
+
 ```json
 {
   "success": true,
   "data": [
     {
-      "factoryId": "F000123",
-      "factoryName": "บริษัท โรงงานตัวอย่าง จำกัด",
-      "newRegistrationNo": "10120000325542",
-      "province": "นนทบุรี",
+      "id": "10840002225552",
+      "factoryId": "10840002225552",
+      "factoryName": "บริษัท พี.ซี.ปาล์ม(2550) จำกัด",
+      "newRegistrationNo": "10840002225552",
+      "oldRegistrationNo": "3-7(1)-22/55สฎ",
+      "industryType": null,
+      "industryMainOrder": null,
+      "businessActivity": null,
+      "province": "สุราษฎร์ธานี",
+      "address": null,
       "monitoringPointCount": 1
     }
   ],
@@ -667,35 +698,93 @@ Response ใช้สำหรับรายชื่อโรงงานใ�
 
 ### `GET /api/v1/kwp-form-reports/requests`
 
+### Authentication And Permission
+
+- Authentication: required
+- Permission: `kwp_forms:view`
+- Data scope: ตาม scope ของ permission และพื้นที่ประจำตัวผู้ใช้
+
 Query fields:
 
 | Field | Location | Type | Required | Description |
 | --- | --- | --- | --- | --- |
 | `formType` | query | `KWP01`-`KWP05` | No | กรองประเภทฟอร์ม |
 | `status` | query | `DRAFT` \| `SUBMITTED` \| `UNDER_REVIEW` \| `APPROVED` \| `REJECTED` \| `REVISION_REQUESTED` \| `CANCELLED` | No | กรองสถานะ |
-| `factoryId` | query | string | No | กรองโรงงาน |
+| `factoryId` | query | string | No | กรองด้วย factory id, เลขทะเบียนปัจจุบัน หรือเลขทะเบียนเดิมที่ resolve ได้ |
 
-Minimal response:
+### Success Response Fields
+
+| Field | Type | Nullable | Description |
+| --- | --- | --- | --- |
+| `data[].id` | integer | No | ID ของ submission |
+| `data[].factoryId` | string | Yes | factory id snapshot ที่เก็บตอนส่งแบบ |
+| `data[].factoryName` | string | No | ชื่อ current/live ของ connected point; fallback ไป eligible factory, factory master และ submission snapshot ตามลำดับ |
+| `data[].factoryRegistration` | string | Yes | เลขทะเบียนปัจจุบันจาก `eligible_factories.factory_registration_no_new`; fallback ไป `factories.fid`, connected-point snapshot และ submission snapshot ตามลำดับ |
+| `data[].oldRegistrationNo` | string | Yes | เลขทะเบียนเดิมจาก eligible factory ที่ resolve ได้ |
+| `data[].industryType` | string | Yes | ประเภทอุตสาหกรรม snapshot ตอนส่งแบบ |
+| `data[].factoryAddress` | string | Yes | ที่อยู่ snapshot ตอนส่งแบบ |
+| `data[].province` | string | Yes | จังหวัดปัจจุบันของ eligible factory เดียวกับ `factoryRegistration`; fallback ไป factory master |
+| `data[].type` | string | Yes | `CEMS`, `WPMS` หรือประเภทของจุดตรวจวัด |
+| `data[].monitoringPointCode` | string | Yes | รหัสจุดตรวจวัด |
+| `data[].monitoringPointName` | string | Yes | ชื่อจุดตรวจวัด |
+| `data[].requestNo` | string | No | เลขที่คำขอแบบ opaque string |
+| `data[].form` | string | No | ชื่อแสดงผล `กวภ.01`-`กวภ.05` |
+| `data[].formType` | enum | No | `KWP01`-`KWP05` |
+| `data[].submittedDate` | string | No | วันที่รูปแบบ `DD/MM/YYYY` ปี พ.ศ. หรือ `-` |
+| `data[].reviewedDate` | string | No | วันที่รูปแบบ `DD/MM/YYYY` ปี พ.ศ. หรือ `-` |
+| `data[].status` | string | No | ป้ายสถานะภาษาไทยสำหรับแสดงผล |
+| `data[].statusCode` | enum | No | machine-readable KWP status |
+| `data[].revisionNote` | string | Yes | หมายเหตุที่ให้แก้ไขล่าสุด |
+| `data[].statusHistory` | object[] | No | timeline สถานะ เรียงตามเวลาและ ID |
+| `meta.total` | integer | No | จำนวนคำขอทั้งหมดหลังกรอง โดยไม่นับซ้ำจาก identifier alias |
+
+### Factory Identity Rules
+
+- เมื่อ submission ผูก active connected point ระบบใช้ `connectedPoint.eligible_factory_id` เป็น match แรก จากนั้นจึง fallback ไป identifier ปัจจุบัน/เดิมของ connected point และ submission
+- ระบบเลือก eligible factory และ factory master อย่างละไม่เกินหนึ่งแถวด้วยลำดับความสำคัญที่แน่นอน จึงไม่ผสมเลขทะเบียนของโรงงานหนึ่งกับจังหวัดของอีกโรงงานและไม่ทำให้ `meta.total` พองจาก join
+- `factoryRegistration`, `oldRegistrationNo` และ `province` อ้างอิง eligible factory เดียวกันเมื่อ resolve ได้
+- ค่า snapshot ใน `kwp_form_submissions` ไม่ถูก rewrite: `factoryId`, `industryType` และ `factoryAddress` ยังคงเป็นค่าตอนยื่น ส่วน snapshot ชื่อ/เลขทะเบียนใช้เป็น fallback เมื่อหา current identity ไม่ได้
+- การแก้นี้ไม่ต้องใช้ data migration และแก้รายการเดิมทันทีผ่าน read model หลัง deploy
+
+### Success Response Example
 
 ```json
 {
   "success": true,
   "data": [
     {
-      "id": 12,
-      "requestNo": "F01-04-0045/2569",
+      "id": 13,
+      "factoryId": "10840002225552",
+      "factoryName": "บริษัท พี.ซี.ปาล์ม(2550) จำกัด",
+      "factoryRegistration": "10840002225552",
+      "oldRegistrationNo": "3-7(1)-22/55สฎ",
+      "industryType": null,
+      "factoryAddress": null,
+      "province": "สุราษฎร์ธานี",
+      "type": "CEMS",
+      "monitoringPointCode": "S1114",
+      "monitoringPointName": null,
+      "requestNo": "F01-07-0002/2569",
+      "form": "กวภ.01",
       "formType": "KWP01",
+      "submittedDate": "04/07/2569",
+      "reviewedDate": "-",
+      "status": "รอพิจารณา",
       "statusCode": "SUBMITTED",
-      "factoryName": "บริษัท โรงงานตัวอย่าง จำกัด"
+      "revisionNote": null,
+      "statusHistory": []
     }
   ],
   "meta": { "total": 1 }
 }
 ```
 
+หลักฐาน regression: [เลขทะเบียนและจังหวัดในตาราง กวภ. ใช้ factory identity เดียวกัน](../../../evidence/kwp-forms/request-table-factory-identity.tdd.md)
+
 ## Business Flow And Explanations
 
 - Client migration checklist:
+  - ตารางรายชื่อโรงงานให้ส่ง `newRegistrationNo` เป็น `factoryRegistrationNo`; ตารางคำขอให้แสดง `factoryRegistration` เป็นเลขปัจจุบัน และใช้ `oldRegistrationNo` เมื่อต้องแสดงเลขเดิม
   - ใช้ `requestNo` เป็น opaque string และรองรับทั้งเลขเดิม `KWP-YY-NNNNN` กับเลขใหม่ `FNN-RR-NNNN/YYYY`; ห้ามแยกค่าด้วยตำแหน่งจากรูปแบบเดิม
   - serialize `problemDate` และ `expectedDoneDate` ของ กวภ.01/03 เป็น `YYYY-MM-DDTHH:00:00` เมื่อต้องเก็บชั่วโมง
   - ใช้ `totalHours` จาก detail response สำหรับแสดง duration และ fallback `totalDays` สำหรับข้อมูลเดิม
@@ -707,6 +796,7 @@ Minimal response:
 - Migration `0081` เพิ่ม sequence แยกตามแบบ/ภาค/ปีและ snapshot ข้อมูลที่ใช้ออกเลข โดยไม่แก้ `submission_no` เดิม
 - Migration `0092` เพิ่ม `parameters_json` แบบ nullable ให้ calibration item โดยไม่ backfill; ค่า `parameter_name` เดิมยังเป็น fallback และเก็บสมาชิกแรกของ canonical list เพื่อรองรับ client legacy
 - Migration `0093` เปลี่ยน `kwp05_calibration_items.result` เป็น `NVARCHAR(32)` เพื่อให้ค่าใหม่ round-trip ภาษาไทยได้ครบ โดยไม่เดาหรือเขียนทับค่า legacy ที่สูญหายเป็น `?` ไปแล้ว
+- การแก้ factory identity ของ `kwp-form-reports` เป็น read-model correction: ไม่มี schema/data migration และไม่ rewrite snapshot ใน `kwp_form_submissions`
 - Deployment ต้องรัน migrations ถึง `0093` ก่อนเปิดใช้ application version นี้; rollback ต้องย้อน application ก่อนจึงค่อยรัน migration down และ migration `0093` จะปฏิเสธ rollback หากการแปลงกลับเป็น `VARCHAR` ทำให้ข้อมูล Unicode สูญหาย
 - [Endpoint registry owner map](../../ENDPOINTS.md)
 - [ขอเชื่อมต่อ](../connection-requests/README.md)
@@ -720,5 +810,7 @@ Minimal response:
 | Validators | [`kwp-form-submissions.validator.ts`](../../../../../backend/src/modules/kwp-form-submissions/kwp-form-submissions.validator.ts), [`kwp-form-reports.validator.ts`](../../../../../backend/src/modules/kwp-form-reports/kwp-form-reports.validator.ts) |
 | Public types | [`kwp-form-submissions.types.ts`](../../../../../backend/src/modules/kwp-form-submissions/kwp-form-submissions.types.ts), [`kwp-form-reports.types.ts`](../../../../../backend/src/modules/kwp-form-reports/kwp-form-reports.types.ts) |
 | Repository | [`kwp-form-submissions.repository.ts`](../../../../../backend/src/modules/kwp-form-submissions/kwp-form-submissions.repository.ts), [`kwp-form-submission-number.ts`](../../../../../backend/src/modules/kwp-form-submissions/kwp-form-submission-number.ts), [`kwp-form-reports.repository.ts`](../../../../../backend/src/modules/kwp-form-reports/kwp-form-reports.repository.ts) |
-| Tests | [`kwp-form-submissions.route.test.ts`](../../../../../backend/tests/unit/kwp-form-submissions.route.test.ts), [`kwp-form-submissions.repository.test.ts`](../../../../../backend/tests/unit/kwp-form-submissions.repository.test.ts), [`kwp-form-submission-number.test.ts`](../../../../../backend/tests/unit/kwp-form-submission-number.test.ts), [`kwp-form-submission-sequence.repository.test.ts`](../../../../../backend/tests/unit/kwp-form-submission-sequence.repository.test.ts), [`kwp-form-submission-create-numbering.repository.test.ts`](../../../../../backend/tests/unit/kwp-form-submission-create-numbering.repository.test.ts), [`kwp-form-duration.test.ts`](../../../../../backend/tests/unit/kwp-form-duration.test.ts), [`kwp-form-attachments.service.test.ts`](../../../../../backend/tests/unit/kwp-form-attachments.service.test.ts), [`kwp-hourly-duration-migration.test.ts`](../../../../../backend/tests/unit/kwp-hourly-duration-migration.test.ts), [`kwp05-calibration-item-parameters-migration.test.ts`](../../../../../backend/tests/unit/kwp05-calibration-item-parameters-migration.test.ts), [`kwp-form-reports.route.test.ts`](../../../../../backend/tests/unit/kwp-form-reports.route.test.ts) |
+| Runtime OpenAPI | [`poms.openapi.ts`](../../../../../backend/src/modules/api-docs/poms.openapi.ts) |
+| Tests | [`kwp-form-submissions.route.test.ts`](../../../../../backend/tests/unit/kwp-form-submissions.route.test.ts), [`kwp-form-submissions.repository.test.ts`](../../../../../backend/tests/unit/kwp-form-submissions.repository.test.ts), [`kwp-form-submission-number.test.ts`](../../../../../backend/tests/unit/kwp-form-submission-number.test.ts), [`kwp-form-submission-sequence.repository.test.ts`](../../../../../backend/tests/unit/kwp-form-submission-sequence.repository.test.ts), [`kwp-form-submission-create-numbering.repository.test.ts`](../../../../../backend/tests/unit/kwp-form-submission-create-numbering.repository.test.ts), [`kwp-form-duration.test.ts`](../../../../../backend/tests/unit/kwp-form-duration.test.ts), [`kwp-form-attachments.service.test.ts`](../../../../../backend/tests/unit/kwp-form-attachments.service.test.ts), [`kwp-hourly-duration-migration.test.ts`](../../../../../backend/tests/unit/kwp-hourly-duration-migration.test.ts), [`kwp05-calibration-item-parameters-migration.test.ts`](../../../../../backend/tests/unit/kwp05-calibration-item-parameters-migration.test.ts), [`kwp-form-reports.repository.test.ts`](../../../../../backend/tests/unit/kwp-form-reports.repository.test.ts), [`kwp-form-reports.route.test.ts`](../../../../../backend/tests/unit/kwp-form-reports.route.test.ts), [`api-docs.openapi.test.ts`](../../../../../backend/tests/unit/api-docs.openapi.test.ts) |
+| Evidence | [`request-table-factory-identity.tdd.md`](../../../evidence/kwp-forms/request-table-factory-identity.tdd.md) |
 | Migration | [`0079_add_kwp_hourly_duration_fields.ts`](../../../../../backend/src/db/migrations/0079_add_kwp_hourly_duration_fields.ts), [`0081_create_kwp_form_submission_sequences.ts`](../../../../../backend/src/db/migrations/0081_create_kwp_form_submission_sequences.ts), [`0092_add_kwp05_calibration_item_parameters.ts`](../../../../../backend/src/db/migrations/0092_add_kwp05_calibration_item_parameters.ts) |

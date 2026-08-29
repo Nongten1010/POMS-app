@@ -1265,6 +1265,59 @@ describe('POMS OpenAPI contract', () => {
     expect(issueReasons.uniqueItems).toBeUndefined();
   });
 
+  it('documents canonical current factory identity for both KWP report tables', () => {
+    const document = asObject(pomsOpenApiDocument, 'OpenAPI document');
+    const schemas = asObject(asObject(document.components, 'components').schemas, 'schemas');
+    const factoryRow = asObject(schemas.KwpFormFactoryRow, 'KwpFormFactoryRow');
+    const factoryProperties = asObject(factoryRow.properties, 'KwpFormFactoryRow.properties');
+    const requestRow = asObject(schemas.KwpFormRequestRow, 'KwpFormRequestRow');
+    const requestProperties = asObject(requestRow.properties, 'KwpFormRequestRow.properties');
+
+    expect(factoryRow.required).toEqual(
+      expect.arrayContaining(['factoryId', 'newRegistrationNo', 'oldRegistrationNo', 'province']),
+    );
+    expect(asObject(factoryProperties.newRegistrationNo, 'newRegistrationNo')).toMatchObject({
+      type: 'string',
+      example: '10840002225552',
+    });
+    expect(asObject(factoryProperties.oldRegistrationNo, 'oldRegistrationNo')).toMatchObject({
+      type: 'string',
+      nullable: true,
+      example: '3-7(1)-22/55สฎ',
+    });
+
+    expect(requestRow.required).toEqual(
+      expect.arrayContaining(['factoryRegistration', 'oldRegistrationNo', 'province', 'requestNo']),
+    );
+    expect(asObject(requestProperties.factoryRegistration, 'factoryRegistration')).toMatchObject({
+      type: 'string',
+      nullable: true,
+      example: '10840002225552',
+    });
+    expect(
+      String(asObject(requestProperties.factoryRegistration, 'factoryRegistration').description),
+    ).toContain('eligible_factories.factory_registration_no_new');
+    expect(asObject(requestProperties.oldRegistrationNo, 'oldRegistrationNo')).toMatchObject({
+      type: 'string',
+      nullable: true,
+      example: '3-7(1)-22/55สฎ',
+    });
+
+    const paths = asObject(document.paths, 'paths');
+    const cases: Array<[string, string]> = [
+      ['/kwp-form-reports/factories', 'KwpFormFactoriesResponse'],
+      ['/kwp-form-reports/requests', 'KwpFormRequestsResponse'],
+    ];
+    for (const [pathKey, expectedSchema] of cases) {
+      const operation = asObject(asObject(paths[pathKey], pathKey).get, `${pathKey}.get`);
+      const responses = asObject(operation.responses, `${pathKey}.get.responses`);
+      const response = asObject(responses['200'], `${pathKey}.get.200`);
+      const content = asObject(response.content, `${pathKey}.get.200.content`);
+      const mediaType = asObject(content['application/json'], `${pathKey}.application/json`);
+      expect(mediaType.schema).toEqual({ $ref: `#/components/schemas/${expectedSchema}` });
+    }
+  });
+
   it('documents the current E- prefix for every BOD/COD report response', () => {
     const document = asObject(pomsOpenApiDocument, 'OpenAPI document');
     const components = asObject(document.components, 'components');

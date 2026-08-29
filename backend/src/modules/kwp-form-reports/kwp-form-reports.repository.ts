@@ -18,7 +18,7 @@ import type {
 interface FactoryTableRow {
   factory_id: string;
   factory_fid: string;
-  factory_code: string;
+  factory_registration_no_new: string;
   factory_name: string;
   factory_system_detail: string | null;
   province_name: string | null;
@@ -52,6 +52,10 @@ interface SubmissionRow {
   province_name: string | null;
   province_region: string | null;
   system_type: string | null;
+  current_factory_name?: string | null;
+  current_factory_registration_no?: string | null;
+  old_registration_no?: string | null;
+  current_province_name?: string | null;
 }
 
 interface StatusHistoryRow {
@@ -119,42 +123,77 @@ export function toKwpFormRequestDTOForTests(
   return toRequestDTO(row, statusHistory);
 }
 
+export function toKwpFormFactoryDTOForTests(row: FactoryTableRow): KwpFormFactoryTableRowDTO {
+  return toFactoryDTO(row);
+}
+
+export function toKwpFormStatusHistoryDTOForTests(row: StatusHistoryRow): KwpFormStatusHistoryDTO {
+  return toStatusHistoryDTO(row);
+}
+
 function buildFactoryQuery(
   access: KwpFormReportAccess,
 ): Knex.QueryBuilder<FactoryTableRow, FactoryTableRow[]> {
   const builder = db<FactoryTableRow>('factories as f')
-    .leftJoin('provinces as p', 'p.id', 'f.province_id')
-    .leftJoin('industrial_estates as ie', 'ie.id', 'f.industrial_estate_id')
-    .leftJoin('eligible_factories as ef', function joinEligibleFactory() {
-      this.on(function joinFactoryKeys() {
-        this.on('ef.factory_registration_no_new', '=', 'f.code')
-          .orOn('ef.factory_registration_no_new', '=', 'f.fid')
-          .orOn('ef.source_factory_id', '=', 'f.fid')
-          .orOn('ef.source_factory_id', '=', 'f.code');
-      }).andOnNull('ef.deleted_at');
-    })
+    .joinRaw(
+      `
+      OUTER APPLY (
+        SELECT TOP (1) ef_source.*
+        FROM eligible_factories AS ef_source
+        WHERE ef_source.deleted_at IS NULL
+          AND (
+            ef_source.factory_registration_no_new = f.fid
+            OR ef_source.source_factory_id = f.fid
+            OR ef_source.factory_registration_no_new = f.code
+            OR ef_source.source_factory_id = f.code
+            OR ef_source.factory_registration_no_old = f.code
+          )
+        ORDER BY CASE
+          WHEN ef_source.factory_registration_no_new = f.fid THEN 0
+          WHEN ef_source.source_factory_id = f.fid THEN 1
+          WHEN ef_source.factory_registration_no_old = f.code THEN 2
+          WHEN ef_source.factory_registration_no_new = f.code THEN 3
+          ELSE 4
+        END, ef_source.id DESC
+      ) AS ef
+    `,
+    )
+    .joinRaw(
+      `
+      OUTER APPLY (
+        SELECT TOP (1) p_source.*
+        FROM provinces AS p_source
+        WHERE p_source.name_th = ef.province_name
+          OR (ef.id IS NULL AND p_source.id = f.province_id)
+        ORDER BY p_source.id
+      ) AS p
+    `,
+    )
+    .joinRaw(
+      `
+      OUTER APPLY (
+        SELECT TOP (1) ie_source.*
+        FROM industrial_estates AS ie_source
+        WHERE ie_source.name_th = ef.industrial_estate_name
+          OR (ef.id IS NULL AND ie_source.id = f.industrial_estate_id)
+        ORDER BY ie_source.id
+      ) AS ie
+    `,
+    )
     .join('cems_wpms_connected_measurement_points as cp', function joinConnectedPoints() {
-      this.on(function joinPointFactoryKeys() {
-        this.on('cp.factory_id', '=', 'f.fid')
-          .orOn('cp.factory_id', '=', 'f.code')
-          .orOn('cp.factory_registration_no', '=', 'f.code');
-      }).andOnNull('cp.deleted_at');
+      this.on('cp.eligible_factory_id', '=', 'ef.id').andOnNull('cp.deleted_at');
     })
     .whereNull('f.deleted_at')
     .select(
       'f.id as factory_id',
       'f.fid as factory_fid',
-      'f.code as factory_code',
+      db.raw('COALESCE(ef.factory_registration_no_new, f.fid) as factory_registration_no_new'),
       db.raw(`
         COALESCE(
           (
             SELECT TOP (1) cp_name.factory_name
             FROM cems_wpms_connected_measurement_points AS cp_name
-            WHERE (
-                cp_name.factory_id = f.fid
-                OR cp_name.factory_id = f.code
-                OR cp_name.factory_registration_no = f.code
-              )
+            WHERE cp_name.eligible_factory_id = ef.id
               AND cp_name.deleted_at IS NULL
             ORDER BY cp_name.updated_at DESC, cp_name.id DESC
           ),
@@ -163,7 +202,7 @@ function buildFactoryQuery(
         ) as factory_name
       `),
       'f.system_detail as factory_system_detail',
-      'p.name_th as province_name',
+      db.raw('COALESCE(ef.province_name, p.name_th) as province_name'),
       'p.region as province_region',
       'ef.factory_registration_no_old as old_registration_no',
       'ef.address as eligible_address',
@@ -174,13 +213,15 @@ function buildFactoryQuery(
     .groupBy(
       'f.id',
       'f.fid',
-      'f.code',
       'f.name',
       'f.system_detail',
       'p.name_th',
       'p.region',
+      'ef.id',
       'ef.factory_name',
+      'ef.factory_registration_no_new',
       'ef.factory_registration_no_old',
+      'ef.province_name',
       'ef.address',
       'ef.business_activity',
       'ef.factory_type_sequence',
@@ -200,22 +241,88 @@ function buildRequestQuery(
   access: KwpFormReportAccess,
 ): Knex.QueryBuilder<SubmissionRow, SubmissionRow[]> {
   const builder = db<SubmissionRow>('kwp_form_submissions as s')
-    .leftJoin('factories as f', function joinFactory() {
-      this.on('f.fid', '=', 's.factory_id')
-        .orOn('f.code', '=', 's.factory_id')
-        .orOn('f.code', '=', 's.factory_registration_no');
+    .leftJoin('cems_wpms_connected_measurement_points as cp', function joinConnectedPoint() {
+      this.on('cp.id', '=', 's.connected_point_id').andOnNull('cp.deleted_at');
     })
-    .leftJoin('provinces as p', 'p.id', 'f.province_id')
-    .leftJoin('industrial_estates as ie', 'ie.id', 'f.industrial_estate_id')
-    .leftJoin('cems_wpms_connected_measurement_points as cp', 'cp.id', 's.connected_point_id')
-    .leftJoin('eligible_factories as ef', function joinEligibleFactory() {
-      this.on(function joinFactoryIdentifiers() {
-        this.on('ef.factory_registration_no_new', '=', 's.factory_registration_no')
-          .orOn('ef.factory_registration_no_new', '=', 's.factory_id')
-          .orOn('ef.source_factory_id', '=', 's.factory_id')
-          .orOn('ef.id', '=', 'cp.eligible_factory_id');
-      }).andOnNull('ef.deleted_at');
-    })
+    .joinRaw(
+      `
+      OUTER APPLY (
+        SELECT TOP (1) ef_source.*
+        FROM eligible_factories AS ef_source
+        WHERE ef_source.deleted_at IS NULL
+          AND (
+            ef_source.id = cp.eligible_factory_id
+            OR ef_source.factory_registration_no_new = cp.factory_registration_no
+            OR ef_source.factory_registration_no_new = cp.factory_id
+            OR ef_source.source_factory_id = cp.factory_id
+            OR ef_source.factory_registration_no_old = s.factory_registration_no
+            OR ef_source.factory_registration_no_new = s.factory_registration_no
+            OR ef_source.factory_registration_no_new = s.factory_id
+            OR ef_source.source_factory_id = s.factory_id
+          )
+        ORDER BY CASE
+          WHEN ef_source.id = cp.eligible_factory_id THEN 0
+          WHEN ef_source.factory_registration_no_new = cp.factory_registration_no THEN 1
+          WHEN ef_source.factory_registration_no_new = cp.factory_id THEN 2
+          WHEN ef_source.source_factory_id = cp.factory_id THEN 3
+          WHEN ef_source.factory_registration_no_old = s.factory_registration_no THEN 4
+          WHEN ef_source.factory_registration_no_new = s.factory_registration_no THEN 5
+          WHEN ef_source.factory_registration_no_new = s.factory_id THEN 6
+          ELSE 7
+        END, ef_source.id DESC
+      ) AS ef
+    `,
+    )
+    .joinRaw(
+      `
+      OUTER APPLY (
+        SELECT TOP (1) f_source.*
+        FROM factories AS f_source
+        WHERE f_source.deleted_at IS NULL
+          AND (
+            f_source.fid = ef.source_factory_id
+            OR f_source.fid = ef.factory_registration_no_new
+            OR f_source.code = ef.factory_registration_no_old
+            OR f_source.fid = cp.factory_id
+            OR f_source.code = cp.factory_registration_no
+            OR f_source.fid = s.factory_id
+            OR f_source.code = s.factory_id
+            OR f_source.code = s.factory_registration_no
+          )
+        ORDER BY CASE
+          WHEN f_source.fid = ef.source_factory_id THEN 0
+          WHEN f_source.fid = ef.factory_registration_no_new THEN 1
+          WHEN f_source.code = ef.factory_registration_no_old THEN 2
+          WHEN f_source.fid = cp.factory_id THEN 3
+          WHEN f_source.fid = s.factory_id THEN 4
+          WHEN f_source.code = s.factory_registration_no THEN 5
+          ELSE 6
+        END, f_source.id DESC
+      ) AS f
+    `,
+    )
+    .joinRaw(
+      `
+      OUTER APPLY (
+        SELECT TOP (1) p_source.*
+        FROM provinces AS p_source
+        WHERE p_source.name_th = ef.province_name
+          OR (ef.id IS NULL AND p_source.id = f.province_id)
+        ORDER BY p_source.id
+      ) AS p
+    `,
+    )
+    .joinRaw(
+      `
+      OUTER APPLY (
+        SELECT TOP (1) ie_source.*
+        FROM industrial_estates AS ie_source
+        WHERE ie_source.name_th = ef.industrial_estate_name
+          OR (ef.id IS NULL AND ie_source.id = f.industrial_estate_id)
+        ORDER BY ie_source.id
+      ) AS ie
+    `,
+    )
     .whereNull('s.deleted_at')
     .select(
       's.id',
@@ -237,6 +344,14 @@ function buildRequestQuery(
       's.created_at',
       's.updated_at',
       'p.name_th as province_name',
+      db.raw(
+        'COALESCE(cp.factory_name, ef.factory_name, f.name, s.factory_name) as current_factory_name',
+      ),
+      db.raw(
+        'COALESCE(ef.factory_registration_no_new, f.fid, cp.factory_registration_no, s.factory_registration_no) as current_factory_registration_no',
+      ),
+      'ef.factory_registration_no_old as old_registration_no',
+      db.raw('COALESCE(ef.province_name, p.name_th) as current_province_name'),
       submissionRegionSelect(),
       'cp.system_type',
     );
@@ -249,6 +364,11 @@ function buildRequestQuery(
       factoryBuilder
         .where('s.factory_id', factoryId)
         .orWhere('s.factory_registration_no', factoryId)
+        .orWhere('cp.factory_id', factoryId)
+        .orWhere('cp.factory_registration_no', factoryId)
+        .orWhere('ef.source_factory_id', factoryId)
+        .orWhere('ef.factory_registration_no_new', factoryId)
+        .orWhere('ef.factory_registration_no_old', factoryId)
         .orWhere('f.fid', factoryId)
         .orWhere('f.code', factoryId);
     });
@@ -385,7 +505,7 @@ function toFactoryDTO(row: FactoryTableRow): KwpFormFactoryTableRowDTO {
     id: row.factory_fid,
     factoryId: row.factory_fid,
     factoryName: row.factory_name,
-    newRegistrationNo: row.factory_code,
+    newRegistrationNo: row.factory_registration_no_new,
     oldRegistrationNo: row.old_registration_no,
     industryType: row.factory_system_detail,
     industryMainOrder: factoryClass,
@@ -404,11 +524,12 @@ function toRequestDTO(
   return {
     id: Number(row.id),
     factoryId: row.factory_id,
-    factoryName: row.factory_name,
-    factoryRegistration: row.factory_registration_no,
+    factoryName: row.current_factory_name ?? row.factory_name,
+    factoryRegistration: row.current_factory_registration_no ?? row.factory_registration_no,
+    oldRegistrationNo: row.old_registration_no ?? null,
     industryType: row.industry_type,
     factoryAddress: row.factory_address,
-    province: row.province_name,
+    province: row.current_province_name ?? row.province_name,
     type: row.system_type ?? pointTypeToSystemType(row.point_type),
     monitoringPointCode: row.point_code,
     monitoringPointName: row.point_name,

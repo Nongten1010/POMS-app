@@ -57,6 +57,7 @@ export interface KwpFormRequestTableRowDTO {
   factoryId: string | null;
   factoryName: string;
   factoryRegistration: string | null;
+  oldRegistrationNo: string | null;
   industryType: string | null;
   factoryAddress: string | null;
   province: string | null;

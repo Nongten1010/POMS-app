@@ -42,6 +42,7 @@ describe('KWP form report routes', () => {
           factoryId: 'FID-001',
           factoryName: 'บริษัท ทดสอบ จำกัด',
           factoryRegistration: '10190000225448',
+          oldRegistrationNo: '3-101-2/44สบ',
           industryType: '10100 / 3',
           factoryAddress: '9 หมู่ 9',
           province: 'สระบุรี',
@@ -102,6 +103,8 @@ describe('KWP form report routes', () => {
     );
     expect(response.body.data[0]).toMatchObject({
       requestNo: 'F01-07-0001/2569',
+      factoryRegistration: '10190000225448',
+      oldRegistrationNo: '3-101-2/44สบ',
       form: 'กวภ.01',
       submittedDate: '15/06/2569',
       status: 'รอพิจารณา',
