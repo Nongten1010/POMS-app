@@ -355,6 +355,17 @@ describe('usersService permissions', () => {
       province: null,
       view: true,
     });
+    expect(result.permissions.connection).toEqual({
+      data: null,
+      region: null,
+      province: null,
+      view: false,
+      edit: false,
+      approve: false,
+    });
+    expect(result.permissions.chat).toEqual({ view: false, edit: false });
+    expect(result.permissions.permissions).toEqual({ view: false });
+    expect(result.permissions).not.toHaveProperty('api_documentation');
   });
 
   it('projects profile assignments into role-scoped permission groups for editing', async () => {
@@ -578,6 +589,118 @@ describe('usersService permissions', () => {
         profile: { regionalAccess: { regions: ['ภาคตะวันออก'] } },
       }),
       7,
+    );
+  });
+
+  it('preserves hidden permission overrides when the editable matrix is replaced', async () => {
+    const existing = {
+      id: 45,
+      userType: 'officer',
+      externalId: 'admin_local',
+      username: 'admin_local',
+      identityProvider: 'local',
+      roles: 'admin',
+      roleCodes: ['admin'],
+      isActive: true,
+      profile: { regionalAccess: { regions: ['ภาคกลาง'] } },
+    } as never;
+    mockedUsersRepository.findById.mockResolvedValue(existing);
+    mockedUsersRepository.getUserPermissionOverrides.mockResolvedValue([
+      {
+        code: 'cems_wpms_requests:direct_connect',
+        resource: 'cems_wpms_requests',
+        action: 'direct_connect',
+        description: null,
+        scope: null,
+        region: null,
+        provinceId: null,
+        provinceName: null,
+        estateCode: null,
+        estate: null,
+        effect: 'deny',
+      },
+      {
+        code: 'statistics:export',
+        resource: 'statistics',
+        action: 'export',
+        description: null,
+        scope: 'IN_REGION',
+        region: 'ภาคกลาง',
+        provinceId: null,
+        provinceName: null,
+        estateCode: null,
+        estate: null,
+        effect: 'allow',
+      },
+      {
+        code: 'factories:edit',
+        resource: 'factories',
+        action: 'edit',
+        description: null,
+        scope: null,
+        region: null,
+        provinceId: null,
+        provinceName: null,
+        estateCode: null,
+        estate: null,
+        effect: 'deny',
+      },
+    ]);
+    mockedUsersRepository.getRolePermissionsByRoleCodes.mockResolvedValue([
+      {
+        code: 'dashboard:view',
+        resource: 'dashboard',
+        action: 'view',
+        description: null,
+        scope: 'ALL',
+      },
+      {
+        code: 'cems_wpms_requests:direct_connect',
+        resource: 'cems_wpms_requests',
+        action: 'direct_connect',
+        description: null,
+        scope: 'ALL',
+      },
+      {
+        code: 'statistics:export',
+        resource: 'statistics',
+        action: 'export',
+        description: null,
+        scope: 'ALL',
+      },
+    ] as never);
+    mockedUsersRepository.update.mockResolvedValue(existing);
+
+    await usersService.update(
+      45,
+      {
+        permissionOverrides: [{ code: 'dashboard:view', effect: 'allow', scope: 'ALL' }],
+      },
+      7,
+    );
+
+    expect(mockedUsersRepository.update).toHaveBeenCalledWith(
+      45,
+      expect.objectContaining({
+        permissionOverrides: expect.arrayContaining([
+          expect.objectContaining({ code: 'dashboard:view', effect: 'allow', scope: 'ALL' }),
+          expect.objectContaining({
+            code: 'cems_wpms_requests:direct_connect',
+            effect: 'deny',
+          }),
+          expect.objectContaining({
+            code: 'statistics:export',
+            effect: 'allow',
+            scope: 'IN_REGION',
+            region: 'ภาคกลาง',
+          }),
+        ]),
+      }),
+      7,
+    );
+    const repositoryInput = mockedUsersRepository.update.mock.calls[0]?.[1];
+    expect(repositoryInput?.permissionOverrides).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'factories:edit' })]),
     );
   });
 

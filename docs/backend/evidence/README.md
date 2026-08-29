@@ -59,6 +59,7 @@
 ## Permissions
 
 - [Permission matrix rollout evidence](./permissions/permission-matrix-rollout.tdd.md)
+- [Permission Management contract alignment](./permissions/permission-management-contract-alignment.tdd.md)
 
 ## Integrations
 

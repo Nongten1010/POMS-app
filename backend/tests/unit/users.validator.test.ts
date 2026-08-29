@@ -131,6 +131,76 @@ describe('managed users validators', () => {
     });
   });
 
+  it('accepts current editable permission groups without data fields on binary modules', () => {
+    const result = createLocalAccountSchema.parse({
+      user: {
+        fullName: 'เจ้าหน้าที่ ทดสอบ',
+        username: 'local_permission_editor',
+        password: validTestPassword,
+        roleCodes: ['admin'],
+        isActive: true,
+      },
+      permissions: {
+        connection: {
+          data: 'ALL',
+          region: null,
+          province: null,
+          view: true,
+          edit: false,
+          approve: false,
+        },
+        helpdesk: { view: true },
+        chat: { view: true, edit: false },
+        permissions: { view: true },
+      },
+    });
+
+    expect(result.permissionOverrides).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'cems_wpms_requests:view',
+          effect: 'allow',
+          scope: 'ALL',
+        }),
+        expect.objectContaining({ code: 'cems_wpms_requests:edit', effect: 'deny', scope: null }),
+        expect.objectContaining({ code: 'helpdesk:submit', effect: 'allow', scope: null }),
+        expect.objectContaining({ code: 'chat:answer', effect: 'deny', scope: null }),
+        expect.objectContaining({ code: 'permissions:view', effect: 'allow', scope: null }),
+      ]),
+    );
+  });
+
+  it('rejects removed permission-management fields and actions', () => {
+    const baseUser = {
+      fullName: 'เจ้าหน้าที่ ทดสอบ',
+      username: 'local_permission_editor',
+      password: validTestPassword,
+      roleCodes: ['admin'],
+      isActive: true,
+    };
+
+    expect(
+      createLocalAccountSchema.safeParse({
+        user: baseUser,
+        permissions: { helpdesk: { data: 'ALL', view: true } },
+      }).success,
+    ).toBe(false);
+    expect(
+      createLocalAccountSchema.safeParse({
+        user: baseUser,
+        permissions: {
+          connection: { data: 'ALL', view: true, direct_connect: true },
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      createLocalAccountSchema.safeParse({
+        user: baseUser,
+        permissions: { api_documentation: { view: true } },
+      }).success,
+    ).toBe(false);
+  });
+
   it('accepts local account location fields from the permission form', () => {
     const result = createLocalAccountSchema.parse({
       fullName: 'สมชาย ทดสอบ',
@@ -263,6 +333,9 @@ describe('managed users validators', () => {
         fullName: 'เจ้าหน้าที่ ทดสอบ',
         username: 'U100',
         password: '',
+        department: 'กรมโรงงานอุตสาหกรรม',
+        lineNameTh: 'นักวิทยาศาสตร์',
+        levelNameTh: 'ชำนาญการ',
         roleCodes: ['diw_central'],
         roles: 'diw_central',
         isActive: true,
@@ -274,6 +347,7 @@ describe('managed users validators', () => {
       username: 'U100',
       externalId: undefined,
       roleCodes: ['diw_central'],
+      profile: undefined,
     });
   });
 
@@ -604,12 +678,10 @@ describe('managed users validators', () => {
       },
       permissions: {
         chat: {
-          data: null,
           view: true,
           edit: true,
         },
         permissions: {
-          data: 'ALL',
           view: true,
         },
         eligible_factories: {
@@ -632,7 +704,11 @@ describe('managed users validators', () => {
           effect: 'allow',
           scope: 'FACTORY_TYPE_88',
         }),
-        expect.objectContaining({ code: 'eligible_factories:approve', effect: 'deny', scope: null }),
+        expect.objectContaining({
+          code: 'eligible_factories:approve',
+          effect: 'deny',
+          scope: null,
+        }),
       ]),
     );
   });

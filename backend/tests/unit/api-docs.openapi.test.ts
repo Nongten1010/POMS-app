@@ -162,6 +162,48 @@ function validationFields(documentation: JsonObject): JsonObject[] {
 }
 
 describe('POMS OpenAPI contract', () => {
+  it('documents the current permission-management input and response matrices', () => {
+    const document = asObject(pomsOpenApiDocument, 'OpenAPI document');
+    const schemas = asObject(asObject(document.components, 'components').schemas, 'schemas');
+    const editableInput = asObject(schemas.EditablePermissionGroups, 'EditablePermissionGroups');
+    const inputProperties = asObject(
+      editableInput.properties,
+      'EditablePermissionGroups.properties',
+    );
+    const chatInput = asObject(inputProperties.chat, 'EditablePermissionGroups.chat');
+    const chatInputProperties = asObject(
+      chatInput.properties,
+      'EditablePermissionGroups.chat.properties',
+    );
+    const connectionInput = asObject(
+      inputProperties.connection,
+      'EditablePermissionGroups.connection',
+    );
+    const connectionInputProperties = asObject(
+      connectionInput.properties,
+      'EditablePermissionGroups.connection.properties',
+    );
+
+    expect(editableInput.additionalProperties).toBe(false);
+    expect(chatInputProperties).toEqual({
+      view: { type: 'boolean' },
+      edit: { type: 'boolean' },
+    });
+    expect(connectionInputProperties).toHaveProperty('data');
+    expect(connectionInputProperties).not.toHaveProperty('direct_connect');
+    expect(inputProperties).not.toHaveProperty('api_documentation');
+
+    const paths = asObject(document.paths, 'paths');
+    const getUser = asObject(asObject(paths['/users/{id}'], '/users/{id}').get, 'GET /users/{id}');
+    const successResponse = asObject(
+      asObject(getUser.responses, 'getUser.responses')['200'],
+      '200',
+    );
+    const content = asObject(successResponse.content, 'getUser.200.content');
+    const mediaType = asObject(content['application/json'], 'getUser.application/json');
+    expect(mediaType.schema).toEqual({ $ref: '#/components/schemas/ManagedUserEditResponse' });
+  });
+
   it.each<[string, string, RuntimeSchema]>([
     ['/auth/login', 'post', loginSchema],
     ['/cems-wpms-requests', 'post', createConnectionRequestSchema],

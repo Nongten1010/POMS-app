@@ -22,11 +22,41 @@ export interface PersonaPermissionOverride {
   estateCode?: string | null;
   estate?: string | null;
 }
-export type PermissionGroup = { data: PermissionDataScope } & Record<
+export type PermissionGroup = { data?: PermissionDataScope } & Record<
   string,
   boolean | PermissionDataScope | string | null | undefined
 >;
 export type PermissionGroups = Record<string, PermissionGroup>;
+
+export const EDITABLE_PERMISSION_ACTIONS = {
+  dashboard: ['view', 'favorite', 'search', 'advanced_search', 'statistics', 'export'],
+  factories: ['view', 'edit', 'approve'],
+  connection: ['view', 'edit', 'approve'],
+  kwp_forms: ['view', 'edit', 'approve'],
+  bod_cod_errors: ['view', 'edit', 'approve'],
+  notifications: ['view'],
+  statistics: ['view'],
+  conditional_search: ['view'],
+  helpdesk: ['view'],
+  feedback: ['view'],
+  laws: ['view', 'edit'],
+  faq: ['view', 'edit'],
+  chat: ['view', 'edit'],
+  permissions: ['view'],
+  eligible_factories: ['view', 'edit', 'approve'],
+} as const;
+
+export const EDITABLE_LOCATION_SCOPED_PERMISSION_MODULES = new Set<string>([
+  'dashboard',
+  'factories',
+  'connection',
+  'kwp_forms',
+  'bod_cod_errors',
+  'notifications',
+  'statistics',
+  'conditional_search',
+  'eligible_factories',
+]);
 
 type PermissionAlias = { module: string; action: string };
 
@@ -57,6 +87,12 @@ const permissionAliases: Record<string, PermissionAlias | PermissionAlias[]> = {
   'eligible_factories:approve': { module: 'eligible_factories', action: 'approve' },
   'eligible_factories:manage': { module: 'eligible_factories', action: 'manage' },
 };
+
+const editablePermissionCodes = new Set(
+  Object.entries(EDITABLE_PERMISSION_ACTIONS).flatMap(([module, actions]) =>
+    actions.flatMap((action) => permissionCodesFromAlias(module, action)),
+  ),
+);
 
 const responseModules = new Set([
   'dashboard',
@@ -147,6 +183,37 @@ export function groupPermissions(
   return groups;
 }
 
+/** Projects effective permissions into the stable matrix editable by Permission Management. */
+export function projectEditablePermissionGroups(groups: PermissionGroups): PermissionGroups {
+  return Object.fromEntries(
+    Object.entries(EDITABLE_PERMISSION_ACTIONS).map(([module, actions]) => {
+      const current = groups[module] ?? {};
+      const projected: PermissionGroup = {};
+
+      if (EDITABLE_LOCATION_SCOPED_PERMISSION_MODULES.has(module)) {
+        projected.data = current.data ?? null;
+        projected.region = normalizeLocationValue(current.region) ?? null;
+        projected.province = normalizeLocationValue(current.province) ?? null;
+        const estateCode = normalizeLocationValue(current.estateCode ?? current.estate);
+        if (estateCode !== undefined) {
+          projected.estateCode = estateCode;
+          projected.estate = estateCode;
+        }
+      }
+
+      for (const action of actions) {
+        projected[action] = current[action] === true;
+      }
+
+      return [module, projected];
+    }),
+  );
+}
+
+export function isEditablePermissionCode(code: string): boolean {
+  return editablePermissionCodes.has(code);
+}
+
 export function permissionGroupsToScopes(
   groups: PermissionGroups,
 ): Record<string, PermissionDataScope> {
@@ -180,7 +247,7 @@ export function permissionGroupsToPermissionOverrides(
         if (overrides[code] && !isPrimaryPermissionAlias(code, module, action)) {
           continue;
         }
-        const scope = rawPermissionScope(code, group.data);
+        const scope = rawPermissionScope(code, group.data ?? null);
         scopes[code] = scope;
         overrides[code] = {
           scope,
@@ -217,7 +284,7 @@ export function permissionGroupsToUserPermissionOverrides(
 
       for (const code of permissionCodesFromAlias(module, action)) {
         if (overrides.has(code) && !isPrimaryPermissionAlias(code, module, action)) continue;
-        const scope = rawPermissionScope(code, group.data);
+        const scope = rawPermissionScope(code, group.data ?? null);
         const isDenied =
           enabled === false ||
           (group.data === null &&

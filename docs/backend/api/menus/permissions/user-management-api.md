@@ -24,14 +24,14 @@
 1. เมื่อสร้างหรือเปลี่ยน role ให้ส่ง role code เดียว ระบบอ่าน role grants จาก [Backend raw role / action / scope matrix](./README.md#backend-raw-role--action--scope-matrix) อัตโนมัติ ไม่ต้องส่ง default permission ซ้ำ
 2. `permissionOverrides`/`permissions` เป็นส่วนต่างจาก role default เท่านั้น: `deny` ใช้ปิดสิทธิ์ และ `allow` ใช้คงสิทธิ์เดิมพร้อมลด scope ให้แคบลง
 3. override ห้ามเพิ่ม permission ที่ role ไม่มี และห้ามขยาย scope ให้กว้างกว่า role
-4. `PUT /users/:id/permissions` และ `permissions` ใน payload แบบหน้าแก้ไขของ `PATCH /users/:id` เป็นการ **แทนที่ override ทั้งชุด**; ถ้าส่ง `[]` จะล้าง override และกลับไปใช้ role default ล้วน
+4. `PUT /users/:id/permissions` เป็น raw API ที่ **แทนที่ override ทั้งชุด**; ถ้าส่ง `[]` จะล้าง override และกลับไปใช้ role default ล้วน ส่วน grouped `permissions` ของ `PATCH /users/:id` แทนที่เฉพาะ editable actions และรักษา internal/hidden overrides เดิมไว้
 5. เปลี่ยน role หรือ override แล้ว access token เดิมไม่เปลี่ยนย้อนหลัง ผู้ใช้ต้อง login/refresh token ใหม่ตาม auth flow เพื่อรับ effective permission ล่าสุด
 
 Production ยังไม่มี `GET /roles`, `GET /permissions` หรือ endpoint สำหรับอ่าน role-default catalog โดยตรง ตาราง default ในหน้าเมนูหลักจึงอ้างอิง seed/runtime canonical และ response ของ user แต่ละคนต้องอ่านผ่าน `GET /users/:id` หรือ `GET /users/:id/permissions`
 
 สำหรับ 8 operations ในหมวดนี้ route guard ใช้จริงเพียง `users:view`, `users:edit` และ `permissions:manage`; code อื่นใน default matrix เป็นสิทธิ์ของเมนูอื่นหรือสิทธิ์ระดับ UI และไม่ได้หมายความว่ามี endpoint จัดการ role/permission catalog เพิ่ม
 
-สำหรับเมนูขอเชื่อมต่อ ให้ Frontend ใช้ [connection permission contract](./README.md#frontend-connection-permission-contract): grouped response และ grouped PATCH payload ใช้ `permissions.connection.*`; raw `cems_wpms_requests:*` ใช้เฉพาะ field `code` ของ override API
+สำหรับเมนูขอเชื่อมต่อ ให้ Frontend ใช้ [runtime connection permission contract](./README.md#runtime-connection-permission-contract): runtime auth response ใช้ `permissions.connection.*`; หน้า Permission Management ใช้เฉพาะ editable actions และ raw `cems_wpms_requests:*` ใช้เฉพาะ field `code` ของ override API
 
 ### Managed user list
 
@@ -103,7 +103,7 @@ curl --request GET \
   --header 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
-Response นี้ใช้เติมหน้าแก้ไข โดยคืน grouped effective permissions หลังรวม role default และ per-user overrides แล้ว:
+Response นี้ใช้เติมหน้าแก้ไข โดยคืน grouped effective permissions หลังรวม role default และ per-user overrides แล้ว ทุก module/action ใน [editable contract](./README.md#permission-management-editable-contract) มีค่าครบเป็น boolean; scoped module มี `data`, `region`, `province` ส่วน binary module ไม่มี location fields:
 
 ```json
 {
@@ -128,18 +128,33 @@ Response นี้ใช้เติมหน้าแก้ไข โดยค�
     "dashboard": {
       "data": "IN_REGION",
       "region": "ภาคตะวันออก",
+      "province": null,
       "view": true,
       "favorite": true,
       "search": true,
       "advanced_search": true,
       "statistics": true,
       "export": true
+    },
+    "connection": {
+      "data": "IN_REGION",
+      "region": "ภาคตะวันออก",
+      "province": null,
+      "view": true,
+      "edit": false,
+      "approve": false
+    },
+    "helpdesk": {
+      "view": true
+    },
+    "permissions": {
+      "view": false
     }
   }
 }
 ```
 
-ข้อควรระวัง: endpoint นี้ไม่ได้ห่อผลลัพธ์ด้วย `{ "success": true, "data": ... }`; root ของ response คือ `user` และ `permissions`
+ตัวอย่างย่อแสดงบาง module เพื่อความกระชับ แต่ response จริงมีครบทุก module ใน editable matrix ข้อควรระวัง: endpoint นี้ไม่ได้ห่อผลลัพธ์ด้วย `{ "success": true, "data": ... }`; root ของ response คือ `user` และ `permissions`
 
 ### Permission override API
 
@@ -298,7 +313,7 @@ Validation and limitation notes:
 | `user.roleCodes` | array<string> | yes | ต้องมี role code 1 ค่า |
 | `user.userType` | `officer` \| `admin` | no | default `officer` |
 | `user.isActive` | boolean | no | default `true` |
-| `permissions` | object | no | grouped permission matrix; default `{}` และแปลงเป็น per-user overrides |
+| `permissions` | object | no | grouped [editable permission matrix](./README.md#permission-management-editable-contract); default `{}` และแปลงเป็น per-user overrides |
 
 ```bash
 curl --request POST \
@@ -528,7 +543,7 @@ Top-level fields:
 | Field | Type | Required | Meaning |
 | --- | --- | --- | --- |
 | `user` | object | yes | ข้อมูลที่หน้าแก้ไขส่งกลับ |
-| `permissions` | object | no | grouped permission matrix; ถ้าส่งจะ **แทนที่ per-user overrides ทั้งชุด** |
+| `permissions` | object | no | grouped editable matrix; ถ้าส่งจะแทนที่ editable overrides และรักษา internal/hidden overrides เดิมไว้ |
 
 `user` fields:
 
@@ -558,13 +573,13 @@ Top-level fields:
 
 | Field | Type | Required | Meaning |
 | --- | --- | --- | --- |
-| `data` | scope \| `null` | no | data scope ของ module |
+| `data` | scope \| `null` | conditional | บังคับสำหรับ scoped module; ห้ามส่งใน `permissions`, `helpdesk`, `feedback`, `laws`, `faq`, `chat` |
 | `region` | string | conditional | qualifier เมื่อ `data=IN_REGION` |
 | `province` | string | conditional | qualifier เมื่อ `data=IN_PROVINCE` |
 | `estateCode` | string | conditional | qualifier เมื่อ `data=IN_ESTATE` |
 | `<action>` | boolean | no | `true` = allow ภายใน role; `false` = deny เช่น `view`, `edit`, `approve`, `export` |
 
-`data` รองรับ `FACTORY_TYPE_88`. Module `permissions` ใช้ `data=ALL` เป็นอนุญาตและ `data=null` เป็นไม่อนุญาต แต่ backend เก็บ raw action เป็น binary scope `null`. Module `chat` รับ action `edit` และ map ไป raw code `chat:answer`. Module `eligible_factories` รับ `view`, `edit`, `approve`; `approve` ใช้กับการเลือก monitoring-point form เป็นโรงงานที่เข้าข่าย.
+`data` รองรับ `FACTORY_TYPE_88` ยกเว้น module `factories` ใน frontend. Binary modules ใช้ boolean action โดยตรงและ backend เก็บ raw action เป็น scope `null`. Module `chat` รับ action `edit` และ map ไป raw code `chat:answer`. Module `eligible_factories` รับ `view`, `edit`, `approve`; `approve` ใช้กับการเลือก monitoring-point form เป็นโรงงานที่เข้าข่าย. Module/action นอก editable matrix ตอบ `400 VALIDATION_ERROR`.
 
 ตัวอย่างนี้คงสิทธิ์ dashboard ภายในภาคตะวันออก แต่ปิด export:
 
@@ -613,11 +628,11 @@ curl --request PATCH \
 ข้อจำกัดร่วมของ PATCH:
 
 - local/POMS account: ถ้าเปลี่ยน `username` ระบบทำให้ account key ตรงกัน; ถ้าส่งทั้ง `username` และ `externalId` ต้องเท่ากัน
-- API/IdP account: เปลี่ยน `username`, `externalId`, ข้อมูลบุคลากร, email, phone หรือ password ไม่ได้
+- API/IdP account: เปลี่ยน `username`, `externalId`, ข้อมูลบุคลากร, email, phone หรือ password ไม่ได้; Shape A ส่งค่าเดิมของ `username`, `fullName`, `department`, `lineNameTh`, `levelNameTh` กลับมาได้และ backend จะไม่นำ provider-owned fields เหล่านี้ไปเขียนทับ
 - เมื่อส่ง Shape A สำหรับ API/IdP account ให้ส่ง `source: "api"` หรือ `accountType: "api"` ตามค่าจาก `GET /users/:id` เพื่อให้ backend แยก provider-owned fields ออกจาก authorization assignment ถูกต้อง
 - API/IdP account ยังแก้ role, `isActive` และ authorization assignment (`regionalAccess`, จังหวัด, นิคม) ได้เมื่อผู้เรียกมีสิทธิ์ครบ
 - เปลี่ยน role แล้วต้องมี assignment ที่ role ใหม่บังคับ มิฉะนั้นตอบ `400 BAD_REQUEST`
-- ถ้าส่ง `permissions` backend แปลง grouped booleans เป็น override และแทนที่ override เดิมทั้งหมด; ถ้าไม่ต้องการเปลี่ยน override ให้ละ field นี้
+- ถ้าส่ง `permissions` backend แปลง grouped booleans เป็น override และแทนที่เฉพาะ editable overrides; internal/hidden overrides เช่น `cems_wpms_requests:direct_connect`, `statistics:export`, `permissions:manage` ถูกเก็บไว้หากยังใช้ได้กับ role ใหม่ ถ้าไม่ต้องการเปลี่ยน editable overrides ให้ละ field นี้
 
 Response (`200 OK`):
 

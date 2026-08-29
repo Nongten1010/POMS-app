@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { permissionGroupsToUserPermissionOverrides } from '../auth/permissions';
+import {
+  EDITABLE_LOCATION_SCOPED_PERMISSION_MODULES,
+  EDITABLE_PERMISSION_ACTIONS,
+  permissionGroupsToUserPermissionOverrides,
+} from '../auth/permissions';
 import { normalizeRegionalAccess } from '../auth/regional-access';
 import type { PermissionGroups } from '../auth/permissions';
 
@@ -118,15 +122,27 @@ const managedUserPayloadShape = {
   profile: officerProfileSchema.optional(),
 };
 
-const permissionGroupSchema = z
-  .object({
-    data: permissionScopeSchema.optional(),
-    region: optionalFormScopeValue(128),
-    province: optionalFormScopeValue(128),
-    estateCode: optionalFormScopeValue(32),
-    estate: optionalFormScopeValue(32),
-  })
-  .catchall(z.union([z.boolean(), permissionScopeSchema]));
+const editablePermissionGroupShape = Object.fromEntries(
+  Object.entries(EDITABLE_PERMISSION_ACTIONS).map(([module, actions]) => {
+    const actionShape = Object.fromEntries(
+      actions.map((action) => [action, z.boolean().optional()]),
+    );
+    const schema = EDITABLE_LOCATION_SCOPED_PERMISSION_MODULES.has(module)
+      ? z
+          .object({
+            data: permissionScopeSchema,
+            region: optionalFormScopeValue(128),
+            province: optionalFormScopeValue(128),
+            estateCode: optionalFormScopeValue(32),
+            estate: optionalFormScopeValue(32),
+            ...actionShape,
+          })
+          .strict()
+      : z.object(actionShape).strict();
+    return [module, schema.optional()];
+  }),
+);
+const editablePermissionGroupsSchema = z.object(editablePermissionGroupShape).strict();
 
 const legacyCreateLocalAccountSchema = z
   .object({
@@ -242,7 +258,7 @@ const nestedCreateLocalAccountSchema = z
         isActive: z.boolean().default(true),
       })
       .strict(),
-    permissions: z.record(z.string(), permissionGroupSchema).default({}),
+    permissions: editablePermissionGroupsSchema.default({}),
   })
   .strict()
   .transform(({ user, permissions }) => {
@@ -323,7 +339,7 @@ const editResponseUpdateSchema = z
         path: ['roleCodes'],
       })
       .strict(),
-    permissions: z.record(z.string(), permissionGroupSchema).optional(),
+    permissions: editablePermissionGroupsSchema.optional(),
   })
   .strict()
   .transform(({ user, permissions }) => {
@@ -342,17 +358,25 @@ const editResponseUpdateSchema = z
             regions: [...(user.regions ?? []), ...(user.regionName ? [user.regionName] : [])],
           })
         : undefined);
-    const profilePatch =
-      user.department !== undefined ||
-      user.lineNameTh !== undefined ||
-      user.levelNameTh !== undefined ||
+    const hasProviderOwnedProfilePatch =
+      !isApiAccount &&
+      (user.department !== undefined ||
+        user.lineNameTh !== undefined ||
+        user.levelNameTh !== undefined);
+    const hasAuthorizationProfilePatch =
       user.provinceName !== undefined ||
       user.estateCode !== undefined ||
-      regionalAccess !== undefined
+      regionalAccess !== undefined;
+    const profilePatch =
+      hasProviderOwnedProfilePatch || hasAuthorizationProfilePatch
         ? {
-            departmentNameTh: user.department,
-            lineNameTh: user.lineNameTh,
-            levelNameTh: user.levelNameTh,
+            ...(!isApiAccount
+              ? {
+                  departmentNameTh: user.department,
+                  lineNameTh: user.lineNameTh,
+                  levelNameTh: user.levelNameTh,
+                }
+              : {}),
             provinceName: user.provinceName,
             estateCode: user.estateCode,
             regionalAccess,

@@ -2,6 +2,14 @@
 
 ไฟล์นี้บันทึกเฉพาะการเปลี่ยน API ที่ทำให้ client ต้องแก้ตาม การเปลี่ยนทั่วไปและประวัติรายละเอียดดูจาก Git history
 
+## 2026-08-29 — แยก Permission Management matrix ออกจาก internal RBAC actions
+
+- **Affected canonical docs:** [สิทธิ์การใช้งาน](./menus/permissions/README.md), [User management API](./menus/permissions/user-management-api.md)
+- **Impact:** `GET /api/v1/users/:id` คืน editable permission matrix แบบเต็มและไม่คืน internal actions เช่น `connection.direct_connect`, `notifications.view_status`, `permissions.manage`, `api_documentation.*`; binary modules `permissions`, `helpdesk`, `feedback`, `laws`, `faq`, `chat` ไม่มี `data`, `region`, `province`. Grouped `permissions` ของ `POST /users/local-accounts` และ `PATCH /users/:id` ปฏิเสธ module/action/field นอก editable matrix.
+- **Migration:** frontend หน้า Permission Management ต้องส่งเฉพาะ [editable contract](./menus/permissions/README.md#permission-management-editable-contract), ใช้ boolean action สำหรับ binary modules และหยุดส่ง `data` ของ module เหล่านั้น. Runtime auth response, raw `PUT /users/:id/permissions`, route guards และ raw RBAC codes ไม่เปลี่ยน. API/IdP edit ส่ง provider-owned display values เดิมกลับมาได้โดย backend จะไม่เขียนทับ.
+- **Old contract:** grouped user-management payload รับ module/action แบบเปิดกว้าง, binary modules ใช้ `data=ALL/null`, response อาจมีเฉพาะ action ที่เป็น true และรวม internal actions ที่หน้าแก้ไขไม่แสดง; grouped PATCH แทนที่ override ทุก code.
+- **New contract:** grouped user-management payload ใช้ allowlist เดียวกับ Permission Management UI, response มีทุก editable action เป็น boolean, binary modules ไม่มี location fields และ grouped PATCH รักษา hidden/internal overrides ที่ยังใช้ได้กับ role ใหม่.
+
 ## 2026-08-28 — แยกสิทธิ์อนุมัติโรงงานที่เข้าข่ายออกจากสิทธิ์แก้ไข
 
 - **Affected canonical docs:** [สิทธิ์การใช้งาน](./menus/permissions/README.md), [โรงงานที่เข้าข่าย](./menus/eligible-factories/README.md)

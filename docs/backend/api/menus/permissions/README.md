@@ -103,7 +103,7 @@ Approved target ใช้ 13 roles ต่อไปนี้:
 | `kwp_director` | ผอ.กวภ. | ทุกพื้นที่ |
 | `admin` | Admin | explicit matrix ระดับระบบ |
 
-### Frontend connection permission contract
+### Runtime connection permission contract
 
 Frontend ต้องใช้ module `connection` สำหรับเมนูขอเชื่อมต่อ ห้ามสร้าง module หรือ object ชื่อ `cems_wpms_requests` เพิ่มใน state, permission hook หรือ UI guard
 
@@ -131,7 +131,33 @@ Frontend ต้องใช้ module `connection` สำหรับเมน�
 }
 ```
 
+`permissions.connection.direct_connect` ยังอยู่ใน response ของ `POST /api/v1/auth/login` และ `GET /api/v1/auth/me` เพราะหน้าขอเชื่อมต่อใช้ตัดสินใจแสดง action เชื่อมต่อทันที แต่ field นี้ไม่อยู่ใน response และ request ของหน้า Permission Management
+
 Raw code `cems_wpms_requests:*` ใช้เฉพาะ backend route guard, JWT `scopes`, ตาราง permission/role และ field `permissions[].code` หรือ `permissionOverrides[].code` ที่ API รับเท่านั้น
+
+### Permission Management editable contract
+
+`GET /api/v1/users/:id` คืน matrix เต็มสำหรับ dialog จัดการสิทธิ์ ทุก action เป็น boolean ชัดเจน และ `POST /api/v1/users/local-accounts` กับ grouped payload ของ `PATCH /api/v1/users/:id` รับเฉพาะ module/action ต่อไปนี้:
+
+| Module | Editable actions | Data/location fields |
+| --- | --- | --- |
+| `dashboard` | `view`, `favorite`, `search`, `advanced_search`, `statistics`, `export` | `data`, `region`, `province`; รองรับ `estateCode`/`estate` สำหรับ compatibility |
+| `factories` | `view`, `edit`, `approve` | เช่นเดียวกับ scoped module แต่ `data` ไม่รับ `FACTORY_TYPE_88` จาก frontend |
+| `connection` | `view`, `edit`, `approve` | scoped module; ไม่มี `direct_connect` ในหน้าแก้สิทธิ์ |
+| `kwp_forms` | `view`, `edit`, `approve` | scoped module |
+| `bod_cod_errors` | `view`, `edit`, `approve` | scoped module |
+| `notifications` | `view` | scoped module; ไม่มี `view_status`, `edit`, `approve` ในหน้าแก้สิทธิ์ |
+| `statistics` | `view` | scoped module |
+| `conditional_search` | `view` | scoped module |
+| `helpdesk` | `view` | ไม่มี `data`, `region`, `province` |
+| `feedback` | `view` | ไม่มี `data`, `region`, `province` |
+| `laws` | `view`, `edit` | ไม่มี `data`, `region`, `province` |
+| `faq` | `view`, `edit` | ไม่มี `data`, `region`, `province` |
+| `chat` | `view`, `edit` | ไม่มี `data`, `region`, `province`; `edit` map ไป raw `chat:answer` |
+| `permissions` | `view` | ไม่มี `data`, `region`, `province`; ไม่มี `manage` ในหน้าแก้สิทธิ์ |
+| `eligible_factories` | `view`, `edit`, `approve` | scoped module |
+
+`api_documentation` และ internal actions เช่น `statistics:export`, `chat:ask`, `permissions:manage`, `eligible_factories:manage` ไม่อยู่ใน editable matrix แต่ raw grants, route guards และ runtime auth permissions ยังทำงานตาม role matrix เดิม เมื่อ grouped PATCH แทนที่ matrix ระบบรักษา per-user overrides ของ internal actions เดิมไว้เพื่อไม่ให้ deny ถูกล้างหรือสิทธิ์ถูกเปิดกลับโดยไม่ตั้งใจ
 
 ### Backend raw role / action / scope matrix
 
@@ -184,9 +210,9 @@ Admin target intentionally **does not include** `chat:ask`
 | Helpdesk / feedback / content | `helpdesk:submit`, `feedback:submit`, `laws:view`, `laws:edit`, `faq:view`, `faq:edit`, `chat:view`, `chat:ask`, `chat:answer` |
 | Permission and admin | `permissions:view`, `permissions:manage`, `api_documentation:view`, `users:view`, `users:edit`, `roles:view`, `roles:edit`, `audit:view` |
 
-### Frontend grouped permission keys (canonical)
+### Runtime grouped permission keys
 
-`GET /api/v1/users/:id`, `POST /api/v1/auth/login`, และ `GET /api/v1/auth/me` คืน grouped `permissions` จาก permission code เดียวกับที่ backend ตรวจจริง
+`POST /api/v1/auth/login` และ `GET /api/v1/auth/me` คืน grouped runtime permissions จาก permission code เดียวกับที่ backend ตรวจจริง ส่วน `GET /api/v1/users/:id` ใช้ editable matrix ที่กรอง internal actions ตามหัวข้อก่อนหน้า
 
 | Permission code | Response group/action |
 | --- | --- |
@@ -201,10 +227,10 @@ Admin target intentionally **does not include** `chat:ask`
 | `cems_wpms_requests:view` | `permissions.connection.view` |
 | `cems_wpms_requests:edit` | `permissions.connection.edit` |
 | `cems_wpms_requests:approve` | `permissions.connection.approve` |
-| `cems_wpms_requests:direct_connect` | `permissions.connection.direct_connect` |
+| `cems_wpms_requests:direct_connect` | `permissions.connection.direct_connect` เฉพาะ runtime auth response; ไม่อยู่ใน Permission Management |
 | `eligible_factories:view`, `eligible_factories:edit`, `eligible_factories:approve` | `permissions.eligible_factories.view`, `permissions.eligible_factories.edit`, `permissions.eligible_factories.approve` |
-| `permissions:view`, `permissions:manage` | `permissions.permissions.view`, `permissions.permissions.manage`; grouped `data` ใช้ `ALL`/`null` แต่ raw permission เป็น binary scope `null` |
-| `chat:view`, `chat:ask`, `chat:answer` | `permissions.chat.view`, `permissions.chat.ask`, `permissions.chat.edit`; response ยัง mirror `permissions.chat.answer` เพื่อ backward compatibility |
+| `permissions:view`, `permissions:manage` | runtime response อาจมี `view`/`manage`; Permission Management มีเฉพาะ `view` และไม่มี `data` |
+| `chat:view`, `chat:ask`, `chat:answer` | runtime response มี `view`, `ask`, `edit` และ compatibility `answer`; Permission Management มีเฉพาะ `view`, `edit` และไม่มี `data` |
 
 Frontend ต้องใช้ grouped response เป็น canonical UI contract โดยเฉพาะ `permissions.connection.*`; raw permission code มีไว้สำหรับส่งกลับใน API ที่ระบุ field `code` และสำหรับ backend authorization เท่านั้น
 
@@ -284,4 +310,4 @@ Migration guidance:
 | Current permission aliases in code | [backend/src/modules/auth/permissions.ts](/Users/yuthsuwannadech/Documents/POMS-app/backend/src/modules/auth/permissions.ts:1) |
 | Current seed files to reconcile | [backend/src/db/seeds/04_roles.ts](/Users/yuthsuwannadech/Documents/POMS-app/backend/src/db/seeds/04_roles.ts:1), [backend/src/db/seeds/05_permissions.ts](/Users/yuthsuwannadech/Documents/POMS-app/backend/src/db/seeds/05_permissions.ts:1), [backend/src/db/seeds/06_role_permissions.ts](/Users/yuthsuwannadech/Documents/POMS-app/backend/src/db/seeds/06_role_permissions.ts:1) |
 | Endpoint registry | [docs/backend/api/ENDPOINTS.md](../../ENDPOINTS.md) |
-| Evidence | [Permission matrix rollout evidence](../../../evidence/permissions/permission-matrix-rollout.tdd.md) |
+| Evidence | [Permission matrix rollout evidence](../../../evidence/permissions/permission-matrix-rollout.tdd.md), [Permission Management contract alignment](../../../evidence/permissions/permission-management-contract-alignment.tdd.md) |

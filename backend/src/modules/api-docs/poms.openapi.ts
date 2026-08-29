@@ -9,6 +9,10 @@ import {
 import { BOD_COD_DEVIATION_REPORT_STATUSES } from '../bod-cod-deviations/bod-cod-deviation-reports.types';
 import { CONNECTION_REQUEST_EIA_ASSESSMENTS } from '../connection-requests/connection-request-eia';
 import { KWP_FORM_STATUSES, KWP_FORM_TYPES } from '../kwp-form-reports/kwp-form-reports.types';
+import {
+  EDITABLE_LOCATION_SCOPED_PERMISSION_MODULES,
+  EDITABLE_PERMISSION_ACTIONS,
+} from '../auth/permissions';
 import { connectionRequestsOpenApiDocument } from './connection-requests.openapi';
 import { MENU_TAGS } from './openapi.shared';
 import { decorateWriteRequestValidationDocs } from './request-validation-docs';
@@ -424,6 +428,52 @@ const replacePermissionsExample = {
   ],
 };
 
+const permissionDataScopeSchema: OpenApiObject = {
+  type: 'string',
+  enum: ['ALL', 'IN_REGION', 'IN_PROVINCE', 'IN_ESTATE', 'OWN_FACTORY', 'FACTORY_TYPE_88'],
+  nullable: true,
+};
+
+function editablePermissionGroupSchema(module: string, complete: boolean): OpenApiObject {
+  const actions = EDITABLE_PERMISSION_ACTIONS[module as keyof typeof EDITABLE_PERMISSION_ACTIONS];
+  const isLocationScoped = EDITABLE_LOCATION_SCOPED_PERMISSION_MODULES.has(module);
+  const properties: Record<string, OpenApiObject> = {
+    ...(isLocationScoped
+      ? {
+          data: permissionDataScopeSchema,
+          region: { type: 'string', maxLength: 128, nullable: true },
+          province: { type: 'string', maxLength: 128, nullable: true },
+          estateCode: { type: 'string', maxLength: 32, nullable: true },
+          estate: { type: 'string', maxLength: 32, nullable: true },
+        }
+      : {}),
+    ...Object.fromEntries(actions.map((action) => [action, { type: 'boolean' }])),
+  };
+
+  return {
+    type: 'object',
+    additionalProperties: false,
+    ...(complete
+      ? { required: [...(isLocationScoped ? ['data', 'region', 'province'] : []), ...actions] }
+      : isLocationScoped
+        ? { required: ['data'] }
+        : {}),
+    properties,
+  };
+}
+
+function editablePermissionGroupsSchema(complete: boolean): OpenApiObject {
+  const modules = Object.keys(EDITABLE_PERMISSION_ACTIONS);
+  return {
+    type: 'object',
+    additionalProperties: false,
+    ...(complete ? { required: modules } : {}),
+    properties: Object.fromEntries(
+      modules.map((module) => [module, editablePermissionGroupSchema(module, complete)]),
+    ),
+  };
+}
+
 const createEligibleFactoryExample = {
   factoryName: 'บริษัท ตัวอย่าง จำกัด',
   factoryId: 'F000123',
@@ -683,6 +733,71 @@ const componentSchemas: Record<string, OpenApiObject> = {
       permissions: { type: 'object', additionalProperties: true },
     },
   },
+  EditablePermissionGroups: {
+    ...editablePermissionGroupsSchema(false),
+    description:
+      'Grouped permissions ที่หน้า Permission Management ส่งได้เท่านั้น; internal RBAC actions ไม่อยู่ใน schema นี้',
+  },
+  EditablePermissionGroupsResponse: {
+    ...editablePermissionGroupsSchema(true),
+    description:
+      'Grouped permissions แบบเต็มสำหรับหน้า Permission Management; ทุก action เป็น boolean และ binary modules ไม่มี data/region/province',
+  },
+  ManagedUserEditUser: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'accountType',
+      'identityProvider',
+      'userType',
+      'username',
+      'fullName',
+      'department',
+      'lineNameTh',
+      'levelNameTh',
+      'provinceName',
+      'estateCode',
+      'regionalAccess',
+      'roles',
+      'roleCodes',
+      'isActive',
+      'source',
+    ],
+    properties: {
+      accountType: { type: 'string', enum: ['poms', 'api'] },
+      identityProvider: { type: 'string' },
+      userType: { type: 'string', enum: ['officer', 'admin'] },
+      username: { type: 'string' },
+      fullName: { type: 'string' },
+      department: { type: 'string', nullable: true },
+      lineNameTh: { type: 'string', nullable: true },
+      levelNameTh: { type: 'string', nullable: true },
+      provinceName: { type: 'string', nullable: true },
+      estateCode: { type: 'string', nullable: true },
+      regionalAccess: {
+        type: 'object',
+        nullable: true,
+        additionalProperties: false,
+        required: ['regions'],
+        properties: {
+          regions: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 1 },
+        },
+      },
+      roles: { type: 'string' },
+      roleCodes: { type: 'array', minItems: 1, maxItems: 1, items: { type: 'string' } },
+      isActive: { type: 'boolean' },
+      source: { type: 'string', enum: ['api', 'created'] },
+    },
+  },
+  ManagedUserEditResponse: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['user', 'permissions'],
+    properties: {
+      user: schemaRef('ManagedUserEditUser'),
+      permissions: schemaRef('EditablePermissionGroupsResponse'),
+    },
+  },
   LegacyCreateLocalAccountRequest: {
     type: 'object',
     additionalProperties: false,
@@ -779,11 +894,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
           isActive: { type: 'boolean', default: true },
         },
       },
-      permissions: {
-        type: 'object',
-        default: {},
-        additionalProperties: schemaRef('PermissionGroup'),
-      },
+      permissions: schemaRef('EditablePermissionGroups'),
     },
   },
   CreateLocalAccountRequest: {
@@ -911,10 +1022,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
         },
         description: 'รองรับ contract หน้า edit user ปัจจุบัน',
       },
-      permissions: {
-        type: 'object',
-        additionalProperties: schemaRef('PermissionGroup'),
-      },
+      permissions: schemaRef('EditablePermissionGroups'),
     },
   },
   LegacyUpdateManagedUserRequest: {
@@ -955,14 +1063,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
       effect: { type: 'string', enum: ['allow', 'deny'] },
       scope: {
         type: 'string',
-        enum: [
-          'ALL',
-          'IN_REGION',
-          'IN_PROVINCE',
-          'IN_ESTATE',
-          'OWN_FACTORY',
-          'FACTORY_TYPE_88',
-        ],
+        enum: ['ALL', 'IN_REGION', 'IN_PROVINCE', 'IN_ESTATE', 'OWN_FACTORY', 'FACTORY_TYPE_88'],
         nullable: true,
       },
       region: { type: 'string', minLength: 1, maxLength: 128, nullable: true },
@@ -979,14 +1080,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
     properties: {
       data: {
         type: 'string',
-        enum: [
-          'ALL',
-          'IN_REGION',
-          'IN_PROVINCE',
-          'IN_ESTATE',
-          'OWN_FACTORY',
-          'FACTORY_TYPE_88',
-        ],
+        enum: ['ALL', 'IN_REGION', 'IN_PROVINCE', 'IN_ESTATE', 'OWN_FACTORY', 'FACTORY_TYPE_88'],
         nullable: true,
       },
       region: { type: 'string', maxLength: 128, nullable: true },
@@ -995,7 +1089,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
       estate: { type: 'string', maxLength: 32, nullable: true },
     },
     description:
-      'สิทธิ์แบบ grouped UI; chat.edit map ไป chat:answer และ permissions.data=ALL map เป็น binary scope null',
+      'Grouped effective permissions สำหรับ runtime/auth และ endpoint raw permission; หน้า Permission Management ใช้ EditablePermissionGroups แทน',
   },
   ReplaceUserPermissionsRequest: {
     type: 'object',
@@ -3489,6 +3583,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Get managed user detail',
       operationId: 'getUserById',
       parameters: [userIdParameter],
+      successSchema: schemaRef('ManagedUserEditResponse'),
     }),
     patch: securedOperation({
       tag: 'Permissions',

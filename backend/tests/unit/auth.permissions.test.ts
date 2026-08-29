@@ -5,9 +5,96 @@ import {
   mergePermissionScopesWithOverrides,
   permissionGroupsToScopes,
   permissionGroupsToUserPermissionOverrides,
+  projectEditablePermissionGroups,
 } from '../../src/modules/auth/permissions';
 
 describe('groupPermissions', () => {
+  it('projects the complete permission-management matrix without internal actions or binary scopes', () => {
+    const grouped = groupPermissions({
+      'dashboard:view': 'ALL',
+      'statistics:view': 'ALL',
+      'statistics:export': 'ALL',
+      'cems_wpms_requests:view': 'ALL',
+      'cems_wpms_requests:direct_connect': 'ALL',
+      'notifications:view': 'ALL',
+      'notifications:view_status': 'ALL',
+      'notifications:edit': null,
+      'chat:view': null,
+      'chat:ask': null,
+      'chat:answer': null,
+      'permissions:view': null,
+      'permissions:manage': null,
+      'eligible_factories:view': 'ALL',
+      'eligible_factories:manage': null,
+      'api_documentation:view': null,
+    });
+
+    const editable = projectEditablePermissionGroups(grouped);
+
+    expect(editable).toMatchObject({
+      dashboard: {
+        data: 'ALL',
+        region: null,
+        province: null,
+        view: true,
+        favorite: false,
+        search: false,
+        advanced_search: false,
+        statistics: false,
+        export: false,
+      },
+      connection: {
+        data: 'ALL',
+        region: null,
+        province: null,
+        view: true,
+        edit: false,
+        approve: false,
+      },
+      notifications: {
+        data: 'ALL',
+        region: null,
+        province: null,
+        view: true,
+      },
+      statistics: {
+        data: 'ALL',
+        region: null,
+        province: null,
+        view: true,
+      },
+      chat: { view: true, edit: true },
+      permissions: { view: true },
+      eligible_factories: {
+        data: 'ALL',
+        region: null,
+        province: null,
+        view: true,
+        edit: false,
+        approve: false,
+      },
+    });
+    expect(editable).toHaveProperty('factories.view', false);
+    expect(editable).toHaveProperty('kwp_forms.view', false);
+    expect(editable).toHaveProperty('bod_cod_errors.view', false);
+    expect(editable).toHaveProperty('conditional_search.view', false);
+    expect(editable).toHaveProperty('helpdesk.view', false);
+    expect(editable).toHaveProperty('feedback.view', false);
+    expect(editable).toHaveProperty('laws.view', false);
+    expect(editable).toHaveProperty('faq.view', false);
+    expect(editable).not.toHaveProperty('connection.direct_connect');
+    expect(editable).not.toHaveProperty('notifications.view_status');
+    expect(editable).not.toHaveProperty('notifications.edit');
+    expect(editable).not.toHaveProperty('statistics.export');
+    expect(editable).not.toHaveProperty('chat.ask');
+    expect(editable).not.toHaveProperty('chat.answer');
+    expect(editable).not.toHaveProperty('chat.data');
+    expect(editable).not.toHaveProperty('permissions.manage');
+    expect(editable).not.toHaveProperty('permissions.data');
+    expect(editable).not.toHaveProperty('eligible_factories.manage');
+    expect(editable).not.toHaveProperty('api_documentation');
+  });
+
   it('maps database permission codes to frontend permission keys with data scopes', () => {
     expect(
       groupPermissions({

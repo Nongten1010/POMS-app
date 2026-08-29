@@ -9,8 +9,10 @@ import { hashPassword } from '../../shared/utils/password';
 import { usersRepository } from './users.repository';
 import {
   groupPermissions,
+  isEditablePermissionCode,
   isSameOrNarrowerPermissionScope,
   mergePermissionScopesWithOverrides,
+  projectEditablePermissionGroups,
 } from '../auth/permissions';
 import type {
   CreateManagedUserInput,
@@ -81,10 +83,12 @@ export const usersService = {
         isActive: user.isActive,
         source: toManagedUserSource(user.identityProvider),
       },
-      permissions: projectManagedPermissionAssignments(
-        groupPermissions(effectivePermissionDetails),
-        roleCodes,
-        user.profile,
+      permissions: projectEditablePermissionGroups(
+        projectManagedPermissionAssignments(
+          groupPermissions(effectivePermissionDetails),
+          roleCodes,
+          user.profile,
+        ),
       ),
     };
   },
@@ -173,6 +177,7 @@ export const usersService = {
             resolvedInput.permissionOverrides,
             resolvedInput.roleCodes ?? existing.roleCodes,
             resolvedInput.profile ?? existing.profile,
+            userId,
           );
 
     const { password, ...repositoryInput } = resolvedInput;
@@ -335,7 +340,8 @@ function intersectAssignedLocation(
   requested: string | PermissionScope | boolean | undefined,
   assigned: string | null,
 ): string | null {
-  const requestedLocation = typeof requested === 'string' ? normalizeLocationValue(requested) : null;
+  const requestedLocation =
+    typeof requested === 'string' ? normalizeLocationValue(requested) : null;
   if (!assigned) return null;
   if (!requestedLocation) return assigned;
   return sameLocation(requestedLocation, assigned) ? assigned : null;
@@ -458,9 +464,57 @@ async function validatePermissionOverridesForRoleCodes(
   permissions: PermissionOverrideInput[],
   roleCodes: string[],
   profile?: OfficerProfileInput,
+  preserveHiddenOverridesForUserId?: number,
 ): Promise<PermissionOverrideInput[]> {
   const rolePermissions = await usersRepository.getRolePermissionsByRoleCodes(roleCodes);
-  return validatePermissionOverridesAgainstRole(permissions, rolePermissions, roleCodes, profile);
+  const effectivePermissions =
+    preserveHiddenOverridesForUserId === undefined
+      ? permissions
+      : await mergePreservedHiddenPermissionOverrides(
+          preserveHiddenOverridesForUserId,
+          permissions,
+          rolePermissions,
+        );
+  return validatePermissionOverridesAgainstRole(
+    effectivePermissions,
+    rolePermissions,
+    roleCodes,
+    profile,
+  );
+}
+
+async function mergePreservedHiddenPermissionOverrides(
+  userId: number,
+  editableOverrides: PermissionOverrideInput[],
+  rolePermissions: PermissionGrantDTO[],
+): Promise<PermissionOverrideInput[]> {
+  const existingOverrides = await usersRepository.getUserPermissionOverrides(userId);
+  const incomingCodes = new Set(editableOverrides.map((permission) => permission.code));
+  const roleScopes = new Map(
+    rolePermissions.map((permission) => [permission.code, permission.scope] as const),
+  );
+  const hiddenOverrides = existingOverrides
+    .filter(
+      (permission) =>
+        !isEditablePermissionCode(permission.code) &&
+        !incomingCodes.has(permission.code) &&
+        roleScopes.has(permission.code),
+    )
+    .filter((permission) => {
+      if (permission.effect === 'deny') return true;
+      return isSameOrNarrowerPermissionScope(permission.scope, roleScopes.get(permission.code));
+    })
+    .map((permission) => ({
+      code: permission.code,
+      effect: permission.effect,
+      scope: permission.scope,
+      region: permission.region,
+      province: permission.provinceId ?? permission.provinceName,
+      estateCode: permission.estateCode ?? permission.estate,
+      estate: permission.estate ?? permission.estateCode,
+    }));
+
+  return [...editableOverrides, ...hiddenOverrides];
 }
 
 function validatePermissionOverridesAgainstRole(
@@ -478,10 +532,13 @@ function validatePermissionOverridesAgainstRole(
   for (const permission of permissions) {
     if (!roleScopes.has(permission.code)) {
       if (permission.effect === 'deny') continue;
-      throw new BadRequestError('Permission override cannot grant an action outside the assigned role', {
-        permission: permission.code,
-        status: StatusCodes.BAD_REQUEST,
-      });
+      throw new BadRequestError(
+        'Permission override cannot grant an action outside the assigned role',
+        {
+          permission: permission.code,
+          status: StatusCodes.BAD_REQUEST,
+        },
+      );
     }
 
     const roleScope = roleScopes.get(permission.code) as PermissionScope;
