@@ -190,8 +190,29 @@ describe('POMS OpenAPI contract', () => {
       edit: { type: 'boolean' },
     });
     expect(connectionInputProperties).toHaveProperty('data');
+    expect(connectionInputProperties).not.toHaveProperty('estateCode');
+    expect(connectionInputProperties).not.toHaveProperty('estate');
     expect(connectionInputProperties).not.toHaveProperty('direct_connect');
     expect(inputProperties).not.toHaveProperty('api_documentation');
+
+    const editableResponse = asObject(
+      schemas.EditablePermissionGroupsResponse,
+      'EditablePermissionGroupsResponse',
+    );
+    const responseProperties = asObject(
+      editableResponse.properties,
+      'EditablePermissionGroupsResponse.properties',
+    );
+    const eligibleFactoriesResponse = asObject(
+      responseProperties.eligible_factories,
+      'EditablePermissionGroupsResponse.eligible_factories',
+    );
+    const eligibleFactoriesResponseProperties = asObject(
+      eligibleFactoriesResponse.properties,
+      'EditablePermissionGroupsResponse.eligible_factories.properties',
+    );
+    expect(eligibleFactoriesResponseProperties).not.toHaveProperty('estateCode');
+    expect(eligibleFactoriesResponseProperties).not.toHaveProperty('estate');
 
     const paths = asObject(document.paths, 'paths');
     const getUser = asObject(asObject(paths['/users/{id}'], '/users/{id}').get, 'GET /users/{id}');

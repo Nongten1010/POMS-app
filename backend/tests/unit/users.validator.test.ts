@@ -199,6 +199,22 @@ describe('managed users validators', () => {
         permissions: { api_documentation: { view: true } },
       }).success,
     ).toBe(false);
+    expect(
+      createLocalAccountSchema.safeParse({
+        user: baseUser,
+        permissions: {
+          dashboard: { data: 'IN_ESTATE', estateCode: 'MTP', view: true },
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      createLocalAccountSchema.safeParse({
+        user: baseUser,
+        permissions: {
+          dashboard: { data: 'IN_ESTATE', estate: 'MTP', view: true },
+        },
+      }).success,
+    ).toBe(false);
   });
 
   it('accepts local account location fields from the permission form', () => {

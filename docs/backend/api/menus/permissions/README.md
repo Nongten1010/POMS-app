@@ -141,7 +141,7 @@ Raw code `cems_wpms_requests:*` ใช้เฉพาะ backend route guard, JW
 
 | Module | Editable actions | Data/location fields |
 | --- | --- | --- |
-| `dashboard` | `view`, `favorite`, `search`, `advanced_search`, `statistics`, `export` | `data`, `region`, `province`; รองรับ `estateCode`/`estate` สำหรับ compatibility |
+| `dashboard` | `view`, `favorite`, `search`, `advanced_search`, `statistics`, `export` | `data`, `region`, `province` |
 | `factories` | `view`, `edit`, `approve` | เช่นเดียวกับ scoped module แต่ `data` ไม่รับ `FACTORY_TYPE_88` จาก frontend |
 | `connection` | `view`, `edit`, `approve` | scoped module; ไม่มี `direct_connect` ในหน้าแก้สิทธิ์ |
 | `kwp_forms` | `view`, `edit`, `approve` | scoped module |
@@ -156,6 +156,8 @@ Raw code `cems_wpms_requests:*` ใช้เฉพาะ backend route guard, JW
 | `chat` | `view`, `edit` | ไม่มี `data`, `region`, `province`; `edit` map ไป raw `chat:answer` |
 | `permissions` | `view` | ไม่มี `data`, `region`, `province`; ไม่มี `manage` ในหน้าแก้สิทธิ์ |
 | `eligible_factories` | `view`, `edit`, `approve` | scoped module |
+
+Scoped permission groups ส่งและคืน location fields เพียง `data`, `region`, `province` ตาม frontend handoff โดยไม่ส่ง `estateCode` หรือ `estate`. เมื่อ `data=IN_ESTATE` backend ใช้ estate assignment ระดับ user profile ภายใน ไม่รับ qualifier ซ้ำในแต่ละ permission group.
 
 `api_documentation` และ internal actions เช่น `statistics:export`, `chat:ask`, `permissions:manage`, `eligible_factories:manage` ไม่อยู่ใน editable matrix แต่ raw grants, route guards และ runtime auth permissions ยังทำงานตาม role matrix เดิม เมื่อ grouped PATCH แทนที่ matrix ระบบรักษา per-user overrides ของ internal actions เดิมไว้เพื่อไม่ให้ deny ถูกล้างหรือสิทธิ์ถูกเปิดกลับโดยไม่ตั้งใจ
 
@@ -240,7 +242,7 @@ Frontend ต้องใช้ grouped response เป็น canonical UI contra
 | --- | --- | --- |
 | `IN_REGION` | รับ `region` เป็น string; ถ้าไม่ส่งให้ใช้ assigned region จาก profile แต่ถ้าค่าขัดกับ profile หรือ profile ไม่มี assignment ต้อง fail closed | grouped permissions คืน effective assigned region; `monitoring_kpm`/`kpm_director` เป็นภาคกลาง ส่วน 5 ศูนย์/ผอ.ศูนย์เป็นภาคที่มอบหมาย |
 | `IN_PROVINCE` | รับ `province` เป็นชื่อหรือรหัสจังหวัดและ resolve เป็น province id; ค่าต้องตรง assigned province | grouped permissions คืนชื่อจังหวัดไทย; qualifier หายหรือขัดกันทำให้ไม่มีข้อมูล |
-| `IN_ESTATE` | รับ `estateCode` หรือ compatibility field `estate`; resolve กับ industrial estate master และค่าต้องตรง profile assignment | grouped permissions คืน canonical `estateCode`/`estate`; qualifier หายหรือขัดกันทำให้ไม่มีข้อมูล |
+| `IN_ESTATE` | profile/raw override API รับ `estateCode` หรือ compatibility field `estate` และ resolve กับ industrial estate master; grouped Permission Management payload ไม่รับสอง field นี้ | Permission Management group คืนเพียง `data: "IN_ESTATE"` และใช้ estate assignment ระดับ profile ภายใน; runtime/raw contract อาจยังมี qualifier |
 | `OWN_FACTORY` | ไม่มี field location เพิ่มเติม | client เห็นเพียง `data: "OWN_FACTORY"` |
 | `FACTORY_TYPE_88` | ไม่มี field location เพิ่มเติม; filter จาก factory type ที่เก็บใน eligible/snapshot/form | client เห็น `data: "FACTORY_TYPE_88"`; scope นี้แคบกว่า `ALL` แต่เทียบลำดับกับ region/province/estate ไม่ได้ |
 | profile-level regional access | `profile.regionalAccess` เป็นคนละชั้นกับ per-menu permission scope | ใช้กับการกำหนดพื้นที่เจ้าหน้าที่ ไม่ใช่รายการ `permissions.<module>.region` |
@@ -267,7 +269,7 @@ Frontend ต้องใช้ grouped response เป็น canonical UI contra
 | Assignment ceiling | per-menu location ต้องอยู่ภายใน profile assignment; missing/conflict เป็น no data |
 | New codes | เพิ่ม `statistics:view`, `conditional_search:view`, `chat:view`, `eligible_factories:view`, `eligible_factories:edit`, `eligible_factories:approve` ใน target contract |
 | Grouped permission aliases | `dashboard.search`, `dashboard.advanced_search`, `dashboard.statistics`, `dashboard.export`, `statistics.*`, `conditional_search.view`, `permissions.*`, `chat.edit` |
-| Estate location detail | ใช้ `estateCode` (หรือ compatibility field `estate`) และตรวจสอบกับ master data |
+| Estate location detail | ใช้ `estateCode`/`estate` เฉพาะ profile และ raw override API; ไม่อยู่ใน Permission Management group |
 
 Migration guidance:
 

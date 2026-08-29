@@ -194,11 +194,6 @@ export function projectEditablePermissionGroups(groups: PermissionGroups): Permi
         projected.data = current.data ?? null;
         projected.region = normalizeLocationValue(current.region) ?? null;
         projected.province = normalizeLocationValue(current.province) ?? null;
-        const estateCode = normalizeLocationValue(current.estateCode ?? current.estate);
-        if (estateCode !== undefined) {
-          projected.estateCode = estateCode;
-          projected.estate = estateCode;
-        }
       }
 
       for (const action of actions) {

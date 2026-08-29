@@ -576,10 +576,9 @@ Top-level fields:
 | `data` | scope \| `null` | conditional | บังคับสำหรับ scoped module; ห้ามส่งใน `permissions`, `helpdesk`, `feedback`, `laws`, `faq`, `chat` |
 | `region` | string | conditional | qualifier เมื่อ `data=IN_REGION` |
 | `province` | string | conditional | qualifier เมื่อ `data=IN_PROVINCE` |
-| `estateCode` | string | conditional | qualifier เมื่อ `data=IN_ESTATE` |
 | `<action>` | boolean | no | `true` = allow ภายใน role; `false` = deny เช่น `view`, `edit`, `approve`, `export` |
 
-`data` รองรับ `FACTORY_TYPE_88` ยกเว้น module `factories` ใน frontend. Binary modules ใช้ boolean action โดยตรงและ backend เก็บ raw action เป็น scope `null`. Module `chat` รับ action `edit` และ map ไป raw code `chat:answer`. Module `eligible_factories` รับ `view`, `edit`, `approve`; `approve` ใช้กับการเลือก monitoring-point form เป็นโรงงานที่เข้าข่าย. Module/action นอก editable matrix ตอบ `400 VALIDATION_ERROR`.
+Grouped permissions ไม่รับ `estateCode` หรือ `estate`; เมื่อ `data=IN_ESTATE` backend ใช้ estate assignment ระดับ user profile. `data` รองรับ `FACTORY_TYPE_88` ยกเว้น module `factories` ใน frontend. Binary modules ใช้ boolean action โดยตรงและ backend เก็บ raw action เป็น scope `null`. Module `chat` รับ action `edit` และ map ไป raw code `chat:answer`. Module `eligible_factories` รับ `view`, `edit`, `approve`; `approve` ใช้กับการเลือก monitoring-point form เป็นโรงงานที่เข้าข่าย. Module/action/field นอก editable matrix ตอบ `400 VALIDATION_ERROR`.
 
 ตัวอย่างนี้คงสิทธิ์ dashboard ภายในภาคตะวันออก แต่ปิด export:
 

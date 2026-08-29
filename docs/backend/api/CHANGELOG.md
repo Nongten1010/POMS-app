@@ -2,6 +2,14 @@
 
 ไฟล์นี้บันทึกเฉพาะการเปลี่ยน API ที่ทำให้ client ต้องแก้ตาม การเปลี่ยนทั่วไปและประวัติรายละเอียดดูจาก Git history
 
+## 2026-08-29 — ตัด estate qualifiers ออกจาก Permission Management matrix
+
+- **Affected canonical docs:** [สิทธิ์การใช้งาน](./menus/permissions/README.md), [User management API](./menus/permissions/user-management-api.md)
+- **Impact:** scoped modules ใน `GET /api/v1/users/:id` ไม่คืน `estateCode` หรือ `estate` ภายใน grouped `permissions` และ grouped `permissions` ของ `POST /users/local-accounts` กับ `PATCH /users/:id` ปฏิเสธสอง field นี้ด้วย `400 VALIDATION_ERROR`.
+- **Migration:** frontend ส่งและอ่านเฉพาะ `data`, `region`, `province` ตาม handoff. เมื่อ `data=IN_ESTATE` backend ใช้ estate assignment ระดับ user profile ภายใน; raw permission override API และ profile assignment ไม่เปลี่ยน.
+- **Old contract:** scoped permission group รองรับ optional `estateCode`/`estate` compatibility fields.
+- **New contract:** scoped permission group มี location fields เพียง `data`, `region`, `province`.
+
 ## 2026-08-29 — แยก Permission Management matrix ออกจาก internal RBAC actions
 
 - **Affected canonical docs:** [สิทธิ์การใช้งาน](./menus/permissions/README.md), [User management API](./menus/permissions/user-management-api.md)

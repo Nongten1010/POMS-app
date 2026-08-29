@@ -277,7 +277,7 @@ describe('usersService permissions', () => {
     expect(mockedUsersRepository.replaceUserPermissionOverrides).not.toHaveBeenCalled();
   });
 
-  it('returns profile region, province, and estate assignments in the permission-management payload', async () => {
+  it('returns profile assignments without leaking estate qualifiers into permission groups', async () => {
     mockedUsersRepository.findById.mockResolvedValue({
       id: 44,
       userType: 'officer',
@@ -406,9 +406,11 @@ describe('usersService permissions', () => {
     });
     expect(result.permissions.eligible_factories).toMatchObject({
       data: 'IN_ESTATE',
-      estateCode: 'IE01',
-      estate: 'IE01',
+      region: null,
+      province: null,
     });
+    expect(result.permissions.eligible_factories).not.toHaveProperty('estateCode');
+    expect(result.permissions.eligible_factories).not.toHaveProperty('estate');
   });
 
   it('keeps users permission output aligned with auth merge safety for widening, invented allow, and deny', async () => {

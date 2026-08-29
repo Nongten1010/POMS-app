@@ -443,8 +443,6 @@ function editablePermissionGroupSchema(module: string, complete: boolean): OpenA
           data: permissionDataScopeSchema,
           region: { type: 'string', maxLength: 128, nullable: true },
           province: { type: 'string', maxLength: 128, nullable: true },
-          estateCode: { type: 'string', maxLength: 32, nullable: true },
-          estate: { type: 'string', maxLength: 32, nullable: true },
         }
       : {}),
     ...Object.fromEntries(actions.map((action) => [action, { type: 'boolean' }])),

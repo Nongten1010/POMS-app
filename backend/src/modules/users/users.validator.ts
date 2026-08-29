@@ -133,8 +133,6 @@ const editablePermissionGroupShape = Object.fromEntries(
             data: permissionScopeSchema,
             region: optionalFormScopeValue(128),
             province: optionalFormScopeValue(128),
-            estateCode: optionalFormScopeValue(32),
-            estate: optionalFormScopeValue(32),
             ...actionShape,
           })
           .strict()
