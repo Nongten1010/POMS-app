@@ -175,8 +175,9 @@ const eligibleMonitoringColumns = [
     width: 170,
     align: 'center',
     headerAlign: 'center',
-    sortable: false,
     filterable: false,
+    valueGetter: (_, row) => getMonitoringPointAttachmentCount(row),
+    sortComparator: (firstValue, secondValue) => firstValue - secondValue,
     renderCell: (params) => <MonitoringPointAttachmentsCell row={params.row} />,
   },
 ]
@@ -482,6 +483,10 @@ function getMonitoringPointAttachmentGroups(row = {}) {
       return { id: `${title}-${pointIndex}`, title, items }
     })
     .filter((group) => group.items.length > 0)
+}
+
+function getMonitoringPointAttachmentCount(row = {}) {
+  return getMonitoringPointAttachmentGroups(row).reduce((total, group) => total + group.items.length, 0)
 }
 
 function normalizeDisplayValue(value) {

@@ -149,6 +149,7 @@ const permissionSections = [
       { label: 'มีสิทธิ์ใช้งาน', action: 'view' },
       { label: 'การแก้ไข', action: 'edit' },
       { label: 'อนุมัติ/อนุญาต', action: 'approve' },
+      { label: 'เชื่อมต่อทันที', action: 'direct_connect' },
     ],
   },
   {
@@ -237,7 +238,10 @@ const permissionSections = [
   {
     title: 'จัดการสิทธิ์การใช้งาน',
     permissionKey: 'permissions',
-    permissions: [{ label: 'มีสิทธิ์ใช้งาน (Admin)', action: 'view' }],
+    permissions: [
+      { label: 'มีสิทธิ์ใช้งาน', action: 'view' },
+      { label: 'จัดการสิทธิ์', action: 'manage' },
+    ],
   },
   {
     title: 'โรงงานที่เข้าข่าย',
