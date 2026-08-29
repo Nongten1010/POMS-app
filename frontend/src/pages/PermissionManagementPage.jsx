@@ -105,8 +105,17 @@ const allowDenyScopeOptions = [
   { label: 'ไม่อนุญาต', value: 'NONE' },
 ]
 
+const binaryPermissionSectionKeys = new Set([
+  'permissions',
+  'helpdesk',
+  'feedback',
+  'laws',
+  'faq',
+  'chat',
+])
+
 function getSectionScopeOptions(section) {
-  if (section.permissionKey === 'permissions') {
+  if (binaryPermissionSectionKeys.has(section.permissionKey)) {
     return allowDenyScopeOptions
   }
 
@@ -149,7 +158,6 @@ const permissionSections = [
       { label: 'มีสิทธิ์ใช้งาน', action: 'view' },
       { label: 'การแก้ไข', action: 'edit' },
       { label: 'อนุมัติ/อนุญาต', action: 'approve' },
-      { label: 'เชื่อมต่อทันที', action: 'direct_connect' },
     ],
   },
   {
@@ -192,9 +200,6 @@ const permissionSections = [
     locationScope: true,
     permissions: [
       { label: 'มีสิทธิ์ใช้งาน', action: 'view' },
-      { label: 'สถานะการแจ้งเตือน', action: 'view_status' },
-      { label: 'การแก้ไข', action: 'edit' },
-      { label: 'อนุมัติ/อนุญาต', action: 'approve' },
     ],
   },
   {
@@ -209,11 +214,22 @@ const permissionSections = [
     locationScope: true,
     permissions: [{ label: 'มีสิทธิ์ใช้งาน', action: 'view' }],
   },
-  { title: 'แจ้งขอความช่วยเหลือ', permissionKey: 'helpdesk', permissions: [{ label: 'มีสิทธิ์ใช้งาน', action: 'view' }] },
-  { title: 'ข้อเสนอแนะ', permissionKey: 'feedback', permissions: [{ label: 'มีสิทธิ์ใช้งาน', action: 'view' }] },
+  {
+    title: 'แจ้งขอความช่วยเหลือ',
+    permissionKey: 'helpdesk',
+    hideDataScope: true,
+    permissions: [{ label: 'มีสิทธิ์ใช้งาน', action: 'view' }],
+  },
+  {
+    title: 'ข้อเสนอแนะ',
+    permissionKey: 'feedback',
+    hideDataScope: true,
+    permissions: [{ label: 'มีสิทธิ์ใช้งาน', action: 'view' }],
+  },
   {
     title: 'กฎหมายที่เกี่ยวข้อง',
     permissionKey: 'laws',
+    hideDataScope: true,
     permissions: [
       { label: 'มีสิทธิ์ใช้งาน', action: 'view' },
       { label: 'การแก้ไข', action: 'edit' },
@@ -222,6 +238,7 @@ const permissionSections = [
   {
     title: 'คำถามที่พบบ่อย',
     permissionKey: 'faq',
+    hideDataScope: true,
     permissions: [
       { label: 'มีสิทธิ์ใช้งาน', action: 'view' },
       { label: 'การแก้ไข', action: 'edit' },
@@ -230,6 +247,7 @@ const permissionSections = [
   {
     title: 'Chat',
     permissionKey: 'chat',
+    hideDataScope: true,
     permissions: [
       { label: 'มีสิทธิ์ใช้งาน', action: 'view' },
       { label: 'ตอบคำถาม (Admin)', action: 'edit' },
@@ -238,10 +256,8 @@ const permissionSections = [
   {
     title: 'จัดการสิทธิ์การใช้งาน',
     permissionKey: 'permissions',
-    permissions: [
-      { label: 'มีสิทธิ์ใช้งาน', action: 'view' },
-      { label: 'จัดการสิทธิ์', action: 'manage' },
-    ],
+    hideDataScope: true,
+    permissions: [{ label: 'มีสิทธิ์ใช้งาน', action: 'view' }],
   },
   {
     title: 'โรงงานที่เข้าข่าย',
@@ -386,20 +402,23 @@ function buildPermissionsFromForm(formData, currentPermissions = {}) {
   return Object.fromEntries(
     permissionSections.map((section) => {
       const currentPermission = currentPermissions?.[section.permissionKey] ?? {}
-      const scopeInput = formData.get(`permission.${section.permissionKey}.data`)
-      const regionInput = formData.get(`permission.${section.permissionKey}.region`)
-      const provinceInput = formData.get(`permission.${section.permissionKey}.province`)
-      const dataScope =
-        scopeInput === null
-          ? currentPermission.data === undefined
-            ? 'ALL'
-            : currentPermission.data
-          : getPermissionDataValue(scopeInput)
-      const permission = {
-        data: dataScope,
+      const permission = {}
+
+      if (!section.hideDataScope) {
+        const scopeInput = formData.get(`permission.${section.permissionKey}.data`)
+        const dataScope =
+          scopeInput === null
+            ? currentPermission.data === undefined
+              ? 'ALL'
+              : currentPermission.data
+            : getPermissionDataValue(scopeInput)
+        permission.data = dataScope
       }
 
       if (section.locationScope) {
+        const dataScope = permission.data ?? currentPermission.data ?? 'ALL'
+        const regionInput = formData.get(`permission.${section.permissionKey}.region`)
+        const provinceInput = formData.get(`permission.${section.permissionKey}.province`)
         permission.region = getScopedLocationValue(
           dataScope,
           'IN_REGION',
@@ -1269,6 +1288,7 @@ function PermissionSection({ section, permissions = {}, locationErrors = {}, onC
   const isProvinceEnabled = scopeValue === 'IN_PROVINCE'
   const regionError = locationErrors[`${section.permissionKey}.region`]
   const provinceError = locationErrors[`${section.permissionKey}.province`]
+  const shouldRenderScopeFields = !section.hideDataScope || section.locationScope
 
   const handleScopeChange = (event) => {
     const nextScope = event.target.value
@@ -1298,80 +1318,84 @@ function PermissionSection({ section, permissions = {}, locationErrors = {}, onC
           {section.title}
         </Typography>
         <Divider />
-        <Box
-          sx={{
-            display: 'grid',
-            gap: 1.5,
-            gridTemplateColumns: {
-              xs: '1fr',
-              sm: 'repeat(2, minmax(0, 1fr))',
-              lg: 'repeat(3, minmax(0, 1fr))',
-            },
-          }}
-        >
-          <FormControl fullWidth size="small">
-            <InputLabel id={`${section.title}-scope-label`}>ข้อมูล</InputLabel>
-            <Select
-              labelId={`${section.title}-scope-label`}
-              label="ข้อมูล"
-              name={`permission.${section.permissionKey}.data`}
-              value={scopeValue}
-              onChange={handleScopeChange}
-            >
-              {sectionScopeOptions.map((scope) => (
-                <MenuItem key={scope.value} value={scope.value}>
-                  {scope.label}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          {section.locationScope ? (
-            <FormControl fullWidth size="small" error={Boolean(regionError)}>
-              <InputLabel id={`${section.title}-region-label`}>ภาค</InputLabel>
-              <Select
-                labelId={`${section.title}-region-label`}
-                label="ภาค"
-                name={`permission.${section.permissionKey}.region`}
-                value={regionValue}
-                disabled={!isRegionEnabled}
-                onChange={(event) => {
-                  setRegionValue(event.target.value)
-                  onClearLocationError?.(section.permissionKey, 'region')
-                }}
-              >
-                {permissionRegionOptions.map((region) => (
-                  <MenuItem key={region.value} value={region.value}>
-                    {region.label}
-                  </MenuItem>
-                ))}
-              </Select>
-              {regionError ? <FormHelperText>{regionError}</FormHelperText> : null}
-            </FormControl>
-          ) : null}
-          {section.locationScope ? (
-            <FormControl fullWidth size="small" error={Boolean(provinceError)}>
-              <InputLabel id={`${section.title}-province-label`}>จังหวัด</InputLabel>
-              <Select
-                labelId={`${section.title}-province-label`}
-                label="จังหวัด"
-                name={`permission.${section.permissionKey}.province`}
-                value={provinceValue}
-                disabled={!isProvinceEnabled}
-                onChange={(event) => {
-                  setProvinceValue(event.target.value)
-                  onClearLocationError?.(section.permissionKey, 'province')
-                }}
-              >
-                {permissionProvinceOptions.map((province) => (
-                  <MenuItem key={province.value} value={province.value}>
-                    {province.label}
-                  </MenuItem>
-                ))}
-              </Select>
-              {provinceError ? <FormHelperText>{provinceError}</FormHelperText> : null}
-            </FormControl>
-          ) : null}
-        </Box>
+        {shouldRenderScopeFields ? (
+          <Box
+            sx={{
+              display: 'grid',
+              gap: 1.5,
+              gridTemplateColumns: {
+                xs: '1fr',
+                sm: 'repeat(2, minmax(0, 1fr))',
+                lg: 'repeat(3, minmax(0, 1fr))',
+              },
+            }}
+          >
+            {!section.hideDataScope ? (
+              <FormControl fullWidth size="small">
+                <InputLabel id={`${section.title}-scope-label`}>ข้อมูล</InputLabel>
+                <Select
+                  labelId={`${section.title}-scope-label`}
+                  label="ข้อมูล"
+                  name={`permission.${section.permissionKey}.data`}
+                  value={scopeValue}
+                  onChange={handleScopeChange}
+                >
+                  {sectionScopeOptions.map((scope) => (
+                    <MenuItem key={scope.value} value={scope.value}>
+                      {scope.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            ) : null}
+            {section.locationScope ? (
+              <FormControl fullWidth size="small" error={Boolean(regionError)}>
+                <InputLabel id={`${section.title}-region-label`}>ภาค</InputLabel>
+                <Select
+                  labelId={`${section.title}-region-label`}
+                  label="ภาค"
+                  name={`permission.${section.permissionKey}.region`}
+                  value={regionValue}
+                  disabled={!isRegionEnabled}
+                  onChange={(event) => {
+                    setRegionValue(event.target.value)
+                    onClearLocationError?.(section.permissionKey, 'region')
+                  }}
+                >
+                  {permissionRegionOptions.map((region) => (
+                    <MenuItem key={region.value} value={region.value}>
+                      {region.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+                {regionError ? <FormHelperText>{regionError}</FormHelperText> : null}
+              </FormControl>
+            ) : null}
+            {section.locationScope ? (
+              <FormControl fullWidth size="small" error={Boolean(provinceError)}>
+                <InputLabel id={`${section.title}-province-label`}>จังหวัด</InputLabel>
+                <Select
+                  labelId={`${section.title}-province-label`}
+                  label="จังหวัด"
+                  name={`permission.${section.permissionKey}.province`}
+                  value={provinceValue}
+                  disabled={!isProvinceEnabled}
+                  onChange={(event) => {
+                    setProvinceValue(event.target.value)
+                    onClearLocationError?.(section.permissionKey, 'province')
+                  }}
+                >
+                  {permissionProvinceOptions.map((province) => (
+                    <MenuItem key={province.value} value={province.value}>
+                      {province.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+                {provinceError ? <FormHelperText>{provinceError}</FormHelperText> : null}
+              </FormControl>
+            ) : null}
+          </Box>
+        ) : null}
         <Box
           sx={{
             display: 'grid',
