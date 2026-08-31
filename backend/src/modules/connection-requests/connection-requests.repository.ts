@@ -47,6 +47,7 @@ import {
   type ListConnectionRequestsQuery,
   type MeasurementPointDTO,
   type MeasurementPointInput,
+  type OperatorFactoryEligibilityRequestDTO,
   type PointCodeAssignmentInput,
   type PointCodeAssignmentMode,
   type RequestDocumentImageInput,
@@ -324,6 +325,12 @@ interface FactoryFavoriteRow {
   deleted_at: Date | string | null;
 }
 
+interface OpenEligibleFactoryAddRequestRow {
+  id: number | string;
+  factory_master_id: number | string;
+  submitted_at: Date | string;
+}
+
 interface ProvinceRegionRow {
   name_th: string;
   region: string | null;
@@ -452,6 +459,55 @@ export const connectionRequestsRepository = {
 
     const rows = await builder;
     return rows.map(toFactorySummaryDTO);
+  },
+
+  async listOpenEligibleFactoryAddRequestsForFactoryMasterIds(
+    factoryMasterIds: number[],
+  ): Promise<Map<number, OperatorFactoryEligibilityRequestDTO>> {
+    const normalizedFactoryMasterIds = [
+      ...new Set(factoryMasterIds.filter((id) => Number.isInteger(id) && id > 0)),
+    ];
+    if (normalizedFactoryMasterIds.length === 0) return new Map();
+
+    const rows = await db<OpenEligibleFactoryAddRequestRow>('eligible_factory_add_requests')
+      .whereIn('factory_master_id', normalizedFactoryMasterIds)
+      .where('status', 'PENDING_REVIEW')
+      .where('is_open', true)
+      .whereNull('deleted_at')
+      .orderBy('submitted_at', 'desc')
+      .orderBy('id', 'desc')
+      .select('id', 'factory_master_id', 'submitted_at');
+
+    const requestsByFactoryMasterId = new Map<number, OperatorFactoryEligibilityRequestDTO>();
+    rows.forEach((row) => {
+      const factoryMasterId = Number(row.factory_master_id);
+      if (requestsByFactoryMasterId.has(factoryMasterId)) return;
+      requestsByFactoryMasterId.set(factoryMasterId, {
+        id: Number(row.id),
+        status: 'PENDING_REVIEW',
+        statusLabel: 'รอพิจารณา',
+        submittedAt: toIsoString(row.submitted_at),
+      });
+    });
+    return requestsByFactoryMasterId;
+  },
+
+  async findFactorySummaryForAccess(
+    factoryId: string,
+    access: FactoryAccess,
+  ): Promise<FactorySummaryDTO | null> {
+    const row = await buildFactoriesForAccessQuery(access)
+      .where((builder) => {
+        builder
+          .where('f.fid', factoryId)
+          .orWhere('f.code', factoryId)
+          .orWhere('ef.source_factory_id', factoryId)
+          .orWhere('ef.factory_registration_no_new', factoryId)
+          .orWhere('ef.factory_registration_no_old', factoryId);
+      })
+      .first();
+
+    return row ? toFactorySummaryDTO(row) : null;
   },
 
   async listFactoryMainTypeLabels(codes: string[]): Promise<Map<string, string>> {
@@ -1074,14 +1130,9 @@ export const connectionRequestsRepository = {
   ): Promise<ConnectionRequestDTO | null> {
     const scopeValue = getAccessScopeValue(access.scope);
     if (
-      ![
-        'ALL',
-        'OWN_FACTORY',
-        'IN_REGION',
-        'IN_PROVINCE',
-        'IN_ESTATE',
-        'FACTORY_TYPE_88',
-      ].includes(scopeValue ?? '')
+      !['ALL', 'OWN_FACTORY', 'IN_REGION', 'IN_PROVINCE', 'IN_ESTATE', 'FACTORY_TYPE_88'].includes(
+        scopeValue ?? '',
+      )
     ) {
       return null;
     }

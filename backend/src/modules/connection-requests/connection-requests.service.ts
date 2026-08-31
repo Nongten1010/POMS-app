@@ -70,6 +70,7 @@ import {
   type MeasurementPointDTO,
   type MeasurementPointInput,
   type OperatorFactoryDashboardRowDTO,
+  type OperatorFactoryEligibilityRequestDTO,
   type OperatorFactoryMeasurementPointDTO,
   type OperatorFactoryOverviewResultDTO,
   type OperatorFactoryOverviewRowDTO,
@@ -214,14 +215,22 @@ export const connectionRequestsService = {
       regionalAccess,
     });
     const eligibleFactories = factories.filter((factory) => factory.isEligible === true);
+    const nonEligibleFactoryMasterIds = factories
+      .filter((factory) => factory.isEligible !== true && factory.id !== null)
+      .map((factory) => factory.id as number);
     const factoryIdByLookupKey = buildFactoryLookupKeyMap(eligibleFactories);
     const factoryLookupKeys = [...factoryIdByLookupKey.keys()];
-    const [requests, connectedPoints] = await Promise.all([
-      connectionRequestsRepository.listRequestsForFactories(
-        eligibleFactories.map((factory) => factory.factoryId),
-      ),
-      connectionRequestsRepository.listConnectedMeasurementPointsForFactories(factoryLookupKeys),
-    ]);
+    const [requests, connectedPoints, openEligibilityRequestsByFactoryMasterId] = await Promise.all(
+      [
+        connectionRequestsRepository.listRequestsForFactories(
+          eligibleFactories.map((factory) => factory.factoryId),
+        ),
+        connectionRequestsRepository.listConnectedMeasurementPointsForFactories(factoryLookupKeys),
+        connectionRequestsRepository.listOpenEligibleFactoryAddRequestsForFactoryMasterIds(
+          nonEligibleFactoryMasterIds,
+        ),
+      ],
+    );
     const officerNotificationEmailsByFactory =
       await connectionRequestsRepository.listOfficerNotificationEmailsForFactories(
         eligibleFactories.map((factory) => ({
@@ -250,7 +259,12 @@ export const connectionRequestsService = {
     const data = factories
       .map<OperatorFactoryTableRowDTO>((factory) => {
         if (factory.isEligible !== true) {
-          return toNonEligibleOperatorFactoryTableRow(factory);
+          return toNonEligibleOperatorFactoryTableRow(
+            factory,
+            factory.id === null
+              ? undefined
+              : openEligibilityRequestsByFactoryMasterId.get(factory.id),
+          );
         }
 
         const latestRequest = latestRequestByFactory.get(factory.factoryId);
@@ -276,6 +290,8 @@ export const connectionRequestsService = {
           eligibilityStatus: factory.eligibilityStatus ?? 'ไม่เข้าข่าย',
           monitoringPointCount: connectedPointCountByFactory.get(factory.factoryId) ?? 0,
           requestStatusCode: latestRequest?.status ?? null,
+          eligibilityRequest: null,
+          canRequestEligibility: false,
           status: 'แสดง',
         };
       })
@@ -2688,6 +2704,7 @@ function toFactoryDashboardBaseRow(
 
 function toNonEligibleOperatorFactoryTableRow(
   factory: FactorySummaryDTO,
+  eligibilityRequest?: OperatorFactoryEligibilityRequestDTO,
 ): OperatorFactoryTableRowDTO {
   return {
     id: factory.id,
@@ -2710,6 +2727,8 @@ function toNonEligibleOperatorFactoryTableRow(
     eligibilityStatus: 'ไม่เข้าข่าย',
     monitoringPointCount: 0,
     requestStatusCode: null,
+    eligibilityRequest: eligibilityRequest ?? null,
+    canRequestEligibility: eligibilityRequest === undefined,
     status: 'แสดง',
   };
 }
@@ -2737,6 +2756,8 @@ function toOfficerEligibleFactoryTableRow(
     isEligible: true,
     eligibilityStatus: 'เข้าข่าย',
     requestStatusCode: null,
+    eligibilityRequest: null,
+    canRequestEligibility: false,
     status: 'แสดง',
   };
 }

@@ -20,7 +20,11 @@ import {
   createDeviceConnectionConfigRequestSchema,
   testDeviceConnectionSchema,
 } from '../../src/modules/device-connections/device-connections.validator';
-import { createEligibleFactorySchema } from '../../src/modules/eligible-factories/eligible-factories.validator';
+import {
+  createEligibleFactoryAddRequestSchema,
+  createEligibleFactorySchema,
+  reviewEligibleFactoryAddRequestSchema,
+} from '../../src/modules/eligible-factories/eligible-factories.validator';
 import {
   createPomsFactoryEditRequestSchema,
   reviewPomsFactoryEditRequestSchema,
@@ -249,6 +253,8 @@ describe('POMS OpenAPI contract', () => {
     ['/users/{id}', 'patch', updateManagedUserSchema],
     ['/users/{id}/permissions', 'put', replaceUserPermissionsSchema],
     ['/eligible-factories', 'post', createEligibleFactorySchema],
+    ['/eligible-factories/add-requests', 'post', createEligibleFactoryAddRequestSchema],
+    ['/eligible-factories/add-requests/{id}/review', 'post', reviewEligibleFactoryAddRequestSchema],
     ['/poms-factories/{factoryId}/edit-requests', 'post', createPomsFactoryEditRequestSchema],
     ['/poms-factories/edit-requests/{id}/review', 'post', reviewPomsFactoryEditRequestSchema],
     ['/monitoring-point-forms', 'post', saveMonitoringPointFormSchema],
@@ -483,7 +489,7 @@ describe('POMS OpenAPI contract', () => {
     }
   });
 
-  it('covers all 123 canonical registry endpoints plus 9 annual testing variants', () => {
+  it('covers all 126 canonical registry endpoints plus 9 annual testing variants', () => {
     const document = asObject(pomsOpenApiDocument, 'OpenAPI document');
     const paths = asObject(document.paths, 'paths');
     const documentedOperations: string[] = [];
@@ -497,13 +503,13 @@ describe('POMS OpenAPI contract', () => {
     }
 
     const registryOperations = readEndpointRegistryOperations();
-    expect(registryOperations).toHaveLength(123);
+    expect(registryOperations).toHaveLength(126);
     expect(documentedOperations.sort()).toEqual(
       [...registryOperations, ...annualTestingVariants].sort(),
     );
     expect(pomsOpenApiStats).toEqual({
-      canonicalOperationCount: 123,
-      operationCount: 132,
+      canonicalOperationCount: 126,
+      operationCount: 135,
       tagCount: 11,
     });
   });
@@ -525,10 +531,10 @@ describe('POMS OpenAPI contract', () => {
       }
     }
 
-    expect(writeOperations).toHaveLength(51);
+    expect(writeOperations).toHaveLength(53);
     expect(
       writeOperations.filter(([, , operation]) => isRequestBody(operation.requestBody)),
-    ).toHaveLength(50);
+    ).toHaveLength(52);
 
     for (const [pathKey, method, operation] of writeOperations) {
       const hasRequestBody = isRequestBody(operation.requestBody);
@@ -818,6 +824,113 @@ describe('POMS OpenAPI contract', () => {
     );
   });
 
+  it('documents the eligible-factory add-request workflow and operator request state', () => {
+    const document = asObject(pomsOpenApiDocument, 'OpenAPI document');
+    const paths = asObject(document.paths, 'paths');
+    const schemas = asObject(asObject(document.components, 'components').schemas, 'schemas');
+    expect(schemas.CreateEligibleFactoryRequest).toBeDefined();
+    expect(schemas).not.toHaveProperty('CreateEligibleFactorySelectionRequest');
+    const addRequests = asObject(
+      paths['/eligible-factories/add-requests'],
+      '/eligible-factories/add-requests',
+    );
+    const listOperation = asObject(addRequests.get, 'GET add requests');
+    const listParameters = listOperation.parameters as JsonObject[];
+    const statusSchema = asObject(
+      asObject(
+        listParameters.find((parameter) => parameter.name === 'status'),
+        'status parameter',
+      ).schema,
+      'status schema',
+    );
+    const pageSchema = asObject(
+      asObject(
+        listParameters.find((parameter) => parameter.name === 'page'),
+        'page parameter',
+      ).schema,
+      'page schema',
+    );
+    const searchSchema = asObject(
+      asObject(
+        listParameters.find((parameter) => parameter.name === 'search'),
+        'search parameter',
+      ).schema,
+      'search schema',
+    );
+    const perPageSchema = asObject(
+      asObject(
+        listParameters.find((parameter) => parameter.name === 'perPage'),
+        'perPage parameter',
+      ).schema,
+      'perPage schema',
+    );
+
+    expect(statusSchema).toMatchObject({
+      enum: ['PENDING_REVIEW', 'APPROVED', 'REJECTED'],
+      default: 'PENDING_REVIEW',
+    });
+    expect(searchSchema).toMatchObject({ minLength: 1, maxLength: 200 });
+    expect(pageSchema).toMatchObject({ minimum: 1, default: 1 });
+    expect(perPageSchema).toMatchObject({ minimum: 1, maximum: 200, default: 25 });
+
+    const createResponses = asObject(
+      asObject(addRequests.post, 'POST add requests').responses,
+      'POST add request responses',
+    );
+    const reviewResponses = asObject(
+      asObject(
+        asObject(paths['/eligible-factories/add-requests/{id}/review'], 'review add request').post,
+        'POST review add request',
+      ).responses,
+      'POST review responses',
+    );
+    expect(createResponses['201']).toBeDefined();
+    expect(createResponses['409']).toBeDefined();
+    expect(reviewResponses['200']).toBeDefined();
+    expect(reviewResponses['409']).toBeDefined();
+
+    const addRequestProperties = asObject(
+      asObject(schemas.EligibleFactoryAddRequest, 'EligibleFactoryAddRequest').properties,
+      'EligibleFactoryAddRequest.properties',
+    );
+    expect(asObject(addRequestProperties.factoryRegistrationNo, 'factoryRegistrationNo')).toEqual(
+      expect.objectContaining({ type: 'string', minLength: 1, maxLength: 80 }),
+    );
+    expect(addRequestProperties).toHaveProperty('reviewNote');
+    expect(addRequestProperties).not.toHaveProperty('officerNote');
+
+    const operatorFactories = asObject(
+      asObject(
+        paths['/cems-wpms-requests/operator-factories'],
+        '/cems-wpms-requests/operator-factories',
+      ).get,
+      'GET operator factories',
+    );
+    const operatorResponses = asObject(operatorFactories.responses, 'operator responses');
+    const operatorResponseSchema = asObject(
+      asObject(
+        asObject(
+          asObject(operatorResponses['200'], 'operator 200').content,
+          'operator 200 content',
+        )['application/json'],
+        'operator application/json',
+      ).schema,
+      'operator response schema',
+    );
+    expect(operatorResponseSchema.$ref).toBe('#/components/schemas/OperatorFactoryTableResponse');
+
+    const operatorRow = asObject(schemas.OperatorFactoryTableRow, 'OperatorFactoryTableRow');
+    expect(operatorRow.required).toEqual(
+      expect.arrayContaining(['eligibilityRequest', 'canRequestEligibility']),
+    );
+    const operatorRowProperties = asObject(
+      operatorRow.properties,
+      'OperatorFactoryTableRow.properties',
+    );
+    expect(operatorRowProperties).toHaveProperty('eligibilityRequest');
+    expect(operatorRowProperties).toHaveProperty('canRequestEligibility');
+  });
+
   it('documents every bearer operation with its runtime permission requirement', () => {
     const document = asObject(pomsOpenApiDocument, 'OpenAPI document');
     const paths = asObject(document.paths, 'paths');
@@ -854,6 +967,26 @@ describe('POMS OpenAPI contract', () => {
       asObject(eligibleFactories.post, 'eligible factories.post')['x-poms-permissions'],
     ).toEqual(['eligible_factories:edit']);
 
+    const eligibleFactoryAddRequests = asObject(
+      paths['/eligible-factories/add-requests'],
+      'eligible factory add requests',
+    );
+    expect(
+      asObject(eligibleFactoryAddRequests.get, 'eligible factory add requests.get')[
+        'x-poms-permissions'
+      ],
+    ).toEqual(['eligible_factories:view']);
+    expect(
+      asObject(eligibleFactoryAddRequests.post, 'eligible factory add requests.post')[
+        'x-poms-permissions'
+      ],
+    ).toEqual(['factories:view', 'factories:edit']);
+    expect(
+      asObject(eligibleFactoryAddRequests.post, 'eligible factory add requests.post')[
+        'x-poms-permission-mode'
+      ],
+    ).toBe('all');
+
     const selectEligible = asObject(
       asObject(
         paths['/monitoring-point-forms/{id}/select-eligible'],
@@ -862,6 +995,19 @@ describe('POMS OpenAPI contract', () => {
       'select eligible monitoring point form.post',
     );
     expect(selectEligible['x-poms-permissions']).toEqual(['eligible_factories:approve']);
+
+    const reviewEligibleFactoryAddRequest = asObject(
+      asObject(
+        paths['/eligible-factories/add-requests/{id}/review'],
+        'review eligible factory add request',
+      ).post,
+      'review eligible factory add request.post',
+    );
+    expect(reviewEligibleFactoryAddRequest['x-poms-permissions']).toEqual([
+      'eligible_factories:view',
+      'eligible_factories:approve',
+    ]);
+    expect(reviewEligibleFactoryAddRequest['x-poms-permission-mode']).toBe('all');
   });
 
   it('matches runtime delete statuses, alert filters and integration station IDs', () => {

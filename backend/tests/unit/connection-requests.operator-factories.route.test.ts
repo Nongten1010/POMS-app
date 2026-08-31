@@ -56,6 +56,8 @@ describe('operator factory dashboard routes', () => {
           eligibilityStatus: 'เข้าข่าย',
           monitoringPointCount: 1,
           requestStatusCode: 'CONNECTED',
+          eligibilityRequest: null,
+          canRequestEligibility: false,
           status: 'แสดง',
         },
       ],
@@ -84,6 +86,8 @@ describe('operator factory dashboard routes', () => {
           eligibilityStatus: 'เข้าข่าย',
           monitoringPointCount: 2,
           requestStatusCode: null,
+          eligibilityRequest: null,
+          canRequestEligibility: false,
           status: 'แสดง',
         },
       ],
@@ -262,10 +266,69 @@ describe('operator factory dashboard routes', () => {
       eligibilityStatus: 'เข้าข่าย',
       monitoringPointCount: 1,
       requestStatusCode: 'CONNECTED',
+      eligibilityRequest: null,
+      canRequestEligibility: false,
       status: 'แสดง',
     });
     expect(response.body.data[0]).not.toHaveProperty('measurementPoints');
     expect(response.body.data[0]).not.toHaveProperty('monitoringPointCountBySystem');
+  });
+
+  it('returns the active eligibility request state for a non-eligible factory', async () => {
+    mockedConnectionRequestsService.listOperatorFactories.mockResolvedValueOnce({
+      data: [
+        {
+          id: 2,
+          factoryId: 'factory-002',
+          factoryName: 'บริษัท ยังไม่เข้าข่าย จำกัด',
+          newRegistrationNo: null,
+          oldRegistrationNo: null,
+          industryType: null,
+          industryMainOrder: null,
+          industrySubOrder: null,
+          businessActivity: null,
+          eia: null,
+          projectName: null,
+          address: null,
+          latitude: null,
+          longitude: null,
+          province: null,
+          officerNotificationEmails: [],
+          isEligible: false,
+          eligibilityStatus: 'ไม่เข้าข่าย',
+          monitoringPointCount: 0,
+          requestStatusCode: null,
+          eligibilityRequest: {
+            id: 41,
+            status: 'PENDING_REVIEW',
+            statusLabel: 'รอพิจารณา',
+            submittedAt: '2026-08-31T03:00:00.000Z',
+          },
+          canRequestEligibility: false,
+          status: 'แสดง',
+        },
+      ],
+      meta: { total: 1 },
+    });
+    const app = createApp();
+
+    const response = await request(app)
+      .get('/api/v1/cems-wpms-requests/operator-factories')
+      .set('Authorization', `Bearer ${accessToken()}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data[0]).toMatchObject({
+      factoryId: 'factory-002',
+      eligibilityRequest: {
+        id: 41,
+        status: 'PENDING_REVIEW',
+        statusLabel: 'รอพิจารณา',
+        submittedAt: '2026-08-31T03:00:00.000Z',
+      },
+      canRequestEligibility: false,
+    });
+    expect(response.body.data[0]).not.toHaveProperty('pendingEligibleFactoryRequestId');
+    expect(response.body.data[0]).not.toHaveProperty('pendingEligibleFactoryRequestReason');
   });
 
   it('lists every owned factory with its POMS membership status for the operator home page', async () => {
@@ -382,6 +445,8 @@ describe('operator factory dashboard routes', () => {
           eligibilityStatus: 'เข้าข่าย',
           monitoringPointCount: 2,
           requestStatusCode: null,
+          eligibilityRequest: null,
+          canRequestEligibility: false,
           status: 'แสดง',
         },
       ],

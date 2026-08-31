@@ -17,10 +17,27 @@ eligibleFactoriesRoutes.get(
   authorize('eligible_factories:view'),
   eligibleFactoriesController.list,
 );
+eligibleFactoriesRoutes.get(
+  '/add-requests',
+  authorize('eligible_factories:view'),
+  eligibleFactoriesController.listAddRequests,
+);
 eligibleFactoriesRoutes.post(
   '/',
   authorize('eligible_factories:edit'),
   eligibleFactoriesController.create,
+);
+eligibleFactoriesRoutes.post(
+  '/add-requests',
+  authorize('factories:view'),
+  authorize('factories:edit'),
+  eligibleFactoriesController.createAddRequest,
+);
+eligibleFactoriesRoutes.post(
+  '/add-requests/:id/review',
+  authorize('eligible_factories:view'),
+  authorize('eligible_factories:approve'),
+  eligibleFactoriesController.reviewAddRequest,
 );
 eligibleFactoriesRoutes.delete(
   '/:id',

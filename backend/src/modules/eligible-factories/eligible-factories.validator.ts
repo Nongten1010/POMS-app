@@ -63,7 +63,38 @@ export const createEligibleFactorySchema = z
     selectedReason: null,
   }));
 
+export const createEligibleFactoryAddRequestSchema = z
+  .object({
+    factoryId: trimmedString(64),
+    reason: trimmedString(1000),
+  })
+  .strict();
+
 export const listEligibleFactoriesQuerySchema = z.object({}).strict();
+export const listEligibleFactoryAddRequestsQuerySchema = z
+  .object({
+    status: z.enum(['PENDING_REVIEW', 'APPROVED', 'REJECTED']).default('PENDING_REVIEW'),
+    search: z.string().trim().min(1).max(200).optional(),
+    page: z.coerce.number().int().min(1).default(1),
+    perPage: z.coerce.number().int().min(1).max(200).default(25),
+  })
+  .strict();
+
+export const reviewEligibleFactoryAddRequestSchema = z
+  .object({
+    decision: z.enum(['APPROVE', 'REJECT']),
+    officerNote: z.string().trim().min(1).max(1000).nullable().optional(),
+  })
+  .strict()
+  .superRefine((input, ctx) => {
+    if (input.decision === 'REJECT' && !input.officerNote) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['officerNote'],
+        message: 'officerNote is required when decision is REJECT',
+      });
+    }
+  });
 
 export const listEligibleFactoryCandidatesQuerySchema = z
   .object({
@@ -86,9 +117,20 @@ export const eligibleFactoryIdParamsSchema = z
   })
   .strict();
 
+export const eligibleFactoryAddRequestIdParamsSchema = eligibleFactoryIdParamsSchema;
+
 export type CreateEligibleFactorySchemaInput = z.infer<typeof createEligibleFactorySchema>;
+export type CreateEligibleFactoryAddRequestSchemaInput = z.infer<
+  typeof createEligibleFactoryAddRequestSchema
+>;
 export type ListEligibleFactoriesQuerySchemaInput = z.infer<
   typeof listEligibleFactoriesQuerySchema
+>;
+export type ListEligibleFactoryAddRequestsQuerySchemaInput = z.infer<
+  typeof listEligibleFactoryAddRequestsQuerySchema
+>;
+export type ReviewEligibleFactoryAddRequestSchemaInput = z.infer<
+  typeof reviewEligibleFactoryAddRequestSchema
 >;
 export type ListEligibleFactoryCandidatesQuerySchemaInput = z.infer<
   typeof listEligibleFactoryCandidatesQuerySchema

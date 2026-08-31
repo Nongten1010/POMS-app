@@ -1,8 +1,11 @@
 import { describe, expect, it } from '@jest/globals';
 import {
+  createEligibleFactoryAddRequestSchema,
   createEligibleFactorySchema,
+  listEligibleFactoryAddRequestsQuerySchema,
   listEligibleFactoryCandidatesQuerySchema,
   listEligibleFactoriesQuerySchema,
+  reviewEligibleFactoryAddRequestSchema,
 } from '../../src/modules/eligible-factories/eligible-factories.validator';
 
 describe('eligible factories validators', () => {
@@ -141,5 +144,69 @@ describe('eligible factories validators', () => {
     });
 
     expect(result.success).toBe(false);
+  });
+
+  it('trims and accepts a valid add-factory request', () => {
+    expect(
+      createEligibleFactoryAddRequestSchema.parse({
+        factoryId: ' 10550000125197 ',
+        reason: ' ต้องการเข้าระบบ CEMS ',
+      }),
+    ).toEqual({
+      factoryId: '10550000125197',
+      reason: 'ต้องการเข้าระบบ CEMS',
+    });
+  });
+
+  it('rejects blank or oversized add-factory reasons', () => {
+    expect(
+      createEligibleFactoryAddRequestSchema.safeParse({ factoryId: 'F-1', reason: '   ' }).success,
+    ).toBe(false);
+    expect(
+      createEligibleFactoryAddRequestSchema.safeParse({
+        factoryId: 'F-1',
+        reason: 'x'.repeat(1001),
+      }).success,
+    ).toBe(false);
+  });
+
+  it('applies stable add-request list defaults and parses filters', () => {
+    expect(listEligibleFactoryAddRequestsQuerySchema.parse({})).toEqual({
+      status: 'PENDING_REVIEW',
+      page: 1,
+      perPage: 25,
+    });
+    expect(
+      listEligibleFactoryAddRequestsQuerySchema.parse({
+        status: 'REJECTED',
+        search: ' โรงงาน A ',
+        page: '2',
+        perPage: '50',
+      }),
+    ).toEqual({ status: 'REJECTED', search: 'โรงงาน A', page: 2, perPage: 50 });
+  });
+
+  it('requires a nonblank officer note for rejection', () => {
+    expect(reviewEligibleFactoryAddRequestSchema.safeParse({ decision: 'REJECT' }).success).toBe(
+      false,
+    );
+    expect(
+      reviewEligibleFactoryAddRequestSchema.safeParse({
+        decision: 'REJECT',
+        officerNote: '   ',
+      }).success,
+    ).toBe(false);
+    expect(
+      reviewEligibleFactoryAddRequestSchema.parse({
+        decision: 'REJECT',
+        officerNote: ' ข้อมูลยังไม่เพียงพอ ',
+      }),
+    ).toEqual({ decision: 'REJECT', officerNote: 'ข้อมูลยังไม่เพียงพอ' });
+  });
+
+  it('allows approval without an officer note', () => {
+    expect(reviewEligibleFactoryAddRequestSchema.parse({ decision: 'APPROVE' })).toEqual({
+      decision: 'APPROVE',
+    });
   });
 });

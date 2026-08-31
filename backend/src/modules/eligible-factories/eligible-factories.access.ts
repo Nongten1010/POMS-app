@@ -1,10 +1,7 @@
 import type { Knex } from 'knex';
 import { db } from '../../config/database';
 import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
-import {
-  applyFactoryType88Filter,
-  isFactoryType88,
-} from '../../shared/utils/factory-type-scope';
+import { applyFactoryType88Filter, isFactoryType88 } from '../../shared/utils/factory-type-scope';
 import type { PermissionScopeDetails } from '../auth/permissions';
 import type { RegionalAccessDTO } from '../auth/regional-access';
 import { resolveAssignedRegions } from '../auth/regional-access';
@@ -194,6 +191,20 @@ export function applySelectedFactoryAccessFilters(
   builder: Knex.QueryBuilder,
   filters: SelectedFactoryAccessFilters,
   actorUserId: number | undefined,
+  identifierColumns: {
+    registrationNo: 'ef.factory_registration_no_new' | 'ef.factory_registration_no';
+    sourceFactoryId: 'ef.source_factory_id';
+    factoryMasterId?: 'ef.factory_master_id';
+    provinceName: 'ef.province_name' | 'p.name_th';
+    industrialEstateName: 'ef.industrial_estate_name' | 'ie.name_th';
+    factoryTypeSequence: 'ef.factory_type_sequence';
+  } = {
+    registrationNo: 'ef.factory_registration_no_new',
+    sourceFactoryId: 'ef.source_factory_id',
+    provinceName: 'ef.province_name',
+    industrialEstateName: 'ef.industrial_estate_name',
+    factoryTypeSequence: 'ef.factory_type_sequence',
+  },
 ): void {
   if (filters.denyAll) {
     builder.whereRaw('1 = 0');
@@ -210,17 +221,21 @@ export function applySelectedFactoryAccessFilters(
         .from('factories as f')
         .whereNull('f.deleted_at')
         .where(function eligibleFactoryIdentifierMatch() {
-          this.whereRaw('f.code = ef.factory_registration_no_new')
-            .orWhereRaw('f.fid = ef.factory_registration_no_new')
-            .orWhereRaw('f.fid = ef.source_factory_id')
-            .orWhereRaw('f.code = ef.source_factory_id');
+          if (identifierColumns.factoryMasterId) {
+            this.whereRaw(`f.id = ${identifierColumns.factoryMasterId}`);
+            return;
+          }
+          this.whereRaw(`f.code = ${identifierColumns.registrationNo}`)
+            .orWhereRaw(`f.fid = ${identifierColumns.registrationNo}`)
+            .orWhereRaw(`f.fid = ${identifierColumns.sourceFactoryId}`)
+            .orWhereRaw(`f.code = ${identifierColumns.sourceFactoryId}`);
         });
       applyAssignedFactoryAccessFilter(this, actorUserId, 'f');
     });
   }
 
   if (filters.requireFactoryType88) {
-    applyFactoryType88Filter(builder, 'ef.factory_type_sequence');
+    applyFactoryType88Filter(builder, identifierColumns.factoryTypeSequence);
   }
 
   if (filters.regionNames.length > 0) {
@@ -228,9 +243,9 @@ export function applySelectedFactoryAccessFilters(
   }
   if (filters.provinceNames.length > 0) {
     if (filters.provinceNames.length === 1) {
-      builder.where('ef.province_name', filters.provinceNames[0]);
+      builder.where(identifierColumns.provinceName, filters.provinceNames[0]);
     } else {
-      builder.whereIn('ef.province_name', filters.provinceNames);
+      builder.whereIn(identifierColumns.provinceName, filters.provinceNames);
     }
   }
   if (filters.estateCodes.length > 0) {
@@ -243,9 +258,9 @@ export function applySelectedFactoryAccessFilters(
   }
   if (filters.estateNames.length > 0) {
     if (filters.estateNames.length === 1) {
-      builder.where('ef.industrial_estate_name', filters.estateNames[0]);
+      builder.where(identifierColumns.industrialEstateName, filters.estateNames[0]);
     } else {
-      builder.whereIn('ef.industrial_estate_name', filters.estateNames);
+      builder.whereIn(identifierColumns.industrialEstateName, filters.estateNames);
     }
   }
 }
@@ -288,7 +303,8 @@ export async function canAccessEligibleFactoryInput(
 
   const provinceName = normalizeText(input.provinceName);
   if (!provinceName) return false;
-  if (filters.provinceNames.length > 0 && !filters.provinceNames.includes(provinceName)) return false;
+  if (filters.provinceNames.length > 0 && !filters.provinceNames.includes(provinceName))
+    return false;
 
   if (filters.regionNames.length > 0) {
     const province = await provinceByName(provinceName);
@@ -452,5 +468,11 @@ function normalizeText(value: unknown): string | null {
 }
 
 function uniqueValues(values: Array<string | null | undefined>): string[] {
-  return [...new Set(values.map((value) => normalizeText(value)).filter((value): value is string => Boolean(value)))];
+  return [
+    ...new Set(
+      values
+        .map((value) => normalizeText(value))
+        .filter((value): value is string => Boolean(value)),
+    ),
+  ];
 }

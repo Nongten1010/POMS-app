@@ -7,10 +7,22 @@ jest.mock('../../src/modules/eligible-factories/eligible-factories.repository', 
     attachMonitoringPointForm: jest.fn(),
     canAccessInput: jest.fn(),
     create: jest.fn(),
+    createAddRequest: jest.fn(),
+    listAddRequests: jest.fn(),
+    findOpenAddRequestByFactoryMasterId: jest.fn(),
+    findAddRequestById: jest.fn(),
     findAccessibleById: jest.fn(),
+    reviewAddRequest: jest.fn(),
     list: jest.fn(),
     softDelete: jest.fn(),
     softDeleteAccessible: jest.fn(),
+  },
+}));
+
+jest.mock('../../src/modules/connection-requests/connection-requests.repository', () => ({
+  connectionRequestsRepository: {
+    findFactorySummaryForAccess: jest.fn(),
+    findFactoryGeneral: jest.fn(),
   },
 }));
 
@@ -27,6 +39,7 @@ jest.mock('../../src/modules/eligible-factories/eligible-factory-source-hydratio
 
 import { ConflictError } from '../../src/shared/errors/AppError';
 import { eligibleFactoryCandidatesRepository } from '../../src/modules/eligible-factories/eligible-factory-candidates.repository';
+import { connectionRequestsRepository } from '../../src/modules/connection-requests/connection-requests.repository';
 import { eligibleFactoriesRepository } from '../../src/modules/eligible-factories/eligible-factories.repository';
 import { eligibleFactoriesService } from '../../src/modules/eligible-factories/eligible-factories.service';
 import { resolveEligibleFactoryAddressForStorage } from '../../src/modules/eligible-factories/eligible-factory-source-hydration';
@@ -34,6 +47,7 @@ import type { CreateEligibleFactoryInput } from '../../src/modules/eligible-fact
 
 const mockedRepository = jest.mocked(eligibleFactoriesRepository);
 const mockedCandidatesRepository = jest.mocked(eligibleFactoryCandidatesRepository);
+const mockedConnectionRequestsRepository = jest.mocked(connectionRequestsRepository);
 const mockedResolveAddress = jest.mocked(resolveEligibleFactoryAddressForStorage);
 
 describe('eligibleFactoriesService', () => {
@@ -360,11 +374,14 @@ describe('eligibleFactoriesService', () => {
       },
     );
 
-    expect(mockedRepository.list).toHaveBeenCalledWith({}, {
-      actorUserId: 42,
-      scope: { scope: 'IN_PROVINCE', province: 'ระยอง', region: null },
-      regionalAccess: { regions: ['ภาคตะวันออก'] },
-    });
+    expect(mockedRepository.list).toHaveBeenCalledWith(
+      {},
+      {
+        actorUserId: 42,
+        scope: { scope: 'IN_PROVINCE', province: 'ระยอง', region: null },
+        regionalAccess: { regions: ['ภาคตะวันออก'] },
+      },
+    );
   });
 
   it('forwards read access context to the external candidate list', async () => {
@@ -382,11 +399,14 @@ describe('eligibleFactoriesService', () => {
       },
     );
 
-    expect(mockedCandidatesRepository.list).toHaveBeenCalledWith({}, {
-      actorUserId: 42,
-      scope: expect.objectContaining({ scope: 'IN_ESTATE', estateCode: 'MTP' }),
-      regionalAccess: { regions: ['ภาคตะวันออก'] },
-    });
+    expect(mockedCandidatesRepository.list).toHaveBeenCalledWith(
+      {},
+      {
+        actorUserId: 42,
+        scope: expect.objectContaining({ scope: 'IN_ESTATE', estateCode: 'MTP' }),
+        regionalAccess: { regions: ['ภาคตะวันออก'] },
+      },
+    );
   });
 
   it('rejects create when the target factory is outside the actor access scope', async () => {
@@ -433,4 +453,205 @@ describe('eligibleFactoriesService', () => {
     );
     expect(mockedRepository.create).not.toHaveBeenCalled();
   });
+
+  it('creates an add-factory request from a factory inside both view and edit scopes', async () => {
+    const factory = ownedFactorySummary();
+    mockedConnectionRequestsRepository.findFactorySummaryForAccess.mockResolvedValue(factory);
+    mockedConnectionRequestsRepository.findFactoryGeneral.mockResolvedValue({
+      ...factory,
+      eligibleFactoryId: null,
+      juristicId: '0100000000000',
+      juristicName: 'บริษัท ทดสอบ จำกัด',
+      systemId: 1,
+      systemDetail: 'ผลิตพลังงาน',
+      verifyStatus: 1,
+      authorizeStart: null,
+      authorizeEnd: null,
+      operationStatus: 'แจ้งประกอบแล้ว',
+      capitalAmount: 5000000,
+      machineryHorsepower: 120,
+      productionCapacity: '10 MW',
+      wastewaterDischargeInfo: null,
+      boilerCount: 1,
+      boilerSizeEach: '5 ton/hour',
+      fuelUsed: 'ก๊าซธรรมชาติ',
+      formDefaults: {
+        factoryId: factory.factoryId,
+        factoryName: factory.factoryName,
+        factoryRegistrationNo: factory.newRegistrationNo,
+      },
+    } as never);
+    mockedRepository.findByRegistrationNoNew.mockResolvedValue(null);
+    mockedRepository.findOpenAddRequestByFactoryMasterId.mockResolvedValue(null);
+    mockedRepository.createAddRequest.mockResolvedValue(pendingAddRequest());
+
+    const access = addRequestAccess();
+    const result = await eligibleFactoriesService.createAddRequest(
+      { factoryId: factory.factoryId, reason: 'ต้องการเข้าระบบ CEMS' },
+      42,
+      access,
+    );
+
+    expect(mockedConnectionRequestsRepository.findFactorySummaryForAccess).toHaveBeenNthCalledWith(
+      1,
+      factory.factoryId,
+      access.view,
+    );
+    expect(mockedConnectionRequestsRepository.findFactorySummaryForAccess).toHaveBeenNthCalledWith(
+      2,
+      factory.factoryId,
+      access.edit,
+    );
+    expect(mockedRepository.createAddRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        factoryMasterId: 12,
+        requestedFactory: expect.objectContaining({
+          sourceSystem: 'eligible_factory_add_requests',
+          operationStatus: 'แจ้งประกอบแล้ว',
+          capitalAmount: 5000000,
+          machineryHorsepower: 120,
+          selectedReason: 'ต้องการเข้าระบบ CEMS',
+        }),
+      }),
+      42,
+    );
+    expect(result.status).toBe('PENDING_REVIEW');
+  });
+
+  it('returns not found when the factory is outside either required scope', async () => {
+    mockedConnectionRequestsRepository.findFactorySummaryForAccess
+      .mockResolvedValueOnce(ownedFactorySummary())
+      .mockResolvedValueOnce(null);
+
+    await expect(
+      eligibleFactoriesService.createAddRequest(
+        { factoryId: '10550000125197', reason: 'ต้องการเข้าระบบ CEMS' },
+        42,
+        addRequestAccess(),
+      ),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(mockedRepository.createAddRequest).not.toHaveBeenCalled();
+  });
+
+  it('returns conflict for an existing open request', async () => {
+    mockedConnectionRequestsRepository.findFactorySummaryForAccess.mockResolvedValue(
+      ownedFactorySummary(),
+    );
+    mockedConnectionRequestsRepository.findFactoryGeneral.mockResolvedValue(null);
+    mockedRepository.findByRegistrationNoNew.mockResolvedValue(null);
+    mockedRepository.findOpenAddRequestByFactoryMasterId.mockResolvedValue({
+      id: 88,
+      factoryMasterId: 12,
+    });
+
+    await expect(
+      eligibleFactoriesService.createAddRequest(
+        { factoryId: '10550000125197', reason: 'ต้องการเข้าระบบ CEMS' },
+        42,
+        addRequestAccess(),
+      ),
+    ).rejects.toBeInstanceOf(ConflictError);
+  });
+
+  it('maps a concurrent open-request unique violation to conflict', async () => {
+    mockedConnectionRequestsRepository.findFactorySummaryForAccess.mockResolvedValue(
+      ownedFactorySummary(),
+    );
+    mockedConnectionRequestsRepository.findFactoryGeneral.mockResolvedValue(null);
+    mockedRepository.findByRegistrationNoNew.mockResolvedValue(null);
+    mockedRepository.findOpenAddRequestByFactoryMasterId.mockResolvedValue(null);
+    mockedRepository.createAddRequest.mockRejectedValue({
+      originalError: { info: { number: 2601 } },
+    });
+
+    await expect(
+      eligibleFactoriesService.createAddRequest(
+        { factoryId: '10550000125197', reason: 'ต้องการเข้าระบบ CEMS' },
+        42,
+        addRequestAccess(),
+      ),
+    ).rejects.toBeInstanceOf(ConflictError);
+  });
+
+  it('passes both access scopes to atomic approval review', async () => {
+    mockedRepository.reviewAddRequest.mockResolvedValue({
+      ...pendingAddRequest(),
+      status: 'APPROVED',
+      statusLabel: 'อนุมัติแล้ว',
+      reviewedBy: 7,
+      reviewedAt: '2026-08-10T01:00:00.000Z',
+      eligibleFactoryId: 17,
+    });
+    const access = {
+      view: { actorUserId: 7, scope: { scope: 'ALL' } as never, regionalAccess: null },
+      approve: { actorUserId: 7, scope: { scope: 'ALL' } as never, regionalAccess: null },
+    };
+
+    const result = await eligibleFactoriesService.reviewAddRequest(
+      88,
+      { decision: 'APPROVE', officerNote: null },
+      7,
+      access,
+    );
+
+    expect(mockedRepository.reviewAddRequest).toHaveBeenCalledWith(
+      88,
+      { decision: 'APPROVE', officerNote: null },
+      7,
+      [access.view, access.approve],
+    );
+    expect(result.status).toBe('APPROVED');
+  });
 });
+
+function ownedFactorySummary() {
+  return {
+    id: 12,
+    factoryId: '10550000125197',
+    factoryName: 'โรงงานร้องขอ',
+    newRegistrationNo: '10550000125197',
+    oldRegistrationNo: null,
+    industryType: 'ผลิตพลังงาน',
+    industryMainOrder: '88',
+    industrySubOrder: '02',
+    businessActivity: 'ผลิตไฟฟ้า',
+    eia: null,
+    hasEia: null,
+    projectName: null,
+    address: '99 หมู่ 1',
+    latitude: '13.1',
+    longitude: '100.1',
+    provinceName: 'น่าน',
+    province: 'น่าน',
+    industrialEstateName: null,
+    isEligible: false,
+    eligibilityStatus: 'ไม่เข้าข่าย',
+    isActive: true,
+  } as const;
+}
+
+function pendingAddRequest() {
+  return {
+    id: 88,
+    factoryId: '10550000125197',
+    factoryName: 'โรงงานร้องขอ',
+    factoryRegistrationNo: '10550000125197',
+    provinceName: 'น่าน',
+    reason: 'ต้องการเข้าระบบ CEMS',
+    status: 'PENDING_REVIEW' as const,
+    statusLabel: 'รอพิจารณา',
+    submittedBy: 42,
+    submittedAt: '2026-08-10T00:00:00.000Z',
+    reviewedBy: null,
+    reviewedAt: null,
+    reviewNote: null,
+    eligibleFactoryId: null,
+  };
+}
+
+function addRequestAccess() {
+  return {
+    view: { actorUserId: 42, scope: { scope: 'OWN_FACTORY' } as never, regionalAccess: null },
+    edit: { actorUserId: 42, scope: { scope: 'OWN_FACTORY' } as never, regionalAccess: null },
+  };
+}

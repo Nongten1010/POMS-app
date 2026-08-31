@@ -454,6 +454,13 @@ export interface ConnectionRequestTableRowDTO {
   requestType: ConnectionRequestType;
 }
 
+export interface OperatorFactoryEligibilityRequestDTO {
+  id: number;
+  status: 'PENDING_REVIEW';
+  statusLabel: 'รอพิจารณา';
+  submittedAt: string;
+}
+
 export interface OperatorFactoryTableRowDTO {
   id: number | null;
   factoryId: string;
@@ -475,6 +482,8 @@ export interface OperatorFactoryTableRowDTO {
   eligibilityStatus: 'เข้าข่าย' | 'ไม่เข้าข่าย';
   monitoringPointCount: number;
   requestStatusCode: ConnectionRequestStatus | null;
+  eligibilityRequest: OperatorFactoryEligibilityRequestDTO | null;
+  canRequestEligibility: boolean;
   status: 'แสดง' | 'ซ่อน';
 }
 

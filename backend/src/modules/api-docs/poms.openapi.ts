@@ -203,6 +203,7 @@ const queryInteger = (
   required = false,
   minimum = 1,
   maximum?: number,
+  defaultValue?: number,
 ): OpenApiObject => ({
   name,
   in: 'query',
@@ -212,6 +213,7 @@ const queryInteger = (
     type: 'integer',
     minimum,
     ...(maximum === undefined ? {} : { maximum }),
+    ...(defaultValue === undefined ? {} : { default: defaultValue }),
   },
 });
 
@@ -493,6 +495,16 @@ const createEligibleFactoryExample = {
   boilerSizeEach: null,
   fuelUsed: null,
   hasEia: true,
+};
+
+const createEligibleFactoryAddRequestExample = {
+  factoryId: 'F000123',
+  reason: 'มีคำขอเชื่อมต่อระบบ CEMS และมีจุดตรวจวัดที่อยู่ในเกณฑ์',
+};
+
+const reviewEligibleFactoryAddRequestExample = {
+  decision: 'APPROVE',
+  officerNote: null,
 };
 
 const favoriteExample = { isFavorite: true };
@@ -1148,6 +1160,102 @@ const componentSchemas: Record<string, OpenApiObject> = {
       boilerSizeEach: { type: 'string', minLength: 1, maxLength: 500, nullable: true },
       fuelUsed: { type: 'string', minLength: 1, maxLength: 500, nullable: true },
       hasEia: { type: 'boolean', nullable: true },
+    },
+  },
+  CreateEligibleFactoryAddRequest: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['factoryId', 'reason'],
+    properties: {
+      factoryId: { type: 'string', minLength: 1, maxLength: 64 },
+      reason: { type: 'string', minLength: 1, maxLength: 1000 },
+    },
+  },
+  ReviewEligibleFactoryAddRequest: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['decision'],
+    properties: {
+      decision: { type: 'string', enum: ['APPROVE', 'REJECT'] },
+      officerNote: { type: 'string', minLength: 1, maxLength: 1000, nullable: true },
+    },
+    description:
+      'officerNote ต้องมีข้อความเมื่อ decision เป็น REJECT; APPROVE ส่ง null หรือละ field ได้',
+  },
+  EligibleFactoryAddRequest: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'id',
+      'factoryId',
+      'factoryRegistrationNo',
+      'factoryName',
+      'provinceName',
+      'reason',
+      'status',
+      'statusLabel',
+      'eligibleFactoryId',
+      'submittedBy',
+      'submittedAt',
+      'reviewedBy',
+      'reviewedAt',
+      'reviewNote',
+    ],
+    properties: {
+      id: { type: 'integer', minimum: 1 },
+      factoryId: { type: 'string', minLength: 1, maxLength: 64 },
+      factoryRegistrationNo: { type: 'string', minLength: 1, maxLength: 80 },
+      factoryName: { type: 'string', minLength: 1, maxLength: 500 },
+      provinceName: { type: 'string', minLength: 1, maxLength: 128 },
+      reason: { type: 'string', minLength: 1, maxLength: 1000 },
+      status: {
+        type: 'string',
+        enum: ['PENDING_REVIEW', 'APPROVED', 'REJECTED'],
+        'x-enum-labels': {
+          PENDING_REVIEW: 'รอพิจารณา',
+          APPROVED: 'อนุมัติแล้ว',
+          REJECTED: 'ไม่อนุมัติ',
+        },
+      },
+      statusLabel: { type: 'string', enum: ['รอพิจารณา', 'อนุมัติแล้ว', 'ไม่อนุมัติ'] },
+      eligibleFactoryId: { type: 'integer', minimum: 1, nullable: true },
+      submittedBy: { type: 'integer', minimum: 1 },
+      submittedAt: { type: 'string', format: 'date-time' },
+      reviewedBy: { type: 'integer', minimum: 1, nullable: true },
+      reviewedAt: { type: 'string', format: 'date-time', nullable: true },
+      reviewNote: { type: 'string', maxLength: 1000, nullable: true },
+    },
+  },
+  EligibleFactoryAddRequestResponse: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['success', 'data'],
+    properties: {
+      success: { type: 'boolean', enum: [true] },
+      data: schemaRef('EligibleFactoryAddRequest'),
+    },
+  },
+  EligibleFactoryAddRequestListResponse: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['success', 'data', 'meta'],
+    properties: {
+      success: { type: 'boolean', enum: [true] },
+      data: {
+        type: 'array',
+        items: schemaRef('EligibleFactoryAddRequest'),
+      },
+      meta: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['total', 'page', 'perPage', 'totalPages'],
+        properties: {
+          total: { type: 'integer', minimum: 0 },
+          page: { type: 'integer', minimum: 1 },
+          perPage: { type: 'integer', minimum: 1, maximum: 200 },
+          totalPages: { type: 'integer', minimum: 0 },
+        },
+      },
     },
   },
   OperatorFactoryMeasurementCriteriaRow: {
@@ -3648,6 +3756,70 @@ const extraPaths: Record<string, OpenApiObject> = {
       successStatus: '201',
     }),
   },
+  '/eligible-factories/add-requests': {
+    get: securedOperation({
+      tag: 'Eligible Factories',
+      summary: 'List eligible-factory add requests',
+      operationId: 'listEligibleFactoryAddRequests',
+      description:
+        'Permission: eligible_factories:view. คืนคำขอตาม data scope โดย default status เป็น PENDING_REVIEW และเรียง submittedAt DESC, id DESC',
+      parameters: [
+        queryEnum(
+          'status',
+          ['PENDING_REVIEW', 'APPROVED', 'REJECTED'],
+          'กรองสถานะคำขอ',
+          false,
+          'PENDING_REVIEW',
+        ),
+        {
+          name: 'search',
+          in: 'query',
+          required: false,
+          description: 'ค้นหาชื่อโรงงานหรือเลขทะเบียนโรงงาน',
+          schema: { type: 'string', minLength: 1, maxLength: 200 },
+        },
+        queryInteger('page', 'เลขหน้า', false, 1, undefined, 1),
+        queryInteger('perPage', 'จำนวนรายการต่อหน้า', false, 1, 200, 25),
+      ],
+      successSchema: schemaRef('EligibleFactoryAddRequestListResponse'),
+    }),
+    post: securedOperation({
+      tag: 'Eligible Factories',
+      summary: 'Submit an eligible-factory add request',
+      operationId: 'createEligibleFactoryAddRequest',
+      description:
+        'Permission (ต้องมีครบ): factories:view + factories:edit. Operator ส่งได้เฉพาะโรงงานใน OWN_FACTORY scope ที่ยังไม่เข้าข่ายและไม่มีคำขอ PENDING_REVIEW',
+      requestBody: jsonRequestBody(
+        schemaRef('CreateEligibleFactoryAddRequest'),
+        createEligibleFactoryAddRequestExample,
+      ),
+      successStatus: '201',
+      successDescription: 'สร้างคำขอเพิ่มโรงงานแล้ว',
+      successSchema: schemaRef('EligibleFactoryAddRequestResponse'),
+      extraResponses: {
+        '409': { $ref: '#/components/responses/Conflict' },
+      },
+    }),
+  },
+  '/eligible-factories/add-requests/{id}/review': {
+    post: securedOperation({
+      tag: 'Eligible Factories',
+      summary: 'Review an eligible-factory add request',
+      operationId: 'reviewEligibleFactoryAddRequest',
+      description:
+        'Permission (ต้องมีครบ): eligible_factories:view + eligible_factories:approve. APPROVE เพิ่มหรือ restore โรงงานเข้าข่ายแบบ atomic; REJECT ต้องระบุ officerNote',
+      parameters: [idParameter],
+      requestBody: jsonRequestBody(
+        schemaRef('ReviewEligibleFactoryAddRequest'),
+        reviewEligibleFactoryAddRequestExample,
+      ),
+      successDescription: 'พิจารณาคำขอแล้ว',
+      successSchema: schemaRef('EligibleFactoryAddRequestResponse'),
+      extraResponses: {
+        '409': { $ref: '#/components/responses/Conflict' },
+      },
+    }),
+  },
   '/eligible-factories/{id}': {
     delete: securedOperation({
       tag: 'Eligible Factories',
@@ -4789,6 +4961,17 @@ function authorizationRequirementFor(path: string, method: string): Authorizatio
       : { permissions: ['users:edit', 'permissions:manage'], mode: 'any' };
   }
 
+  if (path === '/eligible-factories/add-requests') {
+    return method === 'get'
+      ? { permissions: ['eligible_factories:view'], mode: 'any' }
+      : { permissions: ['factories:view', 'factories:edit'], mode: 'all' };
+  }
+  if (path === '/eligible-factories/add-requests/{id}/review') {
+    return {
+      permissions: ['eligible_factories:view', 'eligible_factories:approve'],
+      mode: 'all',
+    };
+  }
   if (path.startsWith('/eligible-factories')) {
     return method === 'get'
       ? { permissions: ['eligible_factories:view'], mode: 'any' }
@@ -5013,13 +5196,13 @@ export const pomsOpenApiDocument: OpenApiObject = {
     title: 'POMS API',
     version: '0.3.0',
     description:
-      'Interactive contract สำหรับ HTTP endpoint ทั้ง 123 รายการใน POMS แยกตามเมนูงานจริง พร้อม payload, validation, auth และตัวอย่างทดสอบ\n\nSwagger แสดง 132 operations เพราะขยาย optional buddhistYear path อีก 9 รูปแบบเพื่อรองรับทั้ง annual point code ที่ URL-encode และ path ที่ proxy ถอดรหัสแล้ว',
+      'Interactive contract สำหรับ HTTP endpoint ทั้ง 126 รายการใน POMS แยกตามเมนูงานจริง พร้อม payload, validation, auth และตัวอย่างทดสอบ\n\nSwagger แสดง 135 operations เพราะขยาย optional buddhistYear path อีก 9 รูปแบบเพื่อรองรับทั้ง annual point code ที่ URL-encode และ path ที่ proxy ถอดรหัสแล้ว',
   },
   servers: [{ url: env.API_PREFIX }],
   tags,
   paths,
   components,
-  'x-poms-canonical-operation-count': 123,
+  'x-poms-canonical-operation-count': 126,
 };
 
 export function countOpenApiOperations(document: OpenApiObject): number {

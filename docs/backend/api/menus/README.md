@@ -6,7 +6,7 @@ Index นี้แสดงเฉพาะเมนูหรือ business capa
 
 ## ศูนย์ทดสอบ API
 
-เปิด `<BASE_URL>/api/v1/docs` เพื่อใช้ Swagger UI ที่รวม API ทั้งระบบ ตัวเลขในตารางนี้นับ `Method + Path` โดย **API ในทะเบียน** คือ route canonical 123 รายการ ส่วน **Operations ใน Swagger** มี 132 รายการ เพราะเพิ่ม path แบบแยก `stationId/{buddhistYear}` อีก 9 รายการให้กรอกและทดสอบ annual point code ได้สะดวก
+เปิด `<BASE_URL>/api/v1/docs` เพื่อใช้ Swagger UI ที่รวม API ทั้งระบบ ตัวเลขในตารางนี้นับ `Method + Path` โดย **API ในทะเบียน** คือ route canonical 126 รายการ ส่วน **Operations ใน Swagger** มี 135 รายการ เพราะเพิ่ม path แบบแยก `stationId/{buddhistYear}` อีก 9 รายการให้กรอกและทดสอบ annual point code ได้สะดวก
 
 | กลุ่มใน Swagger                         | API ในทะเบียน | Operations ใน Swagger | Canonical contract                                                                                                                                       |
 | --------------------------------------- | ------------: | --------------------: | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -19,9 +19,9 @@ Index นี้แสดงเฉพาะเมนูหรือ business capa
 | การแจ้งเตือน                            |             6 |                     6 | [การแจ้งเตือน](./notifications/README.md), [ผู้รับอีเมล](../shared/notification-recipients/README.md)                                                    |
 | สถิติข้อมูล                             |             4 |                     8 | [สถิติข้อมูล](./statistics/README.md)                                                                                                                    |
 | สิทธิ์การใช้งาน                         |             8 |                     8 | [สิทธิ์การใช้งาน](./permissions/README.md)                                                                                                               |
-| โรงงานที่เข้าข่าย                       |            11 |                    11 | [โรงงานที่เข้าข่าย](./eligible-factories/README.md)                                                                                                      |
+| โรงงานที่เข้าข่าย                       |            14 |                    14 | [โรงงานที่เข้าข่าย](./eligible-factories/README.md)                                                                                                      |
 | ระบบเชื่อมต่อภายนอก                     |             4 |                     5 | [Integrations](../integrations/README.md)                                                                                                                |
-| **รวม**                                 |       **123** |               **132** | [Endpoint registry](../ENDPOINTS.md)                                                                                                                     |
+| **รวม**                                 |       **126** |               **135** | [Endpoint registry](../ENDPOINTS.md)                                                                                                                     |
 
 ```text
 menus/

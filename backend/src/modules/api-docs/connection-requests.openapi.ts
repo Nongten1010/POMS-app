@@ -5,6 +5,7 @@ import {
   CONNECTION_REQUEST_TYPE_LABELS,
   MAX_WPMS_OUTSIDE_FACTORY_DISCHARGE_POINT_PHOTOS,
 } from '../connection-requests/connection-requests.types';
+import { CONNECTION_REQUEST_EIA_ASSESSMENTS } from '../connection-requests/connection-request-eia';
 import { MONITORING_POINT_STATUSES } from '../monitoring-point-forms/monitoring-point-forms.types';
 
 type OpenApiObject = Record<string, unknown>;
@@ -613,6 +614,102 @@ const componentSchemas: Record<string, OpenApiObject> = {
       success: { type: 'boolean', enum: [true] },
       data: { nullable: true },
       meta: { type: 'object', additionalProperties: true },
+    },
+  },
+  OperatorFactoryEligibilityRequest: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['id', 'status', 'statusLabel', 'submittedAt'],
+    properties: {
+      id: { type: 'integer', minimum: 1 },
+      status: { type: 'string', enum: ['PENDING_REVIEW'] },
+      statusLabel: { type: 'string', enum: ['รอพิจารณา'] },
+      submittedAt: { type: 'string', format: 'date-time' },
+    },
+  },
+  OperatorFactoryTableRow: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'id',
+      'factoryId',
+      'factoryName',
+      'newRegistrationNo',
+      'oldRegistrationNo',
+      'industryType',
+      'industryMainOrder',
+      'industrySubOrder',
+      'businessActivity',
+      'eia',
+      'projectName',
+      'address',
+      'latitude',
+      'longitude',
+      'province',
+      'officerNotificationEmails',
+      'isEligible',
+      'eligibilityStatus',
+      'eligibilityRequest',
+      'canRequestEligibility',
+      'monitoringPointCount',
+      'requestStatusCode',
+      'status',
+    ],
+    properties: {
+      id: { type: 'integer', minimum: 1, nullable: true },
+      factoryId: { type: 'string', minLength: 1, maxLength: 64 },
+      factoryName: { type: 'string' },
+      newRegistrationNo: { type: 'string', nullable: true },
+      oldRegistrationNo: { type: 'string', nullable: true },
+      industryType: { type: 'string', nullable: true },
+      industryMainOrder: { type: 'string', nullable: true },
+      industrySubOrder: { type: 'string', nullable: true },
+      businessActivity: { type: 'string', nullable: true },
+      eia: {
+        type: 'string',
+        enum: [...CONNECTION_REQUEST_EIA_ASSESSMENTS],
+        nullable: true,
+      },
+      projectName: { type: 'string', nullable: true },
+      address: { type: 'string', nullable: true },
+      latitude: { type: 'string', nullable: true },
+      longitude: { type: 'string', nullable: true },
+      province: { type: 'string', nullable: true },
+      officerNotificationEmails: {
+        type: 'array',
+        items: { type: 'string', format: 'email' },
+      },
+      isEligible: { type: 'boolean' },
+      eligibilityStatus: { type: 'string', enum: ['เข้าข่าย', 'ไม่เข้าข่าย'] },
+      eligibilityRequest: nullableRef('OperatorFactoryEligibilityRequest'),
+      canRequestEligibility: { type: 'boolean' },
+      monitoringPointCount: { type: 'integer', minimum: 0 },
+      requestStatusCode: {
+        type: 'string',
+        enum: Object.keys(CONNECTION_REQUEST_STATUS_LABELS),
+        nullable: true,
+      },
+      status: { type: 'string', enum: ['แสดง', 'ซ่อน'] },
+    },
+  },
+  OperatorFactoryTableResponse: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['success', 'data', 'meta'],
+    properties: {
+      success: { type: 'boolean', enum: [true] },
+      data: {
+        type: 'array',
+        items: schemaRef('OperatorFactoryTableRow'),
+      },
+      meta: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['total'],
+        properties: {
+          total: { type: 'integer', minimum: 0 },
+        },
+      },
     },
   },
   ConnectionRequestResponse: {
@@ -1603,8 +1700,10 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       tag: 'ข้อมูลประกอบฟอร์ม',
       summary: 'อ่านโรงงานของผู้ประกอบการ',
       operationId: 'listOperatorFactories',
-      description: 'Permission: factories:view',
+      description:
+        'Permission: factories:view. ทุก row คืน eligibilityRequest และ canRequestEligibility เพื่อควบคุมปุ่มแจ้งความประสงค์โดยไม่ต้องเดาสถานะจาก client',
       parameters: operatorFactoryParameters,
+      successSchema: schemaRef('OperatorFactoryTableResponse'),
     }),
   },
   '/cems-wpms-requests/eligible-factories': {

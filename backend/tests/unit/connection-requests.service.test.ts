@@ -23,6 +23,7 @@ jest.mock('../../src/modules/connection-requests/connection-requests.repository'
     listOfficerNotificationEmailsForFactories: jest.fn(),
     listFavoriteFactoryIds: jest.fn(),
     listRequestsForFactories: jest.fn(),
+    listOpenEligibleFactoryAddRequestsForFactoryMasterIds: jest.fn(),
     setFactoryFavorite: jest.fn(),
     findDirectConnectionFactory: jest.fn(),
     createDirectConnection: jest.fn(),
@@ -163,6 +164,9 @@ describe('connectionRequestsService', () => {
     );
     mockedRepository.listFavoriteFactoryIds.mockResolvedValue([]);
     mockedRepository.listRequestsForFactories.mockResolvedValue([]);
+    mockedRepository.listOpenEligibleFactoryAddRequestsForFactoryMasterIds.mockResolvedValue(
+      new Map(),
+    );
     mockedRepository.listFactoryMainTypeLabels.mockResolvedValue(new Map());
     mockedRepository.listProvinceRegions.mockResolvedValue(new Map());
     mockedRepository.listOfficerNotificationEmailsForFactories.mockResolvedValue(new Map());
@@ -576,6 +580,8 @@ describe('connectionRequestsService', () => {
       eligibilityStatus: 'เข้าข่าย',
       monitoringPointCount: 1,
       requestStatusCode: CONNECTION_REQUEST_STATUS.CONNECTED,
+      eligibilityRequest: null,
+      canRequestEligibility: false,
       status: 'แสดง',
     });
     expect(result.data[0]).not.toHaveProperty('measurementPoints');
@@ -755,6 +761,8 @@ describe('connectionRequestsService', () => {
           eligibilityStatus: 'เข้าข่าย',
           monitoringPointCount: 1,
           requestStatusCode: null,
+          eligibilityRequest: null,
+          canRequestEligibility: false,
           status: 'แสดง',
         },
       ],
@@ -891,11 +899,88 @@ describe('connectionRequestsService', () => {
           eligibilityStatus: 'ไม่เข้าข่าย',
           monitoringPointCount: 0,
           requestStatusCode: null,
+          eligibilityRequest: null,
+          canRequestEligibility: true,
           status: 'แสดง',
         }),
       ]),
     );
     expect(result.meta.total).toBe(3);
+  });
+
+  it('hydrates pending eligibility requests in one batch and disables duplicate requests', async () => {
+    mockedRepository.listFactoriesForAccess.mockResolvedValue([
+      factorySummary({
+        id: 1,
+        factoryId: 'factory-eligible',
+        newRegistrationNo: 'REG-ELIGIBLE',
+      }),
+      factorySummary({
+        id: 2,
+        eligibleFactoryId: null,
+        factoryId: 'factory-pending',
+        newRegistrationNo: 'REG-PENDING',
+        isEligible: false,
+        eligibilityStatus: 'ไม่เข้าข่าย',
+      }),
+      factorySummary({
+        id: 3,
+        eligibleFactoryId: null,
+        factoryId: 'factory-ready',
+        newRegistrationNo: 'REG-READY',
+        isEligible: false,
+        eligibilityStatus: 'ไม่เข้าข่าย',
+      }),
+    ]);
+    mockedRepository.listOpenEligibleFactoryAddRequestsForFactoryMasterIds.mockResolvedValue(
+      new Map([
+        [
+          2,
+          {
+            id: 41,
+            status: 'PENDING_REVIEW' as const,
+            statusLabel: 'รอพิจารณา' as const,
+            submittedAt: '2026-08-31T03:00:00.000Z',
+          },
+        ],
+      ]),
+    );
+
+    const result = await connectionRequestsService.listOperatorFactories(
+      actorUserId,
+      'OWN_FACTORY',
+    );
+
+    expect(
+      mockedRepository.listOpenEligibleFactoryAddRequestsForFactoryMasterIds,
+    ).toHaveBeenCalledTimes(1);
+    expect(
+      mockedRepository.listOpenEligibleFactoryAddRequestsForFactoryMasterIds,
+    ).toHaveBeenCalledWith([2, 3]);
+    expect(result.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          factoryId: 'factory-eligible',
+          eligibilityRequest: null,
+          canRequestEligibility: false,
+        }),
+        expect.objectContaining({
+          factoryId: 'factory-pending',
+          eligibilityRequest: {
+            id: 41,
+            status: 'PENDING_REVIEW',
+            statusLabel: 'รอพิจารณา',
+            submittedAt: '2026-08-31T03:00:00.000Z',
+          },
+          canRequestEligibility: false,
+        }),
+        expect.objectContaining({
+          factoryId: 'factory-ready',
+          eligibilityRequest: null,
+          canRequestEligibility: true,
+        }),
+      ]),
+    );
   });
 
   it('annotates every owned factory from active POMS points independently of eligibility', async () => {
@@ -4065,12 +4150,7 @@ describe('connectionRequestsService', () => {
     );
 
     await expect(
-      connectionRequestsService.changeStatus(
-        1,
-        { action: 'APPROVE_FORM' },
-        7,
-        'FACTORY_TYPE_88',
-      ),
+      connectionRequestsService.changeStatus(1, { action: 'APPROVE_FORM' }, 7, 'FACTORY_TYPE_88'),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 

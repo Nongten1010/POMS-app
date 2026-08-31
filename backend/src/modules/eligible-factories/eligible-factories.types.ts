@@ -41,6 +41,43 @@ export interface CreateEligibleFactoryInput {
 
 export type ListEligibleFactoriesQuery = Record<string, never>;
 
+export const ELIGIBLE_FACTORY_ADD_REQUEST_STATUS = {
+  PENDING_REVIEW: 'PENDING_REVIEW',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED',
+} as const;
+
+export type EligibleFactoryAddRequestStatus =
+  (typeof ELIGIBLE_FACTORY_ADD_REQUEST_STATUS)[keyof typeof ELIGIBLE_FACTORY_ADD_REQUEST_STATUS];
+
+export const ELIGIBLE_FACTORY_ADD_REQUEST_STATUS_LABELS: Record<
+  EligibleFactoryAddRequestStatus,
+  string
+> = {
+  PENDING_REVIEW: 'รอพิจารณา',
+  APPROVED: 'อนุมัติแล้ว',
+  REJECTED: 'ไม่อนุมัติ',
+};
+
+export interface CreateEligibleFactoryAddRequestInput {
+  factoryId: string;
+  reason: string;
+}
+
+export interface ListEligibleFactoryAddRequestsQuery {
+  status: EligibleFactoryAddRequestStatus;
+  search?: string;
+  page: number;
+  perPage: number;
+}
+
+export type EligibleFactoryAddRequestReviewDecision = 'APPROVE' | 'REJECT';
+
+export interface ReviewEligibleFactoryAddRequestInput {
+  decision: EligibleFactoryAddRequestReviewDecision;
+  officerNote?: string | null;
+}
+
 export interface ListEligibleFactoryCandidatesQuery {
   page?: number;
   perPage?: number;
@@ -155,6 +192,38 @@ export interface PaginatedEligibleFactoriesDTO {
   data: SelectedEligibleFactoryDTO[];
   meta: {
     total: number;
+  };
+}
+
+export interface EligibleFactoryAddRequestDTO {
+  id: number;
+  factoryId: string;
+  factoryName: string;
+  factoryRegistrationNo: string;
+  provinceName: string;
+  reason: string;
+  status: EligibleFactoryAddRequestStatus;
+  statusLabel: string;
+  submittedBy: number;
+  submittedAt: string;
+  reviewedBy: number | null;
+  reviewedAt: string | null;
+  reviewNote: string | null;
+  eligibleFactoryId: number | null;
+}
+
+export interface EligibleFactoryAddRequestRecordDTO extends EligibleFactoryAddRequestDTO {
+  factoryMasterId: number;
+  requestedFactory: CreateEligibleFactoryInput;
+}
+
+export interface PaginatedEligibleFactoryAddRequestsDTO {
+  data: EligibleFactoryAddRequestDTO[];
+  meta: {
+    total: number;
+    page: number;
+    perPage: number;
+    totalPages: number;
   };
 }
 

@@ -8,6 +8,9 @@ jest.mock('../../src/modules/eligible-factories/eligible-factories.service', () 
     listCandidates: jest.fn(),
     list: jest.fn(),
     create: jest.fn(),
+    listAddRequests: jest.fn(),
+    createAddRequest: jest.fn(),
+    reviewAddRequest: jest.fn(),
     remove: jest.fn(),
   },
 }));
@@ -27,6 +30,10 @@ describe('eligible factory routes', () => {
     mockedEligibleFactoriesService.list.mockResolvedValue({
       data: [],
       meta: { total: 0 },
+    });
+    mockedEligibleFactoriesService.listAddRequests.mockResolvedValue({
+      data: [],
+      meta: { total: 0, page: 1, perPage: 25, totalPages: 0 },
     });
     mockedEligibleFactoriesService.create.mockResolvedValue({
       id: 17,
@@ -56,6 +63,38 @@ describe('eligible factory routes', () => {
       selectedAt: '2026-08-10T00:00:00.000Z',
       createdAt: '2026-08-10T00:00:00.000Z',
       updatedAt: '2026-08-10T00:00:00.000Z',
+    } as never);
+    mockedEligibleFactoriesService.createAddRequest.mockResolvedValue({
+      id: 88,
+      factoryId: '10550000125197',
+      factoryName: 'โรงงานร้องขอ',
+      factoryRegistrationNo: '10550000125197',
+      provinceName: 'น่าน',
+      reason: 'ต้องการเข้าระบบ CEMS',
+      status: 'PENDING_REVIEW',
+      statusLabel: 'รอพิจารณา',
+      submittedBy: 42,
+      submittedAt: '2026-08-10T00:00:00.000Z',
+      reviewedBy: null,
+      reviewedAt: null,
+      reviewNote: null,
+      eligibleFactoryId: null,
+    } as never);
+    mockedEligibleFactoriesService.reviewAddRequest.mockResolvedValue({
+      id: 88,
+      factoryId: '10550000125197',
+      factoryRegistrationNo: '10550000125197',
+      factoryName: 'โรงงานร้องขอ',
+      provinceName: 'น่าน',
+      reason: 'ต้องการเข้าระบบ CEMS',
+      status: 'APPROVED',
+      statusLabel: 'อนุมัติแล้ว',
+      submittedBy: 42,
+      submittedAt: '2026-08-10T00:00:00.000Z',
+      reviewedBy: 7,
+      reviewedAt: '2026-08-10T01:00:00.000Z',
+      reviewNote: null,
+      eligibleFactoryId: 17,
     } as never);
     mockedEligibleFactoriesService.remove.mockResolvedValue(undefined);
   });
@@ -127,6 +166,66 @@ describe('eligible factory routes', () => {
         scope: { scope: 'IN_PROVINCE', province: 'ระยอง', region: null },
         regionalAccess: null,
       },
+    );
+  });
+
+  it('uses eligible_factories:view for pending add-factory request reads', async () => {
+    mockedEligibleFactoriesService.listAddRequests.mockResolvedValueOnce({
+      data: [
+        {
+          id: 88,
+          factoryId: '10550000125197',
+          factoryName: 'โรงงานร้องขอ',
+          factoryRegistrationNo: '10550000125197',
+          provinceName: 'น่าน',
+          reason: 'ต้องการเข้าระบบ CEMS',
+          status: 'PENDING_REVIEW',
+          statusLabel: 'รอพิจารณา',
+          submittedBy: 42,
+          submittedAt: '2026-08-10T00:00:00.000Z',
+          reviewedBy: null,
+          reviewedAt: null,
+          reviewNote: null,
+          eligibleFactoryId: null,
+        },
+      ],
+      meta: { total: 1, page: 2, perPage: 10, totalPages: 1 },
+    });
+
+    const response = await request(createEligibleFactoriesApp())
+      .get(
+        '/api/v1/eligible-factories/add-requests?status=PENDING_REVIEW&search=CEMS&page=2&perPage=10',
+      )
+      .set(
+        'Authorization',
+        `Bearer ${accessToken({
+          scopes: { 'eligible_factories:view': 'IN_PROVINCE' },
+          scopeDetails: {
+            'eligible_factories:view': {
+              scope: 'IN_PROVINCE',
+              province: 'น่าน',
+              region: null,
+            },
+          },
+        })}`,
+      );
+
+    expect(response.status).toBe(200);
+    expect(mockedEligibleFactoriesService.listAddRequests).toHaveBeenCalledWith(
+      { status: 'PENDING_REVIEW', search: 'CEMS', page: 2, perPage: 10 },
+      {
+        actorUserId: 42,
+        scope: { scope: 'IN_PROVINCE', province: 'น่าน', region: null },
+        regionalAccess: null,
+      },
+    );
+    expect(response.body.data[0]).toEqual(
+      expect.objectContaining({
+        id: 88,
+        factoryName: 'โรงงานร้องขอ',
+        reason: 'ต้องการเข้าระบบ CEMS',
+        status: 'PENDING_REVIEW',
+      }),
     );
   });
 
@@ -215,6 +314,100 @@ describe('eligible factory routes', () => {
     expect(mockedEligibleFactoriesService.create).not.toHaveBeenCalled();
   });
 
+  it('requires factories:view and factories:edit for operator add-factory requests', async () => {
+    const response = await request(createEligibleFactoriesApp())
+      .post('/api/v1/eligible-factories/add-requests')
+      .set(
+        'Authorization',
+        `Bearer ${accessToken({
+          userType: 'operator',
+          roles: ['factory_operator'],
+          scopes: {
+            'factories:view': 'OWN_FACTORY',
+            'factories:edit': 'OWN_FACTORY',
+          },
+          scopeDetails: {
+            'factories:view': { scope: 'OWN_FACTORY' },
+            'factories:edit': { scope: 'OWN_FACTORY' },
+          },
+        })}`,
+      )
+      .send({
+        factoryId: '10550000125197',
+        reason: 'ต้องการเข้าระบบ CEMS',
+      });
+
+    expect(response.status).toBe(201);
+    expect(mockedEligibleFactoriesService.createAddRequest).toHaveBeenCalledWith(
+      { factoryId: '10550000125197', reason: 'ต้องการเข้าระบบ CEMS' },
+      42,
+      {
+        view: { actorUserId: 42, scope: { scope: 'OWN_FACTORY' }, regionalAccess: null },
+        edit: { actorUserId: 42, scope: { scope: 'OWN_FACTORY' }, regionalAccess: null },
+      },
+    );
+  });
+
+  it('rejects add-factory submission when factories:edit is missing', async () => {
+    const response = await request(createEligibleFactoriesApp())
+      .post('/api/v1/eligible-factories/add-requests')
+      .set(
+        'Authorization',
+        `Bearer ${accessToken({
+          userType: 'operator',
+          roles: ['factory_operator'],
+          scopes: { 'factories:view': 'OWN_FACTORY' },
+        })}`,
+      )
+      .send({ factoryId: '10550000125197', reason: 'ต้องการเข้าระบบ CEMS' });
+
+    expect(response.status).toBe(403);
+    expect(mockedEligibleFactoriesService.createAddRequest).not.toHaveBeenCalled();
+  });
+
+  it('requires eligible_factories:view and eligible_factories:approve to review a request', async () => {
+    const response = await request(createEligibleFactoriesApp())
+      .post('/api/v1/eligible-factories/add-requests/88/review')
+      .set(
+        'Authorization',
+        `Bearer ${accessToken({
+          scopes: {
+            'eligible_factories:view': 'ALL',
+            'eligible_factories:approve': 'ALL',
+          },
+          scopeDetails: {
+            'eligible_factories:view': { scope: 'ALL' },
+            'eligible_factories:approve': { scope: 'ALL' },
+          },
+        })}`,
+      )
+      .send({ decision: 'APPROVE', officerNote: null });
+
+    expect(response.status).toBe(200);
+    expect(mockedEligibleFactoriesService.reviewAddRequest).toHaveBeenCalledWith(
+      88,
+      { decision: 'APPROVE', officerNote: null },
+      42,
+      {
+        view: { actorUserId: 42, scope: { scope: 'ALL' }, regionalAccess: null },
+        approve: { actorUserId: 42, scope: { scope: 'ALL' }, regionalAccess: null },
+      },
+    );
+  });
+
+  it('rejects review when eligible_factories:view is missing', async () => {
+    const response = await request(createEligibleFactoriesApp())
+      .post('/api/v1/eligible-factories/add-requests/88/review')
+      .set(
+        'Authorization',
+        `Bearer ${accessToken({ scopes: { 'eligible_factories:approve': 'ALL' } })}`,
+      )
+      .send({ decision: 'APPROVE' });
+
+    expect(response.status).toBe(403);
+    expect(mockedEligibleFactoriesService.reviewAddRequest).not.toHaveBeenCalled();
+  });
+
   it('uses eligible_factories:edit for delete mutations and forwards scope details', async () => {
     const response = await request(createEligibleFactoriesApp())
       .delete('/api/v1/eligible-factories/17')
@@ -249,6 +442,7 @@ function accessToken(overrides: Partial<Parameters<typeof signAccessToken>[0]> =
     scopes: {
       'eligible_factories:view': 'ALL',
       'eligible_factories:edit': 'ALL',
+      'eligible_factories:approve': 'ALL',
     },
     ...overrides,
   });
