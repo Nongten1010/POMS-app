@@ -21,6 +21,7 @@ import NotificationsIcon from '@mui/icons-material/Notifications'
 import QueryStatsIcon from '@mui/icons-material/QueryStats'
 import SearchIcon from '@mui/icons-material/Search'
 import SupportAgentIcon from '@mui/icons-material/SupportAgent'
+import MenuBookIcon from '@mui/icons-material/MenuBook'
 
 const appBarHeight = {
   xs: 64,
@@ -118,10 +119,16 @@ const menuItems = [
     permissionKey: 'eligible_factories',
     icon: <FactoryIcon />,
   },
+  {
+    label: 'คู่มือการใช้งาน',
+    value: 'manuals',
+    icon: <MenuBookIcon />,
+    alwaysVisible: true,
+  },
 ]
 
 function DpomsSidebar({ open, selectedValue = 'home', onClose, onSelect, permissions }) {
-  const visibleMenuItems = menuItems.filter((item) => permissions?.[item.permissionKey]?.view === true)
+  const visibleMenuItems = menuItems.filter((item) => item.alwaysVisible || permissions?.[item.permissionKey]?.view === true)
 
   return (
     <Drawer

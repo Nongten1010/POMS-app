@@ -13,6 +13,7 @@ import FeedbackPage from './pages/FeedbackPage'
 import HomePage from './pages/HomePage'
 import KwpFormsPage from './pages/KwpFormsPage'
 import LawsPage from './pages/LawsPage'
+import ManualsPage from './pages/ManualsPage'
 import MasterDataPage from './pages/MasterDataPage'
 import NotificationPage from './pages/NotificationPage'
 import PermissionManagementPage from './pages/PermissionManagementPage'
@@ -58,6 +59,8 @@ const menuPermissionMap = {
   permissions: 'permissions',
   'eligible-factories': 'eligible_factories',
 }
+
+const publicMenuValues = new Set(['manuals'])
 
 function loadStoredAuth() {
   try {
@@ -128,6 +131,10 @@ function getRoleCodeFromAuth(auth) {
 }
 
 function canViewMenu(menuValue, permissions) {
+  if (publicMenuValues.has(menuValue)) {
+    return true
+  }
+
   const permissionKey = menuPermissionMap[menuValue]
   return permissions?.[permissionKey]?.view === true
 }
@@ -214,7 +221,8 @@ function App() {
     visibleSelectedMenu === 'laws' ||
     visibleSelectedMenu === 'faq' ||
     visibleSelectedMenu === 'chat' ||
-    visibleSelectedMenu === 'eligible-factories'
+    visibleSelectedMenu === 'eligible-factories' ||
+    visibleSelectedMenu === 'manuals'
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
@@ -298,6 +306,8 @@ function App() {
           <ChatPage isStaff={userType === 'officer' || roleCode === 'admin' || activePermissions?.chat?.edit === true} />
         ) : visibleSelectedMenu === 'eligible-factories' ? (
           <EligibleFactoriesPage accessToken={accessToken} userType={userType} />
+        ) : visibleSelectedMenu === 'manuals' ? (
+          <ManualsPage userType={userType} roleCode={roleCode} />
         ) : (
           <HomePage accessToken={accessToken} permissions={activePermissions} />
         )}
