@@ -55,14 +55,6 @@ const borderedTableSx = {
   },
 }
 
-const requestStatusMockValues = [
-  'อนุมัติ',
-  'ยกเลิก',
-  'รอโรงงานแก้ไข',
-  'แก้ไขแล้ว/รอพิจารณา',
-  'รอพิจารณา',
-]
-
 const eiaAssessmentOptions = ['ไม่มี', 'มี IEE', 'มี EIA', 'มี EHIA', 'อื่นๆ']
 const actionableRequestStatuses = ['แก้ไขแล้ว/รอพิจารณา', 'รอพิจารณา']
 
@@ -115,7 +107,7 @@ const dataGridSx = {
 
 async function readMasterDataResponse(result, fallbackMessage) {
   const rawText = await result.text()
-  let payload = rawText
+  let payload
 
   try {
     payload = rawText ? JSON.parse(rawText) : null
@@ -230,10 +222,6 @@ function getMonitoringPointCode(point, index) {
   return `${prefix}${String(index + 1).padStart(4, '0')}`
 }
 
-function getRequestNo(index) {
-  return index === 0 ? 'base-69-00001' : 'point-69-00002'
-}
-
 function getLatestUpdatedAt(point) {
   const latestRow = Array.isArray(point?.data) ? point.data.at(-1) : null
   return latestRow?.cdate || '-'
@@ -271,59 +259,6 @@ function mapFactoryRows(rows) {
     pendingEditRequestCount: row.pendingEditRequestCount ?? 0,
     source: row,
   }))
-}
-
-function makeRequestRows(factory) {
-  if (!factory) {
-    return []
-  }
-
-  const points = Array.isArray(factory.measurementPoints) ? factory.measurementPoints : []
-  const rows = points.map((point, index) => ({
-    id: `${factory.id}-request-${index + 1}`,
-    requestNo: getRequestNo(index),
-    requestType: index === 0 ? 'เพิ่มจุดตรวจวัด' : 'เพิ่มพารามิเตอร์',
-    systemType: index === 0 ? '-' : point.systemType ?? '-',
-    pointCode: index === 0 ? '-' : getMonitoringPointCode(point, index),
-    pointName: point.pointName ?? point.name ?? '-',
-    submittedDate: index % 2 === 0 ? '15/06/2569' : '12/06/2569',
-    reviewedDate: index % 2 === 0 ? '18/06/2569' : '16/06/2569',
-    codeIssuedDate: index % 2 === 0 ? '18/06/2569' : '16/06/2569',
-    form: index === 0 ? 'แก้ไขข้อมูลพื้นฐาน' : 'แก้ไขข้อมูลจุดตรวจวัด',
-    status: requestStatusMockValues[index % requestStatusMockValues.length],
-  }))
-
-  return rows.length > 0
-    ? rows
-    : [
-        {
-          id: `${factory.id}-request-empty`,
-          requestNo: 'base-69-00001',
-          requestType: 'เพิ่มจุดตรวจวัด',
-          systemType: '-',
-          pointCode: '-',
-          pointName: '-',
-          submittedDate: '15/06/2569',
-          reviewedDate: '18/06/2569',
-          codeIssuedDate: '18/06/2569',
-          form: 'แก้ไขข้อมูลพื้นฐาน',
-          status: requestStatusMockValues[0],
-        },
-      ]
-}
-
-function makeAllRequestRows(factories) {
-  return factories.flatMap((factory, factoryIndex) =>
-    makeRequestRows(factory).map((request, index) => ({
-      ...request,
-      status: requestStatusMockValues[(factoryIndex + index) % requestStatusMockValues.length],
-      factoryId: factory.id,
-      factoryName: factory.factoryName,
-      factoryRegistrationNo: factory.newRegistrationNo,
-      province: factory.province,
-      factory,
-    })),
-  )
 }
 
 function mapEditRequestRows(rows) {
@@ -433,24 +368,6 @@ function StatusChip({ value }) {
   )
 }
 
-function ReadOnlyField({ label, value }) {
-  return (
-    <TextField
-      label={label}
-      value={displayValue(value)}
-      size="small"
-      fullWidth
-      multiline
-      maxRows={3}
-      slotProps={{
-        input: {
-          readOnly: true,
-        },
-      }}
-    />
-  )
-}
-
 function MainActions({ row, onOpen, onEditGeneral }) {
   return (
     <Stack direction="row" spacing={1} sx={tableActionStackSx}>
@@ -508,29 +425,6 @@ function MonitoringPointActions({ point, onEdit }) {
     </Stack>
   )
 }
-
-const requestColumns = [
-  { field: 'requestNo', headerName: 'เลขที่คำขอ', width: 150 },
-  { field: 'requestType', headerName: 'ประเภทคำขอ', width: 150 },
-  { field: 'systemType', headerName: 'ประเภทจุดตรวจวัด', width: 160 },
-  { field: 'pointCode', headerName: 'รหัสจุดตรวจวัด', width: 170 },
-  { field: 'pointName', headerName: 'ชื่อจุดตรวจวัด', width: 220 },
-  { field: 'submittedDate', headerName: 'วันที่ยื่นคำขอ', width: 150 },
-  { field: 'reviewedDate', headerName: 'วันที่พิจารณา', width: 150 },
-  { field: 'status', headerName: 'สถานะ', width: 170, renderCell: (params) => <StatusChip value={params.value} /> },
-  {
-    field: 'actions',
-    headerName: 'จัดการ',
-    width: 130,
-    sortable: false,
-    filterable: false,
-    renderCell: () => (
-      <Button size="small" variant="outlined">
-        เปิดดู
-      </Button>
-    ),
-  },
-]
 
 function getPageRequestColumns(onOpenRequest, onEditRequest, isAdmin = false) {
   return [
@@ -1266,13 +1160,20 @@ function MasterDataPage({ userType = '', roleCode = '', accessToken = '' }) {
   }, [accessToken, isAdmin])
 
   useEffect(() => {
-    loadFactories()
+    const timeoutId = window.setTimeout(() => {
+      loadFactories()
+    }, 0)
+    return () => window.clearTimeout(timeoutId)
   }, [loadFactories])
 
   useEffect(() => {
     if (effectiveSubMenu === 'requests') {
-      loadRequests()
+      const timeoutId = window.setTimeout(() => {
+        loadRequests()
+      }, 0)
+      return () => window.clearTimeout(timeoutId)
     }
+    return undefined
   }, [effectiveSubMenu, loadRequests])
 
   const loadFactoryDetail = useCallback(async (factory) => {

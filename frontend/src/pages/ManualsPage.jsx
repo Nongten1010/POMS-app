@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   Box,
   Button,
@@ -50,12 +50,6 @@ function ManualsPage({ userType = '', roleCode = '' }) {
   const manuals = useMemo(() => getAvailableManuals(userType, roleCode), [roleCode, userType])
   const [selectedManualId, setSelectedManualId] = useState(() => manuals[0]?.id ?? '')
   const selectedManual = manuals.find((manual) => manual.id === selectedManualId) ?? manuals[0]
-
-  useEffect(() => {
-    if (!manuals.some((manual) => manual.id === selectedManualId)) {
-      setSelectedManualId(manuals[0]?.id ?? '')
-    }
-  }, [manuals, selectedManualId])
 
   return (
     <Box sx={{ height: '100%', minHeight: 0, bgcolor: 'background.default' }}>
