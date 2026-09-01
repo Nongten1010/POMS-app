@@ -1,8 +1,10 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
+  Alert,
   Box,
   Button,
   Chip,
+  CircularProgress,
   Dialog,
   DialogContent,
   DialogTitle,
@@ -22,13 +24,17 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Snackbar,
 } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import EditIcon from '@mui/icons-material/Edit'
 import UploadFileIcon from '@mui/icons-material/UploadFile'
 import { DataGrid } from '@mui/x-data-grid'
-import { mockOperatorFactoryRows } from './HomePageMockup'
 import { RequestFormBottomSheet } from './ConnectionRequestPage'
+
+const pomsFactoriesApiBaseUrl = window.location.hostname === 'localhost'
+  ? '/api-proxy/v1/poms-factories'
+  : '/api/v1/poms-factories'
 
 const pageSubMenus = [
   { value: 'factories', label: 'รายชื่อโรงงาน' },
@@ -107,12 +113,88 @@ const dataGridSx = {
   },
 }
 
+async function readMasterDataResponse(result, fallbackMessage) {
+  const rawText = await result.text()
+  let payload = rawText
+
+  try {
+    payload = rawText ? JSON.parse(rawText) : null
+  } catch {
+    payload = rawText
+  }
+
+  if (!result.ok || payload?.success === false) {
+    const issueText = Array.isArray(payload?.error?.issues)
+      ? payload.error.issues
+          .map((issue) => [issue.pathString, issue.message].filter(Boolean).join(': '))
+          .filter(Boolean)
+          .join('\n')
+      : ''
+    throw new Error(issueText || payload?.error?.message || fallbackMessage)
+  }
+
+  return payload
+}
+
 function displayValue(value) {
   if (value === null || value === undefined || value === '') {
     return '-'
   }
 
   return String(value)
+}
+
+function emptyToNull(value) {
+  const text = String(value ?? '').trim()
+  return text ? text : null
+}
+
+function toNumberOrNull(value) {
+  const text = String(value ?? '').trim()
+  if (!text) {
+    return null
+  }
+  const parsed = Number(text)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function toThaiRequestStatusLabel(status, label) {
+  const normalized = String(label || status || '').trim()
+  const statusMap = {
+    PENDING_REVIEW: 'รอพิจารณา',
+    REVISION_REQUESTED: 'รอโรงงานแก้ไข',
+    REVISED_PENDING_REVIEW: 'แก้ไขแล้ว/รอพิจารณา',
+    APPROVED: 'อนุมัติ',
+    REJECTED: 'ไม่อนุมัติ',
+    'ส่งกลับให้แก้ไข': 'รอโรงงานแก้ไข',
+    'แก้ไขแล้ว รอพิจารณา': 'แก้ไขแล้ว/รอพิจารณา',
+    อนุมัติแล้ว: 'อนุมัติ',
+    ไม่อนุมัติ: 'ยกเลิก',
+  }
+
+  return statusMap[normalized] ?? normalized ?? '-'
+}
+
+function getRequestFormLabel(formType) {
+  return formType === 'MEASUREMENT_POINTS' ? 'แก้ไขข้อมูลจุดตรวจวัด' : 'แก้ไขข้อมูลพื้นฐาน'
+}
+
+function sanitizeDocumentItem(document = {}) {
+  const item = {
+    title: document.title ?? document.fileName ?? document.originalFileName ?? 'เอกสารแนบ',
+    description: document.description ?? null,
+    link: document.link ?? null,
+    fileName: document.fileName ?? document.originalFileName ?? document.storedFileName ?? null,
+    fileUrl: document.fileUrl ?? document.url ?? document.storageUrl ?? null,
+    fileType: document.fileType ?? document.mimeType ?? null,
+    fileSize: document.fileSize ?? null,
+  }
+
+  return Object.fromEntries(Object.entries(item).filter(([, value]) => value !== undefined))
+}
+
+function sanitizeDocuments(documents = []) {
+  return Array.isArray(documents) ? documents.map(sanitizeDocumentItem) : []
 }
 
 function sumMonitoringPointCount(row) {
@@ -124,6 +206,10 @@ function sumMonitoringPointCount(row) {
 }
 
 function getFactorySystemText(row) {
+  if (Array.isArray(row.systemTypes) && row.systemTypes.length > 0) {
+    return row.systemTypes.join(', ')
+  }
+
   if (!Array.isArray(row.monitoringPointCountBySystem) || row.monitoringPointCountBySystem.length === 0) {
     return '-'
   }
@@ -134,6 +220,12 @@ function getFactorySystemText(row) {
 }
 
 function getMonitoringPointCode(point, index) {
+  if (point?.pointCode) {
+    return point.pointCode
+  }
+  if (point?.stationId) {
+    return point.stationId
+  }
   const prefix = point?.systemType === 'WPMS' ? 'P' : 'S'
   return `${prefix}${String(index + 1).padStart(4, '0')}`
 }
@@ -149,14 +241,19 @@ function getLatestUpdatedAt(point) {
 
 function mapFactoryRows(rows) {
   return rows.map((row, index) => ({
-    id: row.factoryId || `factory-${index}`,
+    id: row.factoryId || row.factoryRegistrationNo || `factory-${index}`,
+    eligibleFactoryId: row.eligibleFactoryId ?? null,
+    factoryId: row.factoryId ?? row.factoryRegistrationNo ?? '',
+    factoryRegistrationNo: row.factoryRegistrationNo ?? row.newRegistrationNo ?? row.factoryId ?? '',
     factoryName: row.factoryName ?? '',
-    newRegistrationNo: row.factoryId ?? '',
+    newRegistrationNo: row.factoryRegistrationNo ?? row.newRegistrationNo ?? row.factoryId ?? '',
     oldRegistrationNo: row.oldRegistrationNo ?? '',
-    industryType: row.industryType || row.newRegistrationNo || '-',
-    businessActivity: row.industryMainOrderLabel ?? row.businessActivity ?? row.industryType ?? '-',
-    address: row.address ?? '',
-    province: row.province ?? '',
+    industryType: row.industryMainOrder ?? row.industryType ?? '-',
+    industryMainOrder: row.industryMainOrder ?? row.industryType ?? '',
+    industrySubOrder: row.industrySubOrder ?? '',
+    businessActivity: row.industryMainOrderLabel ?? row.businessActivity ?? '-',
+    address: row.factoryAddress ?? row.address ?? '',
+    province: row.provinceName ?? row.province ?? '',
     industrialEstateCode: row.industrialEstateCode ?? '',
     latitude: row.latitude ?? '',
     longitude: row.longitude ?? '',
@@ -164,8 +261,14 @@ function mapFactoryRows(rows) {
     monitoringPointCount: sumMonitoringPointCount(row),
     monitoringSystemText: getFactorySystemText(row),
     requestStatus: '-',
+    eia: row.eia ?? '',
+    eiaOther: row.eiaOther ?? '',
+    projectName: row.projectName ?? '',
+    factoryFrontPhotos: sanitizeDocuments(row.factoryFrontPhotos),
+    factoryLogo: row.factoryLogo ? sanitizeDocumentItem(row.factoryLogo) : null,
     status: row.status ?? 'แสดง',
     measurementPoints: Array.isArray(row.measurementPoints) ? row.measurementPoints : [],
+    pendingEditRequestCount: row.pendingEditRequestCount ?? 0,
     source: row,
   }))
 }
@@ -223,6 +326,44 @@ function makeAllRequestRows(factories) {
   )
 }
 
+function mapEditRequestRows(rows) {
+  return rows.map((row, index) => {
+    const form = getRequestFormLabel(row.formType)
+    const proposedPoint = Array.isArray(row.proposedMeasurementPoints) ? row.proposedMeasurementPoints[0] : null
+    const currentPoint = Array.isArray(row.currentMeasurementPoints) ? row.currentMeasurementPoints[0] : null
+    const point = proposedPoint ?? currentPoint
+
+    return {
+      id: row.id ?? `edit-request-${index}`,
+      requestId: row.id,
+      requestNo: row.requestNo ?? '-',
+      requestType: form,
+      form,
+      formType: row.formType ?? 'BASIC_INFO',
+      systemType: form === 'แก้ไขข้อมูลพื้นฐาน' ? '-' : point?.systemType ?? '-',
+      pointCode: form === 'แก้ไขข้อมูลพื้นฐาน' ? '-' : point?.pointCode ?? '-',
+      pointName: form === 'แก้ไขข้อมูลพื้นฐาน' ? '-' : point?.pointName ?? '-',
+      submittedDate: row.submittedAt ?? row.createdAt ?? '-',
+      reviewedDate: row.reviewedAt ?? '-',
+      statusCode: row.status ?? '',
+      status: toThaiRequestStatusLabel(row.status, row.statusLabel),
+      statusLabel: row.statusLabel ?? '',
+      factoryId: row.factoryId ?? '',
+      factoryName: row.factoryName ?? '',
+      factoryRegistrationNo: row.factoryRegistrationNo ?? row.factoryId ?? '',
+      province: row.provinceName ?? row.province ?? '-',
+      requestNote: row.requestNote ?? null,
+      revisionReason: row.revisionReason ?? null,
+      officerNote: row.officerNote ?? null,
+      raw: row,
+    }
+  })
+}
+
+function normalizeFactoryDetail(row = {}) {
+  return mapFactoryRows([row])[0] ?? null
+}
+
 function StatusChip({ value }) {
   const colorByStatus = {
     รอพิจารณา: {
@@ -253,6 +394,26 @@ function StatusChip({ value }) {
     'แก้ไขแล้ว/รอพิจารณา': {
       bgcolor: '#2563eb',
       borderColor: '#2563eb',
+      color: '#ffffff',
+    },
+    'แก้ไขแล้ว รอพิจารณา': {
+      bgcolor: '#2563eb',
+      borderColor: '#2563eb',
+      color: '#ffffff',
+    },
+    ส่งกลับให้แก้ไข: {
+      bgcolor: '#f97316',
+      borderColor: '#f97316',
+      color: '#ffffff',
+    },
+    ไม่อนุมัติ: {
+      bgcolor: '#dc2626',
+      borderColor: '#dc2626',
+      color: '#ffffff',
+    },
+    อนุมัติแล้ว: {
+      bgcolor: '#16a34a',
+      borderColor: '#16a34a',
       color: '#ffffff',
     },
   }
@@ -442,7 +603,8 @@ function getPageRequestColumns(onOpenRequest, onEditRequest, isAdmin = false) {
 
 function mapMonitoringPointRows(factory) {
   return (factory?.measurementPoints ?? []).map((point, index) => ({
-    id: point.id ?? point.pointCode ?? point.stationId ?? `${factory.id}-point-${index}`,
+    id: point.connectedPointId ?? point.id ?? point.pointCode ?? point.stationId ?? `${factory.id}-point-${index}`,
+    connectedPointId: point.connectedPointId ?? point.id ?? null,
     pointCode: getMonitoringPointCode(point, index),
     pointName: point.pointName ?? point.name ?? '-',
     systemType: point.systemType ?? '-',
@@ -450,7 +612,8 @@ function mapMonitoringPointRows(factory) {
       ? point.parameters.join(', ')
       : point.parameters ?? point.parameterText ?? 'CO (ppm), NOx (ppm), Temp. (°C), O2 (%), Flow (m3/hr)',
     latestUpdatedAt: getLatestUpdatedAt(point),
-    status: point.status ?? 'เชื่อมต่อแล้ว',
+    status: point.monitoringPointStatus ?? point.status ?? 'เชื่อมต่อแล้ว',
+    source: point,
   }))
 }
 
@@ -509,7 +672,7 @@ function FactoryDetailDialog({ factory, open, onClose, onEdit }) {
                     <TableCell sx={{ width: 230 }}>
                       <MonitoringPointActions
                         point={row}
-                        onEdit={() => onEdit(sourceFactory)}
+                        onEdit={() => onEdit({ ...sourceFactory, selectedMeasurementPoint: row.source })}
                       />
                     </TableCell>
                   </TableRow>
@@ -560,7 +723,12 @@ function MockUploadField({ label, helperText, disabled = false }) {
   )
 }
 
-function FactoryGeneralInfoBottomSheet({ open, factory, onClose, showSaveButton = true }) {
+function FactoryGeneralInfoBottomSheet({ open, factory, onClose, showSaveButton = true, submitting = false, onSubmit }) {
+  const handleSubmit = (event) => {
+    event.preventDefault()
+    onSubmit?.(factory, new FormData(event.currentTarget))
+  }
+
   return (
     <Drawer
       anchor="bottom"
@@ -600,7 +768,12 @@ function FactoryGeneralInfoBottomSheet({ open, factory, onClose, showSaveButton 
         </Stack>
         <Divider />
 
-        <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', p: { xs: 2, md: 3 }, bgcolor: 'background.default' }}>
+        <Box
+          component="form"
+          id="master-data-general-info-form"
+          onSubmit={handleSubmit}
+          sx={{ flex: 1, minHeight: 0, overflow: 'auto', p: { xs: 2, md: 3 }, bgcolor: 'background.default' }}
+        >
           <Paper elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider' }}>
             <Stack spacing={2}>
               <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
@@ -613,7 +786,7 @@ function FactoryGeneralInfoBottomSheet({ open, factory, onClose, showSaveButton 
                   gap: 2,
                 }}
               >
-                <TextField label="ชื่อโรงงาน" size="small" defaultValue={factory?.factoryName ?? ''} sx={{ gridColumn: { xs: 'auto', md: 'span 6' } }} />
+                <TextField name="factoryName" label="ชื่อโรงงาน" size="small" defaultValue={factory?.factoryName ?? ''} sx={{ gridColumn: { xs: 'auto', md: 'span 6' } }} />
                 <TextField label="เลขทะเบียนโรงงาน (เดิม)" size="small" defaultValue={factory?.oldRegistrationNo ?? ''} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
                 <TextField label="เลขทะเบียนโรงงาน (ใหม่)" size="small" defaultValue={factory?.newRegistrationNo ?? ''} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
                 <TextField label="การประกอบกิจการ" size="small" defaultValue={factory?.businessActivity ?? ''} sx={{ gridColumn: { xs: 'auto', md: 'span 6' } }} />
@@ -621,6 +794,7 @@ function FactoryGeneralInfoBottomSheet({ open, factory, onClose, showSaveButton 
                 <TextField label="ลำดับประเภทโรงงาน (รอง)" size="small" defaultValue={factory?.industrySubOrder ?? ''} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
                 <TextField
                   select
+                  name="eia"
                   label="การประเมินผลกระทบสิ่งแวดล้อม"
                   size="small"
                   defaultValue={factory?.eia ?? 'ไม่มี'}
@@ -633,9 +807,9 @@ function FactoryGeneralInfoBottomSheet({ open, factory, onClose, showSaveButton 
                   ))}
                 </TextField>
                 <Box sx={{ display: { xs: 'none', md: 'block' }, gridColumn: 'span 9' }} />
-                <TextField label="สถานที่ตั้งโรงงาน" size="small" defaultValue={factory?.address ?? ''} sx={{ gridColumn: { xs: 'auto', md: 'span 6' } }} />
-                <TextField label="ละติจูด" size="small" defaultValue={factory?.latitude ?? ''} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
-                <TextField label="ลองจิจูด" size="small" defaultValue={factory?.longitude ?? ''} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
+                <TextField name="factoryAddress" label="สถานที่ตั้งโรงงาน" size="small" defaultValue={factory?.address ?? ''} sx={{ gridColumn: { xs: 'auto', md: 'span 6' } }} />
+                <TextField name="latitude" label="ละติจูด" size="small" defaultValue={factory?.latitude ?? ''} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
+                <TextField name="longitude" label="ลองจิจูด" size="small" defaultValue={factory?.longitude ?? ''} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
                 <Box sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }}>
                   <MockUploadField label="ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน" helperText="ขนาดไม่เกิน 5 Mb • อัปโหลดได้ไม่เกิน 3 ไฟล์" />
                 </Box>
@@ -649,12 +823,19 @@ function FactoryGeneralInfoBottomSheet({ open, factory, onClose, showSaveButton 
 
         <Divider />
         <Stack direction="row" spacing={1.5} sx={{ px: { xs: 2, md: 3 }, py: 1.5, justifyContent: 'center', bgcolor: 'background.paper' }}>
-          <Button variant="outlined" color="inherit" onClick={onClose}>
-            ยกเลิก
-          </Button>
-          {showSaveButton ? (
-            <Button variant="contained" color="secondary" onClick={onClose}>
-              บันทึก
+            <Button variant="outlined" color="inherit" disabled={submitting} onClick={onClose}>
+              ยกเลิก
+            </Button>
+            {showSaveButton ? (
+            <Button
+              type="submit"
+              form="master-data-general-info-form"
+              variant="contained"
+              color="secondary"
+              disabled={submitting}
+              startIcon={submitting ? <CircularProgress size={16} color="inherit" /> : null}
+            >
+              {submitting ? 'กำลังบันทึก' : 'บันทึก'}
             </Button>
           ) : null}
         </Stack>
@@ -719,8 +900,8 @@ function RequestGeneralInfoPreview({ factory }) {
   )
 }
 
-function RequestMonitoringPointPreview({ factory }) {
-  const firstPoint = Array.isArray(factory?.measurementPoints) ? factory.measurementPoints[0] : null
+function RequestMonitoringPointPreview({ factory, measurementPoints }) {
+  const firstPoint = Array.isArray(measurementPoints) ? measurementPoints[0] : Array.isArray(factory?.measurementPoints) ? factory.measurementPoints[0] : null
   const parameters = Array.isArray(firstPoint?.parameters) ? firstPoint.parameters.join(', ') : firstPoint?.parameters
 
   return (
@@ -769,14 +950,36 @@ function RequestMonitoringPointPreview({ factory }) {
   )
 }
 
-function RequestComparisonContent({ request }) {
-  const factory = request?.factory
+function RequestComparisonContent({ request, variant = 'after' }) {
+  const raw = request?.raw ?? request
+  const baseFactory = request?.factory ?? request
+  const factory = normalizeFactoryDetail({
+    ...baseFactory,
+    ...(variant === 'before' ? raw?.currentFactory : raw?.proposedFactory),
+    factoryId: raw?.factoryId ?? baseFactory?.factoryId,
+    factoryRegistrationNo: raw?.factoryRegistrationNo ?? baseFactory?.factoryRegistrationNo,
+    factoryName: (variant === 'before' ? raw?.currentFactory?.factoryName : raw?.proposedFactory?.factoryName) ?? baseFactory?.factoryName,
+  })
+  const measurementPoints = variant === 'before'
+    ? raw?.currentMeasurementPoints
+    : raw?.proposedMeasurementPoints
   const isPointForm = request?.form === 'แก้ไขข้อมูลจุดตรวจวัด'
 
-  return isPointForm ? <RequestMonitoringPointPreview factory={factory} /> : <RequestGeneralInfoPreview factory={factory} />
+  return isPointForm
+    ? <RequestMonitoringPointPreview factory={factory} measurementPoints={measurementPoints} />
+    : <RequestGeneralInfoPreview factory={factory} />
 }
 
-function RequestViewBottomSheet({ open, request, onClose, showReviewActions = false }) {
+function RequestViewBottomSheet({
+  open,
+  request,
+  onClose,
+  showReviewActions = false,
+  reviewSubmitting = false,
+  onApprove,
+  onRequestRevision,
+  onReject,
+}) {
   const [activeTab, setActiveTab] = useState('after')
 
   return (
@@ -869,14 +1072,23 @@ function RequestViewBottomSheet({ open, request, onClose, showReviewActions = fa
                 bgcolor: 'background.paper',
               }}
             >
-              <Button variant="outlined" color="inherit" onClick={onClose}>
+              <Button variant="outlined" color="inherit" disabled={reviewSubmitting} onClick={onClose}>
                 ยกเลิก
               </Button>
-              <Button variant="outlined" color="warning" onClick={onClose}>
+              <Button variant="outlined" color="warning" disabled={reviewSubmitting} onClick={onRequestRevision}>
                 แจ้งแก้ไข
               </Button>
-              <Button variant="contained" color="secondary" onClick={onClose}>
-                อนุมัติ
+              <Button variant="outlined" color="error" disabled={reviewSubmitting} onClick={onReject}>
+                ไม่อนุมัติ
+              </Button>
+              <Button
+                variant="contained"
+                color="secondary"
+                disabled={reviewSubmitting}
+                startIcon={reviewSubmitting ? <CircularProgress size={16} color="inherit" /> : null}
+                onClick={onApprove}
+              >
+                {reviewSubmitting ? 'กำลังบันทึก' : 'อนุมัติ'}
               </Button>
             </Stack>
           </>
@@ -887,11 +1099,12 @@ function RequestViewBottomSheet({ open, request, onClose, showReviewActions = fa
 }
 
 function makeMasterDataInitialRequest(factory) {
-  const firstPoint = Array.isArray(factory?.measurementPoints) ? factory.measurementPoints[0] : null
+  const firstPoint = factory?.selectedMeasurementPoint ?? (Array.isArray(factory?.measurementPoints) ? factory.measurementPoints[0] : null)
   const systemType = firstPoint?.systemType ?? 'CEMS'
   const pointCode = firstPoint ? getMonitoringPointCode(firstPoint, 0) : ''
   const pointName = firstPoint?.pointName ?? firstPoint?.name ?? ''
   const connectedParameters = Array.isArray(firstPoint?.parameters) ? firstPoint.parameters : []
+  const pointDetails = firstPoint?.details ?? {}
 
   return {
     id: `master-data-${factory?.id ?? 'mock'}`,
@@ -912,50 +1125,338 @@ function makeMasterDataInitialRequest(factory) {
     notificationEmails: [''],
     measurementPoints: [
       {
+        connectedPointId: firstPoint?.connectedPointId ?? firstPoint?.id ?? null,
+        monitoringPointStatus: firstPoint?.monitoringPointStatus ?? firstPoint?.status ?? null,
         pointCode,
         code: pointCode,
         pointName,
         details: {
+          ...pointDetails,
           monitoringPointKind: systemType,
           pointCode,
           pointName,
-          eligibleParameters: connectedParameters,
-          connectedParameters,
-          exemptedParameters: [],
-          pendingParameters: [],
-          requestedParameters: [],
+          eligibleParameters: pointDetails.eligibleParameters ?? connectedParameters,
+          connectedParameters: pointDetails.connectedParameters ?? connectedParameters,
+          exemptedParameters: pointDetails.exemptedParameters ?? [],
+          pendingParameters: pointDetails.pendingParameters ?? [],
+          requestedParameters: pointDetails.requestedParameters ?? [],
         },
+        documentsAndImages: firstPoint?.documentsAndImages ?? [],
+        measurementInstruments: firstPoint?.measurementInstruments ?? null,
       },
     ],
   }
 }
 
-function MasterDataPage({ userType = '', roleCode = '' }) {
+function getFactoryRowId(factory) {
+  return factory?.factoryId ?? factory?.newRegistrationNo ?? factory?.factoryRegistrationNo ?? factory?.id ?? ''
+}
+
+function buildBasicInfoPayload(factory, formData) {
+  const eia = formData.get('eia') || factory?.eia || null
+  return {
+    formType: 'BASIC_INFO',
+    factoryName: String(formData.get('factoryName') ?? factory?.factoryName ?? '').trim(),
+    factoryAddress: emptyToNull(formData.get('factoryAddress') ?? factory?.address),
+    latitude: toNumberOrNull(formData.get('latitude') ?? factory?.latitude),
+    longitude: toNumberOrNull(formData.get('longitude') ?? factory?.longitude),
+    eia,
+    eiaOther: eia === 'อื่นๆ'
+      ? emptyToNull(formData.has('eiaOther') ? formData.get('eiaOther') : factory?.eiaOther)
+      : null,
+    projectName: emptyToNull(formData.has('projectName') ? formData.get('projectName') : factory?.projectName),
+    factoryFrontPhotos: sanitizeDocuments(factory?.factoryFrontPhotos),
+    factoryLogo: factory?.factoryLogo ? sanitizeDocumentItem(factory.factoryLogo) : null,
+    note: 'แก้ไขข้อมูลทั่วไปของโรงงาน',
+  }
+}
+
+function buildMeasurementPointsPayload(requestBody, initialRequest) {
+  const point = requestBody?.measurementPoints?.[0] ?? {}
+  const initialPoint = initialRequest?.measurementPoints?.[0] ?? {}
+  const pointName = point.pointName ?? point.details?.pointName ?? initialPoint.pointName ?? ''
+
+  return {
+    formType: 'MEASUREMENT_POINTS',
+    measurementPoints: [
+      {
+        connectedPointId: initialPoint.connectedPointId,
+        pointName,
+        monitoringPointStatus: point.monitoringPointStatus ?? initialPoint.monitoringPointStatus ?? null,
+        details: point.details ?? null,
+        documentsAndImages: sanitizeDocuments(point.documentsAndImages ?? initialPoint.documentsAndImages),
+        measurementInstruments: point.measurementInstruments ?? initialPoint.measurementInstruments ?? null,
+      },
+    ],
+    note: 'แก้ไขข้อมูลจุดตรวจวัด',
+  }
+}
+
+function MasterDataPage({ userType = '', roleCode = '', accessToken = '' }) {
   const [selectedFactory, setSelectedFactory] = useState(null)
   const [editingFactory, setEditingFactory] = useState(null)
   const [editingGeneralFactory, setEditingGeneralFactory] = useState(null)
   const [viewingRequest, setViewingRequest] = useState(null)
   const [reviewingRequest, setReviewingRequest] = useState(null)
   const [activeSubMenu, setActiveSubMenu] = useState('factories')
-  const isAdmin = String(roleCode || userType).toLowerCase() === 'admin'
+  const [factoryRows, setFactoryRows] = useState([])
+  const [requestRows, setRequestRows] = useState([])
+  const [loadingFactories, setLoadingFactories] = useState(false)
+  const [loadingRequests, setLoadingRequests] = useState(false)
+  const [actionLoading, setActionLoading] = useState(false)
+  const [tableError, setTableError] = useState('')
+  const [snackbarMessage, setSnackbarMessage] = useState('')
+  const isAdmin = String(roleCode).toLowerCase() === 'admin' || String(userType).toLowerCase() === 'admin'
+  const canSubmitMasterData = isAdmin || String(userType).toLowerCase() === 'operator'
   const visibleSubMenus = useMemo(
     () => (isAdmin ? pageSubMenus : pageSubMenus.filter((menu) => menu.value !== 'requests')),
     [isAdmin],
   )
   const effectiveSubMenu = isAdmin ? activeSubMenu : 'factories'
-  const rows = useMemo(() => mapFactoryRows(mockOperatorFactoryRows), [])
-  const requestRows = useMemo(() => makeAllRequestRows(rows), [rows])
+  const rows = factoryRows
 
-  const handleEditFactory = useCallback((factory) => {
+  const loadFactories = useCallback(async () => {
+    if (!accessToken) {
+      setFactoryRows([])
+      return
+    }
+
+    setLoadingFactories(true)
+    setTableError('')
+    try {
+      const result = await fetch(pomsFactoriesApiBaseUrl, {
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+      })
+      const response = await readMasterDataResponse(result, 'โหลดรายชื่อโรงงานไม่สำเร็จ')
+      setFactoryRows(mapFactoryRows(response?.data ?? []))
+    } catch (error) {
+      setTableError(error instanceof Error ? error.message : 'โหลดรายชื่อโรงงานไม่สำเร็จ')
+      setFactoryRows([])
+    } finally {
+      setLoadingFactories(false)
+    }
+  }, [accessToken])
+
+  const loadRequests = useCallback(async () => {
+    if (!accessToken || !isAdmin) {
+      setRequestRows([])
+      return
+    }
+
+    setLoadingRequests(true)
+    setTableError('')
+    try {
+      const result = await fetch(`${pomsFactoriesApiBaseUrl}/edit-requests`, {
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+      })
+      const response = await readMasterDataResponse(result, 'โหลดรายการคำขอไม่สำเร็จ')
+      setRequestRows(mapEditRequestRows(response?.data ?? []))
+    } catch (error) {
+      setTableError(error instanceof Error ? error.message : 'โหลดรายการคำขอไม่สำเร็จ')
+      setRequestRows([])
+    } finally {
+      setLoadingRequests(false)
+    }
+  }, [accessToken, isAdmin])
+
+  useEffect(() => {
+    loadFactories()
+  }, [loadFactories])
+
+  useEffect(() => {
+    if (effectiveSubMenu === 'requests') {
+      loadRequests()
+    }
+  }, [effectiveSubMenu, loadRequests])
+
+  const loadFactoryDetail = useCallback(async (factory) => {
+    const factoryId = getFactoryRowId(factory)
+    if (!accessToken || !factoryId) {
+      return factory
+    }
+
+    const result = await fetch(`${pomsFactoriesApiBaseUrl}/${encodeURIComponent(factoryId)}`, {
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
+    const response = await readMasterDataResponse(result, 'โหลดข้อมูลโรงงานไม่สำเร็จ')
+    return normalizeFactoryDetail(response?.data ?? factory)
+  }, [accessToken])
+
+  const loadRequestDetail = useCallback(async (request) => {
+    const requestId = request?.requestId ?? request?.id
+    if (!accessToken || !requestId) {
+      return request
+    }
+
+    const result = await fetch(`${pomsFactoriesApiBaseUrl}/edit-requests/${encodeURIComponent(requestId)}`, {
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
+    const response = await readMasterDataResponse(result, 'โหลดรายละเอียดคำขอไม่สำเร็จ')
+    const mapped = mapEditRequestRows([response?.data ?? {}])[0]
+    return {
+      ...mapped,
+      raw: response?.data,
+    }
+  }, [accessToken])
+
+  const handleOpenFactory = useCallback(async (factory) => {
+    setActionLoading(true)
+    setTableError('')
+    try {
+      setSelectedFactory(await loadFactoryDetail(factory))
+    } catch (error) {
+      setTableError(error instanceof Error ? error.message : 'โหลดข้อมูลโรงงานไม่สำเร็จ')
+    } finally {
+      setActionLoading(false)
+    }
+  }, [loadFactoryDetail])
+
+  const handleEditFactory = useCallback(async (factory) => {
     setSelectedFactory(null)
-    setEditingFactory(factory)
-  }, [])
-  const handleEditGeneralFactory = useCallback((factory) => {
+    setActionLoading(true)
+    setTableError('')
+    try {
+      setEditingFactory(await loadFactoryDetail(factory))
+    } catch (error) {
+      setTableError(error instanceof Error ? error.message : 'โหลดข้อมูลโรงงานไม่สำเร็จ')
+    } finally {
+      setActionLoading(false)
+    }
+  }, [loadFactoryDetail])
+  const handleEditGeneralFactory = useCallback(async (factory) => {
     setSelectedFactory(null)
-    setEditingGeneralFactory(factory)
-  }, [])
-  const columns = useMemo(() => getFactoryColumns(setSelectedFactory, handleEditGeneralFactory), [handleEditGeneralFactory])
-  const pageRequestColumns = useMemo(() => getPageRequestColumns(setViewingRequest, setReviewingRequest, isAdmin), [isAdmin])
+    setActionLoading(true)
+    setTableError('')
+    try {
+      setEditingGeneralFactory(await loadFactoryDetail(factory))
+    } catch (error) {
+      setTableError(error instanceof Error ? error.message : 'โหลดข้อมูลโรงงานไม่สำเร็จ')
+    } finally {
+      setActionLoading(false)
+    }
+  }, [loadFactoryDetail])
+  const handleOpenRequest = useCallback(async (request, review = false) => {
+    setActionLoading(true)
+    setTableError('')
+    try {
+      const detail = await loadRequestDetail(request)
+      if (review) {
+        setReviewingRequest(detail)
+      } else {
+        setViewingRequest(detail)
+      }
+    } catch (error) {
+      setTableError(error instanceof Error ? error.message : 'โหลดรายละเอียดคำขอไม่สำเร็จ')
+    } finally {
+      setActionLoading(false)
+    }
+  }, [loadRequestDetail])
+
+  const columns = useMemo(() => getFactoryColumns(handleOpenFactory, handleEditGeneralFactory), [handleOpenFactory, handleEditGeneralFactory])
+  const pageRequestColumns = useMemo(
+    () => getPageRequestColumns(
+      (request) => handleOpenRequest(request, false),
+      (request) => handleOpenRequest(request, true),
+      isAdmin,
+    ),
+    [handleOpenRequest, isAdmin],
+  )
+
+  const submitFactoryEditRequest = useCallback(async (factory, body) => {
+    const factoryId = getFactoryRowId(factory)
+    if (!accessToken || !factoryId) {
+      throw new Error('ไม่พบข้อมูลโรงงานสำหรับส่งคำขอแก้ไข')
+    }
+
+    const result = await fetch(`${pomsFactoriesApiBaseUrl}/${encodeURIComponent(factoryId)}/edit-requests`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    })
+    const response = await readMasterDataResponse(result, 'ส่งคำขอแก้ไขไม่สำเร็จ')
+    await Promise.all([loadFactories(), loadRequests()])
+    setSnackbarMessage('ส่งคำขอแก้ไขสำเร็จ')
+    return response?.data
+  }, [accessToken, loadFactories, loadRequests])
+
+  const handleSubmitGeneralInfo = useCallback(async (factory, formData) => {
+    setActionLoading(true)
+    setTableError('')
+    try {
+      await submitFactoryEditRequest(factory, buildBasicInfoPayload(factory, formData))
+      setEditingGeneralFactory(null)
+    } catch (error) {
+      setTableError(error instanceof Error ? error.message : 'ส่งคำขอแก้ไขไม่สำเร็จ')
+    } finally {
+      setActionLoading(false)
+    }
+  }, [submitFactoryEditRequest])
+
+  const handleSubmitMeasurementPoints = useCallback(async (requestBody) => {
+    const initialRequest = makeMasterDataInitialRequest(editingFactory)
+    const payload = buildMeasurementPointsPayload(requestBody, initialRequest)
+    const response = await submitFactoryEditRequest(editingFactory, payload)
+    setEditingFactory(null)
+    return response
+  }, [editingFactory, submitFactoryEditRequest])
+
+  const reviewEditRequest = useCallback(async (decision) => {
+    const requestId = reviewingRequest?.requestId ?? reviewingRequest?.id
+    if (!accessToken || !requestId) {
+      setTableError('ไม่พบรหัสคำขอสำหรับพิจารณา')
+      return
+    }
+
+    const body = {
+      decision,
+      revisionReason: decision === 'REQUEST_REVISION' ? 'กรุณาแก้ไขข้อมูลให้ถูกต้อง' : null,
+      officerNote: decision === 'REJECT' ? 'ไม่อนุมัติ' : null,
+    }
+
+    setActionLoading(true)
+    setTableError('')
+    try {
+      const result = await fetch(`${pomsFactoriesApiBaseUrl}/edit-requests/${encodeURIComponent(requestId)}/review`, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      })
+      await readMasterDataResponse(result, 'พิจารณาคำขอไม่สำเร็จ')
+      setReviewingRequest(null)
+      await Promise.all([loadFactories(), loadRequests()])
+      setSnackbarMessage(
+        decision === 'APPROVE'
+          ? 'อนุมัติคำขอสำเร็จ'
+          : decision === 'REQUEST_REVISION'
+            ? 'แจ้งแก้ไขคำขอสำเร็จ'
+            : 'ไม่อนุมัติคำขอสำเร็จ',
+      )
+    } catch (error) {
+      setTableError(error instanceof Error ? error.message : 'พิจารณาคำขอไม่สำเร็จ')
+    } finally {
+      setActionLoading(false)
+    }
+  }, [accessToken, loadFactories, loadRequests, reviewingRequest])
 
   return (
     <>
@@ -1003,9 +1504,15 @@ function MasterDataPage({ userType = '', roleCode = '' }) {
             overflow: 'hidden',
           }}
         >
+          {tableError ? (
+            <Alert severity="error" sx={{ borderRadius: 0 }}>
+              {tableError}
+            </Alert>
+          ) : null}
           <DataGrid
             rows={effectiveSubMenu === 'factories' ? rows : requestRows}
             columns={effectiveSubMenu === 'factories' ? columns : pageRequestColumns}
+            loading={effectiveSubMenu === 'factories' ? loadingFactories || actionLoading : loadingRequests || actionLoading}
             disableRowSelectionOnClick
             showToolbar
             showCellVerticalBorder
@@ -1039,25 +1546,20 @@ function MasterDataPage({ userType = '', roleCode = '' }) {
         requestId={editingFactory?.id ?? ''}
         initialRequest={makeMasterDataInitialRequest(editingFactory)}
         titleOverride="แก้ไขข้อมูลจุดตรวจวัด"
-        footerActions={
-          <>
-            <Button variant="outlined" color="inherit" onClick={() => setEditingFactory(null)}>
-              ยกเลิก
-            </Button>
-            {isAdmin ? (
-              <Button variant="contained" color="secondary" onClick={() => setEditingFactory(null)}>
-                บันทึก
-              </Button>
-            ) : null}
-          </>
-        }
+        accessToken={accessToken}
+        submitButtonLabel="บันทึก"
+        submitWithoutPreview
+        customSubmit={canSubmitMasterData ? handleSubmitMeasurementPoints : null}
+        footerActions={canSubmitMasterData ? undefined : null}
         onClose={() => setEditingFactory(null)}
       />
 
       <FactoryGeneralInfoBottomSheet
         open={Boolean(editingGeneralFactory)}
         factory={editingGeneralFactory}
-        showSaveButton={isAdmin}
+        showSaveButton={canSubmitMasterData}
+        submitting={actionLoading}
+        onSubmit={handleSubmitGeneralInfo}
         onClose={() => setEditingGeneralFactory(null)}
       />
 
@@ -1071,8 +1573,22 @@ function MasterDataPage({ userType = '', roleCode = '' }) {
         open={Boolean(reviewingRequest)}
         request={reviewingRequest}
         showReviewActions
+        reviewSubmitting={actionLoading}
+        onApprove={() => reviewEditRequest('APPROVE')}
+        onRequestRevision={() => reviewEditRequest('REQUEST_REVISION')}
+        onReject={() => reviewEditRequest('REJECT')}
         onClose={() => setReviewingRequest(null)}
       />
+      <Snackbar
+        open={Boolean(snackbarMessage)}
+        autoHideDuration={4000}
+        onClose={() => setSnackbarMessage('')}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert severity="success" variant="filled" onClose={() => setSnackbarMessage('')}>
+          {snackbarMessage}
+        </Alert>
+      </Snackbar>
     </>
   )
 }

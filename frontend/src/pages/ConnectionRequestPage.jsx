@@ -4,6 +4,7 @@ import {
   Button,
   Checkbox,
   Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -6876,6 +6877,9 @@ export function RequestFormBottomSheet({
   loadError = '',
   titleOverride = '',
   footerActions = undefined,
+  submitButtonLabel = 'ส่งแบบฟอร์มคำขอ',
+  submitWithoutPreview = false,
+  customSubmit = null,
   onClose,
   onSubmitted,
 }) {
@@ -7044,10 +7048,12 @@ export function RequestFormBottomSheet({
     try {
       requestBody = buildCurrentRequestBody()
       validateDirectConnectionRequest(requestBody)
-      validateConnectionRequestPayload(requestBody, {
-        isAddParameterMode,
-        skipFullValidation: shouldUseDirectConnection,
-      })
+      if (!customSubmit) {
+        validateConnectionRequestPayload(requestBody, {
+          isAddParameterMode,
+          skipFullValidation: shouldUseDirectConnection,
+        })
+      }
     } catch (error) {
       handleSubmitValidationError(error)
       return
@@ -7112,13 +7118,27 @@ export function RequestFormBottomSheet({
       applyOfficerSubmissionAction(requestBody)
 
       validateDirectConnectionRequest(requestBody)
-      validateConnectionRequestPayload(requestBody, {
-        isAddParameterMode,
-        skipFullValidation: shouldUseDirectConnection,
-      })
+      if (!customSubmit) {
+        validateConnectionRequestPayload(requestBody, {
+          isAddParameterMode,
+          skipFullValidation: shouldUseDirectConnection,
+        })
+      }
 
       if (shouldUseDirectConnection) {
         sanitizeDirectConnectionRequestBody(requestBody)
+      }
+
+      if (customSubmit) {
+        const responseData = await customSubmit(requestBody, {
+          formData,
+          uploadedDocuments,
+        })
+        setIsSubmitting(false)
+        await onSubmitted?.(responseData ?? null, {
+          successMessage: 'บันทึกข้อมูลสำเร็จ',
+        })
+        return
       }
 
       const submitApiUrl = isEditMode
@@ -7547,8 +7567,13 @@ export function RequestFormBottomSheet({
                 <Button variant="outlined" color="inherit" onClick={onClose}>
                   ยกเลิก
                 </Button>
-                <Button variant="contained" disabled={loading || Boolean(loadError)} onClick={openSubmitConfirm}>
-                  ส่งแบบฟอร์มคำขอ
+                <Button
+                  variant="contained"
+                  disabled={loading || Boolean(loadError) || isSubmitting}
+                  startIcon={isSubmitting ? <CircularProgress size={16} color="inherit" /> : null}
+                  onClick={submitWithoutPreview ? submitRequest : openSubmitConfirm}
+                >
+                  {isSubmitting ? 'กำลังบันทึก' : submitButtonLabel}
                 </Button>
               </>
             )}
