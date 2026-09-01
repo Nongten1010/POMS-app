@@ -469,6 +469,19 @@ function normalizeFactoryId(value) {
   return String(normalizeDisplayValue(value)).trim()
 }
 
+function getFactoryIdentifiers(row = {}) {
+  return [
+    row.factoryId,
+    row.factoryRegistrationNo,
+    row.newRegistrationNo,
+    row.oldRegistrationNo,
+    row.candidatePayload?.factoryId,
+    row.candidatePayload?.factoryRegistrationNo,
+  ]
+    .map(normalizeFactoryId)
+    .filter(Boolean)
+}
+
 function normalizeArrayValue(value) {
   if (Array.isArray(value)) {
     return value.map((item) => String(item).trim()).filter(Boolean)
@@ -849,6 +862,10 @@ function EligibleFactoriesPage({ accessToken = '', userType = '' }) {
     () => new Set(eligibleFactoryRows.map((row) => normalizeFactoryId(row.factoryId)).filter(Boolean)),
     [eligibleFactoryRows],
   )
+  const eligibleFactoryIdentifierSet = useMemo(
+    () => new Set(eligibleFactoryRows.flatMap(getFactoryIdentifiers)),
+    [eligibleFactoryRows],
+  )
   const savingEligibleFactoryIdSet = useMemo(
     () => new Set(savingEligibleFactoryIds),
     [savingEligibleFactoryIds],
@@ -976,12 +993,7 @@ function EligibleFactoriesPage({ accessToken = '', userType = '' }) {
       setEligibleFactoryAddRequestsError('')
 
       try {
-        const query = new URLSearchParams({
-          status: 'PENDING_REVIEW',
-          page: '1',
-          perPage: '200',
-        })
-        const result = await fetch(`${eligibleFactoryAddRequestsApiUrl}?${query.toString()}`, {
+        const result = await fetch(eligibleFactoryAddRequestsApiUrl, {
           headers: {
             Accept: 'application/json',
             Authorization: `Bearer ${accessToken}`,
@@ -1315,7 +1327,7 @@ function EligibleFactoriesPage({ accessToken = '', userType = '' }) {
           },
           body: JSON.stringify({
             decision: 'REJECT',
-            officerNote: 'ไม่อนุมัติคำขอเพิ่มโรงงาน',
+            officerNote: 'ไม่อนุมัติ',
           }),
         })
 
@@ -1332,6 +1344,85 @@ function EligibleFactoriesPage({ accessToken = '', userType = '' }) {
       }
     },
     [accessToken, loadEligibleFactoryAddRequests],
+  )
+
+  const handleApproveEligibleFactoryAddRequest = useCallback(
+    async (row) => {
+      if (!accessToken) {
+        setEligibleActionError('กรุณาเข้าสู่ระบบก่อนพิจารณาคำขอเพิ่มโรงงาน')
+        return
+      }
+
+      if (!row?.requestId) {
+        setEligibleActionError('ไม่พบรหัสคำขอเพิ่มโรงงาน')
+        return
+      }
+
+      const sourceFactoryLookupId =
+        normalizeDisplayValue(row?.factoryId)
+        || normalizeDisplayValue(row?.factoryRegistrationNo)
+
+      if (!sourceFactoryLookupId) {
+        setEligibleActionError('ไม่พบเลขทะเบียนโรงงานสำหรับดึงข้อมูลต้นทาง')
+        return
+      }
+
+      setEligibleActionError('')
+      setReviewingEligibleFactoryAddRequestIds((current) =>
+        current.includes(row.id) ? current : [...current, row.id],
+      )
+
+      try {
+        const result = await fetch(`${eligibleFactoryAddRequestsApiUrl}/${row.requestId}/review`, {
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            decision: 'APPROVE',
+            officerNote: null,
+          }),
+        })
+
+        await readJsonResponse(result, 'อนุมัติคำขอเพิ่มโรงงานไม่สำเร็จ')
+
+        const sourceResult = await fetch(
+          `${eligibleFactorySourceFactoriesApiUrl}/${encodeURIComponent(sourceFactoryLookupId)}`,
+          {
+            headers: {
+              Accept: 'application/json',
+              Authorization: `Bearer ${accessToken}`,
+            },
+          },
+        )
+        const sourceResponse = await readJsonResponse(sourceResult, 'โหลดข้อมูลโรงงานต้นทางไม่สำเร็จ')
+
+        if (!sourceResponse?.data) {
+          throw new Error('ไม่พบข้อมูลโรงงานต้นทาง')
+        }
+
+        await handleOpenEligibleSheet(
+          {
+            ...mapCandidateFactory(sourceResponse.data, 0),
+            saveWithMonitoringPointForm: true,
+          },
+        )
+
+        await Promise.all([
+          loadEligibleFactoryAddRequests(),
+          loadEligibleFactories(),
+        ])
+        setSnackbarMessage('อนุมัติคำขอเพิ่มโรงงานสำเร็จ')
+        setSnackbarOpen(true)
+      } catch (requestError) {
+        setEligibleActionError(requestError.message)
+      } finally {
+        setReviewingEligibleFactoryAddRequestIds((current) => current.filter((id) => id !== row.id))
+      }
+    },
+    [accessToken, handleOpenEligibleSheet, loadEligibleFactories, loadEligibleFactoryAddRequests],
   )
 
   const handleOpenEligibleFactoryAddRequestApprovalSheet = useCallback(
@@ -1361,21 +1452,6 @@ function EligibleFactoriesPage({ accessToken = '', userType = '' }) {
       )
 
       try {
-        const reviewResult = await fetch(`${eligibleFactoryAddRequestsApiUrl}/${row.requestId}/review`, {
-          method: 'POST',
-          headers: {
-            Accept: 'application/json',
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            decision: 'APPROVE',
-            officerNote: null,
-          }),
-        })
-
-        await readJsonResponse(reviewResult, 'เลือกโรงงานเข้าข่ายไม่สำเร็จ')
-
         const result = await fetch(
           `${eligibleFactorySourceFactoriesApiUrl}/${encodeURIComponent(sourceFactoryLookupId)}`,
           {
@@ -1396,22 +1472,14 @@ function EligibleFactoriesPage({ accessToken = '', userType = '' }) {
             ...mapCandidateFactory(response.data, 0),
             saveWithMonitoringPointForm: true,
           },
-          { startEmpty: true },
         )
-
-        Promise.all([
-          loadEligibleFactoryAddRequests(),
-          loadEligibleFactories(),
-        ]).catch((refreshError) => {
-          setEligibleActionError(refreshError.message)
-        })
       } catch (requestError) {
         setEligibleActionError(requestError.message)
       } finally {
         setReviewingEligibleFactoryAddRequestIds((current) => current.filter((id) => id !== row.id))
       }
     },
-    [accessToken, handleOpenEligibleSheet, loadEligibleFactories, loadEligibleFactoryAddRequests],
+    [accessToken, handleOpenEligibleSheet],
   )
 
   const allFactoryColumns = useMemo(
@@ -1523,12 +1591,47 @@ function EligibleFactoriesPage({ accessToken = '', userType = '' }) {
         filterable: false,
         renderCell: (params) => {
           const isReviewing = reviewingEligibleFactoryAddRequestIdSet.has(params.row.id)
+          const status = params.row.status
+          const isPendingReview = status === 'PENDING_REVIEW' || params.row.statusLabel === 'รอพิจารณา'
+          const isApproved = status === 'APPROVED' || params.row.statusLabel === 'อนุมัติแล้ว'
+          const alreadyEligible = getFactoryIdentifiers(params.row).some((identifier) =>
+            eligibleFactoryIdentifierSet.has(identifier),
+          )
+
+          if (alreadyEligible) {
+            return null
+          }
+
+          if (isApproved) {
+            return (
+              <Stack
+                direction="row"
+                spacing={1}
+                sx={{ alignItems: 'center', justifyContent: 'flex-start', width: '100%', height: '100%' }}
+              >
+                <Button
+                  size="small"
+                  variant="contained"
+                  color="secondary"
+                  startIcon={isReviewing ? <CircularProgress size={14} color="inherit" /> : <AddIcon />}
+                  disabled={isReviewing}
+                  onClick={() => handleOpenEligibleFactoryAddRequestApprovalSheet(params.row)}
+                >
+                  {isReviewing ? 'กำลังโหลด' : 'เลือกเข้าข่าย'}
+                </Button>
+              </Stack>
+            )
+          }
+
+          if (!isPendingReview) {
+            return null
+          }
 
           return (
             <Stack
               direction="row"
               spacing={1}
-              sx={{ alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}
+              sx={{ alignItems: 'center', justifyContent: 'flex-start', width: '100%', height: '100%' }}
             >
               <Button
                 size="small"
@@ -1536,9 +1639,9 @@ function EligibleFactoriesPage({ accessToken = '', userType = '' }) {
                 color="secondary"
                 startIcon={isReviewing ? <CircularProgress size={14} color="inherit" /> : <AddTaskIcon />}
                 disabled={isReviewing}
-                onClick={() => handleOpenEligibleFactoryAddRequestApprovalSheet(params.row)}
+                onClick={() => handleApproveEligibleFactoryAddRequest(params.row)}
               >
-                {isReviewing ? 'กำลังโหลด' : 'อนุมัติ'}
+                {isReviewing ? 'กำลังบันทึก' : 'อนุมัติ'}
               </Button>
               <Button
                 size="small"
@@ -1557,7 +1660,12 @@ function EligibleFactoriesPage({ accessToken = '', userType = '' }) {
         },
       },
     ],
-    [handleOpenEligibleFactoryAddRequestApprovalSheet, reviewingEligibleFactoryAddRequestIdSet],
+    [
+      handleApproveEligibleFactoryAddRequest,
+      handleOpenEligibleFactoryAddRequestApprovalSheet,
+      eligibleFactoryIdentifierSet,
+      reviewingEligibleFactoryAddRequestIdSet,
+    ],
   )
 
   return (
