@@ -19,7 +19,9 @@ export async function up(knex: Knex): Promise<void> {
     ALTER TABLE ${REQUESTS_TABLE}
     ADD current_measurement_points_json NVARCHAR(MAX) NULL,
         proposed_measurement_points_json NVARCHAR(MAX) NULL;
+  `);
 
+  await knex.schema.raw(`
     ALTER TABLE ${REQUESTS_TABLE}
     WITH CHECK ADD CONSTRAINT ${FORM_TYPE_CHECK}
     CHECK (form_type IN ('BASIC_INFO', 'MEASUREMENT_POINTS'));

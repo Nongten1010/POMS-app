@@ -37,6 +37,25 @@ describe('POMS measurement-point edit request forward migration', () => {
     );
   });
 
+  it('commits new-column DDL to SQL Server before any later batch references those columns', async () => {
+    const harness = migrationHarness();
+
+    await up(harness.knex);
+
+    expect(harness.raw).toHaveBeenCalledTimes(2);
+    const addColumnsBatch = normalizeSql(String(harness.raw.mock.calls[0]?.[0]));
+    const constraintsAndIndexBatch = normalizeSql(String(harness.raw.mock.calls[1]?.[0]));
+
+    expect(addColumnsBatch).toContain('ADD form_type VARCHAR(32) NOT NULL');
+    expect(addColumnsBatch).toContain('ADD current_measurement_points_json NVARCHAR(MAX) NULL');
+    expect(addColumnsBatch).not.toContain('CHECK (form_type');
+    expect(addColumnsBatch).not.toContain('eligible_factory_id, form_type');
+    expect(constraintsAndIndexBatch).toContain(
+      "CHECK (form_type IN ('BASIC_INFO', 'MEASUREMENT_POINTS'))",
+    );
+    expect(constraintsAndIndexBatch).toContain('eligible_factory_id, form_type');
+  });
+
   it('keeps the historical 0100 migration free of measurement-point schema changes', () => {
     const source = readFileSync(
       resolve(__dirname, '../../src/db/migrations/0100_create_poms_factory_edit_requests.ts'),
