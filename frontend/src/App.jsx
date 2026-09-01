@@ -273,7 +273,7 @@ function App() {
         {visibleSelectedMenu === 'home' ? (
           <HomePage accessToken={accessToken} permissions={activePermissions} />
         ) : visibleSelectedMenu === 'master-data' ? (
-          <MasterDataPage userType={userType} />
+          <MasterDataPage userType={userType} roleCode={roleCode} />
         ) : visibleSelectedMenu === 'permissions' ? (
           <PermissionManagementPage accessToken={accessToken} />
         ) : visibleSelectedMenu === 'connection-request' ? (

@@ -69,6 +69,7 @@ const getOptionLabel = (option) => (typeof option === 'string' ? option : option
 const cemsParameterOptions = cemsParameterOptionItems.map((option) => option.label)
 const parameterNoneOption = 'ไม่มี'
 const requestedParametersExemptAllOption = 'ได้รับการยกเว้นทั้งหมด'
+const pendingEligibleFactoryAddRequestLabel = 'แจ้งความประสงค์แล้ว/รอดำเนินการ'
 const withNoneOption = (options = []) => [parameterNoneOption, ...options.filter((option) => option !== parameterNoneOption)]
 const withRequestedParameterOptions = (options = []) => [
   requestedParametersExemptAllOption,
@@ -849,6 +850,9 @@ const operatorFactoriesApiUrl = import.meta.env.DEV
 const eligibleFactoriesApiUrl = import.meta.env.DEV
   ? '/api-proxy/v1/cems-wpms-requests/eligible-factories'
   : 'https://d-poms.diw.go.th/api/v1/cems-wpms-requests/eligible-factories'
+const eligibleFactoryAddRequestsApiUrl = import.meta.env.DEV
+  ? '/api-proxy/v1/eligible-factories/add-requests'
+  : 'https://d-poms.diw.go.th/api/v1/eligible-factories/add-requests'
 const requestTableRowsApiUrl = import.meta.env.DEV
   ? '/api-proxy/v1/cems-wpms-requests/table-rows'
   : 'https://d-poms.diw.go.th/api/v1/cems-wpms-requests/table-rows'
@@ -1107,6 +1111,7 @@ function mapOperatorFactoryRow(row) {
     isEligible: row.isEligible === true,
     eligibilityStatus: row.eligibilityStatus ?? '',
     requestStatusCode: row.requestStatusCode ?? null,
+    requestStatusLabel: row.requestStatusLabel ?? null,
     requestStatus: row.requestStatus ?? row.requestStatusLabel ?? (monitoringPointCount > 0 ? 'เชื่อมต่อแล้ว' : 'ยังไม่มีจุดตรวจวัด'),
     status: row.status ?? 'แสดง',
   }
@@ -1258,26 +1263,27 @@ function getInitialRequestPoint(request = {}) {
 
 function getInitialRequestFactory(request = {}, fallbackFactory = {}) {
   const safeRequest = request ?? {}
+  const safeFallbackFactory = fallbackFactory ?? {}
   const factory = safeRequest.factory ?? {}
 
   return {
-    ...fallbackFactory,
+    ...safeFallbackFactory,
     ...factory,
-    factoryId: safeRequest.factoryId ?? factory.factoryId ?? fallbackFactory.factoryId ?? '',
-    factoryName: safeRequest.factoryName ?? factory.factoryName ?? fallbackFactory.factoryName ?? '',
-    newRegistrationNo: safeRequest.newRegistrationNo ?? factory.newRegistrationNo ?? fallbackFactory.newRegistrationNo ?? safeRequest.factoryId ?? '',
-    oldRegistrationNo: safeRequest.factoryRegistrationNo ?? safeRequest.oldRegistrationNo ?? factory.oldRegistrationNo ?? fallbackFactory.oldRegistrationNo ?? '',
-    factoryRegistrationNo: safeRequest.factoryRegistrationNo ?? factory.factoryRegistrationNo ?? fallbackFactory.factoryRegistrationNo ?? '',
-    industryMainOrder: safeRequest.industryMainOrder ?? factory.industryMainOrder ?? fallbackFactory.industryMainOrder ?? '',
-    industrySubOrder: safeRequest.industrySubOrder ?? factory.industrySubOrder ?? fallbackFactory.industrySubOrder ?? '',
-    businessActivity: safeRequest.businessActivity ?? factory.businessActivity ?? fallbackFactory.businessActivity ?? '',
-    eia: safeRequest.eia ?? factory.eia ?? fallbackFactory.eia ?? '',
-    eiaOther: safeRequest.eiaOther ?? factory.eiaOther ?? fallbackFactory.eiaOther ?? '',
-    hasEia: safeRequest.hasEia ?? factory.hasEia ?? fallbackFactory.hasEia,
-    projectName: safeRequest.projectName ?? factory.projectName ?? fallbackFactory.projectName ?? '',
-    address: safeRequest.address ?? factory.address ?? fallbackFactory.address ?? '',
-    latitude: safeRequest.latitude ?? factory.latitude ?? fallbackFactory.latitude ?? '',
-    longitude: safeRequest.longitude ?? factory.longitude ?? fallbackFactory.longitude ?? '',
+    factoryId: safeRequest.factoryId ?? factory.factoryId ?? safeFallbackFactory.factoryId ?? '',
+    factoryName: safeRequest.factoryName ?? factory.factoryName ?? safeFallbackFactory.factoryName ?? '',
+    newRegistrationNo: safeRequest.newRegistrationNo ?? factory.newRegistrationNo ?? safeFallbackFactory.newRegistrationNo ?? safeRequest.factoryId ?? '',
+    oldRegistrationNo: safeRequest.factoryRegistrationNo ?? safeRequest.oldRegistrationNo ?? factory.oldRegistrationNo ?? safeFallbackFactory.oldRegistrationNo ?? '',
+    factoryRegistrationNo: safeRequest.factoryRegistrationNo ?? factory.factoryRegistrationNo ?? safeFallbackFactory.factoryRegistrationNo ?? '',
+    industryMainOrder: safeRequest.industryMainOrder ?? factory.industryMainOrder ?? safeFallbackFactory.industryMainOrder ?? '',
+    industrySubOrder: safeRequest.industrySubOrder ?? factory.industrySubOrder ?? safeFallbackFactory.industrySubOrder ?? '',
+    businessActivity: safeRequest.businessActivity ?? factory.businessActivity ?? safeFallbackFactory.businessActivity ?? '',
+    eia: safeRequest.eia ?? factory.eia ?? safeFallbackFactory.eia ?? '',
+    eiaOther: safeRequest.eiaOther ?? factory.eiaOther ?? safeFallbackFactory.eiaOther ?? '',
+    hasEia: safeRequest.hasEia ?? factory.hasEia ?? safeFallbackFactory.hasEia,
+    projectName: safeRequest.projectName ?? factory.projectName ?? safeFallbackFactory.projectName ?? '',
+    address: safeRequest.address ?? factory.address ?? safeFallbackFactory.address ?? '',
+    latitude: safeRequest.latitude ?? factory.latitude ?? safeFallbackFactory.latitude ?? '',
+    longitude: safeRequest.longitude ?? factory.longitude ?? safeFallbackFactory.longitude ?? '',
   }
 }
 
@@ -2274,7 +2280,10 @@ function getStatusChipStyle(value) {
   if (
     [
       'รอพิจารณาแบบ',
+      'รอพิจารณา',
+      pendingEligibleFactoryAddRequestLabel,
       'PENDING_DESIGN_REVIEW',
+      'PENDING_REVIEW',
       'แก้ไขแล้ว/รอพิจารณาแบบ',
       'REVISED_PENDING_DESIGN_REVIEW',
       'รอเชื่อมต่อ',
@@ -2463,11 +2472,19 @@ function OfficerFactoryActions({ row, onOpenMonitoringPoints }) {
 
 function OperatorFactoryActions({ row, onOpenRequestForm, onOpenMonitoringPoints, onOpenIntentDialog }) {
   if (!row.isEligible) {
+    const hasPendingAddRequest = [row?.requestStatusCode, row?.requestStatus, row?.requestStatusLabel].includes('PENDING_REVIEW')
+      || [row?.requestStatusCode, row?.requestStatus, row?.requestStatusLabel].includes('รอพิจารณา')
+      || [row?.requestStatusCode, row?.requestStatus, row?.requestStatusLabel].includes(pendingEligibleFactoryAddRequestLabel)
+
     return (
       <Stack direction="row" spacing={1} sx={tableActionStackSx}>
-        <Button size="small" variant="outlined" onClick={() => onOpenIntentDialog?.(row)}>
-          แจ้งความประสงค์
-        </Button>
+        {hasPendingAddRequest ? (
+          <StatusChip value={pendingEligibleFactoryAddRequestLabel} styleValue="PENDING_REVIEW" />
+        ) : (
+          <Button size="small" variant="outlined" onClick={() => onOpenIntentDialog?.(row)}>
+            แจ้งความประสงค์
+          </Button>
+        )}
       </Stack>
     )
   }
@@ -6843,7 +6860,7 @@ function MonitoringPointDetails({
   return null
 }
 
-function RequestFormBottomSheet({
+export function RequestFormBottomSheet({
   open,
   formType,
   factory,
@@ -6857,6 +6874,8 @@ function RequestFormBottomSheet({
   initialRequest,
   loading = false,
   loadError = '',
+  titleOverride = '',
+  footerActions = undefined,
   onClose,
   onSubmitted,
 }) {
@@ -7181,7 +7200,7 @@ function RequestFormBottomSheet({
         >
           <Box sx={{ width: 40 }} />
           <Typography variant="h6" component="h2" fontWeight={700}>
-            แบบฟอร์มคำขอ {formType}
+            {titleOverride || `แบบฟอร์มคำขอ ${formType}`}
           </Typography>
           <IconButton aria-label="ปิด" onClick={onClose}>
             <CloseIcon />
@@ -7512,23 +7531,29 @@ function RequestFormBottomSheet({
           </Stack>
         </Box>
         <Divider />
-        <Stack
-          direction="row"
-          spacing={1.5}
-          sx={{
-            px: { xs: 2, md: 3 },
-            py: 1.5,
-            justifyContent: 'center',
-            bgcolor: 'background.paper',
-          }}
-        >
-          <Button variant="outlined" color="inherit" onClick={onClose}>
-            ยกเลิก
-          </Button>
-          <Button variant="contained" disabled={loading || Boolean(loadError)} onClick={openSubmitConfirm}>
-            ส่งแบบฟอร์มคำขอ
-          </Button>
-        </Stack>
+        {footerActions === null ? null : (
+          <Stack
+            direction="row"
+            spacing={1.5}
+            sx={{
+              px: { xs: 2, md: 3 },
+              py: 1.5,
+              justifyContent: 'center',
+              bgcolor: 'background.paper',
+            }}
+          >
+            {footerActions ?? (
+              <>
+                <Button variant="outlined" color="inherit" onClick={onClose}>
+                  ยกเลิก
+                </Button>
+                <Button variant="contained" disabled={loading || Boolean(loadError)} onClick={openSubmitConfirm}>
+                  ส่งแบบฟอร์มคำขอ
+                </Button>
+              </>
+            )}
+          </Stack>
+        )}
       </Stack>
       <RequestDocumentDialog
         open={submitConfirmOpen}
@@ -7685,6 +7710,8 @@ function ConnectionRequestPage({
   const [connectionSettingsContext, setConnectionSettingsContext] = useState(null)
   const [intentRequestFactory, setIntentRequestFactory] = useState(null)
   const [intentReason, setIntentReason] = useState('')
+  const [intentRequestSubmitting, setIntentRequestSubmitting] = useState(false)
+  const [intentRequestError, setIntentRequestError] = useState('')
   const [operatorFactoryRows, setOperatorFactoryRows] = useState([])
   const [operatorFactoriesLoading, setOperatorFactoriesLoading] = useState(false)
   const [operatorFactoriesError, setOperatorFactoriesError] = useState('')
@@ -7722,14 +7749,75 @@ function ConnectionRequestPage({
   const openIntentDialog = useCallback((factory) => {
     setIntentRequestFactory(factory)
     setIntentReason('')
+    setIntentRequestError('')
   }, [])
   const closeIntentDialog = useCallback(() => {
     setIntentRequestFactory(null)
     setIntentReason('')
+    setIntentRequestError('')
   }, [])
-  const submitIntentRequest = useCallback(() => {
-    closeIntentDialog()
-  }, [closeIntentDialog])
+  const submitIntentRequest = useCallback(async () => {
+    if (!accessToken) {
+      setIntentRequestError('กรุณาเข้าสู่ระบบก่อนแจ้งความประสงค์')
+      return
+    }
+
+    const factoryId = String(intentRequestFactory?.factoryId ?? '').trim()
+    const reason = intentReason.trim()
+
+    if (!factoryId) {
+      setIntentRequestError('ไม่พบรหัสโรงงานสำหรับแจ้งความประสงค์')
+      return
+    }
+
+    if (!reason) {
+      setIntentRequestError('กรุณาระบุเหตุผลที่ต้องการแจ้งความประสงค์')
+      return
+    }
+
+    setIntentRequestSubmitting(true)
+    setIntentRequestError('')
+
+    try {
+      const result = await fetch(eligibleFactoryAddRequestsApiUrl, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ factoryId, reason }),
+      })
+      const payload = await result.json().catch(() => null)
+
+      if (!result.ok || payload?.success === false) {
+        const message =
+          payload?.error?.message ??
+          payload?.message ??
+          `แจ้งความประสงค์ไม่สำเร็จ (${result.status} ${result.statusText})`
+        throw new Error(message)
+      }
+
+      closeIntentDialog()
+      setRequestFormSuccessMessage('ส่งคำขอเพิ่มโรงงานสำเร็จ')
+      setOperatorFactoryRows((currentRows) =>
+        currentRows.map((row) =>
+          row.factoryId === factoryId
+            ? {
+                ...row,
+                requestStatusCode: 'PENDING_REVIEW',
+                requestStatusLabel: pendingEligibleFactoryAddRequestLabel,
+                requestStatus: pendingEligibleFactoryAddRequestLabel,
+              }
+            : row,
+        ),
+      )
+    } catch (requestError) {
+      setIntentRequestError(requestError.message)
+    } finally {
+      setIntentRequestSubmitting(false)
+    }
+  }, [accessToken, closeIntentDialog, intentReason, intentRequestFactory])
   const fetchFactoryRows = useCallback(async ({ signal } = {}) => {
     if (!canViewFactoryTable || !accessToken) {
       return []
@@ -8573,6 +8661,7 @@ function ConnectionRequestPage({
         <DialogTitle>แจ้งความประสงค์</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2}>
+            {intentRequestError ? <Alert severity="error">{intentRequestError}</Alert> : null}
             <Box>
               <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
                 {intentRequestFactory?.factoryName ?? '-'}
@@ -8589,16 +8678,19 @@ function ConnectionRequestPage({
               minRows={3}
               fullWidth
               autoFocus
+              disabled={intentRequestSubmitting}
+              inputProps={{ maxLength: 1000 }}
               placeholder="ระบุเหตุผลที่ต้องการแจ้งความประสงค์"
+              helperText="กรุณาระบุเหตุผล ความยาวไม่เกิน 1,000 ตัวอักษร"
             />
           </Stack>
         </DialogContent>
         <DialogActions sx={{ justifyContent: 'flex-end', px: 3, py: 2 }}>
-          <Button color="inherit" onClick={closeIntentDialog}>
+          <Button color="inherit" onClick={closeIntentDialog} disabled={intentRequestSubmitting}>
             ยกเลิก
           </Button>
-          <Button variant="contained" onClick={submitIntentRequest}>
-            ส่งข้อความ
+          <Button variant="contained" onClick={submitIntentRequest} disabled={intentRequestSubmitting || !intentReason.trim()}>
+            {intentRequestSubmitting ? 'กำลังส่ง' : 'ส่งข้อความ'}
           </Button>
         </DialogActions>
       </Dialog>
