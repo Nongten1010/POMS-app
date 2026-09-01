@@ -1101,12 +1101,13 @@ function MasterDataPage({ userType = '', roleCode = '', accessToken = '' }) {
   const [tableError, setTableError] = useState('')
   const [snackbarMessage, setSnackbarMessage] = useState('')
   const isAdmin = String(roleCode).toLowerCase() === 'admin' || String(userType).toLowerCase() === 'admin'
+  const isOperator = String(userType).toLowerCase() === 'operator'
   const canSubmitMasterData = isAdmin || String(userType).toLowerCase() === 'operator'
   const visibleSubMenus = useMemo(
-    () => (isAdmin ? pageSubMenus : pageSubMenus.filter((menu) => menu.value !== 'requests')),
-    [isAdmin],
+    () => (isAdmin || isOperator ? pageSubMenus : pageSubMenus.filter((menu) => menu.value !== 'requests')),
+    [isAdmin, isOperator],
   )
-  const effectiveSubMenu = isAdmin ? activeSubMenu : 'factories'
+  const effectiveSubMenu = isAdmin || isOperator ? activeSubMenu : 'factories'
   const rows = factoryRows
 
   const loadFactories = useCallback(async () => {
@@ -1135,7 +1136,7 @@ function MasterDataPage({ userType = '', roleCode = '', accessToken = '' }) {
   }, [accessToken])
 
   const loadRequests = useCallback(async () => {
-    if (!accessToken || !isAdmin) {
+    if (!accessToken || (!isAdmin && !isOperator)) {
       setRequestRows([])
       return
     }
@@ -1157,7 +1158,7 @@ function MasterDataPage({ userType = '', roleCode = '', accessToken = '' }) {
     } finally {
       setLoadingRequests(false)
     }
-  }, [accessToken, isAdmin])
+  }, [accessToken, isAdmin, isOperator])
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
