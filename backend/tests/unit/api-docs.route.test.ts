@@ -164,7 +164,7 @@ describe('API documentation routes', () => {
     expect(operationCount).toBe(
       countOpenApiOperations(pomsOpenApiDocument as Record<string, unknown>),
     );
-    expect(operationCount).toBe(135);
+    expect(operationCount).toBe(136);
   });
 
   it('documents the key write flows with a required request body', async () => {

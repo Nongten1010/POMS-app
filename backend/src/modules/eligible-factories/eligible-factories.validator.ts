@@ -111,6 +111,12 @@ export const listEligibleFactoryCandidatesQuerySchema = z
     }
   });
 
+export const sourceFactoryRegistrationNoParamsSchema = z
+  .object({
+    factoryRegistrationNo: trimmedString(64),
+  })
+  .strict();
+
 export const eligibleFactoryIdParamsSchema = z
   .object({
     id: z.coerce.number().int().min(1),
@@ -134,5 +140,8 @@ export type ReviewEligibleFactoryAddRequestSchemaInput = z.infer<
 >;
 export type ListEligibleFactoryCandidatesQuerySchemaInput = z.infer<
   typeof listEligibleFactoryCandidatesQuerySchema
+>;
+export type SourceFactoryRegistrationNoParamsSchemaInput = z.infer<
+  typeof sourceFactoryRegistrationNoParamsSchema
 >;
 export type EligibleFactoryIdParamsSchemaInput = z.infer<typeof eligibleFactoryIdParamsSchema>;

@@ -298,6 +298,12 @@ const factoryRegistrationNoParameter = {
   schema: { type: 'string', pattern: '^\\d{14}$' },
   example: '40100007125560',
 };
+const sourceFactoryRegistrationNoParameter = stringPath(
+  'factoryRegistrationNo',
+  'เลขทะเบียนโรงงานที่ใช้ค้นใน Fac60k แบบตรงกับ FID, FACREG หรือ DISPFACREG; ถ้าค่ามี / ต้อง URL-encode เป็น %2F',
+  64,
+  '10110500325134',
+);
 const publicAttachmentIdParameter = {
   name: 'publicId',
   in: 'path',
@@ -1160,6 +1166,87 @@ const componentSchemas: Record<string, OpenApiObject> = {
       boilerSizeEach: { type: 'string', minLength: 1, maxLength: 500, nullable: true },
       fuelUsed: { type: 'string', minLength: 1, maxLength: 500, nullable: true },
       hasEia: { type: 'boolean', nullable: true },
+    },
+  },
+  EligibleFactoryCandidate: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'factoryName',
+      'factoryId',
+      'factoryRegistrationNo',
+      'factoryClass',
+      'factorySubclass',
+      'address',
+      'provinceName',
+      'industrialEstateName',
+      'longitude',
+      'latitude',
+      'businessActivity',
+      'operationStatus',
+      'machineryHorsepower',
+      'productionCapacity',
+      'boilerSizeEach',
+      'fuelUsed',
+      'hasEia',
+    ],
+    properties: {
+      factoryName: { type: 'string', minLength: 1, maxLength: 500 },
+      factoryId: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 64,
+        description: 'รหัสต้นทางของโรงงานจาก Fac60k: FID แล้ว fallback เป็น FACREG หรือ DISPFACREG',
+      },
+      factoryRegistrationNo: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 64,
+        description: 'เลขทะเบียนสำหรับแสดง: DISPFACREG แล้ว fallback เป็น FACREG หรือ factoryId',
+      },
+      factoryClass: { type: 'string', minLength: 1, maxLength: 64, nullable: true },
+      factorySubclass: { type: 'string', minLength: 1, maxLength: 64, nullable: true },
+      address: { type: 'string', minLength: 1, maxLength: 1000, nullable: true },
+      provinceName: { type: 'string', minLength: 1, maxLength: 128 },
+      industrialEstateName: { type: 'string', minLength: 1, maxLength: 255, nullable: true },
+      longitude: { type: 'number', minimum: -180, maximum: 180, nullable: true },
+      latitude: { type: 'number', minimum: -90, maximum: 90, nullable: true },
+      businessActivity: { type: 'string', minLength: 1, maxLength: 4000, nullable: true },
+      operationStatus: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 64,
+        enum: ['ยังไม่แจ้งประกอบ', 'แจ้งประกอบแล้ว', 'หยุดชั่วคราว'],
+      },
+      capitalAmount: { type: 'number', nullable: true },
+      machineryHorsepower: { type: 'number', nullable: true },
+      productionCapacity: { type: 'string', minLength: 1, maxLength: 500, nullable: true },
+      wastewaterDischargeInfo: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 4000,
+        nullable: true,
+      },
+      boilerCount: { type: 'integer', minimum: 0, maximum: 10000, nullable: true },
+      boilerSizeEach: { type: 'string', minLength: 1, maxLength: 500, nullable: true },
+      fuelUsed: { type: 'string', minLength: 1, maxLength: 500, nullable: true },
+      eia: {
+        type: 'string',
+        enum: CONNECTION_REQUEST_EIA_ASSESSMENTS,
+        nullable: true,
+      },
+      eiaOther: { type: 'string', minLength: 1, maxLength: 500, nullable: true },
+      projectName: { type: 'string', minLength: 1, maxLength: 500, nullable: true },
+      hasEia: { type: 'boolean', nullable: true },
+    },
+  },
+  EligibleFactoryCandidateResponse: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['success', 'data'],
+    properties: {
+      success: { type: 'boolean', enum: [true] },
+      data: schemaRef('EligibleFactoryCandidate'),
     },
   },
   CreateEligibleFactoryAddRequest: {
@@ -3739,6 +3826,18 @@ const extraPaths: Record<string, OpenApiObject> = {
       ],
     }),
   },
+  '/eligible-factories/source-factories/{factoryRegistrationNo}': {
+    get: securedOperation({
+      tag: 'Eligible Factories',
+      summary: 'ดึงข้อมูลโรงงานรายแห่งจาก Fac60k',
+      operationId: 'getEligibleFactorySourceFactory',
+      description:
+        'ค้นแบบตรงด้วย FID, FACREG หรือ DISPFACREG โดยให้ลำดับความสำคัญ FID → FACREG → DISPFACREG เมื่อค่าชนกัน และคืนรูปแบบเดียวกับแถว candidate จากตาราง 60k; รองรับเฉพาะ FFLAG 0, 1 และ 3 ตาม data scope ของผู้ใช้ และยังค้นได้เมื่อโรงงานอยู่ใน eligible_factories แล้ว',
+      parameters: [sourceFactoryRegistrationNoParameter],
+      successDescription: 'พบข้อมูลโรงงานจาก Fac60k',
+      successSchema: schemaRef('EligibleFactoryCandidateResponse'),
+    }),
+  },
   '/eligible-factories': {
     get: securedOperation({
       tag: 'Eligible Factories',
@@ -5196,13 +5295,13 @@ export const pomsOpenApiDocument: OpenApiObject = {
     title: 'POMS API',
     version: '0.3.0',
     description:
-      'Interactive contract สำหรับ HTTP endpoint ทั้ง 126 รายการใน POMS แยกตามเมนูงานจริง พร้อม payload, validation, auth และตัวอย่างทดสอบ\n\nSwagger แสดง 135 operations เพราะขยาย optional buddhistYear path อีก 9 รูปแบบเพื่อรองรับทั้ง annual point code ที่ URL-encode และ path ที่ proxy ถอดรหัสแล้ว',
+      'Interactive contract สำหรับ HTTP endpoint ทั้ง 127 รายการใน POMS แยกตามเมนูงานจริง พร้อม payload, validation, auth และตัวอย่างทดสอบ\n\nSwagger แสดง 136 operations เพราะขยาย optional buddhistYear path อีก 9 รูปแบบเพื่อรองรับทั้ง annual point code ที่ URL-encode และ path ที่ proxy ถอดรหัสแล้ว',
   },
   servers: [{ url: env.API_PREFIX }],
   tags,
   paths,
   components,
-  'x-poms-canonical-operation-count': 126,
+  'x-poms-canonical-operation-count': 127,
 };
 
 export function countOpenApiOperations(document: OpenApiObject): number {

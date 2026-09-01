@@ -26,6 +26,15 @@ export const eligibleFactoriesService = {
     return eligibleFactoryCandidatesRepository.list(query, access);
   },
 
+  async getSourceFactory(factoryRegistrationNo: string, access?: EligibleFactoryAccessContext) {
+    const sourceFactory = await eligibleFactoryCandidatesRepository.findByRegistrationNo(
+      factoryRegistrationNo,
+      access,
+    );
+    if (!sourceFactory) throw new NotFoundError('Source factory not found');
+    return sourceFactory;
+  },
+
   async list(
     query: ListEligibleFactoriesQuery,
     access?: EligibleFactoryAccessContext,

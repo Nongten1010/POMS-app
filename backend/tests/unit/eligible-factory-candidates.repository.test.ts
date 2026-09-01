@@ -45,6 +45,7 @@ describe('eligibleFactoryCandidatesRepository', () => {
     {
       FNAME: 'โรงงานจริง 1',
       FID: 'real-1',
+      FACREG: 'fac-reg-1',
       DISPFACREG: 'real-reg-1',
       CLASS: '00100',
       FADDR: '197',
@@ -58,6 +59,7 @@ describe('eligibleFactoryCandidatesRepository', () => {
     {
       FNAME: 'โรงงานจริง 2',
       FID: 'real-2',
+      FACREG: 'fac-reg-2',
       DISPFACREG: 'real-reg-2',
       CLASS: '00100',
       PROV: 21,
@@ -79,6 +81,7 @@ describe('eligibleFactoryCandidatesRepository', () => {
         .mockResolvedValue([
           { COLUMN_NAME: 'FNAME' },
           { COLUMN_NAME: 'FID' },
+          { COLUMN_NAME: 'FACREG' },
           { COLUMN_NAME: 'DISPFACREG' },
           { COLUMN_NAME: 'CLASS' },
           { COLUMN_NAME: 'FADDR' },
@@ -112,10 +115,32 @@ describe('eligibleFactoryCandidatesRepository', () => {
         .fn<(...args: unknown[]) => Promise<Array<{ total: string | number | null }>>>()
         .mockResolvedValue([{ total: candidateRows.length }]),
     };
+    const registrationMatchQuery = {
+      where: jest.fn().mockReturnThis(),
+      orWhere: jest.fn().mockReturnThis(),
+    };
     const baseQuery = {
       clone: jest.fn().mockReturnValueOnce(countQuery).mockReturnValueOnce(facImportQuery),
       whereIn: jest.fn().mockReturnThis(),
+      whereNotIn: jest.fn().mockReturnThis(),
+      whereRaw: jest.fn().mockReturnThis(),
+      where: jest.fn((clause: unknown) => {
+        if (typeof clause === 'function') {
+          clause.call(registrationMatchQuery, registrationMatchQuery);
+        }
+        return baseQuery;
+      }),
       select: jest.fn().mockReturnThis(),
+      orderByRaw: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      timeout: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      first: jest
+        .fn<() => Promise<Record<string, unknown> | undefined>>()
+        .mockResolvedValue(candidateRows[0]),
+      then: jest.fn((resolve: (rows: Array<Record<string, unknown>>) => unknown) =>
+        Promise.resolve(resolve(candidateRows)),
+      ),
     };
     const checkEiaQuery = {
       whereIn: jest.fn().mockReturnThis(),
@@ -222,7 +247,10 @@ describe('eligibleFactoryCandidatesRepository', () => {
           { FID: 'real-2', CLASS: '00100' },
         ]),
     };
-    const provinceRowsByRegion = new Map<string, Array<{ id: string; name_th: string; region: string }>>([
+    const provinceRowsByRegion = new Map<
+      string,
+      Array<{ id: string; name_th: string; region: string }>
+    >([
       ['ภาคกลาง', [{ id: '18', name_th: 'ชัยนาท', region: 'ภาคกลาง' }]],
       ['ภาคตะวันออก', [{ id: '21', name_th: 'ระยอง', region: 'ภาคตะวันออก' }]],
     ]);
@@ -283,6 +311,7 @@ describe('eligibleFactoryCandidatesRepository', () => {
       industrialEstateQuery,
       administrativeAreaQuery,
       provinceQuery,
+      registrationMatchQuery,
     };
   }
 
@@ -379,6 +408,69 @@ describe('eligibleFactoryCandidatesRepository', () => {
     expect(result.data).toHaveLength(2);
     expect(facImportQuery.offset).not.toHaveBeenCalled();
     expect(facImportQuery.limit).not.toHaveBeenCalled();
+  });
+
+  it('finds one Fac60k row by exact FID, FACREG, or DISPFACREG within data scope without selected-factory exclusion', async () => {
+    const { baseQuery, registrationMatchQuery } = mockExternalCandidates(externalRows.slice(0, 1));
+    mockedEligibleFactoriesRepository.listActiveRegistrationNumbers.mockResolvedValue([
+      'real-reg-1',
+    ]);
+
+    const result = await eligibleFactoryCandidatesRepository.findByRegistrationNo('real-reg-1', {
+      actorUserId: 42,
+      scope: { scope: 'IN_PROVINCE', province: 'ชัยนาท', region: null },
+    });
+
+    expect(result).toMatchObject({
+      factoryName: 'โรงงานจริง 1',
+      factoryId: 'real-1',
+      factoryRegistrationNo: 'real-reg-1',
+      factoryClass: '00100',
+      factorySubclass: '00201',
+      provinceName: 'ชัยนาท',
+      operationStatus: 'แจ้งประกอบแล้ว',
+    });
+    expect(baseQuery.whereIn).toHaveBeenCalledWith('FFLAG', ['0', '1', '3']);
+    expect(baseQuery.whereIn).toHaveBeenCalledWith('PROV', ['18']);
+    expect(registrationMatchQuery.where).toHaveBeenCalledWith('FID', 'real-reg-1');
+    expect(registrationMatchQuery.orWhere).toHaveBeenCalledWith('FACREG', 'real-reg-1');
+    expect(registrationMatchQuery.orWhere).toHaveBeenCalledWith('DISPFACREG', 'real-reg-1');
+    expect(mockedEligibleFactoriesRepository.listActiveRegistrationNumbers).not.toHaveBeenCalled();
+  });
+
+  it('returns null when no Fac60k row exactly matches the registration number', async () => {
+    mockExternalCandidates([]);
+
+    await expect(
+      eligibleFactoryCandidatesRepository.findByRegistrationNo('missing-reg', {
+        actorUserId: 42,
+        scope: { scope: 'ALL' },
+      }),
+    ).resolves.toBeNull();
+  });
+
+  it('resolves identifier collisions deterministically with FID before FACREG and DISPFACREG', async () => {
+    const { baseQuery } = mockExternalCandidates(externalRows.slice(0, 1));
+
+    await eligibleFactoryCandidatesRepository.findByRegistrationNo('shared-registration', {
+      actorUserId: 42,
+      scope: { scope: 'ALL' },
+    });
+
+    expect(baseQuery.orderByRaw).toHaveBeenCalledWith(
+      'CASE WHEN ?? = ? THEN 0 WHEN ?? = ? THEN 1 WHEN ?? = ? THEN 2 ELSE 3 END',
+      [
+        'FID',
+        'shared-registration',
+        'FACREG',
+        'shared-registration',
+        'DISPFACREG',
+        'shared-registration',
+      ],
+    );
+    expect(baseQuery.orderBy).toHaveBeenNthCalledWith(1, 'FID', 'asc');
+    expect(baseQuery.orderBy).toHaveBeenNthCalledWith(2, 'FACREG', 'asc');
+    expect(baseQuery.orderBy).toHaveBeenNthCalledWith(3, 'DISPFACREG', 'asc');
   });
 
   it('filters external candidates by province scope before count and row queries', async () => {

@@ -29,6 +29,7 @@ jest.mock('../../src/modules/connection-requests/connection-requests.repository'
 jest.mock('../../src/modules/eligible-factories/eligible-factory-candidates.repository', () => ({
   eligibleFactoryCandidatesRepository: {
     list: jest.fn(),
+    findByRegistrationNo: jest.fn(),
   },
 }));
 jest.mock('../../src/modules/eligible-factories/eligible-factory-source-hydration', () => ({
@@ -409,6 +410,34 @@ describe('eligibleFactoriesService', () => {
     );
   });
 
+  it('returns one Fac60k factory by registration number and forwards read access context', async () => {
+    mockedCandidatesRepository.findByRegistrationNo.mockResolvedValue(sourceFactoryCandidate());
+    const access = {
+      actorUserId: 42,
+      scope: { scope: 'IN_PROVINCE', province: 'ระยอง', region: null } as const,
+      regionalAccess: { regions: ['ภาคตะวันออก'] },
+    };
+
+    const result = await eligibleFactoriesService.getSourceFactory('real-reg-17', access);
+
+    expect(mockedCandidatesRepository.findByRegistrationNo).toHaveBeenCalledWith(
+      'real-reg-17',
+      access,
+    );
+    expect(result).toEqual(sourceFactoryCandidate());
+  });
+
+  it('throws not found when no Fac60k factory matches the registration number and read scope', async () => {
+    mockedCandidatesRepository.findByRegistrationNo.mockResolvedValue(null);
+
+    await expect(
+      eligibleFactoriesService.getSourceFactory('missing-reg', {
+        actorUserId: 42,
+        scope: { scope: 'IN_PROVINCE', province: 'ระยอง', region: null },
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
   it('rejects create when the target factory is outside the actor access scope', async () => {
     mockedRepository.findByRegistrationNoNew.mockResolvedValue(null);
     mockedRepository.canAccessInput.mockResolvedValue(false);
@@ -653,5 +682,28 @@ function addRequestAccess() {
   return {
     view: { actorUserId: 42, scope: { scope: 'OWN_FACTORY' } as never, regionalAccess: null },
     edit: { actorUserId: 42, scope: { scope: 'OWN_FACTORY' } as never, regionalAccess: null },
+  };
+}
+
+function sourceFactoryCandidate() {
+  return {
+    factoryName: 'โรงงานจาก Fac60k',
+    factoryId: 'real-17',
+    factoryRegistrationNo: 'real-reg-17',
+    factoryClass: '00100',
+    factorySubclass: '00201',
+    address: '99 หมู่ 1 จังหวัดระยอง',
+    provinceName: 'ระยอง',
+    industrialEstateName: 'มาบตาพุด',
+    longitude: 101.2,
+    latitude: 12.7,
+    businessActivity: 'ผลิตเคมีภัณฑ์',
+    operationStatus: 'แจ้งประกอบแล้ว',
+    machineryHorsepower: 250,
+    productionCapacity: '100 ตัน/วัน',
+    boilerSizeEach: null,
+    fuelUsed: null,
+    eia: null,
+    hasEia: null,
   };
 }

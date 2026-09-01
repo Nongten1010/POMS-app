@@ -2,10 +2,12 @@ import express from 'express';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { signAccessToken } from '../../src/shared/utils/jwt';
+import { NotFoundError } from '../../src/shared/errors/AppError';
 
 jest.mock('../../src/modules/eligible-factories/eligible-factories.service', () => ({
   eligibleFactoriesService: {
     listCandidates: jest.fn(),
+    getSourceFactory: jest.fn(),
     list: jest.fn(),
     create: jest.fn(),
     listAddRequests: jest.fn(),
@@ -27,6 +29,7 @@ describe('eligible factory routes', () => {
       data: [],
       meta: { total: 0, source: 'external' },
     });
+    mockedEligibleFactoriesService.getSourceFactory.mockResolvedValue(sourceFactory());
     mockedEligibleFactoriesService.list.mockResolvedValue({
       data: [],
       meta: { total: 0 },
@@ -139,6 +142,59 @@ describe('eligible factory routes', () => {
 
     expect(response.status).toBe(403);
     expect(mockedEligibleFactoriesService.listCandidates).not.toHaveBeenCalled();
+  });
+
+  it('uses eligible_factories:view for a source-factory lookup and forwards scope details', async () => {
+    const response = await request(createEligibleFactoriesApp())
+      .get('/api/v1/eligible-factories/source-factories/%203-106-33%2F50%20')
+      .set(
+        'Authorization',
+        `Bearer ${accessToken({
+          scopes: { 'eligible_factories:view': 'IN_PROVINCE' },
+          scopeDetails: {
+            'eligible_factories:view': {
+              scope: 'IN_PROVINCE',
+              province: 'ระยอง',
+              region: null,
+            },
+          },
+        })}`,
+      );
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ success: true, data: sourceFactory() });
+    expect(mockedEligibleFactoriesService.getSourceFactory).toHaveBeenCalledWith('3-106-33/50', {
+      actorUserId: 42,
+      scope: { scope: 'IN_PROVINCE', province: 'ระยอง', region: null },
+      regionalAccess: null,
+    });
+  });
+
+  it('rejects source-factory lookups without eligible_factories:view', async () => {
+    const response = await request(createEligibleFactoriesApp())
+      .get('/api/v1/eligible-factories/source-factories/real-reg-17')
+      .set(
+        'Authorization',
+        `Bearer ${accessToken({
+          scopes: { 'eligible_factories:edit': 'ALL' },
+        })}`,
+      );
+
+    expect(response.status).toBe(403);
+    expect(mockedEligibleFactoriesService.getSourceFactory).not.toHaveBeenCalled();
+  });
+
+  it('returns 404 when a source factory does not exist or is outside the read scope', async () => {
+    mockedEligibleFactoriesService.getSourceFactory.mockRejectedValueOnce(
+      new NotFoundError('Source factory not found'),
+    );
+
+    const response = await request(createEligibleFactoriesApp())
+      .get('/api/v1/eligible-factories/source-factories/missing-reg')
+      .set('Authorization', `Bearer ${accessToken()}`);
+
+    expect(response.status).toBe(404);
+    expect(response.body).toMatchObject({ success: false, message: 'Source factory not found' });
   });
 
   it('uses eligible_factories:view for selected-factory reads', async () => {
@@ -446,6 +502,29 @@ function accessToken(overrides: Partial<Parameters<typeof signAccessToken>[0]> =
     },
     ...overrides,
   });
+}
+
+function sourceFactory() {
+  return {
+    factoryName: 'โรงงานจาก Fac60k',
+    factoryId: 'real-17',
+    factoryRegistrationNo: 'real-reg-17',
+    factoryClass: '00100',
+    factorySubclass: '00201',
+    address: '99 หมู่ 1 จังหวัดระยอง',
+    provinceName: 'ระยอง',
+    industrialEstateName: 'มาบตาพุด',
+    longitude: 101.2,
+    latitude: 12.7,
+    businessActivity: 'ผลิตเคมีภัณฑ์',
+    operationStatus: 'แจ้งประกอบแล้ว',
+    machineryHorsepower: 250,
+    productionCapacity: '100 ตัน/วัน',
+    boilerSizeEach: null,
+    fuelUsed: null,
+    eia: null,
+    hasEia: null,
+  };
 }
 
 function createEligibleFactoriesApp() {

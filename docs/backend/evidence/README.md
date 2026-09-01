@@ -30,6 +30,7 @@
 
 - [จังหวัดในที่อยู่ตั้งแต่ Candidate ถึง connected POMS](./eligible-factories/factory-address-province.tdd.md)
 - [ผู้ประกอบการแจ้งความประสงค์ขอเพิ่มโรงงานเข้าข่าย](./eligible-factories/eligible-factory-requests.tdd.md)
+- [ข้อมูลต้นทาง Fac60k รายโรงงานสำหรับ flow อนุมัติ](./eligible-factories/fac60k-source-factory-lookup.tdd.md)
 
 ## Shared operations
 

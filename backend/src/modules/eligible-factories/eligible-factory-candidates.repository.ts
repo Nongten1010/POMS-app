@@ -2,7 +2,10 @@ import type { Knex } from 'knex';
 import { logger } from '../../config/logger';
 import { env } from '../../config/env';
 import type { EligibleFactoryAccessContext } from './eligible-factories.access';
-import { applyCandidateAccessFilters, resolveCandidateAccessFilters } from './eligible-factories.access';
+import {
+  applyCandidateAccessFilters,
+  resolveCandidateAccessFilters,
+} from './eligible-factories.access';
 import { factorySourceDb, factorySourceTableName } from '../../config/factory-source-database';
 import {
   type AdministrativeAreaNames,
@@ -20,6 +23,7 @@ import type {
 const EXTERNAL_QUERY_TIMEOUT_MS = 300000;
 const BULK_LOOKUP_THRESHOLD = 5000;
 const CANDIDATE_FACTORY_FLAGS = ['0', '1', '3'];
+const REGISTRATION_LOOKUP_COLUMNS = ['FID', 'FACREG', 'DISPFACREG'] as const;
 
 export const eligibleFactoryCandidatesRepository = {
   async list(
@@ -28,7 +32,57 @@ export const eligibleFactoryCandidatesRepository = {
   ): Promise<EligibleFactoryCandidatesDTO> {
     return listExternalCandidates(query, access);
   },
+
+  async findByRegistrationNo(
+    factoryRegistrationNo: string,
+    access?: EligibleFactoryAccessContext,
+  ): Promise<EligibleFactoryCandidateDTO | null> {
+    return findExternalCandidateByRegistrationNo(factoryRegistrationNo, access);
+  },
 };
+
+async function findExternalCandidateByRegistrationNo(
+  factoryRegistrationNo: string,
+  access?: EligibleFactoryAccessContext,
+): Promise<EligibleFactoryCandidateDTO | null> {
+  const accessFilters = await resolveCandidateAccessFilters(access);
+  if (accessFilters.denyAll) return null;
+
+  const columns = await availableFacImportColumns();
+  const registrationColumns = REGISTRATION_LOOKUP_COLUMNS.filter((column) =>
+    columns.includes(column),
+  );
+  if (registrationColumns.length === 0) return null;
+
+  const rowQuery = buildFacImportBaseQuery();
+  applyActiveFactoryFilter(rowQuery, columns);
+  applyCandidateAccessFilters(rowQuery, accessFilters);
+  rowQuery.where(function exactRegistrationMatch() {
+    registrationColumns.forEach((column, index) => {
+      if (index === 0) {
+        this.where(column, factoryRegistrationNo);
+        return;
+      }
+      this.orWhere(column, factoryRegistrationNo);
+    });
+  });
+  rowQuery.orderByRaw(
+    `CASE ${registrationColumns
+      .map((_column, index) => `WHEN ?? = ? THEN ${index}`)
+      .join(' ')} ELSE ${registrationColumns.length} END`,
+    registrationColumns.flatMap((column) => [column, factoryRegistrationNo]),
+  );
+  for (const column of registrationColumns) {
+    rowQuery.orderBy(column, 'asc');
+  }
+  rowQuery.select(columns);
+
+  const row = await rowQuery.timeout(EXTERNAL_QUERY_TIMEOUT_MS).first();
+  if (!row) return null;
+
+  const candidates = await mapFacImportRows([row]);
+  return candidates[0] ?? null;
+}
 
 async function listExternalCandidates(
   query: ListEligibleFactoryCandidatesQuery,
@@ -73,6 +127,24 @@ async function listExternalCandidates(
   const rows = isPaginated
     ? await executableRowsQuery.offset((page - 1) * perPage).limit(perPage)
     : await executableRowsQuery;
+  const data = excludeSelectedCandidates(await mapFacImportRows(rows), selectedRegistrationNumbers);
+  return {
+    data,
+    meta: {
+      total,
+      source: 'external',
+      ...(isPaginated
+        ? {
+            page,
+            perPage,
+            totalPages: Math.ceil(total / perPage),
+          }
+        : {}),
+    },
+  };
+}
+
+async function mapFacImportRows(rows: FacImportRow[]): Promise<EligibleFactoryCandidateDTO[]> {
   const [
     industrialEstateNamesByCode,
     administrativeAreaNamesByCode,
@@ -92,32 +164,16 @@ async function listExternalCandidates(
           loadFactoryClassCodesByFid(rows),
           loadProductionCapacitiesByFid(rows),
         ]);
-  const data = excludeSelectedCandidates(
-    rows.map((row) =>
-      toEligibleFactoryCandidate(row, {
-        industrialEstateNamesByCode,
-        administrativeAreaNamesByCode,
-        eiaLookupSkipped: true,
-        productionCapacitiesByFid,
-        factoryClassCodesByFid,
-      }),
-    ),
-    selectedRegistrationNumbers,
+
+  return rows.map((row) =>
+    toEligibleFactoryCandidate(row, {
+      industrialEstateNamesByCode,
+      administrativeAreaNamesByCode,
+      eiaLookupSkipped: true,
+      productionCapacitiesByFid,
+      factoryClassCodesByFid,
+    }),
   );
-  return {
-    data,
-    meta: {
-      total,
-      source: 'external',
-      ...(isPaginated
-        ? {
-            page,
-            perPage,
-            totalPages: Math.ceil(total / perPage),
-          }
-        : {}),
-    },
-  };
 }
 
 async function loadAdministrativeAreaNamesByCode(
@@ -158,9 +214,24 @@ function applyCandidateFilters(
   columns: Array<keyof FacImportRow>,
   selectedRegistrationNumbers: Set<string>,
 ): void {
+  applyActiveFactoryFilter(query, columns);
+  applySelectedFactoryExclusion(query, columns, selectedRegistrationNumbers);
+}
+
+function applyActiveFactoryFilter(
+  query: Knex.QueryBuilder<FacImportRow, unknown>,
+  columns: Array<keyof FacImportRow>,
+): void {
   if (columns.includes('FFLAG')) {
     query.whereIn('FFLAG', CANDIDATE_FACTORY_FLAGS);
   }
+}
+
+function applySelectedFactoryExclusion(
+  query: Knex.QueryBuilder<FacImportRow, unknown>,
+  columns: Array<keyof FacImportRow>,
+  selectedRegistrationNumbers: Set<string>,
+): void {
   if (columns.includes('DISPFACREG') && selectedRegistrationNumbers.size > 0) {
     query.whereNotIn('DISPFACREG', [...selectedRegistrationNumbers]);
   }
@@ -254,7 +325,9 @@ async function loadFactoryClassCodesByFid(rows: FacImportRow[]): Promise<Map<str
       classRows = await loadActiveFactoryClassCodes();
     } else {
       for (const fidChunk of chunks(fids, 1000)) {
-        const chunkRows = await factorySourceDb<FactoryClassRow>(`${env.FACTORY_DB_SCHEMA}.FACCLASS`)
+        const chunkRows = await factorySourceDb<FactoryClassRow>(
+          `${env.FACTORY_DB_SCHEMA}.FACCLASS`,
+        )
           .whereIn('FID', fidChunk)
           .timeout(EXTERNAL_QUERY_TIMEOUT_MS)
           .select('FID', 'CLASS');

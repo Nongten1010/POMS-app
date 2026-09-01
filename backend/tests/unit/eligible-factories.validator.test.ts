@@ -6,6 +6,7 @@ import {
   listEligibleFactoryCandidatesQuerySchema,
   listEligibleFactoriesQuerySchema,
   reviewEligibleFactoryAddRequestSchema,
+  sourceFactoryRegistrationNoParamsSchema,
 } from '../../src/modules/eligible-factories/eligible-factories.validator';
 
 describe('eligible factories validators', () => {
@@ -144,6 +145,25 @@ describe('eligible factories validators', () => {
     });
 
     expect(result.success).toBe(false);
+  });
+
+  it('trims and accepts a source-factory registration number path parameter', () => {
+    expect(
+      sourceFactoryRegistrationNoParamsSchema.parse({
+        factoryRegistrationNo: ' 3-106-33/50สบ ',
+      }),
+    ).toEqual({ factoryRegistrationNo: '3-106-33/50สบ' });
+  });
+
+  it('rejects blank or oversized source-factory registration number path parameters', () => {
+    expect(
+      sourceFactoryRegistrationNoParamsSchema.safeParse({ factoryRegistrationNo: '   ' }).success,
+    ).toBe(false);
+    expect(
+      sourceFactoryRegistrationNoParamsSchema.safeParse({
+        factoryRegistrationNo: 'x'.repeat(65),
+      }).success,
+    ).toBe(false);
   });
 
   it('trims and accepts a valid add-factory request', () => {

@@ -28,6 +28,7 @@ curl --request GET \
 | งาน | Method | Path | Auth | Permission |
 | --- | --- | --- | --- | --- |
 | รายการ candidate | `GET` | `/api/v1/eligible-factories/candidates` | Bearer | `eligible_factories:view` |
+| ข้อมูลต้นทาง Fac60k รายโรงงาน | `GET` | `/api/v1/eligible-factories/source-factories/:factoryRegistrationNo` | Bearer | `eligible_factories:view` |
 | รายการโรงงานที่เข้าข่าย | `GET` | `/api/v1/eligible-factories` | Bearer | `eligible_factories:view` |
 | รายการคำขอเพิ่มโรงงาน | `GET` | `/api/v1/eligible-factories/add-requests` | Bearer | `eligible_factories:view` |
 | ผู้ประกอบการส่งคำขอเพิ่มโรงงาน | `POST` | `/api/v1/eligible-factories/add-requests` | Bearer | `factories:view` + `factories:edit` (ต้องมีครบ) |
@@ -45,6 +46,97 @@ curl --request GET \
 รายการและ candidate ถูกกรองตาม data scope ของผู้เรียก: `ALL`, `IN_REGION`, `IN_PROVINCE`, `IN_ESTATE`, `OWN_FACTORY` หรือ `FACTORY_TYPE_88` โดย `FACTORY_TYPE_88` เทียบรหัสประเภทโรงงานหลักที่ normalize เป็น `00088`; `IN_REGION` หา region จาก province master และ intersect กับ `regionalAccess`; ถ้าไม่มี qualifier ที่ต้องใช้หรือ qualifier ขัดกัน ระบบคืนผลลัพธ์ว่าง/`404` แบบ fail closed. การเพิ่มและลบตรวจ scope เดียวกันก่อนเปลี่ยนข้อมูล.
 
 Candidate จาก Fac60k รับเฉพาะแถวที่ `fac_import.FFLAG` เป็น `0`, `1` หรือ `3`; ไม่รวมสถานะ `2`. Mapping สถานะโรงงานคือ `0` = `ยังไม่แจ้งประกอบ`, `1` = `แจ้งประกอบแล้ว`, `2` = `จำหน่ายทะเบียน` และ `3` = `หยุดชั่วคราว`.
+
+## ข้อมูลต้นทาง Fac60k รายโรงงาน
+
+### `GET /api/v1/eligible-factories/source-factories/:factoryRegistrationNo`
+
+Endpoint แบบ read-only สำหรับ flow ที่ไม่ได้เริ่มจากการคลิกแถวในตาราง candidate เช่น เจ้าหน้าที่กดอนุมัติคำขอเพิ่มโรงงาน แล้วต้องเติมข้อมูลโรงงานชุดเดียวกับตอนเลือกโรงงานเข้าข่ายจากตาราง Fac60k ก่อนทำ action ถัดไป. Endpoint นี้ไม่อนุมัติคำขอและไม่แก้ข้อมูลใด ๆ.
+
+- Authentication: required
+- Permission: `eligible_factories:view`
+- Request body และ query: ไม่มี
+
+Path fields:
+
+| Field | Location | Type | Required | Rules |
+| --- | --- | --- | --- | --- |
+| `factoryRegistrationNo` | path | string | yes | URL decode แล้ว trim, ความยาว 1–64 ตัวอักษร; lookup แบบ exact match กับ `fac_import.FID`, `fac_import.FACREG` หรือ `fac_import.DISPFACREG` |
+
+เลขทะเบียนที่มี `/` ต้อง URL-encode path segment ก่อนส่ง เช่น `3-106-33/50สบ` ต้องใช้ `/source-factories/3-106-33%2F50%E0%B8%AA%E0%B8%9A`. ฝั่ง JavaScript ควรประกอบ path ด้วย `encodeURIComponent(factoryRegistrationNo)`.
+
+```bash
+curl --request GET \
+  --url '<BASE_URL>/api/v1/eligible-factories/source-factories/3-106-33%2F50%E0%B8%AA%E0%B8%9A' \
+  --header 'Authorization: Bearer <ACCESS_TOKEN>'
+```
+
+Lookup ใช้กติกาต้นทางเดียวกับ candidate: รับเฉพาะ `FFLAG` `0`, `1` หรือ `3` และกรองตาม data scope ของ `eligible_factories:view`. การค้นหาเป็น exact lookup เท่านั้น ไม่ใช่ partial search; หากค่าเดียวกันชนข้ามหลายคอลัมน์ ระบบเลือกตามลำดับ `FID` → `FACREG` → `DISPFACREG` และใช้ identifier เหล่านี้เรียงซ้ำเพื่อให้ผล deterministic. ระบบตั้งใจไม่ใช้กติกา exclude โรงงานที่มี active row ใน `eligible_factories` แล้ว จึงยังคืนข้อมูลต้นทางได้เมื่อโรงงานถูกเลือกเข้าข่ายไปก่อนหน้า.
+
+Success response เป็น candidate row เดียวใน `data` โดยใช้ชื่อ field และ semantics เดียวกับ `data[]` ของ `GET /api/v1/eligible-factories/candidates`:
+
+| Field | Type | Required | Nullable | Meaning |
+| --- | --- | --- | --- | --- |
+| `data.factoryName` | string | yes | no | ชื่อโรงงานจาก Fac60k |
+| `data.factoryId` | string | yes | no | source identifier: `FID` แล้ว fallback เป็น `FACREG` หรือ `DISPFACREG`; candidate UI ปัจจุบันใช้เป็นเลขทะเบียนแบบใหม่ |
+| `data.factoryRegistrationNo` | string | yes | no | เลขทะเบียนสำหรับแสดง: `DISPFACREG` แล้ว fallback เป็น `FACREG` หรือ `factoryId`; candidate UI ปัจจุบันใช้เป็นเลขทะเบียนแบบเดิม |
+| `data.factoryClass` | string | yes | yes | รหัสประเภทโรงงานหลัก |
+| `data.factorySubclass` | string | yes | yes | รหัสประเภทโรงงานรอง |
+| `data.address` | string | yes | yes | ที่อยู่โรงงานที่ประกอบจากข้อมูลต้นทาง |
+| `data.provinceName` | string | yes | no | จังหวัดสำหรับแสดงผลและตรวจ scope |
+| `data.industrialEstateName` | string | yes | yes | ชื่อนิคมอุตสาหกรรม |
+| `data.longitude` | number | yes | yes | ลองจิจูดโรงงาน |
+| `data.latitude` | number | yes | yes | ละติจูดโรงงาน |
+| `data.businessActivity` | string | yes | yes | การประกอบกิจการ |
+| `data.operationStatus` | string | yes | no | สถานะที่ map จาก `FFLAG` |
+| `data.capitalAmount` | number | no | yes | เงินทุนเมื่อมีข้อมูล |
+| `data.machineryHorsepower` | number | yes | yes | กำลังเครื่องจักรรวม |
+| `data.productionCapacity` | string | yes | yes | กำลังการผลิตพร้อมหน่วยเมื่อมีข้อมูล |
+| `data.wastewaterDischargeInfo` | string | no | yes | ข้อมูลการระบายน้ำทิ้งเมื่อมีข้อมูล |
+| `data.boilerCount` | integer | no | yes | จำนวนหม้อน้ำเมื่อมีข้อมูล |
+| `data.boilerSizeEach` | string | yes | yes | ขนาดหม้อน้ำรายลูกเมื่อมีข้อมูล |
+| `data.fuelUsed` | string | yes | yes | เชื้อเพลิงที่ใช้เมื่อมีข้อมูล |
+| `data.eia` | string enum | no | yes | `มี`, `ไม่มี`, `มี IEE`, `มี EIA`, `มี EHIA` หรือ `อื่นๆ`; อาจเป็น `null` เมื่อไม่ได้อ่านแหล่ง EIA |
+| `data.eiaOther` | string | no | yes | รายละเอียดเมื่อ `eia` เป็น `อื่นๆ` |
+| `data.projectName` | string | no | yes | ชื่อโครงการเมื่อมีข้อมูล |
+| `data.hasEia` | boolean | yes | yes | สถานะ EIA ตาม candidate mapping; อาจเป็น `null` เมื่อยืนยันไม่ได้ |
+
+Minimal response (`200 OK`):
+
+```json
+{
+  "success": true,
+  "data": {
+    "factoryName": "บริษัท โรงงานตัวอย่าง จำกัด",
+    "factoryId": "10120000325542",
+    "factoryRegistrationNo": "3-106-33/50สบ",
+    "factoryClass": "00100",
+    "factorySubclass": "00201",
+    "address": "99 หมู่ 1 ตำบลมาบตาพุด อำเภอเมืองระยอง จังหวัดระยอง 21150",
+    "provinceName": "ระยอง",
+    "industrialEstateName": "มาบตาพุด",
+    "longitude": 101.2,
+    "latitude": 12.7,
+    "businessActivity": "ผลิตเคมีภัณฑ์",
+    "operationStatus": "แจ้งประกอบแล้ว",
+    "machineryHorsepower": 250,
+    "productionCapacity": "100 ตัน/วัน",
+    "boilerSizeEach": null,
+    "fuelUsed": null,
+    "eia": null,
+    "hasEia": null
+  }
+}
+```
+
+Errors ใช้ [shared error envelope](../../shared/README.md):
+
+| HTTP status | Condition | Client action |
+| --- | --- | --- |
+| `400` | `factoryRegistrationNo` หลัง URL decode/trim ว่างหรือยาวเกิน 64 ตัวอักษร | ตรวจการ encode และค่าเลขทะเบียนก่อนส่งใหม่ |
+| `401` | ไม่มี access token ที่ใช้งานได้ | ให้ผู้ใช้ login ใหม่ |
+| `403` | ไม่มี `eligible_factories:view` | ปิด action และแจ้งว่าสิทธิ์ไม่พอ |
+| `404` | ไม่มีแถวที่ exact match, `FFLAG` ไม่ใช่ `0`/`1`/`3` หรือโรงงานอยู่นอก data scope | แจ้งว่าไม่พบข้อมูลที่เข้าถึงได้ โดยไม่แยกสาเหตุเรื่อง scope |
 
 ## คำขอเพิ่มโรงงาน
 
@@ -648,7 +740,7 @@ Minimal request: ไม่มี request body.
 | Validators | [`eligible-factories.validator.ts`](../../../../../backend/src/modules/eligible-factories/eligible-factories.validator.ts), [`monitoring-point-forms.validator.ts`](../../../../../backend/src/modules/monitoring-point-forms/monitoring-point-forms.validator.ts) |
 | Attachment lifecycle | [`monitoring-point-form-attachments.service.ts`](../../../../../backend/src/modules/monitoring-point-forms/monitoring-point-form-attachments.service.ts), [`monitoring-point-attachment-cleanup.worker.ts`](../../../../../backend/src/modules/monitoring-point-forms/monitoring-point-attachment-cleanup.worker.ts), [`monitoring-point-attachments.ts`](../../../../../backend/src/modules/monitoring-point-forms/monitoring-point-attachments.ts) |
 | Schema | [`0104_create_eligible_factory_add_requests.ts`](../../../../../backend/src/db/migrations/0104_create_eligible_factory_add_requests.ts), [`0091_create_factory_monitoring_point_attachments.ts`](../../../../../backend/src/db/migrations/0091_create_factory_monitoring_point_attachments.ts) |
-| Repository | [`eligible-factories.repository.ts`](../../../../../backend/src/modules/eligible-factories/eligible-factories.repository.ts), [`monitoring-point-forms.repository.ts`](../../../../../backend/src/modules/monitoring-point-forms/monitoring-point-forms.repository.ts) |
+| Repository | [`eligible-factories.repository.ts`](../../../../../backend/src/modules/eligible-factories/eligible-factories.repository.ts), [`eligible-factory-candidates.repository.ts`](../../../../../backend/src/modules/eligible-factories/eligible-factory-candidates.repository.ts), [`monitoring-point-forms.repository.ts`](../../../../../backend/src/modules/monitoring-point-forms/monitoring-point-forms.repository.ts) |
 | Public types | [`eligible-factories.types.ts`](../../../../../backend/src/modules/eligible-factories/eligible-factories.types.ts), [`monitoring-point-forms.types.ts`](../../../../../backend/src/modules/monitoring-point-forms/monitoring-point-forms.types.ts) |
-| Tests | [`eligible-factories.route.test.ts`](../../../../../backend/tests/unit/eligible-factories.route.test.ts), [`eligible-factories.service.test.ts`](../../../../../backend/tests/unit/eligible-factories.service.test.ts), [`eligible-factory-add-requests-migration.test.ts`](../../../../../backend/tests/unit/eligible-factory-add-requests-migration.test.ts), [`api-docs.openapi.test.ts`](../../../../../backend/tests/unit/api-docs.openapi.test.ts), [`monitoring-point-form-attachment-upload.route.test.ts`](../../../../../backend/tests/unit/monitoring-point-form-attachment-upload.route.test.ts), [`monitoring-point-form-attachments.service.test.ts`](../../../../../backend/tests/unit/monitoring-point-form-attachments.service.test.ts), [`monitoring-point-attachment-cleanup.worker.test.ts`](../../../../../backend/tests/unit/monitoring-point-attachment-cleanup.worker.test.ts), [`monitoring-point-attachments-migration.test.ts`](../../../../../backend/tests/unit/monitoring-point-attachments-migration.test.ts), [`monitoring-point-forms.attachment-reconciliation.test.ts`](../../../../../backend/tests/unit/monitoring-point-forms.attachment-reconciliation.test.ts), [`monitoring-point-forms.validator.test.ts`](../../../../../backend/tests/unit/monitoring-point-forms.validator.test.ts), [`monitoring-point-forms.repository.test.ts`](../../../../../backend/tests/unit/monitoring-point-forms.repository.test.ts), [`monitoring-point-forms.service.test.ts`](../../../../../backend/tests/unit/monitoring-point-forms.service.test.ts), [`monitoring-point-forms.route.test.ts`](../../../../../backend/tests/unit/monitoring-point-forms.route.test.ts) |
-| Evidence | [คำขอเพิ่มโรงงานเข้าข่าย](../../../evidence/eligible-factories/eligible-factory-requests.tdd.md) |
+| Tests | [`eligible-factories.route.test.ts`](../../../../../backend/tests/unit/eligible-factories.route.test.ts), [`eligible-factories.service.test.ts`](../../../../../backend/tests/unit/eligible-factories.service.test.ts), [`eligible-factory-candidates.repository.test.ts`](../../../../../backend/tests/unit/eligible-factory-candidates.repository.test.ts), [`eligible-factory-add-requests-migration.test.ts`](../../../../../backend/tests/unit/eligible-factory-add-requests-migration.test.ts), [`api-docs.openapi.test.ts`](../../../../../backend/tests/unit/api-docs.openapi.test.ts), [`monitoring-point-form-attachment-upload.route.test.ts`](../../../../../backend/tests/unit/monitoring-point-form-attachment-upload.route.test.ts), [`monitoring-point-form-attachments.service.test.ts`](../../../../../backend/tests/unit/monitoring-point-form-attachments.service.test.ts), [`monitoring-point-attachment-cleanup.worker.test.ts`](../../../../../backend/tests/unit/monitoring-point-attachment-cleanup.worker.test.ts), [`monitoring-point-attachments-migration.test.ts`](../../../../../backend/tests/unit/monitoring-point-attachments-migration.test.ts), [`monitoring-point-forms.attachment-reconciliation.test.ts`](../../../../../backend/tests/unit/monitoring-point-forms.attachment-reconciliation.test.ts), [`monitoring-point-forms.validator.test.ts`](../../../../../backend/tests/unit/monitoring-point-forms.validator.test.ts), [`monitoring-point-forms.repository.test.ts`](../../../../../backend/tests/unit/monitoring-point-forms.repository.test.ts), [`monitoring-point-forms.service.test.ts`](../../../../../backend/tests/unit/monitoring-point-forms.service.test.ts), [`monitoring-point-forms.route.test.ts`](../../../../../backend/tests/unit/monitoring-point-forms.route.test.ts) |
+| Evidence | [คำขอเพิ่มโรงงานเข้าข่าย](../../../evidence/eligible-factories/eligible-factory-requests.tdd.md), [ข้อมูลต้นทาง Fac60k รายโรงงานสำหรับ flow อนุมัติ](../../../evidence/eligible-factories/fac60k-source-factory-lookup.tdd.md) |

@@ -489,7 +489,7 @@ describe('POMS OpenAPI contract', () => {
     }
   });
 
-  it('covers all 126 canonical registry endpoints plus 9 annual testing variants', () => {
+  it('covers all 127 canonical registry endpoints plus 9 annual testing variants', () => {
     const document = asObject(pomsOpenApiDocument, 'OpenAPI document');
     const paths = asObject(document.paths, 'paths');
     const documentedOperations: string[] = [];
@@ -503,13 +503,13 @@ describe('POMS OpenAPI contract', () => {
     }
 
     const registryOperations = readEndpointRegistryOperations();
-    expect(registryOperations).toHaveLength(126);
+    expect(registryOperations).toHaveLength(127);
     expect(documentedOperations.sort()).toEqual(
       [...registryOperations, ...annualTestingVariants].sort(),
     );
     expect(pomsOpenApiStats).toEqual({
-      canonicalOperationCount: 126,
-      operationCount: 135,
+      canonicalOperationCount: 127,
+      operationCount: 136,
       tagCount: 11,
     });
   });
@@ -929,6 +929,93 @@ describe('POMS OpenAPI contract', () => {
     );
     expect(operatorRowProperties).toHaveProperty('eligibilityRequest');
     expect(operatorRowProperties).toHaveProperty('canRequestEligibility');
+  });
+
+  it('documents the Fac60k source-factory lookup path, permission, and response schema', () => {
+    const document = asObject(pomsOpenApiDocument, 'OpenAPI document');
+    const paths = asObject(document.paths, 'paths');
+    const schemas = asObject(asObject(document.components, 'components').schemas, 'schemas');
+    const operation = asObject(
+      asObject(
+        paths['/eligible-factories/source-factories/{factoryRegistrationNo}'],
+        'source factory lookup',
+      ).get,
+      'GET source factory lookup',
+    );
+
+    expect(operation.operationId).toBe('getEligibleFactorySourceFactory');
+    expect(operation['x-poms-permissions']).toEqual(['eligible_factories:view']);
+    expect(operation['x-poms-permission-mode']).toBe('any');
+
+    const parameters = operation.parameters as JsonObject[];
+    const registrationNoParameter = asObject(
+      parameters.find((parameter) => parameter.name === 'factoryRegistrationNo'),
+      'factoryRegistrationNo path parameter',
+    );
+    expect(registrationNoParameter).toMatchObject({
+      name: 'factoryRegistrationNo',
+      in: 'path',
+      required: true,
+    });
+    expect(asObject(registrationNoParameter.schema, 'factoryRegistrationNo schema')).toMatchObject({
+      type: 'string',
+      minLength: 1,
+      maxLength: 64,
+    });
+
+    const responses = asObject(operation.responses, 'source factory lookup responses');
+    expect(responses['404']).toBeDefined();
+    const successSchema = asObject(
+      asObject(
+        asObject(asObject(responses['200'], 'source factory 200').content, '200 content')[
+          'application/json'
+        ],
+        '200 application/json',
+      ).schema,
+      'source factory response schema',
+    );
+    expect(successSchema.$ref).toBe('#/components/schemas/EligibleFactoryCandidateResponse');
+
+    const responseProperties = asObject(
+      asObject(schemas.EligibleFactoryCandidateResponse, 'EligibleFactoryCandidateResponse')
+        .properties,
+      'EligibleFactoryCandidateResponse.properties',
+    );
+    expect(asObject(responseProperties.data, 'EligibleFactoryCandidateResponse.data').$ref).toBe(
+      '#/components/schemas/EligibleFactoryCandidate',
+    );
+
+    const candidate = asObject(schemas.EligibleFactoryCandidate, 'EligibleFactoryCandidate');
+    expect(candidate.required).toEqual(
+      expect.arrayContaining([
+        'factoryName',
+        'factoryId',
+        'factoryRegistrationNo',
+        'factoryClass',
+        'factorySubclass',
+        'address',
+        'provinceName',
+        'industrialEstateName',
+        'longitude',
+        'latitude',
+        'businessActivity',
+        'operationStatus',
+        'hasEia',
+      ]),
+    );
+    const candidateProperties = asObject(
+      candidate.properties,
+      'EligibleFactoryCandidate.properties',
+    );
+    expect(candidateProperties).toEqual(
+      expect.objectContaining({
+        factoryRegistrationNo: expect.objectContaining({ type: 'string', maxLength: 64 }),
+        factoryClass: expect.objectContaining({ type: 'string', nullable: true }),
+        factorySubclass: expect.objectContaining({ type: 'string', nullable: true }),
+        operationStatus: expect.objectContaining({ type: 'string' }),
+        hasEia: expect.objectContaining({ type: 'boolean', nullable: true }),
+      }),
+    );
   });
 
   it('documents every bearer operation with its runtime permission requirement', () => {

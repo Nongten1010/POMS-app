@@ -13,6 +13,11 @@ eligibleFactoriesRoutes.get(
   eligibleFactoriesController.listCandidates,
 );
 eligibleFactoriesRoutes.get(
+  '/source-factories/:factoryRegistrationNo',
+  authorize('eligible_factories:view'),
+  eligibleFactoriesController.getSourceFactory,
+);
+eligibleFactoriesRoutes.get(
   '/',
   authorize('eligible_factories:view'),
   eligibleFactoriesController.list,

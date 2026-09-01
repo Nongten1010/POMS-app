@@ -11,6 +11,7 @@ import {
   listEligibleFactoriesQuerySchema,
   listEligibleFactoryAddRequestsQuerySchema,
   reviewEligibleFactoryAddRequestSchema,
+  sourceFactoryRegistrationNoParamsSchema,
 } from './eligible-factories.validator';
 import { eligibleFactoriesService } from './eligible-factories.service';
 import type { EligibleFactoryAccessContext } from './eligible-factories.access';
@@ -26,6 +27,19 @@ export const eligibleFactoriesController = {
         buildAccessContext(req, 'eligible_factories:view'),
       );
       res.status(StatusCodes.OK).json({ success: true, ...result });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async getSourceFactory(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { factoryRegistrationNo } = sourceFactoryRegistrationNoParamsSchema.parse(req.params);
+      const data = await eligibleFactoriesService.getSourceFactory(
+        factoryRegistrationNo,
+        buildAccessContext(req, 'eligible_factories:view'),
+      );
+      res.status(StatusCodes.OK).json({ success: true, data });
     } catch (err) {
       next(err);
     }
