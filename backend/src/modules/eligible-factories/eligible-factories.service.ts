@@ -7,11 +7,11 @@ import type {
   CreateEligibleFactoryInput,
   EligibleFactoryDTO,
   EligibleFactoryAddRequestDTO,
+  EligibleFactoryAddRequestsDTO,
   ListEligibleFactoryCandidatesQuery,
   ListEligibleFactoryAddRequestsQuery,
   ListEligibleFactoriesQuery,
   PaginatedEligibleFactoriesDTO,
-  PaginatedEligibleFactoryAddRequestsDTO,
   ReviewEligibleFactoryAddRequestInput,
   SelectedEligibleFactoryDTO,
 } from './eligible-factories.types';
@@ -46,16 +46,11 @@ export const eligibleFactoriesService = {
   async listAddRequests(
     query: ListEligibleFactoryAddRequestsQuery,
     access?: EligibleFactoryAccessContext,
-  ): Promise<PaginatedEligibleFactoryAddRequestsDTO> {
+  ): Promise<EligibleFactoryAddRequestsDTO> {
     const { rows, total } = await eligibleFactoriesRepository.listAddRequests(query, access);
     return {
       data: rows,
-      meta: {
-        total,
-        page: query.page,
-        perPage: query.perPage,
-        totalPages: total === 0 ? 0 : Math.ceil(total / query.perPage),
-      },
+      meta: { total },
     };
   },
 

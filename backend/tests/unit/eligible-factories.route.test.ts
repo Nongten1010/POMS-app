@@ -1,6 +1,7 @@
 import express from 'express';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { ZodError } from 'zod';
 import { signAccessToken } from '../../src/shared/utils/jwt';
 import { NotFoundError } from '../../src/shared/errors/AppError';
 
@@ -36,7 +37,7 @@ describe('eligible factory routes', () => {
     });
     mockedEligibleFactoriesService.listAddRequests.mockResolvedValue({
       data: [],
-      meta: { total: 0, page: 1, perPage: 25, totalPages: 0 },
+      meta: { total: 0 },
     });
     mockedEligibleFactoriesService.create.mockResolvedValue({
       id: 17,
@@ -97,7 +98,7 @@ describe('eligible factory routes', () => {
       reviewedBy: 7,
       reviewedAt: '2026-08-10T01:00:00.000Z',
       reviewNote: null,
-      eligibleFactoryId: 17,
+      eligibleFactoryId: null,
     } as never);
     mockedEligibleFactoriesService.remove.mockResolvedValue(undefined);
   });
@@ -225,7 +226,7 @@ describe('eligible factory routes', () => {
     );
   });
 
-  it('uses eligible_factories:view for pending add-factory request reads', async () => {
+  it('uses eligible_factories:view to read add-factory requests from every status', async () => {
     mockedEligibleFactoriesService.listAddRequests.mockResolvedValueOnce({
       data: [
         {
@@ -245,13 +246,11 @@ describe('eligible factory routes', () => {
           eligibleFactoryId: null,
         },
       ],
-      meta: { total: 1, page: 2, perPage: 10, totalPages: 1 },
+      meta: { total: 1 },
     });
 
     const response = await request(createEligibleFactoriesApp())
-      .get(
-        '/api/v1/eligible-factories/add-requests?status=PENDING_REVIEW&search=CEMS&page=2&perPage=10',
-      )
+      .get('/api/v1/eligible-factories/add-requests?search=CEMS')
       .set(
         'Authorization',
         `Bearer ${accessToken({
@@ -268,7 +267,7 @@ describe('eligible factory routes', () => {
 
     expect(response.status).toBe(200);
     expect(mockedEligibleFactoriesService.listAddRequests).toHaveBeenCalledWith(
-      { status: 'PENDING_REVIEW', search: 'CEMS', page: 2, perPage: 10 },
+      { search: 'CEMS' },
       {
         actorUserId: 42,
         scope: { scope: 'IN_PROVINCE', province: 'น่าน', region: null },
@@ -283,6 +282,16 @@ describe('eligible factory routes', () => {
         status: 'PENDING_REVIEW',
       }),
     );
+    expect(response.body.meta).toEqual({ total: 1 });
+  });
+
+  it('rejects legacy add-request status and pagination query params at the route boundary', async () => {
+    const response = await request(createEligibleFactoriesApp())
+      .get('/api/v1/eligible-factories/add-requests?status=PENDING_REVIEW&page=1&perPage=20')
+      .set('Authorization', `Bearer ${accessToken()}`);
+
+    expect(response.status).toBe(400);
+    expect(mockedEligibleFactoriesService.listAddRequests).not.toHaveBeenCalled();
   });
 
   it('uses eligible_factories:edit for create mutations', async () => {
@@ -449,6 +458,12 @@ describe('eligible factory routes', () => {
         approve: { actorUserId: 42, scope: { scope: 'ALL' }, regionalAccess: null },
       },
     );
+    expect(response.body.data).toEqual(
+      expect.objectContaining({
+        status: 'APPROVED',
+        eligibleFactoryId: null,
+      }),
+    );
   });
 
   it('rejects review when eligible_factories:view is missing', async () => {
@@ -538,6 +553,16 @@ function createEligibleFactoriesApp() {
       res: express.Response,
       _next: express.NextFunction,
     ) => {
+      if (err instanceof ZodError) {
+        res.status(400).json({
+          success: false,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Request validation failed',
+          },
+        });
+        return;
+      }
       res.status(err.statusCode ?? err.status ?? 500).json({
         success: false,
         message: err.message,

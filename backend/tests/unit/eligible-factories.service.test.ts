@@ -602,14 +602,38 @@ describe('eligibleFactoriesService', () => {
     ).rejects.toBeInstanceOf(ConflictError);
   });
 
-  it('passes both access scopes to atomic approval review', async () => {
+  it('lists add-factory requests without status or pagination metadata', async () => {
+    const approved = {
+      ...pendingAddRequest(),
+      status: 'APPROVED' as const,
+      statusLabel: 'อนุมัติแล้ว',
+      reviewedBy: 7,
+      reviewedAt: '2026-08-10T01:00:00.000Z',
+    };
+    mockedRepository.listAddRequests.mockResolvedValue({
+      rows: [pendingAddRequest(), approved],
+      total: 2,
+    });
+    const access = {
+      actorUserId: 7,
+      scope: { scope: 'ALL' } as never,
+      regionalAccess: null,
+    };
+
+    const result = await eligibleFactoriesService.listAddRequests({ search: 'โรงงาน' }, access);
+
+    expect(mockedRepository.listAddRequests).toHaveBeenCalledWith({ search: 'โรงงาน' }, access);
+    expect(result).toEqual({ data: [pendingAddRequest(), approved], meta: { total: 2 } });
+  });
+
+  it('passes both access scopes to a status-only approval review', async () => {
     mockedRepository.reviewAddRequest.mockResolvedValue({
       ...pendingAddRequest(),
       status: 'APPROVED',
       statusLabel: 'อนุมัติแล้ว',
       reviewedBy: 7,
       reviewedAt: '2026-08-10T01:00:00.000Z',
-      eligibleFactoryId: 17,
+      eligibleFactoryId: null,
     });
     const access = {
       view: { actorUserId: 7, scope: { scope: 'ALL' } as never, regionalAccess: null },
@@ -630,6 +654,7 @@ describe('eligibleFactoriesService', () => {
       [access.view, access.approve],
     );
     expect(result.status).toBe('APPROVED');
+    expect(result.eligibleFactoryId).toBeNull();
   });
 });
 

@@ -10,8 +10,8 @@
 ## User journeys
 
 1. ผู้ประกอบการส่ง `factoryId` และ `reason` เพื่อแจ้งความประสงค์ให้โรงงานที่ตนมีสิทธิ์เข้าสู่การพิจารณา
-2. เจ้าหน้าที่อ่านคิวแบบ scoped, filter/search และ pagination ได้
-3. เจ้าหน้าที่อนุมัติหรือปฏิเสธคำขอที่ยัง `PENDING_REVIEW`; การอนุมัติสร้างหรือ restore `eligible_factories` แบบ atomic
+2. เจ้าหน้าที่อ่านคำขอทุกสถานะแบบ scoped ใน response เดียว และใช้ optional `search` ได้โดยไม่มี status filter หรือ pagination
+3. เจ้าหน้าที่อนุมัติหรือปฏิเสธคำขอที่ยัง `PENDING_REVIEW`; ทั้งสอง action เปลี่ยนเฉพาะ request state และ audit fields โดยไม่สร้าง ไม่ restore และไม่แก้ไข `eligible_factories`
 4. หน้า `ขอเชื่อมต่อ` อ่านสถานะคำขอค้างจาก response แล้วไม่แสดงปุ่มส่งซ้ำ
 
 ## TDD guarantees
@@ -19,11 +19,11 @@
 | What is guaranteed | Test target |
 | --- | --- |
 | Submit route ต้องมี `factories:view` และ `factories:edit`, รับเฉพาะ operator และ validate body แบบ strict | `backend/tests/unit/eligible-factories.route.test.ts` |
-| List route ใช้ `eligible_factories:view`, default `PENDING_REVIEW` และส่ง pagination/scope ให้ service | `backend/tests/unit/eligible-factories.route.test.ts` |
+| List route ใช้ `eligible_factories:view`, strict query รับเฉพาะ optional `search` และส่ง scope ให้ service เพื่อคืนทุกสถานะโดยไม่แบ่งหน้า | `backend/tests/unit/eligible-factories.route.test.ts` |
 | Review route ต้องมี `eligible_factories:view` และ `eligible_factories:approve`; REJECT บังคับ `officerNote` | `backend/tests/unit/eligible-factories.route.test.ts`, `backend/tests/unit/eligible-factories.service.test.ts` |
 | Service ตรวจ owner scope, active eligible, open request ซ้ำ, self-review และ terminal state | `backend/tests/unit/eligible-factories.service.test.ts` |
-| APPROVE link eligible row และ request state ใน transaction เดียว; REJECT ปิด request โดยไม่สร้าง eligible row | `backend/tests/unit/eligible-factories.service.test.ts`, repository tests ที่เกี่ยวข้อง |
-| Migration บังคับสถานะ `PENDING_REVIEW`, `APPROVED`, `REJECTED` และหนึ่ง open request ต่อ factory master | `backend/tests/unit/eligible-factory-add-requests-migration.test.ts` |
+| APPROVE เปลี่ยนสถานะเป็น `APPROVED`; REJECT เปลี่ยนเป็น `REJECTED`; ทั้งสองบันทึก `reviewedBy`, `reviewedAt`, `reviewNote` และไม่เขียน `eligible_factories`; repository regression ล็อก query แบบไม่ filter สถานะ/ไม่ paginate และการ approve แบบ status-only | `backend/tests/unit/eligible-factories.service.test.ts`, `backend/tests/unit/eligible-factory-add-requests.repository-regression.test.ts` |
+| Migration `0104_create_eligible_factory_add_requests` บังคับสถานะและหนึ่ง open request ต่อ factory master; `0105_allow_status_only_eligible_factory_add_request_approval` อนุญาต `APPROVED` ที่ไม่มี `eligible_factory_id` โดยยังอ่าน legacy link ได้ | `backend/tests/unit/eligible-factory-add-requests-migration.test.ts` |
 | Operator factory list คืน `eligibilityRequest`/`canRequestEligibility` ครบทุก row และไม่ใช้ field legacy | `backend/tests/unit/connection-requests.operator-factories.route.test.ts`, `backend/tests/unit/connection-requests.operator-factories.repository.test.ts` |
 | OpenAPI paths, request examples, permissions, response schemas และ endpoint count ตรง runtime/registry | `backend/tests/unit/api-docs.openapi.test.ts` |
 
@@ -34,6 +34,7 @@
 ```bash
 npm test -- --runInBand \
   tests/unit/eligible-factory-add-requests-migration.test.ts \
+  tests/unit/eligible-factory-add-requests.repository-regression.test.ts \
   tests/unit/eligible-factories.route.test.ts \
   tests/unit/eligible-factories.service.test.ts \
   tests/unit/connection-requests.operator-factories.repository.test.ts \
@@ -47,4 +48,4 @@ npm run typecheck
 
 ## Scope note
 
-งาน contract รอบนี้ไม่แก้ `frontend/`; client ต้อง wire ปุ่ม `แจ้งความประสงค์`, modal เหตุผล และตาราง `ขอเพิ่มโรงงาน` เข้ากับ endpoints ข้างต้นในงาน frontend แยกต่างหาก
+งาน contract รอบนี้ไม่แก้ `frontend/`; client ต้องหยุดส่ง `status`, `page`, `perPage`, แสดงข้อมูลทุกสถานะจาก response เดียว และรองรับ `eligibleFactoryId = null` สำหรับคำขอที่อนุมัติใหม่ในงาน frontend แยกต่างหาก

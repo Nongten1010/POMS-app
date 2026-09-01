@@ -1259,15 +1259,28 @@ const componentSchemas: Record<string, OpenApiObject> = {
     },
   },
   ReviewEligibleFactoryAddRequest: {
-    type: 'object',
-    additionalProperties: false,
-    required: ['decision'],
-    properties: {
-      decision: { type: 'string', enum: ['APPROVE', 'REJECT'] },
-      officerNote: { type: 'string', minLength: 1, maxLength: 1000, nullable: true },
-    },
+    oneOf: [
+      {
+        type: 'object',
+        additionalProperties: false,
+        required: ['decision'],
+        properties: {
+          decision: { type: 'string', enum: ['APPROVE'] },
+          officerNote: { type: 'string', minLength: 1, maxLength: 1000, nullable: true },
+        },
+      },
+      {
+        type: 'object',
+        additionalProperties: false,
+        required: ['decision', 'officerNote'],
+        properties: {
+          decision: { type: 'string', enum: ['REJECT'] },
+          officerNote: { type: 'string', minLength: 1, maxLength: 1000 },
+        },
+      },
+    ],
     description:
-      'officerNote ต้องมีข้อความเมื่อ decision เป็น REJECT; APPROVE ส่ง null หรือละ field ได้',
+      'officerNote ต้องมีข้อความเมื่อ decision เป็น REJECT; APPROVE ส่ง null หรือละ field ได้ ทั้งสอง decision เปลี่ยนเฉพาะสถานะคำขอและบันทึกข้อมูลการพิจารณา โดยไม่สร้าง ไม่ restore และไม่แก้ไข eligible_factories',
   },
   EligibleFactoryAddRequest: {
     type: 'object',
@@ -1305,7 +1318,13 @@ const componentSchemas: Record<string, OpenApiObject> = {
         },
       },
       statusLabel: { type: 'string', enum: ['รอพิจารณา', 'อนุมัติแล้ว', 'ไม่อนุมัติ'] },
-      eligibleFactoryId: { type: 'integer', minimum: 1, nullable: true },
+      eligibleFactoryId: {
+        type: 'integer',
+        minimum: 1,
+        nullable: true,
+        description:
+          'คำขอที่อนุมัติใหม่คืน null เพราะ review ไม่สร้าง ไม่ restore และไม่แก้ไข eligible_factories; ข้อมูลประวัติเดิมอาจยังมี id ที่เคย link ไว้',
+      },
       submittedBy: { type: 'integer', minimum: 1 },
       submittedAt: { type: 'string', format: 'date-time' },
       reviewedBy: { type: 'integer', minimum: 1, nullable: true },
@@ -1335,12 +1354,9 @@ const componentSchemas: Record<string, OpenApiObject> = {
       meta: {
         type: 'object',
         additionalProperties: false,
-        required: ['total', 'page', 'perPage', 'totalPages'],
+        required: ['total'],
         properties: {
           total: { type: 'integer', minimum: 0 },
-          page: { type: 'integer', minimum: 1 },
-          perPage: { type: 'integer', minimum: 1, maximum: 200 },
-          totalPages: { type: 'integer', minimum: 0 },
         },
       },
     },
@@ -3861,15 +3877,8 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'List eligible-factory add requests',
       operationId: 'listEligibleFactoryAddRequests',
       description:
-        'Permission: eligible_factories:view. คืนคำขอตาม data scope โดย default status เป็น PENDING_REVIEW และเรียง submittedAt DESC, id DESC',
+        'Permission: eligible_factories:view. คืนคำขอทุกสถานะตาม data scope โดยไม่แบ่งหน้า รองรับเฉพาะ optional search และเรียง submittedAt DESC, id DESC; query status, page และ perPage ไม่อยู่ใน contract และถูกปฏิเสธด้วย 400',
       parameters: [
-        queryEnum(
-          'status',
-          ['PENDING_REVIEW', 'APPROVED', 'REJECTED'],
-          'กรองสถานะคำขอ',
-          false,
-          'PENDING_REVIEW',
-        ),
         {
           name: 'search',
           in: 'query',
@@ -3877,9 +3886,8 @@ const extraPaths: Record<string, OpenApiObject> = {
           description: 'ค้นหาชื่อโรงงานหรือเลขทะเบียนโรงงาน',
           schema: { type: 'string', minLength: 1, maxLength: 200 },
         },
-        queryInteger('page', 'เลขหน้า', false, 1, undefined, 1),
-        queryInteger('perPage', 'จำนวนรายการต่อหน้า', false, 1, 200, 25),
       ],
+      successDescription: 'คืนคำขอทุกสถานะที่อยู่ใน data scope โดยไม่แบ่งหน้า',
       successSchema: schemaRef('EligibleFactoryAddRequestListResponse'),
     }),
     post: securedOperation({
@@ -3906,7 +3914,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Review an eligible-factory add request',
       operationId: 'reviewEligibleFactoryAddRequest',
       description:
-        'Permission (ต้องมีครบ): eligible_factories:view + eligible_factories:approve. APPROVE เพิ่มหรือ restore โรงงานเข้าข่ายแบบ atomic; REJECT ต้องระบุ officerNote',
+        'Permission (ต้องมีครบ): eligible_factories:view + eligible_factories:approve. APPROVE และ REJECT เปลี่ยนเฉพาะสถานะคำขอพร้อมบันทึก reviewedBy, reviewedAt และ reviewNote โดยไม่สร้าง ไม่ restore และไม่แก้ไข eligible_factories; REJECT ต้องระบุ officerNote',
       parameters: [idParameter],
       requestBody: jsonRequestBody(
         schemaRef('ReviewEligibleFactoryAddRequest'),

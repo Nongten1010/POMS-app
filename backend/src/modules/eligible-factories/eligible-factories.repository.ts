@@ -25,7 +25,6 @@ import type {
 } from './eligible-factories.types';
 import { ELIGIBLE_FACTORY_ADD_REQUEST_STATUS_LABELS } from './eligible-factories.types';
 import { assertEligibleFactoryAddRequestReviewable } from './eligible-factory-add-request-state';
-import { isMssqlUniqueConstraintError } from './eligible-factory-add-request-errors';
 import { hydrateEligibleFactoriesFromSource } from './eligible-factory-source-hydration';
 
 interface EligibleFactoryRow {
@@ -188,11 +187,10 @@ export const eligibleFactoriesRepository = {
     input: CreateEligibleFactoryInput,
     actorUserId: number,
     trx?: Knex.Transaction,
-    options?: { reviewingAddRequestId?: number },
   ): Promise<EligibleFactoryDTO> {
-    if (trx) return createEligibleFactoryRecord(trx, input, actorUserId, options);
+    if (trx) return createEligibleFactoryRecord(trx, input, actorUserId);
     return db.transaction((transaction) =>
-      createEligibleFactoryRecord(transaction, input, actorUserId, options),
+      createEligibleFactoryRecord(transaction, input, actorUserId),
     );
   },
 
@@ -201,25 +199,10 @@ export const eligibleFactoriesRepository = {
     access?: EligibleFactoryAccessContext,
   ): Promise<{ rows: EligibleFactoryAddRequestDTO[]; total: number }> {
     const filters = await resolveSelectedFactoryAccessFilters(access);
-    const baseQuery = buildEligibleFactoryAddRequestsBaseQuery(
-      [filters],
-      access?.actorUserId,
-    ).where('ef.status', query.status);
+    const baseQuery = buildEligibleFactoryAddRequestsBaseQuery([filters], access?.actorUserId);
     applyEligibleFactoryAddRequestSearch(baseQuery, query.search);
-    const totalRow = await baseQuery
-      .clone()
-      .clearSelect()
-      .clearOrder()
-      .count<{ total: number | string }>('ef.id as total')
-      .first();
-    const total = Number(totalRow?.total ?? 0);
-    const rows = await baseQuery
-      .clone()
-      .orderBy('ef.submitted_at', 'desc')
-      .orderBy('ef.id', 'desc')
-      .offset((query.page - 1) * query.perPage)
-      .limit(query.perPage);
-    return { rows: rows.map(toAddRequestDTO), total };
+    const rows = await baseQuery.orderBy('ef.submitted_at', 'desc').orderBy('ef.id', 'desc');
+    return { rows: rows.map(toAddRequestDTO), total: rows.length };
   },
 
   async findAddRequestById(
@@ -344,90 +327,47 @@ export const eligibleFactoriesRepository = {
     accesses: EligibleFactoryAccessContext[],
   ): Promise<EligibleFactoryAddRequestDTO | null> {
     const filters = await Promise.all(accesses.map(resolveSelectedFactoryAccessFilters));
-    try {
-      return await db.transaction(async (trx) => {
-        const visible = await buildEligibleFactoryAddRequestsBaseQuery(filters, actorUserId, trx)
-          .clearSelect()
-          .where('ef.id', requestId)
-          .first('ef.id', 'ef.factory_master_id');
-        if (!visible) return null;
+    return db.transaction(async (trx) => {
+      const visible = await buildEligibleFactoryAddRequestsBaseQuery(filters, actorUserId, trx)
+        .clearSelect()
+        .where('ef.id', requestId)
+        .first('ef.id');
+      if (!visible) return null;
 
-        if (input.decision === 'APPROVE') {
-          const factoryMaster = await trx('factories')
-            .where('id', Number(visible.factory_master_id))
-            .whereNull('deleted_at')
-            .forUpdate()
-            .first('id');
-          if (!factoryMaster) {
-            throw new ConflictError(
-              'Factory is no longer active and cannot be selected as eligible',
-            );
-          }
-        }
+      const lockedRow = await trx<EligibleFactoryAddRequestRow>('eligible_factory_add_requests')
+        .where('id', requestId)
+        .whereNull('deleted_at')
+        .forUpdate()
+        .first();
+      if (!lockedRow) return null;
+      const request = toAddRequestRecordDTO(lockedRow);
 
-        const lockedRow = await trx<EligibleFactoryAddRequestRow>('eligible_factory_add_requests')
-          .where('id', requestId)
-          .whereNull('deleted_at')
-          .forUpdate()
-          .first();
-        if (!lockedRow) return null;
-        const request = toAddRequestRecordDTO(lockedRow);
+      assertEligibleFactoryAddRequestReviewable(request, Boolean(lockedRow.is_open), actorUserId);
 
-        assertEligibleFactoryAddRequestReviewable(request, Boolean(lockedRow.is_open), actorUserId);
-
-        let eligibleFactoryId: number | null = null;
-        if (input.decision === 'APPROVE') {
-          const selected = await this.findByRegistrationNoNew(
-            request.requestedFactory.factoryRegistrationNoNew,
-            trx,
-          );
-          if (selected) {
-            eligibleFactoryId = selected.id;
-          } else {
-            const eligibleFactory = await this.create(
-              { ...request.requestedFactory, selectedReason: request.reason },
-              actorUserId,
-              trx,
-              { reviewingAddRequestId: requestId },
-            );
-            eligibleFactoryId = eligibleFactory.id;
-          }
-        }
-
-        const nextStatus = input.decision === 'APPROVE' ? 'APPROVED' : 'REJECTED';
-        const affected = await trx('eligible_factory_add_requests')
-          .where('id', requestId)
-          .where('status', 'PENDING_REVIEW')
-          .where('is_open', true)
-          .whereNull('deleted_at')
-          .update({
-            status: nextStatus,
-            is_open: false,
-            eligible_factory_id: eligibleFactoryId,
-            reviewed_by: actorUserId,
-            reviewed_at: trx.fn.now(),
-            officer_note: input.officerNote ?? null,
-            updated_by: actorUserId,
-            updated_at: trx.fn.now(),
-          });
-        if (affected !== 1) {
-          throw new ConflictError(
-            'Eligible factory add request changed while it was being reviewed',
-          );
-        }
-
-        const updated = await this.findAddRequestById(requestId, trx);
-        if (!updated) throw new Error('Reviewed eligible factory add request could not be loaded');
-        return updated;
-      });
-    } catch (error) {
-      if (isMssqlUniqueConstraintError(error)) {
-        throw new ConflictError(
-          'Factory eligibility changed while the add request was being reviewed; retry the review',
-        );
+      const nextStatus = input.decision === 'APPROVE' ? 'APPROVED' : 'REJECTED';
+      const affected = await trx('eligible_factory_add_requests')
+        .where('id', requestId)
+        .where('status', 'PENDING_REVIEW')
+        .where('is_open', true)
+        .whereNull('deleted_at')
+        .update({
+          status: nextStatus,
+          is_open: false,
+          eligible_factory_id: null,
+          reviewed_by: actorUserId,
+          reviewed_at: trx.fn.now(),
+          officer_note: input.officerNote ?? null,
+          updated_by: actorUserId,
+          updated_at: trx.fn.now(),
+        });
+      if (affected !== 1) {
+        throw new ConflictError('Eligible factory add request changed while it was being reviewed');
       }
-      throw error;
-    }
+
+      const updated = await this.findAddRequestById(requestId, trx);
+      if (!updated) throw new Error('Reviewed eligible factory add request could not be loaded');
+      return updated;
+    });
   },
 
   async findById(id: number, trx?: Knex.Transaction): Promise<EligibleFactoryDTO | null> {
@@ -737,7 +677,6 @@ async function createEligibleFactoryRecord(
   trx: Knex.Transaction,
   input: CreateEligibleFactoryInput,
   actorUserId: number,
-  options?: { reviewingAddRequestId?: number },
 ): Promise<EligibleFactoryDTO> {
   const factoryMaster = await lockFactoryMasterForEligibleInput(trx, input);
   if (factoryMaster) {
@@ -745,7 +684,7 @@ async function createEligibleFactoryRecord(
       factoryMaster.id,
       trx,
     );
-    if (openRequest && openRequest.id !== options?.reviewingAddRequestId) {
+    if (openRequest) {
       throw new ConflictError(
         'Factory has a pending add-factory request; review that request before selecting it directly',
         { requestId: openRequest.id },

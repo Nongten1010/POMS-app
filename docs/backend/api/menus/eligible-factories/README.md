@@ -140,7 +140,7 @@ Errors ใช้ [shared error envelope](../../shared/README.md):
 
 ## คำขอเพิ่มโรงงาน
 
-Flow นี้รองรับกรณีหน้า `ขอเชื่อมต่อ` แสดงโรงงานที่ `isEligible = false` และปุ่ม `แจ้งความประสงค์` ถูกกดจากแถวของผู้ประกอบการ เมื่อส่งสำเร็จ ข้อมูลจะยังไม่เข้า `eligible_factories` ทันที แต่จะไปอยู่ในรายการ `ขอเพิ่มโรงงาน` เพื่อให้เจ้าหน้าที่เลือกเข้าข่ายต่อ
+Flow นี้รองรับกรณีหน้า `ขอเชื่อมต่อ` แสดงโรงงานที่ `isEligible = false` และปุ่ม `แจ้งความประสงค์` ถูกกดจากแถวของผู้ประกอบการ เมื่อส่งสำเร็จ ข้อมูลจะไม่เข้า `eligible_factories` แต่จะไปอยู่ในรายการ `ขอเพิ่มโรงงาน` เพื่อให้เจ้าหน้าที่พิจารณาสถานะคำขอ โดยขั้นตอนเพิ่มโรงงานเข้าข่ายเป็นคนละ action กับการ review คำขอ
 
 ```text
 PENDING_REVIEW ── APPROVE ──> APPROVED
@@ -210,20 +210,19 @@ Business rules:
 - Authentication: required
 - Permission: `eligible_factories:view`
 
-Endpoint นี้ใช้เติมแท็บ `ขอเพิ่มโรงงาน` ของหน้า `โรงงานที่เข้าข่าย` และกรองผลตาม data scope เดียวกับเมนูโรงงานเข้าข่าย รายการเรียง `submittedAt DESC, id DESC`
+Endpoint นี้ใช้เติมแท็บ `ขอเพิ่มโรงงาน` ของหน้า `โรงงานที่เข้าข่าย` และกรองผลตาม data scope เดียวกับเมนูโรงงานเข้าข่าย ระบบคืนคำขอทุกสถานะใน response เดียวโดยไม่แบ่งหน้า และเรียง `submittedAt DESC, id DESC`
 
 Query fields:
 
 | Field | Type | Required | Default | Rules |
 | --- | --- | --- | --- | --- |
-| `status` | string enum | no | `PENDING_REVIEW` | `PENDING_REVIEW`, `APPROVED` หรือ `REJECTED` |
 | `search` | string | no | - | trim, 1–200 ตัวอักษร; ค้นชื่อหรือเลขทะเบียนโรงงาน |
-| `page` | integer | no | `1` | ตั้งแต่ 1 ขึ้นไป |
-| `perPage` | integer | no | `25` | 1–200 |
+
+Query `status`, `page` และ `perPage` ไม่อยู่ใน contract แล้ว เนื่องจาก validator เป็นแบบ strict การส่ง field เหล่านี้จะได้ `400 VALIDATION_ERROR`
 
 ```bash
 curl --request GET \
-  --url '<BASE_URL>/api/v1/eligible-factories/add-requests?status=PENDING_REVIEW&page=1&perPage=25' \
+  --url '<BASE_URL>/api/v1/eligible-factories/add-requests' \
   --header 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
@@ -239,16 +238,13 @@ Primary response fields:
 | `data[].reason` | string | no | เหตุผลจากผู้ประกอบการ |
 | `data[].status` | string enum | no | `PENDING_REVIEW`, `APPROVED` หรือ `REJECTED` |
 | `data[].statusLabel` | string | no | `รอพิจารณา`, `อนุมัติแล้ว` หรือ `ไม่อนุมัติ` |
-| `data[].eligibleFactoryId` | integer | yes | id ที่ link ไป `eligible_factories` หลังอนุมัติ |
+| `data[].eligibleFactoryId` | integer | yes | คำขอที่อนุมัติใหม่เป็น `null` เพราะ review ไม่เพิ่มโรงงานเข้าข่าย; ข้อมูลประวัติเดิมอาจยังมี id ที่เคย link ไป `eligible_factories` |
 | `data[].submittedBy` | integer | no | user id ผู้ส่งคำขอ |
 | `data[].submittedAt` | ISO 8601 string | no | เวลาส่งคำขอ |
 | `data[].reviewedBy` | integer | yes | user id ผู้พิจารณา |
 | `data[].reviewedAt` | ISO 8601 string | yes | เวลาพิจารณา |
 | `data[].reviewNote` | string | yes | หมายเหตุจาก `officerNote` ตอนพิจารณา |
-| `meta.total` | integer | no | จำนวนผลลัพธ์ทั้งหมดหลัง filter/scope |
-| `meta.page` | integer | no | หน้าปัจจุบัน |
-| `meta.perPage` | integer | no | จำนวนรายการต่อหน้า |
-| `meta.totalPages` | integer | no | จำนวนหน้าทั้งหมด; เป็น `0` เมื่อไม่มีข้อมูล |
+| `meta.total` | integer | no | จำนวนผลลัพธ์ทั้งหมดหลัง search และ data scope; เท่ากับจำนวนสมาชิกใน `data` |
 
 Minimal response (`200 OK`):
 
@@ -274,10 +270,7 @@ Minimal response (`200 OK`):
     }
   ],
   "meta": {
-    "total": 1,
-    "page": 1,
-    "perPage": 25,
-    "totalPages": 1
+    "total": 1
   }
 }
 ```
@@ -306,7 +299,9 @@ curl --request POST \
   }'
 ```
 
-เมื่ออนุมัติ ระบบอ่าน snapshot ที่บันทึกในคำขอแล้วสร้างหรือ restore `eligible_factories`, คัดลอก `reason` ไป `selectedReason`, link `eligibleFactoryId` และเปลี่ยนสถานะเป็น `APPROVED` ภายใน transaction เดียว เมื่อปฏิเสธระบบเปลี่ยนสถานะเป็น `REJECTED` และเก็บ `officerNote` ใน response field `reviewNote`
+เมื่ออนุมัติ ระบบเปลี่ยนสถานะคำขอเป็น `APPROVED` และบันทึก `reviewedBy`, `reviewedAt` กับ `reviewNote` เท่านั้น โดยไม่สร้าง ไม่ restore และไม่แก้ไขแถวใน `eligible_factories` และ `eligibleFactoryId` ของคำขอที่อนุมัติใหม่จึงเป็น `null` เมื่อปฏิเสธ ระบบเปลี่ยนสถานะเป็น `REJECTED` และบันทึก audit fields ชุดเดียวกัน โดยเก็บ `officerNote` ใน response field `reviewNote`
+
+ข้อมูลคำขอประวัติเดิมที่เคยอนุมัติด้วย contract รุ่นก่อนอาจยังมี `eligibleFactoryId` เป็น integer ได้ Client ต้องรองรับทั้ง `null` และ legacy id โดยไม่ตีความว่าการ review รุ่นปัจจุบันสร้างโรงงานเข้าข่ายแล้ว
 
 Minimal response (`200 OK`):
 
@@ -322,7 +317,7 @@ Minimal response (`200 OK`):
     "reason": "มีคำขอเชื่อมต่อระบบ CEMS",
     "status": "APPROVED",
     "statusLabel": "อนุมัติแล้ว",
-    "eligibleFactoryId": 87,
+    "eligibleFactoryId": null,
     "submittedBy": 42,
     "submittedAt": "2026-08-31T10:00:00.000Z",
     "reviewedBy": 9,
@@ -338,7 +333,7 @@ Errors ของ flow ใช้ [shared error envelope](../../shared/README.md):
 
 | HTTP status | Condition | Client action |
 | --- | --- | --- |
-| `400` | body/query/path ไม่ผ่าน validation เช่น reason ว่าง, `perPage` เกิน 200 หรือ REJECT โดยไม่มี `officerNote` | แก้ค่าตาม field rules แล้วส่งใหม่ |
+| `400` | body/query/path ไม่ผ่าน validation เช่น reason ว่าง, ส่ง query legacy `status`/`page`/`perPage` หรือ REJECT โดยไม่มี `officerNote` | แก้ค่าตาม field rules แล้วส่งใหม่ |
 | `401` | ไม่มี access token ที่ใช้งานได้ | ให้ผู้ใช้ login ใหม่ |
 | `403` | ไม่มี permission, ผู้ส่งไม่ใช่ operator หรือพยายามพิจารณาคำขอตัวเอง | ปิด action และแจ้งว่าสิทธิ์ไม่พอ |
 | `404` | ไม่พบโรงงาน/คำขอภายใน data scope | reload รายการโดยไม่เปิดเผยข้อมูลนอก scope |
@@ -739,8 +734,8 @@ Minimal request: ไม่มี request body.
 | Workflow implementation | [`eligible-factories.controller.ts`](../../../../../backend/src/modules/eligible-factories/eligible-factories.controller.ts), [`eligible-factories.service.ts`](../../../../../backend/src/modules/eligible-factories/eligible-factories.service.ts) |
 | Validators | [`eligible-factories.validator.ts`](../../../../../backend/src/modules/eligible-factories/eligible-factories.validator.ts), [`monitoring-point-forms.validator.ts`](../../../../../backend/src/modules/monitoring-point-forms/monitoring-point-forms.validator.ts) |
 | Attachment lifecycle | [`monitoring-point-form-attachments.service.ts`](../../../../../backend/src/modules/monitoring-point-forms/monitoring-point-form-attachments.service.ts), [`monitoring-point-attachment-cleanup.worker.ts`](../../../../../backend/src/modules/monitoring-point-forms/monitoring-point-attachment-cleanup.worker.ts), [`monitoring-point-attachments.ts`](../../../../../backend/src/modules/monitoring-point-forms/monitoring-point-attachments.ts) |
-| Schema | [`0104_create_eligible_factory_add_requests.ts`](../../../../../backend/src/db/migrations/0104_create_eligible_factory_add_requests.ts), [`0091_create_factory_monitoring_point_attachments.ts`](../../../../../backend/src/db/migrations/0091_create_factory_monitoring_point_attachments.ts) |
+| Schema | [`0104_create_eligible_factory_add_requests.ts`](../../../../../backend/src/db/migrations/0104_create_eligible_factory_add_requests.ts), [`0105_allow_status_only_eligible_factory_add_request_approval.ts`](../../../../../backend/src/db/migrations/0105_allow_status_only_eligible_factory_add_request_approval.ts), [`0091_create_factory_monitoring_point_attachments.ts`](../../../../../backend/src/db/migrations/0091_create_factory_monitoring_point_attachments.ts) |
 | Repository | [`eligible-factories.repository.ts`](../../../../../backend/src/modules/eligible-factories/eligible-factories.repository.ts), [`eligible-factory-candidates.repository.ts`](../../../../../backend/src/modules/eligible-factories/eligible-factory-candidates.repository.ts), [`monitoring-point-forms.repository.ts`](../../../../../backend/src/modules/monitoring-point-forms/monitoring-point-forms.repository.ts) |
 | Public types | [`eligible-factories.types.ts`](../../../../../backend/src/modules/eligible-factories/eligible-factories.types.ts), [`monitoring-point-forms.types.ts`](../../../../../backend/src/modules/monitoring-point-forms/monitoring-point-forms.types.ts) |
-| Tests | [`eligible-factories.route.test.ts`](../../../../../backend/tests/unit/eligible-factories.route.test.ts), [`eligible-factories.service.test.ts`](../../../../../backend/tests/unit/eligible-factories.service.test.ts), [`eligible-factory-candidates.repository.test.ts`](../../../../../backend/tests/unit/eligible-factory-candidates.repository.test.ts), [`eligible-factory-add-requests-migration.test.ts`](../../../../../backend/tests/unit/eligible-factory-add-requests-migration.test.ts), [`api-docs.openapi.test.ts`](../../../../../backend/tests/unit/api-docs.openapi.test.ts), [`monitoring-point-form-attachment-upload.route.test.ts`](../../../../../backend/tests/unit/monitoring-point-form-attachment-upload.route.test.ts), [`monitoring-point-form-attachments.service.test.ts`](../../../../../backend/tests/unit/monitoring-point-form-attachments.service.test.ts), [`monitoring-point-attachment-cleanup.worker.test.ts`](../../../../../backend/tests/unit/monitoring-point-attachment-cleanup.worker.test.ts), [`monitoring-point-attachments-migration.test.ts`](../../../../../backend/tests/unit/monitoring-point-attachments-migration.test.ts), [`monitoring-point-forms.attachment-reconciliation.test.ts`](../../../../../backend/tests/unit/monitoring-point-forms.attachment-reconciliation.test.ts), [`monitoring-point-forms.validator.test.ts`](../../../../../backend/tests/unit/monitoring-point-forms.validator.test.ts), [`monitoring-point-forms.repository.test.ts`](../../../../../backend/tests/unit/monitoring-point-forms.repository.test.ts), [`monitoring-point-forms.service.test.ts`](../../../../../backend/tests/unit/monitoring-point-forms.service.test.ts), [`monitoring-point-forms.route.test.ts`](../../../../../backend/tests/unit/monitoring-point-forms.route.test.ts) |
+| Tests | [`eligible-factories.route.test.ts`](../../../../../backend/tests/unit/eligible-factories.route.test.ts), [`eligible-factories.service.test.ts`](../../../../../backend/tests/unit/eligible-factories.service.test.ts), [`eligible-factory-add-requests.repository-regression.test.ts`](../../../../../backend/tests/unit/eligible-factory-add-requests.repository-regression.test.ts), [`eligible-factory-candidates.repository.test.ts`](../../../../../backend/tests/unit/eligible-factory-candidates.repository.test.ts), [`eligible-factory-add-requests-migration.test.ts`](../../../../../backend/tests/unit/eligible-factory-add-requests-migration.test.ts), [`api-docs.openapi.test.ts`](../../../../../backend/tests/unit/api-docs.openapi.test.ts), [`monitoring-point-form-attachment-upload.route.test.ts`](../../../../../backend/tests/unit/monitoring-point-form-attachment-upload.route.test.ts), [`monitoring-point-form-attachments.service.test.ts`](../../../../../backend/tests/unit/monitoring-point-form-attachments.service.test.ts), [`monitoring-point-attachment-cleanup.worker.test.ts`](../../../../../backend/tests/unit/monitoring-point-attachment-cleanup.worker.test.ts), [`monitoring-point-attachments-migration.test.ts`](../../../../../backend/tests/unit/monitoring-point-attachments-migration.test.ts), [`monitoring-point-forms.attachment-reconciliation.test.ts`](../../../../../backend/tests/unit/monitoring-point-forms.attachment-reconciliation.test.ts), [`monitoring-point-forms.validator.test.ts`](../../../../../backend/tests/unit/monitoring-point-forms.validator.test.ts), [`monitoring-point-forms.repository.test.ts`](../../../../../backend/tests/unit/monitoring-point-forms.repository.test.ts), [`monitoring-point-forms.service.test.ts`](../../../../../backend/tests/unit/monitoring-point-forms.service.test.ts), [`monitoring-point-forms.route.test.ts`](../../../../../backend/tests/unit/monitoring-point-forms.route.test.ts) |
 | Evidence | [คำขอเพิ่มโรงงานเข้าข่าย](../../../evidence/eligible-factories/eligible-factory-requests.tdd.md), [ข้อมูลต้นทาง Fac60k รายโรงงานสำหรับ flow อนุมัติ](../../../evidence/eligible-factories/fac60k-source-factory-lookup.tdd.md) |

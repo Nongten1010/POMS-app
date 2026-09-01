@@ -65,10 +65,7 @@ export interface CreateEligibleFactoryAddRequestInput {
 }
 
 export interface ListEligibleFactoryAddRequestsQuery {
-  status: EligibleFactoryAddRequestStatus;
   search?: string;
-  page: number;
-  perPage: number;
 }
 
 export type EligibleFactoryAddRequestReviewDecision = 'APPROVE' | 'REJECT';
@@ -217,13 +214,10 @@ export interface EligibleFactoryAddRequestRecordDTO extends EligibleFactoryAddRe
   requestedFactory: CreateEligibleFactoryInput;
 }
 
-export interface PaginatedEligibleFactoryAddRequestsDTO {
+export interface EligibleFactoryAddRequestsDTO {
   data: EligibleFactoryAddRequestDTO[];
   meta: {
     total: number;
-    page: number;
-    perPage: number;
-    totalPages: number;
   };
 }
 

@@ -73,10 +73,7 @@ export const createEligibleFactoryAddRequestSchema = z
 export const listEligibleFactoriesQuerySchema = z.object({}).strict();
 export const listEligibleFactoryAddRequestsQuerySchema = z
   .object({
-    status: z.enum(['PENDING_REVIEW', 'APPROVED', 'REJECTED']).default('PENDING_REVIEW'),
     search: z.string().trim().min(1).max(200).optional(),
-    page: z.coerce.number().int().min(1).default(1),
-    perPage: z.coerce.number().int().min(1).max(200).default(25),
   })
   .strict();
 

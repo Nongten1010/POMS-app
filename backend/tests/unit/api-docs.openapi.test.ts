@@ -836,54 +836,49 @@ describe('POMS OpenAPI contract', () => {
     );
     const listOperation = asObject(addRequests.get, 'GET add requests');
     const listParameters = listOperation.parameters as JsonObject[];
-    const statusSchema = asObject(
-      asObject(
-        listParameters.find((parameter) => parameter.name === 'status'),
-        'status parameter',
-      ).schema,
-      'status schema',
-    );
-    const pageSchema = asObject(
-      asObject(
-        listParameters.find((parameter) => parameter.name === 'page'),
-        'page parameter',
-      ).schema,
-      'page schema',
-    );
-    const searchSchema = asObject(
-      asObject(
-        listParameters.find((parameter) => parameter.name === 'search'),
-        'search parameter',
-      ).schema,
-      'search schema',
-    );
-    const perPageSchema = asObject(
-      asObject(
-        listParameters.find((parameter) => parameter.name === 'perPage'),
-        'perPage parameter',
-      ).schema,
-      'perPage schema',
+    expect(listParameters.map((parameter) => parameter.name)).toEqual(['search']);
+    const searchParameter = asObject(listParameters[0], 'search parameter');
+    const searchSchema = asObject(searchParameter.schema, 'search schema');
+    expect(searchParameter).toMatchObject({ name: 'search', in: 'query', required: false });
+    expect(searchSchema).toMatchObject({ minLength: 1, maxLength: 200 });
+    expect(listOperation.description).toEqual(expect.stringContaining('คืนคำขอทุกสถานะ'));
+    expect(listOperation.description).toEqual(expect.stringContaining('โดยไม่แบ่งหน้า'));
+    expect(listOperation.description).toEqual(
+      expect.stringContaining('status, page และ perPage ไม่อยู่ใน contract'),
     );
 
-    expect(statusSchema).toMatchObject({
-      enum: ['PENDING_REVIEW', 'APPROVED', 'REJECTED'],
-      default: 'PENDING_REVIEW',
-    });
-    expect(searchSchema).toMatchObject({ minLength: 1, maxLength: 200 });
-    expect(pageSchema).toMatchObject({ minimum: 1, default: 1 });
-    expect(perPageSchema).toMatchObject({ minimum: 1, maximum: 200, default: 25 });
+    const listResponse = asObject(
+      schemas.EligibleFactoryAddRequestListResponse,
+      'EligibleFactoryAddRequestListResponse',
+    );
+    const listResponseProperties = asObject(
+      listResponse.properties,
+      'EligibleFactoryAddRequestListResponse.properties',
+    );
+    const listMeta = asObject(
+      listResponseProperties.meta,
+      'EligibleFactoryAddRequestListResponse.meta',
+    );
+    const listMetaProperties = asObject(
+      listMeta.properties,
+      'EligibleFactoryAddRequestListResponse.meta.properties',
+    );
+    expect(listMeta.additionalProperties).toBe(false);
+    expect(listMeta.required).toEqual(['total']);
+    expect(Object.keys(listMetaProperties)).toEqual(['total']);
+    expect(listMetaProperties.total).toEqual(
+      expect.objectContaining({ type: 'integer', minimum: 0 }),
+    );
 
     const createResponses = asObject(
       asObject(addRequests.post, 'POST add requests').responses,
       'POST add request responses',
     );
-    const reviewResponses = asObject(
-      asObject(
-        asObject(paths['/eligible-factories/add-requests/{id}/review'], 'review add request').post,
-        'POST review add request',
-      ).responses,
-      'POST review responses',
+    const reviewOperation = asObject(
+      asObject(paths['/eligible-factories/add-requests/{id}/review'], 'review add request').post,
+      'POST review add request',
     );
+    const reviewResponses = asObject(reviewOperation.responses, 'POST review responses');
     expect(createResponses['201']).toBeDefined();
     expect(createResponses['409']).toBeDefined();
     expect(reviewResponses['200']).toBeDefined();
@@ -898,6 +893,51 @@ describe('POMS OpenAPI contract', () => {
     );
     expect(addRequestProperties).toHaveProperty('reviewNote');
     expect(addRequestProperties).not.toHaveProperty('officerNote');
+    const eligibleFactoryIdSchema = asObject(
+      addRequestProperties.eligibleFactoryId,
+      'eligibleFactoryId',
+    );
+    expect(eligibleFactoryIdSchema).toEqual(
+      expect.objectContaining({ type: 'integer', minimum: 1, nullable: true }),
+    );
+    expect(eligibleFactoryIdSchema.description).toEqual(
+      expect.stringContaining('คำขอที่อนุมัติใหม่คืน null'),
+    );
+    expect(eligibleFactoryIdSchema.description).toEqual(
+      expect.stringContaining('ข้อมูลประวัติเดิมอาจยังมี id'),
+    );
+
+    const reviewSchema = asObject(
+      schemas.ReviewEligibleFactoryAddRequest,
+      'ReviewEligibleFactoryAddRequest',
+    );
+    const reviewBranches = reviewSchema.oneOf as JsonObject[];
+    expect(reviewBranches).toHaveLength(2);
+    const approveBranch = asObject(reviewBranches[0], 'ReviewEligibleFactoryAddRequest.APPROVE');
+    const approveProperties = asObject(
+      approveBranch.properties,
+      'ReviewEligibleFactoryAddRequest.APPROVE.properties',
+    );
+    const rejectBranch = asObject(reviewBranches[1], 'ReviewEligibleFactoryAddRequest.REJECT');
+    const rejectProperties = asObject(
+      rejectBranch.properties,
+      'ReviewEligibleFactoryAddRequest.REJECT.properties',
+    );
+    expect(asObject(approveProperties.decision, 'APPROVE decision').enum).toEqual(['APPROVE']);
+    expect(approveBranch.required).toEqual(['decision']);
+    expect(asObject(approveProperties.officerNote, 'APPROVE officerNote')).toEqual(
+      expect.objectContaining({ minLength: 1, maxLength: 1000, nullable: true }),
+    );
+    expect(asObject(rejectProperties.decision, 'REJECT decision').enum).toEqual(['REJECT']);
+    expect(rejectBranch.required).toEqual(['decision', 'officerNote']);
+    expect(asObject(rejectProperties.officerNote, 'REJECT officerNote')).toEqual(
+      expect.objectContaining({ minLength: 1, maxLength: 1000 }),
+    );
+    expect(asObject(rejectProperties.officerNote, 'REJECT officerNote').nullable).toBeUndefined();
+    expect(reviewOperation.description).toEqual(expect.stringContaining('เปลี่ยนเฉพาะสถานะคำขอ'));
+    expect(reviewOperation.description).toEqual(
+      expect.stringContaining('โดยไม่สร้าง ไม่ restore และไม่แก้ไข eligible_factories'),
+    );
 
     const operatorFactories = asObject(
       asObject(

@@ -190,20 +190,22 @@ describe('eligible factories validators', () => {
     ).toBe(false);
   });
 
-  it('applies stable add-request list defaults and parses filters', () => {
-    expect(listEligibleFactoryAddRequestsQuerySchema.parse({})).toEqual({
-      status: 'PENDING_REVIEW',
-      page: 1,
-      perPage: 25,
-    });
+  it('accepts only an optional trimmed search for add-request lists', () => {
+    expect(listEligibleFactoryAddRequestsQuerySchema.parse({})).toEqual({});
     expect(
       listEligibleFactoryAddRequestsQuerySchema.parse({
-        status: 'REJECTED',
         search: ' โรงงาน A ',
-        page: '2',
-        perPage: '50',
       }),
-    ).toEqual({ status: 'REJECTED', search: 'โรงงาน A', page: 2, perPage: 50 });
+    ).toEqual({ search: 'โรงงาน A' });
+  });
+
+  it('rejects removed add-request status and pagination filters', () => {
+    expect(
+      listEligibleFactoryAddRequestsQuerySchema.safeParse({ status: 'PENDING_REVIEW' }).success,
+    ).toBe(false);
+    expect(
+      listEligibleFactoryAddRequestsQuerySchema.safeParse({ page: '1', perPage: '20' }).success,
+    ).toBe(false);
   });
 
   it('requires a nonblank officer note for rejection', () => {

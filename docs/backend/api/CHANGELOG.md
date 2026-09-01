@@ -2,6 +2,14 @@
 
 ไฟล์นี้บันทึกเฉพาะการเปลี่ยน API ที่ทำให้ client ต้องแก้ตาม การเปลี่ยนทั่วไปและประวัติรายละเอียดดูจาก Git history
 
+## 2026-09-01 — คืนคำขอเพิ่มโรงงานทุกสถานะและแยก review ออกจากการเพิ่มโรงงานเข้าข่าย
+
+- **Affected canonical docs:** [โรงงานที่เข้าข่าย](./menus/eligible-factories/README.md#คำขอเพิ่มโรงงาน), [TDD evidence ของคำขอเพิ่มโรงงาน](../evidence/eligible-factories/eligible-factory-requests.tdd.md)
+- **Impact:** `GET /api/v1/eligible-factories/add-requests` รับเฉพาะ optional `search`, คืนทุกสถานะโดยไม่แบ่งหน้า และเหลือ `meta.total`; strict validator ปฏิเสธ query เดิม `status`, `page`, `perPage` ด้วย `400 VALIDATION_ERROR`. `POST /api/v1/eligible-factories/add-requests/:id/review` เปลี่ยนเฉพาะ request state กับ audit fields และไม่สร้าง ไม่ restore และไม่แก้ไข `eligible_factories`; `REJECT` ยังบังคับ `officerNote` และคำขอที่ `APPROVE` ใหม่คืน `eligibleFactoryId: null` ขณะที่ข้อมูลประวัติเดิมอาจยังคืน integer id.
+- **Migration:** deploy [`0105_allow_status_only_eligible_factory_add_request_approval.ts`](../../../backend/src/db/migrations/0105_allow_status_only_eligible_factory_add_request_approval.ts) เพื่ออนุญาตสถานะ `APPROVED` โดยไม่มี `eligible_factory_id`. Frontend ต้องหยุดส่ง `status`, `page`, `perPage`, หยุดอ่าน `meta.page`/`meta.perPage`/`meta.totalPages`, ใช้ `data` ทั้งชุดและกรองสถานะฝั่ง client หากจำเป็น และอย่าถือว่า review แบบ `APPROVE` เพิ่มโรงงานเข้า `eligible_factories` แล้ว. หากมีคำขอ `APPROVED` ใหม่ที่ `eligible_factory_id = null` ต้องวางแผนข้อมูลก่อน rollback; `down` จะไม่สร้างหรือ link eligible row และ transaction จะ fail ขณะคืน constraint เดิมแทนการแก้ข้อมูลอัตโนมัติ.
+- **Old contract:** GET default เป็น `PENDING_REVIEW`, รองรับ status filter กับ pagination และคืน pagination meta; review แบบ `APPROVE` สร้างหรือ restore `eligible_factories`, link `eligibleFactoryId` และเปลี่ยนสถานะใน transaction เดียว.
+- **New contract:** GET คืน `PENDING_REVIEW`, `APPROVED`, `REJECTED` ที่อยู่ใน scope ทั้งหมดพร้อม optional `search` และ `meta.total` เท่านั้น; review แบบ `APPROVE`/`REJECT` เปลี่ยนสถานะและบันทึก `reviewedBy`, `reviewedAt`, `reviewNote` เท่านั้นโดยไม่เขียน `eligible_factories`.
+
 ## 2026-08-29 — ตัด estate qualifiers ออกจาก Permission Management matrix
 
 - **Affected canonical docs:** [สิทธิ์การใช้งาน](./menus/permissions/README.md), [User management API](./menus/permissions/user-management-api.md)
