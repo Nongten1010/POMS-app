@@ -2,6 +2,14 @@
 
 ไฟล์นี้บันทึกเฉพาะการเปลี่ยน API ที่ทำให้ client ต้องแก้ตาม การเปลี่ยนทั่วไปและประวัติรายละเอียดดูจาก Git history
 
+## 2026-09-01 — เพิ่ม 2 แบบฟอร์มคำขอแก้ไขข้อมูลพื้นฐานจาก POMS และจำกัดผู้อนุมัติเป็น admin
+
+- **Affected canonical docs:** [ข้อมูลพื้นฐาน](./menus/master-data/README.md), [คำขอแก้ไขข้อมูลพื้นฐานโรงงานจาก POMS](./menus/master-data/factory-edit-requests.md)
+- **Impact:** `POST /api/v1/poms-factories/:factoryId/edit-requests` และ `PUT /api/v1/poms-factories/edit-requests/:id/resubmission` เปลี่ยนจากรับเฉพาะ payload แก้ข้อมูลพื้นฐาน เป็นรับได้ 2 แบบฟอร์มผ่าน `formType`: `BASIC_INFO` และ `MEASUREMENT_POINTS`; `GET /api/v1/poms-factories/edit-requests/:id` เพิ่ม `formType`, `currentMeasurementPoints`, `proposedMeasurementPoints`; คำขอเปิดค้างถูกจำกัดเป็นหนึ่งคำขอต่อ `eligibleFactoryId + formType`; `pendingEditRequestCount` นับคำขอเปิดของทั้งสองฟอร์ม; และ `POST /api/v1/poms-factories/edit-requests/:id/review` ตอบ `403 FORBIDDEN` สำหรับผู้ใช้ที่มี permission `factories:approve` แต่ไม่ได้เป็น `admin`.
+- **Migration:** deploy [`0106_extend_poms_factory_edit_requests_for_measurement_points.ts`](../../../backend/src/db/migrations/0106_extend_poms_factory_edit_requests_for_measurement_points.ts) และ [`0107_enforce_admin_only_factory_approval.ts`](../../../backend/src/db/migrations/0107_enforce_admin_only_factory_approval.ts). Frontend ต้องส่ง `formType = "MEASUREMENT_POINTS"` สำหรับฟอร์มจุดตรวจวัด (`BASIC_INFO` ยังละ `formType` ได้เพื่อรองรับ client เดิม), ใช้ snapshot จาก `currentMeasurementPoints`/`proposedMeasurementPoints`, ส่งเฉพาะ field ที่แก้ได้จริง (`pointName`, `monitoringPointStatus`, `details`, `documentsAndImages`, `measurementInstruments`) และซ่อน action review สำหรับผู้ใช้ที่ไม่ใช่ admin. หาก client เคยถือว่ามีได้เพียงคำขอเปิดค้างหนึ่งรายการต่อโรงงาน ต้องเปลี่ยนเป็นหนึ่งรายการต่อแบบฟอร์ม.
+- **Old contract:** แก้ไขได้เฉพาะข้อมูลพื้นฐาน, รายละเอียดคำขอไม่มี measurement-point snapshots, จำกัดคำขอเปิดค้างเพียงหนึ่งรายการต่อโรงงาน, และผู้มี `factories:approve` สามารถ review ได้โดยไม่ต้องเป็น admin.
+- **New contract:** รองรับทั้ง `BASIC_INFO` และ `MEASUREMENT_POINTS`, รายละเอียดคำขอคืน snapshot ของจุดตรวจวัด, เปิดคำขอค้างได้แยกตาม `formType`, และ review ได้เฉพาะผู้ใช้ที่เป็น `admin` เท่านั้น.
+
 ## 2026-09-01 — คืนคำขอเพิ่มโรงงานทุกสถานะและแยก review ออกจากการเพิ่มโรงงานเข้าข่าย
 
 - **Affected canonical docs:** [โรงงานที่เข้าข่าย](./menus/eligible-factories/README.md#คำขอเพิ่มโรงงาน), [TDD evidence ของคำขอเพิ่มโรงงาน](../evidence/eligible-factories/eligible-factory-requests.tdd.md)

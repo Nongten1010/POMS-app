@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
+import { ForbiddenError } from '../../shared/errors/AppError';
 import { getScopeDetails } from '../../shared/middlewares/authorize';
 import type { RegionalAccessDTO } from '../auth/regional-access';
 import { pomsFactoriesService } from './poms-factories.service';
@@ -117,12 +118,17 @@ export const pomsFactoriesController = {
   async reviewEditRequest(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const actorUserId = requireActorUserId(req);
+      requireAdminReviewActor(req);
       const { id } = pomsFactoryEditRequestIdParamsSchema.parse(req.params);
       const payload = reviewPomsFactoryEditRequestSchema.parse(req.body);
       const data = await pomsFactoriesService.reviewEditRequest(
         id,
         payload,
         actorUserId,
+        {
+          userType: req.user?.userType,
+          roles: req.user?.roles ?? [],
+        },
         getScopeDetails(req, 'factories:approve'),
         regionalAccess(req),
       );
@@ -138,6 +144,11 @@ function requireActorUserId(req: Request): number {
     throw new Error('Authenticated user id is required');
   }
   return req.user.id;
+}
+
+function requireAdminReviewActor(req: Request): void {
+  if (req.user?.userType === 'admin' && req.user.roles?.includes('admin')) return;
+  throw new ForbiddenError('POMS factory edit request review is limited to admin users');
 }
 
 function regionalAccess(req: Request): RegionalAccessDTO | null | undefined {

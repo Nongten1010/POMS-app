@@ -1,8 +1,10 @@
 import { describe, expect, it } from '@jest/globals';
 import {
   buildApprovedPomsFactoryProfilePatchesForTests,
+  buildApprovedMeasurementPointWritePatchForTests,
   buildConnectedFactoryRowsQueryForTests,
   buildEditRequestsQueryForTests,
+  buildPendingRequestCountsQueryForTests,
   toPomsParameterDisplayNamesForTests,
 } from '../../src/modules/poms-factories/poms-factories.repository';
 
@@ -133,4 +135,56 @@ describe('pomsFactoriesRepository access and approved profile patches', () => {
       }),
     ).toEqual(['CO2 (ppm)', 'BOD (mg/L)', 'CO (ppm)', 'CO (%)', 'Custom (kg/h)']);
   });
+
+  it('builds measurement-point updates from the safe allowlist only', () => {
+    const patch = buildApprovedMeasurementPointWritePatchForTests({
+      ...measurementPoint(),
+      pointName: 'ปล่อง A (แก้ไข)',
+      monitoringPointStatus: 'อยู่ระหว่างเชื่อมต่อ',
+      details: { latitude: 12.7, longitude: 101.1 },
+      documentsAndImages: [],
+      measurementInstruments: null,
+    });
+
+    expect(patch).toEqual(
+      expect.objectContaining({
+        point_name: 'ปล่อง A (แก้ไข)',
+        monitoring_point_status: 'อยู่ระหว่างเชื่อมต่อ',
+      }),
+    );
+    expect(Object.keys(patch)).not.toEqual(
+      expect.arrayContaining(['point_code', 'point_type', 'parameters_json', 'system_type']),
+    );
+  });
+
+  it('counts every open request regardless of formType', () => {
+    const compiled = buildPendingRequestCountsQueryForTests([7, 8]);
+
+    expect(compiled.sql.toLowerCase()).toContain('from [poms_factory_edit_requests]');
+    expect(compiled.sql.toLowerCase()).toContain('[is_open] = ?');
+    expect(compiled.sql.toLowerCase()).not.toContain('[form_type]');
+    expect(compiled.bindings).toContain(true);
+  });
 });
+
+function measurementPoint() {
+  return {
+    connectedPointId: 15,
+    sourceMeasurementPointId: 150,
+    eligibleFactoryId: 7,
+    factoryId: 'factory-001',
+    factoryName: 'บริษัท ทดสอบ จำกัด',
+    systemType: 'CEMS' as const,
+    pointName: 'ปล่อง A',
+    pointCode: 'S0001',
+    pointType: 'STACK' as const,
+    parameters: ['CO (ppm)'],
+    monitoringPointStatus: null,
+    details: null,
+    documentsAndImages: [],
+    measurementInstruments: {
+      parameters: [{ parameter: 'CO (ppm)' }],
+    },
+    updatedAt: '2026-09-01T00:00:00.000Z',
+  };
+}

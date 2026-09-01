@@ -22,6 +22,7 @@ import type {
   PomsFactoryEditRequestAction,
   PomsFactoryEditRequestDTO,
   PomsFactoryEditRequestEventDTO,
+  PomsFactoryEditRequestFormType,
   PomsFactoryEditRequestStatus,
   PomsFactoryProfileDTO,
   PomsFactorySummaryDTO,
@@ -30,6 +31,7 @@ import type {
 } from './poms-factories.types';
 import {
   POMS_FACTORY_EDIT_REQUEST_ACTION,
+  POMS_FACTORY_EDIT_REQUEST_FORM_TYPE,
   POMS_FACTORY_EDIT_REQUEST_STATUS,
   POMS_FACTORY_EDIT_REQUEST_STATUS_LABELS,
 } from './poms-factories.types';
@@ -79,11 +81,14 @@ interface EditRequestRow {
   factory_id: string;
   factory_registration_no: string;
   factory_name: string;
+  form_type: PomsFactoryEditRequestFormType;
   status: PomsFactoryEditRequestStatus;
   revision_no: number | string;
   is_open: boolean | number;
   current_factory_json: string;
   proposed_factory_json: string;
+  current_measurement_points_json: string | null;
+  proposed_measurement_points_json: string | null;
   source_profile_updated_at: Date | string;
   request_note: string | null;
   revision_reason: string | null;
@@ -111,7 +116,14 @@ interface EditRequestEventRow {
 
 interface PendingCountRow {
   eligible_factory_id: number | string;
+  form_type?: PomsFactoryEditRequestFormType;
   total: number | string;
+}
+
+interface EditRequestPayload {
+  formType: PomsFactoryEditRequestFormType;
+  proposedFactory: PomsFactoryProfileDTO;
+  proposedMeasurementPoints: PomsMeasurementPointDTO[] | null;
 }
 
 const REVIEWABLE_STATUSES: PomsFactoryEditRequestStatus[] = [
@@ -170,19 +182,21 @@ export const pomsFactoriesRepository = {
 
   async findOpenEditRequestForFactory(
     eligibleFactoryId: number,
+    formType?: PomsFactoryEditRequestFormType,
   ): Promise<PomsFactoryEditRequestDTO | null> {
-    const row = await db<EditRequestRow>('poms_factory_edit_requests')
+    const query = db<EditRequestRow>('poms_factory_edit_requests')
       .where('eligible_factory_id', eligibleFactoryId)
       .where('is_open', true)
       .whereNull('deleted_at')
-      .orderBy('id', 'desc')
-      .first();
+      .orderBy('id', 'desc');
+    if (formType) query.where('form_type', formType);
+    const row = await query.first();
     return row ? hydrateEditRequest(row, db) : null;
   },
 
   async createEditRequest(
     current: PomsFactoryDetailDTO,
-    proposed: PomsFactoryProfileDTO,
+    payload: EditRequestPayload,
     requestNote: string | null,
     actorUserId: number,
   ): Promise<PomsFactoryEditRequestDTO> {
@@ -193,6 +207,7 @@ export const pomsFactoriesRepository = {
 
         const openRequest = await trx<EditRequestRow>('poms_factory_edit_requests')
           .where('eligible_factory_id', current.eligibleFactoryId)
+          .where('form_type', payload.formType)
           .where('is_open', true)
           .whereNull('deleted_at')
           .forUpdate()
@@ -210,12 +225,24 @@ export const pomsFactoriesRepository = {
             eligible_factory_id: current.eligibleFactoryId,
             factory_id: current.factoryId,
             factory_registration_no: current.factoryRegistrationNo,
-            factory_name: proposed.factoryName,
+            factory_name:
+              payload.formType === POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.MEASUREMENT_POINTS
+                ? current.factoryName
+                : payload.proposedFactory.factoryName,
+            form_type: payload.formType,
             status: POMS_FACTORY_EDIT_REQUEST_STATUS.PENDING_REVIEW,
             revision_no: 0,
             is_open: true,
             current_factory_json: JSON.stringify(toProfile(current)),
-            proposed_factory_json: JSON.stringify(proposed),
+            proposed_factory_json: JSON.stringify(payload.proposedFactory),
+            current_measurement_points_json:
+              payload.formType === POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.MEASUREMENT_POINTS
+                ? JSON.stringify(current.measurementPoints)
+                : null,
+            proposed_measurement_points_json:
+              payload.proposedMeasurementPoints == null
+                ? null
+                : JSON.stringify(payload.proposedMeasurementPoints),
             source_profile_updated_at: new Date(current.updatedAt),
             request_note: requestNote,
             revision_reason: null,
@@ -234,7 +261,7 @@ export const pomsFactoriesRepository = {
           toStatus: POMS_FACTORY_EDIT_REQUEST_STATUS.PENDING_REVIEW,
           note: requestNote,
           actorUserId,
-          snapshot: proposed,
+          snapshot: buildEventSnapshot(payload),
         });
         return requireEditRequestInTransaction(trx, requestId);
       });
@@ -290,7 +317,7 @@ export const pomsFactoriesRepository = {
 
   async resubmitEditRequest(
     id: number,
-    proposed: PomsFactoryProfileDTO,
+    payload: EditRequestPayload,
     requestNote: string | null,
     actorUserId: number,
   ): Promise<PomsFactoryEditRequestDTO> {
@@ -310,22 +337,39 @@ export const pomsFactoriesRepository = {
           },
         );
       }
-      if (Number(request.eligible_factory_id) !== proposed.eligibleFactoryId) {
+      if (Number(request.eligible_factory_id) !== payload.proposedFactory.eligibleFactoryId) {
         throw new ConflictError('POMS factory identity changed before resubmission');
       }
+      if (request.form_type !== payload.formType) {
+        throw new ConflictError(
+          'POMS factory edit request form type cannot change on resubmission',
+        );
+      }
 
-      const live = await lockCurrentFactoryProfile(trx, proposed.eligibleFactoryId);
-      ensureSameProfileVersion(proposed.updatedAt, live.updatedAt);
+      const live = await lockCurrentFactoryProfile(trx, payload.proposedFactory.eligibleFactoryId);
+      ensureSameProfileVersion(payload.proposedFactory.updatedAt, live.updatedAt);
       await trx('poms_factory_edit_requests')
         .where('id', id)
         .update({
-          factory_name: proposed.factoryName,
+          factory_name:
+            payload.formType === POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.MEASUREMENT_POINTS
+              ? live.factoryName
+              : payload.proposedFactory.factoryName,
+          form_type: payload.formType,
           status: POMS_FACTORY_EDIT_REQUEST_STATUS.REVISED_PENDING_REVIEW,
           revision_no: Number(request.revision_no) + 1,
           is_open: true,
-          current_factory_json: JSON.stringify(live),
-          proposed_factory_json: JSON.stringify(proposed),
-          source_profile_updated_at: new Date(proposed.updatedAt),
+          current_factory_json: JSON.stringify(toProfile(live)),
+          proposed_factory_json: JSON.stringify(payload.proposedFactory),
+          current_measurement_points_json:
+            payload.formType === POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.MEASUREMENT_POINTS
+              ? JSON.stringify(live.measurementPoints)
+              : null,
+          proposed_measurement_points_json:
+            payload.proposedMeasurementPoints == null
+              ? null
+              : JSON.stringify(payload.proposedMeasurementPoints),
+          source_profile_updated_at: new Date(payload.proposedFactory.updatedAt),
           request_note: requestNote,
           revision_reason: null,
           officer_note: null,
@@ -344,7 +388,7 @@ export const pomsFactoriesRepository = {
         toStatus: POMS_FACTORY_EDIT_REQUEST_STATUS.REVISED_PENDING_REVIEW,
         note: requestNote,
         actorUserId,
-        snapshot: proposed,
+        snapshot: buildEventSnapshot(payload),
       });
       return requireEditRequestInTransaction(trx, id);
     });
@@ -411,7 +455,7 @@ export const pomsFactoriesRepository = {
             ? (input.revisionReason ?? null)
             : (input.officerNote ?? null),
         actorUserId,
-        snapshot: requireProfileSnapshot(request.proposed_factory_json),
+        snapshot: toStoredEventSnapshot(request),
       });
       return requireEditRequestInTransaction(trx, id);
     });
@@ -435,6 +479,21 @@ export function buildApprovedPomsFactoryProfilePatchesForTests(proposed: PomsFac
   return buildApprovedPomsFactoryProfilePatches(proposed);
 }
 
+export function buildApprovedMeasurementPointWritePatchForTests(point: PomsMeasurementPointDTO) {
+  return buildApprovedMeasurementPointWritePatch(point);
+}
+
+export function buildApprovedPomsMeasurementPointUpdatesForTests(
+  current: PomsMeasurementPointDTO[],
+  proposed: PomsMeasurementPointDTO[],
+) {
+  return buildApprovedPomsMeasurementPointUpdates(current, proposed);
+}
+
+export function buildPendingRequestCountsQueryForTests(ids: number[]) {
+  return buildPendingRequestCountsQuery(ids).toSQL();
+}
+
 export function toPomsParameterDisplayNamesForTests(
   parameters: string[],
   instruments: MeasurementInstrumentsInput | null = null,
@@ -447,6 +506,26 @@ async function applyApprovedRequestInTransaction(
   request: EditRequestRow,
   actorUserId: number,
 ): Promise<void> {
+  if (request.form_type === POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.MEASUREMENT_POINTS) {
+    const currentMeasurementPoints = requireMeasurementPointSnapshotArray(
+      request.current_measurement_points_json,
+    );
+    const latestProfile = await lockCurrentFactoryProfile(trx, Number(request.eligible_factory_id));
+    const currentLiveMeasurementPoints = latestProfile.measurementPoints;
+    ensureSameMeasurementPointsVersion(currentMeasurementPoints, currentLiveMeasurementPoints);
+    const proposedMeasurementPoints = requireMeasurementPointSnapshotArray(
+      request.proposed_measurement_points_json,
+    );
+    await applyApprovedMeasurementPointsInTransaction(
+      trx,
+      Number(request.eligible_factory_id),
+      currentMeasurementPoints,
+      proposedMeasurementPoints,
+      actorUserId,
+    );
+    return;
+  }
+
   const latestProfile = await lockCurrentFactoryProfile(trx, Number(request.eligible_factory_id));
   ensureSameProfileVersion(
     toIsoStringRequired(request.source_profile_updated_at),
@@ -479,6 +558,36 @@ async function applyApprovedRequestInTransaction(
   }
 }
 
+async function applyApprovedMeasurementPointsInTransaction(
+  trx: Knex.Transaction,
+  eligibleFactoryId: number,
+  currentPoints: PomsMeasurementPointDTO[],
+  proposedPoints: PomsMeasurementPointDTO[],
+  actorUserId: number,
+): Promise<void> {
+  const updates = buildApprovedPomsMeasurementPointUpdates(currentPoints, proposedPoints);
+  if (updates.length === 0) {
+    throw new ConflictError('POMS measurement-point edit request does not contain any changes');
+  }
+
+  for (const update of updates) {
+    const updatedCount = await trx('cems_wpms_connected_measurement_points')
+      .where('id', update.connectedPointId)
+      .where('eligible_factory_id', eligibleFactoryId)
+      .whereNull('deleted_at')
+      .update({
+        ...update.patch,
+        updated_by: actorUserId,
+        updated_at: trx.fn.now(),
+      });
+    if (updatedCount !== 1) {
+      throw new ConflictError('Connected POMS measurement point is no longer active', {
+        connectedPointId: update.connectedPointId,
+      });
+    }
+  }
+}
+
 function buildApprovedPomsFactoryProfilePatches(proposed: PomsFactoryProfileDTO) {
   const hasEia = proposed.eia == null ? null : deriveHasEiaFromAssessment(proposed.eia);
   const eiaOther = proposed.eia === 'อื่นๆ' ? proposed.eiaOther : null;
@@ -506,6 +615,92 @@ function buildApprovedPomsFactoryProfilePatches(proposed: PomsFactoryProfileDTO)
       has_eia: hasEia,
       project_name: proposed.projectName,
     },
+  };
+}
+
+function buildApprovedMeasurementPointWritePatch(
+  point: PomsMeasurementPointDTO,
+  actorUserId?: number,
+  updatedAt?: Knex.Raw | Date | string,
+) {
+  return {
+    point_name: point.pointName,
+    monitoring_point_status: point.monitoringPointStatus ?? null,
+    details_json: point.details ? JSON.stringify(point.details) : null,
+    documents_json:
+      point.documentsAndImages.length > 0 ? JSON.stringify(point.documentsAndImages) : null,
+    instruments_json: point.measurementInstruments
+      ? JSON.stringify(point.measurementInstruments)
+      : null,
+    ...(actorUserId == null ? {} : { updated_by: actorUserId }),
+    ...(updatedAt == null ? {} : { updated_at: updatedAt }),
+  };
+}
+
+function buildApprovedPomsMeasurementPointUpdates(
+  currentPoints: PomsMeasurementPointDTO[],
+  proposedPoints: PomsMeasurementPointDTO[],
+) {
+  if (currentPoints.length !== proposedPoints.length) {
+    throw new ConflictError('Stored POMS measurement-point proposal changed point identities');
+  }
+
+  const currentById = new Map(
+    currentPoints.map((point) => [point.connectedPointId, point] as const),
+  );
+
+  return proposedPoints.flatMap((proposed) => {
+    const current = currentById.get(proposed.connectedPointId);
+    if (!current) {
+      throw new ConflictError('Stored POMS measurement-point proposal changed point identities', {
+        connectedPointId: proposed.connectedPointId,
+      });
+    }
+    if (
+      JSON.stringify(immutableMeasurementPointState(current)) !==
+      JSON.stringify(immutableMeasurementPointState(proposed))
+    ) {
+      throw new ConflictError('Stored POMS measurement-point proposal changed immutable fields', {
+        connectedPointId: proposed.connectedPointId,
+      });
+    }
+    if (
+      JSON.stringify(editableMeasurementPointState(current)) ===
+      JSON.stringify(editableMeasurementPointState(proposed))
+    ) {
+      return [];
+    }
+    return [
+      {
+        connectedPointId: proposed.connectedPointId,
+        patch: buildApprovedMeasurementPointWritePatch(proposed),
+      },
+    ];
+  });
+}
+
+function immutableMeasurementPointState(point: PomsMeasurementPointDTO) {
+  return {
+    connectedPointId: point.connectedPointId,
+    sourceMeasurementPointId: point.sourceMeasurementPointId,
+    eligibleFactoryId: point.eligibleFactoryId,
+    factoryId: point.factoryId,
+    factoryName: point.factoryName,
+    systemType: point.systemType,
+    pointCode: point.pointCode,
+    pointType: point.pointType,
+    parameters: point.parameters,
+    updatedAt: point.updatedAt,
+  };
+}
+
+function editableMeasurementPointState(point: PomsMeasurementPointDTO) {
+  return {
+    pointName: point.pointName,
+    monitoringPointStatus: point.monitoringPointStatus,
+    details: point.details,
+    documentsAndImages: point.documentsAndImages,
+    measurementInstruments: point.measurementInstruments,
   };
 }
 
@@ -695,7 +890,7 @@ function normalizeLocationValue(value: string | null | undefined): string | null
 async function lockCurrentFactoryProfile(
   trx: Knex.Transaction,
   eligibleFactoryId: number,
-): Promise<PomsFactoryProfileDTO> {
+): Promise<PomsFactoryDetailDTO> {
   const rows = await trx<ConnectedFactoryRow>('cems_wpms_connected_measurement_points as cp')
     .innerJoin('eligible_factories as ef', function joinEligibleFactory() {
       this.on('ef.id', '=', 'cp.eligible_factory_id').andOnNull('ef.deleted_at');
@@ -734,7 +929,7 @@ async function lockCurrentFactoryProfile(
       'cp.updated_at',
     );
   if (rows.length === 0) throw new ConflictError('Connected POMS factory is no longer active');
-  return toProfile(toFactoryDetail(uniqueConnectedPointRows(rows), 0));
+  return toFactoryDetail(uniqueConnectedPointRows(rows), 0);
 }
 
 function summarizeFactories(rows: ConnectedFactoryRow[]): PomsFactorySummaryDTO[] {
@@ -871,13 +1066,7 @@ function uniqueConnectedPointRows(rows: ConnectedFactoryRow[]): ConnectedFactory
 
 async function listPendingRequestCounts(ids: number[]): Promise<Map<number, number>> {
   if (ids.length === 0) return new Map();
-  const rows = (await db('poms_factory_edit_requests')
-    .whereIn('eligible_factory_id', ids)
-    .where('is_open', true)
-    .whereNull('deleted_at')
-    .groupBy('eligible_factory_id')
-    .select('eligible_factory_id')
-    .count({ total: 'id' })) as PendingCountRow[];
+  const rows = (await buildPendingRequestCountsQuery(ids)) as PendingCountRow[];
   return new Map(rows.map((row) => [Number(row.eligible_factory_id), Number(row.total)]));
 }
 
@@ -886,6 +1075,16 @@ async function pendingCountForFactory(eligibleFactoryId: number | string): Promi
     (await listPendingRequestCounts([Number(eligibleFactoryId)])).get(Number(eligibleFactoryId)) ??
     0
   );
+}
+
+function buildPendingRequestCountsQuery(ids: number[]) {
+  return db('poms_factory_edit_requests')
+    .whereIn('eligible_factory_id', ids)
+    .where('is_open', true)
+    .whereNull('deleted_at')
+    .groupBy('eligible_factory_id')
+    .select('eligible_factory_id')
+    .count({ total: 'id' });
 }
 
 async function hydrateEditRequests(
@@ -925,6 +1124,14 @@ function toEditRequestDTO(
   events: PomsFactoryEditRequestEventDTO[],
 ): PomsFactoryEditRequestDTO {
   const proposed = requireProfileSnapshot(row.proposed_factory_json);
+  const currentMeasurementPoints =
+    row.current_measurement_points_json == null
+      ? null
+      : requireMeasurementPointSnapshotArray(row.current_measurement_points_json);
+  const proposedMeasurementPoints =
+    row.proposed_measurement_points_json == null
+      ? null
+      : requireMeasurementPointSnapshotArray(row.proposed_measurement_points_json);
   return {
     id: Number(row.id),
     requestNo: row.request_no,
@@ -932,6 +1139,7 @@ function toEditRequestDTO(
     factoryId: row.factory_id,
     factoryRegistrationNo: row.factory_registration_no,
     factoryName: proposed.factoryName,
+    formType: row.form_type,
     status: row.status,
     statusLabel: POMS_FACTORY_EDIT_REQUEST_STATUS_LABELS[row.status],
     revisionNo: Number(row.revision_no),
@@ -941,6 +1149,8 @@ function toEditRequestDTO(
     officerNote: row.officer_note,
     currentFactory: requireProfileSnapshot(row.current_factory_json),
     proposedFactory: proposed,
+    currentMeasurementPoints,
+    proposedMeasurementPoints,
     submittedBy: Number(row.submitted_by),
     reviewedBy: toNullableNumber(row.reviewed_by),
     submittedAt: toIsoStringRequired(row.submitted_at),
@@ -990,7 +1200,7 @@ async function insertEvent(
     toStatus: PomsFactoryEditRequestStatus;
     note: string | null;
     actorUserId: number;
-    snapshot: PomsFactoryProfileDTO;
+    snapshot: Record<string, unknown> | PomsFactoryProfileDTO;
   },
 ): Promise<void> {
   await trx('poms_factory_edit_request_events').insert({
@@ -1040,6 +1250,88 @@ function requireProfileSnapshot(value: string): PomsFactoryProfileDTO {
     throw new ConflictError('Stored POMS factory profile snapshot is invalid');
   }
   return parsed;
+}
+
+function requireMeasurementPointSnapshotArray(value: string | null): PomsMeasurementPointDTO[] {
+  if (value == null) {
+    throw new ConflictError('Stored POMS measurement-point snapshot is missing');
+  }
+  const parsed = parseJsonArray<PomsMeasurementPointDTO>(value);
+  if (
+    parsed.length === 0 ||
+    !parsed.every(
+      (point) =>
+        Number.isInteger(point?.connectedPointId) &&
+        typeof point?.pointName === 'string' &&
+        Array.isArray(point?.parameters),
+    )
+  ) {
+    throw new ConflictError('Stored POMS measurement-point snapshot is invalid');
+  }
+  if (new Set(parsed.map((point) => point.connectedPointId)).size !== parsed.length) {
+    throw new ConflictError('Stored POMS measurement-point snapshot contains duplicate points');
+  }
+  return parsed;
+}
+
+function ensureSameMeasurementPointsVersion(
+  expected: PomsMeasurementPointDTO[],
+  current: PomsMeasurementPointDTO[],
+): void {
+  if (expected.length !== current.length) {
+    throw new ConflictError(
+      'POMS factory measurement points changed after the edit request was prepared',
+    );
+  }
+
+  const normalize = (points: PomsMeasurementPointDTO[]) =>
+    [...points]
+      .sort((left, right) => left.connectedPointId - right.connectedPointId)
+      .map((point) => ({
+        connectedPointId: point.connectedPointId,
+        pointName: point.pointName,
+        pointCode: point.pointCode,
+        pointType: point.pointType,
+        parameters: point.parameters,
+        monitoringPointStatus: point.monitoringPointStatus,
+        details: point.details,
+        documentsAndImages: point.documentsAndImages,
+        measurementInstruments: point.measurementInstruments,
+        updatedAt: point.updatedAt,
+      }));
+
+  if (JSON.stringify(normalize(expected)) !== JSON.stringify(normalize(current))) {
+    throw new ConflictError(
+      'POMS factory measurement points changed after the edit request was prepared',
+    );
+  }
+}
+
+function buildEventSnapshot(
+  payload: EditRequestPayload,
+): Record<string, unknown> | PomsFactoryProfileDTO {
+  return payload.formType === POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.MEASUREMENT_POINTS
+    ? {
+        formType: payload.formType,
+        proposedFactory: payload.proposedFactory,
+        proposedMeasurementPoints: payload.proposedMeasurementPoints ?? [],
+      }
+    : payload.proposedFactory;
+}
+
+function toStoredEventSnapshot(
+  request: EditRequestRow,
+): Record<string, unknown> | PomsFactoryProfileDTO {
+  if (request.form_type === POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.MEASUREMENT_POINTS) {
+    return {
+      formType: request.form_type,
+      proposedFactory: requireProfileSnapshot(request.proposed_factory_json),
+      proposedMeasurementPoints: requireMeasurementPointSnapshotArray(
+        request.proposed_measurement_points_json,
+      ),
+    };
+  }
+  return requireProfileSnapshot(request.proposed_factory_json);
 }
 
 function parseJsonArray<T>(value: string | null | undefined): T[] {

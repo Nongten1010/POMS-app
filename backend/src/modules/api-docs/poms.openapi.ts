@@ -9,6 +9,7 @@ import {
 import { BOD_COD_DEVIATION_REPORT_STATUSES } from '../bod-cod-deviations/bod-cod-deviation-reports.types';
 import { CONNECTION_REQUEST_EIA_ASSESSMENTS } from '../connection-requests/connection-request-eia';
 import { KWP_FORM_STATUSES, KWP_FORM_TYPES } from '../kwp-form-reports/kwp-form-reports.types';
+import { MONITORING_POINT_STATUSES } from '../monitoring-point-forms/monitoring-point-forms.types';
 import {
   EDITABLE_LOCATION_SCOPED_PERMISSION_MODULES,
   EDITABLE_PERMISSION_ACTIONS,
@@ -516,6 +517,7 @@ const reviewEligibleFactoryAddRequestExample = {
 const favoriteExample = { isFavorite: true };
 
 const pomsFactoryEditRequestExample = {
+  formType: 'BASIC_INFO',
   factoryName: 'บริษัท ทดสอบ จำกัด (แก้ไข)',
   factoryAddress: '100 หมู่ 2 ตำบลทดสอบ อำเภอเมือง จังหวัดสระบุรี',
   latitude: 13.7563,
@@ -540,6 +542,34 @@ const pomsFactoryEditRequestExample = {
     fileSize: 102400,
   },
   note: 'ขอแก้ไขข้อมูลพื้นฐานหลังเชื่อมต่อแล้ว',
+};
+
+const pomsFactoryMeasurementPointEditRequestExample = {
+  formType: 'MEASUREMENT_POINTS',
+  measurementPoints: [
+    {
+      connectedPointId: 15,
+      pointName: 'ปล่อง A (แก้ไข)',
+      monitoringPointStatus: 'อยู่ระหว่างเชื่อมต่อ',
+      details: {
+        stackHeight: 35,
+      },
+      documentsAndImages: [],
+      measurementInstruments: {
+        converterBrand: 'ACME',
+        converterModel: 'X-200',
+        parameters: [
+          {
+            parameter: 'CO (ppm)',
+          },
+          {
+            parameter: 'NOx (ppm)',
+          },
+        ],
+      },
+    },
+  ],
+  note: 'ขอแก้ไขข้อมูลจุดตรวจวัดหลังเชื่อมต่อแล้ว',
 };
 
 const pomsFactoryEditReviewExample = {
@@ -1604,6 +1634,11 @@ const componentSchemas: Record<string, OpenApiObject> = {
     description:
       'ต้องส่ง factoryName ทุกครั้ง; field อื่นที่ไม่ส่งคงค่าเดิม ส่วน null ใช้ล้าง nullable field. latitude และ longitude ต้องส่งมาคู่กัน',
     properties: {
+      formType: {
+        type: 'string',
+        enum: ['BASIC_INFO'],
+        description: 'Optional เพื่อรองรับ client เดิม; omitted จะตีความเป็น BASIC_INFO',
+      },
       factoryName: {
         type: 'string',
         minLength: 1,
@@ -1674,6 +1709,63 @@ const componentSchemas: Record<string, OpenApiObject> = {
       },
     },
     example: pomsFactoryEditRequestExample,
+  },
+  PomsFactoryMeasurementPointPatchRequest: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['connectedPointId'],
+    minProperties: 2,
+    description:
+      'ต้องส่ง connectedPointId และอย่างน้อยหนึ่ง field ที่อนุญาตให้แก้ไข; field ที่ไม่ส่งคงค่าเดิม',
+    properties: {
+      connectedPointId: { type: 'integer', minimum: 1 },
+      pointName: { type: 'string', minLength: 1, maxLength: 255 },
+      monitoringPointStatus: {
+        type: 'string',
+        nullable: true,
+        enum: [...MONITORING_POINT_STATUSES],
+      },
+      details: {
+        allOf: [schemaRef('MeasurementPointDetails')],
+        nullable: true,
+        description: 'Optional; omitted = คงค่าเดิม, null = ล้างค่า',
+      },
+      documentsAndImages: {
+        type: 'array',
+        maxItems: 50,
+        items: schemaRef('RequestDocumentImage'),
+      },
+      measurementInstruments: {
+        allOf: [schemaRef('MeasurementInstruments')],
+        nullable: true,
+        description: 'Optional; omitted = คงค่าเดิม, null = ล้างค่า',
+      },
+    },
+  },
+  PomsFactoryEditableMeasurementPointsRequest: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['formType', 'measurementPoints'],
+    properties: {
+      formType: {
+        type: 'string',
+        enum: ['MEASUREMENT_POINTS'],
+      },
+      measurementPoints: {
+        type: 'array',
+        minItems: 1,
+        maxItems: 100,
+        items: schemaRef('PomsFactoryMeasurementPointPatchRequest'),
+      },
+      note: nullableStringSchema(1000),
+    },
+    example: pomsFactoryMeasurementPointEditRequestExample,
+  },
+  PomsFactoryEditSubmissionRequest: {
+    oneOf: [
+      schemaRef('PomsFactoryEditableProfileRequest'),
+      schemaRef('PomsFactoryEditableMeasurementPointsRequest'),
+    ],
   },
   PomsFactoryEditReviewRequest: {
     type: 'object',
@@ -1830,7 +1922,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
             type: 'array',
             items: schemaRef('PomsMeasurementPoint'),
             description:
-              'จุดตรวจวัด current/live สำหรับอ่านอย่างเดียว; รุ่นแรกไม่รับแก้ไขผ่าน factory edit request',
+              'จุดตรวจวัด current/live สำหรับแสดงผลและใช้เป็นฐานของฟอร์ม MEASUREMENT_POINTS',
           },
         },
       },
@@ -1870,6 +1962,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
       'factoryId',
       'factoryRegistrationNo',
       'factoryName',
+      'formType',
       'status',
       'statusLabel',
       'revisionNo',
@@ -1879,6 +1972,8 @@ const componentSchemas: Record<string, OpenApiObject> = {
       'officerNote',
       'currentFactory',
       'proposedFactory',
+      'currentMeasurementPoints',
+      'proposedMeasurementPoints',
       'createdBy',
       'submittedBy',
       'reviewedBy',
@@ -1901,6 +1996,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
       factoryId: { type: 'string', minLength: 1, maxLength: 64 },
       factoryRegistrationNo: { type: 'string', minLength: 1, maxLength: 80 },
       factoryName: { type: 'string', minLength: 1, maxLength: 500 },
+      formType: { type: 'string', enum: ['BASIC_INFO', 'MEASUREMENT_POINTS'] },
       status: schemaRef('PomsFactoryEditRequestStatus'),
       statusLabel: { type: 'string', minLength: 1, maxLength: 128 },
       revisionNo: {
@@ -1914,6 +2010,16 @@ const componentSchemas: Record<string, OpenApiObject> = {
       officerNote: nullableStringSchema(1000),
       currentFactory: schemaRef('PomsFactoryProfile'),
       proposedFactory: schemaRef('PomsFactoryProfile'),
+      currentMeasurementPoints: {
+        type: 'array',
+        nullable: true,
+        items: schemaRef('PomsMeasurementPoint'),
+      },
+      proposedMeasurementPoints: {
+        type: 'array',
+        nullable: true,
+        items: schemaRef('PomsMeasurementPoint'),
+      },
       createdBy: { type: 'integer', minimum: 1 },
       submittedBy: { type: 'integer', minimum: 1 },
       reviewedBy: { type: 'integer', minimum: 1, nullable: true },
@@ -4187,7 +4293,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Get current/live POMS factory and measurement points',
       operationId: 'getPomsFactoryDetail',
       description:
-        'คืนข้อมูลโรงงานและ active measurement points. measurementPoints เป็นข้อมูลอ่านอย่างเดียวในรุ่นแรก และ resource นอก data scope ตอบ 404',
+        'คืนข้อมูลโรงงานและ active measurement points. measurementPoints ใช้ทั้งสำหรับแสดงผลและเป็นฐานของฟอร์ม MEASUREMENT_POINTS; resource นอก data scope ตอบ 404',
       parameters: [factoryIdParameter],
       successSchema: schemaRef('PomsFactoryDetailResponse'),
     }),
@@ -4215,13 +4321,13 @@ const extraPaths: Record<string, OpenApiObject> = {
   '/poms-factories/{factoryId}/edit-requests': {
     post: securedOperation({
       tag: 'Master Data',
-      summary: 'Submit a POMS factory profile edit request',
+      summary: 'Submit a POMS factory edit request',
       operationId: 'createPomsFactoryEditRequest',
       description:
-        'ต้องมี factories:view และ factories:edit โดยการคัดโรงงานสำหรับ mutation ยึด data scope ของ factories:edit. สร้างคำขอ PENDING_REVIEW จาก current/live profile; รุ่นแรกแก้ได้เฉพาะ allowlist ใน request schema และไม่รับ measurementPoints. โรงงานหนึ่งแห่งมีคำขอเปิดได้ครั้งละหนึ่งรายการ',
+        'ต้องมี factories:view และ factories:edit โดยการคัดโรงงานสำหรับ mutation ยึด data scope ของ factories:edit. body รองรับ 2 แบบฟอร์ม: BASIC_INFO และ MEASUREMENT_POINTS โดยหนึ่งโรงงานเปิดคำขอได้ครั้งละหนึ่งรายการต่อ formType',
       parameters: [factoryIdParameter],
       requestBody: jsonRequestBody(
-        schemaRef('PomsFactoryEditableProfileRequest'),
+        schemaRef('PomsFactoryEditSubmissionRequest'),
         pomsFactoryEditRequestExample,
       ),
       successStatus: '201',
@@ -4240,10 +4346,10 @@ const extraPaths: Record<string, OpenApiObject> = {
   '/poms-factories/edit-requests/{id}': {
     get: securedOperation({
       tag: 'Master Data',
-      summary: 'Get POMS factory profile edit request detail',
+      summary: 'Get POMS factory edit request detail',
       operationId: 'getPomsFactoryEditRequest',
       description:
-        'คืน currentFactory, proposedFactory และ events เรียงตามเวลา; resource นอก data scope ตอบ 404',
+        'คืน currentFactory, proposedFactory, currentMeasurementPoints, proposedMeasurementPoints และ events เรียงตามเวลา; resource นอก data scope ตอบ 404',
       parameters: [idParameter],
       successSchema: schemaRef('PomsFactoryEditRequestResponse'),
     }),
@@ -4251,12 +4357,12 @@ const extraPaths: Record<string, OpenApiObject> = {
   '/poms-factories/edit-requests/{id}/resubmission': {
     put: securedOperation({
       tag: 'Master Data',
-      summary: 'Resubmit a revised POMS factory profile',
+      summary: 'Resubmit a revised POMS factory edit request',
       operationId: 'resubmitPomsFactoryEditRequest',
       description:
-        'ต้องมี factories:view และ factories:edit โดยการคัดคำขอสำหรับ mutation ยึด data scope ของ factories:edit. ทำได้เมื่อ status = REVISION_REQUESTED เท่านั้น; บันทึก event RESUBMIT, เพิ่ม revisionNo และเปลี่ยนเป็น REVISED_PENDING_REVIEW',
+        'ต้องมี factories:view และ factories:edit โดยการคัดคำขอสำหรับ mutation ยึด data scope ของ factories:edit. body รองรับทั้ง BASIC_INFO และ MEASUREMENT_POINTS; ทำได้เมื่อ status = REVISION_REQUESTED เท่านั้น',
       parameters: [idParameter],
-      requestBody: jsonRequestBody(schemaRef('PomsFactoryEditableProfileRequest'), {
+      requestBody: jsonRequestBody(schemaRef('PomsFactoryEditSubmissionRequest'), {
         ...pomsFactoryEditRequestExample,
         note: 'แก้ไขพิกัดและภาพถ่ายตามคำขอของเจ้าหน้าที่แล้ว',
       }),
@@ -4275,10 +4381,10 @@ const extraPaths: Record<string, OpenApiObject> = {
   '/poms-factories/edit-requests/{id}/review': {
     post: securedOperation({
       tag: 'Master Data',
-      summary: 'Review a POMS factory profile edit request',
+      summary: 'Review a POMS factory edit request',
       operationId: 'reviewPomsFactoryEditRequest',
       description:
-        'ต้องมี factories:view และ factories:approve โดยการคัดคำขอยึด data scope ของ factories:approve; ห้ามทั้ง original creator (createdBy) และ latest submitter (submittedBy) พิจารณาคำขอของตนเอง. APPROVE อัปเดต current/live rows ใน cems_wpms_connected_measurement_points และ eligible_factories ภายใน transaction เดียว; ไม่อัปเดต factories. REQUEST_REVISION เปลี่ยนเป็น REVISION_REQUESTED; REJECT ปิดคำขอ',
+        'ต้องมี factories:view และ factories:approve โดยการคัดคำขอยึด data scope ของ factories:approve และผู้พิจารณาต้องเป็น admin เท่านั้น; ห้ามทั้ง original creator (createdBy) และ latest submitter (submittedBy) พิจารณาคำขอของตนเอง. APPROVE จะอัปเดตข้อมูล current/live ตาม formType',
       parameters: [idParameter],
       requestBody: jsonRequestBody(
         schemaRef('PomsFactoryEditReviewRequest'),

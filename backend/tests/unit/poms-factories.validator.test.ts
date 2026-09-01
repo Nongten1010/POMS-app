@@ -114,9 +114,87 @@ describe('POMS factory edit request validators', () => {
 
     expect(result.success).toBe(true);
     if (!result.success) return;
+    if (!('factoryName' in result.data)) {
+      throw new Error('expected basic-info payload');
+    }
     expect(result.data.factoryFrontPhotos).toEqual([]);
     expect(result.data.factoryLogo).toBeNull();
   });
+
+  it('accepts the measurement-point edit form with unique connectedPointId values', () => {
+    const result = createPomsFactoryEditRequestSchema.safeParse({
+      formType: 'MEASUREMENT_POINTS',
+      measurementPoints: [
+        {
+          connectedPointId: 15,
+          pointName: 'ปล่อง A (แก้ไข)',
+          monitoringPointStatus: 'อยู่ระหว่างเชื่อมต่อ',
+        },
+      ],
+      note: 'ขอแก้ไขข้อมูลจุดตรวจวัด',
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data).toMatchObject({
+      formType: 'MEASUREMENT_POINTS',
+      measurementPoints: [
+        expect.objectContaining({
+          connectedPointId: 15,
+          pointName: 'ปล่อง A (แก้ไข)',
+          monitoringPointStatus: 'อยู่ระหว่างเชื่อมต่อ',
+        }),
+      ],
+    });
+  });
+
+  it('rejects duplicate connectedPointId values in one measurement-point request', () => {
+    expect(
+      createPomsFactoryEditRequestSchema.safeParse({
+        formType: 'MEASUREMENT_POINTS',
+        measurementPoints: [
+          { connectedPointId: 15, pointName: 'ปล่อง A' },
+          { connectedPointId: 15, monitoringPointStatus: 'อยู่ระหว่างเชื่อมต่อ' },
+        ],
+      }).success,
+    ).toBe(false);
+  });
+
+  it('requires at least one editable measurement-point field beyond connectedPointId', () => {
+    expect(
+      createPomsFactoryEditRequestSchema.safeParse({
+        formType: 'MEASUREMENT_POINTS',
+        measurementPoints: [{ connectedPointId: 15 }],
+      }).success,
+    ).toBe(false);
+  });
+
+  it('accepts a measurement-point patch that changes only status', () => {
+    expect(
+      createPomsFactoryEditRequestSchema.safeParse({
+        formType: 'MEASUREMENT_POINTS',
+        measurementPoints: [{ connectedPointId: 15, monitoringPointStatus: 'เชื่อมต่อครบแล้ว' }],
+      }).success,
+    ).toBe(true);
+  });
+
+  it.each(['pointCode', 'parameters', 'pointType', 'systemType'])(
+    'rejects immutable measurement-point field %s',
+    (field) => {
+      expect(
+        createPomsFactoryEditRequestSchema.safeParse({
+          formType: 'MEASUREMENT_POINTS',
+          measurementPoints: [
+            {
+              connectedPointId: 15,
+              pointName: 'ปล่อง A',
+              [field]: field === 'parameters' ? ['CO (ppm)'] : 'ห้ามแก้',
+            },
+          ],
+        }).success,
+      ).toBe(false);
+    },
+  );
 
   it('requires a revision reason for REQUEST_REVISION', () => {
     expect(

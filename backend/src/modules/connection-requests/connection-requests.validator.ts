@@ -53,7 +53,7 @@ const jsonValueSchema: z.ZodType<unknown> = z.lazy(() =>
   ]),
 );
 
-const measurementPointDetailsSchema = z.record(z.string().min(1).max(128), jsonValueSchema);
+export const measurementPointDetailsSchema = z.record(z.string().min(1).max(128), jsonValueSchema);
 const PARAMETER_NONE_OPTION = 'ไม่มี';
 const TREATMENT_SYSTEM_OTHER_OPTION = 'อื่นๆ';
 const EXEMPTED_PARAMETER_REGULATION_CLAUSE_OTHER_OPTION = 'อื่นๆ';
@@ -141,7 +141,7 @@ const contactPersonSchema = z
     position: contact.position ?? null,
   }));
 
-const requestDocumentImageSchema = z
+export const requestDocumentImageSchema = z
   .object({
     title: trimmedString(255),
     description: optionalNullableTrimmedString(1000),
@@ -408,7 +408,7 @@ const measurementInstrumentParameterSchema = z
     eiaCriteria: instrument.eiaCriteria ?? null,
   }));
 
-const measurementInstrumentsSchema = z
+export const measurementInstrumentsSchema = z
   .object({
     converterBrand: optionalNullableTrimmedString(255),
     converterModel: optionalNullableTrimmedString(255),

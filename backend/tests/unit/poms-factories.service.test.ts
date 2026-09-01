@@ -16,6 +16,11 @@ jest.mock('../../src/modules/poms-factories/poms-factories.repository', () => ({
 import { ConflictError, ForbiddenError, NotFoundError } from '../../src/shared/errors/AppError';
 import { pomsFactoriesRepository } from '../../src/modules/poms-factories/poms-factories.repository';
 import { pomsFactoriesService } from '../../src/modules/poms-factories/poms-factories.service';
+import type {
+  PomsFactoryDetailDTO,
+  PomsFactoryEditRequestDTO,
+  PomsFactoryEditRequestStatus,
+} from '../../src/modules/poms-factories/poms-factories.types';
 
 const mockedRepository = jest.mocked(pomsFactoriesRepository);
 const ownFactoryScope = { scope: 'OWN_FACTORY' as const };
@@ -54,18 +59,22 @@ describe('pomsFactoriesService edit-request workflow', () => {
         projectName: 'โครงการเดิม',
       }),
       expect.objectContaining({
-        factoryName: 'บริษัท ทดสอบ จำกัด (ใหม่)',
-        factoryAddress: '99 หมู่ 1',
-        projectName: null,
-        factoryFrontPhotos: [expect.objectContaining({ fileName: 'front.jpg' })],
+        formType: 'BASIC_INFO',
+        proposedFactory: expect.objectContaining({
+          factoryName: 'บริษัท ทดสอบ จำกัด (ใหม่)',
+          factoryAddress: '99 หมู่ 1',
+          projectName: null,
+          factoryFrontPhotos: [expect.objectContaining({ fileName: 'front.jpg' })],
+        }),
+        proposedMeasurementPoints: null,
       }),
       'ขอเปลี่ยนชื่อและล้างชื่อโครงการ',
       42,
     );
-    const proposedSnapshot = mockedRepository.createEditRequest.mock.calls[0]?.[1];
-    expect(proposedSnapshot).not.toHaveProperty('measurementPoints');
-    expect(proposedSnapshot).not.toHaveProperty('systemTypes');
-    expect(proposedSnapshot).not.toHaveProperty('pendingEditRequestCount');
+    const payload = mockedRepository.createEditRequest.mock.calls[0]?.[1];
+    expect(payload?.proposedFactory).not.toHaveProperty('measurementPoints');
+    expect(payload?.proposedFactory).not.toHaveProperty('systemTypes');
+    expect(payload?.proposedFactory).not.toHaveProperty('pendingEditRequestCount');
   });
 
   it('rejects a second open request for the same factory', async () => {
@@ -119,10 +128,102 @@ describe('pomsFactoriesService edit-request workflow', () => {
     expect(mockedRepository.resubmitEditRequest).toHaveBeenCalledWith(
       11,
       expect.objectContaining({
-        factoryName: 'บริษัท ทดสอบ จำกัด (แก้ไขแล้ว)',
-        factoryLogo: null,
+        formType: 'BASIC_INFO',
+        proposedFactory: expect.objectContaining({
+          factoryName: 'บริษัท ทดสอบ จำกัด (แก้ไขแล้ว)',
+          factoryLogo: null,
+        }),
       }),
       'แก้ไขตามข้อสังเกตแล้ว',
+      42,
+    );
+  });
+
+  it('creates a measurement-point edit request from current live POMS points', async () => {
+    await pomsFactoriesService.createEditRequest(
+      'factory-001',
+      {
+        formType: 'MEASUREMENT_POINTS',
+        measurementPoints: [
+          {
+            connectedPointId: 15,
+            pointName: 'ปล่อง A (แก้ไข)',
+            monitoringPointStatus: 'อยู่ระหว่างเชื่อมต่อ',
+          },
+        ],
+        note: 'ขอแก้ไขสถานะจุดตรวจวัด',
+      },
+      42,
+      ownFactoryScope,
+      null,
+    );
+
+    expect(mockedRepository.findOpenEditRequestForFactory).toHaveBeenCalledWith(
+      7,
+      'MEASUREMENT_POINTS',
+    );
+    expect(mockedRepository.createEditRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ eligibleFactoryId: 7 }),
+      expect.objectContaining({
+        formType: 'MEASUREMENT_POINTS',
+        proposedFactory: expect.objectContaining({ factoryName: 'บริษัท ทดสอบ จำกัด' }),
+        proposedMeasurementPoints: [
+          expect.objectContaining({
+            connectedPointId: 15,
+            pointName: 'ปล่อง A (แก้ไข)',
+            pointCode: 'S0001',
+            pointType: 'STACK',
+            parameters: ['CO (ppm)'],
+            monitoringPointStatus: 'อยู่ระหว่างเชื่อมต่อ',
+          }),
+        ],
+      }),
+      'ขอแก้ไขสถานะจุดตรวจวัด',
+      42,
+    );
+  });
+
+  it('resubmits a measurement-point request without allowing the form type to change', async () => {
+    const measurementPoints = factoryDetail().measurementPoints;
+    mockedRepository.findEditRequestById.mockResolvedValue(
+      editRequest('REVISION_REQUESTED', {
+        formType: 'MEASUREMENT_POINTS',
+        currentMeasurementPoints: measurementPoints,
+        proposedMeasurementPoints: measurementPoints,
+      }),
+    );
+
+    await pomsFactoriesService.resubmitEditRequest(
+      11,
+      {
+        formType: 'MEASUREMENT_POINTS',
+        measurementPoints: [
+          {
+            connectedPointId: 15,
+            details: { stackHeight: 40 },
+          },
+        ],
+      },
+      42,
+      ownFactoryScope,
+      null,
+    );
+
+    expect(mockedRepository.resubmitEditRequest).toHaveBeenCalledWith(
+      11,
+      expect.objectContaining({
+        formType: 'MEASUREMENT_POINTS',
+        proposedMeasurementPoints: [
+          expect.objectContaining({
+            connectedPointId: 15,
+            pointCode: 'S0001',
+            pointType: 'STACK',
+            parameters: ['CO (ppm)'],
+            details: { stackHeight: 40 },
+          }),
+        ],
+      }),
+      null,
       42,
     );
   });
@@ -155,6 +256,7 @@ describe('pomsFactoriesService edit-request workflow', () => {
         11,
         { decision: 'APPROVE', officerNote: null },
         42,
+        { userType: 'admin', roles: ['admin'] },
         { scope: 'ALL' },
         null,
       ),
@@ -172,6 +274,7 @@ describe('pomsFactoriesService edit-request workflow', () => {
         11,
         { decision: 'APPROVE', officerNote: null },
         42,
+        { userType: 'admin', roles: ['admin'] },
         { scope: 'ALL' },
         null,
       ),
@@ -210,6 +313,7 @@ describe('pomsFactoriesService edit-request workflow', () => {
       11,
       input,
       77,
+      { userType: 'admin', roles: ['admin'] },
       { scope: 'ALL' },
       null,
     );
@@ -230,6 +334,7 @@ describe('pomsFactoriesService edit-request workflow', () => {
           11,
           { decision: 'APPROVE', officerNote: null },
           77,
+          { userType: 'admin', roles: ['admin'] },
           { scope: 'ALL' },
           null,
         ),
@@ -237,9 +342,23 @@ describe('pomsFactoriesService edit-request workflow', () => {
       expect(mockedRepository.reviewEditRequest).not.toHaveBeenCalled();
     },
   );
+
+  it('rejects review when the approver is not admin even if they have approve permission', async () => {
+    await expect(
+      pomsFactoriesService.reviewEditRequest(
+        11,
+        { decision: 'APPROVE', officerNote: 'ข้อมูลครบถ้วน' },
+        77,
+        { userType: 'officer', roles: ['monitoring_kpm'] },
+        { scope: 'ALL' },
+        null,
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    expect(mockedRepository.reviewEditRequest).not.toHaveBeenCalled();
+  });
 });
 
-function factoryDetail() {
+function factoryDetail(): PomsFactoryDetailDTO {
   return {
     eligibleFactoryId: 7,
     factoryId: 'factory-001',
@@ -263,7 +382,9 @@ function factoryDetail() {
       },
     ],
     factoryLogo: null,
+    systemTypes: ['CEMS'],
     measurementPointCount: 1,
+    pendingEditRequestCount: 0,
     updatedAt: '2026-08-24T00:00:00.000Z',
     measurementPoints: [
       {
@@ -277,31 +398,28 @@ function factoryDetail() {
         pointCode: 'S0001',
         pointType: 'STACK' as const,
         parameters: ['CO (ppm)'],
-        monitoringPointStatus: 'Normal' as const,
+        monitoringPointStatus: 'เชื่อมต่อครบแล้ว' as const,
         details: null,
         documentsAndImages: [],
         measurementInstruments: null,
         updatedAt: '2026-08-24T00:00:00.000Z',
       },
     ],
-  } as never;
+  };
 }
 
 function editRequest(
-  status:
-    | 'PENDING_REVIEW'
-    | 'REVISION_REQUESTED'
-    | 'REVISED_PENDING_REVIEW'
-    | 'APPROVED'
-    | 'REJECTED',
-  overrides: Record<string, unknown> = {},
-) {
+  status: PomsFactoryEditRequestStatus,
+  overrides: Partial<PomsFactoryEditRequestDTO> = {},
+): PomsFactoryEditRequestDTO {
   return {
     id: 11,
     requestNo: 'PFE-20260824-ABC12345',
     eligibleFactoryId: 7,
     factoryId: 'factory-001',
+    factoryRegistrationNo: '3-106-33/50สบ',
     factoryName: 'บริษัท ทดสอบ จำกัด (ใหม่)',
+    formType: 'BASIC_INFO',
     status,
     statusLabel: status,
     revisionNo: 0,
@@ -311,6 +429,8 @@ function editRequest(
     officerNote: null,
     currentFactory: factoryDetail(),
     proposedFactory: factoryDetail(),
+    currentMeasurementPoints: null,
+    proposedMeasurementPoints: null,
     submittedBy: 42,
     reviewedBy: null,
     submittedAt: '2026-08-24T00:00:00.000Z',
@@ -321,5 +441,5 @@ function editRequest(
     createdAt: '2026-08-24T00:00:00.000Z',
     updatedAt: '2026-08-24T00:00:00.000Z',
     ...overrides,
-  } as never;
+  };
 }

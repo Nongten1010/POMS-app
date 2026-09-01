@@ -204,6 +204,8 @@ describe('RBAC seed catalog', () => {
         scope: 'IN_REGION',
       }),
     );
+    expect(findGrant('monitoring_kpm', 'factories:approve')).toBeUndefined();
+    expect(findGrant('monitoring_5_centers', 'factories:approve')).toBeUndefined();
     expect(findGrant('admin', 'cems_wpms_requests:direct_connect')).toEqual(
       expect.objectContaining({
         role: 'admin',
@@ -211,6 +213,23 @@ describe('RBAC seed catalog', () => {
         scope: 'ALL',
       }),
     );
+    expect(findGrant('admin', 'factories:approve')).toEqual(
+      expect.objectContaining({
+        role: 'admin',
+        permission: 'factories:approve',
+        scope: 'ALL',
+      }),
+    );
+  });
+
+  it('grants factories:approve only to the admin role', () => {
+    expect(GRANTS.filter((grant) => grant.permission === 'factories:approve')).toEqual([
+      {
+        role: 'admin',
+        permission: 'factories:approve',
+        scope: 'ALL',
+      },
+    ]);
   });
 
   it('uses the exact eligible factory scopes and edit restrictions', () => {

@@ -54,6 +54,7 @@ describe('POMS factory master-data OpenAPI contract', () => {
 
     expect(Object.keys(properties).sort()).toEqual(
       [
+        'formType',
         'factoryName',
         'factoryAddress',
         'latitude',
@@ -83,10 +84,10 @@ describe('POMS factory master-data OpenAPI contract', () => {
     );
 
     expect(jsonRequestSchema('/poms-factories/{factoryId}/edit-requests', 'post')).toEqual({
-      $ref: '#/components/schemas/PomsFactoryEditableProfileRequest',
+      $ref: '#/components/schemas/PomsFactoryEditSubmissionRequest',
     });
     expect(jsonRequestSchema('/poms-factories/edit-requests/{id}/resubmission', 'put')).toEqual({
-      $ref: '#/components/schemas/PomsFactoryEditableProfileRequest',
+      $ref: '#/components/schemas/PomsFactoryEditSubmissionRequest',
     });
 
     const createRequestBody = asObject(
@@ -106,6 +107,52 @@ describe('POMS factory master-data OpenAPI contract', () => {
         factoryLogo: expect.any(Object),
       }),
     );
+  });
+
+  it('publishes the measurement-point edit form as a second submission variant', () => {
+    const request = asObject(
+      schemas().PomsFactoryEditableMeasurementPointsRequest,
+      'measurement-point request',
+    );
+    const requestProperties = asObject(request.properties, 'measurement request properties');
+    expect(request.required).toEqual(['formType', 'measurementPoints']);
+    expect(asObject(requestProperties.formType, 'formType').enum).toEqual(['MEASUREMENT_POINTS']);
+
+    const pointPatch = asObject(
+      schemas().PomsFactoryMeasurementPointPatchRequest,
+      'measurement-point patch request',
+    );
+    const pointPatchProperties = asObject(pointPatch.properties, 'patch properties');
+    expect(pointPatch.required).toEqual(['connectedPointId']);
+    expect(pointPatchProperties).toEqual(
+      expect.objectContaining({
+        connectedPointId: expect.any(Object),
+        pointName: expect.any(Object),
+        monitoringPointStatus: expect.any(Object),
+        details: expect.any(Object),
+        documentsAndImages: expect.any(Object),
+        measurementInstruments: expect.any(Object),
+      }),
+    );
+    expect(pointPatchProperties).not.toHaveProperty('pointCode');
+    expect(pointPatchProperties).not.toHaveProperty('parameters');
+    expect(
+      asObject(pointPatchProperties.monitoringPointStatus, 'monitoringPointStatus').enum,
+    ).toEqual([
+      'เชื่อมต่อครบแล้ว',
+      'ได้รับการยกเว้นทั้งหมด',
+      'เชื่อมต่อแล้วแต่ยังไม่ครบ',
+      'อยู่ระหว่างขยายเวลา',
+      'ยังไม่ได้ดำเนินการเชื่อมต่อ',
+      'อยู่ระหว่างการตรวจสอบของจังหวัด',
+      'อยู่ระหว่างเชื่อมต่อ',
+    ]);
+
+    const union = asObject(schemas().PomsFactoryEditSubmissionRequest, 'submission union');
+    expect(union.oneOf).toEqual([
+      { $ref: '#/components/schemas/PomsFactoryEditableProfileRequest' },
+      { $ref: '#/components/schemas/PomsFactoryEditableMeasurementPointsRequest' },
+    ]);
   });
 
   it('keeps factory summary and edit-request responses aligned with runtime DTOs', () => {
@@ -156,8 +203,11 @@ describe('POMS factory master-data OpenAPI contract', () => {
       expect.objectContaining({
         requestNo: expect.objectContaining({ example: 'PFE-20260824-1A2B3C4D' }),
         factoryRegistrationNo: expect.any(Object),
+        formType: expect.objectContaining({ enum: ['BASIC_INFO', 'MEASUREMENT_POINTS'] }),
         revisionNo: expect.objectContaining({ minimum: 0 }),
         approvedAt: expect.objectContaining({ nullable: true, format: 'date-time' }),
+        currentMeasurementPoints: expect.objectContaining({ nullable: true }),
+        proposedMeasurementPoints: expect.objectContaining({ nullable: true }),
       }),
     );
 

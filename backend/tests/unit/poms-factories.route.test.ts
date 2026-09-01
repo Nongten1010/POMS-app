@@ -2,6 +2,7 @@ import express from 'express';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { pomsFactoriesRoutes } from '../../src/modules/poms-factories/poms-factories.routes';
+import { POMS_FACTORY_EDIT_REQUEST_FORM_TYPE } from '../../src/modules/poms-factories/poms-factories.types';
 import { errorHandler, notFoundHandler } from '../../src/shared/middlewares/errorHandler';
 import { signAccessToken } from '../../src/shared/utils/jwt';
 
@@ -189,7 +190,7 @@ describe('POMS factory routes', () => {
     expect(mockedService.reviewEditRequest).not.toHaveBeenCalled();
   });
 
-  it('reviews an edit request', async () => {
+  it('rejects a monitoring officer even when the token has factories:approve', async () => {
     const response = await request(createTestApp())
       .post('/api/v1/poms-factories/edit-requests/11/review')
       .set(
@@ -207,13 +208,69 @@ describe('POMS factory routes', () => {
       )
       .send({ decision: 'APPROVE', officerNote: 'ข้อมูลครบถ้วน' });
 
+    expect(response.status).toBe(403);
+    expect(mockedService.reviewEditRequest).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      label: 'admin user type without the admin role',
+      userType: 'admin' as const,
+      roles: ['monitoring_kpm'],
+    },
+    {
+      label: 'admin role without the admin user type',
+      userType: 'officer' as const,
+      roles: ['admin'],
+    },
+  ])('rejects $label', async ({ userType, roles }) => {
+    const response = await request(createTestApp())
+      .post('/api/v1/poms-factories/edit-requests/11/review')
+      .set(
+        'Authorization',
+        `Bearer ${accessToken({
+          sub: '77',
+          userType,
+          roles,
+          scopes: { 'factories:view': 'ALL', 'factories:approve': 'ALL' },
+          scopeDetails: {
+            'factories:view': { scope: 'ALL' },
+            'factories:approve': { scope: 'ALL' },
+          },
+        })}`,
+      )
+      .send({ decision: 'APPROVE' });
+
+    expect(response.status).toBe(403);
+    expect(mockedService.reviewEditRequest).not.toHaveBeenCalled();
+  });
+
+  it('allows an authenticated admin with view and approve permissions to review a request', async () => {
+    const response = await request(createTestApp())
+      .post('/api/v1/poms-factories/edit-requests/11/review')
+      .set(
+        'Authorization',
+        `Bearer ${accessToken({
+          sub: '99',
+          userType: 'admin',
+          roles: ['admin'],
+          scopes: { 'factories:view': 'ALL', 'factories:approve': 'ALL' },
+          scopeDetails: {
+            'factories:view': { scope: 'ALL' },
+            'factories:approve': { scope: 'ALL' },
+          },
+        })}`,
+      )
+      .send({ decision: 'APPROVE' });
+
     expect(response.status).toBe(200);
     expect(response.body.data.status).toBe('APPROVED');
     expect(mockedService.reviewEditRequest).toHaveBeenCalledWith(
       11,
-      { decision: 'APPROVE', officerNote: 'ข้อมูลครบถ้วน' },
-      77,
-      approveScope,
+      { decision: 'APPROVE' },
+      99,
+      { userType: 'admin', roles: ['admin'] },
+      { scope: 'ALL' },
       null,
     );
   });
@@ -294,6 +351,7 @@ function editRequest(status: 'PENDING_REVIEW' | 'REVISED_PENDING_REVIEW' | 'APPR
     factoryId: 'factory-001',
     factoryRegistrationNo: '3-106-33/50สบ',
     factoryName: 'บริษัท ทดสอบ จำกัด',
+    formType: POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.BASIC_INFO,
     status,
     statusLabel: status === 'APPROVED' ? 'อนุมัติแล้ว' : 'รอพิจารณา',
     revisionNo: 0,
@@ -303,6 +361,8 @@ function editRequest(status: 'PENDING_REVIEW' | 'REVISED_PENDING_REVIEW' | 'APPR
     officerNote: status === 'APPROVED' ? 'ข้อมูลครบถ้วน' : null,
     currentFactory: factorySummary(),
     proposedFactory: { ...factorySummary(), factoryName: 'บริษัท ทดสอบ จำกัด (ใหม่)' },
+    currentMeasurementPoints: null,
+    proposedMeasurementPoints: null,
     submittedBy: 42,
     reviewedBy: status === 'APPROVED' ? 77 : null,
     submittedAt: '2026-08-24T00:00:00.000Z',

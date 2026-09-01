@@ -14,8 +14,15 @@ export const POMS_FACTORY_EDIT_REQUEST_STATUS = {
   REJECTED: 'REJECTED',
 } as const;
 
+export const POMS_FACTORY_EDIT_REQUEST_FORM_TYPE = {
+  BASIC_INFO: 'BASIC_INFO',
+  MEASUREMENT_POINTS: 'MEASUREMENT_POINTS',
+} as const;
+
 export type PomsFactoryEditRequestStatus =
   (typeof POMS_FACTORY_EDIT_REQUEST_STATUS)[keyof typeof POMS_FACTORY_EDIT_REQUEST_STATUS];
+export type PomsFactoryEditRequestFormType =
+  (typeof POMS_FACTORY_EDIT_REQUEST_FORM_TYPE)[keyof typeof POMS_FACTORY_EDIT_REQUEST_FORM_TYPE];
 
 export const POMS_FACTORY_EDIT_REQUEST_STATUS_LABELS: Record<PomsFactoryEditRequestStatus, string> =
   {
@@ -84,6 +91,7 @@ export interface PomsFactoryDetailDTO extends PomsFactorySummaryDTO {
 }
 
 export interface CreatePomsFactoryEditRequestInput {
+  formType?: typeof POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.BASIC_INFO;
   factoryName: string;
   factoryAddress?: string | null;
   latitude?: number | null;
@@ -96,12 +104,36 @@ export interface CreatePomsFactoryEditRequestInput {
   note?: string | null;
 }
 
-export type ResubmitPomsFactoryEditRequestInput = CreatePomsFactoryEditRequestInput;
+export interface PomsMeasurementPointPatchInput {
+  connectedPointId: number;
+  pointName?: string;
+  monitoringPointStatus?: MonitoringPointStatus | null;
+  details?: MeasurementPointDetailsInput | null;
+  documentsAndImages?: RequestDocumentImageInput[];
+  measurementInstruments?: MeasurementInstrumentsInput | null;
+}
+
+export interface CreatePomsFactoryMeasurementPointsEditRequestInput {
+  formType: typeof POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.MEASUREMENT_POINTS;
+  measurementPoints: PomsMeasurementPointPatchInput[];
+  note?: string | null;
+}
+
+export type CreateAnyPomsFactoryEditRequestInput =
+  | CreatePomsFactoryEditRequestInput
+  | CreatePomsFactoryMeasurementPointsEditRequestInput;
+
+export type ResubmitPomsFactoryEditRequestInput = CreateAnyPomsFactoryEditRequestInput;
 
 export interface ReviewPomsFactoryEditRequestInput {
   decision: 'APPROVE' | 'REQUEST_REVISION' | 'REJECT';
   revisionReason?: string | null;
   officerNote?: string | null;
+}
+
+export interface PomsFactoryReviewActorContext {
+  userType?: 'citizen' | 'operator' | 'officer' | 'admin';
+  roles: string[];
 }
 
 export interface PomsFactoryEditRequestEventDTO {
@@ -121,6 +153,7 @@ export interface PomsFactoryEditRequestDTO {
   factoryId: string;
   factoryRegistrationNo: string;
   factoryName: string;
+  formType: PomsFactoryEditRequestFormType;
   status: PomsFactoryEditRequestStatus;
   statusLabel: string;
   revisionNo: number;
@@ -130,6 +163,8 @@ export interface PomsFactoryEditRequestDTO {
   officerNote: string | null;
   currentFactory: PomsFactoryProfileDTO;
   proposedFactory: PomsFactoryProfileDTO;
+  currentMeasurementPoints: PomsMeasurementPointDTO[] | null;
+  proposedMeasurementPoints: PomsMeasurementPointDTO[] | null;
   submittedBy: number;
   reviewedBy: number | null;
   submittedAt: string;
