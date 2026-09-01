@@ -434,6 +434,22 @@ export const connectionRequestsController = {
     }
   },
 
+  async getForm(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const actorUserId = requireActorUserId(req);
+      const { id } = connectionRequestIdParamsSchema.parse(req.params);
+      const data = await connectionRequestsService.getForm(
+        id,
+        actorUserId,
+        getScopeDetails(req, 'cems_wpms_requests:view'),
+        ...getRegionalAccessArg(req),
+      );
+      res.status(StatusCodes.OK).json({ success: true, data });
+    } catch (err) {
+      next(err);
+    }
+  },
+
   async getDetail(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const actorUserId = requireActorUserId(req);

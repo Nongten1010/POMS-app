@@ -1,6 +1,18 @@
-import { ConflictError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
+import {
+  BadRequestError,
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+} from '../../shared/errors/AppError';
 import type { PermissionScopeDetails } from '../auth/permissions';
 import type { RegionalAccessDTO } from '../auth/regional-access';
+import { deriveHasEiaFromAssessment } from '../connection-requests/connection-request-eia';
+import {
+  CONNECTION_REQUEST_TYPE,
+  type ConnectionRequestFormDTO,
+  type ConnectionSystemType,
+  type RequestDocumentImageInput,
+} from '../connection-requests/connection-requests.types';
 import type {
   CreateAnyPomsFactoryEditRequestInput,
   ListPomsFactoryEditRequestsQuery,
@@ -48,6 +60,18 @@ export const pomsFactoriesService = {
     });
     if (!detail) throw new NotFoundError('POMS factory not found');
     return detail;
+  },
+
+  async getFactoryForm(
+    factoryId: string,
+    actorUserId: number,
+    viewScope: AccessScope,
+    query: { formType?: PomsFactoryEditRequestDTO['formType']; systemType?: ConnectionSystemType },
+    regionalAccess?: RegionalAccessDTO | null,
+  ): Promise<ConnectionRequestFormDTO> {
+    const current = await this.getFactoryDetail(factoryId, actorUserId, viewScope, regionalAccess);
+    const systemType = resolveFormSystemType(current.measurementPoints, query.systemType);
+    return toPomsConnectionRequestForm(current, current.measurementPoints, systemType);
   },
 
   async createEditRequest(
@@ -128,6 +152,34 @@ export const pomsFactoriesService = {
     });
     if (!request) throw new NotFoundError('POMS factory edit request not found');
     return request;
+  },
+
+  async getEditRequestForm(
+    id: number,
+    actorUserId: number,
+    viewScope: AccessScope,
+    query: { systemType?: ConnectionSystemType },
+    regionalAccess?: RegionalAccessDTO | null,
+  ): Promise<ConnectionRequestFormDTO> {
+    const request = await this.getEditRequest(id, actorUserId, viewScope, regionalAccess);
+    const current = await this.getFactoryDetail(
+      request.factoryId,
+      actorUserId,
+      viewScope,
+      regionalAccess,
+    );
+    const profile =
+      request.formType === POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.BASIC_INFO
+        ? request.proposedFactory
+        : current;
+    const points =
+      request.formType === POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.MEASUREMENT_POINTS
+        ? (request.proposedMeasurementPoints ??
+          request.currentMeasurementPoints ??
+          current.measurementPoints)
+        : current.measurementPoints;
+    const systemType = resolveFormSystemType(points, query.systemType);
+    return toPomsConnectionRequestForm(profile, points, systemType, request.requestNote);
   },
 
   async resubmitEditRequest(
@@ -225,6 +277,156 @@ export const pomsFactoriesService = {
     return pomsFactoriesRepository.reviewEditRequest(id, input, actorUserId);
   },
 };
+
+const FACTORY_FRONT_PHOTO_DOCUMENT_TITLE = 'ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน';
+const FACTORY_LOGO_DOCUMENT_TITLE = 'สัญลักษณ์ของโรงงานหรือโลโก้บริษัท';
+
+function resolveFormSystemType(
+  points: PomsMeasurementPointDTO[],
+  requestedSystemType?: ConnectionSystemType,
+): ConnectionSystemType {
+  const availableSystemTypes = [...new Set(points.map((point) => point.systemType))].sort();
+  if (requestedSystemType) {
+    if (availableSystemTypes.includes(requestedSystemType)) return requestedSystemType;
+    throw new BadRequestError('Requested systemType is not available for this POMS factory', {
+      requestedSystemType,
+      availableSystemTypes,
+    });
+  }
+  if (availableSystemTypes.length === 1) return availableSystemTypes[0];
+  if (availableSystemTypes.length === 0) {
+    throw new NotFoundError('POMS factory has no active measurement points');
+  }
+  throw new BadRequestError(
+    'systemType query is required when a POMS factory has both CEMS and WPMS points',
+    { availableSystemTypes },
+  );
+}
+
+function toPomsConnectionRequestForm(
+  profile: PomsFactoryProfileDTO,
+  points: PomsMeasurementPointDTO[],
+  systemType: ConnectionSystemType,
+  remarks?: string | null,
+): ConnectionRequestFormDTO {
+  const baseForm = emptyConnectionRequestForm(profile, systemType);
+  const measurementPoints = points
+    .filter((point) => point.systemType === systemType)
+    .map((point) => ({
+      pointName: point.pointName,
+      pointCode: point.pointCode,
+      pointType: point.pointType,
+      latitude: null,
+      longitude: null,
+      ...(point.parameters.length > 0 ? { parameters: [...point.parameters] } : {}),
+      description: null,
+      monitoringPointStatus: point.monitoringPointStatus,
+      details: point.details ? { ...point.details } : null,
+      documentsAndImages: point.documentsAndImages.map((document) => ({ ...document })),
+      measurementInstruments: point.measurementInstruments
+        ? {
+            ...point.measurementInstruments,
+            parameters: point.measurementInstruments.parameters.map((parameter) => ({
+              ...parameter,
+            })),
+          }
+        : null,
+    }));
+
+  return {
+    ...baseForm,
+    factoryId: profile.factoryId,
+    factoryName: profile.factoryName,
+    factoryRegistrationNo: profile.factoryRegistrationNo,
+    eia: profile.eia,
+    eiaOther: profile.eiaOther,
+    hasEia: profile.eia ? deriveHasEiaFromAssessment(profile.eia) : null,
+    projectName: profile.projectName,
+    address: profile.factoryAddress,
+    provinceName: profile.provinceName,
+    industrialEstateName: profile.industrialEstateName,
+    latitude: profile.latitude,
+    longitude: profile.longitude,
+    systemType,
+    measurementPoints: mergeFactoryProfileDocuments(
+      measurementPoints,
+      profile.factoryFrontPhotos,
+      profile.factoryLogo,
+    ),
+    remarks: remarks ?? null,
+  };
+}
+
+function emptyConnectionRequestForm(
+  profile: PomsFactoryProfileDTO,
+  systemType: ConnectionSystemType,
+): ConnectionRequestFormDTO {
+  return {
+    requestType: CONNECTION_REQUEST_TYPE.NEW_CONNECTION,
+    factoryId: profile.factoryId,
+    factoryName: profile.factoryName,
+    factoryRegistrationNo: profile.factoryRegistrationNo,
+    industryMainOrder: null,
+    industryMainOrderLabel: null,
+    industrySubOrder: null,
+    businessActivity: null,
+    eia: profile.eia,
+    eiaOther: profile.eiaOther,
+    hasEia: profile.eia ? deriveHasEiaFromAssessment(profile.eia) : null,
+    projectName: profile.projectName,
+    address: profile.factoryAddress,
+    regionCode: null,
+    regionName: null,
+    provinceCode: null,
+    provinceName: profile.provinceName,
+    districtCode: null,
+    districtName: null,
+    subdistrictCode: null,
+    subdistrictName: null,
+    industrialEstateCode: null,
+    industrialEstateName: profile.industrialEstateName,
+    latitude: profile.latitude,
+    longitude: profile.longitude,
+    systemType,
+    contactName: '',
+    contactPhone: '',
+    contactEmail: null,
+    notificationEmails: [],
+    officerNotificationEmails: [],
+    informationProviderName: null,
+    informationProviderPosition: null,
+    measurementPoints: [],
+    remarks: null,
+  };
+}
+
+function mergeFactoryProfileDocuments(
+  points: ConnectionRequestFormDTO['measurementPoints'],
+  factoryFrontPhotos: RequestDocumentImageInput[],
+  factoryLogo: RequestDocumentImageInput | null,
+): ConnectionRequestFormDTO['measurementPoints'] {
+  const withoutProfileDocuments = points.map((point) => ({
+    ...point,
+    documentsAndImages: (point.documentsAndImages ?? []).filter(
+      (document) =>
+        document.title !== FACTORY_FRONT_PHOTO_DOCUMENT_TITLE &&
+        document.title !== FACTORY_LOGO_DOCUMENT_TITLE,
+    ),
+  }));
+  if (withoutProfileDocuments.length === 0) return withoutProfileDocuments;
+  const profileDocuments = [
+    ...factoryFrontPhotos.map((document) => ({ ...document })),
+    ...(factoryLogo ? [{ ...factoryLogo }] : []),
+  ];
+  withoutProfileDocuments[0] = {
+    ...withoutProfileDocuments[0],
+    documentsAndImages: [
+      ...(withoutProfileDocuments[0].documentsAndImages ?? []),
+      ...profileDocuments,
+    ],
+  };
+  return withoutProfileDocuments;
+}
 
 function buildProposedProfile(
   current: PomsFactoryProfileDTO,

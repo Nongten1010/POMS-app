@@ -164,7 +164,34 @@ describe('API documentation routes', () => {
     expect(operationCount).toBe(
       countOpenApiOperations(pomsOpenApiDocument as Record<string, unknown>),
     );
-    expect(operationCount).toBe(136);
+    expect(operationCount).toBe(139);
+  });
+
+  it('serves one canonical form-prefill response schema on connection and POMS endpoints', async () => {
+    const response = await request(createDocsTestApp()).get('/api/v1/openapi.json');
+    const paths = response.body.paths as Record<
+      string,
+      Record<
+        string,
+        {
+          responses?: Record<
+            string,
+            { content?: Record<string, { schema?: Record<string, unknown> }> }
+          >;
+        }
+      >
+    >;
+    const expected = { $ref: '#/components/schemas/ConnectionRequestFormResponse' };
+
+    for (const path of [
+      '/cems-wpms-requests/{id}/form',
+      '/poms-factories/{factoryId}/form',
+      '/poms-factories/edit-requests/{id}/form',
+    ]) {
+      expect(paths[path].get.responses?.['200'].content?.['application/json'].schema).toEqual(
+        expected,
+      );
+    }
   });
 
   it('documents the key write flows with a required request body', async () => {

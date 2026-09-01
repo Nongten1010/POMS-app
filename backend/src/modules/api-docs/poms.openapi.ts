@@ -519,7 +519,7 @@ const favoriteExample = { isFavorite: true };
 const pomsFactoryEditRequestExample = {
   formType: 'BASIC_INFO',
   factoryName: 'บริษัท ทดสอบ จำกัด (แก้ไข)',
-  factoryAddress: '100 หมู่ 2 ตำบลทดสอบ อำเภอเมือง จังหวัดสระบุรี',
+  address: '100 หมู่ 2 ตำบลทดสอบ อำเภอเมือง จังหวัดสระบุรี',
   latitude: 13.7563,
   longitude: 100.5018,
   eia: 'มี',
@@ -541,7 +541,7 @@ const pomsFactoryEditRequestExample = {
     fileType: 'image/png',
     fileSize: 102400,
   },
-  note: 'ขอแก้ไขข้อมูลพื้นฐานหลังเชื่อมต่อแล้ว',
+  remarks: 'ขอแก้ไขข้อมูลพื้นฐานหลังเชื่อมต่อแล้ว',
 };
 
 const pomsFactoryMeasurementPointEditRequestExample = {
@@ -569,7 +569,7 @@ const pomsFactoryMeasurementPointEditRequestExample = {
       },
     },
   ],
-  note: 'ขอแก้ไขข้อมูลจุดตรวจวัดหลังเชื่อมต่อแล้ว',
+  remarks: 'ขอแก้ไขข้อมูลจุดตรวจวัดหลังเชื่อมต่อแล้ว',
 };
 
 const pomsFactoryEditReviewExample = {
@@ -1650,7 +1650,16 @@ const componentSchemas: Record<string, OpenApiObject> = {
         minLength: 1,
         maxLength: 1000,
         nullable: true,
-        description: 'Optional; omitted = คงค่าเดิม, null = ล้างค่า',
+        deprecated: true,
+        description:
+          'Legacy alias ของ address; ถ้าส่งทั้งคู่ค่าต้องตรงกัน. omitted = คงค่าเดิม, null = ล้างค่า',
+      },
+      address: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 1000,
+        nullable: true,
+        description: 'Canonical field ตรงกับแบบคำขอเชื่อมต่อ; omitted = คงค่าเดิม, null = ล้างค่า',
       },
       latitude: {
         type: 'number',
@@ -1705,7 +1714,17 @@ const componentSchemas: Record<string, OpenApiObject> = {
         minLength: 1,
         maxLength: 1000,
         nullable: true,
-        description: 'ข้อความประกอบจากโรงงาน; response แสดงเป็น requestNote',
+        deprecated: true,
+        description:
+          'Legacy alias ของ remarks; ถ้าส่งทั้งคู่ค่าต้องตรงกัน. response workflow แสดงเป็น requestNote',
+      },
+      remarks: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 1000,
+        nullable: true,
+        description:
+          'Canonical field ตรงกับแบบคำขอเชื่อมต่อ; response workflow แสดงเป็น requestNote',
       },
     },
     example: pomsFactoryEditRequestExample,
@@ -1757,7 +1776,17 @@ const componentSchemas: Record<string, OpenApiObject> = {
         maxItems: 100,
         items: schemaRef('PomsFactoryMeasurementPointPatchRequest'),
       },
-      note: nullableStringSchema(1000),
+      remarks: {
+        ...nullableStringSchema(1000),
+        description:
+          'Canonical field ตรงกับแบบคำขอเชื่อมต่อ; response workflow แสดงเป็น requestNote',
+      },
+      note: {
+        ...nullableStringSchema(1000),
+        deprecated: true,
+        description:
+          'Legacy alias ของ remarks; ถ้าส่งทั้งคู่ค่าต้องตรงกัน. response workflow แสดงเป็น requestNote',
+      },
     },
     example: pomsFactoryMeasurementPointEditRequestExample,
   },
@@ -4298,6 +4327,29 @@ const extraPaths: Record<string, OpenApiObject> = {
       successSchema: schemaRef('PomsFactoryDetailResponse'),
     }),
   },
+  '/poms-factories/{factoryId}/form': {
+    get: securedOperation({
+      tag: 'Master Data',
+      summary: 'Get current/live POMS factory as connection-request form',
+      operationId: 'getPomsFactoryForm',
+      description:
+        'คืน canonical form-prefill field names ชุดเดียวกับ GET /cems-wpms-requests/{id}/form และไม่คืน POMS/workflow IDs. Permission: factories:view; ถ้าโรงงานมีทั้ง CEMS และ WPMS ต้องระบุ systemType',
+      parameters: [
+        factoryIdParameter,
+        queryEnum(
+          'formType',
+          ['BASIC_INFO', 'MEASUREMENT_POINTS'],
+          'บริบทแบบฟอร์มที่ client จะเปิด; response ยังคงใช้ canonical form shape เดียวกัน',
+        ),
+        queryEnum(
+          'systemType',
+          ['CEMS', 'WPMS'],
+          'เลือกชนิดระบบ; optional เมื่อโรงงานมี active point เพียงชนิดเดียว',
+        ),
+      ],
+      successSchema: schemaRef('ConnectionRequestFormResponse'),
+    }),
+  },
   '/poms-factories/edit-requests': {
     get: securedOperation({
       tag: 'Master Data',
@@ -4354,6 +4406,24 @@ const extraPaths: Record<string, OpenApiObject> = {
       successSchema: schemaRef('PomsFactoryEditRequestResponse'),
     }),
   },
+  '/poms-factories/edit-requests/{id}/form': {
+    get: securedOperation({
+      tag: 'Master Data',
+      summary: 'Get proposed POMS edit request as connection-request form',
+      operationId: 'getPomsFactoryEditRequestForm',
+      description:
+        'คืน proposed snapshot ด้วย canonical form-prefill field names ชุดเดียวกับ GET /cems-wpms-requests/{id}/form และไม่คืน POMS/workflow IDs. Permission: factories:view; ถ้ามีทั้ง CEMS และ WPMS ต้องระบุ systemType',
+      parameters: [
+        idParameter,
+        queryEnum(
+          'systemType',
+          ['CEMS', 'WPMS'],
+          'เลือกชนิดระบบ; optional เมื่อข้อมูลในคำขอมี point เพียงชนิดเดียว',
+        ),
+      ],
+      successSchema: schemaRef('ConnectionRequestFormResponse'),
+    }),
+  },
   '/poms-factories/edit-requests/{id}/resubmission': {
     put: securedOperation({
       tag: 'Master Data',
@@ -4364,7 +4434,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       parameters: [idParameter],
       requestBody: jsonRequestBody(schemaRef('PomsFactoryEditSubmissionRequest'), {
         ...pomsFactoryEditRequestExample,
-        note: 'แก้ไขพิกัดและภาพถ่ายตามคำขอของเจ้าหน้าที่แล้ว',
+        remarks: 'แก้ไขพิกัดและภาพถ่ายตามคำขอของเจ้าหน้าที่แล้ว',
       }),
       successSchema: schemaRef('PomsFactoryEditRequestResponse'),
       extraResponses: {
@@ -5409,13 +5479,13 @@ export const pomsOpenApiDocument: OpenApiObject = {
     title: 'POMS API',
     version: '0.3.0',
     description:
-      'Interactive contract สำหรับ HTTP endpoint ทั้ง 127 รายการใน POMS แยกตามเมนูงานจริง พร้อม payload, validation, auth และตัวอย่างทดสอบ\n\nSwagger แสดง 136 operations เพราะขยาย optional buddhistYear path อีก 9 รูปแบบเพื่อรองรับทั้ง annual point code ที่ URL-encode และ path ที่ proxy ถอดรหัสแล้ว',
+      'Interactive contract สำหรับ HTTP endpoint ทั้ง 130 รายการใน POMS แยกตามเมนูงานจริง พร้อม payload, validation, auth และตัวอย่างทดสอบ\n\nSwagger แสดง 139 operations เพราะขยาย optional buddhistYear path อีก 9 รูปแบบเพื่อรองรับทั้ง annual point code ที่ URL-encode และ path ที่ proxy ถอดรหัสแล้ว',
   },
   servers: [{ url: env.API_PREFIX }],
   tags,
   paths,
   components,
-  'x-poms-canonical-operation-count': 127,
+  'x-poms-canonical-operation-count': 130,
 };
 
 export function countOpenApiOperations(document: OpenApiObject): number {

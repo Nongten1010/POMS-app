@@ -10,9 +10,11 @@ jest.mock('../../src/modules/poms-factories/poms-factories.service', () => ({
   pomsFactoriesService: {
     listFactories: jest.fn(),
     getFactoryDetail: jest.fn(),
+    getFactoryForm: jest.fn(),
     createEditRequest: jest.fn(),
     listEditRequests: jest.fn(),
     getEditRequest: jest.fn(),
+    getEditRequestForm: jest.fn(),
     resubmitEditRequest: jest.fn(),
     reviewEditRequest: jest.fn(),
   },
@@ -30,12 +32,14 @@ describe('POMS factory routes', () => {
     jest.clearAllMocks();
     mockedService.listFactories.mockResolvedValue({ data: [factorySummary()], meta: { total: 1 } });
     mockedService.getFactoryDetail.mockResolvedValue(factoryDetail());
+    mockedService.getFactoryForm.mockResolvedValue(connectionForm());
     mockedService.createEditRequest.mockResolvedValue(editRequest('PENDING_REVIEW'));
     mockedService.listEditRequests.mockResolvedValue({
       data: [editRequest('PENDING_REVIEW')],
       meta: { total: 1 },
     });
     mockedService.getEditRequest.mockResolvedValue(editRequest('PENDING_REVIEW'));
+    mockedService.getEditRequestForm.mockResolvedValue(connectionForm());
     mockedService.resubmitEditRequest.mockResolvedValue(editRequest('REVISED_PENDING_REVIEW'));
     mockedService.reviewEditRequest.mockResolvedValue(editRequest('APPROVED'));
   });
@@ -69,6 +73,43 @@ describe('POMS factory routes', () => {
       { scope: 'ALL' },
       null,
     );
+  });
+
+  it('returns factory form data with the same field names as the connection-request form', async () => {
+    const response = await request(createTestApp())
+      .get('/api/v1/poms-factories/factory-001/form?formType=BASIC_INFO&systemType=CEMS')
+      .set('Authorization', `Bearer ${accessToken({ scopes: { 'factories:view': 'ALL' } })}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toEqual(connectionForm());
+    expect(response.body.data).not.toHaveProperty('formDefaults');
+    expect(response.body.data).not.toHaveProperty('factoryAddress');
+    expect(response.body.data).not.toHaveProperty('systemTypes');
+    expect(response.body.data.measurementPoints[0]).not.toHaveProperty('connectedPointId');
+    expect(mockedService.getFactoryForm).toHaveBeenCalledWith(
+      'factory-001',
+      42,
+      { scope: 'ALL' },
+      { formType: 'BASIC_INFO', systemType: 'CEMS' },
+      null,
+    );
+  });
+
+  it('returns proposed edit-request values through the same form contract', async () => {
+    const response = await request(createTestApp())
+      .get('/api/v1/poms-factories/edit-requests/11/form?systemType=CEMS')
+      .set('Authorization', `Bearer ${accessToken({ scopes: { 'factories:view': 'ALL' } })}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toEqual(connectionForm());
+    expect(mockedService.getEditRequestForm).toHaveBeenCalledWith(
+      11,
+      42,
+      { scope: 'ALL' },
+      { systemType: 'CEMS' },
+      null,
+    );
+    expect(mockedService.getEditRequest).not.toHaveBeenCalled();
   });
 
   it('requires factories:edit to create an edit request', async () => {
@@ -109,6 +150,40 @@ describe('POMS factory routes', () => {
       expect.objectContaining({
         factoryName: 'บริษัท ทดสอบ จำกัด (ใหม่)',
         factoryAddress: 'นิคมอุตสาหกรรมมาบตาพุด',
+      }),
+      42,
+      editScope,
+      null,
+    );
+  });
+
+  it('accepts connection-form aliases address and remarks for a basic-info edit request', async () => {
+    const response = await request(createTestApp())
+      .post('/api/v1/poms-factories/factory-001/edit-requests')
+      .set(
+        'Authorization',
+        `Bearer ${accessToken({
+          scopes: { 'factories:view': 'ALL', 'factories:edit': 'OWN_FACTORY' },
+          scopeDetails: {
+            'factories:view': { scope: 'ALL' },
+            'factories:edit': editScope,
+          },
+        })}`,
+      )
+      .send({
+        formType: 'BASIC_INFO',
+        factoryName: 'บริษัท ทดสอบ จำกัด (ใหม่)',
+        address: '100 หมู่ 2',
+        remarks: 'แก้ไขตามเอกสารล่าสุด',
+      });
+
+    expect(response.status).toBe(201);
+    expect(mockedService.createEditRequest).toHaveBeenCalledWith(
+      'factory-001',
+      expect.objectContaining({
+        factoryName: 'บริษัท ทดสอบ จำกัด (ใหม่)',
+        factoryAddress: '100 หมู่ 2',
+        note: 'แก้ไขตามเอกสารล่าสุด',
       }),
       42,
       editScope,
@@ -293,6 +368,27 @@ function accessToken(overrides: Partial<Parameters<typeof signAccessToken>[0]> =
     scopes: {},
     ...overrides,
   });
+}
+
+function connectionForm() {
+  return {
+    requestType: 'NEW_CONNECTION' as const,
+    factoryId: 'factory-001',
+    factoryName: 'บริษัท ทดสอบ จำกัด',
+    factoryRegistrationNo: '3-106-33/50สบ',
+    address: '99 หมู่ 1',
+    systemType: 'CEMS' as const,
+    contactName: 'สมชาย ใจดี',
+    contactPhone: '0812345678',
+    measurementPoints: [
+      {
+        pointName: 'ปล่อง A',
+        pointCode: 'S0001',
+        pointType: 'STACK' as const,
+        parameters: ['CO (ppm)'],
+      },
+    ],
+  };
 }
 
 function factorySummary() {

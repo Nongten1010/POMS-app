@@ -123,6 +123,11 @@ connectionRequestsRoutes.get(
   connectionRequestsController.getById,
 );
 connectionRequestsRoutes.get(
+  '/:id/form',
+  authorize('cems_wpms_requests:view'),
+  connectionRequestsController.getForm,
+);
+connectionRequestsRoutes.get(
   '/:id/detail',
   authorize('cems_wpms_requests:view'),
   connectionRequestsController.getDetail,

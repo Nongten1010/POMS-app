@@ -280,6 +280,13 @@ export interface MeasurementPointDTO extends Omit<MeasurementPointInput, 'parame
   pointCodeAssignmentMode?: PointCodeAssignmentMode | null;
 }
 
+export interface ConnectionRequestFormDTO extends Omit<
+  CreateConnectionRequestInput,
+  'eligibleFactoryId' | 'requestType'
+> {
+  requestType: ConnectionRequestType;
+}
+
 export interface StatusHistoryDTO {
   id: number;
   status: ConnectionRequestStatus;

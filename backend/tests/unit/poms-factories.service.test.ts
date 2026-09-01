@@ -13,7 +13,12 @@ jest.mock('../../src/modules/poms-factories/poms-factories.repository', () => ({
   },
 }));
 
-import { ConflictError, ForbiddenError, NotFoundError } from '../../src/shared/errors/AppError';
+import {
+  BadRequestError,
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+} from '../../src/shared/errors/AppError';
 import { pomsFactoriesRepository } from '../../src/modules/poms-factories/poms-factories.repository';
 import { pomsFactoriesService } from '../../src/modules/poms-factories/poms-factories.service';
 import type {
@@ -36,6 +41,110 @@ describe('pomsFactoriesService edit-request workflow', () => {
       editRequest('REVISED_PENDING_REVIEW', { revisionNo: 1 }),
     );
     mockedRepository.reviewEditRequest.mockResolvedValue(editRequest('APPROVED'));
+  });
+
+  it('builds a POMS form with the exact connection-request field names and live values', async () => {
+    const result = await pomsFactoriesService.getFactoryForm(
+      'factory-001',
+      42,
+      ownFactoryScope,
+      { formType: 'BASIC_INFO', systemType: 'CEMS' },
+      null,
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        factoryId: 'factory-001',
+        factoryName: 'บริษัท ทดสอบ จำกัด',
+        factoryRegistrationNo: '3-106-33/50สบ',
+        address: '99 หมู่ 1',
+        systemType: 'CEMS',
+        contactName: '',
+        contactPhone: '',
+        measurementPoints: [
+          expect.objectContaining({
+            pointName: 'ปล่อง A',
+            pointCode: 'S0001',
+            pointType: 'STACK',
+            latitude: null,
+            longitude: null,
+            parameters: ['CO (ppm)'],
+            description: null,
+            documentsAndImages: [
+              expect.objectContaining({
+                title: 'ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน',
+                fileName: 'front.jpg',
+              }),
+            ],
+          }),
+        ],
+      }),
+    );
+    expect(result).not.toHaveProperty('formType');
+    expect(result).not.toHaveProperty('formDefaults');
+    expect(result).not.toHaveProperty('factoryAddress');
+    expect(result).not.toHaveProperty('systemTypes');
+    expect(result.measurementPoints[0]).not.toHaveProperty('connectedPointId');
+    expect(result.measurementPoints[0]).not.toHaveProperty('sourceMeasurementPointId');
+  });
+
+  it('requires systemType when a live factory has both CEMS and WPMS points', async () => {
+    const detail = factoryDetail();
+    mockedRepository.findFactoryDetail.mockResolvedValue({
+      ...detail,
+      systemTypes: ['CEMS', 'WPMS'],
+      measurementPointCount: 2,
+      measurementPoints: [
+        ...detail.measurementPoints,
+        {
+          ...detail.measurementPoints[0],
+          connectedPointId: 16,
+          sourceMeasurementPointId: 3,
+          systemType: 'WPMS',
+          pointName: 'จุดระบายน้ำ A',
+          pointCode: 'P0001',
+          pointType: 'WASTEWATER',
+        },
+      ],
+    });
+
+    await expect(
+      pomsFactoriesService.getFactoryForm(
+        'factory-001',
+        42,
+        ownFactoryScope,
+        { formType: 'MEASUREMENT_POINTS' },
+        null,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestError);
+  });
+
+  it('prefills a returned edit request from proposed values using the same form contract', async () => {
+    const proposedFactory = {
+      ...factoryDetail(),
+      factoryName: 'บริษัท ทดสอบ จำกัด (แก้ไข)',
+      factoryAddress: '100 หมู่ 2',
+    };
+    mockedRepository.findEditRequestById.mockResolvedValue(
+      editRequest('REVISION_REQUESTED', {
+        requestNote: 'แก้ไขข้อมูลตามเอกสารล่าสุด',
+        proposedFactory,
+      }),
+    );
+
+    const result = await pomsFactoriesService.getEditRequestForm(
+      11,
+      42,
+      ownFactoryScope,
+      { systemType: 'CEMS' },
+      null,
+    );
+
+    expect(result.factoryName).toBe('บริษัท ทดสอบ จำกัด (แก้ไข)');
+    expect(result.address).toBe('100 หมู่ 2');
+    expect(result.remarks).toBe('แก้ไขข้อมูลตามเอกสารล่าสุด');
+    expect(result).not.toHaveProperty('revisionReason');
+    expect(result).not.toHaveProperty('requestNo');
   });
 
   it('creates PENDING_REVIEW from current live POMS data and preserves omitted fields', async () => {
@@ -374,7 +483,7 @@ function factoryDetail(): PomsFactoryDetailDTO {
     projectName: 'โครงการเดิม',
     factoryFrontPhotos: [
       {
-        title: 'ภาพด้านหน้า',
+        title: 'ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน',
         fileName: 'front.jpg',
         fileUrl: 'https://example.com/front.jpg',
         fileType: 'image/jpeg',

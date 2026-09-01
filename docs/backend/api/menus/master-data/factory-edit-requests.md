@@ -11,10 +11,10 @@
 ### Main Flow
 
 1. เรียก `GET /api/v1/poms-factories` เพื่อแสดงโรงงาน current/live ที่อยู่ใน data scope ของผู้ใช้
-2. เรียก `GET /api/v1/poms-factories/:factoryId` เพื่ออ่าน profile ปัจจุบันและ `measurementPoints` current/live
+2. เรียก `GET /api/v1/poms-factories/:factoryId/form` เพื่อลง current/live values ด้วยชื่อและ shape เดียวกับ `GET /api/v1/cems-wpms-requests/:id/form`
 3. ผู้ประกอบการส่งคำขอแก้ไขด้วย `POST /api/v1/poms-factories/:factoryId/edit-requests` โดยเลือก `formType` เป็น `BASIC_INFO` หรือ `MEASUREMENT_POINTS`
 4. admin อ่านรายการและรายละเอียดคำขอ แล้วเลือก `APPROVE`, `REQUEST_REVISION` หรือ `REJECT`
-5. ถ้าขอให้แก้ไข ผู้ประกอบการส่งกลับด้วย `PUT /api/v1/poms-factories/edit-requests/:id/resubmission`
+5. ถ้าขอให้แก้ไข ผู้ประกอบการเรียก `GET /api/v1/poms-factories/edit-requests/:id/form` เพื่อลง proposed values แล้วส่งกลับด้วย `PUT /api/v1/poms-factories/edit-requests/:id/resubmission`
 6. เมื่ออนุมัติ backend อัปเดต current/live POMS data ตาม `formType`: `BASIC_INFO` sync active `cems_wpms_connected_measurement_points` และ active `eligible_factories`, ส่วน `MEASUREMENT_POINTS` sync active `cems_wpms_connected_measurement_points` ของโรงงานนั้น โดยไม่อัปเดตตาราง `factories`
 
 ### Capability Boundary
@@ -36,17 +36,22 @@ curl --request GET \
   --header 'Authorization: Bearer <ACCESS_TOKEN>' \
   --header 'Accept: application/json'
 
-curl --request POST \
-  --url '<BASE_URL>/api/v1/poms-factories/factory-001/edit-requests' \
+curl --request GET \
+  --url '<BASE_URL>/api/v1/poms-factories/factory-001/form?formType=BASIC_INFO&systemType=CEMS' \
   --header 'Authorization: Bearer <ACCESS_TOKEN>' \
-  --header 'Content-Type: application/json' \
-  --data '{"formType":"BASIC_INFO","factoryName":"บริษัท ตัวอย่าง จำกัด (มหาชน)","factoryAddress":"99 หมู่ 1 ตำบลตัวอย่าง","latitude":14.315,"longitude":100.612,"eia":"มี","eiaOther":null,"projectName":"โครงการปรับปรุงระบบตรวจวัด","factoryFrontPhotos":[],"factoryLogo":null,"note":"ปรับชื่อและที่อยู่ให้ตรงกับเอกสารล่าสุด"}'
+  --header 'Accept: application/json'
 
 curl --request POST \
   --url '<BASE_URL>/api/v1/poms-factories/factory-001/edit-requests' \
   --header 'Authorization: Bearer <ACCESS_TOKEN>' \
   --header 'Content-Type: application/json' \
-  --data '{"formType":"MEASUREMENT_POINTS","measurementPoints":[{"connectedPointId":15,"monitoringPointStatus":"อยู่ระหว่างเชื่อมต่อ"}],"note":"ปรับสถานะจุดตรวจวัด"}'
+  --data '{"formType":"BASIC_INFO","factoryName":"บริษัท ตัวอย่าง จำกัด (มหาชน)","address":"99 หมู่ 1 ตำบลตัวอย่าง","latitude":14.315,"longitude":100.612,"eia":"มี","eiaOther":null,"projectName":"โครงการปรับปรุงระบบตรวจวัด","factoryFrontPhotos":[],"factoryLogo":null,"remarks":"ปรับชื่อและที่อยู่ให้ตรงกับเอกสารล่าสุด"}'
+
+curl --request POST \
+  --url '<BASE_URL>/api/v1/poms-factories/factory-001/edit-requests' \
+  --header 'Authorization: Bearer <ACCESS_TOKEN>' \
+  --header 'Content-Type: application/json' \
+  --data '{"formType":"MEASUREMENT_POINTS","measurementPoints":[{"connectedPointId":15,"monitoringPointStatus":"อยู่ระหว่างเชื่อมต่อ"}],"remarks":"ปรับสถานะจุดตรวจวัด"}'
 
 curl --request POST \
   --url '<BASE_URL>/api/v1/poms-factories/edit-requests/11/review' \
@@ -57,15 +62,17 @@ curl --request POST \
 
 ## Endpoint Summary
 
-เมนูข้อมูลพื้นฐานมี `13` canonical endpoints และแสดงเป็น `17` Swagger operations เพราะ endpoint เดิมของจุดตรวจวัดมี annual path variants เพิ่ม `4` operations
+เมนูข้อมูลพื้นฐานมี `15` canonical endpoints และแสดงเป็น `19` Swagger operations เพราะ endpoint เดิมของจุดตรวจวัดมี annual path variants เพิ่ม `4` operations
 
 | งาน                            | Method | Path                                                             | Permission                             | Contract                                                                                                                               |
 | ------------------------------ | ------ | ---------------------------------------------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | รายชื่อโรงงาน current/live     | `GET`  | `/api/v1/poms-factories`                                         | `factories:view`                       | [List POMS factories](#get-apiv1poms-factories)                                                                                        |
 | ข้อมูลโรงงานและจุดตรวจวัด      | `GET`  | `/api/v1/poms-factories/:factoryId`                              | `factories:view`                       | [POMS factory detail](#get-apiv1poms-factoriesfactoryid)                                                                               |
+| อ่าน prefill ฟอร์มจาก POMS     | `GET`  | `/api/v1/poms-factories/:factoryId/form`                         | `factories:view`                       | [Factory form prefill](#get-apiv1poms-factoriesfactoryidform)                                                                          |
 | ส่งคำขอแก้ไขข้อมูล             | `POST` | `/api/v1/poms-factories/:factoryId/edit-requests`                | `factories:view` + `factories:edit`    | [Create edit request](#post-apiv1poms-factoriesfactoryidedit-requests)                                                                 |
 | รายการคำขอแก้ไข                | `GET`  | `/api/v1/poms-factories/edit-requests`                           | `factories:view`                       | [List edit requests](#get-apiv1poms-factoriesedit-requests)                                                                            |
 | รายละเอียดคำขอแก้ไข            | `GET`  | `/api/v1/poms-factories/edit-requests/:id`                       | `factories:view`                       | [Edit-request detail](#get-apiv1poms-factoriesedit-requestsid)                                                                         |
+| อ่าน prefill รอบแก้ไข        | `GET`  | `/api/v1/poms-factories/edit-requests/:id/form`                  | `factories:view`                       | [Edit-request form prefill](#get-apiv1poms-factoriesedit-requestsidform)                                                               |
 | ส่งคำขอแก้ไขกลับเข้าพิจารณา    | `PUT`  | `/api/v1/poms-factories/edit-requests/:id/resubmission`          | `factories:view` + `factories:edit`    | [Resubmission](#put-apiv1poms-factoriesedit-requestsidresubmission)                                                                    |
 | Admin พิจารณาคำขอ              | `POST` | `/api/v1/poms-factories/edit-requests/:id/review`                | `factories:view` + `factories:approve` | [Review](#post-apiv1poms-factoriesedit-requestsidreview)                                                                               |
 | อ่านจุดที่เชื่อมต่อแล้วแบบเดิม | `GET`  | `/api/v1/connected-measurement-points`                           | `cems_wpms_requests:view`              | [Shared connected points](../../shared/connected-measurement-points/README.md)                                                         |
@@ -241,6 +248,72 @@ Minimal response (`200 OK`):
 }
 ```
 
+### `GET /api/v1/poms-factories/:factoryId/form`
+
+คืน prefill จาก current/live POMS เท่านั้น โดยใช้ชื่อและ shape ของ `data` ตรงกับ [Connection-request form prefill](../connection-requests/README.md#connection-request-form-prefill) ไม่คืน wrapper `formDefaults`, workflow metadata, `factoryAddress`, `systemTypes`, `connectedPointId` หรือ `sourceMeasurementPointId`
+
+ข้อมูลระดับโรงงานและจุดตรวจวัดยึด active `cems_wpms_connected_measurement_points`; endpoint นี้ไม่ hydrate จากคำขอเชื่อมต่อเดิม ดังนั้น field ที่ POMS ไม่เก็บจะเป็น `null`, `[]` หรือ empty string ตาม type ของ shared contract
+
+#### Request Fields
+
+| Field        | Location | Type                              | Required    | Rules |
+| ------------ | -------- | --------------------------------- | ----------- | ----- |
+| `factoryId`  | path     | string                            | yes         | current `factoryId` หรือเลขทะเบียนที่ resolve ได้ |
+| `formType`   | query    | `BASIC_INFO` \| `MEASUREMENT_POINTS` | no          | ระบุบริบทฟอร์ม; ไม่เพิ่ม field ใน response |
+| `systemType` | query    | `CEMS` \| `WPMS`                 | conditional | optional เมื่อมีระบบเดียว; บังคับเมื่อโรงงานมีทั้ง CEMS และ WPMS |
+
+```bash
+curl --request GET \
+  --url '<BASE_URL>/api/v1/poms-factories/factory-001/form?formType=BASIC_INFO&systemType=CEMS' \
+  --header 'Authorization: Bearer <ACCESS_TOKEN>' \
+  --header 'Accept: application/json'
+```
+
+#### POMS Source And Nullability
+
+| Form field | Current/live source | Fallback เมื่อ POMS ไม่เก็บ |
+| ---------- | ------------------- | ---------------------------- |
+| `requestType` | compatibility field ของ shared form contract | คงที่เป็น `NEW_CONNECTION`; ไม่ใช่สถานะหรือประเภทคำขอแก้ไข POMS |
+| `factoryId`, `factoryName`, `factoryRegistrationNo`, `address`, EIA/project, ชื่อพื้นที่, พิกัดโรงงาน | current/live factory profile | `null` สำหรับ field nullable |
+| `measurementPoints[]` | active points ของ `systemType` ที่เลือก | ถ้าไม่มี active point ตอบ `404` และไม่เปิดฟอร์ม |
+| กลุ่มอุตสาหกรรม, รหัสพื้นที่, พิกัด/คำอธิบายเฉพาะจุด, ผู้ให้ข้อมูล | POMS ไม่เก็บ | `null` |
+| `contactName`, `contactPhone` | POMS ไม่เก็บ | `""` |
+| `contactPersons`, `notificationEmails`, `officerNotificationEmails` | POMS ไม่เก็บ | omit `contactPersons`; email arrays เป็น `[]` |
+| `remarks` | ไม่มีคำขอแก้ไขใน endpoint นี้ | `null` |
+
+`factoryFrontPhotos` และ `factoryLogo` ไม่เป็น top-level field ใน shared form contract; metadata ที่มีจะรวมใน `measurementPoints[0].documentsAndImages`
+
+Minimal response (`200 OK`):
+
+```json
+{
+  "success": true,
+  "data": {
+    "requestType": "NEW_CONNECTION",
+    "factoryId": "factory-001",
+    "factoryName": "บริษัท ตัวอย่าง จำกัด",
+    "factoryRegistrationNo": "3-106-33/50สบ",
+    "address": "99 หมู่ 1",
+    "systemType": "CEMS",
+    "contactName": "",
+    "contactPhone": "",
+    "notificationEmails": [],
+    "officerNotificationEmails": [],
+    "measurementPoints": [
+      {
+        "pointName": "ปล่อง A",
+        "pointCode": "S2001",
+        "pointType": "STACK",
+        "parameters": ["CO (ppm)"],
+        "documentsAndImages": [],
+        "measurementInstruments": null
+      }
+    ],
+    "remarks": null
+  }
+}
+```
+
 ### Shared Basic-info Fields
 
 เมื่อ body ไม่ส่ง `formType` backend จะตีความเป็นฟอร์ม `BASIC_INFO`; client ใหม่ควรส่ง `formType = "BASIC_INFO"` ให้ชัดเจน และใช้ profile allowlist ต่อไปนี้
@@ -249,7 +322,8 @@ Minimal response (`200 OK`):
 | -------------------- | -------------- | -------- | --------------------------------------------------------------------------------------------------- |
 | `formType`           | string         | no       | ถ้าส่งต้องเป็น `BASIC_INFO`; omission รองรับ client เดิม                                           |
 | `factoryName`        | string         | yes      | trim แล้ว 1–500 ตัวอักษร                                                                            |
-| `factoryAddress`     | string \| null | no       | omission = คงค่าเดิม; `null` = ล้างค่า; string trim แล้วไม่เกิน 1000 ตัวอักษร                       |
+| `address`            | string \| null | no       | canonical field; omission = คงค่าเดิม; `null` = ล้างค่า; string trim แล้วไม่เกิน 1000 ตัวอักษร       |
+| `factoryAddress`     | string \| null | no       | legacy alias ของ `address`; หากส่งทั้งคู่ค่าต้องตรงกัน                                                |
 | `latitude`           | number \| null | no       | ช่วง `-90` ถึง `90`; ต้องส่งพร้อม `longitude` รวมถึงกรณีส่ง `null` เพื่อล้างพิกัด                   |
 | `longitude`          | number \| null | no       | ช่วง `-180` ถึง `180`; ต้องส่งพร้อม `latitude`                                                      |
 | `eia`                | string \| null | no       | omission = คงค่าเดิม; `null` = ล้างค่า; enum: `มี`, `ไม่มี`, `มี IEE`, `มี EIA`, `มี EHIA`, `อื่นๆ` |
@@ -257,7 +331,8 @@ Minimal response (`200 OK`):
 | `projectName`        | string \| null | no       | omission = คงค่าเดิม; `null` = ล้างค่า; string ไม่เกิน 500 ตัวอักษร                                 |
 | `factoryFrontPhotos` | object[]       | no       | omission = คงค่าเดิม; `[]` = ล้างทั้งหมด; มากสุด 10 รายการ                                          |
 | `factoryLogo`        | object \| null | no       | omission = คงค่าเดิม; `null` = ล้างโลโก้                                                            |
-| `note`               | string \| null | no       | หมายเหตุผู้ส่ง ไม่เกิน 1000 ตัวอักษร                                                                |
+| `remarks`            | string \| null | no       | canonical field ของหมายเหตุผู้ส่ง; ไม่เกิน 1000 ตัวอักษร                                            |
+| `note`               | string \| null | no       | legacy alias ของ `remarks`; หากส่งทั้งคู่ค่าต้องตรงกัน                                                |
 
 Document object ของ `factoryFrontPhotos[]` และ `factoryLogo`:
 
@@ -289,7 +364,8 @@ field ที่ห้ามส่ง ได้แก่ `eligibleFactoryId`, `fa
 | `measurementPoints[].details`                | object \| null   | no       | omission = คงค่าเดิม; `null` = ล้างค่า                                                |
 | `measurementPoints[].documentsAndImages`     | object[]         | no       | omission = คงค่าเดิม; `[]` = ล้างทั้งหมด                                              |
 | `measurementPoints[].measurementInstruments` | object \| null   | no       | omission = คงค่าเดิม; `null` = ล้างค่า                                                |
-| `note`                                       | string \| null   | no       | หมายเหตุผู้ส่ง ไม่เกิน 1000 ตัวอักษร                                                  |
+| `remarks`                                    | string \| null   | no       | canonical field ของหมายเหตุผู้ส่ง; ไม่เกิน 1000 ตัวอักษร                                  |
+| `note`                                       | string \| null   | no       | legacy alias ของ `remarks`; หากส่งทั้งคู่ค่าต้องตรงกัน                                                |
 
 แต่ละ `measurementPoints[]` ต้องส่งอย่างน้อยหนึ่ง field ที่แก้ได้ นอกเหนือจาก `connectedPointId` ค่า `monitoringPointStatus` ที่รับคือ `เชื่อมต่อครบแล้ว`, `ได้รับการยกเว้นทั้งหมด`, `เชื่อมต่อแล้วแต่ยังไม่ครบ`, `อยู่ระหว่างขยายเวลา`, `ยังไม่ได้ดำเนินการเชื่อมต่อ`, `อยู่ระหว่างการตรวจสอบของจังหวัด` หรือ `อยู่ระหว่างเชื่อมต่อ`
 
@@ -309,7 +385,7 @@ Minimal request:
 {
   "formType": "BASIC_INFO",
   "factoryName": "บริษัท ตัวอย่าง จำกัด (มหาชน)",
-  "factoryAddress": "99 หมู่ 1 ตำบลตัวอย่าง",
+  "address": "99 หมู่ 1 ตำบลตัวอย่าง",
   "latitude": 14.315,
   "longitude": 100.612,
   "eia": "มี",
@@ -317,7 +393,7 @@ Minimal request:
   "projectName": "โครงการปรับปรุงระบบตรวจวัด",
   "factoryFrontPhotos": [],
   "factoryLogo": null,
-  "note": "ปรับข้อมูลตามหนังสือรับรองล่าสุด"
+  "remarks": "ปรับข้อมูลตามหนังสือรับรองล่าสุด"
 }
 ```
 
@@ -333,7 +409,7 @@ Minimal request สำหรับฟอร์มจุดตรวจวัด:
       "documentsAndImages": []
     }
   ],
-  "note": "ปรับสถานะและล้างรายการเอกสารของจุดตรวจวัด"
+  "remarks": "ปรับสถานะและล้างรายการเอกสารของจุดตรวจวัด"
 }
 ```
 
@@ -519,6 +595,57 @@ Minimal response (`200 OK`):
 }
 ```
 
+### `GET /api/v1/poms-factories/edit-requests/:id/form`
+
+คืน `data` ด้วย shared form contract เดียวกับ [Connection-request form prefill](../connection-requests/README.md#connection-request-form-prefill) แต่ overlay proposed values ของคำขอแก้ไขบน current/live POMS: `BASIC_INFO` ใช้ proposed factory profile, `MEASUREMENT_POINTS` ใช้ proposed measurement points และทั้งสองแบบใช้ `requestNote` เป็น `remarks`
+
+ไม่ hydrate field ที่ขาดจากคำขอเชื่อมต่อเดิม และไม่คืน `id`, `requestNo`, `status`, `revisionReason` หรือ audit metadata ใน `data`; field ที่ POMS ไม่เก็บใช้ null/empty semantics ตาม [POMS Source And Nullability](#poms-source-and-nullability)
+
+#### Request Fields
+
+| Field        | Location | Type              | Required    | Rules |
+| ------------ | -------- | ----------------- | ----------- | ----- |
+| `id`         | path     | positive integer  | yes         | edit-request ID ที่อยู่ใน `factories:view` scope |
+| `systemType` | query    | `CEMS` \| `WPMS` | conditional | optional เมื่อ proposed/current points มีระบบเดียว; บังคับเมื่อมีทั้ง CEMS และ WPMS |
+
+```bash
+curl --request GET \
+  --url '<BASE_URL>/api/v1/poms-factories/edit-requests/11/form?systemType=CEMS' \
+  --header 'Authorization: Bearer <ACCESS_TOKEN>' \
+  --header 'Accept: application/json'
+```
+
+Minimal response (`200 OK`):
+
+```json
+{
+  "success": true,
+  "data": {
+    "requestType": "NEW_CONNECTION",
+    "factoryId": "factory-001",
+    "factoryName": "บริษัท ตัวอย่าง จำกัด (แก้ไข)",
+    "factoryRegistrationNo": "3-106-33/50สบ",
+    "address": "100 หมู่ 2",
+    "systemType": "CEMS",
+    "contactName": "",
+    "contactPhone": "",
+    "notificationEmails": [],
+    "officerNotificationEmails": [],
+    "measurementPoints": [
+      {
+        "pointName": "ปล่อง A",
+        "pointCode": "S2001",
+        "pointType": "STACK",
+        "parameters": ["CO (ppm)"],
+        "documentsAndImages": [],
+        "measurementInstruments": null
+      }
+    ],
+    "remarks": "แก้ไขตามข้อสังเกตแล้ว"
+  }
+}
+```
+
 ### `PUT /api/v1/poms-factories/edit-requests/:id/resubmission`
 
 ใช้ได้เมื่อสถานะเป็น `REVISION_REQUESTED` เท่านั้น backend โหลดข้อมูล current/live ล่าสุดเป็น snapshot ใหม่ แทนที่ proposed data จาก body แล้วเปลี่ยนสถานะเป็น `REVISED_PENDING_REVIEW`; `formType` ต้องตรงกับคำขอเดิม
@@ -542,7 +669,7 @@ Minimal request:
       "fileSize": 245760
     }
   ],
-  "note": "แก้ไขตามข้อสังเกตแล้ว"
+  "remarks": "แก้ไขตามข้อสังเกตแล้ว"
 }
 ```
 
@@ -557,7 +684,7 @@ Minimal request สำหรับส่งฟอร์มจุดตรวจ�
       "pointName": "ปล่อง A (แก้ไขตามข้อสังเกต)"
     }
   ],
-  "note": "แก้ไขตามข้อสังเกตแล้ว"
+  "remarks": "แก้ไขตามข้อสังเกตแล้ว"
 }
 ```
 
@@ -649,7 +776,7 @@ Approval target mapping:
 | API profile field                   | active `cems_wpms_connected_measurement_points`                                           | active `eligible_factories`                      |
 | ----------------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------ |
 | `factoryName`                       | `factory_name` ทุก active point                                                           | `factory_name`                                   |
-| `factoryAddress`                    | `factory_address` ทุก active point                                                        | `address`                                        |
+| `address` (legacy `factoryAddress`) | `factory_address` ทุก active point                                                        | `address`                                        |
 | `latitude`, `longitude`             | `factory_latitude`, `factory_longitude` ทุก active point                                  | `latitude`, `longitude`                          |
 | `eia`, `eiaOther`                   | `factory_eia_assessment`, `factory_eia_other`, derived `factory_has_eia` ทุก active point | `eia_assessment`, `eia_other`, derived `has_eia` |
 | `projectName`                       | `factory_project_name` ทุก active point                                                   | `project_name`                                   |

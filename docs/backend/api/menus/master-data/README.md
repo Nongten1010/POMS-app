@@ -11,10 +11,11 @@
 ### Main Flow
 
 1. อ่านรายชื่อและรายละเอียดโรงงานผ่าน `/api/v1/poms-factories`
-2. แสดง `measurementPoints` current/live และใช้เป็นต้นทางของฟอร์มแก้ไขข้อมูลจุดตรวจวัด
+2. เรียก `GET /api/v1/poms-factories/:factoryId/form` เพื่อลงค่า current/live ในฟอร์มด้วยชื่อ field เดียวกับฟอร์มขอเชื่อมต่อ
 3. ผู้ประกอบการส่งคำขอแก้ไขด้วย `factories:edit` โดยระบุ `formType` เป็น `BASIC_INFO` หรือ `MEASUREMENT_POINTS`
-4. admin ใช้ `factories:approve` เพื่ออนุมัติ ขอแก้ไข หรือปฏิเสธ
-5. เมื่ออนุมัติ backend sync ข้อมูล current/live ตาม `formType`: `BASIC_INFO` อัปเดต active `cems_wpms_connected_measurement_points` และ `eligible_factories`, ส่วน `MEASUREMENT_POINTS` อัปเดต active `cems_wpms_connected_measurement_points` เท่านั้น โดยไม่อัปเดต `factories`
+4. ถ้า admin ส่งกลับให้แก้ไข ให้เรียก `GET /api/v1/poms-factories/edit-requests/:id/form` เพื่อลง proposed values รอบล่าสุดก่อน resubmit
+5. admin ใช้ `factories:approve` เพื่ออนุมัติ ขอแก้ไข หรือปฏิเสธ
+6. เมื่ออนุมัติ backend sync ข้อมูล current/live ตาม `formType`: `BASIC_INFO` อัปเดต active `cems_wpms_connected_measurement_points` และ `eligible_factories`, ส่วน `MEASUREMENT_POINTS` อัปเดต active `cems_wpms_connected_measurement_points` เท่านั้น โดยไม่อัปเดต `factories`
 
 ```bash
 curl --request GET \
@@ -22,26 +23,33 @@ curl --request GET \
   --header 'Authorization: Bearer <ACCESS_TOKEN>' \
   --header 'Accept: application/json'
 
+curl --request GET \
+  --url '<BASE_URL>/api/v1/poms-factories/factory-001/form?formType=BASIC_INFO&systemType=CEMS' \
+  --header 'Authorization: Bearer <ACCESS_TOKEN>' \
+  --header 'Accept: application/json'
+
 curl --request POST \
   --url '<BASE_URL>/api/v1/poms-factories/factory-001/edit-requests' \
   --header 'Authorization: Bearer <ACCESS_TOKEN>' \
   --header 'Content-Type: application/json' \
-  --data '{"formType":"BASIC_INFO","factoryName":"บริษัท ตัวอย่าง จำกัด (มหาชน)","note":"ปรับชื่อให้ตรงกับเอกสารล่าสุด"}'
+  --data '{"formType":"BASIC_INFO","factoryName":"บริษัท ตัวอย่าง จำกัด (มหาชน)","remarks":"ปรับชื่อให้ตรงกับเอกสารล่าสุด"}'
 ```
 
 ## Endpoint Summary
 
-เมนูข้อมูลพื้นฐานมี `13` canonical endpoints และแสดงเป็น `17` Swagger operations เพราะ connected-point endpoints เดิมมี annual path variants เพิ่ม `4` operations
+เมนูข้อมูลพื้นฐานมี `15` canonical endpoints และแสดงเป็น `19` Swagger operations เพราะ connected-point endpoints เดิมมี annual path variants เพิ่ม `4` operations
 
-### โรงงานและคำขอแก้ไข: 7 API
+### โรงงานและคำขอแก้ไข: 9 API
 
 | งาน                        | Method | Path                                                    | Permission                             | Contract                                                                                               |
 | -------------------------- | ------ | ------------------------------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | รายชื่อโรงงาน current/live | `GET`  | `/api/v1/poms-factories`                                | `factories:view`                       | [Factory edit workflow](./factory-edit-requests.md#get-apiv1poms-factories)                            |
 | ข้อมูลโรงงานและจุดตรวจวัด  | `GET`  | `/api/v1/poms-factories/:factoryId`                     | `factories:view`                       | [Factory edit workflow](./factory-edit-requests.md#get-apiv1poms-factoriesfactoryid)                   |
+| อ่าน prefill ฟอร์มจาก POMS | `GET`  | `/api/v1/poms-factories/:factoryId/form`                | `factories:view`                       | [Factory form prefill](./factory-edit-requests.md#get-apiv1poms-factoriesfactoryidform)                 |
 | ส่งคำขอแก้ไขข้อมูล         | `POST` | `/api/v1/poms-factories/:factoryId/edit-requests`       | `factories:view` + `factories:edit`    | [Factory edit workflow](./factory-edit-requests.md#post-apiv1poms-factoriesfactoryidedit-requests)     |
 | รายการคำขอแก้ไข            | `GET`  | `/api/v1/poms-factories/edit-requests`                  | `factories:view`                       | [Factory edit workflow](./factory-edit-requests.md#get-apiv1poms-factoriesedit-requests)               |
 | รายละเอียดคำขอแก้ไข        | `GET`  | `/api/v1/poms-factories/edit-requests/:id`              | `factories:view`                       | [Factory edit workflow](./factory-edit-requests.md#get-apiv1poms-factoriesedit-requestsid)             |
+| อ่าน prefill รอบแก้ไข    | `GET`  | `/api/v1/poms-factories/edit-requests/:id/form`         | `factories:view`                       | [Edit-request form prefill](./factory-edit-requests.md#get-apiv1poms-factoriesedit-requestsidform)     |
 | ส่งคำขอกลับเข้าพิจารณา     | `PUT`  | `/api/v1/poms-factories/edit-requests/:id/resubmission` | `factories:view` + `factories:edit`    | [Factory edit workflow](./factory-edit-requests.md#put-apiv1poms-factoriesedit-requestsidresubmission) |
 | Admin พิจารณา              | `POST` | `/api/v1/poms-factories/edit-requests/:id/review`       | `factories:view` + `factories:approve` | [Factory edit workflow](./factory-edit-requests.md#post-apiv1poms-factoriesedit-requestsidreview)      |
 

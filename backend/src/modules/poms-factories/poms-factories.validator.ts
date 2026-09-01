@@ -25,6 +25,13 @@ const optionalNullableTrimmedString = (max: number) =>
     const trimmed = value.trim();
     return trimmed.length > 0 ? trimmed : null;
   }, z.string().trim().min(1).max(max).nullable().optional());
+
+type EditableFactoryProfileCompatibilityInput = {
+  address?: string | null;
+  factoryAddress?: string | null;
+  remarks?: string | null;
+  note?: string | null;
+};
 export const pomsFactoryIdParamsSchema = z
   .object({
     factoryId: z.string().trim().min(1).max(64),
@@ -43,6 +50,17 @@ export const listPomsFactoriesQuerySchema = z
   })
   .strict();
 
+export const pomsFactoryFormQuerySchema = z
+  .object({
+    formType: z.enum(POMS_FACTORY_EDIT_REQUEST_FORM_TYPE).optional(),
+    systemType: z.enum(['CEMS', 'WPMS']).optional(),
+  })
+  .strict();
+
+export const pomsFactoryEditRequestFormQuerySchema = pomsFactoryFormQuerySchema.pick({
+  systemType: true,
+});
+
 export const listPomsFactoryEditRequestsQuerySchema = z
   .object({
     status: z.enum(POMS_FACTORY_EDIT_REQUEST_STATUS).optional(),
@@ -56,17 +74,37 @@ const editableFactoryProfileSchema = z
     formType: z.literal(POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.BASIC_INFO).optional(),
     factoryName: trimmedString(500),
     factoryAddress: optionalNullableTrimmedString(1000),
+    address: optionalNullableTrimmedString(1000),
     latitude: z.number().finite().min(-90).max(90).nullable().optional(),
     longitude: z.number().finite().min(-180).max(180).nullable().optional(),
     eia: z.enum(CONNECTION_REQUEST_EIA_ASSESSMENTS).nullable().optional(),
     eiaOther: optionalNullableTrimmedString(500),
     projectName: optionalNullableTrimmedString(500),
+    remarks: optionalNullableTrimmedString(1000),
     factoryFrontPhotos: z.array(requestDocumentImageSchema).max(10).optional(),
     factoryLogo: requestDocumentImageSchema.nullable().optional(),
     note: optionalNullableTrimmedString(1000),
   })
   .strict()
   .superRefine((value, ctx) => {
+    if (
+      value.address !== undefined &&
+      value.factoryAddress !== undefined &&
+      value.address !== value.factoryAddress
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['address'],
+        message: 'address and factoryAddress must match when both are provided',
+      });
+    }
+    if (value.remarks !== undefined && value.note !== undefined && value.remarks !== value.note) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['remarks'],
+        message: 'remarks and note must match when both are provided',
+      });
+    }
     const hasLatitude = Object.prototype.hasOwnProperty.call(value, 'latitude');
     const hasLongitude = Object.prototype.hasOwnProperty.call(value, 'longitude');
     if (hasLatitude !== hasLongitude || (value.latitude === null) !== (value.longitude === null)) {
@@ -93,7 +131,8 @@ const editableFactoryProfileSchema = z
         message: 'eiaOther is only allowed when eia is อื่นๆ',
       });
     }
-  });
+  })
+  .transform(normalizeEditableFactoryProfileInput);
 
 const editableMeasurementPointPatchSchema: z.ZodType<PomsMeasurementPointPatchInput> = z
   .object({
@@ -129,6 +168,7 @@ const editableMeasurementPointsSchema: z.ZodType<CreatePomsFactoryMeasurementPoi
   z
     .object({
       formType: z.literal(POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.MEASUREMENT_POINTS),
+      remarks: optionalNullableTrimmedString(1000),
       measurementPoints: z.array(editableMeasurementPointPatchSchema).min(1).max(100),
       note: optionalNullableTrimmedString(1000),
     })
@@ -146,7 +186,18 @@ const editableMeasurementPointsSchema: z.ZodType<CreatePomsFactoryMeasurementPoi
           message: 'connectedPointId must be unique within one request',
         });
       });
-    });
+      if (value.remarks !== undefined && value.note !== undefined && value.remarks !== value.note) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['remarks'],
+          message: 'remarks and note must match when both are provided',
+        });
+      }
+    })
+    .transform(({ remarks, ...value }) => ({
+      ...value,
+      note: value.note === undefined ? remarks : value.note,
+    }));
 
 export const createPomsFactoryEditRequestSchema = z.union([
   editableFactoryProfileSchema,
@@ -184,3 +235,25 @@ export const reviewPomsFactoryEditRequestSchema = z
       });
     }
   });
+
+function normalizeEditableFactoryProfileInput<T extends EditableFactoryProfileCompatibilityInput>(
+  value: T,
+): Omit<T, 'address' | 'remarks'> & {
+  factoryAddress?: string | null;
+  note?: string | null;
+} {
+  const { address, remarks, ...rest } = value;
+  const normalized = {
+    ...rest,
+    ...(Object.prototype.hasOwnProperty.call(rest, 'factoryAddress')
+      ? {}
+      : Object.prototype.hasOwnProperty.call(value, 'address')
+        ? { factoryAddress: address ?? null }
+        : {}),
+  };
+  if (Object.prototype.hasOwnProperty.call(normalized, 'note')) return normalized;
+  if (Object.prototype.hasOwnProperty.call(value, 'remarks')) {
+    return { ...normalized, note: remarks ?? null };
+  }
+  return normalized;
+}

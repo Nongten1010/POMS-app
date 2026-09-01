@@ -448,6 +448,10 @@ const dedicatedOperatorFormProperties: Record<string, OpenApiObject> = {
   ...operatorFormProperties,
 };
 delete dedicatedOperatorFormProperties.requestType;
+const connectionRequestFormProperties: Record<string, OpenApiObject> = {
+  ...operatorFormProperties,
+};
+delete connectionRequestFormProperties.type;
 const addPointExample = {
   factoryId: 'F000123',
   factoryName: 'โรงงานตัวอย่าง',
@@ -1023,6 +1027,63 @@ const componentSchemas: Record<string, OpenApiObject> = {
         items: schemaRef('RequestDocumentImage'),
       },
       measurementInstruments: nullableRef('MeasurementInstruments'),
+    },
+  },
+  ConnectionRequestForm: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'requestType',
+      'factoryId',
+      'factoryName',
+      'factoryRegistrationNo',
+      'industryMainOrder',
+      'industryMainOrderLabel',
+      'industrySubOrder',
+      'businessActivity',
+      'eia',
+      'eiaOther',
+      'hasEia',
+      'projectName',
+      'address',
+      'regionCode',
+      'regionName',
+      'provinceCode',
+      'provinceName',
+      'districtCode',
+      'districtName',
+      'subdistrictCode',
+      'subdistrictName',
+      'industrialEstateCode',
+      'industrialEstateName',
+      'latitude',
+      'longitude',
+      'systemType',
+      'contactName',
+      'contactPhone',
+      'contactEmail',
+      'notificationEmails',
+      'officerNotificationEmails',
+      'informationProviderName',
+      'informationProviderPosition',
+      'measurementPoints',
+      'remarks',
+    ],
+    properties: connectionRequestFormProperties,
+    description:
+      'Canonical form-prefill shape ที่ใช้ร่วมกันระหว่างคำขอเชื่อมต่อและข้อมูล current/live POMS; ชื่อ field ตรงกับ normalized PUT /cems-wpms-requests/{id}/form และไม่คืน workflow id, eligibleFactoryId หรือ measurement-point id',
+    example: {
+      ...addPointExample,
+      requestType: 'ADD_MEASUREMENT_POINT',
+    },
+  },
+  ConnectionRequestFormResponse: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['success', 'data'],
+    properties: {
+      success: { type: 'boolean', enum: [true] },
+      data: schemaRef('ConnectionRequestForm'),
     },
   },
   AddPointMeasurementPoint: {
@@ -1907,6 +1968,16 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
     }),
   },
   '/cems-wpms-requests/{id}/form': {
+    get: securedOperation({
+      tag: 'Flow หลัก',
+      summary: 'อ่านข้อมูลลงแบบคำขอเชื่อมต่อ',
+      operationId: 'getConnectionRequestForm',
+      description:
+        'Permission: cems_wpms_requests:view และต้องเข้าถึงคำขอตาม owner/data scope. คืนเฉพาะ canonical form fields ที่ส่งกลับเข้า PUT endpoint ได้ โดยไม่คืน workflow IDs',
+      parameters: [idPathParameter],
+      successSchema: schemaRef('ConnectionRequestFormResponse'),
+      focus: true,
+    }),
     put: securedOperation({
       tag: 'Flow หลัก',
       summary: 'ส่งแบบใหม่หลังถูกแจ้งแก้ไข',
@@ -2310,7 +2381,7 @@ export const connectionRequestsOpenApiDocument: OpenApiObject = {
     title: 'POMS — API หน้าขอเชื่อมต่อ',
     version: '1.0.0',
     description:
-      'OpenAPI สำหรับ 34 canonical route signatures ของเมนูขอเชื่อมต่อ โดยขยาย optional buddhistYear compatibility path เป็น 38 operations เพื่อให้ทดสอบ annual point code ได้ทั้งแบบ encode %2F และแบบ proxy-decoded; ใน canonical set มี 33 API ที่ใช้งานได้ และ 1 compatibility route ที่ตอบ 404 เสมอ\n\nทุก API ต้องใช้ Bearer JWT. กด Authorize แล้วใส่ token (ไม่ต้องพิมพ์คำว่า Bearer หาก UI เติมให้อัตโนมัติ) ก่อนใช้ Try it out. ห้ามใช้ production secrets ในตัวอย่างทดสอบ',
+      'OpenAPI สำหรับ 34 canonical route signatures ของเมนูขอเชื่อมต่อ โดยขยาย optional buddhistYear compatibility path เป็น 39 operations เพื่อให้ทดสอบ annual point code ได้ทั้งแบบ encode %2F และแบบ proxy-decoded; ใน canonical set มี 34 operations ที่ใช้งานได้ และ 1 compatibility route ที่ตอบ 404 เสมอ\n\nทุก API ต้องใช้ Bearer JWT. กด Authorize แล้วใส่ token (ไม่ต้องพิมพ์คำว่า Bearer หาก UI เติมให้อัตโนมัติ) ก่อนใช้ Try it out. ห้ามใช้ production secrets ในตัวอย่างทดสอบ',
   },
   servers: [
     {

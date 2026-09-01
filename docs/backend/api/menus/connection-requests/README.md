@@ -19,7 +19,7 @@ permission code, grouped response alias และ scope keyword ที่อ้�
 3. วาง access token ในช่อง `bearerAuth`; Swagger UI จะเติม `Authorization: Bearer` ให้
 4. เลือก endpoint, กด `Try it out`, แก้ path/query/body แล้วกด `Execute`
 
-หน้าเอกสารเปิดอ่านได้โดยไม่ต้อง login ทุก environment รวม production และรวมทั้งระบบ **126 endpoints / 135 operations / 11 กลุ่มงาน** ให้ใช้ช่อง Filter ค้นชื่อกลุ่ม `ขอเชื่อมต่อ` หรือ path ที่ต้องการ ขอบเขต contract ในเอกสารหน้านี้มี 34 route signatures และแสดงเป็น 38 operations เมื่อรวมรูปแบบ path ที่มี `buddhistYear` ทั้งนี้ API จริงยังตรวจ Bearer token, permission, owner และ data scope ตาม contract ตัวอย่างทั้งหมดเป็นข้อมูลสมมติและไม่มี credential จริง ส่วน `POST /api/v1/device-connections/test-connection` ยังตอบโหมด `MOCK` และไม่ได้เปิดการเชื่อมต่อ transport/database จริง
+หน้าเอกสารเปิดอ่านได้โดยไม่ต้อง login ทุก environment รวม production และรวมทั้งระบบ **130 endpoints / 139 operations / 11 กลุ่มงาน** ให้ใช้ช่อง Filter ค้นชื่อกลุ่ม `ขอเชื่อมต่อ` หรือ path ที่ต้องการ ขอบเขต contract ในเอกสารหน้านี้มี 35 route signatures และแสดงเป็น 39 operations เมื่อรวมรูปแบบ path ที่มี `buddhistYear` ทั้งนี้ API จริงยังตรวจ Bearer token, permission, owner และ data scope ตาม contract ตัวอย่างทั้งหมดเป็นข้อมูลสมมติและไม่มี credential จริง ส่วน `POST /api/v1/device-connections/test-connection` ยังตอบโหมด `MOCK` และไม่ได้เปิดการเชื่อมต่อ transport/database จริง
 
 หน้าเอกสารเปิดเป็นค่าเริ่มต้นและปิดได้ด้วย `API_DOCS_ENABLED=false`; หน้า Swagger ไม่เก็บ Bearer token ข้ามการ refresh/session
 
@@ -54,6 +54,15 @@ curl --request GET \
   --header 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
+อ่านค่าที่บันทึกไว้เพื่อลงฟอร์มโดยไม่ปน workflow metadata:
+
+```bash
+curl --request GET \
+  --url '<BASE_URL>/api/v1/cems-wpms-requests/101/form' \
+  --header 'Authorization: Bearer <ACCESS_TOKEN>' \
+  --header 'Accept: application/json'
+```
+
 ```bash
 curl --request POST \
   --url '<BASE_URL>/api/v1/cems-wpms-requests/101/review' \
@@ -74,15 +83,15 @@ curl --request POST \
 
 ## Endpoint Summary
 
-นับแบบ `Method + Path` แยกกัน เมนูขอเชื่อมต่อมี **33 API ที่ใช้งานได้** และ **1 compatibility API ที่ตอบ `404` เสมอ** รวมที่แสดงในหน้านี้ 34 route signatures ขอบเขตนี้รวม API คำขอ, prefill, การตั้งค่าอุปกรณ์ และการทดสอบการเชื่อมต่อ แต่ไม่นับ API สถิติ/ปฏิทิน/ส่งออกที่เป็นหน้าที่ของเมนูหน้าหลัก
+นับแบบ `Method + Path` แยกกัน เมนูขอเชื่อมต่อมี **34 API ที่ใช้งานได้** และ **1 compatibility API ที่ตอบ `404` เสมอ** รวมที่แสดงในหน้านี้ 35 route signatures ขอบเขตนี้รวม API คำขอ, prefill, การตั้งค่าอุปกรณ์ และการทดสอบการเชื่อมต่อ แต่ไม่นับ API สถิติ/ปฏิทิน/ส่งออกที่เป็นหน้าที่ของเมนูหน้าหลัก
 
-API ทั้ง 34 route signatures ต้องใช้ Bearer token; แต่ละแถวระบุ permission เพิ่มเติมที่ต้องผ่าน
+API ทั้ง 35 route signatures ต้องใช้ Bearer token; แต่ละแถวระบุ permission เพิ่มเติมที่ต้องผ่าน
 
 สัญญา payload และ validation ระดับ field ของ 4 flow หลักอยู่ที่ [Payload และ validation ของคำขอ](./request-payloads-and-validation.md)
 
 สำหรับการต่อหน้าฟอร์มเจ้าหน้าที่โดยตรง ให้ใช้ [Frontend handoff: ส่งฟอร์มเพิ่มจุดตรวจวัดพร้อมสถานะ](./officer-add-point-submission.md) ซึ่งสรุป field ที่เพิ่ม, payload ตัวอย่าง, permission, response และการ map error สำหรับ UI
 
-### คำขอเชื่อมต่อ: 22 API ใช้งาน + 1 compatibility API
+### คำขอเชื่อมต่อ: 23 API ใช้งาน + 1 compatibility API
 
 | งาน                                           | Method | Path                                                      | Input                          | Permission                          | Contract                                                                                                                          |
 | --------------------------------------------- | ------ | --------------------------------------------------------- | ------------------------------ | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
@@ -99,6 +108,7 @@ API ทั้ง 34 route signatures ต้องใช้ Bearer token; แต�
 | ขอเพิ่มพารามิเตอร์                            | `POST` | `/api/v1/cems-wpms-requests/parameters`                   | JSON body                      | `cems_wpms_requests:edit`           | [Payload/validation](./request-payloads-and-validation.md#post-apiv1cems-wpms-requestsparameters)                                 |
 | อ่านสรุปคำขอ                                  | `GET`  | `/api/v1/cems-wpms-requests/:id`                          | `id` path                      | `cems_wpms_requests:view`           | [Read request](#read-request)                                                                                                     |
 | อ่านรายละเอียดเต็มสำหรับ prefill              | `GET`  | `/api/v1/cems-wpms-requests/:id/detail`                   | `id` path                      | `cems_wpms_requests:view`           | [Read request](#read-request)                                                                                                     |
+| อ่านค่าลงฟอร์มมาตรฐาน                  | `GET`  | `/api/v1/cems-wpms-requests/:id/form`                     | `id` path                      | `cems_wpms_requests:view`           | [Connection-request form prefill](#connection-request-form-prefill)                                                               |
 | อ่านแบบตั้งค่าอุปกรณ์ในคำขอ                   | `GET`  | `/api/v1/cems-wpms-requests/:id/device-configs`           | `id` path, `stationId?` query  | `cems_wpms_requests:view`           | [Device configs](./device-configs.md)                                                                                             |
 | อ่าน config เดียวในคำขอ                       | `GET`  | `/api/v1/cems-wpms-requests/:id/device-configs/:configId` | `id`, `configId` path          | `cems_wpms_requests:view`           | [Device configs](./device-configs.md)                                                                                             |
 | สร้างคำขอเชื่อมต่อใหม่                        | `POST` | `/api/v1/cems-wpms-requests`                              | JSON body                      | `cems_wpms_requests:edit`           | [Eligibility gate](#eligibility-gate)                                                                                             |
@@ -697,7 +707,7 @@ Authorization:
 
 - scope `ALL`, `IN_REGION`, `IN_PROVINCE` และ `IN_ESTATE` ใช้ permission และพื้นที่ของผู้เรียกตามปกติ.
 - scope `OWN_FACTORY` อ่านได้เมื่อผู้เรียกเป็น `createdBy` ของคำขอ หรือได้รับมอบหมายโรงงานของคำขอผ่าน `user_juristics` หรือ `user_factory_access`.
-- กฎเดียวกันใช้กับ `GET /api/v1/cems-wpms-requests/:id`, `GET /api/v1/cems-wpms-requests/:id/detail`, `GET /api/v1/cems-wpms-requests/:id/device-configs` และ `GET /api/v1/cems-wpms-requests/:id/device-configs/:configId`.
+- กฎเดียวกันใช้กับ `GET /api/v1/cems-wpms-requests/:id`, `GET /api/v1/cems-wpms-requests/:id/detail`, `GET /api/v1/cems-wpms-requests/:id/form`, `GET /api/v1/cems-wpms-requests/:id/device-configs` และ `GET /api/v1/cems-wpms-requests/:id/device-configs/:configId`.
 - คำขอที่ไม่อยู่ใน scope ตอบ `404 NOT_FOUND` เพื่อไม่เปิดเผยว่ามี resource อยู่; สิทธิ์เขียนที่ระบุ owner ยังคงตรวจ `createdBy` และไม่ได้ขยายตาม factory assignment.
 
 Minimal response:
@@ -714,6 +724,80 @@ Minimal response:
         "pointCode": "S2001"
       }
     ]
+  }
+}
+```
+
+### Connection-request form prefill
+
+`GET /api/v1/cems-wpms-requests/:id/form` คืนเฉพาะค่าที่ใช้ลงฟอร์มขอเชื่อมต่อ โดยตัด workflow metadata และ server IDs ออก เช่น `id`, `requestNo`, `status`, `statusLabel`, `revisionReason`, `officerNote`, `createdBy`, timestamps, `measurementPoints[].id`, `connectedPointId` และ `sourceMeasurementPointId` จึงนำ `data` ไปใส่ใน form state ได้โดยตรง
+
+ชื่อและ shape ของ `data` เป็น canonical contract ร่วมกับ `GET /api/v1/poms-factories/:factoryId/form` และ `GET /api/v1/poms-factories/edit-requests/:id/form`; รายละเอียดลำดับแหล่งข้อมูล POMS อยู่ที่ [Factory form prefill](../master-data/factory-edit-requests.md#get-apiv1poms-factoriesfactoryidform)
+
+#### Request Fields
+
+| Field | Location | Type             | Required | Rules                         |
+| ----- | -------- | ---------------- | -------- | ----------------------------- |
+| `id`  | path     | positive integer | yes      | รหัสคำขอที่ผู้เรียกมีสิทธิ์อ่าน |
+
+ไม่มี request body และใช้ Bearer token + `cems_wpms_requests:view` กับ data-scope กฎเดียวกับ [Read request](#read-request)
+
+#### Shared Form Response Fields
+
+| Field group | Type | Nullable/optional | Description |
+| ----------- | ---- | ----------------- | ----------- |
+| `data.requestType` | `NEW_CONNECTION` \| `ADD_MEASUREMENT_POINT` \| `ADD_PARAMETER` | no | ประเภทแบบตามคำขอต้นทาง |
+| `data.factoryId`, `data.factoryName`, `data.factoryRegistrationNo` | string | no | identity โรงงานที่ใช้ในฟอร์ม |
+| `data.industryMainOrder`, `data.industryMainOrderLabel`, `data.industrySubOrder`, `data.businessActivity` | string | yes | กลุ่มอุตสาหกรรมและลักษณะกิจการ |
+| `data.eia`, `data.eiaOther`, `data.hasEia`, `data.projectName` | string/boolean | yes | ข้อมูล EIA และชื่อโครงการ |
+| `data.address` | string | yes | ชื่อ canonical ของที่อยู่; form response ไม่คืน `factoryAddress` |
+| `data.regionCode`, `data.regionName`, `data.provinceCode`, `data.provinceName`, `data.districtCode`, `data.districtName`, `data.subdistrictCode`, `data.subdistrictName`, `data.industrialEstateCode`, `data.industrialEstateName` | string | yes | รหัสและชื่อพื้นที่ |
+| `data.latitude`, `data.longitude` | number | yes | พิกัดโรงงาน |
+| `data.systemType` | `CEMS` \| `WPMS` | no | ระบบของฟอร์มนี้ |
+| `data.contactName`, `data.contactPhone` | string | no | ผู้ติดต่อหลัก; POMS prefill คืน empty string เพราะ current/live POMS ไม่เก็บ field นี้ |
+| `data.contactEmail` | string | yes | อีเมลผู้ติดต่อหลัก |
+| `data.contactPersons` | object[] | optional | ผู้ติดต่อเพิ่มเติม; แต่ละรายการใช้ `name`, `phone`, `email?`, `position?` |
+| `data.notificationEmails`, `data.officerNotificationEmails` | string[] | no | รายชื่ออีเมลแจ้งเตือน |
+| `data.informationProviderName`, `data.informationProviderPosition` | string | yes | ผู้ให้ข้อมูล |
+| `data.measurementPoints` | object[] | no | จุดตรวจวัดที่ลงฟอร์ม; ไม่มี server IDs |
+| `data.remarks` | string | yes | ชื่อ canonical ของหมายเหตุผู้ส่ง; form response ไม่คืน `note` หรือ `requestNote` |
+
+| Measurement-point field | Type | Nullable/optional | Description |
+| ----------------------- | ---- | ----------------- | ----------- |
+| `pointName`, `pointCode`, `pointType` | string | `pointCode` nullable | ชื่อ รหัส และประเภทจุด |
+| `latitude`, `longitude`, `description`, `monitoringPointStatus` | number/string | yes | พิกัด คำอธิบาย และสถานะจุด |
+| `parameters` | string[] | optional | machine-stable codes หรือชื่อพร้อมหน่วยตามข้อมูลต้นทาง; omit เมื่อไม่มีค่า |
+| `details` | object | yes | รายละเอียดเฉพาะจุด |
+| `documentsAndImages` | object[] | no | document metadata ของจุด/โรงงาน |
+| `measurementInstruments` | object | yes | `converterBrand?`, `converterModel?`, `parameters[]` ของเครื่องมือตรวจวัด |
+
+Minimal response (`200 OK`):
+
+```json
+{
+  "success": true,
+  "data": {
+    "requestType": "NEW_CONNECTION",
+    "factoryId": "factory-001",
+    "factoryName": "บริษัท ตัวอย่าง จำกัด",
+    "factoryRegistrationNo": "3-106-33/50สบ",
+    "address": "99 หมู่ 1",
+    "systemType": "CEMS",
+    "contactName": "สมชาย ใจดี",
+    "contactPhone": "0812345678",
+    "notificationEmails": [],
+    "officerNotificationEmails": [],
+    "measurementPoints": [
+      {
+        "pointName": "ปล่อง A",
+        "pointCode": "S2001",
+        "pointType": "STACK",
+        "parameters": ["CO (ppm)"],
+        "documentsAndImages": [],
+        "measurementInstruments": null
+      }
+    ],
+    "remarks": null
   }
 }
 ```

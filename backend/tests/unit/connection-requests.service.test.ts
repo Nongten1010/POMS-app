@@ -71,7 +71,10 @@ import { eligibleFactoriesService } from '../../src/modules/eligible-factories/e
 import type { SelectedEligibleFactoryDTO } from '../../src/modules/eligible-factories/eligible-factories.types';
 import { logger } from '../../src/config/logger';
 import { connectionRequestsRepository } from '../../src/modules/connection-requests/connection-requests.repository';
-import { connectionRequestsService } from '../../src/modules/connection-requests/connection-requests.service';
+import {
+  connectionRequestsService,
+  toConnectionRequestFormDTO,
+} from '../../src/modules/connection-requests/connection-requests.service';
 import { resubmitConnectionRequestWithTypeSchema } from '../../src/modules/connection-requests/connection-requests.validator';
 import {
   CONNECTION_REQUEST_STATUS,
@@ -2342,6 +2345,84 @@ describe('connectionRequestsService', () => {
       scope: 'OWN_FACTORY',
       regionalAccess: undefined,
     });
+  });
+
+  it('returns a form-only request payload that can be sent back to the strict resubmit contract', async () => {
+    const request = requestDto({
+      eligibleFactoryId: 77,
+      createdBy: 99,
+      measurementPoints: [
+        {
+          id: 501,
+          pointName: 'ปล่องระบาย A',
+          pointCode: 'STACK-A',
+          pointType: 'STACK',
+          latitude: 13.75,
+          longitude: 100.5,
+          parameters: ['CO (ppm)'],
+          description: 'จุดตรวจวัดหลัก',
+          monitoringPointStatus: 'เชื่อมต่อครบแล้ว',
+          details: null,
+          documentsAndImages: [],
+          measurementInstruments: {
+            converterBrand: null,
+            converterModel: null,
+            parameters: [{ parameter: 'CO (ppm)', technique: 'NDIR' }],
+          },
+          pointCodeAssignmentMode: 'AUTO',
+        },
+      ],
+    });
+    Object.assign(request.measurementPoints[0], {
+      connectedPointId: 701,
+      sourceMeasurementPointId: 501,
+    });
+    mockedRepository.findByIdForReadAccess.mockResolvedValue(request);
+
+    const result = await connectionRequestsService.getForm(1, actorUserId, 'OWN_FACTORY');
+
+    expect(mockedRepository.findByIdForReadAccess).toHaveBeenCalledWith(1, {
+      actorUserId,
+      scope: 'OWN_FACTORY',
+      regionalAccess: undefined,
+    });
+    expect(result).toEqual(toConnectionRequestFormDTO(request));
+    expect(result).not.toHaveProperty('id');
+    expect(result).not.toHaveProperty('eligibleFactoryId');
+    expect(result).not.toHaveProperty('requestNo');
+    expect(result).not.toHaveProperty('status');
+    expect(result).not.toHaveProperty('statusHistory');
+    expect(result).not.toHaveProperty('createdBy');
+    expect(result.measurementPoints[0]).not.toHaveProperty('id');
+    expect(result.measurementPoints[0]).not.toHaveProperty('connectedPointId');
+    expect(result.measurementPoints[0]).not.toHaveProperty('sourceMeasurementPointId');
+    expect(result.measurementPoints[0]).not.toHaveProperty('pointCodeAssignmentMode');
+    expect(resubmitConnectionRequestWithTypeSchema.safeParse(result).success).toBe(true);
+  });
+
+  it('omits an empty measurement-point parameters array so the returned form remains resubmittable', () => {
+    const result = toConnectionRequestFormDTO(
+      requestDto({
+        contactPersons: [],
+        measurementPoints: [
+          {
+            id: 502,
+            pointName: 'จุดระบายน้ำทิ้ง A',
+            pointCode: null,
+            pointType: 'WASTEWATER',
+            latitude: null,
+            longitude: null,
+            parameters: [],
+            description: null,
+          },
+        ],
+        systemType: 'WPMS',
+      }),
+    );
+
+    expect(result).not.toHaveProperty('contactPersons');
+    expect(result.measurementPoints[0]).not.toHaveProperty('parameters');
+    expect(resubmitConnectionRequestWithTypeSchema.safeParse(result).success).toBe(true);
   });
 
   it('uses the same scoped request read for detail and device-config GETs', async () => {

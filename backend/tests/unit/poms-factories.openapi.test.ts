@@ -26,14 +26,23 @@ function jsonRequestSchema(path: string, method: string): JsonObject {
   return asObject(asObject(content['application/json'], 'application/json').schema, 'schema');
 }
 
+function jsonSuccessSchema(path: string, method: string): JsonObject {
+  const responses = asObject(operation(path, method).responses, 'responses');
+  const response = asObject(responses['200'], '200 response');
+  const content = asObject(response.content, 'response.content');
+  return asObject(asObject(content['application/json'], 'application/json').schema, 'schema');
+}
+
 describe('POMS factory master-data OpenAPI contract', () => {
   it('publishes all factory read and edit-request workflow operations', () => {
     const operations = [
       ['/poms-factories', 'get'],
       ['/poms-factories/{factoryId}', 'get'],
+      ['/poms-factories/{factoryId}/form', 'get'],
       ['/poms-factories/{factoryId}/edit-requests', 'post'],
       ['/poms-factories/edit-requests', 'get'],
       ['/poms-factories/edit-requests/{id}', 'get'],
+      ['/poms-factories/edit-requests/{id}/form', 'get'],
       ['/poms-factories/edit-requests/{id}/resubmission', 'put'],
       ['/poms-factories/edit-requests/{id}/review', 'post'],
     ];
@@ -56,6 +65,7 @@ describe('POMS factory master-data OpenAPI contract', () => {
       [
         'formType',
         'factoryName',
+        'address',
         'factoryAddress',
         'latitude',
         'longitude',
@@ -64,6 +74,7 @@ describe('POMS factory master-data OpenAPI contract', () => {
         'projectName',
         'factoryFrontPhotos',
         'factoryLogo',
+        'remarks',
         'note',
       ].sort(),
     );
@@ -75,7 +86,12 @@ describe('POMS factory master-data OpenAPI contract', () => {
       expect.objectContaining({ minLength: 1, maxLength: 500 }),
     );
     expect(asObject(properties.factoryFrontPhotos, 'factoryFrontPhotos').maxItems).toBe(10);
+    expect(asObject(properties.address, 'address')).toEqual(
+      expect.objectContaining({ nullable: true, maxLength: 1000 }),
+    );
     expect(asObject(properties.factoryAddress, 'factoryAddress').nullable).toBe(true);
+    expect(asObject(properties.factoryAddress, 'factoryAddress').deprecated).toBe(true);
+    expect(asObject(properties.note, 'note').deprecated).toBe(true);
     expect(asObject(properties.latitude, 'latitude')).toEqual(
       expect.objectContaining({ minimum: -90, maximum: 90, nullable: true }),
     );
@@ -103,10 +119,14 @@ describe('POMS factory master-data OpenAPI contract', () => {
     expect(createExample).not.toHaveProperty('businessActivity');
     expect(createExample).toEqual(
       expect.objectContaining({
+        address: expect.any(String),
+        remarks: expect.any(String),
         factoryFrontPhotos: expect.any(Array),
         factoryLogo: expect.any(Object),
       }),
     );
+    expect(createExample).not.toHaveProperty('factoryAddress');
+    expect(createExample).not.toHaveProperty('note');
   });
 
   it('publishes the measurement-point edit form as a second submission variant', () => {
@@ -117,6 +137,12 @@ describe('POMS factory master-data OpenAPI contract', () => {
     const requestProperties = asObject(request.properties, 'measurement request properties');
     expect(request.required).toEqual(['formType', 'measurementPoints']);
     expect(asObject(requestProperties.formType, 'formType').enum).toEqual(['MEASUREMENT_POINTS']);
+    expect(requestProperties).toEqual(
+      expect.objectContaining({
+        remarks: expect.any(Object),
+        note: expect.objectContaining({ deprecated: true }),
+      }),
+    );
 
     const pointPatch = asObject(
       schemas().PomsFactoryMeasurementPointPatchRequest,
@@ -153,6 +179,98 @@ describe('POMS factory master-data OpenAPI contract', () => {
       { $ref: '#/components/schemas/PomsFactoryEditableProfileRequest' },
       { $ref: '#/components/schemas/PomsFactoryEditableMeasurementPointsRequest' },
     ]);
+  });
+
+  it('uses one canonical connection-request form response for every prefill endpoint', () => {
+    const expectedResponse = { $ref: '#/components/schemas/ConnectionRequestFormResponse' };
+    expect(jsonSuccessSchema('/cems-wpms-requests/{id}/form', 'get')).toEqual(expectedResponse);
+    expect(jsonSuccessSchema('/poms-factories/{factoryId}/form', 'get')).toEqual(expectedResponse);
+    expect(jsonSuccessSchema('/poms-factories/edit-requests/{id}/form', 'get')).toEqual(
+      expectedResponse,
+    );
+
+    const form = asObject(schemas().ConnectionRequestForm, 'ConnectionRequestForm');
+    const properties = asObject(form.properties, 'ConnectionRequestForm.properties');
+    expect(Object.keys(properties).sort()).toEqual(
+      [
+        'requestType',
+        'factoryId',
+        'factoryName',
+        'factoryRegistrationNo',
+        'industryMainOrder',
+        'industryMainOrderLabel',
+        'industrySubOrder',
+        'businessActivity',
+        'eia',
+        'eiaOther',
+        'hasEia',
+        'projectName',
+        'address',
+        'regionCode',
+        'regionName',
+        'provinceCode',
+        'provinceName',
+        'districtCode',
+        'districtName',
+        'subdistrictCode',
+        'subdistrictName',
+        'industrialEstateCode',
+        'industrialEstateName',
+        'latitude',
+        'longitude',
+        'systemType',
+        'contactName',
+        'contactPhone',
+        'contactEmail',
+        'contactPersons',
+        'notificationEmails',
+        'officerNotificationEmails',
+        'informationProviderName',
+        'informationProviderPosition',
+        'measurementPoints',
+        'remarks',
+      ].sort(),
+    );
+    expect(form.additionalProperties).toBe(false);
+    expect(properties).not.toHaveProperty('eligibleFactoryId');
+    expect(properties).not.toHaveProperty('id');
+    expect(properties).not.toHaveProperty('requestNo');
+    expect(properties).not.toHaveProperty('status');
+    expect(properties).not.toHaveProperty('type');
+
+    const point = asObject(schemas().MeasurementPoint, 'MeasurementPoint');
+    const pointProperties = asObject(point.properties, 'MeasurementPoint.properties');
+    expect(pointProperties).not.toHaveProperty('id');
+    expect(pointProperties).not.toHaveProperty('connectedPointId');
+    expect(pointProperties).not.toHaveProperty('sourceMeasurementPointId');
+
+    const factoryParameters = operation('/poms-factories/{factoryId}/form', 'get')
+      .parameters as JsonObject[];
+    expect(factoryParameters).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'formType',
+          required: false,
+          schema: expect.objectContaining({ enum: ['BASIC_INFO', 'MEASUREMENT_POINTS'] }),
+        }),
+        expect.objectContaining({
+          name: 'systemType',
+          required: false,
+          schema: expect.objectContaining({ enum: ['CEMS', 'WPMS'] }),
+        }),
+      ]),
+    );
+    const editParameters = operation('/poms-factories/edit-requests/{id}/form', 'get')
+      .parameters as JsonObject[];
+    expect(editParameters).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'systemType',
+          required: false,
+          schema: expect.objectContaining({ enum: ['CEMS', 'WPMS'] }),
+        }),
+      ]),
+    );
   });
 
   it('keeps factory summary and edit-request responses aligned with runtime DTOs', () => {
@@ -285,8 +403,10 @@ describe('POMS factory master-data OpenAPI contract', () => {
     const expectations: Array<[string, string, string[], string]> = [
       ['/poms-factories', 'get', ['factories:view'], 'any'],
       ['/poms-factories/{factoryId}', 'get', ['factories:view'], 'any'],
+      ['/poms-factories/{factoryId}/form', 'get', ['factories:view'], 'any'],
       ['/poms-factories/edit-requests', 'get', ['factories:view'], 'any'],
       ['/poms-factories/edit-requests/{id}', 'get', ['factories:view'], 'any'],
+      ['/poms-factories/edit-requests/{id}/form', 'get', ['factories:view'], 'any'],
       [
         '/poms-factories/{factoryId}/edit-requests',
         'post',

@@ -18,6 +18,11 @@ pomsFactoriesRoutes.get(
   authorize('factories:view'),
   pomsFactoriesController.getEditRequest,
 );
+pomsFactoriesRoutes.get(
+  '/edit-requests/:id/form',
+  authorize('factories:view'),
+  pomsFactoriesController.getEditRequestForm,
+);
 pomsFactoriesRoutes.put(
   '/edit-requests/:id/resubmission',
   authorize('factories:view'),
@@ -29,6 +34,11 @@ pomsFactoriesRoutes.post(
   authorize('factories:view'),
   authorize('factories:approve'),
   pomsFactoriesController.reviewEditRequest,
+);
+pomsFactoriesRoutes.get(
+  '/:factoryId/form',
+  authorize('factories:view'),
+  pomsFactoriesController.getFactoryForm,
 );
 pomsFactoriesRoutes.get(
   '/:factoryId',

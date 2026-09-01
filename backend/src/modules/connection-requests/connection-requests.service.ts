@@ -45,6 +45,7 @@ import {
   type ConnectionSystemType,
   type ConfirmConnectionInput,
   type ConnectionRequestDTO,
+  type ConnectionRequestFormDTO,
   type ConnectionRequestDetailDTO,
   type ConnectionRequestStatus,
   type ConnectionRequestTableRowDTO,
@@ -606,6 +607,16 @@ export const connectionRequestsService = {
       factory: findFactorySummary(request, factoryMap),
       deviceConfigs: toDeviceConfigPayloadGroups(deviceConfigs),
     };
+  },
+
+  async getForm(
+    id: number,
+    actorUserId: number,
+    viewScope: AccessScope,
+    regionalAccess?: RegionalAccessDTO | null,
+  ): Promise<ConnectionRequestFormDTO> {
+    const request = await this.getById(id, actorUserId, viewScope, regionalAccess);
+    return toConnectionRequestFormDTO(request);
   },
 
   async getDeviceConfigFormDetail(
@@ -1458,6 +1469,73 @@ export const connectionRequestsService = {
     });
   },
 };
+
+export function toConnectionRequestFormDTO(
+  request: ConnectionRequestDTO,
+): ConnectionRequestFormDTO {
+  return {
+    requestType: request.requestType,
+    factoryId: request.factoryId,
+    factoryName: request.factoryName,
+    factoryRegistrationNo: request.factoryRegistrationNo,
+    industryMainOrder: request.industryMainOrder ?? null,
+    industryMainOrderLabel: request.industryMainOrderLabel ?? null,
+    industrySubOrder: request.industrySubOrder ?? null,
+    businessActivity: request.businessActivity ?? null,
+    eia: request.eia ?? null,
+    eiaOther: request.eiaOther ?? null,
+    hasEia: request.hasEia ?? null,
+    projectName: request.projectName ?? null,
+    address: request.address ?? null,
+    regionCode: request.regionCode ?? null,
+    regionName: request.regionName ?? null,
+    provinceCode: request.provinceCode ?? null,
+    provinceName: request.provinceName ?? null,
+    districtCode: request.districtCode ?? null,
+    districtName: request.districtName ?? null,
+    subdistrictCode: request.subdistrictCode ?? null,
+    subdistrictName: request.subdistrictName ?? null,
+    industrialEstateCode: request.industrialEstateCode ?? null,
+    industrialEstateName: request.industrialEstateName ?? null,
+    latitude: request.latitude ?? null,
+    longitude: request.longitude ?? null,
+    systemType: request.systemType,
+    contactName: request.contactName,
+    contactPhone: request.contactPhone,
+    contactEmail: request.contactEmail ?? null,
+    ...(request.contactPersons.length > 0
+      ? { contactPersons: request.contactPersons.map((contact) => ({ ...contact })) }
+      : {}),
+    notificationEmails: [...request.notificationEmails],
+    officerNotificationEmails: [...request.officerNotificationEmails],
+    informationProviderName: request.informationProviderName ?? null,
+    informationProviderPosition: request.informationProviderPosition ?? null,
+    measurementPoints: request.measurementPoints.map((point) => {
+      const parameters = point.parameters.length > 0 ? [...point.parameters] : null;
+      return {
+        pointName: point.pointName,
+        pointCode: point.pointCode ?? null,
+        pointType: point.pointType,
+        latitude: point.latitude ?? null,
+        longitude: point.longitude ?? null,
+        ...(parameters ? { parameters } : {}),
+        description: point.description ?? null,
+        monitoringPointStatus: point.monitoringPointStatus ?? null,
+        details: point.details ? { ...point.details } : null,
+        documentsAndImages: point.documentsAndImages?.map((document) => ({ ...document })) ?? [],
+        measurementInstruments: point.measurementInstruments
+          ? {
+              ...point.measurementInstruments,
+              parameters: point.measurementInstruments.parameters.map((parameter) => ({
+                ...parameter,
+              })),
+            }
+          : null,
+      };
+    }),
+    remarks: request.remarks ?? null,
+  };
+}
 
 async function requireActiveEligibleFactory(input: {
   factoryId: string;

@@ -6,22 +6,22 @@ Index นี้แสดงเฉพาะเมนูหรือ business capa
 
 ## ศูนย์ทดสอบ API
 
-เปิด `<BASE_URL>/api/v1/docs` เพื่อใช้ Swagger UI ที่รวม API ทั้งระบบ ตัวเลขในตารางนี้นับ `Method + Path` โดย **API ในทะเบียน** คือ route canonical 126 รายการ ส่วน **Operations ใน Swagger** มี 135 รายการ เพราะเพิ่ม path แบบแยก `stationId/{buddhistYear}` อีก 9 รายการให้กรอกและทดสอบ annual point code ได้สะดวก
+เปิด `<BASE_URL>/api/v1/docs` เพื่อใช้ Swagger UI ที่รวม API ทั้งระบบ ตัวเลขในตารางนี้นับ `Method + Path` โดย **API ในทะเบียน** คือ route canonical 130 รายการ ส่วน **Operations ใน Swagger** มี 139 รายการ เพราะเพิ่ม path แบบแยก `stationId/{buddhistYear}` อีก 9 รายการให้กรอกและทดสอบ annual point code ได้สะดวก
 
 | กลุ่มใน Swagger                         | API ในทะเบียน | Operations ใน Swagger | Canonical contract                                                                                                                                       |
 | --------------------------------------- | ------------: | --------------------: | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | ระบบทั่วไปและการเข้าสู่ระบบ             |             8 |                     8 | [Common API](../shared/common-api/README.md), [Authentication](../shared/authentication/README.md), [Internal tools](../shared/internal-tools/README.md) |
 | หน้าหลัก                                |             4 |                     4 | [หน้าหลัก](./home/README.md)                                                                                                                             |
-| ข้อมูลพื้นฐาน                           |            13 |                    17 | [ข้อมูลพื้นฐาน](./master-data/README.md)                                                                                                                 |
-| ขอเชื่อมต่อ                             |            31 |                    31 | [ขอเชื่อมต่อ](./connection-requests/README.md)                                                                                                           |
+| ข้อมูลพื้นฐาน                           |            15 |                    19 | [ข้อมูลพื้นฐาน](./master-data/README.md)                                                                                                                 |
+| ขอเชื่อมต่อ                             |            32 |                    32 | [ขอเชื่อมต่อ](./connection-requests/README.md)                                                                                                           |
 | แจ้งแบบ กวภ. 01 - กวภ. 05               |            25 |                    25 | [แจ้งแบบ กวภ.](./kwp-forms/README.md)                                                                                                                    |
 | รายงานค่าความคลาดเคลื่อน BOD/COD Online |             9 |                     9 | [BOD/COD Online](./bod-cod-deviation-reports/README.md)                                                                                                  |
 | การแจ้งเตือน                            |             6 |                     6 | [การแจ้งเตือน](./notifications/README.md), [ผู้รับอีเมล](../shared/notification-recipients/README.md)                                                    |
 | สถิติข้อมูล                             |             4 |                     8 | [สถิติข้อมูล](./statistics/README.md)                                                                                                                    |
 | สิทธิ์การใช้งาน                         |             8 |                     8 | [สิทธิ์การใช้งาน](./permissions/README.md)                                                                                                               |
-| โรงงานที่เข้าข่าย                       |            14 |                    14 | [โรงงานที่เข้าข่าย](./eligible-factories/README.md)                                                                                                      |
+| โรงงานที่เข้าข่าย                       |            15 |                    15 | [โรงงานที่เข้าข่าย](./eligible-factories/README.md)                                                                                                      |
 | ระบบเชื่อมต่อภายนอก                     |             4 |                     5 | [Integrations](../integrations/README.md)                                                                                                                |
-| **รวม**                                 |       **126** |               **135** | [Endpoint registry](../ENDPOINTS.md)                                                                                                                     |
+| **รวม**                                 |       **130** |               **139** | [Endpoint registry](../ENDPOINTS.md)                                                                                                                     |
 
 ```text
 menus/

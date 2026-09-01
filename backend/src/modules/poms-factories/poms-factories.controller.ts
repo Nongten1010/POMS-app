@@ -8,6 +8,8 @@ import {
   createPomsFactoryEditRequestSchema,
   listPomsFactoriesQuerySchema,
   listPomsFactoryEditRequestsQuerySchema,
+  pomsFactoryEditRequestFormQuerySchema,
+  pomsFactoryFormQuerySchema,
   pomsFactoryEditRequestIdParamsSchema,
   pomsFactoryIdParamsSchema,
   resubmitPomsFactoryEditRequestSchema,
@@ -39,6 +41,24 @@ export const pomsFactoriesController = {
         factoryId,
         actorUserId,
         getScopeDetails(req, 'factories:view'),
+        regionalAccess(req),
+      );
+      res.status(StatusCodes.OK).json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  async getFactoryForm(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const actorUserId = requireActorUserId(req);
+      const { factoryId } = pomsFactoryIdParamsSchema.parse(req.params);
+      const query = pomsFactoryFormQuerySchema.parse(req.query);
+      const data = await pomsFactoriesService.getFactoryForm(
+        factoryId,
+        actorUserId,
+        getScopeDetails(req, 'factories:view'),
+        query,
         regionalAccess(req),
       );
       res.status(StatusCodes.OK).json({ success: true, data });
@@ -89,6 +109,24 @@ export const pomsFactoriesController = {
         id,
         actorUserId,
         getScopeDetails(req, 'factories:view'),
+        regionalAccess(req),
+      );
+      res.status(StatusCodes.OK).json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  async getEditRequestForm(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const actorUserId = requireActorUserId(req);
+      const { id } = pomsFactoryEditRequestIdParamsSchema.parse(req.params);
+      const query = pomsFactoryEditRequestFormQuerySchema.parse(req.query);
+      const data = await pomsFactoriesService.getEditRequestForm(
+        id,
+        actorUserId,
+        getScopeDetails(req, 'factories:view'),
+        query,
         regionalAccess(req),
       );
       res.status(StatusCodes.OK).json({ success: true, data });

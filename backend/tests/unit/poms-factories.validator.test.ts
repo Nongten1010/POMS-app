@@ -60,6 +60,43 @@ describe('POMS factory edit request validators', () => {
     expect(Object.prototype.hasOwnProperty.call(result.data, 'factoryLogo')).toBe(false);
   });
 
+  it('normalizes connection-form field names address and remarks to the POMS write model', () => {
+    const result = createPomsFactoryEditRequestSchema.safeParse({
+      factoryName: 'บริษัท ทดสอบ จำกัด',
+      address: '100 หมู่ 2',
+      remarks: 'แก้ไขให้ตรงกับเอกสารล่าสุด',
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data).toEqual(
+      expect.objectContaining({
+        factoryAddress: '100 หมู่ 2',
+        note: 'แก้ไขให้ตรงกับเอกสารล่าสุด',
+      }),
+    );
+    expect(result.data).not.toHaveProperty('address');
+    expect(result.data).not.toHaveProperty('remarks');
+  });
+
+  it('rejects conflicting canonical and legacy aliases', () => {
+    expect(
+      createPomsFactoryEditRequestSchema.safeParse({
+        factoryName: 'บริษัท ทดสอบ จำกัด',
+        address: '100 หมู่ 2',
+        factoryAddress: '99 หมู่ 1',
+      }).success,
+    ).toBe(false);
+    expect(
+      createPomsFactoryEditRequestSchema.safeParse({
+        formType: 'MEASUREMENT_POINTS',
+        measurementPoints: [{ connectedPointId: 15, pointName: 'ปล่อง A' }],
+        remarks: 'ข้อความใหม่',
+        note: 'ข้อความเดิม',
+      }).success,
+    ).toBe(false);
+  });
+
   it('requires latitude and longitude to be supplied or cleared as a pair', () => {
     expect(
       createPomsFactoryEditRequestSchema.safeParse({
