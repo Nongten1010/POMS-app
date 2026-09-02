@@ -11,6 +11,7 @@ import {
   CONNECTION_REQUEST_TYPE,
   type ConnectionRequestFormDTO,
   type ConnectionSystemType,
+  type OperatorFactoryTableRowDTO,
   type RequestDocumentImageInput,
 } from '../connection-requests/connection-requests.types';
 import type {
@@ -21,7 +22,6 @@ import type {
   PomsFactoryReviewActorContext,
   PomsFactoryProfileDTO,
   PomsMeasurementPointDTO,
-  PomsFactorySummaryDTO,
   ResubmitPomsFactoryEditRequestInput,
   ReviewPomsFactoryEditRequestInput,
 } from './poms-factories.types';
@@ -39,7 +39,7 @@ export const pomsFactoriesService = {
     viewScope: AccessScope,
     search?: string,
     regionalAccess?: RegionalAccessDTO | null,
-  ): Promise<{ data: PomsFactorySummaryDTO[]; meta: { total: number } }> {
+  ): Promise<{ data: OperatorFactoryTableRowDTO[]; meta: { total: number } }> {
     const data = await pomsFactoriesRepository.listFactories(
       { actorUserId, scope: viewScope, regionalAccess },
       search,

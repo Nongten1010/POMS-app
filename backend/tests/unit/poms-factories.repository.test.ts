@@ -5,6 +5,7 @@ import {
   buildConnectedFactoryRowsQueryForTests,
   buildEditRequestsQueryForTests,
   buildPendingRequestCountsQueryForTests,
+  summarizeConnectedFactoryRowsForTests,
   toPomsParameterDisplayNamesForTests,
 } from '../../src/modules/poms-factories/poms-factories.repository';
 
@@ -20,7 +21,81 @@ describe('pomsFactoriesRepository access and approved profile patches', () => {
     expect(sql).toContain('from [cems_wpms_connected_measurement_points] as [cp]');
     expect(sql).toContain('inner join [eligible_factories] as [ef]');
     expect(sql).toContain('[cp].[deleted_at] is null');
+    expect(sql).toContain('[ef].[factory_registration_no_new]');
+    expect(sql).toContain('[ef].[factory_registration_no_old]');
+    expect(sql).toContain('[ef].[business_activity]');
+    expect(sql).toContain('[ef].[factory_type_sequence]');
+    expect(sql).not.toContain('cems_wpms_connection_requests');
     expect(sql).not.toContain('user_juristics');
+  });
+
+  it('searches by both current/live and eligible registration numbers', () => {
+    const compiled = buildConnectedFactoryRowsQueryForTests({
+      actorUserId: 77,
+      scope: 'ALL',
+    }, '3-106')
+      .toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('[cp].[factory_registration_no] like ?');
+    expect(sql).toContain('[ef].[factory_registration_no_new] like ?');
+    expect(sql).toContain('[ef].[factory_registration_no_old] like ?');
+    expect(compiled.bindings).toContain('%3-106%');
+  });
+
+  it('maps connected POMS rows to the exact operator-factories row contract', () => {
+    const rows = [
+      connectedFactoryRow({
+        connected_point_id: 15,
+        point_name: 'ปล่อง A',
+        point_code: 'S0001',
+        factory_name: 'ชื่อเก่า',
+        factory_address: '98 หมู่ 1',
+        updated_at: '2026-08-24T00:00:00.000Z',
+      }),
+      connectedFactoryRow({
+        connected_point_id: 16,
+        source_measurement_point_id: 3,
+        point_name: 'ปล่อง B',
+        point_code: 'S0002',
+        factory_name: 'บริษัท ทดสอบ จำกัด',
+        factory_address: '99 หมู่ 1',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      }),
+    ];
+
+    const result = summarizeConnectedFactoryRowsForTests(rows);
+
+    expect(result).toEqual([
+      {
+        id: 7,
+        factoryId: 'factory-001',
+        factoryName: 'บริษัท ทดสอบ จำกัด',
+        newRegistrationNo: '3-106-33/50สบ',
+        oldRegistrationNo: '3-106-33/49สบ',
+        industryType: 'ผลิตเคมีภัณฑ์',
+        industryMainOrder: '00042',
+        industrySubOrder: '04201',
+        businessActivity: 'ผลิตเคมีภัณฑ์',
+        eia: 'มี EIA',
+        projectName: 'โครงการเดิม',
+        address: '99 หมู่ 1',
+        latitude: '12.7',
+        longitude: '101.1',
+        province: 'ระยอง',
+        officerNotificationEmails: [],
+        isEligible: true,
+        eligibilityStatus: 'เข้าข่าย',
+        monitoringPointCount: 2,
+        requestStatusCode: 'CONNECTED',
+        eligibilityRequest: null,
+        canRequestEligibility: false,
+        status: 'แสดง',
+      },
+    ]);
+    for (const legacyField of LEGACY_POMS_FACTORY_LIST_FIELDS) {
+      expect(result[0]).not.toHaveProperty(legacyField);
+    }
   });
 
   it('limits OWN_FACTORY reads and edit requests to assigned juristics or direct grants', () => {
@@ -186,5 +261,56 @@ function measurementPoint() {
       parameters: [{ parameter: 'CO (ppm)' }],
     },
     updatedAt: '2026-09-01T00:00:00.000Z',
+  };
+}
+
+const LEGACY_POMS_FACTORY_LIST_FIELDS = [
+  'eligibleFactoryId',
+  'factoryRegistrationNo',
+  'factoryAddress',
+  'provinceName',
+  'industrialEstateName',
+  'eiaOther',
+  'factoryFrontPhotos',
+  'factoryLogo',
+  'systemTypes',
+  'measurementPointCount',
+  'pendingEditRequestCount',
+  'updatedAt',
+] as const;
+
+function connectedFactoryRow(overrides: Record<string, unknown> = {}) {
+  return {
+    connected_point_id: 15,
+    source_measurement_point_id: 2,
+    eligible_factory_id: 7,
+    factory_id: 'factory-001',
+    factory_name: 'บริษัท ทดสอบ จำกัด',
+    factory_registration_no: 'POMS-REG-001',
+    factory_address: '99 หมู่ 1',
+    factory_latitude: 12.7,
+    factory_longitude: 101.1,
+    factory_eia_assessment: 'มี EIA' as const,
+    factory_eia_other: null,
+    factory_project_name: 'โครงการเดิม',
+    factory_front_photos_json: null,
+    factory_logo_json: null,
+    province_name: 'ระยอง',
+    industrial_estate_name: null,
+    factory_registration_no_new: '3-106-33/50สบ',
+    factory_registration_no_old: '3-106-33/49สบ',
+    business_activity: 'ผลิตเคมีภัณฑ์',
+    factory_type_sequence: '42 / 4201',
+    system_type: 'CEMS' as const,
+    point_name: 'ปล่อง A',
+    point_code: 'S0001',
+    point_type: 'STACK' as const,
+    parameters_json: '["CO"]',
+    monitoring_point_status: 'เชื่อมต่อครบแล้ว' as const,
+    details_json: null,
+    documents_json: null,
+    instruments_json: null,
+    updated_at: '2026-09-01T00:00:00.000Z',
+    ...overrides,
   };
 }

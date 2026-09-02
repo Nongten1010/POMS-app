@@ -2064,21 +2064,6 @@ const componentSchemas: Record<string, OpenApiObject> = {
       },
     },
   },
-  PomsFactoriesResponse: {
-    type: 'object',
-    additionalProperties: false,
-    required: ['success', 'data', 'meta'],
-    properties: {
-      success: { type: 'boolean', enum: [true] },
-      data: { type: 'array', items: schemaRef('PomsFactorySummary') },
-      meta: {
-        type: 'object',
-        additionalProperties: false,
-        required: ['total'],
-        properties: { total: { type: 'integer', minimum: 0 } },
-      },
-    },
-  },
   PomsFactoryDetailResponse: {
     type: 'object',
     additionalProperties: false,
@@ -4304,16 +4289,16 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'List current/live POMS factories',
       operationId: 'listPomsFactories',
       description:
-        'คืนโรงงานที่มี active row ใน cems_wpms_connected_measurement_points เท่านั้น และใช้ data scope ของ factories:view',
+        'คืนเฉพาะโรงงานที่มี active row ใน cems_wpms_connected_measurement_points ภายใต้ data scope ของ factories:view โดยใช้ response schema เดียวกับ GET /cems-wpms-requests/operator-factories แต่ข้อมูลของแต่ละ row มาจาก current/live connected POMS เท่านั้น ไม่ใช้ snapshot จากคำขอเชื่อมต่อ ฟิลด์ที่ derive/fixed จากการเป็นโรงงานที่เชื่อมต่อแล้วคือ requestStatusCode="CONNECTED", isEligible=true, eligibilityStatus="เข้าข่าย", eligibilityRequest=null, canRequestEligibility=false, status="แสดง" และ officerNotificationEmails=[]',
       parameters: [
         queryString(
           'search',
-          'ค้นหาจากชื่อโรงงาน รหัสโรงงาน เลขทะเบียนโรงงาน หรือชื่อ/รหัสจุดตรวจวัด',
+          'ค้นหาจากชื่อโรงงาน รหัสโรงงาน เลขทะเบียนโรงงาน current/live หรือเลขทะเบียนใหม่/เก่าจาก eligible metadata รวมถึงชื่อ/รหัสจุดตรวจวัด',
           false,
           255,
         ),
       ],
-      successSchema: schemaRef('PomsFactoriesResponse'),
+      successSchema: schemaRef('OperatorFactoryTableResponse'),
     }),
   },
   '/poms-factories/{factoryId}': {

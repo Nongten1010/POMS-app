@@ -8,9 +8,11 @@
 
 โรงงานในระบบ POMS หมายถึงโรงงานที่มี active row ใน `cems_wpms_connected_measurement_points` ไม่ใช่รายชื่อจากตาราง `factories` ส่วนข้อมูลโรงงานที่เข้าข่ายเก็บแยกใน `eligible_factories`
 
+`GET /api/v1/poms-factories` ใช้ response shape เดียวกับ `GET /api/v1/cems-wpms-requests/operator-factories` เพื่อให้ frontend ใช้ชื่อ field ชุดเดียวกัน แต่คืนเฉพาะโรงงาน current/live ใน POMS: connected rows เป็น authoritative source และใช้ active `eligible_factories` เฉพาะ metadata ที่ผูกกับโรงงานนั้น โดยไม่ hydrate payload จากคำขอเชื่อมต่อหรือ `factories`
+
 ### Main Flow
 
-1. อ่านรายชื่อและรายละเอียดโรงงานผ่าน `/api/v1/poms-factories`
+1. อ่านรายชื่อผ่าน `GET /api/v1/poms-factories` ด้วย shared operator-factory row shape แล้วอ่านรายละเอียดด้วย `GET /api/v1/poms-factories/:factoryId` ซึ่งยังคง detail shape เดิม
 2. เรียก `GET /api/v1/poms-factories/:factoryId/form` เพื่อลงค่า current/live ในฟอร์มด้วยชื่อ field เดียวกับฟอร์มขอเชื่อมต่อ
 3. ผู้ประกอบการส่งคำขอแก้ไขด้วย `factories:edit` โดยระบุ `formType` เป็น `BASIC_INFO` หรือ `MEASUREMENT_POINTS`
 4. ถ้า admin ส่งกลับให้แก้ไข ให้เรียก `GET /api/v1/poms-factories/edit-requests/:id/form` เพื่อลง proposed values รอบล่าสุดก่อน resubmit
@@ -66,7 +68,7 @@ curl --request POST \
 
 ## Contracts
 
-- [โรงงานและคำขอแก้ไขข้อมูลในระบบ POMS](./factory-edit-requests.md) — field tables, JSON examples, `formType` ของทั้ง 2 แบบฟอร์ม, permissions, workflow statuses, errors, concurrency, idempotency และ maintainer links
+- [โรงงานและคำขอแก้ไขข้อมูลในระบบ POMS](./factory-edit-requests.md) — shared operator-factory list shape พร้อม POMS source mapping, detail contract, JSON examples, `formType` ของทั้ง 2 แบบฟอร์ม, permissions, workflow statuses, errors, concurrency, idempotency และ maintainer links
 - [จุดตรวจวัดที่เชื่อมต่อแล้ว](../../shared/connected-measurement-points/README.md) — point/history/statistics contract ที่ใช้ร่วมหลายเมนู
 - [Device configuration](../connection-requests/device-configs.md) — config ปัจจุบันและการแทนที่ config
 

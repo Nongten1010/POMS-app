@@ -11,11 +11,14 @@ import {
   deriveHasEiaFromAssessment,
   type ConnectionRequestEiaAssessment,
 } from '../connection-requests/connection-request-eia';
-import type {
-  MeasurementInstrumentsInput,
-  MeasurementPointDetailsInput,
-  RequestDocumentImageInput,
+import {
+  CONNECTION_REQUEST_STATUS,
+  type MeasurementInstrumentsInput,
+  type OperatorFactoryTableRowDTO,
+  type MeasurementPointDetailsInput,
+  type RequestDocumentImageInput,
 } from '../connection-requests/connection-requests.types';
+import { splitFactoryTypeSequence } from '../eligible-factories/factory-type-sequence';
 import type {
   ListPomsFactoryEditRequestsQuery,
   PomsFactoryDetailDTO,
@@ -25,7 +28,6 @@ import type {
   PomsFactoryEditRequestFormType,
   PomsFactoryEditRequestStatus,
   PomsFactoryProfileDTO,
-  PomsFactorySummaryDTO,
   PomsMeasurementPointDTO,
   ReviewPomsFactoryEditRequestInput,
 } from './poms-factories.types';
@@ -62,6 +64,10 @@ interface ConnectedFactoryRow {
   factory_logo_json: string | null;
   province_name: string | null;
   industrial_estate_name: string | null;
+  factory_registration_no_new: string;
+  factory_registration_no_old: string | null;
+  business_activity: string | null;
+  factory_type_sequence: string | null;
   system_type: 'CEMS' | 'WPMS';
   point_name: string;
   point_code: string | null;
@@ -148,16 +154,12 @@ const PARAMETER_DISPLAY_LABELS: Record<string, string> = {
 };
 
 export const pomsFactoriesRepository = {
-  async listFactories(access: FactoryAccess, search?: string): Promise<PomsFactorySummaryDTO[]> {
+  async listFactories(
+    access: FactoryAccess,
+    search?: string,
+  ): Promise<OperatorFactoryTableRowDTO[]> {
     const rows = await buildConnectedFactoryRowsQuery(access, search);
-    const summaries = summarizeFactories(rows);
-    const pendingCounts = await listPendingRequestCounts(
-      summaries.map((factory) => factory.eligibleFactoryId),
-    );
-    return summaries.map((factory) => ({
-      ...factory,
-      pendingEditRequestCount: pendingCounts.get(factory.eligibleFactoryId) ?? 0,
-    }));
+    return summarizeFactoriesForOperatorRows(rows);
   },
 
   async findFactoryDetail(
@@ -494,6 +496,12 @@ export function buildPendingRequestCountsQueryForTests(ids: number[]) {
   return buildPendingRequestCountsQuery(ids).toSQL();
 }
 
+export function summarizeConnectedFactoryRowsForTests(
+  rows: ConnectedFactoryRow[],
+): OperatorFactoryTableRowDTO[] {
+  return summarizeFactoriesForOperatorRows(rows);
+}
+
 export function toPomsParameterDisplayNamesForTests(
   parameters: string[],
   instruments: MeasurementInstrumentsInput | null = null,
@@ -732,6 +740,8 @@ function buildConnectedFactoryRowsQuery(
         .where('cp.factory_name', 'like', keyword)
         .orWhere('cp.factory_id', 'like', keyword)
         .orWhere('cp.factory_registration_no', 'like', keyword)
+        .orWhere('ef.factory_registration_no_new', 'like', keyword)
+        .orWhere('ef.factory_registration_no_old', 'like', keyword)
         .orWhere('cp.point_name', 'like', keyword)
         .orWhere('cp.point_code', 'like', keyword);
     });
@@ -753,8 +763,12 @@ function buildConnectedFactoryRowsQuery(
       'cp.factory_project_name',
       'cp.factory_front_photos_json',
       'cp.factory_logo_json',
-      'p.name_th as province_name',
+      'ef.province_name as province_name',
       'ie.name_th as industrial_estate_name',
+      'ef.factory_registration_no_new',
+      'ef.factory_registration_no_old',
+      'ef.business_activity',
+      'ef.factory_type_sequence',
       'cp.system_type',
       'cp.point_name',
       'cp.point_code',
@@ -932,13 +946,15 @@ async function lockCurrentFactoryProfile(
   return toFactoryDetail(uniqueConnectedPointRows(rows), 0);
 }
 
-function summarizeFactories(rows: ConnectedFactoryRow[]): PomsFactorySummaryDTO[] {
+function summarizeFactoriesForOperatorRows(
+  rows: ConnectedFactoryRow[],
+): OperatorFactoryTableRowDTO[] {
   const grouped = new Map<number, ConnectedFactoryRow[]>();
   uniqueConnectedPointRows(rows).forEach((row) => {
     const id = Number(row.eligible_factory_id);
     grouped.set(id, [...(grouped.get(id) ?? []), row]);
   });
-  return [...grouped.values()].map((factoryRows) => toFactoryDetail(factoryRows, 0));
+  return [...grouped.values()].map((factoryRows) => toOperatorFactoryTableRow(factoryRows));
 }
 
 function toFactoryDetail(
@@ -969,6 +985,40 @@ function toFactoryDetail(
     measurementPointCount: rows.length,
     pendingEditRequestCount,
     measurementPoints: rows.map(toMeasurementPointDTO),
+  };
+}
+
+function toOperatorFactoryTableRow(rows: ConnectedFactoryRow[]): OperatorFactoryTableRowDTO {
+  const sortedByProfileVersion = [...rows].sort(
+    (left, right) => toTimestamp(right.updated_at) - toTimestamp(left.updated_at),
+  );
+  const first = sortedByProfileVersion[0];
+  const { factoryClass, factorySubclass } = splitFactoryTypeSequence(first.factory_type_sequence);
+
+  return {
+    id: Number(first.eligible_factory_id),
+    factoryId: first.factory_id,
+    factoryName: first.factory_name,
+    newRegistrationNo: first.factory_registration_no_new,
+    oldRegistrationNo: first.factory_registration_no_old,
+    industryType: first.business_activity,
+    industryMainOrder: factoryClass,
+    industrySubOrder: factorySubclass,
+    businessActivity: first.business_activity,
+    eia: first.factory_eia_assessment,
+    projectName: first.factory_project_name,
+    address: first.factory_address,
+    latitude: toNullableString(first.factory_latitude),
+    longitude: toNullableString(first.factory_longitude),
+    province: first.province_name,
+    officerNotificationEmails: [],
+    isEligible: true,
+    eligibilityStatus: 'เข้าข่าย',
+    monitoringPointCount: rows.length,
+    requestStatusCode: CONNECTION_REQUEST_STATUS.CONNECTED,
+    eligibilityRequest: null,
+    canRequestEligibility: false,
+    status: 'แสดง',
   };
 }
 
@@ -1371,6 +1421,11 @@ function toNullableNumber(value: number | string | null | undefined): number | n
   if (value === null || value === undefined || value === '') return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function toNullableString(value: number | string | null | undefined): string | null {
+  if (value === null || value === undefined || value === '') return null;
+  return String(value);
 }
 
 function toTimestamp(value: Date | string): number {

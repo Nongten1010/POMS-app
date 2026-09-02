@@ -57,6 +57,26 @@ describe('POMS factory master-data OpenAPI contract', () => {
     }
   });
 
+  it('reuses the operator-factory table response for the active connected POMS list', () => {
+    const pomsList = operation('/poms-factories', 'get');
+    const operatorList = operation('/cems-wpms-requests/operator-factories', 'get');
+
+    expect(jsonSuccessSchema('/poms-factories', 'get')).toEqual(
+      jsonSuccessSchema('/cems-wpms-requests/operator-factories', 'get'),
+    );
+    expect(jsonSuccessSchema('/poms-factories', 'get')).toEqual({
+      $ref: '#/components/schemas/OperatorFactoryTableResponse',
+    });
+    expect(pomsList.description).toEqual(
+      expect.stringContaining('active row ใน cems_wpms_connected_measurement_points'),
+    );
+    expect(pomsList.description).toEqual(expect.stringContaining('current/live connected POMS'));
+    expect(pomsList.description).toEqual(expect.stringContaining('requestStatusCode="CONNECTED"'));
+    expect(pomsList.description).toEqual(expect.stringContaining('officerNotificationEmails=[]'));
+    expect(pomsList.description).toEqual(expect.stringContaining('eligibilityRequest=null'));
+    expect(operatorList.description).not.toEqual(pomsList.description);
+  });
+
   it('limits create and resubmission payloads to the first-version profile allowlist', () => {
     const schema = asObject(schemas().PomsFactoryEditableProfileRequest, 'edit profile request');
     const properties = asObject(schema.properties, 'edit profile properties');
@@ -300,12 +320,7 @@ describe('POMS factory master-data OpenAPI contract', () => {
       }),
     );
 
-    const factoriesResponse = asObject(allSchemas.PomsFactoriesResponse, 'factories response');
-    const factoriesData = asObject(
-      asObject(factoriesResponse.properties, 'factories response properties').data,
-      'factories data',
-    );
-    expect(factoriesData.items).toEqual({ $ref: '#/components/schemas/PomsFactorySummary' });
+    expect(allSchemas).not.toHaveProperty('PomsFactoriesResponse');
 
     const detail = asObject(allSchemas.PomsFactoryDetail, 'factory detail');
     expect((detail.allOf as unknown[])[0]).toEqual({

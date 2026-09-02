@@ -2,6 +2,14 @@
 
 ไฟล์นี้บันทึกเฉพาะการเปลี่ยน API ที่ทำให้ client ต้องแก้ตาม การเปลี่ยนทั่วไปและประวัติรายละเอียดดูจาก Git history
 
+## 2026-09-02 — ปรับรายการโรงงาน POMS ให้ใช้ shared operator-factory row shape
+
+- **Affected canonical docs:** [ข้อมูลพื้นฐาน](./menus/master-data/README.md), [`GET /api/v1/poms-factories`](./menus/master-data/factory-edit-requests.md#get-apiv1poms-factories), [Operator factory list source](./menus/connection-requests/README.md#operator-factory-list-source)
+- **Impact:** `GET /api/v1/poms-factories` เปลี่ยน field ของ `data[]` ให้ตรงกับ `GET /api/v1/cems-wpms-requests/operator-factories`. รายการยังเป็น connected-only และใช้ active `cems_wpms_connected_measurement_points` เป็น authoritative current/live source; active `eligible_factories` ใช้เฉพาะ metadata identity/type/location ของ connected row และไม่ hydrate payload จาก connection-request snapshots หรือ `factories`. สำหรับทุก POMS row ค่า `officerNotificationEmails = []`, `isEligible = true`, `eligibilityStatus = "เข้าข่าย"`, `eligibilityRequest = null`, `canRequestEligibility = false`, `requestStatusCode = "CONNECTED"` และ `status = "แสดง"`.
+- **Migration:** client ต้องเปลี่ยน `eligibleFactoryId` เป็น `id`, `factoryRegistrationNo` เป็น `newRegistrationNo` (และอ่าน `oldRegistrationNo` แยกเมื่อจำเป็น), `factoryAddress` เป็น `address`, `provinceName` เป็น `province`, `measurementPointCount` เป็น `monitoringPointCount` และรองรับ `latitude`/`longitude` จาก number เป็น nullable string. Field list เดิมที่ไม่มีใน shared row ได้แก่ `industrialEstateName`, `eiaOther`, `factoryFrontPhotos`, `factoryLogo`, `systemTypes`, `pendingEditRequestCount` และ `updatedAt` ถูกนำออกจาก list response. หากต้องใช้ rich current/live profile และ fields เดิม ให้เรียก `GET /api/v1/poms-factories/:factoryId` ซึ่งยังคง `PomsFactoryDetail` shape เดิม; ไม่มี database migration.
+- **Old contract:** list คืน `PomsFactorySummary` ที่มี field เฉพาะ POMS เช่น `eligibleFactoryId`, `factoryRegistrationNo`, `factoryAddress`, `systemTypes`, `measurementPointCount` และ `pendingEditRequestCount`; พิกัดเป็น number.
+- **New contract:** list คืน `OperatorFactoryTableResponse` โดยแต่ละ row ใช้ `OperatorFactoryTableRow` ชุดเดียวกับหน้าขอเชื่อมต่อ แต่คัดเฉพาะ active POMS factories และสร้างค่าจาก current/live connected data กับ eligible metadata ที่ผูกกัน; detail endpoint ไม่เปลี่ยน.
+
 ## 2026-09-01 — เพิ่ม 2 แบบฟอร์มคำขอแก้ไขข้อมูลพื้นฐานจาก POMS และจำกัดผู้อนุมัติเป็น admin
 
 - **Affected canonical docs:** [ข้อมูลพื้นฐาน](./menus/master-data/README.md), [คำขอแก้ไขข้อมูลพื้นฐานโรงงานจาก POMS](./menus/master-data/factory-edit-requests.md)

@@ -43,6 +43,25 @@ describe('pomsFactoriesService edit-request workflow', () => {
     mockedRepository.reviewEditRequest.mockResolvedValue(editRequest('APPROVED'));
   });
 
+  it('returns the exact operator-factories table row contract for live POMS factories', async () => {
+    const row = factoryOperatorTableRow();
+    mockedRepository.listFactories.mockResolvedValue([row]);
+
+    const result = await pomsFactoriesService.listFactories(42, ownFactoryScope, 'ทดสอบ', null);
+
+    expect(mockedRepository.listFactories).toHaveBeenCalledWith(
+      { actorUserId: 42, scope: ownFactoryScope, regionalAccess: null },
+      'ทดสอบ',
+    );
+    expect(result).toEqual({ data: [row], meta: { total: 1 } });
+    expect(Object.keys(result.data[0]).sort()).toEqual(
+      Object.keys(factoryOperatorTableRow()).sort(),
+    );
+    for (const legacyField of LEGACY_POMS_FACTORY_LIST_FIELDS) {
+      expect(result.data[0]).not.toHaveProperty(legacyField);
+    }
+  });
+
   it('builds a POMS form with the exact connection-request field names and live values', async () => {
     const result = await pomsFactoriesService.getFactoryForm(
       'factory-001',
@@ -514,6 +533,49 @@ function factoryDetail(): PomsFactoryDetailDTO {
         updatedAt: '2026-08-24T00:00:00.000Z',
       },
     ],
+  };
+}
+
+const LEGACY_POMS_FACTORY_LIST_FIELDS = [
+  'eligibleFactoryId',
+  'factoryRegistrationNo',
+  'factoryAddress',
+  'provinceName',
+  'industrialEstateName',
+  'eiaOther',
+  'factoryFrontPhotos',
+  'factoryLogo',
+  'systemTypes',
+  'measurementPointCount',
+  'pendingEditRequestCount',
+  'updatedAt',
+] as const;
+
+function factoryOperatorTableRow() {
+  return {
+    id: 7,
+    factoryId: 'factory-001',
+    factoryName: 'บริษัท ทดสอบ จำกัด',
+    newRegistrationNo: '3-106-33/50สบ',
+    oldRegistrationNo: null,
+    industryType: 'ผลิตเคมีภัณฑ์',
+    industryMainOrder: '00042',
+    industrySubOrder: '01',
+    businessActivity: 'ผลิตเคมีภัณฑ์',
+    eia: 'มี EIA' as const,
+    projectName: 'โครงการเดิม',
+    address: '99 หมู่ 1',
+    latitude: '12.7',
+    longitude: '101.1',
+    province: 'ระยอง',
+    officerNotificationEmails: [],
+    isEligible: true,
+    eligibilityStatus: 'เข้าข่าย' as const,
+    monitoringPointCount: 1,
+    requestStatusCode: 'CONNECTED' as const,
+    eligibilityRequest: null,
+    canRequestEligibility: false,
+    status: 'แสดง' as const,
   };
 }
 

@@ -30,7 +30,10 @@ const approveScope = { scope: 'IN_REGION' as const, region: 'ภาคตะว�
 describe('POMS factory routes', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockedService.listFactories.mockResolvedValue({ data: [factorySummary()], meta: { total: 1 } });
+    mockedService.listFactories.mockResolvedValue({
+      data: [factoryOperatorTableRow()],
+      meta: { total: 1 },
+    });
     mockedService.getFactoryDetail.mockResolvedValue(factoryDetail());
     mockedService.getFactoryForm.mockResolvedValue(connectionForm());
     mockedService.createEditRequest.mockResolvedValue(editRequest('PENDING_REVIEW'));
@@ -56,7 +59,17 @@ describe('POMS factory routes', () => {
       );
 
     expect(response.status).toBe(200);
-    expect(response.body.meta.total).toBe(1);
+    expect(response.body).toEqual({
+      success: true,
+      data: [factoryOperatorTableRow()],
+      meta: { total: 1 },
+    });
+    expect(Object.keys(response.body.data[0]).sort()).toEqual(
+      Object.keys(factoryOperatorTableRow()).sort(),
+    );
+    for (const legacyField of LEGACY_POMS_FACTORY_LIST_FIELDS) {
+      expect(response.body.data[0]).not.toHaveProperty(legacyField);
+    }
     expect(mockedService.listFactories).toHaveBeenCalledWith(42, viewScope, 'ทดสอบ', null);
   });
 
@@ -411,6 +424,49 @@ function factorySummary() {
     systemTypes: ['CEMS' as const],
     measurementPointCount: 1,
     pendingEditRequestCount: 0,
+  };
+}
+
+const LEGACY_POMS_FACTORY_LIST_FIELDS = [
+  'eligibleFactoryId',
+  'factoryRegistrationNo',
+  'factoryAddress',
+  'provinceName',
+  'industrialEstateName',
+  'eiaOther',
+  'factoryFrontPhotos',
+  'factoryLogo',
+  'systemTypes',
+  'measurementPointCount',
+  'pendingEditRequestCount',
+  'updatedAt',
+] as const;
+
+function factoryOperatorTableRow() {
+  return {
+    id: 7,
+    factoryId: 'factory-001',
+    factoryName: 'บริษัท ทดสอบ จำกัด',
+    newRegistrationNo: '3-106-33/50สบ',
+    oldRegistrationNo: null,
+    industryType: 'ผลิตเคมีภัณฑ์',
+    industryMainOrder: '00042',
+    industrySubOrder: '01',
+    businessActivity: 'ผลิตเคมีภัณฑ์',
+    eia: 'มี EIA' as const,
+    projectName: 'โครงการเดิม',
+    address: '99 หมู่ 1',
+    latitude: '12.7',
+    longitude: '101.1',
+    province: 'ระยอง',
+    officerNotificationEmails: [],
+    isEligible: true,
+    eligibilityStatus: 'เข้าข่าย' as const,
+    monitoringPointCount: 1,
+    requestStatusCode: 'CONNECTED' as const,
+    eligibilityRequest: null,
+    canRequestEligibility: false,
+    status: 'แสดง' as const,
   };
 }
 

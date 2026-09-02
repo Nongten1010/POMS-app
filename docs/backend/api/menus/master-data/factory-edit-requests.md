@@ -97,13 +97,15 @@ curl --request POST \
 
 ### `GET /api/v1/poms-factories`
 
-คืนโรงงาน current/live แบบไม่ซ้ำโรงงาน โดยนับและสรุปจาก active `cems_wpms_connected_measurement_points` เท่านั้น ไม่ใช้ตาราง `factories` เป็นแหล่งรายชื่อ POMS
+คืนโรงงาน current/live แบบไม่ซ้ำโรงงานด้วย response shape เดียวกับ `GET /api/v1/cems-wpms-requests/operator-factories` แต่ขอบเขตข้อมูลต่างกัน: endpoint นี้คืนเฉพาะโรงงานที่มี active `cems_wpms_connected_measurement_points` และอยู่ใน `factories:view` scope ของผู้เรียก
+
+active `cems_wpms_connected_measurement_points` เป็น authoritative source สำหรับการเป็นสมาชิก POMS และ current/live profile ส่วน active `eligible_factories` ที่ผูกกับ connected row ใช้เฉพาะ metadata ด้าน identity, ประเภทกิจการ และพื้นที่ Endpoint นี้ไม่ hydrate response จาก connection-request snapshots และไม่ใช้ข้อมูล payload จากตาราง `factories`
 
 #### Request Fields
 
 | Field    | Location | Type   | Required | Rules                                                                              |
 | -------- | -------- | ------ | -------- | ---------------------------------------------------------------------------------- |
-| `search` | query    | string | no       | trim แล้ว 1–255 ตัวอักษร; ค้นจากรหัส/ชื่อ/เลขทะเบียนโรงงาน หรือชื่อ/รหัสจุดตรวจวัด |
+| `search` | query    | string | no       | trim แล้ว 1–255 ตัวอักษร; ค้นจากรหัส/ชื่อ/เลขทะเบียนโรงงาน current/live, เลขทะเบียนใหม่/เก่าจาก eligible metadata หรือชื่อ/รหัสจุดตรวจวัด |
 
 Minimal request JSON สำหรับ endpoint ที่ไม่มี body:
 
@@ -113,29 +115,35 @@ Minimal request JSON สำหรับ endpoint ที่ไม่มี body:
 
 #### Success Response Fields
 
-| Field                            | Type                 | Nullable | Description                                                    |
-| -------------------------------- | -------------------- | -------- | -------------------------------------------------------------- |
-| `success`                        | boolean              | no       | `true`                                                         |
-| `data`                           | object[]             | no       | โรงงาน current/live ที่ผู้เรียกมองเห็น                         |
-| `data[].eligibleFactoryId`       | number               | no       | active `eligible_factories.id` ที่จับคู่กับข้อมูล current/live |
-| `data[].factoryId`               | string               | no       | stable factory identifier ของข้อมูล current/live               |
-| `data[].factoryRegistrationNo`   | string               | no       | เลขทะเบียนโรงงาน                                               |
-| `data[].factoryName`             | string               | no       | ชื่อโรงงานปัจจุบัน                                             |
-| `data[].factoryAddress`          | string               | yes      | ที่อยู่โรงงานปัจจุบัน                                          |
-| `data[].provinceName`            | string               | yes      | จังหวัดสำหรับแสดงผลและตรวจ scope                               |
-| `data[].industrialEstateName`    | string               | yes      | นิคมอุตสาหกรรมสำหรับแสดงผลและตรวจ scope                        |
-| `data[].latitude`                | number               | yes      | ละติจูด                                                        |
-| `data[].longitude`               | number               | yes      | ลองจิจูด                                                       |
-| `data[].eia`                     | string               | yes      | ค่า EIA ตาม enum ของระบบ                                       |
-| `data[].eiaOther`                | string               | yes      | รายละเอียดเมื่อ `eia = "อื่นๆ"`                                |
-| `data[].projectName`             | string               | yes      | ชื่อโครงการ                                                    |
-| `data[].factoryFrontPhotos`      | object[]             | no       | เอกสาร/ภาพด้านหน้าโรงงาน                                       |
-| `data[].factoryLogo`             | object               | yes      | โลโก้โรงงาน                                                    |
-| `data[].systemTypes`             | (`CEMS` \| `WPMS`)[] | no       | ระบบที่มี active point ในโรงงาน เรียงและไม่ซ้ำ                 |
-| `data[].measurementPointCount`   | number               | no       | จำนวน active connected points ของโรงงาน                        |
-| `data[].pendingEditRequestCount` | number               | no       | จำนวน open edit request ของโรงงานทุก `formType`; รองรับค่า `0` ถึง `2` |
-| `data[].updatedAt`               | ISO 8601 string      | no       | เวลาแก้ไขล่าสุดของ active point ที่นำมาสรุป                    |
-| `meta.total`                     | number               | no       | จำนวนโรงงานใน `data`                                           |
+ชื่อ field, type และ nullability ของแต่ละ row ตรงกับ shared [`OperatorFactoryTableRow`](../connection-requests/README.md#operator-factory-list-source) โดย endpoint นี้ส่งเฉพาะ field ต่อไปนี้
+
+| Field                                        | Type                                                        | Nullable | Source/Meaning                                                                                                         |
+| -------------------------------------------- | ----------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `success`                                    | boolean                                                     | no       | คงที่เป็น `true`                                                                                                       |
+| `data`                                       | object[]                                                    | no       | โรงงาน current/live ที่ผู้เรียกมองเห็น; ทุก row มี active connected point                                               |
+| `data[].id`                                  | integer                                                     | yes      | active `eligible_factories.id`; schema กลางรองรับ `null` แต่ POMS row ปัจจุบันมีค่าเสมอ                                 |
+| `data[].factoryId`                           | string                                                      | no       | stable factory identifier จาก current/live connected row                                                               |
+| `data[].factoryName`                         | string                                                      | no       | ชื่อโรงงาน current/live จาก connected row ล่าสุด                                                                        |
+| `data[].newRegistrationNo`                   | string                                                      | yes      | เลขทะเบียนใหม่จาก active eligible metadata ที่ผูกกับ connected row                                                      |
+| `data[].oldRegistrationNo`                   | string                                                      | yes      | เลขทะเบียนเก่าจาก active eligible metadata                                                                              |
+| `data[].industryType`                        | string                                                      | yes      | คำอธิบายประเภทกิจการจาก active eligible metadata; ใช้ค่าเดียวกับ `businessActivity` เพื่อคง shared display contract     |
+| `data[].industryMainOrder`                   | string                                                      | yes      | ลำดับประเภทโรงงานหลักที่แยกจาก active `eligible_factories.factory_type_sequence`                                        |
+| `data[].industrySubOrder`                    | string                                                      | yes      | ลำดับประเภทย่อยที่แยกจาก active `eligible_factories.factory_type_sequence`                                              |
+| `data[].businessActivity`                    | string                                                      | yes      | การประกอบกิจการจาก active eligible metadata                                                                             |
+| `data[].eia`                                 | `มี` \| `ไม่มี` \| `มี IEE` \| `มี EIA` \| `มี EHIA` \| `อื่นๆ` | yes      | ค่า EIA current/live จาก connected row ล่าสุด                                                                           |
+| `data[].projectName`                         | string                                                      | yes      | ชื่อโครงการ current/live จาก connected row ล่าสุด                                                                       |
+| `data[].address`                             | string                                                      | yes      | ที่อยู่ current/live จาก connected row ล่าสุด                                                                            |
+| `data[].latitude`, `data[].longitude`         | string                                                      | yes      | พิกัด current/live ในรูป string ตาม shared operator-factory contract                                                     |
+| `data[].province`                            | string                                                      | yes      | จังหวัดจาก active eligible metadata ที่ผูกกับ connected row                                                              |
+| `data[].officerNotificationEmails`           | string[]                                                    | no       | คงที่เป็น `[]` เพราะ POMS source ไม่เก็บ field นี้                                                                       |
+| `data[].isEligible`                          | boolean                                                     | no       | คงที่เป็น `true` เพราะรายการ POMS ต้องจับคู่ active eligible row                                                         |
+| `data[].eligibilityStatus`                   | `เข้าข่าย` \| `ไม่เข้าข่าย`                                | no       | คงที่เป็น `เข้าข่าย`                                                                                                    |
+| `data[].eligibilityRequest`                  | object                                                      | yes      | คงที่เป็น `null`; endpoint นี้ไม่อ่าน workflow คำขอเพิ่มโรงงาน                                                          |
+| `data[].canRequestEligibility`               | boolean                                                     | no       | คงที่เป็น `false`                                                                                                       |
+| `data[].monitoringPointCount`                | integer                                                     | no       | จำนวน active connected points ของโรงงาน                                                                                 |
+| `data[].requestStatusCode`                   | `CONNECTED`                                                 | no       | derive จากการมี active connected point; ไม่อ่านสถานะจาก connection-request snapshot                                     |
+| `data[].status`                              | `แสดง` \| `ซ่อน`                                          | no       | คงที่เป็น `แสดง`                                                                                                        |
+| `meta.total`                                 | integer                                                     | no       | จำนวนโรงงานใน `data`                                                                                                    |
 
 Minimal response (`200 OK`):
 
@@ -144,24 +152,29 @@ Minimal response (`200 OK`):
   "success": true,
   "data": [
     {
-      "eligibleFactoryId": 7,
+      "id": 7,
       "factoryId": "factory-001",
-      "factoryRegistrationNo": "3-106-33/50สบ",
       "factoryName": "บริษัท ตัวอย่าง จำกัด",
-      "factoryAddress": "99 หมู่ 1",
-      "provinceName": "สระบุรี",
-      "industrialEstateName": null,
-      "latitude": 14.315,
-      "longitude": 100.612,
+      "newRegistrationNo": "10120000325542",
+      "oldRegistrationNo": "3-106-33/50สบ",
+      "industryType": "ผลิตผลิตภัณฑ์ตัวอย่าง",
+      "industryMainOrder": "00343",
+      "industrySubOrder": "00003",
+      "businessActivity": "ผลิตผลิตภัณฑ์ตัวอย่าง",
       "eia": "มี",
-      "eiaOther": null,
       "projectName": "โครงการระบบตรวจวัด",
-      "factoryFrontPhotos": [],
-      "factoryLogo": null,
-      "systemTypes": ["CEMS"],
-      "measurementPointCount": 2,
-      "pendingEditRequestCount": 0,
-      "updatedAt": "2026-08-24T02:00:00.000Z"
+      "address": "99 หมู่ 1",
+      "latitude": "14.315",
+      "longitude": "100.612",
+      "province": "สระบุรี",
+      "officerNotificationEmails": [],
+      "isEligible": true,
+      "eligibilityStatus": "เข้าข่าย",
+      "eligibilityRequest": null,
+      "canRequestEligibility": false,
+      "monitoringPointCount": 2,
+      "requestStatusCode": "CONNECTED",
+      "status": "แสดง"
     }
   ],
   "meta": { "total": 1 }
@@ -184,12 +197,28 @@ Minimal request JSON:
 {}
 ```
 
-#### Additional Success Fields
+#### Success Response Fields
 
-นอกจาก field ระดับโรงงานของ list endpoint แล้ว detail เพิ่ม field ต่อไปนี้
+Detail endpoint นี้คง `PomsFactoryDetail` shape เดิมและไม่เปลี่ยนตาม shared operator-factory row ของ list endpoint
 
 | Field                                               | Type                               | Nullable | Description                                            |
 | --------------------------------------------------- | ---------------------------------- | -------- | ------------------------------------------------------ |
+| `success`                                           | boolean                            | no       | `true`                                                 |
+| `data`                                              | object                             | no       | profile current/live และจุดตรวจวัดของโรงงาน           |
+| `data.eligibleFactoryId`                            | number                             | no       | active `eligible_factories.id`                         |
+| `data.factoryId`                                    | string                             | no       | stable factory identifier                              |
+| `data.factoryRegistrationNo`                        | string                             | no       | เลขทะเบียนโรงงานรูปแบบเดิมของ detail contract         |
+| `data.factoryName`                                  | string                             | no       | ชื่อโรงงาน current/live                                |
+| `data.factoryAddress`                               | string                             | yes      | ที่อยู่โรงงาน current/live                             |
+| `data.provinceName`, `data.industrialEstateName`    | string                             | yes      | ชื่อจังหวัดและนิคมอุตสาหกรรม                           |
+| `data.latitude`, `data.longitude`                    | number                             | yes      | พิกัดในรูป number ตาม detail contract เดิม             |
+| `data.eia`, `data.eiaOther`, `data.projectName`     | string                             | yes      | ข้อมูล EIA และชื่อโครงการ current/live                 |
+| `data.factoryFrontPhotos`                           | object[]                           | no       | เอกสาร/ภาพด้านหน้าโรงงาน                               |
+| `data.factoryLogo`                                  | object                             | yes      | โลโก้โรงงาน                                            |
+| `data.systemTypes`                                  | (`CEMS` \| `WPMS`)[]               | no       | ระบบที่มี active point เรียงและไม่ซ้ำ                  |
+| `data.measurementPointCount`                        | number                             | no       | จำนวน active connected points                          |
+| `data.pendingEditRequestCount`                      | number                             | no       | จำนวน open edit requests ของโรงงานทุก `formType`       |
+| `data.updatedAt`                                    | ISO 8601 string                    | no       | เวลาแก้ไขล่าสุดของ active point ที่นำมาสรุป            |
 | `data.measurementPoints`                            | object[]                           | no       | active connected points ของโรงงาน                      |
 | `data.measurementPoints[].connectedPointId`         | number                             | no       | ID ของ active `cems_wpms_connected_measurement_points` |
 | `data.measurementPoints[].sourceMeasurementPointId` | number                             | no       | จุดต้นทางในคำขอเชื่อมต่อ                               |
