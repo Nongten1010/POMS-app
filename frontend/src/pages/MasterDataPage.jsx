@@ -299,6 +299,111 @@ function normalizeFactoryDetail(row = {}) {
   return mapFactoryRows([row])[0] ?? null
 }
 
+function getPointIdentity(point = {}) {
+  return {
+    connectedPointId: point.connectedPointId ?? point.id ?? null,
+    pointCode: point.pointCode ?? point.stationId ?? point.code ?? '',
+    pointName: point.pointName ?? point.name ?? '',
+    systemType: point.systemType ?? point.type ?? '',
+  }
+}
+
+function getFactorySystemType(factory = {}, selectedPoint = null) {
+  const pointType = selectedPoint?.systemType ?? selectedPoint?.type
+  if (pointType === 'CEMS' || pointType === 'WPMS') {
+    return pointType
+  }
+
+  if (Array.isArray(factory?.systemTypes) && factory.systemTypes.length === 1) {
+    return factory.systemTypes[0]
+  }
+
+  const firstPoint = Array.isArray(factory?.measurementPoints) ? factory.measurementPoints[0] : null
+  return firstPoint?.systemType ?? 'CEMS'
+}
+
+function mergeFormMeasurementPointIds(formData = {}, factory = {}) {
+  const detailPoints = [
+    ...(Array.isArray(factory?.measurementPoints) ? factory.measurementPoints : []),
+    ...(factory?.selectedMeasurementPoint ? [factory.selectedMeasurementPoint] : []),
+  ]
+
+  if (!Array.isArray(formData?.measurementPoints)) {
+    return formData
+  }
+
+  return {
+    ...formData,
+    measurementPoints: formData.measurementPoints.map((point, index) => {
+      const pointIdentity = getPointIdentity(point)
+      const matchedPoint = detailPoints.find((candidate) => {
+        const candidateIdentity = getPointIdentity(candidate)
+        return (
+          (pointIdentity.pointCode && candidateIdentity.pointCode === pointIdentity.pointCode)
+          || (pointIdentity.pointName && candidateIdentity.pointName === pointIdentity.pointName && candidateIdentity.systemType === pointIdentity.systemType)
+          || index === detailPoints.indexOf(candidate)
+        )
+      })
+      const matchedIdentity = getPointIdentity(matchedPoint)
+
+      return {
+        ...point,
+        connectedPointId: point.connectedPointId ?? matchedIdentity.connectedPointId,
+      }
+    }),
+  }
+}
+
+function normalizeFactoryFormData(formData = {}, factory = {}, extra = {}) {
+  const selectedPoint = factory?.selectedMeasurementPoint ?? null
+  const selectedSystemType = getFactorySystemType(factory, selectedPoint)
+  const mergedFormData = mergeFormMeasurementPointIds(formData, factory)
+  const selectedIdentity = getPointIdentity(selectedPoint)
+  const formMeasurementPoints = Array.isArray(mergedFormData.measurementPoints) ? mergedFormData.measurementPoints : []
+  const selectedMeasurementPoints = selectedPoint
+    ? [
+        formMeasurementPoints.find((point) => {
+          const pointIdentity = getPointIdentity(point)
+          return (
+            (selectedIdentity.connectedPointId && pointIdentity.connectedPointId === selectedIdentity.connectedPointId)
+            || (selectedIdentity.pointCode && pointIdentity.pointCode === selectedIdentity.pointCode)
+            || (selectedIdentity.pointName && pointIdentity.pointName === selectedIdentity.pointName && pointIdentity.systemType === selectedIdentity.systemType)
+          )
+        }) ?? {
+          ...selectedPoint,
+          pointCode: selectedIdentity.pointCode,
+          pointName: selectedIdentity.pointName,
+          systemType: selectedIdentity.systemType,
+          connectedPointId: selectedIdentity.connectedPointId,
+        },
+      ]
+    : formMeasurementPoints
+
+  return {
+    ...factory,
+    ...mergedFormData,
+    ...extra,
+    id: extra.id ?? mergedFormData.id ?? factory.id ?? factory.factoryId ?? factory.newRegistrationNo,
+    factoryId: mergedFormData.factoryId ?? factory.factoryId ?? factory.newRegistrationNo ?? '',
+    factoryName: mergedFormData.factoryName ?? factory.factoryName ?? '',
+    newRegistrationNo: mergedFormData.newRegistrationNo ?? mergedFormData.factoryId ?? factory.newRegistrationNo ?? factory.factoryId ?? '',
+    oldRegistrationNo: mergedFormData.oldRegistrationNo ?? mergedFormData.factoryRegistrationNo ?? factory.oldRegistrationNo ?? '',
+    factoryRegistrationNo: mergedFormData.factoryRegistrationNo ?? factory.factoryRegistrationNo ?? factory.oldRegistrationNo ?? '',
+    industryMainOrder: mergedFormData.industryMainOrder ?? factory.industryMainOrder ?? factory.industryType ?? '',
+    industrySubOrder: mergedFormData.industrySubOrder ?? factory.industrySubOrder ?? '',
+    businessActivity: mergedFormData.businessActivity ?? factory.businessActivity ?? '',
+    eia: mergedFormData.eia ?? factory.eia ?? '',
+    eiaOther: mergedFormData.eiaOther ?? factory.eiaOther ?? '',
+    projectName: mergedFormData.projectName ?? factory.projectName ?? '',
+    address: mergedFormData.address ?? factory.address ?? '',
+    latitude: mergedFormData.latitude ?? factory.latitude ?? '',
+    longitude: mergedFormData.longitude ?? factory.longitude ?? '',
+    systemType: mergedFormData.systemType ?? selectedSystemType,
+    selectedMeasurementPoint: selectedPoint,
+    measurementPoints: selectedMeasurementPoints,
+  }
+}
+
 function StatusChip({ value }) {
   const colorByStatus = {
     รอพิจารณา: {
@@ -993,6 +1098,10 @@ function RequestViewBottomSheet({
 }
 
 function makeMasterDataInitialRequest(factory) {
+  if (Array.isArray(factory?.measurementPoints) && factory.measurementPoints.length > 0 && factory?.__fromFormEndpoint) {
+    return factory
+  }
+
   const firstPoint = factory?.selectedMeasurementPoint ?? (Array.isArray(factory?.measurementPoints) ? factory.measurementPoints[0] : null)
   const systemType = firstPoint?.systemType ?? 'CEMS'
   const pointCode = firstPoint ? getMonitoringPointCode(firstPoint, 0) : ''
@@ -1069,12 +1178,17 @@ function buildMeasurementPointsPayload(requestBody, initialRequest) {
   const point = requestBody?.measurementPoints?.[0] ?? {}
   const initialPoint = initialRequest?.measurementPoints?.[0] ?? {}
   const pointName = point.pointName ?? point.details?.pointName ?? initialPoint.pointName ?? ''
+  const connectedPointId = initialPoint.connectedPointId
+
+  if (!connectedPointId) {
+    throw new Error('ไม่พบรหัสอ้างอิงจุดตรวจวัดสำหรับส่งคำขอแก้ไข')
+  }
 
   return {
     formType: 'MEASUREMENT_POINTS',
     measurementPoints: [
       {
-        connectedPointId: initialPoint.connectedPointId,
+        connectedPointId,
         pointName,
         monitoringPointStatus: point.monitoringPointStatus ?? initialPoint.monitoringPointStatus ?? null,
         details: point.details ?? null,
@@ -1193,6 +1307,61 @@ function MasterDataPage({ userType = '', roleCode = '', accessToken = '' }) {
     return normalizeFactoryDetail(response?.data ?? factory)
   }, [accessToken])
 
+  const loadFactoryForm = useCallback(async (factory, formType = 'MEASUREMENT_POINTS') => {
+    const factoryId = getFactoryRowId(factory)
+    if (!accessToken || !factoryId) {
+      return factory
+    }
+
+    const selectedPoint = factory?.selectedMeasurementPoint ?? null
+    const query = new URLSearchParams({ formType })
+    const systemType = getFactorySystemType(factory, selectedPoint)
+    if (systemType) {
+      query.set('systemType', systemType)
+    }
+
+    const result = await fetch(`${pomsFactoriesApiBaseUrl}/${encodeURIComponent(factoryId)}/form?${query.toString()}`, {
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
+    const response = await readMasterDataResponse(result, 'โหลดข้อมูลแบบฟอร์มไม่สำเร็จ')
+    return normalizeFactoryFormData(response?.data ?? {}, factory, {
+      __fromFormEndpoint: true,
+      __formType: formType,
+    })
+  }, [accessToken])
+
+  const loadRequestForm = useCallback(async (request) => {
+    const requestId = request?.requestId ?? request?.id
+    if (!accessToken || !requestId) {
+      return request
+    }
+
+    const query = new URLSearchParams()
+    if (request?.systemType && request.systemType !== '-') {
+      query.set('systemType', request.systemType)
+    }
+    const queryText = query.toString()
+    const result = await fetch(
+      `${pomsFactoriesApiBaseUrl}/edit-requests/${encodeURIComponent(requestId)}/form${queryText ? `?${queryText}` : ''}`,
+      {
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+      },
+    )
+    const response = await readMasterDataResponse(result, 'โหลดข้อมูลแบบฟอร์มไม่สำเร็จ')
+    return normalizeFactoryFormData(response?.data ?? {}, request, {
+      __fromFormEndpoint: true,
+      __editRequestId: requestId,
+      __formType: request?.formType ?? response?.data?.formType ?? 'BASIC_INFO',
+      __isResubmission: true,
+    })
+  }, [accessToken])
+
   const loadRequestDetail = useCallback(async (request) => {
     const requestId = request?.requestId ?? request?.id
     if (!accessToken || !requestId) {
@@ -1230,13 +1399,13 @@ function MasterDataPage({ userType = '', roleCode = '', accessToken = '' }) {
     setActionLoading(true)
     setTableError('')
     try {
-      setEditingFactory(await loadFactoryDetail(factory))
+      setEditingFactory(await loadFactoryForm(factory, 'MEASUREMENT_POINTS'))
     } catch (error) {
-      setTableError(error instanceof Error ? error.message : 'โหลดข้อมูลโรงงานไม่สำเร็จ')
+      setTableError(error instanceof Error ? error.message : 'โหลดข้อมูลแบบฟอร์มไม่สำเร็จ')
     } finally {
       setActionLoading(false)
     }
-  }, [loadFactoryDetail])
+  }, [loadFactoryForm])
   const handleEditGeneralFactory = useCallback(async (factory) => {
     setSelectedFactory(null)
     setActionLoading(true)
@@ -1249,6 +1418,25 @@ function MasterDataPage({ userType = '', roleCode = '', accessToken = '' }) {
       setActionLoading(false)
     }
   }, [loadFactoryDetail])
+  const handleEditRequest = useCallback(async (request) => {
+    setViewingRequest(null)
+    setReviewingRequest(null)
+    setActionLoading(true)
+    setTableError('')
+    try {
+      const detail = await loadRequestDetail(request)
+      const formData = await loadRequestForm(detail)
+      if ((detail?.formType ?? formData.__formType) === 'MEASUREMENT_POINTS') {
+        setEditingFactory(formData)
+      } else {
+        setEditingGeneralFactory(formData)
+      }
+    } catch (error) {
+      setTableError(error instanceof Error ? error.message : 'โหลดข้อมูลแบบฟอร์มไม่สำเร็จ')
+    } finally {
+      setActionLoading(false)
+    }
+  }, [loadRequestDetail, loadRequestForm])
   const handleOpenRequest = useCallback(async (request, review = false) => {
     setActionLoading(true)
     setTableError('')
@@ -1270,20 +1458,24 @@ function MasterDataPage({ userType = '', roleCode = '', accessToken = '' }) {
   const pageRequestColumns = useMemo(
     () => getPageRequestColumns(
       (request) => handleOpenRequest(request, false),
-      (request) => handleOpenRequest(request, true),
+      isAdmin ? (request) => handleOpenRequest(request, true) : handleEditRequest,
       isAdmin,
     ),
-    [handleOpenRequest, isAdmin],
+    [handleEditRequest, handleOpenRequest, isAdmin],
   )
 
   const submitFactoryEditRequest = useCallback(async (factory, body) => {
     const factoryId = getFactoryRowId(factory)
-    if (!accessToken || !factoryId) {
+    const editRequestId = factory?.__editRequestId
+    if (!accessToken || (!factoryId && !editRequestId)) {
       throw new Error('ไม่พบข้อมูลโรงงานสำหรับส่งคำขอแก้ไข')
     }
 
-    const result = await fetch(`${pomsFactoriesApiBaseUrl}/${encodeURIComponent(factoryId)}/edit-requests`, {
-      method: 'POST',
+    const submitUrl = editRequestId
+      ? `${pomsFactoriesApiBaseUrl}/edit-requests/${encodeURIComponent(editRequestId)}/resubmission`
+      : `${pomsFactoriesApiBaseUrl}/${encodeURIComponent(factoryId)}/edit-requests`
+    const result = await fetch(submitUrl, {
+      method: editRequestId ? 'PUT' : 'POST',
       headers: {
         Accept: 'application/json',
         Authorization: `Bearer ${accessToken}`,
@@ -1441,6 +1633,7 @@ function MasterDataPage({ userType = '', roleCode = '', accessToken = '' }) {
       />
 
       <RequestFormBottomSheet
+        key={editingFactory?.__editRequestId ?? editingFactory?.id ?? editingFactory?.factoryId ?? 'master-data-request-form'}
         open={Boolean(editingFactory)}
         formType="เพิ่มจุดตรวจวัด"
         factory={editingFactory}
