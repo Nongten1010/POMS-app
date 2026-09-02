@@ -170,7 +170,13 @@ export const pomsFactoriesService = {
     );
     const profile =
       request.formType === POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.BASIC_INFO
-        ? request.proposedFactory
+        ? {
+            ...request.proposedFactory,
+            industryMainOrder: current.industryMainOrder,
+            industryMainOrderLabel: current.industryMainOrderLabel,
+            industrySubOrder: current.industrySubOrder,
+            businessActivity: current.businessActivity,
+          }
         : current;
     const points =
       request.formType === POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.MEASUREMENT_POINTS
@@ -366,10 +372,10 @@ function emptyConnectionRequestForm(
     factoryId: profile.factoryId,
     factoryName: profile.factoryName,
     factoryRegistrationNo: profile.factoryRegistrationNo,
-    industryMainOrder: null,
-    industryMainOrderLabel: null,
-    industrySubOrder: null,
-    businessActivity: null,
+    industryMainOrder: profile.industryMainOrder ?? null,
+    industryMainOrderLabel: profile.industryMainOrderLabel ?? null,
+    industrySubOrder: profile.industrySubOrder ?? null,
+    businessActivity: profile.businessActivity ?? null,
     eia: profile.eia,
     eiaOther: profile.eiaOther,
     hasEia: profile.eia ? deriveHasEiaFromAssessment(profile.eia) : null,
@@ -456,6 +462,10 @@ function toProfileSnapshot(factory: PomsFactoryProfileDTO): PomsFactoryProfileDT
     factoryId: factory.factoryId,
     factoryRegistrationNo: factory.factoryRegistrationNo,
     factoryName: factory.factoryName,
+    industryMainOrder: factory.industryMainOrder,
+    industryMainOrderLabel: factory.industryMainOrderLabel,
+    industrySubOrder: factory.industrySubOrder,
+    businessActivity: factory.businessActivity,
     factoryAddress: factory.factoryAddress,
     provinceName: factory.provinceName,
     industrialEstateName: factory.industrialEstateName,

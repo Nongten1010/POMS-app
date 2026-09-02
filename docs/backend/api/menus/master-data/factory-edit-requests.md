@@ -199,7 +199,7 @@ Minimal request JSON:
 
 #### Success Response Fields
 
-Detail endpoint นี้คง `PomsFactoryDetail` shape เดิมและไม่เปลี่ยนตาม shared operator-factory row ของ list endpoint
+Detail endpoint นี้ยังใช้ `PomsFactoryDetail` โดยไม่เปลี่ยนไปใช้ shared operator-factory row ของ list endpoint และเพิ่มกลุ่มอุตสาหกรรมจาก active eligible metadata ที่ผูกกับโรงงาน current/live
 
 | Field                                               | Type                               | Nullable | Description                                            |
 | --------------------------------------------------- | ---------------------------------- | -------- | ------------------------------------------------------ |
@@ -209,6 +209,10 @@ Detail endpoint นี้คง `PomsFactoryDetail` shape เดิมและ�
 | `data.factoryId`                                    | string                             | no       | stable factory identifier                              |
 | `data.factoryRegistrationNo`                        | string                             | no       | เลขทะเบียนโรงงานรูปแบบเดิมของ detail contract         |
 | `data.factoryName`                                  | string                             | no       | ชื่อโรงงาน current/live                                |
+| `data.industryMainOrder`                            | string                             | yes      | ลำดับประเภทโรงงานหลักจาก active `eligible_factories.factory_type_sequence` |
+| `data.industryMainOrderLabel`                       | string                             | yes      | ข้อความแสดงผลที่สร้างจากลำดับประเภทโรงงานหลักที่ normalize แล้ว |
+| `data.industrySubOrder`                             | string                             | yes      | ลำดับประเภทย่อยจาก active `eligible_factories.factory_type_sequence` |
+| `data.businessActivity`                             | string                             | yes      | การประกอบกิจการจาก active `eligible_factories`        |
 | `data.factoryAddress`                               | string                             | yes      | ที่อยู่โรงงาน current/live                             |
 | `data.provinceName`, `data.industrialEstateName`    | string                             | yes      | ชื่อจังหวัดและนิคมอุตสาหกรรม                           |
 | `data.latitude`, `data.longitude`                    | number                             | yes      | พิกัดในรูป number ตาม detail contract เดิม             |
@@ -243,6 +247,10 @@ Minimal response (`200 OK`):
     "factoryId": "factory-001",
     "factoryRegistrationNo": "3-106-33/50สบ",
     "factoryName": "บริษัท ตัวอย่าง จำกัด",
+    "industryMainOrder": "00343",
+    "industryMainOrderLabel": "ประเภทโรงงานลำดับที่ 00343",
+    "industrySubOrder": "00003",
+    "businessActivity": "ผลิตผลิตภัณฑ์ตัวอย่าง",
     "factoryAddress": "99 หมู่ 1",
     "provinceName": "สระบุรี",
     "industrialEstateName": null,
@@ -305,7 +313,8 @@ curl --request GET \
 | `requestType` | compatibility field ของ shared form contract | คงที่เป็น `NEW_CONNECTION`; ไม่ใช่สถานะหรือประเภทคำขอแก้ไข POMS |
 | `factoryId`, `factoryName`, `factoryRegistrationNo`, `address`, EIA/project, ชื่อพื้นที่, พิกัดโรงงาน | current/live factory profile | `null` สำหรับ field nullable |
 | `measurementPoints[]` | active points ของ `systemType` ที่เลือก | ถ้าไม่มี active point ตอบ `404` และไม่เปิดฟอร์ม |
-| กลุ่มอุตสาหกรรม, รหัสพื้นที่, พิกัด/คำอธิบายเฉพาะจุด, ผู้ให้ข้อมูล | POMS ไม่เก็บ | `null` |
+| `industryMainOrder`, `industryMainOrderLabel`, `industrySubOrder`, `businessActivity` | active `eligible_factories.factory_type_sequence` และ `eligible_factories.business_activity` ที่ผูกกับ current/live POMS | `null` เมื่อ eligible metadata ไม่มีค่า |
+| รหัสพื้นที่, พิกัด/คำอธิบายเฉพาะจุด, ผู้ให้ข้อมูล | POMS ไม่เก็บ | `null` |
 | `contactName`, `contactPhone` | POMS ไม่เก็บ | `""` |
 | `contactPersons`, `notificationEmails`, `officerNotificationEmails` | POMS ไม่เก็บ | omit `contactPersons`; email arrays เป็น `[]` |
 | `remarks` | ไม่มีคำขอแก้ไขใน endpoint นี้ | `null` |
@@ -322,6 +331,10 @@ Minimal response (`200 OK`):
     "factoryId": "factory-001",
     "factoryName": "บริษัท ตัวอย่าง จำกัด",
     "factoryRegistrationNo": "3-106-33/50สบ",
+    "industryMainOrder": "00343",
+    "industryMainOrderLabel": "ประเภทโรงงานลำดับที่ 00343",
+    "industrySubOrder": "00003",
+    "businessActivity": "ผลิตผลิตภัณฑ์ตัวอย่าง",
     "address": "99 หมู่ 1",
     "systemType": "CEMS",
     "contactName": "",

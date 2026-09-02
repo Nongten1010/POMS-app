@@ -502,6 +502,13 @@ export function summarizeConnectedFactoryRowsForTests(
   return summarizeFactoriesForOperatorRows(rows);
 }
 
+export function toPomsFactoryDetailForTests(
+  rows: ConnectedFactoryRow[],
+  pendingEditRequestCount: number,
+): PomsFactoryDetailDTO {
+  return toFactoryDetail(rows, pendingEditRequestCount);
+}
+
 export function toPomsParameterDisplayNamesForTests(
   parameters: string[],
   instruments: MeasurementInstrumentsInput | null = null,
@@ -931,6 +938,8 @@ async function lockCurrentFactoryProfile(
       'cp.factory_logo_json',
       'p.name_th as province_name',
       'ie.name_th as industrial_estate_name',
+      'ef.business_activity',
+      'ef.factory_type_sequence',
       'cp.system_type',
       'cp.point_name',
       'cp.point_code',
@@ -965,11 +974,16 @@ function toFactoryDetail(
     (left, right) => toTimestamp(right.updated_at) - toTimestamp(left.updated_at),
   );
   const first = sortedByProfileVersion[0];
+  const { factoryClass, factorySubclass } = splitFactoryTypeSequence(first.factory_type_sequence);
   return {
     eligibleFactoryId: Number(first.eligible_factory_id),
     factoryId: first.factory_id,
     factoryRegistrationNo: first.factory_registration_no,
     factoryName: first.factory_name,
+    industryMainOrder: factoryClass,
+    industryMainOrderLabel: factoryClass ? `ประเภทโรงงานลำดับที่ ${factoryClass}` : null,
+    industrySubOrder: factorySubclass,
+    businessActivity: first.business_activity,
     factoryAddress: first.factory_address,
     provinceName: first.province_name,
     industrialEstateName: first.industrial_estate_name,
@@ -1028,6 +1042,10 @@ function toProfile(factory: PomsFactoryProfileDTO): PomsFactoryProfileDTO {
     factoryId: factory.factoryId,
     factoryRegistrationNo: factory.factoryRegistrationNo,
     factoryName: factory.factoryName,
+    industryMainOrder: factory.industryMainOrder,
+    industryMainOrderLabel: factory.industryMainOrderLabel,
+    industrySubOrder: factory.industrySubOrder,
+    businessActivity: factory.businessActivity,
     factoryAddress: factory.factoryAddress,
     provinceName: factory.provinceName,
     industrialEstateName: factory.industrialEstateName,
@@ -1299,7 +1317,13 @@ function requireProfileSnapshot(value: string): PomsFactoryProfileDTO {
   ) {
     throw new ConflictError('Stored POMS factory profile snapshot is invalid');
   }
-  return parsed;
+  return {
+    ...parsed,
+    industryMainOrder: parsed.industryMainOrder ?? null,
+    industryMainOrderLabel: parsed.industryMainOrderLabel ?? null,
+    industrySubOrder: parsed.industrySubOrder ?? null,
+    businessActivity: parsed.businessActivity ?? null,
+  };
 }
 
 function requireMeasurementPointSnapshotArray(value: string | null): PomsMeasurementPointDTO[] {

@@ -1828,6 +1828,10 @@ const componentSchemas: Record<string, OpenApiObject> = {
       'factoryId',
       'factoryRegistrationNo',
       'factoryName',
+      'industryMainOrder',
+      'industryMainOrderLabel',
+      'industrySubOrder',
+      'businessActivity',
       'factoryAddress',
       'provinceName',
       'industrialEstateName',
@@ -1845,6 +1849,23 @@ const componentSchemas: Record<string, OpenApiObject> = {
       factoryId: { type: 'string', minLength: 1, maxLength: 64 },
       factoryRegistrationNo: { type: 'string', minLength: 1, maxLength: 80 },
       factoryName: { type: 'string', minLength: 1, maxLength: 500 },
+      industryMainOrder: {
+        ...nullableStringSchema(128),
+        description:
+          'ลำดับประเภทโรงงานหลักที่แยกจาก active eligible_factories.factory_type_sequence',
+      },
+      industryMainOrderLabel: {
+        ...nullableStringSchema(500),
+        description: 'ข้อความแสดงผลที่สร้างจากลำดับประเภทโรงงานหลักที่ normalize แล้ว',
+      },
+      industrySubOrder: {
+        ...nullableStringSchema(128),
+        description: 'ลำดับประเภทย่อยที่แยกจาก active eligible_factories.factory_type_sequence',
+      },
+      businessActivity: {
+        ...nullableStringSchema(4000),
+        description: 'การประกอบกิจการจาก active eligible_factories.business_activity',
+      },
       factoryAddress: nullableStringSchema(1000),
       provinceName: nullableStringSchema(128),
       industrialEstateName: nullableStringSchema(255),
@@ -4318,7 +4339,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Get current/live POMS factory as connection-request form',
       operationId: 'getPomsFactoryForm',
       description:
-        'คืน canonical form-prefill field names ชุดเดียวกับ GET /cems-wpms-requests/{id}/form และไม่คืน POMS/workflow IDs. Permission: factories:view; ถ้าโรงงานมีทั้ง CEMS และ WPMS ต้องระบุ systemType',
+        'คืน canonical form-prefill field names ชุดเดียวกับ GET /cems-wpms-requests/{id}/form และไม่คืน POMS/workflow IDs. กลุ่มอุตสาหกรรมเติมจาก active eligible_factories.factory_type_sequence และ eligible_factories.business_activity ที่ผูกกับ current/live POMS. Permission: factories:view; ถ้าโรงงานมีทั้ง CEMS และ WPMS ต้องระบุ systemType',
       parameters: [
         factoryIdParameter,
         queryEnum(

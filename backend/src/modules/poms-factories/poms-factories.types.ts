@@ -49,6 +49,10 @@ export interface PomsFactoryProfileDTO {
   factoryId: string;
   factoryRegistrationNo: string;
   factoryName: string;
+  industryMainOrder: string | null;
+  industryMainOrderLabel: string | null;
+  industrySubOrder: string | null;
+  businessActivity: string | null;
   factoryAddress: string | null;
   provinceName: string | null;
   industrialEstateName: string | null;

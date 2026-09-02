@@ -25,6 +25,7 @@ import type {
   PomsFactoryDetailDTO,
   PomsFactoryEditRequestDTO,
   PomsFactoryEditRequestStatus,
+  PomsFactoryProfileDTO,
 } from '../../src/modules/poms-factories/poms-factories.types';
 
 const mockedRepository = jest.mocked(pomsFactoriesRepository);
@@ -76,6 +77,10 @@ describe('pomsFactoriesService edit-request workflow', () => {
         factoryId: 'factory-001',
         factoryName: 'บริษัท ทดสอบ จำกัด',
         factoryRegistrationNo: '3-106-33/50สบ',
+        industryMainOrder: '00042',
+        industryMainOrderLabel: 'ประเภทโรงงานลำดับที่ 00042',
+        industrySubOrder: '04201',
+        businessActivity: 'ผลิตเคมีภัณฑ์',
         address: '99 หมู่ 1',
         systemType: 'CEMS',
         contactName: '',
@@ -105,6 +110,43 @@ describe('pomsFactoriesService edit-request workflow', () => {
     expect(result).not.toHaveProperty('systemTypes');
     expect(result.measurementPoints[0]).not.toHaveProperty('connectedPointId');
     expect(result.measurementPoints[0]).not.toHaveProperty('sourceMeasurementPointId');
+  });
+
+  it('keeps eligible-factory industry fields in the WPMS measurement-points form', async () => {
+    const detail = factoryDetail();
+    mockedRepository.findFactoryDetail.mockResolvedValue({
+      ...detail,
+      factoryId: '91090100125393',
+      factoryRegistrationNo: '91090100125393',
+      industryMainOrder: '09109',
+      industryMainOrderLabel: 'ประเภทโรงงานลำดับที่ 09109',
+      industrySubOrder: '00125,00393',
+      businessActivity: 'ประกอบกิจการทดสอบ',
+      systemTypes: ['WPMS'],
+      measurementPoints: detail.measurementPoints.map((point) => ({
+        ...point,
+        factoryId: '91090100125393',
+        systemType: 'WPMS',
+        pointType: 'WASTEWATER',
+      })),
+    });
+    const result = await pomsFactoriesService.getFactoryForm(
+      '91090100125393',
+      42,
+      ownFactoryScope,
+      { formType: 'MEASUREMENT_POINTS', systemType: 'WPMS' },
+      null,
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        industryMainOrder: '09109',
+        industryMainOrderLabel: 'ประเภทโรงงานลำดับที่ 09109',
+        industrySubOrder: '00125,00393',
+        businessActivity: 'ประกอบกิจการทดสอบ',
+        systemType: 'WPMS',
+      }),
+    );
   });
 
   it('requires systemType when a live factory has both CEMS and WPMS points', async () => {
@@ -139,11 +181,18 @@ describe('pomsFactoriesService edit-request workflow', () => {
   });
 
   it('prefills a returned edit request from proposed values using the same form contract', async () => {
+    const {
+      industryMainOrder: _industryMainOrder,
+      industryMainOrderLabel: _industryMainOrderLabel,
+      industrySubOrder: _industrySubOrder,
+      businessActivity: _businessActivity,
+      ...legacyProfile
+    } = factoryDetail();
     const proposedFactory = {
-      ...factoryDetail(),
+      ...legacyProfile,
       factoryName: 'บริษัท ทดสอบ จำกัด (แก้ไข)',
       factoryAddress: '100 หมู่ 2',
-    };
+    } as unknown as PomsFactoryProfileDTO;
     mockedRepository.findEditRequestById.mockResolvedValue(
       editRequest('REVISION_REQUESTED', {
         requestNote: 'แก้ไขข้อมูลตามเอกสารล่าสุด',
@@ -161,6 +210,9 @@ describe('pomsFactoriesService edit-request workflow', () => {
 
     expect(result.factoryName).toBe('บริษัท ทดสอบ จำกัด (แก้ไข)');
     expect(result.address).toBe('100 หมู่ 2');
+    expect(result.industryMainOrder).toBe('00042');
+    expect(result.industrySubOrder).toBe('04201');
+    expect(result.businessActivity).toBe('ผลิตเคมีภัณฑ์');
     expect(result.remarks).toBe('แก้ไขข้อมูลตามเอกสารล่าสุด');
     expect(result).not.toHaveProperty('revisionReason');
     expect(result).not.toHaveProperty('requestNo');
@@ -492,6 +544,10 @@ function factoryDetail(): PomsFactoryDetailDTO {
     factoryId: 'factory-001',
     factoryRegistrationNo: '3-106-33/50สบ',
     factoryName: 'บริษัท ทดสอบ จำกัด',
+    industryMainOrder: '00042',
+    industryMainOrderLabel: 'ประเภทโรงงานลำดับที่ 00042',
+    industrySubOrder: '04201',
+    businessActivity: 'ผลิตเคมีภัณฑ์',
     factoryAddress: '99 หมู่ 1',
     provinceName: 'ระยอง',
     industrialEstateName: null,

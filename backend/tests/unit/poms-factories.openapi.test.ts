@@ -297,6 +297,38 @@ describe('POMS factory master-data OpenAPI contract', () => {
     const allSchemas = schemas();
     const profile = asObject(allSchemas.PomsFactoryProfile, 'factory profile');
     const profileProperties = asObject(profile.properties, 'factory profile properties');
+    expect(profile.required).toEqual(
+      expect.arrayContaining([
+        'industryMainOrder',
+        'industryMainOrderLabel',
+        'industrySubOrder',
+        'businessActivity',
+      ]),
+    );
+    expect(profileProperties).toEqual(
+      expect.objectContaining({
+        industryMainOrder: expect.objectContaining({
+          nullable: true,
+          maxLength: 128,
+          description: expect.stringContaining('eligible_factories.factory_type_sequence'),
+        }),
+        industryMainOrderLabel: expect.objectContaining({
+          nullable: true,
+          maxLength: 500,
+          description: expect.stringContaining('normalize'),
+        }),
+        industrySubOrder: expect.objectContaining({
+          nullable: true,
+          maxLength: 128,
+          description: expect.stringContaining('eligible_factories.factory_type_sequence'),
+        }),
+        businessActivity: expect.objectContaining({
+          nullable: true,
+          maxLength: 4000,
+          description: expect.stringContaining('eligible_factories.business_activity'),
+        }),
+      }),
+    );
     expect(asObject(profileProperties.factoryName, 'profile factoryName').maxLength).toBe(500);
     expect(
       asObject(profileProperties.factoryFrontPhotos, 'profile factoryFrontPhotos').maxItems,
@@ -326,6 +358,12 @@ describe('POMS factory master-data OpenAPI contract', () => {
     expect((detail.allOf as unknown[])[0]).toEqual({
       $ref: '#/components/schemas/PomsFactorySummary',
     });
+    expect(jsonSuccessSchema('/poms-factories/{factoryId}', 'get')).toEqual({
+      $ref: '#/components/schemas/PomsFactoryDetailResponse',
+    });
+    expect(operation('/poms-factories/{factoryId}/form', 'get').description).toEqual(
+      expect.stringContaining('eligible_factories.factory_type_sequence'),
+    );
 
     const editRequest = asObject(allSchemas.PomsFactoryEditRequest, 'edit request');
     const editRequestProperties = asObject(editRequest.properties, 'edit request properties');

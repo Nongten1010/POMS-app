@@ -6,6 +6,7 @@ import {
   buildEditRequestsQueryForTests,
   buildPendingRequestCountsQueryForTests,
   summarizeConnectedFactoryRowsForTests,
+  toPomsFactoryDetailForTests,
   toPomsParameterDisplayNamesForTests,
 } from '../../src/modules/poms-factories/poms-factories.repository';
 
@@ -98,6 +99,19 @@ describe('pomsFactoriesRepository access and approved profile patches', () => {
     }
   });
 
+  it('keeps eligible-factory industry fields in the live POMS factory detail', () => {
+    const result = toPomsFactoryDetailForTests([connectedFactoryRow()], 0);
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        industryMainOrder: '00042',
+        industryMainOrderLabel: 'ประเภทโรงงานลำดับที่ 00042',
+        industrySubOrder: '04201',
+        businessActivity: 'ผลิตเคมีภัณฑ์',
+      }),
+    );
+  });
+
   it('limits OWN_FACTORY reads and edit requests to assigned juristics or direct grants', () => {
     const factorySql = buildConnectedFactoryRowsQueryForTests({
       actorUserId: 42,
@@ -163,6 +177,10 @@ describe('pomsFactoriesRepository access and approved profile patches', () => {
       factoryId: 'factory-001',
       factoryRegistrationNo: '1012345678901',
       factoryName: 'บริษัท ทดสอบ จำกัด (ใหม่)',
+      industryMainOrder: '00042',
+      industryMainOrderLabel: 'ประเภทโรงงานลำดับที่ 42',
+      industrySubOrder: '04201',
+      businessActivity: 'ผลิตเคมีภัณฑ์',
       factoryAddress: '100 หมู่ 2',
       provinceName: 'ระยอง',
       industrialEstateName: null,
@@ -201,6 +219,9 @@ describe('pomsFactoriesRepository access and approved profile patches', () => {
     });
     expect(Object.keys(patches.connected)).not.toContain('factory_id');
     expect(Object.keys(patches.eligible)).not.toContain('factory_registration_no_new');
+    expect(Object.keys(patches.eligible)).not.toEqual(
+      expect.arrayContaining(['factory_type_sequence', 'business_activity']),
+    );
   });
 
   it('returns display labels with units without collapsing parameters that use explicit units', () => {
