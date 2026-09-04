@@ -190,6 +190,10 @@ function sanitizeDocuments(documents = []) {
 }
 
 function sumMonitoringPointCount(row) {
+  if (row.monitoringPointCount !== undefined && row.monitoringPointCount !== null) {
+    return Number(row.monitoringPointCount) || 0
+  }
+
   if (Array.isArray(row.monitoringPointCountBySystem)) {
     return row.monitoringPointCountBySystem.reduce((total, item) => total + Number(item?.count ?? 0), 0)
   }
@@ -236,10 +240,11 @@ function mapFactoryRows(rows) {
     factoryName: row.factoryName ?? '',
     newRegistrationNo: row.factoryRegistrationNo ?? row.newRegistrationNo ?? row.factoryId ?? '',
     oldRegistrationNo: row.oldRegistrationNo ?? '',
-    industryType: row.industryMainOrder ?? row.industryType ?? '-',
-    industryMainOrder: row.industryMainOrder ?? row.industryType ?? '',
+    industryType: row.industryType ?? row.industryMainOrderLabel ?? '-',
+    industryMainOrder: row.industryMainOrder ?? '',
+    industryMainOrderLabel: row.industryMainOrderLabel ?? '',
     industrySubOrder: row.industrySubOrder ?? '',
-    businessActivity: row.industryMainOrderLabel ?? row.businessActivity ?? '-',
+    businessActivity: row.businessActivity ?? '-',
     address: row.factoryAddress ?? row.address ?? '',
     province: row.provinceName ?? row.province ?? '',
     industrialEstateCode: row.industrialEstateCode ?? '',
@@ -301,10 +306,10 @@ function normalizeFactoryDetail(row = {}) {
 
 function getPointIdentity(point = {}) {
   return {
-    connectedPointId: point.connectedPointId ?? point.id ?? null,
-    pointCode: point.pointCode ?? point.stationId ?? point.code ?? '',
-    pointName: point.pointName ?? point.name ?? '',
-    systemType: point.systemType ?? point.type ?? '',
+    connectedPointId: point?.connectedPointId ?? point?.id ?? null,
+    pointCode: point?.pointCode ?? point?.stationId ?? point?.code ?? '',
+    pointName: point?.pointName ?? point?.name ?? '',
+    systemType: point?.systemType ?? point?.type ?? '',
   }
 }
 
@@ -325,6 +330,10 @@ function getFactorySystemType(factory = {}, selectedPoint = null) {
 function mergeFormMeasurementPointIds(formData = {}, factory = {}) {
   const detailPoints = [
     ...(Array.isArray(factory?.measurementPoints) ? factory.measurementPoints : []),
+    ...(Array.isArray(factory?.proposedMeasurementPoints) ? factory.proposedMeasurementPoints : []),
+    ...(Array.isArray(factory?.currentMeasurementPoints) ? factory.currentMeasurementPoints : []),
+    ...(Array.isArray(factory?.raw?.proposedMeasurementPoints) ? factory.raw.proposedMeasurementPoints : []),
+    ...(Array.isArray(factory?.raw?.currentMeasurementPoints) ? factory.raw.currentMeasurementPoints : []),
     ...(factory?.selectedMeasurementPoint ? [factory.selectedMeasurementPoint] : []),
   ]
 
@@ -390,6 +399,7 @@ function normalizeFactoryFormData(formData = {}, factory = {}, extra = {}) {
     oldRegistrationNo: mergedFormData.oldRegistrationNo ?? mergedFormData.factoryRegistrationNo ?? factory.oldRegistrationNo ?? '',
     factoryRegistrationNo: mergedFormData.factoryRegistrationNo ?? factory.factoryRegistrationNo ?? factory.oldRegistrationNo ?? '',
     industryMainOrder: mergedFormData.industryMainOrder ?? factory.industryMainOrder ?? factory.industryType ?? '',
+    industryMainOrderLabel: mergedFormData.industryMainOrderLabel ?? factory.industryMainOrderLabel ?? '',
     industrySubOrder: mergedFormData.industrySubOrder ?? factory.industrySubOrder ?? '',
     businessActivity: mergedFormData.businessActivity ?? factory.businessActivity ?? '',
     eia: mergedFormData.eia ?? factory.eia ?? '',
@@ -477,7 +487,7 @@ function MainActions({ row, onOpen, onEditGeneral }) {
   return (
     <Stack direction="row" spacing={1} sx={tableActionStackSx}>
       <Button size="small" variant="outlined" onClick={() => onOpen(row)}>
-        ดูข้อมูล
+        รายการจุดตรวจวัด
       </Button>
       <Button size="small" variant="outlined" onClick={() => onEditGeneral(row)} sx={{ whiteSpace: 'nowrap' }}>
         แก้ไขข้อมูลทั่วไปของโรงงาน
@@ -580,7 +590,7 @@ function getPageRequestColumns(onOpenRequest, onEditRequest, isAdmin = false) {
                 size="small"
                 variant="outlined"
                 disabled={params.row.status !== 'รอโรงงานแก้ไข'}
-                onClick={() => onEditRequest?.(params.row.factory)}
+                onClick={() => onEditRequest?.(params.row)}
               >
                 แก้ไข
               </Button>
@@ -789,7 +799,7 @@ function FactoryGeneralInfoBottomSheet({ open, factory, onClose, showSaveButton 
                 <TextField label="เลขทะเบียนโรงงาน (เดิม)" size="small" defaultValue={factory?.oldRegistrationNo ?? ''} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
                 <TextField label="เลขทะเบียนโรงงาน (ใหม่)" size="small" defaultValue={factory?.newRegistrationNo ?? ''} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
                 <TextField label="การประกอบกิจการ" size="small" defaultValue={factory?.businessActivity ?? ''} sx={{ gridColumn: { xs: 'auto', md: 'span 6' } }} />
-                <TextField label="ลำดับประเภทโรงงาน (หลัก)" size="small" defaultValue={factory?.industryType ?? ''} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
+                <TextField label="ลำดับประเภทโรงงาน (หลัก)" size="small" defaultValue={factory?.industryMainOrder ?? ''} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
                 <TextField label="ลำดับประเภทโรงงาน (รอง)" size="small" defaultValue={factory?.industrySubOrder ?? ''} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
                 <TextField
                   select
@@ -880,7 +890,7 @@ function RequestGeneralInfoPreview({ factory }) {
           <ReadOnlyFormField label="เลขทะเบียนโรงงาน (เดิม)" value={factory?.oldRegistrationNo} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
           <ReadOnlyFormField label="เลขทะเบียนโรงงาน (ใหม่)" value={factory?.newRegistrationNo} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
           <ReadOnlyFormField label="การประกอบกิจการ" value={factory?.businessActivity} sx={{ gridColumn: { xs: 'auto', md: 'span 6' } }} />
-          <ReadOnlyFormField label="ลำดับประเภทโรงงาน (หลัก)" value={factory?.industryType} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
+          <ReadOnlyFormField label="ลำดับประเภทโรงงาน (หลัก)" value={factory?.industryMainOrder} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
           <ReadOnlyFormField label="ลำดับประเภทโรงงาน (รอง)" value={factory?.industrySubOrder} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
           <ReadOnlyFormField label="การประเมินผลกระทบสิ่งแวดล้อม" value={factory?.eia ?? 'ไม่มี'} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
           <Box sx={{ display: { xs: 'none', md: 'block' }, gridColumn: 'span 9' }} />
@@ -1116,7 +1126,8 @@ function makeMasterDataInitialRequest(factory) {
     newRegistrationNo: factory?.newRegistrationNo ?? '',
     oldRegistrationNo: factory?.oldRegistrationNo ?? '',
     factoryRegistrationNo: factory?.oldRegistrationNo ?? '',
-    industryMainOrder: factory?.industryType ?? '',
+    industryMainOrder: factory?.industryMainOrder ?? '',
+    industryMainOrderLabel: factory?.industryMainOrderLabel ?? '',
     industrySubOrder: factory?.industrySubOrder ?? '',
     businessActivity: factory?.businessActivity ?? '',
     eia: factory?.eia ?? '',
@@ -1160,7 +1171,7 @@ function buildBasicInfoPayload(factory, formData) {
   return {
     formType: 'BASIC_INFO',
     factoryName: String(formData.get('factoryName') ?? factory?.factoryName ?? '').trim(),
-    factoryAddress: emptyToNull(formData.get('factoryAddress') ?? factory?.address),
+    address: emptyToNull(formData.get('factoryAddress') ?? factory?.address),
     latitude: toNumberOrNull(formData.get('latitude') ?? factory?.latitude),
     longitude: toNumberOrNull(formData.get('longitude') ?? factory?.longitude),
     eia,
@@ -1170,7 +1181,7 @@ function buildBasicInfoPayload(factory, formData) {
     projectName: emptyToNull(formData.has('projectName') ? formData.get('projectName') : factory?.projectName),
     factoryFrontPhotos: sanitizeDocuments(factory?.factoryFrontPhotos),
     factoryLogo: factory?.factoryLogo ? sanitizeDocumentItem(factory.factoryLogo) : null,
-    note: 'แก้ไขข้อมูลทั่วไปของโรงงาน',
+    remarks: 'แก้ไขข้อมูลทั่วไปของโรงงาน',
   }
 }
 
@@ -1196,7 +1207,7 @@ function buildMeasurementPointsPayload(requestBody, initialRequest) {
         measurementInstruments: point.measurementInstruments ?? initialPoint.measurementInstruments ?? null,
       },
     ],
-    note: 'แก้ไขข้อมูลจุดตรวจวัด',
+    remarks: 'แก้ไขข้อมูลจุดตรวจวัด',
   }
 }
 
@@ -1411,13 +1422,14 @@ function MasterDataPage({ userType = '', roleCode = '', accessToken = '' }) {
     setActionLoading(true)
     setTableError('')
     try {
-      setEditingGeneralFactory(await loadFactoryDetail(factory))
+      const detail = await loadFactoryDetail(factory)
+      setEditingGeneralFactory(await loadFactoryForm(detail, 'BASIC_INFO'))
     } catch (error) {
       setTableError(error instanceof Error ? error.message : 'โหลดข้อมูลโรงงานไม่สำเร็จ')
     } finally {
       setActionLoading(false)
     }
-  }, [loadFactoryDetail])
+  }, [loadFactoryDetail, loadFactoryForm])
   const handleEditRequest = useCallback(async (request) => {
     setViewingRequest(null)
     setReviewingRequest(null)
