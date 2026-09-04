@@ -5,6 +5,8 @@ module.exports = {
   // The self-hosted deploy runner preserves node_modules between jobs, while its temp
   // directory is cleared. Keep Jest's transform cache alongside the preserved install.
   cacheDirectory: '<rootDir>/node_modules/.cache/jest',
+  // Windows runners can need more than Jest's 500 ms default to close child processes.
+  workerGracefulExitTimeout: 2_000,
   roots: ['<rootDir>/src', '<rootDir>/tests'],
   testMatch: ['**/*.test.ts', '**/*.spec.ts'],
   moduleNameMapper: {
