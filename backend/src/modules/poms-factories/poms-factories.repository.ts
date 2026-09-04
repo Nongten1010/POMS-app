@@ -1,7 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import type { Knex } from 'knex';
 import { db } from '../../config/database';
-import { ConflictError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
+import {
+  AppError,
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+} from '../../shared/errors/AppError';
 import { applyAssignedFactoryAccessFilter } from '../../shared/utils/factory-access-query';
 import { applyFactoryType88Filter } from '../../shared/utils/factory-type-scope';
 import type { PermissionScopeDetails } from '../auth/permissions';
@@ -32,6 +37,7 @@ import type {
   ReviewPomsFactoryEditRequestInput,
 } from './poms-factories.types';
 import {
+  CANCELLABLE_POMS_FACTORY_EDIT_REQUEST_STATUSES,
   POMS_FACTORY_EDIT_REQUEST_ACTION,
   POMS_FACTORY_EDIT_REQUEST_FORM_TYPE,
   POMS_FACTORY_EDIT_REQUEST_STATUS,
@@ -317,6 +323,40 @@ export const pomsFactoriesRepository = {
     return row ? hydrateEditRequest(row, db) : null;
   },
 
+  async cancelEditRequest(id: number, actorUserId: number): Promise<PomsFactoryEditRequestDTO> {
+    return db.transaction(async (trx) => {
+      const request = await trx<EditRequestRow>('poms_factory_edit_requests')
+        .where('id', id)
+        .whereNull('deleted_at')
+        .forUpdate()
+        .first();
+      if (!request) throw new NotFoundError('POMS factory edit request not found');
+      if (Number(request.created_by) !== actorUserId) {
+        throw new ForbiddenError('Only the request owner can perform this action');
+      }
+      if (!CANCELLABLE_POMS_FACTORY_EDIT_REQUEST_STATUSES.includes(request.status)) {
+        throw invalidCancellationTransition(id, request.status);
+      }
+
+      await trx('poms_factory_edit_requests').where('id', id).whereNull('deleted_at').update({
+        status: POMS_FACTORY_EDIT_REQUEST_STATUS.CANCELLED,
+        is_open: false,
+        updated_by: actorUserId,
+        updated_at: trx.fn.now(),
+      });
+      await insertEvent(trx, {
+        requestId: id,
+        action: POMS_FACTORY_EDIT_REQUEST_ACTION.CANCEL,
+        fromStatus: request.status,
+        toStatus: POMS_FACTORY_EDIT_REQUEST_STATUS.CANCELLED,
+        note: null,
+        actorUserId,
+        snapshot: toStoredEventSnapshot(request),
+      });
+      return requireEditRequestInTransaction(trx, id);
+    });
+  },
+
   async resubmitEditRequest(
     id: number,
     payload: EditRequestPayload,
@@ -463,6 +503,14 @@ export const pomsFactoriesRepository = {
     });
   },
 };
+
+function invalidCancellationTransition(id: number, status: PomsFactoryEditRequestStatus): AppError {
+  return new AppError('ไม่สามารถยกเลิกคำขอในสถานะปัจจุบันได้', 409, 'INVALID_STATUS_TRANSITION', {
+    id,
+    status,
+    allowedStatuses: CANCELLABLE_POMS_FACTORY_EDIT_REQUEST_STATUSES,
+  });
+}
 
 export function buildConnectedFactoryRowsQueryForTests(
   access: FactoryAccess,

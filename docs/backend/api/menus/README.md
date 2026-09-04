@@ -6,13 +6,13 @@ Index นี้แสดงเฉพาะเมนูหรือ business capa
 
 ## ศูนย์ทดสอบ API
 
-เปิด `<BASE_URL>/api/v1/docs` เพื่อใช้ Swagger UI ที่รวม API ทั้งระบบ ตัวเลขในตารางนี้นับ `Method + Path` โดย **API ในทะเบียน** คือ route canonical 139 รายการ ส่วน **Operations ใน Swagger** มี 148 รายการ เพราะเพิ่ม path แบบแยก `stationId/{buddhistYear}` อีก 9 รายการให้กรอกและทดสอบ annual point code ได้สะดวก
+เปิด `<BASE_URL>/api/v1/docs` เพื่อใช้ Swagger UI ที่รวม API ทั้งระบบ ตัวเลขในตารางนี้นับ `Method + Path` โดย **API ในทะเบียน** คือ route canonical 141 รายการ ส่วน **Operations ใน Swagger** มี 150 รายการ เพราะเพิ่ม path แบบแยก `stationId/{buddhistYear}` อีก 9 รายการให้กรอกและทดสอบ annual point code ได้สะดวก
 
 | กลุ่มใน Swagger                         | API ในทะเบียน | Operations ใน Swagger | Canonical contract                                                                                                                                       |
 | --------------------------------------- | ------------: | --------------------: | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | ระบบทั่วไปและการเข้าสู่ระบบ             |             8 |                     8 | [Common API](../shared/common-api/README.md), [Authentication](../shared/authentication/README.md), [Internal tools](../shared/internal-tools/README.md) |
 | หน้าหลัก                                |             4 |                     4 | [หน้าหลัก](./home/README.md)                                                                                                                             |
-| ข้อมูลพื้นฐาน                           |            15 |                    19 | [ข้อมูลพื้นฐาน](./master-data/README.md)                                                                                                                 |
+| ข้อมูลพื้นฐาน                           |            17 |                    21 | [ข้อมูลพื้นฐาน](./master-data/README.md)                                                                                                                 |
 | ขอเชื่อมต่อ                             |            32 |                    32 | [ขอเชื่อมต่อ](./connection-requests/README.md)                                                                                                           |
 | แจ้งแบบ กวภ. 01 - กวภ. 05               |            25 |                    25 | [แจ้งแบบ กวภ.](./kwp-forms/README.md)                                                                                                                    |
 | รายงานค่าความคลาดเคลื่อน BOD/COD Online |             9 |                     9 | [BOD/COD Online](./bod-cod-deviation-reports/README.md)                                                                                                  |
@@ -23,7 +23,7 @@ Index นี้แสดงเฉพาะเมนูหรือ business capa
 | กฎหมายที่เกี่ยวข้อง                     |             5 |                     5 | [กฎหมายที่เกี่ยวข้อง](./laws/README.md)                                                                                                                  |
 | คำถามที่พบบ่อย                          |             4 |                     4 | [คำถามที่พบบ่อย](./faqs/README.md)                                                                                                                       |
 | ระบบเชื่อมต่อภายนอก                     |             4 |                     5 | [Integrations](../integrations/README.md)                                                                                                                |
-| **รวม**                                 |       **139** |               **148** | [Endpoint registry](../ENDPOINTS.md)                                                                                                                     |
+| **รวม**                                 |       **141** |               **150** | [Endpoint registry](../ENDPOINTS.md)                                                                                                                     |
 
 ```text
 menus/

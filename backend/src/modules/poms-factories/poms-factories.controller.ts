@@ -1,8 +1,10 @@
 import type { NextFunction, Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
-import { ForbiddenError } from '../../shared/errors/AppError';
+import { env } from '../../config/env';
+import { BadRequestError, ForbiddenError } from '../../shared/errors/AppError';
 import { getScopeDetails } from '../../shared/middlewares/authorize';
 import type { RegionalAccessDTO } from '../auth/regional-access';
+import { createConnectionRequestDocumentImageService } from '../connection-requests/connection-request-document-image.service';
 import { pomsFactoriesService } from './poms-factories.service';
 import {
   createPomsFactoryEditRequestSchema,
@@ -153,6 +155,22 @@ export const pomsFactoriesController = {
     }
   },
 
+  async cancelEditRequest(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const actorUserId = requireActorUserId(req);
+      const { id } = pomsFactoryEditRequestIdParamsSchema.parse(req.params);
+      const data = await pomsFactoriesService.cancelEditRequest(
+        id,
+        actorUserId,
+        getScopeDetails(req, 'factories:edit'),
+        regionalAccess(req),
+      );
+      res.status(StatusCodes.OK).json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  },
+
   async reviewEditRequest(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const actorUserId = requireActorUserId(req);
@@ -175,6 +193,42 @@ export const pomsFactoriesController = {
       next(error);
     }
   },
+
+  async uploadDocumentImage(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      requireActorUserId(req);
+      if (!req.file) throw new BadRequestError('file is required');
+      if (req.file.originalname.length > 255) {
+        throw new BadRequestError('file name must be at most 255 characters', {
+          field: 'file',
+          maxLength: 255,
+        });
+      }
+      const metadata = parseDocumentImageUploadMetadata(req.body);
+
+      const service = createConnectionRequestDocumentImageService({
+        uploadDir: env.UPLOAD_DIR,
+        publicPath: env.UPLOAD_PUBLIC_PATH,
+        publicBaseUrl: getPublicBaseUrl(req),
+      });
+      const documentImage = await service.createDocumentImage({
+        title: metadata.title,
+        description: metadata.description,
+        link: metadata.link,
+        file: {
+          buffer: req.file.buffer,
+          originalName: req.file.originalname,
+          mimeType: req.file.mimetype,
+          size: req.file.size,
+        },
+      });
+      const { storageKey: _storageKey, ...data } = documentImage;
+
+      res.status(StatusCodes.CREATED).json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  },
 };
 
 function requireActorUserId(req: Request): number {
@@ -191,4 +245,69 @@ function requireAdminReviewActor(req: Request): void {
 
 function regionalAccess(req: Request): RegionalAccessDTO | null | undefined {
   return req.user?.regionalAccess;
+}
+
+function parseDocumentImageUploadMetadata(bodyValue: unknown): {
+  title: string | null;
+  description: string | null;
+  link: string | null;
+} {
+  const body =
+    bodyValue && typeof bodyValue === 'object' && !Array.isArray(bodyValue)
+      ? (bodyValue as Record<string, unknown>)
+      : {};
+  const supportedFields = new Set(['title', 'description', 'link']);
+  const unsupportedField = Object.keys(body).find((field) => !supportedFields.has(field));
+  if (unsupportedField) {
+    throw new BadRequestError('Unsupported multipart field', { field: unsupportedField });
+  }
+
+  return {
+    title: optionalUploadText(body.title, 'title', 255),
+    description: optionalUploadText(body.description, 'description', 1000),
+    link: optionalUploadUrl(body.link, 'link', 2048),
+  };
+}
+
+function optionalUploadText(value: unknown, field: string, maxLength: number): string | null {
+  if (value === undefined || value === null) return null;
+  if (Array.isArray(value) || typeof value !== 'string') {
+    throw new BadRequestError(`${field} must be supplied at most once`, { field });
+  }
+
+  const normalized = value.trim();
+  if (!normalized) return null;
+  if (normalized.length > maxLength) {
+    throw new BadRequestError(`${field} must be at most ${maxLength} characters`, {
+      field,
+      maxLength,
+    });
+  }
+  return normalized;
+}
+
+function optionalUploadUrl(value: unknown, field: string, maxLength: number): string | null {
+  const normalized = optionalUploadText(value, field, maxLength);
+  if (!normalized) return null;
+
+  try {
+    const url = new URL(normalized);
+    if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Unsupported URL protocol');
+    const canonicalUrl = url.toString();
+    if (canonicalUrl.length > maxLength) {
+      throw new BadRequestError(`${field} must be at most ${maxLength} characters`, {
+        field,
+        maxLength,
+      });
+    }
+    return canonicalUrl;
+  } catch (error) {
+    if (error instanceof BadRequestError) throw error;
+    throw new BadRequestError(`${field} must be a valid URL`, { field });
+  }
+}
+
+function getPublicBaseUrl(req: Request): string {
+  if (env.PUBLIC_BASE_URL) return env.PUBLIC_BASE_URL;
+  return `${req.protocol}://${req.get('host')}`;
 }

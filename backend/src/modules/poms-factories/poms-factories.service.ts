@@ -1,4 +1,5 @@
 import {
+  AppError,
   BadRequestError,
   ConflictError,
   ForbiddenError,
@@ -26,6 +27,7 @@ import type {
   ReviewPomsFactoryEditRequestInput,
 } from './poms-factories.types';
 import {
+  CANCELLABLE_POMS_FACTORY_EDIT_REQUEST_STATUSES,
   POMS_FACTORY_EDIT_REQUEST_FORM_TYPE,
   POMS_FACTORY_EDIT_REQUEST_STATUS,
 } from './poms-factories.types';
@@ -152,6 +154,22 @@ export const pomsFactoriesService = {
     });
     if (!request) throw new NotFoundError('POMS factory edit request not found');
     return request;
+  },
+
+  async cancelEditRequest(
+    id: number,
+    actorUserId: number,
+    editScope: AccessScope,
+    regionalAccess?: RegionalAccessDTO | null,
+  ): Promise<PomsFactoryEditRequestDTO> {
+    const request = await this.getEditRequest(id, actorUserId, editScope, regionalAccess);
+    if (request.createdBy !== actorUserId) {
+      throw new ForbiddenError('Only the request owner can perform this action');
+    }
+    if (!CANCELLABLE_POMS_FACTORY_EDIT_REQUEST_STATUSES.includes(request.status)) {
+      throw invalidCancellationTransition(id, request.status);
+    }
+    return pomsFactoriesRepository.cancelEditRequest(id, actorUserId);
   },
 
   async getEditRequestForm(
@@ -283,6 +301,17 @@ export const pomsFactoriesService = {
     return pomsFactoriesRepository.reviewEditRequest(id, input, actorUserId);
   },
 };
+
+function invalidCancellationTransition(
+  id: number,
+  status: PomsFactoryEditRequestDTO['status'],
+): AppError {
+  return new AppError('ไม่สามารถยกเลิกคำขอในสถานะปัจจุบันได้', 409, 'INVALID_STATUS_TRANSITION', {
+    id,
+    status,
+    allowedStatuses: CANCELLABLE_POMS_FACTORY_EDIT_REQUEST_STATUSES,
+  });
+}
 
 const FACTORY_FRONT_PHOTO_DOCUMENT_TITLE = 'ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน';
 const FACTORY_LOGO_DOCUMENT_TITLE = 'สัญลักษณ์ของโรงงานหรือโลโก้บริษัท';

@@ -27,8 +27,12 @@ function jsonRequestSchema(path: string, method: string): JsonObject {
 }
 
 function jsonSuccessSchema(path: string, method: string): JsonObject {
+  return jsonResponseSchema(path, method, '200');
+}
+
+function jsonResponseSchema(path: string, method: string, status: string): JsonObject {
   const responses = asObject(operation(path, method).responses, 'responses');
-  const response = asObject(responses['200'], '200 response');
+  const response = asObject(responses[status], `${status} response`);
   const content = asObject(response.content, 'response.content');
   return asObject(asObject(content['application/json'], 'application/json').schema, 'schema');
 }
@@ -39,11 +43,13 @@ describe('POMS factory master-data OpenAPI contract', () => {
       ['/poms-factories', 'get'],
       ['/poms-factories/{factoryId}', 'get'],
       ['/poms-factories/{factoryId}/form', 'get'],
+      ['/poms-factories/document-images', 'post'],
       ['/poms-factories/{factoryId}/edit-requests', 'post'],
       ['/poms-factories/edit-requests', 'get'],
       ['/poms-factories/edit-requests/{id}', 'get'],
       ['/poms-factories/edit-requests/{id}/form', 'get'],
       ['/poms-factories/edit-requests/{id}/resubmission', 'put'],
+      ['/poms-factories/edit-requests/{id}/cancel', 'post'],
       ['/poms-factories/edit-requests/{id}/review', 'post'],
     ];
 
@@ -55,6 +61,116 @@ describe('POMS factory master-data OpenAPI contract', () => {
         }),
       );
     }
+  });
+
+  it('documents the single-file document-image upload contract and its error variants', () => {
+    const documented = operation('/poms-factories/document-images', 'post');
+    const requestBody = asObject(documented.requestBody, 'upload requestBody');
+    expect(requestBody.required).toBe(true);
+
+    const content = asObject(requestBody.content, 'upload content');
+    const multipart = asObject(content['multipart/form-data'], 'multipart/form-data');
+    expect(multipart.schema).toEqual({
+      $ref: '#/components/schemas/PomsFactoryDocumentImageUploadRequest',
+    });
+    expect(multipart.encoding).toEqual({
+      file: { contentType: 'image/jpeg, image/png, application/pdf' },
+    });
+
+    const upload = asObject(
+      schemas().PomsFactoryDocumentImageUploadRequest,
+      'document image upload request',
+    );
+    const uploadProperties = asObject(upload.properties, 'upload properties');
+    expect(upload.additionalProperties).toBe(false);
+    expect(upload.required).toEqual(['file']);
+    expect(upload['x-max-files']).toBe(1);
+    expect(Object.keys(uploadProperties).sort()).toEqual(
+      ['file', 'title', 'description', 'link'].sort(),
+    );
+
+    const file = asObject(uploadProperties.file, 'upload file');
+    expect(file).toEqual(
+      expect.objectContaining({
+        type: 'string',
+        format: 'binary',
+        'x-min-size-bytes': 1,
+        'x-max-size-bytes': 5 * 1024 * 1024,
+        'x-allowed-media-types': ['image/jpeg', 'image/png', 'application/pdf'],
+        'x-allowed-file-extensions': ['.jpg', '.jpeg', '.png', '.pdf'],
+      }),
+    );
+    expect(uploadProperties.title).toEqual(
+      expect.objectContaining({ type: 'string', maxLength: 255, nullable: true }),
+    );
+    expect(uploadProperties.description).toEqual(
+      expect.objectContaining({ type: 'string', maxLength: 1000, nullable: true }),
+    );
+    expect(uploadProperties.link).toEqual(
+      expect.objectContaining({
+        type: 'string',
+        format: 'uri',
+        maxLength: 2048,
+        nullable: true,
+      }),
+    );
+    expect(upload.required).not.toEqual(expect.arrayContaining(['title', 'description', 'link']));
+
+    expect(jsonResponseSchema('/poms-factories/document-images', 'post', '201')).toEqual({
+      $ref: '#/components/schemas/PomsFactoryDocumentImageResponse',
+    });
+    const uploadResponse = asObject(
+      schemas().PomsFactoryDocumentImageResponse,
+      'document image response',
+    );
+    expect(asObject(uploadResponse.properties, 'upload response properties').data).toEqual({
+      $ref: '#/components/schemas/PomsFactoryUploadedDocumentImage',
+    });
+    const uploadedDocument = asObject(
+      schemas().PomsFactoryUploadedDocumentImage,
+      'uploaded document metadata',
+    );
+    expect(uploadedDocument.required).toEqual([
+      'title',
+      'description',
+      'link',
+      'fileName',
+      'fileUrl',
+      'fileType',
+      'fileSize',
+    ]);
+    const uploadedProperties = asObject(uploadedDocument.properties, 'uploaded properties');
+    expect(asObject(uploadedProperties.fileUrl, 'uploaded fileUrl')).toEqual(
+      expect.objectContaining({ type: 'string', format: 'uri', pattern: '^https?://' }),
+    );
+    expect(asObject(uploadedProperties.fileType, 'uploaded fileType').enum).toEqual([
+      'image/jpeg',
+      'image/png',
+      'application/pdf',
+    ]);
+
+    const responses = asObject(documented.responses, 'upload responses');
+    const badRequest = asObject(responses['400'], 'upload 400 response');
+    const badRequestContent = asObject(badRequest.content, 'upload 400 content');
+    const badRequestJson = asObject(badRequestContent['application/json'], 'upload 400 JSON');
+    expect(badRequestJson.schema).toEqual({ $ref: '#/components/schemas/ErrorEnvelope' });
+    const examples = asObject(badRequestJson.examples, 'upload 400 examples');
+    expect(
+      asObject(asObject(examples.fileUploadFailed, 'multer example').value, 'multer value'),
+    ).toEqual(
+      expect.objectContaining({
+        success: false,
+        error: expect.objectContaining({ code: 'FILE_UPLOAD_FAILED' }),
+      }),
+    );
+    expect(
+      asObject(asObject(examples.badRequest, 'validation example').value, 'validation value'),
+    ).toEqual(
+      expect.objectContaining({
+        success: false,
+        error: expect.objectContaining({ code: 'BAD_REQUEST' }),
+      }),
+    );
   });
 
   it('reuses the operator-factory table response for the active connected POMS list', () => {
@@ -106,6 +222,25 @@ describe('POMS factory master-data OpenAPI contract', () => {
       expect.objectContaining({ minLength: 1, maxLength: 500 }),
     );
     expect(asObject(properties.factoryFrontPhotos, 'factoryFrontPhotos').maxItems).toBe(10);
+    expect(
+      String(asObject(properties.factoryFrontPhotos, 'factoryFrontPhotos').description),
+    ).toContain('omitted = คงค่าเดิม');
+    expect(
+      String(asObject(properties.factoryFrontPhotos, 'factoryFrontPhotos').description),
+    ).toContain('[] = ล้าง');
+    expect(asObject(properties.factoryLogo, 'factoryLogo').nullable).toBe(true);
+    expect(asObject(properties.factoryLogo, 'factoryLogo').allOf).toEqual([
+      { $ref: '#/components/schemas/RequestDocumentImage' },
+    ]);
+    expect(String(asObject(properties.factoryLogo, 'factoryLogo').description)).toContain(
+      'omitted = คงค่าเดิม',
+    );
+    expect(String(asObject(properties.factoryLogo, 'factoryLogo').description)).toContain(
+      'สูงสุด 1 object',
+    );
+    expect(String(asObject(properties.factoryLogo, 'factoryLogo').description)).toContain(
+      'null = ล้าง',
+    );
     expect(asObject(properties.address, 'address')).toEqual(
       expect.objectContaining({ nullable: true, maxLength: 1000 }),
     );
@@ -404,6 +539,7 @@ describe('POMS factory master-data OpenAPI contract', () => {
       'REVISED_PENDING_REVIEW',
       'APPROVED',
       'REJECTED',
+      'CANCELLED',
     ]);
 
     const review = asObject(allSchemas.PomsFactoryEditReviewRequest, 'review request');
@@ -450,6 +586,47 @@ describe('POMS factory master-data OpenAPI contract', () => {
         createdAt: expect.any(Object),
       }),
     );
+    expect(asObject(eventProperties.action, 'event action').enum).toEqual([
+      'SUBMIT',
+      'REQUEST_REVISION',
+      'RESUBMIT',
+      'APPROVE',
+      'REJECT',
+      'CANCEL',
+    ]);
+  });
+
+  it('documents owner-only cancellation without a body and with explicit transition errors', () => {
+    const documented = operation('/poms-factories/edit-requests/{id}/cancel', 'post');
+    expect(documented).not.toHaveProperty('requestBody');
+    expect(String(documented.description)).toContain('createdBy');
+    expect(String(documented.description)).toContain('PENDING_REVIEW');
+    expect(String(documented.description)).toContain('REVISION_REQUESTED');
+    expect(String(documented.description)).toContain('REVISED_PENDING_REVIEW');
+    expect(jsonSuccessSchema('/poms-factories/edit-requests/{id}/cancel', 'post')).toEqual({
+      $ref: '#/components/schemas/PomsFactoryEditRequestResponse',
+    });
+    const editRequest = asObject(schemas().PomsFactoryEditRequest, 'cancelled edit request');
+    expect(editRequest.required).toEqual(
+      expect.arrayContaining(['id', 'status', 'statusLabel', 'isOpen', 'updatedAt']),
+    );
+
+    const responses = asObject(documented.responses, 'cancel responses');
+    expect(responses['403']).toEqual({ $ref: '#/components/responses/Forbidden' });
+    expect(responses['404']).toEqual({ $ref: '#/components/responses/NotFound' });
+
+    const conflict = asObject(responses['409'], 'cancel 409 response');
+    const conflictContent = asObject(conflict.content, 'cancel 409 content');
+    const conflictJson = asObject(conflictContent['application/json'], 'cancel 409 JSON');
+    expect(conflictJson.schema).toEqual({ $ref: '#/components/schemas/ErrorEnvelope' });
+    expect(conflictJson.example).toEqual({
+      success: false,
+      error: {
+        code: 'INVALID_STATUS_TRANSITION',
+        message: 'ไม่สามารถยกเลิกคำขอในสถานะปัจจุบันได้',
+        details: { id: 123, status: 'APPROVED' },
+      },
+    });
   });
 
   it('documents view data-scope plus the action permission for every write', () => {
@@ -457,6 +634,7 @@ describe('POMS factory master-data OpenAPI contract', () => {
       ['/poms-factories', 'get', ['factories:view'], 'any'],
       ['/poms-factories/{factoryId}', 'get', ['factories:view'], 'any'],
       ['/poms-factories/{factoryId}/form', 'get', ['factories:view'], 'any'],
+      ['/poms-factories/document-images', 'post', ['factories:edit'], 'any'],
       ['/poms-factories/edit-requests', 'get', ['factories:view'], 'any'],
       ['/poms-factories/edit-requests/{id}', 'get', ['factories:view'], 'any'],
       ['/poms-factories/edit-requests/{id}/form', 'get', ['factories:view'], 'any'],
@@ -469,6 +647,12 @@ describe('POMS factory master-data OpenAPI contract', () => {
       [
         '/poms-factories/edit-requests/{id}/resubmission',
         'put',
+        ['factories:view', 'factories:edit'],
+        'all',
+      ],
+      [
+        '/poms-factories/edit-requests/{id}/cancel',
+        'post',
         ['factories:view', 'factories:edit'],
         'all',
       ],

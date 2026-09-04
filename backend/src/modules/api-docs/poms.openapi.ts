@@ -375,6 +375,7 @@ const pomsFactoryEditRequestStatusValues = [
   'REVISED_PENDING_REVIEW',
   'APPROVED',
   'REJECTED',
+  'CANCELLED',
 ];
 const pomsFactoryEditDecisionValues = ['APPROVE', 'REQUEST_REVISION', 'REJECT'];
 const parameterStatusValues = [
@@ -600,6 +601,28 @@ const pomsFactoryEditReviewExample = {
   decision: 'REQUEST_REVISION',
   revisionReason: 'กรุณาตรวจสอบพิกัดและแนบภาพถ่ายด้านหน้าโรงงานใหม่',
   officerNote: 'ตรวจสอบเอกสารเบื้องต้นแล้ว',
+};
+
+const pomsFactoryDocumentImageExample = {
+  title: 'ภาพถ่ายหน้าโรงงาน',
+  description: null,
+  link: null,
+  fileName: 'factory-front.jpg',
+  fileUrl: 'https://example.com/uploads/cems-wpms/document-images/2026/09/factory-front.jpg',
+  fileType: 'image/jpeg',
+  fileSize: 245760,
+};
+
+const pomsFactoryCancelConflictExample = {
+  success: false,
+  error: {
+    code: 'INVALID_STATUS_TRANSITION',
+    message: 'ไม่สามารถยกเลิกคำขอในสถานะปัจจุบันได้',
+    details: {
+      id: 123,
+      status: 'APPROVED',
+    },
+  },
 };
 
 const operatorFactoryOverviewExample = {
@@ -2022,7 +2045,8 @@ const componentSchemas: Record<string, OpenApiObject> = {
       factoryLogo: {
         allOf: [schemaRef('RequestDocumentImage')],
         nullable: true,
-        description: 'Optional; omitted = คงค่าเดิม, null = ล้างตราสัญลักษณ์โรงงาน',
+        description:
+          'Optional; รับสูงสุด 1 object, omitted = คงค่าเดิม, null = ล้างตราสัญลักษณ์โรงงาน',
       },
       note: {
         type: 'string',
@@ -2110,6 +2134,88 @@ const componentSchemas: Record<string, OpenApiObject> = {
       schemaRef('PomsFactoryEditableProfileRequest'),
       schemaRef('PomsFactoryEditableMeasurementPointsRequest'),
     ],
+  },
+  PomsFactoryDocumentImageUploadRequest: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['file'],
+    description:
+      'รับ binary file หนึ่งไฟล์ต่อ request; title, description และ link เป็น metadata optional',
+    'x-max-files': 1,
+    properties: {
+      file: {
+        type: 'string',
+        format: 'binary',
+        description:
+          'ไฟล์ JPEG (.jpg/.jpeg), PNG (.png) หรือ PDF (.pdf) ขนาดตั้งแต่ 1 byte ถึง 5 MiB; MIME type, นามสกุล และ file signature ต้องตรงกัน',
+        'x-min-size-bytes': 1,
+        'x-max-size-bytes': 5242880,
+        'x-allowed-media-types': ['image/jpeg', 'image/png', 'application/pdf'],
+        'x-allowed-file-extensions': ['.jpg', '.jpeg', '.png', '.pdf'],
+      },
+      title: {
+        type: 'string',
+        maxLength: 255,
+        nullable: true,
+        description: 'Optional; omitted หรือค่าว่างใช้ค่าเริ่มต้น "เอกสารและรูปภาพ"',
+      },
+      description: {
+        type: 'string',
+        maxLength: 1000,
+        nullable: true,
+        description: 'Optional; omitted หรือค่าว่างคืนเป็น null',
+      },
+      link: {
+        type: 'string',
+        format: 'uri',
+        maxLength: 2048,
+        nullable: true,
+        pattern: '^https?://',
+        description: 'Optional reference URL; รองรับเฉพาะ absolute http/https URL',
+      },
+    },
+  },
+  PomsFactoryUploadedDocumentImage: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['title', 'description', 'link', 'fileName', 'fileUrl', 'fileType', 'fileSize'],
+    properties: {
+      title: { type: 'string', minLength: 1, maxLength: 255 },
+      description: { type: 'string', maxLength: 1000, nullable: true },
+      link: {
+        type: 'string',
+        format: 'uri',
+        maxLength: 2048,
+        pattern: '^https?://',
+        nullable: true,
+      },
+      fileName: { type: 'string', minLength: 1, maxLength: 255 },
+      fileUrl: {
+        type: 'string',
+        format: 'uri',
+        maxLength: 2048,
+        pattern: '^https?://',
+      },
+      fileType: {
+        type: 'string',
+        enum: ['image/jpeg', 'image/png', 'application/pdf'],
+      },
+      fileSize: { type: 'integer', minimum: 1, maximum: 5242880 },
+    },
+    example: pomsFactoryDocumentImageExample,
+  },
+  PomsFactoryDocumentImageResponse: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['success', 'data'],
+    properties: {
+      success: { type: 'boolean', enum: [true] },
+      data: schemaRef('PomsFactoryUploadedDocumentImage'),
+    },
+    example: {
+      success: true,
+      data: pomsFactoryDocumentImageExample,
+    },
   },
   PomsFactoryEditReviewRequest: {
     type: 'object',
@@ -2296,6 +2402,14 @@ const componentSchemas: Record<string, OpenApiObject> = {
   PomsFactoryEditRequestStatus: {
     type: 'string',
     enum: pomsFactoryEditRequestStatusValues,
+    'x-enum-labels': {
+      PENDING_REVIEW: 'รอพิจารณา',
+      REVISION_REQUESTED: 'ส่งกลับให้แก้ไข',
+      REVISED_PENDING_REVIEW: 'แก้ไขแล้ว รอพิจารณา',
+      APPROVED: 'อนุมัติแล้ว',
+      REJECTED: 'ไม่อนุมัติ',
+      CANCELLED: 'ยกเลิก',
+    },
   },
   PomsFactoryEditRequestEvent: {
     type: 'object',
@@ -2305,7 +2419,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
       id: { type: 'integer', minimum: 1 },
       action: {
         type: 'string',
-        enum: ['SUBMIT', 'REQUEST_REVISION', 'RESUBMIT', 'APPROVE', 'REJECT'],
+        enum: ['SUBMIT', 'REQUEST_REVISION', 'RESUBMIT', 'APPROVE', 'REJECT', 'CANCEL'],
       },
       fromStatus: {
         allOf: [schemaRef('PomsFactoryEditRequestStatus')],
@@ -4792,6 +4906,62 @@ const extraPaths: Record<string, OpenApiObject> = {
       successSchema: schemaRef('ConnectionRequestFormResponse'),
     }),
   },
+  '/poms-factories/document-images': {
+    post: securedOperation({
+      tag: 'Master Data',
+      summary: 'Upload a POMS factory document or image',
+      operationId: 'uploadPomsFactoryDocumentImage',
+      description:
+        'อัปโหลดไฟล์หนึ่งไฟล์เพื่อรับ RequestDocumentImage metadata สำหรับนำไปใส่ใน factoryFrontPhotos หรือ factoryLogo. รับ JPEG (.jpg/.jpeg), PNG (.png) และ PDF (.pdf) ขนาด 1 byte–5 MiB; MIME type, นามสกุล และ file signature ต้องตรงกัน. Multer limit failure ตอบ FILE_UPLOAD_FAILED ส่วน file/metadata validation ตอบ BAD_REQUEST',
+      requestBody: multipartRequestBody(
+        schemaRef('PomsFactoryDocumentImageUploadRequest'),
+        { file: { contentType: 'image/jpeg, image/png, application/pdf' } },
+        {
+          file: '<binary>',
+          title: 'ภาพถ่ายหน้าโรงงาน',
+          description: '',
+          link: 'https://example.com/factory-reference',
+        },
+      ),
+      successStatus: '201',
+      successDescription: 'อัปโหลดสำเร็จและคืน metadata สำหรับ request payload',
+      successSchema: schemaRef('PomsFactoryDocumentImageResponse'),
+      extraResponses: {
+        '400': {
+          description:
+            'Multer upload limit failure (FILE_UPLOAD_FAILED) หรือ file/metadata validation ไม่ผ่าน (BAD_REQUEST)',
+          content: {
+            'application/json': {
+              schema: schemaRef('ErrorEnvelope'),
+              examples: {
+                fileUploadFailed: {
+                  summary: 'ไฟล์เกิน 5 MiB หรือ multipart มีไฟล์/ส่วนเกิน limit',
+                  value: {
+                    success: false,
+                    error: {
+                      code: 'FILE_UPLOAD_FAILED',
+                      message: 'ไม่สามารถอัปโหลดไฟล์ได้',
+                      details: { field: 'file', reason: 'LIMIT_FILE_SIZE' },
+                    },
+                  },
+                },
+                badRequest: {
+                  summary: 'ไฟล์หรือ metadata ไม่ผ่าน validation',
+                  value: {
+                    success: false,
+                    error: {
+                      code: 'BAD_REQUEST',
+                      message: 'Unsupported file type',
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    }),
+  },
   '/poms-factories/edit-requests': {
     get: securedOperation({
       tag: 'Master Data',
@@ -4885,6 +5055,30 @@ const extraPaths: Record<string, OpenApiObject> = {
             'สถานะไม่อนุญาตให้ resubmit หรือ current/live profile เปลี่ยนระหว่างทำรายการ',
           content: {
             'application/json': { schema: schemaRef('ErrorEnvelope') },
+          },
+        },
+      },
+    }),
+  },
+  '/poms-factories/edit-requests/{id}/cancel': {
+    post: securedOperation({
+      tag: 'Master Data',
+      summary: 'Cancel a POMS factory edit request',
+      operationId: 'cancelPomsFactoryEditRequest',
+      description:
+        'ผู้สร้างคำขอเดิม (createdBy) เท่านั้นที่ยกเลิกได้ และต้องมี factories:view กับ factories:edit โดยการคัดคำขอสำหรับ mutation ยึด data scope ของ factories:edit. endpoint ไม่มี request body และยกเลิกได้เฉพาะ PENDING_REVIEW, REVISION_REQUESTED หรือ REVISED_PENDING_REVIEW',
+      parameters: [idParameter],
+      successDescription: 'ยกเลิกคำขอสำเร็จ; คืน full edit-request response ในสถานะ CANCELLED',
+      successSchema: schemaRef('PomsFactoryEditRequestResponse'),
+      extraResponses: {
+        '409': {
+          description:
+            'INVALID_STATUS_TRANSITION เมื่อสถานะปัจจุบันไม่ใช่ PENDING_REVIEW, REVISION_REQUESTED หรือ REVISED_PENDING_REVIEW',
+          content: {
+            'application/json': {
+              schema: schemaRef('ErrorEnvelope'),
+              example: pomsFactoryCancelConflictExample,
+            },
           },
         },
       },
@@ -5736,6 +5930,12 @@ function authorizationRequirementFor(path: string, method: string): Authorizatio
   }
 
   if (path.startsWith('/poms-factories')) {
+    if (path === '/poms-factories/document-images' && method === 'post') {
+      return { permissions: ['factories:edit'], mode: 'any' };
+    }
+    if (path === '/poms-factories/edit-requests/{id}/cancel' && method === 'post') {
+      return { permissions: ['factories:view', 'factories:edit'], mode: 'all' };
+    }
     if (path.includes('/edit-requests/') && path.endsWith('/review')) {
       return { permissions: ['factories:view', 'factories:approve'], mode: 'all' };
     }
@@ -5961,13 +6161,13 @@ export const pomsOpenApiDocument: OpenApiObject = {
     title: 'POMS API',
     version: '0.4.0',
     description:
-      'Interactive contract สำหรับ HTTP endpoint ทั้ง 139 รายการใน POMS แยกตามเมนูงานจริง พร้อม payload, validation, auth และตัวอย่างทดสอบ\n\nSwagger แสดง 148 operations เพราะขยาย optional buddhistYear path อีก 9 รูปแบบเพื่อรองรับทั้ง annual point code ที่ URL-encode และ path ที่ proxy ถอดรหัสแล้ว',
+      'Interactive contract สำหรับ HTTP endpoint ทั้ง 141 รายการใน POMS แยกตามเมนูงานจริง พร้อม payload, validation, auth และตัวอย่างทดสอบ\n\nSwagger แสดง 150 operations เพราะขยาย optional buddhistYear path อีก 9 รูปแบบเพื่อรองรับทั้ง annual point code ที่ URL-encode และ path ที่ proxy ถอดรหัสแล้ว',
   },
   servers: [{ url: env.API_PREFIX }],
   tags,
   paths,
   components,
-  'x-poms-canonical-operation-count': 139,
+  'x-poms-canonical-operation-count': 141,
 };
 
 export function countOpenApiOperations(document: OpenApiObject): number {

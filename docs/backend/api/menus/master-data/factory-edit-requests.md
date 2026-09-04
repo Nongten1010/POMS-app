@@ -6,21 +6,25 @@
 
 เมนูนี้ใช้ข้อมูลโรงงาน current/live จาก active rows ใน `cems_wpms_connected_measurement_points` เพื่อแสดงรายชื่อโรงงานและจุดตรวจวัดในระบบ POMS ผู้ประกอบการส่งคำขอแก้ไขได้ 2 แบบฟอร์มคือ `BASIC_INFO` และ `MEASUREMENT_POINTS` แต่ข้อมูลจริงจะยังไม่เปลี่ยนจนกว่า admin จะพิจารณาอนุมัติ
 
-การอ่านข้อมูลและการกำหนดขอบเขตโรงงานใช้ `factories:view` ส่วนการส่งหรือส่งกลับคำขอใช้ทั้ง `factories:view` และ `factories:edit` แต่การคัด resource สำหรับ mutation จะยึด data scope ของ `factories:edit` และการพิจารณาใช้ทั้ง `factories:view` และ `factories:approve` โดยยึด data scope ของ `factories:approve` พร้อมบังคับว่า reviewer ต้องมี role `admin` ทุก endpoint ต้องใช้ Bearer token
+การอ่านข้อมูลและการกำหนดขอบเขตโรงงานใช้ `factories:view` การอัปโหลดเอกสารใช้ `factories:edit` ส่วนการส่ง ส่งกลับ หรือยกเลิกคำขอใช้ทั้ง `factories:view` และ `factories:edit` แต่การคัด resource สำหรับ mutation จะยึด data scope ของ `factories:edit` และการพิจารณาใช้ทั้ง `factories:view` และ `factories:approve` โดยยึด data scope ของ `factories:approve` พร้อมบังคับว่า reviewer ต้องมี role `admin` ทุก endpoint ต้องใช้ Bearer token
 
 ### Main Flow
 
 1. เรียก `GET /api/v1/poms-factories` เพื่อแสดงโรงงาน current/live ที่อยู่ใน data scope ของผู้ใช้
 2. เรียก `GET /api/v1/poms-factories/:factoryId/form` เพื่อลง current/live values ด้วยชื่อและ shape เดียวกับ `GET /api/v1/cems-wpms-requests/:id/form`
-3. ผู้ประกอบการส่งคำขอแก้ไขด้วย `POST /api/v1/poms-factories/:factoryId/edit-requests` โดยเลือก `formType` เป็น `BASIC_INFO` หรือ `MEASUREMENT_POINTS`
-4. admin อ่านรายการและรายละเอียดคำขอ แล้วเลือก `APPROVE`, `REQUEST_REVISION` หรือ `REJECT`
-5. ถ้าขอให้แก้ไข ผู้ประกอบการเรียก `GET /api/v1/poms-factories/edit-requests/:id/form` เพื่อลง proposed values แล้วส่งกลับด้วย `PUT /api/v1/poms-factories/edit-requests/:id/resubmission`
-6. เมื่ออนุมัติ backend อัปเดต current/live POMS data ตาม `formType`: `BASIC_INFO` sync active `cems_wpms_connected_measurement_points` และ active `eligible_factories`, ส่วน `MEASUREMENT_POINTS` sync active `cems_wpms_connected_measurement_points` ของโรงงานนั้น โดยไม่อัปเดตตาราง `factories`
+3. ถ้ามีไฟล์ ผู้ประกอบการอัปโหลดทีละไฟล์ด้วย `POST /api/v1/poms-factories/document-images` แล้วนำ `RequestDocumentImage` metadata ที่ได้ไปใส่ใน `factoryFrontPhotos`, `factoryLogo` หรือ document field ที่รองรับ
+4. ผู้ประกอบการส่งคำขอแก้ไขด้วย `POST /api/v1/poms-factories/:factoryId/edit-requests` โดยเลือก `formType` เป็น `BASIC_INFO` หรือ `MEASUREMENT_POINTS`
+5. admin อ่านรายการและรายละเอียดคำขอ แล้วเลือก `APPROVE`, `REQUEST_REVISION` หรือ `REJECT`
+6. ถ้าขอให้แก้ไข ผู้ประกอบการเรียก `GET /api/v1/poms-factories/edit-requests/:id/form` เพื่อลง proposed values แล้วส่งกลับด้วย `PUT /api/v1/poms-factories/edit-requests/:id/resubmission`
+7. ผู้สร้างคำขอเดิม (`createdBy`) ยกเลิกคำขอที่ยังเปิดอยู่ได้ด้วย `POST /api/v1/poms-factories/edit-requests/:id/cancel`
+8. เมื่ออนุมัติ backend อัปเดต current/live POMS data ตาม `formType`: `BASIC_INFO` sync active `cems_wpms_connected_measurement_points` และ active `eligible_factories`, ส่วน `MEASUREMENT_POINTS` sync active `cems_wpms_connected_measurement_points` ของโรงงานนั้น โดยไม่อัปเดตตาราง `factories`
 
 ### Capability Boundary
 
 - `BASIC_INFO` ใช้แก้ profile โรงงานตาม allowlist และเมื่ออนุมัติจะ sync ทั้ง current/live connected rows กับ `eligible_factories`
 - `MEASUREMENT_POINTS` ใช้ patch เฉพาะ `pointName`, `monitoringPointStatus`, `details`, `documentsAndImages` และ `measurementInstruments`
+- binary upload รับครั้งละหนึ่งไฟล์และคืน metadata เท่านั้น การผูกไฟล์กับคำขอเกิดเมื่อ client ส่ง metadata นั้นใน create/resubmission payload
+- เฉพาะ `createdBy` ยกเลิกคำขอของตนเองได้ และยกเลิกได้เมื่อสถานะเป็น `PENDING_REVIEW`, `REVISION_REQUESTED` หรือ `REVISED_PENDING_REVIEW`
 - โรงงานที่อ่านหรือแก้ได้ต้องอยู่ใน effective data scope ของ permission ที่ endpoint ใช้ และหนึ่งโรงงานมี open request ได้สูงสุดหนึ่งรายการต่อ `formType`
 - การ review ทุก decision จำกัดเฉพาะผู้ใช้ที่มีทั้ง `userType = "admin"`, role `admin` และ permission `factories:approve`
 - ไม่อยู่ใน scope ของ capability นี้: การแก้ `pointCode`, `pointType`, `systemType`, `parameters`, device configuration, identity/audit fields, ตาราง `factories` และโค้ด frontend
@@ -30,6 +34,12 @@ curl --request GET \
   --url '<BASE_URL>/api/v1/poms-factories' \
   --header 'Authorization: Bearer <ACCESS_TOKEN>' \
   --header 'Accept: application/json'
+
+curl --request POST \
+  --url '<BASE_URL>/api/v1/poms-factories/document-images' \
+  --header 'Authorization: Bearer <ACCESS_TOKEN>' \
+  --form 'file=@./factory-front.jpg;type=image/jpeg' \
+  --form 'title=ภาพถ่ายหน้าโรงงาน'
 
 curl --request GET \
   --url '<BASE_URL>/api/v1/poms-factories/factory-001' \
@@ -58,22 +68,29 @@ curl --request POST \
   --header 'Authorization: Bearer <ACCESS_TOKEN>' \
   --header 'Content-Type: application/json' \
   --data '{"decision":"APPROVE","revisionReason":null,"officerNote":"ตรวจสอบเอกสารแล้ว"}'
+
+curl --request POST \
+  --url '<BASE_URL>/api/v1/poms-factories/edit-requests/11/cancel' \
+  --header 'Authorization: Bearer <ACCESS_TOKEN>' \
+  --header 'Accept: application/json'
 ```
 
 ## Endpoint Summary
 
-เมนูข้อมูลพื้นฐานมี `15` canonical endpoints และแสดงเป็น `19` Swagger operations เพราะ endpoint เดิมของจุดตรวจวัดมี annual path variants เพิ่ม `4` operations
+เมนูข้อมูลพื้นฐานมี `17` canonical endpoints และแสดงเป็น `21` Swagger operations เพราะ endpoint เดิมของจุดตรวจวัดมี annual path variants เพิ่ม `4` operations
 
 | งาน                            | Method | Path                                                             | Permission                             | Contract                                                                                                                               |
 | ------------------------------ | ------ | ---------------------------------------------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | รายชื่อโรงงาน current/live     | `GET`  | `/api/v1/poms-factories`                                         | `factories:view`                       | [List POMS factories](#get-apiv1poms-factories)                                                                                        |
 | ข้อมูลโรงงานและจุดตรวจวัด      | `GET`  | `/api/v1/poms-factories/:factoryId`                              | `factories:view`                       | [POMS factory detail](#get-apiv1poms-factoriesfactoryid)                                                                               |
 | อ่าน prefill ฟอร์มจาก POMS     | `GET`  | `/api/v1/poms-factories/:factoryId/form`                         | `factories:view`                       | [Factory form prefill](#get-apiv1poms-factoriesfactoryidform)                                                                          |
+| อัปโหลดเอกสารหรือรูปภาพ        | `POST` | `/api/v1/poms-factories/document-images`                         | `factories:edit`                       | [Document/image upload](#post-apiv1poms-factoriesdocument-images)                                                                      |
 | ส่งคำขอแก้ไขข้อมูล             | `POST` | `/api/v1/poms-factories/:factoryId/edit-requests`                | `factories:view` + `factories:edit`    | [Create edit request](#post-apiv1poms-factoriesfactoryidedit-requests)                                                                 |
 | รายการคำขอแก้ไข                | `GET`  | `/api/v1/poms-factories/edit-requests`                           | `factories:view`                       | [List edit requests](#get-apiv1poms-factoriesedit-requests)                                                                            |
 | รายละเอียดคำขอแก้ไข            | `GET`  | `/api/v1/poms-factories/edit-requests/:id`                       | `factories:view`                       | [Edit-request detail](#get-apiv1poms-factoriesedit-requestsid)                                                                         |
 | อ่าน prefill รอบแก้ไข        | `GET`  | `/api/v1/poms-factories/edit-requests/:id/form`                  | `factories:view`                       | [Edit-request form prefill](#get-apiv1poms-factoriesedit-requestsidform)                                                               |
 | ส่งคำขอแก้ไขกลับเข้าพิจารณา    | `PUT`  | `/api/v1/poms-factories/edit-requests/:id/resubmission`          | `factories:view` + `factories:edit`    | [Resubmission](#put-apiv1poms-factoriesedit-requestsidresubmission)                                                                    |
+| ยกเลิกคำขอแก้ไข                | `POST` | `/api/v1/poms-factories/edit-requests/:id/cancel`                | `factories:view` + `factories:edit`    | [Cancel edit request](#post-apiv1poms-factoriesedit-requestsidcancel)                                                                  |
 | Admin พิจารณาคำขอ              | `POST` | `/api/v1/poms-factories/edit-requests/:id/review`                | `factories:view` + `factories:approve` | [Review](#post-apiv1poms-factoriesedit-requestsidreview)                                                                               |
 | อ่านจุดที่เชื่อมต่อแล้วแบบเดิม | `GET`  | `/api/v1/connected-measurement-points`                           | `cems_wpms_requests:view`              | [Shared connected points](../../shared/connected-measurement-points/README.md)                                                         |
 | อ่านจุดของโรงงานแบบเดิม        | `GET`  | `/api/v1/connected-measurement-points/factories/:factoryId`      | `cems_wpms_requests:view`              | [Shared connected points](../../shared/connected-measurement-points/README.md#get-apiv1connected-measurement-pointsfactoriesfactoryid) |
@@ -88,10 +105,11 @@ curl --request POST \
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Authentication       | ทุก endpoint ภายใต้ `/api/v1/poms-factories` ต้องมี Bearer token                                                                                                         |
 | Read scope           | `GET` ทั้งหมดใช้ scope ของ `factories:view`: `ALL`, `IN_REGION`, `IN_PROVINCE`, `IN_ESTATE` หรือ `OWN_FACTORY`                                                           |
-| Edit scope           | `POST .../edit-requests` และ `PUT .../resubmission` ต้องผ่านทั้ง `factories:view` และ `factories:edit` แต่การคัด resource สำหรับ mutation ยึด scope ของ `factories:edit` |
+| Edit scope           | `POST .../document-images` ใช้ `factories:edit`; ส่วน `POST .../edit-requests`, `PUT .../resubmission` และ `POST .../cancel` ต้องผ่านทั้ง `factories:view` และ `factories:edit` โดยการคัด resource สำหรับ mutation ยึด scope ของ `factories:edit` |
 | Approval scope       | `POST .../review` ต้องผ่านทั้ง `factories:view` และ `factories:approve`, ยึด scope ของ `factories:approve` และบังคับ `userType = admin` พร้อม role `admin`                |
 | Object scope         | รายการถูกกรองตาม effective scope ของ endpoint; detail หรือ mutation ที่อ้างโรงงาน/คำขอนอก scope ตอบ `404 NOT_FOUND` เพื่อไม่เปิดเผยว่าข้อมูลมีอยู่                       |
 | Separation of duties | ผู้พิจารณาต้องไม่ตรงกับทั้ง `createdBy` และ `submittedBy` ของคำขอ; กฎนี้ใช้กับ `APPROVE`, `REQUEST_REVISION` และ `REJECT`; ถ้าซ้ำตอบ `403 FORBIDDEN`                     |
+| Cancel ownership     | `POST .../cancel` อนุญาตเฉพาะผู้ใช้ที่ตรงกับ `createdBy`; ผู้มี permission แต่ไม่ใช่เจ้าของตอบ `403 FORBIDDEN`                                                              |
 
 ## Contracts
 
@@ -356,6 +374,63 @@ Minimal response (`200 OK`):
 }
 ```
 
+### `POST /api/v1/poms-factories/document-images`
+
+อัปโหลด binary file เพื่อสร้าง `RequestDocumentImage` metadata สำหรับ payload คำขอแก้ไข Endpoint นี้ใช้ Bearer token และ permission `factories:edit`, รับ `multipart/form-data` ครั้งละหนึ่งไฟล์ และยังไม่ผูกไฟล์กับโรงงานหรือคำขอจนกว่า client จะนำ object ที่ตอบกลับไปใส่ใน create/resubmission payload
+
+#### Request Fields
+
+| Field         | Type   | Required | Rules                                                                                                                           |
+| ------------- | ------ | -------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `file`        | binary | yes      | หนึ่งไฟล์ต่อ request; 1–5,242,880 bytes; JPEG (`.jpg`, `.jpeg`), PNG (`.png`) หรือ PDF (`.pdf`); MIME, นามสกุล และ signature ต้องตรงกัน |
+| `title`       | string | no       | trim ค่าว่างเป็น omitted; ไม่เกิน 255 ตัวอักษร; เมื่อไม่ส่งใช้ค่าเริ่มต้น `เอกสารและรูปภาพ`                                    |
+| `description` | string | no       | trim ค่าว่างเป็น `null`; ไม่เกิน 1000 ตัวอักษร                                                                                 |
+| `link`        | string | no       | reference URL แบบ absolute `http`/`https`; trim ค่าว่างเป็น `null`; ไม่เกิน 2048 ตัวอักษร                                      |
+
+มุมมองเชิงโครงสร้างของ multipart request:
+
+```json
+{
+  "file": "<binary: factory-front.jpg>",
+  "title": "ภาพถ่ายหน้าโรงงาน",
+  "description": "ภาพถ่ายล่าสุด",
+  "link": "https://example.com/factory-reference"
+}
+```
+
+```bash
+curl --request POST \
+  --url '<BASE_URL>/api/v1/poms-factories/document-images' \
+  --header 'Authorization: Bearer <ACCESS_TOKEN>' \
+  --form 'file=@./factory-front.jpg;type=image/jpeg' \
+  --form 'title=ภาพถ่ายหน้าโรงงาน' \
+  --form 'description=ภาพถ่ายล่าสุด' \
+  --form 'link=https://example.com/factory-reference'
+```
+
+Minimal response (`201 Created`):
+
+```json
+{
+  "success": true,
+  "data": {
+    "title": "ภาพถ่ายหน้าโรงงาน",
+    "description": "ภาพถ่ายล่าสุด",
+    "link": "https://example.com/factory-reference",
+    "fileName": "factory-front.jpg",
+    "fileUrl": "https://example.com/uploads/cems-wpms/document-images/2026/09/550e8400-e29b-41d4-a716-446655440000.jpg",
+    "fileType": "image/jpeg",
+    "fileSize": 245760
+  }
+}
+```
+
+response คืนทั้ง 7 fields ใน `data` ทุกครั้ง โดย `description` และ `link` อาจเป็น `null`; เนื่องจาก endpoint นี้บังคับ `file` ค่า `fileName`, `fileUrl`, `fileType` และ `fileSize` จึงไม่เป็น `null`
+
+client ใช้ `data` ทั้ง object เป็นสมาชิกของ `factoryFrontPhotos` หรือเป็นค่า `factoryLogo`: `factoryFrontPhotos` รับมากสุด 10 objects ส่วน `factoryLogo` รับได้หนึ่ง object หรือ `null` เท่านั้น การเรียก upload ไม่เปลี่ยนค่าเดิมจนกว่าจะส่งคำขอแก้ไข
+
+Multer failure เช่นเกิน 5 MiB หรือส่งไฟล์/part เกิน limit ตอบ `400 FILE_UPLOAD_FAILED`; กรณีไม่ส่งไฟล์ ไฟล์ว่าง ชนิด/นามสกุล/signature ไม่ตรง หรือ `link` ไม่ใช่ `http`/`https` ตอบ `400 BAD_REQUEST`
+
 ### Shared Basic-info Fields
 
 เมื่อ body ไม่ส่ง `formType` backend จะตีความเป็นฟอร์ม `BASIC_INFO`; client ใหม่ควรส่ง `formType = "BASIC_INFO"` ให้ชัดเจน และใช้ profile allowlist ต่อไปนี้
@@ -371,14 +446,14 @@ Minimal response (`200 OK`):
 | `eia`                | string \| null | no       | omission = คงค่าเดิม; `null` = ล้างค่า; enum: `มี`, `ไม่มี`, `มี IEE`, `มี EIA`, `มี EHIA`, `อื่นๆ` |
 | `eiaOther`           | string \| null | no       | ต้องมีข้อความเมื่อส่ง `eia = "อื่นๆ"`; ห้ามส่งค่า non-null ในกรณีอื่น; ไม่เกิน 500 ตัวอักษร         |
 | `projectName`        | string \| null | no       | omission = คงค่าเดิม; `null` = ล้างค่า; string ไม่เกิน 500 ตัวอักษร                                 |
-| `factoryFrontPhotos` | object[]       | no       | omission = คงค่าเดิม; `[]` = ล้างทั้งหมด; มากสุด 10 รายการ                                          |
-| `factoryLogo`        | object \| null | no       | omission = คงค่าเดิม; `null` = ล้างโลโก้                                                            |
+| `factoryFrontPhotos` | object[]       | no       | omission = คงค่าเดิม; `[]` = ล้างทั้งหมด; object array ใหม่ = แทนที่ค่าเดิม; มากสุด 10 รายการ       |
+| `factoryLogo`        | object \| null | no       | omission = คงค่าเดิม; `null` = ล้างโลโก้; object ใหม่ = แทนที่ค่าเดิม; มากสุด 1 object              |
 | `remarks`            | string \| null | no       | canonical field ของหมายเหตุผู้ส่ง; ไม่เกิน 1000 ตัวอักษร                                            |
 | `note`               | string \| null | no       | legacy alias ของ `remarks`; หากส่งทั้งคู่ค่าต้องตรงกัน                                                |
 
 Document object ของ `factoryFrontPhotos[]` และ `factoryLogo`:
 
-Endpoint นี้ไม่รับ multipart/binary upload; client ต้องอัปโหลดไฟล์ผ่านช่องทางที่ระบบอนุญาตก่อน แล้วส่ง document metadata ที่มี absolute URL
+create/resubmission endpoints ไม่รับ multipart/binary upload; client ต้องเรียก [`POST /api/v1/poms-factories/document-images`](#post-apiv1poms-factoriesdocument-images) ก่อน แล้วส่ง document metadata ที่มี absolute URL ใน JSON payload
 
 | Field         | Type                     | Required | Rules                                                                                             |
 | ------------- | ------------------------ | -------- | ------------------------------------------------------------------------------------------------- |
@@ -575,7 +650,7 @@ Minimal request JSON:
 | `data.createdBy`             | number                                                                | no       | user ID ผู้สร้างคำขอครั้งแรก                                                     |
 | `data.events`                | object[]                                                              | no       | audit events เรียงตามเวลาและ ID                                                  |
 | `data.events[].id`           | number                                                                | no       | event ID                                                                         |
-| `data.events[].action`       | `SUBMIT` \| `RESUBMIT` \| `APPROVE` \| `REQUEST_REVISION` \| `REJECT` | no       | action ที่เกิดขึ้น                                                               |
+| `data.events[].action`       | `SUBMIT` \| `RESUBMIT` \| `APPROVE` \| `REQUEST_REVISION` \| `REJECT` \| `CANCEL` | no       | action ที่เกิดขึ้น                                                               |
 | `data.events[].fromStatus`   | string                                                                | yes      | status ก่อน action                                                               |
 | `data.events[].toStatus`     | string                                                                | no       | status หลัง action                                                               |
 | `data.events[].note`         | string                                                                | yes      | note หรือเหตุผลของ event                                                         |
@@ -749,6 +824,79 @@ Minimal response (`200 OK`):
 }
 ```
 
+### `POST /api/v1/poms-factories/edit-requests/:id/cancel`
+
+ยกเลิกคำขอแก้ไขโดยไม่เปลี่ยนข้อมูล current/live ใช้ Bearer token พร้อม `factories:view` และ `factories:edit`; การคัด resource ยึด data scope ของ `factories:edit` และผู้เรียกต้องเป็นผู้สร้างคำขอเดิมตาม `createdBy` เท่านั้น
+
+ยกเลิกได้เมื่อสถานะปัจจุบันเป็น `PENDING_REVIEW`, `REVISION_REQUESTED` หรือ `REVISED_PENDING_REVIEW` หลังสำเร็จสถานะเป็น `CANCELLED`, `statusLabel = "ยกเลิก"`, `isOpen = false` และเพิ่ม event `CANCEL` การตอบกลับเป็น full [`PomsFactoryEditRequestResponse`](#get-apiv1poms-factoriesedit-requestsid) ไม่ใช่ summary object
+
+#### Request Fields
+
+| Field | Location | Type             | Required | Rules           |
+| ----- | -------- | ---------------- | -------- | --------------- |
+| `id`  | path     | positive integer | yes      | edit-request ID |
+
+endpoint นี้ไม่มี request body:
+
+```json
+{}
+```
+
+Minimal response (`200 OK`):
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 11,
+    "requestNo": "PFE-20260824-A1B2C3D4",
+    "eligibleFactoryId": 7,
+    "factoryId": "factory-001",
+    "factoryRegistrationNo": "3-106-33/50สบ",
+    "factoryName": "บริษัท ตัวอย่าง จำกัด (มหาชน)",
+    "formType": "BASIC_INFO",
+    "revisionNo": 0,
+    "isOpen": false,
+    "status": "CANCELLED",
+    "statusLabel": "ยกเลิก",
+    "requestNote": "ปรับข้อมูลตามหนังสือรับรองล่าสุด",
+    "revisionReason": null,
+    "officerNote": null,
+    "currentFactory": {
+      "factoryName": "บริษัท ตัวอย่าง จำกัด",
+      "factoryAddress": "88 หมู่ 1"
+    },
+    "proposedFactory": {
+      "factoryName": "บริษัท ตัวอย่าง จำกัด (มหาชน)",
+      "factoryAddress": "99 หมู่ 1 ตำบลตัวอย่าง"
+    },
+    "currentMeasurementPoints": null,
+    "proposedMeasurementPoints": null,
+    "createdBy": 42,
+    "submittedBy": 42,
+    "submittedAt": "2026-08-24T02:00:00.000Z",
+    "reviewedBy": null,
+    "reviewedAt": null,
+    "approvedAt": null,
+    "events": [
+      {
+        "id": 2,
+        "action": "CANCEL",
+        "fromStatus": "PENDING_REVIEW",
+        "toStatus": "CANCELLED",
+        "note": null,
+        "actorUserId": 42,
+        "createdAt": "2026-09-04T10:30:00.000Z"
+      }
+    ],
+    "createdAt": "2026-08-24T02:00:00.000Z",
+    "updatedAt": "2026-09-04T10:30:00.000Z"
+  }
+}
+```
+
+ถ้าไม่พบคำขอหรือนอก data scope ตอบ `404 NOT_FOUND`; ถ้าผู้เรียกไม่ใช่ `createdBy` ตอบ `403 FORBIDDEN`; ถ้าสถานะไม่อนุญาตให้ยกเลิกตอบ `409 INVALID_STATUS_TRANSITION` พร้อม `error.details.id` และ `error.details.status`
+
 ### `POST /api/v1/poms-factories/edit-requests/:id/review`
 
 admin พิจารณาคำขอที่อยู่ใน `PENDING_REVIEW` หรือ `REVISED_PENDING_REVIEW` และอยู่ใน data scope ของ `factories:approve` ผู้พิจารณาต้องไม่ใช่ทั้งผู้สร้างคำขอครั้งแรก (`createdBy`) และผู้ส่งรอบล่าสุด (`submittedBy`) แม้จะเป็นคนละคนกัน
@@ -802,6 +950,7 @@ Minimal response (`200 OK`):
 | `REVISED_PENDING_REVIEW` | `แก้ไขแล้ว รอพิจารณา` | `true`   | ส่งกลับเข้ารอบพิจารณาแล้ว          |
 | `APPROVED`               | `อนุมัติแล้ว`         | `false`  | อัปเดต current/live ตาม `formType` สำเร็จ |
 | `REJECTED`               | `ไม่อนุมัติ`          | `false`  | ปิดคำขอโดยไม่เปลี่ยนข้อมูลจริง     |
+| `CANCELLED`              | `ยกเลิก`              | `false`  | ผู้สร้างคำขอปิดคำขอโดยไม่เปลี่ยนข้อมูลจริง |
 
 State transitions:
 
@@ -810,6 +959,7 @@ State transitions:
 | none                                           | ผู้มี `factories:edit` | create             | `PENDING_REVIEW`         | เก็บ current/proposed snapshot ตาม `formType` และเปิดคำขอ     |
 | `PENDING_REVIEW`                               | admin                  | `REQUEST_REVISION` | `REVISION_REQUESTED`     | บันทึก `revisionReason`; ยังไม่แก้ข้อมูลจริง                 |
 | `REVISION_REQUESTED`                           | ผู้มี `factories:edit` | resubmission       | `REVISED_PENDING_REVIEW` | refresh current snapshot และส่ง proposed payload เดิมอีกครั้ง |
+| `PENDING_REVIEW`, `REVISION_REQUESTED` หรือ `REVISED_PENDING_REVIEW` | ผู้สร้างคำขอ (`createdBy`) | `CANCEL` | `CANCELLED` | ปิดคำขอโดยไม่แก้ข้อมูล current/live |
 | `PENDING_REVIEW` หรือ `REVISED_PENDING_REVIEW` | admin                  | `APPROVE`          | `APPROVED`               | sync ข้อมูลจริงแบบ atomic ตาม `formType`                    |
 | `PENDING_REVIEW` หรือ `REVISED_PENDING_REVIEW` | admin                  | `REJECT`           | `REJECTED`               | ปิดคำขอโดยไม่แก้ข้อมูลจริง                                   |
 
@@ -825,7 +975,7 @@ Approval target mapping:
 | `factoryFrontPhotos`, `factoryLogo` | `factory_front_photos_json`, `factory_logo_json` ทุก active point                         | ไม่มี target field และไม่อัปเดต                  |
 
 - หนึ่งโรงงานมี open request ได้หนึ่งรายการต่อ `formType` โดย open status คือ `PENDING_REVIEW`, `REVISION_REQUESTED` หรือ `REVISED_PENDING_REVIEW`
-- create/resubmission/review ไม่รับ `Idempotency-Key`; การเรียกซ้ำหลัง transition สำเร็จจะตอบ `409 CONFLICT` แทนการทำซ้ำ
+- create/resubmission/cancel/review ไม่รับ `Idempotency-Key`; การยกเลิกซ้ำตอบ `409 INVALID_STATUS_TRANSITION` ส่วนการเรียก transition อื่นซ้ำตอบ `409 CONFLICT`
 - การอนุมัติ lock คำขอและข้อมูล current/live ที่เกี่ยวข้องใน transaction เดียวกัน และตรวจ source version จากตอนส่ง/ส่งกลับ หากข้อมูลจริงถูกเปลี่ยนระหว่างรอพิจารณาให้ตอบ `409 CONFLICT` โดยไม่มี partial update
 - approval ทำ target updates ตาม `formType` แบบ atomic; ตาราง `factories` ไม่ใช่เป้าหมายของ workflow นี้
 - เมื่อ `formType = "MEASUREMENT_POINTS"` backend อัปเดตเฉพาะ active `cems_wpms_connected_measurement_points` ของโรงงานนั้น ได้แก่ `point_name`, `monitoring_point_status`, `details_json`, `documents_json` และ `instruments_json`
@@ -837,10 +987,13 @@ Approval target mapping:
 | HTTP status | `error.code`       | Condition                                                                                                                                  | Client action                                   |
 | ----------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------- |
 | `400`       | `VALIDATION_ERROR` | path/query/body ไม่ตรง strict schema, พิกัดไม่ส่งเป็นคู่, `eiaOther` ผิดเงื่อนไข หรือมี field นอก allowlist                                | แสดง validation ตาม `error.issues[].pathString` |
+| `400`       | `FILE_UPLOAD_FAILED` | multipart upload เกิน limit เช่นไฟล์เกิน 5 MiB หรือส่งไฟล์/part เกินจำนวน                                                            | แสดงข้อผิดพลาดอัปโหลดและให้เลือกไฟล์ใหม่        |
+| `400`       | `BAD_REQUEST`      | upload ไม่ส่งไฟล์ ไฟล์ว่าง MIME/นามสกุล/signature ไม่ตรง หรือ `link` ไม่ใช่ absolute `http`/`https` URL                                | แก้ไฟล์หรือ metadata แล้วส่งใหม่                 |
 | `401`       | `UNAUTHORIZED`     | token ไม่มี/หมดอายุ/ไม่ถูกต้อง                                                                                                             | login ใหม่                                      |
-| `403`       | `FORBIDDEN`        | ไม่มี action permission, reviewer ไม่ใช่ admin หรือ user ผู้พิจารณาซ้ำกับ `createdBy` หรือ `submittedBy` ของคำขอ                              | ซ่อน action หรือให้ admin คนอื่นพิจารณา         |
+| `403`       | `FORBIDDEN`        | ไม่มี action permission, ผู้ยกเลิกไม่ใช่ `createdBy`, reviewer ไม่ใช่ admin หรือผู้พิจารณาซ้ำกับ `createdBy`/`submittedBy`                  | ซ่อน action หรือใช้ผู้ทำรายการที่ถูกต้อง         |
 | `404`       | `NOT_FOUND`        | ไม่พบโรงงาน/คำขอ หรือ resource อยู่นอก effective data scope ของ endpoint (`factories:view`, `factories:edit`, หรือ `factories:approve`)    | กลับหน้ารายการและ refresh                       |
-| `409`       | `CONFLICT`         | ไม่มี profile field เปลี่ยน, มี open request อยู่แล้ว, status ไม่รองรับ transition, source version เปลี่ยน หรือ request ถูกพิจารณาพร้อมกัน | refresh detail และตัดสินใจจากสถานะล่าสุด        |
+| `409`       | `INVALID_STATUS_TRANSITION` | cancel เมื่อสถานะไม่ใช่ `PENDING_REVIEW`, `REVISION_REQUESTED` หรือ `REVISED_PENDING_REVIEW`                                      | refresh detail และซ่อนปุ่มยกเลิก                 |
+| `409`       | `CONFLICT`         | ไม่มี profile field เปลี่ยน, มี open request อยู่แล้ว, transition อื่นไม่รองรับ, source version เปลี่ยน หรือ request ถูกพิจารณาพร้อมกัน    | refresh detail และตัดสินใจจากสถานะล่าสุด        |
 
 ## Business Flow And Explanations
 
@@ -860,7 +1013,7 @@ Approval target mapping:
 | Repository/atomic sync | [`poms-factories.repository.ts`](../../../../../backend/src/modules/poms-factories/poms-factories.repository.ts)                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | Public types/statuses  | [`poms-factories.types.ts`](../../../../../backend/src/modules/poms-factories/poms-factories.types.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | Runtime OpenAPI        | [`poms.openapi.ts`](../../../../../backend/src/modules/api-docs/poms.openapi.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| Migrations             | [`0100_create_poms_factory_edit_requests.ts`](../../../../../backend/src/db/migrations/0100_create_poms_factory_edit_requests.ts), [`0106_extend_poms_factory_edit_requests_for_measurement_points.ts`](../../../../../backend/src/db/migrations/0106_extend_poms_factory_edit_requests_for_measurement_points.ts), [`0107_enforce_admin_only_factory_approval.ts`](../../../../../backend/src/db/migrations/0107_enforce_admin_only_factory_approval.ts) |
-| Tests                  | [`poms-factories.route.test.ts`](../../../../../backend/tests/unit/poms-factories.route.test.ts), [`poms-factories.service.test.ts`](../../../../../backend/tests/unit/poms-factories.service.test.ts), [`poms-factories.repository.test.ts`](../../../../../backend/tests/unit/poms-factories.repository.test.ts), [`poms-measurement-point-edit-requests.validator.test.ts`](../../../../../backend/tests/unit/poms-measurement-point-edit-requests.validator.test.ts), [`poms-measurement-point-edit-requests.migration.test.ts`](../../../../../backend/tests/unit/poms-measurement-point-edit-requests.migration.test.ts), [`factory-approval-admin-only-migration.test.ts`](../../../../../backend/tests/unit/factory-approval-admin-only-migration.test.ts), [`poms-factories.openapi.test.ts`](../../../../../backend/tests/unit/poms-factories.openapi.test.ts) |
+| Migrations             | [`0100_create_poms_factory_edit_requests.ts`](../../../../../backend/src/db/migrations/0100_create_poms_factory_edit_requests.ts), [`0106_extend_poms_factory_edit_requests_for_measurement_points.ts`](../../../../../backend/src/db/migrations/0106_extend_poms_factory_edit_requests_for_measurement_points.ts), [`0107_enforce_admin_only_factory_approval.ts`](../../../../../backend/src/db/migrations/0107_enforce_admin_only_factory_approval.ts), [`0109_add_poms_factory_edit_request_cancellation.ts`](../../../../../backend/src/db/migrations/0109_add_poms_factory_edit_request_cancellation.ts) |
+| Tests                  | [`poms-factories.route.test.ts`](../../../../../backend/tests/unit/poms-factories.route.test.ts), [`poms-factories.service.test.ts`](../../../../../backend/tests/unit/poms-factories.service.test.ts), [`poms-factories.repository.test.ts`](../../../../../backend/tests/unit/poms-factories.repository.test.ts), [`poms-factories.cancel.service.test.ts`](../../../../../backend/tests/unit/poms-factories.cancel.service.test.ts), [`poms-factories.cancel.repository.test.ts`](../../../../../backend/tests/unit/poms-factories.cancel.repository.test.ts), [`poms-factory-document-upload.route.test.ts`](../../../../../backend/tests/unit/poms-factory-document-upload.route.test.ts), [`poms-measurement-point-edit-requests.validator.test.ts`](../../../../../backend/tests/unit/poms-measurement-point-edit-requests.validator.test.ts), [`poms-measurement-point-edit-requests.migration.test.ts`](../../../../../backend/tests/unit/poms-measurement-point-edit-requests.migration.test.ts), [`factory-approval-admin-only-migration.test.ts`](../../../../../backend/tests/unit/factory-approval-admin-only-migration.test.ts), [`poms-factory-edit-request-cancellation-migration.test.ts`](../../../../../backend/tests/unit/poms-factory-edit-request-cancellation-migration.test.ts), [`poms-factories.openapi.test.ts`](../../../../../backend/tests/unit/poms-factories.openapi.test.ts) |
 
 Breaking change ด้านสิทธิ์ review ถูกบันทึกใน [API changelog](../../CHANGELOG.md#2026-09-01--เพิ่ม-2-แบบฟอร์มคำขอแก้ไขข้อมูลพื้นฐานจาก-poms-และจำกัดผู้อนุมัติเป็น-admin)

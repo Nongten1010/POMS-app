@@ -489,7 +489,7 @@ describe('POMS OpenAPI contract', () => {
     }
   });
 
-  it('covers all 139 canonical registry endpoints plus 9 annual testing variants', () => {
+  it('covers all 141 canonical registry endpoints plus 9 annual testing variants', () => {
     const document = asObject(pomsOpenApiDocument, 'OpenAPI document');
     const paths = asObject(document.paths, 'paths');
     const documentedOperations: string[] = [];
@@ -503,13 +503,13 @@ describe('POMS OpenAPI contract', () => {
     }
 
     const registryOperations = readEndpointRegistryOperations();
-    expect(registryOperations).toHaveLength(139);
+    expect(registryOperations).toHaveLength(141);
     expect(documentedOperations.sort()).toEqual(
       [...registryOperations, ...annualTestingVariants].sort(),
     );
     expect(pomsOpenApiStats).toEqual({
-      canonicalOperationCount: 139,
-      operationCount: 148,
+      canonicalOperationCount: 141,
+      operationCount: 150,
       tagCount: 13,
     });
   });
@@ -531,10 +531,10 @@ describe('POMS OpenAPI contract', () => {
       }
     }
 
-    expect(writeOperations).toHaveLength(57);
+    expect(writeOperations).toHaveLength(59);
     expect(
       writeOperations.filter(([, , operation]) => isRequestBody(operation.requestBody)),
-    ).toHaveLength(56);
+    ).toHaveLength(57);
 
     for (const [pathKey, method, operation] of writeOperations) {
       const hasRequestBody = isRequestBody(operation.requestBody);

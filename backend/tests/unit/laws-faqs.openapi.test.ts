@@ -94,8 +94,8 @@ describe('laws and FAQs OpenAPI contract', () => {
     }
 
     expect(pomsOpenApiStats).toEqual({
-      canonicalOperationCount: 139,
-      operationCount: 148,
+      canonicalOperationCount: 141,
+      operationCount: 150,
       tagCount: 13,
     });
   });

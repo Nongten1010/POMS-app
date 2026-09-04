@@ -16,6 +16,7 @@ jest.mock('../../src/modules/poms-factories/poms-factories.service', () => ({
     getEditRequest: jest.fn(),
     getEditRequestForm: jest.fn(),
     resubmitEditRequest: jest.fn(),
+    cancelEditRequest: jest.fn(),
     reviewEditRequest: jest.fn(),
   },
 }));
@@ -44,6 +45,7 @@ describe('POMS factory routes', () => {
     mockedService.getEditRequest.mockResolvedValue(editRequest('PENDING_REVIEW'));
     mockedService.getEditRequestForm.mockResolvedValue(connectionForm());
     mockedService.resubmitEditRequest.mockResolvedValue(editRequest('REVISED_PENDING_REVIEW'));
+    mockedService.cancelEditRequest.mockResolvedValue(editRequest('CANCELLED'));
     mockedService.reviewEditRequest.mockResolvedValue(editRequest('APPROVED'));
   });
 
@@ -266,6 +268,42 @@ describe('POMS factory routes', () => {
       editScope,
       null,
     );
+  });
+
+  it('requires factories:edit to cancel an edit request', async () => {
+    const response = await request(createTestApp())
+      .post('/api/v1/poms-factories/edit-requests/11/cancel')
+      .set('Authorization', `Bearer ${accessToken({ scopes: { 'factories:view': 'ALL' } })}`);
+
+    expect(response.status).toBe(403);
+    expect(mockedService.cancelEditRequest).not.toHaveBeenCalled();
+  });
+
+  it('cancels an edit request', async () => {
+    const response = await request(createTestApp())
+      .post('/api/v1/poms-factories/edit-requests/11/cancel')
+      .set(
+        'Authorization',
+        `Bearer ${accessToken({
+          scopes: { 'factories:view': 'ALL', 'factories:edit': 'OWN_FACTORY' },
+          scopeDetails: {
+            'factories:view': { scope: 'ALL' },
+            'factories:edit': editScope,
+          },
+        })}`,
+      );
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toEqual(
+      expect.objectContaining({
+        id: 11,
+        status: 'CANCELLED',
+        statusLabel: 'ยกเลิก',
+        isOpen: false,
+        updatedAt: '2026-08-24T01:00:00.000Z',
+      }),
+    );
+    expect(mockedService.cancelEditRequest).toHaveBeenCalledWith(11, 42, editScope, null);
   });
 
   it('requires factories:approve to review a request', async () => {
@@ -503,7 +541,9 @@ function factoryDetail() {
   };
 }
 
-function editRequest(status: 'PENDING_REVIEW' | 'REVISED_PENDING_REVIEW' | 'APPROVED') {
+function editRequest(
+  status: 'PENDING_REVIEW' | 'REVISED_PENDING_REVIEW' | 'APPROVED' | 'CANCELLED',
+) {
   return {
     id: 11,
     requestNo: 'PFE-20260824-ABC12345',
@@ -513,9 +553,10 @@ function editRequest(status: 'PENDING_REVIEW' | 'REVISED_PENDING_REVIEW' | 'APPR
     factoryName: 'บริษัท ทดสอบ จำกัด',
     formType: POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.BASIC_INFO,
     status,
-    statusLabel: status === 'APPROVED' ? 'อนุมัติแล้ว' : 'รอพิจารณา',
+    statusLabel:
+      status === 'APPROVED' ? 'อนุมัติแล้ว' : status === 'CANCELLED' ? 'ยกเลิก' : 'รอพิจารณา',
     revisionNo: 0,
-    isOpen: status !== 'APPROVED',
+    isOpen: !['APPROVED', 'CANCELLED'].includes(status),
     requestNote: 'ขอแก้ไขข้อมูลพื้นฐาน',
     revisionReason: null,
     officerNote: status === 'APPROVED' ? 'ข้อมูลครบถ้วน' : null,
