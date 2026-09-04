@@ -11,6 +11,7 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
+  InputAdornment,
   MenuItem,
   Paper,
   Stack,
@@ -22,12 +23,18 @@ import AddIcon from '@mui/icons-material/Add'
 import DeleteIcon from '@mui/icons-material/Delete'
 import EditIcon from '@mui/icons-material/Edit'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
+import SearchIcon from '@mui/icons-material/Search'
+import { DatePicker } from '@mui/x-date-pickers/DatePicker'
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
+import { AdapterDayjsBuddhist } from '@mui/x-date-pickers/AdapterDayjsBuddhist'
+import dayjs from 'dayjs'
+import 'dayjs/locale/th'
 
 const initialFaqItems = [
   {
     id: 'faq-001',
     question: 'ผู้ประกอบการต้องใช้บัญชีใดในการเข้าสู่ระบบ D-POMS?',
-    category: 'การเข้าใช้งานระบบ',
+    category: 'OTHER',
     updatedDate: '2026-06-17',
     answer:
       'ผู้ประกอบการสามารถเข้าสู่ระบบด้วยบัญชี i-Industry ที่ใช้กับบริการของกระทรวงอุตสาหกรรม จากนั้นระบบจะแสดงข้อมูลโรงงานและเมนูที่ผู้ใช้งานมีสิทธิ์เข้าถึง',
@@ -35,7 +42,7 @@ const initialFaqItems = [
   {
     id: 'faq-002',
     question: 'หากระบบ CEMS หรือ BOD/COD Online ส่งข้อมูลไม่ได้ ต้องดำเนินการอย่างไร?',
-    category: 'การเชื่อมต่อข้อมูล',
+    category: 'CEMS',
     updatedDate: '2026-06-12',
     answer:
       'ให้ตรวจสอบสถานะอุปกรณ์และการเชื่อมต่อก่อน หากไม่สามารถส่งข้อมูลได้ต่อเนื่อง ให้ดำเนินการแจ้งแบบที่เกี่ยวข้องตามประเภทของระบบและระยะเวลาที่หยุดส่งข้อมูล',
@@ -43,7 +50,7 @@ const initialFaqItems = [
   {
     id: 'faq-003',
     question: 'สามารถแก้ไขข้อมูลคำขอเชื่อมต่อหลังส่งแบบฟอร์มแล้วได้หรือไม่?',
-    category: 'ขอเชื่อมต่อ',
+    category: 'WPMS',
     updatedDate: '2026-06-05',
     answer:
       'หากคำขอยังอยู่ในสถานะร่างหรือถูกส่งกลับให้แก้ไข ผู้ใช้งานสามารถปรับปรุงข้อมูลและส่งใหม่ได้ แต่หากอยู่ระหว่างการพิจารณาให้รอผลจากเจ้าหน้าที่ก่อน',
@@ -51,7 +58,7 @@ const initialFaqItems = [
   {
     id: 'faq-004',
     question: 'รายงานสถิติสามารถดาวน์โหลดเป็นไฟล์ได้หรือไม่?',
-    category: 'รายงานและสถิติ',
+    category: 'OTHER',
     updatedDate: '2026-05-28',
     answer:
       'ในหน้ารายงานที่รองรับการส่งออก ผู้ใช้งานสามารถกดปุ่มส่งออกเพื่อดาวน์โหลดข้อมูลตามสิทธิ์และเงื่อนไขที่เลือกไว้',
@@ -59,11 +66,9 @@ const initialFaqItems = [
 ]
 
 const faqCategories = [
-  'การเข้าใช้งานระบบ',
-  'การเชื่อมต่อข้อมูล',
-  'ขอเชื่อมต่อ',
-  'การแจ้งแบบ กวภ.',
-  'รายงานและสถิติ',
+  { value: 'CEMS', label: 'CEMS' },
+  { value: 'WPMS', label: 'WPMS' },
+  { value: 'OTHER', label: 'อื่นๆ' },
 ]
 
 const emptyForm = {
@@ -77,6 +82,20 @@ function createFaqId() {
   return `faq-${Date.now()}`
 }
 
+function getFaqCategoryLabel(category) {
+  return faqCategories.find((option) => option.value === category)?.label ?? category
+}
+
+function formatBuddhistDate(value) {
+  const date = dayjs(value)
+
+  if (!value || !date.isValid()) {
+    return '-'
+  }
+
+  return `${date.format('DD-MM')}-${date.year() + 543}`
+}
+
 function FaqPage({ isAdmin = false }) {
   const [faqs, setFaqs] = useState(initialFaqItems)
   const [searchText, setSearchText] = useState('')
@@ -86,14 +105,14 @@ function FaqPage({ isAdmin = false }) {
   const [form, setForm] = useState(emptyForm)
   const [errors, setErrors] = useState({})
   const filteredFaqs = useMemo(() => {
-    const normalizedSearchText = searchText.trim().toLowerCase()
+    const normalizedSearchText = searchText.trim().toLocaleLowerCase('th')
 
     return faqs.filter((faq) => {
       const matchesCategory = selectedCategory === 'all' || faq.category === selectedCategory
       const matchesSearch =
         !normalizedSearchText ||
-        faq.question.toLowerCase().includes(normalizedSearchText) ||
-        faq.answer.toLowerCase().includes(normalizedSearchText)
+        [faq.question, faq.answer, getFaqCategoryLabel(faq.category)]
+          .some((value) => value.toLocaleLowerCase('th').includes(normalizedSearchText))
 
       return matchesCategory && matchesSearch
     })
@@ -248,32 +267,45 @@ function FaqPage({ isAdmin = false }) {
           <Stack spacing={2}>
             <Box
               sx={{
-                display: 'grid',
-                gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 240px' },
+                display: 'flex',
+                flexDirection: { xs: 'column', sm: 'row' },
                 gap: 1.5,
               }}
             >
+              <TextField
+                select
+                size="small"
+                label="หมวดหมู่"
+                value={selectedCategory}
+                onChange={(event) => setSelectedCategory(event.target.value)}
+                sx={{ width: { xs: '100%', sm: 240 } }}
+              >
+                <MenuItem value="all">ทั้งหมด</MenuItem>
+                {faqCategories.map((category) => (
+                  <MenuItem key={category.value} value={category.value}>
+                    {category.label}
+                  </MenuItem>
+                ))}
+              </TextField>
               <TextField
                 size="small"
                 placeholder="ค้นหาคำถามหรือคำตอบ"
                 value={searchText}
                 onChange={(event) => setSearchText(event.target.value)}
-                fullWidth
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon fontSize="small" />
+                      </InputAdornment>
+                    ),
+                  },
+                  htmlInput: {
+                    'aria-label': 'ค้นหาคำถามหรือคำตอบ',
+                  },
+                }}
+                sx={{ width: { xs: '100%', sm: 360 } }}
               />
-              <TextField
-                select
-                size="small"
-                value={selectedCategory}
-                onChange={(event) => setSelectedCategory(event.target.value)}
-                fullWidth
-              >
-                <MenuItem value="all">ทุกหมวดหมู่</MenuItem>
-                {faqCategories.map((category) => (
-                  <MenuItem key={category} value={category}>
-                    {category}
-                  </MenuItem>
-                ))}
-              </TextField>
             </Box>
 
             <Stack spacing={1.5}>
@@ -390,7 +422,7 @@ function FaqListItem({ faq, isAdmin, defaultExpanded, onEdit, onDelete }) {
           </Typography>
           <Stack direction="row" spacing={1.25} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
             <Chip
-              label={faq.category}
+              label={getFaqCategoryLabel(faq.category)}
               size="small"
               sx={{
                 bgcolor: 'primary.50',
@@ -399,7 +431,7 @@ function FaqListItem({ faq, isAdmin, defaultExpanded, onEdit, onDelete }) {
               }}
             />
             <Typography variant="body2" color="text.secondary">
-              อัปเดต {faq.updatedDate}
+              อัปเดต {formatBuddhistDate(faq.updatedDate)}
             </Typography>
           </Stack>
         </Stack>
@@ -461,21 +493,28 @@ function FaqFormDialog({ open, mode, form, errors, onChange, onClose, onSave }) 
               fullWidth
             >
               {faqCategories.map((category) => (
-                <MenuItem key={category} value={category}>
-                  {category}
+                <MenuItem key={category.value} value={category.value}>
+                  {category.label}
                 </MenuItem>
               ))}
             </TextField>
-            <TextField
-              label="วันที่อัปเดต"
-              type="date"
-              value={form.updatedDate}
-              error={Boolean(errors.updatedDate)}
-              helperText={errors.updatedDate}
-              onChange={(event) => onChange('updatedDate', event.target.value)}
-              slotProps={{ inputLabel: { shrink: true } }}
-              fullWidth
-            />
+            <LocalizationProvider dateAdapter={AdapterDayjsBuddhist} adapterLocale="th">
+              <DatePicker
+                label="วันที่อัปเดต"
+                value={form.updatedDate ? dayjs(form.updatedDate) : null}
+                format="DD-MM-YYYY"
+                onChange={(nextDate) => {
+                  onChange('updatedDate', nextDate?.isValid() ? nextDate.format('YYYY-MM-DD') : '')
+                }}
+                slotProps={{
+                  textField: {
+                    error: Boolean(errors.updatedDate),
+                    helperText: errors.updatedDate,
+                    fullWidth: true,
+                  },
+                }}
+              />
+            </LocalizationProvider>
           </Stack>
           <TextField
             label="คำตอบ"

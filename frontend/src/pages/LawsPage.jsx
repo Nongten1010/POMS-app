@@ -8,6 +8,7 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
+  InputAdornment,
   MenuItem,
   Paper,
   Stack,
@@ -20,67 +21,104 @@ import AttachFileIcon from '@mui/icons-material/AttachFile'
 import DeleteIcon from '@mui/icons-material/Delete'
 import DownloadIcon from '@mui/icons-material/Download'
 import EditIcon from '@mui/icons-material/Edit'
+import SearchIcon from '@mui/icons-material/Search'
+import { DatePicker } from '@mui/x-date-pickers/DatePicker'
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
+import { AdapterDayjsBuddhist } from '@mui/x-date-pickers/AdapterDayjsBuddhist'
+import dayjs from 'dayjs'
+import 'dayjs/locale/th'
 
 const initialLawItems = [
   {
     id: 'law-001',
     title: 'ประกาศกระทรวงอุตสาหกรรม เรื่อง การติดตั้งเครื่องมือหรือเครื่องอุปกรณ์พิเศษเพื่อตรวจวัดมลพิษจากสถานปล่องโรงงาน',
-    type: 'ประกาศกระทรวง',
+    category: 'CEMS',
+    type: 'RULE_AND_ANNOUNCEMENT',
     publishedDate: '2025-01-15',
     fileName: 'law-001.pdf',
   },
   {
     id: 'law-002',
     title: 'ประกาศกรมโรงงานอุตสาหกรรม เรื่อง หลักเกณฑ์การรายงานผลการตรวจวัดมลพิษทางน้ำแบบออนไลน์',
-    type: 'ประกาศกรม',
+    category: 'WPMS',
+    type: 'RULE_AND_ANNOUNCEMENT',
     publishedDate: '2025-03-22',
     fileName: 'law-002.pdf',
   },
   {
     id: 'law-003',
     title: 'พระราชบัญญัติโรงงาน พ.ศ. 2535 และที่แก้ไขเพิ่มเติม',
-    type: 'พระราชบัญญัติ',
+    category: 'OTHER',
+    type: 'OTHER',
     publishedDate: '1992-04-02',
     fileName: 'law-003.pdf',
   },
   {
     id: 'law-004',
     title: 'กฎกระทรวงกำหนดมาตรฐานควบคุมการระบายน้ำทิ้งจากโรงงาน',
-    type: 'กฎกระทรวง',
+    category: 'WPMS',
+    type: 'MINISTERIAL_REGULATION',
     publishedDate: '2024-11-01',
     fileName: 'law-004.pdf',
   },
   {
     id: 'law-005',
     title: 'ประกาศกรมโรงงานอุตสาหกรรม เรื่อง การทวนสอบและสอบเทียบระบบ CEMS',
-    type: 'ประกาศกรม',
+    category: 'CEMS',
+    type: 'RULE_AND_ANNOUNCEMENT',
     publishedDate: '2025-07-09',
     fileName: 'law-005.pdf',
   },
   {
     id: 'law-006',
     title: 'แนวทางปฏิบัติการแจ้งเหตุขัดข้องของเครื่องมือหรือเครื่องอุปกรณ์พิเศษ',
-    type: 'แนวปฏิบัติ',
+    category: 'OTHER',
+    type: 'REGULATION_REQUIREMENT',
     publishedDate: '2025-08-30',
     fileName: 'law-006.pdf',
   },
 ]
 
-const lawTypes = ['ประกาศกระทรวง', 'ประกาศกรม', 'พระราชบัญญัติ', 'กฎกระทรวง', 'แนวปฏิบัติ']
+const lawCategories = [
+  { value: 'CEMS', label: 'CEMS' },
+  { value: 'WPMS', label: 'WPMS' },
+  { value: 'OTHER', label: 'อื่นๆ' },
+]
+const lawTypes = [
+  { value: 'MINISTERIAL_REGULATION', label: 'กฎกระทรวง' },
+  { value: 'RULE_AND_ANNOUNCEMENT', label: 'กฎและประกาศ' },
+  { value: 'REGULATION_REQUIREMENT', label: 'ระเบียบ ข้อบังคับ และข้อกำหนด' },
+  { value: 'OTHER', label: 'อื่นๆ' },
+]
+const lawCategoryOptions = [
+  { value: 'all', label: 'ทั้งหมด' },
+  ...lawCategories,
+]
 
 const emptyForm = {
   title: '',
+  category: '',
   type: '',
   publishedDate: '',
   fileName: '',
 }
 
-function formatThaiDate(value) {
-  if (!value) {
+function getLawCategoryLabel(category) {
+  return lawCategories.find((option) => option.value === category)?.label ?? category
+}
+
+function getLawTypeLabel(type) {
+  return lawTypes.find((option) => option.value === type)?.label ?? type
+}
+
+function formatBuddhistDate(value) {
+  const date = dayjs(value)
+
+  if (!value || !date.isValid()) {
     return '-'
   }
 
-  return value
+  return `${date.format('DD-MM')}-${date.year() + 543}`
 }
 
 function createLawId() {
@@ -89,13 +127,30 @@ function createLawId() {
 
 function LawsPage({ isAdmin = false }) {
   const [laws, setLaws] = useState(initialLawItems)
+  const [selectedCategory, setSelectedCategory] = useState('all')
+  const [searchTerm, setSearchTerm] = useState('')
   const [dialogMode, setDialogMode] = useState('')
   const [selectedLaw, setSelectedLaw] = useState(null)
   const [form, setForm] = useState(emptyForm)
   const [errors, setErrors] = useState({})
   const sortedLaws = useMemo(
-    () => [...laws].sort((first, second) => first.title.localeCompare(second.title, 'th')),
-    [laws],
+    () => {
+      const normalizedSearchTerm = searchTerm.trim().toLocaleLowerCase('th')
+
+      return laws
+        .filter((law) => selectedCategory === 'all' || law.category === selectedCategory)
+        .filter((law) => {
+          if (!normalizedSearchTerm) {
+            return true
+          }
+
+          return [law.title, getLawCategoryLabel(law.category), getLawTypeLabel(law.type), law.fileName]
+            .filter(Boolean)
+            .some((value) => value.toLocaleLowerCase('th').includes(normalizedSearchTerm))
+        })
+        .sort((first, second) => first.title.localeCompare(second.title, 'th'))
+    },
+    [laws, searchTerm, selectedCategory],
   )
 
   const openCreateDialog = () => {
@@ -109,6 +164,7 @@ function LawsPage({ isAdmin = false }) {
     setSelectedLaw(law)
     setForm({
       title: law.title,
+      category: law.category,
       type: law.type,
       publishedDate: law.publishedDate,
       fileName: law.fileName,
@@ -150,8 +206,12 @@ function LawsPage({ isAdmin = false }) {
       nextErrors.type = 'กรุณาเลือกประเภท'
     }
 
+    if (!form.category) {
+      nextErrors.category = 'กรุณาเลือกหมวดหมู่'
+    }
+
     if (!form.publishedDate) {
-      nextErrors.publishedDate = 'กรุณาเลือกวันที่ประกาศ'
+      nextErrors.publishedDate = 'กรุณาเลือกวันที่'
     }
 
     setErrors(nextErrors)
@@ -201,8 +261,9 @@ function LawsPage({ isAdmin = false }) {
   const downloadLaw = (law) => {
     const content = [
       law.title,
-      `ประเภท: ${law.type}`,
-      `วันที่ประกาศ: ${law.publishedDate}`,
+      `หมวดหมู่: ${getLawCategoryLabel(law.category)}`,
+      `ประเภท: ${getLawTypeLabel(law.type)}`,
+      `วันที่: ${formatBuddhistDate(law.publishedDate)}`,
     ].join('\n')
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
@@ -230,8 +291,11 @@ function LawsPage({ isAdmin = false }) {
         >
           <Stack
             direction={{ xs: 'column', lg: 'row' }}
-            spacing={1.5}
-            sx={{ alignItems: { xs: 'stretch', lg: 'center' } }}
+            spacing={2}
+            sx={{
+              alignItems: { xs: 'stretch', lg: 'center' },
+              justifyContent: 'space-between',
+            }}
           >
             <Box sx={{ minWidth: 0, flex: 1 }}>
               <Typography variant="h5" component="h1">
@@ -242,7 +306,12 @@ function LawsPage({ isAdmin = false }) {
               </Typography>
             </Box>
             {isAdmin ? (
-              <Button variant="contained" startIcon={<AddIcon />} onClick={openCreateDialog}>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={openCreateDialog}
+                sx={{ whiteSpace: 'nowrap' }}
+              >
                 เพิ่มรายการ
               </Button>
             ) : null}
@@ -259,16 +328,63 @@ function LawsPage({ isAdmin = false }) {
           }}
         >
           <Stack spacing={1.5}>
-            {sortedLaws.map((law) => (
-              <LawListItem
-                key={law.id}
-                law={law}
-                isAdmin={isAdmin}
-                onDownload={downloadLaw}
-                onEdit={openEditDialog}
-                onDelete={openDeleteDialog}
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: { xs: 'column', sm: 'row' },
+                gap: 1.5,
+              }}
+            >
+              <TextField
+                select
+                size="small"
+                label="หมวดหมู่"
+                value={selectedCategory}
+                onChange={(event) => setSelectedCategory(event.target.value)}
+                sx={{ width: { xs: '100%', sm: 240 } }}
+              >
+                {lawCategoryOptions.map((category) => (
+                  <MenuItem key={category.value} value={category.value}>
+                    {category.label}
+                  </MenuItem>
+                ))}
+              </TextField>
+              <TextField
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="ค้นหารายการกฎหมาย"
+                size="small"
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon fontSize="small" />
+                      </InputAdornment>
+                    ),
+                  },
+                  htmlInput: {
+                    'aria-label': 'ค้นหารายการกฎหมาย',
+                  },
+                }}
+                sx={{ width: { xs: '100%', sm: 360 } }}
               />
-            ))}
+            </Box>
+            {sortedLaws.length > 0 ? (
+              sortedLaws.map((law) => (
+                <LawListItem
+                  key={law.id}
+                  law={law}
+                  isAdmin={isAdmin}
+                  onDownload={downloadLaw}
+                  onEdit={openEditDialog}
+                  onDelete={openDeleteDialog}
+                />
+              ))
+            ) : (
+              <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
+                ไม่พบรายการกฎหมาย
+              </Typography>
+            )}
           </Stack>
         </Paper>
       </Stack>
@@ -325,7 +441,13 @@ function LawListItem({ law, isAdmin, onDownload, onEdit, onDelete }) {
         </Typography>
         <Stack direction="row" spacing={1.25} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
           <Chip
-            label={law.type}
+            label={getLawCategoryLabel(law.category)}
+            size="small"
+            variant="outlined"
+            color="primary"
+          />
+          <Chip
+            label={getLawTypeLabel(law.type)}
             size="small"
             sx={{
               bgcolor: 'primary.50',
@@ -334,16 +456,30 @@ function LawListItem({ law, isAdmin, onDownload, onEdit, onDelete }) {
             }}
           />
           <Typography variant="body2" color="text.secondary">
-            วันที่ประกาศ {formatThaiDate(law.publishedDate)}
+            วันที่ {formatBuddhistDate(law.publishedDate)}
           </Typography>
         </Stack>
       </Stack>
 
+      <Tooltip title="ดาวน์โหลดไฟล์">
+        <IconButton
+          color="primary"
+          onClick={() => onDownload(law)}
+          aria-label="ดาวน์โหลดไฟล์"
+          sx={{ display: { xs: 'inline-flex', md: 'none' }, justifySelf: 'start' }}
+        >
+          <DownloadIcon />
+        </IconButton>
+      </Tooltip>
       <Button
         variant="contained"
         startIcon={<DownloadIcon />}
         onClick={() => onDownload(law)}
-        sx={{ justifySelf: { xs: 'stretch', md: 'end' }, whiteSpace: 'nowrap' }}
+        sx={{
+          display: { xs: 'none', md: 'inline-flex' },
+          justifySelf: 'end',
+          whiteSpace: 'nowrap',
+        }}
       >
         ดาวน์โหลดไฟล์
       </Button>
@@ -385,6 +521,21 @@ function LawFormDialog({ open, mode, form, errors, onChange, onClose, onSave }) 
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
             <TextField
               select
+              label="หมวดหมู่"
+              value={form.category}
+              error={Boolean(errors.category)}
+              helperText={errors.category}
+              onChange={(event) => onChange('category', event.target.value)}
+              fullWidth
+            >
+              {lawCategories.map((category) => (
+                <MenuItem key={category.value} value={category.value}>
+                  {category.label}
+                </MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              select
               label="ประเภท"
               value={form.type}
               error={Boolean(errors.type)}
@@ -393,23 +544,32 @@ function LawFormDialog({ open, mode, form, errors, onChange, onClose, onSave }) 
               fullWidth
             >
               {lawTypes.map((type) => (
-                <MenuItem key={type} value={type}>
-                  {type}
+                <MenuItem key={type.value} value={type.value}>
+                  {type.label}
                 </MenuItem>
               ))}
             </TextField>
+          </Stack>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+            <LocalizationProvider dateAdapter={AdapterDayjsBuddhist} adapterLocale="th">
+              <DatePicker
+                label="วันที่"
+                value={form.publishedDate ? dayjs(form.publishedDate) : null}
+                format="DD-MM-YYYY"
+                onChange={(nextDate) => {
+                  onChange('publishedDate', nextDate?.isValid() ? nextDate.format('YYYY-MM-DD') : '')
+                }}
+                slotProps={{
+                  textField: {
+                    error: Boolean(errors.publishedDate),
+                    helperText: errors.publishedDate,
+                    fullWidth: true,
+                  },
+                }}
+              />
+            </LocalizationProvider>
             <FileAttachField fileName={form.fileName} onChange={(fileName) => onChange('fileName', fileName)} />
           </Stack>
-          <TextField
-            label="วันที่ประกาศ"
-            type="date"
-            value={form.publishedDate}
-            error={Boolean(errors.publishedDate)}
-            helperText={errors.publishedDate}
-            onChange={(event) => onChange('publishedDate', event.target.value)}
-            slotProps={{ inputLabel: { shrink: true } }}
-            fullWidth
-          />
         </Stack>
       </DialogContent>
       <DialogActions>
