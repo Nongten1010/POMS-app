@@ -1,11 +1,13 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Accordion,
   AccordionDetails,
   AccordionSummary,
+  Alert,
   Box,
   Button,
   Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -14,6 +16,7 @@ import {
   InputAdornment,
   MenuItem,
   Paper,
+  Snackbar,
   Stack,
   TextField,
   Tooltip,
@@ -29,46 +32,20 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import { AdapterDayjsBuddhist } from '@mui/x-date-pickers/AdapterDayjsBuddhist'
 import dayjs from 'dayjs'
 import 'dayjs/locale/th'
-
-const initialFaqItems = [
-  {
-    id: 'faq-001',
-    question: 'ผู้ประกอบการต้องใช้บัญชีใดในการเข้าสู่ระบบ D-POMS?',
-    category: 'OTHER',
-    updatedDate: '2026-06-17',
-    answer:
-      'ผู้ประกอบการสามารถเข้าสู่ระบบด้วยบัญชี i-Industry ที่ใช้กับบริการของกระทรวงอุตสาหกรรม จากนั้นระบบจะแสดงข้อมูลโรงงานและเมนูที่ผู้ใช้งานมีสิทธิ์เข้าถึง',
-  },
-  {
-    id: 'faq-002',
-    question: 'หากระบบ CEMS หรือ BOD/COD Online ส่งข้อมูลไม่ได้ ต้องดำเนินการอย่างไร?',
-    category: 'CEMS',
-    updatedDate: '2026-06-12',
-    answer:
-      'ให้ตรวจสอบสถานะอุปกรณ์และการเชื่อมต่อก่อน หากไม่สามารถส่งข้อมูลได้ต่อเนื่อง ให้ดำเนินการแจ้งแบบที่เกี่ยวข้องตามประเภทของระบบและระยะเวลาที่หยุดส่งข้อมูล',
-  },
-  {
-    id: 'faq-003',
-    question: 'สามารถแก้ไขข้อมูลคำขอเชื่อมต่อหลังส่งแบบฟอร์มแล้วได้หรือไม่?',
-    category: 'WPMS',
-    updatedDate: '2026-06-05',
-    answer:
-      'หากคำขอยังอยู่ในสถานะร่างหรือถูกส่งกลับให้แก้ไข ผู้ใช้งานสามารถปรับปรุงข้อมูลและส่งใหม่ได้ แต่หากอยู่ระหว่างการพิจารณาให้รอผลจากเจ้าหน้าที่ก่อน',
-  },
-  {
-    id: 'faq-004',
-    question: 'รายงานสถิติสามารถดาวน์โหลดเป็นไฟล์ได้หรือไม่?',
-    category: 'OTHER',
-    updatedDate: '2026-05-28',
-    answer:
-      'ในหน้ารายงานที่รองรับการส่งออก ผู้ใช้งานสามารถกดปุ่มส่งออกเพื่อดาวน์โหลดข้อมูลตามสิทธิ์และเงื่อนไขที่เลือกไว้',
-  },
-]
+import {
+  buildContentApiHeaders,
+  getContentApiUrl,
+  readContentApiResponse,
+} from '../utils/contentApi.mjs'
 
 const faqCategories = [
   { value: 'CEMS', label: 'CEMS' },
   { value: 'WPMS', label: 'WPMS' },
   { value: 'OTHER', label: 'อื่นๆ' },
+]
+const faqCategoryOptions = [
+  { value: 'all', label: 'ทั้งหมด' },
+  ...faqCategories,
 ]
 
 const emptyForm = {
@@ -78,12 +55,12 @@ const emptyForm = {
   answer: '',
 }
 
-function createFaqId() {
-  return `faq-${Date.now()}`
-}
-
-function getFaqCategoryLabel(category) {
-  return faqCategories.find((option) => option.value === category)?.label ?? category
+function getFaqCategoryLabel(faq) {
+  return (
+    faq.categoryLabel ||
+    faqCategories.find((option) => option.value === faq.category)?.label ||
+    faq.category
+  )
 }
 
 function formatBuddhistDate(value) {
@@ -96,14 +73,58 @@ function formatBuddhistDate(value) {
   return `${date.format('DD-MM')}-${date.year() + 543}`
 }
 
-function FaqPage({ isAdmin = false }) {
-  const [faqs, setFaqs] = useState(initialFaqItems)
+function FaqPage({ isAdmin = false, accessToken = '' }) {
+  const [faqs, setFaqs] = useState([])
   const [searchText, setSearchText] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [dialogMode, setDialogMode] = useState('')
   const [selectedFaq, setSelectedFaq] = useState(null)
   const [form, setForm] = useState(emptyForm)
   const [errors, setErrors] = useState({})
+  const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [reloadKey, setReloadKey] = useState(0)
+  const [isMutating, setIsMutating] = useState(false)
+  const [mutationError, setMutationError] = useState('')
+  const [successMessage, setSuccessMessage] = useState('')
+
+  useEffect(() => {
+    const controller = new AbortController()
+
+    async function loadFaqs() {
+      setIsLoading(true)
+      setLoadError('')
+
+      try {
+        const result = await fetch(getContentApiUrl('faqs'), {
+          headers: { Accept: 'application/json' },
+          signal: controller.signal,
+        })
+        const payload = await readContentApiResponse(result, 'ไม่สามารถโหลดคำถามที่พบบ่อยได้')
+
+        if (!Array.isArray(payload?.data)) {
+          throw new Error('รูปแบบข้อมูลคำถามที่พบบ่อยไม่ถูกต้อง')
+        }
+
+        if (!controller.signal.aborted) {
+          setFaqs(payload.data)
+        }
+      } catch (error) {
+        if (error?.name !== 'AbortError') {
+          setLoadError(error?.message || 'ไม่สามารถโหลดคำถามที่พบบ่อยได้')
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    loadFaqs()
+
+    return () => controller.abort()
+  }, [reloadKey])
+
   const filteredFaqs = useMemo(() => {
     const normalizedSearchText = searchText.trim().toLocaleLowerCase('th')
 
@@ -111,8 +132,11 @@ function FaqPage({ isAdmin = false }) {
       const matchesCategory = selectedCategory === 'all' || faq.category === selectedCategory
       const matchesSearch =
         !normalizedSearchText ||
-        [faq.question, faq.answer, getFaqCategoryLabel(faq.category)]
-          .some((value) => value.toLocaleLowerCase('th').includes(normalizedSearchText))
+        [faq.question, faq.answer, getFaqCategoryLabel(faq)].some((value) =>
+          String(value ?? '')
+            .toLocaleLowerCase('th')
+            .includes(normalizedSearchText),
+        )
 
       return matchesCategory && matchesSearch
     })
@@ -122,9 +146,10 @@ function FaqPage({ isAdmin = false }) {
     setSelectedFaq(null)
     setForm({
       ...emptyForm,
-      updatedDate: new Date().toISOString().slice(0, 10),
+      updatedDate: dayjs().format('YYYY-MM-DD'),
     })
     setErrors({})
+    setMutationError('')
     setDialogMode('create')
   }
 
@@ -137,18 +162,31 @@ function FaqPage({ isAdmin = false }) {
       answer: faq.answer,
     })
     setErrors({})
+    setMutationError('')
     setDialogMode('edit')
   }
 
   const openDeleteDialog = (faq) => {
     setSelectedFaq(faq)
+    setErrors({})
+    setMutationError('')
     setDialogMode('delete')
   }
 
-  const closeDialog = () => {
+  const resetDialog = () => {
     setDialogMode('')
     setSelectedFaq(null)
+    setForm(emptyForm)
     setErrors({})
+    setMutationError('')
+  }
+
+  const closeDialog = () => {
+    if (isMutating) {
+      return
+    }
+
+    resetDialog()
   }
 
   const updateForm = (name, value) => {
@@ -160,6 +198,7 @@ function FaqPage({ isAdmin = false }) {
       ...current,
       [name]: '',
     }))
+    setMutationError('')
   }
 
   const validateForm = () => {
@@ -167,6 +206,8 @@ function FaqPage({ isAdmin = false }) {
 
     if (!form.question.trim()) {
       nextErrors.question = 'กรุณากรอกคำถาม'
+    } else if (form.question.trim().length > 1000) {
+      nextErrors.question = 'คำถามต้องยาวไม่เกิน 1,000 ตัวอักษร'
     }
 
     if (!form.category) {
@@ -185,41 +226,125 @@ function FaqPage({ isAdmin = false }) {
     return Object.keys(nextErrors).length === 0
   }
 
-  const saveFaq = () => {
-    if (!validateForm()) {
+  const saveFaq = async () => {
+    if (isMutating || !validateForm()) {
       return
     }
 
-    if (dialogMode === 'edit' && selectedFaq) {
-      setFaqs((current) =>
-        current.map((faq) =>
-          faq.id === selectedFaq.id
-            ? {
-                ...faq,
-                ...form,
-              }
-            : faq,
-        ),
-      )
-    } else {
-      setFaqs((current) => [
-        ...current,
-        {
-          id: createFaqId(),
-          ...form,
-        },
-      ])
+    const isEdit = dialogMode === 'edit' && Boolean(selectedFaq)
+
+    if (!accessToken) {
+      setMutationError('กรุณาเข้าสู่ระบบอีกครั้งก่อนบันทึกรายการ')
+      return
     }
 
-    closeDialog()
+    if (isEdit && !selectedFaq?.id) {
+      setMutationError('ไม่พบคำถามที่ต้องการแก้ไข')
+      return
+    }
+
+    const requestBody = {
+      question: form.question.trim(),
+      answer: form.answer.trim(),
+      category: form.category,
+      updatedDate: form.updatedDate,
+    }
+
+    setIsMutating(true)
+    setMutationError('')
+
+    try {
+      const result = await fetch(getContentApiUrl('faqs', isEdit ? selectedFaq.id : ''), {
+        method: isEdit ? 'PUT' : 'POST',
+        headers: buildContentApiHeaders(accessToken, {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        }),
+        body: JSON.stringify(requestBody),
+      })
+      const payload = await readContentApiResponse(
+        result,
+        isEdit ? 'ไม่สามารถแก้ไขคำถามได้' : 'ไม่สามารถเพิ่มคำถามได้',
+      )
+
+      if (
+        !payload?.data ||
+        Array.isArray(payload.data) ||
+        typeof payload.data !== 'object' ||
+        typeof payload.data.id !== 'string'
+      ) {
+        throw new Error('รูปแบบข้อมูลคำถามที่พบบ่อยไม่ถูกต้อง')
+      }
+
+      if (isEdit) {
+        setFaqs((current) =>
+          current.map((faq) => (faq.id === selectedFaq.id ? payload.data : faq)),
+        )
+        setSuccessMessage('แก้ไขคำถามเรียบร้อยแล้ว')
+      } else {
+        setFaqs((current) => [...current, payload.data])
+        setSuccessMessage('เพิ่มคำถามเรียบร้อยแล้ว')
+      }
+
+      resetDialog()
+    } catch (error) {
+      if (error?.details && typeof error.details === 'object') {
+        setErrors((current) => ({ ...current, ...error.details }))
+      }
+      setMutationError(
+        error?.message || (isEdit ? 'ไม่สามารถแก้ไขคำถามได้' : 'ไม่สามารถเพิ่มคำถามได้'),
+      )
+
+      if (error?.status === 404) {
+        setReloadKey((current) => current + 1)
+      }
+    } finally {
+      setIsMutating(false)
+    }
   }
 
-  const deleteFaq = () => {
-    if (selectedFaq) {
-      setFaqs((current) => current.filter((faq) => faq.id !== selectedFaq.id))
+  const deleteFaq = async () => {
+    if (isMutating) {
+      return
     }
 
-    closeDialog()
+    if (!selectedFaq?.id) {
+      setMutationError('ไม่พบคำถามที่ต้องการลบ')
+      return
+    }
+
+    if (!accessToken) {
+      setMutationError('กรุณาเข้าสู่ระบบอีกครั้งก่อนลบรายการ')
+      return
+    }
+
+    const faqId = selectedFaq.id
+    setIsMutating(true)
+    setMutationError('')
+
+    try {
+      const result = await fetch(getContentApiUrl('faqs', faqId), {
+        method: 'DELETE',
+        headers: buildContentApiHeaders(accessToken, { Accept: 'application/json' }),
+      })
+      const payload = await readContentApiResponse(result, 'ไม่สามารถลบคำถามได้')
+
+      if (payload?.data?.deleted !== true || payload?.data?.id !== faqId) {
+        throw new Error('ระบบไม่ยืนยันการลบคำถาม')
+      }
+
+      setFaqs((current) => current.filter((faq) => faq.id !== faqId))
+      setSuccessMessage('ลบคำถามเรียบร้อยแล้ว')
+      resetDialog()
+    } catch (error) {
+      setMutationError(error?.message || 'ไม่สามารถลบคำถามได้')
+
+      if (error?.status === 404) {
+        setReloadKey((current) => current + 1)
+      }
+    } finally {
+      setIsMutating(false)
+    }
   }
 
   return (
@@ -248,7 +373,12 @@ function FaqPage({ isAdmin = false }) {
               </Typography>
             </Box>
             {isAdmin ? (
-              <Button variant="contained" startIcon={<AddIcon />} onClick={openCreateDialog}>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={openCreateDialog}
+                disabled={isLoading || Boolean(loadError)}
+              >
                 เพิ่มคำถาม
               </Button>
             ) : null}
@@ -278,10 +408,10 @@ function FaqPage({ isAdmin = false }) {
                 label="หมวดหมู่"
                 value={selectedCategory}
                 onChange={(event) => setSelectedCategory(event.target.value)}
+                disabled={isLoading}
                 sx={{ width: { xs: '100%', sm: 240 } }}
               >
-                <MenuItem value="all">ทั้งหมด</MenuItem>
-                {faqCategories.map((category) => (
+                {faqCategoryOptions.map((category) => (
                   <MenuItem key={category.value} value={category.value}>
                     {category.label}
                   </MenuItem>
@@ -292,6 +422,7 @@ function FaqPage({ isAdmin = false }) {
                 placeholder="ค้นหาคำถามหรือคำตอบ"
                 value={searchText}
                 onChange={(event) => setSearchText(event.target.value)}
+                disabled={isLoading}
                 slotProps={{
                   input: {
                     startAdornment: (
@@ -308,8 +439,38 @@ function FaqPage({ isAdmin = false }) {
               />
             </Box>
 
-            <Stack spacing={1.5}>
-              {filteredFaqs.length > 0 ? (
+            <Stack spacing={1.5} aria-busy={isLoading}>
+              {isLoading ? (
+                <Box
+                  role="status"
+                  sx={{
+                    p: 3,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 1.5,
+                    color: 'text.secondary',
+                  }}
+                >
+                  <CircularProgress size={24} />
+                  <Typography color="text.secondary">กำลังโหลดคำถามที่พบบ่อย...</Typography>
+                </Box>
+              ) : loadError ? (
+                <Alert
+                  severity="error"
+                  action={
+                    <Button
+                      color="inherit"
+                      size="small"
+                      onClick={() => setReloadKey((current) => current + 1)}
+                    >
+                      ลองอีกครั้ง
+                    </Button>
+                  }
+                >
+                  {loadError}
+                </Alert>
+              ) : filteredFaqs.length > 0 ? (
                 filteredFaqs.map((faq, index) => (
                   <FaqListItem
                     key={faq.id}
@@ -344,6 +505,8 @@ function FaqPage({ isAdmin = false }) {
         mode={dialogMode}
         form={form}
         errors={errors}
+        requestError={mutationError}
+        busy={isMutating}
         onChange={updateForm}
         onClose={closeDialog}
         onSave={saveFaq}
@@ -352,17 +515,49 @@ function FaqPage({ isAdmin = false }) {
       <Dialog open={dialogMode === 'delete'} onClose={closeDialog} fullWidth maxWidth="xs">
         <DialogTitle>ลบคำถาม</DialogTitle>
         <DialogContent>
-          <Typography color="text.secondary">
-            ต้องการลบคำถาม “{selectedFaq?.question}” หรือไม่
-          </Typography>
+          <Stack spacing={2}>
+            <Typography color="text.secondary">
+              ต้องการลบคำถาม “{selectedFaq?.question}” หรือไม่
+            </Typography>
+            {mutationError ? <Alert severity="error">{mutationError}</Alert> : null}
+          </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={closeDialog}>ยกเลิก</Button>
-          <Button color="error" variant="contained" onClick={deleteFaq}>
-            ลบ
+          <Button onClick={closeDialog} disabled={isMutating}>
+            ยกเลิก
+          </Button>
+          <Button color="error" variant="contained" onClick={deleteFaq} disabled={isMutating}>
+            {isMutating ? (
+              <>
+                <CircularProgress size={16} color="inherit" sx={{ mr: 1 }} />
+                กำลังลบ...
+              </>
+            ) : (
+              'ลบ'
+            )}
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Snackbar
+        open={Boolean(successMessage)}
+        autoHideDuration={4000}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        onClose={(_, reason) => {
+          if (reason !== 'clickaway') {
+            setSuccessMessage('')
+          }
+        }}
+      >
+        <Alert
+          severity="success"
+          variant="filled"
+          onClose={() => setSuccessMessage('')}
+          sx={{ width: '100%' }}
+        >
+          {successMessage}
+        </Alert>
+      </Snackbar>
     </Box>
   )
 }
@@ -422,7 +617,7 @@ function FaqListItem({ faq, isAdmin, defaultExpanded, onEdit, onDelete }) {
           </Typography>
           <Stack direction="row" spacing={1.25} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
             <Chip
-              label={getFaqCategoryLabel(faq.category)}
+              label={getFaqCategoryLabel(faq)}
               size="small"
               sx={{
                 bgcolor: 'primary.50',
@@ -451,12 +646,20 @@ function FaqListItem({ faq, isAdmin, defaultExpanded, onEdit, onDelete }) {
           {isAdmin ? (
             <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end', pt: 1.5 }}>
               <Tooltip title="แก้ไข">
-                <IconButton color="primary" onClick={() => onEdit(faq)}>
+                <IconButton
+                  color="primary"
+                  aria-label={`แก้ไขคำถาม ${faq.question}`}
+                  onClick={() => onEdit(faq)}
+                >
                   <EditIcon />
                 </IconButton>
               </Tooltip>
               <Tooltip title="ลบ">
-                <IconButton color="error" onClick={() => onDelete(faq)}>
+                <IconButton
+                  color="error"
+                  aria-label={`ลบคำถาม ${faq.question}`}
+                  onClick={() => onDelete(faq)}
+                >
                   <DeleteIcon />
                 </IconButton>
               </Tooltip>
@@ -468,18 +671,38 @@ function FaqListItem({ faq, isAdmin, defaultExpanded, onEdit, onDelete }) {
   )
 }
 
-function FaqFormDialog({ open, mode, form, errors, onChange, onClose, onSave }) {
+function FaqFormDialog({
+  open,
+  mode,
+  form,
+  errors,
+  requestError,
+  busy,
+  onChange,
+  onClose,
+  onSave,
+}) {
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
+    <Dialog
+      open={open}
+      onClose={onClose}
+      disableEscapeKeyDown={busy}
+      fullWidth
+      maxWidth="sm"
+      aria-busy={busy}
+    >
       <DialogTitle>{mode === 'edit' ? 'แก้ไขคำถาม' : 'เพิ่มคำถาม'}</DialogTitle>
       <DialogContent>
         <Stack spacing={2.25} sx={{ pt: 1 }}>
+          {requestError ? <Alert severity="error">{requestError}</Alert> : null}
           <TextField
             label="คำถาม"
             value={form.question}
             error={Boolean(errors.question)}
             helperText={errors.question}
             onChange={(event) => onChange('question', event.target.value)}
+            disabled={busy}
+            slotProps={{ htmlInput: { maxLength: 1000 } }}
             fullWidth
           />
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
@@ -490,6 +713,7 @@ function FaqFormDialog({ open, mode, form, errors, onChange, onClose, onSave }) 
               error={Boolean(errors.category)}
               helperText={errors.category}
               onChange={(event) => onChange('category', event.target.value)}
+              disabled={busy}
               fullWidth
             >
               {faqCategories.map((category) => (
@@ -503,6 +727,7 @@ function FaqFormDialog({ open, mode, form, errors, onChange, onClose, onSave }) 
                 label="วันที่อัปเดต"
                 value={form.updatedDate ? dayjs(form.updatedDate) : null}
                 format="DD-MM-YYYY"
+                disabled={busy}
                 onChange={(nextDate) => {
                   onChange('updatedDate', nextDate?.isValid() ? nextDate.format('YYYY-MM-DD') : '')
                 }}
@@ -522,6 +747,7 @@ function FaqFormDialog({ open, mode, form, errors, onChange, onClose, onSave }) 
             error={Boolean(errors.answer)}
             helperText={errors.answer}
             onChange={(event) => onChange('answer', event.target.value)}
+            disabled={busy}
             fullWidth
             multiline
             minRows={5}
@@ -529,9 +755,18 @@ function FaqFormDialog({ open, mode, form, errors, onChange, onClose, onSave }) 
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>ยกเลิก</Button>
-        <Button variant="contained" onClick={onSave}>
-          บันทึก
+        <Button onClick={onClose} disabled={busy}>
+          ยกเลิก
+        </Button>
+        <Button variant="contained" onClick={onSave} disabled={busy}>
+          {busy ? (
+            <>
+              <CircularProgress size={16} color="inherit" sx={{ mr: 1 }} />
+              กำลังบันทึก...
+            </>
+          ) : (
+            'บันทึก'
+          )}
         </Button>
       </DialogActions>
     </Dialog>

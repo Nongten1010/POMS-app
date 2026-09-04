@@ -299,9 +299,15 @@ function App() {
         ) : visibleSelectedMenu === 'feedback' ? (
           <FeedbackPage />
         ) : visibleSelectedMenu === 'laws' ? (
-          <LawsPage isAdmin={roleCode === 'admin' || activePermissions?.laws?.edit === true} />
+          <LawsPage
+            accessToken={accessToken}
+            isAdmin={roleCode === 'admin' || activePermissions?.laws?.edit === true}
+          />
         ) : visibleSelectedMenu === 'faq' ? (
-          <FaqPage isAdmin={roleCode === 'admin' || activePermissions?.faq?.edit === true} />
+          <FaqPage
+            accessToken={accessToken}
+            isAdmin={roleCode === 'admin' || activePermissions?.faq?.edit === true}
+          />
         ) : visibleSelectedMenu === 'chat' ? (
           <ChatPage isStaff={userType === 'officer' || roleCode === 'admin' || activePermissions?.chat?.edit === true} />
         ) : visibleSelectedMenu === 'eligible-factories' ? (

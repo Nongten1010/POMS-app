@@ -1,8 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
+  Alert,
   Box,
   Button,
   Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -11,6 +13,7 @@ import {
   InputAdornment,
   MenuItem,
   Paper,
+  Snackbar,
   Stack,
   TextField,
   Tooltip,
@@ -27,57 +30,14 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import { AdapterDayjsBuddhist } from '@mui/x-date-pickers/AdapterDayjsBuddhist'
 import dayjs from 'dayjs'
 import 'dayjs/locale/th'
+import {
+  buildContentApiHeaders,
+  getContentApiUrl,
+  readContentApiResponse,
+  resolveContentDownloadUrl,
+} from '../utils/contentApi.mjs'
 
-const initialLawItems = [
-  {
-    id: 'law-001',
-    title: 'ประกาศกระทรวงอุตสาหกรรม เรื่อง การติดตั้งเครื่องมือหรือเครื่องอุปกรณ์พิเศษเพื่อตรวจวัดมลพิษจากสถานปล่องโรงงาน',
-    category: 'CEMS',
-    type: 'RULE_AND_ANNOUNCEMENT',
-    publishedDate: '2025-01-15',
-    fileName: 'law-001.pdf',
-  },
-  {
-    id: 'law-002',
-    title: 'ประกาศกรมโรงงานอุตสาหกรรม เรื่อง หลักเกณฑ์การรายงานผลการตรวจวัดมลพิษทางน้ำแบบออนไลน์',
-    category: 'WPMS',
-    type: 'RULE_AND_ANNOUNCEMENT',
-    publishedDate: '2025-03-22',
-    fileName: 'law-002.pdf',
-  },
-  {
-    id: 'law-003',
-    title: 'พระราชบัญญัติโรงงาน พ.ศ. 2535 และที่แก้ไขเพิ่มเติม',
-    category: 'OTHER',
-    type: 'OTHER',
-    publishedDate: '1992-04-02',
-    fileName: 'law-003.pdf',
-  },
-  {
-    id: 'law-004',
-    title: 'กฎกระทรวงกำหนดมาตรฐานควบคุมการระบายน้ำทิ้งจากโรงงาน',
-    category: 'WPMS',
-    type: 'MINISTERIAL_REGULATION',
-    publishedDate: '2024-11-01',
-    fileName: 'law-004.pdf',
-  },
-  {
-    id: 'law-005',
-    title: 'ประกาศกรมโรงงานอุตสาหกรรม เรื่อง การทวนสอบและสอบเทียบระบบ CEMS',
-    category: 'CEMS',
-    type: 'RULE_AND_ANNOUNCEMENT',
-    publishedDate: '2025-07-09',
-    fileName: 'law-005.pdf',
-  },
-  {
-    id: 'law-006',
-    title: 'แนวทางปฏิบัติการแจ้งเหตุขัดข้องของเครื่องมือหรือเครื่องอุปกรณ์พิเศษ',
-    category: 'OTHER',
-    type: 'REGULATION_REQUIREMENT',
-    publishedDate: '2025-08-30',
-    fileName: 'law-006.pdf',
-  },
-]
+const MAX_PDF_SIZE = 10 * 1024 * 1024
 
 const lawCategories = [
   { value: 'CEMS', label: 'CEMS' },
@@ -100,15 +60,15 @@ const emptyForm = {
   category: '',
   type: '',
   publishedDate: '',
-  fileName: '',
+  file: null,
 }
 
-function getLawCategoryLabel(category) {
-  return lawCategories.find((option) => option.value === category)?.label ?? category
+function getLawCategoryLabel(category, categoryLabel = '') {
+  return categoryLabel || lawCategories.find((option) => option.value === category)?.label || category
 }
 
-function getLawTypeLabel(type) {
-  return lawTypes.find((option) => option.value === type)?.label ?? type
+function getLawTypeLabel(type, typeLabel = '') {
+  return typeLabel || lawTypes.find((option) => option.value === type)?.label || type
 }
 
 function formatBuddhistDate(value) {
@@ -121,18 +81,98 @@ function formatBuddhistDate(value) {
   return `${date.format('DD-MM')}-${date.year() + 543}`
 }
 
-function createLawId() {
-  return `law-${Date.now()}`
+function getFileValidationMessage(file) {
+  if (!file) {
+    return ''
+  }
+
+  if (file.type !== 'application/pdf' || !file.name.toLocaleLowerCase().endsWith('.pdf')) {
+    return 'กรุณาเลือกไฟล์ PDF เท่านั้น'
+  }
+
+  if (file.size < 1) {
+    return 'ไฟล์ PDF ต้องไม่เป็นไฟล์ว่าง'
+  }
+
+  if (file.size > MAX_PDF_SIZE) {
+    return 'ไฟล์ PDF ต้องมีขนาดไม่เกิน 10 MB'
+  }
+
+  return ''
 }
 
-function LawsPage({ isAdmin = false }) {
-  const [laws, setLaws] = useState(initialLawItems)
+function buildLawFormData(form) {
+  const body = new FormData()
+
+  body.append('title', form.title.trim())
+  body.append('category', form.category)
+  body.append('type', form.type)
+  body.append('publishedDate', form.publishedDate)
+
+  if (form.file) {
+    body.append('file', form.file)
+  }
+
+  return body
+}
+
+function LawsPage({ isAdmin = false, accessToken = '' }) {
+  const [laws, setLaws] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [loadRequestKey, setLoadRequestKey] = useState(0)
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [dialogMode, setDialogMode] = useState('')
   const [selectedLaw, setSelectedLaw] = useState(null)
   const [form, setForm] = useState(emptyForm)
   const [errors, setErrors] = useState({})
+  const [operationError, setOperationError] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [successMessage, setSuccessMessage] = useState('')
+
+  useEffect(() => {
+    const controller = new AbortController()
+    let isActive = true
+
+    const loadLaws = async () => {
+      setIsLoading(true)
+      setLoadError('')
+
+      try {
+        const result = await fetch(getContentApiUrl('laws'), {
+          headers: { Accept: 'application/json' },
+          signal: controller.signal,
+        })
+        const payload = await readContentApiResponse(result, 'ไม่สามารถโหลดรายการกฎหมายได้')
+
+        if (!Array.isArray(payload?.data)) {
+          throw new Error('รูปแบบข้อมูลรายการกฎหมายไม่ถูกต้อง')
+        }
+
+        if (isActive) {
+          setLaws(payload.data)
+        }
+      } catch (error) {
+        if (isActive && error?.name !== 'AbortError') {
+          setLoadError(error?.message || 'ไม่สามารถโหลดรายการกฎหมายได้')
+        }
+      } finally {
+        if (isActive) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    loadLaws()
+
+    return () => {
+      isActive = false
+      controller.abort()
+    }
+  }, [loadRequestKey])
+
   const sortedLaws = useMemo(
     () => {
       const normalizedSearchTerm = searchTerm.trim().toLocaleLowerCase('th')
@@ -144,11 +184,16 @@ function LawsPage({ isAdmin = false }) {
             return true
           }
 
-          return [law.title, getLawCategoryLabel(law.category), getLawTypeLabel(law.type), law.fileName]
+          return [
+            law.title,
+            getLawCategoryLabel(law.category, law.categoryLabel),
+            getLawTypeLabel(law.type, law.typeLabel),
+            law.file?.fileName,
+          ]
             .filter(Boolean)
-            .some((value) => value.toLocaleLowerCase('th').includes(normalizedSearchTerm))
+            .some((value) => String(value).toLocaleLowerCase('th').includes(normalizedSearchTerm))
         })
-        .sort((first, second) => first.title.localeCompare(second.title, 'th'))
+        .sort((first, second) => String(first.title).localeCompare(String(second.title), 'th'))
     },
     [laws, searchTerm, selectedCategory],
   )
@@ -157,6 +202,7 @@ function LawsPage({ isAdmin = false }) {
     setSelectedLaw(null)
     setForm(emptyForm)
     setErrors({})
+    setOperationError('')
     setDialogMode('create')
   }
 
@@ -167,21 +213,32 @@ function LawsPage({ isAdmin = false }) {
       category: law.category,
       type: law.type,
       publishedDate: law.publishedDate,
-      fileName: law.fileName,
+      file: null,
     })
     setErrors({})
+    setOperationError('')
     setDialogMode('edit')
   }
 
   const openDeleteDialog = (law) => {
     setSelectedLaw(law)
+    setErrors({})
+    setOperationError('')
     setDialogMode('delete')
   }
 
-  const closeDialog = () => {
+  const resetDialog = () => {
     setDialogMode('')
     setSelectedLaw(null)
+    setForm(emptyForm)
     setErrors({})
+    setOperationError('')
+  }
+
+  const closeDialog = () => {
+    if (!isSaving && !isDeleting) {
+      resetDialog()
+    }
   }
 
   const updateForm = (name, value) => {
@@ -193,6 +250,7 @@ function LawsPage({ isAdmin = false }) {
       ...current,
       [name]: '',
     }))
+    setOperationError('')
   }
 
   const validateForm = () => {
@@ -200,6 +258,8 @@ function LawsPage({ isAdmin = false }) {
 
     if (!form.title.trim()) {
       nextErrors.title = 'กรุณากรอกชื่อรายการ'
+    } else if (form.title.trim().length > 500) {
+      nextErrors.title = 'ชื่อรายการต้องยาวไม่เกิน 500 ตัวอักษร'
     }
 
     if (!form.type) {
@@ -214,67 +274,124 @@ function LawsPage({ isAdmin = false }) {
       nextErrors.publishedDate = 'กรุณาเลือกวันที่'
     }
 
+    if (dialogMode === 'create' && !form.file) {
+      nextErrors.file = 'กรุณาแนบไฟล์ PDF'
+    } else {
+      const fileError = getFileValidationMessage(form.file)
+
+      if (fileError) {
+        nextErrors.file = fileError
+      }
+    }
+
     setErrors(nextErrors)
     return Object.keys(nextErrors).length === 0
   }
 
-  const saveLaw = () => {
-    if (!validateForm()) {
+  const saveLaw = async () => {
+    if (isSaving || isDeleting || !validateForm()) {
       return
     }
 
-    if (dialogMode === 'edit' && selectedLaw) {
-      setLaws((current) =>
-        current.map((law) =>
-          law.id === selectedLaw.id
-            ? {
-                ...law,
-                ...form,
-                fileName: form.fileName || law.fileName,
-              }
-            : law,
-        ),
+    if (!accessToken) {
+      setOperationError('กรุณาเข้าสู่ระบบอีกครั้งก่อนบันทึกรายการ')
+      return
+    }
+
+    const isEdit = dialogMode === 'edit'
+
+    if (isEdit && !selectedLaw?.id) {
+      setOperationError('ไม่พบรายการกฎหมายที่ต้องการแก้ไข')
+      return
+    }
+
+    setIsSaving(true)
+    setOperationError('')
+
+    try {
+      const result = await fetch(getContentApiUrl('laws', isEdit ? selectedLaw.id : ''), {
+        method: isEdit ? 'PUT' : 'POST',
+        headers: buildContentApiHeaders(accessToken, { Accept: 'application/json' }),
+        body: buildLawFormData(form),
+      })
+      const payload = await readContentApiResponse(
+        result,
+        isEdit ? 'ไม่สามารถแก้ไขรายการกฎหมายได้' : 'ไม่สามารถเพิ่มรายการกฎหมายได้',
       )
-    } else {
-      const id = createLawId()
-      setLaws((current) => [
-        ...current,
-        {
-          id,
-          ...form,
-          fileName: form.fileName || `${id}.pdf`,
-        },
-      ])
-    }
+      const savedLaw = payload?.data
 
-    closeDialog()
+      if (!savedLaw?.id) {
+        throw new Error('รูปแบบข้อมูลรายการกฎหมายไม่ถูกต้อง')
+      }
+
+      if (isEdit) {
+        setLaws((current) =>
+          current.map((law) => (law.id === selectedLaw.id ? savedLaw : law)),
+        )
+      } else {
+        setLaws((current) => [...current, savedLaw])
+      }
+
+      setSuccessMessage(isEdit ? 'แก้ไขรายการกฎหมายสำเร็จ' : 'เพิ่มรายการกฎหมายสำเร็จ')
+      resetDialog()
+    } catch (error) {
+      setOperationError(error?.message || 'ไม่สามารถบันทึกรายการกฎหมายได้')
+
+      if (error?.details && typeof error.details === 'object') {
+        setErrors((current) => ({ ...current, ...error.details }))
+      }
+
+      if (error?.status === 404) {
+        setLoadRequestKey((current) => current + 1)
+      }
+    } finally {
+      setIsSaving(false)
+    }
   }
 
-  const deleteLaw = () => {
-    if (selectedLaw) {
-      setLaws((current) => current.filter((law) => law.id !== selectedLaw.id))
+  const deleteLaw = async () => {
+    if (isDeleting || isSaving) {
+      return
     }
 
-    closeDialog()
-  }
+    if (!selectedLaw?.id) {
+      setOperationError('ไม่พบรายการกฎหมายที่ต้องการลบ')
+      return
+    }
 
-  const downloadLaw = (law) => {
-    const content = [
-      law.title,
-      `หมวดหมู่: ${getLawCategoryLabel(law.category)}`,
-      `ประเภท: ${getLawTypeLabel(law.type)}`,
-      `วันที่: ${formatBuddhistDate(law.publishedDate)}`,
-    ].join('\n')
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
+    if (!accessToken) {
+      setOperationError('กรุณาเข้าสู่ระบบอีกครั้งก่อนลบรายการ')
+      return
+    }
 
-    link.href = url
-    link.download = law.fileName || `${law.id}.txt`
-    document.body.append(link)
-    link.click()
-    link.remove()
-    URL.revokeObjectURL(url)
+    const lawId = selectedLaw.id
+    setIsDeleting(true)
+    setOperationError('')
+
+    try {
+      const result = await fetch(getContentApiUrl('laws', lawId), {
+        method: 'DELETE',
+        headers: buildContentApiHeaders(accessToken, { Accept: 'application/json' }),
+      })
+      const payload = await readContentApiResponse(result, 'ไม่สามารถลบรายการกฎหมายได้')
+      const deletion = payload?.data
+
+      if (deletion?.deleted !== true || deletion.id !== lawId) {
+        throw new Error('ไม่ได้รับผลยืนยันการลบรายการกฎหมาย')
+      }
+
+      setLaws((current) => current.filter((law) => law.id !== lawId))
+      setSuccessMessage('ลบรายการกฎหมายสำเร็จ')
+      resetDialog()
+    } catch (error) {
+      setOperationError(error?.message || 'ไม่สามารถลบรายการกฎหมายได้')
+
+      if (error?.status === 404) {
+        setLoadRequestKey((current) => current + 1)
+      }
+    } finally {
+      setIsDeleting(false)
+    }
   }
 
   return (
@@ -310,6 +427,7 @@ function LawsPage({ isAdmin = false }) {
                 variant="contained"
                 startIcon={<AddIcon />}
                 onClick={openCreateDialog}
+                disabled={isLoading}
                 sx={{ whiteSpace: 'nowrap' }}
               >
                 เพิ่มรายการ
@@ -369,13 +487,38 @@ function LawsPage({ isAdmin = false }) {
                 sx={{ width: { xs: '100%', sm: 360 } }}
               />
             </Box>
-            {sortedLaws.length > 0 ? (
+            {isLoading ? (
+              <Stack
+                role="status"
+                aria-live="polite"
+                direction="row"
+                spacing={1.5}
+                sx={{ alignItems: 'center', justifyContent: 'center', py: 4 }}
+              >
+                <CircularProgress size={24} />
+                <Typography color="text.secondary">กำลังโหลดรายการกฎหมาย...</Typography>
+              </Stack>
+            ) : loadError ? (
+              <Alert
+                severity="error"
+                action={(
+                  <Button
+                    color="inherit"
+                    size="small"
+                    onClick={() => setLoadRequestKey((current) => current + 1)}
+                  >
+                    ลองใหม่
+                  </Button>
+                )}
+              >
+                {loadError}
+              </Alert>
+            ) : sortedLaws.length > 0 ? (
               sortedLaws.map((law) => (
                 <LawListItem
                   key={law.id}
                   law={law}
                   isAdmin={isAdmin}
-                  onDownload={downloadLaw}
                   onEdit={openEditDialog}
                   onDelete={openDeleteDialog}
                 />
@@ -394,6 +537,9 @@ function LawsPage({ isAdmin = false }) {
         mode={dialogMode}
         form={form}
         errors={errors}
+        existingFileName={selectedLaw?.file?.fileName || ''}
+        isSaving={isSaving}
+        operationError={operationError}
         onChange={updateForm}
         onClose={closeDialog}
         onSave={saveLaw}
@@ -402,22 +548,50 @@ function LawsPage({ isAdmin = false }) {
       <Dialog open={dialogMode === 'delete'} onClose={closeDialog} fullWidth maxWidth="xs">
         <DialogTitle>ลบรายการกฎหมาย</DialogTitle>
         <DialogContent>
-          <Typography color="text.secondary">
-            ต้องการลบรายการ “{selectedLaw?.title}” หรือไม่
-          </Typography>
+          <Stack spacing={2}>
+            <Typography color="text.secondary">
+              ต้องการลบรายการ “{selectedLaw?.title}” หรือไม่
+            </Typography>
+            {operationError ? <Alert severity="error">{operationError}</Alert> : null}
+          </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={closeDialog}>ยกเลิก</Button>
-          <Button color="error" variant="contained" onClick={deleteLaw}>
-            ลบ
+          <Button onClick={closeDialog} disabled={isDeleting}>ยกเลิก</Button>
+          <Button
+            color="error"
+            variant="contained"
+            onClick={deleteLaw}
+            disabled={isDeleting}
+            startIcon={isDeleting ? <CircularProgress size={18} color="inherit" /> : <DeleteIcon />}
+          >
+            {isDeleting ? 'กำลังลบ...' : 'ลบ'}
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Snackbar
+        open={Boolean(successMessage)}
+        autoHideDuration={4000}
+        onClose={() => setSuccessMessage('')}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          severity="success"
+          variant="filled"
+          onClose={() => setSuccessMessage('')}
+          sx={{ width: '100%' }}
+        >
+          {successMessage}
+        </Alert>
+      </Snackbar>
     </Box>
   )
 }
 
-function LawListItem({ law, isAdmin, onDownload, onEdit, onDelete }) {
+function LawListItem({ law, isAdmin, onEdit, onDelete }) {
+  const downloadUrl = resolveContentDownloadUrl(law.file?.downloadUrl)
+  const downloadFileName = law.file?.fileName || undefined
+
   return (
     <Box
       sx={{
@@ -441,13 +615,13 @@ function LawListItem({ law, isAdmin, onDownload, onEdit, onDelete }) {
         </Typography>
         <Stack direction="row" spacing={1.25} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
           <Chip
-            label={getLawCategoryLabel(law.category)}
+            label={getLawCategoryLabel(law.category, law.categoryLabel)}
             size="small"
             variant="outlined"
             color="primary"
           />
           <Chip
-            label={getLawTypeLabel(law.type)}
+            label={getLawTypeLabel(law.type, law.typeLabel)}
             size="small"
             sx={{
               bgcolor: 'primary.50',
@@ -463,18 +637,24 @@ function LawListItem({ law, isAdmin, onDownload, onEdit, onDelete }) {
 
       <Tooltip title="ดาวน์โหลดไฟล์">
         <IconButton
+          component="a"
+          href={downloadUrl || undefined}
+          download={downloadFileName}
           color="primary"
-          onClick={() => onDownload(law)}
           aria-label="ดาวน์โหลดไฟล์"
+          disabled={!downloadUrl}
           sx={{ display: { xs: 'inline-flex', md: 'none' }, justifySelf: 'start' }}
         >
           <DownloadIcon />
         </IconButton>
       </Tooltip>
       <Button
+        component="a"
+        href={downloadUrl || undefined}
+        download={downloadFileName}
         variant="contained"
         startIcon={<DownloadIcon />}
-        onClick={() => onDownload(law)}
+        disabled={!downloadUrl}
         sx={{
           display: { xs: 'none', md: 'inline-flex' },
           justifySelf: 'end',
@@ -487,12 +667,20 @@ function LawListItem({ law, isAdmin, onDownload, onEdit, onDelete }) {
       {isAdmin ? (
         <Stack direction="row" spacing={0.75} sx={{ justifySelf: { xs: 'start', md: 'end' } }}>
           <Tooltip title="แก้ไข">
-            <IconButton color="primary" onClick={() => onEdit(law)}>
+            <IconButton
+              color="primary"
+              onClick={() => onEdit(law)}
+              aria-label={`แก้ไข ${law.title}`}
+            >
               <EditIcon />
             </IconButton>
           </Tooltip>
           <Tooltip title="ลบ">
-            <IconButton color="error" onClick={() => onDelete(law)}>
+            <IconButton
+              color="error"
+              onClick={() => onDelete(law)}
+              aria-label={`ลบ ${law.title}`}
+            >
               <DeleteIcon />
             </IconButton>
           </Tooltip>
@@ -502,18 +690,38 @@ function LawListItem({ law, isAdmin, onDownload, onEdit, onDelete }) {
   )
 }
 
-function LawFormDialog({ open, mode, form, errors, onChange, onClose, onSave }) {
+function LawFormDialog({
+  open,
+  mode,
+  form,
+  errors,
+  existingFileName,
+  isSaving,
+  operationError,
+  onChange,
+  onClose,
+  onSave,
+}) {
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
+    <Dialog
+      open={open}
+      onClose={onClose}
+      disableEscapeKeyDown={isSaving}
+      fullWidth
+      maxWidth="sm"
+    >
       <DialogTitle>{mode === 'edit' ? 'แก้ไขรายการกฎหมาย' : 'เพิ่มรายการกฎหมาย'}</DialogTitle>
       <DialogContent>
         <Stack spacing={2.25} sx={{ pt: 1 }}>
+          {operationError ? <Alert severity="error">{operationError}</Alert> : null}
           <TextField
             label="ชื่อรายการ"
             value={form.title}
             error={Boolean(errors.title)}
             helperText={errors.title}
             onChange={(event) => onChange('title', event.target.value)}
+            disabled={isSaving}
+            slotProps={{ htmlInput: { maxLength: 500 } }}
             fullWidth
             multiline
             minRows={2}
@@ -526,6 +734,7 @@ function LawFormDialog({ open, mode, form, errors, onChange, onClose, onSave }) 
               error={Boolean(errors.category)}
               helperText={errors.category}
               onChange={(event) => onChange('category', event.target.value)}
+              disabled={isSaving}
               fullWidth
             >
               {lawCategories.map((category) => (
@@ -541,6 +750,7 @@ function LawFormDialog({ open, mode, form, errors, onChange, onClose, onSave }) 
               error={Boolean(errors.type)}
               helperText={errors.type}
               onChange={(event) => onChange('type', event.target.value)}
+              disabled={isSaving}
               fullWidth
             >
               {lawTypes.map((type) => (
@@ -556,6 +766,7 @@ function LawFormDialog({ open, mode, form, errors, onChange, onClose, onSave }) 
                 label="วันที่"
                 value={form.publishedDate ? dayjs(form.publishedDate) : null}
                 format="DD-MM-YYYY"
+                disabled={isSaving}
                 onChange={(nextDate) => {
                   onChange('publishedDate', nextDate?.isValid() ? nextDate.format('YYYY-MM-DD') : '')
                 }}
@@ -568,52 +779,87 @@ function LawFormDialog({ open, mode, form, errors, onChange, onClose, onSave }) 
                 }}
               />
             </LocalizationProvider>
-            <FileAttachField fileName={form.fileName} onChange={(fileName) => onChange('fileName', fileName)} />
+            <FileAttachField
+              file={form.file}
+              existingFileName={existingFileName}
+              error={errors.file}
+              disabled={isSaving}
+              onChange={(file) => onChange('file', file)}
+            />
           </Stack>
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>ยกเลิก</Button>
-        <Button variant="contained" onClick={onSave}>
-          บันทึก
+        <Button onClick={onClose} disabled={isSaving}>ยกเลิก</Button>
+        <Button
+          variant="contained"
+          onClick={onSave}
+          disabled={isSaving}
+          startIcon={isSaving ? <CircularProgress size={18} color="inherit" /> : null}
+        >
+          {isSaving ? 'กำลังบันทึก...' : 'บันทึก'}
         </Button>
       </DialogActions>
     </Dialog>
   )
 }
 
-function FileAttachField({ fileName, onChange }) {
+function FileAttachField({ file, existingFileName, error, disabled, onChange }) {
+  const fileName = file?.name || existingFileName
+  const helperText = error
+    || (existingFileName && !file
+      ? 'ไม่เลือกไฟล์ใหม่จะใช้ไฟล์เดิม'
+      : 'รองรับไฟล์ PDF ขนาดไม่เกิน 10 MB')
+
   return (
-    <Button
-      fullWidth
-      variant="outlined"
-      component="label"
-      startIcon={<AttachFileIcon />}
-      sx={{
-        minHeight: 56,
-        justifyContent: 'flex-start',
-        color: fileName ? 'neutral.900' : 'neutral.600',
-        borderColor: 'neutral.300',
-        overflow: 'hidden',
-      }}
-    >
-      <Box
-        component="span"
+    <Stack spacing={0.5} sx={{ width: '100%', minWidth: 0 }}>
+      <Button
+        fullWidth
+        variant="outlined"
+        component="label"
+        disabled={disabled}
+        startIcon={<AttachFileIcon />}
+        aria-invalid={Boolean(error)}
+        aria-describedby="law-file-helper-text"
         sx={{
+          minHeight: 56,
+          justifyContent: 'flex-start',
+          color: fileName ? 'neutral.900' : 'neutral.600',
+          borderColor: error ? 'error.main' : 'neutral.300',
           overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
         }}
       >
-        {fileName || 'แนบไฟล์'}
-      </Box>
-      <Box
-        component="input"
-        type="file"
-        hidden
-        onChange={(event) => onChange(event.target.files?.[0]?.name ?? '')}
-      />
-    </Button>
+        <Box
+          component="span"
+          sx={{
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {fileName || 'แนบไฟล์ PDF'}
+        </Box>
+        <Box
+          component="input"
+          type="file"
+          accept="application/pdf,.pdf"
+          aria-label="เลือกไฟล์กฎหมาย PDF"
+          hidden
+          onChange={(event) => {
+            onChange(event.target.files?.[0] ?? null)
+            event.target.value = ''
+          }}
+        />
+      </Button>
+      <Typography
+        id="law-file-helper-text"
+        variant="caption"
+        color={error ? 'error.main' : 'text.secondary'}
+        sx={{ px: 1.75 }}
+      >
+        {helperText}
+      </Typography>
+    </Stack>
   )
 }
 
