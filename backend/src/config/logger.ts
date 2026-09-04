@@ -15,27 +15,32 @@ const devFormat = combine(
 
 const prodFormat = combine(timestamp(), errors({ stack: true }), json());
 
+const loggerTransports =
+  env.NODE_ENV === 'test'
+    ? [new winston.transports.Console({ silent: true })]
+    : [
+        new winston.transports.Console(),
+        new DailyRotateFile({
+          dirname: 'logs',
+          filename: 'app-%DATE%.log',
+          datePattern: 'YYYY-MM-DD',
+          maxFiles: '14d',
+          maxSize: '20m',
+          zippedArchive: true,
+        }),
+        new DailyRotateFile({
+          dirname: 'logs',
+          filename: 'error-%DATE%.log',
+          datePattern: 'YYYY-MM-DD',
+          level: 'error',
+          maxFiles: '30d',
+          maxSize: '20m',
+          zippedArchive: true,
+        }),
+      ];
+
 export const logger = winston.createLogger({
   level: env.LOG_LEVEL,
   format: env.NODE_ENV === 'production' ? prodFormat : devFormat,
-  transports: [
-    new winston.transports.Console(),
-    new DailyRotateFile({
-      dirname: 'logs',
-      filename: 'app-%DATE%.log',
-      datePattern: 'YYYY-MM-DD',
-      maxFiles: '14d',
-      maxSize: '20m',
-      zippedArchive: true,
-    }),
-    new DailyRotateFile({
-      dirname: 'logs',
-      filename: 'error-%DATE%.log',
-      datePattern: 'YYYY-MM-DD',
-      level: 'error',
-      maxFiles: '30d',
-      maxSize: '20m',
-      zippedArchive: true,
-    }),
-  ],
+  transports: loggerTransports,
 });

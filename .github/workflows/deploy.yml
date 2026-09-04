@@ -199,10 +199,10 @@ jobs:
 
           Copy-Item $sourceEnv $workspaceEnv -Force
 
-      - name: Build and test backend
+      - name: Prepare backend dependencies
         if: steps.changes.outputs.backend_changed == 'true'
         working-directory: backend
-        timeout-minutes: 20
+        timeout-minutes: 10
         run: |
           $backendDepsReady = Test-Path ".\node_modules\.bin\tsc.cmd"
 
@@ -214,13 +214,20 @@ jobs:
             Write-Host "Reusing existing backend node_modules; package files did not change."
           }
 
-          npm run typecheck
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-          npm test
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
+      - name: Build backend
+        if: steps.changes.outputs.backend_changed == 'true'
+        working-directory: backend
+        timeout-minutes: 10
+        run: |
           npm run build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Test backend
+        if: steps.changes.outputs.backend_changed == 'true'
+        working-directory: backend
+        timeout-minutes: 15
+        run: |
+          npm test
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Run backend database migrations
