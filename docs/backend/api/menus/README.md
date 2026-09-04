@@ -6,7 +6,7 @@ Index นี้แสดงเฉพาะเมนูหรือ business capa
 
 ## ศูนย์ทดสอบ API
 
-เปิด `<BASE_URL>/api/v1/docs` เพื่อใช้ Swagger UI ที่รวม API ทั้งระบบ ตัวเลขในตารางนี้นับ `Method + Path` โดย **API ในทะเบียน** คือ route canonical 130 รายการ ส่วน **Operations ใน Swagger** มี 139 รายการ เพราะเพิ่ม path แบบแยก `stationId/{buddhistYear}` อีก 9 รายการให้กรอกและทดสอบ annual point code ได้สะดวก
+เปิด `<BASE_URL>/api/v1/docs` เพื่อใช้ Swagger UI ที่รวม API ทั้งระบบ ตัวเลขในตารางนี้นับ `Method + Path` โดย **API ในทะเบียน** คือ route canonical 139 รายการ ส่วน **Operations ใน Swagger** มี 148 รายการ เพราะเพิ่ม path แบบแยก `stationId/{buddhistYear}` อีก 9 รายการให้กรอกและทดสอบ annual point code ได้สะดวก
 
 | กลุ่มใน Swagger                         | API ในทะเบียน | Operations ใน Swagger | Canonical contract                                                                                                                                       |
 | --------------------------------------- | ------------: | --------------------: | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -20,8 +20,10 @@ Index นี้แสดงเฉพาะเมนูหรือ business capa
 | สถิติข้อมูล                             |             4 |                     8 | [สถิติข้อมูล](./statistics/README.md)                                                                                                                    |
 | สิทธิ์การใช้งาน                         |             8 |                     8 | [สิทธิ์การใช้งาน](./permissions/README.md)                                                                                                               |
 | โรงงานที่เข้าข่าย                       |            15 |                    15 | [โรงงานที่เข้าข่าย](./eligible-factories/README.md)                                                                                                      |
+| กฎหมายที่เกี่ยวข้อง                     |             5 |                     5 | [กฎหมายที่เกี่ยวข้อง](./laws/README.md)                                                                                                                  |
+| คำถามที่พบบ่อย                          |             4 |                     4 | [คำถามที่พบบ่อย](./faqs/README.md)                                                                                                                       |
 | ระบบเชื่อมต่อภายนอก                     |             4 |                     5 | [Integrations](../integrations/README.md)                                                                                                                |
-| **รวม**                                 |       **130** |               **139** | [Endpoint registry](../ENDPOINTS.md)                                                                                                                     |
+| **รวม**                                 |       **139** |               **148** | [Endpoint registry](../ENDPOINTS.md)                                                                                                                     |
 
 ```text
 menus/
@@ -53,6 +55,8 @@ menus/
 | การแจ้งเตือน                            | `notifications/`             | alert list, detail และ status                                               |
 | สถิติข้อมูล                             | `statistics/`                | measurement statistics, calendar status และ CSV export                      |
 | สิทธิ์การใช้งาน                         | `permissions/`               | users, roles และ permission overrides                                       |
+| กฎหมายที่เกี่ยวข้อง                     | `laws/`                      | public law list, PDF download และ content management                        |
+| คำถามที่พบบ่อย                          | `faqs/`                      | public FAQ list และ content management                                      |
 
 ## Canonical Menu Pages
 
@@ -65,6 +69,8 @@ menus/
 - [การแจ้งเตือน](./notifications/README.md) — contract รายการ alert, รายละเอียด, filter และการอัปเดตสถานะ
 - [สถิติข้อมูล](./statistics/README.md) — contract สถิติ ปฏิทินสถานะ และการส่งออกข้อมูล
 - [สิทธิ์การใช้งาน](./permissions/README.md) — contract การจัดการผู้ใช้, role grants, permission overrides และ data scope
+- [กฎหมายที่เกี่ยวข้อง](./laws/README.md) — contract รายการกฎหมาย การจัดการ metadata และดาวน์โหลด PDF
+- [คำถามที่พบบ่อย](./faqs/README.md) — contract รายการคำถาม คำตอบ หมวดหมู่ และการจัดการเนื้อหา
 
 API ที่หลายเมนูใช้ร่วมกัน เช่น authentication และ connected measurement points อยู่ใต้ `../shared/` และให้หน้าเมนูลิงก์อ้างอิง
 

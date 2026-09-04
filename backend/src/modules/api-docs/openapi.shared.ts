@@ -9,6 +9,8 @@ export const MENU_TAGS = {
   STATISTICS: 'สถิติข้อมูล',
   PERMISSIONS: 'สิทธิ์การใช้งาน',
   ELIGIBLE_FACTORIES: 'โรงงานที่เข้าข่าย',
+  LAWS: 'กฎหมายที่เกี่ยวข้อง',
+  FAQS: 'คำถามที่พบบ่อย',
   INTEGRATIONS: 'ระบบเชื่อมต่อภายนอก',
 } as const;
 

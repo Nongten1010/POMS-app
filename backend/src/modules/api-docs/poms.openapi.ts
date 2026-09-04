@@ -91,6 +91,16 @@ const successResponse = (
         },
 });
 
+const errorResponse = (description: string, example: unknown): OpenApiObject => ({
+  description,
+  content: {
+    'application/json': {
+      schema: schemaRef('ErrorEnvelope'),
+      example,
+    },
+  },
+});
+
 const standardErrorResponses: OpenApiObject = {
   '400': { $ref: '#/components/responses/BadRequest' },
   '401': { $ref: '#/components/responses/Unauthorized' },
@@ -157,6 +167,15 @@ const stringPath = (
   description,
   schema: { type: 'string', minLength: 1, maxLength },
   ...(example ? { example } : {}),
+});
+
+const uuidPath = (name: string, description: string, example: string): OpenApiObject => ({
+  name,
+  in: 'path',
+  required: true,
+  description,
+  schema: { type: 'string', format: 'uuid' },
+  example,
 });
 
 const queryString = (
@@ -227,6 +246,11 @@ const queryBoolean = (name: string, description: string, required = false): Open
 });
 
 const idParameter = positiveIntegerPath('id', 'รหัส resource ต้องเป็นจำนวนเต็มบวก');
+const contentIdParameter = uuidPath(
+  'id',
+  'Public UUID ของรายการ',
+  '0f2386e5-80e0-4f91-a920-586ec2d4d6cb',
+);
 const userIdParameter = positiveIntegerPath('id', 'รหัสผู้ใช้ ต้องเป็นจำนวนเต็มบวก', 12);
 const formIdParameter = positiveIntegerPath('id', 'รหัสฟอร์ม ต้องเป็นจำนวนเต็มบวก', 9);
 const alertEventIdParameter = positiveIntegerPath(
@@ -753,7 +777,298 @@ const createRecipientExample = {
   emails: ['officer@example.com'],
 };
 
+const lawExample = {
+  id: '0f2386e5-80e0-4f91-a920-586ec2d4d6cb',
+  title: 'ประกาศกรมโรงงานอุตสาหกรรม เรื่อง การทวนสอบและสอบเทียบระบบ CEMS',
+  category: 'CEMS',
+  categoryLabel: 'CEMS',
+  type: 'RULE_AND_ANNOUNCEMENT',
+  typeLabel: 'กฎและประกาศ',
+  publishedDate: '2025-07-09',
+  file: {
+    fileName: 'cems-calibration-announcement.pdf',
+    fileSize: 824512,
+    mimeType: 'application/pdf',
+    downloadUrl: '/api/v1/laws/0f2386e5-80e0-4f91-a920-586ec2d4d6cb/file',
+  },
+  createdAt: '2026-09-04T09:30:00.000Z',
+  updatedAt: '2026-09-04T09:30:00.000Z',
+};
+
+const createLawExample = {
+  title: lawExample.title,
+  category: lawExample.category,
+  type: lawExample.type,
+  publishedDate: lawExample.publishedDate,
+  file: '<binary PDF>',
+};
+
+const updateLawExample = {
+  title: 'ประกาศฉบับแก้ไข เรื่อง การทวนสอบระบบ CEMS',
+  category: lawExample.category,
+  type: lawExample.type,
+  publishedDate: '2026-09-04',
+};
+
+const faqExample = {
+  id: '8d6a040b-f133-41f6-860d-4bb4dc08e72e',
+  question: 'หากระบบ CEMS ส่งข้อมูลไม่ได้ ต้องดำเนินการอย่างไร?',
+  answer: 'ให้ตรวจสอบสถานะอุปกรณ์และการเชื่อมต่อก่อน แล้วดำเนินการแจ้งแบบที่เกี่ยวข้อง',
+  category: 'CEMS',
+  categoryLabel: 'CEMS',
+  updatedDate: '2026-09-04',
+  createdAt: '2026-09-04T09:30:00.000Z',
+  updatedAt: '2026-09-04T09:30:00.000Z',
+};
+
+const faqRequestExample = {
+  question: faqExample.question,
+  answer: faqExample.answer,
+  category: faqExample.category,
+  updatedDate: faqExample.updatedDate,
+};
+
+const lawValidationErrorExample = {
+  success: false,
+  error: {
+    code: 'VALIDATION_ERROR',
+    message: 'ข้อมูลรายการกฎหมายไม่ถูกต้อง',
+    details: {
+      category: 'กรุณาเลือกหมวดหมู่',
+      file: 'กรุณาแนบไฟล์ PDF',
+    },
+  },
+};
+
+const faqValidationErrorExample = {
+  success: false,
+  error: {
+    code: 'VALIDATION_ERROR',
+    message: 'Request validation failed',
+    details: {
+      question: ['Too small: expected string to have >=1 characters'],
+      category: ['Invalid option'],
+    },
+  },
+};
+
+const lawRequestProperties: Record<string, OpenApiObject> = {
+  title: { type: 'string', minLength: 1, maxLength: 500 },
+  category: schemaRef('LawCategory'),
+  type: schemaRef('LawType'),
+  publishedDate: {
+    type: 'string',
+    format: 'date',
+    pattern: '^\\d{4}-\\d{2}-\\d{2}$',
+    description: 'วันจริงรูปแบบ YYYY-MM-DD ช่วง 1900-01-01 ถึง 9999-12-31',
+  },
+};
+
+const lawBinaryFileSchema: OpenApiObject = {
+  type: 'string',
+  format: 'binary',
+  description: 'ไฟล์ PDF 1 ไบต์ถึง 10 MB; MIME type ต้องเป็น application/pdf',
+  'x-allowed-mime-types': ['application/pdf'],
+  'x-max-size-bytes': 10 * 1024 * 1024,
+};
+
+const faqRequestProperties: Record<string, OpenApiObject> = {
+  question: { type: 'string', minLength: 1, maxLength: 1000 },
+  answer: { type: 'string', minLength: 1 },
+  category: schemaRef('FaqCategory'),
+  updatedDate: {
+    type: 'string',
+    format: 'date',
+    pattern: '^\\d{4}-\\d{2}-\\d{2}$',
+    description: 'วันจริงรูปแบบ YYYY-MM-DD ช่วง 1900-01-01 ถึง 9999-12-31',
+  },
+};
+
 const componentSchemas: Record<string, OpenApiObject> = {
+  LawCategory: {
+    type: 'string',
+    enum: ['CEMS', 'WPMS', 'OTHER'],
+    'x-enum-labels': { CEMS: 'CEMS', WPMS: 'WPMS', OTHER: 'อื่นๆ' },
+  },
+  LawType: {
+    type: 'string',
+    enum: ['MINISTERIAL_REGULATION', 'RULE_AND_ANNOUNCEMENT', 'REGULATION_REQUIREMENT', 'OTHER'],
+    'x-enum-labels': {
+      MINISTERIAL_REGULATION: 'กฎกระทรวง',
+      RULE_AND_ANNOUNCEMENT: 'กฎและประกาศ',
+      REGULATION_REQUIREMENT: 'ระเบียบ ข้อบังคับ และข้อกำหนด',
+      OTHER: 'อื่นๆ',
+    },
+  },
+  LawFile: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['fileName', 'fileSize', 'mimeType', 'downloadUrl'],
+    properties: {
+      fileName: { type: 'string', minLength: 1, maxLength: 255 },
+      fileSize: {
+        type: 'integer',
+        format: 'int64',
+        minimum: 1,
+        maximum: 10 * 1024 * 1024,
+        description: 'ขนาดไฟล์หน่วย byte',
+      },
+      mimeType: { type: 'string', enum: ['application/pdf'] },
+      downloadUrl: {
+        type: 'string',
+        format: 'uri-reference',
+        description: 'URL สาธารณะที่ frontend ใช้ดาวน์โหลดได้โดยตรง',
+      },
+    },
+  },
+  Law: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'id',
+      'title',
+      'category',
+      'categoryLabel',
+      'type',
+      'typeLabel',
+      'publishedDate',
+      'file',
+      'createdAt',
+      'updatedAt',
+    ],
+    properties: {
+      id: { type: 'string', format: 'uuid' },
+      title: { type: 'string', minLength: 1, maxLength: 500 },
+      category: schemaRef('LawCategory'),
+      categoryLabel: { type: 'string', enum: ['CEMS', 'WPMS', 'อื่นๆ'] },
+      type: schemaRef('LawType'),
+      typeLabel: {
+        type: 'string',
+        enum: ['กฎกระทรวง', 'กฎและประกาศ', 'ระเบียบ ข้อบังคับ และข้อกำหนด', 'อื่นๆ'],
+      },
+      publishedDate: lawRequestProperties.publishedDate,
+      file: schemaRef('LawFile'),
+      createdAt: { type: 'string', format: 'date-time' },
+      updatedAt: { type: 'string', format: 'date-time' },
+    },
+    example: lawExample,
+  },
+  CreateLawRequest: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['title', 'category', 'type', 'publishedDate', 'file'],
+    properties: {
+      ...lawRequestProperties,
+      file: lawBinaryFileSchema,
+    },
+  },
+  UpdateLawRequest: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['title', 'category', 'type', 'publishedDate'],
+    properties: {
+      ...lawRequestProperties,
+      file: lawBinaryFileSchema,
+    },
+  },
+  LawResponse: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['success', 'data'],
+    properties: {
+      success: { type: 'boolean', enum: [true] },
+      data: schemaRef('Law'),
+    },
+    example: { success: true, data: lawExample },
+  },
+  LawListResponse: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['success', 'data'],
+    properties: {
+      success: { type: 'boolean', enum: [true] },
+      data: { type: 'array', items: schemaRef('Law') },
+    },
+    example: { success: true, data: [lawExample] },
+  },
+  FaqCategory: {
+    type: 'string',
+    enum: ['CEMS', 'WPMS', 'OTHER'],
+    'x-enum-labels': { CEMS: 'CEMS', WPMS: 'WPMS', OTHER: 'อื่นๆ' },
+  },
+  Faq: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'id',
+      'question',
+      'answer',
+      'category',
+      'categoryLabel',
+      'updatedDate',
+      'createdAt',
+      'updatedAt',
+    ],
+    properties: {
+      id: { type: 'string', format: 'uuid' },
+      question: { type: 'string', minLength: 1, maxLength: 1000 },
+      answer: { type: 'string', minLength: 1 },
+      category: schemaRef('FaqCategory'),
+      categoryLabel: { type: 'string', enum: ['CEMS', 'WPMS', 'อื่นๆ'] },
+      updatedDate: faqRequestProperties.updatedDate,
+      createdAt: { type: 'string', format: 'date-time' },
+      updatedAt: { type: 'string', format: 'date-time' },
+    },
+    example: faqExample,
+  },
+  FaqRequest: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['question', 'answer', 'category', 'updatedDate'],
+    properties: faqRequestProperties,
+  },
+  FaqResponse: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['success', 'data'],
+    properties: {
+      success: { type: 'boolean', enum: [true] },
+      data: schemaRef('Faq'),
+    },
+    example: { success: true, data: faqExample },
+  },
+  FaqListResponse: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['success', 'data'],
+    properties: {
+      success: { type: 'boolean', enum: [true] },
+      data: { type: 'array', items: schemaRef('Faq') },
+    },
+    example: { success: true, data: [faqExample] },
+  },
+  DeletedContentResult: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['id', 'deleted'],
+    properties: {
+      id: { type: 'string', format: 'uuid' },
+      deleted: { type: 'boolean', enum: [true] },
+    },
+  },
+  DeletedContentResponse: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['success', 'data'],
+    properties: {
+      success: { type: 'boolean', enum: [true] },
+      data: schemaRef('DeletedContentResult'),
+    },
+    example: {
+      success: true,
+      data: { id: '0f2386e5-80e0-4f91-a920-586ec2d4d6cb', deleted: true },
+    },
+  },
   LoginRequest: {
     type: 'object',
     additionalProperties: false,
@@ -3892,6 +4207,127 @@ const extraPaths: Record<string, OpenApiObject> = {
       successSchema: schemaRef('AuthSessionResponse'),
     }),
   },
+  '/laws': {
+    get: publicOperation({
+      tag: 'Laws',
+      summary: 'โหลดรายการกฎหมายทั้งหมด',
+      operationId: 'listLaws',
+      description:
+        'Public endpoint; ตอบรายการทั้งหมดในครั้งเดียว ไม่มี pagination, filter หรือ sort query',
+      successSchema: schemaRef('LawListResponse'),
+    }),
+    post: securedOperation({
+      tag: 'Laws',
+      summary: 'เพิ่มรายการกฎหมายพร้อมไฟล์ PDF',
+      operationId: 'createLaw',
+      description: 'อัปโหลด multipart/form-data โดยรับไฟล์ PDF 1 ไฟล์ ขนาดไม่เกิน 10 MB',
+      requestBody: multipartRequestBody(
+        schemaRef('CreateLawRequest'),
+        { file: { contentType: 'application/pdf' } },
+        createLawExample,
+      ),
+      successStatus: '201',
+      successDescription: 'สร้างรายการกฎหมายสำเร็จ',
+      successSchema: schemaRef('LawResponse'),
+      extraResponses: {
+        '400': errorResponse(
+          'ข้อมูล multipart หรือไฟล์ PDF ไม่ผ่าน validation',
+          lawValidationErrorExample,
+        ),
+      },
+    }),
+  },
+  '/laws/{id}': {
+    put: securedOperation({
+      tag: 'Laws',
+      summary: 'แก้ไขรายการกฎหมาย',
+      operationId: 'updateLaw',
+      description:
+        'ส่งข้อมูลล่าสุดครบทุก field; file เป็น optional และเมื่อไม่ส่งจะเก็บไฟล์เดิมไว้',
+      parameters: [contentIdParameter],
+      requestBody: multipartRequestBody(
+        schemaRef('UpdateLawRequest'),
+        { file: { contentType: 'application/pdf' } },
+        updateLawExample,
+      ),
+      successDescription: 'แก้ไขรายการกฎหมายสำเร็จ',
+      successSchema: schemaRef('LawResponse'),
+      extraResponses: {
+        '400': errorResponse(
+          'UUID, ข้อมูล multipart หรือไฟล์ PDF ไม่ผ่าน validation',
+          lawValidationErrorExample,
+        ),
+      },
+    }),
+    delete: securedOperation({
+      tag: 'Laws',
+      summary: 'ลบรายการกฎหมาย',
+      operationId: 'deleteLaw',
+      parameters: [contentIdParameter],
+      successDescription: 'ลบรายการกฎหมายสำเร็จ',
+      successSchema: schemaRef('DeletedContentResponse'),
+    }),
+  },
+  '/laws/{id}/file': {
+    get: publicOperation({
+      tag: 'Laws',
+      summary: 'ดาวน์โหลดไฟล์กฎหมาย',
+      operationId: 'downloadLawFile',
+      description:
+        'Public endpoint ที่ file.downloadUrl ชี้มาโดยตรง; ตอบ PDF พร้อม Content-Disposition แบบ attachment',
+      parameters: [contentIdParameter],
+      successDescription: 'ไฟล์ PDF ของรายการกฎหมาย',
+      successSchema: { type: 'string', format: 'binary' },
+      successContentType: 'application/pdf',
+    }),
+  },
+  '/faqs': {
+    get: publicOperation({
+      tag: 'FAQs',
+      summary: 'โหลดคำถามที่พบบ่อยทั้งหมด',
+      operationId: 'listFaqs',
+      description:
+        'Public endpoint; ตอบรายการทั้งหมดในครั้งเดียว ไม่มี pagination, filter หรือ sort query',
+      successSchema: schemaRef('FaqListResponse'),
+    }),
+    post: securedOperation({
+      tag: 'FAQs',
+      summary: 'เพิ่มคำถามที่พบบ่อย',
+      operationId: 'createFaq',
+      requestBody: jsonRequestBody(schemaRef('FaqRequest'), faqRequestExample),
+      successStatus: '201',
+      successDescription: 'สร้างคำถามที่พบบ่อยสำเร็จ',
+      successSchema: schemaRef('FaqResponse'),
+      extraResponses: {
+        '400': errorResponse('JSON body ไม่ผ่าน validation', faqValidationErrorExample),
+      },
+    }),
+  },
+  '/faqs/{id}': {
+    put: securedOperation({
+      tag: 'FAQs',
+      summary: 'แก้ไขคำถามที่พบบ่อย',
+      operationId: 'updateFaq',
+      parameters: [contentIdParameter],
+      requestBody: jsonRequestBody(schemaRef('FaqRequest'), {
+        ...faqRequestExample,
+        question: 'หากระบบ CEMS ขัดข้อง ต้องดำเนินการอย่างไร?',
+      }),
+      successDescription: 'แก้ไขคำถามที่พบบ่อยสำเร็จ',
+      successSchema: schemaRef('FaqResponse'),
+      extraResponses: {
+        '400': errorResponse('UUID หรือ JSON body ไม่ผ่าน validation', faqValidationErrorExample),
+      },
+    }),
+    delete: securedOperation({
+      tag: 'FAQs',
+      summary: 'ลบคำถามที่พบบ่อย',
+      operationId: 'deleteFaq',
+      parameters: [contentIdParameter],
+      successDescription: 'ลบคำถามที่พบบ่อยสำเร็จ',
+      successSchema: schemaRef('DeletedContentResponse'),
+    }),
+  },
   '/users': {
     get: securedOperation({
       tag: 'Permissions',
@@ -5157,6 +5593,14 @@ const tags: OpenApiObject[] = [
     description: 'รายชื่อโรงงานที่เข้าข่ายและฟอร์มข้อมูลจุดตรวจวัด',
   },
   {
+    name: MENU_TAGS.LAWS,
+    description: 'รายการกฎหมาย ไฟล์ PDF และการดูแลข้อมูลกฎหมาย',
+  },
+  {
+    name: MENU_TAGS.FAQS,
+    description: 'คำถาม คำตอบ หมวดหมู่ และการดูแลคำถามที่พบบ่อย',
+  },
+  {
     name: MENU_TAGS.INTEGRATIONS,
     description: 'API key contract สำหรับอุปกรณ์และระบบภายนอก',
   },
@@ -5223,6 +5667,8 @@ function menuTagForPath(path: string): string {
   if (path.startsWith('/eligible-factories') || path.startsWith('/monitoring-point-forms')) {
     return MENU_TAGS.ELIGIBLE_FACTORIES;
   }
+  if (path.startsWith('/laws')) return MENU_TAGS.LAWS;
+  if (path.startsWith('/faqs')) return MENU_TAGS.FAQS;
   if (path.startsWith('/integrations')) return MENU_TAGS.INTEGRATIONS;
   throw new Error(`OpenAPI path is not assigned to a POMS menu: ${path}`);
 }
@@ -5375,6 +5821,13 @@ function authorizationRequirementFor(path: string, method: string): Authorizatio
     return { permissions: ['notifications:edit'], mode: 'any' };
   }
 
+  if (path.startsWith('/laws')) {
+    return { permissions: ['laws:edit'], mode: 'any' };
+  }
+  if (path.startsWith('/faqs')) {
+    return { permissions: ['faq:edit'], mode: 'any' };
+  }
+
   throw new Error(
     `Bearer OpenAPI operation has no permission mapping: ${method.toUpperCase()} ${path}`,
   );
@@ -5455,12 +5908,35 @@ function mergePathMaps(...maps: Record<string, OpenApiObject>[]): Record<string,
 }
 
 const baseComponents = (baseDocument.components ?? {}) as OpenApiObject;
+const baseSchemas = (baseComponents.schemas as Record<string, OpenApiObject>) ?? {};
+const baseErrorEnvelope = (baseSchemas.ErrorEnvelope ?? {}) as OpenApiObject;
+const baseErrorEnvelopeProperties =
+  (baseErrorEnvelope.properties as Record<string, OpenApiObject>) ?? {};
+const baseError = (baseErrorEnvelopeProperties.error ?? {}) as OpenApiObject;
+const baseErrorProperties = (baseError.properties as Record<string, OpenApiObject>) ?? {};
 
 const components: OpenApiObject = {
   ...baseComponents,
   schemas: {
     ...componentSchemas,
-    ...((baseComponents.schemas as Record<string, OpenApiObject>) ?? {}),
+    ...baseSchemas,
+    ErrorEnvelope: {
+      ...baseErrorEnvelope,
+      properties: {
+        ...baseErrorEnvelopeProperties,
+        error: {
+          ...baseError,
+          properties: {
+            ...baseErrorProperties,
+            details: {
+              type: 'object',
+              additionalProperties: true,
+              description: 'รายละเอียด validation หรือ error แยกราย field เมื่อมี',
+            },
+          },
+        },
+      },
+    },
   },
   responses: {
     ...((baseComponents.responses as Record<string, OpenApiObject>) ?? {}),
@@ -5483,15 +5959,15 @@ export const pomsOpenApiDocument: OpenApiObject = {
   openapi: '3.0.3',
   info: {
     title: 'POMS API',
-    version: '0.3.0',
+    version: '0.4.0',
     description:
-      'Interactive contract สำหรับ HTTP endpoint ทั้ง 130 รายการใน POMS แยกตามเมนูงานจริง พร้อม payload, validation, auth และตัวอย่างทดสอบ\n\nSwagger แสดง 139 operations เพราะขยาย optional buddhistYear path อีก 9 รูปแบบเพื่อรองรับทั้ง annual point code ที่ URL-encode และ path ที่ proxy ถอดรหัสแล้ว',
+      'Interactive contract สำหรับ HTTP endpoint ทั้ง 139 รายการใน POMS แยกตามเมนูงานจริง พร้อม payload, validation, auth และตัวอย่างทดสอบ\n\nSwagger แสดง 148 operations เพราะขยาย optional buddhistYear path อีก 9 รูปแบบเพื่อรองรับทั้ง annual point code ที่ URL-encode และ path ที่ proxy ถอดรหัสแล้ว',
   },
   servers: [{ url: env.API_PREFIX }],
   tags,
   paths,
   components,
-  'x-poms-canonical-operation-count': 130,
+  'x-poms-canonical-operation-count': 139,
 };
 
 export function countOpenApiOperations(document: OpenApiObject): number {

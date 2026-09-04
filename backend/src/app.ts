@@ -32,6 +32,8 @@ import { kwpFormReportsRoutes } from './modules/kwp-form-reports/kwp-form-report
 import { kwpFormSubmissionsRoutes } from './modules/kwp-form-submissions/kwp-form-submissions.routes';
 import { apiDocsRoutes } from './modules/api-docs/api-docs.routes';
 import { pomsFactoriesRoutes } from './modules/poms-factories/poms-factories.routes';
+import { lawsRoutes } from './modules/laws/laws.routes';
+import { faqsRoutes } from './modules/faqs/faqs.routes';
 
 export function createApp(): Application {
   const app = express();
@@ -107,6 +109,8 @@ export function createApp(): Application {
   app.use(`${env.API_PREFIX}/integrations`, integrationsRoutes);
   app.use(`${env.API_PREFIX}/alert-events`, alertEventsRoutes);
   app.use(`${env.API_PREFIX}/email-test`, emailTestRoutes);
+  app.use(`${env.API_PREFIX}/laws`, lawsRoutes);
+  app.use(`${env.API_PREFIX}/faqs`, faqsRoutes);
   // Admin-managed email recipients for connection-request officer notifications.
   app.use(
     `${env.API_PREFIX}/officer-notification-email-recipients`,

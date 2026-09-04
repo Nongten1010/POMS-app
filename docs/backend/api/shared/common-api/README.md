@@ -22,7 +22,7 @@
 | `GET`  | `/api/v1/docs/swagger-initializer.js` | Public when `API_DOCS_ENABLED=true` | config ฝั่ง browser ของ Swagger UI |
 | `GET`  | `/api/v1/openapi.json`                | Public when `API_DOCS_ENABLED=true` | contract machine-readable          |
 
-Swagger UI ครอบคลุม 126 canonical endpoints และแสดง 135 operations แยกเป็น 11 กลุ่มงาน การเปิดหน้าเอกสารไม่ได้ข้าม auth ของ endpoint ที่กดทดสอบ และ `Try it out` อาจเปลี่ยนข้อมูลใน environment ปัจจุบันจริง
+Swagger UI ครอบคลุม 139 canonical endpoints และแสดง 148 operations แยกเป็น 13 กลุ่มงาน การเปิดหน้าเอกสารไม่ได้ข้าม auth ของ endpoint ที่กดทดสอบ และ `Try it out` อาจเปลี่ยนข้อมูลใน environment ปัจจุบันจริง
 
 `API_DOCS_ENABLED` เปิดเป็นค่าเริ่มต้นทุก environment รวม production และตั้งเป็น `false` เมื่อต้องการปิดทั้ง Swagger UI กับ OpenAPI JSON
 
@@ -43,11 +43,16 @@ Error envelope ทั่วไป:
 {
   "success": false,
   "error": {
-    "code": "BAD_REQUEST",
-    "message": "Validation failed"
+    "code": "VALIDATION_ERROR",
+    "message": "Request validation failed",
+    "details": {
+      "fieldName": ["Field-specific validation message"]
+    }
   }
 }
 ```
+
+`error.code` และ `error.message` มีทุก error response ส่วน `error.details` เป็น object แบบ optional สำหรับรายละเอียด validation หรือ business error ราย field; validation response อาจมี `error.issues[]` เพิ่มเพื่อระบุ path แบบละเอียด
 
 ## Maintainer Links
 
