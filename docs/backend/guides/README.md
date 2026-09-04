@@ -9,6 +9,7 @@
 ## Frontend Handoffs
 
 - [ตั้งค่าอุปกรณ์: งานที่ frontend ต้องแก้และ test checklist](./frontend-handoffs/device-config/README.md)
+- [กฎหมายและคำถามที่พบบ่อย: เชื่อม frontend กับ API production](./frontend-handoffs/laws-and-faqs/README.md)
 
 ## Database operations
 
