@@ -176,6 +176,53 @@ describe('POMS factory routes', () => {
     },
   );
 
+  it.each([
+    ['post', '/api/v1/poms-factories/factory-001/edit-requests', 201],
+    ['put', '/api/v1/poms-factories/edit-requests/11/resubmission', 200],
+  ] as const)(
+    'accepts general factory fields in measurement-point %s',
+    async (method, path, status) => {
+      const input = {
+        formType: 'MEASUREMENT_POINTS',
+        projectName: 'โครงการใหม่',
+        latitude: 13.1,
+        longitude: 100.1,
+        eia: 'มี EIA',
+        factoryFrontPhotos: [],
+        factoryLogo: null,
+        measurementPoints: [{ connectedPointId: 15, pointName: 'ปล่อง A' }],
+      };
+      const response = await request(createTestApp())
+        [method](path)
+        .set(
+          'Authorization',
+          `Bearer ${accessToken({
+            scopes: { 'factories:view': 'ALL', 'factories:edit': 'OWN_FACTORY' },
+            scopeDetails: { 'factories:view': { scope: 'ALL' }, 'factories:edit': editScope },
+          })}`,
+        )
+        .send(input);
+      expect(response.status).toBe(status);
+      if (method === 'post') {
+        expect(mockedService.createEditRequest).toHaveBeenCalledWith(
+          'factory-001',
+          expect.objectContaining(input),
+          42,
+          editScope,
+          null,
+        );
+      } else {
+        expect(mockedService.resubmitEditRequest).toHaveBeenCalledWith(
+          11,
+          expect.objectContaining(input),
+          42,
+          editScope,
+          null,
+        );
+      }
+    },
+  );
+
   describe.each([
     { method: 'post' as const, path: '/api/v1/poms-factories/factory-001/edit-requests' },
     { method: 'put' as const, path: '/api/v1/poms-factories/edit-requests/11/resubmission' },

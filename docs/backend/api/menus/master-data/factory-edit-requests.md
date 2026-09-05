@@ -19,12 +19,12 @@
 5. admin อ่านรายการและรายละเอียดคำขอ แล้วเลือก `APPROVE`, `REQUEST_REVISION` หรือ `REJECT`
 6. ถ้าขอให้แก้ไข ผู้ประกอบการเรียก `GET /api/v1/poms-factories/edit-requests/:id/form` เพื่อลง proposed values แล้วส่งกลับด้วย `PUT /api/v1/poms-factories/edit-requests/:id/resubmission`
 7. ผู้สร้างคำขอเดิม (`createdBy`) ยกเลิกคำขอที่ยังเปิดอยู่ได้ด้วย `POST /api/v1/poms-factories/edit-requests/:id/cancel`
-8. เมื่ออนุมัติ backend อัปเดต current/live POMS data ตาม `formType`: `BASIC_INFO` sync active `cems_wpms_connected_measurement_points` และ active `eligible_factories`, ส่วน `MEASUREMENT_POINTS` sync active `cems_wpms_connected_measurement_points` ของโรงงานนั้น โดยไม่อัปเดตตาราง `factories`
+8. เมื่ออนุมัติ backend อัปเดต current/live POMS data ตาม `formType`: `BASIC_INFO` sync active `cems_wpms_connected_measurement_points` และ active `eligible_factories`, ส่วน `MEASUREMENT_POINTS` sync จุดตรวจวัดและข้อมูลทั่วไปของโรงงานที่มีการแก้ไข โดยข้อมูลทั่วไป sync เป้าหมายเดียวกับ `BASIC_INFO` โดยไม่อัปเดตตาราง `factories`
 
 ### Capability Boundary
 
 - `BASIC_INFO` แก้ได้เฉพาะการประเมินผลกระทบสิ่งแวดล้อม (`eia`), ชื่อโครงการ (`projectName`), อื่นๆ ของ EIA (`eiaOther`), ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน (`factoryFrontPhotos`), สัญลักษณ์ของโรงงานหรือโลโก้บริษัท (`factoryLogo`), ละติจูด (`latitude`) และลองติจูด (`longitude`); เมื่ออนุมัติจะ sync ตาม target mapping โดยคงชื่อและที่อยู่โรงงานเดิม
-- `MEASUREMENT_POINTS` ใช้ patch เฉพาะ `pointName`, `monitoringPointStatus`, `details`, `documentsAndImages` และ `measurementInstruments`
+- `MEASUREMENT_POINTS` ใช้ patch `pointName`, `monitoringPointStatus`, `details`, `documentsAndImages` และ `measurementInstruments` พร้อมข้อมูลทั่วไปของโรงงาน 7 fields เดียวกับ `BASIC_INFO` ได้ในคำขอเดียวกัน
 - binary upload รับครั้งละหนึ่งไฟล์และคืน metadata เท่านั้น การผูกไฟล์กับคำขอเกิดเมื่อ client ส่ง metadata นั้นใน create/resubmission payload
 - เฉพาะ `createdBy` ยกเลิกคำขอของตนเองได้ และยกเลิกได้เมื่อสถานะเป็น `PENDING_REVIEW`, `REVISION_REQUESTED` หรือ `REVISED_PENDING_REVIEW`
 - โรงงานที่อ่านหรือแก้ได้ต้องอยู่ใน effective data scope ของ permission ที่ endpoint ใช้ และหนึ่งโรงงานมี open request ได้สูงสุดหนึ่งรายการต่อ `formType`
@@ -486,7 +486,31 @@ field ที่ห้ามส่งเพิ่มเติม ได้แก�
 
 ### Measurement-point Fields
 
-เมื่อ body ส่ง `formType = "MEASUREMENT_POINTS"` backend จะใช้ payload สำหรับแก้ไขข้อมูลจุดตรวจวัด current/live ของโรงงานนั้นโดยอิง `connectedPointId`
+เมื่อ body ส่ง `formType = "MEASUREMENT_POINTS"` backend จะใช้ payload สำหรับแก้ไขข้อมูลจุดตรวจวัด current/live ของโรงงานนั้นโดยอิง `connectedPointId` และรับข้อมูลทั่วไปของโรงงานเป็น top-level fields ในคำขอเดียวกัน
+
+| ข้อมูลทั่วไปของโรงงาน | Type | Required | Rules |
+| --- | --- | --- | --- |
+| `eia` | string \| null | no | enum และเงื่อนไขเดียวกับ [Shared Basic-info Fields](#shared-basic-info-fields) |
+| `eiaOther` | string \| null | no | ข้อความไม่เกิน 500 ตัวอักษร; ส่งพร้อม `eia = "อื่นๆ"` |
+| `projectName` | string \| null | no | ไม่เกิน 500 ตัวอักษร; `null` ล้างค่า |
+| `factoryFrontPhotos` | object[] | no | `RequestDocumentImage` สูงสุด 10 รูป; `[]` ล้างรูป |
+| `factoryLogo` | object \| null | no | `RequestDocumentImage` หนึ่ง object; `null` ล้างโลโก้ |
+| `latitude`, `longitude` | number \| null | no | ต้องส่งคู่กัน; ช่วง -90 ถึง 90 และ -180 ถึง 180; `null` ทั้งคู่ล้างพิกัด |
+
+การเชื่อมต่อ frontend: ปลด `generalFactoryFieldsReadOnly` ในฟอร์มแก้ไขจุดตรวจวัด แล้วให้ตัวสร้าง payload ส่ง 7 fields นี้ที่ root ของ body; metadata รูปโรงงานและโลโก้ต้องส่งใน `factoryFrontPhotos` / `factoryLogo` โดยเฉพาะ การส่งไว้เฉพาะ `measurementPoints[].documentsAndImages` ไม่ถือเป็นการแก้ข้อมูลทั่วไปของโรงงาน ใช้ `GET /poms-factories/edit-requests/:id/form` เพื่อโหลด proposed values เมื่อแก้คำขอที่ถูกส่งกลับ
+
+ข้อมูลทั่วไปที่ไม่ส่งคงค่าเดิม ยังคงส่ง `measurementPoints` อย่างน้อยหนึ่งรายการตามตารางด้านล่างได้แม้ค่าในจุดนั้นไม่เปลี่ยน โดยคำขอต้องมีการเปลี่ยนข้อมูลทั่วไปหรือข้อมูลจุดอย่างน้อยหนึ่งส่วน หากทั้งสองส่วนเหมือนเดิมตอบ `409 CONFLICT`
+
+```json
+{
+  "formType": "MEASUREMENT_POINTS",
+  "projectName": "โครงการปรับปรุงระบบตรวจวัด",
+  "latitude": 13.1,
+  "longitude": 100.1,
+  "measurementPoints": [{ "connectedPointId": 15, "pointName": "ปล่อง A" }]
+}
+```
+
 
 | Field                                        | Type             | Required | Rules                                                                                  |
 | -------------------------------------------- | ---------------- | -------- | -------------------------------------------------------------------------------------- |
@@ -503,7 +527,7 @@ field ที่ห้ามส่งเพิ่มเติม ได้แก�
 
 แต่ละ `measurementPoints[]` ต้องส่งอย่างน้อยหนึ่ง field ที่แก้ได้ นอกเหนือจาก `connectedPointId` ค่า `monitoringPointStatus` ที่รับคือ `เชื่อมต่อครบแล้ว`, `ได้รับการยกเว้นทั้งหมด`, `เชื่อมต่อแล้วแต่ยังไม่ครบ`, `อยู่ระหว่างขยายเวลา`, `ยังไม่ได้ดำเนินการเชื่อมต่อ`, `อยู่ระหว่างการตรวจสอบของจังหวัด` หรือ `อยู่ระหว่างเชื่อมต่อ`
 
-field ที่ห้ามส่งในฟอร์มนี้ ได้แก่ `pointCode`, `pointType`, `systemType`, `parameters`, `sourceMeasurementPointId`, `eligibleFactoryId`, `factoryId`, `factoryName`, `updatedAt`, device configuration และ field identity/audit อื่น ๆ เพราะ approval จะอัปเดตเฉพาะข้อมูลจุด current/live ที่ผู้ใช้แก้ได้จริง
+field ที่ห้ามส่งในฟอร์มนี้ ได้แก่ `pointCode`, `pointType`, `systemType`, `parameters`, `sourceMeasurementPointId`, `eligibleFactoryId`, `factoryId`, `factoryName`, `updatedAt`, device configuration และ field identity/audit อื่น ๆ เพราะ approval อัปเดตเฉพาะ fields ที่อนุญาตของข้อมูลโรงงานและจุดตรวจวัด
 
 ### `POST /api/v1/poms-factories/:factoryId/edit-requests`
 
@@ -732,7 +756,7 @@ Minimal response (`200 OK`):
 
 ### `GET /api/v1/poms-factories/edit-requests/:id/form`
 
-คืน `data` ด้วย shared form contract เดียวกับ [Connection-request form prefill](../connection-requests/README.md#connection-request-form-prefill) แต่ overlay proposed values ของคำขอแก้ไขบน current/live POMS: `BASIC_INFO` ใช้เฉพาะ 7 editable fields จาก proposed factory profile โดยชื่อ ที่อยู่ และข้อมูลอ่านอย่างเดียวยึด current/live รวมถึงเมื่อเปิดคำขอเก่า; `MEASUREMENT_POINTS` ใช้ proposed measurement points และทั้งสองแบบใช้ `requestNote` เป็น `remarks` (`BASIC_INFO` ที่สร้างหรือ resubmit ภายใต้ contract นี้คืน `null`)
+คืน `data` ด้วย shared form contract เดียวกับ [Connection-request form prefill](../connection-requests/README.md#connection-request-form-prefill) แต่ overlay proposed values ของคำขอแก้ไขบน current/live POMS: `BASIC_INFO` ใช้เฉพาะ 7 editable fields จาก proposed factory profile โดยชื่อ ที่อยู่ และข้อมูลอ่านอย่างเดียวยึด current/live รวมถึงเมื่อเปิดคำขอเก่า; `MEASUREMENT_POINTS` ใช้ proposed measurement points และใช้ 7 editable fields จาก proposed factory profile เมื่อมีการแก้ข้อมูลทั่วไป; ถ้าแก้เฉพาะจุดใช้ข้อมูลทั่วไป current/live และทั้งสองแบบใช้ `requestNote` เป็น `remarks` (`BASIC_INFO` ที่สร้างหรือ resubmit ภายใต้ contract นี้คืน `null`)
 
 ไม่ hydrate field ที่ขาดจากคำขอเชื่อมต่อเดิม และไม่คืน `id`, `requestNo`, `status`, `revisionReason` หรือ audit metadata ใน `data`; field ที่ POMS ไม่เก็บใช้ null/empty semantics ตาม [POMS Source And Nullability](#poms-source-and-nullability)
 
@@ -1000,7 +1024,8 @@ Approval target mapping สำหรับ `BASIC_INFO` (ใช้ allowlist น
 - create/resubmission lock ข้อมูล current/live connected POMS และตรวจ source version ของ snapshot ใน transaction เดียวกับการบันทึกคำขอและ event; หากขั้นตอนใดล้มเหลว transaction จะ rollback จึงไม่เหลือคำขอหรือ event ที่บันทึกเพียงบางส่วน
 - การอนุมัติ lock คำขอและข้อมูล current/live ที่เกี่ยวข้องใน transaction เดียวกัน และตรวจ source version จากตอนส่ง/ส่งกลับ หากข้อมูลจริงถูกเปลี่ยนระหว่างรอพิจารณาให้ตอบ `409 CONFLICT` โดยไม่มี partial update
 - approval ทำ target updates ตาม `formType` แบบ atomic; `BASIC_INFO` ไม่เขียน `factory_name`, `factory_address` หรือ `eligible_factories.address` แม้ proposed snapshot ของคำขอเก่ามีค่าที่ต่างออกไป; ตาราง `factories` ไม่ใช่เป้าหมายของ workflow นี้
-- เมื่อ `formType = "MEASUREMENT_POINTS"` backend อัปเดตเฉพาะ active `cems_wpms_connected_measurement_points` ของโรงงานนั้น ได้แก่ `point_name`, `monitoring_point_status`, `details_json`, `documents_json` และ `instruments_json`
+- ถ้าคำขอ `MEASUREMENT_POINTS` เปลี่ยนข้อมูลทั่วไปด้วย จะตรวจ source profile version และ sync ข้อมูลทั่วไปไป active connected rows ทุกจุดและ active `eligible_factories` ตาม mapping ของ `BASIC_INFO` ใน transaction เดียวกับจุดตรวจวัด หากเปลี่ยนเฉพาะจุดจะไม่เขียนข้อมูลทั่วไปจาก snapshot เก่าทับ live data; หากส่วนใดล้มเหลวให้ rollback ทั้งคำขอ
+- เมื่อ `formType = "MEASUREMENT_POINTS"` backend อัปเดตข้อมูลจุดใน active `cems_wpms_connected_measurement_points` ของโรงงานนั้น ได้แก่ `point_name`, `monitoring_point_status`, `details_json`, `documents_json` และ `instruments_json`
 
 ## Errors
 

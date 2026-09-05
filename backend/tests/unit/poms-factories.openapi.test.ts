@@ -311,6 +311,12 @@ describe('POMS factory master-data OpenAPI contract', () => {
       }),
     );
 
+    for (const field of ['eia', 'eiaOther', 'projectName', 'factoryFrontPhotos', 'factoryLogo', 'latitude', 'longitude']) {
+      expect(requestProperties).toHaveProperty(field);
+    }
+    expect(createPomsFactoryEditRequestSchema.safeParse(request.example).success).toBe(true);
+    expect(request.example).toEqual(expect.objectContaining({ projectName: expect.any(String) }));
+
     const pointPatch = asObject(
       schemas().PomsFactoryMeasurementPointPatchRequest,
       'measurement-point patch request',

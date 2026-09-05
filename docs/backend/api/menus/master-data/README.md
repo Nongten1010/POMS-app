@@ -10,6 +10,8 @@
 
 `GET /api/v1/poms-factories` ใช้ response shape เดียวกับ `GET /api/v1/cems-wpms-requests/operator-factories` เพื่อให้ frontend ใช้ชื่อ field ชุดเดียวกัน แต่คืนเฉพาะโรงงาน current/live ใน POMS: connected rows เป็น authoritative source และใช้ active `eligible_factories` เฉพาะ metadata ที่ผูกกับโรงงานนั้น โดยไม่ hydrate payload จากคำขอเชื่อมต่อหรือ `factories`
 
+คู่มือส่งต่อ frontend สำหรับ section ข้อมูลทั่วไปในฟอร์มแก้ไขจุดตรวจวัด: [จุดที่ต้องแก้ ตัวอย่าง payload และรายการตรวจรับ](../../../guides/frontend-handoffs/measurement-point-general-info/README.md)
+
 ### Main Flow
 
 1. อ่านรายชื่อผ่าน `GET /api/v1/poms-factories` ด้วย shared operator-factory row shape แล้วอ่านรายละเอียดด้วย `GET /api/v1/poms-factories/:factoryId` ซึ่งยังคง detail shape เดิม
@@ -17,7 +19,7 @@
 3. ผู้ประกอบการส่งคำขอแก้ไขด้วย `factories:edit` โดยระบุ `formType` เป็น `BASIC_INFO` หรือ `MEASUREMENT_POINTS`
 4. ถ้า admin ส่งกลับให้แก้ไข ให้เรียก `GET /api/v1/poms-factories/edit-requests/:id/form` เพื่อลง proposed values รอบล่าสุดก่อน resubmit
 5. admin ใช้ `factories:approve` เพื่ออนุมัติ ขอแก้ไข หรือปฏิเสธ
-6. เมื่ออนุมัติ backend sync ข้อมูล current/live ตาม `formType`: `BASIC_INFO` อัปเดต active `cems_wpms_connected_measurement_points` และ `eligible_factories`, ส่วน `MEASUREMENT_POINTS` อัปเดต active `cems_wpms_connected_measurement_points` เท่านั้น โดยไม่อัปเดต `factories`
+6. เมื่ออนุมัติ backend sync ข้อมูล current/live ตาม `formType`: `BASIC_INFO` อัปเดต active `cems_wpms_connected_measurement_points` และ `eligible_factories`, ส่วน `MEASUREMENT_POINTS` อัปเดตจุดตรวจวัดใน active `cems_wpms_connected_measurement_points` และหากมีการแก้ข้อมูลทั่วไปด้วยจะ sync ไปยัง active connected rows และ `eligible_factories` ตาม mapping เดียวกับ `BASIC_INFO` ใน transaction เดียวกัน โดยไม่อัปเดต `factories`
 
 ```bash
 curl --request GET \

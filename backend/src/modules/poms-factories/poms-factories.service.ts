@@ -22,6 +22,7 @@ import type {
   PomsFactoryEditRequestDTO,
   PomsFactoryReviewActorContext,
   PomsFactoryProfileDTO,
+  PomsFactoryProfilePatchInput,
   PomsMeasurementPointDTO,
   ResubmitPomsFactoryEditRequestInput,
   ReviewPomsFactoryEditRequestInput,
@@ -100,12 +101,13 @@ export const pomsFactoriesService = {
 
     if (isMeasurementPointsRequest(input)) {
       const proposed = buildProposedMeasurementPoints(current.measurementPoints, input);
-      ensureMeasurementPointsChanged(current.measurementPoints, proposed);
+      const proposedFactory = buildProposedProfile(current, input);
+      ensureMeasurementRequestChanged(current, proposedFactory, proposed);
       return pomsFactoriesRepository.createEditRequest(
         current,
         {
           formType: POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.MEASUREMENT_POINTS,
-          proposedFactory: toProfileSnapshot(current),
+          proposedFactory,
           proposedMeasurementPoints: proposed,
         },
         input.note ?? null,
@@ -187,11 +189,9 @@ export const pomsFactoriesService = {
       regionalAccess,
     );
     const profile =
-      request.formType === POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.BASIC_INFO
-        ? {
-            ...toProfileSnapshot(current),
-            ...editableProfile(request.proposedFactory),
-          }
+      request.formType === POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.BASIC_INFO ||
+      hasProfileChanges(request.currentFactory, request.proposedFactory)
+        ? { ...toProfileSnapshot(current), ...editableProfile(request.proposedFactory) }
         : current;
     const points =
       request.formType === POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.MEASUREMENT_POINTS
@@ -235,12 +235,13 @@ export const pomsFactoriesService = {
         );
       }
       const proposed = buildProposedMeasurementPoints(current.measurementPoints, input);
-      ensureMeasurementPointsChanged(current.measurementPoints, proposed);
+      const proposedFactory = buildProposedProfile(current, input);
+      ensureMeasurementRequestChanged(current, proposedFactory, proposed);
       return pomsFactoriesRepository.resubmitEditRequest(
         id,
         {
           formType: POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.MEASUREMENT_POINTS,
-          proposedFactory: toProfileSnapshot(current),
+          proposedFactory,
           proposedMeasurementPoints: proposed,
         },
         input.note ?? null,
@@ -462,7 +463,7 @@ function mergeFactoryProfileDocuments(
 
 function buildProposedProfile(
   current: PomsFactoryProfileDTO,
-  input: Exclude<CreateAnyPomsFactoryEditRequestInput, { formType: 'MEASUREMENT_POINTS' }>,
+  input: PomsFactoryProfilePatchInput,
 ): PomsFactoryProfileDTO {
   const proposed: PomsFactoryProfileDTO = {
     ...toProfileSnapshot(current),
@@ -505,8 +506,8 @@ function toProfileSnapshot(factory: PomsFactoryProfileDTO): PomsFactoryProfileDT
 }
 
 function patchValue<T>(
-  input: Exclude<CreateAnyPomsFactoryEditRequestInput, { formType: 'MEASUREMENT_POINTS' }>,
-  key: keyof Exclude<CreateAnyPomsFactoryEditRequestInput, { formType: 'MEASUREMENT_POINTS' }>,
+  input: PomsFactoryProfilePatchInput,
+  key: keyof PomsFactoryProfilePatchInput,
   current: T,
 ): T {
   return Object.prototype.hasOwnProperty.call(input, key) ? ((input[key] ?? null) as T) : current;
@@ -516,9 +517,13 @@ function ensureProfileChanged(
   current: PomsFactoryProfileDTO,
   proposed: PomsFactoryProfileDTO,
 ): void {
-  if (JSON.stringify(editableProfile(current)) === JSON.stringify(editableProfile(proposed))) {
+  if (!hasProfileChanges(current, proposed)) {
     throw new ConflictError('POMS factory edit request does not contain any changes');
   }
+}
+
+function hasProfileChanges(current: PomsFactoryProfileDTO, proposed: PomsFactoryProfileDTO): boolean {
+  return JSON.stringify(editableProfile(current)) !== JSON.stringify(editableProfile(proposed));
 }
 
 function editableProfile(profile: PomsFactoryProfileDTO) {
@@ -581,13 +586,15 @@ function buildProposedMeasurementPoints(
   });
 }
 
-function ensureMeasurementPointsChanged(
-  currentPoints: PomsMeasurementPointDTO[],
+function ensureMeasurementRequestChanged(
+  current: PomsFactoryDetailDTO,
+  proposedFactory: PomsFactoryProfileDTO,
   proposedPoints: PomsMeasurementPointDTO[],
 ): void {
   if (
-    JSON.stringify(currentPoints.map(editableMeasurementPoint)) ===
-    JSON.stringify(proposedPoints.map(editableMeasurementPoint))
+    !hasProfileChanges(current, proposedFactory) &&
+    JSON.stringify(current.measurementPoints.map(editableMeasurementPoint)) ===
+      JSON.stringify(proposedPoints.map(editableMeasurementPoint))
   ) {
     throw new ConflictError('POMS factory edit request does not contain any changes');
   }

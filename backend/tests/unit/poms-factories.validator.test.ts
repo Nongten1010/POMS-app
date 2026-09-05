@@ -244,3 +244,59 @@ describe('POMS factory edit request validators', () => {
     ).toBe(true);
   });
 });
+
+
+describe.each([
+  ['create', createPomsFactoryEditRequestSchema],
+  ['resubmit', resubmitPomsFactoryEditRequestSchema],
+])('POMS measurement-point general factory fields on %s', (_operation, schema) => {
+  const points = {
+    formType: 'MEASUREMENT_POINTS',
+    measurementPoints: [{ connectedPointId: 15, pointName: 'ปล่อง A' }],
+  };
+
+  it('accepts all seven profile fields alongside point data', () => {
+    const input = {
+      ...points,
+      eia: 'อื่นๆ',
+      eiaOther: 'รายงานเฉพาะ',
+      projectName: 'โครงการใหม่',
+      latitude: 13.1,
+      longitude: 100.1,
+      factoryFrontPhotos: [frontPhoto],
+      factoryLogo,
+    };
+    expect(schema.parse(input)).toMatchObject(input);
+  });
+
+  it('preserves omitted fields and explicit clears', () => {
+    expect(schema.parse(points)).not.toHaveProperty('projectName');
+    const clears = {
+      projectName: null,
+      factoryFrontPhotos: [],
+      factoryLogo: null,
+      latitude: null,
+      longitude: null,
+      eia: null,
+      eiaOther: null,
+    };
+    expect(schema.parse({ ...points, ...clears })).toMatchObject(clears);
+  });
+
+  it.each([
+    { latitude: 13.1 },
+    { latitude: null, longitude: 100.1 },
+    { latitude: 91, longitude: 100.1 },
+    { latitude: 13.1, longitude: 181 },
+    { eia: 'อื่นๆ' },
+    { eia: 'มี EIA', eiaOther: 'ผิดประเภท' },
+    { factoryFrontPhotos: null },
+    { factoryName: 'เปลี่ยนชื่อ' },
+    { factoryAddress: 'เปลี่ยนที่อยู่' },
+    { address: 'เปลี่ยนที่อยู่' },
+    { factoryId: 'other-factory' },
+    { status: 'APPROVED' },
+  ])('rejects invalid or read-only profile data %j', (patch) => {
+    expect(schema.safeParse({ ...points, ...patch }).success).toBe(false);
+  });
+});

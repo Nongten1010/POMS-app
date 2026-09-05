@@ -104,8 +104,7 @@ export interface PomsFactoryDetailDTO extends PomsFactorySummaryDTO {
   measurementPoints: PomsMeasurementPointDTO[];
 }
 
-export interface CreatePomsFactoryEditRequestInput {
-  formType?: typeof POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.BASIC_INFO;
+export interface PomsFactoryProfilePatchInput {
   latitude?: number | null;
   longitude?: number | null;
   eia?: ConnectionRequestEiaAssessment | null;
@@ -113,6 +112,10 @@ export interface CreatePomsFactoryEditRequestInput {
   projectName?: string | null;
   factoryFrontPhotos?: RequestDocumentImageInput[];
   factoryLogo?: RequestDocumentImageInput | null;
+}
+
+export interface CreatePomsFactoryEditRequestInput extends PomsFactoryProfilePatchInput {
+  formType?: typeof POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.BASIC_INFO;
 }
 
 export interface PomsMeasurementPointPatchInput {
@@ -124,7 +127,8 @@ export interface PomsMeasurementPointPatchInput {
   measurementInstruments?: MeasurementInstrumentsInput | null;
 }
 
-export interface CreatePomsFactoryMeasurementPointsEditRequestInput {
+export interface CreatePomsFactoryMeasurementPointsEditRequestInput
+  extends PomsFactoryProfilePatchInput {
   formType: typeof POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.MEASUREMENT_POINTS;
   measurementPoints: PomsMeasurementPointPatchInput[];
   note?: string | null;

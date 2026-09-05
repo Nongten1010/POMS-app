@@ -586,11 +586,29 @@ async function applyApprovedRequestInTransaction(
     const proposedMeasurementPoints = requireMeasurementPointSnapshotArray(
       request.proposed_measurement_points_json,
     );
+    const currentFactory = requireProfileSnapshot(request.current_factory_json);
+    const proposedFactory = requireProfileSnapshot(request.proposed_factory_json);
+    const profileChanged =
+      JSON.stringify(buildApprovedPomsFactoryProfilePatches(currentFactory)) !==
+      JSON.stringify(buildApprovedPomsFactoryProfilePatches(proposedFactory));
+    const pointUpdates = buildApprovedPomsMeasurementPointUpdates(
+      currentMeasurementPoints,
+      proposedMeasurementPoints,
+    );
+    if (!profileChanged && pointUpdates.length === 0) {
+      throw new ConflictError('POMS measurement-point edit request does not contain any changes');
+    }
+    if (profileChanged) {
+      ensureSameProfileVersion(
+        toIsoStringRequired(request.source_profile_updated_at),
+        latestProfile.updatedAt,
+      );
+      await applyApprovedFactoryProfileInTransaction(trx, request, proposedFactory, actorUserId);
+    }
     await applyApprovedMeasurementPointsInTransaction(
       trx,
       Number(request.eligible_factory_id),
-      currentMeasurementPoints,
-      proposedMeasurementPoints,
+      pointUpdates,
       actorUserId,
     );
     return;
@@ -602,6 +620,15 @@ async function applyApprovedRequestInTransaction(
     latestProfile.updatedAt,
   );
   const proposed = requireProfileSnapshot(request.proposed_factory_json);
+  await applyApprovedFactoryProfileInTransaction(trx, request, proposed, actorUserId);
+}
+
+async function applyApprovedFactoryProfileInTransaction(
+  trx: Knex.Transaction,
+  request: EditRequestRow,
+  proposed: PomsFactoryProfileDTO,
+  actorUserId: number,
+): Promise<void> {
   const patches = buildApprovedPomsFactoryProfilePatches(proposed);
   const connectedPointUpdateCount = await trx('cems_wpms_connected_measurement_points')
     .where('eligible_factory_id', request.eligible_factory_id)
@@ -631,15 +658,9 @@ async function applyApprovedRequestInTransaction(
 async function applyApprovedMeasurementPointsInTransaction(
   trx: Knex.Transaction,
   eligibleFactoryId: number,
-  currentPoints: PomsMeasurementPointDTO[],
-  proposedPoints: PomsMeasurementPointDTO[],
+  updates: ReturnType<typeof buildApprovedPomsMeasurementPointUpdates>,
   actorUserId: number,
 ): Promise<void> {
-  const updates = buildApprovedPomsMeasurementPointUpdates(currentPoints, proposedPoints);
-  if (updates.length === 0) {
-    throw new ConflictError('POMS measurement-point edit request does not contain any changes');
-  }
-
   for (const update of updates) {
     const updatedCount = await trx('cems_wpms_connected_measurement_points')
       .where('id', update.connectedPointId)

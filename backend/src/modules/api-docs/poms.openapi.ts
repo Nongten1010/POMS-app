@@ -541,6 +541,58 @@ const reviewEligibleFactoryAddRequestExample = {
 
 const favoriteExample = { isFavorite: true };
 
+const pomsFactoryEditableProfileProperties = {
+  latitude: {
+    type: 'number',
+    minimum: -90,
+    maximum: 90,
+    nullable: true,
+    description:
+      'Optional; ต้องส่งคู่กับ longitude. omitted = คงค่าเดิม, ส่ง latitude/longitude เป็น null ทั้งคู่ = ล้างพิกัด',
+  },
+  longitude: {
+    type: 'number',
+    minimum: -180,
+    maximum: 180,
+    nullable: true,
+    description:
+      'Optional; ต้องส่งคู่กับ latitude. omitted = คงค่าเดิม, ส่ง latitude/longitude เป็น null ทั้งคู่ = ล้างพิกัด',
+  },
+  eia: {
+    type: 'string',
+    enum: ['มี', 'ไม่มี', 'มี IEE', 'มี EIA', 'มี EHIA', 'อื่นๆ'],
+    nullable: true,
+    description:
+      'Optional; eia = อื่นๆ ต้องส่ง eiaOther. omitted = คงค่าเดิม, null = ล้าง eia และ eiaOther',
+  },
+  eiaOther: {
+    type: 'string',
+    minLength: 1,
+    maxLength: 500,
+    nullable: true,
+    description:
+      'ส่งข้อความพร้อม eia = อื่นๆ; ล้างข้อความโดยเปลี่ยน eia เป็นค่าอื่นหรือ null. ส่ง eiaOther = null เพียงอย่างเดียวไม่เปลี่ยนค่า',
+  },
+  projectName: {
+    type: 'string',
+    minLength: 1,
+    maxLength: 500,
+    nullable: true,
+    description: 'Optional; omitted = คงค่าเดิม, null = ล้างค่า',
+  },
+  factoryFrontPhotos: {
+    type: 'array',
+    maxItems: 10,
+    items: schemaRef('RequestDocumentImage'),
+    description: 'Optional; omitted = คงค่าเดิม, [] = ล้างภาพถ่ายด้านหน้าโรงงานทั้งหมด',
+  },
+  factoryLogo: {
+    allOf: [schemaRef('RequestDocumentImage')],
+    nullable: true,
+    description: 'Optional; รับสูงสุด 1 object, omitted = คงค่าเดิม, null = ล้างตราสัญลักษณ์โรงงาน',
+  },
+};
+
 const pomsFactoryEditRequestExample = {
   formType: 'BASIC_INFO',
   latitude: 13.7563,
@@ -568,6 +620,9 @@ const pomsFactoryEditRequestExample = {
 
 const pomsFactoryMeasurementPointEditRequestExample = {
   formType: 'MEASUREMENT_POINTS',
+  projectName: 'โครงการปรับปรุงระบบตรวจวัด',
+  latitude: 13.1,
+  longitude: 100.1,
   measurementPoints: [
     {
       connectedPointId: 15,
@@ -1982,56 +2037,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
         enum: ['BASIC_INFO'],
         description: 'Optional เพื่อรองรับ client เดิม; omitted จะตีความเป็น BASIC_INFO',
       },
-      latitude: {
-        type: 'number',
-        minimum: -90,
-        maximum: 90,
-        nullable: true,
-        description:
-          'Optional; ต้องส่งคู่กับ longitude. omitted = คงค่าเดิม, ส่ง latitude/longitude เป็น null ทั้งคู่ = ล้างพิกัด',
-      },
-      longitude: {
-        type: 'number',
-        minimum: -180,
-        maximum: 180,
-        nullable: true,
-        description:
-          'Optional; ต้องส่งคู่กับ latitude. omitted = คงค่าเดิม, ส่ง latitude/longitude เป็น null ทั้งคู่ = ล้างพิกัด',
-      },
-      eia: {
-        type: 'string',
-        enum: ['มี', 'ไม่มี', 'มี IEE', 'มี EIA', 'มี EHIA', 'อื่นๆ'],
-        nullable: true,
-        description:
-          'Optional; eia = อื่นๆ ต้องส่ง eiaOther. omitted = คงค่าเดิม, null = ล้าง eia และ eiaOther',
-      },
-      eiaOther: {
-        type: 'string',
-        minLength: 1,
-        maxLength: 500,
-        nullable: true,
-        description:
-          'ส่งข้อความพร้อม eia = อื่นๆ; ล้างข้อความโดยเปลี่ยน eia เป็นค่าอื่นหรือ null. ส่ง eiaOther = null เพียงอย่างเดียวไม่เปลี่ยนค่า',
-      },
-      projectName: {
-        type: 'string',
-        minLength: 1,
-        maxLength: 500,
-        nullable: true,
-        description: 'Optional; omitted = คงค่าเดิม, null = ล้างค่า',
-      },
-      factoryFrontPhotos: {
-        type: 'array',
-        maxItems: 10,
-        items: schemaRef('RequestDocumentImage'),
-        description: 'Optional; omitted = คงค่าเดิม, [] = ล้างภาพถ่ายด้านหน้าโรงงานทั้งหมด',
-      },
-      factoryLogo: {
-        allOf: [schemaRef('RequestDocumentImage')],
-        nullable: true,
-        description:
-          'Optional; รับสูงสุด 1 object, omitted = คงค่าเดิม, null = ล้างตราสัญลักษณ์โรงงาน',
-      },
+      ...pomsFactoryEditableProfileProperties,
     },
     example: pomsFactoryEditRequestExample,
   },
@@ -2071,11 +2077,14 @@ const componentSchemas: Record<string, OpenApiObject> = {
     type: 'object',
     additionalProperties: false,
     required: ['formType', 'measurementPoints'],
+    description:
+      'รองรับข้อมูลทั่วไปของโรงงานทั้ง 7 field เช่นเดียวกับ BASIC_INFO ควบคู่กับจุดตรวจวัด. ต้องมีการเปลี่ยนแปลงอย่างน้อยหนึ่งส่วน; อนุมัติทั้งสองส่วนใน transaction เดียวกัน',
     properties: {
       formType: {
         type: 'string',
         enum: ['MEASUREMENT_POINTS'],
       },
+      ...pomsFactoryEditableProfileProperties,
       measurementPoints: {
         type: 'array',
         minItems: 1,
@@ -4961,7 +4970,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Submit a POMS factory edit request',
       operationId: 'createPomsFactoryEditRequest',
       description:
-        'ต้องมี factories:view และ factories:edit โดยการคัดโรงงานสำหรับ mutation ยึด data scope ของ factories:edit. body รองรับ 2 แบบฟอร์ม: BASIC_INFO และ MEASUREMENT_POINTS โดยหนึ่งโรงงานเปิดคำขอได้ครั้งละหนึ่งรายการต่อ formType. BASIC_INFO รับเฉพาะ 7 field ใน PomsFactoryEditableProfileRequest. backend lock ข้อมูล current/live connected POMS เพื่อตรวจ source version ของ snapshot และบันทึกคำขอกับ event ใน transaction เดียวกัน; หากล้มเหลวจะ rollback ทั้ง transaction',
+        'ต้องมี factories:view และ factories:edit โดยการคัดโรงงานสำหรับ mutation ยึด data scope ของ factories:edit. body รองรับ 2 แบบฟอร์ม: BASIC_INFO และ MEASUREMENT_POINTS โดยหนึ่งโรงงานเปิดคำขอได้ครั้งละหนึ่งรายการต่อ formType. BASIC_INFO รับเฉพาะ 7 field ใน PomsFactoryEditableProfileRequest; MEASUREMENT_POINTS รับ 7 field เดียวกันเป็น optional top-level fields ร่วมกับ measurementPoints และยอมรับการเปลี่ยนเฉพาะข้อมูลโรงงาน. backend lock ข้อมูล current/live connected POMS เพื่อตรวจ source version ของ snapshot และบันทึกคำขอกับ event ใน transaction เดียวกัน; หากล้มเหลวจะ rollback ทั้ง transaction',
       parameters: [factoryIdParameter],
       requestBody: jsonRequestBody(
         schemaRef('PomsFactoryEditSubmissionRequest'),
@@ -4997,7 +5006,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Get proposed POMS edit request as connection-request form',
       operationId: 'getPomsFactoryEditRequestForm',
       description:
-        'คืน proposed snapshot ด้วย canonical form-prefill field names ชุดเดียวกับ GET /cems-wpms-requests/{id}/form และไม่คืน POMS/workflow IDs. BASIC_INFO overlay เฉพาะ eia, eiaOther, projectName, factoryFrontPhotos, factoryLogo, latitude และ longitude; ชื่อโรงงาน ที่อยู่ และข้อมูลอ่านอย่างเดียวใช้ current/live แม้เป็นคำขอเก่า. Permission: factories:view; ถ้ามีทั้ง CEMS และ WPMS ต้องระบุ systemType',
+        'คืน proposed snapshot ด้วย canonical form-prefill field names ชุดเดียวกับ GET /cems-wpms-requests/{id}/form และไม่คืน POMS/workflow IDs. ทั้ง BASIC_INFO และ MEASUREMENT_POINTS overlay เฉพาะ eia, eiaOther, projectName, factoryFrontPhotos, factoryLogo, latitude และ longitude; ชื่อโรงงาน ที่อยู่ และข้อมูลอ่านอย่างเดียวใช้ current/live แม้เป็นคำขอเก่า. Permission: factories:view; ถ้ามีทั้ง CEMS และ WPMS ต้องระบุ systemType',
       parameters: [
         idParameter,
         queryEnum(
@@ -5015,7 +5024,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Resubmit a revised POMS factory edit request',
       operationId: 'resubmitPomsFactoryEditRequest',
       description:
-        'ต้องมี factories:view และ factories:edit โดยการคัดคำขอสำหรับ mutation ยึด data scope ของ factories:edit. body รองรับทั้ง BASIC_INFO และ MEASUREMENT_POINTS; ทำได้เมื่อ status = REVISION_REQUESTED เท่านั้น. backend lock ข้อมูล current/live connected POMS เพื่อตรวจ source version ของ snapshot รอบใหม่ และบันทึกคำขอกับ event ใน transaction เดียวกัน; หากล้มเหลวจะ rollback ทั้ง transaction',
+        'ต้องมี factories:view และ factories:edit โดยการคัดคำขอสำหรับ mutation ยึด data scope ของ factories:edit. body รองรับทั้ง BASIC_INFO และ MEASUREMENT_POINTS รวม 7 editable factory fields; ทำได้เมื่อ status = REVISION_REQUESTED เท่านั้น. backend lock ข้อมูล current/live connected POMS เพื่อตรวจ source version ของ snapshot รอบใหม่ และบันทึกคำขอกับ event ใน transaction เดียวกัน; หากล้มเหลวจะ rollback ทั้ง transaction',
       parameters: [idParameter],
       requestBody: jsonRequestBody(schemaRef('PomsFactoryEditSubmissionRequest'), {
         ...pomsFactoryEditRequestExample,

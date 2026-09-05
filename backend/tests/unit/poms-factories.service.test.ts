@@ -405,6 +405,103 @@ describe('pomsFactoriesService edit-request workflow', () => {
     );
   });
 
+  it.each(['create', 'resubmit'] as const)(
+    'allows a general-factory-only change on measurement-point %s',
+    async (operation) => {
+      const current = factoryDetail();
+      mockedRepository.findEditRequestById.mockResolvedValue(
+        editRequest('REVISION_REQUESTED', {
+          formType: 'MEASUREMENT_POINTS',
+          currentMeasurementPoints: current.measurementPoints,
+          proposedMeasurementPoints: current.measurementPoints,
+        }),
+      );
+      const input = {
+        formType: 'MEASUREMENT_POINTS' as const,
+        projectName: 'โครงการใหม่',
+        factoryFrontPhotos: [],
+        factoryLogo: null,
+        measurementPoints: [
+          { connectedPointId: 15, pointName: current.measurementPoints[0].pointName },
+        ],
+      };
+      if (operation === 'create') {
+        await pomsFactoriesService.createEditRequest(
+          'factory-001',
+          input,
+          42,
+          ownFactoryScope,
+          null,
+        );
+      } else {
+        await pomsFactoriesService.resubmitEditRequest(11, input, 42, ownFactoryScope, null);
+      }
+      const payload =
+        operation === 'create'
+          ? mockedRepository.createEditRequest.mock.calls[0]?.[1]
+          : mockedRepository.resubmitEditRequest.mock.calls[0]?.[1];
+      expect(payload?.proposedFactory).toMatchObject({
+        projectName: 'โครงการใหม่',
+        factoryFrontPhotos: [],
+        factoryLogo: null,
+        factoryName: current.factoryName,
+        factoryAddress: current.factoryAddress,
+        latitude: current.latitude,
+        longitude: current.longitude,
+      });
+      expect(payload?.proposedMeasurementPoints).toEqual(current.measurementPoints);
+    },
+  );
+
+  it('prefills proposed general factory values and documents in a measurement-point revision', async () => {
+    const current = factoryDetail();
+    mockedRepository.findEditRequestById.mockResolvedValue(
+      editRequest('REVISION_REQUESTED', {
+        formType: 'MEASUREMENT_POINTS',
+        proposedFactory: {
+          ...current,
+          projectName: 'โครงการใหม่',
+          latitude: 13.1,
+          factoryFrontPhotos: [],
+          factoryLogo: null,
+        },
+        currentMeasurementPoints: current.measurementPoints,
+        proposedMeasurementPoints: current.measurementPoints,
+      }),
+    );
+    const result = await pomsFactoriesService.getEditRequestForm(11, 42, ownFactoryScope, {
+      systemType: 'CEMS',
+    });
+    expect(result).toMatchObject({
+      projectName: 'โครงการใหม่',
+      latitude: 13.1,
+      factoryName: current.factoryName,
+      address: current.factoryAddress,
+    });
+    expect(result.measurementPoints[0].documentsAndImages).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ fileName: 'front.jpg' })]),
+    );
+  });
+
+  it('rejects a measurement-point request when neither factory nor point data changed', async () => {
+    const current = factoryDetail();
+    await expect(
+      pomsFactoriesService.createEditRequest(
+        'factory-001',
+        {
+          formType: 'MEASUREMENT_POINTS',
+          projectName: current.projectName,
+          measurementPoints: [
+            { connectedPointId: 15, pointName: current.measurementPoints[0].pointName },
+          ],
+        },
+        42,
+        ownFactoryScope,
+      ),
+    ).rejects.toBeInstanceOf(ConflictError);
+    expect(mockedRepository.createEditRequest).not.toHaveBeenCalled();
+  });
+
   it('resubmits a measurement-point request without allowing the form type to change', async () => {
     const measurementPoints = factoryDetail().measurementPoints;
     mockedRepository.findEditRequestById.mockResolvedValue(

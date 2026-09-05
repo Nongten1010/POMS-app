@@ -63,16 +63,54 @@ export const listPomsFactoryEditRequestsQuerySchema = z
   })
   .strict();
 
+const editableFactoryProfileFields = {
+  latitude: z.number().finite().min(-90).max(90).nullable().optional(),
+  longitude: z.number().finite().min(-180).max(180).nullable().optional(),
+  eia: z.enum(CONNECTION_REQUEST_EIA_ASSESSMENTS).nullable().optional(),
+  eiaOther: optionalNullableTrimmedString(500),
+  projectName: optionalNullableTrimmedString(500),
+  factoryFrontPhotos: z.array(requestDocumentImageSchema).max(10).optional(),
+  factoryLogo: requestDocumentImageSchema.nullable().optional(),
+};
+
+const editableFactoryProfileFieldSchema = z.object(editableFactoryProfileFields);
+
+function validateFactoryProfileFields(
+  value: z.infer<typeof editableFactoryProfileFieldSchema>,
+  ctx: z.RefinementCtx,
+): void {
+  const hasLatitude = Object.prototype.hasOwnProperty.call(value, 'latitude');
+  const hasLongitude = Object.prototype.hasOwnProperty.call(value, 'longitude');
+  if (hasLatitude !== hasLongitude || (value.latitude === null) !== (value.longitude === null)) {
+    ctx.addIssue({
+      code: 'custom',
+      path: hasLatitude ? ['longitude'] : ['latitude'],
+      message: 'latitude and longitude must be provided or cleared together',
+    });
+  }
+
+  const hasEia = Object.prototype.hasOwnProperty.call(value, 'eia');
+  const hasEiaOther = Object.prototype.hasOwnProperty.call(value, 'eiaOther');
+  if (value.eia === 'อื่นๆ' && !value.eiaOther) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['eiaOther'],
+      message: 'eiaOther is required when eia is อื่นๆ',
+    });
+  }
+  if (hasEiaOther && (!hasEia || value.eia !== 'อื่นๆ') && value.eiaOther !== null) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['eiaOther'],
+      message: 'eiaOther is only allowed when eia is อื่นๆ',
+    });
+  }
+}
+
 const editableFactoryProfileSchema = z
   .object({
     formType: z.literal(POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.BASIC_INFO).optional(),
-    latitude: z.number().finite().min(-90).max(90).nullable().optional(),
-    longitude: z.number().finite().min(-180).max(180).nullable().optional(),
-    eia: z.enum(CONNECTION_REQUEST_EIA_ASSESSMENTS).nullable().optional(),
-    eiaOther: optionalNullableTrimmedString(500),
-    projectName: optionalNullableTrimmedString(500),
-    factoryFrontPhotos: z.array(requestDocumentImageSchema).max(10).optional(),
-    factoryLogo: requestDocumentImageSchema.nullable().optional(),
+    ...editableFactoryProfileFields,
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -92,32 +130,7 @@ const editableFactoryProfileSchema = z
         message: 'factory profile patch must include at least one editable field',
       });
     }
-    const hasLatitude = Object.prototype.hasOwnProperty.call(value, 'latitude');
-    const hasLongitude = Object.prototype.hasOwnProperty.call(value, 'longitude');
-    if (hasLatitude !== hasLongitude || (value.latitude === null) !== (value.longitude === null)) {
-      ctx.addIssue({
-        code: 'custom',
-        path: hasLatitude ? ['longitude'] : ['latitude'],
-        message: 'latitude and longitude must be provided or cleared together',
-      });
-    }
-
-    const hasEia = Object.prototype.hasOwnProperty.call(value, 'eia');
-    const hasEiaOther = Object.prototype.hasOwnProperty.call(value, 'eiaOther');
-    if (value.eia === 'อื่นๆ' && !value.eiaOther) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['eiaOther'],
-        message: 'eiaOther is required when eia is อื่นๆ',
-      });
-    }
-    if (hasEiaOther && (!hasEia || value.eia !== 'อื่นๆ') && value.eiaOther !== null) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['eiaOther'],
-        message: 'eiaOther is only allowed when eia is อื่นๆ',
-      });
-    }
+    validateFactoryProfileFields(value, ctx);
   });
 
 const editableMeasurementPointPatchSchema: z.ZodType<PomsMeasurementPointPatchInput> = z
@@ -154,12 +167,14 @@ const editableMeasurementPointsSchema: z.ZodType<CreatePomsFactoryMeasurementPoi
   z
     .object({
       formType: z.literal(POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.MEASUREMENT_POINTS),
+      ...editableFactoryProfileFields,
       remarks: optionalNullableTrimmedString(1000),
       measurementPoints: z.array(editableMeasurementPointPatchSchema).min(1).max(100),
       note: optionalNullableTrimmedString(1000),
     })
     .strict()
     .superRefine((value, ctx) => {
+      validateFactoryProfileFields(value, ctx);
       const seen = new Set<number>();
       value.measurementPoints.forEach((point, index) => {
         if (!seen.has(point.connectedPointId)) {
