@@ -976,6 +976,7 @@ Approval target mapping:
 
 - หนึ่งโรงงานมี open request ได้หนึ่งรายการต่อ `formType` โดย open status คือ `PENDING_REVIEW`, `REVISION_REQUESTED` หรือ `REVISED_PENDING_REVIEW`
 - create/resubmission/cancel/review ไม่รับ `Idempotency-Key`; การยกเลิกซ้ำตอบ `409 INVALID_STATUS_TRANSITION` ส่วนการเรียก transition อื่นซ้ำตอบ `409 CONFLICT`
+- create/resubmission lock ข้อมูล current/live connected POMS และตรวจ source version ของ snapshot ใน transaction เดียวกับการบันทึกคำขอและ event; หากขั้นตอนใดล้มเหลว transaction จะ rollback จึงไม่เหลือคำขอหรือ event ที่บันทึกเพียงบางส่วน
 - การอนุมัติ lock คำขอและข้อมูล current/live ที่เกี่ยวข้องใน transaction เดียวกัน และตรวจ source version จากตอนส่ง/ส่งกลับ หากข้อมูลจริงถูกเปลี่ยนระหว่างรอพิจารณาให้ตอบ `409 CONFLICT` โดยไม่มี partial update
 - approval ทำ target updates ตาม `formType` แบบ atomic; ตาราง `factories` ไม่ใช่เป้าหมายของ workflow นี้
 - เมื่อ `formType = "MEASUREMENT_POINTS"` backend อัปเดตเฉพาะ active `cems_wpms_connected_measurement_points` ของโรงงานนั้น ได้แก่ `point_name`, `monitoring_point_status`, `details_json`, `documents_json` และ `instruments_json`

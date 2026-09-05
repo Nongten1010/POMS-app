@@ -519,6 +519,13 @@ export function buildConnectedFactoryRowsQueryForTests(
   return buildConnectedFactoryRowsQuery(access, search);
 }
 
+export function buildLockedCurrentFactoryProfileQueryForTests(
+  executor: DbExecutor,
+  eligibleFactoryId: number,
+): Knex.QueryBuilder<ConnectedFactoryRow, ConnectedFactoryRow[]> {
+  return buildLockedCurrentFactoryProfileQuery(executor, eligibleFactoryId);
+}
+
 export function buildEditRequestsQueryForTests(
   access: FactoryAccess,
 ): Knex.QueryBuilder<EditRequestRow, EditRequestRow[]> {
@@ -960,7 +967,19 @@ async function lockCurrentFactoryProfile(
   trx: Knex.Transaction,
   eligibleFactoryId: number,
 ): Promise<PomsFactoryDetailDTO> {
-  const rows = await trx<ConnectedFactoryRow>('cems_wpms_connected_measurement_points as cp')
+  const rows = await buildLockedCurrentFactoryProfileQuery(trx, eligibleFactoryId);
+  if (rows.length === 0) throw new ConflictError('Connected POMS factory is no longer active');
+  return toFactoryDetail(uniqueConnectedPointRows(rows), 0);
+}
+
+function buildLockedCurrentFactoryProfileQuery(
+  executor: DbExecutor,
+  eligibleFactoryId: number,
+): Knex.QueryBuilder<ConnectedFactoryRow, ConnectedFactoryRow[]> {
+  // Knex MSSQL forUpdate() puts the hint after JOINs; bind it to the live table instead.
+  return executor<ConnectedFactoryRow>(
+    executor.raw('?? AS ?? WITH (UPDLOCK)', ['cems_wpms_connected_measurement_points', 'cp']),
+  )
     .innerJoin('eligible_factories as ef', function joinEligibleFactory() {
       this.on('ef.id', '=', 'cp.eligible_factory_id').andOnNull('ef.deleted_at');
     })
@@ -968,7 +987,6 @@ async function lockCurrentFactoryProfile(
     .leftJoin('industrial_estates as ie', 'ie.name_th', 'ef.industrial_estate_name')
     .where('cp.eligible_factory_id', eligibleFactoryId)
     .whereNull('cp.deleted_at')
-    .forUpdate()
     .select(
       'cp.id as connected_point_id',
       'cp.source_measurement_point_id',
@@ -999,8 +1017,6 @@ async function lockCurrentFactoryProfile(
       'cp.instruments_json',
       'cp.updated_at',
     );
-  if (rows.length === 0) throw new ConflictError('Connected POMS factory is no longer active');
-  return toFactoryDetail(uniqueConnectedPointRows(rows), 0);
 }
 
 function summarizeFactoriesForOperatorRows(

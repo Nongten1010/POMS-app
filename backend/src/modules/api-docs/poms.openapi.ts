@@ -4988,7 +4988,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Submit a POMS factory edit request',
       operationId: 'createPomsFactoryEditRequest',
       description:
-        'ต้องมี factories:view และ factories:edit โดยการคัดโรงงานสำหรับ mutation ยึด data scope ของ factories:edit. body รองรับ 2 แบบฟอร์ม: BASIC_INFO และ MEASUREMENT_POINTS โดยหนึ่งโรงงานเปิดคำขอได้ครั้งละหนึ่งรายการต่อ formType',
+        'ต้องมี factories:view และ factories:edit โดยการคัดโรงงานสำหรับ mutation ยึด data scope ของ factories:edit. body รองรับ 2 แบบฟอร์ม: BASIC_INFO และ MEASUREMENT_POINTS โดยหนึ่งโรงงานเปิดคำขอได้ครั้งละหนึ่งรายการต่อ formType. backend lock ข้อมูล current/live connected POMS เพื่อตรวจ source version ของ snapshot และบันทึกคำขอกับ event ใน transaction เดียวกัน; หากล้มเหลวจะ rollback ทั้ง transaction',
       parameters: [factoryIdParameter],
       requestBody: jsonRequestBody(
         schemaRef('PomsFactoryEditSubmissionRequest'),
@@ -5042,7 +5042,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Resubmit a revised POMS factory edit request',
       operationId: 'resubmitPomsFactoryEditRequest',
       description:
-        'ต้องมี factories:view และ factories:edit โดยการคัดคำขอสำหรับ mutation ยึด data scope ของ factories:edit. body รองรับทั้ง BASIC_INFO และ MEASUREMENT_POINTS; ทำได้เมื่อ status = REVISION_REQUESTED เท่านั้น',
+        'ต้องมี factories:view และ factories:edit โดยการคัดคำขอสำหรับ mutation ยึด data scope ของ factories:edit. body รองรับทั้ง BASIC_INFO และ MEASUREMENT_POINTS; ทำได้เมื่อ status = REVISION_REQUESTED เท่านั้น. backend lock ข้อมูล current/live connected POMS เพื่อตรวจ source version ของ snapshot รอบใหม่ และบันทึกคำขอกับ event ใน transaction เดียวกัน; หากล้มเหลวจะ rollback ทั้ง transaction',
       parameters: [idParameter],
       requestBody: jsonRequestBody(schemaRef('PomsFactoryEditSubmissionRequest'), {
         ...pomsFactoryEditRequestExample,
@@ -5090,7 +5090,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Review a POMS factory edit request',
       operationId: 'reviewPomsFactoryEditRequest',
       description:
-        'ต้องมี factories:view และ factories:approve โดยการคัดคำขอยึด data scope ของ factories:approve และผู้พิจารณาต้องเป็น admin เท่านั้น; ห้ามทั้ง original creator (createdBy) และ latest submitter (submittedBy) พิจารณาคำขอของตนเอง. APPROVE จะอัปเดตข้อมูล current/live ตาม formType',
+        'ต้องมี factories:view และ factories:approve โดยการคัดคำขอยึด data scope ของ factories:approve และผู้พิจารณาต้องเป็น admin เท่านั้น; ห้ามทั้ง original creator (createdBy) และ latest submitter (submittedBy) พิจารณาคำขอของตนเอง. APPROVE lock คำขอและข้อมูล current/live connected POMS เพื่อตรวจ source version จากตอนส่ง/ส่งกลับ ก่อนอัปเดตข้อมูลตาม formType พร้อมคำขอและ event ใน transaction เดียวกัน; หากล้มเหลวจะ rollback ทั้ง transaction',
       parameters: [idParameter],
       requestBody: jsonRequestBody(
         schemaRef('PomsFactoryEditReviewRequest'),
