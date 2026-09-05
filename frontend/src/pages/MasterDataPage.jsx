@@ -33,7 +33,10 @@ import UploadFileIcon from '@mui/icons-material/UploadFile'
 import { DataGrid } from '@mui/x-data-grid'
 import { RequestFormBottomSheet } from './ConnectionRequestPage'
 import {
+  FACTORY_BASIC_INFO_EIA_OPTIONS,
+  buildFactoryBasicInfoPayload,
   buildFactoryDocumentPatch,
+  buildFactoryEditableProfilePatch,
   canCancelFactoryEditRequest,
   getFactoryDocumentFileError,
   getFactoryEditRequestStatusLabel,
@@ -62,9 +65,11 @@ const borderedTableSx = {
   },
 }
 
-const eiaAssessmentOptions = ['ไม่มี', 'มี IEE', 'มี EIA', 'มี EHIA', 'อื่นๆ']
-const eiaProjectOptions = ['มี IEE', 'มี EIA', 'มี EHIA']
+const eiaAssessmentOptions = FACTORY_BASIC_INFO_EIA_OPTIONS
 const actionableRequestStatuses = ['แก้ไขแล้ว/รอพิจารณา', 'รอพิจารณา']
+const factoryFrontPhotoTitle = 'ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน'
+const factoryLogoTitle = 'สัญลักษณ์ของโรงงานหรือโลโก้บริษัท'
+const factoryGeneralDocumentTitles = new Set([factoryFrontPhotoTitle, factoryLogoTitle])
 
 const dataGridLocaleText = {
   toolbarColumns: 'คอลัมน์',
@@ -173,32 +178,19 @@ function displayValue(value) {
   return String(value)
 }
 
-function emptyToNull(value) {
-  const text = String(value ?? '').trim()
-  return text ? text : null
-}
-
-function toNumberOrNull(value) {
-  const text = String(value ?? '').trim()
-  if (!text) {
-    return null
-  }
-  const parsed = Number(text)
-  return Number.isFinite(parsed) ? parsed : null
-}
-
 function getRequestFormLabel(formType) {
   return formType === 'MEASUREMENT_POINTS' ? 'แก้ไขข้อมูลจุดตรวจวัด' : 'แก้ไขข้อมูลพื้นฐาน'
 }
 
 function sanitizeDocumentItem(document = {}) {
+  const normalizeNullableValue = (value) => (value === '' || value === undefined ? null : value)
   const item = {
     title: document.title ?? document.fileName ?? document.originalFileName ?? 'เอกสารแนบ',
-    description: document.description ?? null,
-    link: document.link ?? null,
-    fileName: document.fileName ?? document.originalFileName ?? document.storedFileName ?? null,
-    fileUrl: document.fileUrl ?? document.url ?? document.storageUrl ?? null,
-    fileType: document.fileType ?? document.mimeType ?? null,
+    description: normalizeNullableValue(document.description),
+    link: normalizeNullableValue(document.link),
+    fileName: normalizeNullableValue(document.fileName ?? document.originalFileName ?? document.storedFileName),
+    fileUrl: normalizeNullableValue(document.fileUrl ?? document.url ?? document.storageUrl),
+    fileType: normalizeNullableValue(document.fileType ?? document.mimeType),
     fileSize: document.fileSize ?? null,
   }
 
@@ -207,6 +199,34 @@ function sanitizeDocumentItem(document = {}) {
 
 function sanitizeDocuments(documents = []) {
   return Array.isArray(documents) ? documents.map(sanitizeDocumentItem) : []
+}
+
+function hasStoredDocument(document = {}) {
+  return Boolean(document.fileUrl || document.link)
+}
+
+function documentValuesEqual(left, right) {
+  return JSON.stringify(left ?? null) === JSON.stringify(right ?? null)
+}
+
+function getFinalFactoryDocuments(initialRequest, context = {}) {
+  const existingDocuments = sanitizeDocuments(context.existingDocuments).filter(hasStoredDocument)
+  const uploadedDocuments = sanitizeDocuments(context.uploadedDocuments).filter(hasStoredDocument)
+  const uploadedFrontPhotos = uploadedDocuments.filter((document) => document.title === factoryFrontPhotoTitle)
+  const uploadedLogo = uploadedDocuments.find((document) => document.title === factoryLogoTitle)
+  const initialFrontPhotos = sanitizeDocuments(initialRequest?.factoryFrontPhotos).filter(hasStoredDocument)
+  const initialLogo = initialRequest?.factoryLogo && hasStoredDocument(initialRequest.factoryLogo)
+    ? sanitizeDocumentItem(initialRequest.factoryLogo)
+    : null
+  const remainingFrontPhotos = existingDocuments.filter((document) => document.title === factoryFrontPhotoTitle)
+  const remainingLogo = existingDocuments.find((document) => document.title === factoryLogoTitle) ?? null
+
+  return {
+    initialFrontPhotos,
+    initialLogo,
+    frontPhotos: [...remainingFrontPhotos, ...uploadedFrontPhotos],
+    logo: uploadedLogo ?? remainingLogo,
+  }
 }
 
 function sumMonitoringPointCount(row) {
@@ -383,12 +403,26 @@ function mergeFormMeasurementPointIds(formData = {}, factory = {}) {
   }
 }
 
+function getFirstOwnValue(sources, key, fallback = null) {
+  for (const source of sources) {
+    if (source && Object.prototype.hasOwnProperty.call(source, key)) {
+      return source[key]
+    }
+  }
+  return fallback
+}
+
 function normalizeFactoryFormData(formData = {}, factory = {}, extra = {}) {
   const selectedPoint = factory?.selectedMeasurementPoint ?? null
   const selectedSystemType = getFactorySystemType(factory, selectedPoint)
   const mergedFormData = mergeFormMeasurementPointIds(formData, factory)
   const selectedIdentity = getPointIdentity(selectedPoint)
   const formMeasurementPoints = Array.isArray(mergedFormData.measurementPoints) ? mergedFormData.measurementPoints : []
+  const proposedFactory = factory?.raw?.proposedFactory ?? {}
+  const currentFactory = factory?.raw?.currentFactory ?? {}
+  const editableFactorySources = [mergedFormData, proposedFactory, factory, currentFactory]
+  const factoryFrontPhotos = getFirstOwnValue(editableFactorySources, 'factoryFrontPhotos', [])
+  const factoryLogo = getFirstOwnValue(editableFactorySources, 'factoryLogo', null)
   const selectedMeasurementPoints = selectedPoint
     ? [
         formMeasurementPoints.find((point) => {
@@ -422,12 +456,14 @@ function normalizeFactoryFormData(formData = {}, factory = {}, extra = {}) {
     industryMainOrderLabel: mergedFormData.industryMainOrderLabel ?? factory.industryMainOrderLabel ?? '',
     industrySubOrder: mergedFormData.industrySubOrder ?? factory.industrySubOrder ?? '',
     businessActivity: mergedFormData.businessActivity ?? factory.businessActivity ?? '',
-    eia: mergedFormData.eia ?? factory.eia ?? '',
-    eiaOther: mergedFormData.eiaOther ?? factory.eiaOther ?? '',
-    projectName: mergedFormData.projectName ?? factory.projectName ?? '',
+    eia: getFirstOwnValue(editableFactorySources, 'eia', ''),
+    eiaOther: getFirstOwnValue(editableFactorySources, 'eiaOther', ''),
+    projectName: getFirstOwnValue(editableFactorySources, 'projectName', ''),
     address: mergedFormData.address ?? factory.address ?? '',
-    latitude: mergedFormData.latitude ?? factory.latitude ?? '',
-    longitude: mergedFormData.longitude ?? factory.longitude ?? '',
+    latitude: getFirstOwnValue(editableFactorySources, 'latitude', ''),
+    longitude: getFirstOwnValue(editableFactorySources, 'longitude', ''),
+    factoryFrontPhotos: sanitizeDocuments(factoryFrontPhotos),
+    factoryLogo: factoryLogo ? sanitizeDocumentItem(factoryLogo) : null,
     systemType: mergedFormData.systemType ?? selectedSystemType,
     selectedMeasurementPoint: selectedPoint,
     measurementPoints: selectedMeasurementPoints,
@@ -827,13 +863,14 @@ function FactoryGeneralInfoBottomSheet({ open, factory, accessToken = '', onClos
 
   const handleSubmit = (event) => {
     event.preventDefault()
+    const preserveProposedDocuments = factory?.__isResubmission === true
     onSubmit?.(
       factory,
       new FormData(event.currentTarget),
       buildFactoryDocumentPatch({
-        frontPhotosChanged,
+        frontPhotosChanged: frontPhotosChanged || preserveProposedDocuments,
         frontPhotos: sanitizeDocuments(frontPhotos),
-        logoChanged: factoryLogoChanged,
+        logoChanged: factoryLogoChanged || preserveProposedDocuments,
         logo: factoryLogo ? sanitizeDocumentItem(factoryLogo) : null,
       }),
     )
@@ -882,6 +919,7 @@ function FactoryGeneralInfoBottomSheet({ open, factory, accessToken = '', onClos
           component="form"
           id="master-data-general-info-form"
           onSubmit={handleSubmit}
+          noValidate
           sx={{ flex: 1, minHeight: 0, overflow: 'auto', p: { xs: 2, md: 3 }, bgcolor: 'background.default' }}
         >
           <Paper elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider' }}>
@@ -923,19 +961,18 @@ function FactoryGeneralInfoBottomSheet({ open, factory, accessToken = '', onClos
                     label="ระบุ"
                     size="small"
                     defaultValue={factory?.eiaOther ?? ''}
-                    required
+                    slotProps={{ htmlInput: { maxLength: 500 } }}
                     sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }}
                   />
                 ) : null}
-                {eiaProjectOptions.includes(eiaAssessment) ? (
-                  <TextField
-                    name="projectName"
-                    label="ชื่อโครงการ"
-                    size="small"
-                    defaultValue={factory?.projectName ?? ''}
-                    sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }}
-                  />
-                ) : null}
+                <TextField
+                  name="projectName"
+                  label="ชื่อโครงการ"
+                  size="small"
+                  defaultValue={factory?.projectName ?? ''}
+                  slotProps={{ htmlInput: { maxLength: 500 } }}
+                  sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }}
+                />
                 <ReadOnlyFormField label="สถานที่ตั้งโรงงาน" value={factory?.address} sx={{ gridColumn: { xs: 'auto', md: '1 / span 6' } }} />
                 <TextField name="latitude" label="ละติจูด" size="small" defaultValue={factory?.latitude ?? ''} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
                 <TextField name="longitude" label="ลองจิจูด" size="small" defaultValue={factory?.longitude ?? ''} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
@@ -1040,9 +1077,7 @@ function RequestGeneralInfoPreview({ factory }) {
           {factory?.eia === 'อื่นๆ' ? (
             <ReadOnlyFormField label="ระบุ" value={factory?.eiaOther} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
           ) : null}
-          {eiaProjectOptions.includes(factory?.eia) ? (
-            <ReadOnlyFormField label="ชื่อโครงการ" value={factory?.projectName} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
-          ) : null}
+          <ReadOnlyFormField label="ชื่อโครงการ" value={factory?.projectName} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
           <ReadOnlyFormField label="สถานที่ตั้งโรงงาน" value={factory?.address} sx={{ gridColumn: { xs: 'auto', md: '1 / span 6' } }} />
           <ReadOnlyFormField label="ละติจูด" value={factory?.latitude} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
           <ReadOnlyFormField label="ลองจิจูด" value={factory?.longitude} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
@@ -1292,9 +1327,13 @@ function makeMasterDataInitialRequest(factory) {
     industrySubOrder: factory?.industrySubOrder ?? '',
     businessActivity: factory?.businessActivity ?? '',
     eia: factory?.eia ?? '',
+    eiaOther: factory?.eiaOther ?? '',
+    projectName: factory?.projectName ?? '',
     address: factory?.address ?? '',
     latitude: factory?.latitude ?? '',
     longitude: factory?.longitude ?? '',
+    factoryFrontPhotos: sanitizeDocuments(factory?.factoryFrontPhotos),
+    factoryLogo: factory?.factoryLogo ? sanitizeDocumentItem(factory.factoryLogo) : null,
     systemType,
     contactPersons: [{ id: 1 }],
     notificationEmails: [''],
@@ -1328,26 +1367,21 @@ function getFactoryRowId(factory) {
 }
 
 function buildBasicInfoPayload(factory, formData, documentPatch = {}) {
-  const eia = formData.get('eia') || factory?.eia || null
-  return {
-    formType: 'BASIC_INFO',
-    factoryName: String(formData.get('factoryName') ?? factory?.factoryName ?? '').trim(),
-    address: emptyToNull(formData.get('factoryAddress') ?? factory?.address),
-    latitude: toNumberOrNull(formData.get('latitude') ?? factory?.latitude),
-    longitude: toNumberOrNull(formData.get('longitude') ?? factory?.longitude),
-    eia,
-    eiaOther: eia === 'อื่นๆ'
-      ? emptyToNull(formData.has('eiaOther') ? formData.get('eiaOther') : factory?.eiaOther)
-      : null,
-    projectName: eiaProjectOptions.includes(eia)
-      ? emptyToNull(formData.has('projectName') ? formData.get('projectName') : factory?.projectName)
-      : null,
-    remarks: 'แก้ไขข้อมูลทั่วไปของโรงงาน',
-    ...documentPatch,
-  }
+  return buildFactoryBasicInfoPayload({
+    initial: factory,
+    values: {
+      eia: formData.get('eia'),
+      eiaOther: formData.get('eiaOther'),
+      projectName: formData.get('projectName'),
+      latitude: formData.get('latitude'),
+      longitude: formData.get('longitude'),
+    },
+    documentPatch,
+    isResubmission: factory?.__isResubmission === true,
+  })
 }
 
-function buildMeasurementPointsPayload(requestBody, initialRequest) {
+function buildMeasurementPointsPayload(requestBody, initialRequest, context = {}) {
   const point = requestBody?.measurementPoints?.[0] ?? {}
   const initialPoint = initialRequest?.measurementPoints?.[0] ?? {}
   const pointName = point.pointName ?? point.details?.pointName ?? initialPoint.pointName ?? ''
@@ -1357,15 +1391,46 @@ function buildMeasurementPointsPayload(requestBody, initialRequest) {
     throw new Error('ไม่พบรหัสอ้างอิงจุดตรวจวัดสำหรับส่งคำขอแก้ไข')
   }
 
+  const finalFactoryDocuments = getFinalFactoryDocuments(initialRequest, context)
+  const preserveProposedValues = initialRequest?.__isResubmission === true
+  const documentPatch = buildFactoryDocumentPatch({
+    frontPhotosChanged: preserveProposedValues || !documentValuesEqual(
+      finalFactoryDocuments.frontPhotos,
+      finalFactoryDocuments.initialFrontPhotos,
+    ),
+    frontPhotos: finalFactoryDocuments.frontPhotos,
+    logoChanged: preserveProposedValues || !documentValuesEqual(
+      finalFactoryDocuments.logo,
+      finalFactoryDocuments.initialLogo,
+    ),
+    logo: finalFactoryDocuments.logo,
+  })
+  const factoryProfilePatch = buildFactoryEditableProfilePatch({
+    initial: initialRequest,
+    values: {
+      eia: requestBody?.eia,
+      eiaOther: requestBody?.eiaOther,
+      projectName: requestBody?.projectName,
+      latitude: requestBody?.latitude,
+      longitude: requestBody?.longitude,
+    },
+    documentPatch,
+    isResubmission: preserveProposedValues,
+    requireChange: false,
+  })
+  const documentsAndImages = sanitizeDocuments(point.documentsAndImages ?? initialPoint.documentsAndImages)
+    .filter((document) => hasStoredDocument(document) && !factoryGeneralDocumentTitles.has(document.title))
+
   return {
     formType: 'MEASUREMENT_POINTS',
+    ...factoryProfilePatch,
     measurementPoints: [
       {
         connectedPointId,
         pointName,
         monitoringPointStatus: point.monitoringPointStatus ?? initialPoint.monitoringPointStatus ?? null,
         details: point.details ?? null,
-        documentsAndImages: sanitizeDocuments(point.documentsAndImages ?? initialPoint.documentsAndImages),
+        documentsAndImages,
         measurementInstruments: point.measurementInstruments ?? initialPoint.measurementInstruments ?? null,
       },
     ],
@@ -1388,6 +1453,7 @@ function MasterDataPage({ userType = '', roleCode = '', accessToken = '' }) {
   const [actionLoading, setActionLoading] = useState(false)
   const [tableError, setTableError] = useState('')
   const [snackbarMessage, setSnackbarMessage] = useState('')
+  const [validationSnackbarMessage, setValidationSnackbarMessage] = useState('')
   const isAdmin = String(roleCode).toLowerCase() === 'admin' || String(userType).toLowerCase() === 'admin'
   const isOperator = String(userType).toLowerCase() === 'operator'
   const canSubmitMasterData = isAdmin || String(userType).toLowerCase() === 'operator'
@@ -1666,21 +1732,24 @@ function MasterDataPage({ userType = '', roleCode = '', accessToken = '' }) {
   }, [accessToken, loadFactories, loadRequests])
 
   const handleSubmitGeneralInfo = useCallback(async (factory, formData, documentPatch) => {
-    setActionLoading(true)
     setTableError('')
+    setValidationSnackbarMessage('')
     try {
-      await submitFactoryEditRequest(factory, buildBasicInfoPayload(factory, formData, documentPatch))
+      const payload = buildBasicInfoPayload(factory, formData, documentPatch)
+      setActionLoading(true)
+      await submitFactoryEditRequest(factory, payload)
       setEditingGeneralFactory(null)
     } catch (error) {
-      setTableError(error instanceof Error ? error.message : 'ส่งคำขอแก้ไขไม่สำเร็จ')
+      const message = error instanceof Error ? error.message : 'ข้อมูลในแบบฟอร์มไม่ถูกต้อง'
+      setValidationSnackbarMessage(message)
     } finally {
       setActionLoading(false)
     }
   }, [submitFactoryEditRequest])
 
-  const handleSubmitMeasurementPoints = useCallback(async (requestBody) => {
+  const handleSubmitMeasurementPoints = useCallback(async (requestBody, context) => {
     const initialRequest = makeMasterDataInitialRequest(editingFactory)
-    const payload = buildMeasurementPointsPayload(requestBody, initialRequest)
+    const payload = buildMeasurementPointsPayload(requestBody, initialRequest, context)
     const response = await submitFactoryEditRequest(editingFactory, payload)
     setEditingFactory(null)
     return response
@@ -1850,7 +1919,8 @@ function MasterDataPage({ userType = '', roleCode = '', accessToken = '' }) {
         submitWithoutPreview
         customSubmit={canSubmitMasterData ? handleSubmitMeasurementPoints : null}
         documentImagesUploadUrl={`${pomsFactoriesApiBaseUrl}/document-images`}
-        generalFactoryFieldsReadOnly
+        generalFactoryFieldsReadOnly={!canSubmitMasterData}
+        factoryProfilePatchMode
         footerActions={canSubmitMasterData ? undefined : null}
         onClose={() => setEditingFactory(null)}
       />
@@ -1909,6 +1979,16 @@ function MasterDataPage({ userType = '', roleCode = '', accessToken = '' }) {
           </Button>
         </DialogActions>
       </Dialog>
+      <Snackbar
+        open={Boolean(validationSnackbarMessage)}
+        autoHideDuration={5000}
+        onClose={() => setValidationSnackbarMessage('')}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert severity="error" variant="filled" onClose={() => setValidationSnackbarMessage('')}>
+          {validationSnackbarMessage}
+        </Alert>
+      </Snackbar>
       <Snackbar
         open={Boolean(snackbarMessage)}
         autoHideDuration={4000}

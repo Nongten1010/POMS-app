@@ -6884,6 +6884,7 @@ export function RequestFormBottomSheet({
   customSubmit = null,
   documentImagesUploadUrl = '',
   generalFactoryFieldsReadOnly = false,
+  factoryProfilePatchMode = false,
   onClose,
   onSubmitted,
 }) {
@@ -6934,7 +6935,9 @@ export function RequestFormBottomSheet({
   const [submitError, setSubmitError] = useState('')
   const [submitValidationSnackbarOpen, setSubmitValidationSnackbarOpen] = useState(false)
   const submitPreviewSessionRef = useRef(0)
-  const [eiaAssessment, setEiaAssessment] = useState(getEiaAssessmentValue(formFactory))
+  const [eiaAssessment, setEiaAssessment] = useState(
+    factoryProfilePatchMode ? (formFactory?.eia ?? 'ไม่มี') : getEiaAssessmentValue(formFactory),
+  )
   const officerEmails = initialOfficerNotificationEmails.length ? initialOfficerNotificationEmails : ['']
   const showMonitoringPointSection = formType === 'เพิ่มจุดตรวจวัด' || isAddParameterMode
   const showOfficerPostSubmitStatusSection = isOfficerAddMeasurementPointMode
@@ -7136,9 +7139,15 @@ export function RequestFormBottomSheet({
       }
 
       if (customSubmit) {
+        const removedDocumentKeys = new Set(documentImageItems.flatMap((_, index) => (
+          formData.getAll(`documentImageRemovedFile-${index}`).map(String)
+        )))
         const responseData = await customSubmit(requestBody, {
           formData,
           uploadedDocuments,
+          existingDocuments: initialDocuments.filter((document) => (
+            !removedDocumentKeys.has(getDocumentRemovalKey(document))
+          )),
         })
         setIsSubmitting(false)
         await onSubmitted?.(responseData ?? null, {
@@ -7189,6 +7198,9 @@ export function RequestFormBottomSheet({
           ? error.message
           : 'ส่งแบบฟอร์มไม่สำเร็จ'
       setSubmitError(message)
+      if (factoryProfilePatchMode) {
+        setSubmitValidationSnackbarOpen(true)
+      }
     } finally {
       setIsSubmitting(false)
     }
@@ -7310,7 +7322,7 @@ export function RequestFormBottomSheet({
                         onChange={(event) => setEiaAssessment(event.target.value)}
                         fullWidth
                       >
-                        {eiaAssessmentOptions.map((option) => (
+                        {(factoryProfilePatchMode ? ['มี', ...eiaAssessmentOptions] : eiaAssessmentOptions).map((option) => (
                           <MenuItem key={option} value={option}>
                             {option}
                           </MenuItem>
@@ -7323,16 +7335,30 @@ export function RequestFormBottomSheet({
                       {generalFactoryFieldsReadOnly ? (
                         <ReadOnlyField label="ระบุ" value={formFactory?.eiaOther ?? ''} />
                       ) : (
-                        <TextField name="eiaOther" label="ระบุ" size="small" defaultValue={formFactory?.eiaOther ?? ''} fullWidth />
+                        <TextField
+                          name="eiaOther"
+                          label="ระบุ"
+                          size="small"
+                          defaultValue={formFactory?.eiaOther ?? ''}
+                          slotProps={{ htmlInput: { maxLength: 500 } }}
+                          fullWidth
+                        />
                       )}
                     </Grid>
                   ) : null}
-                  {eiaProjectOptions.includes(eiaAssessment) ? (
+                  {(factoryProfilePatchMode || eiaProjectOptions.includes(eiaAssessment)) ? (
                     <Grid size={{ xs: 12, md: 3 }}>
                       {generalFactoryFieldsReadOnly ? (
                         <ReadOnlyField label="ชื่อโครงการ" value={formFactory?.projectName ?? ''} />
                       ) : (
-                        <TextField name="projectName" label="ชื่อโครงการ" size="small" defaultValue={formFactory?.projectName ?? ''} fullWidth />
+                        <TextField
+                          name="projectName"
+                          label="ชื่อโครงการ"
+                          size="small"
+                          defaultValue={formFactory?.projectName ?? ''}
+                          slotProps={{ htmlInput: { maxLength: 500 } }}
+                          fullWidth
+                        />
                       )}
                     </Grid>
                   ) : null}
