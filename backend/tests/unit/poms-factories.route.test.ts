@@ -131,78 +131,91 @@ describe('POMS factory routes', () => {
     const response = await request(createTestApp())
       .post('/api/v1/poms-factories/factory-001/edit-requests')
       .set('Authorization', `Bearer ${accessToken({ scopes: { 'factories:view': 'ALL' } })}`)
-      .send({ factoryName: 'บริษัท ทดสอบ จำกัด (ใหม่)' });
+      .send({ projectName: 'โครงการใหม่' });
 
     expect(response.status).toBe(403);
     expect(mockedService.createEditRequest).not.toHaveBeenCalled();
   });
 
-  it('creates an edit request', async () => {
-    const response = await request(createTestApp())
-      .post('/api/v1/poms-factories/factory-001/edit-requests')
-      .set(
-        'Authorization',
-        `Bearer ${accessToken({
-          scopes: { 'factories:view': 'ALL', 'factories:edit': 'OWN_FACTORY' },
-          scopeDetails: {
-            'factories:view': { scope: 'ALL' },
-            'factories:edit': editScope,
-          },
-        })}`,
-      )
-      .send({
-        factoryName: 'บริษัท ทดสอบ จำกัด (ใหม่)',
-        factoryAddress: 'นิคมอุตสาหกรรมมาบตาพุด',
+  it.each([undefined, 'BASIC_INFO'] as const)(
+    'creates an edit request with only editable fields and formType %s',
+    async (formType) => {
+      const input = {
+        ...(formType ? { formType } : {}),
+        eia: 'อื่นๆ' as const,
+        eiaOther: 'อยู่ระหว่างจัดทำรายงาน',
+        projectName: 'โครงการใหม่',
+        factoryFrontPhotos: [],
+        factoryLogo: null,
         latitude: 12.7,
         longitude: 101.1,
-        projectName: 'โครงการใหม่',
-      });
+      };
+      const response = await request(createTestApp())
+        .post('/api/v1/poms-factories/factory-001/edit-requests')
+        .set(
+          'Authorization',
+          `Bearer ${accessToken({
+            scopes: { 'factories:view': 'ALL', 'factories:edit': 'OWN_FACTORY' },
+            scopeDetails: {
+              'factories:view': { scope: 'ALL' },
+              'factories:edit': editScope,
+            },
+          })}`,
+        )
+        .send(input);
 
-    expect(response.status).toBe(201);
-    expect(response.body.data.status).toBe('PENDING_REVIEW');
-    expect(mockedService.createEditRequest).toHaveBeenCalledWith(
-      'factory-001',
-      expect.objectContaining({
-        factoryName: 'บริษัท ทดสอบ จำกัด (ใหม่)',
-        factoryAddress: 'นิคมอุตสาหกรรมมาบตาพุด',
-      }),
-      42,
-      editScope,
-      null,
+      expect(response.status).toBe(201);
+      expect(response.body.data.status).toBe('PENDING_REVIEW');
+      expect(mockedService.createEditRequest).toHaveBeenCalledWith(
+        'factory-001',
+        input,
+        42,
+        editScope,
+        null,
+      );
+    },
+  );
+
+  describe.each([
+    { method: 'post' as const, path: '/api/v1/poms-factories/factory-001/edit-requests' },
+    { method: 'put' as const, path: '/api/v1/poms-factories/edit-requests/11/resubmission' },
+  ])('$method basic-info requests', ({ method, path }) => {
+    it.each(['factoryName', 'factoryAddress', 'address', 'note', 'remarks'])(
+      'rejects forbidden field %s alongside an editable field',
+      async (field) => {
+        const response = await request(createTestApp())
+          [method](path)
+          .set(
+            'Authorization',
+            `Bearer ${accessToken({ scopes: { 'factories:view': 'ALL', 'factories:edit': 'OWN_FACTORY' } })}`,
+          )
+          .send({
+            formType: 'BASIC_INFO',
+            projectName: 'โครงการใหม่',
+            [field]: 'ข้อมูลที่ห้ามแก้ไข',
+          });
+
+        expect(response.status).toBe(400);
+        expect(mockedService.createEditRequest).not.toHaveBeenCalled();
+        expect(mockedService.resubmitEditRequest).not.toHaveBeenCalled();
+      },
     );
-  });
 
-  it('accepts connection-form aliases address and remarks for a basic-info edit request', async () => {
-    const response = await request(createTestApp())
-      .post('/api/v1/poms-factories/factory-001/edit-requests')
-      .set(
-        'Authorization',
-        `Bearer ${accessToken({
-          scopes: { 'factories:view': 'ALL', 'factories:edit': 'OWN_FACTORY' },
-          scopeDetails: {
-            'factories:view': { scope: 'ALL' },
-            'factories:edit': editScope,
-          },
-        })}`,
-      )
-      .send({
-        formType: 'BASIC_INFO',
-        factoryName: 'บริษัท ทดสอบ จำกัด (ใหม่)',
-        address: '100 หมู่ 2',
-        remarks: 'แก้ไขตามเอกสารล่าสุด',
-      });
+    it.each([{}, { formType: 'BASIC_INFO' }])(
+      'rejects requests without editable fields: %j',
+      async (input) => {
+        const response = await request(createTestApp())
+          [method](path)
+          .set(
+            'Authorization',
+            `Bearer ${accessToken({ scopes: { 'factories:view': 'ALL', 'factories:edit': 'OWN_FACTORY' } })}`,
+          )
+          .send(input);
 
-    expect(response.status).toBe(201);
-    expect(mockedService.createEditRequest).toHaveBeenCalledWith(
-      'factory-001',
-      expect.objectContaining({
-        factoryName: 'บริษัท ทดสอบ จำกัด (ใหม่)',
-        factoryAddress: '100 หมู่ 2',
-        note: 'แก้ไขตามเอกสารล่าสุด',
-      }),
-      42,
-      editScope,
-      null,
+        expect(response.status).toBe(400);
+        expect(mockedService.createEditRequest).not.toHaveBeenCalled();
+        expect(mockedService.resubmitEditRequest).not.toHaveBeenCalled();
+      },
     );
   });
 
@@ -230,7 +243,7 @@ describe('POMS factory routes', () => {
     const response = await request(createTestApp())
       .put('/api/v1/poms-factories/edit-requests/11/resubmission')
       .set('Authorization', `Bearer ${accessToken({ scopes: { 'factories:view': 'ALL' } })}`)
-      .send({ factoryName: 'บริษัท ทดสอบ จำกัด (แก้ไขแล้ว)' });
+      .send({ projectName: 'โครงการแก้ไขแล้ว' });
 
     expect(response.status).toBe(403);
     expect(mockedService.resubmitEditRequest).not.toHaveBeenCalled();
@@ -250,9 +263,8 @@ describe('POMS factory routes', () => {
         })}`,
       )
       .send({
-        factoryName: 'บริษัท ทดสอบ จำกัด (แก้ไขแล้ว)',
+        projectName: 'โครงการแก้ไขแล้ว',
         factoryLogo: null,
-        note: 'แก้ไขตามข้อสังเกตแล้ว',
       });
 
     expect(response.status).toBe(200);
@@ -260,9 +272,8 @@ describe('POMS factory routes', () => {
     expect(mockedService.resubmitEditRequest).toHaveBeenCalledWith(
       11,
       {
-        factoryName: 'บริษัท ทดสอบ จำกัด (แก้ไขแล้ว)',
+        projectName: 'โครงการแก้ไขแล้ว',
         factoryLogo: null,
-        note: 'แก้ไขตามข้อสังเกตแล้ว',
       },
       42,
       editScope,
@@ -561,7 +572,7 @@ function editRequest(
     revisionReason: null,
     officerNote: status === 'APPROVED' ? 'ข้อมูลครบถ้วน' : null,
     currentFactory: factorySummary(),
-    proposedFactory: { ...factorySummary(), factoryName: 'บริษัท ทดสอบ จำกัด (ใหม่)' },
+    proposedFactory: { ...factorySummary(), projectName: 'โครงการใหม่' },
     currentMeasurementPoints: null,
     proposedMeasurementPoints: null,
     submittedBy: 42,

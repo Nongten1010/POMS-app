@@ -122,7 +122,7 @@ export const pomsFactoriesService = {
         proposedFactory: proposed,
         proposedMeasurementPoints: null,
       },
-      input.note ?? null,
+      null,
       actorUserId,
     );
   },
@@ -189,11 +189,8 @@ export const pomsFactoriesService = {
     const profile =
       request.formType === POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.BASIC_INFO
         ? {
-            ...request.proposedFactory,
-            industryMainOrder: current.industryMainOrder,
-            industryMainOrderLabel: current.industryMainOrderLabel,
-            industrySubOrder: current.industrySubOrder,
-            businessActivity: current.businessActivity,
+            ...toProfileSnapshot(current),
+            ...editableProfile(request.proposedFactory),
           }
         : current;
     const points =
@@ -263,7 +260,7 @@ export const pomsFactoriesService = {
         proposedFactory: proposed,
         proposedMeasurementPoints: null,
       },
-      input.note ?? null,
+      null,
       actorUserId,
     );
   },
@@ -469,8 +466,6 @@ function buildProposedProfile(
 ): PomsFactoryProfileDTO {
   const proposed: PomsFactoryProfileDTO = {
     ...toProfileSnapshot(current),
-    factoryName: input.factoryName,
-    factoryAddress: patchValue(input, 'factoryAddress', current.factoryAddress),
     latitude: patchValue(input, 'latitude', current.latitude),
     longitude: patchValue(input, 'longitude', current.longitude),
     eia: patchValue(input, 'eia', current.eia),
@@ -528,8 +523,6 @@ function ensureProfileChanged(
 
 function editableProfile(profile: PomsFactoryProfileDTO) {
   return {
-    factoryName: profile.factoryName,
-    factoryAddress: profile.factoryAddress,
     latitude: profile.latitude,
     longitude: profile.longitude,
     eia: profile.eia,

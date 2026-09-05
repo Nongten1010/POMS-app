@@ -106,8 +106,6 @@ export interface PomsFactoryDetailDTO extends PomsFactorySummaryDTO {
 
 export interface CreatePomsFactoryEditRequestInput {
   formType?: typeof POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.BASIC_INFO;
-  factoryName: string;
-  factoryAddress?: string | null;
   latitude?: number | null;
   longitude?: number | null;
   eia?: ConnectionRequestEiaAssessment | null;
@@ -115,7 +113,6 @@ export interface CreatePomsFactoryEditRequestInput {
   projectName?: string | null;
   factoryFrontPhotos?: RequestDocumentImageInput[];
   factoryLogo?: RequestDocumentImageInput | null;
-  note?: string | null;
 }
 
 export interface PomsMeasurementPointPatchInput {

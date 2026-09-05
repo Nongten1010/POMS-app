@@ -171,7 +171,7 @@ describe('pomsFactoriesRepository access and approved profile patches', () => {
     expect(sql).not.toContain('user_juristics');
   });
 
-  it('builds separate connected-POMS and eligible-factory patches without touching factories', () => {
+  it('applies only editable fields from legacy snapshots to connected-POMS and eligible factories', () => {
     const patches = buildApprovedPomsFactoryProfilePatchesForTests({
       eligibleFactoryId: 7,
       factoryId: 'factory-001',
@@ -205,19 +205,31 @@ describe('pomsFactoriesRepository access and approved profile patches', () => {
     });
 
     expect(patches.connected).toMatchObject({
-      factory_name: 'บริษัท ทดสอบ จำกัด (ใหม่)',
+      factory_latitude: 12.7,
+      factory_longitude: 101.1,
+      factory_project_name: 'โครงการใหม่',
       factory_eia_assessment: 'อื่นๆ',
       factory_eia_other: 'รายงานเฉพาะโครงการ',
       factory_has_eia: false,
       factory_logo_json: null,
     });
     expect(patches.eligible).toMatchObject({
-      factory_name: 'บริษัท ทดสอบ จำกัด (ใหม่)',
+      latitude: 12.7,
+      longitude: 101.1,
+      project_name: 'โครงการใหม่',
       eia_assessment: 'อื่นๆ',
       eia_other: 'รายงานเฉพาะโครงการ',
       has_eia: false,
     });
-    expect(Object.keys(patches.connected)).not.toContain('factory_id');
+    expect(JSON.parse(patches.connected.factory_front_photos_json!)).toEqual([
+      expect.objectContaining({ fileName: 'front.jpg' }),
+    ]);
+    for (const field of ['factory_id', 'factory_name', 'factory_address']) {
+      expect(patches.connected).not.toHaveProperty(field);
+    }
+    for (const field of ['factory_name', 'address']) {
+      expect(patches.eligible).not.toHaveProperty(field);
+    }
     expect(Object.keys(patches.eligible)).not.toContain('factory_registration_no_new');
     expect(Object.keys(patches.eligible)).not.toEqual(
       expect.arrayContaining(['factory_type_sequence', 'business_activity']),

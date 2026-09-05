@@ -180,7 +180,7 @@ describe('pomsFactoriesService edit-request workflow', () => {
     ).rejects.toBeInstanceOf(BadRequestError);
   });
 
-  it('prefills a returned edit request from proposed values using the same form contract', async () => {
+  it('prefills only editable proposed values and keeps live identity from legacy requests', async () => {
     const {
       industryMainOrder: _industryMainOrder,
       industryMainOrderLabel: _industryMainOrderLabel,
@@ -192,6 +192,8 @@ describe('pomsFactoriesService edit-request workflow', () => {
       ...legacyProfile,
       factoryName: 'บริษัท ทดสอบ จำกัด (แก้ไข)',
       factoryAddress: '100 หมู่ 2',
+      projectName: 'โครงการที่แก้ไข',
+      latitude: 13.1,
     } as unknown as PomsFactoryProfileDTO;
     mockedRepository.findEditRequestById.mockResolvedValue(
       editRequest('REVISION_REQUESTED', {
@@ -208,8 +210,10 @@ describe('pomsFactoriesService edit-request workflow', () => {
       null,
     );
 
-    expect(result.factoryName).toBe('บริษัท ทดสอบ จำกัด (แก้ไข)');
-    expect(result.address).toBe('100 หมู่ 2');
+    expect(result.factoryName).toBe('บริษัท ทดสอบ จำกัด');
+    expect(result.address).toBe('99 หมู่ 1');
+    expect(result.projectName).toBe('โครงการที่แก้ไข');
+    expect(result.latitude).toBe(13.1);
     expect(result.industryMainOrder).toBe('00042');
     expect(result.industrySubOrder).toBe('04201');
     expect(result.businessActivity).toBe('ผลิตเคมีภัณฑ์');
@@ -222,9 +226,7 @@ describe('pomsFactoriesService edit-request workflow', () => {
     const result = await pomsFactoriesService.createEditRequest(
       'factory-001',
       {
-        factoryName: 'บริษัท ทดสอบ จำกัด (ใหม่)',
         projectName: null,
-        note: 'ขอเปลี่ยนชื่อและล้างชื่อโครงการ',
       },
       42,
       ownFactoryScope,
@@ -241,20 +243,59 @@ describe('pomsFactoriesService edit-request workflow', () => {
       expect.objectContaining({
         formType: 'BASIC_INFO',
         proposedFactory: expect.objectContaining({
-          factoryName: 'บริษัท ทดสอบ จำกัด (ใหม่)',
+          factoryName: 'บริษัท ทดสอบ จำกัด',
           factoryAddress: '99 หมู่ 1',
           projectName: null,
           factoryFrontPhotos: [expect.objectContaining({ fileName: 'front.jpg' })],
         }),
         proposedMeasurementPoints: null,
       }),
-      'ขอเปลี่ยนชื่อและล้างชื่อโครงการ',
+      null,
       42,
     );
     const payload = mockedRepository.createEditRequest.mock.calls[0]?.[1];
     expect(payload?.proposedFactory).not.toHaveProperty('measurementPoints');
     expect(payload?.proposedFactory).not.toHaveProperty('systemTypes');
     expect(payload?.proposedFactory).not.toHaveProperty('pendingEditRequestCount');
+  });
+
+  it('ignores forged read-only profile fields and request notes before creating a request', async () => {
+    const input = {
+      projectName: 'โครงการใหม่',
+      factoryName: 'ชื่อที่ไม่ได้รับอนุญาต',
+      factoryAddress: 'ที่อยู่ที่ไม่ได้รับอนุญาต',
+      factoryRegistrationNo: 'ทะเบียนที่ไม่ได้รับอนุญาต',
+      note: 'หมายเหตุที่ไม่ได้รับอนุญาต',
+    };
+
+    await pomsFactoriesService.createEditRequest('factory-001', input, 42, ownFactoryScope, null);
+
+    expect(mockedRepository.createEditRequest).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        proposedFactory: expect.objectContaining({
+          factoryName: 'บริษัท ทดสอบ จำกัด',
+          factoryAddress: '99 หมู่ 1',
+          factoryRegistrationNo: '3-106-33/50สบ',
+          projectName: 'โครงการใหม่',
+        }),
+      }),
+      null,
+      42,
+    );
+  });
+
+  it('rejects requests with no changes to editable profile fields', async () => {
+    await expect(
+      pomsFactoriesService.createEditRequest(
+        'factory-001',
+        { projectName: 'โครงการเดิม' },
+        42,
+        ownFactoryScope,
+        null,
+      ),
+    ).rejects.toBeInstanceOf(ConflictError);
+    expect(mockedRepository.createEditRequest).not.toHaveBeenCalled();
   });
 
   it('rejects a second open request for the same factory', async () => {
@@ -265,7 +306,7 @@ describe('pomsFactoriesService edit-request workflow', () => {
     await expect(
       pomsFactoriesService.createEditRequest(
         'factory-001',
-        { factoryName: 'บริษัท ทดสอบ จำกัด (ใหม่)' },
+        { projectName: 'โครงการใหม่' },
         42,
         ownFactoryScope,
         null,
@@ -280,7 +321,7 @@ describe('pomsFactoriesService edit-request workflow', () => {
     await expect(
       pomsFactoriesService.createEditRequest(
         'factory-outside-scope',
-        { factoryName: 'โรงงานนอกขอบเขต' },
+        { projectName: 'โครงการนอกขอบเขต' },
         42,
         ownFactoryScope,
         null,
@@ -294,9 +335,8 @@ describe('pomsFactoriesService edit-request workflow', () => {
     const result = await pomsFactoriesService.resubmitEditRequest(
       11,
       {
-        factoryName: 'บริษัท ทดสอบ จำกัด (แก้ไขแล้ว)',
+        projectName: 'โครงการที่แก้ไขแล้ว',
         factoryLogo: null,
-        note: 'แก้ไขตามข้อสังเกตแล้ว',
       },
       42,
       ownFactoryScope,
@@ -310,11 +350,13 @@ describe('pomsFactoriesService edit-request workflow', () => {
       expect.objectContaining({
         formType: 'BASIC_INFO',
         proposedFactory: expect.objectContaining({
-          factoryName: 'บริษัท ทดสอบ จำกัด (แก้ไขแล้ว)',
+          factoryName: 'บริษัท ทดสอบ จำกัด',
+          factoryAddress: '99 หมู่ 1',
+          projectName: 'โครงการที่แก้ไขแล้ว',
           factoryLogo: null,
         }),
       }),
-      'แก้ไขตามข้อสังเกตแล้ว',
+      null,
       42,
     );
   });
@@ -416,7 +458,7 @@ describe('pomsFactoriesService edit-request workflow', () => {
       await expect(
         pomsFactoriesService.resubmitEditRequest(
           11,
-          { factoryName: 'บริษัท ทดสอบ จำกัด' },
+          { projectName: 'โครงการใหม่' },
           42,
           ownFactoryScope,
           null,

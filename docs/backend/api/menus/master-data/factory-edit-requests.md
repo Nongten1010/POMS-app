@@ -4,6 +4,8 @@
 
 ## Frontend Quick Start
 
+คู่มือสำหรับทีม frontend: [แบบฟอร์มแก้ไขข้อมูลทั่วไปของโรงงาน](../../../guides/frontend-handoffs/factory-basic-info/README.md) — จุดที่ต้องปรับ ตัวอย่าง payload และรายการตรวจรับ
+
 เมนูนี้ใช้ข้อมูลโรงงาน current/live จาก active rows ใน `cems_wpms_connected_measurement_points` เพื่อแสดงรายชื่อโรงงานและจุดตรวจวัดในระบบ POMS ผู้ประกอบการส่งคำขอแก้ไขได้ 2 แบบฟอร์มคือ `BASIC_INFO` และ `MEASUREMENT_POINTS` แต่ข้อมูลจริงจะยังไม่เปลี่ยนจนกว่า admin จะพิจารณาอนุมัติ
 
 การอ่านข้อมูลและการกำหนดขอบเขตโรงงานใช้ `factories:view` การอัปโหลดเอกสารใช้ `factories:edit` ส่วนการส่ง ส่งกลับ หรือยกเลิกคำขอใช้ทั้ง `factories:view` และ `factories:edit` แต่การคัด resource สำหรับ mutation จะยึด data scope ของ `factories:edit` และการพิจารณาใช้ทั้ง `factories:view` และ `factories:approve` โดยยึด data scope ของ `factories:approve` พร้อมบังคับว่า reviewer ต้องมี role `admin` ทุก endpoint ต้องใช้ Bearer token
@@ -21,7 +23,7 @@
 
 ### Capability Boundary
 
-- `BASIC_INFO` ใช้แก้ profile โรงงานตาม allowlist และเมื่ออนุมัติจะ sync ทั้ง current/live connected rows กับ `eligible_factories`
+- `BASIC_INFO` แก้ได้เฉพาะการประเมินผลกระทบสิ่งแวดล้อม (`eia`), ชื่อโครงการ (`projectName`), อื่นๆ ของ EIA (`eiaOther`), ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน (`factoryFrontPhotos`), สัญลักษณ์ของโรงงานหรือโลโก้บริษัท (`factoryLogo`), ละติจูด (`latitude`) และลองติจูด (`longitude`); เมื่ออนุมัติจะ sync ตาม target mapping โดยคงชื่อและที่อยู่โรงงานเดิม
 - `MEASUREMENT_POINTS` ใช้ patch เฉพาะ `pointName`, `monitoringPointStatus`, `details`, `documentsAndImages` และ `measurementInstruments`
 - binary upload รับครั้งละหนึ่งไฟล์และคืน metadata เท่านั้น การผูกไฟล์กับคำขอเกิดเมื่อ client ส่ง metadata นั้นใน create/resubmission payload
 - เฉพาะ `createdBy` ยกเลิกคำขอของตนเองได้ และยกเลิกได้เมื่อสถานะเป็น `PENDING_REVIEW`, `REVISION_REQUESTED` หรือ `REVISED_PENDING_REVIEW`
@@ -55,7 +57,7 @@ curl --request POST \
   --url '<BASE_URL>/api/v1/poms-factories/factory-001/edit-requests' \
   --header 'Authorization: Bearer <ACCESS_TOKEN>' \
   --header 'Content-Type: application/json' \
-  --data '{"formType":"BASIC_INFO","factoryName":"บริษัท ตัวอย่าง จำกัด (มหาชน)","address":"99 หมู่ 1 ตำบลตัวอย่าง","latitude":14.315,"longitude":100.612,"eia":"มี","eiaOther":null,"projectName":"โครงการปรับปรุงระบบตรวจวัด","factoryFrontPhotos":[],"factoryLogo":null,"remarks":"ปรับชื่อและที่อยู่ให้ตรงกับเอกสารล่าสุด"}'
+  --data '{"formType":"BASIC_INFO","latitude":14.315,"longitude":100.612,"eia":"มี","eiaOther":null,"projectName":"โครงการปรับปรุงระบบตรวจวัด","factoryFrontPhotos":[],"factoryLogo":null}'
 
 curl --request POST \
   --url '<BASE_URL>/api/v1/poms-factories/factory-001/edit-requests' \
@@ -321,6 +323,8 @@ Minimal response (`200 OK`):
 
 ข้อมูลระดับโรงงานและจุดตรวจวัดยึด active `cems_wpms_connected_measurement_points`; endpoint นี้ไม่ hydrate จากคำขอเชื่อมต่อเดิม ดังนั้น field ที่ POMS ไม่เก็บจะเป็น `null`, `[]` หรือ empty string ตาม type ของ shared contract
 
+response prefill ยังคืนชื่อโรงงาน ที่อยู่ เลขทะเบียน และ field อื่นของ shared contract เพื่อแสดงข้อมูลประกอบเท่านั้น สำหรับ `BASIC_INFO` ให้เปิดแก้เฉพาะ [7 fields ที่อนุญาต](#shared-basic-info-fields) และสร้าง write payload จาก allowlist นี้ ห้ามส่ง response ทั้ง object กลับเป็น create/resubmission body; `remarks` ใน response ไม่ใช่ field ที่แก้ได้ของ `BASIC_INFO`
+
 #### Request Fields
 
 | Field        | Location | Type                              | Required    | Rules |
@@ -445,23 +449,24 @@ Multer failure เช่นเกิน 5 MiB หรือส่งไฟล์/
 
 ### Shared Basic-info Fields
 
-เมื่อ body ไม่ส่ง `formType` backend จะตีความเป็นฟอร์ม `BASIC_INFO`; client ใหม่ควรส่ง `formType = "BASIC_INFO"` ให้ชัดเจน และใช้ profile allowlist ต่อไปนี้
+เมื่อ body ไม่ส่ง `formType` backend จะตีความเป็นฟอร์ม `BASIC_INFO`; client ใหม่ควรส่ง `formType = "BASIC_INFO"` ให้ชัดเจน โดย `formType` เป็นเพียงตัวเลือกแบบฟอร์ม และแก้ได้เฉพาะ 7 fields ต่อไปนี้
 
 | Field                | Type           | Required | Rules                                                                                               |
 | -------------------- | -------------- | -------- | --------------------------------------------------------------------------------------------------- |
 | `formType`           | string         | no       | ถ้าส่งต้องเป็น `BASIC_INFO`; omission รองรับ client เดิม                                           |
-| `factoryName`        | string         | yes      | trim แล้ว 1–500 ตัวอักษร                                                                            |
-| `address`            | string \| null | no       | canonical field; omission = คงค่าเดิม; `null` = ล้างค่า; string trim แล้วไม่เกิน 1000 ตัวอักษร       |
-| `factoryAddress`     | string \| null | no       | legacy alias ของ `address`; หากส่งทั้งคู่ค่าต้องตรงกัน                                                |
-| `latitude`           | number \| null | no       | ช่วง `-90` ถึง `90`; ต้องส่งพร้อม `longitude` รวมถึงกรณีส่ง `null` เพื่อล้างพิกัด                   |
-| `longitude`          | number \| null | no       | ช่วง `-180` ถึง `180`; ต้องส่งพร้อม `latitude`                                                      |
-| `eia`                | string \| null | no       | omission = คงค่าเดิม; `null` = ล้างค่า; enum: `มี`, `ไม่มี`, `มี IEE`, `มี EIA`, `มี EHIA`, `อื่นๆ` |
-| `eiaOther`           | string \| null | no       | ต้องมีข้อความเมื่อส่ง `eia = "อื่นๆ"`; ห้ามส่งค่า non-null ในกรณีอื่น; ไม่เกิน 500 ตัวอักษร         |
-| `projectName`        | string \| null | no       | omission = คงค่าเดิม; `null` = ล้างค่า; string ไม่เกิน 500 ตัวอักษร                                 |
-| `factoryFrontPhotos` | object[]       | no       | omission = คงค่าเดิม; `[]` = ล้างทั้งหมด; object array ใหม่ = แทนที่ค่าเดิม; มากสุด 10 รายการ       |
-| `factoryLogo`        | object \| null | no       | omission = คงค่าเดิม; `null` = ล้างโลโก้; object ใหม่ = แทนที่ค่าเดิม; มากสุด 1 object              |
-| `remarks`            | string \| null | no       | canonical field ของหมายเหตุผู้ส่ง; ไม่เกิน 1000 ตัวอักษร                                            |
-| `note`               | string \| null | no       | legacy alias ของ `remarks`; หากส่งทั้งคู่ค่าต้องตรงกัน                                                |
+| `eia`                | string \| null | no       | การประเมินผลกระทบสิ่งแวดล้อม; enum: `มี`, `ไม่มี`, `มี IEE`, `มี EIA`, `มี EHIA`, `อื่นๆ`             |
+| `projectName`        | string \| null | no       | ชื่อโครงการ; string ไม่เกิน 500 ตัวอักษร                                                             |
+| `eiaOther`           | string \| null | no       | อื่นๆ ของ EIA; ต้องมีข้อความเมื่อส่ง `eia = "อื่นๆ"`; ห้ามส่งค่า non-null ในกรณีอื่น; ไม่เกิน 500 ตัวอักษร |
+| `factoryFrontPhotos` | object[]       | no       | ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน; `[]` = ล้างทั้งหมด; object array ใหม่ = แทนที่ค่าเดิม; มากสุด 10 รายการ |
+| `factoryLogo`        | object \| null | no       | สัญลักษณ์ของโรงงานหรือโลโก้บริษัท; object ใหม่ = แทนที่ค่าเดิม; มากสุด 1 object                       |
+| `latitude`           | number \| null | no       | ละติจูด ช่วง `-90` ถึง `90`; ต้องส่งพร้อม `longitude` รวมถึงกรณีส่ง `null` เพื่อล้างพิกัด              |
+| `longitude`          | number \| null | no       | ลองติจูด ช่วง `-180` ถึง `180`; ต้องส่งพร้อม `latitude`                                             |
+
+- ต้องส่งอย่างน้อยหนึ่ง field ที่แก้ได้; body `{}` หรือ `{ "formType": "BASIC_INFO" }` ตอบ `400 VALIDATION_ERROR`
+- omission = คงค่าจาก current/live snapshot รอบส่งคำขอนั้น; `null` = ล้างค่าของ field ที่ nullable ตามเงื่อนไขของแต่ละ field; `factoryFrontPhotos` ใช้ `[]` เพื่อล้างรูปทั้งหมด
+- `eiaOther` เป็นรายละเอียดที่ส่งพร้อม `eia = "อื่นๆ"`; หากต้องการล้างรายละเอียดให้เปลี่ยน `eia` เป็นค่าอื่นหรือ `null` แล้ว backend จะล้าง `eiaOther` ด้วย การส่ง `eiaOther: null` เพียงอย่างเดียวไม่เปลี่ยนรายละเอียดเดิม
+- `factoryName`, `address`, `factoryAddress`, `remarks` และ `note` ไม่อยู่ใน allowlist และตอบ `400 VALIDATION_ERROR` แม้ส่งค่าเดิมหรือ `null`; กฎเดียวกันใช้ทั้ง create และ resubmission รวมถึงคำขอเก่า
+- ชื่อและที่อยู่ใน proposed profile คงค่าจาก current/live snapshot; `requestNote` ของ `BASIC_INFO` ที่สร้างหรือ resubmit ภายใต้ contract นี้เป็น `null` ส่วน `MEASUREMENT_POINTS` ยังรองรับ `remarks`/`note` ตามเดิม
 
 Document object ของ `factoryFrontPhotos[]` และ `factoryLogo`:
 
@@ -477,7 +482,7 @@ create/resubmission endpoints ไม่รับ multipart/binary upload; client
 | `fileType`    | string \| null           | no       | ไม่เกิน 128 ตัวอักษร                                                                              |
 | `fileSize`    | positive integer \| null | no       | 1–5,242,880 bytes                                                                                 |
 
-field ที่ห้ามส่ง ได้แก่ `eligibleFactoryId`, `factoryId`, `factoryRegistrationNo`, จังหวัด/ภูมิภาค/นิคม, กลุ่มอุตสาหกรรม และสถานะ/audit เนื่องจาก schema เป็น strict object จึงตอบ `400 VALIDATION_ERROR` เมื่อมี field นอก allowlist
+field ที่ห้ามส่งเพิ่มเติม ได้แก่ `eligibleFactoryId`, `factoryId`, `factoryRegistrationNo`, จังหวัด/ภูมิภาค/นิคม, กลุ่มอุตสาหกรรม และสถานะ/audit เนื่องจาก schema เป็น strict object จึงตอบ `400 VALIDATION_ERROR` เมื่อมี field นอก allowlist
 
 ### Measurement-point Fields
 
@@ -513,16 +518,13 @@ Minimal request:
 ```json
 {
   "formType": "BASIC_INFO",
-  "factoryName": "บริษัท ตัวอย่าง จำกัด (มหาชน)",
-  "address": "99 หมู่ 1 ตำบลตัวอย่าง",
   "latitude": 14.315,
   "longitude": 100.612,
   "eia": "มี",
   "eiaOther": null,
   "projectName": "โครงการปรับปรุงระบบตรวจวัด",
   "factoryFrontPhotos": [],
-  "factoryLogo": null,
-  "remarks": "ปรับข้อมูลตามหนังสือรับรองล่าสุด"
+  "factoryLogo": null
 }
 ```
 
@@ -554,11 +556,11 @@ Minimal response (`201 Created`):
     "isOpen": true,
     "eligibleFactoryId": 7,
     "factoryId": "factory-001",
-    "factoryName": "บริษัท ตัวอย่าง จำกัด (มหาชน)",
+    "factoryName": "บริษัท ตัวอย่าง จำกัด",
     "formType": "BASIC_INFO",
     "status": "PENDING_REVIEW",
     "statusLabel": "รอพิจารณา",
-    "requestNote": "ปรับข้อมูลตามหนังสือรับรองล่าสุด",
+    "requestNote": null,
     "revisionReason": null,
     "officerNote": null,
     "currentMeasurementPoints": null,
@@ -603,7 +605,7 @@ Minimal response (`200 OK`):
       "isOpen": true,
       "eligibleFactoryId": 7,
       "factoryId": "factory-001",
-      "factoryName": "บริษัท ตัวอย่าง จำกัด (มหาชน)",
+      "factoryName": "บริษัท ตัวอย่าง จำกัด",
       "formType": "BASIC_INFO",
       "status": "PENDING_REVIEW",
       "statusLabel": "รอพิจารณา",
@@ -619,6 +621,8 @@ Minimal response (`200 OK`):
 ### `GET /api/v1/poms-factories/edit-requests/:id`
 
 คืน current/proposed snapshot, workflow events และ audit metadata ของคำขอเดียว
+
+`currentFactory` และ `proposedFactory` ยังคง profile response ที่มีชื่อ ที่อยู่ และ identity fields เพื่อแสดงบริบท; การมี field ใน response ไม่ทำให้ field นั้นแก้ไขได้ สำหรับ `BASIC_INFO` ที่สร้างหรือ resubmit ภายใต้ contract นี้ ชื่อและที่อยู่ใน proposed snapshot คงค่าปัจจุบัน ส่วนคำขอเก่าอาจยังมี proposed ชื่อ/ที่อยู่เดิมในประวัติ แต่ approval จะไม่เขียนสอง field นี้
 
 #### Request Fields
 
@@ -647,7 +651,7 @@ Minimal request JSON:
 | `data.isOpen`                | boolean                                                               | no       | `true` สำหรับสถานะที่ workflow ยังไม่สิ้นสุด                                     |
 | `data.status`                | string                                                                | no       | workflow status code                                                             |
 | `data.statusLabel`           | string                                                                | no       | label สำหรับแสดงผล                                                               |
-| `data.requestNote`           | string                                                                | yes      | หมายเหตุผู้ส่ง                                                                   |
+| `data.requestNote`           | string                                                                | yes      | หมายเหตุผู้ส่ง; `BASIC_INFO` ที่สร้างหรือ resubmit ภายใต้ contract นี้เป็น `null` |
 | `data.revisionReason`        | string                                                                | yes      | เหตุผลที่เจ้าหน้าที่ขอแก้ไข                                                      |
 | `data.officerNote`           | string                                                                | yes      | หมายเหตุการพิจารณา                                                               |
 | `data.currentFactory`        | object                                                                | no       | snapshot ก่อนส่งคำขอรอบล่าสุด                                                    |
@@ -682,22 +686,24 @@ Minimal response (`200 OK`):
     "eligibleFactoryId": 7,
     "factoryId": "factory-001",
     "factoryRegistrationNo": "3-106-33/50สบ",
-    "factoryName": "บริษัท ตัวอย่าง จำกัด (มหาชน)",
+    "factoryName": "บริษัท ตัวอย่าง จำกัด",
     "formType": "BASIC_INFO",
     "revisionNo": 0,
     "isOpen": true,
     "status": "REVISION_REQUESTED",
     "statusLabel": "ส่งกลับให้แก้ไข",
-    "requestNote": "ปรับข้อมูลตามหนังสือรับรองล่าสุด",
+    "requestNote": null,
     "revisionReason": "กรุณาแนบภาพด้านหน้าโรงงานล่าสุด",
     "officerNote": null,
     "currentFactory": {
       "factoryName": "บริษัท ตัวอย่าง จำกัด",
-      "factoryAddress": "88 หมู่ 1"
+      "factoryAddress": "99 หมู่ 1",
+      "projectName": "โครงการเดิม"
     },
     "proposedFactory": {
-      "factoryName": "บริษัท ตัวอย่าง จำกัด (มหาชน)",
-      "factoryAddress": "99 หมู่ 1 ตำบลตัวอย่าง"
+      "factoryName": "บริษัท ตัวอย่าง จำกัด",
+      "factoryAddress": "99 หมู่ 1",
+      "projectName": "โครงการปรับปรุงระบบตรวจวัด"
     },
     "currentMeasurementPoints": null,
     "proposedMeasurementPoints": null,
@@ -726,9 +732,11 @@ Minimal response (`200 OK`):
 
 ### `GET /api/v1/poms-factories/edit-requests/:id/form`
 
-คืน `data` ด้วย shared form contract เดียวกับ [Connection-request form prefill](../connection-requests/README.md#connection-request-form-prefill) แต่ overlay proposed values ของคำขอแก้ไขบน current/live POMS: `BASIC_INFO` ใช้ proposed factory profile, `MEASUREMENT_POINTS` ใช้ proposed measurement points และทั้งสองแบบใช้ `requestNote` เป็น `remarks`
+คืน `data` ด้วย shared form contract เดียวกับ [Connection-request form prefill](../connection-requests/README.md#connection-request-form-prefill) แต่ overlay proposed values ของคำขอแก้ไขบน current/live POMS: `BASIC_INFO` ใช้เฉพาะ 7 editable fields จาก proposed factory profile โดยชื่อ ที่อยู่ และข้อมูลอ่านอย่างเดียวยึด current/live รวมถึงเมื่อเปิดคำขอเก่า; `MEASUREMENT_POINTS` ใช้ proposed measurement points และทั้งสองแบบใช้ `requestNote` เป็น `remarks` (`BASIC_INFO` ที่สร้างหรือ resubmit ภายใต้ contract นี้คืน `null`)
 
 ไม่ hydrate field ที่ขาดจากคำขอเชื่อมต่อเดิม และไม่คืน `id`, `requestNo`, `status`, `revisionReason` หรือ audit metadata ใน `data`; field ที่ POMS ไม่เก็บใช้ null/empty semantics ตาม [POMS Source And Nullability](#poms-source-and-nullability)
+
+ชื่อ ที่อยู่ และ identity fields ใน prefill เป็นข้อมูลอ่านอย่างเดียวสำหรับ `BASIC_INFO`; ให้ส่งกลับเฉพาะ [7 editable fields](#shared-basic-info-fields) รวมถึงเมื่อเปิดแก้ไขคำขอเก่า ส่วน `remarks` ยังคงเป็น field ของ shared response แต่ห้ามส่งใน `BASIC_INFO` resubmission
 
 #### Request Fields
 
@@ -752,9 +760,10 @@ Minimal response (`200 OK`):
   "data": {
     "requestType": "NEW_CONNECTION",
     "factoryId": "factory-001",
-    "factoryName": "บริษัท ตัวอย่าง จำกัด (แก้ไข)",
+    "factoryName": "บริษัท ตัวอย่าง จำกัด",
     "factoryRegistrationNo": "3-106-33/50สบ",
-    "address": "100 หมู่ 2",
+    "address": "99 หมู่ 1",
+    "projectName": "โครงการปรับปรุงระบบตรวจวัด",
     "systemType": "CEMS",
     "contactName": "",
     "contactPhone": "",
@@ -770,7 +779,7 @@ Minimal response (`200 OK`):
         "measurementInstruments": null
       }
     ],
-    "remarks": "แก้ไขตามข้อสังเกตแล้ว"
+    "remarks": null
   }
 }
 ```
@@ -778,6 +787,8 @@ Minimal response (`200 OK`):
 ### `PUT /api/v1/poms-factories/edit-requests/:id/resubmission`
 
 ใช้ได้เมื่อสถานะเป็น `REVISION_REQUESTED` เท่านั้น backend โหลดข้อมูล current/live ล่าสุดเป็น snapshot ใหม่ แทนที่ proposed data จาก body แล้วเปลี่ยนสถานะเป็น `REVISED_PENDING_REVIEW`; `formType` ต้องตรงกับคำขอเดิม
+
+`BASIC_INFO` ใช้ allowlist เดียวกับ create: ส่งอย่างน้อยหนึ่ง editable field และห้ามส่ง `factoryName`, `address`, `factoryAddress`, `remarks` หรือ `note` แม้คำขอเดิมเคยรับ field เหล่านี้; field ที่ละไว้คงค่าจาก current/live ล่าสุด ไม่ใช่ proposed snapshot รอบก่อน
 
 #### Request Fields
 
@@ -788,7 +799,6 @@ Minimal request:
 ```json
 {
   "formType": "BASIC_INFO",
-  "factoryName": "บริษัท ตัวอย่าง จำกัด (มหาชน)",
   "factoryFrontPhotos": [
     {
       "title": "ภาพด้านหน้าโรงงานล่าสุด",
@@ -797,8 +807,7 @@ Minimal request:
       "fileType": "image/jpeg",
       "fileSize": 245760
     }
-  ],
-  "remarks": "แก้ไขตามข้อสังเกตแล้ว"
+  ]
 }
 ```
 
@@ -865,22 +874,24 @@ Minimal response (`200 OK`):
     "eligibleFactoryId": 7,
     "factoryId": "factory-001",
     "factoryRegistrationNo": "3-106-33/50สบ",
-    "factoryName": "บริษัท ตัวอย่าง จำกัด (มหาชน)",
+    "factoryName": "บริษัท ตัวอย่าง จำกัด",
     "formType": "BASIC_INFO",
     "revisionNo": 0,
     "isOpen": false,
     "status": "CANCELLED",
     "statusLabel": "ยกเลิก",
-    "requestNote": "ปรับข้อมูลตามหนังสือรับรองล่าสุด",
+    "requestNote": null,
     "revisionReason": null,
     "officerNote": null,
     "currentFactory": {
       "factoryName": "บริษัท ตัวอย่าง จำกัด",
-      "factoryAddress": "88 หมู่ 1"
+      "factoryAddress": "99 หมู่ 1",
+      "projectName": "โครงการเดิม"
     },
     "proposedFactory": {
-      "factoryName": "บริษัท ตัวอย่าง จำกัด (มหาชน)",
-      "factoryAddress": "99 หมู่ 1 ตำบลตัวอย่าง"
+      "factoryName": "บริษัท ตัวอย่าง จำกัด",
+      "factoryAddress": "99 หมู่ 1",
+      "projectName": "โครงการปรับปรุงระบบตรวจวัด"
     },
     "currentMeasurementPoints": null,
     "proposedMeasurementPoints": null,
@@ -975,12 +986,10 @@ State transitions:
 | `PENDING_REVIEW` หรือ `REVISED_PENDING_REVIEW` | admin                  | `APPROVE`          | `APPROVED`               | sync ข้อมูลจริงแบบ atomic ตาม `formType`                    |
 | `PENDING_REVIEW` หรือ `REVISED_PENDING_REVIEW` | admin                  | `REJECT`           | `REJECTED`               | ปิดคำขอโดยไม่แก้ข้อมูลจริง                                   |
 
-Approval target mapping:
+Approval target mapping สำหรับ `BASIC_INFO` (ใช้ allowlist นี้รวมถึงการอนุมัติคำขอเก่าที่ยังรอพิจารณา):
 
 | API profile field                   | active `cems_wpms_connected_measurement_points`                                           | active `eligible_factories`                      |
 | ----------------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| `factoryName`                       | `factory_name` ทุก active point                                                           | `factory_name`                                   |
-| `address` (legacy `factoryAddress`) | `factory_address` ทุก active point                                                        | `address`                                        |
 | `latitude`, `longitude`             | `factory_latitude`, `factory_longitude` ทุก active point                                  | `latitude`, `longitude`                          |
 | `eia`, `eiaOther`                   | `factory_eia_assessment`, `factory_eia_other`, derived `factory_has_eia` ทุก active point | `eia_assessment`, `eia_other`, derived `has_eia` |
 | `projectName`                       | `factory_project_name` ทุก active point                                                   | `project_name`                                   |
@@ -990,7 +999,7 @@ Approval target mapping:
 - create/resubmission/cancel/review ไม่รับ `Idempotency-Key`; การยกเลิกซ้ำตอบ `409 INVALID_STATUS_TRANSITION` ส่วนการเรียก transition อื่นซ้ำตอบ `409 CONFLICT`
 - create/resubmission lock ข้อมูล current/live connected POMS และตรวจ source version ของ snapshot ใน transaction เดียวกับการบันทึกคำขอและ event; หากขั้นตอนใดล้มเหลว transaction จะ rollback จึงไม่เหลือคำขอหรือ event ที่บันทึกเพียงบางส่วน
 - การอนุมัติ lock คำขอและข้อมูล current/live ที่เกี่ยวข้องใน transaction เดียวกัน และตรวจ source version จากตอนส่ง/ส่งกลับ หากข้อมูลจริงถูกเปลี่ยนระหว่างรอพิจารณาให้ตอบ `409 CONFLICT` โดยไม่มี partial update
-- approval ทำ target updates ตาม `formType` แบบ atomic; ตาราง `factories` ไม่ใช่เป้าหมายของ workflow นี้
+- approval ทำ target updates ตาม `formType` แบบ atomic; `BASIC_INFO` ไม่เขียน `factory_name`, `factory_address` หรือ `eligible_factories.address` แม้ proposed snapshot ของคำขอเก่ามีค่าที่ต่างออกไป; ตาราง `factories` ไม่ใช่เป้าหมายของ workflow นี้
 - เมื่อ `formType = "MEASUREMENT_POINTS"` backend อัปเดตเฉพาะ active `cems_wpms_connected_measurement_points` ของโรงงานนั้น ได้แก่ `point_name`, `monitoring_point_status`, `details_json`, `documents_json` และ `instruments_json`
 
 ## Errors
@@ -999,7 +1008,7 @@ Approval target mapping:
 
 | HTTP status | `error.code`       | Condition                                                                                                                                  | Client action                                   |
 | ----------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------- |
-| `400`       | `VALIDATION_ERROR` | path/query/body ไม่ตรง strict schema, พิกัดไม่ส่งเป็นคู่, `eiaOther` ผิดเงื่อนไข หรือมี field นอก allowlist                                | แสดง validation ตาม `error.issues[].pathString` |
+| `400`       | `VALIDATION_ERROR` | path/query/body ไม่ตรง strict schema, `BASIC_INFO` ไม่มี editable field, พิกัดไม่ส่งเป็นคู่, `eiaOther` ผิดเงื่อนไข หรือมี field นอก allowlist                                | แสดง validation ตาม `error.issues[].pathString` |
 | `400`       | `FILE_UPLOAD_FAILED` | multipart upload เกิน limit เช่นไฟล์เกิน 5 MiB หรือส่งไฟล์/part เกินจำนวน                                                            | แสดงข้อผิดพลาดอัปโหลดและให้เลือกไฟล์ใหม่        |
 | `400`       | `BAD_REQUEST`      | upload ไม่ส่งไฟล์ ไฟล์ว่าง MIME/นามสกุล/signature ไม่ตรง หรือ `link` ไม่ใช่ absolute `http`/`https` URL                                | แก้ไฟล์หรือ metadata แล้วส่งใหม่                 |
 | `401`       | `UNAUTHORIZED`     | token ไม่มี/หมดอายุ/ไม่ถูกต้อง                                                                                                             | login ใหม่                                      |
@@ -1028,5 +1037,7 @@ Approval target mapping:
 | Runtime OpenAPI        | [`poms.openapi.ts`](../../../../../backend/src/modules/api-docs/poms.openapi.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | Migrations             | [`0100_create_poms_factory_edit_requests.ts`](../../../../../backend/src/db/migrations/0100_create_poms_factory_edit_requests.ts), [`0106_extend_poms_factory_edit_requests_for_measurement_points.ts`](../../../../../backend/src/db/migrations/0106_extend_poms_factory_edit_requests_for_measurement_points.ts), [`0107_enforce_admin_only_factory_approval.ts`](../../../../../backend/src/db/migrations/0107_enforce_admin_only_factory_approval.ts), [`0109_add_poms_factory_edit_request_cancellation.ts`](../../../../../backend/src/db/migrations/0109_add_poms_factory_edit_request_cancellation.ts) |
 | Tests                  | [`poms-factories.route.test.ts`](../../../../../backend/tests/unit/poms-factories.route.test.ts), [`poms-factories.service.test.ts`](../../../../../backend/tests/unit/poms-factories.service.test.ts), [`poms-factories.repository.test.ts`](../../../../../backend/tests/unit/poms-factories.repository.test.ts), [`poms-factories.cancel.service.test.ts`](../../../../../backend/tests/unit/poms-factories.cancel.service.test.ts), [`poms-factories.cancel.repository.test.ts`](../../../../../backend/tests/unit/poms-factories.cancel.repository.test.ts), [`poms-factory-document-upload.route.test.ts`](../../../../../backend/tests/unit/poms-factory-document-upload.route.test.ts), [`poms-measurement-point-edit-requests.validator.test.ts`](../../../../../backend/tests/unit/poms-measurement-point-edit-requests.validator.test.ts), [`poms-measurement-point-edit-requests.migration.test.ts`](../../../../../backend/tests/unit/poms-measurement-point-edit-requests.migration.test.ts), [`factory-approval-admin-only-migration.test.ts`](../../../../../backend/tests/unit/factory-approval-admin-only-migration.test.ts), [`poms-factory-edit-request-cancellation-migration.test.ts`](../../../../../backend/tests/unit/poms-factory-edit-request-cancellation-migration.test.ts), [`poms-factories.openapi.test.ts`](../../../../../backend/tests/unit/poms-factories.openapi.test.ts) |
+
+Breaking change ด้าน editable fields ของ `BASIC_INFO` ถูกบันทึกใน [API changelog](../../CHANGELOG.md#2026-09-05--จำกัด-basic_info-ให้แก้ได้เฉพาะ-7-fields)
 
 Breaking change ด้านสิทธิ์ review ถูกบันทึกใน [API changelog](../../CHANGELOG.md#2026-09-01--เพิ่ม-2-แบบฟอร์มคำขอแก้ไขข้อมูลพื้นฐานจาก-poms-และจำกัดผู้อนุมัติเป็น-admin)

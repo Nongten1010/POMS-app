@@ -26,12 +26,6 @@ const optionalNullableTrimmedString = (max: number) =>
     return trimmed.length > 0 ? trimmed : null;
   }, z.string().trim().min(1).max(max).nullable().optional());
 
-type EditableFactoryProfileCompatibilityInput = {
-  address?: string | null;
-  factoryAddress?: string | null;
-  remarks?: string | null;
-  note?: string | null;
-};
 export const pomsFactoryIdParamsSchema = z
   .object({
     factoryId: z.string().trim().min(1).max(64),
@@ -72,37 +66,30 @@ export const listPomsFactoryEditRequestsQuerySchema = z
 const editableFactoryProfileSchema = z
   .object({
     formType: z.literal(POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.BASIC_INFO).optional(),
-    factoryName: trimmedString(500),
-    factoryAddress: optionalNullableTrimmedString(1000),
-    address: optionalNullableTrimmedString(1000),
     latitude: z.number().finite().min(-90).max(90).nullable().optional(),
     longitude: z.number().finite().min(-180).max(180).nullable().optional(),
     eia: z.enum(CONNECTION_REQUEST_EIA_ASSESSMENTS).nullable().optional(),
     eiaOther: optionalNullableTrimmedString(500),
     projectName: optionalNullableTrimmedString(500),
-    remarks: optionalNullableTrimmedString(1000),
     factoryFrontPhotos: z.array(requestDocumentImageSchema).max(10).optional(),
     factoryLogo: requestDocumentImageSchema.nullable().optional(),
-    note: optionalNullableTrimmedString(1000),
   })
   .strict()
   .superRefine((value, ctx) => {
-    if (
-      value.address !== undefined &&
-      value.factoryAddress !== undefined &&
-      value.address !== value.factoryAddress
-    ) {
+    const editableKeys = [
+      'eia',
+      'eiaOther',
+      'projectName',
+      'factoryFrontPhotos',
+      'factoryLogo',
+      'latitude',
+      'longitude',
+    ] as const;
+    if (!editableKeys.some((key) => value[key] !== undefined)) {
       ctx.addIssue({
         code: 'custom',
-        path: ['address'],
-        message: 'address and factoryAddress must match when both are provided',
-      });
-    }
-    if (value.remarks !== undefined && value.note !== undefined && value.remarks !== value.note) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['remarks'],
-        message: 'remarks and note must match when both are provided',
+        path: [],
+        message: 'factory profile patch must include at least one editable field',
       });
     }
     const hasLatitude = Object.prototype.hasOwnProperty.call(value, 'latitude');
@@ -131,8 +118,7 @@ const editableFactoryProfileSchema = z
         message: 'eiaOther is only allowed when eia is อื่นๆ',
       });
     }
-  })
-  .transform(normalizeEditableFactoryProfileInput);
+  });
 
 const editableMeasurementPointPatchSchema: z.ZodType<PomsMeasurementPointPatchInput> = z
   .object({
@@ -235,25 +221,3 @@ export const reviewPomsFactoryEditRequestSchema = z
       });
     }
   });
-
-function normalizeEditableFactoryProfileInput<T extends EditableFactoryProfileCompatibilityInput>(
-  value: T,
-): Omit<T, 'address' | 'remarks'> & {
-  factoryAddress?: string | null;
-  note?: string | null;
-} {
-  const { address, remarks, ...rest } = value;
-  const normalized = {
-    ...rest,
-    ...(Object.prototype.hasOwnProperty.call(rest, 'factoryAddress')
-      ? {}
-      : Object.prototype.hasOwnProperty.call(value, 'address')
-        ? { factoryAddress: address ?? null }
-        : {}),
-  };
-  if (Object.prototype.hasOwnProperty.call(normalized, 'note')) return normalized;
-  if (Object.prototype.hasOwnProperty.call(value, 'remarks')) {
-    return { ...normalized, note: remarks ?? null };
-  }
-  return normalized;
-}

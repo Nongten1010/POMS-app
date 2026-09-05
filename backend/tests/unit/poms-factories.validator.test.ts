@@ -21,72 +21,112 @@ const factoryLogo = {
   fileSize: 512,
 };
 
-describe('POMS factory edit request validators', () => {
-  it('accepts only the editable factory-profile fields and preserves explicit clears', () => {
-    const result = createPomsFactoryEditRequestSchema.safeParse({
-      factoryName: '  บริษัท ทดสอบ จำกัด (ใหม่)  ',
-      factoryAddress: null,
+describe.each([
+  ['create', createPomsFactoryEditRequestSchema],
+  ['resubmit', resubmitPomsFactoryEditRequestSchema],
+])('POMS basic-info %s validator', (_operation, schema) => {
+  it('accepts all seven editable fields without factory identity or a request note', () => {
+    const result = schema.safeParse({
+      formType: 'BASIC_INFO',
       latitude: 12.7,
       longitude: 101.1,
-      eia: 'มี EIA',
-      eiaOther: null,
-      projectName: null,
+      eia: 'อื่นๆ',
+      eiaOther: '  รายงานประเภทเฉพาะ  ',
+      projectName: '  โครงการใหม่  ',
       factoryFrontPhotos: [frontPhoto],
       factoryLogo,
-      note: 'ขอแก้ไขข้อมูลพื้นฐาน',
     });
 
     expect(result.success).toBe(true);
     if (!result.success) return;
-    expect(result.data).toMatchObject({
-      factoryName: 'บริษัท ทดสอบ จำกัด (ใหม่)',
-      factoryAddress: null,
+    expect(result.data).toEqual({
+      formType: 'BASIC_INFO',
       latitude: 12.7,
       longitude: 101.1,
+      eia: 'อื่นๆ',
+      eiaOther: 'รายงานประเภทเฉพาะ',
+      projectName: 'โครงการใหม่',
+      factoryFrontPhotos: [expect.objectContaining(frontPhoto)],
+      factoryLogo: expect.objectContaining(factoryLogo),
+    });
+  });
+
+  it('preserves omitted values when only the project name is supplied', () => {
+    expect(schema.parse({ projectName: 'โครงการใหม่' })).toEqual({
+      projectName: 'โครงการใหม่',
+    });
+  });
+
+  it('preserves explicit clears for all editable fields', () => {
+    const payload = {
+      latitude: null,
+      longitude: null,
+      eia: null,
+      eiaOther: null,
       projectName: null,
-      factoryFrontPhotos: [expect.objectContaining({ fileName: 'factory-front.jpg' })],
-      factoryLogo: expect.objectContaining({ fileName: 'factory-logo.png' }),
-    });
+      factoryFrontPhotos: [],
+      factoryLogo: null,
+    };
+    expect(schema.parse(payload)).toEqual(payload);
   });
 
-  it('keeps omitted patch fields omitted so they retain the current value', () => {
-    const result = createPomsFactoryEditRequestSchema.safeParse({
-      factoryName: 'บริษัท ทดสอบ จำกัด',
-    });
-
-    expect(result.success).toBe(true);
-    if (!result.success) return;
-    expect(Object.prototype.hasOwnProperty.call(result.data, 'factoryAddress')).toBe(false);
-    expect(Object.prototype.hasOwnProperty.call(result.data, 'factoryLogo')).toBe(false);
+  it.each([{}, { formType: 'BASIC_INFO' }])('rejects an empty patch %j', (payload) => {
+    expect(schema.safeParse(payload).success).toBe(false);
   });
 
-  it('normalizes connection-form field names address and remarks to the POMS write model', () => {
-    const result = createPomsFactoryEditRequestSchema.safeParse({
-      factoryName: 'บริษัท ทดสอบ จำกัด',
-      address: '100 หมู่ 2',
-      remarks: 'แก้ไขให้ตรงกับเอกสารล่าสุด',
-    });
-
-    expect(result.success).toBe(true);
-    if (!result.success) return;
-    expect(result.data).toEqual(
-      expect.objectContaining({
-        factoryAddress: '100 หมู่ 2',
-        note: 'แก้ไขให้ตรงกับเอกสารล่าสุด',
-      }),
-    );
-    expect(result.data).not.toHaveProperty('address');
-    expect(result.data).not.toHaveProperty('remarks');
-  });
-
-  it('rejects conflicting canonical and legacy aliases', () => {
+  it.each([
+    'factoryName',
+    'factoryAddress',
+    'address',
+    'remarks',
+    'note',
+    'factoryId',
+    'factoryRegistrationNo',
+    'businessActivity',
+    'measurementPoints',
+    'status',
+  ])('rejects the forbidden field %s even alongside an allowed change', (field) => {
     expect(
-      createPomsFactoryEditRequestSchema.safeParse({
-        factoryName: 'บริษัท ทดสอบ จำกัด',
-        address: '100 หมู่ 2',
-        factoryAddress: '99 หมู่ 1',
+      schema.safeParse({
+        projectName: 'โครงการใหม่',
+        [field]: field === 'measurementPoints' ? [] : 'ห้ามแก้',
       }).success,
     ).toBe(false);
+  });
+
+  it.each([
+    { latitude: 12.7 },
+    { longitude: 101.1 },
+    { latitude: null, longitude: 101.1 },
+    { latitude: 91, longitude: 101.1 },
+    { latitude: 12.7, longitude: 181 },
+  ])('rejects incomplete or invalid coordinates %j', (payload) => {
+    expect(schema.safeParse(payload).success).toBe(false);
+  });
+
+  it.each([
+    { eia: 'อื่นๆ' },
+    { eia: 'อื่นๆ', eiaOther: '   ' },
+    { eia: 'มี EIA', eiaOther: 'รายงานประเภทเฉพาะ' },
+    { eiaOther: 'รายงานประเภทเฉพาะ' },
+  ])('retains the EIA other-text validation for %j', (payload) => {
+    expect(schema.safeParse(payload).success).toBe(false);
+  });
+});
+
+describe('POMS factory edit request validators', () => {
+  it('retains the remarks alias for the measurement-point form', () => {
+    expect(
+      createPomsFactoryEditRequestSchema.parse({
+        formType: 'MEASUREMENT_POINTS',
+        measurementPoints: [{ connectedPointId: 15, pointName: 'ปล่อง A' }],
+        remarks: 'แก้ไขตามเอกสารล่าสุด',
+      }),
+    ).toEqual({
+      formType: 'MEASUREMENT_POINTS',
+      measurementPoints: [{ connectedPointId: 15, pointName: 'ปล่อง A' }],
+      note: 'แก้ไขตามเอกสารล่าสุด',
+    });
     expect(
       createPomsFactoryEditRequestSchema.safeParse({
         formType: 'MEASUREMENT_POINTS',
@@ -95,67 +135,6 @@ describe('POMS factory edit request validators', () => {
         note: 'ข้อความเดิม',
       }).success,
     ).toBe(false);
-  });
-
-  it('requires latitude and longitude to be supplied or cleared as a pair', () => {
-    expect(
-      createPomsFactoryEditRequestSchema.safeParse({
-        factoryName: 'บริษัท ทดสอบ จำกัด',
-        latitude: 12.7,
-      }).success,
-    ).toBe(false);
-    expect(
-      createPomsFactoryEditRequestSchema.safeParse({
-        factoryName: 'บริษัท ทดสอบ จำกัด',
-        latitude: null,
-        longitude: null,
-      }).success,
-    ).toBe(true);
-  });
-
-  it('requires eiaOther only when eia is อื่นๆ', () => {
-    expect(
-      createPomsFactoryEditRequestSchema.safeParse({
-        factoryName: 'บริษัท ทดสอบ จำกัด',
-        eia: 'อื่นๆ',
-      }).success,
-    ).toBe(false);
-    expect(
-      createPomsFactoryEditRequestSchema.safeParse({
-        factoryName: 'บริษัท ทดสอบ จำกัด',
-        eia: 'อื่นๆ',
-        eiaOther: 'รายงานประเภทเฉพาะ',
-      }).success,
-    ).toBe(true);
-  });
-
-  it.each(['factoryRegistrationNo', 'businessActivity', 'measurementPoints', 'status'])(
-    'rejects immutable or out-of-scope field %s',
-    (field) => {
-      const result = createPomsFactoryEditRequestSchema.safeParse({
-        factoryName: 'บริษัท ทดสอบ จำกัด',
-        [field]: field === 'measurementPoints' ? [] : 'ห้ามแก้',
-      });
-
-      expect(result.success).toBe(false);
-    },
-  );
-
-  it('uses the same editable profile contract for resubmission', () => {
-    const result = resubmitPomsFactoryEditRequestSchema.safeParse({
-      factoryName: 'บริษัท ทดสอบ จำกัด (แก้ไขรอบ 2)',
-      factoryFrontPhotos: [],
-      factoryLogo: null,
-      note: 'แก้ไขตามข้อสังเกตแล้ว',
-    });
-
-    expect(result.success).toBe(true);
-    if (!result.success) return;
-    if (!('factoryName' in result.data)) {
-      throw new Error('expected basic-info payload');
-    }
-    expect(result.data.factoryFrontPhotos).toEqual([]);
-    expect(result.data.factoryLogo).toBeNull();
   });
 
   it('accepts the measurement-point edit form with unique connectedPointId values', () => {

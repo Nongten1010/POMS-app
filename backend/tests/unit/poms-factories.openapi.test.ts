@@ -1,5 +1,6 @@
 import { describe, expect, it } from '@jest/globals';
 import { pomsOpenApiDocument } from '../../src/modules/api-docs/poms.openapi';
+import { createPomsFactoryEditRequestSchema } from '../../src/modules/poms-factories/poms-factories.validator';
 
 type JsonObject = Record<string, unknown>;
 
@@ -193,16 +194,13 @@ describe('POMS factory master-data OpenAPI contract', () => {
     expect(operatorList.description).not.toEqual(pomsList.description);
   });
 
-  it('limits create and resubmission payloads to the first-version profile allowlist', () => {
+  it('limits create and resubmission payloads to the seven-field profile allowlist', () => {
     const schema = asObject(schemas().PomsFactoryEditableProfileRequest, 'edit profile request');
     const properties = asObject(schema.properties, 'edit profile properties');
 
     expect(Object.keys(properties).sort()).toEqual(
       [
         'formType',
-        'factoryName',
-        'address',
-        'factoryAddress',
         'latitude',
         'longitude',
         'eia',
@@ -210,17 +208,23 @@ describe('POMS factory master-data OpenAPI contract', () => {
         'projectName',
         'factoryFrontPhotos',
         'factoryLogo',
-        'remarks',
-        'note',
       ].sort(),
     );
     expect(schema.additionalProperties).toBe(false);
-    expect(schema.required).toEqual(['factoryName']);
+    expect(schema).not.toHaveProperty('required');
+    expect(schema.anyOf).toEqual(
+      [
+        'eia',
+        'eiaOther',
+        'projectName',
+        'factoryFrontPhotos',
+        'factoryLogo',
+        'latitude',
+        'longitude',
+      ].map((field) => ({ required: [field] })),
+    );
     expect(properties).not.toHaveProperty('measurementPoints');
     expect(properties).not.toHaveProperty('businessActivity');
-    expect(asObject(properties.factoryName, 'factoryName')).toEqual(
-      expect.objectContaining({ minLength: 1, maxLength: 500 }),
-    );
     expect(asObject(properties.factoryFrontPhotos, 'factoryFrontPhotos').maxItems).toBe(10);
     expect(
       String(asObject(properties.factoryFrontPhotos, 'factoryFrontPhotos').description),
@@ -241,12 +245,6 @@ describe('POMS factory master-data OpenAPI contract', () => {
     expect(String(asObject(properties.factoryLogo, 'factoryLogo').description)).toContain(
       'null = ล้าง',
     );
-    expect(asObject(properties.address, 'address')).toEqual(
-      expect.objectContaining({ nullable: true, maxLength: 1000 }),
-    );
-    expect(asObject(properties.factoryAddress, 'factoryAddress').nullable).toBe(true);
-    expect(asObject(properties.factoryAddress, 'factoryAddress').deprecated).toBe(true);
-    expect(asObject(properties.note, 'note').deprecated).toBe(true);
     expect(asObject(properties.latitude, 'latitude')).toEqual(
       expect.objectContaining({ minimum: -90, maximum: 90, nullable: true }),
     );
@@ -274,14 +272,28 @@ describe('POMS factory master-data OpenAPI contract', () => {
     expect(createExample).not.toHaveProperty('businessActivity');
     expect(createExample).toEqual(
       expect.objectContaining({
-        address: expect.any(String),
-        remarks: expect.any(String),
+        projectName: expect.any(String),
         factoryFrontPhotos: expect.any(Array),
         factoryLogo: expect.any(Object),
       }),
     );
-    expect(createExample).not.toHaveProperty('factoryAddress');
-    expect(createExample).not.toHaveProperty('note');
+    for (const field of ['factoryName', 'factoryAddress', 'address', 'remarks', 'note']) {
+      expect(createExample).not.toHaveProperty(field);
+    }
+  });
+
+  it('publishes basic-info create and resubmission examples accepted by the runtime validator', () => {
+    const schema = asObject(schemas().PomsFactoryEditableProfileRequest, 'profile schema');
+    expect(createPomsFactoryEditRequestSchema.safeParse(schema.example).success).toBe(true);
+    for (const [path, method] of [
+      ['/poms-factories/{factoryId}/edit-requests', 'post'],
+      ['/poms-factories/edit-requests/{id}/resubmission', 'put'],
+    ]) {
+      const body = asObject(operation(path, method).requestBody, 'request body');
+      const content = asObject(body.content, 'request content');
+      const json = asObject(content['application/json'], 'JSON request');
+      expect(createPomsFactoryEditRequestSchema.safeParse(json.example).success).toBe(true);
+    }
   });
 
   it('publishes the measurement-point edit form as a second submission variant', () => {

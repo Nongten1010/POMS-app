@@ -543,8 +543,6 @@ const favoriteExample = { isFavorite: true };
 
 const pomsFactoryEditRequestExample = {
   formType: 'BASIC_INFO',
-  factoryName: 'บริษัท ทดสอบ จำกัด (แก้ไข)',
-  address: '100 หมู่ 2 ตำบลทดสอบ อำเภอเมือง จังหวัดสระบุรี',
   latitude: 13.7563,
   longitude: 100.5018,
   eia: 'มี',
@@ -566,7 +564,6 @@ const pomsFactoryEditRequestExample = {
     fileType: 'image/png',
     fileSize: 102400,
   },
-  remarks: 'ขอแก้ไขข้อมูลพื้นฐานหลังเชื่อมต่อแล้ว',
 };
 
 const pomsFactoryMeasurementPointEditRequestExample = {
@@ -1967,37 +1964,23 @@ const componentSchemas: Record<string, OpenApiObject> = {
   PomsFactoryEditableProfileRequest: {
     type: 'object',
     additionalProperties: false,
-    required: ['factoryName'],
     minProperties: 1,
     description:
-      'ต้องส่ง factoryName ทุกครั้ง; field อื่นที่ไม่ส่งคงค่าเดิม ส่วน null ใช้ล้าง nullable field. latitude และ longitude ต้องส่งมาคู่กัน',
+      'แก้ไขได้เฉพาะ eia, eiaOther, projectName, factoryFrontPhotos, factoryLogo, latitude และ longitude โดยต้องส่งอย่างน้อยหนึ่ง field; field ที่ไม่ส่งคงค่าเดิม ส่วน null ใช้ล้าง nullable field. latitude และ longitude ต้องส่งมาคู่กัน; ไม่รับ factoryName, address, factoryAddress, remarks หรือ note',
+    anyOf: [
+      { required: ['eia'] },
+      { required: ['eiaOther'] },
+      { required: ['projectName'] },
+      { required: ['factoryFrontPhotos'] },
+      { required: ['factoryLogo'] },
+      { required: ['latitude'] },
+      { required: ['longitude'] },
+    ],
     properties: {
       formType: {
         type: 'string',
         enum: ['BASIC_INFO'],
         description: 'Optional เพื่อรองรับ client เดิม; omitted จะตีความเป็น BASIC_INFO',
-      },
-      factoryName: {
-        type: 'string',
-        minLength: 1,
-        maxLength: 500,
-        description: 'Required และไม่รับ null',
-      },
-      factoryAddress: {
-        type: 'string',
-        minLength: 1,
-        maxLength: 1000,
-        nullable: true,
-        deprecated: true,
-        description:
-          'Legacy alias ของ address; ถ้าส่งทั้งคู่ค่าต้องตรงกัน. omitted = คงค่าเดิม, null = ล้างค่า',
-      },
-      address: {
-        type: 'string',
-        minLength: 1,
-        maxLength: 1000,
-        nullable: true,
-        description: 'Canonical field ตรงกับแบบคำขอเชื่อมต่อ; omitted = คงค่าเดิม, null = ล้างค่า',
       },
       latitude: {
         type: 'number',
@@ -2027,7 +2010,8 @@ const componentSchemas: Record<string, OpenApiObject> = {
         minLength: 1,
         maxLength: 500,
         nullable: true,
-        description: 'Required เมื่อ eia = อื่นๆ; null ใช้ล้างค่า',
+        description:
+          'ส่งข้อความพร้อม eia = อื่นๆ; ล้างข้อความโดยเปลี่ยน eia เป็นค่าอื่นหรือ null. ส่ง eiaOther = null เพียงอย่างเดียวไม่เปลี่ยนค่า',
       },
       projectName: {
         type: 'string',
@@ -2047,23 +2031,6 @@ const componentSchemas: Record<string, OpenApiObject> = {
         nullable: true,
         description:
           'Optional; รับสูงสุด 1 object, omitted = คงค่าเดิม, null = ล้างตราสัญลักษณ์โรงงาน',
-      },
-      note: {
-        type: 'string',
-        minLength: 1,
-        maxLength: 1000,
-        nullable: true,
-        deprecated: true,
-        description:
-          'Legacy alias ของ remarks; ถ้าส่งทั้งคู่ค่าต้องตรงกัน. response workflow แสดงเป็น requestNote',
-      },
-      remarks: {
-        type: 'string',
-        minLength: 1,
-        maxLength: 1000,
-        nullable: true,
-        description:
-          'Canonical field ตรงกับแบบคำขอเชื่อมต่อ; response workflow แสดงเป็น requestNote',
       },
     },
     example: pomsFactoryEditRequestExample,
@@ -2486,7 +2453,11 @@ const componentSchemas: Record<string, OpenApiObject> = {
         description: 'เริ่มที่ 0 และเพิ่มเป็น 1 เมื่อ resubmit ครั้งแรก',
       },
       isOpen: { type: 'boolean' },
-      requestNote: nullableStringSchema(1000),
+      requestNote: {
+        ...nullableStringSchema(1000),
+        description:
+          'คำขอ BASIC_INFO ที่ส่งใหม่หรือ resubmit มีค่า null; คำขอเก่ายังคืนหมายเหตุที่บันทึกไว้ ส่วน MEASUREMENT_POINTS ใช้ remarks/note ตามเดิม',
+      },
       revisionReason: nullableStringSchema(1000),
       officerNote: nullableStringSchema(1000),
       currentFactory: schemaRef('PomsFactoryProfile'),
@@ -4990,7 +4961,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Submit a POMS factory edit request',
       operationId: 'createPomsFactoryEditRequest',
       description:
-        'ต้องมี factories:view และ factories:edit โดยการคัดโรงงานสำหรับ mutation ยึด data scope ของ factories:edit. body รองรับ 2 แบบฟอร์ม: BASIC_INFO และ MEASUREMENT_POINTS โดยหนึ่งโรงงานเปิดคำขอได้ครั้งละหนึ่งรายการต่อ formType. backend lock ข้อมูล current/live connected POMS เพื่อตรวจ source version ของ snapshot และบันทึกคำขอกับ event ใน transaction เดียวกัน; หากล้มเหลวจะ rollback ทั้ง transaction',
+        'ต้องมี factories:view และ factories:edit โดยการคัดโรงงานสำหรับ mutation ยึด data scope ของ factories:edit. body รองรับ 2 แบบฟอร์ม: BASIC_INFO และ MEASUREMENT_POINTS โดยหนึ่งโรงงานเปิดคำขอได้ครั้งละหนึ่งรายการต่อ formType. BASIC_INFO รับเฉพาะ 7 field ใน PomsFactoryEditableProfileRequest. backend lock ข้อมูล current/live connected POMS เพื่อตรวจ source version ของ snapshot และบันทึกคำขอกับ event ใน transaction เดียวกัน; หากล้มเหลวจะ rollback ทั้ง transaction',
       parameters: [factoryIdParameter],
       requestBody: jsonRequestBody(
         schemaRef('PomsFactoryEditSubmissionRequest'),
@@ -5026,7 +4997,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Get proposed POMS edit request as connection-request form',
       operationId: 'getPomsFactoryEditRequestForm',
       description:
-        'คืน proposed snapshot ด้วย canonical form-prefill field names ชุดเดียวกับ GET /cems-wpms-requests/{id}/form และไม่คืน POMS/workflow IDs. Permission: factories:view; ถ้ามีทั้ง CEMS และ WPMS ต้องระบุ systemType',
+        'คืน proposed snapshot ด้วย canonical form-prefill field names ชุดเดียวกับ GET /cems-wpms-requests/{id}/form และไม่คืน POMS/workflow IDs. BASIC_INFO overlay เฉพาะ eia, eiaOther, projectName, factoryFrontPhotos, factoryLogo, latitude และ longitude; ชื่อโรงงาน ที่อยู่ และข้อมูลอ่านอย่างเดียวใช้ current/live แม้เป็นคำขอเก่า. Permission: factories:view; ถ้ามีทั้ง CEMS และ WPMS ต้องระบุ systemType',
       parameters: [
         idParameter,
         queryEnum(
@@ -5048,7 +5019,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       parameters: [idParameter],
       requestBody: jsonRequestBody(schemaRef('PomsFactoryEditSubmissionRequest'), {
         ...pomsFactoryEditRequestExample,
-        remarks: 'แก้ไขพิกัดและภาพถ่ายตามคำขอของเจ้าหน้าที่แล้ว',
+        projectName: 'โครงการปรับปรุงตามข้อสังเกตแล้ว',
       }),
       successSchema: schemaRef('PomsFactoryEditRequestResponse'),
       extraResponses: {

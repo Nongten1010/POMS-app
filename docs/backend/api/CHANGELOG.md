@@ -2,6 +2,14 @@
 
 ไฟล์นี้บันทึกเฉพาะการเปลี่ยน API ที่ทำให้ client ต้องแก้ตาม การเปลี่ยนทั่วไปและประวัติรายละเอียดดูจาก Git history
 
+## 2026-09-05 — จำกัด BASIC_INFO ให้แก้ได้เฉพาะ 7 fields
+
+- **Affected canonical docs:** [คำขอแก้ไขข้อมูลทั่วไปโรงงานจาก POMS](./menus/master-data/factory-edit-requests.md#shared-basic-info-fields)
+- **Impact:** `POST /api/v1/poms-factories/:factoryId/edit-requests` และ `PUT /api/v1/poms-factories/edit-requests/:id/resubmission` สำหรับ `BASIC_INFO` รับเฉพาะ optional `formType` กับ `eia`, `projectName`, `eiaOther`, `factoryFrontPhotos`, `factoryLogo`, `latitude` และ `longitude`; `factoryName`, `address`, `factoryAddress`, `remarks`, `note` และ field นอก allowlist ตอบ `400 VALIDATION_ERROR` แม้ส่งค่าเดิมหรือ `null`. ต้องส่งอย่างน้อยหนึ่ง editable field; body ว่างหรือมีเพียง `formType` ถูกปฏิเสธ.
+- **Migration:** client ต้องเปิดแก้เฉพาะ 7 fields และหยุดส่งชื่อโรงงาน ที่อยู่ และหมายเหตุ รวมถึงเมื่อ resubmit คำขอเก่า; สร้าง write payload จาก allowlist แทนการส่ง prefill response ทั้ง object. ชื่อ ที่อยู่ และ identity fields ยังคงอยู่ใน response เพื่อแสดงข้อมูลอ่านอย่างเดียว. ไม่มี database migration หรือ backfill.
+- **Old contract:** `BASIC_INFO` บังคับ `factoryName`, รับ `address`/`factoryAddress` และ `remarks`/`note`; approval อาจเปลี่ยนชื่อและที่อยู่โรงงาน.
+- **New contract:** omission คงค่าจาก current/live snapshot, `null` ล้าง nullable field ตามเงื่อนไขของแต่ละ field และ `factoryFrontPhotos: []` ล้างรูปทั้งหมด; กฎพิกัดเป็นคู่คงเดิม. รายละเอียด `eiaOther` ต้องส่งพร้อม `eia = "อื่นๆ"`; การเปลี่ยน `eia` เป็นค่าอื่นหรือ `null` จะล้างรายละเอียด แต่ `eiaOther: null` เพียงอย่างเดียวไม่เปลี่ยนค่าเดิม. `BASIC_INFO` ที่สร้างหรือ resubmit ใหม่คงชื่อ/ที่อยู่และมี `requestNote: null`; approval เขียนเฉพาะ allowed fields และไม่เขียนชื่อ/ที่อยู่แม้เป็นคำขอเก่าที่ค้างพิจารณา. `MEASUREMENT_POINTS` ยังรับ `remarks`/`note` ตามเดิม.
+
 ## 2026-09-05 — แยกเลขคำขอแก้ไขข้อมูล POMS เป็น base และ point
 
 - **Affected canonical docs:** [เลขคำขอแก้ไขข้อมูล POMS](./menus/master-data/factory-edit-requests.md#request-number-contract)

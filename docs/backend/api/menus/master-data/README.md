@@ -34,7 +34,7 @@ curl --request POST \
   --url '<BASE_URL>/api/v1/poms-factories/factory-001/edit-requests' \
   --header 'Authorization: Bearer <ACCESS_TOKEN>' \
   --header 'Content-Type: application/json' \
-  --data '{"formType":"BASIC_INFO","factoryName":"บริษัท ตัวอย่าง จำกัด (มหาชน)","remarks":"ปรับชื่อให้ตรงกับเอกสารล่าสุด"}'
+  --data '{"formType":"BASIC_INFO","projectName":"โครงการปรับปรุงระบบตรวจวัด"}'
 ```
 
 ## Endpoint Summary
@@ -70,6 +70,7 @@ curl --request POST \
 
 ## Contracts
 
+- [ส่งต่อ frontend: แบบฟอร์มแก้ไขข้อมูลทั่วไปของโรงงาน](../../../guides/frontend-handoffs/factory-basic-info/README.md) — งานที่ต้องปรับใน payload และรายการตรวจรับสำหรับ 7 fields
 - [โรงงานและคำขอแก้ไขข้อมูลในระบบ POMS](./factory-edit-requests.md) — shared operator-factory list shape พร้อม POMS source mapping, detail contract, JSON examples, `formType` ของทั้ง 2 แบบฟอร์ม, permissions, workflow statuses, errors, concurrency, idempotency และ maintainer links
 - [จุดตรวจวัดที่เชื่อมต่อแล้ว](../../shared/connected-measurement-points/README.md) — point/history/statistics contract ที่ใช้ร่วมหลายเมนู
 - [Device configuration](../connection-requests/device-configs.md) — config ปัจจุบันและการแทนที่ config

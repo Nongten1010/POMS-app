@@ -663,8 +663,6 @@ function buildApprovedPomsFactoryProfilePatches(proposed: PomsFactoryProfileDTO)
   const eiaOther = proposed.eia === 'อื่นๆ' ? proposed.eiaOther : null;
   return {
     connected: {
-      factory_name: proposed.factoryName,
-      factory_address: proposed.factoryAddress,
       factory_latitude: proposed.latitude,
       factory_longitude: proposed.longitude,
       factory_eia_assessment: proposed.eia,
@@ -676,8 +674,6 @@ function buildApprovedPomsFactoryProfilePatches(proposed: PomsFactoryProfileDTO)
       factory_logo_json: proposed.factoryLogo ? JSON.stringify(proposed.factoryLogo) : null,
     },
     eligible: {
-      factory_name: proposed.factoryName,
-      address: proposed.factoryAddress,
       latitude: proposed.latitude,
       longitude: proposed.longitude,
       eia_assessment: proposed.eia,
