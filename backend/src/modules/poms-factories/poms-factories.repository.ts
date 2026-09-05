@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import type { Knex } from 'knex';
 import { db } from '../../config/database';
 import {
@@ -43,6 +42,7 @@ import {
   POMS_FACTORY_EDIT_REQUEST_STATUS,
   POMS_FACTORY_EDIT_REQUEST_STATUS_LABELS,
 } from './poms-factories.types';
+import { allocatePomsFactoryEditRequestNo } from './poms-factory-edit-request-number';
 
 type AccessScope = string | null | undefined | PermissionScopeDetails;
 type DbExecutor = Knex | Knex.Transaction;
@@ -210,6 +210,7 @@ export const pomsFactoriesRepository = {
   ): Promise<PomsFactoryEditRequestDTO> {
     try {
       return await db.transaction(async (trx) => {
+        const requestNo = await allocatePomsFactoryEditRequestNo(trx, payload.formType);
         const live = await lockCurrentFactoryProfile(trx, current.eligibleFactoryId);
         ensureSameProfileVersion(current.updatedAt, live.updatedAt);
 
@@ -226,7 +227,6 @@ export const pomsFactoriesRepository = {
           });
         }
 
-        const requestNo = createRequestNo();
         const [created] = await trx('poms_factory_edit_requests')
           .insert({
             request_no: requestNo,
@@ -1492,11 +1492,6 @@ function parseJsonObject<T>(value: string | null | undefined): T | null {
   } catch {
     return null;
   }
-}
-
-function createRequestNo(): string {
-  const date = new Date().toISOString().slice(0, 10).replaceAll('-', '');
-  return `PFE-${date}-${randomUUID().slice(0, 8).toUpperCase()}`;
 }
 
 function isUniqueViolation(error: unknown): boolean {

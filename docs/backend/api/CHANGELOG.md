@@ -2,6 +2,14 @@
 
 ไฟล์นี้บันทึกเฉพาะการเปลี่ยน API ที่ทำให้ client ต้องแก้ตาม การเปลี่ยนทั่วไปและประวัติรายละเอียดดูจาก Git history
 
+## 2026-09-05 — แยกเลขคำขอแก้ไขข้อมูล POMS เป็น base และ point
+
+- **Affected canonical docs:** [เลขคำขอแก้ไขข้อมูล POMS](./menus/master-data/factory-edit-requests.md#request-number-contract)
+- **Impact:** `requestNo` ของคำขอใหม่ใช้ `base-NNNNN/YYYY` สำหรับ `BASIC_INFO` และ `point-NNNNN/YYYY` สำหรับ `MEASUREMENT_POINTS` โดยลำดับ 5 หลักแยกตามประเภทและปี พ.ศ. ตาม `Asia/Bangkok`
+- **Migration:** client ที่ตรวจหรือแยกเลขรูปแบบ `PFE-*` ต้องรองรับเลขใหม่เป็น opaque string และใช้ `id` อ้างอิงคำขอ; คำขอเก่ายังคงเลขเดิม รวมถึงเมื่อ resubmit/review/cancel ไม่มี database migration หรือ backfill
+- **Old contract:** ทั้งสองแบบฟอร์มใช้ `PFE-YYYYMMDD-XXXXXXXX`
+- **New contract:** เช่น `base-00001/2569` และ `point-00001/2569`; แยกลำดับรวมทุกโรงงานตามประเภทและปี ไม่ใช้เลขของคำขอปิด/ยกเลิก/soft delete ซ้ำ และตอบ `409 CONFLICT` หากลำดับของประเภทและปีนั้นครบ `99999`
+
 ## 2026-09-02 — ปรับรายการโรงงาน POMS ให้ใช้ shared operator-factory row shape
 
 - **Affected canonical docs:** [ข้อมูลพื้นฐาน](./menus/master-data/README.md), [`GET /api/v1/poms-factories`](./menus/master-data/factory-edit-requests.md#get-apiv1poms-factories), [Operator factory list source](./menus/connection-requests/README.md#operator-factory-list-source)

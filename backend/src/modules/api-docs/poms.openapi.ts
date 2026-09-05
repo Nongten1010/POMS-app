@@ -2469,7 +2469,9 @@ const componentSchemas: Record<string, OpenApiObject> = {
         type: 'string',
         minLength: 1,
         maxLength: 40,
-        example: 'PFE-20260824-1A2B3C4D',
+        description:
+          'เลขที่คำขอใหม่: BASIC_INFO ใช้ base-NNNNN/YYYY เช่น base-00001/2569; MEASUREMENT_POINTS ใช้ point-NNNNN/YYYY เช่น point-00001/2569. ลำดับ 5 หลักแยกตามประเภทและปี พ.ศ. ตาม Asia/Bangkok เริ่มที่ 00001; คงเลขเดิมเมื่อ resubmit/review/cancel และคำขอเดิม PFE-* ยังใช้เลขเดิม. Client ต้องถือ requestNo เป็น opaque string และใช้ id อ้างอิงคำขอ',
+        example: 'base-00001/2569',
       },
       eligibleFactoryId: { type: 'integer', minimum: 1 },
       factoryId: { type: 'string', minLength: 1, maxLength: 64 },
@@ -4999,7 +5001,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       extraResponses: {
         '409': {
           description:
-            'มีคำขอเปิดของโรงงานนี้อยู่แล้ว หรือ current/live profile เปลี่ยนระหว่างทำรายการ',
+            'มีคำขอเปิดของโรงงานนี้อยู่แล้ว, current/live profile เปลี่ยนระหว่างทำรายการ หรือเลขคำขอของประเภทและปี พ.ศ. นั้นครบ 99999 (CONFLICT)',
           content: {
             'application/json': { schema: schemaRef('ErrorEnvelope') },
           },

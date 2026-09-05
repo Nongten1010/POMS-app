@@ -75,6 +75,18 @@ curl --request POST \
   --header 'Accept: application/json'
 ```
 
+### Request Number Contract
+
+| `formType` | งาน | รูปแบบเลขที่คำขอใหม่ | ตัวอย่าง |
+| --- | --- | --- | --- |
+| `BASIC_INFO` | แก้ไขข้อมูลพื้นฐาน | `base-NNNNN/YYYY` | `base-00001/2569` |
+| `MEASUREMENT_POINTS` | แก้ไขจุดตรวจวัด | `point-NNNNN/YYYY` | `point-00001/2569` |
+
+- `NNNNN` เป็นลำดับ 5 หลัก เริ่ม `00001` แยกตามประเภทแบบฟอร์มและปี พ.ศ. (`YYYY`) โดยใช้เขตเวลา `Asia/Bangkok`; เป็นลำดับรวมทุกโรงงานของประเภทนั้น
+- backend จัดสรรเลขและบันทึกคำขอใน transaction เดียวกัน พร้อม lock ช่วงเลขเพื่อป้องกันคำขอพร้อมกันได้เลขซ้ำ; เลขของคำขอที่ปิด ยกเลิก หรือลบแบบ soft delete ยังถูกสงวนไว้ เมื่อครบ `99999` ตอบ `409 CONFLICT`
+- การ resubmit, review และ cancel คงเลขเดิม; คำขอเก่าที่เป็น `PFE-*` ยังใช้เลขเดิม ไม่มีการ backfill หรือ database migration
+- client ต้องถือ `requestNo` เป็น opaque string สำหรับแสดงผลและค้นหา ใช้ `id` อ้างอิงใน URL และไม่แยกข้อมูลจาก prefix หรือ `/`
+
 ## Endpoint Summary
 
 เมนูข้อมูลพื้นฐานมี `17` canonical endpoints และแสดงเป็น `21` Swagger operations เพราะ endpoint เดิมของจุดตรวจวัดมี annual path variants เพิ่ม `4` operations
@@ -537,7 +549,7 @@ Minimal response (`201 Created`):
   "success": true,
   "data": {
     "id": 11,
-    "requestNo": "PFE-20260824-A1B2C3D4",
+    "requestNo": "base-00001/2569",
     "revisionNo": 0,
     "isOpen": true,
     "eligibleFactoryId": 7,
@@ -586,7 +598,7 @@ Minimal response (`200 OK`):
   "data": [
     {
       "id": 11,
-      "requestNo": "PFE-20260824-A1B2C3D4",
+      "requestNo": "base-00001/2569",
       "revisionNo": 0,
       "isOpen": true,
       "eligibleFactoryId": 7,
@@ -625,7 +637,7 @@ Minimal request JSON:
 | Field                        | Type                                                                  | Nullable | Description                                                                      |
 | ---------------------------- | --------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------- |
 | `data.id`                    | number                                                                | no       | edit-request ID                                                                  |
-| `data.requestNo`             | string                                                                | no       | `PFE-YYYYMMDD-XXXXXXXX`; วันที่ UTC ตอนสร้างตามด้วย UUID 8 ตัวแรกแบบตัวพิมพ์ใหญ่ |
+| `data.requestNo`             | string                                                                | no       | เลขตาม [Request Number Contract](#request-number-contract); คำขอเดิม `PFE-*` ยังคงเลขเดิม |
 | `data.eligibleFactoryId`     | number                                                                | no       | active `eligible_factories.id` ของคำขอ                                           |
 | `data.factoryId`             | string                                                                | no       | current/live factory identifier                                                  |
 | `data.factoryRegistrationNo` | string                                                                | no       | เลขทะเบียนโรงงาน                                                                 |
@@ -666,7 +678,7 @@ Minimal response (`200 OK`):
   "success": true,
   "data": {
     "id": 11,
-    "requestNo": "PFE-20260824-A1B2C3D4",
+    "requestNo": "base-00001/2569",
     "eligibleFactoryId": 7,
     "factoryId": "factory-001",
     "factoryRegistrationNo": "3-106-33/50สบ",
@@ -812,7 +824,7 @@ Minimal response (`200 OK`):
   "success": true,
   "data": {
     "id": 11,
-    "requestNo": "PFE-20260824-A1B2C3D4",
+    "requestNo": "base-00001/2569",
     "revisionNo": 1,
     "isOpen": true,
     "status": "REVISED_PENDING_REVIEW",
@@ -849,7 +861,7 @@ Minimal response (`200 OK`):
   "success": true,
   "data": {
     "id": 11,
-    "requestNo": "PFE-20260824-A1B2C3D4",
+    "requestNo": "base-00001/2569",
     "eligibleFactoryId": 7,
     "factoryId": "factory-001",
     "factoryRegistrationNo": "3-106-33/50สบ",
@@ -926,7 +938,7 @@ Minimal response (`200 OK`):
   "success": true,
   "data": {
     "id": 11,
-    "requestNo": "PFE-20260824-A1B2C3D4",
+    "requestNo": "base-00001/2569",
     "revisionNo": 1,
     "isOpen": false,
     "status": "APPROVED",
@@ -994,7 +1006,7 @@ Approval target mapping:
 | `403`       | `FORBIDDEN`        | ไม่มี action permission, ผู้ยกเลิกไม่ใช่ `createdBy`, reviewer ไม่ใช่ admin หรือผู้พิจารณาซ้ำกับ `createdBy`/`submittedBy`                  | ซ่อน action หรือใช้ผู้ทำรายการที่ถูกต้อง         |
 | `404`       | `NOT_FOUND`        | ไม่พบโรงงาน/คำขอ หรือ resource อยู่นอก effective data scope ของ endpoint (`factories:view`, `factories:edit`, หรือ `factories:approve`)    | กลับหน้ารายการและ refresh                       |
 | `409`       | `INVALID_STATUS_TRANSITION` | cancel เมื่อสถานะไม่ใช่ `PENDING_REVIEW`, `REVISION_REQUESTED` หรือ `REVISED_PENDING_REVIEW`                                      | refresh detail และซ่อนปุ่มยกเลิก                 |
-| `409`       | `CONFLICT`         | ไม่มี profile field เปลี่ยน, มี open request อยู่แล้ว, transition อื่นไม่รองรับ, source version เปลี่ยน หรือ request ถูกพิจารณาพร้อมกัน    | refresh detail และตัดสินใจจากสถานะล่าสุด        |
+| `409`       | `CONFLICT`         | ไม่มี profile field เปลี่ยน, มี open request อยู่แล้ว, transition อื่นไม่รองรับ, source version เปลี่ยน, request ถูกพิจารณาพร้อมกัน หรือเลขคำขอของประเภทและปีนั้นครบ `99999` | refresh detail และตัดสินใจจากสถานะล่าสุด; ถ้าเลขครบให้ติดต่อผู้ดูแล        |
 
 ## Business Flow And Explanations
 
