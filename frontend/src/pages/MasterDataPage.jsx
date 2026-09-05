@@ -6,6 +6,7 @@ import {
   Chip,
   CircularProgress,
   Dialog,
+  DialogActions,
   DialogContent,
   DialogTitle,
   Divider,
@@ -31,6 +32,12 @@ import EditIcon from '@mui/icons-material/Edit'
 import UploadFileIcon from '@mui/icons-material/UploadFile'
 import { DataGrid } from '@mui/x-data-grid'
 import { RequestFormBottomSheet } from './ConnectionRequestPage'
+import {
+  buildFactoryDocumentPatch,
+  canCancelFactoryEditRequest,
+  getFactoryDocumentFileError,
+  getFactoryEditRequestStatusLabel,
+} from '../utils/masterData.mjs'
 
 const pomsFactoriesApiBaseUrl = window.location.hostname === 'localhost'
   ? '/api-proxy/v1/poms-factories'
@@ -56,6 +63,7 @@ const borderedTableSx = {
 }
 
 const eiaAssessmentOptions = ['ไม่มี', 'มี IEE', 'มี EIA', 'มี EHIA', 'อื่นๆ']
+const eiaProjectOptions = ['มี IEE', 'มี EIA', 'มี EHIA']
 const actionableRequestStatuses = ['แก้ไขแล้ว/รอพิจารณา', 'รอพิจารณา']
 
 const dataGridLocaleText = {
@@ -128,6 +136,35 @@ async function readMasterDataResponse(result, fallbackMessage) {
   return payload
 }
 
+async function uploadFactoryDocumentImage(file, title, accessToken) {
+  const validationError = getFactoryDocumentFileError(file)
+  if (validationError) {
+    throw new Error(validationError)
+  }
+  if (!accessToken) {
+    throw new Error('กรุณาเข้าสู่ระบบอีกครั้งก่อนอัปโหลดไฟล์')
+  }
+
+  const body = new FormData()
+  body.append('file', file)
+  body.append('title', title)
+
+  const result = await fetch(`${pomsFactoriesApiBaseUrl}/document-images`, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body,
+  })
+  const response = await readMasterDataResponse(result, 'อัปโหลดเอกสารหรือรูปภาพไม่สำเร็จ')
+  if (!response?.data?.fileUrl) {
+    throw new Error('ข้อมูลไฟล์ที่ได้รับจากระบบไม่ถูกต้อง')
+  }
+
+  return sanitizeDocumentItem(response.data)
+}
+
 function displayValue(value) {
   if (value === null || value === undefined || value === '') {
     return '-'
@@ -148,23 +185,6 @@ function toNumberOrNull(value) {
   }
   const parsed = Number(text)
   return Number.isFinite(parsed) ? parsed : null
-}
-
-function toThaiRequestStatusLabel(status, label) {
-  const normalized = String(label || status || '').trim()
-  const statusMap = {
-    PENDING_REVIEW: 'รอพิจารณา',
-    REVISION_REQUESTED: 'รอโรงงานแก้ไข',
-    REVISED_PENDING_REVIEW: 'แก้ไขแล้ว/รอพิจารณา',
-    APPROVED: 'อนุมัติ',
-    REJECTED: 'ไม่อนุมัติ',
-    'ส่งกลับให้แก้ไข': 'รอโรงงานแก้ไข',
-    'แก้ไขแล้ว รอพิจารณา': 'แก้ไขแล้ว/รอพิจารณา',
-    อนุมัติแล้ว: 'อนุมัติ',
-    ไม่อนุมัติ: 'ยกเลิก',
-  }
-
-  return statusMap[normalized] ?? normalized ?? '-'
 }
 
 function getRequestFormLabel(formType) {
@@ -286,7 +306,7 @@ function mapEditRequestRows(rows) {
       submittedDate: row.submittedAt ?? row.createdAt ?? '-',
       reviewedDate: row.reviewedAt ?? '-',
       statusCode: row.status ?? '',
-      status: toThaiRequestStatusLabel(row.status, row.statusLabel),
+      status: getFactoryEditRequestStatusLabel(row.status, row.statusLabel),
       statusLabel: row.statusLabel ?? '',
       factoryId: row.factoryId ?? '',
       factoryName: row.factoryName ?? '',
@@ -541,7 +561,7 @@ function MonitoringPointActions({ point, onEdit }) {
   )
 }
 
-function getPageRequestColumns(onOpenRequest, onEditRequest, isAdmin = false) {
+function getPageRequestColumns(onOpenRequest, onEditRequest, onCancelRequest, isAdmin = false) {
   return [
     { field: 'factoryName', headerName: 'ชื่อโรงงาน/บริษัท', width: 240 },
     {
@@ -598,7 +618,8 @@ function getPageRequestColumns(onOpenRequest, onEditRequest, isAdmin = false) {
                 size="small"
                 variant="outlined"
                 color="error"
-                disabled={['อนุมัติ', 'ยกเลิก'].includes(params.row.status)}
+                disabled={!canCancelFactoryEditRequest(params.row.statusCode)}
+                onClick={() => onCancelRequest?.(params.row)}
               >
                 ยกเลิกคำขอ
               </Button>
@@ -703,7 +724,43 @@ function FactoryDetailDialog({ factory, open, onClose, onEdit }) {
   )
 }
 
-function MockUploadField({ label, helperText, disabled = false }) {
+function FactoryDocumentUploadField({
+  label,
+  helperText,
+  title,
+  documents = [],
+  maxFiles = 1,
+  accessToken = '',
+  disabled = false,
+  onChange,
+}) {
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState('')
+  const items = Array.isArray(documents) ? documents.filter(Boolean) : []
+
+  const handleFiles = async (event) => {
+    const input = event.currentTarget
+    const selectedFiles = Array.from(input.files ?? []).slice(0, Math.max(0, maxFiles - items.length))
+    input.value = ''
+    if (selectedFiles.length === 0) {
+      return
+    }
+
+    setUploading(true)
+    setUploadError('')
+    try {
+      const uploadedItems = []
+      for (const file of selectedFiles) {
+        uploadedItems.push(await uploadFactoryDocumentImage(file, title || label, accessToken))
+      }
+      onChange?.([...items, ...uploadedItems])
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : 'อัปโหลดเอกสารหรือรูปภาพไม่สำเร็จ')
+    } finally {
+      setUploading(false)
+    }
+  }
+
   return (
     <Stack spacing={1}>
       <Typography variant="body2" sx={{ fontWeight: 700 }}>
@@ -713,7 +770,7 @@ function MockUploadField({ label, helperText, disabled = false }) {
         component="label"
         variant="outlined"
         startIcon={<UploadFileIcon />}
-        disabled={disabled}
+        disabled={disabled || uploading || items.length >= maxFiles}
         sx={{
           justifyContent: 'flex-start',
           height: 40,
@@ -722,20 +779,64 @@ function MockUploadField({ label, helperText, disabled = false }) {
           fontWeight: 400,
         }}
       >
-        ภาพ/ไฟล์/QR Code
-        <input hidden type="file" disabled={disabled} />
+        {uploading ? 'กำลังอัปโหลด' : 'ภาพ/ไฟล์/QR Code'}
+        <input
+          hidden
+          type="file"
+          accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
+          multiple={maxFiles > 1}
+          disabled={disabled || uploading || items.length >= maxFiles}
+          onChange={handleFiles}
+        />
       </Button>
       <Typography variant="caption" color="text.secondary">
         {helperText}
       </Typography>
+      {uploadError ? <Alert severity="error">{uploadError}</Alert> : null}
+      {items.map((document, index) => (
+        <Stack
+          key={`${document.fileUrl ?? document.fileName ?? 'document'}-${index}`}
+          direction="row"
+          spacing={1}
+          sx={{ alignItems: 'center', border: 1, borderColor: 'divider', p: 1, minWidth: 0 }}
+        >
+          <Typography variant="body2" noWrap sx={{ flex: 1, minWidth: 0 }}>
+            {document.fileName ?? document.title ?? 'เอกสารแนบ'}
+          </Typography>
+          {!disabled ? (
+            <IconButton
+              size="small"
+              aria-label={`นำ ${document.fileName ?? document.title ?? 'เอกสารแนบ'} ออก`}
+              onClick={() => onChange?.(items.filter((_, itemIndex) => itemIndex !== index))}
+            >
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          ) : null}
+        </Stack>
+      ))}
     </Stack>
   )
 }
 
-function FactoryGeneralInfoBottomSheet({ open, factory, onClose, showSaveButton = true, submitting = false, onSubmit }) {
+function FactoryGeneralInfoBottomSheet({ open, factory, accessToken = '', onClose, showSaveButton = true, submitting = false, onSubmit }) {
+  const [eiaAssessment, setEiaAssessment] = useState(() => factory?.eia ?? 'ไม่มี')
+  const [frontPhotos, setFrontPhotos] = useState(() => sanitizeDocuments(factory?.factoryFrontPhotos))
+  const [factoryLogo, setFactoryLogo] = useState(() => factory?.factoryLogo ? sanitizeDocumentItem(factory.factoryLogo) : null)
+  const [frontPhotosChanged, setFrontPhotosChanged] = useState(false)
+  const [factoryLogoChanged, setFactoryLogoChanged] = useState(false)
+
   const handleSubmit = (event) => {
     event.preventDefault()
-    onSubmit?.(factory, new FormData(event.currentTarget))
+    onSubmit?.(
+      factory,
+      new FormData(event.currentTarget),
+      buildFactoryDocumentPatch({
+        frontPhotosChanged,
+        frontPhotos: sanitizeDocuments(frontPhotos),
+        logoChanged: factoryLogoChanged,
+        logo: factoryLogo ? sanitizeDocumentItem(factoryLogo) : null,
+      }),
+    )
   }
 
   return (
@@ -795,18 +896,19 @@ function FactoryGeneralInfoBottomSheet({ open, factory, onClose, showSaveButton 
                   gap: 2,
                 }}
               >
-                <TextField name="factoryName" label="ชื่อโรงงาน" size="small" defaultValue={factory?.factoryName ?? ''} sx={{ gridColumn: { xs: 'auto', md: 'span 6' } }} />
-                <TextField label="เลขทะเบียนโรงงาน (เดิม)" size="small" defaultValue={factory?.oldRegistrationNo ?? ''} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
-                <TextField label="เลขทะเบียนโรงงาน (ใหม่)" size="small" defaultValue={factory?.newRegistrationNo ?? ''} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
-                <TextField label="การประกอบกิจการ" size="small" defaultValue={factory?.businessActivity ?? ''} sx={{ gridColumn: { xs: 'auto', md: 'span 6' } }} />
-                <TextField label="ลำดับประเภทโรงงาน (หลัก)" size="small" defaultValue={factory?.industryMainOrder ?? ''} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
-                <TextField label="ลำดับประเภทโรงงาน (รอง)" size="small" defaultValue={factory?.industrySubOrder ?? ''} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
+                <ReadOnlyFormField label="ชื่อโรงงาน" value={factory?.factoryName} sx={{ gridColumn: { xs: 'auto', md: 'span 6' } }} />
+                <ReadOnlyFormField label="เลขทะเบียนโรงงาน (เดิม)" value={factory?.oldRegistrationNo} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
+                <ReadOnlyFormField label="เลขทะเบียนโรงงาน (ใหม่)" value={factory?.newRegistrationNo} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
+                <ReadOnlyFormField label="การประกอบกิจการ" value={factory?.businessActivity} sx={{ gridColumn: { xs: 'auto', md: 'span 6' } }} />
+                <ReadOnlyFormField label="ลำดับประเภทโรงงาน (หลัก)" value={factory?.industryMainOrder} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
+                <ReadOnlyFormField label="ลำดับประเภทโรงงาน (รอง)" value={factory?.industrySubOrder} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
                 <TextField
                   select
                   name="eia"
                   label="การประเมินผลกระทบสิ่งแวดล้อม"
                   size="small"
-                  defaultValue={factory?.eia ?? 'ไม่มี'}
+                  value={eiaAssessment}
+                  onChange={(event) => setEiaAssessment(event.target.value)}
                   sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }}
                 >
                   {eiaAssessmentOptions.map((option) => (
@@ -815,15 +917,57 @@ function FactoryGeneralInfoBottomSheet({ open, factory, onClose, showSaveButton 
                     </MenuItem>
                   ))}
                 </TextField>
-                <Box sx={{ display: { xs: 'none', md: 'block' }, gridColumn: 'span 9' }} />
-                <TextField name="factoryAddress" label="สถานที่ตั้งโรงงาน" size="small" defaultValue={factory?.address ?? ''} sx={{ gridColumn: { xs: 'auto', md: 'span 6' } }} />
+                {eiaAssessment === 'อื่นๆ' ? (
+                  <TextField
+                    name="eiaOther"
+                    label="ระบุ"
+                    size="small"
+                    defaultValue={factory?.eiaOther ?? ''}
+                    required
+                    sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }}
+                  />
+                ) : null}
+                {eiaProjectOptions.includes(eiaAssessment) ? (
+                  <TextField
+                    name="projectName"
+                    label="ชื่อโครงการ"
+                    size="small"
+                    defaultValue={factory?.projectName ?? ''}
+                    sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }}
+                  />
+                ) : null}
+                <ReadOnlyFormField label="สถานที่ตั้งโรงงาน" value={factory?.address} sx={{ gridColumn: { xs: 'auto', md: '1 / span 6' } }} />
                 <TextField name="latitude" label="ละติจูด" size="small" defaultValue={factory?.latitude ?? ''} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
                 <TextField name="longitude" label="ลองจิจูด" size="small" defaultValue={factory?.longitude ?? ''} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
                 <Box sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }}>
-                  <MockUploadField label="ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน" helperText="ขนาดไม่เกิน 5 Mb • อัปโหลดได้ไม่เกิน 3 ไฟล์" />
+                  <FactoryDocumentUploadField
+                    label="ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน"
+                    title="ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน"
+                    helperText="รองรับ JPEG, PNG หรือ PDF ขนาดไม่เกิน 5 MB • อัปโหลดได้ไม่เกิน 3 ไฟล์"
+                    documents={frontPhotos}
+                    maxFiles={3}
+                    accessToken={accessToken}
+                    disabled={!showSaveButton || submitting}
+                    onChange={(documents) => {
+                      setFrontPhotos(documents)
+                      setFrontPhotosChanged(true)
+                    }}
+                  />
                 </Box>
                 <Box sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }}>
-                  <MockUploadField label="สัญลักษณ์ของโรงงานหรือโลโก้บริษัท" helperText="ขนาด 512 × 512 pixel ไม่เกิน 5 Mb" />
+                  <FactoryDocumentUploadField
+                    label="สัญลักษณ์ของโรงงานหรือโลโก้บริษัท"
+                    title="สัญลักษณ์ของโรงงานหรือโลโก้บริษัท"
+                    helperText="รองรับ JPEG, PNG หรือ PDF ขนาดไม่เกิน 5 MB"
+                    documents={factoryLogo ? [factoryLogo] : []}
+                    maxFiles={1}
+                    accessToken={accessToken}
+                    disabled={!showSaveButton || submitting}
+                    onChange={(documents) => {
+                      setFactoryLogo(documents[0] ?? null)
+                      setFactoryLogoChanged(true)
+                    }}
+                  />
                 </Box>
               </Box>
             </Stack>
@@ -893,15 +1037,32 @@ function RequestGeneralInfoPreview({ factory }) {
           <ReadOnlyFormField label="ลำดับประเภทโรงงาน (หลัก)" value={factory?.industryMainOrder} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
           <ReadOnlyFormField label="ลำดับประเภทโรงงาน (รอง)" value={factory?.industrySubOrder} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
           <ReadOnlyFormField label="การประเมินผลกระทบสิ่งแวดล้อม" value={factory?.eia ?? 'ไม่มี'} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
-          <Box sx={{ display: { xs: 'none', md: 'block' }, gridColumn: 'span 9' }} />
-          <ReadOnlyFormField label="สถานที่ตั้งโรงงาน" value={factory?.address} sx={{ gridColumn: { xs: 'auto', md: 'span 6' } }} />
+          {factory?.eia === 'อื่นๆ' ? (
+            <ReadOnlyFormField label="ระบุ" value={factory?.eiaOther} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
+          ) : null}
+          {eiaProjectOptions.includes(factory?.eia) ? (
+            <ReadOnlyFormField label="ชื่อโครงการ" value={factory?.projectName} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
+          ) : null}
+          <ReadOnlyFormField label="สถานที่ตั้งโรงงาน" value={factory?.address} sx={{ gridColumn: { xs: 'auto', md: '1 / span 6' } }} />
           <ReadOnlyFormField label="ละติจูด" value={factory?.latitude} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
           <ReadOnlyFormField label="ลองจิจูด" value={factory?.longitude} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
           <Box sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }}>
-            <MockUploadField label="ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน" helperText="ขนาดไม่เกิน 5 Mb • อัปโหลดได้ไม่เกิน 3 ไฟล์" disabled />
+            <FactoryDocumentUploadField
+              label="ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน"
+              helperText="รองรับ JPEG, PNG หรือ PDF ขนาดไม่เกิน 5 MB"
+              documents={sanitizeDocuments(factory?.factoryFrontPhotos)}
+              maxFiles={3}
+              disabled
+            />
           </Box>
           <Box sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }}>
-            <MockUploadField label="สัญลักษณ์ของโรงงานหรือโลโก้บริษัท" helperText="ขนาด 512 × 512 pixel ไม่เกิน 5 Mb" disabled />
+            <FactoryDocumentUploadField
+              label="สัญลักษณ์ของโรงงานหรือโลโก้บริษัท"
+              helperText="รองรับ JPEG, PNG หรือ PDF ขนาดไม่เกิน 5 MB"
+              documents={factory?.factoryLogo ? [sanitizeDocumentItem(factory.factoryLogo)] : []}
+              maxFiles={1}
+              disabled
+            />
           </Box>
         </Box>
       </Stack>
@@ -1166,7 +1327,7 @@ function getFactoryRowId(factory) {
   return factory?.factoryId ?? factory?.newRegistrationNo ?? factory?.factoryRegistrationNo ?? factory?.id ?? ''
 }
 
-function buildBasicInfoPayload(factory, formData) {
+function buildBasicInfoPayload(factory, formData, documentPatch = {}) {
   const eia = formData.get('eia') || factory?.eia || null
   return {
     formType: 'BASIC_INFO',
@@ -1178,10 +1339,11 @@ function buildBasicInfoPayload(factory, formData) {
     eiaOther: eia === 'อื่นๆ'
       ? emptyToNull(formData.has('eiaOther') ? formData.get('eiaOther') : factory?.eiaOther)
       : null,
-    projectName: emptyToNull(formData.has('projectName') ? formData.get('projectName') : factory?.projectName),
-    factoryFrontPhotos: sanitizeDocuments(factory?.factoryFrontPhotos),
-    factoryLogo: factory?.factoryLogo ? sanitizeDocumentItem(factory.factoryLogo) : null,
+    projectName: eiaProjectOptions.includes(eia)
+      ? emptyToNull(formData.has('projectName') ? formData.get('projectName') : factory?.projectName)
+      : null,
     remarks: 'แก้ไขข้อมูลทั่วไปของโรงงาน',
+    ...documentPatch,
   }
 }
 
@@ -1217,6 +1379,7 @@ function MasterDataPage({ userType = '', roleCode = '', accessToken = '' }) {
   const [editingGeneralFactory, setEditingGeneralFactory] = useState(null)
   const [viewingRequest, setViewingRequest] = useState(null)
   const [reviewingRequest, setReviewingRequest] = useState(null)
+  const [cancelRequestTarget, setCancelRequestTarget] = useState(null)
   const [activeSubMenu, setActiveSubMenu] = useState('factories')
   const [factoryRows, setFactoryRows] = useState([])
   const [requestRows, setRequestRows] = useState([])
@@ -1471,6 +1634,7 @@ function MasterDataPage({ userType = '', roleCode = '', accessToken = '' }) {
     () => getPageRequestColumns(
       (request) => handleOpenRequest(request, false),
       isAdmin ? (request) => handleOpenRequest(request, true) : handleEditRequest,
+      setCancelRequestTarget,
       isAdmin,
     ),
     [handleEditRequest, handleOpenRequest, isAdmin],
@@ -1501,11 +1665,11 @@ function MasterDataPage({ userType = '', roleCode = '', accessToken = '' }) {
     return response?.data
   }, [accessToken, loadFactories, loadRequests])
 
-  const handleSubmitGeneralInfo = useCallback(async (factory, formData) => {
+  const handleSubmitGeneralInfo = useCallback(async (factory, formData, documentPatch) => {
     setActionLoading(true)
     setTableError('')
     try {
-      await submitFactoryEditRequest(factory, buildBasicInfoPayload(factory, formData))
+      await submitFactoryEditRequest(factory, buildBasicInfoPayload(factory, formData, documentPatch))
       setEditingGeneralFactory(null)
     } catch (error) {
       setTableError(error instanceof Error ? error.message : 'ส่งคำขอแก้ไขไม่สำเร็จ')
@@ -1521,6 +1685,34 @@ function MasterDataPage({ userType = '', roleCode = '', accessToken = '' }) {
     setEditingFactory(null)
     return response
   }, [editingFactory, submitFactoryEditRequest])
+
+  const cancelEditRequest = useCallback(async () => {
+    const requestId = cancelRequestTarget?.requestId ?? cancelRequestTarget?.id
+    if (!accessToken || !requestId) {
+      setTableError('ไม่พบรหัสคำขอสำหรับยกเลิก')
+      return
+    }
+
+    setActionLoading(true)
+    setTableError('')
+    try {
+      const result = await fetch(`${pomsFactoriesApiBaseUrl}/edit-requests/${encodeURIComponent(requestId)}/cancel`, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+      })
+      await readMasterDataResponse(result, 'ยกเลิกคำขอไม่สำเร็จ')
+      setCancelRequestTarget(null)
+      await Promise.all([loadFactories(), loadRequests()])
+      setSnackbarMessage('ยกเลิกคำขอสำเร็จ')
+    } catch (error) {
+      setTableError(error instanceof Error ? error.message : 'ยกเลิกคำขอไม่สำเร็จ')
+    } finally {
+      setActionLoading(false)
+    }
+  }, [accessToken, cancelRequestTarget, loadFactories, loadRequests])
 
   const reviewEditRequest = useCallback(async (decision) => {
     const requestId = reviewingRequest?.requestId ?? reviewingRequest?.id
@@ -1657,13 +1849,17 @@ function MasterDataPage({ userType = '', roleCode = '', accessToken = '' }) {
         submitButtonLabel="บันทึก"
         submitWithoutPreview
         customSubmit={canSubmitMasterData ? handleSubmitMeasurementPoints : null}
+        documentImagesUploadUrl={`${pomsFactoriesApiBaseUrl}/document-images`}
+        generalFactoryFieldsReadOnly
         footerActions={canSubmitMasterData ? undefined : null}
         onClose={() => setEditingFactory(null)}
       />
 
       <FactoryGeneralInfoBottomSheet
+        key={editingGeneralFactory?.__editRequestId ?? editingGeneralFactory?.id ?? editingGeneralFactory?.factoryId ?? 'master-data-general-info'}
         open={Boolean(editingGeneralFactory)}
         factory={editingGeneralFactory}
+        accessToken={accessToken}
         showSaveButton={canSubmitMasterData}
         submitting={actionLoading}
         onSubmit={handleSubmitGeneralInfo}
@@ -1686,6 +1882,33 @@ function MasterDataPage({ userType = '', roleCode = '', accessToken = '' }) {
         onReject={() => reviewEditRequest('REJECT')}
         onClose={() => setReviewingRequest(null)}
       />
+      <Dialog
+        open={Boolean(cancelRequestTarget)}
+        onClose={actionLoading ? undefined : () => setCancelRequestTarget(null)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>ยืนยันการยกเลิกคำขอ</DialogTitle>
+        <DialogContent dividers>
+          <Typography>
+            ยืนยันยกเลิกคำขอ {cancelRequestTarget?.requestNo ?? ''}
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: 'center', gap: 1 }}>
+          <Button variant="outlined" color="inherit" disabled={actionLoading} onClick={() => setCancelRequestTarget(null)}>
+            ยกเลิก
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            disabled={actionLoading}
+            startIcon={actionLoading ? <CircularProgress size={16} color="inherit" /> : null}
+            onClick={cancelEditRequest}
+          >
+            {actionLoading ? 'กำลังยกเลิกคำขอ' : 'ยืนยันยกเลิกคำขอ'}
+          </Button>
+        </DialogActions>
+      </Dialog>
       <Snackbar
         open={Boolean(snackbarMessage)}
         autoHideDuration={4000}

@@ -2046,7 +2046,7 @@ function buildDocumentsAndImages(formData, uploadedDocuments = [], { includePrev
   })
 }
 
-async function uploadDocumentImages(formData, accessToken) {
+async function uploadDocumentImages(formData, accessToken, uploadUrl = getDocumentImagesApiUrl()) {
   const uploadedDocuments = []
 
   for (const [index, item] of documentImageItems.entries()) {
@@ -2075,7 +2075,7 @@ async function uploadDocumentImages(formData, accessToken) {
         uploadFormData.append('file', file)
       }
 
-      const result = await fetch(getDocumentImagesApiUrl(), {
+      const result = await fetch(uploadUrl, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -5343,7 +5343,7 @@ function UploadPreviewCard({ fileName, fileSize, previewUrl = '', onRemove }) {
   )
 }
 
-function UploadFileField({ label, accept, name, currentFileName = '', currentFiles = [], multiple = true, helperText = 'ขนาดไม่เกิน 5 Mb', maxFiles = multiple ? 3 : 1 }) {
+function UploadFileField({ label, accept, name, currentFileName = '', currentFiles = [], multiple = true, helperText = 'ขนาดไม่เกิน 5 Mb', maxFiles = multiple ? 3 : 1, disabled = false }) {
   const inputRef = useRef(null)
   const [selectedFiles, setSelectedFiles] = useState([])
   const [fileError, setFileError] = useState('')
@@ -5439,6 +5439,7 @@ function UploadFileField({ label, accept, name, currentFileName = '', currentFil
         variant="outlined"
         size="small"
         fullWidth
+        disabled={disabled}
         startIcon={<UploadFileIcon />}
         sx={{
           minHeight: 40,
@@ -5460,6 +5461,7 @@ function UploadFileField({ label, accept, name, currentFileName = '', currentFil
           name={name}
           accept={accept}
           multiple={multiple}
+          disabled={disabled}
           hidden
           onChange={handleFilesChange}
         />
@@ -5484,7 +5486,7 @@ function UploadFileField({ label, accept, name, currentFileName = '', currentFil
                 fileName={fileName}
                 fileSize={item.fileSize}
                 previewUrl={isImageAttachment(item) ? fileUrl : ''}
-                onRemove={() => setRemovedCurrentFileKeys((currentKeys) => (
+                onRemove={disabled ? undefined : () => setRemovedCurrentFileKeys((currentKeys) => (
                   currentKeys.includes(removalKey) ? currentKeys : [...currentKeys, removalKey]
                 ))}
               />
@@ -5500,7 +5502,7 @@ function UploadFileField({ label, accept, name, currentFileName = '', currentFil
               fileName={item.file.name}
               fileSize={item.file.size}
               previewUrl={item.previewUrl}
-              onRemove={() => removeSelectedFile(index)}
+              onRemove={disabled ? undefined : () => removeSelectedFile(index)}
             />
           ))}
         </Stack>
@@ -6880,6 +6882,8 @@ export function RequestFormBottomSheet({
   submitButtonLabel = 'ส่งแบบฟอร์มคำขอ',
   submitWithoutPreview = false,
   customSubmit = null,
+  documentImagesUploadUrl = '',
+  generalFactoryFieldsReadOnly = false,
   onClose,
   onSubmitted,
 }) {
@@ -7100,7 +7104,9 @@ export function RequestFormBottomSheet({
     try {
       const formData = formRef.current ? new FormData(formRef.current) : null
       const monitoringPointType = selectedMonitoringPoint?.type
-      const uploadedDocuments = ['CEMS', 'WPMS'].includes(monitoringPointType) ? await uploadDocumentImages(formData, accessToken) : []
+      const uploadedDocuments = ['CEMS', 'WPMS'].includes(monitoringPointType)
+        ? await uploadDocumentImages(formData, accessToken, documentImagesUploadUrl || getDocumentImagesApiUrl())
+        : []
       const requestBody = buildMeasurementPointRequestBody(
         formFactory,
         monitoringPointType,
@@ -7292,30 +7298,42 @@ export function RequestFormBottomSheet({
                     <ReadOnlyField label="ลำดับประเภทโรงงาน (รอง)" value={formFactory?.industrySubOrder ?? ''} />
                   </Grid>
                   <Grid size={{ xs: 12, md: 3 }}>
-                    <TextField
-                      select
-                      name="eia"
-                      label="การประเมินผลกระทบสิ่งแวดล้อม"
-                      size="small"
-                      value={eiaAssessment}
-                      onChange={(event) => setEiaAssessment(event.target.value)}
-                      fullWidth
-                    >
-                      {eiaAssessmentOptions.map((option) => (
-                        <MenuItem key={option} value={option}>
-                          {option}
-                        </MenuItem>
-                      ))}
-                    </TextField>
+                    {generalFactoryFieldsReadOnly ? (
+                      <ReadOnlyField label="การประเมินผลกระทบสิ่งแวดล้อม" value={eiaAssessment} />
+                    ) : (
+                      <TextField
+                        select
+                        name="eia"
+                        label="การประเมินผลกระทบสิ่งแวดล้อม"
+                        size="small"
+                        value={eiaAssessment}
+                        onChange={(event) => setEiaAssessment(event.target.value)}
+                        fullWidth
+                      >
+                        {eiaAssessmentOptions.map((option) => (
+                          <MenuItem key={option} value={option}>
+                            {option}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                    )}
                   </Grid>
                   {eiaAssessment === 'อื่นๆ' ? (
                     <Grid size={{ xs: 12, md: 3 }}>
-                      <TextField name="eiaOther" label="ระบุ" size="small" defaultValue={formFactory?.eiaOther ?? ''} fullWidth />
+                      {generalFactoryFieldsReadOnly ? (
+                        <ReadOnlyField label="ระบุ" value={formFactory?.eiaOther ?? ''} />
+                      ) : (
+                        <TextField name="eiaOther" label="ระบุ" size="small" defaultValue={formFactory?.eiaOther ?? ''} fullWidth />
+                      )}
                     </Grid>
                   ) : null}
                   {eiaProjectOptions.includes(eiaAssessment) ? (
                     <Grid size={{ xs: 12, md: 3 }}>
-                      <TextField name="projectName" label="ชื่อโครงการ" size="small" defaultValue={formFactory?.projectName ?? ''} fullWidth />
+                      {generalFactoryFieldsReadOnly ? (
+                        <ReadOnlyField label="ชื่อโครงการ" value={formFactory?.projectName ?? ''} />
+                      ) : (
+                        <TextField name="projectName" label="ชื่อโครงการ" size="small" defaultValue={formFactory?.projectName ?? ''} fullWidth />
+                      )}
                     </Grid>
                   ) : null}
                   <Grid size={{ xs: 12 }}>
@@ -7324,10 +7342,18 @@ export function RequestFormBottomSheet({
                         <ReadOnlyField label="สถานที่ตั้งโรงงาน" value={formFactory?.address ?? ''} />
                       </Grid>
                       <Grid size={{ xs: 12, md: 3 }}>
-                        <TextField name="latitude" label="ละติจูด" size="small" defaultValue={formFactory?.latitude ?? ''} fullWidth />
+                        {generalFactoryFieldsReadOnly ? (
+                          <ReadOnlyField label="ละติจูด" value={formFactory?.latitude ?? ''} />
+                        ) : (
+                          <TextField name="latitude" label="ละติจูด" size="small" defaultValue={formFactory?.latitude ?? ''} fullWidth />
+                        )}
                       </Grid>
                       <Grid size={{ xs: 12, md: 3 }}>
-                        <TextField name="longitude" label="ลองติจูด" size="small" defaultValue={formFactory?.longitude ?? ''} fullWidth />
+                        {generalFactoryFieldsReadOnly ? (
+                          <ReadOnlyField label="ลองจิจูด" value={formFactory?.longitude ?? ''} />
+                        ) : (
+                          <TextField name="longitude" label="ลองจิจูด" size="small" defaultValue={formFactory?.longitude ?? ''} fullWidth />
+                        )}
                       </Grid>
                     </Grid>
                   </Grid>
@@ -7347,6 +7373,7 @@ export function RequestFormBottomSheet({
                             currentFiles={getUploadPreviewFilesForItem(initialDocuments, item)}
                             multiple={!item.singleFile}
                             helperText={item.helperText ?? 'ขนาดไม่เกิน 5 Mb'}
+                            disabled={generalFactoryFieldsReadOnly}
                           />
                         </Stack>
                       </Grid>
