@@ -35,6 +35,7 @@
 ## Master data
 
 - [POMS factory form คืนข้อมูลผู้ติดต่อและอีเมลแจ้งเตือน](./master-data/poms-factory-form-contact-prefill.tdd.md)
+- [POMS factory form คืนกลุ่มพารามิเตอร์ current/live](./master-data/poms-factory-form-current-parameters.tdd.md)
 
 ## Shared operations
 

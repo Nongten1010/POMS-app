@@ -117,6 +117,43 @@ describe('pomsFactoriesService edit-request workflow', () => {
     expect(result.measurementPoints[0]).not.toHaveProperty('sourceMeasurementPointId');
   });
 
+  it('derives current parameter groups from the live connected parameters', async () => {
+    const detail = factoryDetail();
+    mockedRepository.findFactoryDetail.mockResolvedValue({
+      ...detail,
+      measurementPoints: detail.measurementPoints.map((point) => ({
+        ...point,
+        parameters: ['CO (ppm)', 'SO2 (ppm)'],
+        details: {
+          eligibleParameters: ['CO (ppm)', 'NOx (ppm)', 'SO2 (ppm)'],
+          exemptedParameters: ['NOx (ppm)'],
+          connectedParameters: ['CO (ppm)', 'NOx (ppm)'],
+          pendingParameters: ['SO2 (ppm)'],
+          requestedParameters: ['NOx (ppm)'],
+          stackHeight: 40,
+        },
+      })),
+    });
+
+    const result = await pomsFactoriesService.getFactoryForm(
+      'factory-001',
+      42,
+      ownFactoryScope,
+      { formType: 'MEASUREMENT_POINTS', systemType: 'CEMS' },
+      null,
+    );
+
+    expect(result.measurementPoints[0].details).toEqual(
+      expect.objectContaining({
+        eligibleParameters: ['CO (ppm)', 'NOx (ppm)', 'SO2 (ppm)'],
+        connectedParameters: ['CO (ppm)', 'SO2 (ppm)'],
+        pendingParameters: ['NOx (ppm)'],
+        requestedParameters: ['CO (ppm)', 'SO2 (ppm)'],
+        stackHeight: 40,
+      }),
+    );
+  });
+
   it('keeps eligible-factory industry fields in the WPMS measurement-points form', async () => {
     const detail = factoryDetail();
     mockedRepository.findFactoryDetail.mockResolvedValue({
@@ -280,6 +317,39 @@ describe('pomsFactoriesService edit-request workflow', () => {
     expect(result.remarks).toBe('แก้ไขข้อมูลตามเอกสารล่าสุด');
     expect(result).not.toHaveProperty('revisionReason');
     expect(result).not.toHaveProperty('requestNo');
+  });
+
+  it('keeps proposed parameter groups in an existing edit-request form', async () => {
+    const detail = factoryDetail();
+    mockedRepository.findEditRequestById.mockResolvedValue(
+      editRequest('REVISION_REQUESTED', {
+        formType: 'MEASUREMENT_POINTS',
+        proposedMeasurementPoints: detail.measurementPoints.map((point) => ({
+          ...point,
+          details: {
+            eligibleParameters: ['CO (ppm)', 'NOx (ppm)'],
+            connectedParameters: ['NOx (ppm)'],
+            pendingParameters: ['CO (ppm)'],
+            requestedParameters: ['NOx (ppm)'],
+          },
+        })),
+      }),
+    );
+
+    const result = await pomsFactoriesService.getEditRequestForm(
+      11,
+      42,
+      ownFactoryScope,
+      { systemType: 'CEMS' },
+      null,
+    );
+
+    expect(result.measurementPoints[0].details).toEqual({
+      eligibleParameters: ['CO (ppm)', 'NOx (ppm)'],
+      connectedParameters: ['NOx (ppm)'],
+      pendingParameters: ['CO (ppm)'],
+      requestedParameters: ['NOx (ppm)'],
+    });
   });
 
   it('creates PENDING_REVIEW from current live POMS data and preserves omitted fields', async () => {

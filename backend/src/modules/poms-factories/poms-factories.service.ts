@@ -85,6 +85,7 @@ export const pomsFactoriesService = {
       systemType,
       undefined,
       formContacts,
+      true,
     );
   },
 
@@ -353,6 +354,7 @@ function toPomsConnectionRequestForm(
   systemType: ConnectionSystemType,
   remarks?: string | null,
   formContacts?: PomsFactoryFormContactsDTO | null,
+  deriveCurrentParameterGroups = false,
 ): ConnectionRequestFormDTO {
   const baseForm = emptyConnectionRequestForm(profile, systemType);
   const measurementPoints = points
@@ -366,7 +368,11 @@ function toPomsConnectionRequestForm(
       ...(point.parameters.length > 0 ? { parameters: [...point.parameters] } : {}),
       description: null,
       monitoringPointStatus: point.monitoringPointStatus,
-      details: point.details ? { ...point.details } : null,
+      details: deriveCurrentParameterGroups
+        ? deriveCurrentPomsParameterDetails(point)
+        : point.details
+          ? { ...point.details }
+          : null,
       documentsAndImages: point.documentsAndImages.map((document) => ({ ...document })),
       measurementInstruments: point.measurementInstruments
         ? {
@@ -406,6 +412,34 @@ function toPomsConnectionRequestForm(
     ),
     remarks: remarks ?? null,
   };
+}
+
+function deriveCurrentPomsParameterDetails(
+  point: PomsMeasurementPointDTO,
+): NonNullable<ConnectionRequestFormDTO['measurementPoints'][number]['details']> {
+  const details = point.details ?? {};
+  const eligibleParameters = Array.isArray(details.eligibleParameters)
+    ? details.eligibleParameters.filter(
+        (parameter): parameter is string => typeof parameter === 'string',
+      )
+    : [];
+  const connectedParameters = [...point.parameters];
+  const connectedParameterKeys = new Set(connectedParameters.map(normalizePomsParameterKey));
+  const pendingParameters = eligibleParameters.filter(
+    (parameter) => !connectedParameterKeys.has(normalizePomsParameterKey(parameter)),
+  );
+
+  return {
+    ...details,
+    eligibleParameters,
+    connectedParameters,
+    pendingParameters,
+    requestedParameters: [...connectedParameters],
+  };
+}
+
+function normalizePomsParameterKey(parameter: string): string {
+  return parameter.normalize('NFKC').trim().toLocaleLowerCase('en-US').replace(/\s+/gu, ' ');
 }
 
 function emptyConnectionRequestForm(

@@ -347,6 +347,9 @@ curl --request GET \
 | `requestType` | compatibility field ของ shared form contract | คงที่เป็น `NEW_CONNECTION`; ไม่ใช่สถานะหรือประเภทคำขอแก้ไข POMS |
 | `factoryId`, `factoryName`, `factoryRegistrationNo`, `address`, EIA/project, ชื่อพื้นที่, พิกัดโรงงาน | current/live factory profile | `null` สำหรับ field nullable |
 | `measurementPoints[]` | active points ของ `systemType` ที่เลือก | ถ้าไม่มี active point ตอบ `404` และไม่เปิดฟอร์ม |
+| `measurementPoints[].details.eligibleParameters` | รายการพารามิเตอร์ที่เข้าข่ายของจุด | `[]` |
+| `measurementPoints[].details.connectedParameters`, `requestedParameters` | พารามิเตอร์ที่เชื่อมต่ออยู่ปัจจุบันจาก active `cems_wpms_connected_measurement_points.parameters_json` | `[]` |
+| `measurementPoints[].details.pendingParameters` | `eligibleParameters - connectedParameters` โดยเทียบชื่อพารามิเตอร์แบบ normalize ตัวพิมพ์/Unicode แต่คง label พร้อมหน่วยใน response | `[]` |
 | `industryMainOrder`, `industryMainOrderLabel`, `industrySubOrder`, `businessActivity` | active `eligible_factories.factory_type_sequence` และ `eligible_factories.business_activity` ที่ผูกกับ current/live POMS | `null` เมื่อ eligible metadata ไม่มีค่า |
 | รหัสพื้นที่, พิกัด/คำอธิบายเฉพาะจุด, ผู้ให้ข้อมูล | POMS ไม่เก็บ | `null` |
 | `contactName`, `contactPhone`, `contactEmail` | source connection request ล่าสุดของ active point ใน `systemType` ที่เลือก | `""`, `""`, `null` |
@@ -390,6 +393,12 @@ Minimal response (`200 OK`):
         "pointCode": "S2001",
         "pointType": "STACK",
         "parameters": ["CO (ppm)"],
+        "details": {
+          "eligibleParameters": ["CO (ppm)", "NOx (ppm)"],
+          "connectedParameters": ["CO (ppm)"],
+          "pendingParameters": ["NOx (ppm)"],
+          "requestedParameters": ["CO (ppm)"]
+        },
         "documentsAndImages": [],
         "measurementInstruments": null
       }
@@ -1071,7 +1080,7 @@ Approval target mapping สำหรับ `BASIC_INFO` (ใช้ allowlist น
 | Runtime OpenAPI        | [`poms.openapi.ts`](../../../../../backend/src/modules/api-docs/poms.openapi.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | Migrations             | [`0100_create_poms_factory_edit_requests.ts`](../../../../../backend/src/db/migrations/0100_create_poms_factory_edit_requests.ts), [`0106_extend_poms_factory_edit_requests_for_measurement_points.ts`](../../../../../backend/src/db/migrations/0106_extend_poms_factory_edit_requests_for_measurement_points.ts), [`0107_enforce_admin_only_factory_approval.ts`](../../../../../backend/src/db/migrations/0107_enforce_admin_only_factory_approval.ts), [`0109_add_poms_factory_edit_request_cancellation.ts`](../../../../../backend/src/db/migrations/0109_add_poms_factory_edit_request_cancellation.ts) |
 | Tests                  | [`poms-factories.route.test.ts`](../../../../../backend/tests/unit/poms-factories.route.test.ts), [`poms-factories.service.test.ts`](../../../../../backend/tests/unit/poms-factories.service.test.ts), [`poms-factories.repository.test.ts`](../../../../../backend/tests/unit/poms-factories.repository.test.ts), [`poms-factories.cancel.service.test.ts`](../../../../../backend/tests/unit/poms-factories.cancel.service.test.ts), [`poms-factories.cancel.repository.test.ts`](../../../../../backend/tests/unit/poms-factories.cancel.repository.test.ts), [`poms-factory-document-upload.route.test.ts`](../../../../../backend/tests/unit/poms-factory-document-upload.route.test.ts), [`poms-measurement-point-edit-requests.validator.test.ts`](../../../../../backend/tests/unit/poms-measurement-point-edit-requests.validator.test.ts), [`poms-measurement-point-edit-requests.migration.test.ts`](../../../../../backend/tests/unit/poms-measurement-point-edit-requests.migration.test.ts), [`factory-approval-admin-only-migration.test.ts`](../../../../../backend/tests/unit/factory-approval-admin-only-migration.test.ts), [`poms-factory-edit-request-cancellation-migration.test.ts`](../../../../../backend/tests/unit/poms-factory-edit-request-cancellation-migration.test.ts), [`poms-factories.openapi.test.ts`](../../../../../backend/tests/unit/poms-factories.openapi.test.ts) |
-| Evidence               | [POMS factory form contact prefill TDD](../../../evidence/master-data/poms-factory-form-contact-prefill.tdd.md) |
+| Evidence               | [POMS factory form contact prefill TDD](../../../evidence/master-data/poms-factory-form-contact-prefill.tdd.md), [POMS factory form current parameter semantics TDD](../../../evidence/master-data/poms-factory-form-current-parameters.tdd.md) |
 
 Breaking change ด้าน editable fields ของ `BASIC_INFO` ถูกบันทึกใน [API changelog](../../CHANGELOG.md#2026-09-05--จำกัด-basic_info-ให้แก้ได้เฉพาะ-7-fields)
 

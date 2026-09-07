@@ -446,6 +446,16 @@ describe('POMS factory master-data OpenAPI contract', () => {
     );
   });
 
+  it('documents the current/live parameter semantics for the POMS factory form', () => {
+    const description = String(operation('/poms-factories/{factoryId}/form', 'get').description);
+
+    expect(description).toContain('eligibleParameters');
+    expect(description).toContain('connectedParameters');
+    expect(description).toContain('pendingParameters = eligibleParameters - connectedParameters');
+    expect(description).toContain('requestedParameters');
+    expect(description).toContain('parameters_json');
+  });
+
   it('keeps factory summary and edit-request responses aligned with runtime DTOs', () => {
     const allSchemas = schemas();
     const profile = asObject(allSchemas.PomsFactoryProfile, 'factory profile');
