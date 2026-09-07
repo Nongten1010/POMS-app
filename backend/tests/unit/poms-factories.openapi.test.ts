@@ -456,6 +456,35 @@ describe('POMS factory master-data OpenAPI contract', () => {
     expect(description).toContain('parameters_json');
   });
 
+  it('documents contacts and distinct current/proposed parameters on edit-request detail', () => {
+    expect(jsonSuccessSchema('/poms-factories/edit-requests/{id}', 'get')).toEqual({
+      $ref: '#/components/schemas/PomsFactoryEditRequestDetailResponse',
+    });
+
+    const detail = asObject(schemas().PomsFactoryEditRequestDetail, 'PomsFactoryEditRequestDetail');
+    const extension = asObject(
+      (detail.allOf as unknown[])[1],
+      'PomsFactoryEditRequestDetail extension',
+    );
+    const properties = asObject(extension.properties, 'PomsFactoryEditRequestDetail properties');
+    expect(extension.required).toEqual(
+      expect.arrayContaining(['contactPersons', 'notificationEmails', 'officerNotificationEmails']),
+    );
+    expect(properties).toEqual(
+      expect.objectContaining({
+        contactPersons: expect.any(Object),
+        notificationEmails: expect.any(Object),
+        officerNotificationEmails: expect.any(Object),
+      }),
+    );
+
+    const description = String(operation('/poms-factories/edit-requests/{id}', 'get').description);
+    expect(description).toContain('currentMeasurementPoints');
+    expect(description).toContain('parameters_json');
+    expect(description).toContain('proposedMeasurementPoints');
+    expect(description).toContain('contactPersons');
+  });
+
   it('keeps factory summary and edit-request responses aligned with runtime DTOs', () => {
     const allSchemas = schemas();
     const profile = asObject(allSchemas.PomsFactoryProfile, 'factory profile');

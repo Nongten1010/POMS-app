@@ -201,6 +201,12 @@ export interface PomsFactoryEditRequestDTO {
   events: PomsFactoryEditRequestEventDTO[];
 }
 
+export interface PomsFactoryEditRequestDetailDTO extends PomsFactoryEditRequestDTO {
+  contactPersons: ContactPersonInput[];
+  notificationEmails: string[];
+  officerNotificationEmails: string[];
+}
+
 export interface ListPomsFactoryEditRequestsQuery {
   status?: PomsFactoryEditRequestStatus;
   factoryId?: string;

@@ -2496,6 +2496,35 @@ const componentSchemas: Record<string, OpenApiObject> = {
       },
     },
   },
+  PomsFactoryEditRequestDetail: {
+    allOf: [
+      schemaRef('PomsFactoryEditRequest'),
+      {
+        type: 'object',
+        required: ['contactPersons', 'notificationEmails', 'officerNotificationEmails'],
+        properties: {
+          contactPersons: {
+            type: 'array',
+            maxItems: 20,
+            items: schemaRef('ContactPerson'),
+            description: 'ผู้ติดต่อประสานงานจาก source connection request ของระบบที่แก้ไข',
+          },
+          notificationEmails: {
+            type: 'array',
+            maxItems: 20,
+            items: { type: 'string', format: 'email', maxLength: 255 },
+            description: 'อีเมลสำหรับแจ้งเตือนโรงงานจาก source connection request',
+          },
+          officerNotificationEmails: {
+            type: 'array',
+            maxItems: 20,
+            items: { type: 'string', format: 'email', maxLength: 255 },
+            description: 'อีเมลสำหรับแจ้งเตือนเจ้าหน้าที่จาก source connection request',
+          },
+        },
+      },
+    ],
+  },
   PomsFactoryDetailResponse: {
     type: 'object',
     additionalProperties: false,
@@ -2527,6 +2556,15 @@ const componentSchemas: Record<string, OpenApiObject> = {
     properties: {
       success: { type: 'boolean', enum: [true] },
       data: schemaRef('PomsFactoryEditRequest'),
+    },
+  },
+  PomsFactoryEditRequestDetailResponse: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['success', 'data'],
+    properties: {
+      success: { type: 'boolean', enum: [true] },
+      data: schemaRef('PomsFactoryEditRequestDetail'),
     },
   },
   DeviceConnectionChannel: {
@@ -4995,9 +5033,9 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Get POMS factory edit request detail',
       operationId: 'getPomsFactoryEditRequest',
       description:
-        'คืน currentFactory, proposedFactory, currentMeasurementPoints, proposedMeasurementPoints และ events เรียงตามเวลา; resource นอก data scope ตอบ 404',
+        'คืน currentFactory, proposedFactory, currentMeasurementPoints, proposedMeasurementPoints และ events เรียงตามเวลา. currentMeasurementPoints[].details.connectedParameters และ requestedParameters ใช้ค่าที่เชื่อมต่อจริงจาก snapshot parameters_json ส่วน pendingParameters คำนวณจาก eligibleParameters ลบค่าที่เชื่อมต่อ; proposedMeasurementPoints คง proposed snapshot ตามคำขอแก้ไข. contactPersons, notificationEmails และ officerNotificationEmails hydrate จาก source connection request ของระบบที่แก้ไขหลังตรวจ factories:view แล้ว; resource นอก data scope ตอบ 404',
       parameters: [idParameter],
-      successSchema: schemaRef('PomsFactoryEditRequestResponse'),
+      successSchema: schemaRef('PomsFactoryEditRequestDetailResponse'),
     }),
   },
   '/poms-factories/edit-requests/{id}/form': {

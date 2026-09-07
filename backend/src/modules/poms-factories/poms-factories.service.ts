@@ -20,6 +20,7 @@ import type {
   ListPomsFactoryEditRequestsQuery,
   PomsFactoryDetailDTO,
   PomsFactoryFormContactsDTO,
+  PomsFactoryEditRequestDetailDTO,
   PomsFactoryEditRequestDTO,
   PomsFactoryReviewActorContext,
   PomsFactoryProfileDTO,
@@ -160,14 +161,28 @@ export const pomsFactoriesService = {
     actorUserId: number,
     viewScope: AccessScope,
     regionalAccess?: RegionalAccessDTO | null,
-  ): Promise<PomsFactoryEditRequestDTO> {
+  ): Promise<PomsFactoryEditRequestDetailDTO> {
     const request = await pomsFactoriesRepository.findEditRequestById(id, {
       actorUserId,
       scope: viewScope,
       regionalAccess,
     });
     if (!request) throw new NotFoundError('POMS factory edit request not found');
-    return request;
+    const systemType = resolveEditRequestContactSystemType(request);
+    const formContacts = systemType
+      ? await pomsFactoriesRepository.findFactoryFormContacts(request.eligibleFactoryId, systemType)
+      : null;
+    return {
+      ...request,
+      contactPersons: (formContacts?.contactPersons ?? []).map((contact) => ({ ...contact })),
+      notificationEmails: [...(formContacts?.notificationEmails ?? [])],
+      officerNotificationEmails: [...(formContacts?.officerNotificationEmails ?? [])],
+      currentMeasurementPoints:
+        request.currentMeasurementPoints?.map((point) => ({
+          ...point,
+          details: deriveCurrentPomsParameterDetails(point),
+        })) ?? null,
+    };
   },
 
   async cancelEditRequest(
@@ -440,6 +455,31 @@ function deriveCurrentPomsParameterDetails(
 
 function normalizePomsParameterKey(parameter: string): string {
   return parameter.normalize('NFKC').trim().toLocaleLowerCase('en-US').replace(/\s+/gu, ' ');
+}
+
+function resolveEditRequestContactSystemType(
+  request: PomsFactoryEditRequestDTO,
+): ConnectionSystemType | null {
+  const currentById = new Map(
+    (request.currentMeasurementPoints ?? []).map((point) => [point.connectedPointId, point]),
+  );
+  const proposedPoints = request.proposedMeasurementPoints ?? [];
+  const changedPoints = proposedPoints.filter((point) => {
+    const current = currentById.get(point.connectedPointId);
+    return (
+      !current ||
+      JSON.stringify(editableMeasurementPoint(current)) !==
+        JSON.stringify(editableMeasurementPoint(point))
+    );
+  });
+  const candidatePoints =
+    changedPoints.length > 0
+      ? changedPoints
+      : proposedPoints.length > 0
+        ? proposedPoints
+        : (request.currentMeasurementPoints ?? []);
+  const systemTypes = [...new Set(candidatePoints.map((point) => point.systemType))];
+  return systemTypes.length === 1 ? systemTypes[0] : null;
 }
 
 function emptyConnectionRequestForm(

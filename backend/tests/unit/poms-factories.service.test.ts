@@ -352,6 +352,91 @@ describe('pomsFactoriesService edit-request workflow', () => {
     });
   });
 
+  it('returns contacts and notification emails on edit-request detail', async () => {
+    const detail = factoryDetail();
+    mockedRepository.findEditRequestById.mockResolvedValue(
+      editRequest('PENDING_REVIEW', {
+        formType: 'MEASUREMENT_POINTS',
+        currentMeasurementPoints: detail.measurementPoints,
+        proposedMeasurementPoints: detail.measurementPoints,
+      }),
+    );
+    mockedRepository.findFactoryFormContacts.mockResolvedValue({
+      contactName: 'สมหญิง ใจดี',
+      contactPhone: '0812345678',
+      contactEmail: 'contact@example.com',
+      contactPersons: [
+        {
+          name: 'สมหญิง ใจดี',
+          phone: '0812345678',
+          email: 'contact@example.com',
+          position: 'ผู้ประสานงานโรงงาน',
+        },
+      ],
+      notificationEmails: ['factory-alert@example.com'],
+      officerNotificationEmails: ['officer-alert@example.go.th'],
+    });
+
+    const result = await pomsFactoriesService.getEditRequest(16, 42, ownFactoryScope, null);
+
+    expect(mockedRepository.findFactoryFormContacts).toHaveBeenCalledWith(7, 'CEMS');
+    expect(result).toEqual(
+      expect.objectContaining({
+        contactPersons: [
+          {
+            name: 'สมหญิง ใจดี',
+            phone: '0812345678',
+            email: 'contact@example.com',
+            position: 'ผู้ประสานงานโรงงาน',
+          },
+        ],
+        notificationEmails: ['factory-alert@example.com'],
+        officerNotificationEmails: ['officer-alert@example.go.th'],
+      }),
+    );
+  });
+
+  it('separates current connected parameters from the proposed edit-request parameters', async () => {
+    const detail = factoryDetail();
+    const eligibleParameters = ['BOD (mg/l)', 'COD (mg/l)', 'Watt (kW/hr)', 'Flow rate (m3/hr)'];
+    const proposedParameters = ['BOD (mg/l)', 'Watt (kW/hr)', 'Flow rate (m3/hr)'];
+    const duplicatedDetails = {
+      eligibleParameters,
+      connectedParameters: proposedParameters,
+      pendingParameters: ['COD (mg/l)'],
+      requestedParameters: proposedParameters,
+    };
+    const currentMeasurementPoints = detail.measurementPoints.map((point) => ({
+      ...point,
+      parameters: ['BOD (mg/l)', 'COD (mg/l)', 'Watt (kW/hr)'],
+      details: { ...duplicatedDetails },
+    }));
+    const proposedMeasurementPoints = currentMeasurementPoints.map((point) => ({
+      ...point,
+      details: { ...duplicatedDetails },
+    }));
+    mockedRepository.findEditRequestById.mockResolvedValue(
+      editRequest('PENDING_REVIEW', {
+        formType: 'MEASUREMENT_POINTS',
+        currentMeasurementPoints,
+        proposedMeasurementPoints,
+      }),
+    );
+
+    const result = await pomsFactoriesService.getEditRequest(16, 42, ownFactoryScope, null);
+
+    expect(result.currentMeasurementPoints?.[0].details).toEqual({
+      eligibleParameters,
+      connectedParameters: ['BOD (mg/l)', 'COD (mg/l)', 'Watt (kW/hr)'],
+      pendingParameters: ['Flow rate (m3/hr)'],
+      requestedParameters: ['BOD (mg/l)', 'COD (mg/l)', 'Watt (kW/hr)'],
+    });
+    expect(result.proposedMeasurementPoints?.[0].details).toEqual(duplicatedDetails);
+    expect(result.currentMeasurementPoints?.[0].details).not.toEqual(
+      result.proposedMeasurementPoints?.[0].details,
+    );
+  });
+
   it('creates PENDING_REVIEW from current live POMS data and preserves omitted fields', async () => {
     const result = await pomsFactoriesService.createEditRequest(
       'factory-001',

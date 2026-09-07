@@ -549,7 +549,7 @@ field ที่ห้ามส่งในฟอร์มนี้ ได้แ�
 
 ### `POST /api/v1/poms-factories/:factoryId/edit-requests`
 
-สร้างคำขอ `PENDING_REVIEW` โดยเก็บ snapshot ตาม `formType` หนึ่งโรงงานมี open request ได้ครั้งละหนึ่งรายการต่อ `formType` response ใช้ field contract เดียวกับ [edit-request detail](#get-apiv1poms-factoriesedit-requestsid)
+สร้างคำขอ `PENDING_REVIEW` โดยเก็บ snapshot ตาม `formType` หนึ่งโรงงานมี open request ได้ครั้งละหนึ่งรายการต่อ `formType` response ใช้ workflow snapshot contract หลัก; ส่วน [edit-request detail](#get-apiv1poms-factoriesedit-requestsid) เพิ่มข้อมูลผู้ติดต่อและอีเมลแจ้งเตือนสำหรับหน้าเปรียบเทียบ
 
 #### Request Fields
 
@@ -618,7 +618,7 @@ Minimal response (`201 Created`):
 
 ### `GET /api/v1/poms-factories/edit-requests`
 
-คืนรายการคำขอที่อยู่ใน `factories:view` data scope ของผู้เรียก เรียงใหม่ก่อน สมาชิกใน `data[]` ใช้ field contract เดียวกับ [edit-request detail](#get-apiv1poms-factoriesedit-requestsid)
+คืนรายการคำขอที่อยู่ใน `factories:view` data scope ของผู้เรียก เรียงใหม่ก่อน โดยสมาชิกใน `data[]` ใช้ workflow snapshot contract หลัก; ข้อมูลผู้ติดต่อและอีเมลแจ้งเตือนโหลดเพิ่มเฉพาะ [edit-request detail](#get-apiv1poms-factoriesedit-requestsid)
 
 #### Request Fields
 
@@ -662,9 +662,13 @@ Minimal response (`200 OK`):
 
 ### `GET /api/v1/poms-factories/edit-requests/:id`
 
-คืน current/proposed snapshot, workflow events และ audit metadata ของคำขอเดียว
+คืน current/proposed snapshot, ข้อมูลผู้ติดต่อ, อีเมลแจ้งเตือน, workflow events และ audit metadata ของคำขอเดียว
 
 `currentFactory` และ `proposedFactory` ยังคง profile response ที่มีชื่อ ที่อยู่ และ identity fields เพื่อแสดงบริบท; การมี field ใน response ไม่ทำให้ field นั้นแก้ไขได้ สำหรับ `BASIC_INFO` ที่สร้างหรือ resubmit ภายใต้ contract นี้ ชื่อและที่อยู่ใน proposed snapshot คงค่าปัจจุบัน ส่วนคำขอเก่าอาจยังมี proposed ชื่อ/ที่อยู่เดิมในประวัติ แต่ approval จะไม่เขียนสอง field นี้
+
+สำหรับ `MEASUREMENT_POINTS` ฝั่ง `currentMeasurementPoints[].details.connectedParameters` และ `requestedParameters` ยึดรายการที่เชื่อมต่อจริงจาก `currentMeasurementPoints[].parameters` ซึ่ง snapshot มาจาก active `cems_wpms_connected_measurement_points.parameters_json`; `pendingParameters` คำนวณเป็น `eligibleParameters - connectedParameters` ส่วน `proposedMeasurementPoints[].details` คงค่าที่ผู้ใช้ส่งมากับคำขอแก้ไข จึงแสดงก่อน/หลังต่างกันเมื่อรายการพารามิเตอร์เปลี่ยน
+
+`contactPersons`, `notificationEmails` และ `officerNotificationEmails` hydrate จาก source connection request ล่าสุดของระบบที่ตรวจพบว่าแก้ไข โดยเริ่ม query หลังคำขอผ่าน `factories:view` data scope แล้ว หากไม่มี source request หรือระบุระบบเดียวไม่ได้ ให้คืน `[]`
 
 #### Request Fields
 
@@ -698,8 +702,11 @@ Minimal request JSON:
 | `data.officerNote`           | string                                                                | yes      | หมายเหตุการพิจารณา                                                               |
 | `data.currentFactory`        | object                                                                | no       | snapshot ก่อนส่งคำขอรอบล่าสุด                                                    |
 | `data.proposedFactory`       | object                                                                | no       | snapshot ที่เสนอแก้ไขรอบล่าสุด                                                   |
-| `data.currentMeasurementPoints`  | object[]                                                           | yes      | snapshot จุดตรวจวัดก่อนแก้; เป็น `null` สำหรับ `BASIC_INFO`                     |
-| `data.proposedMeasurementPoints` | object[]                                                           | yes      | snapshot จุดตรวจวัดที่เสนอ; เป็น `null` สำหรับ `BASIC_INFO`                     |
+| `data.currentMeasurementPoints`  | object[]                                                           | yes      | snapshot จุดตรวจวัดก่อนแก้; กลุ่มพารามิเตอร์ current derive จาก `parameters`; เป็น `null` สำหรับ `BASIC_INFO` |
+| `data.proposedMeasurementPoints` | object[]                                                           | yes      | snapshot จุดตรวจวัดที่เสนอ โดยคง `details.*Parameters` ตามคำขอ; เป็น `null` สำหรับ `BASIC_INFO` |
+| `data.contactPersons`            | object[]                                                           | no       | ผู้ติดต่อประสานงานจาก source connection request ของระบบที่แก้ไข; fallback `[]` |
+| `data.notificationEmails`        | string[]                                                           | no       | อีเมลสำหรับแจ้งเตือนโรงงาน; fallback `[]`                                       |
+| `data.officerNotificationEmails` | string[]                                                           | no       | อีเมลสำหรับแจ้งเตือนเจ้าหน้าที่; fallback `[]`                                  |
 | `data.submittedBy`           | number                                                                | no       | user ID ผู้ส่งรอบล่าสุด                                                          |
 | `data.submittedAt`           | ISO 8601 string                                                       | no       | เวลาส่งรอบล่าสุด                                                                 |
 | `data.reviewedBy`            | number                                                                | yes      | user ID ผู้พิจารณาล่าสุด                                                         |
@@ -749,6 +756,9 @@ Minimal response (`200 OK`):
     },
     "currentMeasurementPoints": null,
     "proposedMeasurementPoints": null,
+    "contactPersons": [],
+    "notificationEmails": [],
+    "officerNotificationEmails": [],
     "submittedBy": 42,
     "submittedAt": "2026-08-24T02:00:00.000Z",
     "reviewedBy": 77,
@@ -769,6 +779,41 @@ Minimal response (`200 OK`):
     "createdAt": "2026-08-24T02:00:00.000Z",
     "updatedAt": "2026-08-24T03:00:00.000Z"
   }
+}
+```
+
+ตัวอย่างส่วนเปรียบเทียบพารามิเตอร์ของ `MEASUREMENT_POINTS`:
+
+```json
+{
+  "contactPersons": [
+    {
+      "name": "ผู้ประสานงานโรงงาน",
+      "phone": "0812345678",
+      "email": "contact@example.com",
+      "position": "ผู้จัดการสิ่งแวดล้อม"
+    }
+  ],
+  "notificationEmails": ["factory-alert@example.com"],
+  "officerNotificationEmails": ["officer-alert@example.go.th"],
+  "currentMeasurementPoints": [
+    {
+      "details": {
+        "connectedParameters": ["BOD (mg/l)", "COD (mg/l)", "Watt (kW/hr)"],
+        "pendingParameters": ["Flow rate (m3/hr)"],
+        "requestedParameters": ["BOD (mg/l)", "COD (mg/l)", "Watt (kW/hr)"]
+      }
+    }
+  ],
+  "proposedMeasurementPoints": [
+    {
+      "details": {
+        "connectedParameters": ["BOD (mg/l)", "Watt (kW/hr)", "Flow rate (m3/hr)"],
+        "pendingParameters": ["COD (mg/l)"],
+        "requestedParameters": ["BOD (mg/l)", "Watt (kW/hr)", "Flow rate (m3/hr)"]
+      }
+    }
+  ]
 }
 ```
 

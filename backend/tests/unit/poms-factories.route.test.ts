@@ -42,7 +42,19 @@ describe('POMS factory routes', () => {
       data: [editRequest('PENDING_REVIEW')],
       meta: { total: 1 },
     });
-    mockedService.getEditRequest.mockResolvedValue(editRequest('PENDING_REVIEW'));
+    mockedService.getEditRequest.mockResolvedValue({
+      ...editRequest('PENDING_REVIEW'),
+      contactPersons: [
+        {
+          name: 'สมหญิง ใจดี',
+          phone: '0812345678',
+          email: 'contact@example.com',
+          position: 'ผู้ประสานงานโรงงาน',
+        },
+      ],
+      notificationEmails: ['factory-alert@example.com'],
+      officerNotificationEmails: ['officer-alert@example.go.th'],
+    });
     mockedService.getEditRequestForm.mockResolvedValue(connectionForm());
     mockedService.resubmitEditRequest.mockResolvedValue(editRequest('REVISED_PENDING_REVIEW'));
     mockedService.cancelEditRequest.mockResolvedValue(editRequest('CANCELLED'));
@@ -282,6 +294,13 @@ describe('POMS factory routes', () => {
       .set('Authorization', `Bearer ${accessToken({ scopes: { 'factories:view': 'ALL' } })}`);
 
     expect(response.status).toBe(200);
+    expect(response.body.data).toEqual(
+      expect.objectContaining({
+        contactPersons: [expect.objectContaining({ name: 'สมหญิง ใจดี' })],
+        notificationEmails: ['factory-alert@example.com'],
+        officerNotificationEmails: ['officer-alert@example.go.th'],
+      }),
+    );
     expect(mockedService.getEditRequest).toHaveBeenCalledWith(11, 42, { scope: 'ALL' }, null);
     expect(mockedService.getFactoryDetail).not.toHaveBeenCalled();
   });
