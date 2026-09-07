@@ -6915,7 +6915,11 @@ export function RequestFormBottomSheet({
   const initialMonitoringPointType = useInitialRequestValues && initialRequest ? getRequestSystemType(initialRequest) : ''
   const initialMonitoringPoints = [{ id: 1, type: initialMonitoringPointType }]
   const initialConnectedParameters = normalizeArrayValue(initialPoint.details?.connectedParameters ?? [])
-  const initialRequestedParameters = []
+  const initialRequestedParameters = isEditMode
+    ? initialPoint.monitoringPointStatus === requestedParametersExemptAllOption
+      ? [requestedParametersExemptAllOption]
+      : normalizeArrayValue(initialPoint.details?.requestedParameters ?? [])
+    : []
   const [contacts, setContacts] = useState(initialContactPersons)
   const [factoryEmails, setFactoryEmails] = useState(initialNotificationEmails)
   const [monitoringPoints, setMonitoringPoints] = useState(initialMonitoringPoints)
