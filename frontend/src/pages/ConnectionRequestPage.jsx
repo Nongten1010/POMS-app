@@ -682,6 +682,11 @@ function normalizeDocumentFile(file = {}) {
   }
 }
 
+function normalizeOptionalDocumentLink(value) {
+  const link = String(value ?? '').trim()
+  return link || null
+}
+
 function normalizeDocumentItem(document = {}) {
   if (!document || typeof document !== 'object') {
     return null
@@ -694,7 +699,7 @@ function normalizeDocumentItem(document = {}) {
   return {
     ...document,
     title: document.title ?? document.documentTitle ?? document.documentType ?? document.category ?? '',
-    link: document.link ?? document.urlLink ?? document.documentLink ?? '',
+    link: normalizeOptionalDocumentLink(document.link ?? document.urlLink ?? document.documentLink),
     fileName: document.fileName ?? document.originalFileName ?? document.name ?? document.storedFileName ?? '',
     fileUrl: document.fileUrl ?? document.url ?? document.storageUrl ?? document.storagePath ?? document.path ?? '',
     fileType: document.fileType ?? document.mimeType ?? document.type ?? '',
@@ -2004,10 +2009,11 @@ function buildDocumentsAndImages(formData, uploadedDocuments = [], { includePrev
     const removedKeys = new Set(formData.getAll(`documentImageRemovedFile-${index}`).map(String))
     const existingItems = getExistingDocumentItemsForFormItem(existingDocuments, item, removedKeys)
     const files = getDocumentImageFiles(formData, index)
+    const formLink = getOptionalFormValue(formData, `documentImageLink-${index}`)
     const documentPayload = {
       title: item.title,
       description: item.description ?? null,
-      link: getOptionalFormValue(formData, `documentImageLink-${index}`),
+      link: formLink,
       fileName: null,
       fileUrl: null,
       fileType: null,
@@ -2020,6 +2026,7 @@ function buildDocumentsAndImages(formData, uploadedDocuments = [], { includePrev
         ...document,
         title: item.title,
         description: document.description ?? item.description ?? null,
+        link: normalizeOptionalDocumentLink(item.hasLink ? formLink : document.link),
       }))
     }
 
@@ -2039,6 +2046,7 @@ function buildDocumentsAndImages(formData, uploadedDocuments = [], { includePrev
         ...document,
         title: item.title,
         description: document.description ?? item.description ?? null,
+        link: normalizeOptionalDocumentLink(item.hasLink ? formLink : document.link),
       }))
     }
 
