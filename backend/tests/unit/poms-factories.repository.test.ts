@@ -42,8 +42,37 @@ describe('pomsFactoriesRepository access and approved profile patches', () => {
     expect(sql).toContain('[cp].[system_type] = ?');
     expect(sql).toContain('[cp].[deleted_at] is null');
     expect(sql).toContain('[req].[deleted_at] is null');
+    expect(sql).toContain('[req].[information_provider_name]');
+    expect(sql).toContain('[req].[information_provider_position]');
     expect(sql).toContain('order by [req].[created_at] desc, [req].[id] desc');
     expect(compiled.bindings).toEqual(expect.arrayContaining([7, 'WPMS']));
+  });
+
+  it('reads the latest source across systems for factory-wide BASIC_INFO', () => {
+    const compiled = buildFactoryFormContactsQueryForTests(7).toSQL();
+    expect(compiled.sql).toContain('[cp].[eligible_factory_id] = ?');
+    expect(compiled.sql).not.toContain('[cp].[system_type] = ?');
+    expect(compiled.sql).toContain('order by [req].[created_at] desc, [req].[id] desc');
+    expect(compiled.bindings).toEqual([7]);
+  });
+
+  it('maps provider values separately from the contact person', () => {
+    const row = {
+      contact_name: 'ผู้ติดต่อ',
+      contact_phone: '0800000000',
+      contact_email: null,
+      contact_persons_json: null,
+      notification_emails_json: null,
+      officer_notification_emails_json: null,
+      information_provider_name: 'ผู้ให้ข้อมูล',
+      information_provider_position: 'กรรมการ',
+    };
+    expect(toPomsFactoryFormContactsForTests(row)).toEqual(
+      expect.objectContaining({
+        informationProviderName: 'ผู้ให้ข้อมูล',
+        informationProviderPosition: 'กรรมการ',
+      }),
+    );
   });
 
   it('maps source-request contacts and notification emails for form prefill', () => {
@@ -61,6 +90,8 @@ describe('pomsFactoriesRepository access and approved profile patches', () => {
       ]),
       notification_emails_json: JSON.stringify(['factory-alert@example.com']),
       officer_notification_emails_json: JSON.stringify(['officer-alert@example.go.th']),
+      information_provider_name: null,
+      information_provider_position: null,
     });
 
     expect(result).toEqual({
@@ -77,6 +108,8 @@ describe('pomsFactoriesRepository access and approved profile patches', () => {
       ],
       notificationEmails: ['factory-alert@example.com'],
       officerNotificationEmails: ['officer-alert@example.go.th'],
+      informationProviderName: null,
+      informationProviderPosition: null,
     });
   });
 
@@ -88,6 +121,8 @@ describe('pomsFactoriesRepository access and approved profile patches', () => {
       contact_persons_json: null,
       notification_emails_json: null,
       officer_notification_emails_json: null,
+      information_provider_name: null,
+      information_provider_position: null,
     });
 
     expect(result).toEqual({
@@ -104,15 +139,19 @@ describe('pomsFactoriesRepository access and approved profile patches', () => {
       ],
       notificationEmails: ['legacy@example.com'],
       officerNotificationEmails: [],
+      informationProviderName: null,
+      informationProviderPosition: null,
     });
   });
 
   it('searches by both current/live and eligible registration numbers', () => {
-    const compiled = buildConnectedFactoryRowsQueryForTests({
-      actorUserId: 77,
-      scope: 'ALL',
-    }, '3-106')
-      .toSQL();
+    const compiled = buildConnectedFactoryRowsQueryForTests(
+      {
+        actorUserId: 77,
+        scope: 'ALL',
+      },
+      '3-106',
+    ).toSQL();
     const sql = compiled.sql.toLowerCase();
 
     expect(sql).toContain('[cp].[factory_registration_no] like ?');

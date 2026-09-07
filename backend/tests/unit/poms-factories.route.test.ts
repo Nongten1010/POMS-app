@@ -54,6 +54,8 @@ describe('POMS factory routes', () => {
       ],
       notificationEmails: ['factory-alert@example.com'],
       officerNotificationEmails: ['officer-alert@example.go.th'],
+      informationProviderName: 'ผู้ให้ข้อมูล',
+      informationProviderPosition: 'กรรมการ',
     });
     mockedService.getEditRequestForm.mockResolvedValue(connectionForm());
     mockedService.resubmitEditRequest.mockResolvedValue(editRequest('REVISED_PENDING_REVIEW'));
@@ -299,6 +301,8 @@ describe('POMS factory routes', () => {
         contactPersons: [expect.objectContaining({ name: 'สมหญิง ใจดี' })],
         notificationEmails: ['factory-alert@example.com'],
         officerNotificationEmails: ['officer-alert@example.go.th'],
+        informationProviderName: 'ผู้ให้ข้อมูล',
+        informationProviderPosition: 'กรรมการ',
       }),
     );
     expect(mockedService.getEditRequest).toHaveBeenCalledWith(11, 42, { scope: 'ALL' }, null);
@@ -393,6 +397,26 @@ describe('POMS factory routes', () => {
     expect(mockedService.reviewEditRequest).not.toHaveBeenCalled();
   });
 
+  it.each(['factories:view', 'factories:approve'])(
+    'rejects admin role when %s permission is missing',
+    async (missing) => {
+      const scopes: Record<string, string> = {
+        'factories:view': 'ALL',
+        'factories:approve': 'ALL',
+      };
+      delete scopes[missing];
+      const response = await request(createTestApp())
+        .post('/api/v1/poms-factories/edit-requests/19/review')
+        .set(
+          'Authorization',
+          `Bearer ${accessToken({ userType: 'officer', roles: ['admin'], scopes })}`,
+        )
+        .send({ decision: 'APPROVE' });
+      expect(response.status).toBe(403);
+      expect(mockedService.reviewEditRequest).not.toHaveBeenCalled();
+    },
+  );
+
   it('rejects a monitoring officer even when the token has factories:approve', async () => {
     const response = await request(createTestApp())
       .post('/api/v1/poms-factories/edit-requests/11/review')
@@ -422,9 +446,9 @@ describe('POMS factory routes', () => {
       roles: ['monitoring_kpm'],
     },
     {
-      label: 'admin role without the admin user type',
+      label: 'officer without the admin role',
       userType: 'officer' as const,
-      roles: ['admin'],
+      roles: ['monitoring_kpm'],
     },
   ])('rejects $label', async ({ userType, roles }) => {
     const response = await request(createTestApp())
@@ -448,35 +472,38 @@ describe('POMS factory routes', () => {
     expect(mockedService.reviewEditRequest).not.toHaveBeenCalled();
   });
 
-  it('allows an authenticated admin with view and approve permissions to review a request', async () => {
-    const response = await request(createTestApp())
-      .post('/api/v1/poms-factories/edit-requests/11/review')
-      .set(
-        'Authorization',
-        `Bearer ${accessToken({
-          sub: '99',
-          userType: 'admin',
-          roles: ['admin'],
-          scopes: { 'factories:view': 'ALL', 'factories:approve': 'ALL' },
-          scopeDetails: {
-            'factories:view': { scope: 'ALL' },
-            'factories:approve': { scope: 'ALL' },
-          },
-        })}`,
-      )
-      .send({ decision: 'APPROVE' });
+  it.each(['admin', 'officer'] as const)(
+    'allows an authenticated %s with admin role and view/approve permissions',
+    async (userType) => {
+      const response = await request(createTestApp())
+        .post('/api/v1/poms-factories/edit-requests/11/review')
+        .set(
+          'Authorization',
+          `Bearer ${accessToken({
+            sub: '99',
+            userType,
+            roles: ['admin'],
+            scopes: { 'factories:view': 'ALL', 'factories:approve': 'ALL' },
+            scopeDetails: {
+              'factories:view': { scope: 'ALL' },
+              'factories:approve': { scope: 'ALL' },
+            },
+          })}`,
+        )
+        .send({ decision: 'APPROVE' });
 
-    expect(response.status).toBe(200);
-    expect(response.body.data.status).toBe('APPROVED');
-    expect(mockedService.reviewEditRequest).toHaveBeenCalledWith(
-      11,
-      { decision: 'APPROVE' },
-      99,
-      { userType: 'admin', roles: ['admin'] },
-      { scope: 'ALL' },
-      null,
-    );
-  });
+      expect(response.status).toBe(200);
+      expect(response.body.data.status).toBe('APPROVED');
+      expect(mockedService.reviewEditRequest).toHaveBeenCalledWith(
+        11,
+        { decision: 'APPROVE' },
+        99,
+        { userType, roles: ['admin'] },
+        { scope: 'ALL' },
+        null,
+      );
+    },
+  );
 });
 
 function createTestApp() {

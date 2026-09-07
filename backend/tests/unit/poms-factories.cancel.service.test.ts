@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 jest.mock('../../src/modules/poms-factories/poms-factories.repository', () => ({
   pomsFactoriesRepository: {
     findEditRequestById: jest.fn(),
+    findFactoryFormContacts: jest.fn(),
     cancelEditRequest: jest.fn(),
   },
 }));
@@ -28,6 +29,7 @@ const CANCELLABLE_STATUSES: PomsFactoryEditRequestStatus[] = [
 describe('pomsFactoriesService.cancelEditRequest', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockedRepository.findFactoryFormContacts.mockResolvedValue(null);
   });
 
   it.each(CANCELLABLE_STATUSES)('cancels an owned request from %s', async (status) => {

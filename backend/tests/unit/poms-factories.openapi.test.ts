@@ -311,7 +311,15 @@ describe('POMS factory master-data OpenAPI contract', () => {
       }),
     );
 
-    for (const field of ['eia', 'eiaOther', 'projectName', 'factoryFrontPhotos', 'factoryLogo', 'latitude', 'longitude']) {
+    for (const field of [
+      'eia',
+      'eiaOther',
+      'projectName',
+      'factoryFrontPhotos',
+      'factoryLogo',
+      'latitude',
+      'longitude',
+    ]) {
       expect(requestProperties).toHaveProperty(field);
     }
     expect(createPomsFactoryEditRequestSchema.safeParse(request.example).success).toBe(true);
@@ -462,19 +470,26 @@ describe('POMS factory master-data OpenAPI contract', () => {
     });
 
     const detail = asObject(schemas().PomsFactoryEditRequestDetail, 'PomsFactoryEditRequestDetail');
-    const extension = asObject(
-      (detail.allOf as unknown[])[1],
-      'PomsFactoryEditRequestDetail extension',
-    );
-    const properties = asObject(extension.properties, 'PomsFactoryEditRequestDetail properties');
-    expect(extension.required).toEqual(
-      expect.arrayContaining(['contactPersons', 'notificationEmails', 'officerNotificationEmails']),
+    const properties = asObject(detail.properties, 'PomsFactoryEditRequestDetail properties');
+    expect(detail.additionalProperties).toBe(false);
+    expect(detail).not.toHaveProperty('allOf');
+    expect(detail.required).toEqual(
+      expect.arrayContaining([
+        'id',
+        'contactPersons',
+        'notificationEmails',
+        'officerNotificationEmails',
+        'informationProviderName',
+        'informationProviderPosition',
+      ]),
     );
     expect(properties).toEqual(
       expect.objectContaining({
         contactPersons: expect.any(Object),
         notificationEmails: expect.any(Object),
         officerNotificationEmails: expect.any(Object),
+        informationProviderName: expect.objectContaining({ type: 'string', nullable: true }),
+        informationProviderPosition: expect.objectContaining({ type: 'string', nullable: true }),
       }),
     );
 
@@ -483,6 +498,11 @@ describe('POMS factory master-data OpenAPI contract', () => {
     expect(description).toContain('parameters_json');
     expect(description).toContain('proposedMeasurementPoints');
     expect(description).toContain('contactPersons');
+    expect(description).toContain('informationProviderName');
+    expect(description).toContain('BASIC_INFO');
+    expect(operation('/poms-factories/edit-requests/{id}/review', 'post').description).toEqual(
+      expect.stringContaining('JWT role admin'),
+    );
   });
 
   it('keeps factory summary and edit-request responses aligned with runtime DTOs', () => {

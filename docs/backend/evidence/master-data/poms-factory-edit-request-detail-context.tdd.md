@@ -39,3 +39,42 @@
 - query ข้อมูลติดต่อทำหลัง scoped edit-request lookup ผ่าน `factories:view` และใช้ Knex parameter binding; ไม่มี raw SQL, secret หรือ input contract ใหม่
 - การยืนยัน production หลัง deploy ใช้ GitHub Actions `Deploy POMS` และ public OpenAPI; ไม่บันทึกหรือคัดลอก production credential เข้า clean worktree
 - การเรียก protected API สำหรับ request ID `16` ต้องใช้ credential ของผู้มีสิทธิ์ `factories:view` จึงแยกจาก automated release verification
+
+## Regression: request 19 provider fields and admin-role review
+
+สองอาการที่แจ้งคือ detail ไม่มีผู้ให้ข้อมูล/ผู้รับมอบอำนาจ และผู้ใช้ frontend ที่ได้รับ role admin เรียก review แล้วได้ 403
+
+- Root cause ของ provider: query, mapper และ detail DTO ไม่ส่ง `informationProviderName`/`informationProviderPosition`; BASIC_INFO ไม่มี point snapshots จึงข้าม source lookup อีกชั้น
+- Root cause ของ review: frontend และการจัดการผู้ใช้อนุญาต `userType=officer` พร้อม role `admin` แต่ controller/service บังคับ `userType=admin` ด้วย
+- Fix: ยึด role `admin` จาก JWT ที่ผ่าน authentication ร่วมกับ permissions/scope เดิม และคง self-review guard ทั้ง createdBy และ submittedBy; ไม่แก้ userType หรือข้อมูลบัญชี
+- Provider อ่านจาก source request เดียวกันผ่าน active connected point; BASIC_INFO ใช้ source ล่าสุดข้ามระบบ, MEASUREMENT_POINTS ใช้ระบบที่แก้ไข และคืน null เมื่อระบบกำกวมหรือไม่มีข้อมูล
+- Factory form และ edit-request form คืน provider จาก source ของ systemType ที่เลือก; proposed point values ยังคงตามคำขอ
+- Detail OpenAPI ใช้ shared schema รวม properties โดยตรง เพื่อให้ additionalProperties=false ไม่ปฏิเสธ fields ที่เพิ่ม
+
+คำสั่ง RED ที่รันก่อนแก้ implementation (จาก backend):
+
+```bash
+npm test -- --runInBand --cacheDirectory=/private/tmp/poms-diagnosis-jest tests/unit/poms-factories.route.test.ts tests/unit/poms-factories.service.test.ts tests/unit/poms-factories.repository.test.ts
+```
+
+ผล RED: 8 failed, 87 passed; ตรวจจับ officer/admin-role ได้ 403 แทน 200, query ไม่เลือก provider columns, mapper/response ทิ้งค่า และ BASIC_INFO ไม่เรียก source lookup
+
+คำสั่ง GREEN รอบสุดท้าย:
+
+```bash
+npm test -- --runInBand --cacheDirectory=/private/tmp/poms-diagnosis-jest tests/unit/poms-factories.route.test.ts tests/unit/poms-factories.service.test.ts tests/unit/poms-factories.repository.test.ts tests/unit/poms-factories.cancel.service.test.ts tests/unit/poms-factories.openapi.test.ts tests/unit/poms-measurement-point-edit-requests.service.test.ts tests/unit/poms-measurement-point-edit-requests.openapi.test.ts
+```
+
+ผล: 7 suites / 126 tests PASS รวม provider/null fallback, query หลัง scoped lookup, BASIC_INFO, mixed-system WPMS form, admin role, missing permissions, non-admin rejection, self-review และ cancellation; `npm run typecheck` PASS; ESLint เฉพาะ 10 ไฟล์ TypeScript ที่แตะมี 0 errors / 1 existing non-null-assertion warning ใน repository test; `git diff --check` PASS
+
+ใช้ diagnosing-bugs เพื่อสร้าง RED/GREEN, backend-patterns เพื่อคงชั้น repository/service และตรวจสิทธิ์ที่ backend, api-design เพื่อกำหนด nullability/source และปรับ OpenAPI ให้ตรง response
+
+- Docs impact: updated
+- Canonical docs: [Factory edit requests](../../api/menus/master-data/factory-edit-requests.md)
+- Reason: คืนข้อมูลผู้ให้ข้อมูลและแก้เงื่อนไข review ให้รองรับ role admin ของบัญชีเจ้าหน้าที่
+- Client impact: อ่าน provider fields ระดับ data ได้; admin role ไม่ถูกปฏิเสธเพราะ userType=officer; ไม่มี input fields ใหม่หรือ migration
+- Breaking change: no
+
+ข้อจำกัดในรอบ implementation: ยืนยันกับโค้ดและข้อมูลจำลอง ไม่ได้ตรวจค่าจริงของ request 19 เพราะ SELECT จบด้วย ETIMEOUT; ไม่มี debug instrumentation ค้างใน source
+
+Production release preflight: เตรียมเฉพาะ regression นี้บน clean worktree จาก `d5b6a3f` โดยคงงาน prefill/detail ที่เผยแพร่แล้ว; focused 7 suites / 126 tests, typecheck และ build ผ่านซ้ำ ใช้ dummy environment โดยไม่มี production credentials ใน worktree ไม่เพิ่ม migration และไม่แก้ frontend; การตรวจหลังเผยแพร่ใช้ workflow health check และ public OpenAPI โดยไม่ POST review เพื่อเปลี่ยนสถานะคำขอจริง

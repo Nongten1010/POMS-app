@@ -35,6 +35,7 @@ const ownFactoryScope = { scope: 'OWN_FACTORY' as const };
 describe('pomsFactoriesService edit-request workflow', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockedRepository.findFactoryFormContacts.mockResolvedValue(null);
     mockedRepository.findFactoryDetail.mockResolvedValue(factoryDetail());
     mockedRepository.findOpenEditRequestForFactory.mockResolvedValue(null);
     mockedRepository.createEditRequest.mockResolvedValue(editRequest('PENDING_REVIEW'));
@@ -216,6 +217,8 @@ describe('pomsFactoriesService edit-request workflow', () => {
       ],
       notificationEmails: ['factory-alert@example.com'],
       officerNotificationEmails: ['officer-alert@example.go.th'],
+      informationProviderName: null,
+      informationProviderPosition: null,
     });
 
     const result = await pomsFactoriesService.getFactoryForm(
@@ -352,6 +355,149 @@ describe('pomsFactoriesService edit-request workflow', () => {
     });
   });
 
+  it.each(['BASIC_INFO', 'MEASUREMENT_POINTS'] as const)(
+    'returns provider fields on %s edit-request detail',
+    async (formType) => {
+      const points = formType === 'MEASUREMENT_POINTS' ? factoryDetail().measurementPoints : null;
+      mockedRepository.findEditRequestById.mockResolvedValue(
+        editRequest('PENDING_REVIEW', {
+          formType,
+          currentMeasurementPoints: points,
+          proposedMeasurementPoints: points,
+        }),
+      );
+      const contacts = {
+        contactName: 'ผู้ติดต่อ',
+        contactPhone: '0800000000',
+        contactEmail: null,
+        contactPersons: [],
+        notificationEmails: [],
+        officerNotificationEmails: [],
+        informationProviderName: 'ผู้ให้ข้อมูล',
+        informationProviderPosition: 'กรรมการ',
+      };
+      mockedRepository.findFactoryFormContacts.mockResolvedValue(contacts);
+      const result = await pomsFactoriesService.getEditRequest(19, 42, ownFactoryScope, null);
+      expect(mockedRepository.findFactoryFormContacts.mock.calls).toEqual([
+        [7, formType === 'BASIC_INFO' ? undefined : 'CEMS'],
+      ]);
+      expect(result).toEqual(
+        expect.objectContaining({
+          informationProviderName: contacts.informationProviderName,
+          informationProviderPosition: contacts.informationProviderPosition,
+        }),
+      );
+    },
+  );
+
+  it('returns null provider fields when no source exists and does not query outside request scope', async () => {
+    const result = await pomsFactoriesService.getEditRequest(19, 42, ownFactoryScope, null);
+    expect(result).toEqual(
+      expect.objectContaining({
+        informationProviderName: null,
+        informationProviderPosition: null,
+      }),
+    );
+    mockedRepository.findFactoryFormContacts.mockClear();
+    mockedRepository.findEditRequestById.mockResolvedValue(null);
+    await expect(
+      pomsFactoriesService.getEditRequest(19, 42, ownFactoryScope, null),
+    ).rejects.toBeInstanceOf(NotFoundError);
+    expect(mockedRepository.findFactoryFormContacts).not.toHaveBeenCalled();
+  });
+
+  it('prefills provider fields in both factory and edit-request forms', async () => {
+    const contacts = {
+      contactName: '',
+      contactPhone: '',
+      contactEmail: null,
+      contactPersons: [],
+      notificationEmails: [],
+      officerNotificationEmails: [],
+      informationProviderName: 'ผู้ให้ข้อมูล',
+      informationProviderPosition: 'กรรมการ',
+    };
+    mockedRepository.findFactoryFormContacts.mockResolvedValue(contacts);
+    const factoryForm = await pomsFactoriesService.getFactoryForm(
+      'factory-001',
+      42,
+      ownFactoryScope,
+      { systemType: 'CEMS' },
+      null,
+    );
+    const editForm = await pomsFactoriesService.getEditRequestForm(
+      19,
+      42,
+      ownFactoryScope,
+      { systemType: 'CEMS' },
+      null,
+    );
+    for (const form of [factoryForm, editForm]) {
+      expect(form).toEqual(
+        expect.objectContaining({
+          informationProviderName: contacts.informationProviderName,
+          informationProviderPosition: contacts.informationProviderPosition,
+        }),
+      );
+    }
+  });
+
+  it('does not choose provider data arbitrarily when measurement-point systems are ambiguous', async () => {
+    const cems = factoryDetail().measurementPoints[0];
+    const points = [cems, { ...cems, connectedPointId: 16, systemType: 'WPMS' as const }];
+    mockedRepository.findEditRequestById.mockResolvedValue(
+      editRequest('PENDING_REVIEW', {
+        formType: 'MEASUREMENT_POINTS',
+        currentMeasurementPoints: points,
+        proposedMeasurementPoints: points,
+      }),
+    );
+    const result = await pomsFactoriesService.getEditRequest(19, 42, ownFactoryScope, null);
+    expect(result.informationProviderName).toBeNull();
+    expect(result.informationProviderPosition).toBeNull();
+    expect(mockedRepository.findFactoryFormContacts).not.toHaveBeenCalled();
+  });
+
+  it('uses the selected WPMS source for edit-request form provider data in a mixed-system factory', async () => {
+    const current = factoryDetail();
+    const points = [
+      current.measurementPoints[0],
+      {
+        ...current.measurementPoints[0],
+        connectedPointId: 16,
+        pointCode: 'W0001',
+        systemType: 'WPMS' as const,
+      },
+    ];
+    mockedRepository.findFactoryDetail.mockResolvedValue({
+      ...current,
+      measurementPoints: points,
+      systemTypes: ['CEMS', 'WPMS'],
+    });
+    mockedRepository.findFactoryFormContacts.mockImplementation(async (_id, systemType) => ({
+      contactName: '',
+      contactPhone: '',
+      contactEmail: null,
+      contactPersons: [],
+      notificationEmails: [],
+      officerNotificationEmails: [],
+      informationProviderName: systemType === 'WPMS' ? 'ผู้ให้ข้อมูลน้ำ' : 'ผู้ให้ข้อมูลอากาศ',
+      informationProviderPosition: null,
+    }));
+    const result = await pomsFactoriesService.getEditRequestForm(
+      19,
+      42,
+      ownFactoryScope,
+      { systemType: 'WPMS' },
+      null,
+    );
+    expect(result.informationProviderName).toBe('ผู้ให้ข้อมูลน้ำ');
+    expect(result.informationProviderPosition).toBeNull();
+    expect(result.measurementPoints).toHaveLength(1);
+    expect(result.measurementPoints[0].pointCode).toBe('W0001');
+    expect(mockedRepository.findFactoryFormContacts).toHaveBeenLastCalledWith(7, 'WPMS');
+  });
+
   it('returns contacts and notification emails on edit-request detail', async () => {
     const detail = factoryDetail();
     mockedRepository.findEditRequestById.mockResolvedValue(
@@ -375,6 +521,8 @@ describe('pomsFactoriesService edit-request workflow', () => {
       ],
       notificationEmails: ['factory-alert@example.com'],
       officerNotificationEmails: ['officer-alert@example.go.th'],
+      informationProviderName: null,
+      informationProviderPosition: null,
     });
 
     const result = await pomsFactoriesService.getEditRequest(16, 42, ownFactoryScope, null);
@@ -780,23 +928,56 @@ describe('pomsFactoriesService edit-request workflow', () => {
     },
   );
 
-  it('prevents the current submitter from reviewing their own request', async () => {
-    mockedRepository.findEditRequestById.mockResolvedValue(
-      editRequest('PENDING_REVIEW', { submittedBy: 42 }),
+  it('allows an officer with the admin role to review through the real service', async () => {
+    await pomsFactoriesService.reviewEditRequest(
+      19,
+      { decision: 'APPROVE' },
+      77,
+      { userType: 'officer', roles: ['admin'] },
+      { scope: 'ALL' },
+      null,
     );
+    expect(mockedRepository.reviewEditRequest).toHaveBeenCalledWith(
+      19,
+      { decision: 'APPROVE' },
+      77,
+    );
+  });
 
+  it('rejects an admin user type without the admin role before accessing request data', async () => {
     await expect(
       pomsFactoriesService.reviewEditRequest(
-        11,
-        { decision: 'APPROVE', officerNote: null },
-        42,
-        { userType: 'admin', roles: ['admin'] },
+        19,
+        { decision: 'APPROVE' },
+        77,
+        { userType: 'admin', roles: ['monitoring_kpm'] },
         { scope: 'ALL' },
         null,
       ),
     ).rejects.toBeInstanceOf(ForbiddenError);
-    expect(mockedRepository.reviewEditRequest).not.toHaveBeenCalled();
+    expect(mockedRepository.findEditRequestById).not.toHaveBeenCalled();
   });
+
+  it.each(['admin', 'officer'] as const)(
+    'prevents %s with admin role from reviewing their own request',
+    async (userType) => {
+      mockedRepository.findEditRequestById.mockResolvedValue(
+        editRequest('PENDING_REVIEW', { submittedBy: 42 }),
+      );
+
+      await expect(
+        pomsFactoriesService.reviewEditRequest(
+          11,
+          { decision: 'APPROVE', officerNote: null },
+          42,
+          { userType, roles: ['admin'] },
+          { scope: 'ALL' },
+          null,
+        ),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+      expect(mockedRepository.reviewEditRequest).not.toHaveBeenCalled();
+    },
+  );
 
   it('prevents the original creator from reviewing after another user resubmits', async () => {
     mockedRepository.findEditRequestById.mockResolvedValue(

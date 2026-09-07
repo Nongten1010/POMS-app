@@ -96,6 +96,8 @@ interface FactoryFormContactRow {
   contact_persons_json: string | null;
   notification_emails_json: string | null;
   officer_notification_emails_json: string | null;
+  information_provider_name: string | null;
+  information_provider_position: string | null;
 }
 
 interface EditRequestRow {
@@ -202,7 +204,7 @@ export const pomsFactoriesRepository = {
 
   async findFactoryFormContacts(
     eligibleFactoryId: number,
-    systemType: ConnectionSystemType,
+    systemType?: ConnectionSystemType,
   ): Promise<PomsFactoryFormContactsDTO | null> {
     const row = await buildFactoryFormContactsQuery(eligibleFactoryId, systemType).first();
     return row ? toPomsFactoryFormContacts(row) : null;
@@ -541,7 +543,7 @@ export function buildConnectedFactoryRowsQueryForTests(
 
 export function buildFactoryFormContactsQueryForTests(
   eligibleFactoryId: number,
-  systemType: ConnectionSystemType,
+  systemType?: ConnectionSystemType,
 ): Knex.QueryBuilder<FactoryFormContactRow, FactoryFormContactRow[]> {
   return buildFactoryFormContactsQuery(eligibleFactoryId, systemType);
 }
@@ -816,12 +818,11 @@ function immutableMeasurementPointState(point: PomsMeasurementPointDTO) {
 
 function buildFactoryFormContactsQuery(
   eligibleFactoryId: number,
-  systemType: ConnectionSystemType,
+  systemType?: ConnectionSystemType,
 ): Knex.QueryBuilder<FactoryFormContactRow, FactoryFormContactRow[]> {
-  return db<FactoryFormContactRow>('cems_wpms_connected_measurement_points as cp')
+  const query = db<FactoryFormContactRow>('cems_wpms_connected_measurement_points as cp')
     .innerJoin('cems_wpms_connection_requests as req', 'req.id', 'cp.source_request_id')
     .where('cp.eligible_factory_id', eligibleFactoryId)
-    .where('cp.system_type', systemType)
     .whereNull('cp.deleted_at')
     .whereNull('req.deleted_at')
     .select(
@@ -831,12 +832,16 @@ function buildFactoryFormContactsQuery(
       'req.contact_persons_json',
       'req.notification_emails_json',
       'req.officer_notification_emails_json',
+      'req.information_provider_name',
+      'req.information_provider_position',
     )
     .orderBy('req.created_at', 'desc')
     .orderBy('req.id', 'desc') as unknown as Knex.QueryBuilder<
     FactoryFormContactRow,
     FactoryFormContactRow[]
   >;
+  if (systemType) query.where('cp.system_type', systemType);
+  return query;
 }
 
 function editableMeasurementPointState(point: PomsMeasurementPointDTO) {
@@ -1169,6 +1174,8 @@ function toPomsFactoryFormContacts(row: FactoryFormContactRow): PomsFactoryFormC
     contactName: row.contact_name,
     contactPhone: row.contact_phone,
     contactEmail: row.contact_email,
+    informationProviderName: row.information_provider_name ?? null,
+    informationProviderPosition: row.information_provider_position ?? null,
     contactPersons,
     notificationEmails:
       notificationEmails.length > 0

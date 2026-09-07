@@ -112,6 +112,8 @@ export interface PomsFactoryFormContactsDTO {
   contactPersons: ContactPersonInput[];
   notificationEmails: string[];
   officerNotificationEmails: string[];
+  informationProviderName: string | null;
+  informationProviderPosition: string | null;
 }
 
 export interface PomsFactoryProfilePatchInput {
@@ -137,8 +139,7 @@ export interface PomsMeasurementPointPatchInput {
   measurementInstruments?: MeasurementInstrumentsInput | null;
 }
 
-export interface CreatePomsFactoryMeasurementPointsEditRequestInput
-  extends PomsFactoryProfilePatchInput {
+export interface CreatePomsFactoryMeasurementPointsEditRequestInput extends PomsFactoryProfilePatchInput {
   formType: typeof POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.MEASUREMENT_POINTS;
   measurementPoints: PomsMeasurementPointPatchInput[];
   note?: string | null;
@@ -205,6 +206,8 @@ export interface PomsFactoryEditRequestDetailDTO extends PomsFactoryEditRequestD
   contactPersons: ContactPersonInput[];
   notificationEmails: string[];
   officerNotificationEmails: string[];
+  informationProviderName: string | null;
+  informationProviderPosition: string | null;
 }
 
 export interface ListPomsFactoryEditRequestsQuery {

@@ -28,7 +28,7 @@
 - binary upload รับครั้งละหนึ่งไฟล์และคืน metadata เท่านั้น การผูกไฟล์กับคำขอเกิดเมื่อ client ส่ง metadata นั้นใน create/resubmission payload
 - เฉพาะ `createdBy` ยกเลิกคำขอของตนเองได้ และยกเลิกได้เมื่อสถานะเป็น `PENDING_REVIEW`, `REVISION_REQUESTED` หรือ `REVISED_PENDING_REVIEW`
 - โรงงานที่อ่านหรือแก้ได้ต้องอยู่ใน effective data scope ของ permission ที่ endpoint ใช้ และหนึ่งโรงงานมี open request ได้สูงสุดหนึ่งรายการต่อ `formType`
-- การ review ทุก decision จำกัดเฉพาะผู้ใช้ที่มีทั้ง `userType = "admin"`, role `admin` และ permission `factories:approve`
+- การ review ทุก decision ต้องมี role `admin` ใน JWT พร้อม permissions `factories:view` และ `factories:approve`; บัญชี `userType = officer` ที่ได้รับ role `admin` ใช้งานได้ และ `userType = admin` อย่างเดียวไม่เพียงพอ ไม่ต้องเปลี่ยนประเภทบัญชีหรือ migrate ข้อมูลผู้ใช้
 - ไม่อยู่ใน scope ของ capability นี้: การแก้ `pointCode`, `pointType`, `systemType`, `parameters`, device configuration, identity/audit fields, ตาราง `factories` และโค้ด frontend
 
 ```bash
@@ -120,7 +120,7 @@ curl --request POST \
 | Authentication       | ทุก endpoint ภายใต้ `/api/v1/poms-factories` ต้องมี Bearer token                                                                                                         |
 | Read scope           | `GET` ทั้งหมดใช้ scope ของ `factories:view`: `ALL`, `IN_REGION`, `IN_PROVINCE`, `IN_ESTATE` หรือ `OWN_FACTORY`                                                           |
 | Edit scope           | `POST .../document-images` ใช้ `factories:edit`; ส่วน `POST .../edit-requests`, `PUT .../resubmission` และ `POST .../cancel` ต้องผ่านทั้ง `factories:view` และ `factories:edit` โดยการคัด resource สำหรับ mutation ยึด scope ของ `factories:edit` |
-| Approval scope       | `POST .../review` ต้องผ่านทั้ง `factories:view` และ `factories:approve`, ยึด scope ของ `factories:approve` และบังคับ `userType = admin` พร้อม role `admin`                |
+| Approval scope       | `POST .../review` ต้องผ่านทั้ง `factories:view` และ `factories:approve`, ยึด scope ของ `factories:approve` และบังคับ role `admin` ใน JWT (ไม่บังคับ `userType`)                |
 | Object scope         | รายการถูกกรองตาม effective scope ของ endpoint; detail หรือ mutation ที่อ้างโรงงาน/คำขอนอก scope ตอบ `404 NOT_FOUND` เพื่อไม่เปิดเผยว่าข้อมูลมีอยู่                       |
 | Separation of duties | ผู้พิจารณาต้องไม่ตรงกับทั้ง `createdBy` และ `submittedBy` ของคำขอ; กฎนี้ใช้กับ `APPROVE`, `REQUEST_REVISION` และ `REJECT`; ถ้าซ้ำตอบ `403 FORBIDDEN`                     |
 | Cancel ownership     | `POST .../cancel` อนุญาตเฉพาะผู้ใช้ที่ตรงกับ `createdBy`; ผู้มี permission แต่ไม่ใช่เจ้าของตอบ `403 FORBIDDEN`                                                              |
@@ -321,7 +321,7 @@ Minimal response (`200 OK`):
 
 คืน prefill โดยให้ข้อมูลโรงงานและจุดตรวจวัดมาจาก current/live POMS ใช้ชื่อและ shape ของ `data` ตรงกับ [Connection-request form prefill](../connection-requests/README.md#connection-request-form-prefill) และไม่คืน wrapper `formDefaults`, workflow metadata, `factoryAddress`, `systemTypes`, `connectedPointId` หรือ `sourceMeasurementPointId`
 
-ข้อมูลระดับโรงงานและจุดตรวจวัดยึด active `cems_wpms_connected_measurement_points`; เฉพาะ `contactPersons`, `notificationEmails` และ `officerNotificationEmails` (รวม legacy `contactName`, `contactPhone`, `contactEmail`) จะ hydrate จาก `cems_wpms_connection_requests` ที่ผูกผ่าน `source_request_id` ของ active point ล่าสุดใน `systemType` ที่เลือก ถ้าไม่มี source request ให้ fallback เป็น `null`, `[]` หรือ empty string ตาม type ของ shared contract
+ข้อมูลระดับโรงงานและจุดตรวจวัดยึด active `cems_wpms_connected_measurement_points`; เฉพาะ `contactPersons`, `notificationEmails`, `officerNotificationEmails`, `informationProviderName` และ `informationProviderPosition` (รวม legacy `contactName`, `contactPhone`, `contactEmail`) จะ hydrate จาก `cems_wpms_connection_requests` ที่ผูกผ่าน `source_request_id` ของ active point ล่าสุดใน `systemType` ที่เลือก ถ้าไม่มี source request ให้ fallback เป็น `null`, `[]` หรือ empty string ตาม type ของ shared contract
 
 response prefill ยังคืนชื่อโรงงาน ที่อยู่ เลขทะเบียน และ field อื่นของ shared contract เพื่อแสดงข้อมูลประกอบเท่านั้น สำหรับ `BASIC_INFO` ให้เปิดแก้เฉพาะ [7 fields ที่อนุญาต](#shared-basic-info-fields) และสร้าง write payload จาก allowlist นี้ ห้ามส่ง response ทั้ง object กลับเป็น create/resubmission body; `remarks` ใน response ไม่ใช่ field ที่แก้ได้ของ `BASIC_INFO`
 
@@ -351,9 +351,10 @@ curl --request GET \
 | `measurementPoints[].details.connectedParameters`, `requestedParameters` | พารามิเตอร์ที่เชื่อมต่ออยู่ปัจจุบันจาก active `cems_wpms_connected_measurement_points.parameters_json` | `[]` |
 | `measurementPoints[].details.pendingParameters` | `eligibleParameters - connectedParameters` โดยเทียบชื่อพารามิเตอร์แบบ normalize ตัวพิมพ์/Unicode แต่คง label พร้อมหน่วยใน response | `[]` |
 | `industryMainOrder`, `industryMainOrderLabel`, `industrySubOrder`, `businessActivity` | active `eligible_factories.factory_type_sequence` และ `eligible_factories.business_activity` ที่ผูกกับ current/live POMS | `null` เมื่อ eligible metadata ไม่มีค่า |
-| รหัสพื้นที่, พิกัด/คำอธิบายเฉพาะจุด, ผู้ให้ข้อมูล | POMS ไม่เก็บ | `null` |
+| รหัสพื้นที่, พิกัด/คำอธิบายเฉพาะจุด | POMS ไม่เก็บ | `null` |
 | `contactName`, `contactPhone`, `contactEmail` | source connection request ล่าสุดของ active point ใน `systemType` ที่เลือก | `""`, `""`, `null` |
 | `contactPersons`, `notificationEmails`, `officerNotificationEmails` | JSON snapshots ใน source connection request เดียวกัน | `[]`; `notificationEmails` fallback จาก `contactEmail` เมื่อ JSON ว่าง |
+| `informationProviderName`, `informationProviderPosition` | `information_provider_name`, `information_provider_position` จาก source row เดียวกัน | `null` เมื่อไม่มีค่า; ไม่ fallback เป็นผู้ติดต่อ |
 | `remarks` | ไม่มีคำขอแก้ไขใน endpoint นี้ | `null` |
 
 `factoryFrontPhotos` และ `factoryLogo` ไม่เป็น top-level field ใน shared form contract; metadata ที่มีจะรวมใน `measurementPoints[0].documentsAndImages`
@@ -668,7 +669,9 @@ Minimal response (`200 OK`):
 
 สำหรับ `MEASUREMENT_POINTS` ฝั่ง `currentMeasurementPoints[].details.connectedParameters` และ `requestedParameters` ยึดรายการที่เชื่อมต่อจริงจาก `currentMeasurementPoints[].parameters` ซึ่ง snapshot มาจาก active `cems_wpms_connected_measurement_points.parameters_json`; `pendingParameters` คำนวณเป็น `eligibleParameters - connectedParameters` ส่วน `proposedMeasurementPoints[].details` คงค่าที่ผู้ใช้ส่งมากับคำขอแก้ไข จึงแสดงก่อน/หลังต่างกันเมื่อรายการพารามิเตอร์เปลี่ยน
 
-`contactPersons`, `notificationEmails` และ `officerNotificationEmails` hydrate จาก source connection request ล่าสุดของระบบที่ตรวจพบว่าแก้ไข โดยเริ่ม query หลังคำขอผ่าน `factories:view` data scope แล้ว หากไม่มี source request หรือระบุระบบเดียวไม่ได้ ให้คืน `[]`
+`contactPersons`, `notificationEmails`, `officerNotificationEmails`, `informationProviderName` และ `informationProviderPosition` อ่านจาก source connection request หลังคำขอผ่าน `factories:view` data scope โดยใช้ชื่อและตำแหน่งจาก source row เดียวกัน: `BASIC_INFO` ใช้ source ล่าสุดของโรงงานข้าม CEMS/WPMS (เรียง `req.created_at DESC, req.id DESC`); `MEASUREMENT_POINTS` ใช้ source ล่าสุดของระบบที่แก้ไขตาม snapshots ถ้าระบุระบบเดียวไม่ได้ให้คืน arrays เป็น `[]` และ provider เป็น `null` แทนการเลือกระบบใดระบบหนึ่ง
+
+ข้อมูลกลุ่มนี้เป็นบริบทจากคำขอเชื่อมต่อที่ผูกกับ active POMS point ปัจจุบัน ไม่ใช่ snapshot ผู้ลงนามของคำขอแก้ไขและอาจเปลี่ยนเมื่อ source เปลี่ยน ถ้าต้นทางไม่มีข้อมูลผู้ให้ข้อมูลจะคืนสอง field เป็น `null` โดยไม่แทนด้วยผู้ติดต่อหรือผู้สร้างคำขอ
 
 #### Request Fields
 
@@ -705,6 +708,8 @@ Minimal request JSON:
 | `data.currentMeasurementPoints`  | object[]                                                           | yes      | snapshot จุดตรวจวัดก่อนแก้; กลุ่มพารามิเตอร์ current derive จาก `parameters`; เป็น `null` สำหรับ `BASIC_INFO` |
 | `data.proposedMeasurementPoints` | object[]                                                           | yes      | snapshot จุดตรวจวัดที่เสนอ โดยคง `details.*Parameters` ตามคำขอ; เป็น `null` สำหรับ `BASIC_INFO` |
 | `data.contactPersons`            | object[]                                                           | no       | ผู้ติดต่อประสานงานจาก source connection request ของระบบที่แก้ไข; fallback `[]` |
+| `data.informationProviderName` | string | yes | ชื่อผู้ให้ข้อมูลหรือผู้รับมอบอำนาจจาก source connection request; `null` เมื่อไม่มีข้อมูล |
+| `data.informationProviderPosition` | string | yes | ตำแหน่งจาก source row เดียวกับชื่อ; `null` เมื่อไม่มีข้อมูล |
 | `data.notificationEmails`        | string[]                                                           | no       | อีเมลสำหรับแจ้งเตือนโรงงาน; fallback `[]`                                       |
 | `data.officerNotificationEmails` | string[]                                                           | no       | อีเมลสำหรับแจ้งเตือนเจ้าหน้าที่; fallback `[]`                                  |
 | `data.submittedBy`           | number                                                                | no       | user ID ผู้ส่งรอบล่าสุด                                                          |
@@ -759,6 +764,8 @@ Minimal response (`200 OK`):
     "contactPersons": [],
     "notificationEmails": [],
     "officerNotificationEmails": [],
+    "informationProviderName": null,
+    "informationProviderPosition": null,
     "submittedBy": 42,
     "submittedAt": "2026-08-24T02:00:00.000Z",
     "reviewedBy": 77,
@@ -821,7 +828,7 @@ Minimal response (`200 OK`):
 
 คืน `data` ด้วย shared form contract เดียวกับ [Connection-request form prefill](../connection-requests/README.md#connection-request-form-prefill) แต่ overlay proposed values ของคำขอแก้ไขบน current/live POMS: `BASIC_INFO` ใช้เฉพาะ 7 editable fields จาก proposed factory profile โดยชื่อ ที่อยู่ และข้อมูลอ่านอย่างเดียวยึด current/live รวมถึงเมื่อเปิดคำขอเก่า; `MEASUREMENT_POINTS` ใช้ proposed measurement points และใช้ 7 editable fields จาก proposed factory profile เมื่อมีการแก้ข้อมูลทั่วไป; ถ้าแก้เฉพาะจุดใช้ข้อมูลทั่วไป current/live และทั้งสองแบบใช้ `requestNote` เป็น `remarks` (`BASIC_INFO` ที่สร้างหรือ resubmit ภายใต้ contract นี้คืน `null`)
 
-endpoint edit-request form นี้ยังไม่ hydrate ข้อมูลผู้ติดต่อจากคำขอเชื่อมต่อต้นทาง และไม่คืน `id`, `requestNo`, `status`, `revisionReason` หรือ audit metadata ใน `data`; `contactName`/`contactPhone` เป็น `""`, `contactEmail` เป็น `null` และ contact/email arrays เป็น `[]`
+endpoint edit-request form อ่านผู้ติดต่อ อีเมลแจ้งเตือน และ `informationProviderName`/`informationProviderPosition` จากคำขอเชื่อมต่อต้นทางล่าสุดของ `systemType` ที่เลือก เช่นเดียวกับ factory form; ถ้าไม่มีต้นทางใช้ `""`, `[]` หรือ `null` ตาม shared contract ส่วน proposed values ของจุดตรวจวัดยังคงเดิม และไม่คืน `id`, `requestNo`, `status`, `revisionReason` หรือ audit metadata ใน `data`
 
 ชื่อ ที่อยู่ และ identity fields ใน prefill เป็นข้อมูลอ่านอย่างเดียวสำหรับ `BASIC_INFO`; ให้ส่งกลับเฉพาะ [7 editable fields](#shared-basic-info-fields) รวมถึงเมื่อเปิดแก้ไขคำขอเก่า ส่วน `remarks` ยังคงเป็น field ของ shared response แต่ห้ามส่งใน `BASIC_INFO` resubmission
 
@@ -856,6 +863,8 @@ Minimal response (`200 OK`):
     "contactPhone": "",
     "notificationEmails": [],
     "officerNotificationEmails": [],
+    "informationProviderName": null,
+    "informationProviderPosition": null,
     "measurementPoints": [
       {
         "pointName": "ปล่อง A",

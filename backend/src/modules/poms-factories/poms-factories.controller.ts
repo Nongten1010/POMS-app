@@ -239,7 +239,7 @@ function requireActorUserId(req: Request): number {
 }
 
 function requireAdminReviewActor(req: Request): void {
-  if (req.user?.userType === 'admin' && req.user.roles?.includes('admin')) return;
+  if (req.user?.roles?.includes('admin')) return;
   throw new ForbiddenError('POMS factory edit request review is limited to admin users');
 }
 

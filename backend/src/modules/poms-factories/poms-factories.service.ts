@@ -168,15 +168,25 @@ export const pomsFactoriesService = {
       regionalAccess,
     });
     if (!request) throw new NotFoundError('POMS factory edit request not found');
-    const systemType = resolveEditRequestContactSystemType(request);
-    const formContacts = systemType
-      ? await pomsFactoriesRepository.findFactoryFormContacts(request.eligibleFactoryId, systemType)
-      : null;
+    // BASIC_INFO is factory-wide; null means an ambiguous measurement-point request.
+    const systemType =
+      request.formType === POMS_FACTORY_EDIT_REQUEST_FORM_TYPE.BASIC_INFO
+        ? undefined
+        : resolveEditRequestContactSystemType(request);
+    const formContacts =
+      systemType === null
+        ? null
+        : await pomsFactoriesRepository.findFactoryFormContacts(
+            request.eligibleFactoryId,
+            systemType,
+          );
     return {
       ...request,
       contactPersons: (formContacts?.contactPersons ?? []).map((contact) => ({ ...contact })),
       notificationEmails: [...(formContacts?.notificationEmails ?? [])],
       officerNotificationEmails: [...(formContacts?.officerNotificationEmails ?? [])],
+      informationProviderName: formContacts?.informationProviderName ?? null,
+      informationProviderPosition: formContacts?.informationProviderPosition ?? null,
       currentMeasurementPoints:
         request.currentMeasurementPoints?.map((point) => ({
           ...point,
@@ -227,7 +237,17 @@ export const pomsFactoriesService = {
           current.measurementPoints)
         : current.measurementPoints;
     const systemType = resolveFormSystemType(points, query.systemType);
-    return toPomsConnectionRequestForm(profile, points, systemType, request.requestNote);
+    const formContacts = await pomsFactoriesRepository.findFactoryFormContacts(
+      request.eligibleFactoryId,
+      systemType,
+    );
+    return toPomsConnectionRequestForm(
+      profile,
+      points,
+      systemType,
+      request.requestNote,
+      formContacts,
+    );
   },
 
   async resubmitEditRequest(
@@ -420,6 +440,8 @@ function toPomsConnectionRequestForm(
     contactPersons: (formContacts?.contactPersons ?? []).map((contact) => ({ ...contact })),
     notificationEmails: [...(formContacts?.notificationEmails ?? [])],
     officerNotificationEmails: [...(formContacts?.officerNotificationEmails ?? [])],
+    informationProviderName: formContacts?.informationProviderName ?? null,
+    informationProviderPosition: formContacts?.informationProviderPosition ?? null,
     measurementPoints: mergeFactoryProfileDocuments(
       measurementPoints,
       profile.factoryFrontPhotos,
@@ -705,6 +727,6 @@ function editableMeasurementPoint(point: PomsMeasurementPointDTO) {
 }
 
 function ensureAdminReviewActor(actor: PomsFactoryReviewActorContext): void {
-  if (actor.userType === 'admin' && actor.roles.includes('admin')) return;
+  if (actor.roles.includes('admin')) return;
   throw new ForbiddenError('POMS factory edit request review is limited to admin users');
 }
