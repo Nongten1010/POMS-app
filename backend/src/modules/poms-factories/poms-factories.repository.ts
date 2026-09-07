@@ -17,6 +17,8 @@ import {
 } from '../connection-requests/connection-request-eia';
 import {
   CONNECTION_REQUEST_STATUS,
+  type ConnectionSystemType,
+  type ContactPersonInput,
   type MeasurementInstrumentsInput,
   type OperatorFactoryTableRowDTO,
   type MeasurementPointDetailsInput,
@@ -27,6 +29,7 @@ import type {
   ListPomsFactoryEditRequestsQuery,
   PomsFactoryDetailDTO,
   PomsFactoryEditRequestAction,
+  PomsFactoryFormContactsDTO,
   PomsFactoryEditRequestDTO,
   PomsFactoryEditRequestEventDTO,
   PomsFactoryEditRequestFormType,
@@ -84,6 +87,15 @@ interface ConnectedFactoryRow {
   documents_json: string | null;
   instruments_json: string | null;
   updated_at: Date | string;
+}
+
+interface FactoryFormContactRow {
+  contact_name: string;
+  contact_phone: string;
+  contact_email: string | null;
+  contact_persons_json: string | null;
+  notification_emails_json: string | null;
+  officer_notification_emails_json: string | null;
 }
 
 interface EditRequestRow {
@@ -186,6 +198,14 @@ export const pomsFactoriesRepository = {
       uniqueRows,
       await pendingCountForFactory(uniqueRows[0].eligible_factory_id),
     );
+  },
+
+  async findFactoryFormContacts(
+    eligibleFactoryId: number,
+    systemType: ConnectionSystemType,
+  ): Promise<PomsFactoryFormContactsDTO | null> {
+    const row = await buildFactoryFormContactsQuery(eligibleFactoryId, systemType).first();
+    return row ? toPomsFactoryFormContacts(row) : null;
   },
 
   async findOpenEditRequestForFactory(
@@ -519,6 +539,19 @@ export function buildConnectedFactoryRowsQueryForTests(
   return buildConnectedFactoryRowsQuery(access, search);
 }
 
+export function buildFactoryFormContactsQueryForTests(
+  eligibleFactoryId: number,
+  systemType: ConnectionSystemType,
+): Knex.QueryBuilder<FactoryFormContactRow, FactoryFormContactRow[]> {
+  return buildFactoryFormContactsQuery(eligibleFactoryId, systemType);
+}
+
+export function toPomsFactoryFormContactsForTests(
+  row: FactoryFormContactRow,
+): PomsFactoryFormContactsDTO {
+  return toPomsFactoryFormContacts(row);
+}
+
 export function buildLockedCurrentFactoryProfileQueryForTests(
   executor: DbExecutor,
   eligibleFactoryId: number,
@@ -779,6 +812,31 @@ function immutableMeasurementPointState(point: PomsMeasurementPointDTO) {
     parameters: point.parameters,
     updatedAt: point.updatedAt,
   };
+}
+
+function buildFactoryFormContactsQuery(
+  eligibleFactoryId: number,
+  systemType: ConnectionSystemType,
+): Knex.QueryBuilder<FactoryFormContactRow, FactoryFormContactRow[]> {
+  return db<FactoryFormContactRow>('cems_wpms_connected_measurement_points as cp')
+    .innerJoin('cems_wpms_connection_requests as req', 'req.id', 'cp.source_request_id')
+    .where('cp.eligible_factory_id', eligibleFactoryId)
+    .where('cp.system_type', systemType)
+    .whereNull('cp.deleted_at')
+    .whereNull('req.deleted_at')
+    .select(
+      'req.contact_name',
+      'req.contact_phone',
+      'req.contact_email',
+      'req.contact_persons_json',
+      'req.notification_emails_json',
+      'req.officer_notification_emails_json',
+    )
+    .orderBy('req.created_at', 'desc')
+    .orderBy('req.id', 'desc') as unknown as Knex.QueryBuilder<
+    FactoryFormContactRow,
+    FactoryFormContactRow[]
+  >;
 }
 
 function editableMeasurementPointState(point: PomsMeasurementPointDTO) {
@@ -1080,6 +1138,47 @@ function toFactoryDetail(
     measurementPointCount: rows.length,
     pendingEditRequestCount,
     measurementPoints: rows.map(toMeasurementPointDTO),
+  };
+}
+
+function toPomsFactoryFormContacts(row: FactoryFormContactRow): PomsFactoryFormContactsDTO {
+  const parsedContacts = parseJsonArray<ContactPersonInput>(row.contact_persons_json).filter(
+    (contact) =>
+      typeof contact?.name === 'string' &&
+      contact.name.trim().length > 0 &&
+      typeof contact.phone === 'string' &&
+      contact.phone.trim().length > 0,
+  );
+  const contactPersons =
+    parsedContacts.length > 0
+      ? parsedContacts
+      : row.contact_name.trim() && row.contact_phone.trim()
+        ? [
+            {
+              name: row.contact_name,
+              phone: row.contact_phone,
+              email: row.contact_email,
+              position: null,
+            },
+          ]
+        : [];
+  const notificationEmails = parseJsonArray<string>(row.notification_emails_json).filter(
+    (email) => typeof email === 'string' && email.length > 0,
+  );
+  return {
+    contactName: row.contact_name,
+    contactPhone: row.contact_phone,
+    contactEmail: row.contact_email,
+    contactPersons,
+    notificationEmails:
+      notificationEmails.length > 0
+        ? notificationEmails
+        : row.contact_email
+          ? [row.contact_email]
+          : [],
+    officerNotificationEmails: parseJsonArray<string>(row.officer_notification_emails_json).filter(
+      (email) => typeof email === 'string' && email.length > 0,
+    ),
   };
 }
 

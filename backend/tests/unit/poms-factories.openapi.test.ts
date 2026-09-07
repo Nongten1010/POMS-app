@@ -517,6 +517,9 @@ describe('POMS factory master-data OpenAPI contract', () => {
     expect(operation('/poms-factories/{factoryId}/form', 'get').description).toEqual(
       expect.stringContaining('eligible_factories.factory_type_sequence'),
     );
+    expect(operation('/poms-factories/{factoryId}/form', 'get').description).toEqual(
+      expect.stringContaining('source_request_id'),
+    );
 
     const editRequest = asObject(allSchemas.PomsFactoryEditRequest, 'edit request');
     const editRequestProperties = asObject(editRequest.properties, 'edit request properties');

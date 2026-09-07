@@ -4,6 +4,7 @@ jest.mock('../../src/modules/poms-factories/poms-factories.repository', () => ({
   pomsFactoriesRepository: {
     listFactories: jest.fn(),
     findFactoryDetail: jest.fn(),
+    findFactoryFormContacts: jest.fn(),
     findOpenEditRequestForFactory: jest.fn(),
     createEditRequest: jest.fn(),
     listEditRequests: jest.fn(),
@@ -85,6 +86,10 @@ describe('pomsFactoriesService edit-request workflow', () => {
         systemType: 'CEMS',
         contactName: '',
         contactPhone: '',
+        contactEmail: null,
+        contactPersons: [],
+        notificationEmails: [],
+        officerNotificationEmails: [],
         measurementPoints: [
           expect.objectContaining({
             pointName: 'ปล่อง A',
@@ -145,6 +150,61 @@ describe('pomsFactoriesService edit-request workflow', () => {
         industrySubOrder: '00125,00393',
         businessActivity: 'ประกอบกิจการทดสอบ',
         systemType: 'WPMS',
+      }),
+    );
+  });
+
+  it('prefills contacts and notification emails from the source request for the selected system', async () => {
+    const detail = factoryDetail();
+    mockedRepository.findFactoryDetail.mockResolvedValue({
+      ...detail,
+      systemTypes: ['WPMS'],
+      measurementPoints: detail.measurementPoints.map((point) => ({
+        ...point,
+        systemType: 'WPMS',
+        pointType: 'WASTEWATER',
+      })),
+    });
+    mockedRepository.findFactoryFormContacts.mockResolvedValue({
+      contactName: 'สมหญิง ใจดี',
+      contactPhone: '0812345678',
+      contactEmail: 'contact@example.com',
+      contactPersons: [
+        {
+          name: 'สมหญิง ใจดี',
+          phone: '0812345678',
+          email: 'contact@example.com',
+          position: 'ผู้จัดการสิ่งแวดล้อม',
+        },
+      ],
+      notificationEmails: ['factory-alert@example.com'],
+      officerNotificationEmails: ['officer-alert@example.go.th'],
+    });
+
+    const result = await pomsFactoriesService.getFactoryForm(
+      'factory-001',
+      42,
+      ownFactoryScope,
+      { formType: 'MEASUREMENT_POINTS', systemType: 'WPMS' },
+      null,
+    );
+
+    expect(mockedRepository.findFactoryFormContacts).toHaveBeenCalledWith(7, 'WPMS');
+    expect(result).toEqual(
+      expect.objectContaining({
+        contactName: 'สมหญิง ใจดี',
+        contactPhone: '0812345678',
+        contactEmail: 'contact@example.com',
+        contactPersons: [
+          expect.objectContaining({
+            name: 'สมหญิง ใจดี',
+            phone: '0812345678',
+            email: 'contact@example.com',
+            position: 'ผู้จัดการสิ่งแวดล้อม',
+          }),
+        ],
+        notificationEmails: ['factory-alert@example.com'],
+        officerNotificationEmails: ['officer-alert@example.go.th'],
       }),
     );
   });

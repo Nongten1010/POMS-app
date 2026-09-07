@@ -19,6 +19,7 @@ import type {
   CreateAnyPomsFactoryEditRequestInput,
   ListPomsFactoryEditRequestsQuery,
   PomsFactoryDetailDTO,
+  PomsFactoryFormContactsDTO,
   PomsFactoryEditRequestDTO,
   PomsFactoryReviewActorContext,
   PomsFactoryProfileDTO,
@@ -74,7 +75,17 @@ export const pomsFactoriesService = {
   ): Promise<ConnectionRequestFormDTO> {
     const current = await this.getFactoryDetail(factoryId, actorUserId, viewScope, regionalAccess);
     const systemType = resolveFormSystemType(current.measurementPoints, query.systemType);
-    return toPomsConnectionRequestForm(current, current.measurementPoints, systemType);
+    const formContacts = await pomsFactoriesRepository.findFactoryFormContacts(
+      current.eligibleFactoryId,
+      systemType,
+    );
+    return toPomsConnectionRequestForm(
+      current,
+      current.measurementPoints,
+      systemType,
+      undefined,
+      formContacts,
+    );
   },
 
   async createEditRequest(
@@ -341,6 +352,7 @@ function toPomsConnectionRequestForm(
   points: PomsMeasurementPointDTO[],
   systemType: ConnectionSystemType,
   remarks?: string | null,
+  formContacts?: PomsFactoryFormContactsDTO | null,
 ): ConnectionRequestFormDTO {
   const baseForm = emptyConnectionRequestForm(profile, systemType);
   const measurementPoints = points
@@ -381,6 +393,12 @@ function toPomsConnectionRequestForm(
     latitude: profile.latitude,
     longitude: profile.longitude,
     systemType,
+    contactName: formContacts?.contactName ?? baseForm.contactName,
+    contactPhone: formContacts?.contactPhone ?? baseForm.contactPhone,
+    contactEmail: formContacts?.contactEmail ?? baseForm.contactEmail,
+    contactPersons: (formContacts?.contactPersons ?? []).map((contact) => ({ ...contact })),
+    notificationEmails: [...(formContacts?.notificationEmails ?? [])],
+    officerNotificationEmails: [...(formContacts?.officerNotificationEmails ?? [])],
     measurementPoints: mergeFactoryProfileDocuments(
       measurementPoints,
       profile.factoryFrontPhotos,
@@ -424,6 +442,7 @@ function emptyConnectionRequestForm(
     contactName: '',
     contactPhone: '',
     contactEmail: null,
+    contactPersons: [],
     notificationEmails: [],
     officerNotificationEmails: [],
     informationProviderName: null,

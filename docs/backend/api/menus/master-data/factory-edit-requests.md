@@ -319,9 +319,9 @@ Minimal response (`200 OK`):
 
 ### `GET /api/v1/poms-factories/:factoryId/form`
 
-คืน prefill จาก current/live POMS เท่านั้น โดยใช้ชื่อและ shape ของ `data` ตรงกับ [Connection-request form prefill](../connection-requests/README.md#connection-request-form-prefill) ไม่คืน wrapper `formDefaults`, workflow metadata, `factoryAddress`, `systemTypes`, `connectedPointId` หรือ `sourceMeasurementPointId`
+คืน prefill โดยให้ข้อมูลโรงงานและจุดตรวจวัดมาจาก current/live POMS ใช้ชื่อและ shape ของ `data` ตรงกับ [Connection-request form prefill](../connection-requests/README.md#connection-request-form-prefill) และไม่คืน wrapper `formDefaults`, workflow metadata, `factoryAddress`, `systemTypes`, `connectedPointId` หรือ `sourceMeasurementPointId`
 
-ข้อมูลระดับโรงงานและจุดตรวจวัดยึด active `cems_wpms_connected_measurement_points`; endpoint นี้ไม่ hydrate จากคำขอเชื่อมต่อเดิม ดังนั้น field ที่ POMS ไม่เก็บจะเป็น `null`, `[]` หรือ empty string ตาม type ของ shared contract
+ข้อมูลระดับโรงงานและจุดตรวจวัดยึด active `cems_wpms_connected_measurement_points`; เฉพาะ `contactPersons`, `notificationEmails` และ `officerNotificationEmails` (รวม legacy `contactName`, `contactPhone`, `contactEmail`) จะ hydrate จาก `cems_wpms_connection_requests` ที่ผูกผ่าน `source_request_id` ของ active point ล่าสุดใน `systemType` ที่เลือก ถ้าไม่มี source request ให้ fallback เป็น `null`, `[]` หรือ empty string ตาม type ของ shared contract
 
 response prefill ยังคืนชื่อโรงงาน ที่อยู่ เลขทะเบียน และ field อื่นของ shared contract เพื่อแสดงข้อมูลประกอบเท่านั้น สำหรับ `BASIC_INFO` ให้เปิดแก้เฉพาะ [7 fields ที่อนุญาต](#shared-basic-info-fields) และสร้าง write payload จาก allowlist นี้ ห้ามส่ง response ทั้ง object กลับเป็น create/resubmission body; `remarks` ใน response ไม่ใช่ field ที่แก้ได้ของ `BASIC_INFO`
 
@@ -342,15 +342,15 @@ curl --request GET \
 
 #### POMS Source And Nullability
 
-| Form field | Current/live source | Fallback เมื่อ POMS ไม่เก็บ |
-| ---------- | ------------------- | ---------------------------- |
+| Form field | Source | Fallback เมื่อไม่มีข้อมูล |
+| ---------- | ------ | -------------------------- |
 | `requestType` | compatibility field ของ shared form contract | คงที่เป็น `NEW_CONNECTION`; ไม่ใช่สถานะหรือประเภทคำขอแก้ไข POMS |
 | `factoryId`, `factoryName`, `factoryRegistrationNo`, `address`, EIA/project, ชื่อพื้นที่, พิกัดโรงงาน | current/live factory profile | `null` สำหรับ field nullable |
 | `measurementPoints[]` | active points ของ `systemType` ที่เลือก | ถ้าไม่มี active point ตอบ `404` และไม่เปิดฟอร์ม |
 | `industryMainOrder`, `industryMainOrderLabel`, `industrySubOrder`, `businessActivity` | active `eligible_factories.factory_type_sequence` และ `eligible_factories.business_activity` ที่ผูกกับ current/live POMS | `null` เมื่อ eligible metadata ไม่มีค่า |
 | รหัสพื้นที่, พิกัด/คำอธิบายเฉพาะจุด, ผู้ให้ข้อมูล | POMS ไม่เก็บ | `null` |
-| `contactName`, `contactPhone` | POMS ไม่เก็บ | `""` |
-| `contactPersons`, `notificationEmails`, `officerNotificationEmails` | POMS ไม่เก็บ | omit `contactPersons`; email arrays เป็น `[]` |
+| `contactName`, `contactPhone`, `contactEmail` | source connection request ล่าสุดของ active point ใน `systemType` ที่เลือก | `""`, `""`, `null` |
+| `contactPersons`, `notificationEmails`, `officerNotificationEmails` | JSON snapshots ใน source connection request เดียวกัน | `[]`; `notificationEmails` fallback จาก `contactEmail` เมื่อ JSON ว่าง |
 | `remarks` | ไม่มีคำขอแก้ไขใน endpoint นี้ | `null` |
 
 `factoryFrontPhotos` และ `factoryLogo` ไม่เป็น top-level field ใน shared form contract; metadata ที่มีจะรวมใน `measurementPoints[0].documentsAndImages`
@@ -371,10 +371,19 @@ Minimal response (`200 OK`):
     "businessActivity": "ผลิตผลิตภัณฑ์ตัวอย่าง",
     "address": "99 หมู่ 1",
     "systemType": "CEMS",
-    "contactName": "",
-    "contactPhone": "",
-    "notificationEmails": [],
-    "officerNotificationEmails": [],
+    "contactName": "สมหญิง ใจดี",
+    "contactPhone": "0812345678",
+    "contactEmail": "contact@example.com",
+    "contactPersons": [
+      {
+        "name": "สมหญิง ใจดี",
+        "phone": "0812345678",
+        "email": "contact@example.com",
+        "position": "ผู้จัดการสิ่งแวดล้อม"
+      }
+    ],
+    "notificationEmails": ["factory-alert@example.com"],
+    "officerNotificationEmails": ["officer-alert@example.go.th"],
     "measurementPoints": [
       {
         "pointName": "ปล่อง A",
@@ -758,7 +767,7 @@ Minimal response (`200 OK`):
 
 คืน `data` ด้วย shared form contract เดียวกับ [Connection-request form prefill](../connection-requests/README.md#connection-request-form-prefill) แต่ overlay proposed values ของคำขอแก้ไขบน current/live POMS: `BASIC_INFO` ใช้เฉพาะ 7 editable fields จาก proposed factory profile โดยชื่อ ที่อยู่ และข้อมูลอ่านอย่างเดียวยึด current/live รวมถึงเมื่อเปิดคำขอเก่า; `MEASUREMENT_POINTS` ใช้ proposed measurement points และใช้ 7 editable fields จาก proposed factory profile เมื่อมีการแก้ข้อมูลทั่วไป; ถ้าแก้เฉพาะจุดใช้ข้อมูลทั่วไป current/live และทั้งสองแบบใช้ `requestNote` เป็น `remarks` (`BASIC_INFO` ที่สร้างหรือ resubmit ภายใต้ contract นี้คืน `null`)
 
-ไม่ hydrate field ที่ขาดจากคำขอเชื่อมต่อเดิม และไม่คืน `id`, `requestNo`, `status`, `revisionReason` หรือ audit metadata ใน `data`; field ที่ POMS ไม่เก็บใช้ null/empty semantics ตาม [POMS Source And Nullability](#poms-source-and-nullability)
+endpoint edit-request form นี้ยังไม่ hydrate ข้อมูลผู้ติดต่อจากคำขอเชื่อมต่อต้นทาง และไม่คืน `id`, `requestNo`, `status`, `revisionReason` หรือ audit metadata ใน `data`; `contactName`/`contactPhone` เป็น `""`, `contactEmail` เป็น `null` และ contact/email arrays เป็น `[]`
 
 ชื่อ ที่อยู่ และ identity fields ใน prefill เป็นข้อมูลอ่านอย่างเดียวสำหรับ `BASIC_INFO`; ให้ส่งกลับเฉพาะ [7 editable fields](#shared-basic-info-fields) รวมถึงเมื่อเปิดแก้ไขคำขอเก่า ส่วน `remarks` ยังคงเป็น field ของ shared response แต่ห้ามส่งใน `BASIC_INFO` resubmission
 
@@ -1062,6 +1071,7 @@ Approval target mapping สำหรับ `BASIC_INFO` (ใช้ allowlist น
 | Runtime OpenAPI        | [`poms.openapi.ts`](../../../../../backend/src/modules/api-docs/poms.openapi.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | Migrations             | [`0100_create_poms_factory_edit_requests.ts`](../../../../../backend/src/db/migrations/0100_create_poms_factory_edit_requests.ts), [`0106_extend_poms_factory_edit_requests_for_measurement_points.ts`](../../../../../backend/src/db/migrations/0106_extend_poms_factory_edit_requests_for_measurement_points.ts), [`0107_enforce_admin_only_factory_approval.ts`](../../../../../backend/src/db/migrations/0107_enforce_admin_only_factory_approval.ts), [`0109_add_poms_factory_edit_request_cancellation.ts`](../../../../../backend/src/db/migrations/0109_add_poms_factory_edit_request_cancellation.ts) |
 | Tests                  | [`poms-factories.route.test.ts`](../../../../../backend/tests/unit/poms-factories.route.test.ts), [`poms-factories.service.test.ts`](../../../../../backend/tests/unit/poms-factories.service.test.ts), [`poms-factories.repository.test.ts`](../../../../../backend/tests/unit/poms-factories.repository.test.ts), [`poms-factories.cancel.service.test.ts`](../../../../../backend/tests/unit/poms-factories.cancel.service.test.ts), [`poms-factories.cancel.repository.test.ts`](../../../../../backend/tests/unit/poms-factories.cancel.repository.test.ts), [`poms-factory-document-upload.route.test.ts`](../../../../../backend/tests/unit/poms-factory-document-upload.route.test.ts), [`poms-measurement-point-edit-requests.validator.test.ts`](../../../../../backend/tests/unit/poms-measurement-point-edit-requests.validator.test.ts), [`poms-measurement-point-edit-requests.migration.test.ts`](../../../../../backend/tests/unit/poms-measurement-point-edit-requests.migration.test.ts), [`factory-approval-admin-only-migration.test.ts`](../../../../../backend/tests/unit/factory-approval-admin-only-migration.test.ts), [`poms-factory-edit-request-cancellation-migration.test.ts`](../../../../../backend/tests/unit/poms-factory-edit-request-cancellation-migration.test.ts), [`poms-factories.openapi.test.ts`](../../../../../backend/tests/unit/poms-factories.openapi.test.ts) |
+| Evidence               | [POMS factory form contact prefill TDD](../../../evidence/master-data/poms-factory-form-contact-prefill.tdd.md) |
 
 Breaking change ด้าน editable fields ของ `BASIC_INFO` ถูกบันทึกใน [API changelog](../../CHANGELOG.md#2026-09-05--จำกัด-basic_info-ให้แก้ได้เฉพาะ-7-fields)
 

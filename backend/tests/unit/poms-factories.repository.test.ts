@@ -3,10 +3,12 @@ import {
   buildApprovedPomsFactoryProfilePatchesForTests,
   buildApprovedMeasurementPointWritePatchForTests,
   buildConnectedFactoryRowsQueryForTests,
+  buildFactoryFormContactsQueryForTests,
   buildEditRequestsQueryForTests,
   buildPendingRequestCountsQueryForTests,
   summarizeConnectedFactoryRowsForTests,
   toPomsFactoryDetailForTests,
+  toPomsFactoryFormContactsForTests,
   toPomsParameterDisplayNamesForTests,
 } from '../../src/modules/poms-factories/poms-factories.repository';
 
@@ -28,6 +30,81 @@ describe('pomsFactoriesRepository access and approved profile patches', () => {
     expect(sql).toContain('[ef].[factory_type_sequence]');
     expect(sql).not.toContain('cems_wpms_connection_requests');
     expect(sql).not.toContain('user_juristics');
+  });
+
+  it('reads form contacts from the latest source request for the selected system', () => {
+    const compiled = buildFactoryFormContactsQueryForTests(7, 'WPMS').toSQL();
+    const sql = compiled.sql.toLowerCase();
+
+    expect(sql).toContain('from [cems_wpms_connected_measurement_points] as [cp]');
+    expect(sql).toContain('inner join [cems_wpms_connection_requests] as [req]');
+    expect(sql).toContain('[cp].[eligible_factory_id] = ?');
+    expect(sql).toContain('[cp].[system_type] = ?');
+    expect(sql).toContain('[cp].[deleted_at] is null');
+    expect(sql).toContain('[req].[deleted_at] is null');
+    expect(sql).toContain('order by [req].[created_at] desc, [req].[id] desc');
+    expect(compiled.bindings).toEqual(expect.arrayContaining([7, 'WPMS']));
+  });
+
+  it('maps source-request contacts and notification emails for form prefill', () => {
+    const result = toPomsFactoryFormContactsForTests({
+      contact_name: 'สมหญิง ใจดี',
+      contact_phone: '0812345678',
+      contact_email: 'contact@example.com',
+      contact_persons_json: JSON.stringify([
+        {
+          name: 'สมหญิง ใจดี',
+          phone: '0812345678',
+          email: 'contact@example.com',
+          position: 'ผู้จัดการสิ่งแวดล้อม',
+        },
+      ]),
+      notification_emails_json: JSON.stringify(['factory-alert@example.com']),
+      officer_notification_emails_json: JSON.stringify(['officer-alert@example.go.th']),
+    });
+
+    expect(result).toEqual({
+      contactName: 'สมหญิง ใจดี',
+      contactPhone: '0812345678',
+      contactEmail: 'contact@example.com',
+      contactPersons: [
+        {
+          name: 'สมหญิง ใจดี',
+          phone: '0812345678',
+          email: 'contact@example.com',
+          position: 'ผู้จัดการสิ่งแวดล้อม',
+        },
+      ],
+      notificationEmails: ['factory-alert@example.com'],
+      officerNotificationEmails: ['officer-alert@example.go.th'],
+    });
+  });
+
+  it('falls back to legacy contact fields when contact and factory-email JSON are empty', () => {
+    const result = toPomsFactoryFormContactsForTests({
+      contact_name: 'สมชาย ใจดี',
+      contact_phone: '0899999999',
+      contact_email: 'legacy@example.com',
+      contact_persons_json: null,
+      notification_emails_json: null,
+      officer_notification_emails_json: null,
+    });
+
+    expect(result).toEqual({
+      contactName: 'สมชาย ใจดี',
+      contactPhone: '0899999999',
+      contactEmail: 'legacy@example.com',
+      contactPersons: [
+        {
+          name: 'สมชาย ใจดี',
+          phone: '0899999999',
+          email: 'legacy@example.com',
+          position: null,
+        },
+      ],
+      notificationEmails: ['legacy@example.com'],
+      officerNotificationEmails: [],
+    });
   });
 
   it('searches by both current/live and eligible registration numbers', () => {

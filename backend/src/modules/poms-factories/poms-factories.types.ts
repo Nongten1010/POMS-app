@@ -1,5 +1,6 @@
 import type { ConnectionRequestEiaAssessment } from '../connection-requests/connection-request-eia';
 import type {
+  ContactPersonInput,
   MeasurementInstrumentsInput,
   MeasurementPointDetailsInput,
   RequestDocumentImageInput,
@@ -102,6 +103,15 @@ export interface PomsMeasurementPointDTO {
 
 export interface PomsFactoryDetailDTO extends PomsFactorySummaryDTO {
   measurementPoints: PomsMeasurementPointDTO[];
+}
+
+export interface PomsFactoryFormContactsDTO {
+  contactName: string;
+  contactPhone: string;
+  contactEmail: string | null;
+  contactPersons: ContactPersonInput[];
+  notificationEmails: string[];
+  officerNotificationEmails: string[];
 }
 
 export interface PomsFactoryProfilePatchInput {

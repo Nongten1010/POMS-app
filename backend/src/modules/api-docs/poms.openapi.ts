@@ -4871,7 +4871,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Get current/live POMS factory as connection-request form',
       operationId: 'getPomsFactoryForm',
       description:
-        'คืน canonical form-prefill field names ชุดเดียวกับ GET /cems-wpms-requests/{id}/form และไม่คืน POMS/workflow IDs. กลุ่มอุตสาหกรรมเติมจาก active eligible_factories.factory_type_sequence และ eligible_factories.business_activity ที่ผูกกับ current/live POMS. Permission: factories:view; ถ้าโรงงานมีทั้ง CEMS และ WPMS ต้องระบุ systemType',
+        'คืน canonical form-prefill field names ชุดเดียวกับ GET /cems-wpms-requests/{id}/form และไม่คืน POMS/workflow IDs. ข้อมูลโรงงาน/จุดตรวจวัดมาจาก current/live POMS และ active eligible metadata; contactPersons, notificationEmails และ officerNotificationEmails hydrate จาก cems_wpms_connection_requests ที่ผูกผ่าน active point.source_request_id ล่าสุดของ systemType ที่เลือก โดย fallback เป็นค่าว่างเมื่อไม่มี source request. Permission: factories:view; ถ้าโรงงานมีทั้ง CEMS และ WPMS ต้องระบุ systemType. กลุ่มอุตสาหกรรมเติมจาก active eligible_factories.factory_type_sequence และ eligible_factories.business_activity',
       parameters: [
         factoryIdParameter,
         queryEnum(

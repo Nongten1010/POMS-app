@@ -32,6 +32,10 @@
 - [ผู้ประกอบการแจ้งความประสงค์ขอเพิ่มโรงงานเข้าข่าย](./eligible-factories/eligible-factory-requests.tdd.md)
 - [ข้อมูลต้นทาง Fac60k รายโรงงานสำหรับ flow อนุมัติ](./eligible-factories/fac60k-source-factory-lookup.tdd.md)
 
+## Master data
+
+- [POMS factory form คืนข้อมูลผู้ติดต่อและอีเมลแจ้งเตือน](./master-data/poms-factory-form-contact-prefill.tdd.md)
+
 ## Shared operations
 
 - [ล้างข้อมูลทดสอบด้วย SQL](./shared/test-data-cleanup.tdd.md)
