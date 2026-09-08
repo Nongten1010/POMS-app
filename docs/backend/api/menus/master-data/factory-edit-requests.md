@@ -1020,6 +1020,8 @@ Minimal response (`200 OK`):
 
 admin พิจารณาคำขอที่อยู่ใน `PENDING_REVIEW` หรือ `REVISED_PENDING_REVIEW` และอยู่ใน data scope ของ `factories:approve` ผู้พิจารณาต้องไม่ใช่ทั้งผู้สร้างคำขอครั้งแรก (`createdBy`) และผู้ส่งรอบล่าสุด (`submittedBy`) แม้จะเป็นคนละคนกัน
 
+เมื่อพิจารณาสำเร็จ response ใช้ detail contract เดียวกับ `GET /api/v1/poms-factories/edit-requests/:id` จึงคืน `contactPersons`, `notificationEmails`, `officerNotificationEmails`, `informationProviderName` และ `informationProviderPosition` ที่ hydrate จาก source connection request แล้วด้วย
+
 #### Request Fields
 
 | Field            | Type                                        | Required    | Rules                                                                              |
@@ -1051,6 +1053,11 @@ Minimal response (`200 OK`):
     "status": "APPROVED",
     "statusLabel": "อนุมัติแล้ว",
     "officerNote": "ตรวจสอบเอกสารแล้ว",
+    "contactPersons": [],
+    "notificationEmails": [],
+    "officerNotificationEmails": [],
+    "informationProviderName": "สมหญิง ใจดี",
+    "informationProviderPosition": "ผู้รับมอบอำนาจ",
     "reviewedBy": 77,
     "reviewedAt": "2026-08-24T05:00:00.000Z",
     "updatedAt": "2026-08-24T05:00:00.000Z"

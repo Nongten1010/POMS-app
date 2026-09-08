@@ -944,6 +944,89 @@ describe('pomsFactoriesService edit-request workflow', () => {
     );
   });
 
+  it('returns information-provider fields in a successful review response', async () => {
+    mockedRepository.findEditRequestById.mockResolvedValue(
+      editRequest('PENDING_REVIEW', { submittedBy: 42 }),
+    );
+    mockedRepository.findFactoryFormContacts.mockResolvedValue({
+      contactName: 'ผู้ติดต่อ',
+      contactPhone: '0800000000',
+      contactEmail: null,
+      contactPersons: [],
+      notificationEmails: [],
+      officerNotificationEmails: [],
+      informationProviderName: 'ผู้ให้ข้อมูล',
+      informationProviderPosition: 'กรรมการ',
+    });
+    mockedRepository.reviewEditRequest.mockResolvedValue(
+      editRequest('APPROVED', { submittedBy: 42, reviewedBy: 77 }),
+    );
+
+    const result = await pomsFactoriesService.reviewEditRequest(
+      19,
+      { decision: 'APPROVE' },
+      77,
+      { userType: 'officer', roles: ['admin'] },
+      { scope: 'ALL' },
+      null,
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        informationProviderName: 'ผู้ให้ข้อมูล',
+        informationProviderPosition: 'กรรมการ',
+      }),
+    );
+  });
+
+  it('returns the committed review snapshot when the revision changes before the transaction', async () => {
+    const point = factoryDetail().measurementPoints[0];
+    const committedPoint = {
+      ...point,
+      parameters: ['CO (ppm)', 'SO2 (ppm)'],
+      details: { eligibleParameters: ['CO (ppm)', 'SO2 (ppm)', 'NOx (ppm)'] },
+    };
+    mockedRepository.findEditRequestById.mockResolvedValue(
+      editRequest('PENDING_REVIEW', {
+        formType: 'MEASUREMENT_POINTS',
+        currentMeasurementPoints: [point],
+        proposedMeasurementPoints: [point],
+      }),
+    );
+    mockedRepository.reviewEditRequest.mockResolvedValue(
+      editRequest('APPROVED', {
+        formType: 'MEASUREMENT_POINTS',
+        revisionNo: 1,
+        reviewedBy: 77,
+        currentMeasurementPoints: [committedPoint],
+        proposedMeasurementPoints: [committedPoint],
+      }),
+    );
+
+    const result = await pomsFactoriesService.reviewEditRequest(
+      11,
+      { decision: 'APPROVE' },
+      77,
+      { userType: 'officer', roles: ['admin'] },
+      { scope: 'ALL' },
+      null,
+    );
+
+    expect(result.revisionNo).toBe(1);
+    expect(result.currentMeasurementPoints?.[0]).toEqual(
+      expect.objectContaining({
+        parameters: ['CO (ppm)', 'SO2 (ppm)'],
+        details: {
+          eligibleParameters: ['CO (ppm)', 'SO2 (ppm)', 'NOx (ppm)'],
+          connectedParameters: ['CO (ppm)', 'SO2 (ppm)'],
+          requestedParameters: ['CO (ppm)', 'SO2 (ppm)'],
+          pendingParameters: ['NOx (ppm)'],
+        },
+      }),
+    );
+    expect(result.proposedMeasurementPoints).toEqual([committedPoint]);
+  });
+
   it('rejects an admin user type without the admin role before accessing request data', async () => {
     await expect(
       pomsFactoriesService.reviewEditRequest(

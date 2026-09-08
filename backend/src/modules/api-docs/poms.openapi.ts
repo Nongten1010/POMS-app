@@ -5131,7 +5131,7 @@ const extraPaths: Record<string, OpenApiObject> = {
         schemaRef('PomsFactoryEditReviewRequest'),
         pomsFactoryEditReviewExample,
       ),
-      successSchema: schemaRef('PomsFactoryEditRequestResponse'),
+      successSchema: schemaRef('PomsFactoryEditRequestDetailResponse'),
       extraResponses: {
         '409': {
           description:

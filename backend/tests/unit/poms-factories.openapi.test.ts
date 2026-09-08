@@ -468,6 +468,9 @@ describe('POMS factory master-data OpenAPI contract', () => {
     expect(jsonSuccessSchema('/poms-factories/edit-requests/{id}', 'get')).toEqual({
       $ref: '#/components/schemas/PomsFactoryEditRequestDetailResponse',
     });
+    expect(jsonSuccessSchema('/poms-factories/edit-requests/{id}/review', 'post')).toEqual({
+      $ref: '#/components/schemas/PomsFactoryEditRequestDetailResponse',
+    });
 
     const detail = asObject(schemas().PomsFactoryEditRequestDetail, 'PomsFactoryEditRequestDetail');
     const properties = asObject(detail.properties, 'PomsFactoryEditRequestDetail properties');

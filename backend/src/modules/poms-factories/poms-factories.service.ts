@@ -320,7 +320,7 @@ export const pomsFactoriesService = {
     actor: PomsFactoryReviewActorContext,
     viewScope: AccessScope,
     regionalAccess?: RegionalAccessDTO | null,
-  ): Promise<PomsFactoryEditRequestDTO> {
+  ): Promise<PomsFactoryEditRequestDetailDTO> {
     ensureAdminReviewActor(actor);
     const request = await this.getEditRequest(id, actorUserId, viewScope, regionalAccess);
     if (
@@ -343,7 +343,20 @@ export const pomsFactoriesService = {
         'The request creator or latest submitter cannot review their own POMS factory edit request',
       );
     }
-    return pomsFactoriesRepository.reviewEditRequest(id, input, actorUserId);
+    const reviewed = await pomsFactoriesRepository.reviewEditRequest(id, input, actorUserId);
+    return {
+      ...reviewed,
+      contactPersons: request.contactPersons.map((contact) => ({ ...contact })),
+      notificationEmails: [...request.notificationEmails],
+      officerNotificationEmails: [...request.officerNotificationEmails],
+      informationProviderName: request.informationProviderName,
+      informationProviderPosition: request.informationProviderPosition,
+      currentMeasurementPoints:
+        reviewed.currentMeasurementPoints?.map((point) => ({
+          ...point,
+          details: deriveCurrentPomsParameterDetails(point),
+        })) ?? null,
+    };
   },
 };
 
@@ -637,7 +650,10 @@ function ensureProfileChanged(
   }
 }
 
-function hasProfileChanges(current: PomsFactoryProfileDTO, proposed: PomsFactoryProfileDTO): boolean {
+function hasProfileChanges(
+  current: PomsFactoryProfileDTO,
+  proposed: PomsFactoryProfileDTO,
+): boolean {
   return JSON.stringify(editableProfile(current)) !== JSON.stringify(editableProfile(proposed));
 }
 

@@ -60,7 +60,14 @@ describe('POMS factory routes', () => {
     mockedService.getEditRequestForm.mockResolvedValue(connectionForm());
     mockedService.resubmitEditRequest.mockResolvedValue(editRequest('REVISED_PENDING_REVIEW'));
     mockedService.cancelEditRequest.mockResolvedValue(editRequest('CANCELLED'));
-    mockedService.reviewEditRequest.mockResolvedValue(editRequest('APPROVED'));
+    mockedService.reviewEditRequest.mockResolvedValue({
+      ...editRequest('APPROVED'),
+      contactPersons: [],
+      notificationEmails: [],
+      officerNotificationEmails: [],
+      informationProviderName: 'ผู้ให้ข้อมูล',
+      informationProviderPosition: 'กรรมการ',
+    });
   });
 
   it('lists live POMS factories', async () => {
@@ -494,6 +501,12 @@ describe('POMS factory routes', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.data.status).toBe('APPROVED');
+      expect(response.body.data).toEqual(
+        expect.objectContaining({
+          informationProviderName: 'ผู้ให้ข้อมูล',
+          informationProviderPosition: 'กรรมการ',
+        }),
+      );
       expect(mockedService.reviewEditRequest).toHaveBeenCalledWith(
         11,
         { decision: 'APPROVE' },
