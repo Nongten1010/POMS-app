@@ -936,7 +936,7 @@ const componentSchemas: Record<string, OpenApiObject> = {
         items: { type: 'string' },
         maxItems: 100,
         description:
-          'ไม่บังคับให้ส่ง pendingParameters; ถ้าส่ง pendingParameters ด้วย ต้องเป็น subset และต้องเป็นชุดเดียวกับ measurementInstruments.parameters. Direct Connection ที่ CONNECT และมี pendingParameters จริงต้องมีพารามิเตอร์ที่เลือกอย่างน้อย 1 ค่า โดย requestedParameters เป็นค่าหลักเมื่อส่ง field นี้',
+          'ไม่บังคับให้ส่ง pendingParameters; requestedParameters เลือกนอก eligibleParameters และ pendingParameters ได้ แต่ต้องเป็นชุดเดียวกับ measurementInstruments.parameters. Direct Connection ที่ CONNECT และมี pendingParameters จริงต้องมีพารามิเตอร์ที่เลือกอย่างน้อย 1 ค่า โดย requestedParameters เป็นค่าหลักเมื่อส่ง field นี้',
       },
       timeSharingParameters: {
         type: 'array',

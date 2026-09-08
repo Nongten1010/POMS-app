@@ -1099,23 +1099,6 @@ function validateRequestedParameters(
     return;
   }
 
-  if (isStringArray(details.pendingParameters)) {
-    const pendingParameters = new Set(
-      details.pendingParameters.filter((parameter) => parameter !== PARAMETER_NONE_OPTION),
-    );
-    const unavailableParameters = requestedParameters.filter(
-      (parameter) => !pendingParameters.has(parameter),
-    );
-    if (unavailableParameters.length > 0) {
-      addDetailIssue(
-        ctx,
-        index,
-        'requestedParameters',
-        `requestedParameters must be selected from pendingParameters: ${unavailableParameters.join(', ')}`,
-      );
-    }
-  }
-
   const instrumentParameters =
     point.measurementInstruments?.parameters.map((parameter) => parameter.parameter) ?? [];
   if (!hasSameStringValues(requestedParameters, instrumentParameters)) {

@@ -232,7 +232,7 @@ criteria normalization สำคัญ
 - ค่า `ไม่มี` ใช้ได้เฉพาะกรณีเป็นตัวเดียวใน array
 - `requestedParameters` ห้ามมีค่า `ไม่มี`
 - ส่ง `requestedParameters` ได้โดยไม่ต้องส่ง `pendingParameters`
-- ถ้าส่งทั้ง `requestedParameters` และ `pendingParameters` ทุกค่าใน `requestedParameters` ต้องเป็น subset ของ `pendingParameters`
+- `requestedParameters` เลือกนอก `eligibleParameters` และ `pendingParameters` ได้ แม้ส่งรายการเหล่านี้มาด้วย API ไม่บังคับให้เป็น subset
 - ถ้าส่ง `requestedParameters` แล้ว `measurementInstruments.parameters` ต้องมีชุดค่าเดียวกันกับ `requestedParameters`
 - `hasTreatmentSystem` ถ้าส่งต้องเป็น `มี` หรือ `ไม่มี`
 - ถ้า `hasTreatmentSystem = "มี"` ต้องมี `treatmentSystem` และห้ามเป็น `ไม่มี`

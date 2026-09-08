@@ -380,23 +380,35 @@ describe('CEMS/WPMS monitoring-point form enhancements', () => {
     }
   });
 
-  it('rejects requested parameters that are not still pending', () => {
-    const payload = createCemsPayload();
-    payload.measurementPoints[0].details.requestedParameters = ['NOx (ppm)'];
+  it.each([createCemsPayload, createWpmsPayload])(
+    'accepts requested parameters outside eligible and pending parameters',
+    (createPayload) => {
+      const payload = createPayload();
+      const requested = payload.systemType === 'CEMS' ? 'NOx (ppm)' : 'pH';
+      payload.measurementPoints[0].details.requestedParameters = [requested];
+      const requestBody = {
+        ...payload,
+        measurementPoints: [{ ...payload.measurementPoints[0], pointCode: 'P0001' }],
+      };
 
-    const result = addMeasurementPointRequestSchema.safeParse(payload);
-
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            path: ['measurementPoints', 0, 'details', 'requestedParameters'],
-          }),
-        ]),
-      );
-    }
-  });
+      for (const schema of [
+        createConnectionRequestSchema,
+        addMeasurementPointRequestSchema,
+        addParameterRequestSchema,
+        resubmitConnectionRequestSchema,
+      ]) {
+        const result = schema.safeParse(
+          schema === resubmitConnectionRequestSchema || schema === createConnectionRequestSchema
+            ? { ...requestBody, requestType: 'ADD_MEASUREMENT_POINT' }
+            : requestBody,
+        );
+        expect(result.success ? [] : result.error.issues).toEqual([]);
+        if (result.success) {
+          expect(result.data.measurementPoints[0].parameters).toEqual([requested]);
+        }
+      }
+    },
+  );
 
   it('rejects instrument parameters that do not match requestedParameters', () => {
     const payload = createCemsPayload();
@@ -905,9 +917,6 @@ describe('CEMS/WPMS monitoring-point form enhancements', () => {
         expect.arrayContaining([
           expect.objectContaining({
             path: ['measurementPoints', 0, 'details', 'legalAnnexNo'],
-          }),
-          expect.objectContaining({
-            path: ['measurementPoints', 0, 'details', 'requestedParameters'],
           }),
           expect.objectContaining({
             path: ['measurementPoints', 0, 'details', 'primaryFuelOther'],
