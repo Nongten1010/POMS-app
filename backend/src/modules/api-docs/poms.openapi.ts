@@ -2149,7 +2149,16 @@ const componentSchemas: Record<string, OpenApiObject> = {
       details: {
         allOf: [schemaRef('MeasurementPointDetails')],
         nullable: true,
-        description: 'Optional; omitted = คงค่าเดิม, null = ล้างค่า',
+        description:
+          'Optional; omitted = คงค่าเดิม, null = ล้างรายละเอียดโดยคงพารามิเตอร์หลัก. requestedParameters เป็นพารามิเตอร์เป้าหมายหลังอนุมัติ: string[] ไม่ซ้ำ (ไม่แยกตัวพิมพ์), [] = ล้างทั้งหมด, ห้าม null และตัวเลือก ไม่มี/ได้รับการยกเว้นทั้งหมด. Approval อัปเดต parameters_json และเลิกใช้ช่องอุปกรณ์ที่ถูกถอดออก; พารามิเตอร์ใหม่ต้องตั้ง Address ID จริง',
+        properties: {
+          requestedParameters: {
+            type: 'array',
+            maxItems: 100,
+            uniqueItems: true,
+            items: { type: 'string', minLength: 1, maxLength: 255 },
+          },
+        },
       },
       documentsAndImages: {
         type: 'array',
@@ -5101,7 +5110,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       summary: 'Cancel a POMS factory edit request',
       operationId: 'cancelPomsFactoryEditRequest',
       description:
-        'ผู้สร้างคำขอเดิม (createdBy) เท่านั้นที่ยกเลิกได้ และต้องมี factories:view กับ factories:edit โดยการคัดคำขอสำหรับ mutation ยึด data scope ของ factories:edit. endpoint ไม่มี request body และยกเลิกได้เฉพาะ PENDING_REVIEW, REVISION_REQUESTED หรือ REVISED_PENDING_REVIEW',
+        'ผู้สร้างคำขอเดิม (createdBy) เท่านั้นที่ยกเลิกได้ และต้องมี factories:view กับ factories:edit โดยการคัดคำขอสำหรับ mutation ยึด data scope ของ factories:edit. endpoint ไม่มี request body และยกเลิกได้ใน PENDING_REVIEW, REVISION_REQUESTED, REVISED_PENDING_REVIEW หรือ REJECTED; ยกเว้น APPROVED และ CANCELLED',
       parameters: [idParameter],
       successDescription: 'ยกเลิกคำขอสำเร็จ; คืน full edit-request response ในสถานะ CANCELLED',
       successSchema: schemaRef('PomsFactoryEditRequestResponse'),

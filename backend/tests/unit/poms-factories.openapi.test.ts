@@ -695,6 +695,8 @@ describe('POMS factory master-data OpenAPI contract', () => {
     expect(String(documented.description)).toContain('PENDING_REVIEW');
     expect(String(documented.description)).toContain('REVISION_REQUESTED');
     expect(String(documented.description)).toContain('REVISED_PENDING_REVIEW');
+    expect(String(documented.description)).toContain('REJECTED');
+    expect(String(documented.description)).toContain('ยกเว้น APPROVED และ CANCELLED');
     expect(jsonSuccessSchema('/poms-factories/edit-requests/{id}/cancel', 'post')).toEqual({
       $ref: '#/components/schemas/PomsFactoryEditRequestResponse',
     });

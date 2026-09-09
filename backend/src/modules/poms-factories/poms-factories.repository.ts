@@ -1,4 +1,9 @@
 import type { Knex } from 'knex';
+import {
+  requestedPointParameters,
+  alignPointInstruments,
+} from './poms-measurement-point-parameters';
+import { reconcileApprovedStationParameters } from '../device-connections/reconcile-approved-station-parameters';
 import { db } from '../../config/database';
 import {
   AppError,
@@ -711,6 +716,14 @@ async function applyApprovedMeasurementPointsInTransaction(
         connectedPointId: update.connectedPointId,
       });
     }
+    if (update.parameterChange) {
+      await reconcileApprovedStationParameters(
+        trx,
+        update.parameterChange.stationId,
+        update.parameterChange.parameters,
+        actorUserId,
+      );
+    }
   }
 }
 
@@ -740,7 +753,7 @@ function buildApprovedPomsFactoryProfilePatches(proposed: PomsFactoryProfileDTO)
   };
 }
 
-function buildApprovedMeasurementPointWritePatch(
+export function buildApprovedMeasurementPointWritePatch(
   point: PomsMeasurementPointDTO,
   actorUserId?: number,
   updatedAt?: Knex.Raw | Date | string,
@@ -759,7 +772,7 @@ function buildApprovedMeasurementPointWritePatch(
   };
 }
 
-function buildApprovedPomsMeasurementPointUpdates(
+export function buildApprovedPomsMeasurementPointUpdates(
   currentPoints: PomsMeasurementPointDTO[],
   proposedPoints: PomsMeasurementPointDTO[],
 ) {
@@ -786,16 +799,70 @@ function buildApprovedPomsMeasurementPointUpdates(
         connectedPointId: proposed.connectedPointId,
       });
     }
+    let requested: string[] | undefined;
+    let previousRequested: string[] | undefined;
+    try {
+      // Existing connection snapshots may contain null for an unspecified list.
+      // New edit submissions reject null at validation; old snapshots keep their parameters.
+      requested =
+        proposed.details?.requestedParameters == null
+          ? undefined
+          : requestedPointParameters(proposed.details);
+      previousRequested =
+        current.details?.requestedParameters == null
+          ? undefined
+          : requestedPointParameters(current.details);
+    } catch {
+      throw new ConflictError(
+        'Stored POMS measurement-point proposal has invalid requested parameters',
+      );
+    }
+    const snapshotParametersChanged =
+      JSON.stringify(proposed.parameters) !== JSON.stringify(current.parameters);
     if (
+      snapshotParametersChanged &&
+      (requested === undefined || JSON.stringify(proposed.parameters) !== JSON.stringify(requested))
+    ) {
+      throw new ConflictError(
+        'Stored POMS measurement-point proposal changed parameters without matching requestedParameters',
+      );
+    }
+    // Support pending requests saved before parameters were derived into the proposal snapshot.
+    const requestedChanged =
+      requested !== undefined &&
+      JSON.stringify(requested) !== JSON.stringify(previousRequested ?? current.parameters);
+    const parameters =
+      (snapshotParametersChanged || requestedChanged) && requested !== undefined
+        ? requested
+        : current.parameters;
+    const parametersChanged = JSON.stringify(parameters) !== JSON.stringify(current.parameters);
+    const effective = parametersChanged
+      ? {
+          ...proposed,
+          parameters,
+          measurementInstruments: alignPointInstruments(
+            proposed.measurementInstruments,
+            parameters,
+          ),
+        }
+      : proposed;
+    if (
+      !parametersChanged &&
       JSON.stringify(editableMeasurementPointState(current)) ===
-      JSON.stringify(editableMeasurementPointState(proposed))
+        JSON.stringify(editableMeasurementPointState(proposed))
     ) {
       return [];
     }
     return [
       {
         connectedPointId: proposed.connectedPointId,
-        patch: buildApprovedMeasurementPointWritePatch(proposed),
+        patch: {
+          ...buildApprovedMeasurementPointWritePatch(effective),
+          ...(parametersChanged ? { parameters_json: JSON.stringify(parameters) } : {}),
+        },
+        parameterChange: parametersChanged
+          ? { stationId: proposed.pointCode ?? proposed.pointName, parameters }
+          : null,
       },
     ];
   });
@@ -811,7 +878,6 @@ function immutableMeasurementPointState(point: PomsMeasurementPointDTO) {
     systemType: point.systemType,
     pointCode: point.pointCode,
     pointType: point.pointType,
-    parameters: point.parameters,
     updatedAt: point.updatedAt,
   };
 }

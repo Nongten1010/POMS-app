@@ -19,6 +19,55 @@ describe('measurement-point approval with general factory information', () => {
     jest.clearAllMocks();
   });
 
+  it('approves BASIC_INFO and exposes all seven updated fields through the live detail mapper', async () => {
+    const harness = approvalHarness({ basicInfo: true, pointChanged: false });
+    transaction.mockImplementationOnce(harness.runTransaction);
+    const result = await pomsFactoriesRepository.reviewEditRequest(11, { decision: 'APPROVE' }, 77);
+    expect(result.status).toBe('APPROVED');
+    const connectedWrite = harness.committed.find(
+      (write) => write.table === 'cems_wpms_connected_measurement_points',
+    );
+    const eligibleWrite = harness.committed.find((write) => write.table === 'eligible_factories');
+    expect(connectedWrite).toBeDefined();
+    expect(eligibleWrite?.values).toEqual(
+      expect.objectContaining({
+        latitude: 13.1,
+        longitude: 100.1,
+        eia_assessment: 'อื่นๆ',
+        eia_other: 'อยู่ระหว่างตรวจสอบ',
+        project_name: 'โครงการใหม่',
+      }),
+    );
+    const live = toPomsFactoryDetailForTests([connectedFactoryRow(connectedWrite!.values)], 0);
+    expect(live).toEqual(
+      expect.objectContaining({
+        latitude: 13.1,
+        longitude: 100.1,
+        eia: 'อื่นๆ',
+        eiaOther: 'อยู่ระหว่างตรวจสอบ',
+        projectName: 'โครงการใหม่',
+        factoryFrontPhotos: [{ fileUrl: 'https://example.com/front.jpg' }],
+        factoryLogo: { fileUrl: 'https://example.com/logo.png' },
+      }),
+    );
+    // The request keeps its before/after audit snapshots; currentFactory is not live data.
+    expect(result.currentFactory.projectName).toBe('โครงการเดิม');
+    expect(result.proposedFactory.projectName).toBe(live.projectName);
+    expect(harness.committed.some((write) => 'point_name' in write.values)).toBe(false);
+  });
+
+  it.each(['staleProfile', 'missingEligible'] as const)(
+    'does not commit BASIC_INFO approval when %s prevents saving',
+    async (failure) => {
+      const harness = approvalHarness({ basicInfo: true, [failure]: true });
+      transaction.mockImplementationOnce(harness.runTransaction);
+      await expect(
+        pomsFactoriesRepository.reviewEditRequest(11, { decision: 'APPROVE' }, 77),
+      ).rejects.toMatchObject({ statusCode: 409, code: 'CONFLICT' });
+      expect(harness.committed).toEqual([]);
+    },
+  );
+
   it('saves factory data, points, approval and audit together', async () => {
     const harness = approvalHarness();
     transaction.mockImplementationOnce(harness.runTransaction);
@@ -120,6 +169,7 @@ describe('measurement-point approval with general factory information', () => {
 
 function approvalHarness(
   options: {
+    basicInfo?: boolean;
     profileChanged?: boolean;
     pointChanged?: boolean;
     staleProfile?: boolean;
@@ -137,6 +187,14 @@ function approvalHarness(
           longitude: 100.1,
           factoryFrontPhotos: [],
           factoryLogo: null,
+          ...(options.basicInfo
+            ? {
+                eia: 'อื่นๆ' as const,
+                eiaOther: 'อยู่ระหว่างตรวจสอบ',
+                factoryFrontPhotos: [{ fileUrl: 'https://example.com/front.jpg' }],
+                factoryLogo: { fileUrl: 'https://example.com/logo.png' },
+              }
+            : {}),
         };
   const proposedPoints =
     options.pointChanged === false
@@ -149,7 +207,7 @@ function approvalHarness(
     factory_id: current.factoryId,
     factory_registration_no: current.factoryRegistrationNo,
     factory_name: current.factoryName,
-    form_type: 'MEASUREMENT_POINTS',
+    form_type: options.basicInfo ? 'BASIC_INFO' : 'MEASUREMENT_POINTS',
     status: 'PENDING_REVIEW',
     revision_no: 0,
     is_open: 1,

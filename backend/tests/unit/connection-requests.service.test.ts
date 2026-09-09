@@ -3023,7 +3023,143 @@ describe('connectionRequestsService', () => {
     });
   });
 
+  it('rejects removed COD channels when saving current device configuration', async () => {
+    const request = requestDto({
+      status: CONNECTION_REQUEST_STATUS.CONNECTED,
+      measurementPoints: [
+        {
+          id: 1,
+          pointName: 'บ่อ A',
+          pointCode: 'P0260',
+          pointType: 'WASTEWATER',
+          latitude: null,
+          longitude: null,
+          description: null,
+          parameters: ['BOD (mg/l)', 'COD (mg/l)', 'Watt (kW/hr)'],
+        },
+      ],
+    });
+    mockedRepository.list.mockResolvedValue({ rows: [request], total: 1 });
+    mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
+      currentFactoryMeasurementPoint({
+        sourceMeasurementPointId: 1,
+        stationId: 'P0260',
+        pointName: 'บ่อ A',
+        pointCode: 'P0260',
+        parameters: ['BOD (mg/l)', 'Watt (kW/hr)', 'Flow rate (m3/hr)'],
+      }),
+    ]);
+    await expect(
+      connectionRequestsService.saveCurrentDeviceConfig(
+        'P0260',
+        {
+          stationId: 'P0260',
+          deviceCode: 'P0260/01',
+          protocol: 'MODBUS_RTU',
+          settings: {},
+          channels: [{ dataType: 'COD (mg/l)', addressId: 2, offset: 0 }],
+        },
+        actorUserId,
+        'ALL',
+      ),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      details: { invalidParameters: ['COD (mg/l)'] },
+    });
+    expect(mockedDeviceConnectionsService.replaceCurrentStation).not.toHaveBeenCalled();
+  });
+
+  it('does not fall back to a connection request snapshot when the active point is missing', async () => {
+    mockedRepository.list.mockResolvedValue({
+      rows: [requestDto({ status: CONNECTION_REQUEST_STATUS.CONNECTED })],
+      total: 1,
+    });
+    mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([]);
+    await expect(
+      connectionRequestsService.getCurrentDeviceConfigFormDetail(
+        'ปล่องระบาย A',
+        actorUserId,
+        'ALL',
+      ),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(mockedDeviceConnectionsService.listActiveSettings).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])(
+    'uses approved live parameters and preserves hardware mappings (unitless channel: %s)',
+    async (unitless) => {
+      const oldParameters = ['BOD (mg/l)', 'COD (mg/l)', 'Watt (kW/hr)'];
+      const newParameters = ['BOD (mg/l)', 'Watt (kW/hr)', 'Flow rate (m3/hr)'];
+      const request = requestDto({
+        status: CONNECTION_REQUEST_STATUS.CONNECTED,
+        measurementPoints: [
+          {
+            id: 1,
+            pointName: 'บ่อ A',
+            pointCode: 'P0260',
+            pointType: 'WASTEWATER',
+            latitude: null,
+            longitude: null,
+            description: null,
+            parameters: oldParameters,
+            measurementInstruments: {
+              parameters: oldParameters.map((parameter) => ({ parameter })),
+            },
+          },
+        ],
+      });
+      mockedRepository.list.mockResolvedValue({ rows: [request], total: 1 });
+      mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
+        currentFactoryMeasurementPoint({
+          sourceMeasurementPointId: 1,
+          stationId: 'P0260',
+          pointName: 'บ่อ A',
+          pointCode: 'P0260',
+          parameters: newParameters,
+          measurementInstruments: { parameters: newParameters.map((parameter) => ({ parameter })) },
+        }),
+      ]);
+      mockedDeviceConnectionsService.listActiveSettings.mockResolvedValue([
+        deviceConnectionConfig({
+          id: 20,
+          stationId: 'P0260',
+          deviceCode: 'P0260/01',
+          channels: oldParameters.map((dataType, index) => ({
+            dataType: unitless ? dataType.replace(/\s*\([^)]*\)$/, '') : dataType,
+            addressId: index + 1,
+            offset: 0,
+          })),
+        }),
+      ]);
+      const result = await connectionRequestsService.getCurrentDeviceConfigFormDetail(
+        'P0260',
+        actorUserId,
+        'ALL',
+      );
+      expect(result.parameterOptions).toEqual(newParameters);
+      expect(result.parameterMappings.map((p) => [p.parameter, p.addressId])).toEqual([
+        ['BOD (mg/l)', '1'],
+        ['Watt (kW/hr)', '3'],
+        ['Flow rate (m3/hr)', ''],
+      ]);
+      expect(result.rawConfigs.channels.map((c) => c.dataType)).toEqual([
+        'BOD (mg/l)',
+        'Watt (kW/hr)',
+      ]);
+      expect(request.measurementPoints[0].parameters).toEqual(oldParameters);
+    },
+  );
+
   it('returns current device config form detail from active settings for selected station', async () => {
+    mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
+      currentFactoryMeasurementPoint({
+        sourceMeasurementPointId: 1,
+        stationId: 'STACK-A',
+        pointName: 'ปล่องระบาย A',
+        pointCode: 'STACK-A',
+        parameters: ['NOx'],
+      }),
+    ]);
     const request = requestDto({
       createdBy: 7,
       status: CONNECTION_REQUEST_STATUS.CONNECTED,
@@ -3079,7 +3215,16 @@ describe('connectionRequestsService', () => {
     });
   });
 
-  it('uses requested instrument parameters instead of all eligible point parameters for current device configs', async () => {
+  it('uses live approved parameters instead of historical eligible point parameters for current device configs', async () => {
+    mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
+      currentFactoryMeasurementPoint({
+        sourceMeasurementPointId: 1,
+        stationId: 'STACK-A',
+        pointName: 'ปล่องระบาย A',
+        pointCode: 'STACK-A',
+        parameters: ['CO (ppm)', 'NOx (ppm)', 'Temp. (°C)'],
+      }),
+    ]);
     const request = requestDto({
       createdBy: actorUserId,
       status: CONNECTION_REQUEST_STATUS.CONNECTED,
@@ -4785,6 +4930,15 @@ describe('connectionRequestsService', () => {
   });
 
   it('saves current device configs for a selected connected monitoring point', async () => {
+    mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
+      currentFactoryMeasurementPoint({
+        sourceMeasurementPointId: 1,
+        stationId: 'STACK-A',
+        pointName: 'ปล่องระบาย A',
+        pointCode: 'STACK-A',
+        parameters: ['NOx'],
+      }),
+    ]);
     const config = {
       stationId: 'STACK-A',
       deviceCode: 'STACK-A/01',
@@ -4897,6 +5051,15 @@ describe('connectionRequestsService', () => {
   });
 
   it('rejects current device config saves when payload stationId does not match route stationId', async () => {
+    mockedRepository.listConnectedMeasurementPointsForFactories.mockResolvedValue([
+      currentFactoryMeasurementPoint({
+        sourceMeasurementPointId: 1,
+        stationId: 'STACK-A',
+        pointName: 'ปล่องระบาย A',
+        pointCode: 'STACK-A',
+        parameters: ['NOx'],
+      }),
+    ]);
     mockedRepository.list.mockResolvedValue({
       rows: [
         requestDto({

@@ -26,6 +26,46 @@ interface OperationOptions {
   focus?: boolean;
 }
 const schemaRef = (name: string): OpenApiObject => ({ $ref: `#/components/schemas/${name}` });
+const currentDeviceConfigFormSchema: OpenApiObject = {
+  type: 'object',
+  required: ['success', 'data'],
+  properties: {
+    success: { type: 'boolean', example: true },
+    data: {
+      type: 'object',
+      properties: {
+        parameterOptions: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'พารามิเตอร์ล่าสุดที่อนุมัติแล้วจาก active connected point',
+        },
+        parameterMappings: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              configId: {
+                type: 'integer',
+                nullable: true,
+                description: 'null เมื่อเป็นพารามิเตอร์ใหม่ที่ยังไม่ได้เลือกอุปกรณ์',
+              },
+              deviceCode: { type: 'string' },
+              parameter: { type: 'string' },
+              addressId: {
+                type: 'string',
+                description:
+                  'ค่าว่างเมื่อยังไม่ได้ตั้ง Address ID; ไม่ใช้ address ของพารามิเตอร์ที่ถอดออกแทน',
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+};
+const currentDeviceConfigDescription =
+  'อ่านพารามิเตอร์จาก active connected point หลังตรวจสิทธิ์; คง mapping เดิมที่ยังอยู่, ซ่อนช่องที่ถอดออก, เพิ่ม mapping ว่างสำหรับพารามิเตอร์ใหม่. rawConfigs แสดงเฉพาะค่าที่บันทึกจริง; request-specific device-configs ยังคง snapshot เดิม';
+
 const nullableRef = (name: string): OpenApiObject => ({
   allOf: [schemaRef(name)],
   nullable: true,
@@ -2227,7 +2267,8 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       tag: 'ตั้งค่าอุปกรณ์',
       summary: 'อ่าน config ปัจจุบันของจุดตรวจวัด',
       operationId: 'getCurrentConnectedPointDeviceConfigs',
-      description: 'Permission: cems_wpms_requests:view',
+      description: `Permission: cems_wpms_requests:view. ${currentDeviceConfigDescription}`,
+      successSchema: currentDeviceConfigFormSchema,
       parameters: [stationIdPathParameter],
     }),
     post: securedOperation({
@@ -2235,13 +2276,18 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       summary: 'แทนที่ config ปัจจุบันของจุดตรวจวัด',
       operationId: 'saveCurrentConnectedPointDeviceConfigs',
       description:
-        'Permission: cems_wpms_requests:edit. stationId ใน body ต้องตรงกับ path; รับ config เดี่ยว, batch หรือ form wrapper',
+        'Permission: cems_wpms_requests:edit. stationId ต้องตรงกับ path. ทุก channel ต้องอยู่ในพารามิเตอร์ live ที่อนุมัติแล้ว; ช่องเก่าตอบ 400 BAD_REQUEST. ตรวจซ้ำภายใต้ lock และตอบ 409 CONFLICT หากสถานะเปลี่ยนระหว่างบันทึก',
       parameters: [stationIdPathParameter],
       requestBody: jsonRequestBody(
         schemaRef('DeviceConnectionConfigRequest'),
         deviceConnectionExample,
       ),
       successStatus: '201',
+      extraResponses: {
+        '409': {
+          description: 'พารามิเตอร์จุดตรวจวัดเปลี่ยนก่อนบันทึก config; refresh และตั้งค่าใหม่',
+        },
+      },
       successDescription: 'แทนที่ config แล้ว',
     }),
   },
@@ -2270,8 +2316,8 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       tag: 'ตั้งค่าอุปกรณ์',
       summary: 'อ่าน config ของ annual point code (proxy-decoded path)',
       operationId: 'getAnnualConnectedPointDeviceConfigs',
-      description:
-        'Permission: cems_wpms_requests:view. Compatibility path สำหรับ annual point code ที่ถูกแยกเป็น 2 path segments',
+      description: `Permission: cems_wpms_requests:view. Compatibility path สำหรับ annual point code ที่ถูกแยกเป็น 2 path segments. ${currentDeviceConfigDescription}`,
+      successSchema: currentDeviceConfigFormSchema,
       parameters: [annualStationIdPathParameter, buddhistYearPathParameter],
     }),
     post: securedOperation({
@@ -2279,13 +2325,18 @@ const connectionRequestPaths: Record<string, OpenApiObject> = {
       summary: 'แทนที่ config ของ annual point code (proxy-decoded path)',
       operationId: 'saveAnnualConnectedPointDeviceConfigs',
       description:
-        'Permission: cems_wpms_requests:edit. Middleware ประกอบ stationId/buddhistYear กลับเป็น annual point code ก่อนตรวจ body',
+        'Permission: cems_wpms_requests:edit. Middleware ประกอบ stationId/buddhistYear กลับเป็น annual point code ก่อนตรวจ body. stationId ต้องตรงกับ path. ทุก channel ต้องอยู่ในพารามิเตอร์ live ที่อนุมัติแล้ว; ช่องเก่าตอบ 400 BAD_REQUEST. ตรวจซ้ำภายใต้ lock และตอบ 409 CONFLICT หากสถานะเปลี่ยนระหว่างบันทึก',
       parameters: [annualStationIdPathParameter, buddhistYearPathParameter],
       requestBody: jsonRequestBody(
         schemaRef('DeviceConnectionConfigRequest'),
         annualDeviceConnectionExample,
       ),
       successStatus: '201',
+      extraResponses: {
+        '409': {
+          description: 'พารามิเตอร์จุดตรวจวัดเปลี่ยนก่อนบันทึก config; refresh และตั้งค่าใหม่',
+        },
+      },
       successDescription: 'แทนที่ config แล้ว',
     }),
   },

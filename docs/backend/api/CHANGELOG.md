@@ -2,6 +2,12 @@
 
 ไฟล์นี้บันทึกเฉพาะการเปลี่ยน API ที่ทำให้ client ต้องแก้ตาม การเปลี่ยนทั่วไปและประวัติรายละเอียดดูจาก Git history
 
+## 2026-09-09 — พารามิเตอร์ปัจจุบันหลังอนุมัติคำขอแก้ไขจุดตรวจวัด
+
+- **Affected canonical docs:** [คำขอแก้ไขโรงงาน](./menus/master-data/factory-edit-requests.md#เปลี่ยนพารามิเตอร์หลังอนุมัติ), [ตั้งค่าอุปกรณ์](./menus/connection-requests/device-configs.md#พารามิเตอร์หลังอนุมัติคำขอแก้ไขจุดตรวจวัด)
+- **Impact:** `details.requestedParameters` เปลี่ยนพารามิเตอร์ live เมื่ออนุมัติ ฟอร์มอุปกรณ์ปัจจุบันใช้รายการที่อนุมัติล่าสุดและอาจมี mapping ใหม่ที่ address ว่าง/`configId = null`; การบันทึก channel ที่ถูกถอดออกตอบ 400 หรือ 409 หากเกิดการแข่งขันระหว่างบันทึก
+- **Migration:** client ต้องรองรับ mapping ที่ยังไม่ได้เลือกอุปกรณ์และให้กรอก Address ID จริงก่อนใช้งาน; ห้ามคัดลอกค่าจากพารามิเตอร์ที่ถูกถอดออก. `requestedParameters` ต้องเป็น string[] ไม่ซ้ำ ใช้ [] แทนรายการว่าง ไม่ส่ง null/ตัวเลือกพิเศษ. คำขอที่อนุมัติแล้วต้องตรวจด้วย maintenance dry-run ก่อนซ่อมข้อมูลย้อนหลังตามคู่มือ ไม่มีการแก้ย้อนหลังอัตโนมัติเมื่อ deploy
+
 ## 2026-09-05 — จำกัด BASIC_INFO ให้แก้ได้เฉพาะ 7 fields
 
 - **Affected canonical docs:** [คำขอแก้ไขข้อมูลทั่วไปโรงงานจาก POMS](./menus/master-data/factory-edit-requests.md#shared-basic-info-fields)

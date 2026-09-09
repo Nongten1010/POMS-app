@@ -70,6 +70,25 @@ describe('pomsFactoriesRepository.cancelEditRequest', () => {
     ]);
   });
 
+  it('cancels a rejected request and records the previous decision status', async () => {
+    const harness = cancellationHarness(POMS_FACTORY_EDIT_REQUEST_STATUS.REJECTED);
+    mockedDb.transaction.mockImplementationOnce(harness.runTransaction);
+
+    const result = await pomsFactoriesRepository.cancelEditRequest(11, 42);
+
+    expect(result.status).toBe(POMS_FACTORY_EDIT_REQUEST_STATUS.CANCELLED);
+    expect(result.isOpen).toBe(false);
+    expect(harness.lockedRequest.forUpdate).toHaveBeenCalledTimes(1);
+    expect(harness.eventInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'CANCEL',
+        from_status: POMS_FACTORY_EDIT_REQUEST_STATUS.REJECTED,
+        to_status: POMS_FACTORY_EDIT_REQUEST_STATUS.CANCELLED,
+        actor_user_id: 42,
+      }),
+    );
+  });
+
   it('rechecks the owner after locking and rejects a concurrent non-owner write', async () => {
     const harness = cancellationHarness(POMS_FACTORY_EDIT_REQUEST_STATUS.PENDING_REVIEW, 99);
     mockedDb.transaction.mockImplementationOnce(harness.runTransaction);
@@ -84,28 +103,31 @@ describe('pomsFactoriesRepository.cancelEditRequest', () => {
     expect(harness.eventInsert).not.toHaveBeenCalled();
   });
 
-  it.each([
-    POMS_FACTORY_EDIT_REQUEST_STATUS.CANCELLED,
-    POMS_FACTORY_EDIT_REQUEST_STATUS.APPROVED,
-    POMS_FACTORY_EDIT_REQUEST_STATUS.REJECTED,
-  ])('rejects a locked terminal request in %s without another event', async (status) => {
-    const harness = cancellationHarness(status);
-    mockedDb.transaction.mockImplementationOnce(harness.runTransaction);
+  it.each([POMS_FACTORY_EDIT_REQUEST_STATUS.CANCELLED, POMS_FACTORY_EDIT_REQUEST_STATUS.APPROVED])(
+    'rejects a locked terminal request in %s without another event',
+    async (status) => {
+      const harness = cancellationHarness(status);
+      mockedDb.transaction.mockImplementationOnce(harness.runTransaction);
 
-    await expect(pomsFactoriesRepository.cancelEditRequest(11, 42)).rejects.toMatchObject({
-      statusCode: 409,
-      code: 'INVALID_STATUS_TRANSITION',
-      message: 'ไม่สามารถยกเลิกคำขอในสถานะปัจจุบันได้',
-      details: { id: 11, status },
-    });
+      await expect(pomsFactoriesRepository.cancelEditRequest(11, 42)).rejects.toMatchObject({
+        statusCode: 409,
+        code: 'INVALID_STATUS_TRANSITION',
+        message: 'ไม่สามารถยกเลิกคำขอในสถานะปัจจุบันได้',
+        details: { id: 11, status },
+      });
 
-    expect(harness.requestUpdate).not.toHaveBeenCalled();
-    expect(harness.eventInsert).not.toHaveBeenCalled();
-  });
+      expect(harness.requestUpdate).not.toHaveBeenCalled();
+      expect(harness.eventInsert).not.toHaveBeenCalled();
+    },
+  );
 });
 
 function cancellationHarness(status: string, createdBy = 42) {
-  const lockedRow = requestRow({ status, created_by: createdBy });
+  const lockedRow = requestRow({
+    status,
+    created_by: createdBy,
+    is_open: ['APPROVED', 'REJECTED', 'CANCELLED'].includes(status) ? 0 : 1,
+  });
   const cancelledRow = requestRow({
     status: POMS_FACTORY_EDIT_REQUEST_STATUS.CANCELLED,
     is_open: 0,

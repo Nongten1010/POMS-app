@@ -26,7 +26,7 @@
 - `BASIC_INFO` แก้ได้เฉพาะการประเมินผลกระทบสิ่งแวดล้อม (`eia`), ชื่อโครงการ (`projectName`), อื่นๆ ของ EIA (`eiaOther`), ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน (`factoryFrontPhotos`), สัญลักษณ์ของโรงงานหรือโลโก้บริษัท (`factoryLogo`), ละติจูด (`latitude`) และลองติจูด (`longitude`); เมื่ออนุมัติจะ sync ตาม target mapping โดยคงชื่อและที่อยู่โรงงานเดิม
 - `MEASUREMENT_POINTS` ใช้ patch `pointName`, `monitoringPointStatus`, `details`, `documentsAndImages` และ `measurementInstruments` พร้อมข้อมูลทั่วไปของโรงงาน 7 fields เดียวกับ `BASIC_INFO` ได้ในคำขอเดียวกัน
 - binary upload รับครั้งละหนึ่งไฟล์และคืน metadata เท่านั้น การผูกไฟล์กับคำขอเกิดเมื่อ client ส่ง metadata นั้นใน create/resubmission payload
-- เฉพาะ `createdBy` ยกเลิกคำขอของตนเองได้ และยกเลิกได้เมื่อสถานะเป็น `PENDING_REVIEW`, `REVISION_REQUESTED` หรือ `REVISED_PENDING_REVIEW`
+- เฉพาะ `createdBy` ยกเลิกคำขอของตนเองได้ และยกเลิกได้เมื่อสถานะเป็น `PENDING_REVIEW`, `REVISION_REQUESTED`, `REVISED_PENDING_REVIEW` หรือ `REJECTED`
 - โรงงานที่อ่านหรือแก้ได้ต้องอยู่ใน effective data scope ของ permission ที่ endpoint ใช้ และหนึ่งโรงงานมี open request ได้สูงสุดหนึ่งรายการต่อ `formType`
 - การ review ทุก decision ต้องมี role `admin` ใน JWT พร้อม permissions `factories:view` และ `factories:approve`; บัญชี `userType = officer` ที่ได้รับ role `admin` ใช้งานได้ และ `userType = admin` อย่างเดียวไม่เพียงพอ ไม่ต้องเปลี่ยนประเภทบัญชีหรือ migrate ข้อมูลผู้ใช้
 - ไม่อยู่ใน scope ของ capability นี้: การแก้ `pointCode`, `pointType`, `systemType`, `parameters`, device configuration, identity/audit fields, ตาราง `factories` และโค้ด frontend
@@ -548,6 +548,34 @@ field ที่ห้ามส่งเพิ่มเติม ได้แก�
 
 field ที่ห้ามส่งในฟอร์มนี้ ได้แก่ `pointCode`, `pointType`, `systemType`, `parameters`, `sourceMeasurementPointId`, `eligibleFactoryId`, `factoryId`, `factoryName`, `updatedAt`, device configuration และ field identity/audit อื่น ๆ เพราะ approval อัปเดตเฉพาะ fields ที่อนุญาตของข้อมูลโรงงานและจุดตรวจวัด
 
+### เปลี่ยนพารามิเตอร์หลังอนุมัติ
+
+ใช้ `measurementPoints[].details.requestedParameters` เป็นรายการเป้าหมาย เช่น BOD/COD/Watt → BOD/Watt/Flow โดยยังห้ามส่ง `measurementPoints[].parameters` ตรง ๆ ฟิลด์นี้ต้องเป็น `string[]` ไม่เกิน 100 รายการ ชื่อไม่เกิน 255 ตัวอักษร ไม่ว่างและไม่ซ้ำหลัง normalize ตัวพิมพ์/ช่องว่าง; ห้าม `null`, `ไม่มี` และ `ได้รับการยกเว้นทั้งหมด` ใช้ `[]` หากต้องล้างทั้งหมด ส่วน omission หรือ `details: null` คงพารามิเตอร์หลักเดิม
+
+```json
+{
+  "formType": "MEASUREMENT_POINTS",
+  "measurementPoints": [{
+    "connectedPointId": 15,
+    "details": { "requestedParameters": ["BOD (mg/l)", "Watt (kW/hr)", "Flow rate (m3/hr)"] }
+  }]
+}
+```
+
+เมื่ออนุมัติ backend เขียน `parameters_json` พร้อม metadata ของเครื่องมือใน transaction เดียวกับ status/event และเลิกใช้ channel รวมถึง status schedule ของพารามิเตอร์ที่ถอดออก เฉพาะ config ปัจจุบัน (`request_id IS NULL`) คง address/range/encoding ของพารามิเตอร์ที่ยังอยู่ และคง request/device snapshots เดิมไว้ ไม่มีการนำ Address ID ของ COD ไปตั้งเป็น Flow อัตโนมัติ
+
+ฟอร์ม [ตั้งค่าอุปกรณ์ปัจจุบัน](../connection-requests/device-configs.md#พารามิเตอร์หลังอนุมัติคำขอแก้ไขจุดตรวจวัด) แสดง Flow เป็น mapping ที่ `addressId = ""` จนผู้ใช้ตั้งค่าจริง Integration ส่งเฉพาะ channel ที่บันทึกแล้ว
+
+#### ซ่อมคำขอที่อนุมัติก่อนแก้บั๊ก
+
+การ deploy ไม่เปลี่ยนข้อมูลคำขอที่อนุมัติไปแล้ว ใช้ [maintenance script](../../../../../backend/scripts/repair-approved-poms-parameters.ts) บนเครื่องที่เข้าถึงฐานข้อมูลได้ โดยค่าเริ่มต้นเป็น dry-run:
+
+```bash
+npx tsx scripts/repair-approved-poms-parameters.ts --factory 10100000125241 --request-no point-00001/2569
+```
+
+ตรวจผล `before`/`after` ก่อนใช้ `--apply --actor-id USER_ID` โดย `USER_ID` ต้องเป็นผู้ดำเนินการจริง Script ทำงานเฉพาะคำขอ `APPROVED` แบบจุดตรวจวัดของโรงงานที่ระบุ ปฏิเสธเมื่อมีคำขออนุมัติใหม่กว่า, live data เปลี่ยนหลังอนุมัติ หรือไม่ตรง snapshot และไม่เขียนชื่อ/ที่อยู่/รายละเอียดอื่นย้อนหลัง การรันซ้ำเมื่อ parameters ตรงแล้วเป็น no-op เก็บ stdout ของการ apply เป็นหลักฐานการซ่อม; ฐานข้อมูลบันทึกผู้แก้ใน `updated_by` โดยคงประวัติคำขอเดิม
+
 ### `POST /api/v1/poms-factories/:factoryId/edit-requests`
 
 สร้างคำขอ `PENDING_REVIEW` โดยเก็บ snapshot ตาม `formType` หนึ่งโรงงานมี open request ได้ครั้งละหนึ่งรายการต่อ `formType` response ใช้ workflow snapshot contract หลัก; ส่วน [edit-request detail](#get-apiv1poms-factoriesedit-requestsid) เพิ่มข้อมูลผู้ติดต่อและอีเมลแจ้งเตือนสำหรับหน้าเปรียบเทียบ
@@ -945,7 +973,7 @@ Minimal response (`200 OK`):
 
 ยกเลิกคำขอแก้ไขโดยไม่เปลี่ยนข้อมูล current/live ใช้ Bearer token พร้อม `factories:view` และ `factories:edit`; การคัด resource ยึด data scope ของ `factories:edit` และผู้เรียกต้องเป็นผู้สร้างคำขอเดิมตาม `createdBy` เท่านั้น
 
-ยกเลิกได้เมื่อสถานะปัจจุบันเป็น `PENDING_REVIEW`, `REVISION_REQUESTED` หรือ `REVISED_PENDING_REVIEW` หลังสำเร็จสถานะเป็น `CANCELLED`, `statusLabel = "ยกเลิก"`, `isOpen = false` และเพิ่ม event `CANCEL` การตอบกลับเป็น full [`PomsFactoryEditRequestResponse`](#get-apiv1poms-factoriesedit-requestsid) ไม่ใช่ summary object
+ยกเลิกได้เมื่อสถานะปัจจุบันเป็น `PENDING_REVIEW`, `REVISION_REQUESTED`, `REVISED_PENDING_REVIEW` หรือ `REJECTED` ยกเว้น `APPROVED` และ `CANCELLED` หลังสำเร็จสถานะเป็น `CANCELLED`, `statusLabel = "ยกเลิก"`, `isOpen = false` และเพิ่ม event `CANCEL` การตอบกลับเป็น full [`PomsFactoryEditRequestResponse`](#get-apiv1poms-factoriesedit-requestsid) ไม่ใช่ summary object
 
 #### Request Fields
 
@@ -1065,7 +1093,11 @@ Minimal response (`200 OK`):
 }
 ```
 
+หลัง `APPROVE` สำเร็จ ให้ refresh ข้อมูลโรงงานด้วย `GET /api/v1/poms-factories/:factoryId` หรือฟอร์มด้วย `GET /api/v1/poms-factories/:factoryId/form` เพื่ออ่านค่าปัจจุบัน ห้ามใช้ `currentFactory` ของรายละเอียดคำขอแทนข้อมูลโรงงานล่าสุด เพราะเป็น snapshot ก่อนแก้ไขที่ต้องเก็บไว้เพื่อเปรียบเทียบกับ `proposedFactory` แม้สถานะเป็น `APPROVED` แล้ว การพิจารณาแบบ `REQUEST_REVISION` หรือ `REJECT` จะไม่เปลี่ยนข้อมูลโรงงานจริง
+
 ## Workflow, Concurrency And Idempotency
+
+การเปิดใช้ cancellation จาก `REJECTED` ต้องรัน migration `0111_allow_rejected_poms_factory_edit_request_cancellation.ts` ด้วย เพื่อให้ audit constraint ยอมรับ `REJECTED → CANCELLED` โดยยังตรวจผู้สร้างคำขอและล็อกสถานะก่อนบันทึก การ rollback จะถูกปฏิเสธหากมีประวัติ transition ใหม่นี้แล้ว
 
 ### Status And Decisions
 
@@ -1085,7 +1117,7 @@ State transitions:
 | none                                           | ผู้มี `factories:edit` | create             | `PENDING_REVIEW`         | เก็บ current/proposed snapshot ตาม `formType` และเปิดคำขอ     |
 | `PENDING_REVIEW`                               | admin                  | `REQUEST_REVISION` | `REVISION_REQUESTED`     | บันทึก `revisionReason`; ยังไม่แก้ข้อมูลจริง                 |
 | `REVISION_REQUESTED`                           | ผู้มี `factories:edit` | resubmission       | `REVISED_PENDING_REVIEW` | refresh current snapshot และส่ง proposed payload เดิมอีกครั้ง |
-| `PENDING_REVIEW`, `REVISION_REQUESTED` หรือ `REVISED_PENDING_REVIEW` | ผู้สร้างคำขอ (`createdBy`) | `CANCEL` | `CANCELLED` | ปิดคำขอโดยไม่แก้ข้อมูล current/live |
+| `PENDING_REVIEW`, `REVISION_REQUESTED`, `REVISED_PENDING_REVIEW` หรือ `REJECTED` | ผู้สร้างคำขอ (`createdBy`) | `CANCEL` | `CANCELLED` | ปิดคำขอโดยไม่แก้ข้อมูล current/live |
 | `PENDING_REVIEW` หรือ `REVISED_PENDING_REVIEW` | admin                  | `APPROVE`          | `APPROVED`               | sync ข้อมูลจริงแบบ atomic ตาม `formType`                    |
 | `PENDING_REVIEW` หรือ `REVISED_PENDING_REVIEW` | admin                  | `REJECT`           | `REJECTED`               | ปิดคำขอโดยไม่แก้ข้อมูลจริง                                   |
 
@@ -1118,7 +1150,7 @@ Approval target mapping สำหรับ `BASIC_INFO` (ใช้ allowlist น
 | `401`       | `UNAUTHORIZED`     | token ไม่มี/หมดอายุ/ไม่ถูกต้อง                                                                                                             | login ใหม่                                      |
 | `403`       | `FORBIDDEN`        | ไม่มี action permission, ผู้ยกเลิกไม่ใช่ `createdBy`, reviewer ไม่ใช่ admin หรือผู้พิจารณาซ้ำกับ `createdBy`/`submittedBy`                  | ซ่อน action หรือใช้ผู้ทำรายการที่ถูกต้อง         |
 | `404`       | `NOT_FOUND`        | ไม่พบโรงงาน/คำขอ หรือ resource อยู่นอก effective data scope ของ endpoint (`factories:view`, `factories:edit`, หรือ `factories:approve`)    | กลับหน้ารายการและ refresh                       |
-| `409`       | `INVALID_STATUS_TRANSITION` | cancel เมื่อสถานะไม่ใช่ `PENDING_REVIEW`, `REVISION_REQUESTED` หรือ `REVISED_PENDING_REVIEW`                                      | refresh detail และซ่อนปุ่มยกเลิก                 |
+| `409`       | `INVALID_STATUS_TRANSITION` | cancel เมื่อสถานะไม่ใช่ `PENDING_REVIEW`, `REVISION_REQUESTED`, `REVISED_PENDING_REVIEW` หรือ `REJECTED`                                      | refresh detail และซ่อนปุ่มยกเลิก                 |
 | `409`       | `CONFLICT`         | ไม่มี profile field เปลี่ยน, มี open request อยู่แล้ว, transition อื่นไม่รองรับ, source version เปลี่ยน, request ถูกพิจารณาพร้อมกัน หรือเลขคำขอของประเภทและปีนั้นครบ `99999` | refresh detail และตัดสินใจจากสถานะล่าสุด; ถ้าเลขครบให้ติดต่อผู้ดูแล        |
 
 ## Business Flow And Explanations
@@ -1139,7 +1171,7 @@ Approval target mapping สำหรับ `BASIC_INFO` (ใช้ allowlist น
 | Repository/atomic sync | [`poms-factories.repository.ts`](../../../../../backend/src/modules/poms-factories/poms-factories.repository.ts)                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | Public types/statuses  | [`poms-factories.types.ts`](../../../../../backend/src/modules/poms-factories/poms-factories.types.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | Runtime OpenAPI        | [`poms.openapi.ts`](../../../../../backend/src/modules/api-docs/poms.openapi.ts)                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| Migrations             | [`0100_create_poms_factory_edit_requests.ts`](../../../../../backend/src/db/migrations/0100_create_poms_factory_edit_requests.ts), [`0106_extend_poms_factory_edit_requests_for_measurement_points.ts`](../../../../../backend/src/db/migrations/0106_extend_poms_factory_edit_requests_for_measurement_points.ts), [`0107_enforce_admin_only_factory_approval.ts`](../../../../../backend/src/db/migrations/0107_enforce_admin_only_factory_approval.ts), [`0109_add_poms_factory_edit_request_cancellation.ts`](../../../../../backend/src/db/migrations/0109_add_poms_factory_edit_request_cancellation.ts) |
+| Migrations             | [`0100_create_poms_factory_edit_requests.ts`](../../../../../backend/src/db/migrations/0100_create_poms_factory_edit_requests.ts), [`0106_extend_poms_factory_edit_requests_for_measurement_points.ts`](../../../../../backend/src/db/migrations/0106_extend_poms_factory_edit_requests_for_measurement_points.ts), [`0107_enforce_admin_only_factory_approval.ts`](../../../../../backend/src/db/migrations/0107_enforce_admin_only_factory_approval.ts), [`0109_add_poms_factory_edit_request_cancellation.ts`](../../../../../backend/src/db/migrations/0109_add_poms_factory_edit_request_cancellation.ts), [`0111_allow_rejected_poms_factory_edit_request_cancellation.ts`](../../../../../backend/src/db/migrations/0111_allow_rejected_poms_factory_edit_request_cancellation.ts) |
 | Tests                  | [`poms-factories.route.test.ts`](../../../../../backend/tests/unit/poms-factories.route.test.ts), [`poms-factories.service.test.ts`](../../../../../backend/tests/unit/poms-factories.service.test.ts), [`poms-factories.repository.test.ts`](../../../../../backend/tests/unit/poms-factories.repository.test.ts), [`poms-factories.cancel.service.test.ts`](../../../../../backend/tests/unit/poms-factories.cancel.service.test.ts), [`poms-factories.cancel.repository.test.ts`](../../../../../backend/tests/unit/poms-factories.cancel.repository.test.ts), [`poms-factory-document-upload.route.test.ts`](../../../../../backend/tests/unit/poms-factory-document-upload.route.test.ts), [`poms-measurement-point-edit-requests.validator.test.ts`](../../../../../backend/tests/unit/poms-measurement-point-edit-requests.validator.test.ts), [`poms-measurement-point-edit-requests.migration.test.ts`](../../../../../backend/tests/unit/poms-measurement-point-edit-requests.migration.test.ts), [`factory-approval-admin-only-migration.test.ts`](../../../../../backend/tests/unit/factory-approval-admin-only-migration.test.ts), [`poms-factory-edit-request-cancellation-migration.test.ts`](../../../../../backend/tests/unit/poms-factory-edit-request-cancellation-migration.test.ts), [`poms-factories.openapi.test.ts`](../../../../../backend/tests/unit/poms-factories.openapi.test.ts) |
 | Evidence               | [POMS factory form contact prefill TDD](../../../evidence/master-data/poms-factory-form-contact-prefill.tdd.md), [POMS factory form current parameter semantics TDD](../../../evidence/master-data/poms-factory-form-current-parameters.tdd.md) |
 

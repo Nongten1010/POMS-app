@@ -1,4 +1,6 @@
 import type { Knex } from 'knex';
+import { ConflictError } from '../../shared/errors/AppError';
+import { approvedParameterLabel } from '../poms-factories/poms-measurement-point-parameters';
 import { db } from '../../config/database';
 import type { PermissionScopeDetails } from '../auth/permissions';
 import { resolveAssignedRegions } from '../auth/regional-access';
@@ -163,6 +165,23 @@ export const deviceConnectionsRepository = {
     actorUserId: number,
   ): Promise<DeviceConnectionConfigDTO[]> {
     return db.transaction(async (trx) => {
+      // Use the same lock order as approval: live point, then device configuration.
+      const points = await trx('cems_wpms_connected_measurement_points')
+        .where((builder) => builder.where('point_code', stationId).orWhere('point_name', stationId))
+        .whereNull('deleted_at')
+        .forUpdate()
+        .select('parameters_json');
+      if (points.length !== 1)
+        throw new ConflictError('Active station changed before device configuration was saved');
+      const parameters = JSON.parse(points[0].parameters_json) as string[];
+      const invalidParameters = inputs
+        .flatMap((config) => config.channels.map((channel) => channel.dataType))
+        .filter((parameter) => approvedParameterLabel(parameter, parameters) === undefined);
+      if (invalidParameters.length > 0)
+        throw new ConflictError(
+          'Approved station parameters changed before device configuration was saved',
+          { invalidParameters, allowedParameters: parameters },
+        );
       await softDeleteActiveConfigsByStation(trx, stationId, actorUserId);
       return insertConfigs(trx, inputs, actorUserId, null);
     });

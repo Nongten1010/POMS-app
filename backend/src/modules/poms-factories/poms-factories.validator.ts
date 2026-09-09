@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { requestedPointParametersSchema } from './poms-measurement-point-parameters';
 import { CONNECTION_REQUEST_EIA_ASSESSMENTS } from '../connection-requests/connection-request-eia';
 import {
   measurementInstrumentsSchema,
@@ -148,6 +149,21 @@ const editableMeasurementPointPatchSchema: z.ZodType<PomsMeasurementPointPatchIn
   })
   .strict()
   .superRefine((value, ctx) => {
+    if (
+      value.details &&
+      Object.prototype.hasOwnProperty.call(value.details, 'requestedParameters')
+    ) {
+      const parsed = requestedPointParametersSchema.safeParse(value.details.requestedParameters);
+      if (!parsed.success) {
+        for (const issue of parsed.error.issues) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['details', 'requestedParameters', ...issue.path],
+            message: issue.message,
+          });
+        }
+      }
+    }
     const editableKeys = [
       'pointName',
       'monitoringPointStatus',

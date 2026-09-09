@@ -34,6 +34,10 @@ import {
   POMS_FACTORY_EDIT_REQUEST_FORM_TYPE,
   POMS_FACTORY_EDIT_REQUEST_STATUS,
 } from './poms-factories.types';
+import {
+  requestedPointParameters,
+  alignPointInstruments,
+} from './poms-measurement-point-parameters';
 import { pomsFactoriesRepository } from './poms-factories.repository';
 
 type AccessScope = string | null | undefined | PermissionScopeDetails;
@@ -702,8 +706,10 @@ function buildProposedMeasurementPoints(
       ? (patch.details ?? null)
       : point.details;
 
+    const requested = requestedPointParameters(patch.details);
     return {
       ...point,
+      parameters: requested ?? point.parameters,
       pointName: patch.pointName === undefined ? point.pointName : patch.pointName,
       monitoringPointStatus: Object.prototype.hasOwnProperty.call(patch, 'monitoringPointStatus')
         ? (patch.monitoringPointStatus ?? null)
@@ -712,7 +718,10 @@ function buildProposedMeasurementPoints(
       documentsAndImages: Object.prototype.hasOwnProperty.call(patch, 'documentsAndImages')
         ? (patch.documentsAndImages ?? [])
         : point.documentsAndImages,
-      measurementInstruments,
+      measurementInstruments:
+        requested === undefined
+          ? measurementInstruments
+          : alignPointInstruments(measurementInstruments, requested),
     };
   });
 }
@@ -734,6 +743,7 @@ function ensureMeasurementRequestChanged(
 function editableMeasurementPoint(point: PomsMeasurementPointDTO) {
   return {
     connectedPointId: point.connectedPointId,
+    parameters: point.parameters,
     pointName: point.pointName,
     monitoringPointStatus: point.monitoringPointStatus,
     details: point.details,

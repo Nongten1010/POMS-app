@@ -24,6 +24,7 @@ const CANCELLABLE_STATUSES: PomsFactoryEditRequestStatus[] = [
   POMS_FACTORY_EDIT_REQUEST_STATUS.PENDING_REVIEW,
   POMS_FACTORY_EDIT_REQUEST_STATUS.REVISION_REQUESTED,
   POMS_FACTORY_EDIT_REQUEST_STATUS.REVISED_PENDING_REVIEW,
+  POMS_FACTORY_EDIT_REQUEST_STATUS.REJECTED,
 ];
 
 describe('pomsFactoriesService.cancelEditRequest', () => {
@@ -82,11 +83,7 @@ describe('pomsFactoriesService.cancelEditRequest', () => {
     expect(mockedRepository.cancelEditRequest).not.toHaveBeenCalled();
   });
 
-  it.each([
-    POMS_FACTORY_EDIT_REQUEST_STATUS.CANCELLED,
-    POMS_FACTORY_EDIT_REQUEST_STATUS.APPROVED,
-    POMS_FACTORY_EDIT_REQUEST_STATUS.REJECTED,
-  ])(
+  it.each([POMS_FACTORY_EDIT_REQUEST_STATUS.CANCELLED, POMS_FACTORY_EDIT_REQUEST_STATUS.APPROVED])(
     'rejects cancellation from terminal status %s with the transition error contract',
     async (status) => {
       mockedRepository.findEditRequestById.mockResolvedValue(editRequest(status));

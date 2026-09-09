@@ -1,4 +1,8 @@
 import {
+  approvedParameterLabel,
+  alignPointInstruments,
+} from '../poms-factories/poms-measurement-point-parameters';
+import {
   BadRequestError,
   ConflictError,
   ForbiddenError,
@@ -683,7 +687,7 @@ export const connectionRequestsService = {
     viewScope: AccessScope,
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<DeviceConfigFormDetailDTO> {
-    const { request } = await loadLatestConnectedRequestForStation(
+    const { request } = await loadCurrentDeviceConfigPoint(
       stationId,
       actorUserId,
       viewScope,
@@ -691,7 +695,7 @@ export const connectionRequestsService = {
       regionalAccess,
     );
     const configs = await deviceConnectionsService.listActiveSettings({ stationId });
-    return toDeviceConfigFormDetail(request, configs, stationId);
+    return toDeviceConfigFormDetail(request, configs, stationId, true);
   },
 
   async getConnectedMeasurementPointDetailsByFactory(
@@ -1367,13 +1371,14 @@ export const connectionRequestsService = {
     editScope: AccessScope,
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<DeviceConfigPayloadResponseDTO> {
-    const { request } = await loadLatestConnectedRequestForStation(
+    const { request } = await loadCurrentDeviceConfigPoint(
       stationId,
       actorUserId,
       editScope,
       false,
       regionalAccess,
     );
+    ensureCurrentChannelsBelongToPoint(request, input);
     ensureConfigStationMatchesRoute(stationId, input.stationId);
     ensureStatusScheduleParametersBelongToRequest(request, input);
 
@@ -1392,7 +1397,7 @@ export const connectionRequestsService = {
     editScope: AccessScope,
     regionalAccess?: RegionalAccessDTO | null,
   ): Promise<DeviceConfigPayloadResponseDTO> {
-    const { request } = await loadLatestConnectedRequestForStation(
+    const { request } = await loadCurrentDeviceConfigPoint(
       stationId,
       actorUserId,
       editScope,
@@ -1400,6 +1405,7 @@ export const connectionRequestsService = {
       regionalAccess,
     );
     for (const config of input.configs) {
+      ensureCurrentChannelsBelongToPoint(request, config);
       ensureConfigStationMatchesRoute(stationId, config.stationId);
       ensureStatusScheduleParametersBelongToRequest(request, config);
     }
@@ -1550,6 +1556,75 @@ async function requireActiveEligibleFactory(input: {
 function stationMatchesMeasurementPoint(point: MeasurementPointDTO, stationId?: string): boolean {
   if (!stationId) return true;
   return point.pointCode === stationId || point.pointName === stationId;
+}
+
+async function loadCurrentDeviceConfigPoint(
+  stationId: string,
+  actorUserId: number,
+  scope: AccessScope,
+  useAssignedFactoryAccess: boolean,
+  regionalAccess?: RegionalAccessDTO | null,
+): Promise<{ request: ConnectionRequestDTO; point: MeasurementPointDTO }> {
+  const { request, point } = await loadLatestConnectedRequestForStation(
+    stationId,
+    actorUserId,
+    scope,
+    useAssignedFactoryAccess,
+    regionalAccess,
+  );
+  const currentPoints =
+    await connectionRequestsRepository.listConnectedMeasurementPointsForFactories([
+      request.factoryId,
+    ]);
+  const current = currentPoints.find(
+    (candidate) =>
+      candidate.sourceMeasurementPointId === point.id &&
+      (candidate.pointCode === stationId ||
+        candidate.pointName === stationId ||
+        candidate.stationId === stationId),
+  );
+  if (!current) throw new NotFoundError('Active connected measurement point not found');
+  const livePoint: MeasurementPointDTO = {
+    ...point,
+    pointName: current.pointName,
+    pointCode: current.pointCode,
+    parameters: current.parameters,
+    monitoringPointStatus: current.monitoringPointStatus,
+    measurementInstruments: alignPointInstruments(
+      current.measurementInstruments ?? null,
+      current.parameters,
+    ),
+    details: {
+      ...point.details,
+      requestedParameters: current.parameters,
+      connectedParameters: current.parameters,
+    },
+  };
+  return {
+    point: livePoint,
+    request: {
+      ...request,
+      measurementPoints: request.measurementPoints.map((item) =>
+        item.id === point.id ? livePoint : item,
+      ),
+    },
+  };
+}
+
+function ensureCurrentChannelsBelongToPoint(
+  request: ConnectionRequestDTO,
+  config: CreateDeviceConnectionConfigInput,
+): void {
+  const point = findMonitoringPoint(request, config.stationId);
+  const allowed = point?.parameters ?? [];
+  const invalid = config.channels
+    .filter((channel) => approvedParameterLabel(channel.dataType, allowed) === undefined)
+    .map((channel) => channel.dataType);
+  if (invalid.length > 0)
+    throw new BadRequestError(
+      'Device channels must match the current approved measurement-point parameters',
+      { stationId: config.stationId, invalidParameters: invalid, allowedParameters: allowed },
+    );
 }
 
 async function loadLatestConnectedRequestForStation(
@@ -1815,6 +1890,7 @@ function toDeviceConfigFormDetail(
   request: ConnectionRequestDTO,
   configs: DeviceConnectionConfigDTO[],
   requestedStationId?: string,
+  useLiveParameters = false,
 ): DeviceConfigFormDetailDTO {
   const monitoringPoint = findMonitoringPoint(request, requestedStationId);
   const stationId =
@@ -1828,18 +1904,29 @@ function toDeviceConfigFormDetail(
     [stationId, monitoringPoint?.pointCode, monitoringPoint?.pointName].filter(Boolean),
   );
   const instrumentParameterOptions = getMeasurementInstrumentParameterOptions(monitoringPoint);
-  const monitoringPointParameterOptions = getDeviceConfigParameterOptions(monitoringPoint);
-  const allowedParameterOptions =
-    instrumentParameterOptions.length > 0 ? new Set(instrumentParameterOptions) : null;
+  const monitoringPointParameterOptions = useLiveParameters
+    ? (monitoringPoint?.parameters ?? [])
+    : getDeviceConfigParameterOptions(monitoringPoint);
+  const allowedParameterOptions = useLiveParameters
+    ? new Set(monitoringPointParameterOptions)
+    : instrumentParameterOptions.length > 0
+      ? new Set(instrumentParameterOptions)
+      : null;
   const stationConfigs = configs
     .filter((config) => stationAliases.has(config.stationId))
     .map((config) =>
       allowedParameterOptions
         ? {
             ...config,
-            channels: config.channels.filter((channel) =>
-              allowedParameterOptions.has(channel.dataType),
-            ),
+            channels: useLiveParameters
+              ? config.channels.flatMap((channel) => {
+                  const parameter = approvedParameterLabel(
+                    channel.dataType,
+                    monitoringPointParameterOptions,
+                  );
+                  return parameter === undefined ? [] : [{ ...channel, dataType: parameter }];
+                })
+              : config.channels.filter((channel) => allowedParameterOptions.has(channel.dataType)),
           }
         : config,
     );
@@ -1872,6 +1959,30 @@ function toDeviceConfigFormDetail(
     },
   );
 
+  const parameterMappings = stationConfigs.flatMap((config, configIndex) =>
+    config.channels.map((channel) =>
+      toDeviceConfigParameterMapping(
+        config.id,
+        getDeviceCode(config, stationId, configIndex),
+        channel,
+      ),
+    ),
+  );
+  if (useLiveParameters) {
+    const mapped = new Set(parameterMappings.map((mapping) => mapping.parameter));
+    for (const parameter of monitoringPointParameterOptions) {
+      if (mapped.has(parameter)) continue;
+      const onlyConfig = stationConfigs.length === 1 ? stationConfigs[0] : null;
+      parameterMappings.push({
+        ...toDeviceConfigParameterMapping(
+          onlyConfig?.id ?? 0,
+          onlyConfig ? getDeviceCode(onlyConfig, stationId, 0) : '',
+          { dataType: parameter, addressId: null, offset: null },
+        ),
+        configId: onlyConfig?.id ?? null,
+      });
+    }
+  }
   return {
     requestId: request.id,
     requestNo: request.requestNo,
@@ -1881,15 +1992,7 @@ function toDeviceConfigFormDetail(
     deviceCodeOptions,
     connectionForms,
     statusManagement,
-    parameterMappings: stationConfigs.flatMap((config, configIndex) =>
-      config.channels.map((channel) =>
-        toDeviceConfigParameterMapping(
-          config.id,
-          getDeviceCode(config, stationId, configIndex),
-          channel,
-        ),
-      ),
-    ),
+    parameterMappings,
     testResults: [],
     rawConfigs: toDeviceConfigRawConfig(stationId, stationConfigs, statusManagement),
   };

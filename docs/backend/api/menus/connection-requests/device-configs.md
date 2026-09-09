@@ -633,3 +633,19 @@ Response ใช้ schema เดียวกับ [POST ของ request](#suc
 - Validator/service tests: [`device-connections.validator.test.ts`](../../../../../backend/tests/unit/device-connections.validator.test.ts), [`device-connections.service.test.ts`](../../../../../backend/tests/unit/device-connections.service.test.ts), [`connection-requests.service.test.ts`](../../../../../backend/tests/unit/connection-requests.service.test.ts)
 - Migration test: [`device-connection-protocol-migration.test.ts`](../../../../../backend/tests/unit/device-connection-protocol-migration.test.ts)
 - Route tests: [`connected-measurement-points.route.test.ts`](../../../../../backend/tests/unit/connected-measurement-points.route.test.ts), [`connection-requests.create.route.test.ts`](../../../../../backend/tests/unit/connection-requests.create.route.test.ts)
+
+## พารามิเตอร์หลังอนุมัติคำขอแก้ไขจุดตรวจวัด
+
+`GET /api/v1/connected-measurement-points/:stationId/device-configs` รวมถึงเส้นทาง annual code อ่าน parameter list จาก active connected point หลังตรวจสิทธิ์ แล้วรวมกับ active device configs ส่วน API ที่ขึ้นต้นด้วย `/cems-wpms-requests/:id/` ยังคงอ่าน snapshot ของคำขอนั้น
+
+| Field | พฤติกรรม |
+| --- | --- |
+| `parameterOptions` | รายการพารามิเตอร์ที่อนุมัติล่าสุด |
+| `parameterMappings` | คง mapping ของพารามิเตอร์เดิมที่ยังอยู่ และเพิ่มแถวว่างสำหรับพารามิเตอร์ใหม่ |
+| `parameterMappings[].addressId` | `""` เมื่อยังไม่ตั้งค่าจริง; ไม่ใช้ address ของพารามิเตอร์ที่ถูกถอดออกแทน |
+| `parameterMappings[].configId` | `number` สำหรับ config ที่ระบุได้; `null` เมื่อยังไม่เลือกอุปกรณ์ |
+| `rawConfigs` | ค่าที่บันทึกจริงเท่านั้น ไม่มี channel ใหม่ที่สร้างจากการคาดเดา |
+
+ตัวอย่าง: เปลี่ยน BOD/COD/Watt เป็น BOD/Watt/Flow แล้ว BOD คง address 1, Watt คง address 3 และ Flow แสดง address ว่าง ผู้ใช้ต้องเลือกอุปกรณ์/Address ID ที่ถูกต้องก่อนบันทึก Integration ไม่รายงาน Flow จนมีการบันทึก channel จริง
+
+`POST` ของ endpoint ปัจจุบันรับเฉพาะ channel ที่อยู่ในพารามิเตอร์ที่อนุมัติแล้ว ส่ง COD ที่ถอดออกตอบ `400 BAD_REQUEST`; หากพารามิเตอร์เปลี่ยนระหว่าง validation กับการบันทึก ตอบ `409 CONFLICT` และไม่มีการแทนที่ config ทั้งสองกรณีให้ refresh ฟอร์มก่อนส่งใหม่ สิทธิ์ผู้ใช้/data scope ยังคงเดิม การเพิ่ม Flow ไม่ได้ให้สิทธิ์แก้คำขอของผู้อื่น

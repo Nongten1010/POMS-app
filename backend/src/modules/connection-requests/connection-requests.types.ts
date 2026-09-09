@@ -698,7 +698,7 @@ export interface DeviceConfigFormConnectionDTO {
 }
 
 export interface DeviceConfigFormParameterMappingDTO {
-  configId: number;
+  configId: number | null;
   deviceCode: string;
   addressId: string;
   parameter: string;

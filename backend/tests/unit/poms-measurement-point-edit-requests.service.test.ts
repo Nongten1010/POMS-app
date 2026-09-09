@@ -26,7 +26,7 @@ describe('integrated POMS measurement-point edit service', () => {
     mockedRepository.createEditRequest.mockResolvedValue(editRequest() as never);
   });
 
-  it('preserves point identity, type, code, and parameters while applying editable fields', async () => {
+  it('preserves point identity, type and code while deriving approved parameters', async () => {
     await pomsFactoriesService.createEditRequest(
       'factory-001',
       {
@@ -63,7 +63,7 @@ describe('integrated POMS measurement-point edit service', () => {
         systemType: 'CEMS',
         pointCode: 'S0001',
         pointType: 'STACK',
-        parameters: ['CO (ppm)'],
+        parameters: ['NOx'],
         pointName: 'ปล่อง A (แก้ไข)',
         monitoringPointStatus: 'อยู่ระหว่างเชื่อมต่อ',
         details: { requestedParameters: ['NOx'] },
