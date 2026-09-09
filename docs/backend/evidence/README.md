@@ -34,6 +34,7 @@
 
 ## Master data
 
+- [ซ่อมพารามิเตอร์ P0260 ตามคำขอที่อนุมัติแล้ว](./master-data/p0260-approved-parameter-repair.md)
 - [POMS factory form คืนข้อมูลผู้ติดต่อและอีเมลแจ้งเตือน](./master-data/poms-factory-form-contact-prefill.tdd.md)
 - [POMS factory form คืนกลุ่มพารามิเตอร์ current/live](./master-data/poms-factory-form-current-parameters.tdd.md)
 - [รายละเอียดคำขอแก้ไขโรงงานแยกข้อมูลปัจจุบันและข้อมูลที่เสนอ](./master-data/poms-factory-edit-request-detail-context.tdd.md)
