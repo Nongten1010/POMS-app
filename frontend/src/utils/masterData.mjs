@@ -28,6 +28,25 @@ export function canCancelFactoryEditRequest(status) {
   return CANCELLABLE_FACTORY_EDIT_REQUEST_STATUSES.includes(String(status ?? '').trim())
 }
 
+export function formatFactoryEditRequestDate(value) {
+  const normalizedValue = String(value ?? '').trim()
+  if (!normalizedValue || normalizedValue === '-') {
+    return '-'
+  }
+
+  const date = new Date(normalizedValue)
+  if (!Number.isNaN(date.getTime())) {
+    return new Intl.DateTimeFormat('th-TH', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      timeZone: 'Asia/Bangkok',
+    }).format(date)
+  }
+
+  return normalizedValue.split(/[T\s]/, 1)[0]
+}
+
 const MAX_DOCUMENT_SIZE = 5 * 1024 * 1024
 const allowedDocumentTypes = new Set(['image/jpeg', 'image/png', 'application/pdf'])
 const allowedDocumentExtensions = ['.jpg', '.jpeg', '.png', '.pdf']

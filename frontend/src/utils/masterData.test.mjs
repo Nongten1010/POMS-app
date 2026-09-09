@@ -6,6 +6,7 @@ import {
   buildFactoryEditableProfilePatch,
   buildFactoryDocumentPatch,
   canCancelFactoryEditRequest,
+  formatFactoryEditRequestDate,
   getFactoryDocumentFileError,
   getFactoryEditRequestStatusLabel,
 } from './masterData.mjs'
@@ -23,6 +24,12 @@ test('allows cancellation only while a factory edit request is open', () => {
   assert.equal(canCancelFactoryEditRequest('APPROVED'), false)
   assert.equal(canCancelFactoryEditRequest('REJECTED'), false)
   assert.equal(canCancelFactoryEditRequest('CANCELLED'), false)
+})
+
+test('formats factory edit request timestamps as Thai dates without time', () => {
+  assert.equal(formatFactoryEditRequestDate('2026-08-24T02:00:00.000Z'), '24/08/2569')
+  assert.equal(formatFactoryEditRequestDate('27/08/2569 10:30'), '27/08/2569')
+  assert.equal(formatFactoryEditRequestDate(null), '-')
 })
 
 test('validates POMS factory document files', () => {

@@ -353,7 +353,7 @@ function drawHeader(layout, report = {}) {
   const submittedDate = getSubmittedDate(report)
 
   if (requestNo) {
-    layout.drawText(`เลขที่คำขอ ${requestNo}`, x, layout.y, { size: textSizes.body })
+    layout.drawText(`เลขที่ ${requestNo}`, x, layout.y, { size: textSizes.body })
   }
 
   if (submittedDate) {

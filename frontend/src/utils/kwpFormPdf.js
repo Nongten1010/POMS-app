@@ -246,7 +246,7 @@ class KwpPdfLayout {
   header(formNo, titleLines = []) {
     const requestNo = getRequestNo(this.data)
     if (requestNo) {
-      this.drawTextAt(`เลขที่คำขอ ${requestNo}`, this.margin.left, this.y, {
+      this.drawTextAt(`เลขที่ ${requestNo}`, this.margin.left, this.y, {
         size: textSizes.body,
         bold: true,
       })
@@ -515,7 +515,7 @@ function drawKwp01(layout, data) {
   const formNo = 'แบบ กวภ.01'
   const requestNo = getRequestNo(data)
   if (requestNo) {
-    drawCellText(`เลขที่คำขอ ${requestNo}`, x, y, 220, { size: labelSize, bold: true })
+    drawCellText(`เลขที่ ${requestNo}`, x, y, 220, { size: labelSize, bold: true })
   }
   drawCellText(formNo, right - layout.textWidth(formNo, titleSize, true), y, 120, { size: titleSize, bold: true })
   y -= 36
@@ -894,7 +894,7 @@ async function drawKwp02(layout, data) {
 
   const requestNo = getRequestNo(data)
   if (requestNo) {
-    drawCellText(`เลขที่คำขอ ${requestNo}`, x, y, 220, { size: labelSize, bold: true })
+    drawCellText(`เลขที่ ${requestNo}`, x, y, 220, { size: labelSize, bold: true })
   }
   const formNo = isKwp04 ? 'แบบ กวภ.04' : 'แบบ กวภ.02'
   drawCellText(formNo, right - layout.textWidth(formNo, titleSize, true), y, 120, { size: titleSize, bold: true })
@@ -1197,7 +1197,7 @@ function drawKwp03(layout, data) {
 
   const requestNo = getRequestNo(data)
   if (requestNo) {
-    drawCellText(`เลขที่คำขอ ${requestNo}`, x, y, 220, { size: labelSize, bold: true })
+    drawCellText(`เลขที่ ${requestNo}`, x, y, 220, { size: labelSize, bold: true })
   }
   const formNo = 'แบบ กวภ.03'
   drawCellText(formNo, right - layout.textWidth(formNo, titleSize, true), y, 120, { size: titleSize, bold: true })
@@ -1419,7 +1419,7 @@ function drawKwp05(layout, data) {
 
   const requestNo = getRequestNo(data)
   if (requestNo) {
-    drawCellText(`เลขที่คำขอ ${requestNo}`, x, y, 220, { size: labelSize, bold: true })
+    drawCellText(`เลขที่ ${requestNo}`, x, y, 220, { size: labelSize, bold: true })
   }
   const formNo = 'แบบ กวภ.05'
   drawCellText(formNo, right - layout.textWidth(formNo, titleSize, true), y, 120, { size: titleSize, bold: true })

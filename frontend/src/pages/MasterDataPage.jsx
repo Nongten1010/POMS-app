@@ -32,12 +32,14 @@ import EditIcon from '@mui/icons-material/Edit'
 import UploadFileIcon from '@mui/icons-material/UploadFile'
 import { DataGrid } from '@mui/x-data-grid'
 import { RequestFormBottomSheet } from './ConnectionRequestPage'
+import { createConnectionRequestPdf } from '../utils/connectionRequestPdf'
 import {
   FACTORY_BASIC_INFO_EIA_OPTIONS,
   buildFactoryBasicInfoPayload,
   buildFactoryDocumentPatch,
   buildFactoryEditableProfilePatch,
   canCancelFactoryEditRequest,
+  formatFactoryEditRequestDate,
   getFactoryDocumentFileError,
   getFactoryEditRequestStatusLabel,
 } from '../utils/masterData.mjs'
@@ -67,6 +69,15 @@ const borderedTableSx = {
 
 const eiaAssessmentOptions = FACTORY_BASIC_INFO_EIA_OPTIONS
 const actionableRequestStatuses = ['แก้ไขแล้ว/รอพิจารณา', 'รอพิจารณา']
+const visibleStatus = 'VISIBLE'
+const hiddenStatus = 'HIDDEN'
+const disconnectedStatus = 'DISCONNECTED'
+const factoryAndPointStatusOptions = [
+  { value: visibleStatus, label: 'แสดง' },
+  { value: hiddenStatus, label: 'ซ่อน' },
+  { value: disconnectedStatus, label: 'ยกเลิกการเชื่อมต่อ' },
+]
+const parameterStatusOptions = factoryAndPointStatusOptions.slice(0, 2)
 const factoryFrontPhotoTitle = 'ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน'
 const factoryLogoTitle = 'สัญลักษณ์ของโรงงานหรือโลโก้บริษัท'
 const factoryGeneralDocumentTitles = new Set([factoryFrontPhotoTitle, factoryLogoTitle])
@@ -191,7 +202,7 @@ function displayValue(value) {
 }
 
 function getRequestFormLabel(formType) {
-  return formType === 'MEASUREMENT_POINTS' ? 'แก้ไขข้อมูลจุดตรวจวัด' : 'แก้ไขข้อมูลพื้นฐาน'
+  return formType === 'MEASUREMENT_POINTS' ? 'แก้ไขข้อมูลจุดตรวจวัด' : 'แก้ไขข้อมูลทั่วไปของโรงงาน'
 }
 
 function sanitizeDocumentItem(document = {}) {
@@ -318,12 +329,35 @@ function mapFactoryRows(rows) {
   }))
 }
 
-function mapEditRequestRows(rows) {
+function getFirstNonBlankValue(...values) {
+  return values.find((value) => value !== null && value !== undefined && String(value).trim() !== '')
+}
+
+function findRequestFactory(row, factories) {
+  const requestIdentifiers = new Set([
+    row.factoryId,
+    row.factoryRegistrationNo,
+  ].filter(Boolean).map(String))
+
+  return factories.find((factory) => (
+    (row.eligibleFactoryId && String(factory.eligibleFactoryId) === String(row.eligibleFactoryId))
+    || [
+      factory.factoryId,
+      factory.factoryRegistrationNo,
+      factory.newRegistrationNo,
+      factory.oldRegistrationNo,
+    ].filter(Boolean).some((identifier) => requestIdentifiers.has(String(identifier)))
+  ))
+}
+
+function mapEditRequestRows(rows, factories = []) {
   return rows.map((row, index) => {
-    const form = getRequestFormLabel(row.formType)
+    const formType = row.formType ?? 'BASIC_INFO'
+    const form = getRequestFormLabel(formType)
     const proposedPoint = Array.isArray(row.proposedMeasurementPoints) ? row.proposedMeasurementPoints[0] : null
     const currentPoint = Array.isArray(row.currentMeasurementPoints) ? row.currentMeasurementPoints[0] : null
     const point = proposedPoint ?? currentPoint
+    const matchedFactory = findRequestFactory(row, factories)
 
     return {
       id: row.id ?? `edit-request-${index}`,
@@ -331,11 +365,11 @@ function mapEditRequestRows(rows) {
       requestNo: row.requestNo ?? '-',
       requestType: form,
       form,
-      formType: row.formType ?? 'BASIC_INFO',
-      systemType: form === 'แก้ไขข้อมูลพื้นฐาน' ? '-' : point?.systemType ?? '-',
-      pointCode: form === 'แก้ไขข้อมูลพื้นฐาน' ? '-' : point?.pointCode ?? '-',
-      pointName: form === 'แก้ไขข้อมูลพื้นฐาน' ? '-' : point?.pointName ?? '-',
-      submittedDate: row.submittedAt ?? row.createdAt ?? '-',
+      formType,
+      systemType: formType === 'BASIC_INFO' ? '-' : point?.systemType ?? '-',
+      pointCode: formType === 'BASIC_INFO' ? '-' : point?.pointCode ?? '-',
+      pointName: formType === 'BASIC_INFO' ? '-' : point?.pointName ?? '-',
+      submittedDate: formatFactoryEditRequestDate(row.submittedAt ?? row.createdAt),
       reviewedDate: row.reviewedAt ?? '-',
       statusCode: row.status ?? '',
       status: getFactoryEditRequestStatusLabel(row.status, row.statusLabel),
@@ -343,7 +377,15 @@ function mapEditRequestRows(rows) {
       factoryId: row.factoryId ?? '',
       factoryName: row.factoryName ?? '',
       factoryRegistrationNo: row.factoryRegistrationNo ?? row.factoryId ?? '',
-      province: row.provinceName ?? row.province ?? '-',
+      province: getFirstNonBlankValue(
+        row.provinceName,
+        row.province,
+        row.proposedFactory?.provinceName,
+        row.proposedFactory?.province,
+        row.currentFactory?.provinceName,
+        row.currentFactory?.province,
+        matchedFactory?.province,
+      ) ?? '-',
       requestNote: row.requestNote ?? null,
       revisionReason: row.revisionReason ?? null,
       officerNote: row.officerNote ?? null,
@@ -551,7 +593,7 @@ function StatusChip({ value }) {
   )
 }
 
-function MainActions({ row, onOpen, onEditGeneral }) {
+function MainActions({ row, onOpen, onEditGeneral, onManageStatus, isAdmin = false }) {
   return (
     <Stack direction="row" spacing={1} sx={tableActionStackSx}>
       <Button size="small" variant="outlined" onClick={() => onOpen(row)}>
@@ -560,11 +602,21 @@ function MainActions({ row, onOpen, onEditGeneral }) {
       <Button size="small" variant="outlined" onClick={() => onEditGeneral(row)} sx={{ whiteSpace: 'nowrap' }}>
         แก้ไขข้อมูลทั่วไปของโรงงาน
       </Button>
+      {isAdmin ? (
+        <Button
+          size="small"
+          variant="outlined"
+          onClick={() => onManageStatus(row)}
+          sx={{ whiteSpace: 'nowrap' }}
+        >
+          จัดการสถานะ
+        </Button>
+      ) : null}
     </Stack>
   )
 }
 
-function getFactoryColumns(onOpen, onEditGeneral) {
+function getFactoryColumns(onOpen, onEditGeneral, onManageStatus, isAdmin = false) {
   return [
     { field: 'factoryName', headerName: 'ชื่อโรงงาน/บริษัท', width: 240 },
     { field: 'newRegistrationNo', headerName: 'เลขทะเบียนโรงงาน (ใหม่)', width: 190 },
@@ -581,12 +633,18 @@ function getFactoryColumns(onOpen, onEditGeneral) {
     {
       field: 'actions',
       headerName: 'จัดการ',
-      width: 310,
+      width: isAdmin ? 480 : 310,
       sortable: false,
       filterable: false,
       renderCell: (params) => (
         <Stack direction="row" spacing={1} sx={tableActionStackSx}>
-          <MainActions row={params.row} onOpen={onOpen} onEditGeneral={onEditGeneral} />
+          <MainActions
+            row={params.row}
+            onOpen={onOpen}
+            onEditGeneral={onEditGeneral}
+            onManageStatus={onManageStatus}
+            isAdmin={isAdmin}
+          />
         </Stack>
       ),
     },
@@ -768,6 +826,306 @@ function FactoryDetailDialog({ factory, open, onClose, onEdit }) {
           </Table>
         </TableContainer>
       </DialogContent>
+    </Dialog>
+  )
+}
+
+function normalizeManagedStatus(value, options = factoryAndPointStatusOptions) {
+  const normalizedValue = String(value ?? '').trim().toUpperCase()
+  const matchedOption = options.find((option) => (
+    option.value === normalizedValue || option.label === String(value ?? '').trim()
+  ))
+  return matchedOption?.value ?? visibleStatus
+}
+
+function getManagedStatusLabel(value, options = factoryAndPointStatusOptions) {
+  return options.find((option) => option.value === value)?.label ?? 'แสดง'
+}
+
+function getPointParameters(point = {}) {
+  const detailParameters = [
+    point.details?.requestedParameters,
+    point.details?.connectedParameters,
+    point.details?.eligibleParameters,
+  ].find((items) => Array.isArray(items) && items.length > 0) ?? []
+  const source = Array.isArray(point.parameters) && point.parameters.length > 0
+    ? point.parameters
+    : Array.isArray(detailParameters)
+      ? detailParameters
+      : typeof point.parameters === 'string'
+        ? point.parameters.split(',').map((item) => item.trim()).filter(Boolean)
+        : []
+
+  return source.map((parameter, index) => {
+    const label = typeof parameter === 'string'
+      ? parameter
+      : parameter.displayName
+        ?? parameter.label
+        ?? parameter.parameterName
+        ?? parameter.parameterCode
+        ?? parameter.code
+        ?? parameter.name
+        ?? `พารามิเตอร์ ${index + 1}`
+    return {
+      id: String(parameter?.parameterId ?? parameter?.id ?? parameter?.parameterCode ?? parameter?.code ?? label ?? index),
+      label: String(label),
+      status: normalizeManagedStatus(parameter?.managementStatus ?? parameter?.visibilityStatus ?? parameter?.status, parameterStatusOptions),
+    }
+  })
+}
+
+function createFactoryStatusRows(factory = {}) {
+  const savedPoints = Array.isArray(factory.statusManagement?.measurementPoints)
+    ? factory.statusManagement.measurementPoints
+    : []
+
+  return (factory.measurementPoints ?? []).map((point, index) => {
+    const pointId = String(point.connectedPointId ?? point.id ?? point.pointCode ?? point.stationId ?? index)
+    const pointIdentifiers = new Set([
+      point.connectedPointId,
+      point.id,
+      point.pointCode,
+      point.stationId,
+    ].filter((value) => value !== null && value !== undefined && value !== '').map(String))
+    const savedPoint = savedPoints.find((item) => [
+      item.connectedPointId,
+      item.pointId,
+      item.pointCode,
+    ].some((value) => value !== null && value !== undefined && pointIdentifiers.has(String(value))))
+    const parameters = getPointParameters(point).map((parameter) => {
+      const savedParameter = savedPoint?.parameters?.find((item) => (
+        String(item.parameterId ?? item.id ?? item.parameterCode ?? item.label ?? '') === parameter.id
+      ))
+      return {
+        ...parameter,
+        status: normalizeManagedStatus(savedParameter?.status ?? parameter.status, parameterStatusOptions),
+      }
+    })
+
+    return {
+      id: pointId,
+      connectedPointId: point.connectedPointId ?? point.id ?? null,
+      pointCode: getMonitoringPointCode(point, index),
+      pointName: point.pointName ?? point.name ?? '-',
+      systemType: point.systemType ?? '-',
+      status: normalizeManagedStatus(
+        savedPoint?.status ?? point.managementStatus ?? point.visibilityStatus,
+        factoryAndPointStatusOptions,
+      ),
+      parameters,
+    }
+  })
+}
+
+function ManagedStatusSelect({ value, options, onChange, ariaLabel }) {
+  return (
+    <TextField
+      select
+      size="small"
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      fullWidth
+      slotProps={{ htmlInput: { 'aria-label': ariaLabel } }}
+    >
+      {options.map((option) => (
+        <MenuItem key={option.value} value={option.value}>
+          {option.label}
+        </MenuItem>
+      ))}
+    </TextField>
+  )
+}
+
+function FactoryStatusManagementDialog({ factory, open, onClose, onSave }) {
+  const [factoryStatus, setFactoryStatus] = useState(() => normalizeManagedStatus(
+    factory?.statusManagement?.factoryStatus ?? factory?.managementStatus ?? factory?.visibilityStatus ?? factory?.status,
+  ))
+  const [pointRows, setPointRows] = useState(() => createFactoryStatusRows(factory))
+  const [selectedPointId, setSelectedPointId] = useState(() => pointRows[0]?.id ?? false)
+  const selectedPoint = pointRows.find((point) => point.id === selectedPointId) ?? pointRows[0] ?? null
+
+  const updatePointStatus = (pointId, status) => {
+    setPointRows((current) => current.map((point) => (
+      point.id === pointId ? { ...point, status } : point
+    )))
+  }
+  const updateParameterStatus = (pointId, parameterId, status) => {
+    setPointRows((current) => current.map((point) => (
+      point.id === pointId
+        ? {
+            ...point,
+            parameters: point.parameters.map((parameter) => (
+              parameter.id === parameterId ? { ...parameter, status } : parameter
+            )),
+          }
+        : point
+    )))
+  }
+  const handleSave = () => {
+    onSave?.({
+      factoryId: factory?.factoryId ?? factory?.id ?? null,
+      factoryStatus,
+      measurementPoints: pointRows.map((point) => ({
+        connectedPointId: point.connectedPointId,
+        pointCode: point.pointCode,
+        status: point.status,
+        parameters: point.parameters.map((parameter) => ({
+          parameterId: parameter.id,
+          label: parameter.label,
+          status: parameter.status,
+        })),
+      })),
+    })
+  }
+
+  return (
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg">
+      <DialogTitle
+        sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, pr: 2 }}
+      >
+        <Typography component="span" variant="h6" fontWeight={700}>
+          จัดการสถานะ
+        </Typography>
+        <IconButton aria-label="ปิด" size="small" onClick={onClose}>
+          <CloseIcon />
+        </IconButton>
+      </DialogTitle>
+      <DialogContent dividers sx={{ p: 0 }}>
+        <Stack divider={<Divider />}>
+          <Box sx={{ p: 2.5 }}>
+            <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1.5 }}>
+              ข้อมูลโรงงาน
+            </Typography>
+            <TableContainer sx={{ overflowX: 'auto' }}>
+              <Table size="small" sx={{ minWidth: 840, ...borderedTableSx }}>
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 700, bgcolor: 'neutral.50' }}>ชื่อโรงงาน/บริษัท</TableCell>
+                    <TableCell sx={{ width: 190, fontWeight: 700, bgcolor: 'neutral.50' }}>เลขทะเบียนโรงงาน</TableCell>
+                    <TableCell sx={{ width: 140, fontWeight: 700, bgcolor: 'neutral.50' }}>จังหวัด</TableCell>
+                    <TableCell sx={{ width: 220, fontWeight: 700, bgcolor: 'neutral.50' }}>สถานะ</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  <TableRow>
+                    <TableCell>{displayValue(factory?.factoryName)}</TableCell>
+                    <TableCell>{displayValue(factory?.newRegistrationNo ?? factory?.factoryRegistrationNo)}</TableCell>
+                    <TableCell>{displayValue(factory?.province)}</TableCell>
+                    <TableCell>
+                      <ManagedStatusSelect
+                        value={factoryStatus}
+                        options={factoryAndPointStatusOptions}
+                        onChange={setFactoryStatus}
+                        ariaLabel="สถานะโรงงาน"
+                      />
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </TableContainer>
+            {pointRows.length > 0 ? (
+              <Tabs
+                value={selectedPoint?.id ?? false}
+                onChange={(_, value) => setSelectedPointId(value)}
+                variant="scrollable"
+                scrollButtons="auto"
+                sx={{ mt: 2, minHeight: 40, borderBottom: 1, borderColor: 'divider' }}
+              >
+                {pointRows.map((point) => (
+                  <Tab
+                    key={point.id}
+                    value={point.id}
+                    label={point.pointCode}
+                    sx={{ minHeight: 40, maxWidth: 280 }}
+                  />
+                ))}
+              </Tabs>
+            ) : null}
+          </Box>
+
+          <Box sx={{ p: 2.5 }}>
+            <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1.5 }}>
+              จุดตรวจวัด
+            </Typography>
+            <TableContainer sx={{ overflowX: 'auto' }}>
+              <Table size="small" sx={{ minWidth: 840, ...borderedTableSx }}>
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ width: 160, fontWeight: 700, bgcolor: 'neutral.50' }}>รหัสจุดตรวจวัด</TableCell>
+                    <TableCell sx={{ fontWeight: 700, bgcolor: 'neutral.50' }}>ชื่อจุดตรวจวัด</TableCell>
+                    <TableCell sx={{ width: 160, fontWeight: 700, bgcolor: 'neutral.50' }}>ประเภทจุดตรวจวัด</TableCell>
+                    <TableCell sx={{ width: 220, fontWeight: 700, bgcolor: 'neutral.50' }}>สถานะ</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {selectedPoint ? (
+                    <TableRow>
+                      <TableCell>{selectedPoint.pointCode}</TableCell>
+                      <TableCell>{selectedPoint.pointName}</TableCell>
+                      <TableCell>{selectedPoint.systemType}</TableCell>
+                      <TableCell>
+                        <ManagedStatusSelect
+                          value={selectedPoint.status}
+                          options={factoryAndPointStatusOptions}
+                          onChange={(status) => updatePointStatus(selectedPoint.id, status)}
+                          ariaLabel={`สถานะจุดตรวจวัด ${selectedPoint.pointCode}`}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={4} align="center">ไม่มีข้อมูลจุดตรวจวัด</TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Box>
+
+          <Box sx={{ p: 2.5 }}>
+            <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1.5 }}>
+              พารามิเตอร์
+            </Typography>
+            <TableContainer sx={{ overflowX: 'auto' }}>
+              <Table size="small" sx={{ minWidth: 560, ...borderedTableSx }}>
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 700, bgcolor: 'neutral.50' }}>พารามิเตอร์</TableCell>
+                    <TableCell sx={{ width: 220, fontWeight: 700, bgcolor: 'neutral.50' }}>สถานะ</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {selectedPoint?.parameters.length > 0 ? selectedPoint.parameters.map((parameter) => (
+                    <TableRow key={`${selectedPoint.id}-${parameter.id}`}>
+                      <TableCell>{parameter.label}</TableCell>
+                      <TableCell>
+                        <ManagedStatusSelect
+                          value={parameter.status}
+                          options={parameterStatusOptions}
+                          onChange={(status) => updateParameterStatus(selectedPoint.id, parameter.id, status)}
+                          ariaLabel={`สถานะพารามิเตอร์ ${parameter.label}`}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  )) : (
+                    <TableRow>
+                      <TableCell colSpan={2} align="center">ไม่มีข้อมูลพารามิเตอร์</TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Box>
+        </Stack>
+      </DialogContent>
+      <DialogActions sx={{ justifyContent: 'center', gap: 1, p: 2 }}>
+        <Button variant="outlined" color="inherit" onClick={onClose}>
+          ยกเลิก
+        </Button>
+        <Button variant="contained" onClick={handleSave}>
+          บันทึก
+        </Button>
+      </DialogActions>
     </Dialog>
   )
 }
@@ -1146,6 +1504,34 @@ function getFactoryDocumentsForPreview(factory = {}) {
   ]
 }
 
+function mapEditRequestToPdfRequest(request = {}) {
+  const raw = request.raw ?? request
+  const factorySnapshot = raw.proposedFactory ?? raw.currentFactory ?? {}
+  const measurementPoints = Array.isArray(raw.proposedMeasurementPoints)
+    ? raw.proposedMeasurementPoints
+    : Array.isArray(raw.currentMeasurementPoints)
+      ? raw.currentMeasurementPoints
+      : []
+  const systemType = measurementPoints[0]?.systemType ?? raw.systemType ?? request.systemType
+  const factory = normalizeFactoryDetail({
+    ...factorySnapshot,
+    factoryId: raw.factoryId ?? factorySnapshot.factoryId,
+    factoryRegistrationNo: raw.factoryRegistrationNo ?? factorySnapshot.factoryRegistrationNo,
+    factoryName: raw.factoryName ?? factorySnapshot.factoryName,
+  })
+
+  return {
+    ...raw,
+    ...factory,
+    factory,
+    type: systemType,
+    systemType,
+    submittedDate: formatFactoryEditRequestDate(raw.submittedAt ?? raw.createdAt),
+    measurementPoints,
+    documentsAndImages: getFactoryDocumentsForPreview(factory),
+  }
+}
+
 function getChangedMeasurementPointFieldNames(raw = {}) {
   const changedFields = new Set()
   const beforePoint = Array.isArray(raw.currentMeasurementPoints) ? raw.currentMeasurementPoints[0] ?? {} : {}
@@ -1390,6 +1776,103 @@ function RequestViewBottomSheet({
   )
 }
 
+function RequestPdfPreviewDialog({ open, request, onClose }) {
+  const previewKey = request
+    ? `${request.requestId ?? request.id ?? ''}-${request.formType ?? ''}-${request.raw?.updatedAt ?? ''}`
+    : ''
+  const [previewState, setPreviewState] = useState({ key: '', url: '', error: '' })
+  const previewUrl = previewState.key === previewKey ? previewState.url : ''
+  const previewError = previewState.key === previewKey ? previewState.error : ''
+  const previewLoading = Boolean(open && request && previewKey && previewState.key !== previewKey)
+
+  useEffect(() => {
+    if (!open || !request) {
+      return undefined
+    }
+
+    let isActive = true
+    let nextUrl = ''
+    const pdfRequest = mapEditRequestToPdfRequest(request)
+    const contentMode = request.formType === 'MEASUREMENT_POINTS'
+      ? 'measurement-point'
+      : 'factory-general-info'
+
+    createConnectionRequestPdf(pdfRequest, { showRequestMetaHeader: true, contentMode })
+      .then((pdfBytes) => {
+        nextUrl = URL.createObjectURL(new Blob([pdfBytes], { type: 'application/pdf' }))
+        if (isActive) {
+          setPreviewState({ key: previewKey, url: nextUrl, error: '' })
+        } else {
+          URL.revokeObjectURL(nextUrl)
+          nextUrl = ''
+        }
+      })
+      .catch((error) => {
+        if (isActive) {
+          setPreviewState({
+            key: previewKey,
+            url: '',
+            error: error instanceof Error ? error.message : 'สร้าง PDF preview ไม่สำเร็จ',
+          })
+        }
+      })
+
+    return () => {
+      isActive = false
+      if (nextUrl) {
+        URL.revokeObjectURL(nextUrl)
+      }
+    }
+  }, [open, previewKey, request])
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      fullWidth
+      maxWidth="lg"
+      slotProps={{ paper: { sx: { height: { xs: 'calc(100dvh - 32px)', md: '90vh' } } } }}
+    >
+      <DialogTitle
+        sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, pr: 2 }}
+      >
+        <Box sx={{ minWidth: 0 }}>
+          <Typography component="span" variant="h6" sx={{ display: 'block', fontWeight: 700 }}>
+            {request?.form ?? 'รายละเอียดคำขอ'}
+          </Typography>
+          <Typography component="span" variant="body2" color="text.secondary">
+            {request?.requestNo ?? '-'}
+          </Typography>
+        </Box>
+        <IconButton aria-label="ปิด" size="small" onClick={onClose}>
+          <CloseIcon />
+        </IconButton>
+      </DialogTitle>
+      <DialogContent dividers sx={{ display: 'flex', minHeight: 0, p: 0, bgcolor: 'neutral.100' }}>
+        {previewLoading ? (
+          <Stack sx={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 1.5 }}>
+            <CircularProgress size={28} />
+            <Typography variant="body2">กำลังสร้าง PDF preview...</Typography>
+          </Stack>
+        ) : null}
+        {previewError ? (
+          <Alert severity="error" sx={{ width: '100%', alignSelf: 'flex-start', borderRadius: 0 }}>
+            {previewError}
+          </Alert>
+        ) : null}
+        {previewUrl ? (
+          <Box
+            component="iframe"
+            title="PDF preview"
+            src={previewUrl}
+            sx={{ display: 'block', width: '100%', height: '100%', border: 0, bgcolor: '#fff' }}
+          />
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function makeMasterDataInitialRequest(factory) {
   if (Array.isArray(factory?.measurementPoints) && factory.measurementPoints.length > 0 && factory?.__fromFormEndpoint) {
     return factory
@@ -1529,6 +2012,7 @@ function MasterDataPage({ userType = '', roleCode = '', accessToken = '' }) {
   const [selectedFactory, setSelectedFactory] = useState(null)
   const [editingFactory, setEditingFactory] = useState(null)
   const [editingGeneralFactory, setEditingGeneralFactory] = useState(null)
+  const [statusManagingFactory, setStatusManagingFactory] = useState(null)
   const [viewingRequest, setViewingRequest] = useState(null)
   const [reviewingRequest, setReviewingRequest] = useState(null)
   const [cancelRequestTarget, setCancelRequestTarget] = useState(null)
@@ -1592,14 +2076,14 @@ function MasterDataPage({ userType = '', roleCode = '', accessToken = '' }) {
         },
       })
       const response = await readMasterDataResponse(result, 'โหลดรายการคำขอไม่สำเร็จ')
-      setRequestRows(mapEditRequestRows(response?.data ?? []))
+      setRequestRows(mapEditRequestRows(response?.data ?? [], factoryRows))
     } catch (error) {
       setTableError(error instanceof Error ? error.message : 'โหลดรายการคำขอไม่สำเร็จ')
       setRequestRows([])
     } finally {
       setLoadingRequests(false)
     }
-  }, [accessToken, isAdmin, isOperator])
+  }, [accessToken, factoryRows, isAdmin, isOperator])
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -1702,12 +2186,12 @@ function MasterDataPage({ userType = '', roleCode = '', accessToken = '' }) {
       },
     })
     const response = await readMasterDataResponse(result, 'โหลดรายละเอียดคำขอไม่สำเร็จ')
-    const mapped = mapEditRequestRows([response?.data ?? {}])[0]
+    const mapped = mapEditRequestRows([response?.data ?? {}], factoryRows)[0]
     return {
       ...mapped,
       raw: response?.data,
     }
-  }, [accessToken])
+  }, [accessToken, factoryRows])
 
   const handleOpenFactory = useCallback(async (factory) => {
     setActionLoading(true)
@@ -1746,6 +2230,35 @@ function MasterDataPage({ userType = '', roleCode = '', accessToken = '' }) {
       setActionLoading(false)
     }
   }, [loadFactoryDetail, loadFactoryForm])
+  const handleManageFactoryStatus = useCallback(async (factory) => {
+    setActionLoading(true)
+    setTableError('')
+    try {
+      const detail = await loadFactoryDetail(factory)
+      setStatusManagingFactory({
+        ...detail,
+        statusManagement: factory.statusManagement ?? detail.statusManagement,
+      })
+    } catch (error) {
+      setTableError(error instanceof Error ? error.message : 'โหลดข้อมูลสำหรับจัดการสถานะไม่สำเร็จ')
+    } finally {
+      setActionLoading(false)
+    }
+  }, [loadFactoryDetail])
+  const handleSaveFactoryStatus = useCallback((statusManagement) => {
+    setFactoryRows((current) => current.map((factory) => {
+      if (String(getFactoryRowId(factory)) !== String(statusManagement.factoryId)) {
+        return factory
+      }
+      return {
+        ...factory,
+        status: getManagedStatusLabel(statusManagement.factoryStatus),
+        statusManagement,
+      }
+    }))
+    setStatusManagingFactory(null)
+    setSnackbarMessage('บันทึกสถานะสำเร็จ')
+  }, [])
   const handleEditRequest = useCallback(async (request) => {
     setViewingRequest(null)
     setReviewingRequest(null)
@@ -1782,7 +2295,10 @@ function MasterDataPage({ userType = '', roleCode = '', accessToken = '' }) {
     }
   }, [loadRequestDetail])
 
-  const columns = useMemo(() => getFactoryColumns(handleOpenFactory, handleEditGeneralFactory), [handleOpenFactory, handleEditGeneralFactory])
+  const columns = useMemo(
+    () => getFactoryColumns(handleOpenFactory, handleEditGeneralFactory, handleManageFactoryStatus, isAdmin),
+    [handleEditGeneralFactory, handleManageFactoryStatus, handleOpenFactory, isAdmin],
+  )
   const pageRequestColumns = useMemo(
     () => getPageRequestColumns(
       (request) => handleOpenRequest(request, false),
@@ -1992,6 +2508,16 @@ function MasterDataPage({ userType = '', roleCode = '', accessToken = '' }) {
         onEdit={handleEditFactory}
       />
 
+      {statusManagingFactory ? (
+        <FactoryStatusManagementDialog
+          key={statusManagingFactory.id ?? statusManagingFactory.factoryId ?? 'factory-status-management'}
+          factory={statusManagingFactory}
+          open
+          onClose={() => setStatusManagingFactory(null)}
+          onSave={handleSaveFactoryStatus}
+        />
+      ) : null}
+
       <RequestFormBottomSheet
         key={editingFactory?.__editRequestId ?? editingFactory?.id ?? editingFactory?.factoryId ?? 'master-data-request-form'}
         open={Boolean(editingFactory)}
@@ -2023,7 +2549,7 @@ function MasterDataPage({ userType = '', roleCode = '', accessToken = '' }) {
         onClose={() => setEditingGeneralFactory(null)}
       />
 
-      <RequestViewBottomSheet
+      <RequestPdfPreviewDialog
         open={Boolean(viewingRequest)}
         request={viewingRequest}
         onClose={() => setViewingRequest(null)}

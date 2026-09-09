@@ -505,7 +505,7 @@ class PdfLayout {
     const size = pdfTextSizes.body
     const requestNo = displayValue(request?.requestNo)
     const submittedDate = displayValue(request?.submittedDate || formatRequestSubmittedDate(request?.submittedAt))
-    const leftText = `เลขที่คำขอ : ${requestNo}`
+    const leftText = `เลขที่ : ${requestNo}`
     const rightText = `วันที่ยื่นคำขอ : ${submittedDate}`
     const y = this.pageSize[1] - 30
 
@@ -1553,9 +1553,9 @@ function mergeDocumentItems(...documentGroups) {
 
 function renderGeneralFactorySection(layout, request, context, options = {}) {
   const { factory } = context
-  const showExtendedWpmsFields = options.showExtendedWpmsFields === true
+  const showExtendedFields = options.showExtendedFields === true
   layout.sectionTitle('1. ข้อมูลทั่วไปของโรงงาน')
-  if (showExtendedWpmsFields) {
+  if (showExtendedFields) {
     layout.labelValue('ชื่อโรงงาน : ', request?.factoryName ?? factory.factoryName)
     layout.labelValueRow([
       { label: 'เลขทะเบียนโรงงาน (เดิม) : ', value: request?.factoryRegistrationNo ?? factory.oldRegistrationNo ?? factory.factoryRegistrationNo },
@@ -1574,7 +1574,7 @@ function renderGeneralFactorySection(layout, request, context, options = {}) {
   layout.labelValue('ประกอบกิจการ : ', request?.businessActivity ?? factory.businessActivity)
   layout.labelValue('เขตประกอบการ/นิคมอุตสาหกรรม (ถ้ามี) : ', request?.industrialEstate ?? factory.industrialEstate)
   layout.labelValue('การประเมินผลกระทบสิ่งแวดล้อม : ', request?.eia ?? factory.eia)
-  if (showExtendedWpmsFields) {
+  if (showExtendedFields) {
     const eiaOther = request?.eiaOther ?? factory.eiaOther
     const projectName = request?.projectName ?? factory.projectName
     if (!isBlankValue(eiaOther)) {
@@ -1872,7 +1872,23 @@ async function renderWpmsDocumentSections(layout, documentsAndImages) {
   }
 }
 
-async function renderWpms(layout, request, context) {
+async function renderFactoryGeneralInfo(layout, request, context) {
+  layout.title([
+    { text: 'ข้อมูลทั่วไปของโรงงาน', size: pdfTextSizes.title },
+  ])
+  renderGeneralFactorySection(layout, request, context, { showExtendedFields: true })
+
+  const documentGroups = [
+    { label: 'ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน', titles: ['ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน'] },
+    { label: 'สัญลักษณ์ของโรงงานหรือโลโก้บริษัท', titles: ['สัญลักษณ์ของโรงงานหรือโลโก้บริษัท'] },
+  ]
+  for (const group of documentGroups) {
+    layout.paragraph(group.label, { indent: 18, bold: true })
+    await renderDocumentAttachmentList(layout, getDocumentsByTitles(context.documentsAndImages, group.titles))
+  }
+}
+
+async function renderWpms(layout, request, context, options = {}) {
   const { details, point, instruments, isFullyExempted, documentParameters, signatureDate } = context
   const treatmentSystems = normalizeArrayValue(details.treatmentSystem)
   const treatmentSystemLabels = treatmentSystems.map((system) => (
@@ -1887,12 +1903,18 @@ async function renderWpms(layout, request, context) {
     ? `อื่นๆ (${details.connectionDeviceOther})`
     : firstDefinedValue(details.connectionDevice, details.connectionDeviceOther)
 
-  layout.title([
-    { text: 'แบบบันทึกข้อมูลโรงงานสำหรับการขอเชื่อมต่อระบบเฝ้าระวังและเตือนภัย', size: pdfTextSizes.title },
-    { text: 'มลพิษระยะไกล (Digital Pollution Online Monitoring System : D-POMS)', size: pdfTextSizes.title },
-    { text: '(สำหรับระบบเฝ้าระวังมลพิษน้ำระยะไกล (Water Pollution Monitoring : WPMS))', size: pdfTextSizes.subtitle },
-  ])
-  renderGeneralFactorySection(layout, request, context, { showExtendedWpmsFields: true })
+  const titleLines = options.contentMode === 'measurement-point'
+    ? [
+        { text: 'ข้อมูลจุดตรวจวัด', size: pdfTextSizes.title },
+        { text: '(สำหรับระบบเฝ้าระวังมลพิษน้ำระยะไกล (Water Pollution Monitoring : WPMS))', size: pdfTextSizes.subtitle },
+      ]
+    : [
+        { text: 'แบบบันทึกข้อมูลโรงงานสำหรับการขอเชื่อมต่อระบบเฝ้าระวังและเตือนภัย', size: pdfTextSizes.title },
+        { text: 'มลพิษระยะไกล (Digital Pollution Online Monitoring System : D-POMS)', size: pdfTextSizes.title },
+        { text: '(สำหรับระบบเฝ้าระวังมลพิษน้ำระยะไกล (Water Pollution Monitoring : WPMS))', size: pdfTextSizes.subtitle },
+      ]
+  layout.title(titleLines)
+  renderGeneralFactorySection(layout, request, context, { showExtendedFields: true })
   renderContactsSection(layout, context)
   renderEmailsSection(layout, context)
   layout.addPage()
@@ -1951,17 +1973,24 @@ async function renderWpms(layout, request, context) {
   await renderWpmsDocumentSections(layout, context.documentsAndImages)
 }
 
-async function renderCems(layout, request, context) {
+async function renderCems(layout, request, context, options = {}) {
   const { details, point, instruments, isFullyExempted, documentParameters, signatureDate } = context
   const systemName = 'ระบบตรวจวัดคุณภาพอากาศจากปล่องแบบอัตโนมัติอย่างต่อเนื่อง'
   const systemCode = 'Continuous Emission Monitoring Systems : CEMS'
 
-  layout.title([
-    { text: 'แบบบันทึกข้อมูลโรงงานสำหรับการขอเชื่อมต่อระบบเฝ้าระวัง', size: pdfTextSizes.title },
-    { text: 'และเตือนภัยมลพิษระยะไกล (Digital Pollution Online Monitoring System : D-POMS)', size: pdfTextSizes.title },
-    { text: `(${systemName}`, size: pdfTextSizes.subtitle },
-    { text: `${systemCode})`, size: pdfTextSizes.subtitle },
-  ])
+  const titleLines = options.contentMode === 'measurement-point'
+    ? [
+        { text: 'ข้อมูลจุดตรวจวัด', size: pdfTextSizes.title },
+        { text: `(${systemName}`, size: pdfTextSizes.subtitle },
+        { text: `${systemCode})`, size: pdfTextSizes.subtitle },
+      ]
+    : [
+        { text: 'แบบบันทึกข้อมูลโรงงานสำหรับการขอเชื่อมต่อระบบเฝ้าระวัง', size: pdfTextSizes.title },
+        { text: 'และเตือนภัยมลพิษระยะไกล (Digital Pollution Online Monitoring System : D-POMS)', size: pdfTextSizes.title },
+        { text: `(${systemName}`, size: pdfTextSizes.subtitle },
+        { text: `${systemCode})`, size: pdfTextSizes.subtitle },
+      ]
+  layout.title(titleLines)
   renderGeneralFactorySection(layout, request, context)
   renderContactsSection(layout, context)
   renderEmailsSection(layout, context)
@@ -2067,10 +2096,12 @@ export async function createConnectionRequestPdf(request, options = {}) {
       : undefined,
   }
 
-  if (context.isWpms) {
-    await renderWpms(layout, request, context)
+  if (options.contentMode === 'factory-general-info') {
+    await renderFactoryGeneralInfo(layout, request, context)
+  } else if (context.isWpms) {
+    await renderWpms(layout, request, context, options)
   } else {
-    await renderCems(layout, request, context)
+    await renderCems(layout, request, context, options)
   }
 
   if (options.showRequestMetaHeader) {
