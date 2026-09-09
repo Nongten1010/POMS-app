@@ -5117,7 +5117,7 @@ const extraPaths: Record<string, OpenApiObject> = {
       extraResponses: {
         '409': {
           description:
-            'INVALID_STATUS_TRANSITION เมื่อสถานะปัจจุบันไม่ใช่ PENDING_REVIEW, REVISION_REQUESTED หรือ REVISED_PENDING_REVIEW',
+            'INVALID_STATUS_TRANSITION เมื่อสถานะปัจจุบันไม่ใช่ PENDING_REVIEW, REVISION_REQUESTED, REVISED_PENDING_REVIEW หรือ REJECTED',
           content: {
             'application/json': {
               schema: schemaRef('ErrorEnvelope'),

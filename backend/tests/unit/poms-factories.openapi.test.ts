@@ -710,6 +710,7 @@ describe('POMS factory master-data OpenAPI contract', () => {
     expect(responses['404']).toEqual({ $ref: '#/components/responses/NotFound' });
 
     const conflict = asObject(responses['409'], 'cancel 409 response');
+    expect(String(conflict.description)).toContain('REJECTED');
     const conflictContent = asObject(conflict.content, 'cancel 409 content');
     const conflictJson = asObject(conflictContent['application/json'], 'cancel 409 JSON');
     expect(conflictJson.schema).toEqual({ $ref: '#/components/schemas/ErrorEnvelope' });
