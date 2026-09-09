@@ -12,6 +12,7 @@ const parameters = ['BOD (mg/l)', 'Watt (kW/hr)', 'Flow rate (m3/hr)'];
 function fixture(
   options: {
     later?: boolean;
+    selfCandidate?: boolean;
     liveChanged?: boolean;
     failWrite?: boolean;
     wrongProposal?: boolean;
@@ -73,9 +74,14 @@ function fixture(
     (table: string) => {
       const requestQuery = table === 'poms_factory_edit_requests' ? ++requestQueries : 0;
       let ids: number[] | undefined;
+      let excludedRequestId: number | undefined;
       const chain: Record<string, unknown> = {};
       for (const name of ['where', 'whereNull', 'forUpdate', 'select', 'orderBy'])
         chain[name] = () => chain;
+      chain.whereNot = (column: string, value: number) => {
+        if (column === 'id') excludedRequestId = value;
+        return chain;
+      };
       chain.whereIn = (column: string, values: number[]) => {
         if (column === 'id') ids = values;
         return chain;
@@ -84,9 +90,11 @@ function fixture(
         table === 'poms_factory_edit_requests'
           ? requestQuery === 1
             ? [request]
-            : options.later
-              ? [{ id: 12 }]
-              : []
+            : options.selfCandidate && excludedRequestId !== request.id
+              ? [request]
+              : options.later
+                ? [{ id: 12 }]
+                : []
           : table === 'cems_wpms_connected_measurement_points'
             ? [live]
             : table === 'device_connection_configs'
@@ -138,6 +146,12 @@ describe('targeted P0260 production repair migration', () => {
     expect(JSON.parse(backup.live.parameters_json)).toContain('COD (mg/l)');
     expect(backup.channels).toHaveLength(3);
     expect(f.writes.some((w) => w.table === 'poms_factory_edit_requests')).toBe(false);
+  });
+  it('never mistakes the current request for a newer approval after timestamp rounding', async () => {
+    process.env.NODE_ENV = 'production';
+    const f = fixture({ selfCandidate: true });
+    await up(f.knex);
+    expect(JSON.parse(String(f.live.parameters_json))).toEqual(parameters);
   });
   it.each([{ later: true }, { liveChanged: true }, { wrongProposal: true }])(
     'refuses changed state before any write: %j',

@@ -18,6 +18,8 @@
 [Migration 0112](../../../../backend/src/db/migrations/0112_repair_approved_p0260_parameters.ts)
 ทำงานเฉพาะ production และล็อกคำขอที่อนุมัติแล้วตามโรงงาน/เลขคำขอข้างต้น
 ตรวจ identity, ผลอนุมัติ, ผู้พิจารณาเดิม, คำขออนุมัติที่ใหม่กว่า และการเปลี่ยนข้อมูลหลังอนุมัติ
+การค้นหาคำขออนุมัติใหม่กว่าตัด request ID เดิมออกและเปรียบเทียบเวลาใน SQL โดยตรง
+เพื่อไม่สูญเสียความละเอียดเวลาจากการแปลงเป็น JavaScript Date
 ก่อนแก้ไข ต้องผ่านเงื่อนไขของ [ตัววางแผนซ่อม](../../../../backend/src/modules/poms-factories/poms-approved-parameter-repair.ts)
 
 สำรองคำขอ จุดตรวจวัด config และช่องอุปกรณ์ไว้ใน
@@ -38,7 +40,7 @@ Migration เป็น forward-only: ไม่ย้อนผลอนุมั�
 [Regression ของ migration](../../../../backend/tests/unit/poms-p0260-approved-repair-migration.test.ts)
 จับกรณีข้อมูล POMS ยังคง COD ก่อนใส่การซ่อม และตรวจการสำรองก่อนเขียน การคง address เดิม
 การปฏิเสธข้อมูลเปลี่ยนภายหลัง/ผลอนุมัติผิดเป้าหมาย และการปฏิเสธ update ที่ไม่กระทบหนึ่งแถว
-ร่วมกับ tests ของ approval, repair planner และ channel reconciliation รวม 19 เคสผ่าน
+ร่วมกับ tests ของ approval, repair planner และ channel reconciliation รวม 20 เคสผ่าน
 
 หลัง deploy ต้องอ่าน API ทั้งสองชุดซ้ำ: POMS ต้องเป็น BOD/Watt/Flow และ integration ต้องไม่คืน COD
 Flow อาจยังไม่มีใน integration จนกว่าจะบันทึกการผูก address อุปกรณ์จริง

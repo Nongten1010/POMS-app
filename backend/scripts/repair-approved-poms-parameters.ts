@@ -47,7 +47,12 @@ async function main(): Promise<void> {
       .where('eligible_factory_id', request.eligible_factory_id)
       .where('form_type', 'MEASUREMENT_POINTS')
       .where('status', 'APPROVED')
-      .where('approved_at', '>', request.approved_at)
+      .whereNot('id', request.id)
+      .where(
+        'approved_at',
+        '>',
+        trx('poms_factory_edit_requests').select('approved_at').where('id', request.id),
+      )
       .whereNull('deleted_at')
       .first('id');
     if (later)

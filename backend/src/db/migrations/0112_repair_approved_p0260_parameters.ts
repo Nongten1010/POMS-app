@@ -31,11 +31,20 @@ export async function up(knex: Knex): Promise<void> {
     .where('eligible_factory_id', request.eligible_factory_id)
     .where('form_type', 'MEASUREMENT_POINTS')
     .where('status', 'APPROVED')
-    .where('approved_at', '>', request.approved_at)
+    .whereNot('id', request.id)
+    // Compare SQL timestamps directly; JS Date drops SQL Server precision.
+    .where(
+      'approved_at',
+      '>',
+      knex('poms_factory_edit_requests').select('approved_at').where('id', request.id),
+    )
     .whereNull('deleted_at')
     .forUpdate()
     .first('id');
-  if (later) throw new Error('P0260 repair refused: a newer approval exists');
+  if (later)
+    throw new Error(
+      `P0260 repair refused: newer approved request ${later.id} exists after target ${request.id}`,
+    );
   const reviewerId = Number(request.reviewed_by);
   if (
     !Number.isSafeInteger(reviewerId) ||
