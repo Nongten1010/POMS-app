@@ -496,7 +496,7 @@ class PdfLayout {
     this.space(6)
   }
 
-  requestMetaHeader(request) {
+  requestMetaHeader(request, options = {}) {
     const firstPage = this.pages[0]
     if (!firstPage) {
       return
@@ -516,6 +516,15 @@ class PdfLayout {
       font: this.fonts.regular,
       color: colors.black,
     })
+    if (options.approvalStatusLabel) {
+      firstPage.drawText(options.approvalStatusLabel, {
+        x: this.margin.left + this.textWidth(leftText, size) + 10,
+        y,
+        size,
+        font: this.fonts.bold,
+        color: colors.black,
+      })
+    }
     firstPage.drawText(rightText, {
       x: this.width - this.margin.right - this.textWidth(rightText, size),
       y,
@@ -2105,7 +2114,7 @@ export async function createConnectionRequestPdf(request, options = {}) {
   }
 
   if (options.showRequestMetaHeader) {
-    layout.requestMetaHeader(request)
+    layout.requestMetaHeader(request, options)
   }
 
   layout.footer()

@@ -31,7 +31,7 @@ import CloseIcon from '@mui/icons-material/Close'
 import EditIcon from '@mui/icons-material/Edit'
 import UploadFileIcon from '@mui/icons-material/UploadFile'
 import { DataGrid } from '@mui/x-data-grid'
-import { RequestFormBottomSheet } from './ConnectionRequestPage'
+import { RequestDocumentDialog, RequestFormBottomSheet } from './ConnectionRequestPage'
 import { createConnectionRequestPdf } from '../utils/connectionRequestPdf'
 import {
   FACTORY_BASIC_INFO_EIA_OPTIONS,
@@ -1784,6 +1784,17 @@ function RequestPdfPreviewDialog({ open, request, onClose }) {
   const previewUrl = previewState.key === previewKey ? previewState.url : ''
   const previewError = previewState.key === previewKey ? previewState.error : ''
   const previewLoading = Boolean(open && request && previewKey && previewState.key !== previewKey)
+  const documentRequest = useMemo(
+    () => request ? mapEditRequestToPdfRequest(request) : request,
+    [request],
+  )
+  const isApproved = [
+    request?.statusCode,
+    request?.status,
+    request?.statusLabel,
+    request?.raw?.status,
+    request?.raw?.statusLabel,
+  ].some((status) => ['APPROVED', 'อนุมัติ', 'อนุมัติแล้ว', 'ผ่านการพิจารณา'].includes(status))
 
   useEffect(() => {
     if (!open || !request) {
@@ -1792,12 +1803,15 @@ function RequestPdfPreviewDialog({ open, request, onClose }) {
 
     let isActive = true
     let nextUrl = ''
-    const pdfRequest = mapEditRequestToPdfRequest(request)
     const contentMode = request.formType === 'MEASUREMENT_POINTS'
       ? 'measurement-point'
       : 'factory-general-info'
 
-    createConnectionRequestPdf(pdfRequest, { showRequestMetaHeader: true, contentMode })
+    createConnectionRequestPdf(documentRequest, {
+      showRequestMetaHeader: true,
+      contentMode,
+      approvalStatusLabel: isApproved ? 'ผ่านการพิจารณา' : '',
+    })
       .then((pdfBytes) => {
         nextUrl = URL.createObjectURL(new Blob([pdfBytes], { type: 'application/pdf' }))
         if (isActive) {
@@ -1823,53 +1837,18 @@ function RequestPdfPreviewDialog({ open, request, onClose }) {
         URL.revokeObjectURL(nextUrl)
       }
     }
-  }, [open, previewKey, request])
+  }, [documentRequest, isApproved, open, previewKey, request])
 
   return (
-    <Dialog
+    <RequestDocumentDialog
       open={open}
+      request={documentRequest}
+      title={`${request?.form ?? 'รายละเอียดคำขอ'}${request?.requestNo ? ` - ${request.requestNo}` : ''}`}
       onClose={onClose}
-      fullWidth
-      maxWidth="lg"
-      slotProps={{ paper: { sx: { height: { xs: 'calc(100dvh - 32px)', md: '90vh' } } } }}
-    >
-      <DialogTitle
-        sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, pr: 2 }}
-      >
-        <Box sx={{ minWidth: 0 }}>
-          <Typography component="span" variant="h6" sx={{ display: 'block', fontWeight: 700 }}>
-            {request?.form ?? 'รายละเอียดคำขอ'}
-          </Typography>
-          <Typography component="span" variant="body2" color="text.secondary">
-            {request?.requestNo ?? '-'}
-          </Typography>
-        </Box>
-        <IconButton aria-label="ปิด" size="small" onClick={onClose}>
-          <CloseIcon />
-        </IconButton>
-      </DialogTitle>
-      <DialogContent dividers sx={{ display: 'flex', minHeight: 0, p: 0, bgcolor: 'neutral.100' }}>
-        {previewLoading ? (
-          <Stack sx={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 1.5 }}>
-            <CircularProgress size={28} />
-            <Typography variant="body2">กำลังสร้าง PDF preview...</Typography>
-          </Stack>
-        ) : null}
-        {previewError ? (
-          <Alert severity="error" sx={{ width: '100%', alignSelf: 'flex-start', borderRadius: 0 }}>
-            {previewError}
-          </Alert>
-        ) : null}
-        {previewUrl ? (
-          <Box
-            component="iframe"
-            title="PDF preview"
-            src={previewUrl}
-            sx={{ display: 'block', width: '100%', height: '100%', border: 0, bgcolor: '#fff' }}
-          />
-        ) : null}
-      </DialogContent>
-    </Dialog>
+      pdfPreviewUrl={previewUrl}
+      pdfPreviewLoading={previewLoading}
+      pdfPreviewError={previewError}
+    />
   )
 }
 

@@ -3217,7 +3217,7 @@ function StatusHistoryContent({ history = [] }) {
   )
 }
 
-function RequestDocumentDialog({
+export function RequestDocumentDialog({
   open,
   request,
   mode = 'view',
