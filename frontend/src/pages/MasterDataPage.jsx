@@ -70,6 +70,18 @@ const actionableRequestStatuses = ['แก้ไขแล้ว/รอพิจ�
 const factoryFrontPhotoTitle = 'ภาพถ่ายหน้าโรงงานหรือป้ายโรงงาน'
 const factoryLogoTitle = 'สัญลักษณ์ของโรงงานหรือโลโก้บริษัท'
 const factoryGeneralDocumentTitles = new Set([factoryFrontPhotoTitle, factoryLogoTitle])
+const requestDocumentFieldIndexes = new Map([
+  ['ข้อมูลรายละเอียดการรายงานค่าที่สภาวะมาตรฐาน', 0],
+  ['รายงานผลการทำ RATA หรือ อื่นๆ ที่เทียบเท่า ของระบบ CEMS ครั้งล่าสุด', 1],
+  [factoryFrontPhotoTitle, 2],
+  [factoryLogoTitle, 3],
+  ['ภาพถ่ายปล่อง', 4],
+  ['ภาพถ่ายเครื่องมือตรวจวัดที่ติดตั้ง (CEMS)', 5],
+  ['ภาพถ่ายระบบบำบัด', 6],
+  ['ระบบบำบัด', 6],
+  ['ภาพถ่ายจุดระบายน้ำทิ้งออกนอกโรงงาน', 7],
+  ['ภาพถ่ายเครื่องมือตรวจวัดที่ติดตั้ง (WPMS)', 8],
+])
 
 const dataGridLocaleText = {
   toolbarColumns: 'คอลัมน์',
@@ -1105,53 +1117,127 @@ function RequestGeneralInfoPreview({ factory }) {
   )
 }
 
-function RequestMonitoringPointPreview({ factory, measurementPoints }) {
-  const firstPoint = Array.isArray(measurementPoints) ? measurementPoints[0] : Array.isArray(factory?.measurementPoints) ? factory.measurementPoints[0] : null
-  const parameters = Array.isArray(firstPoint?.parameters) ? firstPoint.parameters.join(', ') : firstPoint?.parameters
+function normalizeComparisonValue(value) {
+  if (value === null || value === undefined || value === '') {
+    return null
+  }
+  if (Array.isArray(value)) {
+    return value.map(normalizeComparisonValue).sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)))
+  }
+  if (typeof value === 'object') {
+    return Object.fromEntries(
+      Object.keys(value)
+        .filter((key) => !['id', 'createdAt', 'updatedAt'].includes(key))
+        .sort()
+        .map((key) => [key, normalizeComparisonValue(value[key])]),
+    )
+  }
+  return String(value).trim()
+}
+
+function comparisonValuesDiffer(before, after) {
+  return JSON.stringify(normalizeComparisonValue(before)) !== JSON.stringify(normalizeComparisonValue(after))
+}
+
+function getFactoryDocumentsForPreview(factory = {}) {
+  return [
+    ...sanitizeDocuments(factory.factoryFrontPhotos).map((document) => ({ ...document, title: factoryFrontPhotoTitle })),
+    ...(factory.factoryLogo ? [{ ...sanitizeDocumentItem(factory.factoryLogo), title: factoryLogoTitle }] : []),
+  ]
+}
+
+function getChangedMeasurementPointFieldNames(raw = {}) {
+  const changedFields = new Set()
+  const beforePoint = Array.isArray(raw.currentMeasurementPoints) ? raw.currentMeasurementPoints[0] ?? {} : {}
+  const afterPoint = Array.isArray(raw.proposedMeasurementPoints) ? raw.proposedMeasurementPoints[0] ?? {} : {}
+  ;['pointCode', 'pointName'].forEach((field) => {
+    if (comparisonValuesDiffer(beforePoint[field], afterPoint[field])) {
+      changedFields.add(field)
+    }
+  })
+  if (comparisonValuesDiffer(beforePoint.monitoringPointStatus, afterPoint.monitoringPointStatus)) {
+    changedFields.add('requestedParameters')
+  }
+
+  const beforeDetails = beforePoint.details ?? {}
+  const afterDetails = afterPoint.details ?? {}
+  new Set([...Object.keys(beforeDetails), ...Object.keys(afterDetails)]).forEach((field) => {
+    if (comparisonValuesDiffer(beforeDetails[field], afterDetails[field])) {
+      const formField = field === 'outfallLatitude'
+        ? 'dischargeLatitude'
+        : field === 'outfallLongitude'
+          ? 'dischargeLongitude'
+          : field === 'productionCapacity'
+            ? 'productionCapacityValue'
+            : field
+      changedFields.add(formField)
+      if (field === 'productionCapacity') {
+        changedFields.add('productionCapacityUnit')
+      }
+    }
+  })
+
+  const beforeInstruments = beforePoint.measurementInstruments ?? {}
+  const afterInstruments = afterPoint.measurementInstruments ?? {}
+  ;['converterBrand', 'converterModel'].forEach((field) => {
+    if (comparisonValuesDiffer(beforeInstruments[field], afterInstruments[field])) {
+      changedFields.add(field)
+    }
+  })
+  if (comparisonValuesDiffer(beforeInstruments.parameters, afterInstruments.parameters)) {
+    changedFields.add('measurementInstruments')
+  }
+
+  const beforeDocuments = Array.isArray(beforePoint.documentsAndImages) ? beforePoint.documentsAndImages : []
+  const afterDocuments = Array.isArray(afterPoint.documentsAndImages) ? afterPoint.documentsAndImages : []
+  requestDocumentFieldIndexes.forEach((index, title) => {
+    if (factoryGeneralDocumentTitles.has(title)) {
+      return
+    }
+    const before = beforeDocuments.filter((document) => document?.title === title)
+    const after = afterDocuments.filter((document) => document?.title === title)
+    if (comparisonValuesDiffer(before, after)) {
+      changedFields.add(`documentImageFile-${index}`)
+    }
+    if (comparisonValuesDiffer(before.map((document) => document?.link), after.map((document) => document?.link))) {
+      changedFields.add(`documentImageLink-${index}`)
+    }
+  })
+
+  return [...changedFields]
+}
+
+function RequestMonitoringPointPreview({ request, factory, measurementPoints, highlightedFieldNames, variant }) {
+  const raw = request?.raw ?? request
+  const firstPoint = Array.isArray(measurementPoints) ? measurementPoints[0] : null
+  const previewRequest = {
+    ...raw,
+    id: `${raw?.id ?? 'request'}-${variant}-${firstPoint?.connectedPointId ?? firstPoint?.id ?? 'point'}`,
+    factory,
+    factoryId: factory?.factoryId,
+    factoryName: factory?.factoryName,
+    systemType: firstPoint?.systemType ?? raw?.systemType,
+    measurementPoints: Array.isArray(measurementPoints) ? measurementPoints : [],
+    documentsAndImages: getFactoryDocumentsForPreview(factory),
+  }
 
   return (
-    <Stack spacing={2}>
-      <RequestGeneralInfoPreview factory={factory} />
-      <Paper elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider' }}>
-        <Stack spacing={2}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-            จุดตรวจวัด
-          </Typography>
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', md: 'repeat(12, minmax(0, 1fr))' },
-              gap: 2,
-            }}
-          >
-            <ReadOnlyFormField label="ประเภทจุดตรวจวัด" value={firstPoint?.systemType ?? 'CEMS'} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
-            <ReadOnlyFormField label="รหัสจุดตรวจวัด" value={firstPoint ? getMonitoringPointCode(firstPoint, 0) : ''} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
-            <ReadOnlyFormField label="ชื่อจุดตรวจวัด" value={firstPoint?.pointName ?? firstPoint?.name} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
-          </Box>
-        </Stack>
-      </Paper>
-      <Paper elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider' }}>
-        <Stack spacing={2}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-            รายละเอียดจุดตรวจวัด
-          </Typography>
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', md: 'repeat(12, minmax(0, 1fr))' },
-              gap: 2,
-            }}
-          >
-            <ReadOnlyFormField label="รหัสจุดตรวจวัด" value={firstPoint ? getMonitoringPointCode(firstPoint, 0) : ''} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
-            <ReadOnlyFormField label="ชื่อจุดตรวจวัด" value={firstPoint?.pointName ?? firstPoint?.name} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
-            <ReadOnlyFormField label="พารามิเตอร์ที่เชื่อมต่อแล้ว" value={parameters} sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
-            <ReadOnlyFormField label="พารามิเตอร์ที่ยังไม่เชื่อมต่อ" value="-" sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
-            <ReadOnlyFormField label="พารามิเตอร์ที่ขอเชื่อมต่อ" value="-" sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
-            <ReadOnlyFormField label="อุปกรณ์/โปรแกรมที่ใช้เชื่อมต่อ" value="-" sx={{ gridColumn: { xs: 'auto', md: 'span 3' } }} />
-          </Box>
-        </Stack>
-      </Paper>
-    </Stack>
+    <RequestFormBottomSheet
+      key={previewRequest.id}
+      embedded
+      readOnlyPreview
+      highlightedFieldNames={highlightedFieldNames}
+      open
+      formType="เพิ่มจุดตรวจวัด"
+      factory={factory}
+      mode="edit"
+      requestId={raw?.id}
+      initialRequest={previewRequest}
+      generalFactoryFieldsReadOnly
+      factoryProfilePatchMode
+      footerActions={null}
+      onClose={() => {}}
+    />
   )
 }
 
@@ -1169,9 +1255,10 @@ function RequestComparisonContent({ request, variant = 'after' }) {
     ? raw?.currentMeasurementPoints
     : raw?.proposedMeasurementPoints
   const isPointForm = request?.form === 'แก้ไขข้อมูลจุดตรวจวัด'
+  const highlightedFieldNames = isPointForm ? getChangedMeasurementPointFieldNames(raw) : []
 
   return isPointForm
-    ? <RequestMonitoringPointPreview factory={factory} measurementPoints={measurementPoints} />
+    ? <RequestMonitoringPointPreview request={request} factory={factory} measurementPoints={measurementPoints} highlightedFieldNames={highlightedFieldNames} variant={variant} />
     : <RequestGeneralInfoPreview factory={factory} />
 }
 

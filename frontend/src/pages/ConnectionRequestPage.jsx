@@ -5233,9 +5233,10 @@ function getFactoryColumns(isOperator, onOpenRequestForm, onOpenMonitoringPoints
   return useOperatorColumns ? columns.filter((column) => column.field !== 'requestStatus') : columns
 }
 
-function ReadOnlyField({ label, value, sx }) {
+function ReadOnlyField({ label, value, name, sx }) {
   return (
     <TextField
+      name={name}
       label={label}
       value={displayValue(value)}
       size="small"
@@ -5433,7 +5434,7 @@ function UploadFileField({ label, accept, name, currentFileName = '', currentFil
   }
 
   return (
-    <Stack spacing={0.75}>
+    <Stack spacing={0.75} data-field-name={name}>
       {removedCurrentFileKeys.map((removalKey) => (
         <input
           key={removalKey}
@@ -6340,7 +6341,7 @@ function MeasurementInstrumentSection({ rows, setRows, initialInstruments = {}, 
     : measurementInstrumentColumns
 
   return (
-    <Paper elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider' }}>
+    <Paper data-field-name="measurementInstruments" elevation={0} sx={{ p: 2, border: 1, borderColor: 'divider' }}>
       <Stack spacing={2}>
         <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
           รายละเอียดเครื่องมือตรวจวัด
@@ -6893,6 +6894,9 @@ export function RequestFormBottomSheet({
   documentImagesUploadUrl = '',
   generalFactoryFieldsReadOnly = false,
   factoryProfilePatchMode = false,
+  embedded = false,
+  readOnlyPreview = false,
+  highlightedFieldNames = [],
   onClose,
   onSubmitted,
 }) {
@@ -6964,6 +6968,35 @@ export function RequestFormBottomSheet({
     setSubmitError(message)
     setSubmitValidationSnackbarOpen(true)
   }
+  const highlightedFieldSx = highlightedFieldNames.reduce((styles, fieldName) => {
+    const fieldSelector = `[name="${fieldName}"]`
+    const dataFieldSelector = `[data-field-name="${fieldName}"]`
+
+    return {
+      ...styles,
+      [`& .MuiFormControl-root:has(${fieldSelector}) .MuiOutlinedInput-notchedOutline`]: {
+        borderColor: '#f97316',
+        borderWidth: 2,
+      },
+      [`& .MuiFormControl-root:has(${fieldSelector}) .MuiInputLabel-root`]: {
+        color: '#f97316',
+      },
+      [`& ${dataFieldSelector} > .MuiButton-root`]: {
+        borderColor: '#f97316',
+        borderWidth: 2,
+        color: '#f97316',
+      },
+      [`& .MuiStack-root:has(> ${dataFieldSelector}) > .MuiTypography-root:first-of-type`]: {
+        color: '#f97316',
+      },
+      [`& ${dataFieldSelector}`]: {
+        borderColor: '#f97316',
+      },
+      [`& ${dataFieldSelector} > .MuiStack-root > .MuiTypography-root:first-of-type`]: {
+        color: '#f97316',
+      },
+    }
+  }, {})
   const applyOfficerSubmissionAction = (requestBody) => {
     if (!showOfficerPostSubmitStatusSection) {
       return
@@ -7221,16 +7254,29 @@ export function RequestFormBottomSheet({
   return (
     <Drawer
       anchor="bottom"
-      open={open}
-      onClose={onClose}
+      variant={embedded ? 'permanent' : 'temporary'}
+      open={embedded || open}
+      onClose={embedded ? undefined : onClose}
       transitionDuration={{ enter: 280, exit: 220 }}
+      sx={embedded ? { width: '100%', flexShrink: 1 } : undefined}
       slotProps={{
         paper: {
           sx: {
-            height: {
-              xs: `calc(100dvh - ${appBarHeight.xs}px)`,
-              md: `calc(100dvh - ${appBarHeight.md}px)`,
-            },
+            ...(embedded
+              ? {
+                  position: 'static',
+                  width: '100%',
+                  height: 'auto',
+                  maxHeight: 'none',
+                  border: 0,
+                  boxShadow: 'none',
+                }
+              : {
+                  height: {
+                    xs: `calc(100dvh - ${appBarHeight.xs}px)`,
+                    md: `calc(100dvh - ${appBarHeight.md}px)`,
+                  },
+                }),
             bgcolor: 'background.default',
             borderTopLeftRadius: 2,
             borderTopRightRadius: 2,
@@ -7238,8 +7284,8 @@ export function RequestFormBottomSheet({
         },
       }}
     >
-      <Stack sx={{ height: '100%', minHeight: 0 }}>
-        <Stack
+      <Stack sx={{ height: embedded ? 'auto' : '100%', minHeight: 0 }}>
+        {embedded ? null : <Stack
           direction="row"
           sx={{
             px: { xs: 2, md: 3 },
@@ -7255,14 +7301,22 @@ export function RequestFormBottomSheet({
           <IconButton aria-label="ปิด" onClick={onClose}>
             <CloseIcon />
           </IconButton>
-        </Stack>
-        <Divider />
+        </Stack>}
+        {embedded ? null : <Divider />}
 
         <Box
           component="form"
           ref={formRef}
           key={`${mode}-${requestId ?? 'new'}-${initialRequest?.id ?? 'draft'}`}
-          sx={{ flex: 1, minHeight: 0, overflow: 'auto', p: { xs: 2, md: 3 }, bgcolor: 'background.default' }}
+          inert={readOnlyPreview ? true : undefined}
+          sx={{
+            flex: embedded ? 'none' : 1,
+            minHeight: 0,
+            overflow: embedded ? 'visible' : 'auto',
+            p: embedded ? 0 : { xs: 2, md: 3 },
+            bgcolor: 'background.default',
+            ...highlightedFieldSx,
+          }}
         >
           <Stack spacing={2}>
             {loading ? (
@@ -7323,7 +7377,7 @@ export function RequestFormBottomSheet({
                   </Grid>
                   <Grid size={{ xs: 12, md: 3 }}>
                     {generalFactoryFieldsReadOnly ? (
-                      <ReadOnlyField label="การประเมินผลกระทบสิ่งแวดล้อม" value={eiaAssessment} />
+                      <ReadOnlyField name={readOnlyPreview ? 'eia' : undefined} label="การประเมินผลกระทบสิ่งแวดล้อม" value={eiaAssessment} />
                     ) : (
                       <TextField
                         select
@@ -7345,7 +7399,7 @@ export function RequestFormBottomSheet({
                   {eiaAssessment === 'อื่นๆ' ? (
                     <Grid size={{ xs: 12, md: 3 }}>
                       {generalFactoryFieldsReadOnly ? (
-                        <ReadOnlyField label="ระบุ" value={formFactory?.eiaOther ?? ''} />
+                        <ReadOnlyField name={readOnlyPreview ? 'eiaOther' : undefined} label="ระบุ" value={formFactory?.eiaOther ?? ''} />
                       ) : (
                         <TextField
                           name="eiaOther"
@@ -7361,7 +7415,7 @@ export function RequestFormBottomSheet({
                   {(factoryProfilePatchMode || eiaProjectOptions.includes(eiaAssessment)) ? (
                     <Grid size={{ xs: 12, md: 3 }}>
                       {generalFactoryFieldsReadOnly ? (
-                        <ReadOnlyField label="ชื่อโครงการ" value={formFactory?.projectName ?? ''} />
+                        <ReadOnlyField name={readOnlyPreview ? 'projectName' : undefined} label="ชื่อโครงการ" value={formFactory?.projectName ?? ''} />
                       ) : (
                         <TextField
                           name="projectName"
@@ -7381,14 +7435,14 @@ export function RequestFormBottomSheet({
                       </Grid>
                       <Grid size={{ xs: 12, md: 3 }}>
                         {generalFactoryFieldsReadOnly ? (
-                          <ReadOnlyField label="ละติจูด" value={formFactory?.latitude ?? ''} />
+                          <ReadOnlyField name={readOnlyPreview ? 'latitude' : undefined} label="ละติจูด" value={formFactory?.latitude ?? ''} />
                         ) : (
                           <TextField name="latitude" label="ละติจูด" size="small" defaultValue={formFactory?.latitude ?? ''} fullWidth />
                         )}
                       </Grid>
                       <Grid size={{ xs: 12, md: 3 }}>
                         {generalFactoryFieldsReadOnly ? (
-                          <ReadOnlyField label="ลองจิจูด" value={formFactory?.longitude ?? ''} />
+                          <ReadOnlyField name={readOnlyPreview ? 'longitude' : undefined} label="ลองจิจูด" value={formFactory?.longitude ?? ''} />
                         ) : (
                           <TextField name="longitude" label="ลองจิจูด" size="small" defaultValue={formFactory?.longitude ?? ''} fullWidth />
                         )}
@@ -7615,8 +7669,8 @@ export function RequestFormBottomSheet({
             ) : null}
           </Stack>
         </Box>
-        <Divider />
-        {footerActions === null ? null : (
+        {embedded ? null : <Divider />}
+        {embedded || footerActions === null ? null : (
           <Stack
             direction="row"
             spacing={1.5}
